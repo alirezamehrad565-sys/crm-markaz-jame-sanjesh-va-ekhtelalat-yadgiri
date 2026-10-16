@@ -1,0 +1,37 @@
+{
+  "name": "center-system",
+  "version": "1.00.2",
+  "private": true,
+  "type": "module",
+  "author": {
+    "name": "@sdt144",
+    "url": "https://t.me/sdt144"
+  },
+  "description": "Comprehensive center management system (CRM & Scheduling) — Cloudflare Workers + D1 + Hono + Admin Console UI",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "migrate:local": "wrangler d1 migrations apply center-system-db --local",
+    "migrate:remote": "wrangler d1 migrations apply center-system-db --remote",
+    "seed:local": "wrangler d1 execute center-system-db --local --file=scripts/seed-dev.sql",
+    "bootstrap": "wrangler d1 execute center-system-db --local --file=scripts/bootstrap.sql",
+    "bootstrap:remote": "wrangler d1 execute center-system-db --remote --file=scripts/bootstrap.sql",
+    "update": "node scripts/update-remote.mjs",
+    "update:dry": "node scripts/update-remote.mjs --dry-run",
+    "backup:remote": "node scripts/update-remote.mjs --backup-only"
+  },
+  "dependencies": {
+    "hono": "^4.6.14",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "@types/node": "^22.20.5",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8",
+    "wrangler": "^3.99.0"
+  }
+}

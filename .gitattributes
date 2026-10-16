@@ -1,0 +1,11 @@
+# Normalize line endings
+* text=auto eol=lf
+
+# Language statistics: recovered backend bundle is an internal artifact
+worker/bundle.js linguist-generated=true
+*.min.js linguist-generated=true
+
+# Persian sources are UTF-8
+*.md text
+*.ts text
+*.js text
