@@ -1,0 +1,287 @@
+[
+  {
+    "key": "ce-dcdq-v1",
+    "title": "پرسش‌نامهٔ هماهنگی حرکتی — فرم خانواده (DCDQ)",
+    "description": "پانزده جمله دربارهٔ مهارت‌های حرکتی فرزندتان — از پرتاب توپ و بالا رفتن از پله تا دست‌خط و استفاده از قیچی. بگویید هر جمله چقدر شبیه اوست؛ پاسخ درست یا غلط ندارد. حدود ۱۰ دقیقه وقت می‌برد.",
+    "category": "checklist",
+    "icon": "🤸",
+    "familyFillable": true,
+    "audience": "family",
+    "source": "Wilson DCDQ'07 (رایگان با ارجاع) — لنگرهای رسمی شباهت‌سنجی پنج‌درجه‌ای. برش کل نسخهٔ خام ۱۵..۷۵ → سیستم ۰..۶۰: ۵–۷٫۱۱ سال = ۳۱؛ ۸–۹٫۱۱ = ۴۰؛ ۱۰–۱۵ = ۴۲ (در m86 مرز بالایی باند مرزی از ۴۰ به ۴۱ اصلاح شد) — کالیبراسیون m86",
+    "tags": ["aaaaaaaa-0000-4000-8000-000000000008"],
+    "subscales": [
+      { "id": "mvt", "name": "کنترل در حرکت", "bands": null },
+      { "id": "fine", "name": "مهارت‌های ظریف و نوشتن", "bands": null },
+      { "id": "gen", "name": "هماهنگی عمومی", "bands": null }
+    ],
+    "bands": [
+      { "max": 30, "label": "پایین از برش سنی — قابل توجه", "color": "danger", "advice": "نمرهٔ کل پایین‌تر از برش همهٔ گروه‌های سنی است؛ ارزیابی کاردرمانی و چک‌لیست ملاکی DCD لازم است." },
+      { "max": 41, "label": "مرزی — با جدول سنی مقایسه شود", "color": "warn", "advice": "برش سنی: ۵–۷٫۱۱ سال = ۳۱؛ ۸–۹٫۱۱ = ۴۰؛ ۱۰–۱۵ = ۴۲ — زیر برشِ گروه سنی کودک یعنی قابل توجه." },
+      { "max": 60, "label": "در انتظار سن یا بالاتر", "color": "ok", "advice": "نمرهٔ کل بالای برش است — مگر نگرانی اختصاصی، مشاهدهٔ کلاس کافی است." }
+    ],
+    "fields": [
+      { "key": "d01", "label": "پرتاب توپ به سمت هدف، کنترل‌شده و درست انجام می‌دهد", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "mvt" },
+      { "key": "d02", "label": "توپ پرتاب‌شده را فقط با دست‌ها به‌خوبی می‌گیرد", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "mvt" },
+      { "key": "d03", "label": "هدف متحرک را با دست یا چوب راحت می‌زند", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "mvt" },
+      { "key": "d04", "label": "پله‌ها را روان و امن (بدون گرفتن نرده) بالا و پایین می‌رود", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "mvt" },
+      { "key": "d05", "label": "در دویدن و تغییر مسیر سریع، تعادلش را حفظ می‌کند", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "mvt" },
+      { "key": "d06", "label": "در بازی‌های حرکتی هماهنگ و به‌اندازهٔ هم‌سن‌هایش ماهر است", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "mvt" },
+      { "key": "d07", "label": "دست‌خطش خوانا، منظم و به‌سرعت مناسب است", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "fine" },
+      { "key": "d08", "label": "قلم را راحت نگه می‌دارد و هنگام نوشتن دستش زود خسته نمی‌شود", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "fine" },
+      { "key": "d09", "label": "با قیچی، چسب و ابزار ظریف راحت کار می‌کند", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "fine" },
+      { "key": "d10", "label": "دکمه، زیپ و بند کفش را در حد سنش می‌بندد", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "fine" },
+      { "key": "d11", "label": "کارد و چنگال و قاشق را بدون پاشیدن و ریختن استفاده می‌کند", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "fine" },
+      { "key": "d12", "label": "مهارت‌های حرکتی جدید را در حد انتظار سن سریع یاد می‌گیرد (مثلاً دوچرخه، طناب‌بازی)", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "gen" },
+      { "key": "d13", "label": "مثل هم‌سالانش تعادل دارد و کمتر می‌افتد یا به در و دیوار می‌خورد", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "gen" },
+      { "key": "d14", "label": "در کلاس ورزش و بازی گروهی، هم‌پای بقیه فعالیت می‌کند", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "gen" },
+      { "key": "d15", "label": "بدنش مثل هم‌سالانش هماهنگ است؛ دست‌وپاچلپگی برجسته ندارد", "type": "scale", "scaleMax": 4, "scaleLabels": ["اصلاً شبیه او نیست", "کمی شبیه اوست", "تا حدی شبیه اوست", "خیلی شبیه اوست", "کاملاً شبیه اوست"], "required": true, "subscaleId": "gen" }
+    ]
+  },
+  {
+    "key": "ce-sld-read-v1",
+    "title": "چک‌لیست دشواری خواندن — فرم خانواده و معلم (ملاک‌های DSM)",
+    "description": "ده جمله دربارهٔ دشواری‌های خواندن — از کندخوانی و جابه‌جایی حروف تا املا. برای هر جمله مشخص کنید این حالت چقدر در کودک دیده می‌شود. پاسخ این فرم کنار آزمون عملکردی خواندن معنی کامل می‌دهد.",
+    "category": "checklist",
+    "icon": "📖",
+    "familyFillable": true,
+    "audience": "both",
+    "source": "ملاک‌های اختلال یادگیری خاص — خواندن (F81.0) بازآفرینی فارسی؛ هر آیتم به ملاک حرف‌دار در rules.ts گره خورده؛ لنگر شدت سه‌درجه‌ای m86",
+    "tags": ["aaaaaaaa-0000-4000-8000-000000000001"],
+    "subscales": [
+      { "id": "crita", "name": "نشانه‌های خواندن", "bands": [
+        { "max": 5, "label": "در محدودهٔ عادی", "color": "ok" },
+        { "max": 8, "label": "مرزی — نیاز به بررسی", "color": "warn", "advice": "چند نشانهٔ محوری گزارش شده؛ آزمون کوتاه خواندن و گزارش مرجع دوم لازم است." },
+        { "max": 9999, "label": "قابل توجه — الگوی ملاکی برقرار", "color": "danger", "advice": "نشانه‌های محوری خواندن بالاست؛ وضعیت تک‌تک ملاک‌ها در تفسیر بالینی ببینید." } ] },
+      { "id": "critb", "name": "تأثیر بر زندگی و درس", "bands": [
+        { "max": 1, "label": "در محدودهٔ عادی", "color": "ok" },
+        { "max": 9999, "label": "تأثیر واقعی گزارش شده", "color": "danger" } ] },
+      { "id": "critc", "name": "شروع دشواری", "excludeFromTotal": true, "bands": null },
+      { "id": "critd", "name": "بررسی دلایل دیگر", "excludeFromTotal": true, "bands": null }
+    ],
+    "bands": [
+      { "max": 10, "label": "در محدودهٔ عادی", "color": "ok", "advice": "نشانه‌های ملاکی عادی است — در صورت نگرانی، آزمون کوتاه خواندن بگیرید." },
+      { "max": 13, "label": "مرزی — نیاز به بررسی", "color": "warn", "advice": "نشانه‌ها مرزی است؛ آزمون سرعت و دقت خواندن + مرجع دوم (والد/معلم) توصیه می‌شود." },
+      { "max": 9999, "label": "قابل توجه — نیاز به بررسی تخصصی", "color": "danger", "advice": "الگوی ملاکی خواندن برقرار است؛ آزمون عملکردی و بررسی جدول ملاک‌های DSM لازم است." }
+    ],
+    "fields": [
+      { "key": "rA1", "label": "خواندن واژه‌ها برایش کند، پرتلاش و پرخطاست", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "rA2", "label": "هنگام خواندن بلند، واژه‌ها را از شکل کلی حدس می‌زند یا حروف را جابه‌جا می‌خواند", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "rA3", "label": "در تشخیص و تفکیک صداهای سازندهٔ واژه‌ها مشکل دارد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "rA4", "label": "با وجود تمرین زیاد، هنوز بعضی حرف‌ها را با صدایشان اشتباه می‌گیرد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "rA5", "label": "واژه‌های تازه و بی‌معنی را نمی‌تواند حرف‌به‌حرف بخواند", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "rA6", "label": "خطاهای املایی فراوان دارد، حتی در واژه‌های همیشگی", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "rB1", "label": "دشواری خواندن، پیشرفت درسی یا حال او را واقعاً تحت تأثیر گذاشته", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critb" },
+      { "key": "rB2", "label": "برای جبران به راه‌های جایگزین پناه می‌برد (مثلاً شنیدن به توضیح یا حدس از تصویر) و زود خسته می‌شود", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critb" },
+      { "key": "rC1", "label": "دشواری از سال‌های اول آموزش خواندن شروع شده و از همان‌جا با او بوده", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critc" },
+      { "key": "rD1", "label": "هوش طبیعی، بینایی/شنوایی سالم و آموزش کافی داشته — مشکل با تلاش معمول برطرف نشده", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critd" }
+    ]
+  },
+  {
+    "key": "ce-sld-wri-v1",
+    "title": "چک‌لیست دشواری نوشتن — فرم خانواده و معلم (ملاک‌های DSM)",
+    "description": "ده جمله دربارهٔ دشواری‌های نوشتن — از جمله‌سازی و املا تا دست‌خط و خستگی دست. برای هر جمله مشخص کنید این حالت چقدر در کودک دیده می‌شود.",
+    "category": "checklist",
+    "icon": "✍️",
+    "familyFillable": true,
+    "audience": "both",
+    "source": "ملاک‌های اختلال یادگیری خاص — بیان نوشتاری (F81.81) بازآفرینی فارسی؛ گره ملاک‌ها در rules.ts؛ لنگر شدت سه‌درجه‌ای m86",
+    "tags": ["aaaaaaaa-0000-4000-8000-000000000002"],
+    "subscales": [
+      { "id": "crita", "name": "نشانه‌های نوشتن", "bands": [
+        { "max": 5, "label": "در محدودهٔ عادی", "color": "ok" },
+        { "max": 8, "label": "مرزی — نیاز به بررسی", "color": "warn", "advice": "چند نشانهٔ محوری نوشتن گزارش شده؛ آزمون کوتاه نوشتن (دیکته) و نمونهٔ تاریخ‌دار لازم است." },
+        { "max": 9999, "label": "قابل توجه — الگوی ملاکی برقرار", "color": "danger" } ] },
+      { "id": "critb", "name": "تأثیر بر زندگی و درس", "bands": [
+        { "max": 1, "label": "در محدودهٔ عادی", "color": "ok" },
+        { "max": 9999, "label": "تأثیر واقعی گزارش شده", "color": "danger" } ] },
+      { "id": "critc", "name": "شروع دشواری", "excludeFromTotal": true, "bands": null },
+      { "id": "critd", "name": "بررسی دلایل دیگر", "excludeFromTotal": true, "bands": null }
+    ],
+    "bands": [
+      { "max": 10, "label": "در محدودهٔ عادی", "color": "ok", "advice": "نشانه‌های ملاکی عادی است — در صورت نگرانی، آزمون کوتاه نوشتن بگیرید." },
+      { "max": 13, "label": "مرزی — نیاز به بررسی", "color": "warn", "advice": "نشانه‌ها مرزی است؛ آزمون دیکتهٔ خطادار + مرجع دوم توصیه می‌شود." },
+      { "max": 9999, "label": "قابل توجه — نیاز به بررسی تخصصی", "color": "danger", "advice": "الگوی ملاکی نوشتن برقرار است؛ آزمون عملکردی و بررسی جدول ملاک‌ها لازم است." }
+    ],
+    "fields": [
+      { "key": "wA1", "label": "نوشتن جملهٔ کامل برایش سخت است؛ فعل یا کلمه‌های ربط جا می‌اندازد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "wA2", "label": "متن‌های کوتاهش خطاهای دستوری و نقطه‌گذاری فراوان دارد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "wA3", "label": "دست‌خطش ناخوانا، بی‌ثبات یا با فشار نامناسب است", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "wA4", "label": "رونویسی از تخته کند است و کار کلاس معمولاً تمام نمی‌شود", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "wA5", "label": "افکارش را روی کاغذ منظم نمی‌چیند؛ نوشته‌اش پراکنده و بی‌ساختار است", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "wA6", "label": "از حجم نوشتن پرهیز می‌کند و زود از خستگی یا درد دست شاکی است", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "wB1", "label": "دشواری نوشتن، پیشرفت درسی یا اعتماد او را واقعاً تحت تأثیر گذاشته", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critb" },
+      { "key": "wB2", "label": "در نمونه‌های تاریخ‌دار، نوشتارش به‌وضوح پایین‌تر از انتظار سن/پایه است", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critb" },
+      { "key": "wC1", "label": "دشواری از سال‌های اول آموزش نوشتن شروع شده", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critc" },
+      { "key": "wD1", "label": "هوش طبیعی و آموزش کافی داشته — مشکل صرفاً بی‌حوصلگی یا کم‌کاری نیست", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critd" }
+    ]
+  },
+  {
+    "key": "ce-sld-calc-v1",
+    "title": "چک‌لیست دشواری حساب — فرم خانواده و معلم (ملاک‌های DSM)",
+    "description": "ده جمله دربارهٔ دشواری‌های حساب — از فهم مقدار و شمارش تا حل مسئله. برای هر جمله مشخص کنید این حالت چقدر در کودک دیده می‌شود.",
+    "category": "checklist",
+    "icon": "🔢",
+    "familyFillable": true,
+    "audience": "both",
+    "source": "ملاک‌های اختلال یادگیری خاص — ریاضی (F81.2) بازآفرینی فارسی؛ گره ملاک‌ها در rules.ts؛ لنگر شدت سه‌درجه‌ای m86",
+    "tags": ["aaaaaaaa-0000-4000-8000-000000000003"],
+    "subscales": [
+      { "id": "crita", "name": "نشانه‌های حساب", "bands": [
+        { "max": 5, "label": "در محدودهٔ عادی", "color": "ok" },
+        { "max": 8, "label": "مرزی — نیاز به بررسی", "color": "warn", "advice": "چند نشانهٔ محوری ریاضی گزارش شده؛ آزمون کوتاه حساب و خط عددی لازم است." },
+        { "max": 9999, "label": "قابل توجه — الگوی ملاکی برقرار", "color": "danger" } ] },
+      { "id": "critb", "name": "تأثیر بر زندگی و درس", "bands": [
+        { "max": 1, "label": "در محدودهٔ عادی", "color": "ok" },
+        { "max": 9999, "label": "تأثیر واقعی گزارش شده", "color": "danger" } ] },
+      { "id": "critc", "name": "شروع دشواری", "excludeFromTotal": true, "bands": null },
+      { "id": "critd", "name": "بررسی دلایل دیگر", "excludeFromTotal": true, "bands": null }
+    ],
+    "bands": [
+      { "max": 10, "label": "در محدودهٔ عادی", "color": "ok", "advice": "نشانه‌های ملاکی عادی است — در صورت نگرانی، آزمون کوتاه حساب بگیرید." },
+      { "max": 13, "label": "مرزی — نیاز به بررسی", "color": "warn", "advice": "نشانه‌ها مرزی است؛ آزمون سلیقهٔ حساب + مرجع دوم توصیه می‌شود." },
+      { "max": 9999, "label": "قابل توجه — نیاز به بررسی تخصصی", "color": "danger", "advice": "الگوی ملاکی ریاضی برقرار است؛ آزمون عملکردی و بررسی جدول ملاک‌ها لازم است." }
+    ],
+    "fields": [
+      { "key": "cA1", "label": "حس عدد و مقایسهٔ مقدارها برایش ضعیف است (مثلاً ۴ بزرگ‌تر است یا ۷؟)", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "cA2", "label": "برای جمع‌های ساده هنوز انگشت می‌شمارد و سرعتش بالا نمی‌رود", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "cA3", "label": "جمع و ضرب‌های پایه با تمرین زیاد هم خودکار نمی‌شود", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "cA4", "label": "در محاسبهٔ چندمرحله‌ای، روش را گم می‌کند یا یک عمل را جا می‌اندازد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "cA5", "label": "در مسئله‌های کلامی، چیدن راه‌حل برایش از خود محاسبه سخت‌تر است", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "cA6", "label": "مفهوم مقدار و اندازه (مثلاً کم/زیاد، نصف/دوبرابر) را در عمل نمی‌فهمد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "cB1", "label": "دشواری ریاضی، پیشرفت درسی یا حال او را واقعاً تحت تأثیر گذاشته", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critb" },
+      { "key": "cB2", "label": "با ابزار ملموس (مثلاً مهره یا خط عدد) بهتر جواب می‌دهد و با نماد فرو می‌ریزد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critb" },
+      { "key": "cC1", "label": "دشواری از ابتدای آموزش ریاضی بوده است", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critc" },
+      { "key": "cD1", "label": "هوش طبیعی و آموزش کافی داشته — ضعف مختص ریاضی است نه همهٔ درس‌ها", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critd" }
+    ]
+  },
+  {
+    "key": "ce-asd-criteria-v1",
+    "title": "چک‌لیست نشانه‌های اتیسم — فرم خانواده و معلم (ملاک‌های DSM)",
+    "description": "شانزده جمله دربارهٔ ارتباط، بازی و رفتارهای تکراری — از تماس چشمی و واکنش متقابل تا چسبیدن به روتین و واکنش به صدا و نور. این فرم به‌تنهایی تشخیص نمی‌دهد؛ پرچم ارجاع تخصصی همیشه فعال است.",
+    "category": "checklist",
+    "icon": "🧩",
+    "familyFillable": true,
+    "audience": "both",
+    "source": "ملاک‌های ASD (F84.0): A هر سه، B حداقل دو از چهار — بازآفرینی فارسی؛ قاعدهٔ ملاکی در rules.ts؛ ارجاع تخصصی همیشه خط قرمز است؛ لنگر شدت سه‌درجه‌ای m86",
+    "tags": ["aaaaaaaa-0000-4000-8000-000000000005"],
+    "subscales": [
+      { "id": "crita", "name": "ارتباط و تعامل اجتماعی", "bands": [
+        { "max": 5, "label": "در محدودهٔ عادی", "color": "ok" },
+        { "max": 8, "label": "مرزی — نیاز به بررسی", "color": "warn", "advice": "نشانه‌های اجتماعی مرزی است؛ چک‌لیست زبان و گزارش مرجع دوم لازم است." },
+        { "max": 9999, "label": "قابل توجه — الگوی ملاکی برقرار", "color": "danger", "advice": "نشانه‌های محوری اجتماعی بالاست؛ قاعدهٔ «هر سه ملاک A» را در تفسیر بالینی ببینید." } ] },
+      { "id": "critb", "name": "رفتارهای تکراری و حسی", "bands": [
+        { "max": 3, "label": "در محدودهٔ عادی", "color": "ok" },
+        { "max": 7, "label": "مرزی — نیاز به بررسی", "color": "warn" },
+        { "max": 9999, "label": "قابل توجه — الگوی ملاکی برقرار", "color": "danger", "advice": "الگوهای تکراری/حسی بالاست؛ قاعدهٔ «حداقل دو از چهار ملاک B» در تفسیر بالینی." } ] },
+      { "id": "critc", "name": "شروع نشانه‌ها", "excludeFromTotal": true, "bands": null },
+      { "id": "critd", "name": "تأثیر بر زندگی روزمره", "excludeFromTotal": true, "bands": null },
+      { "id": "crite", "name": "بررسی دلایل دیگر", "excludeFromTotal": true, "bands": null }
+    ],
+    "bands": [
+      { "max": 15, "label": "در محدودهٔ عادی", "color": "ok", "advice": "نشانه‌های ملاکی عادی است — در صورت نگرانی، گزارش مرجع دوم بگیرید." },
+      { "max": 20, "label": "مرزی — نیاز به بررسی", "color": "warn", "advice": "نشانه‌ها مرزی است؛ هر دو مرجع (والد و معلم) پر شوند و مشاهدهٔ بالینی انجام شود." },
+      { "max": 9999, "label": "قابل توجه — نیاز به بررسی تخصصی", "color": "danger", "advice": "الگوی ملاکی برقرار است؛ ارجاع تخصصی اتیسم و جلسهٔ کمیسیون پیشنهاد می‌شود." }
+    ],
+    "fields": [
+      { "key": "aA1", "label": "در شادی و هیجان مشترک کم می‌گذارد (مثلاً خندهٔ مشترک یا نشان دادن چیزی که دوست دارد)", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita", "critical": true, "criticalMin": 2 },
+      { "key": "aA2", "label": "برای جلب توجه یا نشان دادن چیزی پیش نمی‌آورد؛ واکنش متقابلش کم است", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "aA3", "label": "شادی یا غم دیگران را نمی‌فهمد یا واکنشش نامتناسب است", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "aA4", "label": "تماس چشمی کم یا غیرمعمول است", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "aA5", "label": "اشاره و حرکات بدنیِ همراه گفتار کم یا عجیب است", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "aA6", "label": "در دوستی و بازی هم‌سن، نوبت‌گیری و فهم قواعد بازی مشکل دارد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "aB1", "label": "حرکت‌های تکراری دارد (مثلاً چرخیدن، دست‌زدن، بالا و پایین پریدن)", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critb" },
+      { "key": "aB2", "label": "جمله‌ای را بدون موقعیت مناسب تکرار می‌کند (مثل تکرار حرف‌های تلویزیون)", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critb" },
+      { "key": "aB3", "label": "به یکنواختی چسبیده است؛ تغییر برنامهٔ روزانه او را آشفته می‌کند", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critb" },
+      { "key": "aB4", "label": "به آیین‌های خاص خودش پایدار پایبند است", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critb" },
+      { "key": "aB5", "label": "علایق شدید، محدود و غیرمعمول دارد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critb" },
+      { "key": "aB6", "label": "به صدا، نور یا بافت خاص واکنش قوی می‌دهد (مثلاً گوش می‌پوشاند یا عصبی می‌شود)", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critb" },
+      { "key": "aB7", "label": "به بخشی از اشیا علاقهٔ دیداری عجیب دارد (مثلاً چرخیدن چرخ ماشین)", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critb" },
+      { "key": "aC1", "label": "نشانه‌ها از دورهٔ ابتدایی رشد وجود داشته است", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critc" },
+      { "key": "aD1", "label": "این دشواری‌ها عملکرد روزانه (خانه/مدرسه) را واقعاً مختل کرده‌اند", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critd" },
+      { "key": "aE1", "label": "ضعف هوشی یا زبانی به‌تنهایی این نشانه‌ها را توضیح نمی‌دهد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crite" }
+    ]
+  },
+  {
+    "key": "ce-speech-criteria-v1",
+    "title": "چک‌لیست زبان و گفتار — فرم خانواده و معلم (ملاک‌های DSM)",
+    "description": "سیزده جمله دربارهٔ فهم و ساختن جمله‌ها، تلفظ کلمه‌ها و روانی گفتار. جملهٔ آخر دربارهٔ شنوایی است — اگر پررنگ علامت بخورد، اول بررسی شنوایی توصیه می‌شود.",
+    "category": "checklist",
+    "icon": "🗣️",
+    "familyFillable": true,
+    "audience": "both",
+    "source": "اختلال زبان (F80.2) / اختلال اصوات گفتار (F80.0) / روانی گفتار (F80.81) — بازآفرینی فارسی؛ آیتم بحرانی کم‌شنوایی = ارجاع؛ لنگر شدت سه‌درجه‌ای m86",
+    "tags": ["aaaaaaaa-0000-4000-8000-000000000006"],
+    "subscales": [
+      { "id": "lang", "name": "فهم و ساختن جمله", "bands": [
+        { "max": 5, "label": "در محدودهٔ عادی", "color": "ok" },
+        { "max": 8, "label": "مرزی — نیاز به بررسی", "color": "warn", "advice": "دشواری زبانی مرزی است؛ گزارش مرجع دوم و ارزیابی گفتاردرمانگر پیشنهاد می‌شود." },
+        { "max": 9999, "label": "قابل توجه — الگوی ملاکی برقرار", "color": "danger", "advice": "دشواری زبانی بالاست؛ ارزیابی گفتار-زبان و تفکیک از اتیسم لازم است." } ] },
+      { "id": "speech", "name": "تلفظ کلمه‌ها", "bands": [
+        { "max": 2, "label": "در محدودهٔ عادی", "color": "ok" },
+        { "max": 9999, "label": "قابل توجه — نیاز به بررسی تخصصی", "color": "danger" } ] },
+      { "id": "fluency", "name": "روانی گفتار", "bands": [
+        { "max": 1, "label": "در محدودهٔ عادی", "color": "ok" },
+        { "max": 9999, "label": "قابل توجه — نیاز به بررسی تخصصی", "color": "danger" } ] },
+      { "id": "func", "name": "تأثیر بر زندگی روزمره", "excludeFromTotal": true, "bands": null },
+      { "id": "ref", "name": "بررسی شنوایی (آیتم بحرانی — خارج از جمع)", "excludeFromTotal": true, "bands": null }
+    ],
+    "bands": [
+      { "max": 11, "label": "در محدودهٔ عادی", "color": "ok", "advice": "نشانه‌های زبانی/گفتاری عادی است — گفت‌وگوی روزانه را ادامه دهید." },
+      { "max": 16, "label": "مرزی — نیاز به بررسی", "color": "warn", "advice": "نشانه‌ها مرزی است؛ نمونهٔ گفتار و مرجع دوم لازم است." },
+      { "max": 9999, "label": "قابل توجه — نیاز به بررسی تخصصی", "color": "danger", "advice": "الگوی ملاکی برقرار است؛ ارزیابی گفتاردرمانگر و بررسی جدول ملاک‌ها لازم است." }
+    ],
+    "fields": [
+      { "key": "spL1", "label": "واژه‌اندوزی کند است یا واژه‌های عمومی («اینو»، «همون») جای اسم دقیق را می‌گیرد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "lang" },
+      { "key": "spL2", "label": "جمله‌هایش کوتاه‌تر و ساده‌تر از انتظار سن است؛ فعل و کلمهٔ ربط جا می‌اندازد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "lang" },
+      { "key": "spL3", "label": "دستورهای چندمرحله‌ای را نمی‌فهمد یا نصفه اجرا می‌کند", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "lang" },
+      { "key": "spL4", "label": "در فهم متن‌ها و مفهوم‌های زبانی درس عقب می‌ماند", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "lang" },
+      { "key": "spL5", "label": "در تعریف کردن ماجرای خودش، ترتیب و پیوستگی ندارد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "lang" },
+      { "key": "spL6", "label": "دانسته‌اش بیشتر از گفتارش است؛ پاسخ کوتاه می‌دهد یا ساکت می‌ماند", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "lang" },
+      { "key": "spS1", "label": "اصوات خاص را جایگزین یا حذف می‌کند و تلفظش ناواضح است", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "speech" },
+      { "key": "spS2", "label": "هم‌سن‌ها یا معلم گاهی متوجه حرف‌هایش نمی‌شوند", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "speech" },
+      { "key": "spS3", "label": "در صداهای خاص (مثلاً ر، س، ش) مدام خطا دارد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "speech" },
+      { "key": "spF1", "label": "تکرار یا کشیدن صدا و کنده‌شدن در گفتار دارد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "fluency" },
+      { "key": "spF2", "label": "هنگام کنده‌شدن، تنش یا اجتناب از حرف زدن نشان می‌دهد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "fluency" },
+      { "key": "spB1", "label": "دشواری گفتار/زبان، مشارکت کلاسی یا روابطش را واقعاً محدود کرده", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "func" },
+      { "key": "spR1", "label": "مشکوک به کم‌شنوایی است (مثلاً به صدا کردن واکنش کم دارد یا بلند حرف می‌زند)", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "ref", "critical": true, "criticalMin": 2 }
+    ]
+  },
+  {
+    "key": "ce-odd-criteria-v1",
+    "title": "چک‌لیست لجبازی و نافرمانی — فرم خانواده و معلم (ملاک‌های DSM)",
+    "description": "دوازده جمله دربارهٔ لجبازی، عصبانیت و تلافی‌جویی. اگر این رفتارها با بی‌قراری و تندمزاجی قاطی شده باشد، موتور در تفسیر بالینی راه تفکیک را نشان می‌دهد.",
+    "category": "checklist",
+    "icon": "🧭",
+    "familyFillable": true,
+    "audience": "both",
+    "source": "ملاک‌های ODD (F91.3): حداقل ۴ ملاک A با نمرهٔ ۲ + طول ≥۶ ماه — قاعده در rules.ts؛ تفکیک از ADHD تکانشی الزامی؛ لنگر شدت سه‌درجه‌ای m86",
+    "tags": ["aaaaaaaa-0000-4000-8000-00000000000a"],
+    "subscales": [
+      { "id": "crita", "name": "الگوی لجبازی و عصبانیت", "bands": [
+        { "max": 5, "label": "در محدودهٔ عادی", "color": "ok" },
+        { "max": 9, "label": "مرزی — نیاز به بررسی", "color": "warn", "advice": "نشانه‌های مقابله‌گری مرزی است؛ تعداد آیتم‌های با نمرهٔ کامل را در تفسیر ببینید." },
+        { "max": 9999, "label": "قابل توجه — الگوی ملاکی برقرار", "color": "danger", "advice": "الگوی مقابله‌گری بالاست؛ قاعدهٔ «۴ ملاک با نمرهٔ کامل + ۶ ماه» را در تفسیر ببینید." } ] },
+      { "id": "critb", "name": "تأثیر بر زندگی روزمره", "excludeFromTotal": true, "bands": null },
+      { "id": "critc", "name": "طول ≥ ۶ ماه", "excludeFromTotal": true, "bands": null },
+      { "id": "critd", "name": "تفکیک از بی‌قراری تکانشی", "excludeFromTotal": true, "bands": null }
+    ],
+    "bands": [
+      { "max": 7, "label": "در محدودهٔ عادی", "color": "ok", "advice": "نشانه‌های مقابله‌گری عادی است — قاعدهٔ کم و ثابت بزرگسالان کافی است." },
+      { "max": 11, "label": "مرزی — نیاز به بررسی", "color": "warn", "advice": "نشانه‌ها مرزی است؛ قرارداد رفتاری مشترک خانه-مدرسه و مرجع دوم توصیه می‌شود." },
+      { "max": 9999, "label": "قابل توجه — نیاز به بررسی تخصصی", "color": "danger", "advice": "الگوی مقابله‌گری بالاست؛ مربی والدگری و ارزیابی تفکیکی لازم است." }
+    ],
+    "fields": [
+      { "key": "oA1", "label": "پر از خشم می‌شود و از دست کسی می‌رود", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "oA2", "label": "با بزرگ‌سالان بحث و جدل راه می‌اندازد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "oA3", "label": "به خواسته‌ها و قواعد بزرگ‌سالان فعالانه سر می‌پیچد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "oA4", "label": "آگاهانه دیگران — حتی هم‌سالان — را اذیت می‌کند", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "oA5", "label": "اشتباه‌ها یا بدرفتاری خودش را گردن دیگران می‌اندازد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "oA6", "label": "زودرنج است و با تذکر به‌راحتی آزرده می‌شود", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "oA7", "label": "خشمگین و کینه‌جوست", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "oA8", "label": "وقتی فکر می‌کند حقش ضایع شده، دنبال تلافی برمی‌آید", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "crita" },
+      { "key": "oB1", "label": "این الگوی رفتاری، دوستی/مدرسه/خانه را واقعاً درگیر مشکل کرده", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critb" },
+      { "key": "oC1", "label": "این الگو دست‌کم ۶ ماه است که ادامه دارد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critc" },
+      { "key": "oD1", "label": "بی‌قراری و کم‌توجهی به‌تنهایی این رفتارها را توضیح نمی‌دهد", "type": "scale", "scaleMax": 2, "scaleLabels": ["آشکار نیست", "کم و گاهی", "آشکار و مکرر"], "required": true, "subscaleId": "critd" }
+    ]
+  }
+]
