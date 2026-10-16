@@ -1,0 +1,67 @@
+# ─────────────────────────────────────────────────────────────
+# m57 — مدیریت کش و هدرهای امنیتی (Workers Assets — فایل _headers)
+# قواعد به‌ترتیب اعمال می‌شوند؛ قاعدهٔ بعدی (خاص‌تر) مقدار قبلی را بازنویسی می‌کند.
+# نکته: فایل _headers خودش هرگز سرو نمی‌شود (Cloudflare آن را منتشر نمی‌کند).
+#
+# استراتژی کش:
+#   • پوستهٔ اپ (index.html) → no-cache — هر بار revalidate با ETag/304؛
+#     بنابراین انتشار نسخهٔ جدید بلافاصله دیده می‌شود (بدون Service Worker).
+#   • فونت/تصویر → کش یک‌سالهٔ immutable (محتوای ثابت؛ بدون نسخه‌گذاری).
+#   • JS/CSS → کش ۵ دقیقه‌ای must-revalidate (importهای داخلی ?v= ندارند؛
+#     کش بلندمدت خطر «ماژول کهنه پس از انتشار» دارد) + ?v= روی ورودی‌ها.
+#   • favicon → کش یک‌روزه (نام ثابت است و به‌ندرت عوض می‌شود).
+#   • مرکز دانلود → HTML بدون کش؛ بقیه (zip/pdf/png) کش یک‌روزه.
+# ─────────────────────────────────────────────────────────────
+
+# ۱) هدرهای امنیتی پایه — همهٔ فایل‌های استاتیک
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Cross-Origin-Opener-Policy: same-origin
+  # m113 — CSP پوستهٔ اپ: همهٔ منابع same-origin؛ تنها اسکریپت inline (بوت‌استرپ SW)
+  # با هش sha256 مجاز است. style فقط برای style-attrهای داخلی unsafe-inline می‌ماند.
+  # ⚠️ اگر بلاک <script> داخل index.html تغییر کرد، این هش باید دوباره محاسبه شود.
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-8jQ6bw2IYhxGBEH6axb9CBzhm9nx/LFOakL1HuuZWZc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+
+# ۲) پوستهٔ اپ — همیشه revalidate (انتشار نسخهٔ جدید فوراً اعمال شود)
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+
+# ۳) فونت و تصاویر — محتوای تقریباً ثابت → کش یک‌سالهٔ immutable
+/assets/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+/assets/img/*
+  Cache-Control: public, max-age=31536000, immutable
+/assets/help/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ۴) JS/CSS — چون importهای داخلی ماژول‌ها (?v= ندارند) کش یک‌ساله خطر
+#    «ماژول کهنه پس از انتشار» دارد؛ کش کوتاه ۵ دقیقه‌ای با must-revalidate
+#    انتخاب شد: بازدیدهای مکرر سریع می‌ماند و حداکثر کهنگی پس از deploy ۵ دقیقه است.
+#    (?v= روی ارجاع‌های index.html باطل‌سازی فوری همان ۶ فایل ورودی را تضمین می‌کند)
+/assets/css/*
+  Cache-Control: public, max-age=300, must-revalidate
+/assets/js/*
+  Cache-Control: public, max-age=300, must-revalidate
+
+# ۵) favicon — نام ثابت؛ کش کوتاه‌تر برای اطمینان
+/favicon.png
+  Cache-Control: public, max-age=86400
+
+# ۶) PWA — m106
+#    sw.js باید همیشه تازه باشد (چرخهٔ به‌روزرسانی SW)؛ مانیفست کش کوتاه.
+/sw.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: public, max-age=3600
+
+# ۷) مرکز دانلود — همه‌چیز no-cache (revalidate با ETag/304):
+#    HTML برای تازگیِ فوری؛ zipها «نسخه‌دار»اند (m57.zip = نام جدید → کش‌میس)؛
+#    pdf/html به‌روزشونده هم بدون ریسک کهنگی — فایل بزرگ هرگز دوباره منتقل نمی‌شود.
+/downloads/*
+  Cache-Control: no-cache

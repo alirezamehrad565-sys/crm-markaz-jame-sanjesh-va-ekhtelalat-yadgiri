@@ -1,0 +1,1678 @@
+/* ═══════════════════════════════════════════════════════════════
+   components.css — دکمه، فرم، کارت، جدول، مودال، توست، بج و …
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─────────────── دکمه‌ها ─────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: 9px var(--sp-4);
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  font-size: var(--fs-md);
+  font-weight: 500;
+  line-height: 1.5;
+  transition: background var(--fast), border-color var(--fast), color var(--fast), box-shadow var(--fast), transform var(--fast);
+  user-select: none;
+  white-space: nowrap;
+}
+.btn:active { transform: translateY(1px); }
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn--primary {
+  /* m114 — گرادیان برند + درخشش ملایم: عمق مدرن بدون خروج از زبان طراحی */
+  background: var(--grad-primary, var(--primary));
+  color: var(--on-primary);
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--grad-primary-hover, var(--primary-hover));
+  box-shadow: var(--glow-primary);
+}
+.btn--primary:active:not(:disabled) { box-shadow: none; }
+
+.btn--ghost {
+  background: transparent;
+  color: var(--text-2);
+  border-color: var(--border);
+}
+.btn--ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.btn--soft {
+  background: var(--primary-soft);
+  color: var(--on-primary-soft);
+}
+.btn--soft:hover:not(:disabled) { background: color-mix(in srgb, var(--primary-soft) 70%, var(--primary) 12%); }
+
+.btn--accent {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.btn--accent:hover:not(:disabled) { background: var(--accent-hover); }
+
+.btn--danger {
+  background: transparent;
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 45%, transparent);
+}
+.btn--danger:hover:not(:disabled) { background: var(--error-soft); }
+
+.btn--sm { padding: 5px var(--sp-3); font-size: var(--fs-sm); border-radius: var(--radius-sm); }
+.btn--icon {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: var(--radius);
+}
+
+/* ─────────────── فرم‌ها ─────────────── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.field__label {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text-2);
+}
+.field__label .req { color: var(--error); }
+.field__hint {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+.field__error {
+  font-size: var(--fs-xs);
+  color: var(--error);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 9px var(--sp-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-md);
+  line-height: 1.6;
+  transition: border-color var(--fast), box-shadow var(--fast), background var(--fast);
+}
+.input:hover, .select:hover, .textarea:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.input:focus, .select:focus, .textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: var(--focus-ring);
+}
+.input.is-invalid, .select.is-invalid { border-color: var(--error); }
+.input::placeholder, .textarea::placeholder { color: var(--text-3); }
+.textarea { resize: vertical; min-height: 84px; }
+
+.select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%),
+    linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+  background-position: calc(0% + 16px) calc(50% - 2px), calc(0% + 21px) calc(50% - 2px);
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  padding-inline-start: var(--sp-6);
+}
+
+/* ───────────── combo — دراپ‌داون سرچ‌دار (m66.7 — مثلاً ۴۰ مدرسه) ───────────── */
+
+.combo {
+  position: relative;
+  width: 100%;
+}
+.combo .input { width: 100%; padding-inline-end: var(--sp-6); }
+.combo__clear {
+  position: absolute;
+  inset-inline-end: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-2, color-mix(in srgb, var(--text) 8%, transparent));
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.combo__clear:hover { color: var(--error); }
+.combo__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  inset-inline: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg, 0 10px 30px rgba(0, 0, 0, 0.14));
+  z-index: 60;
+}
+.combo__opt {
+  padding: 8px 12px;
+  font-size: var(--fs-md);
+  color: var(--text);
+  cursor: pointer;
+}
+.combo__opt:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.combo__opt.is-active { background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.combo__opt.is-selected { font-weight: 600; color: var(--primary); }
+.combo__empty {
+  padding: 10px 12px;
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+.form-grid .span-2 { grid-column: span 2; }
+/* m84.3 — نوار زمینهٔ فرم (تاریخ وقوع/پرکننده/تغییر نوع): 1/-1 در هر تعداد ستون درست است؛
+   اسپنِ ثابت «2» در گرید تک‌ستونیِ موبایل ستون ضمنی می‌ساخت و کل فرم بهم می‌ریخت */
+.form-grid__bar { grid-column: 1 / -1; }
+@media (max-width: 640px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .form-grid .span-2 { grid-column: span 1; }
+}
+
+/* سوییچ */
+.switch {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch__track {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  transition: background var(--fast);
+  cursor: pointer;
+}
+.switch__track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  inset-inline-start: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  transition: transform var(--fast);
+}
+.switch input:checked + .switch__track { background: var(--primary); border-color: var(--primary); }
+.switch input:checked + .switch__track::after { transform: translateX(-18px); }
+html[dir='ltr'] .switch input:checked + .switch__track::after { transform: translateX(18px); }
+
+/* ─────────────── کارت ─────────────── */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  transition: background var(--normal), border-color var(--normal);
+}
+.card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--border);
+  /* m94 — سرریز موبایل: سرِ کارت با بج/دکمهٔ بلند باید بشکند، نه اینکه صفحه را
+     افقی بکشد (تب تفسیر بالینی — کارت OT در ۳۶۶px جا نمی‌شد و UI موبایل بهم می‌ریخت) */
+  flex-wrap: wrap;
+}
+.card__title { font-size: var(--fs-lg); font-weight: 700; margin-inline-end: auto; }
+.card__body { padding: var(--sp-5); }
+.card__body--flush { padding: 0; }
+
+/* ─────────────── جدول ─────────────── */
+
+.table-wrap { overflow-x: auto; }
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-md);
+}
+.table th {
+  text-align: start;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  background: var(--surface-2);
+}
+.table td {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  vertical-align: middle;
+}
+.table tbody tr { transition: background var(--fast); }
+.table tbody tr:hover { background: var(--surface-2); }
+.table tbody tr:last-child td { border-bottom: none; }
+.table .cell-main { font-weight: 600; color: var(--text); }
+.table .cell-sub { font-size: var(--fs-xs); color: var(--text-3); }
+.table .cell-actions { display: flex; gap: var(--sp-1); justify-content: flex-end; }
+.table tbody tr.is-clickable { cursor: pointer; }
+.table tbody tr.is-clickable:hover { background: color-mix(in srgb, var(--primary) 6%, transparent); }
+
+/* ─── جدول ریسپانسیو (M15.2): ردیف → کارت انباشته در موبایل ───
+   الگوی CSS خالص: سربرگ پنهان، هر td یک ردیف «برچسب: مقدار»، هر tr یک کارت.
+   برچسب‌ها از data-label (توسط dataTable) می‌آیند — بدون تکرار کد JS. */
+@media (max-width: 640px) {
+  .table-wrap { overflow-x: visible; }
+  .table { display: block; }
+  .table thead { display: none; }
+  .table tbody { display: flex; flex-direction: column; gap: var(--sp-2); }
+  .table tbody tr {
+    display: block;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: var(--sp-1) 0;
+    box-shadow: var(--shadow-1);
+  }
+  .table tbody tr:hover { background: var(--surface); }
+  .table tbody tr.is-clickable:active { background: var(--surface-2); }
+  .table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    padding: var(--sp-2) var(--sp-3);
+    border-bottom: 1px dashed color-mix(in srgb, var(--border) 60%, transparent);
+    text-align: start;
+  }
+  .table td:last-child { border-bottom: none; }
+  .table td::before {
+    content: attr(data-label);
+    flex: none;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--text-3);
+  }
+  .table td > * { min-width: 0; }
+  /* سلول نام: برجسته، بدون برچسب — خودش گویاست */
+  .table td:first-child { font-weight: 600; }
+  .table td:first-child::before { display: none; }
+  /* سلول عملیات: دکمه‌ها در یک ردیف قابل شکستن، بدون برچسب */
+  .table td:last-child { padding-top: var(--sp-2); }
+  .table td:last-child::before { display: none; }
+  .table td:last-child .cell-actions { flex-wrap: wrap; justify-content: flex-start; }
+}
+
+/* ─────────────── بج و چیپ ─────────────── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1.8;
+  white-space: nowrap;
+}
+.badge--primary { background: var(--primary-soft); color: var(--on-primary-soft); }
+.badge--success { background: var(--success-soft); color: var(--success); }
+.badge--error   { background: var(--error-soft);   color: var(--error); }
+.badge--warning { background: var(--warning-soft); color: var(--warning); }
+.badge--neutral { background: var(--surface-3);    color: var(--text-2); }
+.badge--accent  { background: var(--accent-soft);  color: var(--on-accent-soft); }
+/* m84.1 — بج مرخصی (آبی) و بیماری (بنفش) — قبلاً هر دو warning بودند */
+.badge--info    { background: var(--info-soft, var(--accent-soft)); color: var(--info, var(--accent)); }
+.badge--sick    { background: color-mix(in srgb, var(--sick, #9333EA) 14%, transparent); color: var(--sick, #9333EA); }
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot--success { background: var(--success); }
+.dot--error   { background: var(--error); }
+.dot--neutral { background: var(--text-3); }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 5px var(--sp-3);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+/* ─────────────── هشدارها ─────────────── */
+
+.alert {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius);
+  font-size: var(--fs-sm);
+  line-height: 1.7;
+  border: 1px solid transparent;
+}
+.alert--warning { background: var(--warning-soft); color: var(--warning); border-color: color-mix(in srgb, var(--warning) 30%, transparent); }
+.alert--error   { background: var(--error-soft);   color: var(--error);   border-color: color-mix(in srgb, var(--error) 30%, transparent); }
+.alert--info    { background: var(--primary-soft); color: var(--on-primary-soft); border-color: color-mix(in srgb, var(--primary) 25%, transparent); }
+
+/* ─────────────── مودال ─────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 17, 19, 0.5);
+  backdrop-filter: blur(3px);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-4);
+  z-index: 100;
+  animation: fade-in var(--fast) both;
+}
+.modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: min(88vh, 800px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  /* m114 — ورود فنری نرم (اسپرینگ سبک) */
+  animation: pop-in var(--dur-4, 380ms) var(--ease-spring) both;
+}
+
+/* m26 — خروج نرم مودال (هماهنگ با is-leaving در ui.js) */
+@keyframes modal-out {
+  to { opacity: 0; transform: scale(0.96) translateY(6px); }
+}
+@keyframes overlay-out {
+  to { opacity: 0; }
+}
+.modal-overlay.is-leaving {
+  pointer-events: none;
+  animation: overlay-out var(--fast) both;
+}
+.modal-overlay.is-leaving .modal {
+  animation: modal-out var(--fast) both;
+}
+.modal--wide { max-width: 720px; }
+.modal__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--border);
+}
+.modal__title { font-size: var(--fs-lg); font-weight: 700; margin-inline-end: auto; min-width: 0; overflow-wrap: anywhere; }
+.modal__body {
+  padding: var(--sp-5);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.modal__foot {
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: flex-start;
+  padding: var(--sp-4) var(--sp-5);
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+.modal__foot .spacer { margin-inline-start: auto; }
+
+@keyframes fade-in { from { opacity: 0; } }
+/* m114 — پاپ فنری: کمی بزرگ‌تر از قبل شروع می‌شود تا حس «پرش به جلو» بدهد */
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.965); }
+  60% { opacity: 1; }
+}
+
+/* ─────────────── توست ─────────────── */
+
+.toast-stack {
+  position: fixed;
+  bottom: var(--sp-5);
+  inset-inline-start: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  z-index: 200;
+  max-width: min(420px, calc(100vw - 40px));
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-3);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  /* m114 — ورود فنری از پایین با اورشوت ملایم */
+  animation: toast-in var(--dur-4, 380ms) var(--ease-spring) both;
+}
+.toast.is-leaving { animation: toast-out var(--fast) both; }
+.toast--success { border-inline-start: 4px solid var(--success); }
+.toast--error   { border-inline-start: 4px solid var(--error); }
+.toast--info    { border-inline-start: 4px solid var(--primary); }
+.toast--warning { border-inline-start: 4px solid var(--accent); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  60% { opacity: 1; }
+}
+@keyframes toast-out { to { opacity: 0; transform: translateY(8px); } }
+
+/* ─────────────── اسپینر و حالت خالی ─────────────── */
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--surface-3);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-8) var(--sp-4);
+  text-align: center;
+  color: var(--text-3);
+}
+.empty__icon {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-lg);
+  /* m114 — هالهٔ برند دور آیکن حالت خالی */
+  background: var(--empty-halo, var(--surface-2));
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 5%, transparent);
+  display: grid;
+  place-items: center;
+  color: var(--primary);
+}
+.empty__title { font-weight: 600; color: var(--text-2); }
+.empty__hint { font-size: var(--fs-sm); max-width: 340px; }
+.empty .btn { margin-top: var(--sp-2); }
+
+/* ─────────────── گروه دکمه‌ای (segmented) ─────────────── */
+
+.seg {
+  display: inline-flex;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px;
+  gap: 2px;
+}
+.seg__btn {
+  border: none;
+  background: transparent;
+  padding: 6px var(--sp-4);
+  border-radius: calc(var(--radius) - 4px);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text-2);
+  transition: background var(--fast), color var(--fast), box-shadow var(--fast);
+}
+.seg__btn:hover { color: var(--text); }
+.seg__btn.is-active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+
+/* ─────────────── کی‌پی‌آی ─────────────── */
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--sp-4);
+}
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-4) var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: var(--shadow-1);
+  position: relative;
+  overflow: hidden;
+}
+.kpi::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--kpi-tint, var(--primary));
+  opacity: 0.75;
+}
+.kpi__label {
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  font-weight: 500;
+}
+.kpi__value {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.kpi__sub { font-size: var(--fs-xs); color: var(--text-3); }
+.kpi--primary  { --kpi-tint: var(--primary); }
+.kpi--accent   { --kpi-tint: var(--accent); }
+.kpi--success  { --kpi-tint: var(--success); }
+.kpi--error    { --kpi-tint: var(--error); }
+.kpi--neutral  { --kpi-tint: var(--text-3); }
+
+/* ─────────────── M6 — کلیدها و توکن ─────────────── */
+
+.code-block {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--sp-3) var(--sp-4);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  overflow-x: auto;
+  margin: 0;
+  white-space: pre;
+}
+
+.token-box {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--primary-soft);
+  border: 1px dashed var(--primary);
+  border-radius: var(--radius);
+  padding: var(--sp-3) var(--sp-4);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  overflow-wrap: break-word;
+  word-break: break-all;
+  margin: var(--sp-3) 0 0;
+}
+
+/* ═══════════════ M7 — موبایل‌فرندلی ═══════════════ */
+
+/* مودال به‌صورت bottom-sheet در صفحه‌های کوچک */
+@media (max-width: 640px) {
+  .modal-overlay {
+    padding: 0;
+    place-items: end stretch;
+  }
+  .modal {
+    max-height: 94vh;
+    max-height: 94dvh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    animation: sheet-up var(--normal) both;
+  }
+  .modal__head { padding: var(--sp-3) var(--sp-4); }
+  .modal__body { padding: var(--sp-4); }
+  .modal__foot { padding: var(--sp-3) var(--sp-4); flex-wrap: wrap; }
+}
+@keyframes sheet-up {
+  from { opacity: 0; transform: translateY(24px); }
+}
+
+/* جلوگیری از زوم خودکار iOS هنگام فوکوس روی فرم */
+@media (max-width: 640px) {
+  .input, .select, .textarea { font-size: 16px; }
+}
+
+/* فشرده‌سازی برای صفحه‌های خیلی کوچک */
+@media (max-width: 480px) {
+  .table th, .table td { padding: var(--sp-2) var(--sp-3); }
+  .kpi { padding: var(--sp-3) var(--sp-4); }
+  .kpi__value { font-size: var(--fs-xl); }
+}
+
+/* هدف لمسی راحت‌تر روی دستگاه‌های لمسی */
+@media (pointer: coarse) {
+  .seg__btn { padding: 9px var(--sp-4); }
+  .chip { padding: 7px var(--sp-4); }
+  .tab { padding: 12px 16px; }
+  .btn--sm { padding: 8px var(--sp-3); }
+}
+
+/* ═══════════════ M8 — برچسب‌ها + جستجوی سراسری ═══════════════ */
+
+/* ─── رنگ دسته برچسب‌ها (بر پایه توکن‌های موجود) ─── */
+.tag-chip, .tag-toggle {
+  --tag-color: var(--text-3);
+}
+.tag-chip--disorder, .tag-toggle--disorder { --tag-color: var(--primary); }
+.tag-chip--grade, .tag-toggle--grade       { --tag-color: var(--accent); }
+.tag-chip--school_type, .tag-toggle--school_type { --tag-color: var(--success); }
+.tag-chip--custom, .tag-toggle--custom     { --tag-color: #9A6BD6; }
+:root[data-theme='dark'] .tag-chip--custom, :root[data-theme='dark'] .tag-toggle--custom { --tag-color: #B590E8; }
+
+/* m81 — حذف برچسب توسط مدیر: چیپ + دکمهٔ حذف کوچک در یک ردیف */
+.tag-toggle-wrap { display: inline-flex; align-items: center; gap: 3px; }
+.tag-del {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: var(--radius-full);
+  color: var(--text-3); cursor: pointer; flex-shrink: 0;
+  background: none; border: none; padding: 0;
+  transition: color var(--fast), background var(--fast);
+}
+.tag-del:hover { color: var(--error); background: var(--error-soft); }
+
+/* ─── چیپ برچسب ─── */
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--text);
+  background: color-mix(in srgb, var(--tag-color) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tag-color) 32%, transparent);
+  white-space: nowrap;
+  transition: background var(--fast), border-color var(--fast);
+}
+.tag-chip__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tag-color);
+  flex-shrink: 0;
+}
+.tag-chip__x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-inline-start: 2px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.65;
+  transition: opacity var(--fast), background var(--fast);
+}
+.tag-chip__x:hover { opacity: 1; background: color-mix(in srgb, var(--error) 20%, transparent); }
+
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 280px;
+}
+.tag-more { font-size: var(--fs-xs); color: var(--text-3); align-self: center; }
+
+/* ─── فیلتر برچسب در toolbar دانش‌آموزان ─── */
+.tag-filter {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+.tag-filter__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  font-weight: 500;
+  padding-top: 4px;
+  flex-shrink: 0;
+}
+.tag-filter__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ─── دکمه toggle برچسب (فیلتر + ویرایشگر) ─── */
+.tag-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--fast), border-color var(--fast), color var(--fast), box-shadow var(--fast);
+}
+.tag-toggle:hover { border-color: color-mix(in srgb, var(--tag-color) 45%, transparent); color: var(--text); }
+.tag-toggle.is-on {
+  color: var(--text);
+  background: color-mix(in srgb, var(--tag-color) 14%, transparent);
+  border-color: color-mix(in srgb, var(--tag-color) 55%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tag-color) 25%, transparent);
+}
+
+/* ─── ویرایشگر برچسب‌ها (مودال) ─── */
+.tag-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  max-height: 52vh;
+  overflow-y: auto;
+  padding-inline-end: var(--sp-1);
+}
+.tag-editor__section { display: flex; flex-direction: column; gap: var(--sp-2); }
+.tag-editor__cat {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-2);
+}
+.tag-editor__count {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--text-3);
+  background: var(--surface-2);
+  border-radius: var(--radius-full);
+  padding: 1px 8px;
+  font-variant-numeric: tabular-nums;
+}
+.tag-editor__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-editor__create-row {
+  display: grid;
+  grid-template-columns: 1fr 140px auto;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+/* ─── پروفایل: ردیف برچسب‌ها ─── */
+.profile-tags {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.profile-tags__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ─── دکمه جستجوی سراسری در topbar ─── */
+.gsearch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-inline-start: var(--sp-4);
+  padding: 7px var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  min-width: 220px;
+  transition: border-color var(--fast), color var(--fast), background var(--fast), box-shadow var(--fast);
+}
+.gsearch-btn:hover {
+  border-color: var(--primary);
+  color: var(--text-2);
+  box-shadow: var(--shadow-1);
+}
+.gsearch-btn__label { flex: 1; text-align: start; }
+.gsearch-btn kbd {
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+/* ─── پالت جستجو ─── */
+.modal--gsearch .modal__body { display: flex; flex-direction: column; gap: var(--sp-3); }
+.gsearch__input { font-size: var(--fs-lg); }
+.gsearch__results {
+  min-height: 120px;
+  max-height: 46vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.gsearch__group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-3);
+  padding: var(--sp-2) var(--sp-2) 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.gsearch__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: 9px var(--sp-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--fs-md);
+  text-align: start;
+  cursor: pointer;
+  transition: background var(--fast);
+}
+.gsearch__item.is-active { background: var(--primary-soft); }
+.gsearch__item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+.gsearch__item.is-active .gsearch__item-icon { background: var(--surface); color: var(--primary); }
+.gsearch__item-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.gsearch__item-title { font-weight: 500; }
+.gsearch__item-sub {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gsearch__item > .ico:last-child { color: var(--text-3); opacity: 0; transition: opacity var(--fast); }
+.gsearch__item.is-active > .ico:last-child { opacity: 1; }
+
+.gsearch__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-6);
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+.gsearch__loading { display: flex; justify-content: center; padding: var(--sp-5); }
+.gsearch__hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-2);
+}
+.gsearch__hint kbd {
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 6px;
+  color: var(--text-2);
+}
+
+.spinner--sm { width: 20px; height: 20px; border-width: 2px; }
+
+/* ─── ریسپانسیو M8 ─── */
+@media (max-width: 860px) {
+  .gsearch-btn__label, .gsearch-btn kbd { display: none; }
+  .gsearch-btn { min-width: 0; padding: 8px; }
+}
+@media (max-width: 640px) {
+  .tag-filter { flex-direction: column; gap: var(--sp-2); }
+  .tag-editor__create-row { grid-template-columns: 1fr; }
+  .tag-editor { max-height: 46vh; }
+  .gsearch__results { max-height: 52vh; }
+}
+
+/* ─────────────── M15.1 — تقویم جلالی (jalali-picker) ─────────────── */
+
+.jdate { position: relative; }
+
+/* m66.1 — تریگر: دکمهٔ تقویم + کادر قابل تایپ */
+.jdate__row { display: flex; gap: 6px; }
+.jdate__field { flex: 1; min-width: 0; }
+.jdate__field.is-empty { color: var(--text-3); }
+.jdate__iconbtn {
+  flex: 0 0 auto;
+  width: 42px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-2);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background var(--t-fast, 0.15s), border-color var(--t-fast, 0.15s);
+}
+.jdate__iconbtn:hover {
+  background: var(--surface-3);
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+}
+
+.jdate__pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-start: 0;
+  z-index: 210;
+  width: 284px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* m66.1 — سرصفحه: ناوبری ماه + دو منوی کشویی ماه/سال (پرش یک‌کلیکی به هر سال) */
+.jdate__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.jdate__head .btn--icon { flex: 0 0 auto; }
+.jdate__sel {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: var(--fs-sm);
+}
+.jdate__sel--year { flex: 0 0 74px; }
+
+.jdate__quick { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
+.jdate__clear { color: var(--danger); }
+
+.jdate__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.jdate__dow {
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  padding: 4px 0;
+}
+.jdate__day {
+  aspect-ratio: 1;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius);
+  font-size: var(--fs-sm);
+  font-family: inherit;
+  color: var(--text-1);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.jdate__day:hover { background: var(--surface-2); }
+.jdate__day--pad { pointer-events: none; }
+.jdate__day.is-today {
+  box-shadow: inset 0 0 0 1px var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+.jdate__day.is-selected {
+  background: var(--primary);
+  color: var(--on-primary, #fff);
+  font-weight: 700;
+}
+.jdate__hint { font-size: var(--fs-xs); color: var(--text-3); text-align: center; }
+
+/* ─── M21: وضعیت پذیرش در جدول دانش‌آموزان (چند badge عمودی) ─── */
+.table .cell-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.wl-actions .linklike { display: inline-flex; align-items: center; }
+
+/* ═══════════════ m35 — سنجش روزانه (غربال نوآموزان) ═══════════════ */
+
+.sanj-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.sanj-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3);
+}
+
+.sanj-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sanj-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+.sanj-rows {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+/* m70 — ردیف دومنظوره: موبایل ستونی، دسکتاپ یک‌خطی (نام | برچسب‌ها | عملیات) */
+.sanj-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'main actions' 'tags tags';
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.sanj-row__main {
+  grid-area: main;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.sanj-row__main .cell-main {
+  font-weight: 600;
+}
+.sanj-row__main .cell-sub {
+  white-space: nowrap;
+}
+
+.sanj-row__actions {
+  grid-area: actions;
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.sanj-row__tags {
+  grid-area: tags;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+@media (min-width: 720px) {
+  .sanj-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: 'main tags actions';
+    gap: var(--sp-3);
+  }
+  .sanj-row__tags {
+    justify-content: flex-end;
+  }
+}
+
+.sanj-bar {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  overflow: hidden;
+  flex: 1;
+}
+.sanj-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+}
+
+.sanj-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 112px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.sanj-chart__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 24px;
+}
+.sanj-chart__bar {
+  width: 100%;
+  background: var(--primary);
+  border-radius: 4px 4px 0 0;
+  min-height: 3px;
+}
+.sanj-chart__label {
+  font-size: 10px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+/* m70 — فلوی سنجش روزانه v2: ورودی بزرگ + چیپ‌های درشت‌تر + دوستونهٔ دسکتاپ */
+.input--xl {
+  font-size: var(--fs-lg);
+  font-weight: 500;
+  padding: 12px var(--sp-4);
+  border-radius: var(--radius-lg);
+}
+.input--xl::placeholder {
+  font-weight: 400;
+}
+
+.sanj-composer .sanj-chips .chip {
+  padding: 7px 14px;
+}
+
+.sanj-daily {
+  display: grid;
+  gap: var(--sp-4);
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1080px) {
+  .sanj-daily {
+    grid-template-columns: minmax(360px, 5fr) minmax(0, 7fr);
+    align-items: start;
+  }
+  .sanj-daily__composer {
+    position: sticky;
+    top: calc(var(--topbar-h) + var(--sp-4));
+  }
+}
+
+@media (max-width: 640px) {
+  .sanj-row__main .cell-sub {
+    white-space: normal;
+  }
+}
+
+/* ═══════════════ m37 — شاخص سنجش (داشبورد + تنظیمات + ویجت روز کاری) ═══════════════ */
+
+/* گزارش کوتاه سنجش — چهار شاخص فوری */
+.goal-report {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+.goal-mini {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  background: var(--surface-2);
+  border-radius: var(--r-md, 10px);
+  padding: var(--sp-2) var(--sp-1);
+  min-width: 0;
+}
+.goal-mini__val {
+  font-size: var(--fs-lg);
+  color: var(--text-1);
+  white-space: nowrap;
+}
+.goal-mini__val--warn { color: var(--accent); }
+.goal-mini__label {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* نوار تحقق هدف سال */
+.goal-block {
+  display: grid;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+.goal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  font-size: var(--fs-md);
+}
+.goal-bar {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  overflow: hidden;
+}
+.goal-bar__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(270deg, var(--primary), var(--primary-hover));
+  transition: width 0.5s ease;
+}
+.goal-noset { margin-bottom: var(--sp-3); }
+.goal-spark { margin-top: var(--sp-1); }
+/* m71 — فهرست اهداف همزمان (کارت سنجش داشبورد) */
+.goal-rows {
+  display: grid;
+  gap: var(--sp-3);
+  border-top: 1px dashed var(--border);
+  padding-top: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+.goal-rows__title {
+  font-weight: 700;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.goal-rows .goal-block { margin-bottom: 0; }
+.goal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+/* ویجت «سنجش‌های این روز» در روز کاری */
+.sanj-widget__empty {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--text-3);
+  padding: var(--sp-2) 0;
+}
+.sanj-widget__rows { display: grid; }
+.sanj-widget__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px dashed var(--border);
+}
+.sanj-widget__row:last-child { border-bottom: none; }
+.sanj-widget__name { display: grid; min-width: 0; }
+.sanj-widget__name b {
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sanj-widget__tags { display: flex; flex-shrink: 0; }
+.sanj-widget__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+/* ویرایشگر شاخص سنجش در تنظیمات */
+.sanj-targets { display: grid; gap: var(--sp-2); }
+.sanj-targets__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  padding: var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 10px);
+  background: var(--surface);
+}
+.sanj-targets__row .field { display: grid; gap: 4px; }
+
+@media (max-width: 640px) {
+  .goal-report { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   m69 — کارت v2 + KPI v2 + تصویرسازی + جداکننده
+   افزودنی: v1 دست‌نخورده؛ این بلوک امکان‌های تازه اضافه می‌کند
+   ═══════════════════════════════════════════════════════════════ */
+
+/* چیپ آیکون در سربرگ کارت */
+.card__ico {
+  width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--ico-soft, var(--primary-soft));
+  color: var(--ico-on, var(--on-primary-soft));
+}
+.card__title { display: flex; align-items: center; gap: var(--sp-2); }
+.card__meta { font-size: var(--fs-xs); color: var(--text-3); font-weight: 500; margin-inline-start: var(--sp-2); }
+.card__actions { display: flex; gap: var(--sp-1); margin-inline-start: auto; }
+.card__foot {
+  padding: var(--sp-3) var(--sp-5);
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  font-size: var(--fs-sm); color: var(--text-2);
+}
+
+/* KPI v2 — ردیف آیکون + ترند ▲▼ */
+.kpi__row { display: flex; align-items: center; gap: var(--sp-2); }
+.kpi__ico {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--kpi-tint, var(--primary)) 14%, transparent);
+  color: var(--kpi-tint, var(--primary));
+}
+.kpi__trend {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 8px; border-radius: var(--radius-full);
+  font-size: var(--fs-xs); font-weight: 700;
+}
+.kpi__trend--up { color: var(--success); background: var(--success-soft); }
+.kpi__trend--down { color: var(--error); background: var(--error-soft); }
+.kpi--neutral .kpi__ico { color: var(--text-3); background: var(--surface-3); }
+
+/* تصویرسازی حالت خالی */
+.illo { width: min(180px, 62%); height: auto; display: block; margin-inline: auto; padding: var(--sp-2) 0; }
+.illo svg { width: 100%; height: auto; overflow: visible; }
+.illo--hero {
+  position: absolute; inset-inline-end: -30px; inset-block-start: -40px;
+  width: 210px; opacity: 0.8; pointer-events: none;
+}
+.empty { display: flex; flex-direction: column; align-items: center; text-align: center; }
+
+/* جداکنندهٔ بخش با خط محوشونده */
+.divider {
+  display: flex; align-items: center; gap: var(--sp-3);
+  margin: var(--sp-5) 0 var(--sp-4);
+  color: var(--text-3); font-size: var(--fs-xs); font-weight: 600;
+}
+.divider::before { content: ''; flex: 1; height: 1px; background: linear-gradient(to left, var(--border), transparent); }
+.divider::after { content: ''; flex: 1; height: 1px; background: linear-gradient(to right, var(--border), transparent); }
+
+/* ═══════════════════════════════════════════════════════════════
+   m114 — سیستم اسکلتون (Skeleton) — بارگذاری مدرن به‌جای اسپینر
+   .skel بلوک پایه · ترکیب‌ها: skeletonState() در ui.js
+   احترام به prefers-reduced-motion: موج خاموش می‌شود (base.css)
+   ═══════════════════════════════════════════════════════════════ */
+
+@keyframes skel-wave {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skel {
+  position: relative;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg,
+    var(--skel-base) 0%,
+    var(--skel-shine) 40%,
+    var(--skel-base) 80%);
+  background-size: 200% 100%;
+  animation: skel-wave 1.4s linear infinite;
+  min-height: 12px;
+}
+
+/* ترکیب‌های پرکاربرد */
+.skel--line   { height: 12px; }
+.skel--line--lg { height: 16px; }
+.skel--title  { height: 20px; width: 38%; border-radius: var(--radius); }
+.skel--chip   { height: 26px; width: 88px; border-radius: var(--radius-full); }
+.skel--block  { height: 64px; border-radius: var(--radius); }
+
+/* ردیف جدولی: آواتار + دو خط + چیپ */
+.skel-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.skel-row:last-child { border-bottom: none; }
+.skel-row__avatar {
+  width: 34px; height: 34px; flex-shrink: 0;
+  border-radius: var(--radius-full);
+}
+.skel-row__lines { flex: 1; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.skel-row__lines .skel--line:last-child { width: 55%; }
+.skel-row__meta { width: 76px; flex-shrink: 0; }
+
+/* کارت اسکلتی برای گریدهای KPI/داشبورد */
+.skel-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+/* ظرف اسکلتون — جایگزین state-block در بارگذاری اولیهٔ فهرست‌ها */
+.skel-state {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.skel-state__head {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--border);
+}
+.skel-state__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+}
+
+/* کاربران حساس به حرکت: فقط پالس آهستهٔ شفافیت، بدون موج افقی */
+@media (prefers-reduced-motion: reduce) {
+  .skel {
+    animation: skel-pulse 1.8s ease-in-out infinite;
+    background: var(--skel-base);
+  }
+  @keyframes skel-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+}
+
+/* ─────────────── m115 — منوی سرریز عملیات ردیف (⋯) ─────────────── */
+.row-menu {
+  position: relative;
+  display: inline-flex;
+}
+.row-menu__btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+}
+.row-menu__btn.is-open {
+  background: var(--surface-2);
+  border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+}
+.row-menu__pop {
+  position: fixed;
+  z-index: 90;
+  min-width: 172px;
+  padding: 6px;
+  background: var(--surface-1, var(--surface, #fff));
+  border: 1px solid var(--border-1, var(--border, #e5e7eb));
+  border-radius: var(--radius-2, 10px);
+  box-shadow: var(--shadow-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: rowmenu-in 130ms var(--ease-spring, ease-out);
+}
+/* display:flex نویسنده بر hidden مرورگر اولویت می‌یابد — بستن صریح */
+.row-menu__pop[hidden] { display: none; }
+@keyframes rowmenu-in {
+  from { opacity: 0; transform: translateY(-5px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.row-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--radius-1, 8px);
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-1, var(--text, inherit));
+  text-align: start;
+  white-space: nowrap;
+}
+.row-menu__item svg { flex: 0 0 auto; opacity: 0.75; }
+.row-menu__item:hover { background: var(--surface-2); }
+.row-menu__item--danger { color: var(--danger, #dc2626); }
+.row-menu__item--danger:hover { background: color-mix(in srgb, var(--danger, #dc2626) 10%, transparent); }
+.row-menu__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-1, var(--border, #e5e7eb));
+}
+
+/* ─── m117 — انتخابگر تمرین از بانک تمرین (پیوست جلسه‌ها) ─── */
+.expick-chipswrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 132px; /* دو ردیف چیپ زیاد است — سرریز اسکرول می‌شود */
+  overflow-y: auto;
+}
+/* display:flex نویسنده بر hidden مرورگر اولویت می‌یابد — بستن صریح (درس m115) */
+.expick-chipswrap[hidden] { display: none; }
+.expick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.expick-list {
+  max-height: 320px;
+  min-height: 120px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+}
+.expick-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.expick-row:last-child { border-bottom: none; }
+.expick-row:hover { background: var(--surface-2); }
+.expick-row__main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.expick-row__title { font-size: var(--fs-sm); }
+.expick-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.expick-row .btn { flex: 0 0 auto; }
+.expick-foot { margin-top: 2px; }
+
+/* m117 — ردیف برچسب فیلد (برچسب + دکمهٔ کناری مثل «از بانک تمرین») */
+.field__labelrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text-2);
+  min-width: 0;
+}
+.field__labelrow .field__label { margin: 0; }

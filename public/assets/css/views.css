@@ -1,0 +1,3302 @@
+/* ═══════════════════════════════════════════════════════════════
+   views.css — استایل اختصاصی نماها (تقویم هفتگی، برنامه کاری، …)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─────────────── نوار هفته (نوبت‌ها) ─────────────── */
+
+.week-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-4);
+}
+.week-bar__title {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  margin-inline: var(--sp-2);
+  min-width: 200px;
+  text-align: center;
+}
+.week-bar .spacer { flex: 1; }
+
+/* ستون‌های روزها — agenda-style */
+.week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(180px, 1fr));
+  gap: var(--sp-3);
+  overflow-x: auto;
+  padding-bottom: var(--sp-2);
+}
+@media (max-width: 1100px) {
+  .week-grid { grid-template-columns: repeat(7, 210px); }
+}
+
+.day-col {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  overflow: hidden;
+}
+.day-col.is-today { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+.day-col__head {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+.day-col.is-today .day-col__head { background: var(--primary-soft); }
+.day-col__name { font-weight: 700; font-size: var(--fs-md); }
+.day-col__date { font-size: var(--fs-xs); color: var(--text-3); }
+.day-col.is-today .day-col__date { color: var(--on-primary-soft); }
+.day-col__count {
+  margin-inline-start: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0 8px;
+  border-radius: var(--radius-full);
+}
+.day-col__body {
+  padding: var(--sp-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  flex: 1;
+}
+.day-col__empty {
+  margin: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  padding: var(--sp-4) 0;
+}
+
+/* کارت نوبت */
+.appt-card {
+  width: 100%;
+  text-align: start;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--sp-2) var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: border-color var(--fast), background var(--fast), transform var(--fast);
+  position: relative;
+}
+.appt-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+.appt-card.is-cancelled { opacity: 0.62; }
+.appt-card__time {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--on-primary-soft);
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.appt-card.is-cancelled .appt-card__time { color: var(--text-3); }
+.appt-card__staff { font-size: var(--fs-xs); color: var(--text-2); font-weight: 500; }
+.appt-card__students {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.appt-card__bar {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: var(--radius-full);
+  background: var(--primary);
+  opacity: 0.8;
+}
+.appt-card.is-cancelled .appt-card__bar { background: var(--text-3); }
+
+/* ─────────────── ویرایشگر برنامه هفتگی (بازه کاری) ─────────────── */
+
+.sched {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.sched__day {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: var(--sp-3);
+  align-items: start;
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.sched__day-name { font-weight: 700; font-size: var(--fs-md); padding-top: 6px; }
+.sched__day-name small { display: block; color: var(--text-3); font-weight: 400; font-size: var(--fs-xs); }
+.sched__ranges { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; min-height: 36px; }
+.sched__add {
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text-3);
+  border-radius: var(--radius-full);
+  padding: 5px var(--sp-3);
+  font-size: var(--fs-xs);
+  transition: color var(--fast), border-color var(--fast);
+}
+.sched__add:hover { color: var(--primary); border-color: var(--primary); }
+
+.range-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  background: var(--primary-soft);
+  color: var(--on-primary-soft);
+  border-radius: var(--radius-full);
+  padding: 4px 6px 4px 12px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.range-chip__x {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  display: grid;
+  place-items: center;
+  opacity: 0.7;
+}
+.range-chip__x:hover { opacity: 1; background: color-mix(in srgb, var(--error) 25%, transparent); color: var(--error); }
+
+.sched__mini-form {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  flex-wrap: wrap;
+  padding: var(--sp-3);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  border: 1px dashed var(--border);
+}
+.sched__mini-form .select { width: auto; min-width: 110px; }
+.sched__total {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* ─────────────── نمودار میله‌ای کوچک داشبورد ─────────────── */
+
+.spark {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-3);
+  height: 120px;
+  padding: var(--sp-2) 0 0;
+}
+.spark__col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.spark__bar {
+  width: 100%;
+  max-width: 44px;
+  border-radius: 6px 6px 3px 3px;
+  background: linear-gradient(to top, var(--primary), color-mix(in srgb, var(--primary) 55%, transparent));
+  min-height: 4px;
+  transition: height var(--normal);
+  position: relative;
+}
+.spark__bar.is-cancelled-part {
+  background: linear-gradient(to top, var(--surface-3), var(--surface-3));
+  margin-bottom: -4px;
+}
+/* m37 — ماه‌های بالاتر از ریتم هدف سال (هدف/۱۲) در نمودار تحقق سنجش */
+.spark__bar--ahead {
+  background: linear-gradient(to top, var(--success), var(--success));
+}
+.spark__num { font-size: var(--fs-xs); font-weight: 700; color: var(--text-2); }
+.spark__day { font-size: var(--fs-xs); color: var(--text-3); }
+
+/* لیست «به ازای هر کارمند» داشبورد */
+.staff-mini {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.staff-mini:last-child { border-bottom: none; }
+.staff-mini__avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--on-primary-soft);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: var(--fs-md);
+  flex-shrink: 0;
+}
+.staff-mini__name { font-weight: 600; }
+.staff-mini__meta { font-size: var(--fs-xs); color: var(--text-3); }
+.staff-mini__nums { margin-inline-start: auto; display: flex; gap: var(--sp-3); align-items: baseline; }
+.staff-mini__total { font-size: var(--fs-xl); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ─────────────── پروفایل دانش‌آموز ─────────────── */
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: var(--sp-5);
+  align-items: start;
+}
+/* ستون‌های گرید اجازه فشردگی داشته باشند — وگرنه جدول/چیپ‌ها overflow افقی می‌سازند */
+.profile-grid > * { min-width: 0; }
+@media (max-width: 920px) {
+  .profile-grid { grid-template-columns: 1fr; }
+}
+
+.info-list { display: flex; flex-direction: column; }
+.info-list__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--border) 70%, transparent);
+  font-size: var(--fs-sm);
+}
+.info-list__row:last-child { border-bottom: none; }
+.info-list__key { color: var(--text-3); flex-shrink: 0; }
+.info-list__val { font-weight: 500; text-align: end; word-break: break-word; }
+
+.avatar-lg {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--on-primary-soft);
+  display: grid;
+  place-items: center;
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ─────────────── نوار ابزار جستجو/فیلتر ─────────────── */
+
+.toolbar {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: var(--sp-4);
+}
+.toolbar .input { width: 260px; }
+.toolbar .select { width: auto; min-width: 150px; }
+.toolbar .spacer { flex: 1; }
+@media (max-width: 640px) {
+  .toolbar .input { width: 100%; }
+}
+
+/* صفحه‌بندی ساده */
+.pager {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  justify-content: flex-end;
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+/* انتخاب چندگانه دانش‌آموزان در فرم نوبت */
+.pick-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-height: 220px;
+  overflow-y: auto;
+}
+.pick-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  transition: background var(--fast);
+}
+.pick-list__item:hover { background: var(--surface-2); }
+.pick-list__item.is-picked { background: var(--primary-soft); }
+.pick-list__item input { accent-color: var(--primary); }
+
+/* ═══════════════ M5 — تقویم زمان‌بندی (time-grid) + نوبت‌گذاری سریع ═══════════════ */
+
+.grid-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.grid-scroll { overflow-x: auto; }
+
+/* M15.2 — راهنمای سوایپ افقی نمای هفته در موبایل (فقط وقتی هفته تمام‌عرض نیست) */
+.swipe-hint {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+.swipe-hint svg { flex: none; }
+@media (max-width: 720px) {
+  .swipe-hint.is-week { display: inline-flex; }
+}
+
+.grid-inner {
+  display: grid;
+  grid-template-columns: 56px repeat(7, minmax(150px, 1fr));
+  position: relative;
+}
+
+/* سرستون روزها */
+.grid-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  padding: var(--sp-2) var(--sp-2);
+  text-align: center;
+  font-weight: 700;
+  font-size: var(--fs-sm);
+}
+.grid-head.is-today { background: var(--primary-soft); color: var(--on-primary-soft); }
+.grid-head__date { display: block; font-size: var(--fs-xs); color: var(--text-3); font-weight: 400; }
+.grid-head.is-today .grid-head__date { color: var(--on-primary-soft); }
+
+/* برچسب ساعت سمت راست */
+.gutter {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  text-align: end;
+  padding: 2px 8px 0 4px;
+  transform: translateY(-7px);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+/* ستون روز — بدنه با موقعیت نسبی برای کارت‌های absolute */
+.grid-day {
+  position: relative;
+  border-inline-end: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.grid-day.is-today { background: color-mix(in srgb, var(--primary-soft) 28%, transparent); }
+
+/* خط افقی هر سلول ۳۰ دقیقه‌ای */
+.grid-cell {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 34%, transparent);
+  transition: background var(--fast);
+}
+.grid-cell.is-hour { border-bottom-color: color-mix(in srgb, var(--border) 70%, transparent); }
+.grid-day:hover .grid-cell:hover {
+  background: var(--primary-soft);
+  cursor: copy;
+}
+.grid-day.is-weekend .grid-cell { background: color-mix(in srgb, var(--surface-3) 30%, transparent); }
+
+/* ناحیه غیر کاری (خارج بازه کاری مرکز) */
+.grid-off {
+  position: absolute;
+  inset-inline: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--surface-3) 55%, transparent) 0 6px,
+    transparent 6px 12px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+.grid-day.is-today .grid-off { opacity: 0.55; }
+
+/* کارت نوبت روی شبکه — m88: نفس بیشتر (padding/فاصلهٔ خط بیشتر، کارت با PPM بلندترِ بازهٔ کاری بزرگ‌تر می‌شود) */
+.grid-appt {
+  position: absolute;
+  inset-inline: 4px;
+  z-index: 2;
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  border-inline-start: 4px solid var(--primary);
+  border-radius: var(--radius);
+  padding: 4px 9px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-snug, 1.6);
+  overflow: hidden;
+  cursor: grab;
+  text-align: start;
+  transition: box-shadow var(--fast), transform var(--fast);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.grid-appt:hover {
+  box-shadow: var(--shadow-2);
+  z-index: 4;
+}
+.grid-appt:active { cursor: grabbing; }
+.grid-appt.is-dragging { opacity: 0.45; transform: scale(0.98); }
+.grid-appt.is-cancelled {
+  background: color-mix(in srgb, var(--surface-3) 70%, transparent);
+  border-color: var(--border);
+  border-inline-start-color: var(--text-3);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+.grid-appt__time { font-weight: 700; color: var(--on-primary-soft); font-variant-numeric: tabular-nums; }
+.grid-appt.is-cancelled .grid-appt__time { color: var(--text-3); }
+.grid-appt__title {
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* خط «الان» */
+.grid-now {
+  position: absolute;
+  inset-inline: 0;
+  height: 2px;
+  background: var(--accent);
+  z-index: 3;
+  pointer-events: none;
+}
+.grid-now::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: -5px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* درگ‌اور */
+.grid-day.drop-target .grid-cell { background: var(--primary-soft); }
+
+/* چیپ‌های مدت سریع */
+.chip-row { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.chip {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--radius-full);
+  padding: 4px 14px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--fast);
+  font-variant-numeric: tabular-nums;
+}
+.chip:hover { border-color: var(--primary); color: var(--primary); }
+.chip.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* ═══════════════ M5 — تب‌های صفحه تنظیمات ═══════════════ */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--sp-5);
+  overflow-x: auto;
+}
+.tab {
+  border: none;
+  background: transparent;
+  padding: 10px 18px;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--fast), border-color var(--fast);
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text); }
+.tab.is-active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.settings-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+  max-width: 720px;
+}
+.settings-section h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-lg); }
+.settings-section .hint-text { color: var(--text-3); font-size: var(--fs-sm); margin: 0 0 var(--sp-4); }
+
+/* m110 — فرم «امتیازبندی همکاران» (تنظیمات — فقط مدیر) */
+.scw-group { margin: 0 0 var(--sp-4); }
+.scw-group__title { font-weight: 700; font-size: var(--fs-sm); margin-bottom: var(--sp-2); }
+.scw-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--sp-2) var(--sp-3); }
+.scw-item { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); }
+.scw-item .input { max-width: 130px; }
+.scw-item .cell-sub { line-height: 1.6; }
+
+/* نوار وضعیت بات */
+.bot-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  margin-bottom: var(--sp-4);
+  font-size: var(--fs-sm);
+  flex-wrap: wrap;
+}
+
+/* ═══════════════ M7 — موبایل‌فرندلی ═══════════════ */
+
+/* نمای روزانه تقویم — یک ستون تمام‌عرض به‌جای هفت ستون */
+.grid-inner--day {
+  grid-template-columns: 56px minmax(0, 1fr);
+}
+
+/* سوییچ حالت هفته/روز — همه‌جا فعال (M12: نمای چند درمانگر در دسکتاپ هم کاربردی است) */
+.mode-seg { display: inline-flex; }
+
+@media (max-width: 760px) {
+  /* نوار هفته: عنوان منعطف */
+  .week-bar__title {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .week-bar .btn--sm { padding: 6px 10px; }
+
+  /* کارت نوبت روی شبکه: خواناتر برای لمس */
+  .grid-appt {
+    font-size: var(--fs-sm);
+    padding: 6px 11px;
+    gap: 2px;
+    inset-inline: 6px;
+  }
+  .grid-head { font-size: var(--fs-md); padding: var(--sp-3) var(--sp-2); }
+}
+
+@media (max-width: 480px) {
+  .staff-mini__nums { flex-wrap: wrap; }
+  .staff-mini__total { font-size: var(--fs-lg); }
+}
+
+/* ═══════════════ M9: حضور و غیاب ═══════════════ */
+
+/* نوار ناوبری روز */
+.att-day {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+  flex-wrap: wrap;
+}
+.att-day__label {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-lg);
+  min-width: 0;
+}
+
+/* چیپ‌های خلاصه روز */
+.att-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+.att-chip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--sp-3) var(--sp-4);
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  border-inline-start: 3px solid var(--border);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.att-chip:hover { transform: translateY(-1px); box-shadow: var(--shadow-1); }
+.att-chip b { font-size: var(--fs-xl); font-weight: 700; }
+.att-chip span { color: var(--text-2); font-size: var(--fs-sm); }
+.att-chip--present  { border-inline-start-color: var(--success); }
+.att-chip--absent   { border-inline-start-color: var(--error); }
+/* m84.1 — رنگ‌های متمایز: تأخیر کهربایی، مرخصی آبی، بیماری بنفش */
+.att-chip--late     { border-inline-start-color: var(--warning); }
+.att-chip--leave    { border-inline-start-color: var(--info, var(--accent)); }
+.att-chip--sick     { border-inline-start-color: var(--sick, #9333EA); }
+.att-chip--unmarked { border-inline-start-color: var(--text-3, var(--border)); opacity: 0.92; }
+
+/* ردیف همکار */
+.att-list { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4); }
+.att-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-2);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.att-row:last-child { border-bottom: none; }
+.att-row__id { display: flex; align-items: center; gap: var(--sp-3); min-width: 180px; flex: 1 1 180px; }
+.att-row__name { font-weight: 600; }
+.att-row__meta { color: var(--text-2); font-size: var(--fs-sm); }
+.att-row__seg { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.att-row__month {
+  width: 100%;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  padding-inline-start: 52px;
+}
+.att-month__cap { opacity: 0.7; }
+
+/* کنترل وضعیت بخش‌بندی‌شده */
+.att-seg {
+  display: inline-flex;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full, 999px);
+  padding: 3px;
+  gap: 2px;
+}
+.att-seg__btn {
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  padding: 5px 14px;
+  border-radius: var(--radius-full, 999px);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.att-seg__btn:hover:not(:disabled):not(.is-active) { background: var(--surface-2); }
+.att-seg__btn:active:not(:disabled) { transform: scale(0.96); }
+.att-seg__btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.att-seg__btn--ok.is-active   { background: var(--success); color: #fff; }
+.att-seg__btn--err.is-active  { background: var(--error); color: #fff; }
+/* m84.1 — تأخیر کهربایی، مرخصی آبی (accent)، بیماری بنفش — دیگر دو رنگ یکی نیست */
+.att-seg__btn--late.is-active { background: var(--warning); color: var(--on-warning, #fff); }
+.att-seg__btn--info.is-active { background: var(--accent); color: #fff; }
+.att-seg__btn--sick.is-active { background: var(--sick, #9333EA); color: #fff; }
+.att-seg__btn--warn.is-active { background: var(--warning); color: #fff; }
+
+/* نشان یادداشت */
+.att-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  background: var(--surface-2, transparent);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* دکمه غایب ملایم */
+.btn--danger-ghost {
+  background: transparent;
+  color: var(--error);
+  border: 1px solid var(--error);
+}
+.btn--danger-ghost:hover:not(:disabled) { background: var(--error-soft); }
+
+/* m84.1 — دکمه تأخیر ملایم (حاضر با تأخیر) */
+.btn--warn-ghost {
+  background: transparent;
+  color: var(--warning);
+  border: 1px solid var(--warning);
+}
+.btn--warn-ghost:hover:not(:disabled) { background: var(--warning-soft); }
+
+/* آواتار متناوب دانش‌آموز */
+.staff-mini__avatar--alt {
+  background: var(--accent-soft, var(--surface-2));
+  color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .att-row__seg { width: 100%; justify-content: flex-end; }
+  .att-seg__btn { padding: 7px 12px; }
+  .att-row__month { padding-inline-start: 0; }
+  .att-summary { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ═══════════════ M10: اعلان‌های مدیر ═══════════════ */
+
+/* بنرها (صفحه ورود + پنل) */
+#ann-banner-root { padding: 0; }
+.ann-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5) 0;
+}
+.ann-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  background: linear-gradient(135deg, var(--accent-soft, rgba(42, 171, 238, 0.12)), transparent 60%), var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: var(--sp-3) var(--sp-4);
+  color: var(--text);
+  animation: annIn 0.35s ease both;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.ann-banner.is-leaving { opacity: 0; transform: translateY(-6px); }
+.ann-banner .ico { color: var(--accent); margin-top: 2px; }
+.ann-banner__text { flex: 1; min-width: 0; }
+.ann-banner__text b { display: block; margin-bottom: 2px; }
+.ann-banner__text p { margin: 0; color: var(--text-2); font-size: var(--fs-sm); white-space: pre-wrap; }
+.ann-banner__close {
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.ann-banner__close:hover { background: var(--surface-2); color: var(--text); }
+@keyframes annIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* مدیریت اعلان‌ها */
+.ann-compose { display: flex; flex-direction: column; gap: var(--sp-3); }
+.ann-compose .input, .ann-compose .textarea { width: 100%; }
+.ann-checks { display: flex; gap: var(--sp-5); flex-wrap: wrap; }
+.ann-check { display: inline-flex; align-items: center; gap: var(--sp-2); cursor: pointer; font-size: var(--fs-sm); }
+.ann-check input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.ann-compose__hint { font-size: var(--fs-xs); color: var(--text-3); }
+
+.ann-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--sp-3) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ann-item:hover { border-color: var(--accent); box-shadow: var(--shadow-1); }
+.ann-item__head { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
+.ann-item__date { margin-inline-start: auto; font-size: var(--fs-xs); color: var(--text-3); }
+.ann-item__body { margin: 0; color: var(--text-2); font-size: var(--fs-sm); white-space: pre-wrap; }
+.ann-badges { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.ann-item__actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
+
+@media (max-width: 640px) {
+  .ann-stack { padding: var(--sp-3) var(--sp-3) 0; }
+  .ann-item__date { margin-inline-start: 0; width: 100%; }
+}
+
+/* ═══════════════ M11/M12: نمودارهای سبک ═══════════════ */
+
+.chart { width: 100%; }
+.chart__empty { color: var(--text-3); font-size: var(--fs-sm); text-align: center; padding: var(--sp-5) 0; margin: 0; }
+.chart__svg { width: 100%; height: auto; display: block; overflow: visible; }
+.chart__grid { stroke: color-mix(in srgb, var(--border) 70%, transparent); stroke-width: 1; stroke-dasharray: 3 4; }
+
+.chart__bar {
+  fill: var(--primary);
+  transition: y 0.55s var(--ease), height 0.55s var(--ease);
+}
+.chart__bar--mixed { fill: color-mix(in srgb, var(--primary) 72%, var(--warning)); }
+.chart__tick { fill: var(--text-3); font-size: 10px; font-family: inherit; }
+
+.chart__track { stroke: color-mix(in srgb, var(--border) 55%, transparent); }
+.chart__seg { transition: stroke-dashoffset 0.7s var(--ease); }
+.chart__seg--primary { stroke: var(--primary); }
+.chart__seg--success { stroke: var(--success); }
+.chart__seg--error { stroke: var(--error); }
+.chart__seg--warning { stroke: var(--warning); }
+.chart__seg--accent { stroke: var(--accent); }
+.chart__seg--neutral { stroke: var(--text-3); }
+.chart__center { fill: var(--text); font-size: 30px; font-weight: 700; font-family: inherit; }
+.chart__center-cap { fill: var(--text-3); font-size: 11px; font-family: inherit; }
+
+.chart--donut { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; justify-content: center; }
+.chart--donut .chart__svg { max-width: 200px; }
+.chart__legend { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-3); }
+.chart--donut .chart__legend { margin-top: 0; flex-direction: column; gap: var(--sp-2); }
+.chart__legend-item { display: flex; align-items: center; gap: 7px; font-size: var(--fs-sm); color: var(--text-2); }
+.chart__legend-item b { font-variant-numeric: tabular-nums; }
+.chart__dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.chart__dot--primary { background: var(--primary); }
+.chart__dot--success { background: var(--success); }
+.chart__dot--error { background: var(--error); }
+.chart__dot--warning { background: var(--warning); }
+.chart__dot--accent { background: var(--accent); }
+.chart__dot--neutral { background: var(--text-3); }
+
+.chart__hbar-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+.chart__hbar-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2); margin-bottom: 5px; font-size: var(--fs-sm); }
+.chart__hbar-label { color: var(--text-2); }
+.chart__hbar-value { font-variant-numeric: tabular-nums; }
+.chart__hbar-track { height: 9px; border-radius: var(--radius-full); background: var(--surface-3); overflow: hidden; }
+.chart__hbar-fill { height: 100%; border-radius: var(--radius-full); width: 0; transition: width 0.65s var(--ease); }
+.chart__hbar-fill--accent { background: linear-gradient(90deg, var(--accent), var(--primary)); }
+.chart__hbar-fill--primary { background: var(--primary); }
+.chart__hbar-fill--success { background: var(--success); }
+.chart__hbar-fill--warning { background: var(--warning); }
+.chart__hbar-fill--error { background: var(--error); }
+.chart__hbar-hint { font-size: var(--fs-xs); color: var(--text-3); margin-top: 3px; }
+
+/* ═══════════════ M12: منوی بازشونده ═══════════════ */
+
+.dd { position: relative; display: inline-block; }
+.dd__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-start: 0;
+  min-width: 250px;
+  max-width: 320px;
+  max-height: 340px;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  padding: 6px;
+  z-index: 70;
+  animation: dd-in 0.16s var(--ease);
+}
+@keyframes dd-in {
+  from { opacity: 0; transform: translateY(-5px) scale(0.98); }
+}
+.dd__group {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  padding: 8px 10px 4px;
+  font-weight: 700;
+}
+.dd__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: start;
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  transition: background var(--fast);
+}
+.dd__item:hover { background: var(--surface-3); }
+.dd__item.is-on { background: var(--primary-soft); color: var(--on-primary-soft); }
+.dd__item .count { margin-inline-start: auto; font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; }
+.dd__item.is-on .count { color: var(--on-primary-soft); }
+.dd__all { border-bottom: 1px solid var(--border); margin-bottom: 4px; padding-bottom: 6px; }
+
+/* سرستون درمانگر در نمای روزانه چندستونی */
+.grid-head--staff { display: flex; flex-direction: column; gap: 2px; align-items: center; }
+
+/* ═══════════════ M12: چاپ گزارش ═══════════════ */
+
+@media print {
+  .sidebar, .topbar, .toast-stack, .sidebar-backdrop, .menu-btn,
+  .print-hide, .gsearch-btn, .ann-banner-root, .week-bar { display: none !important; }
+  .shell { display: block; }
+  .main { margin: 0 !important; }
+  .content { padding: 0 !important; max-width: none !important; }
+  body { background: #fff !important; }
+  .card, .kpi { box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid; }
+  .page-head__title { font-size: var(--fs-xl); }
+}
+
+/* گرید دوستونی گزارش */
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+
+/* ════════════════════════════════════════════════════════════
+   M14 — تقویم کاری بصری (wgrid) + صفحه ورود (login) + نوار امروز حضور
+   ════════════════════════════════════════════════════════════ */
+
+/* ─── تقویم بصری هفتگی ۰۶–۲۱ (m109 — شیفت صبح + عصر) ─── */
+
+.sched--visual { display: flex; flex-direction: column; gap: var(--sp-3); }
+
+/* ─── m111 — ردیف «تنظیم سریع» ویرایشگر برنامهٔ هفتگی (تب بازه کاری مرکز و کارکنان) ─── */
+
+.sched-quick {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.sched-quick__label { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); white-space: nowrap; }
+.sched-quick__pair { display: flex; align-items: center; gap: 6px; }
+.sched-quick__cap { font-size: var(--fs-xs); color: var(--text-3); }
+.sched-quick__time { max-width: 108px; }
+.sched-quick__scope { max-width: 220px; }
+.sched-quick .btn { margin-inline-start: auto; }
+
+.wgrid__hint {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--text-3); font-size: var(--fs-xs);
+}
+.wgrid__hint svg { flex: none; color: var(--accent); }
+
+.wgrid {
+  display: grid;
+  grid-template-columns: 48px repeat(7, minmax(0, 1fr));
+  gap: 3px;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+  /* m109 — گرید ۱۵ ساعته بلند است؛ درون کارت اسکرول بخورد (نه کل صفحه) */
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 2px;
+}
+
+.wgrid__corner { }
+
+.wgrid__day {
+  text-align: center; font-size: var(--fs-xs); font-weight: 700;
+  color: var(--text-2); padding: 4px 0;
+  /* m109 — سرستون چسبان هنگام اسکرول شبکه */
+  position: sticky; top: 0; z-index: 2;
+  background: var(--surface);
+}
+/* m109 — جداکنندهٔ نمایشی شیفت صبح/عصر (ردیف کامل عرض شبکه) */
+.wgrid__shift-break {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 10px; font-weight: 700; color: var(--text-3);
+  padding-block: 2px;
+}
+.wgrid__shift-break::before,
+.wgrid__shift-break::after {
+  content: ''; flex: 1;
+  border-top: 1px dashed color-mix(in srgb, var(--text-3) 38%, transparent);
+}
+.wgrid__day-abbr { display: none; }
+@media (max-width: 720px) {
+  /* نام کامل روزها در عرض کم روی‌هم می‌افتد → تک‌حرفی */
+  .wgrid__day-full { display: none; }
+  .wgrid__day-abbr { display: inline; }
+}
+
+.wgrid__time {
+  font-size: 10px; color: var(--text-3);
+  display: flex; align-items: center; justify-content: flex-end;
+  padding-inline-end: 6px; direction: ltr;
+  font-variant-numeric: tabular-nums;
+}
+.wgrid__time--half { opacity: 0.45; }
+
+.wgrid__cell {
+  height: 20px; border-radius: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+}
+.wgrid__cell:hover { border-color: var(--primary); }
+.wgrid__cell.is-on {
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  border-color: var(--primary-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--on-primary) 18%, transparent);
+}
+.wgrid__cell:active { transform: scale(0.96); }
+
+/* چیپ‌های روز زیر شبکه */
+.wchips { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.wchips__day {
+  display: flex; flex-direction: column; gap: 5px; align-items: center;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 7px 4px; min-height: 58px;
+}
+.wchips__name { font-size: 10px; font-weight: 700; color: var(--text-3); }
+.wchips__list { display: flex; flex-direction: column; gap: 4px; align-items: center; width: 100%; }
+.wchips__off { font-size: 10px; color: var(--text-3); opacity: 0.7; }
+.wchips__list .range-chip { font-size: 10px; padding: 2px 6px; gap: 4px; }
+
+@media (max-width: 720px) {
+  .wgrid { grid-template-columns: 40px repeat(7, minmax(0, 1fr)); gap: 2px; }
+  .wgrid__cell { height: 14px; border-radius: 3px; }
+  .wchips { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .wchips__day:nth-last-child(-n+3) { grid-column: auto / span 1; }
+}
+
+/* ─── صفحه ورود (M14) ─── */
+
+body.is-login { background: var(--bg); }
+
+.login-root {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--sp-5);
+  background:
+    radial-gradient(900px 500px at 85% -10%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 60%),
+    radial-gradient(700px 420px at 8% 110%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 55%),
+    var(--bg);
+  overflow: auto;
+}
+
+.login-card {
+  width: min(400px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  /* m114 — عمق بیشتر + لبهٔ نوری بالای کارت */
+  box-shadow: var(--shadow-3);
+  border-top: 2px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+  padding: 32px 28px 26px;
+  display: flex; flex-direction: column; gap: 12px;
+  animation: login-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes login-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* m114 — ورود لوگو با اسپرینگ ملایم + هالهٔ برند */
+.login__logo {
+  width: 76px; height: 76px; border-radius: 50%;
+  display: block;
+  margin-inline: auto;
+  animation: logo-in 0.6s var(--ease-spring, cubic-bezier(0.34, 1.4, 0.64, 1)) 0.08s both;
+  box-shadow:
+    0 8px 24px color-mix(in srgb, var(--primary) 32%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--primary) 12%, transparent),
+    0 0 0 1px var(--border);
+}
+@keyframes logo-in {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.login__title { text-align: center; font-size: var(--fs-lg); font-weight: 700; color: var(--text-1); }
+.login__sub { text-align: center; font-size: var(--fs-sm); color: var(--text-3); margin-top: -6px; }
+
+.login__form { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.login__form .field-label { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); margin-top: 6px; }
+.login__form .input { width: 100%; }
+
+.login__error {
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  color: var(--error);
+  border: 1px solid color-mix(in srgb, var(--error) 35%, transparent);
+  border-radius: var(--radius);
+  padding: 8px 12px; font-size: var(--fs-sm);
+}
+
+/* m107 — .login__hint حذف شد (راهنمای رمز پیش‌فرض به خواست کاربر + امنیت برداشته شد) */
+
+/* m114 — نوار برند پایین کارت ورود: امضای زبان طراحی */
+.login-card::after {
+  content: '';
+  order: 99;
+  margin-top: 10px;
+  height: 3px; width: 56px;
+  border-radius: 999px;
+  background: var(--grad-primary, var(--primary));
+  align-self: center;
+  opacity: 0.85;
+}
+
+/* ─── نوار «امروز» حضور و غیاب ─── */
+
+.att-day__hint { font-size: var(--fs-xs); color: var(--text-3); align-self: center; }
+
+@media (max-width: 640px) {
+  .att-day { flex-wrap: wrap; }
+  .att-day__hint { width: 100%; order: 3; }
+}
+
+/* ─────────────── m66.6: بازطراحی «روز کاری» — چیدمان عمودی کارت‌به‌کارت ─────────────── */
+/* ساختار: تقویم ← حضور و غیاب همکاران ← درمانگران و نوبت‌ها (تایم‌لاین) ← سنجش ← توضیحات روز */
+
+/* جریان عمودی کارت‌ها — جایگزین چیدمان دو ستونی */
+.wd-flow { display: flex; flex-direction: column; gap: var(--sp-4); }
+.wd-flow .page-head { margin-bottom: 0; }
+.wd-aux { display: flex; flex-direction: column; gap: var(--sp-4); }
+.wd-att__chips { display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; }
+
+/* کارت ۱ — تقویم ماه جلالی + ناوبری سریع روز/ماه */
+.wd-cal__quick { display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; }
+.wd-cal__bar {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  margin-bottom: var(--sp-3);
+}
+.wd-cal__date { font-size: var(--fs-md); }
+.wd-cal__count {
+  margin-inline-start: auto;
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--text-2); font-size: var(--fs-xs);
+  background: var(--surface-2); border-radius: 999px; padding: 2px 10px;
+}
+.wd-cal__wrap { max-width: 460px; margin-inline: auto; }
+.wd-cal__month {
+  display: flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.wd-cal__month b { min-width: 132px; text-align: center; font-size: var(--fs-sm); }
+.wd-cal__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.wd-cal__dow {
+  text-align: center; font-size: var(--fs-xs); font-weight: 700;
+  color: var(--text-3); padding: 4px 0;
+}
+/* m87 — سلول تقویم بلندتر و ستونی شد تا شمارهٔ روز + نقاط رنگی درمانگرها جا شوند */
+.wd-cal__cell {
+  height: 44px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border: 1px solid transparent; border-radius: var(--radius);
+  background: none; font: inherit; font-size: var(--fs-sm); color: var(--text-1);
+  cursor: pointer;
+  transition: background var(--fast), border-color var(--fast), color var(--fast);
+}
+.wd-cal__cell:hover { background: var(--surface-2); }
+.wd-cal__cell--blank { pointer-events: none; }
+.wd-cal__cell.is-today { border-color: var(--primary); }
+.wd-cal__cell.is-selected { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
+.wd-cal__cell.is-selected:hover { background: var(--primary); }
+
+/* کارت ۲ — حضور و غیاب همکاران (فقط شیفت‌دارهای امروز در فرایند؛ بقیه پانویس) */
+.wd-att { display: flex; flex-direction: column; }
+.wd-att__row {
+  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+.wd-att__row:last-child { border-bottom: none; }
+.wd-att__row--absent { background: color-mix(in srgb, var(--error) 5%, transparent); border-radius: var(--radius); }
+.wd-att__who { flex: 1 1 220px; min-width: 0; }
+.wd-att__name { font-weight: 700; font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wd-att__meta { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-top: 2px; }
+.wd-att__actions { display: flex; align-items: center; gap: var(--sp-1); }
+.wd-att__seg .att-seg__btn { font-size: var(--fs-xs); padding: 5px 10px; }
+.wd-seg--unset .att-seg__btn { opacity: 0.55; }
+.wd-att__off {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: var(--sp-2); padding-top: var(--sp-2);
+  border-top: 1px dashed var(--border);
+  color: var(--text-3); font-size: var(--fs-xs);
+}
+.wd-att__off b { font-weight: 600; color: var(--text-2); }
+
+/* کارت ۳ — بلوک هر درمانگر */
+.wd-blocks { display: flex; flex-direction: column; }
+.wd-block { padding: var(--sp-3); border-top: 1px solid var(--border); }
+.wd-blocks .wd-block:first-child { border-top: none; padding-top: 0; }
+.wd-block--absent { background: color-mix(in srgb, var(--error) 5%, var(--surface)); border-radius: var(--radius); }
+.wd-block--other { border-top-style: dashed; }
+.wd-block__head { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-3); flex-wrap: wrap; }
+.wd-block__title { flex: 1 1 160px; min-width: 0; }
+.wd-block__name { font-weight: 700; font-size: var(--fs-sm); }
+.wd-block__meta { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-top: 2px; }
+
+/* تایم‌لاین عمودی نوبت‌ها — ریل + گرهٔ وضعیت + خط «الان» (حفظ خط زمانی محبوب) */
+.wd-tl { display: flex; flex-direction: column; }
+.wd-tl__item {
+  display: grid;
+  grid-template-columns: 64px 18px minmax(0, 1fr);
+  column-gap: var(--sp-2);
+}
+.wd-tl__time {
+  display: flex; flex-direction: column; align-items: center;
+  padding-top: 8px; font-weight: 700; font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.wd-tl__time span { font-weight: 400; font-size: var(--fs-xs); color: var(--text-3); }
+.wd-tl__rail { position: relative; display: flex; justify-content: center; }
+.wd-tl__rail::before { content: ''; position: absolute; top: 0; bottom: 0; width: 2px; background: var(--border); }
+.wd-tl__item:first-child .wd-tl__rail::before { top: 13px; }
+.wd-tl__item:last-child .wd-tl__rail::before { height: 13px; bottom: auto; }
+.wd-tl__item:only-child .wd-tl__rail::before { display: none; }
+.wd-tl__dot {
+  position: relative; z-index: 1;
+  width: 12px; height: 12px; border-radius: 50%;
+  margin-top: 8px; background: var(--surface);
+  border: 2.5px solid var(--text-3);
+  transition: background var(--fast), border-color var(--fast);
+}
+.wd-tl__dot--planned { border-color: var(--text-3); }
+.wd-tl__dot--checked_in { border-color: var(--primary); background: var(--primary); }
+.wd-tl__dot--delayed { border-color: var(--warning); background: var(--warning); }
+.wd-tl__dot--in_session { border-color: var(--accent); background: var(--accent); }
+.wd-tl__dot--completed { border-color: var(--success); background: var(--success); }
+.wd-tl__dot--no_show { border-color: var(--error); background: var(--error); }
+.wd-tl__dot--cancelled { border-color: var(--border); background: var(--surface-2); }
+.wd-tl__dot--now { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.wd-tl__body { min-width: 0; padding-bottom: var(--sp-3); }
+.wd-tl__item:last-child .wd-tl__body { padding-bottom: 0; }
+.wd-tl__item--cancelled .wd-tl__time { color: var(--text-3); text-decoration: line-through; }
+.wd-tl__nowline {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding-top: 4px;
+  color: var(--accent); font-size: var(--fs-xs); font-weight: 700;
+}
+.wd-tl__nowline::after { content: ''; flex: 1; height: 1px; background: var(--accent); opacity: 0.45; }
+
+/* اکشن‌های عملیاتی روی خود کارت نوبت — یک جا، نه چند جا (m66.6) */
+.wd-appt__ops { display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; margin-top: 2px; }
+.wd-appt__time .spacer { flex: 1; }
+
+/* m67.1 — دکمهٔ حذف کامل نوبت روی کارت (خنثی؛ hover قرمز) */
+.wd-appt__del { color: var(--text-3); }
+.wd-appt__del:hover:not(:disabled) { color: var(--error); background: var(--error-soft); }
+
+/* m25 — تماس سریع با ولیّ روی کارت نوبت */
+/* m80 — همان باجت عمومی شد: .call-badge کنار شماره‌ها در جدول مدارس/دانش‌آموزان */
+.wd-appt__sphone,
+.call-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: var(--radius-full);
+  color: var(--text-3); flex-shrink: 0;
+  transition: color var(--fast), background var(--fast), transform var(--fast);
+}
+.wd-appt__sphone:hover, .call-badge:hover { color: var(--primary); background: var(--primary-soft); transform: scale(1.12); }
+.wd-appt__sphone:active, .call-badge:active { transform: scale(0.94); }
+
+/* m80 — ردیف شماره + باجت تماس داخل سلول جدول */
+.cell-phone { display: inline-flex; align-items: center; gap: 6px; }
+
+/* m81 — چیپ لینک بازی/تمرین آنلاین روی کارت تمرین */
+.exb-link-chip { text-decoration: none; color: var(--primary); font-weight: 600; }
+.exb-link-chip:hover { background: var(--primary-soft); color: var(--primary); }
+
+/* چیپ بازه کاری همان روز */
+.wd-hours {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: var(--fs-xs); color: var(--text-2);
+  background: var(--surface-2); border-radius: 999px;
+  padding: 1px 8px; white-space: nowrap;
+}
+.wd-hours--off { color: var(--text-3); font-style: italic; background: transparent; border: 1px dashed var(--border); }
+
+/* کارت نوبت روی بورد — m87: رنگ درمانگر مثل .appt-card مصرف می‌شود
+   (کلاس hue-N روی خود کارت هست ولی قبلاً مصرف نمی‌شد و کارت خاکستری می‌ماند) */
+.wd-appt {
+  background: var(--appt-soft);
+  border: 1px solid color-mix(in srgb, var(--appt-strong) 32%, var(--border));
+  border-inline-start: 4px solid var(--appt-strong);
+  border-radius: var(--radius); padding: var(--sp-2) var(--sp-3);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.wd-appt--cancelled { opacity: 0.62; }
+.wd-appt__time { display: flex; align-items: center; gap: var(--sp-2); font-weight: 700; font-size: var(--fs-sm); }
+.wd-appt__note {
+  font-size: var(--fs-xs); color: var(--text-2);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  border-inline-start: 3px solid var(--warning);
+  border-radius: 4px; padding: 3px 8px; white-space: pre-wrap;
+}
+.wd-appt__students { display: flex; flex-direction: column; gap: 4px; }
+.wd-appt__student { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); }
+.wd-appt__student--none { color: var(--text-3); justify-content: center; padding: 2px 0; }
+.wd-appt__sname { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-sm); }
+.wd-appt__sactions { display: inline-flex; gap: 4px; }
+
+/* پیل وضعیت حضور جلسه */
+.wd-mark {
+  font-size: 10px; font-weight: 700; border-radius: 999px; padding: 1px 7px;
+  white-space: nowrap;
+}
+.wd-mark--ok     { background: var(--success-soft, #E2F0E8); color: var(--success); }
+.wd-mark--err    { background: var(--error-soft, #F9E7E6); color: var(--error); }
+/* m84.1 — تأخیر کهربایی، بیماری بنفش */
+.wd-mark--warn   { background: var(--warning-soft, #F7E9CC); color: var(--warning); }
+.wd-mark--sick   { background: color-mix(in srgb, var(--sick, #9333EA) 14%, transparent); color: var(--sick, #9333EA); }
+.wd-mark--pending { background: var(--surface); color: var(--text-3); border: 1px dashed var(--border); }
+.wd-mark--muted  { background: var(--surface); color: var(--text-3); }
+
+/* دکمه‌های علامت سریع حاضر/غایب */
+.wd-appt__sbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-3); cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+.wd-appt__sbtn:hover { transform: scale(1.12); }
+.wd-appt__sbtn--ok:hover   { background: var(--success); border-color: var(--success); color: #fff; }
+.wd-appt__sbtn--err:hover  { background: var(--error); border-color: var(--error); color: #fff; }
+/* m84.1 — تأخیر روی کارت روز کاری */
+.wd-appt__sbtn--warn:hover { background: var(--warning); border-color: var(--warning); color: var(--on-warning, #fff); }
+.wd-appt__sbtn:active { transform: scale(0.94); }
+
+/* توضیحات روز (لاگ) */
+.wd-notes-card .card__title { display: flex; align-items: center; gap: 6px; }
+.wd-notes { display: flex; flex-direction: column; gap: var(--sp-2); max-height: 420px; overflow-y: auto; }
+.wd-notes--empty {
+  color: var(--text-3); font-size: var(--fs-sm); text-align: center;
+  border: 1px dashed var(--border); border-radius: var(--radius);
+  padding: var(--sp-4); max-height: none; overflow: visible;
+}
+.wd-note {
+  border: 1px solid var(--border); border-inline-start: 3px solid var(--accent);
+  border-radius: var(--radius); padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+}
+.wd-note__body { white-space: pre-wrap; font-size: var(--fs-sm); line-height: 1.7; }
+.wd-note__meta {
+  display: flex; align-items: center; gap: var(--sp-2);
+  margin-top: 4px; font-size: var(--fs-xs); color: var(--text-3);
+}
+.wd-note__time { margin-inline-end: auto; }
+.wd-note-form { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-3); }
+.wd-note-form__input { width: 100%; resize: vertical; min-height: 64px; }
+.wd-note-form .btn { align-self: flex-start; }
+
+/* دکمه نوبتِ دارای توضیح — نقطه نشانگر */
+.btn--icon.has-note { color: var(--warning); }
+
+/* ─────────────── فاز ۱ — وضعیت عملیاتی ─────────────── */
+/* m66.6: چیپ‌های wd-opschip در سربرگ کارت‌های روز کاری مصرف می‌شوند */
+
+.wd-opschip {
+  display: flex; align-items: baseline; gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.wd-opschip b { font-size: var(--fs-sm); }
+.wd-opschip--neutral { border-color: transparent; }
+.wd-opschip--accent  { background: var(--accent-soft);  color: var(--on-accent-soft); border-color: transparent; }
+.wd-opschip--warn    { background: var(--warning-soft); color: var(--warning);         border-color: transparent; }
+.wd-opschip--primary { background: var(--primary-soft); color: var(--on-primary-soft); border-color: transparent; }
+.wd-opschip--success { background: var(--success-soft); color: var(--success);         border-color: transparent; }
+.wd-opschip--error   { background: var(--error-soft);   color: var(--error);           border-color: transparent; }
+.wd-opschip--info    { background: var(--surface-2);    color: var(--text-2);          border-style: dashed; }
+/* m84.1 — چیپ بیماری بنفش */
+.wd-opschip--sick    { background: color-mix(in srgb, var(--sick, #9333EA) 14%, transparent); color: var(--sick, #9333EA); border-color: transparent; }
+.wd-opschip--muted   { opacity: 0.72; }
+
+/* ردیف سیستمی لاگ روز (D2) */
+.wd-note--system {
+  border-inline-start-color: var(--text-3);
+  border-inline-start-style: dashed;
+  background: transparent;
+}
+.wd-note__kind {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: var(--fs-xs); color: var(--text-3);
+  margin-bottom: 2px;
+}
+
+/* موبایل — m66.6: تایم‌لاین و سگمنت حضور */
+@media (max-width: 760px) {
+  .wd-tl__item { grid-template-columns: 50px 16px minmax(0, 1fr); }
+  .wd-tl__time { font-size: var(--fs-xs); }
+  .wd-att__actions { width: 100%; }
+  .wd-att__actions .att-seg { flex: 1; }
+  .wd-att__actions .att-seg__btn { flex: 1; padding-inline: 4px; }
+  .wd-cal__quick { width: 100%; }
+  .wd-cal__quick .btn { flex: 1; }
+}
+
+/* ─────────────── فاز W — لیست انتظار ─────────────── */
+
+/* badge منو — شمارندهٔ سررسید لیست انتظار */
+.nav__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  margin-inline-start: auto;
+  border-radius: 999px;
+  background: var(--danger, #dc2626);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.nav__badge[hidden] { display: none; }
+
+/* ردیف فوری لیست انتظار */
+tr.wl-row--urgent > td {
+  background: color-mix(in srgb, #dc2626 8%, transparent);
+}
+tr.wl-row--urgent > td:first-child {
+  box-shadow: inset 3px 0 0 #dc2626;
+}
+
+/* اکشن‌های inline ردیف */
+.wl-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.wl-actions .btn--icon { width: 26px; height: 26px; padding: 0; }
+
+/* کارت لیست انتظار در بورد روز کاری */
+.wl-board-card {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border-1, var(--border, #e5e7eb));
+  border-radius: var(--radius-2, 10px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wl-board-card--alert {
+  border-color: color-mix(in srgb, #dc2626 45%, transparent);
+}
+.wl-board-card__counts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+}
+.wl-board-card__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 14px;
+}
+.wl-board-card .card__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* ─────────────── فاز ۲ — گزارش جلسه در مودال جزئیات نوبت ─────────────── */
+.sess-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+}
+.sess-note__head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+.sess-note__body {
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  line-height: 1.7;
+  color: var(--text-1);
+}
+.sess-note__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.sess-note__actions .select { font-size: var(--fs-xs); padding: 4px 8px; }
+.sess-note--ro { gap: 5px; }
+
+/* ───────────── فاز ۴ — کارت «کارهای من» (هماهنگی داخلی) ───────────── */
+
+.todo-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: center;
+  margin-bottom: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px dashed var(--border);
+}
+.todo-quick .input { flex: 1 1 200px; min-width: 150px; width: auto; }
+.todo-quick .select { flex: 0 0 auto; width: auto; min-width: 110px; }
+.todo-quick .jdate { flex: 0 0 auto; width: auto; }
+.todo-quick .jdate__btn { width: auto; min-width: 120px; }
+
+.todo-list { display: flex; flex-direction: column; }
+
+.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-1);
+  border-bottom: 1px solid var(--border);
+}
+.todo-list .todo-item:last-child { border-bottom: none; }
+.todo-item.is-overdue .todo-item__title { color: var(--error); }
+
+.todo-check {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.todo-main { min-width: 0; flex: 1 1 auto; }
+.todo-item__title { font-weight: 500; line-height: 1.7; overflow-wrap: anywhere; }
+.todo-item.is-done .todo-item__title { text-decoration: line-through; opacity: 0.55; }
+
+.todo-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.todo-note {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+.todo-by { opacity: 0.85; }
+
+.todo-item__actions { display: flex; gap: var(--sp-1); flex-shrink: 0; }
+
+/* ── m108 — چک‌لیست کار ── */
+.todo-checklist-zone:empty { display: none; }
+.todo-checklist {
+  margin-top: var(--sp-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-inline-start: var(--sp-2);
+  border-inline-start: 2px solid var(--border);
+}
+.todo-checklist__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  line-height: 1.6;
+}
+.todo-checklist__item.is-done span { text-decoration: line-through; opacity: 0.55; }
+.todo-checklist__check { width: 15px; height: 15px; margin-top: 0; }
+.todo-checklist__item--add { color: var(--text-3); }
+.todo-checklist__add {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  font-size: var(--fs-sm);
+  padding: 4px 8px;
+  background: transparent;
+  border-style: dashed;
+}
+.todo-quick__checklist {
+  flex: 1 1 100%;
+  min-width: 0;
+  resize: vertical;
+  font-size: var(--fs-sm);
+}
+
+@media (max-width: 640px) {
+  .todo-quick .input,
+  .todo-quick .select,
+  .todo-quick .jdate,
+  .todo-quick .btn {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .todo-quick .btn { justify-content: center; }
+  .todo-note { max-width: 100%; white-space: normal; }
+}
+
+/* ───────────── فاز ۶ — تایم‌لاین دانش‌آموز (§11) ───────────── */
+
+.tl-filters {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-4);
+}
+
+.tl-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-inline-start: var(--sp-2);
+}
+
+.tl-item {
+  position: relative;
+  display: flex;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-4);
+}
+
+/* خط عمودی اتصال */
+.tl-item::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 17px;
+  top: 36px;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+
+.tl-item:last-child::before { display: none; }
+
+.tl-item__dot {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+  z-index: 1;
+}
+
+.tl-item__dot--success { background: color-mix(in srgb, var(--success) 14%, transparent); color: var(--success); }
+.tl-item__dot--warning { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
+.tl-item__dot--error { background: color-mix(in srgb, var(--error) 13%, transparent); color: var(--error); }
+.tl-item__dot--accent { background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); }
+.tl-item__dot--neutral { background: var(--bg-2); color: var(--text-2); }
+
+.tl-item__card {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2, 10px);
+  padding: var(--sp-2) var(--sp-3);
+}
+
+.tl-item__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.tl-item__title { font-weight: 600; font-size: var(--fs-sm); }
+
+.tl-item__time {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.tl-item__sub {
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.tl-item__actor {
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+/* بلوک «اقدام بعدی» — پروفایل زنده §14 */
+.next-action {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--primary) 35%, var(--border));
+  border-radius: var(--radius-2, 10px);
+  padding: var(--sp-2) var(--sp-3);
+}
+
+.next-action__icon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+}
+
+.next-action__title { font-weight: 600; font-size: var(--fs-sm); }
+.next-action__sub { font-size: var(--fs-xs); color: var(--text-2); margin-top: 2px; }
+.next-action--followup { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); background: color-mix(in srgb, var(--warning) 8%, transparent); }
+.next-action--followup .next-action__icon { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
+
+/* سوییچ وضعیت پرونده */
+.case-status-edit { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; }
+
+@media (max-width: 480px) {
+  .tl-item { gap: var(--sp-2); }
+  .tl-item__dot { width: 30px; height: 30px; }
+  .tl-item::before { inset-inline-start: 14px; }
+}
+
+/* ───────────── فاز ۷ — نیازهای ویژه (§12) + وضعیت همکاری مدرسه (§15) ───────────── */
+
+/* فیلترهای بالای گرید */
+.sn-filter { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
+.sn-filter .input { min-width: 150px; }
+.sn-metrics { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+
+/* heatmap مدرسه×پایه */
+.sn-heatmap { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.sn-heatmap th, .sn-heatmap td {
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  padding: 10px 12px;
+  text-align: center;
+  min-width: 64px;
+}
+.sn-heatmap thead th {
+  background: color-mix(in srgb, var(--surface-2, var(--surface)) 60%, transparent);
+  font-weight: 600;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.sn-heatmap .sn-row-head {
+  text-align: start;
+  font-weight: 600;
+  min-width: 180px;
+  background: color-mix(in srgb, var(--surface-2, var(--surface)) 40%, transparent);
+}
+.sn-heatmap .sn-cell { cursor: pointer; position: relative; transition: filter .15s ease; }
+.sn-heatmap .sn-cell:hover { filter: brightness(1.05); outline: 2px solid var(--primary); outline-offset: -2px; }
+.sn-heatmap .sn-cell--total { font-weight: 700; background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.sn-heatmap .sn-cell--1 { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.sn-heatmap .sn-cell--2 { background: color-mix(in srgb, var(--primary) 22%, transparent); }
+.sn-heatmap .sn-cell--3 { background: color-mix(in srgb, var(--primary) 38%, transparent); }
+.sn-heatmap .sn-cell--4 { background: color-mix(in srgb, var(--primary) 58%, transparent); color: #fff; }
+
+/* نقطهٔ توجه روی سلول */
+.sn-attention-dot {
+  position: absolute;
+  top: 6px;
+  inset-inline-end: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 25%, transparent);
+}
+
+/* فهرست «نیاز به توجه دارد» */
+.sn-attention-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+.sn-attention-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2, 10px);
+  background: color-mix(in srgb, var(--warning) 5%, transparent);
+}
+
+/* بلوک نیاز ویژه در پروفایل */
+.sn-profile-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2, 10px);
+  padding: var(--sp-3) var(--sp-4);
+  background: color-mix(in srgb, var(--surface-2, var(--surface)) 45%, transparent);
+}
+
+/* متریک‌های وضعیت همکاری مدرسه (مودال) */
+.so-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--sp-3);
+}
+.so-metric {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2, 10px);
+  padding: var(--sp-3);
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .sn-filter { min-width: 120px; flex: 1; }
+  .sn-heatmap th, .sn-heatmap td { min-width: 52px; padding: 8px; }
+  .sn-heatmap .sn-row-head { min-width: 130px; }
+}
+
+/* ─────────────── m34 — بانک تمرین (exb) ─────────────── */
+
+.exb-filters {
+  display: flex;
+  gap: var(--sp-2, 8px);
+  flex-wrap: wrap;
+  margin-top: var(--sp-2, 8px);
+}
+.exb-search {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+.exb-filters .select {
+  flex: 0 1 190px;
+}
+
+.exb-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: var(--sp-4, 20px);
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: center;
+  color: var(--text-2);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.exb-drop:hover,
+.exb-drop.is-over {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.exb-drop.has-file {
+  border-style: solid;
+}
+.exb-drop__hint {
+  font-size: 0.85em;
+  color: var(--text-3);
+}
+
+.exb-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.exb-tags__label {
+  font-size: 0.82em;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+.exb-tags__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.exb-chip {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-1);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.85em;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.exb-chip:hover {
+  border-color: var(--accent);
+}
+.exb-chip.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.exb-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--sp-3, 12px);
+  margin-top: var(--sp-4, 16px);
+}
+.exb-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: var(--sp-3, 12px);
+}
+.exb-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.exb-card__title {
+  font-size: 1em;
+}
+.exb-card__badges {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.exb-card__desc {
+  color: var(--text-2);
+  font-size: 0.9em;
+  margin: 0;
+  white-space: pre-wrap;
+}
+.exb-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.exb-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  color: var(--text-3);
+  font-size: 0.85em;
+}
+.exb-file {
+  display: inline-flex;
+  align-items: center;
+  direction: ltr;
+}
+
+/* m76 — چیپ‌های چندفایلی تمرین */
+.exb-files { display: flex; flex-wrap: wrap; gap: 6px; }
+.exb-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: var(--fs-xs, 12px);
+  color: var(--text-2);
+}
+.exb-file-chip__name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+  color: var(--text-1);
+  font-weight: 600;
+}
+.exb-file-chip__size { color: var(--text-3); }
+.exb-file-chip__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-2);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.exb-file-chip__btn:hover { background: var(--primary-soft); color: var(--primary); }
+.exb-file-chip__btn--danger:hover { background: var(--error-soft); color: var(--error); }
+
+/* m76 — چیپ‌های فایل انتخاب‌شده در فرم (قبل از بارگذاری) */
+.exb-picked { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.exb-picked__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: var(--fs-xs, 12px);
+  color: var(--primary);
+}
+.exb-picked__name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+  font-weight: 600;
+}
+.exb-picked__size { color: var(--text-3); }
+.exb-picked__x {
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.exb-picked__x:hover { color: var(--error); }
+
+/* m76 — خط پیشرفت بارگذاری پیوسته */
+.exb-progress {
+  margin-top: 10px;
+  font-size: var(--fs-xs, 12px);
+  color: var(--primary);
+  font-weight: 700;
+  direction: rtl;
+}
+.exb-card__actions {
+  display: flex;
+  gap: 4px;
+  margin-right: auto;
+}
+.exb-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3, 12px);
+  margin-top: var(--sp-4, 16px);
+}
+.exb-pager__label {
+  color: var(--text-3);
+  font-size: 0.9em;
+}
+
+@media (max-width: 640px) {
+  .exb-list {
+    grid-template-columns: 1fr;
+  }
+  .exb-filters .select {
+    flex: 1 1 140px;
+  }
+}
+
+/* ═══════════ m54 — راهنمای گام‌به‌گام سامانه (#/help) ═══════════ */
+.help { display: flex; flex-direction: column; gap: var(--sp-5); max-width: 980px; margin-inline: auto; }
+
+.help-hero {
+  display: flex; gap: var(--sp-4); align-items: flex-start;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: var(--sp-5); box-shadow: var(--shadow-1);
+}
+.help-hero__logo { width: 64px; height: 64px; border-radius: 50%; flex: none; box-shadow: var(--shadow-1), 0 0 0 1px var(--border); }
+.help-hero__title { margin: 0 0 6px; font-size: var(--fs-2xl); font-weight: 700; color: var(--text-1); }
+.help-hero__sub { margin: 0; color: var(--text-2); font-size: var(--fs-md); line-height: 2; }
+.help-hero__chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+.help-hero__chips .chip { display: inline-flex; align-items: center; gap: 5px; }
+.help-hero__chips a.chip--btn { text-decoration: none; color: var(--primary); border: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent); }
+
+.help-toc {
+  display: flex; flex-wrap: wrap; gap: var(--sp-2);
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+  border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--sp-3);
+}
+.help-toc__item {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 12px; border-radius: 999px; text-decoration: none;
+  font-size: var(--fs-sm); color: var(--text-2); background: var(--surface); border: 1px solid var(--border);
+  transition: all var(--normal);
+}
+.help-toc__item:hover { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 45%, transparent); }
+.help-toc__n {
+  width: 20px; height: 20px; border-radius: 50%; flex: none;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  background: var(--primary); color: var(--on-primary);
+}
+.help-toc__item--bot { border-style: dashed; }
+
+.help-steps { display: flex; flex-direction: column; gap: var(--sp-5); }
+
+.help-step {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: var(--sp-5); box-shadow: var(--shadow-1);
+  scroll-margin-top: 80px;
+}
+.help-step__head { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.help-step__num {
+  width: 38px; height: 38px; border-radius: 50%; flex: none;
+  display: grid; place-items: center; font-weight: 700; font-size: var(--fs-lg);
+  background: var(--primary); color: var(--on-primary);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+.help-step__num--bot { background: var(--accent); }
+.help-step__title { margin: 0; font-size: var(--fs-xl); font-weight: 700; color: var(--text-1); }
+.help-step__route { font-size: var(--fs-xs); color: var(--text-3); font-family: ui-monospace, monospace; direction: ltr; display: inline-block; }
+.help-shot { display: block; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-2); cursor: zoom-in; }
+.help-shot img { display: block; width: 100%; height: auto; }
+.help-step__cap { color: var(--text-2); font-size: var(--fs-md); line-height: 1.9; margin: var(--sp-3) 0 var(--sp-2); }
+.help-points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.help-points li { display: flex; gap: 10px; align-items: flex-start; line-height: 1.95; font-size: var(--fs-md); color: var(--text-2); }
+.help-points li b { color: var(--text-1); }
+.help-points__n {
+  width: 22px; height: 22px; border-radius: 50%; flex: none; margin-top: 4px;
+  display: grid; place-items: center; font-size: 11.5px; font-weight: 700;
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  color: var(--primary); border: 1.5px solid color-mix(in srgb, var(--primary) 55%, transparent);
+}
+.help-tip {
+  display: flex; gap: 8px; align-items: flex-start;
+  margin-top: var(--sp-3); padding: 10px 14px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  font-size: var(--fs-sm); color: var(--text-2); line-height: 1.9;
+}
+.help-tip svg { flex: none; margin-top: 3px; color: var(--accent); }
+
+/* ── بخش بات ── */
+.help-bot {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: var(--sp-5); box-shadow: var(--shadow-1); scroll-margin-top: 80px;
+  display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.help-bot__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--sp-4); }
+.phone {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 22px;
+  padding: 12px; display: flex; flex-direction: column; gap: 10px;
+  box-shadow: var(--shadow-1);
+}
+.phone__head {
+  display: flex; align-items: center; gap: 7px; justify-content: center;
+  background: var(--primary); color: var(--on-primary);
+  border-radius: 12px; padding: 8px 10px; font-size: var(--fs-sm); font-weight: 700;
+}
+.phone__who { font-weight: 700; font-size: var(--fs-md); color: var(--text-1); text-align: center; }
+.phone__sub { font-size: var(--fs-xs); color: var(--text-3); text-align: center; margin-top: -6px; }
+.phone__btns { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+.phone__btn {
+  display: block; text-align: center; padding: 8px 10px; border-radius: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: var(--fs-sm); color: var(--text-1); font-weight: 600;
+  box-shadow: var(--shadow-1);
+}
+.phone__note {
+  font-size: var(--fs-xs); color: var(--text-3); line-height: 1.9;
+  border-top: 1px dashed var(--border); padding-top: 8px; margin-top: auto;
+}
+.help-tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.help-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); min-width: 640px; }
+.help-table th, .help-table td { padding: 8px 12px; text-align: center; border-bottom: 1px solid var(--border); color: var(--text-2); }
+.help-table thead th { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); color: var(--text-1); font-weight: 700; white-space: nowrap; }
+.help-table tbody th { text-align: right; color: var(--text-1); font-weight: 700; white-space: nowrap; }
+.help-table tbody tr:last-child th, .help-table tbody tr:last-child td { border-bottom: none; }
+.help-bot__flows { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--sp-3); }
+.help-flow {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 14px; font-size: var(--fs-sm); color: var(--text-2); line-height: 1.9;
+}
+.help-flow b { display: block; color: var(--text-1); margin-bottom: 4px; }
+.help-flow p { margin: 0; }
+
+@media (max-width: 640px) {
+  .help-hero { flex-direction: column; }
+  .help-hero__logo { width: 52px; height: 52px; }
+  .help-step { padding: var(--sp-4); }
+  .help-bot__grid { grid-template-columns: 1fr; }
+}
+
+/* ─────────────── m68 — داشبورد بازطراحی‌شده ─────────────── */
+
+/* هیروی امتیاز درمانگر */
+.hero-score {
+  position: relative; overflow: hidden;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4);
+  background: linear-gradient(135deg, var(--primary-soft), var(--surface) 60%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, var(--radius));
+  padding: var(--sp-5) var(--sp-5);
+  margin-bottom: var(--sp-4);
+}
+.hero-score__main { min-width: 180px; }
+.hero-score__label { font-size: var(--fs-sm); color: var(--text-2); margin-bottom: var(--sp-1); }
+.hero-score__value {
+  font-size: 44px; font-weight: 700; line-height: 1.1;
+  font-variant-numeric: tabular-nums; color: var(--primary);
+}
+.hero-score__rank {
+  margin-inline-start: auto;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 999px; padding: 10px 18px;
+  font-weight: 700; font-size: var(--fs-md); color: var(--text-1);
+  box-shadow: var(--shadow-1);
+}
+.hero-score__rank--gold {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* m103 — قواعد hero-score__formula/delta/best حذف شدند (فرمول و مقایسهٔ ماه قبل از هیرو خارج شد) */
+
+/* کاشی‌های تلاش (چهار متریک رقابتی) */
+.score-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3); }
+.score-tile {
+  display: block; width: 100%; text-align: start;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: var(--sp-3) var(--sp-4); cursor: pointer;
+  transition: border-color .15s ease, transform .15s ease;
+}
+.score-tile:hover { border-color: var(--primary); transform: translateY(-1px); }
+.score-tile__label { font-size: var(--fs-xs); color: var(--text-2); }
+.score-tile__value { font-size: var(--fs-2xl, 28px); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-1); margin: 2px 0; }
+.score-tile__prev { font-size: var(--fs-xs); color: var(--text-3); }
+.score-tile__prev.is-up { color: var(--success); }
+.score-tile__prev.is-down { color: var(--error); }
+
+/* تابلوی رقابتی (leaderboard) — m76 بازطراحی ضدهم‌پوشانی
+   قواعد ایمنی: نام با ellipsis برش می‌خورد؛ چیپ‌ها می‌شکنند؛ امتیاز ستون ثابت خودش را دارد؛
+   بدون color-mix و بدون baseline-trick تا در همهٔ مرورگرها یکسان رندر شود */
+.lb-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.lb-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-radius: var(--radius-lg, 14px);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+.lb-row--me {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+.lb-rank {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-weight: 700;
+  font-size: var(--fs-sm, 13px);
+  margin-top: 2px;
+}
+.lb-rank--1 { background: var(--accent); border-color: var(--accent); color: #fff; }
+.lb-rank--2 { background: #9BA6AF; border-color: #9BA6AF; color: #fff; }
+.lb-rank--3 { background: #C08552; border-color: #C08552; color: #fff; }
+.lb-row__body { flex: 1 1 auto; min-width: 0; }
+.lb-row__top {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.lb-row__name {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  overflow: hidden;
+  font-weight: 700;
+  font-size: var(--fs-md, 14px);
+  color: var(--text-1);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.lb-row__name .badge { flex: 0 0 auto; }
+.lb-score {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  direction: rtl;
+}
+.lb-score b {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-1);
+  line-height: 1;
+}
+.lb-score span { font-size: var(--fs-xs, 12px); color: var(--text-3); }
+.lb-row__bar {
+  height: 8px;
+  margin-top: 9px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.lb-row__fill { height: 100%; border-radius: 999px; background: var(--primary); }
+/* m110 — .lb-row__chips/.lb-chip حذف شدند (باجت سطح برداشته شد؛ CSS مرده پاک شد) */
+
+/* اطلاع‌رسانی */
+.an-item { border-bottom: 1px dashed var(--border); padding: var(--sp-2) 0; }
+.an-item:last-child { border-bottom: none; padding-bottom: 0; }
+.an-item__title { font-weight: 700; margin-bottom: 2px; }
+.an-item__body { font-size: var(--fs-sm); color: var(--text-2); line-height: 1.9; }
+
+/* دانش‌افزایی */
+.kn-item {
+  display: flex; align-items: center; gap: var(--sp-2); width: 100%; text-align: start;
+  background: none; border: none; border-bottom: 1px dashed var(--border);
+  padding: var(--sp-2) 0; cursor: pointer; font: inherit; color: inherit;
+}
+.kn-item:hover .kn-item__title { color: var(--primary); }
+.kn-item:last-child { border-bottom: none; padding-bottom: 0; }
+.kn-item__title { font-weight: 600; font-size: var(--fs-sm); }
+.kn-badge {
+  flex-shrink: 0; font-size: var(--fs-xs); font-weight: 700;
+  border-radius: 999px; padding: 2px 10px;
+  background: var(--surface-2); color: var(--text-2);
+}
+.kn-badge--tip { background: var(--primary-soft); color: var(--primary); }
+.kn-badge--protocol { background: var(--success-soft); color: var(--success); }
+.kn-badge--article { background: var(--accent-soft); color: var(--accent); }
+.kn-badge--news { background: var(--warning-soft); color: var(--warning); }
+.kn-reader { white-space: pre-wrap; line-height: 2; font-size: var(--fs-md); color: var(--text-1); }
+
+@media (max-width: 640px) {
+  .hero-score__value { font-size: 34px; }
+  .hero-score__rank { margin-inline-start: 0; }
+
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   m69 — رنگ‌بندی کارت جلسه بر اساس درمانگر + وضعیت
+   کدگذاری: رنگ درمانگر (hue-1..8) × وضعیت نوبت (برگزارشده/لغو/نیامد)
+   در .grid-appt (گرید هفتگی) و .appt-card (لیست روزانه) و .wd-appt (روز کاری)
+   ═══════════════════════════════════════════════════════════════ */
+
+.grid-appt, .appt-card, .wd-appt {
+  --appt-soft: var(--surface-2);
+  --appt-strong: var(--text-3);
+  --appt-on: var(--text-2);
+}
+.hue-1 { --appt-soft: var(--hue-1-soft); --appt-strong: var(--hue-1-strong); --appt-on: var(--hue-1-on); }
+.hue-2 { --appt-soft: var(--hue-2-soft); --appt-strong: var(--hue-2-strong); --appt-on: var(--hue-2-on); }
+.hue-3 { --appt-soft: var(--hue-3-soft); --appt-strong: var(--hue-3-strong); --appt-on: var(--hue-3-on); }
+.hue-4 { --appt-soft: var(--hue-4-soft); --appt-strong: var(--hue-4-strong); --appt-on: var(--hue-4-on); }
+.hue-5 { --appt-soft: var(--hue-5-soft); --appt-strong: var(--hue-5-strong); --appt-on: var(--hue-5-on); }
+.hue-6 { --appt-soft: var(--hue-6-soft); --appt-strong: var(--hue-6-strong); --appt-on: var(--hue-6-on); }
+.hue-7 { --appt-soft: var(--hue-7-soft); --appt-strong: var(--hue-7-strong); --appt-on: var(--hue-7-on); }
+.hue-8 { --appt-soft: var(--hue-8-soft); --appt-strong: var(--hue-8-strong); --appt-on: var(--hue-8-on); }
+
+/* کارت روی شبکهٔ زمانی — هندسهٔ v1 دست‌نخورده؛ فقط رنگ از متغیر درمانگر */
+.grid-appt {
+  background: var(--appt-soft);
+  border: 1px solid color-mix(in srgb, var(--appt-strong) 42%, transparent);
+  border-inline-start: 4px solid var(--appt-strong);
+}
+.grid-appt__time { color: var(--appt-on); }
+
+/* برگزارشده (ops = completed) — تینت عمیق‌تر + تیک سبز */
+.grid-appt.is-attended, .appt-card.is-attended, .wd-appt.is-attended {
+  background: color-mix(in srgb, var(--appt-strong) 16%, var(--appt-soft));
+  border-color: color-mix(in srgb, var(--appt-strong) 55%, transparent);
+}
+.appt-tick {
+  width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0;
+  background: var(--success); color: var(--on-success);
+  display: inline-grid; place-items: center;
+}
+
+/* لغوشده — راه‌راه مورب هم‌رنگ درمانگر (هویت رنگی حفظ می‌شود) */
+.grid-appt.is-cancelled, .appt-card.is-cancelled, .wd-appt.is-cancelled,
+.wd-appt--cancelled {
+  background:
+    repeating-linear-gradient(-45deg,
+      color-mix(in srgb, var(--appt-strong) 12%, transparent) 0 5px,
+      transparent 5px 10px),
+    var(--surface);
+  border-color: color-mix(in srgb, var(--appt-strong) 25%, var(--border));
+  border-inline-start-color: color-mix(in srgb, var(--appt-strong) 35%, var(--border));
+  color: var(--text-3);
+  opacity: 0.85;
+}
+.is-cancelled .grid-appt__time, .is-cancelled .appt-card__time { color: var(--text-3); text-decoration: line-through; }
+
+/* نیامد (ops = no_show) — لبهٔ قرمز، تینت درمانگر حفظ می‌شود */
+.grid-appt.is-noshow, .appt-card.is-noshow, .wd-appt.is-noshow {
+  border-inline-start: 4px solid var(--error);
+  border-color: color-mix(in srgb, var(--error) 40%, transparent);
+  background: color-mix(in srgb, var(--error) 7%, var(--appt-soft));
+}
+
+/* کارت لیست روزانه — نوار رنگی سمت شروع */
+.appt-card { border-inline-start: 4px solid var(--appt-strong); background: var(--appt-soft); }
+.appt-card__bar { background: var(--appt-strong); display: none; }
+
+/* ستون «امروز» — پررنگ‌تر */
+.grid-day.is-today .grid-cell { background: color-mix(in srgb, var(--primary-soft) 18%, transparent); }
+.grid-head.is-today { box-shadow: inset 0 3px 0 var(--primary); }
+
+/* ─────────────── چیپ فیلتر درمانگر + راهنمای رنگ ─────────────── */
+
+.staff-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+.staff-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: var(--radius-full);
+  border: 1px solid var(--border); background: var(--surface);
+  font-size: var(--fs-sm); font-weight: 500; cursor: pointer;
+  transition: background var(--fast), border-color var(--fast), color var(--fast), box-shadow var(--fast);
+}
+.staff-chip:hover { border-color: var(--primary); color: var(--primary); }
+.staff-chip__dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  background: var(--appt-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--appt-strong) 18%, transparent);
+}
+.staff-chip__dot.hue-1 { background: var(--hue-1-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue-1-strong) 18%, transparent); }
+.staff-chip__dot.hue-2 { background: var(--hue-2-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue-2-strong) 18%, transparent); }
+.staff-chip__dot.hue-3 { background: var(--hue-3-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue-3-strong) 18%, transparent); }
+.staff-chip__dot.hue-4 { background: var(--hue-4-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue-4-strong) 18%, transparent); }
+.staff-chip__dot.hue-5 { background: var(--hue-5-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue-5-strong) 18%, transparent); }
+.staff-chip__dot.hue-6 { background: var(--hue-6-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue-6-strong) 18%, transparent); }
+.staff-chip__dot.hue-7 { background: var(--hue-7-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue-7-strong) 18%, transparent); }
+.staff-chip__dot.hue-8 { background: var(--hue-8-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue-8-strong) 18%, transparent); }
+.staff-chip__count { font-size: var(--fs-xs); color: var(--text-3); }
+.staff-chip.is-active {
+  background: var(--appt-soft); border-color: var(--appt-strong);
+  color: var(--appt-on); font-weight: 600;
+}
+.staff-chip.is-active .staff-chip__dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--appt-strong) 26%, transparent); }
+
+.appt-legend {
+  display: flex; flex-wrap: wrap; gap: 4px var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-xs); color: var(--text-2);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); margin-bottom: var(--sp-3);
+  align-items: center;
+}
+.appt-legend__item { display: inline-flex; align-items: center; gap: 6px; }
+.appt-legend__name { font-weight: 600; color: var(--text-1); }
+
+/* ─────────────── m69 — نوار خط زمانی امروز (داشبورد دفتر) ─────────────── */
+
+.tl-strip {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px;
+  overflow-x: auto;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: var(--sp-2);
+}
+.tl-strip__hour {
+  display: flex; flex-direction: column-reverse; align-items: center; gap: 3px;
+  min-height: 58px; padding: 2px 1px; border-radius: var(--radius-sm);
+}
+.tl-strip__hour.is-now { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.tl-strip__dots { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; max-width: 100%; }
+.tl-strip__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--appt-strong); }
+.tl-strip__dot.is-cancelled { opacity: 0.35; }
+.tl-strip__label { font-size: 10px; color: var(--text-3); }
+
+/* ═══════════════════════════════════════════════════════════════
+   m87 — رنگ درمانگر روی جدول دانش‌آموزان + تقویت‌های کارت روز کاری
+   اصل: کلاس hue-N متغیرهای --appt-* را روی هر عنصری می‌آورد؛
+   قوانین var-محور می‌نویسیم نه per-hue (۳ قانون به‌جای ۲۴ قانون)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* نوار رنگ درمانگر روی ردیف جدول — کلاس hue روی خود <tr> است؛
+   تینت ملایم همهٔ سلول‌ها + نوار ۴px لبهٔ شروع ردیف (سمت راست در RTL).
+   در موبایل هم ردیف کارت‌مانند می‌شود و همین تینت‌ها سر جایشان می‌مانند */
+.table tbody tr[class*='hue-'] td { background: color-mix(in srgb, var(--appt-soft) 40%, transparent); }
+.table tbody tr[class*='hue-'] td:first-child { box-shadow: inset -4px 0 0 var(--appt-strong); }
+.table tbody tr[class*='hue-']:hover td { background: color-mix(in srgb, var(--appt-soft) 52%, transparent); }
+
+/* ستون «مسئول پرونده» — نقطهٔ رنگ + باج، کنار هم */
+.cell-owner { display: inline-flex; align-items: center; gap: 6px; }
+
+/* نقطهٔ توخالی «بدون مسئول» در راهنمای رنگ جدول دانش‌آموزان */
+.appt-legend__none {
+  width: 8px; height: 8px; border-radius: 50%;
+  border: 1.5px solid var(--text-3); flex-shrink: 0;
+}
+
+/* چیپ‌های فیلتر وقتی همکارها زیادند — اسکرول افقی به‌جای پیچ عمودی */
+.staff-chips--scroll {
+  display: flex; flex-wrap: nowrap; overflow-x: auto;
+  max-width: 100%; padding-bottom: 2px;
+}
+/* m87 — چیپ فعالِ بدون hue (چیپ «همه») — متغیرهای --appt-* روی آن تعریف نیست؛
+   حالت فعال خنثی با رنگ اصلی، مثل هاور چیپ‌ها */
+.staff-chip.is-active:not([class*='hue-']) {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* آواتار بلوک درمانگر در روز کاری — با هویت رنگی همان درمانگر */
+.staff-mini__avatar[class*='hue-'] { background: var(--appt-soft); color: var(--appt-strong); }
+
+/* خلاصهٔ عملیاتی کوچک سربرگ بلوک درمانگر (باج شمارنده + پیل‌های وضعیت) */
+.wd-block__stats { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+
+/* سربرگ کارت نوبت روز کاری با چیپ‌های تازه — در عرض کم بشکند، نه بیرون بزند */
+.wd-appt__time { flex-wrap: wrap; }
+
+/* آواتار حرفی ۲۰px دانش‌آموز در ردیف‌های کارت روز کاری — خنثی؛
+   رنگ درمانگر عمداً فقط روی لبهٔ کارت است */
+.wd-appt__savatar {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--surface-3); color: var(--text-2);
+  font-size: 10px; font-weight: 700;
+  display: inline-grid; place-items: center; flex-shrink: 0;
+}
+
+/* نقاط رنگی تقویم روز کاری — هر روز، یک نقطه به ازای هر درمانگر آن روز
+   (نقطه کلاس hue-N خودش را دارد؛ --appt-strong روی خودش حل می‌شود) */
+.wd-cal__dots { display: flex; align-items: center; justify-content: center; gap: 2px; line-height: 1; }
+.wd-cal__dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--appt-strong, var(--text-3)); flex-shrink: 0;
+}
+.wd-cal__more { font-size: 8.5px; color: var(--text-3); line-height: 1; font-weight: 700; }
+/* m87 — روی روزِ انتخاب‌شده (پس‌زمینهٔ primary) نقطه‌ها هاله و «+N» متن روشن می‌گیرند تا گم نشوند */
+.wd-cal__cell.is-selected .wd-cal__dot { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--surface) 82%, transparent); }
+.wd-cal__cell.is-selected .wd-cal__more { color: var(--on-primary); }
+
+/* ردیف‌های دانش‌آموز روی کارت گرید هفتگی — آیکون حضور + نام، تک‌خطی فشرده */
+.grid-appt__stu { display: flex; align-items: center; gap: 3px; min-width: 0; white-space: nowrap; overflow: hidden; }
+.grid-appt__stu--more { font-size: var(--fs-xs); color: var(--text-3); }
+.stu-ic { display: inline-flex; flex-shrink: 0; }
+.stu-ic--ok { color: var(--success); }
+.stu-ic--late { color: var(--warning); }
+.stu-ic--err { color: var(--error); }
+
+/* نشانگر نقطه‌ای «نوبت دارای توضیح» داخل ردیف ساعت کارت گرید */
+.grid-appt__noted {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--warning); flex-shrink: 0;
+  margin-inline-end: 4px; vertical-align: middle;
+}
+
+/* ─────────────── m69 — هیرو داشبورد با رینگ «بهترین ماهِ من» ─────────────── */
+
+.hero-score__ring { position: relative; width: 96px; height: 96px; flex-shrink: 0; }
+.hero-score__ring .ring-svg { display: block; }
+.hero-score__ring .ring__fill { transition: stroke-dashoffset 0.7s var(--ease, ease-out); }
+.ring-center {
+  position: absolute; inset: 0;
+  display: grid; place-content: center; text-align: center; gap: 0;
+}
+.ring-center b { font-size: 26px; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.ring-center span { font-size: 10px; color: var(--text-3); }
+/* m103 — hero-score__best حذف شد (مقایسهٔ ماه‌های قبل از هیرو خارج شد) */
+
+/* میله‌های افقی «چه مدت در انتظارند؟» */
+.aging-row { display: grid; grid-template-columns: 88px 1fr 48px; align-items: center; gap: var(--sp-3); padding: var(--sp-1) 0; }
+.aging-row__label { font-size: var(--fs-sm); color: var(--text-2); }
+.aging-row__bar { height: 10px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.aging-row__fill { height: 100%; border-radius: 999px; transition: width var(--motion-fill, .5s ease-out); }
+.aging-row__fill--ok { background: var(--hue-2-strong); }
+.aging-row__fill--warn { background: var(--accent); }
+.aging-row__fill--late { background: var(--error); }
+.aging-row__num { font-size: var(--fs-sm); font-weight: 700; text-align: end; font-variant-numeric: tabular-nums; }
+
+/* ردیف پیگیری سررسیده (داشبورد دفتر) */
+.fu-row {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--border) 60%, transparent);
+}
+.fu-row:last-child { border-bottom: none; }
+.fu-row__main { flex: 1; min-width: 0; }
+.fu-row__title { font-weight: 600; font-size: var(--fs-sm); }
+
+/* حالت خالی با وکتور */
+.an-empty { display: flex; flex-direction: column; align-items: center; padding: var(--sp-2) 0; }
+
+/* ───────────────────────── m84 — ناوبری تو در تو بانک تمرین + وکتور جایگزین ایموجی ───────────────────────── */
+
+/* ناوبری: کاشی دستهٔ اختلال (سطح ۱) → چیپ پایه/جستجو (سطح ۲) */
+.exb-nav { display: flex; flex-direction: column; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.exb-cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 8px; }
+.exb-cat {
+  display: flex; align-items: center; gap: 9px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  cursor: pointer; text-align: right;
+  transition: border-color .15s ease, background .15s ease, transform .1s ease;
+}
+.exb-cat:hover { border-color: var(--primary); }
+.exb-cat:active { transform: scale(.98); }
+.exb-cat.is-active { border-color: var(--primary); background: var(--primary-soft); }
+.exb-cat__icon {
+  width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--primary);
+}
+.exb-cat.is-active .exb-cat__icon { background: var(--surface); }
+.exb-cat__text { display: flex; flex-direction: column; min-width: 0; }
+.exb-cat__name { font-size: var(--fs-sm); font-weight: 600; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exb-cat__count { font-size: var(--fs-xs); color: var(--text-3); }
+.exb-crumb { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--text-2); }
+.exb-crumb__sep { color: var(--text-3); }
+.exb-grades { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.exb-format { display: inline-flex; align-items: center; gap: 4px; }
+
+/* انتخابگر آیکون وکتوری فرم‌ساز (جایگزین ورودی ایموجی) */
+.iconpicker { display: flex; flex-wrap: wrap; gap: 6px; }
+.iconpicker__btn {
+  width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-2);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+.iconpicker__btn:hover { border-color: var(--primary); color: var(--primary); }
+.iconpicker__btn.is-active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+
+/* انتخابگر نوع رویداد — کارت‌های گروه‌بندی‌شده با آیکون وکتور */
+.typegrid { display: flex; flex-direction: column; gap: var(--sp-4); }
+.typegrid__group { display: flex; flex-direction: column; gap: 8px; }
+.typegrid__group-title { font-size: var(--fs-sm); font-weight: 700; color: var(--text-2); display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.typegrid__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+/* m84.3 — بج «چه کسی پر می‌کند» روی کارت نوع */
+.typegrid__badge { flex-shrink: 0; align-self: center; white-space: nowrap; }
+/* m84.3 — موبایل: کارت‌ها همیشه تک‌ستونی؛ عنوان فرم هم بدون سرریز */
+@media (max-width: 480px) {
+  .typegrid__grid { grid-template-columns: 1fr; }
+  .typegrid__item { flex-wrap: wrap; }
+}
+.typegrid__item {
+  display: flex; align-items: center; gap: 9px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  cursor: pointer; text-align: right;
+  transition: border-color .15s ease, background .15s ease;
+}
+.typegrid__item:hover { border-color: var(--primary); background: var(--primary-soft); }
+.typegrid__icon {
+  width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--primary);
+}
+.typegrid__icon--lg { width: 40px; height: 40px; }
+.typegrid__text { display: flex; flex-direction: column; min-width: 0; }
+.typegrid__text b { font-size: var(--fs-sm); line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ═════════════ m85 — تب «تفسیر بالینی» (موتور تشخیص‌گذاری) ═════════════ */
+
+.clx { display: flex; flex-direction: column; gap: var(--sp-4); }
+.clx-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-3); flex-wrap: wrap;
+}
+.clx-narrative { white-space: pre-wrap; line-height: 2; font-size: var(--fs-sm); color: var(--text); }
+
+/* پرچم‌های خط قرمز (ارجاع فوری) */
+.clx-flags { display: flex; flex-direction: column; gap: var(--sp-2); }
+.clx-flag {
+  display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px;
+  background: var(--error-soft); color: var(--error);
+  border: 1px solid color-mix(in srgb, var(--error) 25%, transparent);
+  border-radius: var(--radius-md); font-size: var(--fs-sm); font-weight: 600;
+}
+.clx-flag svg { flex-shrink: 0; margin-top: 2px; }
+
+/* بخش‌بندی تب */
+.clx-section { display: flex; flex-direction: column; gap: var(--sp-3); }
+.clx-section__title {
+  display: flex; align-items: center; gap: 7px;
+  font-size: var(--fs-md, 15px); font-weight: 700; color: var(--text);
+}
+.clx-hyps, .clx-paths { display: flex; flex-direction: column; gap: var(--sp-3); }
+
+/* کارت فرضیه */
+.clx-hyp__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.clx-hyp__rank {
+  width: 24px; height: 24px; border-radius: var(--radius-full); flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--primary-soft); color: var(--primary);
+  font-size: var(--fs-xs, 12px); font-weight: 700;
+}
+.clx-hyp__title { font-size: var(--fs-md, 15px); display: inline-flex; align-items: center; gap: 6px; }
+.clx-hyp__title svg { color: var(--primary); }
+.clx-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: var(--sp-2); }
+
+/* سه‌بخشی چه دیدیم / یعنی چه / گام بعدی */
+.clx-three {
+  margin-top: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: var(--sp-3); background: var(--surface-2);
+}
+.clx-three__row { display: flex; gap: 8px; align-items: flex-start; }
+.clx-three__label {
+  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+  font-weight: 700; font-size: var(--fs-xs, 12px); color: var(--primary);
+  min-width: 82px; margin-top: 2px;
+}
+.clx-three__text { font-size: var(--fs-sm); line-height: 1.9; color: var(--text); }
+
+/* زیرلیست‌ها: شواهد / گپ / تفریق */
+.clx-sub { margin-top: var(--sp-3); display: flex; flex-direction: column; gap: 6px; }
+.clx-sub__title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--fs-xs, 12px); font-weight: 700; color: var(--text-2);
+}
+.clx-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.clx-list li {
+  display: flex; gap: 7px; align-items: flex-start;
+  font-size: var(--fs-sm); line-height: 1.8; color: var(--text-2);
+}
+.clx-list li svg { flex-shrink: 0; margin-top: 4px; color: var(--text-2); }
+
+/* یادداشت «مسیر این هدف ثبت است» */
+.clx-livenote {
+  margin-top: var(--sp-3); display: flex; align-items: center; gap: 7px;
+  font-size: var(--fs-xs, 12px); color: var(--text-2);
+  background: var(--surface-2); border: 1px dashed var(--border);
+  border-radius: var(--radius-md); padding: 8px 10px;
+}
+
+/* جدول ملاک‌ها */
+.clx-crit {
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface); overflow: hidden;
+}
+.clx-crit summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 11px 14px; cursor: pointer; user-select: none;
+  font-size: var(--fs-sm); font-weight: 700; color: var(--text);
+  transition: background var(--fast);
+}
+.clx-crit summary:hover { background: var(--surface-2); }
+.clx-crit__title { display: inline-flex; align-items: center; gap: 7px; }
+.clx-crit__title svg { color: var(--primary); }
+.clx-crit__table { border-top: 1px solid var(--border); }
+.clx-crit__table td { vertical-align: top; }
+.clx-crit__grp { flex-shrink: 0; min-width: 24px; text-align: center; }
+.clx-crit__text { line-height: 1.8; }
+
+/* مسیر مداخله */
+.clx-path--active { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
+.clx-steps { margin-top: var(--sp-3); display: flex; flex-direction: column; gap: 6px; }
+.clx-step {
+  display: flex; align-items: center; gap: 9px; text-align: right;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface); font-size: var(--fs-sm); color: var(--text);
+  transition: border-color .15s ease, background .15s ease;
+}
+.clx-step--btn { cursor: pointer; width: 100%; }
+.clx-step--btn:hover { border-color: var(--primary); background: var(--primary-soft); }
+.clx-step__dot {
+  width: 20px; height: 20px; border-radius: var(--radius-full); flex-shrink: 0;
+  border: 1.5px solid var(--border); display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; background: transparent; transition: all .15s ease;
+}
+.clx-step__dot.is-done, .clx-step.is-done .clx-step__dot {
+  background: var(--success); border-color: var(--success); color: var(--on-success, #fff);
+}
+.clx-step.is-done .clx-step__title { color: var(--text-2); text-decoration: line-through; text-decoration-color: var(--success); }
+.clx-step__title { flex: 1; min-width: 0; }
+
+.clx-decision { margin-top: var(--sp-3); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.clx-decision__note {
+  width: 100%; font-size: var(--fs-xs, 12px); color: var(--text-2);
+  background: var(--surface-2); border-radius: var(--radius-md); padding: 7px 10px; line-height: 1.8;
+}
+
+.clx-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; margin-top: var(--sp-3); }
+
+/* پانویس خط قرمز — پلن §۱ */
+.clx-disclaimer {
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 10px 12px; border-radius: var(--radius-md);
+  background: var(--error-soft); color: var(--error);
+  font-size: var(--fs-xs, 12px); font-weight: 600; line-height: 1.9;
+}
+.clx-disclaimer svg { flex-shrink: 0; margin-top: 2px; }
+
+/* ───────── m86 — زبان روایی و مسیر ارزیابی ───────── */
+
+/* سربرگ بخش‌بندی فرم‌های بلند (شرح‌حال) */
+.form-heading {
+  font-size: var(--fs-sm); font-weight: 700; color: var(--brand);
+  padding: var(--sp-3) var(--sp-3) var(--sp-2);
+  border-bottom: 2px solid var(--brand-soft, rgba(34,158,217,.25));
+  margin-top: var(--sp-2);
+}
+/* معرفی روایی فرم در سربرگ فرم پویا */
+.form-intro {
+  font-size: var(--fs-xs, 12px); color: var(--text-2); line-height: 1.9;
+  background: var(--surface-2, var(--bg-2, #F7F3EA));
+  border-radius: var(--radius-md); padding: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+/* آیتم لیکرت با لنگر کلامی — چیپ انتخابی */
+.chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  border: 1px solid var(--line); background: var(--surface); color: var(--text-1);
+  border-radius: 999px; padding: 5px 12px; font-size: var(--fs-xs, 12px);
+  cursor: pointer; font-family: inherit; line-height: 1.7;
+  transition: background .12s, border-color .12s;
+}
+.chip:hover { border-color: var(--brand); }
+.chip.is-on { background: var(--brand-soft, #D9EDF7); border-color: var(--brand); font-weight: 700; color: var(--brand-deep, #12384f); }
+/* نوار پیشرفت فرم بلند */
+.form-progress { margin: 0 0 var(--sp-2); font-size: var(--fs-xs, 12px); color: var(--text-2); }
+.form-progress__bar { height: 5px; background: var(--line); border-radius: 999px; overflow: hidden; margin-top: 4px; }
+.form-progress__fill { height: 100%; width: 0%; background: var(--brand); border-radius: 999px; transition: width .2s; }
+/* چیپ‌های «کم است» کلیک‌پذیر روی کارت فرضیه */
+/* m94 — موبایل: بج سراسری nowrap است؛ این چیپ‌ها متن بلند دارند و باید داخل کارت بشکنند
+   وگرنه کل صفحه را افقی می‌کشند (تب تفسیر بالینی در موبایل بهم می‌ریخت) */
+.clx-missing-btn {
+  cursor: pointer; border: 1px dashed currentColor;
+  white-space: normal; text-align: start; min-width: 0; max-width: 100%;
+}
+.clx-missing-btn:hover { filter: brightness(.96); }
+.clx-missing-btn svg { margin-left: 4px; flex-shrink: 0; margin-top: 2px; }
+/* کارت «مسیر ارزیابی» — پنج گام */
+.clx-journey__steps { display: grid; gap: var(--sp-2); grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.clx-journey__step {
+  border: 1px solid var(--line); border-radius: var(--radius-md);
+  padding: var(--sp-3); display: flex; flex-direction: column; gap: 4px;
+  background: var(--surface);
+}
+.clx-journey__head { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+.clx-journey__head strong { font-size: var(--fs-sm); }
+.clx-journey__act { margin-top: var(--sp-2); }
+@media (max-width: 640px) {
+  .clx-journey__steps { grid-template-columns: 1fr; }
+  .chip { padding: 7px 12px; } /* لمس راحت‌تر در موبایل */
+}
+
+/* موبایل — m84.3 قرارداد: تک‌ستونی و بدون سرریز */
+@media (max-width: 640px) {
+  .clx-toolbar { flex-direction: column; align-items: stretch; }
+  .clx-toolbar > div:last-child { display: flex; gap: var(--sp-2); }
+  .clx-three__row { flex-direction: column; gap: 3px; }
+  .clx-crit summary { flex-wrap: wrap; }
+}
+
+/* ───────────── m89 — نوع جلسه + مسیر پرونده ───────────── */
+
+/* نشان کوچک نوع جلسه روی کارت‌ها و جدول‌ها — رنگ ثابت هر نوع (دوگانه‌پسند/تیره-روشن) */
+.st-chip {
+  display: inline-flex; align-items: center;
+  padding: 1px 8px; border-radius: var(--radius-full);
+  font-size: var(--fs-xs); font-weight: 600; line-height: 1.7;
+  white-space: nowrap;
+}
+.st-chip--individual { background: var(--primary-soft); color: var(--on-primary-soft); }
+.st-chip--group      { background: var(--success-soft);  color: var(--success); }
+.st-chip--family_ed  { background: var(--warning-soft);  color: var(--warning); }
+.st-chip--teacher_ed { background: var(--accent-soft);   color: var(--on-accent-soft); }
+.st-chip--mental_ot  { background: var(--error-soft);    color: var(--error); }
+
+/* نشان مسیر پرونده در سربرگ پروفایل/تب تفسیر */
+.path-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 10px; border-radius: var(--radius-full);
+  font-size: var(--fs-xs); font-weight: 600; line-height: 1.8;
+  white-space: nowrap;
+}
+.path-chip--learning { background: var(--info-soft, var(--accent-soft)); color: var(--info, var(--accent)); }
+.path-chip--rehab    { background: var(--warning-soft); color: var(--warning); }
+
+/* m89 — جزئیات تاشوی موتور استاندارد در شاخهٔ توانبخشی */
+.clx-engine-toggle { border-top: 1px dashed var(--line); padding-top: var(--sp-3); margin-top: var(--sp-2); }
+.clx-engine-toggle > summary { display: flex; align-items: center; gap: 6px; color: var(--text-2); }
+.clx-engine-toggle > summary::-webkit-details-marker { display: none; }
+.clx-engine-toggle > summary::after { content: '▾'; margin-inline-start: auto; font-size: 12px; color: var(--text-3); }
+.clx-engine-toggle[open] > summary::after { content: '▴'; }
+
+/* ───────── m90 — فلو دوفازی شناسایی → مداخله + چک‌لیست ۷ حیطه‌ای کاردرمانی ذهنی ───────── */
+
+/* گام انجام‌شدهٔ گیت‌های شناسایی */
+.clx-journey__step.is-done { border-color: var(--success); }
+
+/* کارت پروتکل فاز مداخله */
+.proto-chip { display: inline-flex; align-items: center; gap: 4px; }
+.proto-card .card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap; }
+
+/* نوار خلاصهٔ ۷ حیطه */
+.ot-domains { display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.ot-domain-chip {
+  display: flex; flex-direction: column; gap: 4px; align-items: stretch;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-md, 10px);
+  background: var(--surface-2, transparent); cursor: pointer; text-align: start;
+  transition: border-color .15s, background .15s;
+}
+.ot-domain-chip:hover { border-color: var(--primary); }
+.ot-domain-chip.is-active { border-color: var(--primary); background: var(--primary-soft); }
+.ot-domain-chip__title { font-size: var(--fs-sm); font-weight: 600; }
+.ot-domain-chip__nums { font-size: var(--fs-xs, 11px); color: var(--text-2); }
+.ot-domain-chip__pend { position: absolute; }
+.ot-domain-chip { position: relative; }
+.ot-domain-chip__pend { top: 4px; inset-inline-end: 6px; font-size: 10px; background: var(--primary); color: var(--on-primary, #fff); border-radius: 999px; padding: 0 5px; line-height: 16px; }
+
+.ot-progress { height: 5px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.ot-progress__fill { display: block; height: 100%; background: var(--success); border-radius: 999px; transition: width .25s; }
+
+/* خط خلاصهٔ کل */
+.ot-totals { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: var(--sp-3) 0 var(--sp-2); }
+.ot-resume-hint { display: inline-flex; align-items: center; gap: 4px; }
+
+/* سربرگ حیطهٔ فعال */
+.ot-domain-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: var(--sp-2); }
+
+/* ردیف مهارت */
+.ot-skills { display: flex; flex-direction: column; }
+.ot-skill {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 6px; border-bottom: 1px solid var(--line);
+}
+.ot-skill:last-child { border-bottom: none; }
+.ot-skill.is-resume { background: color-mix(in srgb, var(--accent, var(--primary)) 7%, transparent); border-radius: 8px; }
+.ot-skill.is-pending { outline: 1px dashed var(--primary); outline-offset: -3px; border-radius: 8px; }
+.ot-skill__num {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--line); color: var(--text-2); font-size: var(--fs-xs, 11px);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.ot-skill.is-resume .ot-skill__num { background: var(--primary); color: var(--on-primary, #fff); }
+.ot-skill__main { flex: 1; min-width: 0; }
+.ot-skill__title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-weight: 600; font-size: var(--fs-sm); }
+.ot-skill__crit { font-size: var(--fs-xs, 11px); color: var(--text-2); margin-top: 2px; }
+.ot-skill__note { font-size: var(--fs-xs, 11px); color: var(--text-3); margin-top: 2px; }
+/* m91 — انتخابگر سطح راهنمای «با کمک» */
+.ot-skill__prompt { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.ot-skill__prompt .select { max-width: 220px; font-size: var(--fs-xs, 12px); padding: 4px 8px; }
+.ot-resume-badge { display: inline-flex; align-items: center; gap: 3px; }
+.ot-pend-badge { display: inline-flex; align-items: center; }
+
+/* دکمه‌های سه‌حالتهٔ وضعیت */
+.ot-skill__seg { flex-shrink: 0; display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.ot-seg__btn {
+  padding: 4px 10px; font-size: var(--fs-xs, 11px); background: transparent;
+  border: none; border-inline-end: 1px solid var(--line); cursor: pointer; color: var(--text-2);
+}
+.ot-seg__btn:last-child { border-inline-end: none; }
+.ot-seg__btn:hover { background: var(--primary-soft); }
+.ot-seg__btn--ok.is-picked { background: var(--success); color: var(--on-primary, #fff); }
+.ot-seg__btn--warn.is-picked { background: var(--warning); color: var(--on-primary, #fff); }
+.ot-seg__btn--diff.is-picked { background: var(--text-3); color: var(--on-primary, #fff); }
+
+/* نوار ثبت جلسه */
+.ot-savebar {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  flex-wrap: wrap; margin-top: var(--sp-3); padding-top: var(--sp-2); border-top: 1px solid var(--line);
+}
+.ot-savebar .btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+@media (max-width: 720px) {
+  .ot-skill { flex-wrap: wrap; }
+  .ot-skill__seg { width: 100%; justify-content: stretch; }
+  .ot-seg__btn { flex: 1; text-align: center; }
+}
+
+/* ───────── m97 — مسیر بالینی استاندارد: شک بالینی + نوار مداخله + جلسه به جلسه ───────── */
+
+/* بلوک نقطهٔ تصمیم شک بالینی (بین گام ۲ و ۳ مسیر استاندارد) */
+.clx-suspicion {
+  border: 1px dashed var(--line); border-radius: var(--radius-md, 10px);
+  padding: var(--sp-2, 12px); margin-top: var(--sp-2, 8px); background: var(--surface-2, transparent);
+}
+.clx-suspicion.is-decided { border-style: solid; }
+.clx-suspicion__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.clx-suspicion__head strong { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); }
+.clx-suspicion__body { display: flex; flex-direction: column; gap: var(--sp-2, 8px); margin-top: var(--sp-2, 8px); }
+.clx-suspicion__signal { min-width: 0; }
+.clx-suspicion__sighead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.clx-suspicion__decision { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: var(--sp-2, 8px); min-width: 0; }
+.clx-suspicion__act { margin-top: var(--sp-2, 8px); }
+
+/* نوار مداخله — سگمنت‌های پیشرفت مسیر قالبی */
+.path-band { display: flex; gap: 4px; margin: var(--sp-2, 8px) 0; min-width: 0; }
+.path-band__seg {
+  flex: 1 1 0; min-width: 0; height: 8px; border-radius: 999px;
+  background: var(--line); transition: background .2s ease;
+}
+.path-band__seg.is-done { background: var(--success); }
+
+/* برنامهٔ جلسه به جلسه */
+.path-sessions { margin-top: var(--sp-3, 12px); }
+.path-sessions .clx-sub__title {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0;
+}
+.path-sessions .clx-sub__title .btn { margin-inline-start: auto; }
+.path-session {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 0; border-bottom: 1px solid var(--line); min-width: 0;
+}
+.path-session:last-of-type { border-bottom: none; }
+.path-session__ord {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--primary-soft); color: var(--primary); font-size: var(--fs-xs, 11px); font-weight: 700;
+}
+.path-session.is-done .path-session__ord { background: var(--success); color: var(--on-primary, #fff); }
+.path-session.is-skipped .path-session__ord { opacity: .45; }
+.path-session__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.path-session__title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; font-size: var(--fs-sm); min-width: 0; }
+.path-session__ops { flex-shrink: 0; display: inline-flex; gap: 4px; }
+.path-session__placeholder { border: 1px dashed var(--line); border-radius: var(--radius-md, 10px); padding: var(--sp-2, 10px); }
+.path-session__next { display: inline-flex; align-items: center; gap: 6px; margin-top: var(--sp-2, 8px); }
+
+/* m100 — آیتم‌های پیوست جلسه (تمرین/تکلیف/بازی/فرم/دستورالعمل) — m118: +رویداد (فرم/پرسش‌نامه) */
+.path-session__items { display: flex; flex-direction: column; gap: 3px; margin-top: 3px; min-width: 0; }
+.path-session__item {
+  font-size: var(--fs-xs, 11px); color: var(--ink-2, #555); line-height: 1.7;
+  padding-inline-start: 9px; border-inline-start: 3px solid var(--line); min-width: 0;
+}
+.path-session__item b { color: var(--ink, #1c1b2b); font-weight: 700; }
+.path-session__item--exercise { border-inline-start-color: var(--primary, #7c5cff); }
+.path-session__item--homework { border-inline-start-color: var(--warn, #a06a00); }
+.path-session__item--game { border-inline-start-color: var(--success, #2e7d32); }
+.path-session__item--event { border-inline-start-color: var(--info, #229ED9); }
+.path-session__item--instruction { border-inline-start-color: var(--ink-3, #999); }
+
+/* m100 — مدیریت قالب‌های مسیر: فهرست + سازندهٔ پروتکل جلسه به جلسه */
+.tpl-list-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 9px 2px; border-bottom: 1px solid var(--line); min-width: 0;
+}
+.tpl-list-row:last-child { border-bottom: none; }
+.tpl-sessions { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.tpl-session {
+  border: 1px solid var(--line); border-radius: var(--radius-md, 10px);
+  padding: 10px 12px; min-width: 0;
+}
+.tpl-session__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.tpl-session__num { font-weight: 700; font-size: var(--fs-sm); }
+.tpl-session .field { margin-bottom: 8px; }
+.tpl-session .field:last-child { margin-bottom: 0; }
+
+@media (max-width: 720px) {
+  .path-session { flex-wrap: wrap; }
+  .path-session__ops { width: 100%; justify-content: flex-end; }
+}
+
+/* ───────── m116 — ری‌رایت مسیر بالینی: استپر مرحله‌ای + شروع از قالب + زمینهٔ تفسیر ───────── */
+
+/* استپر عمودی فاز شناسایی — ستون فقرات + گره شماره‌دار */
+.clx-stepper-card__bar {
+  height: 6px; border-radius: 999px; background: var(--line);
+  overflow: hidden; margin-bottom: var(--sp-2, 8px); min-width: 0;
+}
+.clx-stepper-card__fill {
+  display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  transition: width .35s ease;
+}
+.clx-stepper { list-style: none; margin: var(--sp-2, 8px) 0 0; padding: 0; min-width: 0; }
+.clx-stepper__item {
+  position: relative; display: flex; align-items: flex-start; gap: 10px;
+  padding: 0 0 var(--sp-3, 12px) 0; min-width: 0;
+}
+/* خط اتصال روی ستون فقرات — همه به‌جز آخری */
+.clx-stepper__item::after {
+  content: ''; position: absolute;
+  inset-inline-start: 15px; top: 32px; bottom: -2px;
+  width: 2px; background: var(--line);
+}
+.clx-stepper__item:last-child::after { display: none; }
+.clx-stepper__node {
+  flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-2, transparent); border: 2px solid var(--line);
+  color: var(--text-3); font-weight: 700; font-size: var(--fs-xs, 11px);
+  transition: border-color .2s, background .2s, color .2s;
+  position: relative; z-index: 1;
+}
+.clx-stepper__panel { flex: 1; min-width: 0; padding-top: 4px; }
+.clx-stepper__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.clx-stepper__head strong { font-size: var(--fs-sm); min-width: 0; }
+.clx-stepper__detail {
+  font-size: var(--fs-xs, 11px); color: var(--text-3);
+  border: 1px dashed var(--line); border-radius: var(--radius-sm, 8px);
+  padding: 4px 8px; margin-top: 6px; width: fit-content; max-width: 100%;
+}
+.clx-stepper__act { margin-inline-start: auto; }
+.clx-stepper__num { line-height: 1; }
+
+/* حالت گام‌ها */
+.clx-stepper__item.is-done .clx-stepper__node {
+  background: var(--success); border-color: var(--success); color: var(--on-primary, #fff);
+}
+.clx-stepper__item.is-done::after { background: var(--success); opacity: .35; }
+.clx-stepper__item.is-current .clx-stepper__node {
+  background: var(--primary-soft); border-color: var(--primary); color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-soft);
+}
+.clx-stepper__item.is-current .clx-stepper__head strong { color: var(--primary); }
+.clx-stepper__item.is-todo .clx-stepper__node { opacity: .75; }
+
+/* گره تصمیم شک بالینی روی ستون فقرات */
+.clx-stepper__item--decision .clx-stepper__node--alert {
+  background: var(--warning-soft); border-color: var(--warning); color: var(--warning);
+}
+.clx-stepper__item--decision.is-done .clx-stepper__node--alert {
+  background: var(--success); border-color: var(--success); color: var(--on-primary, #fff);
+}
+.clx-stepper__item--decision .clx-suspicion { margin-top: 0; }
+
+@media (max-width: 640px) {
+  .clx-stepper__head strong { flex-basis: calc(100% - 90px); }
+  .clx-stepper__act { margin-inline-start: 0; }
+}
+
+/* m116 — کارت‌های «شروع از قالب» (قالب‌محور) */
+.clx-quickstart {
+  border: 1px solid var(--line); border-radius: var(--radius-md, 10px);
+  padding: var(--sp-3, 12px); margin-top: var(--sp-2, 8px);
+  background: var(--surface-2, transparent); min-width: 0;
+}
+.clx-quickstart__title {
+  display: flex; align-items: center; gap: 6px;
+  font-weight: 700; font-size: var(--fs-sm); margin-bottom: var(--sp-2, 8px);
+}
+.clx-quickstart__grid {
+  display: grid; gap: var(--sp-2, 8px);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); min-width: 0;
+}
+.clx-tpl {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  border: 1px solid var(--line); border-radius: var(--radius-md, 10px);
+  padding: var(--sp-2, 10px); background: var(--surface);
+}
+.clx-tpl__head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.clx-tpl__title { font-size: var(--fs-sm); min-width: 0; }
+.clx-tpl__desc { min-width: 0; }
+.clx-tpl__meta { display: flex; gap: 4px; flex-wrap: wrap; min-width: 0; }
+.clx-tpl__act { margin-top: auto; }
+@media (max-width: 640px) {
+  .clx-quickstart__grid { grid-template-columns: 1fr; }
+}
+
+/* m116 — زمینهٔ تفسیر (جمعیت‌شناختی × خروجی موتور) */
+.clx-ctx {
+  border: 1px solid var(--line); border-radius: var(--radius-md, 10px);
+  padding: var(--sp-3, 12px); margin-bottom: var(--sp-3, 12px);
+  background: var(--surface-2, transparent); min-width: 0;
+}
+.clx-ctx__title {
+  display: flex; align-items: center; gap: 6px;
+  font-weight: 700; font-size: var(--fs-sm); margin-bottom: 2px;
+}
+.clx-ctx__grid {
+  display: grid; gap: var(--sp-3, 12px); margin-top: var(--sp-2, 8px);
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); min-width: 0;
+}
+.clx-ctx__rows { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.clx-ctx__row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  border-bottom: 1px dashed var(--line); padding-bottom: 3px; min-width: 0;
+}
+.clx-ctx__row:last-child { border-bottom: none; }
+.clx-ctx__label { color: var(--text-3); font-size: var(--fs-xs, 11px); flex-shrink: 0; }
+.clx-ctx__value { font-weight: 600; font-size: var(--fs-sm); min-width: 0; text-align: end; }
+.clx-ctx__value.is-strong { color: var(--primary); }
+.clx-ctx__note { font-size: var(--fs-xs, 11px); color: var(--text-3); margin-top: 2px; }
+.clx-ctx__empty { font-size: var(--fs-xs, 11px); color: var(--text-3); padding: 4px 0; }
+.clx-ctx__guide {
+  display: flex; align-items: flex-start; gap: 6px; margin-top: var(--sp-2, 8px);
+  font-size: var(--fs-xs, 11px); color: var(--text-2);
+  border-top: 1px dashed var(--line); padding-top: var(--sp-2, 8px); min-width: 0;
+}
+.clx-ctx__guide svg { flex-shrink: 0; margin-top: 2px; }
+
+/* m101 — تب مستقل «مدیریت قالب‌ها» (m103 — نوار امتیاز حذف شد) */
+.tpl-card { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; }
+.tpl-card__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.tpl-card__title { font-weight: 700; }
+.tpl-card__meta { display: flex; gap: 6px; flex-wrap: wrap; }
+.tpl-card__sessions { display: flex; flex-direction: column; gap: 4px; border-top: 1px dashed var(--line); padding-top: 7px; }
+.tpl-card__session { display: flex; flex-direction: column; gap: 3px; font-size: var(--fs-sm); }
+.tpl-card__actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+
+.staff-score-card > summary {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  padding: 12px 14px; font-size: var(--fs-sm); list-style: none;
+}
+.staff-score-card > summary::-webkit-details-marker { display: none; }
+
+@media (max-width: 720px) {
+  .tpl-card { flex-direction: column; }
+  .tpl-card__actions { flex-direction: row; width: 100%; }
+  .tpl-card__actions .btn { flex: 1; }
+}
+
+/* ── m102 — تابلوی پیشرفت درمانگران (progress-board.js) ── */
+.pb-tabs { display: flex; gap: 8px; margin: var(--sp-3) 0 var(--sp-4); flex-wrap: wrap; }
+.pb-tab.is-active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+
+.pb-podium { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.pb-podium__card {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center;
+  padding: 14px 10px; border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: var(--shadow-1);
+}
+.pb-podium__card--1 { border-color: var(--warn, #c9a227); background: linear-gradient(180deg, rgba(201,162,39,.10), transparent); }
+.pb-podium__card.is-me { outline: 2px solid var(--primary); outline-offset: -2px; }
+.pb-podium__rank { color: var(--warn, #c9a227); }
+.pb-podium__name { font-weight: 700; }
+.pb-podium__score { font-size: var(--fs-lg); font-weight: 700; }
+.pb-podium__meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: center; }
+
+.pb-board { display: flex; flex-direction: column; box-shadow: var(--shadow-1); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.pb-rowwrap { border-bottom: 1px solid var(--line); }
+.pb-rowwrap:last-child { border-bottom: 0; }
+.pb-row {
+  display: grid; grid-template-columns: 44px 1fr 84px; align-items: center; gap: 10px;
+  width: 100%; padding: 11px 14px; background: transparent; border: 0; cursor: pointer;
+  font: inherit; color: inherit; text-align: right;
+}
+.pb-row:hover { background: color-mix(in srgb, var(--primary) 5%, transparent); }
+.pb-row.is-me { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.pb-row__rank { font-weight: 700; color: var(--text-sub, var(--muted)); }
+.pb-row__name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pb-row__name b { display: flex; gap: 6px; align-items: center; }
+.pb-you { font-size: var(--fs-xs); }
+.pb-row__score { justify-self: end; font-weight: 700; font-size: var(--fs-lg); }
+.pb-row__detail { padding: 4px 14px 14px 14px; border-top: 1px dashed var(--line); }
+.pb-detail-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-3); }
+.pb-detail-cell { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); }
+.pb-detail-chips { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
+
+@media (max-width: 720px) {
+  .pb-podium { grid-template-columns: 1fr; }
+  .pb-row { grid-template-columns: 32px 1fr auto; }
+  .pb-detail-grid { grid-template-columns: 1fr; }
+}

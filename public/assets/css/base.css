@@ -1,0 +1,439 @@
+/* ═══════════════════════════════════════════════════════════════
+   base.css — ریست، تایپوگرافی، پوسته اپ (RTL)
+   ═══════════════════════════════════════════════════════════════ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: var(--fs-md);
+  line-height: var(--lh-body, 1.8);
+  color: var(--text);
+  background: var(--bg);
+  transition: background var(--normal), color var(--normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  font-weight: 700;
+  line-height: var(--lh-heading, 1.5);
+}
+h1 { font-size: var(--fs-2xl); }
+h2 { font-size: var(--fs-xl); }
+h3 { font-size: var(--fs-lg); }
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+a:hover { color: var(--primary-hover); }
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary) 24%, transparent);
+}
+
+/* اسکرول‌بار ظریف */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-full);
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+
+/* ─────────────── پوسته: سایدبار راست + محتوا ─────────────── */
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  flex: 0 0 var(--sidebar-w);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-3);
+  background: var(--surface);
+  border-inline-start: 1px solid var(--border); /* RTL: سمت راست بصری نیست — سایدبار اول DOM است */
+  border-inline-end: 1px solid var(--border);
+  height: 100vh;
+  z-index: 40;
+  transition: background var(--normal);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-2) var(--sp-4);
+}
+.brand__logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-1), 0 0 0 1px var(--border);
+}
+.brand__logo img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: block;
+}
+.brand__name {
+  font-weight: 700;
+  font-size: var(--fs-md);
+  line-height: var(--lh-snug, 1.6);
+}
+.brand__sub {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  line-height: var(--lh-snug, 1.6);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  flex: 1;
+}
+.nav__label {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  padding: var(--sp-3) var(--sp-3) var(--sp-1);
+  font-weight: 500;
+}
+.nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  font-weight: 500;
+  font-size: var(--fs-md);
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: start;
+  transition: background var(--fast), color var(--fast);
+}
+.nav__item:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.nav__item.is-active {
+  background: var(--primary-soft);
+  color: var(--on-primary-soft);
+}
+.nav__item svg { flex-shrink: 0; }
+
+.sidebar__foot {
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+/* ─────────────── ناحیه اصلی ─────────────── */
+
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: var(--topbar-h);
+  padding: 0 var(--sp-6);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+/* m106 — عنوان بزرگ topbar حذف شد (تکرار عنوان)؛ #page-title فقط sr-only است */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  clip: rect(0 0 0 0); clip-path: inset(50%);
+  overflow: hidden; white-space: nowrap;
+}
+.topbar__user {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.topbar__user b { color: var(--text); font-weight: 600; }
+
+.content {
+  padding: var(--sp-6);
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ─────────────── m25 — لایهٔ حرکت (ورود نرم نما + احترام به reduced-motion) ─────────────── */
+
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+/* فقط روی ناوبری واقعی فعال می‌شود (کلاس را router.js می‌گذارد) — رفرش داخلی نما بدون انیمیشن */
+.view-enter { animation: view-in var(--normal) both; }
+
+/* کارت‌های تعاملی — بلندشدن ملایم روی هاور (فقط دستگاه‌های pointer دار) */
+@media (hover: hover) {
+  .card--lift { transition: transform var(--fast), box-shadow var(--fast); }
+  .card--lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+}
+
+/* m114 — استگرگر ورود محتوا: فرزندان ظرف .stagger با تأخیر پلکانی بالا می‌آیند
+   کاربرد: گرید KPI داشبورد. بعد از ۸ فرزند، تأخیر ثابت می‌ماند. */
+@keyframes stagger-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.stagger > * { animation: stagger-in var(--dur-3, 240ms) var(--ease-out) both; }
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 40ms; }
+.stagger > *:nth-child(3) { animation-delay: 80ms; }
+.stagger > *:nth-child(4) { animation-delay: 120ms; }
+.stagger > *:nth-child(5) { animation-delay: 160ms; }
+.stagger > *:nth-child(6) { animation-delay: 200ms; }
+.stagger > *:nth-child(7) { animation-delay: 240ms; }
+.stagger > *:nth-child(n+8) { animation-delay: 280ms; }
+
+/* کاربران حساس به حرکت — انیمیشن‌ها خاموش */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* هدر صفحه درون محتوا */
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-5);
+}
+.page-head__title {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  margin-inline-end: auto;
+}
+.page-head__desc {
+  width: 100%;
+  color: var(--text-2);
+  font-size: var(--fs-md);
+  margin-top: calc(var(--sp-1) * -1);
+}
+
+/* ─────────────── واکنش‌گرایی ─────────────── */
+
+.menu-btn { display: none; }
+
+@media (max-width: 920px) {
+  .shell { display: block; }
+  /* M15.1-fix: drawer در RTL باید سمت راست (کنار دکمه منو) باز شود.
+     inset-inline-end در RTL سمت چپ است — ترکیب قبلی نوار ۹۰px بسته را روی صفحه جا می‌گذاشت. */
+  .sidebar {
+    position: fixed;
+    inset-inline-start: 0;
+    top: 0;
+    width: min(300px, 84vw);
+    transform: translateX(-100%);
+    transition: transform var(--normal);
+    box-shadow: var(--shadow-3);
+  }
+  html[dir='rtl'] .sidebar { transform: translateX(100%); } /* پنهان به سمت راست */
+  html[dir='rtl'] .sidebar.is-open { transform: translateX(0); }
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 35;
+    border: none;
+    padding: 0;
+  }
+  .menu-btn {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .content { padding: var(--sp-4); }
+  .topbar { padding: 0 var(--sp-4); }
+}
+
+/* وضعیت بارگذاری و خطای کلی */
+.state-block {
+  padding: var(--sp-8) var(--sp-4);
+  text-align: center;
+  color: var(--text-2);
+}
+.state-block .spinner { margin-inline: auto; }
+
+/* دسترس‌پذیری */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ═══════════════ M7 — موبایل‌فرندلی ═══════════════ */
+
+@media (max-width: 640px) {
+  /* چیپ کاربر فشرده: فقط نقش بماند (کلیک → تغییر هویت) */
+  .topbar__user b { display: none; }
+  .topbar__user { padding: var(--sp-1) var(--sp-2); }
+  .topbar { gap: var(--sp-2); }
+}
+
+@media (max-width: 480px) {
+  .content { padding: var(--sp-3); }
+  .topbar { padding: 0 var(--sp-3); }
+  .page-head__title { font-size: var(--fs-xl); }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   m69 — ناوبری گروهی + Topbar v2 + آواتار
+   افزودنی: همهٔ رفتارهای v1 حفظ می‌شوند؛ این بلوک فقط ارتقا می‌دهد
+   ═══════════════════════════════════════════════════════════════ */
+
+/* برچسب گروه با خط دنباله */
+.nav__label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+  color: var(--text-3);
+  padding: var(--sp-4) var(--sp-3) var(--sp-1);
+}
+.nav__label::after {
+  content: ''; flex: 1; height: 1px;
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+}
+/* گروه بی‌برچسب (ناظر) — فاصلهٔ اول */
+.nav__label:empty { padding-top: var(--sp-2); }
+
+/* آیتم فعال — قرص نرم + نوار ۳px سمت شروع (RTL درست) + درخشش ملایم (m114) */
+.nav__item { position: relative; }
+.nav__item.is-active { font-weight: 600; }
+.nav__item.is-active::before {
+  content: ''; position: absolute;
+  inset-block: 7px; inset-inline-start: 0;
+  width: 3px; border-radius: 999px; background: var(--primary);
+}
+.nav__item.is-active {
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--primary) 14%, transparent);
+}
+/* m114 — آیکن ناوبری روی هاور یک قدم به جلو (در RTL: به چپ) */
+@media (hover: hover) {
+  .nav__item svg { transition: transform var(--fast); }
+  .nav__item:hover svg { transform: translateX(-2px); }
+  html[dir='ltr'] .nav__item:hover svg { transform: translateX(2px); }
+}
+
+/* Topbar: فقط مسیر راهنما (m106 — عنوان بزرگ فقط در page-headِ نماست تا دوبار تکرار نشود) */
+.topbar__title-wrap {
+  display: flex; flex-direction: column; justify-content: center;
+  min-width: 0; margin-inline-end: auto;
+}
+.topbar__crumb {
+  display: flex; gap: 7px; align-items: baseline;
+  min-width: 0;
+  font-size: var(--fs-sm); font-weight: 400; line-height: 1.5;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.topbar__crumb-group { color: var(--text-3); flex: none; }
+.topbar__crumb-sep { color: var(--text-3); opacity: .6; flex: none; }
+.topbar__crumb-page { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+
+/* آواتار حرف اول نام */
+.avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: var(--primary); color: var(--on-primary);
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; line-height: 1;
+}
+.topbar__user { padding-inline: 8px 14px; }
+.topbar__user .badge { font-size: 10px; padding: 1px 8px; }
+
+/* دراور موبایل — پولیش لبه و دستگیره */
+@media (max-width: 920px) {
+  .sidebar { border-inline-end: none; box-shadow: var(--shadow-3); }
+  .sidebar-backdrop {
+    background: color-mix(in srgb, #0F1113 55%, transparent);
+    backdrop-filter: blur(2px);
+  }
+  .sidebar::after {
+    content: ''; position: absolute; top: 6px; inset-inline-start: 50%;
+    translate: -50% 0; width: 36px; height: 4px; border-radius: 999px;
+    background: var(--surface-3);
+  }
+}

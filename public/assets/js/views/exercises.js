@@ -1,0 +1,945 @@
+/**
+ * نمای بانک تمرین
+ * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
+ */
+// exercises.js — بانک تمرین با ناوبری تو در تو + صفحه‌بندی + وکتور (بدون ایموجی)
+// ساختار جدید (دستور کاربر: «تمرین‌ها باید حالت تو در تو و صفحه‌بندی شده بر اساس نوع اختلال …»):
+// سطح ۱ — کاشی‌های دستهٔ اختلال (با آیکون وکتور و شمارش زنده از facets)
+// سطح ۲ — چیپ‌های پایه + جستجو + فیلتر انتشار → کارت‌ها با صفحه‌بندی سرورمحور
+// تغییر: بخش «بازگشتی‌ها» طبق دستور کاربر به‌کلی حذف شد (بازگشتی خانواده در
+// تایم‌لاین پرونده و پروفایل دانش‌آموز همچنان در جریان است — فقط نمای پنل حذف شد).
+// موروثی: آپلود چندفایلی multipart + تکه‌ای، RBAC سه نقش، حذف نرم.
+
+import { api } from '../api.js';
+import {
+  el,
+  icon,
+  toast,
+  toastError,
+  confirmModal,
+  openModal,
+  formModal,
+  emptyState,
+  skeletonState,
+  errorState
+} from '../ui.js';
+import { fa, formatJalaliNumeric, safeExternalHref } from '../format.js';
+import { session } from '../state.js';
+
+// سقف‌ها از meta سرور خوانده می‌شوند (آداپتر محور)؛ این‌ها فقط پیش‌فرض اولیه‌اند
+const LIMITS = {
+  maxFileBytes: 50 * 1024 * 1024,
+  maxFilesPerUpload: 10
+};
+/** MIME از پسوند — برای مرورگرهایی که نوع خالی می‌دهند (.mkv/.avi/…) */
+const EXT_MIME_FALLBACK = {
+  mp4: 'video/mp4', m4v: 'video/x-m4v', webm: 'video/webm', mov: 'video/quicktime',
+  avi: 'video/x-msvideo', mkv: 'video/x-matroska', '3gp': 'video/3gpp', wmv: 'video/x-ms-wmv',
+  mpeg: 'video/mpeg', mpg: 'video/mpeg',
+  pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp',
+  gif: 'image/gif', txt: 'text/plain', csv: 'text/csv', html: 'text/html',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+};
+const FORMAT_LABELS = { worksheet: 'کاربرگ', game: 'بازی', instruction: 'دستورالعمل خانه' };
+const FORMAT_ICONS = { worksheet: 'file', game: 'gamepad', instruction: 'board' };
+const PAGE_SIZE = 18;
+
+/** — نگاشت نام اختلال به آیکون وکتور (برچسب‌های disorder از meta سرور می‌آیند) */
+const DISORDER_ICON_RULES = [
+  [/خواندن|دسلکسی|روخوانی|واکشی/, 'book'],
+  [/نوشتن|دیسگرافی|املاء|املا|نگارش/, 'edit'],
+  [/ریاض|حساب|دیسکالکولی|عدد/, 'calculator'],
+  [/بیش\s?فعال|توجه|نارسا/, 'zap'],
+  [/اتیزم|طیف/, 'puzzle'],
+  [/گفتار|زبان|کلام/, 'speech'],
+  [/اضطراب|نگرانی|ترس/, 'heart'],
+  [/حرکت|هماهنگی|موتور|رشد/, 'activity'],
+  [/رفتار|نافرمانی|ODD|خلق/, 'shield'],
+  [/دیرآموز|کند|توان ذهنی/, 'brain']
+];
+function disorderIcon(name) {
+  const n = String(name ?? '');
+  for (const [re, ic] of DISORDER_ICON_RULES) {
+    if (re.test(n)) return ic;
+  }
+  return 'target';
+}
+
+function isStaff() {
+  return Boolean(session.user && ['manager', 'therapist', 'secretary'].includes(session.user.role));
+}
+
+function formatBadge(format) {
+  return el('span', { class: 'badge badge--neutral exb-format' }, icon(FORMAT_ICONS[format] ?? 'file', 13), FORMAT_LABELS[format] ?? format);
+}
+
+function publishedBadge(published) {
+  return el('span', { class: `badge ${published ? 'badge--success' : 'badge--warning'}` }, published ? 'منتشرشده' : 'پیش‌نویس');
+}
+
+function sizeLabel(bytes) {
+  if (!bytes && bytes !== 0) return '';
+  if (bytes >= 1024 * 1024) {
+    const mb = bytes / (1024 * 1024);
+    return `${fa(mb >= 10 ? Math.round(mb) : Math.round(mb * 10) / 10)}MB`;
+  }
+  return bytes >= 1024 ? `${fa(Math.round(bytes / 1024))}KB` : `${fa(bytes)}B`;
+}
+
+/** — MIME یک فایل محلی: نوع اعلامی مرورگر یا fallback پسوند */
+function localMime(file) {
+  const t = (file.type || '').toLowerCase();
+  if (t && t !== 'application/octet-stream') return t;
+  const ext = (file.name || '').split('.').pop()?.toLowerCase() ?? '';
+  return EXT_MIME_FALLBACK[ext] ?? t ?? 'application/octet-stream';
+}
+
+/**
+ * — اعتبارسنجی سمت کاربر (همان مرز سرور): نوع + حجم — باینری مستقیم می‌رود،
+ * base64 و سقف ۵۱۲KB قدیمی حذف شد
+ */
+function validateLocalFile(file) {
+  const mime = localMime(file);
+  const ext = (file.name || '').split('.').pop()?.toLowerCase() ?? '';
+  if (!EXT_MIME_FALLBACK[ext] && !(mime && mime !== 'application/octet-stream')) {
+    throw new Error(`نوع فایل «${file.name}» شناخته نشد`);
+  }
+  if (file.size > LIMITS.maxFileBytes) {
+    throw new Error(`حجم «${file.name}» بیش از ${sizeLabel(LIMITS.maxFileBytes)} است`);
+  }
+  if (file.size === 0) {
+    throw new Error(`فایل «${file.name}» خالی است`);
+  }
+  return mime;
+}
+
+/** — فهرست فایل‌های انتخاب‌شده به شکل چیپ با دکمهٔ حذف */
+function buildPickedChips(files, onChange) {
+  const wrap = el('div', { class: 'exb-picked' });
+  function draw() {
+    wrap.replaceChildren(
+      ...files.map((f, i) =>
+        el(
+          'span',
+          { class: 'exb-picked__chip' },
+          icon('file', 13),
+          el('span', { class: 'exb-picked__name' }, f.name),
+          el('span', { class: 'exb-picked__size' }, sizeLabel(f.size)),
+          el('button', {
+            type: 'button',
+            class: 'exb-picked__x',
+            title: 'حذف از انتخاب',
+            onclick: () => { files.splice(i, 1); draw(); onChange?.(); }
+          }, icon('x', 11))
+        )
+      )
+    );
+  }
+  draw();
+  wrap.refresh = draw;
+  return wrap;
+}
+
+/** ناحیهٔ درگ‌اند‌دراپ چندفایلی + کلیک برای انتخاب — */
+function buildDropzone(onFiles) {
+  const input = el('input', { type: 'file', multiple: true, style: { display: 'none' } });
+  const hint = LIMITS.maxFileBytes >= 1024 * 1024
+    ? `${fa(Math.round(LIMITS.maxFileBytes / (1024 * 1024)))} مگابایت`
+    : `${fa(Math.round(LIMITS.maxFileBytes / 1024))} کیلوبایت`;
+  const zone = el(
+    'div',
+    { class: 'exb-drop' },
+    el('span', {}, icon('upload', 22)),
+    el('b', {}, 'فایل‌های تمرین را اینجا رها کنید'),
+    el('span', { class: 'exb-drop__hint' }, `یا کلیک کنید — PDF، تصویر، ویدیو، Word، Excel، HTML — هر فایل تا ${hint} — چند فایل همزمان`)
+  );
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    zone.classList.add('is-over');
+  });
+  zone.addEventListener('dragleave', () => zone.classList.remove('is-over'));
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    zone.classList.remove('is-over');
+    const list = Array.from(e.dataTransfer?.files ?? []);
+    if (list.length > 0) onFiles(list);
+  });
+  input.addEventListener('change', () => {
+    const list = Array.from(input.files ?? []);
+    if (list.length > 0) onFiles(list);
+    input.value = '';
+  });
+  return el('div', {}, input, zone);
+}
+
+/** ردیف برچسب‌های قابل انتخاب — گروه‌بندی دسته‌ها */
+function buildTagPicker(tags, selected) {
+  const wrap = el('div', { class: 'exb-tags' });
+  const groups = [
+    { key: 'disorder', label: 'اختلال' },
+    { key: 'grade', label: 'پایه' },
+    { key: 'other', label: 'سایر' }
+  ];
+  for (const g of groups) {
+    const list = tags[g.key] ?? [];
+    if (list.length === 0) continue;
+    wrap.append(el('div', { class: 'exb-tags__label' }, g.label));
+    const row = el('div', { class: 'exb-tags__row' });
+    for (const t of list) {
+      const chip = el('button', { type: 'button', class: 'exb-chip', dataset: { tagId: t.id } }, t.name);
+      if (selected.has(t.id)) chip.classList.add('is-on');
+      chip.addEventListener('click', () => {
+        if (selected.has(t.id)) {
+          selected.delete(t.id);
+          chip.classList.remove('is-on');
+        } else {
+          selected.add(t.id);
+          chip.classList.add('is-on');
+        }
+      });
+      row.append(chip);
+    }
+    wrap.append(row);
+  }
+  return wrap;
+}
+
+export function renderExercises(container) {
+  const toolbar = el('div', { class: 'page-head' });
+  const nav = el('div', { class: 'exb-nav' });
+  const body = el('div', { class: 'exb-body' });
+  container.replaceChildren(toolbar, nav, body);
+
+  let tags = { disorder: [], grade: [], other: [] };
+  let storage = 'd1';
+  let facets = { counts: {}, total: 0 };
+  // ناوبری تو در تو: دستهٔ اختلال (سطح ۱) + پایه (سطح ۲) + جستجو/انتشار
+  const state = { cat: '', grade: '', q: '', published: 'all', page: 1 };
+  let items = [];
+  let total = 0;
+  let hasMore = false;
+
+  // ─────────────── داده ───────────────
+
+  async function loadMeta() {
+    try {
+      const res = await api.get('/api/exercises/meta');
+      tags = res.data?.categories ?? tags;
+      storage = res.data?.storage ?? 'd1';
+      if (res.data?.facets) facets = res.data.facets;
+      // سقف‌های واقعی از سرور (آداپتر محور: D1 تکه‌تکه/R2 = ۵۰MB)
+      if (res.data?.limits) {
+        if (Number.isFinite(res.data.limits.maxFileBytes)) LIMITS.maxFileBytes = res.data.limits.maxFileBytes;
+        if (Number.isFinite(res.data.limits.maxFilesPerUpload)) LIMITS.maxFilesPerUpload = res.data.limits.maxFilesPerUpload;
+      }
+    } catch {
+      /* برچسب‌های خالی — نما کار می‌کند */
+    }
+  }
+
+  /** — بارگذاری چندفایلی برای یک تمرین ثبت‌شده.
+   * فایل ≤ ۳MB: یک درخواست multipart — فایل بزرگ‌تر: بارگذاری پیوستهٔ تکه‌به‌تکه
+   * (هر درخواست ≤ ۱ مگابایت تا سقف CPU درخواست Worker نسوزد) با نمایش پیشرفت */
+  const CHUNK_UPLOAD_BYTES = 1024 * 1024;
+  const MULTIPART_MAX_BYTES = 3 * 1024 * 1024;
+
+  async function uploadFiles(exerciseId, files, onProgress) {
+    for (let i = 0; i < files.length; i += 1) {
+      const f = files[i];
+      onProgress?.(i + 1, files.length, f.name, 0);
+      if (f.size <= MULTIPART_MAX_BYTES) {
+        const form = new FormData();
+        form.append('files', f, f.name);
+        await api.postForm(`/api/exercises/${exerciseId}/files`, form);
+        onProgress?.(i + 1, files.length, f.name, 100);
+      } else {
+        await uploadChunked(exerciseId, f, (pct) => onProgress?.(i + 1, files.length, f.name, pct));
+      }
+    }
+  }
+
+  async function uploadChunked(exerciseId, file, onPct) {
+    const mime = localMime(file);
+    const begin = await api.post(`/api/exercises/${exerciseId}/files/begin`, {
+      filename: file.name,
+      mime,
+      size: file.size
+    });
+    const fileId = begin?.data?.fileId;
+    const chunks = Math.ceil(file.size / CHUNK_UPLOAD_BYTES);
+    for (let seq = 0; seq < chunks; seq += 1) {
+      const start = seq * CHUNK_UPLOAD_BYTES;
+      const piece = file.slice(start, Math.min(start + CHUNK_UPLOAD_BYTES, file.size));
+      const buf = await piece.arrayBuffer();
+      await api.putRaw(`/api/exercises/${exerciseId}/files/${fileId}/chunks/${seq}`, buf);
+      onPct?.(Math.round(((seq + 1) / chunks) * 100));
+    }
+    await api.post(`/api/exercises/${exerciseId}/files/${fileId}/complete`, {});
+  }
+
+  async function refresh() {
+    body.replaceChildren(skeletonState('cards', 4));
+    try {
+      const qs = new URLSearchParams({ page: String(state.page), page_size: String(PAGE_SIZE) });
+      // ناوبری تو در تو: اختلال + پایه با هم (AND سرورمحور)
+      const tagIds = [state.cat, state.grade].filter(Boolean);
+      if (tagIds.length > 0) qs.set('tag_ids', tagIds.join(','));
+      if (state.q) qs.set('q', state.q);
+      if (state.published !== 'all') qs.set('published', state.published);
+      const res = await api.get(`/api/exercises?${qs.toString()}`);
+      items = res.data?.items ?? [];
+      total = res.data?.total ?? 0;
+      hasMore = res.data?.hasMore ?? false;
+      drawList();
+    } catch (err) {
+      body.replaceChildren(errorState(err, refresh));
+    }
+  }
+
+  /** بعد از هر تغییر داده — شمارش کاشی‌ها هم تازه شود */
+  async function reloadAll() {
+    await loadMeta();
+    drawNav();
+    await refresh();
+  }
+
+  // ─────────────── ناوبری تو در تو (سطح ۱: اختلال، سطح ۲: پایه/جستجو) ───────────────
+
+  function selectCat(id) {
+    if (state.cat === id) return;
+    state.cat = id;
+    state.grade = '';
+    state.page = 1;
+    drawNav();
+    refresh();
+  }
+
+  function selectGrade(id) {
+    if (state.grade === id) return;
+    state.grade = id;
+    state.page = 1;
+    drawNav();
+    refresh();
+  }
+
+  function catTile(id, ic, name, count) {
+    const active = state.cat === id;
+    return el(
+      'button',
+      {
+        class: `exb-cat${active ? ' is-active' : ''}`,
+        onclick: () => selectCat(id)
+      },
+      el('span', { class: 'exb-cat__icon' }, icon(ic, 18)),
+      el(
+        'span',
+        { class: 'exb-cat__text' },
+        el('span', { class: 'exb-cat__name', title: name }, name),
+        el('span', { class: 'exb-cat__count' }, count > 0 ? `${fa(count)} تمرین` : 'بدون تمرین')
+      )
+    );
+  }
+
+  function drawNav() {
+    const parts = [];
+
+    // نان‌مکب — مسیر فعلی با دکمهٔ بازگشت به «همه»
+    if (state.cat || state.grade) {
+      const catName = tags.disorder.find((t) => t.id === state.cat)?.name;
+      const gradeName = tags.grade.find((t) => t.id === state.grade)?.name;
+      const crumb = el('div', { class: 'exb-crumb' },
+        el('button', {
+          class: 'btn btn--ghost btn--sm',
+          onclick: () => { state.cat = ''; state.grade = ''; state.page = 1; drawNav(); refresh(); }
+        }, icon('chevR', 14), 'همهٔ دسته‌ها'),
+        catName ? el('span', { class: 'exb-crumb__sep' }, '‹') : null,
+        catName ? el('b', {}, catName) : null,
+        gradeName ? el('span', { class: 'exb-crumb__sep' }, '‹') : null,
+        gradeName ? el('span', {}, gradeName) : null
+      );
+      parts.push(crumb);
+    }
+
+    // سطح ۱ — کاشی‌های دستهٔ اختلال (+ کاشی «همه»)
+    const grid = el('div', { class: 'exb-cats' },
+      catTile('', 'grid', 'همهٔ تمرین‌ها', facets.total),
+      ...(tags.disorder ?? []).map((t) => catTile(t.id, disorderIcon(t.name), t.name, facets.counts?.[t.id] ?? 0))
+    );
+    parts.push(grid);
+
+    // سطح ۲ — چیپ‌های پایه + جستجو + فیلتر انتشار
+    const search = el('input', {
+      class: 'input exb-search',
+      placeholder: 'جستجوی عنوان یا توضیح…',
+      value: state.q
+    });
+    let debounce = null;
+    search.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        state.q = search.value.trim();
+        state.page = 1;
+        refresh();
+      }, 350);
+    });
+
+    const pubSel = el(
+      'select',
+      { class: 'select' },
+      el('option', { value: 'all', selected: state.published === 'all' }, 'همه'),
+      el('option', { value: 'true', selected: state.published === 'true' }, 'منتشرشده'),
+      el('option', { value: 'false', selected: state.published === 'false' }, 'پیش‌نویس')
+    );
+    pubSel.addEventListener('change', () => {
+      state.published = pubSel.value;
+      state.page = 1;
+      refresh();
+    });
+
+    const gradeChips = el('div', { class: 'exb-grades' },
+      el('span', { class: 'cell-sub' }, 'پایه:'),
+      el('button', {
+        class: `chip${state.grade === '' ? ' is-active' : ''}`,
+        style: { cursor: 'pointer' },
+        onclick: () => selectGrade('')
+      }, 'همه'),
+      ...(tags.grade ?? []).map((g) =>
+        el('button', {
+          class: `chip${state.grade === g.id ? ' is-active' : ''}`,
+          style: { cursor: 'pointer' },
+          onclick: () => selectGrade(g.id)
+        }, g.name)
+      )
+    );
+
+    parts.push(
+      el('div', { class: 'exb-filters' }, search, pubSel),
+      gradeChips
+    );
+
+    nav.replaceChildren(...parts);
+  }
+
+  // ─────────────── فهرست کارت‌ها + صفحه‌بندی ───────────────
+
+  function drawList() {
+    drawNav();
+
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+    if (items.length === 0) {
+      body.replaceChildren(
+        emptyState({
+          iconName: state.cat || state.grade || state.q ? 'search' : 'file',
+          title: state.cat || state.grade || state.q ? 'در این دسته چیزی پیدا نشد' : 'هنوز تمرینی ثبت نشده',
+          hint: state.cat || state.grade || state.q
+            ? 'فیلتر پایه یا جستجو را تغییر دهید؛ یا از دسته‌های دیگر شروع کنید.'
+            : isStaff()
+              ? 'محتوای آماده حذف شده — با «تمرین جدید» اولین تمرین اصیل خودتان را بسازید؛ برچسب پایه و اختلال فراموش نشود تا در بات قابل پیدا کردن باشد.'
+              : 'تمرین‌های مرکز اینجا نمایش داده می‌شود.'
+        })
+      );
+      return;
+    }
+
+    const cards = items.map((ex) => {
+      const files = Array.isArray(ex.files) && ex.files.length > 0
+        ? ex.files
+        : ex.file
+          ? [{ id: '', filename: ex.file.filename, mime: ex.file.mime, size: ex.file.size }]
+          : [];
+      const actions = el(
+        'div',
+        { class: 'exb-card__actions' },
+        files.length > 0
+          ? el(
+              'button',
+              {
+                class: 'btn btn--ghost btn--sm',
+                title: 'دانلود فایل اصلی',
+                onclick: () => downloadFile(ex, files[0])
+              },
+              icon('download', 15)
+            )
+          : null,
+        isStaff()
+          ? el('button', { class: 'btn btn--ghost btn--sm', title: 'ویرایش', onclick: () => openEditModal(ex) }, icon('edit', 15))
+          : null,
+        isStaff()
+          ? el('button', { class: 'btn btn--ghost btn--sm', title: 'فایل‌ها', onclick: () => openFilesModal(ex) }, icon('file', 15))
+          : null,
+        isStaff()
+          ? el('button', { class: 'btn btn--ghost btn--sm', title: 'حذف', onclick: () => removeExercise(ex) }, icon('trash', 15))
+          : null
+      );
+      // همهٔ فایل‌ها به شکل چیپ با دانلود/حذف تکی
+      const fileChips = files.length === 0
+        ? el('span', { class: 'exb-file' }, 'بدون فایل')
+        : el(
+            'div',
+            { class: 'exb-files' },
+            files.map((f) =>
+              el(
+                'span',
+                { class: 'exb-file-chip' },
+                icon('file', 13),
+                el('span', { class: 'exb-file-chip__name', title: f.filename }, f.filename),
+                el('span', { class: 'exb-file-chip__size' }, sizeLabel(f.size)),
+                el('button', { class: 'exb-file-chip__btn', title: 'دانلود', onclick: () => downloadFile(ex, f) }, icon('download', 12)),
+                isStaff()
+                  ? el('button', { class: 'exb-file-chip__btn exb-file-chip__btn--danger', title: 'حذف فایل', onclick: () => removeAttachment(ex, f) }, icon('trash', 12))
+                  : null
+              )
+            )
+          );
+      return el(
+        'div',
+        { class: 'card exb-card' },
+        el(
+          'div',
+          { class: 'exb-card__head' },
+          el('b', { class: 'exb-card__title' }, ex.title),
+          el('div', { class: 'exb-card__badges' }, formatBadge(ex.format), publishedBadge(ex.published))
+        ),
+        ex.description ? el('p', { class: 'exb-card__desc' }, ex.description) : null,
+        // لینک بازی/تمرین آنلاین بیرونی — وکتور بازی (بدون ایموجی)
+        // فقط http/https به‌صورت لینک رندر می‌شود (دفاع دوم در برابر href نامعتبر)
+        safeExternalHref(ex.externalUrl)
+          ? el('div', { style: { marginBottom: '6px' } },
+              el('a', { class: 'exb-file-chip exb-link-chip', href: safeExternalHref(ex.externalUrl), target: '_blank', rel: 'noopener', title: safeExternalHref(ex.externalUrl) },
+                icon('gamepad', 13),
+                el('span', { class: 'exb-file-chip__name' }, 'باز کردن بازی/تمرین آنلاین')))
+          : null,
+        el(
+          'div',
+          { class: 'exb-card__tags' },
+          ex.tags.map((t) => el('span', { class: 'badge badge--neutral' }, t.name))
+        ),
+        el(
+          'div',
+          { class: 'exb-card__meta' },
+          fileChips,
+          el('span', { class: 'exb-date' }, formatJalaliNumeric((ex.createdAt || '').slice(0, 10))),
+          actions
+        )
+      );
+    });
+
+    const pager = el('div', { class: 'exb-pager' });
+    if (state.page > 1) {
+      pager.append(el('button', {
+        class: 'btn btn--ghost btn--sm',
+        onclick: () => { state.page -= 1; refresh(); }
+      }, icon('chevR', 14), 'صفحهٔ قبل'));
+    }
+    pager.append(el('span', { class: 'exb-pager__label' }, `صفحهٔ ${fa(state.page)} از ${fa(totalPages)} — مجموع ${fa(total)} تمرین`));
+    if (hasMore) {
+      pager.append(el('button', {
+        class: 'btn btn--ghost btn--sm',
+        onclick: () => { state.page += 1; refresh(); }
+      }, 'صفحهٔ بعد', icon('chevL', 14)));
+    }
+
+    body.replaceChildren(
+      el('div', { class: 'exb-list' }, cards),
+      pager
+    );
+  }
+
+  // ─────────────── دانلود/حذف فایل و تمرین ───────────────
+
+  /** — دانلود یک فایل مشخص از تمرین (فایل اصلی اگر file بدون id) */
+  async function downloadFile(ex, file) {
+    try {
+      const url = file?.id
+        ? `/api/exercises/${ex.id}/files/${file.id}`
+        : `/api/exercises/${ex.id}/file`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
+      });
+      if (!res.ok) throw new Error('دریافت فایل ناموفق بود');
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = el('a', { href: objUrl, download: file?.filename ?? ex.file?.filename ?? 'exercise' });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(objUrl), 2000);
+    } catch (err) {
+      toastError(err);
+    }
+  }
+
+  /** — حذف یک فایل تمرین (با تأیید) */
+  async function removeAttachment(ex, file) {
+    if (!file.id) {
+      toast('این فایل قابل حذف مستقیم نیست — ابتدا فایل‌ها را از سرور همگام کنید', 'warning');
+      return;
+    }
+    const ok = await confirmModal({
+      title: 'حذف فایل',
+      message: `فایل «${file.filename}» از تمرین «${ex.title}» حذف شود؟`,
+      confirmLabel: 'حذف فایل',
+      danger: true
+    });
+    if (!ok) return;
+    try {
+      await api.del(`/api/exercises/${ex.id}/files/${file.id}`);
+      toast('فایل حذف شد', 'success');
+      reloadAll();
+    } catch (err) {
+      toastError(err);
+    }
+  }
+
+  // ─────────────── ساخت تمرین (درگ‌اند‌دراپ چندفایلی) ───────────────
+
+  function openCreateModal() {
+    const picked = [];
+    const selected = new Set();
+
+    const title = el('input', { class: 'input', maxlength: 150, placeholder: 'مثلاً تمرین حروف نقطه‌دار — پایه دوم' });
+    const desc = el('textarea', { class: 'textarea', rows: 3, maxlength: 2000, placeholder: 'راهنمای اجرا برای خانواده (اختیاری — در پیام بات هم می‌آید)' });
+    // لینک بازی/تمرین آنلاین بیرونی (سرویس خارجی)
+    const link = el('input', { class: 'input', dir: 'ltr', maxlength: 500, placeholder: 'https://example.com/game — لینک بازی/تمرین آنلاین (اختیاری)' });
+    const fmt = el(
+      'select',
+      { class: 'select' },
+      el('option', { value: 'worksheet' }, 'کاربرگ'),
+      el('option', { value: 'game' }, 'بازی'),
+      el('option', { value: 'instruction' }, 'دستورالعمل خانه')
+    );
+    const tagPicker = buildTagPicker(tags, selected);
+
+    let chips = null;
+    const dropzoneWrap = buildDropzone((list) => {
+      for (const file of list) {
+        try {
+          validateLocalFile(file);
+        } catch (err) {
+          toastError(err);
+          continue;
+        }
+        if (picked.length >= LIMITS.maxFilesPerUpload) {
+          toast(`حداکثر ${fa(LIMITS.maxFilesPerUpload)} فایل در هر بار بارگذاری`, 'warning');
+          break;
+        }
+        picked.push(file);
+      }
+      if (picked.length > 0 && !title.value.trim()) {
+        title.value = (picked[0].name || '').replace(/\.[^.]+$/, '');
+      }
+      chips.refresh();
+    });
+    chips = buildPickedChips(picked);
+    dropzoneWrap.append(chips);
+    const progressLine = el('div', { class: 'exb-progress', style: { display: 'none' } });
+    dropzoneWrap.append(progressLine);
+
+    const bodyEl = el(
+      'div',
+      { class: 'form-grid' },
+      el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'فایل‌های تمرین (اختیاری — می‌توانید بعداً هم اضافه کنید)'), dropzoneWrap),
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'عنوان تمرین', el('span', { class: 'req' }, ' *')), title),
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'قالب'), fmt),
+      el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'لینک بازی/تمرین آنلاین (اختیاری)'), link,
+        el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'لینک بازی روی سرویس بیرونی — در پیام بلهٔ خانواده و پروفایل با دکمهٔ بازی باز می‌شود')),
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'توضیح برای خانواده (اختیاری)'), desc),
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'برچسب‌ها (پایه، اختلال، …)'), tagPicker)
+    );
+
+    openModal({
+      title: 'تمرین جدید',
+      body: bodyEl,
+      wide: true,
+      actions: [
+        (close) => el('button', { class: 'btn btn--ghost', onclick: close }, 'انصراف'),
+        (close) =>
+          el(
+            'button',
+            {
+              class: 'btn btn--primary',
+              onclick: async () => {
+                if (title.value.trim().length < 2) {
+                  toast('عنوان تمرین حداقل ۲ نویسه است', 'warning');
+                  title.focus();
+                  return;
+                }
+                try {
+                  // تمرین اول ثبت می‌شود؛ فایل‌ها با multipart باینری می‌روند
+                  const created = await api.post('/api/exercises', {
+                    title: title.value.trim(),
+                    description: desc.value.trim() || null,
+                    format: fmt.value,
+                    external_url: link.value.trim() || null,
+                    tag_ids: [...selected],
+                    published: true
+                  });
+                  const newId = created?.data?.id;
+                  if (picked.length > 0 && newId) {
+                    try {
+                      progressLine.style.display = '';
+                      await uploadFiles(newId, picked, (i, tot, name, pct) => {
+                        progressLine.textContent = `در حال بارگذاری ${fa(i)} از ${fa(tot)} — ${name} (${fa(pct)}٪)`;
+                      });
+                    } catch (err) {
+                      toastError(new Error(`تمرین ثبت شد اما بارگذاری فایل‌ها ناموفق بود — از دکمهٔ «فایل‌ها» دوباره تلاش کنید (${err.message})`));
+                    }
+                  }
+                  toast('تمرین به بانک اضافه شد', 'success');
+                  close();
+                  state.page = 1;
+                  reloadAll();
+                } catch (err) {
+                  toastError(err);
+                }
+              }
+            },
+            'افزودن به بانک'
+          )
+      ]
+    });
+  }
+
+  // ─────────────── ویرایش تمرین ───────────────
+
+  function openEditModal(ex) {
+    const selected = new Set(ex.tags.map((t) => t.id));
+    const title = el('input', { class: 'input', maxlength: 150, value: ex.title });
+    const desc = el('textarea', { class: 'textarea', rows: 3, maxlength: 2000 }, ex.description ?? '');
+    // لینک بازی/تمرین آنلاین بیرونی
+    const link = el('input', { class: 'input', dir: 'ltr', maxlength: 500, placeholder: 'https://example.com/game — اختیاری', value: ex.externalUrl ?? '' });
+    const fmt = el(
+      'select',
+      { class: 'select' },
+      ...Object.entries(FORMAT_LABELS).map(([value, label]) =>
+        el('option', { value, selected: ex.format === value }, label)
+      )
+    );
+    const pub = el(
+      'select',
+      { class: 'select' },
+      el('option', { value: '1', selected: ex.published ? 'selected' : undefined }, 'منتشرشده — در بات دیده می‌شود'),
+      el('option', { value: '0', selected: !ex.published ? 'selected' : undefined }, 'پیش‌نویس — فقط پنل')
+    );
+    const tagPicker = buildTagPicker(tags, selected);
+
+    const bodyEl = el(
+      'div',
+      { class: 'form-grid' },
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'عنوان تمرین', el('span', { class: 'req' }, ' *')), title),
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'قالب'), fmt),
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'انتشار'), pub),
+      el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'لینک بازی/تمرین آنلاین (اختیاری)'), link,
+        el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'لینک بازی روی سرویس بیرونی — در پیام بلهٔ خانواده و پروفایل با دکمهٔ بازی باز می‌شود — برای خالی‌کردن، خالی بگذارید')),
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'توضیح برای خانواده'), desc),
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'برچسب‌ها'), tagPicker)
+    );
+
+    openModal({
+      title: 'ویرایش تمرین',
+      body: bodyEl,
+      wide: true,
+      actions: [
+        (close) => el('button', { class: 'btn btn--ghost', onclick: close }, 'انصراف'),
+        (close) =>
+          el(
+            'button',
+            {
+              class: 'btn btn--primary',
+              onclick: async () => {
+                if (title.value.trim().length < 2) {
+                  toast('عنوان تمرین حداقل ۲ نویسه است', 'warning');
+                  title.focus();
+                  return;
+                }
+                try {
+                  await api.patch(`/api/exercises/${ex.id}`, {
+                    title: title.value.trim(),
+                    description: desc.value.trim() || null,
+                    format: fmt.value,
+                    external_url: link.value.trim() || null,
+                    published: pub.value === '1',
+                    tag_ids: [...selected]
+                  });
+                  toast('تمرین به‌روزرسانی شد', 'success');
+                  close();
+                  reloadAll();
+                } catch (err) {
+                  toastError(err);
+                }
+              }
+            },
+            'ذخیره'
+          )
+      ]
+    });
+  }
+
+  // ─────────────── مدیریت فایل‌های تمرین (افزودن چندفایلی + حذف) ───────────────
+
+  function openFilesModal(ex) {
+    const picked = [];
+    const currentFiles = Array.isArray(ex.files) && ex.files.length > 0
+      ? [...ex.files]
+      : ex.file
+        ? [{ id: '', filename: ex.file.filename, mime: ex.file.mime, size: ex.file.size }]
+        : [];
+    let chips = null;
+    let listWrap = null;
+
+    function drawList() {
+      listWrap.replaceChildren(
+        currentFiles.length === 0
+          ? el('span', { class: 'exb-file' }, 'هنوز فایلی ندارد')
+          : el(
+              'div',
+              { class: 'exb-files' },
+              currentFiles.map((f) =>
+                el(
+                  'span',
+                  { class: 'exb-file-chip' },
+                  icon('file', 13),
+                  el('span', { class: 'exb-file-chip__name', title: f.filename }, f.filename),
+                  el('span', { class: 'exb-file-chip__size' }, sizeLabel(f.size)),
+                  el('button', { class: 'exb-file-chip__btn', title: 'دانلود', onclick: () => downloadFile(ex, f) }, icon('download', 12)),
+                  f.id
+                    ? el('button', {
+                        class: 'exb-file-chip__btn exb-file-chip__btn--danger',
+                        title: 'حذف فایل',
+                        onclick: async () => {
+                          const ok = await confirmModal({
+                            title: 'حذف فایل',
+                            message: `فایل «${f.filename}» حذف شود؟`,
+                            confirmLabel: 'حذف فایل',
+                            danger: true
+                          });
+                          if (!ok) return;
+                          try {
+                            await api.del(`/api/exercises/${ex.id}/files/${f.id}`);
+                            currentFiles.splice(currentFiles.indexOf(f), 1);
+                            drawList();
+                            toast('فایل حذف شد', 'success');
+                            reloadAll();
+                          } catch (err) {
+                            toastError(err);
+                          }
+                        }
+                      }, icon('trash', 12))
+                    : null
+                )
+              )
+            )
+      );
+    }
+
+    const dropzoneWrap = buildDropzone((list) => {
+      for (const file of list) {
+        try {
+          validateLocalFile(file);
+        } catch (err) {
+          toastError(err);
+          continue;
+        }
+        if (picked.length >= LIMITS.maxFilesPerUpload) {
+          toast(`حداکثر ${fa(LIMITS.maxFilesPerUpload)} فایل در هر بار بارگذاری`, 'warning');
+          break;
+        }
+        picked.push(file);
+      }
+      chips.refresh();
+    });
+    chips = buildPickedChips(picked);
+    dropzoneWrap.append(chips);
+    const progressLine = el('div', { class: 'exb-progress', style: { display: 'none' } });
+    dropzoneWrap.append(progressLine);
+    listWrap = el('div', {});
+    drawList();
+
+    openModal({
+      title: `فایل‌های «${ex.title}»`,
+      body: el(
+        'div',
+        { class: 'form-grid' },
+        el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'فایل‌های فعلی'), listWrap),
+        el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'افزودن فایل (چند فایل همزمان)'), dropzoneWrap)
+      ),
+      actions: [
+        (close) => el('button', { class: 'btn btn--ghost', onclick: close }, 'بستن'),
+        (close) =>
+          el(
+            'button',
+            {
+              class: 'btn btn--primary',
+              onclick: async () => {
+                if (picked.length === 0) {
+                  toast('اول فایل انتخاب کنید', 'warning');
+                  return;
+                }
+                try {
+                  progressLine.style.display = '';
+                  await uploadFiles(ex.id, picked, (i, tot, name, pct) => {
+                    progressLine.textContent = `در حال بارگذاری ${fa(i)} از ${fa(tot)} — ${name} (${fa(pct)}٪)`;
+                  });
+                  toast('فایل‌ها اضافه شد', 'success');
+                  close();
+                  reloadAll();
+                } catch (err) {
+                  toastError(err);
+                }
+              }
+            },
+            'بارگذاری فایل‌ها'
+          )
+      ]
+    });
+  }
+
+  // ─────────────── حذف نرم ───────────────
+
+  async function removeExercise(ex) {
+    const ok = await confirmModal({
+      title: 'حذف تمرین',
+      message: `«${ex.title}» از بانک حذف شود؟ حذف نرم است و تکلیف‌های ارسال‌شده سر جایشان می‌مانند.`,
+      confirmLabel: 'حذف',
+      danger: true
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/api/exercises/${ex.id}`);
+      toast('تمرین حذف شد', 'success');
+      reloadAll();
+    } catch (err) {
+      toastError(err);
+    }
+  }
+
+  // ─────────────── راه‌اندازی ───────────────
+
+  function drawToolbar() {
+    const newBtn = isStaff()
+      ? el('button', { class: 'btn btn--primary', onclick: openCreateModal }, icon('plus', 18), 'تمرین جدید')
+      : null;
+    toolbar.replaceChildren(
+      el(
+        'div',
+        { class: 'page-head__title' },
+        'بانک تمرین',
+        newBtn ? el('div', { style: { marginRight: 'auto' } }, newBtn) : null
+      ),
+      el(
+        'div',
+        { class: 'page-head__desc' },
+        `ابتدا دستهٔ اختلال را انتخاب کنید، بعد پایه و جستجو — برای ارسال، از پروفایل دانش‌آموز «ارسال تمرین با بله» (ذخیره: ${storage === 'r2' ? 'R2' : 'D1'})`
+      )
+    );
+  }
+
+  loadMeta().then(() => {
+    drawToolbar();
+    drawNav();
+    refresh();
+  });
+}

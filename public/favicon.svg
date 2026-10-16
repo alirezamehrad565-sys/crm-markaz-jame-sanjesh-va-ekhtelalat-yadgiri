@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- m106 — فاوآیکون برداری: فانوس (نشان مرکز) روی زمینهٔ آبی-سبز برند -->
+  <rect width="32" height="32" rx="7" fill="#12384F"/>
+  <circle cx="16" cy="6.4" r="2.3" fill="none" stroke="#F5F1E6" stroke-width="1.5"/>
+  <path d="M11.6 13.2 Q16 8.2 20.4 13.2 Z" fill="#F5F1E6"/>
+  <rect x="11.2" y="13.8" width="9.6" height="10.2" rx="1.6" fill="none" stroke="#F5F1E6" stroke-width="1.6"/>
+  <path d="M16 16.1c1.9 2.1 1.9 4.3 0 6.1c-1.9-1.8-1.9-4 0-6.1z" fill="#E3B23C"/>
+  <rect x="10.2" y="25.4" width="11.6" height="1.9" rx="0.95" fill="#F5F1E6"/>
+</svg>
