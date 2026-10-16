@@ -152,7 +152,9 @@ describe('بانک تمرین: پنل، فایل، برچسب، لینک خان�
     const tampered = await A.app.request(`/public/exercise-files/${exerciseId}?token=${token}x`, {}, A.env as never);
     expect(tampered.status).toBe(404);
 
-    const wrongId = await A.app.request(`/public/exercise-files/${exerciseId.slice(0, -1)}0?token=${token}`, {}, A.env as never);
+    // شناسهٔ تضمینی متفاوت (اگر اولین نویسه 'a' باشد 'b' وگرنه 'a') — بدون flaky بودن
+    const otherExerciseId = (exerciseId[0] === 'a' ? 'b' : 'a') + exerciseId.slice(1);
+    const wrongId = await A.app.request(`/public/exercise-files/${otherExerciseId}?token=${token}`, {}, A.env as never);
     expect(wrongId.status).toBe(404);
 
     // غیرمنتشر → مسیر عمومی بسته
