@@ -381,16 +381,13 @@ textarea {
 /* گروه بی‌برچسب (ناظر) — فاصلهٔ اول */
 .nav__label:empty { padding-top: var(--sp-2); }
 
-/* آیتم فعال — قرص نرم + نوار ۳px سمت شروع (RTL درست) + درخشش ملایم (m114) */
+/* آیتم فعال — قرص نرم + نوار ۳px سمت شروع (RTL درست)؛ m127: درخشش حذف شد (ظاهر نیتیو) */
 .nav__item { position: relative; }
 .nav__item.is-active { font-weight: 600; }
 .nav__item.is-active::before {
   content: ''; position: absolute;
   inset-block: 7px; inset-inline-start: 0;
   width: 3px; border-radius: 999px; background: var(--primary);
-}
-.nav__item.is-active {
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--primary) 14%, transparent);
 }
 /* m114 — آیکن ناوبری روی هاور یک قدم به جلو (در RTL: به چپ) */
 @media (hover: hover) {

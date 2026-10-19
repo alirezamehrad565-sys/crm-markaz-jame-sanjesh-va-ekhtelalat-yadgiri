@@ -396,7 +396,11 @@ export async function renderAppointments(container, ctx = {}) {
     const wrap = document.querySelector('.grid-wrap');
     if (!wrap) return;
     const top = wrap.getBoundingClientRect().top + window.scrollY + SCALE.yOf(anchor);
-    window.scrollTo({ top: Math.max(0, top - 64) });
+    // m127 — سقف اسکرول: نوار ابزار هرگز زیر topbar پنهان نمی‌شود؛
+    // پرش به ساعات کاری فقط تا جایی که تولبار دیده بماند اعمال می‌شود
+    const barEl = document.querySelector('.week-bar');
+    const maxTop = barEl ? barEl.getBoundingClientRect().top + window.scrollY - 76 : Infinity;
+    window.scrollTo({ top: Math.min(Math.max(0, top - 64), Math.max(0, maxTop)) });
   }
 
   function shiftWeek(n) {
