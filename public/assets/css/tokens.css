@@ -249,13 +249,11 @@
   --lh-tight: 1.25;
 
   /* ─── m114 — UI Modernization v3 ─── */
-  /* m127 — ظاهر نیتیو: گرادیان/درخشش برند حذف شد؛ توکن‌ها تخت و هم‌ارز رنگ اصلی
-     شدند تا همهٔ مصرف‌کننده‌ها (دکمهٔ اصلی، نوار برند ورود، ...) بدون تغییر کلاس
-     به‌صورت تخت رندر شوند */
-  --grad-primary: var(--primary);
-  --grad-primary-hover: var(--primary-hover);
-  /* به‌جای هالهٔ رنگی، سایهٔ لایه‌ای استاندارد */
-  --glow-primary: var(--shadow-1);
+  /* گرادیان برند — دکمهٔ اصلی، هیرو، هدر کارت ویژه */
+  --grad-primary: linear-gradient(135deg, #2FB1E8 0%, #229ED9 55%, #1B8CC4 100%);
+  --grad-primary-hover: linear-gradient(135deg, #28A5DC 0%, #168AC1 55%, #127BAE 100%);
+  /* درخشش ملایم دکمهٔ اصلی و آیتم فعال ناوبری */
+  --glow-primary: 0 4px 14px color-mix(in srgb, var(--primary) 38%, transparent);
   /* اسکلتون — پایه و موج */
   --skel-base: color-mix(in srgb, var(--text-3) 16%, var(--surface-2));
   --skel-shine: color-mix(in srgb, var(--text-3) 7%, var(--surface));
@@ -266,10 +264,10 @@
 :root[data-theme='dark'] {
   --shadow-4: 0 8px 20px rgba(0, 0, 0, 0.3), 0 24px 56px rgba(0, 0, 0, 0.42);
 
-  /* m127 — معادل‌های تاریک: تخت، هم‌رنگ توکن‌های پایه */
-  --grad-primary: var(--primary);
-  --grad-primary-hover: var(--primary-hover);
-  --glow-primary: var(--shadow-1);
+  /* m114 — معادل‌های تاریک */
+  --grad-primary: linear-gradient(135deg, #3BB5F0 0%, #2AABEE 55%, #2196D6 100%);
+  --grad-primary-hover: linear-gradient(135deg, #4FC0F4 0%, #45B8F2 55%, #35A8E2 100%);
+  --glow-primary: 0 4px 18px color-mix(in srgb, var(--primary) 30%, transparent);
   --skel-base: color-mix(in srgb, var(--text-3) 18%, var(--surface-2));
   --skel-shine: color-mix(in srgb, var(--text-3) 8%, var(--surface-2));
   --empty-halo: color-mix(in srgb, var(--primary) 12%, transparent);
