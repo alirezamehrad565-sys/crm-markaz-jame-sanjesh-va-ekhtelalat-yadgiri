@@ -1055,7 +1055,7 @@
 }
 .wgrid__cell:hover { border-color: var(--primary); }
 .wgrid__cell.is-on {
-  background: var(--primary); /* m127: تخت به‌جای گرادیان */
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
   border-color: var(--primary-hover);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--on-primary) 18%, transparent);
 }
@@ -2541,11 +2541,9 @@ tr.wl-row--urgent > td:first-child {
 /* نوار رنگ درمانگر روی ردیف جدول — کلاس hue روی خود <tr> است؛
    تینت ملایم همهٔ سلول‌ها + نوار ۴px لبهٔ شروع ردیف (سمت راست در RTL).
    در موبایل هم ردیف کارت‌مانند می‌شود و همین تینت‌ها سر جایشان می‌مانند */
-/* m127 — نوار رنگ درمانگر روی ردیف: ملایم‌تر شد (تینت کمتر + نوار نازک‌تر و شفاف‌تر)
-   تا جدول نیتیو و آرام دیده شود؛ فیلتر کردن با چشم حفظ شده */
-.table tbody tr[class*='hue-'] td { background: color-mix(in srgb, var(--appt-soft) 20%, transparent); }
-.table tbody tr[class*='hue-'] td:first-child { box-shadow: inset -3px 0 0 color-mix(in srgb, var(--appt-strong) 55%, transparent); }
-.table tbody tr[class*='hue-']:hover td { background: color-mix(in srgb, var(--appt-soft) 32%, transparent); }
+.table tbody tr[class*='hue-'] td { background: color-mix(in srgb, var(--appt-soft) 40%, transparent); }
+.table tbody tr[class*='hue-'] td:first-child { box-shadow: inset -4px 0 0 var(--appt-strong); }
+.table tbody tr[class*='hue-']:hover td { background: color-mix(in srgb, var(--appt-soft) 52%, transparent); }
 
 /* ستون «مسئول پرونده» — نقطهٔ رنگ + باج، کنار هم */
 .cell-owner { display: inline-flex; align-items: center; gap: 6px; }
@@ -3119,7 +3117,7 @@ tr.wl-row--urgent > td:first-child {
 }
 .clx-stepper-card__fill {
   display: block; height: 100%; border-radius: 999px;
-  background: var(--primary); /* m127: تخت به‌جای گرادیان دو‌رنگ */
+  background: linear-gradient(90deg, var(--primary), var(--accent));
   transition: width .35s ease;
 }
 .clx-stepper { list-style: none; margin: var(--sp-2, 8px) 0 0; padding: 0; min-width: 0; }
@@ -3301,26 +3299,4 @@ tr.wl-row--urgent > td:first-child {
   .pb-podium { grid-template-columns: 1fr; }
   .pb-row { grid-template-columns: 32px 1fr auto; }
   .pb-detail-grid { grid-template-columns: 1fr; }
-}
-
-/* ═══════════════ m127 — ظاهر نیتیو (پولیش بدون تغییر جریان کار) ═══════════════ */
-
-/* هالهٔ دور نقطهٔ رنگی درمانگر حذف شد — نقطهٔ تخت تمیز، هم‌رنگ کارت جلسه */
-.staff-chip__dot,
-.staff-chip__dot.hue-1, .staff-chip__dot.hue-2, .staff-chip__dot.hue-3, .staff-chip__dot.hue-4,
-.staff-chip__dot.hue-5, .staff-chip__dot.hue-6, .staff-chip__dot.hue-7, .staff-chip__dot.hue-8 {
-  box-shadow: none;
-}
-.staff-chip.is-active .staff-chip__dot { box-shadow: none; }
-
-/* موبایل: عنوان بازهٔ تقویم به خط خودش می‌رود تا تولبار نوبت‌ها کلیپ نشود */
-@media (max-width: 640px) {
-  .week-bar { gap: var(--sp-2); }
-  .week-bar__title {
-    min-width: 0;
-    flex: 1 1 100%;
-    order: -1;
-    text-align: start;
-    margin-inline: 0;
-  }
 }
