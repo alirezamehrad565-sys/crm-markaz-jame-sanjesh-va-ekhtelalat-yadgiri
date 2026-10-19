@@ -13,7 +13,6 @@ import {
   asRole,
   apptBody,
   quarterHourFromNow,
-  tehranTodayAt,
   ALI_ID,
   MARYAM_ID,
   STUDENT1_ID,
@@ -187,7 +186,7 @@ describe('فاز ۱ — RBAC، لغو، خطاها، D6', () => {
     expect(apptOf(own).opsStatus).toBe('in_session');
 
     // نوبت همکار (مریم) — ۴۰۳
-    const otherStart = tehranTodayAt(14, 0); // — فقط «نوبت دیگری برای همکار» کافی است؛ ایمن به نیمه‌شب
+    const otherStart = quarterHourFromNow(30);
     const other = await mgr.post('/api/appointments', apptBody(MARYAM_ID, otherStart, 45, [STUDENT2_ID]));
     expect(other.status).toBe(201);
     const otherId = apptOf(other).id;
@@ -224,7 +223,7 @@ describe('فاز ۱ — RBAC، لغو، خطاها، D6', () => {
 
   // ارگونومی API: کلید حذف‌شده و null هر دو «بدون توضیح» معنا دارند (قبلاً 400 می‌داد)
   it('ایجاد نوبت با note: null — 200/201 و ذخیرهٔ NULL (nullish)', async () => {
-    const start = tehranTodayAt(13, 0); // — ایمن به گذر نیمه‌شب (قبلاً offset 120min flaky بود)
+    const start = quarterHourFromNow(120);
     const res = await mgr.post('/api/appointments', { ...apptBody(ALI_ID, start, 45, [STUDENT1_ID]), note: null });
     expect(res.status).toBe(201);
     expect(apptOf(res).note ?? null).toBeNull();
@@ -327,12 +326,10 @@ describe('بورد روز کاری درمانگر (scope به خودش)', () => 
     expect((await sec.get('/api/working-day')).status).toBe(200);
 
     // دو نوبت: یکی برای علی (درمانگر تست) و یکی برای مریم (همکار)
-    // m128 — ساعت ثابت صبح به‌جای now+offset: بعدِ ~۲۱:۴۵ تهران، quarterHourFromNow
-    // به روز بعد می‌غلتد و بوردِ «امروز» خالی می‌شد (flaky ساعتی)
-    const start = tehranTodayAt(11, 0);
+    const start = quarterHourFromNow(60);
     const mine = await mgr.post('/api/appointments', apptBody(ALI_ID, start, 45, [STUDENT1_ID]));
     expect(mine.status).toBe(201);
-    const theirs = await mgr.post('/api/appointments', apptBody(MARYAM_ID, tehranTodayAt(12, 0), 45, [STUDENT2_ID]));
+    const theirs = await mgr.post('/api/appointments', apptBody(MARYAM_ID, quarterHourFromNow(90), 45, [STUDENT2_ID]));
     expect(theirs.status).toBe(201);
     const mineId = apptOf(mine).id;
 
