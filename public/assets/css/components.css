@@ -27,7 +27,7 @@
 }
 
 .btn--primary {
-  /* m114 — گرادیان برند + درخشش ملایم: عمق مدرن بدون خروج از زبان طراحی */
+  /* m127 — رنگ تخت برند؛ گرادیان/درخشش m114 از طریق توکن‌ها بی‌اثر شد */
   background: var(--grad-primary, var(--primary));
   color: var(--on-primary);
 }
@@ -1327,7 +1327,7 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .goal-bar__fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(270deg, var(--primary), var(--primary-hover));
+  background: var(--primary); /* m127: تخت به‌جای گرادیان */
   transition: width 0.5s ease;
 }
 .goal-noset { margin-bottom: var(--sp-3); }
@@ -1676,3 +1676,49 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   min-width: 0;
 }
 .field__labelrow .field__label { margin: 0; }
+
+/* ═══════════════ m127 — ظاهر نیتیو (پولیش بدون تغییر جریان کار) ═══════════════ */
+
+/* چیپ برچسب: بدنهٔ خنثی + فقط نقطهٔ رنگی — الگوی نیتیو (Notion/GitHub) */
+.tag-chip {
+  color: var(--text-2);
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+.tag-chip:hover { border-color: color-mix(in srgb, var(--tag-color) 45%, transparent); }
+
+/* toggle برچسب: حالت فعال ملایم‌تر — بدون هالهٔ درونی دولایه */
+.tag-toggle.is-on {
+  background: color-mix(in srgb, var(--tag-color) 10%, transparent);
+  border-color: color-mix(in srgb, var(--tag-color) 40%, transparent);
+  box-shadow: none;
+}
+
+/* دکمه‌های خطرناک در سطح ردیف/کارت: خنثی تا هاور — الگوی اکشن‌های ثانویهٔ نیتیو.
+   (دکمه‌های تأیید خطرناک مودال‌ها و اکشن‌های اصلی تولبار قرمز می‌مانند) */
+.table .btn--danger,
+.cell-actions .btn--danger,
+.wd-appt__sactions .btn--danger,
+.wl-actions .btn--danger,
+.todo-item__actions .btn--danger,
+.tpl-card__actions .btn--danger,
+.ann-item__actions .btn--danger,
+.exb-card__actions .btn--danger,
+.sess-note__actions .btn--danger {
+  color: var(--text-3);
+  border-color: var(--border);
+  background: transparent;
+}
+.table .btn--danger:hover:not(:disabled),
+.cell-actions .btn--danger:hover:not(:disabled),
+.wd-appt__sactions .btn--danger:hover:not(:disabled),
+.wl-actions .btn--danger:hover:not(:disabled),
+.todo-item__actions .btn--danger:hover:not(:disabled),
+.tpl-card__actions .btn--danger:hover:not(:disabled),
+.ann-item__actions .btn--danger:hover:not(:disabled),
+.exb-card__actions .btn--danger:hover:not(:disabled),
+.sess-note__actions .btn--danger:hover:not(:disabled) {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 45%, transparent);
+  background: var(--error-soft);
+}

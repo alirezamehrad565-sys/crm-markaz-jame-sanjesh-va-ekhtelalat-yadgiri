@@ -83,6 +83,12 @@ export async function render(outlet) {
 
 /** شروع روتر — گوش‌دادن به hashchange + رندر اولیه */
 export function start(outlet) {
-  window.addEventListener('hashchange', () => render(outlet));
+  // m127 — رفتار نیتیو: هر ناوبری از بالای صفحه شروع می‌شود
+  // (رفع کلیپ‌شدن سرصفحه/تولبار زیر topbar وقتی نمای قبلی اسکرول‌خورده بود)
+  history.scrollRestoration = 'manual';
+  window.addEventListener('hashchange', () => {
+    document.scrollingElement.scrollTop = 0;
+    render(outlet);
+  });
   render(outlet);
 }

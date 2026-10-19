@@ -3990,8 +3990,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.5";
-var APP_MILESTONE = "";
+var APP_VERSION = "1.00.6";
+var APP_MILESTONE = "m127";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
