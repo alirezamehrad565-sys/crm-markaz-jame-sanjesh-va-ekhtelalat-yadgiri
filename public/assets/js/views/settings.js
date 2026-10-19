@@ -15,7 +15,7 @@ import { weeklyEditor, renderStaffHoursInto } from './working-hours.js';
 
 const local = { tab: 'center' };
 
-// تب «کلیدها و اتصال‌ها» فعلاً از UI قطع است (کاربر دستی تنظیم می‌کند).
+// — تب «کلیدها و اتصال‌ها» فعلاً از UI قطع است (کاربر دستی تنظیم می‌کند).
 // همگام با FEATURES.apiKeys سمت بک‌اند (src/core/shared/features.ts) — کد drawKeys سر جای خود است.
 const API_KEYS_UI_ENABLED = false;
 
@@ -28,9 +28,9 @@ export async function renderSettings(container, ctx = {}) {
   if (local.tab === 'keys' && !API_KEYS_UI_ENABLED) local.tab = 'center';
   if (local.tab === 'announce' && session.user?.role !== 'manager') local.tab = 'center';
   if (local.tab === 'sanj' && session.user?.role !== 'manager') local.tab = 'center';
-  // امتیازبندی همکاران: فقط مدیر (فرمول از غیرمدیر پنهان است)
+  // — امتیازبندی همکاران: فقط مدیر (فرمول از غیرمدیر پنهان است — )
   if (local.tab === 'scoring' && session.user?.role !== 'manager') local.tab = 'center';
-  // تب دانش‌افزایی: ابزار دفتر (مدیر/منشی)
+  // — تب دانش‌افزایی: ابزار دفتر (مدیر/منشی)
   if (local.tab === 'knowledge' && !['manager', 'secretary'].includes(session.user?.role)) local.tab = 'center';
   const staffParam = params.get('staff') ?? '';
 
@@ -47,12 +47,12 @@ export async function renderSettings(container, ctx = {}) {
     { key: 'center', label: 'بازه کاری مرکز', icon: 'clock' },
     { key: 'staff', label: 'بازه کاری کارکنان', icon: 'users' },
     { key: 'notify', label: 'اعلان‌ها و بات', icon: 'bell' },
-    // شاخص سنجش: هدفگذاری غربال برای داشبورد — فقط مدیر
+    // — شاخص سنجش: هدفگذاری غربال برای داشبورد — فقط مدیر
     ...(isManager ? [{ key: 'sanj', label: 'شاخص سنجش', icon: 'dashboard' }] : []),
-    // امتیازبندی همکاران: تاریخ شروع شمارش + وزن‌های فرمول — فقط مدیر
+    // — امتیازبندی همکاران: تاریخ شروع شمارش + وزن‌های فرمول — فقط مدیر
     ...(isManager ? [{ key: 'scoring', label: 'امتیازبندی همکاران', icon: 'trophy' }] : []),
     ...(isManager ? [{ key: 'announce', label: 'اعلان‌های مدیر', icon: 'zap' }] : []),
-    // دانش‌افزایی: پایگاه دانش داخلی همکاران (مدیر/منشی)
+    // — دانش‌افزایی: پایگاه دانش داخلی همکاران (مدیر/منشی)
     ...(['manager', 'secretary'].includes(session.user?.role) ? [{ key: 'knowledge', label: 'دانش‌افزایی', icon: 'file' }] : []),
     ...(API_KEYS_UI_ENABLED ? [{ key: 'keys', label: 'کلیدها و اتصال‌ها', icon: 'link' }] : [])
   ];
@@ -431,6 +431,37 @@ function drawNotify(body, settings) {
       'دستورهای بات: «نوبت‌های من» · «پیگیری‌های من» · «حضور فرزند» · «وضعیت مرکز» · /today · /week · /link CODE · /myid')
   );
 
+  // — لینک احراز خودکار: نمایش نام کاربری بات + دکمهٔ تشخیص خودکار (getMe)
+  const botUserRow = el('div', { class: 'info-list__row' },
+    el('span', { class: 'info-list__key' }, 'نام کاربری بات (لینک احراز خودکار)'),
+    el('span', { class: 'info-list__val', style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
+      settings.botUsername
+        ? el('span', { dir: 'ltr', style: { fontFamily: 'monospace' } }, `@${settings.botUsername}`)
+        : el('span', { class: 'badge badge--neutral' }, 'ثبت‌نشده — با دکمهٔ روبه‌رو تشخیص داده می‌شود'),
+      el('button', {
+        class: 'btn btn--soft btn--sm',
+        onclick: async (e) => {
+          const btn = e.currentTarget;
+          btn.disabled = true;
+          try {
+            const res = await api.get('/api/notifications/bot-username');
+            const u = res?.data?.username;
+            if (u) {
+              toast(`نام کاربری بات تشخیص داده شد: @${u}`, 'success');
+              renderSettings(document.getElementById('outlet'));
+            } else {
+              toast('تشخیص ممکن نشد — از «ویرایش تنظیمات اعلان» دستی وارد کنید', 'warning', 5200);
+              btn.disabled = false;
+            }
+          } catch (err) {
+            toastError(err);
+            btn.disabled = false;
+          }
+        }
+      }, icon('refresh', 14), 'تشخیص خودکار')
+    )
+  );
+
   const editBtn = el('button', {
     class: 'btn btn--primary btn--sm',
     onclick: () => openNotifyForm(settings)
@@ -445,6 +476,7 @@ function drawNotify(body, settings) {
       el('div', { class: 'info-list' },
         row('نام مرکز در پیام‌ها', settings.clinicName),
         row('شماره تماس مرکز', settings.clinicPhone ? el('span', { dir: 'ltr' }, settings.clinicPhone) : 'ثبت‌نشده'),
+        botUserRow,
         row('یادآوری پیش‌فرض', `${fa(settings.defaultReminderHours)} ساعت قبل`),
         row('اعلان ثبت نوبت جدید', toggleText(settings.notifyOnCreate)),
         row('اعلان جابه‌جایی نوبت', toggleText(settings.notifyOnMove)),
@@ -473,6 +505,7 @@ function openNotifyForm(settings) {
     fields: [
       { name: 'clinic_name', label: 'نام مرکز (در متن پیام‌ها)', required: true, value: settings.clinicName },
       { name: 'clinic_phone', label: 'شمارهٔ تماس عمومی مرکز', required: false, value: settings.clinicPhone ?? '', hint: 'در دکمهٔ «شماره تماس» بات به عموم مردم نشان داده می‌شود — خالی = پیام «ثبت‌نشده»', ltr: true },
+      { name: 'bot_username', label: 'نام کاربری بات (بدون @ — برای لینک احراز خودکار)', required: false, value: settings.botUsername ?? '', hint: 'مثلاً MyCenterBot — لینک‌های ble.ir/<bot>?start=<کد> با همین نام ساخته می‌شوند. خالی = تشخیص خودکار با دکمهٔ «تشخیص خودکار»', ltr: true },
       { name: 'default_reminder_hours', label: 'یادآوری پیش‌فرض (ساعت قبل)', type: 'number', required: true, min: 1, max: 48, value: String(settings.defaultReminderHours), hint: 'برای دانش‌آموزانی که تنظیمات شخصی ندارند' },
       { name: 'notify_batch_hour', label: 'ساعت ارسال صف نوبت‌های جدید (۰ تا ۲۳)', type: 'number', required: true, min: 0, max: 23, value: String(settings.notifyBatchHour), hint: 'm62 — اعلان «ثبت نوبت جدید» به‌جای ارسال فوری، تا این ساعت تهران پیش‌نویس می‌ماند و یک‌جا می‌رود؛ تغییر/لغو همیشه فوری است. اگر ساعت را تغییر دادید، همان ساعت را با مدیر فنی برای cron هم‌گام کنید' },
       { name: 'notify_on_create', label: 'اعلان ثبت نوبت جدید', type: 'switch', value: settings.notifyOnCreate },
@@ -485,6 +518,7 @@ function openNotifyForm(settings) {
       await api.put('/api/settings', {
         clinic_name: values.clinic_name,
         clinic_phone: (values.clinic_phone ?? '').trim(),
+        bot_username: (values.bot_username ?? '').trim().replace(/^@/, ''),
         default_reminder_hours: Number(values.default_reminder_hours),
         notify_batch_hour: Number(values.notify_batch_hour),
         notify_on_create: values.notify_on_create,

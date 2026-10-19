@@ -44,7 +44,7 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 200);
   });
 
-  // ─── صندوق اعلان‌ها (Outbox) — پیش‌نویس‌ها + ناموفق‌ها؛ فقط مدیر/منشی ───
+  // ───: صندوق اعلان‌ها (Outbox) — پیش‌نویس‌ها + ناموفق‌ها؛ فقط مدیر/منشی ───
   app.get('/api/notifications/outbox', requireRole('manager', 'secretary'), async (c) => {
     const data = await service.outbox();
     return c.json({ data }, 200);
@@ -76,7 +76,7 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 200);
   });
 
-  // ─── خلاصهٔ روز بات — تریگر دستی (cron صبح خودش اجرا می‌کند) ───
+  // ───: خلاصهٔ روز بات — تریگر دستی (cron صبح خودش اجرا می‌کند) ───
   app.post('/api/notifications/digest', requireRole('manager'), async (c) => {
     const data = await service.sendDailyDigest();
     return c.json({ data }, 200);
@@ -121,7 +121,7 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 200);
   });
 
-  // ─── کدهای اتصال بات کارکنان (معلم‌ها) ───
+  // ───: کدهای اتصال بات کارکنان (معلم‌ها) ───
   app.post('/api/notifications/staff-links', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     const body = z.object({ staff_id: UuidSchema }).parse(await c.req.json<unknown>());
@@ -136,7 +136,13 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 200);
   });
 
-  // ─── کدهای اتصال بات معلم مدرسه (به کلاس) ───
+  // ───: نام کاربری بات برای ساخت لینک اتصال خودکار (ble.ir/<bot>?start=CODE) ───
+  app.get('/api/notifications/bot-username', requireRole('manager', 'secretary'), async (c) => {
+    const data = await service.resolveBotUsername();
+    return c.json({ data }, 200);
+  });
+
+  // ───: کدهای اتصال بات معلم مدرسه (به کلاس) ───
   app.post('/api/notifications/class-links', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = CreateClassLinkSchema.parse(await c.req.json<unknown>());
@@ -151,7 +157,7 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 200);
   });
 
-  // ─── لغو کد اتصال معلم — مدیریت لینک‌ها بدون تولید کد جدید ───
+  // ───: لغو کد اتصال معلم — مدیریت لینک‌ها بدون تولید کد جدید ───
   app.delete('/api/notifications/class-links/:id', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const id = UuidSchema.parse(c.req.param('id'));
@@ -159,7 +165,7 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 200);
   });
 
-  // ─── ارسال گزارش به معلم مدرسه ───
+  // ───: ارسال گزارش به معلم مدرسه ───
   app.post('/api/notifications/teacher-report', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = TeacherReportSchema.parse(await c.req.json<unknown>());

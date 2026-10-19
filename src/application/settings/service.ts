@@ -22,7 +22,7 @@ import {
 import { ConflictError } from '@core/errors';
 import { findOverlap } from '@domain/working-hours/rules';
 import type { WorkingHoursService } from '@domain/working-hours';
-// پیش‌فرض‌های موتور امتیازدهی از تک‌منبع حقیقت (worker/scoring.js) می‌آیند
+// — پیش‌فرض‌های موتور امتیازدهی از تک‌منبع حقیقت (worker/scoring.js) می‌آیند
 import {
   ADMIN_USAGE_CAP,
   CONTENT_FORMULA,
@@ -55,6 +55,8 @@ export interface UpdateSettingsInput {
   clinicPhone?: string;
   /** — ساعت ارسال پیش‌نویس اعلان نوبت جدید (0..23 تهران) */
   notifyBatchHour?: number;
+  /** — نام کاربری بات بله (با یا بدون @؛ خالی = پاک کردن برای تشخیص خودکار) */
+  botUsername?: string;
   /** — جایگزینی کامل بازه‌های شاخص سنجش (سال/ماه شمسی) */
   screeningTargets?: ScreeningTargetConfig[];
 }
@@ -83,6 +85,10 @@ export interface SettingsService {
   getClinicPhone(): Promise<string>;
   /** — ساعت ارسال پیش‌نویس اعلان نوبت جدید (0..23 تهران) */
   getBatchHour(): Promise<number>;
+  /** — یوزرنیم بات بله برای ساخت لینک اتصال (خالی = ثبت نشده) */
+  getBotUsername(): Promise<string>;
+  /** — ثبت/به‌روزرسانی یوزرنیم بات (اعتبارسنجی لاتین + audit) */
+  setBotUsername(username: string, actor: AuthContext): Promise<string>;
   /** خواندن سریع پرچم‌های اعلان چرخه حیات */
   getNotifyFlags(): Promise<{ onCreate: boolean; onMove: boolean; onCancel: boolean; digestEnabled: boolean; waitlistEnabled: boolean; defaultReminderHours: number }>;
   /** — کلید قطع بانک تمرین (جریان بات + ثبت تکلیف) */
@@ -194,6 +200,7 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
       const storedTargets = stored.get(SETTING_KEYS.SCREENING_TARGETS);
       const storedPhone = stored.get(SETTING_KEYS.CLINIC_PHONE);
       const storedBatch = stored.get(SETTING_KEYS.NOTIFY_BATCH_HOUR);
+      const storedBotUsername = stored.get(SETTING_KEYS.BOT_USERNAME);
 
       return {
         centerHours: Array.isArray(hours) ? (hours as CenterHourRange[]) : [...DEFAULT_CENTER_HOURS],
@@ -209,6 +216,7 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
         clinicPhone: typeof storedPhone === 'string' ? storedPhone : DEFAULT_SETTINGS[SETTING_KEYS.CLINIC_PHONE],
         notifyBatchHour:
           typeof storedBatch === 'number' ? storedBatch : DEFAULT_SETTINGS[SETTING_KEYS.NOTIFY_BATCH_HOUR],
+        botUsername: typeof storedBotUsername === 'string' ? storedBotUsername : DEFAULT_SETTINGS[SETTING_KEYS.BOT_USERNAME],
         meta: {
           baleConfigured: deps.baleConfigured,
           webhookEnabled: deps.webhookEnabled
@@ -246,6 +254,9 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
       if (input.notifyBatchHour !== undefined) {
         await upsertSetting(SETTING_KEYS.NOTIFY_BATCH_HOUR, input.notifyBatchHour, actor);
       }
+      if (input.botUsername !== undefined) {
+        await upsertSetting(SETTING_KEYS.BOT_USERNAME, input.botUsername.trim().replace(/^@/, ''), actor);
+      }
       if (input.screeningTargets !== undefined) {
         await upsertSetting(SETTING_KEYS.SCREENING_TARGETS, input.screeningTargets, actor);
       }
@@ -268,6 +279,7 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
           notify_waitlist: { from: before.notifyWaitlist, to: input.notifyWaitlist ?? before.notifyWaitlist },
           clinic_phone: { from: before.clinicPhone, to: input.clinicPhone ?? before.clinicPhone },
           notify_batch_hour: { from: before.notifyBatchHour, to: input.notifyBatchHour ?? before.notifyBatchHour },
+          bot_username: { from: before.botUsername || null, to: input.botUsername ?? before.botUsername },
           screening_targets: {
             from: before.screeningTargets.length,
             to: input.screeningTargets?.length ?? before.screeningTargets.length
@@ -366,6 +378,31 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
       const stored = await readAll();
       const v = stored.get(SETTING_KEYS.NOTIFY_BATCH_HOUR);
       return typeof v === 'number' ? v : DEFAULT_SETTINGS[SETTING_KEYS.NOTIFY_BATCH_HOUR];
+    },
+
+    /** — یوزرنیم بات بله برای ساخت لینک اتصال (ble.ir/<bot>?start=CODE) */
+    async getBotUsername(): Promise<string> {
+      const stored = await readAll();
+      const v = stored.get(SETTING_KEYS.BOT_USERNAME);
+      return typeof v === 'string' ? v.trim().replace(/^@/, '') : '';
+    },
+
+    /** — ثبت/به‌روزرسانی یوزرنیم بات (اعتبارسنجی + audit) */
+    async setBotUsername(username: string, actor: AuthContext): Promise<string> {
+      const clean = username.trim().replace(/^@/, '');
+      if (clean.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean)) {
+        throw new ConflictError('نام کاربری بات فقط حروف لاتین، رقم و خط زیر است (۲ تا ۶۴ نویسه)');
+      }
+      const before = await this.getBotUsername();
+      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean, actor);
+      await audit.log({
+        actorId: actor.staffId,
+        action: 'settings.bot_username.update',
+        resourceType: 'settings',
+        resourceId: 'bot_username',
+        changes: { bot_username: { from: before || null, to: clean || null } }
+      });
+      return clean;
     },
 
     async getNotifyFlags() {

@@ -2,14 +2,9 @@
  * بک‌اند کامل سامانه (Hono + D1) — منبع حقیقت رفتار زنده؛ تغییر جراحی با تست کامل
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
-import { productionScoreOf, effectiveContentFormula, SCORING_CONFIG_KEY, CONTENT_FORMULA, ADMIN_USAGE_CAP, SCORING_EPOCH } from "./scoring.js";
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
 var __publicField = (obj, key, value) => {
   __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
   return value;
@@ -400,7 +395,7 @@ var WriteStream = class extends Socket2 {
     super();
     this.fd = fd;
   }
-  clearLine(dir3, callback) {
+  clearLine(dir4, callback) {
     callback && callback();
     return false;
   }
@@ -416,10 +411,10 @@ var WriteStream = class extends Socket2 {
     callback && callback();
     return false;
   }
-  getColorDepth(env2) {
+  getColorDepth(env3) {
     return 1;
   }
-  hasColors(count3, env2) {
+  hasColors(count4, env3) {
     return false;
   }
   getWindowSize() {
@@ -470,8 +465,8 @@ var Process = class extends EventEmitter {
     return this.#stderr ??= new WriteStream(2);
   }
   #cwd = "/";
-  chdir(cwd2) {
-    this.#cwd = cwd2;
+  chdir(cwd3) {
+    this.#cwd = cwd3;
   }
   cwd() {
     return this.#cwd;
@@ -885,18 +880,1240 @@ var process_default = _process;
 // node_modules/wrangler/_virtual_unenv_global_polyfill-@cloudflare-unenv-preset-node-process
 globalThis.process = process_default;
 
-// node_modules/hono/dist/request/constants.js
-var GET_MATCH_RESULT = Symbol();
+var CONTENT_FORMULA = {
+  production: [
+    { key: "exercises", weight: 4, label: "\u062A\u0645\u0631\u06CC\u0646" },
+    { key: "packages", weight: 8, label: "\u0628\u0633\u062A\u0647\u0654 \u062A\u0645\u0631\u06CC\u0646\u06CC" },
+    { key: "templates", weight: 8, label: "\u0642\u0627\u0644\u0628 \u0645\u0633\u06CC\u0631" },
+    { key: "forms", weight: 6, label: "\u0641\u0631\u0645 \u062F\u0633\u062A\u200C\u0633\u0627\u0632" }
+  ],
+  usage: [
+    { key: "exerciseUses", weight: 4, label: "\u0627\u0631\u0633\u0627\u0644 \u062A\u06A9\u0644\u06CC\u0641 \u0627\u0632 \u062A\u0645\u0631\u06CC\u0646" },
+    { key: "templateUses", weight: 8, label: "\u0633\u0627\u062E\u062A \u0645\u0633\u06CC\u0631 \u0627\u0632 \u0642\u0627\u0644\u0628" },
+    { key: "formFills", weight: 3, label: "\u062A\u06A9\u0645\u06CC\u0644 \u0641\u0631\u0645" }
+  ],
+  reference: [
+    { key: "exerciseRefs", weight: 20, label: "\u0627\u0633\u062A\u0641\u0627\u062F\u0647\u0654 \u0647\u0645\u06A9\u0627\u0631 \u0627\u0632 \u062A\u0645\u0631\u06CC\u0646" },
+    { key: "templateRefs", weight: 30, label: "\u0633\u0627\u062E\u062A \u0645\u0633\u06CC\u0631 \u062A\u0648\u0633\u0637 \u0647\u0645\u06A9\u0627\u0631" },
+    { key: "formRefs", weight: 14, label: "\u062A\u06A9\u0645\u06CC\u0644 \u0641\u0631\u0645 \u062A\u0648\u0633\u0637 \u0647\u0645\u06A9\u0627\u0631" }
+  ]
+};
+var USAGE_FORMULA = [
+  ["student.create", 1, "\u062A\u0634\u06A9\u06CC\u0644 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632", "\u067E\u0631\u0648\u0646\u062F\u0647"],
+  ["appointment.create", 1, "\u062B\u0628\u062A \u0646\u0648\u0628\u062A", "\u0646\u0648\u0628\u062A\u200C\u062F\u0647\u06CC"],
+  ["appointment.copy_week", 1, "\u06A9\u067E\u06CC \u0647\u0641\u062A\u0647\u0654 \u06A9\u0627\u0631\u06CC", "\u0646\u0648\u0628\u062A\u200C\u062F\u0647\u06CC"],
+  ["session_note.created", 1, "\u062B\u0628\u062A \u06AF\u0632\u0627\u0631\u0634 \u062C\u0644\u0633\u0647", "\u06AF\u0632\u0627\u0631\u0634"],
+  ["case_event.created", 1, "\u062B\u0628\u062A \u0631\u0648\u06CC\u062F\u0627\u062F \u067E\u0631\u0648\u0646\u062F\u0647", "\u06AF\u0632\u0627\u0631\u0634"],
+  ["case_event.finalized", 1, "\u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u0631\u0648\u06CC\u062F\u0627\u062F \u067E\u0631\u0648\u0646\u062F\u0647", "\u06AF\u0632\u0627\u0631\u0634"],
+  ["waitlist.create", 1, "\u062B\u0628\u062A \u0645\u062A\u0642\u0627\u0636\u06CC \u062C\u062F\u06CC\u062F", "\u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631"],
+  ["waitlist.call", 1, "\u067E\u06CC\u06AF\u06CC\u0631\u06CC \u062A\u0645\u0627\u0633 \u0645\u062A\u0642\u0627\u0636\u06CC", "\u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631"],
+  ["waitlist.schedule", 1, "\u0646\u0648\u0628\u062A\u200C\u062F\u0647\u06CC \u0645\u062A\u0642\u0627\u0636\u06CC", "\u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631"],
+  ["waitlist.admitted", 1, "\u067E\u0630\u06CC\u0631\u0634 \u0645\u062A\u0642\u0627\u0636\u06CC", "\u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631"],
+  ["assessment.create", 1, "\u062B\u0628\u062A \u0633\u0646\u062C\u0634", "\u0633\u0646\u062C\u0634"],
+  ["screening.create", 1, "\u062B\u0628\u062A \u063A\u0631\u0628\u0627\u0644 \u0631\u0648\u0632\u0627\u0646\u0647", "\u0633\u0646\u062C\u0634"],
+  ["ot.session.saved", 1, "\u062B\u0628\u062A \u062C\u0644\u0633\u0647\u0654 \u062F\u0631\u0645\u0627\u0646\u06CC", "\u062F\u0631\u0645\u0627\u0646"],
+  ["clinical_path.create", 1, "\u0633\u0627\u062E\u062A \u0645\u0633\u06CC\u0631 \u0628\u0627\u0644\u06CC\u0646\u06CC", "\u062F\u0631\u0645\u0627\u0646"],
+  ["followup.created", 1, "\u0627\u06CC\u062C\u0627\u062F \u067E\u06CC\u06AF\u06CC\u0631\u06CC", "\u067E\u06CC\u06AF\u06CC\u0631\u06CC"],
+  ["todo.completed", 1, "\u0627\u0646\u062C\u0627\u0645 \u06A9\u0627\u0631 \u0648\u0627\u06AF\u0630\u0627\u0631\u0634\u062F\u0647", "\u06A9\u0627\u0631 \u0631\u0648\u0632\u0627\u0646\u0647"],
+  ["attendance.mark", 1, "\u062B\u0628\u062A \u062D\u0636\u0648\u0631 \u0648 \u063A\u06CC\u0627\u0628", "\u06A9\u0627\u0631 \u0631\u0648\u0632\u0627\u0646\u0647"],
+  ["knowledge.create", 1, "\u062B\u0628\u062A \u0645\u062D\u062A\u0648\u0627\u06CC \u062F\u0627\u0646\u0634\u06CC", "\u0645\u062D\u062A\u0648\u0627"],
+  ["announcement.create", 1, "\u0627\u0646\u062A\u0634\u0627\u0631 \u0627\u0639\u0644\u0627\u0646", "\u0645\u062D\u062A\u0648\u0627"]
+];
+var SCORING_EPOCH = "2026-10-14 20:30:00";
+var ADMIN_CAP_ROLES = ["manager", "secretary", "supervisor"];
+var ADMIN_USAGE_CAP = 20;
+var SCORING_CONFIG_KEY = "scoring_config";
+function clampWeight(v, fallback) {
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 0 || n > 1e4)
+    return fallback;
+  return n;
+}
+__name(clampWeight, "clampWeight");
+function effectiveContentFormula(weights) {
+  if (!weights || typeof weights !== "object")
+    return CONTENT_FORMULA;
+  const pick = /* @__PURE__ */ __name((list) => list.map((x) => ({ ...x, weight: clampWeight(weights[x.key], x.weight) })), "pick");
+  return {
+    production: pick(CONTENT_FORMULA.production),
+    usage: pick(CONTENT_FORMULA.usage),
+    reference: pick(CONTENT_FORMULA.reference)
+  };
+}
+__name(effectiveContentFormula, "effectiveContentFormula");
+function effectiveUsageFormula(weights) {
+  const base = clampWeight(weights?.baseAction ?? 1, 1);
+  return USAGE_FORMULA.map(([action, , label, group4]) => [action, base, label, group4]);
+}
+__name(effectiveUsageFormula, "effectiveUsageFormula");
+function effectiveAdminCap(weights) {
+  return clampWeight(weights?.adminCap ?? ADMIN_USAGE_CAP, ADMIN_USAGE_CAP);
+}
+__name(effectiveAdminCap, "effectiveAdminCap");
+async function readScoringConfig(d1) {
+  try {
+    const row = await d1.prepare(`SELECT value FROM settings WHERE key = ? LIMIT 1`).bind(SCORING_CONFIG_KEY).first();
+    if (!row || typeof row.value !== "string")
+      return {};
+    const parsed = JSON.parse(row.value);
+    if (!parsed || typeof parsed !== "object")
+      return {};
+    const out = {};
+    if (typeof parsed.epoch === "string" && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(parsed.epoch)) {
+      out.epoch = parsed.epoch;
+    }
+    if (parsed.weights && typeof parsed.weights === "object")
+      out.weights = parsed.weights;
+    return out;
+  } catch {
+    return {};
+  }
+}
+__name(readScoringConfig, "readScoringConfig");
+function effectiveSince(periodKey, periods = PERIODS, now = /* @__PURE__ */ new Date(), epoch = SCORING_EPOCH) {
+  const cut = periodSinceUtc(periodKey, periods, now);
+  if (!cut)
+    return epoch;
+  return cut > epoch ? cut : epoch;
+}
+__name(effectiveSince, "effectiveSince");
+var PERIODS = {
+  all: { key: "all", label: "\u06A9\u0644 \u062F\u0648\u0631\u0647", sinceIso: null },
+  month: { key: "month", label: "\u06F3\u06F0 \u0631\u0648\u0632 \u0627\u062E\u06CC\u0631", days: 30 },
+  week: { key: "week", label: "\u06F7 \u0631\u0648\u0632 \u0627\u062E\u06CC\u0631", days: 7 }
+};
+function usageWeightMap(formula = USAGE_FORMULA) {
+  return new Map(formula.map(([action, weight]) => [action, weight]));
+}
+__name(usageWeightMap, "usageWeightMap");
+function applyUsageWeights(aggRows, formula = USAGE_FORMULA) {
+  const weights = usageWeightMap(formula);
+  const points = {};
+  const counts = {};
+  for (const row of aggRows) {
+    const w = weights.get(row.action);
+    if (!w)
+      continue;
+    points[row.actorId] = (points[row.actorId] ?? 0) + w * row.count;
+    (counts[row.actorId] ??= {})[row.action] = (counts[row.actorId]?.[row.action] ?? 0) + row.count;
+  }
+  return { points, counts };
+}
+__name(applyUsageWeights, "applyUsageWeights");
+function contentScoreOf(c, formula = CONTENT_FORMULA) {
+  const prod = formula.production.reduce((s, x) => s + x.weight * (c[x.key] ?? 0), 0);
+  const use = formula.usage.reduce((s, x) => s + x.weight * (c[x.key] ?? 0), 0);
+  const ref = formula.reference.reduce((s, x) => s + x.weight * (c[x.key] ?? 0), 0);
+  return { production: prod, usage: use, reference: ref, total: prod + use + ref };
+}
+__name(contentScoreOf, "contentScoreOf");
+function productionScoreOf(counts, formula = CONTENT_FORMULA) {
+  return (formula.production ?? CONTENT_FORMULA.production).reduce((s, x) => s + x.weight * (counts?.[x.key] ?? 0), 0);
+}
+__name(productionScoreOf, "productionScoreOf");
+function rankRows(rows) {
+  const sorted = [...rows].sort(
+    (a, b) => b.total - a.total || a.fullName.localeCompare(b.fullName, "fa")
+  );
+  let prevScore = null;
+  let prevRank = 0;
+  return sorted.map((r, i) => {
+    const rank = r.total === prevScore ? prevRank : i + 1;
+    prevScore = r.total;
+    prevRank = rank;
+    return { ...r, rank };
+  });
+}
+__name(rankRows, "rankRows");
+function periodSinceUtc(periodKey, periods = PERIODS, now = /* @__PURE__ */ new Date()) {
+  const p = periods[periodKey];
+  if (!p)
+    throw new Error(`\u062F\u0648\u0631\u0647\u0654 \u0646\u0627\u0645\u0639\u062A\u0628\u0631: ${periodKey}`);
+  if (p.key === "all")
+    return null;
+  return new Date(now.getTime() - p.days * 24 * 60 * 60 * 1e3).toISOString().replace("T", " ").slice(0, 19);
+}
+__name(periodSinceUtc, "periodSinceUtc");
+var D1_ACTIONS = USAGE_FORMULA.map(([a]) => a);
+function contentQueries(since) {
+  const W = since ? " AND created_at >= ?" : "";
+  const P = since ? [since] : [];
+  const q = /* @__PURE__ */ __name((sql) => ({ sql: sql + W, params: P }), "q");
+  const qJoin = /* @__PURE__ */ __name((sql) => ({ sql, params: since ? [since] : [] }), "qJoin");
+  return [
+    // تولید محتوا
+    q(`SELECT created_by k, COUNT(*) c FROM exercises WHERE deleted_at IS NULL AND created_by IS NOT NULL GROUP BY created_by`),
+    q(`SELECT created_by k, COUNT(*) c FROM exercise_packages WHERE deleted_at IS NULL AND created_by IS NOT NULL GROUP BY created_by`),
+    q(`SELECT created_by k, COUNT(*) c FROM pathway_templates WHERE active = 1 AND created_by IS NOT NULL GROUP BY created_by`),
+    q(`SELECT created_by k, COUNT(*) c FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by IS NOT NULL GROUP BY created_by`),
+    // استفاده از تمرین‌ها
+    qJoin(`SELECT e.created_by k, COUNT(*) c
+         FROM exercise_assignments a JOIN exercises e ON e.id = a.exercise_id
+        WHERE e.deleted_at IS NULL AND e.created_by IS NOT NULL AND a.status != 'cancelled'${since ? " AND a.created_at >= ?" : ""}
+        GROUP BY e.created_by`),
+    // ارجاع تمرین — مصرف توسط همکار دیگر
+    qJoin(`SELECT e.created_by k, COUNT(*) c
+         FROM exercise_assignments a JOIN exercises e ON e.id = a.exercise_id
+        WHERE e.deleted_at IS NULL AND e.created_by IS NOT NULL AND a.status != 'cancelled'
+          AND a.assigned_by != e.created_by${since ? " AND a.created_at >= ?" : ""}
+        GROUP BY e.created_by`),
+    // استفاده از قالب‌ها — مسیر ساخته‌شده از قالب
+    qJoin(`SELECT t.created_by k, COUNT(*) c
+         FROM intervention_paths p JOIN pathway_templates t ON t.key = p.template_key
+        WHERE p.deleted_at IS NULL AND t.created_by IS NOT NULL${since ? " AND p.created_at >= ?" : ""}
+        GROUP BY t.created_by`),
+    // ارجاع قالب — ساخت مسیر توسط همکار دیگر
+    qJoin(`SELECT t.created_by k, COUNT(*) c
+         FROM intervention_paths p JOIN pathway_templates t ON t.key = p.template_key
+        WHERE p.deleted_at IS NULL AND t.created_by IS NOT NULL AND p.created_by != t.created_by${since ? " AND p.created_at >= ?" : ""}
+        GROUP BY t.created_by`),
+    // استفاده از فرم‌های دست‌ساز
+    qJoin(`SELECT f.created_by k, COUNT(*) c
+         FROM case_events ce JOIN case_event_types f ON f.id = ce.event_type_id
+        WHERE f.is_system = 0 AND f.created_by IS NOT NULL AND ce.status != 'cancelled'${since ? " AND ce.created_at >= ?" : ""}
+        GROUP BY f.created_by`),
+    // ارجاع فرم — ثبت توسط همکار دیگر
+    qJoin(`SELECT f.created_by k, COUNT(*) c
+         FROM case_events ce JOIN case_event_types f ON f.id = ce.event_type_id
+        WHERE f.is_system = 0 AND f.created_by IS NOT NULL AND ce.status != 'cancelled'
+          AND ce.staff_id IS NOT NULL AND ce.staff_id != f.created_by${since ? " AND ce.created_at >= ?" : ""}
+        GROUP BY f.created_by`)
+  ];
+}
+__name(contentQueries, "contentQueries");
+var CONTENT_KEYS = ["exercises", "packages", "templates", "forms", "exerciseUses", "exerciseRefs", "templateUses", "templateRefs", "formFills", "formRefs"];
+async function computeBoard(d1, sinceUtc, cfg = {}) {
+  const contentFormula = cfg.contentFormula ?? CONTENT_FORMULA;
+  const usageFormula = cfg.usageFormula ?? USAGE_FORMULA;
+  const adminCap = Number.isInteger(cfg.adminCap) ? cfg.adminCap : ADMIN_USAGE_CAP;
+  const usageActions = usageFormula.map(([a]) => a);
+  const placeholders = usageActions.map(() => "?").join(",");
+  const usageParams = sinceUtc ? [...usageActions, sinceUtc] : [...usageActions];
+  const usageSql = `SELECT actor_id actorId, action, COUNT(*) count FROM audit_log
+                     WHERE action IN (${placeholders})${sinceUtc ? " AND created_at >= ?" : ""}
+                    GROUP BY actor_id, action`;
+  const [staffRows, usageRows, ...contentRows] = await Promise.all([
+    d1.prepare(`SELECT id, full_name, COALESCE(role_ext, role) AS role, active FROM staff ORDER BY full_name`).all(),
+    d1.prepare(usageSql).bind(...usageParams).all(),
+    ...contentQueries(sinceUtc).map(
+      ({ sql, params }) => d1.prepare(sql).bind(...params).all()
+    )
+  ]);
+  const agg = usageRows.results.map((r) => ({ actorId: r.actorId, action: r.action, count: Number(r.count) }));
+  const { points: usagePoints, counts: usageCounts } = applyUsageWeights(agg, usageFormula);
+  const maps = {};
+  contentRows.forEach((res, i) => {
+    maps[CONTENT_KEYS[i]] = new Map(res.results.map((r) => [r.k, Number(r.c)]));
+  });
+  const n = /* @__PURE__ */ __name((m, id) => m?.get(id) ?? 0, "n");
+  const usageLabels = Object.fromEntries(USAGE_FORMULA.map(([a, , label]) => [a, label]));
+  const rows = staffRows.results.map((s) => {
+    const content = {
+      exercises: n(maps.exercises, s.id),
+      packages: n(maps.packages, s.id),
+      templates: n(maps.templates, s.id),
+      forms: n(maps.forms, s.id),
+      exerciseUses: n(maps.exerciseUses, s.id),
+      exerciseRefs: n(maps.exerciseRefs, s.id),
+      templateUses: n(maps.templateUses, s.id),
+      templateRefs: n(maps.templateRefs, s.id),
+      formFills: n(maps.formFills, s.id),
+      formRefs: n(maps.formRefs, s.id)
+    };
+    const cs = contentScoreOf(content, contentFormula);
+    const rawUsage = usagePoints[s.id] ?? 0;
+    const isAdminRole = ADMIN_CAP_ROLES.includes(s.role);
+    const usage = isAdminRole ? Math.min(rawUsage, adminCap) : rawUsage;
+    const usageDetail = Object.fromEntries(
+      Object.entries(usageCounts[s.id] ?? {}).map(([a, c]) => [a, c])
+    );
+    const total = cs.total + usage;
+    return {
+      staffId: s.id,
+      fullName: s.full_name,
+      role: s.role,
+      active: s.active === 1,
+      content,
+      contentScore: cs,
+      usagePoints: usage,
+      usageCapped: isAdminRole && rawUsage > adminCap,
+      usageDetail,
+      usageLabels,
+      total
+    };
+  });
+  return rankRows(rows);
+}
+__name(computeBoard, "computeBoard");
+function b64uDecode(part) {
+  const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = b64 + "=".repeat((4 - b64.length % 4) % 4);
+  const raw2 = atob(padded);
+  const bytes = new Uint8Array(raw2.length);
+  for (let i = 0; i < raw2.length; i += 1)
+    bytes[i] = raw2.charCodeAt(i);
+  return bytes;
+}
+__name(b64uDecode, "b64uDecode");
+async function hmacKey(secret) {
+  return crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"]
+  );
+}
+__name(hmacKey, "hmacKey");
+async function verifySessionJwt(token, secret) {
+  const parts = token.split(".");
+  if (parts.length !== 3)
+    return null;
+  const [h, p, sig] = parts;
+  let payload;
+  try {
+    payload = JSON.parse(new TextDecoder().decode(b64uDecode(p)));
+  } catch {
+    return null;
+  }
+  const key = await hmacKey(secret);
+  const valid = await crypto.subtle.verify("HMAC", key, b64uDecode(sig), new TextEncoder().encode(`${h}.${p}`));
+  if (!valid)
+    return null;
+  if (!payload.exp || payload.exp * 1e3 < Date.now())
+    return null;
+  if (!payload.sub)
+    return null;
+  return payload;
+}
+__name(verifySessionJwt, "verifySessionJwt");
+async function resolveSessionSecret(env3) {
+  if (env3.AUTH_SECRET && env3.AUTH_SECRET.length >= 16)
+    return env3.AUTH_SECRET;
+  if (env3.ENV === "development" || env3.ENV === "test")
+    return "center-dev-session-secret";
+  const row = await env3.DB.prepare(`SELECT value FROM settings WHERE key = 'sys_auth_secret' LIMIT 1`).first();
+  if (row) {
+    try {
+      const parsed = JSON.parse(row.value);
+      if (typeof parsed === "string" && parsed.length >= 32)
+        return parsed;
+    } catch {
+    }
+  }
+  throw new Error("sys_auth_secret \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
+}
+__name(resolveSessionSecret, "resolveSessionSecret");
+async function requireAuth(request, env3) {
+  const header = request.headers.get("Authorization") ?? "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  if (!token)
+    return null;
+  const secret = await resolveSessionSecret(env3);
+  return verifySessionJwt(token, secret);
+}
+__name(requireAuth, "requireAuth");
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" }
+  });
+}
+__name(json, "json");
+async function handleScoring(request, env3) {
+  const url = new URL(request.url);
+  const path = url.pathname;
+  const authed = await requireAuth(request, env3).catch(() => null);
+  if (!authed) {
+    return json({ error: "UNAUTHORIZED", message: "\u0627\u0628\u062A\u062F\u0627 \u0648\u0627\u0631\u062F \u062D\u0633\u0627\u0628 \u0634\u0648\u06CC\u062F" }, 401);
+  }
+  if (path === "/api/scoring/board" && request.method === "GET") {
+    const periodKey = url.searchParams.get("period") ?? "all";
+    if (!PERIODS[periodKey]) {
+      return json({ error: "VALIDATION_ERROR", message: "\u062F\u0648\u0631\u0647\u0654 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" }, 400);
+    }
+    const cfg = await readScoringConfig(env3.DB);
+    const since = effectiveSince(periodKey, PERIODS, /* @__PURE__ */ new Date(), cfg.epoch ?? SCORING_EPOCH);
+    const rows = await computeBoard(env3.DB, since, {
+      contentFormula: effectiveContentFormula(cfg.weights),
+      usageFormula: effectiveUsageFormula(cfg.weights),
+      adminCap: effectiveAdminCap(cfg.weights)
+    });
+    return json({
+      data: {
+        period: PERIODS[periodKey].key,
+        periodLabel: PERIODS[periodKey].label,
+        since,
+        generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        rows
+      }
+    });
+  }
+  return json({ error: "NOT_FOUND", message: "\u0645\u0633\u06CC\u0631 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u06CC \u06CC\u0627\u0641\u062A \u0646\u0634\u062F" }, 404);
+}
+__name(handleScoring, "handleScoring");
 
-// node_modules/hono/dist/utils/buffer.js
-var bufferToFormData = /* @__PURE__ */ __name((arrayBuffer, contentType) => {
+import { Writable as Writable2 } from "node:stream";
+import { EventEmitter as EventEmitter2 } from "node:events";
+import { Socket as Socket3 } from "node:net";
+import { Socket as Socket22 } from "node:net";
+var __defProp2 = Object.defineProperty;
+var __defNormalProp2 = /* @__PURE__ */ __name((obj, key, value) => key in obj ? __defProp2(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value, "__defNormalProp");
+var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+var __export = /* @__PURE__ */ __name((target, all) => {
+  for (var name in all)
+    __defProp2(target, name, { get: all[name], enumerable: true });
+}, "__export");
+var __publicField2 = /* @__PURE__ */ __name((obj, key, value) => {
+  __defNormalProp2(obj, typeof key !== "symbol" ? key + "" : key, value);
+  return value;
+}, "__publicField");
+function createNotImplementedError2(name) {
+  return new Error(`[unenv] ${name} is not implemented yet!`);
+}
+__name(createNotImplementedError2, "createNotImplementedError");
+__name2(createNotImplementedError2, "createNotImplementedError");
+function notImplemented2(name) {
+  const fn = /* @__PURE__ */ __name2(() => {
+    throw createNotImplementedError2(name);
+  }, "fn");
+  return Object.assign(fn, { __unenv__: true });
+}
+__name(notImplemented2, "notImplemented");
+__name2(notImplemented2, "notImplemented");
+function notImplementedClass2(name) {
+  return class {
+    __unenv__ = true;
+    constructor() {
+      throw new Error(`[unenv] ${name} is not implemented yet!`);
+    }
+  };
+}
+__name(notImplementedClass2, "notImplementedClass");
+__name2(notImplementedClass2, "notImplementedClass");
+var _timeOrigin2 = globalThis.performance?.timeOrigin ?? Date.now();
+var _performanceNow2 = globalThis.performance?.now ? globalThis.performance.now.bind(globalThis.performance) : () => Date.now() - _timeOrigin2;
+var nodeTiming2 = {
+  name: "node",
+  entryType: "node",
+  startTime: 0,
+  duration: 0,
+  nodeStart: 0,
+  v8Start: 0,
+  bootstrapComplete: 0,
+  environment: 0,
+  loopStart: 0,
+  loopExit: 0,
+  idleTime: 0,
+  uvMetricsInfo: {
+    loopCount: 0,
+    events: 0,
+    eventsWaiting: 0
+  },
+  detail: void 0,
+  toJSON() {
+    return this;
+  }
+};
+var PerformanceEntry2 = /* @__PURE__ */ __name(class {
+  __unenv__ = true;
+  detail;
+  entryType = "event";
+  name;
+  startTime;
+  constructor(name, options) {
+    this.name = name;
+    this.startTime = options?.startTime || _performanceNow2();
+    this.detail = options?.detail;
+  }
+  get duration() {
+    return _performanceNow2() - this.startTime;
+  }
+  toJSON() {
+    return {
+      name: this.name,
+      entryType: this.entryType,
+      startTime: this.startTime,
+      duration: this.duration,
+      detail: this.detail
+    };
+  }
+}, "PerformanceEntry");
+__name2(PerformanceEntry2, "PerformanceEntry");
+var PerformanceMark3 = /* @__PURE__ */ __name2(/* @__PURE__ */ __name(class PerformanceMark22 extends PerformanceEntry2 {
+  entryType = "mark";
+  constructor() {
+    super(...arguments);
+  }
+  get duration() {
+    return 0;
+  }
+}, "PerformanceMark2"), "PerformanceMark");
+var PerformanceMeasure2 = /* @__PURE__ */ __name(class extends PerformanceEntry2 {
+  entryType = "measure";
+}, "PerformanceMeasure");
+__name2(PerformanceMeasure2, "PerformanceMeasure");
+var PerformanceResourceTiming2 = /* @__PURE__ */ __name(class extends PerformanceEntry2 {
+  entryType = "resource";
+  serverTiming = [];
+  connectEnd = 0;
+  connectStart = 0;
+  decodedBodySize = 0;
+  domainLookupEnd = 0;
+  domainLookupStart = 0;
+  encodedBodySize = 0;
+  fetchStart = 0;
+  initiatorType = "";
+  name = "";
+  nextHopProtocol = "";
+  redirectEnd = 0;
+  redirectStart = 0;
+  requestStart = 0;
+  responseEnd = 0;
+  responseStart = 0;
+  secureConnectionStart = 0;
+  startTime = 0;
+  transferSize = 0;
+  workerStart = 0;
+  responseStatus = 0;
+}, "PerformanceResourceTiming");
+__name2(PerformanceResourceTiming2, "PerformanceResourceTiming");
+var PerformanceObserverEntryList2 = /* @__PURE__ */ __name(class {
+  __unenv__ = true;
+  getEntries() {
+    return [];
+  }
+  getEntriesByName(_name, _type) {
+    return [];
+  }
+  getEntriesByType(type) {
+    return [];
+  }
+}, "PerformanceObserverEntryList");
+__name2(PerformanceObserverEntryList2, "PerformanceObserverEntryList");
+var Performance2 = /* @__PURE__ */ __name(class {
+  __unenv__ = true;
+  timeOrigin = _timeOrigin2;
+  eventCounts = /* @__PURE__ */ new Map();
+  _entries = [];
+  _resourceTimingBufferSize = 0;
+  navigation = void 0;
+  timing = void 0;
+  timerify(_fn, _options) {
+    throw createNotImplementedError2("Performance.timerify");
+  }
+  get nodeTiming() {
+    return nodeTiming2;
+  }
+  eventLoopUtilization() {
+    return {};
+  }
+  markResourceTiming() {
+    return new PerformanceResourceTiming2("");
+  }
+  onresourcetimingbufferfull = null;
+  now() {
+    if (this.timeOrigin === _timeOrigin2) {
+      return _performanceNow2();
+    }
+    return Date.now() - this.timeOrigin;
+  }
+  clearMarks(markName) {
+    this._entries = markName ? this._entries.filter((e) => e.name !== markName) : this._entries.filter((e) => e.entryType !== "mark");
+  }
+  clearMeasures(measureName) {
+    this._entries = measureName ? this._entries.filter((e) => e.name !== measureName) : this._entries.filter((e) => e.entryType !== "measure");
+  }
+  clearResourceTimings() {
+    this._entries = this._entries.filter((e) => e.entryType !== "resource" || e.entryType !== "navigation");
+  }
+  getEntries() {
+    return this._entries;
+  }
+  getEntriesByName(name, type) {
+    return this._entries.filter((e) => e.name === name && (!type || e.entryType === type));
+  }
+  getEntriesByType(type) {
+    return this._entries.filter((e) => e.entryType === type);
+  }
+  mark(name, options) {
+    const entry = new PerformanceMark3(name, options);
+    this._entries.push(entry);
+    return entry;
+  }
+  measure(measureName, startOrMeasureOptions, endMark) {
+    let start;
+    let end;
+    if (typeof startOrMeasureOptions === "string") {
+      start = this.getEntriesByName(startOrMeasureOptions, "mark")[0]?.startTime;
+      end = this.getEntriesByName(endMark, "mark")[0]?.startTime;
+    } else {
+      start = Number.parseFloat(startOrMeasureOptions?.start) || this.now();
+      end = Number.parseFloat(startOrMeasureOptions?.end) || this.now();
+    }
+    const entry = new PerformanceMeasure2(measureName, {
+      startTime: start,
+      detail: {
+        start,
+        end
+      }
+    });
+    this._entries.push(entry);
+    return entry;
+  }
+  setResourceTimingBufferSize(maxSize) {
+    this._resourceTimingBufferSize = maxSize;
+  }
+  addEventListener(type, listener, options) {
+    throw createNotImplementedError2("Performance.addEventListener");
+  }
+  removeEventListener(type, listener, options) {
+    throw createNotImplementedError2("Performance.removeEventListener");
+  }
+  dispatchEvent(event) {
+    throw createNotImplementedError2("Performance.dispatchEvent");
+  }
+  toJSON() {
+    return this;
+  }
+}, "Performance");
+__name2(Performance2, "Performance");
+var PerformanceObserver2 = /* @__PURE__ */ __name(class {
+  __unenv__ = true;
+  _callback = null;
+  constructor(callback) {
+    this._callback = callback;
+  }
+  takeRecords() {
+    return [];
+  }
+  disconnect() {
+    throw createNotImplementedError2("PerformanceObserver.disconnect");
+  }
+  observe(options) {
+    throw createNotImplementedError2("PerformanceObserver.observe");
+  }
+  bind(fn) {
+    return fn;
+  }
+  runInAsyncScope(fn, thisArg, ...args) {
+    return fn.call(thisArg, ...args);
+  }
+  asyncId() {
+    return 0;
+  }
+  triggerAsyncId() {
+    return 0;
+  }
+  emitDestroy() {
+    return this;
+  }
+}, "PerformanceObserver");
+__name2(PerformanceObserver2, "PerformanceObserver");
+__publicField2(PerformanceObserver2, "supportedEntryTypes", []);
+var performance2 = globalThis.performance && "addEventListener" in globalThis.performance ? globalThis.performance : new Performance2();
+globalThis.performance = performance2;
+globalThis.Performance = Performance2;
+globalThis.PerformanceEntry = PerformanceEntry2;
+globalThis.PerformanceMark = PerformanceMark3;
+globalThis.PerformanceMeasure = PerformanceMeasure2;
+globalThis.PerformanceObserver = PerformanceObserver2;
+globalThis.PerformanceObserverEntryList = PerformanceObserverEntryList2;
+globalThis.PerformanceResourceTiming = PerformanceResourceTiming2;
+var noop_default2 = Object.assign(() => {
+}, { __unenv__: true });
+var _console2 = globalThis.console;
+var _ignoreErrors2 = true;
+var _stderr2 = new Writable2();
+var _stdout2 = new Writable2();
+var log3 = _console2?.log ?? noop_default2;
+var info3 = _console2?.info ?? log3;
+var trace3 = _console2?.trace ?? info3;
+var debug3 = _console2?.debug ?? log3;
+var table3 = _console2?.table ?? log3;
+var error3 = _console2?.error ?? log3;
+var warn3 = _console2?.warn ?? error3;
+var createTask3 = _console2?.createTask ?? /* @__PURE__ */ notImplemented2("console.createTask");
+var clear3 = _console2?.clear ?? noop_default2;
+var count3 = _console2?.count ?? noop_default2;
+var countReset3 = _console2?.countReset ?? noop_default2;
+var dir3 = _console2?.dir ?? noop_default2;
+var dirxml3 = _console2?.dirxml ?? noop_default2;
+var group3 = _console2?.group ?? noop_default2;
+var groupEnd3 = _console2?.groupEnd ?? noop_default2;
+var groupCollapsed3 = _console2?.groupCollapsed ?? noop_default2;
+var profile3 = _console2?.profile ?? noop_default2;
+var profileEnd3 = _console2?.profileEnd ?? noop_default2;
+var time3 = _console2?.time ?? noop_default2;
+var timeEnd3 = _console2?.timeEnd ?? noop_default2;
+var timeLog3 = _console2?.timeLog ?? noop_default2;
+var timeStamp3 = _console2?.timeStamp ?? noop_default2;
+var Console2 = _console2?.Console ?? /* @__PURE__ */ notImplementedClass2("console.Console");
+var _times2 = /* @__PURE__ */ new Map();
+var _stdoutErrorHandler2 = noop_default2;
+var _stderrErrorHandler2 = noop_default2;
+var workerdConsole2 = globalThis["console"];
+var {
+  assert: assert3,
+  clear: clear22,
+  // @ts-expect-error undocumented public API
+  context: context2,
+  count: count22,
+  countReset: countReset22,
+  // @ts-expect-error undocumented public API
+  createTask: createTask22,
+  debug: debug22,
+  dir: dir22,
+  dirxml: dirxml22,
+  error: error22,
+  group: group22,
+  groupCollapsed: groupCollapsed22,
+  groupEnd: groupEnd22,
+  info: info22,
+  log: log22,
+  profile: profile22,
+  profileEnd: profileEnd22,
+  table: table22,
+  time: time22,
+  timeEnd: timeEnd22,
+  timeLog: timeLog22,
+  timeStamp: timeStamp22,
+  trace: trace22,
+  warn: warn22
+} = workerdConsole2;
+Object.assign(workerdConsole2, {
+  Console: Console2,
+  _ignoreErrors: _ignoreErrors2,
+  _stderr: _stderr2,
+  _stderrErrorHandler: _stderrErrorHandler2,
+  _stdout: _stdout2,
+  _stdoutErrorHandler: _stdoutErrorHandler2,
+  _times: _times2
+});
+var console_default2 = workerdConsole2;
+globalThis.console = console_default2;
+var hrtime4 = /* @__PURE__ */ Object.assign(/* @__PURE__ */ __name2(/* @__PURE__ */ __name(function hrtime22(startTime) {
+  const now = Date.now();
+  const seconds = Math.trunc(now / 1e3);
+  const nanos = now % 1e3 * 1e6;
+  if (startTime) {
+    let diffSeconds = seconds - startTime[0];
+    let diffNanos = nanos - startTime[0];
+    if (diffNanos < 0) {
+      diffSeconds = diffSeconds - 1;
+      diffNanos = 1e9 + diffNanos;
+    }
+    return [diffSeconds, diffNanos];
+  }
+  return [seconds, nanos];
+}, "hrtime2"), "hrtime"), { bigint: /* @__PURE__ */ __name2(/* @__PURE__ */ __name(function bigint2() {
+  return BigInt(Date.now() * 1e6);
+}, "bigint"), "bigint") });
+var ReadStream2 = /* @__PURE__ */ __name(class extends Socket3 {
+  fd;
+  constructor(fd) {
+    super();
+    this.fd = fd;
+  }
+  isRaw = false;
+  setRawMode(mode) {
+    this.isRaw = mode;
+    return this;
+  }
+  isTTY = false;
+}, "ReadStream");
+__name2(ReadStream2, "ReadStream");
+var WriteStream2 = /* @__PURE__ */ __name(class extends Socket22 {
+  fd;
+  constructor(fd) {
+    super();
+    this.fd = fd;
+  }
+  clearLine(dir32, callback) {
+    callback && callback();
+    return false;
+  }
+  clearScreenDown(callback) {
+    callback && callback();
+    return false;
+  }
+  cursorTo(x, y, callback) {
+    callback && typeof callback === "function" && callback();
+    return false;
+  }
+  moveCursor(dx, dy, callback) {
+    callback && callback();
+    return false;
+  }
+  getColorDepth(env22) {
+    return 1;
+  }
+  hasColors(count32, env22) {
+    return false;
+  }
+  getWindowSize() {
+    return [this.columns, this.rows];
+  }
+  columns = 80;
+  rows = 24;
+  isTTY = false;
+}, "WriteStream");
+__name2(WriteStream2, "WriteStream");
+var Process2 = /* @__PURE__ */ __name(class extends EventEmitter2 {
+  env;
+  hrtime;
+  nextTick;
+  constructor(impl) {
+    super();
+    this.env = impl.env;
+    this.hrtime = impl.hrtime;
+    this.nextTick = impl.nextTick;
+    for (const prop of [...Object.getOwnPropertyNames(Process2.prototype), ...Object.getOwnPropertyNames(EventEmitter2.prototype)]) {
+      const value = this[prop];
+      if (typeof value === "function") {
+        this[prop] = value.bind(this);
+      }
+    }
+  }
+  emitWarning(warning, type, code) {
+    console.warn(`${code ? `[${code}] ` : ""}${type ? `${type}: ` : ""}${warning}`);
+  }
+  emit(...args) {
+    return super.emit(...args);
+  }
+  listeners(eventName) {
+    return super.listeners(eventName);
+  }
+  #stdin;
+  #stdout;
+  #stderr;
+  get stdin() {
+    return this.#stdin ??= new ReadStream2(0);
+  }
+  get stdout() {
+    return this.#stdout ??= new WriteStream2(1);
+  }
+  get stderr() {
+    return this.#stderr ??= new WriteStream2(2);
+  }
+  #cwd = "/";
+  chdir(cwd22) {
+    this.#cwd = cwd22;
+  }
+  cwd() {
+    return this.#cwd;
+  }
+  arch = "";
+  platform = "";
+  argv = [];
+  argv0 = "";
+  execArgv = [];
+  execPath = "";
+  title = "";
+  pid = 200;
+  ppid = 100;
+  get version() {
+    return "";
+  }
+  get versions() {
+    return {};
+  }
+  get allowedNodeEnvironmentFlags() {
+    return /* @__PURE__ */ new Set();
+  }
+  get sourceMapsEnabled() {
+    return false;
+  }
+  get debugPort() {
+    return 0;
+  }
+  get throwDeprecation() {
+    return false;
+  }
+  get traceDeprecation() {
+    return false;
+  }
+  get features() {
+    return {};
+  }
+  get release() {
+    return {};
+  }
+  get connected() {
+    return false;
+  }
+  get config() {
+    return {};
+  }
+  get moduleLoadList() {
+    return [];
+  }
+  constrainedMemory() {
+    return 0;
+  }
+  availableMemory() {
+    return 0;
+  }
+  uptime() {
+    return 0;
+  }
+  resourceUsage() {
+    return {};
+  }
+  ref() {
+  }
+  unref() {
+  }
+  umask() {
+    throw createNotImplementedError2("process.umask");
+  }
+  getBuiltinModule() {
+    return void 0;
+  }
+  getActiveResourcesInfo() {
+    throw createNotImplementedError2("process.getActiveResourcesInfo");
+  }
+  exit() {
+    throw createNotImplementedError2("process.exit");
+  }
+  reallyExit() {
+    throw createNotImplementedError2("process.reallyExit");
+  }
+  kill() {
+    throw createNotImplementedError2("process.kill");
+  }
+  abort() {
+    throw createNotImplementedError2("process.abort");
+  }
+  dlopen() {
+    throw createNotImplementedError2("process.dlopen");
+  }
+  setSourceMapsEnabled() {
+    throw createNotImplementedError2("process.setSourceMapsEnabled");
+  }
+  loadEnvFile() {
+    throw createNotImplementedError2("process.loadEnvFile");
+  }
+  disconnect() {
+    throw createNotImplementedError2("process.disconnect");
+  }
+  cpuUsage() {
+    throw createNotImplementedError2("process.cpuUsage");
+  }
+  setUncaughtExceptionCaptureCallback() {
+    throw createNotImplementedError2("process.setUncaughtExceptionCaptureCallback");
+  }
+  hasUncaughtExceptionCaptureCallback() {
+    throw createNotImplementedError2("process.hasUncaughtExceptionCaptureCallback");
+  }
+  initgroups() {
+    throw createNotImplementedError2("process.initgroups");
+  }
+  openStdin() {
+    throw createNotImplementedError2("process.openStdin");
+  }
+  assert() {
+    throw createNotImplementedError2("process.assert");
+  }
+  binding() {
+    throw createNotImplementedError2("process.binding");
+  }
+  permission = { has: /* @__PURE__ */ notImplemented2("process.permission.has") };
+  report = {
+    directory: "",
+    filename: "",
+    signal: "SIGUSR2",
+    compact: false,
+    reportOnFatalError: false,
+    reportOnSignal: false,
+    reportOnUncaughtException: false,
+    getReport: /* @__PURE__ */ notImplemented2("process.report.getReport"),
+    writeReport: /* @__PURE__ */ notImplemented2("process.report.writeReport")
+  };
+  finalization = {
+    register: /* @__PURE__ */ notImplemented2("process.finalization.register"),
+    unregister: /* @__PURE__ */ notImplemented2("process.finalization.unregister"),
+    registerBeforeExit: /* @__PURE__ */ notImplemented2("process.finalization.registerBeforeExit")
+  };
+  memoryUsage = Object.assign(() => ({
+    arrayBuffers: 0,
+    rss: 0,
+    external: 0,
+    heapTotal: 0,
+    heapUsed: 0
+  }), { rss: () => 0 });
+  mainModule = void 0;
+  domain = void 0;
+  send = void 0;
+  exitCode = void 0;
+  channel = void 0;
+  getegid = void 0;
+  geteuid = void 0;
+  getgid = void 0;
+  getgroups = void 0;
+  getuid = void 0;
+  setegid = void 0;
+  seteuid = void 0;
+  setgid = void 0;
+  setgroups = void 0;
+  setuid = void 0;
+  _events = void 0;
+  _eventsCount = void 0;
+  _exiting = void 0;
+  _maxListeners = void 0;
+  _debugEnd = void 0;
+  _debugProcess = void 0;
+  _fatalException = void 0;
+  _getActiveHandles = void 0;
+  _getActiveRequests = void 0;
+  _kill = void 0;
+  _preload_modules = void 0;
+  _rawDebug = void 0;
+  _startProfilerIdleNotifier = void 0;
+  _stopProfilerIdleNotifier = void 0;
+  _tickCallback = void 0;
+  _disconnect = void 0;
+  _handleQueue = void 0;
+  _pendingMessage = void 0;
+  _channel = void 0;
+  _send = void 0;
+  _linkedBinding = void 0;
+}, "Process");
+__name2(Process2, "Process");
+var globalProcess2 = globalThis["process"];
+var getBuiltinModule2 = globalProcess2.getBuiltinModule;
+var { exit: exit2, platform: platform2, nextTick: nextTick2 } = getBuiltinModule2(
+  "node:process"
+);
+var unenvProcess2 = new Process2({
+  env: globalProcess2.env,
+  hrtime: hrtime4,
+  nextTick: nextTick2
+});
+var {
+  abort: abort2,
+  addListener: addListener2,
+  allowedNodeEnvironmentFlags: allowedNodeEnvironmentFlags2,
+  hasUncaughtExceptionCaptureCallback: hasUncaughtExceptionCaptureCallback2,
+  setUncaughtExceptionCaptureCallback: setUncaughtExceptionCaptureCallback2,
+  loadEnvFile: loadEnvFile2,
+  sourceMapsEnabled: sourceMapsEnabled2,
+  arch: arch2,
+  argv: argv2,
+  argv0: argv02,
+  chdir: chdir2,
+  config: config2,
+  connected: connected2,
+  constrainedMemory: constrainedMemory2,
+  availableMemory: availableMemory2,
+  cpuUsage: cpuUsage2,
+  cwd: cwd2,
+  debugPort: debugPort2,
+  dlopen: dlopen2,
+  disconnect: disconnect2,
+  emit: emit2,
+  emitWarning: emitWarning2,
+  env: env2,
+  eventNames: eventNames2,
+  execArgv: execArgv2,
+  execPath: execPath2,
+  finalization: finalization2,
+  features: features2,
+  getActiveResourcesInfo: getActiveResourcesInfo2,
+  getMaxListeners: getMaxListeners2,
+  hrtime: hrtime32,
+  kill: kill2,
+  listeners: listeners2,
+  listenerCount: listenerCount2,
+  memoryUsage: memoryUsage2,
+  on: on2,
+  off: off2,
+  once: once2,
+  pid: pid2,
+  ppid: ppid2,
+  prependListener: prependListener2,
+  prependOnceListener: prependOnceListener2,
+  rawListeners: rawListeners2,
+  release: release2,
+  removeAllListeners: removeAllListeners2,
+  removeListener: removeListener2,
+  report: report2,
+  resourceUsage: resourceUsage2,
+  setMaxListeners: setMaxListeners2,
+  setSourceMapsEnabled: setSourceMapsEnabled2,
+  stderr: stderr2,
+  stdin: stdin2,
+  stdout: stdout2,
+  title: title2,
+  throwDeprecation: throwDeprecation2,
+  traceDeprecation: traceDeprecation2,
+  umask: umask2,
+  uptime: uptime2,
+  version: version2,
+  versions: versions2,
+  domain: domain2,
+  initgroups: initgroups2,
+  moduleLoadList: moduleLoadList2,
+  reallyExit: reallyExit2,
+  openStdin: openStdin2,
+  assert: assert22,
+  binding: binding2,
+  send: send2,
+  exitCode: exitCode2,
+  channel: channel2,
+  getegid: getegid2,
+  geteuid: geteuid2,
+  getgid: getgid2,
+  getgroups: getgroups2,
+  getuid: getuid2,
+  setegid: setegid2,
+  seteuid: seteuid2,
+  setgid: setgid2,
+  setgroups: setgroups2,
+  setuid: setuid2,
+  permission: permission2,
+  mainModule: mainModule2,
+  _events: _events2,
+  _eventsCount: _eventsCount2,
+  _exiting: _exiting2,
+  _maxListeners: _maxListeners2,
+  _debugEnd: _debugEnd2,
+  _debugProcess: _debugProcess2,
+  _fatalException: _fatalException2,
+  _getActiveHandles: _getActiveHandles2,
+  _getActiveRequests: _getActiveRequests2,
+  _kill: _kill2,
+  _preload_modules: _preload_modules2,
+  _rawDebug: _rawDebug2,
+  _startProfilerIdleNotifier: _startProfilerIdleNotifier2,
+  _stopProfilerIdleNotifier: _stopProfilerIdleNotifier2,
+  _tickCallback: _tickCallback2,
+  _disconnect: _disconnect2,
+  _handleQueue: _handleQueue2,
+  _pendingMessage: _pendingMessage2,
+  _channel: _channel2,
+  _send: _send2,
+  _linkedBinding: _linkedBinding2
+} = unenvProcess2;
+var _process2 = {
+  abort: abort2,
+  addListener: addListener2,
+  allowedNodeEnvironmentFlags: allowedNodeEnvironmentFlags2,
+  hasUncaughtExceptionCaptureCallback: hasUncaughtExceptionCaptureCallback2,
+  setUncaughtExceptionCaptureCallback: setUncaughtExceptionCaptureCallback2,
+  loadEnvFile: loadEnvFile2,
+  sourceMapsEnabled: sourceMapsEnabled2,
+  arch: arch2,
+  argv: argv2,
+  argv0: argv02,
+  chdir: chdir2,
+  config: config2,
+  connected: connected2,
+  constrainedMemory: constrainedMemory2,
+  availableMemory: availableMemory2,
+  cpuUsage: cpuUsage2,
+  cwd: cwd2,
+  debugPort: debugPort2,
+  dlopen: dlopen2,
+  disconnect: disconnect2,
+  emit: emit2,
+  emitWarning: emitWarning2,
+  env: env2,
+  eventNames: eventNames2,
+  execArgv: execArgv2,
+  execPath: execPath2,
+  exit: exit2,
+  finalization: finalization2,
+  features: features2,
+  getBuiltinModule: getBuiltinModule2,
+  getActiveResourcesInfo: getActiveResourcesInfo2,
+  getMaxListeners: getMaxListeners2,
+  hrtime: hrtime32,
+  kill: kill2,
+  listeners: listeners2,
+  listenerCount: listenerCount2,
+  memoryUsage: memoryUsage2,
+  nextTick: nextTick2,
+  on: on2,
+  off: off2,
+  once: once2,
+  pid: pid2,
+  platform: platform2,
+  ppid: ppid2,
+  prependListener: prependListener2,
+  prependOnceListener: prependOnceListener2,
+  rawListeners: rawListeners2,
+  release: release2,
+  removeAllListeners: removeAllListeners2,
+  removeListener: removeListener2,
+  report: report2,
+  resourceUsage: resourceUsage2,
+  setMaxListeners: setMaxListeners2,
+  setSourceMapsEnabled: setSourceMapsEnabled2,
+  stderr: stderr2,
+  stdin: stdin2,
+  stdout: stdout2,
+  title: title2,
+  throwDeprecation: throwDeprecation2,
+  traceDeprecation: traceDeprecation2,
+  umask: umask2,
+  uptime: uptime2,
+  version: version2,
+  versions: versions2,
+  // @ts-expect-error old API
+  domain: domain2,
+  initgroups: initgroups2,
+  moduleLoadList: moduleLoadList2,
+  reallyExit: reallyExit2,
+  openStdin: openStdin2,
+  assert: assert22,
+  binding: binding2,
+  send: send2,
+  exitCode: exitCode2,
+  channel: channel2,
+  getegid: getegid2,
+  geteuid: geteuid2,
+  getgid: getgid2,
+  getgroups: getgroups2,
+  getuid: getuid2,
+  setegid: setegid2,
+  seteuid: seteuid2,
+  setgid: setgid2,
+  setgroups: setgroups2,
+  setuid: setuid2,
+  permission: permission2,
+  mainModule: mainModule2,
+  _events: _events2,
+  _eventsCount: _eventsCount2,
+  _exiting: _exiting2,
+  _maxListeners: _maxListeners2,
+  _debugEnd: _debugEnd2,
+  _debugProcess: _debugProcess2,
+  _fatalException: _fatalException2,
+  _getActiveHandles: _getActiveHandles2,
+  _getActiveRequests: _getActiveRequests2,
+  _kill: _kill2,
+  _preload_modules: _preload_modules2,
+  _rawDebug: _rawDebug2,
+  _startProfilerIdleNotifier: _startProfilerIdleNotifier2,
+  _stopProfilerIdleNotifier: _stopProfilerIdleNotifier2,
+  _tickCallback: _tickCallback2,
+  _disconnect: _disconnect2,
+  _handleQueue: _handleQueue2,
+  _pendingMessage: _pendingMessage2,
+  _channel: _channel2,
+  _send: _send2,
+  _linkedBinding: _linkedBinding2
+};
+var process_default2 = _process2;
+globalThis.process = process_default2;
+var GET_MATCH_RESULT = Symbol();
+var bufferToFormData = /* @__PURE__ */ __name2((arrayBuffer, contentType) => {
   return new Response(arrayBuffer, { headers: { "Content-Type": contentType.replace(/^[^;]+/, (mediaType) => mediaType.toLowerCase()) } }).formData();
 }, "bufferToFormData");
-
-// node_modules/hono/dist/utils/body.js
 var MAX_NESTED_OBJECTS = 1e4;
-var isRawRequest = /* @__PURE__ */ __name((request) => "headers" in request, "isRawRequest");
-var parseBody = /* @__PURE__ */ __name(async (request, options = /* @__PURE__ */ Object.create(null)) => {
+var isRawRequest = /* @__PURE__ */ __name2((request) => "headers" in request, "isRawRequest");
+var parseBody = /* @__PURE__ */ __name2(async (request, options = /* @__PURE__ */ Object.create(null)) => {
   const { all = false, dot = false } = options;
   const mediaType = (isRawRequest(request) ? request.headers : request.raw.headers).get("Content-Type")?.split(";")[0].trim().toLowerCase();
   if (mediaType === "multipart/form-data" || mediaType === "application/x-www-form-urlencoded")
@@ -920,6 +2137,7 @@ async function parseFormData(request, options) {
   return {};
 }
 __name(parseFormData, "parseFormData");
+__name2(parseFormData, "parseFormData");
 function convertFormDataToBodyData(formData, options) {
   const form = /* @__PURE__ */ Object.create(null);
   const nestingState = { count: 0 };
@@ -939,7 +2157,8 @@ function convertFormDataToBodyData(formData, options) {
   return form;
 }
 __name(convertFormDataToBodyData, "convertFormDataToBodyData");
-var handleParsingAllValues = /* @__PURE__ */ __name((form, key, value) => {
+__name2(convertFormDataToBodyData, "convertFormDataToBodyData");
+var handleParsingAllValues = /* @__PURE__ */ __name2((form, key, value) => {
   if (form[key] !== void 0) {
     if (Array.isArray(form[key]))
       form[key].push(value);
@@ -950,7 +2169,7 @@ var handleParsingAllValues = /* @__PURE__ */ __name((form, key, value) => {
   else
     form[key] = [value];
 }, "handleParsingAllValues");
-var handleParsingNestedValues = /* @__PURE__ */ __name((form, key, value, state) => {
+var handleParsingNestedValues = /* @__PURE__ */ __name2((form, key, value, state) => {
   if (/(?:^|\.)__proto__\./.test(key))
     return;
   let nestedForm = form;
@@ -970,23 +2189,21 @@ var handleParsingNestedValues = /* @__PURE__ */ __name((form, key, value, state)
     }
   });
 }, "handleParsingNestedValues");
-var throwNestingLimitExceeded = /* @__PURE__ */ __name(() => {
+var throwNestingLimitExceeded = /* @__PURE__ */ __name2(() => {
   throw new Error("Nesting limit exceeded");
 }, "throwNestingLimitExceeded");
-
-// node_modules/hono/dist/utils/url.js
-var splitPath = /* @__PURE__ */ __name((path) => {
+var splitPath = /* @__PURE__ */ __name2((path) => {
   const paths = path.split("/");
   if (paths[0] === "")
     paths.shift();
   return paths;
 }, "splitPath");
-var splitRoutingPath = /* @__PURE__ */ __name((routePath) => {
+var splitRoutingPath = /* @__PURE__ */ __name2((routePath) => {
   const { groups, path } = extractGroupsFromPath(routePath);
   const paths = splitPath(path);
   return replaceGroupMarks(paths, groups);
 }, "splitRoutingPath");
-var extractGroupsFromPath = /* @__PURE__ */ __name((path) => {
+var extractGroupsFromPath = /* @__PURE__ */ __name2((path) => {
   const groups = [];
   path = path.replace(/\{[^}]+\}/g, (match2, index) => {
     const mark = `@${index}`;
@@ -998,7 +2215,7 @@ var extractGroupsFromPath = /* @__PURE__ */ __name((path) => {
     path
   };
 }, "extractGroupsFromPath");
-var replaceGroupMarks = /* @__PURE__ */ __name((paths, groups) => {
+var replaceGroupMarks = /* @__PURE__ */ __name2((paths, groups) => {
   for (let i = groups.length - 1; i >= 0; i--) {
     const [mark] = groups[i];
     for (let j = paths.length - 1; j >= 0; j--)
@@ -1010,7 +2227,7 @@ var replaceGroupMarks = /* @__PURE__ */ __name((paths, groups) => {
   return paths;
 }, "replaceGroupMarks");
 var patternCache = {};
-var getPattern = /* @__PURE__ */ __name((label, next) => {
+var getPattern = /* @__PURE__ */ __name2((label, next) => {
   if (label === "*")
     return "*";
   const match2 = label.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);
@@ -1038,7 +2255,7 @@ var getPattern = /* @__PURE__ */ __name((label, next) => {
   }
   return null;
 }, "getPattern");
-var tryDecode = /* @__PURE__ */ __name((str, decoder) => {
+var tryDecode = /* @__PURE__ */ __name2((str, decoder) => {
   try {
     return decoder(str);
   } catch {
@@ -1051,8 +2268,8 @@ var tryDecode = /* @__PURE__ */ __name((str, decoder) => {
     });
   }
 }, "tryDecode");
-var tryDecodeURI = /* @__PURE__ */ __name((str) => tryDecode(str, decodeURI), "tryDecodeURI");
-var getPath = /* @__PURE__ */ __name((request) => {
+var tryDecodeURI = /* @__PURE__ */ __name2((str) => tryDecode(str, decodeURI), "tryDecodeURI");
+var getPath = /* @__PURE__ */ __name2((request) => {
   const url = request.url;
   const start = url.indexOf("/", url.indexOf(":") + 4);
   let i = start;
@@ -1069,16 +2286,16 @@ var getPath = /* @__PURE__ */ __name((request) => {
   }
   return url.slice(start, i);
 }, "getPath");
-var getPathNoStrict = /* @__PURE__ */ __name((request) => {
+var getPathNoStrict = /* @__PURE__ */ __name2((request) => {
   const result = getPath(request);
   return result.length > 1 && result.at(-1) === "/" ? result.slice(0, -1) : result;
 }, "getPathNoStrict");
-var mergePath = /* @__PURE__ */ __name((base, sub, ...rest) => {
+var mergePath = /* @__PURE__ */ __name2((base, sub, ...rest) => {
   if (rest.length)
     sub = mergePath(sub, ...rest);
   return `${base?.[0] === "/" ? "" : "/"}${base}${sub === "/" ? "" : `${base?.at(-1) === "/" ? "" : "/"}${sub?.[0] === "/" ? sub.slice(1) : sub}`}`;
 }, "mergePath");
-var checkOptionalParameter = /* @__PURE__ */ __name((path) => {
+var checkOptionalParameter = /* @__PURE__ */ __name2((path) => {
   if (path.charCodeAt(path.length - 1) !== 63 || !path.includes(":"))
     return null;
   const segments = path.split("/");
@@ -1102,13 +2319,13 @@ var checkOptionalParameter = /* @__PURE__ */ __name((path) => {
   });
   return results.filter((v, i, a) => a.indexOf(v) === i);
 }, "checkOptionalParameter");
-var tryDecodeURIComponent = /* @__PURE__ */ __name((str) => str.indexOf("%") !== -1 ? tryDecode(str, decodeURIComponent_) : str, "tryDecodeURIComponent");
-var _decodeURI = /* @__PURE__ */ __name((value) => {
+var tryDecodeURIComponent = /* @__PURE__ */ __name2((str) => str.indexOf("%") !== -1 ? tryDecode(str, decodeURIComponent_) : str, "tryDecodeURIComponent");
+var _decodeURI = /* @__PURE__ */ __name2((value) => {
   if (value.indexOf("+") !== -1)
     value = value.replace(/\+/g, " ");
   return tryDecodeURIComponent(value);
 }, "_decodeURI");
-var _getQueryParam = /* @__PURE__ */ __name((url, key, multiple) => {
+var _getQueryParam = /* @__PURE__ */ __name2((url, key, multiple) => {
   const hashIndex = url.indexOf("#", 8);
   if (hashIndex !== -1)
     url = url.slice(0, hashIndex);
@@ -1165,13 +2382,11 @@ var _getQueryParam = /* @__PURE__ */ __name((url, key, multiple) => {
   return key ? results[key] : results;
 }, "_getQueryParam");
 var getQueryParam = _getQueryParam;
-var getQueryParams = /* @__PURE__ */ __name((url, key) => {
+var getQueryParams = /* @__PURE__ */ __name2((url, key) => {
   return _getQueryParam(url, key, true);
 }, "getQueryParams");
 var decodeURIComponent_ = decodeURIComponent;
-
-// node_modules/hono/dist/request.js
-var HonoRequest = /* @__PURE__ */ __name(class {
+var HonoRequest = /* @__PURE__ */ __name2(class {
   /**
   * `.raw` can get the raw Request object.
   *
@@ -1444,20 +2659,18 @@ var HonoRequest = /* @__PURE__ */ __name(class {
     return this.#matchResult[0].map(([[, route]]) => route)[this.routeIndex].path;
   }
 }, "HonoRequest");
-
-// node_modules/hono/dist/utils/html.js
 var HtmlEscapedCallbackPhase = {
   Stringify: 1,
   BeforeStream: 2,
   Stream: 3
 };
-var raw = /* @__PURE__ */ __name((value, callbacks) => {
+var raw = /* @__PURE__ */ __name2((value, callbacks) => {
   const escapedString = new String(value);
   escapedString.isEscaped = true;
   escapedString.callbacks = callbacks;
   return escapedString;
 }, "raw");
-var resolveCallback = /* @__PURE__ */ __name(async (str, phase, preserveCallbacks, context2, buffer) => {
+var resolveCallback = /* @__PURE__ */ __name2(async (str, phase, preserveCallbacks, context22, buffer) => {
   if (typeof str === "object" && !(str instanceof String)) {
     if (!(str instanceof Promise))
       str = str.toString();
@@ -1474,24 +2687,22 @@ var resolveCallback = /* @__PURE__ */ __name(async (str, phase, preserveCallback
   const resStr = Promise.all(callbacks.map((c) => c({
     phase,
     buffer,
-    context: context2
-  }))).then((res) => Promise.all(res.filter(Boolean).map((str2) => resolveCallback(str2, phase, false, context2, buffer))).then(() => buffer[0]));
+    context: context22
+  }))).then((res) => Promise.all(res.filter(Boolean).map((str2) => resolveCallback(str2, phase, false, context22, buffer))).then(() => buffer[0]));
   if (preserveCallbacks)
     return raw(await resStr, callbacks);
   else
     return resStr;
 }, "resolveCallback");
-
-// node_modules/hono/dist/context.js
 var TEXT_PLAIN = "text/plain; charset=UTF-8";
-var setDefaultContentType = /* @__PURE__ */ __name((contentType, headers) => {
+var setDefaultContentType = /* @__PURE__ */ __name2((contentType, headers) => {
   return {
     "Content-Type": contentType,
     ...headers
   };
 }, "setDefaultContentType");
-var createResponseInstance = /* @__PURE__ */ __name((body, init) => new Response(body, init), "createResponseInstance");
-var Context = /* @__PURE__ */ __name(class {
+var createResponseInstance = /* @__PURE__ */ __name2((body, init) => new Response(body, init), "createResponseInstance");
+var Context = /* @__PURE__ */ __name2(class {
   #rawRequest;
   #req;
   /**
@@ -1759,9 +2970,9 @@ var Context = /* @__PURE__ */ __name(class {
     }
     if (headers) {
       if (!responseHeaders) {
-        let count3 = 0;
+        let count32 = 0;
         for (const k in headers)
-          if (++count3 > 1 || typeof headers[k] !== "string") {
+          if (++count32 > 1 || typeof headers[k] !== "string") {
             responseHeaders = new Headers();
             break;
           }
@@ -1838,7 +3049,7 @@ var Context = /* @__PURE__ */ __name(class {
     return this.#newResponse(JSON.stringify(object), arg, setDefaultContentType("application/json", headers));
   };
   html = (html, arg, headers) => {
-    const res = /* @__PURE__ */ __name((html2) => this.#newResponse(html2, arg, setDefaultContentType("text/html; charset=UTF-8", headers)), "res");
+    const res = /* @__PURE__ */ __name2((html2) => this.#newResponse(html2, arg, setDefaultContentType("text/html; charset=UTF-8", headers)), "res");
     return typeof html === "object" ? resolveCallback(html, HtmlEscapedCallbackPhase.Stringify, false, {}).then(res) : res(html);
   };
   /**
@@ -1878,10 +3089,8 @@ var Context = /* @__PURE__ */ __name(class {
     return this.#notFoundHandler(this);
   };
 }, "Context");
-
-// node_modules/hono/dist/compose.js
-var compose = /* @__PURE__ */ __name((middleware, onError, onNotFound) => {
-  return (context2, next) => {
+var compose = /* @__PURE__ */ __name2((middleware, onError, onNotFound) => {
+  return (context22, next) => {
     let index = -1;
     return dispatch(0);
     async function dispatch(i) {
@@ -1893,31 +3102,30 @@ var compose = /* @__PURE__ */ __name((middleware, onError, onNotFound) => {
       let handler;
       if (middleware[i]) {
         handler = middleware[i][0][0];
-        context2.req.routeIndex = i;
+        context22.req.routeIndex = i;
       } else
         handler = i === middleware.length && next || void 0;
       if (handler)
         try {
-          res = await handler(context2, () => dispatch(i + 1));
+          res = await handler(context22, () => dispatch(i + 1));
         } catch (err) {
           if (err instanceof Error && onError) {
-            context2.error = err;
-            res = await onError(err, context2);
+            context22.error = err;
+            res = await onError(err, context22);
             isError = true;
           } else
             throw err;
         }
-      else if (context2.finalized === false && onNotFound)
-        res = await onNotFound(context2);
-      if (res && (context2.finalized === false || isError))
-        context2.res = res;
-      return context2;
+      else if (context22.finalized === false && onNotFound)
+        res = await onNotFound(context22);
+      if (res && (context22.finalized === false || isError))
+        context22.res = res;
+      return context22;
     }
     __name(dispatch, "dispatch");
+    __name2(dispatch, "dispatch");
   };
 }, "compose");
-
-// node_modules/hono/dist/router.js
 var METHODS = [
   "get",
   "post",
@@ -1928,17 +3136,13 @@ var METHODS = [
   "query"
 ];
 var MESSAGE_MATCHER_IS_ALREADY_BUILT = "Can not add a route since the matcher is already built.";
-var UnsupportedPathError = /* @__PURE__ */ __name(class extends Error {
+var UnsupportedPathError = /* @__PURE__ */ __name2(class extends Error {
 }, "UnsupportedPathError");
-
-// node_modules/hono/dist/utils/constants.js
 var COMPOSED_HANDLER = "__COMPOSED_HANDLER";
-
-// node_modules/hono/dist/hono-base.js
-var notFoundHandler = /* @__PURE__ */ __name((c) => {
+var notFoundHandler = /* @__PURE__ */ __name2((c) => {
   return c.text("404 Not Found", 404);
 }, "notFoundHandler");
-var errorHandler = /* @__PURE__ */ __name((err, c) => {
+var errorHandler = /* @__PURE__ */ __name2((err, c) => {
   if ("getResponse" in err) {
     const res = err.getResponse();
     return c.newResponse(res.body, res);
@@ -1946,7 +3150,7 @@ var errorHandler = /* @__PURE__ */ __name((err, c) => {
   console.error(err);
   return c.text("Internal Server Error", 500);
 }, "errorHandler");
-var Hono = /* @__PURE__ */ __name(class Hono2 {
+var Hono = /* @__PURE__ */ __name2(/* @__PURE__ */ __name(class Hono2 {
   get;
   post;
   put;
@@ -2040,7 +3244,7 @@ var Hono = /* @__PURE__ */ __name(class Hono2 {
       if (app.errorHandler === errorHandler)
         handler = r.handler;
       else {
-        handler = /* @__PURE__ */ __name(async (c, next) => (await compose([], app.errorHandler)(c, () => r.handler(c, next))).res, "handler");
+        handler = /* @__PURE__ */ __name2(async (c, next) => (await compose([], app.errorHandler)(c, () => r.handler(c, next))).res, "handler");
         handler[COMPOSED_HANDLER] = r.handler;
       }
       subApp.#addRoute(r.method, r.path, handler, r.basePath);
@@ -2147,7 +3351,7 @@ var Hono = /* @__PURE__ */ __name(class Hono2 {
       else {
         optionHandler = options.optionHandler;
         if (options.replaceRequest === false)
-          replaceRequest = /* @__PURE__ */ __name((request) => request, "replaceRequest");
+          replaceRequest = /* @__PURE__ */ __name2((request) => request, "replaceRequest");
         else
           replaceRequest = options.replaceRequest;
       }
@@ -2172,7 +3376,7 @@ var Hono = /* @__PURE__ */ __name(class Hono2 {
         return new Request(url, request);
       };
     })();
-    const handler = /* @__PURE__ */ __name(async (c, next) => {
+    const handler = /* @__PURE__ */ __name2(async (c, next) => {
       const res = await applicationHandler(replaceRequest(c.req.raw), ...getOptions(c));
       if (res)
         return res;
@@ -2197,15 +3401,15 @@ var Hono = /* @__PURE__ */ __name(class Hono2 {
       return this.errorHandler(err, c);
     throw err;
   }
-  #dispatch(request, executionCtx, env2, method) {
+  #dispatch(request, executionCtx, env22, method) {
     if (method === "HEAD")
-      return (async () => new Response(null, await this.#dispatch(request, executionCtx, env2, "GET")))();
-    const path = this.getPath(request, { env: env2 });
+      return (async () => new Response(null, await this.#dispatch(request, executionCtx, env22, "GET")))();
+    const path = this.getPath(request, { env: env22 });
     const matchResult = this.router.match(method, path);
     const c = new Context(request, {
       path,
       matchResult,
-      env: env2,
+      env: env22,
       executionCtx,
       notFoundHandler: this.#notFoundHandler
     });
@@ -2223,10 +3427,10 @@ var Hono = /* @__PURE__ */ __name(class Hono2 {
     const composed = compose(matchResult[0], this.errorHandler, this.#notFoundHandler);
     return (async () => {
       try {
-        const context2 = await composed(c);
-        if (!context2.finalized)
+        const context22 = await composed(c);
+        if (!context22.finalized)
           throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");
-        return context2.res;
+        return context22.res;
       } catch (err) {
         return this.#handleError(err, c);
       }
@@ -2286,16 +3490,12 @@ var Hono = /* @__PURE__ */ __name(class Hono2 {
       event.respondWith(this.#dispatch(event.request, event, void 0, event.request.method));
     });
   };
-}, "Hono");
-
-// node_modules/hono/dist/router/utils.js
-var createNullObject = /* @__PURE__ */ __name(() => /* @__PURE__ */ Object.create(null), "createNullObject");
-
-// node_modules/hono/dist/router/reg-exp-router/matcher.js
+}, "Hono2"), "Hono");
+var createNullObject = /* @__PURE__ */ __name2(() => /* @__PURE__ */ Object.create(null), "createNullObject");
 var emptyParam = [];
 function match(method, path) {
   const matchers = this.buildAllMatchers();
-  const match2 = /* @__PURE__ */ __name((method2, path2) => {
+  const match2 = /* @__PURE__ */ __name2((method2, path2) => {
     const matcher = matchers[method2] || matchers["ALL"];
     const staticMatch = matcher[2][path2];
     if (staticMatch)
@@ -2310,8 +3510,7 @@ function match(method, path) {
   return match2(method, path);
 }
 __name(match, "match");
-
-// node_modules/hono/dist/router/reg-exp-router/node.js
+__name2(match, "match");
 var LABEL_REG_EXP_STR = "[^/]+";
 var TAIL_WILDCARD_REG_EXP_STR = "(?:|/.*)";
 var PATH_ERROR = Symbol();
@@ -2332,11 +3531,12 @@ function compareKey(a, b) {
   return a.length === b.length ? a < b ? -1 : 1 : b.length - a.length;
 }
 __name(compareKey, "compareKey");
-var Node = /* @__PURE__ */ __name(class Node2 {
+__name2(compareKey, "compareKey");
+var Node = /* @__PURE__ */ __name2(/* @__PURE__ */ __name(class Node2 {
   #index;
   #varIndex;
   #children = createNullObject();
-  insert(tokens, index, paramMap, context2, isStatic) {
+  insert(tokens, index, paramMap, context22, isStatic) {
     let node = this;
     for (let i = 0, len = tokens.length; i < len; i++) {
       const token = tokens[i];
@@ -2376,7 +3576,7 @@ var Node = /* @__PURE__ */ __name(class Node2 {
           nextNode = node.#children[regexpStr] = new Node2();
         }
         if (name !== "") {
-          nextNode.#varIndex ??= context2.varIndex++;
+          nextNode.#varIndex ??= context22.varIndex++;
           paramMap.push([name, nextNode.#varIndex]);
         }
       } else {
@@ -2408,10 +3608,8 @@ var Node = /* @__PURE__ */ __name(class Node2 {
       return strList[0];
     return "(?:" + strList.join("|") + ")";
   }
-}, "Node");
-
-// node_modules/hono/dist/router/reg-exp-router/trie.js
-var Trie = /* @__PURE__ */ __name(class {
+}, "Node2"), "Node");
+var Trie = /* @__PURE__ */ __name2(class {
   #context = { varIndex: 0 };
   #root = new Node();
   #index = 0;
@@ -2477,20 +3675,20 @@ var Trie = /* @__PURE__ */ __name(class {
     ];
   }
 }, "Trie");
-
-// node_modules/hono/dist/router/reg-exp-router/router.js
 var wildcardRegExpCache = createNullObject();
 function buildWildcardRegExp(path) {
   return wildcardRegExpCache[path] ??= new RegExp(`^${path.replace(/\/:[^/{}]+(?:\{\[\^\/]\+})?(?=[/{]|$)|\/?\*$|([.\\+*[^\]$()?{}|])/g, (match2, metaChar) => metaChar ? `\\${metaChar}` : match2 === "/*" ? TAIL_WILDCARD_REG_EXP_STR : match2 === "*" ? ".*" : `/:${LABEL_REG_EXP_STR}`)}$`);
 }
 __name(buildWildcardRegExp, "buildWildcardRegExp");
+__name2(buildWildcardRegExp, "buildWildcardRegExp");
 function findMiddleware(middleware, path) {
   for (const k of Object.keys(middleware).sort((a, b) => b.length - a.length))
     if (buildWildcardRegExp(k).test(path))
       return [...middleware[k]];
 }
 __name(findMiddleware, "findMiddleware");
-var RegExpRouter = /* @__PURE__ */ __name(class {
+__name2(findMiddleware, "findMiddleware");
+var RegExpRouter = /* @__PURE__ */ __name2(class {
   name = "RegExpRouter";
   #middleware;
   #routes;
@@ -2584,9 +3782,7 @@ var RegExpRouter = /* @__PURE__ */ __name(class {
     ];
   }
 }, "RegExpRouter");
-
-// node_modules/hono/dist/router/smart-router/router.js
-var SmartRouter = /* @__PURE__ */ __name(class {
+var SmartRouter = /* @__PURE__ */ __name2(class {
   name = "SmartRouter";
   #routers = [];
   #routes = [];
@@ -2637,11 +3833,9 @@ var SmartRouter = /* @__PURE__ */ __name(class {
     return this.#routers[0];
   }
 }, "SmartRouter");
-
-// node_modules/hono/dist/router/trie-router/node.js
 var emptyParams = createNullObject();
 var order = 0;
-var Node3 = /* @__PURE__ */ __name(class Node4 {
+var Node3 = /* @__PURE__ */ __name2(/* @__PURE__ */ __name(class Node4 {
   #methods = [];
   #children = createNullObject();
   #patterns = [];
@@ -2773,10 +3967,8 @@ var Node3 = /* @__PURE__ */ __name(class Node4 {
       });
     return [handlerSets.map(({ handler, params }) => [handler, params])];
   }
-}, "Node");
-
-// node_modules/hono/dist/router/trie-router/router.js
-var TrieRouter = /* @__PURE__ */ __name(class {
+}, "Node4"), "Node");
+var TrieRouter = /* @__PURE__ */ __name2(class {
   name = "TrieRouter";
   #node = new Node3();
   add(method, path, handler) {
@@ -2787,9 +3979,7 @@ var TrieRouter = /* @__PURE__ */ __name(class {
     return this.#node.search(method, path);
   }
 }, "TrieRouter");
-
-// node_modules/hono/dist/hono.js
-var Hono3 = /* @__PURE__ */ __name(class extends Hono {
+var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
   /**
   * Creates an instance of the Hono class.
   *
@@ -2800,11 +3990,8 @@ var Hono3 = /* @__PURE__ */ __name(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-
-var APP_VERSION = "1.00.2";
+var APP_VERSION = "1.00.5";
 var APP_MILESTONE = "";
-
-// node_modules/zod/v3/external.js
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -2915,8 +4102,6 @@ __export(external_exports, {
   util: () => util,
   void: () => voidType
 });
-
-// node_modules/zod/v3/helpers/util.js
 var util;
 (function(util2) {
   util2.assertEqual = (_) => {
@@ -2924,11 +4109,13 @@ var util;
   function assertIs(_arg) {
   }
   __name(assertIs, "assertIs");
+  __name2(assertIs, "assertIs");
   util2.assertIs = assertIs;
   function assertNever(_x) {
     throw new Error();
   }
   __name(assertNever, "assertNever");
+  __name2(assertNever, "assertNever");
   util2.assertNever = assertNever;
   util2.arrayToEnum = (items) => {
     const obj = {};
@@ -2971,6 +4158,7 @@ var util;
     return array.map((val) => typeof val === "string" ? `'${val}'` : val).join(separator);
   }
   __name(joinValues, "joinValues");
+  __name2(joinValues, "joinValues");
   util2.joinValues = joinValues;
   util2.jsonStringifyReplacer = (_, value) => {
     if (typeof value === "bigint") {
@@ -3011,7 +4199,7 @@ var ZodParsedType = util.arrayToEnum([
   "map",
   "set"
 ]);
-var getParsedType = /* @__PURE__ */ __name((data) => {
+var getParsedType = /* @__PURE__ */ __name2((data) => {
   const t = typeof data;
   switch (t) {
     case "undefined":
@@ -3052,8 +4240,6 @@ var getParsedType = /* @__PURE__ */ __name((data) => {
       return ZodParsedType.unknown;
   }
 }, "getParsedType");
-
-// node_modules/zod/v3/ZodError.js
 var ZodIssueCode = util.arrayToEnum([
   "invalid_type",
   "invalid_literal",
@@ -3072,11 +4258,11 @@ var ZodIssueCode = util.arrayToEnum([
   "not_multiple_of",
   "not_finite"
 ]);
-var quotelessJson = /* @__PURE__ */ __name((obj) => {
-  const json = JSON.stringify(obj, null, 2);
-  return json.replace(/"([^"]+)":/g, "$1:");
+var quotelessJson = /* @__PURE__ */ __name2((obj) => {
+  const json2 = JSON.stringify(obj, null, 2);
+  return json2.replace(/"([^"]+)":/g, "$1:");
 }, "quotelessJson");
-var ZodError = class extends Error {
+var ZodError = /* @__PURE__ */ __name(class extends Error {
   get errors() {
     return this.issues;
   }
@@ -3103,8 +4289,8 @@ var ZodError = class extends Error {
       return issue.message;
     };
     const fieldErrors = { _errors: [] };
-    const processError = /* @__PURE__ */ __name((error3) => {
-      for (const issue of error3.issues) {
+    const processError = /* @__PURE__ */ __name2((error32) => {
+      for (const issue of error32.issues) {
         if (issue.code === "invalid_union") {
           issue.unionErrors.map(processError);
         } else if (issue.code === "invalid_return_type") {
@@ -3165,15 +4351,13 @@ var ZodError = class extends Error {
   get formErrors() {
     return this.flatten();
   }
-};
-__name(ZodError, "ZodError");
+}, "ZodError");
+__name2(ZodError, "ZodError");
 ZodError.create = (issues) => {
-  const error3 = new ZodError(issues);
-  return error3;
+  const error32 = new ZodError(issues);
+  return error32;
 };
-
-// node_modules/zod/v3/locales/en.js
-var errorMap = /* @__PURE__ */ __name((issue, _ctx) => {
+var errorMap = /* @__PURE__ */ __name2((issue, _ctx) => {
   let message;
   switch (issue.code) {
     case ZodIssueCode.invalid_type:
@@ -3274,20 +4458,18 @@ var errorMap = /* @__PURE__ */ __name((issue, _ctx) => {
   return { message };
 }, "errorMap");
 var en_default = errorMap;
-
-// node_modules/zod/v3/errors.js
 var overrideErrorMap = en_default;
 function setErrorMap(map) {
   overrideErrorMap = map;
 }
 __name(setErrorMap, "setErrorMap");
+__name2(setErrorMap, "setErrorMap");
 function getErrorMap() {
   return overrideErrorMap;
 }
 __name(getErrorMap, "getErrorMap");
-
-// node_modules/zod/v3/helpers/parseUtil.js
-var makeIssue = /* @__PURE__ */ __name((params) => {
+__name2(getErrorMap, "getErrorMap");
+var makeIssue = /* @__PURE__ */ __name2((params) => {
   const { data, path, errorMaps, issueData } = params;
   const fullPath = [...path, ...issueData.path || []];
   const fullIssue = {
@@ -3333,7 +4515,8 @@ function addIssueToContext(ctx, issueData) {
   ctx.common.issues.push(issue);
 }
 __name(addIssueToContext, "addIssueToContext");
-var ParseStatus = class {
+__name2(addIssueToContext, "addIssueToContext");
+var ParseStatus = /* @__PURE__ */ __name(class {
   constructor() {
     this.value = "valid";
   }
@@ -3386,27 +4569,23 @@ var ParseStatus = class {
     }
     return { status: status.value, value: finalObject };
   }
-};
-__name(ParseStatus, "ParseStatus");
+}, "ParseStatus");
+__name2(ParseStatus, "ParseStatus");
 var INVALID = Object.freeze({
   status: "aborted"
 });
-var DIRTY = /* @__PURE__ */ __name((value) => ({ status: "dirty", value }), "DIRTY");
-var OK = /* @__PURE__ */ __name((value) => ({ status: "valid", value }), "OK");
-var isAborted = /* @__PURE__ */ __name((x) => x.status === "aborted", "isAborted");
-var isDirty = /* @__PURE__ */ __name((x) => x.status === "dirty", "isDirty");
-var isValid = /* @__PURE__ */ __name((x) => x.status === "valid", "isValid");
-var isAsync = /* @__PURE__ */ __name((x) => typeof Promise !== "undefined" && x instanceof Promise, "isAsync");
-
-// node_modules/zod/v3/helpers/errorUtil.js
+var DIRTY = /* @__PURE__ */ __name2((value) => ({ status: "dirty", value }), "DIRTY");
+var OK = /* @__PURE__ */ __name2((value) => ({ status: "valid", value }), "OK");
+var isAborted = /* @__PURE__ */ __name2((x) => x.status === "aborted", "isAborted");
+var isDirty = /* @__PURE__ */ __name2((x) => x.status === "dirty", "isDirty");
+var isValid = /* @__PURE__ */ __name2((x) => x.status === "valid", "isValid");
+var isAsync = /* @__PURE__ */ __name2((x) => typeof Promise !== "undefined" && x instanceof Promise, "isAsync");
 var errorUtil;
 (function(errorUtil2) {
   errorUtil2.errToObj = (message) => typeof message === "string" ? { message } : message || {};
   errorUtil2.toString = (message) => typeof message === "string" ? message : message?.message;
 })(errorUtil || (errorUtil = {}));
-
-// node_modules/zod/v3/types.js
-var ParseInputLazyPath = class {
+var ParseInputLazyPath = /* @__PURE__ */ __name(class {
   constructor(parent, value, path, key) {
     this._cachedPath = [];
     this.parent = parent;
@@ -3424,9 +4603,9 @@ var ParseInputLazyPath = class {
     }
     return this._cachedPath;
   }
-};
-__name(ParseInputLazyPath, "ParseInputLazyPath");
-var handleResult = /* @__PURE__ */ __name((ctx, result) => {
+}, "ParseInputLazyPath");
+__name2(ParseInputLazyPath, "ParseInputLazyPath");
+var handleResult = /* @__PURE__ */ __name2((ctx, result) => {
   if (isValid(result)) {
     return { success: true, data: result.value };
   } else {
@@ -3438,8 +4617,8 @@ var handleResult = /* @__PURE__ */ __name((ctx, result) => {
       get error() {
         if (this._error)
           return this._error;
-        const error3 = new ZodError(ctx.common.issues);
-        this._error = error3;
+        const error32 = new ZodError(ctx.common.issues);
+        this._error = error32;
         return this._error;
       }
     };
@@ -3454,7 +4633,7 @@ function processCreateParams(params) {
   }
   if (errorMap2)
     return { errorMap: errorMap2, description };
-  const customMap = /* @__PURE__ */ __name((iss, ctx) => {
+  const customMap = /* @__PURE__ */ __name2((iss, ctx) => {
     const { message } = params;
     if (iss.code === "invalid_enum_value") {
       return { message: message ?? ctx.defaultError };
@@ -3469,7 +4648,8 @@ function processCreateParams(params) {
   return { errorMap: customMap, description };
 }
 __name(processCreateParams, "processCreateParams");
-var ZodType = class {
+__name2(processCreateParams, "processCreateParams");
+var ZodType = /* @__PURE__ */ __name(class {
   get description() {
     return this._def.description;
   }
@@ -3592,7 +4772,7 @@ var ZodType = class {
     return handleResult(ctx, result);
   }
   refine(check, message) {
-    const getIssueProperties = /* @__PURE__ */ __name((val) => {
+    const getIssueProperties = /* @__PURE__ */ __name2((val) => {
       if (typeof message === "string" || typeof message === "undefined") {
         return { message };
       } else if (typeof message === "function") {
@@ -3603,7 +4783,7 @@ var ZodType = class {
     }, "getIssueProperties");
     return this._refinement((val, ctx) => {
       const result = check(val);
-      const setError = /* @__PURE__ */ __name(() => ctx.addIssue({
+      const setError = /* @__PURE__ */ __name2(() => ctx.addIssue({
         code: ZodIssueCode.custom,
         ...getIssueProperties(val)
       }), "setError");
@@ -3751,8 +4931,8 @@ var ZodType = class {
   isNullable() {
     return this.safeParse(null).success;
   }
-};
-__name(ZodType, "ZodType");
+}, "ZodType");
+__name2(ZodType, "ZodType");
 var cuidRegex = /^c[^\s-]{8,}$/i;
 var cuid2Regex = /^[0-9a-z]+$/;
 var ulidRegex = /^[0-9A-HJKMNP-TV-Z]{26}$/i;
@@ -3782,10 +4962,12 @@ function timeRegexSource(args) {
   return `([01]\\d|2[0-3]):[0-5]\\d(:${secondsRegexSource})${secondsQuantifier}`;
 }
 __name(timeRegexSource, "timeRegexSource");
+__name2(timeRegexSource, "timeRegexSource");
 function timeRegex(args) {
   return new RegExp(`^${timeRegexSource(args)}$`);
 }
 __name(timeRegex, "timeRegex");
+__name2(timeRegex, "timeRegex");
 function datetimeRegex(args) {
   let regex = `${dateRegexSource}T${timeRegexSource(args)}`;
   const opts = [];
@@ -3796,16 +4978,18 @@ function datetimeRegex(args) {
   return new RegExp(`^${regex}$`);
 }
 __name(datetimeRegex, "datetimeRegex");
-function isValidIP(ip, version2) {
-  if ((version2 === "v4" || !version2) && ipv4Regex.test(ip)) {
+__name2(datetimeRegex, "datetimeRegex");
+function isValidIP(ip, version22) {
+  if ((version22 === "v4" || !version22) && ipv4Regex.test(ip)) {
     return true;
   }
-  if ((version2 === "v6" || !version2) && ipv6Regex.test(ip)) {
+  if ((version22 === "v6" || !version22) && ipv6Regex.test(ip)) {
     return true;
   }
   return false;
 }
 __name(isValidIP, "isValidIP");
+__name2(isValidIP, "isValidIP");
 function isValidJWT(jwt, alg) {
   if (!jwtRegex.test(jwt))
     return false;
@@ -3829,17 +5013,19 @@ function isValidJWT(jwt, alg) {
   }
 }
 __name(isValidJWT, "isValidJWT");
-function isValidCidr(ip, version2) {
-  if ((version2 === "v4" || !version2) && ipv4CidrRegex.test(ip)) {
+__name2(isValidJWT, "isValidJWT");
+function isValidCidr(ip, version22) {
+  if ((version22 === "v4" || !version22) && ipv4CidrRegex.test(ip)) {
     return true;
   }
-  if ((version2 === "v6" || !version2) && ipv6CidrRegex.test(ip)) {
+  if ((version22 === "v6" || !version22) && ipv6CidrRegex.test(ip)) {
     return true;
   }
   return false;
 }
 __name(isValidCidr, "isValidCidr");
-var ZodString = class extends ZodType {
+__name2(isValidCidr, "isValidCidr");
+var ZodString = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     if (this._def.coerce) {
       input.data = String(input.data);
@@ -4376,8 +5562,8 @@ var ZodString = class extends ZodType {
     }
     return max;
   }
-};
-__name(ZodString, "ZodString");
+}, "ZodString");
+__name2(ZodString, "ZodString");
 ZodString.create = (params) => {
   return new ZodString({
     checks: [],
@@ -4395,7 +5581,8 @@ function floatSafeRemainder(val, step) {
   return valInt % stepInt / 10 ** decCount;
 }
 __name(floatSafeRemainder, "floatSafeRemainder");
-var ZodNumber = class extends ZodType {
+__name2(floatSafeRemainder, "floatSafeRemainder");
+var ZodNumber = /* @__PURE__ */ __name(class extends ZodType {
   constructor() {
     super(...arguments);
     this.min = this.gte;
@@ -4618,8 +5805,8 @@ var ZodNumber = class extends ZodType {
     }
     return Number.isFinite(min) && Number.isFinite(max);
   }
-};
-__name(ZodNumber, "ZodNumber");
+}, "ZodNumber");
+__name2(ZodNumber, "ZodNumber");
 ZodNumber.create = (params) => {
   return new ZodNumber({
     checks: [],
@@ -4628,7 +5815,7 @@ ZodNumber.create = (params) => {
     ...processCreateParams(params)
   });
 };
-var ZodBigInt = class extends ZodType {
+var ZodBigInt = /* @__PURE__ */ __name(class extends ZodType {
   constructor() {
     super(...arguments);
     this.min = this.gte;
@@ -4791,8 +5978,8 @@ var ZodBigInt = class extends ZodType {
     }
     return max;
   }
-};
-__name(ZodBigInt, "ZodBigInt");
+}, "ZodBigInt");
+__name2(ZodBigInt, "ZodBigInt");
 ZodBigInt.create = (params) => {
   return new ZodBigInt({
     checks: [],
@@ -4801,7 +5988,7 @@ ZodBigInt.create = (params) => {
     ...processCreateParams(params)
   });
 };
-var ZodBoolean = class extends ZodType {
+var ZodBoolean = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     if (this._def.coerce) {
       input.data = Boolean(input.data);
@@ -4818,8 +6005,8 @@ var ZodBoolean = class extends ZodType {
     }
     return OK(input.data);
   }
-};
-__name(ZodBoolean, "ZodBoolean");
+}, "ZodBoolean");
+__name2(ZodBoolean, "ZodBoolean");
 ZodBoolean.create = (params) => {
   return new ZodBoolean({
     typeName: ZodFirstPartyTypeKind.ZodBoolean,
@@ -4827,7 +6014,7 @@ ZodBoolean.create = (params) => {
     ...processCreateParams(params)
   });
 };
-var ZodDate = class extends ZodType {
+var ZodDate = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     if (this._def.coerce) {
       input.data = new Date(input.data);
@@ -4927,8 +6114,8 @@ var ZodDate = class extends ZodType {
     }
     return max != null ? new Date(max) : null;
   }
-};
-__name(ZodDate, "ZodDate");
+}, "ZodDate");
+__name2(ZodDate, "ZodDate");
 ZodDate.create = (params) => {
   return new ZodDate({
     checks: [],
@@ -4937,7 +6124,7 @@ ZodDate.create = (params) => {
     ...processCreateParams(params)
   });
 };
-var ZodSymbol = class extends ZodType {
+var ZodSymbol = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const parsedType = this._getType(input);
     if (parsedType !== ZodParsedType.symbol) {
@@ -4951,15 +6138,15 @@ var ZodSymbol = class extends ZodType {
     }
     return OK(input.data);
   }
-};
-__name(ZodSymbol, "ZodSymbol");
+}, "ZodSymbol");
+__name2(ZodSymbol, "ZodSymbol");
 ZodSymbol.create = (params) => {
   return new ZodSymbol({
     typeName: ZodFirstPartyTypeKind.ZodSymbol,
     ...processCreateParams(params)
   });
 };
-var ZodUndefined = class extends ZodType {
+var ZodUndefined = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const parsedType = this._getType(input);
     if (parsedType !== ZodParsedType.undefined) {
@@ -4973,15 +6160,15 @@ var ZodUndefined = class extends ZodType {
     }
     return OK(input.data);
   }
-};
-__name(ZodUndefined, "ZodUndefined");
+}, "ZodUndefined");
+__name2(ZodUndefined, "ZodUndefined");
 ZodUndefined.create = (params) => {
   return new ZodUndefined({
     typeName: ZodFirstPartyTypeKind.ZodUndefined,
     ...processCreateParams(params)
   });
 };
-var ZodNull = class extends ZodType {
+var ZodNull = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const parsedType = this._getType(input);
     if (parsedType !== ZodParsedType.null) {
@@ -4995,15 +6182,15 @@ var ZodNull = class extends ZodType {
     }
     return OK(input.data);
   }
-};
-__name(ZodNull, "ZodNull");
+}, "ZodNull");
+__name2(ZodNull, "ZodNull");
 ZodNull.create = (params) => {
   return new ZodNull({
     typeName: ZodFirstPartyTypeKind.ZodNull,
     ...processCreateParams(params)
   });
 };
-var ZodAny = class extends ZodType {
+var ZodAny = /* @__PURE__ */ __name(class extends ZodType {
   constructor() {
     super(...arguments);
     this._any = true;
@@ -5011,15 +6198,15 @@ var ZodAny = class extends ZodType {
   _parse(input) {
     return OK(input.data);
   }
-};
-__name(ZodAny, "ZodAny");
+}, "ZodAny");
+__name2(ZodAny, "ZodAny");
 ZodAny.create = (params) => {
   return new ZodAny({
     typeName: ZodFirstPartyTypeKind.ZodAny,
     ...processCreateParams(params)
   });
 };
-var ZodUnknown = class extends ZodType {
+var ZodUnknown = /* @__PURE__ */ __name(class extends ZodType {
   constructor() {
     super(...arguments);
     this._unknown = true;
@@ -5027,15 +6214,15 @@ var ZodUnknown = class extends ZodType {
   _parse(input) {
     return OK(input.data);
   }
-};
-__name(ZodUnknown, "ZodUnknown");
+}, "ZodUnknown");
+__name2(ZodUnknown, "ZodUnknown");
 ZodUnknown.create = (params) => {
   return new ZodUnknown({
     typeName: ZodFirstPartyTypeKind.ZodUnknown,
     ...processCreateParams(params)
   });
 };
-var ZodNever = class extends ZodType {
+var ZodNever = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const ctx = this._getOrReturnCtx(input);
     addIssueToContext(ctx, {
@@ -5045,15 +6232,15 @@ var ZodNever = class extends ZodType {
     });
     return INVALID;
   }
-};
-__name(ZodNever, "ZodNever");
+}, "ZodNever");
+__name2(ZodNever, "ZodNever");
 ZodNever.create = (params) => {
   return new ZodNever({
     typeName: ZodFirstPartyTypeKind.ZodNever,
     ...processCreateParams(params)
   });
 };
-var ZodVoid = class extends ZodType {
+var ZodVoid = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const parsedType = this._getType(input);
     if (parsedType !== ZodParsedType.undefined) {
@@ -5067,15 +6254,15 @@ var ZodVoid = class extends ZodType {
     }
     return OK(input.data);
   }
-};
-__name(ZodVoid, "ZodVoid");
+}, "ZodVoid");
+__name2(ZodVoid, "ZodVoid");
 ZodVoid.create = (params) => {
   return new ZodVoid({
     typeName: ZodFirstPartyTypeKind.ZodVoid,
     ...processCreateParams(params)
   });
 };
-var ZodArray = class extends ZodType {
+var ZodArray = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const { ctx, status } = this._processInputParams(input);
     const def = this._def;
@@ -5165,8 +6352,8 @@ var ZodArray = class extends ZodType {
   nonempty(message) {
     return this.min(1, message);
   }
-};
-__name(ZodArray, "ZodArray");
+}, "ZodArray");
+__name2(ZodArray, "ZodArray");
 ZodArray.create = (schema, params) => {
   return new ZodArray({
     type: schema,
@@ -5204,7 +6391,8 @@ function deepPartialify(schema) {
   }
 }
 __name(deepPartialify, "deepPartialify");
-var ZodObject = class extends ZodType {
+__name2(deepPartialify, "deepPartialify");
+var ZodObject = /* @__PURE__ */ __name(class extends ZodType {
   constructor() {
     super(...arguments);
     this._cached = null;
@@ -5514,8 +6702,8 @@ var ZodObject = class extends ZodType {
   keyof() {
     return createZodEnum(util.objectKeys(this.shape));
   }
-};
-__name(ZodObject, "ZodObject");
+}, "ZodObject");
+__name2(ZodObject, "ZodObject");
 ZodObject.create = (shape, params) => {
   return new ZodObject({
     shape: () => shape,
@@ -5543,7 +6731,7 @@ ZodObject.lazycreate = (shape, params) => {
     ...processCreateParams(params)
   });
 };
-var ZodUnion = class extends ZodType {
+var ZodUnion = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const { ctx } = this._processInputParams(input);
     const options = this._def.options;
@@ -5567,6 +6755,7 @@ var ZodUnion = class extends ZodType {
       return INVALID;
     }
     __name(handleResults, "handleResults");
+    __name2(handleResults, "handleResults");
     if (ctx.common.async) {
       return Promise.all(options.map(async (option) => {
         const childCtx = {
@@ -5627,8 +6816,8 @@ var ZodUnion = class extends ZodType {
   get options() {
     return this._def.options;
   }
-};
-__name(ZodUnion, "ZodUnion");
+}, "ZodUnion");
+__name2(ZodUnion, "ZodUnion");
 ZodUnion.create = (types, params) => {
   return new ZodUnion({
     options: types,
@@ -5636,7 +6825,7 @@ ZodUnion.create = (types, params) => {
     ...processCreateParams(params)
   });
 };
-var getDiscriminator = /* @__PURE__ */ __name((type) => {
+var getDiscriminator = /* @__PURE__ */ __name2((type) => {
   if (type instanceof ZodLazy) {
     return getDiscriminator(type.schema);
   } else if (type instanceof ZodEffects) {
@@ -5667,7 +6856,7 @@ var getDiscriminator = /* @__PURE__ */ __name((type) => {
     return [];
   }
 }, "getDiscriminator");
-var ZodDiscriminatedUnion = class extends ZodType {
+var ZodDiscriminatedUnion = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const { ctx } = this._processInputParams(input);
     if (ctx.parsedType !== ZodParsedType.object) {
@@ -5742,8 +6931,8 @@ var ZodDiscriminatedUnion = class extends ZodType {
       ...processCreateParams(params)
     });
   }
-};
-__name(ZodDiscriminatedUnion, "ZodDiscriminatedUnion");
+}, "ZodDiscriminatedUnion");
+__name2(ZodDiscriminatedUnion, "ZodDiscriminatedUnion");
 function mergeValues(a, b) {
   const aType = getParsedType(a);
   const bType = getParsedType(b);
@@ -5783,10 +6972,11 @@ function mergeValues(a, b) {
   }
 }
 __name(mergeValues, "mergeValues");
-var ZodIntersection = class extends ZodType {
+__name2(mergeValues, "mergeValues");
+var ZodIntersection = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const { status, ctx } = this._processInputParams(input);
-    const handleParsed = /* @__PURE__ */ __name((parsedLeft, parsedRight) => {
+    const handleParsed = /* @__PURE__ */ __name2((parsedLeft, parsedRight) => {
       if (isAborted(parsedLeft) || isAborted(parsedRight)) {
         return INVALID;
       }
@@ -5827,8 +7017,8 @@ var ZodIntersection = class extends ZodType {
       }));
     }
   }
-};
-__name(ZodIntersection, "ZodIntersection");
+}, "ZodIntersection");
+__name2(ZodIntersection, "ZodIntersection");
 ZodIntersection.create = (left, right, params) => {
   return new ZodIntersection({
     left,
@@ -5837,7 +7027,7 @@ ZodIntersection.create = (left, right, params) => {
     ...processCreateParams(params)
   });
 };
-var ZodTuple = class extends ZodType {
+var ZodTuple = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const { status, ctx } = this._processInputParams(input);
     if (ctx.parsedType !== ZodParsedType.array) {
@@ -5892,8 +7082,8 @@ var ZodTuple = class extends ZodType {
       rest
     });
   }
-};
-__name(ZodTuple, "ZodTuple");
+}, "ZodTuple");
+__name2(ZodTuple, "ZodTuple");
 ZodTuple.create = (schemas, params) => {
   if (!Array.isArray(schemas)) {
     throw new Error("You must pass an array of schemas to z.tuple([ ... ])");
@@ -5905,7 +7095,7 @@ ZodTuple.create = (schemas, params) => {
     ...processCreateParams(params)
   });
 };
-var ZodRecord = class extends ZodType {
+var ZodRecord = /* @__PURE__ */ __name(class extends ZodType {
   get keySchema() {
     return this._def.keyType;
   }
@@ -5957,9 +7147,9 @@ var ZodRecord = class extends ZodType {
       ...processCreateParams(second)
     });
   }
-};
-__name(ZodRecord, "ZodRecord");
-var ZodMap = class extends ZodType {
+}, "ZodRecord");
+__name2(ZodRecord, "ZodRecord");
+var ZodMap = /* @__PURE__ */ __name(class extends ZodType {
   get keySchema() {
     return this._def.keyType;
   }
@@ -6016,8 +7206,8 @@ var ZodMap = class extends ZodType {
       return { status: status.value, value: finalMap };
     }
   }
-};
-__name(ZodMap, "ZodMap");
+}, "ZodMap");
+__name2(ZodMap, "ZodMap");
 ZodMap.create = (keyType, valueType, params) => {
   return new ZodMap({
     valueType,
@@ -6026,7 +7216,7 @@ ZodMap.create = (keyType, valueType, params) => {
     ...processCreateParams(params)
   });
 };
-var ZodSet = class extends ZodType {
+var ZodSet = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const { status, ctx } = this._processInputParams(input);
     if (ctx.parsedType !== ZodParsedType.set) {
@@ -6077,6 +7267,7 @@ var ZodSet = class extends ZodType {
       return { status: status.value, value: parsedSet };
     }
     __name(finalizeSet, "finalizeSet");
+    __name2(finalizeSet, "finalizeSet");
     const elements = [...ctx.data.values()].map((item, i) => valueType._parse(new ParseInputLazyPath(ctx, item, ctx.path, i)));
     if (ctx.common.async) {
       return Promise.all(elements).then((elements2) => finalizeSet(elements2));
@@ -6102,8 +7293,8 @@ var ZodSet = class extends ZodType {
   nonempty(message) {
     return this.min(1, message);
   }
-};
-__name(ZodSet, "ZodSet");
+}, "ZodSet");
+__name2(ZodSet, "ZodSet");
 ZodSet.create = (valueType, params) => {
   return new ZodSet({
     valueType,
@@ -6113,7 +7304,7 @@ ZodSet.create = (valueType, params) => {
     ...processCreateParams(params)
   });
 };
-var ZodFunction = class extends ZodType {
+var ZodFunction = /* @__PURE__ */ __name(class extends ZodType {
   constructor() {
     super(...arguments);
     this.validate = this.implement;
@@ -6128,44 +7319,46 @@ var ZodFunction = class extends ZodType {
       });
       return INVALID;
     }
-    function makeArgsIssue(args, error3) {
+    function makeArgsIssue(args, error32) {
       return makeIssue({
         data: args,
         path: ctx.path,
         errorMaps: [ctx.common.contextualErrorMap, ctx.schemaErrorMap, getErrorMap(), en_default].filter((x) => !!x),
         issueData: {
           code: ZodIssueCode.invalid_arguments,
-          argumentsError: error3
+          argumentsError: error32
         }
       });
     }
     __name(makeArgsIssue, "makeArgsIssue");
-    function makeReturnsIssue(returns, error3) {
+    __name2(makeArgsIssue, "makeArgsIssue");
+    function makeReturnsIssue(returns, error32) {
       return makeIssue({
         data: returns,
         path: ctx.path,
         errorMaps: [ctx.common.contextualErrorMap, ctx.schemaErrorMap, getErrorMap(), en_default].filter((x) => !!x),
         issueData: {
           code: ZodIssueCode.invalid_return_type,
-          returnTypeError: error3
+          returnTypeError: error32
         }
       });
     }
     __name(makeReturnsIssue, "makeReturnsIssue");
+    __name2(makeReturnsIssue, "makeReturnsIssue");
     const params = { errorMap: ctx.common.contextualErrorMap };
     const fn = ctx.data;
     if (this._def.returns instanceof ZodPromise) {
       const me = this;
       return OK(async function(...args) {
-        const error3 = new ZodError([]);
+        const error32 = new ZodError([]);
         const parsedArgs = await me._def.args.parseAsync(args, params).catch((e) => {
-          error3.addIssue(makeArgsIssue(args, e));
-          throw error3;
+          error32.addIssue(makeArgsIssue(args, e));
+          throw error32;
         });
         const result = await Reflect.apply(fn, this, parsedArgs);
         const parsedReturns = await me._def.returns._def.type.parseAsync(result, params).catch((e) => {
-          error3.addIssue(makeReturnsIssue(result, e));
-          throw error3;
+          error32.addIssue(makeReturnsIssue(result, e));
+          throw error32;
         });
         return parsedReturns;
       });
@@ -6219,9 +7412,9 @@ var ZodFunction = class extends ZodType {
       ...processCreateParams(params)
     });
   }
-};
-__name(ZodFunction, "ZodFunction");
-var ZodLazy = class extends ZodType {
+}, "ZodFunction");
+__name2(ZodFunction, "ZodFunction");
+var ZodLazy = /* @__PURE__ */ __name(class extends ZodType {
   get schema() {
     return this._def.getter();
   }
@@ -6230,8 +7423,8 @@ var ZodLazy = class extends ZodType {
     const lazySchema = this._def.getter();
     return lazySchema._parse({ data: ctx.data, path: ctx.path, parent: ctx });
   }
-};
-__name(ZodLazy, "ZodLazy");
+}, "ZodLazy");
+__name2(ZodLazy, "ZodLazy");
 ZodLazy.create = (getter, params) => {
   return new ZodLazy({
     getter,
@@ -6239,7 +7432,7 @@ ZodLazy.create = (getter, params) => {
     ...processCreateParams(params)
   });
 };
-var ZodLiteral = class extends ZodType {
+var ZodLiteral = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     if (input.data !== this._def.value) {
       const ctx = this._getOrReturnCtx(input);
@@ -6255,8 +7448,8 @@ var ZodLiteral = class extends ZodType {
   get value() {
     return this._def.value;
   }
-};
-__name(ZodLiteral, "ZodLiteral");
+}, "ZodLiteral");
+__name2(ZodLiteral, "ZodLiteral");
 ZodLiteral.create = (value, params) => {
   return new ZodLiteral({
     value,
@@ -6272,7 +7465,8 @@ function createZodEnum(values, params) {
   });
 }
 __name(createZodEnum, "createZodEnum");
-var ZodEnum = class extends ZodType {
+__name2(createZodEnum, "createZodEnum");
+var ZodEnum = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     if (typeof input.data !== "string") {
       const ctx = this._getOrReturnCtx(input);
@@ -6335,10 +7529,10 @@ var ZodEnum = class extends ZodType {
       ...newDef
     });
   }
-};
-__name(ZodEnum, "ZodEnum");
+}, "ZodEnum");
+__name2(ZodEnum, "ZodEnum");
 ZodEnum.create = createZodEnum;
-var ZodNativeEnum = class extends ZodType {
+var ZodNativeEnum = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const nativeEnumValues = util.getValidEnumValues(this._def.values);
     const ctx = this._getOrReturnCtx(input);
@@ -6368,8 +7562,8 @@ var ZodNativeEnum = class extends ZodType {
   get enum() {
     return this._def.values;
   }
-};
-__name(ZodNativeEnum, "ZodNativeEnum");
+}, "ZodNativeEnum");
+__name2(ZodNativeEnum, "ZodNativeEnum");
 ZodNativeEnum.create = (values, params) => {
   return new ZodNativeEnum({
     values,
@@ -6377,7 +7571,7 @@ ZodNativeEnum.create = (values, params) => {
     ...processCreateParams(params)
   });
 };
-var ZodPromise = class extends ZodType {
+var ZodPromise = /* @__PURE__ */ __name(class extends ZodType {
   unwrap() {
     return this._def.type;
   }
@@ -6399,8 +7593,8 @@ var ZodPromise = class extends ZodType {
       });
     }));
   }
-};
-__name(ZodPromise, "ZodPromise");
+}, "ZodPromise");
+__name2(ZodPromise, "ZodPromise");
 ZodPromise.create = (schema, params) => {
   return new ZodPromise({
     type: schema,
@@ -6408,7 +7602,7 @@ ZodPromise.create = (schema, params) => {
     ...processCreateParams(params)
   });
 };
-var ZodEffects = class extends ZodType {
+var ZodEffects = /* @__PURE__ */ __name(class extends ZodType {
   innerType() {
     return this._def.schema;
   }
@@ -6469,7 +7663,7 @@ var ZodEffects = class extends ZodType {
       }
     }
     if (effect.type === "refinement") {
-      const executeRefinement = /* @__PURE__ */ __name((acc) => {
+      const executeRefinement = /* @__PURE__ */ __name2((acc) => {
         const result = effect.refinement(acc, checkCtx);
         if (ctx.common.async) {
           return Promise.resolve(result);
@@ -6530,8 +7724,8 @@ var ZodEffects = class extends ZodType {
     }
     util.assertNever(effect);
   }
-};
-__name(ZodEffects, "ZodEffects");
+}, "ZodEffects");
+__name2(ZodEffects, "ZodEffects");
 ZodEffects.create = (schema, effect, params) => {
   return new ZodEffects({
     schema,
@@ -6548,7 +7742,7 @@ ZodEffects.createWithPreprocess = (preprocess, schema, params) => {
     ...processCreateParams(params)
   });
 };
-var ZodOptional = class extends ZodType {
+var ZodOptional = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const parsedType = this._getType(input);
     if (parsedType === ZodParsedType.undefined) {
@@ -6559,8 +7753,8 @@ var ZodOptional = class extends ZodType {
   unwrap() {
     return this._def.innerType;
   }
-};
-__name(ZodOptional, "ZodOptional");
+}, "ZodOptional");
+__name2(ZodOptional, "ZodOptional");
 ZodOptional.create = (type, params) => {
   return new ZodOptional({
     innerType: type,
@@ -6568,7 +7762,7 @@ ZodOptional.create = (type, params) => {
     ...processCreateParams(params)
   });
 };
-var ZodNullable = class extends ZodType {
+var ZodNullable = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const parsedType = this._getType(input);
     if (parsedType === ZodParsedType.null) {
@@ -6579,8 +7773,8 @@ var ZodNullable = class extends ZodType {
   unwrap() {
     return this._def.innerType;
   }
-};
-__name(ZodNullable, "ZodNullable");
+}, "ZodNullable");
+__name2(ZodNullable, "ZodNullable");
 ZodNullable.create = (type, params) => {
   return new ZodNullable({
     innerType: type,
@@ -6588,7 +7782,7 @@ ZodNullable.create = (type, params) => {
     ...processCreateParams(params)
   });
 };
-var ZodDefault = class extends ZodType {
+var ZodDefault = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const { ctx } = this._processInputParams(input);
     let data = ctx.data;
@@ -6604,8 +7798,8 @@ var ZodDefault = class extends ZodType {
   removeDefault() {
     return this._def.innerType;
   }
-};
-__name(ZodDefault, "ZodDefault");
+}, "ZodDefault");
+__name2(ZodDefault, "ZodDefault");
 ZodDefault.create = (type, params) => {
   return new ZodDefault({
     innerType: type,
@@ -6614,7 +7808,7 @@ ZodDefault.create = (type, params) => {
     ...processCreateParams(params)
   });
 };
-var ZodCatch = class extends ZodType {
+var ZodCatch = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const { ctx } = this._processInputParams(input);
     const newCtx = {
@@ -6658,8 +7852,8 @@ var ZodCatch = class extends ZodType {
   removeCatch() {
     return this._def.innerType;
   }
-};
-__name(ZodCatch, "ZodCatch");
+}, "ZodCatch");
+__name2(ZodCatch, "ZodCatch");
 ZodCatch.create = (type, params) => {
   return new ZodCatch({
     innerType: type,
@@ -6668,7 +7862,7 @@ ZodCatch.create = (type, params) => {
     ...processCreateParams(params)
   });
 };
-var ZodNaN = class extends ZodType {
+var ZodNaN = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const parsedType = this._getType(input);
     if (parsedType !== ZodParsedType.nan) {
@@ -6682,8 +7876,8 @@ var ZodNaN = class extends ZodType {
     }
     return { status: "valid", value: input.data };
   }
-};
-__name(ZodNaN, "ZodNaN");
+}, "ZodNaN");
+__name2(ZodNaN, "ZodNaN");
 ZodNaN.create = (params) => {
   return new ZodNaN({
     typeName: ZodFirstPartyTypeKind.ZodNaN,
@@ -6691,7 +7885,7 @@ ZodNaN.create = (params) => {
   });
 };
 var BRAND = Symbol("zod_brand");
-var ZodBranded = class extends ZodType {
+var ZodBranded = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const { ctx } = this._processInputParams(input);
     const data = ctx.data;
@@ -6704,13 +7898,13 @@ var ZodBranded = class extends ZodType {
   unwrap() {
     return this._def.type;
   }
-};
-__name(ZodBranded, "ZodBranded");
-var ZodPipeline = class extends ZodType {
+}, "ZodBranded");
+__name2(ZodBranded, "ZodBranded");
+var ZodPipeline = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const { status, ctx } = this._processInputParams(input);
     if (ctx.common.async) {
-      const handleAsync = /* @__PURE__ */ __name(async () => {
+      const handleAsync = /* @__PURE__ */ __name2(async () => {
         const inResult = await this._def.in._parseAsync({
           data: ctx.data,
           path: ctx.path,
@@ -6760,12 +7954,12 @@ var ZodPipeline = class extends ZodType {
       typeName: ZodFirstPartyTypeKind.ZodPipeline
     });
   }
-};
-__name(ZodPipeline, "ZodPipeline");
-var ZodReadonly = class extends ZodType {
+}, "ZodPipeline");
+__name2(ZodPipeline, "ZodPipeline");
+var ZodReadonly = /* @__PURE__ */ __name(class extends ZodType {
   _parse(input) {
     const result = this._def.innerType._parse(input);
-    const freeze = /* @__PURE__ */ __name((data) => {
+    const freeze = /* @__PURE__ */ __name2((data) => {
       if (isValid(data)) {
         data.value = Object.freeze(data.value);
       }
@@ -6776,8 +7970,8 @@ var ZodReadonly = class extends ZodType {
   unwrap() {
     return this._def.innerType;
   }
-};
-__name(ZodReadonly, "ZodReadonly");
+}, "ZodReadonly");
+__name2(ZodReadonly, "ZodReadonly");
 ZodReadonly.create = (type, params) => {
   return new ZodReadonly({
     innerType: type,
@@ -6791,6 +7985,7 @@ function cleanParams(params, data) {
   return p2;
 }
 __name(cleanParams, "cleanParams");
+__name2(cleanParams, "cleanParams");
 function custom(check, _params = {}, fatal) {
   if (check)
     return ZodAny.create().superRefine((data, ctx) => {
@@ -6814,6 +8009,7 @@ function custom(check, _params = {}, fatal) {
   return ZodAny.create();
 }
 __name(custom, "custom");
+__name2(custom, "custom");
 var late = {
   object: ZodObject.lazycreate
 };
@@ -6856,7 +8052,7 @@ var ZodFirstPartyTypeKind;
   ZodFirstPartyTypeKind2["ZodPipeline"] = "ZodPipeline";
   ZodFirstPartyTypeKind2["ZodReadonly"] = "ZodReadonly";
 })(ZodFirstPartyTypeKind || (ZodFirstPartyTypeKind = {}));
-var instanceOfType = /* @__PURE__ */ __name((cls, params = {
+var instanceOfType = /* @__PURE__ */ __name2((cls, params = {
   message: `Input not instance of ${cls.name}`
 }) => custom((data) => data instanceof cls, params), "instanceOfType");
 var stringType = ZodString.create;
@@ -6893,9 +8089,9 @@ var optionalType = ZodOptional.create;
 var nullableType = ZodNullable.create;
 var preprocessType = ZodEffects.createWithPreprocess;
 var pipelineType = ZodPipeline.create;
-var ostring = /* @__PURE__ */ __name(() => stringType().optional(), "ostring");
-var onumber = /* @__PURE__ */ __name(() => numberType().optional(), "onumber");
-var oboolean = /* @__PURE__ */ __name(() => booleanType().optional(), "oboolean");
+var ostring = /* @__PURE__ */ __name2(() => stringType().optional(), "ostring");
+var onumber = /* @__PURE__ */ __name2(() => numberType().optional(), "onumber");
+var oboolean = /* @__PURE__ */ __name2(() => booleanType().optional(), "oboolean");
 var coerce = {
   string: (arg) => ZodString.create({ ...arg, coerce: true }),
   number: (arg) => ZodNumber.create({ ...arg, coerce: true }),
@@ -6907,7 +8103,6 @@ var coerce = {
   date: (arg) => ZodDate.create({ ...arg, coerce: true })
 };
 var NEVER = INVALID;
-
 var APPOINTMENT_STATUS = {
   SCHEDULED: "scheduled",
   CANCELLED: "cancelled"
@@ -6979,6 +8174,8 @@ var SETTING_KEYS = {
   CLINIC_PHONE: "clinic_phone",
   /** — «ساعت ارسال» پیش‌نویس اعلان ثبت نوبت — 0..23 تهران (پیش‌فرض 18) */
   NOTIFY_BATCH_HOUR: "notify_batch_hour",
+  // — نام کاربری بات بله (ساخت لینک احراز خودکار) — خالی = تشخیص خودکار با getMe
+  BOT_USERNAME: "bot_username",
   /** — پیکربندی امتیازدهی همکاران (تاریخ شروع شمارش + وزن‌های فرمول — فقط مدیر) */
   SCORING_CONFIG: "scoring_config"
 };
@@ -6993,7 +8190,8 @@ var DEFAULT_SETTINGS = {
   [SETTING_KEYS.EXERCISE_BANK_ENABLED]: true,
   [SETTING_KEYS.SCREENING_TARGETS]: [],
   [SETTING_KEYS.CLINIC_PHONE]: "",
-  [SETTING_KEYS.NOTIFY_BATCH_HOUR]: 18
+  [SETTING_KEYS.NOTIFY_BATCH_HOUR]: 18,
+  [SETTING_KEYS.BOT_USERNAME]: ""
 };
 var SCREENING_TARGETS_MAX = 60;
 var DEFAULT_CENTER_HOURS = [
@@ -7150,7 +8348,6 @@ var SPECIAL_NEED_TYPES = [
   "other"
 ];
 var SPECIAL_NEED_SEVERITIES = ["mild", "moderate", "severe"];
-
 var PERSIAN_DIGITS = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
 var ARABIC_DIGITS = "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669";
 function normalizeNationalId(raw2) {
@@ -7177,6 +8374,7 @@ function normalizeNationalId(raw2) {
   return out;
 }
 __name(normalizeNationalId, "normalizeNationalId");
+__name2(normalizeNationalId, "normalizeNationalId");
 function isValidIranianNationalId(value) {
   const nid = normalizeNationalId(value);
   if (!/^\d{10}$/.test(nid))
@@ -7192,17 +8390,19 @@ function isValidIranianNationalId(value) {
   return Number(nid[9]) === expected;
 }
 __name(isValidIranianNationalId, "isValidIranianNationalId");
-
+__name2(isValidIranianNationalId, "isValidIranianNationalId");
 var TEHRAN_OFFSET_MS = TEHRAN_OFFSET_MINUTES * 60 * 1e3;
 function pad2(n) {
   return n < 10 ? `0${n}` : String(n);
 }
 __name(pad2, "pad2");
+__name2(pad2, "pad2");
 function tehranTodayYmd(now = /* @__PURE__ */ new Date()) {
   const tehran = new Date(now.getTime() + TEHRAN_OFFSET_MS);
   return `${tehran.getUTCFullYear()}-${pad2(tehran.getUTCMonth() + 1)}-${pad2(tehran.getUTCDate())}`;
 }
 __name(tehranTodayYmd, "tehranTodayYmd");
+__name2(tehranTodayYmd, "tehranTodayYmd");
 function tehranDayRange(ymd) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
     throw new Error(`INVALID_DATE: ${ymd}`);
@@ -7215,16 +8415,19 @@ function tehranDayRange(ymd) {
   };
 }
 __name(tehranDayRange, "tehranDayRange");
+__name2(tehranDayRange, "tehranDayRange");
 function tehranRange(fromYmd, toYmd) {
   const a = tehranDayRange(fromYmd);
   const b = tehranDayRange(toYmd);
   return { start: a.start, end: b.end };
 }
 __name(tehranRange, "tehranRange");
+__name2(tehranRange, "tehranRange");
 function tehranYmdOf(isoUtc) {
   return tehranTodayYmd(new Date(isoUtc));
 }
 __name(tehranYmdOf, "tehranYmdOf");
+__name2(tehranYmdOf, "tehranYmdOf");
 function isOnGrid(isoUtc, slotMinutes) {
   const ms = Date.parse(isoUtc);
   if (Number.isNaN(ms))
@@ -7233,10 +8436,12 @@ function isOnGrid(isoUtc, slotMinutes) {
   return seconds % (slotMinutes * 60) === 0;
 }
 __name(isOnGrid, "isOnGrid");
+__name2(isOnGrid, "isOnGrid");
 function addMinutes(isoUtc, minutes) {
   return new Date(Date.parse(isoUtc) + minutes * 60 * 1e3).toISOString();
 }
 __name(addMinutes, "addMinutes");
+__name2(addMinutes, "addMinutes");
 function tehranTimeLabel(isoUtc) {
   const ms = Date.parse(isoUtc);
   if (Number.isNaN(ms))
@@ -7245,6 +8450,7 @@ function tehranTimeLabel(isoUtc) {
   return `${pad2(tehran.getUTCHours())}:${pad2(tehran.getUTCMinutes())}`;
 }
 __name(tehranTimeLabel, "tehranTimeLabel");
+__name2(tehranTimeLabel, "tehranTimeLabel");
 function addDaysYmd(ymd, days) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
     throw new Error(`INVALID_DATE: ${ymd}`);
@@ -7253,8 +8459,9 @@ function addDaysYmd(ymd, days) {
   return new Date(ms).toISOString().slice(0, 10);
 }
 __name(addDaysYmd, "addDaysYmd");
-var div = /* @__PURE__ */ __name((a, b) => Math.trunc(a / b), "div");
-var mod = /* @__PURE__ */ __name((a, b) => a - Math.trunc(a / b) * b, "mod");
+__name2(addDaysYmd, "addDaysYmd");
+var div = /* @__PURE__ */ __name2((a, b) => Math.trunc(a / b), "div");
+var mod = /* @__PURE__ */ __name2((a, b) => a - Math.trunc(a / b) * b, "mod");
 var BREAKS = [-61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178];
 var WEEKDAY_NAMES_FA = ["\u0634\u0646\u0628\u0647", "\u06CC\u06A9\u0634\u0646\u0628\u0647", "\u062F\u0648\u0634\u0646\u0628\u0647", "\u0633\u0647\u200C\u0634\u0646\u0628\u0647", "\u0686\u0647\u0627\u0631\u0634\u0646\u0628\u0647", "\u067E\u0646\u062C\u0634\u0646\u0628\u0647", "\u062C\u0645\u0639\u0647"];
 var JALALI_MONTHS_FA = [
@@ -7304,12 +8511,14 @@ function jalCal(jy, withoutLeap) {
   return { leap, gy, march };
 }
 __name(jalCal, "jalCal");
+__name2(jalCal, "jalCal");
 function g2d(gy, gm, gd) {
   let d = div((gy + div(gm - 8, 6) + 100100) * 1461, 4) + div(153 * mod(gm + 9, 12) + 2, 5) + gd - 34840408;
   d = d - div(div(gy + 100100 + div(gm - 8, 6), 100) * 3, 4) + 752;
   return d;
 }
 __name(g2d, "g2d");
+__name2(g2d, "g2d");
 function d2g(jdn) {
   let j = 4 * jdn + 139361631;
   j = j + div(div(4 * jdn + 183187720, 146097) * 3, 4) * 4 - 3908;
@@ -7320,10 +8529,12 @@ function d2g(jdn) {
   return { gy, gm, gd };
 }
 __name(d2g, "d2g");
+__name2(d2g, "d2g");
 function j2d(jy, jm, jd, r) {
   return g2d(r.gy, 3, r.march) + (jm - 1) * 31 - div(jm, 7) * (jm - 7) + jd - 1;
 }
 __name(j2d, "j2d");
+__name2(j2d, "j2d");
 function d2j(jdn) {
   const gy = d2g(jdn).gy;
   let jy = gy - 621;
@@ -7350,10 +8561,12 @@ function d2j(jdn) {
   return { jy, jm, jd };
 }
 __name(d2j, "d2j");
+__name2(d2j, "d2j");
 function toJalaliParts(gy, gm, gd) {
   return d2j(g2d(gy, gm, gd));
 }
 __name(toJalaliParts, "toJalaliParts");
+__name2(toJalaliParts, "toJalaliParts");
 function jalaliToGregorianYmd(jy, jm, jd) {
   const r = jalCal(jy, false);
   const jdn = j2d(jy, jm, jd, r);
@@ -7361,28 +8574,32 @@ function jalaliToGregorianYmd(jy, jm, jd) {
   return `${g.gy}-${pad2(g.gm)}-${pad2(g.gd)}`;
 }
 __name(jalaliToGregorianYmd, "jalaliToGregorianYmd");
+__name2(jalaliToGregorianYmd, "jalaliToGregorianYmd");
 function iranianWeekdayOfYmd(ymd) {
   const ms = (/* @__PURE__ */ new Date(`${ymd}T12:00:00.000Z`)).getTime() + TEHRAN_OFFSET_MS;
   const jsDay = new Date(ms).getUTCDay();
   return (jsDay + 1) % 7;
 }
 __name(iranianWeekdayOfYmd, "iranianWeekdayOfYmd");
+__name2(iranianWeekdayOfYmd, "iranianWeekdayOfYmd");
 function faDigits(input) {
   const fa2 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
   return String(input).replace(/\d/g, (d) => fa2[Number(d)]);
 }
 __name(faDigits, "faDigits");
+__name2(faDigits, "faDigits");
 function jalaliLabel(ymd) {
   const [gy, gm, gd] = ymd.split("-").map(Number);
   const j = toJalaliParts(gy, gm, gd);
   return faDigits(`${j.jd} ${JALALI_MONTHS_FA[j.jm - 1]} ${j.jy}`);
 }
 __name(jalaliLabel, "jalaliLabel");
+__name2(jalaliLabel, "jalaliLabel");
 function jalaliFullLabel(ymd) {
   return `${WEEKDAY_NAMES_FA[iranianWeekdayOfYmd(ymd)]} ${jalaliLabel(ymd)}`;
 }
 __name(jalaliFullLabel, "jalaliFullLabel");
-
+__name2(jalaliFullLabel, "jalaliFullLabel");
 var UuidSchema = external_exports.string().uuid("\u0634\u0646\u0627\u0633\u0647 \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A");
 var IsoDateTimeSchema = external_exports.string().refine((v) => !Number.isNaN(Date.parse(v)), "\u0632\u0645\u0627\u0646 \u0628\u0627\u06CC\u062F ISO \u0645\u0639\u062A\u0628\u0631 \u0628\u0627\u0634\u062F");
 var SlotAlignedTimeSchema = IsoDateTimeSchema.refine(
@@ -7412,9 +8629,9 @@ var NewAppointmentSchema = external_exports.object({
   start_at: IsoDateTimeSchema,
   end_at: IsoDateTimeSchema,
   students: external_exports.array(AppointmentStudentRefSchema).max(20).default([]),
-  // nullish: کلید حذف‌شده و null هردو «بدون توضیح» معنا دارند (ارگونومی API)
+  // — nullish: کلید حذف‌شده و null هردو «بدون توضیح» معنا دارند (ارگونومی API)
   note: external_exports.string().max(2e3).nullish(),
-  // نوع جلسه (جدول ۴ اساس‌نامه) — null/حذف = بدون نوع (رفتار نوبت‌های قدیمی)
+  // — نوع جلسه (جدول ۴ اساس‌نامه) — null/حذف = بدون نوع (رفتار نوبت‌های قدیمی)
   session_type: external_exports.enum(SESSION_TYPE_KEYS).nullish()
 }).refine((v) => Date.parse(v.end_at) > Date.parse(v.start_at), {
   message: "\u0632\u0645\u0627\u0646 \u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0632\u0645\u0627\u0646 \u0634\u0631\u0648\u0639 \u0628\u0627\u0634\u062F",
@@ -7454,7 +8671,7 @@ var CopyWeekSchema = external_exports.object({
   dry_run: external_exports.boolean().optional().default(false)
 });
 var MarkAttendanceSchema = external_exports.object({
-  // 'late' = حاضر با تأخیر (غیبت حساب نمی‌شود؛ اعلان غیبت نمی‌گیرد)
+  // — 'late' = حاضر با تأخیر (غیبت حساب نمی‌شود؛ اعلان غیبت نمی‌گیرد)
   status: external_exports.enum([ATTENDANCE_STATUS.PRESENT, ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.ABSENT, ATTENDANCE_STATUS.CANCELLED]),
   note: external_exports.string().max(1e3).optional()
 });
@@ -7474,7 +8691,7 @@ var NewSchoolSchema = external_exports.object({
   address: external_exports.string().max(500).optional(),
   principal_name: external_exports.string().max(120).optional(),
   principal_phone: external_exports.string().max(20).optional(),
-  // کد رسمی مدرسه (نظام) + یادداشت آزاد؛ ارقام فارسی به لاتین نرمال می‌شود
+  // — کد رسمی مدرسه (نظام) + یادداشت آزاد؛ ارقام فارسی به لاتین نرمال می‌شود
   code: external_exports.string().transform((v) => v.trim().replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d)))).pipe(external_exports.string().max(20)).optional(),
   notes: external_exports.string().trim().max(500, "\u06CC\u0627\u062F\u062F\u0627\u0634\u062A \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F5\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional()
 });
@@ -7486,7 +8703,7 @@ var UpdateSchoolSchema = external_exports.object({
   address: external_exports.string().max(500).optional(),
   principal_name: external_exports.string().max(120).optional(),
   principal_phone: external_exports.string().max(20).optional(),
-  // کد رسمی مدرسه (نظام) + یادداشت آزاد؛ ارقام فارسی به لاتین نرمال می‌شود
+  // — کد رسمی مدرسه (نظام) + یادداشت آزاد؛ ارقام فارسی به لاتین نرمال می‌شود
   code: external_exports.string().transform((v) => v.trim().replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d)))).pipe(external_exports.string().max(20)).optional(),
   notes: external_exports.string().trim().max(500, "\u06CC\u0627\u062F\u062F\u0627\u0634\u062A \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F5\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional()
 });
@@ -7578,7 +8795,7 @@ var LoginSchema = external_exports.object({
   username: external_exports.string().trim().min(1, "\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u0627\u0644\u0632\u0627\u0645\u06CC \u0627\u0633\u062A").max(100),
   password: external_exports.string().min(1, "\u0631\u0645\u0632 \u0639\u0628\u0648\u0631 \u0627\u0644\u0632\u0627\u0645\u06CC \u0627\u0633\u062A").max(STAFF_PASSWORD_MAX)
 });
-var gridMinute = /* @__PURE__ */ __name((label) => external_exports.number().int(`${label} \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0635\u062D\u06CC\u062D \u0628\u0627\u0634\u062F`).refine((m) => m % SLOT_MINUTES === 0, `${label} \u0628\u0627\u06CC\u062F \u0645\u0636\u0631\u0628 ${SLOT_MINUTES} \u062F\u0642\u06CC\u0642\u0647 \u0628\u0627\u0634\u062F`), "gridMinute");
+var gridMinute = /* @__PURE__ */ __name2((label) => external_exports.number().int(`${label} \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0635\u062D\u06CC\u062D \u0628\u0627\u0634\u062F`).refine((m) => m % SLOT_MINUTES === 0, `${label} \u0628\u0627\u06CC\u062F \u0645\u0636\u0631\u0628 ${SLOT_MINUTES} \u062F\u0642\u06CC\u0642\u0647 \u0628\u0627\u0634\u062F`), "gridMinute");
 function normalizeRangeKeys(raw2) {
   if (raw2 === null || typeof raw2 !== "object")
     return raw2;
@@ -7589,6 +8806,7 @@ function normalizeRangeKeys(raw2) {
   return raw2;
 }
 __name(normalizeRangeKeys, "normalizeRangeKeys");
+__name2(normalizeRangeKeys, "normalizeRangeKeys");
 var WorkingHourRangeBase = external_exports.object({
   weekday: external_exports.number().int().min(0, "\u0631\u0648\u0632 \u0647\u0641\u062A\u0647 \u0628\u06CC\u0646 \u06F0 \u062A\u0627 \u06F6 \u0627\u0633\u062A").max(6, "\u0631\u0648\u0632 \u0647\u0641\u062A\u0647 \u0628\u06CC\u0646 \u06F0 \u062A\u0627 \u06F6 \u0627\u0633\u062A"),
   start_minute: gridMinute("\u0632\u0645\u0627\u0646 \u0634\u0631\u0648\u0639").refine(
@@ -7667,9 +8885,11 @@ var UpdateSettingsSchema = external_exports.object({
   notify_waitlist: external_exports.boolean().optional(),
   /** — شماره تماس عمومی مرکز (خالی = پاک کردن) */
   clinic_phone: external_exports.string().max(30, "\u0634\u0645\u0627\u0631\u0647 \u062A\u0645\u0627\u0633 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F3\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional(),
+  // — نام کاربری بات بله (با یا بدون @؛ فقط لاتین/رقم/خط زیر؛ خالی = تشخیص خودکار)
+  bot_username: external_exports.string().max(65, "\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u0628\u0627\u062A \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F6\u06F4 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").regex(/^@?[A-Za-z0-9_]*$/, "\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u0628\u0627\u062A \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0644\u0627\u062A\u06CC\u0646\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637 \u0632\u06CC\u0631 \u0627\u0633\u062A").optional(),
   /** — ساعت ارسال پیش‌نویس اعلان نوبت جدید — 0..23 تهران */
   notify_batch_hour: external_exports.number().int().min(0, "\u0633\u0627\u0639\u062A \u0627\u0631\u0633\u0627\u0644 \u0628\u0627\u06CC\u062F \u0628\u06CC\u0646 \u06F0 \u062A\u0627 \u06F2\u06F3 \u0628\u0627\u0634\u062F").max(23, "\u0633\u0627\u0639\u062A \u0627\u0631\u0633\u0627\u0644 \u0628\u0627\u06CC\u062F \u0628\u06CC\u0646 \u06F0 \u062A\u0627 \u06F2\u06F3 \u0628\u0627\u0634\u062F").optional(),
-  /** — شاخص سنجش: جایگزینی کامل آرایهٔ بازه‌ها (سال/ماه شمسی) — بازهٔ سفارشی + هدف همزمان */
+  /** — شاخص سنجش: جایگزینی کامل آرایهٔ بازه‌ها (سال/ماه شمسی) —: بازهٔ سفارشی + هدف همزمان */
   screening_targets: external_exports.array(
     external_exports.object({
       year: external_exports.number().int().min(1300, "\u0633\u0627\u0644 \u0634\u0645\u0633\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A").max(1500, "\u0633\u0627\u0644 \u0634\u0645\u0633\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A"),
@@ -7702,7 +8922,7 @@ var UpdateSettingsSchema = external_exports.object({
     })
   ).max(SCREENING_TARGETS_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_TARGETS_MAX} \u0628\u0627\u0632\u0647 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A`).optional()
 });
-var ScoringWeightField = external_exports.number({ invalid_type_error: "وزن باید عدد باشد" }).int("وزن باید عدد صحیح باشد").min(0, "وزن نمی‌تواند منفی باشد").max(1e4, "وزن حداکثر ۱۰۰۰۰ است");
+var ScoringWeightField = external_exports.number({ invalid_type_error: "\u0648\u0632\u0646 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F" }).int("\u0648\u0632\u0646 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0635\u062D\u06CC\u062D \u0628\u0627\u0634\u062F").min(0, "\u0648\u0632\u0646 \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0645\u0646\u0641\u06CC \u0628\u0627\u0634\u062F").max(1e4, "\u0648\u0632\u0646 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F0\u06F0\u06F0\u06F0 \u0627\u0633\u062A");
 var ScoringWeightsSchema = external_exports.object({
   exercises: ScoringWeightField,
   packages: ScoringWeightField,
@@ -7715,18 +8935,21 @@ var ScoringWeightsSchema = external_exports.object({
   templateRefs: ScoringWeightField,
   formRefs: ScoringWeightField,
   base_action: ScoringWeightField,
-  admin_cap: external_exports.number({ invalid_type_error: "سقف باید عدد باشد" }).int("سقف باید عدد صحیح باشد").min(0, "سقف نمی‌تواند منفی باشد").max(1e5, "سقف حداکثر ۱۰۰۰۰۰ است")
+  admin_cap: external_exports.number({ invalid_type_error: "\u0633\u0642\u0641 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F" }).int("\u0633\u0642\u0641 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0635\u062D\u06CC\u062D \u0628\u0627\u0634\u062F").min(0, "\u0633\u0642\u0641 \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0645\u0646\u0641\u06CC \u0628\u0627\u0634\u062F").max(1e5, "\u0633\u0642\u0641 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F0\u06F0\u06F0\u06F0\u06F0 \u0627\u0633\u062A")
 });
 var ScoringConfigSchema = external_exports.object({
-  epoch_ymd: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "تاریخ شروع باید YYYY-MM-DD باشد").refine((v) => {
+  epoch_ymd: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u0634\u0631\u0648\u0639 \u0628\u0627\u06CC\u062F YYYY-MM-DD \u0628\u0627\u0634\u062F").refine((v) => {
     const y = Number(v.slice(0, 4));
     const m = Number(v.slice(5, 7));
     const d = Number(v.slice(8, 10));
-    if (!Number.isInteger(y) || y < 2020 || y > 2100) return false;
-    if (!Number.isInteger(m) || m < 1 || m > 12) return false;
-    if (!Number.isInteger(d) || d < 1 || d > 31) return false;
+    if (!Number.isInteger(y) || y < 2020 || y > 2100)
+      return false;
+    if (!Number.isInteger(m) || m < 1 || m > 12)
+      return false;
+    if (!Number.isInteger(d) || d < 1 || d > 31)
+      return false;
     return !Number.isNaN(Date.parse(`${v}T00:00:00Z`));
-  }, "تاریخ شروع نامعتبر است"),
+  }, "\u062A\u0627\u0631\u06CC\u062E \u0634\u0631\u0648\u0639 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A"),
   weights: ScoringWeightsSchema
 });
 var NewApiKeySchema = external_exports.object({
@@ -8012,7 +9235,6 @@ var ScreeningQuerySchema = external_exports.object({
   /** برچسب‌ها با کاما — معنای OR */
   tag: external_exports.string().trim().max(800).optional()
 });
-
 var FEATURES = {
   /**
    * — کلیدهای API (هدر X-Api-Key + مسیرهای /api/keys + تب «کلیدها و اتصال‌ها»)
@@ -8021,8 +9243,7 @@ var FEATURES = {
    */
   apiKeys: false
 };
-
-var AppError = class extends Error {
+var AppError = /* @__PURE__ */ __name(class extends Error {
   code;
   status;
   details;
@@ -8033,55 +9254,54 @@ var AppError = class extends Error {
     this.status = status;
     this.details = details;
   }
-};
-__name(AppError, "AppError");
-var ValidationError = class extends AppError {
+}, "AppError");
+__name2(AppError, "AppError");
+var ValidationError = /* @__PURE__ */ __name(class extends AppError {
   constructor(message = "\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A", details) {
     super("VALIDATION_ERROR", 400, message, details);
     this.name = "ValidationError";
   }
-};
-__name(ValidationError, "ValidationError");
-var AuthError = class extends AppError {
+}, "ValidationError");
+__name2(ValidationError, "ValidationError");
+var AuthError = /* @__PURE__ */ __name(class extends AppError {
   constructor(message = "\u0627\u062D\u0631\u0627\u0632 \u0647\u0648\u06CC\u062A \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F") {
     super("AUTH_ERROR", 401, message);
     this.name = "AuthError";
   }
-};
-__name(AuthError, "AuthError");
-var ForbiddenError = class extends AppError {
+}, "AuthError");
+__name2(AuthError, "AuthError");
+var ForbiddenError = /* @__PURE__ */ __name(class extends AppError {
   constructor(message = "\u062F\u0633\u062A\u0631\u0633\u06CC \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A") {
     super("FORBIDDEN", 403, message);
     this.name = "ForbiddenError";
   }
-};
-__name(ForbiddenError, "ForbiddenError");
-var NotFoundError = class extends AppError {
+}, "ForbiddenError");
+__name2(ForbiddenError, "ForbiddenError");
+var NotFoundError = /* @__PURE__ */ __name(class extends AppError {
   constructor(resource = "\u0645\u0646\u0628\u0639", message) {
     super("NOT_FOUND", 404, message ?? `${resource} \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F`);
     this.name = "NotFoundError";
   }
-};
-__name(NotFoundError, "NotFoundError");
-var ConflictError = class extends AppError {
+}, "NotFoundError");
+__name2(NotFoundError, "NotFoundError");
+var ConflictError = /* @__PURE__ */ __name(class extends AppError {
   currentVersion;
   constructor(message = "\u062A\u0639\u0627\u0631\u0636 \u062F\u0631 \u0648\u0636\u0639\u06CC\u062A \u0641\u0639\u0644\u06CC \u0631\u06A9\u0648\u0631\u062F", currentVersion) {
     super("CONFLICT", 409, message, currentVersion !== void 0 ? { currentVersion } : void 0);
     this.name = "ConflictError";
     this.currentVersion = currentVersion;
   }
-};
-__name(ConflictError, "ConflictError");
-var RateLimitError = class extends AppError {
+}, "ConflictError");
+__name2(ConflictError, "ConflictError");
+var RateLimitError = /* @__PURE__ */ __name(class extends AppError {
   retryAfterSeconds;
   constructor(retryAfterSeconds, message = "\u062A\u0644\u0627\u0634\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F") {
     super("RATE_LIMITED", 429, message, { retryAfterSeconds });
     this.name = "RateLimitError";
     this.retryAfterSeconds = retryAfterSeconds;
   }
-};
-__name(RateLimitError, "RateLimitError");
-
+}, "RateLimitError");
+__name2(RateLimitError, "RateLimitError");
 var JWKS_TTL_MS = 5 * 60 * 1e3;
 var jwksCache = null;
 async function fetchTeamJwks(teamDomain) {
@@ -8099,6 +9319,7 @@ async function fetchTeamJwks(teamDomain) {
   return data.keys;
 }
 __name(fetchTeamJwks, "fetchTeamJwks");
+__name2(fetchTeamJwks, "fetchTeamJwks");
 function base64UrlDecode(part) {
   const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
   const padded = b64 + "=".repeat((4 - b64.length % 4) % 4);
@@ -8109,6 +9330,7 @@ function base64UrlDecode(part) {
   return bytes;
 }
 __name(base64UrlDecode, "base64UrlDecode");
+__name2(base64UrlDecode, "base64UrlDecode");
 async function verifyAccessToken(token, teamDomain) {
   const parts = token.split(".");
   if (parts.length !== 3)
@@ -8147,7 +9369,7 @@ async function verifyAccessToken(token, teamDomain) {
   return payload;
 }
 __name(verifyAccessToken, "verifyAccessToken");
-
+__name2(verifyAccessToken, "verifyAccessToken");
 var SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 function base64UrlEncode(bytes) {
   let bin = "";
@@ -8156,6 +9378,7 @@ function base64UrlEncode(bytes) {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 __name(base64UrlEncode, "base64UrlEncode");
+__name2(base64UrlEncode, "base64UrlEncode");
 function base64UrlDecode2(part) {
   const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
   const padded = b64 + "=".repeat((4 - b64.length % 4) % 4);
@@ -8165,8 +9388,9 @@ function base64UrlDecode2(part) {
     bytes[i] = raw2.charCodeAt(i);
   return bytes;
 }
-__name(base64UrlDecode2, "base64UrlDecode");
-async function hmacKey(secret) {
+__name(base64UrlDecode2, "base64UrlDecode2");
+__name2(base64UrlDecode2, "base64UrlDecode");
+async function hmacKey2(secret) {
   return crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -8175,7 +9399,8 @@ async function hmacKey(secret) {
     ["sign", "verify"]
   );
 }
-__name(hmacKey, "hmacKey");
+__name(hmacKey2, "hmacKey");
+__name2(hmacKey2, "hmacKey");
 async function signSessionJwt(staff, secret) {
   const now = Math.floor(Date.now() / 1e3);
   const payload = {
@@ -8190,13 +9415,14 @@ async function signSessionJwt(staff, secret) {
   const headerB64 = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)));
   const payloadB64 = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
   const data = `${headerB64}.${payloadB64}`;
-  const key = await hmacKey(secret);
+  const key = await hmacKey2(secret);
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
   const token = `${data}.${base64UrlEncode(new Uint8Array(sig))}`;
   return { token, expiresAt: new Date(payload.exp * 1e3).toISOString() };
 }
 __name(signSessionJwt, "signSessionJwt");
-async function verifySessionJwt(token, secret) {
+__name2(signSessionJwt, "signSessionJwt");
+async function verifySessionJwt2(token, secret) {
   const parts = token.split(".");
   if (parts.length !== 3)
     return null;
@@ -8211,7 +9437,7 @@ async function verifySessionJwt(token, secret) {
   }
   if (header.alg !== "HS256")
     return null;
-  const key = await hmacKey(secret);
+  const key = await hmacKey2(secret);
   const valid = await crypto.subtle.verify(
     "HMAC",
     key,
@@ -8226,14 +9452,15 @@ async function verifySessionJwt(token, secret) {
     return null;
   return payload;
 }
-__name(verifySessionJwt, "verifySessionJwt");
-
+__name(verifySessionJwt2, "verifySessionJwt");
+__name2(verifySessionJwt2, "verifySessionJwt");
 var SETTINGS_AUTH_SECRET_KEY = "sys_auth_secret";
 var DEV_AUTH_SECRET = "center-dev-session-secret";
-function isDevEnv(env2) {
-  return env2 === "development" || env2 === "test";
+function isDevEnv(env22) {
+  return env22 === "development" || env22 === "test";
 }
 __name(isDevEnv, "isDevEnv");
+__name2(isDevEnv, "isDevEnv");
 var cachedSecret = null;
 function d1AsSecretStore(db) {
   return {
@@ -8246,11 +9473,13 @@ function d1AsSecretStore(db) {
   };
 }
 __name(d1AsSecretStore, "d1AsSecretStore");
+__name2(d1AsSecretStore, "d1AsSecretStore");
 function randomHexSecret() {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 __name(randomHexSecret, "randomHexSecret");
+__name2(randomHexSecret, "randomHexSecret");
 async function getOrCreateRuntimeSecret(store) {
   if (cachedSecret)
     return cachedSecret;
@@ -8281,30 +9510,33 @@ async function getOrCreateRuntimeSecret(store) {
   return cachedSecret;
 }
 __name(getOrCreateRuntimeSecret, "getOrCreateRuntimeSecret");
-async function resolveSessionSecret(env2) {
-  if (env2.AUTH_SECRET && env2.AUTH_SECRET.length >= 16)
-    return env2.AUTH_SECRET;
-  if (isDevEnv(env2.ENV))
+__name2(getOrCreateRuntimeSecret, "getOrCreateRuntimeSecret");
+async function resolveSessionSecret2(env22) {
+  if (env22.AUTH_SECRET && env22.AUTH_SECRET.length >= 16)
+    return env22.AUTH_SECRET;
+  if (isDevEnv(env22.ENV))
     return DEV_AUTH_SECRET;
-  return getOrCreateRuntimeSecret(d1AsSecretStore(env2.DB));
+  return getOrCreateRuntimeSecret(d1AsSecretStore(env22.DB));
 }
-__name(resolveSessionSecret, "resolveSessionSecret");
-
+__name(resolveSessionSecret2, "resolveSessionSecret");
+__name2(resolveSessionSecret2, "resolveSessionSecret");
 var STAFF_COLS = "id, email, full_name, COALESCE(role_ext, role) AS role, active";
 function resolveStaffByEmail(db, email) {
   return db.prepare(`SELECT ${STAFF_COLS} FROM staff WHERE email = ? LIMIT 1`).bind(email).first();
 }
 __name(resolveStaffByEmail, "resolveStaffByEmail");
+__name2(resolveStaffByEmail, "resolveStaffByEmail");
 function getStaffById(db, staffId) {
   return db.prepare(`SELECT ${STAFF_COLS} FROM staff WHERE id = ? LIMIT 1`).bind(staffId).first();
 }
 __name(getStaffById, "getStaffById");
+__name2(getStaffById, "getStaffById");
 function listStaff(db, onlyActive = true) {
   const sql = onlyActive ? `SELECT ${STAFF_COLS} FROM staff WHERE active = 1 ORDER BY full_name` : `SELECT ${STAFF_COLS} FROM staff ORDER BY full_name`;
   return db.query(sql, []);
 }
 __name(listStaff, "listStaff");
-
+__name2(listStaff, "listStaff");
 var KEY_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 function randomString(length) {
   const bytes = new Uint8Array(length);
@@ -8316,26 +9548,31 @@ function randomString(length) {
   return out;
 }
 __name(randomString, "randomString");
+__name2(randomString, "randomString");
 async function hashApiKey(token) {
   const data = new TextEncoder().encode(token);
   const digest = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 __name(hashApiKey, "hashApiKey");
-async function generateApiKey(env2 = "live") {
-  const token = `ck_${env2}_${randomString(40)}`;
+__name2(hashApiKey, "hashApiKey");
+async function generateApiKey(env22 = "live") {
+  const token = `ck_${env22}_${randomString(40)}`;
   const [prefix, keyHash] = await Promise.all([Promise.resolve(token.slice(0, 11)), hashApiKey(token)]);
   return { token, prefix, keyHash };
 }
 __name(generateApiKey, "generateApiKey");
+__name2(generateApiKey, "generateApiKey");
 function looksLikeApiKey(value) {
   return /^ck_(live|test)_[A-Za-z0-9]{40}$/.test(value);
 }
 __name(looksLikeApiKey, "looksLikeApiKey");
+__name2(looksLikeApiKey, "looksLikeApiKey");
 function findApiKeyByHash(db, keyHash) {
   return db.prepare(`SELECT id, name, prefix, role, active, created_by FROM api_keys WHERE key_hash = ? LIMIT 1`).bind(keyHash).first();
 }
 __name(findApiKeyByHash, "findApiKeyByHash");
+__name2(findApiKeyByHash, "findApiKeyByHash");
 async function touchApiKeyLastUsed(db, id) {
   try {
     await db.prepare(`UPDATE api_keys SET last_used_at = datetime('now') WHERE id = ?`).bind(id).run();
@@ -8343,15 +9580,15 @@ async function touchApiKeyLastUsed(db, id) {
   }
 }
 __name(touchApiKeyLastUsed, "touchApiKeyLastUsed");
-
+__name2(touchApiKeyLastUsed, "touchApiKeyLastUsed");
 var DEV_STAFF_HEADER = "X-Dev-Staff-Id";
 var ACCESS_JWT_HEADER = "Cf-Access-Jwt-Assertion";
 var API_KEY_HEADER = "X-Api-Key";
 function authMiddleware() {
   return async (c, next) => {
-    const env2 = c.env;
-    const db = env2.DB;
-    if (env2.ENV === "development") {
+    const env22 = c.env;
+    const db = env22.DB;
+    if (env22.ENV === "development") {
       const devStaffId = c.req.header(DEV_STAFF_HEADER);
       if (devStaffId) {
         const staff2 = await getStaffById(db, devStaffId);
@@ -8393,7 +9630,7 @@ function authMiddleware() {
     const authHeader = c.req.header("Authorization");
     if (authHeader?.startsWith("Bearer ")) {
       const sessionToken = authHeader.slice(7).trim();
-      const payload2 = await verifySessionJwt(sessionToken, await resolveSessionSecret(env2));
+      const payload2 = await verifySessionJwt2(sessionToken, await resolveSessionSecret2(env22));
       if (payload2) {
         const staff2 = await getStaffById(db, payload2.sub);
         if (!staff2 || staff2.active !== 1) {
@@ -8412,7 +9649,7 @@ function authMiddleware() {
     if (!token) {
       throw new AuthError("\u062A\u0648\u06A9\u0646 \u062F\u0633\u062A\u0631\u0633\u06CC \u0645\u0648\u062C\u0648\u062F \u0646\u06CC\u0633\u062A");
     }
-    const payload = await verifyAccessToken(token, env2.CF_ACCESS_TEAM_DOMAIN);
+    const payload = await verifyAccessToken(token, env22.CF_ACCESS_TEAM_DOMAIN);
     if (!payload) {
       throw new AuthError("\u062A\u0648\u06A9\u0646 \u062F\u0633\u062A\u0631\u0633\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
     }
@@ -8430,6 +9667,7 @@ function authMiddleware() {
   };
 }
 __name(authMiddleware, "authMiddleware");
+__name2(authMiddleware, "authMiddleware");
 function requireRole(...roles) {
   return async (c, next) => {
     const ctx = c.get("authContext");
@@ -8442,6 +9680,7 @@ function requireRole(...roles) {
   };
 }
 __name(requireRole, "requireRole");
+__name2(requireRole, "requireRole");
 function supervisorGate(audit) {
   const ALLOWED_PREFIXES = ["/api/dashboard"];
   const ALLOWED_EXACT = ["/api/me"];
@@ -8469,6 +9708,7 @@ function supervisorGate(audit) {
   };
 }
 __name(supervisorGate, "supervisorGate");
+__name2(supervisorGate, "supervisorGate");
 function getAuthContext(c) {
   const ctx = c.get("authContext");
   if (!ctx)
@@ -8476,7 +9716,7 @@ function getAuthContext(c) {
   return ctx;
 }
 __name(getAuthContext, "getAuthContext");
-
+__name2(getAuthContext, "getAuthContext");
 var DEFAULT_PASSWORD = "1234";
 var PBKDF2_ITERATIONS = 25e3;
 var SALT_BYTES = 16;
@@ -8490,6 +9730,7 @@ function toB64(bytes) {
   return btoa(bin);
 }
 __name(toB64, "toB64");
+__name2(toB64, "toB64");
 function fromB64(b64) {
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
@@ -8498,6 +9739,7 @@ function fromB64(b64) {
   return out;
 }
 __name(fromB64, "fromB64");
+__name2(fromB64, "fromB64");
 function constantTimeEqual(a, b) {
   if (a.length !== b.length)
     return false;
@@ -8507,6 +9749,7 @@ function constantTimeEqual(a, b) {
   return diff === 0;
 }
 __name(constantTimeEqual, "constantTimeEqual");
+__name2(constantTimeEqual, "constantTimeEqual");
 async function pbkdf2(password, salt, iterations) {
   const key = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, [
     "deriveBits"
@@ -8519,6 +9762,7 @@ async function pbkdf2(password, salt, iterations) {
   return toB64(new Uint8Array(bits));
 }
 __name(pbkdf2, "pbkdf2");
+__name2(pbkdf2, "pbkdf2");
 async function hashPassword(password) {
   if (!password)
     throw new Error("password \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
@@ -8527,10 +9771,12 @@ async function hashPassword(password) {
   return `${HASH_PREFIX}$${PBKDF2_ITERATIONS}$${toB64(salt)}$${hash}`;
 }
 __name(hashPassword, "hashPassword");
+__name2(hashPassword, "hashPassword");
 function isLegacyPasswordHash(storedHash) {
   return Boolean(storedHash) && !storedHash.startsWith(`${HASH_PREFIX}$`);
 }
 __name(isLegacyPasswordHash, "isLegacyPasswordHash");
+__name2(isLegacyPasswordHash, "isLegacyPasswordHash");
 async function verifyPassword(password, storedHash) {
   if (!password || !storedHash)
     return false;
@@ -8554,7 +9800,7 @@ async function verifyPassword(password, storedHash) {
   return constantTimeEqual(candidate, storedHash);
 }
 __name(verifyPassword, "verifyPassword");
-
+__name2(verifyPassword, "verifyPassword");
 function findStaffByUsername(db, username) {
   const u = username.trim();
   return db.prepare(
@@ -8565,12 +9811,13 @@ function findStaffByUsername(db, username) {
   ).bind(u, u.toLowerCase()).first();
 }
 __name(findStaffByUsername, "findStaffByUsername");
-
+__name2(findStaffByUsername, "findStaffByUsername");
 var UNKNOWN_TEMPLATE_FALLBACK = "\u0627\u0637\u0644\u0627\u0639\u200C\u0631\u0633\u0627\u0646\u06CC \u0633\u0627\u0645\u0627\u0646\u0647 \u0645\u0631\u06A9\u0632";
 function line(parts, separator = " ") {
   return parts.filter((p) => Boolean(p && p.length > 0)).join(separator);
 }
 __name(line, "line");
+__name2(line, "line");
 function renderTemplate(id, vars = {}) {
   const clinic = vars.clinicName?.trim() || DEFAULT_CLINIC_NAME;
   switch (id) {
@@ -8656,6 +9903,7 @@ function renderTemplate(id, vars = {}) {
         "\u{1F4CA} \xAB\u062D\u0636\u0648\u0631 \u0641\u0631\u0632\u0646\u062F\xBB \u2014 \u0622\u0645\u0627\u0631 \u062D\u0636\u0648\u0631 \u06F3\u06F0 \u0631\u0648\u0632 \u0627\u062E\u06CC\u0631 (\u0648\u0627\u0644\u062F\u06CC\u0646)",
         "\u{1F3E5} \xAB\u0648\u0636\u0639\u06CC\u062A \u0645\u0631\u06A9\u0632\xBB \u2014 \u062E\u0644\u0627\u0635\u0647\u0654 \u0627\u0645\u0631\u0648\u0632 \u0645\u0631\u06A9\u0632 (\u0645\u062F\u06CC\u0631/\u0645\u0646\u0634\u06CC)",
         "/link CODE \u2014 \u0627\u062A\u0635\u0627\u0644 \u0628\u0627 \u06A9\u062F \u062F\u0631\u06CC\u0627\u0641\u062A\u06CC \u0627\u0632 \u0645\u0646\u0634\u06CC (\u0631\u0648\u0634 \u0642\u0628\u0644\u06CC)",
+        "\u{1F517} \u0644\u06CC\u0646\u06A9 \u0627\u062D\u0631\u0627\u0632 \u2014 \u0628\u0627 \u06A9\u0644\u06CC\u06A9 \u0631\u0648\u06CC \u0644\u06CC\u0646\u06A9 \u0645\u0646\u0634\u06CC\u060C \u06A9\u062F \u062E\u0648\u062F\u06A9\u0627\u0631 \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F",
         "/myid \u2014 \u0646\u0645\u0627\u06CC\u0634 \u0634\u0646\u0627\u0633\u0647 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 (\u0628\u0631\u0627\u06CC \u062B\u0628\u062A \u062F\u0633\u062A\u06CC)",
         "/help \u2014 \u0647\u0645\u06CC\u0646 \u0631\u0627\u0647\u0646\u0645\u0627"
       ].join("\n");
@@ -8674,6 +9922,13 @@ ${vars.extra}` : void 0
         "",
         "\u06A9\u062F \u0631\u0627 \u0627\u0632 \u0645\u0646\u0634\u06CC \u0645\u0631\u06A9\u0632 \u062F\u0631\u06CC\u0627\u0641\u062A \u06A9\u0646\u06CC\u062F \u0648 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F:",
         "/link CODE"
+      ].join("\n");
+    case "bot_link_already":
+      return [
+        "\u2139\uFE0F \u0627\u06CC\u0646 \u06A9\u062F \u0642\u0628\u0644\u0627\u064B \u0628\u0627 \u0647\u0645\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0645\u062A\u0635\u0644 \u0634\u062F\u0647 \u0627\u0633\u062A.",
+        "",
+        "\u0647\u0645\u06CC\u0646 \u062D\u0627\u0644\u0627 \u0645\u0646\u0648\u06CC \u067E\u0627\u06CC\u06CC\u0646 \u0686\u062A \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0634\u0645\u0627\u0633\u062A.",
+        "\u0628\u0631\u0627\u06CC \u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644: \u062F\u06A9\u0645\u0647\u0654 \xAB\u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644\xBB \u06CC\u0627 \u062F\u0633\u062A\u0648\u0631 /exit"
       ].join("\n");
     case "bot_myid":
       return [
@@ -8895,6 +10150,43 @@ ${vars.extra}` : void 0
         "",
         "\u0628\u0631\u0627\u06CC \u062F\u06CC\u062F\u0646 \u062A\u062D\u0642\u0642 \u0627\u0647\u062F\u0627\u0641 \u063A\u0631\u0628\u0627\u0644\u060C \u0628\u0627 \u0645\u062F\u06CC\u0631 \u06CC\u0627 \u0645\u0646\u0634\u06CC \u0645\u0631\u06A9\u0632 \u0647\u0645\u0627\u0647\u0646\u06AF \u0634\u0648\u06CC\u062F."
       ].join("\n");
+    case "bot_exit_confirm":
+      return [
+        "\u26A0\uFE0F \u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644",
+        "",
+        `\u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0645\u062A\u0635\u0644 \u0627\u0633\u062A \u0628\u0647: ${vars.ownerLabel ?? "\u062D\u0633\u0627\u0628 \u0641\u0639\u0644\u06CC"}`,
+        "",
+        "\u0628\u0627 \u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644:",
+        "\u2022 \u062F\u06CC\u06AF\u0631 \u0647\u06CC\u0686 \u0627\u0639\u0644\u0627\u0646\u06CC (\u0646\u0648\u0628\u062A\u060C \u062A\u06A9\u0644\u06CC\u0641\u060C \u06CC\u0627\u062F\u0622\u0648\u0631\u06CC\u060C \u062E\u0644\u0627\u0635\u0647\u0654 \u0631\u0648\u0632) \u062F\u0631\u06CC\u0627\u0641\u062A \u0646\u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F",
+        "\u2022 \u062F\u0633\u062A\u0648\u0631\u0647\u0627\u06CC \u0646\u0642\u0634 \u0634\u0645\u0627 \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F",
+        "\u2022 \u0647\u0631 \u0648\u0642\u062A \u0628\u062E\u0648\u0627\u0647\u06CC\u062F \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u06CC\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0648\u0635\u0644 \u0634\u0648\u06CC\u062F:",
+        "   \u06A9\u062F \u0645\u0644\u06CC \u06F1\u06F0 \u0631\u0642\u0645\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647\u0654 \u0647\u0645\u0631\u0627\u0647 \u06F0\u06F9\u2026 \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F\u060C \u06CC\u0627 /link CODE \u0628\u0632\u0646\u06CC\u062F",
+        "",
+        "\u0622\u06CC\u0627 \u0645\u0637\u0645\u0626\u0646\u06CC\u062F\u061F"
+      ].join("\n");
+    case "bot_exit_done":
+      return [
+        "\u2705 \u0627\u062A\u0635\u0627\u0644 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0642\u0637\u0639 \u0634\u062F.",
+        "",
+        "\u062F\u06CC\u06AF\u0631 \u0627\u0639\u0644\u0627\u0646\u06CC \u062F\u0631\u06CC\u0627\u0641\u062A \u0646\u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F \u0648 \u062F\u0633\u062A\u0648\u0631\u0647\u0627\u06CC \u0646\u0642\u0634 \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0627\u0633\u062A.",
+        "\u0628\u0631\u0627\u06CC \u0627\u062A\u0635\u0627\u0644 \u062F\u0648\u0628\u0627\u0631\u0647 \u0647\u0631 \u0648\u0642\u062A \u0628\u062E\u0648\u0627\u0647\u06CC\u062F:",
+        "\u2022 \u06A9\u062F \u0645\u0644\u06CC \u06F1\u06F0 \u0631\u0642\u0645\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647\u0654 \u0647\u0645\u0631\u0627\u0647 \u06F0\u06F9\u2026 \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F",
+        "\u2022 \u06CC\u0627 /link CODE (\u06A9\u062F \u062F\u0631\u06CC\u0627\u0641\u062A\u06CC \u0627\u0632 \u0645\u0646\u0634\u06CC/\u0645\u062F\u06CC\u0631 \u0645\u0631\u06A9\u0632)",
+        "",
+        `${vars.clinicName ?? "\u0645\u0631\u06A9\u0632"} \u2014 \u0647\u0645\u0631\u0627\u0647 \u0634\u0645\u0627\u0633\u062A.`
+      ].join("\n");
+    case "bot_exit_cancelled":
+      return [
+        "\u2714\uFE0F \u0627\u0646\u0635\u0631\u0627\u0641 \u062F\u0627\u062F\u06CC\u062F \u2014 \u0627\u062A\u0635\u0627\u0644 \u0648 \u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627\u06CC \u0634\u0645\u0627 \u0633\u0631 \u062C\u0627\u06CC\u0634 \u0627\u0633\u062A.",
+        "",
+        "\u0647\u0631 \u0648\u0642\u062A \u062E\u0648\u0627\u0633\u062A\u06CC\u062F \u0627\u0632 \u0645\u0646\u0648\u06CC \u067E\u0627\u06CC\u06CC\u0646 \xAB\u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F \u06CC\u0627 /exit \u0628\u0641\u0631\u0633\u062A\u06CC\u062F."
+      ].join("\n");
+    case "bot_exit_not_linked":
+      return [
+        "\u2139\uFE0F \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0627\u0632 \u0642\u0628\u0644 \u0628\u0647 \u062D\u0633\u0627\u0628\u06CC \u0645\u062A\u0635\u0644 \u0646\u06CC\u0633\u062A.",
+        "",
+        "\u0628\u0631\u0627\u06CC \u0627\u062A\u0635\u0627\u0644: \u06A9\u062F \u0645\u0644\u06CC \u06F1\u06F0 \u0631\u0642\u0645\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647\u0654 \u0647\u0645\u0631\u0627\u0647 \u06F0\u06F9\u2026 \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F\u060C \u06CC\u0627 /link CODE \u0628\u0632\u0646\u06CC\u062F."
+      ].join("\n");
     case "bot_help_guest":
       return [
         "\u{1F4CB} \u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u0628\u0627\u062A:",
@@ -8930,7 +10222,8 @@ ${vars.extra}` : void 0
         "/about \u2014 \u062F\u0631\u0628\u0627\u0631\u0647\u0654 \u0645\u0631\u06A9\u0632",
         "/myid \u2014 \u0634\u0646\u0627\u0633\u0647 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648",
         "/help \u2014 \u0647\u0645\u06CC\u0646 \u0631\u0627\u0647\u0646\u0645\u0627",
-        "\u0645\u062F\u06CC\u0631: \u{1F4CA} \xAB\u06AF\u0632\u0627\u0631\u0634 KPI\xBB \u2014 \u0634\u0627\u062E\u0635\u200C\u0647\u0627\u06CC \u062A\u062C\u0645\u06CC\u0639\u06CC"
+        "\u0645\u062F\u06CC\u0631: \u{1F4CA} \xAB\u06AF\u0632\u0627\u0631\u0634 KPI\xBB \u2014 \u0634\u0627\u062E\u0635\u200C\u0647\u0627\u06CC \u062A\u062C\u0645\u06CC\u0639\u06CC",
+        "/exit \u2014 \u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 (\u062A\u0623\u06CC\u06CC\u062F \u062F\u0648\u0645\u0631\u062D\u0644\u0647\u200C\u0627\u06CC)"
       ].join("\n");
     case "bot_help_therapist":
       return [
@@ -8947,7 +10240,8 @@ ${vars.extra}` : void 0
         "\u{1F4E4} \xAB\u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627\u06CC \u062F\u0631 \u0635\u0641\xBB \u2014 \u0648\u0636\u0639\u06CC\u062A \u0635\u0641 \u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627\u06CC \u0645\u0631\u06A9\u0632",
         "/about \u2014 \u062F\u0631\u0628\u0627\u0631\u0647\u0654 \u0645\u0631\u06A9\u0632",
         "/myid \u2014 \u0634\u0646\u0627\u0633\u0647 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648",
-        "/help \u2014 \u0647\u0645\u06CC\u0646 \u0631\u0627\u0647\u0646\u0645\u0627"
+        "/help \u2014 \u0647\u0645\u06CC\u0646 \u0631\u0627\u0647\u0646\u0645\u0627",
+        "/exit \u2014 \u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 (\u062A\u0623\u06CC\u06CC\u062F \u062F\u0648\u0645\u0631\u062D\u0644\u0647\u200C\u0627\u06CC)"
       ].join("\n");
     case "bot_help_class":
       return [
@@ -8962,7 +10256,8 @@ ${vars.extra}` : void 0
         "\u{1F4D6} \xAB\u0622\u06AF\u0627\u0647\u06CC\u200C\u0647\u0627\u06CC \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A\xBB \u2014 \u06F9 \u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u062A\u062E\u0635\u0635\u06CC + \u06F1\u06F8 \u062F\u0641\u062A\u0631 \u0622\u0645\u0648\u0632\u0634\u06CC A4 \u0628\u0627 \u0644\u06CC\u0646\u06A9 \u0645\u0633\u062A\u0642\u06CC\u0645 (\u062F\u0633\u062A\u0648\u0631 /awareness)",
         "/about \u2014 \u062F\u0631\u0628\u0627\u0631\u0647\u0654 \u0645\u0631\u06A9\u0632",
         "/myid \u2014 \u0634\u0646\u0627\u0633\u0647 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648",
-        "/help \u2014 \u0647\u0645\u06CC\u0646 \u0631\u0627\u0647\u0646\u0645\u0627"
+        "/help \u2014 \u0647\u0645\u06CC\u0646 \u0631\u0627\u0647\u0646\u0645\u0627",
+        "/exit \u2014 \u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 (\u062A\u0623\u06CC\u06CC\u062F \u062F\u0648\u0645\u0631\u062D\u0644\u0647\u200C\u0627\u06CC)"
       ].join("\n");
     case "bot_help_parent":
       return [
@@ -8978,7 +10273,8 @@ ${vars.extra}` : void 0
         "/myid \u2014 \u0634\u0646\u0627\u0633\u0647 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648",
         "/help \u2014 \u0647\u0645\u06CC\u0646 \u0631\u0627\u0647\u0646\u0645\u0627",
         "",
-        "\u0628\u0631\u0627\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u06CC\u0627 \u0644\u063A\u0648 \u0646\u0648\u0628\u062A \u0628\u0627 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F."
+        "\u0628\u0631\u0627\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u06CC\u0627 \u0644\u063A\u0648 \u0646\u0648\u0628\u062A \u0628\u0627 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F.",
+        "/exit \u2014 \u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 (\u062A\u0623\u06CC\u06CC\u062F \u062F\u0648\u0645\u0631\u062D\u0644\u0647\u200C\u0627\u06CC)"
       ].join("\n");
     case "bot_about":
       return [
@@ -9341,6 +10637,7 @@ ${vars.extra}` : void 0
   }
 }
 __name(renderTemplate, "renderTemplate");
+__name2(renderTemplate, "renderTemplate");
 function renderScheduleMessage(opts) {
   const clinic = opts.clinicName?.trim() || DEFAULT_CLINIC_NAME;
   const head = [opts.title, `(${clinic})`, ""].join(" ");
@@ -9350,25 +10647,27 @@ function renderScheduleMessage(opts) {
 \u{1F550} \u0645\u0648\u0631\u062F\u06CC \u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A.`;
   }
   const body = opts.entries.map((e) => {
-    const time3 = faDigits(e.timeLabel);
+    const time32 = faDigits(e.timeLabel);
     const status = e.cancelled ? " (\u0644\u063A\u0648\u0634\u062F\u0647)" : "";
     const sub = e.subtitle ? ` \u2014 ${e.subtitle}` : "";
-    return `${time3}  ${e.title}${status}${sub}`;
+    return `${time32}  ${e.title}${status}${sub}`;
   });
   return [head.trim(), "", ...body].join("\n");
 }
 __name(renderScheduleMessage, "renderScheduleMessage");
+__name2(renderScheduleMessage, "renderScheduleMessage");
 function renderDigestBody(entries) {
   if (entries.length === 0)
     return "\u{1F550} \u0645\u0648\u0631\u062F\u06CC \u0628\u0631\u0627\u06CC \u0627\u0645\u0631\u0648\u0632 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A.";
   return entries.map((e) => {
-    const time3 = faDigits(e.timeLabel);
+    const time32 = faDigits(e.timeLabel);
     const status = e.cancelled ? " (\u0644\u063A\u0648\u0634\u062F\u0647)" : "";
     const sub = e.subtitle ? ` \u2014 ${e.subtitle}` : "";
-    return `${time3}  ${e.title}${status}${sub}`;
+    return `${time32}  ${e.title}${status}${sub}`;
   }).join("\n");
 }
 __name(renderDigestBody, "renderDigestBody");
+__name2(renderDigestBody, "renderDigestBody");
 function renderFollowupsMessage(opts) {
   const clinic = opts.clinicName?.trim() || DEFAULT_CLINIC_NAME;
   const head = `${opts.title} (${clinic})`;
@@ -9380,7 +10679,7 @@ function renderFollowupsMessage(opts) {
 \u2705 \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u0628\u0627\u0632\u06CC \u0631\u0648\u06CC \u0645\u06CC\u0632 \u0634\u0645\u0627 \u0646\u06CC\u0633\u062A.`;
   }
   const sections = [head, ""];
-  const emit3 = /* @__PURE__ */ __name((mark, label, items) => {
+  const emit3 = /* @__PURE__ */ __name2((mark, label, items) => {
     if (items.length === 0)
       return;
     sections.push(`${mark} ${label} (${faDigits(String(items.length))}):`);
@@ -9402,6 +10701,7 @@ function renderFollowupsMessage(opts) {
   return sections.join("\n");
 }
 __name(renderFollowupsMessage, "renderFollowupsMessage");
+__name2(renderFollowupsMessage, "renderFollowupsMessage");
 function renderAttendanceSummary(opts) {
   const clinic = opts.clinicName?.trim() || DEFAULT_CLINIC_NAME;
   const head = `${opts.title} (${clinic})`;
@@ -9421,6 +10721,7 @@ function renderAttendanceSummary(opts) {
   return [head, "", ...lines].join("\n");
 }
 __name(renderAttendanceSummary, "renderAttendanceSummary");
+__name2(renderAttendanceSummary, "renderAttendanceSummary");
 function renderCenterStatus(opts) {
   const clinic = opts.clinicName?.trim() || DEFAULT_CLINIC_NAME;
   const head = `${opts.title} (${clinic})`;
@@ -9435,6 +10736,7 @@ function renderCenterStatus(opts) {
   return [head, "", ...lines].join("\n");
 }
 __name(renderCenterStatus, "renderCenterStatus");
+__name2(renderCenterStatus, "renderCenterStatus");
 function renderSearchResults(opts) {
   const clinic = opts.clinicName?.trim() || DEFAULT_CLINIC_NAME;
   const head = `${opts.title} (${clinic})`;
@@ -9447,6 +10749,7 @@ function renderSearchResults(opts) {
   return [head, "", ...lines].join("\n");
 }
 __name(renderSearchResults, "renderSearchResults");
+__name2(renderSearchResults, "renderSearchResults");
 var CENTER_SCHEDULE_MAX_ROWS = 12;
 function renderCenterSchedule(opts) {
   const clinic = opts.clinicName?.trim() || DEFAULT_CLINIC_NAME;
@@ -9468,6 +10771,7 @@ function renderCenterSchedule(opts) {
   return [head, "", ...body].join("\n") + tail;
 }
 __name(renderCenterSchedule, "renderCenterSchedule");
+__name2(renderCenterSchedule, "renderCenterSchedule");
 var WAITLIST_LIST_MAX_ROWS = 8;
 function renderWaitlistList(opts) {
   const clinic = opts.clinicName?.trim() || DEFAULT_CLINIC_NAME;
@@ -9489,6 +10793,7 @@ function renderWaitlistList(opts) {
   return [head, "", ...body].join("\n") + tail;
 }
 __name(renderWaitlistList, "renderWaitlistList");
+__name2(renderWaitlistList, "renderWaitlistList");
 var SCREENING_GOAL_MAX_ROWS = 10;
 function renderScreeningGoal(opts) {
   const clinic = opts.clinicName?.trim() || DEFAULT_CLINIC_NAME;
@@ -9509,7 +10814,7 @@ function renderScreeningGoal(opts) {
   return [head, "", counters, "", ...body].join("\n") + tail;
 }
 __name(renderScreeningGoal, "renderScreeningGoal");
-
+__name2(renderScreeningGoal, "renderScreeningGoal");
 function rowToPrefs(row) {
   return {
     studentId: row.student_id,
@@ -9521,6 +10826,7 @@ function rowToPrefs(row) {
   };
 }
 __name(rowToPrefs, "rowToPrefs");
+__name2(rowToPrefs, "rowToPrefs");
 function rowToBotLink(row) {
   return {
     id: row.id,
@@ -9534,6 +10840,7 @@ function rowToBotLink(row) {
   };
 }
 __name(rowToBotLink, "rowToBotLink");
+__name2(rowToBotLink, "rowToBotLink");
 var NOTIFICATION_COLS = "id, channel, template, recipient, student_id, appointment_id, staff_id, payload, status, attempts, last_error, dedup_key, send_at, sent_at, created_at, updated_at";
 function insertNotification(input) {
   return {
@@ -9557,6 +10864,7 @@ function insertNotification(input) {
   };
 }
 __name(insertNotification, "insertNotification");
+__name2(insertNotification, "insertNotification");
 function selectNotificationById(id) {
   return {
     sql: `SELECT ${NOTIFICATION_COLS} FROM notifications WHERE id = ?`,
@@ -9564,6 +10872,7 @@ function selectNotificationById(id) {
   };
 }
 __name(selectNotificationById, "selectNotificationById");
+__name2(selectNotificationById, "selectNotificationById");
 function selectNotifications(filters) {
   const conditions = [];
   const params = [];
@@ -9586,6 +10895,7 @@ function selectNotifications(filters) {
   };
 }
 __name(selectNotifications, "selectNotifications");
+__name2(selectNotifications, "selectNotifications");
 function selectPendingNotifications(limit, maxAttempts, nowIso) {
   return {
     sql: `SELECT ${NOTIFICATION_COLS}
@@ -9598,6 +10908,7 @@ function selectPendingNotifications(limit, maxAttempts, nowIso) {
   };
 }
 __name(selectPendingNotifications, "selectPendingNotifications");
+__name2(selectPendingNotifications, "selectPendingNotifications");
 function releaseNotificationById(id, nowIso) {
   return {
     sql: `UPDATE notifications
@@ -9607,6 +10918,7 @@ function releaseNotificationById(id, nowIso) {
   };
 }
 __name(releaseNotificationById, "releaseNotificationById");
+__name2(releaseNotificationById, "releaseNotificationById");
 function releaseAllDrafts(nowIso) {
   return {
     sql: `UPDATE notifications
@@ -9616,6 +10928,7 @@ function releaseAllDrafts(nowIso) {
   };
 }
 __name(releaseAllDrafts, "releaseAllDrafts");
+__name2(releaseAllDrafts, "releaseAllDrafts");
 function stalePendingToSkipped(maxAttempts, nowIso) {
   return {
     sql: `UPDATE notifications
@@ -9625,6 +10938,7 @@ function stalePendingToSkipped(maxAttempts, nowIso) {
   };
 }
 __name(stalePendingToSkipped, "stalePendingToSkipped");
+__name2(stalePendingToSkipped, "stalePendingToSkipped");
 function markNotificationSent(id, externalId, nowIso) {
   return {
     sql: `UPDATE notifications
@@ -9635,15 +10949,17 @@ function markNotificationSent(id, externalId, nowIso) {
   };
 }
 __name(markNotificationSent, "markNotificationSent");
-function markNotificationFailed(id, error3, nowIso) {
+__name2(markNotificationSent, "markNotificationSent");
+function markNotificationFailed(id, error32, nowIso) {
   return {
     sql: `UPDATE notifications
              SET status = 'failed', last_error = ?, attempts = attempts + 1, updated_at = ?
            WHERE id = ?`,
-    params: [error3.slice(0, 500), nowIso, id]
+    params: [error32.slice(0, 500), nowIso, id]
   };
 }
 __name(markNotificationFailed, "markNotificationFailed");
+__name2(markNotificationFailed, "markNotificationFailed");
 function markNotificationSkipped(id, reason, nowIso) {
   return {
     sql: `UPDATE notifications
@@ -9653,6 +10969,7 @@ function markNotificationSkipped(id, reason, nowIso) {
   };
 }
 __name(markNotificationSkipped, "markNotificationSkipped");
+__name2(markNotificationSkipped, "markNotificationSkipped");
 function retryFailedNotifications(limit, nowIso) {
   return {
     sql: `UPDATE notifications
@@ -9662,6 +10979,7 @@ function retryFailedNotifications(limit, nowIso) {
   };
 }
 __name(retryFailedNotifications, "retryFailedNotifications");
+__name2(retryFailedNotifications, "retryFailedNotifications");
 function notificationStatusCounts() {
   return {
     sql: `SELECT status, COUNT(*) AS count FROM notifications GROUP BY status`,
@@ -9669,6 +10987,7 @@ function notificationStatusCounts() {
   };
 }
 __name(notificationStatusCounts, "notificationStatusCounts");
+__name2(notificationStatusCounts, "notificationStatusCounts");
 function selectPrefs(studentId) {
   return {
     sql: `SELECT student_id, channel, chat_id, reminders_enabled, reminder_hours_before, updated_at
@@ -9677,6 +10996,7 @@ function selectPrefs(studentId) {
   };
 }
 __name(selectPrefs, "selectPrefs");
+__name2(selectPrefs, "selectPrefs");
 function selectPrefsMany(studentIds) {
   if (studentIds.length === 0) {
     return { sql: `SELECT student_id, channel, chat_id, reminders_enabled, reminder_hours_before, updated_at
@@ -9690,6 +11010,7 @@ function selectPrefsMany(studentIds) {
   };
 }
 __name(selectPrefsMany, "selectPrefsMany");
+__name2(selectPrefsMany, "selectPrefsMany");
 function upsertPrefs(input) {
   return {
     sql: `INSERT INTO notification_prefs
@@ -9712,6 +11033,7 @@ function upsertPrefs(input) {
   };
 }
 __name(upsertPrefs, "upsertPrefs");
+__name2(upsertPrefs, "upsertPrefs");
 var BOT_LINK_COLS = "id, code, student_id, chat_id, status, created_by, created_at, updated_at";
 function insertBotLink(input) {
   return {
@@ -9721,6 +11043,7 @@ function insertBotLink(input) {
   };
 }
 __name(insertBotLink, "insertBotLink");
+__name2(insertBotLink, "insertBotLink");
 function selectBotLinkByCode(code) {
   return {
     sql: `SELECT ${BOT_LINK_COLS} FROM bot_links WHERE code = ?`,
@@ -9728,6 +11051,7 @@ function selectBotLinkByCode(code) {
   };
 }
 __name(selectBotLinkByCode, "selectBotLinkByCode");
+__name2(selectBotLinkByCode, "selectBotLinkByCode");
 function selectBotLinks(filters) {
   if (filters.studentId) {
     return {
@@ -9741,15 +11065,17 @@ function selectBotLinks(filters) {
   };
 }
 __name(selectBotLinks, "selectBotLinks");
+__name2(selectBotLinks, "selectBotLinks");
 function linkBotLink(id, chatId, nowIso) {
   return {
     sql: `UPDATE bot_links
              SET status = 'linked', chat_id = ?, updated_at = ?
-           WHERE id = ? AND status = 'pending'`,
+           WHERE id = ?`,
     params: [chatId, nowIso, id]
   };
 }
 __name(linkBotLink, "linkBotLink");
+__name2(linkBotLink, "linkBotLink");
 function insertBotLinkLinked(input) {
   return {
     sql: `INSERT INTO bot_links (id, code, student_id, chat_id, status, created_by, created_at, updated_at)
@@ -9758,6 +11084,7 @@ function insertBotLinkLinked(input) {
   };
 }
 __name(insertBotLinkLinked, "insertBotLinkLinked");
+__name2(insertBotLinkLinked, "insertBotLinkLinked");
 function insertStaffLinkLinked(input) {
   return {
     sql: `INSERT INTO staff_bot_links (id, code, staff_id, chat_id, status, created_by, created_at, updated_at)
@@ -9766,6 +11093,7 @@ function insertStaffLinkLinked(input) {
   };
 }
 __name(insertStaffLinkLinked, "insertStaffLinkLinked");
+__name2(insertStaffLinkLinked, "insertStaffLinkLinked");
 function selectBotLinkIdFor(studentId, chatId) {
   return {
     sql: `SELECT id FROM bot_links WHERE student_id = ? AND chat_id = ? AND status = 'linked' LIMIT 1`,
@@ -9773,6 +11101,7 @@ function selectBotLinkIdFor(studentId, chatId) {
   };
 }
 __name(selectBotLinkIdFor, "selectBotLinkIdFor");
+__name2(selectBotLinkIdFor, "selectBotLinkIdFor");
 function selectStaffLinkIdFor(staffId, chatId) {
   return {
     sql: `SELECT id FROM staff_bot_links WHERE staff_id = ? AND chat_id = ? AND status = 'linked' LIMIT 1`,
@@ -9780,6 +11109,7 @@ function selectStaffLinkIdFor(staffId, chatId) {
   };
 }
 __name(selectStaffLinkIdFor, "selectStaffLinkIdFor");
+__name2(selectStaffLinkIdFor, "selectStaffLinkIdFor");
 function selectStudentIdsByChat(chatId) {
   return {
     sql: `SELECT DISTINCT student_id FROM bot_links WHERE chat_id = ? AND status = 'linked'`,
@@ -9787,6 +11117,7 @@ function selectStudentIdsByChat(chatId) {
   };
 }
 __name(selectStudentIdsByChat, "selectStudentIdsByChat");
+__name2(selectStudentIdsByChat, "selectStudentIdsByChat");
 function rowToStaffBotLink(row) {
   return {
     id: row.id,
@@ -9800,6 +11131,7 @@ function rowToStaffBotLink(row) {
   };
 }
 __name(rowToStaffBotLink, "rowToStaffBotLink");
+__name2(rowToStaffBotLink, "rowToStaffBotLink");
 var STAFF_LINK_COLS = "id, code, staff_id, chat_id, status, created_by, created_at, updated_at";
 function insertStaffLink(input) {
   return {
@@ -9809,6 +11141,7 @@ function insertStaffLink(input) {
   };
 }
 __name(insertStaffLink, "insertStaffLink");
+__name2(insertStaffLink, "insertStaffLink");
 function selectStaffLinkByCode(code) {
   return {
     sql: `SELECT ${STAFF_LINK_COLS} FROM staff_bot_links WHERE code = ?`,
@@ -9816,6 +11149,7 @@ function selectStaffLinkByCode(code) {
   };
 }
 __name(selectStaffLinkByCode, "selectStaffLinkByCode");
+__name2(selectStaffLinkByCode, "selectStaffLinkByCode");
 function selectStaffLinks(filters) {
   if (filters.staffId) {
     return {
@@ -9829,15 +11163,17 @@ function selectStaffLinks(filters) {
   };
 }
 __name(selectStaffLinks, "selectStaffLinks");
+__name2(selectStaffLinks, "selectStaffLinks");
 function linkStaffLink(id, chatId, nowIso) {
   return {
     sql: `UPDATE staff_bot_links
              SET status = 'linked', chat_id = ?, updated_at = ?
-           WHERE id = ? AND status = 'pending'`,
+           WHERE id = ?`,
     params: [chatId, nowIso, id]
   };
 }
 __name(linkStaffLink, "linkStaffLink");
+__name2(linkStaffLink, "linkStaffLink");
 function selectStaffChats(staffId) {
   return {
     sql: `SELECT DISTINCT chat_id FROM staff_bot_links
@@ -9846,6 +11182,7 @@ function selectStaffChats(staffId) {
   };
 }
 __name(selectStaffChats, "selectStaffChats");
+__name2(selectStaffChats, "selectStaffChats");
 function rowToClassBotLink(row) {
   const rec = {
     id: row.id,
@@ -9865,6 +11202,7 @@ function rowToClassBotLink(row) {
   return rec;
 }
 __name(rowToClassBotLink, "rowToClassBotLink");
+__name2(rowToClassBotLink, "rowToClassBotLink");
 var CLASS_LINK_COLS = "id, code, class_id, chat_id, status, created_by, created_at, updated_at";
 function insertClassLink(input) {
   return {
@@ -9874,6 +11212,7 @@ function insertClassLink(input) {
   };
 }
 __name(insertClassLink, "insertClassLink");
+__name2(insertClassLink, "insertClassLink");
 function selectClassLinkByCode(code) {
   return {
     sql: `SELECT ${CLASS_LINK_COLS} FROM class_bot_links WHERE code = ?`,
@@ -9881,6 +11220,7 @@ function selectClassLinkByCode(code) {
   };
 }
 __name(selectClassLinkByCode, "selectClassLinkByCode");
+__name2(selectClassLinkByCode, "selectClassLinkByCode");
 function selectClassLinks(filters) {
   if (filters.classId) {
     return {
@@ -9899,15 +11239,17 @@ function selectClassLinks(filters) {
   };
 }
 __name(selectClassLinks, "selectClassLinks");
+__name2(selectClassLinks, "selectClassLinks");
 function linkClassLink(id, chatId, nowIso) {
   return {
     sql: `UPDATE class_bot_links
              SET status = 'linked', chat_id = ?, updated_at = ?
-           WHERE id = ? AND status = 'pending'`,
+           WHERE id = ? AND status != 'revoked'`,
     params: [chatId, nowIso, id]
   };
 }
 __name(linkClassLink, "linkClassLink");
+__name2(linkClassLink, "linkClassLink");
 function selectClassChats(classId) {
   return {
     sql: `SELECT DISTINCT chat_id FROM class_bot_links
@@ -9916,6 +11258,7 @@ function selectClassChats(classId) {
   };
 }
 __name(selectClassChats, "selectClassChats");
+__name2(selectClassChats, "selectClassChats");
 function resolveChatOwner(chatId) {
   return {
     sql: `SELECT 'staff' AS kind, l.staff_id AS ref_id, COALESCE(s.role_ext, s.role) AS role
@@ -9932,22 +11275,23 @@ function resolveChatOwner(chatId) {
   };
 }
 __name(resolveChatOwner, "resolveChatOwner");
-
+__name2(resolveChatOwner, "resolveChatOwner");
 function isUniqueViolation(err) {
   const msg = err instanceof Error ? err.message : String(err);
   return msg.includes("UNIQUE") || msg.includes("unique");
 }
 __name(isUniqueViolation, "isUniqueViolation");
+__name2(isUniqueViolation, "isUniqueViolation");
 function createNotifyService(deps) {
   const { db, logger } = deps;
-  const log3 = logger.child("notify");
+  const log32 = logger.child("notify");
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   const maxAttempts = deps.maxAttempts ?? MAX_DISPATCH_ATTEMPTS;
   const channels = /* @__PURE__ */ new Map();
   return {
-    registerChannel(channel2) {
-      channels.set(channel2.name, channel2);
-      log3.info("channel.registered", { channel: channel2.name });
+    registerChannel(channel22) {
+      channels.set(channel22.name, channel22);
+      log32.info("channel.registered", { channel: channel22.name });
     },
     getChannel(name) {
       return channels.get(name) ?? null;
@@ -9984,7 +11328,7 @@ function createNotifyService(deps) {
         return { id, duplicate: false };
       } catch (err) {
         if (input.dedupKey && isUniqueViolation(err)) {
-          log3.warn("enqueue.duplicate.race", { dedupKey: input.dedupKey });
+          log32.warn("enqueue.duplicate.race", { dedupKey: input.dedupKey });
           return { id: null, duplicate: true };
         }
         throw err;
@@ -9997,8 +11341,8 @@ function createNotifyService(deps) {
       const pending = await db.query(...spreadInsert(selectPendingNotifications(limit, maxAttempts, nowIso))).then((rows) => rows.map(rowFromDb));
       for (const row of pending) {
         summary.processed += 1;
-        const channel2 = channels.get(row.channel);
-        if (!channel2) {
+        const channel22 = channels.get(row.channel);
+        if (!channel22) {
           await db.execute(
             ...spreadInsert(markNotificationFailed(row.id, "CHANNEL_UNAVAILABLE", nowIso))
           );
@@ -10020,7 +11364,7 @@ function createNotifyService(deps) {
         }
         let result;
         try {
-          result = await channel2.send({ to: row.recipient, text });
+          result = await channel22.send({ to: row.recipient, text });
         } catch (err) {
           result = { ok: false, error: err instanceof Error ? err.message : "UNKNOWN" };
         }
@@ -10034,18 +11378,18 @@ function createNotifyService(deps) {
             ...spreadInsert(markNotificationFailed(row.id, result.error ?? "SEND_FAILED", nowIso))
           );
           summary.failed += 1;
-          log3.warn("dispatch.failed", { id: row.id, channel: row.channel, error: result.error });
+          log32.warn("dispatch.failed", { id: row.id, channel: row.channel, error: result.error });
         }
       }
       if (summary.processed > 0) {
-        log3.info("dispatch.done", { ...summary });
+        log32.info("dispatch.done", { ...summary });
       }
       return summary;
     },
     async retryFailed(limit = 50) {
       const res = await db.execute(...spreadInsert(retryFailedNotifications(limit, now().toISOString())));
       const changes = res.meta?.changes ?? 0;
-      log3.info("retry.queued", { count: changes });
+      log32.info("retry.queued", { count: changes });
       return changes;
     },
     /** — ارسال فوری یک رکورد از Outbox */
@@ -10096,10 +11440,12 @@ function createNotifyService(deps) {
   };
 }
 __name(createNotifyService, "createNotifyService");
+__name2(createNotifyService, "createNotifyService");
 function spreadInsert(stmt) {
   return [stmt.sql, stmt.params];
 }
 __name(spreadInsert, "spreadInsert");
+__name2(spreadInsert, "spreadInsert");
 function rowFromDb(row) {
   let payload = {};
   try {
@@ -10127,25 +11473,69 @@ function rowFromDb(row) {
   };
 }
 __name(rowFromDb, "rowFromDb");
-
+__name2(rowFromDb, "rowFromDb");
 function createInternalChannel(logger) {
-  const log3 = logger.child("internal-channel");
+  const log32 = logger.child("internal-channel");
   let counter = 0;
   return {
     name: "internal",
     async send(message) {
       counter += 1;
-      log3.info("message.delivered", { to: message.to, chars: message.text.length });
+      log32.info("message.delivered", { to: message.to, chars: message.text.length });
       return { ok: true, externalId: `internal-${Date.now()}-${counter}` };
     }
   };
 }
 __name(createInternalChannel, "createInternalChannel");
-
+__name2(createInternalChannel, "createInternalChannel");
+async function fetchBaleBotUsername(token, fetchImpl) {
+  const doFetch = fetchImpl ?? fetch;
+  try {
+    const res = await doFetch(`https://tapi.bale.ai/bot${token}/getMe`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}"
+    });
+    const body = await res.json().catch(() => ({}));
+    const username = body?.result?.username;
+    if (typeof username !== "string")
+      return null;
+    const clean = username.trim().replace(/^@/, "");
+    return /^[A-Za-z0-9_]{2,64}$/.test(clean) ? clean : null;
+  } catch {
+    return null;
+  }
+}
+__name(fetchBaleBotUsername, "fetchBaleBotUsername");
+__name2(fetchBaleBotUsername, "fetchBaleBotUsername");
 function createBaleChannel(options) {
   const base = (options.apiBase ?? "https://tapi.bale.ai").replace(/\/+$/, "");
   const doFetch = options.fetchImpl ?? fetch;
   const url = `${base}/bot${options.token}/sendMessage`;
+  const callMethod = /* @__PURE__ */ __name(async (method, payload) => {
+    try {
+      const res = await doFetch(`${base}/bot${options.token}/${method}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body.ok === false) {
+        return { ok: false, error: `BALE_${res.status}: ${body.description ?? "unknown error"}` };
+      }
+      const messageId = body.result?.message_id;
+      return { ok: true, externalId: messageId != null ? String(messageId) : void 0 };
+    } catch (err) {
+      return { ok: false, error: `BALE_NETWORK: ${err instanceof Error ? err.message : "unknown"}` };
+    }
+  }, "callMethod");
+  const inlineMarkup = /* @__PURE__ */ __name((buttons) => {
+    if (!buttons || buttons.length === 0)
+      return void 0;
+    return {
+      inline_keyboard: buttons.map((row) => row.map((b) => ({ text: b.text, callback_data: b.callbackData })))
+    };
+  }, "inlineMarkup");
   return {
     name: "bale",
     async send(message) {
@@ -10189,18 +11579,40 @@ function createBaleChannel(options) {
           error: `BALE_NETWORK: ${err instanceof Error ? err.message : "unknown"}`
         };
       }
+    },
+    // ─── منوهای محوشونده: ویرایش درجای پیام + حذف + پاسخ callback ───
+    async editMessageText(chatId, messageId, text, buttons) {
+      const result = await callMethod("editMessageText", {
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        reply_markup: inlineMarkup(buttons)
+      });
+      if (!result.ok && /not modified/i.test(result.error ?? "")) {
+        return { ok: true };
+      }
+      return result;
+    },
+    async deleteMessage(chatId, messageId) {
+      return callMethod("deleteMessage", { chat_id: chatId, message_id: messageId });
+    },
+    async answerCallbackQuery(callbackId, text) {
+      const payload = { callback_query_id: callbackId };
+      if (text)
+        payload.text = text;
+      return callMethod("answerCallbackQuery", payload);
     }
   };
 }
 __name(createBaleChannel, "createBaleChannel");
-
-var FetchMediaError = class extends Error {
+__name2(createBaleChannel, "createBaleChannel");
+var FetchMediaError = /* @__PURE__ */ __name(class extends Error {
   constructor(message) {
     super(message);
     this.name = "FetchMediaError";
   }
-};
-__name(FetchMediaError, "FetchMediaError");
+}, "FetchMediaError");
+__name2(FetchMediaError, "FetchMediaError");
 function createBaleMediaFetcher(options) {
   const base = (options.apiBase ?? "https://tapi.bale.ai").replace(/\/+$/, "");
   const doFetch = options.fetchImpl ?? fetch;
@@ -10240,7 +11652,7 @@ function createBaleMediaFetcher(options) {
   };
 }
 __name(createBaleMediaFetcher, "createBaleMediaFetcher");
-
+__name2(createBaleMediaFetcher, "createBaleMediaFetcher");
 var PERSIAN_DIGITS2 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
 var ARABIC_DIGITS2 = "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669";
 var ZWNJ = "\u200C";
@@ -10264,6 +11676,7 @@ function stripToDigits(raw2) {
   return out;
 }
 __name(stripToDigits, "stripToDigits");
+__name2(stripToDigits, "stripToDigits");
 function classifyIdentityDigits(digits) {
   if (digits.length === 10)
     return "national_id";
@@ -10274,16 +11687,19 @@ function classifyIdentityDigits(digits) {
   return "invalid";
 }
 __name(classifyIdentityDigits, "classifyIdentityDigits");
+__name2(classifyIdentityDigits, "classifyIdentityDigits");
 function normalizePhoneDigits(digits) {
   if (digits.length === 12 && digits.startsWith("98"))
     return "0" + digits.slice(2);
   return digits;
 }
 __name(normalizePhoneDigits, "normalizePhoneDigits");
+__name2(normalizePhoneDigits, "normalizePhoneDigits");
 function normalizeMenuText(text) {
   return text.split(ZWNJ).join("").split(ZWJ).join("").trim();
 }
 __name(normalizeMenuText, "normalizeMenuText");
+__name2(normalizeMenuText, "normalizeMenuText");
 var IDENTITY_SEPARATORS = /[\s+\-()./،,ـ_]/g;
 function isIdentityText(text) {
   const withoutSeparators = text.replace(IDENTITY_SEPARATORS, "");
@@ -10299,6 +11715,7 @@ function isIdentityText(text) {
   return true;
 }
 __name(isIdentityText, "isIdentityText");
+__name2(isIdentityText, "isIdentityText");
 var MY_NEXT_LABELS = /* @__PURE__ */ new Set(["\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u0645\u0646", "\u0646\u0648\u0628\u062A\u0647\u0627\u06CC \u0645\u0646", "\u0646\u0648\u0628\u062A \u0647\u0627\u06CC \u0645\u0646", "\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0645\u0646", "\u0646\u0648\u0628\u062A \u0647\u0627\u06CC \u062F\u0627\u0646\u0634 \u0622\u0645\u0648\u0632 \u0645\u0646", "\u0646\u0648\u0628\u062A\u0647\u0627\u06CC \u062F\u0627\u0646\u0634 \u0622\u0645\u0648\u0632 \u0645\u0646", "\u0646\u0648\u0628\u062A\u0647\u0627\u06CC \u062F\u0627\u0646\u0634\u0622\u0645\u0648\u0632 \u0645\u0646", "\u0646\u0648\u0628\u062A \u0647\u0627\u06CC \u062F\u0627\u0646\u0634\u0622\u0645\u0648\u0632 \u0645\u0646"]);
 var HELP_LABELS = /* @__PURE__ */ new Set(["\u0631\u0627\u0647\u0646\u0645\u0627", "\u06A9\u0645\u06A9"]);
 var ABOUT_LABELS = /* @__PURE__ */ new Set(["\u062F\u0631\u0628\u0627\u0631\u0647 \u0645\u0631\u06A9\u0632", "\u062F\u0631\u0628\u0627\u0631\u0647 \u0645\u0631\u06A9\u0632", "\u062F\u0631\u0628\u0627\u0631\u0647 \u0645\u0627", "\u062F\u0631\u0628\u0627\u0631\u0647\u06CC \u0645\u0631\u06A9\u0632", "\u062F\u0631\u0628\u0627\u0631\u0647 \u06CC \u0645\u0631\u06A9\u0632", "\u0645\u0639\u0631\u0641\u06CC \u0645\u0631\u06A9\u0632", "\u0645\u0639\u0631\u0641\u06CC \u0645\u0631\u06A9\u0632", "\u0645\u0639\u0631\u0641\u06CC \u0645\u0627"]);
@@ -10322,6 +11739,7 @@ var CLASS_ACTIVITY_LABELS = /* @__PURE__ */ new Set(["\u0641\u0639\u0627\u0644\u
 var AWARENESS_LABELS = /* @__PURE__ */ new Set(["\u0622\u06AF\u0627\u0647\u06CC\u200C\u0647\u0627\u06CC \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A", "\u0622\u06AF\u0627\u0647\u06CC \u0647\u0627\u06CC \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A", "\u0622\u06AF\u0627\u0647\u06CC\u0647\u0627\u06CC \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A", "\u0628\u0627\u0646\u06A9 \u0622\u06AF\u0627\u0647\u06CC", "\u0627\u062E\u062A\u0644\u0627\u0644\u200C\u0647\u0627", "\u0627\u062E\u062A\u0644\u0627\u0644\u0647\u0627"]);
 var STU_ACTIVE_LABELS = /* @__PURE__ */ new Set(["\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u0641\u0639\u0627\u0644", "\u062F\u0627\u0646\u0634 \u0622\u0645\u0648\u0632\u0627\u0646 \u0641\u0639\u0627\u0644", "\u062F\u0627\u0646\u0634\u0622\u0645\u0648\u0632\u0627\u0646 \u0641\u0639\u0627\u0644", "\u0644\u06CC\u0633\u062A \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646", "\u0644\u06CC\u0633\u062A \u062F\u0627\u0646\u0634 \u0622\u0645\u0648\u0632\u0627\u0646", "\u0644\u06CC\u0633\u062A \u062F\u0627\u0646\u0634\u0622\u0645\u0648\u0632\u0627\u0646"]);
 var CLASS_APPTS_LABELS = /* @__PURE__ */ new Set(["\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633 \u0645\u0646", "\u0646\u0648\u0628\u062A \u0647\u0627\u06CC \u06A9\u0644\u0627\u0633 \u0645\u0646", "\u0646\u0648\u0628\u062A\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633 \u0645\u0646"]);
+var EXIT_LABELS = /* @__PURE__ */ new Set(["\u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644", "\u0642\u0637\u0639 \u0646\u0642\u0634", "\u0644\u063A\u0648 \u0627\u062A\u0635\u0627\u0644", "\u062E\u0631\u0648\u062C", "\u062E\u0631\u0648\u062C \u0627\u0632 \u062D\u0633\u0627\u0628", "\u062E\u0631\u0648\u062C \u0627\u0632 \u0628\u0627\u062A"]);
 var CLF_LIST_LABELS = /* @__PURE__ */ new Set([
   "\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u0645\u0646",
   "\u0686\u06A9\u0644\u06CC\u0633\u062A\u0647\u0627\u06CC \u0645\u0646",
@@ -10347,6 +11765,7 @@ function pickLargestPhoto(list) {
   return best;
 }
 __name(pickLargestPhoto, "pickLargestPhoto");
+__name2(pickLargestPhoto, "pickLargestPhoto");
 function extractMedia(msg) {
   if (Array.isArray(msg.photo) && msg.photo.length > 0) {
     const best = pickLargestPhoto(msg.photo);
@@ -10373,6 +11792,7 @@ function extractMedia(msg) {
   return null;
 }
 __name(extractMedia, "extractMedia");
+__name2(extractMedia, "extractMedia");
 function normalizeCaption(raw2) {
   if (typeof raw2 !== "string")
     return null;
@@ -10382,6 +11802,7 @@ function normalizeCaption(raw2) {
   return Array.from(s).slice(0, 500).join("");
 }
 __name(normalizeCaption, "normalizeCaption");
+__name2(normalizeCaption, "normalizeCaption");
 function parseSubCallback(data, chatId) {
   const parts = data.split(":");
   if (parts[1] === "pick") {
@@ -10393,6 +11814,7 @@ function parseSubCallback(data, chatId) {
   return null;
 }
 __name(parseSubCallback, "parseSubCallback");
+__name2(parseSubCallback, "parseSubCallback");
 function parseCallbackData(data) {
   const sep = data.indexOf(":");
   if (sep <= 0)
@@ -10410,6 +11832,7 @@ function parseCallbackData(data) {
   return null;
 }
 __name(parseCallbackData, "parseCallbackData");
+__name2(parseCallbackData, "parseCallbackData");
 function toIndex(raw2) {
   if (!raw2)
     return NaN;
@@ -10417,6 +11840,7 @@ function toIndex(raw2) {
   return Number.isInteger(n) && n >= 0 ? n : NaN;
 }
 __name(toIndex, "toIndex");
+__name2(toIndex, "toIndex");
 var EXB_CATS = /* @__PURE__ */ new Set(["a", "d", "g", "o"]);
 function parseAwarenessCallback(data, chatId) {
   const parts = data.split(":");
@@ -10433,6 +11857,7 @@ function parseAwarenessCallback(data, chatId) {
   return { kind: "awareness_item", chatId, section, idx };
 }
 __name(parseAwarenessCallback, "parseAwarenessCallback");
+__name2(parseAwarenessCallback, "parseAwarenessCallback");
 function parseStuCallback(data, chatId) {
   const parts = data.split(":");
   if (parts[1] === "list") {
@@ -10504,6 +11929,7 @@ function parseStuCallback(data, chatId) {
   return null;
 }
 __name(parseStuCallback, "parseStuCallback");
+__name2(parseStuCallback, "parseStuCallback");
 function parseTlCallback(data, chatId) {
   const parts = data.split(":");
   if (parts[1] === "cat") {
@@ -10541,6 +11967,7 @@ function parseTlCallback(data, chatId) {
   return null;
 }
 __name(parseTlCallback, "parseTlCallback");
+__name2(parseTlCallback, "parseTlCallback");
 function parseClfCallback(data, chatId) {
   const parts = data.split(":");
   if (parts[1] === "fill") {
@@ -10562,6 +11989,7 @@ function parseClfCallback(data, chatId) {
   return null;
 }
 __name(parseClfCallback, "parseClfCallback");
+__name2(parseClfCallback, "parseClfCallback");
 function parseExbCallback(data, chatId) {
   const parts = data.split(":");
   switch (parts[1]) {
@@ -10647,6 +12075,7 @@ function parseExbCallback(data, chatId) {
   }
 }
 __name(parseExbCallback, "parseExbCallback");
+__name2(parseExbCallback, "parseExbCallback");
 function parseBotUpdate(update) {
   if (typeof update !== "object" || update === null)
     return null;
@@ -10666,6 +12095,10 @@ function parseBotUpdate(update) {
       return { kind: "wl_intake_confirm", chatId: String(cbChatId) };
     if (data === "wl:no")
       return { kind: "wl_intake_abort", chatId: String(cbChatId) };
+    if (data === "exit:do")
+      return { kind: "exit_do", chatId: String(cbChatId) };
+    if (data === "exit:no")
+      return { kind: "exit_no", chatId: String(cbChatId) };
     if (data === "outbox:flush")
       return { kind: "outbox_flush", chatId: String(cbChatId) };
     if (data.startsWith("stu:"))
@@ -10748,6 +12181,8 @@ function parseBotUpdate(update) {
     return { kind: "my_next", chatId: chatIdStr };
   if (CLF_LIST_LABELS.has(menuText))
     return { kind: "clf_list", chatId: chatIdStr };
+  if (EXIT_LABELS.has(menuText))
+    return { kind: "exit_ask", chatId: chatIdStr };
   if (!text.startsWith("/")) {
     if (!isIdentityText(text))
       return null;
@@ -10761,8 +12196,10 @@ function parseBotUpdate(update) {
   const rawCommand = (spaceIndex === -1 ? text : text.slice(0, spaceIndex)).toLowerCase();
   const arg = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1).trim();
   switch (rawCommand) {
-    case "/start":
-      return { kind: "start", chatId: chatIdStr, firstName: msg.from?.first_name };
+    case "/start": {
+      const startPayload = arg.replace(/\s+/g, "").toUpperCase().slice(0, 32);
+      return { kind: "start", chatId: chatIdStr, firstName: msg.from?.first_name, payload: startPayload.length > 0 ? startPayload : void 0 };
+    }
     case "/help":
       return { kind: "help", chatId: chatIdStr };
     case "/about":
@@ -10828,11 +12265,17 @@ function parseBotUpdate(update) {
       return { kind: "wl_intake_start", chatId: chatIdStr };
     case "/cancel":
       return { kind: "wl_intake_cancel", chatId: chatIdStr };
+    case "/exit":
+    case "/unlink":
+    case "/logout":
+    case "/disconnect":
+      return { kind: "exit_ask", chatId: chatIdStr };
     default:
       return { kind: "unknown", chatId: chatIdStr, text };
   }
 }
 __name(parseBotUpdate, "parseBotUpdate");
+__name2(parseBotUpdate, "parseBotUpdate");
 var LINK_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function generateLinkCode(length) {
   const bytes = new Uint8Array(length);
@@ -10844,7 +12287,7 @@ function generateLinkCode(length) {
   return out;
 }
 __name(generateLinkCode, "generateLinkCode");
-
+__name2(generateLinkCode, "generateLinkCode");
 function findOverlaps(existing, proposed) {
   const warnings = [];
   const pStart = Date.parse(proposed.startAt);
@@ -10878,7 +12321,7 @@ function findOverlaps(existing, proposed) {
   return warnings;
 }
 __name(findOverlaps, "findOverlaps");
-
+__name2(findOverlaps, "findOverlaps");
 function rowToExisting(row) {
   return {
     id: row.id,
@@ -10889,6 +12332,7 @@ function rowToExisting(row) {
   };
 }
 __name(rowToExisting, "rowToExisting");
+__name2(rowToExisting, "rowToExisting");
 function createConflictEngine(deps) {
   const { db } = deps;
   return {
@@ -10940,7 +12384,7 @@ function createConflictEngine(deps) {
   };
 }
 __name(createConflictEngine, "createConflictEngine");
-
+__name2(createConflictEngine, "createConflictEngine");
 function rowToAppointment(row, students) {
   return {
     id: row.id,
@@ -10960,6 +12404,7 @@ function rowToAppointment(row, students) {
   };
 }
 __name(rowToAppointment, "rowToAppointment");
+__name2(rowToAppointment, "rowToAppointment");
 function rowToStudent(row) {
   return {
     studentId: row.student_id,
@@ -10971,6 +12416,7 @@ function rowToStudent(row) {
   };
 }
 __name(rowToStudent, "rowToStudent");
+__name2(rowToStudent, "rowToStudent");
 var APPOINTMENT_COLS = "id, staff_id, start_at, end_at, status, ops_status, session_type, note, version, batch_id, created_by, created_at, updated_at";
 function selectAppointmentById(id) {
   return {
@@ -10979,6 +12425,7 @@ function selectAppointmentById(id) {
   };
 }
 __name(selectAppointmentById, "selectAppointmentById");
+__name2(selectAppointmentById, "selectAppointmentById");
 function selectAppointments(filters) {
   const conditions = [];
   const params = [];
@@ -11006,6 +12453,7 @@ function selectAppointments(filters) {
   };
 }
 __name(selectAppointments, "selectAppointments");
+__name2(selectAppointments, "selectAppointments");
 function selectStudentsOfAppointments(ids) {
   const placeholders = ids.map(() => "?").join(",");
   return {
@@ -11017,7 +12465,7 @@ function selectStudentsOfAppointments(ids) {
   };
 }
 __name(selectStudentsOfAppointments, "selectStudentsOfAppointments");
-
+__name2(selectStudentsOfAppointments, "selectStudentsOfAppointments");
 var OPS_STATUS_TRANSITIONS = {
   none: ["checked_in", "delayed", "no_show"],
   checked_in: ["in_session", "no_show"],
@@ -11030,10 +12478,12 @@ function canTransitionOps(from, to) {
   return OPS_STATUS_TRANSITIONS[from].includes(to);
 }
 __name(canTransitionOps, "canTransitionOps");
+__name2(canTransitionOps, "canTransitionOps");
 function opsFromDb(value) {
   return value ?? "none";
 }
 __name(opsFromDb, "opsFromDb");
+__name2(opsFromDb, "opsFromDb");
 function opsTransitionMessage(from, to) {
   const allowed = OPS_STATUS_TRANSITIONS[from];
   if (allowed.length === 0) {
@@ -11051,7 +12501,7 @@ function opsTransitionMessage(from, to) {
   return `\u0627\u06CC\u0646 \u062A\u063A\u06CC\u06CC\u0631 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u0648\u0636\u0639\u06CC\u062A \u0641\u0639\u0644\u06CC \u0641\u0642\u0637 \u0627\u06CC\u0646 \u0627\u0642\u062F\u0627\u0645\u200C\u0647\u0627 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A: ${allowed.map((s) => `\xAB${labels[s]}\xBB`).join("\u060C ")}`;
 }
 __name(opsTransitionMessage, "opsTransitionMessage");
-
+__name2(opsTransitionMessage, "opsTransitionMessage");
 var DAY_MS = 24 * 60 * 60 * 1e3;
 async function copyWeek(ctx) {
   const { db, audit, logger, actor, input } = ctx;
@@ -11159,6 +12609,7 @@ async function copyWeek(ctx) {
   return { batchId, copied: toCopy.length, conflicts, dryRun: false };
 }
 __name(copyWeek, "copyWeek");
+__name2(copyWeek, "copyWeek");
 async function undoCopyWeek(ctx) {
   const { db, audit, logger, actor, batchId } = ctx;
   const batchRows = await db.query(`SELECT id FROM appointments WHERE batch_id = ?`, [batchId]);
@@ -11201,7 +12652,7 @@ async function undoCopyWeek(ctx) {
   return { removed: removable.length };
 }
 __name(undoCopyWeek, "undoCopyWeek");
-
+__name2(undoCopyWeek, "undoCopyWeek");
 var MY_STUDENT_WAIT_PROJECTION = `,
        CASE WHEN EXISTS (SELECT 1 FROM waitlist wq WHERE wq.student_id = s.id AND wq.deleted_at IS NULL AND wq.status IN ('waiting','called','scheduled')) THEN 'waiting'
             WHEN EXISTS (SELECT 1 FROM waitlist wa WHERE wa.student_id = s.id AND wa.deleted_at IS NULL AND wa.status = 'admitted') THEN 'admitted'
@@ -11215,6 +12666,7 @@ function assertAppointmentScope(actor, targetStaffId) {
   throw new ForbiddenError("\u0634\u0645\u0627 \u0641\u0642\u0637 \u0628\u0647 \u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u062E\u0648\u062F\u062A\u0627\u0646 \u062F\u0633\u062A\u0631\u0633\u06CC \u062F\u0627\u0631\u06CC\u062F");
 }
 __name(assertAppointmentScope, "assertAppointmentScope");
+__name2(assertAppointmentScope, "assertAppointmentScope");
 async function assertStudentsInScope(reader, actor, studentIds) {
   if (actor.role !== "therapist" || studentIds.length === 0)
     return;
@@ -11234,6 +12686,7 @@ async function assertStudentsInScope(reader, actor, studentIds) {
   }
 }
 __name(assertStudentsInScope, "assertStudentsInScope");
+__name2(assertStudentsInScope, "assertStudentsInScope");
 async function loadStudents(tx, appointmentId) {
   return tx.query(
     `SELECT appointment_id, student_id, facet_id, attendance, note, session_note, next_action
@@ -11244,6 +12697,7 @@ async function loadStudents(tx, appointmentId) {
   );
 }
 __name(loadStudents, "loadStudents");
+__name2(loadStudents, "loadStudents");
 function createAppointmentService(deps) {
   const { db, audit, logger } = deps;
   let conflictEngine = null;
@@ -11268,6 +12722,7 @@ function createAppointmentService(deps) {
     }
   }
   __name(fireLifecycle, "fireLifecycle");
+  __name2(fireLifecycle, "fireLifecycle");
   const service = {
     setConflictEngine(engine) {
       conflictEngine = engine;
@@ -11431,7 +12886,7 @@ function createAppointmentService(deps) {
     async notifyCreated(appointment) {
       await fireLifecycle("created", appointment);
     },
-    async update(id, patch, version2, actor) {
+    async update(id, patch, version22, actor) {
       return db.transaction(async (tx) => {
         const q = selectAppointmentById(id);
         const row = await tx.queryOne(q.sql, q.params);
@@ -11440,7 +12895,7 @@ function createAppointmentService(deps) {
         assertAppointmentScope(actor, row.staff_id);
         if (row.status === "cancelled")
           throw new ConflictError("\u0646\u0648\u0628\u062A \u0644\u063A\u0648\u0634\u062F\u0647 \u0642\u0627\u0628\u0644 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0646\u06CC\u0633\u062A", row.version);
-        if (row.version !== version2)
+        if (row.version !== version22)
           throw new ConflictError("\u0627\u06CC\u0646 \u0646\u0648\u0628\u062A \u0647\u0645\u06CC\u0646 \u0627\u0644\u0627\u0646 \u062A\u0648\u0633\u0637 \u06A9\u0627\u0631\u0628\u0631 \u062F\u06CC\u06AF\u0631\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u06A9\u0631\u062F.", row.version);
         const changes = {};
         let noteChanged = false;
@@ -11464,7 +12919,7 @@ function createAppointmentService(deps) {
         return rowToAppointment(merged, students.map(rowToStudent));
       });
     },
-    async move(id, newStartAt, version2, actor) {
+    async move(id, newStartAt, version22, actor) {
       if (!isOnGrid(newStartAt, SLOT_MINUTES)) {
         throw new ValidationError("\u0632\u0645\u0627\u0646 \u0646\u0648\u0628\u062A \u0628\u0627\u06CC\u062F \u0631\u0648\u06CC \u0634\u0628\u06A9\u0647 \u06F1\u06F5 \u062F\u0642\u06CC\u0642\u0647\u200C\u0627\u06CC \u0628\u0627\u0634\u062F");
       }
@@ -11474,14 +12929,14 @@ function createAppointmentService(deps) {
       assertAppointmentScope(actor, current.staffId);
       if (current.status === "cancelled")
         throw new ConflictError("\u0646\u0648\u0628\u062A \u0644\u063A\u0648\u0634\u062F\u0647 \u0642\u0627\u0628\u0644 \u062C\u0627\u0628\u0647\u200C\u062C\u0627\u06CC\u06CC \u0646\u06CC\u0633\u062A", current.version);
-      if (current.version !== version2)
+      if (current.version !== version22)
         throw new ConflictError("\u0627\u06CC\u0646 \u0646\u0648\u0628\u062A \u0647\u0645\u06CC\u0646 \u0627\u0644\u0627\u0646 \u062A\u0648\u0633\u0637 \u06A9\u0627\u0631\u0628\u0631 \u062F\u06CC\u06AF\u0631\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u06A9\u0631\u062F.", current.version);
       const durationMin = (Date.parse(current.endAt) - Date.parse(current.startAt)) / 6e4;
       const newEndAt = addMinutes(newStartAt, durationMin);
       await db.transaction(async (tx) => {
         await tx.execute(
           `UPDATE appointments SET start_at = ?, end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
-          [newStartAt, newEndAt, id, version2]
+          [newStartAt, newEndAt, id, version22]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -11507,14 +12962,14 @@ function createAppointmentService(deps) {
       await fireLifecycle("moved", appointment, { startAt: current.startAt, endAt: current.endAt });
       return { appointment, warnings };
     },
-    async resize(id, newEndAt, version2, actor) {
+    async resize(id, newEndAt, version22, actor) {
       const current = await service.getById(id);
       if (!current)
         throw new NotFoundError("\u0646\u0648\u0628\u062A");
       assertAppointmentScope(actor, current.staffId);
       if (current.status === "cancelled")
         throw new ConflictError("\u0646\u0648\u0628\u062A \u0644\u063A\u0648\u0634\u062F\u0647 \u0642\u0627\u0628\u0644 \u062A\u063A\u06CC\u06CC\u0631 \u0645\u062F\u062A \u0646\u06CC\u0633\u062A", current.version);
-      if (current.version !== version2)
+      if (current.version !== version22)
         throw new ConflictError("\u0627\u06CC\u0646 \u0646\u0648\u0628\u062A \u0647\u0645\u06CC\u0646 \u0627\u0644\u0627\u0646 \u062A\u0648\u0633\u0637 \u06A9\u0627\u0631\u0628\u0631 \u062F\u06CC\u06AF\u0631\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u06A9\u0631\u062F.", current.version);
       const minutes = (Date.parse(newEndAt) - Date.parse(current.startAt)) / 6e4;
       if (minutes < 15 || minutes > 240) {
@@ -11526,7 +12981,7 @@ function createAppointmentService(deps) {
       await db.transaction(async (tx) => {
         await tx.execute(
           `UPDATE appointments SET end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
-          [newEndAt, id, version2]
+          [newEndAt, id, version22]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -11548,7 +13003,7 @@ function createAppointmentService(deps) {
       }
       return { appointment, warnings };
     },
-    async cancel(id, version2, actor) {
+    async cancel(id, version22, actor) {
       const current = await service.getById(id);
       if (!current)
         throw new NotFoundError("\u0646\u0648\u0628\u062A");
@@ -11556,12 +13011,12 @@ function createAppointmentService(deps) {
       if (current.status === "cancelled") {
         throw new ConflictError("\u0646\u0648\u0628\u062A \u0642\u0628\u0644\u0627\u064B \u0644\u063A\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A", current.version);
       }
-      if (current.version !== version2)
+      if (current.version !== version22)
         throw new ConflictError("\u0627\u06CC\u0646 \u0646\u0648\u0628\u062A \u0647\u0645\u06CC\u0646 \u0627\u0644\u0627\u0646 \u062A\u0648\u0633\u0637 \u06A9\u0627\u0631\u0628\u0631 \u062F\u06CC\u06AF\u0631\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u06A9\u0631\u062F.", current.version);
       await db.transaction(async (tx) => {
         await tx.execute(
           `UPDATE appointments SET status = 'cancelled', version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
-          [id, version2]
+          [id, version22]
         );
         await tx.execute(`UPDATE appointment_students SET attendance = 'cancelled' WHERE appointment_id = ? AND attendance != 'cancelled'`, [id]);
         await audit.logInTransaction(tx, {
@@ -11729,7 +13184,7 @@ function createAppointmentService(deps) {
       return result;
     },
     /** — برگرداندن نوبت لغوشده به وضعیت «برنامه‌ریزی‌شده» (قرینه cancel) */
-    async restore(id, version2, actor) {
+    async restore(id, version22, actor) {
       const current = await service.getById(id);
       if (!current)
         throw new NotFoundError("\u0646\u0648\u0628\u062A");
@@ -11737,12 +13192,12 @@ function createAppointmentService(deps) {
       if (current.status !== "cancelled") {
         throw new ConflictError("\u0641\u0642\u0637 \u0646\u0648\u0628\u062A \u0644\u063A\u0648\u0634\u062F\u0647 \u0642\u0627\u0628\u0644 \u0628\u0631\u06AF\u0631\u062F\u0627\u0646\u062F\u0646 \u0627\u0633\u062A", current.version);
       }
-      if (current.version !== version2)
+      if (current.version !== version22)
         throw new ConflictError("\u0627\u06CC\u0646 \u0646\u0648\u0628\u062A \u0647\u0645\u06CC\u0646 \u0627\u0644\u0627\u0646 \u062A\u0648\u0633\u0637 \u06A9\u0627\u0631\u0628\u0631 \u062F\u06CC\u06AF\u0631\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u06A9\u0631\u062F.", current.version);
       await db.transaction(async (tx) => {
         await tx.execute(
           `UPDATE appointments SET status = 'scheduled', version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
-          [id, version2]
+          [id, version22]
         );
         await tx.execute(`UPDATE appointment_students SET attendance = 'pending' WHERE appointment_id = ? AND attendance = 'cancelled'`, [id]);
         await audit.logInTransaction(tx, {
@@ -11826,7 +13281,7 @@ function createAppointmentService(deps) {
   return service;
 }
 __name(createAppointmentService, "createAppointmentService");
-
+__name2(createAppointmentService, "createAppointmentService");
 function registerRoutes(app, service) {
   app.post("/api/appointments/copy-week", async (c) => {
     const actor = getAuthContext(c);
@@ -11947,7 +13402,7 @@ function registerRoutes(app, service) {
   });
 }
 __name(registerRoutes, "registerRoutes");
-
+__name2(registerRoutes, "registerRoutes");
 function createAttendanceService(deps) {
   const { db, audit, logger } = deps;
   let observer = null;
@@ -12060,7 +13515,7 @@ function createAttendanceService(deps) {
   };
 }
 __name(createAttendanceService, "createAttendanceService");
-
+__name2(createAttendanceService, "createAttendanceService");
 function registerRoutes2(app, service) {
   app.patch("/api/attendance/:appointmentId/:studentId", async (c) => {
     const actor = getAuthContext(c);
@@ -12093,12 +13548,13 @@ function registerRoutes2(app, service) {
     return c.json({ data: stats }, 200);
   });
 }
-__name(registerRoutes2, "registerRoutes");
-
+__name(registerRoutes2, "registerRoutes2");
+__name2(registerRoutes2, "registerRoutes");
 function canMarkDate(date, todayYmd) {
   return date === todayYmd;
 }
 __name(canMarkDate, "canMarkDate");
+__name2(canMarkDate, "canMarkDate");
 function rowToRecord(row) {
   return {
     id: row.id,
@@ -12112,11 +13568,13 @@ function rowToRecord(row) {
   };
 }
 __name(rowToRecord, "rowToRecord");
+__name2(rowToRecord, "rowToRecord");
 function countDaysInclusive(from, to) {
   const ms = Date.parse(to) - Date.parse(from);
   return Math.floor(ms / (24 * 60 * 60 * 1e3)) + 1;
 }
 __name(countDaysInclusive, "countDaysInclusive");
+__name2(countDaysInclusive, "countDaysInclusive");
 function aggregateDay(date, rows, totalActiveStaff) {
   const summary = {
     date,
@@ -12148,6 +13606,7 @@ function aggregateDay(date, rows, totalActiveStaff) {
   return summary;
 }
 __name(aggregateDay, "aggregateDay");
+__name2(aggregateDay, "aggregateDay");
 function aggregateRange(from, to, rows, activeStaff) {
   const days = countDaysInclusive(from, to);
   const byId = /* @__PURE__ */ new Map();
@@ -12183,6 +13642,7 @@ function aggregateRange(from, to, rows, activeStaff) {
   return [...byId.values()];
 }
 __name(aggregateRange, "aggregateRange");
+__name2(aggregateRange, "aggregateRange");
 function createStaffAttendanceService(deps) {
   const { db, audit, logger } = deps;
   return {
@@ -12294,7 +13754,7 @@ function createStaffAttendanceService(deps) {
   };
 }
 __name(createStaffAttendanceService, "createStaffAttendanceService");
-
+__name2(createStaffAttendanceService, "createStaffAttendanceService");
 function registerStaffAttendanceRoutes(app, service) {
   app.put("/api/staff-attendance", requireRole("manager", "secretary"), async (c) => {
     const actor = getAuthContext(c);
@@ -12329,7 +13789,7 @@ function registerStaffAttendanceRoutes(app, service) {
   });
 }
 __name(registerStaffAttendanceRoutes, "registerStaffAttendanceRoutes");
-
+__name2(registerStaffAttendanceRoutes, "registerStaffAttendanceRoutes");
 function groupAppointmentsByStaff(appointments, knownStaffIds) {
   const byStaff = /* @__PURE__ */ new Map();
   const unassigned = [];
@@ -12348,6 +13808,7 @@ function groupAppointmentsByStaff(appointments, knownStaffIds) {
   return { byStaff, unassigned };
 }
 __name(groupAppointmentsByStaff, "groupAppointmentsByStaff");
+__name2(groupAppointmentsByStaff, "groupAppointmentsByStaff");
 function sessionStatsFromAppointments(appointments) {
   let present = 0;
   let absent = 0;
@@ -12372,14 +13833,17 @@ function sessionStatsFromAppointments(appointments) {
   return { total, present, absent, pending, cancelledAppointments };
 }
 __name(sessionStatsFromAppointments, "sessionStatsFromAppointments");
+__name2(sessionStatsFromAppointments, "sessionStatsFromAppointments");
 function normalizeDayNoteBody(raw2) {
   return raw2.replace(/\r\n/g, "\n").split("\n").map((line2) => line2.replace(/[ \t\u00a0]+/g, " ").trim()).join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 __name(normalizeDayNoteBody, "normalizeDayNoteBody");
+__name2(normalizeDayNoteBody, "normalizeDayNoteBody");
 function isTerminalOps(ops) {
   return ops !== null && ops !== void 0 && OPS_TERMINAL_STATUSES.includes(ops);
 }
 __name(isTerminalOps, "isTerminalOps");
+__name2(isTerminalOps, "isTerminalOps");
 function opsStatsFromAppointments(appointments) {
   const stats = {
     planned: 0,
@@ -12420,6 +13884,7 @@ function opsStatsFromAppointments(appointments) {
   return stats;
 }
 __name(opsStatsFromAppointments, "opsStatsFromAppointments");
+__name2(opsStatsFromAppointments, "opsStatsFromAppointments");
 function buildQueue(appointments, nowIso, options) {
   const windowMs = (options.windowMinutes ?? OPS_QUEUE_WINDOW_MINUTES) * 6e4;
   const deadline = Date.parse(nowIso) + windowMs;
@@ -12443,7 +13908,7 @@ function buildQueue(appointments, nowIso, options) {
   return items;
 }
 __name(buildQueue, "buildQueue");
-
+__name2(buildQueue, "buildQueue");
 function rowsToAppointments(rows) {
   const byId = /* @__PURE__ */ new Map();
   for (const r of rows) {
@@ -12475,9 +13940,10 @@ function rowsToAppointments(rows) {
   return [...byId.values()];
 }
 __name(rowsToAppointments, "rowsToAppointments");
+__name2(rowsToAppointments, "rowsToAppointments");
 function createWorkingDayService(deps) {
   const { db, audit, logger } = deps;
-  const log3 = logger.child("working-day");
+  const log32 = logger.child("working-day");
   return {
     async getBoard(date, actor) {
       const therapistStaffId = actor?.role === "therapist" ? actor.staffId : null;
@@ -12516,9 +13982,9 @@ function createWorkingDayService(deps) {
           [date]
         ),
         deps.staffAttendance.daySummary(date),
-        // شمارش رویدادهای پروندهٔ همان روز (نوار وضعیت بورد §7.1) — فقط-خواندنی
+        // — شمارش رویدادهای پروندهٔ همان روز (نوار وضعیت بورد §7.1) — فقط-خواندنی
         // (assessments بازنشسته شد؛ مرز روز تهران از tehranDayRange می‌آید)
-        // برای درمانگر فقط گزارش‌های خودش شمرده می‌شود
+        // — برای درمانگر فقط گزارش‌های خودش شمرده می‌شود
         db.query(
           therapistStaffId ? `SELECT COUNT(*) AS n
                  FROM case_events e
@@ -12569,7 +14035,7 @@ function createWorkingDayService(deps) {
       const sessionStats = sessionStatsFromAppointments(appointments);
       const opsStats = opsStatsFromAppointments(appointments);
       const staffNameById = new Map(staffRows.map((s) => [s.id, s.full_name]));
-      const staffNameOf = /* @__PURE__ */ __name((staffId) => staffNameById.get(staffId) ?? "\u2014", "staffNameOf");
+      const staffNameOf = /* @__PURE__ */ __name2((staffId) => staffNameById.get(staffId) ?? "\u2014", "staffNameOf");
       const queue = isToday ? buildQueue(appointments, (/* @__PURE__ */ new Date()).toISOString(), {
         windowMinutes: OPS_QUEUE_WINDOW_MINUTES,
         staffNameOf
@@ -12611,7 +14077,7 @@ function createWorkingDayService(deps) {
           }
         });
       });
-      log3.info("day_note.created", { date });
+      log32.info("day_note.created", { date });
       return {
         id,
         date,
@@ -12645,12 +14111,12 @@ function createWorkingDayService(deps) {
           }
         });
       });
-      log3.info("day_note.deleted", { id });
+      log32.info("day_note.deleted", { id });
     }
   };
 }
 __name(createWorkingDayService, "createWorkingDayService");
-
+__name2(createWorkingDayService, "createWorkingDayService");
 function registerWorkingDayRoutes(app, service) {
   app.get("/api/working-day", requireRole("manager", "secretary", "therapist"), async (c) => {
     const actor = getAuthContext(c);
@@ -12671,7 +14137,7 @@ function registerWorkingDayRoutes(app, service) {
   });
 }
 __name(registerWorkingDayRoutes, "registerWorkingDayRoutes");
-
+__name2(registerWorkingDayRoutes, "registerWorkingDayRoutes");
 function rowToSchool(row) {
   return {
     id: row.id,
@@ -12688,6 +14154,7 @@ function rowToSchool(row) {
   };
 }
 __name(rowToSchool, "rowToSchool");
+__name2(rowToSchool, "rowToSchool");
 function rowToClass(row) {
   return {
     id: row.id,
@@ -12701,6 +14168,7 @@ function rowToClass(row) {
   };
 }
 __name(rowToClass, "rowToClass");
+__name2(rowToClass, "rowToClass");
 function rowToStudent2(row) {
   return {
     id: row.id,
@@ -12731,7 +14199,8 @@ function rowToStudent2(row) {
     ownerName: row.owner_name ?? null
   };
 }
-__name(rowToStudent2, "rowToStudent");
+__name(rowToStudent2, "rowToStudent2");
+__name2(rowToStudent2, "rowToStudent");
 function rowToEducationHistory(row) {
   return {
     id: row.id,
@@ -12746,6 +14215,7 @@ function rowToEducationHistory(row) {
   };
 }
 __name(rowToEducationHistory, "rowToEducationHistory");
+__name2(rowToEducationHistory, "rowToEducationHistory");
 var STUDENT_WAIT_PROJECTION = `,
        CASE WHEN EXISTS (SELECT 1 FROM waitlist wq WHERE wq.student_id = s.id AND wq.deleted_at IS NULL AND wq.status IN ('waiting','called','scheduled')) THEN 'waiting'
             WHEN EXISTS (SELECT 1 FROM waitlist wa WHERE wa.student_id = s.id AND wa.deleted_at IS NULL AND wa.status = 'admitted') THEN 'admitted'
@@ -12806,6 +14276,7 @@ function studentSearchQuery(filters) {
   };
 }
 __name(studentSearchQuery, "studentSearchQuery");
+__name2(studentSearchQuery, "studentSearchQuery");
 function tagsForStudentsQuery(studentIds) {
   if (studentIds.length === 0)
     return { sql: "", params: [] };
@@ -12820,6 +14291,7 @@ function tagsForStudentsQuery(studentIds) {
   };
 }
 __name(tagsForStudentsQuery, "tagsForStudentsQuery");
+__name2(tagsForStudentsQuery, "tagsForStudentsQuery");
 function assessmentCountsForStudentsQuery(studentIds) {
   if (studentIds.length === 0)
     return { sql: "", params: [] };
@@ -12833,7 +14305,7 @@ function assessmentCountsForStudentsQuery(studentIds) {
   };
 }
 __name(assessmentCountsForStudentsQuery, "assessmentCountsForStudentsQuery");
-
+__name2(assessmentCountsForStudentsQuery, "assessmentCountsForStudentsQuery");
 function createStudentProfileService(deps) {
   const { db, audit, logger } = deps;
   async function requireClassForStudent(classId, schoolId) {
@@ -12846,6 +14318,7 @@ function createStudentProfileService(deps) {
     return cls;
   }
   __name(requireClassForStudent, "requireClassForStudent");
+  __name2(requireClassForStudent, "requireClassForStudent");
   const service = {
     // ───────────── Schools ─────────────
     async createSchool(input, actor) {
@@ -13862,7 +15335,7 @@ function createStudentProfileService(deps) {
   return service;
 }
 __name(createStudentProfileService, "createStudentProfileService");
-
+__name2(createStudentProfileService, "createStudentProfileService");
 function pageParams(query) {
   return {
     page: Number.parseInt(query.page ?? "1", 10) || 1,
@@ -13870,7 +15343,7 @@ function pageParams(query) {
   };
 }
 __name(pageParams, "pageParams");
-
+__name2(pageParams, "pageParams");
 function errorHandler2(err, c) {
   if (err instanceof ZodError) {
     return c.json(
@@ -13907,8 +15380,8 @@ function errorHandler2(err, c) {
   });
   return c.json({ error: "INTERNAL_ERROR", message: "\u062E\u0637\u0627\u06CC \u062F\u0627\u062E\u0644\u06CC \u0633\u0631\u0648\u0631" }, 500);
 }
-__name(errorHandler2, "errorHandler");
-
+__name(errorHandler2, "errorHandler2");
+__name2(errorHandler2, "errorHandler");
 function registerRoutes3(app, service) {
   app.post("/api/schools", requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);
@@ -14015,10 +15488,10 @@ function registerRoutes3(app, service) {
         guardianName: body.guardian_name,
         guardianRelation: body.guardian_relation,
         guardianPhone: body.guardian_phone,
-        // مسئول پرونده در لحظهٔ تعریف + ثبت مستقیم در آرشیو
+        // — مسئول پرونده در لحظهٔ تعریف + ثبت مستقیم در آرشیو
         ownerStaffId,
         archived,
-        // مسیر پرونده در لحظهٔ تعریف (پذیرش)
+        // — مسیر پرونده در لحظهٔ تعریف (پذیرش)
         pathway: body.pathway
       },
       actor
@@ -14168,8 +15641,8 @@ function registerRoutes3(app, service) {
     return c.body(null, 204);
   });
 }
-__name(registerRoutes3, "registerRoutes");
-
+__name(registerRoutes3, "registerRoutes3");
+__name2(registerRoutes3, "registerRoutes");
 var TIMELINE_KINDS = [
   "student_created",
   "case_status",
@@ -14185,7 +15658,6 @@ var TIMELINE_KINDS = [
   "exercise",
   "case_event"
 ];
-
 var CASE_STATUS_LABELS_FA = {
   identified: "\u0634\u0646\u0627\u0633\u0627\u06CC\u06CC\u200C\u0634\u062F\u0647",
   awaiting_assessment: "\u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC",
@@ -14230,6 +15702,7 @@ function jalaliLabelOf(ymd) {
   return jalaliLabel(ymd);
 }
 __name(jalaliLabelOf, "jalaliLabelOf");
+__name2(jalaliLabelOf, "jalaliLabelOf");
 function appointmentEventState(a) {
   const durationMin = Math.max(0, Math.round((Date.parse(a.endAt) - Date.parse(a.startAt)) / 6e4));
   const who = null;
@@ -14257,17 +15730,20 @@ function appointmentEventState(a) {
   return { title: "\u0646\u0648\u0628\u062A \u062C\u0644\u0633\u0647", subtitle: subtitleWith(null, `${faDigits(durationMin)} \u062F\u0642\u06CC\u0642\u0647 \u2014 \u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u0628\u0631\u06AF\u0632\u0627\u0631\u06CC`) };
 }
 __name(appointmentEventState, "appointmentEventState");
+__name2(appointmentEventState, "appointmentEventState");
 function subtitleWith(staffName, detail) {
   const parts = [staffName, detail].filter((p) => Boolean(p));
   return parts.length > 0 ? parts.join(" \u2014 ") : null;
 }
 __name(subtitleWith, "subtitleWith");
+__name2(subtitleWith, "subtitleWith");
 function jalaliDateTimeLabel(isoUtc) {
   const ymd = tehranYmdOf(isoUtc);
-  const time3 = tehranTimeLabel(isoUtc);
-  return `${jalaliLabel(ymd)} ${time3}`;
+  const time32 = tehranTimeLabel(isoUtc);
+  return `${jalaliLabel(ymd)} ${time32}`;
 }
 __name(jalaliDateTimeLabel, "jalaliDateTimeLabel");
+__name2(jalaliDateTimeLabel, "jalaliDateTimeLabel");
 function mergeTimelineEvents(raw2) {
   const seen = /* @__PURE__ */ new Set();
   const unique = [];
@@ -14291,6 +15767,7 @@ function mergeTimelineEvents(raw2) {
   });
 }
 __name(mergeTimelineEvents, "mergeTimelineEvents");
+__name2(mergeTimelineEvents, "mergeTimelineEvents");
 function filterTimelineEvents(events, filters) {
   const validKinds = filters.kinds ? new Set(filters.kinds.filter((k) => TIMELINE_KINDS.includes(k))) : null;
   return events.filter((e) => {
@@ -14304,13 +15781,15 @@ function filterTimelineEvents(events, filters) {
   });
 }
 __name(filterTimelineEvents, "filterTimelineEvents");
+__name2(filterTimelineEvents, "filterTimelineEvents");
 function paginateTimeline(events, limit, offset) {
   const lim = Math.min(Math.max(1, limit ?? 50), 200);
-  const off2 = Math.max(0, offset ?? 0);
-  const page = events.slice(off2, off2 + lim);
-  return { page, limit: lim, offset: off2, hasMore: off2 + page.length < events.length };
+  const off22 = Math.max(0, offset ?? 0);
+  const page = events.slice(off22, off22 + lim);
+  return { page, limit: lim, offset: off22, hasMore: off22 + page.length < events.length };
 }
 __name(paginateTimeline, "paginateTimeline");
+__name2(paginateTimeline, "paginateTimeline");
 function deriveNextAction(nextAppointment, openFollowups) {
   if (nextAppointment) {
     return {
@@ -14334,6 +15813,7 @@ function deriveNextAction(nextAppointment, openFollowups) {
   return null;
 }
 __name(deriveNextAction, "deriveNextAction");
+__name2(deriveNextAction, "deriveNextAction");
 function parseCompositeRef(resourceId) {
   const idx = resourceId.indexOf("/");
   if (idx <= 0 || idx === resourceId.length - 1)
@@ -14341,12 +15821,13 @@ function parseCompositeRef(resourceId) {
   return { appointmentId: resourceId.slice(0, idx), studentId: resourceId.slice(idx + 1) };
 }
 __name(parseCompositeRef, "parseCompositeRef");
-
+__name2(parseCompositeRef, "parseCompositeRef");
 function createStudentTimelineService(db) {
   function inList(ids) {
     return ids.map(() => "?").join(", ");
   }
   __name(inList, "inList");
+  __name2(inList, "inList");
   async function actorNames(actorIds) {
     const unique = [...new Set(actorIds)];
     const map = /* @__PURE__ */ new Map();
@@ -14361,6 +15842,7 @@ function createStudentTimelineService(db) {
     return map;
   }
   __name(actorNames, "actorNames");
+  __name2(actorNames, "actorNames");
   return {
     async list(studentId, filters, _actor) {
       const student = await db.queryOne(`SELECT id FROM students WHERE id = ?`, [studentId]);
@@ -14486,7 +15968,7 @@ function createStudentTimelineService(db) {
         ...committeeAudits.map((a) => a.actor_id),
         ...exerciseAudits.map((a) => a.actor_id)
       ]);
-      const actorOf = /* @__PURE__ */ __name((id) => actors.get(id) ?? null, "actorOf");
+      const actorOf = /* @__PURE__ */ __name2((id) => actors.get(id) ?? null, "actorOf");
       for (const a of studentAudits) {
         if (a.action === "student.create") {
           raw2.push({ at: a.created_at, kind: "student_created", title: "\u067E\u0631\u0648\u0646\u062F\u0647 \u062A\u0634\u06A9\u06CC\u0644 \u0634\u062F", subtitle: null, actor: actorOf(a.actor_id), ref: { type: "student", id: studentId } });
@@ -14645,13 +16127,13 @@ function createStudentTimelineService(db) {
       }
       const asgTitleById = new Map(assignments.map((a) => [a.id, a.exercise_title]));
       for (const ea of exerciseAudits) {
-        const title2 = asgTitleById.get(ea.resource_id) ?? "\u062A\u0645\u0631\u06CC\u0646";
+        const title22 = asgTitleById.get(ea.resource_id) ?? "\u062A\u0645\u0631\u06CC\u0646";
         if (ea.action === "exercise.assigned") {
           raw2.push({
             at: ea.created_at,
             kind: "exercise",
             title: "\u062A\u06A9\u0644\u06CC\u0641 \u062A\u0645\u0631\u06CC\u0646 \u0627\u0631\u0633\u0627\u0644 \u0634\u062F",
-            subtitle: `\u062A\u0645\u0631\u06CC\u0646: ${title2}`,
+            subtitle: `\u062A\u0645\u0631\u06CC\u0646: ${title22}`,
             actor: actorOf(ea.actor_id),
             ref: { type: "exercise_assignment", id: ea.resource_id }
           });
@@ -14660,7 +16142,7 @@ function createStudentTimelineService(db) {
             at: ea.created_at,
             kind: "exercise",
             title: "\u062A\u0645\u0631\u06CC\u0646 \u062A\u0635\u062D\u06CC\u062D \u0634\u062F",
-            subtitle: `\u062A\u0645\u0631\u06CC\u0646: ${title2} \u2014 \u0628\u0627\u0632\u062E\u0648\u0631\u062F \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u062B\u0628\u062A \u0634\u062F`,
+            subtitle: `\u062A\u0645\u0631\u06CC\u0646: ${title22} \u2014 \u0628\u0627\u0632\u062E\u0648\u0631\u062F \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u062B\u0628\u062A \u0634\u062F`,
             actor: actorOf(ea.actor_id),
             ref: { type: "exercise_assignment", id: ea.resource_id }
           });
@@ -14672,7 +16154,7 @@ function createStudentTimelineService(db) {
             at: ea.created_at,
             kind: "exercise",
             title: "\u0646\u062A\u06CC\u062C\u0647\u0654 \u062A\u0645\u0631\u06CC\u0646 \u0628\u0627\u0632\u06AF\u0634\u062A",
-            subtitle: filename ? `\u062A\u0645\u0631\u06CC\u0646: ${title2} \u2014 ${filename}` : `\u062A\u0645\u0631\u06CC\u0646: ${title2}`,
+            subtitle: filename ? `\u062A\u0645\u0631\u06CC\u0646: ${title22} \u2014 ${filename}` : `\u062A\u0645\u0631\u06CC\u0646: ${title22}`,
             actor: actorOf(ea.actor_id),
             ref: { type: "exercise_submission", id: submissionId }
           });
@@ -14715,22 +16197,25 @@ function createStudentTimelineService(db) {
   };
 }
 __name(createStudentTimelineService, "createStudentTimelineService");
-function parseChanges(json) {
-  if (!json)
+__name2(createStudentTimelineService, "createStudentTimelineService");
+function parseChanges(json2) {
+  if (!json2)
     return null;
   try {
-    return JSON.parse(json);
+    return JSON.parse(json2);
   } catch {
     return null;
   }
 }
 __name(parseChanges, "parseChanges");
+__name2(parseChanges, "parseChanges");
 function labelOf(map, value) {
   if (typeof value !== "string" || value.length === 0)
     return "\u2014";
   return map[value] ?? value;
 }
 __name(labelOf, "labelOf");
+__name2(labelOf, "labelOf");
 function tagsDetail(added, removed) {
   const parts = [];
   if (added > 0)
@@ -14740,6 +16225,7 @@ function tagsDetail(added, removed) {
   return parts.length > 0 ? parts.join(" / ") : null;
 }
 __name(tagsDetail, "tagsDetail");
+__name2(tagsDetail, "tagsDetail");
 function waitDays(fromIso, toIso) {
   const from = Date.parse(fromIso);
   const to = Date.parse(toIso);
@@ -14748,13 +16234,14 @@ function waitDays(fromIso, toIso) {
   return Math.floor((to - from) / 864e5);
 }
 __name(waitDays, "waitDays");
+__name2(waitDays, "waitDays");
 function faDays(days) {
   if (days < 1)
     return "\u06A9\u0645\u062A\u0631 \u0627\u0632 \u06CC\u06A9 \u0631\u0648\u0632";
   return `${days.toLocaleString("fa-IR")} \u0631\u0648\u0632`;
 }
 __name(faDays, "faDays");
-
+__name2(faDays, "faDays");
 function registerStudentTimelineRoutes(app, service) {
   app.get("/api/students/:id/timeline", async (c) => {
     const actor = getAuthContext(c);
@@ -14771,14 +16258,13 @@ function registerStudentTimelineRoutes(app, service) {
   });
 }
 __name(registerStudentTimelineRoutes, "registerStudentTimelineRoutes");
-
+__name2(registerStudentTimelineRoutes, "registerStudentTimelineRoutes");
 var ATTENTION_REASONS = [
   "overdue_followup",
   "long_open_followup",
   "awaiting_assessment",
   "no_recent_session"
 ];
-
 var DAY_MS2 = 864e5;
 var LONG_OPEN_FOLLOWUP_DAYS = 30;
 var RECENT_SESSION_DAYS = 30;
@@ -14805,6 +16291,7 @@ function deriveAttentionReasons(input, nowIso) {
   return ATTENTION_REASONS.filter((r) => computed.includes(r));
 }
 __name(deriveAttentionReasons, "deriveAttentionReasons");
+__name2(deriveAttentionReasons, "deriveAttentionReasons");
 function sortAttentionStudents(students) {
   return [...students].sort((a, b) => {
     if (b.reasons.length !== a.reasons.length)
@@ -14821,24 +16308,29 @@ function sortAttentionStudents(students) {
   });
 }
 __name(sortAttentionStudents, "sortAttentionStudents");
+__name2(sortAttentionStudents, "sortAttentionStudents");
 function emptyCell() {
   return { total: 0, special: 0, attention: 0, bySeverity: {} };
 }
 __name(emptyCell, "emptyCell");
+__name2(emptyCell, "emptyCell");
 function addTotal(cell, n = 1) {
   cell.total += n;
 }
 __name(addTotal, "addTotal");
+__name2(addTotal, "addTotal");
 function addSpecial(cell, severity) {
   cell.special += 1;
   if (severity)
     cell.bySeverity[severity] = (cell.bySeverity[severity] ?? 0) + 1;
 }
 __name(addSpecial, "addSpecial");
+__name2(addSpecial, "addSpecial");
 function addAttention(cell, n = 1) {
   cell.attention += n;
 }
 __name(addAttention, "addAttention");
+__name2(addAttention, "addAttention");
 function mergeCells(a, b) {
   const bySeverity = {};
   for (const s of SPECIAL_NEED_SEVERITIES) {
@@ -14849,6 +16341,7 @@ function mergeCells(a, b) {
   return { total: a.total + b.total, special: a.special + b.special, attention: a.attention + b.attention, bySeverity };
 }
 __name(mergeCells, "mergeCells");
+__name2(mergeCells, "mergeCells");
 function bumpByType(byType, type) {
   if (!type)
     return byType;
@@ -14857,6 +16350,7 @@ function bumpByType(byType, type) {
   return next;
 }
 __name(bumpByType, "bumpByType");
+__name2(bumpByType, "bumpByType");
 function sortGrades(present, knownOrder) {
   const seen = new Set(present);
   const known = knownOrder.filter((g) => seen.has(g));
@@ -14864,7 +16358,7 @@ function sortGrades(present, knownOrder) {
   return [...known, ...unknown];
 }
 __name(sortGrades, "sortGrades");
-
+__name2(sortGrades, "sortGrades");
 function isoOf(v) {
   if (!v)
     return null;
@@ -14874,6 +16368,7 @@ function isoOf(v) {
   return v;
 }
 __name(isoOf, "isoOf");
+__name2(isoOf, "isoOf");
 var WAIT_PROJECTION = `,
        CASE WHEN EXISTS (SELECT 1 FROM waitlist wq WHERE wq.student_id = s.id AND wq.deleted_at IS NULL AND wq.status IN ('waiting','called','scheduled')) THEN 'waiting'
             WHEN EXISTS (SELECT 1 FROM waitlist wa WHERE wa.student_id = s.id AND wa.deleted_at IS NULL AND wa.status = 'admitted') THEN 'admitted'
@@ -14899,6 +16394,7 @@ function createSpecialNeedsService(deps) {
     return map;
   }
   __name(openFollowupsOf, "openFollowupsOf");
+  __name2(openFollowupsOf, "openFollowupsOf");
   async function sessionsOf(studentIds, nowIso) {
     const map = /* @__PURE__ */ new Map();
     if (studentIds.length === 0)
@@ -14919,6 +16415,7 @@ function createSpecialNeedsService(deps) {
     return map;
   }
   __name(sessionsOf, "sessionsOf");
+  __name2(sessionsOf, "sessionsOf");
   function toAttentionStudent(row, nowIso, fus, sessions) {
     const reasons = deriveAttentionReasons(
       {
@@ -14949,6 +16446,7 @@ function createSpecialNeedsService(deps) {
     };
   }
   __name(toAttentionStudent, "toAttentionStudent");
+  __name2(toAttentionStudent, "toAttentionStudent");
   return {
     /** گرید مدرسه×پایه + فهرست توجه — همه از دو aggregate و دو منبع کمکی */
     async grid(filters, _actor) {
@@ -15002,7 +16500,7 @@ function createSpecialNeedsService(deps) {
       const fus = await openFollowupsOf(specialIds);
       const sessions = await sessionsOf(specialIds, nowIso);
       const schoolMap = /* @__PURE__ */ new Map();
-      const cellKey = /* @__PURE__ */ __name((grade) => grade ?? "\u2014", "cellKey");
+      const cellKey = /* @__PURE__ */ __name2((grade) => grade ?? "\u2014", "cellKey");
       const gradesSet = /* @__PURE__ */ new Set();
       for (const t of totalRows) {
         const key = t.school_id ?? "__none__";
@@ -15069,35 +16567,35 @@ function createSpecialNeedsService(deps) {
       );
       if (!school)
         throw new NotFoundError("\u0645\u062F\u0631\u0633\u0647");
-      const count3 = /* @__PURE__ */ __name(async (sql, params = []) => {
+      const count32 = /* @__PURE__ */ __name2(async (sql, params = []) => {
         const r = await db.queryOne(sql, params);
         return r?.n ?? 0;
       }, "count");
-      const studentsActive = await count3(
+      const studentsActive = await count32(
         `SELECT COUNT(*) AS n FROM students WHERE school_id = ? AND active = 1`,
         [schoolId]
       );
-      const admitted = await count3(
+      const admitted = await count32(
         `SELECT COUNT(*) AS n FROM students s
           WHERE s.school_id = ? AND s.active = 1
             AND EXISTS (SELECT 1 FROM waitlist wa WHERE wa.student_id = s.id AND wa.deleted_at IS NULL AND wa.status = 'admitted')`,
         [schoolId]
       );
-      const waiting = await count3(
+      const waiting = await count32(
         `SELECT COUNT(*) AS n FROM students s
           WHERE s.school_id = ? AND s.active = 1
             AND EXISTS (SELECT 1 FROM waitlist wq WHERE wq.student_id = s.id AND wq.deleted_at IS NULL AND wq.status IN ('waiting','called','scheduled'))`,
         [schoolId]
       );
-      const classesActive = await count3(
+      const classesActive = await count32(
         `SELECT COUNT(*) AS n FROM classes WHERE school_id = ? AND active = 1`,
         [schoolId]
       );
-      const classesWithTeacher = await count3(
+      const classesWithTeacher = await count32(
         `SELECT COUNT(*) AS n FROM classes WHERE school_id = ? AND active = 1 AND teacher_name IS NOT NULL AND TRIM(teacher_name) != ''`,
         [schoolId]
       );
-      const classesBotLinked = await count3(
+      const classesBotLinked = await count32(
         `SELECT COUNT(DISTINCT l.class_id) AS n
            FROM class_bot_links l
            JOIN classes c ON c.id = l.class_id
@@ -15107,7 +16605,7 @@ function createSpecialNeedsService(deps) {
       const now = Date.parse(nowIso);
       const from30 = new Date(now - 30 * 864e5).toISOString();
       const from60 = new Date(now - 60 * 864e5).toISOString();
-      const sessionsLast30 = await count3(
+      const sessionsLast30 = await count32(
         `SELECT COUNT(DISTINCT a.id) AS n
            FROM appointments a
            JOIN appointment_students a_s ON a_s.appointment_id = a.id
@@ -15115,7 +16613,7 @@ function createSpecialNeedsService(deps) {
           WHERE s.school_id = ? AND a.status != 'cancelled' AND a.start_at > ? AND a.start_at <= ?`,
         [schoolId, from30, nowIso]
       );
-      const sessionsPrev30 = await count3(
+      const sessionsPrev30 = await count32(
         `SELECT COUNT(DISTINCT a.id) AS n
            FROM appointments a
            JOIN appointment_students a_s ON a_s.appointment_id = a.id
@@ -15165,7 +16663,7 @@ function createSpecialNeedsService(deps) {
   };
 }
 __name(createSpecialNeedsService, "createSpecialNeedsService");
-
+__name2(createSpecialNeedsService, "createSpecialNeedsService");
 function registerSpecialNeedsRoutes(app, service) {
   app.get("/api/special-needs/grid", requireRole("manager", "secretary"), async (c) => {
     const severityRaw = c.req.query("severity");
@@ -15186,11 +16684,11 @@ function registerSpecialNeedsRoutes(app, service) {
   });
 }
 __name(registerSpecialNeedsRoutes, "registerSpecialNeedsRoutes");
-
+__name2(registerSpecialNeedsRoutes, "registerSpecialNeedsRoutes");
 var WAITLIST_TRANSITIONS = {
-  // admitted از waiting/called هم مجاز شد: جلسهٔ واقعی (حضور/اتمام روی بورد)
+  // — admitted از waiting/called هم مجاز شد: جلسهٔ واقعی (حضور/اتمام روی بورد)
   // برای پروندهٔ متصل، پذیرش را مستقیم ثبت می‌کند — بدون عبور از «نوبت داده شد»
-  // خروج‌های اشتباه قابل بازگشت‌اند (rejected/no_show/cancelled → waiting)؛
+  // — خروج‌های اشتباه قابل بازگشت‌اند (rejected/no_show/cancelled → waiting)؛
   // فقط admitted نهایی است (پروندهٔ واقعی ساخته شده)
   waiting: ["called", "scheduled", "admitted", "rejected", "no_show", "cancelled"],
   called: ["scheduled", "admitted", "rejected", "no_show", "cancelled"],
@@ -15204,10 +16702,12 @@ function canTransition(from, to) {
   return WAITLIST_TRANSITIONS[from].includes(to);
 }
 __name(canTransition, "canTransition");
+__name2(canTransition, "canTransition");
 function isOpen(entry) {
   return WAITLIST_OPEN_STATUSES.includes(entry.status);
 }
 __name(isOpen, "isOpen");
+__name2(isOpen, "isOpen");
 function orderWaitlist(rows) {
   const open = rows.filter(isOpen);
   const closed = rows.filter((r) => !isOpen(r));
@@ -15230,6 +16730,7 @@ function orderWaitlist(rows) {
   return [...sortedOpen, ...sortedClosed];
 }
 __name(orderWaitlist, "orderWaitlist");
+__name2(orderWaitlist, "orderWaitlist");
 function matchStudent(probe, students) {
   if (probe.studentId) {
     const hit = students.find((s) => s.id === probe.studentId);
@@ -15249,12 +16750,13 @@ function matchStudent(probe, students) {
   return { kind: "none" };
 }
 __name(matchStudent, "matchStudent");
+__name2(matchStudent, "matchStudent");
 function appendNote(existing, label, text) {
   const parts = [existing?.trim(), `\uFF3B${label}\uFF3D${text?.trim() || ""}`.trim()].filter(Boolean);
   return parts.join("\n");
 }
 __name(appendNote, "appendNote");
-
+__name2(appendNote, "appendNote");
 function rowToEntry(row) {
   return {
     id: row.id,
@@ -15284,6 +16786,7 @@ function rowToEntry(row) {
   };
 }
 __name(rowToEntry, "rowToEntry");
+__name2(rowToEntry, "rowToEntry");
 var SELECT_BASE = `
   SELECT w.id,
          -- M21: \u0628\u0631\u0627\u06CC \u0648\u0631\u0648\u062F\u06CC\u200C\u0647\u0627\u06CC \u0645\u062A\u0635\u0644 \u0628\u0647 \u067E\u0631\u0648\u0646\u062F\u0647\u060C \u0645\u0634\u062E\u0635\u0627\u062A \u0647\u0648\u06CC\u062A\u06CC \u0632\u0646\u062F\u0647 \u0627\u0632 \u062E\u0648\u062F \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0645\u06CC\u200C\u0622\u06CC\u062F
@@ -15303,7 +16806,7 @@ var SELECT_BASE = `
     LEFT JOIN classes c ON c.id = COALESCE(st.class_id, w.class_id)`;
 function createWaitlistService(deps) {
   const { db, audit, logger } = deps;
-  const log3 = logger.child("waitlist");
+  const log32 = logger.child("waitlist");
   async function loadEntry(tx, id) {
     const row = await tx.queryOne(`${SELECT_BASE} WHERE w.id = ? AND w.deleted_at IS NULL`, [id]);
     if (!row)
@@ -15311,6 +16814,7 @@ function createWaitlistService(deps) {
     return row;
   }
   __name(loadEntry, "loadEntry");
+  __name2(loadEntry, "loadEntry");
   async function transitionEntry(tx, row, to, action, actorId, noteAppend) {
     if (!canTransition(row.status, to)) {
       throw new ConflictError(`\u062A\u063A\u06CC\u06CC\u0631 \u0648\u0636\u0639\u06CC\u062A \u0627\u0632 \xAB${row.status}\xBB \u0628\u0647 \xAB${to}\xBB \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A`, void 0);
@@ -15335,6 +16839,7 @@ function createWaitlistService(deps) {
     });
   }
   __name(transitionEntry, "transitionEntry");
+  __name2(transitionEntry, "transitionEntry");
   const service = {
     async list(filters) {
       const conditions = ["w.deleted_at IS NULL"];
@@ -15429,7 +16934,7 @@ function createWaitlistService(deps) {
           }
         });
       });
-      log3.info("waitlist.created");
+      log32.info("waitlist.created");
       const entry = await service.getById(id);
       if (!entry)
         throw new NotFoundError("\u0648\u0631\u0648\u062F\u06CC \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631");
@@ -15556,7 +17061,7 @@ function createWaitlistService(deps) {
                 schoolId: row.school_id ?? void 0,
                 classId: row.class_id ?? void 0,
                 guardianPhone: row.phone,
-                // «دانش‌آموز به هر همکاری داده شد…»: درمانگرِ نوبتِ اول، مسئول پرونده می‌شود
+                // — «دانش‌آموز به هر همکاری داده شد…»: درمانگرِ نوبتِ اول، مسئول پرونده می‌شود
                 ownerStaffId: input.staffId
               },
               actor
@@ -15602,7 +17107,7 @@ function createWaitlistService(deps) {
         throw new NotFoundError("\u0646\u0648\u0628\u062A");
       const student = await deps.students.getStudentById(studentId) ?? null;
       await deps.appointments.notifyCreated(appointment);
-      log3.info("waitlist.scheduled", { createdStudent });
+      log32.info("waitlist.scheduled", { createdStudent });
       return {
         entry,
         appointment,
@@ -15749,7 +17254,7 @@ function createWaitlistService(deps) {
       });
       return await service.getById(id);
     },
-    // بازگشت خروجِ اشتباه به صف (رد/نیامد/انصراف → در انتظار) — تعیین وضعیت شفاف
+    // — بازگشت خروجِ اشتباه به صف (رد/نیامد/انصراف → در انتظار) — تعیین وضعیت شفاف
     async reopen(id, note, actor) {
       await db.transaction(async (tx) => {
         const row = await loadEntry(tx, id);
@@ -15825,7 +17330,7 @@ function createWaitlistService(deps) {
           changes: { status: { from: row.status, to: "deleted" } }
         });
       });
-      log3.info("waitlist.deleted", { id });
+      log32.info("waitlist.deleted", { id });
     },
     async onAttendanceMarked(appointmentId, studentId, status) {
       try {
@@ -15856,10 +17361,10 @@ function createWaitlistService(deps) {
             resourceId: row.id,
             changes: { status: { from: row.status, to: "admitted" }, removed_from_list: { from: null, to: true } }
           });
-          log3.info("waitlist.admitted", { appointmentId, waitlistId: row.id, from: row.status });
+          log32.info("waitlist.admitted", { appointmentId, waitlistId: row.id, from: row.status });
         }
       } catch (err) {
-        log3.warn("waitlist.admission.observer.failed", {
+        log32.warn("waitlist.admission.observer.failed", {
           error: err instanceof Error ? err.message : String(err)
         });
       }
@@ -15868,7 +17373,7 @@ function createWaitlistService(deps) {
   return service;
 }
 __name(createWaitlistService, "createWaitlistService");
-
+__name2(createWaitlistService, "createWaitlistService");
 function registerWaitlistRoutes(app, service) {
   app.get("/api/waitlist", async (c) => {
     const status = c.req.query("status");
@@ -16014,7 +17519,7 @@ function registerWaitlistRoutes(app, service) {
   });
 }
 __name(registerWaitlistRoutes, "registerWaitlistRoutes");
-
+__name2(registerWaitlistRoutes, "registerWaitlistRoutes");
 var FOLLOWUP_TRANSITIONS = {
   open: ["in_progress", "done", "cancelled"],
   in_progress: ["done", "cancelled"],
@@ -16024,15 +17529,18 @@ var FOLLOWUP_TRANSITIONS = {
 function canTransition2(from, to) {
   return FOLLOWUP_TRANSITIONS[from].includes(to);
 }
-__name(canTransition2, "canTransition");
+__name(canTransition2, "canTransition2");
+__name2(canTransition2, "canTransition");
 function isOpenStatus(status) {
   return FOLLOWUP_OPEN_STATUSES.includes(status);
 }
 __name(isOpenStatus, "isOpenStatus");
+__name2(isOpenStatus, "isOpenStatus");
 function defaultDueAt(now = /* @__PURE__ */ new Date()) {
   return new Date(now.getTime() + FOLLOWUP_DEFAULT_DUE_DAYS * 24 * 60 * 60 * 1e3).toISOString();
 }
 __name(defaultDueAt, "defaultDueAt");
+__name2(defaultDueAt, "defaultDueAt");
 function groupBoundaries(now = /* @__PURE__ */ new Date()) {
   const todayYmd = tehranTodayYmd(now);
   const todayEnd = tehranDayRange(todayYmd).end;
@@ -16040,6 +17548,7 @@ function groupBoundaries(now = /* @__PURE__ */ new Date()) {
   return { nowIso: now.toISOString(), todayEnd, weekEnd };
 }
 __name(groupBoundaries, "groupBoundaries");
+__name2(groupBoundaries, "groupBoundaries");
 function followUpGroupOf(row, now = /* @__PURE__ */ new Date()) {
   if (!isOpenStatus(row.status))
     return null;
@@ -16058,7 +17567,7 @@ function followUpGroupOf(row, now = /* @__PURE__ */ new Date()) {
   return "future";
 }
 __name(followUpGroupOf, "followUpGroupOf");
-
+__name2(followUpGroupOf, "followUpGroupOf");
 function rowToFollowUp(row) {
   return {
     id: row.id,
@@ -16079,6 +17588,7 @@ function rowToFollowUp(row) {
   };
 }
 __name(rowToFollowUp, "rowToFollowUp");
+__name2(rowToFollowUp, "rowToFollowUp");
 var OPEN_LIST = FOLLOWUP_OPEN_STATUSES.map((s) => `'${s}'`).join(",");
 var SELECT_BASE2 = `
   SELECT f.id, f.entity_type, f.entity_id, f.student_id,
@@ -16101,9 +17611,10 @@ function normalizeDueAt(value, now) {
   return new Date(ms).toISOString();
 }
 __name(normalizeDueAt, "normalizeDueAt");
+__name2(normalizeDueAt, "normalizeDueAt");
 function createFollowUpsService(deps) {
   const { db, audit, logger } = deps;
-  const log3 = logger.child("followups");
+  const log32 = logger.child("followups");
   async function loadRow(tx, id) {
     const row = await tx.queryOne(`${SELECT_BASE2} WHERE f.id = ?`, [id]);
     if (!row)
@@ -16111,22 +17622,23 @@ function createFollowUpsService(deps) {
     return row;
   }
   __name(loadRow, "loadRow");
-  function groupCondition(group3, params) {
-    if (group3 === "all")
+  __name2(loadRow, "loadRow");
+  function groupCondition(group32, params) {
+    if (group32 === "all")
       return "1=1";
-    if (!group3 || group3 === "open")
+    if (!group32 || group32 === "open")
       return `f.status IN (${OPEN_LIST})`;
     const { nowIso, todayEnd, weekEnd } = groupBoundaries(/* @__PURE__ */ new Date());
     const dated = `f.status IN (${OPEN_LIST}) AND f.due_at IS NOT NULL`;
-    if (group3 === "overdue") {
+    if (group32 === "overdue") {
       params.push(nowIso);
       return `${dated} AND f.due_at < ?`;
     }
-    if (group3 === "today") {
+    if (group32 === "today") {
       params.push(nowIso, todayEnd);
       return `${dated} AND f.due_at >= ? AND f.due_at <= ?`;
     }
-    if (group3 === "week") {
+    if (group32 === "week") {
       params.push(todayEnd, weekEnd);
       return `${dated} AND f.due_at > ? AND f.due_at <= ?`;
     }
@@ -16134,12 +17646,13 @@ function createFollowUpsService(deps) {
     return `${dated} AND f.due_at > ?`;
   }
   __name(groupCondition, "groupCondition");
+  __name2(groupCondition, "groupCondition");
   async function insertWithinTx(tx, id, input, dueAt, actor) {
-    const title2 = input.title.trim();
+    const title22 = input.title.trim();
     await tx.execute(
       `INSERT INTO followups (id, entity_type, entity_id, student_id, title, assignee_id, created_by, due_at, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open')`,
-      [id, input.entityType, input.entityId, input.studentId ?? null, title2, input.assigneeId, actor.staffId, dueAt]
+      [id, input.entityType, input.entityId, input.studentId ?? null, title22, input.assigneeId, actor.staffId, dueAt]
     );
     await audit.logInTransaction(tx, {
       actorId: actor.staffId,
@@ -16150,7 +17663,7 @@ function createFollowUpsService(deps) {
         status: { from: null, to: "open" },
         entity: { from: null, to: `${input.entityType}/${input.entityId}` },
         student_id: { from: null, to: input.studentId ?? null },
-        title: { from: null, to: title2 },
+        title: { from: null, to: title22 },
         assignee_id: { from: null, to: input.assigneeId },
         due_at: { from: null, to: dueAt }
       }
@@ -16162,7 +17675,7 @@ function createFollowUpsService(deps) {
       entityId: input.entityId,
       studentId: input.studentId ?? null,
       studentName: null,
-      title: title2,
+      title: title22,
       assigneeId: input.assigneeId,
       assigneeName: null,
       createdBy: actor.staffId,
@@ -16175,6 +17688,7 @@ function createFollowUpsService(deps) {
     };
   }
   __name(insertWithinTx, "insertWithinTx");
+  __name2(insertWithinTx, "insertWithinTx");
   const service = {
     async list(filters, actor) {
       const conditions = [];
@@ -16213,8 +17727,8 @@ function createFollowUpsService(deps) {
       return row ? rowToFollowUp(row) : null;
     },
     async create(input, actor) {
-      const title2 = input.title.trim();
-      if (title2.length < 2)
+      const title22 = input.title.trim();
+      if (title22.length < 2)
         throw new ValidationError("\u0639\u0646\u0648\u0627\u0646 \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
       if (!input.entityId)
         throw new ValidationError("\u0634\u0646\u0627\u0633\u0647\u0654 \u0645\u0648\u062C\u0648\u062F\u06CC\u062A \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
@@ -16226,9 +17740,9 @@ function createFollowUpsService(deps) {
         throw new NotFoundError("\u0645\u0633\u0626\u0648\u0644 \u067E\u06CC\u06AF\u06CC\u0631\u06CC");
       const id = crypto.randomUUID();
       await db.transaction(async (tx) => {
-        await insertWithinTx(tx, id, { ...input, title: title2 }, dueAt, actor);
+        await insertWithinTx(tx, id, { ...input, title: title22 }, dueAt, actor);
       });
-      log3.info("followup.created", { id, entity: input.entityType });
+      log32.info("followup.created", { id, entity: input.entityType });
       const created = await service.getById(id);
       if (!created)
         throw new NotFoundError("\u067E\u06CC\u06AF\u06CC\u0631\u06CC");
@@ -16298,31 +17812,31 @@ function createFollowUpsService(deps) {
       return await service.getById(id);
     },
     async createWithinTx(tx, input, actor) {
-      const title2 = input.title.trim();
-      if (title2.length < 2)
+      const title22 = input.title.trim();
+      if (title22.length < 2)
         throw new ValidationError("\u0639\u0646\u0648\u0627\u0646 \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
       if (!input.entityId)
         throw new ValidationError("\u0634\u0646\u0627\u0633\u0647\u0654 \u0645\u0648\u062C\u0648\u062F\u06CC\u062A \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
       const dueAt = normalizeDueAt(input.dueAt, /* @__PURE__ */ new Date());
       const id = crypto.randomUUID();
-      const created = await insertWithinTx(tx, id, { ...input, title: title2 }, dueAt, actor);
-      log3.info("followup.created.hook", { id, entity: input.entityType });
+      const created = await insertWithinTx(tx, id, { ...input, title: title22 }, dueAt, actor);
+      log32.info("followup.created.hook", { id, entity: input.entityType });
       return created;
     }
   };
   return service;
 }
 __name(createFollowUpsService, "createFollowUpsService");
-
+__name2(createFollowUpsService, "createFollowUpsService");
 function registerFollowUpRoutes(app, service) {
   app.get("/api/followups", async (c) => {
     const actor = getAuthContext(c);
     const mine = c.req.query("mine");
-    const group3 = c.req.query("group");
+    const group32 = c.req.query("group");
     const items = await service.list(
       {
         mine: mine === "1" || mine === "true",
-        group: group3 || void 0,
+        group: group32 || void 0,
         entityType: c.req.query("entity_type") || void 0,
         entityId: c.req.query("entity_id") || void 0,
         studentId: c.req.query("student_id") || void 0
@@ -16370,7 +17884,7 @@ function registerFollowUpRoutes(app, service) {
   });
 }
 __name(registerFollowUpRoutes, "registerFollowUpRoutes");
-
+__name2(registerFollowUpRoutes, "registerFollowUpRoutes");
 var TODO_TRANSITIONS = {
   pending: ["done"],
   done: []
@@ -16378,7 +17892,8 @@ var TODO_TRANSITIONS = {
 function canTransition3(from, to) {
   return TODO_TRANSITIONS[from].includes(to);
 }
-__name(canTransition3, "canTransition");
+__name(canTransition3, "canTransition3");
+__name2(canTransition3, "canTransition");
 function isTodoOverdue(row, now = /* @__PURE__ */ new Date()) {
   if (row.status !== "pending" || !row.dueAt)
     return false;
@@ -16388,6 +17903,7 @@ function isTodoOverdue(row, now = /* @__PURE__ */ new Date()) {
   return due < now.getTime();
 }
 __name(isTodoOverdue, "isTodoOverdue");
+__name2(isTodoOverdue, "isTodoOverdue");
 function computeBadge(rows, now = /* @__PURE__ */ new Date()) {
   let urgent = 0;
   let overdue = 0;
@@ -16407,12 +17923,12 @@ function computeBadge(rows, now = /* @__PURE__ */ new Date()) {
   return { urgent, overdue, attention };
 }
 __name(computeBadge, "computeBadge");
-
-function parseChecklist(raw) {
-  if (!raw)
+__name2(computeBadge, "computeBadge");
+function parseChecklist(raw2) {
+  if (!raw2)
     return null;
   try {
-    const arr = JSON.parse(raw);
+    const arr = JSON.parse(raw2);
     if (!Array.isArray(arr))
       return null;
     const items = [];
@@ -16427,6 +17943,7 @@ function parseChecklist(raw) {
   }
 }
 __name(parseChecklist, "parseChecklist");
+__name2(parseChecklist, "parseChecklist");
 function rowToTodo(row) {
   return {
     id: row.id,
@@ -16447,6 +17964,7 @@ function rowToTodo(row) {
   };
 }
 __name(rowToTodo, "rowToTodo");
+__name2(rowToTodo, "rowToTodo");
 var SELECT_BASE3 = `
   SELECT t.id, t.title, t.note, t.checklist,
          t.assigner_id, sa.full_name AS assigner_name,
@@ -16459,7 +17977,7 @@ var SELECT_BASE3 = `
 function m108NormalizeChecklistTexts(texts) {
   if (!texts || texts.length === 0)
     return null;
-  const seen = new Set();
+  const seen = /* @__PURE__ */ new Set();
   const items = [];
   for (const t of texts) {
     const text = t.trim();
@@ -16473,10 +17991,11 @@ function m108NormalizeChecklistTexts(texts) {
   return items.length > 0 ? JSON.stringify(items) : null;
 }
 __name(m108NormalizeChecklistTexts, "m108NormalizeChecklistTexts");
+__name2(m108NormalizeChecklistTexts, "m108NormalizeChecklistTexts");
 function m108NormalizeChecklistItems(items) {
   if (!items || items.length === 0)
     return null;
-  const seen = new Set();
+  const seen = /* @__PURE__ */ new Set();
   const clean = [];
   for (const it of items) {
     const text = it.text.trim();
@@ -16490,6 +18009,7 @@ function m108NormalizeChecklistItems(items) {
   return clean.length > 0 ? JSON.stringify(clean) : null;
 }
 __name(m108NormalizeChecklistItems, "m108NormalizeChecklistItems");
+__name2(m108NormalizeChecklistItems, "m108NormalizeChecklistItems");
 function normalizeDueAt2(value) {
   if (value === null)
     return null;
@@ -16499,21 +18019,23 @@ function normalizeDueAt2(value) {
     return tehranDayRange(value).end;
   const ms = Date.parse(value);
   if (Number.isNaN(ms))
-    throw new ValidationError("\u0645\u0647\u0644\u062a (due_at) \u0628\u0627\u06cc\u062f \u062a\u0627\u0631\u06cc\u062e \u06cc\u0627 \u0632\u0645\u0627\u0646 ISO \u0645\u0639\u062a\u0628\u0631 \u0628\u0627\u0634\u062f");
+    throw new ValidationError("\u0645\u0647\u0644\u062A (due_at) \u0628\u0627\u06CC\u062F \u062A\u0627\u0631\u06CC\u062E \u06CC\u0627 \u0632\u0645\u0627\u0646 ISO \u0645\u0639\u062A\u0628\u0631 \u0628\u0627\u0634\u062F");
   return new Date(ms).toISOString();
 }
-__name(normalizeDueAt2, "normalizeDueAt");
+__name(normalizeDueAt2, "normalizeDueAt2");
+__name2(normalizeDueAt2, "normalizeDueAt");
 function createTodosService(deps) {
   const { db, audit, logger } = deps;
-  const log3 = logger.child("todos");
+  const log32 = logger.child("todos");
   let notifier = null;
   async function loadActiveRow(tx, id) {
     const row = await tx.queryOne(`${SELECT_BASE3} WHERE t.id = ? AND t.deleted_at IS NULL`, [id]);
     if (!row)
-      throw new NotFoundError("\u06a9\u0627\u0631");
+      throw new NotFoundError("\u06A9\u0627\u0631");
     return row;
   }
   __name(loadActiveRow, "loadActiveRow");
+  __name2(loadActiveRow, "loadActiveRow");
   async function assertValidAssignee(tx, assigneeId, actor) {
     if (assigneeId === actor.staffId)
       return;
@@ -16522,18 +18044,19 @@ function createTodosService(deps) {
       [assigneeId]
     );
     if (!row)
-      throw new NotFoundError("\u0647\u0645\u06a9\u0627\u0631 \u06af\u06cc\u0631\u0646\u062f\u0647");
+      throw new NotFoundError("\u0647\u0645\u06A9\u0627\u0631 \u06AF\u06CC\u0631\u0646\u062F\u0647");
     if (!row.active)
-      throw new NotFoundError("\u0647\u0645\u06a9\u0627\u0631 \u06af\u06cc\u0631\u0646\u062f\u0647");
+      throw new NotFoundError("\u0647\u0645\u06A9\u0627\u0631 \u06AF\u06CC\u0631\u0646\u062F\u0647");
     if (row.role !== "manager" && row.role !== "secretary") {
-      throw new ValidationError("\u06af\u06cc\u0631\u0646\u062f\u0647\u0654 \u06a9\u0627\u0631 \u062f\u0627\u062e\u0644\u06cc \u0641\u0642\u0637 \u0645\u062f\u06cc\u0631 \u06cc\u0627 \u0645\u0646\u0634\u06cc \u0627\u0633\u062a \u2014 \u062f\u0631\u0645\u0627\u0646\u06af\u0631 \u062f\u0631 \u0627\u06cc\u0646 \u0686\u0631\u062e\u0647 \u0646\u06cc\u0633\u062a");
+      throw new ValidationError("\u06AF\u06CC\u0631\u0646\u062F\u0647\u0654 \u06A9\u0627\u0631 \u062F\u0627\u062E\u0644\u06CC \u0641\u0642\u0637 \u0645\u062F\u06CC\u0631 \u06CC\u0627 \u0645\u0646\u0634\u06CC \u0627\u0633\u062A \u2014 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u062F\u0631 \u0627\u06CC\u0646 \u0686\u0631\u062E\u0647 \u0646\u06CC\u0633\u062A");
     }
   }
   __name(assertValidAssignee, "assertValidAssignee");
+  __name2(assertValidAssignee, "assertValidAssignee");
   const service = {
     async list(filters, actor) {
       if (actor.role !== "manager" && actor.role !== "secretary") {
-        throw new ForbiddenError("\u06a9\u0627\u0631\u0647\u0627\u06cc \u062f\u0627\u062e\u0644\u06cc \u0641\u0642\u0637 \u0628\u06cc\u0646 \u0645\u0646\u0634\u06cc \u0648 \u0645\u062f\u06cc\u0631 \u0631\u062f \u0648 \u0628\u062f\u0644 \u0645\u06cc\u200c\u0634\u0648\u062f");
+        throw new ForbiddenError("\u06A9\u0627\u0631\u0647\u0627\u06CC \u062F\u0627\u062E\u0644\u06CC \u0641\u0642\u0637 \u0628\u06CC\u0646 \u0645\u0646\u0634\u06CC \u0648 \u0645\u062F\u06CC\u0631 \u0631\u062F \u0648 \u0628\u062F\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F");
       }
       const boxColumn = filters.box === "outbox" ? "t.assigner_id" : "t.assignee_id";
       const rows = await db.query(
@@ -16550,9 +18073,9 @@ function createTodosService(deps) {
       return { data: rows.map(rowToTodo), badge };
     },
     async create(input, actor) {
-      const title2 = input.title.trim();
-      if (title2.length < 2)
-        throw new ValidationError("\u0639\u0646\u0648\u0627\u0646 \u06a9\u0627\u0631 \u062d\u062f\u0627\u0642\u0644 \u06f2 \u0646\u0648\u06cc\u0633\u0647 \u0627\u0633\u062a");
+      const title22 = input.title.trim();
+      if (title22.length < 2)
+        throw new ValidationError("\u0639\u0646\u0648\u0627\u0646 \u06A9\u0627\u0631 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
       const dueAt = normalizeDueAt2(input.dueAt);
       const priority = input.priority ?? "normal";
       const checklistRaw = m108NormalizeChecklistTexts(input.checklist);
@@ -16562,7 +18085,7 @@ function createTodosService(deps) {
         await tx.execute(
           `INSERT INTO todos (id, title, note, checklist, assigner_id, assignee_id, due_at, priority, status)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
-          [id, title2, input.note ?? null, checklistRaw, actor.staffId, input.assigneeId, dueAt, priority]
+          [id, title22, input.note ?? null, checklistRaw, actor.staffId, input.assigneeId, dueAt, priority]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -16570,19 +18093,19 @@ function createTodosService(deps) {
           resourceType: "todo",
           resourceId: id,
           changes: {
-            title: { from: null, to: title2 },
+            title: { from: null, to: title22 },
             assignee_id: { from: null, to: input.assigneeId },
             due_at: { from: null, to: dueAt },
             priority: { from: null, to: priority },
-            ...checklistRaw !== null ? { checklist: { from: null, to: `${input.checklist?.length ?? 0} \u0645\u0648\u0631\u062f` } } : {}
+            ...checklistRaw !== null ? { checklist: { from: null, to: `${input.checklist?.length ?? 0} \u0645\u0648\u0631\u062F` } } : {}
           }
         });
       });
-      log3.info("todo.created", { id, personal: input.assigneeId === actor.staffId });
+      log32.info("todo.created", { id, personal: input.assigneeId === actor.staffId });
       if (input.assigneeId === actor.staffId) {
         const created2 = (await service.list({ box: "outbox" }, actor)).data.find((t) => t.id === id);
         if (!created2)
-          throw new NotFoundError("\u06a9\u0627\u0631");
+          throw new NotFoundError("\u06A9\u0627\u0631");
         return created2;
       }
       const created = (await service.list({ box: "outbox" }, actor)).data.find((t) => t.id === id);
@@ -16590,18 +18113,18 @@ function createTodosService(deps) {
         try {
           await notifier(created);
         } catch (err) {
-          log3.warn("todo.assigned.notify.failed", { id, error: err instanceof Error ? err.message : "UNKNOWN" });
+          log32.warn("todo.assigned.notify.failed", { id, error: err instanceof Error ? err.message : "UNKNOWN" });
         }
       }
       if (!created)
-        throw new NotFoundError("\u06a9\u0627\u0631");
+        throw new NotFoundError("\u06A9\u0627\u0631");
       return created;
     },
     async update(id, patch, actor) {
       await db.transaction(async (tx) => {
         const row = await loadActiveRow(tx, id);
         if (row.assigner_id !== actor.staffId) {
-          throw new ForbiddenError("\u0648\u06cc\u0631\u0627\u06cc\u0634 \u06a9\u0627\u0631 \u0641\u0642\u0637 \u062a\u0648\u0633\u0637 \u062b\u0628\u062a\u200c\u06a9\u0646\u0646\u062f\u0647\u0654 \u0622\u0646 \u0645\u062c\u0627\u0632 \u0627\u0633\u062a");
+          throw new ForbiddenError("\u0648\u06CC\u0631\u0627\u06CC\u0634 \u06A9\u0627\u0631 \u0641\u0642\u0637 \u062A\u0648\u0633\u0637 \u062B\u0628\u062A\u200C\u06A9\u0646\u0646\u062F\u0647\u0654 \u0622\u0646 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
         }
         const changes = {};
         const sets = [];
@@ -16612,7 +18135,7 @@ function createTodosService(deps) {
           changes.deleted_at = { from: null, to: "set" };
         } else {
           if (row.status !== "pending") {
-            throw new ConflictError("\u0627\u06cc\u0646 \u06a9\u0627\u0631 \u0627\u0646\u062c\u0627\u0645 \u0634\u062f\u0647 \u0648 \u062f\u06cc\u06af\u0631 \u0648\u06cc\u0631\u0627\u06cc\u0634 \u0646\u0645\u06cc\u200c\u0634\u0648\u062f");
+            throw new ConflictError("\u0627\u06CC\u0646 \u06A9\u0627\u0631 \u0627\u0646\u062C\u0627\u0645 \u0634\u062F\u0647 \u0648 \u062F\u06CC\u06AF\u0631 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0646\u0645\u06CC\u200C\u0634\u0648\u062F");
           }
           if (patch.title !== void 0 && patch.title !== row.title) {
             sets.push("title = ?");
@@ -16649,8 +18172,8 @@ function createTodosService(deps) {
               const fromItems = parseChecklist(currentRaw);
               const toItems = parseChecklist(nextRaw);
               changes.checklist = {
-                from: fromItems ? `${fromItems.length} \u0645\u0648\u0631\u062f` : null,
-                to: toItems ? `${toItems.length} \u0645\u0648\u0631\u062f` : null
+                from: fromItems ? `${fromItems.length} \u0645\u0648\u0631\u062F` : null,
+                to: toItems ? `${toItems.length} \u0645\u0648\u0631\u062F` : null
               };
             }
           }
@@ -16669,18 +18192,18 @@ function createTodosService(deps) {
       });
       const updated = await db.queryOne(`${SELECT_BASE3} WHERE t.id = ?`, [id]);
       if (!updated)
-        throw new NotFoundError("\u06a9\u0627\u0631");
+        throw new NotFoundError("\u06A9\u0627\u0631");
       return rowToTodo(updated);
     },
     async complete(id, actor) {
       await db.transaction(async (tx) => {
         const row = await loadActiveRow(tx, id);
         if (row.assignee_id !== actor.staffId) {
-          throw new ForbiddenError("\u0627\u0646\u062c\u0627\u0645 \u06a9\u0627\u0631 \u0641\u0642\u0637 \u062a\u0648\u0633\u0637 \u0645\u0633\u0626\u0648\u0644 \u0647\u0645\u0627\u0646 \u06a9\u0627\u0631 \u062b\u0628\u062a \u0645\u06cc\u200c\u0634\u0648\u062f");
+          throw new ForbiddenError("\u0627\u0646\u062C\u0627\u0645 \u06A9\u0627\u0631 \u0641\u0642\u0637 \u062A\u0648\u0633\u0637 \u0645\u0633\u0626\u0648\u0644 \u0647\u0645\u0627\u0646 \u06A9\u0627\u0631 \u062B\u0628\u062A \u0645\u06CC\u200C\u0634\u0648\u062F");
         }
         const status = row.status;
         if (!canTransition3(status, "done")) {
-          throw new ConflictError("\u0627\u06cc\u0646 \u06a9\u0627\u0631 \u0642\u0628\u0644\u0627\u064b \u0627\u0646\u062c\u0627\u0645 \u0634\u062f\u0647 \u0627\u0633\u062a");
+          throw new ConflictError("\u0627\u06CC\u0646 \u06A9\u0627\u0631 \u0642\u0628\u0644\u0627\u064B \u0627\u0646\u062C\u0627\u0645 \u0634\u062F\u0647 \u0627\u0633\u062A");
         }
         const completedAt = (/* @__PURE__ */ new Date()).toISOString();
         await tx.execute(
@@ -16698,32 +18221,32 @@ function createTodosService(deps) {
           }
         });
       });
-      log3.info("todo.completed", { id });
+      log32.info("todo.completed", { id });
       const updated = await db.queryOne(`${SELECT_BASE3} WHERE t.id = ?`, [id]);
       if (!updated)
-        throw new NotFoundError("\u06a9\u0627\u0631");
+        throw new NotFoundError("\u06A9\u0627\u0631");
       return rowToTodo(updated);
     },
     async addChecklistItem(id, text, actor) {
       const clean = text.trim();
       if (!clean)
-        throw new ValidationError("\u0645\u0648\u0631\u062f \u0686\u06a9\u200c\u0644\u06cc\u0633\u062a \u062e\u0627\u0644\u06cc \u0627\u0633\u062a");
+        throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
       if (clean.length > 200)
-        throw new ValidationError("\u0645\u0648\u0631\u062f \u0686\u06a9\u200c\u0644\u06cc\u0633\u062a \u0628\u06cc\u0634 \u0627\u0632 \u06f2\u06f0\u06f0 \u0646\u0648\u06cc\u0633\u0647 \u0627\u0633\u062a");
+        throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
       await db.transaction(async (tx) => {
         const row = await loadActiveRow(tx, id);
         if (row.assigner_id !== actor.staffId && row.assignee_id !== actor.staffId) {
-          throw new ForbiddenError("\u0641\u0642\u0637 \u062b\u0628\u062a\u200c\u06a9\u0646\u0646\u062f\u0647 \u06cc\u0627 \u0645\u0633\u0626\u0648\u0644 \u06a9\u0627\u0631 \u0645\u06cc\u200c\u062a\u0648\u0627\u0646\u062f \u0686\u06a9\u200c\u0644\u06cc\u0633\u062a \u0631\u0627 \u062a\u063a\u06cc\u06cc\u0631 \u062f\u0647\u062f");
+          throw new ForbiddenError("\u0641\u0642\u0637 \u062B\u0628\u062A\u200C\u06A9\u0646\u0646\u062F\u0647 \u06CC\u0627 \u0645\u0633\u0626\u0648\u0644 \u06A9\u0627\u0631 \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0631\u0627 \u062A\u063A\u06CC\u06CC\u0631 \u062F\u0647\u062F");
         }
         if (row.status !== "pending") {
-          throw new ConflictError("\u0627\u06cc\u0646 \u06a9\u0627\u0631 \u0627\u0646\u062c\u0627\u0645 \u0634\u062f\u0647 \u0648 \u0686\u06a9\u200c\u0644\u06cc\u0633\u062a\u0634 \u062a\u063a\u06cc\u06cc\u0631 \u0646\u0645\u06cc\u200c\u06a9\u0646\u062f");
+          throw new ConflictError("\u0627\u06CC\u0646 \u06A9\u0627\u0631 \u0627\u0646\u062C\u0627\u0645 \u0634\u062F\u0647 \u0648 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u0634 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F");
         }
         const items = parseChecklist(row.checklist) ?? [];
         if (items.length >= TODO_CHECKLIST_MAX) {
-          throw new ValidationError("\u0686\u06a9\u200c\u0644\u06cc\u0633\u062a \u0628\u06cc\u0634 \u0627\u0632 ${TODO_CHECKLIST_MAX} \u0645\u0648\u0631\u062f \u0646\u062f\u0627\u0631\u062f");
+          throw new ValidationError("\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 ${TODO_CHECKLIST_MAX} \u0645\u0648\u0631\u062F \u0646\u062F\u0627\u0631\u062F");
         }
         if (items.some((it) => it.text === clean)) {
-          throw new ConflictError("\u0627\u06cc\u0646 \u0645\u0648\u0631\u062f \u0627\u0632 \u0642\u0628\u0644 \u062f\u0631 \u0686\u06a9\u200c\u0644\u06cc\u0633\u062a \u0647\u0633\u062a");
+          throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0648\u0631\u062F \u0627\u0632 \u0642\u0628\u0644 \u062F\u0631 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0647\u0633\u062A");
         }
         items.push({ text: clean, done: false });
         await tx.execute(`UPDATE todos SET checklist = ?, updated_at = datetime('now') WHERE id = ?`, [
@@ -16735,28 +18258,28 @@ function createTodosService(deps) {
           action: "todo.updated",
           resourceType: "todo",
           resourceId: id,
-          changes: { checklist: { from: `${items.length - 1} \u0645\u0648\u0631\u062f`, to: `${items.length} \u0645\u0648\u0631\u062f` } }
+          changes: { checklist: { from: `${items.length - 1} \u0645\u0648\u0631\u062F`, to: `${items.length} \u0645\u0648\u0631\u062F` } }
         });
       });
       const updated = await db.queryOne(`${SELECT_BASE3} WHERE t.id = ?`, [id]);
       if (!updated)
-        throw new NotFoundError("\u06a9\u0627\u0631");
+        throw new NotFoundError("\u06A9\u0627\u0631");
       return rowToTodo(updated);
     },
     async toggleChecklistItem(id, index, done, actor) {
       if (!Number.isInteger(index) || index < 0)
-        throw new ValidationError("\u0634\u0645\u0627\u0631\u0647\u0654 \u0645\u0648\u0631\u062f \u0686\u06a9\u200c\u0644\u06cc\u0633\u062a \u0646\u0627\u0645\u0639\u062a\u0628\u0631 \u0627\u0633\u062a");
+        throw new ValidationError("\u0634\u0645\u0627\u0631\u0647\u0654 \u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
       await db.transaction(async (tx) => {
         const row = await loadActiveRow(tx, id);
         if (row.assigner_id !== actor.staffId && row.assignee_id !== actor.staffId) {
-          throw new ForbiddenError("\u0641\u0642\u0637 \u062b\u0628\u062a\u200c\u06a9\u0646\u0646\u062f\u0647 \u06cc\u0627 \u0645\u0633\u0626\u0648\u0644 \u06a9\u0627\u0631 \u0645\u06cc\u200c\u062a\u0648\u0627\u0646\u062f \u0686\u06a9\u200c\u0644\u06cc\u0633\u062a \u0631\u0627 \u062a\u063a\u06cc\u06cc\u0631 \u062f\u0647\u062f");
+          throw new ForbiddenError("\u0641\u0642\u0637 \u062B\u0628\u062A\u200C\u06A9\u0646\u0646\u062F\u0647 \u06CC\u0627 \u0645\u0633\u0626\u0648\u0644 \u06A9\u0627\u0631 \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0631\u0627 \u062A\u063A\u06CC\u06CC\u0631 \u062F\u0647\u062F");
         }
         if (row.status !== "pending") {
-          throw new ConflictError("\u0627\u06cc\u0646 \u06a9\u0627\u0631 \u0627\u0646\u062c\u0627\u0645 \u0634\u062f\u0647 \u0648 \u0686\u06a9\u200c\u0644\u06cc\u0633\u062a\u0634 \u062a\u063a\u06cc\u06cc\u0631 \u0646\u0645\u06cc\u200c\u06a9\u0646\u062f");
+          throw new ConflictError("\u0627\u06CC\u0646 \u06A9\u0627\u0631 \u0627\u0646\u062C\u0627\u0645 \u0634\u062F\u0647 \u0648 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u0634 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F");
         }
         const items = parseChecklist(row.checklist);
         if (!items || index >= items.length)
-          throw new NotFoundError("\u0645\u0648\u0631\u062f \u0686\u06a9\u200c\u0644\u06cc\u0633\u062a");
+          throw new NotFoundError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A");
         if (items[index].done === done)
           return;
         const openBefore = items.filter((i) => !i.done).length;
@@ -16776,7 +18299,7 @@ function createTodosService(deps) {
       });
       const updated = await db.queryOne(`${SELECT_BASE3} WHERE t.id = ?`, [id]);
       if (!updated)
-        throw new NotFoundError("\u06a9\u0627\u0631");
+        throw new NotFoundError("\u06A9\u0627\u0631");
       return rowToTodo(updated);
     },
     setNotifier(fn) {
@@ -16786,14 +18309,14 @@ function createTodosService(deps) {
   return service;
 }
 __name(createTodosService, "createTodosService");
-
+__name2(createTodosService, "createTodosService");
 var TodoChecklistOpSchema = external_exports.object({
   text: external_exports.string().trim().min(1).max(200).optional(),
   index: external_exports.number().int().min(0).optional(),
   done: external_exports.boolean().optional()
 }).refine(
   (v) => v.text !== void 0 || v.index !== void 0 && v.done !== void 0,
-  { message: "\u0628\u0631\u0627\u06cc \u0627\u0641\u0632\u0648\u062f\u0646 \u0645\u0648\u0631\u062f \u00abtext\u00bb \u0648 \u0628\u0631\u0627\u06cc \u062a\u063a\u06cc\u06cc\u0631 \u0648\u0636\u0639\u06cc\u062a \u00abindex\u00bb \u0648 \u00abdone\u00bb \u0644\u0627\u0632\u0645 \u0627\u0633\u062a" }
+  { message: "\u0628\u0631\u0627\u06CC \u0627\u0641\u0632\u0648\u062F\u0646 \u0645\u0648\u0631\u062F \xABtext\xBB \u0648 \u0628\u0631\u0627\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u0648\u0636\u0639\u06CC\u062A \xABindex\xBB \u0648 \xABdone\xBB \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" }
 );
 function registerTodoRoutes(app, service) {
   app.get("/api/todos", requireRole("manager", "secretary"), async (c) => {
@@ -16848,40 +18371,47 @@ function registerTodoRoutes(app, service) {
   });
 }
 __name(registerTodoRoutes, "registerTodoRoutes");
-
+__name2(registerTodoRoutes, "registerTodoRoutes");
 function faNum(n) {
   return String(n).replace(/\d/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
 __name(faNum, "faNum");
+__name2(faNum, "faNum");
 function normalizeExerciseTitle(raw2) {
   return raw2.replace(/\s+/g, " ").trim();
 }
 __name(normalizeExerciseTitle, "normalizeExerciseTitle");
+__name2(normalizeExerciseTitle, "normalizeExerciseTitle");
 function estimateBase64Bytes(b64) {
   const s = b64.replace(/\s/g, "");
   const padding = s.endsWith("==") ? 2 : s.endsWith("=") ? 1 : 0;
   return Math.max(0, Math.floor(s.length * 3 / 4) - padding);
 }
 __name(estimateBase64Bytes, "estimateBase64Bytes");
+__name2(estimateBase64Bytes, "estimateBase64Bytes");
 function stripDataUrlPrefix(b64) {
   return b64.replace(/^data:[^;]*;base64,/, "");
 }
 __name(stripDataUrlPrefix, "stripDataUrlPrefix");
+__name2(stripDataUrlPrefix, "stripDataUrlPrefix");
 function isAllowedExerciseMimeType(mime) {
   return ALLOWED_EXERCISE_FILE_MIME_TYPES.includes(mime.toLowerCase());
 }
 __name(isAllowedExerciseMimeType, "isAllowedExerciseMimeType");
+__name2(isAllowedExerciseMimeType, "isAllowedExerciseMimeType");
 function sanitizeFilename(raw2) {
   const base = raw2.split(/[/\\]/).pop() ?? "";
   return base.replace(/\s+/g, " ").trim().slice(0, 200);
 }
 __name(sanitizeFilename, "sanitizeFilename");
+__name2(sanitizeFilename, "sanitizeFilename");
 function sizeLimitMessage(bytes) {
   const mb = bytes / (1024 * 1024);
   const limitLabel = mb >= 1 ? `${faNum(Math.round(mb))} \u0645\u06AF\u0627\u0628\u0627\u06CC\u062A` : `${faNum(Math.round(bytes / 1024))} \u06A9\u06CC\u0644\u0648\u0628\u0627\u06CC\u062A`;
   return `\u062D\u062C\u0645 \u0641\u0627\u06CC\u0644 \u0628\u06CC\u0634 \u0627\u0632 ${limitLabel} \u0627\u0633\u062A`;
 }
 __name(sizeLimitMessage, "sizeLimitMessage");
+__name2(sizeLimitMessage, "sizeLimitMessage");
 function validateExerciseFileInput(input, maxBytes = MAX_EXERCISE_FILE_BYTES) {
   const filename = sanitizeFilename(input.filename);
   if (filename.length === 0)
@@ -16897,6 +18427,7 @@ function validateExerciseFileInput(input, maxBytes = MAX_EXERCISE_FILE_BYTES) {
   return { ok: true };
 }
 __name(validateExerciseFileInput, "validateExerciseFileInput");
+__name2(validateExerciseFileInput, "validateExerciseFileInput");
 function validateExerciseFileBytes(input, maxBytes) {
   const filename = sanitizeFilename(input.filename);
   if (filename.length === 0)
@@ -16911,11 +18442,13 @@ function validateExerciseFileBytes(input, maxBytes) {
   return { ok: true };
 }
 __name(validateExerciseFileBytes, "validateExerciseFileBytes");
+__name2(validateExerciseFileBytes, "validateExerciseFileBytes");
 function clampPage(page) {
   const n = Number(page);
   return Number.isInteger(n) && n >= 1 ? n : 1;
 }
 __name(clampPage, "clampPage");
+__name2(clampPage, "clampPage");
 function pageWindow(total, page, pageSize) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -16927,6 +18460,7 @@ function pageWindow(total, page, pageSize) {
   };
 }
 __name(pageWindow, "pageWindow");
+__name2(pageWindow, "pageWindow");
 function truncateLabel(raw2, max = 26) {
   const s = raw2.trim();
   if (s.length <= max)
@@ -16934,20 +18468,21 @@ function truncateLabel(raw2, max = 26) {
   return Array.from(s).slice(0, max - 1).join("") + "\u2026";
 }
 __name(truncateLabel, "truncateLabel");
-
+__name2(truncateLabel, "truncateLabel");
 function concatSegments(segments) {
   if (segments.length === 1)
     return segments[0];
   const total = segments.reduce((n, s) => n + s.length, 0);
   const out = new Uint8Array(total);
-  let off2 = 0;
+  let off22 = 0;
   for (const s of segments) {
-    out.set(s, off2);
-    off2 += s.length;
+    out.set(s, off22);
+    off22 += s.length;
   }
   return out;
 }
 __name(concatSegments, "concatSegments");
+__name2(concatSegments, "concatSegments");
 function base64ToBytes(b64) {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -16956,16 +18491,19 @@ function base64ToBytes(b64) {
   return bytes;
 }
 __name(base64ToBytes, "base64ToBytes");
+__name2(base64ToBytes, "base64ToBytes");
 function base64UrlEncode2(s) {
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
-__name(base64UrlEncode2, "base64UrlEncode");
+__name(base64UrlEncode2, "base64UrlEncode2");
+__name2(base64UrlEncode2, "base64UrlEncode");
 function base64UrlDecode3(part) {
   const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
   const padded = b64 + "=".repeat((4 - b64.length % 4) % 4);
   return atob(padded);
 }
-__name(base64UrlDecode3, "base64UrlDecode");
+__name(base64UrlDecode3, "base64UrlDecode3");
+__name2(base64UrlDecode3, "base64UrlDecode");
 async function hmacSign(message, secret) {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -16982,6 +18520,7 @@ async function hmacSign(message, secret) {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 __name(hmacSign, "hmacSign");
+__name2(hmacSign, "hmacSign");
 async function hmacVerify(message, signature, secret) {
   const expected = await hmacSign(message, secret);
   if (expected.length !== signature.length)
@@ -16992,12 +18531,14 @@ async function hmacVerify(message, signature, secret) {
   return diff === 0;
 }
 __name(hmacVerify, "hmacVerify");
+__name2(hmacVerify, "hmacVerify");
 function assertStaffRole(actor) {
   if (actor.role !== "manager" && actor.role !== "therapist" && actor.role !== "secretary") {
     throw new ForbiddenError("\u0645\u062F\u06CC\u0631\u06CC\u062A \u0628\u0627\u0646\u06A9 \u062A\u0645\u0631\u06CC\u0646 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u06A9\u0627\u0631\u06A9\u0646\u0627\u0646 \u0645\u0631\u06A9\u0632 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
   }
 }
 __name(assertStaffRole, "assertStaffRole");
+__name2(assertStaffRole, "assertStaffRole");
 async function replacePackageTags(tx, packageId, tagIds) {
   const unique = [...new Set(tagIds)];
   await tx.execute(`DELETE FROM exercise_package_tags WHERE package_id = ?`, [packageId]);
@@ -17015,10 +18556,12 @@ async function replacePackageTags(tx, packageId, tagIds) {
   }
 }
 __name(replacePackageTags, "replacePackageTags");
+__name2(replacePackageTags, "replacePackageTags");
 function escapeLike(q) {
   return q.replace(/[\\%_]/g, (m) => "\\" + m);
 }
 __name(escapeLike, "escapeLike");
+__name2(escapeLike, "escapeLike");
 function assignmentRowToRecord(r) {
   return {
     id: r.id,
@@ -17038,6 +18581,7 @@ function assignmentRowToRecord(r) {
   };
 }
 __name(assignmentRowToRecord, "assignmentRowToRecord");
+__name2(assignmentRowToRecord, "assignmentRowToRecord");
 var ASSIGNMENT_SELECT = `
   SELECT a.id, a.exercise_id, a.student_id, a.assigned_by, a.assigned_via, a.note, a.status, a.created_at,
          a.feedback, a.graded_by, a.graded_at, gs.full_name AS graded_by_name,
@@ -17048,7 +18592,7 @@ var ASSIGNMENT_SELECT = `
     LEFT JOIN staff gs ON gs.id = a.graded_by`;
 function createExerciseBankService(deps) {
   const { db, audit, logger, storage, downloadSecret } = deps;
-  const log3 = logger.child("exercise-bank");
+  const log32 = logger.child("exercise-bank");
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   let gradeObserver = null;
   let sendFn = null;
@@ -17073,6 +18617,7 @@ function createExerciseBankService(deps) {
     return map;
   }
   __name(tagsForExercises, "tagsForExercises");
+  __name2(tagsForExercises, "tagsForExercises");
   function rowToRecord4(row, tags, files = []) {
     const primary = files[0] ?? (row.file_key && row.file_name ? { id: "", filename: row.file_name, mime: row.file_mime ?? "application/octet-stream", size: row.file_size ?? 0 } : null);
     return {
@@ -17091,7 +18636,8 @@ function createExerciseBankService(deps) {
       updatedAt: row.updated_at
     };
   }
-  __name(rowToRecord4, "rowToRecord");
+  __name(rowToRecord4, "rowToRecord4");
+  __name2(rowToRecord4, "rowToRecord");
   async function attachmentsForExercises(exerciseIds) {
     const map = /* @__PURE__ */ new Map();
     if (exerciseIds.length === 0)
@@ -17112,6 +18658,7 @@ function createExerciseBankService(deps) {
     return map;
   }
   __name(attachmentsForExercises, "attachmentsForExercises");
+  __name2(attachmentsForExercises, "attachmentsForExercises");
   async function attachmentsOf(exerciseId) {
     const rows = await db.query(
       `SELECT id, exercise_id, file_key, file_name, file_mime, file_size, created_at
@@ -17121,6 +18668,7 @@ function createExerciseBankService(deps) {
     return rows.map((r) => ({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size }));
   }
   __name(attachmentsOf, "attachmentsOf");
+  __name2(attachmentsOf, "attachmentsOf");
   async function guardianChatsOf(studentId) {
     const linkRows = await db.query(
       `SELECT DISTINCT chat_id FROM bot_links
@@ -17135,6 +18683,7 @@ function createExerciseBankService(deps) {
     return [.../* @__PURE__ */ new Set([...linkRows.map((r) => r.chat_id), ...prefRows.map((r) => r.chat_id)])];
   }
   __name(guardianChatsOf, "guardianChatsOf");
+  __name2(guardianChatsOf, "guardianChatsOf");
   async function getExerciseRow(id) {
     return db.queryOne(
       `SELECT id, title, description, format, published, external_url,
@@ -17145,6 +18694,7 @@ function createExerciseBankService(deps) {
     );
   }
   __name(getExerciseRow, "getExerciseRow");
+  __name2(getExerciseRow, "getExerciseRow");
   async function replaceTags(tx, exerciseId, tagIds) {
     const unique = [...new Set(tagIds)];
     await tx.execute(`DELETE FROM exercise_tags WHERE exercise_id = ?`, [exerciseId]);
@@ -17162,6 +18712,7 @@ function createExerciseBankService(deps) {
     }
   }
   __name(replaceTags, "replaceTags");
+  __name2(replaceTags, "replaceTags");
   async function validateFile(file) {
     const verdict = validateExerciseFileInput(file, MAX_EXERCISE_FILE_BYTES);
     if (!verdict.ok)
@@ -17172,6 +18723,7 @@ function createExerciseBankService(deps) {
     return { bytes: base64ToBytes(b64), mime, filename, size: estimateBase64Bytes(b64) };
   }
   __name(validateFile, "validateFile");
+  __name2(validateFile, "validateFile");
   function validatePreparedBytes(file) {
     const verdict = validateExerciseFileBytes({ filename: file.filename, mimeType: file.mimeType, size: file.size }, storage.maxObjectBytes);
     if (!verdict.ok)
@@ -17184,6 +18736,7 @@ function createExerciseBankService(deps) {
     };
   }
   __name(validatePreparedBytes, "validatePreparedBytes");
+  __name2(validatePreparedBytes, "validatePreparedBytes");
   async function assertAttachment(exerciseId, fileId) {
     const att = await db.queryOne(
       `SELECT id, exercise_id, file_key, file_name, file_mime, file_size, created_at
@@ -17195,6 +18748,7 @@ function createExerciseBankService(deps) {
     return att;
   }
   __name(assertAttachment, "assertAttachment");
+  __name2(assertAttachment, "assertAttachment");
   function bytesToBase64Str(bytes) {
     let bin = "";
     const CHUNK = 32768;
@@ -17204,6 +18758,7 @@ function createExerciseBankService(deps) {
     return btoa(bin);
   }
   __name(bytesToBase64Str, "bytesToBase64Str");
+  __name2(bytesToBase64Str, "bytesToBase64Str");
   async function itemsForPackages(packageIds) {
     const map = /* @__PURE__ */ new Map();
     if (packageIds.length === 0)
@@ -17225,6 +18780,7 @@ function createExerciseBankService(deps) {
     return map;
   }
   __name(itemsForPackages, "itemsForPackages");
+  __name2(itemsForPackages, "itemsForPackages");
   async function packageRowToRecord(row) {
     const [tagRows, itemMap] = await Promise.all([
       db.query(
@@ -17251,6 +18807,7 @@ function createExerciseBankService(deps) {
     };
   }
   __name(packageRowToRecord, "packageRowToRecord");
+  __name2(packageRowToRecord, "packageRowToRecord");
   return {
     storageName: storage.name,
     limits: {
@@ -17334,8 +18891,8 @@ function createExerciseBankService(deps) {
     },
     async create(input, actor) {
       assertStaffRole(actor);
-      const title2 = normalizeExerciseTitle(input.title);
-      if (title2.length < 2)
+      const title22 = normalizeExerciseTitle(input.title);
+      if (title22.length < 2)
         throw new ValidationError("\u0639\u0646\u0648\u0627\u0646 \u062A\u0645\u0631\u06CC\u0646 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
       const id = crypto.randomUUID();
       let fileMeta = null;
@@ -17351,7 +18908,7 @@ function createExerciseBankService(deps) {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
-            title2,
+            title22,
             input.description?.trim() ? input.description.trim() : null,
             input.format,
             input.published === false ? 0 : 1,
@@ -17377,14 +18934,14 @@ function createExerciseBankService(deps) {
           resourceType: "exercise",
           resourceId: id,
           changes: {
-            title: { from: null, to: title2 },
+            title: { from: null, to: title22 },
             format: { from: null, to: input.format },
             hasFile: { from: null, to: Boolean(fileMeta) },
             storage: { from: null, to: storage.name }
           }
         });
       });
-      log3.info("exercise.created", { id, hasFile: Boolean(fileMeta) });
+      log32.info("exercise.created", { id, hasFile: Boolean(fileMeta) });
       const created = await this.getById(id);
       return created;
     },
@@ -17393,8 +18950,8 @@ function createExerciseBankService(deps) {
       const row = await getExerciseRow(id);
       if (!row)
         throw new NotFoundError("\u062A\u0645\u0631\u06CC\u0646");
-      const title2 = input.title !== void 0 ? normalizeExerciseTitle(input.title) : void 0;
-      if (title2 !== void 0 && title2.length < 2)
+      const title22 = input.title !== void 0 ? normalizeExerciseTitle(input.title) : void 0;
+      if (title22 !== void 0 && title22.length < 2)
         throw new ValidationError("\u0639\u0646\u0648\u0627\u0646 \u062A\u0645\u0631\u06CC\u0646 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
       await db.transaction(async (tx) => {
         await tx.execute(
@@ -17407,7 +18964,7 @@ function createExerciseBankService(deps) {
                   updated_at = datetime('now')
             WHERE id = ?`,
           [
-            title2 ?? null,
+            title22 ?? null,
             input.description !== void 0 ? 1 : 0,
             input.description !== void 0 ? input.description?.trim() ? input.description.trim() : null : null,
             input.format ?? null,
@@ -17426,12 +18983,12 @@ function createExerciseBankService(deps) {
           resourceType: "exercise",
           resourceId: id,
           changes: {
-            ...input.title !== void 0 ? { title: { from: row.title, to: title2 ?? null } } : {},
+            ...input.title !== void 0 ? { title: { from: row.title, to: title22 ?? null } } : {},
             ...input.published !== void 0 ? { published: { from: row.published === 1, to: input.published } } : {}
           }
         });
       });
-      log3.info("exercise.updated", { id });
+      log32.info("exercise.updated", { id });
       const updated = await this.getById(id);
       return updated;
     },
@@ -17450,7 +19007,7 @@ function createExerciseBankService(deps) {
           changes: { title: { from: row.title, to: null } }
         });
       });
-      log3.info("exercise.deleted", { id });
+      log32.info("exercise.deleted", { id });
     },
     async putFile(id, file, actor) {
       assertStaffRole(actor);
@@ -17491,7 +19048,7 @@ function createExerciseBankService(deps) {
           }
         });
       });
-      log3.info("exercise.file.replaced", { id, size: prepared.size });
+      log32.info("exercise.file.replaced", { id, size: prepared.size });
       const updated = await this.getById(id);
       return updated;
     },
@@ -17544,7 +19101,7 @@ function createExerciseBankService(deps) {
         if (!hasPrimary && i === 0)
           firstMeta = { ...prepared, key };
       }
-      log3.info("exercise.files.added", { id, count: preparedList.length, promotedPrimary: Boolean(firstMeta) });
+      log32.info("exercise.files.added", { id, count: preparedList.length, promotedPrimary: Boolean(firstMeta) });
       const updated = await this.getById(id);
       return updated;
     },
@@ -17582,7 +19139,7 @@ function createExerciseBankService(deps) {
           changes: { filename: { from: null, to: prepared.filename }, sizeBytes: { from: null, to: prepared.size } }
         });
       });
-      log3.info("exercise.file.upload.began", { id, fileId: attId, size: prepared.size });
+      log32.info("exercise.file.upload.began", { id, fileId: attId, size: prepared.size });
       return { fileId: attId };
     },
     /** — دریافت یک تکهٔ باینری (بدنهٔ خام ≤ ۱ مگابایت) و پیوستن به تکه‌های همان پیوست */
@@ -17626,7 +19183,7 @@ function createExerciseBankService(deps) {
           changes: { filename: { from: null, to: att.file_name }, sizeBytes: { from: null, to: att.file_size }, mode: { from: null, to: "chunked" } }
         });
       });
-      log3.info("exercise.files.chunked.completed", { id, fileId, size: att.file_size });
+      log32.info("exercise.files.chunked.completed", { id, fileId, size: att.file_size });
       const updated = await this.getById(id);
       return updated;
     },
@@ -17666,7 +19223,7 @@ function createExerciseBankService(deps) {
           changes: { filename: { from: att.file_name, to: null }, sizeBytes: { from: att.file_size, to: null } }
         });
       });
-      log3.info("exercise.file.deleted", { id, fileId });
+      log32.info("exercise.file.deleted", { id, fileId });
       const updated = await this.getById(id);
       return updated;
     },
@@ -17771,7 +19328,7 @@ function createExerciseBankService(deps) {
         `SELECT id, name, category, color FROM tags WHERE active = 1 AND category IN ('disorder', 'grade', 'school_type', 'custom')
           ORDER BY category, name`
       );
-      const ref = /* @__PURE__ */ __name((r) => ({ id: r.id, name: r.name, category: r.category, color: r.color }), "ref");
+      const ref = /* @__PURE__ */ __name2((r) => ({ id: r.id, name: r.name, category: r.category, color: r.color }), "ref");
       return {
         disorder: rows.filter((r) => r.category === "disorder").map(ref),
         grade: rows.filter((r) => r.category === "grade").map(ref),
@@ -17819,8 +19376,8 @@ function createExerciseBankService(deps) {
     },
     async createPackage(input, actor) {
       assertStaffRole(actor);
-      const title2 = normalizeExerciseTitle(input.title);
-      if (title2.length < 2)
+      const title22 = normalizeExerciseTitle(input.title);
+      if (title22.length < 2)
         throw new ValidationError("\u0639\u0646\u0648\u0627\u0646 \u0628\u0633\u062A\u0647 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
       const uniqueIds = [...new Set(input.exerciseIds)];
       const found = await db.query(
@@ -17835,7 +19392,7 @@ function createExerciseBankService(deps) {
         await tx.execute(
           `INSERT INTO exercise_packages (id, title, description, published, created_by)
            VALUES (?, ?, ?, ?, ?)`,
-          [id, title2, input.description?.trim() ? input.description.trim() : null, input.published === false ? 0 : 1, actor.staffId]
+          [id, title22, input.description?.trim() ? input.description.trim() : null, input.published === false ? 0 : 1, actor.staffId]
         );
         for (const exId of uniqueIds) {
           await tx.execute(
@@ -17850,13 +19407,13 @@ function createExerciseBankService(deps) {
           resourceType: "exercise_package",
           resourceId: id,
           changes: {
-            title: { from: null, to: title2 },
+            title: { from: null, to: title22 },
             itemCount: { from: null, to: uniqueIds.length },
             tagCount: { from: null, to: (input.tagIds ?? []).length }
           }
         });
       });
-      log3.info("exercise_package.created", { id, items: uniqueIds.length });
+      log32.info("exercise_package.created", { id, items: uniqueIds.length });
       const created = await this.getPackageById(id);
       return created;
     },
@@ -17876,13 +19433,13 @@ function createExerciseBankService(deps) {
       }
       await db.transaction(async (tx) => {
         if (input.title !== void 0 || input.description !== void 0 || input.published !== void 0) {
-          const title2 = input.title !== void 0 ? normalizeExerciseTitle(input.title) : row.title;
-          if (title2.length < 2)
+          const title22 = input.title !== void 0 ? normalizeExerciseTitle(input.title) : row.title;
+          if (title22.length < 2)
             throw new ValidationError("\u0639\u0646\u0648\u0627\u0646 \u0628\u0633\u062A\u0647 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
           await tx.execute(
             `UPDATE exercise_packages SET title = ?, description = ?, published = ?, updated_at = datetime('now') WHERE id = ?`,
             [
-              title2,
+              title22,
               input.description !== void 0 ? input.description?.trim() ? input.description.trim() : null : row.description,
               input.published !== void 0 ? input.published ? 1 : 0 : row.published,
               id
@@ -17918,7 +19475,7 @@ function createExerciseBankService(deps) {
           changes: pkgChanges
         });
       });
-      log3.info("exercise_package.updated", { id });
+      log32.info("exercise_package.updated", { id });
       const updated = await this.getPackageById(id);
       return updated;
     },
@@ -17938,7 +19495,7 @@ function createExerciseBankService(deps) {
           changes: { deletedAt: { from: null, to: at } }
         });
       });
-      log3.info("exercise_package.deleted", { id });
+      log32.info("exercise_package.deleted", { id });
     },
     // ───────────── پیشنهاد برچسب‌محور + بستهٔ تکلیف + ارسال پنل ─────────────
     /** تطبیق برچسب دانش‌آموز × برچسب تمرین/بسته — همان الگوی suggestTypesForStudent چک‌لیست */
@@ -18036,13 +19593,13 @@ function createExerciseBankService(deps) {
         exercises = ids.map((exId) => ({ id: exId, title: byId.get(exId).title }));
       }
       const batchId = crypto.randomUUID();
-      const title2 = packageTitle ?? (exercises.length === 1 ? exercises[0].title : `\u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0627\u0646\u062A\u062E\u0627\u0628\u06CC (${exercises.length} \u062A\u0645\u0631\u06CC\u0646)`);
+      const title22 = packageTitle ?? (exercises.length === 1 ? exercises[0].title : `\u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0627\u0646\u062A\u062E\u0627\u0628\u06CC (${exercises.length} \u062A\u0645\u0631\u06CC\u0646)`);
       const note = input.note?.trim() ? Array.from(input.note.trim()).slice(0, EXERCISE_BATCH_NOTE_MAX).join("") : null;
       await db.transaction(async (tx) => {
         await tx.execute(
           `INSERT INTO exercise_batches (id, student_id, package_id, title, note, assigned_by, assigned_via)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [batchId, input.studentId, input.packageId ?? null, title2, note, input.assignedBy, input.via === "bot" ? "bot" : "panel"]
+          [batchId, input.studentId, input.packageId ?? null, title22, note, input.assignedBy, input.via === "bot" ? "bot" : "panel"]
         );
         for (const ex of exercises) {
           const assignmentId = crypto.randomUUID();
@@ -18080,7 +19637,7 @@ function createExerciseBankService(deps) {
           }
         });
       });
-      log3.info("exercise.batch.assigned", { batchId, items: exercises.length, via: input.via });
+      log32.info("exercise.batch.assigned", { batchId, items: exercises.length, via: input.via });
       const batches = await this.listBatches({ studentId: input.studentId, limit: 20 });
       const found = batches.find((b) => b.id === batchId);
       return found;
@@ -18225,7 +19782,7 @@ function createExerciseBankService(deps) {
           sent: { from: null, to: sent }
         }
       });
-      log3.info("exercise.batch.sent", { batchId, targets: chats.length, sent });
+      log32.info("exercise.batch.sent", { batchId, targets: chats.length, sent });
       return { sent, targets: chats };
     },
     setSendObserver(fn) {
@@ -18267,7 +19824,7 @@ function createExerciseBankService(deps) {
           }
         });
       });
-      log3.info("exercise.assigned", { id, exerciseId: input.exerciseId, studentId: input.studentId, via });
+      log32.info("exercise.assigned", { id, exerciseId: input.exerciseId, studentId: input.studentId, via });
       const records = await this.listAssignments({ exerciseId: input.exerciseId, limit: 200 });
       const found = records.find((r) => r.id === id);
       return found;
@@ -18309,7 +19866,7 @@ function createExerciseBankService(deps) {
         gradedAt: r.graded_at
       }));
     },
-    // ───────────── c — تصحیح تکلیف ─────────────
+    // ───────────── -c — تصحیح تکلیف ─────────────
     async gradeAssignment(assignmentId, input, actor) {
       const feedback = input.feedback.replace(/\s+/g, " ").trim();
       const len = Array.from(feedback).length;
@@ -18350,7 +19907,7 @@ function createExerciseBankService(deps) {
           // §20 — متن بازخورد در audit نمی‌آید
         }
       });
-      log3.info("exercise.corrected", { assignmentId, len, by: actor.staffId });
+      log32.info("exercise.corrected", { assignmentId, len, by: actor.staffId });
       const updated = await db.queryOne(
         `${ASSIGNMENT_SELECT}
           WHERE a.id = ?`,
@@ -18361,7 +19918,7 @@ function createExerciseBankService(deps) {
         try {
           await gradeObserver(record);
         } catch (err) {
-          log3.warn("exercise.grade_observer_failed", { assignmentId, error: String(err) });
+          log32.warn("exercise.grade_observer_failed", { assignmentId, error: String(err) });
         }
       }
       return record;
@@ -18475,7 +20032,7 @@ function createExerciseBankService(deps) {
           }
         });
       });
-      log3.info("exercise.submitted", { id, assignmentId: input.assignmentId, size: prepared.size });
+      log32.info("exercise.submitted", { id, assignmentId: input.assignmentId, size: prepared.size });
       const records = await this.listSubmissions({ assignmentId: input.assignmentId, limit: 50 });
       const found = records.find((r) => r.id === id);
       return found;
@@ -18542,10 +20099,10 @@ function createExerciseBankService(deps) {
   };
 }
 __name(createExerciseBankService, "createExerciseBankService");
-
+__name2(createExerciseBankService, "createExerciseBankService");
 var SEGMENT_TARGET = 15e5;
 var HEADERS_MAX = 64 * 1024;
-var enc = /* @__PURE__ */ __name((s) => new TextEncoder().encode(s), "enc");
+var enc = /* @__PURE__ */ __name2((s) => new TextEncoder().encode(s), "enc");
 var dec = new TextDecoder();
 var EMPTY = new Uint8Array(0);
 function concatBytes(a, b) {
@@ -18555,6 +20112,7 @@ function concatBytes(a, b) {
   return out;
 }
 __name(concatBytes, "concatBytes");
+__name2(concatBytes, "concatBytes");
 function indexOfBytes(haystack, needle, from = 0) {
   if (needle.length === 0)
     return from;
@@ -18569,6 +20127,7 @@ function indexOfBytes(haystack, needle, from = 0) {
   return -1;
 }
 __name(indexOfBytes, "indexOfBytes");
+__name2(indexOfBytes, "indexOfBytes");
 function headerParam(line2, param) {
   const star = new RegExp(`${param}\\*=([^;]+)`, "i").exec(line2);
   if (star) {
@@ -18586,6 +20145,7 @@ function headerParam(line2, param) {
   return m[1].replace(/\\/g, "").trim();
 }
 __name(headerParam, "headerParam");
+__name2(headerParam, "headerParam");
 async function parseMultipartStream(body, contentType) {
   const bm = /boundary=(?:"([^"]+)"|([^;,]+))/i.exec(contentType);
   if (!bm)
@@ -18606,7 +20166,7 @@ async function parseMultipartStream(body, contentType) {
   let cur = null;
   let curField = null;
   let finished = false;
-  const flushPending = /* @__PURE__ */ __name(() => {
+  const flushPending = /* @__PURE__ */ __name2(() => {
     if (pending.length === 0)
       return;
     if (cur) {
@@ -18617,7 +20177,7 @@ async function parseMultipartStream(body, contentType) {
     }
     pending = EMPTY;
   }, "flushPending");
-  const finishPart = /* @__PURE__ */ __name(() => {
+  const finishPart = /* @__PURE__ */ __name2(() => {
     flushPending();
     if (cur) {
       files.push(cur);
@@ -18634,7 +20194,7 @@ async function parseMultipartStream(body, contentType) {
       curField = null;
     }
   }, "finishPart");
-  const startPart = /* @__PURE__ */ __name((headerBlock) => {
+  const startPart = /* @__PURE__ */ __name2((headerBlock) => {
     const text = dec.decode(headerBlock);
     const disposition = /content-disposition:[^\r\n]*/i.exec(text)?.[0] ?? "";
     const name = headerParam(disposition, "name");
@@ -18648,7 +20208,7 @@ async function parseMultipartStream(body, contentType) {
       curField = { name, chunks: [] };
     }
   }, "startPart");
-  const finish = /* @__PURE__ */ __name(() => {
+  const finish = /* @__PURE__ */ __name2(() => {
     if (!finished) {
       if (mode === "content")
         finishPart();
@@ -18729,11 +20289,12 @@ async function parseMultipartStream(body, contentType) {
   return { files, fields };
 }
 __name(parseMultipartStream, "parseMultipartStream");
+__name2(parseMultipartStream, "parseMultipartStream");
 function HOLD_MARGIN(delimLen) {
   return delimLen + 8;
 }
 __name(HOLD_MARGIN, "HOLD_MARGIN");
-
+__name2(HOLD_MARGIN, "HOLD_MARGIN");
 var EXT_MIME_FALLBACK = {
   mp4: "video/mp4",
   m4v: "video/x-m4v",
@@ -18767,6 +20328,7 @@ function guessMime(filename, declared) {
   return EXT_MIME_FALLBACK[ext] ?? t ?? "application/octet-stream";
 }
 __name(guessMime, "guessMime");
+__name2(guessMime, "guessMime");
 function downloadHeaders(filename, mimeType, inline) {
   const asciiFallback = filename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
   const type = mimeType === "text/html" ? "text/html; charset=utf-8" : mimeType;
@@ -18776,6 +20338,7 @@ function downloadHeaders(filename, mimeType, inline) {
   };
 }
 __name(downloadHeaders, "downloadHeaders");
+__name2(downloadHeaders, "downloadHeaders");
 function registerExerciseBankRoutes(app, service) {
   app.get("/api/exercises/meta", async (c) => {
     const categories = await service.categories();
@@ -19058,7 +20621,7 @@ function registerExerciseBankRoutes(app, service) {
   });
 }
 __name(registerExerciseBankRoutes, "registerExerciseBankRoutes");
-
+__name2(registerExerciseBankRoutes, "registerExerciseBankRoutes");
 var CASE_EVENT_CATEGORIES = ["session", "checklist", "note"];
 var CASE_EVENT_CATEGORY_LABELS = {
   session: "\u062C\u0644\u0633\u0647",
@@ -19066,7 +20629,6 @@ var CASE_EVENT_CATEGORY_LABELS = {
   note: "\u06CC\u0627\u062F\u062F\u0627\u0634\u062A"
 };
 var CASE_EVENT_FIELD_TYPES = ["text", "longtext", "number", "select", "scale", "single", "heading"];
-
 var TYPE_TITLE_MAX = 120;
 var TYPE_ICON_MAX = 16;
 var FIELD_LABEL_MAX = 120;
@@ -19094,20 +20656,24 @@ function estimateBase64Bytes2(b64) {
   const padding = s.endsWith("==") ? 2 : s.endsWith("=") ? 1 : 0;
   return Math.max(0, Math.floor(s.length * 3 / 4) - padding);
 }
-__name(estimateBase64Bytes2, "estimateBase64Bytes");
+__name(estimateBase64Bytes2, "estimateBase64Bytes2");
+__name2(estimateBase64Bytes2, "estimateBase64Bytes");
 function stripDataUrlPrefix2(b64) {
   return b64.replace(/^data:[^;]*;base64,/, "");
 }
-__name(stripDataUrlPrefix2, "stripDataUrlPrefix");
+__name(stripDataUrlPrefix2, "stripDataUrlPrefix2");
+__name2(stripDataUrlPrefix2, "stripDataUrlPrefix");
 function isAllowedMimeType(mime) {
   return ALLOWED_FILE_MIME_TYPES.includes(mime.toLowerCase());
 }
 __name(isAllowedMimeType, "isAllowedMimeType");
+__name2(isAllowedMimeType, "isAllowedMimeType");
 function sanitizeFilename2(raw2) {
   const base = raw2.split(/[/\\]/).pop() ?? "";
   return base.replace(/\s+/g, " ").trim().slice(0, 200);
 }
-__name(sanitizeFilename2, "sanitizeFilename");
+__name(sanitizeFilename2, "sanitizeFilename2");
+__name2(sanitizeFilename2, "sanitizeFilename");
 function validateFileInput(input) {
   const filename = sanitizeFilename2(input.filename);
   if (filename.length === 0)
@@ -19124,6 +20690,7 @@ function validateFileInput(input) {
   return { ok: true };
 }
 __name(validateFileInput, "validateFileInput");
+__name2(validateFileInput, "validateFileInput");
 function base64ToBytes2(b64) {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -19131,7 +20698,8 @@ function base64ToBytes2(b64) {
     bytes[i] = bin.charCodeAt(i);
   return bytes;
 }
-__name(base64ToBytes2, "base64ToBytes");
+__name(base64ToBytes2, "base64ToBytes2");
+__name2(base64ToBytes2, "base64ToBytes");
 var TYPE_DESCRIPTION_MAX = 500;
 var SCALE_LABEL_MAX = 60;
 var CaseEventBandSchema = external_exports.object({
@@ -19151,16 +20719,16 @@ var CaseEventFieldSchema = external_exports.object({
   label: external_exports.string().min(1, "\u0628\u0631\u0686\u0633\u0628 \u0641\u06CC\u0644\u062F \u0627\u0644\u0632\u0627\u0645\u06CC \u0627\u0633\u062A").max(FIELD_LABEL_MAX),
   type: external_exports.enum(CASE_EVENT_FIELD_TYPES),
   options: external_exports.array(external_exports.string().min(1).max(FIELD_OPTION_MAX)).max(FIELD_OPTIONS_MAX).optional(),
-  // گزینه‌های نمره‌دار (فقط single) — نمره از گیرنده پنهان می‌ماند
+  // — گزینه‌های نمره‌دار (فقط single) — نمره از گیرنده پنهان می‌ماند
   scoredOptions: external_exports.array(external_exports.object({
     label: external_exports.string().min(1, "\u0628\u0631\u0686\u0633\u0628 \u06AF\u0632\u06CC\u0646\u0647 \u0627\u0644\u0632\u0627\u0645\u06CC \u0627\u0633\u062A").max(FIELD_OPTION_MAX),
     score: external_exports.number().int().min(0).max(OPTION_SCORE_LIMIT)
   })).max(FIELD_OPTIONS_MAX).optional(),
   scaleMax: external_exports.number().int().min(1).max(SCALE_MAX_LIMIT).optional(),
-  // لنگرهای کلامی پاسخ (۰ تا scaleMax) — نمرهٔ ذخیره‌شده عددی می‌ماند
+  // — لنگرهای کلامی پاسخ (۰ تا scaleMax) — نمرهٔ ذخیره‌شده عددی می‌ماند
   scaleLabels: external_exports.array(external_exports.string().min(1).max(SCALE_LABEL_MAX)).max(SCALE_MAX_LIMIT + 1).optional(),
   required: external_exports.boolean().optional(),
-  // روان‌سنجی: معکوس / بحرانی / زیرمقیاس
+  // — روان‌سنجی: معکوس / بحرانی / زیرمقیاس
   reverse: external_exports.boolean().optional(),
   critical: external_exports.boolean().optional(),
   criticalMin: external_exports.number().int().min(0).max(SCALE_MAX_LIMIT).optional(),
@@ -19174,9 +20742,9 @@ var CaseEventTypeInputSchema = external_exports.object({
   familyFillable: external_exports.boolean().optional(),
   fields: external_exports.array(CaseEventFieldSchema).min(1, "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u06CC\u0644\u062F \u0641\u0631\u0645 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(FIELDS_MAX),
   bands: external_exports.array(CaseEventBandSchema).max(BANDS_MAX).nullish(),
-  // زیرمقیاس‌های چک‌لیست
+  // — زیرمقیاس‌های چک‌لیست
   subscales: external_exports.array(CaseEventSubscaleSchema).max(SUBSCALES_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${SUBSCALES_MAX} \u0632\u06CC\u0631\u0645\u0642\u06CC\u0627\u0633`).nullish(),
-  // برچسب‌های قالب (tag id) + مخاطب چک‌لیست
+  // — برچسب‌های قالب (tag id) + مخاطب چک‌لیست
   tags: external_exports.array(external_exports.string().min(8).max(64)).max(12, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2 \u0628\u0631\u0686\u0633\u0628 \u0628\u0631\u0627\u06CC \u0647\u0631 \u0642\u0627\u0644\u0628").nullish(),
   audience: external_exports.enum(["family", "teacher", "both"]).nullish()
 });
@@ -19184,7 +20752,8 @@ var CaseEventTypeUpdateSchema = CaseEventTypeInputSchema.partial();
 function faNum2(s) {
   return String(s).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
-__name(faNum2, "faNum");
+__name(faNum2, "faNum2");
+__name2(faNum2, "faNum");
 function validateTypeDefinition(input) {
   const keys = /* @__PURE__ */ new Set();
   const isChecklist = input.category === "checklist";
@@ -19275,6 +20844,7 @@ function validateTypeDefinition(input) {
   }
 }
 __name(validateTypeDefinition, "validateTypeDefinition");
+__name2(validateTypeDefinition, "validateTypeDefinition");
 function itemMaxScore(f) {
   if (f.type === "single") {
     const opts = f.scoredOptions ?? [];
@@ -19283,6 +20853,7 @@ function itemMaxScore(f) {
   return f.scaleMax ?? 3;
 }
 __name(itemMaxScore, "itemMaxScore");
+__name2(itemMaxScore, "itemMaxScore");
 function itemScoreOf(f, raw2) {
   if (raw2 === null || raw2 === void 0 || Number.isNaN(Number(raw2)))
     return null;
@@ -19301,11 +20872,13 @@ function itemScoreOf(f, raw2) {
   return f.reverse ? max - v : v;
 }
 __name(itemScoreOf, "itemScoreOf");
+__name2(itemScoreOf, "itemScoreOf");
 function totalPossible(fields, subscales) {
   const excluded = new Set((subscales ?? []).filter((s) => s.excludeFromTotal).map((s) => s.id));
   return fields.reduce((sum, f) => f.subscaleId && excluded.has(f.subscaleId) ? sum : sum + itemMaxScore(f), 0);
 }
 __name(totalPossible, "totalPossible");
+__name2(totalPossible, "totalPossible");
 function buildEventPayload(fields, values, strict = true) {
   const payload = {};
   for (const f of fields) {
@@ -19366,6 +20939,7 @@ function buildEventPayload(fields, values, strict = true) {
   return payload;
 }
 __name(buildEventPayload, "buildEventPayload");
+__name2(buildEventPayload, "buildEventPayload");
 function analyzeChecklist(fields, bands, values, subscales) {
   const subs = subscales ?? [];
   const excluded = new Set(subs.filter((s) => s.excludeFromTotal).map((s) => s.id));
@@ -19433,6 +21007,7 @@ function analyzeChecklist(fields, bands, values, subscales) {
   };
 }
 __name(analyzeChecklist, "analyzeChecklist");
+__name2(analyzeChecklist, "analyzeChecklist");
 function resolveBandV2(score, bands) {
   if (!bands || bands.length === 0)
     return null;
@@ -19441,10 +21016,12 @@ function resolveBandV2(score, bands) {
   return hit ?? sorted[sorted.length - 1] ?? null;
 }
 __name(resolveBandV2, "resolveBandV2");
+__name2(resolveBandV2, "resolveBandV2");
 function faN(n) {
   return faNum2(n);
 }
 __name(faN, "faN");
+__name2(faN, "faN");
 function buildInterpretation(score, maxScore, hit, subscaleScores, flags) {
   const lines = [];
   const head = hit ? `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644: ${faN(score)} \u0627\u0632 ${faN(maxScore)} \u2014 ${hit.label}` : `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644: ${faN(score)} \u0627\u0632 ${faN(maxScore)}`;
@@ -19461,6 +21038,7 @@ function buildInterpretation(score, maxScore, hit, subscaleScores, flags) {
   return lines.join("\n");
 }
 __name(buildInterpretation, "buildInterpretation");
+__name2(buildInterpretation, "buildInterpretation");
 function buildSummary(payload, analysis) {
   if (analysis) {
     const maxTotal = analysis.maxScore ?? analysis.total * 3;
@@ -19481,6 +21059,7 @@ function buildSummary(payload, analysis) {
   return Array.from(text).slice(0, EVENT_SUMMARY_MAX).join("");
 }
 __name(buildSummary, "buildSummary");
+__name2(buildSummary, "buildSummary");
 var CASE_EVENT_TRANSITIONS = {
   draft: ["completed", "cancelled"],
   completed: ["cancelled"],
@@ -19491,6 +21070,7 @@ function canTransitionStatus(from, to) {
   return (CASE_EVENT_TRANSITIONS[from] ?? []).includes(to);
 }
 __name(canTransitionStatus, "canTransitionStatus");
+__name2(canTransitionStatus, "canTransitionStatus");
 function extractFollowUpAction(fields, payload) {
   if (!payload)
     return false;
@@ -19501,7 +21081,7 @@ function extractFollowUpAction(fields, payload) {
   return entry?.value === NEXT_ACTION_FOLLOW_UP;
 }
 __name(extractFollowUpAction, "extractFollowUpAction");
-
+__name2(extractFollowUpAction, "extractFollowUpAction");
 var SUBTESTS = [
   { code: "BD", col: "B", fa: "\u0637\u0631\u0627\u062D\u06CC \u0645\u06A9\u0639\u0628\u200C\u0647\u0627" },
   { code: "SI", col: "C", fa: "\u062A\u0634\u0627\u0628\u0647\u0627\u062A" },
@@ -19773,9 +21353,7 @@ var SUBTEST_FA_OK = {
   AR: "\u062D\u0633\u0627\u0628",
   WR: "\u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u06A9\u0644\u0645\u0647"
 };
-
 var norms_default = { subtests: [{ code: "BD", col: "B", fa: "\u062A\u06A9\u0645\u06CC\u0644 \u062A\u0635\u0627\u0648\u06CC\u0631" }, { code: "SI", col: "C", fa: "\u062A\u0634\u0627\u0628\u0647\u0627\u062A" }, { code: "DS", col: "D", fa: "\u0648\u0627\u0698\u06AF\u0627\u0646" }, { code: "PCn", col: "E", fa: "\u0627\u062F\u0631\u0627\u06A9" }, { code: "CD", col: "F", fa: "\u0645\u0641\u0627\u0647\u06CC\u0645 \u062A\u0635\u0648\u06CC\u0631\u06CC" }, { code: "VC", col: "G", fa: "\u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u06A9\u0644\u0627\u0645\u06CC" }, { code: "LN", col: "H", fa: "\u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645" }, { code: "MR", col: "I", fa: "\u062A\u0648\u0627\u0644\u06CC \u0639\u062F\u062F-\u062D\u0631\u0641" }, { code: "CO", col: "J", fa: "\u062C\u0633\u062A\u062C\u0648\u06CC \u0646\u0645\u0627\u062F" }, { code: "SS", col: "K", fa: "\u0633\u0631\u0639\u062A \u067E\u0631\u062F\u0627\u0632\u0634" }, { code: "PCm", col: "L", fa: "\u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u062A\u0635\u0648\u06CC\u0631\u06CC" }, { code: "CA", col: "M", fa: "\u062D\u0633\u0627\u0628" }, { code: "IN", col: "N", fa: "\u0631\u0645\u0632\u06AF\u0630\u0627\u0631\u06CC" }, { code: "AR", col: "O", fa: "\u0637\u0631\u0627\u062D\u06CC \u0645\u06A9\u0639\u0628" }, { code: "WR", col: "P", fa: "\u062E\u0637 \u0632\u0646\u06CC" }], bands: { "sq-6": { BD: [[0, 1], [0, 2], [1, 3], [2, 4], [3, 5], [4, 6], [5, 7], [7, 8], [9, 9], [10, 10], [13, 11], [16, 12], [18, 13], [20, 14], [22, 15], [26, 16], [28, 17], [33, 18], [50, 19]], SI: [[0, 2], [1, 4], [2, 5], [3, 6], [4, 7], [5, 8], [6, 10], [7, 11], [8, 12], [10, 13], [12, 14], [14, 15], [16, 16], [18, 17], [23, 18], [31, 19]], DS: [[0, 1], [2, 2], [3, 3], [4, 5], [5, 6], [7, 7], [8, 8], [9, 9], [10, 10], [11, 11], [12, 12], [13, 13], [14, 14], [15, 15], [17, 16], [19, 17], [21, 18], [26, 19]], PCn: [[0, 2], [1, 3], [2, 4], [3, 5], [4, 6], [5, 7], [6, 8], [7, 9], [8, 10], [10, 11], [11, 12], [12, 13], [13, 14], [14, 15], [15, 16], [16, 17], [17, 18], [19, 19]], CD: [[0, 1], [5, 2], [8, 3], [10, 4], [15, 5], [19, 6], [21, 7], [23, 8], [28, 9], [31, 10], [35, 11], [39, 12], [44, 13], [49, 14], [54, 15], [58, 16], [60, 17], [62, 18], [64, 19]], VC: [[0, 1], [4, 2], [8, 3], [9, 4], [10, 5], [11, 6], [12, 7], [13, 8], [14, 9], [16, 10], [18, 11], [20, 12], [22, 13], [24, 14], [28, 15], [30, 16], [33, 17], [38, 18], [52, 19]], LN: [[0, 7], [1, 8], [2, 9], [3, 10], [5, 11], [9, 12], [10, 13], [12, 14], [13, 15], [14, 16], [15, 17], [17, 18], [20, 19]], MR: [[0, 1], [1, 2], [4, 3], [5, 5], [6, 6], [7, 7], [8, 8], [9, 9], [10, 10], [11, 11], [12, 12], [14, 13], [15, 14], [17, 15], [18, 16], [20, 17], [22, 18], [25, 19]], CO: [[0, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], [7, 7], [8, 8], [9, 9], [11, 10], [13, 11], [14, 12], [16, 13], [17, 14], [19, 15], [20, 16], [21, 17], [23, 18], [26, 19]], SS: [[0, 3], [1, 4], [2, 5], [3, 6], [6, 7], [9, 8], [12, 9], [14, 10], [17, 11], [20, 12], [22, 13], [24, 14], [27, 15], [30, 16], [34, 17], [38, 18], [42, 19]], PCm: [[0, 3], [1, 4], [3, 5], [5, 6], [6, 7], [7, 8], [9, 9], [10, 10], [12, 11], [13, 12], [14, 13], [16, 14], [17, 15], [19, 16], [21, 17], [23, 18], [26, 19]], CA: [[0, 1], [10, 2], [16, 3], [18, 4], [19, 5], [23, 6], [27, 7], [30, 8], [33, 9], [37, 10], [41, 11], [46, 12], [50, 13], [56, 14], [69, 15], [76, 16], [89, 17], [99, 18], [111, 19]], IN: [[0, 3], [2, 4], [4, 5], [5, 6], [6, 7], [7, 9], [8, 10], [9, 12], [10, 13], [11, 14], [12, 15], [13, 16], [14, 17], [18, 18], [23, 19]], AR: [[0, 1], [1, 2], [3, 3], [4, 4], [5, 5], [6, 6], [7, 7], [8, 8], [9, 9], [10, 10], [11, 11], [12, 12], [13, 13], [14, 14], [15, 15], [17, 16], [19, 17], [20, 18], [21, 19]], WR: [[0, 3], [1, 4], [2, 5], [3, 6], [4, 7], [5, 8], [6, 9], [7, 10], [8, 12], [9, 13], [10, 14], [11, 16], [12, 17], [14, 18], [17, 19]] }, "sq-7": { BD: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [8, 8], [10, 9], [11, 10], [14, 11], [18, 12], [20, 13], [23, 14], [26, 15], [33, 16], [36, 17], [39, 18], [43, 19]], SI: [[0, 3], [1, 4], [2, 5], [3, 6], [5, 7], [6, 8], [7, 9], [8, 10], [9, 11], [11, 12], [12, 13], [14, 14], [16, 15], [18, 16], [22, 17], [26, 18], [32, 19]], DS: [[0, 1], [2, 2], [5, 4], [6, 5], [8, 6], [9, 7], [10, 8], [11, 9], [12, 10], [13, 11], [14, 12], [15, 14], [16, 15], [17, 16], [18, 17], [20, 18], [24, 19]], PCn: [[0, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], [7, 7], [8, 8], [9, 9], [10, 10], [12, 11], [13, 12], [14, 13], [15, 14], [16, 15], [17, 16], [18, 17], [20, 18], [23, 19]], CD: [[0, 3], [7, 4], [16, 5], [20, 6], [23, 7], [29, 8], [33, 9], [36, 10], [40, 11], [46, 12], [50, 13], [58, 14], [60, 15], [62, 16], [63, 17], [64, 18], [65, 19]], VC: [[0, 1], [7, 2], [8, 3], [9, 4], [11, 5], [12, 6], [13, 7], [14, 8], [15, 9], [17, 10], [19, 11], [21, 12], [24, 13], [27, 14], [29, 15], [33, 16], [37, 17], [45, 18], [53, 19]], LN: [[0, 5], [1, 6], [2, 7], [6, 8], [7, 9], [9, 10], [11, 11], [13, 12], [14, 13], [15, 14], [17, 15], [18, 16], [20, 17], [22, 18], [24, 19]], MR: [[0, 1], [2, 2], [3, 3], [4, 4], [6, 5], [7, 6], [8, 7], [9, 8], [10, 9], [11, 10], [12, 11], [14, 12], [16, 13], [18, 14], [20, 15], [22, 16], [23, 17], [25, 18], [31, 19]], CO: [[0, 1], [2, 2], [3, 3], [4, 4], [5, 5], [7, 6], [8, 7], [10, 8], [12, 9], [14, 10], [15, 11], [16, 12], [18, 13], [19, 14], [20, 15], [22, 16], [23, 17], [24, 18], [25, 19]], SS: [[0, 2], [1, 3], [3, 4], [5, 5], [9, 6], [11, 7], [14, 8], [17, 9], [19, 10], [21, 11], [23, 12], [27, 13], [29, 14], [31, 15], [33, 16], [35, 17], [39, 18], [43, 19]], PCm: [[0, 3], [1, 4], [4, 5], [5, 6], [7, 7], [9, 8], [11, 9], [12, 10], [14, 11], [15, 12], [17, 13], [19, 14], [21, 15], [23, 16], [27, 17], [31, 18], [34, 19]], CA: [[0, 2], [11, 3], [21, 4], [24, 5], [27, 6], [31, 7], [34, 8], [38, 9], [45, 10], [51, 11], [55, 12], [61, 13], [66, 14], [74, 15], [84, 16], [89, 17], [95, 18], [96, 19]], IN: [[0, 3], [2, 4], [5, 5], [7, 7], [8, 8], [9, 10], [10, 11], [11, 12], [12, 13], [13, 14], [14, 15], [15, 16], [23, 17], [30, 18], [32, 19]], AR: [[0, 1], [4, 2], [5, 3], [6, 4], [7, 5], [8, 6], [9, 7], [11, 8], [12, 9], [14, 10], [15, 11], [16, 12], [18, 13], [19, 14], [20, 15], [21, 17], [24, 18], [31, 19]], WR: [[0, 3], [1, 4], [4, 5], [5, 6], [6, 7], [7, 9], [8, 10], [9, 11], [10, 13], [11, 14], [12, 15], [13, 16], [14, 17], [15, 18], [20, 19]] }, "sq-8": { BD: [[0, 1], [3, 2], [4, 4], [5, 5], [6, 6], [8, 7], [11, 8], [14, 9], [17, 10], [21, 11], [24, 12], [27, 13], [31, 14], [34, 15], [39, 16], [40, 17], [42, 18], [57, 19]], SI: [[0, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [9, 9], [12, 10], [13, 11], [15, 12], [17, 13], [19, 14], [21, 15], [23, 16], [26, 17], [27, 18], [30, 19]], DS: [[0, 1], [4, 2], [6, 3], [7, 4], [8, 5], [9, 6], [10, 7], [11, 8], [12, 9], [13, 10], [14, 12], [15, 13], [16, 14], [17, 15], [19, 16], [20, 17], [21, 18], [28, 19]], PCn: [[0, 1], [1, 2], [2, 3], [4, 4], [5, 5], [7, 6], [8, 7], [10, 8], [11, 9], [12, 10], [13, 11], [14, 12], [16, 13], [17, 15], [18, 16], [20, 17], [21, 18], [23, 19]], CD: [[0, 1], [5, 2], [7, 3], [10, 4], [14, 5], [18, 6], [21, 7], [24, 8], [26, 9], [29, 10], [31, 11], [34, 12], [36, 13], [39, 14], [44, 15], [49, 16], [54, 17], [58, 18], [68, 19]], VC: [[0, 1], [3, 2], [5, 3], [9, 4], [11, 5], [13, 6], [14, 7], [16, 8], [18, 9], [19, 10], [23, 11], [26, 12], [31, 13], [35, 14], [39, 15], [43, 16], [45, 17], [51, 18], [61, 19]], LN: [[0, 3], [3, 4], [5, 5], [6, 6], [7, 7], [8, 8], [10, 9], [11, 10], [13, 11], [14, 12], [16, 13], [17, 14], [18, 15], [19, 16], [20, 17], [25, 18], [28, 19]], MR: [[0, 1], [1, 2], [4, 3], [5, 4], [7, 5], [8, 6], [9, 7], [10, 8], [11, 9], [13, 10], [14, 11], [16, 12], [18, 13], [20, 14], [21, 15], [23, 16], [26, 17], [29, 18], [30, 19]], CO: [[0, 1], [1, 2], [3, 3], [4, 4], [7, 5], [9, 6], [10, 7], [12, 8], [14, 9], [15, 10], [17, 11], [19, 12], [20, 13], [22, 14], [23, 15], [24, 16], [25, 17], [26, 18], [36, 19]], SS: [[0, 2], [1, 3], [3, 4], [6, 5], [8, 6], [10, 7], [12, 8], [14, 9], [15, 10], [17, 11], [18, 12], [20, 13], [22, 14], [24, 15], [26, 16], [30, 17], [34, 18], [36, 19]], PCm: [[0, 3], [3, 4], [5, 5], [8, 6], [10, 7], [11, 8], [13, 9], [14, 10], [16, 11], [18, 12], [19, 13], [21, 14], [22, 15], [25, 16], [26, 17], [29, 18], [32, 19]], CA: [[0, 1], [13, 2], [19, 3], [23, 4], [25, 5], [29, 6], [34, 7], [41, 8], [47, 9], [52, 10], [57, 11], [63, 12], [67, 13], [74, 14], [90, 15], [98, 16], [110, 17], [115, 18], [119, 19]], IN: [[0, 3], [5, 4], [7, 5], [8, 6], [9, 7], [10, 9], [11, 10], [12, 11], [13, 13], [14, 14], [16, 15], [17, 16], [18, 17], [19, 18], [28, 19]], AR: [[0, 1], [6, 2], [7, 3], [9, 4], [10, 5], [12, 6], [13, 7], [15, 8], [16, 9], [17, 10], [18, 11], [19, 12], [20, 13], [21, 14], [22, 15], [23, 16], [24, 17], [25, 18], [26, 19]], WR: [[0, 3], [1, 4], [4, 5], [6, 6], [7, 7], [8, 9], [9, 10], [10, 11], [11, 13], [12, 14], [13, 15], [14, 17], [15, 18], [16, 19]] }, "sq-9": { BD: [[0, 1], [5, 2], [6, 3], [7, 4], [9, 5], [10, 6], [13, 7], [15, 8], [18, 9], [21, 10], [25, 11], [27, 12], [30, 13], [34, 14], [36, 15], [40, 16], [42, 17], [44, 18], [48, 19]], SI: [[0, 1], [1, 3], [3, 4], [5, 5], [7, 6], [8, 7], [10, 8], [11, 9], [13, 10], [15, 11], [17, 12], [19, 13], [21, 14], [22, 15], [24, 16], [25, 17], [28, 18], [31, 19]], DS: [[0, 1], [8, 2], [9, 3], [10, 5], [11, 6], [12, 8], [13, 9], [14, 10], [15, 11], [16, 12], [17, 13], [18, 14], [19, 15], [20, 16], [21, 17], [23, 18], [26, 19]], PCn: [[0, 1], [3, 2], [7, 3], [9, 5], [10, 6], [11, 7], [12, 8], [13, 9], [14, 10], [15, 12], [16, 13], [17, 14], [18, 15], [19, 16], [20, 17], [22, 18], [26, 19]], CD: [[0, 2], [9, 3], [13, 4], [16, 5], [22, 6], [26, 7], [28, 8], [31, 9], [33, 10], [35, 11], [38, 12], [40, 13], [43, 14], [46, 15], [49, 16], [54, 17], [58, 18], [62, 19]], VC: [[0, 1], [9, 2], [11, 3], [14, 4], [15, 5], [17, 6], [19, 7], [21, 8], [24, 9], [26, 10], [30, 11], [33, 12], [36, 13], [40, 14], [43, 15], [45, 16], [49, 17], [52, 18], [55, 19]], LN: [[0, 1], [5, 2], [6, 5], [7, 6], [8, 7], [10, 8], [11, 9], [13, 10], [15, 11], [16, 12], [17, 13], [18, 14], [19, 15], [20, 16], [21, 17], [22, 18], [27, 19]], MR: [[0, 1], [2, 2], [4, 3], [8, 5], [9, 6], [11, 7], [12, 8], [13, 9], [15, 10], [17, 11], [19, 12], [20, 13], [21, 14], [23, 15], [25, 16], [27, 17], [30, 18], [33, 19]], CO: [[0, 1], [5, 2], [6, 3], [8, 4], [10, 5], [12, 6], [14, 7], [16, 8], [17, 9], [18, 10], [20, 11], [21, 12], [23, 13], [25, 14], [28, 16], [30, 17], [32, 18], [34, 19]], SS: [[0, 2], [1, 3], [5, 4], [8, 5], [9, 6], [11, 7], [13, 8], [14, 9], [16, 10], [18, 11], [20, 12], [21, 13], [23, 14], [25, 15], [28, 16], [31, 17], [34, 18], [42, 19]], PCm: [[0, 3], [3, 4], [7, 5], [10, 6], [12, 7], [13, 8], [15, 9], [17, 10], [18, 11], [20, 12], [22, 13], [23, 14], [25, 15], [28, 16], [29, 17], [32, 18], [36, 19]], CA: [[0, 1], [15, 2], [17, 3], [27, 4], [35, 5], [39, 6], [44, 7], [49, 8], [53, 9], [58, 10], [64, 11], [69, 12], [75, 13], [82, 14], [93, 15], [98, 16], [109, 17], [118, 18], [129, 19]], IN: [[0, 3], [4, 4], [9, 5], [10, 6], [11, 7], [12, 8], [13, 10], [14, 11], [15, 12], [16, 13], [17, 14], [19, 15], [20, 16], [22, 17], [23, 18], [25, 19]], AR: [[0, 1], [8, 2], [10, 3], [11, 4], [13, 5], [14, 6], [15, 7], [17, 8], [18, 9], [19, 10], [20, 11], [21, 12], [22, 13], [23, 14], [24, 15], [25, 16], [27, 17], [30, 18], [34, 19]], WR: [[0, 3], [3, 4], [6, 5], [7, 6], [8, 7], [9, 9], [10, 10], [11, 11], [12, 13], [13, 14], [14, 15], [16, 16], [17, 17], [18, 18], [19, 19]] }, "sq-10": { BD: [[0, 1], [3, 2], [4, 4], [6, 5], [10, 6], [14, 7], [17, 8], [21, 9], [24, 10], [27, 11], [30, 12], [32, 13], [36, 14], [43, 15], [46, 16], [49, 17], [54, 18], [60, 19]], SI: [[0, 1], [2, 2], [4, 3], [5, 4], [7, 5], [8, 6], [10, 7], [12, 8], [14, 9], [15, 10], [17, 11], [20, 12], [22, 13], [25, 14], [27, 15], [30, 16], [33, 17], [34, 18], [36, 19]], DS: [[0, 1], [5, 2], [8, 3], [9, 4], [10, 5], [11, 6], [12, 7], [13, 8], [14, 9], [15, 11], [16, 12], [17, 13], [19, 14], [20, 15], [23, 16], [24, 17], [25, 18], [26, 19]], PCn: [[0, 1], [2, 2], [5, 3], [6, 4], [8, 5], [9, 6], [11, 7], [12, 8], [14, 9], [15, 10], [16, 11], [17, 12], [18, 13], [19, 14], [20, 15], [21, 16], [22, 17], [23, 18], [24, 19]], CD: [[0, 1], [10, 2], [14, 3], [21, 4], [22, 5], [25, 6], [28, 7], [31, 8], [35, 9], [38, 10], [40, 11], [43, 12], [47, 13], [50, 14], [55, 15], [63, 16], [69, 17], [76, 18], [84, 19]], VC: [[0, 1], [10, 2], [11, 3], [13, 4], [14, 5], [18, 6], [20, 7], [24, 8], [28, 9], [33, 10], [36, 11], [41, 12], [43, 13], [47, 14], [50, 15], [54, 16], [56, 17], [58, 18], [61, 19]], LN: [[0, 1], [3, 2], [5, 3], [6, 5], [7, 6], [10, 7], [12, 8], [14, 9], [15, 10], [16, 11], [18, 12], [19, 13], [20, 14], [21, 15], [23, 16], [24, 17], [26, 18], [27, 19]], MR: [[0, 1], [2, 2], [5, 3], [8, 4], [9, 5], [10, 6], [11, 7], [13, 8], [15, 9], [17, 10], [19, 11], [21, 12], [23, 13], [24, 14], [26, 15], [27, 16], [28, 17], [30, 18], [31, 19]], CO: [[0, 1], [3, 2], [4, 3], [6, 4], [9, 5], [13, 6], [16, 7], [17, 8], [19, 9], [20, 10], [22, 11], [23, 12], [25, 13], [26, 14], [28, 15], [29, 16], [33, 17], [35, 18], [37, 19]], SS: [[0, 3], [4, 4], [8, 5], [11, 6], [13, 7], [15, 8], [17, 9], [19, 10], [20, 11], [22, 12], [24, 13], [27, 14], [30, 15], [32, 16], [36, 17], [39, 18], [46, 19]], PCm: [[0, 3], [3, 4], [7, 5], [10, 6], [12, 7], [14, 8], [16, 9], [18, 10], [20, 11], [22, 12], [24, 13], [26, 14], [28, 15], [29, 16], [31, 17], [32, 18], [33, 19]], CA: [[0, 1], [16, 2], [25, 3], [33, 4], [36, 5], [39, 6], [43, 7], [48, 8], [55, 9], [61, 10], [67, 11], [75, 12], [84, 13], [91, 14], [95, 15], [107, 16], [113, 17], [117, 18], [125, 19]], IN: [[0, 3], [4, 4], [9, 5], [11, 6], [12, 7], [13, 8], [14, 9], [15, 10], [16, 11], [17, 12], [19, 13], [20, 14], [22, 15], [23, 16], [24, 17], [26, 18], [28, 19]], AR: [[0, 1], [6, 2], [10, 3], [12, 4], [13, 5], [15, 6], [17, 7], [18, 8], [20, 9], [21, 10], [22, 11], [23, 12], [24, 13], [25, 14], [27, 15], [28, 16], [29, 17], [30, 18], [32, 19]], WR: [[0, 3], [2, 4], [7, 5], [8, 6], [9, 7], [10, 9], [11, 10], [12, 11], [13, 12], [14, 13], [15, 14], [16, 15], [17, 16], [18, 17], [19, 18], [21, 19]] }, "sq-11": { BD: [[0, 1], [2, 2], [4, 3], [6, 4], [8, 5], [12, 6], [16, 7], [21, 8], [24, 9], [27, 10], [31, 11], [35, 12], [39, 13], [42, 14], [44, 15], [49, 16], [51, 17], [52, 18], [56, 19]], SI: [[0, 1], [2, 2], [4, 3], [6, 4], [7, 5], [8, 6], [11, 7], [13, 8], [14, 9], [16, 10], [18, 11], [20, 12], [22, 13], [24, 14], [26, 15], [27, 16], [30, 17], [33, 18], [37, 19]], DS: [[0, 1], [5, 2], [8, 3], [11, 5], [12, 6], [13, 7], [14, 8], [15, 10], [16, 11], [17, 12], [19, 13], [20, 14], [21, 15], [23, 16], [24, 17], [27, 18], [29, 19]], PCn: [[0, 1], [3, 2], [4, 3], [8, 4], [9, 5], [10, 6], [12, 7], [13, 8], [14, 9], [15, 10], [16, 11], [17, 12], [18, 13], [19, 14], [20, 15], [21, 16], [23, 17], [24, 18], [25, 19]], CD: [[0, 2], [10, 3], [22, 4], [23, 5], [27, 6], [30, 7], [34, 8], [37, 9], [40, 10], [43, 11], [46, 12], [50, 13], [52, 14], [57, 15], [60, 16], [64, 17], [69, 18], [77, 19]], VC: [[0, 1], [11, 2], [12, 3], [13, 4], [17, 5], [20, 6], [24, 7], [27, 8], [31, 9], [35, 10], [38, 11], [43, 12], [45, 13], [49, 14], [51, 15], [54, 16], [56, 17], [57, 18], [60, 19]], LN: [[0, 1], [1, 2], [4, 3], [6, 4], [7, 5], [8, 6], [10, 7], [12, 8], [14, 9], [15, 10], [17, 11], [18, 12], [19, 13], [20, 14], [21, 16], [22, 17], [25, 18], [29, 19]], MR: [[0, 1], [5, 2], [6, 3], [8, 4], [10, 5], [11, 6], [12, 7], [15, 8], [17, 9], [19, 10], [20, 11], [21, 12], [23, 13], [24, 14], [26, 15], [28, 16], [30, 17], [33, 18], [35, 19]], CO: [[0, 1], [1, 2], [3, 3], [7, 4], [10, 5], [14, 6], [16, 7], [18, 8], [20, 9], [21, 10], [22, 11], [24, 12], [26, 13], [27, 14], [28, 15], [30, 16], [31, 17], [33, 18], [37, 19]], SS: [[0, 2], [3, 3], [6, 4], [13, 5], [15, 6], [17, 7], [19, 8], [20, 9], [22, 10], [24, 11], [26, 12], [27, 13], [29, 14], [31, 15], [33, 16], [35, 17], [39, 18], [45, 19]], PCm: [[0, 3], [2, 4], [6, 5], [9, 6], [13, 7], [16, 8], [17, 9], [19, 10], [21, 11], [23, 12], [25, 13], [27, 14], [28, 15], [29, 16], [30, 17], [31, 18], [33, 19]], CA: [[0, 2], [23, 3], [25, 4], [31, 5], [39, 6], [46, 7], [52, 8], [59, 9], [65, 10], [70, 11], [78, 12], [84, 13], [91, 14], [98, 15], [104, 16], [112, 17], [119, 18], [124, 19]], IN: [[0, 3], [3, 4], [9, 5], [11, 6], [13, 7], [14, 8], [15, 9], [16, 10], [18, 11], [19, 12], [20, 13], [22, 14], [23, 15], [24, 16], [25, 17], [27, 18], [28, 19]], AR: [[0, 1], [5, 2], [10, 3], [13, 4], [15, 5], [16, 6], [18, 7], [19, 8], [20, 9], [22, 10], [23, 11], [24, 12], [25, 13], [26, 14], [27, 15], [28, 17], [30, 18], [33, 19]], WR: [[0, 3], [1, 4], [4, 5], [8, 6], [9, 7], [10, 8], [11, 10], [12, 11], [13, 12], [14, 13], [15, 14], [16, 15], [17, 16], [18, 17], [19, 18], [21, 19]] }, "sq-12": { BD: [[0, 1], [2, 2], [4, 3], [6, 4], [8, 5], [12, 6], [16, 7], [21, 8], [24, 9], [27, 10], [31, 11], [35, 12], [39, 13], [42, 14], [44, 15], [49, 16], [51, 17], [52, 18], [56, 19]], SI: [[0, 1], [2, 2], [4, 3], [6, 4], [7, 5], [8, 6], [11, 7], [13, 8], [14, 9], [16, 10], [18, 11], [20, 12], [22, 13], [24, 14], [26, 15], [27, 16], [30, 17], [33, 18], [37, 19]], DS: [[0, 1], [5, 2], [8, 3], [11, 5], [12, 6], [13, 7], [14, 8], [15, 10], [16, 11], [17, 12], [19, 13], [20, 14], [21, 15], [23, 16], [24, 17], [27, 18], [29, 19]], PCn: [[0, 1], [3, 2], [4, 3], [8, 4], [9, 5], [10, 6], [12, 7], [13, 8], [14, 9], [15, 10], [16, 11], [17, 12], [18, 13], [19, 14], [20, 15], [21, 16], [23, 17], [24, 18], [25, 19]], CD: [[0, 2], [10, 3], [22, 4], [23, 5], [27, 6], [30, 7], [34, 8], [37, 9], [40, 10], [43, 11], [46, 12], [50, 13], [52, 14], [57, 15], [60, 16], [64, 17], [69, 18], [77, 19]], VC: [[0, 1], [11, 2], [12, 3], [13, 4], [17, 5], [20, 6], [24, 7], [27, 8], [31, 9], [35, 10], [38, 11], [43, 12], [45, 13], [49, 14], [51, 15], [54, 16], [56, 17], [57, 18], [60, 19]], LN: [[0, 1], [1, 2], [4, 3], [6, 4], [7, 5], [8, 6], [10, 7], [12, 8], [14, 9], [15, 10], [17, 11], [18, 12], [19, 13], [20, 14], [21, 16], [22, 17], [25, 18], [29, 19]], MR: [[0, 1], [5, 2], [6, 3], [8, 4], [10, 5], [11, 6], [12, 7], [15, 8], [17, 9], [19, 10], [20, 11], [21, 12], [23, 13], [24, 14], [26, 15], [28, 16], [30, 17], [33, 18], [35, 19]], CO: [[0, 1], [1, 2], [3, 3], [7, 4], [10, 5], [14, 6], [16, 7], [18, 8], [20, 9], [21, 10], [22, 11], [24, 12], [26, 13], [27, 14], [28, 15], [30, 16], [31, 17], [33, 18], [37, 19]], SS: [[0, 2], [3, 3], [6, 4], [13, 5], [15, 6], [17, 7], [19, 8], [20, 9], [22, 10], [24, 11], [26, 12], [27, 13], [29, 14], [31, 15], [33, 16], [35, 17], [39, 18], [45, 19]], PCm: [[0, 3], [2, 4], [6, 5], [9, 6], [13, 7], [16, 8], [17, 9], [19, 10], [21, 11], [23, 12], [25, 13], [27, 14], [28, 15], [29, 16], [30, 17], [31, 18], [33, 19]], CA: [[0, 2], [23, 3], [25, 4], [31, 5], [39, 6], [46, 7], [52, 8], [59, 9], [65, 10], [70, 11], [78, 12], [84, 13], [91, 14], [98, 15], [104, 16], [112, 17], [119, 18], [124, 19]], IN: [[0, 3], [3, 4], [9, 5], [11, 6], [13, 7], [14, 8], [15, 9], [16, 10], [18, 11], [19, 12], [20, 13], [22, 14], [23, 15], [24, 16], [25, 17], [27, 18], [28, 19]], AR: [[0, 1], [5, 2], [10, 3], [13, 4], [15, 5], [16, 6], [18, 7], [19, 8], [20, 9], [22, 10], [23, 11], [24, 12], [25, 13], [26, 14], [27, 15], [28, 17], [30, 18], [33, 19]], WR: [[0, 3], [1, 4], [4, 5], [8, 6], [9, 7], [10, 8], [11, 10], [12, 11], [13, 12], [14, 13], [15, 14], [16, 15], [17, 16], [18, 17], [19, 18], [21, 19]] }, "sq-13": { BD: [[0, 1], [2, 2], [4, 3], [6, 4], [8, 5], [12, 6], [16, 7], [21, 8], [24, 9], [27, 10], [31, 11], [35, 12], [39, 13], [42, 14], [44, 15], [49, 16], [51, 17], [52, 18], [56, 19]], SI: [[0, 1], [2, 2], [4, 3], [6, 4], [7, 5], [8, 6], [11, 7], [13, 8], [14, 9], [16, 10], [18, 11], [20, 12], [22, 13], [24, 14], [26, 15], [27, 16], [30, 17], [33, 18], [37, 19]], DS: [[0, 1], [5, 2], [8, 3], [11, 5], [12, 6], [13, 7], [14, 8], [15, 10], [16, 11], [17, 12], [19, 13], [20, 14], [21, 15], [23, 16], [24, 17], [27, 18], [29, 19]], PCn: [[0, 1], [3, 2], [4, 3], [8, 4], [9, 5], [10, 6], [12, 7], [13, 8], [14, 9], [15, 10], [16, 11], [17, 12], [18, 13], [19, 14], [20, 15], [21, 16], [23, 17], [24, 18], [25, 19]], CD: [[0, 2], [10, 3], [22, 4], [23, 5], [27, 6], [30, 7], [34, 8], [37, 9], [40, 10], [43, 11], [46, 12], [50, 13], [52, 14], [57, 15], [60, 16], [64, 17], [69, 18], [77, 19]], VC: [[0, 1], [11, 2], [12, 3], [13, 4], [17, 5], [20, 6], [24, 7], [27, 8], [31, 9], [35, 10], [38, 11], [43, 12], [45, 13], [49, 14], [51, 15], [54, 16], [56, 17], [57, 18], [60, 19]], LN: [[0, 1], [1, 2], [4, 3], [6, 4], [7, 5], [8, 6], [10, 7], [12, 8], [14, 9], [15, 10], [17, 11], [18, 12], [19, 13], [20, 14], [21, 16], [22, 17], [25, 18], [29, 19]], MR: [[0, 1], [5, 2], [6, 3], [8, 4], [10, 5], [11, 6], [12, 7], [15, 8], [17, 9], [19, 10], [20, 11], [21, 12], [23, 13], [24, 14], [26, 15], [28, 16], [30, 17], [33, 18], [35, 19]], CO: [[0, 1], [1, 2], [3, 3], [7, 4], [10, 5], [14, 6], [16, 7], [18, 8], [20, 9], [21, 10], [22, 11], [24, 12], [26, 13], [27, 14], [28, 15], [30, 16], [31, 17], [33, 18], [37, 19]], SS: [[0, 2], [3, 3], [6, 4], [13, 5], [15, 6], [17, 7], [19, 8], [20, 9], [22, 10], [24, 11], [26, 12], [27, 13], [29, 14], [31, 15], [33, 16], [35, 17], [39, 18], [45, 19]], PCm: [[0, 3], [2, 4], [6, 5], [9, 6], [13, 7], [16, 8], [17, 9], [19, 10], [21, 11], [23, 12], [25, 13], [27, 14], [28, 15], [29, 16], [30, 17], [31, 18], [33, 19]], CA: [[0, 2], [23, 3], [25, 4], [31, 5], [39, 6], [46, 7], [52, 8], [59, 9], [65, 10], [70, 11], [78, 12], [84, 13], [91, 14], [98, 15], [104, 16], [112, 17], [119, 18], [124, 19]], IN: [[0, 3], [3, 4], [9, 5], [11, 6], [13, 7], [14, 8], [15, 9], [16, 10], [18, 11], [19, 12], [20, 13], [22, 14], [23, 15], [24, 16], [25, 17], [27, 18], [28, 19]], AR: [[0, 1], [5, 2], [10, 3], [13, 4], [15, 5], [16, 6], [18, 7], [19, 8], [20, 9], [22, 10], [23, 11], [24, 12], [25, 13], [26, 14], [27, 15], [28, 17], [30, 18], [33, 19]], WR: [[0, 3], [1, 4], [4, 5], [8, 6], [9, 7], [10, 8], [11, 10], [12, 11], [13, 12], [14, 13], [15, 14], [16, 15], [17, 16], [18, 17], [19, 18], [21, 19]] }, "sq-14": { BD: [[0, 1], [2, 2], [4, 3], [6, 4], [8, 5], [12, 6], [16, 7], [21, 8], [24, 9], [27, 10], [31, 11], [35, 12], [39, 13], [42, 14], [44, 15], [49, 16], [51, 17], [52, 18], [56, 19]], SI: [[0, 1], [2, 2], [4, 3], [6, 4], [7, 5], [8, 6], [11, 7], [13, 8], [14, 9], [16, 10], [18, 11], [20, 12], [22, 13], [24, 14], [26, 15], [27, 16], [30, 17], [33, 18], [37, 19]], DS: [[0, 1], [5, 2], [8, 3], [11, 5], [12, 6], [13, 7], [14, 8], [15, 10], [16, 11], [17, 12], [19, 13], [20, 14], [21, 15], [23, 16], [24, 17], [27, 18], [29, 19]], PCn: [[0, 1], [3, 2], [4, 3], [8, 4], [9, 5], [10, 6], [12, 7], [13, 8], [14, 9], [15, 10], [16, 11], [17, 12], [18, 13], [19, 14], [20, 15], [21, 16], [23, 17], [24, 18], [25, 19]], CD: [[0, 2], [10, 3], [22, 4], [23, 5], [27, 6], [30, 7], [34, 8], [37, 9], [40, 10], [43, 11], [46, 12], [50, 13], [52, 14], [57, 15], [60, 16], [64, 17], [69, 18], [77, 19]], VC: [[0, 1], [11, 2], [12, 3], [13, 4], [17, 5], [20, 6], [24, 7], [27, 8], [31, 9], [35, 10], [38, 11], [43, 12], [45, 13], [49, 14], [51, 15], [54, 16], [56, 17], [57, 18], [60, 19]], LN: [[0, 1], [1, 2], [4, 3], [6, 4], [7, 5], [8, 6], [10, 7], [12, 8], [14, 9], [15, 10], [17, 11], [18, 12], [19, 13], [20, 14], [21, 16], [22, 17], [25, 18], [29, 19]], MR: [[0, 1], [5, 2], [6, 3], [8, 4], [10, 5], [11, 6], [12, 7], [15, 8], [17, 9], [19, 10], [20, 11], [21, 12], [23, 13], [24, 14], [26, 15], [28, 16], [30, 17], [33, 18], [35, 19]], CO: [[0, 1], [1, 2], [3, 3], [7, 4], [10, 5], [14, 6], [16, 7], [18, 8], [20, 9], [21, 10], [22, 11], [24, 12], [26, 13], [27, 14], [28, 15], [30, 16], [31, 17], [33, 18], [37, 19]], SS: [[0, 2], [3, 3], [6, 4], [13, 5], [15, 6], [17, 7], [19, 8], [20, 9], [22, 10], [24, 11], [26, 12], [27, 13], [29, 14], [31, 15], [33, 16], [35, 17], [39, 18], [45, 19]], PCm: [[0, 3], [2, 4], [6, 5], [9, 6], [13, 7], [16, 8], [17, 9], [19, 10], [21, 11], [23, 12], [25, 13], [27, 14], [28, 15], [29, 16], [30, 17], [31, 18], [33, 19]], CA: [[0, 2], [23, 3], [25, 4], [31, 5], [39, 6], [46, 7], [52, 8], [59, 9], [65, 10], [70, 11], [78, 12], [84, 13], [91, 14], [98, 15], [104, 16], [112, 17], [119, 18], [124, 19]], IN: [[0, 3], [3, 4], [9, 5], [11, 6], [13, 7], [14, 8], [15, 9], [16, 10], [18, 11], [19, 12], [20, 13], [22, 14], [23, 15], [24, 16], [25, 17], [27, 18], [28, 19]], AR: [[0, 1], [5, 2], [10, 3], [13, 4], [15, 5], [16, 6], [18, 7], [19, 8], [20, 9], [22, 10], [23, 11], [24, 12], [25, 13], [26, 14], [27, 15], [28, 17], [30, 18], [33, 19]], WR: [[0, 3], [1, 4], [4, 5], [8, 6], [9, 7], [10, 8], [11, 10], [12, 11], [13, 12], [14, 13], [15, 14], [16, 15], [17, 16], [18, 17], [19, 18], [21, 19]] } }, indices: { VCI: { fa: "\u062F\u0631\u06A9 \u06A9\u0644\u0627\u0645\u06CC", rows: [{ sum: 1, scaled: 0, percentile: 0, ci95: 0 }, { sum: 2, scaled: 0, percentile: 0, ci95: 0 }, { sum: 3, scaled: 0, percentile: 0, ci95: 0 }, { sum: 4, scaled: 0, percentile: 0, ci95: 0 }, { sum: 5, scaled: 0, percentile: 0, ci95: 0 }, { sum: 6, scaled: 53, percentile: "<.1", ci95: "49-61" }, { sum: 7, scaled: 56, percentile: 0.2, ci95: "52-63" }, { sum: 8, scaled: 59, percentile: 0.3, ci95: "54-66" }, { sum: 9, scaled: 60, percentile: 0.4, ci95: "56-67" }, { sum: 10, scaled: 62, percentile: 0.6, ci95: "58-69" }, { sum: 11, scaled: 64, percentile: 0.9, ci95: "60-71" }, { sum: 12, scaled: 66, percentile: 1, ci95: "62-73" }, { sum: 13, scaled: 67, percentile: 1, ci95: "63-74" }, { sum: 14, scaled: 68, percentile: 2, ci95: "64-75" }, { sum: 15, scaled: 69, percentile: 2, ci95: "65-76" }, { sum: 16, scaled: 71, percentile: 3, ci95: "67-78" }, { sum: 17, scaled: 73, percentile: 4, ci95: "68-80" }, { sum: 18, scaled: 75, percentile: 5, ci95: "70-82" }, { sum: 19, scaled: 77, percentile: 6, ci95: "72-84" }, { sum: 20, scaled: 79, percentile: 8, ci95: "74-85" }, { sum: 21, scaled: 81, percentile: 11, ci95: "76-87" }, { sum: 22, scaled: 84, percentile: 14, ci95: "79-90" }, { sum: 23, scaled: 86, percentile: 17, ci95: "81-92" }, { sum: 24, scaled: 88, percentile: 21, ci95: "83-94" }, { sum: 25, scaled: 90, percentile: 25, ci95: "85-96" }, { sum: 26, scaled: 92, percentile: 30, ci95: "87-98" }, { sum: 27, scaled: 94, percentile: 30, ci95: "89-100" }, { sum: 28, scaled: 96, percentile: 41, ci95: "91-102" }, { sum: 29, scaled: 99, percentile: 46, ci95: "93-105" }, { sum: 30, scaled: 100, percentile: 51, ci95: "94-106" }, { sum: 31, scaled: 102, percentile: 56, ci95: "96-108" }, { sum: 32, scaled: 104, percentile: 62, ci95: "98-109" }, { sum: 33, scaled: 106, percentile: 67, ci95: "100-111" }, { sum: 34, scaled: 108, percentile: 71, ci95: "102-113" }, { sum: 35, scaled: 110, percentile: 76, ci95: "104-115" }, { sum: 36, scaled: 112, percentile: 80, ci95: "106-117" }, { sum: 37, scaled: 114, percentile: 82, ci95: "108-119" }, { sum: 38, scaled: 116, percentile: 85, ci95: "110-121" }, { sum: 39, scaled: 118, percentile: 88, ci95: "112-123" }, { sum: 40, scaled: 119, percentile: 90, ci95: "113-124" }, { sum: 41, scaled: 121, percentile: 92, ci95: "115-126" }, { sum: 42, scaled: 123, percentile: 94, ci95: "116-128" }, { sum: 43, scaled: 125, percentile: 95, ci95: "118-130" }, { sum: 44, scaled: 127, percentile: 96, ci95: "120-132" }, { sum: 45, scaled: 129, percentile: 97, ci95: "122-133" }, { sum: 46, scaled: 130, percentile: 98, ci95: "123-134" }, { sum: 47, scaled: 132, percentile: 98, ci95: "125-136" }, { sum: 48, scaled: 134, percentile: 99, ci95: "127-138" }, { sum: 49, scaled: 137, percentile: 99, ci95: "130-141" }, { sum: 50, scaled: 138, percentile: 99.5, ci95: "131-142" }, { sum: 51, scaled: 139, percentile: 99.6, ci95: "132-143" }, { sum: 52, scaled: 140, percentile: 99.7, ci95: "133-144" }, { sum: 53, scaled: 142, percentile: 99.8, ci95: "135-146" }, { sum: 54, scaled: 145, percentile: 99.9, ci95: "138-149" }, { sum: 55, scaled: 147, percentile: ">99.9", ci95: "139-151" }] }, PRI: { fa: "\u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u0627\u062F\u0631\u0627\u06A9\u06CC", rows: [{ sum: 1, scaled: 0, percentile: 0, ci95: 0 }, { sum: 2, scaled: 0, percentile: 0, ci95: 0 }, { sum: 3, scaled: 0, percentile: 0, ci95: 0 }, { sum: 4, scaled: 0, percentile: 0, ci95: 0 }, { sum: 5, scaled: 53, percentile: "<.1", ci95: "49-64" }, { sum: 6, scaled: 53, percentile: "<.1", ci95: "49-64" }, { sum: 7, scaled: 54, percentile: "<.1", ci95: "50-64" }, { sum: 8, scaled: 55, percentile: 0.1, ci95: "51-65" }, { sum: 9, scaled: 56, percentile: 0.1, ci95: "52-66" }, { sum: 10, scaled: 57, percentile: 0.2, ci95: "53-67" }, { sum: 11, scaled: 59, percentile: 0.3, ci95: "55-69" }, { sum: 12, scaled: 61, percentile: 0.4, ci95: "57-71" }, { sum: 13, scaled: 62, percentile: 0.5, ci95: "57-72" }, { sum: 14, scaled: 64, percentile: 0.8, ci95: "59-74" }, { sum: 15, scaled: 66, percentile: 1, ci95: "61-75" }, { sum: 16, scaled: 69, percentile: 2, ci95: "64-78" }, { sum: 17, scaled: 72, percentile: 3, ci95: "67-81" }, { sum: 18, scaled: 74, percentile: 4, ci95: "69-83" }, { sum: 19, scaled: 76, percentile: 5, ci95: "70-85" }, { sum: 20, scaled: 78, percentile: 7, ci95: "72-87" }, { sum: 21, scaled: 80, percentile: 9, ci95: "74-89" }, { sum: 22, scaled: 83, percentile: 13, ci95: "77-91" }, { sum: 23, scaled: 85, percentile: 16, ci95: "79-93" }, { sum: 24, scaled: 87, percentile: 19, ci95: "81-95" }, { sum: 25, scaled: 89, percentile: 24, ci95: "83-97" }, { sum: 26, scaled: 92, percentile: 29, ci95: "85-100" }, { sum: 27, scaled: 94, percentile: 35, ci95: "87-102" }, { sum: 28, scaled: 96, percentile: 40, ci95: "89-104" }, { sum: 29, scaled: 98, percentile: 45, ci95: "95-105" }, { sum: 30, scaled: 100, percentile: 51, ci95: "93-107" }, { sum: 31, scaled: 102, percentile: 56, ci95: "95-109" }, { sum: 32, scaled: 104, percentile: 62, ci95: "96-111" }, { sum: 33, scaled: 106, percentile: 66, ci95: "98-113" }, { sum: 34, scaled: 108, percentile: 71, ci95: "100-115" }, { sum: 35, scaled: 110, percentile: 75, ci95: "102-117" }, { sum: 36, scaled: 112, percentile: 79, ci95: "104-118" }, { sum: 37, scaled: 114, percentile: 83, ci95: "106-120" }, { sum: 38, scaled: 117, percentile: 87, ci95: "109-123" }, { sum: 39, scaled: 119, percentile: 90, ci95: "110-125" }, { sum: 40, scaled: 122, percentile: 93, ci95: "113-128" }, { sum: 41, scaled: 123, percentile: 94, ci95: "114-129" }, { sum: 42, scaled: 125, percentile: 96, ci95: "116-130" }, { sum: 43, scaled: 127, percentile: 97, ci95: "118-132" }, { sum: 44, scaled: 130, percentile: 98, ci95: "121-135" }, { sum: 45, scaled: 133, percentile: 99, ci95: "123-138" }, { sum: 46, scaled: 136, percentile: 99, ci95: "126-141" }, { sum: 47, scaled: 139, percentile: 99.6, ci95: "129-144" }, { sum: 48, scaled: 141, percentile: 99.8, ci95: "131-145" }, { sum: 49, scaled: 142, percentile: 99.8, ci95: "132-146" }, { sum: 50, scaled: 143, percentile: 99.9, ci95: "133-147" }, { sum: 51, scaled: 144, percentile: 99.9, ci95: "134-149" }, { sum: 52, scaled: 147, percentile: 99.9, ci95: "137-151" }, { sum: 53, scaled: 149, percentile: ">99.9", ci95: "138-153" }, { sum: 54, scaled: 151, percentile: ">99.9", ci95: "140-155" }] }, WMI: { fa: "\u062D\u0627\u0641\u0638\u0647 \u0641\u0639\u0627\u0644", rows: [{ sum: 0, scaled: 0, percentile: 0, ci95: 0 }, { sum: 2, scaled: 53, percentile: "<.1", ci95: "49-62" }, { sum: 3, scaled: 57, percentile: 0.2, ci95: "53-65" }, { sum: 4, scaled: 62, percentile: 0.6, ci95: "58-70" }, { sum: 5, scaled: 66, percentile: 1, ci95: "61-74" }, { sum: 6, scaled: 69, percentile: 2, ci95: "64-77" }, { sum: 7, scaled: 71, percentile: 3, ci95: "66-79" }, { sum: 8, scaled: 73, percentile: 3, ci95: "68-81" }, { sum: 9, scaled: 75, percentile: 5, ci95: "70-82" }, { sum: 10, scaled: 77, percentile: 6, ci95: "72-84" }, { sum: 11, scaled: 79, percentile: 8, ci95: "74-86" }, { sum: 12, scaled: 80, percentile: 9, ci95: "75-87" }, { sum: 13, scaled: 82, percentile: 11, ci95: "77-89" }, { sum: 14, scaled: 83, percentile: 13, ci95: "78-90" }, { sum: 15, scaled: 84, percentile: 14, ci95: "79-91" }, { sum: 16, scaled: 85, percentile: 16, ci95: "80-92" }, { sum: 17, scaled: 86, percentile: 18, ci95: "80-93" }, { sum: 18, scaled: 88, percentile: 21, ci95: "82-95" }, { sum: 19, scaled: 90, percentile: 25, ci95: "84-97" }, { sum: 20, scaled: 92, percentile: 29, ci95: "86-99" }, { sum: 21, scaled: 93, percentile: 33, ci95: "87-100" }, { sum: 22, scaled: 95, percentile: 36, ci95: "89-101" }, { sum: 23, scaled: 97, percentile: 41, ci95: "91-103" }, { sum: 24, scaled: 99, percentile: 46, ci95: "93-105" }, { sum: 25, scaled: 101, percentile: 51, ci95: "95-107" }, { sum: 26, scaled: 102, percentile: 56, ci95: "96-108" }, { sum: 27, scaled: 104, percentile: 60, ci95: "98-110" }, { sum: 28, scaled: 106, percentile: 65, ci95: "99-112" }, { sum: 29, scaled: 108, percentile: 70, ci95: "110-114" }, { sum: 30, scaled: 110, percentile: 74, ci95: "103-116" }, { sum: 31, scaled: 112, percentile: 79, ci95: "105-118" }, { sum: 32, scaled: 115, percentile: 84, ci95: "108-121" }, { sum: 33, scaled: 117, percentile: 87, ci95: "110-122" }, { sum: 34, scaled: 119, percentile: 89, ci95: "112-124" }, { sum: 35, scaled: 120, percentile: 91, ci95: "113-125" }, { sum: 36, scaled: 122, percentile: 93, ci95: "115-127" }, { sum: 37, scaled: 125, percentile: 95, ci95: "118-130" }, { sum: 38, scaled: 127, percentile: 97, ci95: "119-132" }, { sum: 39, scaled: 130, percentile: 98, ci95: "122-135" }, { sum: 40, scaled: 133, percentile: 99, ci95: "125-138" }, { sum: 41, scaled: 135, percentile: 99, ci95: "127-140" }, { sum: 42, scaled: 137, percentile: 99, ci95: "129-141" }, { sum: 43, scaled: 139, percentile: 99.6, ci95: "131-143" }, { sum: 44, scaled: 141, percentile: 99.7, ci95: "133-145" }, { sum: 45, scaled: 142, percentile: 99.8, ci95: "134-146" }, { sum: 46, scaled: 142, percentile: 99.8, ci95: "134-146" }, { sum: 47, scaled: 144, percentile: 99.9, ci95: "136-148" }, { sum: 48, scaled: 147, percentile: ">99.9", ci95: "138-151" }, { sum: 49, scaled: 149, percentile: ">99.9", ci95: "140-153" }] }, PSI: { fa: "\u0633\u0631\u0639\u062A \u067E\u0631\u062F\u0627\u0632\u0634", rows: [{ sum: 1, scaled: 0, percentile: 0, ci95: 0 }, { sum: 2, scaled: 0, percentile: 0, ci95: 0 }, { sum: 3, scaled: 0, percentile: 0, ci95: 0 }, { sum: 4, scaled: 0, percentile: 0, ci95: 0 }, { sum: 5, scaled: 55, percentile: 0.1, ci95: "51-65" }, { sum: 6, scaled: 60, percentile: 0.4, ci95: "56-70" }, { sum: 7, scaled: 62, percentile: 0.6, ci95: "57-72" }, { sum: 8, scaled: 64, percentile: 0.9, ci95: "59-74" }, { sum: 9, scaled: 67, percentile: 1, ci95: "62-77" }, { sum: 10, scaled: 70, percentile: 2, ci95: "65-79" }, { sum: 11, scaled: 73, percentile: 4, ci95: "68-82" }, { sum: 12, scaled: 76, percentile: 6, ci95: "70-85" }, { sum: 13, scaled: 80, percentile: 9, ci95: "74-89" }, { sum: 14, scaled: 83, percentile: 13, ci95: "76-91" }, { sum: 15, scaled: 86, percentile: 17, ci95: "80-94" }, { sum: 16, scaled: 88, percentile: 22, ci95: "82-96" }, { sum: 17, scaled: 91, percentile: 27, ci95: "84-99" }, { sum: 18, scaled: 94, percentile: 34, ci95: "87-102" }, { sum: 19, scaled: 97, percentile: 43, ci95: "90-104" }, { sum: 20, scaled: 100, percentile: 50, ci95: "93-107" }, { sum: 21, scaled: 103, percentile: 58, ci95: "96-110" }, { sum: 22, scaled: 106, percentile: 66, ci95: "98-113" }, { sum: 23, scaled: 109, percentile: 73, ci95: "101-116" }, { sum: 24, scaled: 112, percentile: 79, ci95: "104-118" }, { sum: 25, scaled: 116, percentile: 85, ci95: "108-122" }, { sum: 26, scaled: 119, percentile: 89, ci95: "110-125" }, { sum: 27, scaled: 122, percentile: 93, ci95: "113-128" }, { sum: 28, scaled: 124, percentile: 95, ci95: "115-130" }, { sum: 29, scaled: 127, percentile: 97, ci95: "118-132" }, { sum: 30, scaled: 131, percentile: 98, ci95: "122-136" }, { sum: 31, scaled: 135, percentile: 99, ci95: "125-140" }, { sum: 32, scaled: 138, percentile: 99.6, ci95: "128-143" }, { sum: 33, scaled: 144, percentile: 99.9, ci95: "134-148" }, { sum: 34, scaled: 147, percentile: ">99.9", ci95: "136-151" }, { sum: 35, scaled: 148, percentile: ">99.9", ci95: "137-152" }, { sum: 36, scaled: 150, percentile: ">99.9", ci95: "139-154" }] }, FSIQ: { fa: "\u0645\u0642\u06CC\u0627\u0633 \u06A9\u0627\u0645\u0644", rows: [{ sum: 1, scaled: 0, percentile: 0, ci95: 0 }, { sum: 2, scaled: 0, percentile: 0, ci95: 0 }, { sum: 3, scaled: 0, percentile: 0, ci95: 0 }, { sum: 4, scaled: 0, percentile: 0, ci95: 0 }, { sum: 5, scaled: 0, percentile: 0, ci95: 0 }, { sum: 6, scaled: 40, percentile: "<.1", ci95: "37-48" }, { sum: 7, scaled: 40, percentile: "<.1", ci95: "37-48" }, { sum: 8, scaled: 40, percentile: "<.1", ci95: "37-48" }, { sum: 9, scaled: 40, percentile: "<.1", ci95: "37-48" }, { sum: 10, scaled: 40, percentile: "<.1", ci95: "37-48" }, { sum: 11, scaled: 40, percentile: "<.1", ci95: "37-48" }, { sum: 12, scaled: 41, percentile: "<.1", ci95: "38-49" }, { sum: 13, scaled: 42, percentile: "<.1", ci95: "39-50" }, { sum: 14, scaled: 43, percentile: "<.1", ci95: "40-51" }, { sum: 15, scaled: 44, percentile: "<.1", ci95: "41-52" }, { sum: 16, scaled: 45, percentile: "<.1", ci95: "42-53" }, { sum: 17, scaled: 46, percentile: "<.1", ci95: "43-54" }, { sum: 18, scaled: 47, percentile: "<.1", ci95: "43-55" }, { sum: 19, scaled: 53, percentile: "<.1", ci95: "50-58" }, { sum: 20, scaled: 53, percentile: "<.1", ci95: "50-58" }, { sum: 21, scaled: 53, percentile: "<.1", ci95: "50-58" }, { sum: 22, scaled: 53, percentile: "<.1", ci95: "50-58" }, { sum: 23, scaled: 53, percentile: "<.1", ci95: "50-58" }, { sum: 24, scaled: 53, percentile: "<.1", ci95: "50-58" }, { sum: 25, scaled: 53, percentile: "<.1", ci95: "50-58" }, { sum: 26, scaled: 54, percentile: "<.1", ci95: "51-59" }, { sum: 27, scaled: 54, percentile: "<.1", ci95: "51-59" }, { sum: 28, scaled: 54, percentile: "<.1", ci95: "51-59" }, { sum: 29, scaled: 54, percentile: "<.1", ci95: "51-59" }, { sum: 30, scaled: 54, percentile: "<.1", ci95: "51-59" }, { sum: 31, scaled: 55, percentile: "<.1", ci95: "52-60" }, { sum: 32, scaled: 55, percentile: 0.1, ci95: "52-60" }, { sum: 33, scaled: 55, percentile: 0.1, ci95: "52-60" }, { sum: 34, scaled: 55, percentile: 0.1, ci95: "52-60" }, { sum: 35, scaled: 55, percentile: 0.1, ci95: "52-60" }, { sum: 36, scaled: 55, percentile: 0.1, ci95: "52-60" }, { sum: 37, scaled: 55, percentile: 0.1, ci95: "52-60" }, { sum: 38, scaled: 56, percentile: 0.1, ci95: "53-61" }, { sum: 39, scaled: 56, percentile: 0.1, ci95: "53-61" }, { sum: 40, scaled: 56, percentile: 0.1, ci95: "53-61" }, { sum: 41, scaled: 56, percentile: 0.2, ci95: "53-61" }, { sum: 42, scaled: 57, percentile: 0.2, ci95: "54-62" }, { sum: 43, scaled: 57, percentile: 0.2, ci95: "54-62" }, { sum: 44, scaled: 58, percentile: 0.2, ci95: "55-63" }, { sum: 45, scaled: 58, percentile: 0.2, ci95: "55-63" }, { sum: 46, scaled: 59, percentile: 0.3, ci95: "56-64" }, { sum: 47, scaled: 60, percentile: 0.4, ci95: "57-65" }, { sum: 48, scaled: 60, percentile: 0.4, ci95: "57-65" }, { sum: 49, scaled: 61, percentile: 0.5, ci95: "58-66" }, { sum: 50, scaled: 62, percentile: 0.6, ci95: "59-67" }, { sum: 51, scaled: 63, percentile: 0.7, ci95: "60-68" }, { sum: 52, scaled: 63, percentile: 0.7, ci95: "60-68" }, { sum: 53, scaled: 64, percentile: 0.8, ci95: "61-69" }, { sum: 54, scaled: 65, percentile: 0.9, ci95: "62-70" }, { sum: 55, scaled: 66, percentile: 1, ci95: "63-71" }, { sum: 56, scaled: 67, percentile: 1, ci95: "64-72" }, { sum: 57, scaled: 68, percentile: 1, ci95: "65-73" }, { sum: 58, scaled: 68, percentile: 2, ci95: "65-73" }, { sum: 59, scaled: 69, percentile: 2, ci95: "66-74" }, { sum: 60, scaled: 70, percentile: 2, ci95: "67-75" }, { sum: 61, scaled: 70, percentile: 2, ci95: "67-75" }, { sum: 62, scaled: 70, percentile: 2, ci95: "67-75" }, { sum: 63, scaled: 71, percentile: 3, ci95: "68-76" }, { sum: 64, scaled: 72, percentile: 3, ci95: "69-77" }, { sum: 65, scaled: 73, percentile: 3, ci95: "69-78" }, { sum: 66, scaled: 73, percentile: 4, ci95: "69-78" }, { sum: 67, scaled: 74, percentile: 4, ci95: "70-79" }, { sum: 68, scaled: 75, percentile: 5, ci95: "71-80" }, { sum: 69, scaled: 76, percentile: 5, ci95: "72-81" }, { sum: 70, scaled: 76, percentile: 6, ci95: "72-81" }, { sum: 71, scaled: 77, percentile: 6, ci95: "72-83" }, { sum: 72, scaled: 78, percentile: 7, ci95: "74-83" }, { sum: 73, scaled: 78, percentile: 7, ci95: "74-83" }, { sum: 74, scaled: 79, percentile: 8, ci95: "75-84" }, { sum: 75, scaled: 80, percentile: 9, ci95: "76-84" }, { sum: 76, scaled: 80, percentile: 9, ci95: "76-84" }, { sum: 77, scaled: 81, percentile: 10, ci95: "77-85" }, { sum: 78, scaled: 82, percentile: 11, ci95: "78-86" }, { sum: 79, scaled: 83, percentile: 13, ci95: "79-87" }, { sum: 80, scaled: 84, percentile: 14, ci95: "80-88" }, { sum: 81, scaled: 85, percentile: 16, ci95: "81-89" }, { sum: 82, scaled: 86, percentile: 18, ci95: "82-90" }, { sum: 83, scaled: 87, percentile: 19, ci95: "81-91" }, { sum: 84, scaled: 87, percentile: 20, ci95: "81-91" }, { sum: 85, scaled: 88, percentile: 21, ci95: "84-92" }, { sum: 86, scaled: 89, percentile: 23, ci95: "85-93" }, { sum: 87, scaled: 90, percentile: 25, ci95: "86-94" }, { sum: 88, scaled: 91, percentile: 27, ci95: "87-95" }, { sum: 89, scaled: 91, percentile: 28, ci95: "87-95" }, { sum: 90, scaled: 92, percentile: 30, ci95: "88-96" }, { sum: 91, scaled: 93, percentile: 32, ci95: "89-97" }, { sum: 92, scaled: 94, percentile: 34, ci95: "90-98" }, { sum: 93, scaled: 95, percentile: 36, ci95: "91-99" }, { sum: 94, scaled: 96, percentile: 38, ci95: "92-100" }, { sum: 95, scaled: 96, percentile: 40, ci95: "92-100" }, { sum: 96, scaled: 97, percentile: 42, ci95: "93-101" }, { sum: 97, scaled: 98, percentile: 44, ci95: "94-102" }, { sum: 98, scaled: 99, percentile: 46, ci95: "95-103" }, { sum: 99, scaled: 99, percentile: 48, ci95: "95-103" }, { sum: 100, scaled: 100, percentile: 50, ci95: "96-104" }, { sum: 101, scaled: 100, percentile: 53, ci95: "96-104" }, { sum: 102, scaled: 102, percentile: 55, ci95: "98-106" }, { sum: 103, scaled: 102, percentile: 56, ci95: "98-106" }, { sum: 104, scaled: 103, percentile: 58, ci95: "99-107" }, { sum: 105, scaled: 104, percentile: 60, ci95: "100-108" }, { sum: 106, scaled: 105, percentile: 62, ci95: "101-109" }, { sum: 107, scaled: 105, percentile: 64, ci95: "101-109" }, { sum: 108, scaled: 106, percentile: 66, ci95: "102-110" }, { sum: 109, scaled: 107, percentile: 68, ci95: "103-111" }, { sum: 110, scaled: 108, percentile: 70, ci95: "104-112" }, { sum: 111, scaled: 109, percentile: 72, ci95: "105-113" }, { sum: 112, scaled: 109, percentile: 73, ci95: "105-113" }, { sum: 113, scaled: 110, percentile: 75, ci95: "106-114" }, { sum: 114, scaled: 111, percentile: 77, ci95: "107-115" }, { sum: 115, scaled: 112, percentile: 79, ci95: "108-116" }, { sum: 116, scaled: 113, percentile: 80, ci95: "109-117" }, { sum: 117, scaled: 114, percentile: 82, ci95: "110-118" }, { sum: 118, scaled: 114, percentile: 83, ci95: "110-118" }, { sum: 119, scaled: 115, percentile: 84, ci95: "111-119" }, { sum: 120, scaled: 116, percentile: 85, ci95: "112-120" }, { sum: 121, scaled: 116, percentile: 86, ci95: "112-120" }, { sum: 122, scaled: 117, percentile: 87, ci95: "113-121" }, { sum: 123, scaled: 118, percentile: 88, ci95: "114-122" }, { sum: 124, scaled: 118, percentile: 89, ci95: "114-122" }, { sum: 125, scaled: 119, percentile: 90, ci95: "115-123" }, { sum: 126, scaled: 121, percentile: 92, ci95: "117-125" }, { sum: 127, scaled: 122, percentile: 93, ci95: "117-126" }, { sum: 128, scaled: 123, percentile: 93, ci95: "118-127" }, { sum: 129, scaled: 123, percentile: 94, ci95: "118-127" }, { sum: 130, scaled: 124, percentile: 95, ci95: "119-128" }, { sum: 131, scaled: 125, percentile: 95, ci95: "120-129" }, { sum: 132, scaled: 125, percentile: 96, ci95: "120-129" }, { sum: 133, scaled: 126, percentile: 96, ci95: "121-130" }, { sum: 134, scaled: 127, percentile: 96, ci95: "122-131" }, { sum: 135, scaled: 127, percentile: 97, ci95: "122-131" }, { sum: 136, scaled: 128, percentile: 97, ci95: "123-132" }, { sum: 137, scaled: 129, percentile: 97, ci95: "124-133" }, { sum: 138, scaled: 130, percentile: 98, ci95: "125-134" }, { sum: 139, scaled: 130, percentile: 98, ci95: "125-134" }, { sum: 140, scaled: 131, percentile: 98, ci95: "126-134" }, { sum: 141, scaled: 132, percentile: 98, ci95: "127-135" }, { sum: 142, scaled: 133, percentile: 99, ci95: "128-136" }, { sum: 143, scaled: 135, percentile: 99, ci95: "130-138" }, { sum: 144, scaled: 136, percentile: 99, ci95: "131-139" }, { sum: 145, scaled: 136, percentile: 99, ci95: "131-139" }, { sum: 146, scaled: 137, percentile: 99, ci95: "132-140" }, { sum: 147, scaled: 137, percentile: 99, ci95: "132-140" }, { sum: 148, scaled: 139, percentile: 99, ci95: "134-142" }, { sum: 149, scaled: 139, percentile: 99, ci95: "134-142" }, { sum: 150, scaled: 140, percentile: 99.9, ci95: "135-143" }, { sum: 151, scaled: 140, percentile: 99.9, ci95: "135-143" }, { sum: 152, scaled: 141, percentile: 99.9, ci95: "136-144" }, { sum: 153, scaled: 141, percentile: 99.9, ci95: "136-144" }, { sum: 154, scaled: 142, percentile: 99.9, ci95: "137-145" }, { sum: 155, scaled: 143, percentile: 99.9, ci95: "138-146" }, { sum: 156, scaled: 144, percentile: 99.9, ci95: "139-147" }, { sum: 157, scaled: 145, percentile: ">99.9", ci95: "140-148" }, { sum: 158, scaled: 145, percentile: ">99.9", ci95: "140-148" }] }, GAI: { fa: "\u062A\u0648\u0627\u0646\u0627\u06CC\u06CC \u0639\u0645\u0648\u0645\u06CC", rows: [{ sum: 6, scaled: 40, percentile: "<.1", ci95: "37-48" }, { sum: 7, scaled: 40, percentile: "<.1", ci95: "37-48" }, { sum: 8, scaled: 40, percentile: "<.1", ci95: "37-48" }, { sum: 9, scaled: 40, percentile: "<.1", ci95: "37-48" }, { sum: 10, scaled: 40, percentile: "<.1", ci95: "37-48" }, { sum: 11, scaled: 40, percentile: "<.1", ci95: "37-48" }, { sum: 12, scaled: 41, percentile: "<.1", ci95: "38-49" }, { sum: 13, scaled: 42, percentile: "<.1", ci95: "39-50" }, { sum: 14, scaled: 43, percentile: "<.1", ci95: "40-51" }, { sum: 15, scaled: 44, percentile: "<.1", ci95: "41-52" }, { sum: 16, scaled: 45, percentile: "<.1", ci95: "42-53" }, { sum: 17, scaled: 46, percentile: "<.1", ci95: "43-54" }, { sum: 18, scaled: 47, percentile: "<.1", ci95: "43-55" }, { sum: 19, scaled: 49, percentile: "<.1", ci95: "45-57" }, { sum: 20, scaled: 51, percentile: 0.1, ci95: "47-59" }, { sum: 21, scaled: 52, percentile: 0.1, ci95: "48-60" }, { sum: 22, scaled: 53, percentile: 0.1, ci95: "49-61" }, { sum: 23, scaled: 55, percentile: 0.1, ci95: "51-62" }, { sum: 24, scaled: 57, percentile: 0.2, ci95: "53-64" }, { sum: 25, scaled: 58, percentile: 0.3, ci95: "54-65" }, { sum: 26, scaled: 59, percentile: 0.3, ci95: "55-66" }, { sum: 27, scaled: 61, percentile: 0.5, ci95: "57-68" }, { sum: 28, scaled: 63, percentile: 1, ci95: "59-70" }, { sum: 29, scaled: 64, percentile: 1, ci95: "60-71" }, { sum: 30, scaled: 65, percentile: 1, ci95: "61-72" }, { sum: 31, scaled: 67, percentile: 1, ci95: "63-74" }, { sum: 32, scaled: 69, percentile: 2, ci95: "65-76" }, { sum: 33, scaled: 70, percentile: 2, ci95: "66-77" }, { sum: 34, scaled: 71, percentile: 3, ci95: "67-78" }, { sum: 35, scaled: 73, percentile: 4, ci95: "68-80" }, { sum: 36, scaled: 74, percentile: 4, ci95: "69-81" }, { sum: 37, scaled: 75, percentile: 5, ci95: "70-82" }, { sum: 38, scaled: 77, percentile: 6, ci95: "72-84" }, { sum: 39, scaled: 78, percentile: 7, ci95: "73-85" }, { sum: 40, scaled: 79, percentile: 8, ci95: "74-85" }, { sum: 41, scaled: 81, percentile: 10, ci95: "76-87" }, { sum: 42, scaled: 82, percentile: 12, ci95: "77-88" }, { sum: 43, scaled: 83, percentile: 13, ci95: "78-89" }, { sum: 44, scaled: 84, percentile: 14, ci95: "79-90" }, { sum: 45, scaled: 85, percentile: 16, ci95: "80-91" }, { sum: 46, scaled: 86, percentile: 18, ci95: "81-92" }, { sum: 47, scaled: 87, percentile: 19, ci95: "82-93" }, { sum: 48, scaled: 88, percentile: 21, ci95: "83-94" }, { sum: 49, scaled: 89, percentile: 23, ci95: "84-95" }, { sum: 50, scaled: 90, percentile: 25, ci95: "85-96" }, { sum: 51, scaled: 91, percentile: 27, ci95: "86-97" }, { sum: 52, scaled: 92, percentile: 30, ci95: "87-98" }, { sum: 53, scaled: 93, percentile: 32, ci95: "88-99" }, { sum: 54, scaled: 94, percentile: 34, ci95: "89-100" }, { sum: 55, scaled: 95, percentile: 37, ci95: "90-101" }, { sum: 56, scaled: 96, percentile: 39, ci95: "90-102" }, { sum: 57, scaled: 97, percentile: 42, ci95: "91-103" }, { sum: 58, scaled: 98, percentile: 45, ci95: "92-104" }, { sum: 59, scaled: 99, percentile: 47, ci95: "93-105" }, { sum: 60, scaled: 100, percentile: 50, ci95: "94-106" }, { sum: 61, scaled: 101, percentile: 53, ci95: "95-107" }, { sum: 62, scaled: 102, percentile: 55, ci95: "96-108" }, { sum: 63, scaled: 103, percentile: 58, ci95: "97-109" }, { sum: 64, scaled: 104, percentile: 61, ci95: "98-109" }, { sum: 65, scaled: 105, percentile: 63, ci95: "99-110" }, { sum: 66, scaled: 106, percentile: 66, ci95: "100-111" }, { sum: 67, scaled: 107, percentile: 68, ci95: "101-112" }, { sum: 68, scaled: 108, percentile: 70, ci95: "102-113" }, { sum: 69, scaled: 110, percentile: 75, ci95: "104-115" }, { sum: 70, scaled: 111, percentile: 77, ci95: "105-116" }, { sum: 71, scaled: 112, percentile: 79, ci95: "106-117" }, { sum: 72, scaled: 113, percentile: 81, ci95: "107-118" }, { sum: 73, scaled: 115, percentile: 84, ci95: "109-120" }, { sum: 74, scaled: 116, percentile: 86, ci95: "110-121" }, { sum: 75, scaled: 117, percentile: 87, ci95: "111-122" }, { sum: 76, scaled: 119, percentile: 90, ci95: "113-124" }, { sum: 77, scaled: 120, percentile: 91, ci95: "114-125" }, { sum: 78, scaled: 121, percentile: 92, ci95: "115-126" }, { sum: 79, scaled: 122, percentile: 93, ci95: "115-127" }, { sum: 80, scaled: 123, percentile: 94, ci95: "116-128" }, { sum: 81, scaled: 124, percentile: 95, ci95: "117-129" }, { sum: 82, scaled: 126, percentile: 96, ci95: "119-131" }, { sum: 83, scaled: 127, percentile: 96, ci95: "120-132" }, { sum: 84, scaled: 128, percentile: 97, ci95: "121-133" }, { sum: 85, scaled: 129, percentile: 97, ci95: "122-133" }, { sum: 86, scaled: 130, percentile: 98, ci95: "123-134" }, { sum: 87, scaled: 132, percentile: 98, ci95: "125-136" }, { sum: 88, scaled: 135, percentile: 99, ci95: "126-137" }, { sum: 89, scaled: 136, percentile: 99, ci95: "128-139" }, { sum: 90, scaled: 138, percentile: 99, ci95: "129-140" }, { sum: 91, scaled: 139, percentile: 99, ci95: "131-142" }, { sum: 92, scaled: 140, percentile: 99.5, ci95: "132-143" }, { sum: 93, scaled: 142, percentile: 99.6, ci95: "133-144" }, { sum: 94, scaled: 143, percentile: 99.7, ci95: "135-146" }, { sum: 95, scaled: 144, percentile: 99.8, ci95: "136-147" }, { sum: 96, scaled: 146, percentile: 99.8, ci95: "137-148" }, { sum: 97, scaled: 147, percentile: 99.9, ci95: "139-150" }, { sum: 98, scaled: 148, percentile: 99.9, ci95: "139-151" }, { sum: 99, scaled: 150, percentile: 99.9, ci95: "140-152" }, { sum: 100, scaled: 151, percentile: ">99.9", ci95: "142-154" }, { sum: 101, scaled: 153, percentile: ">99.9", ci95: "143-155" }, { sum: 102, scaled: 154, percentile: ">99.9", ci95: "145-157" }, { sum: 103, scaled: 155, percentile: ">99.9", ci95: "146-157" }, { sum: 104, scaled: 156, percentile: ">99.9", ci95: "147-158" }, { sum: 105, scaled: 157, percentile: ">99.9", ci95: "148-159" }, { sum: 106, scaled: 158, percentile: ">99.9", ci95: "149-160" }, { sum: 107, scaled: 159, percentile: ">99.9", ci95: "150-161" }, { sum: 108, scaled: 160, percentile: ">99.9", ci95: "151-162" }, { sum: 109, scaled: 160, percentile: ">99.9", ci95: "152-163" }, { sum: 110, scaled: 160, percentile: ">99.9", ci95: "152-163" }, { sum: 111, scaled: 160, percentile: ">99.9", ci95: "152-163" }, { sum: 112, scaled: 160, percentile: ">99.9", ci95: "152-163" }, { sum: 113, scaled: 160, percentile: ">99.9", ci95: "152-163" }, { sum: 114, scaled: 160, percentile: ">99.9", ci95: "152-163" }, { sum: 115, scaled: 160, percentile: ">99.9", ci95: "152-163" }] } }, clusters: { Gf: { fa: "\u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u0633\u06CC\u0627\u0644 (Gf)", rows: [{ sum: 3, scaled: 50, ci95: "42-58", percentile: null }, { sum: 4, scaled: 52, ci95: "44-60", percentile: null }, { sum: 5, scaled: 54, ci95: "46-62", percentile: null }, { sum: 6, scaled: 55, ci95: "47-63", percentile: null }, { sum: 7, scaled: 57, ci95: null, percentile: null }, { sum: 8, scaled: 59, ci95: null, percentile: null }, { sum: 9, scaled: 61, ci95: null, percentile: null }, { sum: 10, scaled: 62, ci95: null, percentile: null }, { sum: 11, scaled: 64, ci95: null, percentile: null }, { sum: 12, scaled: 66, ci95: null, percentile: null }, { sum: 13, scaled: 67, ci95: null, percentile: null }, { sum: 14, scaled: 69, ci95: null, percentile: null }, { sum: 15, scaled: 71, ci95: null, percentile: null }, { sum: 16, scaled: 73, ci95: null, percentile: null }, { sum: 17, scaled: 75, ci95: null, percentile: null }, { sum: 18, scaled: 77, ci95: null, percentile: null }, { sum: 19, scaled: 78, ci95: null, percentile: null }, { sum: 20, scaled: 80, ci95: null, percentile: null }, { sum: 21, scaled: 82, ci95: null, percentile: null }, { sum: 22, scaled: 84, ci95: null, percentile: null }, { sum: 23, scaled: 86, ci95: null, percentile: null }, { sum: 24, scaled: 88, ci95: null, percentile: null }, { sum: 25, scaled: 90, ci95: null, percentile: null }, { sum: 26, scaled: 92, ci95: null, percentile: null }, { sum: 27, scaled: 94, ci95: null, percentile: null }, { sum: 28, scaled: 96, ci95: null, percentile: null }, { sum: 29, scaled: 98, ci95: null, percentile: null }, { sum: 30, scaled: 100, ci95: null, percentile: null }, { sum: 31, scaled: 102, ci95: null, percentile: null }, { sum: 32, scaled: 104, ci95: null, percentile: null }, { sum: 33, scaled: 106, ci95: null, percentile: null }, { sum: 34, scaled: 109, ci95: null, percentile: null }, { sum: 35, scaled: 111, ci95: null, percentile: null }, { sum: 36, scaled: 113, ci95: null, percentile: null }, { sum: 37, scaled: 115, ci95: null, percentile: null }, { sum: 38, scaled: 117, ci95: null, percentile: null }, { sum: 39, scaled: 119, ci95: null, percentile: null }, { sum: 40, scaled: 121, ci95: null, percentile: null }, { sum: 41, scaled: 123, ci95: null, percentile: null }, { sum: 42, scaled: 125, ci95: null, percentile: null }, { sum: 43, scaled: 127, ci95: null, percentile: null }, { sum: 44, scaled: 129, ci95: null, percentile: null }, { sum: 45, scaled: 131, ci95: null, percentile: null }, { sum: 46, scaled: 132, ci95: null, percentile: null }, { sum: 47, scaled: 134, ci95: null, percentile: null }, { sum: 48, scaled: 136, ci95: null, percentile: null }, { sum: 49, scaled: 137, ci95: null, percentile: null }, { sum: 50, scaled: 139, ci95: null, percentile: null }, { sum: 51, scaled: 141, ci95: null, percentile: null }, { sum: 52, scaled: 142, ci95: null, percentile: null }, { sum: 53, scaled: 144, ci95: null, percentile: null }, { sum: 54, scaled: 146, ci95: null, percentile: null }, { sum: 55, scaled: 1147, ci95: null, percentile: null }, { sum: 56, scaled: 149, ci95: null, percentile: null }, { sum: 57, scaled: 150, ci95: null, percentile: null }, { sum: 58, scaled: null, ci95: null, percentile: null }, { sum: 59, scaled: null, ci95: null, percentile: null }, { sum: 60, scaled: null, ci95: null, percentile: null }] }, GV: { fa: "\u067E\u0631\u062F\u0627\u0632\u0634 \u062F\u06CC\u062F\u0627\u0631\u06CC (GV)", rows: [{ sum: 2, scaled: 50, ci95: null, percentile: null }, { sum: 3, scaled: 53, ci95: null, percentile: null }, { sum: 4, scaled: 56, ci95: null, percentile: null }, { sum: 5, scaled: 59, ci95: null, percentile: null }, { sum: 6, scaled: 62, ci95: null, percentile: null }, { sum: 7, scaled: 65, ci95: null, percentile: null }, { sum: 8, scaled: 67, ci95: null, percentile: null }, { sum: 9, scaled: 70, ci95: null, percentile: null }, { sum: 10, scaled: 72, ci95: null, percentile: null }, { sum: 11, scaled: 75, ci95: null, percentile: null }, { sum: 12, scaled: 78, ci95: null, percentile: null }, { sum: 13, scaled: 80, ci95: null, percentile: null }, { sum: 14, scaled: 83, ci95: null, percentile: null }, { sum: 15, scaled: 86, ci95: null, percentile: null }, { sum: 16, scaled: 88, ci95: null, percentile: null }, { sum: 17, scaled: 91, ci95: null, percentile: null }, { sum: 18, scaled: 94, ci95: null, percentile: null }, { sum: 19, scaled: 97, ci95: null, percentile: null }, { sum: 20, scaled: 100, ci95: null, percentile: null }, { sum: 21, scaled: 103, ci95: null, percentile: null }, { sum: 22, scaled: 106, ci95: null, percentile: null }, { sum: 23, scaled: 108, ci95: null, percentile: null }, { sum: 24, scaled: 111, ci95: null, percentile: null }, { sum: 25, scaled: 114, ci95: null, percentile: null }, { sum: 26, scaled: 117, ci95: null, percentile: null }, { sum: 27, scaled: 120, ci95: null, percentile: null }, { sum: 28, scaled: 123, ci95: null, percentile: null }, { sum: 29, scaled: 126, ci95: null, percentile: null }, { sum: 30, scaled: 130, ci95: null, percentile: null }, { sum: 31, scaled: 133, ci95: null, percentile: null }, { sum: 32, scaled: 135, ci95: null, percentile: null }, { sum: 33, scaled: 138, ci95: null, percentile: null }, { sum: 34, scaled: 140, ci95: null, percentile: null }, { sum: 35, scaled: 146, ci95: null, percentile: null }, { sum: 36, scaled: 145, ci95: null, percentile: null }, { sum: 37, scaled: 148, ci95: null, percentile: null }, { sum: 38, scaled: 150, ci95: null, percentile: null }] }, GFn: { fa: "\u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u0633\u06CC\u0627\u0644 \u063A\u06CC\u0631\u06A9\u0644\u0627\u0645\u06CC (GFn)", rows: [{ sum: 2, scaled: 50, ci95: null, percentile: null }, { sum: 3, scaled: 53, ci95: null, percentile: null }, { sum: 4, scaled: 55, ci95: null, percentile: null }, { sum: 5, scaled: 58, ci95: null, percentile: null }, { sum: 6, scaled: 61, ci95: null, percentile: null }, { sum: 7, scaled: 64, ci95: null, percentile: null }, { sum: 8, scaled: 67, ci95: null, percentile: null }, { sum: 9, scaled: 69, ci95: null, percentile: null }, { sum: 10, scaled: 71, ci95: null, percentile: null }, { sum: 11, scaled: 74, ci95: null, percentile: null }, { sum: 12, scaled: 77, ci95: null, percentile: null }, { sum: 13, scaled: 79, ci95: null, percentile: null }, { sum: 14, scaled: 82, ci95: null, percentile: null }, { sum: 15, scaled: 85, ci95: null, percentile: null }, { sum: 16, scaled: 88, ci95: null, percentile: null }, { sum: 17, scaled: 91, ci95: null, percentile: null }, { sum: 18, scaled: 94, ci95: null, percentile: null }, { sum: 19, scaled: 97, ci95: null, percentile: null }, { sum: 20, scaled: 100, ci95: null, percentile: null }, { sum: 21, scaled: 103, ci95: null, percentile: null }, { sum: 22, scaled: 106, ci95: null, percentile: null }, { sum: 23, scaled: 109, ci95: null, percentile: null }, { sum: 24, scaled: 112, ci95: null, percentile: null }, { sum: 25, scaled: 115, ci95: null, percentile: null }, { sum: 26, scaled: 118, ci95: null, percentile: null }, { sum: 27, scaled: 121, ci95: null, percentile: null }, { sum: 28, scaled: 124, ci95: null, percentile: null }, { sum: 29, scaled: 127, ci95: null, percentile: null }, { sum: 30, scaled: 130, ci95: null, percentile: null }, { sum: 31, scaled: 133, ci95: null, percentile: null }, { sum: 32, scaled: 135, ci95: null, percentile: null }, { sum: 33, scaled: 138, ci95: null, percentile: null }, { sum: 34, scaled: 140, ci95: null, percentile: null }, { sum: 35, scaled: 143, ci95: null, percentile: null }, { sum: 36, scaled: 145, ci95: null, percentile: null }, { sum: 37, scaled: 148, ci95: null, percentile: null }, { sum: 38, scaled: 150, ci95: null, percentile: null }] }, GFc: { fa: "\u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u0633\u06CC\u0627\u0644 \u06A9\u0644\u0627\u0645\u06CC (GFc)", rows: [{ sum: 2, scaled: 50, ci95: null, percentile: null }, { sum: 3, scaled: 52, ci95: null, percentile: null }, { sum: 4, scaled: 55, ci95: null, percentile: null }, { sum: 5, scaled: 58, ci95: null, percentile: null }, { sum: 6, scaled: 61, ci95: null, percentile: null }, { sum: 7, scaled: 63, ci95: null, percentile: null }, { sum: 8, scaled: 66, ci95: null, percentile: null }, { sum: 9, scaled: 69, ci95: null, percentile: null }, { sum: 10, scaled: 72, ci95: null, percentile: null }, { sum: 11, scaled: 75, ci95: null, percentile: null }, { sum: 12, scaled: 78, ci95: null, percentile: null }, { sum: 13, scaled: 81, ci95: null, percentile: null }, { sum: 14, scaled: 84, ci95: null, percentile: null }, { sum: 15, scaled: 86, ci95: null, percentile: null }, { sum: 16, scaled: 88, ci95: null, percentile: null }, { sum: 17, scaled: 92, ci95: null, percentile: null }, { sum: 18, scaled: 94, ci95: null, percentile: null }, { sum: 19, scaled: 97, ci95: null, percentile: null }, { sum: 20, scaled: 100, ci95: null, percentile: null }, { sum: 21, scaled: 102, ci95: null, percentile: null }, { sum: 22, scaled: 105, ci95: null, percentile: null }, { sum: 23, scaled: 108, ci95: null, percentile: null }, { sum: 24, scaled: 111, ci95: null, percentile: null }, { sum: 25, scaled: 113, ci95: null, percentile: null }, { sum: 26, scaled: 116, ci95: null, percentile: null }, { sum: 27, scaled: 120, ci95: null, percentile: null }, { sum: 28, scaled: 123, ci95: null, percentile: null }, { sum: 29, scaled: 126, ci95: null, percentile: null }, { sum: 30, scaled: 129, ci95: null, percentile: null }, { sum: 31, scaled: 132, ci95: null, percentile: null }, { sum: 32, scaled: 135, ci95: null, percentile: null }, { sum: 33, scaled: 137, ci95: null, percentile: null }, { sum: 34, scaled: 140, ci95: null, percentile: null }, { sum: 35, scaled: 142, ci95: null, percentile: null }, { sum: 36, scaled: 145, ci95: null, percentile: null }, { sum: 37, scaled: 147, ci95: null, percentile: null }, { sum: 38, scaled: 150, ci95: null, percentile: null }] }, GcVL: { fa: "\u062F\u0627\u0646\u0634 \u0644\u063A\u0648\u06CC (Gc-VL)", rows: [{ sum: 2, scaled: 50, ci95: null, percentile: null }, { sum: 3, scaled: 55, ci95: null, percentile: null }, { sum: 4, scaled: 56, ci95: null, percentile: null }, { sum: 5, scaled: 59, ci95: null, percentile: null }, { sum: 6, scaled: 62, ci95: null, percentile: null }, { sum: 7, scaled: 65, ci95: null, percentile: null }, { sum: 8, scaled: 68, ci95: null, percentile: null }, { sum: 9, scaled: 71, ci95: null, percentile: null }, { sum: 10, scaled: 74, ci95: null, percentile: null }, { sum: 11, scaled: 76, ci95: null, percentile: null }, { sum: 12, scaled: 79, ci95: null, percentile: null }, { sum: 13, scaled: 81, ci95: null, percentile: null }, { sum: 14, scaled: 84, ci95: null, percentile: null }, { sum: 15, scaled: 86, ci95: null, percentile: null }, { sum: 16, scaled: 89, ci95: null, percentile: null }, { sum: 17, scaled: 91, ci95: null, percentile: null }, { sum: 18, scaled: 94, ci95: null, percentile: null }, { sum: 19, scaled: 96, ci95: null, percentile: null }, { sum: 20, scaled: 99, ci95: null, percentile: null }, { sum: 21, scaled: 102, ci95: null, percentile: null }, { sum: 22, scaled: 105, ci95: null, percentile: null }, { sum: 23, scaled: 108, ci95: null, percentile: null }, { sum: 24, scaled: 110, ci95: null, percentile: null }, { sum: 25, scaled: 113, ci95: null, percentile: null }, { sum: 26, scaled: 116, ci95: null, percentile: null }, { sum: 27, scaled: 120, ci95: null, percentile: null }, { sum: 28, scaled: 123, ci95: null, percentile: null }, { sum: 29, scaled: 126, ci95: null, percentile: null }, { sum: 30, scaled: 129, ci95: null, percentile: null }, { sum: 31, scaled: 132, ci95: null, percentile: null }, { sum: 32, scaled: 135, ci95: null, percentile: null }, { sum: 33, scaled: 137, ci95: null, percentile: null }, { sum: 34, scaled: 140, ci95: null, percentile: null }, { sum: 35, scaled: 142, ci95: null, percentile: null }, { sum: 36, scaled: 145, ci95: null, percentile: null }, { sum: 37, scaled: 147, ci95: null, percentile: null }, { sum: 38, scaled: 150, ci95: null, percentile: null }] }, GcKo: { fa: "\u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0639\u0645\u0648\u0645\u06CC (Gc-Ko)", rows: [{ sum: 2, scaled: 50, ci95: null, percentile: null }, { sum: 3, scaled: 53, ci95: null, percentile: null }, { sum: 4, scaled: 56, ci95: null, percentile: null }, { sum: 5, scaled: 59, ci95: null, percentile: null }, { sum: 6, scaled: 62, ci95: null, percentile: null }, { sum: 7, scaled: 65, ci95: null, percentile: null }, { sum: 8, scaled: 68, ci95: null, percentile: null }, { sum: 9, scaled: 71, ci95: null, percentile: null }, { sum: 10, scaled: 73, ci95: null, percentile: null }, { sum: 11, scaled: 76, ci95: null, percentile: null }, { sum: 12, scaled: 78, ci95: null, percentile: null }, { sum: 13, scaled: 81, ci95: null, percentile: null }, { sum: 14, scaled: 83, ci95: null, percentile: null }, { sum: 15, scaled: 85, ci95: null, percentile: null }, { sum: 16, scaled: 88, ci95: null, percentile: null }, { sum: 17, scaled: 91, ci95: null, percentile: null }, { sum: 18, scaled: 94, ci95: null, percentile: null }, { sum: 19, scaled: 97, ci95: null, percentile: null }, { sum: 20, scaled: 99, ci95: null, percentile: null }, { sum: 21, scaled: 102, ci95: null, percentile: null }, { sum: 22, scaled: 105, ci95: null, percentile: null }, { sum: 23, scaled: 108, ci95: null, percentile: null }, { sum: 24, scaled: 111, ci95: null, percentile: null }, { sum: 25, scaled: 114, ci95: null, percentile: null }, { sum: 26, scaled: 117, ci95: null, percentile: null }, { sum: 27, scaled: 120, ci95: null, percentile: null }, { sum: 28, scaled: 123, ci95: null, percentile: null }, { sum: 29, scaled: 126, ci95: null, percentile: null }, { sum: 30, scaled: 129, ci95: null, percentile: null }, { sum: 31, scaled: 131, ci95: null, percentile: null }, { sum: 32, scaled: 133, ci95: null, percentile: null }, { sum: 33, scaled: 136, ci95: null, percentile: null }, { sum: 34, scaled: 139, ci95: null, percentile: null }, { sum: 35, scaled: 142, ci95: null, percentile: null }, { sum: 36, scaled: 145, ci95: null, percentile: null }, { sum: 37, scaled: 148, ci95: null, percentile: null }, { sum: 38, scaled: 150, ci95: null, percentile: null }] }, GCLTM: { fa: "\u062D\u0627\u0641\u0638\u0647 \u0628\u0644\u0646\u062F\u0645\u062F\u062A (GC-LTM)", rows: [{ sum: 2, scaled: 50, ci95: null, percentile: null }, { sum: 3, scaled: 54, ci95: null, percentile: null }, { sum: 4, scaled: 57, ci95: null, percentile: null }, { sum: 5, scaled: 60, ci95: null, percentile: null }, { sum: 6, scaled: 63, ci95: null, percentile: null }, { sum: 7, scaled: 66, ci95: null, percentile: null }, { sum: 8, scaled: 69, ci95: null, percentile: null }, { sum: 9, scaled: 72, ci95: null, percentile: null }, { sum: 10, scaled: 74, ci95: null, percentile: null }, { sum: 11, scaled: 77, ci95: null, percentile: null }, { sum: 12, scaled: 79, ci95: null, percentile: null }, { sum: 13, scaled: 81, ci95: null, percentile: null }, { sum: 14, scaled: 84, ci95: null, percentile: null }, { sum: 15, scaled: 87, ci95: null, percentile: null }, { sum: 16, scaled: 89, ci95: null, percentile: null }, { sum: 17, scaled: 91, ci95: null, percentile: null }, { sum: 18, scaled: 94, ci95: null, percentile: null }, { sum: 19, scaled: 97, ci95: null, percentile: null }, { sum: 20, scaled: 99, ci95: null, percentile: null }, { sum: 21, scaled: 102, ci95: null, percentile: null }, { sum: 22, scaled: 105, ci95: null, percentile: null }, { sum: 23, scaled: 108, ci95: null, percentile: null }, { sum: 24, scaled: 111, ci95: null, percentile: null }, { sum: 25, scaled: 113, ci95: null, percentile: null }, { sum: 26, scaled: 116, ci95: null, percentile: null }, { sum: 27, scaled: 119, ci95: null, percentile: null }, { sum: 28, scaled: 122, ci95: null, percentile: null }, { sum: 29, scaled: 125, ci95: null, percentile: null }, { sum: 30, scaled: 127, ci95: null, percentile: null }, { sum: 31, scaled: 130, ci95: null, percentile: null }, { sum: 32, scaled: 133, ci95: null, percentile: null }, { sum: 33, scaled: 136, ci95: null, percentile: null }, { sum: 34, scaled: 138, ci95: null, percentile: null }, { sum: 35, scaled: 141, ci95: null, percentile: null }, { sum: 36, scaled: 144, ci95: null, percentile: null }, { sum: 37, scaled: 148, ci95: null, percentile: null }, { sum: 38, scaled: 150, ci95: null, percentile: null }] }, GSMWM: { fa: "\u062D\u0627\u0641\u0638\u0647 \u06A9\u0648\u062A\u0627\u0647\u200C\u0645\u062F\u062A (GSM-WM)", rows: [{ sum: 2, scaled: 50, ci95: null, percentile: null }, { sum: 3, scaled: 52, ci95: null, percentile: null }, { sum: 4, scaled: 54, ci95: null, percentile: null }, { sum: 5, scaled: 56, ci95: null, percentile: null }, { sum: 6, scaled: 59, ci95: null, percentile: null }, { sum: 7, scaled: 62, ci95: null, percentile: null }, { sum: 8, scaled: 65, ci95: null, percentile: null }, { sum: 9, scaled: 68, ci95: null, percentile: null }, { sum: 10, scaled: 71, ci95: null, percentile: null }, { sum: 11, scaled: 74, ci95: null, percentile: null }, { sum: 12, scaled: 77, ci95: null, percentile: null }, { sum: 13, scaled: 80, ci95: null, percentile: null }, { sum: 14, scaled: 83, ci95: null, percentile: null }, { sum: 15, scaled: 86, ci95: null, percentile: null }, { sum: 16, scaled: 88, ci95: null, percentile: null }, { sum: 17, scaled: 91, ci95: null, percentile: null }, { sum: 18, scaled: 94, ci95: null, percentile: null }, { sum: 19, scaled: 97, ci95: null, percentile: null }, { sum: 20, scaled: 99, ci95: null, percentile: null }, { sum: 21, scaled: 102, ci95: null, percentile: null }, { sum: 22, scaled: 104, ci95: null, percentile: null }, { sum: 23, scaled: 107, ci95: null, percentile: null }, { sum: 24, scaled: 110, ci95: null, percentile: null }, { sum: 25, scaled: 113, ci95: null, percentile: null }, { sum: 26, scaled: 116, ci95: null, percentile: null }, { sum: 27, scaled: 120, ci95: null, percentile: null }, { sum: 28, scaled: 123, ci95: null, percentile: null }, { sum: 29, scaled: 126, ci95: null, percentile: null }, { sum: 30, scaled: 129, ci95: null, percentile: null }, { sum: 31, scaled: 132, ci95: null, percentile: null }, { sum: 32, scaled: 135, ci95: null, percentile: null }, { sum: 33, scaled: 138, ci95: null, percentile: null }, { sum: 34, scaled: 141, ci95: null, percentile: null }, { sum: 35, scaled: 144, ci95: null, percentile: null }, { sum: 36, scaled: 146, ci95: null, percentile: null }, { sum: 37, scaled: 148, ci95: null, percentile: null }, { sum: 38, scaled: 150, ci95: null, percentile: null }] } }, step5: [{ age: 6, VCI: 7.9, PRI: 7.9, WMI: 7.6, PSI: 9.8 }, { age: 7, VCI: 7.7, PRI: 7.7, WMI: 8.2, PSI: 10.3 }, { age: 8, VCI: 7.3, PRI: 7.1, WMI: 7.6, PSI: 8.4 }, { age: 9, VCI: 7.1, PRI: 10.9, WMI: 7.7, PSI: 8.5 }, { age: 10, VCI: 7.1, PRI: 10.9, WMI: 7.7, PSI: 8.2 }, { age: 11, VCI: 6.9, PRI: 6.9, WMI: 7.2, PSI: 7.8 }, { age: 12, VCI: 6.1, PRI: 6.8, WMI: 6.8, PSI: 8 }, { age: 13, VCI: 6.6, PRI: 6.9, WMI: 7.5, PSI: 8.1 }, { age: 14, VCI: 6.2, PRI: 7.2, WMI: 6.9, PSI: 8 }, { age: 15, VCI: 6.2, PRI: 7.2, WMI: 7.2, PSI: 7.7 }, { age: 16, VCI: 6.2, PRI: 7.5, WMI: 6.9, PSI: 8 }], meta: { source: "Pakdelha-Wisc4-Interpretation - Copy", bands_available: ["sq-10", "sq-11", "sq-12", "sq-13", "sq-14", "sq-6", "sq-7", "sq-8", "sq-9"] } };
-
 var NORMS = norms_default;
 var NORM_MIN_AGE = 6;
 var NORM_MAX_BAND = 14;
@@ -19783,6 +21361,7 @@ function bandForAge(years) {
   return `sq-${Math.min(NORM_MAX_BAND, Math.max(NORM_MIN_AGE, years))}`;
 }
 __name(bandForAge, "bandForAge");
+__name2(bandForAge, "bandForAge");
 function ageFromJalali(ty, tm, td, by, bm, bd) {
   let i8;
   if (td >= bd) {
@@ -19819,6 +21398,7 @@ function ageFromJalali(ty, tm, td, by, bm, bd) {
   return [i8, j8, k8];
 }
 __name(ageFromJalali, "ageFromJalali");
+__name2(ageFromJalali, "ageFromJalali");
 function lookup(pairs, value) {
   let best;
   for (const [key, res] of pairs) {
@@ -19831,6 +21411,7 @@ function lookup(pairs, value) {
   return best;
 }
 __name(lookup, "lookup");
+__name2(lookup, "lookup");
 function num(x) {
   if (typeof x === "boolean")
     return x ? 1 : 0;
@@ -19843,7 +21424,7 @@ function num(x) {
   return Number.isFinite(n) ? n : 0;
 }
 __name(num, "num");
-
+__name2(num, "num");
 var VALID = "\u0645\u0639\u062A\u0628\u0631";
 var INVALID2 = "\u0646\u0627\u0645\u0639\u062A\u0628\u0631";
 var NO_INTERP = "\u0641\u0627\u0642\u062F \u062A\u0641\u0633\u06CC\u0631";
@@ -19877,13 +21458,14 @@ function wiscAge(testDate, birthDate) {
   return { days: i8, months: j8, years: k8, band: bandForAge(k8) };
 }
 __name(wiscAge, "wiscAge");
+__name2(wiscAge, "wiscAge");
 function scaledFor(rawScores, years) {
   const band = bandForAge(years);
-  const table3 = NORMS.bands[band] ?? {};
+  const table32 = NORMS.bands[band] ?? {};
   const out = {};
   for (const code of SUBTEST_CODES) {
     const raw2 = rawScores[code];
-    const pairs = table3[code];
+    const pairs = table32[code];
     if (raw2 === void 0 || raw2 === null) {
       out[code] = 0;
       continue;
@@ -19898,10 +21480,12 @@ function scaledFor(rawScores, years) {
   return out;
 }
 __name(scaledFor, "scaledFor");
+__name2(scaledFor, "scaledFor");
 function anyZero(s, codes) {
   return codes.some((d) => s[d] === 0);
 }
 __name(anyZero, "anyZero");
+__name2(anyZero, "anyZero");
 function gatedSubstitutes(s) {
   const v = { ...s };
   v.PCm = anyZero(s, ["BD", "PCn", "MR"]) ? s.PCm : 0;
@@ -19913,6 +21497,7 @@ function gatedSubstitutes(s) {
   return v;
 }
 __name(gatedSubstitutes, "gatedSubstitutes");
+__name2(gatedSubstitutes, "gatedSubstitutes");
 function indexSums(v) {
   return {
     VCI: v.SI + v.VC + v.CO + v.IN + v.WR,
@@ -19923,6 +21508,7 @@ function indexSums(v) {
   };
 }
 __name(indexSums, "indexSums");
+__name2(indexSums, "indexSums");
 function contribution(rawScores, years) {
   const s = scaledFor(rawScores, years);
   const v = gatedSubstitutes(s);
@@ -19936,16 +21522,19 @@ function contribution(rawScores, years) {
   return { contributing, zeroScaled };
 }
 __name(contribution, "contribution");
+__name2(contribution, "contribution");
 function convertIndex(tableKey, total) {
   const rows = NORMS.indices?.[tableKey]?.rows ?? [];
   return lookup(rows.map((r) => [r.sum, r]), total);
 }
 __name(convertIndex, "convertIndex");
+__name2(convertIndex, "convertIndex");
 function convertCluster(key, total) {
   const rows = NORMS.clusters?.[key]?.rows ?? [];
   return lookup(rows.map((r) => [r.sum, r]), total);
 }
 __name(convertCluster, "convertCluster");
+__name2(convertCluster, "convertCluster");
 function indexScores(sums) {
   const out = {};
   for (const key of ["VCI", "PRI", "WMI", "PSI", "FSIQ"]) {
@@ -19962,6 +21551,7 @@ function indexScores(sums) {
   return out;
 }
 __name(indexScores, "indexScores");
+__name2(indexScores, "indexScores");
 function gaiResult(s, idx, strict) {
   const total = GAI_MEMBERS.reduce((acc, m) => acc + s[m], 0);
   const diff2 = Math.abs(num(idx.PRI.scaled) - num(idx.VCI.scaled));
@@ -19988,8 +21578,9 @@ function gaiResult(s, idx, strict) {
   return rec;
 }
 __name(gaiResult, "gaiResult");
+__name2(gaiResult, "gaiResult");
 function scatterValidity(s, admin) {
-  const spread = /* @__PURE__ */ __name((...codes) => {
+  const spread = /* @__PURE__ */ __name2((...codes) => {
     const vals = codes.filter((c) => admin[c]).map((c) => num(s[c]));
     return vals.length ? Math.max(...vals) - Math.min(...vals) : 0;
   }, "spread");
@@ -20007,6 +21598,7 @@ function scatterValidity(s, admin) {
   return out;
 }
 __name(scatterValidity, "scatterValidity");
+__name2(scatterValidity, "scatterValidity");
 function clusterResults(s, admin) {
   const out = {};
   for (const key of Object.keys(CLUSTER_SPEC)) {
@@ -20051,6 +21643,7 @@ function clusterResults(s, admin) {
   return { clusters: out, pairs };
 }
 __name(clusterResults, "clusterResults");
+__name2(clusterResults, "clusterResults");
 function step5Personal(idx, years, sc) {
   let critRow = null;
   for (const row of NORMS.step5) {
@@ -20090,6 +21683,7 @@ function step5Personal(idx, years, sc) {
   return out;
 }
 __name(step5Personal, "step5Personal");
+__name2(step5Personal, "step5Personal");
 function narrativeFor(idx, s5) {
   const out = {};
   for (const key of INDEX_ORDER) {
@@ -20121,6 +21715,7 @@ function narrativeFor(idx, s5) {
   return out;
 }
 __name(narrativeFor, "narrativeFor");
+__name2(narrativeFor, "narrativeFor");
 function clusterTexts(pairs, clusters) {
   const out = [];
   for (const p of pairs) {
@@ -20139,6 +21734,7 @@ function clusterTexts(pairs, clusters) {
   return out;
 }
 __name(clusterTexts, "clusterTexts");
+__name2(clusterTexts, "clusterTexts");
 function clusterRecommendations(pairs, clusters) {
   const byLabel = {};
   for (const p of PAIR_SPEC)
@@ -20163,6 +21759,7 @@ function clusterRecommendations(pairs, clusters) {
   return out;
 }
 __name(clusterRecommendations, "clusterRecommendations");
+__name2(clusterRecommendations, "clusterRecommendations");
 function descriptiveClass(score, _bugRef, strict = false) {
   const s = num(score);
   if (s > 130)
@@ -20178,6 +21775,7 @@ function descriptiveClass(score, _bugRef, strict = false) {
   return "";
 }
 __name(descriptiveClass, "descriptiveClass");
+__name2(descriptiveClass, "descriptiveClass");
 function analyzeWisc(rawScores, testDate, birthDate, strict = false) {
   const a = wiscAge(testDate, birthDate);
   const s = scaledFor(rawScores, a.years);
@@ -20230,6 +21828,7 @@ function analyzeWisc(rawScores, testDate, birthDate, strict = false) {
   };
 }
 __name(analyzeWisc, "analyzeWisc");
+__name2(analyzeWisc, "analyzeWisc");
 function pairsFromClusters(clusters, pairs) {
   const texts = clusterTexts(pairs, clusters);
   const recs = clusterRecommendations(pairs, clusters);
@@ -20263,7 +21862,7 @@ function pairsFromClusters(clusters, pairs) {
   return out;
 }
 __name(pairsFromClusters, "pairsFromClusters");
-
+__name2(pairsFromClusters, "pairsFromClusters");
 var HYPOTHESES = [
   {
     id: "SLD",
@@ -21336,12 +22935,10 @@ var HYPOTHESES = [
     }
   }
 ];
-
 var HYP_BY_ID = Object.fromEntries(
   HYPOTHESES.map((h) => [h.id, h])
 );
 var HYPOTHESIS_ORDER = HYPOTHESES.map((h) => h.id);
-
 var MIN_AGE = 6;
 var MAX_AGE = 16;
 var COMPLETENESS = {
@@ -21369,6 +22966,7 @@ function presentCodes(raw2) {
   );
 }
 __name(presentCodes, "presentCodes");
+__name2(presentCodes, "presentCodes");
 var RANGE_CACHE = /* @__PURE__ */ new Map();
 function rawRange(band, code) {
   const key = `${band}:${code}`;
@@ -21393,6 +22991,7 @@ function rawRange(band, code) {
   return range;
 }
 __name(rawRange, "rawRange");
+__name2(rawRange, "rawRange");
 function ageYears(testDate, birthDate) {
   return ageFromJalali(
     testDate[0],
@@ -21404,6 +23003,7 @@ function ageYears(testDate, birthDate) {
   )[2];
 }
 __name(ageYears, "ageYears");
+__name2(ageYears, "ageYears");
 function validateWechslerInput(args) {
   const errors = [];
   const raw2 = { ...args.raw };
@@ -21544,6 +23144,7 @@ function validateWechslerInput(args) {
   };
 }
 __name(validateWechslerInput, "validateWechslerInput");
+__name2(validateWechslerInput, "validateWechslerInput");
 var DIGIT_MAP = {
   "\u06F0": "0",
   "\u06F1": "1",
@@ -21573,6 +23174,7 @@ function normalizeDigits(input) {
   return out;
 }
 __name(normalizeDigits, "normalizeDigits");
+__name2(normalizeDigits, "normalizeDigits");
 var RAW_CEILING = (() => {
   let max = 0;
   for (const band of Object.values(NORMS.bands)) {
@@ -21584,10 +23186,9 @@ var RAW_CEILING = (() => {
   }
   return max;
 })();
-
-var faNum3 = /* @__PURE__ */ __name((n) => n === null ? "\u2014" : String(n).replace(/\d/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]), "faNum");
+var faNum3 = /* @__PURE__ */ __name2((n) => n === null ? "\u2014" : String(n).replace(/\d/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]), "faNum");
 function detectSubstitutes(subtests) {
-  const rawOf = /* @__PURE__ */ __name((code) => subtests.find((s) => s.code === code)?.raw ?? null, "rawOf");
+  const rawOf = /* @__PURE__ */ __name2((code) => subtests.find((s) => s.code === code)?.raw ?? null, "rawOf");
   const out = [];
   for (const k of Object.keys(CORES)) {
     const missingCore = CORES[k].some((c) => rawOf(c) === null);
@@ -21598,6 +23199,7 @@ function detectSubstitutes(subtests) {
   return out;
 }
 __name(detectSubstitutes, "detectSubstitutes");
+__name2(detectSubstitutes, "detectSubstitutes");
 var BAND_EDGES = [70, 85, 90, 110, 120, 130];
 function computeFlags(snap) {
   const flags = [];
@@ -21657,15 +23259,18 @@ function computeFlags(snap) {
   return flags;
 }
 __name(computeFlags, "computeFlags");
+__name2(computeFlags, "computeFlags");
 function hasValidityFlag(flags) {
   return flags.some((f) => f.validity);
 }
 __name(hasValidityFlag, "hasValidityFlag");
+__name2(hasValidityFlag, "hasValidityFlag");
 function subScaled(snap, code) {
   const t = snap.subtests.find((s) => s.code === code);
   return t ? t.scaled : null;
 }
 __name(subScaled, "subScaled");
+__name2(subScaled, "subScaled");
 function lowestSub(snap) {
   let best = null;
   for (const s of snap.subtests) {
@@ -21677,12 +23282,14 @@ function lowestSub(snap) {
   return best;
 }
 __name(lowestSub, "lowestSub");
+__name2(lowestSub, "lowestSub");
 function idxV(snap, k) {
   const v = snap.indices[k];
   return v && snap.computable[k] && typeof v.scaled === "number" ? v.scaled : null;
 }
 __name(idxV, "idxV");
-var gap = /* @__PURE__ */ __name((a, b) => a - b, "gap");
+__name2(idxV, "idxV");
+var gap = /* @__PURE__ */ __name2((a, b) => a - b, "gap");
 function activateHypotheses(snap, baseAnswers) {
   const out = [];
   const V = idxV(snap, "VCI");
@@ -21700,8 +23307,8 @@ function activateHypotheses(snap, baseAnswers) {
   const IN = subScaled(snap, "IN");
   const VC = subScaled(snap, "VC");
   const SI = subScaled(snap, "SI");
-  const low7 = /* @__PURE__ */ __name((x) => x !== null && x <= 7, "low7");
-  const low6 = /* @__PURE__ */ __name((x) => x !== null && x <= 6, "low6");
+  const low7 = /* @__PURE__ */ __name2((x) => x !== null && x <= 7, "low7");
+  const low6 = /* @__PURE__ */ __name2((x) => x !== null && x <= 6, "low6");
   if (upperMin !== null && W !== null && S !== null) {
     const wGap = W <= upperMin - 10;
     const sGap = S <= upperMin - 10;
@@ -21876,6 +23483,7 @@ function activateHypotheses(snap, baseAnswers) {
   return out;
 }
 __name(activateHypotheses, "activateHypotheses");
+__name2(activateHypotheses, "activateHypotheses");
 function buildQueue2(active, preAnswers = {}) {
   const q = [];
   for (const a of active) {
@@ -21893,7 +23501,8 @@ function buildQueue2(active, preAnswers = {}) {
   }
   return q;
 }
-__name(buildQueue2, "buildQueue");
+__name(buildQueue2, "buildQueue2");
+__name2(buildQueue2, "buildQueue");
 function autoEvaluate(snap, active) {
   const answers = {};
   const notes = [];
@@ -21902,17 +23511,17 @@ function autoEvaluate(snap, active) {
   const W = idxV(snap, "WMI");
   const S = idxV(snap, "PSI");
   const F = snap.fsiq;
-  const sub = /* @__PURE__ */ __name((c) => subScaled(snap, c), "sub");
+  const sub = /* @__PURE__ */ __name2((c) => subScaled(snap, c), "sub");
   const upper = [V, P].filter((x) => x !== null);
   const upperMin = upper.length ? Math.min(...upper) : null;
-  const set = /* @__PURE__ */ __name((key, v, note) => {
+  const set = /* @__PURE__ */ __name2((key, v, note) => {
     answers[key] = v;
     notes.push(note);
   }, "set");
   const acidOk = ["AR", "CD", "IN", "DS"].map(sub);
   for (const a of active) {
     const id = a.id;
-    const k = /* @__PURE__ */ __name((crit) => `${id}:${crit}`, "k");
+    const k = /* @__PURE__ */ __name2((crit) => `${id}:${crit}`, "k");
     switch (id) {
       case "SLD": {
         if (acidOk.every((x) => x !== null)) {
@@ -22032,16 +23641,19 @@ function autoEvaluate(snap, active) {
   return { answers, notes };
 }
 __name(autoEvaluate, "autoEvaluate");
+__name2(autoEvaluate, "autoEvaluate");
 function criteriaOf(hypId, kind) {
   return HYP_BY_ID[hypId]?.criteria[kind] ?? [];
 }
 __name(criteriaOf, "criteriaOf");
+__name2(criteriaOf, "criteriaOf");
 var LADDER = ["\u0628\u0627\u0644\u0627", "\u0645\u062A\u0648\u0633\u0637", "\u067E\u0627\u06CC\u06CC\u0646"];
 function oneStepDown(l) {
   const i = LADDER.indexOf(l);
   return i < 0 ? l : LADDER[Math.min(i + 1, LADDER.length - 1)];
 }
 __name(oneStepDown, "oneStepDown");
+__name2(oneStepDown, "oneStepDown");
 function scoreHypotheses(snap, active, answers, flags, skipped) {
   const vFlag = hasValidityFlag(flags);
   const out = [];
@@ -22051,7 +23663,7 @@ function scoreHypotheses(snap, active, answers, flags, skipped) {
     const B = criteriaOf(a.id, "B");
     const C = criteriaOf(a.id, "C");
     const D = criteriaOf(a.id, "D");
-    const ans = /* @__PURE__ */ __name((kind, id) => answers[`${a.id}:${id}`], "ans");
+    const ans = /* @__PURE__ */ __name2((kind, id) => answers[`${a.id}:${id}`], "ans");
     const cHit = C.find((c) => ans("C", c.id) === "yes");
     if (cHit) {
       out.push({
@@ -22151,11 +23763,12 @@ function scoreHypotheses(snap, active, answers, flags, skipped) {
       clues: a.clues
     });
   }
-  const rank = /* @__PURE__ */ __name((o) => o.status !== "active" ? -1 : o.level === "\u0628\u0627\u0644\u0627" ? 3 : o.level === "\u0645\u062A\u0648\u0633\u0637" ? 2 : o.level === "\u0646\u06CC\u0627\u0632\u0645\u0646\u062F \u0628\u0631\u0631\u0633\u06CC" ? 1 : 0, "rank");
+  const rank = /* @__PURE__ */ __name2((o) => o.status !== "active" ? -1 : o.level === "\u0628\u0627\u0644\u0627" ? 3 : o.level === "\u0645\u062A\u0648\u0633\u0637" ? 2 : o.level === "\u0646\u06CC\u0627\u0632\u0645\u0646\u062F \u0628\u0631\u0631\u0633\u06CC" ? 1 : 0, "rank");
   out.sort((x, y) => rank(y) - rank(x) || y.weight - x.weight);
   return out;
 }
 __name(scoreHypotheses, "scoreHypotheses");
+__name2(scoreHypotheses, "scoreHypotheses");
 var COMORBID_PAIRS_TRIPLES = [
   ["SLD", "ADHD"],
   ["ASD", "ADHD"],
@@ -22175,6 +23788,7 @@ function pickMainAndComorbid(outcomes) {
   return { main, comorbid: second ?? null };
 }
 __name(pickMainAndComorbid, "pickMainAndComorbid");
+__name2(pickMainAndComorbid, "pickMainAndComorbid");
 var INDEX_DOMAINS = {
   VCI: ["language", "knowledge"],
   PRI: ["visual_spatial", "reasoning"],
@@ -22201,6 +23815,7 @@ function weakDomains(snap) {
   return [...domains];
 }
 __name(weakDomains, "weakDomains");
+__name2(weakDomains, "weakDomains");
 function monitoringInterval(snap) {
   const F = snap.fsiq;
   const lowCount = Object.entries(snap.indices).filter(
@@ -22213,15 +23828,16 @@ function monitoringInterval(snap) {
   return "\u06F1\u06F2 \u0645\u0627\u0647";
 }
 __name(monitoringInterval, "monitoringInterval");
+__name2(monitoringInterval, "monitoringInterval");
 function binaryScenarios(snap) {
-  const sub = /* @__PURE__ */ __name((c) => snap.subtests.find((s) => s.code === c)?.scaled ?? null, "sub");
-  const pair = /* @__PURE__ */ __name((id, title2, focus, aCode, bCode, cut, notes) => {
+  const sub = /* @__PURE__ */ __name2((c) => snap.subtests.find((s) => s.code === c)?.scaled ?? null, "sub");
+  const pair = /* @__PURE__ */ __name2((id, title22, focus, aCode, bCode, cut, notes) => {
     const a = sub(aCode);
     const b = sub(bCode);
     if (a === null || b === null) {
       return {
         id,
-        title: title2,
+        title: title22,
         focus,
         detail: `${aCode} = ${faNum3(a)} \xB7 ${bCode} = ${faNum3(b)}`,
         verdict: "\u0646\u06CC\u0627\u0632 \u0628\u0647 \u0627\u062C\u0631\u0627",
@@ -22234,7 +23850,7 @@ function binaryScenarios(snap) {
     const winner = side === "balance" ? "\u0645\u062A\u0639\u0627\u062F\u0644" : side === "a" ? aCode : bCode;
     return {
       id,
-      title: title2,
+      title: title22,
       focus,
       detail: `${aCode} = ${faNum3(a)} \xB7 ${bCode} = ${faNum3(b)}`,
       verdict: side === "balance" ? `\u0645\u062A\u0639\u0627\u062F\u0644 (\u0634\u06A9\u0627\u0641 ${faNum3(Math.abs(d))})` : `\u0628\u0631\u062A\u0631\u06CC ${winner} (\u0634\u06A9\u0627\u0641 ${faNum3(Math.abs(d))})`,
@@ -22357,7 +23973,7 @@ function binaryScenarios(snap) {
   return out;
 }
 __name(binaryScenarios, "binaryScenarios");
-
+__name2(binaryScenarios, "binaryScenarios");
 var TREATMENTS = {
   SLD: {
     home: [
@@ -22623,7 +24239,6 @@ var TREATMENTS = {
     stopCriteria: "\u0627\u06AF\u0631 \u0636\u0639\u0641 \u0628\u0627 \u062A\u0645\u0631\u06CC\u0646 \u0627\u062F\u0627\u0645\u0647 \u06CC\u0627\u0641\u062A \u06CC\u0627 \u06AF\u0633\u062A\u0631\u0634 \u06CC\u0627\u0641\u062A\u060C \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u062A\u062E\u0635\u0635\u06CC \u0627\u0646\u062C\u0627\u0645 \u0634\u0648\u062F."
   }
 };
-
 function treatmentFor(id) {
   const t = TREATMENTS[id];
   if (!t)
@@ -22637,7 +24252,7 @@ function treatmentFor(id) {
   };
 }
 __name(treatmentFor, "treatmentFor");
-
+__name2(treatmentFor, "treatmentFor");
 function buildSnapshot(result, computable) {
   const indices = {};
   for (const k of ["VCI", "PRI", "WMI", "PSI", "FSIQ"]) {
@@ -22726,6 +24341,7 @@ function buildSnapshot(result, computable) {
   return snapshot;
 }
 __name(buildSnapshot, "buildSnapshot");
+__name2(buildSnapshot, "buildSnapshot");
 function runWechslerAnalysis(input) {
   const strict = input.strict ?? true;
   const baseAnswers = input.baseAnswers ?? {};
@@ -22805,7 +24421,7 @@ function runWechslerAnalysis(input) {
   };
 }
 __name(runWechslerAnalysis, "runWechslerAnalysis");
-
+__name2(runWechslerAnalysis, "runWechslerAnalysis");
 var WISC4_EVENT_KEY = "ce-wechsler-w4-v1";
 var RAW_FIELD_MAP = {
   // canonical
@@ -22846,6 +24462,7 @@ function extractRawScores(payload) {
   return raw2;
 }
 __name(extractRawScores, "extractRawScores");
+__name2(extractRawScores, "extractRawScores");
 function parseJalaliLoose(input) {
   if (!input)
     return null;
@@ -22860,6 +24477,7 @@ function parseJalaliLoose(input) {
   return [y, mo, d];
 }
 __name(parseJalaliLoose, "parseJalaliLoose");
+__name2(parseJalaliLoose, "parseJalaliLoose");
 function parseBirthDateLoose(input) {
   if (!input)
     return null;
@@ -22874,6 +24492,7 @@ function parseBirthDateLoose(input) {
   return null;
 }
 __name(parseBirthDateLoose, "parseBirthDateLoose");
+__name2(parseBirthDateLoose, "parseBirthDateLoose");
 function gregorianIsoToJalali(iso) {
   const dt = new Date(iso);
   const gy = dt.getFullYear();
@@ -22899,6 +24518,7 @@ function gregorianIsoToJalali(iso) {
   return [jy, jm, jd];
 }
 __name(gregorianIsoToJalali, "gregorianIsoToJalali");
+__name2(gregorianIsoToJalali, "gregorianIsoToJalali");
 function compactWechslerOutput(result) {
   return {
     ok: result.ok,
@@ -22919,6 +24539,7 @@ function compactWechslerOutput(result) {
   };
 }
 __name(compactWechslerOutput, "compactWechslerOutput");
+__name2(compactWechslerOutput, "compactWechslerOutput");
 function applyWechslerEngineToPayload(payload, birthDateRaw, occurredAtIso) {
   const raw2 = extractRawScores(payload);
   const emptyComputed = { fsiq: null, vci: null, pri: null, wmi: null, psi: null, gai: null, ageLine: "" };
@@ -22977,7 +24598,7 @@ function applyWechslerEngineToPayload(payload, birthDateRaw, occurredAtIso) {
   };
   if (result.ok && snap) {
     next["age_at_test"] = { value: result.ageLine, label: "\u0633\u0646 \u062F\u0631 \u0632\u0645\u0627\u0646 \u0622\u0632\u0645\u0648\u0646 (\u0645\u062D\u0627\u0633\u0628\u0647\u0654 \u0645\u0648\u062A\u0648\u0631)" };
-    const put = /* @__PURE__ */ __name((k, v) => {
+    const put = /* @__PURE__ */ __name2((k, v) => {
       if (v === null || v === void 0)
         return;
       next[k] = { value: String(v), label: `${k.toUpperCase()} (\u0645\u062D\u0627\u0633\u0628\u0647\u0654 \u0645\u0648\u062A\u0648\u0631)` };
@@ -22991,12 +24612,13 @@ function applyWechslerEngineToPayload(payload, birthDateRaw, occurredAtIso) {
   return { payload: next, ran: true, result, computed };
 }
 __name(applyWechslerEngineToPayload, "applyWechslerEngineToPayload");
+__name2(applyWechslerEngineToPayload, "applyWechslerEngineToPayload");
 function summarySafePayload(payload) {
   const { engine_output, ...rest } = payload;
   return rest;
 }
 __name(summarySafePayload, "summarySafePayload");
-
+__name2(summarySafePayload, "summarySafePayload");
 async function studentBirthDate(db, studentId) {
   const row = await db.queryOne(
     `SELECT birth_date FROM students WHERE id = ?`,
@@ -23005,6 +24627,7 @@ async function studentBirthDate(db, studentId) {
   return row?.birth_date ?? null;
 }
 __name(studentBirthDate, "studentBirthDate");
+__name2(studentBirthDate, "studentBirthDate");
 async function applyWechslerHook(db, typeKey, payload, studentId, occurredAtIso) {
   if (typeKey !== WISC4_EVENT_KEY)
     return payload;
@@ -23019,6 +24642,7 @@ async function applyWechslerHook(db, typeKey, payload, studentId, occurredAtIso)
   return hook.payload;
 }
 __name(applyWechslerHook, "applyWechslerHook");
+__name2(applyWechslerHook, "applyWechslerHook");
 function fileRowToMeta(row) {
   return {
     id: row.id,
@@ -23031,6 +24655,7 @@ function fileRowToMeta(row) {
   };
 }
 __name(fileRowToMeta, "fileRowToMeta");
+__name2(fileRowToMeta, "fileRowToMeta");
 function parseJson(raw2, fallback) {
   if (!raw2)
     return fallback;
@@ -23041,6 +24666,7 @@ function parseJson(raw2, fallback) {
   }
 }
 __name(parseJson, "parseJson");
+__name2(parseJson, "parseJson");
 function typeRowToRecord(r) {
   return {
     id: r.id,
@@ -23062,6 +24688,7 @@ function typeRowToRecord(r) {
   };
 }
 __name(typeRowToRecord, "typeRowToRecord");
+__name2(typeRowToRecord, "typeRowToRecord");
 function eventRowToRecord(r) {
   return {
     id: r.id,
@@ -23088,20 +24715,23 @@ function eventRowToRecord(r) {
   };
 }
 __name(eventRowToRecord, "eventRowToRecord");
+__name2(eventRowToRecord, "eventRowToRecord");
 function newTypeKey() {
   const rnd = crypto.randomUUID().replace(/-/g, "").slice(0, 10);
   return `t-${rnd}`;
 }
 __name(newTypeKey, "newTypeKey");
+__name2(newTypeKey, "newTypeKey");
 function assertNotSystemType(row, action) {
   if (row.is_system === 1) {
     throw new ConflictError(`\u0627\u06CC\u0646 \u0627\u0628\u0632\u0627\u0631 \u0633\u06CC\u0633\u062A\u0645\u06CC\u0650 \u0628\u0627\u062A\u0631\u06CC \u0628\u0627\u0644\u06CC\u0646\u06CC \u0627\u0633\u062A \u0648 ${action} \u0622\u0646 \u0627\u0632 \u067E\u0646\u0644 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A \u2014 \u062A\u063A\u06CC\u06CC\u0631 \u0645\u0644\u0627\u06A9 \u0641\u0642\u0637 \u0628\u0627 \u0646\u0633\u062E\u0647\u0654 \u062C\u062F\u06CC\u062F \u0633\u0627\u0645\u0627\u0646\u0647`);
   }
 }
 __name(assertNotSystemType, "assertNotSystemType");
+__name2(assertNotSystemType, "assertNotSystemType");
 function createCaseEventsService(deps) {
   const { db, audit, logger } = deps;
-  const log3 = logger.child("case-events");
+  const log32 = logger.child("case-events");
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   const fillExpiryHours = deps.fillExpiryHours ?? 168;
   let sendFn = null;
@@ -23125,12 +24755,14 @@ function createCaseEventsService(deps) {
     return row;
   }
   __name(loadTypeRow, "loadTypeRow");
+  __name2(loadTypeRow, "loadTypeRow");
   async function assertStudent(studentId) {
     const row = await db.queryOne(`SELECT id FROM students WHERE id = ?`, [studentId]);
     if (!row)
       throw new NotFoundError("\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632");
   }
   __name(assertStudent, "assertStudent");
+  __name2(assertStudent, "assertStudent");
   function assertEditor(actor, creatorId) {
     if (actor.role === "manager")
       return;
@@ -23139,6 +24771,7 @@ function createCaseEventsService(deps) {
     throw new ForbiddenError("\u0648\u06CC\u0631\u0627\u06CC\u0634 \u0631\u0648\u06CC\u062F\u0627\u062F \u0641\u0642\u0637 \u062A\u0648\u0633\u0637 \u062B\u0628\u062A\u200C\u06A9\u0646\u0646\u062F\u0647 \u06CC\u0627 \u0645\u062F\u06CC\u0631 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
   }
   __name(assertEditor, "assertEditor");
+  __name2(assertEditor, "assertEditor");
   async function getEventRow(id) {
     const row = await db.queryOne(`${EVENT_SELECT} AND e.id = ?`, [id]);
     if (!row)
@@ -23146,6 +24779,7 @@ function createCaseEventsService(deps) {
     return row;
   }
   __name(getEventRow, "getEventRow");
+  __name2(getEventRow, "getEventRow");
   async function runFollowUpHook(tx, event, fields, payload, actor) {
     if (!deps.followups)
       return;
@@ -23166,6 +24800,7 @@ function createCaseEventsService(deps) {
     );
   }
   __name(runFollowUpHook, "runFollowUpHook");
+  __name2(runFollowUpHook, "runFollowUpHook");
   return {
     // ───────── کاتالوگ انواع ─────────
     async listTypes(filters) {
@@ -23227,7 +24862,7 @@ function createCaseEventsService(deps) {
           fieldCount: { from: null, to: input.fields.length }
         }
       });
-      log3.info("type.created", { id, key, category: input.category });
+      log32.info("type.created", { id, key, category: input.category });
       const row = await loadTypeRow(id);
       return typeRowToRecord(row);
     },
@@ -23277,7 +24912,7 @@ function createCaseEventsService(deps) {
           fieldCount: { from: current.fields.length, to: next.fields.length }
         }
       });
-      log3.info("type.updated", { id });
+      log32.info("type.updated", { id });
       return typeRowToRecord(await loadTypeRow(id));
     },
     async deactivateType(id, actor) {
@@ -23294,7 +24929,7 @@ function createCaseEventsService(deps) {
         resourceId: id,
         changes: { active: { from: row.active, to: 0 } }
       });
-      log3.info("type.deactivated", { id });
+      log32.info("type.deactivated", { id });
       return true;
     },
     /** — حذف قالب (فقط مدیر) — فقط وقتی هیچ رویدادی به آن وصل نباشد؛ وگرنه خطا (غیرفعال‌سازی پیشنهاد می‌شود) */
@@ -23322,7 +24957,7 @@ function createCaseEventsService(deps) {
         resourceId: id,
         changes: { title: { from: row.title, to: null } }
       });
-      log3.info("type.deleted", { id });
+      log32.info("type.deleted", { id });
       return true;
     },
     // ───────── رویدادها ─────────
@@ -23435,7 +25070,7 @@ function createCaseEventsService(deps) {
           await runFollowUpHook(tx, { id, student_id: input.studentId }, type.fields, payload, actor);
         }
       });
-      log3.info("event.created", { id, type: type.key, studentId: input.studentId, status });
+      log32.info("event.created", { id, type: type.key, studentId: input.studentId, status });
       return eventRowToRecord(await getEventRow(id));
     },
     async updateEvent(id, input, actor) {
@@ -23472,7 +25107,7 @@ function createCaseEventsService(deps) {
         resourceId: id,
         changes: { fieldsEdited: { from: null, to: input.values ? Object.keys(input.values).length : 0 } }
       });
-      log3.info("event.updated", { id });
+      log32.info("event.updated", { id });
       return eventRowToRecord(await getEventRow(id));
     },
     /** — نهایی‌سازی پیش‌نویس: اعتبارسنجی الزامی + تولید خلاصه + هوک اقدام بعدی */
@@ -23506,7 +25141,7 @@ function createCaseEventsService(deps) {
           changes: { status: { from: "draft", to: "completed" } }
         });
         await runFollowUpHook(tx, { id, student_id: row.student_id }, type.fields, payload, actor);
-        log3.info("event.finalized", { id });
+        log32.info("event.finalized", { id });
       });
       return eventRowToRecord(await getEventRow(id));
     },
@@ -23527,7 +25162,7 @@ function createCaseEventsService(deps) {
         resourceId: id,
         changes: { status: { from: row.status, to: "cancelled" } }
       });
-      log3.info("event.cancelled", { id });
+      log32.info("event.cancelled", { id });
       return eventRowToRecord(await getEventRow(id));
     },
     /** — حذف نرم رویداد (فقط مدیر) — دستور کاربر: «امکان حذف رویداد ها برای مدیر فراهم بشه»
@@ -23552,7 +25187,7 @@ function createCaseEventsService(deps) {
           status: { from: row.status, to: "deleted" }
         }
       });
-      log3.info("event.deleted", { id, deletedBy: actor.staffId });
+      log32.info("event.deleted", { id, deletedBy: actor.staffId });
     },
     // ───────── پیوست‌ها ─────────
     async addEventFile(eventId, input, actor) {
@@ -23570,11 +25205,11 @@ function createCaseEventsService(deps) {
           throw new NotFoundError("\u0631\u0648\u06CC\u062F\u0627\u062F");
         if (row.status === "cancelled")
           throw new ConflictError("\u0631\u0648\u06CC\u062F\u0627\u062F \u0644\u063A\u0648\u0634\u062F\u0647 \u067E\u06CC\u0648\u0633\u062A \u0646\u0645\u06CC\u200C\u067E\u0630\u06CC\u0631\u062F");
-        const count3 = await tx.queryOne(
+        const count32 = await tx.queryOne(
           `SELECT COUNT(*) AS n FROM case_event_files WHERE case_event_id = ?`,
           [eventId]
         );
-        if ((count3?.n ?? 0) >= EVENT_FILES_MAX) {
+        if ((count32?.n ?? 0) >= EVENT_FILES_MAX) {
           throw new ConflictError(`\u062D\u062F\u0627\u06A9\u062B\u0631 ${EVENT_FILES_MAX} \u067E\u06CC\u0648\u0633\u062A \u0628\u0631\u0627\u06CC \u0647\u0631 \u0631\u0648\u06CC\u062F\u0627\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A`);
         }
         const id = crypto.randomUUID();
@@ -23803,7 +25438,7 @@ function createCaseEventsService(deps) {
           sent: { from: null, to: sent }
         }
       });
-      log3.info("event.link_sent", { eventId, wanted, targets: chats.length, sent });
+      log32.info("event.link_sent", { eventId, wanted, targets: chats.length, sent });
       return { sent, targets: chats };
     },
     setSendObserver(fn) {
@@ -23878,21 +25513,22 @@ function createCaseEventsService(deps) {
           via: { from: null, to: input.viaWeb ? "web" : "bot" }
         }
       });
-      log3.info("event.family_filled", { id, answered: analysis.answered, score: analysis.score, via: input.viaWeb ? "web" : "bot" });
+      log32.info("event.family_filled", { id, answered: analysis.answered, score: analysis.score, via: input.viaWeb ? "web" : "bot" });
       return eventRowToRecord(await getEventRow(id));
     }
   };
 }
 __name(createCaseEventsService, "createCaseEventsService");
-
+__name2(createCaseEventsService, "createCaseEventsService");
 var FA_DIGITS = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
 function faNum4(n) {
   return String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
 }
-__name(faNum4, "faNum");
+__name(faNum4, "faNum4");
+__name2(faNum4, "faNum");
 var SCALE_LABELS = ["\u06F0", "\u06F1", "\u06F2", "\u06F3", "\u06F4", "\u06F5", "\u06F6", "\u06F7", "\u06F8", "\u06F9", "\u06F1\u06F0"];
 function renderFillFormPage(model, token) {
-  const esc = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
+  const esc = /* @__PURE__ */ __name2((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
   let counter = 0;
   const total = model.sections.reduce((sum, s) => sum + s.items.length, 0);
   const isTeacherForm = model.audience === "teacher";
@@ -23902,23 +25538,21 @@ function renderFillFormPage(model, token) {
     const items = sec.items.map((f) => {
       counter += 1;
       let opts = [];
+      let optsCls = "opts opts--scale";
       if (f.scoredOptions && f.scoredOptions.length > 0) {
-        opts = f.scoredOptions.map(
-          (o, idx) => `<label class="opt opt--wide"><input type="radio" name="${esc(f.key)}" value="${idx}" required />
-           <span>${esc(o.label)}</span></label>`
-        );
+        optsCls = "opts opts--list";
+        opts = f.scoredOptions.map((o, idx) => `<label class="opt opt--wide"><input type="radio" name="${esc(f.key)}" value="${idx}" required />
+           <span>${esc(o.label)}</span></label>`);
       } else {
         const max = Math.min(Math.max(f.scaleMax ?? 3, 1), 10);
         const labels = f.scaleLabels && f.scaleLabels.length === max + 1 ? f.scaleLabels : null;
         for (let v = 0; v <= max; v++) {
           const lbl = labels ? labels[v] : SCALE_LABELS[v] ?? faNum4(v);
-          opts.push(
-            `<label class="opt"><input type="radio" name="${esc(f.key)}" value="${v}" required />
-             <span>${esc(lbl)}</span></label>`
-          );
+          opts.push(`<label class="opt"><input type="radio" name="${esc(f.key)}" value="${v}" required />
+             <span>${esc(lbl)}</span></label>`);
         }
       }
-      return `<div class="item" data-key="${esc(f.key)}"><div class="q">${faNum4(counter)}. ${esc(f.label)}</div><div class="opts">${opts.join("")}</div></div>`;
+      return `<div class="item" data-key="${esc(f.key)}"><div class="q">${faNum4(counter)}. ${esc(f.label)}</div><div class="${optsCls}">${opts.join("")}</div></div>`;
     }).join("");
     const head = sec.title ? `<div class="subscale"><span class="subscale__dot"></span>${esc(sec.title)}</div>` : "";
     return `${head}<div class="card">${items}</div>`;
@@ -23927,43 +25561,71 @@ function renderFillFormPage(model, token) {
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#12384f" />
 <meta name="robots" content="noindex, nofollow" />
 <title>${esc(model.typeTitle)}</title>
 <style>
-  :root { color-scheme: light; }
+  :root { color-scheme: light; --ink:#12384f; --brand:#229ED9; --cream:#F7F3EA; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #F7F3EA; color: #12384f;
-         font-family: Tahoma, "Segoe UI", sans-serif; line-height: 1.8; }
-  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
-  .head { background: #12384f; color: #fff; border-radius: 16px; padding: 20px 22px; margin-bottom: 18px; }
-  .head h1 { margin: 0 0 6px; font-size: 18px; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--cream); color: var(--ink);
+         font-family: Tahoma, "Segoe UI", sans-serif; line-height: 1.8;
+         -webkit-tap-highlight-color: transparent; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 20px 14px 40px; }
+  .head { background: linear-gradient(160deg, #1a4a66, #12384f); color: #fff;
+          border-radius: 18px; padding: 20px 20px 22px; margin-bottom: 16px;
+          box-shadow: 0 4px 14px rgba(18,56,79,.18); }
+  .head h1 { margin: 0 0 6px; font-size: 18px; line-height: 1.6; }
   .head p { margin: 0; font-size: 13px; opacity: .85; }
   .head .desc { margin-top: 10px; font-size: 13px; opacity: .95; line-height: 1.9;
                 background: rgba(255,255,255,.08); border-radius: 10px; padding: 10px 12px; }
   .progress { position: sticky; top: 8px; z-index: 5; background: #fff; border: 1px solid #E5DCCB;
-              border-radius: 12px; padding: 8px 12px; margin-bottom: 14px; font-size: 12px; color: #1c5d80;
+              border-radius: 12px; padding: 9px 12px; margin-bottom: 14px; font-size: 12.5px; color: #1c5d80;
               box-shadow: 0 1px 3px rgba(18,56,79,.10); }
-  .progress__bar { height: 5px; background: #EFE8DC; border-radius: 999px; overflow: hidden; margin-top: 6px; }
-  .progress__fill { height: 100%; width: 0%; background: #229ED9; border-radius: 999px; transition: width .2s; }
-  .subscale { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700;
+  .progress__bar { height: 6px; background: #EFE8DC; border-radius: 999px; overflow: hidden; margin-top: 6px; }
+  .progress__fill { height: 100%; width: 0%; background: linear-gradient(90deg, #229ED9, #2FB1E8); border-radius: 999px; transition: width .25s; }
+  .subscale { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 800;
               color: #1c5d80; margin: 16px 4px 8px; }
-  .subscale__dot { width: 9px; height: 9px; border-radius: 50%; background: #229ED9; display: inline-block; }
-  .card { background: #fff; border-radius: 16px; padding: 18px 20px; margin-bottom: 14px;
+  .subscale__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--brand); display: inline-block; flex: none; }
+  .card { background: #fff; border-radius: 16px; padding: 6px 14px; margin-bottom: 14px;
           box-shadow: 0 1px 3px rgba(18,56,79,.08); }
-  .item { padding: 12px 0; border-bottom: 1px solid #EFE8DC; }
+  .item { padding: 14px 2px; border-bottom: 1px solid #EFE8DC; border-radius: 10px;
+          transition: background .2s, box-shadow .2s; }
   .item:last-child { border-bottom: 0; }
+  .item.is-missing { background: #FDF4F3; box-shadow: inset -3px 0 0 #A12622; }
   .item.is-missing .q { color: #A12622; }
-  .q { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
-  .opts { display: flex; flex-wrap: wrap; gap: 8px; }
-  .opt { display: inline-flex; align-items: center; gap: 5px; background: #F7F3EA;
-         border: 1px solid #E5DCCB; border-radius: 10px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
-  .opt--wide { width: 100%; align-items: flex-start; }
-  .opt:has(input:checked) { background: #D9EDF7; border-color: #229ED9; }
-  .btn { display: block; width: 100%; border: 0; background: #229ED9; color: #fff;
-         border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 700; cursor: pointer;
-         font-family: inherit; margin-top: 6px; }
-  .btn:disabled { opacity: .6; }
+  .q { font-weight: 700; font-size: 15px; margin-bottom: 10px; line-height: 1.9; }
+  .opts--scale { display: flex; flex-wrap: wrap; gap: 7px; }
+  .opts--scale .opt { flex: 1 1 44px; justify-content: center; }
+  .opts--list { display: grid; gap: 8px; }
+  .opts--list .opt { width: 100%; min-height: 48px; }
+  .opt { display: inline-flex; align-items: center; gap: 8px; background: #FAF7F0;
+         border: 1.5px solid #E5DCCB; border-radius: 12px; padding: 9px 12px;
+         font-size: 14.5px; font-weight: 600; cursor: pointer; min-height: 44px;
+         user-select: none; -webkit-user-select: none; touch-action: manipulation;
+         transition: background .15s, border-color .15s, transform .1s; }
+  .opt:active { transform: scale(.96); }
+  .opt--wide { align-items: center; }
+  .opt input[type="radio"] { appearance: none; -webkit-appearance: none; margin: 0; flex: none;
+        width: 20px; height: 20px; border: 2px solid #C7BBA4; border-radius: 50%;
+        background: #fff; position: relative; transition: border-color .15s; }
+  .opt input[type="radio"]:checked { border-color: var(--brand); }
+  .opt input[type="radio"]:checked::after { content: ""; position: absolute; inset: 3px;
+        border-radius: 50%; background: var(--brand); }
+  .opt input[type="radio"]:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .opt:has(input:checked) { background: #D9EDF7; border-color: var(--brand); }
+  .opt:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .sendbar { position: sticky; bottom: 10px; z-index: 5; margin: 6px -6px 0;
+             padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
+             background: linear-gradient(180deg, rgba(247,243,234,0), var(--cream) 34%);
+             border-radius: 18px; }
+  .btn { display: block; width: 100%; border: 0; background: linear-gradient(180deg, #2FB1E8, #229ED9);
+         color: #fff; border-radius: 14px; padding: 15px; font-size: 17px; font-weight: 800;
+         cursor: pointer; font-family: inherit; box-shadow: 0 8px 22px rgba(34,158,217,.38), 0 2px 6px rgba(18,56,79,.18);
+         transition: transform .1s, filter .15s; }
+  .btn:active { transform: translateY(1px); filter: brightness(.97); }
+  .btn:disabled { opacity: .6; cursor: default; }
   .msg { display: none; border-radius: 12px; padding: 16px; margin-top: 12px; font-size: 14px; }
   .msg.ok { display: block; background: #E4F5E9; color: #1D6B39; }
   .msg.err { display: block; background: #FDE8E8; color: #A12622; }
@@ -23983,7 +25645,9 @@ function renderFillFormPage(model, token) {
   </div>
   <form id="f" novalidate>
     ${sections}
-    <button class="btn" type="submit">\u0627\u0631\u0633\u0627\u0644 \u067E\u0627\u0633\u062E\u200C\u0647\u0627</button>
+    <div class="sendbar">
+      <button class="btn" type="submit">\u0627\u0631\u0633\u0627\u0644 \u067E\u0627\u0633\u062E\u200C\u0647\u0627</button>
+    </div>
     <div class="msg" id="msg"></div>
   </form>
   <div class="foot">\u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634/\u062A\u0648\u0627\u0646\u200C\u0628\u062E\u0634\u06CC \u062A\u0631\u0628\u06CC\u062A\u06CC \u0633\u0631\u0648\u0633\u062A\u0627\u0646 \u2014 \u0627\u06CC\u0646 \u067E\u06CC\u0627\u0645\u200C\u06A9\u0648\u062A\u0627\u0647 \u06CC\u06A9\u200C\u0628\u0627\u0631 \u0645\u0635\u0631\u0641 \u0627\u0633\u062A.</div>
@@ -23992,17 +25656,24 @@ function renderFillFormPage(model, token) {
 (function () {
   var f = document.getElementById('f');
   var msg = document.getElementById('msg');
+  var prog = document.getElementById('prog');
   var progText = document.getElementById('progText');
   var progFill = document.getElementById('progFill');
+  var sendbar = f.querySelector('.sendbar');
+  var btn = f.querySelector('.btn');
   var TOTAL = ${total};
+
+  function faD(x) {
+    return String(x).replace(/[0-9]/g, function (d) { return '\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9'[Number(d)]; });
+  }
 
   function updateProgress() {
     var answered = {};
     f.querySelectorAll('.item input[type=radio]:checked').forEach(function (r) { answered[r.name] = true; });
     var n = Object.keys(answered).length;
-    progText.textContent = '\u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0647\u200C\u0634\u062F\u0647: ' + String(n).replace(/[0-9]/g, function (d) { return '\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9'[Number(d)]; })
-      + ' \u0627\u0632 ' + String(TOTAL).replace(/[0-9]/g, function (d) { return '\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9'[Number(d)]; });
-    progFill.style.width = (TOTAL ? Math.round(n * 100 / TOTAL) : 0) + '%';
+    var pct = TOTAL ? Math.round(n * 100 / TOTAL) : 0;
+    progText.textContent = '\u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0647\u200C\u0634\u062F\u0647: ' + faD(n) + ' \u0627\u0632 ' + faD(TOTAL) + ' (\u066A' + faD(pct) + ')';
+    progFill.style.width = pct + '%';
     return n;
   }
   f.addEventListener('change', function () { updateProgress(); });
@@ -24022,15 +25693,14 @@ function renderFillFormPage(model, token) {
       if (!has) missing += 1;
     });
     if (missing > 0) {
-      var m = String(missing).replace(/[0-9]/g, function (d) { return '\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9'[Number(d)]; });
       msg.className = 'msg err';
-      msg.textContent = '\u0628\u0647 ' + m + ' \u0633\u0624\u0627\u0644 \u067E\u0627\u0633\u062E \u0646\u062F\u0627\u062F\u0647\u200C\u0627\u06CC\u062F \u2014 \u0633\u0624\u0627\u0644\u200C\u0647\u0627\u06CC \u062C\u0627\u0645\u0627\u0646\u062F\u0647 \u0628\u0627 \u0631\u0646\u06AF \u0633\u0631\u062E \u0645\u0634\u062E\u0635 \u0634\u062F\u0647\u200C\u0627\u0646\u062F.';
+      msg.textContent = '\u0628\u0647 ' + faD(missing) + ' \u0633\u0624\u0627\u0644 \u067E\u0627\u0633\u062E \u0646\u062F\u0627\u062F\u0647\u200C\u0627\u06CC\u062F \u2014 \u0633\u0624\u0627\u0644\u200C\u0647\u0627\u06CC \u062C\u0627\u0645\u0627\u0646\u062F\u0647 \u0628\u0627 \u0631\u0646\u06AF \u0633\u0631\u062E \u0645\u0634\u062E\u0635 \u0634\u062F\u0647\u200C\u0627\u0646\u062F.';
       var first = document.querySelector('#f .item.is-missing');
       if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-    var btn = f.querySelector('.btn');
     btn.disabled = true;
+    btn.textContent = '\u062F\u0631 \u062D\u0627\u0644 \u0627\u0631\u0633\u0627\u0644\u2026';
     fetch(location.pathname, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -24041,15 +25711,22 @@ function renderFillFormPage(model, token) {
           msg.className = 'msg ok';
           msg.textContent = '\u067E\u0627\u0633\u062E\u200C\u0647\u0627\u06CC \u0634\u0645\u0627 \u062B\u0628\u062A \u0634\u062F. \u0628\u0627 \u062A\u0634\u06A9\u0631 \u0627\u0632 \u0647\u0645\u0631\u0627\u0647\u06CC \u0634\u0645\u0627.';
           f.querySelectorAll('input, button').forEach(function (x) { x.disabled = true; });
-          var p = document.getElementById('prog');
-          if (p) p.style.display = 'none';
+          if (sendbar) sendbar.style.display = 'none';
+          if (prog) prog.style.display = 'none';
+          msg.scrollIntoView({ behavior: 'smooth', block: 'center' });
         } else {
           msg.className = 'msg err';
           msg.textContent = (res.j && res.j.error && res.j.error.message) || '\u062B\u0628\u062A \u0627\u0646\u062C\u0627\u0645 \u0646\u0634\u062F.';
           btn.disabled = false;
+          btn.textContent = '\u0627\u0631\u0633\u0627\u0644 \u067E\u0627\u0633\u062E\u200C\u0647\u0627';
         }
       })
-      .catch(function () { msg.className = 'msg err'; msg.textContent = '\u062E\u0637\u0627\u06CC \u0634\u0628\u06A9\u0647 \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F.'; btn.disabled = false; });
+      .catch(function () {
+        msg.className = 'msg err';
+        msg.textContent = '\u062E\u0637\u0627\u06CC \u0634\u0628\u06A9\u0647 \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F.';
+        btn.disabled = false;
+        btn.textContent = '\u0627\u0631\u0633\u0627\u0644 \u067E\u0627\u0633\u062E\u200C\u0647\u0627';
+      });
   });
 
   updateProgress();
@@ -24059,7 +25736,7 @@ function renderFillFormPage(model, token) {
 </html>`;
 }
 __name(renderFillFormPage, "renderFillFormPage");
-
+__name2(renderFillFormPage, "renderFillFormPage");
 function registerCaseEventsRoutes(app, service) {
   app.get("/api/case-events/types", async (c) => {
     const items = await service.listTypes({
@@ -24198,6 +25875,7 @@ function registerCaseEventsRoutes(app, service) {
   });
 }
 __name(registerCaseEventsRoutes, "registerCaseEventsRoutes");
+__name2(registerCaseEventsRoutes, "registerCaseEventsRoutes");
 function registerCaseEventPublicRoutes(app, service, helpers) {
   const FILL_PATH = "/public/case-events/:id/fill";
   app.get(FILL_PATH, async (c) => {
@@ -24221,7 +25899,7 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
     for (const f of type?.fields ?? []) {
       if (f.type !== "scale" && f.type !== "single")
         continue;
-      const title2 = f.subscaleId ? subscaleName.get(f.subscaleId) ?? null : null;
+      const title22 = f.subscaleId ? subscaleName.get(f.subscaleId) ?? null : null;
       const item = {
         key: f.key,
         label: f.label,
@@ -24230,17 +25908,17 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
         scaleLabels: f.scaleLabels
       };
       const last = sections[sections.length - 1];
-      if (last && last.title === title2) {
+      if (last && last.title === title22) {
         last.items.push(item);
       } else {
-        sections.push({ title: title2, items: [item] });
+        sections.push({ title: title22, items: [item] });
       }
     }
     const model = {
       typeTitle: `${event.typeIcon ?? ""} ${event.typeTitle}`.trim(),
       studentName: studentName ?? "",
       sections,
-      // سربرگ بر اساس گیرنده + معرفی روایی فرم
+      // — سربرگ بر اساس گیرنده + معرفی روایی فرم
       audience: event.typeAudience ?? type?.audience ?? "family",
       description: type?.description ?? null
     };
@@ -24275,8 +25953,9 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
   });
 }
 __name(registerCaseEventPublicRoutes, "registerCaseEventPublicRoutes");
+__name2(registerCaseEventPublicRoutes, "registerCaseEventPublicRoutes");
 function fillErrorPage(message) {
-  const esc = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "esc");
+  const esc = /* @__PURE__ */ __name2((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "esc");
   return `<!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -24287,7 +25966,7 @@ function fillErrorPage(message) {
 <body><div class="box"><h1 style="font-size:18px">\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A</h1><p style="font-size:14px;line-height:1.9">${esc(message)}</p></div></body></html>`;
 }
 __name(fillErrorPage, "fillErrorPage");
-
+__name2(fillErrorPage, "fillErrorPage");
 var BATTERY_VERSION = "battery-v1";
 var INTERVENTION_PATH_STATUS_LABELS = {
   suggested: "\u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0645\u0648\u062A\u0648\u0631",
@@ -24297,7 +25976,6 @@ var INTERVENTION_PATH_STATUS_LABELS = {
 };
 var PATHWAY_SESSION_STATUSES = ["planned", "done", "skipped"];
 var PATHWAY_ITEM_TYPES = ["exercise", "homework", "game", "instruction", "event"];
-
 var battery_screening_default = [
   {
     key: "ce-sdq-t-v1",
@@ -24534,7 +26212,6 @@ var battery_screening_default = [
     ]
   }
 ];
-
 var battery_specific_default = [
   {
     key: "ce-dcdq-v1",
@@ -24834,7 +26511,6 @@ var battery_specific_default = [
     ]
   }
 ];
-
 var battery_clinical_default = [
   {
     key: "ce-anamnesis-v2",
@@ -24945,7 +26621,6 @@ var battery_clinical_default = [
     ]
   }
 ];
-
 var RAW = [
   ...battery_screening_default,
   ...battery_specific_default,
@@ -24964,12 +26639,14 @@ function resolveBattery(defs) {
   });
 }
 __name(resolveBattery, "resolveBattery");
+__name2(resolveBattery, "resolveBattery");
 var BATTERY = resolveBattery(RAW);
 var BY_KEY = new Map(BATTERY.map((d) => [d.key, d]));
 function batteryDef(key) {
   return BY_KEY.get(key);
 }
 __name(batteryDef, "batteryDef");
+__name2(batteryDef, "batteryDef");
 var WCPM_NORM_50TH = {
   "\u0627\u0648\u0644": 60,
   "\u062F\u0648\u0645": 89,
@@ -25002,7 +26679,6 @@ var DIGITS_2MIN_NORM = {
 };
 var ENGINE_DISCLAIMER = "\u0627\u06CC\u0646 \u062A\u062D\u0644\u06CC\u0644 \u0627\u0628\u0632\u0627\u0631 \u063A\u0631\u0628\u0627\u0644\u06AF\u0631\u06CC \u0627\u0633\u062A \u0648 \u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646 \u0642\u0636\u0627\u0648\u062A \u0628\u0627\u0644\u06CC\u0646\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0646\u06CC\u0633\u062A. \u062A\u0635\u0645\u06CC\u0645 \u0646\u0647\u0627\u06CC\u06CC \u0628\u0627 \u0645\u062A\u062E\u0635\u0635 \u0627\u0646\u0633\u0627\u0646 \u0627\u0633\u062A.";
 var BATTERY_LABEL = `\u0628\u0627\u062A\u0631\u06CC \u0628\u0627\u0644\u06CC\u0646\u06CC \u062B\u0627\u0628\u062A \u0633\u0631\u0648\u0633\u062A\u0627\u0646 \u2014 ${BATTERY_VERSION}`;
-
 function sldRecord(areaFa, areaEn, icd, aCriteria) {
   return {
     nameFa: `\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u062E\u0627\u0635 \u2014 ${areaFa}`,
@@ -25021,6 +26697,7 @@ function sldRecord(areaFa, areaEn, icd, aCriteria) {
   };
 }
 __name(sldRecord, "sldRecord");
+__name2(sldRecord, "sldRecord");
 var DSM_RECORDS = {
   // ─── اختلال یادگیری خاص — سه حوزه (هر ملاک A خودش را دارد؛ B/C/D مشترک) ───
   dyslexia: sldRecord("\u062E\u0648\u0627\u0646\u062F\u0646", "Specific Learning Disorder with Impairment in Reading (Dyslexia)", "F81.0", [
@@ -25170,7 +26847,6 @@ var DSM_RECORDS = {
     referralFa: ["\u067E\u0631\u0648\u062A\u06A9\u0644 \u06F5 \u06AF\u0627\u0645\u06CC \u062F\u06CC\u0631\u0622\u0645\u0648\u0632 \u0645\u0631\u06A9\u0632", "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0631\u0648\u0627\u0646\u200C\u0633\u0646\u062C\u06CC \u06A9\u0627\u0645\u0644 (\u0648\u06A9\u0633\u0644\u0631) \u0628\u0631\u0627\u06CC \u062A\u0639\u06CC\u06CC\u0646 \u0628\u0647\u0631\u0647"]
   }
 };
-
 var STANDARD_PATH = [
   { key: "observe", title: "\u0645\u0634\u0627\u0647\u062F\u0647 \u0648 \u062B\u0628\u062A" },
   { key: "assess", title: "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u062A\u062E\u0635\u0635\u06CC" },
@@ -25821,7 +27497,7 @@ function targetOf(key) {
   return BY_KEY2.get(key);
 }
 __name(targetOf, "targetOf");
-
+__name2(targetOf, "targetOf");
 var EVIDENCE_WEIGHTS = {
   probeDanger: 2,
   instrumentDanger: 2,
@@ -26076,7 +27752,7 @@ function rulesOf(targetKey) {
   return RULES.find((r) => r.targetKey === targetKey);
 }
 __name(rulesOf, "rulesOf");
-
+__name2(rulesOf, "rulesOf");
 var PROBES = [
   { toolKey: "ce-probe-read-v1", valueField: "wcpm", gradeField: "text_grade", norm: WCPM_NORM_50TH, fa: "\u067E\u0631\u0648\u0628 \u0631\u0648\u0627\u0646\u06CC\u200C\u062E\u0648\u0627\u0646\u062F\u0646" },
   { toolKey: "ce-probe-write-v1", valueField: "alpha15s", gradeField: "dict_grade", norm: ALPHA_15S_NORM, fa: "\u067E\u0631\u0648\u0628 \u0631\u0648\u0627\u0646\u06CC\u200C\u0646\u0648\u0634\u062A\u0646" },
@@ -26086,10 +27762,12 @@ function probeDefOf(toolKey) {
   return PROBES.find((p) => p.toolKey === toolKey);
 }
 __name(probeDefOf, "probeDefOf");
+__name2(probeDefOf, "probeDefOf");
 function completed(events) {
   return events.filter((e) => e.status === "completed");
 }
 __name(completed, "completed");
+__name2(completed, "completed");
 function latestPerTool(events) {
   const map = /* @__PURE__ */ new Map();
   for (const e of events) {
@@ -26099,6 +27777,7 @@ function latestPerTool(events) {
   return map;
 }
 __name(latestPerTool, "latestPerTool");
+__name2(latestPerTool, "latestPerTool");
 function latestTwoPerTool(events) {
   const map = /* @__PURE__ */ new Map();
   for (const e of events) {
@@ -26113,25 +27792,29 @@ function latestTwoPerTool(events) {
   return map;
 }
 __name(latestTwoPerTool, "latestTwoPerTool");
+__name2(latestTwoPerTool, "latestTwoPerTool");
 function colorOfBandLabel(label, bands) {
   if (!label || !bands)
     return null;
   return bands.find((b) => b.label === label)?.color ?? null;
 }
 __name(colorOfBandLabel, "colorOfBandLabel");
+__name2(colorOfBandLabel, "colorOfBandLabel");
 function num2(value) {
   if (value === null || value === void 0 || value === "")
     return null;
   const n = Number(String(value).replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))));
   return Number.isFinite(n) ? n : null;
 }
-__name(num2, "num");
+__name(num2, "num2");
+__name2(num2, "num");
 function payloadText(e, keys) {
   if (!e.payload)
     return "";
   return keys.map((k) => e.payload?.[k]?.value ?? "").join(" ");
 }
 __name(payloadText, "payloadText");
+__name2(payloadText, "payloadText");
 function ruleColor(rule, event) {
   if (!event)
     return null;
@@ -26171,6 +27854,7 @@ function ruleColor(rule, event) {
   return colorOfBandLabel(analysis.band, event.bands);
 }
 __name(ruleColor, "ruleColor");
+__name2(ruleColor, "ruleColor");
 var ANAMNESIS_TEXT_FIELDS = ["chief_complaint", "weak_subjects", "development", "medical"];
 function anamnesisFlagFor(targetKey, event) {
   if (!event || event.toolKey !== "ce-anamnesis-v2")
@@ -26187,6 +27871,7 @@ function anamnesisFlagFor(targetKey, event) {
   return false;
 }
 __name(anamnesisFlagFor, "anamnesisFlagFor");
+__name2(anamnesisFlagFor, "anamnesisFlagFor");
 function criterionStatus(criterionId, ruleSet, perTool) {
   const entries = ruleSet.criteriaMap.filter((m) => m.criterionId === criterionId);
   let metCount = 0;
@@ -26219,6 +27904,7 @@ function criterionStatus(criterionId, ruleSet, perTool) {
   return { criterionId, status: "unknown", sources };
 }
 __name(criterionStatus, "criterionStatus");
+__name2(criterionStatus, "criterionStatus");
 function fullCriteriaCount(targetKey, perTool) {
   const ruleSet = rulesOf(targetKey);
   if (!ruleSet)
@@ -26239,16 +27925,18 @@ function fullCriteriaCount(targetKey, perTool) {
   return full;
 }
 __name(fullCriteriaCount, "fullCriteriaCount");
+__name2(fullCriteriaCount, "fullCriteriaCount");
 function autismPattern(perTool) {
   const ruleSet = rulesOf("autism");
   if (!ruleSet)
     return { allA: false, bMet: 0 };
-  const status = /* @__PURE__ */ __name((id) => criterionStatus(id, ruleSet, perTool).status, "status");
+  const status = /* @__PURE__ */ __name2((id) => criterionStatus(id, ruleSet, perTool).status, "status");
   const allA = ["autism.a1", "autism.a2", "autism.a3"].every((id) => status(id) === "met");
   const bMet = ["autism.b1", "autism.b2", "autism.b3", "autism.b4"].filter((id) => status(id) === "met").length;
   return { allA, bMet };
 }
 __name(autismPattern, "autismPattern");
+__name2(autismPattern, "autismPattern");
 function dangerWeightOf(rules, toolKey, event) {
   for (const rule of rules) {
     if (rule.toolKey !== toolKey || rule.band !== "danger")
@@ -26261,6 +27949,7 @@ function dangerWeightOf(rules, toolKey, event) {
   return null;
 }
 __name(dangerWeightOf, "dangerWeightOf");
+__name2(dangerWeightOf, "dangerWeightOf");
 function consensusOf(ruleSet, perTool) {
   if (!ruleSet.consensus)
     return { bonus: 0, oneSided: false };
@@ -26278,6 +27967,7 @@ function consensusOf(ruleSet, perTool) {
   return { bonus: 0, oneSided: false };
 }
 __name(consensusOf, "consensusOf");
+__name2(consensusOf, "consensusOf");
 function runInference(events, options = {}) {
   const done = completed(events);
   const latest = latestPerTool(done);
@@ -26310,7 +28000,7 @@ function runInference(events, options = {}) {
       continue;
     const evidenceFa = [];
     const seenFa = /* @__PURE__ */ new Set();
-    const addFa = /* @__PURE__ */ __name((fa2) => {
+    const addFa = /* @__PURE__ */ __name2((fa2) => {
       if (!seenFa.has(fa2)) {
         seenFa.add(fa2);
         evidenceFa.push(fa2);
@@ -26426,11 +28116,12 @@ function runInference(events, options = {}) {
   };
 }
 __name(runInference, "runInference");
-
+__name2(runInference, "runInference");
 function faNum5(s) {
   return String(s).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
-__name(faNum5, "faNum");
+__name(faNum5, "faNum5");
+__name2(faNum5, "faNum");
 var CERTAINTY_WORDS = ["\u0642\u0637\u0639\u0627\u064B", "\u0628\u0644\u0627\u0634\u06A9", "\u062D\u062A\u0645\u0627\u064B \u062A\u0634\u062E\u06CC\u0635", "\u0635\u062F \u062F\u0631 \u0635\u062F", "\u06F1\u06F0\u06F0\u066A"];
 function assertPlainTone(text) {
   for (const w of CERTAINTY_WORDS) {
@@ -26439,11 +28130,13 @@ function assertPlainTone(text) {
   }
 }
 __name(assertPlainTone, "assertPlainTone");
+__name2(assertPlainTone, "assertPlainTone");
 function shortLine(text, max = 120) {
   const clean = text.replace(/\s+/g, " ").trim();
   return Array.from(clean).length <= max ? clean : `${Array.from(clean).slice(0, max - 1).join("").trim()}\u2026`;
 }
 __name(shortLine, "shortLine");
+__name2(shortLine, "shortLine");
 function sawOf(h) {
   const parts = [];
   const evidence = h.evidenceFa.slice(0, 3);
@@ -26461,23 +28154,27 @@ function sawOf(h) {
   return parts.join(" ");
 }
 __name(sawOf, "sawOf");
+__name2(sawOf, "sawOf");
 function meansOf(h) {
   const target = targetOf(h.targetKey);
   return shortLine(target ? `\u0634\u0648\u0627\u0647\u062F \u0628\u0647 \xAB${target.title}\xBB \u0627\u0634\u0627\u0631\u0647 \u0645\u06CC\u200C\u06A9\u0646\u062F. ${target.texts.means}` : `\u0634\u0648\u0627\u0647\u062F \u0628\u0647 \u0647\u062F\u0641 \xAB${h.targetTitle}\xBB \u0627\u0634\u0627\u0631\u0647 \u0645\u06CC\u200C\u06A9\u0646\u062F.`);
 }
 __name(meansOf, "meansOf");
+__name2(meansOf, "meansOf");
 function nextOf(h) {
   const target = targetOf(h.targetKey);
   const gap2 = h.missingFa.length > 0 ? ` ${h.missingFa[0]}` : "";
   return shortLine(target ? `${target.texts.next}${gap2}` : `${h.missingFa[0] ?? "\u062F\u0627\u062F\u0647\u0654 \u0628\u06CC\u0634\u062A\u0631\u06CC \u062C\u0645\u0639 \u06A9\u0646\u06CC\u062F."}`);
 }
 __name(nextOf, "nextOf");
+__name2(nextOf, "nextOf");
 function narrativeOfHypothesis(h) {
   const n = { targetKey: h.targetKey, saw: sawOf(h), means: meansOf(h), next: nextOf(h) };
   assertPlainTone(`${n.saw} ${n.means} ${n.next}`);
   return n;
 }
 __name(narrativeOfHypothesis, "narrativeOfHypothesis");
+__name2(narrativeOfHypothesis, "narrativeOfHypothesis");
 function narrativeOf(result) {
   const top = result.ranked.length > 0 ? narrativeOfHypothesis(result.ranked[0]) : null;
   const lines = [];
@@ -26503,7 +28200,7 @@ function narrativeOf(result) {
   return { top, text };
 }
 __name(narrativeOf, "narrativeOf");
-
+__name2(narrativeOf, "narrativeOf");
 var MAX_ACTIVE_PATHS = 2;
 var DECISION_NOTE_MAX = 500;
 var PATHWAY_SESSION_TITLE_MAX = 120;
@@ -26525,12 +28222,14 @@ function parseJson2(raw2, fallback) {
     return fallback;
   }
 }
-__name(parseJson2, "parseJson");
+__name(parseJson2, "parseJson2");
+__name2(parseJson2, "parseJson");
 function parseText(v, max) {
   const t = v?.trim();
   return t ? t.slice(0, max) : null;
 }
 __name(parseText, "parseText");
+__name2(parseText, "parseText");
 function sanitizeSessionItems(raw2) {
   if (!Array.isArray(raw2))
     return [];
@@ -26549,16 +28248,17 @@ function sanitizeSessionItems(raw2) {
   return out;
 }
 __name(sanitizeSessionItems, "sanitizeSessionItems");
+__name2(sanitizeSessionItems, "sanitizeSessionItems");
 function sanitizeTemplateSessions(raw2) {
   if (!Array.isArray(raw2))
     return [];
   const out = [];
   for (const s of raw2) {
-    const title2 = typeof s?.title === "string" ? s.title.trim() : "";
-    if (!title2)
+    const title22 = typeof s?.title === "string" ? s.title.trim() : "";
+    if (!title22)
       continue;
     out.push({
-      title: title2.slice(0, PATHWAY_SESSION_TITLE_MAX),
+      title: title22.slice(0, PATHWAY_SESSION_TITLE_MAX),
       items: sanitizeSessionItems(s?.items)
     });
     if (out.length >= PATHWAY_TEMPLATE_SESSIONS_MAX)
@@ -26567,28 +28267,30 @@ function sanitizeTemplateSessions(raw2) {
   return out;
 }
 __name(sanitizeTemplateSessions, "sanitizeTemplateSessions");
+__name2(sanitizeTemplateSessions, "sanitizeTemplateSessions");
 function sanitizeTemplateSteps(raw2) {
   if (!Array.isArray(raw2))
     return [];
   const out = [];
   for (const s of raw2) {
     const key = typeof s?.key === "string" ? s.key.trim().slice(0, 80) : "";
-    const title2 = typeof s?.title === "string" ? s.title.trim().slice(0, PATHWAY_SESSION_TITLE_MAX) : "";
-    if (!key || !title2)
+    const title22 = typeof s?.title === "string" ? s.title.trim().slice(0, PATHWAY_SESSION_TITLE_MAX) : "";
+    if (!key || !title22)
       continue;
     const hint = typeof s?.hint === "string" && s.hint.trim() ? s.hint.trim().slice(0, PATHWAY_TEMPLATE_STEP_HINT_MAX) : void 0;
-    out.push(hint ? { key, title: title2, hint } : { key, title: title2 });
+    out.push(hint ? { key, title: title22, hint } : { key, title: title22 });
     if (out.length >= 12)
       break;
   }
   return out;
 }
 __name(sanitizeTemplateSteps, "sanitizeTemplateSteps");
+__name2(sanitizeTemplateSteps, "sanitizeTemplateSteps");
 function createClinicalEngineService(deps) {
   const { db, audit, logger } = deps;
-  const log3 = logger.child("clinical-engine");
+  const log32 = logger.child("clinical-engine");
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const iso = /* @__PURE__ */ __name(() => now().toISOString(), "iso");
+  const iso = /* @__PURE__ */ __name2(() => now().toISOString(), "iso");
   async function loadStudent(studentId) {
     const row = await db.queryOne(
       `SELECT id, first_name, last_name, grade, owner_staff_id FROM students WHERE id = ?`,
@@ -26599,10 +28301,12 @@ function createClinicalEngineService(deps) {
     return row;
   }
   __name(loadStudent, "loadStudent");
+  __name2(loadStudent, "loadStudent");
   function studentNameOf(s) {
     return `${s.first_name} ${s.last_name}`.trim();
   }
   __name(studentNameOf, "studentNameOf");
+  __name2(studentNameOf, "studentNameOf");
   function assertCanView(student, actor) {
     if (actor.role === "manager" || actor.role === "secretary")
       return;
@@ -26611,6 +28315,7 @@ function createClinicalEngineService(deps) {
     throw new ForbiddenError("\u062A\u0641\u0633\u06CC\u0631 \u0628\u0627\u0644\u06CC\u0646\u06CC \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0645\u062F\u06CC\u0631\u060C \u0645\u0646\u0634\u06CC \u06CC\u0627 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u0645\u0633\u0626\u0648\u0644 \u067E\u0631\u0648\u0646\u062F\u0647 \u0642\u0627\u0628\u0644 \u0645\u0634\u0627\u0647\u062F\u0647 \u0627\u0633\u062A");
   }
   __name(assertCanView, "assertCanView");
+  __name2(assertCanView, "assertCanView");
   function assertCanDecide(student, actor) {
     if (actor.role === "manager")
       return;
@@ -26619,6 +28324,7 @@ function createClinicalEngineService(deps) {
     throw new ForbiddenError("\u062B\u0628\u062A \u062A\u0635\u0645\u06CC\u0645 \u0641\u0642\u0637 \u062A\u0648\u0633\u0637 \u0645\u062F\u06CC\u0631 \u06CC\u0627 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u0645\u0633\u0626\u0648\u0644 \u067E\u0631\u0648\u0646\u062F\u0647 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
   }
   __name(assertCanDecide, "assertCanDecide");
+  __name2(assertCanDecide, "assertCanDecide");
   async function loadEvidenceEvents(studentId) {
     const rows = await db.query(
       `SELECT e.id,
@@ -26652,12 +28358,13 @@ function createClinicalEngineService(deps) {
     }));
   }
   __name(loadEvidenceEvents, "loadEvidenceEvents");
+  __name2(loadEvidenceEvents, "loadEvidenceEvents");
   async function getInsights(studentId, actor) {
     const student = await loadStudent(studentId);
     assertCanView(student, actor);
     const events = await loadEvidenceEvents(studentId);
     const result = runInference(events, { now });
-    log3.debug("insights computed", { studentId, ranked: result.ranked.length });
+    log32.debug("insights computed", { studentId, ranked: result.ranked.length });
     return {
       ...result,
       ranked: result.ranked.map((h) => ({ ...h, narrative: narrativeOfHypothesis(h) })),
@@ -26666,6 +28373,7 @@ function createClinicalEngineService(deps) {
     };
   }
   __name(getInsights, "getInsights");
+  __name2(getInsights, "getInsights");
   function sessionRowToRecord(r) {
     const status = PATHWAY_SESSION_STATUSES.includes(r.status) ? r.status : "planned";
     return {
@@ -26684,6 +28392,7 @@ function createClinicalEngineService(deps) {
     };
   }
   __name(sessionRowToRecord, "sessionRowToRecord");
+  __name2(sessionRowToRecord, "sessionRowToRecord");
   async function loadPathSessions(pathwayId) {
     const rows = await db.query(
       `SELECT * FROM pathway_sessions WHERE pathway_id = ? ORDER BY ord ASC, created_at ASC`,
@@ -26692,6 +28401,7 @@ function createClinicalEngineService(deps) {
     return rows.map(sessionRowToRecord);
   }
   __name(loadPathSessions, "loadPathSessions");
+  __name2(loadPathSessions, "loadPathSessions");
   async function loadSessionsOfPaths(pathIds) {
     const map = /* @__PURE__ */ new Map();
     if (pathIds.length === 0)
@@ -26713,6 +28423,7 @@ function createClinicalEngineService(deps) {
     return map;
   }
   __name(loadSessionsOfPaths, "loadSessionsOfPaths");
+  __name2(loadSessionsOfPaths, "loadSessionsOfPaths");
   function pathRowToRecord(r, sessions = []) {
     return {
       id: r.id,
@@ -26735,6 +28446,7 @@ function createClinicalEngineService(deps) {
     };
   }
   __name(pathRowToRecord, "pathRowToRecord");
+  __name2(pathRowToRecord, "pathRowToRecord");
   async function loadPathRow(pathId) {
     const row = await db.queryOne(
       `SELECT p.*, s.first_name AS student_first, s.last_name AS student_last
@@ -26748,6 +28460,7 @@ function createClinicalEngineService(deps) {
     return row;
   }
   __name(loadPathRow, "loadPathRow");
+  __name2(loadPathRow, "loadPathRow");
   async function listPaths(studentId, actor) {
     const student = await loadStudent(studentId);
     assertCanView(student, actor);
@@ -26763,6 +28476,7 @@ function createClinicalEngineService(deps) {
     return rows.map((r) => pathRowToRecord(r, sessionsByPath.get(r.id) ?? []));
   }
   __name(listPaths, "listPaths");
+  __name2(listPaths, "listPaths");
   function templateRowToSummary(r) {
     return {
       key: r.key,
@@ -26778,6 +28492,7 @@ function createClinicalEngineService(deps) {
     };
   }
   __name(templateRowToSummary, "templateRowToSummary");
+  __name2(templateRowToSummary, "templateRowToSummary");
   async function listPathTemplates() {
     const rows = await db.query(
       `SELECT * FROM pathway_templates WHERE active = 1 ORDER BY is_system DESC, created_at ASC`
@@ -26785,6 +28500,7 @@ function createClinicalEngineService(deps) {
     return rows.map(templateRowToSummary);
   }
   __name(listPathTemplates, "listPathTemplates");
+  __name2(listPathTemplates, "listPathTemplates");
   async function upsertPathTemplate(input, actor) {
     const key = input.key.trim();
     if (!PATHWAY_TEMPLATE_KEY_RE.test(key)) {
@@ -26798,8 +28514,8 @@ function createClinicalEngineService(deps) {
       throw new NotFoundError("\u0642\u0627\u0644\u0628 \u0645\u0633\u06CC\u0631");
     if (!input.isUpdate && existing)
       throw new ConflictError("\u06A9\u0644\u06CC\u062F \u0642\u0627\u0644\u0628 \u062A\u06A9\u0631\u0627\u0631\u06CC \u0627\u0633\u062A");
-    const title2 = input.title !== void 0 ? input.title.trim() ? input.title.trim().slice(0, PATHWAY_SESSION_TITLE_MAX) : "" : existing?.title ?? "";
-    if (!title2)
+    const title22 = input.title !== void 0 ? input.title.trim() ? input.title.trim().slice(0, PATHWAY_SESSION_TITLE_MAX) : "" : existing?.title ?? "";
+    if (!title22)
       throw new ValidationError("\u0639\u0646\u0648\u0627\u0646 \u0642\u0627\u0644\u0628 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
     const description = input.description !== void 0 ? parseText(input.description, PATHWAY_TEMPLATE_DESC_MAX) : existing?.description ?? null;
     const protocols = ["learning", "slow_learner", "mental_ot", "rehab"];
@@ -26815,7 +28531,7 @@ function createClinicalEngineService(deps) {
         `UPDATE pathway_templates
             SET title = ?, description = ?, protocol = ?, target_key = ?, steps = ?, sessions_json = ?, active = ?, updated_at = ?
           WHERE key = ?`,
-        [title2, description, protocol, targetKey, JSON.stringify(steps), sessions.length ? JSON.stringify(sessions) : null, active, iso(), key]
+        [title22, description, protocol, targetKey, JSON.stringify(steps), sessions.length ? JSON.stringify(sessions) : null, active, iso(), key]
       );
       await audit.log({
         actorId: actor.staffId,
@@ -26827,12 +28543,12 @@ function createClinicalEngineService(deps) {
           active: { from: existing.active === 1, to: active === 1 }
         }
       });
-      log3.info("pathway template updated", { key, sessions: sessions.length });
+      log32.info("pathway template updated", { key, sessions: sessions.length });
     } else {
       await db.execute(
         `INSERT INTO pathway_templates (id, key, title, description, protocol, target_key, steps, sessions_json, is_system, active, created_by, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?)`,
-        [crypto.randomUUID(), key, title2, description, protocol, targetKey, JSON.stringify(steps), sessions.length ? JSON.stringify(sessions) : null, actor.staffId, iso(), iso()]
+        [crypto.randomUUID(), key, title22, description, protocol, targetKey, JSON.stringify(steps), sessions.length ? JSON.stringify(sessions) : null, actor.staffId, iso(), iso()]
       );
       await audit.log({
         actorId: actor.staffId,
@@ -26841,12 +28557,13 @@ function createClinicalEngineService(deps) {
         resourceId: key,
         changes: { sessions_count: { from: null, to: sessions.length } }
       });
-      log3.info("pathway template created", { key, sessions: sessions.length });
+      log32.info("pathway template created", { key, sessions: sessions.length });
     }
     const row = await db.queryOne(`SELECT * FROM pathway_templates WHERE key = ?`, [key]);
     return templateRowToSummary(row);
   }
   __name(upsertPathTemplate, "upsertPathTemplate");
+  __name2(upsertPathTemplate, "upsertPathTemplate");
   async function createPath(studentId, input, actor) {
     const student = await loadStudent(studentId);
     assertCanDecide(student, actor);
@@ -26907,10 +28624,11 @@ function createClinicalEngineService(deps) {
         [crypto.randomUUID(), id, i + 1, ts.title, JSON.stringify(ts.items), actor.staffId, iso(), iso()]
       );
     }
-    log3.info("path created", { studentId, targetKey, template: templateKey, engine: hypothesis !== null, sessionsSeeded: tplSessions.length });
+    log32.info("path created", { studentId, targetKey, template: templateKey, engine: hypothesis !== null, sessionsSeeded: tplSessions.length });
     return pathRowToRecord(await loadPathRow(id), await loadPathSessions(id));
   }
   __name(createPath, "createPath");
+  __name2(createPath, "createPath");
   async function decidePath(pathId, input, actor) {
     const row = await loadPathRow(pathId);
     const student = await loadStudent(row.student_id);
@@ -26985,10 +28703,11 @@ function createClinicalEngineService(deps) {
         changes
       });
     });
-    log3.info("path decision", { pathId, action: input.action, status: newStatus });
+    log32.info("path decision", { pathId, action: input.action, status: newStatus });
     return pathRowToRecord(await loadPathRow(pathId));
   }
   __name(decidePath, "decidePath");
+  __name2(decidePath, "decidePath");
   async function toggleStep(pathId, stepKey, actor) {
     const row = await loadPathRow(pathId);
     const student = await loadStudent(row.student_id);
@@ -27015,17 +28734,19 @@ function createClinicalEngineService(deps) {
         changes: { step_key: { from: !step.doneAt, to: Boolean(step.doneAt) } }
       });
     });
-    log3.info("path step toggled", { pathId, stepKey, done: Boolean(step.doneAt) });
+    log32.info("path step toggled", { pathId, stepKey, done: Boolean(step.doneAt) });
     return pathRowToRecord(await loadPathRow(pathId));
   }
   __name(toggleStep, "toggleStep");
+  __name2(toggleStep, "toggleStep");
   async function getPath2(pathId, actor) {
     const row = await loadPathRow(pathId);
     const student = await loadStudent(row.student_id);
     assertCanView(student, actor);
     return pathRowToRecord(row, await loadPathSessions(pathId));
   }
-  __name(getPath2, "getPath");
+  __name(getPath2, "getPath2");
+  __name2(getPath2, "getPath");
   async function addPathSession(pathId, input, actor) {
     const row = await loadPathRow(pathId);
     const student = await loadStudent(row.student_id);
@@ -27033,22 +28754,22 @@ function createClinicalEngineService(deps) {
     if (row.status === "closed") {
       throw new ConflictError("\u0645\u0633\u06CC\u0631 \u0628\u0633\u062A\u0647\u200C\u0634\u062F\u0647 \u062C\u0644\u0633\u0647\u0654 \u062C\u062F\u06CC\u062F \u0646\u0645\u06CC\u200C\u067E\u0630\u06CC\u0631\u062F");
     }
-    const count3 = await db.queryOne(
+    const count32 = await db.queryOne(
       `SELECT COUNT(*) AS n FROM pathway_sessions WHERE pathway_id = ?`,
       [pathId]
     );
-    if ((count3?.n ?? 0) >= PATHWAY_SESSION_MAX) {
+    if ((count32?.n ?? 0) >= PATHWAY_SESSION_MAX) {
       throw new ConflictError(`\u062D\u062F\u0627\u06A9\u062B\u0631 ${PATHWAY_SESSION_MAX} \u062C\u0644\u0633\u0647 \u0628\u0631\u0627\u06CC \u06CC\u06A9 \u0645\u0633\u06CC\u0631 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A`);
     }
-    const ord = (count3?.n ?? 0) + 1;
+    const ord = (count32?.n ?? 0) + 1;
     const id = crypto.randomUUID();
-    const title2 = input.title.trim().slice(0, PATHWAY_SESSION_TITLE_MAX);
+    const title22 = input.title.trim().slice(0, PATHWAY_SESSION_TITLE_MAX);
     const plan = parseText(input.plan, PATHWAY_SESSION_PLAN_MAX);
     const items = sanitizeSessionItems(input.items);
     await db.execute(
       `INSERT INTO pathway_sessions (id, pathway_id, ord, title, plan, items_json, status, created_by, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?)`,
-      [id, pathId, ord, title2, plan, JSON.stringify(items), actor.staffId, iso(), iso()]
+      [id, pathId, ord, title22, plan, JSON.stringify(items), actor.staffId, iso(), iso()]
     );
     await audit.log({
       actorId: actor.staffId,
@@ -27057,11 +28778,12 @@ function createClinicalEngineService(deps) {
       resourceId: pathId,
       changes: { session_ord: { from: null, to: ord } }
     });
-    log3.info("path session added", { pathId, ord });
+    log32.info("path session added", { pathId, ord });
     const created = await db.queryOne(`SELECT * FROM pathway_sessions WHERE id = ?`, [id]);
     return sessionRowToRecord(created);
   }
   __name(addPathSession, "addPathSession");
+  __name2(addPathSession, "addPathSession");
   async function updatePathSession(pathId, sessionId, input, actor) {
     const row = await loadPathRow(pathId);
     const student = await loadStudent(row.student_id);
@@ -27100,6 +28822,7 @@ function createClinicalEngineService(deps) {
     return sessionRowToRecord(updated);
   }
   __name(updatePathSession, "updatePathSession");
+  __name2(updatePathSession, "updatePathSession");
   async function deletePathSession(pathId, sessionId, actor) {
     const row = await loadPathRow(pathId);
     const student = await loadStudent(row.student_id);
@@ -27118,9 +28841,10 @@ function createClinicalEngineService(deps) {
       resourceId: pathId,
       changes: { session_ord: { from: session.ord, to: null } }
     });
-    log3.info("path session deleted", { pathId, sessionId });
+    log32.info("path session deleted", { pathId, sessionId });
   }
   __name(deletePathSession, "deletePathSession");
+  __name2(deletePathSession, "deletePathSession");
   async function listPathSessions(pathId, actor) {
     const row = await loadPathRow(pathId);
     const student = await loadStudent(row.student_id);
@@ -27128,10 +28852,12 @@ function createClinicalEngineService(deps) {
     return loadPathSessions(pathId);
   }
   __name(listPathSessions, "listPathSessions");
+  __name2(listPathSessions, "listPathSessions");
   async function listTargets() {
     return ALL_TARGETS_INCLUDING_REHAB.map((t) => ({ key: t.key, title: t.title, group: t.group }));
   }
   __name(listTargets, "listTargets");
+  __name2(listTargets, "listTargets");
   return {
     getInsights,
     listPaths,
@@ -27149,7 +28875,7 @@ function createClinicalEngineService(deps) {
   };
 }
 __name(createClinicalEngineService, "createClinicalEngineService");
-
+__name2(createClinicalEngineService, "createClinicalEngineService");
 var TARGET_KEY_MAX = 40;
 var STEP_KEY_MAX = 80;
 var TEMPLATE_KEY_MAX = 60;
@@ -27339,7 +29065,7 @@ function registerClinicalEngineRoutes(app, service) {
   });
 }
 __name(registerClinicalEngineRoutes, "registerClinicalEngineRoutes");
-
+__name2(registerClinicalEngineRoutes, "registerClinicalEngineRoutes");
 var CONSTRUCT_KEYS = [
   "attention_exec",
   "externalizing",
@@ -27350,7 +29076,6 @@ var CONSTRUCT_KEYS = [
   "general_cog",
   "social_adl"
 ];
-
 var CONSTRUCT_LABELS = {
   attention_exec: "\u062A\u0648\u062C\u0647 \u0648 \u06A9\u0627\u0631\u06A9\u0631\u062F \u0627\u062C\u0631\u0627\u06CC\u06CC",
   externalizing: "\u0631\u0641\u062A\u0627\u0631 \u0628\u06CC\u0631\u0648\u0646\u06CC\u200C\u0633\u0627\u0632\u06CC (\u0646\u0627\u0641\u0631\u0645\u0627\u0646\u06CC/\u0633\u0644\u0648\u06A9)",
@@ -27473,14 +29198,14 @@ var CONFIDENCE_MIN = 0.1;
 var CONFIDENCE_MAX = 0.95;
 var COVERAGE_GOOD_PERCENT = 60;
 var FORMULATION_DISCLAIMER = "\u0627\u06CC\u0646 \u0635\u0648\u0631\u062A\u200C\u0628\u0646\u062F\u06CC\u060C \u062E\u0644\u0627\u0635\u0647\u200C\u0627\u06CC \u0628\u0627\u0644\u06CC\u0646\u06CC \u0627\u0632 \u0634\u0648\u0627\u0647\u062F \u0645\u0648\u062C\u0648\u062F \u067E\u0631\u0648\u0646\u062F\u0647 \u0627\u0633\u062A\u061B \u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646 \u0645\u0639\u0627\u06CC\u0646\u0647\u0654 \u0628\u0627\u0644\u06CC\u0646\u06CC \u0648 \u062A\u0634\u062E\u06CC\u0635 \u0631\u0633\u0645\u06CC \u062A\u0648\u0633\u0637 \u0645\u062A\u062E\u0635\u0635 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A.";
-
 function num3(value) {
   if (value === null || value === void 0 || value === "")
     return null;
   const n = Number(String(value).replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))));
   return Number.isFinite(n) ? n : null;
 }
-__name(num3, "num");
+__name(num3, "num3");
+__name2(num3, "num");
 function latestPerTool2(events) {
   const map = /* @__PURE__ */ new Map();
   for (const e of events) {
@@ -27491,13 +29216,15 @@ function latestPerTool2(events) {
   }
   return map;
 }
-__name(latestPerTool2, "latestPerTool");
+__name(latestPerTool2, "latestPerTool2");
+__name2(latestPerTool2, "latestPerTool");
 function colorOfBandLabel2(label, bands) {
   if (!label || !bands)
     return null;
   return bands.find((b) => b.label === label)?.color ?? null;
 }
-__name(colorOfBandLabel2, "colorOfBandLabel");
+__name(colorOfBandLabel2, "colorOfBandLabel2");
+__name2(colorOfBandLabel2, "colorOfBandLabel");
 function totalColor(event) {
   const a = event.analysis;
   if (!a)
@@ -27516,10 +29243,12 @@ function totalColor(event) {
   return null;
 }
 __name(totalColor, "totalColor");
+__name2(totalColor, "totalColor");
 function subscaleScoreOf(event, id) {
   return event.analysis?.subscaleScores?.find((s) => s.id === id);
 }
 __name(subscaleScoreOf, "subscaleScoreOf");
+__name2(subscaleScoreOf, "subscaleScoreOf");
 function subscaleColor(event, id) {
   const ss = subscaleScoreOf(event, id);
   if (!ss)
@@ -27530,22 +29259,26 @@ function subscaleColor(event, id) {
   return colorOfBandLabel2(ss.band, def?.bands ?? null);
 }
 __name(subscaleColor, "subscaleColor");
+__name2(subscaleColor, "subscaleColor");
 function payloadText2(event, keys) {
   if (!event?.payload)
     return "";
   return keys.map((k) => event.payload?.[k]?.value ?? "").join(" ");
 }
-__name(payloadText2, "payloadText");
+__name(payloadText2, "payloadText2");
+__name2(payloadText2, "payloadText");
 function payloadField(event, key) {
   return event?.payload?.[key]?.value ?? "";
 }
 __name(payloadField, "payloadField");
+__name2(payloadField, "payloadField");
 function addRow(rows, row) {
   if (row.weight <= 0)
     return;
   rows.push(row);
 }
 __name(addRow, "addRow");
+__name2(addRow, "addRow");
 function criteriaMetFor(toolKey, criterionIds, event) {
   if (!event)
     return 0;
@@ -27566,6 +29299,7 @@ function criteriaMetFor(toolKey, criterionIds, event) {
   return met;
 }
 __name(criteriaMetFor, "criteriaMetFor");
+__name2(criteriaMetFor, "criteriaMetFor");
 function oddRuleActive(event) {
   if (!event)
     return false;
@@ -27573,6 +29307,7 @@ function oddRuleActive(event) {
   return full >= ODD_MIN_FULL_CRITERIA2;
 }
 __name(oddRuleActive, "oddRuleActive");
+__name2(oddRuleActive, "oddRuleActive");
 function asdRuleActive(event) {
   if (!event)
     return false;
@@ -27581,6 +29316,7 @@ function asdRuleActive(event) {
   return allA && bMet >= ASD_B_FULL_CRITERIA2;
 }
 __name(asdRuleActive, "asdRuleActive");
+__name2(asdRuleActive, "asdRuleActive");
 function mapSnap(rows, role, event) {
   const suffix = role === "parent" ? "p" : "t";
   const cut = SNAP_CUTOFFS[role];
@@ -27618,6 +29354,7 @@ function mapSnap(rows, role, event) {
   }
 }
 __name(mapSnap, "mapSnap");
+__name2(mapSnap, "mapSnap");
 function mapSdq(rows, role, event) {
   const source = TOOL_SOURCE[event.toolKey];
   const fa2 = role === "parent" ? "\u0648\u0627\u0644\u062F" : "\u0645\u0639\u0644\u0645";
@@ -27639,6 +29376,7 @@ function mapSdq(rows, role, event) {
   }
 }
 __name(mapSdq, "mapSdq");
+__name2(mapSdq, "mapSdq");
 function mapScared(rows, event) {
   const source = TOOL_SOURCE[event.toolKey];
   const total = event.analysis?.score ?? null;
@@ -27669,6 +29407,7 @@ function mapScared(rows, event) {
   }
 }
 __name(mapScared, "mapScared");
+__name2(mapScared, "mapScared");
 function mapDcdq(rows, event) {
   const c = totalColor(event);
   const source = TOOL_SOURCE[event.toolKey];
@@ -27679,6 +29418,7 @@ function mapDcdq(rows, event) {
   }
 }
 __name(mapDcdq, "mapDcdq");
+__name2(mapDcdq, "mapDcdq");
 function mapConners(rows, event) {
   const total = event.analysis?.score ?? null;
   const source = TOOL_SOURCE[event.toolKey];
@@ -27691,6 +29431,7 @@ function mapConners(rows, event) {
   }
 }
 __name(mapConners, "mapConners");
+__name2(mapConners, "mapConners");
 function mapLegacyBehavior(rows, event) {
   const c = totalColor(event);
   if (c !== "danger")
@@ -27700,6 +29441,7 @@ function mapLegacyBehavior(rows, event) {
   addRow(rows, { construct: "externalizing", toolId: event.toolKey, signal: "legacy_behavior_danger", weight: 1, danger: true, sourceType: source, textFa: `${fa2 === "\u0645\u0639\u0644\u0645" ? "\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0639\u0644\u0645" : "\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0646\u0647"} \u0631\u0641\u062A\u0627\u0631 \u0686\u0627\u0644\u0634\u06CC \u0631\u0627 \u062F\u0631 \u0628\u0627\u0646\u062F \u067E\u0631\u062E\u0637\u0631 \u062B\u0628\u062A \u06A9\u0631\u062F\u0647 \u0627\u0633\u062A.` });
 }
 __name(mapLegacyBehavior, "mapLegacyBehavior");
+__name2(mapLegacyBehavior, "mapLegacyBehavior");
 function mapSld(rows, event, kind) {
   const total = event.analysis?.score ?? null;
   const source = TOOL_SOURCE[event.toolKey];
@@ -27716,6 +29458,7 @@ function mapSld(rows, event, kind) {
   }
 }
 __name(mapSld, "mapSld");
+__name2(mapSld, "mapSld");
 function mapAsd(rows, event, ruleActive) {
   const total = event.analysis?.score ?? null;
   const source = TOOL_SOURCE[event.toolKey];
@@ -27727,6 +29470,7 @@ function mapAsd(rows, event, ruleActive) {
   }
 }
 __name(mapAsd, "mapAsd");
+__name2(mapAsd, "mapAsd");
 function mapSpeech(rows, event) {
   const total = event.analysis?.score ?? null;
   const source = TOOL_SOURCE[event.toolKey];
@@ -27738,6 +29482,7 @@ function mapSpeech(rows, event) {
   }
 }
 __name(mapSpeech, "mapSpeech");
+__name2(mapSpeech, "mapSpeech");
 function mapOdd(rows, event, ruleActive) {
   const total = event.analysis?.score ?? null;
   const source = TOOL_SOURCE[event.toolKey];
@@ -27749,6 +29494,7 @@ function mapOdd(rows, event, ruleActive) {
   }
 }
 __name(mapOdd, "mapOdd");
+__name2(mapOdd, "mapOdd");
 var PROBE_KINDS = [
   { kind: "read", toolKey: "ce-probe-read-v1", valueField: "wcpm", gradeField: "text_grade", norm: WCPM_NORM_50TH, fa: "\u062E\u0648\u0627\u0646\u062F\u0646", subtype: "reading" },
   { kind: "write", toolKey: "ce-probe-write-v1", valueField: "alpha15s", gradeField: "dict_grade", norm: ALPHA_15S_NORM, fa: "\u0646\u0648\u0634\u062A\u0646", subtype: "writing" },
@@ -27778,6 +29524,7 @@ function mapProbes(rows, event, ctx) {
   }
 }
 __name(mapProbes, "mapProbes");
+__name2(mapProbes, "mapProbes");
 function rehabMean(event, subscaleId) {
   const ss = subscaleScoreOf(event, subscaleId);
   if (!ss || ss.max <= 0)
@@ -27786,6 +29533,7 @@ function rehabMean(event, subscaleId) {
   return Number.isFinite(mean) ? mean : null;
 }
 __name(rehabMean, "rehabMean");
+__name2(rehabMean, "rehabMean");
 function mapRehabCog(rows, event) {
   const source = TOOL_SOURCE[event.toolKey];
   const groups = [
@@ -27806,6 +29554,7 @@ function mapRehabCog(rows, event) {
   }
 }
 __name(mapRehabCog, "mapRehabCog");
+__name2(mapRehabCog, "mapRehabCog");
 function mapRehabMotor(rows, event) {
   const source = TOOL_SOURCE[event.toolKey];
   const ids = ["gross", "bal", "fine", "eye", "post"];
@@ -27820,6 +29569,7 @@ function mapRehabMotor(rows, event) {
   }
 }
 __name(mapRehabMotor, "mapRehabMotor");
+__name2(mapRehabMotor, "mapRehabMotor");
 function mapRehabAdl(rows, event) {
   const source = TOOL_SOURCE[event.toolKey];
   const ids = ["org", "soc"];
@@ -27832,6 +29582,7 @@ function mapRehabAdl(rows, event) {
   }
 }
 __name(mapRehabAdl, "mapRehabAdl");
+__name2(mapRehabAdl, "mapRehabAdl");
 var ANAM_FIELD_MAP = {
   attention_exec: ["chief_complaint", "weak_subjects"],
   externalizing: ["chief_complaint"],
@@ -27869,6 +29620,7 @@ function mapAnamnesis(rows, event, ctx) {
   }
 }
 __name(mapAnamnesis, "mapAnamnesis");
+__name2(mapAnamnesis, "mapAnamnesis");
 function anamnesisTextFor(construct) {
   switch (construct) {
     case "attention_exec":
@@ -27890,6 +29642,7 @@ function anamnesisTextFor(construct) {
   }
 }
 __name(anamnesisTextFor, "anamnesisTextFor");
+__name2(anamnesisTextFor, "anamnesisTextFor");
 function normalizeEvents(events) {
   const latest = latestPerTool2(events);
   const rows = [];
@@ -28016,12 +29769,13 @@ function normalizeEvents(events) {
   return { rows, latest, ctx };
 }
 __name(normalizeEvents, "normalizeEvents");
+__name2(normalizeEvents, "normalizeEvents");
 function applySnapPairBonus(rows, snapP, snapT) {
   if (!snapP || !snapT)
     return;
   const cutP = SNAP_CUTOFFS.parent;
   const cutT = SNAP_CUTOFFS.teacher;
-  const pair = /* @__PURE__ */ __name((sub, construct, fa2, signal) => {
+  const pair = /* @__PURE__ */ __name2((sub, construct, fa2, signal) => {
     const p = subscaleScoreOf(snapP, sub);
     const t = subscaleScoreOf(snapT, sub);
     if (!p || !t)
@@ -28042,7 +29796,7 @@ function applySnapPairBonus(rows, snapP, snapT) {
   pair("odd", "externalizing", "\u0631\u0641\u062A\u0627\u0631 \u0646\u0627\u0641\u0631\u0645\u0627\u0646\u06CC", "snap_odd");
 }
 __name(applySnapPairBonus, "applySnapPairBonus");
-
+__name2(applySnapPairBonus, "applySnapPairBonus");
 var OUTCOME_CONSTRUCT = {
   SLD: "academic_learning",
   ADHD: "attention_exec",
@@ -28088,6 +29842,7 @@ function monitoringParse(interval) {
   return n === 3 || n === 6 || n === 12 ? n : null;
 }
 __name(monitoringParse, "monitoringParse");
+__name2(monitoringParse, "monitoringParse");
 function indexRowLevel(scaled) {
   if (scaled === null)
     return 0;
@@ -28098,11 +29853,13 @@ function indexRowLevel(scaled) {
   return 0;
 }
 __name(indexRowLevel, "indexRowLevel");
+__name2(indexRowLevel, "indexRowLevel");
 function scaledLabel(scaled, percentile) {
   const p = percentile === null || percentile === void 0 ? "" : `\u060C \u0635\u062F\u06A9 ${faNum5(percentile)}`;
   return `${faNum5(scaled ?? 0)}${p}`;
 }
 __name(scaledLabel, "scaledLabel");
+__name2(scaledLabel, "scaledLabel");
 function injectWechsler(result) {
   const rows = [];
   if (!result || !result.ok || !result.snapshot) {
@@ -28158,7 +29915,7 @@ function injectWechsler(result) {
     link.iqBasis = null;
     link.iqValue = null;
   }
-  const indexRow = /* @__PURE__ */ __name((key, construct, textWeak, textBorder) => {
+  const indexRow = /* @__PURE__ */ __name2((key, construct, textWeak, textBorder) => {
     const ix = indices[key];
     if (!ix || ix.scaled === null || ix.scaled === void 0)
       return;
@@ -28172,7 +29929,7 @@ function injectWechsler(result) {
       return;
     add(key, construct, level === 2, weight, level === 2 ? textWeak.replace("{v}", scaledLabel(ix.scaled, ix.percentile)) : textBorder);
   }, "indexRow");
-  const add = /* @__PURE__ */ __name((key, construct, danger, weight, text) => {
+  const add = /* @__PURE__ */ __name2((key, construct, danger, weight, text) => {
     rows.push({ construct, toolId: WECHSLER_TOOL, signal: `wisc_${key.toLowerCase()}_${danger ? "weak" : "border"}`, weight, danger, sourceType: "examiner", textFa: text });
   }, "add");
   indexRow("VCI", "language_comm", "\u0634\u0627\u062E\u0635 \u062F\u0631\u06A9 \u06A9\u0644\u0627\u0645\u06CC \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0627\u0646\u062A\u0638\u0627\u0631 \u0633\u0646\u06CC \u0627\u0633\u062A ({v}).", "\u0634\u0627\u062E\u0635 \u062F\u0631\u06A9 \u06A9\u0644\u0627\u0645\u06CC \u062F\u0631 \u0645\u0631\u0632 \u067E\u0627\u06CC\u06CC\u0646 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0633\u062A.");
@@ -28192,7 +29949,7 @@ function injectWechsler(result) {
   if (fsiqVal !== null && fsiqVal >= IQ_GIFTED_FSIQ || gaiVal !== null && gaiVal >= IQ_GIFTED_FSIQ) {
     rows.push({ construct: "general_cog", toolId: WECHSLER_TOOL, signal: "wisc_iq_gifted", weight: 1, danger: false, sourceType: "examiner", textFa: "\u0638\u0631\u0641\u06CC\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u06A9\u0644\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u062D\u062F \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0633\u062A." });
   }
-  const injectOutcome = /* @__PURE__ */ __name((o, comorbid) => {
+  const injectOutcome = /* @__PURE__ */ __name2((o, comorbid) => {
     if (!o || o.status !== "active")
       return;
     const construct = OUTCOME_CONSTRUCT[o.id] ?? null;
@@ -28239,7 +29996,7 @@ function injectWechsler(result) {
   };
 }
 __name(injectWechsler, "injectWechsler");
-
+__name2(injectWechsler, "injectWechsler");
 var LEVEL_ORDER = { "\u067E\u0627\u06CC\u06CC\u0646": 0, "\u0645\u0631\u0632\u06CC": 1, "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647": 2, "\u0647\u0645\u200C\u06AF\u0631\u0627\u06CC-\u0628\u0627\u0644\u0627": 3 };
 function levelFromScore(s) {
   if (s >= LEVEL_THRESHOLDS.high)
@@ -28251,14 +30008,17 @@ function levelFromScore(s) {
   return "\u067E\u0627\u06CC\u06CC\u0646";
 }
 __name(levelFromScore, "levelFromScore");
+__name2(levelFromScore, "levelFromScore");
 function clampLevel(level, max) {
   return LEVEL_ORDER[level] > LEVEL_ORDER[max] ? max : level;
 }
 __name(clampLevel, "clampLevel");
+__name2(clampLevel, "clampLevel");
 function atLeastLevel(levels, k, min) {
   return LEVEL_ORDER[levels.get(k) ?? "\u067E\u0627\u06CC\u06CC\u0646"] >= LEVEL_ORDER[min];
 }
 __name(atLeastLevel, "atLeastLevel");
+__name2(atLeastLevel, "atLeastLevel");
 var OT_DOMAIN_LABEL_FA = {
   gross: "\u062D\u0631\u06A9\u0627\u062A \u062F\u0631\u0634\u062A",
   fine: "\u062D\u0631\u06A9\u0627\u062A \u0638\u0631\u06CC\u0641",
@@ -28298,6 +30058,7 @@ function otDomainStatuses(ot, ageYears2) {
   return out;
 }
 __name(otDomainStatuses, "otDomainStatuses");
+__name2(otDomainStatuses, "otDomainStatuses");
 function injectOt(statuses, rows) {
   for (const st of statuses) {
     const delay = st.delayed ? 2 : st.border ? 1 : 0;
@@ -28330,6 +30091,7 @@ function injectOt(statuses, rows) {
   }
 }
 __name(injectOt, "injectOt");
+__name2(injectOt, "injectOt");
 function detectDivergences(norm, wInj, otStatuses) {
   const out = [];
   const ctx = norm.ctx;
@@ -28434,9 +30196,10 @@ function detectDivergences(norm, wInj, otStatuses) {
   return out;
 }
 __name(detectDivergences, "detectDivergences");
+__name2(detectDivergences, "detectDivergences");
 function scoreConstructs(rows) {
   const per = /* @__PURE__ */ new Map();
-  const get = /* @__PURE__ */ __name((k) => {
+  const get = /* @__PURE__ */ __name2((k) => {
     let v = per.get(k);
     if (!v) {
       v = { rows: [], rawScore: 0, score: 0, sources: [], tools: /* @__PURE__ */ new Set(), hasParentDanger: false, hasTeacherDanger: false };
@@ -28464,9 +30227,10 @@ function scoreConstructs(rows) {
   return per;
 }
 __name(scoreConstructs, "scoreConstructs");
+__name2(scoreConstructs, "scoreConstructs");
 function buildCaps(per, wInj, gates, divergences) {
   const result = { globalCapsFa: [], capTexts: /* @__PURE__ */ new Map(), conflictTexts: /* @__PURE__ */ new Map(), capMax: /* @__PURE__ */ new Map() };
-  const setCap = /* @__PURE__ */ __name((k, max, text) => {
+  const setCap = /* @__PURE__ */ __name2((k, max, text) => {
     const arr = result.capTexts.get(k) ?? [];
     if (!arr.includes(text))
       arr.push(text);
@@ -28475,7 +30239,7 @@ function buildCaps(per, wInj, gates, divergences) {
     if (!cur || LEVEL_ORDER[max] < LEVEL_ORDER[cur])
       result.capMax.set(k, max);
   }, "setCap");
-  const setConflict = /* @__PURE__ */ __name((k, text) => {
+  const setConflict = /* @__PURE__ */ __name2((k, text) => {
     const arr = result.conflictTexts.get(k) ?? [];
     if (!arr.includes(text))
       arr.push(text);
@@ -28520,6 +30284,7 @@ function buildCaps(per, wInj, gates, divergences) {
   return result;
 }
 __name(buildCaps, "buildCaps");
+__name2(buildCaps, "buildCaps");
 function idxValueOf(wInj, key) {
   const line2 = wInj.link?.indicesFa.find((l) => l.startsWith(`${key}=`));
   if (!line2)
@@ -28528,14 +30293,16 @@ function idxValueOf(wInj, key) {
   return m ? Number(m[1]) : null;
 }
 __name(idxValueOf, "idxValueOf");
+__name2(idxValueOf, "idxValueOf");
 function maxIndexValueOf(wInj) {
   const vals = (wInj.link?.indicesFa ?? []).map((l) => Number((l.match(/=(\d+)/) ?? [])[1])).filter((n) => Number.isFinite(n));
   return vals.length ? Math.max(...vals) : 0;
 }
 __name(maxIndexValueOf, "maxIndexValueOf");
+__name2(maxIndexValueOf, "maxIndexValueOf");
 function evaluatePatterns(norm, wInj, levels, otStatuses) {
   const out = [];
-  const push = /* @__PURE__ */ __name((p) => out.push(p), "push");
+  const push = /* @__PURE__ */ __name2((p) => out.push(p), "push");
   const allRows = [...norm.rows, ...wInj.rows];
   const p12Iq = wInj.iqValue !== null && wInj.iqValue <= IQ_ID_MAX;
   const p12Ot = otStatuses.filter((s) => s.delayed).length >= 4;
@@ -28681,6 +30448,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   return out;
 }
 __name(evaluatePatterns, "evaluatePatterns");
+__name2(evaluatePatterns, "evaluatePatterns");
 var PATTERN_ORDER = ["P12_GLOBAL_WEAK", "P8_NVLD", "P7_TWO_E", "P3_ASD_x_ADHD", "P1_SLD_x_ADHD", "P2_DCD_x_ADHD", "P5_LANG_x_SLD", "P6_BIF_x_SLD", "P9_PSI_WMI", "P10_GAI_GAP", "P4_ANXIETY_SECONDARY", "P11_MOOD"];
 function applyParsimony(patterns, per, levels) {
   const active = patterns.filter((p) => p.status === "active");
@@ -28743,6 +30511,7 @@ function applyParsimony(patterns, per, levels) {
   return { primary, sharedWith, differentialsFa };
 }
 __name(applyParsimony, "applyParsimony");
+__name2(applyParsimony, "applyParsimony");
 function detectRedFlags(norm, wInj, patterns) {
   const out = [];
   if (norm.ctx.speechCritical) {
@@ -28766,6 +30535,7 @@ function detectRedFlags(norm, wInj, patterns) {
   return out;
 }
 __name(detectRedFlags, "detectRedFlags");
+__name2(detectRedFlags, "detectRedFlags");
 function computeCoverage(input, presentTools, levels) {
   const gates = input.gates;
   const gatesScore = gates && gates.gates.length > 0 ? gates.gates.filter((g) => g.done).length / gates.gates.length : 0;
@@ -28795,7 +30565,7 @@ function computeCoverage(input, presentTools, levels) {
   const constructCoverage = covs.length ? covs.reduce((a, b) => a + b, 0) / covs.length : 1;
   const percent = Math.round(100 * (0.5 * gatesScore + 0.5 * constructCoverage));
   if (gates) {
-    const gateOf = /* @__PURE__ */ __name((key) => gates.gates.find((g) => g.key === key), "gateOf");
+    const gateOf = /* @__PURE__ */ __name2((key) => gates.gates.find((g) => g.key === key), "gateOf");
     if (!gateOf("anamnesis")?.done)
       missing.add("ce-anamnesis-v2");
     if (!gateOf("behavioral")?.done)
@@ -28808,13 +30578,14 @@ function computeCoverage(input, presentTools, levels) {
   return { percent, missing: [...missing] };
 }
 __name(computeCoverage, "computeCoverage");
+__name2(computeCoverage, "computeCoverage");
 function pickNextActions(input, norm, levels, redFlags, wInj, divergences) {
   const present = new Set(norm.latest.keys());
   if (input.wechsler)
     present.add(WECHSLER_TOOL);
   const out = [];
   const seen = /* @__PURE__ */ new Set();
-  const add = /* @__PURE__ */ __name((a) => {
+  const add = /* @__PURE__ */ __name2((a) => {
     const key = a.toolId ?? a.actionFa;
     if (seen.has(key))
       return;
@@ -28883,8 +30654,9 @@ function pickNextActions(input, norm, levels, redFlags, wInj, divergences) {
   return out.slice(0, 8);
 }
 __name(pickNextActions, "pickNextActions");
+__name2(pickNextActions, "pickNextActions");
 function suggestProtocol(norm, redFlags, wInj, patterns, levels) {
-  const patternActive = /* @__PURE__ */ __name((key) => patterns.some((p) => p.key === key && p.status === "active"), "patternActive");
+  const patternActive = /* @__PURE__ */ __name2((key) => patterns.some((p) => p.key === key && p.status === "active"), "patternActive");
   if (redFlags.some((r) => r.urgent) || wInj.iqValue !== null && wInj.iqValue <= IQ_ID_MAX || patternActive("P12_GLOBAL_WEAK")) {
     return { protocol: "rehab", rationaleFa: "\u067E\u0631\u0686\u0645 \u0641\u0648\u0631\u06CC \u06CC\u0627 \u0627\u0641\u062A \u0647\u0645\u0647\u200C\u06AF\u06CC\u0631 \u0634\u0646\u0627\u062E\u062A\u06CC \u0641\u0639\u0627\u0644 \u0627\u0633\u062A \u2014 \u0645\u0633\u06CC\u0631 \u062A\u0648\u0627\u0646\u0628\u062E\u0634\u06CC \u0648 \u0627\u0631\u062C\u0627\u0639 \u062A\u062E\u0635\u0635\u06CC \u0627\u0648\u0644\u0648\u06CC\u062A \u062F\u0627\u0631\u062F." };
   }
@@ -28912,6 +30684,7 @@ function suggestProtocol(norm, redFlags, wInj, patterns, levels) {
   return null;
 }
 __name(suggestProtocol, "suggestProtocol");
+__name2(suggestProtocol, "suggestProtocol");
 function suggestMonitoring(redFlags, wInj, levels) {
   if (redFlags.length > 0) {
     return { intervalMonths: 3, rationaleFa: redFlags.some((r) => r.urgent) ? "\u067E\u0631\u0686\u0645 \u0641\u0648\u0631\u06CC \u0641\u0639\u0627\u0644 \u0627\u0633\u062A \u2014 \u0627\u0631\u062C\u0627\u0639 \u0648 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0633\u0631\u06CC\u0639 (\u06F3 \u0645\u0627\u0647)." : "\u067E\u0631\u0686\u0645 \u0627\u06CC\u0645\u0646\u06CC \u063A\u06CC\u0631\u0641\u0648\u0631\u06CC \u0641\u0639\u0627\u0644 \u0627\u0633\u062A \u2014 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0633\u0647\u200C\u0645\u0627\u0647\u0647." };
@@ -28928,6 +30701,7 @@ function suggestMonitoring(redFlags, wInj, levels) {
   return { intervalMonths: 12, rationaleFa: "\u0634\u0648\u0627\u0647\u062F \u0628\u0631\u062C\u0633\u062A\u0647\u200C\u0627\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u2014 \u067E\u0627\u06CC\u0634 \u0633\u0627\u0644\u0627\u0646\u0647." };
 }
 __name(suggestMonitoring, "suggestMonitoring");
+__name2(suggestMonitoring, "suggestMonitoring");
 function buildNarrative(constructs, primary, patterns, nextActions, wInj) {
   const elevated = constructs.filter((c) => c.level !== "\u067E\u0627\u06CC\u06CC\u0646");
   const sawParts = [];
@@ -28945,6 +30719,7 @@ function buildNarrative(constructs, primary, patterns, nextActions, wInj) {
   return { saw, means, next };
 }
 __name(buildNarrative, "buildNarrative");
+__name2(buildNarrative, "buildNarrative");
 function buildCaseFormulation(input, options = {}) {
   const now = options.now ?? (() => /* @__PURE__ */ new Date());
   const norm = normalizeEvents(input.events);
@@ -29054,7 +30829,7 @@ function buildCaseFormulation(input, options = {}) {
   };
 }
 __name(buildCaseFormulation, "buildCaseFormulation");
-
+__name2(buildCaseFormulation, "buildCaseFormulation");
 function parseJson3(raw2, fallback) {
   if (!raw2)
     return fallback;
@@ -29064,7 +30839,8 @@ function parseJson3(raw2, fallback) {
     return fallback;
   }
 }
-__name(parseJson3, "parseJson");
+__name(parseJson3, "parseJson3");
+__name2(parseJson3, "parseJson");
 function wechslerFromEvent(payload) {
   if (!payload)
     return null;
@@ -29077,7 +30853,7 @@ function wechslerFromEvent(payload) {
     } catch {
     }
   }
-  const num5 = /* @__PURE__ */ __name((key) => {
+  const num5 = /* @__PURE__ */ __name2((key) => {
     const raw2 = payload[key]?.value;
     if (raw2 === void 0 || raw2 === null || raw2 === "")
       return null;
@@ -29091,7 +30867,7 @@ function wechslerFromEvent(payload) {
   const fsiq = num5("fsiq");
   if (fsiq === null && vci === null && pri === null && wmi === null && psi === null)
     return null;
-  const emptyIndex = /* @__PURE__ */ __name((v) => ({ scaled: v, percentile: null, ci: null, cls: "" }), "emptyIndex");
+  const emptyIndex = /* @__PURE__ */ __name2((v) => ({ scaled: v, percentile: null, ci: null, cls: "" }), "emptyIndex");
   const values = [vci, pri, wmi, psi, fsiq].filter((v) => v !== null);
   const scatter = values.length >= 2 ? Math.max(...values) - Math.min(...values) : 0;
   const snapshot = {
@@ -29137,6 +30913,7 @@ function wechslerFromEvent(payload) {
   };
 }
 __name(wechslerFromEvent, "wechslerFromEvent");
+__name2(wechslerFromEvent, "wechslerFromEvent");
 function ageYearsFromBirthDate(birthDate) {
   if (!birthDate)
     return void 0;
@@ -29161,9 +30938,10 @@ function ageYearsFromBirthDate(birthDate) {
   return age >= 3 && age < 25 ? age : void 0;
 }
 __name(ageYearsFromBirthDate, "ageYearsFromBirthDate");
+__name2(ageYearsFromBirthDate, "ageYearsFromBirthDate");
 function createReasoningEngineService(deps) {
   const { db, logger } = deps;
-  const log3 = logger.child("reasoning-engine");
+  const log32 = logger.child("reasoning-engine");
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   async function loadStudent(studentId) {
     const row = await db.queryOne(
@@ -29175,6 +30953,7 @@ function createReasoningEngineService(deps) {
     return row;
   }
   __name(loadStudent, "loadStudent");
+  __name2(loadStudent, "loadStudent");
   function assertCanView(student, actor) {
     if (actor.role === "manager" || actor.role === "secretary")
       return;
@@ -29183,6 +30962,7 @@ function createReasoningEngineService(deps) {
     throw new ForbiddenError("\u0635\u0648\u0631\u062A\u200C\u0628\u0646\u062F\u06CC \u067E\u0631\u0648\u0646\u062F\u0647 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0645\u062F\u06CC\u0631\u060C \u0645\u0646\u0634\u06CC \u06CC\u0627 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u0645\u0633\u0626\u0648\u0644 \u0642\u0627\u0628\u0644 \u0645\u0634\u0627\u0647\u062F\u0647 \u0627\u0633\u062A");
   }
   __name(assertCanView, "assertCanView");
+  __name2(assertCanView, "assertCanView");
   async function loadEvidenceEvents(studentId) {
     const rows = await db.query(
       `SELECT e.id,
@@ -29216,6 +30996,7 @@ function createReasoningEngineService(deps) {
     }));
   }
   __name(loadEvidenceEvents, "loadEvidenceEvents");
+  __name2(loadEvidenceEvents, "loadEvidenceEvents");
   async function loadWechsler(studentId) {
     const row = await db.queryOne(
       `SELECT e.payload
@@ -29232,6 +31013,7 @@ function createReasoningEngineService(deps) {
     return wechslerFromEvent(payload);
   }
   __name(loadWechsler, "loadWechsler");
+  __name2(loadWechsler, "loadWechsler");
   async function getCaseFormulation(studentId, actor) {
     const student = await loadStudent(studentId);
     assertCanView(student, actor);
@@ -29255,7 +31037,7 @@ function createReasoningEngineService(deps) {
       },
       { now }
     );
-    log3.debug("case formulation computed", {
+    log32.debug("case formulation computed", {
       studentId,
       coherence: result.coherence,
       patterns: result.patterns.filter((p) => p.status === "active").length,
@@ -29264,10 +31046,11 @@ function createReasoningEngineService(deps) {
     return result;
   }
   __name(getCaseFormulation, "getCaseFormulation");
+  __name2(getCaseFormulation, "getCaseFormulation");
   return { getCaseFormulation };
 }
 __name(createReasoningEngineService, "createReasoningEngineService");
-
+__name2(createReasoningEngineService, "createReasoningEngineService");
 function registerReasoningEngineRoutes(app, service) {
   app.get("/api/students/:id/case-formulation", requireRole("manager", "secretary", "therapist"), async (c) => {
     const actor = getAuthContext(c);
@@ -29276,7 +31059,7 @@ function registerReasoningEngineRoutes(app, service) {
   });
 }
 __name(registerReasoningEngineRoutes, "registerReasoningEngineRoutes");
-
+__name2(registerReasoningEngineRoutes, "registerReasoningEngineRoutes");
 var OT_DOMAINS = ["gross", "fine", "visual", "auditory", "cognitive", "adl", "social"];
 var OT_DOMAIN_LABELS = {
   gross: "\u062D\u0631\u06A9\u0627\u062A \u062F\u0631\u0634\u062A",
@@ -29301,7 +31084,6 @@ var OT_PROMPT_LEVEL_LABELS = {
   full_physical: "\u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u0641\u06CC\u0632\u06CC\u06A9\u06CC \u06A9\u0627\u0645\u0644"
 };
 var OT_GATE_FRESH_MONTHS = 12;
-
 var STANDARD_PATHWAY_ORDER = ["anamnesis", "behavioral", "wechsler", "skills", "needs"];
 var STANDARD_STAGE_META = {
   anamnesis: {
@@ -29326,7 +31108,6 @@ var STANDARD_STAGE_META = {
   }
 };
 var SUSPICION_EVENT_KEY = "ce-clinical-suspicion-v1";
-
 var SUSPICION_LEVEL_LABELS = {
   watch: "\u0642\u0627\u0628\u0644 \u067E\u0627\u06CC\u0634",
   high: "\u0645\u062D\u062A\u0645\u0644 \u2014 \u0634\u0648\u0627\u0647\u062F \u0647\u0645\u200C\u06AF\u0631\u0627"
@@ -29341,11 +31122,13 @@ function num4(value) {
   const n = Number(String(value).replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))));
   return Number.isFinite(n) ? n : null;
 }
-__name(num4, "num");
+__name(num4, "num4");
+__name2(num4, "num");
 function subscaleScoreOf2(event, id) {
   return event.analysis?.subscaleScores?.find((s) => s.id === id) ?? null;
 }
-__name(subscaleScoreOf2, "subscaleScoreOf");
+__name(subscaleScoreOf2, "subscaleScoreOf2");
+__name2(subscaleScoreOf2, "subscaleScoreOf");
 function subscaleColor2(event, id) {
   const ss = subscaleScoreOf2(event, id);
   if (!ss)
@@ -29356,7 +31139,8 @@ function subscaleColor2(event, id) {
   const b = ss.band && def ? def.bands?.find((x) => x.label === ss.band)?.color ?? null : null;
   return b;
 }
-__name(subscaleColor2, "subscaleColor");
+__name(subscaleColor2, "subscaleColor2");
+__name2(subscaleColor2, "subscaleColor");
 function sourceOf(toolKey) {
   if (toolKey.includes("-t-") || toolKey === "ce-sdq-t-v1" || toolKey === "teacher-classroom")
     return "teacher";
@@ -29365,14 +31149,17 @@ function sourceOf(toolKey) {
   return "parent";
 }
 __name(sourceOf, "sourceOf");
+__name2(sourceOf, "sourceOf");
 function sourceFa(toolKey) {
   return sourceOf(toolKey) === "teacher" ? "\u0645\u0639\u0644\u0645" : "\u0648\u0627\u0644\u062F";
 }
 __name(sourceFa, "sourceFa");
+__name2(sourceFa, "sourceFa");
 function roleOf(toolKey) {
   return sourceOf(toolKey) === "teacher" ? "teacher" : "parent";
 }
 __name(roleOf, "roleOf");
+__name2(roleOf, "roleOf");
 function computeSuspicion(behavioralEvents, decisionEvent, isFresh2) {
   const latest = /* @__PURE__ */ new Map();
   for (const e of behavioralEvents) {
@@ -29457,7 +31244,7 @@ function computeSuspicion(behavioralEvents, decisionEvent, isFresh2) {
   };
 }
 __name(computeSuspicion, "computeSuspicion");
-
+__name2(computeSuspicion, "computeSuspicion");
 var OT_SKILL_NOTE_MAX = 300;
 var OT_FOCUS_MAX = 200;
 var OT_SUMMARY_MAX = 2e3;
@@ -29490,7 +31277,8 @@ function parseText2(v, max) {
   const t = v?.trim();
   return t ? t.slice(0, max) : null;
 }
-__name(parseText2, "parseText");
+__name(parseText2, "parseText2");
+__name2(parseText2, "parseText");
 function parseJson4(raw2, fallback) {
   if (!raw2)
     return fallback;
@@ -29500,7 +31288,8 @@ function parseJson4(raw2, fallback) {
     return fallback;
   }
 }
-__name(parseJson4, "parseJson");
+__name(parseJson4, "parseJson4");
+__name2(parseJson4, "parseJson");
 function parseEventRow(r) {
   return {
     eventId: r.id,
@@ -29515,6 +31304,7 @@ function parseEventRow(r) {
   };
 }
 __name(parseEventRow, "parseEventRow");
+__name2(parseEventRow, "parseEventRow");
 function isFresh(lastAt, nowFn) {
   if (!lastAt)
     return false;
@@ -29524,6 +31314,7 @@ function isFresh(lastAt, nowFn) {
   return nowFn().getTime() - t <= OT_GATE_FRESH_MONTHS * 30 * 24 * 3600 * 1e3;
 }
 __name(isFresh, "isFresh");
+__name2(isFresh, "isFresh");
 function makeIsFreshIso(nowFn) {
   return (isoAt) => {
     const t = Date.parse(isoAt.includes("T") ? isoAt : `${isoAt.replace(" ", "T")}Z`);
@@ -29533,11 +31324,12 @@ function makeIsFreshIso(nowFn) {
   };
 }
 __name(makeIsFreshIso, "makeIsFreshIso");
+__name2(makeIsFreshIso, "makeIsFreshIso");
 function createOtEngineService(deps) {
   const { db, audit, logger } = deps;
-  const log3 = logger.child("ot-engine");
+  const log32 = logger.child("ot-engine");
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const iso = /* @__PURE__ */ __name(() => now().toISOString(), "iso");
+  const iso = /* @__PURE__ */ __name2(() => now().toISOString(), "iso");
   async function loadStudent(studentId) {
     const row = await db.queryOne(
       `SELECT id, first_name, last_name, owner_staff_id, protocol, pathway FROM students WHERE id = ?`,
@@ -29548,6 +31340,7 @@ function createOtEngineService(deps) {
     return row;
   }
   __name(loadStudent, "loadStudent");
+  __name2(loadStudent, "loadStudent");
   function assertCanView(student, actor) {
     if (actor.role === "manager" || actor.role === "secretary")
       return;
@@ -29556,6 +31349,7 @@ function createOtEngineService(deps) {
     throw new ForbiddenError("\u0627\u06CC\u0646 \u0628\u062E\u0634 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0645\u062F\u06CC\u0631\u060C \u0645\u0646\u0634\u06CC \u06CC\u0627 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u0645\u0633\u0626\u0648\u0644 \u067E\u0631\u0648\u0646\u062F\u0647 \u0642\u0627\u0628\u0644 \u0645\u0634\u0627\u0647\u062F\u0647 \u0627\u0633\u062A");
   }
   __name(assertCanView, "assertCanView");
+  __name2(assertCanView, "assertCanView");
   function assertCanWrite(student, actor) {
     if (actor.role === "manager")
       return;
@@ -29564,6 +31358,7 @@ function createOtEngineService(deps) {
     throw new ForbiddenError("\u062B\u0628\u062A \u0641\u0642\u0637 \u062A\u0648\u0633\u0637 \u0645\u062F\u06CC\u0631 \u06CC\u0627 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u0645\u0633\u0626\u0648\u0644 \u067E\u0631\u0648\u0646\u062F\u0647 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
   }
   __name(assertCanWrite, "assertCanWrite");
+  __name2(assertCanWrite, "assertCanWrite");
   async function loadSeenToolMeta(studentId) {
     const rows = await db.query(
       `SELECT t.key AS tool_key, MAX(e.occurred_at) AS last_at
@@ -29577,6 +31372,7 @@ function createOtEngineService(deps) {
     return new Map(rows.map((r) => [r.tool_key, r.last_at]));
   }
   __name(loadSeenToolMeta, "loadSeenToolMeta");
+  __name2(loadSeenToolMeta, "loadSeenToolMeta");
   async function loadOtCoverage(studentId) {
     const rows = await db.query(
       `SELECT t.domain, COUNT(DISTINCT p.skill_id) AS n
@@ -29604,10 +31400,12 @@ function createOtEngineService(deps) {
     return { scored, total: totalRow?.n ?? 0, domainsCovered: covered.length, domainsMin3, domainTitles: covered };
   }
   __name(loadOtCoverage, "loadOtCoverage");
+  __name2(loadOtCoverage, "loadOtCoverage");
   function clampProtocol(v) {
     return v && v in STUDENT_PROTOCOL_LABELS ? v : null;
   }
   __name(clampProtocol, "clampProtocol");
+  __name2(clampProtocol, "clampProtocol");
   async function loadStageEvents(studentId) {
     const keys = [...BEHAVIORAL_KEYS, ...WECHSLER_KEYS, SUSPICION_EVENT_KEY];
     const rows = await db.query(
@@ -29631,6 +31429,7 @@ function createOtEngineService(deps) {
     return rows.map(parseEventRow);
   }
   __name(loadStageEvents, "loadStageEvents");
+  __name2(loadStageEvents, "loadStageEvents");
   function wechslerSummaryOf(events) {
     const w = events.find((e) => WECHSLER_KEYS.includes(e.toolKey));
     if (!w)
@@ -29660,7 +31459,7 @@ function createOtEngineService(deps) {
       } catch {
       }
     }
-    const n = /* @__PURE__ */ __name((k) => {
+    const n = /* @__PURE__ */ __name2((k) => {
       const v = w.payload?.[k]?.value;
       if (!v)
         return null;
@@ -29673,6 +31472,7 @@ function createOtEngineService(deps) {
     return { ...manual, occurredAt: w.occurredAt, gai: null, indexScatter: null, cls: null, percentile: null, mainName: null, mainLevel: null, engine: false };
   }
   __name(wechslerSummaryOf, "wechslerSummaryOf");
+  __name2(wechslerSummaryOf, "wechslerSummaryOf");
   async function computeGates(student) {
     const [seen, otCoverage, stageEvents] = await Promise.all([
       loadSeenToolMeta(student.id),
@@ -29680,8 +31480,8 @@ function createOtEngineService(deps) {
       loadStageEvents(student.id)
     ]);
     const protocol = clampProtocol(student.protocol);
-    const freshCount = /* @__PURE__ */ __name((keys) => keys.filter((k) => isFresh(seen.get(k), now)).length, "freshCount");
-    const rawCount = /* @__PURE__ */ __name((keys) => keys.filter((k) => seen.has(k)).length, "rawCount");
+    const freshCount = /* @__PURE__ */ __name2((keys) => keys.filter((k) => isFresh(seen.get(k), now)).length, "freshCount");
+    const rawCount = /* @__PURE__ */ __name2((keys) => keys.filter((k) => seen.has(k)).length, "rawCount");
     const nAnam = freshCount(ANAMNESIS_KEYS);
     const nAnamRaw = rawCount(ANAMNESIS_KEYS);
     const nBehav = freshCount(BEHAVIORAL_KEYS);
@@ -29719,7 +31519,7 @@ function createOtEngineService(deps) {
         detail: protocol ? `\u067E\u0631\u0648\u062A\u06A9\u0644 \u0641\u0639\u0627\u0644: ${STUDENT_PROTOCOL_LABELS[protocol]}` : "\u067E\u0633 \u0627\u0632 \u0686\u0647\u0627\u0631 \u0648\u0631\u0648\u062F\u06CC \u062F\u06CC\u06AF\u0631"
       }
     };
-    const ordOf = /* @__PURE__ */ __name((key) => STANDARD_PATHWAY_ORDER.indexOf(key) + 1, "ordOf");
+    const ordOf = /* @__PURE__ */ __name2((key) => STANDARD_PATHWAY_ORDER.indexOf(key) + 1, "ordOf");
     const gates = STANDARD_PATHWAY_ORDER.map((key) => {
       const label = key === "skills" && isLearning ? "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0639\u0645\u0644\u06A9\u0631\u062F\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u062E\u0648\u0627\u0646\u062F\u0646/\u0646\u0648\u0634\u062A\u0646/\u0631\u06CC\u0627\u0636\u06CC" : STANDARD_STAGE_META[key].short;
       const hint = key === "skills" && isLearning ? "\u062D\u062F\u0627\u0642\u0644 \u06F2 \u0627\u0632 \u06F3 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u2014 \u0628\u0646\u0627 \u0628\u0647 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0648 \u063A\u0631\u0628\u0627\u0644\u06AF\u0631\u06CC" : STANDARD_STAGE_META[key].note;
@@ -29749,12 +31549,14 @@ function createOtEngineService(deps) {
     };
   }
   __name(computeGates, "computeGates");
+  __name2(computeGates, "computeGates");
   async function getGates(studentId, actor) {
     const student = await loadStudent(studentId);
     assertCanView(student, actor);
     return computeGates(student);
   }
   __name(getGates, "getGates");
+  __name2(getGates, "getGates");
   async function getOtProfile(studentId, actor) {
     const student = await loadStudent(studentId);
     assertCanView(student, actor);
@@ -29868,6 +31670,7 @@ function createOtEngineService(deps) {
     };
   }
   __name(getOtProfile, "getOtProfile");
+  __name2(getOtProfile, "getOtProfile");
   async function saveOtSession(studentId, input, actor) {
     const student = await loadStudent(studentId);
     assertCanWrite(student, actor);
@@ -29966,10 +31769,11 @@ function createOtEngineService(deps) {
         }
       });
     });
-    log3.info("ot session saved", { studentId, sessionId, skills: bySkill.size, masteryConfirmed });
+    log32.info("ot session saved", { studentId, sessionId, skills: bySkill.size, masteryConfirmed });
     return { sessionId, saved: bySkill.size, masteryConfirmed, summary: timelineSummary };
   }
   __name(saveOtSession, "saveOtSession");
+  __name2(saveOtSession, "saveOtSession");
   async function setNeeds(studentId, input, actor) {
     const student = await loadStudent(studentId);
     assertCanWrite(student, actor);
@@ -30032,14 +31836,15 @@ function createOtEngineService(deps) {
         }
       });
     });
-    log3.info("needs recorded \u2014 protocol active", { studentId, protocol: input.protocol, needType: input.needType });
+    log32.info("needs recorded \u2014 protocol active", { studentId, protocol: input.protocol, needType: input.needType });
     return { protocol: input.protocol, needType: input.needType, needTypeLabel, eventId: typeRow ? eventId : "" };
   }
   __name(setNeeds, "setNeeds");
+  __name2(setNeeds, "setNeeds");
   return { getGates, getOtProfile, saveOtSession, setNeeds };
 }
 __name(createOtEngineService, "createOtEngineService");
-
+__name2(createOtEngineService, "createOtEngineService");
 var SKILL_ID_MAX = 40;
 var OtSessionItemSchema = external_exports.object({
   skill_id: external_exports.string().min(4).max(SKILL_ID_MAX),
@@ -30117,7 +31922,7 @@ function registerOtEngineRoutes(app, service) {
   });
 }
 __name(registerOtEngineRoutes, "registerOtEngineRoutes");
-
+__name2(registerOtEngineRoutes, "registerOtEngineRoutes");
 function createR2ObjectStore(bucket) {
   return {
     name: "r2",
@@ -30144,7 +31949,7 @@ function createR2ObjectStore(bucket) {
   };
 }
 __name(createR2ObjectStore, "createR2ObjectStore");
-
+__name2(createR2ObjectStore, "createR2ObjectStore");
 var CHUNK_BYTES = 15e5;
 var PAGE_CHUNKS = 6;
 function chunkToBytes(row) {
@@ -30159,6 +31964,7 @@ function chunkToBytes(row) {
   return new Uint8Array(c);
 }
 __name(chunkToBytes, "chunkToBytes");
+__name2(chunkToBytes, "chunkToBytes");
 function bytesToBase64(bytes) {
   let bin = "";
   const CHUNK = 32768;
@@ -30168,12 +31974,13 @@ function bytesToBase64(bytes) {
   return btoa(bin);
 }
 __name(bytesToBase64, "bytesToBase64");
+__name2(bytesToBase64, "bytesToBase64");
 async function writeSegments(db, key, segments) {
   await db.execute(`DELETE FROM exercise_file_chunks WHERE key = ?`, [key]);
   const chunk = new Uint8Array(CHUNK_BYTES);
   let fill = 0;
   let seq = 0;
-  const flushChunk = /* @__PURE__ */ __name(async () => {
+  const flushChunk = /* @__PURE__ */ __name2(async () => {
     if (fill === 0)
       return;
     await db.execute(
@@ -30184,12 +31991,12 @@ async function writeSegments(db, key, segments) {
     fill = 0;
   }, "flushChunk");
   for (const seg of segments) {
-    let off2 = 0;
-    while (off2 < seg.length) {
-      const n = Math.min(CHUNK_BYTES - fill, seg.length - off2);
-      chunk.set(seg.subarray(off2, off2 + n), fill);
+    let off22 = 0;
+    while (off22 < seg.length) {
+      const n = Math.min(CHUNK_BYTES - fill, seg.length - off22);
+      chunk.set(seg.subarray(off22, off22 + n), fill);
       fill += n;
-      off2 += n;
+      off22 += n;
       if (fill === CHUNK_BYTES)
         await flushChunk();
     }
@@ -30197,6 +32004,7 @@ async function writeSegments(db, key, segments) {
   await flushChunk();
 }
 __name(writeSegments, "writeSegments");
+__name2(writeSegments, "writeSegments");
 function createChunkedD1ObjectStore(db) {
   return {
     name: "d1",
@@ -30243,11 +32051,12 @@ function createChunkedD1ObjectStore(db) {
   };
 }
 __name(createChunkedD1ObjectStore, "createChunkedD1ObjectStore");
-
+__name2(createChunkedD1ObjectStore, "createChunkedD1ObjectStore");
 function normalizeTagName(raw2) {
   return raw2.replace(/\s+/g, " ").trim();
 }
 __name(normalizeTagName, "normalizeTagName");
+__name2(normalizeTagName, "normalizeTagName");
 function diffStudentTags(current, next) {
   const currentIds = new Set(current.map((t) => t.id));
   const nextIds = new Set(next.map((t) => t.id));
@@ -30256,7 +32065,7 @@ function diffStudentTags(current, next) {
   return { added, removed };
 }
 __name(diffStudentTags, "diffStudentTags");
-
+__name2(diffStudentTags, "diffStudentTags");
 function rowToTag(row) {
   return {
     id: row.id,
@@ -30268,10 +32077,12 @@ function rowToTag(row) {
   };
 }
 __name(rowToTag, "rowToTag");
+__name2(rowToTag, "rowToTag");
 function rowToRef(row) {
   return { id: row.id, name: row.name, category: row.category, color: row.color };
 }
 __name(rowToRef, "rowToRef");
+__name2(rowToRef, "rowToRef");
 var USAGE_SUBQUERY = `(SELECT COUNT(*) FROM student_tags st WHERE st.tag_id = t.id) AS usage`;
 function createTagService(deps) {
   const { db, audit, logger } = deps;
@@ -30426,7 +32237,7 @@ function createTagService(deps) {
   };
 }
 __name(createTagService, "createTagService");
-
+__name2(createTagService, "createTagService");
 function registerRoutes4(app, service) {
   app.get("/api/tags", async (c) => {
     const category = c.req.query("category");
@@ -30462,8 +32273,8 @@ function registerRoutes4(app, service) {
     return c.json({ data: items }, 200);
   });
 }
-__name(registerRoutes4, "registerRoutes");
-
+__name(registerRoutes4, "registerRoutes4");
+__name2(registerRoutes4, "registerRoutes");
 var SCREENING_PREDEFINED_TAGS = [
   { id: "ref_vision", label: "\u0627\u0631\u062C\u0627\u0639 \u062A\u062E\u0635\u0635\u06CC \u0628\u06CC\u0646\u0627\u06CC\u06CC", kind: "referral" },
   { id: "ref_hearing", label: "\u0627\u0631\u062C\u0627\u0639 \u062A\u062E\u0635\u0635\u06CC \u0634\u0646\u0648\u0627\u06CC\u06CC", kind: "referral" },
@@ -30475,7 +32286,6 @@ var SCREENING_PREDEFINED_TAGS = [
 var SCREENING_REFERRAL_TAGS = SCREENING_PREDEFINED_TAGS.filter(
   (t) => t.kind === "referral"
 ).map((t) => t.label);
-
 var PREDEFINED_LABELS = new Set(SCREENING_PREDEFINED_TAGS.map((t) => t.label));
 var KIND_BY_LABEL = new Map(
   SCREENING_PREDEFINED_TAGS.map((t) => [t.label, t.kind])
@@ -30491,6 +32301,7 @@ function normalizeTagToken(token) {
   return token.replace(/[_\-–]+/g, " ").replace(/\s+/g, " ").trim();
 }
 __name(normalizeTagToken, "normalizeTagToken");
+__name2(normalizeTagToken, "normalizeTagToken");
 function parseEntryInput(raw2) {
   const hashTags = [];
   const name = String(raw2 ?? "").replace(/[#＃]([\p{L}\p{N}][\p{L}\p{N}_\-–]*)/gu, (_m, t) => {
@@ -30502,6 +32313,7 @@ function parseEntryInput(raw2) {
   return { name, hashTags };
 }
 __name(parseEntryInput, "parseEntryInput");
+__name2(parseEntryInput, "parseEntryInput");
 function resolveHashTag(label) {
   if (PREDEFINED_LABELS.has(label))
     return label;
@@ -30512,6 +32324,7 @@ function resolveHashTag(label) {
   return label;
 }
 __name(resolveHashTag, "resolveHashTag");
+__name2(resolveHashTag, "resolveHashTag");
 function sanitizeTags(input) {
   if (!Array.isArray(input))
     return [];
@@ -30529,6 +32342,7 @@ function sanitizeTags(input) {
   return out;
 }
 __name(sanitizeTags, "sanitizeTags");
+__name2(sanitizeTags, "sanitizeTags");
 function mergeTags(parsed, toggled) {
   const out = [];
   for (const t of [...parsed.hashTags, ...sanitizeTags(toggled)]) {
@@ -30539,6 +32353,7 @@ function mergeTags(parsed, toggled) {
   return out;
 }
 __name(mergeTags, "mergeTags");
+__name2(mergeTags, "mergeTags");
 function normalizeName(raw2) {
   const name = String(raw2 ?? "").replace(/\s+/g, " ").trim();
   if (name.length < SCREENING_LIMITS.nameMin || name.length > SCREENING_LIMITS.nameMax) {
@@ -30547,20 +32362,24 @@ function normalizeName(raw2) {
   return name;
 }
 __name(normalizeName, "normalizeName");
+__name2(normalizeName, "normalizeName");
 function applyTagFilter(entries, tags) {
   if (tags.length === 0)
     return entries;
   return entries.filter((e) => e.tags.some((t) => tags.includes(t)));
 }
 __name(applyTagFilter, "applyTagFilter");
+__name2(applyTagFilter, "applyTagFilter");
 function tagKind(label) {
   return KIND_BY_LABEL.get(label) ?? "custom";
 }
 __name(tagKind, "tagKind");
+__name2(tagKind, "tagKind");
 function hasPredefinedTag(tags) {
   return tags.some((t) => PREDEFINED_LABELS.has(t));
 }
 __name(hasPredefinedTag, "hasPredefinedTag");
+__name2(hasPredefinedTag, "hasPredefinedTag");
 function screeningStats(entries) {
   let normal = 0;
   let referrals = 0;
@@ -30581,8 +32400,8 @@ function screeningStats(entries) {
       perTagMap.set(t, (perTagMap.get(t) ?? 0) + 1);
     byDayMap.set(e.day, (byDayMap.get(e.day) ?? 0) + 1);
   }
-  const perTag = [...perTagMap.entries()].map(([label, count3]) => ({ label, count: count3, kind: tagKind(label) })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "fa"));
-  const byDay = [...byDayMap.entries()].map(([day, count3]) => ({ day, count: count3 })).sort((a, b) => a.day.localeCompare(b.day));
+  const perTag = [...perTagMap.entries()].map(([label, count32]) => ({ label, count: count32, kind: tagKind(label) })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "fa"));
+  const byDay = [...byDayMap.entries()].map(([day, count32]) => ({ day, count: count32 })).sort((a, b) => a.day.localeCompare(b.day));
   const total = entries.length;
   return {
     total,
@@ -30596,7 +32415,7 @@ function screeningStats(entries) {
   };
 }
 __name(screeningStats, "screeningStats");
-
+__name2(screeningStats, "screeningStats");
 var KIND_BY_LABEL2 = new Map(
   SCREENING_PREDEFINED_TAGS.map((t) => [t.label, t.kind])
 );
@@ -30610,6 +32429,7 @@ function parseTagsJson(raw2) {
   }
 }
 __name(parseTagsJson, "parseTagsJson");
+__name2(parseTagsJson, "parseTagsJson");
 function rowToEntry2(r) {
   return {
     id: r.id,
@@ -30622,7 +32442,8 @@ function rowToEntry2(r) {
     updatedAt: r.updated_at
   };
 }
-__name(rowToEntry2, "rowToEntry");
+__name(rowToEntry2, "rowToEntry2");
+__name2(rowToEntry2, "rowToEntry");
 var SELECT = `
   SELECT e.id, e.name, e.day, e.tags, e.created_by, e.created_at, e.updated_at,
          st.full_name AS creator_name
@@ -30633,9 +32454,10 @@ function nowSql() {
   return (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
 }
 __name(nowSql, "nowSql");
+__name2(nowSql, "nowSql");
 function createScreeningService(deps) {
   const { db, audit, logger } = deps;
-  const log3 = logger.child("screening");
+  const log32 = logger.child("screening");
   async function getEntryRow(id) {
     const row = await db.queryOne(`${SELECT} WHERE e.id = ?`, [id]);
     if (!row)
@@ -30643,6 +32465,7 @@ function createScreeningService(deps) {
     return row;
   }
   __name(getEntryRow, "getEntryRow");
+  __name2(getEntryRow, "getEntryRow");
   return {
     async list(filters) {
       const where = [];
@@ -30682,7 +32505,7 @@ function createScreeningService(deps) {
           counts.set(t, (counts.get(t) ?? 0) + 1);
         }
       }
-      return [...counts.entries()].map(([label, count3]) => ({ label, count: count3, kind: KIND_BY_LABEL2.get(label) ?? "custom" })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "fa"));
+      return [...counts.entries()].map(([label, count32]) => ({ label, count: count32, kind: KIND_BY_LABEL2.get(label) ?? "custom" })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "fa"));
     },
     // ─── خواندنی‌های سبک برای داشبورد (گزارش کوتاه + تحقق هدفگذاری) ───
     async dayCounts(from, to) {
@@ -30744,7 +32567,7 @@ function createScreeningService(deps) {
           }
         });
       });
-      log3.info("screening.created", { day, tagged: tags.length > 0 });
+      log32.info("screening.created", { day, tagged: tags.length > 0 });
       return rowToEntry2(await getEntryRow(id));
     },
     async update(id, input, actor) {
@@ -30775,7 +32598,7 @@ function createScreeningService(deps) {
           }
         });
       });
-      log3.info("screening.updated", { id });
+      log32.info("screening.updated", { id });
       return rowToEntry2(await getEntryRow(id));
     },
     async remove(id, actor) {
@@ -30793,12 +32616,12 @@ function createScreeningService(deps) {
           }
         });
       });
-      log3.info("screening.deleted", { id });
+      log32.info("screening.deleted", { id });
     }
   };
 }
 __name(createScreeningService, "createScreeningService");
-
+__name2(createScreeningService, "createScreeningService");
 function registerScreeningRoutes(app, service) {
   app.get("/api/screening", async (c) => {
     const q = ScreeningQuerySchema.parse({
@@ -30845,7 +32668,7 @@ function registerScreeningRoutes(app, service) {
   });
 }
 __name(registerScreeningRoutes, "registerScreeningRoutes");
-
+__name2(registerScreeningRoutes, "registerScreeningRoutes");
 function rowToRecord2(row) {
   return {
     id: row.id,
@@ -30862,7 +32685,8 @@ function rowToRecord2(row) {
     updatedAt: row.updated_at
   };
 }
-__name(rowToRecord2, "rowToRecord");
+__name(rowToRecord2, "rowToRecord2");
+__name2(rowToRecord2, "rowToRecord");
 var SELECT_COLS = `a.id, a.title, a.body, a.show_login, a.show_panel, a.bot_sent_staff,
        a.bot_sent_families, a.active, a.created_by, s.full_name AS created_by_name,
        a.created_at, a.updated_at`;
@@ -30876,6 +32700,7 @@ function createAnnouncementService(deps) {
     return row ? rowToRecord2(row) : null;
   }
   __name(getById, "getById");
+  __name2(getById, "getById");
   return {
     async create(input, actor) {
       if (!input.showLogin && !input.showPanel) {
@@ -31007,11 +32832,11 @@ function createAnnouncementService(deps) {
             WHERE chat_id IS NOT NULL AND channel = 'bale'`
         );
       }
-      const channel2 = baleEnabled ? "bale" : "internal";
+      const channel22 = baleEnabled ? "bale" : "internal";
       let queued = 0;
       for (const r of rows) {
         const outcome = await notify.enqueue({
-          channel: channel2,
+          channel: channel22,
           template: "announcement",
           recipient: r.chat_id,
           staffId: r.staff_id ?? null,
@@ -31049,7 +32874,7 @@ function createAnnouncementService(deps) {
   };
 }
 __name(createAnnouncementService, "createAnnouncementService");
-
+__name2(createAnnouncementService, "createAnnouncementService");
 function registerAnnouncementRoutes(app, service) {
   app.post("/api/announcements", requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);
@@ -31097,7 +32922,7 @@ function registerAnnouncementRoutes(app, service) {
   });
 }
 __name(registerAnnouncementRoutes, "registerAnnouncementRoutes");
-
+__name2(registerAnnouncementRoutes, "registerAnnouncementRoutes");
 function rowToRecord3(row) {
   return {
     id: row.id,
@@ -31112,7 +32937,8 @@ function rowToRecord3(row) {
     updatedAt: row.updated_at
   };
 }
-__name(rowToRecord3, "rowToRecord");
+__name(rowToRecord3, "rowToRecord3");
+__name2(rowToRecord3, "rowToRecord");
 var SELECT_COLS2 = `k.id, k.title, k.body, k.category, k.pinned, k.published,
        k.created_by, s.full_name AS created_by_name, k.created_at, k.updated_at`;
 function createKnowledgeService(deps) {
@@ -31125,6 +32951,7 @@ function createKnowledgeService(deps) {
     return row ? rowToRecord3(row) : null;
   }
   __name(getById, "getById");
+  __name2(getById, "getById");
   return {
     async listPublished() {
       const rows = await db.query(
@@ -31220,7 +33047,7 @@ function createKnowledgeService(deps) {
   };
 }
 __name(createKnowledgeService, "createKnowledgeService");
-
+__name2(createKnowledgeService, "createKnowledgeService");
 function registerKnowledgeRoutes(app, service) {
   app.get("/api/knowledge", async (c) => {
     const items = await service.listPublished();
@@ -31262,12 +33089,13 @@ function registerKnowledgeRoutes(app, service) {
   });
 }
 __name(registerKnowledgeRoutes, "registerKnowledgeRoutes");
-
+__name2(registerKnowledgeRoutes, "registerKnowledgeRoutes");
 var STAFF_COLS2 = "id, email, full_name, COALESCE(role_ext, role) AS role, active, notify_enabled, phone, national_id, username, role_ext, created_at";
 function roleToColumns(role) {
   return role === "supervisor" ? { role: "secretary", roleExt: "supervisor" } : { role, roleExt: null };
 }
 __name(roleToColumns, "roleToColumns");
+__name2(roleToColumns, "roleToColumns");
 function rowToMember(row) {
   return {
     id: row.id,
@@ -31283,11 +33111,13 @@ function rowToMember(row) {
   };
 }
 __name(rowToMember, "rowToMember");
+__name2(rowToMember, "rowToMember");
 function syntheticEmail() {
   const rnd = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
   return `auto-${rnd}@local`;
 }
 __name(syntheticEmail, "syntheticEmail");
+__name2(syntheticEmail, "syntheticEmail");
 function createStaffService(deps) {
   const { db, audit, logger } = deps;
   return {
@@ -31515,7 +33345,7 @@ function createStaffService(deps) {
         `SELECT id, full_name, COALESCE(role_ext, role) AS role, active FROM staff ORDER BY full_name`,
         []
       );
-      const countByCreator = /* @__PURE__ */ __name(async (sql) => {
+      const countByCreator = /* @__PURE__ */ __name2(async (sql) => {
         const rows = await db.query(sql, []);
         return new Map(rows.map((r) => [r.k, Number(r.c)]));
       }, "countByCreator");
@@ -31569,7 +33399,7 @@ function createStaffService(deps) {
                            AND ce.staff_id IS NOT NULL AND ce.staff_id != f.created_by
                          GROUP BY f.created_by`)
       ]);
-      const n = /* @__PURE__ */ __name((m, id) => m.get(id) ?? 0, "n");
+      const n = /* @__PURE__ */ __name2((m, id) => m.get(id) ?? 0, "n");
       return staffRows.map((s) => {
         const exercises = n(exMap, s.id);
         const packages = n(pkgMap, s.id);
@@ -31609,7 +33439,7 @@ function createStaffService(deps) {
   };
 }
 __name(createStaffService, "createStaffService");
-
+__name2(createStaffService, "createStaffService");
 function registerRoutes5(app, service) {
   app.get("/api/staff", async (c) => {
     const activeRaw = c.req.query("active");
@@ -31681,12 +33511,13 @@ function registerRoutes5(app, service) {
     return c.body(null, 204);
   });
 }
-__name(registerRoutes5, "registerRoutes");
-
+__name(registerRoutes5, "registerRoutes5");
+__name2(registerRoutes5, "registerRoutes");
 function intersects(a, b) {
   return a.startMinute < b.endMinute && b.startMinute < a.endMinute;
 }
 __name(intersects, "intersects");
+__name2(intersects, "intersects");
 function findOverlap(items) {
   for (let i = 0; i < items.length; i++) {
     for (let j = i + 1; j < items.length; j++) {
@@ -31700,7 +33531,7 @@ function findOverlap(items) {
   return null;
 }
 __name(findOverlap, "findOverlap");
-
+__name2(findOverlap, "findOverlap");
 var WH_COLS = "id, staff_id, weekday, start_minute, end_minute, created_at, updated_at";
 function rowToWorkingHour(row) {
   return {
@@ -31714,6 +33545,7 @@ function rowToWorkingHour(row) {
   };
 }
 __name(rowToWorkingHour, "rowToWorkingHour");
+__name2(rowToWorkingHour, "rowToWorkingHour");
 async function loadStaffRanges(db, staffId) {
   const rows = await db.query(
     `SELECT weekday, start_minute, end_minute FROM working_hours WHERE staff_id = ?`,
@@ -31722,6 +33554,7 @@ async function loadStaffRanges(db, staffId) {
   return rows.map((r) => ({ weekday: r.weekday, startMinute: r.start_minute, endMinute: r.end_minute }));
 }
 __name(loadStaffRanges, "loadStaffRanges");
+__name2(loadStaffRanges, "loadStaffRanges");
 function createWorkingHoursService(deps) {
   const { db, audit, logger } = deps;
   function assertHoursScope(actor, staffId) {
@@ -31732,6 +33565,7 @@ function createWorkingHoursService(deps) {
     throw new ForbiddenError("\u0648\u06CC\u0631\u0627\u06CC\u0634 \u0633\u0627\u0639\u0627\u062A \u06A9\u0627\u0631\u06CC \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u062E\u0648\u062F\u0650 \u0634\u0645\u0627 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
   }
   __name(assertHoursScope, "assertHoursScope");
+  __name2(assertHoursScope, "assertHoursScope");
   return {
     async listForStaff(staffId) {
       const rows = await db.query(
@@ -31830,7 +33664,7 @@ function createWorkingHoursService(deps) {
   };
 }
 __name(createWorkingHoursService, "createWorkingHoursService");
-
+__name2(createWorkingHoursService, "createWorkingHoursService");
 function registerRoutes6(app, service) {
   app.get("/api/working-hours", async (c) => {
     const staffId = c.req.query("staff_id");
@@ -31869,24 +33703,27 @@ function registerRoutes6(app, service) {
     return c.body(null, 204);
   });
 }
-__name(registerRoutes6, "registerRoutes");
-
-var pad22 = /* @__PURE__ */ __name((n) => String(n).padStart(2, "0"), "pad2");
+__name(registerRoutes6, "registerRoutes6");
+__name2(registerRoutes6, "registerRoutes");
+var pad22 = /* @__PURE__ */ __name2((n) => String(n).padStart(2, "0"), "pad2");
 function faJalaliYmd(gYmd) {
   const [gy, gm, gd] = gYmd.split("-").map(Number);
   const j = toJalaliParts(gy, gm, gd);
   return faDigits(`${j.jy}/${pad22(j.jm)}/${pad22(j.jd)}`);
 }
 __name(faJalaliYmd, "faJalaliYmd");
+__name2(faJalaliYmd, "faJalaliYmd");
 function jalaliMonthEndYmd(jy, jm) {
   const nextStart = jm >= 12 ? jalaliToGregorianYmd(jy + 1, 1, 1) : jalaliToGregorianYmd(jy, jm + 1, 1);
   return addDaysYmd(nextStart, -1);
 }
 __name(jalaliMonthEndYmd, "jalaliMonthEndYmd");
+__name2(jalaliMonthEndYmd, "jalaliMonthEndYmd");
 function jalaliYearEndYmd(jy) {
   return addDaysYmd(jalaliToGregorianYmd(jy + 1, 1, 1), -1);
 }
 __name(jalaliYearEndYmd, "jalaliYearEndYmd");
+__name2(jalaliYearEndYmd, "jalaliYearEndYmd");
 function goalWindowOf(t) {
   if (t.from && t.to)
     return { fromYmd: t.from, toYmd: t.to };
@@ -31896,12 +33733,14 @@ function goalWindowOf(t) {
   return { fromYmd: jalaliToGregorianYmd(t.year, 1, 1), toYmd: jalaliYearEndYmd(t.year) };
 }
 __name(goalWindowOf, "goalWindowOf");
+__name2(goalWindowOf, "goalWindowOf");
 function goalPeriodLabelOf(t) {
   const base = t.from && t.to ? `${faJalaliYmd(t.from)} \u062A\u0627 ${faJalaliYmd(t.to)}` : t.month !== null && t.month !== void 0 ? `${JALALI_MONTHS_FA[t.month - 1]} ${faDigits(String(t.year))}` : `\u0633\u0627\u0644 ${faDigits(String(t.year))}`;
-  const title2 = t.title?.trim();
-  return title2 ? `${title2} \u2014 ${base}` : base;
+  const title22 = t.title?.trim();
+  return title22 ? `${title22} \u2014 ${base}` : base;
 }
 __name(goalPeriodLabelOf, "goalPeriodLabelOf");
+__name2(goalPeriodLabelOf, "goalPeriodLabelOf");
 function goalStatusOf(fromYmd, toYmd, todayYmd) {
   if (todayYmd < fromYmd)
     return "upcoming";
@@ -31910,6 +33749,7 @@ function goalStatusOf(fromYmd, toYmd, todayYmd) {
   return "active";
 }
 __name(goalStatusOf, "goalStatusOf");
+__name2(goalStatusOf, "goalStatusOf");
 function goalDoneOf(dayCounts, fromYmd, toYmd) {
   let done = 0;
   for (const d of dayCounts) {
@@ -31919,6 +33759,7 @@ function goalDoneOf(dayCounts, fromYmd, toYmd) {
   return done;
 }
 __name(goalDoneOf, "goalDoneOf");
+__name2(goalDoneOf, "goalDoneOf");
 function summarizeScreeningGoals(targets, dayCounts, todayYmd) {
   const statusRank = { active: 0, upcoming: 1, past: 2 };
   const items = targets.map((t, idx) => {
@@ -31947,6 +33788,7 @@ function summarizeScreeningGoals(targets, dayCounts, todayYmd) {
   });
 }
 __name(summarizeScreeningGoals, "summarizeScreeningGoals");
+__name2(summarizeScreeningGoals, "summarizeScreeningGoals");
 function goalsQueryWindow(targets, todayYmd) {
   const [gy, gm, gd] = todayYmd.split("-").map(Number);
   const j = toJalaliParts(gy, gm, gd);
@@ -31962,7 +33804,7 @@ function goalsQueryWindow(targets, todayYmd) {
   return { fromYmd, toYmd };
 }
 __name(goalsQueryWindow, "goalsQueryWindow");
-
+__name2(goalsQueryWindow, "goalsQueryWindow");
 function computeStatusCounts(appointments) {
   let scheduled = 0;
   let cancelled = 0;
@@ -31975,6 +33817,7 @@ function computeStatusCounts(appointments) {
   return { total: appointments.length, scheduled, cancelled };
 }
 __name(computeStatusCounts, "computeStatusCounts");
+__name2(computeStatusCounts, "computeStatusCounts");
 function computeStaffCards(appointments, staffInfo) {
   const byStaff = /* @__PURE__ */ new Map();
   for (const a of appointments) {
@@ -31988,11 +33831,11 @@ function computeStaffCards(appointments, staffInfo) {
   }
   const cards = [];
   for (const [staffId, counts] of byStaff) {
-    const info3 = staffInfo.get(staffId);
+    const info32 = staffInfo.get(staffId);
     cards.push({
       staffId,
-      staffName: info3?.name ?? "\u2014",
-      role: info3?.role ?? "therapist",
+      staffName: info32?.name ?? "\u2014",
+      role: info32?.role ?? "therapist",
       ...counts
     });
   }
@@ -32000,6 +33843,7 @@ function computeStaffCards(appointments, staffInfo) {
   return cards;
 }
 __name(computeStaffCards, "computeStaffCards");
+__name2(computeStaffCards, "computeStaffCards");
 function computeAttendanceStats(appointments) {
   let present = 0;
   let absent = 0;
@@ -32038,6 +33882,7 @@ function computeAttendanceStats(appointments) {
   };
 }
 __name(computeAttendanceStats, "computeAttendanceStats");
+__name2(computeAttendanceStats, "computeAttendanceStats");
 function groupByDay(appointments) {
   const byDay = /* @__PURE__ */ new Map();
   for (const a of appointments) {
@@ -32053,6 +33898,7 @@ function groupByDay(appointments) {
   return [...byDay.entries()].sort(([d1], [d2]) => d1 < d2 ? -1 : d1 > d2 ? 1 : 0).map(([date, counts]) => ({ date, ...counts }));
 }
 __name(groupByDay, "groupByDay");
+__name2(groupByDay, "groupByDay");
 function findNextAppointment(appointments, nowIso) {
   const now = Date.parse(nowIso);
   let best = null;
@@ -32067,11 +33913,13 @@ function findNextAppointment(appointments, nowIso) {
   return best ? { id: best.id, staffId: best.staffId, startAt: best.startAt, endAt: best.endAt } : null;
 }
 __name(findNextAppointment, "findNextAppointment");
+__name2(findNextAppointment, "findNextAppointment");
 var SCORE_WEIGHTS = { sessions: 2, exercises: 3, events: 1, followups: 1 };
 function scoreOf(c) {
   return c.sessions * SCORE_WEIGHTS.sessions + c.exercises * SCORE_WEIGHTS.exercises + c.events * SCORE_WEIGHTS.events + c.followups * SCORE_WEIGHTS.followups;
 }
 __name(scoreOf, "scoreOf");
+__name2(scoreOf, "scoreOf");
 function computeScoreboard(therapists, counts) {
   const entries = therapists.map((t) => {
     const c = counts.get(t.id) ?? { sessions: 0, exercises: 0, events: 0, followups: 0 };
@@ -32097,6 +33945,7 @@ function computeScoreboard(therapists, counts) {
   return entries;
 }
 __name(computeScoreboard, "computeScoreboard");
+__name2(computeScoreboard, "computeScoreboard");
 function countSessionsPerStaff(appointments) {
   const byStaff = /* @__PURE__ */ new Map();
   for (const a of appointments) {
@@ -32109,7 +33958,7 @@ function countSessionsPerStaff(appointments) {
   return byStaff;
 }
 __name(countSessionsPerStaff, "countSessionsPerStaff");
-
+__name2(countSessionsPerStaff, "countSessionsPerStaff");
 function createDashboardService(deps) {
   const { db, appointments, conflicts, students } = deps;
   async function staffInfoMap() {
@@ -32121,6 +33970,7 @@ function createDashboardService(deps) {
     return map;
   }
   __name(staffInfoMap, "staffInfoMap");
+  __name2(staffInfoMap, "staffInfoMap");
   async function activityCounts(fromYmd, toYmd) {
     const range = tehranRange(fromYmd, toYmd);
     const [monthAppointments, exRows, evRows, fuRows] = await Promise.all([
@@ -32146,7 +33996,7 @@ function createDashboardService(deps) {
     ]);
     const sessions = countSessionsPerStaff(monthAppointments);
     const map = /* @__PURE__ */ new Map();
-    const ensure = /* @__PURE__ */ __name((staffId) => {
+    const ensure = /* @__PURE__ */ __name2((staffId) => {
       let c = map.get(staffId);
       if (!c) {
         c = { sessions: 0, exercises: 0, events: 0, followups: 0 };
@@ -32165,6 +34015,7 @@ function createDashboardService(deps) {
     return map;
   }
   __name(activityCounts, "activityCounts");
+  __name2(activityCounts, "activityCounts");
   return {
     async getTodayCards(dateYmd) {
       const date = dateYmd || tehranTodayYmd();
@@ -32270,7 +34121,7 @@ function createDashboardService(deps) {
         monthlyTarget: monthTargetCfg ? monthTargetCfg.target : null,
         monthlyDone: monthTotals[j.jm - 1],
         months,
-        // همهٔ هدف‌ها (سال/ماه/سفارشی) با پیشرفت مستقل — برای کارت‌های چندگانهٔ داشبورد و بات
+        // — همهٔ هدف‌ها (سال/ماه/سفارشی) با پیشرفت مستقل — برای کارت‌های چندگانهٔ داشبورد و بات
         goals: summarizeScreeningGoals(targets, dayCounts, todayYmd)
       };
     },
@@ -32391,7 +34242,7 @@ function createDashboardService(deps) {
   };
 }
 __name(createDashboardService, "createDashboardService");
-
+__name2(createDashboardService, "createDashboardService");
 function registerRoutes7(app, service) {
   app.get("/api/dashboard/today", async (c) => {
     const query = DashboardTodayQuerySchema.parse({
@@ -32423,8 +34274,8 @@ function registerRoutes7(app, service) {
     return c.json({ data }, 200);
   });
 }
-__name(registerRoutes7, "registerRoutes");
-
+__name(registerRoutes7, "registerRoutes7");
+__name2(registerRoutes7, "registerRoutes");
 var PARENT_TEMPLATE = {
   created: "appointment_created",
   moved: "appointment_changed",
@@ -32450,7 +34301,7 @@ function planLifecycleNotifications(input) {
   const oldTimeLabel = input.previous ? tehranTimeLabel(input.previous.startAt) : void 0;
   const studentsLine = appt.students.filter((s) => s.attendance !== "cancelled").map((s) => input.studentNames.get(s.studentId) ?? "").filter((n) => n.length > 0).join("\u060C ");
   const plans = [];
-  const studentGetsNotice = /* @__PURE__ */ __name((attendance) => input.event === "cancelled" ? true : attendance !== "cancelled", "studentGetsNotice");
+  const studentGetsNotice = /* @__PURE__ */ __name2((attendance) => input.event === "cancelled" ? true : attendance !== "cancelled", "studentGetsNotice");
   for (const s of appt.students) {
     if (!studentGetsNotice(s.attendance))
       continue;
@@ -32527,6 +34378,7 @@ function planLifecycleNotifications(input) {
   return plans;
 }
 __name(planLifecycleNotifications, "planLifecycleNotifications");
+__name2(planLifecycleNotifications, "planLifecycleNotifications");
 function buildScheduleEntries(appointments, viewer) {
   const sorted = [...appointments].sort((a, b) => a.startAt.localeCompare(b.startAt));
   const entries = [];
@@ -32553,7 +34405,7 @@ function buildScheduleEntries(appointments, viewer) {
   return entries;
 }
 __name(buildScheduleEntries, "buildScheduleEntries");
-
+__name2(buildScheduleEntries, "buildScheduleEntries");
 function tehranTodayBatchInstant(nowMs, hour) {
   const tehranNowMs = nowMs + TEHRAN_OFFSET_MINUTES * 6e4;
   const ymd = new Date(tehranNowMs).toISOString().slice(0, 10);
@@ -32561,6 +34413,7 @@ function tehranTodayBatchInstant(nowMs, hour) {
   return batchUtcMs;
 }
 __name(tehranTodayBatchInstant, "tehranTodayBatchInstant");
+__name2(tehranTodayBatchInstant, "tehranTodayBatchInstant");
 function computeBatchSendAt(input) {
   const nowMs = Date.parse(input.nowIso);
   const batchMs = tehranTodayBatchInstant(nowMs, input.batchHour);
@@ -32574,15 +34427,17 @@ function computeBatchSendAt(input) {
   return new Date(batchMs).toISOString();
 }
 __name(computeBatchSendAt, "computeBatchSendAt");
+__name2(computeBatchSendAt, "computeBatchSendAt");
 function isCreatedTemplate(template) {
   return template === "appointment_created" || template === "staff_appointment_created" || template === "teacher_appointment_created";
 }
 __name(isCreatedTemplate, "isCreatedTemplate");
-
+__name2(isCreatedTemplate, "isCreatedTemplate");
 function reminderDedupKey(appointmentId, studentId) {
   return `reminder:${appointmentId}:${studentId}`;
 }
 __name(reminderDedupKey, "reminderDedupKey");
+__name2(reminderDedupKey, "reminderDedupKey");
 function planReminders(input) {
   const nowMs = Date.parse(input.nowIso);
   const horizonMs = input.horizonHours * 60 * 60 * 1e3;
@@ -32643,6 +34498,7 @@ function planReminders(input) {
   return { plans, skips, considered };
 }
 __name(planReminders, "planReminders");
+__name2(planReminders, "planReminders");
 function summarizeSkips(skips) {
   let skippedDisabled = 0;
   let skippedNoChat = 0;
@@ -32661,6 +34517,7 @@ function summarizeSkips(skips) {
   return { skippedDisabled, skippedNoChat, skippedTooSoon, cancelled };
 }
 __name(summarizeSkips, "summarizeSkips");
+__name2(summarizeSkips, "summarizeSkips");
 function buildEnqueueSummary(result, enqueued, duplicates, horizonFrom, horizonTo) {
   const s = summarizeSkips(result.skips);
   return {
@@ -32675,7 +34532,7 @@ function buildEnqueueSummary(result, enqueued, duplicates, horizonFrom, horizonT
   };
 }
 __name(buildEnqueueSummary, "buildEnqueueSummary");
-
+__name2(buildEnqueueSummary, "buildEnqueueSummary");
 function toListItem(f) {
   return {
     id: f.id,
@@ -32684,6 +34541,7 @@ function toListItem(f) {
   };
 }
 __name(toListItem, "toListItem");
+__name2(toListItem, "toListItem");
 function groupFollowUpsForBot(list, now) {
   const groups = { overdue: [], today: [], week: [], future: [], open: [] };
   for (const f of list) {
@@ -32695,6 +34553,7 @@ function groupFollowUpsForBot(list, now) {
   return groups;
 }
 __name(groupFollowUpsForBot, "groupFollowUpsForBot");
+__name2(groupFollowUpsForBot, "groupFollowUpsForBot");
 function followupsNudgeBody(list, now) {
   const groups = groupFollowUpsForBot(list, now);
   const overdue = groups.overdue.length;
@@ -32714,7 +34573,7 @@ function followupsNudgeBody(list, now) {
   return { total: overdue + today, overdue, today, extra: lines.join("\n") };
 }
 __name(followupsNudgeBody, "followupsNudgeBody");
-
+__name2(followupsNudgeBody, "followupsNudgeBody");
 var EXB_ACTOR = {
   staffId: "bale-bot",
   email: "bale-bot@system.local",
@@ -32732,9 +34591,10 @@ function formatSize(bytes) {
   return `${bytes}B`;
 }
 __name(formatSize, "formatSize");
+__name2(formatSize, "formatSize");
 function createExerciseBankBot(deps) {
   const { db, audit, logger, notify, settings, exerciseBank } = deps;
-  const log3 = logger.child("exb-bot");
+  const log32 = logger.child("exb-bot");
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   async function readState(chatId) {
     const row = await db.queryOne(
@@ -32751,6 +34611,7 @@ function createExerciseBankBot(deps) {
     }
   }
   __name(readState, "readState");
+  __name2(readState, "readState");
   async function writeState3(chatId, state) {
     await db.execute(
       `INSERT INTO bot_menu_state (chat_id, payload, updated_at)
@@ -32759,7 +34620,8 @@ function createExerciseBankBot(deps) {
       [chatId, JSON.stringify(state), now().toISOString()]
     );
   }
-  __name(writeState3, "writeState");
+  __name(writeState3, "writeState3");
+  __name2(writeState3, "writeState");
   async function gate(chatId) {
     const enabled = await settings.getExerciseBankEnabled();
     if (!enabled)
@@ -32784,6 +34646,7 @@ function createExerciseBankBot(deps) {
     return { ok: true, owner: { kind: owner.kind, refId: owner.ref_id, role: owner.role } };
   }
   __name(gate, "gate");
+  __name2(gate, "gate");
   function deniedReply(reason) {
     if (reason === "disabled") {
       return { text: renderTemplate("bot_exercise_disabled"), buttons: null };
@@ -32791,6 +34654,7 @@ function createExerciseBankBot(deps) {
     return { text: renderTemplate("bot_exercise_denied"), buttons: null };
   }
   __name(deniedReply, "deniedReply");
+  __name2(deniedReply, "deniedReply");
   const STALE = {
     text: "\u23F3 \u0627\u06CC\u0646 \u0645\u0646\u0648 \u0642\u062F\u06CC\u0645\u06CC \u0627\u0633\u062A \u2014 \u062F\u06A9\u0645\u0647\u0654 \xAB\u0628\u0627\u0646\u06A9 \u062A\u0645\u0631\u06CC\u0646\xBB \u0631\u0627 \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0632\u0646\u06CC\u062F.",
     buttons: [[{ text: "\u{1F4DA} \u0628\u0627\u0646\u06A9 \u062A\u0645\u0631\u06CC\u0646", callbackData: "exb:root" }]]
@@ -32825,6 +34689,7 @@ function createExerciseBankBot(deps) {
     return rows;
   }
   __name(scopedStudents, "scopedStudents");
+  __name2(scopedStudents, "scopedStudents");
   async function renderRoot() {
     const text = [
       "\u{1F4DA} \u0628\u0627\u0646\u06A9 \u062A\u0645\u0631\u06CC\u0646 \u0645\u0631\u06A9\u0632",
@@ -32844,6 +34709,7 @@ function createExerciseBankBot(deps) {
     };
   }
   __name(renderRoot, "renderRoot");
+  __name2(renderRoot, "renderRoot");
   async function renderCats(chatId, cat, page) {
     const groups = await exerciseBank.categories();
     const list = cat === "d" ? groups.disorder : cat === "g" ? groups.grade : groups.other;
@@ -32863,25 +34729,26 @@ function createExerciseBankBot(deps) {
     delete state.stu;
     delete state.sent;
     await writeState3(chatId, state);
-    const title2 = cat === "d" ? "\u{1F9E9} \u0628\u0631\u0686\u0633\u0628 \u0627\u062E\u062A\u0644\u0627\u0644" : cat === "g" ? "\u{1F393} \u0628\u0631\u0686\u0633\u0628 \u067E\u0627\u06CC\u0647" : "\u{1F3F7} \u0633\u0627\u06CC\u0631 \u0628\u0631\u0686\u0633\u0628\u200C\u0647\u0627";
+    const title22 = cat === "d" ? "\u{1F9E9} \u0628\u0631\u0686\u0633\u0628 \u0627\u062E\u062A\u0644\u0627\u0644" : cat === "g" ? "\u{1F393} \u0628\u0631\u0686\u0633\u0628 \u067E\u0627\u06CC\u0647" : "\u{1F3F7} \u0633\u0627\u06CC\u0631 \u0628\u0631\u0686\u0633\u0628\u200C\u0647\u0627";
     const rows = slice.map((t, i) => [
       { text: truncateLabel(t.name), callbackData: `exb:lst:${cat}:${(safePage - 1) * EXB_PAGE_SIZE + i}:1` }
     ]);
     const nav = [];
-    if (safePage > 1)
-      nav.push({ text: "\u25B6 \u0628\u0639\u062F\u06CC", callbackData: `exb:cats:${cat}:${safePage - 1}` });
     if (safePage < totalPages)
-      nav.push({ text: "\u25C0 \u0642\u0628\u0644\u06CC", callbackData: `exb:cats:${cat}:${safePage + 1}` });
+      nav.push({ text: "\u0635\u0641\u062D\u0647\u0654 \u0628\u0639\u062F", callbackData: `exb:cats:${cat}:${safePage + 1}` });
+    if (safePage > 1)
+      nav.push({ text: "\u0635\u0641\u062D\u0647\u0654 \u0642\u0628\u0644", callbackData: `exb:cats:${cat}:${safePage - 1}` });
     nav.push({ text: "\u21A9 \u0628\u0627\u0632\u06AF\u0634\u062A", callbackData: "exb:root" });
     rows.push(nav);
     return {
-      text: `${title2} \u2014 \u0635\u0641\u062D\u0647\u0654 ${safePage} \u0627\u0632 ${totalPages} (${total} \u0628\u0631\u0686\u0633\u0628):
+      text: `${title22} \u2014 \u0635\u0641\u062D\u0647\u0654 ${safePage} \u0627\u0632 ${totalPages} (${total} \u0628\u0631\u0686\u0633\u0628):
 
 \u06CC\u06A9\u06CC \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F \u062A\u0627 \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0622\u0646 \u0628\u06CC\u0627\u06CC\u062F.`,
       buttons: rows
     };
   }
   __name(renderCats, "renderCats");
+  __name2(renderCats, "renderCats");
   async function renderList(chatId, cat, tagIdx, page) {
     let tagId;
     if (cat !== "a") {
@@ -32911,10 +34778,10 @@ function createExerciseBankBot(deps) {
       { text: truncateLabel(e.title), callbackData: `exb:item:${i}` }
     ]);
     const nav = [];
-    if (result.page > 1)
-      nav.push({ text: "\u25B6 \u0628\u0639\u062F\u06CC", callbackData: `exb:lst:${cat}:${tagIdx}:${result.page - 1}` });
     if (result.hasMore)
-      nav.push({ text: "\u25C0 \u0642\u0628\u0644\u06CC", callbackData: `exb:lst:${cat}:${tagIdx}:${result.page + 1}` });
+      nav.push({ text: "\u0635\u0641\u062D\u0647\u0654 \u0628\u0639\u062F", callbackData: `exb:lst:${cat}:${tagIdx}:${result.page + 1}` });
+    if (result.page > 1)
+      nav.push({ text: "\u0635\u0641\u062D\u0647\u0654 \u0642\u0628\u0644", callbackData: `exb:lst:${cat}:${tagIdx}:${result.page - 1}` });
     nav.push({ text: "\u21A9 \u0628\u0627\u0632\u06AF\u0634\u062A", callbackData: "exb:root" });
     rows.push(nav);
     return {
@@ -32925,6 +34792,7 @@ function createExerciseBankBot(deps) {
     };
   }
   __name(renderList, "renderList");
+  __name2(renderList, "renderList");
   async function renderItem(chatId, idx) {
     const state = await readState(chatId);
     const lite = state.ex?.[idx];
@@ -32964,6 +34832,7 @@ function createExerciseBankBot(deps) {
     };
   }
   __name(renderItem, "renderItem");
+  __name2(renderItem, "renderItem");
   async function renderStudents(chatId, owner, idx, page) {
     const state = await readState(chatId);
     const lite = state.ex?.[idx];
@@ -32986,10 +34855,10 @@ function createExerciseBankBot(deps) {
       { text: truncateLabel(s.name, 24), callbackData: `exb:pick:${idx}:${i}` }
     ]);
     const nav = [];
-    if (safePage > 1)
-      nav.push({ text: "\u25B6 \u0628\u0639\u062F\u06CC", callbackData: `exb:send:${idx}:${safePage - 1}` });
     if (safePage < totalPages)
-      nav.push({ text: "\u25C0 \u0642\u0628\u0644\u06CC", callbackData: `exb:send:${idx}:${safePage + 1}` });
+      nav.push({ text: "\u0635\u0641\u062D\u0647\u0654 \u0628\u0639\u062F", callbackData: `exb:send:${idx}:${safePage + 1}` });
+    if (safePage > 1)
+      nav.push({ text: "\u0635\u0641\u062D\u0647\u0654 \u0642\u0628\u0644", callbackData: `exb:send:${idx}:${safePage - 1}` });
     nav.push({ text: "\u21A9 \u0628\u0627\u0632\u06AF\u0634\u062A", callbackData: `exb:item:${idx}` });
     rows.push(nav);
     return {
@@ -32999,6 +34868,7 @@ function createExerciseBankBot(deps) {
     };
   }
   __name(renderStudents, "renderStudents");
+  __name2(renderStudents, "renderStudents");
   async function renderConfirm(chatId, idx, stuIdx) {
     const state = await readState(chatId);
     const lite = state.ex?.[idx];
@@ -33021,6 +34891,7 @@ function createExerciseBankBot(deps) {
     };
   }
   __name(renderConfirm, "renderConfirm");
+  __name2(renderConfirm, "renderConfirm");
   async function guardianChats(studentId) {
     const linkRows = await db.query(
       `SELECT DISTINCT chat_id FROM bot_links
@@ -33035,6 +34906,7 @@ function createExerciseBankBot(deps) {
     return [.../* @__PURE__ */ new Set([...linkRows.map((r) => r.chat_id), ...prefRows.map((r) => r.chat_id)])];
   }
   __name(guardianChats, "guardianChats");
+  __name2(guardianChats, "guardianChats");
   async function executeSend(chatId, owner, idx, stuIdx) {
     const state = await readState(chatId);
     if (state.sent) {
@@ -33081,12 +34953,12 @@ function createExerciseBankBot(deps) {
       extraLines.push("\u0628\u0631\u0627\u06CC \u062F\u0631\u06CC\u0627\u0641\u062A \u0641\u0627\u06CC\u0644 \u062A\u0645\u0631\u06CC\u0646 \u0628\u0627 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F.");
     }
     const targets = await guardianChats(student.id);
-    const channel2 = notify.getChannel("bale") ? "bale" : "internal";
+    const channel22 = notify.getChannel("bale") ? "bale" : "internal";
     const clinicName = await settings.getClinicName();
     let enqueued = 0;
     for (const target of targets) {
       const outcome = await notify.enqueue({
-        channel: channel2,
+        channel: channel22,
         template: "homework_assigned",
         recipient: target,
         studentId: student.id,
@@ -33110,7 +34982,7 @@ function createExerciseBankBot(deps) {
         targets: { from: null, to: targets.length }
       }
     });
-    log3.info("exercise.homework.sent", { assignmentId: assignment.id, targets: targets.length, enqueued });
+    log32.info("exercise.homework.sent", { assignmentId: assignment.id, targets: targets.length, enqueued });
     state.sent = true;
     await writeState3(chatId, state);
     const note = enqueued > 0 ? "\u0628\u0647 \u0686\u062A \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0627\u0631\u0633\u0627\u0644 \u0634\u062F." : "\u0648\u0644\u06CC\u0651 \u0627\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0647\u0646\u0648\u0632 \u0628\u0647 \u0628\u0627\u062A \u0645\u062A\u0635\u0644 \u0646\u06CC\u0633\u062A \u2014 \u062A\u06A9\u0644\u06CC\u0641 \u062F\u0631 \u067E\u0631\u0648\u0646\u062F\u0647 \u062B\u0628\u062A \u0634\u062F \u0627\u0645\u0627 \u067E\u06CC\u0627\u0645\u06CC \u0627\u0631\u0633\u0627\u0644 \u0646\u0634\u062F.";
@@ -33120,6 +34992,7 @@ function createExerciseBankBot(deps) {
     };
   }
   __name(executeSend, "executeSend");
+  __name2(executeSend, "executeSend");
   return {
     /** «بانک تمرین» یا /bank — منوی ریشه */
     async root(chatId) {
@@ -33163,7 +35036,7 @@ function createExerciseBankBot(deps) {
   };
 }
 __name(createExerciseBankBot, "createExerciseBankBot");
-
+__name2(createExerciseBankBot, "createExerciseBankBot");
 var SUB_ACTOR = {
   staffId: "bale-bot",
   email: "bale-bot@system.local",
@@ -33173,7 +35046,7 @@ var SUB_ACTOR = {
 var PICK_LIMIT = 10;
 function createExerciseSubmissionBot(deps) {
   const { db, audit, logger, notify, settings, exerciseBank, mediaFetcher } = deps;
-  const log3 = logger.child("sub-bot");
+  const log32 = logger.child("sub-bot");
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   async function readState(chatId) {
     const row = await db.queryOne(
@@ -33190,6 +35063,7 @@ function createExerciseSubmissionBot(deps) {
     }
   }
   __name(readState, "readState");
+  __name2(readState, "readState");
   async function writeState3(chatId, state) {
     await db.execute(
       `INSERT INTO bot_menu_state (chat_id, payload, updated_at)
@@ -33198,17 +35072,20 @@ function createExerciseSubmissionBot(deps) {
       [chatId, JSON.stringify(state), now().toISOString()]
     );
   }
-  __name(writeState3, "writeState");
+  __name(writeState3, "writeState3");
+  __name2(writeState3, "writeState");
   async function isEnabled() {
     return settings.getExerciseBankEnabled();
   }
   __name(isEnabled, "isEnabled");
+  __name2(isEnabled, "isEnabled");
   async function linkedStudentIds(chatId) {
     const stmt = selectStudentIdsByChat(chatId);
     const rows = await db.query(stmt.sql, stmt.params);
     return rows.map((r) => r.student_id);
   }
   __name(linkedStudentIds, "linkedStudentIds");
+  __name2(linkedStudentIds, "linkedStudentIds");
   const STALE = {
     text: "\u23F3 \u0627\u06CC\u0646 \u0641\u0647\u0631\u0633\u062A \u0642\u062F\u06CC\u0645\u06CC \u0627\u0633\u062A \u2014 \u0641\u0627\u06CC\u0644 \u0646\u062A\u06CC\u062C\u0647 \u0631\u0627 \u062F\u0648\u0628\u0627\u0631\u0647 \u062F\u0631 \u0647\u0645\u06CC\u0646 \u0686\u062A \u0628\u0641\u0631\u0633\u062A\u06CC\u062F.",
     buttons: null
@@ -33222,6 +35099,7 @@ function createExerciseSubmissionBot(deps) {
     return `\u0646\u062A\u06CC\u062C\u0647-\u062A\u0645\u0631\u06CC\u0646-${stamp}.${ext}`;
   }
   __name(resolveFileName, "resolveFileName");
+  __name2(resolveFileName, "resolveFileName");
   async function notifyCreator(assignment, submission) {
     let targets = [];
     if (assignment.assignedBy.startsWith("class:")) {
@@ -33261,6 +35139,7 @@ function createExerciseSubmissionBot(deps) {
     return enqueued;
   }
   __name(notifyCreator, "notifyCreator");
+  __name2(notifyCreator, "notifyCreator");
   async function attachMedia(chatId, assignment, media, caption) {
     if (!mediaFetcher) {
       return { text: renderTemplate("bot_submission_unavailable"), buttons: null };
@@ -33276,7 +35155,7 @@ function createExerciseSubmissionBot(deps) {
     try {
       fetched = await mediaFetcher.fetch(media.fileId);
     } catch (err) {
-      log3.warn("submission.fetch.failed", { chatId, error: err instanceof Error ? err.message : String(err) });
+      log32.warn("submission.fetch.failed", { chatId, error: err instanceof Error ? err.message : String(err) });
       return { text: renderTemplate("bot_submission_failed"), buttons: null };
     }
     const mime = media.type === "photo" ? "image/jpeg" : (media.mime ?? fetched.mime ?? "application/octet-stream").toLowerCase();
@@ -33302,7 +35181,7 @@ function createExerciseSubmissionBot(deps) {
     try {
       enqueued = await notifyCreator(assignment, submission);
     } catch (err) {
-      log3.warn("submission.notify.failed", { submissionId: submission.id, error: err instanceof Error ? err.message : String(err) });
+      log32.warn("submission.notify.failed", { submissionId: submission.id, error: err instanceof Error ? err.message : String(err) });
     }
     await audit.log({
       actorId: "bale-bot",
@@ -33316,7 +35195,7 @@ function createExerciseSubmissionBot(deps) {
         notified: { from: null, to: enqueued }
       }
     });
-    log3.info("submission.received", {
+    log32.info("submission.received", {
       submissionId: submission.id,
       assignmentId: assignment.id,
       studentId: assignment.studentId,
@@ -33326,6 +35205,7 @@ function createExerciseSubmissionBot(deps) {
     return { text: renderTemplate("bot_submission_received", { exerciseTitle: assignment.exerciseTitle }), buttons: null };
   }
   __name(attachMedia, "attachMedia");
+  __name2(attachMedia, "attachMedia");
   function bytesToBase642(bytes) {
     let bin = "";
     const CHUNK = 32768;
@@ -33334,11 +35214,13 @@ function createExerciseSubmissionBot(deps) {
     }
     return btoa(bin);
   }
-  __name(bytesToBase642, "bytesToBase64");
+  __name(bytesToBase642, "bytesToBase642");
+  __name2(bytesToBase642, "bytesToBase64");
   function spreadStmt2(stmt) {
     return [stmt.sql, stmt.params];
   }
-  __name(spreadStmt2, "spreadStmt");
+  __name(spreadStmt2, "spreadStmt2");
+  __name2(spreadStmt2, "spreadStmt");
   return {
     /** پیام رسانه‌ای (عکس/سند) از هر chat — نقطهٔ ورود حلقهٔ بازگشت */
     async handleMedia(chatId, media, caption) {
@@ -33406,7 +35288,7 @@ function createExerciseSubmissionBot(deps) {
   };
 }
 __name(createExerciseSubmissionBot, "createExerciseSubmissionBot");
-
+__name2(createExerciseSubmissionBot, "createExerciseSubmissionBot");
 var CONFIRM_BUTTONS = [
   [
     { text: "\u2705 \u062B\u0628\u062A \u0646\u0647\u0627\u06CC\u06CC", callbackData: "wl:do" },
@@ -33425,6 +35307,7 @@ async function readWlIntakeState(db, chatId) {
   }
 }
 __name(readWlIntakeState, "readWlIntakeState");
+__name2(readWlIntakeState, "readWlIntakeState");
 async function writeState(db, chatId, state, now) {
   await db.execute(
     `INSERT INTO bot_menu_state (chat_id, payload, updated_at)
@@ -33434,10 +35317,12 @@ async function writeState(db, chatId, state, now) {
   );
 }
 __name(writeState, "writeState");
+__name2(writeState, "writeState");
 async function clearWlIntakeState(db, chatId) {
   await db.execute(`DELETE FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
 }
 __name(clearWlIntakeState, "clearWlIntakeState");
+__name2(clearWlIntakeState, "clearWlIntakeState");
 function validName(raw2) {
   const t = raw2.replace(/\s+/g, " ").trim();
   if (t.length < 3 || t.length > 120)
@@ -33447,6 +35332,7 @@ function validName(raw2) {
   return t;
 }
 __name(validName, "validName");
+__name2(validName, "validName");
 function validPhone(raw2) {
   const digits = normalizePhoneDigits(stripToDigits(raw2));
   if (digits.length === 11 && digits.startsWith("09"))
@@ -33454,6 +35340,7 @@ function validPhone(raw2) {
   return null;
 }
 __name(validPhone, "validPhone");
+__name2(validPhone, "validPhone");
 function validBirth(raw2) {
   const t = raw2.trim();
   if (t === "-" || t === "\u0631\u062F" || t === "\u0646\u062F\u0627\u0631\u062F" || t.length === 0)
@@ -33473,6 +35360,7 @@ function validBirth(raw2) {
   return null;
 }
 __name(validBirth, "validBirth");
+__name2(validBirth, "validBirth");
 function validNeed(raw2) {
   const t = raw2.replace(/\s+/g, " ").trim();
   if (t === "-" || t === "\u0646\u062F\u0627\u0631\u062F" || t.length === 0)
@@ -33482,9 +35370,10 @@ function validNeed(raw2) {
   return t;
 }
 __name(validNeed, "validNeed");
+__name2(validNeed, "validNeed");
 function createWaitlistIntakeBot(deps) {
   const { db, audit, logger } = deps;
-  const log3 = logger.child("wl-intake");
+  const log32 = logger.child("wl-intake");
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   async function linkedClass(chatId) {
     const row = await db.queryOne(
@@ -33500,6 +35389,7 @@ function createWaitlistIntakeBot(deps) {
     return row ? { classId: row.id, schoolId: row.school_id, className: row.name, schoolName: row.school_name, createdBy: row.created_by } : null;
   }
   __name(linkedClass, "linkedClass");
+  __name2(linkedClass, "linkedClass");
   const cancelHint = "\n\n\u0628\u0631\u0627\u06CC \u0644\u063A\u0648: /cancel";
   async function start(chatId) {
     const owner = await db.queryOne(
@@ -33541,12 +35431,14 @@ function createWaitlistIntakeBot(deps) {
     };
   }
   __name(start, "start");
+  __name2(start, "start");
   async function cancel(chatId) {
     const had = await readWlIntakeState(db, chatId);
     await clearWlIntakeState(db, chatId);
     return { text: had ? renderTemplate("bot_wl_cancelled") : "\u0686\u06CC\u0632\u06CC \u0628\u0631\u0627\u06CC \u0644\u063A\u0648 \u0646\u0628\u0648\u062F.", buttons: null };
   }
   __name(cancel, "cancel");
+  __name2(cancel, "cancel");
   async function feedInput(chatId, raw2) {
     const st = await readWlIntakeState(db, chatId);
     if (!st)
@@ -33601,6 +35493,7 @@ function createWaitlistIntakeBot(deps) {
     return { text: lines.join("\n"), buttons: CONFIRM_BUTTONS };
   }
   __name(feedInput, "feedInput");
+  __name2(feedInput, "feedInput");
   async function confirm(chatId) {
     const st = await readWlIntakeState(db, chatId);
     if (!st || !st.name || !st.phone) {
@@ -33635,19 +35528,21 @@ function createWaitlistIntakeBot(deps) {
       }
     });
     await clearWlIntakeState(db, chatId);
-    log3.info("wl.teacher_intake", { waitlistId: id, classId: cls.classId });
+    log32.info("wl.teacher_intake", { waitlistId: id, classId: cls.classId });
     return { text: renderTemplate("bot_wl_done"), buttons: null };
   }
   __name(confirm, "confirm");
-  async function abort2(chatId) {
+  __name2(confirm, "confirm");
+  async function abort22(chatId) {
     await clearWlIntakeState(db, chatId);
     return { text: renderTemplate("bot_wl_cancelled"), buttons: null };
   }
-  __name(abort2, "abort");
-  return { start, cancel, feedInput, confirm, abort: abort2, readWlIntakeState };
+  __name(abort22, "abort2");
+  __name2(abort22, "abort");
+  return { start, cancel, feedInput, confirm, abort: abort22, readWlIntakeState };
 }
 __name(createWaitlistIntakeBot, "createWaitlistIntakeBot");
-
+__name2(createWaitlistIntakeBot, "createWaitlistIntakeBot");
 var STU_LIST_LIMIT = 30;
 var STU_PAGE_SIZE = 6;
 var FAMILY_MSG_MAX = 500;
@@ -33682,6 +35577,7 @@ async function readStuMsgState(db, chatId) {
   }
 }
 __name(readStuMsgState, "readStuMsgState");
+__name2(readStuMsgState, "readStuMsgState");
 async function writeState2(db, chatId, state, now) {
   await db.execute(
     `INSERT INTO bot_menu_state (chat_id, payload, updated_at)
@@ -33690,14 +35586,16 @@ async function writeState2(db, chatId, state, now) {
     [chatId, JSON.stringify(state), now().toISOString()]
   );
 }
-__name(writeState2, "writeState");
+__name(writeState2, "writeState2");
+__name2(writeState2, "writeState");
 async function clearStuState(db, chatId) {
   await db.execute(`DELETE FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
 }
 __name(clearStuState, "clearStuState");
+__name2(clearStuState, "clearStuState");
 function createStudentActionsBot(deps) {
   const { db, audit, logger, notify, settings, exerciseBank } = deps;
-  const log3 = logger.child("stu-bot");
+  const log32 = logger.child("stu-bot");
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   async function resolveOwner(chatId) {
     const row = await db.queryOne(
@@ -33714,6 +35612,7 @@ function createStudentActionsBot(deps) {
     return row ? { kind: row.kind, refId: row.ref_id, role: row.role } : null;
   }
   __name(resolveOwner, "resolveOwner");
+  __name2(resolveOwner, "resolveOwner");
   async function staffGate(chatId) {
     const owner = await resolveOwner(chatId);
     if (!owner || owner.kind !== "staff")
@@ -33723,6 +35622,7 @@ function createStudentActionsBot(deps) {
     return owner;
   }
   __name(staffGate, "staffGate");
+  __name2(staffGate, "staffGate");
   async function scopedStudents(owner) {
     if (owner.role === "therapist") {
       return db.query(
@@ -33750,6 +35650,7 @@ function createStudentActionsBot(deps) {
     );
   }
   __name(scopedStudents, "scopedStudents");
+  __name2(scopedStudents, "scopedStudents");
   async function readStuState(chatId) {
     const row = await db.queryOne(`SELECT payload FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
     if (!row)
@@ -33762,6 +35663,7 @@ function createStudentActionsBot(deps) {
     }
   }
   __name(readStuState, "readStuState");
+  __name2(readStuState, "readStuState");
   const STALE = {
     text: "\u23F3 \u0627\u06CC\u0646 \u0645\u0646\u0648 \u0642\u062F\u06CC\u0645\u06CC \u0627\u0633\u062A \u2014 \u062F\u06A9\u0645\u0647\u0654 \xAB\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u0641\u0639\u0627\u0644\xBB \u0631\u0627 \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0632\u0646\u06CC\u062F.",
     buttons: [[{ text: "\u{1F465} \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u0641\u0639\u0627\u0644", callbackData: "stu:list" }]]
@@ -33780,6 +35682,7 @@ function createStudentActionsBot(deps) {
     return [.../* @__PURE__ */ new Set([...linkRows.map((r) => r.chat_id), ...prefRows.map((r) => r.chat_id)])];
   }
   __name(guardianChats, "guardianChats");
+  __name2(guardianChats, "guardianChats");
   async function openAssignmentCount(studentId) {
     const row = await db.queryOne(
       `SELECT COUNT(*) AS n FROM exercise_assignments WHERE student_id = ? AND status = 'assigned'`,
@@ -33788,6 +35691,7 @@ function createStudentActionsBot(deps) {
     return row?.n ?? 0;
   }
   __name(openAssignmentCount, "openAssignmentCount");
+  __name2(openAssignmentCount, "openAssignmentCount");
   async function list(chatId, page = 1) {
     const owner = await staffGate(chatId);
     if (!owner) {
@@ -33814,16 +35718,16 @@ function createStudentActionsBot(deps) {
       { text: truncateLabel(s.name, 28), callbackData: `stu:menu:${startIdx + i}` }
     ]);
     const nav = [];
-    if (cur > 1)
-      nav.push({ text: "\u25B6 \u0628\u0639\u062F\u06CC", callbackData: `stu:list:${cur - 1}` });
     if (cur < totalPages)
-      nav.push({ text: "\u25C0 \u0642\u0628\u0644\u06CC", callbackData: `stu:list:${cur + 1}` });
+      nav.push({ text: "\u0635\u0641\u062D\u0647\u0654 \u0628\u0639\u062F", callbackData: `stu:list:${cur + 1}` });
+    if (cur > 1)
+      nav.push({ text: "\u0635\u0641\u062D\u0647\u0654 \u0642\u0628\u0644", callbackData: `stu:list:${cur - 1}` });
     if (nav.length > 0)
       rows.push(nav);
     const note = totalPages > 1 ? `
 
 \u0635\u0641\u062D\u0647\u0654 ${faDigits(String(cur))} \u0627\u0632 ${faDigits(String(totalPages))}` : "";
-    log3.info("stu.list", { by: owner.refId, count: total, page: cur });
+    log32.info("stu.list", { by: owner.refId, count: total, page: cur });
     return {
       text: `\u{1F465} \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u0641\u0639\u0627\u0644 (${faDigits(String(total))} \u0646\u0641\u0631)
 
@@ -33832,6 +35736,7 @@ function createStudentActionsBot(deps) {
     };
   }
   __name(list, "list");
+  __name2(list, "list");
   async function menu(chatId, idx) {
     const owner = await staffGate(chatId);
     if (!owner)
@@ -33840,7 +35745,7 @@ function createStudentActionsBot(deps) {
     const stu = state?.students?.[idx];
     if (!stu)
       return STALE;
-    const profile3 = await db.queryOne(
+    const profile32 = await db.queryOne(
       `SELECT s.grade, s.case_status, c.name AS class_name, sc.name AS school_name
          FROM students s
          LEFT JOIN classes c ON c.id = s.class_id
@@ -33850,13 +35755,13 @@ function createStudentActionsBot(deps) {
     );
     const openCount = exerciseBank ? await openAssignmentCount(stu.id) : 0;
     const lines = [`\u{1F464} ${stu.name}`];
-    if (profile3?.class_name) {
-      lines.push(`\u{1F3EB} \u06A9\u0644\u0627\u0633: ${profile3.class_name}${profile3.school_name ? ` \u2014 ${profile3.school_name}` : ""}`);
+    if (profile32?.class_name) {
+      lines.push(`\u{1F3EB} \u06A9\u0644\u0627\u0633: ${profile32.class_name}${profile32.school_name ? ` \u2014 ${profile32.school_name}` : ""}`);
     }
-    if (profile3?.grade)
-      lines.push(`\u{1F393} \u067E\u0627\u06CC\u0647: ${profile3.grade}`);
-    if (profile3?.case_status) {
-      lines.push(`\u{1F4CB} \u0648\u0636\u0639\u06CC\u062A \u067E\u0631\u0648\u0646\u062F\u0647: ${CASE_LABELS[profile3.case_status] ?? profile3.case_status}`);
+    if (profile32?.grade)
+      lines.push(`\u{1F393} \u067E\u0627\u06CC\u0647: ${profile32.grade}`);
+    if (profile32?.case_status) {
+      lines.push(`\u{1F4CB} \u0648\u0636\u0639\u06CC\u062A \u067E\u0631\u0648\u0646\u062F\u0647: ${CASE_LABELS[profile32.case_status] ?? profile32.case_status}`);
     }
     lines.push(`\u{1F4DA} \u062A\u06A9\u0644\u06CC\u0641 \u0628\u0627\u0632: ${faDigits(String(openCount))}`);
     return {
@@ -33871,7 +35776,7 @@ function createStudentActionsBot(deps) {
           { text: "\u{1F5D3} \u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u0627\u0648", callbackData: `stu:appts:${idx}` },
           { text: "\u{1F4CB} \u0631\u0648\u06CC\u062F\u0627\u062F/\u06AF\u0632\u0627\u0631\u0634", callbackData: `stu:tl:${idx}` }
         ],
-        // نمای چرخهٔ پرونده: تاریخچه + چک‌لیست‌های او
+        // — نمای چرخهٔ پرونده: تاریخچه + چک‌لیست‌های او
         [
           { text: "\u{1F558} \u062A\u0627\u0631\u06CC\u062E\u0686\u0647", callbackData: `stu:hist:${idx}` },
           { text: "\u{1F4DD} \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u0627\u0648", callbackData: `stu:ckl:${idx}` }
@@ -33881,6 +35786,7 @@ function createStudentActionsBot(deps) {
     };
   }
   __name(menu, "menu");
+  __name2(menu, "menu");
   async function sendExercises(chatId, stuIdx, page) {
     const owner = await staffGate(chatId);
     if (!owner)
@@ -33909,10 +35815,10 @@ function createStudentActionsBot(deps) {
       { text: truncateLabel(e.title), callbackData: `stu:pick:${stuIdx}:${i}` }
     ]);
     const nav = [];
-    if (result.page > 1)
-      nav.push({ text: "\u25B6 \u0628\u0639\u062F\u06CC", callbackData: `stu:send:${stuIdx}:${result.page - 1}` });
     if (result.hasMore)
-      nav.push({ text: "\u25C0 \u0642\u0628\u0644\u06CC", callbackData: `stu:send:${stuIdx}:${result.page + 1}` });
+      nav.push({ text: "\u0635\u0641\u062D\u0647\u0654 \u0628\u0639\u062F", callbackData: `stu:send:${stuIdx}:${result.page + 1}` });
+    if (result.page > 1)
+      nav.push({ text: "\u0635\u0641\u062D\u0647\u0654 \u0642\u0628\u0644", callbackData: `stu:send:${stuIdx}:${result.page - 1}` });
     nav.push({ text: `\u21A9 \u0628\u0627\u0632\u06AF\u0634\u062A \u0628\u0647 ${truncateLabel(stu.name, 12)}`, callbackData: `stu:menu:${stuIdx}` });
     rows.push(nav);
     return {
@@ -33922,6 +35828,7 @@ function createStudentActionsBot(deps) {
     };
   }
   __name(sendExercises, "sendExercises");
+  __name2(sendExercises, "sendExercises");
   async function pick(chatId, stuIdx, exIdx) {
     const owner = await staffGate(chatId);
     if (!owner)
@@ -33947,6 +35854,7 @@ function createStudentActionsBot(deps) {
     };
   }
   __name(pick, "pick");
+  __name2(pick, "pick");
   async function yes(chatId, stuIdx, exIdx) {
     const owner = await staffGate(chatId);
     if (!owner)
@@ -33990,12 +35898,12 @@ function createStudentActionsBot(deps) {
       extraLines.push("\u0628\u0631\u0627\u06CC \u062F\u0631\u06CC\u0627\u0641\u062A \u0641\u0627\u06CC\u0644 \u062A\u0645\u0631\u06CC\u0646 \u0628\u0627 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F.");
     }
     const targets = await guardianChats(stu.id);
-    const channel2 = notify.getChannel("bale") ? "bale" : "internal";
+    const channel22 = notify.getChannel("bale") ? "bale" : "internal";
     const clinicName = await settings.getClinicName();
     let enqueued = 0;
     for (const target of targets) {
       const outcome = await notify.enqueue({
-        channel: channel2,
+        channel: channel22,
         template: "homework_assigned",
         recipient: target,
         studentId: stu.id,
@@ -34019,7 +35927,7 @@ function createStudentActionsBot(deps) {
         via: { from: null, to: "stu_menu" }
       }
     });
-    log3.info("stu.homework.sent", { assignmentId: assignment.id, studentId: stu.id, enqueued });
+    log32.info("stu.homework.sent", { assignmentId: assignment.id, studentId: stu.id, enqueued });
     const note = enqueued > 0 ? "\u0628\u0647 \u0686\u062A \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0627\u0631\u0633\u0627\u0644 \u0634\u062F." : "\u0648\u0644\u06CC\u0651 \u0627\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0647\u0646\u0648\u0632 \u0628\u0647 \u0628\u0627\u062A \u0645\u062A\u0635\u0644 \u0646\u06CC\u0633\u062A \u2014 \u062A\u06A9\u0644\u06CC\u0641 \u062F\u0631 \u067E\u0631\u0648\u0646\u062F\u0647 \u062B\u0628\u062A \u0634\u062F \u0627\u0645\u0627 \u067E\u06CC\u0627\u0645\u06CC \u0627\u0631\u0633\u0627\u0644 \u0646\u0634\u062F.";
     return {
       text: renderTemplate("bot_exercise_sent", { studentName: stu.name, extra: note }),
@@ -34027,6 +35935,7 @@ function createStudentActionsBot(deps) {
     };
   }
   __name(yes, "yes");
+  __name2(yes, "yes");
   async function msgStart(chatId, idx) {
     const owner = await staffGate(chatId);
     if (!owner)
@@ -34054,6 +35963,7 @@ function createStudentActionsBot(deps) {
     };
   }
   __name(msgStart, "msgStart");
+  __name2(msgStart, "msgStart");
   async function msgFeed(chatId, raw2) {
     const st = await readStuMsgState(db, chatId);
     if (!st || st.step !== "body")
@@ -34085,6 +35995,7 @@ function createStudentActionsBot(deps) {
     };
   }
   __name(msgFeed, "msgFeed");
+  __name2(msgFeed, "msgFeed");
   async function msgConfirm(chatId) {
     const owner = await staffGate(chatId);
     if (!owner)
@@ -34106,12 +36017,12 @@ function createStudentActionsBot(deps) {
       [owner.refId]
     ).then((r) => r?.full_name ?? "\u0647\u0645\u06A9\u0627\u0631 \u0645\u0631\u06A9\u0632");
     const clinicName = await settings.getClinicName();
-    const channel2 = notify.getChannel("bale") ? "bale" : "internal";
+    const channel22 = notify.getChannel("bale") ? "bale" : "internal";
     const ts = now().toISOString();
     let enqueued = 0;
     for (const target of targets) {
       const outcome = await notify.enqueue({
-        channel: channel2,
+        channel: channel22,
         template: "bot_family_message",
         recipient: target,
         studentId: st.studentId,
@@ -34139,7 +36050,7 @@ function createStudentActionsBot(deps) {
         chatId: { from: null, to: chatId }
       }
     });
-    log3.info("stu.family_message", { studentId: st.studentId, enqueued, by: owner.refId });
+    log32.info("stu.family_message", { studentId: st.studentId, enqueued, by: owner.refId });
     await clearStuState(db, chatId);
     return {
       text: renderTemplate("bot_family_message_sent", { studentName: st.studentName, extra: `\u067E\u06CC\u0627\u0645 \u0634\u0645\u0627 \u0628\u0647 ${faDigits(String(enqueued))} \u06AF\u0641\u062A\u06AF\u0648\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0627\u0631\u0633\u0627\u0644 \u0634\u062F.` }),
@@ -34147,11 +36058,13 @@ function createStudentActionsBot(deps) {
     };
   }
   __name(msgConfirm, "msgConfirm");
+  __name2(msgConfirm, "msgConfirm");
   async function msgAbort(chatId) {
     await clearStuState(db, chatId);
     return { text: "\u2716\uFE0F \u067E\u06CC\u0627\u0645 \u0644\u063A\u0648 \u0634\u062F.", buttons: null };
   }
   __name(msgAbort, "msgAbort");
+  __name2(msgAbort, "msgAbort");
   async function homework(chatId, idx) {
     const owner = await staffGate(chatId);
     if (!owner)
@@ -34191,6 +36104,7 @@ function createStudentActionsBot(deps) {
     };
   }
   __name(homework, "homework");
+  __name2(homework, "homework");
   async function appointments(chatId, idx) {
     const owner = await staffGate(chatId);
     if (!owner)
@@ -34225,6 +36139,7 @@ function createStudentActionsBot(deps) {
     };
   }
   __name(appointments, "appointments");
+  __name2(appointments, "appointments");
   async function classActivity(chatId) {
     const owner = await resolveOwner(chatId);
     if (!owner || owner.kind !== "class") {
@@ -34275,6 +36190,7 @@ function createStudentActionsBot(deps) {
     };
   }
   __name(classActivity, "classActivity");
+  __name2(classActivity, "classActivity");
   return {
     list,
     menu,
@@ -34292,7 +36208,7 @@ function createStudentActionsBot(deps) {
   };
 }
 __name(createStudentActionsBot, "createStudentActionsBot");
-
+__name2(createStudentActionsBot, "createStudentActionsBot");
 var TEXT_MAX = 200;
 var LONGTEXT_MAX = 2e3;
 var TL_ACTOR = {
@@ -34310,13 +36226,15 @@ function fa(n) {
   return faDigits(String(n));
 }
 __name(fa, "fa");
+__name2(fa, "fa");
 function faNumStr(s) {
   return s.replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
 __name(faNumStr, "faNumStr");
+__name2(faNumStr, "faNumStr");
 function createCaseEventsBot(deps) {
   const { db, audit, logger, notify, settings, caseEvents } = deps;
-  const log3 = logger.child("tl-bot");
+  const log32 = logger.child("tl-bot");
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   const STALE_STAFF = {
     text: "\u23F3 \u0627\u06CC\u0646 \u0645\u0646\u0648 \u0642\u062F\u06CC\u0645\u06CC \u0627\u0633\u062A \u2014 \u062F\u06A9\u0645\u0647\u0654 \xAB\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u0641\u0639\u0627\u0644\xBB \u0631\u0627 \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0632\u0646\u06CC\u062F.",
@@ -34339,6 +36257,7 @@ function createCaseEventsBot(deps) {
     }
   }
   __name(readState, "readState");
+  __name2(readState, "readState");
   async function writeState3(chatId, state) {
     await db.execute(
       `INSERT INTO bot_menu_state (chat_id, payload, updated_at)
@@ -34347,11 +36266,13 @@ function createCaseEventsBot(deps) {
       [chatId, JSON.stringify(state), now().toISOString()]
     );
   }
-  __name(writeState3, "writeState");
+  __name(writeState3, "writeState3");
+  __name2(writeState3, "writeState");
   async function clearState(chatId) {
     await clearStuState(db, chatId);
   }
   __name(clearState, "clearState");
+  __name2(clearState, "clearState");
   async function staffOwner(chatId) {
     const row = await db.queryOne(
       `SELECT l.staff_id, COALESCE(s.role_ext, s.role) AS role
@@ -34368,6 +36289,7 @@ function createCaseEventsBot(deps) {
     return { staffId: row.staff_id, role: row.role };
   }
   __name(staffOwner, "staffOwner");
+  __name2(staffOwner, "staffOwner");
   async function staffReader(chatId) {
     const row = await db.queryOne(
       `SELECT COALESCE(s.role_ext, s.role) AS role
@@ -34378,14 +36300,17 @@ function createCaseEventsBot(deps) {
     return Boolean(row && (row.role === "manager" || row.role === "therapist" || row.role === "secretary"));
   }
   __name(staffReader, "staffReader");
+  __name2(staffReader, "staffReader");
   function actorOf(staffId, role) {
     return { staffId, email: "bale-bot@system.local", role, displayName: "\u0628\u0627\u062A \u0628\u0644\u0647" };
   }
   __name(actorOf, "actorOf");
+  __name2(actorOf, "actorOf");
   async function guardianChats(studentId) {
     return caseEvents ? caseEvents.guardianChats(studentId) : [];
   }
   __name(guardianChats, "guardianChats");
+  __name2(guardianChats, "guardianChats");
   async function staffChats(staffId) {
     const rows = await db.query(
       `SELECT chat_id FROM staff_bot_links WHERE staff_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
@@ -34394,6 +36319,7 @@ function createCaseEventsBot(deps) {
     return rows.map((r) => r.chat_id);
   }
   __name(staffChats, "staffChats");
+  __name2(staffChats, "staffChats");
   async function startCategory(chatId, stuIdx) {
     const owner = await staffOwner(chatId);
     if (!owner)
@@ -34415,6 +36341,7 @@ function createCaseEventsBot(deps) {
     };
   }
   __name(startCategory, "startCategory");
+  __name2(startCategory, "startCategory");
   async function readRawState(chatId) {
     const row = await db.queryOne(`SELECT payload FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
     if (!row)
@@ -34429,6 +36356,7 @@ function createCaseEventsBot(deps) {
     }
   }
   __name(readRawState, "readRawState");
+  __name2(readRawState, "readRawState");
   async function listTypes(chatId, stuIdx, cat) {
     const owner = await staffOwner(chatId);
     if (!owner)
@@ -34469,6 +36397,7 @@ function createCaseEventsBot(deps) {
     };
   }
   __name(listTypes, "listTypes");
+  __name2(listTypes, "listTypes");
   async function startForm(chatId, stuIdx, typeIdx) {
     const owner = await staffOwner(chatId);
     if (!owner)
@@ -34560,6 +36489,7 @@ function createCaseEventsBot(deps) {
     return promptField(chatId);
   }
   __name(startForm, "startForm");
+  __name2(startForm, "startForm");
   async function promptField(chatId) {
     const st = await readState(chatId, "tl_form");
     if (!st)
@@ -34610,6 +36540,7 @@ ${f.label}${f.required ? "" : " (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)"} \
     };
   }
   __name(promptField, "promptField");
+  __name2(promptField, "promptField");
   async function optionPick(chatId, value) {
     const st = await readState(chatId, "tl_form");
     if (!st)
@@ -34635,6 +36566,7 @@ ${f.label}${f.required ? "" : " (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)"} \
     return st.fields[st.step] ? promptField(chatId) : buildConfirm(chatId);
   }
   __name(optionPick, "optionPick");
+  __name2(optionPick, "optionPick");
   async function skipField(chatId) {
     const st = await readState(chatId, "tl_form");
     if (!st)
@@ -34650,6 +36582,7 @@ ${f.label}${f.required ? "" : " (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)"} \
     return st.fields[st.step] ? promptField(chatId) : buildConfirm(chatId);
   }
   __name(skipField, "skipField");
+  __name2(skipField, "skipField");
   async function feedInput(chatId, raw2) {
     const st = await readState(chatId, "tl_form");
     if (!st)
@@ -34680,6 +36613,7 @@ ${f.label}${f.required ? "" : " (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)"} \
     return st.fields[st.step] ? promptField(chatId) : buildConfirm(chatId);
   }
   __name(feedInput, "feedInput");
+  __name2(feedInput, "feedInput");
   async function buildConfirm(chatId) {
     const st = await readState(chatId, "tl_form");
     if (!st)
@@ -34711,6 +36645,7 @@ ${f.label}${f.required ? "" : " (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)"} \
     };
   }
   __name(buildConfirm, "buildConfirm");
+  __name2(buildConfirm, "buildConfirm");
   async function confirmCreate(chatId) {
     const owner = await staffOwner(chatId);
     if (!owner)
@@ -34749,7 +36684,7 @@ ${f.label}${f.required ? "" : " (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)"} \
         chatId: { from: null, to: chatId }
       }
     });
-    log3.info("tl.created", { eventId: event.id, studentId: st.studentId, type: st.typeTitle });
+    log32.info("tl.created", { eventId: event.id, studentId: st.studentId, type: st.typeTitle });
     let notifyNote = "";
     if (event.status === "pending_family") {
       notifyNote = await notifyChecklistAssigned(event, st.studentName, st.typeTitle, chatId);
@@ -34767,6 +36702,7 @@ ${f.label}${f.required ? "" : " (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)"} \
     };
   }
   __name(confirmCreate, "confirmCreate");
+  __name2(confirmCreate, "confirmCreate");
   async function notifyChecklistAssigned(event, studentName, typeTitle, byChatId) {
     const chats = await guardianChats(event.studentId);
     const type = caseEvents ? await caseEvents.getTypeById(event.eventTypeId) : null;
@@ -34777,11 +36713,11 @@ ${f.label}${f.required ? "" : " (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)"} \
       webLine = await caseEvents.mintFillLink(event.id, deps.publicBaseUrlEnv);
     }
     const clinicName = await settings.getClinicName();
-    const channel2 = notify.getChannel("bale") ? "bale" : "internal";
+    const channel22 = notify.getChannel("bale") ? "bale" : "internal";
     let enqueued = 0;
     for (const target of chats) {
       const outcome = await notify.enqueue({
-        channel: channel2,
+        channel: channel22,
         template: "bot_checklist_assigned",
         recipient: target,
         studentId: event.studentId,
@@ -34810,18 +36746,20 @@ ${webLine}` : `\u062A\u0639\u062F\u0627\u062F \u0622\u06CC\u062A\u0645\u200C\u06
         byChatId: { from: null, to: byChatId }
       }
     });
-    log3.info("clf.assigned", { eventId: event.id, enqueued, viaWeb: Boolean(webLine) });
+    log32.info("clf.assigned", { eventId: event.id, enqueued, viaWeb: Boolean(webLine) });
     if (enqueued === 0) {
       return "\u0648\u0644\u06CC\u0651 \u0627\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0647\u0646\u0648\u0632 \u0628\u0647 \u0628\u0627\u062A \u0645\u062A\u0635\u0644 \u0646\u06CC\u0633\u062A \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062B\u0628\u062A \u0634\u062F \u0627\u0645\u0627 \u067E\u06CC\u0627\u0645\u06CC \u0627\u0631\u0633\u0627\u0644 \u0646\u0634\u062F. \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0627\u0632 \u062F\u06A9\u0645\u0647\u0654 \xAB\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u0645\u0646\xBB \u0628\u0639\u062F \u0627\u0632 \u0627\u062A\u0635\u0627\u0644 \u067E\u0631 \u06A9\u0646\u062F.";
     }
     return webLine ? `\u0628\u0647 ${fa(enqueued)} \u06AF\u0641\u062A\u06AF\u0648\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0628\u0627 \u0644\u06CC\u0646\u06A9 \u0648\u0628\u200C\u0641\u0631\u0645 \u0627\u0637\u0644\u0627\u0639\u200C\u0631\u0633\u0627\u0646\u06CC \u0634\u062F.` : `\u0628\u0647 ${fa(enqueued)} \u06AF\u0641\u062A\u06AF\u0648\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0627\u0637\u0644\u0627\u0639\u200C\u0631\u0633\u0627\u0646\u06CC \u0634\u062F \u2014 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0628\u0627 \xAB\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u0645\u0646\xBB \u067E\u0627\u0633\u062E \u0645\u06CC\u200C\u062F\u0647\u062F.`;
   }
   __name(notifyChecklistAssigned, "notifyChecklistAssigned");
+  __name2(notifyChecklistAssigned, "notifyChecklistAssigned");
   async function abortCreate(chatId) {
     await clearState(chatId);
     return { text: "\u2716\uFE0F \u062B\u0628\u062A \u0631\u0648\u06CC\u062F\u0627\u062F \u0644\u063A\u0648 \u0634\u062F.", buttons: null };
   }
   __name(abortCreate, "abortCreate");
+  __name2(abortCreate, "abortCreate");
   async function familyStudentIds(chatId) {
     const linkRows = await db.query(
       `SELECT DISTINCT student_id FROM bot_links WHERE chat_id = ? AND status = 'linked' AND student_id IS NOT NULL`,
@@ -34834,6 +36772,7 @@ ${webLine}` : `\u062A\u0639\u062F\u0627\u062F \u0622\u06CC\u062A\u0645\u200C\u06
     return [...new Set([...linkRows.map((r) => r.student_id), ...prefRows.map((r) => r.student_id)].filter((x) => Boolean(x)))];
   }
   __name(familyStudentIds, "familyStudentIds");
+  __name2(familyStudentIds, "familyStudentIds");
   async function listMine(chatId) {
     if (!caseEvents)
       return { text: renderTemplate("bot_case_events_disabled"), buttons: null };
@@ -34897,6 +36836,7 @@ ${resultLines.join("\n")}`;
     return { text, buttons };
   }
   __name(listMine, "listMine");
+  __name2(listMine, "listMine");
   async function startFill(chatId, eventId) {
     if (!caseEvents)
       return { text: renderTemplate("bot_case_events_disabled"), buttons: null };
@@ -34949,6 +36889,7 @@ ${resultLines.join("\n")}`;
     return promptClfItem(chatId);
   }
   __name(startFill, "startFill");
+  __name2(startFill, "startFill");
   async function promptClfItem(chatId) {
     const st = await readState(chatId, "clf_form");
     if (!st)
@@ -34988,6 +36929,7 @@ ${resultLines.join("\n")}`;
     };
   }
   __name(promptClfItem, "promptClfItem");
+  __name2(promptClfItem, "promptClfItem");
   async function answerItem(chatId, value) {
     const st = await readState(chatId, "clf_form");
     if (!st)
@@ -35012,6 +36954,7 @@ ${resultLines.join("\n")}`;
     return st.fields[st.step] ? promptClfItem(chatId) : buildClfConfirm(chatId);
   }
   __name(answerItem, "answerItem");
+  __name2(answerItem, "answerItem");
   async function buildClfConfirm(chatId) {
     const st = await readState(chatId, "clf_form");
     if (!st)
@@ -35028,6 +36971,7 @@ ${resultLines.join("\n")}`;
     };
   }
   __name(buildClfConfirm, "buildClfConfirm");
+  __name2(buildClfConfirm, "buildClfConfirm");
   async function confirmFill(chatId) {
     const st = await readState(chatId, "clf_form");
     if (!st || !caseEvents)
@@ -35059,15 +37003,15 @@ ${resultLines.join("\n")}`;
         chatId: { from: null, to: chatId }
       }
     });
-    log3.info("clf.filled", { eventId: event.id, chatId });
+    log32.info("clf.filled", { eventId: event.id, chatId });
     if (event.staffId) {
       const chats = await staffChats(event.staffId);
       const clinicName = await settings.getClinicName();
-      const channel2 = notify.getChannel("bale") ? "bale" : "internal";
+      const channel22 = notify.getChannel("bale") ? "bale" : "internal";
       let enqueued = 0;
       for (const target of chats) {
         const outcome = await notify.enqueue({
-          channel: channel2,
+          channel: channel22,
           template: "bot_checklist_result",
           recipient: target,
           studentId: event.studentId,
@@ -35085,7 +37029,7 @@ ${resultLines.join("\n")}`;
       }
       if (enqueued > 0)
         await notify.dispatchPending(50);
-      log3.info("clf.result_notified", { eventId: event.id, enqueued });
+      log32.info("clf.result_notified", { eventId: event.id, enqueued });
     }
     await clearState(chatId);
     const bandLine = event.analysis?.band ? `
@@ -35096,11 +37040,13 @@ ${resultLines.join("\n")}`;
     };
   }
   __name(confirmFill, "confirmFill");
+  __name2(confirmFill, "confirmFill");
   async function abortFill(chatId) {
     await clearState(chatId);
     return { text: "\u2716\uFE0F \u067E\u0631 \u06A9\u0631\u062F\u0646 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0644\u063A\u0648 \u0634\u062F \u2014 \u0647\u0631 \u0648\u0642\u062A \u0622\u0645\u0627\u062F\u0647 \u0628\u0648\u062F\u06CC\u062F \u0627\u0632 \xAB\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u0645\u0646\xBB \u062F\u0648\u0628\u0627\u0631\u0647 \u0634\u0631\u0648\u0639 \u06A9\u0646\u06CC\u062F.", buttons: null };
   }
   __name(abortFill, "abortFill");
+  __name2(abortFill, "abortFill");
   async function history(chatId, idx) {
     if (!await staffReader(chatId))
       return { text: renderTemplate("bot_case_event_denied"), buttons: null };
@@ -35132,6 +37078,7 @@ ${resultLines.join("\n")}`;
     };
   }
   __name(history, "history");
+  __name2(history, "history");
   async function checklists(chatId, idx) {
     if (!await staffReader(chatId))
       return { text: renderTemplate("bot_case_event_denied"), buttons: null };
@@ -35187,6 +37134,7 @@ ${resultLines.join("\n")}`;
     };
   }
   __name(checklists, "checklists");
+  __name2(checklists, "checklists");
   return {
     // همکاران
     startCategory,
@@ -35203,7 +37151,7 @@ ${resultLines.join("\n")}`;
     answerItem,
     confirmFill,
     abortFill,
-    // نمای چرخهٔ پرونده
+    // — نمای چرخهٔ پرونده
     history,
     checklists,
     // state readers (تست + intercept)
@@ -35212,7 +37160,7 @@ ${resultLines.join("\n")}`;
   };
 }
 __name(createCaseEventsBot, "createCaseEventsBot");
-
+__name2(createCaseEventsBot, "createCaseEventsBot");
 var AW_PAGE_SIZE = 8;
 var TRAINING = [
   { title: "\u0646\u0627\u0631\u0633\u0627\u062E\u0648\u0627\u0646\u06CC (\u062F\u06CC\u0633\u200C\u0644\u06A9\u0633\u06CC)", file: "ekhtelal-01-narsakhaani.html", hint: "\u0634\u0646\u0627\u062E\u062A \u0639\u0644\u0627\u0626\u0645 \u0648 \u0631\u0627\u0647\u200C\u0647\u0627\u06CC \u0647\u0645\u0631\u0627\u0647\u06CC \u062F\u0631 \u062E\u0627\u0646\u0647 \u0648 \u06A9\u0644\u0627\u0633" },
@@ -35249,6 +37197,7 @@ function sectionItems(section) {
   return section === "t" ? TRAINING : DOSSIERS;
 }
 __name(sectionItems, "sectionItems");
+__name2(sectionItems, "sectionItems");
 function createAwarenessBot(deps) {
   const base = (deps.publicBaseUrl ?? "").replace(/\/+$/, "");
   const hasLinks = base.length > 0;
@@ -35256,6 +37205,7 @@ function createAwarenessBot(deps) {
     return section === "t" ? `${base}/downloads/training/${item.file}` : `${base}/downloads/dossiers/${item.file}`;
   }
   __name(itemUrl, "itemUrl");
+  __name2(itemUrl, "itemUrl");
   return {
     /** منوی ریشه — دو دکمهٔ بخش */
     async root() {
@@ -35282,15 +37232,15 @@ function createAwarenessBot(deps) {
         { text: it.title, callbackData: `dis:${section}:${(safePage - 1) * AW_PAGE_SIZE + i}` }
       ]);
       const nav = [];
-      if (safePage > 1)
-        nav.push({ text: "\u25B6 \u0628\u0639\u062F\u06CC", callbackData: `dis:${section}:${safePage - 1}` });
       if (safePage < totalPages)
-        nav.push({ text: "\u25C0 \u0642\u0628\u0644\u06CC", callbackData: `dis:${section}:${safePage + 1}` });
+        nav.push({ text: "\u0635\u0641\u062D\u0647\u0654 \u0628\u0639\u062F", callbackData: `dis:${section}:${safePage + 1}` });
+      if (safePage > 1)
+        nav.push({ text: "\u0635\u0641\u062D\u0647\u0654 \u0642\u0628\u0644", callbackData: `dis:${section}:${safePage - 1}` });
       nav.push({ text: "\u21A9 \u0628\u0627\u0632\u06AF\u0634\u062A", callbackData: "dis:root" });
       rows.push(nav);
-      const title2 = section === "t" ? "\u{1F9E9} \u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u0627\u062E\u062A\u0644\u0627\u0644\u200C\u0647\u0627" : "\u{1F4C4} \u062F\u0641\u0627\u062A\u0631 \u0622\u0645\u0648\u0632\u0634\u06CC A4";
+      const title22 = section === "t" ? "\u{1F9E9} \u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u0627\u062E\u062A\u0644\u0627\u0644\u200C\u0647\u0627" : "\u{1F4C4} \u062F\u0641\u0627\u062A\u0631 \u0622\u0645\u0648\u0632\u0634\u06CC A4";
       return {
-        text: `${title2} \u2014 \u0635\u0641\u062D\u0647\u0654 ${faDigits(String(safePage))} \u0627\u0632 ${faDigits(String(totalPages))} (\u0645\u062C\u0645\u0648\u0639 ${faDigits(String(items.length))}):
+        text: `${title22} \u2014 \u0635\u0641\u062D\u0647\u0654 ${faDigits(String(safePage))} \u0627\u0632 ${faDigits(String(totalPages))} (\u0645\u062C\u0645\u0648\u0639 ${faDigits(String(items.length))}):
 
 \u0631\u0648\u06CC \u0647\u0631 \u0639\u0646\u0648\u0627\u0646 \u0628\u0632\u0646\u06CC\u062F \u062A\u0627 \u062A\u0648\u0636\u06CC\u062D \u0648 \u0644\u06CC\u0646\u06A9 \u0628\u06CC\u0627\u06CC\u062F.`,
         buttons: rows
@@ -35319,7 +37269,7 @@ function createAwarenessBot(deps) {
   };
 }
 __name(createAwarenessBot, "createAwarenessBot");
-
+__name2(createAwarenessBot, "createAwarenessBot");
 var BOT_ACTOR = {
   staffId: "bale-bot",
   email: "bale-bot@system.local",
@@ -35334,6 +37284,7 @@ var STAFF_ROLE_LABEL = {
 };
 function buildBotKeyboard(owner) {
   const aboutRow = ["\u062F\u0631\u0628\u0627\u0631\u0647 \u0645\u0631\u06A9\u0632", "\u0631\u0627\u0647\u0646\u0645\u0627"];
+  const exitRow = ["\u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644"];
   if (!owner) {
     return [
       ["\u0645\u0639\u0631\u0641\u06CC \u0645\u0631\u06A9\u0632", "\u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632"],
@@ -35348,7 +37299,8 @@ function buildBotKeyboard(owner) {
         ["\u0648\u0636\u0639\u06CC\u062A \u0645\u0631\u06A9\u0632", "\u0647\u062F\u0641 \u0633\u0646\u062C\u0634"],
         ["\u0628\u0627\u0646\u06A9 \u062A\u0645\u0631\u06CC\u0646", "\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u0641\u0639\u0627\u0644"],
         ["\u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627\u06CC \u062F\u0631 \u0635\u0641", "\u06AF\u0632\u0627\u0631\u0634 KPI"],
-        aboutRow
+        aboutRow,
+        exitRow
       ];
     }
     if (owner.role === "secretary") {
@@ -35358,7 +37310,8 @@ function buildBotKeyboard(owner) {
         ["\u0648\u0636\u0639\u06CC\u062A \u0645\u0631\u06A9\u0632", "\u0647\u062F\u0641 \u0633\u0646\u062C\u0634"],
         ["\u0628\u0627\u0646\u06A9 \u062A\u0645\u0631\u06CC\u0646", "\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u0641\u0639\u0627\u0644"],
         ["\u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627\u06CC \u062F\u0631 \u0635\u0641"],
-        aboutRow
+        aboutRow,
+        exitRow
       ];
     }
     if (owner.role === "therapist") {
@@ -35366,33 +37319,38 @@ function buildBotKeyboard(owner) {
         ["\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u0645\u0646", "\u067E\u06CC\u06AF\u06CC\u0631\u06CC\u200C\u0647\u0627\u06CC \u0645\u0646"],
         ["\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u0641\u0639\u0627\u0644", "\u0628\u0627\u0646\u06A9 \u062A\u0645\u0631\u06CC\u0646"],
         ["\u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627\u06CC \u062F\u0631 \u0635\u0641"],
-        aboutRow
+        aboutRow,
+        exitRow
       ];
     }
     if (owner.role === "supervisor") {
-      return [["\u06AF\u0632\u0627\u0631\u0634 KPI"], aboutRow];
+      return [["\u06AF\u0632\u0627\u0631\u0634 KPI"], aboutRow, exitRow];
     }
-    return [["\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u0645\u0646"], aboutRow];
+    return [["\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u0645\u0646"], aboutRow, exitRow];
   }
   if (owner.kind === "class") {
     return [
       ["\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633 \u0645\u0646", "\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u0645\u0646"],
       ["\u062B\u0628\u062A \u0645\u062A\u0642\u0627\u0636\u06CC", "\u0641\u0639\u0627\u0644\u06CC\u062A \u06A9\u0644\u0627\u0633"],
       ["\u0628\u0627\u0646\u06A9 \u062A\u0645\u0631\u06CC\u0646", "\u0622\u06AF\u0627\u0647\u06CC\u200C\u0647\u0627\u06CC \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A"],
-      aboutRow
+      aboutRow,
+      exitRow
     ];
   }
   return [
     ["\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0645\u0646", "\u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645\u200C\u0646\u0634\u062F\u0647"],
     ["\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u0645\u0646", "\u062D\u0636\u0648\u0631 \u0641\u0631\u0632\u0646\u062F"],
-    aboutRow
+    aboutRow,
+    exitRow
   ];
 }
 __name(buildBotKeyboard, "buildBotKeyboard");
+__name2(buildBotKeyboard, "buildBotKeyboard");
 function createNotifyAppService(deps) {
   const { db, audit, logger, notify, appointments, students, followups } = deps;
-  const log3 = logger.child("notifications");
+  const log32 = logger.child("notifications");
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const resolveUsernameFromBale = deps.botUsernameFetcher ?? fetchBaleBotUsername;
   const exbBot = deps.exerciseBank ? createExerciseBankBot({
     db,
     audit,
@@ -35448,6 +37406,7 @@ function createNotifyAppService(deps) {
     return map;
   }
   __name(studentNamesMap, "studentNamesMap");
+  __name2(studentNamesMap, "studentNamesMap");
   async function staffNamesMap() {
     const rows = await listStaff(db, true);
     const map = /* @__PURE__ */ new Map();
@@ -35456,6 +37415,7 @@ function createNotifyAppService(deps) {
     return map;
   }
   __name(staffNamesMap, "staffNamesMap");
+  __name2(staffNamesMap, "staffNamesMap");
   return {
     async listNotifications(filters) {
       return notify.list(filters);
@@ -35489,16 +37449,16 @@ function createNotifyAppService(deps) {
     },
     /** — تلاش دوبارهٔ همهٔ ناموفق‌ها + dispatch */
     async retryFailed(actor) {
-      const count3 = await notify.retryFailed(100);
+      const count32 = await notify.retryFailed(100);
       await audit.log({
         actorId: actor.staffId,
         action: "notification.retry_failed",
         resourceType: "notification",
         resourceId: "outbox",
-        changes: { requeued: { from: null, to: count3 } }
+        changes: { requeued: { from: null, to: count32 } }
       });
       await notify.dispatchPending(100);
-      return count3;
+      return count32;
     },
     async stats() {
       return notify.stats();
@@ -35554,7 +37514,7 @@ function createNotifyAppService(deps) {
           enqueued += 1;
       }
       const summary = buildEnqueueSummary(plan, enqueued, duplicates, nowIso, horizonTo);
-      log3.info("reminders.enqueued", { ...summary });
+      log32.info("reminders.enqueued", { ...summary });
       await audit.log({
         actorId: "system",
         action: "notification.reminders.enqueue",
@@ -35636,7 +37596,7 @@ function createNotifyAppService(deps) {
       );
       return rows.map(rowToBotLink);
     },
-    // ─── کدهای اتصال بات کارکنان ───
+    // ───: کدهای اتصال بات کارکنان ───
     async createStaffLink(staffId, actor) {
       const member = await db.queryOne(`SELECT id FROM staff WHERE id = ?`, [staffId]);
       if (!member)
@@ -35664,7 +37624,7 @@ function createNotifyAppService(deps) {
       );
       return rows.map(rowToStaffBotLink);
     },
-    // ─── کدهای اتصال بات معلم مدرسه (به کلاس) ───
+    // ───: کدهای اتصال بات معلم مدرسه (به کلاس) ───
     async createClassLink(classId, actor) {
       const cls = await db.queryOne(`SELECT id FROM classes WHERE id = ? AND active = 1`, [classId]);
       if (!cls)
@@ -35692,7 +37652,7 @@ function createNotifyAppService(deps) {
       );
       return rows.map(rowToClassBotLink);
     },
-    // ─── مدیریت لینک معلم‌ها — مشاهده/لغو کد بدون تولید کد جدید ───
+    // ───: مدیریت لینک معلم‌ها — مشاهده/لغو کد بدون تولید کد جدید ───
     async revokeClassLink(id, actor) {
       const row = await db.queryOne(`SELECT * FROM class_bot_links WHERE id = ?`, [id]);
       if (!row)
@@ -35753,7 +37713,7 @@ function createNotifyAppService(deps) {
         resourceId: studentId,
         changes: { enqueued: { from: null, to: enqueued }, classId: { from: null, to: student.classId } }
       });
-      log3.info("teacher.report.sent", { studentId, targets: targets.length, enqueued });
+      log32.info("teacher.report.sent", { studentId, targets: targets.length, enqueued });
       return { enqueued, className: cls?.name ?? null };
     },
     async handleBotUpdate(update) {
@@ -35874,6 +37834,9 @@ function createNotifyAppService(deps) {
       }
       switch (cmd.kind) {
         case "start": {
+          if (cmd.payload) {
+            return await this.processLinkCode(cmd.chatId, cmd.payload);
+          }
           const owner0 = await this.resolveOwner(cmd.chatId);
           return { handled: true, reply: renderTemplate("bot_welcome", { clinicName: await deps.settings.getClinicName() }), keyboard: buildBotKeyboard(owner0) };
         }
@@ -36130,113 +38093,162 @@ function createNotifyAppService(deps) {
           const out = await subBot.handlePick(cmd.chatId, cmd.idx);
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
-        case "link": {
-          const staffRow = await db.queryOne(...spreadStmt(selectStaffLinkByCode(cmd.code)));
-          const staffLink = staffRow ? rowToStaffBotLink(staffRow) : null;
-          if (staffLink) {
-            const result2 = await db.execute(
-              ...spreadStmt(linkStaffLink(staffLink.id, cmd.chatId, now().toISOString()))
-            );
-            const changed2 = result2.meta?.changes ?? 0;
-            if (changed2 > 0) {
-              await audit.log({
-                actorId: "bale-bot",
-                action: "notification.bot.staff_link",
-                resourceType: "staff_bot_link",
-                resourceId: staffLink.id,
-                changes: { chatId: { from: null, to: cmd.chatId }, staffId: { from: null, to: staffLink.staffId } }
-              });
-              const member = await listStaff(db, true).then((rows) => rows.find((r) => r.id === staffLink.staffId));
-              const staffOwner = await this.resolveOwner(cmd.chatId);
-              return {
-                handled: true,
-                reply: renderTemplate("bot_link_success", {
-                  studentName: member?.full_name ?? "\u06A9\u0627\u0631\u0645\u0646\u062F",
-                  extra: "\u0628\u0631\u0646\u0627\u0645\u0647 \u06A9\u0644\u0627\u0633\u200C\u0647\u0627\u06CC \u062E\u0648\u062F \u0631\u0627 \u0628\u0627 /today \u0648 /week \u0628\u06AF\u06CC\u0631\u06CC\u062F."
-                }),
-                keyboard: buildBotKeyboard(staffOwner)
-              };
-            }
-            log3.warn("bot.staff_link.already", { code: cmd.code });
-            return { handled: true, reply: renderTemplate("bot_link_invalid") };
-          }
-          const classRow = await db.queryOne(...spreadStmt(selectClassLinkByCode(cmd.code)));
-          const classLink = classRow ? rowToClassBotLink(classRow) : null;
-          if (classLink) {
-            const result2 = await db.execute(
-              ...spreadStmt(linkClassLink(classLink.id, cmd.chatId, now().toISOString()))
-            );
-            const changed2 = result2.meta?.changes ?? 0;
-            if (changed2 > 0) {
-              await audit.log({
-                actorId: "bale-bot",
-                action: "notification.bot.class_link",
-                resourceType: "class_bot_link",
-                resourceId: classLink.id,
-                changes: { chatId: { from: null, to: cmd.chatId }, classId: { from: null, to: classLink.classId } }
-              });
-              const cls = await db.queryOne(
-                `SELECT c.name, sc.name AS school_name FROM classes c JOIN schools sc ON sc.id = c.school_id WHERE c.id = ?`,
-                [classLink.classId]
-              );
-              return {
-                handled: true,
-                reply: renderTemplate("bot_link_success", {
-                  studentName: cls ? `\u06A9\u0644\u0627\u0633 ${cls.name} \u2014 ${cls.school_name}` : "\u06A9\u0644\u0627\u0633 \u0645\u062F\u0631\u0633\u0647",
-                  extra: "\u0627\u0639\u0644\u0627\u0646 \u0645\u0631\u0627\u062C\u0639\u0647 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u06A9\u0644\u0627\u0633 \u0634\u0645\u0627 \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F. \u0628\u0631\u0646\u0627\u0645\u0647 \u06A9\u0627\u0645\u0644: /today \u0648 /week"
-                }),
-                keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId))
-              };
-            }
-            log3.warn("bot.class_link.already", { code: cmd.code });
-            return { handled: true, reply: renderTemplate("bot_link_invalid") };
-          }
-          const row = await db.queryOne(...spreadStmt(selectBotLinkByCode(cmd.code)));
-          const link = row ? rowToBotLink(row) : null;
-          if (!link) {
-            log3.warn("bot.link.invalid", { code: cmd.code });
-            return { handled: true, reply: renderTemplate("bot_link_invalid") };
-          }
-          const result = await db.execute(
-            ...spreadStmt(linkBotLink(link.id, cmd.chatId, now().toISOString()))
-          );
-          const changed = result.meta?.changes ?? 0;
-          if (changed === 0) {
-            log3.warn("bot.link.already", { code: cmd.code });
-            return { handled: true, reply: renderTemplate("bot_link_invalid") };
-          }
-          const flags = await deps.settings.getNotifyFlags();
-          await db.execute(
-            ...spreadStmt(
-              upsertPrefs({
-                studentId: link.studentId,
-                channel: "bale",
-                chatId: cmd.chatId,
-                remindersEnabled: true,
-                reminderHoursBefore: flags.defaultReminderHours,
-                nowIso: now().toISOString()
-              })
-            )
-          );
-          await audit.log({
-            actorId: "bale-bot",
-            action: "notification.bot.link",
-            resourceType: "bot_link",
-            resourceId: link.id,
-            changes: { chatId: { from: null, to: cmd.chatId }, studentId: { from: null, to: link.studentId } }
-          });
-          const student = await students.getStudentById(link.studentId);
-          const studentName = student ? `${student.firstName} ${student.lastName}` : "";
-          return {
-            handled: true,
-            reply: renderTemplate("bot_link_success", {
-              studentName,
-              extra: "\u0628\u0631\u0646\u0627\u0645\u0647 \u06A9\u0644\u0627\u0633\u200C\u0647\u0627\u06CC \u062E\u0648\u062F \u0631\u0627 \u0628\u0627 /today \u0648 /week \u0628\u06AF\u06CC\u0631\u06CC\u062F."
-            }),
-            keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId))
-          };
+        case "exit_ask": {
+          const out = await this.handleBotExit(cmd.chatId, "ask");
+          return { handled: true, reply: out.text, buttons: out.buttons };
         }
+        case "exit_do": {
+          const out = await this.handleBotExit(cmd.chatId, "do");
+          const ownerExit = await this.resolveOwner(cmd.chatId);
+          return { handled: true, reply: out.text, buttons: out.buttons, keyboard: buildBotKeyboard(ownerExit) };
+        }
+        case "exit_no": {
+          const out = await this.handleBotExit(cmd.chatId, "no");
+          return { handled: true, reply: out.text, buttons: out.buttons };
+        }
+        case "link":
+          return await this.processLinkCode(cmd.chatId, cmd.code);
       }
+    },
+    // ─── پردازش کد اتصال: مسیر مشترک /link و /start <code> (deep link احراز خودکار) ───
+    // بدنه از case "link" منتقل شد؛ «cmd» محلی همان شکل قبلی را نگه می‌دارد.
+    async processLinkCode(chatId, code) {
+      const cmd = { chatId, code };
+      {
+        const staffRow = await db.queryOne(...spreadStmt(selectStaffLinkByCode(cmd.code)));
+        const staffLink = staffRow ? rowToStaffBotLink(staffRow) : null;
+        if (staffLink) {
+          const result2 = await db.execute(
+            ...spreadStmt(linkStaffLink(staffLink.id, cmd.chatId, now().toISOString()))
+          );
+          const changed2 = result2.meta?.changes ?? 0;
+          if (changed2 > 0) {
+            await audit.log({
+              actorId: "bale-bot",
+              action: "notification.bot.staff_link",
+              resourceType: "staff_bot_link",
+              resourceId: staffLink.id,
+              changes: { chatId: { from: staffLink.chatId, to: cmd.chatId }, staffId: { from: null, to: staffLink.staffId } }
+            });
+            const member = await listStaff(db, true).then((rows) => rows.find((r) => r.id === staffLink.staffId));
+            const staffOwner = await this.resolveOwner(cmd.chatId);
+            return {
+              handled: true,
+              reply: renderTemplate("bot_link_success", {
+                studentName: member?.full_name ?? "\u06A9\u0627\u0631\u0645\u0646\u062F",
+                extra: "\u0628\u0631\u0646\u0627\u0645\u0647 \u06A9\u0644\u0627\u0633\u200C\u0647\u0627\u06CC \u062E\u0648\u062F \u0631\u0627 \u0628\u0627 /today \u0648 /week \u0628\u06AF\u06CC\u0631\u06CC\u062F."
+              }),
+              keyboard: buildBotKeyboard(staffOwner)
+            };
+          }
+          if (staffLink.chatId === cmd.chatId) {
+            return { handled: true, reply: renderTemplate("bot_link_already"), keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
+          }
+          log32.warn("bot.staff_link.already", { code: cmd.code });
+          return { handled: true, reply: renderTemplate("bot_link_invalid") };
+        }
+        const classRow = await db.queryOne(...spreadStmt(selectClassLinkByCode(cmd.code)));
+        const classLink = classRow ? rowToClassBotLink(classRow) : null;
+        if (classLink) {
+          const result2 = await db.execute(
+            ...spreadStmt(linkClassLink(classLink.id, cmd.chatId, now().toISOString()))
+          );
+          const changed2 = result2.meta?.changes ?? 0;
+          if (changed2 > 0) {
+            await audit.log({
+              actorId: "bale-bot",
+              action: "notification.bot.class_link",
+              resourceType: "class_bot_link",
+              resourceId: classLink.id,
+              changes: { chatId: { from: classLink.chatId, to: cmd.chatId }, classId: { from: null, to: classLink.classId } }
+            });
+            const cls = await db.queryOne(
+              `SELECT c.name, sc.name AS school_name FROM classes c JOIN schools sc ON sc.id = c.school_id WHERE c.id = ?`,
+              [classLink.classId]
+            );
+            return {
+              handled: true,
+              reply: renderTemplate("bot_link_success", {
+                studentName: cls ? `\u06A9\u0644\u0627\u0633 ${cls.name} \u2014 ${cls.school_name}` : "\u06A9\u0644\u0627\u0633 \u0645\u062F\u0631\u0633\u0647",
+                extra: "\u0627\u0639\u0644\u0627\u0646 \u0645\u0631\u0627\u062C\u0639\u0647 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u06A9\u0644\u0627\u0633 \u0634\u0645\u0627 \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F. \u0628\u0631\u0646\u0627\u0645\u0647 \u06A9\u0627\u0645\u0644: /today \u0648 /week"
+              }),
+              keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId))
+            };
+          }
+          log32.warn("bot.class_link.revoked", { code: cmd.code });
+          return { handled: true, reply: renderTemplate("bot_link_invalid") };
+        }
+        const row = await db.queryOne(...spreadStmt(selectBotLinkByCode(cmd.code)));
+        const link = row ? rowToBotLink(row) : null;
+        if (!link) {
+          log32.warn("bot.link.invalid", { code: cmd.code });
+          return { handled: true, reply: renderTemplate("bot_link_invalid") };
+        }
+        const result = await db.execute(
+          ...spreadStmt(linkBotLink(link.id, cmd.chatId, now().toISOString()))
+        );
+        const changed = result.meta?.changes ?? 0;
+        if (changed === 0) {
+          if (link.chatId === cmd.chatId) {
+            return { handled: true, reply: renderTemplate("bot_link_already"), keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
+          }
+          log32.warn("bot.link.already", { code: cmd.code });
+          return { handled: true, reply: renderTemplate("bot_link_invalid") };
+        }
+        const flags = await deps.settings.getNotifyFlags();
+        await db.execute(
+          ...spreadStmt(
+            upsertPrefs({
+              studentId: link.studentId,
+              channel: "bale",
+              chatId: cmd.chatId,
+              remindersEnabled: true,
+              reminderHoursBefore: flags.defaultReminderHours,
+              nowIso: now().toISOString()
+            })
+          )
+        );
+        await audit.log({
+          actorId: "bale-bot",
+          action: "notification.bot.link",
+          resourceType: "bot_link",
+          resourceId: link.id,
+          changes: { chatId: { from: link.chatId, to: cmd.chatId }, studentId: { from: null, to: link.studentId } }
+        });
+        const student = await students.getStudentById(link.studentId);
+        const studentName = student ? `${student.firstName} ${student.lastName}` : "";
+        const rebindNote = link.chatId && link.chatId !== cmd.chatId ? "\u0627\u062A\u0635\u0627\u0644 \u0642\u0628\u0644\u06CC \u0627\u06CC\u0646 \u067E\u0631\u0648\u0646\u062F\u0647 \u0628\u0647 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0645\u0646\u062A\u0642\u0644 \u0634\u062F." : "\u0628\u0631\u0646\u0627\u0645\u0647 \u06A9\u0644\u0627\u0633\u200C\u0647\u0627\u06CC \u062E\u0648\u062F \u0631\u0627 \u0628\u0627 /today \u0648 /week \u0628\u06AF\u06CC\u0631\u06CC\u062F.";
+        return {
+          handled: true,
+          reply: renderTemplate("bot_link_success", {
+            studentName,
+            extra: rebindNote
+          }),
+          keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId))
+        };
+      }
+    },
+    // ─── نام کاربری بات برای ساخت لینک احراز خودکار (ble.ir/<bot>?start=<code>) ───
+    // ۱) مقدار ذخیره‌شدهٔ تنظیمات (کلید bot_username) ۲) تشخیص خودکار با Bale getMe + کش در تنظیمات
+    async resolveBotUsername() {
+      const stored = await deps.settings.getBotUsername();
+      if (stored)
+        return { username: stored, source: "stored" };
+      if (!deps.baleToken)
+        return { username: null, source: "none" };
+      const detected = await resolveUsernameFromBale(deps.baleToken);
+      if (!detected)
+        return { username: null, source: "none" };
+      await deps.settings.setBotUsername(detected, BOT_ACTOR);
+      await audit.log({
+        actorId: "bale-bot",
+        action: "settings.bot_username.detect",
+        resourceType: "settings",
+        resourceId: "bot_username",
+        changes: { bot_username: { from: null, to: detected } }
+      });
+      log32.info("bot_username.detected", { username: detected });
+      return { username: detected, source: "detected" };
     },
     /** — دستورهای /today و /week: برنامه کلاس‌های chat متصل (دانش‌آموز یا کارمند) */
     async handleScheduleCommand(chatId, scope) {
@@ -36250,16 +38262,16 @@ function createNotifyAppService(deps) {
       const todayYmd = tehranTodayYmd();
       let fromYmd;
       let toYmd;
-      let title2;
+      let title22;
       if (scope === "today") {
         fromYmd = todayYmd;
         toYmd = todayYmd;
-        title2 = `\u{1F5D3} \u0628\u0631\u0646\u0627\u0645\u0647 \u0627\u0645\u0631\u0648\u0632 \u0634\u0645\u0627 \u2014 ${jalaliFullLabel(todayYmd)}`;
+        title22 = `\u{1F5D3} \u0628\u0631\u0646\u0627\u0645\u0647 \u0627\u0645\u0631\u0648\u0632 \u0634\u0645\u0627 \u2014 ${jalaliFullLabel(todayYmd)}`;
       } else {
         const weekday = iranianWeekdayOfYmd(todayYmd);
         fromYmd = addDaysYmd(todayYmd, -weekday);
         toYmd = addDaysYmd(fromYmd, 6);
-        title2 = `\u{1F5D3} \u0628\u0631\u0646\u0627\u0645\u0647 \u0627\u06CC\u0646 \u0647\u0641\u062A\u0647 \u0634\u0645\u0627 \u2014 ${jalaliFullLabel(fromYmd)} \u062A\u0627 ${jalaliFullLabel(toYmd)}`;
+        title22 = `\u{1F5D3} \u0628\u0631\u0646\u0627\u0645\u0647 \u0627\u06CC\u0646 \u0647\u0641\u062A\u0647 \u0634\u0645\u0627 \u2014 ${jalaliFullLabel(fromYmd)} \u062A\u0627 ${jalaliFullLabel(toYmd)}`;
       }
       const { start, end } = tehranRange(fromYmd, toYmd);
       if (owner.kind === "class") {
@@ -36277,7 +38289,7 @@ function createNotifyAppService(deps) {
         }
         const names2 = await studentNamesMap(studentIds);
         return renderScheduleMessage({
-          title: title2,
+          title: title22,
           entries: buildScheduleEntries(merged, { kind: "staff", names: names2 }),
           clinicName
         });
@@ -36292,24 +38304,108 @@ function createNotifyAppService(deps) {
             names.set(id, `${st.firstName} ${st.lastName}`);
         }
         return renderScheduleMessage({
-          title: title2,
+          title: title22,
           entries: buildScheduleEntries(rangeAppointments, { kind: "staff", names }),
           clinicName
         });
       }
       const staffNames = await staffNamesMap();
       return renderScheduleMessage({
-        title: title2,
+        title: title22,
         entries: buildScheduleEntries(rangeAppointments, { kind: "student", names: staffNames }),
         clinicName
       });
     },
     async replyToChat(chatId, text, buttons, keyboard) {
-      const channel2 = notify.getChannel("bale");
-      if (!channel2) {
+      const channel22 = notify.getChannel("bale");
+      if (!channel22) {
         return { ok: false, error: "CHANNEL_UNAVAILABLE" };
       }
-      return channel2.send({ to: chatId, text, buttons: buttons ?? void 0, keyboard: keyboard ?? void 0 });
+      return channel22.send({ to: chatId, text, buttons: buttons ?? void 0, keyboard: keyboard ?? void 0 });
+    },
+    // ───────────── منوهای محوشونده + قطع اتصال ─────────────
+    async editBotMessage(chatId, messageId, text, buttons) {
+      const channel3 = notify.getChannel("bale");
+      if (!channel3?.editMessageText)
+        return { ok: false, error: "CHANNEL_UNAVAILABLE" };
+      return channel3.editMessageText(chatId, messageId, text, buttons);
+    },
+    async deleteBotMessage(chatId, messageId) {
+      const channel3 = notify.getChannel("bale");
+      if (!channel3?.deleteMessage)
+        return { ok: false, error: "CHANNEL_UNAVAILABLE" };
+      return channel3.deleteMessage(chatId, messageId);
+    },
+    async answerBotCallback(callbackId, text) {
+      const channel3 = notify.getChannel("bale");
+      if (!channel3?.answerCallbackQuery)
+        return { ok: false, error: "CHANNEL_UNAVAILABLE" };
+      return channel3.answerCallbackQuery(callbackId, text);
+    },
+    async describeBotOwner(chatId, owner) {
+      if (owner.kind === "staff") {
+        const row = await db.queryOne(`SELECT full_name FROM staff WHERE id = ?`, [owner.ref_id]);
+        const role = owner.role && STAFF_ROLE_LABEL[owner.role] ? STAFF_ROLE_LABEL[owner.role] : "\u0647\u0645\u06A9\u0627\u0631 \u0645\u0631\u06A9\u0632";
+        return `\u0647\u0645\u06A9\u0627\u0631 \u0645\u0631\u06A9\u0632 \u2014 ${row?.full_name ?? "\u06A9\u0627\u0631\u0645\u0646\u062F"} (${role})`;
+      }
+      if (owner.kind === "class") {
+        const row = await db.queryOne(`SELECT name FROM classes WHERE id = ?`, [owner.ref_id]);
+        return `\u0645\u0639\u0644\u0645 \u0645\u062F\u0631\u0633\u0647 \u2014 \u06A9\u0644\u0627\u0633 \xAB${row?.name ?? "?"}\xBB`;
+      }
+      const kids = await db.query(
+        `SELECT s.full_name FROM notification_prefs p JOIN students s ON s.id = p.student_id
+          WHERE p.chat_id = ? AND p.reminders_enabled = 1 ORDER BY s.full_name LIMIT 3`,
+        [chatId]
+      );
+      const names = kids.map((k) => k.full_name).join("\u060C ");
+      return names.length > 0 ? `\u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u2014 ${names}` : "\u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u062E\u0627\u0646\u0648\u0627\u062F\u0647";
+    },
+    async handleBotExit(chatId, step) {
+      if (step === "no") {
+        return { text: renderTemplate("bot_exit_cancelled"), buttons: null };
+      }
+      const owner = await this.resolveOwner(chatId);
+      if (!owner) {
+        return { text: renderTemplate("bot_exit_not_linked"), buttons: null };
+      }
+      if (step === "ask") {
+        const ownerLabel = await this.describeBotOwner(chatId, owner);
+        return {
+          text: renderTemplate("bot_exit_confirm", { ownerLabel }),
+          buttons: [
+            [
+              { text: "\u2705 \u0628\u0644\u0647\u060C \u0627\u062A\u0635\u0627\u0644 \u0642\u0637\u0639 \u0634\u0648\u062F", callbackData: "exit:do" },
+              { text: "\u2716 \u0627\u0646\u0635\u0631\u0627\u0641", callbackData: "exit:no" }
+            ]
+          ]
+        };
+      }
+      await db.execute(
+        `UPDATE staff_bot_links SET status = 'pending', chat_id = NULL, updated_at = ?
+          WHERE chat_id = ? AND status = 'linked'`,
+        [now().toISOString(), chatId]
+      );
+      await db.execute(
+        `UPDATE class_bot_links SET status = 'pending', chat_id = NULL, updated_at = ?
+          WHERE chat_id = ? AND status = 'linked'`,
+        [now().toISOString(), chatId]
+      );
+      await db.execute(
+        `UPDATE bot_links SET status = 'pending', chat_id = NULL, updated_at = ?
+          WHERE chat_id = ? AND status = 'linked'`,
+        [now().toISOString(), chatId]
+      );
+      await db.execute(`UPDATE notification_prefs SET chat_id = NULL WHERE chat_id = ?`, [chatId]);
+      await db.execute(`DELETE FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
+      await audit.log({
+        actorId: BOT_ACTOR.staffId,
+        action: "notification.bot.unlink",
+        resourceType: "bot_link",
+        resourceId: chatId,
+        changes: { kind: { from: owner.kind, to: null }, refId: { from: owner.ref_id, to: null } }
+      });
+      log32.info("bot.exit.done", { kind: owner.kind, role: owner.role ?? null });
+      return { text: renderTemplate("bot_exit_done", { clinicName: await deps.settings.getClinicName() }), buttons: null };
     },
     // ───────────── ورود خودکار + نوبت‌های من + لغو از بات ─────────────
     /** ورود خودکار: تطبیق کد ملی/تلفن با کارکنان و بعد دانش‌آموزان؛ اتصال idempotent */
@@ -36357,7 +38453,7 @@ function createNotifyAppService(deps) {
             resourceId: member.id,
             changes: { chatId: { from: null, to: chatId }, staffId: { from: null, to: member.id } }
           });
-          log3.info("bot.identify.staff", { staffId: member.id });
+          log32.info("bot.identify.staff", { staffId: member.id });
         }
         return renderTemplate("bot_identify_staff", {
           name: member.full_name,
@@ -36365,7 +38461,7 @@ function createNotifyAppService(deps) {
         });
       }
       if (staffRows.length > 1) {
-        log3.warn("bot.identify.staff_ambiguous", { count: staffRows.length });
+        log32.warn("bot.identify.staff_ambiguous", { count: staffRows.length });
         return renderTemplate("bot_identify_ambiguous");
       }
       const studentConds = [];
@@ -36383,7 +38479,7 @@ function createNotifyAppService(deps) {
         studentParams
       );
       if (studentRows.length === 0) {
-        log3.warn("bot.identify.notfound", { format });
+        log32.warn("bot.identify.notfound", { format });
         return renderTemplate("bot_identify_notfound");
       }
       const studentIds = studentRows.map((s) => s.id);
@@ -36405,7 +38501,7 @@ function createNotifyAppService(deps) {
             claimedBy: { from: null, to: claimedRows[0].chat_id }
           }
         });
-        log3.warn("bot.identify.family_link_denied", { claimed: claimedRows.length });
+        log32.warn("bot.identify.family_link_denied", { claimed: claimedRows.length });
         return renderTemplate("bot_family_link_denied", { clinicName: await deps.settings.getClinicName() });
       }
       const flags = await deps.settings.getNotifyFlags();
@@ -36448,7 +38544,7 @@ function createNotifyAppService(deps) {
         );
         nameLines.push(`\u2022 ${s.first_name} ${s.last_name}`);
       }
-      log3.info("bot.identify.students", { count: studentRows.length });
+      log32.info("bot.identify.students", { count: studentRows.length });
       return renderTemplate("bot_identify_students", { extra: nameLines.join("\n") });
     },
     /** «نوبت‌های من» — همکار: ۷ روز آینده با دکمه لغو؛ والد: ۱۴ روز آینده همهٔ فرزندان؛ معلم مدرسه: برنامه هفته */
@@ -36470,8 +38566,8 @@ function createNotifyAppService(deps) {
         const studentIds2 = [...new Set(list.flatMap((a) => a.students.map((s) => s.studentId)))];
         const names = await studentNamesMap(studentIds2);
         const entries2 = buildScheduleEntries(list, { kind: "staff", names });
-        const title2 = `\u{1F5D3} \u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u067E\u06CC\u0634\u200C\u0631\u0648\u06CC \u0634\u0645\u0627 \u2014 \u0627\u0632 ${jalaliFullLabel(tehranYmdOf(nowIso))}`;
-        const text2 = renderScheduleMessage({ title: title2, entries: entries2, clinicName });
+        const title22 = `\u{1F5D3} \u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u067E\u06CC\u0634\u200C\u0631\u0648\u06CC \u0634\u0645\u0627 \u2014 \u0627\u0632 ${jalaliFullLabel(tehranYmdOf(nowIso))}`;
+        const text2 = renderScheduleMessage({ title: title22, entries: entries2, clinicName });
         const sorted = [...list].sort((a, b) => a.startAt.localeCompare(b.startAt));
         const buttons = sorted.filter((a) => a.status === "scheduled").slice(0, 8).map((a) => [{ text: `\u0644\u063A\u0648 ${tehranTimeLabel(a.startAt)}`, callbackData: `ask:${a.id}` }]);
         return { text: text2, buttons: buttons.length > 0 ? buttons : null };
@@ -36545,12 +38641,12 @@ function createNotifyAppService(deps) {
         await appointments.cancel(appt.id, appt.version, BOT_ACTOR);
       } catch (err) {
         if (err instanceof ConflictError) {
-          log3.warn("bot.cancel.conflict", { appointmentId });
+          log32.warn("bot.cancel.conflict", { appointmentId });
           return { text: renderTemplate("bot_cancel_conflict"), buttons: null };
         }
         throw err;
       }
-      log3.info("bot.cancel.done", { appointmentId });
+      log32.info("bot.cancel.done", { appointmentId });
       return { text: renderTemplate("bot_cancel_success", vars), buttons: null };
     },
     // ───────────── بات اطلاع‌رسان: پیگیری‌ها + حضور فرزند + وضعیت مرکز + خلاصهٔ روز ─────────────
@@ -36597,12 +38693,12 @@ function createNotifyAppService(deps) {
         await followups.update(followupId, { status: "done" }, BOT_ACTOR);
       } catch (err) {
         if (err instanceof ConflictError) {
-          log3.warn("bot.followup.conflict", { followupId });
+          log32.warn("bot.followup.conflict", { followupId });
           return { text: renderTemplate("bot_followup_rejected"), buttons: null };
         }
         throw err;
       }
-      log3.info("bot.followup.done", { followupId, chatId });
+      log32.info("bot.followup.done", { followupId, chatId });
       return { text: renderTemplate("bot_followup_done", { taskTitle: f.title }), buttons: null };
     },
     /** «حضور فرزند» — والدین: آمار ۳۰ روز اخیر جلسات هر فرزند متصل (شامل لغوشده‌ها) */
@@ -36697,7 +38793,7 @@ function createNotifyAppService(deps) {
           `SELECT COUNT(*) AS n FROM followups WHERE status IN ('open', 'in_progress') AND due_at IS NOT NULL AND due_at >= ? AND due_at <= ?`,
           [nowIso, end]
         ),
-        // سنجه‌های چرخهٔ پرونده
+        // — سنجه‌های چرخهٔ پرونده
         db.queryOne(
           `SELECT COUNT(*) AS n
              FROM case_events e JOIN case_event_types t ON t.id = e.event_type_id
@@ -36723,7 +38819,7 @@ function createNotifyAppService(deps) {
         title: `\u{1F3E5} \u0648\u0636\u0639\u06CC\u062A \u0645\u0631\u06A9\u0632 \u2014 ${jalaliFullLabel(todayYmd)}`,
         sessionsToday: sessionRow?.n ?? 0,
         presentToday: (attRows.find((r) => r.attendance === "present")?.cnt ?? 0) + (attRows.find((r) => r.attendance === "late")?.cnt ?? 0),
-        // تأخیر هم حضور
+        // — تأخیر هم حضور
         absentToday: attRows.find((r) => r.attendance === "absent")?.cnt ?? 0,
         waitlistOpen: waitlistRow?.n ?? 0,
         followupsOverdue: overdueRow?.n ?? 0,
@@ -36833,7 +38929,7 @@ function createNotifyAppService(deps) {
         items: rows.map((r) => ({ name: `${r.first_name} ${r.last_name}`, grade: r.grade })),
         clinicName
       });
-      log3.info("bot.search", { by: owner.ref_id, hits: rows.length });
+      log32.info("bot.search", { by: owner.ref_id, hits: rows.length });
       return { text, buttons: null };
     },
     /**
@@ -36865,7 +38961,7 @@ function createNotifyAppService(deps) {
         rows,
         clinicName
       });
-      log3.info("bot.center_schedule", { by: owner.ref_id, rows: rows.length });
+      log32.info("bot.center_schedule", { by: owner.ref_id, rows: rows.length });
       return { text, buttons: null };
     },
     /**
@@ -36912,7 +39008,7 @@ function createNotifyAppService(deps) {
         totalOpen: sortedRows.length,
         clinicName
       });
-      log3.info("bot.waitlist", { by: owner.ref_id, open: sortedRows.length });
+      log32.info("bot.waitlist", { by: owner.ref_id, open: sortedRows.length });
       return { text, buttons: null };
     },
     // ═══════════════ — بات نقش‌محور CRM ═══════════════
@@ -36968,7 +39064,7 @@ function createNotifyAppService(deps) {
           lines.push(`\u2022 ${a.exerciseTitle}${who ? ` \u2014 ${who}` : ` \u2014 ${a.studentName}`}${a.createdAt ? ` (${jalaliFullLabel(tehranYmdOf(a.createdAt))})` : ""}`);
         }
       }
-      log3.info("bot.pending_homework", { chatId, students: studentIds.length, open: openTotal });
+      log32.info("bot.pending_homework", { chatId, students: studentIds.length, open: openTotal });
       return {
         text: renderTemplate("bot_pending_homework", {
           clinicName: await deps.settings.getClinicName(),
@@ -37022,7 +39118,7 @@ function createNotifyAppService(deps) {
         const status = r.case_status ? CASE_LABELS2[r.case_status] ?? r.case_status : "\u0628\u062F\u0648\u0646 \u067E\u0631\u0648\u0646\u062F\u0647";
         return `\u2022 ${r.first_name} ${r.last_name}${r.grade ? ` (${r.grade})` : ""} \u2014 ${status}`;
       }).join("\n");
-      log3.info("bot.my_students", { classId: owner.ref_id, count: rows.length });
+      log32.info("bot.my_students", { classId: owner.ref_id, count: rows.length });
       return {
         text: renderTemplate("bot_my_students", {
           className: cls ? `${cls.name} \u2014 ${cls.school_name}` : "\u06A9\u0644\u0627\u0633",
@@ -37052,7 +39148,7 @@ function createNotifyAppService(deps) {
       );
       const nextSend = draftRow?.next ? `${tehranTimeLabel(draftRow.next)} (${jalaliFullLabel(tehranYmdOf(draftRow.next))})` : null;
       const isOffice = owner.role === "manager" || owner.role === "secretary";
-      log3.info("bot.outbox", { by: owner.ref_id, drafts: draftRow?.n ?? 0, failed: failedRow?.n ?? 0 });
+      log32.info("bot.outbox", { by: owner.ref_id, drafts: draftRow?.n ?? 0, failed: failedRow?.n ?? 0 });
       return {
         text: renderTemplate("bot_outbox", {
           draftCount: faDigits(draftRow?.n ?? 0),
@@ -37082,7 +39178,7 @@ function createNotifyAppService(deps) {
         resourceId: "outbox",
         changes: { released: { from: null, to: released }, sent: { from: null, to: summary.sent } }
       });
-      log3.info("bot.outbox.flush", { by: owner.ref_id, released, sent: summary.sent });
+      log32.info("bot.outbox.flush", { by: owner.ref_id, released, sent: summary.sent });
       return {
         text: renderTemplate("bot_outbox_flushed", {
           released: faDigits(released),
@@ -37113,7 +39209,7 @@ function createNotifyAppService(deps) {
           changes: void 0
         });
       }
-      log3.info("bot.kpi", { by: owner.ref_id });
+      log32.info("bot.kpi", { by: owner.ref_id });
       return {
         text: renderTemplate("bot_kpi", { ...vars, clinicName: await deps.settings.getClinicName() }),
         buttons: null
@@ -37145,7 +39241,7 @@ function createNotifyAppService(deps) {
       }
       if (enqueued > 0)
         await notify.dispatchPending(50);
-      log3.info("kpi.weekly.enqueued", { chats: chats.length, enqueued });
+      log32.info("kpi.weekly.enqueued", { chats: chats.length, enqueued });
       return enqueued;
     },
     /** — متغیرهای KPI تجمیعی ۷ روز اخیر (مشترک بات/هفتگی) */
@@ -37209,7 +39305,7 @@ function createNotifyAppService(deps) {
       const absent = attRow?.absent ?? 0;
       const attTotal = present + absent;
       const attendanceRate = attTotal > 0 ? Math.round(present / attTotal * 100) : null;
-      const fa2 = /* @__PURE__ */ __name((n) => faDigits(String(n)), "fa");
+      const fa2 = /* @__PURE__ */ __name2((n) => faDigits(String(n)), "fa");
       const lines = [
         `\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u06F7 \u0631\u0648\u0632 \u0627\u062E\u06CC\u0631: ${fa2(total)} (\u0628\u0631\u06AF\u0632\u0627\u0631\u0634\u062F\u0647: ${fa2(held)} \u2014 \u0644\u063A\u0648\u0634\u062F\u0647: ${fa2(cancelled)})`,
         attendanceRate === null ? "\u062D\u0636\u0648\u0631 \u0648 \u063A\u06CC\u0627\u0628: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647" : `\u0646\u0631\u062E \u062D\u0636\u0648\u0631: ${fa2(attendanceRate)}\u066A (${fa2(present)} \u062D\u0627\u0636\u0631 / ${fa2(absent)} \u063A\u0627\u06CC\u0628)`,
@@ -37262,12 +39358,12 @@ function createNotifyAppService(deps) {
           []
         );
         const namesLine = nameRows.map((r) => `${r.first_name} ${r.last_name}`).join("\u060C ") || "";
-        const channel2 = notify.getChannel("bale") ? "bale" : "internal";
+        const channel22 = notify.getChannel("bale") ? "bale" : "internal";
         let enqueued = 0;
         let duplicates = 0;
         for (const { chat_id } of officeRows) {
           const outcome = await notify.enqueue({
-            channel: channel2,
+            channel: channel22,
             template: "waitlist_slot_freed",
             recipient: chat_id,
             staffId: appointment.staffId,
@@ -37299,9 +39395,9 @@ function createNotifyAppService(deps) {
             openWaitlist: { from: null, to: openCount }
           }
         });
-        log3.info("waitlist.slot_freed", { appointmentId: appointment.id, enqueued, duplicates });
+        log32.info("waitlist.slot_freed", { appointmentId: appointment.id, enqueued, duplicates });
       } catch (err) {
-        log3.warn("waitlist.slot_freed.failed", { appointmentId: appointment.id, error: String(err) });
+        log32.warn("waitlist.slot_freed.failed", { appointmentId: appointment.id, error: String(err) });
       }
     },
     /**
@@ -37327,21 +39423,21 @@ function createNotifyAppService(deps) {
       };
       if (iranianWeekdayOfYmd(todayYmd) === 0) {
         summary.kpiSent = await this.enqueueWeeklyKpi(nowDate).catch((err) => {
-          log3.error("kpi.weekly.failed", { error: err instanceof Error ? err.message : String(err) });
+          log32.error("kpi.weekly.failed", { error: err instanceof Error ? err.message : String(err) });
           return 0;
         });
       }
       if (!flags.digestEnabled) {
-        log3.info("digest.disabled", { dateYmd: todayYmd });
+        log32.info("digest.disabled", { dateYmd: todayYmd });
         return summary;
       }
-      const channel2 = notify.getChannel("bale") ? "bale" : "internal";
+      const channel22 = notify.getChannel("bale") ? "bale" : "internal";
       const clinicName = await deps.settings.getClinicName();
       const { start, end } = tehranRange(todayYmd, todayYmd);
       const staffNames = await staffNamesMap();
-      const enqueueDigest = /* @__PURE__ */ __name(async (template, chatId, extra) => {
+      const enqueueDigest = /* @__PURE__ */ __name2(async (template, chatId, extra) => {
         const outcome = await notify.enqueue({
-          channel: channel2,
+          channel: channel22,
           template,
           recipient: chatId,
           payload: { dateYmd: todayYmd, extra, clinicName },
@@ -37462,7 +39558,7 @@ function createNotifyAppService(deps) {
           duplicates: { from: null, to: summary.duplicates }
         }
       });
-      log3.info("digest.sent", { ...summary });
+      log32.info("digest.sent", { ...summary });
       return summary;
     },
     /** یادآور صبحگاهی پیگیری‌های عقب‌افتاده/امروز به مسئول (idempotent با dedup روزانه) */
@@ -37484,7 +39580,7 @@ function createNotifyAppService(deps) {
       }
       if (byAssignee.size === 0)
         return 0;
-      const channel2 = notify.getChannel("bale") ? "bale" : "internal";
+      const channel22 = notify.getChannel("bale") ? "bale" : "internal";
       const todayYmd = tehranTodayYmd(nowDate);
       const clinicName = await deps.settings.getClinicName();
       let enqueued = 0;
@@ -37497,7 +39593,7 @@ function createNotifyAppService(deps) {
         const { extra } = followupsNudgeBody(list, nowDate);
         for (const r of chatRows) {
           const outcome = await notify.enqueue({
-            channel: channel2,
+            channel: channel22,
             template: "followup_nudge",
             recipient: r.chat_id,
             staffId: assigneeId,
@@ -37508,10 +39604,10 @@ function createNotifyAppService(deps) {
             enqueued += 1;
         }
       }
-      log3.info("followup.nudge.enqueued", { assignees: byAssignee.size, enqueued });
+      log32.info("followup.nudge.enqueued", { assignees: byAssignee.size, enqueued });
       return enqueued;
     },
-    // ─── ناظر چرخه حیات نوبت — صف‌گذاری اعلان برای معلم و ولیّ هر دانش‌آموز ───
+    // ───: ناظر چرخه حیات نوبت — صف‌گذاری اعلان برای معلم و ولیّ هر دانش‌آموز ───
     async notifyAppointmentCreated(appointment) {
       await this.notifyLifecycle("created", appointment);
     },
@@ -37542,10 +39638,10 @@ function createNotifyAppService(deps) {
       const staffChats = staffChatRows.map((r) => r.chat_id);
       const classMap = await students.getClassesForStudents(studentIds);
       const classTargets = /* @__PURE__ */ new Map();
-      for (const [sid, info3] of classMap) {
-        const chats = await db.query(...spreadStmt(selectClassChats(info3.classId)));
+      for (const [sid, info32] of classMap) {
+        const chats = await db.query(...spreadStmt(selectClassChats(info32.classId)));
         for (const r of chats) {
-          classTargets.set(sid, { channel: staffChannel, chatId: r.chat_id, className: info3.className });
+          classTargets.set(sid, { channel: staffChannel, chatId: r.chat_id, className: info32.className });
         }
       }
       if (studentTargets.size === 0 && staffChats.length === 0 && classTargets.size === 0)
@@ -37604,15 +39700,15 @@ function createNotifyAppService(deps) {
           duplicates: { from: null, to: duplicates }
         }
       });
-      log3.info("lifecycle.notified", { event, appointmentId: appointment.id, enqueued, duplicates });
+      log32.info("lifecycle.notified", { event, appointmentId: appointment.id, enqueued, duplicates });
     },
     async sendTest(input, actor) {
-      const channel2 = notify.getChannel(input.channel);
-      if (!channel2) {
+      const channel22 = notify.getChannel(input.channel);
+      if (!channel22) {
         return { ok: false, error: "CHANNEL_UNAVAILABLE" };
       }
       const text = input.text?.trim() || renderTemplate("generic", { extra: "\u067E\u06CC\u0627\u0645 \u0622\u0632\u0645\u0627\u06CC\u0634\u06CC \u0633\u0627\u0645\u0627\u0646\u0647" });
-      const result = await channel2.send({ to: input.recipient, text });
+      const result = await channel22.send({ to: input.recipient, text });
       await audit.log({
         actorId: actor.staffId,
         action: "notification.test.send",
@@ -37625,7 +39721,7 @@ function createNotifyAppService(deps) {
     isWebhookEnabled() {
       return Boolean(deps.webhookSecret);
     },
-    // ─── یادآوری هوشمند ───
+    // ───: یادآوری هوشمند ───
     async notifyAttendanceMarked(appointmentId, studentId, status) {
       if (status !== "absent")
         return;
@@ -37682,7 +39778,7 @@ function createNotifyAppService(deps) {
         resourceId: `${appointmentId}/${studentId}`,
         changes: { enqueued: { from: null, to: enqueued }, targets: { from: null, to: targets.length } }
       });
-      log3.info("attendance.absent.notified", { appointmentId, targets: targets.length, enqueued });
+      log32.info("attendance.absent.notified", { appointmentId, targets: targets.length, enqueued });
     },
     /** -c — اعلان تصحیح تکلیف به خانواده (ناظر gradeAssignment) */
     async notifyHomeworkGraded(input) {
@@ -37700,11 +39796,11 @@ function createNotifyAppService(deps) {
       if (targets.length === 0)
         return;
       const clinicName = await deps.settings.getClinicName();
-      const channel2 = notify.getChannel("bale") ? "bale" : "internal";
+      const channel22 = notify.getChannel("bale") ? "bale" : "internal";
       let enqueued = 0;
       for (const chatId of targets) {
         const outcome = await notify.enqueue({
-          channel: channel2,
+          channel: channel22,
           template: "homework_graded",
           recipient: chatId,
           studentId: input.studentId,
@@ -37729,7 +39825,7 @@ function createNotifyAppService(deps) {
         resourceId: input.studentId,
         changes: { enqueued: { from: null, to: enqueued }, targets: { from: null, to: targets.length } }
       });
-      log3.info("homework.graded.notified", { studentId: input.studentId, targets: targets.length, enqueued });
+      log32.info("homework.graded.notified", { studentId: input.studentId, targets: targets.length, enqueued });
     },
     /** فاز ۴ — اعلان کار داخلی به مسئول (§9.5): فقط چت‌های متصل بله؛ بدون لینک، مقصدی نیست */
     async notifyTodoAssigned(todo) {
@@ -37738,7 +39834,7 @@ function createNotifyAppService(deps) {
       );
       if (chatRows.length === 0)
         return;
-      const channel2 = notify.getChannel("bale") ? "bale" : "internal";
+      const channel22 = notify.getChannel("bale") ? "bale" : "internal";
       const [allStaffNames, clinicName] = await Promise.all([
         staffNamesMap(),
         deps.settings.getClinicName()
@@ -37753,7 +39849,7 @@ function createNotifyAppService(deps) {
       let duplicates = 0;
       for (const r of chatRows) {
         const outcome = await notify.enqueue({
-          channel: channel2,
+          channel: channel22,
           template: "todo_assigned",
           recipient: r.chat_id,
           staffId: todo.assigneeId,
@@ -37772,7 +39868,7 @@ function createNotifyAppService(deps) {
       }
       if (enqueued > 0)
         await notify.dispatchPending(50);
-      log3.info("todo.assigned.notified", { todoId: todo.id, enqueued, duplicates, channel: channel2 });
+      log32.info("todo.assigned.notified", { todoId: todo.id, enqueued, duplicates, channel: channel22 });
     },
     async enqueuePendingAttendanceNudges() {
       const today = tehranTodayYmd();
@@ -37791,7 +39887,7 @@ function createNotifyAppService(deps) {
       );
       if (rows.length === 0)
         return 0;
-      const channel2 = notify.getChannel("bale") ? "bale" : "internal";
+      const channel22 = notify.getChannel("bale") ? "bale" : "internal";
       const staffNames = await staffNamesMap();
       let enqueued = 0;
       for (const row of rows) {
@@ -37800,7 +39896,7 @@ function createNotifyAppService(deps) {
         );
         for (const chatRow of chatRows) {
           const outcome = await notify.enqueue({
-            channel: channel2,
+            channel: channel22,
             template: "staff_attendance_nudge",
             recipient: chatRow.chat_id,
             staffId: row.staff_id,
@@ -37817,7 +39913,7 @@ function createNotifyAppService(deps) {
       }
       if (enqueued > 0)
         await notify.dispatchPending(50);
-      log3.info("attendance.nudge.enqueued", { staff: rows.length, enqueued });
+      log32.info("attendance.nudge.enqueued", { staff: rows.length, enqueued });
       return enqueued;
     },
     isWebhookSecretValid(secret) {
@@ -37828,6 +39924,7 @@ function createNotifyAppService(deps) {
   };
 }
 __name(createNotifyAppService, "createNotifyAppService");
+__name2(createNotifyAppService, "createNotifyAppService");
 function constantTimeEqual2(a, b) {
   const maxLen = Math.max(a.length, b.length);
   let diff = a.length ^ b.length;
@@ -37836,7 +39933,8 @@ function constantTimeEqual2(a, b) {
   }
   return diff === 0;
 }
-__name(constantTimeEqual2, "constantTimeEqual");
+__name(constantTimeEqual2, "constantTimeEqual2");
+__name2(constantTimeEqual2, "constantTimeEqual");
 function waitlistDaysOf(createdAt, nowMs) {
   const t = Date.parse(createdAt.includes("T") ? createdAt : createdAt.replace(" ", "T") + "Z");
   if (Number.isNaN(t))
@@ -37844,10 +39942,12 @@ function waitlistDaysOf(createdAt, nowMs) {
   return Math.max(0, Math.floor((nowMs - t) / 864e5));
 }
 __name(waitlistDaysOf, "waitlistDaysOf");
+__name2(waitlistDaysOf, "waitlistDaysOf");
 function spreadStmt(stmt) {
   return [stmt.sql, stmt.params];
 }
 __name(spreadStmt, "spreadStmt");
+__name2(spreadStmt, "spreadStmt");
 function extractMessageText(update) {
   if (typeof update !== "object" || update === null)
     return null;
@@ -37857,6 +39957,7 @@ function extractMessageText(update) {
   return typeof t === "string" && t.trim().length > 0 ? t.trim() : null;
 }
 __name(extractMessageText, "extractMessageText");
+__name2(extractMessageText, "extractMessageText");
 function extractChatIdOf(update) {
   if (typeof update !== "object" || update === null)
     return null;
@@ -37866,7 +39967,7 @@ function extractChatIdOf(update) {
   return id === void 0 || id === null ? null : String(id);
 }
 __name(extractChatIdOf, "extractChatIdOf");
-
+__name2(extractChatIdOf, "extractChatIdOf");
 function registerRoutes8(app, service) {
   app.get("/api/notifications", async (c) => {
     const query = NotificationListQuerySchema.parse({
@@ -37961,6 +40062,10 @@ function registerRoutes8(app, service) {
     const data = await service.listStaffLinks(staffId);
     return c.json({ data }, 200);
   });
+  app.get("/api/notifications/bot-username", requireRole("manager", "secretary"), async (c) => {
+    const data = await service.resolveBotUsername();
+    return c.json({ data }, 200);
+  });
   app.post("/api/notifications/class-links", requireRole("manager", "secretary"), async (c) => {
     const actor = getAuthContext(c);
     const body = CreateClassLinkSchema.parse(await c.req.json());
@@ -38013,14 +40118,40 @@ function registerRoutes8(app, service) {
     if (reply && update && typeof update === "object") {
       const chatId = extractChatId(update);
       if (chatId) {
-        const result = await service.replyToChat(chatId, reply, buttons, keyboard);
-        sent = result.ok;
+        const cb = extractCallbackQuery(update);
+        if (cb) {
+          if (cb.id)
+            void await service.answerBotCallback(cb.id);
+          const msgId = cb.messageId;
+          if (keyboard) {
+            if (msgId)
+              void await service.deleteBotMessage(chatId, msgId);
+            const result = await service.replyToChat(chatId, reply, buttons, keyboard);
+            sent = result.ok;
+          } else if (msgId) {
+            const edited = await service.editBotMessage(chatId, msgId, reply, buttons);
+            if (edited.ok) {
+              sent = true;
+            } else {
+              void await service.deleteBotMessage(chatId, msgId);
+              const result = await service.replyToChat(chatId, reply, buttons, keyboard);
+              sent = result.ok;
+            }
+          } else {
+            const result = await service.replyToChat(chatId, reply, buttons, keyboard);
+            sent = result.ok;
+          }
+        } else {
+          const result = await service.replyToChat(chatId, reply, buttons, keyboard);
+          sent = result.ok;
+        }
       }
     }
     return c.json({ ok: true, handled, sent, reply, buttons, keyboard }, 200);
   });
 }
-__name(registerRoutes8, "registerRoutes");
+__name(registerRoutes8, "registerRoutes8");
+__name2(registerRoutes8, "registerRoutes");
 function extractChatId(update) {
   const u = update;
   const msg = u.message ?? u.edited_message ?? u.callback_query?.message;
@@ -38028,23 +40159,36 @@ function extractChatId(update) {
   return id === void 0 || id === null ? null : String(id);
 }
 __name(extractChatId, "extractChatId");
-
-// ── تبدیل تاریخ شروع شمارش (روز تهران ↔ cutoff UTC) ──
+__name2(extractChatId, "extractChatId");
+function extractCallbackQuery(update) {
+  const cb = update.callback_query;
+  if (!cb || typeof cb !== "object")
+    return null;
+  const id = cb.id === void 0 || cb.id === null ? null : String(cb.id);
+  const rawMsgId = cb.message?.message_id;
+  const messageId = rawMsgId === void 0 || rawMsgId === null ? null : String(rawMsgId);
+  return { id, messageId };
+}
+__name(extractCallbackQuery, "extractCallbackQuery");
+__name2(extractCallbackQuery, "extractCallbackQuery");
 function epochUtcOfTehranYmd(ymd) {
   const utcMs = Date.parse(`${ymd}T00:00:00.000Z`) - TEHRAN_OFFSET_MINUTES * 6e4;
   return new Date(utcMs).toISOString().slice(0, 19).replace("T", " ");
 }
 __name(epochUtcOfTehranYmd, "epochUtcOfTehranYmd");
+__name2(epochUtcOfTehranYmd, "epochUtcOfTehranYmd");
 function tehranYmdOfEpochUtc(epoch) {
   const ms = Date.parse(`${epoch.replace(" ", "T")}Z`) + TEHRAN_OFFSET_MINUTES * 6e4;
   return new Date(ms).toISOString().slice(0, 10);
 }
 __name(tehranYmdOfEpochUtc, "tehranYmdOfEpochUtc");
+__name2(tehranYmdOfEpochUtc, "tehranYmdOfEpochUtc");
 function sanitizeWeight(v, max = 1e4) {
   const n = Number(v);
   return Number.isInteger(n) && n >= 0 && n <= max ? n : void 0;
 }
 __name(sanitizeWeight, "sanitizeWeight");
+__name2(sanitizeWeight, "sanitizeWeight");
 function defaultScoringWeights() {
   const w = {};
   for (const x of [...CONTENT_FORMULA.production, ...CONTENT_FORMULA.usage, ...CONTENT_FORMULA.reference]) {
@@ -38055,22 +40199,26 @@ function defaultScoringWeights() {
   return w;
 }
 __name(defaultScoringWeights, "defaultScoringWeights");
+__name2(defaultScoringWeights, "defaultScoringWeights");
 function mergeScoringWeights(stored) {
   const base = defaultScoringWeights();
-  if (!stored || typeof stored !== "object") return base;
+  if (!stored || typeof stored !== "object")
+    return base;
   const s = stored;
   const out = { ...base };
   for (const key of Object.keys(base)) {
     const v = sanitizeWeight(s[key], key === "adminCap" ? 1e5 : 1e4);
-    if (v !== void 0) out[key] = v;
+    if (v !== void 0)
+      out[key] = v;
   }
   return out;
 }
 __name(mergeScoringWeights, "mergeScoringWeights");
+__name2(mergeScoringWeights, "mergeScoringWeights");
 var EPOCH_UTC_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 function createSettingsService(deps) {
   const { db, audit, logger } = deps;
-  const log3 = logger.child("settings");
+  const log32 = logger.child("settings");
   async function readAll() {
     const rows = await db.query(`SELECT key, value FROM settings`, []);
     const map = /* @__PURE__ */ new Map();
@@ -38078,12 +40226,13 @@ function createSettingsService(deps) {
       try {
         map.set(row.key, JSON.parse(row.value));
       } catch {
-        log3.warn("settings.corrupt", { key: row.key });
+        log32.warn("settings.corrupt", { key: row.key });
       }
     }
     return map;
   }
   __name(readAll, "readAll");
+  __name2(readAll, "readAll");
   async function upsertSetting(key, value, actor) {
     await db.execute(
       `INSERT INTO settings (key, value, updated_by, updated_at)
@@ -38096,13 +40245,14 @@ function createSettingsService(deps) {
     );
   }
   __name(upsertSetting, "upsertSetting");
+  __name2(upsertSetting, "upsertSetting");
   return {
     async get() {
       const stored = await readAll();
       const hours = stored.get(SETTING_KEYS.CENTER_HOURS);
       const storedClinic = stored.get(SETTING_KEYS.CLINIC_NAME);
       const clinicName = typeof storedClinic === "string" && storedClinic.trim().length > 0 ? storedClinic : deps.envClinicName ?? DEFAULT_SETTINGS[SETTING_KEYS.CLINIC_NAME];
-      const readBool = /* @__PURE__ */ __name((key, fallback) => {
+      const readBool = /* @__PURE__ */ __name2((key, fallback) => {
         const v = stored.get(key);
         return typeof v === "boolean" ? v : fallback;
       }, "readBool");
@@ -38110,6 +40260,7 @@ function createSettingsService(deps) {
       const storedTargets = stored.get(SETTING_KEYS.SCREENING_TARGETS);
       const storedPhone = stored.get(SETTING_KEYS.CLINIC_PHONE);
       const storedBatch = stored.get(SETTING_KEYS.NOTIFY_BATCH_HOUR);
+      const storedBot = stored.get(SETTING_KEYS.BOT_USERNAME);
       return {
         centerHours: Array.isArray(hours) ? hours : [...DEFAULT_CENTER_HOURS],
         clinicName,
@@ -38122,6 +40273,7 @@ function createSettingsService(deps) {
         screeningTargets: Array.isArray(storedTargets) ? storedTargets : [],
         clinicPhone: typeof storedPhone === "string" ? storedPhone : DEFAULT_SETTINGS[SETTING_KEYS.CLINIC_PHONE],
         notifyBatchHour: typeof storedBatch === "number" ? storedBatch : DEFAULT_SETTINGS[SETTING_KEYS.NOTIFY_BATCH_HOUR],
+        botUsername: typeof storedBot === "string" ? storedBot : DEFAULT_SETTINGS[SETTING_KEYS.BOT_USERNAME],
         meta: {
           baleConfigured: deps.baleConfigured,
           webhookEnabled: deps.webhookEnabled
@@ -38157,6 +40309,9 @@ function createSettingsService(deps) {
       if (input.notifyBatchHour !== void 0) {
         await upsertSetting(SETTING_KEYS.NOTIFY_BATCH_HOUR, input.notifyBatchHour, actor);
       }
+      if (input.botUsername !== void 0) {
+        await upsertSetting(SETTING_KEYS.BOT_USERNAME, input.botUsername.trim().replace(/^@/, ""), actor);
+      }
       if (input.screeningTargets !== void 0) {
         await upsertSetting(SETTING_KEYS.SCREENING_TARGETS, input.screeningTargets, actor);
       }
@@ -38178,6 +40333,7 @@ function createSettingsService(deps) {
           notify_waitlist: { from: before.notifyWaitlist, to: input.notifyWaitlist ?? before.notifyWaitlist },
           clinic_phone: { from: before.clinicPhone, to: input.clinicPhone ?? before.clinicPhone },
           notify_batch_hour: { from: before.notifyBatchHour, to: input.notifyBatchHour ?? before.notifyBatchHour },
+          bot_username: { from: before.botUsername, to: input.botUsername ?? before.botUsername },
           screening_targets: {
             from: before.screeningTargets.length,
             to: input.screeningTargets?.length ?? before.screeningTargets.length
@@ -38214,7 +40370,7 @@ function createSettingsService(deps) {
           changes: { ranges: { from: "previous", to: `${items.length} ranges` } }
         });
       });
-      log3.info("center_hours.replaced", { count: items.length });
+      log32.info("center_hours.replaced", { count: items.length });
       return items;
     },
     async applyCenterHoursToAllStaff(actor) {
@@ -38235,7 +40391,7 @@ function createSettingsService(deps) {
           ranges: { from: null, to: items.length }
         }
       });
-      log3.info("center_hours.applied", { staffCount, ranges: items.length });
+      log32.info("center_hours.applied", { staffCount, ranges: items.length });
       return { staffCount, ranges: items.length };
     },
     async getClinicName() {
@@ -38265,9 +40421,31 @@ function createSettingsService(deps) {
       const v = stored.get(SETTING_KEYS.NOTIFY_BATCH_HOUR);
       return typeof v === "number" ? v : DEFAULT_SETTINGS[SETTING_KEYS.NOTIFY_BATCH_HOUR];
     },
+    // — نام کاربری بات (خالی = ثبت نشده)
+    async getBotUsername() {
+      const stored = await readAll();
+      const v = stored.get(SETTING_KEYS.BOT_USERNAME);
+      return typeof v === "string" ? v.trim().replace(/^@/, "") : DEFAULT_SETTINGS[SETTING_KEYS.BOT_USERNAME];
+    },
+    // — ثبت/پاک کردن نام کاربری بات (نرمال: بدون @؛ فقط لاتین/رقم/خط زیر)
+    async setBotUsername(username, actor) {
+      const clean = username.trim().replace(/^@/, "");
+      if (clean.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean)) {
+        throw new ConflictError("\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u0628\u0627\u062A \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0644\u0627\u062A\u06CC\u0646\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637 \u0632\u06CC\u0631 \u0627\u0633\u062A (\u06F2 \u062A\u0627 \u06F6\u06F4 \u0646\u0648\u06CC\u0633\u0647)");
+      }
+      const before = await this.getBotUsername();
+      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean, actor);
+      await audit.log({
+        actorId: actor.staffId,
+        action: "settings.bot_username.update",
+        resourceType: "settings",
+        resourceId: SETTING_KEYS.BOT_USERNAME,
+        changes: { bot_username: { from: before, to: clean } }
+      });
+    },
     async getNotifyFlags() {
       const stored = await readAll();
-      const readBool = /* @__PURE__ */ __name((key, fallback) => {
+      const readBool = /* @__PURE__ */ __name2((key, fallback) => {
         const v = stored.get(key);
         return typeof v === "boolean" ? v : fallback;
       }, "readBool");
@@ -38302,10 +40480,12 @@ function createSettingsService(deps) {
       if (row) {
         try {
           const parsed = JSON.parse(row.value);
-          if (typeof parsed?.epoch === "string" && EPOCH_UTC_RE.test(parsed.epoch)) epoch = parsed.epoch;
-          if (parsed?.weights && typeof parsed.weights === "object") storedWeights = parsed.weights;
+          if (typeof parsed?.epoch === "string" && EPOCH_UTC_RE.test(parsed.epoch))
+            epoch = parsed.epoch;
+          if (parsed?.weights && typeof parsed.weights === "object")
+            storedWeights = parsed.weights;
         } catch {
-          log3.warn("scoring_config.corrupt");
+          log32.warn("scoring_config.corrupt");
         }
       }
       const defaults = defaultScoringWeights();
@@ -38333,13 +40513,13 @@ function createSettingsService(deps) {
           weights_changed: { from: null, to: changed }
         }
       });
-      log3.info("scoring_config.updated", { epoch, weights_changed: changed });
+      log32.info("scoring_config.updated", { epoch, weights_changed: changed });
       return this.getScoringConfig();
     }
   };
 }
 __name(createSettingsService, "createSettingsService");
-
+__name2(createSettingsService, "createSettingsService");
 function registerSettingsRoutes(app, service) {
   app.get("/api/settings", requireRole("manager", "secretary"), async (c) => {
     const data = await service.get();
@@ -38359,6 +40539,7 @@ function registerSettingsRoutes(app, service) {
         notifyWaitlist: body.notify_waitlist,
         clinicPhone: body.clinic_phone,
         notifyBatchHour: body.notify_batch_hour,
+        botUsername: body.bot_username,
         screeningTargets: body.screening_targets
       },
       actor
@@ -38383,7 +40564,6 @@ function registerSettingsRoutes(app, service) {
     const data = await service.applyCenterHoursToAllStaff(actor);
     return c.json({ data }, 200);
   });
-  // ─── پیکربندی امتیازدهی همکاران — فقط مدیر (فرمول از غیرمدیر پنهان است) ───
   app.get("/api/settings/scoring", requireRole("manager"), async (c) => {
     const data = await service.getScoringConfig();
     return c.json({ data }, 200);
@@ -38415,7 +40595,7 @@ function registerSettingsRoutes(app, service) {
   });
 }
 __name(registerSettingsRoutes, "registerSettingsRoutes");
-
+__name2(registerSettingsRoutes, "registerSettingsRoutes");
 function toRecord(row) {
   return {
     id: row.id,
@@ -38429,9 +40609,10 @@ function toRecord(row) {
   };
 }
 __name(toRecord, "toRecord");
+__name2(toRecord, "toRecord");
 function createKeysService(deps) {
   const { db, audit, logger } = deps;
-  const log3 = logger.child("keys");
+  const log32 = logger.child("keys");
   return {
     async create(name, role, actor) {
       const { token, prefix, keyHash } = await generateApiKey("live");
@@ -38465,7 +40646,7 @@ function createKeysService(deps) {
           revokedAt: null
         };
       });
-      log3.info("apikey.created", { prefix, role });
+      log32.info("apikey.created", { prefix, role });
       return { record, token };
     },
     async list() {
@@ -38499,13 +40680,13 @@ function createKeysService(deps) {
         });
         return toRecord({ ...current, active: 0, revoked_at: revokedAt });
       });
-      log3.info("apikey.revoked", { prefix: record.prefix });
+      log32.info("apikey.revoked", { prefix: record.prefix });
       return record;
     }
   };
 }
 __name(createKeysService, "createKeysService");
-
+__name2(createKeysService, "createKeysService");
 function registerKeysRoutes(app, service) {
   app.get("/api/keys", requireRole("manager"), async (c) => {
     const data = await service.list();
@@ -38524,23 +40705,27 @@ function registerKeysRoutes(app, service) {
   });
 }
 __name(registerKeysRoutes, "registerKeysRoutes");
-
+__name2(registerKeysRoutes, "registerKeysRoutes");
 function toLatinDigits(value) {
   return value.replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))).replace(/[٠-٩]/g, (d) => String("\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669".indexOf(d)));
 }
 __name(toLatinDigits, "toLatinDigits");
+__name2(toLatinDigits, "toLatinDigits");
 function sanitizeSearchQuery(raw2) {
   return toLatinDigits(String(raw2 ?? "")).replace(/[%_]/g, " ").replace(/\s+/g, " ").trim().slice(0, SEARCH_QUERY_MAX_LENGTH);
 }
 __name(sanitizeSearchQuery, "sanitizeSearchQuery");
+__name2(sanitizeSearchQuery, "sanitizeSearchQuery");
 function isSearchable(value, minLength) {
   return value.length >= minLength;
 }
 __name(isSearchable, "isSearchable");
+__name2(isSearchable, "isSearchable");
 function likePattern(value) {
   return `%${value}%`;
 }
 __name(likePattern, "likePattern");
+__name2(likePattern, "likePattern");
 var GROUP_ORDER = ["student", "staff", "school", "tag", "waitlist"];
 function orderGroups(groups) {
   return GROUP_ORDER.map((type) => groups.find((g) => g.type === type)).filter(
@@ -38548,11 +40733,12 @@ function orderGroups(groups) {
   );
 }
 __name(orderGroups, "orderGroups");
+__name2(orderGroups, "orderGroups");
 function capItems(items, limit) {
   return items.slice(0, limit);
 }
 __name(capItems, "capItems");
-
+__name2(capItems, "capItems");
 var PER_GROUP_LIMIT = { students: 6, staff: 4, schools: 3, tags: 4, waitlist: 4 };
 function createSearchService(deps) {
   const { db, logger } = deps;
@@ -38635,7 +40821,7 @@ function createSearchService(deps) {
         },
         {
           type: "school",
-          // زیرنویس: کد مدرسه اگر دارد، وگرنه نوع
+          // — زیرنویس: کد مدرسه اگر دارد، وگرنه نوع
           items: schoolRows.map(
             (r) => ({ type: "school", id: r.id, title: r.name, subtitle: r.code ?? r.kind })
           )
@@ -38673,7 +40859,7 @@ function createSearchService(deps) {
   };
 }
 __name(createSearchService, "createSearchService");
-
+__name2(createSearchService, "createSearchService");
 function registerSearchRoutes(app, service) {
   app.get("/api/search", async (c) => {
     const q = c.req.query("q") ?? "";
@@ -38682,11 +40868,12 @@ function registerSearchRoutes(app, service) {
   });
 }
 __name(registerSearchRoutes, "registerSearchRoutes");
-
+__name2(registerSearchRoutes, "registerSearchRoutes");
 function daysBetween(from, to) {
   return Math.max(1, Math.round((Date.parse(to) - Date.parse(from)) / (24 * 60 * 60 * 1e3)) + 1);
 }
 __name(daysBetween, "daysBetween");
+__name2(daysBetween, "daysBetween");
 function buildDaySeries(appointments, from, to) {
   const n = daysBetween(from, to);
   const map = /* @__PURE__ */ new Map();
@@ -38707,6 +40894,7 @@ function buildDaySeries(appointments, from, to) {
   return [...map.values()];
 }
 __name(buildDaySeries, "buildDaySeries");
+__name2(buildDaySeries, "buildDaySeries");
 function buildPerStaff(rows, names, roles) {
   const by = /* @__PURE__ */ new Map();
   for (const r of rows) {
@@ -38735,6 +40923,7 @@ function buildPerStaff(rows, names, roles) {
   return out;
 }
 __name(buildPerStaff, "buildPerStaff");
+__name2(buildPerStaff, "buildPerStaff");
 function buildTopStudents(rows, limit = 10) {
   const by = /* @__PURE__ */ new Map();
   for (const r of rows) {
@@ -38755,23 +40944,27 @@ function buildTopStudents(rows, limit = 10) {
   return [...by.values()].sort((a, b) => b.sessions - a.sessions || b.absents - a.absents).slice(0, limit).map(({ studentId, studentName, sessions, absents }) => ({ studentId, studentName, sessions, absents }));
 }
 __name(buildTopStudents, "buildTopStudents");
+__name2(buildTopStudents, "buildTopStudents");
 function safeRate(num5, den) {
   if (den <= 0)
     return 0;
   return Math.round(num5 / den * 1e3) / 1e3;
 }
 __name(safeRate, "safeRate");
+__name2(safeRate, "safeRate");
 function safeRateOrNull(num5, den) {
   if (den <= 0)
     return null;
   return Math.round(num5 / den * 1e3) / 1e3;
 }
 __name(safeRateOrNull, "safeRateOrNull");
+__name2(safeRateOrNull, "safeRateOrNull");
 function weekStartOfYmd(ymd) {
   const wd = iranianWeekdayOfYmd(ymd);
   return addDaysYmd(ymd, -wd);
 }
 __name(weekStartOfYmd, "weekStartOfYmd");
+__name2(weekStartOfYmd, "weekStartOfYmd");
 function buildWeeklyTrend(appointments, attendance, fromYmd, toYmd) {
   const weekKeys = [];
   const weeks = /* @__PURE__ */ new Map();
@@ -38785,7 +40978,7 @@ function buildWeeklyTrend(appointments, attendance, fromYmd, toYmd) {
       break;
     cur = addDaysYmd(cur, 7);
   }
-  const bucketOf = /* @__PURE__ */ __name((iso) => {
+  const bucketOf = /* @__PURE__ */ __name2((iso) => {
     const wk = weekStartOfYmd(tehranYmdOf(iso));
     return weeks.get(wk);
   }, "bucketOf");
@@ -38823,6 +41016,7 @@ function buildWeeklyTrend(appointments, attendance, fromYmd, toYmd) {
   });
 }
 __name(buildWeeklyTrend, "buildWeeklyTrend");
+__name2(buildWeeklyTrend, "buildWeeklyTrend");
 function avgWaitDaysOf(pairs) {
   if (pairs.length === 0)
     return null;
@@ -38841,12 +41035,12 @@ function avgWaitDaysOf(pairs) {
   return Math.round(sum / n * 10) / 10;
 }
 __name(avgWaitDaysOf, "avgWaitDaysOf");
-
-/** — وزن‌های تنظیم‌شدهٔ مدیر از settings (fallback = پیش‌فرض موتور) */
+__name2(avgWaitDaysOf, "avgWaitDaysOf");
 async function readScoringWeights(db) {
   try {
     const row = await db.queryOne(`SELECT value FROM settings WHERE key = ?`, [SCORING_CONFIG_KEY]);
-    if (!row) return void 0;
+    if (!row)
+      return void 0;
     const parsed = JSON.parse(row.value);
     return parsed?.weights && typeof parsed.weights === "object" ? parsed.weights : void 0;
   } catch {
@@ -38854,6 +41048,7 @@ async function readScoringWeights(db) {
   }
 }
 __name(readScoringWeights, "readScoringWeights");
+__name2(readScoringWeights, "readScoringWeights");
 function createReportService(deps) {
   const { db, logger } = deps;
   return {
@@ -38988,7 +41183,7 @@ function createReportService(deps) {
       const cancelled = apptRows.filter((a) => a.status === "cancelled").length;
       const totalMinutes = apptRows.filter((a) => a.status !== "cancelled").reduce((acc, a) => acc + Math.max(0, (Date.parse(a.end_at) - Date.parse(a.start_at)) / 6e4), 0);
       const dayCount = Math.max(1, Math.round((Date.parse(to) - Date.parse(from)) / (24 * 60 * 60 * 1e3)) + 1);
-      const report2 = {
+      const report22 = {
         from,
         to,
         generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -39002,14 +41197,14 @@ function createReportService(deps) {
         },
         attendance: {
           ...attendance,
-          // تأخیر در مخرج نرخ غیبت هم می‌آید (حضورِ دیررس)
+          // — تأخیر در مخرج نرخ غیبت هم می‌آید (حضورِ دیررس)
           absenceRate: safeRate(attendance.absent, attendance.present + attendance.late + attendance.absent)
         },
         staffAttendance: {
           ...staffAttendance,
           unmarked: 0,
           // در سطح بازه شمارش unmarked بی‌معناست — فقط ثبت‌شده‌ها
-          // تأخیر شکلِ حضور است: صورت و مخرج نرخ حضور هر دو شامل آن
+          // — تأخیر شکلِ حضور است: صورت و مخرج نرخ حضور هر دو شامل آن
           attendanceRate: safeRate(staffAttendance.present + staffAttendance.late, staffAttendance.present + staffAttendance.late + staffAttendance.absent + staffAttendance.leave + staffAttendance.sick)
         },
         newStudents: newStudentsRow?.n ?? 0,
@@ -39031,7 +41226,7 @@ function createReportService(deps) {
         schools
       };
       logger.child("reports").info("report.generated", { from, to, total });
-      return report2;
+      return report22;
     },
     /** — تحلیل پیشرفته: روند هفتگی + قیف لیست انتظار + پوشش‌ها (همه Projection) */
     async getAdvancedReport(from, to) {
@@ -39074,7 +41269,7 @@ function createReportService(deps) {
           firstAdmitted.set(r.resource_id, r.admitted_at);
       }
       const waitPairs = wlIdRows.filter((r) => firstAdmitted.has(r.id)).map((r) => ({ createdAt: r.created_at, admittedAt: firstAdmitted.get(r.id) }));
-      const countBy = /* @__PURE__ */ __name((status) => wlRows.filter((w) => w.status === status).length, "countBy");
+      const countBy = /* @__PURE__ */ __name2((status) => wlRows.filter((w) => w.status === status).length, "countBy");
       const waitlist = {
         total: wlRows.length,
         open: countBy("waiting") + countBy("called"),
@@ -39157,7 +41352,7 @@ function createReportService(deps) {
         approved,
         approvalRate: safeRateOrNull(approved, itemsTotal)
       };
-      const report2 = {
+      const report22 = {
         from,
         to,
         generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -39169,12 +41364,12 @@ function createReportService(deps) {
         committee
       };
       logger.child("reports").info("advanced_report.generated", { from, to, weeks: weeks.length });
-      return report2;
+      return report22;
     }
   };
 }
 __name(createReportService, "createReportService");
-
+__name2(createReportService, "createReportService");
 function registerRoutes9(app, service) {
   app.get("/api/reports", requireRole("manager", "secretary"), async (c) => {
     const query = ReportQuerySchema.parse({
@@ -39193,12 +41388,13 @@ function registerRoutes9(app, service) {
     return c.json({ data }, 200);
   });
 }
-__name(registerRoutes9, "registerRoutes");
-
+__name(registerRoutes9, "registerRoutes9");
+__name2(registerRoutes9, "registerRoutes");
 function normalizeNextAction(value) {
   return value === "none" ? null : value;
 }
 __name(normalizeNextAction, "normalizeNextAction");
+__name2(normalizeNextAction, "normalizeNextAction");
 var SELECT_NOTE = `
   SELECT a.status AS appt_status, a.staff_id,
          (st.first_name || ' ' || st.last_name) AS student_name,
@@ -39209,7 +41405,7 @@ var SELECT_NOTE = `
    WHERE a.id = ? AND s.student_id = ?`;
 function createSessionNotesService(deps) {
   const { db, audit, logger } = deps;
-  const log3 = logger.child("session-notes");
+  const log32 = logger.child("session-notes");
   return {
     async save(appointmentId, studentId, input, actor) {
       const note = input.sessionNote.trim();
@@ -39263,7 +41459,7 @@ function createSessionNotesService(deps) {
             actor
           );
         }
-        log3.info(created ? "session_note.created" : "session_note.updated", { appointmentId });
+        log32.info(created ? "session_note.created" : "session_note.updated", { appointmentId });
         return { appointmentId, studentId, sessionNote: note.length > 0 ? note : null, nextAction };
       });
     },
@@ -39281,7 +41477,7 @@ function createSessionNotesService(deps) {
   };
 }
 __name(createSessionNotesService, "createSessionNotesService");
-
+__name2(createSessionNotesService, "createSessionNotesService");
 function registerSessionNoteRoutes(app, service) {
   app.put("/api/appointments/:id/students/:studentId/note", async (c) => {
     const actor = getAuthContext(c);
@@ -39300,7 +41496,7 @@ function registerSessionNoteRoutes(app, service) {
   });
 }
 __name(registerSessionNoteRoutes, "registerSessionNoteRoutes");
-
+__name2(registerSessionNoteRoutes, "registerSessionNoteRoutes");
 var LOGIN_MAX_FAILURES = 5;
 var LOGIN_WINDOW_MINUTES = 15;
 var LOGIN_WINDOW_MS = LOGIN_WINDOW_MINUTES * 60 * 1e3;
@@ -39319,6 +41515,7 @@ async function throttleRemainingSeconds(db, identity) {
   return Math.max(1, Math.ceil((LOGIN_WINDOW_MS - elapsed) / 1e3));
 }
 __name(throttleRemainingSeconds, "throttleRemainingSeconds");
+__name2(throttleRemainingSeconds, "throttleRemainingSeconds");
 async function recordLoginFailure(db, identity) {
   await db.prepare(
     `INSERT INTO login_throttle (identity, fail_count, window_start)
@@ -39335,10 +41532,12 @@ async function recordLoginFailure(db, identity) {
   ).bind(identity, (/* @__PURE__ */ new Date()).toISOString(), windowFloorIso(), windowFloorIso()).run();
 }
 __name(recordLoginFailure, "recordLoginFailure");
+__name2(recordLoginFailure, "recordLoginFailure");
 function windowFloorIso() {
   return new Date(Date.now() - LOGIN_WINDOW_MS).toISOString();
 }
 __name(windowFloorIso, "windowFloorIso");
+__name2(windowFloorIso, "windowFloorIso");
 async function clearThrottle(db, identity) {
   try {
     await db.prepare(`DELETE FROM login_throttle WHERE identity = ? OR window_start <= ?`).bind(identity, windowFloorIso()).run();
@@ -39346,6 +41545,7 @@ async function clearThrottle(db, identity) {
   }
 }
 __name(clearThrottle, "clearThrottle");
+__name2(clearThrottle, "clearThrottle");
 function registerAuthRoutes(app, deps) {
   app.post("/api/auth/login", async (c) => {
     const body = LoginSchema.parse(await c.req.json());
@@ -39400,7 +41600,7 @@ function registerAuthRoutes(app, deps) {
         });
       }
     }
-    const secret = await resolveSessionSecret(c.env);
+    const secret = await resolveSessionSecret2(c.env);
     const { token, expiresAt } = await signSessionJwt(
       { id: staff.id, fullName: staff.full_name, role: staff.role, email: staff.email },
       secret
@@ -39432,7 +41632,7 @@ function registerAuthRoutes(app, deps) {
   app.post("/api/auth/logout", (c) => c.json({ data: { ok: true } }, 200));
 }
 __name(registerAuthRoutes, "registerAuthRoutes");
-
+__name2(registerAuthRoutes, "registerAuthRoutes");
 function createServices(deps) {
   const { db, audit, logger } = deps;
   const conflictEngine = createConflictEngine({ db });
@@ -39452,10 +41652,10 @@ function createServices(deps) {
     audit,
     logger,
     storage: exerciseStorage,
-    // بدون fallback هاردکد: production بدون AUTH_SECRET/WEBHOOK_SECRET →
+    // — بدون fallback هاردکد: production بدون AUTH_SECRET/WEBHOOK_SECRET →
     // secret تصادفی ماندگار در settings (getOrCreateRuntimeSecret)؛ فقط dev ثابت قدیمی را می‌گیرد.
     downloadSecret: deps.downloadSecret ?? (deps.authIsDev ? "insecure-dev-secret" : () => getOrCreateRuntimeSecret(db)),
-    // آدرس عمومی برای لینک دانلود فایل تمرین در پیام بستهٔ تکلیف
+    // — آدرس عمومی برای لینک دانلود فایل تمرین در پیام بستهٔ تکلیف
     publicBaseUrl: deps.publicBaseUrl ?? null
   });
   const caseEvents = createCaseEventsService({
@@ -39512,11 +41712,11 @@ function createServices(deps) {
     clinicName: deps.clinicName,
     exerciseBank,
     publicBaseUrl: deps.publicBaseUrl ?? null,
-    // رویدادهای پرونده (ویزارد بات + چک‌لیست خانواده)
+    // — رویدادهای پرونده (ویزارد بات + چک‌لیست خانواده)
     caseEvents,
-    // «هدف سنجش» بات = همان اعداد داشبورد (سنجش روزانه)
+    // — «هدف سنجش» بات = همان اعداد داشبورد (سنجش روزانه)
     screening,
-    // حلقهٔ بازگشت: با توکن بله fetcher واقعی، در تست fetcher تزریقی، بدون هر دو null
+    // — حلقهٔ بازگشت: با توکن بله fetcher واقعی، در تست fetcher تزریقی، بدون هر دو null
     mediaFetcher: deps.mediaFetcher !== void 0 ? deps.mediaFetcher : deps.baleToken ? createBaleMediaFetcher({ token: deps.baleToken }) : null
   });
   appointments.setLifecycleObserver({
@@ -39550,12 +41750,12 @@ function createServices(deps) {
     });
   });
   caseEvents.setSendObserver(async (input) => {
-    const channel2 = notifyCore.getChannel("bale") ? "bale" : "internal";
+    const channel22 = notifyCore.getChannel("bale") ? "bale" : "internal";
     const clinicName = await settings.getClinicName();
     let sent = 0;
     for (const chat of input.chats) {
       const outcome = await notifyCore.enqueue({
-        channel: channel2,
+        channel: channel22,
         template: input.template,
         recipient: chat,
         studentId: input.studentId,
@@ -39570,12 +41770,12 @@ function createServices(deps) {
     return sent;
   });
   exerciseBank.setSendObserver(async (input) => {
-    const channel2 = notifyCore.getChannel("bale") ? "bale" : "internal";
+    const channel22 = notifyCore.getChannel("bale") ? "bale" : "internal";
     const clinicName = await settings.getClinicName();
     let sent = 0;
     for (const chat of input.chats) {
       const outcome = await notifyCore.enqueue({
-        channel: channel2,
+        channel: channel22,
         template: input.template,
         recipient: chat,
         studentId: input.studentId,
@@ -39606,6 +41806,7 @@ function createServices(deps) {
   return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, reports, waitlist, followups, sessionNotes, todos, exerciseBank, caseEvents, clinicalEngine, otEngine, reasoningEngine };
 }
 __name(createServices, "createServices");
+__name2(createServices, "createServices");
 function createApp(deps) {
   const services = createServices(deps);
   const app = new Hono3();
@@ -39670,7 +41871,7 @@ function createApp(deps) {
       headers: {
         "Content-Type": mime,
         "Content-Disposition": `inline; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
-        // محتوای آپلودی کاربر در origin سندباکس‌شده اجرا می‌شود؛ HTML/SVG آپلودی
+        // — محتوای آپلودی کاربر در origin سندباکس‌شده اجرا می‌شود؛ HTML/SVG آپلودی
         // نمی‌تواند به داده‌های نشست در همین origin دسترسی یا اسکریپت در دامنهٔ سایت اجرا کند.
         "Content-Security-Policy": "sandbox allow-scripts allow-popups"
       }
@@ -39746,7 +41947,7 @@ function createApp(deps) {
   return app;
 }
 __name(createApp, "createApp");
-
+__name2(createApp, "createApp");
 function createDb(d1, logger) {
   const base = {
     async query(sql, params = []) {
@@ -39799,7 +42000,7 @@ function createDb(d1, logger) {
   return base;
 }
 __name(createDb, "createDb");
-
+__name2(createDb, "createDb");
 function buildInsert(entry) {
   return {
     sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes)
@@ -39815,6 +42016,7 @@ function buildInsert(entry) {
   };
 }
 __name(buildInsert, "buildInsert");
+__name2(buildInsert, "buildInsert");
 function createAuditWriter(db) {
   return {
     async log(entry) {
@@ -39828,14 +42030,15 @@ function createAuditWriter(db) {
   };
 }
 __name(createAuditWriter, "createAuditWriter");
-
+__name2(createAuditWriter, "createAuditWriter");
 var LEVEL_WEIGHT = { debug: 10, info: 20, warn: 30, error: 40 };
 function minLevel() {
-  const env2 = globalThis.ENV ?? "development";
-  return env2 === "production" ? "info" : "debug";
+  const env22 = globalThis.ENV ?? "development";
+  return env22 === "production" ? "info" : "debug";
 }
 __name(minLevel, "minLevel");
-function emit2(scope, level, msg, meta) {
+__name2(minLevel, "minLevel");
+function emit22(scope, level, msg, meta) {
   if (LEVEL_WEIGHT[level] < LEVEL_WEIGHT[minLevel()])
     return;
   const entry = {
@@ -39847,41 +42050,43 @@ function emit2(scope, level, msg, meta) {
   };
   console.log(JSON.stringify(entry));
 }
-__name(emit2, "emit");
+__name(emit22, "emit2");
+__name2(emit22, "emit");
 function createLogger(scope) {
   return {
-    debug: (msg, meta) => emit2(scope, "debug", msg, meta),
-    info: (msg, meta) => emit2(scope, "info", msg, meta),
-    warn: (msg, meta) => emit2(scope, "warn", msg, meta),
-    error: (msg, meta) => emit2(scope, "error", msg, meta),
+    debug: (msg, meta) => emit22(scope, "debug", msg, meta),
+    info: (msg, meta) => emit22(scope, "info", msg, meta),
+    warn: (msg, meta) => emit22(scope, "warn", msg, meta),
+    error: (msg, meta) => emit22(scope, "error", msg, meta),
     child: (subScope) => createLogger(`${scope}.${subScope}`)
   };
 }
 __name(createLogger, "createLogger");
-
-function buildEnv(env2) {
+__name2(createLogger, "createLogger");
+function buildEnv(env22) {
   return {
-    baleToken: env2.BALE_BOT_TOKEN ?? null,
-    webhookSecret: env2.BALE_WEBHOOK_SECRET ?? null,
-    clinicName: env2.CLINIC_NAME ?? void 0,
-    exerciseBucket: env2.EXERCISE_FILES ?? null,
-    downloadSecret: env2.AUTH_SECRET ?? env2.BALE_WEBHOOK_SECRET ?? null,
-    publicBaseUrl: env2.PUBLIC_BASE_URL ?? null,
-    // فقط برای fallback توسعه‌ای secret دانلود؛ production همیشه مسیر ماندگار
-    authIsDev: isDevEnv(env2.ENV)
+    baleToken: env22.BALE_BOT_TOKEN ?? null,
+    webhookSecret: env22.BALE_WEBHOOK_SECRET ?? null,
+    clinicName: env22.CLINIC_NAME ?? void 0,
+    exerciseBucket: env22.EXERCISE_FILES ?? null,
+    downloadSecret: env22.AUTH_SECRET ?? env22.BALE_WEBHOOK_SECRET ?? null,
+    publicBaseUrl: env22.PUBLIC_BASE_URL ?? null,
+    // — فقط برای fallback توسعه‌ای secret دانلود؛ production همیشه مسیر ماندگار
+    authIsDev: isDevEnv(env22.ENV)
   };
 }
 __name(buildEnv, "buildEnv");
-async function runNotificationCycle(env2) {
-  const db = createDb(env2.DB);
+__name2(buildEnv, "buildEnv");
+async function runNotificationCycle(env22) {
+  const db = createDb(env22.DB);
   const audit = createAuditWriter(db);
   const logger = createLogger("cron.notify");
   const services = createServices({
     db,
     audit,
     logger,
-    teamDomain: env2.CF_ACCESS_TEAM_DOMAIN,
-    ...buildEnv(env2)
+    teamDomain: env22.CF_ACCESS_TEAM_DOMAIN,
+    ...buildEnv(env22)
   });
   const summary = await services.notify.enqueueUpcomingReminders(
     /* @__PURE__ */ new Date,
@@ -39892,16 +42097,17 @@ async function runNotificationCycle(env2) {
   logger.info("cycle.done", { ...summary, nudges, dispatch });
 }
 __name(runNotificationCycle, "runNotificationCycle");
-async function runDigestCycle(env2) {
-  const db = createDb(env2.DB);
+__name2(runNotificationCycle, "runNotificationCycle");
+async function runDigestCycle(env22) {
+  const db = createDb(env22.DB);
   const audit = createAuditWriter(db);
   const logger = createLogger("cron.digest");
   const services = createServices({
     db,
     audit,
     logger,
-    teamDomain: env2.CF_ACCESS_TEAM_DOMAIN,
-    ...buildEnv(env2)
+    teamDomain: env22.CF_ACCESS_TEAM_DOMAIN,
+    ...buildEnv(env22)
   });
   const summary = await services.notify.sendDailyDigest(/* @__PURE__ */ new Date()).catch((err) => {
     logger.error("digest.failed", { error: err instanceof Error ? err.message : String(err) });
@@ -39911,51 +42117,74 @@ async function runDigestCycle(env2) {
   logger.info("digest.cycle.done", { summary, dispatch });
 }
 __name(runDigestCycle, "runDigestCycle");
-async function runBatchDispatchCycle(env2) {
-  const db = createDb(env2.DB);
+__name2(runDigestCycle, "runDigestCycle");
+async function runBatchDispatchCycle(env22) {
+  const db = createDb(env22.DB);
   const audit = createAuditWriter(db);
   const logger = createLogger("cron.batch");
   const services = createServices({
     db,
     audit,
     logger,
-    teamDomain: env2.CF_ACCESS_TEAM_DOMAIN,
-    ...buildEnv(env2)
+    teamDomain: env22.CF_ACCESS_TEAM_DOMAIN,
+    ...buildEnv(env22)
   });
   const dispatch = await services.notify.dispatchPending(100);
   logger.info("batch.cycle.done", { dispatch });
 }
 __name(runBatchDispatchCycle, "runBatchDispatchCycle");
+__name2(runBatchDispatchCycle, "runBatchDispatchCycle");
 var src_default = {
-  async fetch(request, env2, _ctx) {
-    const db = createDb(env2.DB);
+  async fetch(request, env22, _ctx) {
+    const db = createDb(env22.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger("worker");
     const app = createApp({
       db,
       audit,
       logger,
-      teamDomain: env2.CF_ACCESS_TEAM_DOMAIN,
-      ...buildEnv(env2)
+      teamDomain: env22.CF_ACCESS_TEAM_DOMAIN,
+      ...buildEnv(env22)
     });
-    return app.fetch(request, env2, _ctx);
+    return app.fetch(request, env22, _ctx);
   },
   // ─── Cron: یادآوری نوبت‌ها + ارسال صف (قرارها در wrangler.toml) ───
-  // cron «0 4 * * *» (07:30 تهران) = خلاصهٔ روز؛ بقیه = چرخهٔ یادآوری
-  // cron «30 14 * * *» (18:00 تهران) = ساعت ارسال پیش‌نویس‌های اعلان نوبت
-  async scheduled(event, env2, ctx) {
+  // — cron «0 4 * * *» (07:30 تهران) = خلاصهٔ روز؛ بقیه = چرخهٔ یادآوری
+  // — cron «30 14 * * *» (18:00 تهران) = ساعت ارسال پیش‌نویس‌های اعلان نوبت
+  async scheduled(event, env22, ctx) {
     if (event.cron === DIGEST_CRON) {
-      ctx.waitUntil(runDigestCycle(env2));
+      ctx.waitUntil(runDigestCycle(env22));
       return;
     }
     if (event.cron === BATCH_CRON) {
-      ctx.waitUntil(runBatchDispatchCycle(env2));
+      ctx.waitUntil(runBatchDispatchCycle(env22));
       return;
     }
-    ctx.waitUntil(runNotificationCycle(env2));
+    ctx.waitUntil(runNotificationCycle(env22));
+  }
+};
+
+var entry_default = {
+  async fetch(request, env3, ctx) {
+    const url = new URL(request.url);
+    if (url.pathname === "/api/scoring/board" || url.pathname.startsWith("/api/scoring/")) {
+      try {
+        return await handleScoring(request, env3);
+      } catch (err) {
+        console.error("scoring.error", err?.message ?? err);
+        return new Response(
+          JSON.stringify({ error: "SCORING_ERROR", message: "\u062E\u0637\u0627\u06CC \u0645\u0648\u0642\u062A \u062F\u0631 \u0645\u062D\u0627\u0633\u0628\u0647\u0654 \u062A\u0627\u0628\u0644\u0648\u06CC \u067E\u06CC\u0634\u0631\u0641\u062A" }),
+          { status: 500, headers: { "content-type": "application/json; charset=utf-8" } }
+        );
+      }
+    }
+    return src_default.fetch(request, env3, ctx);
+  },
+  async scheduled(event, env3, ctx) {
+    return src_default.scheduled(event, env3, ctx);
   }
 };
 export {
-  src_default as default
+  entry_default as default
 };
-//# sourceMappingURL=index.js.map
+//# sourceMappingURL=entry.js.map

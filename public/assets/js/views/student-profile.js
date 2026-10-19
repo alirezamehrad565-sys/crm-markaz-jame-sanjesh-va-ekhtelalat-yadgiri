@@ -16,8 +16,9 @@ import { renderClinicalTab } from '../clinical-insights.js'; // — تب تفس�
 import { pathwayChip, canEditPathway, openPathwayModal } from '../session-type.js'; // — مسیر پرونده
 import { openEducationHistory } from '../archive-form.js'; // — تاریخچهٔ تحصیلی
 import { openStudentForm } from '../student-form.js'; // — فرم مشترک ویرایش (کد ملی/مسئول/مسیر) — جایگزین فرم قدیمی داخلی
+import { openBotLinkModal } from '../bot-link.js'; // — لینک احراز خودکار بات
 
-// گارد و مودال مسیر پرونده به session-type.js منتقل شد (مصرف مشترک با تب تفسیر)
+// — گارد و مودال مسیر پرونده به session-type.js منتقل شد (مصرف مشترک با تب تفسیر)
 
 const KIND_META = {
   student_created: { icon: 'user', tone: 'success' },
@@ -66,7 +67,7 @@ const SPECIAL_NEED_SEVERITY_TONES = { mild: 'neutral', moderate: 'warning', seve
 const TIMELINE_PAGE = 30;
 
 export async function renderStudentProfile(container, ctx) {
-  // اسکلتون بارگذاری پروفایل
+  // — اسکلتون بارگذاری پروفایل
   container.replaceChildren(skeletonState('list', 6));
   const id = ctx.params.id;
 
@@ -114,7 +115,7 @@ export async function renderStudentProfile(container, ctx) {
   const canManageTags = session.user && ['manager', 'secretary', 'therapist'].includes(session.user.role);
   const canSendReport = session.user && ['manager', 'secretary', 'therapist'].includes(session.user.role);
   const canManageCase = session.user && ['manager', 'secretary'].includes(session.user.role);
-  // تفسیر بالینی (RBAC پلن §۷): مدیر/منشی مشاهده + درمانگرِ مسئول پرونده؛
+  // — تفسیر بالینی (RBAC پلن §۷): مدیر/منشی مشاهده + درمانگرِ مسئول پرونده؛
   // تصمیم فقط مدیر یا درمانگرِ مسئول — منشی فقط می‌خواند (دکمه‌ها داخل ماژول گارد می‌شوند)
   const canSeeClinical = session.user && (
     ['manager', 'secretary'].includes(session.user.role) ||
@@ -123,7 +124,7 @@ export async function renderStudentProfile(container, ctx) {
 
   // ─── وضعیت فعلی (§14) — هدر زنده ───
 
-  // نردبان «وضعیت پرونده» (شناسایی‌شده/در انتظار ارزیابی/…/تحت پایش) حذف شد؛
+  // — نردبان «وضعیت پرونده» (شناسایی‌شده/در انتظار ارزیابی/…/تحت پایش) حذف شد؛
   // چرخهٔ واقعی حالا سه‌لیستی است: لیست انتظار ← دانش‌آموزان (با مسئول پرونده) ← آرشیو
   const nextActionBlock = buildNextActionBlock(timeline.nextAction);
 
@@ -137,7 +138,7 @@ export async function renderStudentProfile(container, ctx) {
             statusBadge(student.active ? 'active' : 'inactive'),
             student.gender ? statusBadge(student.gender) : null,
             student.grade ? el('span', { class: 'badge badge--neutral' }, gradeLabel(student.grade)) : null,
-            // مسیر پرونده (learning/rehab) + ویرایش سریع
+            // — مسیر پرونده (learning/rehab) + ویرایش سریع
             pathwayChip(student.pathway),
             canEditPathway(student)
               ? el('button', {
@@ -166,12 +167,12 @@ export async function renderStudentProfile(container, ctx) {
                 class: 'btn btn--primary btn--sm',
                 onclick: () => openCaseEventForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
               }, icon('plus', 15), 'ثبت رویداد پرونده'),
-              // موتور تشخیص و مداخله: ارسال یک‌کلیکی چک‌لیست با بله (پیشنهاد بر اساس برچسب‌ها)
+              // — موتور تشخیص و مداخله: ارسال یک‌کلیکی چک‌لیست با بله (پیشنهاد بر اساس برچسب‌ها)
               el('button', {
                 class: 'btn btn--soft btn--sm',
                 onclick: () => openChecklistSendModal({ student, onSent: () => renderStudentProfile(container, ctx) })
               }, icon('zap', 15), 'ارسال چک‌لیست با بله'),
-              // بانک تمرین ۲.۰: ارسال یک‌کلیکی تمرین/بستهٔ تمرینی با بله (پیشنهاد بر اساس برچسب‌ها)
+              // — بانک تمرین ۲.۰: ارسال یک‌کلیکی تمرین/بستهٔ تمرینی با بله (پیشنهاد بر اساس برچسب‌ها)
               el('button', {
                 class: 'btn btn--soft btn--sm',
                 onclick: () => openExerciseSendModal({ student, onSent: () => renderStudentProfile(container, ctx) })
@@ -205,7 +206,7 @@ export async function renderStudentProfile(container, ctx) {
   const tabBar = tabs(
     [
       { key: 'info', label: 'اطلاعات پایه', icon: 'user', onSelect: selectTab },
-      // تب تفسیر بالینی (موتور تشخیص‌گذاری) — فقط برای نقش‌های مجاز
+      // — تب تفسیر بالینی (موتور تشخیص‌گذاری) — فقط برای نقش‌های مجاز
       ...(canSeeClinical ? [{ key: 'clinical', label: 'تفسیر بالینی', icon: 'brain', onSelect: selectTab }] : []),
       { key: 'timeline', label: 'تاریخچه', icon: 'clock', onSelect: selectTab },
       { key: 'sessions', label: `جلسات (${fa(appointments.length)})`, icon: 'calendar', onSelect: selectTab },
@@ -226,7 +227,7 @@ export async function renderStudentProfile(container, ctx) {
     el('div', { style: { marginTop: 'var(--sp-4)' } }, content)
   );
 
-  // deep-link تب‌ها: #/students/:id?tab=sessions|timeline|followups|comms|exercises|clinical
+  // — deep-link تب‌ها: #/students/:id?tab=sessions|timeline|followups|comms|exercises|clinical
   const requestedTab = ctx.query?.tab;
   const knownTabs = ['info', 'timeline', 'sessions', 'followups', 'comms', 'exercises'];
   if (canSeeClinical) knownTabs.splice(1, 0, 'clinical');
@@ -275,7 +276,7 @@ export async function renderStudentProfile(container, ctx) {
             row('کد ملی', el('span', { dir: 'ltr' }, isPlaceholderNid(student.nationalId) ? '— (ثبت نشده)' : fa(student.nationalId))),
             row('تاریخ تولد', student.birthDate ? formatStoredJalaliNumeric(student.birthDate) : '—'),
             row('مدرسه', schoolName(student.schoolId) ?? '—'),
-            // باجت تماس با معلم کنار نام معلم (تلفن از کلاس مدرسه)
+            // — باجت تماس با معلم کنار نام معلم (تلفن از کلاس مدرسه)
             row('کلاس', student.className
               ? el('span', { class: 'cell-phone' },
                   el('span', {}, student.teacherName
@@ -287,7 +288,7 @@ export async function renderStudentProfile(container, ctx) {
               : '—'),
             row('نام ولی', student.guardianName ?? '—'),
             row('نسبت ولی', relationLabel(student.guardianRelation)),
-            // باجت تماس سریع کنار شمارهٔ ولیّ در پروفایل هم
+            // — باجت تماس سریع کنار شمارهٔ ولیّ در پروفایل هم
             row('تلفن ولی', student.guardianPhone
               ? el('span', { class: 'cell-phone' },
                   el('span', { dir: 'ltr' }, fa(student.guardianPhone)),
@@ -297,7 +298,7 @@ export async function renderStudentProfile(container, ctx) {
           ),
           el('div', { style: { marginTop: 'var(--sp-4)' } }, tagsRow),
           buildSpecialNeedBlock(student, canManageCase, container, ctx),
-          // تاریخچهٔ تحصیلی: سابقهٔ سال‌به‌سال (به‌خصوص پرونده‌های آرشیو)
+          // — تاریخچهٔ تحصیلی: سابقهٔ سال‌به‌سال (به‌خصوص پرونده‌های آرشیو)
           el('div', {
             class: 'card',
             style: { marginTop: 'var(--sp-4)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--sp-3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-3)', flexWrap: 'wrap' }
@@ -314,7 +315,7 @@ export async function renderStudentProfile(container, ctx) {
           el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', marginTop: 'var(--sp-4)' } },
             el('button', {
               class: 'btn btn--soft btn--sm',
-              // فرم مشترک student-form.js (کد ملی + مسئول پرونده + مسیر پرونده)
+              // — فرم مشترک student-form.js (کد ملی + مسئول پرونده + مسیر پرونده)
               // به‌جای فرم قدیمی داخلی که کد ملی/مسئول/مسیر نداشت
               onclick: () => openStudentForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
             }, icon('edit', 15), 'ویرایش اطلاعات'),
@@ -407,13 +408,13 @@ export async function renderStudentProfile(container, ctx) {
     else paint();
   }
 
-  // نقشهٔ مقصد کلیک هر kind تایم‌لاین — «همه‌چیز روی یک تایم‌لاین» واقعاً کلیک‌پذیر است
-  // بازگردانی: لینک تقویم برای همهٔ نقش‌ها (تقویم برای دفتر هم فعال شد)
+  // — نقشهٔ مقصد کلیک هر kind تایم‌لاین — «همه‌چیز روی یک تایم‌لاین» واقعاً کلیک‌پذیر است
+  // — بازگردانی: لینک تقویم برای همهٔ نقش‌ها (تقویم برای دفتر هم فعال شد)
   const KIND_LINKS = {
     session_note: { hash: '#/reports', label: 'یادداشت جلسه در «گزارش جلسات من»' },
     exercise: { hash: '#/exercises', label: 'مشاهده در بانک تمرین' },
     followup: { hash: `#/students/${id}?tab=followups`, label: 'مشاهده در تب پیگیری‌ها' },
-    // لینک «کمیسیون» حذف شد (ماژول قطع شد)؛ رویدادهای تاریخی committee بدون لینک می‌مانند
+    // — لینک «کمیسیون» حذف شد (ماژول قطع شد)؛ رویدادهای تاریخی committee بدون لینک می‌مانند
     appointment: { hash: '#/appointments', label: 'مشاهده در تقویم نوبت‌ها' },
     appointment_moved: { hash: '#/appointments', label: 'مشاهده در تقویم نوبت‌ها' },
     notification: { hash: `#/students/${id}?tab=comms`, label: 'مشاهده در تب ارتباطات' },
@@ -422,7 +423,7 @@ export async function renderStudentProfile(container, ctx) {
 
   function timelineItem(e) {
     const meta = KIND_META[e.kind] ?? { icon: 'clock', tone: 'neutral' };
-    // رویداد پرونده: کلیک → مودال جزئیات (فرم کامل + پیوست + تحلیل + لغو)
+    // — رویداد پرونده: کلیک → مودال جزئیات (فرم کامل + پیوست + تحلیل + لغو)
     const isCaseEvent = e.kind === 'case_event' && e.ref?.type === 'case_event';
     const link = !isCaseEvent ? KIND_LINKS[e.kind] : null;
     const clickable = isCaseEvent || Boolean(link);
@@ -448,7 +449,7 @@ export async function renderStudentProfile(container, ctx) {
       ),
       e.subtitle ? el('div', { class: 'tl-item__sub' }, e.subtitle) : null,
       e.actor ? el('div', { class: 'tl-item__actor' }, `توسط ${e.actor}`) : null,
-      // بج سه‌هدف: این فرم توسط کی پر شده/می‌شود؟ (درمانگر در سایت — خانواده/معلم با بله)
+      // — بج سه‌هدف: این فرم توسط کی پر شده/می‌شود؟ (درمانگر در سایت — خانواده/معلم با بله)
       isCaseEvent ? (() => {
         const ev = caseEvents.find((x) => x.id === e.ref?.id);
         if (!ev) return null;
@@ -475,7 +476,7 @@ export async function renderStudentProfile(container, ctx) {
       el('span', { class: 'badge badge--warning' }, `${fa(counts.pending)} در انتظار`)
     );
 
-    // ستون «گزارش»: رویدادهای ساخت‌یافتهٔ متصل به همان نوبت + یادداشت جلسه
+    // — ستون «گزارش»: رویدادهای ساخت‌یافتهٔ متصل به همان نوبت + یادداشت جلسه
     const noteApptIds = new Set(
       noteEvents
         .map((n) => (n.ref?.id ? String(n.ref.id).split('/')[0] : null))
@@ -659,7 +660,7 @@ function buildNextActionBlock(nextAction) {
 }
 
 // -c — ادیتور «مسئول پرونده» — فقط منشی/مدیر (لایهٔ دوم RBAC؛ سرور هم ۴۰۳)
-// مسئول پرونده در فرم تعریف هم انتخاب می‌شود؛ این ادیتور برای جابه‌جایی بعدی است
+// — مسئول پرونده در فرم تعریف هم انتخاب می‌شود؛ این ادیتور برای جابه‌جایی بعدی است
 function buildOwnerEditor(student, onSaved) {
   let staff = [];
   api.get('/api/staff').then((res) => { staff = (res.data ?? []).filter((s) => s.active !== false); fillSel(); }).catch(() => {});
@@ -818,7 +819,7 @@ function relationLabel(rel) {
 }
 
 // ─────────────── کارت اعلان‌ها ───────────────
-// فرم قدیمی ویرایش (openEditForm) حذف شد — openStudentForm مشترک جایگزین شد
+// — فرم قدیمی ویرایش (openEditForm) حذف شد — openStudentForm مشترک جایگزین شد
 // (کد ملی/مسئول پرونده/مسیر پرونده در فرم مشترک هست؛ دوبله‌سازی برداشته شد)
 
 async function buildNotifyCard(studentId) {
@@ -864,11 +865,18 @@ async function buildNotifyCard(studentId) {
 
   const linkListBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
     links.length === 0
-      ? el('span', { style: { fontSize: 'var(--fs-sm)', color: 'var(--text-3)' } }, 'کدی ساخته نشده است.')
-      : links.slice(0, 3).map((l) =>
-          el('div', { class: 'chip' },
+      ? el('span', { style: { fontSize: 'var(--fs-sm)', color: 'var(--text-3)' } }, 'لینکی ساخته نشده است.')
+      : links.slice(0, 4).map((l) =>
+          // — لینک‌ها چندبارمصرف‌اند؛ «دیدن لینک» برای ارسال دوباره/انتقال به گفتگوی جدید
+          el('div', { class: 'chip', style: { gap: '8px' } },
             el('b', { dir: 'ltr' }, l.code),
-            statusBadge(l.status)
+            statusBadge(l.status),
+            el('button', {
+              class: 'btn btn--ghost btn--sm',
+              onclick: () => openBotLinkModal(l.code, {
+                intro: 'این لینک دوباره قابل استفاده است — برای گفتگوی جدید همان را بفرستید:'
+              })
+            }, 'دیدن لینک')
           )
         )
   );
@@ -879,14 +887,27 @@ async function buildNotifyCard(studentId) {
       linkBtn.disabled = true;
       try {
         const res = await api.post('/api/notifications/links', { student_id: studentId });
-        toast('کد اتصال ساخته شد', 'success');
-        linkListBox.prepend(el('div', { class: 'chip' }, el('b', { dir: 'ltr' }, res.data.code), statusBadge(res.data.status)));
+        toast('لینک اتصال خانواده ساخته شد', 'success');
+        linkListBox.prepend(el('div', { class: 'chip', style: { gap: '8px' } },
+          el('b', { dir: 'ltr' }, res.data.code),
+          statusBadge(res.data.status),
+          el('button', {
+            class: 'btn btn--ghost btn--sm',
+            onclick: () => openBotLinkModal(res.data.code, {
+              intro: 'این لینک دوباره قابل استفاده است — برای گفتگوی جدید همان را بفرستید:'
+            })
+          }, 'دیدن لینک')
+        ));
+        // — نمایش کد + لینک احراز خودکار (خانواده با کلیک متصل می‌شود)
+        await openBotLinkModal(res.data.code, {
+          intro: 'این کد/لینک را به ولیّ دانش‌آموز بدهید تا گفتگوی باتش متصل شود:'
+        });
       } catch (err) {
         toastError(err);
       }
       linkBtn.disabled = false;
     }
-  }, icon('bot', 15), 'ساخت کد اتصال بات');
+  }, icon('bot', 15), 'ساخت لینک اتصال خانواده');
 
   return el('div', { class: 'card' },
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'یادآوری و اعلان‌ها')),
@@ -901,7 +922,7 @@ async function buildNotifyCard(studentId) {
       ),
       el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } }, saveBtn, linkBtn),
       prefs?.chatId ? el('div', { class: 'alert alert--info' }, icon('bot', 16), el('span', {}, `اتصال فعال — chat_id: ${fa(prefs.chatId)}`)) : null,
-      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'کدهای اتصال اخیر'), linkListBox)
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'لینک‌های اتصال اخیر'), linkListBox)
     )
   );
 }

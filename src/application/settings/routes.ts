@@ -33,6 +33,7 @@ export function registerSettingsRoutes(app: AppHono, service: SettingsService): 
         notifyWaitlist: body.notify_waitlist,
         clinicPhone: body.clinic_phone,
         notifyBatchHour: body.notify_batch_hour,
+        botUsername: body.bot_username,
         screeningTargets: body.screening_targets
       },
       actor
@@ -63,7 +64,7 @@ export function registerSettingsRoutes(app: AppHono, service: SettingsService): 
     return c.json({ data }, 200);
   });
 
-  // ─── پیکربندی امتیازدهی همکاران — فقط مدیر (فرمول از غیرمدیر پنهان است) ───
+  // ─── پیکربندی امتیازدهی همکاران — فقط مدیر (فرمول از غیرمدیر پنهان است — ) ───
   app.get('/api/settings/scoring', requireRole('manager'), async (c) => {
     const data = await service.getScoringConfig();
     return c.json({ data }, 200);

@@ -185,6 +185,7 @@ export const NOTIFICATION_TEMPLATES = [
   'bot_help',
   'bot_link_success',
   'bot_link_invalid',
+  'bot_link_already',
   'bot_myid',
   'generic',
   'announcement',
@@ -290,7 +291,7 @@ export const NOTIFICATION_TEMPLATES = [
   // ─── موتور تشخیص و مداخله: ارسال چک‌لیست با یک کلیک (لینک امن وب‌فرم) ───
   'bot_checklist_link',
 
-  // ترمیم خطای پایه: قالب در کد مصرف می‌شد ولی در فهرست منبع جا افتاده بود
+  // — ترمیم خطای پایه: قالب در کد مصرف می‌شد ولی در فهرست منبع جا افتاده بود
   'bot_goal_denied'
 ] as const;
 
@@ -348,7 +349,9 @@ export const SETTING_KEYS = {
   /** — «ساعت ارسال» پیش‌نویس اعلان ثبت نوبت — 0..23 تهران (پیش‌فرض 18) */
   NOTIFY_BATCH_HOUR: 'notify_batch_hour',
   /** — پیکربندی امتیازدهی همکاران (تاریخ شروع شمارش + وزن‌های فرمول — فقط مدیر) */
-  SCORING_CONFIG: 'scoring_config'
+  SCORING_CONFIG: 'scoring_config',
+  /** — یوزرنیم بات بله برای ساخت لینک اتصال (ble.ir/<bot>?start=CODE) */
+  BOT_USERNAME: 'bot_username'
 } as const;
 
 /** مقدار پیش‌فرض تنظیمات — وقتی کلیدی در DB نیست این‌ها اعمال می‌شوند */
@@ -363,7 +366,8 @@ export const DEFAULT_SETTINGS = {
   [SETTING_KEYS.EXERCISE_BANK_ENABLED]: true,
   [SETTING_KEYS.SCREENING_TARGETS]: [],
   [SETTING_KEYS.CLINIC_PHONE]: '',
-  [SETTING_KEYS.NOTIFY_BATCH_HOUR]: 18
+  [SETTING_KEYS.NOTIFY_BATCH_HOUR]: 18,
+  [SETTING_KEYS.BOT_USERNAME]: ''
 } as const;
 
 /** — هدفگذاری سنجش برای یک بازهٔ شمسی — month=null یعنی کل سال */
