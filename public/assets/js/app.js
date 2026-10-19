@@ -73,7 +73,11 @@ function applyTheme(next, persist = true) {
 }
 
 function toggleTheme() {
+  // m128 — جابه‌جایی نرم رنگ‌ها به‌جای پرش ناگهانی (CSS: html.theme-switching)
+  const root = document.documentElement;
+  root.classList.add('theme-switching');
   applyTheme(currentTheme() === 'dark' ? 'light' : 'dark');
+  setTimeout(() => root.classList.remove('theme-switching'), 220);
 }
 
 // یک دکمهٔ تم در نوار بالای پنل (حالت پیشین)
