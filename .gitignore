@@ -42,4 +42,3 @@ download/
 
 # Public download center (data-bearing visuals — repo stays code-only)
 public/downloads/
-wrangler.prod.toml

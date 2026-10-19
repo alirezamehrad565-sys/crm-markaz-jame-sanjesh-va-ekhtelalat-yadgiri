@@ -86,45 +86,9 @@ export function start(outlet) {
   // m127 — رفتار نیتیو: هر ناوبری از بالای صفحه شروع می‌شود
   // (رفع کلیپ‌شدن سرصفحه/تولبار زیر topbar وقتی نمای قبلی اسکرول‌خورده بود)
   history.scrollRestoration = 'manual';
-  // m128 — نوار پیشرفت ناوبری: ادراک سرعت، الگوی GitHub/YouTube (CSS: .route-progress)
   window.addEventListener('hashchange', () => {
     document.scrollingElement.scrollTop = 0;
-    progressStart();
-    Promise.resolve(render(outlet)).finally(progressDone);
+    render(outlet);
   });
   render(outlet);
-}
-
-/* ─── m128 — نوار پیشرفت ناوبری (بدون وابستگی) ─── */
-let progressEl = null;
-let progressStageTimers = [];
-let progressHideTimer = null;
-
-function progressStart() {
-  if (!progressEl) {
-    progressEl = document.createElement('div');
-    progressEl.className = 'route-progress';
-    progressEl.setAttribute('aria-hidden', 'true');
-    document.body.appendChild(progressEl);
-  }
-  clearTimeout(progressHideTimer);
-  progressStageTimers.forEach(clearTimeout);
-  progressStageTimers = [];
-  progressEl.classList.remove('is-done');
-  progressEl.classList.add('is-active');
-  progressEl.style.transform = 'scaleX(0.18)';
-  // پیشروی تدریجی تا سقف ~۸۰٪ تا بار کامل شود
-  progressStageTimers.push(setTimeout(() => { progressEl.style.transform = 'scaleX(0.55)'; }, 160));
-  progressStageTimers.push(setTimeout(() => { progressEl.style.transform = 'scaleX(0.8)'; }, 480));
-}
-
-function progressDone() {
-  if (!progressEl || !progressEl.classList.contains('is-active')) return;
-  progressStageTimers.forEach(clearTimeout);
-  progressStageTimers = [];
-  progressEl.classList.add('is-done');
-  progressHideTimer = setTimeout(() => {
-    progressEl.classList.remove('is-active', 'is-done');
-    progressEl.style.transform = 'scaleX(0)';
-  }, 500);
 }
