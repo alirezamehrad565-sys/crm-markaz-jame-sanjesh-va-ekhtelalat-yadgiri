@@ -364,11 +364,12 @@ export function selectBotLinks(filters: { studentId?: string; limit: number }): 
   };
 }
 
+/** — لینک چندبارمصرف: اتصال دوباره (همین چت = idempotent، چت تازه = انتقال اتصال) */
 export function linkBotLink(id: string, chatId: string, nowIso: string): { sql: string; params: unknown[] } {
   return {
     sql: `UPDATE bot_links
              SET status = 'linked', chat_id = ?, updated_at = ?
-           WHERE id = ? AND status = 'pending'`,
+           WHERE id = ?`,
     params: [chatId, nowIso, id]
   };
 }
@@ -491,11 +492,12 @@ export function selectStaffLinks(filters: { staffId?: string; limit: number }): 
   };
 }
 
+/** — لینک چندبارمصرف: اتصال دوبارهٔ کد کارمند (انتقال به چت تازه هم مجاز) */
 export function linkStaffLink(id: string, chatId: string, nowIso: string): { sql: string; params: unknown[] } {
   return {
     sql: `UPDATE staff_bot_links
              SET status = 'linked', chat_id = ?, updated_at = ?
-           WHERE id = ? AND status = 'pending'`,
+           WHERE id = ?`,
     params: [chatId, nowIso, id]
   };
 }
@@ -533,7 +535,7 @@ export function rowToClassBotLink(row: ClassBotLinkRow): import('@core/shared').
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
-  // ستون‌های JOIN فهرست مدیریت (اختیاری)
+  // — ستون‌های JOIN فهرست مدیریت (اختیاری)
   const extra = row as ClassBotLinkRow & { class_name?: string | null; school_name?: string | null };
   if (extra.class_name !== undefined) rec.className = extra.class_name;
   if (extra.school_name !== undefined) rec.schoolName = extra.school_name;
@@ -570,7 +572,7 @@ export function selectClassLinks(filters: { classId?: string; limit: number }): 
       params: [filters.classId, filters.limit]
     };
   }
-  // فهرست مدیریت لینک معلم‌ها: نام کلاس/مدرسه هم می‌آید
+  // — فهرست مدیریت لینک معلم‌ها: نام کلاس/مدرسه هم می‌آید
   return {
     sql: `SELECT l.id, l.code, l.class_id, l.chat_id, l.status, l.created_by, l.created_at, l.updated_at,
                  c.name AS class_name, sc.name AS school_name
@@ -582,11 +584,12 @@ export function selectClassLinks(filters: { classId?: string; limit: number }): 
   };
 }
 
+/** — لینک چندبارمصرف: فقط کد «لغوشده» مرده می‌ماند؛ اتصال دوبارهٔ کد فعال مجاز است */
 export function linkClassLink(id: string, chatId: string, nowIso: string): { sql: string; params: unknown[] } {
   return {
     sql: `UPDATE class_bot_links
              SET status = 'linked', chat_id = ?, updated_at = ?
-           WHERE id = ? AND status = 'pending'`,
+           WHERE id = ? AND status != 'revoked'`,
     params: [chatId, nowIso, id]
   };
 }

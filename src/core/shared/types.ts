@@ -32,7 +32,7 @@ export type { ScreeningTargetConfig };
 
 export type StaffRole = (typeof STAFF_ROLES)[number];
 export type StaffAttendanceStatus = (typeof STAFF_ATTENDANCE_STATUSES)[number];
-// انواع کمیسیون حذف شدند (ماژول قطع شد؛ جدول‌های DB برای دادهٔ تاریخی گزارش می‌مانند)
+// — انواع کمیسیون حذف شدند (ماژول قطع شد؛ جدول‌های DB برای دادهٔ تاریخی گزارش می‌مانند)
 export type AppointmentStatus = (typeof APPOINTMENT_STATUS)[keyof typeof APPOINTMENT_STATUS];
 /** فاز ۱ — وضعیت عملیاتی نوبت (اختیاری؛ NULL/غایب = برنامه‌ریزی‌شدهٔ عادی) */
 export type AppointmentOpsStatus = (typeof APPOINTMENT_OPS_STATUSES)[number];
@@ -259,6 +259,8 @@ export interface BotLinkRecord {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  /** — لینک آمادهٔ ارسال (ble.ir/<bot>?start=CODE) — با یوزرنیم ثبت‌شده پر می‌شود */
+  deepLink?: string | null;
 }
 
 /** اتصال گفتگوی بات ↔ کارمند */
@@ -271,6 +273,8 @@ export interface StaffBotLinkRecord {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  /** — لینک آمادهٔ ارسال (ble.ir/<bot>?start=CODE) — با یوزرنیم ثبت‌شده پر می‌شود */
+  deepLink?: string | null;
 }
 
 /** اتصال گفتگوی بات ↔ کلاس مدرسه */
@@ -286,6 +290,8 @@ export interface ClassBotLinkRecord {
   /** — فقط در فهرست مدیریت (بدون class_id) پر می‌شود */
   className?: string | null;
   schoolName?: string | null;
+  /** — لینک آمادهٔ ارسال (ble.ir/<bot>?start=CODE) — با یوزرنیم ثبت‌شده پر می‌شود */
+  deepLink?: string | null;
 }
 
 /** نتیجه resolve یک chat بله به پرونده (دانش‌آموز، کارمند یا کلاس مدرسه) */
@@ -357,6 +363,8 @@ export interface CenterSettings {
   clinicPhone: string;
   /** — «ساعت ارسال» پیش‌نویس اعلان ثبت نوبت — 0..23 تهران */
   notifyBatchHour: number;
+  /** — یوزرنیم بات بله برای ساخت لینک اتصال؛ خالی = لینک ساخته نمی‌شود */
+  botUsername: string;
   /** وضعیت زیرساخت اعلان (فقط خواندنی — از env) */
   meta: {
     baleConfigured: boolean;

@@ -3,7 +3,7 @@
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
 // views/staff.js — مدیریت کارکنان: فهرست + ایجاد/ویرایش + فعال/غیرفعال
-// تابلوی پیشرفت درمانگران همین‌جا (نمای مدیر) تعبیه می‌شود — به دستور کاربر:
+// — تابلوی پیشرفت درمانگران همین‌جا (نمای مدیر) تعبیه می‌شود — به دستور کاربر:
 // «به مدیر نشون بده تو قسمت کارکنان و درمانگران» — جایگزین کارت «امتیاز محتوا»
 
 import { api } from '../api.js';
@@ -11,6 +11,7 @@ import { fa, formatJalaliNumeric } from '../format.js';
 import { el, icon, formModal, confirmModal, openModal, toast, toastError, dataTable, statusBadge, loadingState, skeletonState, emptyState, phoneCell } from '../ui.js';
 import { renderProgressBoardCard } from './progress-board.js'; // — تابلوی پیشرفت (مدیر)
 import { invalidateStudentFormMeta } from '../student-form.js'; // — کش فرم دانش‌آموز بعد از هر تغییر کارکنان تازه شود
+import { openBotLinkModal } from '../bot-link.js'; // — لینک احراز خودکار بات
 
 let filter = ''; // '', 'true', 'false'
 
@@ -51,7 +52,7 @@ export async function renderStaff(container) {
       {
         key: 'contact',
         label: 'تلفن / کد ملی',
-        // باجت تماس سیستمی کنار شمارهٔ همکار
+        // — باجت تماس سیستمی کنار شمارهٔ همکار
         render: (s) => el('div', { class: 'cell-sub' },
           s.phone
             ? el('div', { dir: 'ltr', style: { textAlign: 'end' } }, phoneCell(s.phone, `تماس با همکار ${s.fullName} — ${fa(s.phone)}`))
@@ -96,7 +97,7 @@ export async function renderStaff(container) {
                     } catch (err) { toastError(err); }
                   }
                 }, icon('check', 15)),
-            // حذف کامل همکار ثبت‌شدهٔ اشتباه/تکراری (فقط مدیر؛ سرور گارد سابقه دارد)
+            // — حذف کامل همکار ثبت‌شدهٔ اشتباه/تکراری (فقط مدیر؛ سرور گارد سابقه دارد)
             el('button', {
               class: 'btn btn--danger btn--sm', title: 'حذف کامل — فقط اگر هیچ سابقه‌ای نداشته باشد',
               onclick: async () => {
@@ -121,7 +122,7 @@ export async function renderStaff(container) {
     }
   });
 
-  // تابلوی پیشرفت درمانگران (فرمول سراسری: محتوا + استفادهٔ واقعی از سامانه)
+  // — تابلوی پیشرفت درمانگران (فرمول سراسری: محتوا + استفادهٔ واقعی از سامانه)
   const boardMount = el('div', {});
 
   container.replaceChildren(
@@ -197,31 +198,14 @@ function openStaffForm(member, container) {
   });
 }
 
-/** — ساخت کد اتصال بات برای کارمند (معلم) */
+/** — ساخت کد اتصال بات برای کارمند (معلم) —: با لینک احراز خودکار */
 async function createBotLink(member, container) {
   void container;
   try {
     const res = await api.post('/api/notifications/staff-links', { staff_id: member.id });
-    openModal({
-      title: 'کد اتصال بات بله',
-      body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
-        el('p', { style: { margin: 0, color: 'var(--text-2)' } },
-          `این کد را به ${member.fullName} بدهید تا در گفتگوی بات بفرستد:`),
-        el('div', {
-          style: {
-            fontSize: '28px', fontWeight: '800', letterSpacing: '6px', textAlign: 'center',
-            background: 'var(--surface-2)', border: '1px dashed var(--border)',
-            borderRadius: 'var(--radius)', padding: '14px', direction: 'ltr', userSelect: 'all'
-          }
-        }, res.data.code),
-        el('p', { style: { margin: 0, fontSize: 'var(--fs-sm)', color: 'var(--text-3)' } },
-          'کافی است در بات این پیام را بفرستد: /link ' + res.data.code +
-          ' — پس از اتصال، اعلان نوبت‌ها و برنامه کلاس‌ها (/today و /week) دریافت می‌کند.')
-      ),
-      actions: [
-        (close) => el('button', { class: 'btn btn--primary', onclick: () => { navigator.clipboard?.writeText(`/link ${res.data.code}`); toast('دستور کپی شد', 'success'); } }, 'کپی دستور'),
-        (close) => el('button', { class: 'btn btn--ghost', onclick: close }, 'بستن')
-      ]
+    await openBotLinkModal(res.data.code, {
+      intro: `این کد/لینک را به ${member.fullName} بدهید تا گفتگوی باتش متصل شود:`,
+      extraHint: 'پس از اتصال، اعلان نوبت‌ها و برنامه کلاس‌ها (/today و /week) دریافت می‌کند.'
     });
   } catch (err) {
     toastError(err);

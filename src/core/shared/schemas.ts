@@ -126,9 +126,9 @@ export const NewAppointmentSchema = z
     start_at: IsoDateTimeSchema,
     end_at: IsoDateTimeSchema,
     students: z.array(AppointmentStudentRefSchema).max(20).default([]),
-    // nullish: کلید حذف‌شده و null هردو «بدون توضیح» معنا دارند (ارگونومی API)
+    // — nullish: کلید حذف‌شده و null هردو «بدون توضیح» معنا دارند (ارگونومی API)
     note: z.string().max(2000).nullish(),
-    // نوع جلسه (جدول ۴ اساس‌نامه) — null/حذف = بدون نوع (رفتار نوبت‌های قدیمی)
+    // — نوع جلسه (جدول ۴ اساس‌نامه) — null/حذف = بدون نوع (رفتار نوبت‌های قدیمی)
     session_type: z.enum(SESSION_TYPE_KEYS).nullish()
   })
   .refine((v) => Date.parse(v.end_at) > Date.parse(v.start_at), {
@@ -183,7 +183,7 @@ export const CopyWeekSchema = z.object({
 // ───────────── Attendance ─────────────
 
 export const MarkAttendanceSchema = z.object({
-  // 'late' = حاضر با تأخیر (غیبت حساب نمی‌شود؛ اعلان غیبت نمی‌گیرد)
+  // — 'late' = حاضر با تأخیر (غیبت حساب نمی‌شود؛ اعلان غیبت نمی‌گیرد)
   status: z.enum([ATTENDANCE_STATUS.PRESENT, ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.ABSENT, ATTENDANCE_STATUS.CANCELLED]),
   note: z.string().max(1000).optional()
 });
@@ -211,7 +211,7 @@ export const NewSchoolSchema = z.object({
   address: z.string().max(500).optional(),
   principal_name: z.string().max(120).optional(),
   principal_phone: z.string().max(20).optional(),
-  // کد رسمی مدرسه (نظام) + یادداشت آزاد؛ ارقام فارسی به لاتین نرمال می‌شود
+  // — کد رسمی مدرسه (نظام) + یادداشت آزاد؛ ارقام فارسی به لاتین نرمال می‌شود
   code: z
     .string()
     .transform((v) => v.trim().replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))))
@@ -228,7 +228,7 @@ export const UpdateSchoolSchema = z.object({
   address: z.string().max(500).optional(),
   principal_name: z.string().max(120).optional(),
   principal_phone: z.string().max(20).optional(),
-  // کد رسمی مدرسه (نظام) + یادداشت آزاد؛ ارقام فارسی به لاتین نرمال می‌شود
+  // — کد رسمی مدرسه (نظام) + یادداشت آزاد؛ ارقام فارسی به لاتین نرمال می‌شود
   code: z
     .string()
     .transform((v) => v.trim().replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))))
@@ -258,7 +258,7 @@ export const UpdateClassSchema = z.object({
  * - آرشیو (archived=true): اختیاری — بدون کد ملی نگه‌دارندهٔ یکتای «NAS-…» می‌گیرد
  * و هر زمان از ویرایش پروفایل قابل ثبت است.
  */
-// مسیر پرونده: learning / rehab — تعریف زودتر از NewStudentSchema (پذیرش)
+// — مسیر پرونده: learning / rehab — تعریف زودتر از NewStudentSchema (پذیرش)
 export const PathwaySchema = z.enum(STUDENT_PATHWAYS);
 
 export const NewStudentSchema = z
@@ -499,6 +499,12 @@ export const UpdateSettingsSchema = z.object({
   notify_waitlist: z.boolean().optional(),
   /** — شماره تماس عمومی مرکز (خالی = پاک کردن) */
   clinic_phone: z.string().max(30, 'شماره تماس حداکثر ۳۰ نویسه است').optional(),
+  // — نام کاربری بات بله (با یا بدون @؛ فقط لاتین/رقم/خط زیر؛ خالی = تشخیص خودکار)
+  bot_username: z
+    .string()
+    .max(65, 'نام کاربری بات حداکثر ۶۴ نویسه است')
+    .regex(/^@?[A-Za-z0-9_]*$/, 'نام کاربری بات فقط حروف لاتین، رقم و خط زیر است')
+    .optional(),
   /** — ساعت ارسال پیش‌نویس اعلان نوبت جدید — 0..23 تهران */
   notify_batch_hour: z
     .number()
@@ -506,7 +512,7 @@ export const UpdateSettingsSchema = z.object({
     .min(0, 'ساعت ارسال باید بین ۰ تا ۲۳ باشد')
     .max(23, 'ساعت ارسال باید بین ۰ تا ۲۳ باشد')
     .optional(),
-  /** — شاخص سنجش: جایگزینی کامل آرایهٔ بازه‌ها (سال/ماه شمسی) — بازهٔ سفارشی + هدف همزمان */
+  /** — شاخص سنجش: جایگزینی کامل آرایهٔ بازه‌ها (سال/ماه شمسی) —: بازهٔ سفارشی + هدف همزمان */
   screening_targets: z
     .array(
       z
@@ -992,7 +998,7 @@ export const ChangeSpecialNeedSchema = z.object({
   { message: 'شدت بدون نوع نیاز ویژه معنا ندارد' }
 );
 
-// بلوک اسکیمای کمیسیون حذف شد (ماژول قطع شد)
+// — بلوک اسکیمای کمیسیون حذف شد (ماژول قطع شد)
 
 // ───────────── بانک تمرین ─────────────
 

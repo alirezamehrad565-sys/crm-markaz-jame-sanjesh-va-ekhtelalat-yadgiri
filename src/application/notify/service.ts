@@ -117,6 +117,8 @@ export interface NotifyAppDeps {
   settings: SettingsService;
   /** توکن بله — در صورت وجود، کانال bale ثبت می‌شود */
   baleToken?: string | null;
+  /** — دریافت یوزرنیم بات از Bale getMe (تزریقی برای تست؛ پیش‌فرض fetch واقعی) */
+  botUsernameFetcher?: (token: string, fetchImpl?: typeof fetch) => Promise<string | null>;
   /** secret مسیر webhook — در صورت نبود، webhook غیرفعال (404) است */
   webhookSecret?: string | null;
   /** fallback نام مرکز از env */
@@ -157,6 +159,28 @@ const STAFF_ROLE_LABEL: Record<string, string> = {
   supervisor: 'سمت: ناظر اداره'
 };
 
+/**
+ * — دریافت یوزرنیم بات از Bale getMe — برای ساخت لینک اتصال خودکار.
+ * یوزرنیم نامعتبر/ناموفق → null (تماس‌کننده fallback «/link CODE» می‌دهد)
+ */
+export async function fetchBaleBotUsername(token: string, fetchImpl?: typeof fetch): Promise<string | null> {
+  const doFetch = fetchImpl ?? fetch;
+  try {
+    const res = await doFetch(`https://tapi.bale.ai/bot${token}/getMe`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}'
+    });
+    const body = (await res.json().catch(() => ({}))) as { result?: { username?: unknown } };
+    const username = body?.result?.username;
+    if (typeof username !== 'string') return null;
+    const clean = username.trim().replace(/^@/, '');
+    return /^[A-Za-z0-9_]{2,64}$/.test(clean) ? clean : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface BotReply {
   text: string;
   buttons: InlineButton[][] | null;
@@ -187,7 +211,7 @@ export interface OutboxSummary {
 export function buildBotKeyboard(owner: { kind: string; role: string | null } | null): string[][] {
   const aboutRow = ['درباره مرکز', 'راهنما'];
   if (!owner) {
-    // عموم مردم: دقیقاً ۴ دکمهٔ دستور کاربر
+    // — عموم مردم: دقیقاً ۴ دکمهٔ دستور کاربر
     return [
       ['معرفی مرکز', 'خدمات مرکز'],
       ['راه‌های ارتباطی', 'احراز هویت']
@@ -222,7 +246,7 @@ export function buildBotKeyboard(owner: { kind: string; role: string | null } | 
         aboutRow
       ];
     }
-    // ناظر اداره: فقط KPI تجمیعی — رفع تکرار «راهنما»
+    // — ناظر اداره: فقط KPI تجمیعی —: رفع تکرار «راهنما»
     if (owner.role === 'supervisor') {
       return [['گزارش KPI'], aboutRow];
     }
@@ -236,7 +260,7 @@ export function buildBotKeyboard(owner: { kind: string; role: string | null } | 
       aboutRow
     ];
   }
-  // والد (student) — نوبت‌های دانش‌آموز من + تمرین‌های انجام‌نشده — چک‌لیست‌های من
+  // والد (student) —: نوبت‌های دانش‌آموز من + تمرین‌های انجام‌نشده —: چک‌لیست‌های من
   return [
     ['نوبت‌های دانش‌آموز من', 'تمرین‌های انجام‌نشده'],
     ['چک‌لیست‌های من', 'حضور فرزند'],
@@ -270,6 +294,10 @@ export interface NotifyAppService {
   listClassLinks(classId: string | undefined, limit?: number): Promise<ClassBotLinkRecord[]>;
   /** — لغو کد اتصال معلم (idempotent؛ در اتصال هم تأثیر فوری دارد) */
   revokeClassLink(id: string, actor: AuthContext): Promise<ClassBotLinkRecord>;
+  /** — نام کاربری بات برای لینک اتصال خودکار (تنظیمات → Bale getMe) */
+  resolveBotUsername(): Promise<{ username: string | null; source: 'stored' | 'detected' | 'none' }>;
+  /** — پردازش کد اتصال (/link CODE یا پیلود /start CODE) — چندبارمصرف */
+  processLinkCode(chatId: string, code: string): Promise<{ handled: boolean; reply: string | null; buttons?: InlineButton[][] | null; keyboard?: string[][] | null }>;
   /** — ارسال گزارش درباره دانش‌آموز به معلم مدرسه‌اش (چت متصل کلاس) */
   sendReportToStudentTeacher(studentId: string, text: string, actor: AuthContext): Promise<{ enqueued: number; className: string | null }>;
   /** هندلر webhook بله — خروجی: متن پاسخ برای ارسال به همان chat (+ دکمه‌های inline و کیبورد ثابت اختیاری) */
@@ -362,6 +390,8 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
   const { db, audit, logger, notify, appointments, students, followups } = deps;
   const log = logger.child('notifications');
   const now = deps.now ?? (() => new Date());
+  // — دریافت یوزرنیم بات (تزریقی برای تست؛ پیش‌فرض Bale getMe واقعی)
+  const resolveUsernameFromBale = deps.botUsernameFetcher ?? fetchBaleBotUsername;
 
   // ─── جریان «بانک تمرین» بات (در نبود سرویس، پاسخ «غیرفعال») ───
   const exbBot: ExerciseBankBot | null = deps.exerciseBank
@@ -441,6 +471,24 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
     const map = new Map<string, string>();
     for (const r of rows) map.set(r.id, r.full_name);
     return map;
+  }
+
+  // ─── لینک اتصال آمادهٔ ارسال (ble.ir/<bot>?start=CODE) ───
+
+  /** پیش‌فرض یوزرنیم بات از env — اگر در تنظیمات ثبت نشده باشد */
+  let botUsernameCache: string | null = null;
+  async function botDeepLinkCache(): Promise<string | null> {
+    if (botUsernameCache === null) {
+      const stored = await deps.settings.getBotUsername().catch(() => '');
+      botUsernameCache = stored || '';
+    }
+    return botUsernameCache ? `https://ble.ir/${botUsernameCache}` : null;
+  }
+
+  /** لینک کامل اتصال برای یک کد — بدون یوزرنیم ثبت‌شده = null (فقط کد نمایش داده می‌شود) */
+  async function botDeepLink(code: string): Promise<string | null> {
+    const base = await botDeepLinkCache();
+    return base ? `${base}?start=${code}` : null;
   }
 
   return {
@@ -642,17 +690,24 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
 
       const row = await db.queryOne<BotLinkRow>(...spreadStmt(selectBotLinkByCode(code)));
       if (!row) throw new Error('LINK_CREATE_FAILED');
-      return rowToBotLink(row);
+      const rec = rowToBotLink(row);
+      rec.deepLink = await botDeepLink(code);
+      return rec;
     },
 
     async listLinks(studentId: string | undefined, limit = 50): Promise<BotLinkRecord[]> {
       const rows = await db.query<BotLinkRow>(
         ...spreadStmt(selectBotLinks({ studentId, limit: Math.min(limit, 200) }))
       );
-      return rows.map(rowToBotLink);
+      const deep = await botDeepLinkCache();
+      return rows.map((r) => {
+        const rec = rowToBotLink(r);
+        rec.deepLink = deep ? `${deep}?start=${r.code}` : null;
+        return rec;
+      });
     },
 
-    // ─── کدهای اتصال بات کارکنان ───
+    // ───: کدهای اتصال بات کارکنان ───
 
     async createStaffLink(staffId: string, actor: AuthContext): Promise<StaffBotLinkRecord> {
       const member = await db.queryOne<{ id: string }>(`SELECT id FROM staff WHERE id = ?`, [staffId]);
@@ -673,17 +728,24 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
 
       const row = await db.queryOne<StaffBotLinkRow>(...spreadStmt(selectStaffLinkByCode(code)));
       if (!row) throw new Error('STAFF_LINK_CREATE_FAILED');
-      return rowToStaffBotLink(row);
+      const rec = rowToStaffBotLink(row);
+      rec.deepLink = await botDeepLink(code);
+      return rec;
     },
 
     async listStaffLinks(staffId: string | undefined, limit = 50): Promise<StaffBotLinkRecord[]> {
       const rows = await db.query<StaffBotLinkRow>(
         ...spreadStmt(selectStaffLinks({ staffId, limit: Math.min(limit, 200) }))
       );
-      return rows.map(rowToStaffBotLink);
+      const deep = await botDeepLinkCache();
+      return rows.map((r) => {
+        const rec = rowToStaffBotLink(r);
+        rec.deepLink = deep ? `${deep}?start=${r.code}` : null;
+        return rec;
+      });
     },
 
-    // ─── کدهای اتصال بات معلم مدرسه (به کلاس) ───
+    // ───: کدهای اتصال بات معلم مدرسه (به کلاس) ───
 
     async createClassLink(classId: string, actor: AuthContext): Promise<ClassBotLinkRecord> {
       const cls = await db.queryOne<{ id: string }>(`SELECT id FROM classes WHERE id = ? AND active = 1`, [classId]);
@@ -704,17 +766,24 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
 
       const row = await db.queryOne<ClassBotLinkRow>(...spreadStmt(selectClassLinkByCode(code)));
       if (!row) throw new Error('CLASS_LINK_CREATE_FAILED');
-      return rowToClassBotLink(row);
+      const rec = rowToClassBotLink(row);
+      rec.deepLink = await botDeepLink(code);
+      return rec;
     },
 
     async listClassLinks(classId: string | undefined, limit = 50): Promise<ClassBotLinkRecord[]> {
       const rows = await db.query<ClassBotLinkRow>(
         ...spreadStmt(selectClassLinks({ classId, limit: Math.min(limit, 200) }))
       );
-      return rows.map(rowToClassBotLink);
+      const deep = await botDeepLinkCache();
+      return rows.map((r) => {
+        const rec = rowToClassBotLink(r);
+        rec.deepLink = deep ? `${deep}?start=${r.code}` : null;
+        return rec;
+      });
     },
 
-    // ─── مدیریت لینک معلم‌ها — مشاهده/لغو کد بدون تولید کد جدید ───
+    // ───: مدیریت لینک معلم‌ها — مشاهده/لغو کد بدون تولید کد جدید ───
 
     async revokeClassLink(id: string, actor: AuthContext): Promise<ClassBotLinkRecord> {
       const row = await db.queryOne<ClassBotLinkRow>(`SELECT * FROM class_bot_links WHERE id = ?`, [id]);
@@ -782,7 +851,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
 
     async handleBotUpdate(update: unknown): Promise<{ handled: boolean; reply: string | null; buttons?: InlineButton[][] | null; keyboard?: string[][] | null }> {
       const cmd = parseBotUpdate(update);
-      // متن خام پیام (برای جریان فرم — چون parseBotUpdate متن آزاد فارسی را null می‌دهد)
+      // — متن خام پیام (برای جریان فرم — چون parseBotUpdate متن آزاد فارسی را null می‌دهد)
       const rawText = extractMessageText(update);
       if (!cmd) {
         // متن آزاد بدون دستور — فرم ثبت متقاضی یا فرم پیام خانواده یا فرم رویداد
@@ -793,13 +862,13 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
             const out = await wlIntakeBot.feedInput(chatId0, rawText);
             if (out) return { handled: true, reply: out.text, buttons: out.buttons };
           }
-          // فرم پیام به خانواده: متن آزاد پیام
+          // — فرم پیام به خانواده: متن آزاد پیام
           const msgSt = await readStuMsgState(db, chatId0);
           if (msgSt) {
             const out = await stuBot.msgFeed(chatId0, rawText);
             if (out) return { handled: true, reply: out.text, buttons: out.buttons };
           }
-          // ویزارد رویداد: متن/عدد فیلد جاری
+          // — ویزارد رویداد: متن/عدد فیلد جاری
           const tlSt = await tlBot.readTlFormState(chatId0);
           if (tlSt) {
             const out = await tlBot.feedInput(chatId0, rawText);
@@ -811,9 +880,9 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
 
       // ─── جریان ثبت متقاضی: intercept قبل از switch ───
       // تأیید/انصراف با دکمه یا /cancel — همیشه خودش هندل می‌شود
-      // اگر فرم رویداد/چک‌لیست فعال است، /cancel آن را لغو می‌کند (اولویت با فرم فعال)
+      // — اگر فرم رویداد/چک‌لیست فعال است، /cancel آن را لغو می‌کند (اولویت با فرم فعال)
       if (cmd.kind === 'wl_intake_cancel') {
-        // اولویت لغو: فرم پیام خانواده → ویزارد رویداد → چک‌لیست → ثبت متقاضی
+        // — اولویت لغو: فرم پیام خانواده → ویزارد رویداد → چک‌لیست → ثبت متقاضی
         const msgActive = await readStuMsgState(db, cmd.chatId);
         if (msgActive) {
           const out = await stuBot.msgAbort(cmd.chatId);
@@ -849,7 +918,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
       const flowActive = await readWlIntakeState(db, cmd.chatId);
       if (flowActive) {
         if (cmd.kind === 'identify' || cmd.kind === 'unknown') {
-          // متن خام کامل (تاریخ ۱۳۹۷/۱۰/۲۵ توسط identify بدون جداکننده نمی‌آید)
+          // — متن خام کامل (تاریخ ۱۳۹۷/۱۰/۲۵ توسط identify بدون جداکننده نمی‌آید)
           const input = rawText ?? (cmd.kind === 'unknown' ? cmd.text : cmd.value);
           const out = await wlIntakeBot.feedInput(cmd.chatId, input);
           if (out) return { handled: true, reply: out.text, buttons: out.buttons };
@@ -892,7 +961,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
       const clfFormActive = await tlBot.readClfFormState(cmd.chatId);
       if (clfFormActive) {
         if (cmd.kind === 'identify' || cmd.kind === 'unknown') {
-          // عدد فارسی/لاتین به‌عنوان پاسخ آیتم — متن آزاد به‌جای سکوت راهنما می‌دهد
+          // عدد فارسی/لاتین به‌عنوان پاسخ آیتم —: متن آزاد به‌جای سکوت راهنما می‌دهد
           const input = (rawText ?? (cmd.kind === 'unknown' ? cmd.text : cmd.value) ?? '').trim();
           const digits = input.replace(/[^۰-۹0-9]/g, '');
           const norm = digits.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
@@ -913,7 +982,11 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
 
       switch (cmd.kind) {
         case 'start': {
-          // کیبورد ثابت پس از /start — اگر chat قبلاً متصل است، کیبورد نقشش را می‌گیرد
+          // — پیلود دیپ‌لینک (ble.ir/<bot>?start=CODE) → اتصال با کد
+          if (cmd.payload) {
+            return await this.processLinkCode(cmd.chatId, cmd.payload);
+          }
+          // — کیبورد ثابت پس از /start — اگر chat قبلاً متصل است، کیبورد نقشش را می‌گیرد
           const owner0 = await this.resolveOwner(cmd.chatId);
           return { handled: true, reply: renderTemplate('bot_welcome', { clinicName: await deps.settings.getClinicName() }), keyboard: buildBotKeyboard(owner0) };
         }
@@ -923,7 +996,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           return { handled: true, reply: await this.handleHelpCommand(cmd.chatId), keyboard: buildBotKeyboard(ownerHelp) };
         }
 
-        // «درباره مرکز» (/about یا دکمهٔ متنی)
+        // — «درباره مرکز» (/about یا دکمهٔ متنی)
         case 'about': {
           const ownerAbout = await this.resolveOwner(cmd.chatId);
           return { handled: true, reply: renderTemplate('bot_about', { clinicName: await deps.settings.getClinicName() }), keyboard: buildBotKeyboard(ownerAbout) };
@@ -933,7 +1006,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           return { handled: true, reply: renderTemplate('bot_myid', { chatId: cmd.chatId }) };
 
         case 'unknown': {
-          // دستور ناشناخته هم راهنمای نقش‌محور می‌گیرد (نه منوی عمومی)
+          // — دستور ناشناخته هم راهنمای نقش‌محور می‌گیرد (نه منوی عمومی)
           const ownerUnknown = await this.resolveOwner(cmd.chatId);
           return { handled: true, reply: await this.handleHelpCommand(cmd.chatId), keyboard: buildBotKeyboard(ownerUnknown) };
         }
@@ -941,21 +1014,21 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
         case 'schedule':
           return { handled: true, reply: await this.handleScheduleCommand(cmd.chatId, cmd.scope) };
 
-        // ─── «نوبت‌های من» ───
+        // ───: «نوبت‌های من» ───
         case 'my_next': {
           const out = await this.handleMyNextCommand(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
 
-        // ─── ورود خودکار با کد ملی/شماره تلفن ───
+        // ───: ورود خودکار با کد ملی/شماره تلفن ───
         case 'identify': {
           const reply = await this.identifyAndReply(cmd.chatId, cmd.format, cmd.value);
-          // پس از اتصال، کیبورد ثابت نقش جدید نصب می‌شود
+          // — پس از اتصال، کیبورد ثابت نقش جدید نصب می‌شود
           const ownerIdentify = await this.resolveOwner(cmd.chatId);
           return { handled: true, reply, keyboard: buildBotKeyboard(ownerIdentify) };
         }
 
-        // ─── لغو دومرحله‌ای نوبت همکار ───
+        // ───: لغو دومرحله‌ای نوبت همکار ───
         case 'cancel_ask': {
           const out = await this.handleBotCancel(cmd.chatId, cmd.appointmentId, false);
           return { handled: true, reply: out.text, buttons: out.buttons };
@@ -965,7 +1038,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
 
-        // ─── امکانات سایت در بات ───
+        // ───: امکانات سایت در بات ───
         case 'followups_me': {
           const out = await this.handleFollowupsCommand(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
@@ -983,7 +1056,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
 
-        // ─── بات نقش‌آگاه ───
+        // ───: بات نقش‌آگاه ───
         case 'search': {
           const out = await this.handleSearchCommand(cmd.chatId, cmd.query);
           return { handled: true, reply: out.text, buttons: out.buttons };
@@ -997,13 +1070,13 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
 
-        // ─── هماهنگی با سایت — شاخص سنجش ───
+        // ───: هماهنگی با سایت — شاخص سنجش ───
         case 'screening_goal': {
           const out = await this.handleScreeningGoalCommand(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
 
-        // ─── بات نقش‌محور CRM ───
+        // ───: بات نقش‌محور CRM ───
         case 'contact': {
           const out = await this.handleContactCommand();
           return { handled: true, reply: out.text, buttons: out.buttons, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
@@ -1029,7 +1102,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
 
-        // ─── بات نقش‌محور نسخهٔ ۲ (کیبورد نقش در پاسخ دوباره نصب می‌شود) ───
+        // ───: بات نقش‌محور نسخهٔ ۲ (کیبورد نقش در پاسخ دوباره نصب می‌شود) ───
         case 'services': {
           const out = await this.handleServicesCommand();
           return { handled: true, reply: out.text, buttons: out.buttons, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
@@ -1108,7 +1181,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
 
-        // ─── ویزارد رویداد/گزارش (همکاران) ───
+        // ───: ویزارد رویداد/گزارش (همکاران) ───
         case 'stu_tl': {
           const out = await tlBot.startCategory(cmd.chatId, cmd.idx);
           return { handled: true, reply: out.text, buttons: out.buttons };
@@ -1142,7 +1215,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
 
-        // ─── چک‌لیست خانواده ───
+        // ───: چک‌لیست خانواده ───
         case 'clf_list': {
           const out = await tlBot.listMine(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
@@ -1164,7 +1237,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
 
-        // ─── بانک تمرین — منوی تو‌در‌تو همکاران و معلمان ───
+        // ───: بانک تمرین — منوی تو‌در‌تو همکاران و معلمان ───
         case 'exb_root':
         case 'exb_cats':
         case 'exb_list':
@@ -1172,7 +1245,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
         case 'exb_send':
         case 'exb_pick':
         case 'exb_yes':
-        // ─── بسته‌های تمرینی ───
+        // ───: بسته‌های تمرینی ───
         case 'exb_pkg':
         case 'exb_pitem':
         case 'exb_psend':
@@ -1187,7 +1260,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
 
-        // ─── حلقهٔ بازگشت فایل — رسانهٔ خانواده + انتخاب تکلیف ───
+        // ───: حلقهٔ بازگشت فایل — رسانهٔ خانواده + انتخاب تکلیف ───
         case 'media_received': {
           if (!subBot) {
             return {
@@ -1209,126 +1282,171 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
 
-        case 'link': {
-          //: اول کد کارمند، بعد کد کلاس (معلم مدرسه)، بعد کد دانش‌آموز
-          const staffRow = await db.queryOne<StaffBotLinkRow>(...spreadStmt(selectStaffLinkByCode(cmd.code)));
-          const staffLink = staffRow ? rowToStaffBotLink(staffRow) : null;
+        case 'link':
+          // — دستور /link CODE و پیلود /start هر دو به processLinkCode می‌روند
+          return await this.processLinkCode(cmd.chatId, cmd.code);
+      }
+    },
 
-          if (staffLink) {
-            const result = await db.execute(
-              ...spreadStmt(linkStaffLink(staffLink.id, cmd.chatId, now().toISOString()))
-            );
-            const changed = (result.meta as { changes?: number } | undefined)?.changes ?? 0;
-            if (changed > 0) {
-              await audit.log({
-                actorId: 'bale-bot',
-                action: 'notification.bot.staff_link',
-                resourceType: 'staff_bot_link',
-                resourceId: staffLink.id,
-                changes: { chatId: { from: null, to: cmd.chatId }, staffId: { from: null, to: staffLink.staffId } }
-              });
-              const member = await listStaff(db, true).then((rows) => rows.find((r) => r.id === staffLink.staffId));
-              const staffOwner = await this.resolveOwner(cmd.chatId);
-              return {
-                handled: true,
-                reply: renderTemplate('bot_link_success', {
-                  studentName: member?.full_name ?? 'کارمند',
-                  extra: 'برنامه کلاس‌های خود را با /today و /week بگیرید.'
-                }),
-                keyboard: buildBotKeyboard(staffOwner)
-              };
-            }
-            log.warn('bot.staff_link.already', { code: cmd.code });
-            return { handled: true, reply: renderTemplate('bot_link_invalid') };
-          }
+    /**
+     * — پردازش کد اتصال (از /link CODE یا پیلود دیپ‌لینک /start CODE)
+     * چندبارمصرف: کد فعال همیشه کار می‌کند — همین چت = idempotent، چت تازه = انتقال اتصال؛
+     * فقط کد لغوشدهٔ معلم (revoked) مرده می‌ماند.
+     */
+    async processLinkCode(chatId: string, code: string): Promise<{ handled: boolean; reply: string | null; buttons?: InlineButton[][] | null; keyboard?: string[][] | null }> {
+      const cmd = { chatId, code };
+      {
+        //: اول کد کارمند، بعد کد کلاس (معلم مدرسه)، بعد کد دانش‌آموز
+        const staffRow = await db.queryOne<StaffBotLinkRow>(...spreadStmt(selectStaffLinkByCode(cmd.code)));
+        const staffLink = staffRow ? rowToStaffBotLink(staffRow) : null;
 
-          // کد اتصال معلم مدرسه (به کلاس)
-          const classRow = await db.queryOne<ClassBotLinkRow>(...spreadStmt(selectClassLinkByCode(cmd.code)));
-          const classLink = classRow ? rowToClassBotLink(classRow) : null;
-
-          if (classLink) {
-            const result = await db.execute(
-              ...spreadStmt(linkClassLink(classLink.id, cmd.chatId, now().toISOString()))
-            );
-            const changed = (result.meta as { changes?: number } | undefined)?.changes ?? 0;
-            if (changed > 0) {
-              await audit.log({
-                actorId: 'bale-bot',
-                action: 'notification.bot.class_link',
-                resourceType: 'class_bot_link',
-                resourceId: classLink.id,
-                changes: { chatId: { from: null, to: cmd.chatId }, classId: { from: null, to: classLink.classId } }
-              });
-              const cls = await db.queryOne<{ name: string; school_name: string }>(
-                `SELECT c.name, sc.name AS school_name FROM classes c JOIN schools sc ON sc.id = c.school_id WHERE c.id = ?`,
-                [classLink.classId]
-              );
-              return {
-                handled: true,
-                reply: renderTemplate('bot_link_success', {
-                  studentName: cls ? `کلاس ${cls.name} — ${cls.school_name}` : 'کلاس مدرسه',
-                  extra: 'اعلان مراجعه دانش‌آموزان کلاس شما ارسال می‌شود. برنامه کامل: /today و /week'
-                }),
-                keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId))
-              };
-            }
-            log.warn('bot.class_link.already', { code: cmd.code });
-            return { handled: true, reply: renderTemplate('bot_link_invalid') };
-          }
-
-          const row = await db.queryOne<BotLinkRow>(...spreadStmt(selectBotLinkByCode(cmd.code)));
-          const link = row ? rowToBotLink(row) : null;
-
-          if (!link) {
-            log.warn('bot.link.invalid', { code: cmd.code });
-            return { handled: true, reply: renderTemplate('bot_link_invalid') };
-          }
-
-          // UPDATE اتمیک با شرط status='pending' — مسابقه دو chat با یک کد را می‌بندد
+        if (staffLink) {
+          // — چندبارمصرف: اتصال دوبارهٔ کد فعال (همین چت = idempotent، چت تازه = انتقال)
           const result = await db.execute(
-            ...spreadStmt(linkBotLink(link.id, cmd.chatId, now().toISOString()))
+            ...spreadStmt(linkStaffLink(staffLink.id, cmd.chatId, now().toISOString()))
           );
           const changed = (result.meta as { changes?: number } | undefined)?.changes ?? 0;
-          if (changed === 0) {
-            log.warn('bot.link.already', { code: cmd.code });
-            return { handled: true, reply: renderTemplate('bot_link_invalid') };
+          if (changed > 0) {
+            await audit.log({
+              actorId: 'bale-bot',
+              action: 'notification.bot.staff_link',
+              resourceType: 'staff_bot_link',
+              resourceId: staffLink.id,
+              changes: { chatId: { from: staffLink.chatId, to: cmd.chatId }, staffId: { from: null, to: staffLink.staffId } }
+            });
+            const member = await listStaff(db, true).then((rows) => rows.find((r) => r.id === staffLink.staffId));
+            const staffOwner = await this.resolveOwner(cmd.chatId);
+            return {
+              handled: true,
+              reply: renderTemplate('bot_link_success', {
+                studentName: member?.full_name ?? 'کارمند',
+                extra: 'برنامه کلاس‌های خود را با /today و /week بگیرید.'
+              }),
+              keyboard: buildBotKeyboard(staffOwner)
+            };
           }
-
-          // پس از لینک موفق: chat_id در prefs ثبت می‌شود (idempotent؛ ساعت پیش‌فرض از تنظیمات)
-          const flags = await deps.settings.getNotifyFlags();
-          await db.execute(
-            ...spreadStmt(
-              upsertPrefs({
-                studentId: link.studentId,
-                channel: 'bale',
-                chatId: cmd.chatId,
-                remindersEnabled: true,
-                reminderHoursBefore: flags.defaultReminderHours,
-                nowIso: now().toISOString()
-              })
-            )
-          );
-
-          await audit.log({
-            actorId: 'bale-bot',
-            action: 'notification.bot.link',
-            resourceType: 'bot_link',
-            resourceId: link.id,
-            changes: { chatId: { from: null, to: cmd.chatId }, studentId: { from: null, to: link.studentId } }
-          });
-
-          const student = await students.getStudentById(link.studentId);
-          const studentName = student ? `${student.firstName} ${student.lastName}` : '';
-          return {
-            handled: true,
-            reply: renderTemplate('bot_link_success', {
-              studentName,
-              extra: 'برنامه کلاس‌های خود را با /today و /week بگیرید.'
-            }),
-            keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId))
-          };
+          if (staffLink.chatId === cmd.chatId) {
+            return { handled: true, reply: renderTemplate('bot_link_already'), keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
+          }
+          log.warn('bot.staff_link.revoked', { code: cmd.code });
+          return { handled: true, reply: renderTemplate('bot_link_invalid') };
         }
+
+        // — کد اتصال معلم مدرسه (به کلاس)
+        const classRow = await db.queryOne<ClassBotLinkRow>(...spreadStmt(selectClassLinkByCode(cmd.code)));
+        const classLink = classRow ? rowToClassBotLink(classRow) : null;
+
+        if (classLink) {
+          // — چندبارمصرف: اتصال دوبارهٔ کد فعال کلاس؛ کد لغوشده (changed=0) رد می‌شود
+          const result = await db.execute(
+            ...spreadStmt(linkClassLink(classLink.id, cmd.chatId, now().toISOString()))
+          );
+          const changed = (result.meta as { changes?: number } | undefined)?.changes ?? 0;
+          if (changed > 0) {
+            await audit.log({
+              actorId: 'bale-bot',
+              action: 'notification.bot.class_link',
+              resourceType: 'class_bot_link',
+              resourceId: classLink.id,
+              changes: { chatId: { from: classLink.chatId, to: cmd.chatId }, classId: { from: null, to: classLink.classId } }
+            });
+            const cls = await db.queryOne<{ name: string; school_name: string }>(
+              `SELECT c.name, sc.name AS school_name FROM classes c JOIN schools sc ON sc.id = c.school_id WHERE c.id = ?`,
+              [classLink.classId]
+            );
+            return {
+              handled: true,
+              reply: renderTemplate('bot_link_success', {
+                studentName: cls ? `کلاس ${cls.name} — ${cls.school_name}` : 'کلاس مدرسه',
+                extra: 'اعلان مراجعه دانش‌آموزان کلاس شما ارسال می‌شود. برنامه کامل: /today و /week'
+              }),
+              keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId))
+            };
+          }
+          // — کد لغوشده همیشه «معتبر نیست» (حتی همان چت قبلی)
+          log.warn('bot.class_link.revoked', { code: cmd.code });
+          return { handled: true, reply: renderTemplate('bot_link_invalid') };
+        }
+
+        const row = await db.queryOne<BotLinkRow>(...spreadStmt(selectBotLinkByCode(cmd.code)));
+        const link = row ? rowToBotLink(row) : null;
+
+        if (!link) {
+          log.warn('bot.link.invalid', { code: cmd.code });
+          return { handled: true, reply: renderTemplate('bot_link_invalid') };
+        }
+
+        // — چندبارمصرف: اتصال دوبارهٔ کد خانواده — چت تازه جایگزین چت قبلی می‌شود
+        // (مثلاً شماره عوض شد یا بات را بلاک/آنبلاک کرده)؛ یادآورها به چت تازه می‌روند.
+        const result = await db.execute(
+          ...spreadStmt(linkBotLink(link.id, cmd.chatId, now().toISOString()))
+        );
+        const changed = (result.meta as { changes?: number } | undefined)?.changes ?? 0;
+        if (changed === 0) {
+          if (link.chatId === cmd.chatId) {
+            return { handled: true, reply: renderTemplate('bot_link_already'), keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
+          }
+          log.warn('bot.link.failed', { code: cmd.code });
+          return { handled: true, reply: renderTemplate('bot_link_invalid') };
+        }
+
+        // پس از لینک موفق: chat_id در prefs ثبت می‌شود (idempotent؛ ساعت پیش‌فرض از تنظیمات)
+        const flags = await deps.settings.getNotifyFlags();
+        await db.execute(
+          ...spreadStmt(
+            upsertPrefs({
+              studentId: link.studentId,
+              channel: 'bale',
+              chatId: cmd.chatId,
+              remindersEnabled: true,
+              reminderHoursBefore: flags.defaultReminderHours,
+              nowIso: now().toISOString()
+            })
+          )
+        );
+
+        await audit.log({
+          actorId: 'bale-bot',
+          action: 'notification.bot.link',
+          resourceType: 'bot_link',
+          resourceId: link.id,
+          changes: { chatId: { from: link.chatId, to: cmd.chatId }, studentId: { from: null, to: link.studentId } }
+        });
+
+        const student = await students.getStudentById(link.studentId);
+        const studentName = student ? `${student.firstName} ${student.lastName}` : '';
+        const rebindNote = link.chatId && link.chatId !== cmd.chatId
+          ? 'اتصال قبلی این پرونده به این گفتگو منتقل شد.'
+          : 'برنامه کلاس‌های خود را با /today و /week بگیرید.';
+        return {
+          handled: true,
+          reply: renderTemplate('bot_link_success', {
+            studentName,
+            extra: rebindNote
+          }),
+          keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId))
+        };
       }
+    },
+
+    /** — نام کاربری بات برای ساخت لینک اتصال خودکار (ble.ir/<bot>?start=<code>)
+     * ۱) مقدار ذخیره‌شدهٔ تنظیمات (کلید bot_username) ۲) تشخیص خودکار با Bale getMe + کش در تنظیمات */
+    async resolveBotUsername(): Promise<{ username: string | null; source: 'stored' | 'detected' | 'none' }> {
+      const stored = await deps.settings.getBotUsername();
+      if (stored) return { username: stored, source: 'stored' };
+      if (!deps.baleToken) return { username: null, source: 'none' };
+      const detected = await resolveUsernameFromBale(deps.baleToken);
+      if (!detected) return { username: null, source: 'none' };
+      await deps.settings.setBotUsername(detected, BOT_ACTOR);
+      await audit.log({
+        actorId: 'bale-bot',
+        action: 'settings.bot_username.detect',
+        resourceType: 'settings',
+        resourceId: 'bot_username',
+        changes: { bot_username: { from: null, to: detected } }
+      });
+      log.info('bot_username.detected', { username: detected });
+      return { username: detected, source: 'detected' };
     },
 
     /** — دستورهای /today و /week: برنامه کلاس‌های chat متصل (دانش‌آموز یا کارمند) */
@@ -1359,7 +1477,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
 
       const { start, end } = tehranRange(fromYmd, toYmd);
 
-      // معلم مدرسه: برنامه نوبت‌های دانش‌آموزان کلاس‌اش
+      // — معلم مدرسه: برنامه نوبت‌های دانش‌آموزان کلاس‌اش
       if (owner.kind === 'class') {
         const studentIds = await students.listStudentIdsByClass(owner.ref_id);
         const merged: Appointment[] = [];
@@ -1844,7 +1962,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           `SELECT COUNT(*) AS n FROM followups WHERE status IN ('open', 'in_progress') AND due_at IS NOT NULL AND due_at >= ? AND due_at <= ?`,
           [nowIso, end]
         ),
-        // سنجه‌های چرخهٔ پرونده
+        // — سنجه‌های چرخهٔ پرونده
         db.queryOne<{ n: number }>(
           `SELECT COUNT(*) AS n
              FROM case_events e JOIN case_event_types t ON t.id = e.event_type_id
@@ -1941,7 +2059,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
       if (owner.kind === 'staff') {
         if (owner.role === 'manager' || owner.role === 'secretary') return renderTemplate('bot_help_office');
         if (owner.role === 'therapist') return renderTemplate('bot_help_therapist');
-        // ناظر اداره: راهنمای اختصاصی
+        // — ناظر اداره: راهنمای اختصاصی
         if (owner.role === 'supervisor') return renderTemplate('bot_help_supervisor');
         return renderTemplate('bot_help'); // نقش ناشناخته — راهنمای عمومی
       }
@@ -1958,7 +2076,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
       const owner = await this.resolveOwner(chatId);
       if (!owner) return { text: renderTemplate('bot_help_guest'), buttons: null };
       if (owner.kind !== 'staff') return { text: renderTemplate('bot_search_denied'), buttons: null };
-      // ناظر اداره از دادهٔ اسم‌دار محروم است (فقط KPI تجمیعی)
+      // — ناظر اداره از دادهٔ اسم‌دار محروم است (فقط KPI تجمیعی)
       if (owner.role !== 'manager' && owner.role !== 'secretary' && owner.role !== 'therapist') {
         return { text: renderTemplate('bot_search_denied'), buttons: null };
       }
@@ -2037,7 +2155,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
     async handleWaitlistCommand(chatId: string): Promise<BotReply> {
       const owner = await this.resolveOwner(chatId);
       if (!owner) return { text: renderTemplate('bot_help_guest'), buttons: null };
-      // درمانگر هم «لیست انتظار» را می‌بیند (فقط-خواندن؛ ثبت از سایت)
+      // — درمانگر هم «لیست انتظار» را می‌بیند (فقط-خواندن؛ ثبت از سایت)
       if (owner.kind !== 'staff' || (owner.role !== 'manager' && owner.role !== 'secretary' && owner.role !== 'therapist')) {
         return { text: renderTemplate('bot_waitlist_denied'), buttons: null };
       }
@@ -2545,7 +2663,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
         kpiSent: 0
       };
 
-      // گزارش KPI هفتگی ناظرهای اداره — فقط شنبه‌ها (مستقل از پرچم digest؛
+      // — گزارش KPI هفتگی ناظرهای اداره — فقط شنبه‌ها (مستقل از پرچم digest؛
       // idempotent با dedup «kpi-weekly:{ymd}:{chatId}» — اجرای مکرر پیام تکراری نمی‌سازد)
       if (iranianWeekdayOfYmd(todayYmd) === 0) {
         summary.kpiSent = await this.enqueueWeeklyKpi(nowDate).catch((err: unknown) => {
@@ -2750,7 +2868,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
       return enqueued;
     },
 
-    // ─── ناظر چرخه حیات نوبت — صف‌گذاری اعلان برای معلم و ولیّ هر دانش‌آموز ───
+    // ───: ناظر چرخه حیات نوبت — صف‌گذاری اعلان برای معلم و ولیّ هر دانش‌آموز ───
 
     async notifyAppointmentCreated(appointment: Appointment): Promise<void> {
       await this.notifyLifecycle('created', appointment);
@@ -2790,7 +2908,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
       const staffChannel: 'bale' | 'internal' = notify.getChannel('bale') ? 'bale' : 'internal';
       const staffChats = staffChatRows.map((r) => r.chat_id);
 
-      // کلاس‌های دانش‌آموزان نوبت + chatهای متصل معلم مدرسه
+      // — کلاس‌های دانش‌آموزان نوبت + chatهای متصل معلم مدرسه
       const classMap = await students.getClassesForStudents(studentIds);
       const classTargets = new Map<string, { channel: 'bale' | 'internal'; chatId: string; className: string }>();
       for (const [sid, info] of classMap) {
@@ -2823,7 +2941,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
         clinicName
       });
 
-      // «ساعت ارسال» فقط برای اعلان‌های ثبت نوبت جدید (بقیه فوری)
+      // — «ساعت ارسال» فقط برای اعلان‌های ثبت نوبت جدید (بقیه فوری)
       const batchHour = await deps.settings.getBatchHour();
       const nowIsoBatch = now().toISOString();
 
@@ -2889,7 +3007,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
       return Boolean(deps.webhookSecret);
     },
 
-    // ─── یادآوری هوشمند ───
+    // ───: یادآوری هوشمند ───
 
     async notifyAttendanceMarked(appointmentId, studentId, status) {
       // فقط غیبت به خانواده اعلان می‌شود (حاضر/لغو نیاز به اعلان ندارد)

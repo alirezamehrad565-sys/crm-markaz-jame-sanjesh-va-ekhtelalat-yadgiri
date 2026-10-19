@@ -143,6 +143,14 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         '/link CODE'
       ].join('\n');
 
+    case 'bot_link_already':
+      return [
+        'ℹ️ این کد قبلاً با همین گفتگو متصل شده است.',
+        '',
+        'همین حالا منوی پایین چت در دسترس شماست.',
+        'برای قطع اتصال: دکمهٔ «قطع اتصال» یا دستور /exit'
+      ].join('\n');
+
     case 'bot_myid':
       return [
         ' شناسه این گفتگو:',

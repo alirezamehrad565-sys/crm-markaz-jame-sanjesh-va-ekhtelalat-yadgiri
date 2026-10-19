@@ -61,7 +61,7 @@ export interface BaleUpdate {
 export type IdentityFormat = 'national_id' | 'phone' | 'invalid';
 
 export type BotCommand =
-  | { kind: 'start'; chatId: string; firstName?: string }
+  | { kind: 'start'; chatId: string; firstName?: string; payload?: string }
   | { kind: 'help'; chatId: string }
   | { kind: 'about'; chatId: string }
   | { kind: 'myid'; chatId: string }
@@ -224,21 +224,21 @@ export function isIdentityText(text: string): boolean {
 
 const MY_NEXT_LABELS = new Set(['نوبت‌های من', 'نوبتهای من', 'نوبت های من', 'نوبت‌های دانش‌آموز من', 'نوبت های دانش آموز من', 'نوبتهای دانش آموز من', 'نوبتهای دانشآموز من', 'نوبت های دانشآموز من']);
 const HELP_LABELS = new Set(['راهنما', 'کمک']);
-// «درباره مرکز» (درباره ما)
+// — «درباره مرکز» (درباره ما)
 const ABOUT_LABELS = new Set(['درباره مرکز', 'درباره مرکز', 'درباره ما', 'دربارهی مرکز', 'درباره ی مرکز', 'معرفی مرکز', 'معرفی مرکز', 'معرفی ما']);
-// دکمه‌های متنی دستورهای جدید (پس از نرمال ZWNJ)
+// — دکمه‌های متنی دستورهای جدید (پس از نرمال ZWNJ)
 const FOLLOWUPS_LABELS = new Set(['پیگیریهای من', 'پیگیری های من']);
 const ATTENDANCE_LABELS = new Set(['حضور فرزند', 'حضور']);
 const STATUS_LABELS = new Set(['وضعیت مرکز']);
-// بات نقش‌آگاه
+// — بات نقش‌آگاه
 const CENTER_SCHEDULE_LABELS = new Set(['برنامهٔ مرکز', 'برنامه مرکز']);
-// لیست انتظار
+// — لیست انتظار
 const WAITLIST_LABELS = new Set(['لیست انتظار']);
-// شاخص سنجش (هدفگذاری غربال) — هماهنگ با داشبورد سایت
+// — شاخص سنجش (هدفگذاری غربال) — هماهنگ با داشبورد سایت
 const SCREENING_GOAL_LABELS = new Set(['هدف سنجش', 'شاخص سنجش', 'اهداف سنجش']);
 /** — دکمهٔ «ثبت متقاضی» معلم مدرسه (+ /add) */
 const TEACHER_INTAKE_LABELS = new Set(['ثبت متقاضی', 'ثبت متقاضی جدید']);
-// بانک تمرین
+// — بانک تمرین
 const EXB_LABELS = new Set(['بانک تمرین', 'بانک تمرینها', 'بانک تمرین ها', 'بانکتمرین', 'بانکتمرینها']);
 // ─── برچسب‌های نقش‌محور CRM ───
 const CONTACT_LABELS = new Set(['شماره تماس', 'شمارهٔ تماس', 'تماس با ما', 'راه‌های ارتباطی', 'راه های ارتباطی', 'راههای ارتباطی', 'ارتباط با ما']);
@@ -371,7 +371,7 @@ export function parseAwarenessCallback(data: string, chatId: string): BotCommand
 export function parseStuCallback(data: string, chatId: string): BotCommand | null {
   const parts = data.split(':');
   if (parts[1] === 'list') {
-    // صفحه‌بندی فهرست دانش‌آموزان (stu:list یا stu:list:<page>)
+    // — صفحه‌بندی فهرست دانش‌آموزان (stu:list یا stu:list:<page>)
     const page = parts[2] === undefined ? 1 : toIndex(parts[2]);
     if (Number.isNaN(page) || page < 1) return null;
     return { kind: 'stu_list', chatId, page };
@@ -577,23 +577,23 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
     const cbChatId = u.callback_query.message?.chat?.id;
     if (cbChatId === undefined || cbChatId === null) return null;
     const data = typeof u.callback_query.data === 'string' ? u.callback_query.data.trim() : '';
-    // دستهٔ بانک تمرین قبل از پارس عمومی callback
+    // — دستهٔ بانک تمرین قبل از پارس عمومی callback
     if (data.startsWith('exb:')) {
       return parseExbCallback(data, String(cbChatId));
     }
-    // انتخاب تکلیف در حلقهٔ بازگشت
+    // — انتخاب تکلیف در حلقهٔ بازگشت
     if (data.startsWith('sub:')) {
       return parseSubCallback(data, String(cbChatId));
     }
-    // تأیید/انصراف فرم ثبت متقاضی معلم
+    // — تأیید/انصراف فرم ثبت متقاضی معلم
     if (data === 'wl:do') return { kind: 'wl_intake_confirm', chatId: String(cbChatId) };
     if (data === 'wl:no') return { kind: 'wl_intake_abort', chatId: String(cbChatId) };
-    // دکمهٔ «ارسال فوری صف» دفتر
+    // — دکمهٔ «ارسال فوری صف» دفتر
     if (data === 'outbox:flush') return { kind: 'outbox_flush', chatId: String(cbChatId) };
-    // منوی دانش‌آموز + آگاهی‌ها
+    // — منوی دانش‌آموز + آگاهی‌ها
     if (data.startsWith('stu:')) return parseStuCallback(data, String(cbChatId));
     if (data.startsWith('dis:')) return parseAwarenessCallback(data, String(cbChatId));
-    // ویزارد رویداد + چک‌لیست خانواده
+    // — ویزارد رویداد + چک‌لیست خانواده
     if (data.startsWith('tl:')) return parseTlCallback(data, String(cbChatId));
     if (data.startsWith('clf:')) return parseClfCallback(data, String(cbChatId));
     const parsed = parseCallbackData(data);
@@ -649,7 +649,7 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
   if (CLF_LIST_LABELS.has(menuText)) return { kind: 'clf_list', chatId: chatIdStr };
 
   if (!text.startsWith('/')) {
-    // ─── ورود خودکار — فقط اگر متن «فقط عدد» باشد (با جداکننده‌های رایج) ───
+    // ───: ورود خودکار — فقط اگر متن «فقط عدد» باشد (با جداکننده‌های رایج) ───
     if (!isIdentityText(text)) return null;
     const digits = stripToDigits(text);
     if (digits.length >= 4 && digits.length <= 15) {
@@ -664,8 +664,11 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
   const arg = spaceIndex === -1 ? '' : text.slice(spaceIndex + 1).trim();
 
   switch (rawCommand) {
-    case '/start':
-      return { kind: 'start', chatId: chatIdStr, firstName: msg.from?.first_name };
+    case '/start': {
+      // — پیلود دیپ‌لینک (ble.ir/<bot>?start=CODE) —: در سرویس به processLinkCode می‌رود
+      const startPayload = arg.replace(/\s+/g, '').toUpperCase().slice(0, 32);
+      return { kind: 'start', chatId: chatIdStr, firstName: msg.from?.first_name, payload: startPayload.length > 0 ? startPayload : undefined };
+    }
     case '/help':
       return { kind: 'help', chatId: chatIdStr };
     case '/about':
@@ -688,7 +691,7 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
       return { kind: 'center_schedule', chatId: chatIdStr };
     case '/waitlist':
       return { kind: 'waitlist_list', chatId: chatIdStr };
-    // شاخص سنجش (هماهنگ با داشبورد سایت)
+    // — شاخص سنجش (هماهنگ با داشبورد سایت)
     case '/goal':
     case '/sanj':
       return { kind: 'screening_goal', chatId: chatIdStr };
@@ -720,7 +723,7 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
     case '/checklist':
       return { kind: 'clf_list', chatId: chatIdStr };
     case '/search': {
-      // جستجوی دانش‌آموز؛ آرگومان الزامی — خالی → unknown (راهنمای نقش‌محور)
+      // — جستجوی دانش‌آموز؛ آرگومان الزامی — خالی → unknown (راهنمای نقش‌محور)
       if (arg.length === 0) return { kind: 'unknown', chatId: chatIdStr, text };
       return { kind: 'search', chatId: chatIdStr, query: arg };
     }
