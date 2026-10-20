@@ -500,15 +500,15 @@ describe('handleScoring (v2): explain فقط-مدیر + ضد-اسنپ‌شات +
     expect(data.period).toBe('all');
     expect(data.staff).toEqual({ staffId: 'th1', fullName: 'سارا درمانگر', role: 'therapist' });
 
-    // محتوا — تمرین: شمارش خام ۲، وزن‌دار ۱٫۵ (یکی تیمی)؛ آیتم‌ها با effectiveWeight
+    // محتوا — تمرین: شمارش خام ۲؛ weighted = امتیاز جمع وزن‌دار = (۱٫۵ شمارش وزن‌دار تیمی) × وزن ۴ = ۶
     const content = data.content as {
       exercises: { count: number; weighted: number; weight: number; items: { id: string; title: string; teamCreated: boolean; effectiveWeight: number }[] };
-      packages: { count: number; weight: number; items: unknown[] };
-      templates: { count: number; weight: number; items: unknown[] };
-      forms: { count: number; weight: number; items: unknown[] };
+      packages: { count: number; weighted: number; weight: number; items: unknown[] };
+      templates: { count: number; weighted: number; weight: number; items: unknown[] };
+      forms: { count: number; weighted: number; weight: number; items: unknown[] };
     };
     expect(content.exercises.count).toBe(2);
-    expect(content.exercises.weighted).toBe(1.5);
+    expect(content.exercises.weighted).toBe(6);
     expect(content.exercises.weight).toBe(4);
     expect(content.exercises.items.map((i) => i.teamCreated)).toEqual([false, true]);
     expect(content.exercises.items.map((i) => i.effectiveWeight)).toEqual([4, 2]);
