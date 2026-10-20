@@ -7,16 +7,15 @@
 import { describe, it, expect } from 'vitest';
 import {
   BATTERY,
-  BATTERY_KEYS,
   batteryDef,
-  batteryScoredFields,
-  probeStatus,
   WCPM_NORM_50TH
 } from '../instruments';
+import { runInference } from '../infer';
 import { CLINICAL_TARGETS, SUPPORT_TARGETS, ALL_TARGETS, targetOf, totalExerciseCount } from '../targets';
 import { DSM_RECORDS } from '../dsm-criteria';
 import { RULES, rulesOf, CONFIDENCE_THRESHOLDS, ODD_MIN_FULL_CRITERIA, BIF_IQ_RANGE } from '../rules';
 import { BATTERY_VERSION } from '../types';
+import type { EvidenceEvent } from '../types';
 import { CaseEventTypeInputSchema, validateTypeDefinition, resolveBandV2, FIELDS_MAX } from '@domain/case-events/pure';
 import type { CaseEventBand, CaseEventSubscale } from '@domain/case-events';
 
@@ -29,6 +28,7 @@ const EXISTING_TOOLS = new Set([
 
 describe('باتری battery-v1 — اعتبار ساختاری', () => {
   it('۱۵ ابزار ثابت دارد و کلیدها یکتا هستند', () => {
+    const BATTERY_KEYS = BATTERY.map((d) => d.key);
     expect(BATTERY.length).toBe(15);
     expect(new Set(BATTERY_KEYS).size).toBe(15);
     expect(BATTERY_VERSION).toBe('battery-v1');
@@ -174,6 +174,7 @@ describe('قواعد شواهد — گره ابزار/آیتم/ملاک', () => 
   });
 
   it('کلیدهای ابزار قواعد در باتری یا ابزارهای موجود DB هستند', () => {
+    const BATTERY_KEYS = BATTERY.map((d) => d.key);
     for (const r of RULES) {
       for (const e of r.evidence) {
         expect(BATTERY_KEYS.includes(e.toolKey) || EXISTING_TOOLS.has(e.toolKey), `${r.targetKey}→${e.toolKey}`).toBe(true);
@@ -191,7 +192,10 @@ describe('قواعد شواهد — گره ابزار/آیتم/ملاک', () => 
   it('هر آیتم criteriaMap واقعاً در ابزار مربوط وجود دارد', () => {
     for (const r of RULES) {
       for (const c of r.criteriaMap) {
-        const fields = c.toolKey.startsWith('ce-') ? batteryScoredFields(c.toolKey) : [];
+        // معادل batteryScoredFields حذف‌شده: فقط آیتم‌های نمره‌دار (scale/single)
+        const fields = c.toolKey.startsWith('ce-')
+          ? (batteryDef(c.toolKey)?.fields ?? []).filter((f) => f.type === 'scale' || f.type === 'single')
+          : [];
         for (const ref of c.itemRefs) {
           expect(fields.some((f) => f.key === ref), `${r.targetKey}: ${c.criterionId} ← ${ref}`).toBe(true);
         }
@@ -259,11 +263,34 @@ describe('پروب‌ها — هنجار و وضعیت', () => {
     }
   });
 
-  it('وضعیت پروب: زیر ۸۰٪ هنجار = پایین، ۸۰–۱۲۰٪ = در انتظار، بالای ۱۲۰٪ = بالا', () => {
-    expect(probeStatus(40, 'دوم', WCPM_NORM_50TH)).toBe('below');   // ۴۰ < ۷۱
-    expect(probeStatus(90, 'دوم', WCPM_NORM_50TH)).toBe('ok');      // ۸۰٪ ۸۹ ≈ ۷۱..۱۰۷
-    expect(probeStatus(130, 'دوم', WCPM_NORM_50TH)).toBe('above');  // > ۱۰۷
-    expect(probeStatus(null, 'دوم', WCPM_NORM_50TH)).toBe('unknown');
+  it('قرارداد پروب در موتور شناسایی: زیر ۸۰٪ هنجار = شاهد خطر؛ در انتظار/بدون پایه = بدون شاهد', () => {
+    // مصرف‌کنندهٔ واقعی هنجارها ruleColor داخل infer.ts است — قرارداد از همان‌جا سنجیده می‌شود
+    const probe = (wcpm: number | null, grade: string | null): EvidenceEvent => ({
+      eventId: 'p1',
+      toolKey: 'ce-probe-read-v1',
+      typeTitle: 'پروب عملکردی خواندن (ثبت درمانگر)',
+      status: 'completed',
+      occurredAt: '2026-10-03T08:00:00.000Z',
+      payload: {
+        ...(wcpm !== null ? { wcpm: { value: String(wcpm), label: 'WCPM' } } : {}),
+        ...(grade !== null ? { text_grade: { value: grade, label: 'پایهٔ متن' } } : {})
+      },
+      analysis: null,
+      bands: null,
+      subscales: null
+    });
+    const dysOf = (e: EvidenceEvent) => runInference([e]).ranked.find((h) => h.targetKey === 'dyslexia');
+    // زیر ۸۰٪ هنجار «دوم» (۰٫۸×۸۹ ≈ ۷۱) → شاهد پروب با وزن ۲
+    const low = dysOf(probe(40, 'دوم'))!;
+    expect(low).toBeDefined();
+    expect(low.score).toBeGreaterThanOrEqual(CONFIDENCE_THRESHOLDS.medium);
+    expect(low.evidenceFa.some((e) => e.includes('پروب خواندن'))).toBe(true);
+    // در بازهٔ انتظار (۹۰ ∈ ۷۱..۱۰۷) → بدون شاهد
+    expect(dysOf(probe(90, 'دوم'))).toBeUndefined();
+    // پایهٔ ناموجود در هنجار / مقدار یا پایهٔ غایب → نادیده
+    expect(dysOf(probe(40, 'نهم'))).toBeUndefined();
+    expect(dysOf(probe(null, 'دوم'))).toBeUndefined();
+    expect(dysOf(probe(40, null))).toBeUndefined();
   });
 
   it('سه پروب عملکردی در باتری هستند و familyFillable نیستند', () => {

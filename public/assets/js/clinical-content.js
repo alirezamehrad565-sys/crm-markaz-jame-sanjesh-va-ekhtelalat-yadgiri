@@ -46,11 +46,7 @@ export const LEARNING_BLANK_TEMPLATE_KEY = 'tpl-learning-blank';
 
 /** — چک‌لیست‌های خواندن/نوشتن/ریاضی — گیت گام ۴ مسیر یادگیری */
 export const SLD_CHECKLIST_KEYS = ['ce-sld-read-v1', 'ce-sld-wri-v1', 'ce-sld-calc-v1'];
-export const SLD_CHECKLIST_TITLES = {
-  'ce-sld-read-v1': 'خواندن',
-  'ce-sld-wri-v1': 'نوشتن',
-  'ce-sld-calc-v1': 'ریاضی'
-};
+// SLD_CHECKLIST_TITLES حذف شد (39-C — export مرده بود؛ برچسب‌ها از تعریف فرم سرور می‌آید)
 
 // ───────── برچسب‌های وضعیت ─────────
 
@@ -174,4 +170,39 @@ export const CONTEXT_META = {
   emptyWechsler: 'با ثبت نمرهٔ خام وکسلر ۴، صدک و نیم‌رخ این‌جا کنار سن و پایه می‌نشیند.',
   gapTemplate: (percentile, grade) =>
     `با صدک ${percentile} و پایهٔ تحصیلی جاری، انتظار عملکرد کلاس را با نیم‌رخ شناختی بسنجید — فاصلهٔ معنادار، شاخص اصلی مسیر یادگیری است.`
+};
+
+// ───────── مراحل یکپارچهٔ شناسایی (m134 — فلوی ۵ مرحله‌ای روی گیت‌های استاندارد) ─────────
+
+/** عناوین مراحل + وضعیت‌ها — هم‌تراز با STANDARD_PATHWAY_ORDER سرور */
+export const STAGE_META = {
+  stages: [
+    { num: 1, title: 'شرح‌حال', hint: 'گفت‌وگوی اول با خانواده — ورودی گام ۱' },
+    { num: 2, title: 'چک‌لیست‌ها', hint: 'خانواده و معلم + نقطهٔ تصمیم شک بالینی' },
+    { num: 3, title: 'وکسلر', hint: 'نیم‌رخ هوشی وکسلر ۴ — تحلیل موتور و مقایسه‌ها' },
+    { num: 4, title: 'ارزیابی عملکردی', hint: 'چک‌لیست‌های خواندن/نوشتن/ریاضی یا چک‌لیست مهارتی' },
+    { num: 5, title: 'جمع‌بندی تشخیصی', hint: 'تلفیق همهٔ ابزارها و تصمیم درمانگر' }
+  ],
+  badges: {
+    done: 'ثبت شده',
+    current: 'گام جاری',
+    pending: 'در انتظار',
+    needsDone: 'پروتکل فعال شد'
+  }
+};
+
+/** کارت جمع‌بندی تشخیصی — تیترهای بخش‌های داخلی */
+export const SYNTHESIS_META = {
+  title: 'جمع‌بندی تشخیصی',
+  primaryTitle: 'توضیح اصلی',
+  primaryHint: 'صورت‌بندی پرونده + نزدیک‌ترین فرضیهٔ موتور — دو نگاه به یک روایت',
+  topHypothesis: 'نزدیک‌ترین فرضیهٔ موتور',
+  constructsTitle: 'سازه‌های برجسته',
+  patternsTitle: 'الگوهای تلفیقی',
+  candidatesLabel: 'الگوهای نامزد',
+  conflictsTitle: 'ناهم‌رأیی‌ها',
+  flagsTitle: 'پرچم‌های ارجاع',
+  nextTitle: 'گام بعدی',
+  detailsTitle: 'جزئیات موتور تشخیصی',
+  seenTitle: 'شواهد موجود'
 };

@@ -22,7 +22,7 @@ import type {
 } from './types';
 import { BATTERY_VERSION } from './types';
 import type { CaseEventBand } from '@domain/case-events';
-import { RULES, rulesOf, CONFIDENCE_THRESHOLDS, ODD_MIN_FULL_CRITERIA, ASD_B_FULL_CRITERIA, BIF_IQ_RANGE } from './rules';
+import { RULES, rulesOf, CONFIDENCE_THRESHOLDS, ODD_MIN_FULL_CRITERIA, ASD_B_FULL_CRITERIA, BIF_IQ_RANGE, SCARED_SCHOOL_CUTOFF } from './rules';
 import { DSM_RECORDS } from './dsm-criteria';
 import { targetOf } from './targets';
 import { WCPM_NORM_50TH, ALPHA_15S_NORM, DIGITS_2MIN_NORM, ENGINE_DISCLAIMER, batteryDef } from './instruments';
@@ -101,7 +101,7 @@ function ruleColor(rule: EvidenceRule, event: EvidenceEvent | undefined): BandCo
     if (value === null || !grade) return null;
     const n = def.norm[grade];
     if (!n) return null;
-    // همان قرارداد probeStatus — زیر ۸۰٪ هنجار = پایین از انتظار (شاهد اصلی)
+    // قرارداد پروب (قبلاً probeStatus): زیر ۸۰٪ هنجار = پایین از انتظار (شاهد اصلی)
     return value < n * 0.8 ? 'danger' : 'ok';
   }
 
@@ -419,9 +419,9 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
   // سقف فرضیه (پلن §۱۱ پیش‌فرض: ۳)
   const ranked = hypotheses.slice(0, 3);
 
-  // پرچم اجتناب از مدرسه (SCARED sch — برش ۱ از قواعد )
+  // پرچم اجتناب از مدرسه (SCARED sch — برش از قواعد: SCARED_SCHOOL_CUTOFF)
   const sch = latest.get('ce-scared-p-v1')?.analysis?.subscaleScores?.find((s) => s.id === 'sch');
-  if (sch && sch.score >= 1) {
+  if (sch && sch.score >= SCARED_SCHOOL_CUTOFF) {
     nextActionsSet.add('اجتناب از مدرسه در SCARED گزارش شده — با معلم و خانواده دربارهٔ موقعیت مدرسه صحبت کنید.');
   }
 

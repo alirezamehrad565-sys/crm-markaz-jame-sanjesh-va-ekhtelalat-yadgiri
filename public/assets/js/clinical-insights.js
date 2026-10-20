@@ -15,7 +15,7 @@
 // درمانگر روی مسیر مداخله (active) ثبت می‌شود؛ متن موتور هرگز برای خانواده/معلم ارسال نمی‌شود.
 
 import { api } from './api.js';
-import { el, icon, openModal, confirmModal, formModal, toast, toastError, emptyState, loadingState } from './ui.js';
+import { el, icon, confirmModal, formModal, toast, toastError, emptyState, loadingState } from './ui.js';
 import { fa, formatJalaliDateTime, formatStoredJalaliNumeric, tehranTodayYmd, toJalali, gradeLabel } from './format.js';
 import { session } from './state.js';
 import { openExerciseSendModal } from './exercise-send.js';
@@ -23,9 +23,9 @@ import { bankPickButton, appendExerciseToTextarea } from './exercise-pick.js'; /
 import { eventPickButton, appendEventToTextarea } from './event-pick.js'; // — افزودن رویداد (فرم/پرسش‌نامه) به جلسه
 import { openCaseEventForm } from './case-events.js';
 import { pathwayChip, canEditPathway, openPathwayModal } from './session-type.js'; // — مسیر پرونده
-import { otChecklistCard, openNeedsModal, protocolChip, protocolCard, NEEDS_KEY, OT_SESSION_KEY } from './ot-checklist.js'; // — فلو دوفازی شناسایی→مداخله
-import { formulationSection } from './case-formulation.js'; // — صورت‌بندی پرونده (استدلال تلفیقی)
-import { wechslerProfileBlock } from './wechsler-profile.js'; // — کارت کامل نیم‌رخ وکسلر (m133)
+import { otChecklistCard, protocolChip, protocolCard, NEEDS_KEY, OT_SESSION_KEY } from './ot-checklist.js'; // — فلو دوفازی شناسایی→مداخله (openNeedsModal در کارت جمع‌بندی)
+import { synthesisSection, fetchFormulation } from './case-formulation.js'; // — کارت واحد جمع‌بندی تشخیصی (m134)
+import { wechslerProfileBlock, WEAKEST_FA } from './wechsler-profile.js'; // — کارت کامل نیم‌رخ وکسلر (m133 + m134)
 // محتوای ثابت (کلیدهای ابزار، برچسب‌ها، متن گام‌ها) از ماژول محتوا
 import {
   ANAMNESIS_KEY,
@@ -50,6 +50,7 @@ import {
   DECISION_LABEL,
   RESULTS_EVENT_LABELS,
   STEPPER_META,
+  STAGE_META,
   GATE_GLOSS,
   SUSPICION_CONTENT,
   CONTEXT_META
@@ -61,6 +62,21 @@ function canDecideFor(student) {
   if (!u) return false;
   if (u.role === 'manager') return true;
   return u.role === 'therapist' && Boolean(student.ownerStaffId) && student.ownerStaffId === u.staffId;
+}
+
+/** حذف تکرار متنی — کلید: متن نرمال‌شده */
+function dedupeTexts(items) {
+  const seen = new Set();
+  const out = [];
+  for (const t of items) {
+    const s = String(t ?? '').trim();
+    if (!s) continue;
+    const key = s.replace(/\s+/g, ' ');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
 }
 
 /** چیپ کوچک شمارشی برای خلاصهٔ ملاک‌ها */
@@ -255,33 +271,6 @@ function suspicionBlock({ student, gates, typesById, canDecide, refresh }) {
   );
 }
 
-/** — نیم‌رخ وکسلر (گام ۳) — چیپ‌محور: شاخص‌ها + GAI + پراکندگی + فرضیهٔ اصلی موتور */
-function wechslerSummaryLine(summary) {
-  if (!summary) return null;
-  const chip = (label, v) => v == null ? null : el('span', { class: 'badge badge--neutral' }, `${label} ${fa(v)}`);
-  const chips = [];
-  if (summary.fsiq != null) {
-    const p = summary.percentile != null ? ` (صدک ${fa(summary.percentile)})` : '';
-    const c = summary.cls ? ` — ${summary.cls}` : '';
-    chips.push(el('span', { class: 'badge badge--accent' }, `FSIQ ${fa(summary.fsiq)}${p}${c}`));
-  }
-  chips.push(chip('VCI', summary.vci), chip('PRI', summary.pri), chip('WMI', summary.wmi), chip('PSI', summary.psi), chip('GAI', summary.gai));
-  if (summary.indexScatter != null && summary.indexScatter > 0) {
-    chips.push(el('span', { class: 'badge badge--warning', title: 'ماکس − مین شاخص‌ها (مبنای GAI: ≥۲۳)' }, `پراکندگی ${fa(summary.indexScatter)}`));
-  }
-  if (summary.mainName) {
-    chips.push(el('span', { class: 'badge badge--info' }, `فرضیهٔ اصلی: ${summary.mainName}${summary.mainLevel ? ` — ${summary.mainLevel}` : ''}`));
-  }
-  if (!chips.length) return null;
-  return el('div', { class: 'clx-chips', style: { marginTop: '4px' } },
-    el('span', { class: 'cell-sub' }, 'نیم‌رخ وکسلر ۴:'),
-    ...chips,
-    summary.engine
-      ? el('span', { class: 'cell-sub' }, 'موتور')
-      : el('span', { class: 'cell-sub', title: 'ثبت دستی — برای تحلیل موتور، نمرهٔ خام ۱۵ خرده‌آزمون را در فرم وکسلر ۴ ثبت کنید' }, 'ثبت دستی')
-  );
-}
-
 /**
  * — بلوک «زمینهٔ تفسیر» (ری‌رایت پیشنهاد ۴ — داده‌های جمعیت‌شناختی در تفسیر)
  * سن/تولد/پایه/مسیر پرونده کنار خروجی کمی وکسلر (FSIQ/صدک/پراکندگی) — تا نیم‌رخ
@@ -328,12 +317,53 @@ function interpretationContext({ student, gates }) {
 }
 
 /**
- * — استپر مرحله‌ای «مسیر بالینی استاندارد — فاز شناسایی» (ری‌رایت پیشنهاد ۲)
- * گرهٔ عمودی شماره‌دار + خط اتصال؛ گام جاری (اولین گام ناتمام قابل اقدام) هایلایت است.
- * بلوک تصمیم شک بالینی روی ستون فقرات، بین گام ۲ و ۳ می‌نشیند.
+ * — دکمهٔ اقدام هر گیت — مشترک بین استپر (نوار وضعیت) و کارت‌های مرحله
+ * گیت «needs» این‌جا دکمه ندارد: اقدام اصلی گام ۵ دکمهٔ داخل کارت جمع‌بندی است (تک‌منبع).
+ */
+function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide, refresh }) {
+  if (!g) return null;
+  const typeIdOf = (key) => typesById.get(key)?.id ?? null;
+  const act = (label, cls, onclick) => el('button', { class: `btn ${cls} btn--sm`, onclick }, icon('send', 14), label);
+  switch (g.key) {
+    case 'anamnesis':
+      return anamnesisTypeId
+        ? act(GATE_GLOSS.anamnesis.actionLabel, 'btn--soft', () => openCaseEventForm({ student, defaultTypeId: anamnesisTypeId, onSaved: refresh }))
+        : null;
+    case 'behavioral':
+      return act(GATE_GLOSS.behavioral.actionLabel, 'btn--soft', () => openCaseEventForm({
+        student,
+        onlyKeys: [...SCREEN_KEYS, ...SPECIFIC_KEYS],
+        pickerTitle: 'چک‌لیست‌های خانواده و معلم‌محور',
+        onSaved: refresh
+      }));
+    case 'wechsler':
+      return typeIdOf(WISC4_KEY)
+        ? act(GATE_GLOSS.wechsler.actionLabel, 'btn--soft', () => openCaseEventForm({ student, defaultTypeId: typeIdOf(WISC4_KEY), onSaved: refresh }))
+        : null;
+    case 'skills':
+      // گیت گام ۴ وابسته به مسیر: یادگیری → چک‌لیست‌های خواندن/نوشتن/ریاضی؛ توانبخشی → چک‌لیست مهارتی
+      if (gates?.pathway === 'learning') {
+        return act(GATE_GLOSS.skills.learningActionLabel, 'btn--soft', () => openCaseEventForm({
+          student,
+          onlyKeys: SLD_CHECKLIST_KEYS,
+          pickerTitle: 'چک‌لیست‌های خواندن، نوشتن و ریاضی',
+          onSaved: refresh
+        }));
+      }
+      return act(GATE_GLOSS.skills.rehabActionLabel, 'btn--soft', () => {
+        document.getElementById('ot-checklist-anchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    default:
+      return null;
+  }
+}
+
+/**
+ * — استپر مرحله‌ای «مسیر بالینی استاندارد — فاز شناسایی» — نوار وضعیت فشرده (m134)
+ * نقش‌اش فقط «وضعیت در یک نگاه» است: گام‌ها + گره تصمیم شک بالینی؛ چیپ وکسلر از داخل
+ * استپر حذف شد (قبلاً نیم‌رخ ۳ بار در یک صفحه رندر می‌شد) — نیم‌رخ کامل در مرحلهٔ ۳ است.
  */
 function identificationStepper({ student, gates, typesById, anamnesisTypeId, canDecide, refresh }) {
-  const typeIdOf = (key) => typesById.get(key)?.id ?? null;
   const gatesList = gates.gates ?? [];
   const doneCount = gatesList.filter((g) => g.done).length;
 
@@ -343,44 +373,7 @@ function identificationStepper({ student, gates, typesById, anamnesisTypeId, can
     return el('span', { class: 'badge badge--neutral' }, 'ثبت نشده');
   };
 
-  const actionOf = (g) => {
-    const act = (label, cls, onclick) => el('button', { class: `btn ${cls} btn--sm`, onclick }, icon('send', 14), label);
-    switch (g.key) {
-      case 'anamnesis':
-        return anamnesisTypeId
-          ? act(GATE_GLOSS.anamnesis.actionLabel, 'btn--soft', () => openCaseEventForm({ student, defaultTypeId: anamnesisTypeId, onSaved: refresh }))
-          : null;
-      case 'behavioral':
-        return act(GATE_GLOSS.behavioral.actionLabel, 'btn--soft', () => openCaseEventForm({
-          student,
-          onlyKeys: [...SCREEN_KEYS, ...SPECIFIC_KEYS],
-          pickerTitle: 'چک‌لیست‌های خانواده و معلم‌محور',
-          onSaved: refresh
-        }));
-      case 'wechsler':
-        return typeIdOf(WISC4_KEY)
-          ? act(GATE_GLOSS.wechsler.actionLabel, 'btn--soft', () => openCaseEventForm({ student, defaultTypeId: typeIdOf(WISC4_KEY), onSaved: refresh }))
-          : null;
-      case 'skills':
-        // گیت گام ۴ وابسته به مسیر: یادگیری → چک‌لیست‌های خواندن/نوشتن/ریاضی؛ توانبخشی → چک‌لیست مهارتی
-        if (gates.pathway === 'learning') {
-          return act(GATE_GLOSS.skills.learningActionLabel, 'btn--soft', () => openCaseEventForm({
-            student,
-            onlyKeys: SLD_CHECKLIST_KEYS,
-            pickerTitle: 'چک‌لیست‌های خواندن، نوشتن و ریاضی',
-            onSaved: refresh
-          }));
-        }
-        return act(GATE_GLOSS.skills.rehabActionLabel, 'btn--soft', () => {
-          document.getElementById('ot-checklist-anchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-      case 'needs':
-        if (g.done || !canDecide) return null;
-        return act(GATE_GLOSS.needs.actionLabel, 'btn--primary', () => openNeedsModal({ student, gates, canDecide, refresh }));
-      default:
-        return null;
-    }
-  };
+  const ctx = { student, gates, typesById, anamnesisTypeId, canDecide, refresh };
 
   // گام جاری = اولین گام ناتمام (بعد از آن که شک بالینی تصمیم ندارد، فرعی حساب نمی‌شود)
   const firstOpenIdx = gatesList.findIndex((g) => !g.done);
@@ -390,7 +383,7 @@ function identificationStepper({ student, gates, typesById, anamnesisTypeId, can
     const isDone = Boolean(g.done);
     const isCurrent = idx === firstOpenIdx;
     const state = isDone ? 'is-done' : isCurrent ? 'is-current' : 'is-todo';
-    const action = actionOf(g);
+    const action = gateActionOf(g, ctx);
     return el('li', { class: `clx-stepper__item ${state}` },
       el('span', { class: 'clx-stepper__node', 'aria-hidden': 'true' }, isDone ? icon('check', 13) : el('span', { class: 'clx-stepper__num' }, fa(g.ord ?? ''))),
       el('div', { class: 'clx-stepper__panel' },
@@ -400,8 +393,7 @@ function identificationStepper({ student, gates, typesById, anamnesisTypeId, can
           action ? el('span', { class: 'clx-stepper__act' }, action) : null
         ),
         g.hint ? el('div', { class: 'cell-sub' }, g.hint) : null,
-        g.detail ? el('div', { class: 'clx-stepper__detail' }, g.detail) : null,
-        g.key === 'wechsler' ? wechslerSummaryLine(gates.wechslerSummary) : null
+        g.detail ? el('div', { class: 'clx-stepper__detail' }, g.detail) : null
       )
     );
   };
@@ -439,6 +431,88 @@ function identificationStepper({ student, gates, typesById, anamnesisTypeId, can
       el('ol', { class: 'clx-stepper' }, ...items)
     )
   );
+}
+
+// ───────── مراحل یکپارچهٔ شناسایی (m134 — فلوی ۵ مرحله‌ای) ─────────
+
+/** نشان وضعیت مرحله — هم‌تراز با بج‌های استپر */
+function stageStatusBadge(g, gatesList) {
+  if (!g) return el('span', { class: 'badge badge--neutral' }, STAGE_META.badges.pending);
+  if (g.key === 'needs' && g.done) return el('span', { class: 'badge badge--accent' }, STAGE_META.badges.needsDone);
+  if (g.done) return el('span', { class: 'badge badge--success' }, STAGE_META.badges.done);
+  const firstOpenIdx = gatesList.findIndex((x) => !x.done);
+  if (gatesList.indexOf(g) === firstOpenIdx) return el('span', { class: 'badge badge--info' }, STAGE_META.badges.current);
+  return el('span', { class: 'badge badge--neutral' }, STAGE_META.badges.pending);
+}
+
+/**
+ * کارت یک مرحله — سربرگ شماره‌دار + نشان وضعیت گیت + بدنهٔ محتوا.
+ * children = محتوای همان مرحله (فرم‌ها/کارت‌ها/بلوک تصمیم).
+ */
+function stageSection({ num, title, hint, gate, gatesList, children, action }) {
+  return el('section', { class: 'card clx-stage' },
+    el('div', { class: 'clx-stage__head' },
+      el('span', { class: 'clx-stage__num', 'aria-hidden': 'true' }, fa(num)),
+      el('div', { class: 'clx-stage__heading' },
+        el('strong', { class: 'clx-stage__title' }, title),
+        el('span', { class: 'cell-sub clx-stage__hint' }, hint ?? ''),
+        stageStatusBadge(gate, gatesList ?? [])),
+      action ? el('div', { class: 'clx-stage__act' }, action) : null),
+    gate?.detail ? el('div', { class: 'clx-stage__detail' }, gate.detail) : null,
+    (children ?? []).filter(Boolean).length
+      ? el('div', { class: 'clx-stage__body' }, ...(children ?? []).filter(Boolean))
+      : null
+  );
+}
+
+/**
+ * — «پیوند با سایر اطلاعات» (m134 — خواستهٔ اصلی کاربر: وکسلر متصل به بقیهٔ فرم‌ها)
+ * خطوط متنی ساخته‌شده از سه منبع و به renderProfile پاس داده می‌شود (wechsler-profile خالص می‌ماند):
+ * ۱) wechslerLink صورت‌بندی (فرضیهٔ اصلی + شاخص‌ها)  ۲) فرضیه‌های موتور با شواهد وکسلری
+ * ۳) حوزه‌های ضعیف وکسلر × سازه‌های برجستهٔ صورت‌بندی.
+ */
+function wechslerConnections({ formulation, insights, gates }) {
+  const lines = [];
+  const w = gates?.wechslerSummary ?? null;
+
+  // ۱) صورت‌بندی پرونده — پیوند وکسلر
+  const link = formulation?.wechslerLink ?? null;
+  if (link) {
+    const bits = [];
+    if (link.mainNameFa) bits.push(`فرضیهٔ اصلی موتور وکسلر: «${link.mainNameFa}»`);
+    if (link.iqValue != null) bits.push(`${link.iqBasis === 'GAI' ? 'GAI' : 'FSIQ'} = ${fa(link.iqValue)}`);
+    if ((link.indicesFa ?? []).length) bits.push(link.indicesFa.join(' — '));
+    if (bits.length) lines.push(`صورت‌بندی پرونده روی نیم‌رخ وکسلر سوار است: ${bits.join(' · ')}`);
+  }
+
+  // ۲) فرضیه‌های موتور که شواهد وکسلری دارند
+  for (const h of (insights?.ranked ?? []).slice(0, 3)) {
+    const ev = (h.evidenceFa ?? []).find((t) => /وکسلر|هوش|FSIQ|GAI/.test(String(t)));
+    if (ev) lines.push(`فرضیهٔ «${h.targetTitle}»: ${ev}`);
+  }
+
+  // ۳) هم‌خوانی حوزه‌های ضعیف وکسلر با سازه‌های برجستهٔ صورت‌بندی
+  const WEAK_KEYWORDS = {
+    language: ['زبان', 'کلام'], attention: ['توجه'], working_memory: ['حافظه'],
+    processing_speed: ['سرعت پردازش'], visual_spatial: ['دیداری'], fluid_reasoning: ['استدلال'],
+    knowledge: ['دانش'], fine_motor: ['حرکتی'], academic: ['یادگیری', 'تحصیلی'],
+    executive: ['اجرایی'], social: ['اجتماعی', 'ارتباطی'], adaptive: ['سازش'], crystallized: ['دانش']
+  };
+  const elevated = (formulation?.constructs ?? []).filter((c) => c && c.level !== 'پایین');
+  const matched = new Set();
+  for (const d of (w?.weakDomains ?? [])) {
+    const keys = WEAK_KEYWORDS[d] ?? [];
+    if (!keys.length) continue;
+    const hit = elevated.find((c) => keys.some((k) => String(c.titleFa ?? '').includes(k)));
+    if (hit) {
+      const key = `${d}:${hit.titleFa}`;
+      if (matched.has(key)) continue;
+      matched.add(key);
+      lines.push(`ضعف وکسلری «${WEAKEST_FA[d] ?? d}» با سازهٔ برجستهٔ «${hit.titleFa}» (سطح ${hit.level}) هم‌خوان است.`);
+    }
+  }
+
+  return dedupeTexts(lines).slice(0, 6);
 }
 
 // ───────── / — کارت نتایج (فرم نتایج + وکسلر ۴ — هر دو مسیر) ─────────
@@ -1047,6 +1121,17 @@ function pathCard(p, { student, canDecide, refresh }) {
   );
 }
 
+/** موتور تاشو — «تفسیر استاندارد» برای پروتکل‌های mental_ot/rehab (افتراق و هم‌پوشانی) */
+function engineDetailsToggle(nodes) {
+  const items = (nodes ?? []).filter(Boolean);
+  if (!items.length) return null;
+  return el('details', { class: 'clx-engine-toggle' },
+    el('summary', { class: 'clx-section__title', style: { cursor: 'pointer', listStyle: 'revert' } },
+      icon('sparkles', 16), 'تفسیر استاندارد — موتور اختلال یادگیری (برای افتراق و هم‌پوشانی)'),
+    el('div', { style: { marginTop: 'var(--sp-3)' } }, ...items)
+  );
+}
+
 // ───────── رندر اصلی تب ─────────
 
 /**
@@ -1074,10 +1159,11 @@ export async function renderClinicalTab(box, { student }) {
       insights = insRes.data;
       paths = pathRes.data ?? [];
       gates = gatesRes?.data ?? null;
-      // پروفایل مهارتی: در فاز شناسایی (ورودی گیت ۴) و پروتکل کاردرمانی ذهنی لازم است
-      // چک‌لیست مهارتی فقط مسیر توانبخشی/کاردرمانی ذهنی — مسیر یادگیری آن را نمی‌بیند
-      const hideOtForLearning = student.pathway === 'learning' && gates?.protocol !== 'mental_ot';
-      if (!hideOtForLearning && (!gates || gates.phase === 'identification' || gates.protocol === 'mental_ot')) {
+      // پروفایل مهارتی: فاز شناسایی (ورودی گیت ۴) + همهٔ پروتکل‌های مداخله‌ای به‌جز توانبخشی
+      // m134: در مداخلهٔ یادگیری/دیرآموز هم لازم است — چک‌لیست ۷ حیطه‌ای نقش «پایش» دارد
+      const proto0 = gates?.protocol ?? null;
+      const wantOt = !gates || gates.phase === 'identification' || proto0 === 'mental_ot' || proto0 === 'learning' || proto0 === 'slow_learner';
+      if (wantOt) {
         otProfile = await api.get(`/api/students/${student.id}/ot/profile`).then((r) => r.data).catch(() => null);
       }
       // شناسهٔ فرم شرح‌حال برای گام ۱ مسیر ارزیابی (اگر فعال باشد)
@@ -1098,16 +1184,19 @@ export async function renderClinicalTab(box, { student }) {
     const refresh = () => { load(); };
     const hasData = (insights.ranked?.length ?? 0) > 0 || (insights.criteria?.length ?? 0) > 0;
 
-    // صورت‌بندی پرونده: خودش fetch و خطا را می‌بلعد (null = کارت حذف)
-    const formulation = await formulationSection({ student });
-
-    // کارت کامل نیم‌رخ وکسلر — از گیت‌های شناسایی (خروجی گسترش‌یافتهٔ wechslerSummaryOf)
-    // null = دادهٔ وکسلری معنادار نیست؛ الگوی null-safe مثل formulation/flagsCard
-    const wechslerCard = wechslerProfileBlock({ summary: gates?.wechslerSummary ?? null });
-
     // ── فاز و پروتکل از گیت‌ها؛ fallback: اگر گیت‌ها نیامد، فاز شناسایی ──
     const protocol = gates?.protocol ?? null;
     const phase = protocol ? 'intervention' : 'identification';
+
+    // دادهٔ صورت‌بندی — یک‌بار fetch؛ هم به wechslerConnections می‌رود هم به کارت جمع‌بندی (null-safe)
+    const formulation = await fetchFormulation({ student });
+
+    // ── «پیوند با سایر اطلاعات» — خطوط اتصال وکسلر به بقیهٔ ابزارها (m134) ──
+    const connections = wechslerConnections({ formulation, insights, gates });
+
+    // کارت کامل نیم‌رخ وکسلر — از گیت‌های شناسایی + نیم‌رخ کامل بک‌اند (قرارداد profile)
+    // null = دادهٔ وکسلری معنادار نیست؛ الگوی null-safe
+    const wechslerCard = wechslerProfileBlock({ summary: gates?.wechslerSummary ?? null, connections });
 
     // ── نوار بالای تب — تاریخ تولد/سن/پایه از پروفایل به تفسیر بالینی متصل شد ──
     const ageLine = ageLineFromBirthDate(student.birthDate);
@@ -1139,32 +1228,16 @@ export async function renderClinicalTab(box, { student }) {
           onclick: () => openCaseEventForm({ student, onSaved: refresh })
         }, icon('send', 15), 'ارسال فرم به خانواده یا معلم'),
         el('button', { class: 'btn btn--ghost btn--sm', onclick: refresh }, icon('refresh', 15), 'به‌روزرسانی'),
-        el('button', {
-          class: 'btn btn--soft btn--sm',
-          onclick: () => copyText(insights.narrative, 'خلاصهٔ سه‌بخشی کپی شد')
-        }, icon('copy', 15), 'کپی خلاصه')
+        insights.narrative
+          ? el('button', {
+              class: 'btn btn--soft btn--sm',
+              onclick: () => copyText(typeof insights.narrative === 'string' ? insights.narrative : String(insights.narrative?.saw ?? ''), 'خلاصه کپی شد')
+            }, icon('copy', 15), 'کپی خلاصه')
+          : null
       )
     );
 
-    // ── کارت مسیر ارزیابی — در فاز مداخلهٔ یادگیری/دیرآموز نقش «پایش» دارد ──
-    const journey = journeyCard({ student, insights, paths, anamnesisTypeId, refresh });
-
-    // ── خلاصهٔ سه‌بخشی (پلن §۶) + زمینهٔ تفسیر (جمعیت‌شناختی × خروجی موتور) ──
-    const narrativeCard = el('div', { class: 'card' },
-      el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('message', 16), 'خلاصهٔ سه‌بخشی — چه دیدیم / یعنی چه / گام بعدی')),
-      el('div', { class: 'card__body' },
-        interpretationContext({ student, gates }),
-        el('div', { class: 'clx-narrative' }, insights.narrative)
-      )
-    );
-
-    // ── پرچم‌های خط قرمز (ارجاع فوری) ──
-    const flagsCard = (insights.referralFlags ?? []).length
-      ? el('div', { class: 'clx-flags' },
-          ...insights.referralFlags.map((f) => el('div', { class: 'clx-flag' }, icon('alert', 15), el('span', {}, f))))
-      : null;
-
-    // ── فرضیه‌ها ──
+    // ── فرضیه‌ها (داخل تاشوی جزئیات؛ یا موتور تاشوی پروتکل‌های غیر یادگیری) ──
     const hypotheses = hasData
       ? el('div', { class: 'clx-section' },
           el('div', { class: 'clx-section__title' }, icon('sparkles', 16), 'فرضیه‌ها — به ترتیب شواهد'),
@@ -1187,25 +1260,13 @@ export async function renderClinicalTab(box, { student }) {
           crits)
       : null;
 
-    // ── ناهم‌رأیی / گپ اطلاعاتی / پوشش داده ──
-    const metaCard = (insights.discrepancies?.length || insights.nextActions?.length || insights.dataCoverage?.seenTitles?.length)
-      ? el('div', { class: 'card' },
-          el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('info', 16), 'بررسی‌های تکمیلی')),
-          el('div', { class: 'card__body' },
-            insights.discrepancies?.length ? el('div', { class: 'clx-sub' },
-              el('div', { class: 'clx-sub__title' }, icon('alert', 14), 'ناهم‌رأیی خانه و مدرسه:'),
-              iconList(insights.discrepancies, 'clock', 'warn')) : null,
-            insights.nextActions?.length ? el('div', { class: 'clx-sub' },
-              el('div', { class: 'clx-sub__title' }, icon('compass', 14), 'گام بعدی:'),
-              iconList(insights.nextActions, 'check', 'ok')) : null,
-            insights.dataCoverage?.seenTitles?.length ? el('div', { class: 'clx-sub' },
-              el('div', { class: 'clx-sub__title' }, icon('clip', 14), 'شواهد موجود:'),
-              el('div', { class: 'clx-chips' }, insights.dataCoverage.seenTitles.map((t) =>
-                el('span', { class: 'badge badge--neutral' }, t))))
-              : el('div', { class: 'cell-sub' }, 'هنوز ابزاری ثبت نشده است.')
-          )
-        )
-      : null;
+    // ── «شواهد موجود» — بازماندهٔ metaCard؛ ناهم‌رأیی و گام بعدی به کارت جمع‌بندی منتقل شد ──
+    const seenBlock = el('div', { class: 'clx-sub' },
+      el('div', { class: 'clx-sub__title' }, icon('clip', 14), 'شواهد موجود:'),
+      insights.dataCoverage?.seenTitles?.length
+        ? el('div', { class: 'clx-chips' }, insights.dataCoverage.seenTitles.map((t) =>
+            el('span', { class: 'badge badge--neutral' }, t)))
+        : el('div', { class: 'cell-sub' }, 'هنوز ابزاری ثبت نشده است.'));
 
     // ── مسیرهای مداخله + قالب‌محور: بدون مسیر → کارت‌های «شروع از قالب» ──
     const emptyPathLine = paths.length
@@ -1235,29 +1296,36 @@ export async function renderClinicalTab(box, { student }) {
       quickStart
     );
 
-    // ── پانویس خط قرمز (پلن §۱ — بدون استثنا) ──
+    // ── پانویس خط قرمز — تنها سلب مسئولیتِ صفحه (پلن §۱) ──
     const disclaimer = el('div', { class: 'clx-disclaimer' }, icon('shield', 15), el('span', {}, insights.disclaimer));
 
     // ── کارت‌های مشترک هر دو فاز ──
     const resultsCard = await latestResultsCard({ student, typesById, refresh });
-    const otCard = (otProfile && (student.pathway !== 'learning' || gates?.protocol === 'mental_ot'))
+    const otCard = otProfile
       ? otChecklistCard({ student, profile: otProfile, canDecide, refresh, scrollTarget: true })
       : null;
 
-    // موتور تاشو — برای پروتکل‌های غیر یادگیری (افتراق و هم‌پوشانی)
-    // m133: narrativeCard دیگر داخل موتور تاشو نیست — خودش مستقیم پس از formulation می‌آید
-    const engineDetails = () => el('details', { class: 'clx-engine-toggle' },
-      el('summary', { class: 'clx-section__title', style: { cursor: 'pointer', listStyle: 'revert' } },
-        icon('sparkles', 16), 'تفسیر استاندارد — موتور اختلال یادگیری (برای افتراق و هم‌پوشانی)'),
-      el('div', { style: { marginTop: 'var(--sp-3)' } },
-        hypotheses,
-        critsSection,
-        metaCard
-      )
-    );
-
-    // ════════ فاز ۱ — شناسایی: استپر مرحله‌ای + پشتیبان تصمیم ════════
+    // ════════ فاز ۱ — شناسایی: فلوی ۵ مرحله‌ای یکپارچه ════════
     if (phase === 'identification') {
+      const gatesList = gates?.gates ?? [];
+      const gateByKey = (key) => gatesList.find((g) => g.key === key) ?? null;
+      const stageCtx = { student, gates, typesById, anamnesisTypeId, canDecide, refresh };
+      const stageDef = STAGE_META.stages;
+
+      // تاشوی جزئیات موتور — جدول DSM + فرضیه‌ها + آخرین ثبت‌ها + شواهد موجود
+      const synthDetails = [critsSection, hypotheses, resultsCard, seenBlock].filter(Boolean);
+
+      // کارت جمع‌بندی — تلفیق دو موتور (صورت‌بندی + فرضیه‌ها) در یک کارت
+      const synthesis = await synthesisSection({
+        student, formulation, insights, gates, canDecide, refresh, engineDetails: synthDetails
+      });
+
+      // پوشش ابزاری مرحلهٔ ۴ — چیپ «چه فرم‌هایی آمده» (درصد پوشش در سربرگ جمع‌بندی است)
+      const coverageChips = insights.dataCoverage?.seenTitles?.length
+        ? el('div', { class: 'clx-chips' },
+            insights.dataCoverage.seenTitles.map((t) => el('span', { class: 'badge badge--neutral' }, t)))
+        : null;
+
       const stepperCard = gates
         ? identificationStepper({ student, gates, typesById, anamnesisTypeId, canDecide, refresh })
         : null;
@@ -1266,16 +1334,22 @@ export async function renderClinicalTab(box, { student }) {
         el('div', { class: 'clx' },
           toolbar,
           stepperCard,
-          formulation,
-          wechslerCard,
-          flagsCard,
-          otCard,
-          narrativeCard,
-          hypotheses,
-          critsSection,
-          metaCard,
-          resultsCard,
-          pathsSection,
+          stageSection({ num: stageDef[0].num, title: stageDef[0].title, hint: stageDef[0].hint, gate: gateByKey('anamnesis'), gatesList, action: gateActionOf(gateByKey('anamnesis'), stageCtx) }),
+          stageSection({ num: stageDef[1].num, title: stageDef[1].title, hint: stageDef[1].hint, gate: gateByKey('behavioral'), gatesList, action: gateActionOf(gateByKey('behavioral'), stageCtx), children: [
+            suspicionBlock({ student, gates, typesById, canDecide, refresh })
+          ] }),
+          stageSection({ num: stageDef[2].num, title: stageDef[2].title, hint: stageDef[2].hint, gate: gateByKey('wechsler'), gatesList, action: gateActionOf(gateByKey('wechsler'), stageCtx), children: [
+            wechslerCard,
+            interpretationContext({ student, gates })
+          ] }),
+          stageSection({ num: stageDef[3].num, title: stageDef[3].title, hint: stageDef[3].hint, gate: gateByKey('skills'), gatesList, action: gateActionOf(gateByKey('skills'), stageCtx), children: [
+            otCard,
+            coverageChips
+          ] }),
+          stageSection({ num: stageDef[4].num, title: stageDef[4].title, hint: stageDef[4].hint, gate: gateByKey('needs'), gatesList, children: [
+            synthesis,
+            pathsSection
+          ] }),
           disclaimer
         )
       );
@@ -1287,17 +1361,20 @@ export async function renderClinicalTab(box, { student }) {
 
     if (protocol === 'mental_ot') {
       // کاردرمانی ذهنی: چک‌لیست ۷ حیطه‌ای ابزار اصلی جلسات است؛ موتور تاشو برای افتراق
+      // جزئیات موتور در تاشوی «تفسیر استاندارد» می‌ماند — کارت جمع‌بندی بدون تاشوی داخلی
+      const synthesis = await synthesisSection({
+        student, formulation, insights, gates, canDecide, refresh, engineDetails: []
+      });
       box.replaceChildren(
         el('div', { class: 'clx' },
           toolbar,
           protoCard,
-          formulation,
           wechslerCard,
-          narrativeCard,
           otCard,
+          synthesis,
           resultsCard,
           pathsSection,
-          engineDetails(),
+          engineDetailsToggle([hypotheses, critsSection, seenBlock]),
           disclaimer
         )
       );
@@ -1306,35 +1383,40 @@ export async function renderClinicalTab(box, { student }) {
 
     if (protocol === 'rehab') {
       // توانبخشی ذهنی-جسمی: ارزیابی‌ها و جلسات مخصوص توانبخشی؛ موتور تاشو برای افتراق
+      const synthesis = await synthesisSection({
+        student, formulation, insights, gates, canDecide, refresh, engineDetails: []
+      });
       box.replaceChildren(
         el('div', { class: 'clx' },
           toolbar,
           protoCard,
-          formulation,
           wechslerCard,
-          narrativeCard,
+          synthesis,
           resultsCard,
           pathsSection,
-          engineDetails(),
+          engineDetailsToggle([hypotheses, critsSection, seenBlock]),
           disclaimer
         )
       );
       return;
     }
 
-    // learning / slow_learner — چیدمان با پشتیبانی مسیر ارزیابی (پایش پروب‌ها)
+    // learning / slow_learner — جمع‌بندی + پایش (مسیر ارزیابی + چک‌لیست مهارتی)
+    // m134: otCard این‌جا رندر می‌شود (قبلاً ساخته می‌شد ولی به صفحه نمی‌آمد) و
+    // جزئیات موتور داخل تاشوی کارت جمع‌بندی است؛ پیگیرِ پروب‌ها فقط journeyCard است.
+    const journey = journeyCard({ student, insights, paths, anamnesisTypeId, refresh });
+    const synthesis = await synthesisSection({
+      student, formulation, insights, gates, canDecide, refresh,
+      engineDetails: [critsSection, hypotheses, seenBlock].filter(Boolean)
+    });
     box.replaceChildren(
       el('div', { class: 'clx' },
         toolbar,
         protoCard,
-        formulation,
         wechslerCard,
+        synthesis,
         journey,
-        flagsCard,
-        narrativeCard,
-        hypotheses,
-        critsSection,
-        metaCard,
+        otCard,
         resultsCard,
         pathsSection,
         disclaimer

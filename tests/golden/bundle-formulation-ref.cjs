@@ -180,8 +180,6 @@ var SNAP_CUTOFFS = {
 var SCARED_DANGER = 25;
 var SCARED_WARN_MIN = 20;
 var SCARED_STRONG = 30;
-var CONNERS_DANGER = 19;
-var CONNERS_WARN_MIN = 14;
 var CRITERIA_CUTOFFS = {
   sld: { danger: 13, warn: 10 },
   asd: { danger: 20, warn: 15 },
@@ -196,7 +194,6 @@ var TOOL_SOURCE = {
   "sdq-parent": "parent",
   "ce-scared-p-v1": "parent",
   "ce-dcdq-v1": "parent",
-  "conners-short": "parent",
   "achenbach-practical": "parent",
   "home_behavior": "parent",
   "ce-anamnesis-v2": "parent",
@@ -480,19 +477,6 @@ function mapDcdq(rows, event) {
 }
 __name(mapDcdq, "mapDcdq");
 __name2(mapDcdq, "mapDcdq");
-function mapConners(rows, event) {
-  const total = event.analysis?.score ?? null;
-  const source = TOOL_SOURCE[event.toolKey];
-  if (total === null)
-    return;
-  if (total >= CONNERS_DANGER) {
-    addRow(rows, { construct: "attention_exec", toolId: event.toolKey, signal: "conners_danger", weight: 2, danger: true, sourceType: source, textFa: "\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u06A9\u0648\u062A\u0627\u0647 \u06A9\u0627\u0646\u0631\u0632 (\u0627\u0628\u0632\u0627\u0631 \u0642\u062F\u06CC\u0645\u06CC) \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647 \u0631\u0627 \u067E\u0631\u062E\u0637\u0631 \u06AF\u0632\u0627\u0631\u0634 \u06A9\u0631\u062F\u0647 \u0627\u0633\u062A." });
-  } else if (total >= CONNERS_WARN_MIN) {
-    addRow(rows, { construct: "attention_exec", toolId: event.toolKey, signal: "conners_warn", weight: 1, danger: false, sourceType: source, textFa: "\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u06A9\u0648\u062A\u0627\u0647 \u06A9\u0627\u0646\u0631\u0632 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647 \u0631\u0627 \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627 \u06AF\u0632\u0627\u0631\u0634 \u06A9\u0631\u062F\u0647 \u0627\u0633\u062A." });
-  }
-}
-__name(mapConners, "mapConners");
-__name2(mapConners, "mapConners");
 function mapLegacyBehavior(rows, event) {
   const c = totalColor(event);
   if (c !== "danger")
@@ -749,9 +733,6 @@ function normalizeEvents(events) {
         break;
       case "ce-dcdq-v1":
         mapDcdq(rows, event);
-        break;
-      case "conners-short":
-        mapConners(rows, event);
         break;
       case "teacher-classroom":
       case "home_behavior":
@@ -1566,7 +1547,7 @@ function applyParsimony(patterns, per, levels) {
   }
   for (const k of elevated) {
     if (!sharedWith.has(k) && k !== primary.key) {
-      differentialsFa.push(`${CONSTRUCT_LABELS[k]} \u0633\u0637\u062D \u0628\u0631\u062C\u0633\u062A\u0647 \u062F\u0627\u0631\u062F \u0648\u0644\u06CC \u062F\u0631 \u062A\u0648\u0636\u06CC\u062D \u0627\u0635\u0644\u06CC \u0646\u0645\u06CC\u200C\u06AF\u0646\u062C\u062F \u2014 \u062A\u0641\u0633\u06CC\u0631 \u062C\u062F\u0627\u06AF\u0627\u0646\u0647 \u0644\u0627\u0632\u0645 \u062F\u0627\u0631\u062F.`);
+      differentialsFa.push(`${CONSTRUCT_LABELS[k]} \u0633\u0637\u062D \u0628\u0631\u062C\u0633\u062A\u0647 \u062F\u0627\u0631\u062F \u0648 \u0628\u0647\u200C\u0639\u0646\u0648\u0627\u0646 \u062A\u0641\u0633\u06CC\u0631 \u0645\u06A9\u0645\u0644 \u062F\u0631 \u06A9\u0646\u0627\u0631 \u062A\u0648\u0636\u06CC\u062D \u0627\u0635\u0644\u06CC \u0628\u0631\u0631\u0633\u06CC \u0634\u0648\u062F.`);
     }
   }
   return { primary, sharedWith, differentialsFa };
@@ -1763,24 +1744,6 @@ function suggestMonitoring(redFlags, wInj, levels) {
 }
 __name(suggestMonitoring, "suggestMonitoring");
 __name2(suggestMonitoring, "suggestMonitoring");
-function buildNarrative(constructs, primary, patterns, nextActions, wInj) {
-  const elevated = constructs.filter((c) => c.level !== "\u067E\u0627\u06CC\u06CC\u0646");
-  const sawParts = [];
-  for (const c of elevated.slice(0, 3)) {
-    const lines = c.evidenceFa.slice(0, 2).map((e) => e.textFa);
-    if (lines.length > 0)
-      sawParts.push(lines.join("\u061B "));
-  }
-  const saw = sawParts.length > 0 ? sawParts.join("\u061B ") + "." : "\u0647\u0646\u0648\u0632 \u0634\u0648\u0627\u0647\u062F \u0628\u0631\u062C\u0633\u062A\u0647\u200C\u0627\u06CC \u0627\u0632 \u0627\u0628\u0632\u0627\u0631\u0647\u0627\u06CC \u0641\u0627\u0632 \u0634\u0646\u0627\u0633\u0627\u06CC\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A.";
-  const chosen = patterns.find((p) => p.key === primary.key && p.status === "active");
-  const baseRateLine = chosen ? ` \u0634\u06CC\u0648\u0639 \u062A\u0642\u0631\u06CC\u0628\u06CC \u0627\u06CC\u0646 \u0627\u0644\u06AF\u0648: ${chosen.baseRateFa}.` : "";
-  const wLine = wInj.link && wInj.iqValue !== null ? ` \u0638\u0631\u0641\u06CC\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u06A9\u0644\u06CC ${wInj.iqValue >= 90 ? "\u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0627\u0646\u062A\u0638\u0627\u0631" : "\u062F\u0631 \u0645\u0631\u0632 \u067E\u0627\u06CC\u06CC\u0646"} \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0634\u062F.` : "";
-  const means = primary.key === "none" ? "\u067E\u0633 \u0627\u0632 \u062A\u06A9\u0645\u06CC\u0644 \u0627\u0628\u0632\u0627\u0631\u0647\u0627\u06CC \u063A\u0631\u0628\u0627\u0644\u06AF\u0631\u06CC\u060C \u0635\u0648\u0631\u062A\u200C\u0628\u0646\u062F\u06CC \u062F\u0642\u06CC\u0642\u200C\u062A\u0631\u06CC \u0645\u0645\u06A9\u0646 \u0645\u06CC\u200C\u0634\u0648\u062F." : primary.rationaleFa + baseRateLine + wLine;
-  const next = nextActions.slice(0, 3).map((a) => a.actionFa).join(" ") || "\u0627\u0628\u062A\u062F\u0627 \u0627\u0628\u0632\u0627\u0631\u0647\u0627\u06CC \u063A\u0631\u0628\u0627\u0644\u06AF\u0631\u06CC \u062A\u06A9\u0645\u06CC\u0644 \u0634\u0648\u062F.";
-  return { saw, means, next };
-}
-__name(buildNarrative, "buildNarrative");
-__name2(buildNarrative, "buildNarrative");
 function buildCaseFormulation(input, options = {}) {
   const now = options.now ?? (() => /* @__PURE__ */ new Date());
   const norm = normalizeEvents(input.events);
@@ -1854,19 +1817,8 @@ function buildCaseFormulation(input, options = {}) {
   let conf = CONFIDENCE_BASE + (coverage.percent >= COVERAGE_GOOD_PERCENT ? CONFIDENCE_COVERAGE_BONUS : 0) + (wInj.link ? CONFIDENCE_WISC_BONUS : 0) + (mainDangerSources ? CONFIDENCE_DANGER_SOURCES_BONUS : 0) + (elevatedConstructs.some((c) => c.level === "\u0647\u0645\u200C\u06AF\u0631\u0627\u06CC-\u0628\u0627\u0644\u0627") ? CONFIDENCE_HIGH_LEVEL_BONUS : 0) - CONFIDENCE_CAP_PENALTY * fullCapCount - softScatterPenalty;
   conf = Math.min(CONFIDENCE_MAX, Math.max(CONFIDENCE_MIN, conf));
   conf = Math.round(conf * 100) / 100;
-  const narrative = buildNarrative(constructs, primary, patterns, nextActions, wInj);
-  const otLink = input.ot ? {
-    delayedDomainsFa: otStatuses.filter((s) => s.delayed).map((s) => s.titleFa),
-    summaryFa: otStatuses.some((s) => s.delayed || s.border) ? `\u062D\u06CC\u0637\u0647\u200C\u0647\u0627\u06CC ${[...otStatuses.filter((s) => s.delayed).map((s) => s.titleFa), ...otStatuses.filter((s) => s.border).map((s) => `${s.titleFa} (\u0645\u0631\u0632)`)].join("\u060C ")} \u0639\u0642\u0628\u200C\u062A\u0631 \u0627\u0632 \u0627\u0646\u062A\u0638\u0627\u0631 \u0633\u0646\u06CC \u0627\u0633\u062A\u061B \u0633\u0627\u06CC\u0631 \u062D\u06CC\u0637\u0647\u200C\u0647\u0627 \u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0627\u0646\u062A\u0638\u0627\u0631.` : "\u0647\u0645\u0647\u0654 \u062D\u06CC\u0637\u0647\u200C\u0647\u0627\u06CC \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC \u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0627\u0646\u062A\u0638\u0627\u0631 \u0633\u0646\u06CC \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0634\u062F."
-  } : null;
-  for (const t of [narrative.saw, narrative.means, narrative.next]) {
-    for (const w of ["\u0642\u0637\u0639\u0627\u064B", "\u0628\u0644\u0627\u0634\u06A9", "\u0635\u062F \u062F\u0631 \u0635\u062F", "\u0628\u062F\u0648\u0646 \u0634\u06A9"]) {
-      if (t.includes(w))
-        throw new Error(`\u0644\u062D\u0646 \u0633\u0627\u062F\u0647: \u0648\u0627\u0698\u0647\u0654 \u0645\u0645\u0646\u0648\u0639 \xAB${w}\xBB \u062F\u0631 \u0631\u0648\u0627\u06CC\u062A \u0635\u0648\u0631\u062A\u200C\u0628\u0646\u062F\u06CC`);
-    }
-  }
   return {
-    schemaVersion: "m93.1",
+    schemaVersion: "m93.2",
     generatedAt: now().toISOString(),
     childId: input.child.id,
     ageYears: input.child.ageYears,
@@ -1877,13 +1829,11 @@ function buildCaseFormulation(input, options = {}) {
     primaryProfile: primary,
     differentialsFa: [...new Set(differentialsFa)].slice(0, 8),
     wechslerLink: wInj.link,
-    otLink,
     redFlags,
     dataCoverage: coverage,
     nextActions,
     protocolSuggestion,
     monitoring,
-    narrative,
     confidence: conf,
     capsFa: [...new Set(caps.globalCapsFa)],
     disclaimer: FORMULATION_DISCLAIMER
@@ -2009,7 +1959,7 @@ module.exports = {
   ageYearsFromBirthDate,
   __tables: {
     ANAMNESIS_KEYWORDS, REDFLAG_KEYWORDS, SNAP_CUTOFFS, CRITERIA_CUTOFFS,
-    SCARED_DANGER, SCARED_WARN_MIN, SCARED_STRONG, CONNERS_DANGER, CONNERS_WARN_MIN,
+    SCARED_DANGER, SCARED_WARN_MIN, SCARED_STRONG,
     SDQ_PROS_WEAK_MAX, ODD_MIN_FULL_CRITERIA2, ASD_B_FULL_CRITERIA2,
     PROBE_DANGER_RATIO, PROBE_WARN_MAX_RATIO, LEVEL_THRESHOLDS, SCORE_CAP,
     CONSENSUS_MULTIPLIER, CONSTRUCT_KEYS, CONSTRUCT_LABELS, PATTERN_ORDER,

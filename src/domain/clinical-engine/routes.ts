@@ -60,12 +60,6 @@ export function registerClinicalEngineRoutes(app: AppHono, service: ClinicalEngi
     return c.json({ data }, 200);
   });
 
-  app.get('/api/clinical-paths/:id', requireRole('manager', 'secretary', 'therapist'), async (c) => {
-    const actor = getAuthContext(c);
-    const data = await service.getPath(c.req.param('id'), actor);
-    return c.json({ data }, 200);
-  });
-
   // ساخت مسیر — فقط مدیر/درمانگر (مالک در سرویس چک می‌شود)
   app.post('/api/students/:id/clinical-paths', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);

@@ -667,9 +667,6 @@ export const REHAB_TARGETS: ClinicalTarget[] = [
 /** همهٔ اهداف قابل انتخاب در مسیر مداخله — ۱۸ دانش‌نامه + ۴ توانبخشی */
 export const ALL_TARGETS_INCLUDING_REHAB: ClinicalTarget[] = [...ALL_TARGETS, ...REHAB_TARGETS];
 
-/** کلیدهای شاخهٔ توانبخشی — برای تفکیک پیشنهاد اهداف در تب تفسیر */
-export const REHAB_TARGET_KEYS = REHAB_TARGETS.map((t) => t.key);
-
 const BY_KEY = new Map(ALL_TARGETS_INCLUDING_REHAB.map((t) => [t.key, t]));
 
 /** یک هدف با کلید */

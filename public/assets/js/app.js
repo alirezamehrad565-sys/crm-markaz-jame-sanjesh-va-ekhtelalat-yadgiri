@@ -31,9 +31,8 @@ import { renderTemplates } from './views/templates.js'; // — مدیریت قا
 // import تابلوی پیشرفت حذف شد (تب مستقل ندارد؛ staff.js مؤلفه را مستقیم مصرف می‌کند)
 import { renderOutbox } from './views/outbox.js'; // — صندوق اعلان‌ها (مدیر/منشی)
 import { renderCaseEventTypes } from './views/case-event-types.js'; // — فرم‌ساز انواع رویداد (مدیر + درمانگر)
-// راهنمای درون‌برنامه‌ای (#/help) فعلاً غیرفعال است؛ نسخهٔ PDF «راهنمای تصویری سامانه» جایگزین شده
-// (فایل views/help.js برای فعال‌سازی مجدد حفظ شده است)
-import { renderHelp } from './views/help.js'; // — راهنمای گام‌به‌گام (غیرفعال)
+// نمای «راهنمای گام‌به‌گام» (views/help.js + تصاویر /assets/help) حذف شد (m134 — کد مرده پارک‌شده)؛
+// نسخهٔ PDF «راهنمای تصویری سامانه» جایگزین شده است. اگر روزی فعال شد: register('#/help', …)
 import { emptyState } from './ui.js';
 import { initGlobalSearch } from './global-search.js';
 import { initAnnouncementBanners } from './announcements.js';

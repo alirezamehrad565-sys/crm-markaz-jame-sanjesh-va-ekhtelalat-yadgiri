@@ -155,7 +155,7 @@ export interface ComorbidityPattern {
 }
 
 export interface FormulationResult {
-  schemaVersion: "m93.1";
+  schemaVersion: "m93.2";
   generatedAt: string;
   childId: string;
   ageYears?: number;
@@ -166,13 +166,11 @@ export interface FormulationResult {
   primaryProfile: { key: string; titleFa: string; rationaleFa: string; sharedConstructKeys: string[] };
   differentialsFa: string[];
   wechslerLink: Record<string, unknown> | null;
-  otLink: { delayedDomainsFa: string[]; summaryFa: string } | null;
   redFlags: readonly { key: string; textFa: string; actionFa: string; urgent: boolean }[];
   dataCoverage: { percent: number; missing: string[] };
   nextActions: readonly { priority: number; actionFa: string; toolId?: string; reasonFa?: string }[];
   protocolSuggestion: { protocol: string; secondary?: string; rationaleFa: string } | null;
   monitoring: { intervalMonths: number; rationaleFa: string };
-  narrative: { saw: string; means: string; next: string };
   confidence: number; // 0.1-0.95
   capsFa: string[];
   disclaimer: string;

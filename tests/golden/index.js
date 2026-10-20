@@ -17,3 +17,4 @@
 //
 // This file contains no tests of its own.
 import "./wechsler-golden.test.mjs";
+import "./formulation-golden.test.mjs";
