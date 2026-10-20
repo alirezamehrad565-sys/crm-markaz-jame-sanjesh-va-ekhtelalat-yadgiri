@@ -6,7 +6,7 @@
 // هدف: نمایش زمان نباید به TZ مرورگر وابسته باشد (یافتهٔ ثبت‌شدهٔ ).
 // format.js در public/assets/js است — عمداً خارج از تایپ‌چک TS؛ import با @ts-ignore.
 // @ts-ignore — فایل.js فرانت، خارج از include تایپ‌اسکریپت است
-import { enDigits, jalaliMonthLength, parseJalaliInput, toUtcIso, tehranTimeOfIso, tehranYmdOfIso } from '../../public/assets/js/format.js';
+import { enDigits, formatJalaliNumeric, formatStoredJalaliNumeric, jalaliMonthLength, parseJalaliInput, storedDateKind, toUtcIso, tehranTimeOfIso, tehranYmdOfIso } from '../../public/assets/js/format.js';
 
 describe('toUtcIso (نرمال‌ساز ضد-TZ)', () => {
   test('ISO کامل با Z — بدون تغییر معنا', () => {
@@ -146,5 +146,49 @@ describe('jalaliMonthLength (کبیسهٔ واقعی)', () => {
     expect(jalaliMonthLength(1403, 12)).toBe(30);
     expect(jalaliMonthLength(1402, 12)).toBe(29);
     expect(jalaliMonthLength(1404, 12)).toBe(29);
+  });
+});
+
+// ─────────────── تولد دو-قالبی: تشخیص قالب + نمایش همیشه‌شمسی (m131) ───────────────
+
+describe('storedDateKind (تشخیص قالب تاریخ ذخیره‌شده)', () => {
+  test('جلالی: سال ۱۲۰۰–۱۵۰۰ (رکوردهای قدیمی/seed)', () => {
+    expect(storedDateKind('1391-07-02')).toBe('jalali');
+    expect(storedDateKind('1390-03-15')).toBe('jalali');
+  });
+
+  test('میلادی: سال ≥۱۷۰۰ (خروجی jalali-picker و بات بله)', () => {
+    expect(storedDateKind('2012-09-23')).toBe('gregorian');
+    expect(storedDateKind('2026-10-08')).toBe('gregorian');
+  });
+
+  test('ورودی نامعتبر/خالی → جلالی (رفتار محتاطانه — همان مسیر قبلی)', () => {
+    expect(storedDateKind('')).toBe('jalali');
+    expect(storedDateKind(null)).toBe('jalali');
+    expect(storedDateKind('abc')).toBe('jalali');
+  });
+});
+
+describe('formatStoredJalaliNumeric (نمایش تولد — همیشه شمسی)', () => {
+  test('رکورد قدیمی جلالی (seed) — بدون تغییر همان‌طور نمایش داده می‌شود', () => {
+    expect(formatStoredJalaliNumeric('1391-07-02')).toBe('۱۳۹۱/۰۷/۰۲');
+    expect(formatStoredJalaliNumeric('1390-03-15')).toBe('۱۳۹۰/۰۳/۱۵');
+  });
+
+  test('رکورد جدید میلادی (باگ «۲۰۱۲/۰۹/۲۳») → به جلالی تبدیل می‌شود', () => {
+    expect(formatStoredJalaliNumeric('2012-09-23')).toBe(formatJalaliNumeric('2012-09-23'));
+    expect(formatStoredJalaliNumeric('2012-09-23')).not.toContain('2012');
+    expect(formatStoredJalaliNumeric('2012-09-23')).not.toContain('۲۰۱۲');
+  });
+
+  test('هر دو قالبِ معادل یک خروجی یکسان می‌دهند', () => {
+    // ۱۳۹۱/۰۷/۰۲ جلالی = 2012-09-23 میلادی
+    expect(formatStoredJalaliNumeric('1391-07-02')).toBe(formatStoredJalaliNumeric('2012-09-23'));
+  });
+
+  test('خالی/ناموجود → خط تیره', () => {
+    expect(formatStoredJalaliNumeric('')).toBe('—');
+    expect(formatStoredJalaliNumeric(null)).toBe('—');
+    expect(formatStoredJalaliNumeric(undefined)).toBe('—');
   });
 });
