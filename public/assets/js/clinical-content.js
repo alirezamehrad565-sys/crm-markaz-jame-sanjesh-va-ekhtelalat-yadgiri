@@ -206,7 +206,8 @@ export const STAGE2_META = {
       num: 4,
       title: 'ارزیابی عملکردی',
       glanceOt: 'پیمایش {n} از {m} مهارت',
-      glanceOtProbe: '{ot} · {k} آزمون عملکرد',
+      glanceSld: '{n} چک‌لیست خواندن/نوشتن/ریاضی و پروب پاسخ‌شده',
+      glanceSldZero: 'چک‌لیست عملکردی پاسخ نشده است',
       glanceFallback: 'پس از تعیین مسیر پرونده فعال می‌شود',
       emptyHint: 'ارزیابی عملکردی بسته به مسیر پرونده انتخاب می‌شود — چک‌لیست خواندن/نوشتن/ریاضی یا چک‌لیست مهارتی پس از تعیین مسیر فعال می‌شود.'
     },
@@ -244,7 +245,30 @@ export const STAGE2_META = {
     hypotheses:  { label: 'فرضیه‌ها، حوزه‌های ضعیف و پرچم‌های روایی', count: '{n} فرضیه' }
   },
   showMoreRows: '{n} سطر دیگر…',
-  showMoreItems: '{n} مورد دیگر…'
+  showMoreItems: '{n} مورد دیگر…',
+  /**
+   * برچسب‌های ریزآمار سربرگ‌ها (m136) — ردیف .clxacc__stats زیر glance؛
+   * همهٔ اعداد با fa() فارسی می‌شوند و آمار بدون داده اصلاً رندر نمی‌شود.
+   */
+  stats: {
+    anamnesisLast: 'آخرین شرح‌حال',
+    anamnesisStaleLabel: 'تازگی',
+    anamnesisStale: 'کهنه است — بازثبت لازم',
+    behavioralAnswered: 'چک‌لیست پاسخ‌شده',
+    suspicionSignals: 'سیگنال شک',
+    wechslerScatter: 'پراکندگی شاخص‌ها',
+    wechslerReassess: 'بازسنجی',
+    skillsCoverage: 'مهارت پیمایش‌شده',
+    skillsDomains: 'حیطهٔ فعال',
+    skillsSld: 'چک‌لیست درسی',
+    skillsProbe: 'پروب عملکرد',
+    needsCoverage: 'پوشش داده',
+    needsConstructs: 'سازهٔ برجسته',
+    needsPatterns: 'الگوی فعال',
+    pathSteps: 'گام مسیر',
+    pathSessions: 'جلسهٔ برنامه‌ریزی‌شده',
+    protocolSuggestion: 'پیشنهاد موتور:'
+  }
 };
 
 /** کارت جمع‌بندی تشخیصی — تیترهای بخش‌های داخلی */

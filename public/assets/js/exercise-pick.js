@@ -12,6 +12,7 @@
 import { api } from './api.js';
 import { el, icon, toast, toastError, openModal, skeletonState, emptyState } from './ui.js';
 import { fa } from './format.js';
+import { hueDot } from './staff-hue.js'; // — چیپ رنگی سازندهٔ تمرین (m136)
 
 const PAGE_SIZE = 50; // با جستجو + چیپ دسته کافی است — مرور کامل در تب «بانک تمرین»
 const ITEM_TEXT_MAX = 500; // PATHWAY_SESSION_ITEM_TEXT_MAX سمت سرور
@@ -48,6 +49,15 @@ export function openExercisePicker({ onPick } = {}) {
   const state = { q: '', tagIds: [] };
   let tags = { disorder: [], grade: [] };
   let seq = 0; // پاسخ‌های کهنهٔ جستجو نادیده گرفته شوند
+  // نگاشت سازنده برای چیپ رنگی — با فهرست تمرین‌ها موازی می‌آید؛ خطا بی‌صدا
+  let staffNames = new Map();
+  const staffReady = (async () => {
+    try {
+      const res = await api.get('/api/staff');
+      const items = Array.isArray(res.data) ? res.data : res.data?.items ?? [];
+      staffNames = new Map(items.map((s) => [s.id, s.fullName]));
+    } catch { /* چیپ سازنده نمایش داده نمی‌شود */ }
+  })();
 
   const listBox = el('div', { class: 'expick-list' });
   const foot = el('div', { class: 'cell-sub expick-foot' });
@@ -77,10 +87,14 @@ export function openExercisePicker({ onPick } = {}) {
 
   function row(ex) {
     const fileCount = Array.isArray(ex.files) ? ex.files.length : 0;
+    const ownerName = ex.createdBy ? staffNames.get(ex.createdBy) : null;
     return el('div', { class: 'expick-row' },
       el('div', { class: 'expick-row__main' },
         el('b', { class: 'expick-row__title' }, ex.title),
         el('div', { class: 'expick-row__meta' },
+          ownerName ? el('span', { class: 'staff-chip exb-owner expick-owner' }, hueDot(ex.createdBy, 9), ownerName) : null,
+          ex.visibility === 'private' ? el('span', { class: 'badge badge--warning' }, 'خصوصی') : null,
+          ex.teamCreated ? el('span', { class: 'badge badge--neutral' }, 'تیمی') : null,
           fileCount ? el('span', { class: 'cell-sub' }, `${fa(fileCount)} فایل`) : null,
           ex.externalUrl ? el('span', { class: 'cell-sub' }, 'بازی آنلاین') : null,
           (ex.tags ?? []).slice(0, 3).map((t) => el('span', { class: 'badge badge--neutral' }, t.name)))),
@@ -93,6 +107,7 @@ export function openExercisePicker({ onPick } = {}) {
 
   async function load() {
     const mySeq = ++seq;
+    await staffReady; // چیپ سازنده بدون رقابت با فهرست
     listBox.replaceChildren(skeletonState('list', 5));
     try {
       const qs = new URLSearchParams({ page: '1', page_size: String(PAGE_SIZE) });

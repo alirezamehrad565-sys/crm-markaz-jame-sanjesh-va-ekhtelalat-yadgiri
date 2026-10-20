@@ -1041,8 +1041,8 @@ function contentQueries(since) {
   const q = /* @__PURE__ */ __name((sql) => ({ sql: sql + W, params: P }), "q");
   const qJoin = /* @__PURE__ */ __name((sql) => ({ sql, params: since ? [since] : [] }), "qJoin");
   return [
-    // تولید محتوا
-    q(`SELECT created_by k, COUNT(*) c FROM exercises WHERE deleted_at IS NULL AND created_by IS NOT NULL GROUP BY created_by`),
+    // تولید محتوا — تمرین تیمی (team_created=1) نصف وزن می‌گیرد (خواست کاربر)
+    q(`SELECT created_by k, SUM(CASE WHEN team_created = 1 THEN 0.5 ELSE 1 END) c FROM exercises WHERE deleted_at IS NULL AND created_by IS NOT NULL GROUP BY created_by`),
     q(`SELECT created_by k, COUNT(*) c FROM exercise_packages WHERE deleted_at IS NULL AND created_by IS NOT NULL GROUP BY created_by`),
     q(`SELECT created_by k, COUNT(*) c FROM pathway_templates WHERE active = 1 AND created_by IS NOT NULL GROUP BY created_by`),
     q(`SELECT created_by k, COUNT(*) c FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by IS NOT NULL GROUP BY created_by`),
@@ -3990,8 +3990,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.14";
-var APP_MILESTONE = "m135";
+var APP_VERSION = "1.00.15";
+var APP_MILESTONE = "m136";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -9171,6 +9171,8 @@ var NewExerciseSchema = external_exports.object({
   external_url: external_exports.string().trim().max(500, "\u0644\u06CC\u0646\u06A9 \u0628\u06CC\u0634 \u0627\u0632 \u06F5\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").refine((v) => v === "" || /^https?:\/\//i.test(v), "\u0644\u06CC\u0646\u06A9 \u0628\u0627\u06CC\u062F \u0628\u0627 http:// \u06CC\u0627 https:// \u0634\u0631\u0648\u0639 \u0634\u0648\u062F").nullable().optional(),
   tag_ids: external_exports.array(UuidSchema).max(10, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F0 \u0628\u0631\u0686\u0633\u0628 \u0628\u0631\u0627\u06CC \u0647\u0631 \u062A\u0645\u0631\u06CC\u0646").optional().default([]),
   published: external_exports.boolean().optional().default(true),
+  visibility: external_exports.enum(["public", "private"]).optional(),
+  team_created: external_exports.boolean().optional(),
   file: ExerciseFileSchema.nullable().optional()
 });
 var UpdateExerciseSchema = external_exports.object({
@@ -9179,9 +9181,12 @@ var UpdateExerciseSchema = external_exports.object({
   format: ExerciseFormatSchema.optional(),
   external_url: external_exports.string().trim().max(500, "\u0644\u06CC\u0646\u06A9 \u0628\u06CC\u0634 \u0627\u0632 \u06F5\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").refine((v) => v === "" || /^https?:\/\//i.test(v), "\u0644\u06CC\u0646\u06A9 \u0628\u0627\u06CC\u062F \u0628\u0627 http:// \u06CC\u0627 https:// \u0634\u0631\u0648\u0639 \u0634\u0648\u062F").nullable().optional(),
   tag_ids: external_exports.array(UuidSchema).max(10, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F0 \u0628\u0631\u0686\u0633\u0628 \u0628\u0631\u0627\u06CC \u0647\u0631 \u062A\u0645\u0631\u06CC\u0646").optional(),
-  published: external_exports.boolean().optional()
+  published: external_exports.boolean().optional(),
+  visibility: external_exports.enum(["public", "private"]).optional(),
+  team_created: external_exports.boolean().optional(),
+  owner_staff_id: UuidSchema.nullable().optional()
 }).refine(
-  (v) => v.title !== void 0 || v.description !== void 0 || v.format !== void 0 || v.external_url !== void 0 || v.tag_ids !== void 0 || v.published !== void 0,
+  (v) => v.title !== void 0 || v.description !== void 0 || v.format !== void 0 || v.external_url !== void 0 || v.tag_ids !== void 0 || v.published !== void 0 || v.visibility !== void 0 || v.team_created !== void 0 || v.owner_staff_id !== void 0,
   { message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u06CC\u0644\u062F \u0628\u0631\u0627\u06CC \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" }
 );
 var ReplaceExerciseFileSchema = external_exports.object({
@@ -18666,6 +18671,8 @@ function createExerciseBankService(deps) {
       file: primary ? { filename: primary.filename, mime: primary.mime, size: primary.size } : null,
       files,
       assignCount: row.assign_count ?? 0,
+      visibility: row.visibility === "private" ? "private" : "public",
+      teamCreated: row.team_created === 1,
       createdBy: row.created_by,
       createdAt: row.created_at,
       updatedAt: row.updated_at
@@ -18723,7 +18730,7 @@ function createExerciseBankService(deps) {
     return db.queryOne(
       `SELECT id, title, description, format, published, external_url,
               file_name, file_mime, file_size, file_key, assign_count,
-              created_by, created_at, updated_at
+              visibility, team_created, created_by, created_at, updated_at
          FROM exercises WHERE id = ? AND deleted_at IS NULL`,
       [id]
     );
@@ -18854,6 +18861,8 @@ function createExerciseBankService(deps) {
     setGradeObserver(observer) {
       gradeObserver = observer;
     },
+    /** — فهرست تمرین‌ها؛ دید (visibility): غیرمدیر = عمومی + خصوصیِ خودش؛
+     * publicOnly (بات/خانواده) = فقط عمومی؛ مدیر = همه */
     async list(filters, _actor) {
       const pageSize = Math.min(Math.max(filters.pageSize ?? 20, 1), 100);
       const page = clampPage(filters.page);
@@ -18861,6 +18870,12 @@ function createExerciseBankService(deps) {
       const params = [];
       if (filters.publishedOnly)
         conds.push("e.published = 1");
+      if (filters.publicOnly) {
+        conds.push("e.visibility = 'public'");
+      } else if (_actor && _actor.role !== "manager") {
+        conds.push("(e.visibility = 'public' OR e.created_by = ?)");
+        params.push(_actor.staffId);
+      }
       if (filters.q && filters.q.trim().length > 0) {
         const like = `%${escapeLike(filters.q.trim())}%`;
         conds.push("(e.title LIKE ? ESCAPE '\\' OR e.description LIKE ? ESCAPE '\\')");
@@ -18886,7 +18901,7 @@ function createExerciseBankService(deps) {
       const rows = await db.query(
         `SELECT e.id, e.title, e.description, e.format, e.published, e.external_url,
                 e.file_name, e.file_mime, e.file_size, e.file_key, e.assign_count,
-                e.created_by, e.created_at, e.updated_at
+                e.visibility, e.team_created, e.created_by, e.created_at, e.updated_at
            FROM exercises e ${where}
           ORDER BY e.created_at DESC, e.id DESC
           LIMIT ${pageSize} OFFSET ${win.offset}`,
@@ -18939,8 +18954,8 @@ function createExerciseBankService(deps) {
       }
       await db.transaction(async (tx) => {
         await tx.execute(
-          `INSERT INTO exercises (id, title, description, format, published, external_url, file_name, file_mime, file_size, file_key, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO exercises (id, title, description, format, published, external_url, file_name, file_mime, file_size, file_key, visibility, team_created, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
             title22,
@@ -18952,6 +18967,8 @@ function createExerciseBankService(deps) {
             fileMeta?.mime ?? null,
             fileMeta?.size ?? null,
             fileMeta ? `exercise/${id}` : null,
+            input.visibility === "private" ? "private" : "public",
+            input.teamCreated ? 1 : 0,
             actor.staffId
           ]
         );
@@ -18972,7 +18989,9 @@ function createExerciseBankService(deps) {
             title: { from: null, to: title22 },
             format: { from: null, to: input.format },
             hasFile: { from: null, to: Boolean(fileMeta) },
-            storage: { from: null, to: storage.name }
+            storage: { from: null, to: storage.name },
+            visibility: { from: null, to: input.visibility === "private" ? "private" : "public" },
+            teamCreated: { from: null, to: Boolean(input.teamCreated) }
           }
         });
       });
@@ -18988,6 +19007,20 @@ function createExerciseBankService(deps) {
       const title22 = input.title !== void 0 ? normalizeExerciseTitle(input.title) : void 0;
       if (title22 !== void 0 && title22.length < 2)
         throw new ValidationError("\u0639\u0646\u0648\u0627\u0646 \u062A\u0645\u0631\u06CC\u0646 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+      const visibility = input.visibility === "private" ? "private" : input.visibility === "public" ? "public" : null;
+      const teamCreated = input.teamCreated === void 0 ? null : input.teamCreated ? 1 : 0;
+      if ((visibility !== null || teamCreated !== null) && actor.role !== "manager" && row.created_by !== actor.staffId) {
+        throw new ForbiddenError("\u062A\u0646\u0647\u0627 \u0633\u0627\u0632\u0646\u062F\u0647\u0654 \u062A\u0645\u0631\u06CC\u0646 \u06CC\u0627 \u0645\u062F\u06CC\u0631 \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u062F\u06CC\u062F \u06CC\u0627 \u062A\u06CC\u0645\u200C\u0628\u0648\u062F\u0646 \u0622\u0646 \u0631\u0627 \u062A\u063A\u06CC\u06CC\u0631 \u062F\u0647\u062F");
+      }
+      let newOwner = null;
+      if (input.ownerStaffId) {
+        if (actor.role !== "manager")
+          throw new ForbiddenError("\u062A\u063A\u06CC\u06CC\u0631 \u0633\u0627\u0632\u0646\u062F\u0647\u0654 \u062A\u0645\u0631\u06CC\u0646 \u0641\u0642\u0637 \u062A\u0648\u0633\u0637 \u0645\u062F\u06CC\u0631 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
+        const ownerRow = await db.queryOne(`SELECT id FROM staff WHERE id = ? AND active = 1`, [input.ownerStaffId]);
+        if (!ownerRow)
+          throw new NotFoundError("\u06A9\u0627\u0631\u0645\u0646\u062F");
+        newOwner = input.ownerStaffId;
+      }
       await db.transaction(async (tx) => {
         await tx.execute(
           `UPDATE exercises
@@ -18996,6 +19029,9 @@ function createExerciseBankService(deps) {
                   format = COALESCE(?, format),
                   published = COALESCE(?, published),
                   external_url = CASE WHEN ? THEN ? ELSE external_url END,
+                  visibility = COALESCE(?, visibility),
+                  team_created = COALESCE(?, team_created),
+                  created_by = COALESCE(?, created_by),
                   updated_at = datetime('now')
             WHERE id = ?`,
           [
@@ -19006,6 +19042,9 @@ function createExerciseBankService(deps) {
             input.published === void 0 ? null : input.published ? 1 : 0,
             input.externalUrl !== void 0 ? 1 : 0,
             input.externalUrl !== void 0 ? input.externalUrl?.trim() ? input.externalUrl.trim() : null : null,
+            visibility,
+            teamCreated,
+            newOwner,
             id
           ]
         );
@@ -19019,11 +19058,22 @@ function createExerciseBankService(deps) {
           resourceId: id,
           changes: {
             ...input.title !== void 0 ? { title: { from: row.title, to: title22 ?? null } } : {},
-            ...input.published !== void 0 ? { published: { from: row.published === 1, to: input.published } } : {}
+            ...input.published !== void 0 ? { published: { from: row.published === 1, to: input.published } } : {},
+            ...visibility !== null ? { visibility: { from: row.visibility ?? "public", to: visibility } } : {},
+            ...teamCreated !== null ? { teamCreated: { from: row.team_created === 1, to: teamCreated === 1 } } : {}
           }
         });
+        if (newOwner && newOwner !== row.created_by) {
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: "exercise.reassigned",
+            resourceType: "exercise",
+            resourceId: id,
+            changes: { createdBy: { from: row.created_by, to: newOwner } }
+          });
+        }
       });
-      log32.info("exercise.updated", { id });
+      log32.info("exercise.updated", { id, reassigned: newOwner ?? null });
       const updated = await this.getById(id);
       return updated;
     },
@@ -19534,7 +19584,8 @@ function createExerciseBankService(deps) {
     },
     // ───────────── پیشنهاد برچسب‌محور + بستهٔ تکلیف + ارسال پنل ─────────────
     /** تطبیق برچسب دانش‌آموز × برچسب تمرین/بسته — همان الگوی suggestTypesForStudent چک‌لیست */
-    async suggestForStudent(studentId) {
+    async suggestForStudent(studentId, _actor) {
+      const exVisible = _actor && _actor.role !== "manager";
       const [tagRows, exerciseRows, packageRows] = await Promise.all([
         db.query(
           `SELECT t.id, t.name
@@ -19546,10 +19597,11 @@ function createExerciseBankService(deps) {
         db.query(
           `SELECT id, title, description, format, published,
                   file_name, file_mime, file_size, file_key, assign_count,
-                  created_by, created_at, updated_at
+                  visibility, team_created, created_by, created_at, updated_at
              FROM exercises
-            WHERE deleted_at IS NULL AND published = 1
-            ORDER BY created_at DESC LIMIT 200`
+            WHERE deleted_at IS NULL AND published = 1${exVisible ? " AND (visibility = 'public' OR created_by = ?)" : ""}
+            ORDER BY created_at DESC LIMIT 200`,
+          exVisible ? [_actor.staffId] : []
         ),
         db.query(
           `SELECT * FROM exercise_packages WHERE deleted_at IS NULL AND published = 1
@@ -19599,7 +19651,7 @@ function createExerciseBankService(deps) {
           throw new ConflictError("\u0628\u0633\u062A\u0647\u0654 \u062A\u0645\u0631\u06CC\u0646\u06CC \u0645\u0646\u062A\u0634\u0631\u0634\u062F\u0647 \u0646\u06CC\u0633\u062A \u2014 \u0627\u0628\u062A\u062F\u0627 \u0622\u0646 \u0631\u0627 \u0645\u0646\u062A\u0634\u0631 \u06A9\u0646\u06CC\u062F");
         packageTitle = pkg.title;
         const itemRows = await db.query(
-          `SELECT pi.exercise_id, e.title
+          `SELECT pi.exercise_id, e.title, e.visibility, e.created_by
              FROM exercise_package_items pi
              JOIN exercises e ON e.id = pi.exercise_id AND e.deleted_at IS NULL AND e.published = 1
             WHERE pi.package_id = ?
@@ -19608,13 +19660,17 @@ function createExerciseBankService(deps) {
         );
         if (itemRows.length === 0)
           throw new ConflictError("\u0628\u0633\u062A\u0647\u0654 \u062A\u0645\u0631\u06CC\u0646\u06CC \u0647\u06CC\u0686 \u062A\u0645\u0631\u06CC\u0646 \u0645\u0646\u062A\u0634\u0631\u0634\u062F\u0647\u200C\u0627\u06CC \u0646\u062F\u0627\u0631\u062F");
+        for (const item of itemRows) {
+          if (item.visibility === "private" && item.created_by !== actor.staffId)
+            throw new ForbiddenError(`\u062A\u0645\u0631\u06CC\u0646 \u062E\u0635\u0648\u0635\u06CC \xAB${item.title}\xBB \u062F\u0631 \u0627\u06CC\u0646 \u0628\u0633\u062A\u0647 \u0627\u0633\u062A \u2014 \u0641\u0642\u0637 \u0633\u0627\u0632\u0646\u062F\u0647\u0654 \u0622\u0646 \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0628\u0641\u0631\u0633\u062A\u062F`);
+        }
         exercises = itemRows.map((r) => ({ id: r.exercise_id, title: r.title }));
       } else {
         const ids = [...new Set(input.exerciseIds ?? [])];
         if (ids.length === 0)
           throw new ValidationError("\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u062A\u0645\u0631\u06CC\u0646 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
         const rows = await db.query(
-          `SELECT id, title, published, deleted_at FROM exercises WHERE id IN (${ids.map(() => "?").join(", ")})`,
+          `SELECT id, title, published, deleted_at, visibility, created_by FROM exercises WHERE id IN (${ids.map(() => "?").join(", ")})`,
           ids
         );
         const byId = new Map(rows.map((r) => [r.id, r]));
@@ -19624,6 +19680,8 @@ function createExerciseBankService(deps) {
             throw new NotFoundError("\u062A\u0645\u0631\u06CC\u0646");
           if (r.published !== 1)
             throw new ConflictError(`\u062A\u0645\u0631\u06CC\u0646 \xAB${r.title}\xBB \u0645\u0646\u062A\u0634\u0631\u0634\u062F\u0647 \u0646\u06CC\u0633\u062A \u2014 \u0627\u0628\u062A\u062F\u0627 \u0622\u0646 \u0631\u0627 \u0645\u0646\u062A\u0634\u0631 \u06A9\u0646\u06CC\u062F`);
+          if (r.visibility === "private" && r.created_by !== actor.staffId)
+            throw new ForbiddenError(`\u062A\u0645\u0631\u06CC\u0646 \u062E\u0635\u0648\u0635\u06CC \xAB${r.title}\xBB \u0641\u0642\u0637 \u062A\u0648\u0633\u0637 \u0633\u0627\u0632\u0646\u062F\u0647\u0654 \u0622\u0646 \u0642\u0627\u0628\u0644 \u0627\u0631\u0633\u0627\u0644 \u0627\u0633\u062A`);
         }
         exercises = ids.map((exId) => ({ id: exId, title: byId.get(exId).title }));
       }
@@ -19758,7 +19816,7 @@ function createExerciseBankService(deps) {
         throw new ConflictError("\u0647\u06CC\u0686 \u0686\u062A \u0645\u062A\u0635\u0644\u06CC \u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F \u2014 \u0627\u0648\u0644 \u0648\u0644\u06CC\u0651 \u0631\u0627 \u0628\u0627 \u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u0628\u0647 \u0628\u0627\u062A \u0648\u0635\u0644 \u06A9\u0646\u06CC\u062F");
       }
       const items = await db.query(
-        `SELECT a.id, a.exercise_id, a.status, e.title
+        `SELECT a.id, a.exercise_id, a.status, e.title, e.visibility, e.created_by
            FROM exercise_assignments a
            JOIN exercises e ON e.id = a.exercise_id AND e.deleted_at IS NULL
           WHERE a.batch_id = ?
@@ -19774,7 +19832,13 @@ function createExerciseBankService(deps) {
       else if (batch.note)
         lines.push(`\u06CC\u0627\u062F\u062F\u0627\u0634\u062A: ${batch.note}`);
       let linkBudget = MAX_EXERCISE_BATCH_LINKS;
+      let skippedPrivate = 0;
       for (const item of items) {
+        // — تمرین خصوصی دیگری هرگز به خانواده نمی‌رود (حتی اگر قبلاً در بسته بود)
+        if (item.visibility === "private" && item.created_by !== actor.staffId) {
+          skippedPrivate += 1;
+          continue;
+        }
         lines.push("", `\u2022 ${item.title}`);
         const ex = await this.getById(item.exercise_id);
         if (ex?.externalUrl)
@@ -19792,6 +19856,9 @@ function createExerciseBankService(deps) {
       }
       if (linkBudget <= 0 && base) {
         lines.push(`\u0648 \u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0628\u06CC\u0634\u062A\u0631 \u2014 \u0628\u0627 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F.`);
+      }
+      if (skippedPrivate > 0) {
+        lines.push(`\u26A0\uFE0F ${skippedPrivate} \u062A\u0645\u0631\u06CC\u0646 \u0628\u0647 \u062F\u0644\u06CC\u0644 \u062E\u0635\u0648\u0635\u06CC\u200C\u0628\u0648\u062F\u0646 \u0627\u0632 \u0627\u06CC\u0646 \u062A\u06A9\u0644\u06CC\u0641 \u062D\u0630\u0641 \u0634\u062F.`);
       }
       lines.push("", "\u067E\u0633 \u0627\u0632 \u0627\u0646\u062C\u0627\u0645 \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u060C \u0646\u062A\u06CC\u062C\u0647 \u0631\u0627 \u0628\u0627 \u0639\u06A9\u0633 \u0628\u0631\u0627\u06CC \u0647\u0645\u06CC\u0646 \u0686\u062A \u0628\u0641\u0631\u0633\u062A\u06CC\u062F.");
       const minuteBucket = Math.floor(now().getTime() / 6e4);
@@ -19825,13 +19892,15 @@ function createExerciseBankService(deps) {
     },
     async assign(input, actor) {
       const row = await db.queryOne(
-        `SELECT id, title, published, deleted_at FROM exercises WHERE id = ?`,
+        `SELECT id, title, published, deleted_at, visibility, created_by FROM exercises WHERE id = ?`,
         [input.exerciseId]
       );
       if (!row || row.deleted_at)
         throw new NotFoundError("\u062A\u0645\u0631\u06CC\u0646");
       if (row.published !== 1)
         throw new ConflictError("\u062A\u0645\u0631\u06CC\u0646 \u0645\u0646\u062A\u0634\u0631\u0634\u062F\u0647 \u0646\u06CC\u0633\u062A \u2014 \u0627\u0628\u062A\u062F\u0627 \u0622\u0646 \u0631\u0627 \u0645\u0646\u062A\u0634\u0631 \u06A9\u0646\u06CC\u062F");
+      if (row.visibility === "private" && row.created_by !== actor.staffId)
+        throw new ForbiddenError("\u062A\u0645\u0631\u06CC\u0646 \u062E\u0635\u0648\u0635\u06CC \u0641\u0642\u0637 \u062A\u0648\u0633\u0637 \u0633\u0627\u0632\u0646\u062F\u0647\u0654 \u0622\u0646 \u0642\u0627\u0628\u0644 \u0627\u0631\u0633\u0627\u0644 \u0627\u0633\u062A");
       const student = await db.queryOne(
         `SELECT id, first_name, last_name FROM students WHERE id = ? AND active = 1`,
         [input.studentId]
@@ -20407,6 +20476,8 @@ function registerExerciseBankRoutes(app, service) {
         externalUrl: body.external_url ?? null,
         tagIds: body.tag_ids ?? [],
         published: body.published,
+        visibility: body.visibility,
+        teamCreated: body.team_created,
         file: body.file ? { filename: body.file.filename, mimeType: body.file.mime_type, contentB64: body.file.content_b64 } : null
       },
       actor
@@ -20499,8 +20570,11 @@ function registerExerciseBankRoutes(app, service) {
     return c.json({ data: { ok: true } }, 200);
   });
   app.get("/api/exercises/:id", async (c) => {
+    const actor = getAuthContext(c);
     const exercise = await service.getById(c.req.param("id"));
     if (!exercise)
+      throw new NotFoundError("\u062A\u0645\u0631\u06CC\u0646");
+    if (exercise.visibility === "private" && actor.role !== "manager" && exercise.createdBy !== actor.staffId)
       throw new NotFoundError("\u062A\u0645\u0631\u06CC\u0646");
     return c.json({ data: exercise }, 200);
   });
@@ -20515,7 +20589,10 @@ function registerExerciseBankRoutes(app, service) {
         format: body.format,
         externalUrl: body.external_url,
         tagIds: body.tag_ids,
-        published: body.published
+        published: body.published,
+        visibility: body.visibility,
+        teamCreated: body.team_created,
+        ownerStaffId: body.owner_staff_id
       },
       actor
     );
@@ -20620,7 +20697,8 @@ function registerExerciseBankRoutes(app, service) {
     return c.json({ data: items }, 200);
   });
   app.get("/api/students/:id/exercises/suggest", requireRole("manager", "therapist", "secretary"), async (c) => {
-    const suggestions = await service.suggestForStudent(UuidSchema.parse(c.req.param("id")));
+    const actor = getAuthContext(c);
+    const suggestions = await service.suggestForStudent(UuidSchema.parse(c.req.param("id")), actor);
     return c.json({ data: suggestions }, 200);
   });
   app.post("/api/students/:id/exercises/batches", requireRole("manager", "therapist", "secretary"), async (c) => {
@@ -33390,112 +33468,6 @@ function createStaffService(deps) {
       });
       logger.child("staff").info("staff.deleted", { id });
     },
-    /**
-     * — امتیاز محتوای همکاران (خواست کاربر: «از بخش‌های مختلف سایت داخل سیستم
-     * امتیازبندی بیار؛ بسته به محتوایی که تولید می‌کنن، میزان ارجاعی که به محتواشون
-     * می‌خوره و از محتواشون استفاده می‌شه امتیاز بده»).
-     * نمرهٔ شفاف و محاسبه‌شدهٔ زنده از روی دادهٔ واقعی — بدون شمارندهٔ نگهداری‌شده:
-     * تولید: تمرین ۳ / بستهٔ تمرینی ۴ / قالب مسیر ۴ / فرم دست‌ساز ۵
-     * استفاده: هر ارسال تکلیف تمرین ۱ / هر ساخت مسیر از قالب ۲ / هر تکمیل فرم ۱
-     * ارجاع: همان رویدادها وقتی مصرف‌کننده همکارِ دیگری است (اعتبار نزد جمع) —
-     * تمرین/فرم +۱ و قالب +۲ اضافهٔ رویداد استفاده
-     */
-    async contributionScores() {
-      const staffRows = await db.query(
-        `SELECT id, full_name, COALESCE(role_ext, role) AS role, active FROM staff ORDER BY full_name`,
-        []
-      );
-      const countByCreator = /* @__PURE__ */ __name2(async (sql) => {
-        const rows = await db.query(sql, []);
-        return new Map(rows.map((r) => [r.k, Number(r.c)]));
-      }, "countByCreator");
-      const [
-        exMap,
-        pkgMap,
-        tplMap,
-        formMap,
-        exUseMap,
-        exRefMap,
-        tplUseMap,
-        tplRefMap,
-        formFillMap,
-        formRefMap
-      ] = await Promise.all([
-        // ── تولید محتوا ──
-        countByCreator(`SELECT created_by k, COUNT(*) c FROM exercises WHERE deleted_at IS NULL GROUP BY created_by`),
-        countByCreator(`SELECT created_by k, COUNT(*) c FROM exercise_packages WHERE deleted_at IS NULL GROUP BY created_by`),
-        countByCreator(`SELECT created_by k, COUNT(*) c FROM pathway_templates WHERE active = 1 AND created_by IS NOT NULL GROUP BY created_by`),
-        countByCreator(`SELECT created_by k, COUNT(*) c FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by IS NOT NULL GROUP BY created_by`),
-        // ── استفاده از تمرین‌ها (تکلیف ارسال‌شده — تکی یا بستهٔ تکلیف) ──
-        countByCreator(`SELECT e.created_by k, COUNT(*) c
-                          FROM exercise_assignments a JOIN exercises e ON e.id = a.exercise_id
-                         WHERE e.deleted_at IS NULL AND e.created_by IS NOT NULL AND a.status != 'cancelled'
-                         GROUP BY e.created_by`),
-        // ── ارجاع تمرین — مصرف توسط همکار دیگر (نه سازنده) ──
-        countByCreator(`SELECT e.created_by k, COUNT(*) c
-                          FROM exercise_assignments a JOIN exercises e ON e.id = a.exercise_id
-                         WHERE e.deleted_at IS NULL AND e.created_by IS NOT NULL AND a.status != 'cancelled'
-                           AND a.assigned_by != e.created_by
-                         GROUP BY e.created_by`),
-        // ── استفاده از قالب‌ها (مسیر ساخته‌شده از قالب) ──
-        countByCreator(`SELECT t.created_by k, COUNT(*) c
-                          FROM intervention_paths p JOIN pathway_templates t ON t.key = p.template_key
-                         WHERE p.deleted_at IS NULL AND t.created_by IS NOT NULL
-                         GROUP BY t.created_by`),
-        // ── ارجاع قالب — ساخت مسیر توسط همکار دیگر ──
-        countByCreator(`SELECT t.created_by k, COUNT(*) c
-                          FROM intervention_paths p JOIN pathway_templates t ON t.key = p.template_key
-                         WHERE p.deleted_at IS NULL AND t.created_by IS NOT NULL AND p.created_by != t.created_by
-                         GROUP BY t.created_by`),
-        // ── استفاده از فرم‌های دست‌ساز (تکمیل‌شده — خانواده یا همکار) ──
-        countByCreator(`SELECT f.created_by k, COUNT(*) c
-                          FROM case_events ce JOIN case_event_types f ON f.id = ce.event_type_id
-                         WHERE f.is_system = 0 AND f.created_by IS NOT NULL AND ce.status != 'cancelled'
-                         GROUP BY f.created_by`),
-        // ── ارجاع فرم — تکمیل توسط همکار دیگر (پرکردن خانواده ارجاع نیست، استفاده است) ──
-        countByCreator(`SELECT f.created_by k, COUNT(*) c
-                          FROM case_events ce JOIN case_event_types f ON f.id = ce.event_type_id
-                         WHERE f.is_system = 0 AND f.created_by IS NOT NULL AND ce.status != 'cancelled'
-                           AND ce.staff_id IS NOT NULL AND ce.staff_id != f.created_by
-                         GROUP BY f.created_by`)
-      ]);
-      const n = /* @__PURE__ */ __name2((m, id) => m.get(id) ?? 0, "n");
-      return staffRows.map((s) => {
-        const exercises = n(exMap, s.id);
-        const packages = n(pkgMap, s.id);
-        const templates = n(tplMap, s.id);
-        const forms = n(formMap, s.id);
-        const exerciseUses = n(exUseMap, s.id);
-        const templateUses = n(tplUseMap, s.id);
-        const formFills = n(formFillMap, s.id);
-        const exerciseRefs = n(exRefMap, s.id);
-        const templateRefs = n(tplRefMap, s.id);
-        const formRefs = n(formRefMap, s.id);
-        const productionScore = 3 * exercises + 4 * packages + 4 * templates + 5 * forms;
-        const usageScore = exerciseUses + 2 * templateUses + formFills;
-        const referenceScore = exerciseRefs + 2 * templateRefs + formRefs;
-        return {
-          staffId: s.id,
-          fullName: s.full_name,
-          role: s.role,
-          active: s.active === 1,
-          exercises,
-          packages,
-          templates,
-          forms,
-          exerciseUses,
-          templateUses,
-          formFills,
-          exerciseRefs,
-          templateRefs,
-          formRefs,
-          productionScore,
-          usageScore,
-          referenceScore,
-          score: productionScore + usageScore + referenceScore
-        };
-      });
-    }
   };
 }
 __name(createStaffService, "createStaffService");
@@ -34812,7 +34784,7 @@ function createExerciseBankBot(deps) {
         return STALE;
     }
     const result = await exerciseBank.list(
-      { tagId, publishedOnly: true, page, pageSize: EXB_PAGE_SIZE },
+      { tagId, publishedOnly: true, publicOnly: true, page, pageSize: EXB_PAGE_SIZE },
       EXB_ACTOR
     );
     if (result.items.length === 0) {
@@ -35852,7 +35824,7 @@ function createStudentActionsBot(deps) {
     if (!exerciseBank)
       return { text: renderTemplate("bot_exercise_disabled"), buttons: null };
     const result = await exerciseBank.list(
-      { publishedOnly: true, page, pageSize: EXB_PAGE_SIZE },
+      { publishedOnly: true, publicOnly: true, page, pageSize: EXB_PAGE_SIZE },
       STU_ACTOR
     );
     if (result.items.length === 0) {

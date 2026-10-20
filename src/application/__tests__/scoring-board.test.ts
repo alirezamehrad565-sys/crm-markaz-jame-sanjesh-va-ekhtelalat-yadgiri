@@ -117,7 +117,7 @@ describe('رتبه‌بندی تابلو', () => {
         resource_type TEXT, resource_id TEXT, changes TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
-      CREATE TABLE exercises (id TEXT PRIMARY KEY, created_by TEXT, deleted_at TEXT, created_at TEXT);
+      CREATE TABLE exercises (id TEXT PRIMARY KEY, created_by TEXT, deleted_at TEXT, created_at TEXT, team_created INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE exercise_packages (id TEXT PRIMARY KEY, created_by TEXT, deleted_at TEXT, created_at TEXT);
       CREATE TABLE pathway_templates (id TEXT PRIMARY KEY, key TEXT, created_by TEXT, active INTEGER, created_at TEXT);
       CREATE TABLE case_event_types (id TEXT PRIMARY KEY, created_by TEXT, is_system INTEGER, active INTEGER, created_at TEXT);
@@ -206,7 +206,7 @@ describe('computeBoard روی MockD1 (یکپارچه)', () => {
         resource_type TEXT, resource_id TEXT, changes TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
-      CREATE TABLE exercises (id TEXT PRIMARY KEY, created_by TEXT, deleted_at TEXT, created_at TEXT);
+      CREATE TABLE exercises (id TEXT PRIMARY KEY, created_by TEXT, deleted_at TEXT, created_at TEXT, team_created INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE exercise_packages (id TEXT PRIMARY KEY, created_by TEXT, deleted_at TEXT, created_at TEXT);
       CREATE TABLE pathway_templates (id TEXT PRIMARY KEY, key TEXT, created_by TEXT, active INTEGER, created_at TEXT);
       CREATE TABLE case_event_types (id TEXT PRIMARY KEY, created_by TEXT, is_system INTEGER, active INTEGER, created_at TEXT);
