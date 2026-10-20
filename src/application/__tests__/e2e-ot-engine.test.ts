@@ -219,7 +219,8 @@ describe('/ — پروفایل مهارتی، نقطهٔ ادامه، تسلط �
 
     // گزارش جلسه در تایم‌لاین (case_events) — رکورد typeTitle دارد
     const events = dataOf<{ typeTitle?: string }[]>(await ali.get(`/api/students/${studentId}/case-events`));
-    expect(events.some((e) => e.typeTitle === 'جلسهٔ کاردرمانی ذهنی — ثبت درمانگر')).toBe(true);
+    // عنوان فرم جلسه در m132 به «گزارش جلسهٔ کاردرمانی ذهنی» تغییر کرد (migration 0055)
+    expect(events.some((e) => e.typeTitle === 'گزارش جلسهٔ کاردرمانی ذهنی')).toBe(true);
   });
 
   it('جلسهٔ دوم «بلد است» → تسلط دوجلسه‌ای تأیید و نقطهٔ ادامه جلو می‌رود', async () => {
@@ -314,7 +315,8 @@ describe('/ — نتیجهٔ نیاز ویژه و فعال‌سازی پروتک
     expect(needsGate.detail).toContain('کاردرمانی ذهنی');
 
     const events = dataOf<{ typeTitle?: string; summary?: string }[]>(await ali.get(`/api/students/${studentId}/case-events`));
-    const needsEvent = events.find((e) => e.typeTitle === 'نتیجهٔ نیاز ویژه — جمع‌بندی شناسایی');
+    // عنوان فرم نیاز ویژه در m132 به «تعیین نیاز ویژه و پروتکل مداخله» تغییر کرد (migration 0055)
+    const needsEvent = events.find((e) => e.typeTitle === 'تعیین نیاز ویژه و پروتکل مداخله');
     expect(needsEvent).toBeDefined();
     expect(needsEvent!.summary).toContain('دیرآموز');
   });

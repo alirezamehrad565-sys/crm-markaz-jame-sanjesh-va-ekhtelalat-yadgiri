@@ -290,7 +290,7 @@ describe('ویزارد بات رویداد (tl) + چک‌لیست خانواده
     await bot(A, cb(stuCb, CHAT_ALI));
     await bot(A, cb(`stu:tl:${idx}`, CHAT_ALI));
     const types = await bot(A, cb(`tl:types:${idx}:checklist`, CHAT_ALI));
-    expect(types.buttons!.flat().some((b) => b.text.includes('مشاهدهٔ رفتار در خانه'))).toBe(true); // — عنوان روایی
+    expect(types.buttons!.flat().some((b) => b.text.includes('پایش رفتار در خانه'))).toBe(true); // عنوان روایی — در m132 بازنویسی شد (migration 0055)
     const startCb = types.buttons!.flat().find((b) => b.callbackData.startsWith('tl:start:'))!.callbackData;
     const confirm = await bot(A, cb(startCb, CHAT_ALI));
     expect(confirm.reply).toContain('در انتظار پاسخ خانواده');
