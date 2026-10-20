@@ -264,12 +264,25 @@ export function formatJalaliNumeric(ymd) {
 }
 
 /**
- * تاریخ جلالیِ ذخیره‌شده (مثل تاریخ تولد — خروجی jalali-picker) → «۱۳۹۱/۰۷/۰۲»
- * بدون تبدیل مجدد — مقدار DB همین حالا جلالی است (فرم + seed).
+ * — تشخیص قالب تاریخ ذخیره‌شده: رکوردهای قدیمی/seed جلالی‌اند (سال ۱۲۰۰–۱۵۰۰)
+ * و مقادیر جدید (خروجی jalali-picker و بات بله) میلادی (سال ≥۱۷۰۰).
+ * همان قرارداد ageLineFromBirthDate (clinical-insights) و parseBirthDateLoose (باندل).
+ */
+export function storedDateKind(ymd) {
+  const y = Number(String(ymd ?? '').slice(0, 4));
+  return y >= 1700 ? 'gregorian' : 'jalali';
+}
+
+/**
+ * تاریخ ذخیره‌شدهٔ تولد → همیشه «۱۳۹۱/۰۷/۰۲» (شمسیِ نمایشی)
+ * مقدار DB دو-قالبی است: رکوردهای قدیمی جلالی (seed) و جدید میلادی (خروجی picker/بات)
+ * → میلادی ≥۱۷۰۰ به جلالی تبدیل می‌شود؛ جلالیِ ذخیره‌شده همان‌طور نمایش داده می‌شود (m131).
  */
 export function formatStoredJalaliNumeric(ymd) {
   if (!ymd) return '—';
-  return fa(String(ymd).replace(/-/g, '/'));
+  const s = String(ymd);
+  if (storedDateKind(s) === 'gregorian') return formatJalaliNumeric(s);
+  return fa(s.replace(/-/g, '/'));
 }
 
 // ─────────────── پارس ورودی آزاد تاریخ جلالی (تقویم فرم‌ها) ───────────────

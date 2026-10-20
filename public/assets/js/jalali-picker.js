@@ -7,7 +7,8 @@
 // + پرش یک‌کلیکی ماه/سال از منوی کشویی تقویم + ناوبری ماه‌به‌ماه و میان‌بُرهای امروز/فردا
 // API:
 // jalaliDateInput({ value, allowClear, onChange }) → { root, hiddenInput, setYmd, getYmd }
-// در formModal با type: 'jalali-date' استفاده می‌شود (مقدار نهایی = تاریخ میلادی YYYY-MM-DD)
+// در formModal با type: 'jalali-date' استفاده می‌شود (مقدار جدید = میلادی YYYY-MM-DD؛
+// رکوردهای قدیمی/seed با مقدار جلالی هم درست نمایش داده و ویرایش می‌شوند — m131)
 
 import { el, icon } from './ui.js';
 import {
@@ -18,6 +19,7 @@ import {
   jalaliMonthLength,
   JALALI_MONTHS,
   parseJalaliInput,
+  storedDateKind,
   tehranTodayYmd,
   toGregorian,
   toJalali
@@ -27,6 +29,32 @@ import {
 export { jalaliMonthLength, parseJalaliInput } from './format.js';
 
 const DOW_SHORT = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
+
+// ─────────────── مقدار ذخیره‌شدهٔ دو-قالبی (m131) ───────────────
+// رکوردهای قدیمی/seed تاریخ جلالی دارند (۱۲۰۰–۱۵۰۰) و مقادیر جدیدِ picker/بات میلادی‌اند
+// (≥۱۷۰۰) — نمایش/تقویم باید قالب را تشخیص دهد تا ویرایش رکورد قدیمی به سال ~۷۷۰ نپرد.
+const pad2c = (n) => (n < 10 ? `0${n}` : String(n));
+
+/** YMD ذخیره‌شده → متن نمایشی کادر (همیشه جلالی) */
+const displayOfStored = (ymd) => (storedDateKind(ymd) === 'gregorian'
+  ? formatJalaliNumeric(ymd)
+  : fa(String(ymd).replace(/-/g, '/')));
+
+/** YMD ذخیره‌شده → اجزای جلالی — میلادی تبدیل می‌شود؛ جلالی مستقیم خوانده می‌شود */
+const jalaliPartsOfStored = (ymd) => {
+  const [y, m, d] = String(ymd).split('-').map(Number);
+  return storedDateKind(ymd) === 'gregorian' ? toJalali(y, m, d) : { jy: y, jm: m, jd: d };
+};
+
+/** YMD ذخیره‌شده → YMD میلادی معادل (مقایسه با سلول‌های تقویم) */
+const gregorianYmdOfStored = (ymd) => {
+  if (storedDateKind(ymd) !== 'gregorian') {
+    const { jy, jm, jd } = jalaliPartsOfStored(ymd);
+    const g = toGregorian(jy, jm, jd);
+    return `${g.gy}-${pad2c(g.gm)}-${pad2c(g.gd)}`;
+  }
+  return ymd;
+};
 
 /**
  * ویجت تاریخ: کادر قابل تایپ + دکمهٔ تقویم + input hidden (حامل YMD میلادی) + پاپ‌اور تقویم
@@ -58,7 +86,7 @@ export function jalaliDateInput({ value = '', allowClear = true, onChange } = {}
     hiddenInput.value = ymd || '';
     field.classList.remove('is-invalid');
     if (ymd) {
-      field.value = formatJalaliNumeric(ymd);
+      field.value = displayOfStored(ymd);
       field.classList.remove('is-empty');
     } else {
       field.value = '';
@@ -90,7 +118,7 @@ export function jalaliDateInput({ value = '', allowClear = true, onChange } = {}
 
   function togglePop() {
     if (pop) { closePop(); return; }
-    const base = hiddenInput.value ? jOf(hiddenInput.value) : jOf(tehranTodayYmd());
+    const base = hiddenInput.value ? jalaliPartsOfStored(hiddenInput.value) : jOf(tehranTodayYmd());
     view = { jy: base.jy, jm: base.jm };
     pop = el('div', { class: 'jdate__pop', role: 'dialog', 'aria-label': 'انتخاب تاریخ' });
     root.appendChild(pop);
@@ -101,6 +129,7 @@ export function jalaliDateInput({ value = '', allowClear = true, onChange } = {}
   function drawPop() {
     const today = tehranTodayYmd();
     const selected = hiddenInput.value || null;
+    const selectedG = selected ? gregorianYmdOfStored(selected) : null;
 
     // سرصفحه: دو منوی کشویی ماه/سال + ناوبری ماه‌به‌ماه — پرش مستقیم به هر سال
     const monthSel = el('select', { class: 'select jdate__sel', 'aria-label': 'ماه' },
@@ -113,7 +142,7 @@ export function jalaliDateInput({ value = '', allowClear = true, onChange } = {}
 
     const yearSel = el('select', { class: 'select jdate__sel jdate__sel--year', 'aria-label': 'سال' });
     const tJ = jOf(today);
-    const sJ = selected ? jOf(selected) : null;
+    const sJ = selected ? jalaliPartsOfStored(selected) : null;
     const minJy = Math.min(tJ.jy - 45, view.jy, sJ ? sJ.jy : view.jy);
     const maxJy = Math.max(tJ.jy + 2, view.jy, sJ ? sJ.jy : view.jy);
     for (let y = maxJy; y >= minJy; y -= 1) yearSel.appendChild(el('option', { value: String(y) }, fa(y)));
@@ -157,7 +186,7 @@ export function jalaliDateInput({ value = '', allowClear = true, onChange } = {}
       const ymd = `${gd.gy}-${String(gd.gm).padStart(2, '0')}-${String(gd.gd).padStart(2, '0')}`;
       cells.push(el('button', {
         type: 'button',
-        class: `jdate__day${ymd === today ? ' is-today' : ''}${ymd === selected ? ' is-selected' : ''}`,
+        class: `jdate__day${ymd === today ? ' is-today' : ''}${ymd === selectedG ? ' is-selected' : ''}`,
         onclick: () => pick(ymd)
       }, fa(d)));
     }
