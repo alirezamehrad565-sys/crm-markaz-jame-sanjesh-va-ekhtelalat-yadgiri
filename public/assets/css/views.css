@@ -3404,6 +3404,62 @@ tr.wl-row--urgent > td:first-child {
 }
 .exb-preview__pdfbar:empty { display: none; }
 
+/* ═════════ m143 — بانک تمرین: بندانگشتی کارت + سربرگ ستونی + آکاردئون قالب ═════════ */
+/* بندانگشتی سربرگ کارت تمرین — لبه‌به‌لبه با کارت (نوار منفیِ پدینگ کارت) */
+.exb-thumb {
+  position: relative;
+  height: 150px;
+  margin: calc(-1 * var(--sp-3, 12px)) calc(-1 * var(--sp-3, 12px)) 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.exb-thumb--click { cursor: zoom-in; }
+.exb-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.exb-thumb__tile {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  color: var(--text-3); font-size: var(--fs-xs);
+  background: color-mix(in srgb, var(--primary) 3%, var(--surface-2));
+}
+.exb-thumb__tile b { font-weight: 600; }
+.exb-thumb--click:hover .exb-thumb__tile { color: var(--primary); }
+.exb-thumb--click:hover img { filter: brightness(0.97); }
+
+/* سربرگ کارت ستونی: عنوان بالا، نشان‌ها زیرش — دیگر روی موبایل عنوان له نمی‌شود */
+.exb-card__head { flex-direction: column; align-items: flex-start; }
+.exb-card__badges { flex-wrap: wrap; }
+
+/* توضیح کارت: حداکثر ۳ خط — متن کامل در title attr و ویرایش در دسترس است */
+.exb-card__desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* آکاردئون جلسهٔ قالب — سربرگ کلیک‌پذیر؛ فیلدها فقط در حالت باز (m143) */
+.tpl-session__toggle {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 8px;
+  background: none; border: 0; padding: 0;
+  cursor: pointer; text-align: start;
+  font: inherit; color: inherit;
+}
+.tpl-session__ttl {
+  color: var(--text-2); font-size: var(--fs-sm); font-weight: 400;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.tpl-session.is-open .tpl-session__ttl { color: var(--text-1); }
+.tpl-session__chev { display: inline-flex; color: var(--text-3); transition: transform var(--fast, 150ms); flex: none; }
+.tpl-session.is-open .tpl-session__chev { transform: rotate(-90deg); }
+.tpl-session__body { display: none; padding-top: 8px; margin-top: 8px; border-top: 1px dashed var(--line, var(--border)); }
+.tpl-session.is-open .tpl-session__body { display: block; }
+.tpl-session .tpl-session__head { margin-bottom: 0; }
+.tpl-sessions__add { display: flex; justify-content: center; padding: 4px 0 2px; }
+
 /* ═════════ m140 — scoring v2: سازندهٔ فقط-خواندنی ویرایش + انتقال مالکیت + جزئیات امتیاز ═════════ */
 /* ۱) مودال ویرایش تمرین: ردیف سازنده — چیپ فقط-خواندنی (همان پالت staff-chip/exb-owner)
       + دکمهٔ کوچک «انتقال مالکیت به همکار…» (فقط مدیر) */
