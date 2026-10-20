@@ -38,6 +38,14 @@ import { initGlobalSearch } from './global-search.js';
 import { initAnnouncementBanners } from './announcements.js';
 import { fa } from './format.js'; // فاز W — badge لیست انتظار
 
+// m143 — شماره نسخهٔ پوسته از ?v= استایل‌شیت (خودکار با هر انتشار، دیگر دستی نمی‌ماند)
+(() => {
+  const href = document.querySelector('link[rel="stylesheet"][href*="tokens.css"]')?.href ?? '';
+  const v = href ? new URL(href).searchParams.get('v') : null;
+  const elVer = document.getElementById('shell-version');
+  if (v && elVer) elVer.textContent = `نسخه ${fa(v)}`;
+})();
+
 // ─── m138: گزارش خطاهای سمت کاربر به سرور (بی‌صدا؛ حداکثر ۱۰ در هر سشن) ───
 // مقصد: POST /api/client-errors (عمومی، سقف ۵۰۰ ردیف/شبانه‌روز در سرور)
 let __clientErrCount = 0;

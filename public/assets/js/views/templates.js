@@ -52,38 +52,47 @@ function openEditor(tpl, targets, { onSaved }) {
   const renumber = () => {
     [...sessionBlocks.querySelectorAll('.tpl-session__num')].forEach((n, i) => { n.textContent = `جلسهٔ ${fa(i + 1)}`; });
   };
-  const addSessionBlock = (data = {}) => {
+  const addSessionBlock = (data = {}, { open = false } = {}) => {
     const titleInput = el('input', { class: 'input', placeholder: 'مثلاً: ارزیابی پایهٔ خواندن و تنظیم هدف' });
     titleInput.value = data.title ?? '';
     const itemInputs = {};
-    const block = el('div', { class: 'tpl-session' },
+    // m143 — آکاردئون: سربرگ جلسه (شماره + عنوان زنده + فلش)؛ فیلدها فقط در حالت باز —
+    // قالب ۸ جلسه‌ای دیگر ۴۰ تکست‌اریای خالی نمی‌سازد و اسکرول مودال مهار می‌شود
+    const ttlPreview = el('span', { class: 'tpl-session__ttl' }, titleInput.value.trim() || 'بدون عنوان');
+    titleInput.addEventListener('input', () => { ttlPreview.textContent = titleInput.value.trim() || 'بدون عنوان'; });
+    const block = el('div', { class: `tpl-session${open ? ' is-open' : ''}` },
       el('div', { class: 'tpl-session__head' },
-        el('span', { class: 'tpl-session__num' }, ''),
+        el('button', { class: 'tpl-session__toggle', type: 'button', title: 'نمایش/بستن فیلدهای این جلسه',
+          onclick: () => block.classList.toggle('is-open') },
+          el('span', { class: 'tpl-session__num' }, ''),
+          ttlPreview,
+          el('span', { class: 'tpl-session__chev', 'aria-hidden': 'true' }, icon('chevL', 14))),
         el('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'حذف این جلسه از قالب',
           onclick: () => { block.remove(); renumber(); } }, icon('trash', 13))),
-      el('div', { class: 'field' },
-        el('label', { class: 'field__label' }, 'عنوان جلسه'), titleInput),
-      ...SESSION_ITEM_TYPES.map((t) => {
-        const ta = el('textarea', { class: 'textarea', rows: 2, placeholder: t.placeholder });
-        ta.value = (data.items ?? []).find((it) => it.type === t.key)?.text ?? '';
-        itemInputs[t.key] = ta;
-        const field = el('div', { class: 'field span-2' });
-        // فیلد «تمرین»: دکمهٔ «از بانک تمرین» کنار برچسب — انتخاب از بانک به متن اضافه می‌شود
-        // فیلد «رویداد (فرم/پرسش‌نامه)»: دکمهٔ «افزودن رویداد» کنار برچسب — انتخاب از رویدادساز
-        if (t.key === 'exercise') {
-          field.appendChild(el('div', { class: 'field__labelrow' },
-            el('label', { class: 'field__label' }, t.label),
-            bankPickButton({ onPick: (ex) => appendExerciseToTextarea(itemInputs.exercise, ex.title) })));
-        } else if (t.key === 'event') {
-          field.appendChild(el('div', { class: 'field__labelrow' },
-            el('label', { class: 'field__label' }, t.label),
-            eventPickButton({ onPick: (t2) => appendEventToTextarea(itemInputs.event, t2.title) })));
-        } else {
-          field.appendChild(el('label', { class: 'field__label' }, t.label));
-        }
-        field.appendChild(ta);
-        return field;
-      })
+      el('div', { class: 'tpl-session__body' },
+        el('div', { class: 'field' },
+          el('label', { class: 'field__label' }, 'عنوان جلسه'), titleInput),
+        ...SESSION_ITEM_TYPES.map((t) => {
+          const ta = el('textarea', { class: 'textarea', rows: 2, placeholder: t.placeholder });
+          ta.value = (data.items ?? []).find((it) => it.type === t.key)?.text ?? '';
+          itemInputs[t.key] = ta;
+          const field = el('div', { class: 'field span-2' });
+          // فیلد «تمرین»: دکمهٔ «از بانک تمرین» کنار برچسب — انتخاب از بانک به متن اضافه می‌شود
+          // فیلد «رویداد (فرم/پرسش‌نامه)»: دکمهٔ «افزودن رویداد» کنار برچسب — انتخاب از رویدادساز
+          if (t.key === 'exercise') {
+            field.appendChild(el('div', { class: 'field__labelrow' },
+              el('label', { class: 'field__label' }, t.label),
+              bankPickButton({ onPick: (ex) => appendExerciseToTextarea(itemInputs.exercise, ex.title) })));
+          } else if (t.key === 'event') {
+            field.appendChild(el('div', { class: 'field__labelrow' },
+              el('label', { class: 'field__label' }, t.label),
+              eventPickButton({ onPick: (t2) => appendEventToTextarea(itemInputs.event, t2.title) })));
+          } else {
+            field.appendChild(el('label', { class: 'field__label' }, t.label));
+          }
+          field.appendChild(ta);
+          return field;
+        }))
     );
     block._collect = () => ({
       title: titleInput.value.trim(),
@@ -108,6 +117,10 @@ function openEditor(tpl, targets, { onSaved }) {
     ...targets.map((t) => el('option', { value: t.key }, t.title)));
   targetSel.value = tpl?.targetKey ?? '';
 
+  // m143 — دکمهٔ افزودن جلسه (سربرگ بخش + پایان فهرست، هر دو همین دکمه‌اند)
+  const addSessionBtn = el('button', { class: 'btn btn--soft btn--sm', type: 'button',
+    onclick: () => addSessionBlock() }, icon('plus', 13), 'افزودن جلسه');
+
   const body = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px' } },
     el('div', { class: 'form-grid' },
       el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'عنوان قالب', el('span', { class: 'req' }, ' *')), titleInput),
@@ -117,59 +130,72 @@ function openEditor(tpl, targets, { onSaved }) {
     ),
     el('div', { class: 'clx-sub__title', style: { display: 'flex', alignItems: 'center', gap: '8px' } },
       'پروتکل جلسه به جلسه',
-      el('button', { class: 'btn btn--soft btn--sm', type: 'button',
-        onclick: () => addSessionBlock() }, icon('plus', 13), 'افزودن جلسه')),
+      addSessionBtn),
     sessionBlocks,
-    el('div', { class: 'cell-sub' }, 'هر جلسه: عنوان + تمرین/تکلیف/بازی/فرم/دستورالعمل — هنگام ساخت مسیر از قالب، جلسات به‌صورت برنامه‌ریزی‌شده روی مسیر کپی می‌شوند.')
+    // m143 — دکمهٔ افزودن جلسه هم در پایان فهرست (روی موبایل دیگر تا بالای مودال اسکرول نمی‌شود)
+    el('div', { class: 'tpl-sessions__add' },
+      el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => addSessionBlock() },
+        icon('plus', 13), 'افزودن جلسه')),
+    el('div', { class: 'cell-sub' }, 'هر جلسه: عنوان + تمرین/تکلیف/بازی/فرم/دستورالعمل — برای ویرایش، روی سربرگ جلسه بزنید. هنگام ساخت مسیر از قالب، جلسات به‌صورت برنامه‌ریزی‌شده روی مسیر کپی می‌شوند.')
   );
+
+  // m143 — دکمهٔ ذخیره در حین ثبت قفل می‌شود + دکمهٔ انصراف هم‌سبک سایر مودال‌ها
+  let closeModal = null;
+  const saveBtn = el('button', { class: 'btn btn--primary', type: 'button', onclick: onSave }, 'ذخیره قالب');
+  async function onSave() {
+    if (saveBtn.disabled) return;
+    const title = titleInput.value.trim();
+    if (title.length < 2) { toast('عنوان قالب را بنویسید'); titleInput.focus(); return; }
+    const sessions = [...sessionBlocks.children].map((b) => b._collect()).filter((s) => s.title);
+    const payload = {
+      title,
+      description: descTa.value.trim() || null,
+      protocol: protocolSel.value || null,
+      target_key: targetSel.value || null,
+      sessions
+    };
+    saveBtn.disabled = true;
+    try {
+      if (isNew) {
+        // کلید خودکار؛ در تعارض (کلید تکراری نادر) تا ۳ بار با کلید تازه تلاش می‌شود
+        let saved = false, lastErr = null;
+        for (let attempt = 0; attempt < 3 && !saved; attempt += 1) {
+          const key = autoTemplateKey();
+          if (!KEY_RE.test(key)) continue;
+          try {
+            await api.post('/api/pathway-templates', { key, ...payload });
+            saved = true;
+          } catch (err) {
+            if (err?.status === 409) { lastErr = err; continue; }
+            throw err;
+          }
+        }
+        if (!saved) throw lastErr ?? new Error('ثبت قالب ناموفق بود');
+      } else {
+        await api.patch(`/api/pathway-templates/${tpl.key}`, payload);
+      }
+      toast('قالب ذخیره شد', 'success');
+      if (closeModal) closeModal();
+      onSaved();
+    } catch (err) {
+      toastError(err);
+    } finally {
+      saveBtn.disabled = false;
+    }
+  }
 
   openModal({
     title: isNew ? 'قالب جدید مسیر' : `ویرایش قالب — ${tpl.title}`,
     wide: true,
     body,
     actions: [
-      (close) => el('button', {
-        class: 'btn btn--primary', type: 'button',
-        onclick: async () => {
-          const title = titleInput.value.trim();
-          if (title.length < 2) { toast('عنوان قالب را بنویسید'); return; }
-          const sessions = [...sessionBlocks.children].map((b) => b._collect()).filter((s) => s.title);
-          const payload = {
-            title,
-            description: descTa.value.trim() || null,
-            protocol: protocolSel.value || null,
-            target_key: targetSel.value || null,
-            sessions
-          };
-          try {
-            if (isNew) {
-              // کلید خودکار؛ در تعارض (کلید تکراری نادر) تا ۳ بار با کلید تازه تلاش می‌شود
-              let saved = false, lastErr = null;
-              for (let attempt = 0; attempt < 3 && !saved; attempt += 1) {
-                const key = autoTemplateKey();
-                if (!KEY_RE.test(key)) continue;
-                try {
-                  await api.post('/api/pathway-templates', { key, ...payload });
-                  saved = true;
-                } catch (err) {
-                  if (err?.status === 409) { lastErr = err; continue; }
-                  throw err;
-                }
-              }
-              if (!saved) throw lastErr ?? new Error('ثبت قالب ناموفق بود');
-            } else {
-              await api.patch(`/api/pathway-templates/${tpl.key}`, payload);
-            }
-            toast('قالب ذخیره شد', 'success');
-            close(); onSaved();
-          } catch (err) { toastError(err); }
-        }
-      }, 'ذخیره قالب')
+      (c) => el('button', { class: 'btn btn--ghost', type: 'button', onclick: c }, 'انصراف'),
+      (c) => { closeModal = c; return saveBtn; }
     ]
   });
 
-  (tpl?.sessions ?? []).forEach((s) => addSessionBlock(s));
-  if (!(tpl?.sessions ?? []).length) addSessionBlock();
+  (tpl?.sessions ?? []).forEach((s) => addSessionBlock(s, { open: false }));
+  if (!(tpl?.sessions ?? []).length) addSessionBlock({}, { open: true });
 }
 
 export async function renderTemplates(container) {

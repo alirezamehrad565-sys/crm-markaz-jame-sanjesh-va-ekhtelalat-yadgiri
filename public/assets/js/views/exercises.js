@@ -475,6 +475,67 @@ export function renderExercises(container) {
 
   // ─────────────── فهرست کارت‌ها + صفحه‌بندی ───────────────
 
+  /** m143 — بندانگشتی پیش‌نمایش روی کارت: اولین تصویر لِیزی-لود می‌شود؛ PDF کاشی ثابت دارد */
+  function buildThumb(ex, files) {
+    const IMG_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+    const mimeOf = (f) => String(f?.mime ?? '').toLowerCase();
+    const extOf = (f) => String(f?.filename ?? '').split('.').pop()?.toLowerCase() ?? '';
+    const isImg = (f) => {
+      const m = mimeOf(f);
+      if (m.startsWith('image/')) return true;
+      if (!m || m === 'application/octet-stream') return IMG_EXTS.includes(extOf(f));
+      return false;
+    };
+    const isPdf = (f) => {
+      const m = mimeOf(f);
+      if (m === 'application/pdf') return true;
+      if (!m || m === 'application/octet-stream') return extOf(f) === 'pdf';
+      return false;
+    };
+    const img = files.find(isImg);
+    const pdf = files.find(isPdf);
+    const previewFiles = files.filter(previewable);
+    const fileUrl = (f) => (f?.id ? `/api/exercises/${ex.id}/files/${f.id}` : `/api/exercises/${ex.id}/file`);
+    const tile = (ic, label) => el('span', { class: 'exb-thumb__tile' }, icon(ic, 22), el('b', {}, label));
+    const clickable = Boolean(img || pdf);
+    const startIdxOf = (f) => Math.max(0, previewFiles.indexOf(f));
+    const stage = el('div', {
+      class: `exb-thumb${clickable ? ' exb-thumb--click' : ''}`,
+      role: clickable ? 'button' : undefined,
+      'aria-label': clickable ? `پیش‌نمایش ${ex.title}` : undefined,
+      title: clickable ? 'پیش‌نمایش' : undefined,
+      onclick: clickable ? () => openPreviewModal(ex, previewFiles, startIdxOf(img ?? pdf)) : undefined
+    });
+    if (img) {
+      stage.append(tile('eye', 'پیش‌نمایش…'));
+      let started = false;
+      const io = new IntersectionObserver((entries, obs) => {
+        if (!entries.some((en) => en.isIntersecting)) return;
+        obs.disconnect();
+        if (started) return;
+        started = true;
+        (async () => {
+          try {
+            const res = await fetch(fileUrl(img), {
+              headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
+            });
+            if (!res.ok) throw new Error('بارگذاری پیش‌نمایش ناموفق بود');
+            const objUrl = URL.createObjectURL(await res.blob());
+            stage.replaceChildren(el('img', { src: objUrl, alt: ex.title }));
+          } catch {
+            stage.replaceChildren(tile('file', 'پیش‌نمایش در دسترس نیست'));
+          }
+        })();
+      }, { rootMargin: '240px' });
+      io.observe(stage);
+    } else if (pdf) {
+      stage.append(tile('file', 'PDF — پیش‌نمایش'));
+    } else {
+      stage.append(tile(FORMAT_ICONS[ex.format] ?? 'file', FORMAT_LABELS[ex.format] ?? 'تمرین'));
+    }
+    return stage;
+  }
+
   function drawList() {
     drawNav();
 
@@ -560,9 +621,12 @@ export function renderExercises(container) {
               )
             )
           );
+      // m143 — بندانگشتی پیش‌نمایش سربرگ کارت؛ سربرگ ستونی (عنوان، بعد نشان‌ها)
+      const thumb = files.length > 0 ? buildThumb(ex, files) : null;
       return el(
         'div',
         { class: 'card exb-card' },
+        thumb,
         el(
           'div',
           { class: 'exb-card__head' },
@@ -574,7 +638,7 @@ export function renderExercises(container) {
             ex.visibility === 'private' ? privateBadge() : null,
             ex.teamCreated ? teamBadge() : null)
         ),
-        ex.description ? el('p', { class: 'exb-card__desc' }, ex.description) : null,
+        ex.description ? el('p', { class: 'exb-card__desc', title: ex.description }, ex.description) : null,
         // لینک بازی/تمرین آنلاین بیرونی — وکتور بازی (بدون ایموجی)
         // فقط http/https به‌صورت لینک رندر می‌شود (دفاع دوم در برابر href نامعتبر)
         safeExternalHref(ex.externalUrl)
@@ -753,6 +817,14 @@ export function renderExercises(container) {
       ? el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { idx = (idx + 1) % files.length; show(); } }, 'بعدی', icon('chevL', 14))
       : null;
 
+    // m143 — ناوبری کلیدی چپ/راست در پیش‌نمایش چندفایلی
+    const onKeyNav = (e) => {
+      if (!files.length || files.length < 2) return;
+      if (e.key === 'ArrowLeft') { idx = (idx + 1) % files.length; show(); } // RTL: چپ = بعدی
+      else if (e.key === 'ArrowRight') { idx = (idx - 1 + files.length) % files.length; show(); }
+    };
+    if (files.length > 1) document.addEventListener('keydown', onKeyNav);
+
     openModal({
       title: `پیش‌نمایش «${ex.title}»`,
       wide: true,
@@ -764,9 +836,19 @@ export function renderExercises(container) {
         stage,
         files.length > 1 ? el('div', { class: 'exb-preview__nav' }, prevBtn, nextBtn) : null
       ),
-      actions: [(close) => el('button', { class: 'btn btn--ghost', onclick: close }, 'بستن')],
+      actions: [
+        // m143 — دانلود/تب جدید همیشه در دسترس (نه فقط برای PDF مشکل‌دار)
+        () => el('button', { class: 'btn btn--ghost', onclick: () => downloadFile(ex, files[idx]) }, icon('download', 15), 'دانلود'),
+        () => el('button', {
+          class: 'btn btn--ghost',
+          title: 'باز کردن فایل فعلی در تب جدید',
+          onclick: () => { if (currentUrl) window.open(currentUrl, '_blank', 'noopener'); else toast('فایل هنوز بارگذاری نشده است', 'warning'); }
+        }, icon('link', 15), 'تب جدید'),
+        (close) => el('button', { class: 'btn btn--primary', onclick: close }, 'بستن')
+      ],
       onClose: () => {
         seq += 1; // واکنش‌های در جریه بی‌اثر می‌شوند
+        document.removeEventListener('keydown', onKeyNav);
         dropCurrent();
       }
     });
@@ -837,25 +919,71 @@ export function renderExercises(container) {
     const progressLine = el('div', { class: 'exb-progress', style: { display: 'none' } });
     dropzoneWrap.append(progressLine);
 
+    // m143 — ترتیب UX: عنوان ← فایل‌ها ← قالب/دید ← امتیاز/سازنده ← لینک ← توضیح/برچسب
     const bodyEl = el(
       'div',
       { class: 'form-grid' },
-      // — سازندهٔ تمرین (m138): انتخابگر صریح به‌جای بنر ثابت m136
-      el('div', { class: 'field span-2' },
-        el('label', { class: 'field__label' }, 'سازندهٔ تمرین — امتیاز به نام او ثبت می‌شود'), ownerSel,
-        el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, `پیش‌فرض: ${session.user?.displayName ?? 'حساب شما'} — اگر روی دستگاه مشترک با حساب دیگری وارد شده‌اید، نام واقعی سازنده را انتخاب کنید`)),
-      el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'فایل‌های تمرین (اختیاری — می‌توانید بعداً هم اضافه کنید)'), dropzoneWrap),
-      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'عنوان تمرین', el('span', { class: 'req' }, ' *')), title),
+      el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'عنوان تمرین', el('span', { class: 'req' }, ' *')), title,
+        el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'اگر خالی بماند، از نام اولین فایل پر می‌شود')),
+      el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'فایل‌های تمرین (اختیاری — تصویر/PDF/سند، حداکثر ۱۰ فایل)'), dropzoneWrap),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'قالب'), fmt),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'دید'), visSel,
-        el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'خصوصی: در بانک تمرین و انتخابگر فقط شما و مدیر می‌بینید؛ بات/خانواده هرگز')), 
+        el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'خصوصی: در بانک و انتخابگر فقط شما و مدیر می‌بینید؛ بات/خانواده هرگز')),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'امتیازسازی'),
         el('label', { class: 'exb-check' }, teamChk, el('span', {}, 'ساختهٔ تیمی — امتیاز نصف'))),
+      // — سازندهٔ تمرین (m138): فشرده شد ولی سرِ جای خودش ماند (ریشهٔ باگ امتیاز به نام دیگری)
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'سازندهٔ تمرین — امتیاز به نام او'), ownerSel,
+        el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'روی دستگاه مشترک، نام واقعی سازنده را انتخاب کنید')),
       el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'لینک بازی/تمرین آنلاین (اختیاری)'), link,
-        el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'لینک بازی روی سرویس بیرونی — در پیام بلهٔ خانواده و پروفایل با دکمهٔ بازی باز می‌شود')),
+        el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'در پیام بلهٔ خانواده و پروفایل با دکمهٔ بازی باز می‌شود')),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'توضیح برای خانواده (اختیاری)'), desc),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'برچسب‌ها (پایه، اختلال، …)'), tagPicker)
     );
+
+    // m143 — دکمهٔ ذخیره در حین ثبت قفل می‌شود (جلوگیری از تمرین تکراری با دابل‌کلیک)
+    const saveBtn = el('button', { class: 'btn btn--primary', type: 'button', onclick: onSave }, 'افزودن به بانک');
+    async function onSave() {
+      if (saveBtn.disabled) return;
+      if (title.value.trim().length < 2) {
+        toast('عنوان تمرین حداقل ۲ نویسه است', 'warning');
+        title.focus();
+        return;
+      }
+      saveBtn.disabled = true;
+      try {
+        // تمرین اول ثبت می‌شود؛ فایل‌ها با multipart باینری می‌روند
+        const created = await api.post('/api/exercises', {
+          title: title.value.trim(),
+          description: desc.value.trim() || null,
+          format: fmt.value,
+          external_url: link.value.trim() || null,
+          tag_ids: [...selected],
+          published: true,
+          visibility: visSel.value,
+          team_created: teamChk.checked,
+          owner_staff_id: ownerSel.value || null
+        });
+        const newId = created?.data?.id;
+        if (picked.length > 0 && newId) {
+          try {
+            progressLine.style.display = '';
+            await uploadFiles(newId, picked, (i, tot, name, pct) => {
+              progressLine.textContent = `در حال بارگذاری ${fa(i)} از ${fa(tot)} — ${name} (${fa(pct)}٪)`;
+            });
+          } catch (err) {
+            toastError(new Error(`تمرین ثبت شد اما بارگذاری فایل‌ها ناموفق بود — از دکمهٔ «فایل‌ها» دوباره تلاش کنید (${err.message})`));
+          }
+        }
+        toast('تمرین به بانک اضافه شد', 'success');
+        close();
+        state.page = 1;
+        reloadAll();
+      } catch (err) {
+        toastError(err);
+      } finally {
+        saveBtn.disabled = false;
+      }
+    }
 
     openModal({
       title: 'تمرین جدید',
@@ -863,52 +991,7 @@ export function renderExercises(container) {
       wide: true,
       actions: [
         (close) => el('button', { class: 'btn btn--ghost', onclick: close }, 'انصراف'),
-        (close) =>
-          el(
-            'button',
-            {
-              class: 'btn btn--primary',
-              onclick: async () => {
-                if (title.value.trim().length < 2) {
-                  toast('عنوان تمرین حداقل ۲ نویسه است', 'warning');
-                  title.focus();
-                  return;
-                }
-                try {
-                  // تمرین اول ثبت می‌شود؛ فایل‌ها با multipart باینری می‌روند
-                  const created = await api.post('/api/exercises', {
-                    title: title.value.trim(),
-                    description: desc.value.trim() || null,
-                    format: fmt.value,
-                    external_url: link.value.trim() || null,
-                    tag_ids: [...selected],
-                    published: true,
-                    visibility: visSel.value,
-                    team_created: teamChk.checked,
-                    owner_staff_id: ownerSel.value || null
-                  });
-                  const newId = created?.data?.id;
-                  if (picked.length > 0 && newId) {
-                    try {
-                      progressLine.style.display = '';
-                      await uploadFiles(newId, picked, (i, tot, name, pct) => {
-                        progressLine.textContent = `در حال بارگذاری ${fa(i)} از ${fa(tot)} — ${name} (${fa(pct)}٪)`;
-                      });
-                    } catch (err) {
-                      toastError(new Error(`تمرین ثبت شد اما بارگذاری فایل‌ها ناموفق بود — از دکمهٔ «فایل‌ها» دوباره تلاش کنید (${err.message})`));
-                    }
-                  }
-                  toast('تمرین به بانک اضافه شد', 'success');
-                  close();
-                  state.page = 1;
-                  reloadAll();
-                } catch (err) {
-                  toastError(err);
-                }
-              }
-            },
-            'افزودن به بانک'
-          )
+        () => saveBtn
       ]
     });
   }
@@ -1078,12 +1161,15 @@ export function renderExercises(container) {
             'button',
             {
               class: 'btn btn--primary',
-              onclick: async () => {
+              onclick: async (e) => {
+                const saveBtn = e.currentTarget;
                 if (title.value.trim().length < 2) {
                   toast('عنوان تمرین حداقل ۲ نویسه است', 'warning');
                   title.focus();
                   return;
                 }
+                if (saveBtn.disabled) return;
+                saveBtn.disabled = true;
                 try {
                   const patch = {
                     title: title.value.trim(),
@@ -1106,6 +1192,8 @@ export function renderExercises(container) {
                   reloadAll();
                 } catch (err) {
                   toastError(err);
+                } finally {
+                  saveBtn.disabled = false;
                 }
               }
             },
