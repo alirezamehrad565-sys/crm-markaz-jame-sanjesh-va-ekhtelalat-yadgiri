@@ -1176,9 +1176,12 @@ body.is-login { background: var(--bg); }
   border-radius: 4px; padding: 3px 8px; white-space: pre-wrap;
 }
 .wd-appt__students { display: flex; flex-direction: column; gap: 4px; }
-.wd-appt__student { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); }
+/* m142 — در عرض کم، وضعیت/دکمه‌ها به خط بعد می‌شکنند تا دکمه‌ها از کارت بیرون نزنند */
+.wd-appt__student { display: flex; align-items: center; gap: 6px; row-gap: 4px; flex-wrap: wrap; font-size: var(--fs-xs); }
 .wd-appt__student--none { color: var(--text-3); justify-content: center; padding: 2px 0; }
-.wd-appt__sname { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-sm); }
+/* m142 — basis ۹۶px: نام دانش‌آموز هرگز تا صفر فرو نمی‌پزد (ریشهٔ «نام دیده نمی‌شود»)؛
+   min-width:0 می‌ماند تا بیضی‌نمایی نام‌های خیلی بلند روی دسکتاپ کار کند */
+.wd-appt__sname { flex: 1 1 96px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-sm); }
 .wd-appt__sactions { display: inline-flex; gap: 4px; }
 
 /* پیل وضعیت حضور جلسه */
@@ -1280,6 +1283,12 @@ body.is-login { background: var(--bg); }
   .wd-att__actions .att-seg__btn { flex: 1; padding-inline: 4px; }
   .wd-cal__quick { width: 100%; }
   .wd-cal__quick .btn { flex: 1; }
+  /* m142 — موبایل روز کاری: نفس کشیدن کارت‌ها؛ کارت نوبت به‌جای ~۲۲۰px
+     ~۲۴۰px عرض می‌گیرد و ردیف دانش‌آموز دیگر سرریز نمی‌کند */
+  .wd-flow .card__body { padding: var(--sp-3); }
+  .wd-appts-card .wd-block { padding: var(--sp-2) 10px; }
+  .wd-appt { padding: var(--sp-2) 10px; }
+  .wd-appt__time, .wd-appt__ops { row-gap: 4px; }
 }
 
 /* ─────────────── فاز W — لیست انتظار ─────────────── */
