@@ -799,6 +799,17 @@ export function renderExercises(container) {
     );
     // — تمرین تیمی: در تابلوی پیشرفت نصف امتیاز
     const teamChk = el('input', { type: 'checkbox' });
+    // — سازندهٔ تمرین (m138): پیش‌فرض حسابِ واردشده؛ برای دستگاه/نشست مشترک قابل اصلاح
+    //    ریشهٔ باگ «امتیاز به نام نفر دیگر»: کار با حساب همکار روی دستگاه مشترک (توکن ۳۰روزه)
+    const myStaffId = session.user?.staffId ?? '';
+    const activeStaff = staffList.filter((s) => s.active === undefined || s.active === 1 || s.active === true);
+    const ownerSel = activeStaff.length > 0
+      ? el(
+          'select',
+          { class: 'select' },
+          ...activeStaff.map((s) => el('option', { value: s.id, selected: s.id === myStaffId ? 'selected' : undefined }, s.fullName))
+        )
+      : el('select', { class: 'select' }, el('option', { value: myStaffId, selected: 'selected' }, session.user?.displayName ?? '—'));
     const tagPicker = buildTagPicker(tags, selected);
 
     let chips = null;
@@ -829,9 +840,10 @@ export function renderExercises(container) {
     const bodyEl = el(
       'div',
       { class: 'form-grid' },
-      // — شفافیت هویت (m136): تمرین همیشه به نام کاربرِ وارد‌شده ثبت می‌شود
+      // — سازندهٔ تمرین (m138): انتخابگر صریح به‌جای بنر ثابت m136
       el('div', { class: 'field span-2' },
-        el('div', { class: 'exb-attrib' }, icon('user', 15), `ثبت به نام شما: ${session.user?.displayName ?? '—'}`)),
+        el('label', { class: 'field__label' }, 'سازندهٔ تمرین — امتیاز به نام او ثبت می‌شود'), ownerSel,
+        el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, `پیش‌فرض: ${session.user?.displayName ?? 'حساب شما'} — اگر روی دستگاه مشترک با حساب دیگری وارد شده‌اید، نام واقعی سازنده را انتخاب کنید`)),
       el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'فایل‌های تمرین (اختیاری — می‌توانید بعداً هم اضافه کنید)'), dropzoneWrap),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'عنوان تمرین', el('span', { class: 'req' }, ' *')), title),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'قالب'), fmt),
@@ -872,7 +884,8 @@ export function renderExercises(container) {
                     tag_ids: [...selected],
                     published: true,
                     visibility: visSel.value,
-                    team_created: teamChk.checked
+                    team_created: teamChk.checked,
+                    owner_staff_id: ownerSel.value || null
                   });
                   const newId = created?.data?.id;
                   if (picked.length > 0 && newId) {

@@ -38,6 +38,29 @@ import { initGlobalSearch } from './global-search.js';
 import { initAnnouncementBanners } from './announcements.js';
 import { fa } from './format.js'; // فاز W — badge لیست انتظار
 
+// ─── m138: گزارش خطاهای سمت کاربر به سرور (بی‌صدا؛ حداکثر ۱۰ در هر سشن) ───
+// مقصد: POST /api/client-errors (عمومی، سقف ۵۰۰ ردیف/شبانه‌روز در سرور)
+let __clientErrCount = 0;
+function reportClientError(message, source, line, col, stack) {
+  if (__clientErrCount >= 10) return;
+  __clientErrCount += 1;
+  try {
+    fetch('/api/client-errors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({ message, source, line, col, stack, url: location.href })
+    }).catch(() => {});
+  } catch { /* گزارش خطا هرگز نباید خودش خطا تولید کند */ }
+}
+window.addEventListener('error', (e) => {
+  reportClientError(String(e.message ?? 'script error'), e.filename ?? null, e.lineno ?? null, e.colno ?? null, e.error?.stack ?? null);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const r = e.reason;
+  reportClientError(String(r?.message ?? r ?? 'unhandledrejection'), null, null, null, r?.stack ?? null);
+});
+
 // ─────────────── وضعیت سراسری سبک ───────────────
 // session به state.js منتقل شد؛ این فایل (ورودی اپ) هرگز نباید export داشته باشد
 // وگرنه ایمپورتِ نسبی آن، ماژول را با URL دوم دوباره اجرا می‌کند (باگ دکمهٔ تم)

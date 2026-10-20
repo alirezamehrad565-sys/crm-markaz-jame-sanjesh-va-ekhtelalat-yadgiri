@@ -3990,8 +3990,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.16";
-var APP_MILESTONE = "m137";
+var APP_VERSION = "1.00.17";
+var APP_MILESTONE = "m138";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -9173,6 +9173,7 @@ var NewExerciseSchema = external_exports.object({
   published: external_exports.boolean().optional().default(true),
   visibility: external_exports.enum(["public", "private"]).optional(),
   team_created: external_exports.boolean().optional(),
+  owner_staff_id: UuidSchema.nullable().optional(),
   file: ExerciseFileSchema.nullable().optional()
 });
 var UpdateExerciseSchema = external_exports.object({
@@ -18944,6 +18945,13 @@ function createExerciseBankService(deps) {
       const title22 = normalizeExerciseTitle(input.title);
       if (title22.length < 2)
         throw new ValidationError("\u0639\u0646\u0648\u0627\u0646 \u062A\u0645\u0631\u06CC\u0646 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+      let creatorId = actor.staffId;
+      if (input.ownerStaffId && input.ownerStaffId !== actor.staffId) {
+        const ownerRow = await db.queryOne(`SELECT id FROM staff WHERE id = ? AND active = 1`, [input.ownerStaffId]);
+        if (!ownerRow)
+          throw new NotFoundError("\u06A9\u0627\u0631\u0645\u0646\u062F");
+        creatorId = input.ownerStaffId;
+      }
       const id = crypto.randomUUID();
       let fileMeta = null;
       if (input.file) {
@@ -18969,7 +18977,7 @@ function createExerciseBankService(deps) {
             fileMeta ? `exercise/${id}` : null,
             input.visibility === "private" ? "private" : "public",
             input.teamCreated ? 1 : 0,
-            actor.staffId
+            creatorId
           ]
         );
         if (fileMeta) {
@@ -18991,11 +18999,12 @@ function createExerciseBankService(deps) {
             hasFile: { from: null, to: Boolean(fileMeta) },
             storage: { from: null, to: storage.name },
             visibility: { from: null, to: input.visibility === "private" ? "private" : "public" },
-            teamCreated: { from: null, to: Boolean(input.teamCreated) }
+            teamCreated: { from: null, to: Boolean(input.teamCreated) },
+            ...creatorId !== actor.staffId ? { createdBy: { from: null, to: creatorId }, sessionActor: actor.staffId } : {}
           }
         });
       });
-      log32.info("exercise.created", { id, hasFile: Boolean(fileMeta) });
+      log32.info("exercise.created", { id, hasFile: Boolean(fileMeta), ownerOverride: creatorId !== actor.staffId });
       const created = await this.getById(id);
       return created;
     },
@@ -20495,6 +20504,7 @@ function registerExerciseBankRoutes(app, service) {
         published: body.published,
         visibility: body.visibility,
         teamCreated: body.team_created,
+        ownerStaffId: body.owner_staff_id ?? void 0,
         file: body.file ? { filename: body.file.filename, mimeType: body.file.mime_type, contentB64: body.file.content_b64 } : null
       },
       actor
@@ -41943,16 +41953,26 @@ function createApp(deps) {
       ms: Date.now() - start
     });
   });
-  app.get("/health", (c) => c.json(
-    {
-      ok: true,
-      version: APP_VERSION,
-      milestone: APP_MILESTONE,
-      ts: (/* @__PURE__ */ new Date()).toISOString()
-    },
-    200,
-    { "Cache-Control": "no-store" }
-  ));
+  app.get("/health", async (c) => {
+    // — m138: سلامت واقعی = دسترسی D1 هم آزموده می‌شود؛ خرابی → 503 تا مانیتور بیرونی متوجه شود
+    let dbOk = true;
+    try {
+      await services.db.queryOne("SELECT 1 AS ok");
+    } catch {
+      dbOk = false;
+    }
+    return c.json(
+      {
+        ok: dbOk,
+        db: dbOk ? "up" : "down",
+        version: APP_VERSION,
+        milestone: APP_MILESTONE,
+        ts: (/* @__PURE__ */ new Date()).toISOString()
+      },
+      dbOk ? 200 : 503,
+      { "Cache-Control": "no-store" }
+    );
+  });
   app.get("/public/announcements", async (c) => {
     const items = await services.announcements.listPublic();
     return c.json({ data: items }, 200);
@@ -41974,6 +41994,35 @@ function createApp(deps) {
         "Content-Security-Policy": "sandbox allow-scripts allow-popups"
       }
     });
+  });
+  // — m138: گزارش خطاهای سمت کاربر — مسیر عمومی (قبل از authMiddleware)؛ بی‌صدا و سقف‌دار
+  app.post("/api/client-errors", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const message = typeof body?.message === "string" ? body.message.slice(0, 500) : "";
+    if (!message)
+      return c.json({ ok: false }, 400);
+    try {
+      const cap = await services.db.queryOne(`SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at >= datetime('now', '-1 day')`);
+      if ((cap?.n ?? 0) >= 500)
+        return c.json({ ok: false, throttled: true }, 429);
+      await services.db.execute(
+        `INSERT INTO client_errors (id, message, source, line_no, col_no, stack, url, user_agent)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          crypto.randomUUID(),
+          message,
+          typeof body?.source === "string" ? body.source.slice(0, 300) : null,
+          Number.isFinite(body?.line) ? Number(body.line) : null,
+          Number.isFinite(body?.col) ? Number(body.col) : null,
+          typeof body?.stack === "string" ? body.stack.slice(0, 2000) : null,
+          typeof body?.url === "string" ? body.url.slice(0, 300) : c.req.header("referer") ?? null,
+          c.req.header("user-agent") ?? null
+        ]
+      );
+    } catch {
+      // — جدول هنوز مایگریت نشده یا خطای D1 — گزارشِ خطا هرگز خودش نباید خطا تولید کند
+    }
+    return c.json({ ok: true }, 201);
   });
   registerAuthRoutes(app, { audit: services.audit, logger: services.logger });
   app.use("/api/*", authMiddleware());
