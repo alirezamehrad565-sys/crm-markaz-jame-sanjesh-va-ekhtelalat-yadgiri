@@ -169,14 +169,14 @@ function renderExplain(d) {
     explainItem(it.title ?? it.id, it.teamCreated ? 'تیمی → نصف امتیاز' : null,
       `${faScore(it.effectiveWeight)} امتیاز`));
   const exSec = explainSection('تمرین‌های شمرده‌شده',
-    `${faScore(ex.count)} مورد — جمع وزن‌دار ${faScore(ex.weighted)}`,
+    `${faScore(ex.count)} مورد — جمع وزن‌دار ${faScore(ex.weighted)} امتیاز`,
     el('div', { class: 'pb-explain__items' }, ...(exItems.length ? exItems : [emptyNote()])));
 
-  // بسته‌ها / قالب‌ها / فرم‌ها — شمارش + جمع وزن + فهرست عناوین
+  // بسته‌ها / قالب‌ها / فرم‌ها — شمارش + جمع وزن (امتیاز) + فهرست عناوین
   const listSec = (label, box, nameKey) => {
     const items = (box.items ?? []).map((it) => explainItem(it[nameKey] ?? it.id, null, null));
     return explainSection(label,
-      `${fa(box.count ?? 0)} مورد — ${faScore(box.weight ?? 0)} امتیاز`,
+      `${fa(box.count ?? 0)} مورد — جمع وزن‌دار ${faScore(box.weighted ?? (box.count ?? 0) * (box.weight ?? 0))} امتیاز`,
       el('div', { class: 'pb-explain__items' }, ...(items.length ? items : [emptyNote()])));
   };
 

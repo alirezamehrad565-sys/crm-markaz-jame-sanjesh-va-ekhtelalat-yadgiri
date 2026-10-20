@@ -288,64 +288,103 @@ export function periodSinceUtc(periodKey, periods = PERIODS, now = new Date()) {
 // ── اجرای واقعی روی D1 ────────────────────────────────────────────────────────
 
 /**
- * کوئری‌های بخش محتوا — همان SQL های + فیلتر دوره
- * (خروجی به ترتیب CONTENT_KEYS)
+ * — v3 (m141): کل تابلو در «یک» کوئری و «یک» اسنپ‌شات.
+ *
+ * درس واقعی م۱۳۹/م۱۴۰ (بازگشتِ دوبارهٔ باگ در م۱۴۰): خواندن‌های موازی (Promise.all)
+ * روی یک نشست D1 — حتی با withSession('first-primary') — می‌توانند اسنپ‌شات‌های
+ * «متفاوت» ببینند؛ نتیجهٔ زنده: فهرست آیتم‌ها ۹ تمرین نشان می‌داد و جمع وزن‌دارِ
+ * همان پاسخ صفر بود. راه‌حل ریشه‌ای: شمارش همهٔ دسته‌ها + استفادهٔ سامانه + ردیفِ
+ * همهٔ کارکنان در «یک» SELECT (زیرکوئری‌های همبسته) — کوئریِ اولِ نشستِ
+ * first-primary همیشه از primary می‌خواند و همهٔ ستون‌ها از یک لحظهٔ واحد می‌آیند؛
+ * مسیر ساختاریِ واگراییِ «فهرست در برابر جمع» کاملاً بسته می‌شود.
+ * nonce تصادفی هم هر کش احتمالی سطح statement را دور می‌زند.
+ *
+ * @param {string|null} sinceUtc — null یعنی بدون فیلتر دوره
+ * @param {Array<string>} usageActions — کلیدهای اقدام‌های وزن‌دار استفاده
+ * @returns {{sql: string, params: Array}} — ترتیب پارامترها دقیقاً مطابق ظهورِ ? در SQL
  */
-function contentQueries(since) {
-  // کوئری‌های تک‌جدولی فیلتر عمومی می‌گیرند؛ کوئری‌های JOIN فیلترشان داخل
-  // خود SQL با نام مستعار ستون است (تا «ambiguous column: created_at» نشود)
-  const W = since ? ' AND created_at >= ?' : '';
-  const P = since ? [since] : [];
-  const q = (sql) => ({ sql: sql + W, params: P });
-  const qJoin = (sql) => ({ sql, params: since ? [since] : [] });
-  return [
-    // تولید محتوا — تمرین تیمی (team_created=1) نصف وزن می‌گیرد (خواست کاربر)
-    q(`SELECT created_by k, SUM(CASE WHEN team_created = 1 THEN 0.5 ELSE 1 END) c FROM exercises WHERE deleted_at IS NULL AND created_by IS NOT NULL GROUP BY created_by`),
-    q(`SELECT created_by k, COUNT(*) c FROM exercise_packages WHERE deleted_at IS NULL AND created_by IS NOT NULL GROUP BY created_by`),
-    q(`SELECT created_by k, COUNT(*) c FROM pathway_templates WHERE active = 1 AND created_by IS NOT NULL GROUP BY created_by`),
-    q(`SELECT created_by k, COUNT(*) c FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by IS NOT NULL GROUP BY created_by`),
-    // استفاده از تمرین‌ها (ارسال‌های کلاسی هم «استفاده» هستند)
-    qJoin(`SELECT e.created_by k, COUNT(*) c
-         FROM exercise_assignments a JOIN exercises e ON e.id = a.exercise_id
-        WHERE e.deleted_at IS NULL AND e.created_by IS NOT NULL AND a.status != 'cancelled'${since ? ' AND a.created_at >= ?' : ''}
-        GROUP BY e.created_by`),
-    // ارجاع تمرین — مصرف توسط همکار دیگر
-    // — v2: ارسال‌های کلاسی (assigned_by = 'class:<id>' — معلم مدرسه ردیف staff
-    // ندارد) «استفادهٔ همکار» نیستند → در ارجاع شمرده نمی‌شوند (در استفاده می‌آیند)
-    qJoin(`SELECT e.created_by k, COUNT(*) c
-         FROM exercise_assignments a JOIN exercises e ON e.id = a.exercise_id
-        WHERE e.deleted_at IS NULL AND e.created_by IS NOT NULL AND a.status != 'cancelled'
-          AND a.assigned_by != e.created_by
-          AND (a.assigned_by IS NULL OR a.assigned_by NOT LIKE 'class:%')${since ? ' AND a.created_at >= ?' : ''}
-        GROUP BY e.created_by`),
-    // استفاده از قالب‌ها — مسیر ساخته‌شده از قالب
-    qJoin(`SELECT t.created_by k, COUNT(*) c
-         FROM intervention_paths p JOIN pathway_templates t ON t.key = p.template_key
-        WHERE p.deleted_at IS NULL AND t.created_by IS NOT NULL${since ? ' AND p.created_at >= ?' : ''}
-        GROUP BY t.created_by`),
-    // ارجاع قالب — ساخت مسیر توسط همکار دیگر
-    qJoin(`SELECT t.created_by k, COUNT(*) c
-         FROM intervention_paths p JOIN pathway_templates t ON t.key = p.template_key
-        WHERE p.deleted_at IS NULL AND t.created_by IS NOT NULL AND p.created_by != t.created_by${since ? ' AND p.created_at >= ?' : ''}
-        GROUP BY t.created_by`),
-    // استفاده از فرم‌های دست‌ساز
-    qJoin(`SELECT f.created_by k, COUNT(*) c
-         FROM case_events ce JOIN case_event_types f ON f.id = ce.event_type_id
-        WHERE f.is_system = 0 AND f.created_by IS NOT NULL AND ce.status != 'cancelled'${since ? ' AND ce.created_at >= ?' : ''}
-        GROUP BY f.created_by`),
-    // ارجاع فرم — ثبت توسط همکار دیگر
-    qJoin(`SELECT f.created_by k, COUNT(*) c
-         FROM case_events ce JOIN case_event_types f ON f.id = ce.event_type_id
-        WHERE f.is_system = 0 AND f.created_by IS NOT NULL AND ce.status != 'cancelled'
-          AND ce.staff_id IS NOT NULL AND ce.staff_id != f.created_by${since ? ' AND ce.created_at >= ?' : ''}
-        GROUP BY f.created_by`)
+function boardSqlAndParams(sinceUtc, usageActions) {
+  const P = [];
+  const since = (col) => {
+    if (!sinceUtc) return '';
+    P.push(sinceUtc);
+    return ` AND ${col} >= ?`;
+  };
+  // ستون‌های محتوا — هر کدام یک زیرکوئری همبسته روی s.id (همان فیلترهای نسخهٔ قبل)
+  const metrics = [
+    ['exercises',
+      // تولید محتوا — تمرین تیمی (team_created=1) نصف وزن می‌گیرد (خواست کاربر)
+      `(SELECT COALESCE(SUM(CASE WHEN e.team_created = 1 THEN 0.5 ELSE 1 END), 0)
+          FROM exercises e
+         WHERE e.deleted_at IS NULL AND e.created_by = s.id${since('e.created_at')})`],
+    ['packages',
+      `(SELECT COUNT(*) FROM exercise_packages p
+        WHERE p.deleted_at IS NULL AND p.created_by = s.id${since('p.created_at')})`],
+    ['templates',
+      `(SELECT COUNT(*) FROM pathway_templates t
+        WHERE t.active = 1 AND t.created_by = s.id${since('t.created_at')})`],
+    ['forms',
+      `(SELECT COUNT(*) FROM case_event_types f
+        WHERE f.is_system = 0 AND f.active = 1 AND f.created_by = s.id${since('f.created_at')})`],
+    ['exerciseUses',
+      // استفاده از تمرین‌ها (ارسال‌های کلاسی هم «استفاده» هستند)
+      `(SELECT COUNT(*)
+          FROM exercise_assignments a JOIN exercises e ON e.id = a.exercise_id
+         WHERE e.deleted_at IS NULL AND e.created_by = s.id
+           AND a.status != 'cancelled'${since('a.created_at')})`],
+    ['exerciseRefs',
+      // ارجاع تمرین — مصرف توسط همکار دیگر؛ ارسال‌های کلاسی ('class:<id>'))
+      // معلم مدرسه ردیف staff ندارد → «استفادهٔ همکار» نیست (در استفاده می‌آید)
+      `(SELECT COUNT(*)
+          FROM exercise_assignments a JOIN exercises e ON e.id = a.exercise_id
+         WHERE e.deleted_at IS NULL AND e.created_by = s.id
+           AND a.status != 'cancelled' AND a.assigned_by != e.created_by
+           AND (a.assigned_by IS NULL OR a.assigned_by NOT LIKE 'class:%')${since('a.created_at')})`],
+    ['templateUses',
+      // استفاده از قالب‌ها — مسیر ساخته‌شده از قالب
+      `(SELECT COUNT(*)
+          FROM intervention_paths p JOIN pathway_templates t ON t.key = p.template_key
+         WHERE p.deleted_at IS NULL AND t.created_by = s.id${since('p.created_at')})`],
+    ['templateRefs',
+      // ارجاع قالب — ساخت مسیر توسط همکار دیگر
+      `(SELECT COUNT(*)
+          FROM intervention_paths p JOIN pathway_templates t ON t.key = p.template_key
+         WHERE p.deleted_at IS NULL AND t.created_by = s.id
+           AND p.created_by != t.created_by${since('p.created_at')})`],
+    ['formFills',
+      // استفاده از فرم‌های دست‌ساز
+      `(SELECT COUNT(*)
+          FROM case_events ce JOIN case_event_types f ON f.id = ce.event_type_id
+         WHERE f.is_system = 0 AND f.created_by = s.id
+           AND ce.status != 'cancelled'${since('ce.created_at')})`],
+    ['formRefs',
+      // ارجاع فرم — ثبت توسط همکار دیگر
+      `(SELECT COUNT(*)
+          FROM case_events ce JOIN case_event_types f ON f.id = ce.event_type_id
+         WHERE f.is_system = 0 AND f.created_by = s.id AND ce.status != 'cancelled'
+           AND ce.staff_id IS NOT NULL AND ce.staff_id != f.created_by${since('ce.created_at')})`]
   ];
+  // استفادهٔ سامانه — JSON تجمیعی audit_log در همان ردیف (پارامترهایش بعد از since ها)
+  P.push(...usageActions);
+  const actionList = usageActions.map(() => '?').join(',');
+  const usageJson = `(SELECT COALESCE(json_group_array(json_object('a', u.action, 'c', u.c)), '[]')
+                        FROM (SELECT al.action AS action, COUNT(*) AS c
+                                FROM audit_log al
+                               WHERE al.actor_id = s.id
+                                 AND al.action IN (${actionList})${since('al.created_at')}
+                               GROUP BY al.action) u)`;
+  const nonce = Math.random().toString(36).slice(2, 10);
+  const sql = `SELECT s.id AS staffId, s.full_name AS fullName,
+         COALESCE(s.role_ext, s.role) AS role, s.active AS active,
+         ${metrics.map(([k, expr]) => `${expr} AS ${k}`).join(',\n         ')},
+         ${usageJson} AS usageJson
+    FROM staff s
+   ORDER BY s.full_name /* board:${nonce} */`;
+  return { sql, params: P };
 }
 
-const CONTENT_KEYS = ['exercises', 'packages', 'templates', 'forms', 'exerciseUses', 'exerciseRefs', 'templateUses', 'templateRefs', 'formFills', 'formRefs'];
-
 /**
- * محاسبهٔ تابلوی پیشرفت برای یک دوره
+ * محاسبهٔ تابلوی پیشرفت برای یک دوره — v3: تک‌کوئریِ تک‌اسنپ‌شات
  * @param {D1Database} d1
  * @param {string|null} sinceUtc «YYYY-MM-DD HH:MM:SS» UTC یا null (پیش از فراخوانی، effectiveSince اعمال شود)
  * @param {{contentFormula?: object, usageFormula?: Array, adminCap?: number}} [cfg] — وزن‌های مؤثر
@@ -355,60 +394,54 @@ export async function computeBoard(d1, sinceUtc, cfg = {}) {
   const usageFormula = cfg.usageFormula ?? USAGE_FORMULA;
   const adminCap = Number.isInteger(cfg.adminCap) ? cfg.adminCap : ADMIN_USAGE_CAP;
   const usageActions = usageFormula.map(([a]) => a);
-  const placeholders = usageActions.map(() => '?').join(',');
-  const usageParams = sinceUtc ? [...usageActions, sinceUtc] : [...usageActions];
-  const usageSql = `SELECT actor_id actorId, action, COUNT(*) count FROM audit_log
-                     WHERE action IN (${placeholders})${sinceUtc ? ' AND created_at >= ?' : ''}
-                    GROUP BY actor_id, action`;
 
-  const [staffRows, usageRows, ...contentRows] = await Promise.all([
-    d1.prepare(`SELECT id, full_name, COALESCE(role_ext, role) AS role, active FROM staff ORDER BY full_name`).all(),
-    d1.prepare(usageSql).bind(...usageParams).all(),
-    ...contentQueries(sinceUtc).map(({ sql, params }) =>
-      d1.prepare(sql).bind(...params).all()
-    )
-  ]);
+  const { sql, params } = boardSqlAndParams(sinceUtc, usageActions);
+  const boardRows = await d1.prepare(sql).bind(...params).all();
 
-  // استفادهٔ سراسری — audit_log
-  const agg = usageRows.results.map((r) => ({ actorId: r.actorId, action: r.action, count: Number(r.count) }));
+  // استفادهٔ سراسری — از usageJsonِ همان ردیف‌ها (همان projection قبلی روی audit_log)
+  const agg = [];
+  for (const r of boardRows.results) {
+    let arr = [];
+    try {
+      arr = JSON.parse(r.usageJson ?? '[]');
+    } catch {
+      arr = []; // سطر خراب → استفادهٔ صفر برای همین همکار
+    }
+    for (const u of arr) {
+      if (u && u.a) agg.push({ actorId: r.staffId, action: String(u.a), count: Number(u.c) || 0 });
+    }
+  }
   const { points: usagePoints, counts: usageCounts } = applyUsageWeights(agg, usageFormula);
 
-  // محتوا — همان نقشه‌های
-  const maps = {};
-  contentRows.forEach((res, i) => {
-    maps[CONTENT_KEYS[i]] = new Map(res.results.map((r) => [r.k, Number(r.c)]));
-  });
-  const n = (m, id) => m?.get(id) ?? 0;
-
   const usageLabels = Object.fromEntries(USAGE_FORMULA.map(([a, , label]) => [a, label]));
-  const rows = staffRows.results.map((s) => {
+  const rows = boardRows.results.map((r) => {
     const content = {
-      exercises: n(maps.exercises, s.id),
-      packages: n(maps.packages, s.id),
-      templates: n(maps.templates, s.id),
-      forms: n(maps.forms, s.id),
-      exerciseUses: n(maps.exerciseUses, s.id),
-      exerciseRefs: n(maps.exerciseRefs, s.id),
-      templateUses: n(maps.templateUses, s.id),
-      templateRefs: n(maps.templateRefs, s.id),
-      formFills: n(maps.formFills, s.id),
-      formRefs: n(maps.formRefs, s.id)
+      exercises: Number(r.exercises) || 0,
+      packages: Number(r.packages) || 0,
+      templates: Number(r.templates) || 0,
+      forms: Number(r.forms) || 0,
+      exerciseUses: Number(r.exerciseUses) || 0,
+      exerciseRefs: Number(r.exerciseRefs) || 0,
+      templateUses: Number(r.templateUses) || 0,
+      templateRefs: Number(r.templateRefs) || 0,
+      formFills: Number(r.formFills) || 0,
+      formRefs: Number(r.formRefs) || 0
     };
     const cs = contentScoreOf(content, contentFormula);
     // سقف فعالیت اداری نقش‌های دفتری (مدیر و معاون): پیشرفت تابلو
     // با حجم کار اداری بالا نمی‌رود؛ تولید محتوا کامل حساب می‌شود.
-    const rawUsage = usagePoints[s.id] ?? 0;
-    const isAdminRole = ADMIN_CAP_ROLES.includes(s.role);
+    const rawUsage = usagePoints[r.staffId] ?? 0;
+    const isAdminRole = ADMIN_CAP_ROLES.includes(r.role);
     const usage = isAdminRole ? Math.min(rawUsage, adminCap) : rawUsage;
     const usageDetail = Object.fromEntries(
-      Object.entries(usageCounts[s.id] ?? {}).map(([a, c]) => [a, c])
+      Object.entries(usageCounts[r.staffId] ?? {}).map(([a, c]) => [a, c])
     );
     const total = cs.total + usage;
     return {
-      staffId: s.id,
-      fullName: s.full_name,
-      role: s.role,
-      active: s.active === 1,
+      staffId: r.staffId,
+      fullName: r.fullName,
+      role: r.role,
+      active: r.active === 1,
       content,
       contentScore: cs,
       usagePoints: usage,
@@ -508,6 +541,25 @@ function json(data, status = 200) {
   });
 }
 
+/**
+ * لمسِ بی‌اثر برای پیش‌بردن bookmark نشست D1 — درس تکرارشدهٔ م۱۳۹/م۱۴۰.
+ * یک UPDATE بی‌اثر روی settings (مقدار = خودش) تراکنشِ نوشتنِ کوچکی می‌سازد که
+ * bookmark نشست را به «آخرین حالت ثابت‌شده» می‌برد؛ همهٔ خواندن‌های بعدیِ همان
+ * نشست read-your-writes می‌شوند و دیگر اسنپ‌شات کهنه برنمی‌گردند.
+ * در محیط تست (جدول settings نیست) بی‌صدا رد می‌شود.
+ */
+const BOOKMARK_TOUCH_SQL = `INSERT INTO settings (key, value) VALUES ('scoring_config', '{}')
+                             ON CONFLICT(key) DO UPDATE SET value = settings.value`;
+
+export async function bumpSessionBookmark(db) {
+  try {
+    await db.prepare(BOOKMARK_TOUCH_SQL).run();
+  } catch {
+    // بی‌خطر: در ماک/تست‌ها جدول settings نیست؛ خواندن‌ها به قرارداد نشست
+    // («first-primary») تکیه می‌کنند.
+  }
+}
+
 export async function handleScoring(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -519,6 +571,9 @@ export async function handleScoring(request, env) {
 
   // — v2: نشست تازهٔ D1 برای همهٔ خواندن‌ها (ضد-اسنپ‌شات — درس 43-A)
   const db = scoringDb(env);
+  // — v3 (m141): پیش‌بردن bookmark نشست با لمسِ بی‌اثر — خواندن‌های بعدی
+  // همین نشست تضمینی «آخرین نوشته» را می‌بینند (درس تکرارشدهٔ م۱۳۹/م۱۴۰).
+  await bumpSessionBookmark(db);
 
   // GET /api/scoring/board?period=all|month|week — تابلوی پیشرفت درمانگران
   if (path === '/api/scoring/board' && request.method === 'GET') {
@@ -585,20 +640,27 @@ export async function handleScoring(request, env) {
       return json({ error: 'NOT_FOUND', message: 'کارمند یافت نشد' }, 404);
     }
 
-    // آیتم‌های محتوا per-staff — دقیقاً همان فیلترهای کوئری‌های تابلو
-    // (تا count شرح همیشه با count تابلو یکی باشد)
+    // آیتم‌های محتوا per-staff — دقیقاً همان فیلترهای کوئری تابلوی تک‌اسنپ‌شات
+    // — v3: ترتیبی (نه Promise.all) — خواندن‌های پشت‌سرهمِ یک نشست هرگز از
+    // اسنپ‌شاتِ خواندن قبلیِ همان نشست عقب‌تر نیستند.
     const W = since ? ' AND created_at >= ?' : '';
     const P = since ? [since] : [];
-    const [exerciseItems, packageItems, templateItems, formItems] = await Promise.all([
-      db.prepare(`SELECT id, title, team_created FROM exercises WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all(),
-      db.prepare(`SELECT id, title FROM exercise_packages WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all(),
-      db.prepare(`SELECT key, title FROM pathway_templates WHERE active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all(),
-      db.prepare(`SELECT id, title FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all()
-    ]);
+    const exerciseItems = await db
+      .prepare(`SELECT id, title, team_created FROM exercises WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`)
+      .bind(staffId, ...P).all();
+    const packageItems = await db
+      .prepare(`SELECT id, title FROM exercise_packages WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`)
+      .bind(staffId, ...P).all();
+    const templateItems = await db
+      .prepare(`SELECT key, title FROM pathway_templates WHERE active = 1 AND created_by = ?${W} ORDER BY created_at`)
+      .bind(staffId, ...P).all();
+    const formItems = await db
+      .prepare(`SELECT id, title FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by = ?${W} ORDER BY created_at`)
+      .bind(staffId, ...P).all();
 
     const prodW = (key) => contentFormula.production.find((x) => x.key === key)?.weight ?? 0;
     const exWeight = prodW('exercises');
-    // تمرین: count = شمارش خام؛ weighted = شمارش وزن‌دار تیمی (0.5) — همان عدد تابلو
+    // تمرین: count = شمارش خام؛ effectiveWeight = وزن مؤثر هر قلم (تیمی نصف)
     const exerciseList = exerciseItems.results.map((r) => {
       const teamCreated = r.team_created === 1;
       return {
@@ -631,25 +693,30 @@ export async function handleScoring(request, env) {
         generatedAt: new Date().toISOString(),
         staff: { staffId: row.staffId, fullName: row.fullName, role: row.role },
         content: {
+          // — v3 (m141): weighted = «جمع وزن‌دار به امتیاز» = شمارش وزن‌دار تیمی × وزن
+          // فرمول مؤثر (همان عددی که در سرجمع بخش دیده می‌شود — ۱۱ تمرین × ۱۰ = ۱۱۰)
           exercises: {
             count: exerciseList.length,
-            weighted: row.content.exercises,
+            weighted: row.content.exercises * exWeight,
             weight: exWeight,
             items: exerciseList
           },
           packages: {
             count: row.content.packages,
+            weighted: row.content.packages * prodW('packages'),
             weight: prodW('packages'),
             items: packageItems.results.map((r) => ({ id: r.id, title: r.title }))
           },
           templates: {
             count: row.content.templates,
+            weighted: row.content.templates * prodW('templates'),
             weight: prodW('templates'),
             // — ستون انسانی قالب «title» است؛ شناسهٔ منطقی «key»
             items: templateItems.results.map((r) => ({ id: r.key, title: r.title }))
           },
           forms: {
             count: row.content.forms,
+            weighted: row.content.forms * prodW('forms'),
             weight: prodW('forms'),
             // — قرارداد پین‌شده: فیلد «name» (ستون واقعی جدول: title)
             items: formItems.results.map((r) => ({ id: r.id, name: r.title }))
