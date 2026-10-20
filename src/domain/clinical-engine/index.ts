@@ -10,6 +10,7 @@ export * from './instruments';
 export * from './dsm-criteria';
 export * from './targets';
 export * from './rules';
+export * from './wechsler-link';
 export * from './infer';
 export * from './narrative';
 export * from './service';

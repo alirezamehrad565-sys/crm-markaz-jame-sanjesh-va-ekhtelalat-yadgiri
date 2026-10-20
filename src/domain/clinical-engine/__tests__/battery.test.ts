@@ -21,9 +21,10 @@ import { CaseEventTypeInputSchema, validateTypeDefinition, resolveBandV2, FIELDS
 import type { CaseEventBand, CaseEventSubscale } from '@domain/case-events';
 
 // ابزارهای استاندارد موجود در DB (قبل از ) — قواعد به آن‌ها هم ارجاع می‌دهند
+// (m132+: فرم وکسلر قدیمی wechsler بازنشسته شد — قواعد به فرم جدید ce-wechsler-w4-v1 ارجاع می‌دهند)
 const EXISTING_TOOLS = new Set([
   'sdq-parent', 'conners-short', 'achenbach-practical', 'teacher-classroom', 'quick-multi-v1',
-  'anamnesis', 'intervention', 'home_behavior', 'legacy_assessment', 'wechsler'
+  'anamnesis', 'intervention', 'home_behavior', 'legacy_assessment', 'wechsler', 'ce-wechsler-w4-v1'
 ]);
 
 describe('باتری battery-v1 — اعتبار ساختاری', () => {

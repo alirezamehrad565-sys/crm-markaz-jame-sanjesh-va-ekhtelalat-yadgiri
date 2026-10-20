@@ -251,12 +251,12 @@ export const RULES: RuleSet[] = [
     targetKey: 'slow_learner',
     batteryVersion: 'battery-v1',
     evidence: [
-      { kind: 'wechsler', toolKey: 'wechsler', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'هوشبهر کلی وکسلر در محدودهٔ مرزی (۷۰ تا ۸۵) است.' },
+      { kind: 'wechsler', toolKey: 'ce-wechsler-w4-v1', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'هوشبهر کلی وکسلر در محدودهٔ مرزی (۷۰ تا ۸۵) است.' },
       { kind: 'anamnesis', toolKey: 'ce-anamnesis-v2', band: 'danger', weight: EVIDENCE_WEIGHTS.anamnesisFlag, fa: 'افت تحصیلی تدریجی همه‌درسی در شرح حال ثبت شده است.' }
     ],
     consensus: undefined,
     criteriaMap: [
-      { criterionId: 'bif.a', toolKey: 'wechsler', itemRefs: [], passScore: 0 },
+      { criterionId: 'bif.a', toolKey: 'ce-wechsler-w4-v1', itemRefs: [], passScore: 0 },
       { criterionId: 'bif.b', toolKey: 'ce-anamnesis-v2', itemRefs: [], passScore: 0 },
       { criterionId: 'bif.c', toolKey: 'ce-anamnesis-v2', itemRefs: [], passScore: 0 }
     ],
