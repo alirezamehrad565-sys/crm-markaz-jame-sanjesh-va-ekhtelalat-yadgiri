@@ -25,6 +25,7 @@ import {
 } from '../ui.js';
 import { fa, formatJalaliNumeric, safeExternalHref } from '../format.js';
 import { session } from '../state.js';
+import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ ثابت سازندهٔ تمرین (همان پالت درمانگر)
 
 // سقف‌ها از meta سرور خوانده می‌شوند (آداپتر محور)؛ این‌ها فقط پیش‌فرض اولیه‌اند
 const LIMITS = {
@@ -68,6 +69,49 @@ function disorderIcon(name) {
 
 function isStaff() {
   return Boolean(session.user && ['manager', 'therapist', 'secretary'].includes(session.user.role));
+}
+
+// ─────────────── سازنده + نشان‌های خصوصی/تیمی (m136) ───────────────
+
+/** نگاشت staffId → نام — یک‌بار در هر سشن نما پر می‌شود (GET /api/staff) */
+let staffList = [];
+const staffNames = new Map();
+
+async function loadStaff() {
+  try {
+    const res = await api.get('/api/staff');
+    staffList = Array.isArray(res.data) ? res.data : res.data?.items ?? [];
+    staffNames.clear();
+    for (const s of staffList) staffNames.set(s.id, s.fullName);
+  } catch {
+    /* فهرست کارکنان نیامد — چیپ سازنده فقط نمایش داده نمی‌شود */
+  }
+}
+
+/** چیپ رنگی سازنده روی سربرگ کارت — «سازنده: نام» */
+function ownerChip(createdBy) {
+  const name = createdBy ? staffNames.get(createdBy) : null;
+  if (!name) return null;
+  return el(
+    'span',
+    { class: `staff-chip exb-owner ${hueClass(createdBy)}`, title: `سازندهٔ تمرین: ${name}` },
+    hueDot(createdBy, 9),
+    `سازنده: ${name}`
+  );
+}
+
+function privateBadge() {
+  return el('span', { class: 'badge badge--warning' }, 'خصوصی');
+}
+
+function teamBadge() {
+  return el('span', { class: 'badge badge--neutral' }, 'تیمی');
+}
+
+/** فایل‌های قابل پیش‌نمایش درون‌برنامه‌ای — تصویر یا PDF */
+function previewable(file) {
+  const mime = String(file?.mime ?? '').toLowerCase();
+  return mime.startsWith('image/') || mime === 'application/pdf';
 }
 
 function formatBadge(format) {
@@ -450,9 +494,21 @@ export function renderExercises(container) {
         : ex.file
           ? [{ id: '', filename: ex.file.filename, mime: ex.file.mime, size: ex.file.size }]
           : [];
+      const previewFiles = files.filter(previewable);
       const actions = el(
         'div',
         { class: 'exb-card__actions' },
+        previewFiles.length > 0
+          ? el(
+              'button',
+              {
+                class: 'btn btn--ghost btn--sm',
+                title: 'پیش‌نمایش',
+                onclick: () => openPreviewModal(ex, previewFiles)
+              },
+              icon('eye', 15)
+            )
+          : null,
         files.length > 0
           ? el(
               'button',
@@ -487,6 +543,9 @@ export function renderExercises(container) {
                 icon('file', 13),
                 el('span', { class: 'exb-file-chip__name', title: f.filename }, f.filename),
                 el('span', { class: 'exb-file-chip__size' }, sizeLabel(f.size)),
+                previewable(f)
+                  ? el('button', { class: 'exb-file-chip__btn', title: 'پیش‌نمایش', onclick: () => openPreviewModal(ex, [f]) }, icon('eye', 12))
+                  : null,
                 el('button', { class: 'exb-file-chip__btn', title: 'دانلود', onclick: () => downloadFile(ex, f) }, icon('download', 12)),
                 isStaff()
                   ? el('button', { class: 'exb-file-chip__btn exb-file-chip__btn--danger', title: 'حذف فایل', onclick: () => removeAttachment(ex, f) }, icon('trash', 12))
@@ -501,7 +560,12 @@ export function renderExercises(container) {
           'div',
           { class: 'exb-card__head' },
           el('b', { class: 'exb-card__title' }, ex.title),
-          el('div', { class: 'exb-card__badges' }, formatBadge(ex.format), publishedBadge(ex.published))
+          el('div', { class: 'exb-card__badges' },
+            ownerChip(ex.createdBy),
+            formatBadge(ex.format),
+            publishedBadge(ex.published),
+            ex.visibility === 'private' ? privateBadge() : null,
+            ex.teamCreated ? teamBadge() : null)
         ),
         ex.description ? el('p', { class: 'exb-card__desc' }, ex.description) : null,
         // لینک بازی/تمرین آنلاین بیرونی — وکتور بازی (بدون ایموجی)
@@ -594,6 +658,88 @@ export function renderExercises(container) {
     }
   }
 
+  // ─────────────── پیش‌نمایش درون‌برنامه‌ای (تصویر / PDF) ───────────────
+
+  /** — همان الگوی blob دانلود (Bearer → objectURL) ولی برای نمایش؛
+   * مسیر عمومی توکن‌دار خانواده‌ها اینجا هرگز استفاده نمی‌شود.
+   * objectURLها هنگام بستن مودال و هنگام جابه‌جایی فایل رها می‌شوند. */
+  function openPreviewModal(ex, files, startIdx = 0) {
+    let idx = Math.min(Math.max(startIdx, 0), files.length - 1);
+    let currentUrl = null;
+    let seq = 0;
+
+    const status = el('div', { class: 'exb-preview__status' });
+    const stage = el('div', { class: 'exb-preview__stage' });
+
+    function dropCurrent() {
+      if (currentUrl) {
+        URL.revokeObjectURL(currentUrl);
+        currentUrl = null;
+      }
+    }
+
+    async function show() {
+      const my = ++seq;
+      dropCurrent();
+      const f = files[idx];
+      stage.replaceChildren(el('span', { class: 'exb-preview__status' }, 'در حال دریافت پیش‌نمایش…'));
+      status.textContent = `${f.filename} — ${fa(idx + 1)} از ${fa(files.length)}`;
+      try {
+        const url = f.id
+          ? `/api/exercises/${ex.id}/files/${f.id}`
+          : `/api/exercises/${ex.id}/file`;
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
+        });
+        if (!res.ok) throw new Error('دریافت فایل ناموفق بود');
+        const blob = await res.blob();
+        if (my !== seq) return; // پاسخ کهنه — کاربر فایل دیگری را باز کرده
+        const objUrl = URL.createObjectURL(blob);
+        const mime = (f.mime || blob.type || '').toLowerCase();
+        if (mime === 'application/pdf') {
+          currentUrl = objUrl;
+          stage.replaceChildren(el('iframe', { class: 'exb-preview__frame', src: objUrl, title: f.filename }));
+        } else if (mime.startsWith('image/')) {
+          currentUrl = objUrl;
+          stage.replaceChildren(el('img', { class: 'exb-preview__img', src: objUrl, alt: f.filename }));
+        } else {
+          URL.revokeObjectURL(objUrl);
+          stage.replaceChildren(el('span', { class: 'exb-preview__status' }, 'پیش‌نمایش این نوع فایل ممکن نیست — از دکمهٔ دانلود استفاده کنید'));
+        }
+      } catch (err) {
+        if (my !== seq) return;
+        stage.replaceChildren(el('span', { class: 'exb-preview__status' }, 'دریافت پیش‌نمایش ناموفق بود'));
+        status.textContent = '';
+        toastError(err);
+      }
+    }
+
+    const prevBtn = files.length > 1
+      ? el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { idx = (idx - 1 + files.length) % files.length; show(); } }, icon('chevR', 14), 'قبلی')
+      : null;
+    const nextBtn = files.length > 1
+      ? el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { idx = (idx + 1) % files.length; show(); } }, 'بعدی', icon('chevL', 14))
+      : null;
+
+    openModal({
+      title: `پیش‌نمایش «${ex.title}»`,
+      wide: true,
+      body: el(
+        'div',
+        { class: 'exb-preview' },
+        status,
+        stage,
+        files.length > 1 ? el('div', { class: 'exb-preview__nav' }, prevBtn, nextBtn) : null
+      ),
+      actions: [(close) => el('button', { class: 'btn btn--ghost', onclick: close }, 'بستن')],
+      onClose: () => {
+        seq += 1; // واکنش‌های در جریه بی‌اثر می‌شوند
+        dropCurrent();
+      }
+    });
+    show();
+  }
+
   // ─────────────── ساخت تمرین (درگ‌اند‌دراپ چندفایلی) ───────────────
 
   function openCreateModal() {
@@ -611,6 +757,15 @@ export function renderExercises(container) {
       el('option', { value: 'game' }, 'بازی'),
       el('option', { value: 'instruction' }, 'دستورالعمل خانه')
     );
+    // — دید (m136): خصوصی = فقط سازنده و مدیر در بانک/انتخابگر می‌بینند
+    const visSel = el(
+      'select',
+      { class: 'select' },
+      el('option', { value: 'public', selected: 'selected' }, 'عمومی — همهٔ همکاران'),
+      el('option', { value: 'private' }, 'خصوصی — فقط من و مدیر')
+    );
+    // — تمرین تیمی: در تابلوی پیشرفت نصف امتیاز
+    const teamChk = el('input', { type: 'checkbox' });
     const tagPicker = buildTagPicker(tags, selected);
 
     let chips = null;
@@ -641,9 +796,16 @@ export function renderExercises(container) {
     const bodyEl = el(
       'div',
       { class: 'form-grid' },
+      // — شفافیت هویت (m136): تمرین همیشه به نام کاربرِ وارد‌شده ثبت می‌شود
+      el('div', { class: 'field span-2' },
+        el('div', { class: 'exb-attrib' }, icon('user', 15), `ثبت به نام شما: ${session.user?.displayName ?? '—'}`)),
       el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'فایل‌های تمرین (اختیاری — می‌توانید بعداً هم اضافه کنید)'), dropzoneWrap),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'عنوان تمرین', el('span', { class: 'req' }, ' *')), title),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'قالب'), fmt),
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'دید'), visSel,
+        el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'خصوصی: در بانک تمرین و انتخابگر فقط شما و مدیر می‌بینید؛ بات/خانواده هرگز')), 
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'امتیازسازی'),
+        el('label', { class: 'exb-check' }, teamChk, el('span', {}, 'ساختهٔ تیمی — امتیاز نصف'))),
       el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'لینک بازی/تمرین آنلاین (اختیاری)'), link,
         el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'لینک بازی روی سرویس بیرونی — در پیام بلهٔ خانواده و پروفایل با دکمهٔ بازی باز می‌شود')),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'توضیح برای خانواده (اختیاری)'), desc),
@@ -675,7 +837,9 @@ export function renderExercises(container) {
                     format: fmt.value,
                     external_url: link.value.trim() || null,
                     tag_ids: [...selected],
-                    published: true
+                    published: true,
+                    visibility: visSel.value,
+                    team_created: teamChk.checked
                   });
                   const newId = created?.data?.id;
                   if (picked.length > 0 && newId) {
@@ -724,6 +888,26 @@ export function renderExercises(container) {
       el('option', { value: '1', selected: ex.published ? 'selected' : undefined }, 'منتشرشده — در بات دیده می‌شود'),
       el('option', { value: '0', selected: !ex.published ? 'selected' : undefined }, 'پیش‌نویس — فقط پنل')
     );
+    // — دید/تیم (m136): قابل ویرایش فقط توسط سازنده یا مدیر
+    const canOwn = ex.createdBy === session.user?.staffId || session.user?.role === 'manager';
+    const visSel = el(
+      'select',
+      { class: 'select' },
+      el('option', { value: 'public', selected: ex.visibility !== 'private' ? 'selected' : undefined }, 'عمومی — همهٔ همکاران'),
+      el('option', { value: 'private', selected: ex.visibility === 'private' ? 'selected' : undefined }, 'خصوصی — فقط من و مدیر')
+    );
+    const teamChk = el('input', { type: 'checkbox' });
+    if (ex.teamCreated) teamChk.checked = true;
+    // — انتخابگر سازنده فقط برای مدیر (انتقال مالکیت)
+    const isManager = session.user?.role === 'manager';
+    const ownerSel = isManager
+      ? el(
+          'select',
+          { class: 'select' },
+          el('option', { value: '' }, '— بدون تغییر سازنده —'),
+          ...staffList.map((s) => el('option', { value: s.id, selected: s.id === ex.createdBy ? 'selected' : undefined }, s.fullName))
+        )
+      : null;
     const tagPicker = buildTagPicker(tags, selected);
 
     const bodyEl = el(
@@ -732,6 +916,10 @@ export function renderExercises(container) {
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'عنوان تمرین', el('span', { class: 'req' }, ' *')), title),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'قالب'), fmt),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'انتشار'), pub),
+      canOwn ? el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'دید'), visSel) : null,
+      canOwn ? el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'امتیازسازی'),
+        el('label', { class: 'exb-check' }, teamChk, el('span', {}, 'ساختهٔ تیمی — امتیاز نصف'))) : null,
+      ownerSel ? el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'سازندهٔ تمرین (انتقال مالکیت — مدیر)'), ownerSel) : null,
       el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'لینک بازی/تمرین آنلاین (اختیاری)'), link,
         el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'لینک بازی روی سرویس بیرونی — در پیام بلهٔ خانواده و پروفایل با دکمهٔ بازی باز می‌شود — برای خالی‌کردن، خالی بگذارید')),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'توضیح برای خانواده'), desc),
@@ -756,14 +944,24 @@ export function renderExercises(container) {
                   return;
                 }
                 try {
-                  await api.patch(`/api/exercises/${ex.id}`, {
+                  const patch = {
                     title: title.value.trim(),
                     description: desc.value.trim() || null,
                     format: fmt.value,
                     external_url: link.value.trim() || null,
                     published: pub.value === '1',
                     tag_ids: [...selected]
-                  });
+                  };
+                  // دید/تیم فقط سازنده یا مدیر — سرور هم گارد دارد
+                  if (canOwn) {
+                    patch.visibility = visSel.value;
+                    patch.team_created = teamChk.checked;
+                  }
+                  // انتقال مالکیت فقط مدیر — فقط وقتی انتخاب تازه‌ای شده باشد
+                  if (ownerSel && ownerSel.value) {
+                    patch.owner_staff_id = ownerSel.value;
+                  }
+                  await api.patch(`/api/exercises/${ex.id}`, patch);
                   toast('تمرین به‌روزرسانی شد', 'success');
                   close();
                   reloadAll();
@@ -804,6 +1002,9 @@ export function renderExercises(container) {
                   icon('file', 13),
                   el('span', { class: 'exb-file-chip__name', title: f.filename }, f.filename),
                   el('span', { class: 'exb-file-chip__size' }, sizeLabel(f.size)),
+                  previewable(f)
+                    ? el('button', { class: 'exb-file-chip__btn', title: 'پیش‌نمایش', onclick: () => openPreviewModal(ex, [f]) }, icon('eye', 12))
+                    : null,
                   el('button', { class: 'exb-file-chip__btn', title: 'دانلود', onclick: () => downloadFile(ex, f) }, icon('download', 12)),
                   f.id
                     ? el('button', {
@@ -908,7 +1109,7 @@ export function renderExercises(container) {
     });
     if (!ok) return;
     try {
-      await api.delete(`/api/exercises/${ex.id}`);
+      await api.del(`/api/exercises/${ex.id}`);
       toast('تمرین حذف شد', 'success');
       reloadAll();
     } catch (err) {
@@ -937,7 +1138,8 @@ export function renderExercises(container) {
     );
   }
 
-  loadMeta().then(() => {
+  loadMeta().then(async () => {
+    await loadStaff();
     drawToolbar();
     drawNav();
     refresh();

@@ -282,8 +282,8 @@ function contentQueries(since) {
   const q = (sql) => ({ sql: sql + W, params: P });
   const qJoin = (sql) => ({ sql, params: since ? [since] : [] });
   return [
-    // تولید محتوا
-    q(`SELECT created_by k, COUNT(*) c FROM exercises WHERE deleted_at IS NULL AND created_by IS NOT NULL GROUP BY created_by`),
+    // تولید محتوا — تمرین تیمی (team_created=1) نصف وزن می‌گیرد (خواست کاربر)
+    q(`SELECT created_by k, SUM(CASE WHEN team_created = 1 THEN 0.5 ELSE 1 END) c FROM exercises WHERE deleted_at IS NULL AND created_by IS NOT NULL GROUP BY created_by`),
     q(`SELECT created_by k, COUNT(*) c FROM exercise_packages WHERE deleted_at IS NULL AND created_by IS NOT NULL GROUP BY created_by`),
     q(`SELECT created_by k, COUNT(*) c FROM pathway_templates WHERE active = 1 AND created_by IS NOT NULL GROUP BY created_by`),
     q(`SELECT created_by k, COUNT(*) c FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by IS NOT NULL GROUP BY created_by`),

@@ -3307,3 +3307,65 @@ tr.wl-row--urgent > td:first-child {
   .clxacc-toolbar { flex-direction: column; align-items: stretch; }
   .clxacc-toolbar > div:last-child { display: flex; gap: var(--sp-2); }
 }
+
+/* ═════════ m136 — clxacc stats row: ریزآمار پراطلاعات سربرگ مراحل ═════════ */
+
+.clxacc__stats {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 2px 12px; margin-top: 3px;
+  font-size: var(--fs-xs); color: var(--text-3);
+}
+.clxacc__stat { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.clxacc__stat b { font-weight: 700; color: var(--text-2); }
+.clxacc__stat--warn { color: var(--warning); }
+.clxacc__stat--warn b { color: inherit; }
+
+/* ۴۸۰px — سربرگ wrap می‌شود؛ ردیف آمار هم فاصله‌ها را جمع می‌کند */
+@media (max-width: 480px) {
+  .clxacc__stats { gap: 2px 10px; }
+}
+
+/* ═══ m136 — exb owner/preview/badges ═══ */
+/* سربرگ کارت: بج‌ها (چیپ سازنده + قالب/انتشار/خصوصی/تیمی) wrap شوند */
+.exb-card__badges { flex-wrap: wrap; justify-content: flex-end; }
+/* چیپ سازنده — غیرتعاملی؛ رنگ از staff-chip/hue-<n> (همان پالت درمانگر) */
+.exb-owner {
+  cursor: default;
+  padding: 2px 8px;
+  font-size: var(--fs-xs);
+  border-color: color-mix(in srgb, var(--appt-strong) 38%, var(--border));
+  background: color-mix(in srgb, var(--appt-soft) 55%, var(--surface));
+}
+.exb-owner:hover, .exb-owner:active { border-color: color-mix(in srgb, var(--appt-strong) 38%, var(--border)); color: var(--text-2); }
+.exb-owner .staff-chip__dot { width: 8px; height: 8px; }
+.expick-owner { cursor: default; padding: 1px 8px; font-size: var(--fs-xs); }
+.expick-owner:hover, .expick-owner:active { border-color: var(--border); color: var(--text-2); }
+.expick-owner .staff-chip__dot { width: 8px; height: 8px; }
+/* بنر «ثبت به نام شما» — شفافیت هویت در مودال تمرین جدید */
+.exb-attrib {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px var(--sp-3);
+  border-radius: var(--radius);
+  background: var(--primary-soft);
+  font-size: var(--fs-sm); font-weight: 600; color: var(--text-1);
+}
+/* سوییچ «ساختهٔ تیمی» */
+.exb-check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: var(--fs-sm); color: var(--text-1); }
+.exb-check input { width: 16px; height: 16px; accent-color: var(--primary); flex: none; }
+/* لایهٔ پیش‌نمایش درون‌برنامه‌ای (تصویر / PDF) */
+.exb-preview { display: flex; flex-direction: column; gap: var(--sp-2); }
+.exb-preview__status { font-size: var(--fs-xs); color: var(--text-3); min-height: 1.2em; }
+.exb-preview__stage {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 120px; overflow: hidden;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.exb-preview__img { display: block; max-width: 100%; max-height: 70vh; object-fit: contain; }
+.exb-preview__frame { display: block; width: 100%; height: 70vh; border: 0; background: #fff; }
+.exb-preview__nav { display: flex; gap: var(--sp-2); justify-content: center; }
+@media (max-width: 480px) {
+  .exb-preview__img { max-height: 55vh; }
+  .exb-preview__frame { height: 55vh; }
+  .exb-card__badges { justify-content: flex-start; }
+}

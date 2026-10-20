@@ -2,11 +2,13 @@
  * مسیر بالینی — قالب‌ساز و جلسات مداخله
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
-// clinical-insights.js — تب «تفسیر بالینی» پروفایل دانش‌آموز — بازسازی کامل m135 (آکاردئون ۶ مرحله‌ای)
+// clinical-insights.js — تب «تفسیر بالینی» پروفایل دانش‌آموز — بازسازی m135 (آکاردئون ۶ مرحله‌ای) + m136
 // ساختار (UX-SPEC): نوار باریک (clxacc-toolbar) + فلوی عمودی شش <details> (clxacc-flow) + یک disclaimer.
 //   ۱ شرح‌حال → ۲ چک‌لیست‌های خانواده و معلم (+ شک بالینی) → ۳ وکسلر ۴ (افشای تدریجی؛ شش آکاردئون تودرتو
 //   همیشه‌بسته) → ۴ ارزیابی عملکردی → ۵ جمع‌بندی تشخیصی (+ پیوند با سایر اطلاعات) → ۶ ورود به قالب مداخله.
 // یک چیدمان برای هر دو فاز (P1): فاز فقط گام بازِ پیش‌فرض، بج‌ها و CTAها را عوض می‌کند.
+// m136: (۱) مرحلهٔ ۴ حالت‌آگاه شد — ماتریس resolveSkillsMode؛ چک‌لیست مهارتی فقط برای مسیر/پروتکل OT
+//   (رفع باگ «چک‌لیست توانبخشی برای همه»)؛ (۲) سربرگ‌ها ردیف ریزآمار .clxacc__stats گرفتند — صفر GET تازه.
 // قرارداد mount دست‌نخورده: renderClinicalTab(box, {student}) از views/student-profile.js.
 // بودجهٔ GET ثابت (§8.1): ۳ موازی + ترتیبی؛ پاسخ واحد /case-events بین مراحل ۱/۲/۴ مشترک است.
 // خط قرمز پلن §۱: خروجی موتور همیشه «غربالگری/فرضیه» است — «هدف درمانی نهایی» فقط با تأیید
@@ -58,6 +60,30 @@ function canDecideFor(student) {
   return u.role === 'therapist' && Boolean(student.ownerStaffId) && student.ownerStaffId === u.staffId;
 }
 
+// ───────── m136 — حالت‌های مرحلهٔ ۴ «ارزیابی عملکردی» ─────────
+// رفع باگ: چک‌لیست مهارتی توانبخشی برای «همه» رندر می‌شد چون قاعدهٔ قدیمی واکشی OT در فاز شناسایی همیشه true بود.
+
+/** چک‌لیست ۷ حیطه‌ای مهارتی — ابزار مسیر توانبخشی/کاردرمانی ذهنی */
+const SKILL_MODE_OT = 'ot';
+/** چک‌لیست‌های خواندن/نوشتن/ریاضی + پروب‌های عملکرد — ابزار مسیر یادگیری */
+const SKILL_MODE_SLD = 'sld';
+
+/**
+ * ماتریس حالت مرحلهٔ ۴ — تک‌منبع شاخه‌زنی (واکشی ot/profile + glance + CTA + بدنه):
+ *   فاز مداخله + protocol ∈ {rehab, mental_ot}        → MODE_OT
+ *   فاز مداخله + protocol ∈ {learning, slow_learner}  → MODE_SLD
+ *   فاز شناسایی + student.pathway === 'rehab'         → MODE_OT (چک‌لیست مهارتی = غربالگری توانبخشی)
+ *   فاز شناسایی + بقیه (null = پیش‌فرض یادگیری، learning، slow_learner) → MODE_SLD
+ *   دفاعی: پاسخ /clinical-gates نیامده → مثل شناسایی از student.pathway (protocol null می‌ماند).
+ * منبع مسیر: student.pathway ستون پذیرش است (constants.ts:70-72؛ null = مسیر یادگیری) —
+ * فیلد pathway قرارداد پاسخ گیت‌ها نیست؛ شاخه‌زنی هرگز آن را از پاسخ گیت‌ها نمی‌خواند.
+ */
+function resolveSkillsMode({ gates, student }) {
+  const proto = gates?.protocol ?? null;
+  if (proto) return (proto === 'rehab' || proto === 'mental_ot') ? SKILL_MODE_OT : SKILL_MODE_SLD;
+  return student?.pathway === 'rehab' ? SKILL_MODE_OT : SKILL_MODE_SLD;
+}
+
 /** حذف تکرار متنی — کلید: متن نرمال‌شده */
 function dedupeTexts(items) {
   const seen = new Set();
@@ -77,6 +103,24 @@ function dedupeTexts(items) {
 function countChip(label, n, cls) {
   if (!n) return null;
   return el('span', { class: `badge ${cls}`, title: `${label}: ${fa(n)}` }, `${label} ${fa(n)}`);
+}
+
+// ───────── m136 — ریزآمار سربرگ آکاردئون‌ها (ردیف .clxacc__stats زیر glance) ─────────
+
+/**
+ * یک آمار ریز سربرگ — برچسب + مقدار (اعداد باید پیش‌فرض fa() باشند).
+ * value خالی → null (قاعدهٔ «آمار خالی رندر نمی‌شود»)؛ warn → رنگ هشدار (مثلاً سیگنال سطح «محتمل»).
+ */
+function statItem(label, value, { warn = false, hint = null } = {}) {
+  if (value == null || value === '') return null;
+  return el('span', { class: `clxacc__stat${warn ? ' clxacc__stat--warn' : ''}`, ...(hint ? { title: hint } : {}) },
+    el('span', {}, label),
+    el('b', {}, value));
+}
+
+/** آمار شمارشی — صفر رندر نمی‌شود (سربرگ شلوغ نشود؛ glance حالت صفر را می‌گوید) */
+function countStat(label, n, opts) {
+  return n > 0 ? statItem(label, fa(n), opts) : null;
 }
 
 /** — سن از تاریخ تولد (شمسی ذخیره‌شده یا میلادی) — «۹ سال و ۴ ماه» */
@@ -154,15 +198,18 @@ function clxaccStateBadge(state) {
 
 /**
  * سازندهٔ یک بخش آکاردئون (سربرگ summary + بدنه) — آناتومی §3.
+ * stats: ردیف ریزآمار m136 داخل heading، زیر glance — فقط دادهٔ ازپیش‌گرفته؛ آمار خالی/صفرِ بی‌معنا رندر نمی‌شود.
  * ویژگی open هنگام ساخت ست می‌شود (بدون فلش پس از paint — §8.3)؛ aria-expanded سربرگ آینهٔ open است
  * و با شنوندهٔ واگذارشدهٔ toggle هم‌گام می‌ماند (§8.4).
  */
-function clxaccSection({ key, num, title, glance, chips = [], state = 'todo', cta = null, body = [], open = false }) {
+function clxaccSection({ key, num, title, glance, stats = [], chips = [], state = 'todo', cta = null, body = [], open = false }) {
+  const statNodes = (stats ?? []).filter(Boolean);
   const summary = el('summary', { class: 'clxacc__head', 'aria-expanded': open ? 'true' : 'false' },
     num != null ? el('span', { class: 'clxacc__num', 'aria-hidden': 'true' }, fa(num)) : null,
     el('span', { class: 'clxacc__heading' },
       el('strong', { class: 'clxacc__title' }, title),
-      glance ? el('span', { class: 'clxacc__glance' }, glance) : null),
+      glance ? el('span', { class: 'clxacc__glance' }, glance) : null,
+      statNodes.length ? el('span', { class: 'clxacc__stats' }, ...statNodes) : null),
     el('span', { class: 'clxacc__chips' }, clxaccStateBadge(state), ...(chips ?? []).filter(Boolean)),
     cta ? el('span', { class: 'clxacc__act' }, cta) : null,
     el('span', { class: 'clxacc__chev', 'aria-hidden': 'true' }, icon('chevL', 15)));
@@ -298,7 +345,7 @@ function interpretationContext({ student, gates }) {
  * — دکمهٔ اقدام هر گیت — CTA سربرگ و بدنهٔ آکاردئون‌ها
  * گیت «needs» این‌جا دکمه ندارد: اقدام اصلی مرحلهٔ ۵ دکمهٔ داخل کارت جمع‌بندی است (تک‌منبع).
  */
-function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide, refresh }) {
+function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide, refresh, skillsMode }) {
   if (!g) return null;
   const typeIdOf = (key) => typesById.get(key)?.id ?? null;
   const act = (label, cls, onclick) => el('button', { class: `btn ${cls} btn--sm`, onclick }, icon('send', 14), label);
@@ -319,8 +366,9 @@ function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide
         ? act(GATE_GLOSS.wechsler.actionLabel, 'btn--soft', () => openCaseEventForm({ student, defaultTypeId: typeIdOf(WISC4_KEY), onSaved: refresh }))
         : null;
     case 'skills':
-      // گیت مرحلهٔ ۴ وابسته به مسیر: یادگیری → چک‌لیست‌های خواندن/نوشتن/ریاضی؛ توانبخشی → چک‌لیست مهارتی
-      if (gates?.pathway === 'learning') {
+      // حالت مرحلهٔ ۴ از ماتریس resolveSkillsMode می‌آید (m136) — SLD → چک‌لیست‌های خواندن/نوشتن/ریاضی؛
+      // OT → اسکرول به لنگر چک‌لیست مهارتی در همین بدنه.
+      if (skillsMode === SKILL_MODE_SLD) {
         return act(GATE_GLOSS.skills.learningActionLabel, 'btn--soft', () => openCaseEventForm({
           student,
           onlyKeys: SLD_CHECKLIST_KEYS,
@@ -1041,7 +1089,8 @@ export async function renderClinicalTab(box, { student }) {
     let anamnesisTypeId = null;
     let typesById = new Map(); // — کلید → تعریف نوع (فرم‌های نتایج/وکسلر/توانبخشی)
     let gates = null; // — گیت‌های شناسایی + فاز/پروتکل
-    let otProfile = null; // — پروفایل چک‌لیست ۷ حیطه‌ای
+    let otProfile = null; // — پروفایل چک‌لیست ۷ حیطه‌ای (فقط MODE_OT واکشی می‌شود — m136)
+    let skillsMode = SKILL_MODE_SLD; // — حالت مرحلهٔ ۴؛ درست زیر از گیت‌ها/مسیر حل می‌شود
     let events = []; // — پاسخ واحد /case-events؛ ردیف‌های مراحل ۱/۲/۴ از همین می‌آید (GET رشد نمی‌کند)
     try {
       const [insRes, pathRes, gatesRes] = await Promise.all([
@@ -1052,11 +1101,10 @@ export async function renderClinicalTab(box, { student }) {
       insights = insRes.data;
       paths = pathRes.data ?? [];
       gates = gatesRes?.data ?? null;
-      // پروفایل مهارتی: فاز شناسایی (ورودی گیت ۴) + همهٔ پروتکل‌های مداخله‌ای به‌جز توانبخشی
-      // m134: در مداخلهٔ یادگیری/دیرآموز هم لازم است — چک‌لیست ۷ حیطه‌ای نقش «پایش» دارد
-      const proto0 = gates?.protocol ?? null;
-      const wantOt = !gates || gates.phase === 'identification' || proto0 === 'mental_ot' || proto0 === 'learning' || proto0 === 'slow_learner';
-      if (wantOt) {
+      // حالت مرحلهٔ ۴ — ماتریس resolveSkillsMode (m136): فقط MODE_OT پروفایل مهارتی می‌گیرد؛
+      // قاعدهٔ قبلی واکشی در فاز شناسایی برای «همه» true بود → ریشهٔ باگ «چک‌لیست توانبخشی برای همه».
+      skillsMode = resolveSkillsMode({ gates, student });
+      if (skillsMode === SKILL_MODE_OT) {
         otProfile = await api.get(`/api/students/${student.id}/ot/profile`).then((r) => r.data).catch(() => null);
       }
       // شناسهٔ فرم شرح‌حال برای مرحلهٔ ۱ (اگر فعال باشد)
@@ -1091,7 +1139,7 @@ export async function renderClinicalTab(box, { student }) {
       ? gates.gates
       : (gates ? [] : ['anamnesis', 'behavioral', 'wechsler', 'skills', 'needs'].map((k) => ({ key: k, done: false, ord: SM[k].num, label: SM[k].title, detail: null })));
     const gateByKey = (key) => gatesList.find((g) => g.key === key) ?? null;
-    const stageCtx = { student, gates, typesById, anamnesisTypeId, canDecide, refresh };
+    const stageCtx = { student, gates, typesById, anamnesisTypeId, canDecide, refresh, skillsMode };
 
     // دادهٔ صورت‌بندی — یک‌بار fetch؛ هم به wechslerConnections می‌رود هم به کارت جمع‌بندی (null-safe)
     const formulation = await fetchFormulation({ student });
@@ -1146,16 +1194,16 @@ export async function renderClinicalTab(box, { student }) {
         return line;
       },
       skills: () => {
-        const t = otProfile?.totals ?? null;
-        if (t) {
-          let line = SM.skills.glanceOt.replace('{n}', fa(t.scored)).replace('{m}', fa(t.total));
-          if (gates?.pathway === 'learning') {
-            const k = countCompleted(PROBE_KEYS);
-            if (k > 0) line = SM.skills.glanceOtProbe.replace('{ot}', line).replace('{k}', fa(k));
-          }
-          return line;
+        // glance حالت‌آگاه (m136): OT → پوشش پیمایش از gates.otCoverage (اولین مصرف واقعی این داده)؛
+        // SLD → شمار چک‌لیست‌های خواندن/نوشتن/ریاضی + پروب‌های پاسخ‌شده از پاسخ مشترک رویدادها.
+        if (skillsMode === SKILL_MODE_OT) {
+          const cov = gates?.otCoverage
+            ?? (otProfile?.totals ? { scored: otProfile.totals.scored, total: otProfile.totals.total } : null);
+          if (cov?.total) return SM.skills.glanceOt.replace('{n}', fa(cov.scored)).replace('{m}', fa(cov.total));
+          return gateByKey('skills')?.detail || SM.skills.glanceFallback;
         }
-        return gateByKey('skills')?.detail || SM.skills.glanceFallback;
+        const k = countCompleted([...SLD_CHECKLIST_KEYS, ...PROBE_KEYS]);
+        return k > 0 ? SM.skills.glanceSld.replace('{n}', fa(k)) : SM.skills.glanceSldZero;
       },
       needs: () => {
         if (formulation?.coherence) {
@@ -1176,6 +1224,93 @@ export async function renderClinicalTab(box, { student }) {
           : paths.some((p) => p.status === 'reviewed') ? 'reviewed'
             : paths[0]?.status;
         return SM.protocol.glanceActive.replace('{protocol}', label).replace('{status}', PATH_STATUS_LABEL[statusKey] ?? statusKey ?? '—');
+      }
+    };
+
+    // ── ریزآمار سربرگ‌ها (m136 — B) — فقط دادهٔ ازپیش‌گرفته (صفر GET تازه)؛ آمار خالی حذف ──
+    const ST = STAGE2_META.stats;
+    // آخرین ثبت شرح‌حال — از پاسخ مشترک رویدادها (بدون GET تازه)
+    const anamTypeId = typesById.get(ANAMNESIS_KEY)?.id ?? null;
+    const lastAnamAt = (events ?? [])
+      .filter((e) => e.eventTypeId === anamTypeId && e.status !== 'cancelled')
+      .reduce((m, e) => (e.occurredAt && (!m || e.occurredAt > m) ? e.occurredAt : m), null);
+    // «کهنه است» فقط وقتی که detail سرور همین را بگوید (پنجرهٔ ۱۲ ماه سمت سرور قضاوت می‌شود)
+    const anamStale = String(gateByKey('anamnesis')?.detail ?? '').includes('کهنه');
+    const statsOf = {
+      anamnesis: () => [
+        statItem(ST.anamnesisLast, lastAnamAt ? formatJalaliDateTime(lastAnamAt) : null),
+        anamStale ? statItem(ST.anamnesisStaleLabel, ST.anamnesisStale, { warn: true }) : null
+      ],
+      behavioral: () => {
+        const sig = gates?.suspicion?.signals ?? [];
+        const anyHigh = sig.some((s) => s?.level === 'high');
+        return [
+          countStat(ST.behavioralAnswered, countCompleted([...SCREEN_KEYS, ...SPECIFIC_KEYS])),
+          sig.length
+            ? statItem(ST.suspicionSignals, fa(sig.length), {
+                warn: anyHigh,
+                hint: anyHigh ? 'حداقل یک سیگنال با شواهد هم‌گرا — سطح «محتمل»' : null
+              })
+            : null
+        ];
+      },
+      wechsler: () => [
+        wSummary?.indexScatter != null && wSummary.indexScatter > 0
+          ? statItem(ST.wechslerScatter, fa(wSummary.indexScatter), { hint: CONTEXT_META.scatterNote })
+          : null,
+        wSummary?.monitoringInterval != null
+          ? statItem(ST.wechslerReassess, `${fa(wSummary.monitoringInterval)} ماه`)
+          : null
+      ],
+      skills: () => {
+        if (skillsMode === SKILL_MODE_OT) {
+          const cov = gates?.otCoverage ?? null;
+          return [
+            cov?.total ? statItem(ST.skillsCoverage, `${fa(cov.scored)} از ${fa(cov.total)}`) : null,
+            cov?.domainsMin3 != null
+              ? statItem(ST.skillsDomains, fa(cov.domainsMin3), { hint: 'حیطه‌هایی با حداقل ۳ مهارت نمره‌گرفته' })
+              : null
+          ];
+        }
+        return [
+          countStat(ST.skillsSld, countCompleted(SLD_CHECKLIST_KEYS)),
+          countStat(ST.skillsProbe, countCompleted(PROBE_KEYS))
+        ];
+      },
+      needs: () => {
+        if (!formulation) return [];
+        const elevated = (formulation.constructs ?? []).filter((c) => c && c.level !== 'پایین').length;
+        const activeP = (formulation.patterns ?? []).filter((p) => p?.status === 'active').length;
+        return [
+          formulation.dataCoverage?.percent != null
+            ? statItem(ST.needsCoverage, `${fa(formulation.dataCoverage.percent)}٪`)
+            : null,
+          countStat(ST.needsConstructs, elevated),
+          countStat(ST.needsPatterns, activeP)
+        ];
+      },
+      intervention: () => {
+        const stats = [];
+        // چیپ پیشنهاد پروتکل — فقط وقتی مرحلهٔ ۶ قفل شناسایی است
+        if (!protocol && formulation?.protocolSuggestion?.protocol) {
+          const sug = formulation.protocolSuggestion.protocol;
+          stats.push(el('span', {
+            class: 'badge badge--info clxacc__stat',
+            ...(formulation.protocolSuggestion.rationaleFa ? { title: formulation.protocolSuggestion.rationaleFa } : {})
+          }, icon('compass', 12), `${ST.protocolSuggestion} ${TEMPLATE_PROTOCOL_BADGE[sug]?.label ?? sug}`));
+        }
+        // گام‌های مسیر (انجام‌شده از کل) + جلسات برنامه‌ریزی‌شده — از پاسخ /clinical-paths
+        let stepsDone = 0;
+        let stepsTotal = 0;
+        let planned = 0;
+        for (const p of paths) {
+          stepsTotal += (p.steps ?? []).length;
+          stepsDone += (p.steps ?? []).filter((s) => s.doneAt).length;
+          planned += (p.sessions ?? []).filter((s) => s.status === 'planned').length;
+        }
+        if (stepsTotal) stats.push(statItem(ST.pathSteps, `${fa(stepsDone)} از ${fa(stepsTotal)}`));
+        stats.push(countStat(ST.pathSessions, planned));
+        return stats;
       }
     };
 
@@ -1234,8 +1369,9 @@ export async function renderClinicalTab(box, { student }) {
         : emptyPathLine
     );
 
-    // ── کارت چک‌لیست مهارتی مرحلهٔ ۴ — لنگر اسکرول CTA «چک‌لیست مهارتی» ──
-    const otCard = otProfile
+    // ── کارت چک‌لیست مهارتی مرحلهٔ ۴ — فقط در حالت OT سوار می‌شود (m136 رفع باگ: منحصر به مسیر/پروتکل OT) ──
+    // مصرف‌کنندهٔ otChecklistCard در کل فرانت همین‌جاست؛ ot-checklist.js دست‌نخورده ماند.
+    const otCard = skillsMode === SKILL_MODE_OT && otProfile
       ? otChecklistCard({ student, profile: otProfile, canDecide, refresh, scrollTarget: true })
       : null;
 
@@ -1290,12 +1426,18 @@ export async function renderClinicalTab(box, { student }) {
         return [interpretationContext({ student, gates }), profileBody];
       },
       skills: () => {
+        // بدنهٔ حالت‌آگاه (m136) — OT: کارت مهارتی + چیپ‌ها + CTA اسکرول؛
+        // SLD: چیپ‌ها + ردیف‌های پروب/نتایج + CTA ارسال چک‌لیست‌های خواندن/نوشتن/ریاضی.
         const g = gateByKey('skills');
         const body = [];
-        if (!otProfile && !g?.detail && !probeRows.node) body.push(el('div', { class: 'cell-sub' }, SM.skills.emptyHint));
-        if (otCard) body.push(otCard);
+        if (skillsMode === SKILL_MODE_OT) {
+          if (otCard) body.push(otCard);
+          if (!otCard && !g?.detail) body.push(el('div', { class: 'cell-sub' }, SM.skills.emptyHint));
+        } else if (!probeRows.node && !g?.detail) {
+          body.push(el('div', { class: 'cell-sub' }, SM.skills.emptyHint));
+        }
         body.push(seenChipsBlock(insights)); // تنها جای چیپ‌های «چه فرم‌هایی آمده» در مرحلهٔ ۴
-        if (probeRows.node) body.push(probeRows.node);
+        if (skillsMode === SKILL_MODE_SLD && probeRows.node) body.push(probeRows.node);
         if (!g?.done) {
           const cta = gateActionOf(g, stageCtx);
           if (cta) body.push(el('div', { class: 'clx-actions' }, cta));
@@ -1317,8 +1459,8 @@ export async function renderClinicalTab(box, { student }) {
         if (protocol) {
           const strip = protocolStrip(protoCardNode);
           if (strip) body.push(strip);
-          // پیوند مرحلهٔ ۴ — بدون رندر تکراری چک‌لیست مهارتی (§3.6 item 4)
-          if (protocol === 'mental_ot' || protocol === 'learning' || protocol === 'slow_learner') {
+          // پیوند مرحلهٔ ۴ — فقط پروتکل‌های OT (m136: یادگیری/دیرآموز در مرحلهٔ ۴ حالت SLD دارند و پایش مهارتی ندارند)
+          if (protocol === 'mental_ot') {
             body.push(el('div', { class: 'cell-sub' }, icon('clipboard', 13), ' ', SM.protocol.monitoringLink));
           }
         }
@@ -1337,11 +1479,13 @@ export async function renderClinicalTab(box, { student }) {
       const body = known
         ? (bodyOf[g.key]?.() ?? [])
         : (g.detail ? [el('div', { class: 'cell-sub' }, g.detail)] : []);
+      const stats = known ? ((statsOf[g.key]?.() ?? []).filter(Boolean)) : [];
       sections.push(clxaccSection({
         key: g.key,
         num: meta?.num ?? g.ord ?? null,
         title: meta?.title ?? g.label,
         glance,
+        stats,
         chips: g.key === 'wechsler' && !wechslerEmpty ? [wechslerSourceBadge(Boolean(wSummary.engine))] : [],
         state,
         cta: known && CTA_GATE_KEYS.includes(g.key) && state !== 'noData' ? gateActionOf(g, stageCtx) : null,
@@ -1355,6 +1499,7 @@ export async function renderClinicalTab(box, { student }) {
       num: SM.protocol.num,
       title: SM.protocol.title,
       glance: glanceOf.intervention(),
+      stats: statsOf.intervention().filter(Boolean),
       chips: [],
       state: stateOf('intervention'),
       cta: canDecide
