@@ -945,13 +945,16 @@ export function renderExercises(container) {
     const teamChk = el('input', { type: 'checkbox' });
     if (ex.teamCreated) teamChk.checked = true;
     // — انتخابگر سازنده فقط برای مدیر (انتقال مالکیت)
+    // m139: پیش‌فرض همیشه «بدون تغییر» است — سازندهٔ فعلی از پیش انتخاب نمی‌شود
+    // تا هر ذخیرهٔ سادهٔ فرم، مالکیت را بی‌صدا به کسی منتقل نکند (باگ ۱۳:۴۱).
     const isManager = session.user?.role === 'manager';
+    const currentOwnerName = staffList.find((s) => s.id === ex.createdBy)?.fullName ?? 'نامشخص';
     const ownerSel = isManager
       ? el(
           'select',
           { class: 'select' },
-          el('option', { value: '' }, '— بدون تغییر سازنده —'),
-          ...staffList.map((s) => el('option', { value: s.id, selected: s.id === ex.createdBy ? 'selected' : undefined }, s.fullName))
+          el('option', { value: '', selected: 'selected' }, '— بدون تغییر سازنده —'),
+          ...staffList.map((s) => el('option', { value: s.id }, s.fullName))
         )
       : null;
     const tagPicker = buildTagPicker(tags, selected);
@@ -965,7 +968,9 @@ export function renderExercises(container) {
       canOwn ? el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'دید'), visSel) : null,
       canOwn ? el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'امتیازسازی'),
         el('label', { class: 'exb-check' }, teamChk, el('span', {}, 'ساختهٔ تیمی — امتیاز نصف'))) : null,
-      ownerSel ? el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'سازندهٔ تمرین (انتقال مالکیت — مدیر)'), ownerSel) : null,
+      ownerSel ? el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'سازندهٔ تمرین (انتقال مالکیت — مدیر)'), ownerSel,
+        el('div', { class: 'cell-sub', style: { marginTop: '4px' } },
+          `سازندهٔ فعلی: ${currentOwnerName} — امتیاز تولید محتوا به نام او ثبت می‌شود؛ برای انتقال، صریحاً نام دیگری را انتخاب کنید.`)) : null,
       el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'لینک بازی/تمرین آنلاین (اختیاری)'), link,
         el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'لینک بازی روی سرویس بیرونی — در پیام بلهٔ خانواده و پروفایل با دکمهٔ بازی باز می‌شود — برای خالی‌کردن، خالی بگذارید')),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'توضیح برای خانواده'), desc),
@@ -1003,7 +1008,7 @@ export function renderExercises(container) {
                     patch.visibility = visSel.value;
                     patch.team_created = teamChk.checked;
                   }
-                  // انتقال مالکیت فقط مدیر — فقط وقتی انتخاب تازه‌ای شده باشد
+                  // انتقال مالکیت فقط مدیر — فقط با انتخاب صریح (پیش‌فرض: بدون تغییر — m139)
                   if (ownerSel && ownerSel.value) {
                     patch.owner_staff_id = ownerSel.value;
                   }
