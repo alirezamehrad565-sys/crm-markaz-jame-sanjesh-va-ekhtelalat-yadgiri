@@ -3990,8 +3990,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.8";
-var APP_MILESTONE = "m129";
+var APP_VERSION = "1.00.9";
+var APP_MILESTONE = "m130";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -10114,6 +10114,15 @@ ${vars.extra}` : void 0
         "",
         "\u0645\u0631\u06A9\u0632 \u0627\u0642\u062F\u0627\u0645 (\u067E\u06CC\u06AF\u06CC\u0631\u06CC\u200C\u0647\u0627) \u0631\u0627 \u0627\u0632 \u067E\u0646\u0644 \u0645\u062F\u06CC\u0631\u06CC\u062A \u062F\u0646\u0628\u0627\u0644 \u06A9\u0646\u06CC\u062F \u06CC\u0627 \xAB\u067E\u06CC\u06AF\u06CC\u0631\u06CC\u200C\u0647\u0627\u06CC \u0645\u0646\xBB \u0631\u0627 \u062F\u0631 \u0647\u0645\u06CC\u0646 \u0628\u0627\u062A \u0628\u0641\u0631\u0633\u062A\u06CC\u062F."
       ].filter((l) => l !== "").join("\n");
+    case "reassessment_due":
+      return [
+        "\u23F0 \u06CC\u0627\u062F\u0622\u0648\u0631 \u0628\u0627\u0632\u0633\u0646\u062C\u06CC \u0645\u0633\u06CC\u0631 \u0645\u062F\u0627\u062E\u0644\u0647",
+        "",
+        `\u0645\u0633\u06CC\u0631 \u0641\u0639\u0627\u0644 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \xAB${vars.studentName ?? "\u2014"}\xBB \u0628\u0647 \u067E\u0646\u062C\u0631\u0647\u0654 \u0628\u0627\u0632\u0633\u0646\u062C\u06CC \u06F4\u2013\u06F6 \u0647\u0641\u062A\u0647\u200C\u0627\u06CC \u0631\u0633\u06CC\u062F\u0647 \u0627\u0633\u062A.`,
+        `\u062A\u0627\u0631\u06CC\u062E \u0628\u0627\u0632\u0633\u0646\u062C\u06CC: ${vars.dueYmd ?? "\u2014"}`,
+        "",
+        "\u062F\u0631 \u062A\u0628 \xAB\u062A\u0641\u0633\u06CC\u0631 \u0628\u0627\u0644\u06CC\u0646\u06CC\xBB \u067E\u0631\u0648\u0641\u0627\u06CC\u0644\u060C \u0648\u0636\u0639\u06CC\u062A \u0645\u0633\u06CC\u0631 \u0631\u0627 \u0628\u0627\u0632\u0646\u06AF\u0631\u06CC \u06A9\u0646\u06CC\u062F: \u062A\u0645\u062F\u06CC\u062F\u060C \u062A\u063A\u06CC\u06CC\u0631 \u0647\u062F\u0641 \u06CC\u0627 \u0628\u0633\u062A\u0646 \u0645\u0633\u06CC\u0631."
+      ].filter((l) => l !== "").join("\n");
     case "bot_followup_done":
       return [
         "\u2705 \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u0627\u0646\u062C\u0627\u0645 \u0634\u062F.",
@@ -15195,7 +15204,6 @@ function createStudentProfileService(deps) {
           ["waitlist", `SELECT COUNT(*) AS cnt FROM waitlist WHERE (student_id = ? OR admitted_student_id = ?) AND deleted_at IS NULL`],
           ["case_events", `SELECT COUNT(*) AS cnt FROM case_events WHERE student_id = ? AND deleted_at IS NULL`],
           ["followups", `SELECT COUNT(*) AS cnt FROM followups WHERE student_id = ?`],
-          ["assessments", `SELECT COUNT(*) AS cnt FROM assessments WHERE student_id = ?`],
           ["exercise_assignments", `SELECT COUNT(*) AS cnt FROM exercise_assignments WHERE student_id = ?`],
           ["exercise_submissions", `SELECT COUNT(*) AS cnt FROM exercise_submissions WHERE student_id = ?`],
           ["committee_items", `SELECT COUNT(*) AS cnt FROM committee_items WHERE student_id = ? AND deleted_at IS NULL`]
@@ -15656,6 +15664,7 @@ var TIMELINE_KINDS = [
   "notification",
   "committee",
   "exercise",
+  "clinical_path",
   "case_event"
 ];
 var CASE_STATUS_LABELS_FA = {
@@ -15959,6 +15968,15 @@ function createStudentTimelineService(db) {
           ORDER BY e.occurred_at ASC`,
         [studentId]
       );
+      const pathAudits = await db.query(
+        `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
+           FROM audit_log
+          WHERE resource_type = 'intervention_path'
+            AND action IN ('clinical_path.create', 'clinical_path.decision')
+            AND resource_id IN (SELECT id FROM intervention_paths WHERE student_id = ?)
+          ORDER BY created_at ASC`,
+        [studentId]
+      );
       const actors = await actorNames([
         ...studentAudits.map((a) => a.actor_id),
         ...moveAudits.map((a) => a.actor_id),
@@ -15966,7 +15984,8 @@ function createStudentTimelineService(db) {
         ...followupAudits.map((a) => a.actor_id),
         ...waitlistAudits.map((a) => a.actor_id),
         ...committeeAudits.map((a) => a.actor_id),
-        ...exerciseAudits.map((a) => a.actor_id)
+        ...exerciseAudits.map((a) => a.actor_id),
+        ...pathAudits.map((a) => a.actor_id)
       ]);
       const actorOf = /* @__PURE__ */ __name2((id) => actors.get(id) ?? null, "actorOf");
       for (const a of studentAudits) {
@@ -16158,6 +16177,22 @@ function createStudentTimelineService(db) {
             actor: actorOf(ea.actor_id),
             ref: { type: "exercise_submission", id: submissionId }
           });
+        }
+      }
+      const PATH_STATUS_LABELS_FA = {
+        suggested: "\u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0645\u0648\u062A\u0648\u0631",
+        reviewed: "\u0628\u0627\u0632\u0628\u06CC\u0646\u06CC\u200C\u0634\u062F\u0647",
+        active: "\u062F\u0631 \u0645\u062F\u0627\u062E\u0644\u0647",
+        closed: "\u0628\u0633\u062A\u0647\u200C\u0634\u062F\u0647"
+      };
+      for (const pa of pathAudits) {
+        if (pa.action === "clinical_path.create") {
+          raw2.push({ at: pa.created_at, kind: "clinical_path", title: "\u0645\u0633\u06CC\u0631 \u0645\u062F\u0627\u062E\u0644\u0647 \u0633\u0627\u062E\u062A\u0647 \u0634\u062F", subtitle: null, actor: actorOf(pa.actor_id), ref: { type: "clinical_path", id: pa.resource_id } });
+        } else if (pa.action === "clinical_path.decision") {
+          const changes = parseChanges(pa.changes);
+          const to = typeof changes?.status?.to === "string" ? changes.status.to : null;
+          const toLabel = to ? PATH_STATUS_LABELS_FA[to] ?? to : null;
+          raw2.push({ at: pa.created_at, kind: "clinical_path", title: toLabel ? `\u062A\u0635\u0645\u06CC\u0645 \u0645\u0633\u06CC\u0631 \u0645\u062F\u0627\u062E\u0644\u0647: ${toLabel}` : "\u062A\u0635\u0645\u06CC\u0645 \u0645\u0633\u06CC\u0631 \u0645\u062F\u0627\u062E\u0644\u0647", subtitle: changes?.reassess_at?.to ? "\u0628\u0627\u0632\u0633\u0646\u062C\u06CC ۴–۶ \u0647\u0641\u062A\u0647 \u0628\u0631\u0646\u0627\u0645\u0647\u200C\u0631\u06CC\u0632\u06CC \u0634\u062F" : null, actor: actorOf(pa.actor_id), ref: { type: "clinical_path", id: pa.resource_id } });
         }
       }
       for (const ce of caseEvents) {
@@ -28688,12 +28723,17 @@ function createClinicalEngineService(deps) {
       at: iso(),
       note
     };
+    const REASSESS_WINDOW_DAYS = 35;
+    const reassessAt = newStatus === "active" ? new Date(Date.now() + REASSESS_WINDOW_DAYS * 864e5).toISOString() : row.reassess_at ?? null;
+    if (newStatus === "active") {
+      changes.reassess_at = { from: row.reassess_at ?? null, to: reassessAt };
+    }
     await db.transaction(async (tx) => {
       await tx.execute(
         `UPDATE intervention_paths
-            SET status = ?, target_key = ?, decision = ?, steps = ?, exercise_ids = ?, updated_at = ?
+            SET status = ?, target_key = ?, decision = ?, steps = ?, exercise_ids = ?, reassess_at = ?, updated_at = ?
           WHERE id = ?`,
-        [newStatus, targetKey, JSON.stringify(decision), row.steps, JSON.stringify(exerciseIds), iso(), pathId]
+        [newStatus, targetKey, JSON.stringify(decision), row.steps, JSON.stringify(exerciseIds), reassessAt, iso(), pathId]
       );
       await audit.logInTransaction(tx, {
         actorId: actor.staffId,
@@ -31332,7 +31372,7 @@ function createOtEngineService(deps) {
   const iso = /* @__PURE__ */ __name2(() => now().toISOString(), "iso");
   async function loadStudent(studentId) {
     const row = await db.queryOne(
-      `SELECT id, first_name, last_name, owner_staff_id, protocol, pathway FROM students WHERE id = ?`,
+      `SELECT id, first_name, last_name, owner_staff_id, protocol, pathway, case_status FROM students WHERE id = ?`,
       [studentId]
     );
     if (!row)
@@ -31825,6 +31865,17 @@ function createOtEngineService(deps) {
         );
       }
       await tx.execute(`UPDATE students SET protocol = ? WHERE id = ?`, [input.protocol, studentId]);
+      const prevStatus = student.case_status ?? null;
+      if (prevStatus !== "in_intervention" && prevStatus !== "monitoring" && prevStatus !== "archived") {
+        await tx.execute(`UPDATE students SET case_status = 'in_intervention' WHERE id = ?`, [studentId]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "student.case_status.changed",
+          resourceType: "student",
+          resourceId: studentId,
+          changes: { case_status: { from: prevStatus, to: "in_intervention" } }
+        });
+      }
       await audit.logInTransaction(tx, {
         actorId: actor.staffId,
         action: "student.protocol.changed",
@@ -33307,7 +33358,6 @@ function createStaffService(deps) {
           ["\u067E\u06CC\u06AF\u06CC\u0631\u06CC", `SELECT COUNT(*) AS cnt FROM followups WHERE assignee_id = ? OR created_by = ?`, 2],
           ["\u0645\u062A\u0642\u0627\u0636\u06CC \u062B\u0628\u062A\u200C\u0634\u062F\u0647", `SELECT COUNT(*) AS cnt FROM waitlist WHERE created_by = ? AND deleted_at IS NULL`, 1],
           ["\u0631\u0648\u06CC\u062F\u0627\u062F \u067E\u0631\u0648\u0646\u062F\u0647", `SELECT COUNT(*) AS cnt FROM case_events WHERE staff_id = ?`, 1],
-          ["\u0633\u0646\u062C\u0634", `SELECT COUNT(*) AS cnt FROM assessments WHERE staff_id = ?`, 1],
           ["\u0627\u0639\u0644\u0627\u0646", `SELECT COUNT(*) AS cnt FROM announcements WHERE created_by = ?`, 1],
           ["\u062A\u0645\u0631\u06CC\u0646", `SELECT COUNT(*) AS cnt FROM exercises WHERE created_by = ?`, 1],
           ["\u06A9\u0644\u06CC\u062F API", `SELECT COUNT(*) AS cnt FROM api_keys WHERE created_by = ?`, 1],
@@ -39416,6 +39466,7 @@ function createNotifyAppService(deps) {
         familySent: 0,
         classSent: 0,
         followupNudges: 0,
+        reassessNudges: 0,
         enqueued: 0,
         duplicates: 0,
         skippedEmpty: 0,
@@ -39541,6 +39592,7 @@ function createNotifyAppService(deps) {
           summary.classSent += 1;
       }
       summary.followupNudges = await this.enqueueFollowupNudges(nowDate);
+      summary.reassessNudges = await this.enqueueReassessmentNudges(nowDate);
       if (summary.enqueued > 0) {
         await notify.dispatchPending(100);
       }
@@ -39554,6 +39606,7 @@ function createNotifyAppService(deps) {
           family: { from: null, to: summary.familySent },
           class: { from: null, to: summary.classSent },
           followupNudges: { from: null, to: summary.followupNudges },
+          reassessNudges: { from: null, to: summary.reassessNudges },
           skippedEmpty: { from: null, to: summary.skippedEmpty },
           duplicates: { from: null, to: summary.duplicates }
         }
@@ -39605,6 +39658,42 @@ function createNotifyAppService(deps) {
         }
       }
       log32.info("followup.nudge.enqueued", { assignees: byAssignee.size, enqueued });
+      return enqueued;
+    },
+    async enqueueReassessmentNudges(nowDate = now()) {
+      const flags = await deps.settings.getNotifyFlags();
+      if (!flags.digestEnabled) return 0;
+      const dueRows = await db.query(
+        `SELECT p.id, s.owner_staff_id AS owner_id, s.first_name || ' ' || s.last_name AS student_name, p.reassess_at
+           FROM intervention_paths p
+           JOIN students s ON s.id = p.student_id
+          WHERE p.status = 'active' AND p.deleted_at IS NULL
+            AND p.reassess_at IS NOT NULL AND p.reassess_at <= ?`,
+        [new Date(nowDate.getTime() + 7 * 864e5).toISOString()]
+      );
+      if (dueRows.length === 0) return 0;
+      const channel2 = notify.getChannel("bale") ? "bale" : "internal";
+      const todayYmd = tehranTodayYmd(nowDate);
+      let enqueued = 0;
+      for (const p of dueRows) {
+        if (!p.owner_id) continue;
+        const chatRows = await db.query(
+          ...spreadStmt(selectStaffChats(p.owner_id))
+        );
+        for (const r of chatRows) {
+          const outcome = await notify.enqueue({
+            channel: channel2,
+            template: "reassessment_due",
+            recipient: r.chat_id,
+            staffId: p.owner_id,
+            payload: { studentName: p.student_name, dueYmd: p.reassess_at.slice(0, 10) },
+            dedupKey: `reassess:${todayYmd}:${p.id}:${r.chat_id}`
+          });
+          if (!outcome.duplicate)
+            enqueued += 1;
+        }
+      }
+      log32.info("reassessment.nudge.enqueued", { paths: dueRows.length, enqueued });
       return enqueued;
     },
     // ───: ناظر چرخه حیات نوبت — صف‌گذاری اعلان برای معلم و ولیّ هر دانش‌آموز ───

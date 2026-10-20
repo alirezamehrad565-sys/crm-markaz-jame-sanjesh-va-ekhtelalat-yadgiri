@@ -19,6 +19,8 @@ export interface DigestSummary {
   familySent: number;
   classSent: number;
   followupNudges: number;
+  /** یادآور بازسنجی مسیرهای فعال (reassess_at ≤ ۷ روز) — فاز بهبود §۱۰.۳ */
+  reassessNudges: number;
   enqueued: number;
   duplicates: number;
   /** chatهایی که امروز برنامه‌ای نداشتند — پوش نمی‌گیرند (بدون اسپم) */

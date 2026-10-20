@@ -363,6 +363,8 @@ export interface NotifyAppService {
   sendDailyDigest(nowDate?: Date): Promise<DigestSummary>;
   /** — یادآور پیگیری‌های عقب‌افتاده/امروز به مسئولان (بخشی از چرخهٔ خلاصهٔ روز) */
   enqueueFollowupNudges(nowDate?: Date): Promise<number>;
+  /** — یادآور بازسنجی مسیرهای فعال با reassess_at ≤ ۷ روز به درمانگر مالک (بخشی از چرخهٔ خلاصهٔ روز) */
+  enqueueReassessmentNudges(nowDate?: Date): Promise<number>;
   /** — resolve chat متصل با نقش کارمند (داخلی — برای گیت‌های نقش) */
   resolveOwner(chatId: string): Promise<{ kind: string; ref_id: string; role: string | null } | null>;
   /** — ناظر چرخه حیات نوبت (در api-routing به appointment service وصل می‌شود) */
@@ -2657,6 +2659,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
         familySent: 0,
         classSent: 0,
         followupNudges: 0,
+        reassessNudges: 0,
         enqueued: 0,
         duplicates: 0,
         skippedEmpty: 0,
@@ -2803,6 +2806,9 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
       // ─── ۴) یادآور پیگیری‌های عقب‌افتاده/امروز به مسئولان ───
       summary.followupNudges = await this.enqueueFollowupNudges(nowDate);
 
+      // ─── ۵) یادآور بازسنجی مسیرهای فعال (reassess_at ≤ ۷ روز) — فاز بهبود §۱۰.۳ ───
+      summary.reassessNudges = await this.enqueueReassessmentNudges(nowDate);
+
       if (summary.enqueued > 0) {
         await notify.dispatchPending(100);
       }
@@ -2817,6 +2823,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           family: { from: null, to: summary.familySent },
           class: { from: null, to: summary.classSent },
           followupNudges: { from: null, to: summary.followupNudges },
+          reassessNudges: { from: null, to: summary.reassessNudges },
           skippedEmpty: { from: null, to: summary.skippedEmpty },
           duplicates: { from: null, to: summary.duplicates }
         }
@@ -2865,6 +2872,45 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
         }
       }
       log.info('followup.nudge.enqueued', { assignees: byAssignee.size, enqueued });
+      return enqueued;
+    },
+
+    /** یادآور روزانهٔ بازسنجی مسیرهای فعال — reassess_at ≤ ۷ روز به درمانگر مالک پرونده (idempotent با dedup روزانه) */
+    async enqueueReassessmentNudges(nowDate = now()): Promise<number> {
+      const flags = await deps.settings.getNotifyFlags();
+      if (!flags.digestEnabled) return 0;
+
+      const dueRows = await db.query<{ id: string; owner_id: string | null; student_name: string; reassess_at: string }>(
+        `SELECT p.id, s.owner_staff_id AS owner_id, s.first_name || ' ' || s.last_name AS student_name, p.reassess_at
+           FROM intervention_paths p
+           JOIN students s ON s.id = p.student_id
+          WHERE p.status = 'active' AND p.deleted_at IS NULL
+            AND p.reassess_at IS NOT NULL AND p.reassess_at <= ?`,
+        [new Date(nowDate.getTime() + 7 * 86400000).toISOString()]
+      );
+      if (dueRows.length === 0) return 0;
+
+      const channel: 'bale' | 'internal' = notify.getChannel('bale') ? 'bale' : 'internal';
+      const todayYmd = tehranTodayYmd(nowDate);
+      let enqueued = 0;
+      for (const p of dueRows) {
+        if (!p.owner_id) continue;
+        const chatRows = await db.query<{ chat_id: string }>(
+          ...spreadStmt(selectStaffChats(p.owner_id))
+        );
+        for (const r of chatRows) {
+          const outcome = await notify.enqueue({
+            channel,
+            template: 'reassessment_due',
+            recipient: r.chat_id,
+            staffId: p.owner_id,
+            payload: { studentName: p.student_name, dueYmd: p.reassess_at.slice(0, 10) },
+            dedupKey: `reassess:${todayYmd}:${p.id}:${r.chat_id}`
+          });
+          if (!outcome.duplicate) enqueued += 1;
+        }
+      }
+      log.info('reassessment.nudge.enqueued', { paths: dueRows.length, enqueued });
       return enqueued;
     },
 

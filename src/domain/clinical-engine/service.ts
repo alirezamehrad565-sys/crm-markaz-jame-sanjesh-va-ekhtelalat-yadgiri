@@ -338,12 +338,22 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
       note
     };
 
+    // یادآور بازسنجی ۴–۶ هفته (فاز بهبود §۱۰.۳): در تأیید مسیر، reassess_at — که UI وعده می‌دهد —
+    // بالاخره نوشته می‌شود (میانهٔ پنجرهٔ ۴–۶ هفته = ۳۵ روز)؛ در سایر تصمیم‌ها مقدار قبلی حفظ می‌شود
+    const REASSESS_WINDOW_DAYS = 35;
+    const reassessAt = newStatus === 'active'
+      ? new Date(Date.now() + REASSESS_WINDOW_DAYS * 86400000).toISOString()
+      : (row.reassess_at ?? null);
+    if (newStatus === 'active') {
+      changes.reassess_at = { from: row.reassess_at ?? null, to: reassessAt };
+    }
+
     await db.transaction(async (tx) => {
       await tx.execute(
         `UPDATE intervention_paths
-            SET status = ?, target_key = ?, decision = ?, steps = ?, exercise_ids = ?, updated_at = ?
+            SET status = ?, target_key = ?, decision = ?, steps = ?, exercise_ids = ?, reassess_at = ?, updated_at = ?
           WHERE id = ?`,
-        [newStatus, targetKey, JSON.stringify(decision), row.steps, JSON.stringify(exerciseIds), iso(), pathId]
+        [newStatus, targetKey, JSON.stringify(decision), row.steps, JSON.stringify(exerciseIds), reassessAt, iso(), pathId]
       );
       await audit.logInTransaction(tx, {
         actorId: actor.staffId,

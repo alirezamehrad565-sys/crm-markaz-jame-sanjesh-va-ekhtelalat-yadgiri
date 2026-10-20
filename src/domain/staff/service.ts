@@ -263,7 +263,6 @@ export function createStaffService(deps: StaffDeps): StaffService {
           ['پیگیری', `SELECT COUNT(*) AS cnt FROM followups WHERE assignee_id = ? OR created_by = ?`, 2],
           ['متقاضی ثبت‌شده', `SELECT COUNT(*) AS cnt FROM waitlist WHERE created_by = ? AND deleted_at IS NULL`, 1],
           ['رویداد پرونده', `SELECT COUNT(*) AS cnt FROM case_events WHERE staff_id = ?`, 1],
-          ['سنجش', `SELECT COUNT(*) AS cnt FROM assessments WHERE staff_id = ?`, 1],
           ['اعلان', `SELECT COUNT(*) AS cnt FROM announcements WHERE created_by = ?`, 1],
           ['تمرین', `SELECT COUNT(*) AS cnt FROM exercises WHERE created_by = ?`, 1],
           ['کلید API', `SELECT COUNT(*) AS cnt FROM api_keys WHERE created_by = ?`, 1],

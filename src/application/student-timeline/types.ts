@@ -24,6 +24,7 @@ export const TIMELINE_KINDS = [
   'notification',
   'committee',
   'exercise',
+  'clinical_path',
   'case_event'
 ] as const;
 

@@ -261,6 +261,18 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         [studentId]
       );
 
+      // ─── ۱۲) — تصمیم‌های مسیر مداخله (audit مسیرهای پرونده) — فاز بهبود §۱۰.۲ ───
+      // فقط ساخت و تصمیم (create/decision)؛ toggle گام‌ها نویز عملیاتی است و عمداً حذف می‌شود
+      const pathAudits: AuditRow[] = await db.query<AuditRow>(
+        `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
+           FROM audit_log
+          WHERE resource_type = 'intervention_path'
+            AND action IN ('clinical_path.create', 'clinical_path.decision')
+            AND resource_id IN (SELECT id FROM intervention_paths WHERE student_id = ?)
+          ORDER BY created_at ASC`,
+        [studentId]
+      );
+
       // ─── نام بازیگران ───
       const actors = await actorNames([
         ...studentAudits.map((a) => a.actor_id),
@@ -269,7 +281,8 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         ...followupAudits.map((a) => a.actor_id),
         ...waitlistAudits.map((a) => a.actor_id),
         ...committeeAudits.map((a) => a.actor_id),
-        ...exerciseAudits.map((a) => a.actor_id)
+        ...exerciseAudits.map((a) => a.actor_id),
+        ...pathAudits.map((a) => a.actor_id)
       ]);
       const actorOf = (id: string): string | null => actors.get(id) ?? null;
 
@@ -472,6 +485,38 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
             subtitle: filename ? `تمرین: ${title} — ${filename}` : `تمرین: ${title}`,
             actor: actorOf(ea.actor_id),
             ref: { type: 'exercise_submission', id: submissionId }
+          });
+        }
+      }
+
+      // ─── رویدادهای مسیر مداخله (ساخت/تصمیم) — شفافیت تصمیم بالینی برای مدیر ───
+      const PATH_STATUS_LABELS_FA: Record<string, string> = {
+        suggested: 'پیشنهاد موتور',
+        reviewed: 'بازبینی‌شده',
+        active: 'در مداخله',
+        closed: 'بسته‌شده'
+      };
+      for (const pa of pathAudits) {
+        if (pa.action === 'clinical_path.create') {
+          raw.push({
+            at: pa.created_at,
+            kind: 'clinical_path',
+            title: 'مسیر مداخله ساخته شد',
+            subtitle: null,
+            actor: actorOf(pa.actor_id),
+            ref: { type: 'clinical_path', id: pa.resource_id }
+          });
+        } else if (pa.action === 'clinical_path.decision') {
+          const changes = parseChanges(pa.changes);
+          const to = typeof changes?.status?.to === 'string' ? changes.status.to : null;
+          const toLabel = to ? (PATH_STATUS_LABELS_FA[to] ?? to) : null;
+          raw.push({
+            at: pa.created_at,
+            kind: 'clinical_path',
+            title: toLabel ? `تصمیم مسیر مداخله: ${toLabel}` : 'تصمیم مسیر مداخله',
+            subtitle: changes?.reassess_at?.to ? 'بازسنجی ۴–۶ هفته برنامه‌ریزی شد' : null,
+            actor: actorOf(pa.actor_id),
+            ref: { type: 'clinical_path', id: pa.resource_id }
           });
         }
       }

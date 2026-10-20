@@ -71,6 +71,7 @@ interface StudentRow {
   last_name: string;
   owner_staff_id: string | null;
   protocol: string | null;
+  case_status: string | null;
 }
 
 /** آخرین ثبت هر ابزار شناسایی — برای گیت تازگی‌آگاه */
@@ -131,7 +132,7 @@ export function createOtEngineService(deps: OtEngineDeps) {
 
   async function loadStudent(studentId: string): Promise<StudentRow> {
     const row = await db.queryOne<StudentRow>(
-      `SELECT id, first_name, last_name, owner_staff_id, protocol FROM students WHERE id = ?`,
+      `SELECT id, first_name, last_name, owner_staff_id, protocol, case_status FROM students WHERE id = ?`,
       [studentId]
     );
     if (!row) throw new NotFoundError('دانش‌آموز');
@@ -576,6 +577,19 @@ export function createOtEngineService(deps: OtEngineDeps) {
         );
       }
       await tx.execute(`UPDATE students SET protocol = ? WHERE id = ?`, [input.protocol, studentId]);
+      // گذار خودکار وضعیت پرونده (فاز بهبود §۱۰.۲): ثبت نیاز ویژه یعنی ورود عملی به فاز مداخله —
+      // وضعیت‌های پیشرفته‌تر (monitoring/archived) دست‌نخورده می‌مانند تا تصمیم انسانی بی‌اثر نشود
+      const prevStatus = student.case_status ?? null;
+      if (prevStatus !== 'in_intervention' && prevStatus !== 'monitoring' && prevStatus !== 'archived') {
+        await tx.execute(`UPDATE students SET case_status = 'in_intervention' WHERE id = ?`, [studentId]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'student.case_status.changed',
+          resourceType: 'student',
+          resourceId: studentId,
+          changes: { case_status: { from: prevStatus, to: 'in_intervention' } }
+        });
+      }
       await audit.logInTransaction(tx, {
         actorId: actor.staffId,
         action: 'student.protocol.changed',
