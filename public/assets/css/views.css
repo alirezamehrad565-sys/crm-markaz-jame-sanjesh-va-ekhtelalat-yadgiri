@@ -3369,3 +3369,28 @@ tr.wl-row--urgent > td:first-child {
   .exb-preview__frame { height: 55vh; }
   .exb-card__badges { justify-content: flex-start; }
 }
+
+/* ═══ m137 — fixes ═══ */
+/* سطر بازخورد تصحیح تکلیف (تب «تمرین‌ها»ی پروفایل) — تمام‌عرض زیر عنوان ردیف */
+.exb-grade {
+  flex-basis: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px var(--sp-2);
+}
+.exb-grade__text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* نوار جانشین PDF در پیش‌نمایش بانک تمرین — دکمهٔ «باز کردن در تب جدید» */
+.exb-preview__pdfbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.exb-preview__pdfbar:empty { display: none; }

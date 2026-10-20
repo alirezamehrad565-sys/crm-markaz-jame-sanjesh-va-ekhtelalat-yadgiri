@@ -113,11 +113,11 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
           'div',
           { class: 'alert alert--warning', style: { marginBottom: 'var(--sp-4)' } },
           icon('edit', 18),
-          el('span', {}, `${fa(myStats.missingNotes)} جلسهٔ برگزارشدهٔ این ماه هنوز یادداشت جلسه ندارد — گزارشِ نوشته‌شده هم امتیاز رقابت است، هم سند بالینی.`),
+          el('span', {}, `${fa(myStats.missingNotes)} جلسهٔ برگزارشدهٔ این ماه هنوز گزارش جلسه ندارند — گزارشِ نوشته‌شده هم امتیاز رقابت است، هم سند بالینی.`),
           el(
             'button',
-            { class: 'btn btn--soft btn--sm', onclick: () => { location.hash = '#/reports'; } },
-            'نوشتن گزارش‌ها'
+            { class: 'btn btn--soft btn--sm', onclick: () => { location.hash = '#/working-day'; } },
+            'ثبت گزارش جلسه‌ها'
           )
         )
       );

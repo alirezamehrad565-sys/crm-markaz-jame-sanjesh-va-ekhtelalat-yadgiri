@@ -24,7 +24,9 @@
   # m113 — CSP پوستهٔ اپ: همهٔ منابع same-origin؛ تنها اسکریپت inline (بوت‌استرپ SW)
   # با هش sha256 مجاز است. style فقط برای style-attrهای داخلی unsafe-inline می‌ماند.
   # ⚠️ اگر بلاک <script> داخل index.html تغییر کرد، این هش باید دوباره محاسبه شود.
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-8jQ6bw2IYhxGBEH6axb9CBzhm9nx/LFOakL1HuuZWZc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  # m137 — پیش‌نمایش درون‌برنامه‌ای بانک تمرین: img و iframe از blob: (objectURL همان صفحه؛
+  # بلاک قبلی، <img src=blob:> و <iframe src=blob:> پیش‌نمایش را بی‌صدا می‌بست)
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-8jQ6bw2IYhxGBEH6axb9CBzhm9nx/LFOakL1HuuZWZc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; frame-src 'self' blob:; child-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
 
 # ۲) پوستهٔ اپ — همیشه revalidate (انتشار نسخهٔ جدید فوراً اعمال شود)
 /

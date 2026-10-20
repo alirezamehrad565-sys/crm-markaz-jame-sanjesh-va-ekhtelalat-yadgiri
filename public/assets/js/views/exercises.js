@@ -108,10 +108,17 @@ function teamBadge() {
   return el('span', { class: 'badge badge--neutral' }, 'تیمی');
 }
 
-/** فایل‌های قابل پیش‌نمایش درون‌برنامه‌ای — تصویر یا PDF */
+/** فایل‌های قابل پیش‌نمایش درون‌برنامه‌ای — تصویر یا PDF
+ * — m137: mime ناشناخته/خالی با پسوند هم حدس زده می‌شود (آپلودها گاهی octet-stream ثبت می‌شوند) */
+const PREVIEW_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'pdf'];
 function previewable(file) {
   const mime = String(file?.mime ?? '').toLowerCase();
-  return mime.startsWith('image/') || mime === 'application/pdf';
+  if (mime.startsWith('image/') || mime === 'application/pdf') return true;
+  if (!mime || mime === 'application/octet-stream') {
+    const ext = String(file?.filename ?? '').split('.').pop()?.toLowerCase() ?? '';
+    return PREVIEW_EXTS.includes(ext);
+  }
+  return false;
 }
 
 function formatBadge(format) {
@@ -662,13 +669,16 @@ export function renderExercises(container) {
 
   /** — همان الگوی blob دانلود (Bearer → objectURL) ولی برای نمایش؛
    * مسیر عمومی توکن‌دار خانواده‌ها اینجا هرگز استفاده نمی‌شود.
-   * objectURLها هنگام بستن مودال و هنگام جابه‌جایی فایل رها می‌شوند. */
+   * objectURLها هنگام بستن مودال و هنگام جابه‌جایی فایل رها می‌شوند.
+   * m137: نوار «باز کردن در تب جدید» برای PDF (سافاری موبایل blob iframe را خالی نشان می‌دهد)
+   * + mime از blob/پسوند هم حدس زده می‌شود + پیام خطا کد وضعیت را نشان می‌دهد. */
   function openPreviewModal(ex, files, startIdx = 0) {
     let idx = Math.min(Math.max(startIdx, 0), files.length - 1);
     let currentUrl = null;
     let seq = 0;
 
     const status = el('div', { class: 'exb-preview__status' });
+    const pdfBar = el('div', { class: 'exb-preview__pdfbar' });
     const stage = el('div', { class: 'exb-preview__stage' });
 
     function dropCurrent() {
@@ -678,11 +688,25 @@ export function renderExercises(container) {
       }
     }
 
+    /** — mime قطعی: اعلامی سالم → blob.type → پسوند (آپلودها گاهی octet-stream ثبت می‌شوند) */
+    function resolvedMime(f, blob) {
+      const declared = String(f.mime ?? '').toLowerCase();
+      const actual = String(blob.type ?? '').toLowerCase();
+      let mime = declared && declared !== 'application/octet-stream' ? declared : actual;
+      if (!mime || mime === 'application/octet-stream') {
+        const ext = String(f.filename ?? '').split('.').pop()?.toLowerCase() ?? '';
+        const guessed = EXT_MIME_FALLBACK[ext] ?? '';
+        if (guessed) mime = guessed;
+      }
+      return mime;
+    }
+
     async function show() {
       const my = ++seq;
       dropCurrent();
       const f = files[idx];
       stage.replaceChildren(el('span', { class: 'exb-preview__status' }, 'در حال دریافت پیش‌نمایش…'));
+      pdfBar.replaceChildren();
       status.textContent = `${f.filename} — ${fa(idx + 1)} از ${fa(files.length)}`;
       try {
         const url = f.id
@@ -691,14 +715,22 @@ export function renderExercises(container) {
         const res = await fetch(url, {
           headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
         });
-        if (!res.ok) throw new Error('دریافت فایل ناموفق بود');
+        if (!res.ok) throw new Error(`دریافت فایل ناموفق بود (کد ${fa(res.status)})`);
         const blob = await res.blob();
         if (my !== seq) return; // پاسخ کهنه — کاربر فایل دیگری را باز کرده
         const objUrl = URL.createObjectURL(blob);
-        const mime = (f.mime || blob.type || '').toLowerCase();
+        const mime = resolvedMime(f, blob);
         if (mime === 'application/pdf') {
           currentUrl = objUrl;
           stage.replaceChildren(el('iframe', { class: 'exb-preview__frame', src: objUrl, title: f.filename }));
+          // — جانشین PDF: بعضی مرورگرها (سافاری موبایل) blob iframe را خالی نشان می‌دهند
+          pdfBar.replaceChildren(
+            el('span', { class: 'cell-sub' }, 'PDF نمایش داده نمی‌شود؟'),
+            el('button', {
+              class: 'btn btn--ghost btn--sm',
+              onclick: () => window.open(objUrl, '_blank', 'noopener')
+            }, icon('download', 14), 'باز کردن در تب جدید')
+          );
         } else if (mime.startsWith('image/')) {
           currentUrl = objUrl;
           stage.replaceChildren(el('img', { class: 'exb-preview__img', src: objUrl, alt: f.filename }));
@@ -728,6 +760,7 @@ export function renderExercises(container) {
         'div',
         { class: 'exb-preview' },
         status,
+        pdfBar,
         stage,
         files.length > 1 ? el('div', { class: 'exb-preview__nav' }, prevBtn, nextBtn) : null
       ),
