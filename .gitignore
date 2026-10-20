@@ -42,3 +42,9 @@ download/
 
 # Public download center (data-bearing visuals — repo stays code-only)
 public/downloads/
+
+# استقرار پروداکشن (شناسه‌های واقعی — هرگز کامیت نشود)
+wrangler.prod.toml
+
+# بکاپ‌های D1 — هرگز کامیت نشود
+backups/

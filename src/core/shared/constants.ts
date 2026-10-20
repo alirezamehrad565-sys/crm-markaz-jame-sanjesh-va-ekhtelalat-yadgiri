@@ -213,6 +213,7 @@ export const NOTIFICATION_TEMPLATES = [
   'digest_family',
   'digest_class',
   'followup_nudge',
+  'reassessment_due',
   'bot_followup_done',
   'bot_followup_rejected',
   'bot_followups_denied',

@@ -974,7 +974,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
           ['waitlist', `SELECT COUNT(*) AS cnt FROM waitlist WHERE (student_id = ? OR admitted_student_id = ?) AND deleted_at IS NULL`],
           ['case_events', `SELECT COUNT(*) AS cnt FROM case_events WHERE student_id = ? AND deleted_at IS NULL`],
           ['followups', `SELECT COUNT(*) AS cnt FROM followups WHERE student_id = ?`],
-          ['assessments', `SELECT COUNT(*) AS cnt FROM assessments WHERE student_id = ?`],
           ['exercise_assignments', `SELECT COUNT(*) AS cnt FROM exercise_assignments WHERE student_id = ?`],
           ['exercise_submissions', `SELECT COUNT(*) AS cnt FROM exercise_submissions WHERE student_id = ?`],
           ['committee_items', `SELECT COUNT(*) AS cnt FROM committee_items WHERE student_id = ? AND deleted_at IS NULL`]

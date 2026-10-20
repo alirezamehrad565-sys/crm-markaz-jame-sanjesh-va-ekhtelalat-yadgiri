@@ -368,6 +368,16 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         'مرکز اقدام (پیگیری‌ها) را از پنل مدیریت دنبال کنید یا «پیگیری‌های من» را در همین بات بفرستید.'
       ].filter((l) => l !== '').join('\n');
 
+    case 'reassessment_due':
+      return [
+        '⏰ یادآور بازسنجی مسیر مداخله',
+        '',
+        `مسیر فعال پروندهٔ «${vars.studentName ?? '—'}» به پنجرهٔ بازسنجی ۴–۶ هفته‌ای رسیده است.`,
+        `تاریخ بازسنجی: ${vars.dueYmd ?? '—'}`,
+        '',
+        'در تب «تفسیر بالینی» پروفایل، وضعیت مسیر را بازنگری کنید: تمدید، تغییر هدف یا بستن مسیر.'
+      ].filter((l) => l !== '').join('\n');
+
     case 'bot_followup_done':
       return [
         '✅ پیگیری انجام شد.',

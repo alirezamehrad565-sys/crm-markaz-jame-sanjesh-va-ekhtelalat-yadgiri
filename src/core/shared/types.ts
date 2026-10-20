@@ -196,6 +196,8 @@ export interface TemplateVars {
   taskTitle?: string;     // عنوان کار داخلی واگذارشده
   // ─── (حلقهٔ بازگشت تکلیف) ───
   exerciseTitle?: string; // عنوان تمرین
+  // ─── (یادآور بازسنجی مسیر مداخله — فاز بهبود) ───
+  dueYmd?: string;        // تاریخ بازسنجی (YYYY-MM-DD)
   // ─── (بات نقش‌محور CRM — قالب‌های عمومی/صف/KPI) ───
   phone?: string;         // شمارهٔ تماس مرکز (bot_contact)
   links?: string;         // لینک‌های فایل‌های آموزشی (bot_public_files)

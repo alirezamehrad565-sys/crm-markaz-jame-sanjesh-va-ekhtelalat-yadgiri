@@ -66,10 +66,15 @@ describe('کاتالوگ انواع: seed مهاجرت + وکسلر', () => {
     const legacy = types.find((t) => t.key === 'legacy_assessment');
     expect(legacy).toBeTruthy();
     expect(legacy!.title).toContain('ارزیابی');
+    // فرم قدیمی وکسلر (0042) با 0054 بازنشسته شد — از فهرست حذف است (رفتار فاز بهبود §۱۰.۱)
     const wechsler = types.find((t) => t.key === 'wechsler');
-    expect(wechsler).toBeTruthy();
-    // وکسلر فیلد «اقدام بعدی» دارد — حلقهٔ پیگیری خودکار
-    expect(wechsler!.fields.some((f) => f.key === 'next_action')).toBe(true);
+    expect(wechsler).toBeUndefined();
+    // فرم مرجع وکسلر ۴ (0050 + تکمیل 0054) فیلدهای واقعی ثبت خام دارد — از جمله «اقدام بعدی»
+    const w4 = types.find((t) => t.key === 'ce-wechsler-w4-v1');
+    expect(w4).toBeTruthy();
+    expect(w4!.fields.some((f) => f.key === 'raw_si')).toBe(true);
+    expect(w4!.fields.some((f) => f.key === 'test_date')).toBe(true);
+    expect(w4!.fields.some((f) => f.key === 'next_action')).toBe(true);
   });
 
   it('whitelist تایم‌لاین — kind «assessment» حذف و «case_event/committee» حاضرند', () => {
@@ -93,7 +98,19 @@ describe('چرخهٔ پیش‌نویس/نهایی‌سازی + هوک اقدام
     const s = await createStudent(manager, { first_name: 'ارسیا', last_name: 'واستاندارد' });
     studentId = s.id;
     const types = dataOf<Array<{ key: string; id: string }>>(await manager.get('/api/case-events/types?active=true'));
-    wechslerTypeId = types.find((t) => t.key === 'wechsler')!.id;
+    // فرم قدیمی وکسلر با 0054 بازنشسته شد — چرخهٔ پیش‌نویس/نهایی‌سازی با یک نوع فرم‌سازِ تستی با
+    // «اقدام بعدی» الزامی (select شامل «پیگیری») انجام می‌شود؛ رفتار هوک بدون وابستگی به میراث
+    const created = dataOf<{ id: string }>(await manager.post('/api/case-events/types', {
+      title: 'فرم تست اقدام بعدی',
+      category: 'session',
+      familyFillable: false,
+      fields: [
+        { key: 'note', label: 'یادداشت جلسه', type: 'text' },
+        { key: 'next_action', label: 'اقدام بعدی', type: 'select', options: ['هیچ', 'پیگیری', 'نوبت بعدی'], required: true }
+      ]
+    }));
+    wechslerTypeId = created.id;
+    expect(types.some((t) => t.key === 'ce-wechsler-w4-v1')).toBe(true);
   });
 
   it('پیش‌نویس: فیلد الزامی خالی می‌ماند → 201 draft', async () => {
@@ -117,7 +134,7 @@ describe('چرخهٔ پیش‌نویس/نهایی‌سازی + هوک اقدام
     expect(early.status).toBe(400);
 
     const patch = await therapist.patch(`/api/case-events/${draft.id}`, {
-      values: { version: 'وکسلر کودکان (WISC-V)', fsiq: 92, next_action: 'پیگیری' } // — گزینه‌های 0042: WISC-V (WISC قدیمی دیگر معتبر نیست)
+      values: { note: 'جلسهٔ نمونه', next_action: 'پیگیری' }
     });
     expect(patch.status).toBe(200);
 
