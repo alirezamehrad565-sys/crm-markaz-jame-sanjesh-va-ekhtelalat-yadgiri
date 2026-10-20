@@ -2548,11 +2548,6 @@ tr.wl-row--urgent > td:first-child {
 /* ═════════════ m85 — تب «تفسیر بالینی» (موتور تشخیص‌گذاری) ═════════════ */
 
 .clx { display: flex; flex-direction: column; gap: var(--sp-4); }
-.clx-toolbar {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: var(--sp-3); flex-wrap: wrap;
-}
-.clx-narrative { white-space: pre-wrap; line-height: 2; font-size: var(--fs-sm); color: var(--text); }
 
 /* پرچم‌های خط قرمز (ارجاع فوری) */
 .clx-flags { display: flex; flex-direction: column; gap: var(--sp-2); }
@@ -2711,7 +2706,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .clx-journey__head { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
 .clx-journey__head strong { font-size: var(--fs-sm); }
-.clx-journey__act { margin-top: var(--sp-2); }
 @media (max-width: 640px) {
   .clx-journey__steps { grid-template-columns: 1fr; }
   .chip { padding: 7px 12px; } /* لمس راحت‌تر در موبایل */
@@ -2719,8 +2713,6 @@ tr.wl-row--urgent > td:first-child {
 
 /* موبایل — m84.3 قرارداد: تک‌ستونی و بدون سرریز */
 @media (max-width: 640px) {
-  .clx-toolbar { flex-direction: column; align-items: stretch; }
-  .clx-toolbar > div:last-child { display: flex; gap: var(--sp-2); }
   .clx-crit summary { flex-wrap: wrap; }
 }
 
@@ -2749,17 +2741,7 @@ tr.wl-row--urgent > td:first-child {
 .path-chip--learning { background: var(--info-soft, var(--accent-soft)); color: var(--info, var(--accent)); }
 .path-chip--rehab    { background: var(--warning-soft); color: var(--warning); }
 
-/* m89 — جزئیات تاشوی موتور استاندارد در شاخهٔ توانبخشی */
-.clx-engine-toggle { border-top: 1px dashed var(--line); padding-top: var(--sp-3); margin-top: var(--sp-2); }
-.clx-engine-toggle > summary { display: flex; align-items: center; gap: 6px; color: var(--text-2); }
-.clx-engine-toggle > summary::-webkit-details-marker { display: none; }
-.clx-engine-toggle > summary::after { content: '▾'; margin-inline-start: auto; font-size: 12px; color: var(--text-3); }
-.clx-engine-toggle[open] > summary::after { content: '▴'; }
-
 /* ───────── m90 — فلو دوفازی شناسایی → مداخله + چک‌لیست ۷ حیطه‌ای کاردرمانی ذهنی ───────── */
-
-/* گام انجام‌شدهٔ گیت‌های شناسایی */
-.clx-journey__step.is-done { border-color: var(--success); }
 
 /* کارت پروتکل فاز مداخله */
 .proto-chip { display: inline-flex; align-items: center; gap: 4px; }
@@ -2923,74 +2905,7 @@ tr.wl-row--urgent > td:first-child {
   .path-session__ops { width: 100%; justify-content: flex-end; }
 }
 
-/* ───────── m116 — ری‌رایت مسیر بالینی: استپر مرحله‌ای + شروع از قالب + زمینهٔ تفسیر ───────── */
-
-/* استپر عمودی فاز شناسایی — ستون فقرات + گره شماره‌دار */
-.clx-stepper-card__bar {
-  height: 6px; border-radius: 999px; background: var(--line);
-  overflow: hidden; margin-bottom: var(--sp-2, 8px); min-width: 0;
-}
-.clx-stepper-card__fill {
-  display: block; height: 100%; border-radius: 999px;
-  background: linear-gradient(90deg, var(--primary), var(--accent));
-  transition: width .35s ease;
-}
-.clx-stepper { list-style: none; margin: var(--sp-2, 8px) 0 0; padding: 0; min-width: 0; }
-.clx-stepper__item {
-  position: relative; display: flex; align-items: flex-start; gap: 10px;
-  padding: 0 0 var(--sp-3, 12px) 0; min-width: 0;
-}
-/* خط اتصال روی ستون فقرات — همه به‌جز آخری */
-.clx-stepper__item::after {
-  content: ''; position: absolute;
-  inset-inline-start: 15px; top: 32px; bottom: -2px;
-  width: 2px; background: var(--line);
-}
-.clx-stepper__item:last-child::after { display: none; }
-.clx-stepper__node {
-  flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--surface-2, transparent); border: 2px solid var(--line);
-  color: var(--text-3); font-weight: 700; font-size: var(--fs-xs, 11px);
-  transition: border-color .2s, background .2s, color .2s;
-  position: relative; z-index: 1;
-}
-.clx-stepper__panel { flex: 1; min-width: 0; padding-top: 4px; }
-.clx-stepper__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
-.clx-stepper__head strong { font-size: var(--fs-sm); min-width: 0; }
-.clx-stepper__detail {
-  font-size: var(--fs-xs, 11px); color: var(--text-3);
-  border: 1px dashed var(--line); border-radius: var(--radius-sm, 8px);
-  padding: 4px 8px; margin-top: 6px; width: fit-content; max-width: 100%;
-}
-.clx-stepper__act { margin-inline-start: auto; }
-.clx-stepper__num { line-height: 1; }
-
-/* حالت گام‌ها */
-.clx-stepper__item.is-done .clx-stepper__node {
-  background: var(--success); border-color: var(--success); color: var(--on-primary, #fff);
-}
-.clx-stepper__item.is-done::after { background: var(--success); opacity: .35; }
-.clx-stepper__item.is-current .clx-stepper__node {
-  background: var(--primary-soft); border-color: var(--primary); color: var(--primary);
-  box-shadow: 0 0 0 4px var(--primary-soft);
-}
-.clx-stepper__item.is-current .clx-stepper__head strong { color: var(--primary); }
-.clx-stepper__item.is-todo .clx-stepper__node { opacity: .75; }
-
-/* گره تصمیم شک بالینی روی ستون فقرات */
-.clx-stepper__item--decision .clx-stepper__node--alert {
-  background: var(--warning-soft); border-color: var(--warning); color: var(--warning);
-}
-.clx-stepper__item--decision.is-done .clx-stepper__node--alert {
-  background: var(--success); border-color: var(--success); color: var(--on-primary, #fff);
-}
-.clx-stepper__item--decision .clx-suspicion { margin-top: 0; }
-
-@media (max-width: 640px) {
-  .clx-stepper__head strong { flex-basis: calc(100% - 90px); }
-  .clx-stepper__act { margin-inline-start: 0; }
-}
+/* ───────── m116 — شروع از قالب + زمینهٔ تفسیر ───────── */
 
 /* m116 — کارت‌های «شروع از قالب» (قالب‌محور) */
 .clx-quickstart {
@@ -3117,51 +3032,6 @@ tr.wl-row--urgent > td:first-child {
 }
 
 /* ═════════ m134 — فلوی مرحله‌ای تفسیر بالینی + نیم‌رخ وکسلر + کارت جمع‌بندی ═════════ */
-
-/* ─── کارت مرحله (۵ مرحلهٔ شناسایی روی نوار عمودی) ─── */
-.clx-stage { position: relative; overflow: hidden; }
-.clx-stage::before {
-  content: ''; position: absolute; inset-inline-start: 0; top: 0; bottom: 0;
-  width: 3px; background: var(--border); transition: background var(--normal);
-}
-.clx-stage.is-current::before { background: var(--primary); }
-.clx-stage.is-done::before { background: var(--success); }
-.clx-stage__head {
-  display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; min-width: 0;
-}
-.clx-stage__num {
-  flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--surface-2); border: 2px solid var(--line);
-  color: var(--text-3); font-weight: 700; font-size: var(--fs-sm);
-}
-.clx-stage.is-current .clx-stage__num {
-  background: var(--primary-soft); border-color: var(--primary); color: var(--primary);
-}
-.clx-stage.is-done .clx-stage__num {
-  background: var(--success); border-color: var(--success); color: var(--on-primary, #fff);
-}
-.clx-stage__heading {
-  display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;
-}
-.clx-stage__title { font-size: var(--fs-md, 15px); font-weight: 700; color: var(--text); }
-.clx-stage__hint { font-size: var(--fs-xs, 12px); }
-.clx-stage__act { margin-inline-start: auto; flex-shrink: 0; }
-.clx-stage__detail {
-  margin-top: var(--sp-2); font-size: var(--fs-xs, 12px); color: var(--text-3);
-  border: 1px dashed var(--line); border-radius: var(--radius-sm, 8px);
-  padding: 5px 9px; width: fit-content; max-width: 100%;
-}
-.clx-stage__body {
-  margin-top: var(--sp-3); padding-top: var(--sp-3);
-  border-top: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: var(--sp-3);
-}
-@media (max-width: 640px) {
-  .clx-stage__head { flex-direction: column; gap: 8px; }
-  .clx-stage__act { margin-inline-start: 0; width: 100%; }
-  .clx-stage__act > * { width: 100%; justify-content: center; }
-}
 
 /* ─── کارت جمع‌بندی تشخیصی (تلفیق دو موتور) ─── */
 .clx-synthesis { border-color: color-mix(in srgb, var(--primary) 22%, var(--border)); }
@@ -3304,4 +3174,136 @@ tr.wl-row--urgent > td:first-child {
 @media (max-width: 640px) {
   .clx-widx__name { min-width: 110px; }
   .clx-syn__lead { align-items: flex-start; }
+}
+
+/* ═════════ m135 — clxacc: آکاردئون فلوی تفسیر بالینی ═════════ */
+
+/* فلو عمودی آکاردئون‌ها — جایگزین نوار وضعیت + کارت‌های همیشه‌باز (§7) */
+.clxacc-flow { display: flex; flex-direction: column; gap: var(--sp-3); }
+
+/* کارت آکاردئون (<details>) */
+.clxacc {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.clxacc[open] { border-color: color-mix(in srgb, var(--primary) 25%, var(--border)); }
+
+/* سربرگ summary — هدف لمسی ۴۴px + بدون مارکر بومی + ضدانتخاب متن */
+.clxacc__head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px var(--sp-3);
+  cursor: pointer; min-height: 44px;
+  list-style: none; user-select: none;
+}
+.clxacc__head::-webkit-details-marker { display: none; }
+
+/* دایرهٔ شماره ۳۰px — میراث بصری clx-stage__num (حذف‌شده) */
+.clxacc__num {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-2); border: 2px solid var(--line);
+  color: var(--text-3); font-weight: 700; font-size: var(--fs-sm);
+}
+
+.clxacc__heading { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.clxacc__title { font-size: var(--fs-md); font-weight: 700; color: var(--text); }
+/* خلاصهٔ تک‌خطی «یک نگاه» */
+.clxacc__glance {
+  font-size: var(--fs-xs); color: var(--text-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.clxacc__chips { display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
+.clxacc__act { flex-shrink: 0; } /* حداکثر یک CTA کوچک — دکمه از .btn سراسری می‌آید */
+
+/* شورون — فلپ ۱۸۰° هنگام بازشدن (در RTL هم فلپ بصری کافی است) */
+.clxacc__chev {
+  flex-shrink: 0; display: inline-block; line-height: 0; color: var(--text-3);
+  transition: transform var(--normal);
+}
+.clxacc[open] > .clxacc__head .clxacc__chev { transform: rotate(180deg); }
+
+/* بدنه — فقط هنگام بازشدن انیمیت می‌شود (بستنِ details با CSS شدنی نیست) */
+.clxacc__body {
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: var(--sp-3);
+}
+@keyframes clxacc-open { from { opacity: 0; transform: translateY(-4px); } }
+/* --normal خودِ «زمان + ایزینگ» است (240ms var(--ease))؛ افزودن var(--ease) جداگانه شورت‌هند را نامعتبر می‌کند */
+.clxacc[open] > .clxacc__body { animation: clxacc-open var(--normal); }
+@media (prefers-reduced-motion: reduce) {
+  .clxacc[open] > .clxacc__body { animation: none; }
+}
+
+/* حالت‌ها — نوار inline-start جایگزین ::before کارت مرحله (§5) */
+.clxacc.is-current { border-inline-start: 3px solid var(--primary); }
+.clxacc.is-done { border-inline-start: 3px solid var(--success); }
+.clxacc.is-current .clxacc__num {
+  background: var(--primary-soft); border-color: var(--primary); color: var(--primary);
+}
+.clxacc.is-done .clxacc__num {
+  background: var(--success); border-color: var(--success); color: var(--on-primary, #fff);
+}
+.clxacc.is-locked .clxacc__num { opacity: .65; }
+.clxacc.is-locked .clxacc__act { display: none; }
+
+/* آکاردئون تودرتو (۳.۱–۳.۶ وکسلر) — min-height ۴۴px از قاعدهٔ پایه حفظ می‌شود */
+.clxacc--sub { margin: 0; border-radius: var(--radius-sm); }
+.clxacc--sub[open] { background: var(--surface-2); }
+.clxacc--sub > .clxacc__head { padding: 8px var(--sp-3); }
+.clxacc--sub > .clxacc__head .clxacc__title { font-size: var(--fs-sm); }
+
+/* شمارندهٔ ردیف‌ها در سربرگ‌های تودرتو — هم‌خانوادهٔ badge--neutral */
+.clxacc__count {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 8px; border-radius: var(--radius-full);
+  background: var(--surface-3); color: var(--text-2);
+  font-size: var(--fs-xs); font-weight: 600; line-height: 1.8;
+  white-space: nowrap; flex-shrink: 0;
+}
+
+/* دکمهٔ «نمایش همه» — تمام‌عرض ghost (از .btn.btn--ghost سراسری) */
+.clxacc__more { width: 100%; min-height: 40px; }
+
+/* سقف ۱۰ سطر جدول خرده‌آزمون + حالت بازِ همهٔ سطرها */
+.clxacc-table.is-truncated tr:nth-child(n+11) { display: none; }
+.clxacc-table.is-expanded tr { display: table-row; }
+
+/* پانویس خط قرمز وکسلر — همان ظاهر .clx-wconn__empty */
+.clxacc-footnote {
+  font-size: var(--fs-xs, 12px); color: var(--text-3);
+  border: 1px dashed var(--line); border-radius: var(--radius-md);
+  padding: 7px 10px; width: fit-content; max-width: 100%;
+}
+
+/* نوار باریک بالای تب — الگوی چینش clx-toolbar حذف‌شده */
+.clxacc-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-3); flex-wrap: wrap;
+}
+
+/* ردیف‌های رویداد مشترک مراحل ۱/۲/۴ (مهاجرت latestResultsCard) */
+.clxacc-rows { display: flex; flex-direction: column; list-style: none; margin: 0; padding: 0; }
+.clxacc-rows > * {
+  display: flex; align-items: flex-start; gap: 8px;
+  border-bottom: 1px dashed var(--border);
+  padding-block: 6px;
+}
+.clxacc-rows > *:last-child { border-bottom: 0; }
+
+/* موبایل — m135 */
+@media (max-width: 480px) {
+  .clxacc__head { flex-wrap: wrap; padding: 10px var(--sp-3); }
+  .clxacc__glance { white-space: normal; } /* اجازهٔ ۲ خط */
+  .clxacc__act, .clxacc__act > .btn { width: 100%; justify-content: center; min-height: 44px; }
+  .clxacc__num { width: 26px; height: 26px; }
+  .clxacc__body { padding: var(--sp-3); }
+}
+
+/* موبایل نوار باریک — همان قرارداد تک‌ستونی m84.3 قدیم */
+@media (max-width: 640px) {
+  .clxacc-toolbar { flex-direction: column; align-items: stretch; }
+  .clxacc-toolbar > div:last-child { display: flex; gap: var(--sp-2); }
 }
