@@ -3990,8 +3990,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.15";
-var APP_MILESTONE = "m136";
+var APP_VERSION = "1.00.16";
+var APP_MILESTONE = "m137";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -19987,9 +19987,8 @@ function createExerciseBankService(deps) {
         throw new NotFoundError("\u062A\u06A9\u0644\u06CC\u0641");
       if (row.status === "cancelled")
         throw new ConflictError("\u0627\u06CC\u0646 \u062A\u06A9\u0644\u06CC\u0641 \u0644\u063A\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A");
-      if (row.status === "corrected")
-        throw new ConflictError("\u0627\u06CC\u0646 \u062A\u06A9\u0644\u06CC\u0641 \u0642\u0628\u0644\u0627\u064B \u062A\u0635\u062D\u06CC\u062D \u0634\u062F\u0647 \u0627\u0633\u062A");
-      if (row.status !== "done") {
+      // — m137: بازخوردِ اشتباه باید قابل اصلاح باشد — تصحیحِ دوباره روی corrected مجاز شد
+      if (row.status !== "done" && row.status !== "corrected") {
         throw new ConflictError("\u062A\u0635\u062D\u06CC\u062D \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u062A\u06A9\u0644\u06CC\u0641\u0650 \u0627\u0646\u062C\u0627\u0645\u200C\u0634\u062F\u0647 (\u0628\u0627\u0632\u06AF\u0634\u062A\u06CC \u062B\u0628\u062A\u200C\u0634\u062F\u0647) \u0645\u0645\u06A9\u0646 \u0627\u0633\u062A");
       }
       const isClassAssigner = row.assigned_by.startsWith("class:");
@@ -20007,7 +20006,7 @@ function createExerciseBankService(deps) {
         resourceId: assignmentId,
         changes: {
           status: { from: row.status, to: "corrected" },
-          feedbackLength: { from: null, to: len }
+          feedbackLength: { from: Array.from(row.feedback ?? "").length, to: len }
           // §20 — متن بازخورد در audit نمی‌آید
         }
       });
@@ -20443,6 +20442,24 @@ function downloadHeaders(filename, mimeType, inline) {
 }
 __name(downloadHeaders, "downloadHeaders");
 __name2(downloadHeaders, "downloadHeaders");
+/** — m137: پیش‌نمایش درون‌برنامه‌ای — فقط تصویر/PDF اجازهٔ inline دارد (HTML/SVG هرگز، حتی با درخواست) */
+function isSafeInlineMime(mimeType) {
+  const t = String(mimeType || "").toLowerCase();
+  return t.startsWith("image/") || t === "application/pdf";
+}
+__name(isSafeInlineMime, "isSafeInlineMime");
+__name2(isSafeInlineMime, "isSafeInlineMime");
+/** — m137: هدر پاسخ مسیرهای GET فایل کارکنان — با ?disposition=inline و mime امن inline می‌شود؛
+ * همون سندباکس CSP مسیر عمومی خانواده (محتوای آپلودی روی origin اپ اجرا نمی‌شود) */
+function fileResponseHeaders(filename, mimeType, c) {
+  const inline = c.req.query("disposition") === "inline" && isSafeInlineMime(mimeType);
+  const headers = downloadHeaders(filename, mimeType, inline);
+  if (inline)
+    headers["Content-Security-Policy"] = "sandbox allow-scripts allow-popups";
+  return headers;
+}
+__name(fileResponseHeaders, "fileResponseHeaders");
+__name2(fileResponseHeaders, "fileResponseHeaders");
 function registerExerciseBankRoutes(app, service) {
   app.get("/api/exercises/meta", async (c) => {
     const categories = await service.categories();
@@ -20504,7 +20521,8 @@ function registerExerciseBankRoutes(app, service) {
       throw new NotFoundError("\u0641\u0627\u06CC\u0644 \u0628\u0627\u0632\u06AF\u0634\u062A\u06CC");
     return new Response(file.bytes, {
       status: 200,
-      headers: downloadHeaders(file.filename, file.mime, false)
+      // — m137: ?disposition=inline برای پیش‌نمایش امن (تصویر/PDF)
+      headers: fileResponseHeaders(file.filename, file.mime, c)
     });
   });
   app.post("/api/exercises/assignments/:id/grade", requireRole("manager", "therapist", "secretary"), async (c) => {
@@ -20619,7 +20637,8 @@ function registerExerciseBankRoutes(app, service) {
       throw new NotFoundError("\u0641\u0627\u06CC\u0644 \u062A\u0645\u0631\u06CC\u0646");
     return new Response(file.bytes, {
       status: 200,
-      headers: downloadHeaders(file.filename, file.mime, false)
+      // — m137: ?disposition=inline برای پیش‌نمایش امن (تصویر/PDF)
+      headers: fileResponseHeaders(file.filename, file.mime, c)
     });
   });
   app.post("/api/exercises/:id/files", requireRole("manager", "therapist", "secretary"), async (c) => {
@@ -20679,7 +20698,8 @@ function registerExerciseBankRoutes(app, service) {
       throw new NotFoundError("\u0641\u0627\u06CC\u0644 \u062A\u0645\u0631\u06CC\u0646");
     return new Response(file.bytes, {
       status: 200,
-      headers: downloadHeaders(file.filename, file.mime, false)
+      // — m137: ?disposition=inline برای پیش‌نمایش امن (تصویر/PDF)
+      headers: fileResponseHeaders(file.filename, file.mime, c)
     });
   });
   app.delete("/api/exercises/:id/files/:fileId", requireRole("manager", "therapist", "secretary"), async (c) => {
@@ -34192,13 +34212,21 @@ function createDashboardService(deps) {
         activityCounts(prevStart, prevEnd),
         listStaff(db, true),
         db.queryOne(
+          // — m137: «ثبت‌شده» = یادداشت سریع OR گزارش رسمی جلسه (case_event از نوع session،
+          //   هم‌سو با سنجهٔ بات sessionsWithoutReport) — تأخیر هم حضور است (هم‌سو با کاشی جلسات).
+          //   گزارش جلسه per-student ثبت می‌شود → سنجش هم per-student.
           `SELECT COUNT(*) AS cnt
              FROM appointment_students s
              JOIN appointments a ON a.id = s.appointment_id
             WHERE a.staff_id = ?
               AND a.status != 'cancelled'
-              AND s.attendance = 'present'
+              AND s.attendance IN ('present', 'late')
               AND (s.session_note IS NULL OR s.session_note = '')
+              AND NOT EXISTS (
+                SELECT 1 FROM case_events ce JOIN case_event_types ct ON ct.id = ce.event_type_id
+                 WHERE ce.appointment_id = a.id AND ce.student_id = s.student_id
+                   AND ct.category = 'session' AND ce.status != 'cancelled'
+              )
               AND substr(a.start_at, 1, 10) BETWEEN ? AND ?`,
           [actorStaffId, monthStart, todayYmd]
         ),
@@ -39845,7 +39873,9 @@ function createNotifyAppService(deps) {
       });
       log32.info("attendance.absent.notified", { appointmentId, targets: targets.length, enqueued });
     },
-    /** -c — اعلان تصحیح تکلیف به خانواده (ناظر gradeAssignment) */
+    /** -c — اعلان تصحیح تکلیف به خانواده (ناظر gradeAssignment)
+     * — m137: assignmentId/gradedAt ورودی شد؛ dedupKey per-assignment+زمانِ تصحیح است —
+     *   تصحیحِ دوباره یا تکلیف تکراریِ هم‌عنوان، پیام خانواده را dedup نمی‌کند */
     async notifyHomeworkGraded(input) {
       const linkRows = await db.query(
         `SELECT DISTINCT chat_id FROM bot_links
@@ -39876,7 +39906,8 @@ function createNotifyAppService(deps) {
             senderName: input.gradedByName ?? void 0,
             clinicName
           },
-          dedupKey: `hw-graded:${input.studentId}:${input.exerciseTitle}:${chatId}`
+          // — m137: کلید یکتا per-assignment + زمان تصحیح (کد قبلی: studentId+عنوان — تکلیف تکراریِ هم‌عنوان پیام خانواده را حذف می‌کرد)
+          dedupKey: `hw-graded:${input.assignmentId ?? input.studentId}:${input.gradedAt ?? ""}:${chatId}`
         });
         if (!outcome.duplicate)
           enqueued += 1;
@@ -41807,11 +41838,13 @@ function createServices(deps) {
   todos.setNotifier((todo) => notify.notifyTodoAssigned(todo));
   exerciseBank.setGradeObserver(async (record) => {
     await notify.notifyHomeworkGraded({
+      assignmentId: record.id,
       studentId: record.studentId,
       studentName: record.studentName,
       exerciseTitle: record.exerciseTitle,
       feedback: record.feedback ?? "",
-      gradedByName: record.gradedByName
+      gradedByName: record.gradedByName,
+      gradedAt: record.gradedAt ?? ""
     });
   });
   caseEvents.setSendObserver(async (input) => {

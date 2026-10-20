@@ -8,7 +8,7 @@
 // تب پروفایل: تاریخچهٔ بسته‌های تکلیف با وضعیت هر تمرین، بازگشتی خانواده و یادآوری.
 
 import { api } from './api.js';
-import { el, icon, toast, toastError, confirmModal, openModal, statusBadge, emptyState, loadingState, errorState } from './ui.js';
+import { el, icon, toast, toastError, confirmModal, formModal, openModal, statusBadge, emptyState, loadingState, errorState } from './ui.js';
 import { fa, formatJalaliNumeric, safeExternalHref } from './format.js';
 import { session } from './state.js';
 
@@ -226,6 +226,52 @@ export async function renderExercisesTab(box, { student, onChanged }) {
     return { badge: statusBadge('assigned') };
   }
 
+  // ─────────────── تصحیح تکلیف (m137) ───────────────
+  // زنجیرهٔ نمره‌دهی: بازگشت خانواده (done) → بازخورد درمانگر (corrected) →
+  // اعلان «✅ تکلیف شما تصحیح شد» در بلهٔ خانواده + رویداد «تمرین تصحیح شد» در تایم‌لاین.
+  // تا m136 هیچ UIای این endpoint را صدا نمی‌زد و بازخورد ثبت‌شده هم جایی نمایش داده نمی‌شد.
+
+  /** — مودال ثبت/ویرایش بازخورد — POST /api/exercises/assignments/:id/grade */
+  function openGradeModal(item, onChanged) {
+    formModal({
+      title: `بازخورد تکلیف — ${item.exerciseTitle}`,
+      initial: { feedback: item.feedback ?? '' },
+      fields: [
+        {
+          name: 'feedback',
+          label: 'بازخورد برای خانواده',
+          type: 'textarea',
+          rows: 4,
+          maxlength: 1000,
+          required: true,
+          hint: 'حداقل ۲ نویسه، سقف ۱۰۰۰ — بعد از ثبت در بلهٔ خانواده هم می‌رود و در تایم‌لاین پرونده می‌نشیند'
+        }
+      ],
+      submitLabel: item.status === 'corrected' ? 'به‌روزرسانی بازخورد' : 'ثبت بازخورد',
+      onSubmit: async (v) => {
+        const feedback = String(v.feedback ?? '').trim();
+        if (feedback.length < 2) throw new Error('بازخورد حداقل ۲ نویسه است');
+        await api.post(`/api/exercises/assignments/${item.assignmentId}/grade`, { feedback });
+        toast('بازخورد ثبت شد — خانواده در بله مطلع شد', 'success', 2600);
+        onChanged?.();
+      }
+    });
+  }
+
+  /** — سطر بازخوردِ ثبت‌شدهٔ یک تکلیف (feedback/gradedAt از listBatches می‌آید) */
+  function feedbackLine(item) {
+    if (!item.feedback) return null;
+    return el(
+      'div',
+      { class: 'exb-grade' },
+      icon('edit', 13),
+      el('span', { class: 'exb-grade__text', title: item.feedback }, item.feedback),
+      item.gradedAt
+        ? el('span', { class: 'cell-sub' }, `— ${formatJalaliNumeric((item.gradedAt || '').slice(0, 10))}`)
+        : null
+    );
+  }
+
   async function remind(batch) {
     const ok = await confirmModal({
       title: 'یادآوری تمرین',
@@ -245,6 +291,12 @@ export async function renderExercisesTab(box, { student, onChanged }) {
 
   const cards = batches.map((b) => {
     const done = b.items.filter((i) => i.status === 'done' || i.status === 'corrected').length;
+    // — گارد تصحیح هم‌سو با سرور: ثبت‌کنندهٔ تکلیف یا مدیر (تکلیف کلاسِ معلم = همهٔ کارکنان)
+    const canGrade = isStaff()
+      && (session.user.role === 'manager'
+        || b.assignedBy === session.user.staffId
+        || String(b.assignedBy ?? '').startsWith('class:'));
+    const gradeable = (item) => item.status === 'done' || item.status === 'corrected';
     const itemRows = b.items.map((item) => {
       const { badge } = itemStatusMeta(item.status);
       return el(
@@ -252,6 +304,21 @@ export async function renderExercisesTab(box, { student, onChanged }) {
         { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap', padding: '6px 0', borderTop: '1px solid var(--border)' } },
         el('b', { style: { flex: 1, minWidth: '140px' } }, item.exerciseTitle),
         badge,
+        // — بازخورد ثبت‌شده (m137: تا قبل از این جایی نمایش داده نمی‌شد)
+        feedbackLine(item),
+        // — کنش تصحیح (m137): حلقهٔ نمره‌دهی کامل می‌شود؛ تصحیحِ دوباره هم مجاز است
+        canGrade && gradeable(item)
+          ? el(
+              'button',
+              {
+                class: 'btn btn--soft btn--sm',
+                title: item.status === 'corrected' ? 'ویرایش بازخورد ثبت‌شده' : 'ثبت بازخورد تصحیح',
+                onclick: () => openGradeModal(item, () => renderExercisesTab(box, { student, onChanged }))
+              },
+              icon('edit', 13),
+              item.status === 'corrected' ? 'ویرایش بازخورد' : 'تصحیح'
+            )
+          : null,
         // لینک بازی/تمرین آنلاین بیرونی
         // فقط http/https به‌صورت لینک رندر می‌شود (دفاع دوم در برابر href نامعتبر)
         safeExternalHref(item.externalUrl)
