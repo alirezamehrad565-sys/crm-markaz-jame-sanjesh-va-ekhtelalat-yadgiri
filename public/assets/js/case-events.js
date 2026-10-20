@@ -16,6 +16,7 @@ import { el, icon, openModal, formModal, confirmModal, toast, toastError, status
 import { jalaliDateInput } from './jalali-picker.js';
 import { session } from './state.js';
 import { typeIconNode } from './case-event-icons.js';
+import { wechslerEventAnalysisSection } from './wechsler-profile.js'; // — نیم‌رخ کامل وکسلر در مودال (m133)
 const STATUS_LABELS = { draft: 'پیش‌نویس', completed: 'ثبت‌شده', pending_family: 'در انتظار خانواده', cancelled: 'لغوشده' };
 
 /** برچسب امن نام دانش‌آموز — دیگر هرگز «undefined» در عنوان مودال‌ها */
@@ -539,10 +540,24 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
   }
 
   const payload = event.payload ?? {};
-  // خروجی JSON موتور وکسلر در مودال جزئیات رندر نمی‌شود؛ فقط نشان «تحلیل موتور»
+  // m133 — خروجی JSON موتور وکسلر حالا خودش این‌جا رندر می‌شود (نیم‌رخ کامل پیش از فهرست payload)
   const hasEngineOutput = 'engine_output' in payload && String(payload['engine_output']?.value ?? '').length > 0;
-  const keys = Object.keys(payload).filter((k) => k !== 'engine_output' && payload[k] && String(payload[k].value ?? '').length > 0);
+  let wEng = null;
   if (hasEngineOutput) {
+    try {
+      const c = JSON.parse(String(payload['engine_output'].value));
+      if (c && c.ok) wEng = c;
+    } catch {}
+  }
+  const keys = Object.keys(payload).filter((k) => k !== 'engine_output' && payload[k] && String(payload[k].value ?? '').length > 0);
+  if (wEng) {
+    // نیم‌رخ کامل (شاخص‌ها + فرضیه‌ها + حوزه‌های ضعیف + پرچم‌های روایی) بالای فهرست payload
+    const wSection = wechslerEventAnalysisSection(wEng);
+    if (wSection) body.appendChild(wSection);
+    body.appendChild(el('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' } },
+      el('span', { class: 'badge badge--accent' }, 'تحلیل موتور وکسلر ۴ ثبت شد')
+    ));
+  } else if (hasEngineOutput) {
     body.appendChild(el('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' } },
       el('span', { class: 'badge badge--accent' }, 'تحلیل موتور وکسلر ۴ ثبت شد'),
       el('span', { class: 'cell-sub' }, 'شاخص‌ها و نیم‌رخ در تب تفسیر بالینی نمایش داده می‌شود')

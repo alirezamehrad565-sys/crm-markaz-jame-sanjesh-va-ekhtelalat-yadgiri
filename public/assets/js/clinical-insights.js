@@ -25,6 +25,7 @@ import { openCaseEventForm } from './case-events.js';
 import { pathwayChip, canEditPathway, openPathwayModal } from './session-type.js'; // — مسیر پرونده
 import { otChecklistCard, openNeedsModal, protocolChip, protocolCard, NEEDS_KEY, OT_SESSION_KEY } from './ot-checklist.js'; // — فلو دوفازی شناسایی→مداخله
 import { formulationSection } from './case-formulation.js'; // — صورت‌بندی پرونده (استدلال تلفیقی)
+import { wechslerProfileBlock } from './wechsler-profile.js'; // — کارت کامل نیم‌رخ وکسلر (m133)
 // محتوای ثابت (کلیدهای ابزار، برچسب‌ها، متن گام‌ها) از ماژول محتوا
 import {
   ANAMNESIS_KEY,
@@ -1100,6 +1101,10 @@ export async function renderClinicalTab(box, { student }) {
     // صورت‌بندی پرونده: خودش fetch و خطا را می‌بلعد (null = کارت حذف)
     const formulation = await formulationSection({ student });
 
+    // کارت کامل نیم‌رخ وکسلر — از گیت‌های شناسایی (خروجی گسترش‌یافتهٔ wechslerSummaryOf)
+    // null = دادهٔ وکسلری معنادار نیست؛ الگوی null-safe مثل formulation/flagsCard
+    const wechslerCard = wechslerProfileBlock({ summary: gates?.wechslerSummary ?? null });
+
     // ── فاز و پروتکل از گیت‌ها؛ fallback: اگر گیت‌ها نیامد، فاز شناسایی ──
     const protocol = gates?.protocol ?? null;
     const phase = protocol ? 'intervention' : 'identification';
@@ -1240,11 +1245,11 @@ export async function renderClinicalTab(box, { student }) {
       : null;
 
     // موتور تاشو — برای پروتکل‌های غیر یادگیری (افتراق و هم‌پوشانی)
+    // m133: narrativeCard دیگر داخل موتور تاشو نیست — خودش مستقیم پس از formulation می‌آید
     const engineDetails = () => el('details', { class: 'clx-engine-toggle' },
       el('summary', { class: 'clx-section__title', style: { cursor: 'pointer', listStyle: 'revert' } },
         icon('sparkles', 16), 'تفسیر استاندارد — موتور اختلال یادگیری (برای افتراق و هم‌پوشانی)'),
       el('div', { style: { marginTop: 'var(--sp-3)' } },
-        narrativeCard,
         hypotheses,
         critsSection,
         metaCard
@@ -1262,6 +1267,7 @@ export async function renderClinicalTab(box, { student }) {
           toolbar,
           stepperCard,
           formulation,
+          wechslerCard,
           flagsCard,
           otCard,
           narrativeCard,
@@ -1286,6 +1292,8 @@ export async function renderClinicalTab(box, { student }) {
           toolbar,
           protoCard,
           formulation,
+          wechslerCard,
+          narrativeCard,
           otCard,
           resultsCard,
           pathsSection,
@@ -1303,6 +1311,8 @@ export async function renderClinicalTab(box, { student }) {
           toolbar,
           protoCard,
           formulation,
+          wechslerCard,
+          narrativeCard,
           resultsCard,
           pathsSection,
           engineDetails(),
@@ -1318,6 +1328,7 @@ export async function renderClinicalTab(box, { student }) {
         toolbar,
         protoCard,
         formulation,
+        wechslerCard,
         journey,
         flagsCard,
         narrativeCard,

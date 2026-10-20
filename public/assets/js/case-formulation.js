@@ -3,7 +3,9 @@
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
 // case-formulation.js — کارت «صورت‌بندی پرونده» (موتور استدلال تلفیقی)
-// هشت سازه + الگوهای هم‌بودی + روایت سه‌بخشی + پوشش داده + پیشنهاد پروتکل و پایش.
+// هشت سازه + الگوهای هم‌بودی + پوشش داده + پیشنهاد پروتکل و پایش.
+// m133: کارت «روایت صورت‌بندی» (سه‌بخشی) حذف شد — روایت سه‌بخشی فقط یک پنجره دارد:
+// کارت «خلاصهٔ سه‌بخشی» در clinical-insights.js (پیش از این موازی‌کاری دو کارت یکسان بود).
 // خط قرمز: خروجی همیشه «الگو/شواهد» است — تشخیص رسمی فقط با متخصص مجاز (پانویس ثابت).
 
 import { api } from './api.js';
@@ -100,17 +102,6 @@ export async function formulationSection({ student }) {
   if (!f) return null;
 
   const elevated = (f.constructs ?? []).filter((c) => c.level !== 'پایین');
-
-  // روایت سه‌بخشی
-  const narrative = el('div', { class: 'card', style: { marginBottom: 'var(--sp-3)' } },
-    el('div', { class: 'card__title', style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' } },
-      icon('message', 15), 'روایت صورت‌بندی — چه دیدیم / یعنی چه / گام بعدی'),
-    el('div', { style: { fontSize: '13px', lineHeight: 1.9 } },
-      el('div', {}, el('strong', {}, 'چه دیدیم: '), f.narrative.saw),
-      el('div', { style: { marginTop: '4px' } }, el('strong', {}, 'یعنی چه: '), f.narrative.means),
-      el('div', { style: { marginTop: '4px' } }, el('strong', {}, 'گام بعدی: '), f.narrative.next)
-    )
-  );
 
   // سازه‌ها
   const constructsCard = el('div', { class: 'card', style: { marginBottom: 'var(--sp-3)' } },
@@ -212,7 +203,6 @@ export async function formulationSection({ student }) {
             icon('alert', 15),
             el('span', {}, el('strong', {}, r.urgent ? 'ارجاع فوری — ' : ''), r.textFa, ' ', el('span', { class: 'cell-sub' }, r.actionFa)))))
       : null,
-    narrative,
     elevated.length ? constructsCard : null,
     patternsCard,
     wiscCard,

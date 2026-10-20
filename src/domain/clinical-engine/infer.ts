@@ -26,6 +26,7 @@ import { RULES, rulesOf, CONFIDENCE_THRESHOLDS, ODD_MIN_FULL_CRITERIA, ASD_B_FUL
 import { DSM_RECORDS } from './dsm-criteria';
 import { targetOf } from './targets';
 import { WCPM_NORM_50TH, ALPHA_15S_NORM, DIGITS_2MIN_NORM, ENGINE_DISCLAIMER, batteryDef } from './instruments';
+import { WECHSLER_W4_EVENT_KEY, wechslerHypothesisBoost } from './wechsler-link';
 
 // ───────── نگاشت پروب‌ها (هاردکد — پلن §۴ لایهٔ ۳) ─────────
 
@@ -284,10 +285,12 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
       toolKeys.add(ruleSet.consensus.parent);
       toolKeys.add(ruleSet.consensus.teacher);
     }
+    // تقویت وکسلر خودش شاهد است — فرضیه‌های engine_output فرم ce-wechsler-w4-v1 به هدف همین ruleSet
+    const wBoost0 = wechslerHypothesisBoost(latest.get(WECHSLER_W4_EVENT_KEY), ruleSet.targetKey);
     const hasData = [...toolKeys].some((k) => {
       const e = latest.get(k);
       return Boolean(e && (e.analysis || e.payload));
-    });
+    }) || Boolean(wBoost0);
     if (!hasData) continue;
 
     // ۱) امتیاز شواهد — instrument/sdq از «دو مرجع» (دو رویداد آخر هر ابزار)؛
@@ -323,6 +326,12 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
       score += 1;
       const rule = ruleSet.evidence.find((r) => r.kind === 'anamnesis');
       if (rule) evidenceFa.push(rule.fa);
+    }
+
+    // تقویت فرضیهٔ وکسلر ۴ — وزن ۲ (بالا) یا ۱ (متوسط) به امتیاز و متن شاهد به شواهد
+    if (wBoost0) {
+      score += wBoost0.weight;
+      evidenceFa.push(wBoost0.fa);
     }
 
     // ۲) هم‌رأیی والد/معلم — جفت danger هر دو مرجع → جمع جفت ×۱٫۵

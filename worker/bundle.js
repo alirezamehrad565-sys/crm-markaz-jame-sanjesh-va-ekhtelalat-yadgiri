@@ -3990,8 +3990,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.11";
-var APP_MILESTONE = "m132";
+var APP_VERSION = "1.00.12";
+var APP_MILESTONE = "m133";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -27767,12 +27767,12 @@ var RULES = [
     targetKey: "slow_learner",
     batteryVersion: "battery-v1",
     evidence: [
-      { kind: "wechsler", toolKey: "wechsler", band: "danger", weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: "\u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC \u0648\u06A9\u0633\u0644\u0631 \u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0645\u0631\u0632\u06CC (\u06F7\u06F0 \u062A\u0627 \u06F8\u06F5) \u0627\u0633\u062A." },
+      { kind: "wechsler", toolKey: "ce-wechsler-w4-v1", band: "danger", weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: "\u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC \u0648\u06A9\u0633\u0644\u0631 \u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0645\u0631\u0632\u06CC (\u06F7\u06F0 \u062A\u0627 \u06F8\u06F5) \u0627\u0633\u062A." },
       { kind: "anamnesis", toolKey: "ce-anamnesis-v2", band: "danger", weight: EVIDENCE_WEIGHTS.anamnesisFlag, fa: "\u0627\u0641\u062A \u062A\u062D\u0635\u06CC\u0644\u06CC \u062A\u062F\u0631\u06CC\u062C\u06CC \u0647\u0645\u0647\u200C\u062F\u0631\u0633\u06CC \u062F\u0631 \u0634\u0631\u062D \u062D\u0627\u0644 \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A." }
     ],
     consensus: void 0,
     criteriaMap: [
-      { criterionId: "bif.a", toolKey: "wechsler", itemRefs: [], passScore: 0 },
+      { criterionId: "bif.a", toolKey: "ce-wechsler-w4-v1", itemRefs: [], passScore: 0 },
       { criterionId: "bif.b", toolKey: "ce-anamnesis-v2", itemRefs: [], passScore: 0 },
       { criterionId: "bif.c", toolKey: "ce-anamnesis-v2", itemRefs: [], passScore: 0 }
     ],
@@ -27850,6 +27850,41 @@ function payloadText(e, keys) {
 }
 __name(payloadText, "payloadText");
 __name2(payloadText, "payloadText");
+// ─── پیوند وکسلر ۴ با موتور تشخیصی (فرم ce-wechsler-w4-v1 — فرضیه‌های engine_output) ───
+var WECHSLER_HYP_TARGETS = { DLD: "speech_language", APD: "speech_language", MOOD: "anxiety", ADHD: "adhd", ASD: "autism" };
+var WECHSLER_HYP_NAMES = { DLD: "اختلال زبانی (DLD)", BIF: "عملکرد مرزی/دیرآموزی (BIF)", APD: "اختلال پردازش شنیداری (APD)", MOOD: "عامل خلقی/اضطرابی (MOOD)", ADHD: "بیش‌فعالی/کم‌توجهی (ADHD)", ASD: "اطیسم (ASD)", ID: "ناتوانی هوشی (ID)", SLD: "اختلال یادگیری خاص (SLD)", NVLD: "یادگیری غیرکلامی (NVLD)", TBI: "آسیب مغزی اکتسابی (TBI)", TWO_E: "دواستثنایی (2e)", DOMAIN_WEAK: "ضعف حوزه‌ای", NORMAL: "نیم‌رخ عادی" };
+function wechslerEngineOutputOf(event) {
+  if (!event)
+    return null;
+  const raw = event.payload?.["engine_output"]?.value?.trim();
+  if (!raw)
+    return null;
+  try {
+    const c = JSON.parse(raw);
+    return c && c.ok ? c : null;
+  } catch {
+    return null;
+  }
+}
+__name(wechslerEngineOutputOf, "wechslerEngineOutputOf");
+__name2(wechslerEngineOutputOf, "wechslerEngineOutputOf");
+function wechslerHypothesisBoost(event, targetKey) {
+  const c = wechslerEngineOutputOf(event);
+  if (!c)
+    return null;
+  const hyps = (c.hypotheses ?? []).filter((h) => WECHSLER_HYP_TARGETS[h.id] === targetKey);
+  if (!hyps.length)
+    return null;
+  const best = hyps.reduce((a, b) => b.weight > a.weight ? b : a);
+  const w = Number(best.weight) || 0;
+  if (!(w >= 0.18))
+    return null;
+  const weight = w >= 0.3 ? 2 : 1;
+  const name = WECHSLER_HYP_NAMES[best.id] ?? best.id;
+  return { weight, fa: `نیم‌رخ وکسلر ۴ با فرضیهٔ «${name}» هم‌گراست (وزن ${w >= 0.3 ? "بالا" : "متوسط"}).` };
+}
+__name(wechslerHypothesisBoost, "wechslerHypothesisBoost");
+__name2(wechslerHypothesisBoost, "wechslerHypothesisBoost");
 function ruleColor(rule, event) {
   if (!event)
     return null;
@@ -28027,10 +28062,12 @@ function runInference(events, options = {}) {
       toolKeys.add(ruleSet.consensus.parent);
       toolKeys.add(ruleSet.consensus.teacher);
     }
+    // تقویت وکسلر خودش شاهد است — فرضیه‌های engine_output فرم ce-wechsler-w4-v1 به هدف همین ruleSet
+    const wBoost0 = wechslerHypothesisBoost(latest.get("ce-wechsler-w4-v1"), ruleSet.targetKey);
     const hasData = [...toolKeys].some((k) => {
       const e = latest.get(k);
       return Boolean(e && (e.analysis || e.payload));
-    });
+    }) || Boolean(wBoost0);
     if (!hasData)
       continue;
     const evidenceFa = [];
@@ -28066,6 +28103,10 @@ function runInference(events, options = {}) {
       const rule = ruleSet.evidence.find((r) => r.kind === "anamnesis");
       if (rule)
         evidenceFa.push(rule.fa);
+    }
+    if (wBoost0) {
+      score += wBoost0.weight;
+      evidenceFa.push(wBoost0.fa);
     }
     const consensus = consensusOf(ruleSet, perTool);
     score += consensus.bonus;
@@ -31493,6 +31534,11 @@ function createOtEngineService(deps) {
             percentile: typeof snap.indices?.FSIQ?.percentile === "number" ? snap.indices.FSIQ.percentile : null,
             mainName: c.main?.name ?? null,
             mainLevel: c.main?.level ?? null,
+            hypotheses: (c.hypotheses ?? []).map((h) => ({ id: h.id, weight: h.weight, name: WECHSLER_HYP_NAMES[h.id] ?? h.id })),
+            weakDomains: c.weakDomains ?? [],
+            flagsFa: (c.flags ?? []).map((f) => f.fa),
+            monitoringInterval: c.monitoringInterval ?? null,
+            ageLine: c.ageLine ?? null,
             engine: true
           };
         }
@@ -31509,7 +31555,7 @@ function createOtEngineService(deps) {
     const manual = { fsiq: n("fsiq"), vci: n("vci"), pri: n("pri"), wmi: n("wmi"), psi: n("psi") };
     if (manual.fsiq === null && manual.vci === null && manual.pri === null && manual.wmi === null && manual.psi === null)
       return null;
-    return { ...manual, occurredAt: w.occurredAt, gai: null, indexScatter: null, cls: null, percentile: null, mainName: null, mainLevel: null, engine: false };
+    return { ...manual, occurredAt: w.occurredAt, gai: null, indexScatter: null, cls: null, percentile: null, mainName: null, mainLevel: null, hypotheses: [], weakDomains: [], flagsFa: [], monitoringInterval: null, ageLine: null, engine: false };
   }
   __name(wechslerSummaryOf, "wechslerSummaryOf");
   __name2(wechslerSummaryOf, "wechslerSummaryOf");

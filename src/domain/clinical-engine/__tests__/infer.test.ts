@@ -134,10 +134,11 @@ describe('موتور شناسایی (پلن §۵)', () => {
   });
 
   it('وکسلر مرزی ۷۰–۸۵ → شاهد دیرآموزی؛ خارج بازه → هیچ', () => {
+    // m132+: فرم قدیمی wechsler بازنشسته شده — قاعدهٔ دیرآموزی کلید جدید ce-wechsler-w4-v1 را می‌خواند
     const wechsler = (fsiq: number): EvidenceEvent => ({
       eventId: `w${fsiq}`,
-      toolKey: 'wechsler',
-      typeTitle: 'پروندهٔ وکسلر v2 — پروفایل WISC-V',
+      toolKey: 'ce-wechsler-w4-v1',
+      typeTitle: 'وکسلر ۴ — پروندهٔ تفسیر موتور',
       status: 'completed',
       occurredAt: '2026-10-03T08:00:00.000Z',
       payload: { fsiq: { value: String(fsiq), label: 'هوشبهر کلی' } },
@@ -168,8 +169,8 @@ describe('موتور شناسایی (پلن §۵)', () => {
     };
     const w: EvidenceEvent = {
       eventId: 'w1',
-      toolKey: 'wechsler',
-      typeTitle: 'وکسلر',
+      toolKey: 'ce-wechsler-w4-v1',
+      typeTitle: 'وکسلر ۴ — پروندهٔ تفسیر موتور',
       status: 'completed',
       occurredAt: '2026-10-03T08:00:00.000Z',
       payload: { fsiq: { value: '80', label: 'هوشبهر کلی' } },
