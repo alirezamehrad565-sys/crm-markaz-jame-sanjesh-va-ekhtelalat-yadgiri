@@ -20,112 +20,6 @@
 }
 .week-bar .spacer { flex: 1; }
 
-/* ستون‌های روزها — agenda-style */
-.week-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(180px, 1fr));
-  gap: var(--sp-3);
-  overflow-x: auto;
-  padding-bottom: var(--sp-2);
-}
-@media (max-width: 1100px) {
-  .week-grid { grid-template-columns: repeat(7, 210px); }
-}
-
-.day-col {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  display: flex;
-  flex-direction: column;
-  min-height: 320px;
-  overflow: hidden;
-}
-.day-col.is-today { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
-.day-col__head {
-  padding: var(--sp-3) var(--sp-4);
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-2);
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-2);
-}
-.day-col.is-today .day-col__head { background: var(--primary-soft); }
-.day-col__name { font-weight: 700; font-size: var(--fs-md); }
-.day-col__date { font-size: var(--fs-xs); color: var(--text-3); }
-.day-col.is-today .day-col__date { color: var(--on-primary-soft); }
-.day-col__count {
-  margin-inline-start: auto;
-  font-size: var(--fs-xs);
-  color: var(--text-3);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 0 8px;
-  border-radius: var(--radius-full);
-}
-.day-col__body {
-  padding: var(--sp-2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  flex: 1;
-}
-.day-col__empty {
-  margin: auto;
-  font-size: var(--fs-xs);
-  color: var(--text-3);
-  padding: var(--sp-4) 0;
-}
-
-/* کارت نوبت */
-.appt-card {
-  width: 100%;
-  text-align: start;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--sp-2) var(--sp-3);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  transition: border-color var(--fast), background var(--fast), transform var(--fast);
-  position: relative;
-}
-.appt-card:hover {
-  border-color: var(--primary);
-  transform: translateY(-1px);
-}
-.appt-card.is-cancelled { opacity: 0.62; }
-.appt-card__time {
-  font-size: var(--fs-sm);
-  font-weight: 700;
-  color: var(--on-primary-soft);
-  font-variant-numeric: tabular-nums;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.appt-card.is-cancelled .appt-card__time { color: var(--text-3); }
-.appt-card__staff { font-size: var(--fs-xs); color: var(--text-2); font-weight: 500; }
-.appt-card__students {
-  font-size: var(--fs-xs);
-  color: var(--text-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.appt-card__bar {
-  position: absolute;
-  inset-inline-start: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  border-radius: var(--radius-full);
-  background: var(--primary);
-  opacity: 0.8;
-}
-.appt-card.is-cancelled .appt-card__bar { background: var(--text-3); }
-
 /* ─────────────── ویرایشگر برنامه هفتگی (بازه کاری) ─────────────── */
 
 .sched {
@@ -133,29 +27,6 @@
   flex-direction: column;
   gap: var(--sp-3);
 }
-.sched__day {
-  display: grid;
-  grid-template-columns: 92px 1fr;
-  gap: var(--sp-3);
-  align-items: start;
-  padding: var(--sp-3);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.sched__day-name { font-weight: 700; font-size: var(--fs-md); padding-top: 6px; }
-.sched__day-name small { display: block; color: var(--text-3); font-weight: 400; font-size: var(--fs-xs); }
-.sched__ranges { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; min-height: 36px; }
-.sched__add {
-  border: 1px dashed var(--border);
-  background: transparent;
-  color: var(--text-3);
-  border-radius: var(--radius-full);
-  padding: 5px var(--sp-3);
-  font-size: var(--fs-xs);
-  transition: color var(--fast), border-color var(--fast);
-}
-.sched__add:hover { color: var(--primary); border-color: var(--primary); }
 
 .range-chip {
   display: inline-flex;
@@ -182,17 +53,6 @@
 }
 .range-chip__x:hover { opacity: 1; background: color-mix(in srgb, var(--error) 25%, transparent); color: var(--error); }
 
-.sched__mini-form {
-  display: flex;
-  gap: var(--sp-2);
-  align-items: center;
-  flex-wrap: wrap;
-  padding: var(--sp-3);
-  background: var(--surface-2);
-  border-radius: var(--radius);
-  border: 1px dashed var(--border);
-}
-.sched__mini-form .select { width: auto; min-width: 110px; }
 .sched__total {
   font-size: var(--fs-sm);
   color: var(--text-2);
@@ -227,10 +87,6 @@
   transition: height var(--normal);
   position: relative;
 }
-.spark__bar.is-cancelled-part {
-  background: linear-gradient(to top, var(--surface-3), var(--surface-3));
-  margin-bottom: -4px;
-}
 /* m37 — ماه‌های بالاتر از ریتم هدف سال (هدف/۱۲) در نمودار تحقق سنجش */
 .spark__bar--ahead {
   background: linear-gradient(to top, var(--success), var(--success));
@@ -238,15 +94,7 @@
 .spark__num { font-size: var(--fs-xs); font-weight: 700; color: var(--text-2); }
 .spark__day { font-size: var(--fs-xs); color: var(--text-3); }
 
-/* لیست «به ازای هر کارمند» داشبورد */
-.staff-mini {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-3) 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
-}
-.staff-mini:last-child { border-bottom: none; }
+/* آواتار کوچک همکار — روز کاری (staff-mini__avatar از working-day.js) */
 .staff-mini__avatar {
   width: 38px;
   height: 38px;
@@ -258,24 +106,6 @@
   font-weight: 700;
   font-size: var(--fs-md);
   flex-shrink: 0;
-}
-.staff-mini__name { font-weight: 600; }
-.staff-mini__meta { font-size: var(--fs-xs); color: var(--text-3); }
-.staff-mini__nums { margin-inline-start: auto; display: flex; gap: var(--sp-3); align-items: baseline; }
-.staff-mini__total { font-size: var(--fs-xl); font-weight: 700; font-variant-numeric: tabular-nums; }
-
-/* ─────────────── پروفایل دانش‌آموز ─────────────── */
-
-.profile-grid {
-  display: grid;
-  grid-template-columns: 340px 1fr;
-  gap: var(--sp-5);
-  align-items: start;
-}
-/* ستون‌های گرید اجازه فشردگی داشته باشند — وگرنه جدول/چیپ‌ها overflow افقی می‌سازند */
-.profile-grid > * { min-width: 0; }
-@media (max-width: 920px) {
-  .profile-grid { grid-template-columns: 1fr; }
 }
 
 .info-list { display: flex; flex-direction: column; }
@@ -2754,20 +2584,6 @@ tr.wl-row--urgent > td:first-child {
 .clx-hyp__title svg { color: var(--primary); }
 .clx-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: var(--sp-2); }
 
-/* سه‌بخشی چه دیدیم / یعنی چه / گام بعدی */
-.clx-three {
-  margin-top: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2);
-  border: 1px solid var(--border); border-radius: var(--radius-md);
-  padding: var(--sp-3); background: var(--surface-2);
-}
-.clx-three__row { display: flex; gap: 8px; align-items: flex-start; }
-.clx-three__label {
-  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
-  font-weight: 700; font-size: var(--fs-xs, 12px); color: var(--primary);
-  min-width: 82px; margin-top: 2px;
-}
-.clx-three__text { font-size: var(--fs-sm); line-height: 1.9; color: var(--text); }
-
 /* زیرلیست‌ها: شواهد / گپ / تفریق */
 .clx-sub { margin-top: var(--sp-3); display: flex; flex-direction: column; gap: 6px; }
 .clx-sub__title {
@@ -2905,7 +2721,6 @@ tr.wl-row--urgent > td:first-child {
 @media (max-width: 640px) {
   .clx-toolbar { flex-direction: column; align-items: stretch; }
   .clx-toolbar > div:last-child { display: flex; gap: var(--sp-2); }
-  .clx-three__row { flex-direction: column; gap: 3px; }
   .clx-crit summary { flex-wrap: wrap; }
 }
 
@@ -3299,4 +3114,194 @@ tr.wl-row--urgent > td:first-child {
   .pb-podium { grid-template-columns: 1fr; }
   .pb-row { grid-template-columns: 32px 1fr auto; }
   .pb-detail-grid { grid-template-columns: 1fr; }
+}
+
+/* ═════════ m134 — فلوی مرحله‌ای تفسیر بالینی + نیم‌رخ وکسلر + کارت جمع‌بندی ═════════ */
+
+/* ─── کارت مرحله (۵ مرحلهٔ شناسایی روی نوار عمودی) ─── */
+.clx-stage { position: relative; overflow: hidden; }
+.clx-stage::before {
+  content: ''; position: absolute; inset-inline-start: 0; top: 0; bottom: 0;
+  width: 3px; background: var(--border); transition: background var(--normal);
+}
+.clx-stage.is-current::before { background: var(--primary); }
+.clx-stage.is-done::before { background: var(--success); }
+.clx-stage__head {
+  display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; min-width: 0;
+}
+.clx-stage__num {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-2); border: 2px solid var(--line);
+  color: var(--text-3); font-weight: 700; font-size: var(--fs-sm);
+}
+.clx-stage.is-current .clx-stage__num {
+  background: var(--primary-soft); border-color: var(--primary); color: var(--primary);
+}
+.clx-stage.is-done .clx-stage__num {
+  background: var(--success); border-color: var(--success); color: var(--on-primary, #fff);
+}
+.clx-stage__heading {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;
+}
+.clx-stage__title { font-size: var(--fs-md, 15px); font-weight: 700; color: var(--text); }
+.clx-stage__hint { font-size: var(--fs-xs, 12px); }
+.clx-stage__act { margin-inline-start: auto; flex-shrink: 0; }
+.clx-stage__detail {
+  margin-top: var(--sp-2); font-size: var(--fs-xs, 12px); color: var(--text-3);
+  border: 1px dashed var(--line); border-radius: var(--radius-sm, 8px);
+  padding: 5px 9px; width: fit-content; max-width: 100%;
+}
+.clx-stage__body {
+  margin-top: var(--sp-3); padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: var(--sp-3);
+}
+@media (max-width: 640px) {
+  .clx-stage__head { flex-direction: column; gap: 8px; }
+  .clx-stage__act { margin-inline-start: 0; width: 100%; }
+  .clx-stage__act > * { width: 100%; justify-content: center; }
+}
+
+/* ─── کارت جمع‌بندی تشخیصی (تلفیق دو موتور) ─── */
+.clx-synthesis { border-color: color-mix(in srgb, var(--primary) 22%, var(--border)); }
+.clx-syn__badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.clx-syn__lead {
+  display: flex; align-items: flex-start; gap: 7px;
+  font-size: var(--fs-sm); line-height: 1.9; color: var(--text-2);
+  background: var(--surface-2); border-radius: var(--radius-md); padding: 8px 12px;
+}
+.clx-syn__lead svg { flex-shrink: 0; margin-top: 4px; color: var(--text-3); }
+.clx-syn__blocktitle {
+  display: flex; align-items: center; gap: 6px; margin-top: var(--sp-3);
+  font-size: var(--fs-xs, 12px); font-weight: 700; color: var(--text-2);
+}
+.clx-syn__blocktitle svg { color: var(--primary); }
+.clx-syn__primary {
+  margin-top: 6px; border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface-2); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+}
+.clx-syn__primarytitle { font-size: var(--fs-md, 15px); font-weight: 700; color: var(--text); }
+.clx-syn__rationale { font-size: var(--fs-sm); line-height: 1.9; color: var(--text-2); }
+.clx-syn__tophypo {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));
+  background: var(--primary-soft); color: var(--on-primary-soft);
+  border-radius: var(--radius-md); padding: 8px 12px; font-size: var(--fs-sm);
+}
+.clx-syn__constructs { margin-top: 6px; display: flex; flex-direction: column; }
+.clx-syn__construct { padding: 7px 2px; }
+.clx-syn__construct summary { cursor: pointer; list-style: none; }
+.clx-syn__candidates { margin-top: 6px; }
+.clx-syn__candidates > summary {
+  cursor: pointer; user-select: none; width: fit-content; max-width: 100%;
+  font-size: var(--fs-xs, 12px); font-weight: 600; color: var(--text-2);
+  border: 1px dashed var(--line); border-radius: var(--radius-full); padding: 4px 10px;
+}
+.clx-syn__candidates > summary:hover { color: var(--primary); border-color: var(--primary); }
+.clx-syn__candidates[open] > summary { margin-bottom: 8px; }
+.clx-syn__conflicts, .clx-syn__flags { margin-top: 6px; display: flex; flex-direction: column; gap: var(--sp-2); }
+.clx-syn__actions { margin: 6px 0 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 4px; }
+.clx-syn__actions li { font-size: var(--fs-sm); line-height: 1.9; color: var(--text); }
+.clx-syn__caps { margin-top: 6px; font-size: var(--fs-xs, 12px); color: var(--text-3); }
+.clx-syn__primaryact { margin-top: var(--sp-3); }
+.clx-syn__engine { margin-top: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.clx-syn__engine > summary {
+  cursor: pointer; user-select: none; padding: 9px 12px;
+  font-size: var(--fs-xs, 12px); font-weight: 700; color: var(--text-2);
+  display: flex; align-items: center; gap: 6px; list-style: none;
+}
+.clx-syn__engine > summary::-webkit-details-marker { display: none; }
+.clx-syn__engine > summary:hover { color: var(--primary); background: var(--surface-2); }
+.clx-syn__enginedetail {
+  border-top: 1px solid var(--border); padding: var(--sp-3);
+  display: flex; flex-direction: column; gap: var(--sp-3);
+}
+
+/* ─── نیم‌رخ وکسلر: شاخص‌ها + گام ۵ ─── */
+.clx-widx { display: flex; flex-direction: column; }
+.clx-widx__row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 7px 2px; border-bottom: 1px dashed var(--border); min-width: 0;
+}
+.clx-widx__row:last-child { border-bottom: 0; }
+.clx-widx__row.is-weak {
+  background: var(--warning-soft); border-radius: var(--radius-sm); padding-inline: 8px;
+}
+.clx-widx__row.is-strong {
+  background: var(--success-soft); border-radius: var(--radius-sm); padding-inline: 8px;
+}
+.clx-widx__name { font-size: var(--fs-sm); color: var(--text); min-width: 150px; }
+.clx-widx__key {
+  font-size: var(--fs-xs, 11px); color: var(--text-3); font-weight: 700;
+  letter-spacing: .4px; direction: ltr; unicode-bidi: embed;
+}
+.clx-widx__scaled { font-size: var(--fs-xs, 12px); color: var(--text-2); }
+
+/* ─── جدول خرده‌آزمون‌ها ─── */
+.clx-wsub__table td, .clx-wsub__table th { vertical-align: middle; }
+.clx-wsub__table tr.is-strong td { background: var(--success-soft); }
+.clx-wsub__table tr.is-weak td { background: var(--warning-soft); }
+.clx-wsub__table td:first-child { font-weight: 600; }
+
+/* ─── مقایسه‌های دوبه‌دوی خرده‌آزمون‌ها ─── */
+.clx-wcmp { display: flex; flex-direction: column; gap: 6px; }
+.clx-wcmp__row {
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface); padding: 8px 12px; display: flex; flex-direction: column; gap: 4px;
+}
+.clx-wcmp__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.clx-wcmp__head strong { font-size: var(--fs-sm); color: var(--text); }
+.clx-wcmp__note { font-size: var(--fs-xs, 12px); line-height: 1.8; color: var(--text-2); }
+.clx-wcmp__skipped { margin-top: 8px; }
+.clx-wcmp__skipped > summary {
+  cursor: pointer; user-select: none; width: fit-content; max-width: 100%;
+  font-size: var(--fs-xs, 12px); color: var(--text-3);
+  border: 1px dashed var(--line); border-radius: var(--radius-full); padding: 3px 10px;
+}
+.clx-wcmp__skipped > summary:hover { color: var(--text-2); }
+.clx-wcmp__skipped[open] > summary { margin-bottom: 8px; }
+
+/* ─── مقایسه‌های خوشه‌ای (جفت‌ها) ─── */
+.clx-wpairs { display: flex; flex-direction: column; gap: 8px; }
+.clx-wpair {
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface); padding: 9px 12px; display: flex; flex-direction: column; gap: 6px;
+}
+.clx-wpair__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.clx-wpair__head strong { font-size: var(--fs-sm); color: var(--text); }
+.clx-wpair__more > summary {
+  cursor: pointer; user-select: none; width: fit-content;
+  font-size: var(--fs-xs, 12px); font-weight: 600; color: var(--primary);
+  list-style: none;
+}
+.clx-wpair__more > summary::-webkit-details-marker { display: none; }
+.clx-wpair__text { font-size: var(--fs-sm); line-height: 1.9; color: var(--text-2); }
+.clx-wpair__advice {
+  display: flex; align-items: flex-start; gap: 6px;
+  font-size: var(--fs-xs, 12px); line-height: 1.8; color: var(--on-accent-soft);
+  background: var(--accent-soft); border-radius: var(--radius-md); padding: 7px 10px;
+}
+.clx-wpair__advice svg { flex-shrink: 0; margin-top: 3px; }
+
+/* ─── پیوند با سایر اطلاعات ─── */
+.clx-wconn { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.clx-wconn li {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: var(--fs-sm); line-height: 1.9; color: var(--text);
+}
+.clx-wconn li svg { flex-shrink: 0; margin-top: 5px; color: var(--primary); }
+.clx-wconn__empty {
+  font-size: var(--fs-xs, 12px); color: var(--text-3);
+  border: 1px dashed var(--line); border-radius: var(--radius-md);
+  padding: 7px 10px; width: fit-content; max-width: 100%;
+}
+
+/* ─── پوشش جدول ملاک‌ها ─── */
+.clx-crits { display: flex; flex-direction: column; gap: var(--sp-2); }
+
+/* موبایل — m134 */
+@media (max-width: 640px) {
+  .clx-widx__name { min-width: 110px; }
+  .clx-syn__lead { align-items: flex-start; }
 }

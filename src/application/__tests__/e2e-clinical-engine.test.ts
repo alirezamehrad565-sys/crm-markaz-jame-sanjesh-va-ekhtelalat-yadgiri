@@ -237,9 +237,10 @@ describe('مسیر مداخله و پروتکل قضاوت', () => {
     expect(rows.map((r) => r.action)).toEqual(['clinical_path.create', 'clinical_path.decision']);
   });
 
-  it('خواندن مسیر تکی + دانش‌نامهٔ اهداف', async () => {
+  it('مسیر تکی حذف شده (m134) → ۴۰۴ + دانش‌نامهٔ اهداف', async () => {
     const { body } = await createPath(ali);
-    expect((await ali.get(`/api/clinical-paths/${body.id}`)).status).toBe(200);
+    // GET /api/clinical-paths/:id برد مرده بود (صفر مصرف‌کننده در UI) — حذف شد
+    expect((await ali.get(`/api/clinical-paths/${body.id}`)).status).toBe(404);
     const targets = dataOf<{ key: string; group: string }[]>(await ali.get('/api/clinical-targets'));
     expect(targets.filter((t) => t.group === 'clinical')).toHaveLength(10);
     // ۸ پشتیبان دانش‌نامهٔ ۱۸گانه + ۴ هدف شاخهٔ توانبخشی (همه group='support' — بدون برچسب DSM)

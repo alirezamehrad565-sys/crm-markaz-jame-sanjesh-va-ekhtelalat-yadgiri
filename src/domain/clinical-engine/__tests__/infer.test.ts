@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { runInference } from '../infer';
-import { narrativeOf, narrativeOfHypothesis, plainTerm, faNum } from '../narrative';
+import { narrativeOf, narrativeOfHypothesis, faNum } from '../narrative';
 import { ENGINE_DISCLAIMER, WCPM_NORM_50TH } from '../instruments';
 import { CONFIDENCE_THRESHOLDS } from '../rules';
 import type { EvidenceEvent } from '../types';
@@ -232,9 +232,7 @@ describe('لحن ساده (پلن §۶)', () => {
     expect(n.saw).not.toMatch(/[0-9]/);
   });
 
-  it('واژه‌نامهٔ «به زبان ساده» و ارقام فارسی', () => {
-    expect(plainTerm('WCPM')).toContain('دقیقه');
-    expect(plainTerm('ناموجود')).toBeNull();
+  it('ارقام فارسی در روایت', () => {
     expect(faNum(18)).toBe('۱۸');
     expect(faNum('40')).toBe('۴۰');
   });

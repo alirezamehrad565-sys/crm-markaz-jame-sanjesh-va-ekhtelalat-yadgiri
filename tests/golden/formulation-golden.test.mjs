@@ -99,7 +99,7 @@ function assertEquivalent(name, evidence) {
   // 2) stable-stringified byte equality (catches key-order / undefined quirks)
   assert.equal(stableStringify(got), stableStringify(want), `${name}: stable stringify mismatch`);
   // 3) sanity: the formulation itself is well-formed
-  assert.equal(got.schemaVersion, "m93.1");
+  assert.equal(got.schemaVersion, "m93.2");
   assert.equal(got.constructs.length, 8);
   assert.equal(got.patterns.length, 12);
   assert.ok(got.confidence >= T.CONFIDENCE_MIN && got.confidence <= T.CONFIDENCE_MAX);
@@ -365,7 +365,7 @@ test("scenario 7: rich multi-informant — SNAP pair x2, SDQ p+t, SCARED, DCDQ, 
   const attention = got.constructs.find((c) => c.key === "attention_exec");
   assert.ok(attention.evidenceFa.some((e) => e.signal === "snap_ia_pair"), "parent+teacher agreement pair row");
   assert.ok(got.wechslerLink && got.wechslerLink.iqBasis === "FSIQ");
-  assert.ok(got.otLink && got.otLink.delayedDomainsFa.length >= 2);
+  assert.ok(got.constructs.find((c) => c.key === "motor_coord").evidenceFa.some((e) => e.toolId === "OtProfile"), "OT delays feed the motor construct evidence");
   assert.ok(got.differentialsFa.some((d) => d.includes("MOOD") || d.includes("دلمشغولی")), "rejected wechsler outcome → differential");
 });
 
@@ -379,9 +379,9 @@ test("scenario 8: empty evidence — no events, no wechsler/ot/gates", () => {
   });
   assert.equal(got.primaryProfile.key, "none");
   assert.equal(got.wechslerLink, null);
-  assert.equal(got.otLink, null);
+  assert.equal("otLink" in got, false, "m93.2: dead otLink output removed");
+  assert.equal("narrative" in got, false, "m93.2: dead narrative output removed");
   assert.equal(got.dataCoverage.percent, 50, "no gates + no elevated constructs → 0.5*0 + 0.5*1");
-  assert.ok(got.narrative.saw.includes("ثبت نشده"));
 });
 
 test("scenario 9: invalid/malformed evidence — unknown tools, pending status, garbage values, duplicate toolKeys, wechsler event in stream", () => {

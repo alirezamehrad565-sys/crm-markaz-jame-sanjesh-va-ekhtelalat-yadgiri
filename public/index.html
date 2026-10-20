@@ -4,11 +4,6 @@
   سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
 -->
 
-<!--
-  پوستهٔ پنل مدیریت — منو، سایدبار و لودینگ ماژول‌ها با نسخه (?v=)
-  سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--->
-
 <html lang="fa" dir="rtl" data-theme="light">
 <head>
   <meta charset="utf-8" />
@@ -17,28 +12,28 @@
   <meta name="description" content="سامانه مدیریت نوبت‌دهی، سنجش، کارکنان و مدارس — مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام" />
   <meta name="theme-color" content="#12384f" />
   <!-- m106 — نشان جدید مرکز + PWA: favicon برداری + PNG نسخه‌دار (با هر انتشار «?v=» bump شود) -->
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.00.12" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/logo-32.png?v=1.00.12" />
-  <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=1.00.12" />
-  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png?v=1.00.12" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.00.13" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/logo-32.png?v=1.00.13" />
+  <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=1.00.13" />
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png?v=1.00.13" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <!-- m106 — پیش‌بارگذاری: فونت اصلی + نشان سایدبار/ورود (بهبود LCP) -->
   <link rel="preload" href="/assets/fonts/Vazirmatn-Regular.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="/assets/img/logo-192.png?v=1.00.12" as="image" fetchpriority="high" />
+  <link rel="preload" href="/assets/img/logo-192.png?v=1.00.13" as="image" fetchpriority="high" />
   <!-- m57 — assetهای نسخه‌دار: با هر انتشار «?v=» را در همین فایل bump کنید
        تا کش یک‌سالهٔ immutable ــ/ِassets/* در _headers── باطل شود (cache busting) -->
-  <link rel="stylesheet" href="/assets/css/tokens.css?v=1.00.12" />
-  <link rel="stylesheet" href="/assets/css/base.css?v=1.00.12" />
-  <link rel="stylesheet" href="/assets/css/components.css?v=1.00.12" />
-  <link rel="stylesheet" href="/assets/css/views.css?v=1.00.12" />
-  <script src="/assets/js/theme-boot.js?v=1.00.12"></script>
+  <link rel="stylesheet" href="/assets/css/tokens.css?v=1.00.13" />
+  <link rel="stylesheet" href="/assets/css/base.css?v=1.00.13" />
+  <link rel="stylesheet" href="/assets/css/components.css?v=1.00.13" />
+  <link rel="stylesheet" href="/assets/css/views.css?v=1.00.13" />
+  <script src="/assets/js/theme-boot.js?v=1.00.13"></script>
 </head>
 <body>
   <div class="shell">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
         <div class="brand__logo">
-          <img src="/assets/img/logo-192.png?v=1.00.12" alt="نشان مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام" width="40" height="40" />
+          <img src="/assets/img/logo-192.png?v=1.00.13" alt="نشان مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام" width="40" height="40" />
         </div>
         <div>
           <div class="brand__name">مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام</div>
@@ -82,7 +77,7 @@
 
   <!-- m59 — ورودی اپ نسخه‌دار OK است (هیچ ماژولی app.js را import نمی‌کند؛ session → state.js).
        هشدار: اگر روزی چیزی app.js را ایمپورت کرد، همین ?v= دوباره باگ «دو بار اجرا» می‌سازد. -->
-  <script type="module" src="/assets/js/app.js?v=1.00.12"></script>
+  <script type="module" src="/assets/js/app.js?v=1.00.13"></script>
   <!-- m106 — ثبت Service Worker (PWA): پس از بار کامل صفحه، بدون رقابت با منابع بحرانی -->
   <script>
     if ('serviceWorker' in navigator) {

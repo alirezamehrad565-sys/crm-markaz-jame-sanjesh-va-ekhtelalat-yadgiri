@@ -10,7 +10,6 @@ import screeningJson from './battery-screening.json';
 import specificJson from './battery-specific.json';
 import clinicalJson from './battery-clinical.json';
 import type { BatteryDef } from './types';
-import { BATTERY_VERSION } from './types';
 
 type RawBatteryDef = BatteryDef;
 
@@ -19,9 +18,6 @@ const RAW: RawBatteryDef[] = [
   ...(specificJson as unknown as RawBatteryDef[]),
   ...(clinicalJson as unknown as RawBatteryDef[])
 ];
-
-/** کلیدهای ابزار باتری ثابت — برای seed و حفاظت is_system */
-export const BATTERY_KEYS = RAW.map((d) => d.key);
 
 /** resolve sameItemsAs: فقط آیتم‌ها از تعریف مرجع کپی می‌شوند — زیرمقیاس‌ها/باندهای خودِ ابزار می‌مانند (برش والد≠معلم) */
 function resolveBattery(defs: RawBatteryDef[]): BatteryDef[] {
@@ -44,13 +40,6 @@ export function batteryDef(key: string): BatteryDef | undefined {
   return BY_KEY.get(key);
 }
 
-/** آیتم‌های نمره‌دار (scale/single) یک ابزار — چک‌لیست‌ها همیشه نمره‌دارند */
-export function batteryScoredFields(key: string): NonNullable<BatteryDef['fields']> {
-  const def = BY_KEY.get(key);
-  if (!def?.fields) return [];
-  return def.fields.filter((f) => f.type === 'scale' || f.type === 'single');
-}
-
 /**
  * هنجار پروب خواندن — واژهٔ درست در دقیقه (صدک ۵۰ مرجع بین‌المللی Hasbrouck & Tindal 2017)
  * هنجار فارسی رسمی منتشرنشده — برآورد اولیه؛ کالیبراسیون با دادهٔ مرکز در
@@ -70,17 +59,8 @@ export const DIGITS_2MIN_NORM: Record<string, number> = {
 };
 
 /** وضعیت یک پروب نسبت به هنجار پایه — «پایین از انتظار / در انتظار / بالا» */
-export function probeStatus(value: number | null, grade: string | null, norm: Record<string, number>): 'below' | 'ok' | 'above' | 'unknown' {
-  if (value === null || grade === null) return 'unknown';
-  const n = norm[grade];
-  if (!n) return 'unknown';
-  if (value < n * 0.8) return 'below';
-  if (value > n * 1.2) return 'above';
-  return 'ok';
-}
+// (حذف شد — مصرف‌کنندهٔ واقعی این قرارداد در ruleColor داخل infer.ts است)
 
 /** پانویس خط قرمز همهٔ خروجی‌های موتور — پلن §۱ */
 export const ENGINE_DISCLAIMER =
   'این تحلیل ابزار غربالگری است و جایگزین قضاوت بالینی درمانگر نیست. تصمیم نهایی با متخصص انسان است.';
-
-export const BATTERY_LABEL = `باتری بالینی ثابت — ${BATTERY_VERSION}`;

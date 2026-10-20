@@ -1,8 +1,8 @@
 ════════════════════════════════════════════════════════════════════════
  Route Diff Report — deploy127 (src/**/*.ts  vs  worker/bundle.js)
 ════════════════════════════════════════════════════════════════════════
-Generated : 2026-10-20T04:13:55.386Z
-SRC files : 187 TypeScript files under src/ (tests excluded)
+Generated : 2026-10-20T09:01:09.737Z
+SRC files : 188 TypeScript files under src/ (tests excluded)
 BUNDLE    : worker/bundle.js
 Rules     : line-anchored `app.<method>(` registrations; file-local const
             paths resolved (e.g. FILL_PATH); params canonicalized to :param;
@@ -10,28 +10,26 @@ Rules     : line-anchored `app.<method>(` registrations; file-local const
             middleware NOT counted; comments never matched.
 
 ── Totals ──────────────────────────────────────────────────────────────
-SRC registrations (raw)        :  221  (unique: 221)
-BUNDLE registrations (raw)     :  230  (unique: 230)
+SRC registrations (raw)        :  220  (unique: 220)
+BUNDLE registrations (raw)     :  227  (unique: 227)
 
-ONLY_IN_BUNDLE (extraction backlog) : 9
+ONLY_IN_BUNDLE (extraction backlog) : 7
 ONLY_IN_SRC (stale/dead candidates) : 0
-COMMON                              : 221
+COMMON                              : 220
 
 ── ONLY_IN_BUNDLE (routes that exist only in the live bundle) ──────────
-  DELETE /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:29101]
-  GET /api/clinical-paths/:param/sessions   [worker/bundle.js:29075]
-  GET /api/pathway-templates   [worker/bundle.js:29033]
-  GET /api/staff/contribution-scores   [worker/bundle.js:33501]
-  GET /api/students/:param/case-formulation   [worker/bundle.js:31095]
-  PATCH /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:29090]
-  PATCH /api/pathway-templates/:param   [worker/bundle.js:29056]
-  POST /api/clinical-paths/:param/sessions   [worker/bundle.js:29080]
-  POST /api/pathway-templates   [worker/bundle.js:29037]
+  DELETE /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:29132]
+  GET /api/pathway-templates   [worker/bundle.js:29069]
+  GET /api/students/:param/case-formulation   [worker/bundle.js:31076]
+  PATCH /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:29121]
+  PATCH /api/pathway-templates/:param   [worker/bundle.js:29092]
+  POST /api/clinical-paths/:param/sessions   [worker/bundle.js:29111]
+  POST /api/pathway-templates   [worker/bundle.js:29073]
 
 ── ONLY_IN_SRC (routes that exist only in src — stale/dead-code candidates) ──
   (none)
 
-── COMMON (221) ────────────────────────────────────────────────
+── COMMON (220) ────────────────────────────────────────────────
   DELETE /api/announcements/:param   [src ×1 | bundle ×1]
   DELETE /api/appointments/:param   [src ×1 | bundle ×1]
   DELETE /api/appointments/:param/students/:param   [src ×1 | bundle ×1]
@@ -68,7 +66,6 @@ COMMON                              : 221
   GET /api/case-events/types   [src ×1 | bundle ×1]
   GET /api/classes   [src ×1 | bundle ×1]
   GET /api/classes/:param   [src ×1 | bundle ×1]
-  GET /api/clinical-paths/:param   [src ×1 | bundle ×1]
   GET /api/clinical-targets   [src ×1 | bundle ×1]
   GET /api/conflicts   [src ×1 | bundle ×1]
   GET /api/dashboard/leaderboard   [src ×1 | bundle ×1]
@@ -255,9 +252,8 @@ COMMON                              : 221
   PUT /api/working-hours/staff/:param   [src ×1 | bundle ×1]
 
 ── Bundle-only routes grouped by area ──────────────────────────────────
-  /api/clinical-paths                      4
+  /api/clinical-paths                      3
   /api/pathway-templates                   3
-  /api/staff                               1
   /api/students                            1
 
 ── Anomalies ───────────────────────────────────────────────────────────
