@@ -64,6 +64,9 @@ export const CONTENT_FORMULA: {
 
 export const USAGE_FORMULA: UsageFormulaItem[];
 
+/** وزن مؤثر — عدد صحیح مجاز (0..10000)، وگرنه پیش‌فرض */
+export function clampWeight(v: unknown, fallback: number): number;
+
 /** — سطح‌بندی تابلو حذف شد (باجت‌های تازه‌کار/… غیرمحترمانه — فقط امتیاز) */
 
 export const PERIODS: Record<string, { key: string; label: string; days?: number; sinceIso: null }>;

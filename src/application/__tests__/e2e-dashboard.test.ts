@@ -6,8 +6,8 @@
 // پوشش:
 // ۱) دانش‌افزایی — خواندن همهٔ نقش‌ها؛ ساخت دفتر (مدیر/منشی)؛ حذف فقط مدیر؛
 // پیش‌نویس از فهرست عمومی مخفی؛ سنجاق‌شده اول
-// ۲) تابلوی رقابتی — فقط درمانگرها؛ جلساتِ «حاضر»/تمرین/رویداد/پیگیری دقیق شمرده
-// می‌شوند و امتیاز/رتبه با فرمول شفاف می‌خواند
+// ۲) تابلوی رقابتی — GET /api/dashboard/leaderboard در m140 حذف شد (مسیر مرده — تابلوی
+// پیشرفت زنده = /api/scoring/board)؛ شمارنده‌ها با «کارنامهٔ من» (/api/dashboard/me) می‌خوانند
 // ۳) کارنامهٔ من (/api/dashboard/me) — شمارنده‌ها + یادداشت جاافتاده + نوبت بعدی
 // ۴) داشبورد امروز — بدون رگرسیون (KPIها سر جا)
 
@@ -15,14 +15,14 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { addDaysYmd, tehranTodayYmd } from '@core/shared';
 import {
   createTestApp,
+  Api,
   asRole,
+  loginToken,
   createStudent,
   apptBody,
   tehranTodayAt,
   ALI_ID,
-  MARYAM_ID,
-  MANAGER_ID,
-  SECRETARY_ID
+  MARYAM_ID
 } from '../../test/harness';
 
 /** — فردا ساعت مشخص تهران: تست «نوبت بعدی» نباید به ساعتِ اجرا وابسته باشد (رفع time-bomb) */
@@ -31,17 +31,6 @@ function tehranTomorrowAt(hour: number, minute = 0): string {
   const hh = String(hour).padStart(2, '0');
   const mm = String(minute).padStart(2, '0');
   return new Date(Date.parse(`${ymd}T${hh}:${mm}:00.000Z`) - 210 * 60_000).toISOString();
-}
-
-interface ScoreEntry {
-  staffId: string;
-  staffName: string;
-  sessions: number;
-  exercises: number;
-  events: number;
-  followups: number;
-  score: number;
-  rank: number;
 }
 
 function dataOf<T>(res: { body: unknown }): T {
@@ -172,27 +161,19 @@ describe('تابلوی رقابتی و کارنامهٔ من', () => {
     });
     expect(note.status).toBe(200);
 
-    // ─── تابلو ───
-    const board = dataOf<{ entries: ScoreEntry[]; me: { rank: number; of: number; score: number } | null }>(
-      await ther.get('/api/dashboard/leaderboard')
-    );
-    // نوبت دفتری‌ها در تابلو نیستند — فقط درمانگرها رقیب‌اند
-    const ids = board.entries.map((e) => e.staffId);
-    expect(ids).toContain(ALI_ID);
-    expect(ids).toContain(MARYAM_ID);
-    expect(ids).not.toContain(MANAGER_ID);
-    expect(ids).not.toContain(SECRETARY_ID);
+    // ─── شمارنده‌ها — تابلوی رقابتی قدیم حذف شده؛ از «کارنامهٔ من» می‌خوانیم ───
+    // — m140: GET /api/dashboard/leaderboard حذف شد (مسیر مرده؛ تابلوی پیشرفت زنده = /api/scoring/board)
+    const deadBoard = await ther.get('/api/dashboard/leaderboard');
+    expect(deadBoard.status).toBe(404);
 
-    const ali = board.entries.find((e) => e.staffId === ALI_ID);
-    expect(ali).toBeDefined();
-    expect(ali!.sessions).toBe(2); // هر دو جلسهٔ «حاضر» شمرده می‌شوند
-    expect(ali!.exercises).toBe(1);
-    expect(ali!.events).toBe(1);
-    expect(ali!.followups).toBe(1);
-    expect(ali!.score).toBe(2 * 2 + 1 * 3 + 1 * 1 + 1 * 1); // فرمول شفاف
-    expect(ali!.rank).toBe(1);
-    expect(board.me?.rank).toBe(1);
-    expect(board.me?.score).toBe(ali!.score);
+    const me = dataOf<{ sessions: number; exercises: number; events: number; followups: number; score: number }>(
+      await ther.get('/api/dashboard/me')
+    );
+    expect(me.sessions).toBe(2); // هر دو جلسهٔ «حاضر» شمرده می‌شوند
+    expect(me.exercises).toBe(1);
+    expect(me.events).toBe(1);
+    expect(me.followups).toBe(1);
+    expect(me.score).toBe(2 * 2 + 1 * 3 + 1 * 1 + 1 * 1); // فرمول شفاف (scoreOf)
   });
 
   it('جلسهٔ لغوشده و بدونِ «حاضر» شمرده نمی‌شود — مریم صفرِ واقعی دارد', async () => {
@@ -200,11 +181,11 @@ describe('تابلوی رقابتی و کارنامهٔ من', () => {
     const apptId = (appt.body as { data: { id: string } }).data.id;
     await mgr.post(`/api/appointments/${apptId}/cancel`, { version: 1 });
 
-    const board = dataOf<{ entries: ScoreEntry[] }>(await mgr.get('/api/dashboard/leaderboard'));
-    const maryam = board.entries.find((e) => e.staffId === MARYAM_ID);
-    expect(maryam).toBeDefined();
-    expect(maryam!.sessions).toBe(0);
-    expect(maryam!.score).toBe(0);
+    // — m140: تابلو از /api/dashboard/leaderboard حذف شد؛ شمارش از «کارنامهٔ من» مریم
+    const maryamApi = new Api(A, await loginToken(A, 'maryam'));
+    const me = dataOf<{ sessions: number; score: number }>(await maryamApi.get('/api/dashboard/me'));
+    expect(me.sessions).toBe(0);
+    expect(me.score).toBe(0);
   });
 
   it('کارنامهٔ من — یادداشتِ نوشته‌شده از شمارندهٔ جاافتاده کم می‌شود', async () => {

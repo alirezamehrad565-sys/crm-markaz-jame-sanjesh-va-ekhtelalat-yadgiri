@@ -1038,7 +1038,13 @@ export const NewExerciseSchema = z.object({
   file: ExerciseFileSchema.nullable().optional()
 });
 
-/** ویرایش تمرین — عنوان/توضیح/قالب/برچسب‌ها/انتشار (فایل از مسیر مجزای PUT) */
+/**
+ * ویرایش تمرین — عنوان/توضیح/قالب/برچسب‌ها/انتشار (فایل از مسیر مجزای PUT)
+ * — m140: owner_staff_id عمداً پذیرفته نمی‌شود — ویرایش ساده هرگز مالکیت (created_by)
+ * را تغییر نمی‌دهد (درس 43-A: فرم ویرایش کهنه owner_staff_id را دوباره می‌فرستاد).
+ * z.object به‌صورت پیش‌فرض کلید ناشناخته را strip می‌کند؛ .strip() صریحِ همین قرارداد است —
+ * انتقال مالکیت فقط از مسیر اختصاصی POST /api/exercises/:id/reassign (فقط مدیر) ممکن است.
+ */
 export const UpdateExerciseSchema = z
   .object({
     title: z
@@ -1064,10 +1070,17 @@ export const UpdateExerciseSchema = z
     tag_ids: z.array(UuidSchema).max(10, 'حداکثر ۱۰ برچسب برای هر تمرین').optional(),
     published: z.boolean().optional()
   })
+  .strip()
   .refine(
     (v) => v.title !== undefined || v.description !== undefined || v.format !== undefined || v.external_url !== undefined || v.tag_ids !== undefined || v.published !== undefined,
     { message: 'حداقل یک فیلد برای ویرایش لازم است' }
   );
+
+/** — m140: انتقال مالکیت تمرین — فقط مدیر؛ بدنهٔ POST /api/exercises/:id/reassign */
+export const ReassignExerciseSchema = z.object({
+  staffId: UuidSchema,
+  reason: z.string().trim().max(500, 'دلیل انتقال بیش از ۵۰۰ نویسه است').optional()
+});
 
 /** تعویض فایل یک تمرین موجود */
 export const ReplaceExerciseFileSchema = z.object({

@@ -3394,3 +3394,82 @@ tr.wl-row--urgent > td:first-child {
   flex-wrap: wrap;
 }
 .exb-preview__pdfbar:empty { display: none; }
+
+/* ═════════ m140 — scoring v2: سازندهٔ فقط-خواندنی ویرایش + انتقال مالکیت + جزئیات امتیاز ═════════ */
+/* ۱) مودال ویرایش تمرین: ردیف سازنده — چیپ فقط-خواندنی (همان پالت staff-chip/exb-owner)
+      + دکمهٔ کوچک «انتقال مالکیت به همکار…» (فقط مدیر) */
+.exb-ownerfield__row { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+
+/* ۲) پنل کوچک تأیید انتقال مالکیت — درون همان مودال ویرایش باز می‌شود (بدون مودال تودرتو) */
+.exb-reassign {
+  margin-top: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.exb-reassign__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.exb-reassign__act { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .exb-reassign__row { grid-template-columns: 1fr; }
+}
+
+/* ۳) مودال «جزئیات امتیاز» تابلوی پیشرفت — پاسخ GET /api/scoring/explain
+      الگو: همان کارت/جدول RTL بقیهٔ نماها؛ سکشن‌ها زیر هم، قلم‌ها با خط چین */
+.pb-explain { display: flex; flex-direction: column; gap: var(--sp-3); }
+.pb-explain__loading,
+.pb-explain__error {
+  padding: var(--sp-3);
+  text-align: center;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.pb-explain__error { display: flex; flex-direction: column; gap: 4px; color: var(--error); }
+.pb-explain__head {
+  display: flex; flex-direction: column; gap: 2px;
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
+.pb-explain__sec { display: flex; flex-direction: column; gap: 6px; }
+.pb-explain__sec-head { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; }
+.pb-explain__sec-head b { font-size: var(--fs-sm); }
+.pb-explain__items { display: flex; flex-direction: column; }
+.pb-explain__item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 2px;
+  border-bottom: 1px dashed var(--line);
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+.pb-explain__item:last-child { border-bottom: 0; }
+.pb-explain__item-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pb-explain__item-w { flex-shrink: 0; font-size: var(--fs-xs); color: var(--text-2); white-space: nowrap; }
+.pb-explain__cap {
+  font-size: var(--fs-xs);
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  width: fit-content;
+  max-width: 100%;
+}
+.pb-explain__totals {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-2);
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-2);
+}
+.pb-explain__total { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.pb-explain__total b { font-size: var(--fs-md); }
+.pb-explain__total--sum b { color: var(--primary); }
+@media (max-width: 640px) {
+  .pb-explain__totals { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ۴) نوار دکمهٔ «جزئیات امتیاز و شمارش» در پنل بازشدنی هر سطر تابلو */
+.pb-detail-tools {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  margin-bottom: var(--sp-2);
+}

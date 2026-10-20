@@ -101,6 +101,7 @@ export {
   ExerciseFileSchema,
   NewExerciseSchema,
   UpdateExerciseSchema,
+  ReassignExerciseSchema,
   ReplaceExerciseFileSchema,
   NewExercisePackageSchema,
   UpdateExercisePackageSchema,

@@ -49,6 +49,8 @@ import type {
   PackageItem,
   PackageListResult,
   PackageSuggestion,
+  ReassignExerciseInput,
+  ReassignExerciseResult,
   StudentExerciseSuggestions,
   SubmissionRecord,
   SubmissionTarget,
@@ -719,6 +721,51 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       log.info('exercise.updated', { id });
       const updated = await this.getById(id);
       return updated as ExerciseRecord;
+    },
+
+    // — m140: انتقال مالکیت تمرین — فقط مدیر؛ مسیر اختصاصی با audit «exercise.reassigned»
+    // (ویرایش ساده هرگز created_by را تغییر نمی‌دهد — درس 43-A: فرم ویرایشِ کهنه
+    // owner_staff_id قدیمی را دوباره می‌فرستاد و انتساب مدیر را بی‌صدا برمی‌گرداند)
+    async reassign(id: string, input: ReassignExerciseInput, actor: AuthContext): Promise<ReassignExerciseResult> {
+      assertStaffRole(actor);
+      if (actor.role !== 'manager') {
+        throw new ForbiddenError('تغییر سازندهٔ تمرین فقط توسط مدیر مجاز است');
+      }
+      const row = await getExerciseRow(id);
+      if (!row) throw new NotFoundError('تمرین');
+
+      const ownerRow = await db.queryOne<{ id: string }>(
+        `SELECT id FROM staff WHERE id = ? AND active = 1`,
+        [input.staffId]
+      );
+      if (!ownerRow) throw new NotFoundError('کارمند');
+
+      // بدون‌عمل — مالک از قبل همان است؛ هیچ نوشتنی انجام نمی‌شود
+      if (input.staffId === row.created_by) {
+        const current = await this.getById(id);
+        return { record: current as ExerciseRecord, unchanged: true };
+      }
+
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE exercises SET created_by = ?, updated_at = datetime('now') WHERE id = ?`,
+          [input.staffId, id]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'exercise.reassigned',
+          resourceType: 'exercise',
+          resourceId: id,
+          changes: {
+            createdBy: { from: row.created_by, to: input.staffId },
+            ...(input.reason ? { reason: { from: null, to: input.reason } } : {})
+          }
+        });
+      });
+
+      log.info('exercise.reassigned', { id, from: row.created_by, to: input.staffId });
+      const updated = await this.getById(id);
+      return { record: updated as ExerciseRecord, unchanged: false };
     },
 
     async softDelete(id: string, actor: AuthContext): Promise<void> {

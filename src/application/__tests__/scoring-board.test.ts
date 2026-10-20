@@ -26,7 +26,8 @@ import {
   USAGE_FORMULA,
   SCORING_EPOCH,
   ADMIN_USAGE_CAP,
-  ADMIN_CAP_ROLES
+  ADMIN_CAP_ROLES,
+  handleScoring
 } from '../../../worker/scoring.js';
 
 describe('فرمول سراسری: استفاده از سامانه (وزن یکنواخت ۱ امتیاز)', () => {
@@ -65,6 +66,11 @@ describe('فرمول سراسری: استفاده از سامانه (وزن یک
   it('حذف اقدام تکراری نباید وزن بگیرد — اقدام‌ها یکتا هستند', () => {
     const actions = USAGE_FORMULA.map(([a]) => a);
     expect(new Set(actions).size).toBe(actions.length);
+  });
+
+  it('— v2: ورود مردهٔ assessment.create حذف شد — هیچ سرویسی این action را نمی‌نویسد', () => {
+    const actions = USAGE_FORMULA.map(([a]) => a);
+    expect(actions).not.toContain('assessment.create');
   });
 });
 
@@ -331,6 +337,28 @@ describe('computeBoard روی MockD1 (یکپارچه)', () => {
     const rows = await computeBoard(db, null);
     expect(rows.length).toBe(4);
   });
+
+  // — v2: تست‌های بعدی دادهٔ تازه اضافه می‌کنند — پس از همهٔ تست‌های با عددِ قطعی می‌آیند
+  it('— v2: ارسال کلاسی (assigned_by=\'class:…\') «استفاده» می‌شمارد ولی «ارجاع همکار» نه', async () => {
+    // تمرینِ سارا (e1) با ارسال کلاسی + ارسال توسط همکار
+    const ins = raw.prepare(`INSERT INTO exercise_assignments (id, exercise_id, assigned_by, status, created_at) VALUES (?,?,?,?,?)`);
+    ins.run('cls1', 'e1', 'class:9', 'sent', '2026-10-12 14:00:00'); // معلم کلاس — همکار نیست
+    ins.run('col1', 'e1', 'th2', 'sent', '2026-10-12 15:00:00'); // همکار واقعی
+    const rows = await computeBoard(db, null);
+    const sara = rows.find((r) => r.staffId === 'th1')!;
+    // استفاده: ارسال قبلی (as1) + کلاسی + همکار = ۳؛ ارجاع: فقط ارسال‌های همکار (as1 + col1) = ۲
+    expect(sara.content.exerciseUses).toBe(3);
+    expect(sara.content.exerciseRefs).toBe(2);
+  });
+
+  it('— v2: تمرین تیمی (team_created=1) نصف وزن می‌گیرد (۰٫۵)', async () => {
+    raw.prepare(`INSERT INTO exercises (id, created_by, deleted_at, created_at, team_created) VALUES (?,?,NULL,?,1)`)
+      .run('teamEx1', 'th1', '2026-10-08 08:00:00');
+    const rows = await computeBoard(db, null);
+    const sara = rows.find((r) => r.staffId === 'th1')!;
+    // قبلاً ۲ تمرین عادی (۲×۱) + ۱ تمرین تیمی (۰٫۵) = ۲٫۵
+    expect(sara.content.exercises).toBe(2.5);
+  });
 });
 
 describe('پیکربندی قابل‌تنظیم امتیازدهی (تنظیمات ← «امتیازبندی همکاران»)', () => {
@@ -394,5 +422,203 @@ describe('پیکربندی قابل‌تنظیم امتیازدهی (تنظیم�
     const d1c = new MockD1(raw3);
     raw3.exec(`CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
     expect(await readScoringConfig(d1c)).toEqual({}); // بدون سطر
+  });
+});
+
+// ─── v2 — handleScoring: explain فقط-مدیر + ضد-اسنپ‌شات + شکل پاسخ تابلو ──────
+
+/** توکن نشست HS256 با secret معلوم — همان قرارداد resolveSessionSecret (AUTH_SECRET) */
+async function scoringToken(sub: string, secret = 'test-secret-1234567890'): Promise<string> {
+  const enc = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const payload = { sub, exp: Math.floor(Date.now() / 1000) + 3600 };
+  const data = `x.${enc(payload)}`; // هدر پارس نمی‌شود — بخش اول دلخواه است
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = Buffer.from(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data))).toString('base64url');
+  return `${data}.${sig}`;
+}
+
+describe('handleScoring (v2): explain فقط-مدیر + ضد-اسنپ‌شات + شکل تابلو', () => {
+  let db: MockD1;
+  let raw: InstanceType<typeof DatabaseSync>;
+  const SECRET = 'test-secret-1234567890';
+
+  beforeAll(() => {
+    raw = new DatabaseSync(':memory:');
+    db = new MockD1(raw);
+    raw.exec(`
+      CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE staff (
+        id TEXT PRIMARY KEY, full_name TEXT, role TEXT, role_ext TEXT, active INTEGER
+      );
+      CREATE TABLE audit_log (
+        id TEXT PRIMARY KEY, actor_id TEXT, action TEXT,
+        resource_type TEXT, resource_id TEXT, changes TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE exercises (id TEXT PRIMARY KEY, title TEXT, created_by TEXT, deleted_at TEXT, created_at TEXT, team_created INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE exercise_packages (id TEXT PRIMARY KEY, title TEXT, created_by TEXT, deleted_at TEXT, created_at TEXT);
+      CREATE TABLE pathway_templates (id TEXT PRIMARY KEY, key TEXT, title TEXT, created_by TEXT, active INTEGER, created_at TEXT);
+      CREATE TABLE case_event_types (id TEXT PRIMARY KEY, title TEXT, created_by TEXT, is_system INTEGER, active INTEGER, created_at TEXT);
+      CREATE TABLE exercise_assignments (id TEXT PRIMARY KEY, exercise_id TEXT, assigned_by TEXT, status TEXT, created_at TEXT);
+      CREATE TABLE intervention_paths (id TEXT PRIMARY KEY, student_id TEXT, target_key TEXT, template_key TEXT, created_by TEXT, deleted_at TEXT, created_at TEXT);
+      CREATE TABLE case_events (id TEXT PRIMARY KEY, event_type_id TEXT, staff_id TEXT, status TEXT, created_at TEXT);
+    `);
+    raw.prepare(`INSERT INTO staff (id, full_name, role, role_ext, active) VALUES (?,?,?,?,1)`).run('th1', 'سارا درمانگر', 'therapist', null);
+    raw.prepare(`INSERT INTO staff (id, full_name, role, role_ext, active) VALUES (?,?,?,?,1)`).run('mg1', 'مدیر مرکز', 'manager', null);
+    // محتوای سارا: ۱ تمرین عادی + ۱ تمرین تیمی
+    const ex = raw.prepare(`INSERT INTO exercises (id, title, created_by, deleted_at, created_at, team_created) VALUES (?,?,?,NULL,?,?)`);
+    ex.run('e1', 'کاربرگ همخوان‌ها', 'th1', '2026-10-20 08:00:00', 0);
+    ex.run('e2', 'کاربرگ تیمی نشانه‌ها', 'th1', '2026-10-21 08:00:00', 1);
+    // ارسال‌ها: کلاسی (ارجاع نمی‌شود) + همکار (ارجاع می‌شود)
+    const asg = raw.prepare(`INSERT INTO exercise_assignments (id, exercise_id, assigned_by, status, created_at) VALUES (?,?,?,?,?)`);
+    asg.run('as-c', 'e1', 'class:3', 'sent', '2026-10-22 08:00:00');
+    asg.run('as-m', 'e1', 'mg1', 'sent', '2026-10-22 09:00:00');
+    // استفادهٔ سامانه: ۱ پرونده
+    raw.prepare(`INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, created_at) VALUES (?,?,?,?,?,?)`)
+      .run('l1', 'th1', 'student.create', 'student', 's1', '2026-10-22 10:00:00');
+  });
+
+  it('explain برای مدیر: شکل پین‌شده + هم‌خوانی totals با computeBoard همان دوره', async () => {
+    const token = await scoringToken('mg1');
+    const res = await handleScoring(
+      new Request(`http://center.test/api/scoring/explain?staffId=th1`, { headers: { authorization: `Bearer ${token}` } }),
+      { DB: db, AUTH_SECRET: SECRET }
+    );
+    expect(res.status).toBe(200);
+    const { data } = (await res.json()) as { data: Record<string, unknown> };
+
+    // شکل پین‌شده — کلیدهای سطح بالا
+    expect(Object.keys(data).sort()).toEqual(
+      ['config', 'content', 'generatedAt', 'period', 'periodLabel', 'since', 'staff', 'totals', 'usage'].sort()
+    );
+    expect(data.period).toBe('all');
+    expect(data.staff).toEqual({ staffId: 'th1', fullName: 'سارا درمانگر', role: 'therapist' });
+
+    // محتوا — تمرین: شمارش خام ۲، وزن‌دار ۱٫۵ (یکی تیمی)؛ آیتم‌ها با effectiveWeight
+    const content = data.content as {
+      exercises: { count: number; weighted: number; weight: number; items: { id: string; title: string; teamCreated: boolean; effectiveWeight: number }[] };
+      packages: { count: number; weight: number; items: unknown[] };
+      templates: { count: number; weight: number; items: unknown[] };
+      forms: { count: number; weight: number; items: unknown[] };
+    };
+    expect(content.exercises.count).toBe(2);
+    expect(content.exercises.weighted).toBe(1.5);
+    expect(content.exercises.weight).toBe(4);
+    expect(content.exercises.items.map((i) => i.teamCreated)).toEqual([false, true]);
+    expect(content.exercises.items.map((i) => i.effectiveWeight)).toEqual([4, 2]);
+    expect(content.exercises.items[0].title).toBe('کاربرگ همخوان‌ها');
+    expect(content.packages).toMatchObject({ count: 0, weight: 8, items: [] });
+    expect(content.templates).toMatchObject({ count: 0, weight: 8, items: [] });
+    expect(content.forms).toMatchObject({ count: 0, weight: 6, items: [] });
+
+    // استفاده — کلاسی در «استفاده» می‌آید و همکار هم؛ ارجاع فقط همکار
+    // → محتوا = ۴×۱٫۵ (تمرین وزن‌دار) + ۴×۲ (استفاده) + ۲۰×۱ (ارجاع) = ۳۴
+    const usage = data.usage as {
+      actions: { action: string; label: string; count: number; points: number }[];
+      rawPoints: number; adminCap: number | null; capped: boolean; appliedPoints: number;
+    };
+    expect(usage.actions).toEqual([{ action: 'student.create', label: 'تشکیل پروندهٔ دانش‌آموز', count: 1, points: 1 }]);
+    expect(usage.rawPoints).toBe(1);
+    expect(usage.adminCap).toBeNull(); // درمانگر سقف اداری ندارد
+    expect(usage.capped).toBe(false);
+    expect(usage.appliedPoints).toBe(1);
+    const totals = data.totals as { contentScore: number; usagePoints: number; total: number; rank: number };
+    expect(totals.contentScore).toBe(34);
+    expect(totals.usagePoints).toBe(1);
+    expect(totals.total).toBe(35);
+
+    // هم‌خوانی با computeBoard همان دوره — تک‌منبع حقیقت
+    const rows = await computeBoard(db, null);
+    const row = rows.find((r) => r.staffId === 'th1')!;
+    expect(totals.rank).toBe(row.rank);
+    expect(totals.total).toBe(row.total);
+    expect(totals.contentScore).toBe(row.contentScore.total);
+
+    const config = data.config as { epoch: string; weightsFromSettings: boolean };
+    expect(config.epoch).toBe(SCORING_EPOCH);
+    expect(config.weightsFromSettings).toBe(false); // بدون تنظیمات → پیش‌فرض
+  });
+
+  it('explain: درمانگر توکن‌دار → 403؛ همکار ناشناس → 404؛ دورهٔ نامعتبر → 400', async () => {
+    const therRes = await handleScoring(
+      new Request(`http://center.test/api/scoring/explain?staffId=th1`, { headers: { authorization: `Bearer ${await scoringToken('th1')}` } }),
+      { DB: db, AUTH_SECRET: SECRET }
+    );
+    expect(therRes.status).toBe(403);
+    await expect(therRes.json()).resolves.toMatchObject({ error: 'FORBIDDEN' });
+
+    const mgrRes = await handleScoring(
+      new Request(`http://center.test/api/scoring/explain?staffId=nope`, { headers: { authorization: `Bearer ${await scoringToken('mg1')}` } }),
+      { DB: db, AUTH_SECRET: SECRET }
+    );
+    expect(mgrRes.status).toBe(404);
+
+    const badPeriod = await handleScoring(
+      new Request(`http://center.test/api/scoring/explain?staffId=th1&period=year`, { headers: { authorization: `Bearer ${await scoringToken('mg1')}` } }),
+      { DB: db, AUTH_SECRET: SECRET }
+    );
+    expect(badPeriod.status).toBe(400);
+
+    // بدون staffId → 400
+    const noStaff = await handleScoring(
+      new Request(`http://center.test/api/scoring/explain`, { headers: { authorization: `Bearer ${await scoringToken('mg1')}` } }),
+      { DB: db, AUTH_SECRET: SECRET }
+    );
+    expect(noStaff.status).toBe(400);
+  });
+
+  it('ضد-اسنپ‌شات (درس 43-A): با DB دارای withSession — همهٔ خواندن‌ها از first-primary', async () => {
+    // ویژگی‌سنجی: با پوشش MockD1 + باSession — هندلر باید با 'first-primary' بخواند
+    const sessionCalls: string[] = [];
+    const wrapped = Object.create(db) as MockD1 & { withSession: (c: string) => unknown };
+    wrapped.withSession = (constraint: string) => {
+      sessionCalls.push(constraint);
+      return db; // نشست تازه (اینجا همان DB ماک است)
+    };
+    const token = await scoringToken('mg1');
+    const res = await handleScoring(
+      new Request(`http://center.test/api/scoring/board?period=week`, { headers: { authorization: `Bearer ${token}` } }),
+      { DB: wrapped, AUTH_SECRET: SECRET }
+    );
+    expect(res.status).toBe(200);
+    expect(sessionCalls).toEqual(['first-primary']);
+
+    // و بدون withSession (ماک خام) — همان DB مستقیم خوانده می‌شود (تست‌ها نشکنند)
+    sessionCalls.length = 0;
+    const res2 = await handleScoring(
+      new Request(`http://center.test/api/scoring/board?period=week`, { headers: { authorization: `Bearer ${token}` } }),
+      { DB: db, AUTH_SECRET: SECRET }
+    );
+    expect(res2.status).toBe(200);
+    expect(sessionCalls).toEqual([]);
+  });
+
+  it('شکل پاسخ تابلو دقیقاً بدون تغییر مانده (قرارداد فرانت)', async () => {
+    const token = await scoringToken('mg1');
+    const res = await handleScoring(
+      new Request(`http://center.test/api/scoring/board?period=month`, { headers: { authorization: `Bearer ${token}` } }),
+      { DB: db, AUTH_SECRET: SECRET }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: Record<string, unknown> };
+    expect(Object.keys(body.data).sort()).toEqual(['generatedAt', 'period', 'periodLabel', 'rows', 'since'].sort());
+    const rows = body.data.rows as Record<string, unknown>[];
+    expect(rows.length).toBe(2);
+    for (const row of rows) {
+      expect(Object.keys(row).sort()).toEqual(
+        ['active', 'content', 'contentScore', 'fullName', 'rank', 'role', 'staffId', 'total', 'usageCapped', 'usageDetail', 'usageLabels', 'usagePoints'].sort()
+      );
+      expect(Object.keys(row.content as object).sort()).toEqual(
+        ['exerciseRefs', 'exerciseUses', 'exercises', 'formFills', 'formRefs', 'forms', 'packages', 'templateRefs', 'templateUses', 'templates'].sort()
+      );
+    }
+    // فرمول در پاسخ نیست (وزن‌ها سمت سرور می‌مانند)
+    expect(JSON.stringify(body)).not.toContain('weight');
   });
 });

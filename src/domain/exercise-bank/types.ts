@@ -84,6 +84,18 @@ export interface UpdateExerciseInput {
   published?: boolean;
 }
 
+/** — m140: ورودی انتقال مالکیت تمرین (مسیر اختصاصی مدیر) */
+export interface ReassignExerciseInput {
+  staffId: string;
+  reason?: string | null;
+}
+
+/** — m140: نتیجهٔ انتقال مالکیت — unchanged=true یعنی مالک از قبل همان بود (بدون نوشتن) */
+export interface ReassignExerciseResult {
+  record: ExerciseRecord;
+  unchanged: boolean;
+}
+
 export interface ListExercisesFilters {
   /** جستجوی متنی در عنوان و توضیح */
   q?: string;
@@ -379,6 +391,8 @@ export interface ExerciseBankService {
   getById(id: string): Promise<ExerciseRecord | null>;
   create(input: NewExerciseInput, actor: AuthContext): Promise<ExerciseRecord>;
   update(id: string, input: UpdateExerciseInput, actor: AuthContext): Promise<ExerciseRecord>;
+  /** — m140: انتقال مالکیت تمرین — فقط مدیر؛ ویرایش ساده (update) هرگز created_by را تغییر نمی‌دهد */
+  reassign(id: string, input: ReassignExerciseInput, actor: AuthContext): Promise<ReassignExerciseResult>;
   /** حذف نرم — تمرین از بات و فهرست‌ها می‌رود؛ فایل حذف نمی‌شود */
   softDelete(id: string, actor: AuthContext): Promise<void>;
   /** تعویض/ثبت فایل یک تمرین موجود (فایل اصلی — مسیر قدیمی JSON) */

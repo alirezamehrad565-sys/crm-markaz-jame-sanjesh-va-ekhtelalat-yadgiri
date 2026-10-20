@@ -8,7 +8,7 @@
 // مسیر عمومی /public/exercise-files/:id در api-routing (قبل از authMiddleware) رجیستر می‌شود.
 
 import type { AppHono } from '@core/shared';
-import { CreateExerciseBatchSchema, NewExercisePackageSchema, NewExerciseSchema, ReplaceExerciseFileSchema, UpdateExercisePackageSchema, UpdateExerciseSchema, UuidSchema } from '@core/shared';
+import { CreateExerciseBatchSchema, NewExercisePackageSchema, NewExerciseSchema, ReassignExerciseSchema, ReplaceExerciseFileSchema, UpdateExercisePackageSchema, UpdateExerciseSchema, UuidSchema } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
 import { NotFoundError, ValidationError } from '@core/errors';
 import type { ExerciseBankService } from './types';
@@ -225,6 +225,21 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
       actor
     );
     return c.json({ data: updated }, 200);
+  });
+
+  // — m140: انتقال مالکیت تمرین — فقط مدیر (ویرایش ساده دیگر owner_staff_id نمی‌پذیرد؛ درس 43-A)
+  // پاسخ: تغییر → { data } ، بدون‌عمل (مالک از قبل همان) → { data, unchanged: true }
+  app.post('/api/exercises/:id/reassign', requireRole('manager'), async (c) => {
+    const actor = getAuthContext(c);
+    const body = ReassignExerciseSchema.parse(await c.req.json<unknown>());
+    const result = await service.reassign(
+      UuidSchema.parse(c.req.param('id')),
+      { staffId: body.staffId, reason: body.reason ?? null },
+      actor
+    );
+    return result.unchanged
+      ? c.json({ data: result.record, unchanged: true }, 200)
+      : c.json({ data: result.record }, 200);
   });
 
   app.delete('/api/exercises/:id', requireRole('manager', 'therapist', 'secretary'), async (c) => {

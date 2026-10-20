@@ -35,12 +35,8 @@ export function registerRoutes(app: AppHono, service: DashboardService): void {
     return c.json({ data }, 200);
   });
 
-  // تابلوی رقابتی درمانگران (ماه جلالی جاری) — همهٔ نقش‌ها؛ «من» فقط برای درمانگر
-  app.get('/api/dashboard/leaderboard', async (c) => {
-    const actor = getAuthContext(c);
-    const data = await service.getScoreboard(actor.staffId);
-    return c.json({ data }, 200);
-  });
+  // — m140: GET /api/dashboard/leaderboard حذف شد — مسیر مرده بود (هیچ مصرف‌کنندهٔ
+  // فرانت ندارد؛ تابلوی پیشرفت زنده = /api/scoring/board، کارنامه = /api/dashboard/me)
 
   // کارنامهٔ شخصی همکار («کارنامهٔ من») — همهٔ نقش‌های دارای حساب همکار
   app.get('/api/dashboard/me', async (c) => {

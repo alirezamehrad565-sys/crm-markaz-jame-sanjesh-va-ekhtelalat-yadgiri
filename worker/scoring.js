@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// scoring.js — موتور امتیازدهی سراسری درمانگران + تابلوی پیشرفت
-//: صفرسازی + وزن یکنواخت اقدام‌های پایه + سقف اداری مدیر/معاون
+// scoring.js (v2 — m140) — موتور امتیازدهی سراسری درمانگران + تابلوی پیشرفت
+//: صفرسازی + وزن یکنواخت اقدام‌های پایه + سقف اداری مدیر/معاون + شرح امتیاز
 // ─────────────────────────────────────────────────────────────────────────────
 // خواست کاربر:
 // «امتیاز همه کارکنان رو حذف صفر کن از الان همه چیز ها شروع بشه»
@@ -18,13 +18,26 @@
 // انتظار بزارن و... سراسری باشه — از قالب ها تمرین ها... همه اطلاعات رو جمع
 // کنه لاگ ها رو بخونه و بزاره داخل تابلوی پیشرفت درمانگران»
 //
-// طراحی:
+// بازنویسی v2 (m140) — بدون تغییر شکل پاسخ تابلو؛ تغییرها:
+// ۱) ضد-اسنپ‌شات (درس 43-A): ایزولیت طولانی‌عمر Worker می‌تواند نشست D1 کهنه را
+//    نگه دارد و «مقدار اصلاح‌شدهٔ» created_by را کهنه بخواند → همهٔ خواندن‌های
+//    تابلو/شرح از نشست تازهٔ first-primary می‌رود (feature-detect — ماک تست بدون
+//    withSession همان env.DB را می‌گیرد تا vitest بشکند).
+// ۲) ارجاع تمرین (exerciseRefs): ارسال‌های کلاسی (assigned_by با پیشوند
+//    «class:<id>» — معلم مدرسه ردیف staff ندارد) «استفادهٔ همکار» نیستند →
+//    از ارجاع حذف شدند؛ ولی در «استفاده» (exerciseUses) همچنان شمرده می‌شوند.
+// ۳) ورود مردهٔ «assessment.create» از USAGE_FORMULA حذف شد — هیچ سرویسی
+//    هیچ‌وقت این audit action را نمی‌نوشت (grep=0) → ردیف مرده بود.
+// ۴) GET /api/scoring/explain (فقط مدیر) — شرح شفاف امتیاز یک همکار در یک دوره؛
+//    رتبه/امتیازها از همان computeBoard همان دوره خوانده می‌شود (تک‌منبع حقیقت).
+//
+// طراحی ثابت:
 // - تک‌فرمول سراسری: امتیاز = محتوا (تولید + استفاده + ارجاع)
 // + استفادهٔ واقعی از سامانه (projection مستقیم روی audit_log).
-// - — نمایش محدود به دو جایگاه: بخش کارکنان (مدیر) + کارت خلاصهٔ داشبورد؛
-// فرمول در هیچ UI‌ای نشان داده نمی‌شود و در پاسخ API هم نیست.
+// - فرمول در هیچ UI‌ای نشان داده نمی‌شود و در پاسخ API تابلو هم نیست
+//   (تنها استثنا: explain — مخصوص مدیر، عمداً با اجازهٔ کاربر).
 // - بدون شمارندهٔ نگهداری‌شده — همه‌چیز محاسبهٔ زنده از دادهٔ واقعی است؛
-// حذف یا دستکاری رکورد خودش در امتیاز منعکس می‌شود (شفافیت).
+//   حذف یا دستکاری رکورد خودش در امتیاز منعکس می‌شود (شفافیت).
 // - این ماژول فقط می‌خواند (READ-ONLY) — هیچ endpoint نوشتنی ندارد.
 // - احراز هویت همان نشست HS256 باندل اصلی است (AUTH_SECRET / settings /
 // dev-secret — همان ترتیب resolveSessionSecret).
@@ -64,6 +77,8 @@ export const CONTENT_FORMULA = {
  * فقط اقدام‌های «سازنده» امتیاز دارند؛ ویرایش/حذف/جابه‌جایی امتیاز ندارد.
  * — وزن یکنواخت: هر اقدام پایه = ۱ امتیاز (خواست کاربر: «تعریف دانش آموز
  * و... هر کدوم 1 امتیاز بشه»). تفاوت واقعی امتیاز را تولید محتوا می‌سازد.
+ * — v2: «assessment.create» حذف شد — هیچ سرویسی این action را در audit_log
+ * نمی‌نویسد (سنجش‌ها از مسیرهای دیگر ثبت می‌شوند) → ورود مرده بود.
  * ترتیب: [action، وزن، برچسب فارسی، گروه]
  */
 export const USAGE_FORMULA = [
@@ -77,7 +92,6 @@ export const USAGE_FORMULA = [
   ['waitlist.call', 1, 'پیگیری تماس متقاضی', 'لیست انتظار'],
   ['waitlist.schedule', 1, 'نوبت‌دهی متقاضی', 'لیست انتظار'],
   ['waitlist.admitted', 1, 'پذیرش متقاضی', 'لیست انتظار'],
-  ['assessment.create', 1, 'ثبت سنجش', 'سنجش'],
   ['screening.create', 1, 'ثبت غربال روزانه', 'سنجش'],
   ['ot.session.saved', 1, 'ثبت جلسهٔ درمانی', 'درمان'],
   ['clinical_path.create', 1, 'ساخت مسیر بالینی', 'درمان'],
@@ -123,7 +137,7 @@ export const ADMIN_USAGE_CAP = 20;
 export const SCORING_CONFIG_KEY = 'scoring_config';
 
 /** وزن مؤثر — عدد صحیح مجاز، وگرنه پیش‌فرض */
-function clampWeight(v, fallback) {
+export function clampWeight(v, fallback) {
   const n = Number(v);
   if (!Number.isInteger(n) || n < 0 || n > 10000) return fallback;
   return n;
@@ -236,6 +250,8 @@ export function contentScoreOf(c, formula = CONTENT_FORMULA) {
  * (تمرین/بسته/قالب/فرم) برای شمارش‌های خام یک بازه — تک‌منبع وزن‌ها همان
  * CONTENT_FORMULA است تا فرمول هیچ‌وقت دو جا نشیند. — formula اختیاری:
  * گزارش دوره هم با وزن‌های تنظیم‌شدهٔ مدیر محاسبه می‌شود.
+ * — m140: شمارش تمرینِ ورودی باید وزن‌دار تیمی باشد
+ * (SUM(CASE WHEN team_created=1 THEN 0.5 ELSE 1 END)) نه COUNT(*).
  * @param {{exercises?:number, packages?:number, templates?:number, forms?:number}} counts
  * @param {{production?: Array<{key:string, weight:number}>}} [formula]
  */
@@ -271,9 +287,10 @@ export function periodSinceUtc(periodKey, periods = PERIODS, now = new Date()) {
 
 // ── اجرای واقعی روی D1 ────────────────────────────────────────────────────────
 
-const D1_ACTIONS = USAGE_FORMULA.map(([a]) => a);
-
-/** کوئری‌های بخش محتوا — همان SQL های + فیلتر دوره */
+/**
+ * کوئری‌های بخش محتوا — همان SQL های + فیلتر دوره
+ * (خروجی به ترتیب CONTENT_KEYS)
+ */
 function contentQueries(since) {
   // کوئری‌های تک‌جدولی فیلتر عمومی می‌گیرند؛ کوئری‌های JOIN فیلترشان داخل
   // خود SQL با نام مستعار ستون است (تا «ambiguous column: created_at» نشود)
@@ -287,16 +304,19 @@ function contentQueries(since) {
     q(`SELECT created_by k, COUNT(*) c FROM exercise_packages WHERE deleted_at IS NULL AND created_by IS NOT NULL GROUP BY created_by`),
     q(`SELECT created_by k, COUNT(*) c FROM pathway_templates WHERE active = 1 AND created_by IS NOT NULL GROUP BY created_by`),
     q(`SELECT created_by k, COUNT(*) c FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by IS NOT NULL GROUP BY created_by`),
-    // استفاده از تمرین‌ها
+    // استفاده از تمرین‌ها (ارسال‌های کلاسی هم «استفاده» هستند)
     qJoin(`SELECT e.created_by k, COUNT(*) c
          FROM exercise_assignments a JOIN exercises e ON e.id = a.exercise_id
         WHERE e.deleted_at IS NULL AND e.created_by IS NOT NULL AND a.status != 'cancelled'${since ? ' AND a.created_at >= ?' : ''}
         GROUP BY e.created_by`),
     // ارجاع تمرین — مصرف توسط همکار دیگر
+    // — v2: ارسال‌های کلاسی (assigned_by = 'class:<id>' — معلم مدرسه ردیف staff
+    // ندارد) «استفادهٔ همکار» نیستند → در ارجاع شمرده نمی‌شوند (در استفاده می‌آیند)
     qJoin(`SELECT e.created_by k, COUNT(*) c
          FROM exercise_assignments a JOIN exercises e ON e.id = a.exercise_id
         WHERE e.deleted_at IS NULL AND e.created_by IS NOT NULL AND a.status != 'cancelled'
-          AND a.assigned_by != e.created_by${since ? ' AND a.created_at >= ?' : ''}
+          AND a.assigned_by != e.created_by
+          AND (a.assigned_by IS NULL OR a.assigned_by NOT LIKE 'class:%')${since ? ' AND a.created_at >= ?' : ''}
         GROUP BY e.created_by`),
     // استفاده از قالب‌ها — مسیر ساخته‌شده از قالب
     qJoin(`SELECT t.created_by k, COUNT(*) c
@@ -464,6 +484,23 @@ async function requireAuth(request, env) {
 
 // ── هندلر مسیرهای /api/scoring/* ──────────────────────────────────────────────
 
+/**
+ * — v2 (درس 43-A): ضد-اسنپ‌شاتِ نشست D1.
+ * ایزولیت طولانی‌عمر Worker ممکن است نشست (session) قدیمی D1 را نگه دارد و
+ * اسنپ‌شات «پیش از اصلاحِ داده» بخواند — باگ واقعی م139: تابلو پس از اصلاح
+ * مستقیم created_by هنوز مقدار کهنه را نشان می‌داد تا دیپلوی سرد.
+ * راه‌حل: همهٔ خواندن‌های تابلو/شرح روی نشست تازهٔ «first-primary» انجام می‌شود
+ * (خواندن همیشه از primary = آخرین نوشته). feature-detect: ماک D1 تست‌ها
+ * (node:sqlite) withSession ندارد → همان binding اصلی برمی‌گردد تا vitest نشکند.
+ * @param {{DB?: unknown}} env
+ */
+function scoringDb(env) {
+  if (env.DB && typeof env.DB.withSession === 'function') {
+    return env.DB.withSession('first-primary');
+  }
+  return env.DB;
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -480,6 +517,9 @@ export async function handleScoring(request, env) {
     return json({ error: 'UNAUTHORIZED', message: 'ابتدا وارد حساب شوید' }, 401);
   }
 
+  // — v2: نشست تازهٔ D1 برای همهٔ خواندن‌ها (ضد-اسنپ‌شات — درس 43-A)
+  const db = scoringDb(env);
+
   // GET /api/scoring/board?period=all|month|week — تابلوی پیشرفت درمانگران
   if (path === '/api/scoring/board' && request.method === 'GET') {
     const periodKey = url.searchParams.get('period') ?? 'all';
@@ -487,10 +527,10 @@ export async function handleScoring(request, env) {
       return json({ error: 'VALIDATION_ERROR', message: 'دورهٔ نامعتبر است' }, 400);
     }
     // پیکربندی از تنظیمات: تاریخ شروع شمارش + وزن‌های فرمول (مدیر)
-    const cfg = await readScoringConfig(env.DB);
+    const cfg = await readScoringConfig(db);
     // صفرسازی: cutoff مؤثر هرگز قدیمی‌تر از تاریخ شروع انتخابی نیست
     const since = effectiveSince(periodKey, PERIODS, new Date(), cfg.epoch ?? SCORING_EPOCH);
-    const rows = await computeBoard(env.DB, since, {
+    const rows = await computeBoard(db, since, {
       contentFormula: effectiveContentFormula(cfg.weights),
       usageFormula: effectiveUsageFormula(cfg.weights),
       adminCap: effectiveAdminCap(cfg.weights)
@@ -504,6 +544,134 @@ export async function handleScoring(request, env) {
         since,
         generatedAt: new Date().toISOString(),
         rows
+      }
+    });
+  }
+
+  // GET /api/scoring/explain?staffId=<uuid>&period=all|month|week
+  // — v2: شرح شفاف امتیاز یک همکار — فقط مدیر مرکز (عمداً؛ فرمول برای کارکنان پنهان می‌ماند)
+  if (path === '/api/scoring/explain' && request.method === 'GET') {
+    // نقش فراخوان همیشه تازه از DB خوانده می‌شود (نه فقط از توکن)
+    const meRow = await db
+      .prepare(`SELECT id, COALESCE(role_ext, role) AS role FROM staff WHERE id = ? LIMIT 1`)
+      .bind(authed.sub)
+      .first();
+    if (!meRow) {
+      return json({ error: 'UNAUTHORIZED', message: 'ابتدا وارد حساب شوید' }, 401);
+    }
+    if (meRow.role !== 'manager') {
+      return json({ error: 'FORBIDDEN', message: 'شرح امتیاز فقط برای مدیر مرکز مجاز است' }, 403);
+    }
+    const staffId = url.searchParams.get('staffId') ?? '';
+    if (!staffId) {
+      return json({ error: 'VALIDATION_ERROR', message: 'staffId الزامی است' }, 400);
+    }
+    const periodKey = url.searchParams.get('period') ?? 'all';
+    if (!PERIODS[periodKey]) {
+      return json({ error: 'VALIDATION_ERROR', message: 'دورهٔ نامعتبر است' }, 400);
+    }
+
+    const cfg = await readScoringConfig(db);
+    const since = effectiveSince(periodKey, PERIODS, new Date(), cfg.epoch ?? SCORING_EPOCH);
+    const contentFormula = effectiveContentFormula(cfg.weights);
+    const usageFormula = effectiveUsageFormula(cfg.weights);
+    const adminCap = effectiveAdminCap(cfg.weights);
+
+    // تابلو همان دوره — رتبه و امتیازها از همان computeBoard خوانده می‌شود
+    // (تک‌منبع حقیقت: شرح هرگز با تابلو نمی‌خواند)
+    const rows = await computeBoard(db, since, { contentFormula, usageFormula, adminCap });
+    const row = rows.find((r) => r.staffId === staffId);
+    if (!row) {
+      return json({ error: 'NOT_FOUND', message: 'کارمند یافت نشد' }, 404);
+    }
+
+    // آیتم‌های محتوا per-staff — دقیقاً همان فیلترهای کوئری‌های تابلو
+    // (تا count شرح همیشه با count تابلو یکی باشد)
+    const W = since ? ' AND created_at >= ?' : '';
+    const P = since ? [since] : [];
+    const [exerciseItems, packageItems, templateItems, formItems] = await Promise.all([
+      db.prepare(`SELECT id, title, team_created FROM exercises WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all(),
+      db.prepare(`SELECT id, title FROM exercise_packages WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all(),
+      db.prepare(`SELECT key, title FROM pathway_templates WHERE active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all(),
+      db.prepare(`SELECT id, title FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all()
+    ]);
+
+    const prodW = (key) => contentFormula.production.find((x) => x.key === key)?.weight ?? 0;
+    const exWeight = prodW('exercises');
+    // تمرین: count = شمارش خام؛ weighted = شمارش وزن‌دار تیمی (0.5) — همان عدد تابلو
+    const exerciseList = exerciseItems.results.map((r) => {
+      const teamCreated = r.team_created === 1;
+      return {
+        id: r.id,
+        title: r.title,
+        teamCreated,
+        effectiveWeight: exWeight * (teamCreated ? 0.5 : 1)
+      };
+    });
+
+    // استفادهٔ سامانه — از usageDetail همان ردیف تابلو (شمارش‌های audit_log) + برچسب/وزن فرمول مؤثر
+    const uWeights = usageWeightMap(usageFormula);
+    const uLabels = Object.fromEntries(usageFormula.map(([a, , label]) => [a, label]));
+    const actions = Object.entries(row.usageDetail)
+      .map(([action, count]) => ({
+        action,
+        label: uLabels[action] ?? action,
+        count,
+        points: (uWeights.get(action) ?? 0) * count
+      }))
+      .sort((a, b) => b.points - a.points || b.count - a.count || a.action.localeCompare(b.action));
+    const rawPoints = actions.reduce((s, a) => s + a.points, 0);
+    const isAdminRole = ADMIN_CAP_ROLES.includes(row.role);
+
+    return json({
+      data: {
+        period: PERIODS[periodKey].key,
+        periodLabel: PERIODS[periodKey].label,
+        since,
+        generatedAt: new Date().toISOString(),
+        staff: { staffId: row.staffId, fullName: row.fullName, role: row.role },
+        content: {
+          exercises: {
+            count: exerciseList.length,
+            weighted: row.content.exercises,
+            weight: exWeight,
+            items: exerciseList
+          },
+          packages: {
+            count: row.content.packages,
+            weight: prodW('packages'),
+            items: packageItems.results.map((r) => ({ id: r.id, title: r.title }))
+          },
+          templates: {
+            count: row.content.templates,
+            weight: prodW('templates'),
+            // — ستون انسانی قالب «title» است؛ شناسهٔ منطقی «key»
+            items: templateItems.results.map((r) => ({ id: r.key, title: r.title }))
+          },
+          forms: {
+            count: row.content.forms,
+            weight: prodW('forms'),
+            // — قرارداد پین‌شده: فیلد «name» (ستون واقعی جدول: title)
+            items: formItems.results.map((r) => ({ id: r.id, name: r.title }))
+          }
+        },
+        usage: {
+          actions,
+          rawPoints,
+          adminCap: isAdminRole ? adminCap : null,
+          capped: row.usageCapped,
+          appliedPoints: row.usagePoints
+        },
+        totals: {
+          contentScore: row.contentScore.total,
+          usagePoints: row.usagePoints,
+          total: row.total,
+          rank: row.rank
+        },
+        config: {
+          epoch: cfg.epoch ?? SCORING_EPOCH,
+          weightsFromSettings: Boolean(cfg.weights)
+        }
       }
     });
   }

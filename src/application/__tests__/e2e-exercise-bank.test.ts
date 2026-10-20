@@ -12,6 +12,9 @@ import {
   asRole,
   createStudent,
   makeNationalId,
+  ALI_ID,
+  MANAGER_ID,
+  MARYAM_ID,
   TAG_DISORDER_1,
   TAG_GRADE_5,
   WEBHOOK_SECRET
@@ -232,5 +235,105 @@ describe('بانک تمرین: پنل، فایل، برچسب، لینک خان�
 
     const list = await manager.get('/api/exercises');
     expect((list.body as { data: { items: { id: string }[] } }).data.items.map((i) => i.id)).not.toContain(id);
+  });
+});
+
+// ─── — مالکیت تمرین (m140): PATCH نمی‌تواند created_by را تغییر دهد؛ انتقال فقط با
+// POST /:id/reassign (فقط مدیر) — رگرسیونِ باگ واقعی 43-A (بازگشت انتساب با فرم ویرایش کهنه)
+describe('بانک تمرین: مالکیت (owner_staff_id بسته + reassign فقط-مدیر)', () => {
+  let A: ReturnType<typeof createTestApp>;
+  let manager: Api;
+  let therapist: Api;
+  let exerciseId = '';
+
+  beforeAll(async () => {
+    A = createTestApp();
+    manager = await asRole(A, 'manager');
+    therapist = await asRole(A, 'therapist');
+    // تمرینِ ساخته‌شده با حساب مدیر (شبیه‌سازی «ثبت زیر نشست مشترک» — درس 42-F/43-A)
+    const res = await manager.post('/api/exercises', { title: 'شمارش برعکس (مالکیت)', format: 'worksheet' });
+    expect(res.status).toBe(201);
+    exerciseId = (res.body as { data: { id: string; createdBy: string } }).data.id;
+  });
+
+  it('رگرسیون THE-bug: PATCH با owner_staff_id در payload مالکیت (createdBy) را تغییر نمی‌دهد', async () => {
+    const before = await manager.get(`/api/exercises/${exerciseId}`);
+    const createdBefore = (before.body as { data: { createdBy: string } }).data.createdBy;
+
+    // حتی از حساب خودِ مدیر — با owner_staff_id اشاره به درمانگر (فرم کهنه)
+    const patch = await manager.patch(`/api/exercises/${exerciseId}`, {
+      title: 'شمارش برعکس (مالکیت) — ویرایش ساده',
+      owner_staff_id: ALI_ID
+    });
+    expect(patch.status).toBe(200);
+    const after = (patch.body as { data: { createdBy: string } }).data.createdBy;
+    expect(after).toBe(createdBefore);
+
+    const reread = await manager.get(`/api/exercises/${exerciseId}`);
+    expect((reread.body as { data: { createdBy: string } }).data.createdBy).toBe(createdBefore);
+
+    // هیچ audit «exercise.reassigned» از مسیر PATCH نوشته نشده
+    const audits = A.sql.prepare(
+      `SELECT COUNT(*) AS cnt FROM audit_log WHERE action = 'exercise.reassigned' AND resource_id = ?`
+    ).get(exerciseId) as { cnt: number };
+    expect(audits.cnt).toBe(0);
+  });
+
+  it('reassign توسط مدیر: createdBy عوض می‌شود + سطر audit با from/to/reason', async () => {
+    const res = await manager.post(`/api/exercises/${exerciseId}/reassign`, {
+      staffId: ALI_ID,
+      reason: 'ثبت زیر نشست مشترک — مالک واقعی درمانگر است'
+    });
+    expect(res.status).toBe(200);
+    const body = res.body as { data: { createdBy: string }; unchanged?: boolean };
+    expect(body.data.createdBy).toBe(ALI_ID);
+    expect(body.unchanged).toBeUndefined(); // تغییر واقعی — پرچم بدون‌عمل ندارد
+
+    // پاسخ هم‌شکل GET /api/exercises/:id است
+    const viaGet = await manager.get(`/api/exercises/${exerciseId}`);
+    expect((viaGet.body as { data: { createdBy: string } }).data.createdBy).toBe(ALI_ID);
+
+    // سطر audit — از و to + reason
+    const audit = A.sql.prepare(
+      `SELECT actor_id, changes FROM audit_log WHERE action = 'exercise.reassigned' AND resource_id = ? ORDER BY rowid DESC LIMIT 1`
+    ).get(exerciseId) as { actor_id: string; changes: string };
+    expect(audit.actor_id).toBe(MANAGER_ID);
+    const changes = JSON.parse(audit.changes) as { createdBy: { from: string; to: string }; reason?: { to: string } };
+    expect(changes.createdBy.from).toBe(MANAGER_ID);
+    expect(changes.createdBy.to).toBe(ALI_ID);
+    expect(changes.reason?.to).toContain('نشست مشترک');
+  });
+
+  it('reassign برای درمانگر ۴۰۳ است', async () => {
+    const res = await therapist.post(`/api/exercises/${exerciseId}/reassign`, { staffId: MARYAM_ID });
+    expect(res.status).toBe(403);
+    expect(res.body).toMatchObject({ error: 'FORBIDDEN' });
+  });
+
+  it('reassign با همان مالک فعلی: ۲۰۰ بدون‌عمل (unchanged) و بدون سطر audit تازه', async () => {
+    const before = A.sql.prepare(
+      `SELECT COUNT(*) AS cnt FROM audit_log WHERE action = 'exercise.reassigned' AND resource_id = ?`
+    ).get(exerciseId) as { cnt: number };
+
+    const res = await manager.post(`/api/exercises/${exerciseId}/reassign`, { staffId: ALI_ID });
+    expect(res.status).toBe(200);
+    const body = res.body as { data: { createdBy: string }; unchanged?: boolean };
+    expect(body.unchanged).toBe(true);
+    expect(body.data.createdBy).toBe(ALI_ID);
+
+    const after = A.sql.prepare(
+      `SELECT COUNT(*) AS cnt FROM audit_log WHERE action = 'exercise.reassigned' AND resource_id = ?`
+    ).get(exerciseId) as { cnt: number };
+    expect(after.cnt).toBe(before.cnt); // سطر تازه ندارد
+  });
+
+  it('reassign: تمرین ناموجود ۴۰۴ و کارمند ناموجود/غیرفعال ۴۰۴', async () => {
+    const unknownEx = await manager.post('/api/exercises/ffffffff-ffff-4fff-8fff-ffffffffffff/reassign', { staffId: ALI_ID });
+    expect(unknownEx.status).toBe(404);
+
+    const unknownStaff = await manager.post(`/api/exercises/${exerciseId}/reassign`, {
+      staffId: 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+    });
+    expect(unknownStaff.status).toBe(404);
   });
 });
