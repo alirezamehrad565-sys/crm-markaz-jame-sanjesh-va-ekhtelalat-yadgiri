@@ -17,7 +17,7 @@
 // سامانه از audit_log — محاسبهٔ زندهٔ فقط-خواندنی از /api/scoring/board.
 
 import { api } from '../api.js';
-import { el, icon, toastError, emptyState, skeletonState, errorState } from '../ui.js';
+import { el, icon, toastError, emptyState, skeletonState, errorState, openModal } from '../ui.js';
 import { fa, formatJalaliNumeric, tehranYmdOfIso, tehranTimeOfIso } from '../format.js';
 import { session } from '../state.js';
 
@@ -30,6 +30,13 @@ const PERIOD_TABS = [
 
 function roleChip(role) {
   return el('span', { class: 'cell-sub' }, ROLE_LABELS[role] ?? role);
+}
+
+/** — عدد فارسی با ممیزِ فارسی: «۱۰٫۵» — وزن تیمی ۰٫۵ شمارش تمرین‌ها را اعشاری می‌کند (m140) */
+function faScore(n) {
+  const v = Math.round(Number(n) * 100) / 100;
+  if (!Number.isFinite(v)) return fa(0);
+  return fa(Number.isInteger(v) ? String(v) : String(v).replace('.', '٫'));
 }
 
 /** سکوی قهرمانی — سه نفر اول */
@@ -50,7 +57,7 @@ function podium(rows, meId) {
 }
 
 /** ردیف تفصیلی یک همکار — کلیک = باز/بسته شدن تفکیک (شمارش واقعی، بدون وزن) */
-function boardRow(row, meId) {
+function boardRow(row, meId, period) {
   const isOpen = { v: false };
   const detail = el('div', { class: 'pb-row__detail', hidden: true });
 
@@ -60,11 +67,27 @@ function boardRow(row, meId) {
       el('span', { class: 'badge badge--neutral' }, `${row.usageLabels[action] ?? action}: ${fa(c)}`)
     );
 
+  // — جزئیات کامل امتیاز (m140): هر سطر دکمهٔ خودش را دارد؛ باز کردن مودال با دریافت
+  //   تنبلِ GET /api/scoring/explain?staffId=…&period=<دورهٔ فعلی تابلو> — خطا هرگز تابلو را نمی‌شکند
+  const explainBtn = el(
+    'button',
+    {
+      class: 'btn btn--ghost btn--sm',
+      type: 'button',
+      onclick: () => openExplainModal(row, period)
+    },
+    icon('clipboard', 14),
+    'جزئیات امتیاز و شمارش'
+  );
+
   detail.replaceChildren(
+    el('div', { class: 'pb-detail-tools' },
+      explainBtn,
+      el('span', { class: 'cell-sub' }, 'اقلام شمرده‌شده و محاسبهٔ امتیاز همین دوره')),
     el('div', { class: 'pb-detail-grid' },
       el('div', { class: 'pb-detail-cell' },
         el('div', { class: 'cell-sub' }, 'محتوا — تولید'),
-        el('b', {}, `تمرین ${fa(row.content.exercises)} • بسته ${fa(row.content.packages)} • قالب ${fa(row.content.templates)} • فرم ${fa(row.content.forms)}`)),
+        el('b', {}, `تمرین ${faScore(row.content.exercises)} • بسته ${faScore(row.content.packages)} • قالب ${faScore(row.content.templates)} • فرم ${faScore(row.content.forms)}`)),
       el('div', { class: 'pb-detail-cell' },
         el('div', { class: 'cell-sub' }, 'محتوا — استفاده و ارجاع'),
         el('b', {}, `تکلیف ${fa(row.content.exerciseUses)} • مسیر از قالب ${fa(row.content.templateUses)} • فرم ${fa(row.content.formFills)}`)),
@@ -95,6 +118,115 @@ function boardRow(row, meId) {
   );
 
   return el('div', { class: 'pb-rowwrap' }, rowEl, detail);
+}
+
+// ── m140 — جزئیات امتیاز (پاسخ GET /api/scoring/explain) ─────────────────────
+
+/** سکشن داخل مودال جزئیات — سربرگ + خلاصهٔ شمارش + بدنه */
+function explainSection(title, summary, ...body) {
+  return el('div', { class: 'pb-explain__sec' },
+    el('div', { class: 'pb-explain__sec-head' },
+      el('b', {}, title),
+      el('span', { class: 'cell-sub' }, summary)),
+    ...body);
+}
+
+/** ردیف یک قلم شمرده‌شده — عنوان + نشان اختیاری (تیمی/شمارش) + عدد اختیاری */
+function explainItem(titleText, badgeText, valueText) {
+  return el('div', { class: 'pb-explain__item' },
+    el('span', { class: 'pb-explain__item-title', title: titleText }, titleText),
+    badgeText ? el('span', { class: 'badge badge--neutral' }, badgeText) : null,
+    valueText ? el('span', { class: 'pb-explain__item-w' }, valueText) : null);
+}
+
+/**
+ * بدنهٔ مودال «جزئیات امتیاز» پس از رسیدن پاسخ explain.
+ * شکل قرارداد: staff/content{exercises,packages,templates,forms}/usage/totals —
+ * هر فیلد غایب با پیش‌فرض خنثی جبران می‌شود تا پاسخ ناقص هرگز مودال را نشکند.
+ */
+function renderExplain(d) {
+  const c = d.content ?? {};
+  const ex = c.exercises ?? { count: 0, weighted: 0, items: [] };
+  const pk = c.packages ?? { count: 0, weight: 0, items: [] };
+  const tp = c.templates ?? { count: 0, weight: 0, items: [] };
+  const fm = c.forms ?? { count: 0, weight: 0, items: [] };
+  const u = d.usage ?? {};
+  const t = d.totals ?? {};
+  const emptyNote = () => el('span', { class: 'cell-sub' }, 'در این دوره موردی نیست');
+
+  // سربرگ — همکار + دوره + شروع شمارش + زمان محاسبه (جلالی، وقت تهران)
+  const head = el('div', { class: 'pb-explain__head' },
+    el('b', {}, `${d.staff?.fullName ?? '—'}${d.staff?.role ? ` — ${ROLE_LABELS[d.staff.role] ?? d.staff.role}` : ''}`),
+    el('span', { class: 'cell-sub' }, `دوره: ${d.periodLabel ?? d.period ?? '—'}`),
+    d.since ? el('span', { class: 'cell-sub' }, `شروع شمارش امتیازها: ${formatJalaliNumeric(tehranYmdOfIso(d.since))}`) : null,
+    d.generatedAt
+      ? el('span', { class: 'cell-sub' },
+        `محاسبه: ${formatJalaliNumeric(tehranYmdOfIso(d.generatedAt))} — ${fa(String(tehranTimeOfIso(d.generatedAt)))}`)
+      : null);
+
+  // تمرین‌ها — قلم‌به‌قلم با وزن مؤثر (تمرین تیمی = نصف)
+  const exItems = (ex.items ?? []).map((it) =>
+    explainItem(it.title ?? it.id, it.teamCreated ? 'تیمی → نصف امتیاز' : null,
+      `${faScore(it.effectiveWeight)} امتیاز`));
+  const exSec = explainSection('تمرین‌های شمرده‌شده',
+    `${faScore(ex.count)} مورد — جمع وزن‌دار ${faScore(ex.weighted)}`,
+    el('div', { class: 'pb-explain__items' }, ...(exItems.length ? exItems : [emptyNote()])));
+
+  // بسته‌ها / قالب‌ها / فرم‌ها — شمارش + جمع وزن + فهرست عناوین
+  const listSec = (label, box, nameKey) => {
+    const items = (box.items ?? []).map((it) => explainItem(it[nameKey] ?? it.id, null, null));
+    return explainSection(label,
+      `${fa(box.count ?? 0)} مورد — ${faScore(box.weight ?? 0)} امتیاز`,
+      el('div', { class: 'pb-explain__items' }, ...(items.length ? items : [emptyNote()])));
+  };
+
+  // اقدام‌های سامانه — برچسب × شمارش = امتیاز؛ با سقف اداری اگر خورده باشد
+  const actions = (u.actions ?? []).filter((a) => (a.count ?? 0) > 0);
+  const usageItems = actions.map((a) =>
+    explainItem(a.label ?? a.action, `${fa(a.count ?? 0)} بار`, `${faScore(a.points ?? 0)} امتیاز`));
+  const usageSec = explainSection('اقدام‌های سامانه',
+    u.capped
+      ? `خام ${faScore(u.rawPoints ?? 0)} → اعمال‌شده ${faScore(u.appliedPoints ?? 0)}`
+      : `${faScore(u.rawPoints ?? 0)} امتیاز`,
+    u.capped
+      ? el('div', { class: 'pb-explain__cap' }, `سقف اداری: ${faScore(u.adminCap ?? 0)} → اعمال‌شده ${faScore(u.appliedPoints ?? 0)}`)
+      : null,
+    el('div', { class: 'pb-explain__items' },
+      ...(usageItems.length ? usageItems : [el('span', { class: 'cell-sub' }, 'فعالیت ثبت‌شده‌ای در این دوره نیست')])));
+
+  // پانوشت — مجموع‌ها + رتبه
+  const totals = el('div', { class: 'pb-explain__totals' },
+    el('div', { class: 'pb-explain__total' }, el('span', { class: 'cell-sub' }, 'مجموع محتوا'), el('b', {}, faScore(t.contentScore ?? 0))),
+    el('div', { class: 'pb-explain__total' }, el('span', { class: 'cell-sub' }, 'استفادهٔ سامانه'), el('b', {}, faScore(t.usagePoints ?? 0))),
+    el('div', { class: 'pb-explain__total pb-explain__total--sum' }, el('span', { class: 'cell-sub' }, 'کل امتیاز'), el('b', {}, faScore(t.total ?? 0))),
+    el('div', { class: 'pb-explain__total' }, el('span', { class: 'cell-sub' }, 'رتبه'), el('b', {}, t.rank ? fa(t.rank) : '—')));
+
+  return el('div', { class: 'pb-explain' },
+    head,
+    exSec,
+    listSec('بسته‌ها', pk, 'title'),
+    listSec('قالب‌ها', tp, 'title'),
+    listSec('فرم‌ها', fm, 'name'),
+    usageSec,
+    totals);
+}
+
+/** مودال جزئیات امتیاز — دریافت تنبل؛ خطا درون مودال نشان داده می‌شود و تابلو سالم می‌ماند */
+function openExplainModal(row, period) {
+  const box = el('div', { class: 'pb-explain' },
+    el('div', { class: 'pb-explain__loading' }, 'در حال دریافت جزئیات امتیاز…'));
+  openModal({
+    title: `جزئیات امتیاز — ${row.fullName}`,
+    wide: true,
+    body: box,
+    actions: [(close) => el('button', { class: 'btn btn--ghost', onclick: close }, 'بستن')]
+  });
+  api.get(`/api/scoring/explain?staffId=${encodeURIComponent(row.staffId)}&period=${encodeURIComponent(period)}`)
+    .then(({ data }) => box.replaceChildren(renderExplain(data ?? {})))
+    .catch((err) => box.replaceChildren(
+      el('div', { class: 'pb-explain__error' },
+        el('b', {}, 'دریافت جزئیات ناموفق بود'),
+        el('span', { class: 'cell-sub' }, err?.message ?? ''))));
 }
 
 /**
@@ -133,7 +265,7 @@ export function renderProgressBoardCard(container) {
       return;
     }
     const board = el('div', { class: 'card card__body--flush pb-board' },
-      data.rows.map((r) => boardRow(r, meId)));
+      data.rows.map((r) => boardRow(r, meId, currentPeriod)));
     const podiumEl = podium(data.rows, meId);
     const updatedAt = `${formatJalaliNumeric(tehranYmdOfIso(data.generatedAt))} — ${fa(String(tehranTimeOfIso(data.generatedAt)))}`;
     // شروع دورهٔ امتیاز (صفرسازی): هر فعالیتی قبل از این تاریخ در تابلو نیست

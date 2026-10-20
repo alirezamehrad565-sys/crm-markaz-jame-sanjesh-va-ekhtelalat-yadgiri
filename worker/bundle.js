@@ -880,44 +880,45 @@ var process_default = _process;
 // node_modules/wrangler/_virtual_unenv_global_polyfill-@cloudflare-unenv-preset-node-process
 globalThis.process = process_default;
 
+// ── scoring v2 (m140) — ضد-اسنپ‌شات نشست D1 (درس 43-A) + حذف ارجاع کلاسی از exerciseRefs
+// + حذف ورود مردهٔ assessment.create + مسیر «شرح امتیاز» فقط-مدیر (/api/scoring/explain)
 var CONTENT_FORMULA = {
   production: [
-    { key: "exercises", weight: 4, label: "\u062A\u0645\u0631\u06CC\u0646" },
-    { key: "packages", weight: 8, label: "\u0628\u0633\u062A\u0647\u0654 \u062A\u0645\u0631\u06CC\u0646\u06CC" },
-    { key: "templates", weight: 8, label: "\u0642\u0627\u0644\u0628 \u0645\u0633\u06CC\u0631" },
-    { key: "forms", weight: 6, label: "\u0641\u0631\u0645 \u062F\u0633\u062A\u200C\u0633\u0627\u0632" }
+    { key: "exercises", weight: 4, label: "\u062a\u0645\u0631\u06cc\u0646" },
+    { key: "packages", weight: 8, label: "\u0628\u0633\u062a\u0647\u0654 \u062a\u0645\u0631\u06cc\u0646\u06cc" },
+    { key: "templates", weight: 8, label: "\u0642\u0627\u0644\u0628 \u0645\u0633\u06cc\u0631" },
+    { key: "forms", weight: 6, label: "\u0641\u0631\u0645 \u062f\u0633\u062a\u200c\u0633\u0627\u0632" }
   ],
   usage: [
-    { key: "exerciseUses", weight: 4, label: "\u0627\u0631\u0633\u0627\u0644 \u062A\u06A9\u0644\u06CC\u0641 \u0627\u0632 \u062A\u0645\u0631\u06CC\u0646" },
-    { key: "templateUses", weight: 8, label: "\u0633\u0627\u062E\u062A \u0645\u0633\u06CC\u0631 \u0627\u0632 \u0642\u0627\u0644\u0628" },
-    { key: "formFills", weight: 3, label: "\u062A\u06A9\u0645\u06CC\u0644 \u0641\u0631\u0645" }
+    { key: "exerciseUses", weight: 4, label: "\u0627\u0631\u0633\u0627\u0644 \u062a\u06a9\u0644\u06cc\u0641 \u0627\u0632 \u062a\u0645\u0631\u06cc\u0646" },
+    { key: "templateUses", weight: 8, label: "\u0633\u0627\u062e\u062a \u0645\u0633\u06cc\u0631 \u0627\u0632 \u0642\u0627\u0644\u0628" },
+    { key: "formFills", weight: 3, label: "\u062a\u06a9\u0645\u06cc\u0644 \u0641\u0631\u0645" }
   ],
   reference: [
-    { key: "exerciseRefs", weight: 20, label: "\u0627\u0633\u062A\u0641\u0627\u062F\u0647\u0654 \u0647\u0645\u06A9\u0627\u0631 \u0627\u0632 \u062A\u0645\u0631\u06CC\u0646" },
-    { key: "templateRefs", weight: 30, label: "\u0633\u0627\u062E\u062A \u0645\u0633\u06CC\u0631 \u062A\u0648\u0633\u0637 \u0647\u0645\u06A9\u0627\u0631" },
-    { key: "formRefs", weight: 14, label: "\u062A\u06A9\u0645\u06CC\u0644 \u0641\u0631\u0645 \u062A\u0648\u0633\u0637 \u0647\u0645\u06A9\u0627\u0631" }
+    { key: "exerciseRefs", weight: 20, label: "\u0627\u0633\u062a\u0641\u0627\u062f\u0647\u0654 \u0647\u0645\u06a9\u0627\u0631 \u0627\u0632 \u062a\u0645\u0631\u06cc\u0646" },
+    { key: "templateRefs", weight: 30, label: "\u0633\u0627\u062e\u062a \u0645\u0633\u06cc\u0631 \u062a\u0648\u0633\u0637 \u0647\u0645\u06a9\u0627\u0631" },
+    { key: "formRefs", weight: 14, label: "\u062a\u06a9\u0645\u06cc\u0644 \u0641\u0631\u0645 \u062a\u0648\u0633\u0637 \u0647\u0645\u06a9\u0627\u0631" }
   ]
 };
 var USAGE_FORMULA = [
-  ["student.create", 1, "\u062A\u0634\u06A9\u06CC\u0644 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632", "\u067E\u0631\u0648\u0646\u062F\u0647"],
-  ["appointment.create", 1, "\u062B\u0628\u062A \u0646\u0648\u0628\u062A", "\u0646\u0648\u0628\u062A\u200C\u062F\u0647\u06CC"],
-  ["appointment.copy_week", 1, "\u06A9\u067E\u06CC \u0647\u0641\u062A\u0647\u0654 \u06A9\u0627\u0631\u06CC", "\u0646\u0648\u0628\u062A\u200C\u062F\u0647\u06CC"],
-  ["session_note.created", 1, "\u062B\u0628\u062A \u06AF\u0632\u0627\u0631\u0634 \u062C\u0644\u0633\u0647", "\u06AF\u0632\u0627\u0631\u0634"],
-  ["case_event.created", 1, "\u062B\u0628\u062A \u0631\u0648\u06CC\u062F\u0627\u062F \u067E\u0631\u0648\u0646\u062F\u0647", "\u06AF\u0632\u0627\u0631\u0634"],
-  ["case_event.finalized", 1, "\u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u0631\u0648\u06CC\u062F\u0627\u062F \u067E\u0631\u0648\u0646\u062F\u0647", "\u06AF\u0632\u0627\u0631\u0634"],
-  ["waitlist.create", 1, "\u062B\u0628\u062A \u0645\u062A\u0642\u0627\u0636\u06CC \u062C\u062F\u06CC\u062F", "\u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631"],
-  ["waitlist.call", 1, "\u067E\u06CC\u06AF\u06CC\u0631\u06CC \u062A\u0645\u0627\u0633 \u0645\u062A\u0642\u0627\u0636\u06CC", "\u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631"],
-  ["waitlist.schedule", 1, "\u0646\u0648\u0628\u062A\u200C\u062F\u0647\u06CC \u0645\u062A\u0642\u0627\u0636\u06CC", "\u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631"],
-  ["waitlist.admitted", 1, "\u067E\u0630\u06CC\u0631\u0634 \u0645\u062A\u0642\u0627\u0636\u06CC", "\u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631"],
-  ["assessment.create", 1, "\u062B\u0628\u062A \u0633\u0646\u062C\u0634", "\u0633\u0646\u062C\u0634"],
-  ["screening.create", 1, "\u062B\u0628\u062A \u063A\u0631\u0628\u0627\u0644 \u0631\u0648\u0632\u0627\u0646\u0647", "\u0633\u0646\u062C\u0634"],
-  ["ot.session.saved", 1, "\u062B\u0628\u062A \u062C\u0644\u0633\u0647\u0654 \u062F\u0631\u0645\u0627\u0646\u06CC", "\u062F\u0631\u0645\u0627\u0646"],
-  ["clinical_path.create", 1, "\u0633\u0627\u062E\u062A \u0645\u0633\u06CC\u0631 \u0628\u0627\u0644\u06CC\u0646\u06CC", "\u062F\u0631\u0645\u0627\u0646"],
-  ["followup.created", 1, "\u0627\u06CC\u062C\u0627\u062F \u067E\u06CC\u06AF\u06CC\u0631\u06CC", "\u067E\u06CC\u06AF\u06CC\u0631\u06CC"],
-  ["todo.completed", 1, "\u0627\u0646\u062C\u0627\u0645 \u06A9\u0627\u0631 \u0648\u0627\u06AF\u0630\u0627\u0631\u0634\u062F\u0647", "\u06A9\u0627\u0631 \u0631\u0648\u0632\u0627\u0646\u0647"],
-  ["attendance.mark", 1, "\u062B\u0628\u062A \u062D\u0636\u0648\u0631 \u0648 \u063A\u06CC\u0627\u0628", "\u06A9\u0627\u0631 \u0631\u0648\u0632\u0627\u0646\u0647"],
-  ["knowledge.create", 1, "\u062B\u0628\u062A \u0645\u062D\u062A\u0648\u0627\u06CC \u062F\u0627\u0646\u0634\u06CC", "\u0645\u062D\u062A\u0648\u0627"],
-  ["announcement.create", 1, "\u0627\u0646\u062A\u0634\u0627\u0631 \u0627\u0639\u0644\u0627\u0646", "\u0645\u062D\u062A\u0648\u0627"]
+  ["student.create", 1, "\u062a\u0634\u06a9\u06cc\u0644 \u067e\u0631\u0648\u0646\u062f\u0647\u0654 \u062f\u0627\u0646\u0634\u200c\u0622\u0645\u0648\u0632", "\u067e\u0631\u0648\u0646\u062f\u0647"],
+  ["appointment.create", 1, "\u062b\u0628\u062a \u0646\u0648\u0628\u062a", "\u0646\u0648\u0628\u062a\u200c\u062f\u0647\u06cc"],
+  ["appointment.copy_week", 1, "\u06a9\u067e\u06cc \u0647\u0641\u062a\u0647\u0654 \u06a9\u0627\u0631\u06cc", "\u0646\u0648\u0628\u062a\u200c\u062f\u0647\u06cc"],
+  ["session_note.created", 1, "\u062b\u0628\u062a \u06af\u0632\u0627\u0631\u0634 \u062c\u0644\u0633\u0647", "\u06af\u0632\u0627\u0631\u0634"],
+  ["case_event.created", 1, "\u062b\u0628\u062a \u0631\u0648\u06cc\u062f\u0627\u062f \u067e\u0631\u0648\u0646\u062f\u0647", "\u06af\u0632\u0627\u0631\u0634"],
+  ["case_event.finalized", 1, "\u062c\u0645\u0639\u200c\u0628\u0646\u062f\u06cc \u0631\u0648\u06cc\u062f\u0627\u062f \u067e\u0631\u0648\u0646\u062f\u0647", "\u06af\u0632\u0627\u0631\u0634"],
+  ["waitlist.create", 1, "\u062b\u0628\u062a \u0645\u062a\u0642\u0627\u0636\u06cc \u062c\u062f\u06cc\u062f", "\u0644\u06cc\u0633\u062a \u0627\u0646\u062a\u0638\u0627\u0631"],
+  ["waitlist.call", 1, "\u067e\u06cc\u06af\u06cc\u0631\u06cc \u062a\u0645\u0627\u0633 \u0645\u062a\u0642\u0627\u0636\u06cc", "\u0644\u06cc\u0633\u062a \u0627\u0646\u062a\u0638\u0627\u0631"],
+  ["waitlist.schedule", 1, "\u0646\u0648\u0628\u062a\u200c\u062f\u0647\u06cc \u0645\u062a\u0642\u0627\u0636\u06cc", "\u0644\u06cc\u0633\u062a \u0627\u0646\u062a\u0638\u0627\u0631"],
+  ["waitlist.admitted", 1, "\u067e\u0630\u06cc\u0631\u0634 \u0645\u062a\u0642\u0627\u0636\u06cc", "\u0644\u06cc\u0633\u062a \u0627\u0646\u062a\u0638\u0627\u0631"],
+  ["screening.create", 1, "\u062b\u0628\u062a \u063a\u0631\u0628\u0627\u0644 \u0631\u0648\u0632\u0627\u0646\u0647", "\u0633\u0646\u062c\u0634"],
+  ["ot.session.saved", 1, "\u062b\u0628\u062a \u062c\u0644\u0633\u0647\u0654 \u062f\u0631\u0645\u0627\u0646\u06cc", "\u062f\u0631\u0645\u0627\u0646"],
+  ["clinical_path.create", 1, "\u0633\u0627\u062e\u062a \u0645\u0633\u06cc\u0631 \u0628\u0627\u0644\u06cc\u0646\u06cc", "\u062f\u0631\u0645\u0627\u0646"],
+  ["followup.created", 1, "\u0627\u06cc\u062c\u0627\u062f \u067e\u06cc\u06af\u06cc\u0631\u06cc", "\u067e\u06cc\u06af\u06cc\u0631\u06cc"],
+  ["todo.completed", 1, "\u0627\u0646\u062c\u0627\u0645 \u06a9\u0627\u0631 \u0648\u0627\u06af\u0630\u0627\u0631\u0634\u062f\u0647", "\u06a9\u0627\u0631 \u0631\u0648\u0632\u0627\u0646\u0647"],
+  ["attendance.mark", 1, "\u062b\u0628\u062a \u062d\u0636\u0648\u0631 \u0648 \u063a\u06cc\u0627\u0628", "\u06a9\u0627\u0631 \u0631\u0648\u0632\u0627\u0646\u0647"],
+  ["knowledge.create", 1, "\u062b\u0628\u062a \u0645\u062d\u062a\u0648\u0627\u06cc \u062f\u0627\u0646\u0634\u06cc", "\u0645\u062d\u062a\u0648\u0627"],
+  ["announcement.create", 1, "\u0627\u0646\u062a\u0634\u0627\u0631 \u0627\u0639\u0644\u0627\u0646", "\u0645\u062d\u062a\u0648\u0627"]
 ];
 var SCORING_EPOCH = "2026-10-14 20:30:00";
 var ADMIN_CAP_ROLES = ["manager", "secretary", "supervisor"];
@@ -978,9 +979,9 @@ function effectiveSince(periodKey, periods = PERIODS, now = /* @__PURE__ */ new 
 }
 __name(effectiveSince, "effectiveSince");
 var PERIODS = {
-  all: { key: "all", label: "\u06A9\u0644 \u062F\u0648\u0631\u0647", sinceIso: null },
-  month: { key: "month", label: "\u06F3\u06F0 \u0631\u0648\u0632 \u0627\u062E\u06CC\u0631", days: 30 },
-  week: { key: "week", label: "\u06F7 \u0631\u0648\u0632 \u0627\u062E\u06CC\u0631", days: 7 }
+  all: { key: "all", label: "\u06a9\u0644 \u062f\u0648\u0631\u0647", sinceIso: null },
+  month: { key: "month", label: "\u06f3\u06f0 \u0631\u0648\u0632 \u0627\u062e\u06cc\u0631", days: 30 },
+  week: { key: "week", label: "\u06f7 \u0631\u0648\u0632 \u0627\u062e\u06cc\u0631", days: 7 }
 };
 function usageWeightMap(formula = USAGE_FORMULA) {
   return new Map(formula.map(([action, weight]) => [action, weight]));
@@ -1028,13 +1029,12 @@ __name(rankRows, "rankRows");
 function periodSinceUtc(periodKey, periods = PERIODS, now = /* @__PURE__ */ new Date()) {
   const p = periods[periodKey];
   if (!p)
-    throw new Error(`\u062F\u0648\u0631\u0647\u0654 \u0646\u0627\u0645\u0639\u062A\u0628\u0631: ${periodKey}`);
+    throw new Error(`\u062f\u0648\u0631\u0647\u0654 \u0646\u0627\u0645\u0639\u062a\u0628\u0631: ${periodKey}`);
   if (p.key === "all")
     return null;
   return new Date(now.getTime() - p.days * 24 * 60 * 60 * 1e3).toISOString().replace("T", " ").slice(0, 19);
 }
 __name(periodSinceUtc, "periodSinceUtc");
-var D1_ACTIONS = USAGE_FORMULA.map(([a]) => a);
 function contentQueries(since) {
   const W = since ? " AND created_at >= ?" : "";
   const P = since ? [since] : [];
@@ -1046,16 +1046,19 @@ function contentQueries(since) {
     q(`SELECT created_by k, COUNT(*) c FROM exercise_packages WHERE deleted_at IS NULL AND created_by IS NOT NULL GROUP BY created_by`),
     q(`SELECT created_by k, COUNT(*) c FROM pathway_templates WHERE active = 1 AND created_by IS NOT NULL GROUP BY created_by`),
     q(`SELECT created_by k, COUNT(*) c FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by IS NOT NULL GROUP BY created_by`),
-    // استفاده از تمرین‌ها
+    // استفاده از تمرین‌ها — ارسال‌های کلاسی هم «استفاده» هستند
     qJoin(`SELECT e.created_by k, COUNT(*) c
          FROM exercise_assignments a JOIN exercises e ON e.id = a.exercise_id
         WHERE e.deleted_at IS NULL AND e.created_by IS NOT NULL AND a.status != 'cancelled'${since ? " AND a.created_at >= ?" : ""}
         GROUP BY e.created_by`),
-    // ارجاع تمرین — مصرف توسط همکار دیگر
+    // ارجاع تمرین — مصرف توسط همکار دیگر؛ — v2: ارسال‌های کلاسی
+    // (assigned_by = 'class:<id>' — معلم مدرسه ردیف staff ندارد) «استفادهٔ همکار»
+    // نیستند → در ارجاع شمرده نمی‌شوند (در استفاده می‌آیند)
     qJoin(`SELECT e.created_by k, COUNT(*) c
          FROM exercise_assignments a JOIN exercises e ON e.id = a.exercise_id
         WHERE e.deleted_at IS NULL AND e.created_by IS NOT NULL AND a.status != 'cancelled'
-          AND a.assigned_by != e.created_by${since ? " AND a.created_at >= ?" : ""}
+          AND a.assigned_by != e.created_by
+          AND (a.assigned_by IS NULL OR a.assigned_by NOT LIKE 'class:%')${since ? " AND a.created_at >= ?" : ""}
         GROUP BY e.created_by`),
     // استفاده از قالب‌ها — مسیر ساخته‌شده از قالب
     qJoin(`SELECT t.created_by k, COUNT(*) c
@@ -1201,7 +1204,7 @@ async function resolveSessionSecret(env3) {
     } catch {
     }
   }
-  throw new Error("sys_auth_secret \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
+  throw new Error("sys_auth_secret \u06cc\u0627\u0641\u062a \u0646\u0634\u062f");
 }
 __name(resolveSessionSecret, "resolveSessionSecret");
 async function requireAuth(request, env3) {
@@ -1213,6 +1216,13 @@ async function requireAuth(request, env3) {
   return verifySessionJwt(token, secret);
 }
 __name(requireAuth, "requireAuth");
+function scoringDb(env3) {
+  if (env3.DB && typeof env3.DB.withSession === "function") {
+    return env3.DB.withSession("first-primary");
+  }
+  return env3.DB;
+}
+__name(scoringDb, "scoringDb");
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -1225,16 +1235,19 @@ async function handleScoring(request, env3) {
   const path = url.pathname;
   const authed = await requireAuth(request, env3).catch(() => null);
   if (!authed) {
-    return json({ error: "UNAUTHORIZED", message: "\u0627\u0628\u062A\u062F\u0627 \u0648\u0627\u0631\u062F \u062D\u0633\u0627\u0628 \u0634\u0648\u06CC\u062F" }, 401);
+    return json({ error: "UNAUTHORIZED", message: "\u0627\u0628\u062a\u062f\u0627 \u0648\u0627\u0631\u062f \u062d\u0633\u0627\u0628 \u0634\u0648\u06cc\u062f" }, 401);
   }
+  // — v2: نشست تازهٔ D1 برای همهٔ خواندن‌ها (ضد-اسنپ‌شات — درس 43-A:
+  // ایزولیت طولانی‌عمر Worker اسنپ‌شات کهنهٔ D1 را می‌خواند؛ first-primary همیشه آخرین نوشته)
+  const db = scoringDb(env3);
   if (path === "/api/scoring/board" && request.method === "GET") {
     const periodKey = url.searchParams.get("period") ?? "all";
     if (!PERIODS[periodKey]) {
-      return json({ error: "VALIDATION_ERROR", message: "\u062F\u0648\u0631\u0647\u0654 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" }, 400);
+      return json({ error: "VALIDATION_ERROR", message: "\u062f\u0648\u0631\u0647\u0654 \u0646\u0627\u0645\u0639\u062a\u0628\u0631 \u0627\u0633\u062a" }, 400);
     }
-    const cfg = await readScoringConfig(env3.DB);
+    const cfg = await readScoringConfig(db);
     const since = effectiveSince(periodKey, PERIODS, /* @__PURE__ */ new Date(), cfg.epoch ?? SCORING_EPOCH);
-    const rows = await computeBoard(env3.DB, since, {
+    const rows = await computeBoard(db, since, {
       contentFormula: effectiveContentFormula(cfg.weights),
       usageFormula: effectiveUsageFormula(cfg.weights),
       adminCap: effectiveAdminCap(cfg.weights)
@@ -1249,7 +1262,123 @@ async function handleScoring(request, env3) {
       }
     });
   }
-  return json({ error: "NOT_FOUND", message: "\u0645\u0633\u06CC\u0631 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u06CC \u06CC\u0627\u0641\u062A \u0646\u0634\u062F" }, 404);
+  // — v2: GET /api/scoring/explain?staffId=<uuid>&period=all|month|week
+  // شرح شفاف امتیاز یک همکار — فقط مدیر مرکز (فرمول برای سایر کارکنان پنهان می‌ماند)
+  if (path === "/api/scoring/explain" && request.method === "GET") {
+    // نقش فراخوان همیشه تازه از DB خوانده می‌شود (نه فقط از توکن)
+    const meRow = await db.prepare(`SELECT id, COALESCE(role_ext, role) AS role FROM staff WHERE id = ? LIMIT 1`).bind(authed.sub).first();
+    if (!meRow) {
+      return json({ error: "UNAUTHORIZED", message: "\u0627\u0628\u062a\u062f\u0627 \u0648\u0627\u0631\u062f \u062d\u0633\u0627\u0628 \u0634\u0648\u06cc\u062f" }, 401);
+    }
+    if (meRow.role !== "manager") {
+      return json({ error: "FORBIDDEN", message: "\u0634\u0631\u062d \u0627\u0645\u062a\u06cc\u0627\u0632 \u0641\u0642\u0637 \u0628\u0631\u0627\u06cc \u0645\u062f\u06cc\u0631 \u0645\u0631\u06a9\u0632 \u0645\u062c\u0627\u0632 \u0627\u0633\u062a" }, 403);
+    }
+    const staffId = url.searchParams.get("staffId") ?? "";
+    if (!staffId) {
+      return json({ error: "VALIDATION_ERROR", message: "staffId \u0627\u0644\u0632\u0627\u0645\u06cc \u0627\u0633\u062a" }, 400);
+    }
+    const periodKey = url.searchParams.get("period") ?? "all";
+    if (!PERIODS[periodKey]) {
+      return json({ error: "VALIDATION_ERROR", message: "\u062f\u0648\u0631\u0647\u0654 \u0646\u0627\u0645\u0639\u062a\u0628\u0631 \u0627\u0633\u062a" }, 400);
+    }
+    const cfg = await readScoringConfig(db);
+    const since = effectiveSince(periodKey, PERIODS, /* @__PURE__ */ new Date(), cfg.epoch ?? SCORING_EPOCH);
+    const contentFormula = effectiveContentFormula(cfg.weights);
+    const usageFormula = effectiveUsageFormula(cfg.weights);
+    const adminCap = effectiveAdminCap(cfg.weights);
+    // تابلو همان دوره — رتبه و امتیازها از همان computeBoard خوانده می‌شود
+    // (تک‌منبع حقیقت: شرح هرگز با تابلو نمی‌خواند)
+    const rows = await computeBoard(db, since, { contentFormula, usageFormula, adminCap });
+    const row = rows.find((r) => r.staffId === staffId);
+    if (!row) {
+      return json({ error: "NOT_FOUND", message: "\u06a9\u0627\u0631\u0645\u0646\u062f \u06cc\u0627\u0641\u062a \u0646\u0634\u062f" }, 404);
+    }
+    // آیتم‌های محتوا per-staff — دقیقاً همان فیلترهای کوئری‌های تابلو
+    // (تا count شرح همیشه با count تابلو یکی باشد)
+    const W = since ? " AND created_at >= ?" : "";
+    const P = since ? [since] : [];
+    const [exerciseItems, packageItems, templateItems, formItems] = await Promise.all([
+      db.prepare(`SELECT id, title, team_created FROM exercises WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all(),
+      db.prepare(`SELECT id, title FROM exercise_packages WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all(),
+      db.prepare(`SELECT key, title FROM pathway_templates WHERE active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all(),
+      db.prepare(`SELECT id, title FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all()
+    ]);
+    const prodW = /* @__PURE__ */ __name((key) => contentFormula.production.find((x) => x.key === key)?.weight ?? 0, "prodW");
+    const exWeight = prodW("exercises");
+    // تمرین: count = شمارش خام؛ weighted = شمارش وزن‌دار تیمی (۰٫۵) — همان عدد تابلو
+    const exerciseList = exerciseItems.results.map((r) => {
+      const teamCreated = r.team_created === 1;
+      return {
+        id: r.id,
+        title: r.title,
+        teamCreated,
+        effectiveWeight: exWeight * (teamCreated ? 0.5 : 1)
+      };
+    });
+    // استفادهٔ سامانه — از usageDetail همان ردیف تابلو + برچسب/وزن فرمول مؤثر
+    const uWeights = usageWeightMap(usageFormula);
+    const uLabels = Object.fromEntries(usageFormula.map(([a, , label]) => [a, label]));
+    const actions = Object.entries(row.usageDetail).map(([action, count]) => ({
+      action,
+      label: uLabels[action] ?? action,
+      count,
+      points: (uWeights.get(action) ?? 0) * count
+    })).sort((a, b) => b.points - a.points || b.count - a.count || a.action.localeCompare(b.action));
+    const rawPoints = actions.reduce((s, a) => s + a.points, 0);
+    const isAdminRole = ADMIN_CAP_ROLES.includes(row.role);
+    return json({
+      data: {
+        period: PERIODS[periodKey].key,
+        periodLabel: PERIODS[periodKey].label,
+        since,
+        generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        staff: { staffId: row.staffId, fullName: row.fullName, role: row.role },
+        content: {
+          exercises: {
+            count: exerciseList.length,
+            weighted: row.content.exercises,
+            weight: exWeight,
+            items: exerciseList
+          },
+          packages: {
+            count: row.content.packages,
+            weight: prodW("packages"),
+            items: packageItems.results.map((r) => ({ id: r.id, title: r.title }))
+          },
+          templates: {
+            count: row.content.templates,
+            weight: prodW("templates"),
+            // — ستون انسانی قالب «title» است؛ شناسهٔ منطقی «key»
+            items: templateItems.results.map((r) => ({ id: r.key, title: r.title }))
+          },
+          forms: {
+            count: row.content.forms,
+            weight: prodW("forms"),
+            // — قرارداد پین‌شده: فیلد «name» (ستون واقعی جدول: title)
+            items: formItems.results.map((r) => ({ id: r.id, name: r.title }))
+          }
+        },
+        usage: {
+          actions,
+          rawPoints,
+          adminCap: isAdminRole ? adminCap : null,
+          capped: row.usageCapped,
+          appliedPoints: row.usagePoints
+        },
+        totals: {
+          contentScore: row.contentScore.total,
+          usagePoints: row.usagePoints,
+          total: row.total,
+          rank: row.rank
+        },
+        config: {
+          epoch: cfg.epoch ?? SCORING_EPOCH,
+          weightsFromSettings: Boolean(cfg.weights)
+        }
+      }
+    });
+  }
+  return json({ error: "NOT_FOUND", message: "\u0645\u0633\u06cc\u0631 \u062f\u0631\u062e\u0648\u0627\u0633\u062a\u06cc \u06cc\u0627\u0641\u062a \u0646\u0634\u062f" }, 404);
 }
 __name(handleScoring, "handleScoring");
 
@@ -3990,8 +4119,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.18";
-var APP_MILESTONE = "m139";
+var APP_VERSION = "1.00.19";
+var APP_MILESTONE = "m140";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -9184,12 +9313,19 @@ var UpdateExerciseSchema = external_exports.object({
   tag_ids: external_exports.array(UuidSchema).max(10, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F0 \u0628\u0631\u0686\u0633\u0628 \u0628\u0631\u0627\u06CC \u0647\u0631 \u062A\u0645\u0631\u06CC\u0646").optional(),
   published: external_exports.boolean().optional(),
   visibility: external_exports.enum(["public", "private"]).optional(),
-  team_created: external_exports.boolean().optional(),
-  owner_staff_id: UuidSchema.nullable().optional()
+  team_created: external_exports.boolean().optional()
+  // — m140: owner_staff_id عمداً حذف شد — PATCH هرگز نباید بتواند created_by را تغییر دهد
+  // (درس 43-A: فرم ویرایشِ کهنه owner_staff_id را دوباره می‌فرستاد و انتساب را برمی‌گرداند)
+  // zod به‌صورت پیش‌فرض کلید ناشناخته را strip می‌کند → حتی اگر کلاینت کهنه بفرستد، نادیده گرفته می‌شود
 }).refine(
-  (v) => v.title !== void 0 || v.description !== void 0 || v.format !== void 0 || v.external_url !== void 0 || v.tag_ids !== void 0 || v.published !== void 0 || v.visibility !== void 0 || v.team_created !== void 0 || v.owner_staff_id !== void 0,
+  (v) => v.title !== void 0 || v.description !== void 0 || v.format !== void 0 || v.external_url !== void 0 || v.tag_ids !== void 0 || v.published !== void 0 || v.visibility !== void 0 || v.team_created !== void 0,
   { message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u06CC\u0644\u062F \u0628\u0631\u0627\u06CC \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" }
 );
+// — m140: انتقال مالکیت تمرین فقط از مسیر اختصاصی مدیر (POST /api/exercises/:id/reassign)
+var ReassignExerciseSchema = external_exports.object({
+  staffId: UuidSchema,
+  reason: external_exports.string().trim().max(500, "\u062F\u0644\u06CC\u0644 \u0627\u0646\u062A\u0642\u0627\u0644 \u0628\u06CC\u0634 \u0627\u0632 \u06F5\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional()
+});
 var ReplaceExerciseFileSchema = external_exports.object({
   filename: external_exports.string().trim().min(1, "\u0646\u0627\u0645 \u0641\u0627\u06CC\u0644 \u0627\u0644\u0632\u0627\u0645\u06CC \u0627\u0633\u062A").max(200, "\u0646\u0627\u0645 \u0641\u0627\u06CC\u0644 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
   mime_type: external_exports.string().trim().min(3, "\u0646\u0648\u0639 \u0641\u0627\u06CC\u0644 \u0627\u0644\u0632\u0627\u0645\u06CC \u0627\u0633\u062A").max(120),
@@ -19021,15 +19157,9 @@ function createExerciseBankService(deps) {
       if ((visibility !== null || teamCreated !== null) && actor.role !== "manager" && row.created_by !== actor.staffId) {
         throw new ForbiddenError("\u062A\u0646\u0647\u0627 \u0633\u0627\u0632\u0646\u062F\u0647\u0654 \u062A\u0645\u0631\u06CC\u0646 \u06CC\u0627 \u0645\u062F\u06CC\u0631 \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u062F\u06CC\u062F \u06CC\u0627 \u062A\u06CC\u0645\u200C\u0628\u0648\u062F\u0646 \u0622\u0646 \u0631\u0627 \u062A\u063A\u06CC\u06CC\u0631 \u062F\u0647\u062F");
       }
-      let newOwner = null;
-      if (input.ownerStaffId) {
-        if (actor.role !== "manager")
-          throw new ForbiddenError("\u062A\u063A\u06CC\u06CC\u0631 \u0633\u0627\u0632\u0646\u062F\u0647\u0654 \u062A\u0645\u0631\u06CC\u0646 \u0641\u0642\u0637 \u062A\u0648\u0633\u0637 \u0645\u062F\u06CC\u0631 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
-        const ownerRow = await db.queryOne(`SELECT id FROM staff WHERE id = ? AND active = 1`, [input.ownerStaffId]);
-        if (!ownerRow)
-          throw new NotFoundError("\u06A9\u0627\u0631\u0645\u0646\u062F");
-        newOwner = input.ownerStaffId;
-      }
+      // — m140: ویرایش ساده هرگز مالکیت (created_by) را تغییر نمی‌دهد — درس 43-A:
+      // فرم ویرایش کهنه owner_staff_id قدیمی را دوباره می‌فرستاد و انتساب مدیر را بی‌صدا برمی‌گرداند.
+      // انتقال مالکیت فقط از مسیر اختصاصی reassign (پایین) ممکن است.
       await db.transaction(async (tx) => {
         await tx.execute(
           `UPDATE exercises
@@ -19040,7 +19170,6 @@ function createExerciseBankService(deps) {
                   external_url = CASE WHEN ? THEN ? ELSE external_url END,
                   visibility = COALESCE(?, visibility),
                   team_created = COALESCE(?, team_created),
-                  created_by = COALESCE(?, created_by),
                   updated_at = datetime('now')
             WHERE id = ?`,
           [
@@ -19053,7 +19182,6 @@ function createExerciseBankService(deps) {
             input.externalUrl !== void 0 ? input.externalUrl?.trim() ? input.externalUrl.trim() : null : null,
             visibility,
             teamCreated,
-            newOwner,
             id
           ]
         );
@@ -19072,19 +19200,43 @@ function createExerciseBankService(deps) {
             ...teamCreated !== null ? { teamCreated: { from: row.team_created === 1, to: teamCreated === 1 } } : {}
           }
         });
-        if (newOwner && newOwner !== row.created_by) {
-          await audit.logInTransaction(tx, {
-            actorId: actor.staffId,
-            action: "exercise.reassigned",
-            resourceType: "exercise",
-            resourceId: id,
-            changes: { createdBy: { from: row.created_by, to: newOwner } }
-          });
-        }
       });
-      log32.info("exercise.updated", { id, reassigned: newOwner ?? null });
+      log32.info("exercise.updated", { id });
       const updated = await this.getById(id);
       return updated;
+    },
+    // — m140: انتقال مالکیت تمرین — فقط مدیر؛ مسیر اختصاصی با audit «exercise.reassigned»
+    // (ویرایش ساده دیگر نمی‌تواند created_by را تغییر دهد — audit بازگشت‌های ۴۳-A)
+    async reassign(id, staffId, reason, actor) {
+      assertStaffRole(actor);
+      if (actor.role !== "manager")
+        throw new ForbiddenError("\u062A\u063A\u06CC\u06CC\u0631 \u0633\u0627\u0632\u0646\u062F\u0647\u0654 \u062A\u0645\u0631\u06CC\u0646 \u0641\u0642\u0637 \u062A\u0648\u0633\u0637 \u0645\u062F\u06CC\u0631 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
+      const row = await getExerciseRow(id);
+      if (!row)
+        throw new NotFoundError("\u062A\u0645\u0631\u06CC\u0646");
+      const ownerRow = await db.queryOne(`SELECT id FROM staff WHERE id = ? AND active = 1`, [staffId]);
+      if (!ownerRow)
+        throw new NotFoundError("\u06A9\u0627\u0631\u0645\u0646\u062F");
+      if (staffId === row.created_by) {
+        const current = await this.getById(id);
+        return { record: current, unchanged: true };
+      }
+      await db.transaction(async (tx) => {
+        await tx.execute(`UPDATE exercises SET created_by = ?, updated_at = datetime('now') WHERE id = ?`, [staffId, id]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "exercise.reassigned",
+          resourceType: "exercise",
+          resourceId: id,
+          changes: {
+            createdBy: { from: row.created_by, to: staffId },
+            ...reason ? { reason: { from: null, to: reason } } : {}
+          }
+        });
+      });
+      log32.info("exercise.reassigned", { id, from: row.created_by, to: staffId });
+      const updated = await this.getById(id);
+      return { record: updated, unchanged: false };
     },
     async softDelete(id, actor) {
       assertStaffRole(actor);
@@ -20619,12 +20771,19 @@ function registerExerciseBankRoutes(app, service) {
         tagIds: body.tag_ids,
         published: body.published,
         visibility: body.visibility,
-        teamCreated: body.team_created,
-        ownerStaffId: body.owner_staff_id
+        teamCreated: body.team_created
+        // — m140: owner_staff_id حذف شد — ویرایش ساده مالکیت را تغییر نمی‌دهد
       },
       actor
     );
     return c.json({ data: updated }, 200);
+  });
+  // — m140: انتقال مالکیت تمرین — فقط مدیر؛ پاسخ بدون تغییر: { data } ، بدون‌عمل: { data, unchanged: true }
+  app.post("/api/exercises/:id/reassign", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = ReassignExerciseSchema.parse(await c.req.json());
+    const result = await service.reassign(UuidSchema.parse(c.req.param("id")), body.staffId, body.reason, actor);
+    return result.unchanged ? c.json({ data: result.record, unchanged: true }, 200) : c.json({ data: result.record }, 200);
   });
   app.delete("/api/exercises/:id", requireRole("manager", "therapist", "secretary"), async (c) => {
     const actor = getAuthContext(c);
@@ -34327,11 +34486,7 @@ function registerRoutes7(app, service) {
     const data = await service.getScreeningGoal();
     return c.json({ data }, 200);
   });
-  app.get("/api/dashboard/leaderboard", async (c) => {
-    const actor = getAuthContext(c);
-    const data = await service.getScoreboard(actor.staffId);
-    return c.json({ data }, 200);
-  });
+  // — m140: GET /api/dashboard/leaderboard حذف شد — مسیر مرده بود (تابلوی پیشرفت زنده = /api/scoring/board)
   app.get("/api/dashboard/me", async (c) => {
     const actor = getAuthContext(c);
     const data = await service.getMyStats(actor.staffId);
@@ -41222,9 +41377,10 @@ function createReportService(deps) {
         scheduled: schedRows.length,
         avgDays: avgWaitDaysOf(schedRows.map((r) => ({ createdAt: r.wl_created, admittedAt: r.appt_created })))
       };
+      // — m140: شمارش تمرین وزن‌دار تیمی است (team_created=1 → ۰٫۵) — هم‌سو با تابلوی امتیاز
       const practicalRow = await db.queryOne(
         `SELECT
-           (SELECT COUNT(*) FROM exercises WHERE deleted_at IS NULL AND created_at >= ? AND created_at <= ?) AS exercises,
+           (SELECT SUM(CASE WHEN team_created = 1 THEN 0.5 ELSE 1 END) FROM exercises WHERE deleted_at IS NULL AND created_at >= ? AND created_at <= ?) AS exercises,
            (SELECT COUNT(*) FROM exercise_packages WHERE deleted_at IS NULL AND created_at >= ? AND created_at <= ?) AS packages,
            (SELECT COUNT(*) FROM pathway_templates WHERE active = 1 AND created_at >= ? AND created_at <= ?) AS templates,
            (SELECT COUNT(*) FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_at >= ? AND created_at <= ?) AS forms`,

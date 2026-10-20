@@ -944,19 +944,104 @@ export function renderExercises(container) {
     );
     const teamChk = el('input', { type: 'checkbox' });
     if (ex.teamCreated) teamChk.checked = true;
-    // — انتخابگر سازنده فقط برای مدیر (انتقال مالکیت)
-    // m139: پیش‌فرض همیشه «بدون تغییر» است — سازندهٔ فعلی از پیش انتخاب نمی‌شود
-    // تا هر ذخیرهٔ سادهٔ فرم، مالکیت را بی‌صدا به کسی منتقل نکند (باگ ۱۳:۴۱).
+    // — سازنده (m140): در ویرایش فقط «نمایشِ فقط-خواندنی» است؛ انتخابگر سازنده حذف شد.
+    //   ریشهٔ باگ بازگشت انتساب (۱۳:۴۱ و ۱۴:۲۵ روز ۲۰ اکتبر): فرم ویرایش owner_staff_id
+    //   از-پیش-پرشدهٔ ردیف را در هر ذخیره دوباره می‌فرستاد — حتی با پیش‌فرض m139،
+    //   کشِ کهنهٔ JS روی مرورگر مدیر همان بازگشت را تکرار کرد. حالا:
+    //   ۱) مالکیت دیگر از مسیر ویرایش تغییر نمی‌کند (سرور هم این کلیدها را از PATCH می‌ریزد)
+    //   ۲) انتقال فقط با اکشن صریح مدیر روی POST /api/exercises/:id/reassign انجام می‌شود
     const isManager = session.user?.role === 'manager';
     const currentOwnerName = staffList.find((s) => s.id === ex.createdBy)?.fullName ?? 'نامشخص';
-    const ownerSel = isManager
-      ? el(
-          'select',
-          { class: 'select' },
-          el('option', { value: '', selected: 'selected' }, '— بدون تغییر سازنده —'),
-          ...staffList.map((s) => el('option', { value: s.id }, s.fullName))
-        )
-      : null;
+    const creatorChip = el(
+      'span',
+      { class: `staff-chip exb-owner ${hueClass(ex.createdBy)}`, title: `سازندهٔ فعلی: ${currentOwnerName}` },
+      hueDot(ex.createdBy, 9),
+      `سازندهٔ فعلی: ${currentOwnerName}`
+    );
+    // — انتقال مالکیت (فقط مدیر): دکمهٔ کوچک + پنل تأیید درون‌مودالی (بدون مودال تودرتو)
+    let closeEdit = null;
+    let reassignToggle = null;
+    let reassignPanel = null;
+    if (isManager) {
+      const targets = staffList.filter(
+        (s) => s.id !== ex.createdBy && (s.active === undefined || s.active === 1 || s.active === true)
+      );
+      const reSel = el(
+        'select',
+        { class: 'select' },
+        ...targets.map((s) => el('option', { value: s.id }, s.fullName))
+      );
+      const reReason = el('input', {
+        class: 'input',
+        maxlength: 200,
+        placeholder: 'دلیل انتقال (اختیاری — در تاریخ حسابرسی ثبت می‌شود)'
+      });
+      const reConfirm = el('button', { class: 'btn btn--primary btn--sm', type: 'button' }, 'ثبت انتقال مالکیت');
+      reConfirm.addEventListener('click', async () => {
+        if (!reSel.value) {
+          toast('اول همکار مقصد را انتخاب کنید', 'warning');
+          reSel.focus();
+          return;
+        }
+        reConfirm.disabled = true;
+        try {
+          const res = await api.post(`/api/exercises/${ex.id}/reassign`, {
+            staffId: reSel.value,
+            reason: reReason.value.trim() || undefined
+          });
+          if (res?.unchanged === true) {
+            // سرور: سازندهٔ فعلی همان مقصد است — هیچ تغییری نکرد
+            toast('سازندهٔ تمرین از قبل همین شخص است', 'info');
+            reassignPanel.hidden = true;
+            return;
+          }
+          toast(`مالکیت تمرین به ${staffNames.get(reSel.value) ?? reSel.value} منتقل شد`, 'success');
+          closeEdit?.();
+          reloadAll();
+        } catch (err) {
+          // ۴۰۳ (غیرمدیر) / ۴۰۴ (تمرین یا همکار ناموجود) / خطای دیگر — پیام سرور نمایش داده می‌شود
+          toastError(err);
+        } finally {
+          reConfirm.disabled = false;
+        }
+      });
+      reassignToggle = el(
+        'button',
+        {
+          class: 'btn btn--ghost btn--sm',
+          type: 'button',
+          'aria-expanded': 'false',
+          onclick: () => {
+            const willOpen = reassignPanel.hidden;
+            reassignPanel.hidden = !willOpen;
+            reassignToggle.setAttribute('aria-expanded', String(willOpen));
+            if (willOpen && reSel.value === '') reSel.focus();
+          }
+        },
+        icon('users', 14),
+        'انتقال مالکیت به همکار…'
+      );
+      reassignPanel = el(
+        'div',
+        { class: 'exb-reassign', hidden: true },
+        targets.length > 0
+          ? [
+              el(
+                'div',
+                { class: 'exb-reassign__row' },
+                el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'همکار مقصد'), reSel),
+                el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'دلیل (اختیاری)'), reReason)
+              ),
+              el(
+                'div',
+                { class: 'exb-reassign__act' },
+                reConfirm,
+                el('span', { class: 'cell-sub' }, 'امتیاز تولید محتوا از این پس به نام همکار مقصد ثبت می‌شود')
+              )
+            ]
+          : [el('span', { class: 'cell-sub' }, 'همکار فعالی برای انتقال مالکیت وجود ندارد')]
+      );
+    }
     const tagPicker = buildTagPicker(tags, selected);
 
     const bodyEl = el(
@@ -968,9 +1053,13 @@ export function renderExercises(container) {
       canOwn ? el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'دید'), visSel) : null,
       canOwn ? el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'امتیازسازی'),
         el('label', { class: 'exb-check' }, teamChk, el('span', {}, 'ساختهٔ تیمی — امتیاز نصف'))) : null,
-      ownerSel ? el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'سازندهٔ تمرین (انتقال مالکیت — مدیر)'), ownerSel,
+      // — سازندهٔ فعلی (m140): فقط نمایش + دکمهٔ انتقال مالکیت برای مدیر
+      el('div', { class: 'field span-2' },
+        el('label', { class: 'field__label' }, 'سازندهٔ تمرین'),
+        el('div', { class: 'exb-ownerfield__row' }, creatorChip, reassignToggle),
+        reassignPanel,
         el('div', { class: 'cell-sub', style: { marginTop: '4px' } },
-          `سازندهٔ فعلی: ${currentOwnerName} — امتیاز تولید محتوا به نام او ثبت می‌شود؛ برای انتقال، صریحاً نام دیگری را انتخاب کنید.`)) : null,
+          `امتیاز تولید محتوا به نام ${currentOwnerName} ثبت می‌شود — ویرایش عادی مالکیت را تغییر نمی‌دهد`)),
       el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'لینک بازی/تمرین آنلاین (اختیاری)'), link,
         el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'لینک بازی روی سرویس بیرونی — در پیام بلهٔ خانواده و پروفایل با دکمهٔ بازی باز می‌شود — برای خالی‌کردن، خالی بگذارید')),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'توضیح برای خانواده'), desc),
@@ -979,7 +1068,8 @@ export function renderExercises(container) {
 
     openModal({
       title: 'ویرایش تمرین',
-      body: bodyEl,
+      // — body به‌صورت تابع: close مودال برای بستنِ پس از انتقال موفق مالکیت نگه داشته می‌شود
+      body: (close) => { closeEdit = close; return bodyEl; },
       wide: true,
       actions: [
         (close) => el('button', { class: 'btn btn--ghost', onclick: close }, 'انصراف'),
@@ -1008,10 +1098,8 @@ export function renderExercises(container) {
                     patch.visibility = visSel.value;
                     patch.team_created = teamChk.checked;
                   }
-                  // انتقال مالکیت فقط مدیر — فقط با انتخاب صریح (پیش‌فرض: بدون تغییر — m139)
-                  if (ownerSel && ownerSel.value) {
-                    patch.owner_staff_id = ownerSel.value;
-                  }
+                  // m140: هیچ کلید مالکیت‌حمل (owner_staff_id/created_by) در PATCH فرستاده نمی‌شود —
+                  // مالکیت فقط با POST /api/exercises/:id/reassign تغییر می‌کند
                   await api.patch(`/api/exercises/${ex.id}`, patch);
                   toast('تمرین به‌روزرسانی شد', 'success');
                   close();

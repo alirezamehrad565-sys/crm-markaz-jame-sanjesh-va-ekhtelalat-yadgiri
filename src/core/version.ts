@@ -10,7 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** نسخهٔ فعلی سامانه — با package.json و index.html هم‌قدم نگه داشته می‌شود */
-export const APP_VERSION = '1.00.18';
+export const APP_VERSION = '1.00.19';
 
 /** شمارهٔ ماژول (milestone) متناظر با این نسخه — برای لاگ و پشتیبانی */
-export const APP_MILESTONE = 'm139';
+export const APP_MILESTONE = 'm140';

@@ -128,6 +128,7 @@ export function createReportService(deps: ReportDeps): ReportService {
       };
 
       // ─── نمرهٔ مشارکت عملی تیم: تولید محتوا در بازه (وزن‌ها از scoring.js) ───
+      // — m140: شمارش تمرین وزن‌دار تیمی است (team_created=1 → ۰٫۵) — هم‌سو با تابلوی امتیاز
       const practicalRow = await db.queryOne<{
         exercises: number;
         packages: number;
@@ -135,7 +136,7 @@ export function createReportService(deps: ReportDeps): ReportService {
         forms: number;
       }>(
         `SELECT
-           (SELECT COUNT(*) FROM exercises WHERE deleted_at IS NULL AND created_at >= ? AND created_at <= ?) AS exercises,
+           (SELECT SUM(CASE WHEN team_created = 1 THEN 0.5 ELSE 1 END) FROM exercises WHERE deleted_at IS NULL AND created_at >= ? AND created_at <= ?) AS exercises,
            (SELECT COUNT(*) FROM exercise_packages WHERE deleted_at IS NULL AND created_at >= ? AND created_at <= ?) AS packages,
            (SELECT COUNT(*) FROM pathway_templates WHERE active = 1 AND created_at >= ? AND created_at <= ?) AS templates,
            (SELECT COUNT(*) FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_at >= ? AND created_at <= ?) AS forms`,
