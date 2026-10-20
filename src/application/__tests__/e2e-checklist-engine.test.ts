@@ -12,7 +12,6 @@ import { createTestApp, asRole, createStudent } from '../../test/harness';
 import { renderTemplate } from '@core/notify';
 
 const ADHD_TAG = 'aaaaaaaa-0000-4000-8000-000000000004';
-const ANXIETY_TAG = 'aaaaaaaa-0000-4000-8000-000000000007';
 
 function dataOf<T>(res: { body: unknown }): T {
   return (res.body as { data: T }).data;
@@ -35,7 +34,7 @@ interface PendingRow {
 }
 
 describe('کتابخانهٔ سنجش آماده (seed مهاجرت)', () => {
-  it('قالب‌های استاندارد با مخاطب و برچسب seed شده‌اند — کانرز از غیرفعال (جایگزین: SNAP-IV)', async () => {
+  it('قالب‌های استاندارد با مخاطب و برچسب seed شده‌اند — کانرز، اخنباخ کاربردی و چک‌لیست کلاس از غیرفعال (جایگزین: SNAP-IV و SDQ)', async () => {
     const A = createTestApp();
     const m = await asRole(A, 'manager');
     const types = dataOf<Array<{ key: string; title: string; audience: string; tags: string[]; category: string }>>(
@@ -51,9 +50,9 @@ describe('کتابخانهٔ سنجش آماده (seed مهاجرت)', () => {
     expect(byKey['ce-snap-iv-p-v1']).toBeTruthy();
     expect(byKey['ce-snap-iv-p-v1'].audience).toBe('family');
     expect(byKey['ce-snap-iv-p-v1'].tags).toContain(ADHD_TAG);
-    expect(byKey['achenbach-practical'].tags).toContain(ANXIETY_TAG);
-    expect(byKey['teacher-classroom']).toBeTruthy();
-    expect(byKey['teacher-classroom'].audience).toBe('teacher');
+    // اخنباخ کاربردی و چک‌لیست کلاس در m132 غیرفعال شدند (فرم‌های موازی SDQ والد/معلم — فقط یک ابزار استاندارد برای هر منبع)
+    expect(byKey['achenbach-practical']).toBeUndefined();
+    expect(byKey['teacher-classroom']).toBeUndefined();
   });
 });
 
