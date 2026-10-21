@@ -17,6 +17,7 @@ import { pathwayChip, canEditPathway, openPathwayModal } from '../session-type.j
 import { openEducationHistory } from '../archive-form.js'; // — تاریخچهٔ تحصیلی
 import { openStudentForm } from '../student-form.js'; // — فرم مشترک ویرایش (کد ملی/مسئول/مسیر) — جایگزین فرم قدیمی داخلی
 import { openBotLinkModal } from '../bot-link.js'; // — لینک احراز خودکار بات
+import { renderDocsQuickCard } from '../document-requests.js'; // — m151: درخواست مدارک با بله + کارت مدارک دریافتی
 
 // — گارد و مودال مسیر پرونده به session-type.js منتقل شد (مصرف مشترک با تب تفسیر)
 
@@ -217,12 +218,17 @@ export async function renderStudentProfile(container, ctx) {
     'info'
   );
 
+  // — m151 — کارت «مدارک دریافتی از بله» (پنل دسترسی سریع پرونده)
+  const docsMount = el('div', { style: { marginTop: 'var(--sp-4)' } });
+  renderDocsQuickCard(docsMount, student, { onChanged: () => renderStudentProfile(container, ctx) });
+
   container.replaceChildren(
     el('div', { class: 'page-head' },
       el('div', { class: 'page-head__title' }, 'پروفایل دانش‌آموز'),
       el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { location.hash = '#/students'; } }, icon('chevR', 16), 'بازگشت به فهرست')
     ),
     statusCard,
+    docsMount,
     el('div', { style: { marginTop: 'var(--sp-4)' } }, tabBar.root),
     el('div', { style: { marginTop: 'var(--sp-4)' } }, content)
   );

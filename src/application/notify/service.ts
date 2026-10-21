@@ -101,6 +101,7 @@ import { createAwarenessBot } from './awareness-bot';
 import type { AwarenessBot, AwBotReply } from './awareness-bot';
 import type { AwSection } from '@core/notify';
 import type { ExerciseBankService } from '@domain/exercise-bank';
+import type { DocumentRequestService } from '@domain/document-requests';
 import type { MediaFetcher, BotMedia } from '@core/notify';
 
 export interface NotifyAppDeps {
@@ -125,6 +126,8 @@ export interface NotifyAppDeps {
   clinicName?: string;
   /** — بانک تمرین (در نبود آن، دستورهای exb پاسخ «غیرفعال» می‌دهند) */
   exerciseBank?: ExerciseBankService | null;
+  /** — m151 مدارک بله (در نبود آن، رسانهٔ خانواده مستقیم به جریان تکلیف می‌رود) */
+  documentRequests?: DocumentRequestService | null;
   /** — آدرس عمومی برای لینک دانلود کاربرگ در پیام خانواده */
   publicBaseUrl?: string | null;
   /** — دریافت رسانه از بله برای حلقهٔ بازگشت (بدون توکن بله null) */
@@ -1264,6 +1267,12 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
 
         // ───: حلقهٔ بازگشت فایل — رسانهٔ خانواده + انتخاب تکلیف ───
         case 'media_received': {
+          // ─── m151 مدارک بله: چت متصل با درخواست باز → پیوست به پرونده؛
+          // وگرنه null → جریان‌های فعلی (بازگشت تکلیف) بدون تغییر ادامه می‌دهند
+          if (deps.documentRequests) {
+            const docOut = await deps.documentRequests.tryHandleMedia(cmd.chatId, cmd.media, cmd.caption);
+            if (docOut) return { handled: true, reply: docOut.text, buttons: docOut.buttons };
+          }
           if (!subBot) {
             return {
               handled: true,

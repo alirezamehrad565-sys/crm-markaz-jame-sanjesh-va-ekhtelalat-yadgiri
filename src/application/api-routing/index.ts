@@ -43,6 +43,8 @@ import { createTodosService, registerTodoRoutes } from '@domain/todos';
 import type { TodosService } from '@domain/todos';
 import { createExerciseBankService, registerExerciseBankRoutes } from '@domain/exercise-bank';
 import type { ExerciseBankService } from '@domain/exercise-bank';
+import { createDocumentRequestService, registerRoutes as documentRequestRoutes } from '@domain/document-requests';
+import type { DocumentRequestService } from '@domain/document-requests';
 import { createCaseEventsService, registerCaseEventsRoutes, registerCaseEventPublicRoutes } from '@domain/case-events';
 import type { CaseEventsService } from '@domain/case-events';
 import { createClinicalEngineService, registerClinicalEngineRoutes } from '@domain/clinical-engine';
@@ -132,6 +134,7 @@ export interface Services {
   sessionNotes: SessionNotesService;
   todos: TodosService;
   exerciseBank: ExerciseBankService;
+  documentRequests: DocumentRequestService;
   caseEvents: CaseEventsService;
   clinicalEngine: ClinicalEngineService;
   otEngine: OtEngineService;
@@ -241,6 +244,24 @@ export function createServices(deps: AppDeps): Services {
   // کانال internal همیشه هست — dev بدون توکن بله هم dispatch سبز می‌ماند
   notifyCore.registerChannel(createInternalChannel(logger));
 
+  // ─── m151 — مدارک بله: همان انبار فایل بانک تمرین + همان حلقهٔ رسانهٔ بله ───
+  // بعد از notifyCore (صف اعلان پیام درخواست) و settings (نام مرکز)
+  const docMediaFetcher: MediaFetcher | null =
+    deps.mediaFetcher !== undefined
+      ? deps.mediaFetcher
+      : deps.baleToken
+        ? createBaleMediaFetcher({ token: deps.baleToken })
+        : null;
+  const documentRequests = createDocumentRequestService({
+    db,
+    audit,
+    logger,
+    storage: exerciseStorage,
+    mediaFetcher: docMediaFetcher,
+    notify: notifyCore,
+    settings
+  });
+
   const notify = createNotifyAppService({
     db,
     audit,
@@ -254,6 +275,7 @@ export function createServices(deps: AppDeps): Services {
     webhookSecret: deps.webhookSecret ?? null,
     clinicName: deps.clinicName,
     exerciseBank,
+    documentRequests,
     publicBaseUrl: deps.publicBaseUrl ?? null,
     // رویدادهای پرونده (ویزارد بات + چک‌لیست خانواده)
     caseEvents,
@@ -376,7 +398,7 @@ export function createServices(deps: AppDeps): Services {
   // ─── موتور فلو دوفازی شناسایی→مداخله + چک‌لیست ۷ حیطه‌ای کاردرمانی ذهنی ───
   const otEngine = createOtEngineService({ db, audit, logger });
 
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, reports, waitlist, followups, sessionNotes, todos, exerciseBank, caseEvents, clinicalEngine, otEngine };
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine };
 }
 
 export function createApp(deps: AppDeps): AppHono {
@@ -503,6 +525,9 @@ export function createApp(deps: AppDeps): AppHono {
 
   // ─── بانک تمرین + حلقهٔ تکلیف ───
   registerExerciseBankRoutes(app, services.exerciseBank);
+
+  // ─── m151 — مدارک بله (درخواست مدارک + پنل دریافتی‌ها) ───
+  documentRequestRoutes(app, services.documentRequests);
 
   // ─── رویدادهای پرونده (فرم‌ساز + رویدادها) + وب‌فرم خانواده ───
   registerCaseEventsRoutes(app, services.caseEvents);
