@@ -77,7 +77,7 @@ describe('/ — گیت‌های شناسایی و RBAC', () => {
     expect(body.protocol).toBeNull();
     expect(body.gates).toHaveLength(5);
     expect(body.gates.every((g) => !g.done)).toBe(true);
-    expect(body.gates.map((g) => g.key)).toEqual(['anamnesis', 'behavioral', 'wechsler', 'skills', 'needs']);
+    expect(body.gates.map((g) => g.key)).toEqual(['anamnesis', 'wechsler', 'behavioral', 'skills', 'needs']); // T3 (m147) — وکسلر یک خانه عقب در مسیر استاندارد
     expect(body.otCoverage.total).toBe(83); // — فقط primary (۸۴ − ۱ مکمل دکمه/زیپ)
     expect(body.otCoverage.scored).toBe(0);
     expect(body.otCoverage.domainsMin3).toBe(0);
@@ -129,6 +129,23 @@ describe('/ — گیت‌های شناسایی و RBAC', () => {
       [crypto.randomUUID(), typeRow!.id, studentId, iso]
     );
     const gates = dataOf<GatesBody>(await ali.get(`/api/students/${studentId}/clinical-gates`));
+    const anam = gates.gates.find((g) => g.key === 'anamnesis')!;
+    expect(anam.done).toBe(true);
+    expect(anam.detail).toBe('ثبت شده');
+  });
+
+  it('T4 (m148) — ثبت شرح‌حال نسخهٔ ۳ → گیت شرح‌حال سبز می‌شود (فرم فعال ورودی جدید)', async () => {
+    const fresh = await createStudent(ali);
+    const v2Row = await A.db.queryOne<{ id: string; active: number }>(`SELECT id, active FROM case_event_types WHERE key = 'ce-anamnesis-v2'`);
+    const v3Row = await A.db.queryOne<{ id: string; active: number }>(`SELECT id, active FROM case_event_types WHERE key = 'ce-anamnesis-v3'`);
+    expect(v2Row!.active).toBe(0); // — نسخهٔ ۲ برای ورودی جدید غیرفعال (پرونده‌های قدیمی دست‌نخورده)
+    expect(v3Row!.active).toBe(1);
+    await A.db.execute(
+      `INSERT INTO case_events (id, event_type_id, student_id, occurred_at, status, payload, summary, created_by)
+       VALUES (?, ?, ?, ?, 'completed', '{}', 'شرح‌حال v3', 'e2e')`,
+      [crypto.randomUUID(), v3Row!.id, fresh.id, new Date().toISOString()]
+    );
+    const gates = dataOf<GatesBody>(await ali.get(`/api/students/${fresh.id}/clinical-gates`));
     const anam = gates.gates.find((g) => g.key === 'anamnesis')!;
     expect(anam.done).toBe(true);
     expect(anam.detail).toBe('ثبت شده');

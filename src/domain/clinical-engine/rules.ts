@@ -8,6 +8,8 @@
 import type { RuleSet } from './types';
 
 /** وزن استاندارد شواهد (پلن §۵ گام ۲) */
+// T4 (m148): کلید قواعد شرح‌حال عمداً v2 می‌ماند (دادهٔ قاعده ثابت) — حل شواهد در infer.ts
+// نسخهٔ ۳ را ترجیح می‌دهد و بی‌نسخهٔ ۳ به هیوریستیک دقیق v2 فال‌بک می‌کند.
 export const EVIDENCE_WEIGHTS = {
   probeDanger: 2,
   instrumentDanger: 2,

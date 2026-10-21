@@ -16,7 +16,7 @@ import { DSM_RECORDS } from '../dsm-criteria';
 import { RULES, rulesOf, CONFIDENCE_THRESHOLDS, ODD_MIN_FULL_CRITERIA, BIF_IQ_RANGE } from '../rules';
 import { BATTERY_VERSION } from '../types';
 import type { EvidenceEvent } from '../types';
-import { CaseEventTypeInputSchema, validateTypeDefinition, resolveBandV2, FIELDS_MAX } from '@domain/case-events/pure';
+import { CaseEventTypeInputSchema, validateTypeDefinition, resolveBandV2, FIELDS_MAX, packageComponentsOf, COMPOSITE_FAMILY_COMPONENTS } from '@domain/case-events/pure';
 import type { CaseEventBand, CaseEventSubscale } from '@domain/case-events';
 
 // ابزارهای استاندارد موجود در DB (قبل از ) — قواعد به آن‌ها هم ارجاع می‌دهند
@@ -27,10 +27,10 @@ const EXISTING_TOOLS = new Set([
 ]);
 
 describe('باتری battery-v1 — اعتبار ساختاری', () => {
-  it('۱۵ ابزار ثابت دارد و کلیدها یکتا هستند', () => {
+  it('۱۹ ابزار ثابت دارد و کلیدها یکتا هستند (T4: شرح‌حال نسخهٔ ۳ کنار نسخهٔ ۲ — T5: جامع خانواده)', () => {
     const BATTERY_KEYS = BATTERY.map((d) => d.key);
-    expect(BATTERY.length).toBe(15);
-    expect(new Set(BATTERY_KEYS).size).toBe(15);
+    expect(BATTERY.length).toBe(19);
+    expect(new Set(BATTERY_KEYS).size).toBe(19);
     expect(BATTERY_VERSION).toBe('battery-v1');
   });
 
@@ -51,7 +51,7 @@ describe('باتری battery-v1 — اعتبار ساختاری', () => {
     }
   });
 
-  it('هر چک‌لیست از اعتبارسنجی معنایی (باندها = بیشینهٔ ممکن) می‌گذرد', () => {
+  it('هر ابزار از اعتبارسنجی معنایی (باندها = بیشینهٔ ممکن) می‌گذرد — پکیج با شاخهٔ packageComponents', () => {
     for (const def of BATTERY) {
       expect(() =>
         validateTypeDefinition({
@@ -59,7 +59,8 @@ describe('باتری battery-v1 — اعتبار ساختاری', () => {
           fields: def.fields ?? [],
           bands: def.bands ?? null,
           familyFillable: def.familyFillable,
-          subscales: def.subscales ?? null
+          subscales: def.subscales ?? null,
+          packageComponents: def.packageComponents ?? null
         })
       ).not.toThrow(def.key);
     }
@@ -94,6 +95,131 @@ describe('باتری battery-v1 — اعتبار ساختاری', () => {
   it('سقف فیلد برای SCARED-41 و SNAP-IV-26 کافی است', () => {
     expect(FIELDS_MAX).toBeGreaterThanOrEqual(41);
     expect(batteryDef('ce-scared-p-v1')?.fields?.length).toBe(41);
+  });
+});
+
+describe('شرح‌حال — نسخهٔ ۲ و نسخهٔ ۳ (T4 m148)', () => {
+  /** قرارداد کلیدهای ساخت‌یافتهٔ نسخهٔ ۳ که موتور می‌خواند (infer.ts — منبع سیگنال) */
+  const V3_ENGINE_KEYS = [
+    'sld_read_concern', 'sld_write_concern', 'sld_calc_concern', 'attention_concern', 'hyper_concern',
+    'exam_anxiety', 'morning_somatic', 'crisis_event', 'sensory_concern', 'home_language',
+    'decline_scope', 'absence_level', 'school_change', 'prev_intervention'
+  ];
+
+  it('نسخهٔ ۲ دست‌نخورده است — ۳۴ فیلد، ۷ سربرگ، شکایت اصلی الزامی (پرونده‌های قدیمی)', () => {
+    const v2 = batteryDef('ce-anamnesis-v2');
+    expect(v2).toBeTruthy();
+    expect(v2?.fields?.length).toBe(34);
+    expect(v2?.fields?.filter((f) => f.type === 'heading')).toHaveLength(7);
+    expect(v2?.fields?.find((f) => f.key === 'chief_complaint')?.required).toBe(true);
+    expect(v2?.bands ?? null).toBeNull();
+    expect(v2?.subscales ?? null).toBeNull();
+  });
+
+  it('نسخهٔ ۳ — جلسه، مخاطب خانواده، بدون باند، ≤۴۵ فیلد با کلیدهای ثابت موتور', () => {
+    const v3 = batteryDef('ce-anamnesis-v3');
+    expect(v3).toBeTruthy();
+    expect(v3?.category).toBe('session');
+    expect(v3?.familyFillable).toBe(false);
+    expect(v3?.audience).toBe('family');
+    expect(v3?.bands ?? null).toBeNull();
+    expect(v3?.subscales ?? null).toBeNull();
+    expect(v3?.fields!.length).toBeLessThanOrEqual(FIELDS_MAX);
+    expect(v3?.fields?.filter((f) => f.type === 'heading')).toHaveLength(7);
+    const keys = new Set(v3?.fields?.map((f) => f.key));
+    for (const k of V3_ENGINE_KEYS) expect(keys.has(k), `کلید موتور v3: ${k}`).toBe(true);
+    // متن آزاد پایه حفظ شده
+    expect(v3?.fields?.find((f) => f.key === 'chief_complaint')?.required).toBe(true);
+    expect(keys.has('weak_subjects')).toBe(true);
+  });
+
+  it('گزینه‌های کلیدهای موتور نسخهٔ ۳ با جدول نگاشت موتور هم‌خوان است', () => {
+    const v3 = batteryDef('ce-anamnesis-v3');
+    const opt = (k: string): string[] => v3?.fields?.find((f) => f.key === k)?.options ?? [];
+    // مقیاس نگرانی ۴تایی مشترک
+    for (const k of ['sld_read_concern', 'sld_write_concern', 'sld_calc_concern', 'attention_concern', 'hyper_concern', 'exam_anxiety', 'sensory_concern']) {
+      expect(opt(k), k).toEqual(['بدون نگرانی', 'کم', 'متوسط', 'زیاد — نگران‌کننده']);
+    }
+    expect(opt('decline_scope')).toContain('همهٔ درس‌ها با هم افت کرده‌اند');
+    expect(opt('morning_somatic')).toEqual(['نه', 'گاهی', 'بیشتر روزها — بدون علت پزشکی']);
+    expect(opt('absence_level')).toEqual(['ندارد', 'کمتر از یک ماه', 'یک تا سه ماه', 'بیش از سه ماه']);
+    expect(opt('home_language')).toEqual(['فارسی', 'دوزبانه', 'غیرفارسی']);
+  });
+});
+
+describe('T5 (m150) — فرم جامع خانواده: SDQ والد رسمی + سنجهٔ انطباق + پکیج', () => {
+  it('SDQ والد: ۲۵ آیتم با همان کلید/ترتیب/لنگر نسخهٔ معلم، زیرمقیاس‌ها دقیقاً emo/cond/hyper/peer/pros و برش‌ها هم‌سان', () => {
+    const p = batteryDef('ce-sdq-p-v1');
+    const t = batteryDef('ce-sdq-t-v1');
+    expect(p).toBeTruthy();
+    expect(p?.audience).toBe('family');
+    expect(p?.familyFillable).toBe(true);
+    expect(p?.fields?.length).toBe(25);
+    // همان ساختار آیتم‌ها (کلید و ترتیب و لنگرهای پاسخ) — متن والدپسند
+    expect(p?.fields?.map((f) => f.key)).toEqual(t?.fields?.map((f) => f.key));
+    expect(p?.fields?.map((f) => f.scaleLabels)).toEqual(t?.fields?.map((f) => f.scaleLabels));
+    // پنج آیتمِ متکی به کلاس بازنویسی والدپسند شده — بقیه عین معلم
+    const diffKeys = p?.fields?.filter((f, i) => f.label !== t?.fields?.[i].label).map((f) => f.key);
+    expect(diffKeys).toEqual(['i06', 'i09', 'i11', 'i14', 'i19']);
+    // زیرمقیاس‌ها و باندها هم‌سان معلم (هم‌گرایی والد×معلم خودکار)
+    expect(p?.subscales?.map((s) => s.id)).toEqual(['emo', 'cond', 'hyper', 'peer', 'pros']);
+    expect(JSON.stringify(p?.subscales)).toBe(JSON.stringify(t?.subscales));
+    expect(JSON.stringify(p?.bands)).toBe(JSON.stringify(t?.bands));
+  });
+
+  it('سنجهٔ انطباق: ۱۲ آیتم ۰–۲، زیرمقیاس واحد id_adapt، نمرهٔ بالاتر = انطباق بهتر (باندهای پایین/مرزی/نرمال)', () => {
+    const d = batteryDef('ce-id-adapt-v1');
+    expect(d).toBeTruthy();
+    expect(d?.familyFillable).toBe(true);
+    expect(d?.fields?.length).toBe(12);
+    for (const f of d?.fields ?? []) {
+      expect(f.type).toBe('scale');
+      expect(f.scaleMax).toBe(2);
+      expect(f.subscaleId).toBe('id_adapt');
+    }
+    expect(d?.subscales?.map((s) => s.id)).toEqual(['id_adapt']);
+    const bands = d?.bands as CaseEventBand[];
+    // معکوس: نمرهٔ کم = باند خطر
+    expect(resolveBandV2(5, bands)?.color).toBe('danger');
+    expect(resolveBandV2(15, bands)?.color).toBe('warn');
+    expect(resolveBandV2(22, bands)?.color).toBe('ok');
+    // سقف آخر = بیشینهٔ ممکن (۲۴) — جمع ماکسیمم آیتم‌ها
+    expect((d?.fields ?? []).reduce((sum, f) => sum + (f.scaleMax ?? 3), 0)).toBe(24);
+    expect(bands[bands.length - 1].max).toBe(24);
+  });
+
+  it('پکیج ce-comp-family-v2: دستهٔ جلسه، خانواده‌پذیر، بلوک زمینه ≤۸ فیلد بدون آیتم نمره‌دار و کامپوننت‌ها به‌ترتیب قرارداد', () => {
+    const d = batteryDef('ce-comp-family-v2');
+    expect(d).toBeTruthy();
+    expect(d?.category).toBe('session');
+    expect(d?.familyFillable).toBe(true);
+    expect(d?.audience).toBe('family');
+    expect(d?.bands ?? null).toBeNull();
+    expect(d?.subscales ?? null).toBeNull();
+    expect(d?.packageComponents).toEqual(['ce-snap-iv-p-v1', 'ce-sdq-p-v1', 'ce-scared-p-v1', 'ce-id-adapt-v1']);
+    expect((d?.fields?.length ?? 0)).toBeLessThanOrEqual(8);
+    for (const f of d?.fields ?? []) {
+      expect(['heading', 'select', 'text', 'longtext']).toContain(f.type);
+    }
+    expect(d?.fields?.find((f) => f.key === 'filled_by')?.required).toBe(true);
+  });
+
+  it('پاریتی قرارداد: packageComponents باتری ≡ COMPOSITE_FAMILY_COMPONENTS case-events و بدون تداخل کلید فیلدها', () => {
+    const d = batteryDef('ce-comp-family-v2');
+    expect(d?.packageComponents).toEqual([...COMPOSITE_FAMILY_COMPONENTS]);
+    expect(packageComponentsOf('ce-comp-family-v2')).toEqual([...COMPOSITE_FAMILY_COMPONENTS]);
+    expect(packageComponentsOf('ce-sdq-t-v1')).toBeNull();
+    expect(packageComponentsOf(undefined)).toBeNull();
+    // کلیدهای آیتم کامپوننت‌ها در کل پکیج یکتا (payload تخت امن است)
+    const allKeys = COMPOSITE_FAMILY_COMPONENTS.flatMap((k) => (batteryDef(k)?.fields ?? []).map((f) => f.key));
+    expect(new Set(allKeys).size).toBe(allKeys.length);
+    // زمینهٔ پکیج با هیچ کامپوننتی تداخل کلید ندارد
+    const ctxKeys = (batteryDef('ce-comp-family-v2')?.fields ?? []).map((f) => f.key);
+    expect(allKeys.filter((k) => ctxKeys.includes(k))).toEqual([]);
+    // تک‌تک کامپوننت‌ها عضو باتری‌اند (پنل/موتور همان‌طور می‌خوانند)
+    for (const k of COMPOSITE_FAMILY_COMPONENTS) {
+      expect(batteryDef(k), k).toBeTruthy();
+    }
   });
 });
 

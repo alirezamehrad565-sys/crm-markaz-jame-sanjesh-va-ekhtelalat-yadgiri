@@ -6,7 +6,9 @@
 // همهٔ ورودی‌ها EvidenceEvent دست‌ساز — بدون I/O (قرارداد ماژول pure)
 
 import { describe, it, expect } from 'vitest';
-import { runInference } from '../infer';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { runInference, anamnesisSignalsOf, ANAMNESIS_V2_KEY, ANAMNESIS_V3_KEY } from '../infer';
 import { narrativeOf, narrativeOfHypothesis, faNum } from '../narrative';
 import { ENGINE_DISCLAIMER, WCPM_NORM_50TH } from '../instruments';
 import { CONFIDENCE_THRESHOLDS } from '../rules';
@@ -211,6 +213,182 @@ describe('موتور شناسایی (پلن §۵)', () => {
     const out = runInference(many);
     expect(out.ranked.length).toBeLessThanOrEqual(3);
     expect(out.dataCoverage.seen).toContain('ce-sld-read-v1');
+  });
+});
+
+// ───────── T4 (m148) — شرح‌حال نسخهٔ ۳: سیگنال + فال‌بک دقیق نسخهٔ ۲ ─────────
+
+const T4_NOW = { now: () => new Date('2026-10-22T06:30:00.000Z') };
+
+function anamEvent(toolKey: string, payload: Record<string, string>, occurredAt = '2026-10-03T07:00:00.000Z'): EvidenceEvent {
+  const p: EvidenceEvent['payload'] = {};
+  for (const [k, v] of Object.entries(payload)) p[k] = { value: v, label: k };
+  return {
+    eventId: toolKey === ANAMNESIS_V3_KEY ? 'a3' : 'a2',
+    toolKey,
+    typeTitle: toolKey === ANAMNESIS_V3_KEY ? 'گفت‌وگوی اول — شرح‌حال کودک (نسخهٔ ۳)' : 'گفت‌وگوی اول — شرح‌حال کودک',
+    status: 'completed',
+    occurredAt,
+    payload: p,
+    analysis: null,
+    bands: null,
+    subscales: null
+  };
+}
+
+function w4Event(fsiq: number): EvidenceEvent {
+  return {
+    eventId: 'w1',
+    toolKey: 'ce-wechsler-w4-v1',
+    typeTitle: 'وکسلر ۴ — پروندهٔ تفسیر موتور',
+    status: 'completed',
+    occurredAt: '2026-10-03T08:00:00.000Z',
+    payload: { fsiq: { value: String(fsiq), label: 'هوشبهر کلی' } },
+    analysis: null,
+    bands: null,
+    subscales: null
+  };
+}
+
+/** خروجی بدون کلیدهای افزودنی/متغیر — برای مقایسهٔ بایت‌به‌بایت با پایهٔ پیش از T4 */
+function legacyView(out: ReturnType<typeof runInference>): Record<string, unknown> {
+  const { anamnesisSignals: _signals, ...rest } = out;
+  return rest as Record<string, unknown>;
+}
+
+describe('شرح‌حال v3 — سیگنال‌های ساخت‌یافته (T4 m148)', () => {
+  it('v3 کامل → ۱۳ سیگنال مرتب با قرارداد ClinicalSignal (domain/source/۰..۱/fa)', () => {
+    const v3 = anamEvent(ANAMNESIS_V3_KEY, {
+      chief_complaint: 'خواندن و نوشتنش از اول مهر افت کرده',
+      sld_read_concern: 'زیاد — نگران‌کننده',
+      sld_write_concern: 'متوسط',
+      sld_calc_concern: 'بدون نگرانی',
+      attention_concern: 'کم',
+      hyper_concern: 'متوسط',
+      exam_anxiety: 'کم',
+      morning_somatic: 'گاهی',
+      crisis_event: 'بله — برای خود کودک',
+      sensory_concern: 'کم',
+      home_language: 'دوزبانه',
+      decline_scope: 'بیشترِ درس‌ها افت کرده‌اند',
+      absence_level: 'یک تا سه ماه',
+      school_change: 'یک بار'
+    });
+    const sig = anamnesisSignalsOf(v3);
+    expect(sig).toHaveLength(13);
+    // ترتیب قطعی بر اساس کلید
+    expect(sig.map((s) => s.key)).toEqual([...sig.map((s) => s.key)].sort());
+    for (const s of sig) {
+      expect(s.source).toBe('anamnesis');
+      expect(s.value).toBeGreaterThanOrEqual(0);
+      expect(s.value).toBeLessThanOrEqual(1);
+      expect(s.fa.length).toBeGreaterThan(3);
+    }
+    const byKey = Object.fromEntries(sig.map((s) => [s.key, s]));
+    expect(byKey['anam.sld_read']).toMatchObject({ domain: 'academic', value: 1 });
+    expect(byKey['anam.sld_write']).toMatchObject({ domain: 'academic', value: 0.67 });
+    expect(byKey['anam.sld_calc']).toMatchObject({ domain: 'academic', value: 0 });
+    expect(byKey['anam.attention']).toMatchObject({ domain: 'attention', value: 0.33 });
+    expect(byKey['anam.hyper']).toMatchObject({ domain: 'attention', value: 0.67 });
+    expect(byKey['anam.morning_somatic']).toMatchObject({ domain: 'emotional', value: 0.5 });
+    expect(byKey['anam.crisis_event']).toMatchObject({ domain: 'emotional', value: 1 });
+    expect(byKey['anam.sensory']).toMatchObject({ domain: 'motor', value: 0.33 });
+    expect(byKey['anam.home_language']).toMatchObject({ domain: 'language', value: 0.5 });
+    expect(byKey['anam.decline_scope']).toMatchObject({ domain: 'academic', value: 0.67 });
+    expect(byKey['anam.absence']).toMatchObject({ domain: 'academic', value: 0.67 });
+    expect(byKey['anam.school_change']).toMatchObject({ domain: 'academic', value: 0.33 });
+    expect(byKey['anam.exam_anxiety']).toMatchObject({ domain: 'emotional', value: 0.33 });
+  });
+
+  it('سیگنال‌ها کلید افزودنی خروجی‌اند — پروندهٔ v3 به موتور می‌رود ولی امتیازها دست نمی‌خورد', () => {
+    const v3 = anamEvent(ANAMNESIS_V3_KEY, {
+      chief_complaint: 'افت در همهٔ درس‌ها',
+      sld_read_concern: 'زیاد — نگران‌کننده',
+      decline_scope: 'فقط یکی دو درس مشخص' // پرچم دیرآموزی نمی‌گیرد
+    });
+    const w = w4Event(80);
+    const out = runInference([w, v3], T4_NOW);
+    expect(out.anamnesisSignals.length).toBeGreaterThan(0);
+    const slow = out.ranked.find((h) => h.targetKey === 'slow_learner');
+    expect(slow).toBeDefined();
+    expect(slow!.score).toBeCloseTo(2, 5); // فقط وکسلر — decline_scope «فقط یکی دو درس» پرچم نمی‌دهد
+  });
+
+  it('پرچم v3: decline_scope «بیشترِ درس‌ها/همهٔ درس‌ها» → شاهد دیرآموزی w۱', () => {
+    for (const scope of ['بیشترِ درس‌ها افت کرده‌اند', 'همهٔ درس‌ها با هم افت کرده‌اند']) {
+      const out = runInference([w4Event(80), anamEvent(ANAMNESIS_V3_KEY, { chief_complaint: 'افت دارد', decline_scope: scope })], T4_NOW);
+      const slow = out.ranked.find((h) => h.targetKey === 'slow_learner')!;
+      expect(slow.score, scope).toBeCloseTo(3, 5);
+      expect(slow.evidenceFa.some((e) => e.includes('افت تحصیلی تدریجی'))).toBe(true);
+    }
+  });
+
+  it('پرچم v3 اضطراب: morning_somatic «گاهی» و «بیشتر روزها» → شاهد w۱؛ «نه» → هیچ', () => {
+    const hit = runInference([anamEvent(ANAMNESIS_V3_KEY, { chief_complaint: 'نگران است', morning_somatic: 'گاهی' })], T4_NOW);
+    expect(hit.ranked.find((h) => h.targetKey === 'anxiety')).toBeDefined();
+    const strong = runInference([anamEvent(ANAMNESIS_V3_KEY, { chief_complaint: 'نگران است', morning_somatic: 'بیشتر روزها — بدون علت پزشکی' })], T4_NOW);
+    expect(strong.ranked.find((h) => h.targetKey === 'anxiety')).toBeDefined();
+    const miss = runInference([anamEvent(ANAMNESIS_V3_KEY, { chief_complaint: 'نگران است', morning_somatic: 'نه' })], T4_NOW);
+    expect(miss.ranked.find((h) => h.targetKey === 'anxiety')).toBeUndefined();
+  });
+
+  it('هم‌زیستی v2+v3 → نسخهٔ ۳ برنده است (سیگنال از v3؛ پرچم از کلیدهای ساخت‌یافته)', () => {
+    const v2Old = anamEvent(ANAMNESIS_V2_KEY, { chief_complaint: 'افت تحصیلی در همهٔ درس‌ها' }, '2026-09-01T07:00:00.000Z');
+    const v3New = anamEvent(ANAMNESIS_V3_KEY, { chief_complaint: 'مشکل در مدرسه', decline_scope: 'افت محسوسی ندارم' }, '2026-10-20T07:00:00.000Z');
+    const out = runInference([v2Old, v3New], T4_NOW);
+    // متن v2 دارای «افت+همه» است ولی نسخهٔ ۳ ترجیح دارد → پرچم از decline_scope v3 (ندارم) گرفته نمی‌شود
+    expect(out.ranked.find((h) => h.targetKey === 'slow_learner')).toBeUndefined();
+    expect(out.anamnesisSignals.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it('گزینهٔ خارج از قرارداد نادیده گرفته می‌شود — بدون سیگنال، بدون خطا', () => {
+    const sig = anamnesisSignalsOf(anamEvent(ANAMNESIS_V3_KEY, { sld_read_concern: 'گزینهٔ آینده', chief_complaint: 'x' }));
+    expect(sig).toEqual([]);
+    expect(anamnesisSignalsOf(undefined)).toEqual([]);
+    expect(anamnesisSignalsOf(anamEvent(ANAMNESIS_V2_KEY, { sld_read_concern: 'کم' }))).toEqual([]);
+  });
+
+  it('فال‌بک دقیق نسخهٔ ۲ — خروجی بایت‌به‌بایت پایهٔ پیش از T4 (t4-baseline.json)', () => {
+    const baseline = JSON.parse(readFileSync(new URL('../../../../scripts/t4-baseline.json', import.meta.url), 'utf8')) as {
+      outputs: Record<string, ReturnType<typeof runInference> | undefined>;
+    };
+    // بازسازی دقیق فیکسچرها — همان سازنده‌های فایل ثبت پایه
+    const wechsler = (fsiq: number): EvidenceEvent => ({ ...w4Event(fsiq), eventId: 'w4' });
+    const probeRead = (wcpm: number, grade: string): EvidenceEvent => ({
+      eventId: 'p1', toolKey: 'ce-probe-read-v1', typeTitle: 'پروب خواندن', status: 'completed',
+      occurredAt: '2026-10-03T08:00:00.000Z',
+      payload: { wcpm: { value: String(wcpm), label: 'WCPM' }, text_grade: { value: grade, label: 'پایه' } },
+      analysis: null, bands: null, subscales: null
+    });
+    const fixtures: Record<string, EvidenceEvent[]> = {
+      f1_v2_slow_learner_flag: [wechsler(80), anamEvent(ANAMNESIS_V2_KEY, { chief_complaint: 'افت تحصیلی تدریجی در همهٔ درس‌ها' })],
+      f2_v2_anxiety_flag: [anamEvent(ANAMNESIS_V2_KEY, { chief_complaint: 'صبح‌ها دل‌درد دارد و گاهی تهوع پیش از مدرسه' })],
+      f3_v2_no_flag: [anamEvent(ANAMNESIS_V2_KEY, { chief_complaint: 'تأخیر در تکلم؛ از سه سالگی توجه خانواده جلب شد.', development: 'راه‌افتادن ۱۴ ماهگی' })],
+      f4_wechsler_no_anamnesis: [wechsler(80)],
+      f5_empty: [],
+      f6_v2_probe_read: [anamEvent(ANAMNESIS_V2_KEY, { chief_complaint: 'روان‌خوانی کند است' }), probeRead(40, 'دوم')]
+    };
+    for (const [name, events] of Object.entries(fixtures)) {
+      const base = baseline.outputs[name];
+      expect(base, name).toBeTruthy();
+      const out = runInference(events, T4_NOW);
+      if (name === 'f4_wechsler_no_anamnesis') {
+        // تنها دلتای مجاز: پیشنهاد گپ شرح‌حال (nextActions و missingFa) حالا به فرم فعال (نسخهٔ ۳) اشاره می‌کند —
+        // با نرمال‌سازی عنوان نسخهٔ ۳ به عنوان نسخهٔ ۲، بقیهٔ خروجی باید بایت‌به‌بایت برابر باشد.
+        const norm = (o: unknown): unknown =>
+          JSON.parse(JSON.stringify(o).replaceAll('گفت‌وگوی اول — شرح‌حال کودک (نسخهٔ ۳)', 'گفت‌وگوی اول — شرح‌حال کودک')) as unknown;
+        const outNorm = norm(legacyView(out));
+        const baseNorm = norm(legacyView(base as ReturnType<typeof runInference>));
+        // اثبات اینکه دلتای واقعی همین بود: پیشنهاد گپ در خروجی امروز با عنوان نسخهٔ ۳ آمده و در پایه با عنوان نسخهٔ ۲
+        expect(JSON.stringify(legacyView(out))).toContain('گفت‌وگوی اول — شرح‌حال کودک (نسخهٔ ۳) هنوز ارسال/ثبت نشده');
+        expect(JSON.stringify(base as unknown)).toContain('گفت‌وگوی اول — شرح‌حال کودک هنوز ارسال/ثبت نشده');
+        expect(outNorm).toEqual(baseNorm);
+        continue;
+      }
+      // پرونده‌های فقط-v2 (و بی‌شرح‌حال): تمام کلیدهای قدیمی بایت‌به‌بایت + کلید افزودنی خالی
+      expect(legacyView(out)).toEqual(legacyView(base as ReturnType<typeof runInference>));
+      expect(out.anamnesisSignals).toEqual([]);
+    }
   });
 });
 

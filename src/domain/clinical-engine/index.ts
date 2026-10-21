@@ -17,3 +17,5 @@ export * from './service';
 export * from './routes';
 // T1 (m146) — لایهٔ سیگنال: قرارداد ClinicalSignal + جدول بازه‌های FSIQ (افزودنی)
 export * from './signals';
+// T3 (m147) — پیشنهادگر چک‌لیست: ۱۴ قاعدهٔ §۲.۴ + سناریوی دیرآموز §۳.۱ (افزودنی)
+export * from './recommender';

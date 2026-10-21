@@ -21,8 +21,10 @@ import type {
   PathStepState,
   RankedHypothesis
 } from './types';
+import type { ChecklistPlan } from './recommender';
 import { INTERVENTION_PATH_STATUS_LABELS } from './types';
 import { runInference } from './infer';
+import { checklistPlanContextOf, recommendChecklistPlan } from './recommender';
 import { narrativeOf, narrativeOfHypothesis } from './narrative';
 import { ALL_TARGETS_INCLUDING_REHAB, targetOf } from './targets';
 
@@ -184,6 +186,22 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
       student: { id: student.id, name: studentNameOf(student), grade: student.grade },
       narrative: narrativeOf(result).text
     };
+  }
+
+  // ───────── پیشنهادگر چک‌لیست (T3/m147) ─────────
+
+  /**
+   * پلن پیشنهادی چک‌لیست از سیگنال‌ها — محاسبهٔ زندهٔ قطعی (بدون ذخیره‌سازی؛ مثل تفسیر).
+   * ورودی: سیگنال‌های وکسلر (T1) + شرح‌حال v3 (T4) + شواهد موجود پرونده + id_adapt (T5).
+   * RBAC همان تفسیر: مدیر/منشی/درمانگرِ مسئول — خواندن است، تصمیم نیست.
+   */
+  async function getChecklistPlan(studentId: string, actor: AuthContext): Promise<ChecklistPlan> {
+    const student = await loadStudent(studentId);
+    assertCanView(student, actor);
+    const events = await loadEvidenceEvents(studentId);
+    const plan = recommendChecklistPlan(checklistPlanContextOf(events));
+    log.debug('checklist plan computed', { studentId, planType: plan.planType, items: plan.items.length });
+    return plan;
   }
 
   // ───────── مسیرهای مداخله ─────────
@@ -416,7 +434,7 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     return ALL_TARGETS_INCLUDING_REHAB.map((t) => ({ key: t.key, title: t.title, group: t.group }));
   }
 
-  return { getInsights, listPaths, createPath, decidePath, getPath, listTargets, toggleStep };
+  return { getInsights, getChecklistPlan, listPaths, createPath, decidePath, getPath, listTargets, toggleStep };
 }
 
 export type ClinicalEngineService = ReturnType<typeof createClinicalEngineService>;

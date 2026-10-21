@@ -181,7 +181,7 @@ test("scenario 1: pure ADHD — SNAP-IV parent+teacher, consensus pair bonus", (
   const attention = got.constructs.find((c) => c.key === "attention_exec");
   assert.ok(attention.rawScore > 0, "attention must receive evidence");
   assert.ok(attention.evidenceFa.some((e) => e.signal === "snap_ia_pair"), "parent+teacher agreement pair row");
-  assert.ok(got.nextActions.some((a) => a.toolId === "ce-anamnesis-v2"), "anamnesis missing from evidence stream → base action");
+  assert.ok(got.nextActions.some((a) => a.toolId === "ce-anamnesis-v3"), "anamnesis missing from evidence stream → base action (T4: فرم فعال نسخهٔ ۳)");
 });
 
 test("scenario 2: ADHD + ODD — SNAP odd danger + ODD criteria checklist rule-active", () => {
@@ -220,7 +220,7 @@ test("scenario 3: SLD-only — checklist danger + probe danger (reading), writin
   const academic = got.constructs.find((c) => c.key === "academic_learning");
   assert.ok(academic.rawScore > 0);
   assert.ok(academic.subtypeFa?.includes("reading") || academic.subtypeFa?.includes("writing"));
-  assert.ok(got.nextActions.some((a) => a.toolId === "ce-anamnesis-v2"));
+  assert.ok(got.nextActions.some((a) => a.toolId === "ce-anamnesis-v3")); // — T4: پیشنهاد ورودی جدید = نسخهٔ ۳
 });
 
 test("scenario 4: autism red flags — ASD criteria rule-active + anamnesis regression/TBI + speech critical item", () => {

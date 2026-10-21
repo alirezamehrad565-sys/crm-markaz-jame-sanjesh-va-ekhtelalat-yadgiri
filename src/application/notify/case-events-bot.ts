@@ -21,7 +21,7 @@ import { truncateLabel } from '@domain/exercise-bank';
 import type {
   CaseEventCategory, CaseEventField, CaseEventRecord, CaseEventsService
 } from '@domain/case-events';
-import { CASE_EVENT_CATEGORY_LABELS, CHECKLIST_BOT_MAX_ITEMS } from '@domain/case-events';
+import { CASE_EVENT_CATEGORY_LABELS, CHECKLIST_BOT_MAX_ITEMS, packageComponentsOf } from '@domain/case-events';
 import type { SettingsService } from '@app/settings';
 import type { StuListItem } from './student-actions-bot';
 import { clearStuState } from './student-actions-bot';
@@ -692,7 +692,10 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
   async function startFill(chatId: string, eventId: string): Promise<TlBotReply> {
     if (!caseEvents) return { text: renderTemplate('bot_case_events_disabled'), buttons: null };
     const event = await caseEvents.getEventById(eventId);
-    if (!event || event.typeCategory !== 'checklist') {
+    const pkgType = event ? await caseEvents.getTypeById(event.eventTypeId) : null;
+    // — T5: پکیج فرم جامع هم در «چک‌لیست‌های من» می‌آید ولی همیشه مسیر وب‌فرم بخش‌به‌بخش می‌ماند
+    const isPackage = Boolean(pkgType && packageComponentsOf(pkgType.key));
+    if (!event || (event.typeCategory !== 'checklist' && !isPackage)) {
       return { text: '⚠️ این چک‌لیست پیدا نشد.', buttons: null };
     }
     if (event.status !== 'pending_family') {
@@ -702,9 +705,28 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     if (!allowed) {
       return { text: '⚠️ این چک‌لیست برای فرزندان متصل به این چت نیست.', buttons: null };
     }
-    const type = await caseEvents.getTypeById(event.eventTypeId);
+    const type = pkgType;
     const fields = type?.fields ?? [];
     if (fields.length === 0) return { text: '⚠️ این چک‌لیست فاقد آیتم است.', buttons: null };
+
+    if (isPackage) {
+      // فرم جامع چندبخشی — فقط با لینک امن وب (رندر بخش‌به‌بخش + یک submit)
+      const link = deps.publicBaseUrlEnv ? await caseEvents.mintFillLink(event.id, deps.publicBaseUrlEnv) : null;
+      if (link) {
+        return {
+          text: [
+            `🧺 ${event.typeTitle}`,
+            '',
+            'این فرم جامع چند بخش دارد و در بات جا نمی‌شود.',
+            'با لینک امن زیر در مرورگر پر کنید — می‌توانید آرام جلو بروید و همه را یک‌جا بفرستید (۷ روز اعتبار):',
+            '',
+            link
+          ].join('\n'),
+          buttons: null
+        };
+      }
+      return { text: 'این فرم جامع با لینک وب پر می‌شود — لینک امن از دفتر مرکز برای شما ارسال می‌شود.', buttons: null };
+    }
 
     if (fields.length > CHECKLIST_BOT_MAX_ITEMS) {
       // تصمیم ۳: فرم بلند → وب‌فرم امن

@@ -39,8 +39,8 @@ export const OT_HOMEWORK_MAX = 300;
 export const NEEDS_TEXT_MAX = 4000;
 export const NEEDS_PLAN_MAX = 300;
 
-/** کلیدهای ابزار هر گیت شناسایی */
-const ANAMNESIS_KEYS = ['ce-anamnesis-v2', 'anamnesis'];
+/** کلیدهای ابزار هر گیت شناسایی — T4 (m148): شرح‌حال نسخهٔ ۳ هم گیت را سبز می‌کند (نسخهٔ ۲ برای پرونده‌های قدیمی) */
+const ANAMNESIS_KEYS = ['ce-anamnesis-v3', 'ce-anamnesis-v2', 'anamnesis'];
 const BEHAVIORAL_KEYS = ['sdq-parent', 'ce-sdq-t-v1', 'ce-snap-iv-p-v1', 'ce-snap-iv-t-v1', 'ce-scared-p-v1', 'ce-dcdq-v1'];
 const WECHSLER_KEYS = ['ce-wechsler-w4-v1', 'wechsler'];
 
@@ -228,18 +228,18 @@ export function createOtEngineService(deps: OtEngineDeps) {
         detail: nAnam > 0 ? 'ثبت شده' : nAnamRaw > 0 ? `ثبت شده اما${staleNote}` : 'هنوز ثبت نشده'
       },
       {
-        key: 'behavioral',
-        label: 'چک‌لیست‌های رفتاری (حداقل ۲ تازه)',
-        hint: 'SNAP-IV والد و معلم، SDQ، SCARED، DCDQ — با بله ارسال می‌شود؛ پنجرهٔ اعتبار ۱۲ ماه',
-        done: nBehav >= 2,
-        detail: nBehav > 0 ? `${nBehav} چک‌لیست معتبر در ۱۲ ماه اخیر` : nBehav === 0 && rawCount(BEHAVIORAL_KEYS) > 0 ? 'ثبت شده اما خارج از پنجرهٔ ۱۲ ماه' : 'هنوز ثبت نشده'
-      },
-      {
         key: 'wechsler',
         label: 'آزمون هوش وکسلر ۴',
         hint: 'فرم نتایج وکسلر — خروجی موتور تحلیل در فیلد engine_output؛ زیر ۶ سال WPPSI/Leiter',
         done: nWisc > 0,
         detail: nWisc > 0 ? 'ثبت شده' : nWiscRaw > 0 ? `ثبت شده اما${staleNote}` : 'هنوز ثبت نشده'
+      },
+      {
+        key: 'behavioral',
+        label: 'چک‌لیست‌های رفتاری (حداقل ۲ تازه)',
+        hint: 'SNAP-IV والد و معلم، SDQ، SCARED، DCDQ — با بله ارسال می‌شود؛ پنجرهٔ اعتبار ۱۲ ماه',
+        done: nBehav >= 2,
+        detail: nBehav > 0 ? `${nBehav} چک‌لیست معتبر در ۱۲ ماه اخیر` : nBehav === 0 && rawCount(BEHAVIORAL_KEYS) > 0 ? 'ثبت شده اما خارج از پنجرهٔ ۱۲ ماه' : 'هنوز ثبت نشده'
       },
       {
         key: 'skills',

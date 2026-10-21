@@ -29,6 +29,7 @@ import { wechslerProfileBlock, wechslerSourceBadge, connectionsSection, WEAKEST_
 // محتوای ثابت (کلیدهای ابزار، برچسب‌ها، متن مراحل) از ماژول محتوا
 import {
   ANAMNESIS_KEY,
+  ANAMNESIS_LEGACY_KEY,
   SCREEN_KEYS,
   SPECIFIC_KEYS,
   PROBE_KEYS,
@@ -49,7 +50,8 @@ import {
   GATE_GLOSS,
   SUSPICION_CONTENT,
   CONTEXT_META,
-  SYNTHESIS_META
+  SYNTHESIS_META,
+  PLAN_META
 } from './clinical-content.js';
 
 /** آیا کاربرِ فعلی حق تصمیم دارد؟ (پلن §۷ — مدیر یا درمانگرِ مسئول؛ منشی فقط مشاهده) */
@@ -244,10 +246,10 @@ function syncAria(details) {
   if (s) s.setAttribute('aria-expanded', details.open ? 'true' : 'false');
 }
 
-// ───────── بلوک تصمیم شک بالینی — بدنهٔ مرحلهٔ ۲ (بدنه تغییر نکرده — MOVE از استپر حذف‌شده) ─────────
+// ───────── بلوک تصمیم شک بالینی — بدنهٔ مرحلهٔ چک‌لیست‌ها (بدنه تغییر نکرده — MOVE از استپر حذف‌شده) ─────────
 
 /**
- * — بلوک «نقطهٔ تصمیم شک بالینی» — بین مرحلهٔ ۲ (چک‌لیست‌ها) و مرحلهٔ ۳ (وکسلر):
+ * — بلوک «نقطهٔ تصمیم شک بالینی» — بدنهٔ مرحلهٔ «چک‌لیست‌های خانواده و معلم»:
  * سیگنال چک‌لیست‌های تازه + تصمیم ثبت‌شدهٔ درمانگر (فرم ce-clinical-suspicion-v1).
  * خط قرمز: سیگنال فقط پیشنهاد است؛ شناسایی و تصمیم با درمانگر است.
  */
@@ -296,8 +298,72 @@ function suspicionBlock({ student, gates, typesById, canDecide, refresh }) {
   );
 }
 
+// ───────── کارت «پیشنهاد باتری از موتور» — پلن چک‌لیست (T3/m147) — بدنهٔ مرحلهٔ وکسلر ─────────
+
 /**
- * — بلوک «زمینهٔ تفسیر» — بدنهٔ مرحلهٔ ۳ (بدنه تغییر نکرده — m134)
+ * کارت پلن پیشنهادی چک‌لیست — بعد از نیم‌رخ وکسلر (داخل بدنهٔ مرحلهٔ وکسلر):
+ * ۱) پلن با اولویت و دلیل هر آیتم (reasonFa از موتور — بدون جعبهٔ سیاه).
+ * ۲) «تأیید یک‌کلیکی» = همان جریان موجود ارسال فرم (openCaseEventForm با فقط‌کلیدهای پلن)
+ *   با پیش‌انتخاب ابزارهای پلن؛ مسیرهای بله/معلم داخل همان انتخابگر باز می‌شوند.
+ * ۳) «ویرایش/انتخاب دستی» = کتابخانهٔ کامل فرم‌ها — برگشت به دستی همیشه ممکن (بدون قفل).
+ * ۴) خط قرمز (مسیر ID/TBI) و پانویس ENGINE_DISCLAIMER روی همهٔ حالت‌ها.
+ * فقط توکن/کلاس m144 موجود؛ بدون رنگ/فونت تازه؛ RTL.
+ */
+function checklistPlanCard({ student, plan, typesById, canDecide, refresh }) {
+  if (!plan) return null;
+  const M = PLAN_META;
+  const titleOf = (key) => typesById.get(key)?.title ?? key;
+
+  const itemRows = (plan.items ?? []).map((it) => {
+    const pb = M.priorityBadge[it.priority] ?? M.priorityBadge.optional;
+    return el('div', { class: 'clx-plan__item' },
+      el('div', { class: 'clx-plan__itemhead' },
+        el('strong', {}, titleOf(it.toolKey)),
+        el('span', { class: `badge ${pb.cls}` }, pb.label)),
+      el('div', { class: 'cell-sub' }, it.reasonFa)
+    );
+  });
+
+  const redLine = plan.referralFa
+    ? el('div', { class: 'clx-plan__redline' }, icon('alert', 14),
+        el('span', { class: 'badge badge--error' }, M.redLineLabel),
+        el('span', { class: 'cell-sub' }, plan.referralFa))
+    : null;
+
+  const planKeys = (plan.items ?? []).map((i) => i.toolKey);
+  const actions = canDecide
+    ? el('div', { class: 'clx-actions' },
+        planKeys.length
+          ? el('button', {
+              class: 'btn btn--primary btn--sm',
+              onclick: () => openCaseEventForm({ student, onlyKeys: planKeys, pickerTitle: M.confirmPickerTitle, onSaved: refresh })
+            }, icon('zap', 14), M.confirmLabel)
+          : null,
+        el('button', {
+          class: 'btn btn--soft btn--sm',
+          onclick: () => openCaseEventForm({ student, onSaved: refresh })
+        }, icon('edit', 14), M.editLabel))
+    : null;
+
+  return el('div', { class: 'card clx-plan' },
+    el('div', { class: 'card__body' },
+      el('div', { class: 'clx-plan__head' },
+        el('strong', { class: 'clx-plan__title' }, icon('compass', 15), M.title),
+        el('span', { class: `badge ${M.planTypeBadge[plan.planType] ?? 'badge--info'}` }, M.planTypeLabel[plan.planType] ?? plan.planType)),
+      el('div', { class: 'cell-sub' }, `${M.basisLabel}${plan.basis}`),
+      redLine,
+      itemRows.length
+        ? el('div', { class: 'clx-plan__items' }, ...itemRows)
+        : el('div', { class: 'cell-sub' }, M.emptyItems),
+      actions,
+      actions ? el('div', { class: 'cell-sub' }, M.editHint) : null,
+      el('div', { class: 'clx-plan__disclaimer cell-sub' }, icon('shield', 13), el('span', {}, plan.disclaimer))
+    )
+  );
+}
+
+/**
+ * — بلوک «زمینهٔ تفسیر» — بدنهٔ مرحلهٔ وکسلر (بدنه تغییر نکرده — m134)
  * سن/تولد/پایه/مسیر پرونده کنار خروجی کمی وکسلر (FSIQ/صدک/پراکندگی) — تا نیم‌رخ
  * همیشه در بستر سن و پایهٔ تحصیلی خوانده شود؛ همان بستری که موتور وکسلر با
  * تاریخ تولد نرمال‌سازی می‌کند.
@@ -1092,25 +1158,29 @@ export async function renderClinicalTab(box, { student }) {
     let otProfile = null; // — پروفایل چک‌لیست ۷ حیطه‌ای (فقط MODE_OT واکشی می‌شود — m136)
     let skillsMode = SKILL_MODE_SLD; // — حالت مرحلهٔ ۴؛ درست زیر از گیت‌ها/مسیر حل می‌شود
     let events = []; // — پاسخ واحد /case-events؛ ردیف‌های مراحل ۱/۲/۴ از همین می‌آید (GET رشد نمی‌کند)
+    let plan = null; // — پلن پیشنهادی چک‌لیست (T3/m147) — کارت مرحلهٔ وکسلر
     try {
-      const [insRes, pathRes, gatesRes] = await Promise.all([
+      const [insRes, pathRes, gatesRes, planRes] = await Promise.all([
         api.get(`/api/students/${student.id}/clinical-insights`),
         api.get(`/api/students/${student.id}/clinical-paths`).catch(() => ({ data: [] })),
-        api.get(`/api/students/${student.id}/clinical-gates`).catch(() => null)
+        api.get(`/api/students/${student.id}/clinical-gates`).catch(() => null),
+        api.get(`/api/students/${student.id}/checklist-plan`).catch(() => null) // T3 — پیشنهاد پلن (خواندن ارزان و قطعی)
       ]);
       insights = insRes.data;
       paths = pathRes.data ?? [];
       gates = gatesRes?.data ?? null;
+      plan = planRes?.data ?? null;
       // حالت مرحلهٔ ۴ — ماتریس resolveSkillsMode (m136): فقط MODE_OT پروفایل مهارتی می‌گیرد؛
       // قاعدهٔ قبلی واکشی در فاز شناسایی برای «همه» true بود → ریشهٔ باگ «چک‌لیست توانبخشی برای همه».
       skillsMode = resolveSkillsMode({ gates, student });
       if (skillsMode === SKILL_MODE_OT) {
         otProfile = await api.get(`/api/students/${student.id}/ot/profile`).then((r) => r.data).catch(() => null);
       }
-      // شناسهٔ فرم شرح‌حال برای مرحلهٔ ۱ (اگر فعال باشد)
+      // T4 (m148): فهرست کامل نوع‌ها برای نگاشت تاریخچه (نسخهٔ ۲ قدیمی هم رندر شود) —
+      // ولی ورودی جدید فقط فرم فعال نسخهٔ ۳ را باز می‌کند (anamnesisTypeId با active=true).
       try {
-        const types = (await api.get('/api/case-events/types?active=true')).data ?? [];
-        anamnesisTypeId = types.find((t) => t.key === ANAMNESIS_KEY)?.id ?? null;
+        const types = (await api.get('/api/case-events/types')).data ?? [];
+        anamnesisTypeId = types.find((t) => t.key === ANAMNESIS_KEY && t.active)?.id ?? null;
         typesById = new Map(types.map((t) => [t.key, t]));
       } catch { anamnesisTypeId = null; }
       // پاسخ واحد رویدادها — قبلاً داخل latestResultsCard گرفته می‌شد؛ الان مشترک مراحل ۱/۲/۴ است
@@ -1137,7 +1207,7 @@ export async function renderClinicalTab(box, { student }) {
     // اسکلت استاندارد می‌سازیم تا تب خالی نماند — با پاسخ سرور، هر تعداد/ترتیبی رندر می‌شود.
     const gatesList = (gates?.gates ?? []).length
       ? gates.gates
-      : (gates ? [] : ['anamnesis', 'behavioral', 'wechsler', 'skills', 'needs'].map((k) => ({ key: k, done: false, ord: SM[k].num, label: SM[k].title, detail: null })));
+      : (gates ? [] : ['anamnesis', 'wechsler', 'behavioral', 'skills', 'needs'].map((k) => ({ key: k, done: false, ord: SM[k].num, label: SM[k].title, detail: null })));
     const gateByKey = (key) => gatesList.find((g) => g.key === key) ?? null;
     const stageCtx = { student, gates, typesById, anamnesisTypeId, canDecide, refresh, skillsMode };
 
@@ -1230,9 +1300,9 @@ export async function renderClinicalTab(box, { student }) {
     // ── ریزآمار سربرگ‌ها (m136 — B) — فقط دادهٔ ازپیش‌گرفته (صفر GET تازه)؛ آمار خالی حذف ──
     const ST = STAGE2_META.stats;
     // آخرین ثبت شرح‌حال — از پاسخ مشترک رویدادها (بدون GET تازه)
-    const anamTypeId = typesById.get(ANAMNESIS_KEY)?.id ?? null;
+    const anamTypeIds = new Set([ANAMNESIS_KEY, ANAMNESIS_LEGACY_KEY].map((k) => typesById.get(k)?.id).filter(Boolean));
     const lastAnamAt = (events ?? [])
-      .filter((e) => e.eventTypeId === anamTypeId && e.status !== 'cancelled')
+      .filter((e) => anamTypeIds.has(e.eventTypeId) && e.status !== 'cancelled')
       .reduce((m, e) => (e.occurredAt && (!m || e.occurredAt > m) ? e.occurredAt : m), null);
     // «کهنه است» فقط وقتی که detail سرور همین را بگوید (پنجرهٔ ۱۲ ماه سمت سرور قضاوت می‌شود)
     const anamStale = String(gateByKey('anamnesis')?.detail ?? '').includes('کهنه');
@@ -1315,7 +1385,7 @@ export async function renderClinicalTab(box, { student }) {
     };
 
     // ── ردیف‌های رویداد هر مرحله — از پاسخ واحد (§8.1) ──
-    const anamRows = eventRowsBlock({ events, typesById, keys: [ANAMNESIS_KEY], cap: 1, expandable: false });
+    const anamRows = eventRowsBlock({ events, typesById, keys: [ANAMNESIS_KEY, ANAMNESIS_LEGACY_KEY], cap: 1, expandable: false }); // — T4: v3 + تاریخچهٔ v2
     const checklistRows = eventRowsBlock({ events, typesById, keys: [...SCREEN_KEYS, ...SPECIFIC_KEYS], cap: 6, expandable: true });
     const probeRows = eventRowsBlock({ events, typesById, keys: [...PROBE_KEYS, RESULTS_KEY], cap: 6, expandable: true });
 
@@ -1422,8 +1492,12 @@ export async function renderClinicalTab(box, { student }) {
           if (cta) body.push(el('div', { class: 'clx-actions' }, cta));
           return body;
         }
-        // زمینهٔ تفسیر همیشه بالای بدنه؛ سپس چیپ‌ها + شش آکاردئون تودرتو (همه بسته) + پانویس خط قرمز
-        return [interpretationContext({ student, gates }), profileBody];
+        // زمینهٔ تفسیر همیشه بالای بدنه؛ سپس کارت پلن پیشنهادی (T3) + شش آکاردئون تودرتو + پانویس خط قرمز
+        const body = [interpretationContext({ student, gates }), profileBody];
+        // کارت پلن فقط پس از تکمیل گیت وکسلر می‌نشیند (قرارداد T3) — با دلیل هر آیتم و دو اقدام
+        const planCard = checklistPlanCard({ student, plan, typesById, canDecide, refresh });
+        if (planCard) body.push(planCard);
+        return body;
       },
       skills: () => {
         // بدنهٔ حالت‌آگاه (m136) — OT: کارت مهارتی + چیپ‌ها + CTA اسکرول؛

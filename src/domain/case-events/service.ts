@@ -17,7 +17,7 @@ import type {
 import { CASE_EVENT_STATUSES } from './types';
 import {
   analyzeChecklist, base64ToBytes, buildEventPayload, buildSummary, canTransitionStatus,
-  estimateBase64Bytes, EVENT_FILES_MAX, extractFollowUpAction, resolveBand, sanitizeFilename,
+  estimateBase64Bytes, EVENT_FILES_MAX, extractFollowUpAction, packageComponentsOf, resolveBand, sanitizeFilename,
   stripDataUrlPrefix, validateFileInput, validateTypeDefinition
 } from './pure';
 
@@ -191,6 +191,14 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     return row;
   }
 
+  /** — T5: حل نوع با کلید منطقی (کامپوننت‌های پکیج با کلید قرارداد) */
+  async function loadTypeRowByKey(key: string): Promise<TypeRow | null> {
+    return db.queryOne<TypeRow>(
+      `SELECT * FROM case_event_types WHERE key = ? AND deleted_at IS NULL`,
+      [key]
+    );
+  }
+
   async function assertStudent(studentId: string): Promise<void> {
     const row = await db.queryOne<{ id: string }>(`SELECT id FROM students WHERE id = ?`, [studentId]);
     if (!row) throw new NotFoundError('دانش‌آموز');
@@ -232,6 +240,121 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       },
       actor
     );
+  }
+
+  /**
+   * — T5 (m150): جریان submit پکیج فرم جامع خانواده — یک submit، چند رویداد:
+   * ۱) حل کامپوننت‌ها به‌ترتیب قرارداد (packageComponentsOf — آینهٔ battery-composite.json)
+   * ۲) اعتبارسنجی کامل بودن پاسخ + تحلیل هر کامپوننت با همان موتور v2 (زیرمقیاس/باند خودش)
+   * ۳) بلوک زمینهٔ پکیج با همان قرارداد payload برچسب‌دار
+   * ۴) یک تراکنش: تکمیل رویداد لنگر + ساخت رویداد مستقل به‌ازای هر کامپوننت
+   * موتور بعداً رویداد کامپوننت‌ها را مثل ابزار تکی می‌خواند (toolKey = کلید type کامپوننت).
+   */
+  async function fillPackageFlow(
+    row: EventRow,
+    anchorType: CaseEventTypeRecord,
+    components: readonly string[],
+    input: { values: Record<string, number | string>; sourceChatId: string | null; viaWeb: boolean },
+    actor: AuthContext
+  ): Promise<CaseEventRecord> {
+    if (row.status === 'cancelled') throw new ConflictError('این فرم لغو شده است');
+    if (row.status !== 'pending_family') throw new ConflictError('این فرم قبلاً پاسخ گرفته است');
+    if (input.viaWeb) {
+      if (!row.fill_expires_at || new Date(row.fill_expires_at).getTime() < now().getTime()) {
+        throw new ConflictError('مهلت پر کردن این فرم تمام شده است');
+      }
+    }
+    const values = input.values;
+
+    // ۱) حل رکورد کامپوننت‌ها از DB — به‌ترتیب قرارداد
+    const compTypes: CaseEventTypeRecord[] = [];
+    for (const key of components) {
+      const trow = await loadTypeRowByKey(key);
+      if (!trow) throw new ValidationError(`ابزار فرم جامع یافت نشد: ${key}`);
+      if (trow.active !== 1) throw new ValidationError(`ابزار فرم جامع غیرفعال است: ${key}`);
+      compTypes.push(typeRowToRecord(trow));
+    }
+
+    // ۲) هر کامپوننت: همهٔ آیتم‌ها پاسخ‌داده + تحلیل v2 (معکوس/گزینهٔ نمره‌دار/زیرمقیاس/پرچم)
+    const filled: { comp: CaseEventTypeRecord; analysis: CaseEventAnalysis; payload: Record<string, { value: string; label: string }>; summary: string | null }[] = [];
+    for (const comp of compTypes) {
+      const numeric: Record<string, number> = {};
+      for (const f of comp.fields) {
+        const v = values[f.key];
+        if (v === undefined || v === null || String(v).trim() === '') {
+          throw new ValidationError(`آیتم «${f.label}» بی‌پاسخ مانده است`);
+        }
+        const n = Number(String(v).trim().replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))));
+        if (!Number.isInteger(n)) {
+          throw new ValidationError(`پاسخ آیتم «${f.label}» از گزینه‌های مجاز نیست`);
+        }
+        numeric[f.key] = n;
+      }
+      const analysis = analyzeChecklist(comp.fields, comp.bands, numeric, comp.subscales);
+      // payload نمایشی: برچسب گزینه برای گزینه‌ای نمره‌دار؛ نمرهٔ خام برای scale
+      const payload: Record<string, { value: string; label: string }> = {};
+      for (const f of comp.fields) {
+        const raw = numeric[f.key];
+        const display = f.type === 'single' ? (f.scoredOptions?.[raw]?.label ?? String(raw)) : String(raw);
+        payload[f.key] = { value: display, label: f.label };
+      }
+      filled.push({ comp, analysis, payload, summary: buildSummary(payload, analysis) });
+    }
+
+    // ۳) بلوک زمینهٔ پکیج — همان قرارداد فرم درمانگر (الزامیِ خالی → خطا)
+    const ctxPayload = buildEventPayload(anchorType.fields, values, true);
+    const ctxSummary = buildSummary(ctxPayload, null);
+
+    // ۴) تراکنش واحد — یا همه یا هیچ
+    const occurredAt = now().toISOString();
+    const sourceTag = input.viaWeb ? `web:${occurredAt}` : (input.sourceChatId ?? 'unknown');
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        `UPDATE case_events
+            SET status = 'completed', payload = ?, summary = ?,
+                filled_by_chat_id = ?, updated_at = ?
+          WHERE id = ?`,
+        [JSON.stringify(ctxPayload), ctxSummary, sourceTag, occurredAt, row.id]
+      );
+      await audit.logInTransaction(tx, {
+        actorId: actor.staffId,
+        action: 'case_event.family_filled',
+        resourceType: 'case_event',
+        resourceId: row.id,
+        changes: {
+          studentId: { from: null, to: row.student_id },
+          packageKey: { from: null, to: anchorType.key },
+          components: { from: null, to: components.length },
+          via: { from: null, to: input.viaWeb ? 'web' : 'bot' }
+        }
+      });
+      for (const f of filled) {
+        const cid = crypto.randomUUID();
+        await tx.execute(
+          `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
+                                    status, payload, analysis, summary, fill_token, fill_expires_at,
+                                    filled_by_chat_id, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, NULL, NULL, ?, 'completed', ?, ?, ?, NULL, NULL, ?, ?, ?, ?)`,
+          [cid, f.comp.id, row.student_id, occurredAt, JSON.stringify(f.payload), JSON.stringify(f.analysis), f.summary, sourceTag, actor.staffId, occurredAt, occurredAt]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'case_event.created',
+          resourceType: 'case_event',
+          resourceId: cid,
+          changes: {
+            eventTypeId: { from: null, to: f.comp.id },
+            studentId: { from: null, to: row.student_id },
+            status: { from: null, to: 'completed' },
+            packageKey: { from: null, to: anchorType.key }
+          }
+        });
+      }
+    });
+    log.info('event.package_filled', {
+      id: row.id, package: anchorType.key, components: filled.length, via: input.viaWeb ? 'web' : 'bot'
+    });
+    return eventRowToRecord(await getEventRow(row.id));
   }
 
   return {
@@ -438,7 +561,10 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       if (!type.active) throw new ConflictError('این نوع رویداد غیرفعال است');
 
       const isChecklist = type.category === 'checklist';
-      const asDraft = Boolean(input.draft) && !isChecklist; // چک‌لیست هرگز پیش‌نویس نمی‌شود
+      // — T5: پکیج چند-ابزاری — رویداد لنگر با توکن ساخته می‌شود؛ پاسخ خانواده در
+      // submit، به‌ازای هر کامپوننت رویداد مستقل می‌سازد + رویداد همین type (زمینه)
+      const isPackage = packageComponentsOf(type.key) !== null;
+      const asDraft = Boolean(input.draft) && !isChecklist && !isPackage; // چک‌لیست/پکیج هرگز پیش‌نویس نمی‌شود
       let status: CaseEventStatus = 'completed';
       let payload: Record<string, { value: string; label: string }> | null = null;
       let analysis: CaseEventAnalysis | null = null;
@@ -446,8 +572,8 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       let fillToken: string | null = null;
       let fillExpires: string | null = null;
 
-      if (isChecklist) {
-        // چک‌لیست — رویداد با وضعیت «در انتظار پاسخ خانواده» ساخته می‌شود
+      if (isChecklist || isPackage) {
+        // چک‌لیست/پکیج — رویداد با وضعیت «در انتظار پاسخ خانواده» ساخته می‌شود
         status = 'pending_family';
         fillToken = crypto.randomUUID();
         fillExpires = new Date(now().getTime() + fillExpiryHours * 3600_000).toISOString();
@@ -751,7 +877,8 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         ),
         db.query<TypeRow>(
           `SELECT * FROM case_event_types
-            WHERE deleted_at IS NULL AND active = 1 AND category = 'checklist'
+            WHERE deleted_at IS NULL AND active = 1
+              AND (category = 'checklist' OR (category = 'session' AND family_fillable = 1))
             ORDER BY created_at`
         )
       ]);
@@ -790,7 +917,9 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
            JOIN case_event_types t ON t.id = e.event_type_id
            LEFT JOIN staff s ON s.id = e.staff_id
            JOIN students st ON st.id = e.student_id
-          WHERE e.status = 'pending_family' AND t.category = 'checklist' AND e.deleted_at IS NULL
+          WHERE e.status = 'pending_family'
+            AND (t.category = 'checklist' OR (t.category = 'session' AND t.family_fillable = 1))
+            AND e.deleted_at IS NULL
           ORDER BY e.occurred_at DESC LIMIT 100`
       );
       const nowMs = now().getTime();
@@ -821,9 +950,11 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     async sendChecklistLink(eventId, input, actor) {
       if (!sendFn) throw new ConflictError('سرویس اعلان در دسترس نیست');
       const row = await getEventRow(eventId);
-      if (row.type_category !== 'checklist') throw new ValidationError('این رویداد چک‌لیست نیست');
-      if (row.status !== 'pending_family') throw new ConflictError('این چک‌لیست در انتظار پاسخ نیست (قبلاً پر یا لغو شده)');
       const type = typeRowToRecord(await loadTypeRow(row.event_type_id));
+      // — T5: پکیج فرم جامع هم مسیر ارسال لینک امن را باز می‌کند (افزودنی — الگوی چک‌لیست)
+      const isPkg = packageComponentsOf(type.key) !== null;
+      if (row.type_category !== 'checklist' && !isPkg) throw new ValidationError('این رویداد چک‌لیست نیست');
+      if (row.status !== 'pending_family') throw new ConflictError('این چک‌لیست در انتظار پاسخ نیست (قبلاً پر یا لغو شده)');
       if (!type.familyFillable) throw new ValidationError('این فرم برای پر کردن از سمت گیرنده طراحی نشده است');
 
       const wanted: CaseEventAudience = input.audience ?? type.audience ?? 'family';
@@ -845,8 +976,9 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
 
       const studentName = (await deps.studentNameOf?.(row.student_id)) ?? 'دانش‌آموز';
       const note = input.note?.trim() ? input.note.trim() : null;
+      const kindLabel = isPkg ? 'فرم جامع' : 'چک‌لیست';
       const extra = [
-        `چک‌لیست «${type.title}»`,
+        `${kindLabel} «${type.title}»`,
         note ? `یادداشت: ${note}` : null,
         'فرم امن (۷ روز اعتبار):',
         link
@@ -905,8 +1037,31 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return `${base}/public/case-events/${id}/fill?token=${row.fill_token}`;
     },
 
+    /**
+     * — T5: رکورد کامپوننت‌های پکیج به‌ترتیب قرارداد (فرم عمومی پکیجی).
+     * نوعِ پکیج نباشد → null؛ کامپوننتِ غایب → خطا با پیام فارسی.
+     */
+    async listPackageComponentTypes(typeId) {
+      const type = typeRowToRecord(await loadTypeRow(typeId));
+      const comps = packageComponentsOf(type.key);
+      if (!comps) return null;
+      const out: CaseEventTypeRecord[] = [];
+      for (const key of comps) {
+        const row = await loadTypeRowByKey(key);
+        if (!row) throw new NotFoundError(`ابزار پکیج (${key})`);
+        out.push(typeRowToRecord(row));
+      }
+      return out;
+    },
+
     async fillByFamily(id, input, actor) {
       const row = await getEventRow(id);
+      // — T5: پکیج فرم جامع — یک submit → رویداد مستقل به‌ازای هر کامپوننت + رویداد زمینه
+      const anchorType = typeRowToRecord(await loadTypeRow(row.event_type_id));
+      const pkgComponents = packageComponentsOf(anchorType.key);
+      if (pkgComponents) {
+        return fillPackageFlow(row, anchorType, pkgComponents, input, actor);
+      }
       if (row.type_category !== 'checklist') {
         throw new ValidationError('این رویداد چک‌لیست خانواده نیست');
       }
@@ -919,7 +1074,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         }
       }
 
-      const type = typeRowToRecord(await loadTypeRow(row.event_type_id));
+      const type = anchorType;
       const bands = type.bands;
       const subscales = type.subscales;
       const values = input.values;
@@ -929,7 +1084,11 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         }
       }
       // تحلیل v2: معکوس/گزینه‌های نمره‌دار/زیرمقیاس/پرچم بحرانی/تفسیر خودکار
-      const analysis = analyzeChecklist(type.fields, bands, values, subscales);
+      // (مسیر تکی — پاسخ‌ها عددی‌اند؛ پکیج از fillPackageFlow جداگانه می‌گذرد)
+      const numericValues: Record<string, number> = Object.fromEntries(
+        Object.entries(values).map(([k, v]) => [k, Number(v)])
+      );
+      const analysis = analyzeChecklist(type.fields, bands, numericValues, subscales);
       // payload نمایشی: نمرهٔ خام برای scale؛ برچسب گزینه برای گزینه‌ای نمره‌دار
       const payload: Record<string, { value: string; label: string }> = {};
       for (const f of type.fields) {

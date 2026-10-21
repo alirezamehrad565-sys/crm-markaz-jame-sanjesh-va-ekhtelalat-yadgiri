@@ -6,6 +6,7 @@
 // بدون I/O — همهٔ ساختارها هاردکد و نسخه‌دار (battery-v1) هستند.
 
 import type { CaseEventField, CaseEventSubscale, CaseEventBand, CaseEventCategory, CaseEventAudience, CaseEventAnalysis } from '@domain/case-events';
+import type { ClinicalSignal } from './signals';
 
 /** نسخهٔ باتری — تغییر ملاک/آیتم = نسخهٔ جدید (گزارش‌های قدیم دست‌نخورده می‌مانند) */
 export const BATTERY_VERSION = 'battery-v1' as const;
@@ -190,6 +191,11 @@ export interface InferenceOutput {
   referralFlags: string[];
   /** پانویس خط قرمز — پلن §۱ (هر خروجی موتور بدون استثنا) */
   disclaimer: string;
+  /**
+   * T4 (m148) — کلید افزودنی: سیگنال‌های شرح‌حال (فقط از آخرین رویداد نسخهٔ ۳).
+   * پروندهٔ فقط-v2 / بی‌شرح‌حال → [] — هیچ کلید قدیمی دیگری تغییر نمی‌کند (اثبات: t4-baseline).
+   */
+  anamnesisSignals: ClinicalSignal[];
 }
 
 /** تصمیم ثبت‌شدهٔ درمانگر — دادهٔ کالیبراسیون «موتور چه گفت / متخصص چه گرفت» */
@@ -267,4 +273,11 @@ export interface BatteryDef {
   bands?: CaseEventBand[] | null;
   /** آیتم‌ها و زیرمقیاس‌ها از این کلید کپی می‌شوند (فقط باندها تفاوت دارد — مثل SNAP-IV والد/معلم) */
   sameItemsAs?: string;
+  /**
+   * — T5 (m150): پکیج چند-ابزاری فرم جامع خانواده — کامپوننت‌ها به‌ترتیب اجرا.
+   * فقط برای کلید پکیج (ce-comp-family-v2) معنا دارد؛ فیلدهای خودِ تعریف = بلوک زمینهٔ کوتاه.
+   * مصرف: فرم عمومی پکیجی (رندر بخش‌به‌بخش + رویداد مستقل به‌ازای هر کامپوننت) — نه ابزار تکی پیشنهادی.
+   * آینهٔ قرارداد: COMPOSITE_FAMILY_COMPONENTS در case-events/pure.ts (تست پاریتی دارد).
+   */
+  packageComponents?: string[];
 }

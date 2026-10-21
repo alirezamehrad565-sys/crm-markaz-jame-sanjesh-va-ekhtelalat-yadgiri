@@ -9,9 +9,10 @@
 
 import type { AppHono } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
-import { CaseEventTypeInputSchema, CaseEventTypeUpdateSchema } from './pure';
-import type { CaseEventsService, CaseEventTypeInput } from './types';
-import { renderFillFormPage } from './public-form';
+import { CaseEventTypeInputSchema, CaseEventTypeUpdateSchema, packageComponentsOf } from './pure';
+import type { CaseEventsService, CaseEventTypeInput, CaseEventTypeRecord } from './types';
+import { renderFillFormPage, renderPackageFormPage } from './public-form';
+import type { PackageFormModel, PackageToolBlock } from './public-form';
 
 export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsService): void {
   // ───────── کاتالوگ انواع ─────────
@@ -195,6 +196,54 @@ export function registerCaseEventPublicRoutes(
 ): void {
   const FILL_PATH = '/public/case-events/:id/fill';
 
+  /** — T5: مدل رندر پکیج چند-ابزاری — بلوک زمینه + سربرگ اختصاصی هر کامپوننت به‌ترتیب */
+  function packageModelOf(
+    pkgType: CaseEventTypeRecord,
+    comps: CaseEventTypeRecord[],
+    studentName: string | null
+  ): PackageFormModel {
+    const ctxFields = pkgType.fields
+      .filter((f) => f.type === 'select' || f.type === 'text' || f.type === 'longtext')
+      .map((f) => ({
+        key: f.key,
+        label: f.label,
+        type: f.type as 'select' | 'text' | 'longtext',
+        options: f.options,
+        required: f.required
+      }));
+    const ctxTitle = pkgType.fields.find((f) => f.type === 'heading')?.label ?? 'زمینهٔ خانواده';
+    const tools: PackageToolBlock[] = comps.map((comp, idx) => {
+      const subscaleName = new Map((comp.subscales ?? []).map((s) => [s.id, s.name] as const));
+      const sections: PackageToolBlock['sections'] = [];
+      for (const f of comp.fields) {
+        if (f.type !== 'scale' && f.type !== 'single') continue; // — فقط آیتم نمره‌دار به گیرنده می‌رسد
+        const title = f.subscaleId ? subscaleName.get(f.subscaleId) ?? null : null;
+        const item = {
+          key: f.key, label: f.label, scaleMax: f.scaleMax,
+          scoredOptions: f.scoredOptions?.map((o) => ({ label: o.label })),
+          scaleLabels: f.scaleLabels
+        };
+        const last = sections[sections.length - 1];
+        if (last && last.title === title) last.items.push(item);
+        else sections.push({ title, items: [item] });
+      }
+      return {
+        toolKey: comp.key,
+        toolTitle: `بخش ${faNum(idx + 2)} از ${faNum(comps.length + 1)} — ${comp.title}`,
+        toolIntro: comp.description ?? null,
+        itemCount: sections.reduce((sum, s) => sum + s.items.length, 0),
+        sections
+      };
+    });
+    return {
+      packageTitle: `${pkgType.icon ?? ''} ${pkgType.title}`.trim(),
+      studentName: studentName ?? '',
+      description: pkgType.description ?? null,
+      context: { title: ctxTitle, fields: ctxFields },
+      tools
+    };
+  }
+
   app.get(FILL_PATH, async (c) => {
     const id = c.req.param('id');
     const token = c.req.query('token') ?? '';
@@ -212,6 +261,23 @@ export function registerCaseEventPublicRoutes(
     }
     const studentName = await helpers.studentNameOf(event.studentId);
     const type = await service.getTypeById(event.eventTypeId);
+
+    // — T5: پکیج چند-ابزاری → رندر بخش‌به‌بخش (زمینه + هر ابزار با سربرگ خودش)
+    if (type && packageComponentsOf(type.key)) {
+      const comps = await service.listPackageComponentTypes(event.eventTypeId);
+      if (!comps) {
+        return c.html(fillErrorPage('این فرم پیدا نشد.'), 404);
+      }
+      return new Response(renderPackageFormPage(packageModelOf(type, comps, studentName), token), {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Robots-Tag': 'noindex, nofollow'
+        }
+      });
+    }
+
     // بخش‌بندی زیرمقیاس‌ها: آیتم‌های پیوستهٔ یک زیرمقیاس زیر یک سربرگ
     const subscaleName = new Map((type?.subscales ?? []).map((s) => [s.id, s.name] as const));
     const sections: { title: string | null; items: { key: string; label: string; scaleMax?: number; scoredOptions?: { label: string }[]; scaleLabels?: string[] }[] }[] = [];
@@ -250,7 +316,8 @@ export function registerCaseEventPublicRoutes(
 
   app.post(FILL_PATH, async (c) => {
     const id = c.req.param('id');
-    const body = await c.req.json<{ token?: string; answers?: Record<string, number> }>().catch(() => null);
+    // — T5: پکیج چند-ابزاری — مقدارهای متنی بلوک زمینه هم کنار نمره‌های عددی می‌آیند
+    const body = await c.req.json<{ token?: string; answers?: Record<string, number | string> }>().catch(() => null);
     if (!body || !body.token || !body.answers) {
       return c.json({ error: { code: 'BAD_REQUEST', message: 'درخواست نامعتبر است' } }, 400);
     }
@@ -268,6 +335,12 @@ export function registerCaseEventPublicRoutes(
       return c.json({ error: { code: 'CONFLICT', message } }, code);
     }
   });
+}
+
+/** تبدیل ارقام برای شمارهٔ بخش سربرگ‌های پکیج */
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+function faNum(n: number): string {
+  return String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
 }
 
 function fillErrorPage(message: string): string {
