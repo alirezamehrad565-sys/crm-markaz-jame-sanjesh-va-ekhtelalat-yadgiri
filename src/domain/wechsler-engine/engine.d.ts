@@ -142,6 +142,82 @@ export interface WechslerAnalysisResult {
   monitoringInterval: string;
   binaryScenarios: Array<Record<string, unknown>>;
   treatments: Record<string, WechslerTreatment>;
+  /** T1 (m146) — افزودنی: سیگنال‌های بالینی ساخته‌شده از snapshot/analysis موجود (ok:false → []) */
+  signals: WechslerSignal[];
+  /** T1 (m146) — افزودنی: پروفایل ساخت‌یافتهٔ خلاصه (ok:false → null) */
+  profile: WechslerProfile | null;
+}
+
+// --- T1 (m146) — clinical signal layer (additive) ----------------------------
+
+/** بازهٔ هوش‌بهر کل — هم‌ارز WechslerFsiqBand در src/domain/clinical-engine/signals.ts */
+export type WechslerFsiqBand =
+  | "ID"
+  | "BIF"
+  | "LOW_BORDER"
+  | "AVERAGE"
+  | "HIGH_AVERAGE"
+  | "SUPERIOR"
+  | "GIFTED";
+
+/** یک ردیف جدول بازه‌های FSIQ (هم‌ارز FSIQ_BAND_RANGES در signals.ts) */
+export interface WechslerFsiqBandRange {
+  band: WechslerFsiqBand;
+  min: number;
+  max: number;
+  fa: string;
+}
+
+/** سیگنال بالینی وکسلر — ساختار هم‌ارز ClinicalSignal در signals.ts */
+export interface WechslerSignal {
+  domain:
+    | "attention"
+    | "language"
+    | "memory"
+    | "executive"
+    | "social"
+    | "emotional"
+    | "academic"
+    | "motor"
+    | "cognitive_level"
+    | "validity";
+  key: string;
+  /** شدت/اطمینان ۰..۱ */
+  value: number;
+  source: "anamnesis" | "wechsler" | "checklist" | "probe" | "ot" | "observation";
+  /** دلیل فارسی قابل‌نمایش برای درمانگر */
+  fa: string;
+}
+
+/** نمرهٔ تراز + صدک یک شاخص (وقتی محاسبه‌پذیر) */
+export interface WechslerIndexPair {
+  scaled: number;
+  percentile: number | null;
+}
+
+/** الگوی فعال ACID/CAD — فقط وقتی همهٔ زیرآزمون‌های الگو ≤۷ باشند مقدار دارد */
+export interface WechslerProfilePattern {
+  codes: string[];
+  scaled: Record<string, number>;
+}
+
+/** پروفایل ساخت‌یافتهٔ خلاصه — همهٔ فیلدها از داده‌های موجود snapshot/analysis */
+export interface WechslerProfile {
+  vci: WechslerIndexPair | null;
+  pri: WechslerIndexPair | null;
+  wmi: WechslerIndexPair | null;
+  psi: WechslerIndexPair | null;
+  fsiq: number | null;
+  gai: number | null;
+  /** "معتبر"/"نامعتبر" از analysis.gai — null وقتی تحلیل موجود نیست */
+  gaiValidity: string | null;
+  indexScatter: number;
+  fsiqBand: WechslerFsiqBand | null;
+  acid: WechslerProfilePattern | null;
+  cad: WechslerProfilePattern | null;
+  step5: { strengths: string[]; weaknesses: string[] };
+  substitutes: string[];
+  flags: Array<{ id: string; fa: string; validity: boolean }>;
 }
 
 // --- form payload glue -------------------------------------------------------
@@ -182,6 +258,29 @@ export declare function analyzeWisc(
   birthDate: JalaliDate,
   strict?: boolean
 ): Record<string, unknown>;
+
+// --- T1 (m146) — clinical signal layer (additive) ----------------------------
+
+/** ورودی profileSignals/buildWechslerProfile — فقط همین بخش‌های نتیجه خوانده می‌شوند */
+export type WechslerResultSlice = Pick<
+  WechslerAnalysisResult,
+  "ok" | "snapshot" | "analysis" | "flags"
+>;
+
+/**
+ * سیگنال‌های بالینی پروفایل وکسلر — تابع خالص؛ فقط از snapshot/analysis موجود
+ * می‌خواند (بدون محاسبهٔ تازهٔ روان‌سنجی). ورودی نامعتبر/خالی → [].
+ */
+export declare function profileSignals(result: WechslerResultSlice | null | undefined): WechslerSignal[];
+
+/** پروفایل ساخت‌یافتهٔ خلاصه — تابع خالص؛ ورودی نامعتبر/خالی → null */
+export declare function buildWechslerProfile(result: WechslerResultSlice | null | undefined): WechslerProfile | null;
+
+/** بازهٔ FSIQ ورودی — ورودی غیرمتناهی/منفی محافظه‌کارانه به ID می‌رود */
+export declare function fsiqBandOf(fsiq: number): WechslerFsiqBand;
+
+/** جدول بازه‌های FSIQ موتور — باید با FSIQ_BAND_RANGES در signals.ts هم‌ارز بماند */
+export declare const FSIQ_BANDS: WechslerFsiqBandRange[];
 export declare function applyWechslerEngineToPayload(
   payload: FormPayload,
   birthDateRaw: string | null | undefined,

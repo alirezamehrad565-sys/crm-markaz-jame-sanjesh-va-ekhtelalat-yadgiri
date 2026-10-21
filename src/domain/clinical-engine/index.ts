@@ -15,3 +15,5 @@ export * from './infer';
 export * from './narrative';
 export * from './service';
 export * from './routes';
+// T1 (m146) — لایهٔ سیگنال: قرارداد ClinicalSignal + جدول بازه‌های FSIQ (افزودنی)
+export * from './signals';

@@ -1,6 +1,6 @@
 // bundle-wechsler-ref.cjs — GENERATED FILE, DO NOT EDIT BY HAND.
 // Golden-test REFERENCE implementation of the WISC-IV Wechsler analysis engine.
-// Region copied VERBATIM from worker/bundle.js lines 21120-24656
+// Region copied VERBATIM from worker/bundle.js lines 21419-25111
 // at commit 365d103 (m130 / 1.00.9), engineVersion "m98".
 // Regenerate with: node tests/golden/extract-engine.mjs
 //
@@ -3273,6 +3273,153 @@ function buildSnapshot(result, computable) {
 }
 __name(buildSnapshot, "buildSnapshot");
 __name2(buildSnapshot, "buildSnapshot");
+// ─── T1 (m146) — لایهٔ سیگنال بالینی: کاملاً افزودنی، بدون تغییر در محاسبات موجود ───
+// profileSignals/buildWechslerProfile فقط از خروجی موجود snapshot/analysis می‌خوانند و
+// هیچ محاسبهٔ روان‌سنجی تازه‌ای انجام نمی‌دهند. سازندهٔ سیگنال داخل خود engine تعریف می‌شود
+// چون استاندارد این فایل «JS مستقل بدون import» است؛ این تکرار نسبت به
+// src/domain/clinical-engine/signals.ts آگاهانه است. جدول FSIQ_BANDS باید با
+// FSIQ_BAND_RANGES در signals.ts هم‌ارز بماند — تست هم‌خوانی دو جدول در
+// tests/golden/wechsler-golden.test.mjs واگرایی آینده را می‌گیرد.
+var FSIQ_BANDS = [
+  { band: "ID", min: 0, max: 69, fa: "بازهٔ ناتوانی هوشی (≤۶۹)" },
+  { band: "BIF", min: 70, max: 84, fa: "بازهٔ مرزی/دیرآموزی (۷۰–۸۴)" },
+  { band: "LOW_BORDER", min: 85, max: 89, fa: "مرز پایین (۸۵–۸۹)" },
+  { band: "AVERAGE", min: 90, max: 109, fa: "متوسط (۹۰–۱۰۹)" },
+  { band: "HIGH_AVERAGE", min: 110, max: 119, fa: "بالاتر از متوسط (۱۱۰–۱۱۹)" },
+  { band: "SUPERIOR", min: 120, max: 129, fa: "عالی (۱۲۰–۱۲۹)" },
+  { band: "GIFTED", min: 130, max: 200, fa: "استعداد (۱۳۰+)" }
+];
+function fsiqBandOf(fsiq) {
+  const s = num(fsiq);
+  if (!Number.isFinite(s) || s < 0)
+    return "ID";
+  for (const b of FSIQ_BANDS) {
+    if (s >= b.min && s <= b.max)
+      return b.band;
+  }
+  return "GIFTED";
+}
+__name(fsiqBandOf, "fsiqBandOf");
+__name2(fsiqBandOf, "fsiqBandOf");
+function buildWechslerProfile(result) {
+  const snap = result?.snapshot;
+  if (!result || result.ok === false || !snap)
+    return null;
+  const idxOf = (k) => {
+    const v = snap.indices[k];
+    return snap.computable[k] && v && typeof v.scaled === "number" ? { scaled: v.scaled, percentile: typeof v.percentile === "number" ? v.percentile : null } : null;
+  };
+  const subScaled = (code) => {
+    const t = snap.subtests.find((s) => s.code === code);
+    return t && typeof t.scaled === "number" ? t.scaled : null;
+  };
+  const pattern = (codes) => {
+    for (const c of codes) {
+      const s = subScaled(c);
+      if (s === null || s > 7)
+        return null;
+    }
+    const scaled = {};
+    for (const c of codes)
+      scaled[c] = subScaled(c);
+    return { codes: [...codes], scaled };
+  };
+  return {
+    vci: idxOf("VCI"),
+    pri: idxOf("PRI"),
+    wmi: idxOf("WMI"),
+    psi: idxOf("PSI"),
+    fsiq: typeof snap.fsiq === "number" ? snap.fsiq : null,
+    gai: typeof snap.gai === "number" ? snap.gai : null,
+    gaiValidity: result.analysis?.gai?.validity ?? null,
+    indexScatter: snap.indexScatter ?? 0,
+    fsiqBand: typeof snap.fsiq === "number" ? fsiqBandOf(snap.fsiq) : null,
+    acid: pattern(["AR", "CD", "IN", "DS"]),
+    cad: pattern(["AR", "CD", "DS"]),
+    step5: { strengths: [...(snap.step5Strong ?? [])], weaknesses: [...(snap.step5Weak ?? [])] },
+    substitutes: [...(snap.substitutes ?? [])],
+    flags: (result.flags ?? []).map((f) => ({ id: f.id, fa: f.fa, validity: f.validity === true }))
+  };
+}
+__name(buildWechslerProfile, "buildWechslerProfile");
+__name2(buildWechslerProfile, "buildWechslerProfile");
+function profileSignals(result) {
+  const snap = result?.snapshot;
+  const analysis = result?.analysis;
+  if (!result || result.ok === false || !snap)
+    return [];
+  const out = [];
+  const push = (domain, key, value, fa) => {
+    out.push({ domain, key, value: Math.max(0, Math.min(1, value)), source: "wechsler", fa });
+  };
+  const subScaled = (code) => {
+    const t = snap.subtests.find((s) => s.code === code);
+    return t && typeof t.scaled === "number" ? t.scaled : null;
+  };
+  // ۱) بازهٔ هوش‌بهر کل — از fsiq موجود snapshot
+  if (typeof snap.fsiq === "number") {
+    const bandEntry = FSIQ_BANDS.find((b) => snap.fsiq >= b.min && snap.fsiq <= b.max) ?? FSIQ_BANDS[FSIQ_BANDS.length - 1];
+    push("cognitive_level", "cog_level.fsiq_band", 1, `هوش‌بهر کل ${faNum3(snap.fsiq)} در ${bandEntry.fa} قرار دارد.`);
+  }
+  // ۲) پراکندگی بین‌شاخصی — نسبت به سقف تفسیر واحد (۲۳)
+  const scatter = snap.indexScatter ?? 0;
+  push("cognitive_level", "cog_level.index_scatter", scatter / 23, `پراکندگی بین‌شاخصی ${faNum3(scatter)} نمره است (سقف تفسیر واحد ۲۳).`);
+  if (scatter >= 23) {
+    push("validity", "validity.scatter", scatter / 23, `پراکندگی بین‌شاخصی ${faNum3(scatter)} نمره است (≥۲۳): هوش‌بهر کل تصویر واحدی از توان کلی نمی‌دهد و تفسیر به سطح شاخص‌ها منتقل می‌شود.`);
+  }
+  // ۳) الگوهای ACID/CAD — همان برش موجود موتور (همهٔ زیرآزمون‌های الگو ≤۷)
+  const patternValue = (codes) => {
+    const vals = codes.map((c) => subScaled(c) ?? 0);
+    const depth = vals.reduce((acc, s) => acc + Math.max(0, 8 - s), 0) / vals.length;
+    return depth / 7;
+  };
+  const acidCodes = ["AR", "CD", "IN", "DS"];
+  if (acidCodes.every((c) => {
+    const s = subScaled(c);
+    return s !== null && s <= 7;
+  })) {
+    push("academic", "profile.acid", patternValue(acidCodes), "الگوی ACID فعال است: حساب، رمزگردانی، اطلاعات و فراخنای ارقام هم‌زمان ضعیف‌اند — نشانهٔ کلاسیک فشار بر فرایند یادگیری.");
+  }
+  const cadCodes = ["AR", "CD", "DS"];
+  if (cadCodes.every((c) => {
+    const s = subScaled(c);
+    return s !== null && s <= 7;
+  })) {
+    push("attention", "profile.cad", patternValue(cadCodes), "الگوی CAD فعال است: حساب، رمزگردانی و فراخنای ارقام هم‌زمان ضعیف‌اند — نشانهٔ فشار بر حافظهٔ فعال و تمرکز در کار عددی.");
+  }
+  // ۴) گام ۵ (نیم‌رخ شخصی) — دقیقاً از خروجی موجود گام ۵ (s5rows)، بدون محاسبهٔ تازه
+  for (const row of snap.s5rows ?? []) {
+    if (row.strength !== WEAKNESS && row.strength !== STRENGTH)
+      continue;
+    const faName = INDEX_SPEC[row.key]?.fa ?? row.key;
+    const absDiff = Math.abs(num(row.diff));
+    const intensity = absDiff / 10;
+    if (row.strength === WEAKNESS) {
+      push("cognitive_level", `cog_level.step5_weak.${row.key}`, intensity, `گام ۵ پروفایل شخصی: ${faName} نسبت به میانگین شاخص‌های خود ${faNum3(absDiff)} نمره ضعف دارد (آستانهٔ ${faNum3(row.cut)}).`);
+    } else {
+      push("cognitive_level", `cog_level.step5_strong.${row.key}`, intensity, `گام ۵ پروفایل شخصی: ${faName} نسبت به میانگین شاخص‌های خود ${faNum3(absDiff)} نمره قوت دارد (آستانهٔ ${faNum3(row.cut)}).`);
+    }
+  }
+  // ۵) اعتبار GAI — از analysis.gai موجود
+  if (analysis?.gai && analysis.gai.validity === INVALID2) {
+    push("validity", "cog_level.gai_invalid", 1, `شاخص توانایی کلی (GAI) نامعتبر است: اختلاف VCI و PRI برابر ${faNum3(num(analysis.gai.diff))} نمره و بیش از سقف مجاز ۲۳ است.`);
+  }
+  // ۶) شاخص‌های ساخته‌شده با زیرآزمون جانشین
+  if ((snap.substitutes ?? []).length) {
+    push("validity", "validity.substitute_index", 1, `شاخص ${snap.substitutes.join(" و ")} با زیرآزمون جانشین ساخته شده است؛ تفسیر با احتیاط انجام شود.`);
+  }
+  // ترتیب قطعی: مرتب‌سازی بر اساس key (و سپس fa برای پایداری کامل)
+  out.sort((a, b) => {
+    if (a.key !== b.key)
+      return a.key < b.key ? -1 : 1;
+    if (a.fa !== b.fa)
+      return a.fa < b.fa ? -1 : 1;
+    return 0;
+  });
+  return out;
+}
+__name(profileSignals, "profileSignals");
+__name2(profileSignals, "profileSignals");
 function runWechslerAnalysis(input) {
   const strict = input.strict ?? true;
   const baseAnswers = input.baseAnswers ?? {};
@@ -3301,7 +3448,9 @@ function runWechslerAnalysis(input) {
       weakDomains: [],
       monitoringInterval: "",
       binaryScenarios: [],
-      treatments: {}
+      treatments: {},
+      signals: [],
+      profile: null
     };
   }
   const analysis = analyzeWisc(validation.raw, validation.testDate, validation.birthDate, strict);
@@ -3331,7 +3480,7 @@ function runWechslerAnalysis(input) {
     if (plan)
       treatments[id] = plan;
   }
-  return {
+  const result = {
     ok: true,
     ageLine: `${faNum3(analysis.age.years)} \u0633\u0627\u0644 \u0648 ${faNum3(analysis.age.months)} \u0645\u0627\u0647`,
     validation,
@@ -3350,6 +3499,10 @@ function runWechslerAnalysis(input) {
     binaryScenarios: binaries,
     treatments
   };
+  // T1 (m146) — فیلدهای افزودنی سیگنال/پروفایل: از همان snapshot/analysis بالا ساخته می‌شوند
+  result.signals = profileSignals(result);
+  result.profile = buildWechslerProfile(result);
+  return result;
 }
 __name(runWechslerAnalysis, "runWechslerAnalysis");
 __name2(runWechslerAnalysis, "runWechslerAnalysis");
@@ -3466,7 +3619,10 @@ function compactWechslerOutput(result) {
     comorbid: result.comorbid,
     weakDomains: result.weakDomains,
     monitoringInterval: result.monitoringInterval,
-    hypotheses: (result.hypotheses ?? []).map((h) => ({ id: h.id, weight: h.weight }))
+    hypotheses: (result.hypotheses ?? []).map((h) => ({ id: h.id, weight: h.weight })),
+    // T1 (m146) — افزودنی: سیگنال/پروفایل در خروجی فشرده هم می‌آیند (compact/engineVersion دست‌نخورده)
+    signals: result.signals ?? [],
+    profile: result.profile ?? null
   };
 }
 __name(compactWechslerOutput, "compactWechslerOutput");
@@ -3550,4 +3706,4 @@ function summarySafePayload(payload) {
 }
 __name(summarySafePayload, "summarySafePayload");
 __name2(summarySafePayload, "summarySafePayload");
-module.exports = { runWechslerAnalysis, analyzeWisc, applyWechslerEngineToPayload, extractRawScores, compactWechslerOutput, parseJalaliLoose, parseBirthDateLoose, gregorianIsoToJalali, normalizeDigits, summarySafePayload, validateWechslerInput, bandForAge, ageFromJalali, WISC4_EVENT_KEY, RAW_FIELD_MAP, SUBTESTS, SUBTEST_CODES, SUBTEST_FA, SUBTEST_FA_OK, NORMS, NORM_MIN_AGE, NORM_MAX_BAND, INDEX_MEMBERS, GAI_MEMBERS, HYPOTHESES, TREATMENTS, MIN_AGE, MAX_AGE };
+module.exports = { runWechslerAnalysis, analyzeWisc, applyWechslerEngineToPayload, profileSignals, buildWechslerProfile, fsiqBandOf, FSIQ_BANDS, extractRawScores, compactWechslerOutput, parseJalaliLoose, parseBirthDateLoose, gregorianIsoToJalali, normalizeDigits, summarySafePayload, validateWechslerInput, bandForAge, ageFromJalali, WISC4_EVENT_KEY, RAW_FIELD_MAP, SUBTESTS, SUBTEST_CODES, SUBTEST_FA, SUBTEST_FA_OK, NORMS, NORM_MIN_AGE, NORM_MAX_BAND, INDEX_MEMBERS, GAI_MEMBERS, HYPOTHESES, TREATMENTS, MIN_AGE, MAX_AGE };
