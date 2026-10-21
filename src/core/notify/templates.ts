@@ -687,6 +687,47 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         'فایل نتیجه در پروندهٔ دانش‌آموز (تایم‌لاین) ثبت شد.'
       ].filter((l) => l !== '').join('\n');
 
+    // ─── m151 — مدارک بله: درخواست مدارک از خانواده + پاسخ‌های بات ───
+
+    case 'doc_request_sent':
+      return [
+        '📝 درخواست مدارک',
+        '',
+        vars.studentName ? `${vars.studentName} عزیز، سلام 👋` : 'سلام 👋',
+        vars.extra?.trim() || '',
+        '',
+        'کافی است عکس یا فایل را همین‌جا در همین گفتگو بفرستید؛',
+        `مستقیم به پروندهٔ ${vars.studentName ?? 'دانش‌آموز'} در ${clinic} ضمیمه می‌شود.`
+      ].filter((l) => l !== undefined && l !== '').join('\n');
+
+    case 'bot_doc_received':
+      return [
+        `✅ ${vars.title ?? 'فایل'} شما دریافت شد و به پروندهٔ ${vars.studentName ?? 'دانش‌آموز'} ضمیمه شد.`,
+        '',
+        'ممنون از همراهی شما 🙏'
+      ].join('\n');
+
+    case 'bot_doc_bad_type':
+      return [
+        '⚠️ این نوع فایل مجاز نیست — فقط عکس، PDF، Word، Excel و متن.',
+        '',
+        'لطفاً مدرک را به‌صورت عکس یا PDF بفرستید.'
+      ].join('\n');
+
+    case 'bot_doc_too_large':
+      return [
+        '⚠️ حجم فایل بیش از ۵۱۲ کیلوبایت است.',
+        '',
+        'لطفاً عکس را با کیفیت کمتر بفرستید یا فقط صفحه‌های اصلی را عکس بگیرید.'
+      ].join('\n');
+
+    case 'bot_doc_failed':
+      return [
+        '⚠️ دریافت فایل ناموفق بود — لطفاً دوباره بفرستید.',
+        '',
+        'اگر چند بار تکرار شد، با دفتر مرکز تماس بگیرید.'
+      ].join('\n');
+
     case 'bot_submission_received':
       return [
         `✅ نتیجهٔ تمرین «${vars.exerciseTitle ?? '—'}» دریافت شد.`,

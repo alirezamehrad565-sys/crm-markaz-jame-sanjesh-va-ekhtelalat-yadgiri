@@ -292,6 +292,13 @@ export const NOTIFICATION_TEMPLATES = [
   // ─── موتور تشخیص و مداخله: ارسال چک‌لیست با یک کلیک (لینک امن وب‌فرم) ───
   'bot_checklist_link',
 
+  // ─── m151 — مدارک بله: درخواست مدارک از خانواده + پاسخ‌های بات ───
+  'doc_request_sent',
+  'bot_doc_received',
+  'bot_doc_bad_type',
+  'bot_doc_too_large',
+  'bot_doc_failed',
+
   // — ترمیم خطای پایه: قالب در کد مصرف می‌شد ولی در فهرست منبع جا افتاده بود
   'bot_goal_denied'
 ] as const;

@@ -4151,8 +4151,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.25";
-var APP_MILESTONE = "m146";
+var APP_VERSION = "1.00.26";
+var APP_MILESTONE = "m151";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -10592,6 +10592,41 @@ ${vars.extra}` : void 0
         "",
         "\u067E\u0633 \u0627\u0632 \u062B\u0628\u062A \u067E\u0627\u0633\u062E\u060C \u0646\u062A\u06CC\u062C\u0647 \u0628\u0647\u200C\u0637\u0648\u0631 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0628\u0631\u0627\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0645\u0631\u06A9\u0632 \u0645\u06CC\u200C\u0622\u06CC\u062F."
       ].filter((l) => l !== void 0 && l !== "").join("\n");
+    // ─── T2 (m151) — مدارک بله: قالب‌های افزودنی ───
+    case "doc_request_sent":
+      return [
+        "\u{1F4DD} \u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0645\u062F\u0627\u0631\u06A9",
+        "",
+        vars.studentName ? `${vars.studentName} \u0639\u0632\u06CC\u0632\u060C \u0633\u0644\u0627\u0645 \u{1F44B}` : "\u0633\u0644\u0627\u0645 \u{1F44B}",
+        vars.extra?.trim() || "",
+        "",
+        "\u06A9\u0627\u0641\u06CC \u0627\u0633\u062A \u0639\u06A9\u0633 \u06CC\u0627 \u0641\u0627\u06CC\u0644 \u0631\u0627 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u062F\u0631 \u0647\u0645\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F\u061B",
+        `\u0645\u0633\u062A\u0642\u06CC\u0645 \u0628\u0647 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 ${vars.studentName ?? "\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632"} \u062F\u0631 ${clinic} \u0636\u0645\u06CC\u0645\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F.`
+      ].filter((l) => l !== void 0 && l !== "").join("\n");
+    case "bot_doc_received":
+      return [
+        `\u2705 ${vars.title ?? "\u0641\u0627\u06CC\u0644"} \u0634\u0645\u0627 \u062F\u0631\u06CC\u0627\u0641\u062A \u0634\u062F \u0648 \u0628\u0647 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 ${vars.studentName ?? "\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632"} \u0636\u0645\u06CC\u0645\u0647 \u0634\u062F.`,
+        "",
+        "\u0645\u0645\u0646\u0648\u0646 \u0627\u0632 \u0647\u0645\u0631\u0627\u0647\u06CC \u0634\u0645\u0627 \u{1F64F}"
+      ].join("\n");
+    case "bot_doc_bad_type":
+      return [
+        "\u26A0\uFE0F \u0627\u06CC\u0646 \u0646\u0648\u0639 \u0641\u0627\u06CC\u0644 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A \u2014 \u0641\u0642\u0637 \u0639\u06A9\u0633\u060C PDF\u060C Word\u060C Excel \u0648 \u0645\u062A\u0646.",
+        "",
+        "\u0644\u0637\u0641\u0627\u064B \u0645\u062F\u0631\u06A9 \u0631\u0627 \u0628\u0647\u200C\u0635\u0648\u0631\u062A \u0639\u06A9\u0633 \u06CC\u0627 PDF \u0628\u0641\u0631\u0633\u062A\u06CC\u062F."
+      ].join("\n");
+    case "bot_doc_too_large":
+      return [
+        "\u26A0\uFE0F \u062D\u062C\u0645 \u0641\u0627\u06CC\u0644 \u0628\u06CC\u0634 \u0627\u0632 \u06F5\u06F1\u06F2 \u06A9\u06CC\u0644\u0648\u0628\u0627\u06CC\u062A \u0627\u0633\u062A.",
+        "",
+        "\u0644\u0637\u0641\u0627\u064B \u0639\u06A9\u0633 \u0631\u0627 \u0628\u0627 \u06A9\u06CC\u0641\u06CC\u062A \u06A9\u0645\u062A\u0631 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u06CC\u0627 \u0641\u0642\u0637 \u0635\u0641\u062D\u0647\u200C\u0647\u0627\u06CC \u0627\u0635\u0644\u06CC \u0631\u0627 \u0639\u06A9\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F."
+      ].join("\n");
+    case "bot_doc_failed":
+      return [
+        "\u26A0\uFE0F \u062F\u0631\u06CC\u0627\u0641\u062A \u0641\u0627\u06CC\u0644 \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F \u2014 \u0644\u0637\u0641\u0627\u064B \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F.",
+        "",
+        "\u0627\u06AF\u0631 \u0686\u0646\u062F \u0628\u0627\u0631 \u062A\u06A9\u0631\u0627\u0631 \u0634\u062F\u060C \u0628\u0627 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F."
+      ].join("\n");
     case "homework_returned":
       return [
         "\u{1F4E4} \u0646\u062A\u06CC\u062C\u0647\u0654 \u062A\u06A9\u0644\u06CC\u0641 \u0628\u0627\u0632\u06AF\u0634\u062A",
@@ -35696,6 +35731,384 @@ function createExerciseSubmissionBot(deps) {
 }
 __name(createExerciseSubmissionBot, "createExerciseSubmissionBot");
 __name2(createExerciseSubmissionBot, "createExerciseSubmissionBot");
+// ─── T2 (m151) — مدارک بله: درخواست مدارک از خانواده + دریافت رسانه در webhook ───
+// کاملاً افزودنی؛ هم‌تراز src/domain/document-requests/* (تک‌منبع منطق، تکرار آگاهانه باندل).
+// نگاشت چت↔دانش‌آموز: bot_links (همان منبع بات بازگشت تکلیف). انبار فایل: همان ObjectStore
+// بانک تمرین. tryHandleMedia فقط وقتی «درخواست باز» هست رسانه را می‌گیرد؛ وگرنه null —
+// یعنی جریان‌های فعلی بله (بازگشت تکلیف) بدون تغییر ادامه می‌دهند (تست‌های webhook سبز می‌مانند).
+var DOC_REQUEST_TEMPLATE_LABELS = {
+  dictation: "نمونهٔ املا و نوشتن‌های کلاسی",
+  report_card: "کارنامه و برگه‌های مدرسه",
+  teacher_report: "گزارش کتبی معلم",
+  prev_eval: "ارزیابی/گزارش قبلی (بی‌بی‌اسک، گفتاردرمانی و…)"
+};
+var DOC_NOTE_MAX = 500;
+var DOC_TEMPLATE_KEYS = Object.keys(DOC_REQUEST_TEMPLATE_LABELS);
+function parseDocTemplates(raw) {
+  if (!Array.isArray(raw))
+    return null;
+  const out = [];
+  for (const item of raw) {
+    if (typeof item !== "string" || !DOC_TEMPLATE_KEYS.includes(item))
+      return null;
+    if (!out.includes(item))
+      out.push(item);
+  }
+  return out.length > 0 ? out : null;
+}
+__name(parseDocTemplates, "parseDocTemplates");
+__name2(parseDocTemplates, "parseDocTemplates");
+function normalizeDocNote(raw, max = DOC_NOTE_MAX) {
+  if (typeof raw !== "string")
+    return null;
+  const s = raw.replace(/\s+/g, " ").trim();
+  if (s.length === 0)
+    return null;
+  return Array.from(s).slice(0, max).join("");
+}
+__name(normalizeDocNote, "normalizeDocNote");
+__name2(normalizeDocNote, "normalizeDocNote");
+function sanitizeDocFilename(raw) {
+  const base = raw.split(/[/\\]/).pop() ?? "";
+  return base.replace(/\s+/g, " ").trim().slice(0, 200);
+}
+__name(sanitizeDocFilename, "sanitizeDocFilename");
+__name2(sanitizeDocFilename, "sanitizeDocFilename");
+function resolveDocFileName(media, fetchedMime, stampIso) {
+  if (media.type === "document" && media.fileName)
+    return sanitizeDocFilename(media.fileName);
+  const stamp = stampIso.slice(0, 19).replace(/[-:T]/g, "");
+  const ext = fetchedMime.includes("png") ? "png" : fetchedMime.includes("webp") ? "webp" : "jpg";
+  return `مدرک-${stamp}.${ext}`;
+}
+__name(resolveDocFileName, "resolveDocFileName");
+__name2(resolveDocFileName, "resolveDocFileName");
+function guardDocMedia(media, allowedMimes, maxBytes) {
+  if (media.type === "document") {
+    const declaredMime = (media.mime ?? "application/octet-stream").toLowerCase();
+    if (!allowedMimes.includes(declaredMime))
+      return "bad_type";
+  }
+  if (media.size !== null && media.size > maxBytes)
+    return "too_large";
+  return "ok";
+}
+__name(guardDocMedia, "guardDocMedia");
+__name2(guardDocMedia, "guardDocMedia");
+function buildDocRequestBody(templates, customNote, dueHint) {
+  const lines = ["این مدارک را برای پرونده نیاز داریم:"];
+  for (const t of templates)
+    lines.push(`• ${DOC_REQUEST_TEMPLATE_LABELS[t] ?? t}`);
+  if (customNote)
+    lines.push("", customNote);
+  if (dueHint)
+    lines.push(`مهلت پیشنهادی: ${dueHint}`);
+  return lines.join("\n");
+}
+__name(buildDocRequestBody, "buildDocRequestBody");
+__name2(buildDocRequestBody, "buildDocRequestBody");
+var DOC_BOT_ACTOR = {
+  staffId: "bale-bot",
+  email: "bale-bot@system.local",
+  role: "manager",
+  displayName: "بات بله"
+};
+var DOC_REQUEST_SELECT = `SELECT r.id, r.student_id, r.templates, r.custom_note, r.status, r.sent_at,
+       r.closed_at, r.due_hint, r.requested_by, r.delivered_chats,
+       s.full_name AS requested_by_name
+  FROM document_requests r
+  LEFT JOIN staff s ON s.id = r.requested_by`;
+function requestRowToDocRecord(r) {
+  let templates = [];
+  try {
+    const parsed = JSON.parse(r.templates);
+    if (Array.isArray(parsed))
+      templates = parsed;
+  } catch {
+    templates = [];
+  }
+  return {
+    id: r.id,
+    studentId: r.student_id,
+    templates,
+    customNote: r.custom_note,
+    status: r.status,
+    sentAt: r.sent_at,
+    closedAt: r.closed_at,
+    dueHint: r.due_hint,
+    requestedByName: r.requested_by_name,
+    deliveredChats: r.delivered_chats ?? 0
+  };
+}
+__name(requestRowToDocRecord, "requestRowToDocRecord");
+__name2(requestRowToDocRecord, "requestRowToDocRecord");
+function docRowToDocRecord(r) {
+  return {
+    id: r.id,
+    studentId: r.student_id,
+    requestId: r.request_id,
+    mediaKind: r.media_kind,
+    fileName: r.file_name,
+    mime: r.file_mime,
+    size: r.file_size ?? 0,
+    caption: r.caption,
+    storedAt: r.stored_at,
+    chatId: r.chat_id ?? ""
+  };
+}
+__name(docRowToDocRecord, "docRowToDocRecord");
+__name2(docRowToDocRecord, "docRowToDocRecord");
+function createDocumentRequestService(deps) {
+  const { db, audit, logger, storage, mediaFetcher, notify, settings } = deps;
+  const log = logger.child("doc-requests");
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  // — MIMEهای مجاز سند و سقف حجم: همان ثابت‌های بانک تمرین (ALLOWED_EXERCISE_FILE_MIME_TYPES /
+  //   MAX_EXERCISE_FILE_BYTES) — در همین باندل از آرایهٔ موتور تمرین خوانده می‌شود
+  const allowedDocMimes = ALLOWED_EXERCISE_FILE_MIME_TYPES.map((m) => String(m).toLowerCase());
+  async function familyChatsOf(studentId) {
+    const linkRows = await db.query(
+      `SELECT DISTINCT chat_id FROM bot_links
+        WHERE student_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
+      [studentId]
+    );
+    const prefRows = await db.query(
+      `SELECT chat_id FROM notification_prefs
+        WHERE student_id = ? AND chat_id IS NOT NULL AND channel = 'bale'`,
+      [studentId]
+    );
+    return [...new Set([...linkRows.map((r) => r.chat_id), ...prefRows.map((r) => r.chat_id)])];
+  }
+  __name(familyChatsOf, "familyChatsOf");
+  __name2(familyChatsOf, "familyChatsOf");
+  async function linkedStudentIds(chatId) {
+    const rows = await db.query(
+      `SELECT DISTINCT student_id FROM bot_links WHERE chat_id = ? AND status = 'linked' AND student_id IS NOT NULL`,
+      [chatId]
+    );
+    return [...new Set(rows.map((r) => r.student_id))];
+  }
+  __name(linkedStudentIds, "linkedStudentIds");
+  __name2(linkedStudentIds, "linkedStudentIds");
+  return {
+    async create(studentId, input, actor) {
+      const student = await db.queryOne(`SELECT id, first_name, last_name FROM students WHERE id = ?`, [studentId]);
+      if (!student)
+        throw new NotFoundError("دانش‌آموز");
+      const templates = parseDocTemplates(input.templates);
+      if (!templates)
+        throw new ValidationError("حداقل یک قالب مدرک معتبر انتخاب کنید");
+      const customNote = normalizeDocNote(input.customNote);
+      const dueHint = normalizeDocNote(input.dueHint, 60);
+      const chats = await familyChatsOf(studentId);
+      if (chats.length === 0) {
+        throw new ValidationError("هیچ گفتگوی بله‌ای به پروندهٔ این دانش‌آموز متصل نیست — ابتدا از کارت «یادآوری و اعلان‌ها» لینک اتصال خانواده را بسازید");
+      }
+      const id = crypto.randomUUID();
+      const studentName = `${student.first_name} ${student.last_name}`.trim();
+      await db.execute(
+        `INSERT INTO document_requests (id, student_id, templates, custom_note, status, sent_at, due_hint, requested_by, delivered_chats)
+         VALUES (?, ?, ?, ?, 'sent', ?, ?, ?, 0)`,
+        [id, studentId, JSON.stringify(templates), customNote, now().toISOString(), dueHint, actor.staffId]
+      );
+      const extra = buildDocRequestBody(templates, customNote, dueHint);
+      const clinicName = await settings.getClinicName();
+      const channel = notify.getChannel("bale") ? "bale" : "internal";
+      let delivered = 0;
+      for (const chatId of chats) {
+        const outcome = await notify.enqueue({
+          channel,
+          template: "doc_request_sent",
+          recipient: chatId,
+          studentId,
+          payload: { studentName, extra, clinicName },
+          dedupKey: `docreq:${id}:${chatId}`
+        });
+        if (!outcome.duplicate)
+          delivered += 1;
+      }
+      if (delivered > 0)
+        await notify.dispatchPending(50);
+      if (delivered > 0)
+        await db.execute(`UPDATE document_requests SET delivered_chats = ? WHERE id = ?`, [delivered, id]);
+      await audit.log({
+        actorId: actor.staffId,
+        action: "document.request.sent",
+        resourceType: "document_request",
+        resourceId: id,
+        changes: {
+          studentId: { from: null, to: studentId },
+          templates: { from: null, to: templates },
+          deliveredChats: { from: null, to: delivered }
+        }
+      });
+      log.info("doc.request.sent", { id, studentId, delivered });
+      const row = await db.queryOne(`${DOC_REQUEST_SELECT} WHERE r.id = ?`, [id]);
+      return { request: requestRowToDocRecord(row), deliveredChats: delivered };
+    },
+    async listRequests(studentId) {
+      const rows = await db.query(
+        `${DOC_REQUEST_SELECT} WHERE r.student_id = ? ORDER BY r.sent_at DESC, r.id DESC LIMIT 100`,
+        [studentId]
+      );
+      return rows.map(requestRowToDocRecord);
+    },
+    async listDocs(studentId) {
+      const rows = await db.query(
+        `SELECT id, student_id, request_id, media_kind, file_name, file_mime, file_size, file_key, caption, chat_id, stored_at
+           FROM student_received_docs
+          WHERE student_id = ?
+          ORDER BY stored_at DESC, id DESC
+          LIMIT 200`,
+        [studentId]
+      );
+      return rows.map(docRowToDocRecord);
+    },
+    async close(requestId, actor) {
+      const row = await db.queryOne(`${DOC_REQUEST_SELECT} WHERE r.id = ?`, [requestId]);
+      if (!row)
+        throw new NotFoundError("درخواست مدارک");
+      if (row.status === "closed")
+        throw new ConflictError("این درخواست قبلاً بسته شده است");
+      await db.execute(`UPDATE document_requests SET status = 'closed', closed_at = ? WHERE id = ?`, [now().toISOString(), requestId]);
+      await audit.log({
+        actorId: actor.staffId,
+        action: "document.request.closed",
+        resourceType: "document_request",
+        resourceId: requestId,
+        changes: { status: { from: row.status, to: "closed" } }
+      });
+      log.info("doc.request.closed", { requestId, by: actor.staffId });
+      const fresh = await db.queryOne(`${DOC_REQUEST_SELECT} WHERE r.id = ?`, [requestId]);
+      return requestRowToDocRecord(fresh);
+    },
+    async tryHandleMedia(chatId, media, caption) {
+      const studentIds = await linkedStudentIds(chatId);
+      if (studentIds.length === 0)
+        return null;
+      const placeholders = studentIds.map(() => "?").join(", ");
+      const openRow = await db.queryOne(
+        `SELECT id, student_id FROM document_requests
+          WHERE status != 'closed' AND student_id IN (${placeholders})
+          ORDER BY sent_at DESC, id DESC LIMIT 1`,
+        studentIds
+      );
+      if (!openRow)
+        return null;
+      const studentNameRow = await db.queryOne(`SELECT first_name || ' ' || last_name AS name FROM students WHERE id = ?`, [openRow.student_id]);
+      const studentName = studentNameRow?.name ?? "دانش‌آموز";
+      const guard = guardDocMedia(media, allowedDocMimes, MAX_EXERCISE_FILE_BYTES);
+      if (guard === "bad_type")
+        return { text: renderTemplate("bot_doc_bad_type"), buttons: null };
+      if (guard === "too_large")
+        return { text: renderTemplate("bot_doc_too_large"), buttons: null };
+      if (!mediaFetcher)
+        return { text: renderTemplate("bot_doc_failed"), buttons: null };
+      let fetched;
+      try {
+        fetched = await mediaFetcher.fetch(media.fileId);
+      } catch (err) {
+        log.warn("doc.fetch.failed", { chatId, error: err instanceof Error ? err.message : String(err) });
+        return { text: renderTemplate("bot_doc_failed"), buttons: null };
+      }
+      const mime = media.type === "photo" ? "image/jpeg" : (media.mime ?? fetched.mime ?? "application/octet-stream").toLowerCase();
+      if (fetched.bytes.length === 0)
+        return { text: renderTemplate("bot_doc_failed"), buttons: null };
+      if (guardDocMedia({ type: media.type, mime, size: fetched.bytes.length }, allowedDocMimes, MAX_EXERCISE_FILE_BYTES) === "too_large")
+        return { text: renderTemplate("bot_doc_too_large"), buttons: null };
+      const id = crypto.randomUUID();
+      const key = `doc/${id}`;
+      await storage.put(key, fetched.bytes, mime);
+      const fileName = resolveDocFileName(media, mime, now().toISOString());
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO student_received_docs (id, student_id, request_id, media_kind, file_name, file_mime, file_size, file_key, caption, chat_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, openRow.student_id, openRow.id, media.type, fileName, mime, fetched.bytes.length, key, caption, chatId]
+        );
+        await tx.execute(
+          `UPDATE document_requests SET status = 'received' WHERE id = ? AND status = 'sent'`,
+          [openRow.id]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: DOC_BOT_ACTOR.staffId,
+          action: "document.doc.received",
+          resourceType: "student_received_doc",
+          resourceId: id,
+          changes: {
+            requestId: { from: null, to: openRow.id },
+            studentId: { from: null, to: openRow.student_id },
+            fileName: { from: null, to: fileName },
+            sizeBytes: { from: null, to: fetched.bytes.length }
+          }
+        });
+      });
+      log.info("doc.received", { id, requestId: openRow.id, studentId: openRow.student_id, size: fetched.bytes.length });
+      return { text: renderTemplate("bot_doc_received", { studentName, title: media.type === "photo" ? "عکس" : "فایل" }), buttons: null };
+    },
+    async getDocFile(docId) {
+      const row = await db.queryOne(
+        `SELECT id, student_id, request_id, media_kind, file_name, file_mime, file_size, file_key, caption, chat_id, stored_at
+           FROM student_received_docs WHERE id = ?`,
+        [docId]
+      );
+      if (!row)
+        return null;
+      const obj = await storage.get(row.file_key);
+      if (!obj)
+        return null;
+      return { bytes: obj.bytes, filename: row.file_name, mime: row.file_mime ?? obj.mime };
+    }
+  };
+}
+__name(createDocumentRequestService, "createDocumentRequestService");
+__name2(createDocumentRequestService, "createDocumentRequestService");
+function registerDocumentRequestRoutes(app, service) {
+  app.post("/api/students/:id/document-requests", async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json().catch(() => ({}));
+    const raw = body ?? {};
+    const result = await service.create(c.req.param("id"), {
+      templates: Array.isArray(raw.templates) ? raw.templates : [],
+      customNote: typeof raw.custom_note === "string" ? raw.custom_note : null,
+      dueHint: typeof raw.due_hint === "string" ? raw.due_hint : null
+    }, actor);
+    return c.json({ data: result }, 201);
+  });
+  app.get("/api/students/:id/document-requests", async (c) => {
+    const items = await service.listRequests(c.req.param("id"));
+    return c.json({ data: items }, 200);
+  });
+  app.get("/api/students/:id/received-docs", async (c) => {
+    const items = await service.listDocs(c.req.param("id"));
+    return c.json({ data: items }, 200);
+  });
+  app.post("/api/requests/:id/close", async (c) => {
+    const actor = getAuthContext(c);
+    const request = await service.close(c.req.param("id"), actor);
+    return c.json({ data: request }, 200);
+  });
+  app.get("/api/students/:id/received-docs/:docId/file", async (c) => {
+    const docId = c.req.param("docId");
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(docId))
+      throw new NotFoundError("مدرک");
+    const file = await service.getDocFile(docId);
+    if (!file)
+      throw new NotFoundError("مدرک");
+    const asciiFallback = file.filename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
+    const mime = file.mime === "text/html" ? "text/html; charset=utf-8" : file.mime;
+    return new Response(file.bytes, {
+      status: 200,
+      headers: {
+        "Content-Type": mime,
+        "Content-Disposition": `inline; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+        // — هم‌سنگ مسیر فایل تمرین: محتوای آپلودی در origin سندباکس‌شده اجرا می‌شود
+        "Content-Security-Policy": "sandbox allow-scripts allow-popups"
+      }
+    });
+  });
+}
+__name(registerDocumentRequestRoutes, "registerDocumentRequestRoutes");
+__name2(registerDocumentRequestRoutes, "registerDocumentRequestRoutes");
 var CONFIRM_BUTTONS = [
   [
     { text: "\u2705 \u062B\u0628\u062A \u0646\u0647\u0627\u06CC\u06CC", callbackData: "wl:do" },
@@ -38483,6 +38896,13 @@ function createNotifyAppService(deps) {
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
         case "media_received": {
+          // ─── T2 (m151) مدارک بله: چت متصل با درخواست باز → پیوست به پرونده؛
+          // وگرنه null → جریان‌های فعلی (بازگشت تکلیف) بدون تغییر ادامه می‌دهند
+          if (deps.documentRequests) {
+            const docOut = await deps.documentRequests.tryHandleMedia(cmd.chatId, cmd.media, cmd.caption);
+            if (docOut)
+              return { handled: true, reply: docOut.text, buttons: docOut.buttons };
+          }
           if (!subBot) {
             return {
               handled: true,
@@ -42148,6 +42568,18 @@ function createServices(deps) {
   const keys = createKeysService({ db, audit, logger });
   const notifyCore = createNotifyService({ db, logger });
   notifyCore.registerChannel(createInternalChannel(logger));
+  // ─── T2 (m151) — مدارک بله: همان انبار فایل بانک تمرین + همان حلقهٔ رسانهٔ بله ───
+  // بعد از notifyCore (صف اعلان پیام درخواست) و settings (نام مرکز)
+  const docMediaFetcher = deps.mediaFetcher !== void 0 ? deps.mediaFetcher : deps.baleToken ? createBaleMediaFetcher({ token: deps.baleToken }) : null;
+  const documentRequests = createDocumentRequestService({
+    db,
+    audit,
+    logger,
+    storage: exerciseStorage,
+    mediaFetcher: docMediaFetcher,
+    notify: notifyCore,
+    settings
+  });
   const notify = createNotifyAppService({
     db,
     audit,
@@ -42161,6 +42593,7 @@ function createServices(deps) {
     webhookSecret: deps.webhookSecret ?? null,
     clinicName: deps.clinicName,
     exerciseBank,
+    documentRequests,
     publicBaseUrl: deps.publicBaseUrl ?? null,
     // — رویدادهای پرونده (ویزارد بات + چک‌لیست خانواده)
     caseEvents,
@@ -42255,7 +42688,7 @@ function createServices(deps) {
   const clinicalEngine = createClinicalEngineService({ db, audit, logger });
   const otEngine = createOtEngineService({ db, audit, logger });
   const reasoningEngine = createReasoningEngineService({ db, logger, otEngine });
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, reports, waitlist, followups, sessionNotes, todos, exerciseBank, caseEvents, clinicalEngine, otEngine, reasoningEngine };
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, reasoningEngine };
 }
 __name(createServices, "createServices");
 __name2(createServices, "createServices");
@@ -42383,6 +42816,8 @@ function createApp(deps) {
   registerFollowUpRoutes(app, services.followups);
   registerTodoRoutes(app, services.todos);
   registerExerciseBankRoutes(app, services.exerciseBank);
+  // ─── T2 (m151) — مدارک بله (درخواست مدارک + پنل دریافتی‌ها) ───
+  registerDocumentRequestRoutes(app, services.documentRequests);
   registerCaseEventsRoutes(app, services.caseEvents);
   registerClinicalEngineRoutes(app, services.clinicalEngine);
   registerReasoningEngineRoutes(app, services.reasoningEngine);
