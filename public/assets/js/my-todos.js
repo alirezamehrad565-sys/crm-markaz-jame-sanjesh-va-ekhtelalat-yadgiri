@@ -65,7 +65,8 @@ export function renderMyTodosCard() {
   const body = el('div', { class: 'card__body' });
   const card = el(
     'div',
-    { class: 'card todos-card' },
+    // m145 — ریتم فاصلهٔ یکنواخت داشبورد: کارت بدون حاشیهٔ پایین به کارت قبلی می‌چسبید (0px seam)
+    { class: 'card todos-card', style: { marginBottom: 'var(--sp-4)' } },
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('check', 18), 'کارهای من'), countBadge),
     body
   );

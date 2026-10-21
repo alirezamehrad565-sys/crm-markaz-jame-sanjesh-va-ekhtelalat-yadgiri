@@ -293,7 +293,8 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
     parts.push(
       el(
         'div',
-        { class: 'card' },
+        // m145 — کارت بدون حاشیهٔ پایین به کارت بعدی می‌چسبید (0px seam) — ریتم یکنواخت ۱۶px
+        { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
         el(
           'div',
           { class: 'card__head' },
@@ -657,7 +658,8 @@ function drawScreeningGoalCard(goal) {
 
   return el(
     'div',
-    { class: 'card' },
+    // m145 — فاصلهٔ یکنواخت با کارت «روند ۷ روز» بالا و بلاک اطلاع‌رسانی پایین
+    { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
     el(
       'div',
       { class: 'card__head' },
