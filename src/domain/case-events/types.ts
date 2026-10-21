@@ -326,8 +326,13 @@ export interface CaseEventsService {
   verifyFillToken(id: string, token: string): Promise<boolean>;
   /** ساخت لینک وب‌فرم برای پیام خانواده — فقط چک‌لیست در انتظار؛ وگرنه null */
   mintFillLink(id: string, publicBaseUrl: string): Promise<string | null>;
+  /**
+   * — T5: رکورد کامپوننت‌های پکیج به‌ترتیب قرارداد (فرم عمومی پکیجی).
+   * اگر نوع پکیج نباشد → null؛ کامپوننتِ غایب/غیرفعال → خطا.
+   */
+  listPackageComponentTypes(typeId: string): Promise<CaseEventTypeRecord[] | null>;
   /** ثبت پاسخ‌های خانواده (بات یا وب) — تحلیل + وضعیت + audit هم‌تراکنش */
-  fillByFamily(id: string, input: { values: Record<string, number>; sourceChatId: string | null; viaWeb: boolean }, actor: AuthContext): Promise<CaseEventRecord>;
+  fillByFamily(id: string, input: { values: Record<string, number | string>; sourceChatId: string | null; viaWeb: boolean }, actor: AuthContext): Promise<CaseEventRecord>;
 }
 
 // ─── شکل‌های موتور تشخیص و مداخله ───

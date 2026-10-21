@@ -49,6 +49,29 @@ export const CHECKLIST_BOT_MAX_ITEMS = 8;
 export const EVENT_FILES_MAX = 10;
 /** — کلید فیلد «اقدام بعدی» — مقدار follow_up آن هوک ساخت پیگیری دارد */
 export const NEXT_ACTION_FIELD_KEY = 'next_action';
+
+// ─── پکیج فرم جامع خانواده (T5 m150 — چند-ابزاری) ───
+
+/** کلید پکیج فرم جامع خانواده — تعریف کامل در clinical-engine/battery-composite.json */
+export const COMPOSITE_FAMILY_KEY = 'ce-comp-family-v2';
+/**
+ * کامپوننت‌های پکیج به‌ترتیب اجرا — آینهٔ packageComponents در battery-composite.json
+ * (تست پاریتی دو سمت را گوار می‌کند). هر کامپوننت در submit، رویداد مستقل خودش را می‌گیرد
+ * (همان اسکورینگ/زیرمقیاس/باند ابزار تکی) — موتور بعداً هر دو منبع تکی/تجمیعی را با همان قواعد می‌خواند.
+ */
+export const COMPOSITE_FAMILY_COMPONENTS: readonly string[] = [
+  'ce-snap-iv-p-v1',
+  'ce-sdq-p-v1',
+  'ce-scared-p-v1',
+  'ce-id-adapt-v1'
+];
+
+/** آیا این نوع، پکیج چند-ابزاری است؟ کامپوننت‌ها را به‌ترتیب می‌دهد؛ وگرنه null */
+export function packageComponentsOf(typeKey: string | null | undefined): readonly string[] | null {
+  if (typeKey === COMPOSITE_FAMILY_KEY) return COMPOSITE_FAMILY_COMPONENTS;
+  return null;
+}
+
 /** — مقدارهای مجاز فیلد اقدام بعدی — هم‌تراز NEXT_ACTION_VALUES بدون none */
 export const NEXT_ACTION_OPTIONS = ['هیچ', 'پیگیری', 'نوبت بعدی', 'تماس با خانواده', 'ارجاع'] as const;
 /** مقداری که هوک پیگیری می‌سازد */
@@ -172,14 +195,57 @@ function faNum(s: string | number): string {
   return String(s).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
 }
 
-/** بررسی‌های معنایی تعریف فیلد — پیام فارسی برای فرم‌ساز پنل (: نمره‌گذاری روان‌سنجی v2) */
+/**
+ * بررسی‌های معنایی تعریف فیلد — پیام فارسی برای فرم‌ساز پنل (: نمره‌گذاری روان‌سنجی v2)
+ * — packageComponents (T5): پکیج چند-ابزاری — فرم زمینهٔ غیرنمره‌دار + اعلام کامپوننت‌ها؛
+ *   نمره‌دهی فقط در کامپوننت‌هاست (هر type سقف ۴۵ فیلد/۸ زیرمقیاس خودش را دارد)
+ */
 export function validateTypeDefinition(input: {
   category: string;
   fields: CaseEventField[];
   bands?: CaseEventBand[] | null;
   familyFillable?: boolean;
   subscales?: CaseEventSubscale[] | null;
+  packageComponents?: string[] | null;
 }): void {
+  // پکیج چند-ابزاری — قواعد خودش (قبل از قواعد چک‌لیست/جلسه)
+  const pkg = input.packageComponents ?? null;
+  if (pkg && pkg.length > 0) {
+    if (input.familyFillable !== true) {
+      throw new ValidationError('فرم پکیجی برای پر کردن توسط خانواده طراحی نشده است');
+    }
+    if (input.bands && input.bands.length > 0) {
+      throw new ValidationError('فرم پکیجی باند کل ندارد — نمره‌دهی در کامپوننت‌هاست');
+    }
+    if (input.subscales && input.subscales.length > 0) {
+      throw new ValidationError('فرم پکیجی زیرمقیاس ندارد — زیرمقیاس‌ها در کامپوننت‌هاست');
+    }
+    if (new Set(pkg).size !== pkg.length) {
+      throw new ValidationError('کامپوننت‌های پکیج تکراری‌اند');
+    }
+    const ctxKeys = new Set<string>();
+    for (const f of input.fields) {
+      if (f.type === 'heading') {
+        if (!f.label || f.label.trim().length === 0) {
+          throw new ValidationError('متن سربرگ بخش نمی‌تواند خالی باشد');
+        }
+        continue;
+      }
+      if (f.type === 'scale' || f.type === 'single') {
+        throw new ValidationError(`آیتم نمره‌دار «${f.label}» در فرم پکیجی مجاز نیست — نمره‌دهی در کامپوننت‌هاست`);
+      }
+      if (ctxKeys.has(f.key)) throw new ValidationError(`کلید فیلد تکراری است: ${f.key}`);
+      ctxKeys.add(f.key);
+      if (f.type === 'select' && (!f.options || f.options.length < 2)) {
+        throw new ValidationError(`فیلد انتخابی «${f.label}» حداقل به دو گزینه نیاز دارد`);
+      }
+      if (f.type !== 'select' && f.options) {
+        throw new ValidationError(`فیلد «${f.label}» گزینهٔ انتخابی ندارد — نوع آن select نیست`);
+      }
+    }
+    return;
+  }
+
   const keys = new Set<string>();
   const isChecklist = input.category === 'checklist';
   const subscaleIds = new Set((input.subscales ?? []).map((s) => s.id));

@@ -27,6 +27,9 @@ import { DSM_RECORDS } from './dsm-criteria';
 import { targetOf } from './targets';
 import { WCPM_NORM_50TH, ALPHA_15S_NORM, DIGITS_2MIN_NORM, ENGINE_DISCLAIMER, batteryDef } from './instruments';
 import { WECHSLER_W4_EVENT_KEY, wechslerHypothesisBoost } from './wechsler-link';
+// T4 (m148) — لایهٔ سیگنال شرح‌حال: قرارداد ClinicalSignal از signals.ts (افزودنی — بدون تغییر کلیدهای قدیمی)
+import type { ClinicalSignal, SignalDomain } from './signals';
+import { makeSignal, sortSignals } from './signals';
 
 // ───────── نگاشت پروب‌ها (هاردکد — پلن §۴ لایهٔ ۳) ─────────
 
@@ -38,6 +41,76 @@ export const PROBES: ProbeDef[] = [
 
 function probeDefOf(toolKey: string): ProbeDef | undefined {
   return PROBES.find((p) => p.toolKey === toolKey);
+}
+
+// ───────── شرح‌حال — کلیدهای ابزار (T4 m148) ─────────
+
+/** نسخهٔ ۲ — فقط برای پرونده‌های قدیمی (برای ورودی جدید غیرفعال شده) */
+export const ANAMNESIS_V2_KEY = 'ce-anamnesis-v2';
+/** نسخهٔ ۳ — فرم ساخت‌یافتهٔ جدید؛ حل شواهد شرح‌حال نسخهٔ ۳ را ترجیح می‌دهد */
+export const ANAMNESIS_V3_KEY = 'ce-anamnesis-v3';
+
+/** آخرین شرح‌حال مؤثر پرونده — نسخهٔ ۳ اگر رویداد داشته باشد، وگرنه نسخهٔ ۲ (فال‌بک دقیق) — مصرف‌کننده: تست‌ها */
+export function latestAnamnesisKeyOf(latest: Map<string, EvidenceEvent>): string {
+  return latest.has(ANAMNESIS_V3_KEY) ? ANAMNESIS_V3_KEY : ANAMNESIS_V2_KEY;
+}
+
+// ───────── سیگنال‌های شرح‌حال نسخهٔ ۳ (T4 m148 — قرارداد کلیدها برای T3/T6) ─────────
+
+// فیلدهای ساخت‌یافتهٔ نسخهٔ ۳ با گزینه‌های ثابت می‌آیند؛ هر گزینه به شدت ۰..۱ نگاشت می‌شود.
+// جدول بازه‌های نگرانی ۴تایی — مشترک بین فیلدهای concern (قرارداد فرم v3):
+//   «بدون نگرانی»=۰ · «کم»=۰٫۳۳ · «متوسط»=۰٫۶۷ · «زیاد — نگران‌کننده»=۱
+const ANAMNESIS_V3_LEVEL4: Record<string, number> = {
+  'بدون نگرانی': 0,
+  'کم': 0.33,
+  'متوسط': 0.67,
+  'زیاد — نگران‌کننده': 1
+};
+
+const level4Of = (label: string): number | null => {
+  const v = ANAMNESIS_V3_LEVEL4[label];
+  return v === undefined ? null : v;
+};
+
+/** جدول نگاشت فیلد نسخهٔ ۳ → سیگنال (تک‌منبع قرارداد؛ منبع همیشه anamnesis) */
+const ANAMNESIS_V3_SIGNAL_SPEC: { fieldKey: string; sigKey: string; domain: SignalDomain; faHead: string; valueOf: (label: string) => number | null }[] = [
+  { fieldKey: 'sld_read_concern', sigKey: 'anam.sld_read', domain: 'academic', faHead: 'خواندن', valueOf: level4Of },
+  { fieldKey: 'sld_write_concern', sigKey: 'anam.sld_write', domain: 'academic', faHead: 'نوشتن و املا', valueOf: level4Of },
+  { fieldKey: 'sld_calc_concern', sigKey: 'anam.sld_calc', domain: 'academic', faHead: 'ریاضی', valueOf: level4Of },
+  { fieldKey: 'attention_concern', sigKey: 'anam.attention', domain: 'attention', faHead: 'توجه و تمرکز', valueOf: level4Of },
+  { fieldKey: 'hyper_concern', sigKey: 'anam.hyper', domain: 'attention', faHead: 'بی‌قراری و تکانش', valueOf: level4Of },
+  { fieldKey: 'exam_anxiety', sigKey: 'anam.exam_anxiety', domain: 'emotional', faHead: 'اضطراب امتحان', valueOf: level4Of },
+  { fieldKey: 'morning_somatic', sigKey: 'anam.morning_somatic', domain: 'emotional', faHead: 'نشانهٔ جسمانی صبحگاهی', valueOf: (l) => ({ 'نه': 0, 'گاهی': 0.5, 'بیشتر روزها — بدون علت پزشکی': 1 }[l] ?? null) },
+  { fieldKey: 'crisis_event', sigKey: 'anam.crisis_event', domain: 'emotional', faHead: 'رویداد بحرانی اخیر', valueOf: (l) => ({ 'نه': 0, 'بله — برای خود کودک': 1, 'بله — برای خانواده': 0.75, 'نمی‌خواهم بگویم': 0.5 }[l] ?? null) },
+  { fieldKey: 'sensory_concern', sigKey: 'anam.sensory', domain: 'motor', faHead: 'حساسیت حسی', valueOf: level4Of },
+  { fieldKey: 'home_language', sigKey: 'anam.home_language', domain: 'language', faHead: 'زبان گفت‌وگوی خانه', valueOf: (l) => ({ 'فارسی': 0, 'دوزبانه': 0.5, 'غیرفارسی': 1 }[l] ?? null) },
+  { fieldKey: 'decline_scope', sigKey: 'anam.decline_scope', domain: 'academic', faHead: 'دامنهٔ افت تحصیلی', valueOf: (l) => ({ 'افت محسوسی ندارم': 0, 'فقط یکی دو درس مشخص': 0.33, 'بیشترِ درس‌ها افت کرده‌اند': 0.67, 'همهٔ درس‌ها با هم افت کرده‌اند': 1 }[l] ?? null) },
+  { fieldKey: 'absence_level', sigKey: 'anam.absence', domain: 'academic', faHead: 'غیبت از مدرسه', valueOf: (l) => ({ 'ندارد': 0, 'کمتر از یک ماه': 0.33, 'یک تا سه ماه': 0.67, 'بیش از سه ماه': 1 }[l] ?? null) },
+  { fieldKey: 'school_change', sigKey: 'anam.school_change', domain: 'academic', faHead: 'تغییر مدرسه (سه سال اخیر)', valueOf: (l) => ({ 'هیچ': 0, 'یک بار': 0.33, 'دو بار': 0.67, 'سه بار یا بیشتر': 1 }[l] ?? null) }
+];
+
+/** نگاشت گزینهٔ نسخهٔ ۳ به شدت ۰..۱ از جدول قرارداد — ناشناخته → null */
+function anamV3ValueOf(fieldKey: string, label: string): number | null {
+  const spec = ANAMNESIS_V3_SIGNAL_SPEC.find((s) => s.fieldKey === fieldKey);
+  return spec ? spec.valueOf(label) : null;
+}
+
+/**
+ * سیگنال‌های شرح‌حال از آخرین رویداد نسخهٔ ۳ — افزودنی (کلید جدید anamnesisSignals).
+ * فقط نسخهٔ ۳ سیگنال می‌دهد؛ نسخهٔ ۲ دقیقاً رفتار امروز (هیوریستیک متن) را دارد → []
+ * گزینهٔ ناشناخته/فیلد بی‌پاسخ نادیده گرفته می‌شود — خروجی قطعی و مرتب‌شده با sortSignals.
+ */
+export function anamnesisSignalsOf(event: EvidenceEvent | undefined): ClinicalSignal[] {
+  if (!event || event.toolKey !== ANAMNESIS_V3_KEY || !event.payload) return [];
+  const signals: ClinicalSignal[] = [];
+  for (const spec of ANAMNESIS_V3_SIGNAL_SPEC) {
+    const label = event.payload[spec.fieldKey]?.value;
+    if (!label) continue;
+    const value = spec.valueOf(label);
+    if (value === null) continue; // گزینهٔ خارج از قرارداد — نادیده (دادهٔ آینده‌پذیر)
+    signals.push(makeSignal(spec.domain, spec.sigKey, value, 'anamnesis', `${spec.faHead}: ${label}`));
+  }
+  return sortSignals(signals);
 }
 
 // ───────── ابزارهای کمکی ─────────
@@ -131,11 +204,28 @@ function ruleColor(rule: EvidenceRule, event: EvidenceEvent | undefined): BandCo
 /**
  * پرچم‌های شرح‌حال — هیوریستیک شفاف v1 روی متن فیلدهای آزاد (کامنت‌دار و تست‌پذیر).
  * با دادهٔ مرکز به فلگ ساخت‌یافتهٔ دقیق ارتقا می‌یابد.
+ * T4 (m148): نسخهٔ ۲ عیناً همین هیوریستیک می‌ماند (فال‌بک دقیق پرونده‌های قدیمی)؛
+ * نسخهٔ ۳ پرچم را از کلیدهای ساخت‌یافته می‌گیرد — نه از متن آزاد.
  */
 const ANAMNESIS_TEXT_FIELDS = ['chief_complaint', 'weak_subjects', 'development', 'medical'];
 
 function anamnesisFlagFor(targetKey: string, event: EvidenceEvent | undefined): boolean {
-  if (!event || event.toolKey !== 'ce-anamnesis-v2') return false;
+  // نسخهٔ ۳ — کلیدهای ساخت‌یافته (قرارداد فرم v3)
+  if (event && event.toolKey === ANAMNESIS_V3_KEY) {
+    if (targetKey === 'slow_learner') {
+      // «افت همه‌درسی/بیشترِ درس‌ها» — از گزینهٔ ساخت‌یافتهٔ decline_scope (≥۰٫۶۷)
+      const v = anamV3ValueOf('decline_scope', event.payload?.['decline_scope']?.value ?? '');
+      return v !== null && v >= 0.67;
+    }
+    if (targetKey === 'anxiety') {
+      // «نشانهٔ جسمانی صبحگاهی بدون علت پزشکی» — گزینه‌های «گاهی» و «بیشتر روزها» (همان حساسیت متن آزاد v2)
+      const v = anamV3ValueOf('morning_somatic', event.payload?.['morning_somatic']?.value ?? '');
+      return v !== null && v >= 0.5;
+    }
+    return false;
+  }
+  // نسخهٔ ۲ — هیوریستیک متن آزاد (بایت‌به‌بایت رفتار امروز)
+  if (!event || event.toolKey !== ANAMNESIS_V2_KEY) return false;
   const text = payloadText(event, ANAMNESIS_TEXT_FIELDS);
   if (!text) return false;
   if (targetKey === 'slow_learner') {
@@ -265,6 +355,9 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
 
   const seen = [...latest.keys()];
   const seenTitles = [...new Set([...latest.values()].map((e) => e.typeTitle))];
+  // شرح‌حال مؤثر پرونده (نسخهٔ ۳ ترجیح، فال‌بک نسخهٔ ۲) + سیگنال‌های افزودنی (فقط نسخهٔ ۳ سیگنال می‌دهد)
+  const anamKey = latest.has(ANAMNESIS_V3_KEY) ? ANAMNESIS_V3_KEY : ANAMNESIS_V2_KEY;
+  const anamnesisSignals = anamnesisSignalsOf(latest.get(ANAMNESIS_V3_KEY));
 
   const hypotheses: RankedHypothesis[] = [];
   const criteria: InferenceOutput['criteria'] = [];
@@ -285,6 +378,8 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
       toolKeys.add(ruleSet.consensus.parent);
       toolKeys.add(ruleSet.consensus.teacher);
     }
+    // شرح‌حال: قواعد به کلید v2 اشاره می‌کنند — اگر پرونده نسخهٔ ۳ دارد، همان هم شاهد است (T4)
+    if (toolKeys.has(ANAMNESIS_V2_KEY)) toolKeys.add(anamKey);
     // تقویت وکسلر خودش شاهد است — فرضیه‌های engine_output فرم ce-wechsler-w4-v1 به هدف همین ruleSet
     const wBoost0 = wechslerHypothesisBoost(latest.get(WECHSLER_W4_EVENT_KEY), ruleSet.targetKey);
     const hasData = [...toolKeys].some((k) => {
@@ -321,8 +416,8 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
       }
     }
 
-    // پرچم شرح‌حال هدف‌محور (w۱)
-    if (ruleSet.evidence.some((r) => r.kind === 'anamnesis') && anamnesisFlagFor(ruleSet.targetKey, latest.get('ce-anamnesis-v2'))) {
+    // پرچم شرح‌حال هدف‌محور (w۱) — نسخهٔ ۳ ترجیح دارد؛ بی‌نسخهٔ ۳، نسخهٔ ۲ با هیوریستیک امروز
+    if (ruleSet.evidence.some((r) => r.kind === 'anamnesis') && anamnesisFlagFor(ruleSet.targetKey, latest.get(anamKey))) {
       score += 1;
       const rule = ruleSet.evidence.find((r) => r.kind === 'anamnesis');
       if (rule) evidenceFa.push(rule.fa);
@@ -373,9 +468,13 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
     // ۵) گپ اطلاعاتی — ابزار بعدی همان هدف
     const missingFa: string[] = [];
     for (const toolKey of ruleSet.nextInstrument) {
-      if (!latest.has(toolKey)) {
-        const probe = probeDefOf(toolKey);
-        missingFa.push(probe ? `${probe.fa} هنوز گرفته نشده است.` : `${batteryDef(toolKey)?.title ?? `ابزار «${toolKey}»`} هنوز ارسال/ثبت نشده است.`);
+      // شرح‌حال (T4): وجود هرکدام از نسخهٔ ۲ یا ۳ گپ را پر می‌کند؛ اگر هیچ‌کدام نیست،
+      // پیشنهاد به فرم فعال (نسخهٔ ۳) اشاره می‌کند — پروندهٔ قدیمیِ فقط-v2 بایت‌به‌بایت امروز می‌ماند.
+      const satisfied = latest.has(toolKey) || (toolKey === ANAMNESIS_V2_KEY && latest.has(ANAMNESIS_V3_KEY));
+      const displayKey = toolKey === ANAMNESIS_V2_KEY && !latest.has(ANAMNESIS_V2_KEY) ? ANAMNESIS_V3_KEY : toolKey;
+      if (!satisfied) {
+        const probe = probeDefOf(displayKey);
+        missingFa.push(probe ? `${probe.fa} هنوز گرفته نشده است.` : `${batteryDef(displayKey)?.title ?? `ابزار «${displayKey}»`} هنوز ارسال/ثبت نشده است.`);
       }
     }
 
@@ -438,6 +537,8 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
     nextActions: [...nextActionsSet].slice(0, 8),
     dataCoverage: { seen, seenTitles },
     referralFlags: [...new Set(referralFlags)].slice(0, 10),
-    disclaimer: ENGINE_DISCLAIMER
+    disclaimer: ENGINE_DISCLAIMER,
+    // T4 (m148) — کلید افزودنی: سیگنال‌های شرح‌حال نسخهٔ ۳ (پروندهٔ فقط-v2 → [])
+    anamnesisSignals
   };
 }

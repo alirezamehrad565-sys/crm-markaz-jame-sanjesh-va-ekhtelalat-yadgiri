@@ -51,6 +51,10 @@ export async function fetchCaseEventTypes(activeOnly = true) {
  * با دو فلگ موجود محاسبه می‌شود (بدون مایگریشن): category + familyFillable + audience
  */
 export function fillTargetOf(type) {
+  // — T5 (m150): پکیج فرم جامع خانواده — دستهٔ session اما مسیر ارسال بله برای خانواده
+  if (type?.key === 'ce-comp-family-v2' && type?.familyFillable) {
+    return { key: 'family', group: 'family', label: 'خانواده', badge: 'فرم جامع خانواده — با بله', badgeClass: 'badge--accent' };
+  }
   if (type?.category === 'checklist' && type?.familyFillable) {
     if (type.audience === 'teacher') {
       return { key: 'teacher', group: 'teacher', label: 'معلم', badge: 'فرم معلم — با بله', badgeClass: 'badge--warning' };
@@ -675,7 +679,9 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
     toastError(err);
     return;
   }
-  const checklists = suggestions.filter((s) => s.type.category === 'checklist' && s.type.familyFillable);
+  const checklists = suggestions.filter(
+    (s) => s.type.familyFillable && (s.type.category === 'checklist' || s.type.key === 'ce-comp-family-v2')
+  );
   if (checklists.length === 0) {
     toast('هنوز چک‌لیست قابل ارسالی در کتابخانه نیست — از «رویدادساز» اضافه کنید');
     return;

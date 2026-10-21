@@ -47,6 +47,13 @@ export function registerClinicalEngineRoutes(app: AppHono, service: ClinicalEngi
     return c.json({ data }, 200);
   });
 
+  // ─── پیشنهادگر چک‌لیست (T3/m147) — پلن ۱۴ قاعده‌ای با دلیل؛ خواندن، بدون ثبت ───
+  app.get('/api/students/:id/checklist-plan', requireRole('manager', 'secretary', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const data = await service.getChecklistPlan(c.req.param('id'), actor);
+    return c.json({ data }, 200);
+  });
+
   // ─── دانش‌نامهٔ اهداف (فرم پنل/بات) ───
   app.get('/api/clinical-targets', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const data = await service.listTargets();

@@ -3,12 +3,18 @@
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
 // باتری ابزارهای روان‌سنجی ثابت (battery-v1) — پلن §۴
-// منبع حقیقت: سه فایل JSON کنار همین ماژول (همین ساختار در migration seed می‌شود)
+// منبع حقیقت: چهار فایل JSON کنار همین ماژول (همین ساختار در migration seed می‌شود؛
+// battery-composite.json — T5/m150: فرم جامع خانواده)
 // هر تغییر ملاک/آیتم = نسخهٔ جدید (battery-v2) — گزارش‌های قدیم دست‌نخورده می‌مانند.
 
 import screeningJson from './battery-screening.json';
 import specificJson from './battery-specific.json';
 import clinicalJson from './battery-clinical.json';
+// — T5 (m150): باتری جامع خانواده — SDQ والد (رسمی‌سازی legacy sdq-parent) + سنجهٔ انطباق
+// روزمره + تعریف پکیج چند-ابزاری ce-comp-family-v2. تعریف پکیج فقط از مسیر فرم عمومی
+// پکیجی مصرف می‌شود (رندر بخش‌به‌بخش + رویداد مستقل به‌ازای هر کامپوننت — case-events)؛
+// ابزار تکیِ داخل آن مستقیم هم عضو باتری است و پنل/موتور همان‌طور می‌خوانند.
+import compositeJson from './battery-composite.json';
 import type { BatteryDef } from './types';
 
 type RawBatteryDef = BatteryDef;
@@ -16,7 +22,8 @@ type RawBatteryDef = BatteryDef;
 const RAW: RawBatteryDef[] = [
   ...(screeningJson as unknown as RawBatteryDef[]),
   ...(specificJson as unknown as RawBatteryDef[]),
-  ...(clinicalJson as unknown as RawBatteryDef[])
+  ...(clinicalJson as unknown as RawBatteryDef[]),
+  ...(compositeJson as unknown as RawBatteryDef[])
 ];
 
 /** resolve sameItemsAs: فقط آیتم‌ها از تعریف مرجع کپی می‌شوند — زیرمقیاس‌ها/باندهای خودِ ابزار می‌مانند (برش والد≠معلم) */
@@ -30,7 +37,7 @@ function resolveBattery(defs: RawBatteryDef[]): BatteryDef[] {
   });
 }
 
-/** باتری کامل — ۱۵ ابزار ثابت نسخهٔ battery-v1 */
+/** باتری کامل — ۱۹ ابزار ثابت نسخهٔ battery-v1 (T5: +SDQ والد، +سنجهٔ انطباق، +پکیج فرم جامع) */
 export const BATTERY: BatteryDef[] = resolveBattery(RAW);
 
 const BY_KEY = new Map(BATTERY.map((d) => [d.key, d]));
