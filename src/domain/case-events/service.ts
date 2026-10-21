@@ -18,7 +18,8 @@ import { CASE_EVENT_STATUSES } from './types';
 import {
   analyzeChecklist, base64ToBytes, buildEventPayload, buildSummary, canTransitionStatus,
   estimateBase64Bytes, EVENT_FILES_MAX, extractFollowUpAction, packageComponentsOf, resolveBand, sanitizeFilename,
-  stripDataUrlPrefix, validateFileInput, validateTypeDefinition
+  sanitizeTeacherName, stripDataUrlPrefix, teacherBindingOfPayload,
+  validateFileInput, validateTypeDefinition, withTeacherName
 } from './pure';
 
 interface TypeRow {
@@ -242,6 +243,16 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     );
   }
 
+  /** — T7: گره‌زدن نام معلم به رویداد لنگر (پیش از ارسال/صدور لینک) — payload نواری برای فرم عمومی و پاسخ‌ها */
+  async function bindTeacherToEvent(row: EventRow, teacher: { name: string; teacherId: string | null }): Promise<void> {
+    const current = parseJson<Record<string, unknown> | null>(row.payload, null) ?? {};
+    current['teacher_binding'] = { name: teacher.name, teacherId: teacher.teacherId };
+    await db.execute(
+      `UPDATE case_events SET payload = ?, updated_at = ? WHERE id = ?`,
+      [JSON.stringify(current), now().toISOString(), row.id]
+    );
+  }
+
   /**
    * — T5 (m150): جریان submit پکیج فرم جامع خانواده — یک submit، چند رویداد:
    * ۱) حل کامپوننت‌ها به‌ترتیب قرارداد (packageComponentsOf — آینهٔ battery-composite.json)
@@ -249,6 +260,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
    * ۳) بلوک زمینهٔ پکیج با همان قرارداد payload برچسب‌دار
    * ۴) یک تراکنش: تکمیل رویداد لنگر + ساخت رویداد مستقل به‌ازای هر کامپوننت
    * موتور بعداً رویداد کامپوننت‌ها را مثل ابزار تکی می‌خواند (toolKey = کلید type کامپوننت).
+   * — T7: اگر لینک به معلمی گره خورده باشد، payload همهٔ رویدادها «پاسخ معلم: X» می‌گیرد.
    */
   async function fillPackageFlow(
     row: EventRow,
@@ -265,6 +277,8 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       }
     }
     const values = input.values;
+    // — T7: اتصال معلم (لینک به‌ازای معلم خاص) — به payload همهٔ رویدادها تزریق می‌شود
+    const teacher = teacherBindingOfPayload(parseJson<unknown>(row.payload, null));
 
     // ۱) حل رکورد کامپوننت‌ها از DB — به‌ترتیب قرارداد
     const compTypes: CaseEventTypeRecord[] = [];
@@ -292,17 +306,22 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       }
       const analysis = analyzeChecklist(comp.fields, comp.bands, numeric, comp.subscales);
       // payload نمایشی: برچسب گزینه برای گزینه‌ای نمره‌دار؛ نمرهٔ خام برای scale
-      const payload: Record<string, { value: string; label: string }> = {};
-      for (const f of comp.fields) {
-        const raw = numeric[f.key];
-        const display = f.type === 'single' ? (f.scoredOptions?.[raw]?.label ?? String(raw)) : String(raw);
-        payload[f.key] = { value: display, label: f.label };
-      }
+      // — T7: اتصال معلم → «پاسخ معلم: X» در payload هر کامپوننت
+      const payload = withTeacherName((() => {
+        const p: Record<string, { value: string; label: string }> = {};
+        for (const f of comp.fields) {
+          const raw = numeric[f.key];
+          const display = f.type === 'single' ? (f.scoredOptions?.[raw]?.label ?? String(raw)) : String(raw);
+          p[f.key] = { value: display, label: f.label };
+        }
+        return p;
+      })(), teacher);
       filled.push({ comp, analysis, payload, summary: buildSummary(payload, analysis) });
     }
 
     // ۳) بلوک زمینهٔ پکیج — همان قرارداد فرم درمانگر (الزامیِ خالی → خطا)
-    const ctxPayload = buildEventPayload(anchorType.fields, values, true);
+    // — T7: اتصال معلم → «پاسخ معلم: X» در رویداد زمینهٔ پکیج هم
+    const ctxPayload = withTeacherName(buildEventPayload(anchorType.fields, values, true), teacher);
     const ctxSummary = buildSummary(ctxPayload, null);
 
     // ۴) تراکنش واحد — یا همه یا هیچ
@@ -325,7 +344,8 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
           studentId: { from: null, to: row.student_id },
           packageKey: { from: null, to: anchorType.key },
           components: { from: null, to: components.length },
-          via: { from: null, to: input.viaWeb ? 'web' : 'bot' }
+          via: { from: null, to: input.viaWeb ? 'web' : 'bot' },
+          ...(teacher ? { teacherName: { from: null, to: teacher.name } } : {})
         }
       });
       for (const f of filled) {
@@ -346,7 +366,8 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
             eventTypeId: { from: null, to: f.comp.id },
             studentId: { from: null, to: row.student_id },
             status: { from: null, to: 'completed' },
-            packageKey: { from: null, to: anchorType.key }
+            packageKey: { from: null, to: anchorType.key },
+            ...(teacher ? { teacherName: { from: null, to: teacher.name } } : {})
           }
         });
       }
@@ -946,6 +967,8 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
      * — ارسال با یک کلیک: رویداد باید چک‌لیستِ در انتظار باشد؛
      * گیرنده‌ها از audience قالب (یا صریح درخواست) resolved می‌شوند؛
      * پیام با لینک امن وب‌فرم از observer (notify) می‌رود؛ شمارش واقعی برمی‌گردد.
+     * — T7: teacherName/teacherId اختیاری — لینک به نام معلم گره می‌خورد (فرم «فرم شما — X» می‌بیند
+     * و پاسخ‌ها «پاسخ معلم: X» می‌گیرند)؛ قالب پیام هم bot_teacher_package_link می‌شود.
      */
     async sendChecklistLink(eventId, input, actor) {
       if (!sendFn) throw new ConflictError('سرویس اعلان در دسترس نیست');
@@ -957,14 +980,22 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       if (row.status !== 'pending_family') throw new ConflictError('این چک‌لیست در انتظار پاسخ نیست (قبلاً پر یا لغو شده)');
       if (!type.familyFillable) throw new ValidationError('این فرم برای پر کردن از سمت گیرنده طراحی نشده است');
 
-      const wanted: CaseEventAudience = input.audience ?? type.audience ?? 'family';
+      // — T7: اتصال معلم — نام معتبر یا خطای فارسی؛ گره‌زدن قبل از ارسال
+      const teacherName = sanitizeTeacherName(input.teacherName ?? null);
+      if (input.teacherName != null && String(input.teacherName).trim() !== '' && !teacherName) {
+        throw new ValidationError('نام معلم برای اتصال لینک نامعتبر است');
+      }
+      const teacher = teacherName ? { name: teacherName, teacherId: input.teacherId ?? null } : null;
+      if (teacher) await bindTeacherToEvent(row, teacher);
+
+      const wanted: CaseEventAudience = input.audience ?? type.audience ?? (teacher ? 'teacher' : 'family');
       const familyChats = wanted === 'family' || wanted === 'both' ? await this.guardianChats(row.student_id) : [];
       const teacherList = wanted === 'teacher' || wanted === 'both' ? await this.teacherChats(row.student_id) : [];
       const chats = [...new Set([...familyChats, ...teacherList])];
       if (chats.length === 0) {
         throw new ConflictError(
           wanted === 'teacher'
-            ? 'چت معلمِ کلاس این دانش‌آموز در بله متصل نیست — اول کد اتصال کلاس را فعال کنید'
+            ? 'چت معلمِ کلاس این دانش‌آموز در بله متصل نیست — می‌توانید از «صدور لینک برای معلم» فقط لینک را کپی کنید'
             : 'هیچ چت متصلی برای این دانش‌آموز پیدا نشد — اول ولیّ/معلم را با کد اتصال به بات وصل کنید'
         );
       }
@@ -986,11 +1017,13 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
 
       // dedup داخل همان دقیقه (ضد دابل‌کلیک) — ارسال دوباره در دقیقهٔ بعد آزاد است
       const minuteBucket = Math.floor(now().getTime() / 60_000);
+      // — T7: با اتصال معلم، پیام با قالب معلم‌محور (سلام به نام معلم) می‌رود
+      const template = teacher ? 'bot_teacher_package_link' as const : 'bot_checklist_link' as const;
       const sent = await sendFn({
         studentId: row.student_id,
         chats,
-        template: 'bot_checklist_link',
-        vars: { studentName, extra },
+        template,
+        vars: { studentName, extra, ...(teacher ? { teacherName: teacher.name } : {}) },
         dedupBase: `ce:${eventId}:${minuteBucket}`
       });
 
@@ -1007,11 +1040,41 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         changes: {
           audience: { from: null, to: wanted },
           targets: { from: null, to: chats.length },
-          sent: { from: null, to: sent }
+          sent: { from: null, to: sent },
+          ...(teacher ? { teacherName: { from: null, to: teacher.name } } : {})
         }
       });
-      log.info('event.link_sent', { eventId, wanted, targets: chats.length, sent });
-      return { sent, targets: chats };
+      log.info('event.link_sent', { eventId, wanted, targets: chats.length, sent, teacher: teacher?.name ?? null });
+      return { sent, targets: chats, link };
+    },
+
+    /**
+     * — T7: صدور/کپی لینک امن به‌ازای یک معلم مشخص — بدون ارسال بله.
+     * مدرسه بدون چت متصل هم کار می‌کند؛ چند معلم = چند رویداد لنگر مستقل = چند لینک مستقل.
+     */
+    async issueTeacherFillLink(eventId, input, actor) {
+      const row = await getEventRow(eventId);
+      const type = typeRowToRecord(await loadTypeRow(row.event_type_id));
+      const isPkg = packageComponentsOf(type.key) !== null;
+      if (row.type_category !== 'checklist' && !isPkg) throw new ValidationError('این رویداد چک‌لیست نیست');
+      if (row.status !== 'pending_family') throw new ConflictError('این چک‌لیست در انتظار پاسخ نیست (قبلاً پر یا لغو شده)');
+      if (!type.familyFillable) throw new ValidationError('این فرم برای پر کردن از سمت گیرنده طراحی نشده است');
+      const teacherName = sanitizeTeacherName(input.teacherName ?? null);
+      if (!teacherName) throw new ValidationError('نام معلم برای صدور لینک الزامی است');
+      await bindTeacherToEvent(row, { name: teacherName, teacherId: input.teacherId ?? null });
+      const base = deps.publicBaseUrl ?? null;
+      if (!base) throw new ConflictError('آدرس عمومی سایت تنظیم نشده است — ساخت لینک فرم ممکن نیست');
+      const link = await this.mintFillLink(eventId, base);
+      if (!link) throw new ConflictError('ساخت لینک فرم ممکن نیست');
+      await audit.log({
+        actorId: actor.staffId,
+        action: 'case_event.teacher_link_issued',
+        resourceType: 'case_event',
+        resourceId: eventId,
+        changes: { teacherName: { from: null, to: teacherName }, typeKey: { from: null, to: type.key } }
+      });
+      log.info('event.teacher_link_issued', { eventId, teacherName, typeKey: type.key });
+      return { link, teacherName };
     },
 
     setSendObserver(fn) {
@@ -1090,14 +1153,19 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       );
       const analysis = analyzeChecklist(type.fields, bands, numericValues, subscales);
       // payload نمایشی: نمرهٔ خام برای scale؛ برچسب گزینه برای گزینه‌ای نمره‌دار
-      const payload: Record<string, { value: string; label: string }> = {};
-      for (const f of type.fields) {
-        const raw = values[f.key];
-        const display = f.type === 'single'
-          ? (f.scoredOptions?.[Number(raw)]?.label ?? String(raw))
-          : String(raw);
-        payload[f.key] = { value: display, label: f.label };
-      }
+      // — T7: فرم معلمِ تک که لینکش به معلم گره خورده → «پاسخ معلم: X» در payload
+      const teacher = teacherBindingOfPayload(parseJson<unknown>(row.payload, null));
+      const payload = withTeacherName((() => {
+        const p: Record<string, { value: string; label: string }> = {};
+        for (const f of type.fields) {
+          const raw = values[f.key];
+          const display = f.type === 'single'
+            ? (f.scoredOptions?.[Number(raw)]?.label ?? String(raw))
+            : String(raw);
+          p[f.key] = { value: display, label: f.label };
+        }
+        return p;
+      })(), teacher);
       const summary = buildSummary(payload, analysis);
       const sourceTag = input.viaWeb ? `web:${now().toISOString()}` : (input.sourceChatId ?? 'unknown');
 

@@ -69,7 +69,63 @@ export const COMPOSITE_FAMILY_COMPONENTS: readonly string[] = [
 /** آیا این نوع، پکیج چند-ابزاری است؟ کامپوننت‌ها را به‌ترتیب می‌دهد؛ وگرنه null */
 export function packageComponentsOf(typeKey: string | null | undefined): readonly string[] | null {
   if (typeKey === COMPOSITE_FAMILY_KEY) return COMPOSITE_FAMILY_COMPONENTS;
+  if (typeKey === COMPOSITE_TEACHER_KEY) return COMPOSITE_TEACHER_COMPONENTS;
   return null;
+}
+
+// ─── پکیج فرم جامع معلم (T7 m150-b — چند-ابزاری + اتصال معلم به لینک) ───
+
+/** کلید پکیج فرم جامع معلم — تعریف کامل در clinical-engine/battery-composite.json */
+export const COMPOSITE_TEACHER_KEY = 'ce-comp-teacher-v2';
+/**
+ * کامپوننت‌های پکیج به‌ترتیب اجرا — آینهٔ packageComponents در battery-composite.json
+ * (تست پاریتی دو سمت را گوار می‌کند). کامپوننت‌ها تکی‌های موجود معلم‌اند
+ * (ce-snap-iv-t-v1: ia/hi/odd · ce-sdq-t-v1: emo/cond/hyper/peer/pros) تا هم‌گرایی
+ * والد×معلم بی‌بازنویسی موتور بماند + ملاک‌های کلاسی جدید با sld_read/sld_write/sld_calc
+ * (هم‌نام سیگنال‌های شرح‌حال v3).
+ */
+export const COMPOSITE_TEACHER_COMPONENTS: readonly string[] = [
+  'ce-snap-iv-t-v1',
+  'ce-sdq-t-v1',
+  'ce-sld-class-t-v1'
+];
+
+/**
+ * — اتصال معلم به لینک عمومی (T7): لینک به‌ازای یک معلم صادر می‌شود؛ نام معلم در payload
+ * رویداد لنگر (تا لحظهٔ پاسخ) با همین کلید می‌ماند و در لحظهٔ fill به payload همهٔ
+ * رویدادهای تولیدشده با برچسب «پاسخ معلم» تزریق می‌شود.
+ */
+export const TEACHER_BINDING_KEY = 'teacher_binding';
+export const TEACHER_NAME_FIELD_KEY = 'teacher_name';
+export const TEACHER_NAME_LABEL = 'پاسخ معلم';
+/** — سقف نام معلم در اتصال لینک */
+export const TEACHER_NAME_MAX = 120;
+
+/** پاک‌سازی نام معلم — خالی/کوتاه/بلند → null (تماس‌گیرنده پیام فارسی می‌دهد) */
+export function sanitizeTeacherName(raw: string | null | undefined): string | null {
+  const s = String(raw ?? '').replace(/\s+/g, ' ').trim();
+  if (s.length < 2 || s.length > TEACHER_NAME_MAX) return null;
+  return s;
+}
+
+/** خواندن اتصال معلم از payload خام رویداد لنگر — ساختار ناشناخته/نام نامعتبر → null */
+export function teacherBindingOfPayload(payload: unknown): { name: string; teacherId: string | null } | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const bind = (payload as Record<string, unknown>)[TEACHER_BINDING_KEY];
+  if (!bind || typeof bind !== 'object') return null;
+  const name = sanitizeTeacherName((bind as Record<string, unknown>).name as string | undefined);
+  if (!name) return null;
+  const tid = (bind as Record<string, unknown>).teacherId;
+  return { name, teacherId: typeof tid === 'string' && tid.length > 0 ? tid : null };
+}
+
+/** تزریق «پاسخ معلم: X» به payload برچسب‌دار — بدون اتصال → همان payload */
+export function withTeacherName(
+  payload: Record<string, { value: string; label: string }>,
+  teacher: { name: string } | null
+): Record<string, { value: string; label: string }> {
+  if (!teacher) return payload;
+  return { ...payload, [TEACHER_NAME_FIELD_KEY]: { value: teacher.name, label: TEACHER_NAME_LABEL } };
 }
 
 /** — مقدارهای مجاز فیلد اقدام بعدی — هم‌تراز NEXT_ACTION_VALUES بدون none */

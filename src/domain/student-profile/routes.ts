@@ -10,7 +10,15 @@ import { getAuthContext, requireRole } from '@core/auth';
 import { NotFoundError } from '@core/errors';
 import { normalizeNationalId } from '@core/shared';
 import { pageParams } from '@app/http';
+import { z } from 'zod';
 import type { StudentProfileService } from './types';
+
+/** — T7 (m150-b): اعتبارسنجی ورودی معلم تازه (اسکیمای محلی — الگوی pure دامنه‌ها) */
+const StudentTeacherSchema = z.object({
+  name: z.string().min(2, 'نام معلم الزامی است (۲ تا ۱۲۰ نویسه)').max(120, 'نام معلم حداکثر ۱۲۰ نویسه است'),
+  class_label: z.string().max(120).optional(),
+  contact: z.string().max(60).optional()
+});
 
 export function registerRoutes(app: AppHono, service: StudentProfileService): void {
   // ───────────── Schools ─────────────
@@ -315,6 +323,31 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
   app.delete('/api/students/:id/education-history/:entryId', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     await service.deleteEducationHistory(c.req.param('id'), c.req.param('entryId'), actor);
+    return c.body(null, 204);
+  });
+
+  // ─── T7 (m150-b): معلم‌های دانش‌آموز — چند معلم = چند لینک مستقل فرم جامع معلم ───
+  // خواندن: همهٔ نقش‌های داخلی (پروفایل)؛ ثبت/حذف: سه نقش مرکز (معلم‌ها برای جریان فرم معلم لازم‌اند)
+
+  app.get('/api/students/:id/teachers', async (c) => {
+    const items = await service.listStudentTeachers(c.req.param('id'));
+    return c.json({ data: items }, 200);
+  });
+
+  app.post('/api/students/:id/teachers', requireRole('manager', 'secretary', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const body = StudentTeacherSchema.parse(await c.req.json<unknown>());
+    const item = await service.addStudentTeacher(
+      c.req.param('id'),
+      { name: body.name, classLabel: body.class_label, contact: body.contact },
+      actor
+    );
+    return c.json({ data: item }, 201);
+  });
+
+  app.delete('/api/students/:id/teachers/:teacherId', requireRole('manager', 'secretary', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    await service.deleteStudentTeacher(c.req.param('id'), c.req.param('teacherId'), actor);
     return c.body(null, 204);
   });
 }

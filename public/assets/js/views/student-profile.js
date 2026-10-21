@@ -318,6 +318,8 @@ export async function renderStudentProfile(container, ctx) {
               onclick: () => openEducationHistory(student, { onChanged: () => renderStudentProfile(container, ctx) })
             }, icon('eye', 15), 'مشاهده / مدیریت')
           ),
+          // — T7 (m150-b): کارت «معلم‌ها» — چند معلم = چند لینک مستقل فرم جامع معلم
+          renderTeachersCard(student, container, ctx),
           el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', marginTop: 'var(--sp-4)' } },
             el('button', {
               class: 'btn btn--soft btn--sm',
@@ -779,6 +781,97 @@ function openSpecialNeedForm(student, onSaved) {
       onSaved();
     }
   });
+}
+
+/** — T7 (m150-b): کارت «معلم‌ها» روی پرونده — فهرست + افزودن/حذف
+ * مکملِ فیلد تک‌معلم کلاس (که در «اطلاعات پایه» همان قبل می‌ماند — دست‌نخورده)؛
+ * «چند معلم = چند لینک مستقل» فرم جامع معلم — پاسخ هر معلم با نامش («پاسخ معلم: X»)
+ * روی پرونده می‌نشیند و در جریان ارسال فرم معلم به‌عنوان «انتخاب معلم» مصرف می‌شود.
+ */
+function renderTeachersCard(student, container, ctx) {
+  const canManage = Boolean(session.user && ['manager', 'secretary', 'therapist'].includes(session.user.role));
+  const listWrap = el('div', { style: { display: 'grid', gap: 'var(--sp-2)' } }, el('div', { class: 'cell-sub' }, 'در حال بارگذاری…'));
+  const addBtn = canManage
+    ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openAddTeacher() }, icon('plus', 15), 'افزودن معلم')
+    : null;
+
+  async function reload() {
+    try {
+      const res = await api.get(`/api/students/${student.id}/teachers`);
+      const items = res.data ?? [];
+      listWrap.replaceChildren(
+        ...(items.length === 0
+          ? [el('div', { class: 'cell-sub' }, canManage
+            ? 'هنوز معلمی ثبت نشده — برای فرم جامع معلم، معلم‌ها را اضافه کنید.'
+            : 'معلمی ثبت نشده است.')]
+          : items.map((t) => el('div', {
+            style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-2)', flexWrap: 'wrap', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: 'var(--sp-2) var(--sp-3)' }
+          },
+            el('div', {},
+              el('div', { style: { fontWeight: 600 } }, t.name),
+              el('div', { class: 'cell-sub' }, [t.classLabel, t.contact].filter(Boolean).join(' — ') || '—')),
+            canManage
+              ? el('button', {
+                class: 'btn btn--ghost btn--sm', 'aria-label': 'حذف معلم',
+                onclick: async () => {
+                  const ok = await confirmModal({
+                    title: 'حذف معلم',
+                    message: `«${t.name}» از فهرست معلم‌های این پرونده حذف شود؟ لینک‌های صادرشدهٔ قبلی معتبر می‌مانند؛ فقط گره‌زدن پاسخ‌های بعدی به نام او برداشته می‌شود.`,
+                    confirmLabel: 'حذف معلم',
+                    danger: true
+                  });
+                  if (!ok) return;
+                  try {
+                    await api.del(`/api/students/${student.id}/teachers/${t.id}`);
+                    toast('معلم حذف شد');
+                    reload();
+                  } catch (err) { toastError(err); }
+                }
+              }, icon('trash', 15), 'حذف')
+              : null
+          )))
+      );
+    } catch {
+      listWrap.replaceChildren(el('div', { class: 'cell-sub' }, 'فهرست معلم‌ها بارگذاری نشد.'));
+    }
+  }
+
+  function openAddTeacher() {
+    formModal({
+      title: 'افزودن معلم — پروندهٔ دانش‌آموز',
+      submitLabel: 'افزودن',
+      fields: [
+        { name: 'name', label: 'نام و نام خانوادگی معلم', type: 'text', required: true, maxlength: 120, span: 2, placeholder: 'مثلاً سرکار موسوی' },
+        { name: 'class_label', label: 'کلاس/درس (اختیاری)', type: 'text', maxlength: 120, span: 2, placeholder: 'مثل «چهارم ب — ریاضی»' },
+        { name: 'contact', label: 'راه ارتباطی (اختیاری — تلفن/بله)', type: 'text', maxlength: 60, ltr: true, span: 2 }
+      ],
+      onSubmit: async (v) => {
+        await api.post(`/api/students/${student.id}/teachers`, {
+          name: v.name,
+          class_label: v.class_label || undefined,
+          contact: v.contact || undefined
+        });
+        toast('معلم اضافه شد');
+        reload();
+        return true;
+      }
+    });
+  }
+
+  reload();
+  return el('div', {
+    class: 'card',
+    style: { marginTop: 'var(--sp-4)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--sp-3)' }
+  },
+    el('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-2)', flexWrap: 'wrap', marginBottom: 'var(--sp-2)' } },
+      el('div', {},
+        el('div', { class: 'card__title', style: { fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' } }, icon('users', 16), 'معلم‌ها'),
+        el('div', { class: 'cell-sub', style: { marginTop: '2px' } }, 'چند معلم = چند لینک مستقل فرم جامع معلم — پاسخ هر معلم با نامش روی پرونده می‌نشیند')
+      ),
+      addBtn
+    ),
+    listWrap
+  );
 }
 
 /** — ارسال گزارش درباره دانش‌آموز به معلم مدرسه‌اش (چت متصل کلاس) */

@@ -95,7 +95,8 @@ describe('موتور پیشنهاد بر اساس برچسب‌های دانش�
     expect(matchedKeys).toContain('ce-snap-iv-t-v1');
     // بقیهٔ فهرست هم قابل انتخاب می‌مانند — صرفاً بعد از تطبیقی‌ها
     // (T5: پکیج فرم جامع خانواده — دستهٔ session اما مسیر ارسال بله برای خانواده)
-    expect(sug.every((x) => x.type.category === 'checklist' || x.type.key === 'ce-comp-family-v2')).toBe(true);
+    // (T7: پکیج فرم جامع معلم — همان الگو، مسیر ارسال بله/لینک برای معلم منتخب)
+    expect(sug.every((x) => x.type.category === 'checklist' || x.type.key === 'ce-comp-family-v2' || x.type.key === 'ce-comp-teacher-v2')).toBe(true);
 
     const s2 = await createStudent(m, {});
     const sug2 = dataOf<Suggestion[]>(await m.get(`/api/students/${s2.id}/case-events/suggest`));

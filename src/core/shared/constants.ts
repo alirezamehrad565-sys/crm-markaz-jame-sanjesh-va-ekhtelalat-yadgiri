@@ -292,6 +292,9 @@ export const NOTIFICATION_TEMPLATES = [
   // ─── موتور تشخیص و مداخله: ارسال چک‌لیست با یک کلیک (لینک امن وب‌فرم) ───
   'bot_checklist_link',
 
+  // ─── T7 m150-b: فرم جامع معلم — پیام معلم‌محور لینک گره‌خورده به نام معلم ───
+  'bot_teacher_package_link',
+
   // ─── m151 — مدارک بله: درخواست مدارک از خانواده + پاسخ‌های بات ───
   'doc_request_sent',
   'bot_doc_received',

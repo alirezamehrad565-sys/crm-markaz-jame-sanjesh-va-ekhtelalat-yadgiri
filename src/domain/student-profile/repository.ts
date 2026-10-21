@@ -156,6 +156,29 @@ export function rowToEducationHistory(row: EduHistoryRow): import('./types').Edu
 }
 
 /**
+ * — T7 (m150-b): ردیف معلم‌های دانش‌آموز (student_teachers — مایگریشن 0062)
+ */
+export interface StudentTeacherRow {
+  id: string;
+  student_id: string;
+  name: string;
+  class_label: string | null;
+  contact: string | null;
+  created_at: string;
+}
+
+export function rowToStudentTeacher(row: StudentTeacherRow): import('./types').StudentTeacher {
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    name: row.name,
+    classLabel: row.class_label,
+    contact: row.contact,
+    createdAt: row.created_at
+  };
+}
+
+/**
  * — projection وضعیت پذیرش از جدول waitlist (بدون تغییر ساختار جدول students):
  * waiting → ورودی باز متصل دارد (منتظر نوبت‌دهی/پذیرش)
  * admitted → ورودی پذیرش‌شده دارد (اولین جلسهٔ واقعی ثبت شده)

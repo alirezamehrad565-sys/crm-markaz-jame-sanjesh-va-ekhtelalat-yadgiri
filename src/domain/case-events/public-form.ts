@@ -33,6 +33,8 @@ export interface FillFormModel {
   audience?: 'family' | 'teacher' | 'both' | null;
   /** — معرفی روایی فرم (یک تا دو جملهٔ ساده) */
   description?: string | null;
+  /** — T7: لینک صادرشده برای معلم خاص — سربرگ «فرم شما — X» */
+  teacherLabel?: string | null;
 }
 
 /** یک فیلد زمینهٔ پکیج (غیرنمره‌دار — select/text/longtext) */
@@ -60,6 +62,8 @@ export interface PackageFormModel {
   packageTitle: string;
   studentName: string;
   description?: string | null;
+  /** — T7: لینک صادرشده برای معلم خاص — سربرگ «فرم شما — X» */
+  teacherLabel?: string | null;
   /** بلوک زمینهٔ کوتاه (≤۸ فیلد) — ابتدای فرم */
   context: {
     title: string;
@@ -136,6 +140,9 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
   .head p { margin: 0; font-size: 13px; opacity: .85; }
   .head .desc { margin-top: 10px; font-size: 13px; opacity: .95; line-height: 1.9;
                 background: rgba(255,255,255,.08); border-radius: 10px; padding: 10px 12px; }
+  .head .who { margin-top: 10px; font-size: 13.5px; font-weight: 700; line-height: 1.8;
+               background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25);
+               border-radius: 10px; padding: 9px 12px; }
   .progress { position: sticky; top: 8px; z-index: 5; background: #fff; border: 1px solid #E5DCCB;
               border-radius: 12px; padding: 8px 12px; margin-bottom: 14px; font-size: 12px; color: #1c5d80;
               box-shadow: 0 1px 3px rgba(18,56,79,.10); }
@@ -170,6 +177,7 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
   <div class="head">
     <h1>${esc(model.typeTitle)}</h1>
     ${headSub ? `<p>${esc(headSub)}</p>` : ''}
+    ${model.teacherLabel ? `<div class="who">${esc(model.teacherLabel)}</div>` : ''}
     ${model.description ? `<div class="desc">${esc(model.description)}</div>` : ''}
   </div>
   <div class="progress" id="prog">
@@ -362,6 +370,9 @@ export function renderPackageFormPage(model: PackageFormModel, token: string): s
   .head p { margin: 0; font-size: 13px; opacity: .85; }
   .head .desc { margin-top: 10px; font-size: 13px; opacity: .95; line-height: 1.9;
                 background: rgba(255,255,255,.08); border-radius: 10px; padding: 10px 12px; }
+  .head .who { margin-top: 10px; font-size: 13.5px; font-weight: 700; line-height: 1.8;
+               background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25);
+               border-radius: 10px; padding: 9px 12px; }
   .progress { position: sticky; top: 8px; z-index: 5; background: #fff; border: 1px solid #E5DCCB;
               border-radius: 12px; padding: 9px 12px; margin-bottom: 14px; font-size: 12.5px; color: #1c5d80;
               box-shadow: 0 1px 3px rgba(18,56,79,.10); }
@@ -430,6 +441,7 @@ export function renderPackageFormPage(model: PackageFormModel, token: string): s
   <div class="head">
     <h1>${esc(model.packageTitle)}</h1>
     ${headSub ? `<p>${esc(headSub)}</p>` : ''}
+    ${model.teacherLabel ? `<div class="who">${esc(model.teacherLabel)}</div>` : ''}
     ${model.description ? `<div class="desc">${esc(model.description)}</div>` : ''}
   </div>
   <div class="progress" id="prog">

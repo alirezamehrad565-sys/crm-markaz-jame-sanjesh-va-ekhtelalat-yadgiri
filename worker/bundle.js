@@ -4151,8 +4151,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.27";
-var APP_MILESTONE = "m147+148a+150a";
+var APP_VERSION = "1.00.28";
+var APP_MILESTONE = "m148b+150b";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -10592,6 +10592,18 @@ ${vars.extra}` : void 0
         "",
         "\u067E\u0633 \u0627\u0632 \u062B\u0628\u062A \u067E\u0627\u0633\u062E\u060C \u0646\u062A\u06CC\u062C\u0647 \u0628\u0647\u200C\u0637\u0648\u0631 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0628\u0631\u0627\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0645\u0631\u06A9\u0632 \u0645\u06CC\u200C\u0622\u06CC\u062F."
       ].filter((l) => l !== void 0 && l !== "").join("\n");
+    // ─── T7 (m150-b) — فرم جامع معلم: قالب معلم‌محور (لینک گره‌خورده به نام معلم) ───
+    case "bot_teacher_package_link":
+      return [
+        "\u{1F4DD} \u0641\u0631\u0645 \u0645\u0634\u0627\u0647\u062F\u0647\u0654 \u06A9\u0644\u0627\u0633 \u2014 \u0641\u0631\u0645 \u0645\u0639\u0644\u0645",
+        "",
+        vars.teacherName ? `${vars.teacherName} \u0633\u0644\u0627\u0645 \u{1F44B}` : "\u0633\u0644\u0627\u0645 \u{1F44B}",
+        vars.studentName ? `\u062F\u0631\u0628\u0627\u0631\u0647\u0654 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632: ${vars.studentName}` : void 0,
+        vars.extra?.trim() || void 0,
+        "",
+        "\u067E\u0627\u0633\u062E\u200C\u0647\u0627 \u0628\u0627 \u0646\u0627\u0645 \u0634\u0645\u0627 \u0631\u0648\u06CC \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062B\u0628\u062A \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0645\u0633\u062A\u0642\u06CC\u0645 \u0628\u0631\u0627\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0645\u0631\u06A9\u0632 \u0645\u06CC\u200C\u0622\u06CC\u062F.",
+        "\u067E\u06CC\u0634\u0627\u067E\u06CC\u0634 \u0627\u0632 \u0648\u0642\u062A\u06CC \u06A9\u0647 \u0645\u06CC\u200C\u06AF\u0630\u0627\u0631\u06CC\u062F \u0645\u0645\u0646\u0648\u0646\u06CC\u0645 \u{1F64F}"
+      ].filter((l) => l !== void 0 && l !== "").join("\n");
     // ─── T2 (m151) — مدارک بله: قالب‌های افزودنی ───
     case "doc_request_sent":
       return [
@@ -15547,12 +15559,89 @@ function createStudentProfileService(deps) {
         });
       });
       logger.child("student").info("student.education_history.deleted", { studentId });
+    },
+    async listStudentTeachers(studentId) {
+      const student = await db.queryOne(`SELECT id FROM students WHERE id = ?`, [studentId]);
+      if (!student)
+        throw new NotFoundError("\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632");
+      const rows = await db.query(
+        `SELECT id, student_id, name, class_label, contact, created_at
+           FROM student_teachers WHERE student_id = ? ORDER BY created_at, rowid`,
+        [studentId]
+      );
+      return rows.map(rowToStudentTeacher);
+    },
+    async addStudentTeacher(studentId, input, actor) {
+      const name = input.name.replace(/\s+/g, " ").trim();
+      if (name.length < 2 || name.length > 120) {
+        throw new ValidationError("\u0646\u0627\u0645 \u0645\u0639\u0644\u0645 \u0627\u0644\u0632\u0627\u0645\u06CC \u0627\u0633\u062A (۲ \u062A\u0627 ۱۲۰ \u0646\u0648\u06CC\u0633\u0647)");
+      }
+      const classLabel = input.classLabel?.replace(/\s+/g, " ").trim().slice(0, 120) || null;
+      const contact = input.contact?.trim().slice(0, 60) || null;
+      const teacherId = await db.transaction(async (tx) => {
+        const student = await tx.queryOne(`SELECT id FROM students WHERE id = ?`, [studentId]);
+        if (!student)
+          throw new NotFoundError("\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632");
+        const dup = await tx.queryOne(`SELECT id FROM student_teachers WHERE student_id = ? AND name = ?`, [studentId, name]);
+        if (dup)
+          throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0639\u0644\u0645 \u0642\u0628\u0644\u0627\u064B \u0631\u0648\u06CC \u067E\u0631\u0648\u0646\u062F\u0647 \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A");
+        const newId = crypto.randomUUID();
+        await tx.execute(
+          `INSERT INTO student_teachers (id, student_id, name, class_label, contact) VALUES (?, ?, ?, ?, ?)`,
+          [newId, studentId, name, classLabel, contact]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "student.teachers.add",
+          resourceType: "student",
+          resourceId: studentId,
+          changes: { teacher_id: { from: null, to: newId }, name: { from: null, to: name } }
+        });
+        return newId;
+      });
+      logger.child("student").info("student.teachers.added", { studentId });
+      const row = await db.queryOne(
+        `SELECT id, student_id, name, class_label, contact, created_at FROM student_teachers WHERE id = ?`,
+        [teacherId]
+      );
+      return rowToStudentTeacher(row);
+    },
+    async deleteStudentTeacher(studentId, teacherId, actor) {
+      await db.transaction(async (tx) => {
+        const row = await tx.queryOne(
+          `SELECT id, name FROM student_teachers WHERE id = ? AND student_id = ?`,
+          [teacherId, studentId]
+        );
+        if (!row)
+          throw new NotFoundError("\u0645\u0639\u0644\u0645");
+        await tx.execute(`DELETE FROM student_teachers WHERE id = ?`, [teacherId]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "student.teachers.delete",
+          resourceType: "student",
+          resourceId: studentId,
+          changes: { teacher_id: { from: teacherId, to: null }, name: { from: row.name, to: null } }
+        });
+      });
+      logger.child("student").info("student.teachers.deleted", { studentId });
     }
   };
   return service;
 }
 __name(createStudentProfileService, "createStudentProfileService");
 __name2(createStudentProfileService, "createStudentProfileService");
+function rowToStudentTeacher(row) {
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    name: row.name,
+    classLabel: row.class_label,
+    contact: row.contact,
+    createdAt: row.created_at
+  };
+}
+__name(rowToStudentTeacher, "rowToStudentTeacher");
+__name2(rowToStudentTeacher, "rowToStudentTeacher");
 function pageParams(query) {
   return {
     page: Number.parseInt(query.page ?? "1", 10) || 1,
@@ -15855,6 +15944,32 @@ function registerRoutes3(app, service) {
   app.delete("/api/students/:id/education-history/:entryId", requireRole("manager", "secretary"), async (c) => {
     const actor = getAuthContext(c);
     await service.deleteEducationHistory(c.req.param("id"), c.req.param("entryId"), actor);
+    return c.body(null, 204);
+  });
+  app.get("/api/students/:id/teachers", async (c) => {
+    const items = await service.listStudentTeachers(c.req.param("id"));
+    return c.json({ data: items }, 200);
+  });
+  app.post("/api/students/:id/teachers", requireRole("manager", "secretary", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json();
+    const name = String(body?.name ?? "").trim();
+    if (name.length < 2 || name.length > 120)
+      throw new ValidationError("\u0646\u0627\u0645 \u0645\u0639\u0644\u0645 \u0627\u0644\u0632\u0627\u0645\u06CC \u0627\u0633\u062A (۲ \u062A\u0627 ۱۲۰ \u0646\u0648\u06CC\u0633\u0647)");
+    if (body?.class_label != null && String(body.class_label).length > 120)
+      throw new ValidationError("\u0628\u0631\u0686\u0633\u0628 \u06A9\u0644\u0627\u0633 \u062D\u062F\u0627\u06A9\u062B\u0631 ۱۲۰ \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+    if (body?.contact != null && String(body.contact).length > 60)
+      throw new ValidationError("\u0631\u0627\u0647 \u0627\u0631\u062A\u0628\u0627\u0637\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 ۶۰ \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+    const item = await service.addStudentTeacher(
+      c.req.param("id"),
+      { name, classLabel: body?.class_label, contact: body?.contact },
+      actor
+    );
+    return c.json({ data: item }, 201);
+  });
+  app.delete("/api/students/:id/teachers/:teacherId", requireRole("manager", "secretary", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    await service.deleteStudentTeacher(c.req.param("id"), c.req.param("teacherId"), actor);
     return c.body(null, 204);
   });
 }
@@ -21024,10 +21139,47 @@ var COMPOSITE_FAMILY_COMPONENTS = ["ce-snap-iv-p-v1", "ce-sdq-p-v1", "ce-scared-
 function packageComponentsOf(typeKey) {
   if (typeKey === COMPOSITE_FAMILY_KEY)
     return COMPOSITE_FAMILY_COMPONENTS;
+  if (typeKey === COMPOSITE_TEACHER_KEY)
+    return COMPOSITE_TEACHER_COMPONENTS;
   return null;
 }
 __name(packageComponentsOf, "packageComponentsOf");
 __name2(packageComponentsOf, "packageComponentsOf");
+var COMPOSITE_TEACHER_KEY = "ce-comp-teacher-v2";
+var COMPOSITE_TEACHER_COMPONENTS = ["ce-snap-iv-t-v1", "ce-sdq-t-v1", "ce-sld-class-t-v1"];
+var TEACHER_BINDING_KEY = "teacher_binding";
+var TEACHER_NAME_FIELD_KEY = "teacher_name";
+var TEACHER_NAME_LABEL = "\u067E\u0627\u0633\u062E \u0645\u0639\u0644\u0645";
+var TEACHER_NAME_MAX = 120;
+function sanitizeTeacherName(raw) {
+  const s = String(raw ?? "").replace(/\s+/g, " ").trim();
+  if (s.length < 2 || s.length > TEACHER_NAME_MAX)
+    return null;
+  return s;
+}
+__name(sanitizeTeacherName, "sanitizeTeacherName");
+__name2(sanitizeTeacherName, "sanitizeTeacherName");
+function teacherBindingOfPayload(payload) {
+  if (!payload || typeof payload !== "object")
+    return null;
+  const bind = payload[TEACHER_BINDING_KEY];
+  if (!bind || typeof bind !== "object")
+    return null;
+  const name = sanitizeTeacherName(bind.name);
+  if (!name)
+    return null;
+  const tid = bind.teacherId;
+  return { name, teacherId: typeof tid === "string" && tid.length > 0 ? tid : null };
+}
+__name(teacherBindingOfPayload, "teacherBindingOfPayload");
+__name2(teacherBindingOfPayload, "teacherBindingOfPayload");
+function withTeacherName(payload, teacher) {
+  if (!teacher)
+    return payload;
+  return { ...payload, [TEACHER_NAME_FIELD_KEY]: { value: teacher.name, label: TEACHER_NAME_LABEL } };
+}
+__name(withTeacherName, "withTeacherName");
+__name2(withTeacherName, "withTeacherName");
 var NEXT_ACTION_FOLLOW_UP = "\u067E\u06CC\u06AF\u06CC\u0631\u06CC";
 function estimateBase64Bytes2(b64) {
   const s = b64.replace(/\s/g, "");
@@ -25343,6 +25495,16 @@ function createCaseEventsService(deps) {
   }
   __name(runFollowUpHook, "runFollowUpHook");
   __name2(runFollowUpHook, "runFollowUpHook");
+  async function bindTeacherToEvent(row, teacher) {
+    const current = parseJson(row.payload, null) ?? {};
+    current[TEACHER_BINDING_KEY] = { name: teacher.name, teacherId: teacher.teacherId };
+    await db.execute(
+      `UPDATE case_events SET payload = ?, updated_at = ? WHERE id = ?`,
+      [JSON.stringify(current), now().toISOString(), row.id]
+    );
+  }
+  __name(bindTeacherToEvent, "bindTeacherToEvent");
+  __name2(bindTeacherToEvent, "bindTeacherToEvent");
   async function fillPackageFlow(row, anchorType, components, input, actor) {
     if (row.status === "cancelled")
       throw new ConflictError("این فرم لغو شده است");
@@ -25354,6 +25516,7 @@ function createCaseEventsService(deps) {
       }
     }
     const values = input.values;
+    const teacher = teacherBindingOfPayload(parseJson(row.payload, null));
     const compTypes = [];
     for (const key of components) {
       const trow = await loadTypeRowByKey(key);
@@ -25378,15 +25541,18 @@ function createCaseEventsService(deps) {
         numeric[f.key] = n;
       }
       const analysis = analyzeChecklist(comp.fields, comp.bands, numeric, comp.subscales);
-      const payload = {};
-      for (const f of comp.fields) {
-        const raw2 = numeric[f.key];
-        const display = f.type === "single" ? f.scoredOptions?.[raw2]?.label ?? String(raw2) : String(raw2);
-        payload[f.key] = { value: display, label: f.label };
-      }
+      const payload = withTeacherName((() => {
+        const p = {};
+        for (const f of comp.fields) {
+          const raw2 = numeric[f.key];
+          const display = f.type === "single" ? f.scoredOptions?.[raw2]?.label ?? String(raw2) : String(raw2);
+          p[f.key] = { value: display, label: f.label };
+        }
+        return p;
+      })(), teacher);
       filled.push({ comp, analysis, payload, summary: buildSummary(payload, analysis) });
     }
-    const ctxPayload = buildEventPayload(anchorType.fields, values, true);
+    const ctxPayload = withTeacherName(buildEventPayload(anchorType.fields, values, true), teacher);
     const ctxSummary = buildSummary(ctxPayload, null);
     const occurredAt = now().toISOString();
     const sourceTag = input.viaWeb ? `web:${occurredAt}` : input.sourceChatId ?? "unknown";
@@ -25407,7 +25573,8 @@ function createCaseEventsService(deps) {
           studentId: { from: null, to: row.student_id },
           packageKey: { from: null, to: anchorType.key },
           components: { from: null, to: components.length },
-          via: { from: null, to: input.viaWeb ? "web" : "bot" }
+          via: { from: null, to: input.viaWeb ? "web" : "bot" },
+          ...teacher ? { teacherName: { from: null, to: teacher.name } } : {}
         }
       });
       for (const f of filled) {
@@ -25428,7 +25595,8 @@ function createCaseEventsService(deps) {
             eventTypeId: { from: null, to: f.comp.id },
             studentId: { from: null, to: row.student_id },
             status: { from: null, to: "completed" },
-            packageKey: { from: null, to: anchorType.key }
+            packageKey: { from: null, to: anchorType.key },
+            ...teacher ? { teacherName: { from: null, to: teacher.name } } : {}
           }
         });
       }
@@ -26039,13 +26207,20 @@ function createCaseEventsService(deps) {
       const type = type0;
       if (!type.familyFillable)
         throw new ValidationError("\u0627\u06CC\u0646 \u0641\u0631\u0645 \u0628\u0631\u0627\u06CC \u067E\u0631 \u06A9\u0631\u062F\u0646 \u0627\u0632 \u0633\u0645\u062A \u06AF\u06CC\u0631\u0646\u062F\u0647 \u0637\u0631\u0627\u062D\u06CC \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
-      const wanted = input.audience ?? type.audience ?? "family";
+      const teacherName = sanitizeTeacherName(input.teacherName ?? null);
+      if (input.teacherName != null && String(input.teacherName).trim() !== "" && !teacherName) {
+        throw new ValidationError("\u0646\u0627\u0645 \u0645\u0639\u0644\u0645 \u0628\u0631\u0627\u06CC \u0627\u062A\u0635\u0627\u0644 \u0644\u06CC\u0646\u06A9 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+      }
+      const teacher = teacherName ? { name: teacherName, teacherId: input.teacherId ?? null } : null;
+      if (teacher)
+        await bindTeacherToEvent(row, teacher);
+      const wanted = input.audience ?? type.audience ?? (teacher ? "teacher" : "family");
       const familyChats = wanted === "family" || wanted === "both" ? await this.guardianChats(row.student_id) : [];
       const teacherList = wanted === "teacher" || wanted === "both" ? await this.teacherChats(row.student_id) : [];
       const chats = [.../* @__PURE__ */ new Set([...familyChats, ...teacherList])];
       if (chats.length === 0) {
         throw new ConflictError(
-          wanted === "teacher" ? "\u0686\u062A \u0645\u0639\u0644\u0645\u0650 \u06A9\u0644\u0627\u0633 \u0627\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u0631 \u0628\u0644\u0647 \u0645\u062A\u0635\u0644 \u0646\u06CC\u0633\u062A \u2014 \u0627\u0648\u0644 \u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u06A9\u0644\u0627\u0633 \u0631\u0627 \u0641\u0639\u0627\u0644 \u06A9\u0646\u06CC\u062F" : "\u0647\u06CC\u0686 \u0686\u062A \u0645\u062A\u0635\u0644\u06CC \u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F \u2014 \u0627\u0648\u0644 \u0648\u0644\u06CC\u0651/\u0645\u0639\u0644\u0645 \u0631\u0627 \u0628\u0627 \u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u0628\u0647 \u0628\u0627\u062A \u0648\u0635\u0644 \u06A9\u0646\u06CC\u062F"
+          wanted === "teacher" ? "\u0686\u062A \u0645\u0639\u0644\u0645\u0650 \u06A9\u0644\u0627\u0633 \u0627\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u0631 \u0628\u0644\u0647 \u0645\u062A\u0635\u0644 \u0646\u06CC\u0633\u062A \u2014 \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u06CC\u062F \u0627\u0632 \u00AB\u0635\u062F\u0648\u0631 \u0644\u06CC\u0646\u06A9 \u0628\u0631\u0627\u06CC \u0645\u0639\u0644\u0645\u00BB \u0641\u0642\u0637 \u0644\u06CC\u0646\u06A9 \u0631\u0627 \u06A9\u067E\u06CC \u06A9\u0646\u06CC\u062F" : "\u0647\u06CC\u0686 \u0686\u062A \u0645\u062A\u0635\u0644\u06CC \u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F \u2014 \u0627\u0648\u0644 \u0648\u0644\u06CC\u0651/\u0645\u0639\u0644\u0645 \u0631\u0627 \u0628\u0627 \u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u0628\u0647 \u0628\u0627\u062A \u0648\u0635\u0644 \u06A9\u0646\u06CC\u062F"
         );
       }
       const base = deps.publicBaseUrl ?? null;
@@ -26063,11 +26238,12 @@ function createCaseEventsService(deps) {
         link
       ].filter((x) => Boolean(x)).join("\n");
       const minuteBucket = Math.floor(now().getTime() / 6e4);
+      const template = teacher ? "bot_teacher_package_link" : "bot_checklist_link";
       const sent = await sendFn({
         studentId: row.student_id,
         chats,
-        template: "bot_checklist_link",
-        vars: { studentName, extra },
+        template,
+        vars: { studentName, extra, ...teacher ? { teacherName: teacher.name } : {} },
         dedupBase: `ce:${eventId}:${minuteBucket}`
       });
       const sentAt = now().toISOString();
@@ -26083,11 +26259,42 @@ function createCaseEventsService(deps) {
         changes: {
           audience: { from: null, to: wanted },
           targets: { from: null, to: chats.length },
-          sent: { from: null, to: sent }
+          sent: { from: null, to: sent },
+          ...teacher ? { teacherName: { from: null, to: teacher.name } } : {}
         }
       });
-      log32.info("event.link_sent", { eventId, wanted, targets: chats.length, sent });
-      return { sent, targets: chats };
+      log32.info("event.link_sent", { eventId, wanted, targets: chats.length, sent, teacher: teacher?.name ?? null });
+      return { sent, targets: chats, link };
+    },
+    async issueTeacherFillLink(eventId, input, actor) {
+      const row = await getEventRow(eventId);
+      const type = typeRowToRecord(await loadTypeRow(row.event_type_id));
+      const isPkg = packageComponentsOf(type.key) !== null;
+      if (row.type_category !== "checklist" && !isPkg)
+        throw new ValidationError("\u0627\u06CC\u0646 \u0631\u0648\u06CC\u062F\u0627\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0646\u06CC\u0633\u062A");
+      if (row.status !== "pending_family")
+        throw new ConflictError("\u0627\u06CC\u0646 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u067E\u0627\u0633\u062E \u0646\u06CC\u0633\u062A (\u0642\u0628\u0644\u0627\u064B \u067E\u0631 \u06CC\u0627 \u0644\u063A\u0648 \u0634\u062F\u0647)");
+      if (!type.familyFillable)
+        throw new ValidationError("\u0627\u06CC\u0646 \u0641\u0631\u0645 \u0628\u0631\u0627\u06CC \u067E\u0631 \u06A9\u0631\u062F\u0646 \u0627\u0632 \u0633\u0645\u062A \u06AF\u06CC\u0631\u0646\u062F\u0647 \u0637\u0631\u0627\u062D\u06CC \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
+      const teacherName = sanitizeTeacherName(input.teacherName ?? null);
+      if (!teacherName)
+        throw new ValidationError("\u0646\u0627\u0645 \u0645\u0639\u0644\u0645 \u0628\u0631\u0627\u06CC \u0635\u062F\u0648\u0631 \u0644\u06CC\u0646\u06A9 \u0627\u0644\u0632\u0627\u0645\u06CC \u0627\u0633\u062A");
+      await bindTeacherToEvent(row, { name: teacherName, teacherId: input.teacherId ?? null });
+      const base = deps.publicBaseUrl ?? null;
+      if (!base)
+        throw new ConflictError("\u0622\u062F\u0631\u0633 \u0639\u0645\u0648\u0645\u06CC \u0633\u0627\u06CC\u062A \u062A\u0646\u0638\u06CC\u0645 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0633\u0627\u062E\u062A \u0644\u06CC\u0646\u06A9 \u0641\u0631\u0645 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A");
+      const link = await this.mintFillLink(eventId, base);
+      if (!link)
+        throw new ConflictError("\u0633\u0627\u062E\u062A \u0644\u06CC\u0646\u06A9 \u0641\u0631\u0645 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A");
+      await audit.log({
+        actorId: actor.staffId,
+        action: "case_event.teacher_link_issued",
+        resourceType: "case_event",
+        resourceId: eventId,
+        changes: { teacherName: { from: null, to: teacherName }, typeKey: { from: null, to: type.key } }
+      });
+      log32.info("event.teacher_link_issued", { eventId, teacherName, typeKey: type.key });
+      return { link, teacherName };
     },
     setSendObserver(fn) {
       sendFn = fn;
@@ -26157,12 +26364,16 @@ function createCaseEventsService(deps) {
         Object.entries(values).map(([k, v]) => [k, Number(v)])
       );
       const analysis = analyzeChecklist(type.fields, bands, numericValues, subscales);
-      const payload = {};
-      for (const f of type.fields) {
-        const raw2 = values[f.key];
-        const display = f.type === "single" ? f.scoredOptions?.[Number(raw2)]?.label ?? String(raw2) : String(raw2);
-        payload[f.key] = { value: display, label: f.label };
-      }
+      const teacher = teacherBindingOfPayload(parseJson(row.payload, null));
+      const payload = withTeacherName((() => {
+        const p = {};
+        for (const f of type.fields) {
+          const raw2 = values[f.key];
+          const display = f.type === "single" ? f.scoredOptions?.[Number(raw2)]?.label ?? String(raw2) : String(raw2);
+          p[f.key] = { value: display, label: f.label };
+        }
+        return p;
+      })(), teacher);
       const summary = buildSummary(payload, analysis);
       const sourceTag = input.viaWeb ? `web:${now().toISOString()}` : input.sourceChatId ?? "unknown";
       await db.execute(
@@ -26250,6 +26461,9 @@ function renderFillFormPage(model, token) {
   .head p { margin: 0; font-size: 13px; opacity: .85; }
   .head .desc { margin-top: 10px; font-size: 13px; opacity: .95; line-height: 1.9;
                 background: rgba(255,255,255,.08); border-radius: 10px; padding: 10px 12px; }
+  .head .who { margin-top: 10px; font-size: 13.5px; font-weight: 700; line-height: 1.8;
+               background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25);
+               border-radius: 10px; padding: 9px 12px; }
   .progress { position: sticky; top: 8px; z-index: 5; background: #fff; border: 1px solid #E5DCCB;
               border-radius: 12px; padding: 9px 12px; margin-bottom: 14px; font-size: 12.5px; color: #1c5d80;
               box-shadow: 0 1px 3px rgba(18,56,79,.10); }
@@ -26307,6 +26521,7 @@ function renderFillFormPage(model, token) {
   <div class="head">
     <h1>${esc(model.typeTitle)}</h1>
     ${headSub ? `<p>${esc(headSub)}</p>` : ""}
+    ${model.teacherLabel ? `<div class="who">${esc(model.teacherLabel)}</div>` : ""}
     ${model.description ? `<div class="desc">${esc(model.description)}</div>` : ""}
   </div>
   <div class="progress" id="prog">
@@ -26505,6 +26720,9 @@ function renderPackageFormPage(model, token) {
   .head p { margin: 0; font-size: 13px; opacity: .85; }
   .head .desc { margin-top: 10px; font-size: 13px; opacity: .95; line-height: 1.9;
                 background: rgba(255,255,255,.08); border-radius: 10px; padding: 10px 12px; }
+  .head .who { margin-top: 10px; font-size: 13.5px; font-weight: 700; line-height: 1.8;
+               background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25);
+               border-radius: 10px; padding: 9px 12px; }
   .progress { position: sticky; top: 8px; z-index: 5; background: #fff; border: 1px solid #E5DCCB;
               border-radius: 12px; padding: 9px 12px; margin-bottom: 14px; font-size: 12.5px; color: #1c5d80;
               box-shadow: 0 1px 3px rgba(18,56,79,.10); }
@@ -26573,6 +26791,7 @@ function renderPackageFormPage(model, token) {
   <div class="head">
     <h1>${esc(model.packageTitle)}</h1>
     ${headSub ? `<p>${esc(headSub)}</p>` : ''}
+    ${model.teacherLabel ? `<div class="who">${esc(model.teacherLabel)}</div>` : ''}
     ${model.description ? `<div class="desc">${esc(model.description)}</div>` : ''}
   </div>
   <div class="progress" id="prog">
@@ -26741,7 +26960,21 @@ function registerCaseEventsRoutes(app, service) {
     const actor = getAuthContext(c);
     const body = await c.req.json().catch(() => null);
     const audience = body?.audience === "family" || body?.audience === "teacher" || body?.audience === "both" ? body.audience : null;
-    const result = await service.sendChecklistLink(c.req.param("id"), { audience, note: body?.note ?? null }, actor);
+    const result = await service.sendChecklistLink(
+      c.req.param("id"),
+      { audience, note: body?.note ?? null, teacherName: body?.teacher_name ?? null, teacherId: body?.teacher_id ?? null },
+      actor
+    );
+    return c.json({ data: result }, 200);
+  });
+  app.post("/api/case-events/:id/teacher-link", requireRole("manager", "secretary", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json().catch(() => null);
+    const result = await service.issueTeacherFillLink(
+      c.req.param("id"),
+      { teacherName: body?.teacher_name ?? null, teacherId: body?.teacher_id ?? null },
+      actor
+    );
     return c.json({ data: result }, 200);
   });
   app.get("/api/students/:id/case-events", async (c) => {
@@ -26856,11 +27089,12 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
     }
     const studentName = await helpers.studentNameOf(event.studentId);
     const type = await service.getTypeById(event.eventTypeId);
+    const teacherName = teacherBindingOfPayload(event.payload)?.name ?? null;
     if (type && packageComponentsOf(type.key)) {
       const comps = await service.listPackageComponentTypes(event.eventTypeId);
       if (!comps)
         return c.html(fillErrorPage("این فرم پیدا نشد."), 404);
-      return new Response(renderPackageFormPage(packageModelOf(type, comps, studentName), token), {
+      return new Response(renderPackageFormPage(packageModelOf(type, comps, studentName, teacherName), token), {
         status: 200,
         headers: {
           "Content-Type": "text/html; charset=utf-8",
@@ -26895,7 +27129,8 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
       sections,
       // — سربرگ بر اساس گیرنده + معرفی روایی فرم
       audience: event.typeAudience ?? type?.audience ?? "family",
-      description: type?.description ?? null
+      description: type?.description ?? null,
+      teacherLabel: teacherName ? `فرم شما — ${teacherName}` : null
     };
     return new Response(renderFillFormPage(model, token), {
       status: 200,
@@ -26942,7 +27177,7 @@ function fillErrorPage(message) {
 }
 __name(fillErrorPage, "fillErrorPage");
 __name2(fillErrorPage, "fillErrorPage");
-function packageModelOf(pkgType, comps, studentName) {
+function packageModelOf(pkgType, comps, studentName, teacherName = null) {
   const ctxFields = pkgType.fields.filter((f) => f.type === "select" || f.type === "text" || f.type === "longtext").map((f) => ({
     key: f.key,
     label: f.label,
@@ -26982,6 +27217,7 @@ function packageModelOf(pkgType, comps, studentName) {
   return {
     packageTitle: `${pkgType.icon ?? ""} ${pkgType.title}`.trim(),
     studentName: studentName ?? "",
+    teacherLabel: teacherName ? `فرم شما — ${teacherName}` : null,
     description: pkgType.description ?? null,
     context: { title: ctxTitle, fields: ctxFields },
     tools
@@ -28638,6 +28874,329 @@ var battery_composite_default = [
       type: "longtext"
     }
     ]
+  },
+  {
+    key: "ce-sld-class-t-v1",
+    title: "\u0645\u0644\u0627\u06a9\u200c\u0647\u0627\u06cc \u06a9\u0644\u0627\u0633\u06cc \u062e\u0648\u0627\u0646\u062f\u0646/\u0646\u0648\u0634\u062a\u0646/\u062d\u0633\u0627\u0628 \u2014 \u0641\u0631\u0645 \u0645\u0639\u0644\u0645",
+    description: "\u062f\u0648\u0627\u0632\u062f\u0647 \u062c\u0645\u0644\u0647\u0654 \u06a9\u0648\u062a\u0627\u0647 \u062f\u0631\u0628\u0627\u0631\u0647\u0654 \u06a9\u0627\u0631\u06a9\u0631\u062f \u0631\u0648\u0632\u0645\u0631\u0647\u0654 \u062f\u0627\u0646\u0634\u200c\u0622\u0645\u0648\u0632 \u0634\u0645\u0627 \u062f\u0631 \u06a9\u0644\u0627\u0633 \u2014 \u0631\u0648\u0627\u0646\u06cc \u0648 \u062f\u0642\u062a \u062e\u0648\u0627\u0646\u062f\u0646\u060c \u0627\u0645\u0644\u0627\u0621 \u0648 \u0646\u06af\u0627\u0631\u0634\u060c \u0648 \u062d\u0633\u0627\u0628. \u0628\u0631\u0627\u06cc \u0647\u0631 \u062c\u0645\u0644\u0647 \u0628\u06af\u0648\u06cc\u06cc\u062f \u0686\u0647 \u0627\u0646\u062f\u0627\u0632\u0647 \u062f\u0631 \u06a9\u0644\u0627\u0633 \u0628\u0647\u200c\u0686\u0634\u0645 \u0634\u0645\u0627 \u0645\u06cc\u200c\u062e\u0648\u0631\u062f. \u067e\u0627\u0633\u062e \u062f\u0631\u0633\u062a \u06cc\u0627 \u063a\u0644\u0637 \u0646\u062f\u0627\u0631\u062f\u061b \u0645\u0634\u0627\u0647\u062f\u0647\u0654 \u0648\u0627\u0642\u0639\u06cc \u0634\u0645\u0627 \u0627\u0631\u0632\u0634\u0645\u0646\u062f\u062a\u0631\u06cc\u0646 \u062f\u0627\u062f\u0647\u0654 \u0645\u0627\u0633\u062a. \u062d\u062f\u0648\u062f \u06f4 \u062f\u0642\u06cc\u0642\u0647 \u0648\u0642\u062a \u0645\u06cc\u200c\u0628\u0631\u062f.",
+    category: "checklist",
+    icon: "\ud83d\udcd6",
+    familyFillable: true,
+    audience: "teacher",
+    source: "\u0645\u0644\u0627\u06a9\u200c\u0647\u0627\u06cc \u06a9\u0644\u0627\u0633\u06cc \u062f\u0634\u0648\u0627\u0631\u06cc \u06cc\u0627\u062f\u06af\u06cc\u0631\u06cc \u062e\u0627\u0635 \u2014 \u0628\u0627\u0632\u0622\u0641\u0631\u06cc\u0646\u06cc \u0645\u0631\u06a9\u0632 \u0628\u0631\u0627\u06cc \u0645\u0634\u0627\u0647\u062f\u0647\u0654 \u0645\u0639\u0644\u0645 (T7/m150-b \u2014 \u0637\u0631\u062d \u0648\u0627\u062d\u062f \u00a7\u06f2 P0 \u0631\u062f\u06cc\u0641 \u06f4): \u0631\u0648\u0627\u0646\u06cc \u062e\u0648\u0627\u0646\u062f\u0646/\u0627\u0645\u0644\u0627\u0621 \u0648 \u0646\u06af\u0627\u0631\u0634/\u062d\u0633\u0627\u0628 \u0630\u0647\u0646\u06cc \u0648 \u0645\u0633\u0626\u0644\u0647. \u0632\u06cc\u0631\u0645\u0642\u06cc\u0627\u0633\u200c\u0647\u0627 sld_read/sld_write/sld_calc \u2014 \u0647\u0645\u200c\u0646\u0627\u0645 \u06a9\u0644\u06cc\u062f\u0647\u0627\u06cc \u0633\u06cc\u06af\u0646\u0627\u0644 \u0634\u0631\u062d\u200c\u062d\u0627\u0644 v3 (ANAMNESIS_V3_SIGNAL_SPEC: anam.sld_read/sld_write/sld_calc) \u062a\u0627 \u0645\u0648\u062a\u0648\u0631 \u0647\u0631 \u062f\u0648 \u0645\u0646\u0628\u0639 \u0631\u0627 \u0628\u06cc\u200c\u0628\u0627\u0632\u0646\u0648\u06cc\u0633\u06cc \u0628\u062e\u0648\u0627\u0646\u062f. \u0647\u0631 \u0622\u06cc\u062a\u0645 \u06f0\u2013\u06f2 (\u0641\u0631\u0627\u0648\u0627\u0646\u06cc \u0645\u0634\u0627\u0647\u062f\u0647)\u060c \u0646\u0645\u0631\u0647\u0654 \u0628\u0627\u0644\u0627\u062a\u0631 = \u0646\u0634\u0627\u0646\u0647\u0654 \u0628\u06cc\u0634\u062a\u0631. \u0628\u0631\u0634\u200c\u0647\u0627\u06cc \u0633\u0647\u200c\u06af\u0627\u0646\u0647\u0654 \u0639\u0627\u062f\u06cc/\u0645\u0631\u0632\u06cc/\u0642\u0627\u0628\u0644 \u062a\u0648\u062c\u0647 \u0627\u0648\u0644\u06cc\u0647 \u0627\u0633\u062a \u2014 \u06a9\u0627\u0644\u06cc\u0628\u0631\u0627\u0633\u06cc\u0648\u0646 \u0628\u0627 \u062f\u0627\u062f\u0647\u0654 \u0645\u0631\u06a9\u0632 \u062f\u0631.",
+    tags: [],
+    subscales: [
+      {
+        id: "sld_read",
+        name: "\u062e\u0648\u0627\u0646\u062f\u0646 \u062f\u0631 \u06a9\u0644\u0627\u0633",
+        bands: [
+          {
+            max: 2,
+            label: "\u062f\u0631 \u0645\u062d\u062f\u0648\u062f\u0647\u0654 \u0639\u0627\u062f\u06cc",
+            color: "ok",
+            advice: "\u0646\u0634\u0627\u0646\u0647\u0654 \u062f\u0634\u0648\u0627\u0631\u06cc \u062e\u0648\u0627\u0646\u062f\u0646 \u0628\u0631\u062c\u0633\u062a\u0647 \u0646\u06cc\u0633\u062a \u2014 \u067e\u0627\u06cc\u0634 \u062f\u0648\u0631\u0647\u200c\u0627\u06cc \u06a9\u0627\u0641\u06cc \u0627\u0633\u062a."
+          },
+          {
+            max: 4,
+            label: "\u0645\u0631\u0632\u06cc \u2014 \u0646\u06cc\u0627\u0632 \u0628\u0647 \u062a\u0648\u062c\u0647",
+            color: "warn",
+            advice: "\u0646\u0634\u0627\u0646\u0647\u200c\u0647\u0627\u06cc \u062e\u0648\u0627\u0646\u062f\u0646 \u0645\u0631\u0632\u06cc \u0627\u0633\u062a\u061b \u067e\u0631\u0648\u0628 \u06a9\u0648\u062a\u0627\u0647 \u062e\u0648\u0627\u0646\u062f\u0646 \u0628\u0631\u0627\u06cc \u0633\u0646\u062c\u0634 \u062f\u0642\u06cc\u0642\u200c\u062a\u0631 \u067e\u06cc\u0634\u0646\u0647\u0627\u062f \u0645\u06cc\u200c\u0634\u0648\u062f."
+          },
+          {
+            max: 9999,
+            label: "\u0642\u0627\u0628\u0644 \u062a\u0648\u062c\u0647 \u2014 \u0646\u06cc\u0627\u0632 \u0628\u0647 \u0628\u0631\u0631\u0633\u06cc \u0628\u06cc\u0634\u062a\u0631",
+            color: "danger",
+            advice: "\u0646\u0634\u0627\u0646\u0647\u200c\u0647\u0627\u06cc \u062e\u0648\u0627\u0646\u062f\u0646 \u0628\u0627\u0644\u0627\u0633\u062a\u061b \u067e\u0631\u0648\u0628 \u062e\u0648\u0627\u0646\u062f\u0646 + \u0686\u06a9\u200c\u0644\u06cc\u0633\u062a \u0645\u0644\u0627\u06a9\u06cc \u062f\u0634\u0648\u0627\u0631\u06cc \u062e\u0648\u0627\u0646\u062f\u0646 \u067e\u06cc\u0634\u0646\u0647\u0627\u062f \u0645\u06cc\u200c\u0634\u0648\u062f."
+          }
+        ]
+      },
+      {
+        id: "sld_write",
+        name: "\u0646\u0648\u0634\u062a\u0646 \u0648 \u0627\u0645\u0644\u0627\u0621 \u062f\u0631 \u06a9\u0644\u0627\u0633",
+        bands: [
+          {
+            max: 2,
+            label: "\u062f\u0631 \u0645\u062d\u062f\u0648\u062f\u0647\u0654 \u0639\u0627\u062f\u06cc",
+            color: "ok"
+          },
+          {
+            max: 4,
+            label: "\u0645\u0631\u0632\u06cc \u2014 \u0646\u06cc\u0627\u0632 \u0628\u0647 \u062a\u0648\u062c\u0647",
+            color: "warn",
+            advice: "\u0646\u0634\u0627\u0646\u0647\u200c\u0647\u0627\u06cc \u0646\u0648\u0634\u062a\u0646 \u0645\u0631\u0632\u06cc \u0627\u0633\u062a\u061b \u0646\u0645\u0648\u0646\u0647\u0654 \u0627\u0645\u0644\u0627 \u0648 \u062a\u06a9\u0644\u06cc\u0641 \u0646\u06af\u0627\u0631\u0634 \u0627\u062e\u06cc\u0631 \u0628\u0631\u0631\u0633\u06cc \u0634\u0648\u062f."
+          },
+          {
+            max: 9999,
+            label: "\u0642\u0627\u0628\u0644 \u062a\u0648\u062c\u0647 \u2014 \u0646\u06cc\u0627\u0632 \u0628\u0647 \u0628\u0631\u0631\u0633\u06cc \u0628\u06cc\u0634\u062a\u0631",
+            color: "danger",
+            advice: "\u0646\u0634\u0627\u0646\u0647\u200c\u0647\u0627\u06cc \u0646\u0648\u0634\u062a\u0646 \u0628\u0627\u0644\u0627\u0633\u062a\u061b \u067e\u0631\u0648\u0628 \u0646\u0648\u0634\u062a\u0646 + \u062a\u062c\u0632\u06cc\u0647\u0654 \u062e\u0637\u0627\u06cc \u062f\u06cc\u06a9\u062a\u0647 \u067e\u06cc\u0634\u0646\u0647\u0627\u062f \u0645\u06cc\u200c\u0634\u0648\u062f."
+          }
+        ]
+      },
+      {
+        id: "sld_calc",
+        name: "\u062d\u0633\u0627\u0628 \u062f\u0631 \u06a9\u0644\u0627\u0633",
+        bands: [
+          {
+            max: 2,
+            label: "\u062f\u0631 \u0645\u062d\u062f\u0648\u062f\u0647\u0654 \u0639\u0627\u062f\u06cc",
+            color: "ok"
+          },
+          {
+            max: 4,
+            label: "\u0645\u0631\u0632\u06cc \u2014 \u0646\u06cc\u0627\u0632 \u0628\u0647 \u062a\u0648\u062c\u0647",
+            color: "warn",
+            advice: "\u0646\u0634\u0627\u0646\u0647\u200c\u0647\u0627\u06cc \u062d\u0633\u0627\u0628 \u0645\u0631\u0632\u06cc \u0627\u0633\u062a\u061b \u06a9\u0627\u0631 \u0628\u0627 \u0645\u0627\u062f\u0647\u0654 \u0639\u0645\u0644\u06cc \u0648 \u067e\u0627\u06cc\u0634 \u062c\u0644\u0633\u0647\u200c\u0627\u06cc \u062a\u0648\u0635\u06cc\u0647 \u0645\u06cc\u200c\u0634\u0648\u062f."
+          },
+          {
+            max: 9999,
+            label: "\u0642\u0627\u0628\u0644 \u062a\u0648\u062c\u0647 \u2014 \u0646\u06cc\u0627\u0632 \u0628\u0647 \u0628\u0631\u0631\u0633\u06cc \u0628\u06cc\u0634\u062a\u0631",
+            color: "danger",
+            advice: "\u0646\u0634\u0627\u0646\u0647\u200c\u0647\u0627\u06cc \u062d\u0633\u0627\u0628 \u0628\u0627\u0644\u0627\u0633\u062a\u061b \u067e\u0631\u0648\u0628 \u062d\u0633\u0627\u0628 + \u0627\u0631\u0632\u06cc\u0627\u0628\u06cc \u0645\u0641\u0627\u0647\u06cc\u0645 \u067e\u0627\u06cc\u0647\u0654 \u0631\u06cc\u0627\u0636\u06cc \u067e\u06cc\u0634\u0646\u0647\u0627\u062f \u0645\u06cc\u200c\u0634\u0648\u062f."
+          }
+        ]
+      }
+    ],
+    bands: [
+      {
+        max: 6,
+        label: "\u062f\u0631 \u0645\u062d\u062f\u0648\u062f\u0647\u0654 \u0639\u0627\u062f\u06cc",
+        color: "ok",
+        advice: "\u0646\u0634\u0627\u0646\u0647\u0654 \u06a9\u0644\u0627\u0633\u06cc \u062f\u0634\u0648\u0627\u0631\u06cc \u06cc\u0627\u062f\u06af\u06cc\u0631\u06cc \u0628\u0631\u062c\u0633\u062a\u0647 \u0646\u06cc\u0633\u062a \u2014 \u067e\u0627\u06cc\u0634 \u062f\u0648\u0631\u0647\u200c\u0627\u06cc \u06a9\u0627\u0641\u06cc \u0627\u0633\u062a."
+      },
+      {
+        max: 10,
+        label: "\u0645\u0631\u0632\u06cc \u2014 \u0646\u06cc\u0627\u0632 \u0628\u0647 \u062a\u0648\u062c\u0647",
+        color: "warn",
+        advice: "\u0646\u0634\u0627\u0646\u0647\u200c\u0647\u0627\u06cc \u06a9\u0644\u0627\u0633\u06cc \u0645\u0631\u0632\u06cc \u0627\u0633\u062a\u061b \u0632\u06cc\u0631\u0645\u0642\u06cc\u0627\u0633\u200c\u0647\u0627 \u062f\u06cc\u062f\u0647 \u0634\u0648\u062f \u0648 \u062f\u0631 \u0635\u0648\u0631\u062a \u062a\u06a9\u0631\u0627\u0631\u060c \u067e\u0631\u0648\u0628 \u0647\u0645\u0627\u0646 \u062d\u0648\u0632\u0647 \u06af\u0631\u0641\u062a\u0647 \u0634\u0648\u062f."
+      },
+      {
+        max: 9999,
+        label: "\u0642\u0627\u0628\u0644 \u062a\u0648\u062c\u0647 \u2014 \u0646\u06cc\u0627\u0632 \u0628\u0647 \u0628\u0631\u0631\u0633\u06cc \u0628\u06cc\u0634\u062a\u0631",
+        color: "danger",
+        advice: "\u0646\u0634\u0627\u0646\u0647\u200c\u0647\u0627\u06cc \u06a9\u0644\u0627\u0633\u06cc \u0628\u0627\u0644\u0627\u0633\u062a\u061b \u067e\u0631\u0648\u0628 \u0633\u0647\u200c\u06af\u0627\u0646\u0647 (\u062e\u0648\u0627\u0646\u062f\u0646/\u0646\u0648\u0634\u062a\u0646/\u062d\u0633\u0627\u0628) \u0628\u0631\u0627\u06cc \u062a\u0639\u06cc\u06cc\u0646 \u062d\u0648\u0632\u0647\u0654 \u0627\u0635\u0644\u06cc \u067e\u06cc\u0634\u0646\u0647\u0627\u062f \u0645\u06cc\u200c\u0634\u0648\u062f."
+      }
+    ],
+    fields: [
+      {
+        key: "r01",
+        label: "\u062f\u0631 \u062e\u0648\u0627\u0646\u062f\u0646 \u0628\u0644\u0646\u062f\u0650 \u0645\u062a\u0646\u060c \u06a9\u0644\u0645\u0647\u200c\u0647\u0627 \u0631\u0627 \u062d\u0631\u0641\u200c\u0628\u0647\u200c\u062d\u0631\u0641 \u0645\u06cc\u200c\u062e\u0648\u0627\u0646\u062f \u06cc\u0627 \u0628\u0627 \u062a\u0648\u0642\u0641\u200c\u0647\u0627\u06cc \u0645\u06a9\u0631\u0631 \u0631\u0648\u0627\u0646\u06cc \u062e\u0648\u0627\u0646\u062f\u0646 \u0631\u0627 \u0627\u0632 \u062f\u0633\u062a \u0645\u06cc\u200c\u062f\u0647\u062f",
+        type: "scale",
+        scaleMax: 2,
+        scaleLabels: [
+          "\u0627\u0635\u0644\u0627\u064b \u0628\u0647\u200c\u0686\u0634\u0645 \u0646\u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u062a\u0627 \u062d\u062f\u06cc \u0628\u0647\u200c\u0686\u0634\u0645 \u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u0628\u0647\u200c\u0631\u0648\u0634\u0646\u06cc \u0648 \u0645\u06a9\u0631\u0631"
+        ],
+        required: true,
+        subscaleId: "sld_read"
+      },
+      {
+        key: "r02",
+        label: "\u062f\u0631 \u062e\u0648\u0627\u0646\u062f\u0646\u060c \u06a9\u0644\u0645\u0647\u200c\u0647\u0627\u06cc \u0622\u0634\u0646\u0627 \u0648 \u067e\u0631\u062a\u06a9\u0631\u0627\u0631 \u0631\u0627 \u062c\u0627\u06cc\u06af\u0632\u06cc\u0646\u060c \u062d\u0630\u0641 \u06cc\u0627 \u0627\u0636\u0627\u0641\u0647 \u0645\u06cc\u200c\u06a9\u0646\u062f",
+        type: "scale",
+        scaleMax: 2,
+        scaleLabels: [
+          "\u0627\u0635\u0644\u0627\u064b \u0628\u0647\u200c\u0686\u0634\u0645 \u0646\u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u062a\u0627 \u062d\u062f\u06cc \u0628\u0647\u200c\u0686\u0634\u0645 \u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u0628\u0647\u200c\u0631\u0648\u0634\u0646\u06cc \u0648 \u0645\u06a9\u0631\u0631"
+        ],
+        required: true,
+        subscaleId: "sld_read"
+      },
+      {
+        key: "r03",
+        label: "\u062f\u0631 \u062e\u0648\u0627\u0646\u062f\u0646 \u0647\u0645\u0627\u0646 \u0645\u062a\u0646\u06cc \u06a9\u0647 \u06a9\u0644\u0627\u0633 \u0645\u06cc\u200c\u062e\u0648\u0627\u0646\u062f\u060c \u0628\u0633\u06cc\u0627\u0631 \u06a9\u0646\u062f\u062a\u0631 \u0627\u0632 \u0647\u0645\u200c\u06a9\u0644\u0627\u0633\u06cc\u200c\u0647\u0627 \u067e\u06cc\u0634 \u0645\u06cc\u200c\u0631\u0648\u062f \u0648 \u0632\u0648\u062f \u062e\u0633\u062a\u0647 \u0645\u06cc\u200c\u0634\u0648\u062f",
+        type: "scale",
+        scaleMax: 2,
+        scaleLabels: [
+          "\u0627\u0635\u0644\u0627\u064b \u0628\u0647\u200c\u0686\u0634\u0645 \u0646\u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u062a\u0627 \u062d\u062f\u06cc \u0628\u0647\u200c\u0686\u0634\u0645 \u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u0628\u0647\u200c\u0631\u0648\u0634\u0646\u06cc \u0648 \u0645\u06a9\u0631\u0631"
+        ],
+        required: true,
+        subscaleId: "sld_read"
+      },
+      {
+        key: "r04",
+        label: "\u067e\u0633 \u0627\u0632 \u062e\u0648\u0627\u0646\u062f\u0646 \u06cc\u06a9 \u0645\u062a\u0646 \u06a9\u0648\u062a\u0627\u0647\u060c \u062f\u0631 \u067e\u0627\u0633\u062e \u0628\u0647 \u067e\u0631\u0633\u0634\u200c\u0647\u0627\u06cc \u0633\u0627\u062f\u0647 \u0627\u0632 \u062e\u0648\u062f\u0650 \u0645\u062a\u0646 \u062f\u0686\u0627\u0631 \u0645\u0634\u06a9\u0644 \u0627\u0633\u062a",
+        type: "scale",
+        scaleMax: 2,
+        scaleLabels: [
+          "\u0627\u0635\u0644\u0627\u064b \u0628\u0647\u200c\u0686\u0634\u0645 \u0646\u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u062a\u0627 \u062d\u062f\u06cc \u0628\u0647\u200c\u0686\u0634\u0645 \u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u0628\u0647\u200c\u0631\u0648\u0634\u0646\u06cc \u0648 \u0645\u06a9\u0631\u0631"
+        ],
+        required: true,
+        subscaleId: "sld_read"
+      },
+      {
+        key: "w01",
+        label: "\u062f\u0631 \u062f\u06cc\u06a9\u062a\u0647\u060c \u062e\u0637\u0627\u06cc \u062d\u0630\u0641 \u06cc\u0627 \u062c\u0627\u0628\u0647\u200c\u062c\u0627\u06cc\u06cc \u062d\u0631\u0641\u200c\u0647\u0627 \u062f\u0627\u0631\u062f \u2014 \u062d\u062a\u06cc \u062f\u0631 \u06a9\u0644\u0645\u0647\u200c\u0647\u0627\u06cc\u06cc \u06a9\u0647 \u062f\u0631\u0633 \u062f\u0627\u062f\u0647 \u0634\u062f\u0647 \u0627\u0633\u062a",
+        type: "scale",
+        scaleMax: 2,
+        scaleLabels: [
+          "\u0627\u0635\u0644\u0627\u064b \u0628\u0647\u200c\u0686\u0634\u0645 \u0646\u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u062a\u0627 \u062d\u062f\u06cc \u0628\u0647\u200c\u0686\u0634\u0645 \u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u0628\u0647\u200c\u0631\u0648\u0634\u0646\u06cc \u0648 \u0645\u06a9\u0631\u0631"
+        ],
+        required: true,
+        subscaleId: "sld_write"
+      },
+      {
+        key: "w02",
+        label: "\u0646\u0648\u0634\u062a\u0647\u200c\u0647\u0627\u06cc\u0634 \u0628\u0633\u06cc\u0627\u0631 \u06a9\u0648\u062a\u0627\u0647\u200c\u062a\u0631 \u0627\u0632 \u0627\u0646\u062a\u0638\u0627\u0631 \u067e\u0627\u06cc\u0647\u0654 \u062a\u062d\u0635\u06cc\u0644\u06cc \u0627\u0633\u062a \u0648 \u0627\u0632 \u0641\u0639\u0627\u0644\u06cc\u062a\u200c\u0647\u0627\u06cc \u0646\u0648\u0634\u062a\u0646\u06cc \u067e\u0631\u0647\u06cc\u0632 \u0645\u06cc\u200c\u06a9\u0646\u062f",
+        type: "scale",
+        scaleMax: 2,
+        scaleLabels: [
+          "\u0627\u0635\u0644\u0627\u064b \u0628\u0647\u200c\u0686\u0634\u0645 \u0646\u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u062a\u0627 \u062d\u062f\u06cc \u0628\u0647\u200c\u0686\u0634\u0645 \u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u0628\u0647\u200c\u0631\u0648\u0634\u0646\u06cc \u0648 \u0645\u06a9\u0631\u0631"
+        ],
+        required: true,
+        subscaleId: "sld_write"
+      },
+      {
+        key: "w03",
+        label: "\u062f\u0631 \u0646\u06af\u0627\u0631\u0634\u060c \u062c\u0645\u0644\u0647\u200c\u0647\u0627\u06cc \u0646\u0627\u0642\u0635 \u06cc\u0627 \u062f\u0631\u0647\u0645 \u0645\u06cc\u200c\u0646\u0648\u06cc\u0633\u062f \u0648 \u0646\u0638\u0645 \u062f\u0627\u062f\u0646 \u0628\u0647 \u0646\u0648\u0634\u062a\u0647 \u0628\u0631\u0627\u06cc\u0634 \u062f\u0634\u0648\u0627\u0631 \u0627\u0633\u062a",
+        type: "scale",
+        scaleMax: 2,
+        scaleLabels: [
+          "\u0627\u0635\u0644\u0627\u064b \u0628\u0647\u200c\u0686\u0634\u0645 \u0646\u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u062a\u0627 \u062d\u062f\u06cc \u0628\u0647\u200c\u0686\u0634\u0645 \u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u0628\u0647\u200c\u0631\u0648\u0634\u0646\u06cc \u0648 \u0645\u06a9\u0631\u0631"
+        ],
+        required: true,
+        subscaleId: "sld_write"
+      },
+      {
+        key: "w04",
+        label: "\u0646\u0648\u0634\u062a\u0646\u0634 \u0631\u0648\u06cc \u06a9\u0627\u063a\u0630 \u06cc\u0627 \u062a\u062e\u062a\u0647 \u0628\u06cc\u0634 \u0627\u0632 \u0647\u0645\u200c\u06a9\u0644\u0627\u0633\u06cc\u200c\u0647\u0627 \u0632\u0645\u0627\u0646 \u0645\u06cc\u200c\u0628\u0631\u062f \u0648 \u0646\u062a\u06cc\u062c\u0647\u200c\u0627\u0634 \u0646\u0627\u062e\u0648\u0627\u0646\u0627\u0633\u062a",
+        type: "scale",
+        scaleMax: 2,
+        scaleLabels: [
+          "\u0627\u0635\u0644\u0627\u064b \u0628\u0647\u200c\u0686\u0634\u0645 \u0646\u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u062a\u0627 \u062d\u062f\u06cc \u0628\u0647\u200c\u0686\u0634\u0645 \u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u0628\u0647\u200c\u0631\u0648\u0634\u0646\u06cc \u0648 \u0645\u06a9\u0631\u0631"
+        ],
+        required: true,
+        subscaleId: "sld_write"
+      },
+      {
+        key: "m01",
+        label: "\u062f\u0631 \u062c\u0645\u0639\u200c\u0647\u0627\u06cc \u0633\u0627\u062f\u0647\u0654 \u0630\u0647\u0646\u06cc (\u062c\u0645\u0639 \u0648 \u062a\u0641\u0631\u06cc\u0642 \u0627\u0639\u062f\u0627\u062f \u06cc\u06a9\u200c\u0631\u0642\u0645\u06cc) \u06af\u06cc\u0631 \u0645\u06cc\u200c\u06a9\u0646\u062f \u0648 \u0628\u0647 \u0634\u0645\u0627\u0631\u0634 \u0627\u0646\u06af\u0634\u062a\u06cc \u0628\u0631\u0645\u06cc\u200c\u06af\u0631\u062f\u062f",
+        type: "scale",
+        scaleMax: 2,
+        scaleLabels: [
+          "\u0627\u0635\u0644\u0627\u064b \u0628\u0647\u200c\u0686\u0634\u0645 \u0646\u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u062a\u0627 \u062d\u062f\u06cc \u0628\u0647\u200c\u0686\u0634\u0645 \u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u0628\u0647\u200c\u0631\u0648\u0634\u0646\u06cc \u0648 \u0645\u06a9\u0631\u0631"
+        ],
+        required: true,
+        subscaleId: "sld_calc"
+      },
+      {
+        key: "m02",
+        label: "\u062f\u0631 \u062d\u0644 \u0645\u0633\u0626\u0644\u0647\u0654 \u0631\u06cc\u0627\u0636\u06cc\u060c \u0639\u0645\u0644\u0650 \u062f\u0631\u0633\u062a \u0631\u0627 \u062a\u0634\u062e\u06cc\u0635 \u0646\u0645\u06cc\u200c\u062f\u0647\u062f \u0648 \u0648\u0633\u0637 \u0645\u0633\u0626\u0644\u0647 \u06af\u0645 \u0645\u06cc\u200c\u0634\u0648\u062f",
+        type: "scale",
+        scaleMax: 2,
+        scaleLabels: [
+          "\u0627\u0635\u0644\u0627\u064b \u0628\u0647\u200c\u0686\u0634\u0645 \u0646\u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u062a\u0627 \u062d\u062f\u06cc \u0628\u0647\u200c\u0686\u0634\u0645 \u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u0628\u0647\u200c\u0631\u0648\u0634\u0646\u06cc \u0648 \u0645\u06a9\u0631\u0631"
+        ],
+        required: true,
+        subscaleId: "sld_calc"
+      },
+      {
+        key: "m03",
+        label: "\u062f\u0631 \u0645\u062d\u0627\u0633\u0628\u0647\u200c\u0647\u0627\u06cc \u0686\u0646\u062f\u0631\u0642\u0645\u06cc\u060c \u0633\u062a\u0648\u0646\u200c\u0628\u0646\u062f\u06cc \u0648 \u0631\u0642\u0645\u200c\u0647\u0627 \u0631\u0627 \u062c\u0627\u0628\u0647\u200c\u062c\u0627 \u0645\u06cc\u200c\u06a9\u0646\u062f \u0648 \u062e\u0637\u0627\u06cc\u0634\u0627\u0646 \u062a\u06a9\u0631\u0627\u0631\u06cc \u0627\u0633\u062a",
+        type: "scale",
+        scaleMax: 2,
+        scaleLabels: [
+          "\u0627\u0635\u0644\u0627\u064b \u0628\u0647\u200c\u0686\u0634\u0645 \u0646\u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u062a\u0627 \u062d\u062f\u06cc \u0628\u0647\u200c\u0686\u0634\u0645 \u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u0628\u0647\u200c\u0631\u0648\u0634\u0646\u06cc \u0648 \u0645\u06a9\u0631\u0631"
+        ],
+        required: true,
+        subscaleId: "sld_calc"
+      },
+      {
+        key: "m04",
+        label: "\u0645\u0641\u0647\u0648\u0645\u200c\u0647\u0627\u06cc \u067e\u0627\u06cc\u0647\u0654 \u0631\u06cc\u0627\u0636\u06cc (\u062a\u0631\u062a\u06cc\u0628 \u0627\u0639\u062f\u0627\u062f\u060c \u0645\u0642\u0627\u06cc\u0633\u0647\u060c \u0627\u0646\u062f\u0627\u0632\u0647) \u0631\u0627 \u062f\u06cc\u0631\u062a\u0631 \u0627\u0632 \u0647\u0645\u200c\u06a9\u0644\u0627\u0633\u06cc\u200c\u0647\u0627 \u0645\u06cc\u200c\u0641\u0647\u0645\u062f",
+        type: "scale",
+        scaleMax: 2,
+        scaleLabels: [
+          "\u0627\u0635\u0644\u0627\u064b \u0628\u0647\u200c\u0686\u0634\u0645 \u0646\u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u062a\u0627 \u062d\u062f\u06cc \u0628\u0647\u200c\u0686\u0634\u0645 \u0645\u06cc\u200c\u062e\u0648\u0631\u062f",
+          "\u0628\u0647\u200c\u0631\u0648\u0634\u0646\u06cc \u0648 \u0645\u06a9\u0631\u0631"
+        ],
+        required: true,
+        subscaleId: "sld_calc"
+      }
+    ]
+  },
+  {
+    key: "ce-comp-teacher-v2",
+    title: "\u0641\u0631\u0645 \u062c\u0627\u0645\u0639 \u0645\u0639\u0644\u0645 \u2014 \u0628\u0633\u062a\u0647\u0654 \u06a9\u0627\u0645\u0644 \u0645\u0634\u0627\u0647\u062f\u0647\u0654 \u06a9\u0644\u0627\u0633",
+    description: "\u06cc\u06a9 \u0644\u06cc\u0646\u06a9 \u062c\u062f\u0627\u06af\u0627\u0646\u0647 \u0628\u0631\u0627\u06cc \u0647\u0631 \u0645\u0639\u0644\u0645\u061b \u0686\u0647\u0627\u0631 \u0628\u062e\u0634 \u067e\u0634\u062a\u200c\u0633\u0631\u0647\u0645: \u0686\u0646\u062f \u067e\u0631\u0633\u0634 \u06a9\u0648\u062a\u0627\u0647 \u0645\u0634\u0627\u0647\u062f\u0647\u0654 \u06a9\u0644\u0627\u0633\u060c \u0686\u06a9\u200c\u0644\u06cc\u0633\u062a \u062a\u0648\u062c\u0647 \u0648 \u0628\u06cc\u200c\u0642\u0631\u0627\u0631\u06cc (SNAP-IV)\u060c \u067e\u0631\u0633\u0634\u200c\u0646\u0627\u0645\u0647\u0654 \u0631\u0641\u062a\u0627\u0631 (SDQ) \u0648 \u0645\u0644\u0627\u06a9\u200c\u0647\u0627\u06cc \u06a9\u0644\u0627\u0633\u06cc \u062e\u0648\u0627\u0646\u062f\u0646/\u0646\u0648\u0634\u062a\u0646/\u062d\u0633\u0627\u0628. \u067e\u0627\u0633\u062e\u200c\u0647\u0627 \u062c\u062f\u0627\u06af\u0627\u0646\u0647 \u0646\u0645\u0631\u0647 \u0645\u06cc\u200c\u062e\u0648\u0631\u0646\u062f \u0648 \u0631\u0648\u06cc \u067e\u0631\u0648\u0646\u062f\u0647\u0654 \u062f\u0627\u0646\u0634\u200c\u0622\u0645\u0648\u0632 \u0628\u0627 \u0646\u0627\u0645 \u0634\u0645\u0627 \u062b\u0628\u062a \u0645\u06cc\u200c\u0634\u0648\u0646\u062f. \u062d\u062f\u0648\u062f \u06f1\u06f5 \u062a\u0627 \u06f2\u06f0 \u062f\u0642\u06cc\u0642\u0647 \u0648\u0642\u062a \u0645\u06cc\u200c\u0628\u0631\u062f\u061b \u0645\u06cc\u200c\u062a\u0648\u0627\u0646\u06cc\u062f \u0622\u0631\u0627\u0645 \u0648 \u0628\u062f\u0648\u0646 \u0639\u062c\u0644\u0647 \u062c\u0644\u0648 \u0628\u0631\u0648\u06cc\u062f \u2014 \u0647\u0645\u0647\u0654 \u067e\u0627\u0633\u062e\u200c\u0647\u0627 \u06cc\u06a9\u200c\u062c\u0627 \u062f\u0631 \u067e\u0627\u06cc\u0627\u0646 \u0627\u0631\u0633\u0627\u0644 \u0645\u06cc\u200c\u0634\u0648\u062f.",
+    category: "session",
+    icon: "\ud83e\uddd1\u200d\ud83c\udfeb",
+    familyFillable: true,
+    audience: "teacher",
+    source: "\u067e\u06a9\u06cc\u062c \u0686\u0646\u062f-\u0627\u0628\u0632\u0627\u0631\u06cc \u0641\u0631\u0645 \u062c\u0627\u0645\u0639 \u0645\u0639\u0644\u0645 (T7/m150-b \u2014 \u0637\u0631\u062d \u0648\u0627\u062d\u062f \u00a7\u06f2 P0 \u0631\u062f\u06cc\u0641 \u06f4): \u06cc\u06a9 \u0644\u06cc\u0646\u06a9 \u0639\u0645\u0648\u0645\u06cc \u0628\u0647\u200c\u0627\u0632\u0627\u06cc \u0647\u0631 \u0645\u0639\u0644\u0645\u060c \u0631\u0646\u062f\u0631 \u0628\u062e\u0634\u200c\u0628\u0647\u200c\u0628\u062e\u0634\u060c \u06cc\u06a9 submit \u2192 \u0631\u0648\u06cc\u062f\u0627\u062f \u0645\u0633\u062a\u0642\u0644 \u0628\u0647\u200c\u0627\u0632\u0627\u06cc \u0647\u0631 \u06a9\u0627\u0645\u067e\u0648\u0646\u0646\u062a + \u0631\u0648\u06cc\u062f\u0627\u062f \u0632\u0645\u06cc\u0646\u0647\u0654 \u0647\u0645\u06cc\u0646 type. \u06a9\u0627\u0645\u067e\u0648\u0646\u0646\u062a\u200c\u0647\u0627 \u062a\u06a9\u06cc\u200c\u0647\u0627\u06cc \u0645\u0648\u062c\u0648\u062f \u0645\u0639\u0644\u0645\u200c\u0627\u0646\u062f (ce-snap-iv-t-v1 \u0628\u0627 ia/hi/odd \u0648 ce-sdq-t-v1 \u0628\u0627 emo/cond/hyper/peer/pros) \u062a\u0627 \u0647\u0645\u200c\u06af\u0631\u0627\u06cc\u06cc \u0648\u0627\u0644\u062f\u00d7\u0645\u0639\u0644\u0645 \u0628\u0627 \u0647\u0645\u0627\u0646 subscaleIds \u062e\u0648\u062f\u06a9\u0627\u0631 \u0628\u0645\u0627\u0646\u062f + \u0645\u0644\u0627\u06a9\u200c\u0647\u0627\u06cc \u06a9\u0644\u0627\u0633\u06cc \u062c\u062f\u06cc\u062f ce-sld-class-t-v1 \u0628\u0627 sld_read/sld_write/sld_calc. \u0647\u0631 \u0631\u0648\u06cc\u062f\u0627\u062f \u0646\u0627\u0645 \u0645\u0639\u0644\u0645 \u06af\u06cc\u0631\u0646\u062f\u0647\u0654 \u0644\u06cc\u0646\u06a9 \u0631\u0627 \u062f\u0631 payload \u062b\u0628\u062a \u0645\u06cc\u200c\u06a9\u0646\u062f (\u00ab\u067e\u0627\u0633\u062e \u0645\u0639\u0644\u0645: X\u00bb). \u0642\u0631\u0627\u0631\u062f\u0627\u062f COMPOSITE_TEACHER_COMPONENTS \u062f\u0631 case-events/pure.ts (\u062a\u0633\u062a \u067e\u0627\u0631\u06cc\u062a\u06cc \u062f\u0627\u0631\u062f).",
+    tags: [],
+    packageComponents: [
+      "ce-snap-iv-t-v1",
+      "ce-sdq-t-v1",
+      "ce-sld-class-t-v1"
+    ],
+    fields: [
+      {
+        key: "pkg_sec",
+        label: "\u0645\u0634\u0627\u0647\u062f\u0647\u0654 \u06a9\u0644\u0627\u0633 \u0648 \u0632\u0645\u06cc\u0646\u0647\u0654 \u06af\u0632\u0627\u0631\u0634 \u0645\u0639\u0644\u0645",
+        type: "heading"
+      },
+      {
+        key: "obs_role",
+        label: "\u0646\u0642\u0634 \u0634\u0645\u0627 \u0628\u0627 \u0627\u06cc\u0646 \u062f\u0627\u0646\u0634\u200c\u0622\u0645\u0648\u0632 \u0686\u06cc\u0633\u062a\u061f",
+        type: "select",
+        options: [
+          "\u0645\u0639\u0644\u0645 \u06a9\u0644\u0627\u0633",
+          "\u0645\u0639\u0644\u0645 \u0648\u06cc\u0698\u0647\u0654 \u062f\u0631\u0633 (\u0645\u062b\u0644 \u0631\u06cc\u0627\u0636\u06cc \u06cc\u0627 \u0641\u0627\u0631\u0633\u06cc)",
+          "\u0645\u0639\u0644\u0645 \u062a\u0642\u0648\u06cc\u062a\u06cc / \u06a9\u0644\u0627\u0633 \u062c\u0628\u0631\u0627\u0646\u06cc",
+          "\u0633\u0627\u06cc\u0631"
+        ],
+        required: true
+      },
+      {
+        key: "obs_period",
+        label: "\u0686\u0647 \u0645\u062f\u062a \u0627\u0648 \u0631\u0627 \u062f\u0627\u0631\u06cc\u062f \u0648 \u06a9\u0644\u0627\u0633 \u0645\u06cc\u200c\u0631\u0648\u06cc\u062f\u061f",
+        type: "select",
+        options: [
+          "\u06a9\u0645\u062a\u0631 \u0627\u0632 \u0633\u0647 \u0645\u0627\u0647",
+          "\u0633\u0647 \u062a\u0627 \u0634\u0634 \u0645\u0627\u0647",
+          "\u0634\u0634 \u0645\u0627\u0647 \u062a\u0627 \u06cc\u06a9 \u0633\u0627\u0644",
+          "\u0628\u06cc\u0634 \u0627\u0632 \u06cc\u06a9 \u0633\u0627\u0644"
+        ],
+        required: true
+      },
+      {
+        key: "main_concern",
+        label: "\u0628\u0632\u0631\u06af\u200c\u062a\u0631\u06cc\u0646 \u062f\u063a\u062f\u063a\u0647\u0654 \u0634\u0645\u0627 \u062f\u0631\u0628\u0627\u0631\u0647\u0654 \u06a9\u0627\u0631\u06a9\u0631\u062f \u0627\u0648 \u062f\u0631 \u06a9\u0644\u0627\u0633 \u0686\u06cc\u0633\u062a\u061f (\u06a9\u0648\u062a\u0627\u0647 \u0628\u0646\u0648\u06cc\u0633\u06cc\u062f)",
+        type: "text"
+      },
+      {
+        key: "class_support",
+        label: "\u062a\u0627 \u062d\u0627\u0644\u0627 \u0686\u0647 \u062d\u0645\u0627\u06cc\u062a \u06cc\u0627 \u0622\u0645\u0648\u0632\u0634 \u0648\u06cc\u0698\u0647\u200c\u0627\u06cc \u062f\u0631 \u06a9\u0644\u0627\u0633 \u0628\u0631\u0627\u06cc \u0627\u0648 \u0627\u0646\u062c\u0627\u0645 \u062f\u0627\u062f\u0647\u200c\u0627\u06cc\u062f\u061f (\u0645\u062b\u0644\u0627\u064b \u0646\u0648\u0628\u062a\u200c\u062f\u0647\u06cc\u060c \u0635\u0646\u062f\u0644\u06cc \u062c\u0644\u0648\u060c \u062a\u06a9\u0644\u06cc\u0641 \u06a9\u0648\u062a\u0627\u0647\u200c\u062a\u0631)",
+        type: "longtext"
+      },
+      {
+        key: "teacher_notes",
+        label: "\u0647\u0631 \u0646\u06a9\u062a\u0647\u0654 \u062f\u06cc\u06af\u0631\u06cc \u06a9\u0647 \u0628\u0647 \u0646\u0638\u0631\u062a\u0627\u0646 \u0628\u0631\u0627\u06cc \u062f\u0631\u0645\u0627\u0646\u06af\u0631 \u0645\u0647\u0645 \u0627\u0633\u062a (\u0627\u062e\u062a\u06cc\u0627\u0631\u06cc)",
+        type: "longtext"
+      }
+    ]
   }
 ];
 var RAW = [
@@ -29531,6 +30090,13 @@ var CONFIDENCE_THRESHOLDS = { medium: 2, high: 3.5 };
 var ODD_MIN_FULL_CRITERIA = 4;
 var ASD_B_FULL_CRITERIA = 2;
 var BIF_IQ_RANGE = { min: 70, max: 85 };
+// ───────────── T6 (m148-b) — بازه‌های هوش‌بهر: تک‌منبع از FSIQ_BANDS موتور وکسلر (بالای فایل) ─────────────
+// آینهٔ rules.ts در src: بازنشر ردیف‌های جدول واحد — هیچ عدد جدیدی برای باندها کپی نمی‌شود.
+// ثابت قدیمی BIF_IQ_RANGE (بازهٔ ۷۰–۸۵ قاعدهٔ خام fsiq) عمداً سرجایش مانده — تست‌های موجود قفل‌ش‌اند.
+var FSIQ_BAND_BIF = FSIQ_BANDS.find((b) => b.band === "BIF");
+var FSIQ_BAND_LOW_BORDER = FSIQ_BANDS.find((b) => b.band === "LOW_BORDER");
+var ID_PATH_MAX_FSIQ = FSIQ_BAND_BIF.min;
+var SCATTER_UNIFORM_MAX = 23;
 var RULES = [
   // ─── نارساخوانی ───
   {
@@ -29836,7 +30402,62 @@ function payloadText(e, keys) {
 __name(payloadText, "payloadText");
 __name2(payloadText, "payloadText");
 // ─── پیوند وکسلر ۴ با موتور تشخیصی (فرم ce-wechsler-w4-v1 — فرضیه‌های engine_output) ───
-var WECHSLER_HYP_TARGETS = { DLD: "speech_language", APD: "speech_language", MOOD: "anxiety", ADHD: "adhd", ASD: "autism" };
+var WECHSLER_HYP_IDS = ["SLD", "ADHD", "ID", "BIF", "DLD", "NVLD", "TBI", "ASD", "TWO_E", "MOOD", "APD", "NORMAL", "DOMAIN_WEAK"];
+// T6 (m148-b) — نگاشت کامل سیزده‌فرضیه‌ای: هر شناسه صریح است — یا هدف بالینی، یا «عمداً null» با دلیل.
+// ID هرگز نباید slow_learner را تقویت کند (تفکیک انطباقی §۳.۱ — مسیر ID فقط خط قرمز ارجاع است).
+var WECHSLER_HYP_TARGETS = { DLD: "speech_language", APD: "speech_language", MOOD: "anxiety", ADHD: "adhd", ASD: "autism", BIF: "slow_learner", ID: null, NVLD: null, TBI: null, TWO_E: null, NORMAL: null, SLD: null, DOMAIN_WEAK: null };
+// SLD و DOMAIN_WEAK پویا هستند — با wechslerHypTargetOf از زمینهٔ همان پرونده حل می‌شوند.
+function wechslerHypTargetOf(hypId, ctx = {}) {
+  if (hypId === "SLD") {
+    const c = ctx.sld;
+    if (!c)
+      return null;
+    const cands = [];
+    if (c.read !== null && c.read !== undefined)
+      cands.push(["dyslexia", c.read]);
+    if (c.write !== null && c.write !== undefined)
+      cands.push(["dysgraphia", c.write]);
+    if (c.calc !== null && c.calc !== undefined)
+      cands.push(["dyscalculia", c.calc]);
+    if (!cands.length)
+      return null;
+    return cands.reduce((a, b) => b[1] > a[1] ? b : a)[0];
+  }
+  if (hypId === "DOMAIN_WEAK") {
+    switch (ctx.domainWeakIndex) {
+      case "WMI":
+        return "working_memory";
+      case "VCI":
+        return "speech_language";
+      case "PRI":
+        return "motor_coordination";
+      default:
+        return null;
+    }
+  }
+  return WECHSLER_HYP_TARGETS[hypId] ?? null;
+}
+__name(wechslerHypTargetOf, "wechslerHypTargetOf");
+__name2(wechslerHypTargetOf, "wechslerHypTargetOf");
+// شاخص ضعف گام ۵ برای حل DOMAIN_WEAK — اولین ضعفِ شناخته‌شده از profile (T1) با فال‌بک snapshot
+function domainWeakIndexOf(event) {
+  const c = wechslerEngineOutputOf(event);
+  if (!c)
+    return null;
+  const pick = (arr) => {
+    for (const w of Array.isArray(arr) ? arr : []) {
+      const key = typeof w === "string" ? w : (w ?? null)?.key ?? null;
+      if (key && ["VCI", "PRI", "WMI", "PSI"].includes(key))
+        return key;
+    }
+    return null;
+  };
+  const profile = c["profile"];
+  const snap = c["snapshot"];
+  return pick(profile?.step5?.weaknesses) ?? pick(snap?.step5Weak);
+}
+__name(domainWeakIndexOf, "domainWeakIndexOf");
+__name2(domainWeakIndexOf, "domainWeakIndexOf");
 var WECHSLER_HYP_NAMES = { DLD: "اختلال زبانی (DLD)", BIF: "عملکرد مرزی/دیرآموزی (BIF)", APD: "اختلال پردازش شنیداری (APD)", MOOD: "عامل خلقی/اضطرابی (MOOD)", ADHD: "بیش‌فعالی/کم‌توجهی (ADHD)", ASD: "اطیسم (ASD)", ID: "ناتوانی هوشی (ID)", SLD: "اختلال یادگیری خاص (SLD)", NVLD: "یادگیری غیرکلامی (NVLD)", TBI: "آسیب مغزی اکتسابی (TBI)", TWO_E: "دواستثنایی (2e)", DOMAIN_WEAK: "ضعف حوزه‌ای", NORMAL: "نیم‌رخ عادی" };
 function wechslerEngineOutputOf(event) {
   if (!event)
@@ -29853,11 +30474,14 @@ function wechslerEngineOutputOf(event) {
 }
 __name(wechslerEngineOutputOf, "wechslerEngineOutputOf");
 __name2(wechslerEngineOutputOf, "wechslerEngineOutputOf");
-function wechslerHypothesisBoost(event, targetKey) {
+function wechslerHypothesisBoost(event, targetKey, ctx = {}) {
   const c = wechslerEngineOutputOf(event);
   if (!c)
     return null;
-  const hyps = (c.hypotheses ?? []).filter((h) => WECHSLER_HYP_TARGETS[h.id] === targetKey);
+  const hyps = (c.hypotheses ?? []).filter((h) => {
+    const t = wechslerHypTargetOf(h.id ?? "", ctx);
+    return t !== null && t === targetKey;
+  });
   if (!hyps.length)
     return null;
   const best = hyps.reduce((a, b) => b.weight > a.weight ? b : a);
@@ -29870,6 +30494,104 @@ function wechslerHypothesisBoost(event, targetKey) {
 }
 __name(wechslerHypothesisBoost, "wechslerHypothesisBoost");
 __name2(wechslerHypothesisBoost, "wechslerHypothesisBoost");
+// ───────────── T6 (m148-b) — هم‌گرایی چندمنبعی (آینهٔ convergence.ts — اصل ۳: پشت‌پردهٔ نامرئی) ─────────────
+// ماتریس منابع و وزن‌ها هرگز به درمانگر نمی‌آید؛ فقط سه حالت خوانا + یک جملهٔ دلالت فارسی.
+var CONVERGENCE_SOURCE_FA = { family: "خانواده", teacher: "مدرسه", test: "آزمون شناختی", probe: "پروب عملکردی", clinician: "چک‌لیست ملاکی" };
+var ID_ADAPT_EVENT_KEY = "ce-id-adapt-v1";
+var COMPOSITE_FAMILY_EVENT_KEY = "ce-comp-family-v2";
+// جدول طبقه‌بندی کلید ابزار → منبع مستقل (تک‌منبع قرارداد T6) — پکیج تجمیعی = یک منبع (informant)
+var SOURCE_BY_TOOL = {
+  "ce-anamnesis-v3": "family",
+  "ce-anamnesis-v2": "family",
+  "sdq-parent": "family",
+  "ce-sdq-p-v1": "family",
+  "ce-snap-iv-p-v1": "family",
+  "ce-scared-p-v1": "family",
+  "ce-id-adapt-v1": "family",
+  "ce-comp-family-v2": "family",
+  "ce-sdq-t-v1": "teacher",
+  "ce-snap-iv-t-v1": "teacher",
+  "ce-comp-teacher-v2": "teacher",
+  "ce-wechsler-w4-v1": "test",
+  "ce-probe-read-v1": "probe",
+  "ce-probe-write-v1": "probe",
+  "ce-probe-calc-v1": "probe",
+  "ce-sld-read-v1": "clinician",
+  "ce-sld-wri-v1": "clinician",
+  "ce-sld-calc-v1": "clinician",
+  "ce-odd-criteria-v1": "clinician",
+  "ce-asd-criteria-v1": "clinician",
+  "ce-speech-criteria-v1": "clinician"
+};
+function convergenceSourceOfTool(toolKey) {
+  const direct = SOURCE_BY_TOOL[toolKey];
+  if (direct)
+    return direct;
+  const def = batteryDef(toolKey);
+  if (def?.audience === "teacher")
+    return "teacher";
+  return null;
+}
+__name(convergenceSourceOfTool, "convergenceSourceOfTool");
+__name2(convergenceSourceOfTool, "convergenceSourceOfTool");
+function convergenceItemOf(targetKey, targetTitle, positive, withData) {
+  const pos = [];
+  for (const s of positive)
+    if (!pos.includes(s))
+      pos.push(s);
+  if (!pos.length)
+    return null;
+  const fa = (s) => CONVERGENCE_SOURCE_FA[s];
+  if (pos.length >= 2) {
+    const names = pos.map(fa).join("، ");
+    return { targetKey, state: "هم‌گرا", implicationFa: `برای «${targetTitle}» چند منبع مستقل (${names}) هم‌جهت نشانه گزارش کرده‌اند؛ این فرضیه پشتوانهٔ چندجانبه دارد و در جمع‌بندی با اطمینان بالاتری طرح می‌شود.` };
+  }
+  const contradicting = withData.filter((s) => !pos.includes(s));
+  if (contradicting.length) {
+    const seen = [];
+    for (const s of contradicting)
+      if (!seen.includes(fa(s)))
+        seen.push(fa(s));
+    return { targetKey, state: "واگرا", implicationFa: `دربارهٔ «${targetTitle}» منابع هم‌رأی نیستند — ${fa(pos[0])} نشانه می‌دهد ولی ${seen.join(" و ")} با وجود پاسخ‌دادن، نشانهٔ قابل توجهی گزارش نکرده است؛ جمع‌بندی به جلسهٔ بالینی موکول می‌شود.` };
+  }
+  return { targetKey, state: "تنها", implicationFa: `نشانه‌های «${targetTitle}» فعلاً فقط از سوی ${fa(pos[0])} گزارش شده است — پیش از هر جمع‌بندی، دیدگاه منبع دیگر (خانه، مدرسه یا آزمون تکمیلی) لازم است.` };
+}
+__name(convergenceItemOf, "convergenceItemOf");
+__name2(convergenceItemOf, "convergenceItemOf");
+// سطح انطباق روزمره از رویداد ce-id-adapt-v1 — قرارداد باندهای T5 (بالاتر = انطباق بهتر)
+function idAdaptLevelOfEvent(event) {
+  const ss = event?.analysis?.subscaleScores?.find((s) => s.id === "id_adapt") ?? null;
+  if (!ss)
+    return "unknown";
+  const color = ss.color ?? event?.subscales?.find((d) => d.id === "id_adapt")?.bands?.find((b) => b.label === ss.band)?.color ?? null;
+  if (color === "danger" || (ss.band ?? "").includes("پایین"))
+    return "low";
+  if (color === "warn" || (ss.band ?? "").includes("مرزی"))
+    return "border";
+  if (color === "ok" || (ss.band ?? "").includes("نرمال"))
+    return "normal";
+  return "unknown";
+}
+__name(idAdaptLevelOfEvent, "idAdaptLevelOfEvent");
+__name2(idAdaptLevelOfEvent, "idAdaptLevelOfEvent");
+// عدد فارسی برای جملات موتور (T6) — نام‌گذاری Ce تا با faNum ناحیهٔ صورت‌بندی (۱۸۷۳۴) تلاقی نکند
+function faNumCe(n) {
+  return String(n).replace(/[0-9]/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
+}
+__name(faNumCe, "faNumCe");
+__name2(faNumCe, "faNumCe");
+// اطلاعات پروفایل وکسلر برای قواعد سیگنالی — فقط از profile (T1)
+// رویدادهای قدیمی بدون profile → همه null: قواعد جدید خاموش می‌مانند (پاریتی پرونده‌های قدیمی)
+function wechslerProfileFactsOf(event) {
+  const profile = wechslerEngineOutputOf(event)?.profile ?? null;
+  const fsiq = typeof profile?.fsiq === "number" ? profile.fsiq : null;
+  const bandRaw = typeof profile?.fsiqBand === "string" ? profile.fsiqBand : null;
+  const band = bandRaw ?? (fsiq !== null ? fsiqBandOf(fsiq) : null);
+  const scatter = typeof profile?.indexScatter === "number" ? profile.indexScatter : null;
+  return { fsiq, band, indexScatter: scatter };
+}
+__name(wechslerProfileFactsOf, "wechslerProfileFactsOf");
+__name2(wechslerProfileFactsOf, "wechslerProfileFactsOf");
 function ruleColor(rule, event) {
   if (!event)
     return null;
@@ -30580,6 +31302,25 @@ function runInference(events, options = {}) {
   const discrepancies = [];
   const referralFlags = [];
   const nextActionsSet = /* @__PURE__ */ new Set();
+  // ── T6 (m148-b) — زمینهٔ قواعد سیگنالی وکسلر (همه از دادهٔ موجود؛ بدون محاسبهٔ تازه) ──
+  const wEvent = latest.get("ce-wechsler-w4-v1");
+  const wFacts = wechslerProfileFactsOf(wEvent);
+  const adapt = idAdaptLevelOfEvent(latest.get(ID_ADAPT_EVENT_KEY));
+  const sigValOf = (key) => anamnesisSignals.find((s) => s.key === key)?.value ?? null;
+  const hypCtx = { sld: { read: sigValOf("anam.sld_read"), write: sigValOf("anam.sld_write"), calc: sigValOf("anam.sld_calc") }, domainWeakIndex: domainWeakIndexOf(wEvent) };
+  // خط قرمز مسیر ID (§۳.۱): FSIQ ≤ ۷۰ «و» انطباق پایین → ارجاع؛
+  // در این مسیر هیچ تقویت دیرآموزی اعمال نمی‌شود — دو مسیر ID و دیرآموز هرگز هم‌پوشان نمی‌شوند.
+  const idPathActive = wFacts.fsiq !== null && wFacts.fsiq <= ID_PATH_MAX_FSIQ && adapt === "low";
+  if (idPathActive) {
+    referralFlags.push("خط قرمز — مسیر ناتوانی هوشی: هوش‌بهر کل ۷۰ یا کمتر همراه انطباق روزمرهٔ «پایین» است؛ پرونده برای ارجاع تخصصی (روان‌پزشک/مدیر پرونده) علامت خورد — پلن چک‌لیست رفتاری پیشنهاد نمی‌شود.");
+    nextActionsSet.add("مسیر ناتوانی هوشی (ID) فعال شده است — «ارجاع» به متخصص تخصصی پیش از هر پلن آموزشی؛ فرضیهٔ دیرآموزی تقویت نمی‌شود.");
+  }
+  // مرز پایین یکنواخت (۸۵–۸۹ با پراکندگی زیر سقف تفسیر واحد) — فقط توصیهٔ پایش، بدون برچسب تشخیصی (§۳.۱)
+  if (!idPathActive && wFacts.band === "LOW_BORDER" && wFacts.indexScatter !== null && wFacts.indexScatter < SCATTER_UNIFORM_MAX) {
+    nextActionsSet.add("نیم‌رخ هوشی در «مرز پایین» با شاخص‌های یکنواخت است — بدون برچسب تشخیصی، پایش دوره‌ای (شش‌ماهه) پیشنهاد می‌شود.");
+  }
+  // جمع‌آوری منابع هم‌گرایی (T6 — در همین یک محاسبه؛ ماتریس هرگز به UI نمی‌آید)
+  const convergenceMap = new Map();
   for (const ruleSet of RULES) {
     const target = targetOf(ruleSet.targetKey);
     if (!target)
@@ -30595,7 +31336,8 @@ function runInference(events, options = {}) {
     if (toolKeys.has(ANAMNESIS_V2_KEY))
       toolKeys.add(anamKey);
     // تقویت وکسلر خودش شاهد است — فرضیه‌های engine_output فرم ce-wechsler-w4-v1 به هدف همین ruleSet
-    const wBoost0 = wechslerHypothesisBoost(latest.get("ce-wechsler-w4-v1"), ruleSet.targetKey);
+    // T6: زمینهٔ پرونده (SLD/DOMAIN_WEAK) برای حل قطعی فرضیه‌های پویا پاس داده می‌شود.
+    const wBoost0 = wechslerHypothesisBoost(latest.get("ce-wechsler-w4-v1"), ruleSet.targetKey, hypCtx);
     const hasData = [...toolKeys].some((k) => {
       const e = latest.get(k);
       return Boolean(e && (e.analysis || e.payload));
@@ -30610,9 +31352,24 @@ function runInference(events, options = {}) {
         evidenceFa.push(fa2);
       }
     }, "addFa");
+    // منابع هم‌گرایی همین هدف (T6) — مثبت = شواهد همان‌جهت؛ داده = رویداد مرتبط با تحلیل/پاسخ
+    const srcPositive = [];
+    const srcData = [];
+    const noteSource = (toolKey, fired) => {
+      const s = convergenceSourceOfTool(toolKey);
+      if (!s)
+        return;
+      if (!srcData.includes(s))
+        srcData.push(s);
+      if (fired && !srcPositive.includes(s))
+        srcPositive.push(s);
+    };
     let score = 0;
     for (const rule of ruleSet.evidence) {
       if (rule.kind === "anamnesis")
+        continue;
+      // T6 — شواهد وکسلریِ دیرآموزی (باند BIF) یک‌جا در بلوک «قوی‌ترین تک‌تقویت» پایین اعمال می‌شود
+      if (rule.kind === "wechsler" && ruleSet.targetKey === "slow_learner")
         continue;
       if (rule.kind === "probe" || rule.kind === "wechsler") {
         const color = ruleColor(rule, latest.get(rule.toolKey));
@@ -30630,15 +31387,80 @@ function runInference(events, options = {}) {
         addFa(rule.fa);
       }
     }
-    if (ruleSet.evidence.some((r) => r.kind === "anamnesis") && anamnesisFlagFor(ruleSet.targetKey, latest.get(anamKey))) {
-      score += 1;
-      const rule = ruleSet.evidence.find((r) => r.kind === "anamnesis");
-      if (rule)
-        evidenceFa.push(rule.fa);
+    // منابع هم‌گرایی از قواعد ابزاری — فقط رویدادِ دارای داده (رنگ null = داده‌ای نیست)
+    for (const rule of ruleSet.evidence) {
+      if (rule.kind === "anamnesis")
+        continue;
+      if (ruleSet.targetKey === "slow_learner" && rule.kind === "wechsler")
+        continue;
+      if (rule.kind === "probe" || rule.kind === "wechsler") {
+        const color = ruleColor(rule, latest.get(rule.toolKey));
+        if (color !== null)
+          noteSource(rule.toolKey, color === rule.band);
+        continue;
+      }
+      for (const event of perTool.get(rule.toolKey) ?? []) {
+        const color = ruleColor(rule, event);
+        if (color !== null) {
+          noteSource(rule.toolKey, color === rule.band);
+          break;
+        }
+      }
     }
-    if (wBoost0) {
+    // ── T6 (m148-b) — خانوادهٔ شواهد BIF هدف دیرآموزی: «قوی‌ترین تک‌تقویت» — هیچ‌وقت جمع نمی‌شوند ──
+    if (ruleSet.targetKey === "slow_learner") {
+      const cands = [];
+      for (const rule of ruleSet.evidence) {
+        if (rule.kind !== "wechsler")
+          continue;
+        const color = ruleColor(rule, wEvent);
+        if (color !== null) {
+          noteSource(rule.toolKey, color === rule.band);
+          if (color === rule.band)
+            cands.push({ weight: rule.weight, fa: rule.fa });
+        }
+      }
+      if (wBoost0)
+        cands.push(wBoost0);
+      if (wEvent?.payload || wEvent?.analysis)
+        noteSource("ce-wechsler-w4-v1", Boolean(wBoost0));
+      // انطباق «پایین» خانواده با مسیر دیرآموزی هم‌رأی نیست — منبع خانواده با دادهٔ مخالف (T6)
+      if (adapt === "low" && latest.has(ID_ADAPT_EVENT_KEY))
+        noteSource(ID_ADAPT_EVENT_KEY, false);
+      // نامزد ۳ — سیگنال پروفایل: باند BIF (۷۰–۸۴) با انطباق عادی یا ثبت‌نشده
+      if (!idPathActive && wFacts.fsiq !== null && wFacts.fsiq >= FSIQ_BAND_BIF.min && wFacts.fsiq <= FSIQ_BAND_BIF.max && (adapt === "normal" || adapt === "unknown")) {
+        cands.push({
+          weight: 1,
+          fa: `هوش‌بهر کل ${faNumCe(wFacts.fsiq)} در بازهٔ مرزی/دیرآموزی (۷۰–۸۴) است و انطباق روزمره عادی یا ثبت‌نشده است — شاهد دیرآموزی (BIF).`
+        });
+      }
+      if (!idPathActive) {
+        const best = cands.reduce((a, b) => a === null || b.weight > a.weight ? b : a, null);
+        if (best) {
+          score += best.weight;
+          addFa(best.fa);
+          // هر سه نامزد از رویداد وکسلر می‌آیند — تقویتِ اعمال‌شده = شاهد مثبت منبع «آزمون» (T6)
+          noteSource("ce-wechsler-w4-v1", true);
+        }
+      }
+    }
+    // پرچم شرح‌حال هدف‌محور (w۱) — نسخهٔ ۳ ترجیح دارد؛ بی‌نسخهٔ ۳، نسخهٔ ۲ با هیوریستیک امروز
+    const anamRule = ruleSet.evidence.find((r) => r.kind === "anamnesis");
+    const anamFired = Boolean(anamRule) && anamnesisFlagFor(ruleSet.targetKey, latest.get(anamKey));
+    if (anamFired) {
+      score += 1;
+      if (anamRule)
+        evidenceFa.push(anamRule.fa);
+    }
+    // منبع خانواده برای اهداف دارای قاعدهٔ شرح‌حال — مثبت اگر پرچم همان‌جهت داشت (T6)
+    if (anamRule && latest.get(anamKey)?.payload)
+      noteSource(anamKey, anamFired);
+    // تقویت فرضیهٔ وکسلر ۴ — وزن ۲ (بالا) یا ۱ (متوسط) به امتیاز و متن شاهد به شواهد
+    // T6: هدف دیرآموزی در بلوک ویژهٔ بالا با سیاست «قوی‌ترین تک‌تقویت» اعمال می‌شود.
+    if (wBoost0 && ruleSet.targetKey !== "slow_learner") {
       score += wBoost0.weight;
       evidenceFa.push(wBoost0.fa);
+      noteSource("ce-wechsler-w4-v1", true);
     }
     const consensus = consensusOf(ruleSet, perTool);
     score += consensus.bonus;
@@ -30703,6 +31525,8 @@ function runInference(events, options = {}) {
         }
       }
     }
+    // ثبت منابع هم‌گرایی این هدف (T6)
+    convergenceMap.set(ruleSet.targetKey, { positive: srcPositive, data: srcData });
   }
   hypotheses.sort((a, b) => b.score - a.score || b.criteriaSummary.met - a.criteriaSummary.met);
   const ranked = hypotheses.slice(0, 3);
@@ -30713,7 +31537,7 @@ function runInference(events, options = {}) {
   if (ranked.length === 0) {
     nextActionsSet.add("\u0647\u0646\u0648\u0632 \u062F\u0627\u062F\u0647\u0654 \u06A9\u0627\u0641\u06CC \u0628\u0631\u0627\u06CC \u0641\u0631\u0636\u06CC\u0647 \u0646\u06CC\u0633\u062A \u2014 SDQ (\u0648\u0627\u0644\u062F/\u0645\u0639\u0644\u0645) \u0648 \u0634\u0631\u062D \u062D\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647 \u0631\u0627 \u06A9\u0627\u0645\u0644 \u06A9\u0646\u06CC\u062F.");
   }
-  return {
+  const output = {
     batteryVersion: BATTERY_VERSION,
     generatedAt: now().toISOString(),
     criteria,
@@ -30725,6 +31549,17 @@ function runInference(events, options = {}) {
     disclaimer: ENGINE_DISCLAIMER,
     anamnesisSignals
   };
+  // T6 (m148-b) — کلید افزودنی هم‌گرایی؛ ساختار قبلی عیناً حفظ شده
+  const convergence = [];
+  for (const h of ranked) {
+    const s = convergenceMap.get(h.targetKey);
+    if (!s)
+      continue;
+    const item = convergenceItemOf(h.targetKey, h.targetTitle, s.positive, s.data);
+    if (item)
+      convergence.push(item);
+  }
+  return { ...output, convergence };
 }
 __name(runInference, "runInference");
 __name2(runInference, "runInference");
@@ -33611,6 +34446,12 @@ function createReasoningEngineService(deps) {
       },
       { now }
     );
+    // T6 (m148-b) — فرمول‌بندی روی خروجی موتور شک: یک محاسبه، چند کارت UI (افزودنی).
+    // ranked و convergence از runInference روی همان رویدادها — تک‌منبع فرضیه‌ها؛
+    // کلیدهای قدیمی نتیجهٔ صورت‌بندی عیناً سرجایشان‌اند (پاریتی طلایی).
+    const infT6 = runInference(events);
+    result.inferenceRanked = infT6.ranked;
+    result.inferenceConvergence = infT6.convergence;
     log32.debug("case formulation computed", {
       studentId,
       coherence: result.coherence,

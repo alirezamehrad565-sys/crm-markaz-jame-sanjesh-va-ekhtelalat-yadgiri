@@ -7,6 +7,7 @@
 
 import type { CaseEventField, CaseEventSubscale, CaseEventBand, CaseEventCategory, CaseEventAudience, CaseEventAnalysis } from '@domain/case-events';
 import type { ClinicalSignal } from './signals';
+import type { ConvergenceItem } from './convergence';
 
 /** نسخهٔ باتری — تغییر ملاک/آیتم = نسخهٔ جدید (گزارش‌های قدیم دست‌نخورده می‌مانند) */
 export const BATTERY_VERSION = 'battery-v1' as const;
@@ -196,6 +197,13 @@ export interface InferenceOutput {
    * پروندهٔ فقط-v2 / بی‌شرح‌حال → [] — هیچ کلید قدیمی دیگری تغییر نمی‌کند (اثبات: t4-baseline).
    */
   anamnesisSignals: ClinicalSignal[];
+  /**
+   * T6 (m148-b) — کلید افزودنی: هم‌گرایی چندمنبعی — سه حالت خوانا (هم‌گرا/تنها/واگرا)
+   * + یک جملهٔ دلالت برای هر هدف رتبه‌خورده. هیچ وزن/امتیاز/ماتریسی در این ساختار نیست
+   * (اصل ۳ طرح: پشت‌پردهٔ نامرئی). جمع‌آوری منابع در همان یک محاسبهٔ runInference انجام
+   * می‌شود؛ طبقه‌بندی و متن‌ها در convergence.ts.
+   */
+  convergence: ConvergenceItem[];
 }
 
 /** تصمیم ثبت‌شدهٔ درمانگر — دادهٔ کالیبراسیون «موتور چه گفت / متخصص چه گرفت» */

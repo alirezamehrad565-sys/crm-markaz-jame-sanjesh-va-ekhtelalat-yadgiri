@@ -252,7 +252,9 @@ function w4Event(fsiq: number): EvidenceEvent {
 
 /** خروجی بدون کلیدهای افزودنی/متغیر — برای مقایسهٔ بایت‌به‌بایت با پایهٔ پیش از T4 */
 function legacyView(out: ReturnType<typeof runInference>): Record<string, unknown> {
-  const { anamnesisSignals: _signals, ...rest } = out;
+  // کلیدهای افزودنی لایه‌ای (T4: anamnesisSignals · T6: convergence) از دید پاریتی حذف می‌شوند —
+  // پروندهٔ فقط-v2 همهٔ کلیدهای قدیمی را بایت‌به‌بایت نگه می‌دارد.
+  const { anamnesisSignals: _signals, convergence: _conv, ...rest } = out;
   return rest as Record<string, unknown>;
 }
 

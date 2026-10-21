@@ -9,7 +9,7 @@
 
 import type { AppHono } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
-import { CaseEventTypeInputSchema, CaseEventTypeUpdateSchema, packageComponentsOf } from './pure';
+import { CaseEventTypeInputSchema, CaseEventTypeUpdateSchema, packageComponentsOf, teacherBindingOfPayload } from './pure';
 import type { CaseEventsService, CaseEventTypeInput, CaseEventTypeRecord } from './types';
 import { renderFillFormPage, renderPackageFormPage } from './public-form';
 import type { PackageFormModel, PackageToolBlock } from './public-form';
@@ -70,9 +70,26 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
   /** ارسال با یک کلیک — پیام بله با لینک امن وب‌فرم به خانواده/معلم */
   app.post('/api/case-events/:id/send', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
-    const body = await c.req.json<{ audience?: string; note?: string }>().catch(() => null);
+    const body = await c.req.json<{ audience?: string; note?: string; teacher_name?: string; teacher_id?: string }>().catch(() => null);
     const audience = body?.audience === 'family' || body?.audience === 'teacher' || body?.audience === 'both' ? body.audience : null;
-    const result = await service.sendChecklistLink(c.req.param('id'), { audience, note: body?.note ?? null }, actor);
+    // — T7: اتصال معلم اختیاری — نام/شناسه معلم از انتخابگر معلم می‌آید
+    const result = await service.sendChecklistLink(
+      c.req.param('id'),
+      { audience, note: body?.note ?? null, teacherName: body?.teacher_name ?? null, teacherId: body?.teacher_id ?? null },
+      actor
+    );
+    return c.json({ data: result }, 200);
+  });
+
+  // — T7: صدور/کپی لینک امن به‌ازای یک معلم مشخص (بدون ارسال بله) — چند معلم = چند لینک مستقل
+  app.post('/api/case-events/:id/teacher-link', requireRole('manager', 'secretary', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json<{ teacher_name?: string; teacher_id?: string }>().catch(() => null);
+    const result = await service.issueTeacherFillLink(
+      c.req.param('id'),
+      { teacherName: body?.teacher_name ?? null, teacherId: body?.teacher_id ?? null },
+      actor
+    );
     return c.json({ data: result }, 200);
   });
 
@@ -200,7 +217,8 @@ export function registerCaseEventPublicRoutes(
   function packageModelOf(
     pkgType: CaseEventTypeRecord,
     comps: CaseEventTypeRecord[],
-    studentName: string | null
+    studentName: string | null,
+    teacherName: string | null = null
   ): PackageFormModel {
     const ctxFields = pkgType.fields
       .filter((f) => f.type === 'select' || f.type === 'text' || f.type === 'longtext')
@@ -238,6 +256,8 @@ export function registerCaseEventPublicRoutes(
     return {
       packageTitle: `${pkgType.icon ?? ''} ${pkgType.title}`.trim(),
       studentName: studentName ?? '',
+      // — T7: لینک به‌ازای معلم خاص — سربرگ «فرم شما — X»
+      teacherLabel: teacherName ? `فرم شما — ${teacherName}` : null,
       description: pkgType.description ?? null,
       context: { title: ctxTitle, fields: ctxFields },
       tools
@@ -261,6 +281,8 @@ export function registerCaseEventPublicRoutes(
     }
     const studentName = await helpers.studentNameOf(event.studentId);
     const type = await service.getTypeById(event.eventTypeId);
+    // — T7: لینک به معلم گره خورده؟ — نامش روی سربرگ فرم می‌آید (پکیج و تکی هر دو)
+    const teacherName = teacherBindingOfPayload(event.payload)?.name ?? null;
 
     // — T5: پکیج چند-ابزاری → رندر بخش‌به‌بخش (زمینه + هر ابزار با سربرگ خودش)
     if (type && packageComponentsOf(type.key)) {
@@ -268,7 +290,7 @@ export function registerCaseEventPublicRoutes(
       if (!comps) {
         return c.html(fillErrorPage('این فرم پیدا نشد.'), 404);
       }
-      return new Response(renderPackageFormPage(packageModelOf(type, comps, studentName), token), {
+      return new Response(renderPackageFormPage(packageModelOf(type, comps, studentName, teacherName), token), {
         status: 200,
         headers: {
           'Content-Type': 'text/html; charset=utf-8',
@@ -302,7 +324,9 @@ export function registerCaseEventPublicRoutes(
       sections,
       // سربرگ بر اساس گیرنده + معرفی روایی فرم
       audience: event.typeAudience ?? type?.audience ?? 'family',
-      description: type?.description ?? null
+      description: type?.description ?? null,
+      // — T7: لینک معلم → «فرم شما — X»
+      teacherLabel: teacherName ? `فرم شما — ${teacherName}` : null
     };
     return new Response(renderFillFormPage(model, token), {
       status: 200,

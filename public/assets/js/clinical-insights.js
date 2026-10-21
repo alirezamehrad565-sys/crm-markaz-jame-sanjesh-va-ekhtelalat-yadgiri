@@ -62,6 +62,16 @@ function canDecideFor(student) {
   return u.role === 'therapist' && Boolean(student.ownerStaffId) && student.ownerStaffId === u.staffId;
 }
 
+// ───────── T6 (m148-b) — هم‌گرایی منابع: فقط سه حالت خوانا + یک جملهٔ دلالت (اصل ۳ طرح: پشت‌پردهٔ نامرئی) ─────────
+// هیچ وزن/امتیازی نمایش داده نمی‌شود — فقط برچسب حالت و جملهٔ دلالت از موتور (insights.convergence).
+const CONV_BADGE = { 'هم‌گرا': 'badge--success', 'تنها': 'badge--info', 'واگرا': 'badge--warning' };
+const CONV_ICON = { 'هم‌گرا': 'check', 'تنها': 'eye', 'واگرا': 'alert' };
+
+/** آیتم هم‌گرایی یک هدف رتبه‌خورده — از کلید افزودنی convergence پاسخ موتور */
+function convergenceOf(insights, targetKey) {
+  return (insights?.convergence ?? []).find((c) => c.targetKey === targetKey) ?? null;
+}
+
 // ───────── m136 — حالت‌های مرحلهٔ ۴ «ارزیابی عملکردی» ─────────
 // رفع باگ: چک‌لیست مهارتی توانبخشی برای «همه» رندر می‌شد چون قاعدهٔ قدیمی واکشی OT در فاز شناسایی همیشه true بود.
 
@@ -557,7 +567,7 @@ function seenChipsBlock(insights) {
       : el('div', { class: 'cell-sub' }, 'هنوز ابزاری ثبت نشده است.'));
 }
 
-function hypothesisCard(h, rank, { student, paths, canDecide, refresh }) {
+function hypothesisCard(h, rank, { student, paths, canDecide, refresh, conv }) {
   const livePath = (paths ?? []).find(
     (p) => p.targetKey === h.targetKey && ['suggested', 'reviewed', 'active'].includes(p.status)
   );
@@ -609,6 +619,11 @@ function hypothesisCard(h, rank, { student, paths, canDecide, refresh }) {
         countChip('بررسی', cs.unknown, 'badge--info'),
         countChip('رد', cs.notMet, 'badge--neutral')
       ),
+      conv ? el('div', { class: 'clx-sub' },
+        el('div', { class: 'clx-sub__title' }, 'هم‌گرایی منابع:'),
+        el('div', { class: 'clx-conv' },
+          el('span', { class: `badge ${CONV_BADGE[conv.state] ?? 'badge--neutral'}` }, icon(CONV_ICON[conv.state] ?? 'eye', 13), conv.state),
+          el('div', { class: 'cell-sub' }, conv.implicationFa))) : null,
       h.evidenceFa?.length ? el('div', { class: 'clx-sub' },
         el('div', { class: 'clx-sub__title' }, 'شواهد:'),
         iconList(h.evidenceFa, 'check', 'ok')) : null,
@@ -1395,7 +1410,7 @@ export async function renderClinicalTab(box, { student }) {
           el('div', { class: 'clx-section__title' }, icon('sparkles', 16), 'فرضیه‌ها — به ترتیب شواهد'),
           insights.ranked.length
             ? el('div', { class: 'clx-hyps' },
-                insights.ranked.map((h, i) => hypothesisCard(h, i + 1, { student, paths, canDecide, refresh })))
+                insights.ranked.map((h, i) => hypothesisCard(h, i + 1, { student, paths, canDecide, refresh, conv: convergenceOf(insights, h.targetKey) })))
             : emptyState({
                 iconName: 'compass',
                 title: 'هنوز فرضیه‌ای ساخته نشده است',
