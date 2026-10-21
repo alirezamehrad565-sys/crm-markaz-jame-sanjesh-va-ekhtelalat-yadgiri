@@ -398,7 +398,9 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   position: fixed;
   inset: 0;
   background: rgba(15, 17, 19, 0.5);
-  backdrop-filter: blur(3px);
+  /* m144 — شیشهٔ مات‌تر و اشباع‌تر: عمق واقعی پشت مودال */
+  backdrop-filter: blur(8px) saturate(1.15);
+  -webkit-backdrop-filter: blur(8px) saturate(1.15);
   display: grid;
   place-items: center;
   padding: var(--sp-4);
@@ -413,7 +415,7 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-3);
   /* m114 — ورود فنری نرم (اسپرینگ سبک) */
   animation: pop-in var(--dur-4, 380ms) var(--ease-spring) both;
@@ -456,7 +458,7 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   padding: var(--sp-4) var(--sp-5);
   border-top: 1px solid var(--border);
   background: var(--surface-2);
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
 }
 .modal__foot .spacer { margin-inline-start: auto; }
 
@@ -657,7 +659,7 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   .modal {
     max-height: 94vh;
     max-height: 94dvh;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     animation: sheet-up var(--normal) both;
   }
   .modal__head { padding: var(--sp-3) var(--sp-4); }
