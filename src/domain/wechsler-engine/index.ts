@@ -19,6 +19,10 @@
 import {
   runWechslerAnalysis,
   applyWechslerEngineToPayload,
+  profileSignals,
+  buildWechslerProfile,
+  fsiqBandOf,
+  FSIQ_BANDS,
   WISC4_EVENT_KEY,
   SUBTESTS,
   SUBTEST_CODES,
@@ -39,6 +43,11 @@ export {
   runWechslerAnalysis,
   analyzeWisc,
   applyWechslerEngineToPayload,
+  // T1 (m146) — لایهٔ سیگنال بالینی (افزودنی)
+  profileSignals,
+  buildWechslerProfile,
+  fsiqBandOf,
+  FSIQ_BANDS,
   // pure glue
   extractRawScores,
   compactWechslerOutput,
@@ -82,7 +91,15 @@ export {
   type FormPayload,
   type FormFieldEntry,
   type WechslerComputedScores,
-  type WechslerHookResult
+  type WechslerHookResult,
+  // T1 (m146) — types لایهٔ سیگنال (افزودنی)
+  type WechslerSignal,
+  type WechslerProfile,
+  type WechslerProfilePattern,
+  type WechslerIndexPair,
+  type WechslerFsiqBand,
+  type WechslerFsiqBandRange,
+  type WechslerResultSlice
 } from "./engine.js";
 
 /**

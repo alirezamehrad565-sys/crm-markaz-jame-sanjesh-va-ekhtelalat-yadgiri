@@ -137,6 +137,11 @@ const EXPORTS = [
   "runWechslerAnalysis",
   "analyzeWisc",
   "applyWechslerEngineToPayload",
+  // T1 (m146) — clinical signal layer (additive)
+  "profileSignals",
+  "buildWechslerProfile",
+  "fsiqBandOf",
+  "FSIQ_BANDS",
   // payload / date glue (pure)
   "extractRawScores",
   "compactWechslerOutput",

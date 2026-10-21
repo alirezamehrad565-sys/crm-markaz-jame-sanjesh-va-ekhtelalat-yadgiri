@@ -18,6 +18,8 @@ import path from "node:path";
 import url from "node:url";
 
 import * as extracted from "../../src/domain/wechsler-engine/engine.js";
+// T1 (m146) — قرارداد لایهٔ سیگنال برای تست هم‌خوانی دو جدول بازهٔ FSIQ (Node 24: strip-types)
+import { FSIQ_BAND_RANGES, fsiqBandOf as fsiqBandOfContract } from "../../src/domain/clinical-engine/signals.ts";
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(url.fileURLToPath(import.meta.url));
@@ -548,4 +550,220 @@ test("meta | both modules agree on constants and engineVersion", () => {
   );
   assert.equal(compact.engineVersion, "m98");
   assert.equal(Object.keys(extracted).length > 0, true);
+});
+
+// ---------------------------------------------------------------------------
+// T1 (m146) — لایهٔ سیگنال بالینی (افزودنی) — بدون دست‌زدن به کیس‌های بالا
+// ---------------------------------------------------------------------------
+
+const T1_PROFILES = {
+  balanced: profile(10),
+  acid: profile(12, { AR: 5, CD: 5, IN: 5, DS: 5 }),
+  scattered: profile(10, { SI: 16, VC: 16, CO: 15, IN: 14, WR: 15, BD: 4, PCn: 5, MR: 5, PCm: 4 }),
+  vciWeak: profile(10, { SI: 4, VC: 4, CO: 4, IN: 4, WR: 4 })
+};
+
+function t1Run(raw, opts = {}) {
+  return extracted.runWechslerAnalysis({
+    rawScores: raw,
+    testDate: [1406, 9, 15],
+    birthDate: [1396, 8, 10],
+    ...opts
+  });
+}
+
+test("signals | قطعیت: دو اجرای پیاپی سیگنال و پروفایل یکسان می‌دهد (باندل هم همین است)", () => {
+  const input = { rawScores: T1_PROFILES.acid, testDate: [1406, 7, 1], birthDate: [1394, 5, 2] };
+  const a = extracted.runWechslerAnalysis(input);
+  const b = extracted.runWechslerAnalysis(input);
+  const c = ref.runWechslerAnalysis(input);
+  assertSame("signals determinism (extracted)", a.signals, b.signals);
+  assertSame("profile determinism (extracted)", a.profile, b.profile);
+  assertSame("signals parity (extracted vs bundle)", a.signals, c.signals);
+  assertSame("profile parity (extracted vs bundle)", a.profile, c.profile);
+  assert.ok(a.signals.length > 0, "ACID profile must emit signals");
+});
+
+test("signals | فقط از دادهٔ snapshot/analysis ساخته می‌شوند — فراخوانی مستقلِ تابع خالص همان خروجی است", () => {
+  for (const raw of Object.values(T1_PROFILES)) {
+    const r = t1Run(raw);
+    const slice = { ok: r.ok, snapshot: r.snapshot, analysis: r.analysis, flags: r.flags };
+    assertSame("profileSignals pure", extracted.profileSignals(slice), r.signals);
+    assertSame("buildWechslerProfile pure", extracted.buildWechslerProfile(slice), r.profile);
+  }
+});
+
+test("signals | snapshot نامعتبر (ok:false یا خالی) → آرایهٔ خالی و profile:null", () => {
+  const r = extracted.runWechslerAnalysis({
+    rawScores: profile(16), // سن ۱۷ — خطای سنی → ok:false
+    testDate: [1406, 7, 10],
+    birthDate: [1389, 6, 20]
+  });
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.signals, []);
+  assert.equal(r.profile, null);
+  assert.deepEqual(extracted.profileSignals(null), []);
+  assert.deepEqual(extracted.profileSignals({ ok: false, snapshot: null, analysis: null, flags: [] }), []);
+  assert.equal(extracted.buildWechslerProfile(null), null);
+  assert.equal(extracted.buildWechslerProfile({ ok: false, snapshot: null, analysis: null, flags: [] }), null);
+});
+
+test("signals | کیس ACID → سیگنال profile.acid با value>0 (و CAD زیرمجموعه، فعال)", () => {
+  const r = extracted.runWechslerAnalysis({
+    rawScores: T1_PROFILES.acid,
+    testDate: [1406, 7, 1],
+    birthDate: [1394, 5, 2]
+  });
+  const acid = r.signals.find((s) => s.key === "profile.acid");
+  assert.ok(acid, "profile.acid signal expected");
+  assert.ok(acid.value > 0 && acid.value <= 1, "acid value in (0,1]");
+  assert.equal(acid.domain, "academic");
+  assert.equal(acid.source, "wechsler");
+  assert.ok(acid.fa.includes("ACID"), "fa must name the pattern");
+  assert.ok(r.profile.acid, "profile.acid object expected");
+  assert.deepEqual(r.profile.acid.codes, ["AR", "CD", "IN", "DS"]);
+  assert.ok(r.profile.cad, "CAD (AR/CD/DS ⊂ ACID) must be active too");
+});
+
+test("signals | کیس پراکنده → validity.scatter فعال + cog_level.gai_invalid", () => {
+  const r = t1Run(T1_PROFILES.scattered);
+  assert.ok(r.snapshot.indexScatter >= 23);
+  const sc = r.signals.find((s) => s.key === "validity.scatter");
+  assert.ok(sc, "validity.scatter expected");
+  assert.equal(sc.domain, "validity");
+  assert.equal(sc.value, 1);
+  const gai = r.signals.find((s) => s.key === "cog_level.gai_invalid");
+  assert.ok(gai, "gai_invalid expected when VCI/PRI gap > 23");
+  assert.equal(r.profile.gaiValidity, INVALID);
+  assert.equal(r.profile.gai, null, "strict mode → GAI number suppressed");
+});
+
+test("signals | گام ۵: ضعف/قوت شخصی از خروجی موجود گام ۵ سیگنال می‌شود", () => {
+  const weak = t1Run(T1_PROFILES.vciWeak);
+  assert.ok(weak.snapshot.step5Weak.length >= 1, "VCI must be a personal weakness here");
+  for (const k of weak.snapshot.step5Weak) {
+    const s = weak.signals.find((x) => x.key === `cog_level.step5_weak.${k}`);
+    assert.ok(s, `step5_weak.${k} signal expected`);
+    assert.ok(s.value > 0 && s.value <= 1);
+    assert.equal(s.domain, "cognitive_level");
+  }
+  const acid = extracted.runWechslerAnalysis({ rawScores: T1_PROFILES.acid, testDate: [1406, 7, 1], birthDate: [1394, 5, 2] });
+  for (const k of acid.snapshot.step5Strong) {
+    const s = acid.signals.find((x) => x.key === `cog_level.step5_strong.${k}`);
+    assert.ok(s, `step5_strong.${k} signal expected`);
+  }
+});
+
+test("signals | ترتیب قطعی (کلیدمرتب) + قید ۰..۱ + fa فارسی در همهٔ پروفایل‌ها", () => {
+  for (const [name, raw] of Object.entries(T1_PROFILES)) {
+    const r = t1Run(raw);
+    const keys = r.signals.map((s) => s.key);
+    assert.deepEqual(keys, [...keys].sort(), `${name}: signals must be key-sorted`);
+    for (const s of r.signals) {
+      assert.ok(Number.isFinite(s.value) && s.value >= 0 && s.value <= 1, `${name}/${s.key}: value in 0..1`);
+      assert.equal(s.source, "wechsler", `${name}/${s.key}: source`);
+      assert.ok(typeof s.fa === "string" && s.fa.length > 10, `${name}/${s.key}: fa text present`);
+    }
+  }
+});
+
+test("fsiqBand | پروفایل واقعی: BIF~۷۸ / LOW_BORDER~۸۷ / AVERAGE~۱۰۵ + هم‌خوانی با fsiqBandOf", () => {
+  const bandCases = [
+    { name: "BIF", base: 7, delta: +1, k: 2, wantFsiq: 78, wantBand: "BIF" },
+    { name: "LOW_BORDER", base: 9, delta: -1, k: 6, wantFsiq: 87, wantBand: "LOW_BORDER" },
+    { name: "AVERAGE", base: 11, delta: -1, k: 3, wantFsiq: 105, wantBand: "AVERAGE" }
+  ];
+  for (const bc of bandCases) {
+    const targets = {};
+    for (const code of CODES) targets[code] = bc.base;
+    for (let i = 0; i < bc.k; i++) targets[CODES[i]] = bc.base + bc.delta;
+    const raw = {};
+    for (const code of CODES) raw[code] = rawForScaled(10, code, targets[code]);
+    const r = extracted.runWechslerAnalysis({ rawScores: raw, testDate: [1406, 9, 15], birthDate: [1396, 8, 10] });
+    assert.equal(r.ok, true);
+    assert.equal(r.snapshot.fsiq, bc.wantFsiq, `${bc.name}: pinned fsiq`);
+    assert.equal(r.profile.fsiqBand, bc.wantBand, `${bc.name}: profile.fsiqBand`);
+    const sig = r.signals.find((s) => s.key === "cog_level.fsiq_band");
+    assert.ok(sig, `${bc.name}: fsiq_band signal expected`);
+    assert.equal(extracted.fsiqBandOf(r.snapshot.fsiq), bc.wantBand, `${bc.name}: engine fsiqBandOf`);
+    assert.equal(fsiqBandOfContract(r.snapshot.fsiq), bc.wantBand, `${bc.name}: contract fsiqBandOf`);
+  }
+});
+
+test("fsiqBand | هم‌خوانی دو جدول: FSIQ_BANDS موتور ≡ FSIQ_BAND_RANGES قرارداد (ضد واگرایی آینده)", () => {
+  assert.equal(extracted.FSIQ_BANDS.length, FSIQ_BAND_RANGES.length, "same row count");
+  for (let i = 0; i < FSIQ_BAND_RANGES.length; i++) {
+    const a = FSIQ_BAND_RANGES[i];
+    const b = extracted.FSIQ_BANDS[i];
+    assert.deepEqual(
+      { band: b.band, min: b.min, max: b.max, fa: b.fa },
+      { band: a.band, min: a.min, max: a.max, fa: a.fa },
+      `FSIQ band row ${i} must be identical in engine and signals.ts`
+    );
+  }
+  for (let v = 0; v <= 200; v++) {
+    assert.equal(extracted.fsiqBandOf(v), fsiqBandOfContract(v), `fsiqBandOf(${v}) must agree`);
+  }
+  assert.equal(extracted.fsiqBandOf(-5), "ID", "negative → ID (conservative)");
+});
+
+test("fsiqBand | مرزهای بازه‌ها دقیق‌اند (۶۹/۷۰/۸۴/۸۵/۸۹/۹۰/۱۰۹/۱۱۰/۱۱۹/۱۲۰/۱۲۹/۱۳۰)", () => {
+  const edges = [
+    [69, "ID"], [70, "BIF"], [84, "BIF"], [85, "LOW_BORDER"], [89, "LOW_BORDER"],
+    [90, "AVERAGE"], [109, "AVERAGE"], [110, "HIGH_AVERAGE"], [119, "HIGH_AVERAGE"],
+    [120, "SUPERIOR"], [129, "SUPERIOR"], [130, "GIFTED"], [200, "GIFTED"]
+  ];
+  for (const [v, want] of edges) {
+    assert.equal(extracted.fsiqBandOf(v), want, `engine fsiqBandOf(${v})`);
+    assert.equal(fsiqBandOfContract(v), want, `contract fsiqBandOf(${v})`);
+  }
+});
+
+test("meta | compact هنوز engineVersion m98 و compact:true است و signals/profile افزودنی دارد", () => {
+  const input = { rawScores: T1_PROFILES.balanced, testDate: [1406, 9, 15], birthDate: [1396, 8, 10] };
+  const compact = extracted.compactWechslerOutput(extracted.runWechslerAnalysis(input));
+  assert.equal(compact.compact, true);
+  assert.equal(compact.engineVersion, "m98");
+  for (const k of ["ok", "ageLine", "years", "band", "validation", "snapshot", "flags", "outcomes", "main", "comorbid", "weakDomains", "monitoringInterval", "hypotheses"]) {
+    assert.ok(k in compact, `compact keeps legacy key ${k}`);
+  }
+  assert.ok(Array.isArray(compact.signals) && compact.signals.length > 0, "compact.signals additive");
+  assert.ok(compact.profile && typeof compact.profile.fsiqBand === "string", "compact.profile additive");
+  const refCompact = ref.compactWechslerOutput(ref.runWechslerAnalysis(input));
+  assertSame("compact parity (extracted vs bundle)", compact, refCompact);
+});
+
+test("payload | engine_output فرم واقعی شامل signals/profile است و کلیدهای قدیمی فرم حفظمانند", () => {
+  const payload = {
+    test_date: { value: "1405/08/12", label: "تاریخ اجرا" },
+    raw_si: { value: "12" },
+    raw_vc: { value: "۱۴" },
+    raw_co: { value: " 9 " },
+    raw_in: { value: "10" },
+    raw_wr: { value: "11" },
+    raw_bd: { value: "13" },
+    raw_pcn: { value: "8" },
+    raw_mr: { value: "10" },
+    raw_pcm: { value: "9" },
+    raw_ds: { value: "7" },
+    raw_ln: { value: "6" },
+    raw_ar: { value: "5" },
+    raw_cd: { value: "12" },
+    raw_ss: { value: "10" },
+    raw_ca: { value: "9" }
+  };
+  const h = extracted.applyWechslerEngineToPayload(payload, "1398/03/25", OCCURRED_AT);
+  assert.equal(h.ran, true);
+  const out = JSON.parse(h.payload.engine_output.value);
+  assert.equal(out.engineVersion, "m98");
+  assert.equal(out.compact, true);
+  assert.ok(Array.isArray(out.signals));
+  assert.ok(out.profile && "fsiqBand" in out.profile);
+  // کلیدهای قدیمی compact در خروجی فرم هم هستند
+  for (const k of ["ok", "ageLine", "years", "band", "validation", "snapshot", "flags", "outcomes", "main", "comorbid", "weakDomains", "monitoringInterval", "hypotheses"]) {
+    assert.ok(k in out, `engine_output keeps legacy key ${k}`);
+  }
+  // و همان خروجی با موتور باندل بایت‌به‌بایت یکی است
+  const hRef = ref.applyWechslerEngineToPayload(payload, "1398/03/25", OCCURRED_AT);
+  assertSame("engine_output parity", JSON.parse(h.payload.engine_output.value), JSON.parse(hRef.payload.engine_output.value));
 });
