@@ -50,7 +50,7 @@ npm run dev                                         # http://localhost:8787
 
 - ورود اولیه: `manager / 1234` (فقط محلی — در تولید با `bootstrap:remote` و رمز دلخواه بسازید).
 - هویت توسعه: کلیک روی چیپ نام کاربر (هدر `X-Dev-Staff-Id`) — فقط با `ENV=development` در `.dev.vars`.
-- تم: دکمهٔ ماه/خورشید · جستجوی سراسری: `Ctrl+K`.
+- تم: روشن/ تاریک با کمترین انیمشین · جستجوی سراسری: `Ctrl+K`.
 - اعلان‌ها/بات: secrets محلی در `.dev.vars` (`BALE_BOT_TOKEN`, `BALE_WEBHOOK_SECRET`) — تولید با `wrangler secret put`.
 
 ## استقرار تولید
