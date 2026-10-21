@@ -22,14 +22,16 @@ import type {
 } from './types';
 import { BATTERY_VERSION } from './types';
 import type { CaseEventBand } from '@domain/case-events';
-import { RULES, rulesOf, CONFIDENCE_THRESHOLDS, ODD_MIN_FULL_CRITERIA, ASD_B_FULL_CRITERIA, BIF_IQ_RANGE, SCARED_SCHOOL_CUTOFF } from './rules';
+import { RULES, rulesOf, CONFIDENCE_THRESHOLDS, ODD_MIN_FULL_CRITERIA, ASD_B_FULL_CRITERIA, BIF_IQ_RANGE, SCARED_SCHOOL_CUTOFF, FSIQ_BAND_BIF, ID_PATH_MAX_FSIQ, SCATTER_UNIFORM_MAX, fsiqBandOf } from './rules';
 import { DSM_RECORDS } from './dsm-criteria';
 import { targetOf } from './targets';
 import { WCPM_NORM_50TH, ALPHA_15S_NORM, DIGITS_2MIN_NORM, ENGINE_DISCLAIMER, batteryDef } from './instruments';
-import { WECHSLER_W4_EVENT_KEY, wechslerHypothesisBoost } from './wechsler-link';
+import { WECHSLER_W4_EVENT_KEY, wechslerHypothesisBoost, wechslerEngineOutputOf, type WechslerHypContext } from './wechsler-link';
 // T4 (m148) — لایهٔ سیگنال شرح‌حال: قرارداد ClinicalSignal از signals.ts (افزودنی — بدون تغییر کلیدهای قدیمی)
-import type { ClinicalSignal, SignalDomain } from './signals';
+import type { ClinicalSignal, SignalDomain, WechslerFsiqBand } from './signals';
 import { makeSignal, sortSignals } from './signals';
+// T6 (m148-b) — هم‌گرایی چندمنبعی: جدول طبقه‌بندی منابع + طبقه‌بندی خوانا سه‌حالته
+import { convergenceSourceOfTool, convergenceItemOf, idAdaptLevelOfEvent, ID_ADAPT_EVENT_KEY, type ConvergenceSource, type ConvergenceItem } from './convergence';
 
 // ───────── نگاشت پروب‌ها (هاردکد — پلن §۴ لایهٔ ۳) ─────────
 
@@ -117,6 +119,47 @@ export function anamnesisSignalsOf(event: EvidenceEvent | undefined): ClinicalSi
 
 function completed(events: EvidenceEvent[]): EvidenceEvent[] {
   return events.filter((e) => e.status === 'completed');
+}
+
+/** عدد فارسی برای جملات موتور (T6) */
+function faNum(n: number): string {
+  return String(n).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+}
+
+// ───────── قواعد سیگنالی وکسلر — تفکیک انطباقی ID/دیرآموز (T6 m148-b — §۳.۱) ─────────
+
+/**
+ * اطلاعات پروفایل وکسلر برای قواعد سیگنالی — فقط از profile (T1).
+ * رویدادهای قدیمی بدون profile → همه null: قواعد جدید خاموش می‌مانند و رفتار امروز
+ * بایت‌به‌بایت حفظ می‌شود (پاریتی پرونده‌های قدیمی).
+ */
+function wechslerProfileFactsOf(event: EvidenceEvent | undefined): {
+  fsiq: number | null;
+  band: WechslerFsiqBand | null;
+  indexScatter: number | null;
+} {
+  const profile = wechslerEngineOutputOf(event)?.profile ?? null;
+  const fsiq = typeof profile?.fsiq === 'number' ? profile.fsiq : null;
+  const bandRaw = typeof profile?.fsiqBand === 'string' ? profile.fsiqBand : null;
+  const band = (bandRaw as WechslerFsiqBand | null) ?? (fsiq !== null ? fsiqBandOf(fsiq) : null);
+  const scatter = typeof profile?.indexScatter === 'number' ? profile.indexScatter : null;
+  return { fsiq, band, indexScatter: scatter };
+}
+
+/** شاخص ضعف گام ۵ برای حل DOMAIN_WEAK — اولین ضعفِ شناخته‌شده از profile (T1) با فال‌بک snapshot */
+function domainWeakIndexOf(event: EvidenceEvent | undefined): string | null {
+  const c = wechslerEngineOutputOf(event) as unknown as Record<string, unknown> | null;
+  if (!c) return null;
+  const pick = (arr: unknown): string | null => {
+    for (const w of Array.isArray(arr) ? arr : []) {
+      const key = typeof w === 'string' ? w : (w as { key?: string } | null)?.key ?? null;
+      if (key && ['VCI', 'PRI', 'WMI', 'PSI'].includes(key)) return key;
+    }
+    return null;
+  };
+  const profile = c['profile'] as { step5?: { weaknesses?: unknown } | null } | null;
+  const snap = c['snapshot'] as { step5Weak?: unknown } | null;
+  return pick(profile?.step5?.weaknesses) ?? pick(snap?.step5Weak);
 }
 
 /** جدیدترین رویداد هر کلید ابزار (ورودی نزولی زمانی — اولین = جدیدترین) */
@@ -365,6 +408,30 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
   const referralFlags: string[] = [];
   const nextActionsSet = new Set<string>();
 
+  // ── T6 (m148-b) — زمینهٔ قواعد سیگنالی وکسلر (همه از دادهٔ موجود؛ بدون محاسبهٔ تازه) ──
+  const wEvent = latest.get(WECHSLER_W4_EVENT_KEY);
+  const wFacts = wechslerProfileFactsOf(wEvent);
+  const adapt = idAdaptLevelOfEvent(latest.get(ID_ADAPT_EVENT_KEY));
+  // زمینهٔ حل فرضیه‌های وابسته به پرونده (SLD/DOMAIN_WEAK) — از سیگنال‌های v3 و پروفایل وکسلر
+  const sigValOf = (key: string): number | null => anamnesisSignals.find((s) => s.key === key)?.value ?? null;
+  const hypCtx: WechslerHypContext = {
+    sld: { read: sigValOf('anam.sld_read'), write: sigValOf('anam.sld_write'), calc: sigValOf('anam.sld_calc') },
+    domainWeakIndex: domainWeakIndexOf(wEvent)
+  };
+  // خط قرمز مسیر ID (§۳.۱): FSIQ ≤ ۷۰ «و» انطباق پایین → ارجاع؛
+  // در این مسیر هیچ تقویت دیرآموزی اعمال نمی‌شود — دو مسیر ID و دیرآموز هرگز هم‌پوشان نمی‌شوند.
+  const idPathActive = wFacts.fsiq !== null && wFacts.fsiq <= ID_PATH_MAX_FSIQ && adapt === 'low';
+  if (idPathActive) {
+    referralFlags.push('خط قرمز — مسیر ناتوانی هوشی: هوش‌بهر کل ۷۰ یا کمتر همراه انطباق روزمرهٔ «پایین» است؛ پرونده برای ارجاع تخصصی (روان‌پزشک/مدیر پرونده) علامت خورد — پلن چک‌لیست رفتاری پیشنهاد نمی‌شود.');
+    nextActionsSet.add('مسیر ناتوانی هوشی (ID) فعال شده است — «ارجاع» به متخصص تخصصی پیش از هر پلن آموزشی؛ فرضیهٔ دیرآموزی تقویت نمی‌شود.');
+  }
+  // مرز پایین یکنواخت (۸۵–۸۹ با پراکندگی زیر سقف تفسیر واحد) — فقط توصیهٔ پایش، بدون برچسب تشخیصی (§۳.۱)
+  if (!idPathActive && wFacts.band === 'LOW_BORDER' && wFacts.indexScatter !== null && wFacts.indexScatter < SCATTER_UNIFORM_MAX) {
+    nextActionsSet.add('نیم‌رخ هوشی در «مرز پایین» با شاخص‌های یکنواخت است — بدون برچسب تشخیصی، پایش دوره‌ای (شش‌ماهه) پیشنهاد می‌شود.');
+  }
+  // جمع‌آوری منابع هم‌گرایی (T6 — در همین یک محاسبه؛ ماتریس هرگز به UI نمی‌آید)
+  const convergenceMap = new Map<string, { positive: ConvergenceSource[]; data: ConvergenceSource[] }>();
+
   for (const ruleSet of RULES) {
     const target = targetOf(ruleSet.targetKey);
     if (!target) continue;
@@ -381,7 +448,8 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
     // شرح‌حال: قواعد به کلید v2 اشاره می‌کنند — اگر پرونده نسخهٔ ۳ دارد، همان هم شاهد است (T4)
     if (toolKeys.has(ANAMNESIS_V2_KEY)) toolKeys.add(anamKey);
     // تقویت وکسلر خودش شاهد است — فرضیه‌های engine_output فرم ce-wechsler-w4-v1 به هدف همین ruleSet
-    const wBoost0 = wechslerHypothesisBoost(latest.get(WECHSLER_W4_EVENT_KEY), ruleSet.targetKey);
+    // T6: زمینهٔ پرونده (SLD/DOMAIN_WEAK) برای حل قطعی فرضیه‌های پویا پاس داده می‌شود.
+    const wBoost0 = wechslerHypothesisBoost(latest.get(WECHSLER_W4_EVENT_KEY), ruleSet.targetKey, hypCtx);
     const hasData = [...toolKeys].some((k) => {
       const e = latest.get(k);
       return Boolean(e && (e.analysis || e.payload));
@@ -398,9 +466,20 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
         evidenceFa.push(fa);
       }
     };
+    // منابع هم‌گرایی همین هدف (T6) — مثبت = شواهد همان‌جهت؛ داده = رویداد مرتبط با تحلیل/پاسخ
+    const srcPositive: ConvergenceSource[] = [];
+    const srcData: ConvergenceSource[] = [];
+    const noteSource = (toolKey: string, fired: boolean) => {
+      const s = convergenceSourceOfTool(toolKey);
+      if (!s) return;
+      if (!srcData.includes(s)) srcData.push(s);
+      if (fired && !srcPositive.includes(s)) srcPositive.push(s);
+    };
     let score = 0;
     for (const rule of ruleSet.evidence) {
       if (rule.kind === 'anamnesis') continue; // با پرچم هدف‌محور پایین
+      // T6 — شواهد وکسلریِ دیرآموزی (باند BIF) یک‌جا در بلوک «قوی‌ترین تک‌تقویت» پایین اعمال می‌شود
+      if (rule.kind === 'wechsler' && ruleSet.targetKey === 'slow_learner') continue;
       if (rule.kind === 'probe' || rule.kind === 'wechsler') {
         const color = ruleColor(rule, latest.get(rule.toolKey));
         if (color === null || color !== rule.band) continue;
@@ -415,18 +494,78 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
         addFa(rule.fa);
       }
     }
-
-    // پرچم شرح‌حال هدف‌محور (w۱) — نسخهٔ ۳ ترجیح دارد؛ بی‌نسخهٔ ۳، نسخهٔ ۲ با هیوریستیک امروز
-    if (ruleSet.evidence.some((r) => r.kind === 'anamnesis') && anamnesisFlagFor(ruleSet.targetKey, latest.get(anamKey))) {
-      score += 1;
-      const rule = ruleSet.evidence.find((r) => r.kind === 'anamnesis');
-      if (rule) evidenceFa.push(rule.fa);
+    // منابع هم‌گرایی از قواعد ابزاری — فقط رویدادِ دارای داده (رنگ null = داده‌ای نیست)
+    for (const rule of ruleSet.evidence) {
+      if (rule.kind === 'anamnesis') continue;
+      if (ruleSet.targetKey === 'slow_learner' && rule.kind === 'wechsler') continue;
+      if (rule.kind === 'probe' || rule.kind === 'wechsler') {
+        const color = ruleColor(rule, latest.get(rule.toolKey));
+        if (color !== null) noteSource(rule.toolKey, color === rule.band);
+        continue;
+      }
+      for (const event of perTool.get(rule.toolKey) ?? []) {
+        const color = ruleColor(rule, event);
+        if (color !== null) {
+          noteSource(rule.toolKey, color === rule.band);
+          break; // یک رویداد کافی است — منبع تکراری معنا ندارد
+        }
+      }
     }
 
+    // ── T6 (m148-b) — خانوادهٔ شواهد BIF هدف دیرآموزی: «قوی‌ترین تک‌تقویت» — هیچ‌وقت جمع نمی‌شوند ──
+    // (قبل از بلوک شرح‌حال — تا ترتیب متن شواهد با رفتار امروز یکسان بماند)
+    // سه نامزد: ۱) قاعدهٔ خام fsiq (رفتار امروز — بازهٔ ۷۰–۸۵ در BIF_IQ_RANGE)؛
+    // ۲) تقویت فرضیهٔ BIF (نگاشت کامل سیزده‌فرضیه‌ای)؛
+    // ۳) تقویت سیگنال پروفایل (فقط رویدادهای دارای profile — T1): FSIQ ۷۰–۸۴ + انطباق عادی/ثبت‌نشده.
+    // فقط قوی‌ترین یکی به امتیاز می‌رود؛ مسیر ID فعال → هیچ تقویتی اعمال نمی‌شود (عدم هم‌پوشانی).
+    if (ruleSet.targetKey === 'slow_learner') {
+      const cands: { weight: number; fa: string }[] = [];
+      for (const rule of ruleSet.evidence) {
+        if (rule.kind !== 'wechsler') continue;
+        const color = ruleColor(rule, wEvent);
+        if (color !== null) {
+          noteSource(rule.toolKey, color === rule.band);
+          if (color === rule.band) cands.push({ weight: rule.weight, fa: rule.fa });
+        }
+      }
+      if (wBoost0) cands.push(wBoost0); // نامزد ۲ — فرضیهٔ BIF
+      if (wEvent?.payload || wEvent?.analysis) noteSource(WECHSLER_W4_EVENT_KEY, Boolean(wBoost0));
+      // انطباق «پایین» خانواده با مسیر دیرآموزی هم‌رأی نیست — منبع خانواده با دادهٔ مخالف (T6)
+      if (adapt === 'low' && latest.has(ID_ADAPT_EVENT_KEY)) noteSource(ID_ADAPT_EVENT_KEY, false);
+      // نامزد ۳ — سیگنال پروفایل: باند BIF (۷۰–۸۴) با انطباق عادی یا ثبت‌نشده
+      if (!idPathActive && wFacts.fsiq !== null && wFacts.fsiq >= FSIQ_BAND_BIF.min && wFacts.fsiq <= FSIQ_BAND_BIF.max && (adapt === 'normal' || adapt === 'unknown')) {
+        cands.push({
+          weight: 1,
+          fa: `هوش‌بهر کل ${faNum(wFacts.fsiq)} در بازهٔ مرزی/دیرآموزی (۷۰–۸۴) است و انطباق روزمره عادی یا ثبت‌نشده است — شاهد دیرآموزی (BIF).`
+        });
+      }
+      if (!idPathActive) {
+        const best = cands.reduce<{ weight: number; fa: string } | null>((a, b) => (a === null || b.weight > a.weight ? b : a), null);
+        if (best) {
+          score += best.weight;
+          addFa(best.fa);
+          // هر سه نامزد از رویداد وکسلر می‌آیند — تقویتِ اعمال‌شده = شاهد مثبت منبع «آزمون» (T6)
+          noteSource(WECHSLER_W4_EVENT_KEY, true);
+        }
+      }
+    }
+
+    // پرچم شرح‌حال هدف‌محور (w۱) — نسخهٔ ۳ ترجیح دارد؛ بی‌نسخهٔ ۳، نسخهٔ ۲ با هیوریستیک امروز
+    const anamRule = ruleSet.evidence.find((r) => r.kind === 'anamnesis');
+    const anamFired = Boolean(anamRule) && anamnesisFlagFor(ruleSet.targetKey, latest.get(anamKey));
+    if (anamFired) {
+      score += 1;
+      if (anamRule) evidenceFa.push(anamRule.fa);
+    }
+    // منبع خانواده برای اهداف دارای قاعدهٔ شرح‌حال — مثبت اگر پرچم همان‌جهت داشت (T6)
+    if (anamRule && latest.get(anamKey)?.payload) noteSource(anamKey, anamFired);
+
     // تقویت فرضیهٔ وکسلر ۴ — وزن ۲ (بالا) یا ۱ (متوسط) به امتیاز و متن شاهد به شواهد
-    if (wBoost0) {
+    // T6: هدف دیرآموزی در بلوک ویژهٔ بالا با سیاست «قوی‌ترین تک‌تقویت» اعمال می‌شود.
+    if (wBoost0 && ruleSet.targetKey !== 'slow_learner') {
       score += wBoost0.weight;
       evidenceFa.push(wBoost0.fa);
+      noteSource(WECHSLER_W4_EVENT_KEY, true);
     }
 
     // ۲) هم‌رأیی والد/معلم — جفت danger هر دو مرجع → جمع جفت ×۱٫۵
@@ -510,6 +649,9 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
         }
       }
     }
+
+    // ثبت منابع هم‌گرایی این هدف (T6)
+    convergenceMap.set(ruleSet.targetKey, { positive: srcPositive, data: srcData });
   }
 
   // رتبه‌بندی: امتیاز ↓ سپس ملاک‌های برآورده ↓ (sort پایدار ترتیب سند را حفظ می‌کند)
@@ -528,7 +670,16 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
     nextActionsSet.add('هنوز دادهٔ کافی برای فرضیه نیست — SDQ (والد/معلم) و شرح حال ساخت‌یافته را کامل کنید.');
   }
 
-  return {
+  // T6 (m148-b) — هم‌گرایی چندمنبعی فرضیه‌های رتبه‌خورده (سه حالت خوانا؛ ماتریس پشت‌پرده می‌ماند)
+  const convergence: ConvergenceItem[] = [];
+  for (const h of ranked) {
+    const s = convergenceMap.get(h.targetKey);
+    if (!s) continue;
+    const item = convergenceItemOf(h.targetKey, h.targetTitle, s.positive, s.data);
+    if (item) convergence.push(item);
+  }
+
+  const output = {
     batteryVersion: BATTERY_VERSION,
     generatedAt: now().toISOString(),
     criteria,
@@ -541,4 +692,6 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
     // T4 (m148) — کلید افزودنی: سیگنال‌های شرح‌حال نسخهٔ ۳ (پروندهٔ فقط-v2 → [])
     anamnesisSignals
   };
+  // T6 (m148-b) — کلید افزودنی هم‌گرایی؛ ساختار قبلی عیناً حفظ شده (لنگر t4-verify سرجایش است)
+  return { ...output, convergence };
 }

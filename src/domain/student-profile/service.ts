@@ -6,13 +6,14 @@
 
 import type { AuthContext, SchoolKind, SpecialNeedSeverity, SpecialNeedType, StudentCaseStatus, StudentPathway } from '@core/shared';
 import { faDigits, PLACEHOLDER_NATIONAL_ID_PREFIX } from '@core/shared';
-import { NotFoundError, ConflictError } from '@core/errors';
+import { NotFoundError, ConflictError, ValidationError } from '@core/errors';
 import type {
   EducationHistoryEntry,
   NewClassInput,
   NewEducationHistoryInput,
   NewSchoolInput,
   NewStudentInput,
+  NewStudentTeacherInput,
   School,
   SchoolClass,
   Student,
@@ -21,11 +22,12 @@ import type {
   StudentProfileDeps,
   StudentProfileService,
   StudentSearchFilters,
+  StudentTeacher,
   UpdateClassInput,
   UpdateSchoolInput,
   UpdateStudentInput
 } from './types';
-import { rowToClass, rowToEducationHistory, rowToSchool, rowToStudent, studentSearchQuery, STUDENT_WAIT_PROJECTION, STUDENT_OWNER_PROJECTION, tagsForStudentsQuery, assessmentCountsForStudentsQuery, type EduHistoryRow } from './repository';
+import { rowToClass, rowToEducationHistory, rowToSchool, rowToStudent, rowToStudentTeacher, studentSearchQuery, STUDENT_WAIT_PROJECTION, STUDENT_OWNER_PROJECTION, tagsForStudentsQuery, assessmentCountsForStudentsQuery, type EduHistoryRow, type StudentTeacherRow } from './repository';
 import type { ClassRow, SchoolRow, StudentRow, StudentTagJoinRow } from './repository';
 import type { TagRef } from '@core/shared';
 
@@ -1131,6 +1133,75 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         });
       });
       logger.child('student').info('student.education_history.deleted', { studentId });
+    },
+
+    // ───────────── معلم‌های دانش‌آموز (T7 — m150-b) ─────────────
+
+    async listStudentTeachers(studentId: string): Promise<StudentTeacher[]> {
+      const student = await db.queryOne<{ id: string }>(`SELECT id FROM students WHERE id = ?`, [studentId]);
+      if (!student) throw new NotFoundError('دانش‌آموز');
+      const rows = await db.query<StudentTeacherRow>(
+        `SELECT id, student_id, name, class_label, contact, created_at
+           FROM student_teachers WHERE student_id = ? ORDER BY created_at, rowid`,
+        [studentId]
+      );
+      return rows.map(rowToStudentTeacher);
+    },
+
+    async addStudentTeacher(studentId: string, input: NewStudentTeacherInput, actor: AuthContext): Promise<StudentTeacher> {
+      const name = input.name.replace(/\s+/g, ' ').trim();
+      if (name.length < 2 || name.length > 120) {
+        throw new ValidationError('نام معلم الزامی است (۲ تا ۱۲۰ نویسه)');
+      }
+      const classLabel = input.classLabel?.replace(/\s+/g, ' ').trim().slice(0, 120) || null;
+      const contact = input.contact?.trim().slice(0, 60) || null;
+      const teacherId = await db.transaction(async (tx) => {
+        const student = await tx.queryOne<{ id: string }>(`SELECT id FROM students WHERE id = ?`, [studentId]);
+        if (!student) throw new NotFoundError('دانش‌آموز');
+        const dup = await tx.queryOne<{ id: string }>(
+          `SELECT id FROM student_teachers WHERE student_id = ? AND name = ?`,
+          [studentId, name]
+        );
+        if (dup) throw new ConflictError('این معلم قبلاً روی پرونده ثبت شده است');
+        const newId = crypto.randomUUID();
+        await tx.execute(
+          `INSERT INTO student_teachers (id, student_id, name, class_label, contact) VALUES (?, ?, ?, ?, ?)`,
+          [newId, studentId, name, classLabel, contact]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'student.teachers.add',
+          resourceType: 'student',
+          resourceId: studentId,
+          changes: { teacher_id: { from: null, to: newId }, name: { from: null, to: name } }
+        });
+        return newId;
+      });
+      logger.child('student').info('student.teachers.added', { studentId });
+      const row = await db.queryOne<StudentTeacherRow>(
+        `SELECT id, student_id, name, class_label, contact, created_at FROM student_teachers WHERE id = ?`,
+        [teacherId]
+      );
+      return rowToStudentTeacher(row as StudentTeacherRow);
+    },
+
+    async deleteStudentTeacher(studentId: string, teacherId: string, actor: AuthContext): Promise<void> {
+      await db.transaction(async (tx) => {
+        const row = await tx.queryOne<{ id: string; name: string }>(
+          `SELECT id, name FROM student_teachers WHERE id = ? AND student_id = ?`,
+          [teacherId, studentId]
+        );
+        if (!row) throw new NotFoundError('معلم');
+        await tx.execute(`DELETE FROM student_teachers WHERE id = ?`, [teacherId]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'student.teachers.delete',
+          resourceType: 'student',
+          resourceId: studentId,
+          changes: { teacher_id: { from: teacherId, to: null }, name: { from: row.name, to: null } }
+        });
+      });
+      logger.child('student').info('student.teachers.deleted', { studentId });
     }
   };
   return service;

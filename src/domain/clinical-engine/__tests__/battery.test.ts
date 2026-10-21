@@ -27,10 +27,10 @@ const EXISTING_TOOLS = new Set([
 ]);
 
 describe('باتری battery-v1 — اعتبار ساختاری', () => {
-  it('۱۹ ابزار ثابت دارد و کلیدها یکتا هستند (T4: شرح‌حال نسخهٔ ۳ کنار نسخهٔ ۲ — T5: جامع خانواده)', () => {
+  it('۲۱ ابزار ثابت دارد و کلیدها یکتا هستند (T4: شرح‌حال نسخهٔ ۳ کنار نسخهٔ ۲ — T5: جامع خانواده — T7: جامع معلم + ملاک‌های کلاسی)', () => {
     const BATTERY_KEYS = BATTERY.map((d) => d.key);
-    expect(BATTERY.length).toBe(19);
-    expect(new Set(BATTERY_KEYS).size).toBe(19);
+    expect(BATTERY.length).toBe(21);
+    expect(new Set(BATTERY_KEYS).size).toBe(21);
     expect(BATTERY_VERSION).toBe('battery-v1');
   });
 

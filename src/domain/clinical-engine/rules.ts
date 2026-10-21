@@ -6,6 +6,8 @@
 // آستانه‌ها و وزن‌ها شفاف و در سند قابل مرورند — جعبهٔ سیاه نیست؛ کالیبراسیون با دادهٔ مرکز در
 
 import type { RuleSet } from './types';
+// T6 (m148-b) — بازه‌های FSIQ تک‌منبع از signals.ts بازنشر می‌شوند (پایین، پس از ثابت‌های قفل‌شده)
+import { FSIQ_BAND_RANGES } from './signals';
 
 /** وزن استاندارد شواهد (پلن §۵ گام ۲) */
 // T4 (m148): کلید قواعد شرح‌حال عمداً v2 می‌ماند (دادهٔ قاعده ثابت) — حل شواهد در infer.ts
@@ -31,6 +33,23 @@ export const ASD_B_FULL_CRITERIA = 2;
 export const SCARED_SCHOOL_CUTOFF = 1;
 /** محدودهٔ IQ دیرآموزی — عملکرد فکری مرزی */
 export const BIF_IQ_RANGE = { min: 70, max: 85 } as const;
+
+// ───────────── T6 (m148-b) — بازه‌های هوش‌بهر: تک‌منبع از signals.ts ─────────────
+// جدول FSIQ_BAND_RANGES و توابع آن در signals.ts است (قفل تست طلایی T1)؛ این‌جا فقط
+// بازنشر می‌شود تا مصرف‌کنندگان (infer، صورت‌بندی، تست‌ها) به یک مسیر واحد اشاره کنند —
+// هیچ عدد جدیدی برای باندها کپی نمی‌شود. ثابت قدیمی BIF_IQ_RANGE (بازهٔ ۷۰–۸۵ قاعدهٔ
+// خام fsiq) عمداً سرجایش مانده و تغییر نمی‌کند — تست‌های موجود قفل‌ش‌اند.
+export { FSIQ_BAND_RANGES, fsiqBandOf, fsiqBandFaOf } from './signals';
+export type { WechslerFsiqBand } from './signals';
+
+/** ردیف بازهٔ BIF (۷۰–۸۴) — سناریوی دیرآموز §۳.۱ (بدون کپی عددی از جدول واحد) */
+export const FSIQ_BAND_BIF = FSIQ_BAND_RANGES.find((b) => b.band === 'BIF') as { band: 'BIF'; min: number; max: number; fa: string };
+/** ردیف بازهٔ «مرز پایین» (۸۵–۸۹) — فقط توصیهٔ پایش، بدون برچسب تشخیصی (§۳.۱) */
+export const FSIQ_BAND_LOW_BORDER = FSIQ_BAND_RANGES.find((b) => b.band === 'LOW_BORDER') as { band: 'LOW_BORDER'; min: number; max: number; fa: string };
+/** سقف FSIQ مسیر ID — «FSIQ ≤ ۷۰» سند §۳.۱؛ عدد از مرز پایینی بازهٔ BIF (تک‌منبع) */
+export const ID_PATH_MAX_FSIQ = FSIQ_BAND_BIF.min;
+/** سقف پراکندگی بین‌شاخصی برای «یکنواخت» شمردن نیم‌رخ — هم‌ارز سقف تفسیر واحد ۲۳ در profileSignals موتور وکسلر و SCATTER_SEVERE پیشنهادگر */
+export const SCATTER_UNIFORM_MAX = 23;
 
 export const RULES: RuleSet[] = [
   // ─── نارساخوانی ───

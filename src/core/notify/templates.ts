@@ -674,6 +674,20 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         'پس از ثبت پاسخ، نتیجه به‌طور خودکار برای درمانگر مرکز می‌آید.'
       ].filter((l): l is string => l !== undefined && l !== '').join('\n');
 
+    // ─── T7 m150-b: فرم جامع معلم — لینک گره‌خورده به نام معلم (پیام معلم‌محور) ───
+
+    case 'bot_teacher_package_link':
+      return [
+        '📝 فرم مشاهدهٔ کلاس — فرم معلم',
+        '',
+        vars.teacherName ? `${vars.teacherName} سلام 👋` : 'سلام 👋',
+        vars.studentName ? `دربارهٔ دانش‌آموز: ${vars.studentName}` : undefined,
+        vars.extra?.trim() || undefined,
+        '',
+        'پاسخ‌ها با نام شما روی پروندهٔ دانش‌آموز ثبت می‌شود و مستقیم برای درمانگر مرکز می‌آید.',
+        'پیشاپیش از وقتی که می‌گذارید ممنونیم 🙏'
+      ].filter((l): l is string => l !== undefined && l !== '').join('\n');
+
     // ─── حلقهٔ بازگشت فایل: اعلان به کارکنان + پاسخ‌های بات ───
 
     case 'homework_returned':

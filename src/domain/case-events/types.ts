@@ -315,9 +315,16 @@ export interface CaseEventsService {
   listPendingChecklists(): Promise<PendingChecklist[]>;
   /**
    * — ارسال با یک کلیک: پیام بله با لینک امن وب‌فرم برای خانواده/معلم.
-   * خروجی: { sent, targets } — sent از طریق observer (notify) واقعی شمرده می‌شود.
+   * T7: teacherName/teacherId اختیاری — لینک به نام معلم گره می‌خورد و پاسخ‌ها «پاسخ معلم: X» می‌گیرند؛
+   * قالب پیام بله هم bot_teacher_package_link می‌شود.
+   * خروجی: { sent, targets, link } — sent از طریق observer (notify) واقعی شمرده می‌شود؛ link برای کپی.
    */
-  sendChecklistLink(eventId: string, input: { audience?: CaseEventAudience | null; note?: string | null }, actor: AuthContext): Promise<{ sent: number; targets: string[] }>;
+  sendChecklistLink(eventId: string, input: { audience?: CaseEventAudience | null; note?: string | null; teacherName?: string | null; teacherId?: string | null }, actor: AuthContext): Promise<{ sent: number; targets: string[]; link: string | null }>;
+  /**
+   * — T7: صدور/کپی لینک امن به‌ازای یک معلم مشخص — بدون ارسال بله (مدرسه بدون چت متصل هم کار می‌کند).
+   * نام معلم را به رویداد لنگر می‌بندد؛ لینک مستقل به‌ازای هر معلم = چند معلم، چند لینک.
+   */
+  issueTeacherFillLink(eventId: string, input: { teacherName?: string | null; teacherId?: string | null }, actor: AuthContext): Promise<{ link: string; teacherName: string }>;
   /** — سیم اعلان (observer — الگوی setGradeObserver): enqueue + dispatch → تعداد واقعی ارسال */
   setSendObserver(fn: SendObserver | null): void;
   /** اعتبارسنجی گیت خانواده: آیا این چت به این دانش‌آموز متصل است؟ */
@@ -367,7 +374,7 @@ export interface PendingChecklist {
 export interface SendObserverInput {
   studentId: string;
   chats: string[];
-  template: 'bot_checklist_link';
+  template: 'bot_checklist_link' | 'bot_teacher_package_link';
   vars: import('@core/shared').TemplateVars;
   dedupBase: string;
 }

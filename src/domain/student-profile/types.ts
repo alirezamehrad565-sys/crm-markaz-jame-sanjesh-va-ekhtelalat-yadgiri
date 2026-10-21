@@ -217,6 +217,27 @@ export interface StudentAppointment {
   note: string | null;
 }
 
+/** — T7 (m150-b): معلم روی پروندهٔ دانش‌آموز — چند معلم = چند لینک مستقل فرم جامع معلم
+ * مکملِ فیلد تک‌معلمِ کلاس (classes.teacher_name) — آن فیلد هرگز حذف/تغییر نمی‌کند.
+ */
+export interface StudentTeacher {
+  id: string;
+  studentId: string;
+  /** نام و نام خانوادگی — پاسخ فرم معلم با همین نام روی پرونده می‌نشیند («پاسخ معلم: X») */
+  name: string;
+  /** برچسب کلاس/درس (آزاد — مثل «چهارم ب — ریاضی») */
+  classLabel: string | null;
+  /** راه ارتباطی (تلفن/بله) */
+  contact: string | null;
+  createdAt: string;
+}
+
+export interface NewStudentTeacherInput {
+  name: string;
+  classLabel?: string;
+  contact?: string;
+}
+
 export interface StudentProfileDeps {
   db: DbClient;
   audit: AuditWriter;
@@ -300,6 +321,11 @@ export interface StudentProfileService {
 
   /** نوبت‌های اخیر یک دانش‌آموز — join با staff برای نام */
   listStudentAppointments(studentId: string, filters?: { from?: string; to?: string; limit?: number }): Promise<StudentAppointment[]>;
+
+  // ─── T7 (m150-b): معلم‌های دانش‌آموز — خواندن همهٔ نقش‌ها؛ ثبت/حذف سه نقش مرکز (RBAC در route) ───
+  listStudentTeachers(studentId: string): Promise<StudentTeacher[]>;
+  addStudentTeacher(studentId: string, input: NewStudentTeacherInput, actor: AuthContext): Promise<StudentTeacher>;
+  deleteStudentTeacher(studentId: string, teacherId: string, actor: AuthContext): Promise<void>;
 
   // ─── read-only stats (برای dashboard) ───
   getDirectoryStats(): Promise<StudentDirectoryStats>;

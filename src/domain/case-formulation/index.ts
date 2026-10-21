@@ -22,6 +22,10 @@ import {
   wechslerFromEvent,
   ageYearsFromBirthDate,
 } from "./engine.js";
+// T6 (m148-b) — فرمول‌بندی روی خروجی موتور شک: یک محاسبه، چند کارت UI (افزودنی — بدون تغییر کلیدهای قدیمی)
+import type { RankedHypothesis } from "../clinical-engine/types";
+import type { ConvergenceItem } from "../clinical-engine/convergence";
+import { runInference } from "../clinical-engine/infer";
 
 // ─────────────────────────── input types ───────────────────────────
 
@@ -174,6 +178,12 @@ export interface FormulationResult {
   confidence: number; // 0.1-0.95
   capsFa: string[];
   disclaimer: string;
+  /**
+   * T6 (m148-b) — کلیدهای افزودنی: خروجی موتور شک واحد روی همان رویدادها (یک محاسبه، چند کارت).
+   * ranked و convergence از runInference می‌آیند — موتور شک تک‌منبع فرضیه‌ها و هم‌گرایی منابع است.
+   */
+  inferenceRanked?: readonly RankedHypothesis[];
+  inferenceConvergence?: readonly ConvergenceItem[];
 }
 
 // ─────────────────────────── public API ───────────────────────────
@@ -186,7 +196,11 @@ export function formulateCase(
   evidence: FormulationEvidence,
   options?: FormulationOptions
 ): FormulationResult {
-  return formulateCaseRaw(evidence as never, options) as unknown as FormulationResult;
+  const raw = formulateCaseRaw(evidence as never, options) as unknown as FormulationResult;
+  // T6 (m148-b) — خروجی موتور شک (فرضیه‌های رتبه‌خورده + هم‌گرایی سه‌حالته) افزوندنی می‌شود؛
+  // بقیهٔ ساختار عیناً سرجایش است (پاریتی طلایی formulation).
+  const inf = runInference((evidence.events ?? []) as never, options);
+  return { ...raw, inferenceRanked: inf.ranked, inferenceConvergence: inf.convergence };
 }
 
 export { buildCaseFormulation, wechslerFromEvent, ageYearsFromBirthDate };

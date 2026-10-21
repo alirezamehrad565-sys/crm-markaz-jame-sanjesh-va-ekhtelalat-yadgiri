@@ -55,6 +55,10 @@ export function fillTargetOf(type) {
   if (type?.key === 'ce-comp-family-v2' && type?.familyFillable) {
     return { key: 'family', group: 'family', label: 'خانواده', badge: 'فرم جامع خانواده — با بله', badgeClass: 'badge--accent' };
   }
+  // — T7 (m150-b): پکیج فرم جامع معلم — یک لینک مستقل به‌ازای هر معلم («انتخاب معلم»)
+  if (type?.key === 'ce-comp-teacher-v2' && type?.familyFillable) {
+    return { key: 'teacher', group: 'teacher', label: 'معلم', badge: 'فرم جامع معلم — با بله (انتخاب معلم)', badgeClass: 'badge--warning' };
+  }
   if (type?.category === 'checklist' && type?.familyFillable) {
     if (type.audience === 'teacher') {
       return { key: 'teacher', group: 'teacher', label: 'معلم', badge: 'فرم معلم — با بله', badgeClass: 'badge--warning' };
@@ -665,6 +669,10 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
  * قرار میگیره تو بله و نتیجهش برمیگرده به سایت»
  * جریان: انتخاب قالب (پیشنهاد هوشمند بر اساس برچسب‌های دانش‌آموز) → گیرنده (خانواده/معلم)
  * → یک کلیک: رویداد «در انتظار پاسخ» ساخته + پیام بله با لینک امن وب‌فرم ارسال می‌شود.
+ * — T7 (m150-b): فرم‌های معلمی (پکیج فرم جامع معلم/چک‌لیست معلم) «انتخاب معلم» دارند:
+ *   انتخاب معلم ثبت‌شده یا افزودن معلم تازه → رویداد لنگر مستقل + لینک مستقل به‌ازای همان معلم
+ *   («چند معلم = چند لینک مستقل»)؛ پیام بله با قالب معلم‌محور می‌رود و اگر چت کلاس متصل نباشد
+ *   لینک کپی‌شدنی همچنان صادر می‌شود. پاسخ هر معلم با نامش («پاسخ معلم: X») روی پرونده می‌نشیند.
  * onSent(event, sendResult) بعد از ارسال موفق صدا می‌شود.
  */
 export async function openChecklistSendModal({ student, typeId = null, onSent }) {
@@ -679,13 +687,20 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
     toastError(err);
     return;
   }
+  // — T7: پکیج فرم جامع معلم هم قابل ارسال است
   const checklists = suggestions.filter(
-    (s) => s.type.familyFillable && (s.type.category === 'checklist' || s.type.key === 'ce-comp-family-v2')
+    (s) => s.type.familyFillable && (s.type.category === 'checklist' || s.type.key === 'ce-comp-family-v2' || s.type.key === 'ce-comp-teacher-v2')
   );
   if (checklists.length === 0) {
     toast('هنوز چک‌لیست قابل ارسالی در کتابخانه نیست — از «رویدادساز» اضافه کنید');
     return;
   }
+
+  // — T7: معلم‌های ثبت‌شدهٔ پرونده برای «انتخاب معلم» (خطا → فهرست خالی + افزودن تازه)
+  let teachers = [];
+  try {
+    teachers = (await api.get(`/api/students/${student.id}/teachers`)).data ?? [];
+  } catch { teachers = []; }
 
   const preselected = checklists.find((s) => s.type.id === typeId) ?? null;
   const matchedCount = checklists.filter((s) => s.score > 0).length;
@@ -696,6 +711,18 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
       s.type.title +
       (s.score > 0 ? ` — مناسب: ${s.matched.map((m) => m.name).join('، ')}` : '')
   }));
+
+  /** آیا قالب انتخابی/مخاطب، جریان معلم است؟ — toggling فیلدهای معلم */
+  const isTeacherFlow = (typeIdVal, audienceVal) => {
+    const chosen = checklists.find((s) => s.type.id === typeIdVal);
+    if (!chosen) return false;
+    return chosen.type.key === 'ce-comp-teacher-v2' || chosen.type.audience === 'teacher' || audienceVal === 'teacher';
+  };
+
+  const teacherOptions = [
+    ...teachers.map((t) => ({ value: t.id, label: `${t.name}${t.classLabel ? ` — ${t.classLabel}` : ''}` })),
+    { value: '__new__', label: '＋ معلم تازه…' }
+  ];
 
   formModal({
     title: `ارسال چک‌لیست — ${studentLabel(student)}`,
@@ -709,7 +736,15 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
         required: true,
         options: typeOptions,
         value: preselected?.type.id ?? checklists[0]?.type.id,
-        span: 2
+        span: 2,
+        onChange: (val, inputs) => {
+          const show = isTeacherFlow(val, inputs.audience?.value) ? '' : 'none';
+          for (const k of ['teacher_pick', 'teacher_new_name', 'teacher_new_class', 'teacher_new_contact']) {
+            const field = inputs[k]?.closest('.field');
+            if (field) field.style.display = show;
+          }
+          if (show === 'none' && inputs.teacher_pick) inputs.teacher_pick.value = '';
+        }
       },
       {
         name: 'audience',
@@ -723,8 +758,37 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
         ],
         value: preselected?.type.audience ?? checklists[0]?.type.audience ?? 'family',
         hint: 'پیام بله شامل لینک امن فرم است — پاسخ‌دهنده بدون ورود به پنل، فرم را وب پر می‌کند.',
-        span: 2
+        span: 2,
+        onChange: (val, inputs) => {
+          const show = isTeacherFlow(inputs.type_id?.value, val) ? '' : 'none';
+          for (const k of ['teacher_pick', 'teacher_new_name', 'teacher_new_class', 'teacher_new_contact']) {
+            const field = inputs[k]?.closest('.field');
+            if (field) field.style.display = show;
+          }
+          if (show === 'none' && inputs.teacher_pick) inputs.teacher_pick.value = '';
+        }
       },
+      {
+        name: 'teacher_pick',
+        label: 'انتخاب معلم — هر معلم لینک مستقل خودش را می‌گیرد',
+        type: 'select',
+        options: teacherOptions,
+        placeholder: '— معلم را انتخاب کنید —',
+        value: teachers.length === 1 ? teachers[0].id : '',
+        hint: 'پاسخ فرم با نام همین معلم روی پرونده ثبت می‌شود («پاسخ معلم: نام معلم»).',
+        span: 2,
+        onChange: (val, inputs) => {
+          const isNew = val === '__new__';
+          for (const k of ['teacher_new_name', 'teacher_new_class', 'teacher_new_contact']) {
+            const field = inputs[k]?.closest('.field');
+            if (field) field.style.display = isNew ? '' : 'none';
+          }
+          if (isNew && inputs.teacher_new_name) inputs.teacher_new_name.focus();
+        }
+      },
+      { name: 'teacher_new_name', label: 'نام و نام خانوادگی معلم تازه', type: 'text', span: 2, maxlength: 120 },
+      { name: 'teacher_new_class', label: 'کلاس/درس (اختیاری — مثل «چهارم ب — ریاضی»)', type: 'text', span: 2, maxlength: 120 },
+      { name: 'teacher_new_contact', label: 'راه ارتباطی معلم (اختیاری — تلفن/بله)', type: 'text', span: 2, maxlength: 60, ltr: true },
       {
         name: 'note',
         label: 'یادداشت برای گیرنده (اختیاری)',
@@ -736,22 +800,92 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
     onSubmit: async (v) => {
       const chosen = checklists.find((s) => s.type.id === v.type_id);
       if (!chosen) throw new Error('قالب نامعتبر است');
+      const teacherFlow = isTeacherFlow(v.type_id, v.audience);
+      let teacherName = null;
+      let teacherId = null;
+      if (teacherFlow) {
+        if (v.teacher_pick === '__new__') {
+          if (!v.teacher_new_name || v.teacher_new_name.trim().length < 2) {
+            throw new Error('نام و نام خانوادگی معلم تازه را بنویسید');
+          }
+          const added = await api.post(`/api/students/${student.id}/teachers`, {
+            name: v.teacher_new_name,
+            class_label: v.teacher_new_class || undefined,
+            contact: v.teacher_new_contact || undefined
+          });
+          teacherName = added.data.name;
+          teacherId = added.data.id;
+        } else if (v.teacher_pick) {
+          const t = teachers.find((x) => x.id === v.teacher_pick);
+          if (!t) throw new Error('معلم انتخابی پیدا نشد');
+          teacherName = t.name;
+          teacherId = t.id;
+        } else {
+          throw new Error('معلم فرم را انتخاب کنید — هر معلم لینک مستقل خودش را می‌گیرد');
+        }
+      }
+
       const created = await api.post(`/api/students/${student.id}/case-events`, {
         eventTypeId: chosen.type.id,
         values: {},
         draft: false
       });
-      const send = await api.post(`/api/case-events/${created.data.id}/send`, {
-        audience: v.audience,
-        note: v.note || null
-      });
-      if (send.data.sent > 0) {
-        toast(`پیام بله برای ${fa(send.data.sent)} نفر ارسال شد — نتیجه خودکار به پرونده برمی‌گردد`);
-      } else {
-        toast('همین حالا ارسال شده — برای یادآوری مجدد یک دقیقه بعد تلاش کنید', 'warning');
+      let send = null;
+      let link = null;
+      try {
+        send = await api.post(`/api/case-events/${created.data.id}/send`, {
+          audience: v.audience,
+          note: v.note || null,
+          teacher_name: teacherName,
+          teacher_id: teacherId
+        });
+        link = send.data?.link ?? null;
+        if (send.data.sent > 0) {
+          toast(`پیام بله برای ${fa(send.data.sent)} نفر ارسال شد — نتیجه خودکار به پرونده برمی‌گردد`);
+        } else {
+          toast('همین حالا ارسال شده — برای یادآوری مجدد یک دقیقه بعد تلاش کنید', 'warning');
+        }
+      } catch (err) {
+        // چت کلاس متصل نیست — لینک کپی‌شدنی معلم همچنان صادر می‌شود (مسیر T7)
+        if (!teacherName) throw err;
+        const issued = await api.post(`/api/case-events/${created.data.id}/teacher-link`, {
+          teacher_name: teacherName,
+          teacher_id: teacherId
+        });
+        link = issued.data?.link ?? null;
+        toast('چت کلاس در بله متصل نیست — لینک فرم آماده است؛ آن را کپی کنید و برای معلم بفرستید', 'warning');
       }
-      onSent?.(created.data, send.data);
+      onSent?.(created.data, send?.data ?? { sent: 0, targets: [], link });
+      // پنل نتیجه: لینک مستقل این معلم برای کپی (به‌خصوص وقتی چت متصل نیست)
+      if (teacherName && link) openTeacherLinkResult({ link, teacherName, student });
       return true;
     }
+  });
+}
+
+/** — T7: پنل نتیجهٔ «لینک مستقل معلم» — کپی با یک کلیک */
+function openTeacherLinkResult({ link, teacherName, student }) {
+  const copyBtn = el('button', { class: 'btn btn--soft btn--sm' }, icon('copy', 15), 'کپی لینک');
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      toast('لینک فرم کپی شد — برای معلم بفرستید', 'success');
+    } catch {
+      toast('کپی خودکار ممکن نشد — لینک را دستی انتخاب کنید', 'warning');
+    }
+  });
+  openModal({
+    title: `لینک فرم معلم — ${teacherName}`,
+    body: el('div', {},
+      el('div', { class: 'cell-sub', style: { marginBottom: 'var(--sp-2)' } },
+        `فرم «${studentLabel(student)}» برای این معلم ساخته شد؛ پاسخش با نام او روی پرونده ثبت می‌شود.`),
+      el('div', { class: 'field', style: { marginBottom: 'var(--sp-2)' } },
+        el('input', { class: 'input', type: 'text', readonly: true, dir: 'ltr', value: link, onclick: (e) => e.target.select() })),
+      el('div', { class: 'cell-sub' }, 'چند معلم = چند لینک مستقل — برای هر معلم، ارسال را تکرار کنید.')
+    ),
+    actions: [
+      () => copyBtn,
+      (close) => el('button', { class: 'btn btn--primary', onclick: close }, 'بستن')
+    ]
   });
 }
