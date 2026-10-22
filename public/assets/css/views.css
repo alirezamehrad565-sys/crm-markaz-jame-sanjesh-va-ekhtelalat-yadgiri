@@ -2871,6 +2871,19 @@ tr.wl-row--urgent > td:first-child {
 }
 .ot-baseline__label { color: var(--text-2); }
 .ot-baseline__value { font-weight: 700; color: var(--text-1); }
+.ot-baseline__reassess { margin-inline-start: auto; }
+
+/* m163 — بلوک تاشوی «پشتوانهٔ علمی و نحوهٔ استفاده» کارت خط پایه — بسته = صفر نویز */
+.rehab-fx-guide { margin-top: var(--sp-2, 8px); border-top: 1px dashed var(--line); padding-top: var(--sp-2, 8px); }
+.rehab-fx-guide > summary {
+  cursor: pointer; list-style: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--fs-xs, 12px); font-weight: 700; color: var(--text-2);
+}
+.rehab-fx-guide > summary::-webkit-details-marker { display: none; }
+.rehab-fx-guide > summary::after { content: '▾'; font-size: 10px; color: var(--text-3, var(--text-2)); }
+.rehab-fx-guide[open] > summary::after { content: '▴'; }
+.rehab-fx-guide__body { margin-top: 6px; display: flex; flex-direction: column; gap: 5px; }
 
 @media (max-width: 720px) {
   .ot-trend__row { grid-template-columns: 1fr; }

@@ -456,8 +456,10 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
  *  · منحنی محوشدن راهنما: توزیع سطح راهنمای «با کمک» هر جلسه
  *  · خط پایهٔ عملکردی (توانبخشی): شش حیطهٔ ce-rehab-fx-v1 با باند و سطح راهنما — مرجع مقایسه
  * بدون جلسه → حالت خالی؛ بدون progress (خطای واکشی) → null.
+ * m163 — onReassess: دکمهٔ «بازسنجی خط پایه» در سربرگ بلوک خط پایه (فقط توانبخشی + حق تصمیم)
+ * — بازسنجی ۸–۱۲ جلسه با مودال همان فرم؛ تک‌منبعِ خط پایه همین پنل است (حذف تکرار مرحلهٔ ۴).
  */
-export function otProgressPanel({ progress, protocolLabel = 'کاردرمانی ذهنی' }) {
+export function otProgressPanel({ progress, protocolLabel = 'کاردرمانی ذهنی', onReassess = null }) {
   if (!progress) return null;
   const { sessions, baseline, baselineSummary, baselineAt, summary } = progress;
   const faNum = (n) => fa(n);
@@ -495,7 +497,15 @@ export function otProgressPanel({ progress, protocolLabel = 'کاردرمانی 
     ? el('div', { class: 'ot-baseline' },
         el('div', { class: 'clx-sub__title' },
           'خط پایهٔ عملکردی',
-          baselineAt ? el('span', { class: 'cell-sub' }, formatJalaliDateTime(baselineAt)) : null),
+          baselineAt ? el('span', { class: 'cell-sub' }, formatJalaliDateTime(baselineAt)) : null,
+          // m163 — بازسنجی همان شش تکلیف (۸–۱۲ جلسه) — دکمه فقط با حق تصمیم از کارفرمای پنل
+          onReassess
+            ? el('button', {
+                class: 'btn btn--ghost btn--sm ot-baseline__reassess',
+                title: 'همان شش تکلیف — مقایسهٔ عدد خام و سطح راهنما با ثبت اول (بازسنجی ۸ تا ۱۲ جلسه)',
+                onclick: onReassess
+              }, icon('refresh', 13), 'بازسنجی خط پایه')
+            : null),
         baselineSummary ? el('div', { class: 'cell-sub' }, baselineSummary) : null,
         el('div', { class: 'ot-baseline__strip' },
           ...baseline.map((b) => el('span', { class: `ot-baseline__chip` , title: `${b.valueFa} — ${b.band} · سطح راهنما: ${b.prompt}` },
