@@ -7,6 +7,7 @@
 // همه توابع Element برمی‌گردانند؛ رنگ‌ها از CSS متغیر می‌خوانند.
 
 import { el } from './ui.js';
+import { fa } from './format.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -232,4 +233,63 @@ export function countUp(el_, value, { duration = 700, formatter = (v) => String(
     if (p < 1) requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+}
+
+// ─────────────── نمودار خطی (m164 — گزارش پیشرفت چک‌لیست‌محور) ───────────────
+
+/**
+ * نمودار خطی SVG چاپ‌پسند — بدون انیمیشن سنگین (خروجی چاپ باید کامل و قابل استناد باشد).
+ * ورودی: points: [{ x: برچسب محور, y: عدد, note? }] · yMin/yMax اختیاری · خطوط راهنما + نقاط + برچسب محور.
+ * محور زمان چپ→راست (قدیم→جدید) — قرارداد استاندارد نمودار روند حتی در متن RTL.
+ */
+export function lineChart({ points, yMin = 0, yMax = null, height = 190, valueFormatter = (v) => fa(Math.round(v)) }) {
+  const wrap = el('div', { class: 'chart chart--line' });
+  if (!points.length) {
+    wrap.appendChild(el('p', { class: 'chart__empty' }, 'داده‌ای برای نمایش نیست'));
+    return wrap;
+  }
+  const lo = yMin;
+  const hi = yMax ?? Math.max(...points.map((p) => p.y));
+  const span = Math.max(1e-9, hi - lo);
+  const W = Math.max(320, Math.min(760, points.length * 68));
+  const pad = { top: 14, right: 14, bottom: 26, left: 40 };
+  const node = svg('svg', {
+    viewBox: `0 0 ${W} ${height}`,
+    preserveAspectRatio: 'xMidYMid meet',
+    class: 'chart__svg',
+    role: 'img'
+  });
+  const plotH = height - pad.top - pad.bottom;
+  const plotW = W - pad.left - pad.right;
+  const yOf = (v) => pad.top + plotH * (1 - (v - lo) / span);
+  // خطوط راهنما — سه سطح با برچسب مقدار
+  for (const frac of [0, 0.5, 1]) {
+    const v = lo + span * frac;
+    const y = yOf(v);
+    node.appendChild(svg('line', { x1: pad.left, x2: W - pad.right, y1: y, y2: y, class: 'chart__grid' }));
+    const t = svg('text', { x: pad.left - 7, y: y + 4, class: 'chart__axis', 'text-anchor': 'end' });
+    t.textContent = valueFormatter(v);
+    node.appendChild(t);
+  }
+  const xOf = (i) => (points.length > 1
+    ? pad.left + (plotW * i) / (points.length - 1)
+    : pad.left + plotW / 2);
+  // خط روند + نقاط
+  const poly = points.map((p, i) => `${xOf(i).toFixed(1)},${yOf(p.y).toFixed(1)}`).join(' ');
+  node.appendChild(svg('polyline', { points: poly, class: 'chart__line', fill: 'none' }));
+  points.forEach((p, i) => {
+    const c = svg('circle', { cx: xOf(i).toFixed(1), cy: yOf(p.y).toFixed(1), r: 3.4, class: 'chart__dot' });
+    const ti = svg('title');
+    ti.textContent = `${p.x}: ${valueFormatter(p.y)}${p.note ? ` — ${p.note}` : ''}`;
+    c.appendChild(ti);
+    node.appendChild(c);
+    // برچسب محور X — تا ۱۲ نقطه همه؛ بیشتر → هر نقطهٔ زوج
+    if (points.length <= 12 || i % 2 === 0) {
+      const t = svg('text', { x: xOf(i).toFixed(1), y: height - 9, class: 'chart__axis', 'text-anchor': 'middle' });
+      t.textContent = p.x;
+      node.appendChild(t);
+    }
+  });
+  wrap.appendChild(node);
+  return wrap;
 }

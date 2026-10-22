@@ -459,7 +459,7 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
  * m163 — onReassess: دکمهٔ «بازسنجی خط پایه» در سربرگ بلوک خط پایه (فقط توانبخشی + حق تصمیم)
  * — بازسنجی ۸–۱۲ جلسه با مودال همان فرم؛ تک‌منبعِ خط پایه همین پنل است (حذف تکرار مرحلهٔ ۴).
  */
-export function otProgressPanel({ progress, protocolLabel = 'کاردرمانی ذهنی', onReassess = null }) {
+export function otProgressPanel({ progress, protocolLabel = 'کاردرمانی ذهنی', onReassess = null, studentId = null }) {
   if (!progress) return null;
   const { sessions, baseline, baselineSummary, baselineAt, summary } = progress;
   const faNum = (n) => fa(n);
@@ -526,7 +526,15 @@ export function otProgressPanel({ progress, protocolLabel = 'کاردرمانی 
       el('div', { class: 'card__title' }, icon('trendingUp', 16), 'پیشرفت جلسه به جلسه'),
       summary.sessions > 0 ? el('span', { class: 'badge badge--info' }, `${fa(summary.sessions)} جلسه`) : null,
       summary.sessions > 0 ? el('span', { class: 'badge badge--success' }, `تسلط تأییدشده: ${fa(summary.confirmedMastered)}`) : null,
-      summary.withHelp > 0 ? el('span', { class: 'badge badge--warning' }, `با کمک: ${fa(summary.withHelp)}`) : null
+      summary.withHelp > 0 ? el('span', { class: 'badge badge--warning' }, `با کمک: ${fa(summary.withHelp)}`) : null,
+      // m164 — ورود به گزارش چاپی پیشرفت (چک‌لیست‌محور + سنجه‌های علمی)
+      studentId
+        ? el('button', {
+            class: 'btn btn--ghost btn--sm print-hide',
+            title: 'گزارش چاپی پیشرفت (PDF) — چک‌لیست مهارتی + روند + محو راهنما + خط پایه/بازسنجی',
+            onclick: () => { location.hash = `#/students/${studentId}/progress-report`; }
+          }, icon('printer', 14), 'گزارش پیشرفت')
+        : null
     ),
     el('div', { class: 'card__body' },
       baselineBlock,
