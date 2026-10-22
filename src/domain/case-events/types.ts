@@ -295,6 +295,12 @@ export interface CaseEventsService {
    * type با کلید ce-sensory-chip-v1 در همان فراخوانی idempotent ensure می‌شود (بدون مایگریشن).
    */
   createSensoryChipEvent(studentId: string, input: { levels: Record<string, unknown> }, actor: AuthContext): Promise<CaseEventRecord>;
+  /**
+   * — T10/m153: ثبت چیپ هستهٔ خواندن (ابزار میکروی دوکلیکی مرحلهٔ مهارت‌ها — حالت SLD).
+   * مسیر اختصاصی — رویداد completed با تحلیل باند + پیشنهاد شرطی (advice_N در payload) ساخته می‌شود؛
+   * type با کلید ce-read-core-v1 در همان فراخوانی idempotent ensure می‌شود (بدون مایگریشن).
+   */
+  createReadCoreEvent(studentId: string, input: { levels: Record<string, unknown> }, actor: AuthContext): Promise<CaseEventRecord>;
   updateEvent(id: string, input: { values?: Record<string, string | number | null>; summary?: string }, actor: AuthContext): Promise<CaseEventRecord>;
   /** — نهایی‌سازی پیش‌نویس: اعتبارسنجی الزامی + هوک اقدام بعدی */
   finalizeEvent(id: string, actor: AuthContext): Promise<CaseEventRecord>;
