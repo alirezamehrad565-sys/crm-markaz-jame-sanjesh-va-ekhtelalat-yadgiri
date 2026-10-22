@@ -26,6 +26,16 @@ export interface WechslerEngineOutput {
     fsiq?: number | null;
     fsiqBand?: string | null;
     indexScatter?: number | null;
+    /**
+     * m159 — شاخص‌های چهارگانه (نمرهٔ استاندارد) برای قواعد هم‌گرایی پردازشی SLD.
+     * رویدادهای قدیمی بدون این فیلدها → null: قواعد جدید خاموش می‌مانند (پاریتی قدیمی‌ها).
+     */
+    vci?: { scaled?: number | null } | null;
+    pri?: { scaled?: number | null } | null;
+    wmi?: { scaled?: number | null } | null;
+    psi?: { scaled?: number | null } | null;
+    /** وضعیت شخصی گام ۵ — ضعف/قوت نسبت به میانگین شاخص‌های خود دانش‌آموز */
+    step5?: { strengths?: string[]; weaknesses?: string[] } | null;
   } | null;
 }
 

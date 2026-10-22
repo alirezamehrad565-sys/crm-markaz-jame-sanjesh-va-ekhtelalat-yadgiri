@@ -296,6 +296,37 @@ function psychometricsSection(view) {
     blocks.push(el('div', { style: { marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' } },
       ...ps.patterns.map((p) => el('div', { style: { fontSize: '12px', color: 'var(--ink-2, #555)' } }, icon('sparkles', 12), ' ', p.textFa))));
   }
+  // m159 — بلوک رویکرد پردازش اطلاعات: چهار مرحلهٔ پردازش با سطح هنجاری + وضعیت شخصی + دلالت آموزشی
+  const LEVEL_BADGE = { 'قوت': 'badge--success', 'متوسط': 'badge--neutral', 'مرزی': 'badge--warning', 'ضعف': 'badge--error' };
+  if ((ps.processing ?? []).length) {
+    const rows = ps.processing.map((p) => el('div', {
+      style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', padding: '6px 0', borderTop: '1px solid var(--line, rgba(128,128,128,.15))' }
+    },
+      el('strong', { style: { fontSize: '12px', minWidth: '150px' } }, `${p.fa} — ${fa(p.scaled)}`),
+      el('span', { class: `badge ${LEVEL_BADGE[p.level] ?? 'badge--neutral'}` }, `سطح هنجاری: ${p.level}`),
+      p.personal ? el('span', { class: 'badge badge--info' }, `گام ۵ (شخصی): ${p.personal}`) : null,
+      p.implicationFa ? el('span', { class: 'cell-sub', style: { flexBasis: '100%' } }, p.implicationFa) : null));
+    blocks.push(el('div', { style: { marginTop: '8px' } },
+      el('div', { style: { fontWeight: 700, fontSize: '12px', marginBottom: '4px' } }, icon('activity', 13), ' رویکرد پردازش اطلاعات'),
+      el('div', { style: { display: 'flex', flexDirection: 'column' } }, ...rows)));
+  }
+  // m159 — جهت‌گیری توان/کارایی (گپ ≥۱۰) — جملهٔ کامل در راهنمای چیپ
+  if (ps.abilityProficiency) {
+    const ap = ps.abilityProficiency;
+    blocks.push(el('div', { class: 'clx-chips', style: { marginTop: '6px' } },
+      el('span', {
+        class: ap.direction === 'proficiency_weaker' ? 'badge badge--warning' : 'badge badge--info',
+        title: ap.textFa
+      }, ap.direction === 'proficiency_weaker'
+        ? `توان بالاتر از کارایی — گپ ${fa(Math.abs(ap.gap))} نمره`
+        : `کارایی بالاتر از توان — گپ ${fa(Math.abs(ap.gap))} نمره`)));
+  }
+  // m159 — پراکندگی درون‌شاخص (≥۵) — تفسیر واحد شاخص با احتیاط
+  if ((ps.scatterWithin ?? []).length) {
+    blocks.push(el('div', { class: 'clx-chips', style: { marginTop: '6px' } },
+      ...ps.scatterWithin.map((s) => el('span', { class: 'badge badge--warning', title: s.textFa },
+        `پراکندگی درون‌شاخص ${s.fa}: ${fa(s.spread)} نمره`))));
+  }
   if (!blocks.length) return null;
   return el('div', {}, subTitle('brain', 'خوانش روان‌سنجی نیم‌رخ'), ...blocks);
 }

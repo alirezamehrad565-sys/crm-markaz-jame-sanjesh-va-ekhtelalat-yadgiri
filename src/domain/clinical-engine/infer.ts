@@ -115,6 +115,63 @@ export function anamnesisSignalsOf(event: EvidenceEvent | undefined): ClinicalSi
   return sortSignals(signals);
 }
 
+// ───────── هم‌گرایی پردازشی SLD — رویکرد پردازش اطلاعات (m159) ─────────
+
+/**
+ * قرارداد هم‌گرایی پردازشی سه هدف یادگیری با نیم‌رخ وکسلر (طرح m159 §۲):
+ *   خواندن  → فشار بر حافظهٔ کاری (حلقهٔ وابستهٔ شنیداری) و سرعت/خودکارسازی؛ تقابل: توان کلامی/استدلالی سالم
+ *   نوشتن   → فشار بر نگه‌داشت در حین تولید نوشتاری و خودکارسازی دیداری-حرکتی؛ تقابل: همان
+ *   حساب    → فشار بر حافظهٔ کاری عددی، استدلال دیداری-منطقی و خودکارسازی؛ تقابل: توان کلامی
+ * پایهٔ علمی: تعریف عملیاتی SLD با الگوی قوت/ضعف (Flanagan & Kaufman — کاربرد بالینی WISC-IV) +
+ * رویکرد پردازش اطلاعات (ورودی دیداری/شنیداری → نگه‌داشت → اجرای خودکار). WISC-IV proxy:
+ * PRI=ورودی/استدلال دیداری، VCI=دانش/زبان، WMI=نگه‌داشت، PSI=خودکارسازی.
+ *
+ * خطوط قرمز (m156 محفوظ):
+ *  - هرگز از نمرهٔ وکسلر تنها سناریو ساخته نمی‌شود — این تقویت فقط وقتی اعمال می‌شود که
+ *    شواهد تحصیلی همان هدف (چک‌لیست ملاکی/پروب) موجود باشد (گیت hasData حلقهٔ قواعد).
+ *  - مسیر فعال ID بر آن مقدم است — در idPathActive هیچ تقویتی اعمال نمی‌شود.
+ *  - متن‌ها «الگوی هم‌گرا/همسو»اند، نه تشخیص؛ جمع‌بندی با قضاوت درمانگر.
+ */
+interface SldProcessingSpec {
+  /** شاخص‌های مرتبط — ضعف هرکدام (هنجاری <۸۵ یا گام ۵ ضعف شخصی) شاهد هم‌گرایی است */
+  related: ('vci' | 'pri' | 'wmi' | 'psi')[];
+  /** شاخص‌های تقابل — سالم (≥۹۰ و بدون گام ۵ ضعف) جملهٔ «حفظ توان» را فعال می‌کند */
+  contrast: ('vci' | 'pri' | 'wmi' | 'psi')[];
+  faHead: string;
+  mechanism: string;
+}
+
+const SLD_FA_OF: Record<string, string> = { vci: 'درک کلامی', pri: 'استدلال ادراکی', wmi: 'حافظهٔ فعال', psi: 'سرعت پردازش' };
+
+const SLD_PROCESSING: Record<string, SldProcessingSpec> = {
+  dyslexia: {
+    related: ['wmi', 'psi'],
+    contrast: ['vci', 'pri'],
+    faHead: 'خواندن',
+    mechanism: 'فشار بر نگه‌داشت زبانی و خودکارسازی'
+  },
+  dysgraphia: {
+    related: ['wmi', 'psi'],
+    contrast: ['vci', 'pri'],
+    faHead: 'نوشتن',
+    mechanism: 'فشار بر نگه‌داشت در حین تولید نوشتاری و خودکارسازی دیداری-حرکتی'
+  },
+  dyscalculia: {
+    related: ['wmi', 'pri', 'psi'],
+    contrast: ['vci'],
+    faHead: 'حساب',
+    mechanism: 'فشار بر حافظهٔ کاری عددی، استدلال دیداری-منطقی و خودکارسازی'
+  }
+};
+
+/** ضعف شاخص مرتبط: هنجاری <۸۵ یا ضعف شخصی گام ۵ (نسبت به میانگین خود دانش‌آموز) */
+const isWeakRelated = (facts: { vci: number | null; pri: number | null; wmi: number | null; psi: number | null; step5Weak: string[] }, key: 'vci' | 'pri' | 'wmi' | 'psi'): boolean =>
+  (facts[key] !== null && facts[key] < 85) || facts.step5Weak.includes(key.toUpperCase());
+
+/** حفظ شاخص تقابل: هنجاری ≥۹۰ و بدون ضعف شخصی گام ۵ */
+const isIntactContrast = (facts: { vci: number | null; pri: number | null; wmi: number | null; psi: number | null; step5Weak: string[] }, key: 'vci' | 'pri' | 'wmi' | 'psi'): boolean =>
+  facts[key] !== null && facts[key] >= 90 && !facts.step5Weak.includes(key.toUpperCase());
+
 // ───────── ابزارهای کمکی ─────────
 
 function completed(events: EvidenceEvent[]): EvidenceEvent[] {
@@ -132,18 +189,38 @@ function faNum(n: number): string {
  * اطلاعات پروفایل وکسلر برای قواعد سیگنالی — فقط از profile (T1).
  * رویدادهای قدیمی بدون profile → همه null: قواعد جدید خاموش می‌مانند و رفتار امروز
  * بایت‌به‌بایت حفظ می‌شود (پاریتی پرونده‌های قدیمی).
+ * m159 — شاخص‌های چهارگانه + وضعیت شخصی گام ۵ برای قواعد هم‌گرایی پردازشی SLD افزوده شد.
  */
 function wechslerProfileFactsOf(event: EvidenceEvent | undefined): {
   fsiq: number | null;
   band: WechslerFsiqBand | null;
   indexScatter: number | null;
+  vci: number | null;
+  pri: number | null;
+  wmi: number | null;
+  psi: number | null;
+  step5Weak: string[];
 } {
   const profile = wechslerEngineOutputOf(event)?.profile ?? null;
+  const idxNum = (x?: { scaled?: number | null } | null): number | null =>
+    typeof x?.scaled === 'number' ? x.scaled : null;
+  // m159 — قرارداد m148-b محفوظ: بدون profile → همه null (قواعد باند/ID/انطباق خاموش).
+  // پوشش داده‌گِیری انطباق برای رویدادهای قدیمی عهدهٔ پیشنهادگر (T3) است که fsiq خام را می‌خواند.
   const fsiq = typeof profile?.fsiq === 'number' ? profile.fsiq : null;
   const bandRaw = typeof profile?.fsiqBand === 'string' ? profile.fsiqBand : null;
   const band = (bandRaw as WechslerFsiqBand | null) ?? (fsiq !== null ? fsiqBandOf(fsiq) : null);
   const scatter = typeof profile?.indexScatter === 'number' ? profile.indexScatter : null;
-  return { fsiq, band, indexScatter: scatter };
+  const step5Weak = (profile?.step5?.weaknesses ?? []).filter((k): k is string => typeof k === 'string');
+  return {
+    fsiq,
+    band,
+    indexScatter: scatter,
+    vci: idxNum(profile?.vci),
+    pri: idxNum(profile?.pri),
+    wmi: idxNum(profile?.wmi),
+    psi: idxNum(profile?.psi),
+    step5Weak
+  };
 }
 
 /** جدیدترین رویداد هر کلید ابزار (ورودی نزولی زمانی — اولین = جدیدترین) */
@@ -409,6 +486,17 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
   if (!idPathActive && wFacts.band === 'LOW_BORDER' && wFacts.indexScatter !== null && wFacts.indexScatter < SCATTER_UNIFORM_MAX) {
     nextActionsSet.add('نیم‌رخ هوشی در «مرز پایین» با شاخص‌های یکنواخت است — بدون برچسب تشخیصی، پایش دوره‌ای (شش‌ماهه) پیشنهاد می‌شود.');
   }
+  // ── m159 — سناریوهای تکمیلی ID ──
+  // الف) FSIQ ۷۱–۷۵ + انطباق «پایین» — با احتساب خطای استاندارد اندازه‌گیری وکسلر (SEM ≈ ۳ نمره؛
+  // بازهٔ اطمینان ۹۵٪ ≈ ±۶٫۶) نمرهٔ ۷۵ می‌تواند توان واقعی ~۷۰ باشد؛ ملاک عملیاتی DSM «تقریباً ۷۰ یا کمتر»
+  // → پرچم ارجاع، نه فعال‌سازی مسیر ID.
+  if (!idPathActive && wFacts.fsiq !== null && wFacts.fsiq >= 71 && wFacts.fsiq <= 75 && adapt === 'low') {
+    referralFlags.push('هوش‌بهر کل ۷۱–۷۵ همراه انطباق روزمرهٔ «پایین» است — با احتساب خطای استاندارد اندازه‌گیری وکسلر (SEM حدود ۳ نمره)، ناتوانی هوشی رد نمی‌شود؛ ارزیابی تخصصی انطباق و مشورت ارجاع لازم است.');
+  }
+  // ب) FSIQ در بازهٔ ID ولی انطباق ثبت‌نشده → اقدام بعدی؛ تفکیک مسیر ID از دیرآموزی به سنجهٔ انطباق وابسته است
+  if (wFacts.fsiq !== null && wFacts.fsiq <= ID_PATH_MAX_FSIQ && adapt === 'unknown' && wEvent) {
+    nextActionsSet.add('هوش‌بهر کل ۷۰ یا کمتر است ولی سنجهٔ انطباق روزمره ثبت نشده — تفکیک مسیر ناتوانی هوشی از دیرآموزی به ثبت آن وابسته است (فرم جامع خانواده).');
+  }
   // جمع‌آوری منابع هم‌گرایی (T6 — در همین یک محاسبه؛ ماتریس هرگز به UI نمی‌آید)
   const convergenceMap = new Map<string, { positive: ConvergenceSource[]; data: ConvergenceSource[] }>();
 
@@ -523,6 +611,32 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
           // هر دو نامزد از رویداد وکسلر می‌آیند — تقویتِ اعمال‌شده = شاهد مثبت منبع «آزمون»
           noteSource(WECHSLER_W4_EVENT_KEY, true);
         }
+      }
+    }
+
+    // ── m159 — هم‌گرایی پردازشی SLD (رویکرد پردازش اطلاعات) ──
+    // شرط‌های فعال‌شدن (هر سه لازم): ۱) هدف یکی از سه هدف یادگیری؛ ۲) شواهد تحصیلی همان هدف
+    // موجود است (گیت hasData بالا — چک‌لیست ملاکی/پروب)؛ ۳) پروفایل وکسلر با شاخص‌های عددی موجود
+    // و مسیر ID فعال نیست. ساختار «تک‌تقویت» مثل دیرآموزی — +۱ امتیاز، هرگز جمع‌شونده.
+    const sldSpec = SLD_PROCESSING[ruleSet.targetKey];
+    if (sldSpec && !idPathActive && wFacts.fsiq !== null) {
+      const weakRel = sldSpec.related.filter((k) => isWeakRelated(wFacts, k));
+      if (weakRel.length) {
+        const weakFa = weakRel.map((k) => SLD_FA_OF[k]).join(' و ');
+        const intact = sldSpec.contrast.filter((k) => isIntactContrast(wFacts, k));
+        const contrastFa = intact.map((k) => SLD_FA_OF[k]).join(' و ');
+        const bifNote = wFacts.fsiq >= FSIQ_BAND_BIF.min && wFacts.fsiq <= FSIQ_BAND_BIF.max
+          ? ' (هوش‌بهر کل در بازهٔ مرزی است — تعبیر با احتیاط و در کنار شواهد دیرآموزی)'
+          : '';
+        addFa(intact.length
+          ? `در نیم‌رخ وکسلر، ${weakFa} پایین‌تر از حد انتظار است و ${contrastFa} حفظ شده است — الگوی هم‌گرا با دشواری ${sldSpec.faHead} (رویکرد پردازش اطلاعات: ${sldSpec.mechanism})؛ شاهد پشتیبان ملاک‌های تحصیلی.${bifNote}`
+          : `در نیم‌رخ وکسلر ${weakFa} پایین است — همسو با دشواری ${sldSpec.faHead} (${sldSpec.mechanism})؛ چون نیم‌رخ کلی ضعیف است، تعبیر اختصاصی محدودتر می‌ماند.${bifNote}`);
+        score += 1;
+        // تقویت اعمال‌شده = شاهد مثبت منبع «آزمون شناختی» در هم‌گرایی
+        noteSource(WECHSLER_W4_EVENT_KEY, true);
+      } else if (wEvent?.payload || wEvent?.analysis) {
+        // وکسلر داده دارد ولی پردازشِ هم‌جهت ندارد — منبع با دادهٔ بی‌نشانه (مبنای حالت «واگرا»)
+        noteSource(WECHSLER_W4_EVENT_KEY, false);
       }
     }
 

@@ -1,15 +1,15 @@
 // engine.js — WISC-IV Wechsler analysis engine (EXTRACTED, phase 0 / task 39-d1)
 //
-// Source: extracted verbatim from worker/bundle.js lines 21694-23418
+// Source: extracted verbatim from worker/bundle.js lines 21694-23489
 // at commit 365d103 ("m130 (1.00.9)"), engineVersion "m98". Extraction date: 2026-10-20.
 //
 // Region layout (bundle lines):
-//   21694-23229   pure computation core: subtest definitions, norms (NORMS = norms_default,
+//   21694-23300   pure computation core: subtest definitions, norms (NORMS = norms_default,
 //         a 71 KB data line), index/cluster/GAI/step5 math, hypothesis activation
 //         (T8/m149: فقط روان‌سنجی + شواهد {id, weight, clues} — لایهٔ تفسیر موازی
 //         outcomes/main/comorbid/binaryScenarios/treatments/queue حذف شده است),
 //         validation, flags, runWechslerAnalysis (engine entry point).
-//   23230-23418   pure payload glue: WISC4_EVENT_KEY, RAW_FIELD_MAP (raw_si..raw_ca + legacy
+//   23301-23489   pure payload glue: WISC4_EVENT_KEY, RAW_FIELD_MAP (raw_si..raw_ca + legacy
 //         raw_sim/raw_voc/raw_com/raw_pc), extractRawScores, Jalali/Gregorian date
 //         parsing, compactWechslerOutput, applyWechslerEngineToPayload (the
 //         form-payload I/O contract), summarySafePayload.
@@ -1388,6 +1388,67 @@ function psychometricProfile(result) {
       gaps.push({ key: `${hi}_${lo}`, fa: `${faName(hi)} / ${faName(lo)}`, diff: d, textFa: `فاصلهٔ ${faName(hi)} و ${faName(lo)} برابر ${faNum3(d)} نمره است — ${faName(hi)} بالاتر از ${faName(lo)} قرار دارد.` });
     }
   }
+  // ─── m159 — بلوک رویکرد پردازش اطلاعات: چهار مرحلهٔ پردازش با سطح هنجاری + وضعیت شخصی گام ۵ ───
+  // قرارداد سطح هنجاری (نمرهٔ استاندارد شاخص): ≥۱۱۰ قوت · ۹۰–۱۰۹ متوسط · ۸۵–۸۹ مرزی · <۸۵ ضعف
+  // دلالت آموزشی هر حوزه ثابت و مستند است؛ هیچ برچسب تشخیصی صادر نمی‌شود.
+  const PROCESS_LEVEL = [
+    { min: 110, fa: "قوت" },
+    { min: 90, fa: "متوسط" },
+    { min: 85, fa: "مرزی" },
+    { min: -Infinity, fa: "ضعف" }
+  ];
+  const PROCESS_IMPLICATION = {
+    VCI: "دانش واژگانی و استدلال کلامی — پایهٔ فهم متن، درس‌های مفهومی و بیان شفاهی.",
+    PRI: "استدلال دیداری-منطقی — پایهٔ ریاضی مفهومی، درک نمودار و حل مسئلهٔ غیرکلامی.",
+    WMI: "نگه‌داشتن و کار با اطلاعات در ذهن — پایهٔ محاسبهٔ ذهنی، پیگیری دستور چندمرحله‌ای و روانی‌خوانی.",
+    PSI: "سرعت و خودکارسازی کار دیداری-حرکتی ساده — پایهٔ تکمیل به‌موقع برگه‌ها و یادداشت‌برداری."
+  };
+  const step5Map = {};
+  for (const r of snap.s5rows ?? []) {
+    if (r.strength === STRENGTH || r.strength === WEAKNESS)
+      step5Map[r.key] = r.strength;
+  }
+  const processing = indices.map((ix) => {
+    const level = (PROCESS_LEVEL.find((c) => ix.scaled >= c.min) ?? PROCESS_LEVEL[PROCESS_LEVEL.length - 1]).fa;
+    return {
+      key: ix.key,
+      fa: ix.fa,
+      scaled: ix.scaled,
+      percentile: ix.percentile,
+      level,
+      personal: step5Map[ix.key] ?? "",
+      implicationFa: PROCESS_IMPLICATION[ix.key] ?? ""
+    };
+  });
+  // ─── m159 — جهت‌گیری توان/کارایی: میانگین شاخص‌های توان (VCI/PRI) در برابر کارایی (WMI/PSI) ───
+  // گپ ≥۱۰ نمرهٔ استاندارد معنادار است (همان آستانهٔ گپ‌های میان‌شاخصی)؛ بدون ادعای شاخص CPI
+  // به‌دلیل نبود جدول هنجار آن — صادقانه «میانگین شاخص‌ها» نامیده می‌شود.
+  const abilG = [vals.VCI, vals.PRI].filter((x) => x !== void 0);
+  const profG = [vals.WMI, vals.PSI].filter((x) => x !== void 0);
+  let abilityProficiency = null;
+  if (abilG.length && profG.length) {
+    const am = abilG.reduce((a, b) => a + b, 0) / abilG.length;
+    const pm = profG.reduce((a, b) => a + b, 0) / profG.length;
+    const gap2 = Math.round((am - pm) * 10) / 10;
+    if (Math.abs(gap2) >= 10) {
+      abilityProficiency = {
+        abilityMean: Math.round(am * 10) / 10,
+        proficiencyMean: Math.round(pm * 10) / 10,
+        gap: gap2,
+        direction: gap2 > 0 ? "proficiency_weaker" : "ability_weaker",
+        textFa: gap2 > 0 ? `میانگین شاخص‌های توان (درک کلامی/استدلال ادراکی، میانگین ${faNum3(Math.round(am * 10) / 10)}) به میزان ${faNum3(Math.abs(gap2))} نمره بالاتر از میانگین کارایی (حافظهٔ فعال/سرعت پردازش، میانگین ${faNum3(Math.round(pm * 10) / 10)}) است — نیم‌رخ «توان بالاتر از کارایی» دارد؛ انتظار می‌رود کار کلاسیِ نیازمند سرعت، خودکارسازی و نگه‌داشت، بیشتر از فهم مفاهیم فشار ببیند.` : `میانگین شاخص‌های کارایی (حافظهٔ فعال/سرعت پردازش، میانگین ${faNum3(Math.round(pm * 10) / 10)}) به میزان ${faNum3(Math.abs(gap2))} نمره بالاتر از میانگین توان (درک کلامی/استدلال ادراکی، میانگین ${faNum3(Math.round(am * 10) / 10)}) است — نیم‌رخ «کارایی بالاتر از توان» دارد؛ فهم مفاهیم نسبت به کارِ نیازمند سرعت و بار حافظه‌ای محتمل‌تر است.`
+      };
+    }
+  }
+  // ─── m159 — پراکندگی درون‌شاخص (از شاخص‌های روایی خود موتور) — تفسیر واحد شاخص با احتیاط ───
+  // همان برش scatterValidity موتور: پخش خرده‌آزمون‌های هستهٔ هر شاخص ≥۵ → شاخص را یکنواخت نمی‌داند
+  const scatterWithin = [];
+  for (const k of ["VCI", "PRI", "WMI", "PSI"]) {
+    const sp = snap.spreads?.[k];
+    if (typeof sp === "number" && sp >= 5) {
+      scatterWithin.push({ key: k, fa: faName(k), spread: sp, textFa: `پراکندگی خرده‌آزمون‌های ${faName(k)} برابر ${faNum3(sp)} نمره است (حد تفسیر یکنواخت: کمتر از ۵) — این شاخص تصویر یکنواخت از حوزهٔ خود نمی‌دهد و بهتر است خرده‌آزمون‌هایش جداگانه خوانده شوند.` });
+    }
+  }
   // الگوهای نمره‌ای — توصیف الگوی نمرهٔ ترازی خرده‌آزمون‌ها؛ بدون برچسب تشخیصی
   const sub = (code) => {
     const t = (snap.subtests ?? []).find((s) => s.code === code);
@@ -1422,6 +1483,13 @@ function psychometricProfile(result) {
     sentences.push(`${st.fa} نسبت به میانگین شاخص‌های خود دانش‌آموز ${faNum3(st.diff)} نمره قوت معنادار دارد (گام ۵).`);
   for (const g of gaps)
     sentences.push(g.textFa);
+  // m159 — جملهٔ توان/کارایی و پراکندگی درون‌شاخص در خوانش یک‌پارچه (بلوک رندر اختصاصی هم دارند)
+  if (abilityProficiency)
+    sentences.push(abilityProficiency.textFa);
+  if (scatterWithin.length) {
+    const names2 = scatterWithin.map((s2) => s2.fa).join(" و ");
+    sentences.push(`${names2} پراکندگی درون‌شاخص دارند — خوانش شاخصی با احتیاط و خرده‌آزمون‌به‌خرده‌آزمون انجام شود.`);
+  }
   // الگوهای نمره‌ای (ACID/CAD) در بلوک اختصاصی خودشان رندر می‌شوند — در خوانش یک‌پارچه تکرار نمی‌شوند
   if (!sentences.length)
     sentences.push("نیم‌رخ محاسبه‌شده کامل نیست — با ثبت خرده‌آزمون‌های بیشتری خوانش کامل می‌شود.");
@@ -1432,6 +1500,9 @@ function psychometricProfile(result) {
     strengths,
     weaknesses,
     gaps,
+    processing,
+    abilityProficiency,
+    scatterWithin,
     patterns,
     validityNotes,
     summaryFa: sentences.join(" ")

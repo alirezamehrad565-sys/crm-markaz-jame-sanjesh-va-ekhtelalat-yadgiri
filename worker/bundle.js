@@ -4151,8 +4151,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.31";
-var APP_MILESTONE = "m157";
+var APP_VERSION = "1.00.33";
+var APP_MILESTONE = "m159";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -23049,6 +23049,67 @@ function psychometricProfile(result) {
       gaps.push({ key: `${hi}_${lo}`, fa: `${faName(hi)} / ${faName(lo)}`, diff: d, textFa: `فاصلهٔ ${faName(hi)} و ${faName(lo)} برابر ${faNum3(d)} نمره است — ${faName(hi)} بالاتر از ${faName(lo)} قرار دارد.` });
     }
   }
+  // ─── m159 — بلوک رویکرد پردازش اطلاعات: چهار مرحلهٔ پردازش با سطح هنجاری + وضعیت شخصی گام ۵ ───
+  // قرارداد سطح هنجاری (نمرهٔ استاندارد شاخص): ≥۱۱۰ قوت · ۹۰–۱۰۹ متوسط · ۸۵–۸۹ مرزی · <۸۵ ضعف
+  // دلالت آموزشی هر حوزه ثابت و مستند است؛ هیچ برچسب تشخیصی صادر نمی‌شود.
+  const PROCESS_LEVEL = [
+    { min: 110, fa: "قوت" },
+    { min: 90, fa: "متوسط" },
+    { min: 85, fa: "مرزی" },
+    { min: -Infinity, fa: "ضعف" }
+  ];
+  const PROCESS_IMPLICATION = {
+    VCI: "دانش واژگانی و استدلال کلامی — پایهٔ فهم متن، درس‌های مفهومی و بیان شفاهی.",
+    PRI: "استدلال دیداری-منطقی — پایهٔ ریاضی مفهومی، درک نمودار و حل مسئلهٔ غیرکلامی.",
+    WMI: "نگه‌داشتن و کار با اطلاعات در ذهن — پایهٔ محاسبهٔ ذهنی، پیگیری دستور چندمرحله‌ای و روانی‌خوانی.",
+    PSI: "سرعت و خودکارسازی کار دیداری-حرکتی ساده — پایهٔ تکمیل به‌موقع برگه‌ها و یادداشت‌برداری."
+  };
+  const step5Map = {};
+  for (const r of snap.s5rows ?? []) {
+    if (r.strength === STRENGTH || r.strength === WEAKNESS)
+      step5Map[r.key] = r.strength;
+  }
+  const processing = indices.map((ix) => {
+    const level = (PROCESS_LEVEL.find((c) => ix.scaled >= c.min) ?? PROCESS_LEVEL[PROCESS_LEVEL.length - 1]).fa;
+    return {
+      key: ix.key,
+      fa: ix.fa,
+      scaled: ix.scaled,
+      percentile: ix.percentile,
+      level,
+      personal: step5Map[ix.key] ?? "",
+      implicationFa: PROCESS_IMPLICATION[ix.key] ?? ""
+    };
+  });
+  // ─── m159 — جهت‌گیری توان/کارایی: میانگین شاخص‌های توان (VCI/PRI) در برابر کارایی (WMI/PSI) ───
+  // گپ ≥۱۰ نمرهٔ استاندارد معنادار است (همان آستانهٔ گپ‌های میان‌شاخصی)؛ بدون ادعای شاخص CPI
+  // به‌دلیل نبود جدول هنجار آن — صادقانه «میانگین شاخص‌ها» نامیده می‌شود.
+  const abilG = [vals.VCI, vals.PRI].filter((x) => x !== void 0);
+  const profG = [vals.WMI, vals.PSI].filter((x) => x !== void 0);
+  let abilityProficiency = null;
+  if (abilG.length && profG.length) {
+    const am = abilG.reduce((a, b) => a + b, 0) / abilG.length;
+    const pm = profG.reduce((a, b) => a + b, 0) / profG.length;
+    const gap2 = Math.round((am - pm) * 10) / 10;
+    if (Math.abs(gap2) >= 10) {
+      abilityProficiency = {
+        abilityMean: Math.round(am * 10) / 10,
+        proficiencyMean: Math.round(pm * 10) / 10,
+        gap: gap2,
+        direction: gap2 > 0 ? "proficiency_weaker" : "ability_weaker",
+        textFa: gap2 > 0 ? `میانگین شاخص‌های توان (درک کلامی/استدلال ادراکی، میانگین ${faNum3(Math.round(am * 10) / 10)}) به میزان ${faNum3(Math.abs(gap2))} نمره بالاتر از میانگین کارایی (حافظهٔ فعال/سرعت پردازش، میانگین ${faNum3(Math.round(pm * 10) / 10)}) است — نیم‌رخ «توان بالاتر از کارایی» دارد؛ انتظار می‌رود کار کلاسیِ نیازمند سرعت، خودکارسازی و نگه‌داشت، بیشتر از فهم مفاهیم فشار ببیند.` : `میانگین شاخص‌های کارایی (حافظهٔ فعال/سرعت پردازش، میانگین ${faNum3(Math.round(pm * 10) / 10)}) به میزان ${faNum3(Math.abs(gap2))} نمره بالاتر از میانگین توان (درک کلامی/استدلال ادراکی، میانگین ${faNum3(Math.round(am * 10) / 10)}) است — نیم‌رخ «کارایی بالاتر از توان» دارد؛ فهم مفاهیم نسبت به کارِ نیازمند سرعت و بار حافظه‌ای محتمل‌تر است.`
+      };
+    }
+  }
+  // ─── m159 — پراکندگی درون‌شاخص (از شاخص‌های روایی خود موتور) — تفسیر واحد شاخص با احتیاط ───
+  // همان برش scatterValidity موتور: پخش خرده‌آزمون‌های هستهٔ هر شاخص ≥۵ → شاخص را یکنواخت نمی‌داند
+  const scatterWithin = [];
+  for (const k of ["VCI", "PRI", "WMI", "PSI"]) {
+    const sp = snap.spreads?.[k];
+    if (typeof sp === "number" && sp >= 5) {
+      scatterWithin.push({ key: k, fa: faName(k), spread: sp, textFa: `پراکندگی خرده‌آزمون‌های ${faName(k)} برابر ${faNum3(sp)} نمره است (حد تفسیر یکنواخت: کمتر از ۵) — این شاخص تصویر یکنواخت از حوزهٔ خود نمی‌دهد و بهتر است خرده‌آزمون‌هایش جداگانه خوانده شوند.` });
+    }
+  }
   // الگوهای نمره‌ای — توصیف الگوی نمرهٔ ترازی خرده‌آزمون‌ها؛ بدون برچسب تشخیصی
   const sub = (code) => {
     const t = (snap.subtests ?? []).find((s) => s.code === code);
@@ -23083,6 +23144,13 @@ function psychometricProfile(result) {
     sentences.push(`${st.fa} نسبت به میانگین شاخص‌های خود دانش‌آموز ${faNum3(st.diff)} نمره قوت معنادار دارد (گام ۵).`);
   for (const g of gaps)
     sentences.push(g.textFa);
+  // m159 — جملهٔ توان/کارایی و پراکندگی درون‌شاخص در خوانش یک‌پارچه (بلوک رندر اختصاصی هم دارند)
+  if (abilityProficiency)
+    sentences.push(abilityProficiency.textFa);
+  if (scatterWithin.length) {
+    const names2 = scatterWithin.map((s2) => s2.fa).join(" و ");
+    sentences.push(`${names2} پراکندگی درون‌شاخص دارند — خوانش شاخصی با احتیاط و خرده‌آزمون‌به‌خرده‌آزمون انجام شود.`);
+  }
   // الگوهای نمره‌ای (ACID/CAD) در بلوک اختصاصی خودشان رندر می‌شوند — در خوانش یک‌پارچه تکرار نمی‌شوند
   if (!sentences.length)
     sentences.push("نیم‌رخ محاسبه‌شده کامل نیست — با ثبت خرده‌آزمون‌های بیشتری خوانش کامل می‌شود.");
@@ -23093,6 +23161,9 @@ function psychometricProfile(result) {
     strengths,
     weaknesses,
     gaps,
+    processing,
+    abilityProficiency,
+    scatterWithin,
     patterns,
     validityNotes,
     summaryFa: sentences.join(" ")
@@ -28714,13 +28785,18 @@ __name(faNumCe, "faNumCe");
 __name2(faNumCe, "faNumCe");
 // اطلاعات پروفایل وکسلر برای قواعد سیگنالی — فقط از profile (T1)
 // رویدادهای قدیمی بدون profile → همه null: قواعد جدید خاموش می‌مانند (پاریتی پرونده‌های قدیمی)
+// m159 — شاخص‌های چهارگانه + وضعیت شخصی گام ۵ برای قواعد هم‌گرایی پردازشی SLD افزوده شد
 function wechslerProfileFactsOf(event) {
   const profile = wechslerEngineOutputOf(event)?.profile ?? null;
+  const idxNum = (x) => typeof x?.scaled === "number" ? x.scaled : null;
+  // m159 — قرارداد m148-b محفوظ: بدون profile → همه null (قواعد باند/ID/انطباق خاموش)؛
+  // پوشش داده‌گِیری انطباق برای رویدادهای قدیمی عهدهٔ پیشنهادگر (T3) است.
   const fsiq = typeof profile?.fsiq === "number" ? profile.fsiq : null;
   const bandRaw = typeof profile?.fsiqBand === "string" ? profile.fsiqBand : null;
   const band = bandRaw ?? (fsiq !== null ? fsiqBandOf(fsiq) : null);
   const scatter = typeof profile?.indexScatter === "number" ? profile.indexScatter : null;
-  return { fsiq, band, indexScatter: scatter };
+  const step5Weak = (profile?.step5?.weaknesses ?? []).filter((k) => typeof k === "string");
+  return { fsiq, band, indexScatter: scatter, vci: idxNum(profile?.vci), pri: idxNum(profile?.pri), wmi: idxNum(profile?.wmi), psi: idxNum(profile?.psi), step5Weak };
 }
 __name(wechslerProfileFactsOf, "wechslerProfileFactsOf");
 __name2(wechslerProfileFactsOf, "wechslerProfileFactsOf");
@@ -28844,6 +28920,18 @@ function anamnesisFlagFor(targetKey, event) {
 }
 __name(anamnesisFlagFor, "anamnesisFlagFor");
 __name2(anamnesisFlagFor, "anamnesisFlagFor");
+
+// ─── m159 — هم‌گرایی پردازشی SLD (رویکرد پردازش اطلاعات) — آینهٔ infer.ts ───
+// خطوط قرمز (m156 محفوظ): هرگز از نمرهٔ وکسلر تنها سناریو ساخته نمی‌شود (فقط با شواهد تحصیلی
+// هم‌زمان — گیت hasData حلقهٔ قواعد)؛ مسیر فعال ID بر آن مقدم است؛ متن‌ها «هم‌گرا/همسو»اند نه تشخیص.
+var SLD_FA_OF = { vci: "درک کلامی", pri: "استدلال ادراکی", wmi: "حافظهٔ فعال", psi: "سرعت پردازش" };
+var SLD_PROCESSING = {
+  dyslexia: { related: ["wmi", "psi"], contrast: ["vci", "pri"], faHead: "خواندن", mechanism: "فشار بر نگه‌داشت زبانی و خودکارسازی" },
+  dysgraphia: { related: ["wmi", "psi"], contrast: ["vci", "pri"], faHead: "نوشتن", mechanism: "فشار بر نگه‌داشت در حین تولید نوشتاری و خودکارسازی دیداری-حرکتی" },
+  dyscalculia: { related: ["wmi", "pri", "psi"], contrast: ["vci"], faHead: "حساب", mechanism: "فشار بر حافظهٔ کاری عددی، استدلال دیداری-منطقی و خودکارسازی" }
+};
+var isWeakRelated = (facts, key) => (facts[key] !== null && facts[key] < 85) || facts.step5Weak.includes(key.toUpperCase());
+var isIntactContrast = (facts, key) => facts[key] !== null && facts[key] >= 90 && !facts.step5Weak.includes(key.toUpperCase());
 
 // ─── T3 (m147) — پیشنهادگر چک‌لیست: ۱۴ قاعدهٔ §۲.۴ سند m146 + سناریوی دیرآموز §۳.۱ طرح واحد ───
 // آینهٔ src/domain/clinical-engine/recommender.ts — تابع خالص و بازتولیدپذیر؛ بدون I/O.
@@ -29449,6 +29537,17 @@ function runInference(events, options = {}) {
   if (!idPathActive && wFacts.band === "LOW_BORDER" && wFacts.indexScatter !== null && wFacts.indexScatter < SCATTER_UNIFORM_MAX) {
     nextActionsSet.add("نیم‌رخ هوشی در «مرز پایین» با شاخص‌های یکنواخت است — بدون برچسب تشخیصی، پایش دوره‌ای (شش‌ماهه) پیشنهاد می‌شود.");
   }
+  // ── m159 — سناریوهای تکمیلی ID ──
+  // الف) FSIQ ۷۱–۷۵ + انطباق «پایین» — با احتساب خطای استاندارد اندازه‌گیری وکسلر (SEM ≈ ۳ نمره؛
+  // بازهٔ اطمینان ۹۵٪ ≈ ±۶٫۶) نمرهٔ ۷۵ می‌تواند توان واقعی ~۷۰ باشد؛ ملاک عملیاتی DSM «تقریباً ۷۰ یا کمتر»
+  // → پرچم ارجاع، نه فعال‌سازی مسیر ID.
+  if (!idPathActive && wFacts.fsiq !== null && wFacts.fsiq >= 71 && wFacts.fsiq <= 75 && adapt === "low") {
+    referralFlags.push("هوش‌بهر کل ۷۱–۷۵ همراه انطباق روزمرهٔ «پایین» است — با احتساب خطای استاندارد اندازه‌گیری وکسلر (SEM حدود ۳ نمره)، ناتوانی هوشی رد نمی‌شود؛ ارزیابی تخصصی انطباق و مشورت ارجاع لازم است.");
+  }
+  // ب) FSIQ در بازهٔ ID ولی انطباق ثبت‌نشده → اقدام بعدی؛ تفکیک مسیر ID از دیرآموزی به سنجهٔ انطباق وابسته است
+  if (wFacts.fsiq !== null && wFacts.fsiq <= ID_PATH_MAX_FSIQ && adapt === "unknown" && wEvent) {
+    nextActionsSet.add("هوش‌بهر کل ۷۰ یا کمتر است ولی سنجهٔ انطباق روزمره ثبت نشده — تفکیک مسیر ناتوانی هوشی از دیرآموزی به ثبت آن وابسته است (فرم جامع خانواده).");
+  }
   // جمع‌آوری منابع هم‌گرایی (T6 — در همین یک محاسبه؛ ماتریس هرگز به UI نمی‌آید)
   const convergenceMap = new Map();
   for (const ruleSet of RULES) {
@@ -29568,6 +29667,24 @@ function runInference(events, options = {}) {
           // هر دو نامزد (قاعدهٔ خام fsiq / سیگنال باند پروفایل) از رویداد وکسلر می‌آیند — شاهد مثبت منبع «آزمون»
           noteSource("ce-wechsler-w4-v1", true);
         }
+      }
+    }
+    // ── m159 — هم‌گرایی پردازشی SLD (رویکرد پردازش اطلاعات) — آینهٔ infer.ts ──
+    // شرط‌ها: هدف یادگیری + شواهد تحصیلی موجود (گیت hasData) + پروفایل با FSIQ + مسیر ID فعال نیست.
+    // ساختار تک‌تقویت (+۱) — هرگز جمع‌شونده؛ بدون شاهد هم‌جهت، وکسلر فقط منبع بی‌نشانه ثبت می‌شود.
+    const sldSpec = SLD_PROCESSING[ruleSet.targetKey];
+    if (sldSpec && !idPathActive && wFacts.fsiq !== null) {
+      const weakRel = sldSpec.related.filter((k) => isWeakRelated(wFacts, k));
+      if (weakRel.length) {
+        const weakFa = weakRel.map((k) => SLD_FA_OF[k]).join(" و ");
+        const intact = sldSpec.contrast.filter((k) => isIntactContrast(wFacts, k));
+        const contrastFa = intact.map((k) => SLD_FA_OF[k]).join(" و ");
+        const bifNote = wFacts.fsiq >= FSIQ_BAND_BIF.min && wFacts.fsiq <= FSIQ_BAND_BIF.max ? " (هوش‌بهر کل در بازهٔ مرزی است — تعبیر با احتیاط و در کنار شواهد دیرآموزی)" : "";
+        addFa(intact.length ? `در نیم‌رخ وکسلر، ${weakFa} پایین‌تر از حد انتظار است و ${contrastFa} حفظ شده است — الگوی هم‌گرا با دشواری ${sldSpec.faHead} (رویکرد پردازش اطلاعات: ${sldSpec.mechanism})؛ شاهد پشتیبان ملاک‌های تحصیلی.${bifNote}` : `در نیم‌رخ وکسلر ${weakFa} پایین است — همسو با دشواری ${sldSpec.faHead} (${sldSpec.mechanism})؛ چون نیم‌رخ کلی ضعیف است، تعبیر اختصاصی محدودتر می‌ماند.${bifNote}`);
+        score += 1;
+        noteSource("ce-wechsler-w4-v1", true);
+      } else if (wEvent?.payload || wEvent?.analysis) {
+        noteSource("ce-wechsler-w4-v1", false);
       }
     }
     // پرچم شرح‌حال هدف‌محور (w۱) — نسخهٔ ۳ ترجیح دارد؛ بی‌نسخهٔ ۳، نسخهٔ ۲ با هیوریستیک امروز
