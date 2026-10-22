@@ -32937,7 +32937,9 @@ function createOtEngineService(deps) {
             indexScatter: snap.indexScatter ?? null,
             cls: snap.indices?.FSIQ?.cls ?? null,
             percentile: typeof snap.indices?.FSIQ?.percentile === "number" ? snap.indices.FSIQ.percentile : null,
-            psychometrics: c.psychometrics ?? null,
+            // m156 — رویدادهای قدیمی (پیش از m156) کلید psychometrics ذخیره‌شده ندارند؛
+            // خوانش مستقل از snapshot/flags همان payload به‌صورت تنبل ساخته می‌شود (روان‌سنجی پایدار است)
+            psychometrics: c.psychometrics ?? (c.snapshot ? psychometricProfile({ ok: true, snapshot: c.snapshot, flags: c.flags ?? [] }) : null),
             weakDomains: c.weakDomains ?? [],
             flagsFa: (c.flags ?? []).map((f) => f.fa),
             monitoringInterval: c.monitoringInterval ?? null,
