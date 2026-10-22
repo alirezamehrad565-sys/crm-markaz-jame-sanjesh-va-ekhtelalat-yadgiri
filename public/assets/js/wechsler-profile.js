@@ -16,9 +16,9 @@
 //     + پانویس خط قرمز از STAGE2_META (تک‌منبع مشترک مسیر تب و مودال — CONTENT-SPEC یافتهٔ ۵).
 // «پیوند با سایر اطلاعات» (connectionsSection) از بدنهٔ وکسلر خارج شد — خروجی آن سمت
 // clinical-insights در مرحلهٔ ۵ (جمع‌بندی تشخیصی) رندر می‌شود (UX-SPEC §4).
-// T8 (m149) — «فرضیه‌های موتور» (صحنهٔ تفسیر موازی) حذف شد: WECHSLER_HYP_NAMES/hypRowsOf/
-// بلوک فرضیه‌ها/چیپ «فرضیهٔ اصلی» — تفسیر با موتور واحد (مرحلهٔ ۵ تب) است. هر دو مسیر به یک view نرمال
-// تبدیل و با یک رندر مشترک (renderProfile) نمایش داده می‌شوند. همهٔ بخش‌ها «دفاعی» رندر می‌شوند:
+// T8 (m149) — صحنهٔ فرضیه‌های موتور حذف شد؛ m156 — خوانش مستقل روان‌سنجی نیم‌رخ (psychometrics)
+// جای آن را به‌عنوان نخستین بخش گرفت: فقط شواهد نیم‌رخ (FSIQ/شاخص‌ها/پراکندگی/گپ‌ها) — بدون فرضیه.
+// هر دو مسیر به یک view نرمال تبدیل و با یک رندر مشترک (renderProfile) نمایش داده می‌شوند. همهٔ بخش‌ها «دفاعی» رندر می‌شوند:
 // نبود داده = نبود بخش؛ بدون profile هم رندر چیپ‌محور دست‌نخورده کار می‌کند.
 
 import { el, icon } from './ui.js';
@@ -277,6 +277,26 @@ function chipsRow(view) {
   return chips.length ? el('div', { class: 'clx-chips' }, ...chips) : null;
 }
 
+/** «خوانش روان‌سنجی نیم‌رخ» — m156: خوانش مستقل نیم‌رخ هوشی؛ فقط شواهد (بدون فرضیه/سناریو/وزن).
+ * ورودی: view.psychometrics — از gates.wechslerSummary یا engine_output رویداد.
+ */
+function psychometricsSection(view) {
+  const ps = view.psychometrics ?? null;
+  if (!ps) return null;
+  const blocks = [];
+  if (ps.summaryFa) blocks.push(el('div', { style: { lineHeight: 1.9, fontSize: '13px' } }, ps.summaryFa));
+  if ((ps.gaps ?? []).length) {
+    blocks.push(el('div', { class: 'clx-chips', style: { marginTop: '6px' } },
+      ...ps.gaps.map((g) => el('span', { class: 'badge badge--warning', title: g.textFa }, `${g.fa}: فاصلهٔ ${fa(g.diff)} نمره`))));
+  }
+  if ((ps.patterns ?? []).length) {
+    blocks.push(el('div', { style: { marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' } },
+      ...ps.patterns.map((p) => el('div', { style: { fontSize: '12px', color: 'var(--ink-2, #555)' } }, icon('sparkles', 12), ' ', p.textFa))));
+  }
+  if (!blocks.length) return null;
+  return el('div', {}, subTitle('brain', 'خوانش روان‌سنجی نیم‌رخ'), ...blocks);
+}
+
 /** بلوک حوزه‌های ضعیف */
 function weakBlock(view) {
   const weakChips = (view.weakDomains ?? []).map((d) =>
@@ -336,6 +356,9 @@ function nestedProfileBody(view) {
   const S = STAGE2_META.sub;
 
   const subs = [];
+  // m156 — خوانش روان‌سنجی نیم‌رخ: نخستین آکاردئون؛ حتی برای رویدادهای قدیمیِ بدون profile
+  const psych = psychometricsSection(view);
+  if (psych) subs.push(subAcc({ key: 'psych', label: 'خوانش روان‌سنجی نیم‌رخ', count: null, body: psych }));
   if (p) {
     const idxCount = indexRowCount(p);
     const idx = idxCount ? indexRowsSection(p) : null;
@@ -362,15 +385,13 @@ function nestedProfileBody(view) {
   const flagsBlk = flagsBlock(view);
   if (weakBlk || flagsBlk) {
     const metaCount = (view.weakDomains ?? []).length + (view.flagsFa ?? []).length;
-    subs.push(subAcc({ key: 'hypotheses', label: S.hypotheses.label, count: subCount(S.hypotheses.count, metaCount), body: [weakBlk, flagsBlk] }));
+    subs.push(subAcc({ key: 'weakflags', label: S.weakflags.label, count: subCount(S.weakflags.count, metaCount), body: [weakBlk, flagsBlk] }));
   }
 
   const chips = chipsRow(view);
   return el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3, 14px)' } },
     chips,
-    ...subs,
-    // پانویس خط قرمز — تک‌منبع STAGE2_META (مشترک با مسیر مودال)؛ سلب مسئولیت کامل صفحه فقط یک‌بار در پانویس تب
-    el('div', { class: 'clxacc-footnote' }, STAGE2_META.stages.wechsler.footnote));
+    ...subs);
 }
 
 // ─────────────── رندر مشترک نیم‌رخ ───────────────
@@ -405,16 +426,14 @@ function renderProfile(view, { nested = false } = {}) {
     head,
     el('div', { class: 'card__body' },
       chipsRow(view),
+      psychometricsSection(view),
       p ? indexRowsSection(p) : null,
       p ? step5Section(p) : null,
       p ? subtestTableSection(p) : null,
       p ? comparisonsSection(p) : null,
       p ? pairsSection(p) : null,
       weakBlock(view),
-      flagsBlock(view),
-      // یادآوری خط قرمز — یک خط کوتاه؛ متن تک‌منبع از STAGE2_META (CONTENT-SPEC یافتهٔ ۵)؛
-      // سلب مسئولیت کامل تب فقط یک‌بار در پانویس صفحه می‌آید
-      el('div', { class: 'clx-wconn__empty' }, STAGE2_META.stages.wechsler.footnote)
+      flagsBlock(view)
     )
   );
 }
@@ -445,7 +464,8 @@ export function wechslerProfileBlock({ summary, nested = false }) {
     monitoringInterval: summary.monitoringInterval ?? null,
     ageLine: summary.ageLine ?? null,
     engine: Boolean(summary.engine),
-    profile: summary.profile ?? null
+    profile: summary.profile ?? null,
+    psychometrics: summary.psychometrics ?? null
   }, { nested });
 }
 
@@ -507,6 +527,7 @@ export function wechslerEventAnalysisSection(engineOutput) {
     monitoringInterval: c.monitoringInterval ?? null,
     ageLine: c.ageLine ?? null,
     engine: true,
-    profile
+    profile,
+    psychometrics: c.psychometrics ?? null
   });
 }

@@ -82,7 +82,7 @@ export {
   type WechslerValidationError,
   type WechslerAnalysisResult,
   type WechslerSnapshot,
-  type WechslerHypothesisActivation,
+  type WechslerPsychometrics,
   type FormPayload,
   type FormFieldEntry,
   type WechslerComputedScores,
@@ -106,17 +106,18 @@ export {
  *               integers within the age-band norm range.
  *   testDate / birthDate — Jalali [year, month, day] triples.
  *   strict (default true) — when true, a VCI/PRI gap > 23 marks GAI invalid.
- *   baseAnswers — legacy input contract (T8/m149): accepted for weight refinement
- *                 (base question "BQ4" refines the MOOD weight); no queue is produced.
- *   skippedHypotheses — legacy input contract (T8/m149): accepted, no longer scored.
+ *   baseAnswers — legacy input contract (T8/m149 → m156): accepted and ignored;
+ *                 the MOOD weight refinement died with the hypothesis layer.
+ *   skippedHypotheses — legacy input contract: accepted and ignored.
  *
  * Output: WechslerAnalysisResult — validation (errors/warnings/computable/missing),
- * index scores + FSIQ + GAI (snapshot), flags, hypothesis EVIDENCE (13 possible ids:
- * SLD ADHD ID BIF DLD NVLD TBI ASD TWO_E MOOD APD NORMAL DOMAIN_WEAK — {id, weight, clues}),
- * weak domains, monitoring interval, signals and the structured profile.
+ * index scores + FSIQ + GAI (snapshot), flags, weak domains, monitoring interval,
+ * signals, the structured profile and the standalone psychometric reading (m156).
  * T8 (m149) — the parallel interpretation layer (outcomes/main/comorbid pick,
- * binary scenarios, treatment plans, questionnaire queue/answers) is REMOVED:
- * interpretation display belongs to the unified reasoning engine.
+ * binary scenarios, treatment plans, questionnaire queue/answers) is REMOVED.
+ * m156 — the hypothesis scenario generator (activateHypotheses: 13 diagnostic ids
+ * with weights) is REMOVED as well: the engine is pure psychometrics + a
+ * hypothesis-free reading of the intelligence profile (psychometricProfile).
  */
 export function analyzeWechsler(input: WechslerAnalysisInput): WechslerAnalysisResult {
   return runWechslerAnalysis(input);

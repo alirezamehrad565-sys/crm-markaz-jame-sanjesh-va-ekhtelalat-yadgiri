@@ -108,7 +108,6 @@ export function narrativeOf(result: InferenceOutput): FullNarrative {
       ...result.ranked.slice(1).map((h) => `• ${h.targetTitle} — اطمینان ${h.confidence}`)
     );
   }
-  lines.push('', `— ${result.disclaimer}`);
 
   const text = lines.join('\n');
   assertPlainTone(text);

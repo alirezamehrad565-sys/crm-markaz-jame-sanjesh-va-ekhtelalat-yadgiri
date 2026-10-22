@@ -1,7 +1,7 @@
 ════════════════════════════════════════════════════════════════════════
  Route Diff Report — deploy127 (src/**/*.ts  vs  worker/bundle.js)
 ════════════════════════════════════════════════════════════════════════
-Generated : 2026-10-22T02:11:19.827Z
+Generated : 2026-10-22T03:46:35.482Z
 SRC files : 196 TypeScript files under src/ (tests excluded)
 BUNDLE    : worker/bundle.js
 Rules     : line-anchored `app.<method>(` registrations; file-local const
@@ -18,14 +18,14 @@ ONLY_IN_SRC (stale/dead candidates) : 0
 COMMON                              : 231
 
 ── ONLY_IN_BUNDLE (routes that exist only in the live bundle) ──────────
-  DELETE /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:30846]
-  GET /api/pathway-templates   [worker/bundle.js:30783]
-  GET /api/students/:param/case-formulation   [worker/bundle.js:32796]
-  PATCH /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:30835]
-  PATCH /api/pathway-templates/:param   [worker/bundle.js:30806]
-  POST /api/client-errors   [worker/bundle.js:44023]
-  POST /api/clinical-paths/:param/sessions   [worker/bundle.js:30825]
-  POST /api/pathway-templates   [worker/bundle.js:30787]
+  DELETE /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:30638]
+  GET /api/pathway-templates   [worker/bundle.js:30575]
+  GET /api/students/:param/case-formulation   [worker/bundle.js:32521]
+  PATCH /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:30627]
+  PATCH /api/pathway-templates/:param   [worker/bundle.js:30598]
+  POST /api/client-errors   [worker/bundle.js:43746]
+  POST /api/clinical-paths/:param/sessions   [worker/bundle.js:30617]
+  POST /api/pathway-templates   [worker/bundle.js:30579]
 
 ── ONLY_IN_SRC (routes that exist only in src — stale/dead-code candidates) ──
   (none)
@@ -276,3 +276,5 @@ Unresolvable first-arg constants: 0
 Unparsable app.<method>( lines: 0
 
 End of report.
+ 
+[route-diff] report written to /home/z/my-project/gh-work/scripts/route-diff-report.txt

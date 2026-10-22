@@ -143,7 +143,7 @@ check('runInference — گیت داده کلید شرح‌حال مؤثر را �
 check('runInference — پرچم شرح‌حال از رویداد مؤثر', bundleSrc.includes('anamnesisFlagFor(ruleSet.targetKey, latest.get(anamKey))'));
 check('runInference — گپ: نسخهٔ ۲ یا ۳ کافی است', bundleSrc.includes('const anamSatisfied = latest.has(toolKey) || toolKey === ANAMNESIS_V2_KEY && latest.has(ANAMNESIS_V3_KEY);'));
 check('runInference — پیشنهاد گپ به فرم فعال (کلید نمایشی)', bundleSrc.includes('const anamDisplay = toolKey === ANAMNESIS_V2_KEY && !latest.has(ANAMNESIS_V2_KEY) ? ANAMNESIS_V3_KEY : toolKey;'));
-check('runInference — خروجی: کلید افزودنی anamnesisSignals (آخرین کلید)', bundleSrc.includes('disclaimer: ENGINE_DISCLAIMER,\n    anamnesisSignals\n  };'));
+check('runInference — خروجی: کلید افزودنی anamnesisSignals (m156: بدون disclaimer)', bundleSrc.includes('referralFlags: [...new Set(referralFlags)].slice(0, 10),\n    anamnesisSignals\n  };'));
 check('هیوریستیک v2 بایت‌به‌بایت باقی است (صبح + واژه‌های جسمانی)', bundleSrc.includes('\\u0635\\u0628\\u062D') && bundleSrc.includes('\\u062F\\u0644\\u200C\\u062F\\u0631\\u062F') && bundleSrc.includes('event.toolKey !== ANAMNESIS_V2_KEY'));
 check('گیت OT — نسخهٔ ۳ هم گیت شرح‌حال را سبز می‌کند', bundleSrc.includes('var ANAMNESIS_KEYS = ["ce-anamnesis-v3", "ce-anamnesis-v2", "anamnesis"];'));
 check('صورت‌بندی — اقدام پایه شرح‌حال نسخهٔ ۳ + گارد v2/v3', bundleSrc.includes('if (!present.has("ce-anamnesis-v2") && !present.has("ce-anamnesis-v3")) {') && bundleSrc.includes('toolId: "ce-anamnesis-v3", reasonFa:'));

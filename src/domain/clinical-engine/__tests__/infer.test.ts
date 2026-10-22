@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runInference, anamnesisSignalsOf, ANAMNESIS_V2_KEY, ANAMNESIS_V3_KEY } from '../infer';
 import { narrativeOf, narrativeOfHypothesis, faNum } from '../narrative';
-import { ENGINE_DISCLAIMER, WCPM_NORM_50TH } from '../instruments';
+import { WCPM_NORM_50TH } from '../instruments';
 import { CONFIDENCE_THRESHOLDS } from '../rules';
 import type { EvidenceEvent } from '../types';
 
@@ -71,12 +71,12 @@ function sldEvent(overrides: {
 // ───────── آزمون‌ها ─────────
 
 describe('موتور شناسایی (پلن §۵)', () => {
-  it('دادهٔ خالی → بدون فرضیه، اقدام بعدی «کامل کنید» و پانویس خط قرمز', () => {
+  it('دادهٔ خالی → بدون فرضیه و اقدام بعدی «کامل کنید» (m156: پانویس انکار حذف شد)', () => {
     const out = runInference([], { now: () => new Date('2026-10-13T06:00:00.000Z') });
     expect(out.ranked).toHaveLength(0);
     expect(out.criteria).toHaveLength(0);
     expect(out.nextActions.some((a) => a.includes('دادهٔ کافی'))).toBe(true);
-    expect(out.disclaimer).toBe(ENGINE_DISCLAIMER);
+    expect('disclaimer' in out).toBe(false);
     expect(out.batteryVersion).toBe('battery-v1');
     expect(out.generatedAt).toBe('2026-10-13T06:00:00.000Z');
   });
@@ -254,8 +254,10 @@ function w4Event(fsiq: number): EvidenceEvent {
 function legacyView(out: ReturnType<typeof runInference>): Record<string, unknown> {
   // کلیدهای افزودنی لایه‌ای (T4: anamnesisSignals · T6: convergence) از دید پاریتی حذف می‌شوند —
   // پروندهٔ فقط-v2 همهٔ کلیدهای قدیمی را بایت‌به‌بایت نگه می‌دارد.
+  // m156 — disclaimer از قرارداد خروجی حذف شد؛ در پایهٔ ثبت‌شدهٔ T4 هست → از دید پاریتی حذف می‌شود.
   const { anamnesisSignals: _signals, convergence: _conv, ...rest } = out;
-  return rest as Record<string, unknown>;
+  const { disclaimer: _disc, ...legacy } = rest as Record<string, unknown>;
+  return legacy;
 }
 
 describe('شرح‌حال v3 — سیگنال‌های ساخت‌یافته (T4 m148)', () => {
@@ -403,7 +405,7 @@ describe('لحن ساده (پلن §۶)', () => {
     expect(full.text).toContain('چه دیدیم');
     expect(full.text).toContain('یعنی چه');
     expect(full.text).toContain('گام بعدی');
-    expect(full.text).toContain(ENGINE_DISCLAIMER);
+    expect(full.text).not.toContain('جایگزین قضاوت بالینی');
     expect(full.text).not.toContain('قطعاً');
     expect(full.text).not.toContain('صد در صد');
     // عدد در جدول ملاک‌ها فارسی است

@@ -61,48 +61,17 @@ eq(R("FSIQ_BAND_LOW_BORDER")?.max, 89, "FSIQ_BAND_LOW_BORDER.max=89");
 eq(R("ID_PATH_MAX_FSIQ"), 70, "ID_PATH_MAX_FSIQ=70");
 eq(R("SCATTER_UNIFORM_MAX"), 23, "SCATTER_UNIFORM_MAX=23");
 
-// ─── ۲) نگاشت کامل سیزده‌فرضیه‌ای ───
-const IDS = R("WECHSLER_HYP_IDS");
-eq(IDS.length, 13, "WECHSLER_HYP_IDS length 13");
-eq(new Set(IDS).size, 13, "WECHSLER_HYP_IDS unique");
-const T = R("WECHSLER_HYP_TARGETS");
-eq(T.BIF, "slow_learner", "BIF → slow_learner (§۳.۱)");
-for (const id of ["ID", "NVLD", "TBI", "TWO_E", "NORMAL"]) ok(id in T && T[id] === null, `${id} → null صریح`);
-eq(T.DLD, "speech_language", "DLD → speech_language");
-eq(T.APD, "speech_language", "APD → speech_language");
-eq(T.MOOD, "anxiety", "MOOD → anxiety");
-eq(T.ADHD, "adhd", "ADHD → adhd");
-eq(T.ASD, "autism", "ASD → autism");
-ok(!("SLD" in T) || T.SLD === null, "SLD پویا (ثابت null)");
-ok(!("DOMAIN_WEAK" in T) || T.DOMAIN_WEAK === null, "DOMAIN_WEAK پویا (ثابت null)");
-
-const hypTargetOf = R("wechslerHypTargetOf");
-eq(hypTargetOf("SLD", { sld: { read: 0.8, write: 0.3, calc: null } }), "dyslexia", "SLD → قوی‌ترین سیگنال (خواندن)");
-eq(hypTargetOf("SLD", { sld: { read: 0.3, write: 0.9, calc: 0.1 } }), "dysgraphia", "SLD → قوی‌ترین (نوشتن)");
-eq(hypTargetOf("SLD", { sld: { read: 0.7, write: 0.7, calc: 0.1 } }), "dyslexia", "SLD تساوی → ترتیب ثابت خواندن");
-eq(hypTargetOf("SLD", {}), null, "SLD بی‌زمینه → null");
-eq(hypTargetOf("DOMAIN_WEAK", { domainWeakIndex: "WMI" }), "working_memory", "DOMAIN_WEAK WMI → حافظهٔ کاری");
-eq(hypTargetOf("DOMAIN_WEAK", { domainWeakIndex: "VCI" }), "speech_language", "DOMAIN_WEAK VCI → زبان");
-eq(hypTargetOf("DOMAIN_WEAK", { domainWeakIndex: "PRI" }), "motor_coordination", "DOMAIN_WEAK PRI → motor_coordination");
-eq(hypTargetOf("DOMAIN_WEAK", { domainWeakIndex: "PSI" }), null, "DOMAIN_WEAK PSI → null");
-eq(hypTargetOf("BIF"), "slow_learner", "hypTargetOf BIF");
-eq(hypTargetOf("ID"), null, "hypTargetOf ID → null");
-
-// ─── ۳) تقویت فرضیه — ID هرگز slow_learner را تقویت نمی‌کند ───
-const w4Ev = (hyps, profile) => ({
-  toolKey: "ce-wechsler-w4-v1",
-  status: "completed",
-  occurredAt: "2026-10-01T08:00:00.000Z",
-  typeTitle: "وکسلر ۴",
-  payload: { engine_output: { value: JSON.stringify({ ok: true, hypotheses: hyps, ...(profile ? { profile } : {}) }) } }
-});
-const boost = R("wechslerHypothesisBoost");
-eq(boost(w4Ev([{ id: "BIF", weight: 0.5 }]), "slow_learner")?.weight, 2, "BIF وزن ۰٫۵ → وزن ۲");
-eq(boost(w4Ev([{ id: "ID", weight: 0.9 }]), "slow_learner"), null, "ID ۰٫۹ → هیچ تقویت دیرآموزی");
-eq(boost(w4Ev([{ id: "DLD", weight: 0.2 }]), "speech_language")?.weight, 1, "DLD ۰٫۲ → وزن ۱ (رفتار امروز)");
-eq(boost(w4Ev([{ id: "SLD", weight: 0.5 }], null, ), "dyslexia", { sld: { read: 1, write: 0.2, calc: null } })?.weight, 2, "SLD با زمینه → dyslexia وزن ۲");
-eq(boost(w4Ev([{ id: "SLD", weight: 0.5 }]), "dyslexia"), null, "SLD بی‌زمینه → هیچ");
-eq(boost(undefined, "adhd"), null, "بدون رویداد → null");
+// ─── ۲ و ۳) m156 — اتصال فرضیه‌ای قطع است (ماشین فرضیه‌های وکسلر حذف شده) ───
+ok(R("WECHSLER_HYP_IDS") === undefined, "WECHSLER_HYP_IDS حذف شده (m156)");
+ok(R("WECHSLER_HYP_TARGETS") === undefined, "WECHSLER_HYP_TARGETS حذف شده (m156)");
+ok(R("WECHSLER_HYP_NAMES") === undefined, "WECHSLER_HYP_NAMES حذف شده (m156)");
+ok(R("wechslerHypTargetOf") === undefined, "wechslerHypTargetOf حذف شده (m156)");
+ok(R("wechslerHypothesisBoost") === undefined, "wechslerHypothesisBoost حذف شده (m156)");
+ok(R("domainWeakIndexOf") === undefined, "domainWeakIndexOf حذف شده (m156)");
+ok(!bundle.includes("function activateHypotheses"), "activateHypotheses از موتور وکسلر حذف شده (m156)");
+ok(!bundle.includes("ENGINE_DISCLAIMER"), "ENGINE_DISCLAIMER از باندل حذف شده (m156)");
+ok(R("wechslerEngineOutputOf") !== undefined, "پیوند فقط پروفایل: wechslerEngineOutputOf سرجایش است");
+ok(R("wechslerProfileFactsOf") !== undefined, "قواعد سیگنالی پروفایل (FSIQ band) سرجایش‌اند");
 
 // ─── ۴) هم‌گرایی — سه حالت خوانا ───
 const convItem = R("convergenceItemOf");
@@ -130,6 +99,14 @@ eq(adaptOf({ analysis: { subscaleScores: [{ id: "id_adapt", color: "warn", band:
 eq(adaptOf({ analysis: { subscaleScores: [{ id: "id_adapt", color: "ok", band: "نرمال" }] } }), "normal", "انطباق ok → normal");
 eq(adaptOf(undefined), "unknown", "بی‌رویداد → unknown");
 eq(adaptOf({ analysis: { subscaleScores: [{ id: "ia", color: "ok" }] } }), "unknown", "بی‌زیرمقیاس → unknown");
+
+const w4Ev = (hyps, profile) => ({
+  toolKey: "ce-wechsler-w4-v1",
+  status: "completed",
+  occurredAt: "2026-10-01T08:00:00.000Z",
+  typeTitle: "وکسلر ۴",
+  payload: { engine_output: { value: JSON.stringify({ ok: true, ...(hyps.length ? { hypotheses: hyps } : {}), ...(profile ? { profile } : {}) }) } }
+});
 
 const factsOf = R("wechslerProfileFactsOf");
 eq(factsOf(w4Ev([], { fsiq: 78, fsiqBand: null, indexScatter: 5 })).band, "BIF", "fsiq ۷۸ → باند BIF (فال‌بک fsiqBandOf)");
@@ -199,7 +176,7 @@ const anamV3Ev = (decline, at) => ({
 // ۵-۵) فرضیهٔ قدیمی بدون پروفایل: BIF → نگاشت تازه اعمال می‌شود (تغییر عمدی)
 {
   const out = runInf([w4Ev([{ id: "BIF", weight: 0.5 }])]);
-  ok(out.ranked.find((h) => h.targetKey === "slow_learner"), "رویداد قدیمی BIF → slow_learner (نگاشت T6)");
+  eq(out.ranked.find((h) => h.targetKey === "slow_learner"), undefined, "فرضیهٔ BIF قدیمی → هیچ دیرآموزی (m156)");
 }
 // ۵-۶) هم‌گرایی والد×معلم برای ADHD — پاریتی رفتار امروز + حالت هم‌گرا
 {
@@ -217,7 +194,7 @@ const anamV3Ev = (decline, at) => ({
   const out = runInf([snapEv("p", "danger", "2026-10-03T08:00:00.000Z")]);
   eq(JSON.stringify(Object.keys(out)), JSON.stringify([
     "batteryVersion", "generatedAt", "criteria", "ranked", "discrepancies",
-    "nextActions", "dataCoverage", "referralFlags", "disclaimer", "anamnesisSignals", "convergence"
+    "nextActions", "dataCoverage", "referralFlags", "anamnesisSignals", "convergence"
   ]), "کلیدهای خروجی — قدیمی‌ها سرجایشان + convergence در انتها");
 }
 // ۵-۸) رویداد خالی — پاریتی کامل (فرضیه‌ای نیست، convergence [])

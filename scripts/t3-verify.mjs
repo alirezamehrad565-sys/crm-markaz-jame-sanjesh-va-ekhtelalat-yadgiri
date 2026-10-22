@@ -75,7 +75,6 @@ function cut(src, a, b) {
 const region = [
   cut(bundleSrc, 'function num2(value) {', '__name2(num2, "num");'),
   cut(bundleSrc, 'function num(x) {', '__name2(num, "num");'),
-  cut(bundleSrc, 'var ENGINE_DISCLAIMER =', ';'),
   cut(bundleSrc, 'var FSIQ_BANDS = [', '__name2(fsiqBandOf, "fsiqBandOf");'),
   cut(bundleSrc, 'var ANAMNESIS_TEXT_FIELDS', '__name2(anamnesisSignalsOf, "anamnesisSignalsOf");'),
   cut(bundleSrc, 'function wechslerEngineOutputOf(event) {', '__name2(wechslerEngineOutputOf, "wechslerEngineOutputOf");'),
@@ -165,7 +164,7 @@ const keysOf = (plan) => plan.items.map((i) => i.toolKey);
 console.log('T3 bundle verify — بلوک پیشنهادگر (vm):');
 const planEmpty = recommendChecklistPlan(checklistPlanContextOf([]));
 check('پروندهٔ خالی → SDQ والد+معلم core و پلن تکی', JSON.stringify(keysOf(planEmpty)) === JSON.stringify([TOOL.sdqP, TOOL.sdqT]) && planEmpty.planType === 'تکی' && planEmpty.referralFa === null);
-check('پانویس خط قرمز روی خروجی', planEmpty.disclaimer.includes('غربالگری'));
+check('پانویس انکار از خروجی حذف شده (m156)', planEmpty.disclaimer === undefined);
 
 const bif = recommendChecklistPlan(checklistPlanContextOf([weEv(uni(78))]));
 check('دیرآموز (FSIQ ۷۸) → سه پروب + فرم جامع خانواده + شرح‌حال v3؛ بدون چک‌لیست ملاکی',
@@ -287,10 +286,10 @@ check('تأیید یک‌کلیکی = جریان موجود ارسال فرم ب
   ui.includes('onclick: () => openCaseEventForm({ student, onlyKeys: planKeys, pickerTitle: M.confirmPickerTitle, onSaved: refresh })'));
 check('ویرایش/انتخاب دستی = کتابخانهٔ کامل (بدون onlyKeys) و همیشه در دسترس',
   ui.includes("el('button', {\n          class: 'btn btn--soft btn--sm',\n          onclick: () => openCaseEventForm({ student, onSaved: refresh })\n        }, icon('edit', 14), M.editLabel)"));
-check('پانویس خط قرمز (ENGINE_DISCLAIMER) روی کارت', ui.includes("plan.disclaimer"));
+check('پانویس انکار روی کارت حذف شده (m156)', !ui.includes("plan.disclaimer"));
 check('پرچم ارجاع خط قرمز روی کارت رندر می‌شود', ui.includes('plan.referralFa'));
 const css = fs.readFileSync(path.join(ROOT, 'public/assets/css/views.css'), 'utf8');
-const cssBlock = css.slice(css.indexOf('T3 (m147) — کارت «پیشنهاد باتری از موتور»'));
+const cssBlock = css.slice(css.indexOf('کارت «ابزارهای پیشنهادی گام بعد»'));
 check('CSS — فقط توکن موجود؛ بدون رنگ/فونت تازه در بلوک T3',
   !/#[0-9a-fA-F]{3,8}\b|font-family|rgb\(/.test(cssBlock.slice(0, cssBlock.indexOf('}', cssBlock.indexOf('.clx-plan__disclaimer') + 1))));
 

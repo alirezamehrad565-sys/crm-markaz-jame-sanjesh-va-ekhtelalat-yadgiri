@@ -261,10 +261,12 @@ function syncAria(details) {
 /**
  * — بلوک «نقطهٔ تصمیم شک بالینی» — بدنهٔ مرحلهٔ «چک‌لیست‌های خانواده و معلم»:
  * سیگنال چک‌لیست‌های تازه + تصمیم ثبت‌شدهٔ درمانگر (فرم ce-clinical-suspicion-v1).
- * خط قرمز: سیگنال فقط پیشنهاد است؛ شناسایی و تصمیم با درمانگر است.
+ * m156 — فقط با داده رندر می‌شود: بدون سیگنال و بدون تصمیم ← null (بدون بلوک خالی «بدون تصمیم»).
  */
 function suspicionBlock({ student, gates, typesById, canDecide, refresh }) {
   const sus = gates.suspicion ?? { signals: [], decided: false, decidedAt: null, decidedSummary: null };
+  const hasContent = (sus.signals ?? []).length > 0 || sus.decided;
+  if (!hasContent) return null;
   const typeId = typesById.get(SUSPICION_KEY)?.id ?? null;
 
   const levelBadge = (level) => level === 'high'
@@ -294,11 +296,11 @@ function suspicionBlock({ student, gates, typesById, canDecide, refresh }) {
       el('strong', {}, icon('alert', 15), SUSPICION_CONTENT.head),
       sus.decided
         ? el('span', { class: 'badge badge--accent' }, SUSPICION_CONTENT.decidedBadge)
-        : el('span', { class: 'badge badge--neutral' }, SUSPICION_CONTENT.pendingBadge)
+        : null
     ),
     (sus.signals ?? []).length
       ? el('div', { class: 'clx-suspicion__body' }, ...signalRows)
-      : el('div', { class: 'cell-sub' }, SUSPICION_CONTENT.emptyHint),
+      : null,
     sus.decided && sus.decidedSummary
       ? el('div', { class: 'clx-suspicion__decision' },
           el('span', { class: 'badge badge--info' }, `تصمیم: ${sus.decidedSummary}`),
@@ -308,7 +310,7 @@ function suspicionBlock({ student, gates, typesById, canDecide, refresh }) {
   );
 }
 
-// ───────── کارت «پیشنهاد باتری از موتور» — پلن چک‌لیست (T3/m147) — بدنهٔ مرحلهٔ وکسلر ─────────
+// ───────── کارت «ابزارهای پیشنهادی گام بعد» — پلن چک‌لیست (T3/m147) — بدنهٔ مرحلهٔ وکسلر ─────────
 
 /**
  * کارت پلن پیشنهادی چک‌لیست — بعد از نیم‌رخ وکسلر (داخل بدنهٔ مرحلهٔ وکسلر):
@@ -316,7 +318,7 @@ function suspicionBlock({ student, gates, typesById, canDecide, refresh }) {
  * ۲) «تأیید یک‌کلیکی» = همان جریان موجود ارسال فرم (openCaseEventForm با فقط‌کلیدهای پلن)
  *   با پیش‌انتخاب ابزارهای پلن؛ مسیرهای بله/معلم داخل همان انتخابگر باز می‌شوند.
  * ۳) «ویرایش/انتخاب دستی» = کتابخانهٔ کامل فرم‌ها — برگشت به دستی همیشه ممکن (بدون قفل).
- * ۴) خط قرمز (مسیر ID/TBI) و پانویس ENGINE_DISCLAIMER روی همهٔ حالت‌ها.
+ * ۴) خط قرمز (مسیر ID/TBI) روی همهٔ حالت‌ها — m156: پانویس انکار حذف شد.
  * فقط توکن/کلاس m144 موجود؛ بدون رنگ/فونت تازه؛ RTL.
  */
 function checklistPlanCard({ student, plan, typesById, canDecide, refresh }) {
@@ -366,8 +368,7 @@ function checklistPlanCard({ student, plan, typesById, canDecide, refresh }) {
         ? el('div', { class: 'clx-plan__items' }, ...itemRows)
         : el('div', { class: 'cell-sub' }, M.emptyItems),
       actions,
-      actions ? el('div', { class: 'cell-sub' }, M.editHint) : null,
-      el('div', { class: 'clx-plan__disclaimer cell-sub' }, icon('shield', 13), el('span', {}, plan.disclaimer))
+      actions ? el('div', { class: 'cell-sub' }, M.editHint) : null
     )
   );
 }
@@ -557,32 +558,24 @@ function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide
 }
 
 /**
- * — «پیوند با سایر اطلاعات» (m134 — خواستهٔ اصلی کاربر: وکسلر متصل به بقیهٔ فرم‌ها)
- * خطوط متنی ساخته‌شده از سه منبع؛ رندر آن با connectionsSection در مرحلهٔ ۵ (جمع‌بندی) است (m135).
- * ۱) wechslerLink صورت‌بندی (فرضیهٔ اصلی + شاخص‌ها)  ۲) فرضیه‌های موتور با شواهد وکسلری
- * ۳) حوزه‌های ضعیف وکسلر × سازه‌های برجستهٔ صورت‌بندی.
+ * — «پیوند با سایر اطلاعات» (m134؛ m156 — فقط پیوندهای روان‌سنجی، بدون فرضیه)
+ * ۱) نیم‌رخ وکسلر صورت‌بندی (FSIQ/GAI + شاخص‌ها)  ۲) هم‌خوانی حوزه‌های ضعیف وکسلر × سازه‌های برجسته.
  */
 function wechslerConnections({ formulation, insights, gates }) {
   const lines = [];
   const w = gates?.wechslerSummary ?? null;
+  void insights;
 
-  // ۱) صورت‌بندی پرونده — پیوند وکسلر
+  // ۱) صورت‌بندی پرونده — پیوند روان‌سنجی نیم‌رخ
   const link = formulation?.wechslerLink ?? null;
   if (link) {
     const bits = [];
-    if (link.mainNameFa) bits.push(`فرضیهٔ اصلی موتور وکسلر: «${link.mainNameFa}»`);
     if (link.iqValue != null) bits.push(`${link.iqBasis === 'GAI' ? 'GAI' : 'FSIQ'} = ${fa(link.iqValue)}`);
     if ((link.indicesFa ?? []).length) bits.push(link.indicesFa.join(' — '));
     if (bits.length) lines.push(`صورت‌بندی پرونده روی نیم‌رخ وکسلر سوار است: ${bits.join(' · ')}`);
   }
 
-  // ۲) فرضیه‌های موتور که شواهد وکسلری دارند
-  for (const h of (insights?.ranked ?? []).slice(0, 3)) {
-    const ev = (h.evidenceFa ?? []).find((t) => /وکسلر|هوش|FSIQ|GAI/.test(String(t)));
-    if (ev) lines.push(`فرضیهٔ «${h.targetTitle}»: ${ev}`);
-  }
-
-  // ۳) هم‌خوانی حوزه‌های ضعیف وکسلر با سازه‌های برجستهٔ صورت‌بندی
+  // ۲) هم‌خوانی حوزه‌های ضعیف وکسلر با سازه‌های برجستهٔ صورت‌بندی
   const WEAK_KEYWORDS = {
     language: ['زبان', 'کلام'], attention: ['توجه'], working_memory: ['حافظه'],
     processing_speed: ['سرعت پردازش'], visual_spatial: ['دیداری'], fluid_reasoning: ['استدلال'],
@@ -675,8 +668,8 @@ function hypothesisCard(h, rank, { student, paths, canDecide, refresh, conv }) {
           class: 'btn btn--primary btn--sm',
           onclick: async () => {
             const ok = await confirmModal({
-              title: `تأیید فرضیه «${h.targetTitle}»`,
-              message: 'با تأیید، این هدف به‌عنوان هدف درمانی نهایی ثبت و مسیر مداخله فعال می‌شود. این ثبت، قضاوت بالینی شماست — خروجی موتور فقط پیشنهاد بود.',
+              title: `تأیید هدف «${h.targetTitle}»`,
+              message: 'با تأیید، این هدف به‌عنوان هدف درمانی نهایی ثبت و مسیر مداخله فعال می‌شود.',
               confirmLabel: 'تأیید و فعال‌سازی'
             });
             if (!ok) return;
@@ -1180,8 +1173,8 @@ function pathCard(p, { student, canDecide, refresh }) {
     : null;
 
   const engineLine = p.engineHypothesis
-    ? el('div', { class: 'cell-sub' }, `فرضیهٔ موتور هنگام ثبت: ${p.engineHypothesis.targetTitle} — اطمینان ${p.engineHypothesis.confidence} (وزن ${fa(p.engineHypothesis.score)})`)
-    : el('div', { class: 'cell-sub' }, 'هدف دستی درمانگر — بدون فرضیهٔ موتور');
+    ? el('div', { class: 'cell-sub' }, `هدف پیشنهادی هنگام ثبت: ${p.engineHypothesis.targetTitle} — اطمینان ${p.engineHypothesis.confidence}`)
+    : el('div', { class: 'cell-sub' }, 'هدف دستی درمانگر');
 
   const decisionLine = p.decision
     ? el('div', { class: 'clx-decision' },
@@ -1331,7 +1324,7 @@ export async function renderClinicalTab(box, { student }) {
     // ── حالت‌های مراحل — §5: iterate گیت‌ها به ترتیب سرور؛ گام جاری = اولین ناتمام؛ پروتکل فعال → مرحلهٔ ۶ ──
     const wSummary = gates?.wechslerSummary ?? null;
     const wechslerEmpty = !wSummary
-      || (wSummary.fsiq == null && wSummary.percentile == null && !(wSummary.hypotheses ?? []).length && !wSummary.profile);
+      || (wSummary.fsiq == null && wSummary.percentile == null && !wSummary.profile);
     const firstOpenGate = gatesList.find((g) => !g.done) ?? null;
     const currentKey = protocol ? 'intervention' : (firstOpenGate?.key ?? null);
     const hasRanked = (insights.ranked?.length ?? 0) > 0;
@@ -1357,17 +1350,16 @@ export async function renderClinicalTab(box, { student }) {
       behavioral: () => {
         const n = countCompleted([...SCREEN_KEYS, ...SPECIFIC_KEYS]);
         const countLine = n === 0 ? SM.behavioral.glanceZero : SM.behavioral.glanceSome.replace('{n}', fa(n));
-        const susLine = gates?.suspicion?.decided ? SM.behavioral.glanceSuspicion.decided : SM.behavioral.glanceSuspicion.pending;
-        return `${countLine} · ${susLine}`;
+        const susLine = gates?.suspicion?.decided ? ` · ${SM.behavioral.glanceSuspicion.decided}` : '';
+        return `${countLine}${susLine}`;
       },
       wechsler: () => {
         const W = SM.wechsler;
         if (!wSummary) return W.glanceEmpty;
-        const { fsiq, percentile, mainName } = wSummary;
+        const { fsiq, percentile } = wSummary;
         let line;
-        if (fsiq != null && percentile != null && mainName) line = W.glanceFull.replace('{fsiq}', fa(fsiq)).replace('{p}', fa(percentile)).replace('{main}', mainName);
-        else if (fsiq != null && percentile != null) line = W.glanceFsiq.replace('{fsiq}', fa(fsiq)).replace('{p}', fa(percentile));
-        else if (mainName) line = W.glanceMain.replace('{main}', mainName);
+        if (fsiq != null && percentile != null) line = W.glanceFsiq.replace('{fsiq}', fa(fsiq)).replace('{p}', fa(percentile));
+        else if (fsiq != null) line = W.glanceFsiqOnly.replace('{fsiq}', fa(fsiq));
         else if (!wSummary.engine) line = W.glanceManual;
         else line = W.glanceEmpty;
         const date = wSummary.event?.date ? formatJalaliDateTime(wSummary.event.date) : null;
@@ -1582,10 +1574,10 @@ export async function renderClinicalTab(box, { student }) {
       },
       behavioral: () => {
         const g = gateByKey('behavioral');
-        const sus = gates?.suspicion ?? null;
         const body = [];
-        if (!checklistRows.count && !sus?.decided) body.push(el('div', { class: 'cell-sub' }, SM.behavioral.emptyHint));
-        body.push(suspicionBlock({ student, gates, typesById, canDecide, refresh }));
+        if (!checklistRows.count && !(gates?.suspicion?.decided)) body.push(el('div', { class: 'cell-sub' }, SM.behavioral.emptyHint));
+        const sus = suspicionBlock({ student, gates, typesById, canDecide, refresh });
+        if (sus) body.push(sus); // m156 — فقط با سیگنال/تصمیم؛ بدون بلوک خالی
         if (checklistRows.node) body.push(checklistRows.node);
         if (!g?.done) {
           const cta = gateActionOf(g, stageCtx);
@@ -1787,11 +1779,9 @@ export async function renderClinicalTab(box, { student }) {
       )
     );
 
-    // ── پانویس خط قرمز — تنها سلب مسئولیتِ صفحه (پلن §۱؛ سه سلب مسئولیت → یکی) ──
-    const disclaimer = el('div', { class: 'clx-disclaimer' }, icon('shield', 15), el('span', {}, insights.disclaimer));
-
     // ── یک قطعهٔ واحد — بدون patch جزئی؛ refresh = load کامل (§8.2) ──
-    box.replaceChildren(el('div', { class: 'clx' }, toolbar, flow, disclaimer));
+    // m156 — پانویس انکار (disclaimer) از پایین تب حذف شد.
+    box.replaceChildren(el('div', { class: 'clx' }, toolbar, flow));
   }
 
   await load();

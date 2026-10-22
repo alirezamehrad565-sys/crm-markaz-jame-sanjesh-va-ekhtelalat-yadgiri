@@ -145,7 +145,6 @@ describe('قاعدهٔ ۰ — باتری پایهٔ غربال عمومی (هم�
     expect(plan.items.every((i) => i.priority === 'core' && i.reasonFa.length > 10 && i.hypothesisKeys.length >= 1)).toBe(true);
     expect(plan.planType).toBe('تکی');
     expect(plan.referralFa).toBeNull();
-    expect(plan.disclaimer).toContain('غربالگری');
     expect(plan.basis).toContain('ثبت‌نشده');
   });
 

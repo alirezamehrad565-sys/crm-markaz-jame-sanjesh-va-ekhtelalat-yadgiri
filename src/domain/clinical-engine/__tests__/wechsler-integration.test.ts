@@ -2,10 +2,10 @@
  * تست‌های یکپارچگی وکسلر ۴ با موتور شناسایی
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
-// wechsler-integration.test.ts — پیوند فرم ce-wechsler-w4-v1 (engine_output) با runInference:
-// ۱) رفع قاعدهٔ مردهٔ fsiq → دیرآموزی  ۲) تزریق فرضیه‌ها به هدف مرتبط حتی بدون چک‌لیست (گیت hasData)
-// ۳) وزن «بالا/متوسط»  ۴) وزن زیر ۰٫۱۸ → هیچ  ۵) جمع‌شدن با شواهد چک‌لیست (smoke)
-// سناریوی پایه = دادهٔ واقعی آریا: fsiq ۷۵ / DLD ۰٫۴ / BIF ۰٫۳ / APD ۰٫۲۵ / MOOD ۰٫۲
+// wechsler-integration.test.ts — پیوند فرم ce-wechsler-w4-v1 با runInference — نسخهٔ m156:
+// ۱) قاعدهٔ خام fsiq → دیرآموزی (بافتار T8)  ۲) m156 — فرضیه‌های engine_output (قدیم m98) نادیده
+// گرفته می‌شوند: هیچ فرضیه‌ای از وکسلر به هیچ هدفی تزریق نمی‌شود  ۳) پروفایل T1 → قواعد سیگنالی باند
+// سناریوی پایه = دادهٔ واقعی آریا: fsiq ۷۵ / DLD ۰٫۴ / BIF ۰٫۳ / APD ۰٫۲۵ / MOOD ۰٫۲ (شکل payload قدیم)
 
 import { describe, it, expect } from 'vitest';
 import { runInference } from '../infer';
@@ -13,7 +13,7 @@ import type { EvidenceEvent } from '../types';
 
 // ───────── سازندهٔ رویداد وکسلر ۴ ─────────
 
-/** خروجی موتور تفسیر — مشابه Aria: fsiq=75 و چهار فرضیه */
+/** خروجی موتور تفسیر — مشابه Aria: fsiq=75 و چهار فرضیه (شکل payload قدیمی m98) */
 const ARIA_ENGINE_OUTPUT = {
   ok: true,
   engineVersion: 'm132',
@@ -79,8 +79,8 @@ function sdqParentEmoDanger(eventId: string): EvidenceEvent {
 
 // ───────── آزمون‌ها ─────────
 
-describe('پیوند وکسلر ۴ با موتور شناسایی (Task 39-a)', () => {
-  it('۱) فقط رویداد وکسلر (fsiq=۷۵) → دیرآموزی با شاهد «هوشبهر کلی وکسلر در محدودهٔ مرزی» — رفع قاعدهٔ مرده', () => {
+describe('پیوند وکسلر ۴ با موتور شناسایی (m156 — بدون تغذیهٔ فرضیه‌ای)', () => {
+  it('۱) فقط رویداد وکسلر (fsiq=۷۵) → دیرآموزی با شاهد «هوشبهر کلی وکسلر در محدودهٔ مرزی» — قاعدهٔ خام بندل', () => {
     const out = runInference([wechslerEvent({ eventId: 'w1', fsiq: '75' })]);
     const slow = out.ranked.find((h) => h.targetKey === 'slow_learner');
     expect(slow).toBeDefined();
@@ -90,57 +90,42 @@ describe('پیوند وکسلر ۴ با موتور شناسایی (Task 39-a)', 
     expect(out.dataCoverage.seen).toContain('ce-wechsler-w4-v1');
   });
 
-  it('۲) فرضیهٔ DLD وزن ۰٫۴ → زبان/گفتار با شاهد وکسلری «وزن بالا» — بدون هیچ چک‌لیست زبان (گیت hasData)', () => {
+  it('۲) payload قدیمی با فرضیهٔ DLD وزن ۰٫۴ → هیچ فرضیهٔ زبان/گفتاری ساخته نمی‌شود (m156 — اتصال قطع)', () => {
     const out = runInference([wechslerEvent({ eventId: 'w1', fsiq: '75', engine: ARIA_ENGINE_OUTPUT })]);
-    const speech = out.ranked.find((h) => h.targetKey === 'speech_language');
-    expect(speech).toBeDefined();
-    expect(speech!.score).toBeCloseTo(2, 5);
-    expect(speech!.evidenceFa.some((e) => e.includes('نیم‌رخ وکسلر ۴ با فرضیهٔ «اختلال زبانی (DLD)» هم‌گراست (وزن بالا)'))).toBe(true);
-    // اثبات گیت hasData: هیچ رویداد دیگری جز وکسلر در ورودی نیست
+    expect(out.ranked.find((h) => h.targetKey === 'speech_language')).toBeUndefined();
     expect(out.dataCoverage.seen).toEqual(['ce-wechsler-w4-v1']);
   });
 
-  it('۳) فرضیهٔ MOOD وزن ۰٫۲ → اضطراب با شاهد «وزن متوسط» (w۱)', () => {
+  it('۳) payload قدیمی با فرضیهٔ MOOD وزن ۰٫۲ → هیچ فرضیهٔ اضطرابی ساخته نمی‌شود', () => {
     const out = runInference([wechslerEvent({ eventId: 'w1', fsiq: '75', engine: ARIA_ENGINE_OUTPUT })]);
-    const anx = out.ranked.find((h) => h.targetKey === 'anxiety');
-    expect(anx).toBeDefined();
-    expect(anx!.score).toBeCloseTo(1, 5);
-    expect(anx!.evidenceFa.some((e) => e.includes('عامل خلقی/اضطرابی (MOOD)') && e.includes('متوسط'))).toBe(true);
+    expect(out.ranked.find((h) => h.targetKey === 'anxiety')).toBeUndefined();
   });
 
-  it('۴) فرضیه با وزن ۰٫۱ (زیر آستانهٔ ۰٫۱۸) → هیچ تقویتی اعمال نمی‌شود', () => {
-    const out = runInference([
-      wechslerEvent({
-        eventId: 'w1',
-        engine: { ok: true, hypotheses: [{ id: 'DLD', weight: 0.1 }, { id: 'MOOD', weight: 0.1 }] }
-      })
-    ]);
-    // بدون boost، هدف‌های زبان/اضطراب اصلاً وارد رتبه‌بندی نمی‌شوند (گیت داده رد می‌کند)
-    expect(out.ranked.find((h) => h.targetKey === 'speech_language')).toBeUndefined();
-    expect(out.ranked.find((h) => h.targetKey === 'anxiety')).toBeUndefined();
-    // دیرآموزی هم بدون fsiq و بدون boost امتیازی ندارد
+  it('۴) payload قدیمی با main=BIF (تفسیر موازی m98) → هیچ دیرآموزی‌ای از main ساخته نمی‌شود', () => {
+    const out = runInference([wechslerEvent({ eventId: 'w1', engine: ARIA_ENGINE_OUTPUT })]);
+    // بدون fsiq دستی و بدون profile → هیچ نامزد وکسلری وجود ندارد
     expect(out.ranked.find((h) => h.targetKey === 'slow_learner')).toBeUndefined();
   });
 
-  it('۵) ترکیب با چک‌لیست: SDQ والد زیرمقیاس هیجانی danger + MOOD → جمع امتیاز (smoke)', () => {
+  it('۵) ترکیب با چک‌لیست: SDQ والد زیرمقیاس هیجانی danger → اضطراب فقط از چک‌لیست (w۱) — بدون فرضیهٔ وکسلری', () => {
     const out = runInference([
       wechslerEvent({ eventId: 'w1', fsiq: '75', engine: ARIA_ENGINE_OUTPUT }),
       sdqParentEmoDanger('s1')
     ]);
-    // اضطراب = SDQ (w۱) + MOOD (w۱) = ۲
+    // اضطراب = فقط SDQ (w۱) — هیچ تقویت وکسلری اضافه نمی‌شود
     const anx = out.ranked.find((h) => h.targetKey === 'anxiety')!;
-    expect(anx.score).toBeCloseTo(2, 5);
+    expect(anx.score).toBeCloseTo(1, 5);
     expect(anx.evidenceFa.some((e) => e.includes('زیرمقیاس هیجانی SDQ والد'))).toBe(true);
-    expect(anx.evidenceFa.some((e) => e.includes('نیم‌رخ وکسلر ۴'))).toBe(true);
-    // دیرآموزی مستقل از SDQ روی ۲ می‌ماند
+    expect(anx.evidenceFa.some((e) => e.includes('وکسلر'))).toBe(false);
+    // دیرآموزی مستقل روی ۲ می‌ماند (قاعدهٔ خام fsiq)
     expect(out.ranked.find((h) => h.targetKey === 'slow_learner')!.score).toBeCloseTo(2, 5);
   });
 
-  it('شبیه‌سازی آریا — امتیاز نهایی: دیرآموزی ۲، زبان/گفتار ۲، اضطراب ۱', () => {
+  it('شبیه‌سازی آریا (m156) — امتیاز نهایی: دیرآموزی ۲؛ زبان/گفتار و اضطراب ساخته نمی‌شوند', () => {
     const out = runInference([wechslerEvent({ eventId: 'w1', fsiq: '75', engine: ARIA_ENGINE_OUTPUT })]);
     const scores = Object.fromEntries(out.ranked.map((h) => [h.targetKey, h.score]));
     expect(scores['slow_learner']).toBeCloseTo(2, 5);
-    expect(scores['speech_language']).toBeCloseTo(2, 5);
-    expect(scores['anxiety']).toBeCloseTo(1, 5);
+    expect(scores['speech_language']).toBeUndefined();
+    expect(scores['anxiety']).toBeUndefined();
   });
 });

@@ -18,7 +18,7 @@
 //    پاسخ با referralFa شفاف — تفکیک انطباقی، دو مسیر ID و دیرآموز هرگز هم‌پوشان نمی‌شوند.
 //  - TBI: PSI منفردِ پایین‌ترین با گپ معنادار + سابقهٔ آسیب/بیماری → ارجاع پزشکی (خط قرمز)
 //    در کنار باتری پایه.
-//  - هر پیشنهاد بدون «چرا» نمی‌آید (reasonFa) و پانویس خط قرمز (ENGINE_DISCLAIMER) الزامی است.
+//  - هر پیشنهاد بدون «چرا» نمی‌آید (reasonFa) — m156: پانویس انکار از خروجی حذف شد.
 //
 // قاعدهٔ slow_learner هدف مستقل موتور شک v2 است (موج ۳/T6) — این‌جا فقط در پیشنهادگر ظاهر می‌شود.
 
@@ -27,7 +27,6 @@ import type { ClinicalSignal, WechslerFsiqBand } from './signals';
 import { fsiqBandOf } from './signals';
 import { WECHSLER_W4_EVENT_KEY, wechslerEngineOutputOf } from './wechsler-link';
 import { anamnesisSignalsOf, ANAMNESIS_V3_KEY } from './infer';
-import { ENGINE_DISCLAIMER } from './instruments';
 
 // ───────── آستانه‌های شفاف — تک‌منبع کالیبراسیون (سند §۲.۴ — «آستانه‌ها قابل مرور») ─────────
 
@@ -116,8 +115,6 @@ export interface ChecklistPlan {
   basis: string;
   /** خط قرمز ارجاع — مسیر ID یا ارجاع پزشکی؛ بدون خط قرمز null */
   referralFa: string | null;
-  /** پانویس خط قرمز — الزام سند §۴ */
-  disclaimer: string;
 }
 
 /** ورودی خالص پیشنهادگر — همهٔ قطعات از رویدادهای پرونده مشتق می‌شوند (checklistPlanContextOf) */
@@ -400,8 +397,7 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
       planType: 'جامع',
       items: [],
       basis: `هوش‌بهر کل ${faNum(fsiq ?? 0)} در بازهٔ ناتوانی هوشی است و انطباق روزمره «پایین» گزارش شده — طبق ملاک تفکیک انطباقی، مسیر ارجاع ناتوانی هوشی (ID) فعال می‌شود و سامانه پلن ابزاری پیشنهاد نمی‌کند؛ تصمیم و ارجاع با متخصص است.`,
-      referralFa: 'خط قرمز — مسیر ناتوانی هوشی (FSIQ ≤ ۷۰ همراه انطباق پایین): پلن چک‌لیست رفتاری پیشنهاد نمی‌شود؛ پرونده برای ارجاع تخصصی (روان‌پزشک/مدیر پرونده) علامت خورد.',
-      disclaimer: ENGINE_DISCLAIMER
+      referralFa: 'خط قرمز — مسیر ناتوانی هوشی (FSIQ ≤ ۷۰ همراه انطباق پایین): پلن چک‌لیست رفتاری پیشنهاد نمی‌شود؛ پرونده برای ارجاع تخصصی (روان‌پزشک/مدیر پرونده) علامت خورد.'
     };
   }
 
@@ -519,8 +515,7 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
     planType,
     items,
     basis: buildBasis({ facts, anam, adapt, domains: builder.domains, notes: builder.notes, planType, band, fsiq }),
-    referralFa: builder.referral,
-    disclaimer: ENGINE_DISCLAIMER
+    referralFa: builder.referral
   };
 }
 

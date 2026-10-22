@@ -3,7 +3,7 @@
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
 // پوشش:
-//  ۱) نگاشت کامل ۱۳ فرضیهٔ وکسلر → رجیستری واحد (هر شناسه صریح: هدف یا null عمدی)
+//  ۱) m156 — اتصال فرضیه‌ای قطع است: فرضیه‌های engine_output وکسلر (قدیم و جدید) نادیده گرفته می‌شوند
 //  ۲) تفکیک انطباقی ID/دیرآموز (§۳.۱): FSIQ ≤ ۷۰ + انطباق پایین → ارجاع و بدون تقویت دیرآموزی
 //  ۳) قاعدهٔ BIF: FSIQ ۷۰–۸۴ + انطباق عادی/ثبت‌نشده → تقویت؛ «قوی‌ترین تک‌تقویت» بدون جمع
 //  ۴) مرز پایین یکنواخت (۸۵–۸۹) → فقط پایش، بدون برچسب و بدون تقویت
@@ -11,12 +11,6 @@
 
 import { describe, it, expect } from 'vitest';
 import { runInference } from '../infer';
-import {
-  WECHSLER_HYP_IDS,
-  WECHSLER_HYP_TARGETS,
-  wechslerHypTargetOf,
-  wechslerHypothesisBoost
-} from '../wechsler-link';
 import { convergenceItemOf, convergenceSourceOfTool, ID_ADAPT_EVENT_KEY } from '../convergence';
 import type { EvidenceEvent } from '../types';
 
@@ -81,105 +75,36 @@ function snap(form: 'p' | 't', ia: number, color: 'danger' | 'warn' | 'ok' | nul
   });
 }
 
-// ───────── ۱) نگاشت کامل ۱۳ فرضیه ─────────
+// ───────── ۱) m156 — اتصال فرضیه‌ای قطع است ─────────
 
-describe('T6 — نگاشت ۱۳ فرضیهٔ وکسلر به رجیستری واحد', () => {
-  it('هر ۱۳ شناسهٔ موتور وکسلر در جدول نگاشت صریح‌اند (هدف یا null عمدی)', () => {
-    // T8 (m149) — جدول ملاک‌های موتور وکسلر حذف شد (لایهٔ تفسیر موازی)؛ فعال‌ساز profile-محور
-    // همان سیزده شناسه را تولید می‌کند — فهرست مرجع این‌جا قفل می‌شود تا شناسهٔ آینده‌ای جا نیفتد
-    const engineIds = [
-      'SLD', 'ADHD', 'ID', 'BIF', 'DLD', 'NVLD', 'TBI', 'ASD', 'TWO_E', 'MOOD', 'APD', 'NORMAL', 'DOMAIN_WEAK'
-    ].sort();
-    expect(engineIds).toEqual([...WECHSLER_HYP_IDS].sort());
-    for (const id of WECHSLER_HYP_IDS) {
-      expect(id in WECHSLER_HYP_TARGETS || id === 'SLD' || id === 'DOMAIN_WEAK', id).toBe(true);
-    }
-    // پوشش کامل: wechslerHypTargetOf برای هیچ شناسه‌ای undefined نمی‌دهد — یا هدف یا null
-    for (const id of WECHSLER_HYP_IDS) {
-      const t = wechslerHypTargetOf(id, {});
-      expect(t === null || typeof t === 'string', id).toBe(true);
-    }
+describe('m156 — فرضیه‌های وکسلر به موتور واحد تغذیه نمی‌شوند', () => {
+  it('فرضیه‌های engine_output رویداد وکسلر (قدیم m98) نادیده گرفته می‌شوند — اتیسم با یک فرضیهٔ وکسلری ساخته نمی‌شود', () => {
+    const out = runInference([
+      w4({ engine: { ok: true, hypotheses: [{ id: 'ASD', weight: 0.9 }, { id: 'SLD', weight: 0.9 }] } })
+    ]);
+    expect(out.ranked.find((h) => h.targetKey === 'autism')).toBeUndefined();
+    expect(out.ranked.find((h) => h.targetKey === 'dyslexia')).toBeUndefined();
   });
 
-  it('BIF → slow_learner (الزام §۳.۱) و ID هرگز slow_learner نمی‌گیرد', () => {
-    expect(wechslerHypTargetOf('BIF')).toBe('slow_learner');
-    expect(wechslerHypTargetOf('ID')).toBeNull();
-    // در عمل: رویداد با فرضیهٔ ID → هیچ تقویتی برای دیرآموزی حتی با fsiq پایین
+  it('فرضیهٔ BIF وزن‌دار بی‌پروفایل → هیچ دیرآموزی‌ای ساخته نمی‌شود', () => {
+    const out = runInference([
+      w4({ engine: { ok: true, hypotheses: [{ id: 'BIF', weight: 0.9 }] } })
+    ]);
+    expect(out.ranked.find((h) => h.targetKey === 'slow_learner')).toBeUndefined();
+  });
+
+  it('ID هرگز slow_learner نمی‌سازد (تفکیک انطباقی §۳.۱ — بقا پس از m156)', () => {
     const out = runInference([
       w4({ engine: { ok: true, hypotheses: [{ id: 'ID', weight: 0.4 }], profile: { fsiq: 65, fsiqBand: 'ID', indexScatter: 4 } } })
     ]);
     expect(out.ranked.find((h) => h.targetKey === 'slow_learner')).toBeUndefined();
-    // و تقویت مستقیم تابع هم برای هدف slow_learner با فرضیهٔ ID → null
-    expect(wechslerHypothesisBoost(w4({ engine: { ok: true, hypotheses: [{ id: 'ID', weight: 0.4 }] } }), 'slow_learner')).toBeNull();
   });
 
-  it('SLD → قوی‌ترین سیگنال شرح‌حال (تساوی → ترتیب ثابت خواندن، نوشتن، حساب)؛ بی‌سیگنال → null صریح', () => {
-    const ctx = (read: number | null, write: number | null, calc: number | null) => ({ sld: { read, write, calc } });
-    expect(wechslerHypTargetOf('SLD', ctx(1, 0.67, 0))).toBe('dyslexia');
-    expect(wechslerHypTargetOf('SLD', ctx(0.33, 1, 0.33))).toBe('dysgraphia');
-    expect(wechslerHypTargetOf('SLD', ctx(0.33, 0.33, 0.9))).toBe('dyscalculia');
-    // تساوی کامل → ترتیب ثابت: خواندن، نوشتن، حساب
-    expect(wechslerHypTargetOf('SLD', ctx(0.67, 0.67, 0.67))).toBe('dyslexia');
-    expect(wechslerHypTargetOf('SLD', ctx(0, 0.5, 0.5))).toBe('dysgraphia');
-    // بی‌داده (هیچ‌کدام در پرونده نیست) → null صریح — نه حذف بی‌سروصدا
-    expect(wechslerHypTargetOf('SLD', ctx(null, null, null))).toBeNull();
-    expect(wechslerHypTargetOf('SLD', {})).toBeNull();
-  });
-
-  it('DOMAIN_WEAK → هدف شاخص (WMI→حافظهٔ کاری)؛ بدون جزئیات شاخص → null صریح', () => {
-    expect(wechslerHypTargetOf('DOMAIN_WEAK', { domainWeakIndex: 'WMI' })).toBe('working_memory');
-    expect(wechslerHypTargetOf('DOMAIN_WEAK', { domainWeakIndex: 'VCI' })).toBe('speech_language');
-    expect(wechslerHypTargetOf('DOMAIN_WEAK', { domainWeakIndex: 'PRI' })).toBe('motor_coordination');
-    // PSI هدف مستقلی در رجیستری ندارد → null صریح
-    expect(wechslerHypTargetOf('DOMAIN_WEAK', { domainWeakIndex: 'PSI' })).toBeNull();
-    expect(wechslerHypTargetOf('DOMAIN_WEAK', {})).toBeNull();
-  });
-
-  it('NVLD/TBI/TWO_E/NORMAL — null عمدی با دلیل؛ DLD/APD/MOOD/ADHD/ASD — نگاشت ثابت امروز', () => {
-    expect(wechslerHypTargetOf('NVLD')).toBeNull();
-    expect(wechslerHypTargetOf('TBI')).toBeNull();
-    expect(wechslerHypTargetOf('TWO_E')).toBeNull();
-    expect(wechslerHypTargetOf('NORMAL')).toBeNull();
-    expect(wechslerHypTargetOf('DLD')).toBe('speech_language');
-    expect(wechslerHypTargetOf('APD')).toBe('speech_language');
-    expect(wechslerHypTargetOf('MOOD')).toBe('anxiety');
-    expect(wechslerHypTargetOf('ADHD')).toBe('adhd');
-    expect(wechslerHypTargetOf('ASD')).toBe('autism');
-  });
-
-  it('تقویت فرضیهٔ BIF در عمل: رویداد بدون fsiq دستی → دیرآموزی با شاهد وکسلری (تغییر مقصود)', () => {
+  it('ضعف گام ۵ (VCI) بی‌چک‌لیست → هیچ فرضیهٔ زبان/گفتار از وکسلر ساخته نمی‌شود', () => {
     const out = runInference([
-      w4({ engine: { ok: true, hypotheses: [{ id: 'BIF', weight: 0.3 }] } })
+      w4({ engine: { ok: true, hypotheses: [{ id: 'DOMAIN_WEAK', weight: 0.4 }], snapshot: { step5Weak: ['VCI'] } } })
     ]);
-    const slow = out.ranked.find((h) => h.targetKey === 'slow_learner');
-    expect(slow).toBeDefined();
-    expect(slow!.score).toBeCloseTo(2, 5); // w۰٫۳ ≥ ۰٫۳ → وزن ۲ (بالا) — قرارداد وزن ماژول
-    expect(slow!.evidenceFa.some((e) => e.includes('عملکرد مرزی/دیرآموزی (BIF)'))).toBe(true);
-  });
-
-  it('تقویت DOMAIN_WEAK در عمل: step5 ضعف VCI → هدف زبان/گفتار؛ و در سطح تابع: WMI → حافظهٔ کاری', () => {
-    // در سطح تابع نگاشت — WMI به حافظهٔ کاری می‌رود (هدف حمایتی بدون ruleSet، تقویتش فقط در لایهٔ نگاشت معنا دارد)؛
-    // زمینه (domainWeakIndex) را مانند infer از پروفایل/snapshot می‌سازیم
-    const boost = wechslerHypothesisBoost(
-      w4({ engine: { ok: true, hypotheses: [{ id: 'DOMAIN_WEAK', weight: 0.4 }], snapshot: { step5Weak: ['WMI'] } } }),
-      'working_memory',
-      { domainWeakIndex: 'WMI' }
-    );
-    expect(boost?.weight).toBe(2);
-    expect(boost?.fa).toContain('ضعف حوزه‌ای');
-    // در سطح موتور — هدف دارای ruleSet (زبان/گفتار) واقعاً رتبه می‌گیرد
-    const out = runInference([
-      w4({
-        engine: {
-          ok: true,
-          hypotheses: [{ id: 'DOMAIN_WEAK', weight: 0.4 }],
-          snapshot: { step5Weak: ['VCI'] }
-        }
-      })
-    ]);
-    const speech = out.ranked.find((h) => h.targetKey === 'speech_language');
-    expect(speech).toBeDefined();
-    expect(speech!.evidenceFa.some((e) => e.includes('ضعف حوزه‌ای'))).toBe(true);
+    expect(out.ranked.find((h) => h.targetKey === 'speech_language')).toBeUndefined();
   });
 });
 
@@ -333,7 +258,6 @@ describe('T6 — هم‌گرایی چندمنبعی (سه حالت خوانا)',
       'nextActions',
       'dataCoverage',
       'referralFlags',
-      'disclaimer',
       'anamnesisSignals',
       'convergence'
     ]);

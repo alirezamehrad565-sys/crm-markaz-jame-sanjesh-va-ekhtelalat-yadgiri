@@ -57,11 +57,17 @@ export interface WechslerValidation {
   missing: SubtestCode[];
 }
 
-/** فرضیهٔ فعال‌شده از نیم‌رخ (پیش از پرسش‌نامه) — تنها خروجی بالینی موتور (T8/m149) */
-export interface WechslerHypothesisActivation {
-  id: string;
-  weight: number;
-  clues: string[];
+/** m156 — خوانش مستقل روان‌سنجی نیم‌رخ هوشی — فقط شواهد؛ بدون فرضیه/سناریو/وزن */
+export interface WechslerPsychometrics {
+  fsiq: { value: number; band: string | null; bandFa: string | null; percentile: number | null; computable: boolean } | null;
+  indices: Array<{ key: string; fa: string; scaled: number; percentile: number | null; cls: string | null }>;
+  scatter: { value: number; homogeneous: boolean } | null;
+  strengths: Array<{ key: string; fa: string; diff: number }>;
+  weaknesses: Array<{ key: string; fa: string; diff: number }>;
+  gaps: Array<{ key: string; fa: string; diff: number; textFa: string }>;
+  patterns: Array<{ key: string; textFa: string }>;
+  validityNotes: string[];
+  summaryFa: string;
 }
 
 export interface WechslerIndexScore {
@@ -95,7 +101,7 @@ export interface WechslerSnapshot {
   subWeak: Array<{ code: string; scaled: number }>;
 }
 
-/** Full engine result (psychometrics + hypothesis evidence — T8/m149: بدون لایهٔ تفسیر موازی). */
+/** Full engine result (روان‌سنجی خالص + خوانش نیم‌رخ — T8/m149 + m156: بدون هیچ لایهٔ فرضیه‌ای). */
 export interface WechslerAnalysisResult {
   ok: boolean;
   ageLine: string;
@@ -104,8 +110,8 @@ export interface WechslerAnalysisResult {
   analysis: Record<string, unknown> | null;
   snapshot: WechslerSnapshot | null;
   flags: Array<{ id: string; fa: string; validity: boolean }>;
-  /** شواهد فرضیه‌ای موتور — موتور واحد همین‌ها را مصرف می‌کند ({id, weight, clues}) */
-  hypotheses: WechslerHypothesisActivation[];
+  /** m156 — خوانش مستقل روان‌سنجی نیم‌رخ هوشی (ok:false → null)؛ فرضیه‌ها از خروجی حذف شدند */
+  psychometrics: WechslerPsychometrics | null;
   weakDomains: Array<{ domain: string; label: string; indices: string[] }>;
   monitoringInterval: string;
   /** T1 (m146) — افزودنی: سیگنال‌های بالینی ساخته‌شده از snapshot/analysis موجود (ok:false → []) */
