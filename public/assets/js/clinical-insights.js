@@ -34,6 +34,7 @@ import {
   SPECIFIC_KEYS,
   PROBE_KEYS,
   RESULTS_KEY,
+  REHAB_FX_KEY,
   WISC4_KEY,
   SUSPICION_KEY,
   LEARNING_BLANK_TEMPLATE_KEY,
@@ -701,6 +702,113 @@ function probeAssessSection({ student, events, typesById, canDecide, refresh }) 
     el('div', { class: 'clx-probe__grid' }, ...cards));
 }
 
+// ───────── m161 — ارزیابی عملکردی توانبخشی ذهنی — بدنهٔ مرحلهٔ مهارت‌ها (حالت توانبخشی) ─────────
+// تمرکز مسیر توانبخشی ذهنی-جسمی روی «کار درمانی ذهنی» است: شش حیطهٔ شناختی پایه با دادهٔ خام
+// عددی + سطح راهنمای هر حیطه (خط پایهٔ محوشدن راهنما) — آزمونِ درمانگر در مرکز، حین جلسهٔ اول.
+// ملاک هر حیطه = ملاک کمی مهارت متناظر در چک‌لیست ۷ حیطه‌ای (ot_skills) — ارزیابی پایه و
+// ماتریس مداخله جلسه‌به‌جلسه یک زبان مشترک دارند. آینهٔ backend pure.ts (REHAB_FX_DOMAINS).
+const REHAB_FX_PROMPTS = ['بدون راهنما', 'راهنمای کلامی', 'ژستی / الگودهی', 'لمسی جزئی', 'راهنمای فیزیکی کامل'];
+const REHAB_FX_AREAS = [
+  { key: 'att_sus', label: 'توجه پایدار', unit: 'دقیقهٔ تمرکز پیوسته', max: 15, hint: 'روی یک فعالیت ساخت‌یافته چقدر پیوسته می‌ماند؟ (ملاک: ۱۰ دقیقه بدون یادآوری)' },
+  { key: 'att_sel', label: 'توجه انتخابی — حذف هدف', unit: 'خطا از ۲۰ هدف', max: 20, hint: 'در جدول حذف هدف چند خطا؟ (ملاک: حداکثر ۲ خطا)' },
+  { key: 'wm', label: 'حافظهٔ کاری', unit: 'طول توالی بازگوشده (رقم)', max: 9, hint: 'بیشترین توالی عددی که برگرداند؟ (ملاک: ۴ رقم)' },
+  { key: 'inh', label: 'بازداری — سیگنال معکوس', unit: 'خطا از ۱۰ آزمون', max: 10, hint: 'در بازی سیگنال معکوس چند خطا؟ (ملاک: حداکثر ۲ خطا)' },
+  { key: 'flex', label: 'انعطاف ذهنی', unit: 'کمک لازم پس از تغییر قاعده (بار)', max: 4, hint: 'بعد از تغییر قاعدهٔ بازی چند بار کمک خواست؟ (ملاک: بدون گِر)' },
+  { key: 'ps', label: 'حل مسئله — پازل', unit: 'تکهٔ درست از ۱۲', max: 12, hint: 'پازل چند تکه را درست گذاشت؟ (ملاک: ۶–۱۲ تکه + ترتیب داستان)' }
+];
+
+/** آخرین رویداد ارزیابی عملکردی توانبخشی (غیرلغوشده) — null یعنی ثبت نشده */
+function rehabFxEventOf(events, typesById) {
+  const typeId = typesById.get(REHAB_FX_KEY)?.id ?? null;
+  if (!typeId) return null;
+  return (events ?? []).find((e) => e.eventTypeId === typeId && e.status !== 'cancelled') ?? null;
+}
+
+/** مودال میکروی ثبت — شش عدد + توالی داستان + سطح راهنمای هر حیطه + مشاهده → POST مسیر اختصاصی */
+function openRehabFxModal(student, onDone) {
+  const fields = [];
+  for (const a of REHAB_FX_AREAS) {
+    fields.push({ name: `d_${a.key}`, type: 'number', label: `${a.label} — ${a.unit}`, hint: a.hint, required: true, span: 1 });
+  }
+  fields.push({ name: 'd_ps_story', type: 'number', label: 'توالی داستان — تصویر درست‌ترتیب از ۴', span: 1 });
+  for (const a of REHAB_FX_AREAS) {
+    fields.push({
+      name: `p_${a.key}`, type: 'select', label: `سطح راهنما — ${a.label}`,
+      options: REHAB_FX_PROMPTS.map((p) => ({ value: p, label: p })), span: 1
+    });
+  }
+  fields.push({ name: 'notes', type: 'textarea', label: 'مشاهدهٔ درمانگر (انگیزه، خستگی، راهبرد جالب…)', span: 2 });
+  formModal({
+    title: 'ارزیابی عملکردی توانبخشی ذهنی — ثبت درمانگر در مرکز',
+    submitLabel: 'ثبت ارزیابی',
+    fields,
+    onSubmit: async (vals) => {
+      try {
+        await api.post(`/api/students/${student.id}/case-events/rehab-fx`, { values: vals });
+        toast('ارزیابی عملکردی ذهنی ثبت شد — باند هر حیطه و پیشنهاد مداخلهٔ حیطه‌ای همین‌جا می‌نشیند', 'success');
+        onDone();
+        return true;
+      } catch (err) { toastError(err); return false; }
+    }
+  });
+}
+
+/**
+ * بخش «ارزیابی عملکردی توانبخشی ذهنی» — یک کارت:
+ * ثبت‌شده → نشان باند کلی + ردیف شش حیطه (مقدار خام — باند + سطح راهنما) + ملاک مرجع + پیشنهادهای حیطه‌ای؛
+ * بدون ثبت + حق ثبت → توضیح + دکمهٔ مودال میکرو؛ بدون حق ثبت → فقط اطلاع.
+ */
+function rehabFxSection({ student, events, typesById, canDecide, refresh }) {
+  const existing = rehabFxEventOf(events, typesById);
+  if (existing) {
+    const bandLabel = existing.analysis?.band ?? existing.payload?.chip_band?.value ?? null;
+    const color = ((existing.typeBands ?? []).find((b) => b.label === bandLabel) ?? {}).color ?? null;
+    const metricRows = [];
+    for (let i = 1; i <= 8; i++) {
+      const m = existing.payload?.[`chip_metric_${i}`];
+      if (m?.value) metricRows.push(el('div', { class: 'clx-probe__metric' }, el('span', {}, m.label), el('b', {}, m.value)));
+    }
+    const adviceRows = [];
+    for (let i = 1; i <= 8; i++) {
+      const a = existing.payload?.[`advice_${i}`];
+      if (a?.value) adviceRows.push(el('div', { class: 'clx-readcore__advice-row' },
+        el('strong', {}, a.label), el('span', {}, a.value)));
+    }
+    return el('div', { class: 'card clx-probe is-done', id: 'rehab-fx-anchor' },
+      el('div', { class: 'card__body' },
+        el('div', { class: 'clx-plan__head' },
+          el('strong', { class: 'clx-plan__title' }, icon('brain', 15), 'ارزیابی عملکردی توانبخشی ذهنی — خط پایه'),
+          sensoryBandBadge(`ثبت شد — ${bandLabel ?? '—'}`, color)),
+        existing.payload?.fa_summary?.value
+          ? el('div', { class: 'cell-sub clx-probe__summary' }, existing.payload.fa_summary.value)
+          : null,
+        metricRows.length ? el('div', { class: 'clx-probe__metrics' }, ...metricRows) : null,
+        existing.payload?.norm_fa?.value
+          ? el('div', { class: 'cell-sub clx-probe__norm' }, icon('compass', 12), ' ', existing.payload.norm_fa.value)
+          : null,
+        adviceRows.length
+          ? el('div', { class: 'clx-readcore__advice' },
+            el('div', { class: 'cell-sub' }, el('strong', null, 'پیشنهاد مداخلهٔ حیطه‌ای — از همین‌جا به جلسات:')),
+            adviceRows)
+          : null,
+        existing.occurredAt ? el('div', { class: 'cell-sub' }, `ثبت: ${formatJalaliDateTime(existing.occurredAt)}`) : null));
+  }
+  const act = canDecide
+    ? el('div', { class: 'clx-actions' },
+      el('button', { class: 'btn btn--primary btn--sm', onclick: () => openRehabFxModal(student, refresh) },
+        icon('zap', 14), 'ثبت ارزیابی عملکردی'))
+    : null;
+  return el('div', { class: 'card clx-probe', id: 'rehab-fx-anchor' },
+    el('div', { class: 'card__body' },
+      el('div', { class: 'clx-plan__head' },
+        el('strong', { class: 'clx-plan__title' }, icon('brain', 15), 'ارزیابی عملکردی توانبخشی ذهنی — خط پایه'),
+        el('span', { class: 'badge badge--neutral' }, 'ثبت نشده')),
+      el('div', { class: 'cell-sub' }, 'شش حیطهٔ شناختی پایه (توجه پایدار، توجه انتخابی، حافظهٔ کاری، بازداری، انعطاف، حل مسئله) با دادهٔ خام و سطح راهنما — آزمونِ درمانگر در مرکز حین جلسهٔ اول؛ ملاک هر حیطه از چک‌لیست ۷ حیطه‌ای.'),
+      el('div', { class: 'clx-probe__metrics' },
+        ...REHAB_FX_AREAS.map((a) => el('div', { class: 'clx-probe__metric' }, el('span', {}, a.label), el('b', {}, a.unit)))),
+      act));
+}
+
 /**
  * — بلوک «زمینهٔ تفسیر» — بدنهٔ مرحلهٔ وکسلر (بدنه تغییر نکرده — m134)
  * سن/تولد/پایه/مسیر پرونده کنار خروجی کمی وکسلر (FSIQ/صدک/پراکندگی) — تا نیم‌رخ
@@ -750,7 +858,7 @@ function interpretationContext({ student, gates }) {
  * — دکمهٔ اقدام هر گیت — CTA سربرگ و بدنهٔ آکاردئون‌ها
  * گیت «needs» این‌جا دکمه ندارد: اقدام اصلی مرحلهٔ ۵ دکمهٔ داخل کارت جمع‌بندی است (تک‌منبع).
  */
-function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide, refresh, skillsMode, events }) {
+function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide, refresh, skillsMode, events, isRehabCase }) {
   if (!g) return null;
   const typeIdOf = (key) => typesById.get(key)?.id ?? null;
   const act = (label, cls, onclick) => el('button', { class: `btn ${cls} btn--sm`, onclick }, icon('send', 14), label);
@@ -781,6 +889,11 @@ function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide
         return nextProbe
           ? act(GATE_GLOSS.skills.learningActionLabel, 'btn--soft', () => openProbeModal(nextProbe, student, refresh))
           : null;
+      }
+      // m161 — حالت توانبخشی: بدون خط پایه → مودال میکروی ارزیابی عملکردی؛ با ثبت → همان مودال (بازسنجی خط پایه)
+      if (ctx.isRehabCase) {
+        if (!canDecide) return null;
+        return act(GATE_GLOSS.skills.rehabActionLabel, 'btn--soft', () => openRehabFxModal(student, refresh));
       }
       return act(GATE_GLOSS.skills.rehabActionLabel, 'btn--soft', () => {
         document.getElementById('ot-checklist-anchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1538,6 +1651,8 @@ export async function renderClinicalTab(box, { student }) {
 
     // ── فاز و پروتکل از گیت‌ها؛ fallback: اگر گیت‌ها نیامد، فاز شناسایی ──
     const protocol = gates?.protocol ?? null;
+    // m161 — حالت توانبخشی: مسیر پرونده rehab یا پروتکل فعال توانبخشی — مبنای مرحلهٔ ۴ و شماره‌گذاری گیت‌ها
+    const isRehabCase = student.pathway === 'rehab' || protocol === 'rehab';
     const phase = protocol ? 'intervention' : 'identification';
     const SM = STAGE2_META.stages;
     // دفاعی (§8.9): ترتیب و تعداد گیت‌ها مالکیت سرور است؛ اگر پاسخ گیت‌ها نیامده باشد،
@@ -1546,7 +1661,7 @@ export async function renderClinicalTab(box, { student }) {
       ? gates.gates
       : (gates ? [] : ['anamnesis', 'wechsler', 'behavioral', 'skills', 'needs'].map((k) => ({ key: k, done: false, ord: SM[k].num, label: SM[k].title, detail: null })));
     const gateByKey = (key) => gatesList.find((g) => g.key === key) ?? null;
-    const stageCtx = { student, gates, typesById, anamnesisTypeId, canDecide, refresh, skillsMode, events };
+    const stageCtx = { student, gates, typesById, anamnesisTypeId, canDecide, refresh, skillsMode, events, isRehabCase };
 
     // دادهٔ صورت‌بندی — یک‌بار fetch؛ هم به wechslerConnections می‌رود هم به کارت جمع‌بندی (null-safe)
     const formulation = await fetchFormulation({ student });
@@ -1600,9 +1715,16 @@ export async function renderClinicalTab(box, { student }) {
         return line;
       },
       skills: () => {
-        // glance حالت‌آگاه (m136): OT → پوشش پیمایش از gates.otCoverage (اولین مصرف واقعی این داده)؛
-        // SLD → شمار چک‌لیست‌های خواندن/نوشتن/ریاضی + پروب‌های پاسخ‌شده از پاسخ مشترک رویدادها.
+        // glance حالت‌آگاه (m136 + m161): توانبخشی → خط پایهٔ ارزیابی عملکردی ذهنی؛
+        // OT → پوشش پیمایش از gates.otCoverage؛ SLD → شمار پروب‌ها از پاسخ مشترک رویدادها.
         if (skillsMode === SKILL_MODE_OT) {
+          if (isRehabCase) {
+            const fx = rehabFxEventOf(events, typesById);
+            if (fx && fx.analysis?.score != null) {
+              return SM.skills.glanceFxDone.replace('{ok}', fa(Number(fx.analysis.score)));
+            }
+            return SM.skills.glanceFxNone;
+          }
           const cov = gates?.otCoverage
             ?? (otProfile?.totals ? { scored: otProfile.totals.scored, total: otProfile.totals.total } : null);
           if (cov?.total) return SM.skills.glanceOt.replace('{n}', fa(cov.scored)).replace('{m}', fa(cov.total));
@@ -1670,13 +1792,18 @@ export async function renderClinicalTab(box, { student }) {
       ],
       skills: () => {
         if (skillsMode === SKILL_MODE_OT) {
+          const stats = [];
+          // m161 — توانبخشی: حیطه‌های پایهٔ در انتظار از ارزیابی عملکردی ذهنی
+          if (isRehabCase) {
+            const fx = rehabFxEventOf(events, typesById);
+            if (fx?.analysis?.score != null) stats.push(statItem(ST.skillsFx, `${fa(Number(fx.analysis.score))} از ${fa(6)}`));
+          }
           const cov = gates?.otCoverage ?? null;
-          return [
-            cov?.total ? statItem(ST.skillsCoverage, `${fa(cov.scored)} از ${fa(cov.total)}`) : null,
-            cov?.domainsMin3 != null
-              ? statItem(ST.skillsDomains, fa(cov.domainsMin3), { hint: 'حیطه‌هایی با حداقل ۳ مهارت نمره‌گرفته' })
-              : null
-          ];
+          if (cov?.total) stats.push(statItem(ST.skillsCoverage, `${fa(cov.scored)} از ${fa(cov.total)}`));
+          if (cov?.domainsMin3 != null) {
+            stats.push(statItem(ST.skillsDomains, fa(cov.domainsMin3), { hint: 'حیطه‌هایی با حداقل ۳ مهارت نمره‌گرفته' }));
+          }
+          return stats;
         }
         return [
           countStat(ST.skillsSld, countCompleted(PROBE_KEYS)),
@@ -1840,13 +1967,16 @@ export async function renderClinicalTab(box, { student }) {
         return body;
       },
       skills: () => {
-        // بدنهٔ حالت‌آگاه (m136 + T12/m160) — OT: کارت مهارتی + چیپ‌ها + CTA اسکرول؛
-        // SLD: سه کارت آزمون عملکرد مرکزی (ثبت درمانگر در مرکز) + چیپ هستهٔ خواندن + ردیف فرم نتایج.
+        // بدنهٔ حالت‌آگاه (m136 + T12/m160 + m161) — توانبخشی: خط پایهٔ عملکردی + چک‌لیست مهارتی؛
+        // OT: کارت مهارتی + چیپ‌ها + CTA اسکرول؛ SLD: سه کارت آزمون عملکرد مرکزی + چیپ هستهٔ خواندن.
         const g = gateByKey('skills');
         const body = [];
         if (skillsMode === SKILL_MODE_OT) {
+          if (isRehabCase) {
+            body.push(rehabFxSection({ student, events, typesById, canDecide, refresh }));
+          }
           if (otCard) body.push(otCard);
-          if (!otCard && !g?.detail) body.push(el('div', { class: 'cell-sub' }, SM.skills.emptyHint));
+          if (!otCard && !isRehabCase && !g?.detail) body.push(el('div', { class: 'cell-sub' }, SM.skills.emptyHint));
           body.push(seenChipsBlock(insights)); // تنها جای چیپ‌های «چه فرم‌هایی آمده» در مرحلهٔ ۴
           if (!g?.done) {
             const cta = gateActionOf(g, stageCtx);
@@ -1883,8 +2013,8 @@ export async function renderClinicalTab(box, { student }) {
         if (protocol) {
           const strip = protocolStrip(protoCardNode);
           if (strip) body.push(strip);
-          // پیوند مرحلهٔ ۴ — فقط پروتکل‌های OT (m136: یادگیری/دیرآموز در مرحلهٔ ۴ حالت SLD دارند و پایش مهارتی ندارند)
-          if (protocol === 'mental_ot') {
+          // پیوند مرحلهٔ ۴ — پروتکل‌های OT + توانبخشی (m161: rehab هم پایش مهارتی مرحلهٔ ۴ دارد)
+          if (protocol === 'mental_ot' || protocol === 'rehab') {
             body.push(el('div', { class: 'cell-sub' }, icon('clipboard', 13), ' ', SM.protocol.monitoringLink));
           }
         }
@@ -1906,7 +2036,9 @@ export async function renderClinicalTab(box, { student }) {
       const stats = known ? ((statsOf[g.key]?.() ?? []).filter(Boolean)) : [];
       sections.push(clxaccSection({
         key: g.key,
-        num: meta?.num ?? g.ord ?? null,
+        // m161 — شماره‌گذاری مسیرآگاه: سرور ord هر گیت را بر حسب جایگاه واقعی می‌فرستد
+        // (توانبخشی ۱–۳، مسیر استاندارد ۱–۵)؛ meta.num فقط فال‌بک سربرگ‌های قدیمی است.
+        num: g.ord ?? meta?.num ?? null,
         title: meta?.title ?? g.label,
         glance,
         stats,
@@ -1917,10 +2049,10 @@ export async function renderClinicalTab(box, { student }) {
         open: false
       }));
     }
-    // مرحلهٔ ۶ — گیت سرور نیست؛ از gates.protocol مشتق می‌شود (§3.6)
+    // مرحلهٔ پایانی — گیت سرور نیست؛ از gates.protocol مشتق می‌شود (§3.6) — شماره = بعد از آخرین گیت (m161)
     sections.push(clxaccSection({
       key: 'intervention',
-      num: SM.protocol.num,
+      num: (gatesList.length || 5) + 1,
       title: SM.protocol.title,
       glance: glanceOf.intervention(),
       stats: statsOf.intervention().filter(Boolean),

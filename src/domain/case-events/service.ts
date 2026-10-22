@@ -16,13 +16,13 @@ import type {
 } from './types';
 import { CASE_EVENT_STATUSES } from './types';
 import {
-  analyzeChecklist, analyzeProbe, analyzeReadCore, analyzeSensoryChip, base64ToBytes, buildEventPayload, buildProbePayload, buildReadCorePayload,
-  buildSensoryChipPayload, buildSummary, canTransitionStatus, estimateBase64Bytes, EVENT_FILES_MAX,
+  analyzeChecklist, analyzeProbe, analyzeRehabFx, analyzeReadCore, analyzeSensoryChip, base64ToBytes, buildEventPayload, buildProbePayload, buildReadCorePayload,
+  buildRehabFxPayload, buildSensoryChipPayload, buildSummary, canTransitionStatus, estimateBase64Bytes, EVENT_FILES_MAX,
   extractFollowUpAction, packageComponentsOf, PROBE_AREA_KEYS, probeAnalysisOf,
   READ_CORE_BANDS, READ_CORE_FIELDS, READ_CORE_KEY, READ_CORE_SUBSCALES,
-  READ_CORE_TYPE_ID, resolveBand, SENSORY_CHIP_BANDS, SENSORY_CHIP_FIELDS, SENSORY_CHIP_KEY, SENSORY_CHIP_SUBSCALES,
+  READ_CORE_TYPE_ID, rehabFxAnalysisOf, rehabFxTypeFields, REHAB_FX_BANDS, REHAB_FX_KEY, REHAB_FX_TYPE_ID, resolveBand, SENSORY_CHIP_BANDS, SENSORY_CHIP_FIELDS, SENSORY_CHIP_KEY, SENSORY_CHIP_SUBSCALES,
   SENSORY_CHIP_TYPE_ID, sanitizeFilename, sanitizeTeacherName, stripDataUrlPrefix, teacherBindingOfPayload,
-  validateFileInput, validateProbeValues, validateReadCoreLevels, validateSensoryChipLevels, validateTypeDefinition, withTeacherName
+  validateFileInput, validateProbeValues, validateReadCoreLevels, validateRehabFxValues, validateSensoryChipLevels, validateTypeDefinition, withTeacherName
 } from './pure';
 import type { ProbeArea } from './pure';
 
@@ -266,6 +266,35 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     );
     const row = await loadTypeRowByKey(READ_CORE_KEY);
     if (!row) throw new ConflictError('ثبت type چیپ هستهٔ خواندن ممکن نشد');
+    return row;
+  }
+
+  /**
+   * — m161: تضمین وجود type ارزیابی عملکردی توانبخشی ذهنی — idempotent (بدون مایگریشن؛ کلید unique است).
+   * الگوی چیپ هستهٔ خواندن: type سیستمیِ خارج کتابخانه (active=0) — ثبت فقط از مسیر اختصاصی
+   * فرم عملکردی تا رویداد بدون تحلیل از فرم عمومی ساخته نشود. تعریف از pure.ts (REHAB_FX_*).
+   */
+  async function ensureRehabFxType(): Promise<TypeRow> {
+    const existing = await loadTypeRowByKey(REHAB_FX_KEY);
+    if (existing) return existing;
+    await db.execute(
+      `INSERT OR IGNORE INTO case_event_types
+         (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, active, created_by, is_system, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'session', ?, 0, ?, ?, NULL, NULL, 'staff', 0, 'seed-m161', 1, ?, ?)`,
+      [
+        REHAB_FX_TYPE_ID,
+        REHAB_FX_KEY,
+        'ارزیابی عملکردی توانبخشی ذهنی — ثبت درمانگر',
+        'شش حیطهٔ شناختی پایه (توجه پایدار، توجه انتخابی، حافظهٔ کاری، بازداری، انعطاف ذهنی، حل مسئله) با دادهٔ خام عددی و سطح راهنمای هر حیطه — آزمونِ درمانگر در مرکز حین جلسه؛ ملاک‌ها از معیار قبولی مهارت‌های چک‌لیست ۷ حیطه‌ای (رشدی-ملاکی). خط پایهٔ مسیر توانبخشی و مبنای مقایسهٔ جلسه‌به‌جلسه.',
+        '🧠',
+        JSON.stringify(rehabFxTypeFields()),
+        JSON.stringify(REHAB_FX_BANDS),
+        now().toISOString(),
+        now().toISOString()
+      ]
+    );
+    const row = await loadTypeRowByKey(REHAB_FX_KEY);
+    if (!row) throw new ConflictError('ثبت type ارزیابی عملکردی توانبخشی ممکن نشد');
     return row;
   }
 
@@ -830,6 +859,49 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         });
       });
       log.info('event.probe_created', { id, studentId, area, pct: result.pct, band: result.band.label });
+      return eventRowToRecord(await getEventRow(id));
+    },
+
+    /**
+     * — m161: ثبت ارزیابی عملکردی توانبخشی ذهنی — آزمونِ درمانگر در مرکز (خط پایهٔ مسیر توانبخشی).
+     * تفاوت با createEvent: رویداد همین‌جا completed می‌شود و تحلیل ملاکی (باند هر شش حیطه +
+     * باند کلی از ترکیب + پرچم‌ها + پیشنهاد حیطه‌ای) در همان تراکنش ساخته می‌شود.
+     * type ce-rehab-fx-v1 idempotent ensure می‌شود (active=0 — خارج کتابخانه، فقط مسیر اختصاصی).
+     * حیطهٔ جا/خارج از قلم‌رو/راهنمای نامعتبر → ValidationError فارسی بدون هیچ رکورد.
+     */
+    async createRehabFxEvent(studentId, input, actor) {
+      await assertStudent(studentId);
+      // اول اعتبارسنجی — ورودی خراب هیچ ردی (نه event نه type) نمی‌گذارد
+      const values = validateRehabFxValues(input.values);
+      const type = typeRowToRecord(await ensureRehabFxType());
+      const result = analyzeRehabFx(values);
+      const payload = buildRehabFxPayload(values, result);
+      const analysis = rehabFxAnalysisOf(values, result);
+      const summary = buildSummary(payload, analysis);
+      const id = crypto.randomUUID();
+      const occurredAt = now().toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
+                                    status, payload, analysis, summary, fill_token, fill_expires_at, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, NULL, ?, 'completed', ?, ?, ?, NULL, NULL, ?, ?, ?)`,
+          [id, type.id, studentId, actor.staffId, occurredAt, JSON.stringify(payload), JSON.stringify(analysis), summary, actor.staffId, occurredAt, occurredAt]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'case_event.rehab_fx_created',
+          resourceType: 'case_event',
+          resourceId: id,
+          changes: {
+            eventTypeId: { from: null, to: type.id },
+            studentId: { from: null, to: studentId },
+            ok: { from: null, to: result.counts.ok },
+            weak: { from: null, to: result.counts.weak },
+            band: { from: null, to: result.band.label }
+          }
+        });
+      });
+      log.info('event.rehab_fx_created', { id, studentId, ok: result.counts.ok, weak: result.counts.weak, band: result.band.label });
       return eventRowToRecord(await getEventRow(id));
     },
 

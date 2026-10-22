@@ -4151,8 +4151,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.35";
-var APP_MILESTONE = "m160";
+var APP_VERSION = "1.00.36";
+var APP_MILESTONE = "m161";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -21790,7 +21790,7 @@ function analyzeReadCore(levels) {
 }
 __name(analyzeReadCore, "analyzeReadCore");
 __name2(analyzeReadCore, "analyzeReadCore");
-// ───────── آزمون‌های عملکرد مرکزی — پروب‌های خواندن/نوشتن/حساب (T12/m160) — آینهٔ case-events/pure.ts ─────────
+// ───────── آزمون‌های عملکرد مرکزی — پروب‌های خواندن/نوشتن/حساب (T12/m161) — آینهٔ case-events/pure.ts ─────────
 // ارزیابی عملکردی = آزمون درمانگر در مرکز (CBM) — هنجار صدک ۵۰ آینهٔ instruments.ts؛
 // باند بر حسب «درصد انتظار پایه»: <۷۰ پایین‌تر از انتظار · ۷۰–۸۹ مرزی · ≥۹۰ در انتظار پایه.
 var PROBE_GRADE_OPTIONS = ["اول", "دوم", "سوم", "چهارم", "پنجم", "ششم", "هفتم", "هشتم"];
@@ -22001,6 +22001,221 @@ function probeAnalysisOf(area, v, result) {
 }
 __name(probeAnalysisOf, "probeAnalysisOf");
 __name2(probeAnalysisOf, "probeAnalysisOf");
+// ───────── ارزیابی عملکردی توانبخشی ذهنی (m161) — آزمونِ درمانگر در مرکز — آینهٔ case-events/pure.ts ─────────
+// شش حیطهٔ شناختی پایه با دادهٔ خام + سطح راهنما؛ ملاک هر حیطه = ملاک کمی ot_skills
+// (att_sus←ot-cog-07 · att_sel←ot-cog-08 · wm←ot-aud-06 · inh←ot-cog-10 · flex←ot-cog-11 · ps←ot-cog-12) —
+// رویکرد رشدی-ملاکی؛ خط پایهٔ مسیر توانبخشی و مبنای مقایسهٔ جلسه‌به‌جلسه.
+var REHAB_FX_KEY = "ce-rehab-fx-v1";
+var REHAB_FX_TYPE_ID = "bbbbbbbb-8200-4000-8000-000000000033";
+var REHAB_FX_PROMPT_OPTIONS = ["بدون راهنما", "راهنمای کلامی", "ژستی / الگودهی", "لمسی جزئی", "راهنمای فیزیکی کامل"];
+var REHAB_FX_PROMPT_DEFAULT = "بدون راهنما";
+var REHAB_FX_STORY_MAX = 4;
+var REHAB_FX_DOMAINS = [
+  {
+    key: "att_sus", label: "توجه پایدار", unit: "دقیقهٔ تمرکز پیوسته", min: 0, max: 15,
+    kind: "higher_better", weakMax: 4, okMin: 10,
+    criterionFa: "پایان‌رساندن کار ساخت‌یافتهٔ ۱۰ دقیقه‌ای بدون یادآوری (ملاک ot-cog-07)",
+    adviceFa: "توجه پایدار گیر دارد — فعالیت ساخت‌یافته با مدت پلکانی از ۵ دقیقه + تایمر دیداری و استراحت حرکتی کوتاه بین بازه‌ها (حیطهٔ «توجه و مهارت‌های ذهنی» چک‌لیست مهارتی)."
+  },
+  {
+    key: "att_sel", label: "توجه انتخابی — حذف هدف", unit: "خطا از ۲۰ هدف", min: 0, max: 20,
+    kind: "lower_better", weakMax: 4, okMin: 2,
+    criterionFa: "حذف هدف در جدول تصویر/حرف با حداکثر ۲ خطا (ملاک ot-cog-08)",
+    adviceFa: "توجه انتخابی گیر دارد — تمرین حذف هدف روزانه (۵ دقیقه، از جدول ساده به شلوغ) + کاهش محرک میز کار در جلسه."
+  },
+  {
+    key: "wm", label: "حافظهٔ کاری", unit: "طول توالی بازگوشده (رقم)", min: 1, max: 9,
+    kind: "higher_better", weakMax: 2, okMin: 4,
+    criterionFa: "تکرار ۴ رقم در ۲ از ۳ بار (ملاک ot-aud-06)",
+    adviceFa: "حافظهٔ کاری گیر دارد — بازی دنبالهٔ چندکاری و توالی عددی پلکانی از ۳ رقم؛ دستورهای دو مرحله‌ای با یادآور دیداری."
+  },
+  {
+    key: "inh", label: "بازداری — سیگنال معکوس", unit: "خطا از ۱۰ آزمون", min: 0, max: 10,
+    kind: "lower_better", weakMax: 4, okMin: 2,
+    criterionFa: "بازی سیگنال معکوس با حداکثر ۲ خطا در ۱۰ آزمون (ملاک ot-cog-10)",
+    adviceFa: "بازداری گیر دارد — بازی توقف-شروع و سیگنال معکوس با تکرار روزانه؛ قاعدهٔ «اول فکر، بعد عمل» با جمله‌سازی آشکار پیش از هر پاسخ."
+  },
+  {
+    key: "flex", label: "انعطاف ذهنی", unit: "کمک لازم پس از تغییر قاعده (بار)", min: 0, max: 4,
+    kind: "lower_better", weakMax: 2, okMin: 1,
+    criterionFa: "تغییر قاعدهٔ طبقه‌بندی و ادامهٔ کار بدون گِر (ملاک ot-cog-11)",
+    adviceFa: "انعطاف ذهنی گیر دارد — تغییر قاعدهٔ عمدی در بازی با پیش‌اعلام و کارت «قاعدهٔ جدید»؛ سقف کمک در تکرار بعدی باید یک پله کم شود."
+  },
+  {
+    key: "ps", label: "حل مسئله — پازل", unit: "تکهٔ درست از ۱۲", min: 0, max: 12,
+    kind: "higher_better", weakMax: 5, okMin: 9,
+    criterionFa: "پازل ۶–۱۲ تکه و ترتیب درست ۴ تصویر داستانی (ملاک ot-cog-12)",
+    adviceFa: "حل مسئله گیر دارد — پازل پلکانی و توالی داستان با تحلیل «کجا گیر کرد» پیش از هر کمک؛ تمرین گام‌به‌گام با طرح کلی دیداری."
+  }
+];
+function rehabFxTypeFields() {
+  const fields = [];
+  for (const d of REHAB_FX_DOMAINS) {
+    fields.push({ key: `d_${d.key}`, label: `${d.label} — ${d.unit} (${faNum2(d.min)}–${faNum2(d.max)})`, type: "number", required: true });
+  }
+  fields.push({ key: "d_ps_story", label: `توالی داستان — تصویر درست‌ترتیب از ${faNum2(REHAB_FX_STORY_MAX)}`, type: "number", required: false });
+  for (const d of REHAB_FX_DOMAINS) {
+    fields.push({ key: `p_${d.key}`, label: `سطح راهنما — ${d.label}`, type: "select", options: [...REHAB_FX_PROMPT_OPTIONS], required: false });
+  }
+  fields.push({ key: "notes", label: "مشاهدهٔ درمانگر (انگیزه، خستگی، راهبرد جالب…)", type: "longtext", required: false });
+  return fields;
+}
+__name(rehabFxTypeFields, "rehabFxTypeFields");
+__name2(rehabFxTypeFields, "rehabFxTypeFields");
+var REHAB_FX_BANDS = [
+  { max: 2, label: "نیاز به مداخلهٔ همه‌جانبهٔ ذهنی", color: "danger", advice: "سه حیطه یا بیشتر ضعیف است — برنامهٔ جلسات از حیطه‌های پایه (توجه/بازداری) شروع شود و هر حیطه یک هدف کوچک هفتگی بگیرد." },
+  { max: 4, label: "گیرهای نقطه‌ای — مداخلهٔ حیطه‌ای هدفمند", color: "warn", advice: "ترکیب قوت/ضعف نقطه‌ای است — مداخله از حیطه‌های ضعیف آغاز و حیطه‌های قوت به‌عنوان پل انگیزشی به‌کار رود؛ بازسنجی ۸ تا ۱۲ جلسه." },
+  { max: 2147483647, label: "نیم‌رخ پایه در انتظار", color: "ok", advice: "نیم‌رخ پایه در انتظار سن است — مداخله روی اهداف عملکردی خانواده‌محور و پایش جلسه‌به‌جلسه ادامه یابد." }
+];
+function rehabFxNumber(raw2, d) {
+  const n = typeof raw2 === "number" ? raw2 : Number(String(raw2 ?? "").trim().replace(/[۰-۹]/g, (c) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(c))));
+  if (!Number.isInteger(n) || n < d.min || n > d.max) {
+    throw new ValidationError(`«${d.label}» باید بین ${faNum2(d.min)} تا ${faNum2(d.max)} باشد (${d.unit})`);
+  }
+  return n;
+}
+__name(rehabFxNumber, "rehabFxNumber");
+__name2(rehabFxNumber, "rehabFxNumber");
+function rehabFxDomainBand(d, value) {
+  const OK = { max: 0, label: "در انتظار", color: "ok", advice: REHAB_FX_BANDS[2].advice };
+  const WARN = { max: 0, label: "مرزی", color: "warn", advice: REHAB_FX_BANDS[1].advice };
+  const WEAK = { max: 0, label: "ضعف آشکار", color: "danger", advice: REHAB_FX_BANDS[0].advice };
+  if (d.kind === "higher_better") {
+    if (value >= d.okMin) return OK;
+    if (value > d.weakMax) return WARN;
+    return WEAK;
+  }
+  if (value <= d.okMin) return OK;
+  if (value <= d.weakMax) return WARN;
+  return WEAK;
+}
+__name(rehabFxDomainBand, "rehabFxDomainBand");
+__name2(rehabFxDomainBand, "rehabFxDomainBand");
+function analyzeRehabFx(v) {
+  const domains = [];
+  const flags = [];
+  const metrics = [];
+  let ok = 0, warn = 0, weak = 0;
+  for (const d of REHAB_FX_DOMAINS) {
+    const value = rehabFxNumber(v[`d_${d.key}`], d);
+    const band = rehabFxDomainBand(d, value);
+    if (band.color === "ok") ok += 1;
+    else if (band.color === "warn") warn += 1;
+    else weak += 1;
+    const promptRaw = v[`p_${d.key}`];
+    const prompt = promptRaw !== void 0 && String(promptRaw).trim() !== "" ? String(promptRaw).trim() : REHAB_FX_PROMPT_DEFAULT;
+    if (!REHAB_FX_PROMPT_OPTIONS.includes(prompt)) {
+      throw new ValidationError(`«سطح راهنما — ${d.label}» از گزینه‌های مجاز نیست`);
+    }
+    domains.push({ key: d.key, label: d.label, value, valueFa: `${faNum2(value)} ${d.unit}`, band, prompt, criterionFa: d.criterionFa });
+    if (band.color !== "ok") {
+      flags.push({ key: d.key, label: `${d.label}: ${band.label} — ${faNum2(value)} ${d.unit} (ملاک: ${d.criterionFa})`, value });
+    }
+    metrics.push({ value: `${faNum2(value)} ${d.unit} — ${band.label}`, label: d.label });
+  }
+  if (v.d_ps_story !== void 0 && String(v.d_ps_story).trim() !== "") {
+    const story = rehabFxNumber(v.d_ps_story, { key: "ps_story", label: "توالی داستان", unit: "تصویر", min: 0, max: REHAB_FX_STORY_MAX, kind: "higher_better", weakMax: 0, okMin: 3, criterionFa: "", adviceFa: "" });
+    metrics.push({ value: `${faNum2(story)} از ${faNum2(REHAB_FX_STORY_MAX)}`, label: "توالی داستان" });
+    if (story <= 1) flags.push({ key: "ps_story", label: `توالی داستان ضعیف (${faNum2(story)} از ${faNum2(REHAB_FX_STORY_MAX)}) — ترتیب‌سازی تصویری روزانه اضافه شود`, value: story });
+  }
+  const band = ok >= 5 ? REHAB_FX_BANDS[2] : weak >= 3 ? REHAB_FX_BANDS[0] : REHAB_FX_BANDS[1];
+  const notes = typeof v.notes === "string" ? v.notes.trim().slice(0, 600) : "";
+  if (notes) metrics.push({ value: notes, label: "مشاهدهٔ درمانگر" });
+  const normFa = "ملاک‌ها برگرفته از معیار قبولی مهارت‌های «توجه و مهارت‌های ذهنی/ادراک شنیداری» چک‌لیست ۷ حیطه‌ای است (رشدی-ملاکی — ot-cog-07/08/10/11/12، ot-aud-06)؛ سطح راهنمای هر حیطه، خط پایهٔ محوشدن راهنماست.";
+  const faSummary = `ارزیابی عملکردی ذهنی: ${faNum2(ok)} حیطه در انتظار، ${faNum2(warn)} مرزی، ${faNum2(weak)} ضعف از ${faNum2(REHAB_FX_DOMAINS.length)} — ${band.label}`;
+  return { domains, counts: { ok, warn, weak }, band, flags, metrics, normFa, faSummary };
+}
+__name(analyzeRehabFx, "analyzeRehabFx");
+__name2(analyzeRehabFx, "analyzeRehabFx");
+function rehabFxAdviceOf(result) {
+  const out = [];
+  for (const dom of result.domains) {
+    if (dom.band.color === "ok") continue;
+    const spec = REHAB_FX_DOMAINS.find((d) => d.key === dom.key);
+    if (spec) out.push({ label: `${spec.label} — ${dom.band.label}`, text: spec.adviceFa });
+  }
+  return out;
+}
+__name(rehabFxAdviceOf, "rehabFxAdviceOf");
+__name2(rehabFxAdviceOf, "rehabFxAdviceOf");
+function buildRehabFxPayload(v, result) {
+  const payload = {};
+  for (const d of REHAB_FX_DOMAINS) {
+    const dom = result.domains.find((x) => x.key === d.key);
+    payload[`d_${d.key}`] = { value: faNum2(dom?.value ?? Number(v[`d_${d.key}`])), label: `${d.label} — ${d.unit}` };
+    if (dom) {
+      payload[`fx_${d.key}_band`] = { value: dom.band.label, label: `باند ${d.label}` };
+      payload[`fx_${d.key}_prompt`] = { value: dom.prompt, label: `سطح راهنما — ${d.label}` };
+    }
+  }
+  if (v.d_ps_story !== void 0 && String(v.d_ps_story).trim() !== "") {
+    const storyNum = typeof v.d_ps_story === "number"
+      ? v.d_ps_story
+      : Number(String(v.d_ps_story).trim().replace(/[۰-۹]/g, (c) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(c))));
+    payload["d_ps_story"] = { value: faNum2(storyNum), label: `توالی داستان از ${faNum2(REHAB_FX_STORY_MAX)}` };
+  }
+  for (const d of REHAB_FX_DOMAINS) {
+    const p = v[`p_${d.key}`];
+    if (p !== void 0 && String(p).trim() !== "") payload[`p_${d.key}`] = { value: String(p).trim(), label: `سطح راهنما — ${d.label}` };
+  }
+  if (typeof v.notes === "string" && v.notes.trim() !== "") {
+    payload["notes"] = { value: v.notes.trim().slice(0, 600), label: "مشاهدهٔ درمانگر" };
+  }
+  result.metrics.forEach((m, i) => {
+    payload[`chip_metric_${i + 1}`] = { value: m.value, label: m.label };
+  });
+  payload["chip_band"] = { value: result.band.label, label: "باند کلی" };
+  payload["norm_fa"] = { value: result.normFa, label: "ملاک مرجع" };
+  payload["fa_summary"] = { value: result.faSummary, label: "خلاصهٔ ارزیابی عملکردی" };
+  rehabFxAdviceOf(result).forEach((a, i) => {
+    payload[`advice_${i + 1}`] = { value: a.text, label: `پیشنهاد حیطه‌ای — ${a.label}` };
+  });
+  return payload;
+}
+__name(buildRehabFxPayload, "buildRehabFxPayload");
+__name2(buildRehabFxPayload, "buildRehabFxPayload");
+function rehabFxAnalysisOf(v, result) {
+  const interpretationLines = [
+    result.faSummary,
+    result.normFa,
+    ...result.domains.map((d) => `${d.label}: ${d.valueFa} — ${d.band.label}${d.prompt !== REHAB_FX_PROMPT_DEFAULT ? ` (${d.prompt})` : ""}`),
+    ...(result.flags ?? []).map((f) => `پرچم: ${f.label}`)
+  ];
+  return {
+    score: result.counts.ok,
+    band: result.band.label,
+    answered: REHAB_FX_DOMAINS.length,
+    total: REHAB_FX_DOMAINS.length,
+    maxScore: REHAB_FX_DOMAINS.length,
+    flags: result.flags.length > 0 ? result.flags : void 0,
+    interpretation: interpretationLines.join("\n")
+  };
+}
+__name(rehabFxAnalysisOf, "rehabFxAnalysisOf");
+__name2(rehabFxAnalysisOf, "rehabFxAnalysisOf");
+function validateRehabFxValues(values) {
+  const raw2 = values && typeof values === "object" ? values : {};
+  const out = {};
+  for (const d of REHAB_FX_DOMAINS) {
+    const v = raw2[`d_${d.key}`];
+    if (v === void 0 || v === null || String(v).trim() === "") {
+      throw new ValidationError(`حیطهٔ «${d.label}» بی‌پاسخ مانده است`);
+    }
+    out[`d_${d.key}`] = typeof v === "number" ? v : String(v).trim();
+    const p = raw2[`p_${d.key}`];
+    if (p !== void 0 && p !== null && String(p).trim() !== "") out[`p_${d.key}`] = String(p).trim();
+  }
+  const story = raw2["d_ps_story"];
+  if (story !== void 0 && story !== null && String(story).trim() !== "") {
+    out["d_ps_story"] = typeof story === "number" ? story : String(story).trim();
+  }
+  if (typeof raw2["notes"] === "string" && raw2["notes"].trim() !== "") {
+    out["notes"] = raw2["notes"].trim();
+  }
+  return out;
+}
+__name(validateRehabFxValues, "validateRehabFxValues");
+__name2(validateRehabFxValues, "validateRehabFxValues");
 var CASE_EVENT_TRANSITIONS = {
   draft: ["completed", "cancelled"],
   completed: ["cancelled"],
@@ -24024,6 +24239,33 @@ function createCaseEventsService(deps) {
   }
   __name(ensureReadCoreType, "ensureReadCoreType");
   __name2(ensureReadCoreType, "ensureReadCoreType");
+  async function ensureRehabFxType() {
+    const existing = await loadTypeRowByKey(REHAB_FX_KEY);
+    if (existing)
+      return existing;
+    await db.execute(
+      `INSERT OR IGNORE INTO case_event_types
+         (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, active, created_by, is_system, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'session', ?, 0, ?, ?, NULL, NULL, 'staff', 0, 'seed-m161', 1, ?, ?)`,
+      [
+        REHAB_FX_TYPE_ID,
+        REHAB_FX_KEY,
+        "ارزیابی عملکردی توانبخشی ذهنی — ثبت درمانگر",
+        "شش حیطهٔ شناختی پایه (توجه پایدار، توجه انتخابی، حافظهٔ کاری، بازداری، انعطاف ذهنی، حل مسئله) با دادهٔ خام عددی و سطح راهنمای هر حیطه — آزمونِ درمانگر در مرکز حین جلسه؛ ملاک‌ها از معیار قبولی مهارت‌های چک‌لیست ۷ حیطه‌ای (رشدی-ملاکی). خط پایهٔ مسیر توانبخشی و مبنای مقایسهٔ جلسه‌به‌جلسه.",
+        "🧠",
+        JSON.stringify(rehabFxTypeFields()),
+        JSON.stringify(REHAB_FX_BANDS),
+        now().toISOString(),
+        now().toISOString()
+      ]
+    );
+    const row = await loadTypeRowByKey(REHAB_FX_KEY);
+    if (!row)
+      throw new ConflictError("ثبت type ارزیابی عملکردی توانبخشی ممکن نشد");
+    return row;
+  }
+  __name(ensureRehabFxType, "ensureRehabFxType");
+  __name2(ensureRehabFxType, "ensureRehabFxType");
   async function assertStudent(studentId) {
     const row = await db.queryOne(`SELECT id FROM students WHERE id = ?`, [studentId]);
     if (!row)
@@ -24527,7 +24769,7 @@ function createCaseEventsService(deps) {
       log32.info("event.read_core_created", { id, studentId, score: analysis.score, band: analysis.band });
       return eventRowToRecord(await getEventRow(id));
     },
-    // — T12/m160: ثبت آزمون عملکرد مرکزی (خواندن/نوشتن/حساب) — ارزیابی درمانگر در مرکز؛
+    // — T12/m161: ثبت آزمون عملکرد مرکزی (خواندن/نوشتن/حساب) — ارزیابی درمانگر در مرکز؛
     //   رویداد همین‌جا completed می‌شود؛ تحلیل هنجاری (درصد انتظار پایه + باند + پرچم‌ها) در همان تراکنش؛
     //   type از کتابخانهٔ فعال باتری با کلید منطقی حل می‌شود (بدون ensure — عضو رسمی باتری است).
     async createProbeEvent(studentId, input, actor) {
@@ -24569,6 +24811,43 @@ function createCaseEventsService(deps) {
         });
       });
       log32.info("event.probe_created", { id, studentId, area, pct: result.pct, band: result.band.label });
+      return eventRowToRecord(await getEventRow(id));
+    },
+    // — m161: ثبت ارزیابی عملکردی توانبخشی ذهنی — آزمونِ درمانگر در مرکز (خط پایهٔ مسیر توانبخشی)؛
+    //   رویداد completed با تحلیل ملاکی (باند هر شش حیطه + باند کلی ترکیبی + پرچم‌ها + پیشنهاد حیطه‌ای)؛
+    //   type ce-rehab-fx-v1 idempotent ensure می‌شود (active=0 — خارج کتابخانه، فقط مسیر اختصاصی).
+    async createRehabFxEvent(studentId, input, actor) {
+      await assertStudent(studentId);
+      const values = validateRehabFxValues(input.values);
+      const type = typeRowToRecord(await ensureRehabFxType());
+      const result = analyzeRehabFx(values);
+      const payload = buildRehabFxPayload(values, result);
+      const analysis = rehabFxAnalysisOf(values, result);
+      const summary = buildSummary(payload, analysis);
+      const id = crypto.randomUUID();
+      const occurredAt = now().toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
+                                    status, payload, analysis, summary, fill_token, fill_expires_at, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, NULL, ?, 'completed', ?, ?, ?, NULL, NULL, ?, ?, ?)`,
+          [id, type.id, studentId, actor.staffId, occurredAt, JSON.stringify(payload), JSON.stringify(analysis), summary, actor.staffId, occurredAt, occurredAt]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "case_event.rehab_fx_created",
+          resourceType: "case_event",
+          resourceId: id,
+          changes: {
+            eventTypeId: { from: null, to: type.id },
+            studentId: { from: null, to: studentId },
+            ok: { from: null, to: result.counts.ok },
+            weak: { from: null, to: result.counts.weak },
+            band: { from: null, to: result.band.label }
+          }
+        });
+      });
+      log32.info("event.rehab_fx_created", { id, studentId, ok: result.counts.ok, weak: result.counts.weak, band: result.band.label });
       return eventRowToRecord(await getEventRow(id));
     },
     async updateEvent(id, input, actor) {
@@ -25720,12 +25999,21 @@ function registerCaseEventsRoutes(app, service) {
     const item = await service.createReadCoreEvent(c.req.param("id"), { levels: body?.levels ?? {} }, actor);
     return c.json({ data: item }, 201);
   });
-  // — T12/m160: آزمون عملکرد مرکزی (خواندن/نوشتن/حساب) — ارزیابی درمانگر در مرکز، مرحلهٔ ۴ مسیر یادگیری؛
+  // — T12/m161: آزمون عملکرد مرکزی (خواندن/نوشتن/حساب) — ارزیابی درمانگر در مرکز، مرحلهٔ ۴ مسیر یادگیری؛
   //   {area:'read'|'write'|'calc', values} — فیلد جا/خارج از قلم‌رو → 400 فارسی؛ type از کتابخانهٔ فعال باتری.
   app.post("/api/students/:id/case-events/probe", requireRole("manager", "therapist"), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json().catch(() => null);
     const item = await service.createProbeEvent(c.req.param("id"), { area: body?.area ?? "", values: body?.values ?? {} }, actor);
+    return c.json({ data: item }, 201);
+  });
+  // — m161: ارزیابی عملکردی توانبخشی ذهنی (ce-rehab-fx-v1) — خط پایهٔ مسیر توانبخشی، ثبت درمانگر در مرکز؛
+  //   {values: {d_att_sus…, p_att_sus…, d_ps_story?, notes?}} — حیطهٔ جا/خارج از قلم‌رو → 400 فارسی؛
+  //   type در سرویس idempotent ensure می‌شود (active=0 — خارج کتابخانه).
+  app.post("/api/students/:id/case-events/rehab-fx", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json().catch(() => null);
+    const item = await service.createRehabFxEvent(c.req.param("id"), { values: body?.values ?? {} }, actor);
     return c.json({ data: item }, 201);
   });
   app.patch("/api/case-events/:id", requireRole("manager", "therapist"), async (c) => {
@@ -33582,12 +33870,21 @@ function createOtEngineService(deps) {
     const domMin3 = otCoverage.domainsMin3;
     const staleNote = ` \u2014 \u06A9\u0647\u0646\u0647 \u0627\u0633\u062A (\u0628\u06CC\u0634 \u0627\u0632 ${"\u06F1\u06F2"} \u0645\u0627\u0647\u061B \u0628\u0627\u0632\u062B\u0628\u062A \u0644\u0627\u0632\u0645)`;
     const isLearning = student.pathway === "learning";
-    const skillsStatus = isLearning ? {
+    // — m161: مسیر توانبخشی ذهنی-جسمی — گیت‌های متمرکز: شرح‌حال + ارزیابی عملکردی + نیاز.
+    // وکسلر و چک‌لیست‌های خانواده/معلم اختیاری‌اند — از رویدادساز قابل ارسال‌اند ولی گیت نمی‌سازند.
+    // ملاک گیت مهارتی rehab = ثبت ce-rehab-fx-v1 (پنجرهٔ ۱۲ ماه) — پوشش OT۷ برای پرونده‌های قدیمی هم پذیرفته است.
+    const isRehab = student.pathway === "rehab";
+    const nFx = freshCount([REHAB_FX_KEY]);
+    const nFxRaw = rawCount([REHAB_FX_KEY]);
+    const skillsStatus = isRehab ? {
+      done: nFx > 0 || (domCovered >= 7 && domMin3 >= 7),
+      detail: nFx > 0 ? "ارزیابی عملکردی ذهنی ثبت شده — خط پایهٔ شش حیطه‌ای موجود است" : nFxRaw > 0 ? `ارزیابی عملکردی ذهنی ثبت شده اما${staleNote}` : domCovered > 0 ? `${otCoverage.scored} مهارت در چک‌لیست ۷ حیطه‌ای نمره گرفته — ارزیابی عملکردی درمانگر هنوز ثبت نشده` : "ارزیابی عملکردی درمانگر در مرکز هنوز ثبت نشده"
+    } : isLearning ? {
       done: nSld >= 2,
-      detail: nSld > 0 ? `${nSld} \u0627\u0632 \u06F3 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0648\u0627\u0646\u062F\u0646/\u0646\u0648\u0634\u062A\u0646/\u0631\u06CC\u0627\u0636\u06CC \u062F\u0631 \u06F1\u06F2 \u0645\u0627\u0647 \u0627\u062E\u06CC\u0631` : nSldRaw > 0 ? "\u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0645\u0627 \u062E\u0627\u0631\u062C \u0627\u0632 \u067E\u0646\u062C\u0631\u0647\u0654 \u06F1\u06F2 \u0645\u0627\u0647" : "\u0647\u0646\u0648\u0632 \u062B\u0628\u062A \u0646\u0634\u062F\u0647"
+      detail: nSld > 0 ? `${nSld} از ۳ چک‌لیست خواندن/نوشتن/ریاضی در ۱۲ ماه اخیر` : nSldRaw > 0 ? "ثبت شده اما خارج از پنجرهٔ ۱۲ ماه" : "هنوز ثبت نشده"
     } : {
       done: domCovered >= 7 && domMin3 >= 7,
-      detail: `${otCoverage.scored} \u0645\u0647\u0627\u0631\u062A \u0646\u0645\u0631\u0647\u200C\u06AF\u0631\u0641\u062A\u0647 \u2014 ${domMin3} \u062D\u06CC\u0637\u0647 \u0627\u0632 \u06F7 \u0628\u0627 \u062D\u062F\u0627\u0642\u0644 \u06F3 \u0646\u0645\u0631\u0647`
+      detail: `${otCoverage.scored} مهارت نمره‌گرفته — ${domMin3} حیطه از ۷ با حداقل ۳ نمره`
     };
     const stageStatus = {
       anamnesis: {
@@ -33605,13 +33902,19 @@ function createOtEngineService(deps) {
       skills: skillsStatus,
       needs: {
         done: protocol !== null,
-        detail: protocol ? `\u067E\u0631\u0648\u062A\u06A9\u0644 \u0641\u0639\u0627\u0644: ${STUDENT_PROTOCOL_LABELS[protocol]}` : "\u067E\u0633 \u0627\u0632 \u0686\u0647\u0627\u0631 \u0648\u0631\u0648\u062F\u06CC \u062F\u06CC\u06AF\u0631"
+        detail: protocol ? `\u067E\u0631\u0648\u062A\u06A9\u0644 \u0641\u0639\u0627\u0644: ${STUDENT_PROTOCOL_LABELS[protocol]}` : isRehab ? "پس از شرح‌حال و ارزیابی عملکردی" : "\u067E\u0633 \u0627\u0632 \u0686\u0647\u0627\u0631 \u0648\u0631\u0648\u062F\u06CC \u062F\u06CC\u06AF\u0631"
       }
     };
-    const ordOf = /* @__PURE__ */ __name2((key) => STANDARD_PATHWAY_ORDER.indexOf(key) + 1, "ordOf");
-    const gates = STANDARD_PATHWAY_ORDER.map((key) => {
-      const label = key === "skills" && isLearning ? "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0639\u0645\u0644\u06A9\u0631\u062F\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u062E\u0648\u0627\u0646\u062F\u0646/\u0646\u0648\u0634\u062A\u0646/\u0631\u06CC\u0627\u0636\u06CC" : STANDARD_STAGE_META[key].short;
-      const hint = key === "skills" && isLearning ? "\u062D\u062F\u0627\u0642\u0644 \u06F2 \u0627\u0632 \u06F3 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u2014 \u0628\u0646\u0627 \u0628\u0647 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0648 \u063A\u0631\u0628\u0627\u0644\u06AF\u0631\u06CC" : STANDARD_STAGE_META[key].note;
+    // — m161: ترتیب گیت‌ها مسیرآگاه است — توانبخشی سه گیت، بقیه مسیر استاندارد پنج‌گیت؛
+    // شماره‌گذاری (ord) از جایگاه واقعی در همان آرایه می‌آید — بدون عدد سخت‌گیرانهٔ ترتیب.
+    const REHAB_PATHWAY_ORDER = ["anamnesis", "skills", "needs"];
+    const activeOrder = isRehab ? REHAB_PATHWAY_ORDER : STANDARD_PATHWAY_ORDER;
+    const ordOf = /* @__PURE__ */ __name2((key) => activeOrder.indexOf(key) + 1, "ordOf");
+    const gates = activeOrder.map((key) => {
+      const label = key === "skills" && isRehab ? "ارزیابی عملکردی توانبخشی — ثبت درمانگر"
+        : key === "skills" && isLearning ? "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0639\u0645\u0644\u06A9\u0631\u062F\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u062E\u0648\u0627\u0646\u062F\u0646/\u0646\u0648\u0634\u062A\u0646/\u0631\u06CC\u0627\u0636\u06CC" : STANDARD_STAGE_META[key].short;
+      const hint = key === "skills" && isRehab ? "شش حیطهٔ شناختی پایه با دادهٔ خام + سطح راهنما — حین جلسهٔ اول مرکز؛ وکسلر و چک‌لیست‌های خانواده/معلم اختیاری‌اند"
+        : key === "skills" && isLearning ? "\u062D\u062F\u0627\u0642\u0644 \u06F2 \u0627\u0632 \u06F3 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u2014 \u0628\u0646\u0627 \u0628\u0647 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0648 \u063A\u0631\u0628\u0627\u0644\u06AF\u0631\u06CC" : STANDARD_STAGE_META[key].note;
       return {
         key,
         ord: ordOf(key),

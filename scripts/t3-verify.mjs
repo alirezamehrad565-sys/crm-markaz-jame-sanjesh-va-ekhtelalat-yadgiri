@@ -45,18 +45,24 @@ console.log('T3 bundle verify — ترتیب مسیر استاندارد:');
 check('STANDARD_PATHWAY_ORDER = [anamnesis, wechsler, behavioral, skills, needs]',
   bundleSrc.includes('var STANDARD_PATHWAY_ORDER = ["anamnesis", "wechsler", "behavioral", "skills", "needs"];'));
 check('ترتیب قدیمی در باندل باقی نمانده', !bundleSrc.includes('["anamnesis", "behavioral", "wechsler", "skills", "needs"]'));
-const gatesRegion = cutBetween(bundleSrc, 'const ordOf = /* @__PURE__ */ __name2((key) => STANDARD_PATHWAY_ORDER.indexOf(key) + 1, "ordOf");', '__name2(computeGates, "computeGates");', 'gates');
-check('رندر گیت‌ها از indexOf همان آرایه می‌خواند (بدون عدد سخت‌گیرانهٔ ترتیب)',
-  gatesRegion.includes('STANDARD_PATHWAY_ORDER.map((key) => {') && !(/ordinal|\bord:\s*\d/.test(gatesRegion)));
+const gatesRegion = cutBetween(bundleSrc, 'const ordOf = /* @__PURE__ */ __name2((key) => activeOrder.indexOf(key) + 1, "ordOf");', '__name2(computeGates, "computeGates");', 'gates');
+check('رندر گیت‌ها از آرایهٔ فعال مسیر می‌خواند (بدون عدد سخت‌گیرانهٔ ترتیب)',
+  gatesRegion.includes('activeOrder.map((key) => {') && !(/ordinal|\bord:\s*\d/.test(gatesRegion)));
+check('m161 — ترتیب گیت‌های توانبخشی: سه گیت [anamnesis, skills, needs] با فیلتر مسیرآگاه',
+  bundleSrc.includes('const REHAB_PATHWAY_ORDER = ["anamnesis", "skills", "needs"];')
+  && bundleSrc.includes('const activeOrder = isRehab ? REHAB_PATHWAY_ORDER : STANDARD_PATHWAY_ORDER;'));
 check('منطق تکمیل گیت‌ها کلیدمحور است (nWisc/nBehav/nAnam — بدون وابستگی ترتیبی)',
   ['const nAnam = freshCount(ANAMNESIS_KEYS);', 'const nBehav = freshCount(BEHAVIORAL_KEYS);', 'const nWisc = freshCount(WECHSLER_KEYS);']
     .every((s) => bundleSrc.includes(s)));
 check('src — آرایهٔ گیت‌های ot-engine هم همان ترتیب را دارد',
   (() => {
     const s = fs.readFileSync(path.join(ROOT, 'src/domain/ot-engine/service.ts'), 'utf8');
-    const iW = s.indexOf("key: 'wechsler'");
-    const iB = s.indexOf("key: 'behavioral'");
-    return iW !== -1 && iB !== -1 && iW < iB;
+    const iW = s.indexOf("'wechsler'");
+    const iB = s.indexOf("'behavioral'");
+    // m161 — ترتیب استاندارد در activeOrder + سه‌گیت توانبخشی
+    return iW !== -1 && iB !== -1 && iW < iB
+      && s.includes("const REHAB_PATHWAY_ORDER = ['anamnesis', 'skills', 'needs'] as const;")
+      && s.includes("isRehab ? REHAB_PATHWAY_ORDER : ['anamnesis', 'wechsler', 'behavioral', 'skills', 'needs']");
   })());
 check('UI — فال‌بک گیت‌ها در clinical-insights هم‌تراز سرور',
   fs.readFileSync(path.join(ROOT, 'public/assets/js/clinical-insights.js'), 'utf8')

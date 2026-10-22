@@ -47,6 +47,13 @@ const WECHSLER_KEYS = ['ce-wechsler-w4-v1', 'wechsler'];
 const NEEDS_EVENT_KEY = 'ce-needs-v1';
 const OT_SESSION_EVENT_KEY = 'ce-ot-session-v1';
 
+/** کلید ارزیابی عملکردی توانبخشی — آینهٔ case-events/pure.ts (m161) — بدون واردکردن از دامنهٔ دیگر */
+const REHAB_FX_EVENT_KEY = 'ce-rehab-fx-v1';
+/** چک‌لیست‌های درسی مسیر یادگیری — آینهٔ SLD_CHECKLIST_KEYS (m147) */
+const SLD_CHECKLIST_EVENT_KEYS = ['ce-sld-read-v1', 'ce-sld-wri-v1', 'ce-sld-calc-v1'];
+/** ترتیب گیت‌های مسیر توانبخشی — m161: سه گیت متمرکز؛ وکسلر/چک‌لیست‌ها اختیاری */
+const REHAB_PATHWAY_ORDER = ['anamnesis', 'skills', 'needs'] as const;
+
 /** برچسب فارسی نیاز ویژه — هم‌قرارداد با special-needs/pure.ts */
 const NEED_TYPE_LABELS: Record<string, string> = {
   dyslexia: 'نارساخوانی (دیس‌لکسی)',
@@ -72,6 +79,8 @@ interface StudentRow {
   owner_staff_id: string | null;
   protocol: string | null;
   case_status: string | null;
+  /** مسیر پرونده — m161: پایهٔ گیت‌های مسیرآگاه (null = تعیین نشده) */
+  pathway: string | null;
 }
 
 /** آخرین ثبت هر ابزار شناسایی — برای گیت تازگی‌آگاه */
@@ -132,7 +141,7 @@ export function createOtEngineService(deps: OtEngineDeps) {
 
   async function loadStudent(studentId: string): Promise<StudentRow> {
     const row = await db.queryOne<StudentRow>(
-      `SELECT id, first_name, last_name, owner_staff_id, protocol, case_status FROM students WHERE id = ?`,
+      `SELECT id, first_name, last_name, owner_staff_id, protocol, case_status, pathway FROM students WHERE id = ?`,
       [studentId]
     );
     if (!row) throw new NotFoundError('دانش‌آموز');
@@ -214,55 +223,106 @@ export function createOtEngineService(deps: OtEngineDeps) {
     const nBehav = freshCount(BEHAVIORAL_KEYS);
     const nWisc = freshCount(WECHSLER_KEYS);
     const nWiscRaw = rawCount(WECHSLER_KEYS);
+    const nSld = freshCount(SLD_CHECKLIST_EVENT_KEYS);
+    const nSldRaw = rawCount(SLD_CHECKLIST_EVENT_KEYS);
+    const nFx = freshCount([REHAB_FX_EVENT_KEY]);
+    const nFxRaw = rawCount([REHAB_FX_EVENT_KEY]);
     const domCovered = otCoverage.domainsCovered;
     const domMin3 = otCoverage.domainsMin3;
 
     const staleNote = ` — کهنه است (بیش از ${'۱۲'} ماه؛ بازثبت لازم)`;
+    const isLearning = student.pathway === 'learning';
+    // — m161: مسیر توانبخشی ذهنی-جسمی — گیت‌های متمرکز: شرح‌حال + ارزیابی عملکردی + نیاز؛
+    // وکسلر و چک‌لیست‌های خانواده/معلم اختیاری‌اند (بدون گیت). ملاک گیت rehab = ثبت ce-rehab-fx-v1
+    // (پنجرهٔ ۱۲ ماه)؛ پوشش OT۷ برای پرونده‌های قدیمی هم پذیرفته است.
+    const isRehab = student.pathway === 'rehab';
 
-    const gates: IdentificationGate[] = [
-      {
-        key: 'anamnesis',
-        label: 'شرح‌حال و گفت‌وگوی اول',
-        hint: 'فرم «گفت‌وگوی اول» با خانواده — پایهٔ همهٔ تصمیم‌ها',
+    const skillsStatus = isRehab
+      ? {
+          done: nFx > 0 || (domCovered >= 7 && domMin3 >= 7),
+          detail: nFx > 0
+            ? 'ارزیابی عملکردی ذهنی ثبت شده — خط پایهٔ شش حیطه‌ای موجود است'
+            : nFxRaw > 0
+              ? `ارزیابی عملکردی ذهنی ثبت شده اما${staleNote}`
+              : domCovered > 0
+                ? `${otCoverage.scored} مهارت در چک‌لیست ۷ حیطه‌ای نمره گرفته — ارزیابی عملکردی درمانگر هنوز ثبت نشده`
+                : 'ارزیابی عملکردی درمانگر در مرکز هنوز ثبت نشده'
+        }
+      : isLearning
+        ? {
+            done: nSld >= 2,
+            detail: nSld > 0 ? `${nSld} از ۳ چک‌لیست خواندن/نوشتن/ریاضی در ۱۲ ماه اخیر` : nSldRaw > 0 ? 'ثبت شده اما خارج از پنجرهٔ ۱۲ ماه' : 'هنوز ثبت نشده'
+          }
+        : {
+            done: domCovered >= 7 && domMin3 >= 7,
+            detail: `${otCoverage.scored} مهارت نمره‌گرفته — ${domMin3} حیطه از ۷ با حداقل ۳ نمره`
+          };
+
+    // — m161: گیت‌های مبنایی کلیدمحور — ترتیب/تعداد مسیرآگاه: توانبخشی سه گیت، بقیه مسیر استاندارد پنج‌گیت
+    const stageStatus: Record<string, { done: boolean; detail: string }> = {
+      anamnesis: {
         done: nAnam > 0,
         detail: nAnam > 0 ? 'ثبت شده' : nAnamRaw > 0 ? `ثبت شده اما${staleNote}` : 'هنوز ثبت نشده'
       },
-      {
-        key: 'wechsler',
-        label: 'آزمون هوش وکسلر ۴',
-        hint: 'فرم نتایج وکسلر — خروجی موتور تحلیل در فیلد engine_output؛ زیر ۶ سال WPPSI/Leiter',
+      wechsler: {
         done: nWisc > 0,
         detail: nWisc > 0 ? 'ثبت شده' : nWiscRaw > 0 ? `ثبت شده اما${staleNote}` : 'هنوز ثبت نشده'
       },
-      {
-        key: 'behavioral',
-        label: 'چک‌لیست‌های رفتاری (حداقل ۲ تازه)',
-        hint: 'SNAP-IV والد و معلم، SDQ، SCARED، DCDQ — با بله ارسال می‌شود؛ پنجرهٔ اعتبار ۱۲ ماه',
+      behavioral: {
         done: nBehav >= 2,
         detail: nBehav > 0 ? `${nBehav} چک‌لیست معتبر در ۱۲ ماه اخیر` : nBehav === 0 && rawCount(BEHAVIORAL_KEYS) > 0 ? 'ثبت شده اما خارج از پنجرهٔ ۱۲ ماه' : 'هنوز ثبت نشده'
       },
-      {
-        key: 'skills',
-        label: 'ارزیابی مهارتی — چک‌لیست ۷ حیطه‌ای',
-        hint: 'حین جلسات کاردرمانی ذهنی — ملاک: حداقل ۳ نمره در هر ۷ حیطه (نزدیک سن + پایین‌تر + بالاتر)',
-        done: domCovered >= 7 && domMin3 >= 7,
-        detail: `${otCoverage.scored} مهارت نمره‌گرفته — ${domMin3} حیطه از ۷ با حداقل ۳ نمره`
-      },
-      {
-        key: 'needs',
-        label: 'نتیجهٔ نیاز ویژه (دروازهٔ مداخله)',
-        hint: 'جمع‌بندی شواهد + انتخاب پروتکل مداخله — پرونده وارد فاز مداخله می‌شود',
+      skills: skillsStatus,
+      needs: {
         done: protocol !== null,
-        detail: protocol ? `پروتکل فعال: ${STUDENT_PROTOCOL_LABELS[protocol]}` : 'پس از چهار ورودی دیگر'
+        detail: protocol ? `پروتکل فعال: ${STUDENT_PROTOCOL_LABELS[protocol]}` : isRehab ? 'پس از شرح‌حال و ارزیابی عملکردی' : 'پس از چهار ورودی دیگر'
       }
-    ];
+    };
+    const activeOrder: readonly string[] = isRehab ? REHAB_PATHWAY_ORDER : ['anamnesis', 'wechsler', 'behavioral', 'skills', 'needs'];
+    const gates: IdentificationGate[] = activeOrder.map((key) => {
+      const label = key === 'skills' && isRehab
+        ? 'ارزیابی عملکردی توانبخشی — ثبت درمانگر'
+        : key === 'skills' && isLearning
+          ? 'ارزیابی عملکردی درمانگر — چک‌لیست‌های خواندن/نوشتن/ریاضی'
+          : key === 'skills'
+            ? 'ارزیابی مهارتی — چک‌لیست ۷ حیطه‌ای'
+            : key === 'anamnesis'
+              ? 'شرح‌حال و گفت‌وگوی اول'
+              : key === 'wechsler'
+                ? 'آزمون هوش وکسلر ۴'
+                : key === 'behavioral'
+                  ? 'چک‌لیست‌های رفتاری (حداقل ۲ تازه)'
+                  : 'نتیجهٔ نیاز ویژه (دروازهٔ مداخله)';
+      const hint = key === 'skills' && isRehab
+        ? 'شش حیطهٔ شناختی پایه با دادهٔ خام + سطح راهنما — حین جلسهٔ اول مرکز؛ وکسلر و چک‌لیست‌های خانواده/معلم اختیاری‌اند'
+        : key === 'skills' && isLearning
+          ? 'حداقل ۲ از ۳ چک‌لیست — بنا به نشانه‌های شرح‌حال و غربالگری'
+          : key === 'skills'
+            ? 'حین جلسات کاردرمانی ذهنی — ملاک: حداقل ۳ نمره در هر ۷ حیطه (نزدیک سن + پایین‌تر + بالاتر)'
+            : key === 'anamnesis'
+              ? 'فرم «گفت‌وگوی اول» با خانواده — پایهٔ همهٔ تصمیم‌ها'
+              : key === 'wechsler'
+                ? 'فرم نتایج وکسلر — خروجی موتور تحلیل در فیلد engine_output؛ زیر ۶ سال WPPSI/Leiter'
+                : key === 'behavioral'
+                  ? 'SNAP-IV والد و معلم، SDQ، SCARED، DCDQ — با بله ارسال می‌شود؛ پنجرهٔ اعتبار ۱۲ ماه'
+                  : 'جمع‌بندی شواهد + انتخاب پروتکل مداخله — پرونده وارد فاز مداخله می‌شود';
+      return {
+        key: key as IdentificationGate['key'],
+        ord: activeOrder.indexOf(key) + 1,
+        label,
+        hint,
+        done: stageStatus[key].done,
+        detail: stageStatus[key].detail
+      };
+    });
 
     return {
       phase: protocol ? 'intervention' : 'identification',
       protocol,
       gates,
       otCoverage,
-      protocolSuggestions: NEED_PROTOCOL_SUGGESTIONS
+      protocolSuggestions: NEED_PROTOCOL_SUGGESTIONS,
+      pathway: student.pathway
     };
   }
 
