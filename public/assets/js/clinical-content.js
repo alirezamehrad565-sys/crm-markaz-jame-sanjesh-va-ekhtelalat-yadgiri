@@ -240,7 +240,8 @@ export const STAGE2_META = {
     },
     protocol: {
       num: 6,
-      title: 'ورود به قالب مداخله',
+      // m165 — تب مداخله خودش میزکار است (پیش‌فرض = چک‌لیست مهارتی جلسه‌به‌جلسه)؛ تغییر قالب یک اقدام ثانویه در انتهای تب است
+      title: 'مداخله',
       glanceActive: '{protocol} · مسیر: {status}',
       glanceNoPath: '{protocol} · مسیری ثبت نشده',
       glanceLocked: 'پس از ثبت نتیجهٔ نیاز ویژه باز می‌شود',
