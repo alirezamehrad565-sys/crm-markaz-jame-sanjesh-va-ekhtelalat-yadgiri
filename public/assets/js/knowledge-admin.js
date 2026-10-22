@@ -5,14 +5,236 @@
 // knowledge-admin.js — مدیریت دانش‌افزایی (تب تنظیمات، دفتر)
 // دستور کاربر: «باید بخش‌هایی برای اطلاع‌رسانی و دانش‌افزایی بگذاریم»
 // ساخت/ویرایش/انتشار/حذف مقالهٔ دانش — نمایش روی داشبورد همهٔ همکاران
+// — پیوست فایل/تصویر (دستور کاربر: «توی قسمت دانش‌افزایی باید بشه فایل مقاله
+// یا تصویر گذاشت») — همان الگوی پیوست بانک تمرین: آپلود چندتایی + تکه‌ای برای
+// فایل‌های بزرگ، تامب‌نیل تصویر، چیپ فایل، حذف، بازکردن در تب جدید
 
 import { api } from './api.js';
 import { el, icon, toast, toastError, confirmModal, formModal, emptyState, loadingState, openModal } from './ui.js';
 import { session } from './state.js';
-import { formatJalaliDateTime } from './format.js';
+import { fa, formatJalaliDateTime } from './format.js';
 
 const CATEGORY_LABELS = { tip: 'نکتهٔ آموزشی', protocol: 'پروتکل درمانی', article: 'مقاله', news: 'خبر مرکز' };
 const CATEGORY_BADGE = { tip: 'badge--primary', protocol: 'badge--success', article: 'badge--accent', news: 'badge--neutral' };
+
+// سقف‌ها — همان بانک تمرین (پیش‌فرض اولیه؛ مرز قطعی سمت سرور اعمال می‌شود)
+const LIMITS = { maxFileBytes: 50 * 1024 * 1024, maxFilesPerUpload: 10, maxAttachments: 20 };
+/** MIME از پسوند — برای مرورگرهایی که نوع خالی می‌دهند (.mkv/.avi/…) */
+const EXT_MIME_FALLBACK = {
+  mp4: 'video/mp4', m4v: 'video/x-m4v', webm: 'video/webm', mov: 'video/quicktime',
+  avi: 'video/x-msvideo', mkv: 'video/x-matroska', '3gp': 'video/3gpp', wmv: 'video/x-ms-wmv',
+  mpeg: 'video/mpeg', mpg: 'video/mpeg',
+  pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp',
+  gif: 'image/gif', txt: 'text/plain', csv: 'text/csv', html: 'text/html',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+};
+const CHUNK_UPLOAD_BYTES = 1024 * 1024;      // هر درخواست تکه‌ای ≤ ۱ مگابایت — امن با سقف CPU
+const MULTIPART_MAX_BYTES = 3 * 1024 * 1024; // تا ۳ مگابایت یک‌جا می‌رود؛ بزرگ‌تر تکه‌تکه
+
+function isImageMime(mime) {
+  return String(mime ?? '').toLowerCase().startsWith('image/');
+}
+
+/** MIME یک فایل محلی: نوع اعلامی مرورگر یا fallback پسوند */
+function localMime(file) {
+  const t = (file.type || '').toLowerCase();
+  if (t && t !== 'application/octet-stream') return t;
+  const ext = (file.name || '').split('.').pop()?.toLowerCase() ?? '';
+  return EXT_MIME_FALLBACK[ext] ?? t ?? 'application/octet-stream';
+}
+
+function sizeLabel(bytes) {
+  if (!bytes && bytes !== 0) return '';
+  if (bytes >= 1024 * 1024) {
+    const mb = bytes / (1024 * 1024);
+    return `${fa(mb >= 10 ? Math.round(mb) : Math.round(mb * 10) / 10)} مگابایت`;
+  }
+  return bytes >= 1024 ? `${fa(Math.round(bytes / 1024))} کیلوبایت` : `${fa(bytes)} بایت`;
+}
+
+/** — اعتبارسنجی سمت کاربر (همان مرز سرور پیوست تمرین): نوع + حجم + خالی‌نبودن */
+function validateLocalFile(file) {
+  const mime = localMime(file);
+  const ext = (file.name || '').split('.').pop()?.toLowerCase() ?? '';
+  if (!EXT_MIME_FALLBACK[ext] && !(mime && mime !== 'application/octet-stream')) {
+    throw new Error(`نوع فایل «${file.name}» شناخته نشد`);
+  }
+  if (file.size > LIMITS.maxFileBytes) {
+    throw new Error(`حجم «${file.name}» بیش از ${sizeLabel(LIMITS.maxFileBytes)} است`);
+  }
+  if (file.size === 0) {
+    throw new Error(`فایل «${file.name}» خالی است`);
+  }
+  return mime;
+}
+
+/** — آپلود یک فایل: تا ۳ مگابایت multipart مستقیم؛ بزرگ‌تر تکه‌تکه (الگوی تمرین) */
+async function uploadAttachment(itemId, file) {
+  if (file.size <= MULTIPART_MAX_BYTES) {
+    const form = new FormData();
+    form.append('files', file, file.name);
+    await api.postForm(`/api/knowledge/${itemId}/files`, form);
+    return;
+  }
+  const mime = localMime(file);
+  const begin = await api.post(`/api/knowledge/${itemId}/files/begin`, { filename: file.name, mime, size: file.size });
+  const fileId = begin?.data?.fileId;
+  if (!fileId) throw new Error('شروع بارگذاری فایل ناموفق بود');
+  const chunks = Math.ceil(file.size / CHUNK_UPLOAD_BYTES);
+  for (let seq = 0; seq < chunks; seq += 1) {
+    const piece = file.slice(seq * CHUNK_UPLOAD_BYTES, Math.min((seq + 1) * CHUNK_UPLOAD_BYTES, file.size));
+    await api.putRaw(`/api/knowledge/${itemId}/files/${fileId}/chunks/${seq}`, await piece.arrayBuffer());
+  }
+  await api.post(`/api/knowledge/${itemId}/files/${fileId}/complete`, {});
+}
+
+/** — آپلود چند فایل پشت‌سرهم با گزارش پیشرفت */
+async function uploadAttachments(itemId, files, onProgress) {
+  for (let i = 0; i < files.length; i += 1) {
+    onProgress?.(i + 1, files.length, files[i].name);
+    await uploadAttachment(itemId, files[i]);
+  }
+}
+
+/** دریافت امن فایل پیوست (Bearer → blob) — الگوی دانلود بانک تمرین */
+async function fetchAttachmentBlob(itemId, file) {
+  const token = localStorage.getItem('cs.token') ?? '';
+  const res = await fetch(`/api/knowledge/${itemId}/files/${file.id}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!res.ok) throw new Error(`دریافت فایل ناموفق بود (کد ${fa(res.status)})`);
+  return res.blob();
+}
+
+/** بازکردن پیوست در تب جدید — blob URL با همان احراز صفحه */
+function openAttachmentInTab(itemId, file) {
+  fetchAttachmentBlob(itemId, file)
+    .then((blob) => {
+      const objUrl = URL.createObjectURL(blob);
+      window.open(objUrl, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
+    })
+    .catch(toastError);
+}
+
+/** تامب‌نیل تصویر — واکشی blob و گذاشتن در src */
+function buildThumb(itemId, file) {
+  const img = el('img', {
+    src: '',
+    alt: file.filename,
+    title: `${file.filename} — ${sizeLabel(file.size)}`,
+    style: {
+      width: '44px', height: '44px', objectFit: 'cover', borderRadius: '8px',
+      border: '1px solid var(--border)', cursor: 'zoom-in', background: 'var(--bg-2)'
+    }
+  });
+  fetchAttachmentBlob(itemId, file)
+    .then((blob) => {
+      const objUrl = URL.createObjectURL(blob);
+      img.src = objUrl;
+      setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
+    })
+    .catch(() => {
+      img.replaceWith(el('span', { class: 'exb-file-chip__name' }, file.filename));
+    });
+  img.addEventListener('click', () => openAttachmentInTab(itemId, file));
+  return img;
+}
+
+/** چیپ/تامب‌نیل یک پیوست + بازکردن در تب جدید + حذف */
+function attachmentChip(itemId, file, onChanged) {
+  const name = el('span', { class: 'exb-file-chip__name', title: file.filename }, file.filename);
+  const size = el('span', { class: 'exb-file-chip__size' }, sizeLabel(file.size));
+  const openBtn = el('button', { class: 'exb-file-chip__btn', title: 'بازکردن در تب جدید' }, icon('link', 12));
+  openBtn.addEventListener('click', () => openAttachmentInTab(itemId, file));
+  const delBtn = el('button', { class: 'exb-file-chip__btn exb-file-chip__btn--danger', title: 'حذف فایل' }, icon('trash', 12));
+  delBtn.addEventListener('click', async () => {
+    const ok = await confirmModal({
+      title: 'حذف پیوست',
+      message: `فایل «${file.filename}» از مقاله حذف شود؟`,
+      confirmLabel: 'حذف فایل',
+      danger: true
+    });
+    if (!ok) return;
+    try {
+      await api.del(`/api/knowledge/${itemId}/files/${file.id}`);
+      toast('پیوست حذف شد', 'success');
+      onChanged?.();
+    } catch (err) { toastError(err); }
+  });
+
+  if (isImageMime(file.mime)) {
+    const wrap = el('span', { class: 'exb-file-chip', style: { padding: '4px', gap: '6px' } },
+      buildThumb(itemId, file),
+      el('span', { style: { display: 'flex', flexDirection: 'column', minWidth: 0 } }, name, size),
+      openBtn,
+      delBtn
+    );
+    return wrap;
+  }
+  return el('span', { class: 'exb-file-chip' },
+    el('span', { style: { display: 'flex' } }, icon('file', 14)),
+    name,
+    size,
+    openBtn,
+    delBtn
+  );
+}
+
+/** بخش پیوست‌های یک مقاله — چیپ‌ها + دکمهٔ افزودن چندفایلی */
+function attachmentsSection(k, refresh) {
+  const wrap = el('div', { class: 'exb-picked', style: { marginTop: '8px' } });
+  const input = el('input', { type: 'file', multiple: true, style: { display: 'none' } });
+  const status = el('span', { class: 'exb-picked__size', style: { alignSelf: 'center' } }, '');
+
+  async function handleFiles(list) {
+    const files = Array.from(list ?? []);
+    if (files.length === 0) return;
+    if (files.length > LIMITS.maxFilesPerUpload) {
+      toast(`حداکثر ${fa(LIMITS.maxFilesPerUpload)} فایل در هر بار بارگذاری`, 'warning');
+      return;
+    }
+    if ((k.attachments?.length ?? 0) + files.length > LIMITS.maxAttachments) {
+      toast(`حداکثر ${fa(LIMITS.maxAttachments)} پیوست برای هر مقاله`, 'warning');
+      return;
+    }
+    try {
+      for (const f of files) validateLocalFile(f); // اعتبارسنجی همه قبل از ارسال
+    } catch (err) {
+      toastError(err);
+      return;
+    }
+    status.textContent = 'در حال بارگذاری…';
+    try {
+      await uploadAttachments(k.id, files, (i, tot, name) => {
+        status.textContent = `بارگذاری ${fa(i)} از ${fa(tot)} — «${name}»`;
+      });
+      toast('پیوست‌ها ذخیره شدند', 'success');
+      refresh();
+    } catch (err) {
+      toastError(err);
+      status.textContent = '';
+    }
+  }
+
+  const addBtn = el('button', { class: 'btn btn--ghost btn--sm' }, icon('upload', 14), 'افزودن فایل');
+  addBtn.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => {
+    const list = Array.from(input.files ?? []);
+    input.value = '';
+    handleFiles(list);
+  });
+  wrap.addEventListener('dragover', (e) => e.preventDefault());
+  wrap.addEventListener('drop', (e) => {
+    e.preventDefault();
+    handleFiles(e.dataTransfer?.files);
+  });
+
+  const chips = (k.attachments ?? []).map((f) => attachmentChip(k.id, f, refresh));
+  wrap.replaceChildren(...chips, addBtn, input, status);
+  return wrap;
+}
 
 export function drawKnowledgeAdmin(body) {
   const list = el('div', { class: 'stack' });
@@ -45,6 +267,64 @@ export function drawKnowledgeAdmin(body) {
 
 // ─────────────── فرم ساخت ───────────────
 
+/** ناحیهٔ درگ‌اند‌دراپ چندفایلی + کلیک برای انتخاب — الگوی بانک تمرین */
+function buildDropzone(onFiles) {
+  const input = el('input', { type: 'file', multiple: true, style: { display: 'none' } });
+  const hint = `${fa(Math.round(LIMITS.maxFileBytes / (1024 * 1024)))} مگابایت`;
+  const zone = el(
+    'div',
+    { class: 'exb-drop', style: { marginTop: '10px' } },
+    el('span', {}, icon('upload', 20)),
+    el('b', {}, 'فایل مقاله یا تصویر را اینجا رها کنید'),
+    el('span', { class: 'exb-drop__hint' }, `یا کلیک کنید — PDF، تصویر، Word، ویدیو — هر فایل تا ${hint} — چند فایل همزمان`)
+  );
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    zone.classList.add('is-over');
+  });
+  zone.addEventListener('dragleave', () => zone.classList.remove('is-over'));
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    zone.classList.remove('is-over');
+    const list = Array.from(e.dataTransfer?.files ?? []);
+    if (list.length > 0) onFiles(list);
+  });
+  input.addEventListener('change', () => {
+    const list = Array.from(input.files ?? []);
+    if (list.length > 0) onFiles(list);
+    input.value = '';
+  });
+  return el('div', {}, input, zone);
+}
+
+/** فهرست فایل‌های انتخاب‌شدهٔ فرم ساخت به شکل چیپ با دکمهٔ حذف */
+function buildPickedChips(files, onChange) {
+  const wrap = el('div', { class: 'exb-picked' });
+  function draw() {
+    wrap.replaceChildren(
+      ...files.map((f, i) =>
+        el(
+          'span',
+          { class: 'exb-picked__chip' },
+          icon('file', 13),
+          el('span', { class: 'exb-picked__name' }, f.name),
+          el('span', { class: 'exb-picked__size' }, sizeLabel(f.size)),
+          el('button', {
+            type: 'button',
+            class: 'exb-picked__x',
+            title: 'حذف از انتخاب',
+            onclick: () => { files.splice(i, 1); draw(); onChange?.(); }
+          }, icon('x', 11))
+        )
+      )
+    );
+  }
+  draw();
+  wrap.refresh = draw;
+  return wrap;
+}
+
 function composeForm(onSaved) {
   const title = el('input', { class: 'input', placeholder: 'عنوان مقاله…', maxlength: 140 });
   const bodyIn = el('textarea', { class: 'textarea', rows: 5, placeholder: 'متن مقاله — نکتهٔ آموزشی، پروتکل، راهنما یا خبر مرکز…', maxlength: 6000 });
@@ -58,27 +338,61 @@ function composeForm(onSaved) {
   const chkPublished = el('input', { type: 'checkbox' });
   chkPublished.checked = true; // پیش‌فرض منطقی — انتشار فوری
 
+  // پیوست‌های مقالهٔ جدید — پس از ثبت مقاله آپلود می‌شوند
+  const picked = [];
+  let chips = null;
+  const dropzoneWrap = el('div', {});
+  const dropStatus = el('div', { class: 'exb-picked__size', style: { marginTop: '6px' } }, '');
+  dropzoneWrap.append(
+    buildDropzone((list) => {
+      for (const f of list) {
+        try {
+          validateLocalFile(f);
+          picked.push(f);
+        } catch (err) {
+          toastError(err);
+        }
+      }
+      chips.refresh();
+    })
+  );
+  chips = buildPickedChips(picked);
+  dropzoneWrap.append(chips, dropStatus);
+
   const submit = el('button', { class: 'btn btn--primary' }, icon('plus', 16), 'ثبت مقاله');
 
   submit.addEventListener('click', async () => {
     if (title.value.trim().length < 2) { toast('عنوان حداقل ۲ نویسه است', 'warning'); title.focus(); return; }
     if (bodyIn.value.trim().length < 2) { toast('متن مقاله حداقل ۲ نویسه است', 'warning'); bodyIn.focus(); return; }
+    if (picked.length > LIMITS.maxFilesPerUpload) { toast(`حداکثر ${fa(LIMITS.maxFilesPerUpload)} فایل در هر بار بارگذاری`, 'warning'); return; }
     submit.disabled = true;
+    let createdId = null;
     try {
-      await api.post('/api/knowledge', {
+      const res = await api.post('/api/knowledge', {
         title: title.value.trim(),
         body: bodyIn.value.trim(),
         category: selCategory.value,
         pinned: chkPinned.checked,
         published: chkPublished.checked
       });
-      toast('مقاله ثبت شد و روی داشبورد همکاران نمایش داده می‌شود', 'success');
+      createdId = res?.data?.id ?? null;
+      if (picked.length > 0 && createdId) {
+        await uploadAttachments(createdId, picked, (i, tot, name) => {
+          dropStatus.textContent = `بارگذاری پیوست ${fa(i)} از ${fa(tot)} — «${name}»`;
+        });
+      }
+      toast(picked.length > 0 ? 'مقاله و پیوست‌هایش ثبت شد' : 'مقاله ثبت شد و روی داشبورد همکاران نمایش داده می‌شود', 'success');
       title.value = '';
       bodyIn.value = '';
       chkPinned.checked = false;
+      picked.length = 0;
+      chips.refresh();
+      dropStatus.textContent = '';
       onSaved();
     } catch (err) {
       toastError(err);
+      // مقاله ساخته شده ولی پیوست ناقص مانده — فهرست تازه‌سازی شود تا از همان‌جا تکمیل شود
+      if (createdId) onSaved();
     } finally {
       submit.disabled = false;
     }
@@ -87,12 +401,13 @@ function composeForm(onSaved) {
   return el('div', { class: 'ann-compose' },
     title,
     bodyIn,
+    dropzoneWrap,
     el('div', { class: 'ann-checks' },
       el('label', { class: 'ann-check', style: { gap: '6px' } }, selCategory),
       el('label', { class: 'ann-check' }, chkPinned, el('span', {}, 'سنجاق در بالای فهرست')),
       el('label', { class: 'ann-check' }, chkPublished, el('span', {}, 'انتشار برای همکاران'))
     ),
-    el('div', { class: 'ann-compose__hint' }, 'مقاله‌های منتشرشده روی داشبورد همهٔ همکاران (کارت «دانش‌افزایی») دیده می‌شوند.'),
+    el('div', { class: 'ann-compose__hint' }, 'مقاله‌های منتشرشده روی داشبورد همهٔ همکاران (کارت «دانش‌افزایی») دیده می‌شوند. پیوست‌ها پس از ثبت مقاله بارگذاری می‌شوند.'),
     el('div', { style: { display: 'flex', justifyContent: 'flex-end' } }, submit)
   );
 }
@@ -120,7 +435,8 @@ function knRow(k, refresh) {
   const badges = el('div', { class: 'ann-badges' },
     el('span', { class: `badge ${CATEGORY_BADGE[k.category] ?? 'badge--neutral'}` }, CATEGORY_LABELS[k.category] ?? k.category),
     k.pinned ? el('span', { class: 'badge badge--accent' }, 'سنجاق‌شده') : null,
-    k.published ? el('span', { class: 'badge badge--success' }, 'منتشرشده') : el('span', { class: 'badge badge--error' }, 'پیش‌نویس')
+    k.published ? el('span', { class: 'badge badge--success' }, 'منتشرشده') : el('span', { class: 'badge badge--error' }, 'پیش‌نویس'),
+    (k.attachments?.length ?? 0) > 0 ? el('span', { class: 'badge badge--neutral' }, icon('file', 12), ` ${fa(k.attachments.length)} پیوست`) : null
   );
 
   const viewBtn = el('button', { class: 'btn btn--ghost btn--icon btn--sm', 'aria-label': 'مشاهده' }, icon('eye', 15));
@@ -132,7 +448,23 @@ function knRow(k, refresh) {
     openModal({
       title: `${CATEGORY_LABELS[k.category] ?? k.category} — ${k.title}`,
       wide: true,
-      body: el('div', { class: 'kn-reader' }, k.body),
+      body: el('div', { class: 'kn-reader' },
+        k.body,
+        (k.attachments?.length ?? 0) > 0
+          ? el('div', { class: 'exb-picked', style: { marginTop: '14px' } },
+              ...k.attachments.map((f) => {
+                const open = el('button', { class: 'exb-file-chip__btn', title: 'بازکردن در تب جدید' }, icon('link', 12));
+                open.addEventListener('click', () => openAttachmentInTab(k.id, f));
+                return el('span', { class: 'exb-file-chip' },
+                  el('span', { style: { display: 'flex' } }, icon('file', 14)),
+                  el('span', { class: 'exb-file-chip__name' }, f.filename),
+                  el('span', { class: 'exb-file-chip__size' }, sizeLabel(f.size)),
+                  open
+                );
+              })
+            )
+          : null
+      ),
       actions: []
     });
   });
@@ -148,7 +480,7 @@ function knRow(k, refresh) {
     delBtn.addEventListener('click', async () => {
       const ok = await confirmModal({
         title: 'حذف مقالهٔ دانش',
-        message: `«${k.title}» برای همیشه حذف شود؟`,
+        message: `«${k.title}» برای همیشه حذف شود؟${(k.attachments?.length ?? 0) > 0 ? ` پیوست‌های آن (${fa(k.attachments.length)} فایل) هم حذف می‌شود.` : ''}`,
         danger: true,
         confirmLabel: 'حذف'
       });
@@ -168,6 +500,7 @@ function knRow(k, refresh) {
     ),
     el('p', { class: 'ann-item__body' }, k.body.length > 160 ? k.body.slice(0, 160) + '…' : k.body),
     badges,
+    attachmentsSection(k, refresh),
     el('div', { class: 'ann-item__actions' }, viewBtn, editBtn, pubBtn, delBtn)
   );
 }

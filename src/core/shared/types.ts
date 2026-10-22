@@ -816,6 +816,14 @@ export interface AnnouncementSendSummary {
 
 // ───────────── Knowledge ─────────────
 
+/** متادیتای پیوست مقالهٔ دانش — همان شکل ExerciseFileMetaWithId بانک تمرین */
+export interface KnowledgeFileMeta {
+  id: string;
+  filename: string;
+  mime: string;
+  size: number;
+}
+
 /** مقالهٔ دانش‌افزایی — خواندن همهٔ همکاران؛ مدیریت دفتر */
 export interface KnowledgeRecord {
   id: string;
@@ -824,6 +832,8 @@ export interface KnowledgeRecord {
   category: KnowledgeCategory;
   pinned: boolean;
   published: boolean;
+  /** — پیوست‌های مقاله (PDF/تصویر/…) به ترتیب ثبت — الگوی پیوست تمرین */
+  attachments: KnowledgeFileMeta[];
   createdBy: string;
   createdByName: string | null;
   createdAt: string;

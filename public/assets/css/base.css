@@ -92,6 +92,8 @@ textarea {
   background: var(--surface);
   border-inline-start: 1px solid var(--border); /* RTL: سمت راست بصری نیست — سایدبار اول DOM است */
   border-inline-end: 1px solid var(--border);
+  /* m166-e — عمق لایه‌ای به سمت محتوا: نزدیک تیره + پخش ملایم از پایین */
+  box-shadow: var(--shadow-sidebar);
   height: 100vh;
   z-index: 40;
   transition: background var(--normal);
@@ -116,15 +118,18 @@ textarea {
   border-radius: 50%;
   display: block;
 }
+/* m166-e — برند: فاصلهٔ خطوط هماهنگ با مقیاس تایپ (نام چندخطی با ارتفاع خط بدنه،
+   زیرنویس فشرده‌تر با جدایی 2px — قبلاً خطوط چسبیده بودند) */
 .brand__name {
   font-weight: 700;
   font-size: var(--fs-md);
-  line-height: var(--lh-snug, 1.6);
+  line-height: var(--lh-body, 1.8);
 }
 .brand__sub {
   font-size: var(--fs-xs);
   color: var(--text-3);
   line-height: var(--lh-snug, 1.6);
+  margin-top: 2px;
 }
 
 .nav {
@@ -149,16 +154,21 @@ textarea {
   color: var(--text-2);
   font-weight: 500;
   font-size: var(--fs-md);
+  line-height: var(--lh-ui, 1.5);
   border: none;
   background: transparent;
   width: 100%;
   text-align: start;
-  transition: background var(--fast), color var(--fast);
+  transition: background var(--fast), color var(--fast), box-shadow var(--fast), transform var(--fast);
 }
+/* m166-e — هاور/فوکوس حرفه‌ای‌تر: سطح + حاشیهٔ داخلی ظریف + فشردن ملایم */
 .nav__item:hover {
   background: var(--surface-2);
   color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 85%, transparent);
 }
+.nav__item:active { transform: scale(0.985); }
+.nav__item:focus-visible { box-shadow: var(--focus-ring); }
 .nav__item.is-active {
   background: var(--primary-soft);
   color: var(--on-primary-soft);
@@ -276,6 +286,7 @@ textarea {
 .page-head__title {
   font-size: var(--fs-2xl);
   font-weight: 700;
+  line-height: var(--lh-heading, 1.4); /* m166-e — عنوان بزرگ با نقش heading، نه بدنه */
   margin-inline-end: auto;
 }
 .page-head__desc {
@@ -292,18 +303,27 @@ textarea {
 @media (max-width: 920px) {
   .shell { display: block; }
   /* M15.1-fix: drawer در RTL باید سمت راست (کنار دکمه منو) باز شود.
-     inset-inline-end در RTL سمت چپ است — ترکیب قبلی نوار ۹۰px بسته را روی صفحه جا می‌گذاشت. */
+     inset-inline-end در RTL سمت چپ است — ترکیب قبلی نوار ۹۰px بسته را روی صفحه جا می‌گذاشت.
+     m166-e — بازشدن نرم و سریع (transform+opacity، ~180ms ease-out) + گوشهٔ گرد لبهٔ آزاد
+     + عمق لایه‌ای از پایین (توکن --shadow-sidebar) */
   .sidebar {
     position: fixed;
     inset-inline-start: 0;
     top: 0;
     width: min(300px, 84vw);
     transform: translateX(-100%);
-    transition: transform var(--normal);
-    box-shadow: var(--shadow-3);
+    opacity: 0;
+    transition: transform var(--dur-2, 180ms) var(--ease-out),
+                opacity var(--dur-2, 180ms) var(--ease-out);
+    border-radius: var(--radius-xl) 0 0 var(--radius-xl); /* Fallback فیزیکی برای RTL — لبهٔ آزاد چپ */
+    border-start-end-radius: var(--radius-xl);            /* منطقی: لبهٔ آزاد دراپر در هر دو جهت */
+    border-end-end-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sidebar);
   }
   html[dir='rtl'] .sidebar { transform: translateX(100%); } /* پنهان به سمت راست */
   html[dir='rtl'] .sidebar.is-open { transform: translateX(0); }
+  html[dir='ltr'] .sidebar.is-open { transform: translateX(0); } /* m166-e — حالت is-open در LTR هم */
+  .sidebar.is-open { opacity: 1; }
   .sidebar-backdrop {
     position: fixed;
     inset: 0;
@@ -407,7 +427,7 @@ textarea {
 .topbar__crumb {
   display: flex; gap: 7px; align-items: baseline;
   min-width: 0;
-  font-size: var(--fs-sm); font-weight: 400; line-height: 1.5;
+  font-size: var(--fs-sm); font-weight: 400; line-height: var(--lh-ui, 1.5);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .topbar__crumb-group { color: var(--text-3); flex: none; }
@@ -426,7 +446,7 @@ textarea {
 
 /* دراور موبایل — پولیش لبه و دستگیره */
 @media (max-width: 920px) {
-  .sidebar { border-inline-end: none; box-shadow: var(--shadow-3); }
+  .sidebar { border-inline-end: none; box-shadow: var(--shadow-sidebar); }
   .sidebar-backdrop {
     background: color-mix(in srgb, #0F1113 55%, transparent);
     backdrop-filter: blur(2px);

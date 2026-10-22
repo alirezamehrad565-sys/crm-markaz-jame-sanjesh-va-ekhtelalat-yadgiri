@@ -1,5 +1,5 @@
 /**
- * ماژول درخواست مدارک از خانواده با بله — نقطهٔ ورود و صادرات‌های ماژول (barrel)
+ * ماژول درخواست مدارک از خانواده/معلم با بله — نقطهٔ ورود و صادرات‌های ماژول (barrel)
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
 // مرز عمومی ماژول document-requests — تنها نقطه import ماژول‌های دیگر
@@ -7,10 +7,17 @@
 export { createDocumentRequestService } from './service';
 export { registerRoutes } from './routes';
 export {
-  DOC_REQUEST_TEMPLATE_LABELS,
+  DOC_TAG_PRESET_LABELS,
+  DOC_TAG_LEGACY_LABELS,
+  DOC_RECIPIENT_LABELS,
   DOC_REQUEST_STATUS_LABELS,
+  DOC_TAG_MAX_CHARS,
+  DOC_TAGS_MAX,
   DOC_NOTE_MAX,
-  parseDocTemplates,
+  docTagLabel,
+  normalizeDocTag,
+  parseDocTags,
+  parseDocRecipients,
   normalizeDocNote,
   sanitizeDocFilename,
   resolveDocFileName,
@@ -20,8 +27,9 @@ export {
 export type {
   DocBotReply,
   DocMediaKind,
+  DocRecipient,
   DocRequestStatus,
-  DocRequestTemplate,
+  DocTagKey,
   DocumentRequest,
   DocumentRequestDeps,
   NewDocumentRequestInput,

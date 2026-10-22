@@ -40,6 +40,8 @@ export interface ExerciseRecord {
   /** — آمار مصرف: چند بار برای دانش‌آموزان ارسال شده */
   assignCount?: number;
   createdBy: string;
+  /** — m166: هم‌ساز (سازندهٔ دوم) — امتیاز تولید محتوا بین این دو نصف می‌شود */
+  coCreatedBy: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -71,6 +73,8 @@ export interface NewExerciseInput {
   format: ExerciseFormat;
   externalUrl?: string | null;
   tagIds?: string[];
+  /** — m166: هم‌ساز (سازندهٔ دوم) — باید کارمند فعال و مخالف سازندهٔ اصلی باشد */
+  coCreatedBy?: string | null;
   published?: boolean;
   file?: NewExerciseFileInput | null;
 }
@@ -81,6 +85,8 @@ export interface UpdateExerciseInput {
   format?: ExerciseFormat;
   externalUrl?: string | null;
   tagIds?: string[];
+  /** — m166: هم‌ساز — undefined یعنی دست نزن؛ null یعنی بردار */
+  coCreatedBy?: string | null;
   published?: boolean;
 }
 

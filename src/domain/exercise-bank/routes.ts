@@ -99,6 +99,7 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
         format: body.format,
         externalUrl: body.external_url ?? null,
         tagIds: body.tag_ids ?? [],
+        coCreatedBy: body.co_created_by ?? null,
         published: body.published,
         file: body.file
           ? { filename: body.file.filename, mimeType: body.file.mime_type, contentB64: body.file.content_b64 }
@@ -220,6 +221,7 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
         format: body.format,
         externalUrl: body.external_url,
         tagIds: body.tag_ids,
+        coCreatedBy: body.co_created_by,
         published: body.published
       },
       actor

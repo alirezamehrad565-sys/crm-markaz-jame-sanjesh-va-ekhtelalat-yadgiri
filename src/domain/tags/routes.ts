@@ -3,7 +3,8 @@
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
 // REST endpoints برچسب‌ها — بدون business logic، فقط سیم به سرویس
-// RBAC: خواندن برای همه کارکنان؛ ساخت/غیرفعال‌سازی فقط مدیر.
+// RBAC: خواندن برای همه کارکنان؛ ساخت فقط مدیر و درمانگر (m166 — خواست کاربر:
+// «تو این قسمت همکار درمانگر باید بتونه برچسب اضافه کنه»)؛ غیرفعال‌سازی فقط مدیر.
 
 import type { AppHono, TagCategory } from '@core/shared';
 import { NewTagSchema, ReplaceStudentTagsSchema } from '@core/shared';
@@ -21,7 +22,8 @@ export function registerRoutes(app: AppHono, service: TagService): void {
     return c.json({ data: items }, 200);
   });
 
-  app.post('/api/tags', requireRole('manager'), async (c) => {
+  // — m166: درمانگر هم می‌تواند برچسب (دستهٔ سفارشی) بسازد — بانک تمرین و پروفایل
+  app.post('/api/tags', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = NewTagSchema.parse(await c.req.json<unknown>());
     const tag = await service.create(

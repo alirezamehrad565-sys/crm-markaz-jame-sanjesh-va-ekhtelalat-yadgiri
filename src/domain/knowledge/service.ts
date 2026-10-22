@@ -5,12 +5,19 @@
 // دانش‌افزایی مرکز
 // پایگاه دانش داخلی همکاران (نکتهٔ آموزشی/پروتکل/مقاله/خبر) — الگوی اعلان‌های
 // مالکیت WRITE: دفتر (مدیر/منشی) — حذف کامل فقط مدیر؛ خواندن همهٔ همکاران احرازشده
+// — پیوست فایل/تصویر مقاله (دستور کاربر: «توی قسمت دانش‌افزایی باید بشه فایل
+// مقاله یا تصویر گذاشت») — بازاستفادهٔ کامل از الگوی پیوست بانک تمرین (0036):
+// جدول پیوست + ObjectStore مشترک (R2 یا D1 تکه‌تکه روی exercise_file_chunks)
+// + سقف حجم/نوع/تعداد همان تمرین‌ها (validateExerciseFileBytes)
 
-import type { AuthContext, KnowledgeCategory, KnowledgeRecord } from '@core/shared';
-import { NotFoundError } from '@core/errors';
+import type { AuthContext, KnowledgeCategory, KnowledgeFileMeta, KnowledgeRecord } from '@core/shared';
+import { MAX_EXERCISE_ATTACHMENT_COUNT, MAX_EXERCISE_FILES_PER_UPLOAD, MAX_EXERCISE_UPLOAD_CHUNK_BYTES } from '@core/shared';
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
+import type { ObjectStore } from '@core/storage';
+import { sanitizeFilename, validateExerciseFileBytes } from '@domain/exercise-bank/pure';
 import type { KnowledgeService, NewKnowledgeInput, UpdateKnowledgeInput } from './types';
 
 interface KnowledgeRow {
@@ -26,7 +33,18 @@ interface KnowledgeRow {
   updated_at: string;
 }
 
-function rowToRecord(row: KnowledgeRow): KnowledgeRecord {
+/** — ردیف پیوست مقالهٔ دانش */
+interface AttachmentRow {
+  id: string;
+  knowledge_id: string;
+  file_key: string;
+  file_name: string;
+  file_mime: string;
+  file_size: number;
+  created_at: string;
+}
+
+function rowToRecord(row: KnowledgeRow, attachments: KnowledgeFileMeta[]): KnowledgeRecord {
   return {
     id: row.id,
     title: row.title,
@@ -34,6 +52,7 @@ function rowToRecord(row: KnowledgeRow): KnowledgeRecord {
     category: row.category as KnowledgeCategory,
     pinned: row.pinned === 1,
     published: row.published === 1,
+    attachments,
     createdBy: row.created_by,
     createdByName: row.created_by_name ?? null,
     createdAt: row.created_at,
@@ -44,21 +63,114 @@ function rowToRecord(row: KnowledgeRow): KnowledgeRecord {
 const SELECT_COLS = `k.id, k.title, k.body, k.category, k.pinned, k.published,
        k.created_by, s.full_name AS created_by_name, k.created_at, k.updated_at`;
 
+/** اتصال قطعات — فقط برای آداپترهای بدون putSegments (فایل‌های کوچک) */
+function concatSegments(segments: Uint8Array[]): Uint8Array {
+  if (segments.length === 1) return segments[0];
+  const total = segments.reduce((n, s) => n + s.length, 0);
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const s of segments) {
+    out.set(s, off);
+    off += s.length;
+  }
+  return out;
+}
+
+/** بایت → base64 (برای تکه‌های بارگذاری پیوسته — الگوی بانک تمرین) */
+function bytesToBase64Str(bytes: Uint8Array): string {
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
+
 export interface KnowledgeDeps {
   db: DbClient;
   audit: AuditWriter;
   logger: Logger;
+  /** — ذخیره‌ساز فایل (همان ObjectStore بانک تمرین: R2 یا D1 تکه‌تکه) */
+  storage: ObjectStore;
 }
 
 export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
-  const { db, audit, logger } = deps;
+  const { db, audit, logger, storage } = deps;
+  const log = logger.child('knowledge');
+
+  /** گارد نوشتن — همان مدیریت دانش: دفتر (مدیر/منشی) */
+  function assertWriter(actor: AuthContext): void {
+    if (actor.role !== 'manager' && actor.role !== 'secretary') {
+      throw new ForbiddenError('مدیریت دانش‌افزایی فقط برای دفتر (مدیر/منشی) مجاز است');
+    }
+  }
 
   async function getById(id: string): Promise<KnowledgeRecord | null> {
     const row = await db.queryOne<KnowledgeRow>(
       `SELECT ${SELECT_COLS} FROM knowledge_items k JOIN staff s ON s.id = k.created_by WHERE k.id = ?`,
       [id]
     );
-    return row ? rowToRecord(row) : null;
+    if (!row) return null;
+    return rowToRecord(row, await attachmentsOf(id));
+  }
+
+  /** — پیوست‌های یک مقاله به ترتیب ثبت */
+  async function attachmentsOf(itemId: string): Promise<KnowledgeFileMeta[]> {
+    const rows = await db.query<AttachmentRow>(
+      `SELECT id, knowledge_id, file_key, file_name, file_mime, file_size, created_at
+         FROM knowledge_attachments WHERE knowledge_id = ? ORDER BY created_at, rowid`,
+      [itemId]
+    );
+    return rows.map((r) => ({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size }));
+  }
+
+  /** — پیوست‌های چند مقاله به‌صورت دسته‌ای (برای فهرست‌ها) */
+  async function attachmentsForItems(itemIds: string[]): Promise<Map<string, KnowledgeFileMeta[]>> {
+    const map = new Map<string, KnowledgeFileMeta[]>();
+    if (itemIds.length === 0) return map;
+    const placeholders = itemIds.map(() => '?').join(', ');
+    const rows = await db.query<AttachmentRow>(
+      `SELECT id, knowledge_id, file_key, file_name, file_mime, file_size, created_at
+         FROM knowledge_attachments
+        WHERE knowledge_id IN (${placeholders})
+        ORDER BY created_at, rowid`,
+      itemIds
+    );
+    for (const r of rows) {
+      const list = map.get(r.knowledge_id) ?? [];
+      list.push({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size });
+      map.set(r.knowledge_id, list);
+    }
+    return map;
+  }
+
+  /** — پیوست باید موجود و متعلق به همین مقاله باشد */
+  async function assertAttachment(itemId: string, fileId: string): Promise<AttachmentRow> {
+    const att = await db.queryOne<AttachmentRow>(
+      `SELECT id, knowledge_id, file_key, file_name, file_mime, file_size, created_at
+         FROM knowledge_attachments WHERE id = ? AND knowledge_id = ?`,
+      [fileId, itemId]
+    );
+    if (!att) throw new NotFoundError('فایل مقاله');
+    return att;
+  }
+
+  /** — اعتبارسنجی یک فایل باینری (سقف حجم/نوع همان تمرین‌ها) */
+  function validatePrepared(file: { filename: string; mimeType: string; size: number }): { filename: string; mime: string } {
+    const verdict = validateExerciseFileBytes(file, storage.maxObjectBytes);
+    if (!verdict.ok) throw new ValidationError(verdict.reason);
+    return { filename: sanitizeFilename(file.filename), mime: file.mimeType.toLowerCase() };
+  }
+
+  /** — سقف تعداد پیوست هر مقاله */
+  async function assertAttachmentCount(itemId: string, adding: number): Promise<void> {
+    const countRow = await db.queryOne<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM knowledge_attachments WHERE knowledge_id = ?`,
+      [itemId]
+    );
+    if ((countRow?.n ?? 0) + adding > MAX_EXERCISE_ATTACHMENT_COUNT) {
+      throw new ValidationError(`حداکثر ${MAX_EXERCISE_ATTACHMENT_COUNT} فایل برای هر مقاله`);
+    }
   }
 
   return {
@@ -70,7 +182,8 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
           ORDER BY k.pinned DESC, k.created_at DESC
           LIMIT 30`
       );
-      return rows.map(rowToRecord);
+      const attMap = await attachmentsForItems(rows.map((r) => r.id));
+      return rows.map((r) => rowToRecord(r, attMap.get(r.id) ?? []));
     },
 
     async listAll() {
@@ -79,7 +192,8 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
           ORDER BY k.pinned DESC, k.created_at DESC
           LIMIT 200`
       );
-      return rows.map(rowToRecord);
+      const attMap = await attachmentsForItems(rows.map((r) => r.id));
+      return rows.map((r) => rowToRecord(r, attMap.get(r.id) ?? []));
     },
 
     async create(input, actor) {
@@ -103,7 +217,7 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
           }
         });
       });
-      logger.child('knowledge').info('knowledge.created', { id });
+      log.info('knowledge.created', { id });
       return (await getById(id)) as KnowledgeRecord;
     },
 
@@ -138,14 +252,20 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
           }
         });
       });
-      logger.child('knowledge').info('knowledge.updated', { id });
+      log.info('knowledge.updated', { id });
       return (await getById(id)) as KnowledgeRecord;
     },
 
     async remove(id, actor) {
       const existing = await getById(id);
       if (!existing) throw new NotFoundError('مقالهٔ دانش');
+      // کلیدهای پیوست قبل از حذف ردیف‌ها جمع می‌شود (حذف آبجکت بعد از تراکنش)
+      const attRows = await db.query<{ file_key: string }>(
+        `SELECT file_key FROM knowledge_attachments WHERE knowledge_id = ?`,
+        [id]
+      );
       await db.transaction(async (tx) => {
+        await tx.execute(`DELETE FROM knowledge_attachments WHERE knowledge_id = ?`, [id]);
         await tx.execute(`DELETE FROM knowledge_items WHERE id = ?`, [id]);
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -155,8 +275,172 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
           changes: { title: { from: existing.title, to: null } }
         });
       });
-      logger.child('knowledge').info('knowledge.deleted', { id });
+      // پاک‌سازی آبجکت‌های ذخیره‌ساز — بهترین‌تلاش؛ مقاله قبلاً حذف شده است
+      for (const k of attRows) {
+        await storage.delete(k.file_key).catch((err: unknown) => {
+          log.warn('knowledge.attachment.storage.delete.failed', { key: k.file_key, error: err instanceof Error ? err.message : String(err) });
+        });
+      }
+      log.info('knowledge.deleted', { id, attachments: attRows.length });
       return { id };
+    },
+
+    /** — افزودن چند پیوست (multipart باینری) — هر فایل مستقل اعتبارسنجی و ذخیره می‌شود */
+    async addFiles(id, files, actor) {
+      assertWriter(actor);
+      const existing = await getById(id);
+      if (!existing) throw new NotFoundError('مقالهٔ دانش');
+      if (!Array.isArray(files) || files.length === 0) throw new ValidationError('حداقل یک فایل لازم است');
+      if (files.length > MAX_EXERCISE_FILES_PER_UPLOAD) {
+        throw new ValidationError(`حداکثر ${MAX_EXERCISE_FILES_PER_UPLOAD} فایل در هر بار بارگذاری`);
+      }
+      await assertAttachmentCount(id, files.length);
+
+      // اعتبارسنجی همه قبل از هر نوشتنی — نیمه‌تمام نمی‌ماند
+      const preparedList = files.map((f) => ({ ...validatePrepared(f), segments: f.segments, size: f.size }));
+
+      for (const prepared of preparedList) {
+        const attId = crypto.randomUUID();
+        const key = `knowledge/${id}/${attId}`;
+        // نوشتن از قطعات (بدون concat کامل) با fallback به put ساده
+        if (storage.putSegments) {
+          await storage.putSegments(key, prepared.segments);
+        } else {
+          await storage.put(key, concatSegments(prepared.segments), prepared.mime);
+        }
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            `INSERT INTO knowledge_attachments (id, knowledge_id, file_key, file_name, file_mime, file_size)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [attId, id, key, prepared.filename, prepared.mime, prepared.size]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: 'knowledge.files.added',
+            resourceType: 'knowledge',
+            resourceId: id,
+            changes: {
+              filename: { from: null, to: prepared.filename },
+              sizeBytes: { from: null, to: prepared.size }
+            }
+          });
+        });
+      }
+
+      log.info('knowledge.files.added', { id, count: preparedList.length });
+      return (await getById(id)) as KnowledgeRecord;
+    },
+
+    /** — شروع بارگذاری پیوسته: ردیف پیوست با متادیتا ساخته می‌شود؛ تکه‌ها بعداً می‌آیند */
+    async beginChunkedUpload(id, input, actor) {
+      assertWriter(actor);
+      const existing = await getById(id);
+      if (!existing) throw new NotFoundError('مقالهٔ دانش');
+      const prepared = validatePrepared({ filename: input.filename, mimeType: input.mimeType, size: input.size });
+      await assertAttachmentCount(id, 1);
+      const attId = crypto.randomUUID();
+      const key = `knowledge/${id}/${attId}`;
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO knowledge_attachments (id, knowledge_id, file_key, file_name, file_mime, file_size)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [attId, id, key, prepared.filename, prepared.mime, input.size]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'knowledge.file.upload.began',
+          resourceType: 'knowledge',
+          resourceId: id,
+          changes: { filename: { from: null, to: prepared.filename }, sizeBytes: { from: null, to: input.size } }
+        });
+      });
+      log.info('knowledge.file.upload.began', { id, fileId: attId, size: input.size });
+      return { fileId: attId };
+    },
+
+    /** — دریافت یک تکهٔ باینری (بدنهٔ خام ≤ ۱ مگابایت) و پیوستن به تکه‌های همان پیوست */
+    async putUploadChunk(id, fileId, seq, bytes, actor) {
+      assertWriter(actor);
+      const att = await assertAttachment(id, fileId);
+      if (!Number.isInteger(seq) || seq < 0 || seq > 1024) throw new ValidationError('شماره تکه نامعتبر است');
+      if (bytes.length === 0) throw new ValidationError('تکهٔ خالی');
+      if (bytes.length > MAX_EXERCISE_UPLOAD_CHUNK_BYTES) {
+        throw new ValidationError('حجم تکه بیش از حد مجاز است');
+      }
+      await db.execute(
+        `INSERT INTO exercise_file_chunks (key, seq, content) VALUES (?, ?, ?)
+         ON CONFLICT(key, seq) DO UPDATE SET content = excluded.content`,
+        [att.file_key, seq, bytesToBase64Str(bytes)]
+      );
+      return { received: bytes.length };
+    },
+
+    /** — پایان بارگذاری پیوسته: شمار و مجموع تکه‌ها با متادیتای اعلام‌شده سنجیده می‌شود */
+    async completeChunkedUpload(id, fileId, actor) {
+      assertWriter(actor);
+      const att = await assertAttachment(id, fileId);
+      const stat = await db.queryOne<{ n: number; bl: number | null }>(
+        `SELECT COUNT(*) AS n, SUM(length(content)) AS bl FROM exercise_file_chunks WHERE key = ?`,
+        [att.file_key]
+      );
+      // طول base64 هر تکه جداگانه حساب می‌شود — تکهٔ ۱ مگابایتی باقیماندهٔ ۱ بر ۳
+      // دارد و padding آن طول کل را نسبت به کدگذاری پیوسته جابه‌جا می‌کند
+      const b64Len = (n: number): number => Math.ceil(n / 3) * 4;
+      const fullChunks = Math.floor(att.file_size / MAX_EXERCISE_UPLOAD_CHUNK_BYTES);
+      const rest = att.file_size % MAX_EXERCISE_UPLOAD_CHUNK_BYTES;
+      const expectedRows = rest === 0 ? fullChunks : fullChunks + 1;
+      const expectedB64 = fullChunks * b64Len(MAX_EXERCISE_UPLOAD_CHUNK_BYTES) + (rest === 0 ? 0 : b64Len(rest));
+      if (!stat || stat.n !== expectedRows || (stat.bl ?? 0) !== expectedB64) {
+        throw new ConflictError('بارگذاری ناقص است — تکه‌ها با حجم اعلام‌شده هم‌خوان نیستند؛ دوباره تلاش کنید یا فایل را حذف کنید');
+      }
+      await db.transaction(async (tx) => {
+        await tx.execute(`UPDATE knowledge_items SET updated_at = datetime('now') WHERE id = ?`, [id]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'knowledge.files.added',
+          resourceType: 'knowledge',
+          resourceId: id,
+          changes: { filename: { from: null, to: att.file_name }, sizeBytes: { from: null, to: att.file_size }, mode: { from: null, to: 'chunked' } }
+        });
+      });
+      log.info('knowledge.files.chunked.completed', { id, fileId, size: att.file_size });
+      return (await getById(id)) as KnowledgeRecord;
+    },
+
+    /** — حذف یک پیوست مقاله */
+    async deleteAttachment(id, fileId, actor) {
+      assertWriter(actor);
+      const existing = await getById(id);
+      if (!existing) throw new NotFoundError('مقالهٔ دانش');
+      const att = await assertAttachment(id, fileId);
+      await storage.delete(att.file_key);
+      await db.transaction(async (tx) => {
+        await tx.execute(`DELETE FROM knowledge_attachments WHERE id = ?`, [att.id]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'knowledge.file.deleted',
+          resourceType: 'knowledge',
+          resourceId: id,
+          changes: { filename: { from: att.file_name, to: null }, sizeBytes: { from: att.file_size, to: null } }
+        });
+      });
+      log.info('knowledge.file.deleted', { id, fileId });
+      return (await getById(id)) as KnowledgeRecord;
+    },
+
+    /** — دانلود یک پیوست مشخص (همهٔ همکاران احرازشده) */
+    async getAttachmentFile(id, fileId) {
+      const row = await db.queryOne<{ id: string }>(`SELECT id FROM knowledge_items WHERE id = ?`, [id]);
+      if (!row) return null;
+      const att = await db.queryOne<AttachmentRow>(
+        `SELECT id, knowledge_id, file_key, file_name, file_mime, file_size
+           FROM knowledge_attachments WHERE id = ? AND knowledge_id = ?`,
+        [fileId, id]
+      );
+      if (!att) return null;
+      const obj = await storage.get(att.file_key);
+      if (!obj) return null;
+      return { bytes: obj.bytes, filename: att.file_name, mime: att.file_mime ?? obj.mime };
     }
   };
 }

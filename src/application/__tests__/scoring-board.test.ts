@@ -123,7 +123,7 @@ describe('رتبه‌بندی تابلو', () => {
         resource_type TEXT, resource_id TEXT, changes TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
-      CREATE TABLE exercises (id TEXT PRIMARY KEY, created_by TEXT, deleted_at TEXT, created_at TEXT, team_created INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE exercises (id TEXT PRIMARY KEY, created_by TEXT, deleted_at TEXT, created_at TEXT, team_created INTEGER NOT NULL DEFAULT 0, co_created_by TEXT);
       CREATE TABLE exercise_packages (id TEXT PRIMARY KEY, created_by TEXT, deleted_at TEXT, created_at TEXT);
       CREATE TABLE pathway_templates (id TEXT PRIMARY KEY, key TEXT, created_by TEXT, active INTEGER, created_at TEXT);
       CREATE TABLE case_event_types (id TEXT PRIMARY KEY, created_by TEXT, is_system INTEGER, active INTEGER, created_at TEXT);
@@ -212,7 +212,7 @@ describe('computeBoard روی MockD1 (یکپارچه)', () => {
         resource_type TEXT, resource_id TEXT, changes TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
-      CREATE TABLE exercises (id TEXT PRIMARY KEY, created_by TEXT, deleted_at TEXT, created_at TEXT, team_created INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE exercises (id TEXT PRIMARY KEY, created_by TEXT, deleted_at TEXT, created_at TEXT, team_created INTEGER NOT NULL DEFAULT 0, co_created_by TEXT);
       CREATE TABLE exercise_packages (id TEXT PRIMARY KEY, created_by TEXT, deleted_at TEXT, created_at TEXT);
       CREATE TABLE pathway_templates (id TEXT PRIMARY KEY, key TEXT, created_by TEXT, active INTEGER, created_at TEXT);
       CREATE TABLE case_event_types (id TEXT PRIMARY KEY, created_by TEXT, is_system INTEGER, active INTEGER, created_at TEXT);
@@ -359,6 +359,30 @@ describe('computeBoard روی MockD1 (یکپارچه)', () => {
     // قبلاً ۲ تمرین عادی (۲×۱) + ۱ تمرین تیمی (۰٫۵) = ۲٫۵
     expect(sara.content.exercises).toBe(2.5);
   });
+
+  // — m166: هم‌ساز واقعی (co_created_by) — امتیاز تمرین بین سازندهٔ اصلی و هم‌ساز نصف می‌شود؛
+  // جمعِ دو نیم در تابلو = ۱ (همان امتیاز یک تمرین کامل)
+  it('— m166: هم‌ساز (co_created_by) نصف امتیاز به سازندهٔ اصلی و نصف به هم‌ساز می‌دهد', async () => {
+    raw.prepare(`INSERT INTO exercises (id, created_by, deleted_at, created_at, co_created_by) VALUES (?,?,NULL,?,?)`)
+      .run('coEx1', 'th1', '2026-10-09 08:00:00', 'th2');
+    const rows = await computeBoard(db, null);
+    const sara = rows.find((r) => r.staffId === 'th1')!;
+    const reza = rows.find((r) => r.staffId === 'th2')!;
+    // سارا: ۲ عادی + تیمی ۰٫۵ + هم‌سازدار ۰٫۵ = ۳
+    expect(sara.content.exercises).toBe(3);
+    // رضا: تمرین شخصی‌اش (۱) + نصفِ تمرینِ سارا (۰٫۵) = ۱٫۵
+    expect(reza.content.exercises).toBe(1.5);
+  });
+
+  it('— m166: هم‌ساز بودنِ صرف (تمرین ساختهٔ دیگری) هم نصف امتیاز دارد', async () => {
+    // رضا هم‌سازِ تمرین سارا (coEx1) است ولی تمرینِ دیگری از سارا را هم‌ساز نشده — حالت قبلی پوشش داده شد؛
+    // اینجا مرز پایه: هم‌سازی که هیچ تمرین شخصی ندارد فقط ۰٫۵ می‌گیرد
+    raw.prepare(`INSERT INTO exercises (id, created_by, deleted_at, created_at, co_created_by) VALUES (?,?,NULL,?,?)`)
+      .run('coEx2', 'th1', '2026-10-10 08:00:00', 'mg1');
+    const rows = await computeBoard(db, null);
+    const manager = rows.find((r) => r.staffId === 'mg1')!;
+    expect(manager.content.exercises).toBe(0.5);
+  });
 });
 
 describe('پیکربندی قابل‌تنظیم امتیازدهی (تنظیمات ← «امتیازبندی همکاران»)', () => {
@@ -461,7 +485,7 @@ describe('handleScoring (v2): explain فقط-مدیر + ضد-اسنپ‌شات +
         resource_type TEXT, resource_id TEXT, changes TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
-      CREATE TABLE exercises (id TEXT PRIMARY KEY, title TEXT, created_by TEXT, deleted_at TEXT, created_at TEXT, team_created INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE exercises (id TEXT PRIMARY KEY, title TEXT, created_by TEXT, deleted_at TEXT, created_at TEXT, team_created INTEGER NOT NULL DEFAULT 0, co_created_by TEXT);
       CREATE TABLE exercise_packages (id TEXT PRIMARY KEY, title TEXT, created_by TEXT, deleted_at TEXT, created_at TEXT);
       CREATE TABLE pathway_templates (id TEXT PRIMARY KEY, key TEXT, title TEXT, created_by TEXT, active INTEGER, created_at TEXT);
       CREATE TABLE case_event_types (id TEXT PRIMARY KEY, title TEXT, created_by TEXT, is_system INTEGER, active INTEGER, created_at TEXT);

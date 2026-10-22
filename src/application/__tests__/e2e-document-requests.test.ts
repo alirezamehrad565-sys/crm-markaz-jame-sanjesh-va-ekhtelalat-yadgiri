@@ -1,12 +1,13 @@
 /**
- * تست‌های e2e — document-requests (m151 — T2)
+ * تست‌های e2e — document-requests (m151 — T2 · بازطراحی m166)
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
 // e2e-document-requests.test.ts — حلقهٔ کامل «درخواست مدارک با بله»:
-// درمانگر درخواست می‌سازد → پیام بله به چت خانواده → خانواده عکس/فایل می‌فرستد
-// (webhook واقعی + fetcher تزریقی) → مدرک در GET ظاهر می‌شود → فایل دانلود می‌شود →
-// بستن درخواست → رسانهٔ بعدی دوباره مسیر فعلی بله (بازگشت تکلیف) را می‌رود.
-// حالت بدون نگاشت چت هم پوشش داده می‌شود (پیام فارسی شفاف).
+// درمانگر درخواست می‌سازد (توضیح آزاد + تگ‌های روشن؛ گیرنده: خانواده و/یا معلم) →
+// پیام بله به چت گیرنده‌ها → عکس/فایل می‌آید (وبهوک واقعی + fetcher تزریقی) → مدرک در GET
+// ظاهر می‌شود → فایل دانلود می‌شود → بستن درخواست → رسانهٔ بعدی دوباره مسیر فعلی بله
+// (بازگشت تکلیف) را می‌رود. رسانهٔ چت کلاس فقط به درخواستِ «گیرندهٔ معلم» می‌چسبد.
+// سازگاری رکوردهای قدیمی m151 (آرایهٔ JSON در ستون templates) هم پین شده است.
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
@@ -14,7 +15,9 @@ import {
   Api,
   asRole,
   createStudent,
-  WEBHOOK_SECRET
+  WEBHOOK_SECRET,
+  SCHOOL1_ID,
+  MANAGER_ID
 } from '../../test/harness';
 import type { MediaFetcher } from '@core/notify';
 
@@ -47,6 +50,7 @@ const document = (chatId: number, fileId: string, name: string, mime: string): U
 });
 
 const CHAT_PARENT = 8604;
+const CHAT_TEACHER = 8701;
 const CHAT_STRANGER = 8699;
 
 describe('حلقهٔ درخواست مدارک با بله (وبهوک واقعی + fetcher تزریقی)', () => {
@@ -57,6 +61,7 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
   let studentNid = '';
   const studentName = 'آوا مدارکی';
   let requestId = '';
+  let teacherRequestId = '';
   let fetchCalls: string[] = [];
 
   function fakeFetcher(): MediaFetcher {
@@ -106,23 +111,30 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
     expect(rows.c).toBe(0);
   });
 
-  it('قالب خالی/نامعتبر → ۴۰۰ فارسی', async () => {
-    const res = await therapist.post(`/api/students/${studentId}/document-requests`, { templates: [] });
+  it('تگ خالی/نامعتبر یا گیرندهٔ نامعتبر → ۴۰۰ فارسی', async () => {
+    const res = await therapist.post(`/api/students/${studentId}/document-requests`, { tags: [] });
     expect(res.status).toBe(400);
-    const res2 = await therapist.post(`/api/students/${studentId}/document-requests`, { templates: ['unknown_kind'] });
+    const res2 = await therapist.post(`/api/students/${studentId}/document-requests`, { tags: [42] });
     expect(res2.status).toBe(400);
+    const res3 = await therapist.post(`/api/students/${studentId}/document-requests`, { tags: ['   '] });
+    expect(res3.status).toBe(400);
+    const res4 = await therapist.post(`/api/students/${studentId}/document-requests`, { tags: ['other'], recipients: 'family' });
+    expect(res4.status).toBe(400);
+    const res5 = await therapist.post(`/api/students/${studentId}/document-requests`, { tags: ['other'], recipients: ['school'] });
+    expect(res5.status).toBe(400);
   });
 
   it('درمانگر درخواست می‌سازد → پیام بله به چت خانواده صف/ارسال می‌شود', async () => {
     const res = await therapist.post(`/api/students/${studentId}/document-requests`, {
-      templates: ['dictation', 'report_card'],
+      tags: ['dictation', 'report_card'],
       custom_note: 'فقط نمونه‌های این ماه کافی است.'
     });
     expect(res.status).toBe(201);
-    const data = res.body as { data: { request: { id: string; status: string; templates: string[] }; deliveredChats: number } };
+    const data = res.body as { data: { request: { id: string; status: string; tags: string[]; recipients: string[] }; deliveredChats: number } };
     requestId = data.data.request.id;
     expect(data.data.request.status).toBe('sent');
-    expect(data.data.request.templates).toEqual(['dictation', 'report_card']);
+    expect(data.data.request.tags).toEqual(['dictation', 'report_card']);
+    expect(data.data.request.recipients).toEqual(['family']);
     expect(data.data.deliveredChats).toBe(1);
 
     // — پیام درخواست در صف اعلان با قالب تازه
@@ -243,9 +255,127 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
   it('دخالت therapist روی درخواست پروندهٔ دیگر — ثبت برای دانش‌آموز موجود بدون چت بله خطا می‌دهد', async () => {
     // پروندهٔ تازه بدون چت متصل → پیام راهنمای ساخت لینک
     const s3 = await createStudent(manager, { first_name: 'بی', last_name: 'چت' });
-    const res = await therapist.post(`/api/students/${s3.id}/document-requests`, { templates: ['prev_eval'] });
+    const res = await therapist.post(`/api/students/${s3.id}/document-requests`, { tags: ['other'] });
     expect(res.status).toBe(400);
     const body = res.body as { message?: string };
     expect(body.message).toContain('لینک اتصال خانواده');
+  });
+
+  // ─── m166: گیرندهٔ معلم + هر دو گیرنده + تگ دلخواه + سازگاری رکورد قدیمی ───
+
+  it('گیرندهٔ معلم بدون چت کلاس → ۴۰۰ فارسی؛ سپس با اتصال کلاس، پیام به چت معلم می‌رود', async () => {
+    // — قبل از اتصال کلاس: خطای شفاف
+    const noClass = await therapist.post(`/api/students/${studentId}/document-requests`, {
+      tags: ['narrative', 'exam'],
+      recipients: ['teacher']
+    });
+    expect(noClass.status).toBe(400);
+    expect((noClass.body as { message?: string }).message).toContain('چت معلمِ کلاس');
+
+    // — کلاس + چت معلمِ متصل (الگوی e2e-teacher-package: class_bot_links)
+    A.sql.prepare(
+      `INSERT INTO classes (id, school_id, name, teacher_name, teacher_phone, active)
+       VALUES ('c-doc-req', ?, 'ششم ب', 'سرکار موسوی', '09120000009', 1)`
+    ).run(SCHOOL1_ID);
+    A.sql.prepare(`UPDATE students SET class_id = 'c-doc-req' WHERE id = ?`).run(studentId);
+    A.sql.prepare(
+      `INSERT INTO class_bot_links (id, code, class_id, chat_id, status, created_by, created_at, updated_at)
+       VALUES ('cbl-doc-1', 'DOCREQ1', 'c-doc-req', '${CHAT_TEACHER}', 'linked', 'seed', datetime('now'), datetime('now'))`
+    ).run();
+
+    const res = await therapist.post(`/api/students/${studentId}/document-requests`, {
+      tags: ['narrative', 'exam'],
+      recipients: ['teacher'],
+      custom_note: 'گزارش روایی این ماه'
+    });
+    expect(res.status).toBe(201);
+    const data = res.body as { data: { request: { id: string; recipients: string[] }; deliveredChats: number } };
+    teacherRequestId = data.data.request.id;
+    expect(data.data.request.recipients).toEqual(['teacher']);
+    expect(data.data.deliveredChats).toBe(1);
+
+    const notes = A.sql
+      .prepare(`SELECT recipient FROM notifications WHERE template = 'doc_request_sent' AND recipient = ?`)
+      .all(String(CHAT_TEACHER)) as { recipient: string }[];
+    expect(notes.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('رسانهٔ چت کلاس فقط به درخواستِ گیرندهٔ معلم می‌چسبد — جریان‌های دیگر دست‌نخورده', async () => {
+    // درخواست معلم‌محور قبلی بسته می‌شود تا فقط درخواستِ فقط‌خانواده باز بماند
+    expect((await therapist.post(`/api/requests/${teacherRequestId}/close`)).status).toBe(200);
+
+    const famReq = await therapist.post(`/api/students/${studentId}/document-requests`, {
+      tags: ['dictation'],
+      recipients: ['family']
+    });
+    expect(famReq.status).toBe(201);
+
+    const before = (A.sql.prepare(`SELECT COUNT(*) AS c FROM student_received_docs WHERE student_id = ?`).get(studentId) as { c: number }).c;
+    // — عکس معلم در چت کلاس، وقتی درخواستِ معلم‌محور بازی نیست → به درخواست خانواده نمی‌چسبد
+    const denied = await bot(photo(CHAT_TEACHER, 'TEACHER-DENIED'));
+    expect(denied.reply).toContain('متصل نیست');
+    const after = (A.sql.prepare(`SELECT COUNT(*) AS c FROM student_received_docs WHERE student_id = ?`).get(studentId) as { c: number }).c;
+    expect(after).toBe(before);
+
+    // — درخواستِ گیرندهٔ معلم → عکس بعدی معلم به همان ضمیمه و وضعیت received می‌شود
+    const tReq = await therapist.post(`/api/students/${studentId}/document-requests`, {
+      tags: ['exam'],
+      recipients: ['teacher']
+    });
+    expect(tReq.status).toBe(201);
+    const tReqId = (tReq.body as { data: { request: { id: string } } }).data.request.id;
+
+    const ok = await bot(photo(CHAT_TEACHER, 'TEACHER-DOC-1', 'برگهٔ امتحان ریاضی'));
+    expect(ok.handled).toBe(true);
+    expect(ok.reply).toContain('دریافت شد');
+    const st = A.sql.prepare(`SELECT status FROM document_requests WHERE id = ?`).get(tReqId) as { status: string };
+    expect(st.status).toBe('received');
+    const rows = A.sql
+      .prepare(`SELECT request_id, chat_id, caption FROM student_received_docs WHERE student_id = ? ORDER BY rowid`)
+      .all(studentId) as { request_id: string; chat_id: string; caption: string }[];
+    const last = rows[rows.length - 1];
+    expect(last.request_id).toBe(tReqId);
+    expect(last.chat_id).toBe(String(CHAT_TEACHER));
+    expect(last.caption).toBe('برگهٔ امتحان ریاضی');
+  });
+
+  it('هر دو گیرنده — پیام به خانواده و معلم بدون تکرار', async () => {
+    const res = await therapist.post(`/api/students/${studentId}/document-requests`, {
+      tags: ['report_card'],
+      recipients: ['family', 'teacher']
+    });
+    expect(res.status).toBe(201);
+    const data = res.body as { data: { request: { recipients: string[] }; deliveredChats: number } };
+    expect(data.data.request.recipients).toEqual(['family', 'teacher']);
+    expect(data.data.deliveredChats).toBe(2);
+    const recipients = A.sql
+      .prepare(`SELECT DISTINCT recipient FROM notifications WHERE template = 'doc_request_sent' AND recipient IN (?, ?)`)
+      .all(String(CHAT_PARENT), String(CHAT_TEACHER)) as { recipient: string }[];
+    expect(recipients.map((r) => r.recipient).sort()).toEqual([String(CHAT_PARENT), String(CHAT_TEACHER)].sort());
+  });
+
+  it('تگ دلخواه کنار تگ پیش‌فرض ذخیره می‌شود', async () => {
+    const res = await therapist.post(`/api/students/${studentId}/document-requests`, {
+      tags: ['exam', 'آزمون تعیین سطح معلم خصوصی']
+    });
+    expect(res.status).toBe(201);
+    const req = (res.body as { data: { request: { tags: string[]; recipients: string[] } } }).data.request;
+    expect(req.tags).toEqual(['exam', 'آزمون تعیین سطح معلم خصوصی']);
+    expect(req.recipients).toEqual(['family']);
+  });
+
+  it('رکورد قدیمی m151 (آرایهٔ JSON در ستون templates) — سازگاری نمایش: tags و recipients', async () => {
+    const s4 = await createStudent(manager, { first_name: 'نازنین', last_name: 'قدیمی' });
+    A.sql.prepare(
+      `INSERT INTO document_requests (id, student_id, templates, custom_note, status, sent_at, due_hint, requested_by, delivered_chats)
+       VALUES ('req-legacy-m151', ?, '["prev_eval","teacher_report"]', 'یادداشت قدیمی', 'sent', datetime('now'), NULL, ?, 1)`
+    ).run(s4.id, MANAGER_ID);
+    const list = await therapist.get(`/api/students/${s4.id}/document-requests`);
+    expect(list.status).toBe(200);
+    const items = (list.body as { data: { id: string; tags: string[]; recipients: string[] }[] }).data;
+    const legacy = items.find((r) => r.id === 'req-legacy-m151');
+    expect(legacy).toBeTruthy();
+    expect(legacy!.tags).toEqual(['prev_eval', 'teacher_report']);
+    expect(legacy!.recipients).toEqual(['family']);
   });
 });

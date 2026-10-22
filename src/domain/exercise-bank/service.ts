@@ -86,6 +86,8 @@ interface ExerciseRow {
   /** — آمار مصرف */
   assign_count?: number;
   created_by: string;
+  /** — m166: هم‌ساز (سازندهٔ دوم) — امتیاز نصف بین دو نفر */
+  co_created_by?: string | null;
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -356,6 +358,7 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       files,
       assignCount: row.assign_count ?? 0,
       createdBy: row.created_by,
+      coCreatedBy: row.co_created_by ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
@@ -411,10 +414,26 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
     return db.queryOne<ExerciseRow>(
       `SELECT id, title, description, format, published, external_url,
               file_name, file_mime, file_size, file_key, assign_count,
-              created_by, created_at, updated_at
+              created_by, co_created_by, created_at, updated_at
          FROM exercises WHERE id = ? AND deleted_at IS NULL`,
       [id]
     );
+  }
+
+  /** — m166: اعتبارسنجی هم‌ساز تمرین — باید کارمند فعال و مخالف سازندهٔ اصلی باشد
+   * خروجی: null (بدون هم‌ساز) یا شناسهٔ تأییدشده */
+  async function resolveCoCreator(raw: string | null | undefined, creatorId: string): Promise<string | null> {
+    if (raw === undefined || raw === null || String(raw).trim() === '') return null;
+    const coId = String(raw).trim();
+    if (coId === creatorId) {
+      throw new ValidationError('هم‌ساز نمی‌تواند همان سازندهٔ اصلی تمرین باشد');
+    }
+    const staffRow = await db.queryOne<{ id: string }>(
+      `SELECT id FROM staff WHERE id = ? AND active = 1`,
+      [coId]
+    );
+    if (!staffRow) throw new NotFoundError('هم‌ساز');
+    return coId;
   }
 
   /** اعتبارسنجی و نوشتن برچسب‌ها — همه باید فعال و موجود باشند */
@@ -573,7 +592,7 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       const rows = await db.query<ExerciseRow>(
         `SELECT e.id, e.title, e.description, e.format, e.published, e.external_url,
                 e.file_name, e.file_mime, e.file_size, e.file_key, e.assign_count,
-                e.created_by, e.created_at, e.updated_at
+                e.created_by, e.co_created_by, e.created_at, e.updated_at
            FROM exercises e ${where}
           ORDER BY e.created_at DESC, e.id DESC
           LIMIT ${pageSize} OFFSET ${win.offset}`,
@@ -628,10 +647,13 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         fileMeta = { filename: prepared.filename, mime: prepared.mime, size: prepared.size };
       }
 
+      // — m166: هم‌ساز (سازندهٔ دوم) — کارمند فعال مخالف سازندهٔ اصلی؛ امتیاز نصف بین دو نفر
+      const coCreatorId = await resolveCoCreator(input.coCreatedBy, actor.staffId);
+
       await db.transaction(async (tx) => {
         await tx.execute(
-          `INSERT INTO exercises (id, title, description, format, published, external_url, file_name, file_mime, file_size, file_key, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO exercises (id, title, description, format, published, external_url, file_name, file_mime, file_size, file_key, co_created_by, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
             title,
@@ -643,6 +665,7 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
             fileMeta?.mime ?? null,
             fileMeta?.size ?? null,
             fileMeta ? `exercise/${id}` : null,
+            coCreatorId,
             actor.staffId
           ]
         );
@@ -682,6 +705,12 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       const title = input.title !== undefined ? normalizeExerciseTitle(input.title) : undefined;
       if (title !== undefined && title.length < 2) throw new ValidationError('عنوان تمرین حداقل ۲ نویسه است');
 
+      // — m166: هم‌ساز — فقط وقتی کلید در payload آمده باشد دست می‌خورد (null = برداشتن)
+      // (پیش از تراکنش — خواندن از db داخل تراکنش tx نیست)
+      const coCreatorId = input.coCreatedBy !== undefined
+        ? await resolveCoCreator(input.coCreatedBy, row.created_by)
+        : undefined;
+
       await db.transaction(async (tx) => {
         await tx.execute(
           `UPDATE exercises
@@ -690,6 +719,7 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
                   format = COALESCE(?, format),
                   published = COALESCE(?, published),
                   external_url = CASE WHEN ? THEN ? ELSE external_url END,
+                  co_created_by = CASE WHEN ? THEN ? ELSE co_created_by END,
                   updated_at = datetime('now')
             WHERE id = ?`,
           [
@@ -700,6 +730,8 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
             input.published === undefined ? null : input.published ? 1 : 0,
             input.externalUrl !== undefined ? 1 : 0,
             input.externalUrl !== undefined ? (input.externalUrl?.trim() ? input.externalUrl.trim() : null) : null,
+            input.coCreatedBy !== undefined ? 1 : 0,
+            coCreatorId ?? null,
             id
           ]
         );
@@ -713,7 +745,9 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
           resourceId: id,
           changes: {
             ...(input.title !== undefined ? { title: { from: row.title, to: title ?? null } } : {}),
-            ...(input.published !== undefined ? { published: { from: row.published === 1, to: input.published } } : {})
+            ...(input.published !== undefined ? { published: { from: row.published === 1, to: input.published } } : {}),
+            // — m166: تغییر هم‌ساز روی امتیاز اثر دارد — در تاریخچه می‌ماند
+            ...(input.coCreatedBy !== undefined ? { coCreatedBy: { from: row.co_created_by ?? null, to: coCreatorId ?? null } } : {})
           }
         });
       });
