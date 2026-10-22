@@ -3631,3 +3631,62 @@ tr.wl-row--urgent > td:first-child {
   display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
   margin-bottom: var(--sp-2);
 }
+
+/* ═══════════════ m164 — گزارش پیشرفت چک‌لیست‌محور (چاپ/PDF) ═══════════════ */
+
+.pr-sheet { display: flex; flex-direction: column; gap: var(--sp-4); }
+
+/* سربرگ گزارش — برند + عنوان + متادیتا */
+.pr-head { border-bottom: 2px solid var(--primary); padding-bottom: var(--sp-3); display: flex; flex-direction: column; gap: 6px; }
+.pr-head__brand { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--text-3); }
+.pr-head__title { margin: 0; font-size: var(--fs-xl); font-weight: 800; color: var(--text-1); }
+.pr-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 18px; margin-top: 4px; }
+.pr-meta__item { display: flex; flex-direction: column; gap: 2px; }
+.pr-meta__label { font-size: var(--fs-xs); color: var(--text-3); }
+.pr-meta__value { font-size: var(--fs-sm); font-weight: 700; color: var(--text-1); }
+
+/* نوار شاخص‌های کلیدی */
+.pr-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--sp-3); }
+.pr-kpi { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--sp-3); text-align: center; display: flex; flex-direction: column; gap: 4px; }
+.pr-kpi__num { font-size: var(--fs-xl); font-weight: 800; color: var(--primary); line-height: 1.2; }
+.pr-kpi__label { font-size: var(--fs-xs); color: var(--text-2); }
+
+/* جدول‌های گزارش */
+.pr-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.pr-table th, .pr-table td { border: 1px solid var(--border); padding: 6px 8px; text-align: right; vertical-align: middle; }
+.pr-table th { background: var(--surface-2); font-weight: 700; font-size: var(--fs-xs); color: var(--text-2); white-space: nowrap; }
+.pr-table td.is-num { text-align: center; white-space: nowrap; }
+.pr-domain-row td { background: var(--surface-2); font-weight: 800; color: var(--text-1); }
+.pr-chip { margin-inline-start: 6px; }
+.pr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+/* رأی روند در جدول خط پایه */
+.pr-verdict { font-weight: 800; }
+.pr-verdict--good { color: var(--success); }
+.pr-verdict--bad { color: var(--error); }
+.pr-verdict--flat { color: var(--text-2); }
+
+/* یادداشت پانویس کارت‌ها — فرمول و مرزهای تفسیر */
+.pr-note { font-size: var(--fs-xs); color: var(--text-3); line-height: 2; border-top: 1px dashed var(--border); padding-top: var(--sp-2); margin-top: var(--sp-2); }
+
+/* پانویس گزارش */
+.pr-foot { border-top: 1px solid var(--border); padding-top: var(--sp-2); font-size: var(--fs-xs); color: var(--text-3); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+
+/* نمودار خطی — استایل مشترک با chart__grid موجود */
+.chart--line { width: 100%; }
+.chart__line { stroke: var(--primary); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.chart__dot { fill: var(--primary); }
+.chart__axis { font-size: 10px; fill: var(--text-3); font-family: inherit; }
+
+/* چاپ — A4 فشرده و بدون شکستگی ناخوشایند */
+@media print {
+  @page { size: A4; margin: 13mm 12mm; }
+  .pr-sheet { gap: 10px; }
+  .pr-table { font-size: 10.5pt; table-layout: auto; }
+  .pr-table th, .pr-table td { padding: 4px 6px; }
+  .pr-table th { white-space: normal; }
+  .pr-table td { word-wrap: break-word; }
+  .pr-table tr, .pr-domain-row { break-inside: avoid; }
+  .card { break-inside: avoid; }
+  .chart--line { break-inside: avoid; }
+}

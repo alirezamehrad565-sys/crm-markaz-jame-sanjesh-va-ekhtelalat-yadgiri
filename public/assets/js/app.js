@@ -17,6 +17,7 @@ import { renderSettings } from './views/settings.js';
 import { renderSchools } from './views/schools.js';
 import { renderStudents } from './views/students.js';
 import { renderStudentProfile } from './views/student-profile.js';
+import { renderProgressReport } from './views/progress-report.js'; // m164 — گزارش پیشرفت چک‌لیست‌محور (چاپ/PDF)
 // ماژول مستقل «لیست انتظار» + «آرشیو مرکز» (جدا شدن فلو از ماژول دانش‌آموزان)
 import { renderWaitlistModule } from './waitlist.js';
 import { renderArchive } from './views/archive.js';
@@ -412,6 +413,7 @@ register('#/working-hours', { title: 'تنظیمات', render: renderSettings })
 register('#/schools', { title: 'مدارس', render: roleOnly(['manager', 'secretary'], renderSchools) }); // — منشی مجاز
 register('#/students', { title: 'دانش‌آموزان', render: renderStudents });
 register('#/students/:id', { title: 'پروفایل دانش‌آموز', render: renderStudentProfile });
+register('#/students/:id/progress-report', { title: 'گزارش پیشرفت', render: renderProgressReport }); // m164 — نقش‌ها در سرور کنترل می‌شوند (مثل ot/progress)
 // ماژول مستقل لیست انتظار (تب قدیمی «#/students?tab=waitlist» در students.js ریدایرکت می‌شود)
 // درمانگر هم وارد می‌شود؛ نمای فقط-افزودن (waitlist.js خودش نقش را می‌سنجد؛ سرور هم ۴۰۳)
 register('#/waitlist', { title: 'لیست انتظار', render: roleOnly(['manager', 'secretary', 'therapist'], renderWaitlistModule, 'این بخش برای دفتر و ثبت متقاضی توسط درمانگر فعال است.') });

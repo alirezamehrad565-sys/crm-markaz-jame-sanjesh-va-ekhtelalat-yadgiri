@@ -1971,6 +1971,8 @@ export async function renderClinicalTab(box, { student }) {
       ? otProgressPanel({
           progress: otProgress,
           protocolLabel: otProtocolLabel,
+          // m164 — دکمهٔ «گزارش پیشرفت» (صفحهٔ چاپی چک‌لیست‌محور)
+          studentId: student.id,
           // m163 — بازسنجی خط پایه در فاز مداخله (۸–۱۲ جلسه) — مودال همان فرم؛ تک‌منبع پنل پیشرفت
           onReassess: isRehabCase && canDecide ? () => openRehabFxModal(student, refresh) : null
         })
