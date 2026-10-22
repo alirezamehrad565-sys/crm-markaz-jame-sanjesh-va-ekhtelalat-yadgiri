@@ -891,7 +891,7 @@ function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide
           : null;
       }
       // m161 — حالت توانبخشی: بدون خط پایه → مودال میکروی ارزیابی عملکردی؛ با ثبت → همان مودال (بازسنجی خط پایه)
-      if (ctx.isRehabCase) {
+      if (isRehabCase) {
         if (!canDecide) return null;
         return act(GATE_GLOSS.skills.rehabActionLabel, 'btn--soft', () => openRehabFxModal(student, refresh));
       }
