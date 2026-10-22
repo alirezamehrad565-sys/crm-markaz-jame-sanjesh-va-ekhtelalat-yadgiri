@@ -129,6 +129,8 @@ export interface OtProfile {
 /** یک گیت فاز شناسایی — ورودی‌های مشترک همهٔ مسیرها */
 export interface IdentificationGate {
   key: 'anamnesis' | 'behavioral' | 'wechsler' | 'skills' | 'needs';
+  /** جایگاه نمایشی — m161: مسیرآگاه (توانبخشی ۱–۳، مسیر استاندارد ۱–۵) */
+  ord: number;
   label: string;
   hint: string;
   done: boolean;
@@ -149,6 +151,8 @@ export interface GatesOutput {
   };
   /** پیشنهاد پیش‌فرض نیاز→پروتکل (فقط پیشنهاد — تصمیم با درمانگر) */
   protocolSuggestions: Record<string, { protocol: StudentProtocol; secondary: StudentProtocol | null } | null>;
+  /** مسیر پرونده — m161: پایهٔ گیت‌های مسیرآگاه (null = فاز شناسایی بدون مسیر) */
+  pathway: string | null;
 }
 
 export interface OtSessionSaveInput {

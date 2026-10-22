@@ -1253,6 +1253,297 @@ export function probeAnalysisOf(area: ProbeArea, v: Record<string, string | numb
   };
 }
 
+// ───────── ارزیابی عملکردی توانبخشی ذهنی (m161) — آزمونِ درمانگر در مرکز ─────────
+// تمرکز مسیر توانبخشی ذهنی-جسمی روی «کار درمانی ذهنی» است: شش حیطهٔ شناختی پایه با
+// دادهٔ خام عددی + سطح راهنما (خط پایهٔ محوشدن راهنما). ملاک هر حیطه = ملاک کمی
+// مهارت متناظر در چک‌لیست ۷ حیطه‌ای (ot_skills — مایگریشن 0047/0048) تا ارزیابی پایه
+// و ماتریس مداخله جلسه‌به‌جلسه یک زبان مشترک داشته باشند:
+//   att_sus ← ot-cog-07 (توجه پایدار)     att_sel ← ot-cog-08 (توجه انتخابی)
+//   wm      ← ot-aud-06 (حافظهٔ کاری)     inh     ← ot-cog-10 (بازداری)
+//   flex    ← ot-cog-11 (انعطاف ذهنی)     ps      ← ot-cog-12 (حل مسئله)
+// رویکرد: رشدی-ملاکی (نه هنجار سنی) — مناسب پرونده‌های توانبخشی با تأخیر رشدی.
+
+export const REHAB_FX_KEY = 'ce-rehab-fx-v1';
+export const REHAB_FX_TYPE_ID = 'bbbbbbbb-8200-4000-8000-000000000033';
+
+/** سطح راهنما — آینهٔ OT_PROMPT_LEVEL_LABELS موتور OT + «بدون راهنما» (استقلال کامل) */
+export const REHAB_FX_PROMPT_OPTIONS: readonly string[] = [
+  'بدون راهنما', 'راهنمای کلامی', 'ژستی / الگودهی', 'لمسی جزئی', 'راهنمای فیزیکی کامل'
+];
+export const REHAB_FX_PROMPT_DEFAULT = 'بدون راهنما';
+
+/** پیام یک حیطهٔ خام — تعداد کل مبنای پرچم حل مسئله (توالی داستان) */
+export const REHAB_FX_STORY_MAX = 4;
+
+export interface RehabFxDomainSpec {
+  key: string;
+  label: string;
+  /** واحد دادهٔ خام — در ردیف نمایشی و پیام خطا می‌نشیند */
+  unit: string;
+  min: number;
+  max: number;
+  /** جهت مقایسه با ملاک — خطا/کمک = lower_better، مدت/توالی/تکه = higher_better */
+  kind: 'higher_better' | 'lower_better';
+  /** مرز «مرزی» — بالاترین مقدار ضعف (higher) یا آخرین مقدار مرزی (lower) */
+  weakMax: number;
+  /** مرز «در انتظار» — کمترین مقدار در انتظار */
+  okMin: number;
+  /** ملاک قبولی ot_skills متناظر — در کارت و هنجار مرجع نمایش داده می‌شود */
+  criterionFa: string;
+  /** متن پیشنهاد مداخلهٔ حیطه‌ای — برای حیطه‌های مرزی/ضعیف */
+  adviceFa: string;
+}
+
+/** شش حیطهٔ پایه — ترتیب نمایشی همین است؛ مرزها یک‌جا برای تست قابل‌گوان هستند */
+export const REHAB_FX_DOMAINS: readonly RehabFxDomainSpec[] = [
+  {
+    key: 'att_sus', label: 'توجه پایدار', unit: 'دقیقهٔ تمرکز پیوسته', min: 0, max: 15,
+    kind: 'higher_better', weakMax: 4, okMin: 10,
+    criterionFa: 'پایان‌رساندن کار ساخت‌یافتهٔ ۱۰ دقیقه‌ای بدون یادآوری (ملاک ot-cog-07)',
+    adviceFa: 'توجه پایدار گیر دارد — فعالیت ساخت‌یافته با مدت پلکانی از ۵ دقیقه + تایمر دیداری و استراحت حرکتی کوتاه بین بازه‌ها (حیطهٔ «توجه و مهارت‌های ذهنی» چک‌لیست مهارتی).'
+  },
+  {
+    key: 'att_sel', label: 'توجه انتخابی — حذف هدف', unit: 'خطا از ۲۰ هدف', min: 0, max: 20,
+    kind: 'lower_better', weakMax: 4, okMin: 2,
+    criterionFa: 'حذف هدف در جدول تصویر/حرف با حداکثر ۲ خطا (ملاک ot-cog-08)',
+    adviceFa: 'توجه انتخابی گیر دارد — تمرین حذف هدف روزانه (۵ دقیقه، از جدول ساده به شلوغ) + کاهش محرک میز کار در جلسه.'
+  },
+  {
+    key: 'wm', label: 'حافظهٔ کاری', unit: 'طول توالی بازگوشده (رقم)', min: 1, max: 9,
+    kind: 'higher_better', weakMax: 2, okMin: 4,
+    criterionFa: 'تکرار ۴ رقم در ۲ از ۳ بار (ملاک ot-aud-06)',
+    adviceFa: 'حافظهٔ کاری گیر دارد — بازی دنبالهٔ چندکاری و توالی عددی پلکانی از ۳ رقم؛ دستورهای دو مرحله‌ای با یادآور دیداری.'
+  },
+  {
+    key: 'inh', label: 'بازداری — سیگنال معکوس', unit: 'خطا از ۱۰ آزمون', min: 0, max: 10,
+    kind: 'lower_better', weakMax: 4, okMin: 2,
+    criterionFa: 'بازی سیگنال معکوس با حداکثر ۲ خطا در ۱۰ آزمون (ملاک ot-cog-10)',
+    adviceFa: 'بازداری گیر دارد — بازی توقف-شروع و سیگنال معکوس با تکرار روزانه؛ قاعدهٔ «اول فکر، بعد عمل» با جمله‌سازی آشکار پیش از هر پاسخ.'
+  },
+  {
+    key: 'flex', label: 'انعطاف ذهنی', unit: 'کمک لازم پس از تغییر قاعده (بار)', min: 0, max: 4,
+    kind: 'lower_better', weakMax: 2, okMin: 1,
+    criterionFa: 'تغییر قاعدهٔ طبقه‌بندی و ادامهٔ کار بدون گِر (ملاک ot-cog-11)',
+    adviceFa: 'انعطاف ذهنی گیر دارد — تغییر قاعدهٔ عمدی در بازی با پیش‌اعلام و کارت «قاعدهٔ جدید»؛ سقف کمک در تکرار بعدی باید یک پله کم شود.'
+  },
+  {
+    key: 'ps', label: 'حل مسئله — پازل', unit: 'تکهٔ درست از ۱۲', min: 0, max: 12,
+    kind: 'higher_better', weakMax: 5, okMin: 9,
+    criterionFa: 'پازل ۶–۱۲ تکه و ترتیب درست ۴ تصویر داستانی (ملاک ot-cog-12)',
+    adviceFa: 'حل مسئله گیر دارد — پازل پلکانی و توالی داستان با تحلیل «کجا گیر کرد» پیش از هر کمک؛ تمرین گام‌به‌گام با طرح کلی دیداری.'
+  }
+];
+
+/** فیلدهای فرم type (آینهٔ مودال) — عدد هر حیطه + سطح راهنما + توالی داستان + مشاهده */
+export function rehabFxTypeFields(): CaseEventField[] {
+  const fields: CaseEventField[] = [];
+  for (const d of REHAB_FX_DOMAINS) {
+    fields.push({ key: `d_${d.key}`, label: `${d.label} — ${d.unit} (${faNum(d.min)}–${faNum(d.max)})`, type: 'number', required: true });
+  }
+  fields.push({ key: 'd_ps_story', label: `توالی داستان — تصویر درست‌ترتیب از ${faNum(REHAB_FX_STORY_MAX)}`, type: 'number', required: false });
+  for (const d of REHAB_FX_DOMAINS) {
+    fields.push({ key: `p_${d.key}`, label: `سطح راهنما — ${d.label}`, type: 'select', options: [...REHAB_FX_PROMPT_OPTIONS], required: false });
+  }
+  fields.push({ key: 'notes', label: 'مشاهدهٔ درمانگر (انگیزه، خستگی، راهبرد جالب…)', type: 'longtext', required: false });
+  return fields;
+}
+
+/** باندهای کلی type — بر حسب ترکیب شش حیطه (max بلند برای resolve ساده) */
+export const REHAB_FX_BANDS: CaseEventBand[] = [
+  { max: 2, label: 'نیاز به مداخلهٔ همه‌جانبهٔ ذهنی', color: 'danger', advice: 'سه حیطه یا بیشتر ضعیف است — برنامهٔ جلسات از حیطه‌های پایه (توجه/بازداری) شروع شود و هر حیطه یک هدف کوچک هفتگی بگیرد.' },
+  { max: 4, label: 'گیرهای نقطه‌ای — مداخلهٔ حیطه‌ای هدفمند', color: 'warn', advice: 'ترکیب قوت/ضعف نقطه‌ای است — مداخله از حیطه‌های ضعیف آغاز و حیطه‌های قوت به‌عنوان پل انگیزشی به‌کار رود؛ بازسنجی ۸ تا ۱۲ جلسه.' },
+  { max: 2147483647, label: 'نیم‌رخ پایه در انتظار', color: 'ok', advice: 'نیم‌رخ پایه در انتظار سن است — مداخله روی اهداف عملکردی خانواده‌محور و پایش جلسه‌به‌جلسه ادامه یابد.' }
+];
+
+const rehabFxNumber = (raw: unknown, d: RehabFxDomainSpec): number => {
+  const n = typeof raw === 'number'
+    ? raw
+    : Number(String(raw ?? '').trim().replace(/[۰-۹]/g, (c) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))));
+  if (!Number.isInteger(n) || n < d.min || n > d.max) {
+    throw new ValidationError(`«${d.label}» باید بین ${faNum(d.min)} تا ${faNum(d.max)} باشد (${d.unit})`);
+  }
+  return n;
+};
+
+export interface RehabFxDomainResult {
+  key: string;
+  label: string;
+  value: number;
+  /** متن نمایشی خام — «۷ دقیقهٔ تمرکز پیوسته» */
+  valueFa: string;
+  band: CaseEventBand;
+  prompt: string;
+  criterionFa: string;
+}
+
+export interface RehabFxResult {
+  /** ردیف هر شش حیطه به ترتیب نمایش */
+  domains: RehabFxDomainResult[];
+  counts: { ok: number; warn: number; weak: number };
+  band: CaseEventBand;
+  /** پرچم‌های علمی مستقل از باند کلی */
+  flags: CaseEventFlag[];
+  metrics: { value: string; label: string }[];
+  normFa: string;
+  faSummary: string;
+}
+
+/** باند هر حیطه — مرزها از spec؛ خطا/کمک معکوس خوانده می‌شود */
+function rehabFxDomainBand(d: RehabFxDomainSpec, value: number): CaseEventBand {
+  const OK: CaseEventBand = { max: 0, label: 'در انتظار', color: 'ok', advice: REHAB_FX_BANDS[2].advice };
+  const WARN: CaseEventBand = { max: 0, label: 'مرزی', color: 'warn', advice: REHAB_FX_BANDS[1].advice };
+  const WEAK: CaseEventBand = { max: 0, label: 'ضعف آشکار', color: 'danger', advice: REHAB_FX_BANDS[0].advice };
+  if (d.kind === 'higher_better') {
+    if (value >= d.okMin) return OK;
+    if (value > d.weakMax) return WARN;
+    return WEAK;
+  }
+  if (value <= d.okMin) return OK;
+  if (value <= d.weakMax) return WARN;
+  return WEAK;
+}
+
+/**
+ * تحلیل ارزیابی عملکردی توانبخشی ذهنی — تابع خالص.
+ * باند کلی از ترکیب شش حیطه: ≥۵ «در انتظار» · ≥۳ ضعف «مداخلهٔ همه‌جانبه» · بقیه «گیرهای نقطه‌ای».
+ * توالی داستان (اختیاری) فقط پرچم می‌سازد — باند حل مسئله از پازل است.
+ */
+export function analyzeRehabFx(v: Record<string, string | number>): RehabFxResult {
+  const domains: RehabFxDomainResult[] = [];
+  const flags: CaseEventFlag[] = [];
+  const metrics: { value: string; label: string }[] = [];
+  let ok = 0, warn = 0, weak = 0;
+  for (const d of REHAB_FX_DOMAINS) {
+    const value = rehabFxNumber(v[`d_${d.key}`], d);
+    const band = rehabFxDomainBand(d, value);
+    if (band.color === 'ok') ok += 1;
+    else if (band.color === 'warn') warn += 1;
+    else weak += 1;
+    const promptRaw = v[`p_${d.key}`];
+    const prompt = promptRaw !== undefined && String(promptRaw).trim() !== ''
+      ? String(promptRaw).trim()
+      : REHAB_FX_PROMPT_DEFAULT;
+    if (!REHAB_FX_PROMPT_OPTIONS.includes(prompt)) {
+      throw new ValidationError(`«سطح راهنما — ${d.label}» از گزینه‌های مجاز نیست`);
+    }
+    domains.push({ key: d.key, label: d.label, value, valueFa: `${faNum(value)} ${d.unit}`, band, prompt, criterionFa: d.criterionFa });
+    if (band.color !== 'ok') {
+      flags.push({ key: d.key, label: `${d.label}: ${band.label} — ${faNum(value)} ${d.unit} (ملاک: ${d.criterionFa})`, value });
+    }
+    metrics.push({ value: `${faNum(value)} ${d.unit} — ${band.label}`, label: d.label });
+  }
+  // پرچم توالی داستان — مکمل حل مسئله
+  if (v.d_ps_story !== undefined && String(v.d_ps_story).trim() !== '') {
+    const story = rehabFxNumber(v.d_ps_story, { key: 'ps_story', label: 'توالی داستان', unit: 'تصویر', min: 0, max: REHAB_FX_STORY_MAX, kind: 'higher_better', weakMax: 0, okMin: 3, criterionFa: '', adviceFa: '' });
+    metrics.push({ value: `${faNum(story)} از ${faNum(REHAB_FX_STORY_MAX)}`, label: 'توالی داستان' });
+    if (story <= 1) flags.push({ key: 'ps_story', label: `توالی داستان ضعیف (${faNum(story)} از ${faNum(REHAB_FX_STORY_MAX)}) — ترتیب‌سازی تصویری روزانه اضافه شود`, value: story });
+  }
+  const band = ok >= 5 ? REHAB_FX_BANDS[2] : weak >= 3 ? REHAB_FX_BANDS[0] : REHAB_FX_BANDS[1];
+  const notes = typeof v.notes === 'string' ? v.notes.trim().slice(0, 600) : '';
+  if (notes) metrics.push({ value: notes, label: 'مشاهدهٔ درمانگر' });
+  const normFa = 'ملاک‌ها برگرفته از معیار قبولی مهارت‌های «توجه و مهارت‌های ذهنی/ادراک شنیداری» چک‌لیست ۷ حیطه‌ای است (رشدی-ملاکی — ot-cog-07/08/10/11/12، ot-aud-06)؛ سطح راهنمای هر حیطه، خط پایهٔ محوشدن راهنماست.';
+  const faSummary = `ارزیابی عملکردی ذهنی: ${faNum(ok)} حیطه در انتظار، ${faNum(warn)} مرزی، ${faNum(weak)} ضعف از ${faNum(REHAB_FX_DOMAINS.length)} — ${band.label}`;
+  return { domains, counts: { ok, warn, weak }, band, flags, metrics, normFa, faSummary };
+}
+
+/** پیشنهادهای حیطه‌ای شرطی — فقط حیطه‌های مرزی/ضعیف، به ترتیب نمایش */
+export function rehabFxAdviceOf(result: RehabFxResult): { label: string; text: string }[] {
+  const out: { label: string; text: string }[] = [];
+  for (const dom of result.domains) {
+    if (dom.band.color === 'ok') continue;
+    const spec = REHAB_FX_DOMAINS.find((d) => d.key === dom.key);
+    if (spec) out.push({ label: `${spec.label} — ${dom.band.label}`, text: spec.adviceFa });
+  }
+  return out;
+}
+
+/**
+ * payload نمایشی ارزیابی عملکردی توانبخشی — فیلدها (ارقام فارسی) + ردیف‌های عددی
+ * (chip_metric_N) + باند هر حیطه (fx_{key}_band) + سطح راهنما (fx_{key}_prompt) +
+ * باند کلی (chip_band) + ملاک مرجع (norm_fa) + خلاصه (fa_summary) + پیشنهادها (advice_N).
+ */
+export function buildRehabFxPayload(v: Record<string, string | number>, result: RehabFxResult): Record<string, PayloadEntry> {
+  const payload: Record<string, PayloadEntry> = {};
+  for (const d of REHAB_FX_DOMAINS) {
+    // مقدار خام از تحلیل (پارس‌شده با تبدیل رقم فارسی) — نه پارس دوبارهٔ رشتهٔ ورودی
+    const dom = result.domains.find((x) => x.key === d.key);
+    payload[`d_${d.key}`] = { value: faNum(dom?.value ?? Number(v[`d_${d.key}`])), label: `${d.label} — ${d.unit}` };
+    if (dom) {
+      payload[`fx_${d.key}_band`] = { value: dom.band.label, label: `باند ${d.label}` };
+      payload[`fx_${d.key}_prompt`] = { value: dom.prompt, label: `سطح راهنما — ${d.label}` };
+    }
+  }
+  if (v.d_ps_story !== undefined && String(v.d_ps_story).trim() !== '') {
+    const storyNum = typeof v.d_ps_story === 'number'
+      ? v.d_ps_story
+      : Number(String(v.d_ps_story).trim().replace(/[۰-۹]/g, (c) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))));
+    payload['d_ps_story'] = { value: faNum(storyNum), label: `توالی داستان از ${faNum(REHAB_FX_STORY_MAX)}` };
+  }
+  for (const d of REHAB_FX_DOMAINS) {
+    const p = v[`p_${d.key}`];
+    if (p !== undefined && String(p).trim() !== '') payload[`p_${d.key}`] = { value: String(p).trim(), label: `سطح راهنما — ${d.label}` };
+  }
+  if (typeof v.notes === 'string' && v.notes.trim() !== '') {
+    payload['notes'] = { value: v.notes.trim().slice(0, 600), label: 'مشاهدهٔ درمانگر' };
+  }
+  result.metrics.forEach((m, i) => {
+    payload[`chip_metric_${i + 1}`] = { value: m.value, label: m.label };
+  });
+  payload['chip_band'] = { value: result.band.label, label: 'باند کلی' };
+  payload['norm_fa'] = { value: result.normFa, label: 'ملاک مرجع' };
+  payload['fa_summary'] = { value: result.faSummary, label: 'خلاصهٔ ارزیابی عملکردی' };
+  rehabFxAdviceOf(result).forEach((a, i) => {
+    payload[`advice_${i + 1}`] = { value: a.text, label: `پیشنهاد حیطه‌ای — ${a.label}` };
+  });
+  return payload;
+}
+
+/** تحلیل استاندارد CaseEventAnalysis — score = شمار حیطه‌های «در انتظار» از ۶ */
+export function rehabFxAnalysisOf(v: Record<string, string | number>, result: RehabFxResult): CaseEventAnalysis {
+  const interpretationLines = [
+    result.faSummary,
+    result.normFa,
+    ...result.domains.map((d) => `${d.label}: ${d.valueFa} — ${d.band.label}${d.prompt !== REHAB_FX_PROMPT_DEFAULT ? ` (${d.prompt})` : ''}`),
+    ...(result.flags ?? []).map((f) => `پرچم: ${f.label}`)
+  ];
+  return {
+    score: result.counts.ok,
+    band: result.band.label,
+    answered: REHAB_FX_DOMAINS.length,
+    total: REHAB_FX_DOMAINS.length,
+    maxScore: REHAB_FX_DOMAINS.length,
+    flags: result.flags.length > 0 ? result.flags : undefined,
+    interpretation: interpretationLines.join('\n')
+  };
+}
+
+/**
+ * اعتبارسنجی ظرف ورودی ارزیابی عملکردی — کلیدهای شناخته‌شده (d_دامنه / p_دامنه / d_ps_story / notes)
+ * پالایش می‌شوند؛ حیطهٔ جا → ValidationError فارسی. اعداد ممکن است رشته بیایند (مودال) —
+ * parse نهایی در rehabFxNumber انجام می‌شود؛ سطح راهنمای نامعتبر در analyzeRehabFx رد می‌شود.
+ */
+export function validateRehabFxValues(values: unknown): Record<string, string | number> {
+  const raw = (values && typeof values === 'object' ? values : {}) as Record<string, unknown>;
+  const out: Record<string, string | number> = {};
+  for (const d of REHAB_FX_DOMAINS) {
+    const v = raw[`d_${d.key}`];
+    if (v === undefined || v === null || String(v).trim() === '') {
+      throw new ValidationError(`حیطهٔ «${d.label}» بی‌پاسخ مانده است`);
+    }
+    out[`d_${d.key}`] = typeof v === 'number' ? v : String(v).trim();
+    const p = raw[`p_${d.key}`];
+    if (p !== undefined && p !== null && String(p).trim() !== '') out[`p_${d.key}`] = String(p).trim();
+  }
+  const story = raw['d_ps_story'];
+  if (story !== undefined && story !== null && String(story).trim() !== '') {
+    out['d_ps_story'] = typeof story === 'number' ? story : String(story).trim();
+  }
+  if (typeof raw['notes'] === 'string' && (raw['notes'] as string).trim() !== '') {
+    out['notes'] = (raw['notes'] as string).trim();
+  }
+  return out;
+}
+
 // ───────── ماتریس ترنزیشن وضعیت ─────────
 
 export const CASE_EVENT_TRANSITIONS: Record<string, string[]> = {

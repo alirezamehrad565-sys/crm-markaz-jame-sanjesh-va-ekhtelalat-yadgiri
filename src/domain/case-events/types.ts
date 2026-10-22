@@ -308,6 +308,13 @@ export interface CaseEventsService {
    * حوزهٔ نامعتبر/فیلد جا/خارج از قلم‌رو → ValidationError فارسی (بدون رکورد).
    */
   createProbeEvent(studentId: string, input: { area: string; values: Record<string, unknown> }, actor: AuthContext): Promise<CaseEventRecord>;
+  /**
+   * — m161: ثبت ارزیابی عملکردی توانبخشی ذهنی (ce-rehab-fx-v1) — آزمونِ درمانگر در مرکز،
+   * خط پایهٔ مسیر توانبخشی ذهنی-جسمی. رویداد completed با تحلیل ملاکی شش حیطهٔ شناختی
+   * (باند هر حیطه + باند کلی ترکیبی + پرچم‌ها + پیشنهاد حیطه‌ای)؛ type idempotent ensure می‌شود
+   * (active=0 — خارج کتابخانه، فقط مسیر اختصاصی). حیطهٔ جا/خارج از قلم‌رو → 400 فارسی.
+   */
+  createRehabFxEvent(studentId: string, input: { values: Record<string, unknown> }, actor: AuthContext): Promise<CaseEventRecord>;
   updateEvent(id: string, input: { values?: Record<string, string | number | null>; summary?: string }, actor: AuthContext): Promise<CaseEventRecord>;
   /** — نهایی‌سازی پیش‌نویس: اعتبارسنجی الزامی + هوک اقدام بعدی */
   finalizeEvent(id: string, actor: AuthContext): Promise<CaseEventRecord>;

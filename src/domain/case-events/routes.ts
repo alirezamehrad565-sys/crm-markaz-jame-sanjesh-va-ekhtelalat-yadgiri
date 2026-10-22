@@ -168,6 +168,16 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: item }, 201);
   });
 
+  // — m161: ارزیابی عملکردی توانبخشی ذهنی (ce-rehab-fx-v1) — خط پایهٔ مسیر توانبخشی، ثبت درمانگر در مرکز؛
+  //   {values: {d_att_sus…, p_att_sus…, d_ps_story?, notes?}} — حیطهٔ جا/خارج از قلم‌رو → 400 فارسی؛
+  //   type در سرویس idempotent ensure می‌شود (active=0 — خارج کتابخانه).
+  app.post('/api/students/:id/case-events/rehab-fx', requireRole('manager', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json<{ values?: Record<string, unknown> }>().catch(() => null);
+    const item = await service.createRehabFxEvent(c.req.param('id'), { values: body?.values ?? {} }, actor);
+    return c.json({ data: item }, 201);
+  });
+
   app.patch('/api/case-events/:id', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json<{ values?: Record<string, string | number | null>; summary?: string }>();

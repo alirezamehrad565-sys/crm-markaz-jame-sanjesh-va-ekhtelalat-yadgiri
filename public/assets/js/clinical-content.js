@@ -34,6 +34,9 @@ export const REHAB_MOTOR_KEY = 'ce-rehab-motor-v1';
 export const REHAB_ADL_KEY = 'ce-rehab-adl-v1';
 export const REHAB_JOURNEY_KEYS = [REHAB_COG_KEY, REHAB_MOTOR_KEY, REHAB_ADL_KEY];
 
+/** m161 — ارزیابی عملکردی توانبخشی ذهنی (خط پایهٔ مسیر توانبخشی — ثبت درمانگر در مرکز) */
+export const REHAB_FX_KEY = 'ce-rehab-fx-v1';
+
 /** فرم نتایج عمومی */
 export const RESULTS_KEY = 'ce-results-v1';
 
@@ -106,6 +109,7 @@ export const RESULTS_EVENT_LABELS = {
   [REHAB_COG_KEY]: 'ارزیابی شناختی',
   [REHAB_MOTOR_KEY]: 'ارزیابی حرکتی-جسمی',
   [REHAB_ADL_KEY]: 'مهارت‌های خودیاری',
+  [REHAB_FX_KEY]: 'ارزیابی عملکردی توانبخشی ذهنی',
   [RESULTS_KEY]: 'فرم نتایج',
   [WISC4_KEY]: 'وکسلر ۴',
   [SUSPICION_KEY]: 'تصمیم شک بالینی'
@@ -125,7 +129,7 @@ export const GATE_GLOSS = {
   },
   skills: {
     learningActionLabel: 'ثبت آزمون عملکرد مرکزی',
-    rehabActionLabel: 'چک‌لیست مهارتی'
+    rehabActionLabel: 'ثبت ارزیابی عملکردی توانبخشی'
   },
   needs: {
     actionLabel: 'ثبت نتیجهٔ درمانگر و انتخاب مسیر'
@@ -207,6 +211,9 @@ export const STAGE2_META = {
       glanceSld: '{n} از ۳ آزمون عملکرد مرکزی ثبت شده',
       glanceSldZero: 'آزمون عملکرد مرکزی ثبت نشده است',
       glanceFallback: 'پس از تعیین مسیر پرونده فعال می‌شود',
+      // m161 — مسیر توانبخشی: ارزیابی عملکردی = آزمون درمانگر در مرکز (شش حیطهٔ شناختی پایه)
+      glanceFxNone: 'ارزیابی عملکردی توانبخشی ثبت نشده است',
+      glanceFxDone: 'خط پایهٔ ذهنی ثبت شد — {ok} حیطه در انتظار از ۶',
       emptyHint: 'ارزیابی عملکردی = آزمونِ درمانگر در مرکز (خواندن، نوشتن، حساب) — در جلسهٔ حضوری از کودک گرفته می‌شود و همین‌جا ثبت می‌گردد. چک‌لیست‌های خانواده و معلم جای خود در مرحلهٔ ۲ است.'
     },
     needs: {
@@ -261,6 +268,7 @@ export const STAGE2_META = {
     skillsDomains: 'حیطهٔ فعال',
     skillsSld: 'آزمون مرکزی',
     skillsProbe: 'چک‌لیست درسی',
+    skillsFx: 'حیطهٔ پایه در انتظار',
     needsCoverage: 'پوشش داده',
     needsConstructs: 'سازهٔ برجسته',
     needsPatterns: 'الگوی فعال',
