@@ -23083,8 +23083,7 @@ function psychometricProfile(result) {
     sentences.push(`${st.fa} نسبت به میانگین شاخص‌های خود دانش‌آموز ${faNum3(st.diff)} نمره قوت معنادار دارد (گام ۵).`);
   for (const g of gaps)
     sentences.push(g.textFa);
-  for (const p of patterns)
-    sentences.push(p.textFa);
+  // الگوهای نمره‌ای (ACID/CAD) در بلوک اختصاصی خودشان رندر می‌شوند — در خوانش یک‌پارچه تکرار نمی‌شوند
   if (!sentences.length)
     sentences.push("نیم‌رخ محاسبه‌شده کامل نیست — با ثبت خرده‌آزمون‌های بیشتری خوانش کامل می‌شود.");
   return {

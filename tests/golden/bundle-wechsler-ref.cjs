@@ -1,6 +1,6 @@
 // bundle-wechsler-ref.cjs — GENERATED FILE, DO NOT EDIT BY HAND.
 // Golden-test REFERENCE implementation of the WISC-IV Wechsler analysis engine.
-// Region copied VERBATIM from worker/bundle.js lines 21694-23419
+// Region copied VERBATIM from worker/bundle.js lines 21694-23418
 // at commit 365d103 (m130 / 1.00.9), engineVersion "m98".
 // Regenerate with: node tests/golden/extract-engine.mjs
 //
@@ -1405,8 +1405,7 @@ function psychometricProfile(result) {
     sentences.push(`${st.fa} نسبت به میانگین شاخص‌های خود دانش‌آموز ${faNum3(st.diff)} نمره قوت معنادار دارد (گام ۵).`);
   for (const g of gaps)
     sentences.push(g.textFa);
-  for (const p of patterns)
-    sentences.push(p.textFa);
+  // الگوهای نمره‌ای (ACID/CAD) در بلوک اختصاصی خودشان رندر می‌شوند — در خوانش یک‌پارچه تکرار نمی‌شوند
   if (!sentences.length)
     sentences.push("نیم‌رخ محاسبه‌شده کامل نیست — با ثبت خرده‌آزمون‌های بیشتری خوانش کامل می‌شود.");
   return {

@@ -1,15 +1,15 @@
 // engine.js — WISC-IV Wechsler analysis engine (EXTRACTED, phase 0 / task 39-d1)
 //
-// Source: extracted verbatim from worker/bundle.js lines 21694-23419
+// Source: extracted verbatim from worker/bundle.js lines 21694-23418
 // at commit 365d103 ("m130 (1.00.9)"), engineVersion "m98". Extraction date: 2026-10-20.
 //
 // Region layout (bundle lines):
-//   21694-23230   pure computation core: subtest definitions, norms (NORMS = norms_default,
+//   21694-23229   pure computation core: subtest definitions, norms (NORMS = norms_default,
 //         a 71 KB data line), index/cluster/GAI/step5 math, hypothesis activation
 //         (T8/m149: فقط روان‌سنجی + شواهد {id, weight, clues} — لایهٔ تفسیر موازی
 //         outcomes/main/comorbid/binaryScenarios/treatments/queue حذف شده است),
 //         validation, flags, runWechslerAnalysis (engine entry point).
-//   23231-23419   pure payload glue: WISC4_EVENT_KEY, RAW_FIELD_MAP (raw_si..raw_ca + legacy
+//   23230-23418   pure payload glue: WISC4_EVENT_KEY, RAW_FIELD_MAP (raw_si..raw_ca + legacy
 //         raw_sim/raw_voc/raw_com/raw_pc), extractRawScores, Jalali/Gregorian date
 //         parsing, compactWechslerOutput, applyWechslerEngineToPayload (the
 //         form-payload I/O contract), summarySafePayload.
@@ -1422,8 +1422,7 @@ function psychometricProfile(result) {
     sentences.push(`${st.fa} نسبت به میانگین شاخص‌های خود دانش‌آموز ${faNum3(st.diff)} نمره قوت معنادار دارد (گام ۵).`);
   for (const g of gaps)
     sentences.push(g.textFa);
-  for (const p of patterns)
-    sentences.push(p.textFa);
+  // الگوهای نمره‌ای (ACID/CAD) در بلوک اختصاصی خودشان رندر می‌شوند — در خوانش یک‌پارچه تکرار نمی‌شوند
   if (!sentences.length)
     sentences.push("نیم‌رخ محاسبه‌شده کامل نیست — با ثبت خرده‌آزمون‌های بیشتری خوانش کامل می‌شود.");
   return {
