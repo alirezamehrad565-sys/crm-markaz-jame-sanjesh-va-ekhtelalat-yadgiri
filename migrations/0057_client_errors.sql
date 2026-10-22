@@ -1,6 +1,3 @@
--- مایگریشن اسکیما D1 — گزارش خطاهای سمت کاربر (m138)
--- مانیتورینگ خطاهای مرورگر بدون اکانت خارجی (گام «مانیتور خطا» طرح ارتقا — EXPERT-AUDIT Gap-3)
--- سبک نگه داشته شده: بدون FK، فقط اندیس زمان؛ مسیر POST /api/client-errors سقف ۵۰۰ ردیف/شبانه‌روز دارد
 CREATE TABLE IF NOT EXISTS client_errors (
   id          TEXT PRIMARY KEY,
   occurred_at TEXT NOT NULL DEFAULT (datetime('now')),

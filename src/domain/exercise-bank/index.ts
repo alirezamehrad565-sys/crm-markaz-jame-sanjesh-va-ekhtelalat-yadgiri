@@ -1,10 +1,3 @@
-/**
- * ماژول بانک تمرین — نقطهٔ ورود و صادرات‌های ماژول (barrel)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-//: بانک تمرین و کاربرگ + حلقهٔ تکلیف بله
-// طراحی کامل: docs/EXERCISE-BANK.md
-
 export { createExerciseBankService } from './service';
 export type { ExerciseBankService } from './service';
 export {

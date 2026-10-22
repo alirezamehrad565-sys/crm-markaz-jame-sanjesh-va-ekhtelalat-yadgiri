@@ -1,11 +1,3 @@
-/**
- * موتور بالینی — باتری‌ها، قواعد، روایت و اهداف مداخله — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// REST موتور بالینی — فقط سیم به سرویس، بدون business logic
-// RBAC در سرویس چک می‌شود (مالک پرونده)؛ این‌جا گیت نقش coarse: خواندن نقش‌های مرکز،
-// نوشتن فقط مدیر/درمانگر — منشی مشاهده‌گر است (پلن §۷ و §۱۱).
-
 import { z } from 'zod';
 import type { AppHono } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
@@ -15,7 +7,6 @@ import { DECISION_NOTE_MAX } from './service';
 const TARGET_KEY_MAX = 40;
 const STEP_KEY_MAX = 80;
 
-/** — علامت‌زدن/لغو گام چک‌لیست مسیر مداخله */
 export const ClinicalStepToggleSchema = z.object({
   step_key: z.string().min(1).max(STEP_KEY_MAX)
 });
@@ -40,34 +31,29 @@ export const ClinicalPathDecisionSchema = z
   });
 
 export function registerClinicalEngineRoutes(app: AppHono, service: ClinicalEngineService): void {
-  // ─── تفسیر زندهٔ موتور (پلن §۵) — خواندن: مدیر/منشی/درمانگرِ مسئول ───
   app.get('/api/students/:id/clinical-insights', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const data = await service.getInsights(c.req.param('id'), actor);
     return c.json({ data }, 200);
   });
 
-  // ─── پیشنهادگر چک‌لیست (T3/m147) — پلن ۱۴ قاعده‌ای با دلیل؛ خواندن، بدون ثبت ───
   app.get('/api/students/:id/checklist-plan', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const data = await service.getChecklistPlan(c.req.param('id'), actor);
     return c.json({ data }, 200);
   });
 
-  // ─── دانش‌نامهٔ اهداف (فرم پنل/بات) ───
   app.get('/api/clinical-targets', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const data = await service.listTargets();
     return c.json({ data }, 200);
   });
 
-  // ─── مسیرهای مداخله ───
   app.get('/api/students/:id/clinical-paths', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const data = await service.listPaths(c.req.param('id'), actor);
     return c.json({ data }, 200);
   });
 
-  // ساخت مسیر — فقط مدیر/درمانگر (مالک در سرویس چک می‌شود)
   app.post('/api/students/:id/clinical-paths', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = ClinicalPathCreateSchema.parse(await c.req.json<unknown>());
@@ -79,7 +65,6 @@ export function registerClinicalEngineRoutes(app: AppHono, service: ClinicalEngi
     return c.json({ data }, 201);
   });
 
-  // پروتکل قضاوت (پلن §۷): تأیید/اصلاح/رد/نیاز به اطلاعات — فقط مدیر/درمانگرِ مسئول
   app.post('/api/clinical-paths/:id/decision', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = ClinicalPathDecisionSchema.parse(await c.req.json<unknown>());
@@ -91,7 +76,6 @@ export function registerClinicalEngineRoutes(app: AppHono, service: ClinicalEngi
     return c.json({ data }, 200);
   });
 
-  // چک‌لیست مراحل مسیر فعال (toggle) — فقط مدیر/درمانگرِ مسئول
   app.post('/api/clinical-paths/:id/steps/toggle', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = ClinicalStepToggleSchema.parse(await c.req.json<unknown>());

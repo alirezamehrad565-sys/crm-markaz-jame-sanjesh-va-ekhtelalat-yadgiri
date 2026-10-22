@@ -1,11 +1,3 @@
-/**
- * سرویس نیازهای ویژه — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// فاز ۷ — گردآوری گرید نیازهای ویژه + وضعیت همکاری مدرسه از منابع موجود
-// فقط-خواندنی: students/schools/classes (مالک: student-profile)، followups،
-// appointments، waitlist (پروجکشن inline )، class_bot_links — هیچ write
-
 import { NotFoundError } from '@core/errors';
 import { FOLLOWUP_OPEN_STATUSES, STUDENT_GRADES } from '@core/shared';
 import type { AuthContext, SpecialNeedSeverity, SpecialNeedType, StudentCaseStatus } from '@core/shared';
@@ -68,7 +60,6 @@ interface SessionRow {
   next_upcoming: string | null;
 }
 
-/** ISO نرمال‌ساز — created_at فرمت SQLite می‌دهد؛ start_at/created_at سرویس‌های دیگر ISO */
 function isoOf(v: string | null): string | null {
   if (!v) return null;
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(v)) {
@@ -77,7 +68,6 @@ function isoOf(v: string | null): string | null {
   return v;
 }
 
-/** پروجکشن وضعیت پذیرش — همان الگوی inline سایر ماژول‌های فقط-خواندنی (پرهیز از اتصال عرضی) */
 const WAIT_PROJECTION = `,
        CASE WHEN EXISTS (SELECT 1 FROM waitlist wq WHERE wq.student_id = s.id AND wq.deleted_at IS NULL AND wq.status IN ('waiting','called','scheduled')) THEN 'waiting'
             WHEN EXISTS (SELECT 1 FROM waitlist wa WHERE wa.student_id = s.id AND wa.deleted_at IS NULL AND wa.status = 'admitted') THEN 'admitted'
@@ -86,7 +76,6 @@ const WAIT_PROJECTION = `,
 export function createSpecialNeedsService(deps: { db: DbClient }): SpecialNeedsService {
   const { db } = deps;
 
-  /** پیگیری‌های باز دانش‌آموزان — یک کوئری */
   async function openFollowupsOf(studentIds: string[]): Promise<Map<string, OpenFollowUpRef[]>> {
     const map = new Map<string, OpenFollowUpRef[]>();
     if (studentIds.length === 0) return map;
@@ -105,7 +94,6 @@ export function createSpecialNeedsService(deps: { db: DbClient }): SpecialNeedsS
     return map;
   }
 
-  /** آخرین جلسهٔ گذشته و نزدیک‌ترین نوبت آینده — یک کوئری روی appointment_students */
   async function sessionsOf(studentIds: string[], nowIso: string): Promise<Map<string, SessionRow>> {
     const map = new Map<string, SessionRow>();
     if (studentIds.length === 0) return map;
@@ -124,7 +112,6 @@ export function createSpecialNeedsService(deps: { db: DbClient }): SpecialNeedsS
     return map;
   }
 
-  /** ساخت AttentionStudent از ردیف خام + منابع پیگیری/جلسه */
   function toAttentionStudent(row: SpecialStudentRow, nowIso: string, fus: OpenFollowUpRef[], sessions: SessionRow | undefined): { student: AttentionStudent; reasons: string[] } {
     const reasons = deriveAttentionReasons(
       {
@@ -156,7 +143,6 @@ export function createSpecialNeedsService(deps: { db: DbClient }): SpecialNeedsS
   }
 
   return {
-    /** گرید مدرسه×پایه + فهرست توجه — همه از دو aggregate و دو منبع کمکی */
     async grid(filters: GridFilters, _actor: AuthContext): Promise<SpecialNeedsGrid> {
       const nowIso = new Date().toISOString();
 
@@ -175,7 +161,6 @@ export function createSpecialNeedsService(deps: { db: DbClient }): SpecialNeedsS
         params.push(filters.severity);
       }
 
-      // ۱) دانش‌آموزان ویژه فعال (فیلترشده)
       const specialRows = await db.query<SpecialStudentRow>(
         `SELECT s.id, s.first_name, s.last_name, s.grade, s.school_id,
                 sc.name AS school_name, sc.kind AS school_kind,
@@ -190,7 +175,6 @@ export function createSpecialNeedsService(deps: { db: DbClient }): SpecialNeedsS
         params
       );
 
-      // ۲) مخرج گرید — همهٔ دانش‌آموزان فعال به تفکیک مدرسه×پایه (با همان فیلتر مدرسه/پایه؛ severity مخرج را تغییر نمی‌دهد)
       const totalConditions: string[] = [`s.active = 1`];
       const totalParams: unknown[] = [];
       if (filters.schoolId) {
@@ -210,12 +194,10 @@ export function createSpecialNeedsService(deps: { db: DbClient }): SpecialNeedsS
         totalParams
       );
 
-      // ۳) منابع توجه
       const specialIds = specialRows.map((r) => r.id);
       const fus = await openFollowupsOf(specialIds);
       const sessions = await sessionsOf(specialIds, nowIso);
 
-      // ۴) ساخت گرید
       const schoolMap = new Map<string | null, SchoolGridRow>();
       const cellKey = (grade: string | null) => grade ?? '—';
       const gradesSet = new Set<string>();
@@ -240,7 +222,6 @@ export function createSpecialNeedsService(deps: { db: DbClient }): SpecialNeedsS
         const key = s.school_id ?? '__none__';
         let row = schoolMap.get(key);
         if (!row) {
-          // دانش‌آموز ویژه در مدرسه/پایه‌ای که در totals نیست (فیلتر severity داده را از مخرج جدا کرده؟ خیر — فقط حالت دفاعی)
           row = { schoolId: s.school_id, schoolName: s.school_name, kind: s.school_kind, cells: {}, totals: emptyCell() };
           schoolMap.set(key, row);
         }
@@ -281,7 +262,6 @@ export function createSpecialNeedsService(deps: { db: DbClient }): SpecialNeedsS
       };
     },
 
-    /** وضعیت همکاری مدرسه (§15.2) + بخش توجه (§15.3) — بازخوانِ همان derivation گرید */
     async schoolOverview(schoolId: string, _actor: AuthContext): Promise<SchoolOverview> {
       const nowIso = new Date().toISOString();
       const school = await db.queryOne<{ id: string; name: string; kind: string; active: number }>(
@@ -300,7 +280,6 @@ export function createSpecialNeedsService(deps: { db: DbClient }): SpecialNeedsS
         [schoolId]
       );
 
-      // پروجکشن پذیرش روی همان school — با EXISTS روی waitlist
       const admitted = await count(
         `SELECT COUNT(*) AS n FROM students s
           WHERE s.school_id = ? AND s.active = 1
@@ -330,7 +309,6 @@ export function createSpecialNeedsService(deps: { db: DbClient }): SpecialNeedsS
         [schoolId]
       );
 
-      // جلسات دو پنجرهٔ ۳۰ روزه — گذشتهٔ برگزارشده (غیرلغوشده)
       const now = Date.parse(nowIso);
       const from30 = new Date(now - 30 * 86_400_000).toISOString();
       const from60 = new Date(now - 60 * 86_400_000).toISOString();
@@ -351,7 +329,6 @@ export function createSpecialNeedsService(deps: { db: DbClient }): SpecialNeedsS
         [schoolId, from60, from30]
       );
 
-      // توجه — همان لایهٔ derivation گرید برای دانش‌آموزان ویژهٔ این مدرسه
       const specialRows = await db.query<SpecialStudentRow>(
         `SELECT s.id, s.first_name, s.last_name, s.grade, s.school_id,
                 sc.name AS school_name, sc.kind AS school_kind,

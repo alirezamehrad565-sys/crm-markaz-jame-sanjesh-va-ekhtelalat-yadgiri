@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — webhook
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست pure پارسر آپدیت بات بله — بدون شبکه
-
 import { describe, expect, it } from 'vitest';
 import { LINK_CODE_LENGTH } from '@core/shared';
 import { generateLinkCode, parseBotUpdate } from '../webhook';
@@ -91,8 +85,6 @@ describe('generateLinkCode (pure)', () => {
   });
 });
 
-// ───────────── ورود خودکار، منوی متنی و callback ─────────────
-
 describe('parseBotUpdate (pure)', () => {
   it(': دکمه متنی «نوبت‌های من» با و بدون نیم‌فاصله → my_next', () => {
     expect(parseBotUpdate(updateWithText('نوبت‌های من'))).toEqual({ kind: 'my_next', chatId: '111222333' });
@@ -109,7 +101,6 @@ describe('parseBotUpdate (pure)', () => {
     expect(parseBotUpdate(updateWithText('۰۰۱۲۳۴۵۶۷۹'))).toEqual({
       kind: 'identify', chatId: '111222333', format: 'national_id', value: '0012345679'
     });
-    // با فاصله و خط تیره — فقط ارقام مهم است
     expect(parseBotUpdate(updateWithText('0012-3456-79'))).toEqual({
       kind: 'identify', chatId: '111222333', format: 'national_id', value: '0012345679'
     });
@@ -167,8 +158,6 @@ describe('parseBotUpdate (pure)', () => {
   });
 });
 
-// ───────────── دستورهای جدید بات اطلاع‌رسان ─────────────
-
 describe('parseBotUpdate (pure)', () => {
   it(': دستورهای /followups و /attendance و /status', () => {
     expect(parseBotUpdate(updateWithText('/followups'))).toEqual({ kind: 'followups_me', chatId: '111222333' });
@@ -198,8 +187,6 @@ describe('parseBotUpdate (pure)', () => {
     expect(parseBotUpdate(updateWithText('حضور و غیاب'))).toBeNull();
   });
 });
-
-// ───────────── شاخص سنجش («هدف سنجش» هماهنگ با سایت) ─────────────
 
 describe('parseBotUpdate (pure)', () => {
   it(': دستورهای /goal و /sanj → screening_goal', () => {

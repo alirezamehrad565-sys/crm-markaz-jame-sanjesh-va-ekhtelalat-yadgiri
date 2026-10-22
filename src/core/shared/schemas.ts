@@ -1,9 +1,3 @@
-/**
- * زیرساخت مشترک — زمان تهران، کدملی، اسکیمای Zod و ثابت‌ها — اسکیمای اعتبارسنجی Zod
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Zod schemas — تنها منبع حقیقت اعتبارسنجی ورودی (قانون ۳)
-
 import { z } from 'zod';
 import {
   ANNOUNCEMENT_BODY_MAX,
@@ -78,8 +72,6 @@ import {
 import { isValidIranianNationalId, normalizeNationalId } from './national-id';
 import { isOnGrid, tehranTodayYmd } from './time';
 
-// ───────────── Primitives ─────────────
-
 export const UuidSchema = z.string().uuid('شناسه معتبر نیست');
 
 export const IsoDateTimeSchema = z
@@ -113,8 +105,6 @@ export const TehranYmdSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ باید به قالب YYYY-MM-DD باشد');
 
-// ───────────── Appointments ─────────────
-
 export const AppointmentStudentRefSchema = z.object({
   student_id: UuidSchema,
   facet_id: z.string().min(1).max(64).optional()
@@ -126,9 +116,7 @@ export const NewAppointmentSchema = z
     start_at: IsoDateTimeSchema,
     end_at: IsoDateTimeSchema,
     students: z.array(AppointmentStudentRefSchema).max(20).default([]),
-    // — nullish: کلید حذف‌شده و null هردو «بدون توضیح» معنا دارند (ارگونومی API)
     note: z.string().max(2000).nullish(),
-    // — نوع جلسه (جدول ۴ اساس‌نامه) — null/حذف = بدون نوع (رفتار نوبت‌های قدیمی)
     session_type: z.enum(SESSION_TYPE_KEYS).nullish()
   })
   .refine((v) => Date.parse(v.end_at) > Date.parse(v.start_at), {
@@ -164,9 +152,6 @@ export const CancelAppointmentSchema = z.object({
   version: z.number().int().positive()
 });
 
-// ───────────── Board Ops (فاز ۱ — بورد منشی) ─────────────
-
-/** تغییر وضعیت عملیاتی نوبت — بدون version (اقدام سریع عملیاتی؛ last-write-wins + audit) */
 export const OpsStatusSchema = z.enum(APPOINTMENT_OPS_STATUSES);
 
 export const SetOpsStatusSchema = z.object({
@@ -180,17 +165,11 @@ export const CopyWeekSchema = z.object({
   dry_run: z.boolean().optional().default(false)
 });
 
-// ───────────── Attendance ─────────────
-
 export const MarkAttendanceSchema = z.object({
-  // — 'late' = حاضر با تأخیر (غیبت حساب نمی‌شود؛ اعلان غیبت نمی‌گیرد)
   status: z.enum([ATTENDANCE_STATUS.PRESENT, ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.ABSENT, ATTENDANCE_STATUS.CANCELLED]),
   note: z.string().max(1000).optional()
 });
 
-// ───────────── Schools & Students (student-profile) ─────────────
-
-/** — تلفن ولی: نرمال‌سازی هم‌سان با فرانت (ارقام فارسی، +98، فاصله/خط تیره) + قاعده ۰۹xxxxxxxxx */
 export const GuardianPhoneSchema = z
   .string()
   .transform((v) => {
@@ -211,7 +190,6 @@ export const NewSchoolSchema = z.object({
   address: z.string().max(500).optional(),
   principal_name: z.string().max(120).optional(),
   principal_phone: z.string().max(20).optional(),
-  // — کد رسمی مدرسه (نظام) + یادداشت آزاد؛ ارقام فارسی به لاتین نرمال می‌شود
   code: z
     .string()
     .transform((v) => v.trim().replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))))
@@ -228,7 +206,6 @@ export const UpdateSchoolSchema = z.object({
   address: z.string().max(500).optional(),
   principal_name: z.string().max(120).optional(),
   principal_phone: z.string().max(20).optional(),
-  // — کد رسمی مدرسه (نظام) + یادداشت آزاد؛ ارقام فارسی به لاتین نرمال می‌شود
   code: z
     .string()
     .transform((v) => v.trim().replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))))
@@ -236,8 +213,6 @@ export const UpdateSchoolSchema = z.object({
     .optional(),
   notes: z.string().trim().max(500, 'یادداشت حداکثر ۵۰۰ نویسه است').optional()
 });
-
-// ─── Classes — کلاس‌های مدرسه با معلم ───
 
 export const NewClassSchema = z.object({
   school_id: UuidSchema,
@@ -252,13 +227,6 @@ export const UpdateClassSchema = z.object({
   teacher_phone: z.string().max(20).nullable().optional()
 });
 
-/**
- * — کد ملی در تعریف دانش‌آموز:
- * - چرخهٔ فعال: الزامی (همهٔ مسیرهای اتصال بات/لیست انتظار به کد ملی تکیه دارند)
- * - آرشیو (archived=true): اختیاری — بدون کد ملی نگه‌دارندهٔ یکتای «NAS-…» می‌گیرد
- * و هر زمان از ویرایش پروفایل قابل ثبت است.
- */
-// — مسیر پرونده: learning / rehab — تعریف زودتر از NewStudentSchema (پذیرش)
 export const PathwaySchema = z.enum(STUDENT_PATHWAYS);
 
 export const NewStudentSchema = z
@@ -268,18 +236,14 @@ export const NewStudentSchema = z
     last_name: z.string().min(1).max(100),
     birth_date: TehranYmdSchema.optional(),
     gender: z.enum(['male', 'female']).optional(),
-    /** — پایه تحصیلی هاردکد (لیبل فارسی ثابت از STUDENT_GRADES) */
     grade: z.enum(STUDENT_GRADES).optional(),
     school_id: UuidSchema.optional(),
     class_id: UuidSchema.optional(),
     guardian_name: z.string().max(100).optional(),
     guardian_relation: z.string().max(50).optional(),
     guardian_phone: GuardianPhoneSchema.optional(),
-    /** — مسئول پرونده در لحظهٔ تعریف — همکار فعال مرکز */
     owner_staff_id: UuidSchema.optional(),
-    /** — ثبت مستقیم در آرشیو (دیتابیس شهر) — پرونده با active=0 ساخته می‌شود */
     archived: z.boolean().optional(),
-    /** — مسیر پرونده در لحظهٔ تعریف (پذیرش) — اختیاری؛ بعداً قابل تغییر */
     pathway: PathwaySchema.optional()
   })
   .superRefine((v, ctx) => {
@@ -293,22 +257,14 @@ export const UpdateStudentSchema = z.object({
   last_name: z.string().min(1).max(100).optional(),
   birth_date: TehranYmdSchema.optional(),
   gender: z.enum(['male', 'female']).optional(),
-  /** — پایه تحصیلی هاردکد */
   grade: z.enum(STUDENT_GRADES).optional(),
   school_id: UuidSchema.nullable().optional(),
   class_id: UuidSchema.nullable().optional(),
   guardian_name: z.string().max(100).optional(),
   guardian_relation: z.string().max(50).optional(),
   guardian_phone: GuardianPhoneSchema.optional(),
-  /**
-   * — ثبت کد ملی پرونده‌هایی که بدون کد ملی ساخته شده‌اند (نگه‌دارندهٔ «NAS-…»)
-   * فقط «اولین ثبت» مجاز است؛ پرونده‌ای که کد ملی واقعی دارد قابل تغییر نیست
-   * (همان سیاست «غیرقابل تغییر» قبل — گارد در سرویس).
-   */
   national_id: NationalIdSchema.optional()
 });
-
-// ───────────── تاریخچهٔ تحصیلی ─────────────
 
 export const NewEducationHistorySchema = z.object({
   study_year: z
@@ -320,8 +276,6 @@ export const NewEducationHistorySchema = z.object({
   level: z.string().trim().max(EDUCATION_HISTORY_LEVEL_MAX).optional(),
   notes: z.string().trim().max(EDUCATION_HISTORY_NOTE_MAX).optional()
 });
-
-// ───────────── Staff v۲ ─────────────
 
 const StaffUsernameSchema = z
   .string()
@@ -337,7 +291,6 @@ const StaffPhoneSchema = z
   .max(STAFF_PHONE_MAX, 'شماره تلفن بیش از حد طولانی است')
   .regex(/^[0-9+\s-]+$/, 'شماره تلفن فقط رقم و + است');
 
-/** رمز عبور — خالی یعنی «بدون تغییر / پیش‌فرض» (بسته به مسیر) */
 export const StaffPasswordSchema = z
   .string()
   .min(STAFF_PASSWORD_MIN, `رمز باید حداقل ${STAFF_PASSWORD_MIN} نویسه باشد`)
@@ -348,7 +301,6 @@ export const NewStaffSchema = z.object({
   phone: StaffPhoneSchema,
   national_id: NationalIdSchema,
   username: StaffUsernameSchema,
-  /** اختیاری — خالی = رمز پیش‌فرض ۱۲۳۴ */
   password: StaffPasswordSchema.optional(),
   role: StaffRoleSchema,
   notify_enabled: z.boolean().optional()
@@ -359,22 +311,15 @@ export const UpdateStaffSchema = z.object({
   phone: StaffPhoneSchema.optional(),
   national_id: NationalIdSchema.optional(),
   username: StaffUsernameSchema.optional(),
-  /** اختیاری — ناموجود/خالی یعنی رمز فعلی حفظ شود */
   password: StaffPasswordSchema.optional(),
   role: StaffRoleSchema.optional(),
   notify_enabled: z.boolean().optional()
 });
 
-// ───────────── صفحه ورود ─────────────
-
 export const LoginSchema = z.object({
   username: z.string().trim().min(1, 'نام کاربری الزامی است').max(100),
   password: z.string().min(1, 'رمز عبور الزامی است').max(STAFF_PASSWORD_MAX)
 });
-
-// ───────────── Working hours ─────────────
-// weekday: 0 = شنبه … 6 = جمعه (هفته ایرانی)
-// start_minute/end_minute: دقیقه از نیمه‌شب تهران — روی شبکه SLOT_MINUTES
 
 const gridMinute = (label: string) =>
   z
@@ -382,7 +327,6 @@ const gridMinute = (label: string) =>
     .int(`${label} باید عدد صحیح باشد`)
     .refine((m) => m % SLOT_MINUTES === 0, `${label} باید مضرب ${SLOT_MINUTES} دقیقه باشد`);
 
-/** — پذیرش هر دو شکل camelCase (فرانت) و snake_case (API) برای بازه‌های کاری */
 function normalizeRangeKeys(raw: unknown): unknown {
   if (raw === null || typeof raw !== 'object') return raw;
   const r = raw as Record<string, unknown>;
@@ -424,12 +368,9 @@ export const NewWorkingHourSchema = z.preprocess(
   })
 );
 
-/** جایگزینی کامل برنامه هفتگی یک کارمند (bulk) */
 export const ReplaceWeekSchema = z.object({
   items: z.array(WorkingHourRangeSchema).max(70, 'حداکثر ۷۰ بازه در هفته مجاز است')
 });
-
-// ───────────── Dashboard ─────────────
 
 export const DashboardTodayQuerySchema = z.object({
   date: TehranYmdSchema.optional().default(() => tehranTodayYmd())
@@ -446,16 +387,12 @@ export const DashboardSummaryQuerySchema = z
     { message: 'بازه بیش از یک سال است', path: ['to'] }
   );
 
-// ───────────── Conflict debug ─────────────
-
 export const ConflictCheckSchema = z.object({
   staff_id: UuidSchema,
   start_at: IsoDateTimeSchema,
   end_at: IsoDateTimeSchema,
   exclude_id: UuidSchema.optional()
 });
-
-// ───────────── Notifications ─────────────
 
 export const NotificationListQuerySchema = z.object({
   status: z.enum(NOTIFICATION_STATUSES).optional(),
@@ -465,7 +402,6 @@ export const NotificationListQuerySchema = z.object({
 });
 
 export const UpsertPrefsSchema = z.object({
-  // بدون default — فیلد غایب یعنی «مقدار موجود حفظ شود» (patch semantics)
   channel: z.enum(NOTIFICATION_CHANNELS).optional(),
   chat_id: z.string().min(1).max(64).nullable().optional(),
   reminders_enabled: z.boolean().optional(),
@@ -482,9 +418,6 @@ export const TestMessageSchema = z.object({
   text: z.string().min(1).max(1000).optional()
 });
 
-// ───────────── Settings ─────────────
-
-/** جایگزینی کامل بازه کاری مرکز (بازه‌ها عمدتاً ثابت هستند — یک‌جا تنظیم می‌شوند) */
 export const ReplaceCenterHoursSchema = z.object({
   items: z.array(WorkingHourRangeSchema).max(70, 'حداکثر ۷۰ بازه در هفته مجاز است')
 });
@@ -497,22 +430,18 @@ export const UpdateSettingsSchema = z.object({
   notify_on_cancel: z.boolean().optional(),
   notify_digest: z.boolean().optional(),
   notify_waitlist: z.boolean().optional(),
-  /** — شماره تماس عمومی مرکز (خالی = پاک کردن) */
   clinic_phone: z.string().max(30, 'شماره تماس حداکثر ۳۰ نویسه است').optional(),
-  // — نام کاربری بات بله (با یا بدون @؛ فقط لاتین/رقم/خط زیر؛ خالی = تشخیص خودکار)
   bot_username: z
     .string()
     .max(65, 'نام کاربری بات حداکثر ۶۴ نویسه است')
     .regex(/^@?[A-Za-z0-9_]*$/, 'نام کاربری بات فقط حروف لاتین، رقم و خط زیر است')
     .optional(),
-  /** — ساعت ارسال پیش‌نویس اعلان نوبت جدید — 0..23 تهران */
   notify_batch_hour: z
     .number()
     .int()
     .min(0, 'ساعت ارسال باید بین ۰ تا ۲۳ باشد')
     .max(23, 'ساعت ارسال باید بین ۰ تا ۲۳ باشد')
     .optional(),
-  /** — شاخص سنجش: جایگزینی کامل آرایهٔ بازه‌ها (سال/ماه شمسی) —: بازهٔ سفارشی + هدف همزمان */
   screening_targets: z
     .array(
       z
@@ -524,9 +453,7 @@ export const UpdateSettingsSchema = z.object({
             .int('هدف باید عدد صحیح باشد')
             .min(1, 'هدف حداقل ۱ سنجش است')
             .max(1000000),
-          /** — عنوان اختیاری هدف */
           title: z.string().trim().max(80, 'عنوان هدف حداکثر ۸۰ نویسه است').nullable().optional(),
-          /** — بازهٔ سفارشی (YYYY-MM-DD میلادی) — null = حالت سال/ماه */
           from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ شروع باید YYYY-MM-DD باشد').nullable().optional(),
           to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ پایان باید YYYY-MM-DD باشد').nullable().optional()
         })
@@ -544,7 +471,6 @@ export const UpdateSettingsSchema = z.object({
             if (v.from! > v.to!) {
               ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد' });
             }
-            // از/تا تاریخ میلادی است (YYYY-MM-DD) — فقط بازهٔ معقول سال میلادی
             const fy = Number(v.from!.slice(0, 4));
             if (!Number.isInteger(fy) || fy < 1900 || fy > 2100) {
               ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'سال بازهٔ سفارشی خارج از محدودهٔ مجاز است' });
@@ -556,9 +482,6 @@ export const UpdateSettingsSchema = z.object({
     .optional()
 });
 
-// ───────────── پیکربندی امتیازدهی همکاران (فقط مدیر) ─────────────
-
-/** وزن یک مؤلفهٔ فرمول — عدد صحیح نامنفی معقول */
 const ScoringWeightField = z
   .number({ invalid_type_error: 'وزن باید عدد باشد' })
   .int('وزن باید عدد صحیح باشد')
@@ -566,20 +489,16 @@ const ScoringWeightField = z
   .max(10000, 'وزن حداکثر ۱۰۰۰۰ است');
 
 export const ScoringWeightsSchema = z.object({
-  // تولید محتوا
   exercises: ScoringWeightField,
   packages: ScoringWeightField,
   templates: ScoringWeightField,
   forms: ScoringWeightField,
-  // استفاده از محتوا
   exerciseUses: ScoringWeightField,
   templateUses: ScoringWeightField,
   formFills: ScoringWeightField,
-  // ارجاع — مصرف توسط همکار دیگر
   exerciseRefs: ScoringWeightField,
   templateRefs: ScoringWeightField,
   formRefs: ScoringWeightField,
-  // اقدام‌های پایه و سقف
   base_action: ScoringWeightField,
   admin_cap: z
     .number({ invalid_type_error: 'سقف باید عدد باشد' })
@@ -589,7 +508,6 @@ export const ScoringWeightsSchema = z.object({
 });
 
 export const ScoringConfigSchema = z.object({
-  /** تاریخ شروع شمارش امتیاز — YYYY-MM-DD میلادیِ روز تهران (نیمه‌شب تهران = cutoff) */
   epoch_ymd: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ شروع باید YYYY-MM-DD باشد')
@@ -605,14 +523,10 @@ export const ScoringConfigSchema = z.object({
   weights: ScoringWeightsSchema
 });
 
-// ───────────── API Keys ─────────────
-
 export const NewApiKeySchema = z.object({
   name: z.string().trim().min(2, 'نام کلید حداقل ۲ نویسه است').max(60),
   role: StaffRoleSchema
 });
-
-// ───────────── Tags ─────────────
 
 export const NewTagSchema = z.object({
   name: z.string().trim().min(2, 'نام برچسب حداقل ۲ نویسه است').max(60),
@@ -631,11 +545,6 @@ export const SearchQuerySchema = z.object({
   q: z.string().max(SEARCH_QUERY_MAX_LENGTH * 2, 'عبارت جستجو بیش از حد طولانی است').optional().default('')
 });
 
-// ───────────── Staff bot links ─────────────
-
-// ───────────── Staff attendance ─────────────
-
-/** ثبت/تغییر وضعیت حضور روزانه یک همکار (upsert روی staff_id+date) */
 export const MarkStaffAttendanceSchema = z.object({
   staff_id: UuidSchema,
   date: TehranYmdSchema,
@@ -659,8 +568,6 @@ export const StaffAttendanceDayQuerySchema = z.object({
   date: TehranYmdSchema.optional().default(() => tehranTodayYmd())
 });
 
-// ───────────── Reports ─────────────
-
 export const ReportQuerySchema = z
   .object({
     from: TehranYmdSchema,
@@ -671,8 +578,6 @@ export const ReportQuerySchema = z
     (v) => Date.parse(v.to) - Date.parse(v.from) <= 366 * 24 * 60 * 60 * 1000,
     { message: 'بازه بیش از یک سال است', path: ['to'] }
   );
-
-// ───────────── Announcements ─────────────
 
 export const NewAnnouncementSchema = z.object({
   title: z.string().trim().min(2, 'عنوان حداقل ۲ نویسه است').max(ANNOUNCEMENT_TITLE_MAX),
@@ -693,8 +598,6 @@ export const SendAnnouncementSchema = z.object({
   target: z.enum(['staff', 'families'])
 });
 
-// ───────────── Knowledge ─────────────
-
 export const NewKnowledgeSchema = z.object({
   title: z.string().trim().min(2, 'عنوان حداقل ۲ نویسه است').max(KNOWLEDGE_TITLE_MAX),
   body: z.string().trim().min(2, 'متن مقاله حداقل ۲ نویسه است').max(KNOWLEDGE_BODY_MAX),
@@ -711,8 +614,6 @@ export const UpdateKnowledgeSchema = z.object({
   published: z.boolean().optional()
 });
 
-// ───────────── Classes & teacher links ─────────────
-
 export const CreateClassLinkSchema = z.object({
   class_id: UuidSchema
 });
@@ -722,13 +623,10 @@ export const TeacherReportSchema = z.object({
   text: z.string().trim().min(2, 'متن گزارش حداقل ۲ نویسه است').max(2000)
 });
 
-// ───────────── Working Day ─────────────
-
 export const WorkingDayQuerySchema = z.object({
   date: TehranYmdSchema.optional().default(() => tehranTodayYmd())
 });
 
-/** ثبت توضیحات روز کاری (لاگ روزانه) — منشی/مدیر */
 export const NewDayNoteSchema = z.object({
   date: TehranYmdSchema,
   body: z
@@ -738,12 +636,6 @@ export const NewDayNoteSchema = z.object({
     .max(DAY_NOTE_BODY_MAX, 'متن توضیحات بیش از حد طولانی است')
 });
 
-// ───────────── Session Notes (فاز ۲ — گزارش جلسه) ─────────────
-
-/**
- * ذخیرهٔ گزارش جلسه برای یک دانش‌آموزِ نوبت — جایگزینی کامل (نه append).
- * 'none' یعنی «هیچ اقدامی» و در DB به‌صورت NULL ذخیره می‌شود.
- */
 export const SaveSessionNoteSchema = z.object({
   session_note: z
     .string()
@@ -752,13 +644,10 @@ export const SaveSessionNoteSchema = z.object({
   next_action: z.enum(NEXT_ACTION_VALUES).default('none')
 });
 
-// ───────────── Waitlist (فاز W — لیست انتظار) ─────────────
-
 export const WaitlistSourceSchema = z.enum(WAITLIST_SOURCES);
 export const WaitlistPrioritySchema = z.enum(WAITLIST_PRIORITIES);
 export const WaitlistStatusSchema = z.enum(WAITLIST_STATUSES);
 
-/** تلفن ولیّ اجباری — همان نرمال‌سازی GuardianPhoneSchema (۰۹xxxxxxxxx) */
 export const NewWaitlistSchema = z.object({
   first_name: z.string().min(1, 'نام لازم است').max(WAITLIST_NAME_MAX),
   last_name: z.string().min(1, 'نام خانوادگی لازم است').max(WAITLIST_NAME_MAX),
@@ -771,11 +660,9 @@ export const NewWaitlistSchema = z.object({
   service_type: z.string().max(WAITLIST_SERVICE_TYPE_MAX).optional(),
   note: z.string().max(WAITLIST_NOTE_MAX).optional(),
   priority: WaitlistPrioritySchema.default('normal'),
-  /** — پروندهٔ متصل: نام/تلفن/مدرسه از خود پرونده پر می‌شود */
   student_id: UuidSchema.optional()
 });
 
-/** ویرایش دموگرافیک — وضعیت/اولویت از این مسیر تغییر نمی‌کند (وضعیت فقط endpoint اختصاصی) */
 export const UpdateWaitlistSchema = z.object({
   first_name: z.string().min(1).max(WAITLIST_NAME_MAX).optional(),
   last_name: z.string().min(1).max(WAITLIST_NAME_MAX).optional(),
@@ -794,7 +681,6 @@ export const WaitlistCallSchema = z.object({
   note: z.string().max(WAITLIST_NOTE_MAX).optional()
 });
 
-/** — تیک «منتظر دریافت خدمت» روی پروندهٔ دانش‌آموز (ورود/خروج از لیست انتظار پذیرش) */
 export const StudentWaitStatusSchema = z.object({
   awaiting: z.boolean(),
   source: WaitlistSourceSchema.default('self'),
@@ -802,12 +688,6 @@ export const StudentWaitStatusSchema = z.object({
   priority: WaitlistPrioritySchema.default('normal')
 });
 
-/**
- * تبدیل به نوبت:
- * - student_id → پروندهٔ موجود صریح
- * - national_id → تطبیق با پروندهٔ موجود یا ساخت پروندهٔ جدید
- * - هیچ‌کدام → تطبیق با تلفن ولیّ (مبهم → 409 با درخواست انتخاب صریح)
- */
 export const WaitlistScheduleSchema = z.object({
   staff_id: UuidSchema,
   start_at: SlotAlignedTimeSchema,
@@ -821,15 +701,9 @@ export const WaitlistReorderSchema = z.object({
   ids: z.array(UuidSchema).min(1, 'فهرست ترتیب خالی است').max(WAITLIST_LIST_LIMIT)
 });
 
-// ───────────── Follow-ups (فاز ۳ — بنیاد پیگیری) ─────────────
-
 export const FollowUpStatusSchema = z.enum(FOLLOWUP_STATUSES);
 export const FollowUpEntityTypeSchema = z.enum(FOLLOWUP_ENTITY_TYPES);
 
-/**
- * ساخت پیگیری — حداقل موجودیت + عنوان + مسئول.
- * due_at اختیاری است؛ هوک‌های خودکار (جلسه/لیست انتظار) مهلت پیش‌فرض +۷ روز می‌گذارند.
- */
 export const NewFollowUpSchema = z.object({
   entity_type: FollowUpEntityTypeSchema,
   entity_id: z.string().min(1, 'شناسهٔ موجودیت لازم است').max(64),
@@ -843,7 +717,6 @@ export const NewFollowUpSchema = z.object({
   due_at: IsoDateTimeSchema.nullable().optional()
 });
 
-/** ویرایش پیگیری — وضعیت با ماتریس pure.ts + تغییر مسئول/مهلت (§13)؛ حداقل یک فیلد لازم */
 export const UpdateFollowUpSchema = z
   .object({
     status: FollowUpStatusSchema.optional(),
@@ -855,16 +728,10 @@ export const UpdateFollowUpSchema = z
     { message: 'حداقل یکی از وضعیت/مسئول/مهلت باید ارسال شود' }
   );
 
-// ───────────── Todos (فاز ۴ — هماهنگی داخلی منشی↔مدیر) ─────────────
-
 export const TodoPrioritySchema = z.enum(TODO_PRIORITIES);
 export const TodoStatusSchema = z.enum(TODO_STATUSES);
 export const TodoBoxSchema = z.enum(TODO_BOXES);
 
-/**
- * مهلت کار — تاریخ شمسی‌محور UI یک روز میلادی می‌فرستد (YYYY-MM-DD؛ پایان روز تهران
- * در سرویس نرمال می‌شود) یا ISO کامل؛ null = حذف مهلت.
- */
 export const TodoDueAtSchema = z
   .string()
   .trim()
@@ -875,10 +742,6 @@ export const TodoDueAtSchema = z
     { message: 'مهلت باید تاریخ (YYYY-MM-DD) یا زمان ISO معتبر باشد' }
   );
 
-/**
- * مورد چک‌لیست کار —. ساخت (NewTodo) فقط متن می‌گیرد (همه done=false)؛
- * ویرایش (UpdateTodo) شکل کامل {text, done} را جایگزین می‌کند.
- */
 export const TodoChecklistItemSchema = z.object({
   text: z
     .string()
@@ -888,10 +751,6 @@ export const TodoChecklistItemSchema = z.object({
   done: z.boolean()
 });
 
-/**
- * ساخت کار — گیرنده همکارِ منشی↔مدیر یا «خودم» (کار شخصی — ؛
- * قاعدهٔ نقش در سرویس چک می‌شود). checklist ورودی آرایهٔ متن است.
- */
 export const NewTodoSchema = z.object({
   title: z
     .string()
@@ -919,10 +778,6 @@ export const NewTodoSchema = z.object({
     .optional()
 });
 
-/**
- * ویرایش کار (inline) + حذف نرم — فقط ثبت‌کننده مجاز است.
- * deleted: true یعنی soft delete؛ بقیهٔ فیلدها ویرایش معمولی.
- */
 export const UpdateTodoSchema = z
   .object({
     title: z
@@ -953,42 +808,23 @@ export const UpdateTodoSchema = z
     { message: 'حداقل یک فیلد برای ویرایش لازم است' }
   );
 
-// ───────────── Case Status (فاز ۶ — §12.1/§14.2، تصمیم D5) ─────────────
-
 export const CaseStatusSchema = z.enum(STUDENT_CASE_STATUSES);
 
-/** تغییر وضعیت پرونده — تنها فیلد body؛ همان مقدار = no-op بدون audit */
 export const ChangeCaseStatusSchema = z.object({
   case_status: CaseStatusSchema
 });
 
-// ───────────── مسیر پرونده ─────────────
-// PathwaySchema بالاتر (پیش از NewStudentSchema) تعریف شده — در این‌جا فقط schema تغییر:
-
-/** تغییر مسیر پرونده — همان مقدار = no-op بدون audit */
 export const ChangePathwaySchema = z.object({
   pathway: PathwaySchema.nullable()
 });
 
-/**
- * -c — تعیین/برداشتن «مسئول پرونده» — همان مقدار = no-op بدون audit.
- * owner_staff_id باید UUID معتبر staff باشد یا null (برداشتن مسئول).
- */
 export const ChangeOwnerSchema = z.object({
   owner_staff_id: UuidSchema.nullable()
 });
 
-// ───────────── Special Needs (فاز ۷ — §12، تصمیم D3) ─────────────
-
 export const SpecialNeedTypeSchema = z.enum(SPECIAL_NEED_TYPES);
 export const SpecialNeedSeveritySchema = z.enum(SPECIAL_NEED_SEVERITIES);
 
-/**
- * ثبت/ویرایش نیاز ویژه — هر دو فیلد همیشه صریح (NULL معتبر است = پاک‌کردن).
- * identified_at اختیاری ISO؛ اگر فرستاده نشود و نوع جدید غیر NULL باشد و قبلاً
- * NULL بوده، سرویس «الان» می‌گذارد (اولین شناسایی). متن آزاد تشخیص وجود ندارد
- * (§12.10 — PII در سطح اسکیما بسته است).
- */
 export const ChangeSpecialNeedSchema = z.object({
   special_need_type: SpecialNeedTypeSchema.nullable(),
   special_need_severity: SpecialNeedSeveritySchema.nullable(),
@@ -998,23 +834,14 @@ export const ChangeSpecialNeedSchema = z.object({
   { message: 'شدت بدون نوع نیاز ویژه معنا ندارد' }
 );
 
-// — بلوک اسکیمای کمیسیون حذف شد (ماژول قطع شد)
-
-// ───────────── بانک تمرین ─────────────
-
-/** قالب تمرین — کاربرگ/بازی/دستورالعمل خانه */
 export const ExerciseFormatSchema = z.enum(EXERCISE_FORMATS);
 
-/** فایل تمرین — همان قالب پیوست ارزیابی (base64 بدون multipart) */
 export const ExerciseFileSchema = z.object({
   filename: z.string().trim().min(1, 'نام فایل الزامی است').max(200, 'نام فایل حداکثر ۲۰۰ نویسه است'),
   mime_type: z.string().trim().min(3, 'نوع فایل الزامی است').max(120),
   content_b64: z.string().min(1, 'محتوای فایل الزامی است').max(1_200_000, 'حجم فایل بیش از حد مجاز است')
 });
 
-/** ساخت تمرین جدید — فایل اختیاری (تمرین می‌تواند فقط دستورالعمل متنی باشد)
- * — m166: co_created_by = سازندهٔ دوم واقعی (انتخاب از کارکنان) — امتیاز تولید محتوا
- *   بین سازندهٔ اصلی و هم‌ساز نصف می‌شود (جای تیک بی‌نامِ team_created). */
 export const NewExerciseSchema = z.object({
   title: z
     .string()
@@ -1041,13 +868,6 @@ export const NewExerciseSchema = z.object({
   file: ExerciseFileSchema.nullable().optional()
 });
 
-/**
- * ویرایش تمرین — عنوان/توضیح/قالب/برچسب‌ها/انتشار (فایل از مسیر مجزای PUT)
- * — m140: owner_staff_id عمداً پذیرفته نمی‌شود — ویرایش ساده هرگز مالکیت (created_by)
- * را تغییر نمی‌دهد (درس 43-A: فرم ویرایش کهنه owner_staff_id را دوباره می‌فرستاد).
- * z.object به‌صورت پیش‌فرض کلید ناشناخته را strip می‌کند؛ .strip() صریحِ همین قرارداد است —
- * انتقال مالکیت فقط از مسیر اختصاصی POST /api/exercises/:id/reassign (فقط مدیر) ممکن است.
- */
 export const UpdateExerciseSchema = z
   .object({
     title: z
@@ -1071,7 +891,6 @@ export const UpdateExerciseSchema = z
       .nullable()
       .optional(),
     tag_ids: z.array(UuidSchema).max(10, 'حداکثر ۱۰ برچسب برای هر تمرین').optional(),
-    // — m166: هم‌ساز (سازندهٔ دوم) — null یعنی برداشتن هم‌ساز؛ created_by دست نمی‌خورد
     co_created_by: UuidSchema.nullable().optional(),
     published: z.boolean().optional()
   })
@@ -1081,22 +900,17 @@ export const UpdateExerciseSchema = z
     { message: 'حداقل یک فیلد برای ویرایش لازم است' }
   );
 
-/** — m140: انتقال مالکیت تمرین — فقط مدیر؛ بدنهٔ POST /api/exercises/:id/reassign */
 export const ReassignExerciseSchema = z.object({
   staffId: UuidSchema,
   reason: z.string().trim().max(500, 'دلیل انتقال بیش از ۵۰۰ نویسه است').optional()
 });
 
-/** تعویض فایل یک تمرین موجود */
 export const ReplaceExerciseFileSchema = z.object({
   filename: z.string().trim().min(1, 'نام فایل الزامی است').max(200, 'نام فایل حداکثر ۲۰۰ نویسه است'),
   mime_type: z.string().trim().min(3, 'نوع فایل الزامی است').max(120),
   content_b64: z.string().min(1, 'محتوای فایل الزامی است').max(1_200_000, 'حجم فایل بیش از حد مجاز است')
 });
 
-// ───────────── بستهٔ تمرینی + بستهٔ تکلیف ─────────────
-
-/** ساخت بستهٔ تمرینی — گروه چند تمرین آمادهٔ ارسال */
 export const NewExercisePackageSchema = z.object({
   title: z
     .string()
@@ -1117,7 +931,6 @@ export const NewExercisePackageSchema = z.object({
   published: z.boolean().optional().default(true)
 });
 
-/** ویرایش بستهٔ تمرینی */
 export const UpdateExercisePackageSchema = z
   .object({
     title: z
@@ -1145,7 +958,6 @@ export const UpdateExercisePackageSchema = z
     { message: 'حداقل یک فیلد برای ویرایش لازم است' }
   );
 
-/** — ساخت بستهٔ تکلیف از پنل (ارسال تمرین برای دانش‌آموز) — یا بستهٔ آماده یا فهرست تمرین */
 export const CreateExerciseBatchSchema = z
   .object({
     package_id: UuidSchema.nullable().optional(),
@@ -1165,10 +977,6 @@ export const CreateExerciseBatchSchema = z
     message: 'یا بستهٔ آماده را انتخاب کنید یا حداقل یک تمرین'
   });
 
-
-// ───────────── Screening ─────────────
-
-/** ثبت سریع نوآموز سنجشی — نام آزاد + برچسب‌ها (بدون پروفایل) */
 export const SCREENING_NAME_MAX = 80;
 export const SCREENING_TAGS_MAX = 12;
 
@@ -1185,7 +993,6 @@ export const ScreeningCreateSchema = z.object({
     .min(2, 'نام و فامیل حداقل ۲ نویسه است')
     .max(SCREENING_NAME_MAX, `نام و فامیل حداکثر ${SCREENING_NAME_MAX} نویسه است`),
   tags: z.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `حداکثر ${SCREENING_TAGS_MAX} برچسب`).default([]),
-  /** روز سنجش — پیش‌فرض: امروز تهران */
   day: TehranYmdSchema.optional()
 });
 
@@ -1207,7 +1014,5 @@ export const ScreeningQuerySchema = z.object({
   from: TehranYmdSchema.optional(),
   to: TehranYmdSchema.optional(),
   q: z.string().trim().max(80).optional(),
-  /** برچسب‌ها با کاما — معنای OR */
   tag: z.string().trim().max(800).optional()
 });
-

@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — reminders
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست pure برنامه‌ریز یادآوری — بدون دیتابیس
-
 import { describe, expect, it } from 'vitest';
 import type { Appointment, NotificationPrefs } from '@core/shared';
 import {
@@ -13,9 +7,7 @@ import {
   summarizeSkips
 } from '../reminders';
 
-// 2026-10-11T10:00:00Z → تهران 13:30
 const NOW = '2026-10-11T10:00:00.000Z';
-// 2026-10-12T06:00:00Z → تهران 2026-10-12 ساعت 09:30 (۲۰ ساعت بعد از NOW)
 const START = '2026-10-12T06:00:00.000Z';
 
 function appt(overrides: Partial<Appointment> & { id: string }): Appointment {
@@ -94,7 +86,6 @@ describe('planReminders (pure)', () => {
   });
 
   it('T4: فاصله کمتر از reminder_hours_before → رد با دلیل too_soon', () => {
-    // شروع فقط ۱ ساعت بعد از NOW — pref با ۳ ساعت قبل → too_soon
     const soon = appt({ id: 'a1', startAt: '2026-10-11T11:00:00.000Z' });
     const r = plan([soon], [prefs({ reminderHoursBefore: 3 })]);
     expect(r.skips[0].reason).toBe('too_soon');

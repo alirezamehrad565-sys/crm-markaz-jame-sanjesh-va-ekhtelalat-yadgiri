@@ -1,37 +1,17 @@
-// engine.d.ts — hand-written types for the extracted Wechsler engine module.
-//
-// The runtime implementation (engine.js) is verbatim extracted bundle code
-// (worker/bundle.js lines 21120-24656 at commit 365d103, engineVersion m98).
-// Deep result structures (analysis / snapshot internals) are typed pragmatically:
-// top-level input & output shapes are exact, deeply nested payload data is typed
-// loosely rather than duplicating ~3000 lines of engine internals.
-
 export type SubtestCode =
   | "BD" | "SI" | "DS" | "PCn" | "CD" | "VC" | "LN" | "MR" | "CO" | "SS"
   | "PCm" | "CA" | "IN" | "AR" | "WR";
 
-/** Raw (test-page) scores per subtest code. */
 export type RawScores = Partial<Record<SubtestCode, number>>;
 
-/** Jalali date triple [year, month, day]. */
 export type JalaliDate = [number, number, number];
 
-/** Input of runWechslerAnalysis / analyzeWechsler.
- *
- * T8 (m149) — baseAnswers/skippedHypotheses در قرارداد ورودی می‌مانند (پالایش وزن MOOD با BQ4
- * و سازگاری فراخوانی‌های قدیمی)؛ اما صف پرسش/پاسخ و امتیازدهی ملاک‌ها دیگر تولید نمی‌شود.
- */
 export interface WechslerAnalysisInput {
   rawScores: RawScores;
-  /** Test date as Jalali [y, m, d]. */
   testDate: JalaliDate;
-  /** Birth date as Jalali [y, m, d]. */
   birthDate: JalaliDate;
-  /** Default true. When false, GAI is computed from the norms table even if VCI/PRI differ by more than 23. */
   strict?: boolean;
-  /** Pre-filled questionnaire answers, keyed "<HYP_ID>:<CRIT_ID>" (also "BQ4" for the base question). */
   baseAnswers?: Record<string, string>;
-  /** Hypothesis ids the assessor chose to skip. */
   skippedHypotheses?: string[];
 }
 
@@ -57,7 +37,6 @@ export interface WechslerValidation {
   missing: SubtestCode[];
 }
 
-/** m156 — خوانش مستقل روان‌سنجی نیم‌رخ هوشی — فقط شواهد؛ بدون فرضیه/سناریو/وزن */
 export interface WechslerPsychometrics {
   fsiq: { value: number; band: string | null; bandFa: string | null; percentile: number | null; computable: boolean } | null;
   indices: Array<{ key: string; fa: string; scaled: number; percentile: number | null; cls: string | null }>;
@@ -84,7 +63,6 @@ export interface WechslerSnapshot {
   spreads: Record<string, number>;
   computable: { VCI: boolean; PRI: boolean; WMI: boolean; PSI: boolean; FSIQ: boolean };
   substitutes: string[];
-  /** null when GAI is not computable/valid in strict mode. */
   gai: number | null;
   gaiMeta: { scaled: number; percentile: number | null; ci95: string | number | null } | null;
   fsiq: number | null;
@@ -101,28 +79,20 @@ export interface WechslerSnapshot {
   subWeak: Array<{ code: string; scaled: number }>;
 }
 
-/** Full engine result (روان‌سنجی خالص + خوانش نیم‌رخ — T8/m149 + m156: بدون هیچ لایهٔ فرضیه‌ای). */
 export interface WechslerAnalysisResult {
   ok: boolean;
   ageLine: string;
   validation: WechslerValidation;
-  /** Detailed WISC-IV analysis; rich nested structure (see bundle engine region). */
   analysis: Record<string, unknown> | null;
   snapshot: WechslerSnapshot | null;
   flags: Array<{ id: string; fa: string; validity: boolean }>;
-  /** m156 — خوانش مستقل روان‌سنجی نیم‌رخ هوشی (ok:false → null)؛ فرضیه‌ها از خروجی حذف شدند */
   psychometrics: WechslerPsychometrics | null;
   weakDomains: Array<{ domain: string; label: string; indices: string[] }>;
   monitoringInterval: string;
-  /** T1 (m146) — افزودنی: سیگنال‌های بالینی ساخته‌شده از snapshot/analysis موجود (ok:false → []) */
   signals: WechslerSignal[];
-  /** T1 (m146) — افزودنی: پروفایل ساخت‌یافتهٔ خلاصه (ok:false → null) */
   profile: WechslerProfile | null;
 }
 
-// --- T1 (m146) — clinical signal layer (additive) ----------------------------
-
-/** بازهٔ هوش‌بهر کل — هم‌ارز WechslerFsiqBand در src/domain/clinical-engine/signals.ts */
 export type WechslerFsiqBand =
   | "ID"
   | "BIF"
@@ -132,7 +102,6 @@ export type WechslerFsiqBand =
   | "SUPERIOR"
   | "GIFTED";
 
-/** یک ردیف جدول بازه‌های FSIQ (هم‌ارز FSIQ_BAND_RANGES در signals.ts) */
 export interface WechslerFsiqBandRange {
   band: WechslerFsiqBand;
   min: number;
@@ -140,7 +109,6 @@ export interface WechslerFsiqBandRange {
   fa: string;
 }
 
-/** سیگنال بالینی وکسلر — ساختار هم‌ارز ClinicalSignal در signals.ts */
 export interface WechslerSignal {
   domain:
     | "attention"
@@ -154,26 +122,21 @@ export interface WechslerSignal {
     | "cognitive_level"
     | "validity";
   key: string;
-  /** شدت/اطمینان ۰..۱ */
   value: number;
   source: "anamnesis" | "wechsler" | "checklist" | "probe" | "ot" | "observation";
-  /** دلیل فارسی قابل‌نمایش برای درمانگر */
   fa: string;
 }
 
-/** نمرهٔ تراز + صدک یک شاخص (وقتی محاسبه‌پذیر) */
 export interface WechslerIndexPair {
   scaled: number;
   percentile: number | null;
 }
 
-/** الگوی فعال ACID/CAD — فقط وقتی همهٔ زیرآزمون‌های الگو ≤۷ باشند مقدار دارد */
 export interface WechslerProfilePattern {
   codes: string[];
   scaled: Record<string, number>;
 }
 
-/** پروفایل ساخت‌یافتهٔ خلاصه — همهٔ فیلدها از داده‌های موجود snapshot/analysis */
 export interface WechslerProfile {
   vci: WechslerIndexPair | null;
   pri: WechslerIndexPair | null;
@@ -181,7 +144,6 @@ export interface WechslerProfile {
   psi: WechslerIndexPair | null;
   fsiq: number | null;
   gai: number | null;
-  /** "معتبر"/"نامعتبر" از analysis.gai — null وقتی تحلیل موجود نیست */
   gaiValidity: string | null;
   indexScatter: number;
   fsiqBand: WechslerFsiqBand | null;
@@ -192,9 +154,6 @@ export interface WechslerProfile {
   flags: Array<{ id: string; fa: string; validity: boolean }>;
 }
 
-// --- form payload glue -------------------------------------------------------
-
-/** One form field value as stored in case_events.payload. */
 export interface FormFieldEntry {
   value?: string | number | null;
   label?: string;
@@ -202,7 +161,6 @@ export interface FormFieldEntry {
 
 export type FormPayload = Record<string, FormFieldEntry | undefined | null>;
 
-/** Index scores computed for the form fields (NOT gated by computable flags — mirrors bundle behavior). */
 export interface WechslerComputedScores {
   fsiq: number | null;
   vci: number | null;
@@ -213,15 +171,12 @@ export interface WechslerComputedScores {
   ageLine: string;
 }
 
-/** Return of applyWechslerEngineToPayload (the hook I/O contract minus DB/error glue). */
 export interface WechslerHookResult {
   payload: FormPayload;
   ran: boolean;
   result: WechslerAnalysisResult | null;
   computed: WechslerComputedScores;
 }
-
-// --- exported engine functions ----------------------------------------------
 
 export declare function runWechslerAnalysis(input: WechslerAnalysisInput): WechslerAnalysisResult;
 export declare function analyzeWisc(
@@ -231,27 +186,17 @@ export declare function analyzeWisc(
   strict?: boolean
 ): Record<string, unknown>;
 
-// --- T1 (m146) — clinical signal layer (additive) ----------------------------
-
-/** ورودی profileSignals/buildWechslerProfile — فقط همین بخش‌های نتیجه خوانده می‌شوند */
 export type WechslerResultSlice = Pick<
   WechslerAnalysisResult,
   "ok" | "snapshot" | "analysis" | "flags"
 >;
 
-/**
- * سیگنال‌های بالینی پروفایل وکسلر — تابع خالص؛ فقط از snapshot/analysis موجود
- * می‌خواند (بدون محاسبهٔ تازهٔ روان‌سنجی). ورودی نامعتبر/خالی → [].
- */
 export declare function profileSignals(result: WechslerResultSlice | null | undefined): WechslerSignal[];
 
-/** پروفایل ساخت‌یافتهٔ خلاصه — تابع خالص؛ ورودی نامعتبر/خالی → null */
 export declare function buildWechslerProfile(result: WechslerResultSlice | null | undefined): WechslerProfile | null;
 
-/** بازهٔ FSIQ ورودی — ورودی غیرمتناهی/منفی محافظه‌کارانه به ID می‌رود */
 export declare function fsiqBandOf(fsiq: number): WechslerFsiqBand;
 
-/** جدول بازه‌های FSIQ موتور — باید با FSIQ_BAND_RANGES در signals.ts هم‌ارز بماند */
 export declare const FSIQ_BANDS: WechslerFsiqBandRange[];
 export declare function applyWechslerEngineToPayload(
   payload: FormPayload,
@@ -275,15 +220,12 @@ export declare function ageFromJalali(
   ty: number, tm: number, td: number, by: number, bm: number, bd: number
 ): [number, number, number];
 
-// --- data tables -------------------------------------------------------------
-
 export declare const WISC4_EVENT_KEY: "ce-wechsler-w4-v1";
 export declare const RAW_FIELD_MAP: Record<string, SubtestCode>;
 export declare const SUBTESTS: Array<{ code: SubtestCode; col: string; fa: string }>;
 export declare const SUBTEST_CODES: SubtestCode[];
 export declare const SUBTEST_FA: Record<string, string>;
 export declare const SUBTEST_FA_OK: Record<string, string>;
-/** Norm tables (raw→scaled pairs per age band sq-6..sq-14, index/cluster/step5 conversion rows). */
 export declare const NORMS: Record<string, any>;
 export declare const NORM_MIN_AGE: 6;
 export declare const NORM_MAX_BAND: 14;

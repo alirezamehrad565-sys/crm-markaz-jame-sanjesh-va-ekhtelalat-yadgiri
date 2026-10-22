@@ -1,11 +1,3 @@
-/**
- * هستهٔ اعلان و کلاینت بات بله — پردازش webhook بات
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// پارس pure آپدیت‌های بات بله — بدون دیتابیس/شبکه (قابل تست کامل)
-// فقط منطق «پیام → دستور»؛ اجرای دستور در application/notify انجام می‌شود.
-//: ورود خودکار با کد ملی/شماره تلفن + «نوبت‌های من» + لغو دومرحله‌ای با دکمه inline
-
 export interface BalePhotoSize {
   file_id?: string;
   file_size?: number | null;
@@ -25,21 +17,16 @@ export interface BaleUpdateMessage {
   chat?: { id?: number | string; type?: string };
   from?: { id?: number | string; first_name?: string };
   text?: string;
-  // ─── رسانهٔ بازگشت تکلیف ───
   photo?: BalePhotoSize[];
   document?: BaleDocument;
   caption?: string;
 }
 
-/** رسانهٔ استخراج‌شده از پیام — ورودی حلقهٔ بازگشت */
 export interface BotMedia {
   type: 'photo' | 'document';
   fileId: string;
-  /** فقط document — عکس نام تولیدی می‌گیرد */
   fileName: string | null;
-  /** photo → image/jpeg (قرارداد بله)؛ document → mime اعلامی یا null */
   mime: string | null;
-  /** اگر بله اعلام کرده باشد — گارد حجم قبل از دانلود */
   size: number | null;
 }
 
@@ -57,7 +44,6 @@ export interface BaleUpdate {
   callback_query?: BaleCallbackQuery;
 }
 
-/** قالب شناسه ارسالی کاربر برای ورود خودکار */
 export type IdentityFormat = 'national_id' | 'phone' | 'invalid';
 
 export type BotCommand =
@@ -78,16 +64,13 @@ export type BotCommand =
   | { kind: 'search'; chatId: string; query: string }
   | { kind: 'center_schedule'; chatId: string }
   | { kind: 'waitlist_list'; chatId: string }
-  // ─── هماهنگی با سایت: شاخص سنجش (فقط مدیر/منشی) ───
   | { kind: 'screening_goal'; chatId: string }
-  // ─── بات نقش‌محور CRM: عموم/معلم مدرسه/صف اعلان/ناظر اداره ───
   | { kind: 'contact'; chatId: string }
   | { kind: 'public_files'; chatId: string }
   | { kind: 'my_students'; chatId: string }
   | { kind: 'outbox'; chatId: string }
   | { kind: 'outbox_flush'; chatId: string }
   | { kind: 'kpi_report'; chatId: string }
-  // ─── بات نقش‌محور نسخهٔ ۲: عموم کامل + خانواده + معلم + درمانگر ───
   | { kind: 'services'; chatId: string }
   | { kind: 'auth_guide'; chatId: string }
   | { kind: 'pending_homework'; chatId: string }
@@ -105,10 +88,8 @@ export type BotCommand =
   | { kind: 'stu_msg_abort'; chatId: string }
   | { kind: 'stu_hw'; chatId: string; idx: number }
   | { kind: 'stu_appts'; chatId: string; idx: number }
-  // ─── تاریخچه و چک‌لیست‌های او (چرخهٔ استاندارد پرونده) ───
   | { kind: 'stu_hist'; chatId: string; idx: number }
   | { kind: 'stu_ckl'; chatId: string; idx: number }
-  // ─── بانک تمرین (منوی تو‌در‌تو با callback + state) ───
   | { kind: 'exb_root'; chatId: string }
   | { kind: 'exb_cats'; chatId: string; cat: ExbCat; page: number }
   | { kind: 'exb_list'; chatId: string; cat: ExbCat; tagIdx: number; page: number }
@@ -116,21 +97,17 @@ export type BotCommand =
   | { kind: 'exb_send'; chatId: string; idx: number; page: number }
   | { kind: 'exb_pick'; chatId: string; idx: number; stuIdx: number }
   | { kind: 'exb_yes'; chatId: string; idx: number; stuIdx: number }
-  // ─── بسته‌های تمرینی (همان جریان، برای بستهٔ چندتمرینه) ───
   | { kind: 'exb_pkg'; chatId: string; page: number }
   | { kind: 'exb_pitem'; chatId: string; idx: number }
   | { kind: 'exb_psend'; chatId: string; idx: number; page: number }
   | { kind: 'exb_ppick'; chatId: string; idx: number; stuIdx: number }
   | { kind: 'exb_pyes'; chatId: string; idx: number; stuIdx: number }
-  // ─── حلقهٔ بازگشت فایل ───
   | { kind: 'media_received'; chatId: string; media: BotMedia; caption: string | null }
   | { kind: 'sub_pick'; chatId: string; idx: number }
-  // ─── ثبت متقاضی لیست انتظار توسط معلم مدرسه (فرم چندمرحله‌ای با state) ───
   | { kind: 'wl_intake_start'; chatId: string }
   | { kind: 'wl_intake_cancel'; chatId: string }
   | { kind: 'wl_intake_confirm'; chatId: string }
   | { kind: 'wl_intake_abort'; chatId: string }
-  // ─── تایم‌لاین و گزارش‌نویسی: ویزارد رویداد (همکار) + چک‌لیست خانواده ───
   | { kind: 'stu_tl'; chatId: string; idx: number }
   | { kind: 'tl_cat'; chatId: string; idx: number }
   | { kind: 'tl_types'; chatId: string; stuIdx: number; cat: string }
@@ -145,12 +122,9 @@ export type BotCommand =
   | { kind: 'clf_do'; chatId: string }
   | { kind: 'clf_no'; chatId: string }
   | { kind: 'unknown'; chatId: string; text: string };
-/** null = پیام عادی/بدون متن/بدون chat — نادیده گرفته می‌شود */
 
-/** دستهٔ برچسب بانک تمرین در منوی بات — a=همه، d=اختلال، g=پایه، o=سایر (school_type+custom) */
 export type ExbCat = 'a' | 'd' | 'g' | 'o';
 
-/** — بخش منوی آگاهی‌های اختلالات — t=راهنمای تخصصی، d=دفاتر آموزشی A4 */
 export type AwSection = 't' | 'd';
 
 const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
@@ -158,7 +132,6 @@ const ARABIC_DIGITS = '٠١٢٣٤٥٦٧٨٩';
 const ZWNJ = '\u200c';
 const ZWJ = '\u200d';
 
-/** تبدیل ارقام فارسی/عربی به انگلیسی و حذف هر کاراکتر دیگر */
 export function stripToDigits(raw: string): string {
   let out = '';
   for (const ch of raw) {
@@ -177,14 +150,6 @@ export function stripToDigits(raw: string): string {
   return out;
 }
 
-/**
- * تشخیص قالب شناسه از ارقام خام:
- * ۱۰ رقم → کد ملی (سرویس برای احتیاط، تطبیق تلفن «۰+ارقام» را هم امتحان می‌کند)
- * ۱۱ رقم با پیشوند ۰۹ → موبایل
- * ۱۲ رقم با پیشوند ۹۸ → موبایل (۰۹ نرمال می‌شود)
- * بقیه (۴ تا ۱۵ رقم) → invalid (پیام راهنما برمی‌گردد، نه سکوت)
- * کمتر از ۴ رقم → null توسط caller (نویز، نادیده)
- */
 export function classifyIdentityDigits(digits: string): IdentityFormat {
   if (digits.length === 10) return 'national_id';
   if (digits.length === 11 && digits.startsWith('09')) return 'phone';
@@ -192,24 +157,17 @@ export function classifyIdentityDigits(digits: string): IdentityFormat {
   return 'invalid';
 }
 
-/** نرمال موبایل: ۰۹۸… → ۰۹… — ورودی فقط رقم */
 export function normalizePhoneDigits(digits: string): string {
   if (digits.length === 12 && digits.startsWith('98')) return '0' + digits.slice(2);
   return digits;
 }
 
-/** متن دکمه‌ها — نرمال ZWNJ/ZWJ برای تطبیق دقیق */
 function normalizeMenuText(text: string): string {
   return text.split(ZWNJ).join('').split(ZWJ).join('').trim();
 }
 
-/** جداکننده‌های مجاز در کنار ارقام (خط تیره، فاصله، پرانتز، + و…) — بقیه یعنی متن عادی */
 const IDENTITY_SEPARATORS = /[\s+\-()./،,ـ_]/g;
 
-/**
- * متن فقط از ارقام (با جداکننده‌های رایج) تشکیل شده؟
- * «0012-3456-79» → بله؛ «کد من ۱۲۳» → خیر (حرف دارد → نویز عادی)
- */
 export function isIdentityText(text: string): boolean {
   const withoutSeparators = text.replace(IDENTITY_SEPARATORS, '');
   if (withoutSeparators.length === 0) return false;
@@ -224,29 +182,20 @@ export function isIdentityText(text: string): boolean {
 
 const MY_NEXT_LABELS = new Set(['نوبت‌های من', 'نوبتهای من', 'نوبت های من', 'نوبت‌های دانش‌آموز من', 'نوبت های دانش آموز من', 'نوبتهای دانش آموز من', 'نوبتهای دانشآموز من', 'نوبت های دانشآموز من']);
 const HELP_LABELS = new Set(['راهنما', 'کمک']);
-// — «درباره مرکز» (درباره ما)
 const ABOUT_LABELS = new Set(['درباره مرکز', 'درباره مرکز', 'درباره ما', 'دربارهی مرکز', 'درباره ی مرکز', 'معرفی مرکز', 'معرفی مرکز', 'معرفی ما']);
-// — دکمه‌های متنی دستورهای جدید (پس از نرمال ZWNJ)
 const FOLLOWUPS_LABELS = new Set(['پیگیریهای من', 'پیگیری های من']);
 const ATTENDANCE_LABELS = new Set(['حضور فرزند', 'حضور']);
 const STATUS_LABELS = new Set(['وضعیت مرکز']);
-// — بات نقش‌آگاه
 const CENTER_SCHEDULE_LABELS = new Set(['برنامهٔ مرکز', 'برنامه مرکز']);
-// — لیست انتظار
 const WAITLIST_LABELS = new Set(['لیست انتظار']);
-// — شاخص سنجش (هدفگذاری غربال) — هماهنگ با داشبورد سایت
 const SCREENING_GOAL_LABELS = new Set(['هدف سنجش', 'شاخص سنجش', 'اهداف سنجش']);
-/** — دکمهٔ «ثبت متقاضی» معلم مدرسه (+ /add) */
 const TEACHER_INTAKE_LABELS = new Set(['ثبت متقاضی', 'ثبت متقاضی جدید']);
-// — بانک تمرین
 const EXB_LABELS = new Set(['بانک تمرین', 'بانک تمرینها', 'بانک تمرین ها', 'بانکتمرین', 'بانکتمرینها']);
-// ─── برچسب‌های نقش‌محور CRM ───
 const CONTACT_LABELS = new Set(['شماره تماس', 'شمارهٔ تماس', 'تماس با ما', 'راه‌های ارتباطی', 'راه های ارتباطی', 'راههای ارتباطی', 'ارتباط با ما']);
 const FILES_LABELS = new Set(['فایل‌های آموزشی', 'فایلهای آموزشی', 'فایل های آموزشی']);
 const MY_STUDENTS_LABELS = new Set(['دانش‌آموزان من', 'دانش آموزان من', 'دانشآموزان من']);
 const OUTBOX_LABELS = new Set(['اعلان‌های در صف', 'اعلانهای در صف', 'اعلان های در صف']);
 const KPI_LABELS = new Set(['گزارش KPI', 'گزارش kpi', 'گزارش کپی‌آی', 'گزارش kpi', 'kpi']);
-// ─── برچسب‌های نقش‌محور نسخهٔ ۲ ───
 const SERVICES_LABELS = new Set(['خدمات مرکز', 'معرفی خدمات مرکز', 'معرفی خدمات', 'خدمات']);
 const AUTH_LABELS = new Set(['احراز هویت', 'ورود به بات', 'اتصال گفتگو', 'اتصال']);
 const PENDING_HW_LABELS = new Set(['تمرین‌های انجام‌نشده', 'تمرینهای انجام نشده', 'تمرین های انجام نشده', 'تمرینهای انجامنشده', 'تکلیف‌های انجام‌نشده', 'تکلیفهای انجام نشده', 'تکلیفهای انجامنشده']);
@@ -255,7 +204,6 @@ const AWARENESS_LABELS = new Set(['آگاهی‌های اختلالات', 'آگ�
 const STU_ACTIVE_LABELS = new Set(['دانش‌آموزان فعال', 'دانش آموزان فعال', 'دانشآموزان فعال', 'لیست دانش‌آموزان', 'لیست دانش آموزان', 'لیست دانشآموزان']);
 const CLASS_APPTS_LABELS = new Set(['نوبت‌های کلاس من', 'نوبت های کلاس من', 'نوبتهای کلاس من']);
 
-// ─── چک‌لیست‌های من (خانواده) — normalizeMenuText نیم‌فاصله را حذف می‌کند؛ هر دو شکل
 export const CLF_LIST_LABELS = new Set([
   'چک‌لیست‌های من',
   'چکلیستهای من',
@@ -265,9 +213,6 @@ export const CLF_LIST_LABELS = new Set([
   'چک لیست‌های من'
 ]);
 
-// ─── استخراج رسانه از پیام ───
-
-/** بزرگ‌ترین سایز عکس — ترتیب: file_size، بعد (width×height)؛ تساوی → آخرین (قرارداد بله) */
 export function pickLargestPhoto(list: BalePhotoSize[]): BalePhotoSize | null {
   let best: BalePhotoSize | null = null;
   let bestScore = -1;
@@ -284,7 +229,6 @@ export function pickLargestPhoto(list: BalePhotoSize[]): BalePhotoSize | null {
   return best;
 }
 
-/** رسانهٔ پیام — عکس یا سند؛ بقیه (ویدئو/صدا/…) → null */
 export function extractMedia(msg: BaleUpdateMessage): BotMedia | null {
   if (Array.isArray(msg.photo) && msg.photo.length > 0) {
     const best = pickLargestPhoto(msg.photo);
@@ -311,7 +255,6 @@ export function extractMedia(msg: BaleUpdateMessage): BotMedia | null {
   return null;
 }
 
-/** کپشن پیام — نرمال فاصله، سقف ۵۰۰ نویسه (نکتهٔ خانواده همراه فایل) */
 export function normalizeCaption(raw: string | undefined): string | null {
   if (typeof raw !== 'string') return null;
   const s = raw.replace(/\s+/g, ' ').trim();
@@ -319,7 +262,6 @@ export function normalizeCaption(raw: string | undefined): string | null {
   return Array.from(s).slice(0, 500).join('');
 }
 
-/** پارس callback حلقهٔ بازگشت — «sub:pick:<idx>»؛ نامعتبر → null */
 export function parseSubCallback(data: string, chatId: string): BotCommand | null {
   const parts = data.split(':');
   if (parts[1] === 'pick') {
@@ -330,7 +272,6 @@ export function parseSubCallback(data: string, chatId: string): BotCommand | nul
   return null;
 }
 
-/** استخراج شناسه از callback_data — «ask:<id>» / «cancel:<id>» / «fudone:<id>» */
 function parseCallbackData(data: string): { action: 'ask' | 'cancel' | 'fudone'; targetId: string } | null {
   const sep = data.indexOf(':');
   if (sep <= 0) return null;
@@ -343,10 +284,6 @@ function parseCallbackData(data: string): { action: 'ask' | 'cancel' | 'fudone';
   return null;
 }
 
-// ─── callbackهای بانک تمرین: «exb:<op>:<args…>» ───
-// شناسه‌ها UUID هستند و callback_data بیش از ۶۴ بایت نمی‌پذیرد؛
-// همهٔ اندیس‌ها به لیست‌های ذخیره‌شده در bot_menu_state همان chat اشاره می‌کنند.
-
 function toIndex(raw: string | undefined): number {
   if (!raw) return NaN;
   const n = Number(raw);
@@ -355,7 +292,6 @@ function toIndex(raw: string | undefined): number {
 
 const EXB_CATS = new Set(['a', 'd', 'g', 'o']);
 
-/** — پارس callback آگاهی‌ها: «dis:<section>[:<idx>]» — نامعتبر → null */
 export function parseAwarenessCallback(data: string, chatId: string): BotCommand | null {
   const parts = data.split(':');
   if (parts[1] !== 'root' && parts[1] !== 't' && parts[1] !== 'd') return null;
@@ -367,11 +303,9 @@ export function parseAwarenessCallback(data: string, chatId: string): BotCommand
   return { kind: 'awareness_item', chatId, section, idx };
 }
 
-/** پارس callback منوی دانش‌آموز: «stu:<op>:<args…>» */
 export function parseStuCallback(data: string, chatId: string): BotCommand | null {
   const parts = data.split(':');
   if (parts[1] === 'list') {
-    // — صفحه‌بندی فهرست دانش‌آموزان (stu:list یا stu:list:<page>)
     const page = parts[2] === undefined ? 1 : toIndex(parts[2]);
     if (Number.isNaN(page) || page < 1) return null;
     return { kind: 'stu_list', chatId, page };
@@ -430,7 +364,6 @@ export function parseStuCallback(data: string, chatId: string): BotCommand | nul
   return null;
 }
 
-/** — پارس callback ویزارد رویداد (همکار): «tl:<op>:<args…>» */
 export function parseTlCallback(data: string, chatId: string): BotCommand | null {
   const parts = data.split(':');
   if (parts[1] === 'cat') {
@@ -461,7 +394,6 @@ export function parseTlCallback(data: string, chatId: string): BotCommand | null
   return null;
 }
 
-/** — پارس callback چک‌لیست خانواده: «clf:<op>:<args…>» — eventId همان UUID رویداد */
 export function parseClfCallback(data: string, chatId: string): BotCommand | null {
   const parts = data.split(':');
   if (parts[1] === 'fill') {
@@ -479,7 +411,6 @@ export function parseClfCallback(data: string, chatId: string): BotCommand | nul
   return null;
 }
 
-/** پارس callback بانک تمرین → BotCommand همسان؛ نامعتبر → null (نادیده) */
 export function parseExbCallback(data: string, chatId: string): BotCommand | null {
   const parts = data.split(':');
   switch (parts[1]) {
@@ -521,7 +452,6 @@ export function parseExbCallback(data: string, chatId: string): BotCommand | nul
       if (Number.isNaN(idx) || Number.isNaN(stuIdx)) return null;
       return { kind: 'exb_yes', chatId, idx, stuIdx };
     }
-    // ─── بسته‌های تمرینی ───
     case 'pkg': {
       const page = toIndex(parts[2]);
       if (Number.isNaN(page)) return null;
@@ -555,45 +485,26 @@ export function parseExbCallback(data: string, chatId: string): BotCommand | nul
   }
 }
 
-/**
- * استخراج دستور از آپدیت خام بله.
- * قراردادها:
- * - chat.id به string تبدیل می‌شود (بله ممکن است number بدهد)
- * - کد /link نرمال می‌شود (uppercase + حذف فاصله اضافی)
- * - هر متن دیگر که با / شروع شود → unknown
- * - متن بدون /:
- * * دکمه‌های متنی منو → my_next / help / followups_me / attendance_summary / center_status
- * * عدد ۴+ رقمی → identify (ورود خودکار با کد ملی/تلفن)
- * * بقیه → null (نویز؛ بات ساکت می‌ماند)
- * - callback_query با data «ask:<id>» / «cancel:<id>» / «fudone:<id>» → cancel_ask / cancel_do / followup_done
- */
 export function parseBotUpdate(update: unknown): BotCommand | null {
   if (typeof update !== 'object' || update === null) return null;
 
   const u = update as BaleUpdate;
 
-  // ─── دکمه‌های inline (لغو نوبت همکار / انجام پیگیری) ───
   if (u.callback_query && typeof u.callback_query === 'object') {
     const cbChatId = u.callback_query.message?.chat?.id;
     if (cbChatId === undefined || cbChatId === null) return null;
     const data = typeof u.callback_query.data === 'string' ? u.callback_query.data.trim() : '';
-    // — دستهٔ بانک تمرین قبل از پارس عمومی callback
     if (data.startsWith('exb:')) {
       return parseExbCallback(data, String(cbChatId));
     }
-    // — انتخاب تکلیف در حلقهٔ بازگشت
     if (data.startsWith('sub:')) {
       return parseSubCallback(data, String(cbChatId));
     }
-    // — تأیید/انصراف فرم ثبت متقاضی معلم
     if (data === 'wl:do') return { kind: 'wl_intake_confirm', chatId: String(cbChatId) };
     if (data === 'wl:no') return { kind: 'wl_intake_abort', chatId: String(cbChatId) };
-    // — دکمهٔ «ارسال فوری صف» دفتر
     if (data === 'outbox:flush') return { kind: 'outbox_flush', chatId: String(cbChatId) };
-    // — منوی دانش‌آموز + آگاهی‌ها
     if (data.startsWith('stu:')) return parseStuCallback(data, String(cbChatId));
     if (data.startsWith('dis:')) return parseAwarenessCallback(data, String(cbChatId));
-    // — ویزارد رویداد + چک‌لیست خانواده
     if (data.startsWith('tl:')) return parseTlCallback(data, String(cbChatId));
     if (data.startsWith('clf:')) return parseClfCallback(data, String(cbChatId));
     const parsed = parseCallbackData(data);
@@ -610,7 +521,6 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
   if (chatId === undefined || chatId === null) return null;
   const chatIdStr = String(chatId);
 
-  // ─── رسانه (عکس/سند) قبل از گارد متن — کپشن اختیاری ───
   const media = extractMedia(msg);
   if (media) {
     return { kind: 'media_received', chatId: chatIdStr, media, caption: normalizeCaption(msg.caption) };
@@ -619,7 +529,6 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
   const text = typeof msg.text === 'string' ? msg.text.trim() : '';
   if (text.length === 0) return null;
 
-  // ─── دکمه‌های متنی منو ───
   const menuText = normalizeMenuText(text);
   if (MY_NEXT_LABELS.has(menuText)) return { kind: 'my_next', chatId: chatIdStr };
   if (HELP_LABELS.has(menuText)) return { kind: 'help', chatId: chatIdStr };
@@ -632,13 +541,11 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
   if (SCREENING_GOAL_LABELS.has(menuText)) return { kind: 'screening_goal', chatId: chatIdStr };
   if (TEACHER_INTAKE_LABELS.has(menuText)) return { kind: 'wl_intake_start', chatId: chatIdStr };
   if (EXB_LABELS.has(menuText)) return { kind: 'exb_root', chatId: chatIdStr };
-  // ─── برچسب‌های نقش‌محور CRM ───
   if (CONTACT_LABELS.has(menuText)) return { kind: 'contact', chatId: chatIdStr };
   if (FILES_LABELS.has(menuText)) return { kind: 'public_files', chatId: chatIdStr };
   if (MY_STUDENTS_LABELS.has(menuText)) return { kind: 'my_students', chatId: chatIdStr };
   if (OUTBOX_LABELS.has(menuText)) return { kind: 'outbox', chatId: chatIdStr };
   if (KPI_LABELS.has(menuText)) return { kind: 'kpi_report', chatId: chatIdStr };
-  // ─── برچسب‌های نقش‌محور نسخهٔ ۲ ───
   if (SERVICES_LABELS.has(menuText)) return { kind: 'services', chatId: chatIdStr };
   if (AUTH_LABELS.has(menuText)) return { kind: 'auth_guide', chatId: chatIdStr };
   if (PENDING_HW_LABELS.has(menuText)) return { kind: 'pending_homework', chatId: chatIdStr };
@@ -649,7 +556,6 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
   if (CLF_LIST_LABELS.has(menuText)) return { kind: 'clf_list', chatId: chatIdStr };
 
   if (!text.startsWith('/')) {
-    // ───: ورود خودکار — فقط اگر متن «فقط عدد» باشد (با جداکننده‌های رایج) ───
     if (!isIdentityText(text)) return null;
     const digits = stripToDigits(text);
     if (digits.length >= 4 && digits.length <= 15) {
@@ -658,14 +564,12 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
     return null;
   }
 
-  // /command arg... → kind + arg
   const spaceIndex = text.indexOf(' ');
   const rawCommand = (spaceIndex === -1 ? text : text.slice(0, spaceIndex)).toLowerCase();
   const arg = spaceIndex === -1 ? '' : text.slice(spaceIndex + 1).trim();
 
   switch (rawCommand) {
     case '/start': {
-      // — پیلود دیپ‌لینک (ble.ir/<bot>?start=CODE) —: در سرویس به processLinkCode می‌رود
       const startPayload = arg.replace(/\s+/g, '').toUpperCase().slice(0, 32);
       return { kind: 'start', chatId: chatIdStr, firstName: msg.from?.first_name, payload: startPayload.length > 0 ? startPayload : undefined };
     }
@@ -691,13 +595,11 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
       return { kind: 'center_schedule', chatId: chatIdStr };
     case '/waitlist':
       return { kind: 'waitlist_list', chatId: chatIdStr };
-    // — شاخص سنجش (هماهنگ با داشبورد سایت)
     case '/goal':
     case '/sanj':
       return { kind: 'screening_goal', chatId: chatIdStr };
     case '/bank':
       return { kind: 'exb_root', chatId: chatIdStr };
-    // ─── دستورهای نقش‌محور CRM ───
     case '/contact':
     case '/phone':
       return { kind: 'contact', chatId: chatIdStr };
@@ -709,7 +611,6 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
       return { kind: 'outbox', chatId: chatIdStr };
     case '/kpi':
       return { kind: 'kpi_report', chatId: chatIdStr };
-    // ─── دستورهای نقش‌محور نسخهٔ ۲ ───
     case '/services':
       return { kind: 'services', chatId: chatIdStr };
     case '/auth':
@@ -723,7 +624,6 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
     case '/checklist':
       return { kind: 'clf_list', chatId: chatIdStr };
     case '/search': {
-      // — جستجوی دانش‌آموز؛ آرگومان الزامی — خالی → unknown (راهنمای نقش‌محور)
       if (arg.length === 0) return { kind: 'unknown', chatId: chatIdStr, text };
       return { kind: 'search', chatId: chatIdStr, query: arg };
     }
@@ -741,7 +641,6 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
   }
 }
 
-/** تولید کد اتصال انسانی — بدون حروف گمراه‌کننده (O/0, I/1) */
 const LINK_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export function generateLinkCode(length: number): string {

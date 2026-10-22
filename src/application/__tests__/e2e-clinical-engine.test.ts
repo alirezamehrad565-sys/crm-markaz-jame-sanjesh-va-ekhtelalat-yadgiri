@@ -1,10 +1,3 @@
-/**
- * تست‌های e2e — clinical-engine
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-clinical-engine.test.ts — API موتور بالینی
-// تفسیر زنده (RBAC مالک)، مسیر مداخله، پروتکل قضاوت (تأیید/اصلاح/رد/نیاز به اطلاعات)، سقف مسیر فعال
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -23,7 +16,6 @@ interface RankedBody {
   evidenceFa: string[];
   missingFa: string[];
   criteriaSummary: { met: number; partial: number; unknown: number; notMet: number };
-  /** — روایت سه‌بخشی مستقل هر فرضیه */
   narrative: { targetKey: string; saw: string; means: string; next: string };
 }
 
@@ -70,7 +62,6 @@ describe('تفسیر بالینی (GET clinical-insights)', () => {
     sec = await asRole(A, 'secretary');
     ali = await asRole(A, 'therapist');
     maryam = new Api(A, await loginToken(A, 'maryam'));
-    // درمانگرِ فعال پرونده را می‌سازد → مسئول خودش
     studentId = (await createStudent(ali)).id;
   });
 
@@ -100,7 +91,6 @@ describe('تفسیر بالینی (GET clinical-insights)', () => {
     expect(sldRead).toBeDefined();
 
     const values = { rA1: 2, rA2: 2, rA3: 2, rA4: 2, rA5: 2, rA6: 2, rB1: 2, rB2: 2, rC1: 2, rD1: 0 };
-    // چک‌لیست با status=pending_family ساخته می‌شود و با فلو واقعی خانواده (وب‌فرم با توکن) کامل می‌شود
     for (let i = 0; i < 2; i++) {
       const created = await ali.post(`/api/students/${studentId}/case-events`, { eventTypeId: sldRead!.id });
       expect(created.status).toBe(201);
@@ -117,15 +107,12 @@ describe('تفسیر بالینی (GET clinical-insights)', () => {
     expect(dys).toBeDefined();
     expect(dys!.confidence).toBe('زیاد');
     expect(dys!.evidenceFa.some((e) => e.includes('خانه و مدرسه'))).toBe(true);
-    // جدول ملاک‌ها — همهٔ ملاک‌های نارساخوانی با وضعیت
     const dysCrit = body.criteria.filter((c) => c.targetKey === 'dyslexia');
     expect(dysCrit.length).toBeGreaterThanOrEqual(6);
     expect(dysCrit.filter((c) => c.status === 'met').length).toBeGreaterThanOrEqual(4);
-    // روایت سه‌بخشی
     expect(body.narrative).toContain('چه دیدیم');
     expect(body.narrative).toContain('یعنی چه');
     expect(body.narrative).toContain('گام بعدی');
-    // روایت مستقل هر فرضیه برای کارت پنل
     expect(dys!.narrative.targetKey).toBe('dyslexia');
     expect(dys!.narrative.saw).toContain('خانه و مدرسه');
     expect(dys!.narrative.means).toContain('نارساخوانی');
@@ -190,7 +177,6 @@ describe('مسیر مداخله و پروتکل قضاوت', () => {
     const again = await ali.post(`/api/clinical-paths/${body.id}/decision`, { action: 'reject', note: 'x' });
     expect(again.status).toBe(409);
 
-    // سقف مسیر فعال (۲) — در لحظهٔ تأیید: سومی در ورود به active ۴۰۹ می‌گیرد
     const p2 = await createPath(ali, 'adhd');
     expect(p2.status).toBe(201);
     expect((await ali.post(`/api/clinical-paths/${p2.body.id}/decision`, { action: 'confirm' })).status).toBe(200);
@@ -238,11 +224,9 @@ describe('مسیر مداخله و پروتکل قضاوت', () => {
 
   it('مسیر تکی حذف شده (m134) → ۴۰۴ + دانش‌نامهٔ اهداف', async () => {
     const { body } = await createPath(ali);
-    // GET /api/clinical-paths/:id برد مرده بود (صفر مصرف‌کننده در UI) — حذف شد
     expect((await ali.get(`/api/clinical-paths/${body.id}`)).status).toBe(404);
     const targets = dataOf<{ key: string; group: string }[]>(await ali.get('/api/clinical-targets'));
     expect(targets.filter((t) => t.group === 'clinical')).toHaveLength(10);
-    // ۸ پشتیبان دانش‌نامهٔ ۱۸گانه + ۴ هدف شاخهٔ توانبخشی (همه group='support' — بدون برچسب DSM)
     expect(targets.filter((t) => t.group === 'support')).toHaveLength(12);
     for (const key of ['rehab_cognitive', 'rehab_motor', 'rehab_adl', 'rehab_family']) {
       expect(targets.some((t) => t.key === key)).toBe(true);
@@ -265,7 +249,6 @@ describe('چک‌لیست مراحل مسیر مداخله (toggle)', () => {
     maryam = new Api(A, await loginToken(A, 'maryam'));
   });
 
-  /** پروندهٔ تازه + مسیر تأییدشدهٔ فعال (هر تست دانش‌آموز جدا — بدون برخورد با سقف ۲ مسیر فعال) */
   async function newActiveCase(): Promise<{ studentId: string; pathId: string }> {
     const studentId = (await createStudent(ali)).id;
     const created = await ali.post(`/api/students/${studentId}/clinical-paths`, { target_key: 'dyslexia' });

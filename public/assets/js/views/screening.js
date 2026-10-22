@@ -1,12 +1,3 @@
-/**
- * نمای غربالگری
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/screening.js — سنجش روزانه (غربال نوآموزان بدو ورود به دبستان)
-// اصل طراحی: بدون پروفایل — یک باکس «نام + #برچسب» با هدف ثبت < ۱۰ ثانیه.
-// تب ۱ «ثبت روزانه» (منشی/مدیر) • تب ۲ «گزارش و KPI» (مدیر + فیلتر بازه/برچسب)
-// پارس ورودی همتای pure سمت سرور است (resolve هشتگ کوتاه به برچسب ثابت).
-
 import { api, qs } from '../api.js';
 import {
   fa,
@@ -32,8 +23,6 @@ import {
 import { jalaliDateInput } from '../jalali-picker.js';
 import { session } from '../state.js';
 
-// ─── قرارداد یکسان با @domain/screening ───
-
 const PREDEFINED = [
   { label: 'ارجاع تخصصی بینایی', kind: 'referral', badge: 'badge--error' },
   { label: 'ارجاع تخصصی شنوایی', kind: 'referral', badge: 'badge--error' },
@@ -54,7 +43,6 @@ const QUICKS = [
   { id: 'custom', label: 'دلخواه' }
 ];
 
-// وضعیت ماژول — بین رندرها حفظ می‌شود
 let state = {
   tab: 'daily',
   quick: '30',
@@ -64,8 +52,6 @@ let state = {
   tagFilter: [],
   editingId: null
 };
-
-// ─── پارس ورودی (همتای pure) ───
 
 function normalizeTagToken(token) {
   return token.replace(/[_\-–]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -95,7 +81,6 @@ function tagBadgeClass(label) {
   return BADGE_BY_LABEL.get(label) ?? 'badge--primary';
 }
 
-/** آیا برچسب ثابت (ارجاع/وضعیت) دارد؟ — برچسب #کارمند/مهدکودک او را از «عادی» خارج نمی‌کند */
 function hasPreTag(tags) {
   return tags.some((t) => KIND_BY_LABEL.has(t));
 }
@@ -122,8 +107,6 @@ function normalBadge() {
   return el('span', { class: 'badge badge--success' }, '✓ عادی');
 }
 
-// ─────────────── تب ۱: ثبت روزانه ───────────────
-
 async function renderDailyTab(box, container) {
   box.replaceChildren(skeletonState('table', 5));
   const today = tehranTodayYmd();
@@ -145,7 +128,6 @@ async function renderDailyTab(box, container) {
   const canEdit = session.user && ['manager', 'secretary'].includes(session.user.role);
   const normalCount = entries.filter((e) => !hasPreTag(e.tags)).length;
 
-  // ─── وضعیت composer (بین رندرها با state.editingId سازگار می‌ماند) ───
   const composer = { raw: '', toggles: new Set(), custom: new Set() };
   if (state.editingId) {
     const cur = entries.find((e) => e.id === state.editingId);
@@ -160,8 +142,6 @@ async function renderDailyTab(box, container) {
     }
   }
 
-  // ─── باکس واحد ───
-  // ورودی درشت‌تر (input--xl): قهرمان صفحه، ورود سریع با خوانایی بالا
   const input = el('input', {
     class: 'input input--xl',
     placeholder: state.editingId ? 'نام و فامیل…' : 'نام و فامیل دانش‌آموز… مثلاً: آوا محمدی #مهدکودک_ستاره',
@@ -187,7 +167,6 @@ async function renderDailyTab(box, container) {
         if (composer.toggles.has(t)) composer.toggles.delete(t);
         else if (composer.custom.has(t)) composer.custom.delete(t);
         else {
-          // حذف «#توکن» از متن
           const flexible = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '[_\\-–\\s]*');
           input.value = input.value.replace(new RegExp(`[#＃]\\s*${flexible}`, 'u'), ' ').replace(/\s{2,}/g, ' ').trim();
         }
@@ -205,7 +184,6 @@ async function renderDailyTab(box, container) {
     }
   });
 
-  // ─── چیپ‌های برچسب ثابت ───
   const preChips = el('div', { class: 'sanj-chips' });
   const drawChips = () => {
     preChips.replaceChildren(
@@ -225,7 +203,6 @@ async function renderDailyTab(box, container) {
   };
   drawChips();
 
-  // ─── برچسب‌های اخیر سفارشی (کارمند، مهدکودک و…) ───
   const recentCustom = tagSummary.filter((t) => !KIND_BY_LABEL.has(t.label)).slice(0, 8);
   const recentChips = recentCustom.length === 0 ? null : el('div', {},
     el('div', { class: 'sanj-hint', style: { marginBottom: '6px' } }, '# برچسب‌های اخیر (کارمند، مهدکودک و…)'),
@@ -291,7 +268,6 @@ async function renderDailyTab(box, container) {
         renderDailyTab(box, container);
         return;
       }
-      // جلوگیری از ثبت تکراری همان نام در همان روز
       if (entries.some((e) => e.name === parsed.name)) {
         toast(`«${parsed.name}» امروز قبلاً ثبت شده — برای تغییر برچسب‌ها از ویرایش استفاده کنید`, 'warning');
         return;
@@ -309,7 +285,6 @@ async function renderDailyTab(box, container) {
     }
   };
 
-  // ─── لیست امروز ───
   const listCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, 'لیست روز سنجش امروز'),
@@ -326,7 +301,6 @@ async function renderDailyTab(box, container) {
           })
         : el('div', { class: 'sanj-rows' },
             ...entries.map((e) =>
-              // ردیف دومنظوره: نام و زمان | برچسب‌ها | عملیات
               el('div', { class: 'sanj-row' },
                 el('div', { class: 'sanj-row__main' },
                   el('span', { class: 'cell-main' }, e.name),
@@ -391,12 +365,9 @@ async function renderDailyTab(box, container) {
     )
   );
 
-  // فلوی دوستونهٔ دسکتاپ: کامپوزر چسبان + لیست زنده کنار آن
   composerCard.classList.add('sanj-daily__composer');
   box.replaceChildren(el('div', { class: 'sanj-daily' }, composerCard, listCard));
 }
-
-// ─────────────── تب ۲: گزارش و KPI (مدیر) ───────────────
 
 function quickRange(quick, from, to) {
   const today = tehranTodayYmd();
@@ -433,7 +404,6 @@ async function renderManagerTab(box, container) {
 
   const { entries, stats } = result;
 
-  // ─── فیلترها ───
   const quickChips = el('div', { class: 'sanj-chips' },
     ...QUICKS.map((q) =>
       el('button', {
@@ -528,9 +498,6 @@ async function renderManagerTab(box, container) {
     )
   );
 
-  // ─── KPI ───
-  // تعریف «عادی» (قرارداد محصول): بدون برچسب ارجاع تخصصی و بدون موارد خاص؛
-  // برچسب‌های آزاد کارمند سنجش‌گر / مهدکودک مبدأ «عادی» را تغییر نمی‌دهند.
   const kpis = el('div', { style: { marginTop: 'var(--sp-4)' } },
     el('div', { class: 'kpi-grid' },
     sanjKpi('کل سنجش‌های بازه', fa(stats.total), stats.total ? `عادی ${fa(stats.normal)} از کل` : 'بدون داده', 'primary'),
@@ -543,10 +510,8 @@ async function renderManagerTab(box, container) {
     )
   );
 
-  // ─── روند روزانه (حداکثر ۱۴ روز اخیر بازه) ───
   const chartCard = buildChartCard(stats.byDay);
 
-  // ─── تفکیک برچسب‌ها ───
   const breakdownCard = stats.perTag.length === 0 ? null : el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, 'تفکیک برچسب‌ها'),
@@ -569,7 +534,6 @@ async function renderManagerTab(box, container) {
     )
   );
 
-  // ─── نیازمند پیگیری ───
   const followUps = entries.filter((e) => e.tags.some((t) => REFERRALS.includes(t)));
   const followCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
     el('div', { class: 'card__head' },
@@ -581,7 +545,6 @@ async function renderManagerTab(box, container) {
         ? emptyState({ iconName: 'check', title: 'در این بازه مورد ارجاعی وجود ندارد', hint: 'موارد ارجاع‌شده به متخصص برای تماس با خانواده اینجا فهرست می‌شوند.' })
         : el('div', { class: 'sanj-rows' },
             ...followUps.map((e) =>
-              // همان ردیف دومنظورهٔ تب ثبت
               el('div', { class: 'sanj-row' },
                 el('div', { class: 'sanj-row__main' },
                   el('span', { class: 'cell-main' }, e.name),
@@ -590,7 +553,6 @@ async function renderManagerTab(box, container) {
                 el('div', { class: 'sanj-row__tags' },
                   e.tags.filter((t) => REFERRALS.includes(t)).map((t) => tagBadge(t))
                 ),
-                // پل سنجش → لیست انتظار: ادامهٔ چرخه با یک لمس (نام پیش‌پُر می‌شود)
                 el('div', { class: 'sanj-row__actions' },
                   el('button', {
                     class: 'btn btn--soft btn--sm',
@@ -604,7 +566,6 @@ async function renderManagerTab(box, container) {
     )
   );
 
-  // ─── لیست بازه ───
   const listCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, 'سنجش‌های بازه'),
@@ -728,8 +689,6 @@ function exportCsv(entries, range) {
   toast('فایل CSV دانلود شد', 'success');
 }
 
-// ─────────────── رندر اصلی نما ───────────────
-
 export async function renderScreening(container) {
   const head = el('div', { class: 'page-head' },
     el('div', { class: 'page-head__title' }, 'سنجش روزانه'),
@@ -756,10 +715,6 @@ export async function renderScreening(container) {
   container.replaceChildren(head, tabbar.root, el('div', { style: { marginTop: 'var(--sp-4)' } }, body));
   draw(state.tab);
 }
-
-// ─────────────── ویجت «سنجش‌های این روز» برای ماژول روز کاری ───────────────
-// فقط مشاهده — فراخوانی سبک /api/screening برای همان روزِ انتخاب‌شده در بورد؛
-// خطاها ویجت را می‌شکنند نه بورد را (همراه با catch در import سمت working-day).
 
 export async function renderScreeningDayWidget(box, ymd) {
   const body = el('div', { class: 'card__body' }, skeletonState('list', 3));

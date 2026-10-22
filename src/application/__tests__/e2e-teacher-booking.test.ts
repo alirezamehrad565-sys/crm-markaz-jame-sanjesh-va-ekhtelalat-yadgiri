@@ -1,12 +1,3 @@
-/**
- * تست‌های e2e — teacher-booking
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-teacher-booking.test.ts — فاز ۵: نوبت‌دهی مستقیم معلم + منشی ناظر
-// گارد محدوده در لایهٔ service (نه requireRole مسیر): مدیر/منشی همهٔ نوبت‌ها؛
-// درمانگر فقط نوبت‌های خودش و فقط دانش‌آموزانِ خودش (اشتقاق D4 از سابقهٔ نوبت)
-// + endpoint دانش‌آموزان من (badge پذیرش از پروجکشن ) + گارد ساعات کاری
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -81,11 +72,9 @@ describe('فاز ۵ — گارد محدودهٔ نوشتن نوبت', () => {
   it('مسیر کامل: intake منشی → سابقه → درمانگر برای خودش 201', async () => {
     const st = await createStudent(sec);
 
-    // intake توسط منشی — نوبت اول با ali (بدون محدودیت)
     const intake = await sec.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(90), 45, [st.id]));
     expect(intake.status).toBe(201);
 
-    // حالا ali می‌تواند جلسهٔ بعدی همان دانش‌آموز را خودش ثبت کند
     const next = await ali.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(90 + 7 * 24 * 60), 45, [st.id]));
     expect(next.status).toBe(201);
     expect(apptOf(next).staffId).toBe(ALI_ID);
@@ -114,31 +103,25 @@ describe('فاز ۵ — گارد محدودهٔ نوشتن نوبت', () => {
   it('مدت/لغو/برگردانی نوبت همکار — همه 403؛ برای خودش مجاز', async () => {
     const st = await createStudent(sec);
 
-    // نوبت maryam (بازیگر منشی؛ بدون محدودیت)
     const hers = apptOf(await sec.post('/api/appointments', apptBody(MARYAM_ID, quarterHourFromNow(150), 45, [st.id])));
 
-    // resize نوبت همکار
     const r1 = await ali.patch(`/api/appointments/${hers.id}/resize`, {
       end_at: new Date(Date.parse(quarterHourFromNow(150)) + 60 * 60000).toISOString(),
       version: hers.version
     });
     expect(r1.status).toBe(403);
 
-    // cancel نوبت همکار
     const r2 = await ali.post(`/api/appointments/${hers.id}/cancel`, { version: hers.version });
     expect(r2.status).toBe(403);
 
-    // منشی لغو می‌کند؛ ali برگردانی هم 403
     const canceled = await sec.post(`/api/appointments/${hers.id}/cancel`, { version: hers.version });
     expect(canceled.status).toBe(200);
     const r3 = await ali.post(`/api/appointments/${hers.id}/restore`, { version: apptOf(canceled).version });
     expect(r3.status).toBe(403);
 
-    // update note نوبت همکار
     const r4 = await ali.patch(`/api/appointments/${hers.id}`, { note: 'هک', version: apptOf(canceled).version });
     expect(r4.status).toBe(403);
 
-    // برای خودش: لغو + برگردانی مجاز (دانش‌آموز با سابقهٔ نوبت با ali)
     const stAli = await createStudent(sec);
     await sec.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(450), 45, [stAli.id]));
     const mine = apptOf(await ali.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(480), 45, [stAli.id])));
@@ -160,12 +143,10 @@ describe('فاز ۵ — گارد محدودهٔ نوشتن نوبت', () => {
     const add2 = await ali.post(`/api/appointments/${mine.id}/students`, { student_id: st.id });
     expect(add2.status).toBe(409); // قبلاً در نوبت هست — گارد رد شد، قاعدهٔ duplicate
 
-    // حذف از نوبت خودش — مجاز
     const mine2 = apptOf(await ali.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(660), 45, [st.id])));
     const del = await ali.delete(`/api/appointments/${mine2.id}/students/${st.id}`);
     expect(del.status).toBe(204);
 
-    // منشی به نوبت maryam دانش‌آموزِ دلخواه اضافه می‌کند — مجاز (intake)
     const hers = apptOf(await sec.post('/api/appointments', apptBody(MARYAM_ID, quarterHourFromNow(720), 45, [stranger.id])));
     const add3 = await sec.post(`/api/appointments/${hers.id}/students`, { student_id: st.id });
     expect(add3.status).toBe(204);
@@ -192,7 +173,6 @@ describe('فاز ۵ — گارد محدودهٔ نوشتن نوبت', () => {
   });
 
   it('undo دستهٔ کپی دیگران — درمانگر 403', async () => {
-    // منشی برای maryam یک هفته کپی می‌کند؛ ali دست به برگردانی نمی‌زند
     const st = await createStudent(sec);
     await sec.post('/api/appointments', apptBody(MARYAM_ID, '2030-01-07T08:00:00.000Z', 45, [st.id]));
     const copy = await sec.post('/api/appointments/copy-week', {
@@ -228,7 +208,6 @@ describe('فاز ۵ — دانش‌آموزان من (my-students)', () => {
     A = createTestApp();
     sec = await asRole(A, 'secretary');
     mgr = await asRole(A, 'manager');
-    // همکار تازه — هیچ سابقهٔ نوبتی ندارد
     const created = await mgr.post('/api/staff', {
       full_name: 'همکار تازه',
       phone: '09121117777',
@@ -250,25 +229,20 @@ describe('فاز ۵ — دانش‌آموزان من (my-students)', () => {
   it('بعد از intake + جلسهٔ ثابت — دانش‌آموز در لیست معلم با badge پذیرش کامل', async () => {
     const st = await createStudent(sec);
 
-    // هنوز در لیست نیست
     expect((await myStudents(freshTher)).find((s) => s.id === st.id)).toBeUndefined();
 
-    // جریان: تیک منتظر دریافت خدمت → intake → پذیرش با حضور
     await waitStatus(sec, st.id, true, { source: 'school', service_type: 'کاردرمانی' });
     const therId = await staffIdOf(A, freshTher);
     const created = await sec.post('/api/appointments', apptBody(therId, quarterHourFromNow(90), 45, [st.id]));
     expect(created.status).toBe(201);
     const apptId = (created.body as { data: { id: string } }).data.id;
 
-    // حالا در لیست است ولی هنوز «منتظر» است
     const before = (await myStudents(freshTher)).find((s) => s.id === st.id);
     expect(before?.waitStatus).toBe('waiting');
 
-    // حضور «حاضر» → پذیرش خودکار → ورودی از لیست انتظار پاک می‌شود
     const mark = await sec.patch(`/api/attendance/${apptId}/${st.id}`, { status: 'present' });
     expect(mark.status).toBe(200);
 
-    // دانش‌آموز همچنان در لیست معلم است (سابقهٔ جلسه) ولی دیگر badge وضعیت انتظار ندارد
     const list = await myStudents(freshTher);
     const admitted = list.find((s) => s.id === st.id);
     expect(admitted).toBeTruthy();
@@ -276,7 +250,6 @@ describe('فاز ۵ — دانش‌آموزان من (my-students)', () => {
   });
 });
 
-/** یافتن staffId از پروفایل /api/me */
 async function staffIdOf(A: ReturnType<typeof createTestApp>, api: Api): Promise<string> {
   const me = await api.get('/api/me');
   return (me.body as { data: { staffId: string } }).data.staffId;
@@ -316,7 +289,6 @@ describe('فاز ۵ — گارد ساعات کاری', () => {
     });
     expect(week.status).toBe(403);
 
-    // بازهٔ maryam توسط منشی ساخته می‌شود؛ ali اجازهٔ حذف ندارد
     const made = await sec.post('/api/working-hours', {
       staff_id: MARYAM_ID, weekday: 5, start_minute: 9 * 60, end_minute: 11 * 60
     });
@@ -333,10 +305,6 @@ describe('فاز ۵ — گارد ساعات کاری', () => {
     expect(add.status).toBe(201);
   });
 });
-
-// ─────────────── گارد محدودهٔ خواندن تقویم ───────────────
-// تقویم مرکزی نوبت‌دهی ابزار پذیرش است؛ درمانگر فقط برنامهٔ خودش را می‌بیند —
-// حتی با فراخوانی مستقیم API (لیست بدون staff_id یا staff_id همکار = فقط خودش / 403)
 
 describe('گارد محدودهٔ خواندن نوبت‌ها (درمانگر فقط برنامهٔ خودش)', () => {
   let A: ReturnType<typeof createTestApp>;
@@ -386,8 +354,6 @@ describe('گارد محدودهٔ خواندن نوبت‌ها (درمانگر �
     expect(apptOf(ok).id).toBe(mine.id);
   });
 
-  // بازگردانی به دستور کاربر: دفتر (مدیر/منشی) تقویم مرکزی را می‌بیند — همهٔ دسترسی‌ها
-  // و ماژول‌ها برای مدیر/منشی؛ لیست دفتر شامل نوبت‌های همهٔ همکاران و getById هم باز است
   it('دفتر (مدیر/منشی) — GET تقویم 200 و شامل نوبت‌های همهٔ همکاران (بازگردانی )', async () => {
     const mgrRes = await mgr.get('/api/appointments');
     expect(mgrRes.status).toBe(200);
@@ -399,7 +365,6 @@ describe('گارد محدودهٔ خواندن نوبت‌ها (درمانگر �
     const secRes = await sec.get('/api/appointments');
     expect(secRes.status).toBe(200);
 
-    // getById نوبت همکار برای دفتر هم باز است (فقط درمانگر scope می‌خورد)
     const other = items.find((a) => a.staffId === MARYAM_ID);
     if (other) {
       const one = await mgr.get(`/api/appointments?id=${other.id}`);

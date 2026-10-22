@@ -1,15 +1,3 @@
-/**
- * تست‌های e2e — teacher-intake
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-teacher-intake.test.ts — ثبت متقاضی لیست انتظار توسط معلم مدرسه از بات
-// ۱) کیبورد معلم کلاس دکمهٔ «ثبت متقاضی» دارد
-// ۲) فرم ۴ مرحله‌ای (نام → موبایل → تولد اختیاری → نیاز اختیاری) + جمع‌بندی + تأیید
-// ۳) ردیف waitlist با source='teacher' و اتصال به کلاس معلم
-// ۴) گیت‌ها: مهمان/والد/همکار مرکز پیام اختصاصی می‌گیرند؛ /cancel state را پاک می‌کند
-// ۵) مدیریت کدها: GET بدون class_id با نام کلاس/مدرسه + DELETE (لغو) → کد بی‌اثر
-// اپ واقعی Hono + migrations واقعی + webhook بله با secret تست
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, WEBHOOK_SECRET, asRole, createStudent } from '../../test/harness';
 import type { Api } from '../../test/harness';
@@ -41,7 +29,6 @@ const cb = (data: string, chatId: number): Update => ({
   callback_query: { id: 'c1', data, message: { chat: { id: chatId } } }
 });
 
-// chatها: 7501 معلم مدرسه | 7502 والد | 7503 همکار مرکز (علی) | 7599 مهمان
 const CHAT_TEACHER = 7501;
 const CHAT_PARENT = 7502;
 const CHAT_STAFF = 7503;
@@ -60,13 +47,11 @@ describe('ثبت متقاضی توسط معلم مدرسه از بات', () => {
     A = createTestApp();
     manager = await asRole(A, 'manager');
 
-    // مدرسه + کلاس + دانش‌آموزِ همان کلاس (برای اتصال)
     const school = ((await manager.post('/api/schools', { name: 'دبستان آزمون m61', kind: 'school', gender_type: 'male' })).body as { data: { id: string } }).data;
     const cls = ((await manager.post('/api/classes', { school_id: school.id, name: 'چهارم الف', teacher_name: 'استاد آزمون', teacher_phone: '09170001122' })).body as { data: { id: string } }).data;
     classId = cls.id;
     await createStudent(manager, { school_id: school.id, class_id: classId });
 
-    // کد اتصال معلم + اتصال بات معلم با /link
     code = (((await manager.post('/api/notifications/class-links', { class_id: classId })).body as { data: { code: string } }).data).code;
     const linked = await bot(A, tx(`/link ${code}`, CHAT_TEACHER));
     expect(linked.reply).toContain('اتصال با موفقیت');
@@ -80,7 +65,6 @@ describe('ثبت متقاضی توسط معلم مدرسه از بات', () => {
       ['بانک تمرین', 'آگاهی‌های اختلالات'],
       ['درباره مرکز', 'راهنما']
     ]);
-    // برچسب قدیمی «نوبت‌های من» برای معلم هم کار می‌کند (سازگاری )
     const legacy = await bot(A, tx('نوبت‌های من', CHAT_TEACHER));
     expect(legacy.handled).toBe(true);
   });
@@ -91,7 +75,6 @@ describe('ثبت متقاضی توسط معلم مدرسه از بات', () => {
     expect(start.reply).toContain('چهارم الف');
     expect(start.reply).toContain('نام و نام خانوادگی');
 
-    // ورودی عددیِ وسط فرم نباید «ورود خودکار» شود — به فرم می‌رود
     const name = await bot(A, tx('امیرحسین کوهنجانی', CHAT_TEACHER));
     expect(name.reply).toContain('موبایل ولیّ');
 
@@ -113,7 +96,6 @@ describe('ثبت متقاضی توسط معلم مدرسه از بات', () => {
     const confirmed = await bot(A, cb('wl:do', CHAT_TEACHER));
     expect(confirmed.reply).toContain('موفقیت');
 
-    // ردیف ساخته‌شده — از API دفتر (پاسخ camelCase است)
     const list = await manager.get('/api/waitlist');
     const rows = (list.body as { data: { firstName: string; phone: string; source: string }[] }).data;
     const entry = rows.find((r) => r.firstName === 'امیرحسین');
@@ -128,13 +110,11 @@ describe('ثبت متقاضی توسط معلم مدرسه از بات', () => {
     const cancelled = await bot(A, tx('/cancel', CHAT_TEACHER));
     expect(cancelled.reply).toContain('لغو شد');
 
-    // بعد از لغو، ورودی عددی دیگر به فرم نمی‌رود (مسیر شناسایی عادی)
     const after = await bot(A, tx(ALI_NID, CHAT_TEACHER));
     expect(after.reply).not.toContain('موبایل');
   });
 
   it('گیت‌ها: مهمان → کد اتصال + تماس؛ والد → تماس با مرکز؛ همکار مرکز → ثبت از سایت', async () => {
-    // chat همکار مرکز را با کد ملی علی متصل کن
     expect((await bot(A, tx(ALI_NID, CHAT_STAFF))).reply).toContain('اتصال انجام شد');
 
     const guest = await bot(A, tx('/add', CHAT_NONE));
@@ -192,11 +172,9 @@ describe('مدیریت کدهای اتصال معلم‌ها (مشاهده بد�
     const rows = ((await manager.get(`/api/notifications/class-links?class_id=${cls.id}`)).body as { data: { status: string }[] }).data;
     expect(rows[0].status).toBe('revoked');
 
-    // اتصال با کد لغوشده شکست می‌خورد
     const tryLink = await bot(A, tx(`/link ${link.code}`, CHAT_STRANGER));
     expect(tryLink.reply).toContain('معتبر نیست');
 
-    // idempotent
     const again = await manager.delete(`/api/notifications/class-links/${link.id}`);
     expect(again.status).toBe(200);
   });

@@ -1,9 +1,3 @@
-// T6 (m148-b) — بازتولید هم‌زمان دو مرجع طلایی formulation بعد از تغییر باندل:
-//   1) tests/golden/bundle-formulation-ref.cjs  → node tests/golden/generate-bundle-ref.mjs
-//   2) src/domain/case-formulation/engine.js    → جایگذاری اسلایس ناحیهٔ تازهٔ باندل
-// ناحیه: "var CONSTRUCT_KEYS = [" تا (انحصاری) "function createReasoningEngineService(deps) {"
-// در engine.js همین اسلایس بین «var CONSTRUCT_KEYS» و «__name2(ageYearsFromBirthDate, ...)»
-// نشسته است؛ سرِ صفحه (شیم‌ها + جداول مشترک) و دُم (exports + __tables) دست‌نخورده می‌مانند.
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

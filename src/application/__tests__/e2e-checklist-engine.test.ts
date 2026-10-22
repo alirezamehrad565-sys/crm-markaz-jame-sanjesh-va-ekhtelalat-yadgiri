@@ -1,12 +1,3 @@
-/**
- * تست‌های e2e — -checklist-engine
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e--checklist-engine.test.ts — موتور تشخیص و مداخله — فاز ۱ (رویدادساز هوشمند)
-// کتابخانهٔ سنجش آماده (SDQ/کانرز/اخنباخ کاربردی/چک‌لیست معلم)، فرم‌ساز همگانی (سه نقش)،
-// پیشنهاد قالب بر اساس برچسب‌های دانش‌آموز، ارسال یک‌کلیکی با بله (خانواده/معلم کلاس)،
-// dedup همان دقیقه، صف «در انتظار پاسخ» و قالب پیام bot_checklist_link.
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, asRole, createStudent } from '../../test/harness';
 import { renderTemplate } from '@core/notify';
@@ -44,13 +35,10 @@ describe('کتابخانهٔ سنجش آماده (seed مهاجرت)', () => {
     expect(byKey['sdq-parent']).toBeTruthy();
     expect(byKey['sdq-parent'].audience).toBe('family');
     expect(byKey['sdq-parent'].category).toBe('checklist');
-    // کانرز کوتاه با SNAP-IV والد/معلم جایگزین شد (پلن v2 §۴) — فعال نیست
     expect(byKey['conners-short']).toBeUndefined();
-    // SNAP-IV والد: مخاطب خانواده + برچسب ADHD
     expect(byKey['ce-snap-iv-p-v1']).toBeTruthy();
     expect(byKey['ce-snap-iv-p-v1'].audience).toBe('family');
     expect(byKey['ce-snap-iv-p-v1'].tags).toContain(ADHD_TAG);
-    // اخنباخ کاربردی و چک‌لیست کلاس در m132 غیرفعال شدند (فرم‌های موازی SDQ والد/معلم — فقط یک ابزار استاندارد برای هر منبع)
     expect(byKey['achenbach-practical']).toBeUndefined();
     expect(byKey['teacher-classroom']).toBeUndefined();
   });
@@ -87,15 +75,11 @@ describe('موتور پیشنهاد بر اساس برچسب‌های دانش�
 
     const sug = dataOf<Suggestion[]>(await m.get(`/api/students/${s.id}/case-events/suggest`));
     expect(sug.length).toBeGreaterThanOrEqual(4);
-    // جای کانرز، SNAP-IV والد/معلم (هر دو با برچسب ADHD) سر فهرست‌اند
     expect(sug[0].score).toBeGreaterThanOrEqual(1);
     expect(sug[0].matched.some((x) => x.id === ADHD_TAG)).toBe(true);
     const matchedKeys = sug.filter((x) => x.score > 0).map((x) => x.type.key);
     expect(matchedKeys).toContain('ce-snap-iv-p-v1');
     expect(matchedKeys).toContain('ce-snap-iv-t-v1');
-    // بقیهٔ فهرست هم قابل انتخاب می‌مانند — صرفاً بعد از تطبیقی‌ها
-    // (T5: پکیج فرم جامع خانواده — دستهٔ session اما مسیر ارسال بله برای خانواده)
-    // (T7: پکیج فرم جامع معلم — همان الگو، مسیر ارسال بله/لینک برای معلم منتخب)
     expect(sug.every((x) => x.type.category === 'checklist' || x.type.key === 'ce-comp-family-v2' || x.type.key === 'ce-comp-teacher-v2')).toBe(true);
 
     const s2 = await createStudent(m, {});
@@ -127,7 +111,6 @@ describe('ارسال یک‌کلیکی چک‌لیست با بله', () => {
       )
       .run(studentId);
     const types = dataOf<Array<{ id: string; key: string }>>(await manager.get('/api/case-events/types?active=true'));
-    // چک‌لیست دشواری خواندن (مخاطب both) — جایگزین کانرز در این سناریو
     sldReadId = types.find((t) => t.key === 'ce-sld-read-v1')!.id;
     const ev = await therapist.post(`/api/students/${studentId}/case-events`, {
       eventTypeId: sldReadId,

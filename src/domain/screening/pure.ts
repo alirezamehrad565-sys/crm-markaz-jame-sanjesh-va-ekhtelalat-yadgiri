@@ -1,10 +1,3 @@
-/**
- * ماژول غربالگری — توابع خالص منطق محض (بدون I/O)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// منطق خالص سنجش روزانه (بدون I/O) — همتای lib/screening در دموی Next.js
-// پارس «نام + #برچسب»، پاک‌سازی برچسب‌ها، و محاسبهٔ KPI مدیر.
-
 import {
   SCREENING_PREDEFINED_TAGS,
   SCREENING_REFERRAL_TAGS
@@ -23,7 +16,6 @@ const KIND_BY_LABEL = new Map<string, ScreeningTagKind>(
   SCREENING_PREDEFINED_TAGS.map((t) => [t.label, t.kind as ScreeningTagKind])
 );
 
-/** سقف‌های ورودی — عمداً کوچک؛ این ماژول پروفایل ندارد */
 export const SCREENING_LIMITS = {
   nameMin: 2,
   nameMax: 80,
@@ -32,9 +24,6 @@ export const SCREENING_LIMITS = {
   listTake: 2000
 } as const;
 
-// ─────────────── پارس ورودی «نام و فامیل + #برچسب‌ها» ───────────────
-
-/** «مهدکودک_ستاره» → «مهدکودک ستاره» — خط‌زیر/خط‌تیره = فاصله */
 export function normalizeTagToken(token: string): string {
   return token.replace(/[_\-–]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -44,10 +33,6 @@ export interface ParsedEntryInput {
   hashTags: string[];
 }
 
-/**
- * هر توکن #واحد از متن جدا و برچسب می‌شود؛ باقیِ متن = نام و فامیل.
- * «آوا محمدی #مهدکودک_ستاره #بینایی» → { name: 'آوا محمدی', hashTags: ['مهدکودک ستاره', 'بینایی'] }
- */
 export function parseEntryInput(raw: string): ParsedEntryInput {
   const hashTags: string[] = [];
   const name = String(raw ?? '')
@@ -61,10 +46,6 @@ export function parseEntryInput(raw: string): ParsedEntryInput {
   return { name, hashTags };
 }
 
-/**
- * اگر برچسب # با نام یک برچسب ثابت بخواند (تطابق کامل یا «شامل» برای اسم کوتاه
- * مثل «بینایی»)، همان برچسب ثابت برمی‌گردد — وگرنه برچسب آزاد باقی می‌ماند.
- */
 export function resolveHashTag(label: string): string {
   if (PREDEFINED_LABELS.has(label)) return label;
   for (const p of SCREENING_PREDEFINED_TAGS) {
@@ -73,7 +54,6 @@ export function resolveHashTag(label: string): string {
   return label;
 }
 
-/** پاک‌سازی آرایهٔ برچسب ورودی کاربر (ثابت + آزاد) — trim، dedupe، سقف */
 export function sanitizeTags(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
   const out: string[] = [];
@@ -87,7 +67,6 @@ export function sanitizeTags(input: unknown): string[] {
   return out;
 }
 
-/** ترکیب برچسب‌های پارس‌شده از متن + برچسب‌های تاگل‌شده — بدون تکرار، همگی resolve می‌شوند */
 export function mergeTags(parsed: ParsedEntryInput, toggled: string[]): string[] {
   const out: string[] = [];
   for (const t of [...parsed.hashTags, ...sanitizeTags(toggled)]) {
@@ -97,7 +76,6 @@ export function mergeTags(parsed: ParsedEntryInput, toggled: string[]): string[]
   return out;
 }
 
-/** نام نرمال‌شده یا خطای اعتبار — نام باید ۲ تا ۸۰ نویسه باشد */
 export function normalizeName(raw: unknown): string {
   const name = String(raw ?? '').replace(/\s+/g, ' ').trim();
   if (name.length < SCREENING_LIMITS.nameMin || name.length > SCREENING_LIMITS.nameMax) {
@@ -106,31 +84,19 @@ export function normalizeName(raw: unknown): string {
   return name;
 }
 
-// ─────────────── فیلترها ───────────────
-
-/** فیلتر برچسب با معنای OR — ورودی که «هر یک» از برچسب‌های خواسته‌شده را دارد */
 export function applyTagFilter(entries: ScreeningEntry[], tags: string[]): ScreeningEntry[] {
   if (tags.length === 0) return entries;
   return entries.filter((e) => e.tags.some((t) => tags.includes(t)));
 }
 
-// ─────────────── KPI مدیر (pure) ───────────────
-
 function tagKind(label: string): ScreeningTagCount['kind'] {
   return KIND_BY_LABEL.get(label) ?? 'custom';
 }
 
-/** آیا ورودی «برچسب ثابت» (ارجاع یا وضعیت) دارد؟ برچسب‌های آزاد # (کارمند/مهدکودک) شمرده نمی‌شوند */
 export function hasPredefinedTag(tags: string[]): boolean {
   return tags.some((t) => PREDEFINED_LABELS.has(t));
 }
 
-/**
- * KPI روی همان ورودی‌های فیلترشده:
- * total / normal (بدون برچسب ثابت — برچسب کارمند/مهدکودک او را از عادی خارج نمی‌کند)
- * referrals (حداقل یک برچسب ارجاع) / referralRate٪
- * noCoop، noReg، perTag (نزولی) و byDay (صعودی)
- */
 export function screeningStats(entries: ScreeningEntry[]): ScreeningStats {
   let normal = 0;
   let referrals = 0;

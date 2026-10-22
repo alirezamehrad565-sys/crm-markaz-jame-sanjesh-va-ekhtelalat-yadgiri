@@ -1,24 +1,10 @@
-/**
- * موتور بالینی — باتری‌ها، قواعد، روایت و اهداف مداخله — متن روایت بالینی
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// قواعد نوشتار «لحن ساده» (پلن §۶) — سه‌بخشی «چه دیدیم / یعنی چه / گام بعدی»
-// قواعد هاردکد و تست‌پذیر:
-// ۱. هر فرضیه سه بخش ثابت دارد؛ ۲. اصطلاح فنی یک خط «به زبان ساده» دارد؛
-// ۳. عدد فقط فارسی و در قالب «۱۸ از ۴۰ — ناحیهٔ بالینی»؛ ۴. جمله ≤ دو خط، بدون قطعیت کاذب؛
-// ۵. متن‌های خانواده/معلم از دفترها می‌آید؛ متن موتور فقط برای پنل درمانگر/مدیر است.
-
 import type { InferenceOutput, RankedHypothesis } from './types';
 import { targetOf } from './targets';
 
-// ───────── قواعد نوشتار ─────────
-
-/** ارقام لاتین/عرب → فارسی (قالب عددی §۶ قاعدهٔ ۳) */
 export function faNum(s: string | number): string {
   return String(s).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
 }
 
-/** حذف قطعیت کاذب — واژه‌های ممنوع در متن موتور (تست‌پذیر) */
 const CERTAINTY_WORDS = ['قطعاً', 'بلاشک', 'حتماً تشخیص', 'صد در صد', '۱۰۰٪'];
 
 export function assertPlainTone(text: string): void {
@@ -27,21 +13,15 @@ export function assertPlainTone(text: string): void {
   }
 }
 
-/** برش جمله‌های بلندتر از دو خط (≈۱۲۰ نویسه) — قاعدهٔ ۴ */
 function shortLine(text: string, max = 120): string {
   const clean = text.replace(/\s+/g, ' ').trim();
   return Array.from(clean).length <= max ? clean : `${Array.from(clean).slice(0, max - 1).join('').trim()}…`;
 }
 
-// ───────── سه‌بخشی هر فرضیه ─────────
-
 export interface HypothesisNarrative {
   targetKey: string;
-  /** «چه دیدیم» — داده، بدون اصطلاح، با اعداد فارسی */
   saw: string;
-  /** «یعنی چه» — یک پاراگراف ساده از متون هدف (دفتر آموزشی) */
   means: string;
-  /** «گام بعدی» — یک اقدام مشخص */
   next: string;
 }
 
@@ -62,7 +42,6 @@ function sawOf(h: RankedHypothesis): string {
 }
 
 function meansOf(h: RankedHypothesis): string {
-  // متن «یعنی چه» از دانش‌نامهٔ هدف (دفتر آموزشی) می‌آید — لحن خود مرکز
   const target = targetOf(h.targetKey);
   return shortLine(target ? `شواهد به «${target.title}» اشاره می‌کند. ${target.texts.means}` : `شواهد به هدف «${h.targetTitle}» اشاره می‌کند.`);
 }
@@ -79,12 +58,8 @@ export function narrativeOfHypothesis(h: RankedHypothesis): HypothesisNarrative 
   return n;
 }
 
-// ───────── روایت کامل خروجی موتور ─────────
-
 export interface FullNarrative {
-  /** سه‌بخشی فرضیهٔ برتر — وقتی فرضیه نیست null */
   top: HypothesisNarrative | null;
-  /** متن پیوسته برای بات/کپی — با پانویس خط قرمز */
   text: string;
 }
 

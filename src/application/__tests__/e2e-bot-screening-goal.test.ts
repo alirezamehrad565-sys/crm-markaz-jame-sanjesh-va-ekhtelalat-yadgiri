@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — bot-screening-goal
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-bot-screening-goal.test.ts — «هدف سنجش» بات بله
-// هماهنگی فلوی بات با داشبورد سایت: همان اعداد هدفگذاری غربال — با حفظ کامل
-// احراز هویت قبلی (ورود خودکار با کد ملی) و گیت نقش (فقط مدیر/منشی).
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, asRole, WEBHOOK_SECRET } from '../../test/harness';
 import { toJalaliParts, tehranTodayYmd, jalaliToGregorianYmd } from '@core/shared';
@@ -36,13 +28,11 @@ async function bot(A: ReturnType<typeof createTestApp>, raw: Update): Promise<Bo
 
 const tx = (t: string, chatId: number): Update => ({ update_id: 1, message: { chat: { id: chatId }, text: t } });
 
-// chatها: 7301 مدیر | 7302 همکار (علی — درمانگر) | 7303 منشی | 7399 بدون اتصال
 const CHAT_MGR = 7301;
 const CHAT_ALI = 7302;
 const CHAT_SEC = 7303;
 const CHAT_NONE = 7399;
 
-// کدهای ملی seed-dev
 const MANAGER_NID = '3672818690';
 const ALI_NID = '3149977797';
 const SECRETARY_NID = '1566009243';
@@ -59,12 +49,10 @@ describe('«هدف سنجش» بات: هماهنگ با داشبورد + حفظ 
     A = createTestApp();
     mgrApi = await asRole(A, 'manager');
 
-    // ورود خودکار — همان احراز هویت قبلی، دست‌نخورده
     expect((await bot(A, tx(MANAGER_NID, CHAT_MGR))).reply).toContain('اتصال انجام شد');
     expect((await bot(A, tx(ALI_NID, CHAT_ALI))).reply).toContain('اتصال انجام شد');
     expect((await bot(A, tx(SECRETARY_NID, CHAT_SEC))).reply).toContain('اتصال انجام شد');
 
-    // هدفگذاری: سال + کمپین سفارشی همپوشان (از اول ماه شمسی تا امروز)
     const monthStart = jalaliToGregorianYmd(j.jy, j.jm, 1);
     const put = await mgrApi.put('/api/settings', {
       screening_targets: [
@@ -76,7 +64,6 @@ describe('«هدف سنجش» بات: هماهنگ با داشبورد + حفظ 
   });
 
   it('مدیر با «هدف سنجش» → همان اعداد داشبورد (اهداف + پیشرفت)', async () => {
-    // یک سنجش ثبت می‌شود → هر دو هدف فعال باید ۱ از هدف نشان دهند
     expect((await mgrApi.post('/api/screening', { name: 'بات تستی', tags: [] })).status).toBe(201);
 
     const res = await bot(A, tx('هدف سنجش', CHAT_MGR));
@@ -86,7 +73,6 @@ describe('«هدف سنجش» بات: هماهنگ با داشبورد + حفظ 
     expect(res.reply).toContain('کمپین پاییزه');
     expect(res.reply).toContain('۱ از ۴۰۰');
     expect(res.reply).toContain('۱ از ۳۰');
-    // شمارنده‌های سایت هم در پیام است
     expect(res.reply).toContain('امروز');
   });
 

@@ -1,9 +1,3 @@
-/**
- * سرویس گزارش‌ها (دوره، تحلیل پیشرفته، مدارس) — توابع خالص منطق محض (بدون I/O)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تجمیع‌های pure گزارش دوره — بدون دیتابیس، مستقیماً قابل تست
-
 import type {
   AdvancedWeekPoint,
   ReportDayPoint,
@@ -32,7 +26,6 @@ export function daysBetween(from: string, to: string): number {
   return Math.max(1, Math.round((Date.parse(to) - Date.parse(from)) / (24 * 60 * 60 * 1000)) + 1);
 }
 
-/** سری روزانه: تعداد نوبت‌های هر روز تهران — ورودی سبک (فقط startAt/status) */
 export function buildDaySeries(
   appointments: Array<{ startAt: string; status: string }>,
   from: string,
@@ -55,7 +48,6 @@ export function buildDaySeries(
   return [...map.values()];
 }
 
-/** بار کاری هر همکار: تعداد جلسه + ساعت + لغوشده */
 export function buildPerStaff(rows: ApptMinuteRow[], names: Map<string, string>, roles: Map<string, StaffRole>): ReportStaffRow[] {
   const by = new Map<string, { sessions: number; cancelled: number; minutes: number }>();
   for (const r of rows) {
@@ -84,7 +76,6 @@ export function buildPerStaff(rows: ApptMinuteRow[], names: Map<string, string>,
   return out;
 }
 
-/** رتبه دانش‌آموزان: بیشترین جلسه + تعداد غیبت */
 export function buildTopStudents(rows: StudentSessionRow[], limit = 10): ReportStudentRow[] {
   const by = new Map<string, ReportStudentRow & { _name: string }>();
   for (const r of rows) {
@@ -106,52 +97,39 @@ export function buildTopStudents(rows: StudentSessionRow[], limit = 10): ReportS
     .map(({ studentId, studentName, sessions, absents }) => ({ studentId, studentName, sessions, absents }));
 }
 
-/** نرخ (0..1) امن تقسیم */
 export function safeRate(num: number, den: number): number {
   if (den <= 0) return 0;
   return Math.round((num / den) * 1000) / 1000;
 }
 
-/** نرخ امن nullable — مخرج صفر → null (برای «—» نمایشی، الگوی ) */
 export function safeRateOrNull(num: number, den: number): number | null {
   if (den <= 0) return null;
   return Math.round((num / den) * 1000) / 1000;
 }
 
-// ───────────── تحلیل پیشرفته (فاز ۸ بازطراحی‌شده) ─────────────
-
 export interface TrendAppointmentRow {
-  /** ISO UTC */
   startAt: string;
   status: string;
   opsStatus: string | null;
 }
 
 export interface TrendAttendanceRow {
-  /** ISO UTC — start_at نوبت */
   startAt: string;
   attendance: string;
   apptStatus: string;
 }
 
-/** شنبهٔ شروع هفتهٔ یک YMD تهران (weekday 0 = شنبه) — pure تاریخ */
 export function weekStartOfYmd(ymd: string): string {
   const wd = iranianWeekdayOfYmd(ymd); // 0..6
   return addDaysYmd(ymd, -wd);
 }
 
-/**
- * روند هفتگی شنبه‌محور — خروجی یک نقطه برای هر هفتهٔ موجود در بازه
- * (شامل هفته‌های خالی درون بازه؛ هفتهٔ اول/آخر ممکن است ناقص باشند — عمدی).
- * ترتیب صعودی weekStart.
- */
 export function buildWeeklyTrend(
   appointments: TrendAppointmentRow[],
   attendance: TrendAttendanceRow[],
   fromYmd: string,
   toYmd: string
 ): AdvancedWeekPoint[] {
-  // سبد هفته‌ها از بازهٔ کامل (بدون جاافتادن هفتهٔ خالی)
   const weekKeys: string[] = [];
   const weeks = new Map<string, { sessions: number; completed: number; cancelled: number; present: number; absent: number }>();
   let cur = weekStartOfYmd(fromYmd);
@@ -196,7 +174,6 @@ export function buildWeeklyTrend(
   });
 }
 
-/** میانگین روز تا پذیرش — ورودی: created_at ورودی‌ها + زمان اولین admitted آنها */
 export function avgWaitDaysOf(pairs: Array<{ createdAt: string; admittedAt: string }>): number | null {
   if (pairs.length === 0) return null;
   let sum = 0;

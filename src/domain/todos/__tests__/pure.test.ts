@@ -1,10 +1,3 @@
-/**
- * تست‌های واحد — pure
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// pure.test.ts — فاز ۴: ماتریس وضعیت، عقب‌افتادگی computed، شمارش‌های badge
-// now ثابت: 2026-10-07T08:00:00Z = چهارشنبه ۱۱:۳۰ تهران
-
 import { describe, it, expect } from 'vitest';
 import type { TodoStatus } from '@core/shared';
 import { TODO_STATUSES } from '@core/shared';

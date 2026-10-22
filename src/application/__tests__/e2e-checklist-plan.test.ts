@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — پیشنهادگر چک‌لیست (T3/m147) — GET /api/students/:id/checklist-plan
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-checklist-plan.test.ts — مسیر API پیشنهاد پلن: RBAC (خواندن مثل تفسیر)، شکل قرارداد
-// پاسخ، سناریوی دیرآموز (BIF → پلن پروب‌محور + فرم جامع خانواده) و خط قرمز ID (بدون پلن ابزار).
-// رویدادها با SQL واقعی درج می‌شوند (الگوی e2e-ot-engine) — شکل payload/analysis همان قرارداد T1/T5.
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -33,7 +25,6 @@ function dataOf<T>(res: { body: unknown }): T {
   return (res.body as { data: T }).data;
 }
 
-/** درج رویداد کامل با payload/analysis خام — بازگشت بدون خواندن */
 async function insertEvent(
   A: ReturnType<typeof createTestApp>,
   studentId: string,
@@ -50,7 +41,6 @@ async function insertEvent(
   );
 }
 
-/** نیم‌رخ وکسلر یکنواخت در باند داده‌شده — شکل T1 (profile + snapshot) */
 function uniformEngine(fsiq: number): Record<string, unknown> {
   const idx = (v: number) => ({ scaled: v, percentile: null });
   return {

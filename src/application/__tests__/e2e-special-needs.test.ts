@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — special-needs
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-special-needs.test.ts — فاز ۷: نیازهای ویژه + وضعیت همکاری مدرسه روی اپ واقعی
-// RBAC (manager/secretary فقط)، PATCH special-need (flow/no-op/audit بدون PII)،
-// رویداد تایم‌لاین، گرید مدرسه×پایه با فیلترها، derivation توجه، overview
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -71,13 +63,10 @@ describe('فاز ۷ — نیازهای ویژه و وضعیت همکاری مد�
     s3 = (await createStudent(mgr, { first_name: 'نیاز', last_name: 'سوم', grade: 'چهارم', school_id: SCHOOL2_ID })).id;
     s4 = (await createStudent(mgr, { first_name: 'بی‌نیاز', last_name: 'چهارم', grade: undefined, school_id: SCHOOL3_ID })).id;
 
-    // ثبت نیازهای ویژه با منشی (مسیر واقعی)
     expect((await sec.patch(`/api/students/${s1}/special-need`, { special_need_type: 'dyslexia', special_need_severity: 'severe' })).status).toBe(200);
     expect((await sec.patch(`/api/students/${s2}/special-need`, { special_need_type: 'adhd', special_need_severity: 'mild' })).status).toBe(200);
     expect((await sec.patch(`/api/students/${s3}/special-need`, { special_need_type: 'autism', special_need_severity: 'moderate' })).status).toBe(200);
   });
-
-  // ─────────────── RBAC ───────────────
 
   it('RBAC — درمانگر و بی‌نشست از گرید و overview ۴۰۳ می‌گیرند؛ منشی/مدیر ۲۰۰', async () => {
     expect((await ali.get('/api/special-needs/grid')).status).toBe(403);
@@ -88,8 +77,6 @@ describe('فاز ۷ — نیازهای ویژه و وضعیت همکاری مد�
     expect((await ali.get(`/api/schools/${SCHOOL1_ID}/overview`)).status).toBe(403);
     expect((await sec.get(`/api/schools/${SCHOOL1_ID}/overview`)).status).toBe(200);
   });
-
-  // ─────────────── PATCH special-need ───────────────
 
   it('RBAC write — درمانگر ۴۰۳؛ مقدار نامعتبر ۴۰۰؛ شدت بدون نوع ۴۰۰', async () => {
     expect(
@@ -146,8 +133,6 @@ describe('فاز ۷ — نیازهای ویژه و وضعیت همکاری مد�
     ).toBe(404);
   });
 
-  // ─────────────── تایم‌لاین ───────────────
-
   it('رویداد special_need در تایم‌لاین با لیبل فارسی نوع و شدت + بازیگر', async () => {
     const res = await mgr.get(`/api/students/${s1}/timeline?kinds=special_need`);
     expect(res.status).toBe(200);
@@ -161,14 +146,11 @@ describe('فاز ۷ — نیازهای ویژه و وضعیت همکاری مد�
     expect(ev.actor).toBe('زهرا کریمی'); // منشی — بازیگر واقعی
   });
 
-  // ─────────────── گرید ───────────────
-
   it('گرید — گروه‌بندی مدرسه×پایه با شمارش دقیق سلول‌ها', async () => {
     const body = ((await mgr.get('/api/special-needs/grid')).body as { data: GridResponse }).data;
 
     const school1 = body.schools.find((r) => r.schoolId === SCHOOL1_ID);
     expect(school1).toBeTruthy();
-    // هر دو دانش‌آموز جدید در پایه «سوم» + حسین (seed) همان پایه — special = ۲
     expect(school1!.cells['سوم'].special).toBe(2);
     expect(school1!.cells['سوم'].total).toBe(3); // seed: حسین + s1 + s2
     expect(school1!.cells['سوم'].bySeverity).toEqual({ severe: 1, mild: 1 });
@@ -177,13 +159,11 @@ describe('فاز ۷ — نیازهای ویژه و وضعیت همکاری مد�
     expect(school2!.cells['چهارم'].special).toBe(1);
     expect(school2!.cells['چهارم'].total).toBeGreaterThanOrEqual(1); // seed: فاطمه ششم است، s3 چهارم
 
-    // مهدکودک بدون پایه — سلول «—»
     const school3 = body.schools.find((r) => r.schoolId === SCHOOL3_ID);
     expect(school3).toBeTruthy();
     expect(school3!.cells['—'].total).toBe(2); // seed: زهرا + s4 — هر دو بدون پایه
     expect(school3!.cells['—'].special).toBe(0);
 
-    // overall
     expect(body.overall.byType['dyslexia']).toBe(1);
     expect(body.overall.byType['adhd']).toBe(1);
     expect(body.overall.byType['autism']).toBe(1);
@@ -206,7 +186,6 @@ describe('فاز ۷ — نیازهای ویژه و وضعیت همکاری مد�
   });
 
   it('توجه — پیگیری سررسیدگذشته و «در انتظار ارزیابی» در گرید ظاهر می‌شوند', async () => {
-    // پیگیری عقب‌افتاده برای s2
     const fu = await mgr.post('/api/followups', {
       entity_type: 'student',
       entity_id: s2,
@@ -217,7 +196,6 @@ describe('فاز ۷ — نیازهای ویژه و وضعیت همکاری مد�
     });
     expect(fu.status).toBe(201);
 
-    // s3 → در انتظار ارزیابی
     expect((await sec.patch(`/api/students/${s3}/case-status`, { case_status: 'awaiting_assessment' })).status).toBe(200);
 
     const body = ((await mgr.get('/api/special-needs/grid')).body as { data: GridResponse }).data;
@@ -232,12 +210,9 @@ describe('فاز ۷ — نیازهای ویژه و وضعیت همکاری مد�
     const s3Row = body.attention.find((a) => a.id === s3)!;
     expect(s3Row.reasons).toContain('awaiting_assessment');
 
-    // سلول سوم مدرسه ۱ — attention = ۱ (فقط s2)
     const school1 = body.schools.find((r) => r.schoolId === SCHOOL1_ID)!;
     expect(school1.cells['سوم'].attention).toBe(1);
   });
-
-  // ─────────────── وضعیت همکاری مدرسه ───────────────
 
   it('overview — متریک‌های مدرسه + بخش توجه همان derivation', async () => {
     const res = await mgr.get(`/api/schools/${SCHOOL2_ID}/overview`);

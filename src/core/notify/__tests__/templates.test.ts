@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — templates
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست pure قالب‌های پیام — بدون دیتابیس
-
 import { describe, expect, it } from 'vitest';
 import { NOTIFICATION_TEMPLATES } from '@core/shared';
 import type { NotificationTemplateId } from '@core/shared';
@@ -39,7 +33,6 @@ describe('notification templates (pure)', () => {
       timeLabel: '14:15'
     });
     expect(text).toContain('تغییر زمان نوبت');
-    //: تاریخ‌ها شمسی و ارقام فارسی شدند
     expect(text).toContain('۲۱ مهر ۱۴۰۵');
     expect(text).toContain('۱۴:۱۵');
   });

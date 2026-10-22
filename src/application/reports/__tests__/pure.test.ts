@@ -1,15 +1,8 @@
-/**
- * تست‌های واحد — pure
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست تجمیع‌های pure گزارش
-
 import { describe, it, expect } from 'vitest';
 import { buildDaySeries, buildPerStaff, buildTopStudents, safeRate, daysBetween } from '../pure';
 
 const TZ_OFFSET = 210 * 60 * 1000; // تهران +03:30
 
-/** ISO UTC معادل ymd و ساعت مشخص به وقت تهران */
 function tehranIso(ymd: string, hour = 10): string {
   const h = Math.floor(hour);
   return new Date(Date.parse(`${ymd}T${String(h).padStart(2, '0')}:00:00.000Z`) - TZ_OFFSET).toISOString();

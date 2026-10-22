@@ -1,19 +1,7 @@
-/**
- * کامپوننت‌های پایهٔ UI — مودال، toast، tabs، فرم‌ساز
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// ui.js — DOM builder + shared components (modal, toast, form, table, icons)
-
 import { ERROR_TEXT } from './api.js';
 import { fa } from './format.js';
 import { jalaliDateInput } from './jalali-picker.js';
 
-// ─────────────── DOM builder ───────────────
-
-/**
- * el('div', {class: 'x', onclick: fn, dataset: {id: '1'}}, children…)
- * children: string | Node | Array | null | undefined
- */
 export function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs ?? {})) {
@@ -38,8 +26,6 @@ function append(node, children) {
     else node.appendChild(document.createTextNode(String(child)));
   }
 }
-
-// ─────────────── Icons (inline SVG, 24×24, stroke) ───────────────
 
 const PATHS = {
   dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
@@ -80,8 +66,6 @@ const PATHS = {
   board: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9.5 4v16M15 4v11M5.5 8h1.5M12 8h1.5M17.5 8h1"/>',
   dots: '<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
   phone: '<path d="M21.5 16.7v2.6a1.8 1.8 0 0 1-2 1.8 17.8 17.8 0 0 1-7.8-2.8 17.5 17.5 0 0 1-5.4-5.4A17.8 17.8 0 0 1 3.5 5a1.8 1.8 0 0 1 1.8-2h2.6a1.8 1.8 0 0 1 1.8 1.55c.11.85.32 1.68.62 2.47a1.8 1.8 0 0 1-.4 1.9L8.9 10a14.4 14.4 0 0 0 5.4 5.4l1.08-1.07a1.8 1.8 0 0 1 1.9-.4c.79.3 1.62.51 2.47.62a1.8 1.8 0 0 1 1.55 1.85Z"/>',
-  // ─── آیکون‌های افزوده (هم‌سبک: ۲۴×۲۴، خط ۱.۷، RTL-سالم) ───
-  // رفع باگ: info قبلاً در login.js/working-hours.js صدا زده می‌شد ولی تعریف نداشت (SVG خالی)
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/>',
   waitlist: '<path d="M9 4.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-13a2 2 0 0 0-2-2h-2"/><rect x="9" y="2.5" width="6" height="4" rx="1.2"/><path d="M8.5 11.5h7M8.5 15.5h4.5"/>',
   archive: '<rect x="3" y="3.5" width="18" height="4.5" rx="1.2"/><path d="M5 8v11a1.8 1.8 0 0 0 1.8 1.8h10.4A1.8 1.8 0 0 0 19 19V8"/><path d="M10 12h4"/>',
@@ -99,7 +83,6 @@ const PATHS = {
   hourglass: '<path d="M6.5 3h11M6.5 21h11"/><path d="M8 3v3.2c0 2.1 1.6 3.6 4 5.3 2.4-1.7 4-3.2 4-5.3V3"/><path d="M8 21v-3.2c0-2.1 1.6-3.6 4-5.3 2.4 1.7 4 3.2 4 5.3V21"/>',
   sparkles: '<path d="M12 4 13.9 9.1 19 11l-5.1 1.9L12 18l-1.9-5.1L5 11l5.1-1.9L12 4Z"/><path d="M19 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/>',
   trophy: '<path d="M8 3.5h8V9a4 4 0 0 1-8 0V3.5Z"/><path d="M8 5H5.5a2.5 2.5 0 0 0 2.6 4.3"/><path d="M16 5h2.5a2.5 2.5 0 0 1-2.6 4.3"/><path d="M12 13v3.5"/><path d="M8.5 20.5h7"/><path d="M9.5 20.5c0-2.2 1-4 2.5-4s2.5 1.8 2.5 4"/>',
-  // ─── آیکون‌های افزوده: وکتور جایگزین ایموجی (هم‌سبک: ۲۴×۲۴، خط ۱٫۷) ───
   book: '<path d="M12 6.6C10.5 5 8.4 4.1 6 4.1H3.5v14.4H6c2.4 0 4.5.9 6 2.5 1.5-1.6 3.6-2.5 6-2.5h2.5V4.1H18c-2.4 0-4.5.9-6 2.5Z"/><path d="M12 6.6V21"/>',
   gamepad: '<path d="M6.7 7.2h10.6a4.4 4.4 0 0 1 4.3 5.3l-.7 3.7a2.8 2.8 0 0 1-5 1.2L14.7 15H9.3l-1.2 2.4a2.8 2.8 0 0 1-5-1.2l-.7-3.7a4.4 4.4 0 0 1 4.3-5.3Z"/><path d="M8.2 9.9v3.2M6.6 11.5h3.2"/><circle cx="15.4" cy="10.7" r="1" fill="currentColor" stroke="none"/><circle cx="17.6" cy="12.9" r="1" fill="currentColor" stroke="none"/>',
   calculator: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8.5 6.5h7"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01M8.5 14.5h.01M12 14.5h.01M15.5 14.5h.01M8.5 18h.01M12 18h.01M15.5 18h.01"/>',
@@ -119,15 +102,10 @@ const PATHS = {
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>'
 };
 
-/** — آیا این نام در کاتالوگ وکتورها هست؟ (برای مهاجرت ایموجی‌های قدیمی به وکتور) */
 export function isKnownIcon(name) {
   return typeof name === 'string' && name.length > 0 && Object.prototype.hasOwnProperty.call(PATHS, name);
 }
 
-/**
- * — حلقهٔ پیشرفت SVG (رینگ) — برای هیروی داشبورد و کاشی‌ها.
- * value/max هر عددی؛ رنگ از توکن. انیمیشن fill با stroke-dashoffset.
- */
 export function progressRing(value, max, { size = 84, stroke = 8, color = 'var(--primary)', trackColor = 'var(--surface-3)' } = {}) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -144,7 +122,6 @@ export function progressRing(value, max, { size = 84, stroke = 8, color = 'var(-
   );
 }
 
-/** تب‌ها — خروجی: {root, setActive(hash)} */
 export function tabs(items, initialKey) {
   const root = el('div', { class: 'tabs', role: 'tablist' });
   const buttons = new Map();
@@ -175,8 +152,6 @@ export function icon(name, size = 20) {
   return span;
 }
 
-// ─────────────── Toast ───────────────
-
 function toastStack() {
   let stack = document.querySelector('.toast-stack');
   if (!stack) {
@@ -196,8 +171,6 @@ export function toast(message, type = 'info', ttl = 3600) {
 }
 
 export function toastError(err) {
-  // خطای اعتبارسنجی Zod جزئیات فیلد را دارد؛ اولین جزئیات را نشان بده
-  // (وگرنه کاربر فقط «ورودی نامعتبر است» می‌بیند و نمی‌فهمد کدام فیلد مشکل دارد)
   const detail = Array.isArray(err?.details) && err.details.length > 0
     ? err.details.find((d) => d?.message)?.message
     : null;
@@ -205,16 +178,10 @@ export function toastError(err) {
   toast(detail && detail !== msg ? `${msg} — ${detail}` : msg, 'error', 5200);
 }
 
-// ─────────────── Modal ───────────────
-
-// استک مودال: Escape فقط بالاترین مودال را می‌بندد (قبلاً همهٔ مودال‌های
-// انباشته یک‌جا بسته می‌شدند — مثلاً ویزارد گزارش روی ویرایشگر جلسه)
 const modalStack = [];
 
 export function openModal({ title, body, actions = [], wide = false, onClose }) {
   const overlay = el('div', { class: 'modal-overlay' });
-  // خروج نرم مودال: یک‌بار کلاس is-leaving + حذف پس از پایان انیمیشن
-  // (prefers-reduced-motion انیمیشن را خاموش می‌کند — fallback تایمر همیشه هست)
   const close = () => {
     if (overlay.dataset.closing) return;
     overlay.dataset.closing = '1';
@@ -286,13 +253,6 @@ export function confirmModal({ title = 'تأیید', message, confirmLabel = 'ت
   });
 }
 
-// ─────────────── فرم عمومی ───────────────
-
-/**
- * buildSearchableSelect — — کمبو‌باکس سرچ‌دار برای لیست‌های بلند (مثلاً ۴۰ مدرسه)
- * قرارداد: مقدار واقعی در input hidden (همان name فیلد)؛ ورودی متنی فقط جستجو/نمایش است.
- * کیبورد: ↑/↓ حرکت، Enter انتخاب، Escape بستن؛ دکمهٔ × برای پاک‌کردن (اگر مقدار باشد).
- */
 function buildSearchableSelect(f, value) {
   const opts = f.options ?? [];
   const hiddenInput = el('input', { type: 'hidden', name: f.name });
@@ -321,7 +281,6 @@ function buildSearchableSelect(f, value) {
     text.value = labelOf(v);
     syncClear();
     closeList();
-    // مثل select رفتار کند: هر سیم‌کشی‌ای که به change گوش می‌دهد (مثل cascade کلاس) زنده بماند
     if (changed) hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
   }
   function renderFilter(q) {
@@ -368,26 +327,16 @@ function buildSearchableSelect(f, value) {
   return { root, hiddenInput };
 }
 
-/**
- * formModal — فرم‌ساز از تعریف فیلدها
- * field: {name, label, type: text|email|tel|date|time|number|select|searchable-select|textarea|switch|chips|jalali-date,
- * required, placeholder, hint, options:[{value,label}], value, min, max, step, span,
- * extra(input) — گرهٔ اختیاری بعد از برچسب (مثل دکمهٔ انتخاب از بانک تمرین)}
- * (searchable-select — — کمبوباکس سرچ‌دار برای لیست‌های بلند مثل ۴۰ مدرسه)
- * onSubmit(values) — async؛ خطا → توست + نمایش inline
- */
 export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیره', wide = false, onSubmit, secondary }) {
   const form = el('form', { class: 'form-grid', novalidate: true });
   const inputs = {};
 
   for (const f of fields) {
-    // سربرگ بخش‌بندی فرم‌های بلند (شرح‌حال) — بدون مقدار، بدون input
     if (f.type === 'heading') {
       form.appendChild(el('div', { class: 'form-heading', style: { gridColumn: '1 / -1' } }, f.label));
       continue;
     }
     const field = el('div', { class: `field${f.span === 2 ? ' span-2' : ''}` });
-    // labelEl نگه داشته می‌شود تا f.extra (در صورت وجود) دقیقاً بعد از برچسب جای بگیرد
     let labelEl = null;
     if (f.type !== 'switch') {
       labelEl = el('label', { class: 'field__label' }, f.label, f.required ? el('span', { class: 'req' }, ' *') : null);
@@ -404,14 +353,10 @@ export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیر
       );
       input.value = initial[f.name] ?? f.value ?? '';
     } else if (f.type === 'searchable-select') {
-      // دراپ‌داون سرچ‌دار برای لیست‌های بلند (مثلاً ۴۰ مدرسه) —
-      // مقدار واقعی در input hidden با همان name می‌ماند؛ ورودی متنی فقط جستجو/نمایش است
       const combo = buildSearchableSelect(f, initial[f.name] ?? f.value ?? '');
       input = combo.hiddenInput;
       field.appendChild(combo.root);
     } else if (f.type === 'chips') {
-      // آیتم لیکرت با لنگر کلامی (مطابق ابزار مرجع) — به‌جای کادر عددی؛
-      // value واقعی در input hidden با همان name می‌ماند (۰ تا scaleMax)
       const hidden = el('input', { type: 'hidden', name: f.name });
       hidden.value = initial[f.name] ?? f.value ?? '';
       const current = Number(hidden.value);
@@ -433,7 +378,6 @@ export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیر
       input = el('textarea', { class: 'textarea', name: f.name, placeholder: f.placeholder, rows: f.rows ?? 3 });
       input.value = initial[f.name] ?? f.value ?? '';
     } else if (f.type === 'jalali-date') {
-      // تقویم جلالی به‌جای ورودی متنی؛ مقدار نهایی YMD میلادی در input hidden
       const w = jalaliDateInput({ value: initial[f.name] ?? f.value ?? '', allowClear: !f.required });
       input = w.hiddenInput;
       field.appendChild(w.root);
@@ -469,12 +413,10 @@ export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیر
     field.appendChild(input);
     field.appendChild(errSlot);
     inputs[f.name] = input;
-    // extra(input): گرهٔ اختیاری (مثل دکمهٔ «از بانک تمرین») درست بعد از برچسب فیلد
     if (typeof f.extra === 'function' && labelEl) {
       const extraNode = f.extra(input);
       if (extraNode) labelEl.after(extraNode);
     }
-    // onChange اختیاری فیلد: (value, allInputs) — برای پیش‌پرکردن زنده (مثل پیشنهاد پروتکل از نیاز ویژه)
     if (f.onChange) {
       input.addEventListener('change', () => f.onChange(input.type === 'checkbox' ? input.checked : input.value, inputs));
     }
@@ -495,7 +437,6 @@ export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیر
   };
 
   const submitBtn = el('button', { class: 'btn btn--primary', type: 'submit' }, submitLabel);
-  // دکمهٔ کنار دیگاهی (مثلاً «ذخیرهٔ پیش‌نویس») — همان اعتبارسنجی required را دور می‌زند
   const secondaryAction = secondary
     ? (close) => {
         const btn = el('button', { class: 'btn btn--ghost', type: 'button' }, secondary.label);
@@ -532,7 +473,6 @@ export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیر
             const input = inputs[f.name];
             values[f.name] = f.type === 'switch' ? input.checked : input.value.trim();
           }
-          // required سمت کلاینت
           for (const f of fields) {
             if (f.required && !values[f.name] && f.type !== 'switch') {
               inputs[f.name].classList.add('is-invalid');
@@ -573,13 +513,6 @@ export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیر
   return { form };
 }
 
-// ─────────────── جدول داده ───────────────
-
-/**
- * dataTable({columns:[{key,label,render(row),thStyle}], rows, empty, onRowClick(row)})
- * روی موبایل (≤۶۴۰px) هر ردیف به کارت انباشته تبدیل می‌شود؛ برچسب هر سلول از
- * data-label می‌آید. اگر onRowClick داده شود، کلیک روی ردیف (نه دکمه‌ها) اجرایش می‌کند.
- */
 export function dataTable({ columns, rows, empty, onRowClick, rowClass }) {
   if (!rows || rows.length === 0) {
     return emptyState(empty ?? {});
@@ -597,11 +530,9 @@ export function dataTable({ columns, rows, empty, onRowClick, rowClass }) {
         'tr',
         {
           dataset: { id: row.id ?? '' },
-          // فاز W — rowClass: کلاس اختیاری هر ردیف (مثلاً ردیف رنگی urgent در لیست انتظار)
           class: [onRowClick ? 'is-clickable' : null, rowClass ? rowClass(row) : null].filter(Boolean).join(' ') || null,
           onclick: onRowClick
             ? (e) => {
-                // دکمه/لینک/فرم داخل ردیف نباید کلیک ردیف را فعال کنند
                 if (e.target.closest('button, a, input, select, textarea, label, [role="button"]')) return;
                 onRowClick(row);
               }
@@ -634,11 +565,6 @@ export function emptyState({ iconName = 'alert', title = 'چیزی اینجا ن
   );
 }
 
-// ─────────────── منوی سرریز ردیف (⋯) ───────────────
-// جای دکمه‌های inline پشت‌سرهم در سلول عملیات (مثل لیست انتظار با ۹ دکمه) —
-// ۱–۲ اکشن اصلی inline می‌ماند و بقیه در این منو جمع می‌شود.
-// پاپ‌آپ position:fixed است چون.table-wrap با overflow-x:auto هر منوی absolute را کلیپ می‌کند.
-// items: [{label, icon?, danger?, onclick?}] — آیتم { sep: true } جداکننده می‌سازد.
 let activeRowMenuClose = null;
 export function rowMenu({ label = 'اقدامات بیشتر', items }) {
   const btn = el('button', {
@@ -669,20 +595,17 @@ export function rowMenu({ label = 'اقدامات بیشتر', items }) {
     pop.hidden = false;
     btn.classList.add('is-open');
     btn.setAttribute('aria-expanded', 'true');
-    // جای‌گذاری ثابت زیر دکمه — اگر پایین صفحه جا نبود بالا می‌رود
     const r = btn.getBoundingClientRect();
     const w = pop.offsetWidth;
     const h = pop.offsetHeight;
     let top = r.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
     pop.style.top = `${top}px`;
-    // RTL: منو از لبهٔ دکمه به سمت راست باز می‌شود (اکشن‌ها در جدول RTL سمت چپ‌اند) — با clamp درون viewport
     let left = r.left;
     if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
     if (left < 8) left = 8;
     pop.style.left = `${left}px`;
     activeRowMenuClose = close;
-    // capture-phase + async تا همین کلیکِ باز کردن بلافاصله نبندد
     setTimeout(() => {
       document.addEventListener('click', onDoc, true);
       document.addEventListener('keydown', onKey, true);
@@ -705,9 +628,6 @@ export function loadingState(text = 'در حال بارگذاری…') {
   return el('div', { class: 'state-block' }, el('div', { class: 'spinner' }), el('p', { style: { marginTop: '10px' } }, text));
 }
 
-// ─────────────── اسکلتون بارگذاری ───────────────
-// جایگزین مدرن اسپینر برای بارگذاری اولیهٔ فهرست‌ها/جدول‌ها/گریدها.
-// kind: 'table' (ردیف‌های جدولی) | 'cards' (گرید کارت KPI) | 'list' (خطوط ساده)
 export function skeletonState(kind = 'table', rows = 5) {
   const n = Math.max(1, Math.min(12, rows));
   if (kind === 'cards') {
@@ -735,7 +655,6 @@ export function skeletonState(kind = 'table', rows = 5) {
       )
     );
   }
-  // 'table' — پیش‌فرض: هدر + ردیف‌های آواتاردار
   return el('div', { class: 'skel-state' },
     el('div', { class: 'skel-state__head' },
       el('div', { class: 'skel skel--title' }),
@@ -764,8 +683,6 @@ export function errorState(err, onRetry) {
   );
 }
 
-// ─────────────── بج ───────────────
-
 const BADGE_TONES = {
   draft: 'warning',
   scheduled: 'primary',
@@ -773,7 +690,6 @@ const BADGE_TONES = {
   pending: 'warning',
   present: 'success',
   absent: 'error',
-  // فاز ۱ — وضعیت‌های عملیاتی نوبت (بورد منشی)
   checked_in: 'accent',
   delayed: 'warning',
   in_session: 'primary',
@@ -794,11 +710,9 @@ const BADGE_TONES = {
   revoked: 'error',
   draft: 'warning',
   final: 'success',
-  // فاز ۶ — وضعیت پیگیری
   open: 'warning',
   in_progress: 'primary',
   done: 'success',
-  // -c — وضعیت تکلیف تمرین
   corrected: 'accent',
   assigned: 'warning'
 };
@@ -810,7 +724,6 @@ const BADGE_LABELS = {
   pending: 'در انتظار',
   present: 'حاضر',
   absent: 'غایب',
-  // فاز ۱ — وضعیت‌های عملیاتی نوبت
   checked_in: 'آمد',
   delayed: 'تأخیر',
   in_session: 'در جلسه',
@@ -846,11 +759,6 @@ export function statusBadge(value) {
   return el('span', { class: `badge badge--${tone}` }, label);
 }
 
-/**
- * — باجت تماس سریع (همان الگوی روی کارت روز کاری):
- * دکمهٔ گرد آیکون تلفن با لینک tel: — کنار شمارهٔ ولیّ/مدیر/معلم در جدول‌ها.
- * stopPropagation تا کلیک روی باجت، ردیف جدول (پرونده) را باز نکند.
- */
 export function callBadge(phone, title) {
   return el('a', {
     class: 'call-badge',
@@ -861,10 +769,6 @@ export function callBadge(phone, title) {
   }, icon('phone', 12));
 }
 
-/**
- * — کانونشن سیستمی نمایش شماره: عدد + باجت تماس سریع در یک ردیف.
- * هر نمای جدید که شماره نشان می‌دهد باید از همین استفاده کند تا باجت همیشه باشد.
- */
 export function phoneCell(phone, title) {
   return el('span', { class: 'cell-phone' },
     el('span', { dir: 'ltr' }, fa(phone)),

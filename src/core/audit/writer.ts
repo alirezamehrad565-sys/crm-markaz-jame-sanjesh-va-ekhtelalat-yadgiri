@@ -1,14 +1,3 @@
-/**
- * ثبت رخدادهای audit به‌صورت append-only — نویسندهٔ رخداد audit
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Audit log helper — ثبت تغییرات به‌صورت هم‌تراکنش (قانون ۴)
-// قوانین داخلی:
-// - audit در همان transaction با تغییر اصلی نوشته می‌شود (logInTransaction)
-// - فقط فیلدهای تغییرکرده (changes)
-// - append-only — هیچ‌وقت UPDATE یا DELETE روی audit_log
-// - no PII در action
-
 import type { DbClient } from '@core/db';
 
 export interface AuditEntry {
@@ -20,9 +9,7 @@ export interface AuditEntry {
 }
 
 export interface AuditWriter {
-  /** ثبت مستقیم روی db (خارج از تراکنش) */
   log(entry: AuditEntry): Promise<void>;
-  /** ثبت داخل تراکنش — در همان batch با تغییر اصلی اجرا می‌شود */
   logInTransaction(tx: DbClient, entry: AuditEntry): Promise<void>;
 }
 

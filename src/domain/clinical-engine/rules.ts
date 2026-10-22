@@ -1,58 +1,31 @@
-/**
- * موتور بالینی — باتری‌ها، قواعد، روایت و اهداف مداخله — قواعد محض ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// قواعد هاردکد شواهد و ملاک‌ها (پلن §۵) — موتور (infer.ts) همین را مصرف می‌کند
-// آستانه‌ها و وزن‌ها شفاف و در سند قابل مرورند — جعبهٔ سیاه نیست؛ کالیبراسیون با دادهٔ مرکز در
-
 import type { RuleSet } from './types';
-// T6 (m148-b) — بازه‌های FSIQ تک‌منبع از signals.ts بازنشر می‌شوند (پایین، پس از ثابت‌های قفل‌شده)
 import { FSIQ_BAND_RANGES } from './signals';
 
-/** وزن استاندارد شواهد (پلن §۵ گام ۲) */
-// T4 (m148): کلید قواعد شرح‌حال عمداً v2 می‌ماند (دادهٔ قاعده ثابت) — حل شواهد در infer.ts
-// نسخهٔ ۳ را ترجیح می‌دهد و بی‌نسخهٔ ۳ به هیوریستیک دقیق v2 فال‌بک می‌کند.
 export const EVIDENCE_WEIGHTS = {
   probeDanger: 2,
   instrumentDanger: 2,
   instrumentWarn: 1,
   sdqDanger: 1,
   anamnesisFlag: 1,
-  /** ضریب هم‌رأیی والد/معلم وقتی هر دو مرجع باند بالا دارند */
   consensusMultiplier: 1.5
 } as const;
 
-/** آستانهٔ اطمینان توصیفی روی جمع وزن شواهد */
 export const CONFIDENCE_THRESHOLDS = { medium: 2, high: 3.5 } as const;
 
-/** قاعدهٔ ملاکی ODD: دست‌کم ۴ آیتم با نمرهٔ کامل (۲) از ۸ ملاک A */
 export const ODD_MIN_FULL_CRITERIA = 4;
-/** قاعدهٔ ملاکی ASD: هر سه ملاک A + حداقل ۲ از ۴ ملاک B (در باتری B هفت آیتم دارد) */
 export const ASD_B_FULL_CRITERIA = 2;
-/** برش اجتناب از مدرسه SCARED (زیرمقیاس sch) */
 export const SCARED_SCHOOL_CUTOFF = 1;
-/** محدودهٔ IQ دیرآموزی — عملکرد فکری مرزی */
 export const BIF_IQ_RANGE = { min: 70, max: 85 } as const;
 
-// ───────────── T6 (m148-b) — بازه‌های هوش‌بهر: تک‌منبع از signals.ts ─────────────
-// جدول FSIQ_BAND_RANGES و توابع آن در signals.ts است (قفل تست طلایی T1)؛ این‌جا فقط
-// بازنشر می‌شود تا مصرف‌کنندگان (infer، صورت‌بندی، تست‌ها) به یک مسیر واحد اشاره کنند —
-// هیچ عدد جدیدی برای باندها کپی نمی‌شود. ثابت قدیمی BIF_IQ_RANGE (بازهٔ ۷۰–۸۵ قاعدهٔ
-// خام fsiq) عمداً سرجایش مانده و تغییر نمی‌کند — تست‌های موجود قفل‌ش‌اند.
 export { FSIQ_BAND_RANGES, fsiqBandOf, fsiqBandFaOf } from './signals';
 export type { WechslerFsiqBand } from './signals';
 
-/** ردیف بازهٔ BIF (۷۰–۸۴) — سناریوی دیرآموز §۳.۱ (بدون کپی عددی از جدول واحد) */
 export const FSIQ_BAND_BIF = FSIQ_BAND_RANGES.find((b) => b.band === 'BIF') as { band: 'BIF'; min: number; max: number; fa: string };
-/** ردیف بازهٔ «مرز پایین» (۸۵–۸۹) — فقط توصیهٔ پایش، بدون برچسب تشخیصی (§۳.۱) */
 export const FSIQ_BAND_LOW_BORDER = FSIQ_BAND_RANGES.find((b) => b.band === 'LOW_BORDER') as { band: 'LOW_BORDER'; min: number; max: number; fa: string };
-/** سقف FSIQ مسیر ID — «FSIQ ≤ ۷۰» سند §۳.۱؛ عدد از مرز پایینی بازهٔ BIF (تک‌منبع) */
 export const ID_PATH_MAX_FSIQ = FSIQ_BAND_BIF.min;
-/** سقف پراکندگی بین‌شاخصی برای «یکنواخت» شمردن نیم‌رخ — هم‌ارز سقف تفسیر واحد ۲۳ در profileSignals موتور وکسلر و SCATTER_SEVERE پیشنهادگر */
 export const SCATTER_UNIFORM_MAX = 23;
 
 export const RULES: RuleSet[] = [
-  // ─── نارساخوانی ───
   {
     targetKey: 'dyslexia',
     batteryVersion: 'battery-v1',
@@ -76,7 +49,6 @@ export const RULES: RuleSet[] = [
     ],
     nextInstrument: ['ce-probe-read-v1', 'ce-sld-read-v1']
   },
-  // ─── نارسانویسی ───
   {
     targetKey: 'dysgraphia',
     batteryVersion: 'battery-v1',
@@ -100,7 +72,6 @@ export const RULES: RuleSet[] = [
     ],
     nextInstrument: ['ce-probe-write-v1', 'ce-sld-wri-v1']
   },
-  // ─── نارساریاضی ───
   {
     targetKey: 'dyscalculia',
     batteryVersion: 'battery-v1',
@@ -124,7 +95,6 @@ export const RULES: RuleSet[] = [
     ],
     nextInstrument: ['ce-probe-calc-v1', 'ce-sld-calc-v1']
   },
-  // ─── ADHD ───
   {
     targetKey: 'adhd',
     batteryVersion: 'battery-v1',
@@ -149,7 +119,6 @@ export const RULES: RuleSet[] = [
     ],
     nextInstrument: ['ce-snap-iv-t-v1', 'ce-snap-iv-p-v1']
   },
-  // ─── اتیسم ───
   {
     targetKey: 'autism',
     batteryVersion: 'battery-v1',
@@ -174,7 +143,6 @@ export const RULES: RuleSet[] = [
     ],
     nextInstrument: ['ce-asd-criteria-v1']
   },
-  // ─── زبان/گفتار ───
   {
     targetKey: 'speech_language',
     batteryVersion: 'battery-v1',
@@ -196,7 +164,6 @@ export const RULES: RuleSet[] = [
     ],
     nextInstrument: ['ce-speech-criteria-v1']
   },
-  // ─── اضطراب ───
   {
     targetKey: 'anxiety',
     batteryVersion: 'battery-v1',
@@ -219,7 +186,6 @@ export const RULES: RuleSet[] = [
     ],
     nextInstrument: ['ce-scared-p-v1']
   },
-  // ─── DCD ───
   {
     targetKey: 'motor_coordination',
     batteryVersion: 'battery-v1',
@@ -238,7 +204,6 @@ export const RULES: RuleSet[] = [
     ],
     nextInstrument: ['ce-dcdq-v1']
   },
-  // ─── ODD ───
   {
     targetKey: 'odd',
     batteryVersion: 'battery-v1',
@@ -267,7 +232,6 @@ export const RULES: RuleSet[] = [
     ],
     nextInstrument: ['ce-odd-criteria-v1']
   },
-  // ─── دیرآموزی ───
   {
     targetKey: 'slow_learner',
     batteryVersion: 'battery-v1',
@@ -289,7 +253,6 @@ export const RULES: RuleSet[] = [
   }
 ];
 
-/** قواعد یک هدف */
 export function rulesOf(targetKey: string): RuleSet | undefined {
   return RULES.find((r) => r.targetKey === targetKey);
 }

@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — api-keys
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست واحد — تولید/هش/شکل کلیدهای API
-
 import { describe, it, expect } from 'vitest';
 import { generateApiKey, hashApiKey, looksLikeApiKey } from '../api-keys';
 

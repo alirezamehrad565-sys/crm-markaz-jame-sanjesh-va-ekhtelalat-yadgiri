@@ -1,25 +1,11 @@
-/**
- * ماژول رویدادساز (فرم/پرسش‌نامه/چک‌لیست) — فرم عمومی پاسخ خانواده/معلم
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// -b — صفحهٔ مستقل وب‌فرم چک‌لیست خانواده/معلم (بدون ورود — با توکن یک‌بارمصرف)
-// تصمیم ۳ طراحی: چک‌لیست بلندتر از ۸ آیتم با لینک امن پر می‌شود.
-// بازطراحی روان‌سنجی: سربرگ زیرمقیاس‌ها + گزینه‌های نمره‌دار (نمره از گیرنده پنهان است —
-// اصل سنجش استاندارد: فقط برچسب گزینه دیده می‌شود) + صفحهٔ سازگار با RTL و موبایل
-// نسخهٔ ۲: سربرگ بر اساس گیرنده (خانواده/معلم)، معرفی روایی فرم، لنگرهای کلامی مطابق
-// ابزار مرجع (scaleLabels)، نوار پیشرفت چسبان و مشخص‌کردن سؤال‌های بی‌پاسخ
-
 export interface FillFormItem {
   key: string;
   label: string;
   scaleMax?: number;
-  /** — گزینه‌های نمره‌دار (فقط برچسب به گیرنده نمایش داده می‌شود؛ value = اندیس) */
   scoredOptions?: { label: string }[];
-  /** — لنگرهای کلامی نمرهٔ ۰..scaleMax مطابق ابزار مرجع */
   scaleLabels?: string[];
 }
 
-/** — بخش زیرمقیاس: آیتم‌های پیوستهٔ یک زیرمقیاس زیر یک سربرگ می‌نشینند */
 export interface FillFormSection {
   title: string | null;
   items: FillFormItem[];
@@ -29,15 +15,11 @@ export interface FillFormModel {
   typeTitle: string;
   studentName: string;
   sections: FillFormSection[];
-  /** — gیرنده: خانواده یا معلم — سربرگ و لحن بر همین اساس */
   audience?: 'family' | 'teacher' | 'both' | null;
-  /** — معرفی روایی فرم (یک تا دو جملهٔ ساده) */
   description?: string | null;
-  /** — T7: لینک صادرشده برای معلم خاص — سربرگ «فرم شما — X» */
   teacherLabel?: string | null;
 }
 
-/** یک فیلد زمینهٔ پکیج (غیرنمره‌دار — select/text/longtext) */
 export interface PackageContextField {
   key: string;
   label: string;
@@ -46,14 +28,10 @@ export interface PackageContextField {
   required?: boolean;
 }
 
-/** یک ابزار داخل پکیج — سربرگ اختصاصی + بخش‌های زیرمقیاسی همان ابزار */
 export interface PackageToolBlock {
   toolKey: string;
-  /** عنوان با شمارهٔ بخش — «بخش ۲ از ۵ — …» */
   toolTitle: string;
-  /** معرفی روایی همان ابزار (یک تا دو جملهٔ ساده) */
   toolIntro: string | null;
-  /** تعداد آیتم نمره‌دار ابزار (نمایش «N پرسش») */
   itemCount: number;
   sections: FillFormSection[];
 }
@@ -62,14 +40,11 @@ export interface PackageFormModel {
   packageTitle: string;
   studentName: string;
   description?: string | null;
-  /** — T7: لینک صادرشده برای معلم خاص — سربرگ «فرم شما — X» */
   teacherLabel?: string | null;
-  /** بلوک زمینهٔ کوتاه (≤۸ فیلد) — ابتدای فرم */
   context: {
     title: string;
     fields: PackageContextField[];
   };
-  /** ابزارهای پکیج به‌ترتیب قرارداد */
   tools: PackageToolBlock[];
 }
 
@@ -79,7 +54,6 @@ function faNum(n: number): string {
   return String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
 }
 
-/** — لنگر عمومی قدیمی (برای فرم‌های بدون لنگر اختصاصی) */
 const SCALE_LABELS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹', '۱۰'];
 
 export function renderFillFormPage(model: FillFormModel, token: string): string {
@@ -96,7 +70,6 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
       counter += 1;
       let opts: string[] = [];
       if (f.scoredOptions && f.scoredOptions.length > 0) {
-        // گزینه‌ای نمره‌دار — value = اندیس گزینه؛ نمره هرگز نمایش داده نمی‌شود
         opts = f.scoredOptions.map((o, idx) =>
           `<label class="opt opt--wide"><input type="radio" name="${esc(f.key)}" value="${idx}" required />
            <span>${esc(o.label)}</span></label>`
@@ -262,28 +235,16 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
 </html>`;
 }
 
-// ───────── فرم عمومی پکیجی (T5 — فرم جامع خانواده) ─────────
-
-/**
- * رندر بخش‌به‌بخش پکیج چند-ابزاری — یک صفحه، چند ابزار پشت‌سرهم:
- * بلوک زمینهٔ کوتاه → سربرگ اختصاصی هر ابزار (شمارهٔ بخش + معرفی روایی + شمار پرسش)
- * → آیتم‌های همان ابزار با بخش‌بندی زیرمقیاسی؛ یک دکمهٔ ارسال در پایان.
- * اعتبارسنجی مرورگر هر بخش و سرور هر کامپوننت را با همان موتور v2 جدا نمره می‌دهد
- * (POST همان مسیر عمومی — answers تخت: نمرهٔ عددی برای آیتم‌ها، متن خام برای زمینه).
- * سبک بصری = عین renderFillFormPage (RTL، موبایل‌پسند، نمره از گیرنده پنهان).
- */
 export function renderPackageFormPage(model: PackageFormModel, token: string): string {
   const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   let counter = 0;
-  /** آیتم‌های نمره‌دار یک ابزار — همان رندر فرم تکی؛ شمارندهٔ سراسری ادامه می‌یابد */
   const renderItems = (sections: FillFormSection[]): string => sections.map((sec) => {
     const items = sec.items.map((f) => {
       counter += 1;
       let opts: string[] = [];
       let optsCls = 'opts opts--scale';
       if (f.scoredOptions && f.scoredOptions.length > 0) {
-        // گزینه‌ای نمره‌دار — value = اندیس گزینه؛ نمره هرگز نمایش داده نمی‌شود
         optsCls = 'opts opts--list';
         opts = f.scoredOptions.map((o, idx) =>
           `<label class="opt opt--wide"><input type="radio" name="${esc(f.key)}" value="${idx}" required />
@@ -310,7 +271,6 @@ export function renderPackageFormPage(model: PackageFormModel, token: string): s
     return `${head}<div class="card">${items}</div>`;
   }).join('');
 
-  // بلوک زمینه — select با چیپ رادیویی، text با ورودی خطی، longtext با textarea
   const contextFields = model.context.fields.map((f) => {
     let ctrl: string;
     if (f.type === 'select') {
@@ -497,12 +457,10 @@ export function renderPackageFormPage(model: PackageFormModel, token: string): s
     ev.preventDefault();
     var data = new FormData(f);
     var answers = {};
-    // آیتم‌های نمره‌دار — اندیس گزینه/نمرهٔ عددی (بلوک زمینه مستثنا)
     document.querySelectorAll('#f .item:not(.ctx-item) input[type=radio]').forEach(function (radio) {
       var name = radio.name;
       if (data.get(name)) answers[name] = Number(data.get(name));
     });
-    // بلوک زمینه — select برچسب گزینه را می‌فرستد؛ text/longtext متن خام
     document.querySelectorAll('#f .ctx-item').forEach(function (item) {
       var radio = item.querySelector('input[type=radio]:checked');
       var t = item.querySelector('.txt');

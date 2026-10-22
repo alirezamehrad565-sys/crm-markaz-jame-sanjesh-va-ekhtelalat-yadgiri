@@ -1,11 +1,3 @@
-/**
- * نمای کارکنان
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/staff.js — مدیریت کارکنان: فهرست + ایجاد/ویرایش + فعال/غیرفعال
-// — تابلوی پیشرفت درمانگران همین‌جا (نمای مدیر) تعبیه می‌شود — به دستور کاربر:
-// «به مدیر نشون بده تو قسمت کارکنان و درمانگران» — جایگزین کارت «امتیاز محتوا»
-
 import { api } from '../api.js';
 import { fa, formatJalaliNumeric } from '../format.js';
 import { el, icon, formModal, confirmModal, openModal, toast, toastError, dataTable, statusBadge, loadingState, skeletonState, emptyState, phoneCell } from '../ui.js';
@@ -52,7 +44,6 @@ export async function renderStaff(container) {
       {
         key: 'contact',
         label: 'تلفن / کد ملی',
-        // — باجت تماس سیستمی کنار شمارهٔ همکار
         render: (s) => el('div', { class: 'cell-sub' },
           s.phone
             ? el('div', { dir: 'ltr', style: { textAlign: 'end' } }, phoneCell(s.phone, `تماس با همکار ${s.fullName} — ${fa(s.phone)}`))
@@ -97,7 +88,6 @@ export async function renderStaff(container) {
                     } catch (err) { toastError(err); }
                   }
                 }, icon('check', 15)),
-            // — حذف کامل همکار ثبت‌شدهٔ اشتباه/تکراری (فقط مدیر؛ سرور گارد سابقه دارد)
             el('button', {
               class: 'btn btn--danger btn--sm', title: 'حذف کامل — فقط اگر هیچ سابقه‌ای نداشته باشد',
               onclick: async () => {
@@ -122,7 +112,6 @@ export async function renderStaff(container) {
     }
   });
 
-  // — تابلوی پیشرفت درمانگران (فرمول سراسری: محتوا + استفادهٔ واقعی از سامانه)
   const boardMount = el('div', {});
 
   container.replaceChildren(
@@ -198,7 +187,6 @@ function openStaffForm(member, container) {
   });
 }
 
-/** — ساخت کد اتصال بات برای کارمند (معلم) —: با لینک احراز خودکار */
 async function createBotLink(member, container) {
   void container;
   try {

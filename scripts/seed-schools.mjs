@@ -1,19 +1,4 @@
 #!/usr/bin/env node
-// ─────────────────────────────────────────────────────────────────────────────
-// seed-schools.mjs — درج مدارس از فایل CSV روی استقرار هدف
-//
-//   node scripts/seed-schools.mjs <schools.csv> [--yes] [--dry-run]
-//                                 [--base https://<دامنه-استقرار-شما>]
-//                                 [--user <شناسهٔ کاربری>] [--pass <رمز>]
-//
-// امن‌سازی: شناسه/رمز پیش‌فرض ندارد — فقط از آرگومان یا متغیر محیطی خوانده می‌شود
-//
-// امن‌ها:
-//   • فقط POST /api/schools (ساخت مدرسه) — هیچ تغییری در دادهٔ موجود نمی‌دهد
-//   • idempotent: اگر کد یا نام مدرسه از قبل باشد، رد می‌شود (اجرای مجدد امن است)
-//   • همهٔ ورودی‌ها از همان اعتبارسنجی Zod فرم‌ها رد می‌شوند (کلاینت = فرم خود اپ)
-//   • --dry-run هیچ درخواستی نمی‌زند؛ فقط نقشهٔ تبدیل CSV→API را نشان می‌دهد
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { readFileSync } from 'node:fs';
 
@@ -40,7 +25,6 @@ if (!csvPath) {
   process.exit(1);
 }
 
-// ─── CSV پارسر کوچک (فیلدهای quoted با کاما را هم درست می‌خواند) ───
 function parseCsv(text) {
   const rows = [];
   let row = [], field = '', inQuotes = false;
@@ -65,7 +49,6 @@ function parseCsv(text) {
   return rows;
 }
 
-// ─── نگاشت CSV → payload API ───
 const GENDER = { 'مختلط': 'mixed', 'دخترانه': 'female', 'پسرانه': 'male' };
 
 function mapRow(r) {
@@ -85,7 +68,6 @@ function mapRow(r) {
   };
 }
 
-// ─── API helpers ───
 async function api(path, { method = 'GET', token, body } = {}) {
   const res = await fetch(BASE + path, {
     method,
@@ -106,7 +88,6 @@ console.log(line);
 console.log('🌱 seed-schools — درج مدارس CSV روی', BASE);
 console.log(line);
 
-// ─── ۱) خواندن و نگاشت CSV ───
 const raw = readFileSync(csvPath, 'utf8').replace(/^\uFEFF/, '');
 const rows = parseCsv(raw);
 const header = rows[0].map((h) => h.trim());
@@ -132,7 +113,6 @@ if (DRY) {
   process.exit(0);
 }
 
-// ─── ۲) ورود ───
 const login = await api('/api/auth/login', { method: 'POST', body: { username: USER, password: PASS } });
 if (login.status !== 200 || !login.json?.data?.token) {
   console.error('✘ ورود ناموفق:', login.status, (login.json?.error?.message) || login.text.slice(0, 200));
@@ -141,8 +121,6 @@ if (login.status !== 200 || !login.json?.data?.token) {
 const token = login.json.data.token;
 console.log(`   ورود: ✓ (${login.json.data.staff.fullName} — ${login.json.data.staff.role})`);
 
-// ─── ۳) فهرست موجود (برای idempotent بودن) ───
-// توجه: بدون پارامتر active = همه (فعال + غیرفعال)؛ ?active=false فقط غیرفعال‌ها را می‌دهد!
 const existing = await api('/api/schools', { token });
 if (existing.status !== 200) {
   console.error('✘ خواندن مدارس موجود ناموفق:', existing.status);
@@ -160,11 +138,9 @@ const normName = (n) => String(n || '')
 const haveNormNames = new Set(have.map((s) => normName(s.name)));
 console.log(`   مدارس موجود روی سایت (فعال + غیرفعال): ${have.length}`);
 
-// ─── ۴) درج ───
 let created = 0, skipped = 0;
 const failures = [];
 for (const x of items) {
-  // کد موجود یا نام نرمال‌شدهٔ موجود (مدرسهٔ دستی قدیمی با املای کمی متفاوت) → رد
   if (haveCodes.has(x.code) || haveNormNames.has(normName(x.name))) { skipped++; continue; }
   const res = await api('/api/schools', { method: 'POST', token, body: x });
   if (res.status === 201) {
@@ -176,7 +152,6 @@ for (const x of items) {
   }
 }
 
-// ─── ۵) جمع‌بندی ───
 console.log(line);
 console.log(`   ساخته‌شده: ${created} | از قبل موجود (رد شده): ${skipped} | خطا: ${failures.length}`);
 if (failures.length) {

@@ -1,9 +1,3 @@
-/**
- * ماژول کارکنان — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Staff REST endpoints — no business logic here, just wire to service
-
 import type { AppHono } from '@core/shared';
 import { NewStaffSchema, UpdateStaffSchema } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
@@ -25,7 +19,6 @@ export function registerRoutes(app: AppHono, service: StaffService): void {
     return c.json({ data: member }, 200);
   });
 
-  // تنظیم کارکنان فقط مدیر (تفکیک نقش‌ها: معلم/منشی فقط مشاهده برای فرم‌ها)
   app.post('/api/staff', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     const body = NewStaffSchema.parse(await c.req.json<unknown>());
@@ -75,7 +68,6 @@ export function registerRoutes(app: AppHono, service: StaffService): void {
     return c.json({ data: member }, 200);
   });
 
-  // حذف کامل همکار ثبت‌شدهٔ اشتباه — فقط مدیر؛ گاردها در سرویس (409)
   app.delete('/api/staff/:id', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     await service.remove(c.req.param('id'), actor);

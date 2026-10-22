@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — staff-schema-
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// اسکیمای کارمند v۲ (بدون ایمیل؛ تلفن + کد ملی + نام کاربری) و لاگین
-
 import { describe, it, expect } from 'vitest';
 import { NewStaffSchema, UpdateStaffSchema, LoginSchema } from '../schemas';
 
@@ -82,8 +76,6 @@ describe('LoginSchema', () => {
     expect(LoginSchema.safeParse({ username: '', password: '1234' }).success).toBe(false);
   });
 });
-
-// ───────────── پذیرش camelCase در بازه‌های کاری (رفع باگ قدیمی) ─────────────
 
 import { WorkingHourRangeSchema, NewWorkingHourSchema } from '../schemas';
 

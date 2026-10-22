@@ -1,11 +1,3 @@
-/**
- * ماژول رویدادساز (فرم/پرسش‌نامه/چک‌لیست) — توابع خالص منطق محض (بدون I/O)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// اعتبارسنجی خالص: تعریف نوع، payload رویداد و تحلیل چک‌لیست
-// پیوست فایل (الگوی ) + ماتریس ترنزیشن با پیش‌نویس
-// همهٔ توابع بدون db — تست‌پذیری کامل + همان قرارداد سایر دامنه‌ها
-
 import { z } from 'zod';
 import { ValidationError } from '@core/errors';
 import { ALLOWED_FILE_MIME_TYPES, MAX_FILE_BYTES } from '@core/shared';
@@ -15,19 +7,13 @@ import type {
 } from './types';
 import { CASE_EVENT_CATEGORIES, CASE_EVENT_FIELD_TYPES, CASE_EVENT_BAND_COLORS } from './types';
 
-// ───────── سقف‌ها ─────────
-
 export const TYPE_TITLE_MAX = 120;
 export const TYPE_KEY_MAX = 60;
-// ۸→۱۶: آیکون‌های وکتور جدید (clipboard=۹، calculator=۱۰) در سقف ۸ می‌ماندند
-// و ساخت هر قالب با پیام عمومی «ورودی نامعتبر است» رد می‌شد (باگ رویدادساز)
 export const TYPE_ICON_MAX = 16;
 export const FIELD_LABEL_MAX = 120;
 export const FIELD_KEY_MAX = 60;
 export const FIELD_OPTION_MAX = 120;
-/** — ۱۶: سلکت پایهٔ شرح حال v2 (پیش‌دبستانی تا دوازدهم = ۱۳ گزینه) — فرم‌ساز پنل همان ۱۲ را می‌سازد */
 export const FIELD_OPTIONS_MAX = 16;
-/** — ۴۵: باتری بالینی ثابت (SCARED 41 + SDQ 25 + SNAP-IV 26) — فرم‌ساز آزاد همان سقف را می‌گیرد */
 export const FIELDS_MAX = 45;
 export const SCALE_MAX_LIMIT = 10;
 export const EVENT_TEXT_MAX = 200;
@@ -35,30 +21,16 @@ export const EVENT_LONGTEXT_MAX = 2000;
 export const EVENT_SUMMARY_MAX = 300;
 export const BANDS_MAX = 5;
 export const BAND_LABEL_MAX = 80;
-/** — توصیه/تفسیر هر باند */
 export const BAND_ADVICE_MAX = 400;
-/** — زیرمقیاس‌ها */
 export const SUBSCALES_MAX = 8;
 export const SUBSCALE_NAME_MAX = 60;
 export const SUBSCALE_ID_MAX = 40;
-/** — نمرهٔ هر گزینه */
 export const OPTION_SCORE_LIMIT = SCALE_MAX_LIMIT;
-/** آستانهٔ ویزارد بات — چک‌لیست بلندتر → وب‌فرم (تصمیم ۳ طراحی) */
 export const CHECKLIST_BOT_MAX_ITEMS = 8;
-/** — سقف پیوست هر رویداد — هم‌تراز */
 export const EVENT_FILES_MAX = 10;
-/** — کلید فیلد «اقدام بعدی» — مقدار follow_up آن هوک ساخت پیگیری دارد */
 export const NEXT_ACTION_FIELD_KEY = 'next_action';
 
-// ─── پکیج فرم جامع خانواده (T5 m150 — چند-ابزاری) ───
-
-/** کلید پکیج فرم جامع خانواده — تعریف کامل در clinical-engine/battery-composite.json */
 export const COMPOSITE_FAMILY_KEY = 'ce-comp-family-v2';
-/**
- * کامپوننت‌های پکیج به‌ترتیب اجرا — آینهٔ packageComponents در battery-composite.json
- * (تست پاریتی دو سمت را گوار می‌کند). هر کامپوننت در submit، رویداد مستقل خودش را می‌گیرد
- * (همان اسکورینگ/زیرمقیاس/باند ابزار تکی) — موتور بعداً هر دو منبع تکی/تجمیعی را با همان قواعد می‌خواند.
- */
 export const COMPOSITE_FAMILY_COMPONENTS: readonly string[] = [
   'ce-snap-iv-p-v1',
   'ce-sdq-p-v1',
@@ -66,49 +38,30 @@ export const COMPOSITE_FAMILY_COMPONENTS: readonly string[] = [
   'ce-id-adapt-v1'
 ];
 
-/** آیا این نوع، پکیج چند-ابزاری است؟ کامپوننت‌ها را به‌ترتیب می‌دهد؛ وگرنه null */
 export function packageComponentsOf(typeKey: string | null | undefined): readonly string[] | null {
   if (typeKey === COMPOSITE_FAMILY_KEY) return COMPOSITE_FAMILY_COMPONENTS;
   if (typeKey === COMPOSITE_TEACHER_KEY) return COMPOSITE_TEACHER_COMPONENTS;
   return null;
 }
 
-// ─── پکیج فرم جامع معلم (T7 m150-b — چند-ابزاری + اتصال معلم به لینک) ───
-
-/** کلید پکیج فرم جامع معلم — تعریف کامل در clinical-engine/battery-composite.json */
 export const COMPOSITE_TEACHER_KEY = 'ce-comp-teacher-v2';
-/**
- * کامپوننت‌های پکیج به‌ترتیب اجرا — آینهٔ packageComponents در battery-composite.json
- * (تست پاریتی دو سمت را گوار می‌کند). کامپوننت‌ها تکی‌های موجود معلم‌اند
- * (ce-snap-iv-t-v1: ia/hi/odd · ce-sdq-t-v1: emo/cond/hyper/peer/pros) تا هم‌گرایی
- * والد×معلم بی‌بازنویسی موتور بماند + ملاک‌های کلاسی جدید با sld_read/sld_write/sld_calc
- * (هم‌نام سیگنال‌های شرح‌حال v3).
- */
 export const COMPOSITE_TEACHER_COMPONENTS: readonly string[] = [
   'ce-snap-iv-t-v1',
   'ce-sdq-t-v1',
   'ce-sld-class-t-v1'
 ];
 
-/**
- * — اتصال معلم به لینک عمومی (T7): لینک به‌ازای یک معلم صادر می‌شود؛ نام معلم در payload
- * رویداد لنگر (تا لحظهٔ پاسخ) با همین کلید می‌ماند و در لحظهٔ fill به payload همهٔ
- * رویدادهای تولیدشده با برچسب «پاسخ معلم» تزریق می‌شود.
- */
 export const TEACHER_BINDING_KEY = 'teacher_binding';
 export const TEACHER_NAME_FIELD_KEY = 'teacher_name';
 export const TEACHER_NAME_LABEL = 'پاسخ معلم';
-/** — سقف نام معلم در اتصال لینک */
 export const TEACHER_NAME_MAX = 120;
 
-/** پاک‌سازی نام معلم — خالی/کوتاه/بلند → null (تماس‌گیرنده پیام فارسی می‌دهد) */
 export function sanitizeTeacherName(raw: string | null | undefined): string | null {
   const s = String(raw ?? '').replace(/\s+/g, ' ').trim();
   if (s.length < 2 || s.length > TEACHER_NAME_MAX) return null;
   return s;
 }
 
-/** خواندن اتصال معلم از payload خام رویداد لنگر — ساختار ناشناخته/نام نامعتبر → null */
 export function teacherBindingOfPayload(payload: unknown): { name: string; teacherId: string | null } | null {
   if (!payload || typeof payload !== 'object') return null;
   const bind = (payload as Record<string, unknown>)[TEACHER_BINDING_KEY];
@@ -119,7 +72,6 @@ export function teacherBindingOfPayload(payload: unknown): { name: string; teach
   return { name, teacherId: typeof tid === 'string' && tid.length > 0 ? tid : null };
 }
 
-/** تزریق «پاسخ معلم: X» به payload برچسب‌دار — بدون اتصال → همان payload */
 export function withTeacherName(
   payload: Record<string, { value: string; label: string }>,
   teacher: { name: string } | null
@@ -128,37 +80,28 @@ export function withTeacherName(
   return { ...payload, [TEACHER_NAME_FIELD_KEY]: { value: teacher.name, label: TEACHER_NAME_LABEL } };
 }
 
-/** — مقدارهای مجاز فیلد اقدام بعدی — هم‌تراز NEXT_ACTION_VALUES بدون none */
 export const NEXT_ACTION_OPTIONS = ['هیچ', 'پیگیری', 'نوبت بعدی', 'تماس با خانواده', 'ارجاع'] as const;
-/** مقداری که هوک پیگیری می‌سازد */
 export const NEXT_ACTION_FOLLOW_UP = 'پیگیری';
 
-// ─── اعتبارسنجی پیوست (هم‌ارز assessments/pure ) ───
-
-/** برآورد حجم باینری از طول رشته base64 (بدون decode) — padding لحاظ می‌شود */
 export function estimateBase64Bytes(b64: string): number {
   const s = b64.replace(/\s/g, '');
   const padding = s.endsWith('==') ? 2 : s.endsWith('=') ? 1 : 0;
   return Math.max(0, Math.floor((s.length * 3) / 4) - padding);
 }
 
-/** حذف پیشوند data-URL اگر مخاطب کل محتوا را با FileReader خوانده باشد */
 export function stripDataUrlPrefix(b64: string): string {
   return b64.replace(/^data:[^;]*;base64,/, '');
 }
 
-/** پیوست فقط سند و تصویر — اجرایی/اسکریپت/آرشیو ممنوع */
 export function isAllowedMimeType(mime: string): boolean {
   return (ALLOWED_FILE_MIME_TYPES as readonly string[]).includes(mime.toLowerCase());
 }
 
-/** پاک‌سازی نام فایل: حذف مسیر (../ و / و \) + فروکاستن فاصله */
 export function sanitizeFilename(raw: string): string {
   const base = raw.split(/[/\\]/).pop() ?? '';
   return base.replace(/\s+/g, ' ').trim().slice(0, 200);
 }
 
-/** اعتبارسنجی کامل پیوست قبل از نوشتن — پیام فارسی برای ConflictError/ValidationError */
 export function validateFileInput(input: {
   filename: string;
   mimeType: string;
@@ -177,7 +120,6 @@ export function validateFileInput(input: {
   return { ok: true };
 }
 
-/** decode base64 → بایت (محیط Workers: atob در دسترس است) */
 export function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -185,13 +127,7 @@ export function base64ToBytes(b64: string): Uint8Array {
   return bytes;
 }
 
-// ───────── Zod — بدنهٔ API ─────────
-
-// ───── اسکیمای باند/زیرمقیاس/گزینهٔ نمره‌دار ─────
-
-/** — سقف معرفی روایی فرم */
 export const TYPE_DESCRIPTION_MAX = 500;
-/** — برچسب‌های کلامی لنگر پاسخ (تا سقف SCALE_MAX_LIMIT) */
 export const SCALE_LABEL_MAX = 60;
 
 export const CaseEventBandSchema = z.object({
@@ -213,16 +149,13 @@ export const CaseEventFieldSchema = z.object({
   label: z.string().min(1, 'برچسب فیلد الزامی است').max(FIELD_LABEL_MAX),
   type: z.enum(CASE_EVENT_FIELD_TYPES as unknown as [CaseEventFieldType, ...CaseEventFieldType[]]),
   options: z.array(z.string().min(1).max(FIELD_OPTION_MAX)).max(FIELD_OPTIONS_MAX).optional(),
-  // گزینه‌های نمره‌دار (فقط single) — نمره از گیرنده پنهان می‌ماند
   scoredOptions: z.array(z.object({
     label: z.string().min(1, 'برچسب گزینه الزامی است').max(FIELD_OPTION_MAX),
     score: z.number().int().min(0).max(OPTION_SCORE_LIMIT)
   })).max(FIELD_OPTIONS_MAX).optional(),
   scaleMax: z.number().int().min(1).max(SCALE_MAX_LIMIT).optional(),
-  // لنگرهای کلامی پاسخ (۰ تا scaleMax) — نمرهٔ ذخیره‌شده عددی می‌ماند
   scaleLabels: z.array(z.string().min(1).max(SCALE_LABEL_MAX)).max(SCALE_MAX_LIMIT + 1).optional(),
   required: z.boolean().optional(),
-  // روان‌سنجی: معکوس / بحرانی / زیرمقیاس
   reverse: z.boolean().optional(),
   critical: z.boolean().optional(),
   criticalMin: z.number().int().min(0).max(SCALE_MAX_LIMIT).optional(),
@@ -237,25 +170,17 @@ export const CaseEventTypeInputSchema = z.object({
   familyFillable: z.boolean().optional(),
   fields: z.array(CaseEventFieldSchema).min(1, 'حداقل یک فیلد فرم لازم است').max(FIELDS_MAX),
   bands: z.array(CaseEventBandSchema).max(BANDS_MAX).nullish(),
-  // زیرمقیاس‌های چک‌لیست
   subscales: z.array(CaseEventSubscaleSchema).max(SUBSCALES_MAX, `حداکثر ${SUBSCALES_MAX} زیرمقیاس`).nullish(),
-  // برچسب‌های قالب (tag id) + مخاطب چک‌لیست
   tags: z.array(z.string().min(8).max(64)).max(12, 'حداکثر ۱۲ برچسب برای هر قالب').nullish(),
   audience: z.enum(['family', 'teacher', 'both']).nullish()
 });
 
 export const CaseEventTypeUpdateSchema = CaseEventTypeInputSchema.partial();
 
-/** تبدیل ارقام لاتین به فارسی برای پیام‌های کاربر */
 function faNum(s: string | number): string {
   return String(s).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
 }
 
-/**
- * بررسی‌های معنایی تعریف فیلد — پیام فارسی برای فرم‌ساز پنل (: نمره‌گذاری روان‌سنجی v2)
- * — packageComponents (T5): پکیج چند-ابزاری — فرم زمینهٔ غیرنمره‌دار + اعلام کامپوننت‌ها؛
- *   نمره‌دهی فقط در کامپوننت‌هاست (هر type سقف ۴۵ فیلد/۸ زیرمقیاس خودش را دارد)
- */
 export function validateTypeDefinition(input: {
   category: string;
   fields: CaseEventField[];
@@ -264,7 +189,6 @@ export function validateTypeDefinition(input: {
   subscales?: CaseEventSubscale[] | null;
   packageComponents?: string[] | null;
 }): void {
-  // پکیج چند-ابزاری — قواعد خودش (قبل از قواعد چک‌لیست/جلسه)
   const pkg = input.packageComponents ?? null;
   if (pkg && pkg.length > 0) {
     if (input.familyFillable !== true) {
@@ -314,7 +238,6 @@ export function validateTypeDefinition(input: {
 
   for (const f of input.fields) {
     if (f.type === 'heading') {
-      // سربرگ بخش: فقط متن — نه مقدار، نه گزینه، نه نمره
       if (!f.label || f.label.trim().length === 0) {
         throw new ValidationError('متن سربرگ بخش نمی‌تواند خالی باشد');
       }
@@ -334,7 +257,6 @@ export function validateTypeDefinition(input: {
     if (f.type !== 'select' && f.options) {
       throw new ValidationError(`فیلد «${f.label}» گزینهٔ انتخابی ندارد — نوع آن select نیست`);
     }
-    // گزینه‌های نمره‌دار فقط برای single
     if (f.type === 'single') {
       if (!isChecklist) {
         throw new ValidationError(`نوع گزینه‌ای نمره‌دار «${f.label}» فقط در دستهٔ چک‌لیست مجاز است`);
@@ -354,7 +276,6 @@ export function validateTypeDefinition(input: {
     if (f.type === 'scale' && f.scaleMax !== undefined && (f.scaleMax < 1 || f.scaleMax > SCALE_MAX_LIMIT)) {
       throw new ValidationError(`سقف نمرهٔ «${f.label}» باید ۱ تا ${SCALE_MAX_LIMIT} باشد`);
     }
-    // معکوس فقط برای scale؛ بحرانی فقط برای نوع نمره‌دار (و نه آیتم معکوس)
     if (f.reverse && f.type !== 'scale') {
       throw new ValidationError(`آیتم معکوس فقط برای نوع نمره‌ای مجاز است — «${f.label}»`);
     }
@@ -367,18 +288,15 @@ export function validateTypeDefinition(input: {
     if (f.criticalMin !== undefined && !f.critical) {
       throw new ValidationError(`آستانهٔ بحرانی فقط همراه با آیتم بحرانی معنا دارد — «${f.label}»`);
     }
-    // زیرمقیاس باید تعریف شده باشد
     if (f.subscaleId && !subscaleIds.has(f.subscaleId)) {
       throw new ValidationError(`آیتم «${f.label}» به زیرمقیاس تعریف‌نشده وصل است`);
     }
   }
 
-  // چک‌لیست: همهٔ آیتم‌ها باید نمره‌دار باشند (scale یا گزینه‌ای نمره‌دار) — سربرگ هم مجاز نیست
   if (isChecklist && input.fields.some((f) => f.type !== 'scale' && f.type !== 'single')) {
     throw new ValidationError('فیلدهای چک‌لیست فقط از نوع نمره‌ای یا گزینه‌ای نمره‌دار می‌توانند باشند');
   }
 
-  // باندهای زیرمقیاس — سقف آخر باید کل بازهٔ زیرمقیاس را بپوشاند
   for (const s of input.subscales ?? []) {
     if (!s.bands || s.bands.length === 0) continue;
     const maxOfSub = input.fields.filter((f) => f.subscaleId === s.id).reduce((sum, f) => sum + itemMaxScore(f), 0);
@@ -391,7 +309,6 @@ export function validateTypeDefinition(input: {
   if (isChecklist && input.familyFillable !== false && input.bands && input.bands.length > 0) {
     const sorted = [...input.bands].sort((a, b) => a.max - b.max);
     if (sorted[input.bands.length - 1].max < totalPossible(input.fields, input.subscales)) {
-      // سقف آخر باید همهٔ نمره‌ها را بپوشاند — وگرنه نمرهٔ ماکسیمم بی‌باند می‌ماند
       throw new ValidationError('سقف آخرین باند باید برابر حداکثر نمرهٔ ممکن چک‌لیست باشد');
     }
   }
@@ -400,7 +317,6 @@ export function validateTypeDefinition(input: {
   }
 }
 
-/** ماکسیمم نمرهٔ یک آیتم نمره‌دار */
 export function itemMaxScore(f: CaseEventField): number {
   if (f.type === 'single') {
     const opts = f.scoredOptions ?? [];
@@ -408,12 +324,6 @@ export function itemMaxScore(f: CaseEventField): number {
   }
   return f.scaleMax ?? 3;
 }
-/**
- * نمرهٔ مؤثر یک آیتم از پاسخ خام:
- * - scale: raw ۰..scaleMax — معکوس: scaleMax - raw
- * - single: raw = اندیس گزینه در scoredOptions — نمره از جدول گزینه‌ها
- * پاسخ خالی → null (بی‌پاسخ)
- */
 export function itemScoreOf(f: CaseEventField, raw: number | null | undefined): number | null {
   if (raw === null || raw === undefined || Number.isNaN(Number(raw))) return null;
   const v = Number(raw);
@@ -431,24 +341,16 @@ export function itemScoreOf(f: CaseEventField, raw: number | null | undefined): 
   return f.reverse ? max - v : v;
 }
 
-/** حداکثر نمرهٔ ممکن چک‌لیست — فقط زیرمقیاس‌های داخلِ جمع (: +excludeFromTotal) */
 export function totalPossible(fields: CaseEventField[], subscales?: CaseEventSubscale[] | null): number {
   const excluded = new Set((subscales ?? []).filter((s) => s.excludeFromTotal).map((s) => s.id));
   return fields.reduce((sum, f) => (f.subscaleId && excluded.has(f.subscaleId) ? sum : sum + itemMaxScore(f)), 0);
 }
-
-// ───────── payload رویداد ─────────
 
 export interface PayloadEntry {
   value: string;
   label: string;
 }
 
-/**
- * اعتبارسنجی مقادیر فرم بر اساس تعریف نوع — خروجی payload نهایی با label.
- * قرارداد: فیلد خالیِ اختیاری حذف می‌شود؛ الزامی خالی → خطا.
- * — strict=false (پیش‌نویس): الزامی هم می‌تواند خالی بماند.
- */
 export function buildEventPayload(fields: CaseEventField[], values: Record<string, string | number | null | undefined>, strict = true): Record<string, PayloadEntry> {
   const payload: Record<string, PayloadEntry> = {};
   for (const f of fields) {
@@ -469,7 +371,6 @@ export function buildEventPayload(fields: CaseEventField[], values: Record<strin
         normalized = s;
         break;
       }
-      // گزینه‌ای نمره‌دار: raw = اندیس گزینه؛ نمایش = برچسب گزینه
       case 'single': {
         const idx = typeof raw === 'number'
           ? raw
@@ -509,17 +410,6 @@ export function buildEventPayload(fields: CaseEventField[], values: Record<strin
   return payload;
 }
 
-// ───────── تحلیل چک‌لیست ─────────
-
-/**
- * تحلیل چک‌لیست — موتور نمره‌گذاری روان‌سنجی v2:
- * - نمرهٔ مؤثر با آیتم‌های معکوس و جدول نمرهٔ گزینه‌ها
- * - نمرهٔ کل فقط از زیرمقیاس‌های داخلِ جمع (excludeFromTotal مثل SDQ)
- * - پرچم آیتم‌های بحرانی (مستقل از جمع کل)
- * - نمره و باند مستقل هر زیرمقیاس
- * - تفسیر خودکار فارسی (باند کل + زیرمقیاس‌ها + پرچم‌ها + توصیهٔ باندها)
- * سازگار با قالب‌های قدیمی (بدون زیرمقیاس/معکوس → نتیجهٔ v1)
- */
 export function analyzeChecklist(
   fields: CaseEventField[],
   bands: CaseEventBand[] | null,
@@ -559,7 +449,6 @@ export function analyzeChecklist(
       acc.answered += 1;
     }
     answered += 1;
-    // آیتم بحرانی — پرچم مستقل از جمع کل (خط قرمز بالینی)
     if (f.critical) {
       const threshold = f.criticalMin ?? itemMax;
       if (eff >= threshold) {
@@ -594,13 +483,11 @@ export function analyzeChecklist(
   };
 }
 
-/** یافتن باند از تعریف صعودی — v1 */
 export function resolveBand(score: number, bands: CaseEventBand[] | null): string | null {
   const hit = resolveBandV2(score, bands);
   return hit ? hit.label : null;
 }
 
-/** یافتن باند با رنگ و توصیه — v2 */
 export function resolveBandV2(score: number, bands: CaseEventBand[] | null): CaseEventBand | null {
   if (!bands || bands.length === 0) return null;
   const sorted = [...bands].sort((a, b) => a.max - b.max);
@@ -608,15 +495,10 @@ export function resolveBandV2(score: number, bands: CaseEventBand[] | null): Cas
   return hit ?? sorted[sorted.length - 1] ?? null;
 }
 
-/** تبدیل ارقام برای تفسیر خودکار */
 function faN(n: number): string {
   return faNum(n);
 }
 
-/**
- * تفسیر خودکار موتور تشخیص — متن فارسی ساخت‌یافته:
- * «نمرهٔ کل: ۱۸ از ۴۰ — مرزی — نیاز به توجه» + توصیهٔ باند + زیرمقیاس‌های باندخورده + آیتم‌های بحرانی
- */
 export function buildInterpretation(
   score: number,
   maxScore: number,
@@ -640,9 +522,6 @@ export function buildInterpretation(
   return lines.join('\n');
 }
 
-// ───────── خلاصهٔ تایم‌لاین ─────────
-
-/** خط خلاصهٔ رویداد — معنادارترین متن فرم (اولین مقدار ≥۱۰ نویسه)؛ وگرنه اولین مقدار */
 export function buildSummary(payload: Record<string, PayloadEntry> | null, analysis: CaseEventAnalysis | null): string | null {
   if (analysis) {
     const maxTotal = analysis.maxScore ?? analysis.total * 3;
@@ -659,29 +538,17 @@ export function buildSummary(payload: Record<string, PayloadEntry> | null, analy
   return Array.from(text).slice(0, EVENT_SUMMARY_MAX).join('');
 }
 
-// ───────── چیپ غربالگری حسی (T9/m152) ─────────
-
-/**
- * ابزار میکروی «حساسیت حسی» تب شناسایی — سه مشاهدهٔ ثابت × سه سطح، جمع ۰..۶.
- * تعریف آیتم/باند آینهٔ ورودی battery-screening.json است (هر تغییر ملاک = نسخهٔ جدید کد)؛
- * ثبت فقط از مسیر اختصاصی سرویس (createSensoryChipEvent) — عضو کتابخانهٔ فرم پنل نیست
- * و در موتور/rules مصرف نمی‌شود (افزودنی خالص — رفتار ابزارهای موجود دست‌نخورده).
- */
 export const SENSORY_CHIP_KEY = 'ce-sensory-chip-v1';
-/** شناسهٔ ثابت type — الگوی seed مایگریشن‌ها (bbbbbbbb-8200-…؛ سقف فعلی …021) — ensure داخلی سرویس idempotent است */
 export const SENSORY_CHIP_TYPE_ID = 'bbbbbbbb-8200-4000-8000-000000000031';
 
-/** سه سطح ثابت هر مجرای حسی — نمره ۰..۲ (اندیس همین آرایه) */
 export const SENSORY_CHIP_LEVEL_LABELS: readonly string[] = ['بدون حساسیت', 'حساسیت جزئی', 'حساسیت آزارنده'];
 
-/** سه مجرای ثابت چیپ — کلید/برچسب عین battery-screening.json */
 export const SENSORY_CHIP_ITEMS: readonly { key: string; label: string }[] = [
   { key: 'sound', label: 'صدا (صوت)' },
   { key: 'light', label: 'نور (نور/رنگ)' },
   { key: 'touch', label: 'لمس و بافت (لمس/جنس لباس/بافت غذا)' }
 ];
 
-/** تعریف فیلدها — زیرمقیاس واحد sens؛ آینهٔ battery-screening.json */
 export const SENSORY_CHIP_FIELDS: CaseEventField[] = SENSORY_CHIP_ITEMS.map((it) => ({
   key: it.key,
   label: it.label,
@@ -696,13 +563,6 @@ export const SENSORY_CHIP_SUBSCALES: CaseEventSubscale[] = [
   { id: 'sens', name: 'پروفایل حسی', bands: null }
 ];
 
-/**
- * باندهای چیپ — ۰–۱ بدون نشان / ۲–۳ جزئی / ۴–۶ قابل توجه (resolveBandV2).
- * قرارداد CaseEventBandSchema در Zod «max ≥ ۱» را گوار می‌کند؛ بنابراین باند اول از
- * max:۰ به max:۱ جابه‌جا شد — یک مشاهدهٔ «جزئی» منفرد (جمع ۱) دیگر الگوی نشان‌دار
- * نیست و در «بدون نشان — پایش عادی» می‌نشیند؛ از جمع ۲ الگوی جزئی و از ۴ الگوی
- * قابل توجه آغاز می‌شود. منطق سرویس و JSON باتری همگام است.
- */
 export const SENSORY_CHIP_BANDS: CaseEventBand[] = [
   { max: 1, label: 'بدون نشان', color: 'ok', advice: 'حساسیت حسی برجسته نیست — پایش دوره‌ای در جلسات عادی کافی است.' },
   { max: 3, label: 'حساسیت جزئی', color: 'warn', advice: 'حساسیت جزئی — در تنظیم محیط جلسه و توصیه‌های خانه لحاظ شود.' },
@@ -715,7 +575,6 @@ export interface SensoryChipLevels {
   touch: number;
 }
 
-/** نرمال‌سازی رقم فارسی/متنی — قرینهٔ buildEventPayload */
 function sensoryChipNumber(raw: unknown, label: string): number {
   const n = typeof raw === 'number'
     ? raw
@@ -726,10 +585,6 @@ function sensoryChipNumber(raw: unknown, label: string): number {
   return n;
 }
 
-/**
- * اعتبارسنجی سه سطح چیپ — آیتم جا/خارج از بازه → ValidationError با پیام فارسی.
- * ورودی نامعتبر (نوع غلط/آیتم اضافه نادیده) — خروجی همیشه {sound, light, touch} عددی.
- */
 export function validateSensoryChipLevels(values: unknown): SensoryChipLevels {
   const raw = (values && typeof values === 'object' ? values : {}) as Record<string, unknown>;
   const out: Record<string, number> = {};
@@ -743,26 +598,19 @@ export function validateSensoryChipLevels(values: unknown): SensoryChipLevels {
   return { sound: out.sound, light: out.light, touch: out.touch };
 }
 
-/** جمع ۰..۶ */
 export function sensoryChipTotalOf(levels: SensoryChipLevels): number {
   return levels.sound + levels.light + levels.touch;
 }
 
-/** باند چیپ از جمع — همان موتور باند چک‌لیست (resolveBandV2) */
 export function resolveSensoryChipBand(total: number): CaseEventBand {
   return resolveBandV2(total, SENSORY_CHIP_BANDS) ?? SENSORY_CHIP_BANDS[SENSORY_CHIP_BANDS.length - 1];
 }
 
-/** خلاصهٔ فارسی کوتاه چیپ — «حساسیت حسی: ۳ از ۶ — حساسیت قابل توجه» */
 export function sensoryChipFaSummary(levels: SensoryChipLevels): string {
   const total = sensoryChipTotalOf(levels);
   return `حساسیت حسی: ${faNum(total)} از ${faNum(6)} — ${resolveSensoryChipBand(total).label}`;
 }
 
-/**
- * payload نمایشی چیپ — آیتم‌ها (برچسب سطح) + نمرهٔ کل + باند + خلاصه.
- * کلیدهای extra با الگوی teacher_binding سازگارند (خواندن با label؛ ویرایش عمومی آن‌ها را دور می‌ریزد).
- */
 export function buildSensoryChipPayload(levels: SensoryChipLevels): Record<string, PayloadEntry> {
   const total = sensoryChipTotalOf(levels);
   const band = resolveSensoryChipBand(total);
@@ -776,31 +624,15 @@ export function buildSensoryChipPayload(levels: SensoryChipLevels): Record<strin
   return payload;
 }
 
-/** تحلیل چیپ — همان موتور v2 چک‌لیست (نمره/باند/تفسیر) تا تایم‌لاین هم‌شکل بقیهٔ ابزارها شود */
 export function analyzeSensoryChip(levels: SensoryChipLevels): CaseEventAnalysis {
   return analyzeChecklist(SENSORY_CHIP_FIELDS, SENSORY_CHIP_BANDS, { ...levels }, SENSORY_CHIP_SUBSCALES);
 }
 
-// ───────── چیپ هستهٔ خواندن (T10/m153) ─────────
-
-/**
- * ابزار میکروی «هستهٔ خواندن» مرحلهٔ مهارت‌ها (حالت SLD) — پنج مؤلفهٔ ثابت × سه سطح، جمع ۰..۱۰.
- * پایهٔ علمی: پنج مؤلفهٔ خواندن (National Reading Panel 2000) + نمای سادهٔ خواندن
- * (Simple View of Reading — Gough & Tunmer 1986): درک مطلب = رمزگشایی × فهم زبان.
- * تعریف آیتم/باند آینهٔ ورودی battery-screening.json است (هر تغییر ملاک = نسخهٔ جدید کد)؛
- * ثبت فقط از مسیر اختصاصی سرویس (createReadCoreEvent) — عضو کتابخانهٔ فرم پنل نیست
- * و در موتور/rules مصرف نمی‌شود (افزودنی خالص — رفتار ابزارهای موجود دست‌نخورده).
- * «پیشنهاد شرطی» تابع خالص readCoreAdviceOf است: الگوی مؤلفه‌های ثبت‌شده → ابزار رسمی
- * باتریِ گام بعد با دلیل فارسی — بدون هیچ برچسب تشخیصی و بدون ورود به موتور شک.
- */
 export const READ_CORE_KEY = 'ce-read-core-v1';
-/** شناسهٔ ثابت type — الگوی seed (…031 چیپ حسی) — ensure داخلی سرویس idempotent است */
 export const READ_CORE_TYPE_ID = 'bbbbbbbb-8200-4000-8000-000000000032';
 
-/** سه سطح ثابت هر مؤلفه — نمره ۰..۲ (اندیس همین آرایه) */
 export const READ_CORE_LEVEL_LABELS: readonly string[] = ['برقرار', 'مرزی', 'ضعف آشکار'];
 
-/** پنج مؤلفهٔ ثابت هستهٔ خواندن — کلید/برچسب عین battery-screening.json */
 export const READ_CORE_ITEMS: readonly { key: string; label: string }[] = [
   { key: 'pa', label: 'آگاهی واج‌شناختی (بخشیدن و ترکیب صدا، قافیه)' },
   { key: 'dec', label: 'رمزگشایی (خواندن واژهٔ تازه و بی‌معنی)' },
@@ -809,7 +641,6 @@ export const READ_CORE_ITEMS: readonly { key: string; label: string }[] = [
   { key: 'comp', label: 'درک مطلب (پاسخ به پرسش‌های متن)' }
 ];
 
-/** تعریف فیلدها — زیرمقیاس واحد rdcore؛ آینهٔ battery-screening.json */
 export const READ_CORE_FIELDS: CaseEventField[] = READ_CORE_ITEMS.map((it) => ({
   key: it.key,
   label: it.label,
@@ -824,12 +655,6 @@ export const READ_CORE_SUBSCALES: CaseEventSubscale[] = [
   { id: 'rdcore', name: 'هستهٔ خواندن', bands: null }
 ];
 
-/**
- * باندهای چیپ — ۰–۱ بدون نشان / ۲–۳ گیر مرزی / ۴–۱۰ ضعف آشکار (resolveBandV2).
- * قرارداد Zod «حداکثر باند ≥ ۱» رعایت است؛ یک مؤلفهٔ مرزی منفرد (جمع ۱) در
- * «بدون نشان» می‌نشیند و الگوی نشان‌دار از جمع ۲ آغاز می‌شود. منطق سرویس و
- * JSON باتری همگام است.
- */
 export const READ_CORE_BANDS: CaseEventBand[] = [
   { max: 1, label: 'بدون نشان', color: 'ok', advice: 'هستهٔ خواندن برقرار است — پایش دوره‌ای در جلسات عادی کافی است.' },
   { max: 3, label: 'گیر مرزی', color: 'warn', advice: 'گیرهای مرزی در مؤلفه‌های خواندن — در جلسات تقویتی هدفمند لحاظ شود و پس از ۸ هفته بازبینی شود.' },
@@ -844,7 +669,6 @@ export interface ReadCoreLevels {
   comp: number;
 }
 
-/** نرمال‌سازی رقم فارسی/متنی — قرینهٔ buildEventPayload */
 function readCoreNumber(raw: unknown, label: string): number {
   const n = typeof raw === 'number'
     ? raw
@@ -855,10 +679,6 @@ function readCoreNumber(raw: unknown, label: string): number {
   return n;
 }
 
-/**
- * اعتبارسنجی پنج سطح چیپ — آیتم جا/خارج از بازه → ValidationError با پیام فارسی.
- * ورودی نامعتبر (نوع غلط/آیتم اضافه نادیده) — خروجی همیشه {pa, dec, flu, voc, comp} عددی.
- */
 export function validateReadCoreLevels(values: unknown): ReadCoreLevels {
   const raw = (values && typeof values === 'object' ? values : {}) as Record<string, unknown>;
   const out: Record<string, number> = {};
@@ -872,25 +692,19 @@ export function validateReadCoreLevels(values: unknown): ReadCoreLevels {
   return { pa: out.pa, dec: out.dec, flu: out.flu, voc: out.voc, comp: out.comp };
 }
 
-/** جمع ۰..۱۰ */
 export function readCoreTotalOf(levels: ReadCoreLevels): number {
   return levels.pa + levels.dec + levels.flu + levels.voc + levels.comp;
 }
 
-/** باند چیپ از جمع — همان موتور باند چک‌لیست (resolveBandV2) */
 export function resolveReadCoreBand(total: number): CaseEventBand {
   return resolveBandV2(total, READ_CORE_BANDS) ?? READ_CORE_BANDS[READ_CORE_BANDS.length - 1];
 }
 
-/** خلاصهٔ فارسی کوتاه چیپ — «هستهٔ خواندن: ۳ از ۱۰ — گیر مرزی» */
 export function readCoreFaSummary(levels: ReadCoreLevels): string {
   const total = readCoreTotalOf(levels);
   return `هستهٔ خواندن: ${faNum(total)} از ${faNum(10)} — ${resolveReadCoreBand(total).label}`;
 }
 
-// ───── پیشنهاد شرطی (قرارداد T10/m153 — تابع خالص و بازتولیدپذیر) ─────
-
-/** برچسب فارسی ابزارهای رسمی باتری که پیشنهاد شرطی به آن‌ها ارجاع می‌دهد */
 export const READ_CORE_TOOL_FA: Record<string, string> = {
   'ce-sld-read-v1': 'چک‌لیست دشواری خواندن',
   'ce-probe-read-v1': 'آزمون کوتاه خواندن',
@@ -899,23 +713,9 @@ export const READ_CORE_TOOL_FA: Record<string, string> = {
 
 export interface ReadCoreAdvice {
   toolKey: string;
-  /** متن پیشنهاد — چرا و چطور (فارسی قابل‌نمایش) */
   text: string;
 }
 
-/**
- * پیشنهاد شرطی گام بعد از الگوی مؤلفه‌ها — تابع خالص (ورودی یکسان → خروجی یکسان).
- * منطق (NRP 2000 + نمای سادهٔ خواندن — Gough & Tunmer 1986):
- *  - آگاهی واج‌شناختی گیردار → چک‌لیست ملاکی خواندن (هم‌گرایی خانه/مدرسه) + تمرکز جلسه
- *  - رمزگشایی گیردار → پروب خواندن با بخش واژهٔ بی‌معنی
- *  - روانی گیردار → پروب خواندن CBM (واژهٔ درست در دقیقه) — هم‌ابزار رمزگشایی، متن‌ها به‌هم می‌پیوندند
- *  - واژگان گیردار → چک‌لیست زبان و گفتار (تفریق ریشهٔ زبانی)
- *  - درک مطلب گیردار با رمزگشایی/روانی برقرار → الگوی «درک زبانی» — چک‌لیست زبان و گفتار
- *    (درکِ متأثر از رمزگشایی پیشنهاد جدا نمی‌گیرد — از هم‌گیری کدگشایی پیروی می‌کند)
- *  - جمع ≥۴ (باند ضعف آشکار) → چک‌لیست ملاکی خواندن + پروب خواندن پیش از جلسهٔ بعد
- * خروجی dedupe‌شده بر کلید ابزار (متن‌های هم‌ابزار join) به ترتیب رسمی باتری —
- * فقط ابزارهای موجود در باتری رسمی پیشنهاد می‌شوند (همان قاعدهٔ پیشنهادگر T3).
- */
 export function readCoreAdviceOf(levels: ReadCoreLevels): ReadCoreAdvice[] {
   const texts = new Map<string, string[]>();
   const add = (toolKey: string, text: string): void => {
@@ -947,11 +747,6 @@ export function readCoreAdviceOf(levels: ReadCoreLevels): ReadCoreAdvice[] {
     .map((toolKey) => ({ toolKey, text: (texts.get(toolKey) ?? []).join(' ') }));
 }
 
-/**
- * payload نمایشی چیپ — آیتم‌ها (برچسب سطح) + نمرهٔ کل + باند + خلاصه + ردیف‌های
- * پیشنهاد شرطی (advice_N با برچسب «پیشنهاد گام بعد — ابزار»). کلیدهای extra با
- * الگوی teacher_binding سازگارند (خواندن با label؛ ویرایش عمومی آن‌ها را دور می‌ریزد).
- */
 export function buildReadCorePayload(levels: ReadCoreLevels): Record<string, PayloadEntry> {
   const total = readCoreTotalOf(levels);
   const band = resolveReadCoreBand(total);
@@ -968,26 +763,10 @@ export function buildReadCorePayload(levels: ReadCoreLevels): Record<string, Pay
   return payload;
 }
 
-/** تحلیل چیپ — همان موتور v2 چک‌لیست (نمره/باند/تفسیر) تا تایم‌لاین هم‌شکل بقیهٔ ابزارها شود */
 export function analyzeReadCore(levels: ReadCoreLevels): CaseEventAnalysis {
   return analyzeChecklist(READ_CORE_FIELDS, READ_CORE_BANDS, { ...levels }, READ_CORE_SUBSCALES);
 }
 
-// ───────── آزمون‌های عملکرد مرکزی — پروب‌های خواندن/نوشتن/حساب (T12/m160) ─────────
-
-/**
- * ارزیابی عملکردی مرحلهٔ ۴ مسیر یادگیری = آزمونِ درمانگر در مرکز (CBM — Curriculum-Based
- * Measurement). سه حوزهٔ ثابت با فیلدهای آینهٔ battery-clinical.json (ce-probe-*-v1 —
- * type کتابخانه‌ای فعال با category=session) و هنجارهای آینهٔ instruments.ts
- * (صدک ۵۰ مرجع Hasbrouck & Tindal 2017 — کالیبراسیون با دادهٔ مرکز).
- * ثبت فقط از مسیر اختصاصی سرویس (createProbeEvent) — رویداد completed با تحلیل هنجاری،
- * برخلاف مسیر عمومی createEvent که برای category=session تحلیل نمی‌سازد.
- * قرارداد باند مشترک هر سه حوزه:
- *   «در انتظار پایه» (ok) ≥۹۰٪ انتظار · «مرزی» (warn) ۷۰–۸۹٪ · «پایین‌تر از انتظار پایه» (danger) <۷۰٪
- * حوزهٔ نوشتن/حساب قواعد ترکیبی دارند (نرخ خطا / مقایسه و خط عددی — پایین، مستند).
- */
-
-/** پایه‌های هنجاری مشترک — آینهٔ instruments.ts (هر تغییر هنجار = همگام‌سازی دو سمت) */
 const PROBE_GRADE_OPTIONS: readonly string[] = ['اول', 'دوم', 'سوم', 'چهارم', 'پنجم', 'ششم', 'هفتم', 'هشتم'];
 
 export const PROBE_WCPM_NORM_50TH: Record<string, number> = {
@@ -1000,14 +779,12 @@ export const PROBE_DIGITS_2MIN_NORM: Record<string, number> = {
   'اول': 15, 'دوم': 25, 'سوم': 35, 'چهارم': 45, 'پنجم': 55, 'ششم': 55, 'هفتم': 55, 'هشتم': 55
 };
 
-/** باندهای مشترک پروب — بر حسب «درصد انتظار پایه» (۰ تا ۱۰۰+) */
 export const PROBE_BANDS: CaseEventBand[] = [
   { max: 69, label: 'پایین‌تر از انتظار پایه', color: 'danger', advice: 'عملکرد پایین‌تر از انتظار هم‌پایه‌ها — ارزیابی هدفمند حوزه و طراحی مداخلهٔ مستقیم آغاز شود.' },
   { max: 89, label: 'مرزی', color: 'warn', advice: 'عملکرد مرزی نزدیک انتظار پایه — پایش هفتگی پروب و تمرین هدفمند در جلسات توصیه می‌شود.' },
   { max: 2147483647, label: 'در انتظار پایه', color: 'ok', advice: 'عملکرد در انتظار پایه است — پایش دوره‌ای با پروب کافی است.' }
 ];
 
-/** کلید type کتابخانه‌ای هر حوزه — آینهٔ battery-clinical.json */
 export const PROBE_AREA_KEYS = {
   read: 'ce-probe-read-v1',
   write: 'ce-probe-write-v1',
@@ -1018,7 +795,6 @@ export const PROBE_AREA_LABELS: Record<ProbeArea, string> = {
   read: 'خواندن', write: 'نوشتن', calc: 'حساب'
 };
 
-/** قلم‌رو عددی فیلدهای هر حوزه — منبع پیام خطای فارسی و سقف ورودی */
 interface ProbeNumSpec { key: string; label: string; min: number; max: number; required: boolean }
 interface ProbeGradeSpec { key: string; label: string; required: boolean; grade: true }
 interface ProbeSelectSpec { key: string; label: string; required: boolean; options: readonly string[] }
@@ -1053,7 +829,6 @@ const PROBE_FIELD_SPECS: Record<ProbeArea, readonly ProbeFieldSpec[]> = {
   ]
 };
 
-/** نرمال‌سازی رقم فارسی/متنی — قرینهٔ buildEventPayload */
 function probeNumber(raw: unknown, spec: ProbeNumSpec): number {
   const n = typeof raw === 'number'
     ? raw
@@ -1064,10 +839,6 @@ function probeNumber(raw: unknown, spec: ProbeNumSpec): number {
   return n;
 }
 
-/**
- * اعتبارسنجی ورودی پروب — فیلد الزامیِ جا/عدد خارج از قلم‌رو/گزینهٔ نامعتبر →
- * ValidationError فارسی. خروجی: فقط کلیدهای شناخته‌شدهٔ حوزه (string|number).
- */
 export function validateProbeValues(area: ProbeArea, values: unknown): Record<string, string | number> {
   const raw = (values && typeof values === 'object' ? values : {}) as Record<string, unknown>;
   const out: Record<string, string | number> = {};
@@ -1099,20 +870,14 @@ export function validateProbeValues(area: ProbeArea, values: unknown): Record<st
 }
 
 export interface ProbeResult {
-  /** درصد انتظار پایه (شاخص اصلی باند) */
   pct: number;
   band: CaseEventBand;
-  /** ردیف‌های عددی نمایشی — {value, label} برای کارت فرانت */
   metrics: { value: string; label: string }[];
-  /** پرچم‌های علمی مستقل از باند */
   flags: CaseEventFlag[];
-  /** خط هنجار مرجع — «انتظار پایهٔ سوم …» */
   normFa: string;
-  /** خلاصهٔ فارسی یک‌خطی */
   faSummary: string;
 }
 
-/** درصد گردشده نسبت به هنجار */
 function probePct(value: number, norm: number): number {
   return Math.round((value / norm) * 100);
 }
@@ -1121,15 +886,8 @@ function probeBandOf(pct: number): CaseEventBand {
   return resolveBandV2(pct, PROBE_BANDS) ?? PROBE_BANDS[PROBE_BANDS.length - 1];
 }
 
-/** ارقام فارسی برای متن‌های نمایشی */
 const faNumProbe = (n: number): string => faNum(n);
 
-/**
- * تحلیل هنجاری هر حوزه — تابع خالص (ورودی اعتبارسنجی‌شده → خروجی ثابت).
- * خواندن: pct = wcpm/هنجار؛ پرچم رمزگشایی (<۱۰ از ۲۰) و فهم متن (≤۱ از ۳).
- * نوشتن: دقت املایی = ۱ − نرخ خطا؛ باند از ترکیب دقت + روانی دست (قاعدهٔ مستند در کامنت).
- * حساب: pct ارقام درست؛ تشدید باند با مقایسهٔ مقدار/خط عددی/مسئلهٔ کلامی.
- */
 export function analyzeProbe(area: ProbeArea, v: Record<string, string | number>): ProbeResult {
   const flags: CaseEventFlag[] = [];
   const metrics: { value: string; label: string }[] = [];
@@ -1168,7 +926,6 @@ export function analyzeProbe(area: ProbeArea, v: Record<string, string | number>
     const alpha = Number(v.alpha15s);
     const norm = PROBE_ALPHA_15S_NORM[grade];
     const fluPct = probePct(alpha, norm);
-    // قاعدهٔ ترکیبی نارسانویسی: نرخ خطای املایی بالا و/یا روانی نوشتن پایین
     const band = (errRate > 0.25 || fluPct < 70) ? PROBE_BANDS[0]
       : (errRate > 0.10 || fluPct < 90) ? PROBE_BANDS[1]
         : PROBE_BANDS[2];
@@ -1185,7 +942,6 @@ export function analyzeProbe(area: ProbeArea, v: Record<string, string | number>
     return { pct: Math.max(0, spellPct), band, metrics, flags, normFa, faSummary: `آزمون نوشتن: دقت املایی ${head} — ${band.label}` };
   }
 
-  // calc
   const grade = String(v.calc_grade);
   const norm = PROBE_DIGITS_2MIN_NORM[grade];
   const digits = Number(v.digits2min);
@@ -1201,7 +957,6 @@ export function analyzeProbe(area: ProbeArea, v: Record<string, string | number>
   if (v.word_problem_support !== undefined) {
     metrics.push({ value: String(v.word_problem_support), label: 'راهنمایی مسئلهٔ کلامی' });
   }
-  // تشدید مستند: مقایسهٔ مقدار ≥۴ → حداقل «مرزی»؛ مقایسهٔ ≥۶ یا خط عددی ≥۲۵٪ یا «بی‌راه‌حل» → «پایین‌تر از انتظار»
   const nlPct = v.number_line_pct !== undefined ? Number(v.number_line_pct) : 0;
   const support = v.word_problem_support !== undefined ? String(v.word_problem_support) : 'کم';
   if (compareErr >= 6 || nlPct >= 25 || support === 'بی‌راه‌حل') band = PROBE_BANDS[0];
@@ -1212,11 +967,6 @@ export function analyzeProbe(area: ProbeArea, v: Record<string, string | number>
   return { pct, band, metrics, flags, normFa, faSummary: `آزمون حساب: ${faNumProbe(pct)}٪ انتظار پایهٔ ${grade} — ${band.label}` };
 }
 
-/**
- * payload نمایشی پروب — فیلدها (ارقام فارسی) + ردیف‌های عددی (chip_metric_N) +
- * باند (chip_band) + هنجار مرجع (norm_fa) + خلاصه (fa_summary). کلیدهای extra با
- * الگوی teacher_binding سازگارند (خواندن با label؛ ویرایش عمومی آن‌ها را دور می‌ریزد).
- */
 export function buildProbePayload(area: ProbeArea, v: Record<string, string | number>, result: ProbeResult): Record<string, PayloadEntry> {
   const payload: Record<string, PayloadEntry> = {};
   for (const spec of PROBE_FIELD_SPECS[area]) {
@@ -1234,7 +984,6 @@ export function buildProbePayload(area: ProbeArea, v: Record<string, string | nu
   return payload;
 }
 
-/** تحلیل استاندارد CaseEventAnalysis پروب — score = درصد انتظار پایه، maxScore = ۱۰۰ */
 export function probeAnalysisOf(area: ProbeArea, v: Record<string, string | number>, result: ProbeResult): CaseEventAnalysis {
   const spec = PROBE_FIELD_SPECS[area];
   const interpretationLines = [
@@ -1253,48 +1002,29 @@ export function probeAnalysisOf(area: ProbeArea, v: Record<string, string | numb
   };
 }
 
-// ───────── ارزیابی عملکردی توانبخشی ذهنی (m161) — آزمونِ درمانگر در مرکز ─────────
-// تمرکز مسیر توانبخشی ذهنی-جسمی روی «کار درمانی ذهنی» است: شش حیطهٔ شناختی پایه با
-// دادهٔ خام عددی + سطح راهنما (خط پایهٔ محوشدن راهنما). ملاک هر حیطه = ملاک کمی
-// مهارت متناظر در چک‌لیست ۷ حیطه‌ای (ot_skills — مایگریشن 0047/0048) تا ارزیابی پایه
-// و ماتریس مداخله جلسه‌به‌جلسه یک زبان مشترک داشته باشند:
-//   att_sus ← ot-cog-07 (توجه پایدار)     att_sel ← ot-cog-08 (توجه انتخابی)
-//   wm      ← ot-aud-06 (حافظهٔ کاری)     inh     ← ot-cog-10 (بازداری)
-//   flex    ← ot-cog-11 (انعطاف ذهنی)     ps      ← ot-cog-12 (حل مسئله)
-// رویکرد: رشدی-ملاکی (نه هنجار سنی) — مناسب پرونده‌های توانبخشی با تأخیر رشدی.
-
 export const REHAB_FX_KEY = 'ce-rehab-fx-v1';
 export const REHAB_FX_TYPE_ID = 'bbbbbbbb-8200-4000-8000-000000000033';
 
-/** سطح راهنما — آینهٔ OT_PROMPT_LEVEL_LABELS موتور OT + «بدون راهنما» (استقلال کامل) */
 export const REHAB_FX_PROMPT_OPTIONS: readonly string[] = [
   'بدون راهنما', 'راهنمای کلامی', 'ژستی / الگودهی', 'لمسی جزئی', 'راهنمای فیزیکی کامل'
 ];
 export const REHAB_FX_PROMPT_DEFAULT = 'بدون راهنما';
 
-/** پیام یک حیطهٔ خام — تعداد کل مبنای پرچم حل مسئله (توالی داستان) */
 export const REHAB_FX_STORY_MAX = 4;
 
 export interface RehabFxDomainSpec {
   key: string;
   label: string;
-  /** واحد دادهٔ خام — در ردیف نمایشی و پیام خطا می‌نشیند */
   unit: string;
   min: number;
   max: number;
-  /** جهت مقایسه با ملاک — خطا/کمک = lower_better، مدت/توالی/تکه = higher_better */
   kind: 'higher_better' | 'lower_better';
-  /** مرز «مرزی» — بالاترین مقدار ضعف (higher) یا آخرین مقدار مرزی (lower) */
   weakMax: number;
-  /** مرز «در انتظار» — کمترین مقدار در انتظار */
   okMin: number;
-  /** ملاک قبولی ot_skills متناظر — در کارت و هنجار مرجع نمایش داده می‌شود */
   criterionFa: string;
-  /** متن پیشنهاد مداخلهٔ حیطه‌ای — برای حیطه‌های مرزی/ضعیف */
   adviceFa: string;
 }
 
-/** شش حیطهٔ پایه — ترتیب نمایشی همین است؛ مرزها یک‌جا برای تست قابل‌گوان هستند */
 export const REHAB_FX_DOMAINS: readonly RehabFxDomainSpec[] = [
   {
     key: 'att_sus', label: 'توجه پایدار', unit: 'دقیقهٔ تمرکز پیوسته', min: 0, max: 15,
@@ -1334,7 +1064,6 @@ export const REHAB_FX_DOMAINS: readonly RehabFxDomainSpec[] = [
   }
 ];
 
-/** فیلدهای فرم type (آینهٔ مودال) — عدد هر حیطه + سطح راهنما + توالی داستان + مشاهده */
 export function rehabFxTypeFields(): CaseEventField[] {
   const fields: CaseEventField[] = [];
   for (const d of REHAB_FX_DOMAINS) {
@@ -1348,7 +1077,6 @@ export function rehabFxTypeFields(): CaseEventField[] {
   return fields;
 }
 
-/** باندهای کلی type — بر حسب ترکیب شش حیطه (max بلند برای resolve ساده) */
 export const REHAB_FX_BANDS: CaseEventBand[] = [
   { max: 2, label: 'نیاز به مداخلهٔ همه‌جانبهٔ ذهنی', color: 'danger', advice: 'سه حیطه یا بیشتر ضعیف است — برنامهٔ جلسات از حیطه‌های پایه (توجه/بازداری) شروع شود و هر حیطه یک هدف کوچک هفتگی بگیرد.' },
   { max: 4, label: 'گیرهای نقطه‌ای — مداخلهٔ حیطه‌ای هدفمند', color: 'warn', advice: 'ترکیب قوت/ضعف نقطه‌ای است — مداخله از حیطه‌های ضعیف آغاز و حیطه‌های قوت به‌عنوان پل انگیزشی به‌کار رود؛ بازسنجی ۸ تا ۱۲ جلسه.' },
@@ -1369,7 +1097,6 @@ export interface RehabFxDomainResult {
   key: string;
   label: string;
   value: number;
-  /** متن نمایشی خام — «۷ دقیقهٔ تمرکز پیوسته» */
   valueFa: string;
   band: CaseEventBand;
   prompt: string;
@@ -1377,18 +1104,15 @@ export interface RehabFxDomainResult {
 }
 
 export interface RehabFxResult {
-  /** ردیف هر شش حیطه به ترتیب نمایش */
   domains: RehabFxDomainResult[];
   counts: { ok: number; warn: number; weak: number };
   band: CaseEventBand;
-  /** پرچم‌های علمی مستقل از باند کلی */
   flags: CaseEventFlag[];
   metrics: { value: string; label: string }[];
   normFa: string;
   faSummary: string;
 }
 
-/** باند هر حیطه — مرزها از spec؛ خطا/کمک معکوس خوانده می‌شود */
 function rehabFxDomainBand(d: RehabFxDomainSpec, value: number): CaseEventBand {
   const OK: CaseEventBand = { max: 0, label: 'در انتظار', color: 'ok', advice: REHAB_FX_BANDS[2].advice };
   const WARN: CaseEventBand = { max: 0, label: 'مرزی', color: 'warn', advice: REHAB_FX_BANDS[1].advice };
@@ -1403,11 +1127,6 @@ function rehabFxDomainBand(d: RehabFxDomainSpec, value: number): CaseEventBand {
   return WEAK;
 }
 
-/**
- * تحلیل ارزیابی عملکردی توانبخشی ذهنی — تابع خالص.
- * باند کلی از ترکیب شش حیطه: ≥۵ «در انتظار» · ≥۳ ضعف «مداخلهٔ همه‌جانبه» · بقیه «گیرهای نقطه‌ای».
- * توالی داستان (اختیاری) فقط پرچم می‌سازد — باند حل مسئله از پازل است.
- */
 export function analyzeRehabFx(v: Record<string, string | number>): RehabFxResult {
   const domains: RehabFxDomainResult[] = [];
   const flags: CaseEventFlag[] = [];
@@ -1432,7 +1151,6 @@ export function analyzeRehabFx(v: Record<string, string | number>): RehabFxResul
     }
     metrics.push({ value: `${faNum(value)} ${d.unit} — ${band.label}`, label: d.label });
   }
-  // پرچم توالی داستان — مکمل حل مسئله
   if (v.d_ps_story !== undefined && String(v.d_ps_story).trim() !== '') {
     const story = rehabFxNumber(v.d_ps_story, { key: 'ps_story', label: 'توالی داستان', unit: 'تصویر', min: 0, max: REHAB_FX_STORY_MAX, kind: 'higher_better', weakMax: 0, okMin: 3, criterionFa: '', adviceFa: '' });
     metrics.push({ value: `${faNum(story)} از ${faNum(REHAB_FX_STORY_MAX)}`, label: 'توالی داستان' });
@@ -1446,7 +1164,6 @@ export function analyzeRehabFx(v: Record<string, string | number>): RehabFxResul
   return { domains, counts: { ok, warn, weak }, band, flags, metrics, normFa, faSummary };
 }
 
-/** پیشنهادهای حیطه‌ای شرطی — فقط حیطه‌های مرزی/ضعیف، به ترتیب نمایش */
 export function rehabFxAdviceOf(result: RehabFxResult): { label: string; text: string }[] {
   const out: { label: string; text: string }[] = [];
   for (const dom of result.domains) {
@@ -1457,15 +1174,9 @@ export function rehabFxAdviceOf(result: RehabFxResult): { label: string; text: s
   return out;
 }
 
-/**
- * payload نمایشی ارزیابی عملکردی توانبخشی — فیلدها (ارقام فارسی) + ردیف‌های عددی
- * (chip_metric_N) + باند هر حیطه (fx_{key}_band) + سطح راهنما (fx_{key}_prompt) +
- * باند کلی (chip_band) + ملاک مرجع (norm_fa) + خلاصه (fa_summary) + پیشنهادها (advice_N).
- */
 export function buildRehabFxPayload(v: Record<string, string | number>, result: RehabFxResult): Record<string, PayloadEntry> {
   const payload: Record<string, PayloadEntry> = {};
   for (const d of REHAB_FX_DOMAINS) {
-    // مقدار خام از تحلیل (پارس‌شده با تبدیل رقم فارسی) — نه پارس دوبارهٔ رشتهٔ ورودی
     const dom = result.domains.find((x) => x.key === d.key);
     payload[`d_${d.key}`] = { value: faNum(dom?.value ?? Number(v[`d_${d.key}`])), label: `${d.label} — ${d.unit}` };
     if (dom) {
@@ -1498,7 +1209,6 @@ export function buildRehabFxPayload(v: Record<string, string | number>, result: 
   return payload;
 }
 
-/** تحلیل استاندارد CaseEventAnalysis — score = شمار حیطه‌های «در انتظار» از ۶ */
 export function rehabFxAnalysisOf(v: Record<string, string | number>, result: RehabFxResult): CaseEventAnalysis {
   const interpretationLines = [
     result.faSummary,
@@ -1517,11 +1227,6 @@ export function rehabFxAnalysisOf(v: Record<string, string | number>, result: Re
   };
 }
 
-/**
- * اعتبارسنجی ظرف ورودی ارزیابی عملکردی — کلیدهای شناخته‌شده (d_دامنه / p_دامنه / d_ps_story / notes)
- * پالایش می‌شوند؛ حیطهٔ جا → ValidationError فارسی. اعداد ممکن است رشته بیایند (مودال) —
- * parse نهایی در rehabFxNumber انجام می‌شود؛ سطح راهنمای نامعتبر در analyzeRehabFx رد می‌شود.
- */
 export function validateRehabFxValues(values: unknown): Record<string, string | number> {
   const raw = (values && typeof values === 'object' ? values : {}) as Record<string, unknown>;
   const out: Record<string, string | number> = {};
@@ -1544,8 +1249,6 @@ export function validateRehabFxValues(values: unknown): Record<string, string | 
   return out;
 }
 
-// ───────── ماتریس ترنزیشن وضعیت ─────────
-
 export const CASE_EVENT_TRANSITIONS: Record<string, string[]> = {
   draft: ['completed', 'cancelled'],
   completed: ['cancelled'],
@@ -1557,7 +1260,6 @@ export function canTransitionStatus(from: string, to: string): boolean {
   return (CASE_EVENT_TRANSITIONS[from] ?? []).includes(to);
 }
 
-/** — آیا فیلد «اقدام بعدی» در تعریف نوع هست و مقدار follow_up دارد؟ */
 export function extractFollowUpAction(
   fields: CaseEventField[],
   payload: Record<string, PayloadEntry> | null

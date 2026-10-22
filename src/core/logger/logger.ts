@@ -1,10 +1,3 @@
-/**
- * لاگر ساخت‌یافتهٔ Worker — پیاده‌سازی لاگر
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Structured logger — خروجی JSON، بدون PII (قانون ۹)
-// مسئولیت پرهیز از PII با فراخواننده است؛ این ماژول فقط scope و سطح را اضافه می‌کند.
-
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface Logger {

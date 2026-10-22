@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — staff
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست pure تجمیع حضور و غیاب همکاران
-
 import { describe, it, expect } from 'vitest';
 import { aggregateDay, aggregateRange, daysInRange, countDaysInclusive } from '../staff';
 
@@ -59,7 +53,6 @@ describe('aggregateDay', () => {
     expect(s.totalActiveStaff).toBe(5);
   });
 
-  // تأخیر وضعیت مستقل است و در خلاصهٔ روز شمرده می‌شود
   it('تأخیر جداگانه شمرده می‌شود و unmarked را پر می‌کند', () => {
     const rows = [
       row({ staff_id: 's1', status: 'late' }),

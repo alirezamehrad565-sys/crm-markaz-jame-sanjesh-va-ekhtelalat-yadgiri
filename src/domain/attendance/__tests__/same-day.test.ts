@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — same-day
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// قاعده «حضور و غیاب کارمند فقط برای همان روز»
-
 import { describe, it, expect } from 'vitest';
 import { canMarkDate } from '../staff';
 

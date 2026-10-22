@@ -1,16 +1,3 @@
-/**
- * ماژول پیگیری‌ها — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Business logic پیگیری (فاز ۳) — مالک WRITE جدول followups
-// قواعد:
-// - audit هم‌تراکنش (قانون ۴) — title در audit مجاز است (PII نیست؛ §13)
-// - overdue ستون ندارد — computed: باز ∧ due_at<now (گروه‌بندی pure.ts)
-// - وضعیت فقط با ماتریس pure.ts؛ done/cancelled پایان‌حالت‌اند
-// - due_at همیشه نرمال‌شده ذخیره می‌شود (toISOString) تا مقایسهٔ رشته‌ای مرزها درست بماند
-// - RBAC ویرایش: مدیر/منشی یا خودِ مسئول پیگیری (§13.2) — درمانگرِ غیرمسئول ۴۰۳
-// - read-back فقط بعد از commit (درس فاز W — خواندن داخل tx مقدار کهنه می‌دهد)
-
 import type { AuthContext, FollowUp, FollowUpGroup, FollowUpStatus } from '@core/shared';
 import { FOLLOWUP_LIST_LIMIT, FOLLOWUP_OPEN_STATUSES } from '@core/shared';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
@@ -71,7 +58,6 @@ const SELECT_BASE = `
     LEFT JOIN staff sa ON sa.id = f.assignee_id
     LEFT JOIN staff sc ON sc.id = f.created_by`;
 
-/** نرمال‌سازی مهلت: undefined = پیش‌فرض +۷ روز · null = بی‌مهلت · رشته = ISO نرمال */
 function normalizeDueAt(value: string | null | undefined, now: Date): string | null {
   if (value === null) return null;
   if (value === undefined) return defaultDueAt(now);
@@ -90,9 +76,7 @@ export function createFollowUpsService(deps: FollowUpDeps): FollowUpsService {
     return row;
   }
 
-  /** شرط‌های گروه §13.4 — مرزها از pure (تهران) و due_at نرمال‌شده → مقایسهٔ رشته‌ای معتبر */
   function groupCondition(group: FollowUpGroup | 'all' | undefined, params: unknown[]): string {
-    // فاز ۶ — تب پیگیری‌های پروفایل: همهٔ وضعیت‌ها (باز + بسته) بدون فیلتر زمانی
     if (group === 'all') return '1=1';
     if (!group || group === 'open') return `f.status IN (${OPEN_LIST})`;
     const { nowIso, todayEnd, weekEnd } = groupBoundaries(new Date());
@@ -113,7 +97,6 @@ export function createFollowUpsService(deps: FollowUpDeps): FollowUpsService {
     return `${dated} AND f.due_at > ?`;
   }
 
-  /** INSERT + audit — بدون read-back؛ پاسخ در حافظه ساخته می‌شود (قرارداد WithinTx) */
   async function insertWithinTx(
     tx: DbClient,
     id: string,
@@ -227,7 +210,6 @@ export function createFollowUpsService(deps: FollowUpDeps): FollowUpsService {
         const row = await loadRow(tx, id);
         const status = row.status as FollowUpStatus;
 
-        // RBAC (§13.2): مدیر/منشی یا خودِ مسئول پیگیری
         const privileged = actor.role === 'manager' || actor.role === 'secretary';
         if (!privileged && row.assignee_id !== actor.staffId) {
           throw new ForbiddenError('ویرایش پیگیری فقط توسط مسئول همان پیگیری یا مدیر/منشی مجاز است');
@@ -292,7 +274,6 @@ export function createFollowUpsService(deps: FollowUpDeps): FollowUpsService {
           changes
         });
       });
-      // read-back بعد از commit
       return (await service.getById(id)) as FollowUp;
     },
 

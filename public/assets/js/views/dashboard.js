@@ -1,19 +1,3 @@
-/**
- * نمای داشبورد
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/dashboard.js — بازطراحی کامل داشبورد
-// دستور کاربر: «داشبورد خیلی اطلاعات مهمی رو نمیده؛ طراحی شو دوست ندارم —
-// برای درمانگران باید شامل اطلاعات رقابتی باشه که تلاششون رو بیشتر کنه
-// (تعداد جلسات، افزودن تمرین به لیست تمرین، طراحی رویداد بیشتر و...)؛
-// سمت مدیر و منشی هم طراحیش جالب نیست؛ باید بخش‌هایی برای اطلاع‌رسانی و
-// دانش‌افزایی بگذاریم»
-//
-// سه چهرهٔ نقش‌محور:
-// درمانگر → «کارنامهٔ من» + تابلوی رقابتی + نردبان گزارش‌نویسی + دانش/اطلاع‌رسانی
-// دفتر → KPIهای امروز + عملکرد تیم + سنجش + کارهای داخلی + دانش/اطلاع‌رسانی
-// ناظر → KPIهای تجمعی + عملکرد تیم (فقط خواندنی)
-
 import { api, qs } from '../api.js';
 import {
   addDaysYmd,
@@ -32,10 +16,6 @@ import { illoHeroOrnament, illoNoAnnouncements, illoKnowledge } from '../illustr
 import { session } from '../state.js';
 import { canSeeTodos, renderMyTodosCard } from '../my-todos.js';
 
-// وزن‌ها فقط سمت سرور می‌مانند؛ هیچ متن فرمولی در داشبورد نمایش داده نمی‌شود
-// («به صورت خلاصه بدون اینکه از فرمول مطلع بشن»)
-
-// برچسب دسته‌های دانش‌افزایی — هم‌تراز KNOWLEDGE_CATEGORY_LABELS سرور
 const KNOWLEDGE_CATEGORY_LABELS = { tip: 'نکتهٔ آموزشی', protocol: 'پروتکل درمانی', article: 'مقاله', news: 'خبر مرکز' };
 
 export async function renderDashboard(container) {
@@ -49,22 +29,18 @@ export async function renderDashboard(container) {
   const from = addDaysYmd(today, -6);
   const dayRange = tehranDayRange(today);
 
-  // ─── داده‌های نقش‌محور — خطای هر کارت مستقل است و بقیهٔ داشبورد نمی‌شکند ───
   const safe = (p) => p.then((r) => r.data).catch(() => null);
 
   const [todayData, summaryData, goalData, scoring, myStats, knowledge, announcements, waitlist, dayAppts, followups] = await Promise.all([
     isTherapist ? Promise.resolve(null) : safe(api.get(`/api/dashboard/today${qs({ date: today })}`)),
     isTherapist ? Promise.resolve(null) : safe(api.get(`/api/dashboard/summary${qs({ from, to: today })}`)),
     isOffice ? safe(api.get('/api/dashboard/screening-goal')) : Promise.resolve(null),
-    // تابلوی پیشرفت از موتور سراسری امتیاز (۳۰ روز اخیر) — جایگزین leaderboard قدیمی
     safe(api.get('/api/scoring/board?period=month')),
     safe(api.get('/api/dashboard/me')),
     safe(api.get('/api/knowledge')),
     safe(api.get('/api/announcements')),
     isOffice ? safe(api.get('/api/waitlist')) : Promise.resolve(null),
-    // نوار خط زمانی امروز (نوبت‌های امروز با رنگ درمانگرها)
     isOffice ? safe(api.get(`/api/appointments${qs({ from: dayRange.start, to: dayRange.end })}`)) : Promise.resolve(null),
-    // پیگیری‌های سررسیده (باز فیلتر مهلت در کلاینت)
     isOffice ? safe(api.get(`/api/followups${qs({ group: 'open' })}`)) : Promise.resolve(null)
   ]);
 
@@ -75,18 +51,14 @@ export async function renderDashboard(container) {
 
   const parts = [];
 
-  // ─────────────── درمانگر: کارنامهٔ من + تابلوی پیشرفت ───────────────
   if (isTherapist) {
     parts.push(...therapistDashboard(container, { myStats, scoring, knowledge, announcements }));
   } else {
-    // today باید پاس داده شود (باگ «داشبورد مدیر باز نمی‌شود»: today is not defined)
     parts.push(...officeDashboard(container, { todayData, summaryData, goalData, scoring, knowledge, announcements, waitlist, dayAppts, followups, today }));
   }
 
   container.replaceChildren(...parts.filter(Boolean));
 }
-
-// ─────────────── داشبورد درمانگر ───────────────
 
 function therapistDashboard(container, { myStats, scoring, knowledge, announcements }) {
   const parts = [];
@@ -100,13 +72,11 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
     )
   );
 
-  // ─── ۱) هیرو — امتیاز سراسری از شروع دورهٔ امتیاز (: صفرسازی) + رتبه ───
   const scoreRows = scoring?.rows ?? [];
   const scoreRow = scoreRows.find((r) => r.staffId === session.user?.staffId) ?? null;
   if (scoreRow) parts.push(heroScore(scoreRow, scoreRows, scoring?.since));
 
   if (myStats) {
-    // نردبان گزارش‌نویسی — جلسهٔ حاضرِ بدون یادداشت، کار تمام‌شده نیست
     if (myStats.missingNotes > 0) {
       parts.push(
         el(
@@ -123,7 +93,6 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
       );
     }
 
-    // نوبت بعدی من
     if (myStats.nextAppointment) {
       const nx = myStats.nextAppointment;
       parts.push(
@@ -140,24 +109,17 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
       );
     }
 
-    // ─── ۲) چهار کاشی تلاش ───
     parts.push(scoreTiles(myStats));
   }
 
-  // ─── ۳) تابلوی پیشرفت — کارت خلاصه از موتور سراسری؛ بدون فرمول ───
   if (scoreRows.length) parts.push(leaderboardCard(scoreRows, 'تابلوی پیشرفت', session.user?.staffId, scoring?.since));
 
-  // ─── ۴) دانش‌افزایی + اطلاع‌رسانی ───
   const info = infoGrid(knowledge, announcements);
   if (info) parts.push(info);
 
   return parts;
 }
 
-/**
- * هیروی امتیاز — امتیاز از موتور سراسری از شروع دورهٔ امتیاز؛ رینگ نسبت به صدر تابلو؛
- *: باجت سطح حذف شد («غیرمحترمانه است — فقط امتیاز») — فقط امتیاز/رتبه + تاریخ شروع شمارش
- */
 function heroScore(scoreRow, rows, since = null) {
   const top = Math.max(1, ...rows.map((r) => r.total));
 
@@ -217,8 +179,6 @@ function scoreTiles(myStats) {
   );
 }
 
-// ─────────────── داشبورد دفتر (مدیر/منشی) و ناظر ───────────────
-
 function officeDashboard(container, { todayData, summaryData, goalData, scoring, knowledge, announcements, waitlist, dayAppts, followups, today }) {
   const parts = [];
 
@@ -231,7 +191,6 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
     )
   );
 
-  // نوبت بعدی
   if (todayData.nextAppointment) {
     const next = todayData.nextAppointment;
     const staffName = todayData.perStaff.find((s) => s.staffId === next.staffId)?.staffName ?? '';
@@ -245,7 +204,6 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
     );
   }
 
-  // KPIهای امروز — ماتریس تصمیم روز دفتر
   const attendance = todayData.attendance ?? null;
   const hasAttendanceData = attendance ? attendance.present + attendance.absent > 0 : false;
   const absencePct = Math.round((todayData.absenceRate ?? 0) * 100);
@@ -263,38 +221,30 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
       waitingCount !== null
         ? kpi('لیست انتظار', fa(waitingCount), 'متقاضیِ در صف (در انتظار/فراخوانده)', waitingCount > 0 ? 'accent' : 'neutral')
         : null,
-      // m166-a — کارت «تداخل‌های فعال» حذف شد (بازخورد کاربر: تداخل نوبت‌ها موضوعیت ندارد)؛
-      // محاسبهٔ activeConflicts سمت سرور به قوت خود برقرار است.
       kpi('دانش‌آموزان فعال', fa(todayData.studentsSummary.totalStudents), `در ${fa(todayData.studentsSummary.totalSchools)} مدرسه`, 'primary')
     )
   );
 
-  // کارهای داخلی منشی/مدیر
   if (canSeeTodos()) parts.push(renderMyTodosCard());
 
-  // خط زمانی امروز: ساعت‌ها با نقطهٔ رنگ درمانگرها
   const timeline = todayTimelineCard(dayAppts, todayData);
   if (timeline) parts.push(timeline);
 
-  // عملکرد تیم — دید دفتری
   const scoreRows = scoring?.rows ?? [];
   if (scoreRows.length) {
     parts.push(leaderboardCard(scoreRows, 'تابلوی پیشرفت درمانگران', session.user?.staffId, scoring?.since));
   }
 
-  // پیگیری‌های سررسیده + پیرشدن لیست انتظار
   const fuCard = followupsDueCard(followups, today);
   if (fuCard) parts.push(fuCard);
   const agingCard = waitlistAgingCard(waitlist);
   if (agingCard) parts.push(agingCard);
 
-  // روند ۷ روز + سنجش
   if (summaryData) {
     const maxTotal = Math.max(1, ...summaryData.byDay.map((d) => d.total));
     parts.push(
       el(
         'div',
-        // m145 — کارت بدون حاشیهٔ پایین به کارت بعدی می‌چسبید (0px seam) — ریتم یکنواخت ۱۶px
         { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
         el(
           'div',
@@ -331,10 +281,6 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
   return parts;
 }
 
-// ─────────────── اجزای مشترک ───────────────
-
-/** تابلوی پیشرفت — کارت خلاصهٔ داشبورد: هر ردیف سه سطر مستقل (نام+امتیاز / میله / سطح)
- * هیچ هم‌پوشانی ممکن نیست: نام برش می‌خورد، اعداد ستون خودشان را دارند؛ بدون فرمول */
 function leaderboardCard(rows, title, meStaffId, since = null) {
   const max = Math.max(1, ...rows.map((x) => x.total));
   const body =
@@ -353,7 +299,6 @@ function leaderboardCard(rows, title, meStaffId, since = null) {
               el(
                 'div',
                 { class: 'lb-row__body' },
-                // سطر ۱ — نام (برش امن) + امتیاز (ستون ثابت)
                 el(
                   'div',
                   { class: 'lb-row__top' },
@@ -370,7 +315,6 @@ function leaderboardCard(rows, title, meStaffId, since = null) {
                     el('span', {}, 'امتیاز')
                   )
                 ),
-                // سطر ۲ — میلهٔ پیشرفت
                 el(
                   'div',
                   { class: 'lb-row__bar' },
@@ -381,7 +325,6 @@ function leaderboardCard(rows, title, meStaffId, since = null) {
           })
         );
 
-  // بج سربرگ: از شروع دورهٔ امتیاز (صفرسازی) — نه «۳۰ روز اخیر»
   const headBadge = since
     ? el('span', { class: 'badge badge--accent' }, `از ${formatJalaliNumeric(tehranYmdOfIso(since))}`)
     : el('span', { class: 'badge badge--accent' }, 'کل دوره');
@@ -399,9 +342,6 @@ function leaderboardCard(rows, title, meStaffId, since = null) {
   );
 }
 
-// ─────────────── کارت‌های تازهٔ دفتر ───────────────
-
-/** خط زمانی امروز — ساعت ۰۶ تا ۲۱؛ هر نقطه = یک نوبت با رنگ درمانگر */
 function todayTimelineCard(appts, todayData) {
   if (!Array.isArray(appts) || appts.length === 0) return null;
   const staffNames = new Map((todayData?.perStaff ?? []).map((s) => [s.staffId, s.staffName]));
@@ -438,7 +378,6 @@ function todayTimelineCard(appts, todayData) {
   );
 }
 
-/** پیگیری‌های سررسیده — فقط مواردی که مهلتشان امروز یا قبل است */
 function followupsDueCard(rows, todayYmd) {
   const open = (Array.isArray(rows) ? rows : (rows?.data ?? [])).filter((f) => (f.status === 'open' || f.status === 'in_progress') && f.dueAt);
   const due = open
@@ -476,7 +415,6 @@ function followupsDueCard(rows, todayYmd) {
   );
 }
 
-/** «چه مدت در انتظارند؟» — سنین صف لیست انتظار در سه بازه */
 function waitlistAgingCard(waitlist) {
   const rows = Array.isArray(waitlist) ? waitlist : (Array.isArray(waitlist?.data) ? waitlist.data : []);
   const active = rows.filter((w) => w.status === 'waiting' || w.status === 'called');
@@ -515,7 +453,6 @@ function waitlistAgingCard(waitlist) {
   );
 }
 
-/** کارت‌های اطلاع‌رسانی + دانش‌افزایی — حتی بدون محتوا هم دیده می‌شوند (: حالت خالی + میان‌بر دفتر) */
 function infoGrid(knowledge, announcements) {
   const anItems = (announcements ?? []).slice(0, 3);
   const knItems = (knowledge ?? []).slice(0, 4);
@@ -612,8 +549,6 @@ function kpi(label, value, sub, tone = 'primary') {
   );
 }
 
-// ─────────────── کارت سنجش روزانه (نگه‌داشته از طراحی قبل) ───────────────
-
 function goalMini(value, label, tone) {
   return el(
     'div',
@@ -623,7 +558,6 @@ function goalMini(value, label, tone) {
   );
 }
 
-/** — یک ردیف هدف مستقل (ماه/سفارشی) در کارت سنجش داشبورد */
 function goalRowItem(g) {
   const statusBadge =
     g.status === 'upcoming'
@@ -654,12 +588,10 @@ function drawScreeningGoalCard(goal) {
   const monthMax = Math.max(1, ...goal.months.map((m) => m.done));
   const monthlyAvg = goal.target ? goal.target / 12 : null;
   const canOpenScreening = ['manager', 'secretary'].includes(session.user?.role);
-  // اهداف غیر از «هدف سالِ پرچم‌دار» — ماه‌ها و بازه‌های سفارشی، هرکدام با نوار تحقق مستقل
   const otherGoals = Array.isArray(goal.goals) ? goal.goals.filter((g) => g.mode !== 'year') : [];
 
   return el(
     'div',
-    // m145 — فاصلهٔ یکنواخت با کارت «روند ۷ روز» بالا و بلاک اطلاع‌رسانی پایین
     { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
     el(
       'div',

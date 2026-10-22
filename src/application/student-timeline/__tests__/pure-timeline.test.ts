@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — pure-timeline
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// pure-timeline.test.ts — فاز ۶: merge قطعی، فیلتر، صفحه‌بندی، «اقدام بعدی»، ماتریس عنوان جلسه
-
 import { describe, it, expect } from 'vitest';
 import {
   mergeTimelineEvents,

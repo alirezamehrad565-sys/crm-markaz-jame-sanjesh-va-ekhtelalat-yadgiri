@@ -1,19 +1,3 @@
--- مایگریشن اسکیما D1 — رویدادساز
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- ============================================================
--- — سیستم تایم‌لاین و گزارش‌نویسی جلسات/ایونت‌ها — فقط اضافه‌ای
--- جداول:
--- case_event_types کاتالوگ انواع رویداد + تعریف فیلدهای فرم (فرم‌ساز پنل)
--- case_events هر رویداد/گزارش ثبت‌شده روی پروندهٔ دانش‌آموز — منبع تایم‌لاین
--- ستون‌های additive:
--- students.owner_staff_id «مسئول پرونده» — سپردن رسمی پرونده به درمانگر
--- exercise_assignments.feedback/graded_by/graded_at تصحیح تکلیف
--- قراردادها: بدون CHECK در SQL (الگوی D7 — enum در @core/shared/constants.ts + Zod)؛
--- حذف فقط نرم (deleted_at)؛ رویداد append-only (لغو با status نه DELETE)؛
--- snapshot فیلدها نیست — payload با تعریف نوعِ لحظهٔ ثبت تفسیر می‌شود و
--- رویدادهای قدیمی با label ذخیره‌شده در payload هم‌زمان خوانا می‌مانند.
--- ============================================================
-
 CREATE TABLE IF NOT EXISTS case_event_types (
   id              TEXT PRIMARY KEY,
   key             TEXT NOT NULL,                 -- کلید یکتای منطقی (برای seed و شناسایی)
@@ -56,18 +40,11 @@ CREATE INDEX IF NOT EXISTS idx_case_events_student ON case_events(student_id, oc
 CREATE INDEX IF NOT EXISTS idx_case_events_type    ON case_events(event_type_id, occurred_at);
 CREATE INDEX IF NOT EXISTS idx_case_events_status  ON case_events(status);
 
--- ─── -c — مسئول پرونده (سپردن رسمی پرونده به درمانگر) ───
 ALTER TABLE students ADD COLUMN owner_staff_id TEXT REFERENCES staff(id);
 
--- ─── -c — تصحیح تکلیف (وضعیت + بازخورد متنی) ───
 ALTER TABLE exercise_assignments ADD COLUMN feedback  TEXT;
 ALTER TABLE exercise_assignments ADD COLUMN graded_by TEXT;
 ALTER TABLE exercise_assignments ADD COLUMN graded_at TEXT;
-
--- ============================================================
--- seed روز اول — سه نوع پایه (تصمیم ۷ طراحی): شرح حال، گزارش جلسهٔ مداخله،
--- چک‌لیست مشاهدهٔ رفتار در خانه. با id ثابت و ON CONFLICT بدون کاری (idempotent).
--- ============================================================
 
 INSERT INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, created_by)
 VALUES (

@@ -1,17 +1,3 @@
-/**
- * اعلان‌های کاربردی و بات‌های نقش‌آگاه بله — بات دریافت بازگشت تمرین
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// حلقهٔ بازگشت فایل تکلیف (سمت خانواده):
-// والد عکس/فایل نتیجه را در بله می‌فرستد → تطبیق با تکلیف‌های باز فرزندان →
-// دانلود رسانه از بله (MediaFetcher) → ObjectStore → ثبت بازگشت + done تکلیف →
-// اعلان به معلم/درمانگر ثبت‌کننده (صف اعلان با dedup)
-// تصمیم مسیر قطعی است (resolveSubmissionTarget):
-// دقیقاً یک تکلیف باز → پیوست مستقیم | چند تکلیف → منوی انتخاب (state) |
-// بدون باز + بازگشتی در پنجرهٔ ۴۸ ساعت → پیوست به همان تکلیف (صفحهٔ بعد) | none
-// وضعیت منوی انتخاب در bot_menu_state (کلید sub داخل payload JSON) — همان جدول exb
-// با خواندن-نوشتن کل payload تا کلیدهای دیگر از بین نروند.
-
 import type { DbClient } from '@core/db';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
@@ -30,16 +16,13 @@ export interface SubmissionBotDeps {
   db: DbClient;
   audit: AuditWriter;
   logger: Logger;
-  /** هستهٔ صف اعلان — اعلان بازگشت به کارکنان از همین مسیر با dedup */
   notify: NotifyService;
   settings: SettingsService;
   exerciseBank: ExerciseBankService;
-  /** دریافت رسانه از بله — بدون توکن بله null است (پاسخ «فعال نیست») */
   mediaFetcher: MediaFetcher | null;
   now?: () => Date;
 }
 
-/** بازیگر بات برای ثبت بازگشت و audit */
 const SUB_ACTOR: AuthContext = {
   staffId: 'bale-bot',
   email: 'bale-bot@system.local',
@@ -47,14 +30,12 @@ const SUB_ACTOR: AuthContext = {
   displayName: 'بات بله'
 };
 
-/** آیتم منوی انتخاب تکلیف — اندیس callback به این لیست اشاره می‌کند */
 interface SubAsgLite {
   id: string;
   studentId: string;
   label: string;
 }
 
-/** رسانهٔ موقت پیام خانواده در منوی انتخاب — فقط شناسه (نه بایت) */
 interface StashedMedia {
   fileId: string;
   type: 'photo' | 'document';
@@ -63,15 +44,12 @@ interface StashedMedia {
   size: number | null;
 }
 
-/** سقف آیتم منوی انتخاب (callback فقط اندیس حمل می‌کند) */
 const PICK_LIMIT = 10;
 
 export function createExerciseSubmissionBot(deps: SubmissionBotDeps) {
   const { db, audit, logger, notify, settings, exerciseBank, mediaFetcher } = deps;
   const log = logger.child('sub-bot');
   const now = deps.now ?? (() => new Date());
-
-  // ───────────── state helpers — حفظ کلیدهای دیگر payload ─────────────
 
   interface SubState {
     sub?: { asg?: SubAsgLite[]; media?: StashedMedia; caption?: string | null };
@@ -101,14 +79,10 @@ export function createExerciseSubmissionBot(deps: SubmissionBotDeps) {
     );
   }
 
-  // ───────────── گیت‌ها ─────────────
-
-  /** کلید قطع مشترک با بانک تمرین (همان سناریوی S3) */
   async function isEnabled(): Promise<boolean> {
     return settings.getExerciseBankEnabled();
   }
 
-  /** دانش‌آموزان متصل chat (والد) — bot_links منبع حقیقت اتصال است */
   async function linkedStudentIds(chatId: string): Promise<string[]> {
     const stmt = selectStudentIdsByChat(chatId);
     const rows = await db.query<{ student_id: string }>(stmt.sql, stmt.params);
@@ -120,9 +94,6 @@ export function createExerciseSubmissionBot(deps: SubmissionBotDeps) {
     buttons: null
   };
 
-  // ───────────── پیوست + اعلان ─────────────
-
-  /** نام فایل نهایی — سند: نام اعلامی بله؛ عکس: نام تولیدی خوانا */
   function resolveFileName(media: BotMedia, fetchedMime: string): string {
     if (media.type === 'document' && media.fileName) {
       return sanitizeFilename(media.fileName);
@@ -132,7 +103,6 @@ export function createExerciseSubmissionBot(deps: SubmissionBotDeps) {
     return `نتیجه-تمرین-${stamp}.${ext}`;
   }
 
-  /** اعلان بازگشت به ثبت‌کنندهٔ تکلیف (معلم کلاس یا همکار مرکز) — best-effort با dedup */
   async function notifyCreator(assignment: AssignmentRecord, submission: SubmissionRecord): Promise<number> {
     let targets: string[] = [];
     if (assignment.assignedBy.startsWith('class:')) {
@@ -170,7 +140,6 @@ export function createExerciseSubmissionBot(deps: SubmissionBotDeps) {
     return enqueued;
   }
 
-  /** مسیر مشترک پیوست: گارد حجم/نوع → دانلود → ثبت → اعلان → پاسخ */
   async function attachMedia(
     chatId: string,
     assignment: AssignmentRecord,
@@ -181,7 +150,6 @@ export function createExerciseSubmissionBot(deps: SubmissionBotDeps) {
       return { text: renderTemplate('bot_submission_unavailable'), buttons: null };
     }
 
-    // گارد نوع قبل از دانلود — عکس همیشه مجاز؛ سند با لیست whitelist
     const declaredMime = (media.mime ?? 'application/octet-stream').toLowerCase();
     if (media.type === 'document' && !isAllowedExerciseMimeType(declaredMime)) {
       return { text: renderTemplate('bot_submission_bad_type'), buttons: null };
@@ -223,7 +191,6 @@ export function createExerciseSubmissionBot(deps: SubmissionBotDeps) {
     try {
       enqueued = await notifyCreator(assignment, submission);
     } catch (err) {
-      // اعلان best-effort است — ثبت بازگشت باید سر جایش بماند
       log.warn('submission.notify.failed', { submissionId: submission.id, error: err instanceof Error ? err.message : String(err) });
     }
 
@@ -250,7 +217,6 @@ export function createExerciseSubmissionBot(deps: SubmissionBotDeps) {
     return { text: renderTemplate('bot_submission_received', { exerciseTitle: assignment.exerciseTitle }), buttons: null };
   }
 
-  /** base64 تکه‌تکه — همان الگوی d1-store برای دور شدن از محدودیت apply موتورها */
   function bytesToBase64(bytes: Uint8Array): string {
     let bin = '';
     const CHUNK = 0x8000;
@@ -264,10 +230,7 @@ export function createExerciseSubmissionBot(deps: SubmissionBotDeps) {
     return [stmt.sql, stmt.params];
   }
 
-  // ───────────── نقطهٔ ورود ─────────────
-
   return {
-    /** پیام رسانه‌ای (عکس/سند) از هر chat — نقطهٔ ورود حلقهٔ بازگشت */
     async handleMedia(chatId: string, media: BotMedia, caption: string | null): Promise<BotReply> {
       if (!(await isEnabled())) {
         return { text: renderTemplate('bot_exercise_disabled'), buttons: null };
@@ -285,7 +248,6 @@ export function createExerciseSubmissionBot(deps: SubmissionBotDeps) {
       }
 
       if (target.mode === 'pick') {
-        // file_id (نه بایت) در state می‌ماند — بعد از انتخاب دوباره از بله دانلود می‌شود
         const state = await readState(chatId);
         state.sub = {
           asg: target.assignments.map((a) => ({
@@ -307,11 +269,9 @@ export function createExerciseSubmissionBot(deps: SubmissionBotDeps) {
         };
       }
 
-      // auto و extra هر دو یک تکلیف مشخص دارند
       return attachMedia(chatId, target.assignment, media, caption);
     },
 
-    /** «sub:pick:<idx>» — انتخاب تکلیف از منوی خانواده + رسانهٔ موقت همان پیام */
     async handlePick(chatId: string, idx: number): Promise<BotReply> {
       if (!(await isEnabled())) {
         return { text: renderTemplate('bot_exercise_disabled'), buttons: null };
@@ -322,7 +282,6 @@ export function createExerciseSubmissionBot(deps: SubmissionBotDeps) {
       const caption = (state.sub?.caption as string | null | undefined) ?? null;
       if (!lite || !stashed) return STALE;
 
-      // گیت مجدد — تکلیف باید هنوز باز باشد (نه لغو، نه done از مسیر دیگر)
       const fresh = await db.queryOne<{ status: string }>(
         `SELECT status FROM exercise_assignments WHERE id = ?`,
         [lite.id]
@@ -337,7 +296,6 @@ export function createExerciseSubmissionBot(deps: SubmissionBotDeps) {
       const assignment = assignments.find((a) => a.id === lite.id);
       if (!assignment) return STALE;
 
-      // state قبل از دانلود پاک می‌شود — دوباره‌فشردن دکمهٔ قدیمی منجر به دوباره‌ثبت نمی‌شود
       delete state.sub;
       await writeState(chatId, state);
 

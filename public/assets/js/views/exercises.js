@@ -1,15 +1,3 @@
-/**
- * نمای بانک تمرین
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// exercises.js — بانک تمرین با ناوبری تو در تو + صفحه‌بندی + وکتور (بدون ایموجی)
-// ساختار جدید (دستور کاربر: «تمرین‌ها باید حالت تو در تو و صفحه‌بندی شده بر اساس نوع اختلال …»):
-// سطح ۱ — کاشی‌های دستهٔ اختلال (با آیکون وکتور و شمارش زنده از facets)
-// سطح ۲ — چیپ‌های پایه + جستجو + فیلتر انتشار → کارت‌ها با صفحه‌بندی سرورمحور
-// تغییر: بخش «بازگشتی‌ها» طبق دستور کاربر به‌کلی حذف شد (بازگشتی خانواده در
-// تایم‌لاین پرونده و پروفایل دانش‌آموز همچنان در جریان است — فقط نمای پنل حذف شد).
-// موروثی: آپلود چندفایلی multipart + تکه‌ای، RBAC سه نقش، حذف نرم.
-
 import { api } from '../api.js';
 import {
   el,
@@ -27,12 +15,10 @@ import { fa, formatJalaliNumeric, safeExternalHref } from '../format.js';
 import { session } from '../state.js';
 import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ ثابت سازندهٔ تمرین (همان پالت درمانگر)
 
-// سقف‌ها از meta سرور خوانده می‌شوند (آداپتر محور)؛ این‌ها فقط پیش‌فرض اولیه‌اند
 const LIMITS = {
   maxFileBytes: 50 * 1024 * 1024,
   maxFilesPerUpload: 10
 };
-/** MIME از پسوند — برای مرورگرهایی که نوع خالی می‌دهند (.mkv/.avi/…) */
 const EXT_MIME_FALLBACK = {
   mp4: 'video/mp4', m4v: 'video/x-m4v', webm: 'video/webm', mov: 'video/quicktime',
   avi: 'video/x-msvideo', mkv: 'video/x-matroska', '3gp': 'video/3gpp', wmv: 'video/x-ms-wmv',
@@ -46,18 +32,8 @@ const FORMAT_LABELS = { worksheet: 'کاربرگ', game: 'بازی', instruction
 const FORMAT_ICONS = { worksheet: 'file', game: 'gamepad', instruction: 'board' };
 const PAGE_SIZE = 18;
 
-// ─────────────── m166 — بازطراحی بانک تمرین برای مرکز (پیش‌دبستانی تا ششم) ───────────────
-
-/** پایه‌های مرکز — دانش‌آموزان فقط پیش‌دبستانی تا ششم‌اند؛
- * چیپ‌های فیلتر همین‌ها هستند (به همین ترتیب) — تمرین‌های برچسب‌خوردهٔ پایهٔ بالاتر
- * همچنان در «همه» و جستجو دیده می‌شوند (داده حذف نمی‌شود) */
 const GRADE_CHIP_NAMES = ['پیش‌دبستانی', 'اول', 'دوم', 'سوم', 'چهارم', 'پنجم', 'ششم'];
 
-/** برچسب‌های پیش‌فرض پیشنهادی بانک تمرین (m166 — بازطراحی به خواست کاربر):
- * فارسی، ریاضی، دیکته، روخوانی، درک مطلب، نوشتن، دقت و تمرکز،
- * حافظهٔ فعال، هماهنگی حرکتی، تنظیم رفتار — دستهٔ custom با id ثابت
- * که در ۰۰۶۴_exercise_co_creator.sql هم‌شناسه seed می‌شوند؛
- * برچسب‌های سفارشی قبلی دست‌نخورده می‌مانند و در گروه «سفارشی» نمایش می‌یابند */
 const DEFAULT_EXERCISE_TAGS = [
   { id: 'aaaaaaaa-0000-4000-8000-000000000301', name: 'فارسی' },
   { id: 'aaaaaaaa-0000-4000-8000-000000000302', name: 'ریاضی' },
@@ -71,16 +47,13 @@ const DEFAULT_EXERCISE_TAGS = [
   { id: 'aaaaaaaa-0000-4000-8000-000000000310', name: 'تنظیم رفتار' }
 ];
 
-/** چیپ‌های پایهٔ فیلتر — فقط پایه‌های مرکز، به ترتیب مقطع */
 function gradeChipsOf(gradeTags) {
   const byName = new Map((gradeTags ?? []).map((g) => [g.name, g]));
   return GRADE_CHIP_NAMES.map((n) => byName.get(n)).filter(Boolean);
 }
 
-/** حداکثر فایل/پیوست نمایش‌داده‌شده روی کارت تمرین — بقیه با «نمایش همه (n)» آکاردئونی */
 const MAX_CARD_FILES = 3;
 
-/** — نگاشت نام اختلال به آیکون وکتور (برچسب‌های disorder از meta سرور می‌آیند) */
 const DISORDER_ICON_RULES = [
   [/خواندن|دسلکسی|روخوانی|واکشی/, 'book'],
   [/نوشتن|دیسگرافی|املاء|املا|نگارش/, 'edit'],
@@ -105,9 +78,6 @@ function isStaff() {
   return Boolean(session.user && ['manager', 'therapist', 'secretary'].includes(session.user.role));
 }
 
-// ─────────────── سازنده + نشان‌های خصوصی/تیمی (m136) ───────────────
-
-/** نگاشت staffId → نام — یک‌بار در هر سشن نما پر می‌شود (GET /api/staff) */
 let staffList = [];
 const staffNames = new Map();
 
@@ -118,11 +88,9 @@ async function loadStaff() {
     staffNames.clear();
     for (const s of staffList) staffNames.set(s.id, s.fullName);
   } catch {
-    /* فهرست کارکنان نیامد — چیپ سازنده فقط نمایش داده نمی‌شود */
   }
 }
 
-/** چیپ رنگی سازنده روی سربرگ کارت — «سازنده: نام» */
 function ownerChip(createdBy) {
   const name = createdBy ? staffNames.get(createdBy) : null;
   if (!name) return null;
@@ -138,7 +106,6 @@ function privateBadge() {
   return el('span', { class: 'badge badge--warning' }, 'خصوصی');
 }
 
-/** چیپ رنگی هم‌ساز (سازندهٔ دوم) روی سربرگ کارت — m166 جای نشان «تیمی» */
 function coCreatorChip(coId) {
   const name = coId ? staffNames.get(coId) : null;
   if (!name) return null;
@@ -150,8 +117,6 @@ function coCreatorChip(coId) {
   );
 }
 
-/** فایل‌های قابل پیش‌نمایش درون‌برنامه‌ای — تصویر یا PDF
- * — m137: mime ناشناخته/خالی با پسوند هم حدس زده می‌شود (آپلودها گاهی octet-stream ثبت می‌شوند) */
 const PREVIEW_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'pdf'];
 function previewable(file) {
   const mime = String(file?.mime ?? '').toLowerCase();
@@ -180,7 +145,6 @@ function sizeLabel(bytes) {
   return bytes >= 1024 ? `${fa(Math.round(bytes / 1024))}KB` : `${fa(bytes)}B`;
 }
 
-/** — MIME یک فایل محلی: نوع اعلامی مرورگر یا fallback پسوند */
 function localMime(file) {
   const t = (file.type || '').toLowerCase();
   if (t && t !== 'application/octet-stream') return t;
@@ -188,10 +152,6 @@ function localMime(file) {
   return EXT_MIME_FALLBACK[ext] ?? t ?? 'application/octet-stream';
 }
 
-/**
- * — اعتبارسنجی سمت کاربر (همان مرز سرور): نوع + حجم — باینری مستقیم می‌رود،
- * base64 و سقف ۵۱۲KB قدیمی حذف شد
- */
 function validateLocalFile(file) {
   const mime = localMime(file);
   const ext = (file.name || '').split('.').pop()?.toLowerCase() ?? '';
@@ -207,7 +167,6 @@ function validateLocalFile(file) {
   return mime;
 }
 
-/** — فهرست فایل‌های انتخاب‌شده به شکل چیپ با دکمهٔ حذف */
 function buildPickedChips(files, onChange) {
   const wrap = el('div', { class: 'exb-picked' });
   function draw() {
@@ -234,7 +193,6 @@ function buildPickedChips(files, onChange) {
   return wrap;
 }
 
-/** ناحیهٔ درگ‌اند‌دراپ چندفایلی + کلیک برای انتخاب — */
 function buildDropzone(onFiles) {
   const input = el('input', { type: 'file', multiple: true, style: { display: 'none' } });
   const hint = LIMITS.maxFileBytes >= 1024 * 1024
@@ -267,20 +225,9 @@ function buildDropzone(onFiles) {
   return el('div', {}, input, zone);
 }
 
-/**
- * ردیف برچسب‌های قابل انتخاب در مودال تمرین — m166 بازطراحی کامل:
- * «پیش‌فرض» = ده برچسب پیشنهادی کار درمانی (فارسی، ریاضی، دیکته، …)؛
- * «پایه» = پیش‌دبستانی تا ششم (+ پایه‌های قدیمیِ همین تمرین که از قبل زده شده)؛
- * «سفارشی» = برچسب‌های ساخته‌شدهٔ قبلی — دست‌نخورده؛
- * «سایر» = برچسب‌های از-قبل-زده‌شدهٔ این تمرین خارج از گروه‌های بالا (گم نشوند)؛
- * + ورودی «برچسب دلخواه» — سازنده و هم‌ساز و هر درمانگر/مدیر می‌تواند بسازد
- * (POST /api/tags از m166 برای درمانگر هم باز است؛ منشی خطای نقش می‌گیرد)
- */
 function buildTagPicker(tags, selected) {
   const wrap = el('div', { class: 'exb-tags' });
   const allCustom = [...(tags.other ?? [])];
-  // برچسب‌های پیش‌فرض — از فهرست سفارشیِ سرور (با id یا نام) پیدا می‌شوند؛ اگر seed
-  // هنوز اعمال نشده باشد گروه «پیش‌فرض» خالی می‌ماند (چیپِ بی‌شناسه هرگز نمی‌سازیم)
   const defaults = DEFAULT_EXERCISE_TAGS
     .map((d) => allCustom.find((t) => t.id === d.id || t.name === d.name))
     .filter(Boolean);
@@ -290,7 +237,6 @@ function buildTagPicker(tags, selected) {
   const byId = new Map(
     [...(tags.disorder ?? []), ...(tags.grade ?? []), ...(tags.other ?? [])].map((t) => [t.id, t])
   );
-  // برچسب‌های زده‌شدهٔ این تمرین که در گروه‌های بالا نیستند (مثلاً اختلال در تمرین‌های قدیمی)
   const strayTags = () =>
     [...selected]
       .map((id) => byId.get(id))
@@ -326,7 +272,6 @@ function buildTagPicker(tags, selected) {
       for (const t of g.list) row.append(chipOf(t));
       wrap.append(row);
     }
-    // ورودی برچسب دلخواه — برای سازندهٔ اصلی، هم‌ساز و هر درمانگر/مدیر (نه فقط مدیر)
     if (isStaff()) {
       const nameInput = el('input', { class: 'input', placeholder: 'نام برچسب دلخواه…', maxlength: '60' });
       const addBtn = el('button', { type: 'button', class: 'btn btn--soft btn--sm' }, icon('plus', 14), 'افزودن');
@@ -369,13 +314,10 @@ export function renderExercises(container) {
   let tags = { disorder: [], grade: [], other: [] };
   let storage = 'd1';
   let facets = { counts: {}, total: 0 };
-  // ناوبری تو در تو: دستهٔ اختلال (سطح ۱) + پایه (سطح ۲) + جستجو/انتشار
   const state = { cat: '', grade: '', q: '', published: 'all', page: 1 };
   let items = [];
   let total = 0;
   let hasMore = false;
-
-  // ─────────────── داده ───────────────
 
   async function loadMeta() {
     try {
@@ -383,19 +325,14 @@ export function renderExercises(container) {
       tags = res.data?.categories ?? tags;
       storage = res.data?.storage ?? 'd1';
       if (res.data?.facets) facets = res.data.facets;
-      // سقف‌های واقعی از سرور (آداپتر محور: D1 تکه‌تکه/R2 = ۵۰MB)
       if (res.data?.limits) {
         if (Number.isFinite(res.data.limits.maxFileBytes)) LIMITS.maxFileBytes = res.data.limits.maxFileBytes;
         if (Number.isFinite(res.data.limits.maxFilesPerUpload)) LIMITS.maxFilesPerUpload = res.data.limits.maxFilesPerUpload;
       }
     } catch {
-      /* برچسب‌های خالی — نما کار می‌کند */
     }
   }
 
-  /** — بارگذاری چندفایلی برای یک تمرین ثبت‌شده.
-   * فایل ≤ ۳MB: یک درخواست multipart — فایل بزرگ‌تر: بارگذاری پیوستهٔ تکه‌به‌تکه
-   * (هر درخواست ≤ ۱ مگابایت تا سقف CPU درخواست Worker نسوزد) با نمایش پیشرفت */
   const CHUNK_UPLOAD_BYTES = 1024 * 1024;
   const MULTIPART_MAX_BYTES = 3 * 1024 * 1024;
 
@@ -437,7 +374,6 @@ export function renderExercises(container) {
     body.replaceChildren(skeletonState('cards', 4));
     try {
       const qs = new URLSearchParams({ page: String(state.page), page_size: String(PAGE_SIZE) });
-      // ناوبری تو در تو: اختلال + پایه با هم (AND سرورمحور)
       const tagIds = [state.cat, state.grade].filter(Boolean);
       if (tagIds.length > 0) qs.set('tag_ids', tagIds.join(','));
       if (state.q) qs.set('q', state.q);
@@ -452,14 +388,11 @@ export function renderExercises(container) {
     }
   }
 
-  /** بعد از هر تغییر داده — شمارش کاشی‌ها هم تازه شود */
   async function reloadAll() {
     await loadMeta();
     drawNav();
     await refresh();
   }
-
-  // ─────────────── ناوبری تو در تو (سطح ۱: اختلال، سطح ۲: پایه/جستجو) ───────────────
 
   function selectCat(id) {
     if (state.cat === id) return;
@@ -499,7 +432,6 @@ export function renderExercises(container) {
   function drawNav() {
     const parts = [];
 
-    // نان‌مکب — مسیر فعلی با دکمهٔ بازگشت به «همه»
     if (state.cat || state.grade) {
       const catName = tags.disorder.find((t) => t.id === state.cat)?.name;
       const gradeName = tags.grade.find((t) => t.id === state.grade)?.name;
@@ -516,14 +448,12 @@ export function renderExercises(container) {
       parts.push(crumb);
     }
 
-    // سطح ۱ — کاشی‌های دستهٔ اختلال (+ کاشی «همه»)
     const grid = el('div', { class: 'exb-cats' },
       catTile('', 'grid', 'همهٔ تمرین‌ها', facets.total),
       ...(tags.disorder ?? []).map((t) => catTile(t.id, disorderIcon(t.name), t.name, facets.counts?.[t.id] ?? 0))
     );
     parts.push(grid);
 
-    // سطح ۲ — چیپ‌های پایه + جستجو + فیلتر انتشار
     const search = el('input', {
       class: 'input exb-search',
       placeholder: 'جستجوی عنوان یا توضیح…',
@@ -552,8 +482,6 @@ export function renderExercises(container) {
       refresh();
     });
 
-    // m166 — چیپ‌های پایه فقط مقطع‌های مرکز: پیش‌دبستانی تا ششم (به همین ترتیب)؛
-    // تمرین‌های پایه‌های بالاتر در «همه» دیده می‌شوند ولی چیپ فیلتر ندارند
     const gradeChips = el('div', { class: 'exb-grades' },
       el('span', { class: 'cell-sub' }, 'پایه:'),
       el('button', {
@@ -578,9 +506,6 @@ export function renderExercises(container) {
     nav.replaceChildren(...parts);
   }
 
-  // ─────────────── فهرست کارت‌ها + صفحه‌بندی ───────────────
-
-  /** m143 — بندانگشتی پیش‌نمایش روی کارت: اولین تصویر لِیزی-لود می‌شود؛ PDF کاشی ثابت دارد */
   function buildThumb(ex, files) {
     const IMG_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
     const mimeOf = (f) => String(f?.mime ?? '').toLowerCase();
@@ -641,12 +566,6 @@ export function renderExercises(container) {
     return stage;
   }
 
-  /**
-   * m166 — فایل‌های کارت تمرین جمع‌وجور: حداکثر ۳ چیپ + دکمهٔ «نمایش همه (n)»
-   * آکاردئونی (کلاس chip موجود) — کارت با فایل‌های زیاد دیگر بلند نمی‌شود.
-   * باز/بسته شدن با رسم دوبارهٔ همان ظرف انجام می‌شود (hidden روی چیپ با
-   * display:inline-flexِ کلاس بی‌اثر می‌شد).
-   */
   function buildCardFiles(ex, files) {
     const chipOf = (f) =>
       el(
@@ -745,11 +664,9 @@ export function renderExercises(container) {
           ? el('button', { class: 'btn btn--ghost btn--sm', title: 'حذف', onclick: () => removeExercise(ex) }, icon('trash', 15))
           : null
       );
-      // m166 — کارت جمع‌وجور: حداکثر ۳ فایل/پیوست + «نمایش همه (n)» آکاردئونی داخل کارت
       const fileChips = files.length === 0
         ? el('span', { class: 'exb-file' }, 'بدون فایل')
         : buildCardFiles(ex, files);
-      // m143 — بندانگشتی پیش‌نمایش سربرگ کارت؛ سربرگ ستونی (عنوان، بعد نشان‌ها)
       const thumb = files.length > 0 ? buildThumb(ex, files) : null;
       return el(
         'div',
@@ -767,8 +684,6 @@ export function renderExercises(container) {
             ex.visibility === 'private' ? privateBadge() : null)
         ),
         ex.description ? el('p', { class: 'exb-card__desc', title: ex.description }, ex.description) : null,
-        // لینک بازی/تمرین آنلاین بیرونی — وکتور بازی (بدون ایموجی)
-        // فقط http/https به‌صورت لینک رندر می‌شود (دفاع دوم در برابر href نامعتبر)
         safeExternalHref(ex.externalUrl)
           ? el('div', { style: { marginBottom: '6px' } },
               el('a', { class: 'exb-file-chip exb-link-chip', href: safeExternalHref(ex.externalUrl), target: '_blank', rel: 'noopener', title: safeExternalHref(ex.externalUrl) },
@@ -811,9 +726,6 @@ export function renderExercises(container) {
     );
   }
 
-  // ─────────────── دانلود/حذف فایل و تمرین ───────────────
-
-  /** — دانلود یک فایل مشخص از تمرین (فایل اصلی اگر file بدون id) */
   async function downloadFile(ex, file) {
     try {
       const url = file?.id
@@ -835,7 +747,6 @@ export function renderExercises(container) {
     }
   }
 
-  /** — حذف یک فایل تمرین (با تأیید) */
   async function removeAttachment(ex, file) {
     if (!file.id) {
       toast('این فایل قابل حذف مستقیم نیست — ابتدا فایل‌ها را از سرور همگام کنید', 'warning');
@@ -857,13 +768,6 @@ export function renderExercises(container) {
     }
   }
 
-  // ─────────────── پیش‌نمایش درون‌برنامه‌ای (تصویر / PDF) ───────────────
-
-  /** — همان الگوی blob دانلود (Bearer → objectURL) ولی برای نمایش؛
-   * مسیر عمومی توکن‌دار خانواده‌ها اینجا هرگز استفاده نمی‌شود.
-   * objectURLها هنگام بستن مودال و هنگام جابه‌جایی فایل رها می‌شوند.
-   * m137: نوار «باز کردن در تب جدید» برای PDF (سافاری موبایل blob iframe را خالی نشان می‌دهد)
-   * + mime از blob/پسوند هم حدس زده می‌شود + پیام خطا کد وضعیت را نشان می‌دهد. */
   function openPreviewModal(ex, files, startIdx = 0) {
     let idx = Math.min(Math.max(startIdx, 0), files.length - 1);
     let currentUrl = null;
@@ -880,7 +784,6 @@ export function renderExercises(container) {
       }
     }
 
-    /** — mime قطعی: اعلامی سالم → blob.type → پسوند (آپلودها گاهی octet-stream ثبت می‌شوند) */
     function resolvedMime(f, blob) {
       const declared = String(f.mime ?? '').toLowerCase();
       const actual = String(blob.type ?? '').toLowerCase();
@@ -915,7 +818,6 @@ export function renderExercises(container) {
         if (mime === 'application/pdf') {
           currentUrl = objUrl;
           stage.replaceChildren(el('iframe', { class: 'exb-preview__frame', src: objUrl, title: f.filename }));
-          // — جانشین PDF: بعضی مرورگرها (سافاری موبایل) blob iframe را خالی نشان می‌دهند
           pdfBar.replaceChildren(
             el('span', { class: 'cell-sub' }, 'PDF نمایش داده نمی‌شود؟'),
             el('button', {
@@ -945,7 +847,6 @@ export function renderExercises(container) {
       ? el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { idx = (idx + 1) % files.length; show(); } }, 'بعدی', icon('chevL', 14))
       : null;
 
-    // m143 — ناوبری کلیدی چپ/راست در پیش‌نمایش چندفایلی
     const onKeyNav = (e) => {
       if (!files.length || files.length < 2) return;
       if (e.key === 'ArrowLeft') { idx = (idx + 1) % files.length; show(); } // RTL: چپ = بعدی
@@ -965,7 +866,6 @@ export function renderExercises(container) {
         files.length > 1 ? el('div', { class: 'exb-preview__nav' }, prevBtn, nextBtn) : null
       ),
       actions: [
-        // m143 — دانلود/تب جدید همیشه در دسترس (نه فقط برای PDF مشکل‌دار)
         () => el('button', { class: 'btn btn--ghost', onclick: () => downloadFile(ex, files[idx]) }, icon('download', 15), 'دانلود'),
         () => el('button', {
           class: 'btn btn--ghost',
@@ -983,15 +883,12 @@ export function renderExercises(container) {
     show();
   }
 
-  // ─────────────── ساخت تمرین (درگ‌اند‌دراپ چندفایلی) ───────────────
-
   function openCreateModal() {
     const picked = [];
     const selected = new Set();
 
     const title = el('input', { class: 'input', maxlength: 150, placeholder: 'مثلاً تمرین حروف نقطه‌دار — پایه دوم' });
     const desc = el('textarea', { class: 'textarea', rows: 3, maxlength: 2000, placeholder: 'راهنمای اجرا برای خانواده (اختیاری — در پیام بات هم می‌آید)' });
-    // لینک بازی/تمرین آنلاین بیرونی (سرویس خارجی)
     const link = el('input', { class: 'input', dir: 'ltr', maxlength: 500, placeholder: 'https://example.com/game — لینک بازی/تمرین آنلاین (اختیاری)' });
     const fmt = el(
       'select',
@@ -1000,17 +897,12 @@ export function renderExercises(container) {
       el('option', { value: 'game' }, 'بازی'),
       el('option', { value: 'instruction' }, 'دستورالعمل خانه')
     );
-    // — دید (m136): خصوصی = فقط سازنده و مدیر در بانک/انتخابگر می‌بینند
     const visSel = el(
       'select',
       { class: 'select' },
       el('option', { value: 'public', selected: 'selected' }, 'عمومی — همهٔ همکاران'),
       el('option', { value: 'private' }, 'خصوصی — فقط من و مدیر')
     );
-    // — تمرین تیمی قدیمی حذف شد (m166) — تیک «ساختهٔ تیمی» فقط امتیاز را نصف می‌کرد بی‌آنکه
-    //   بگوید نیم دیگر مالِ کیست؛ جایش انتخاب همکار واقعی (هم‌ساز) نشسته است
-    // — سازندهٔ تمرین (m138): پیش‌فرض حسابِ واردشده؛ برای دستگاه/نشست مشترک قابل اصلاح
-    //    ریشهٔ باگ «امتیاز به نام نفر دیگر»: کار با حساب همکار روی دستگاه مشترک (توکن ۳۰روزه)
     const myStaffId = session.user?.staffId ?? '';
     const activeStaff = staffList.filter((s) => s.active === undefined || s.active === 1 || s.active === true);
     const ownerSel = activeStaff.length > 0
@@ -1020,9 +912,6 @@ export function renderExercises(container) {
           ...activeStaff.map((s) => el('option', { value: s.id, selected: s.id === myStaffId ? 'selected' : undefined }, s.fullName))
         )
       : el('select', { class: 'select' }, el('option', { value: myStaffId, selected: 'selected' }, session.user?.displayName ?? '—'));
-    // — m166: هم‌ساز واقعی (سازندهٔ دوم) از فهرست کارکنان — جای تیک بی‌نامِ «ساختهٔ تیمی»؛
-    //   با انتخاب همکار، امتیاز تولید محتوا بین سازندهٔ اصلی و او نصف می‌شود (موتور امتیاز:
-    //   سازندهٔ ۰٫۵ + هم‌ساز ۰٫۵) — گزینه‌ها فعال و مخالف سازندهٔ پیش‌فرض‌اند
     const coSel = el(
       'select',
       { class: 'select' },
@@ -1058,7 +947,6 @@ export function renderExercises(container) {
     const progressLine = el('div', { class: 'exb-progress', style: { display: 'none' } });
     dropzoneWrap.append(progressLine);
 
-    // m143 — ترتیب UX: عنوان ← فایل‌ها ← قالب/دید ← امتیاز/سازنده ← لینک ← توضیح/برچسب
     const bodyEl = el(
       'div',
       { class: 'form-grid' },
@@ -1070,7 +958,6 @@ export function renderExercises(container) {
         el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'خصوصی: در بانک و انتخابگر فقط شما و مدیر می‌بینید؛ بات/خانواده هرگز')),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'هم‌ساز تمرین (سازندهٔ دوم)'), coSel,
         el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'اختیاری — با انتخاب همکار، امتیاز تولید محتوا بین دو نفر نصف می‌شود')),
-      // — سازندهٔ تمرین (m138): فشرده شد ولی سرِ جای خودش ماند (ریشهٔ باگ امتیاز به نام دیگری)
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'سازندهٔ تمرین — امتیاز به نام او'), ownerSel,
         el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'روی دستگاه مشترک، نام واقعی سازنده را انتخاب کنید')),
       el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'لینک بازی/تمرین آنلاین (اختیاری)'), link,
@@ -1079,7 +966,6 @@ export function renderExercises(container) {
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'برچسب‌ها — پیش‌فرض، پایه و برچسب دلخواه'), tagPicker)
     );
 
-    // m143 — دکمهٔ ذخیره در حین ثبت قفل می‌شود (جلوگیری از تمرین تکراری با دابل‌کلیک)
     const saveBtn = el('button', { class: 'btn btn--primary', type: 'button', onclick: onSave }, 'افزودن به بانک');
     async function onSave() {
       if (saveBtn.disabled) return;
@@ -1090,7 +976,6 @@ export function renderExercises(container) {
       }
       saveBtn.disabled = true;
       try {
-        // تمرین اول ثبت می‌شود؛ فایل‌ها با multipart باینری می‌روند
         const created = await api.post('/api/exercises', {
           title: title.value.trim(),
           description: desc.value.trim() || null,
@@ -1135,13 +1020,10 @@ export function renderExercises(container) {
     });
   }
 
-  // ─────────────── ویرایش تمرین ───────────────
-
   function openEditModal(ex) {
     const selected = new Set(ex.tags.map((t) => t.id));
     const title = el('input', { class: 'input', maxlength: 150, value: ex.title });
     const desc = el('textarea', { class: 'textarea', rows: 3, maxlength: 2000 }, ex.description ?? '');
-    // لینک بازی/تمرین آنلاین بیرونی
     const link = el('input', { class: 'input', dir: 'ltr', maxlength: 500, placeholder: 'https://example.com/game — اختیاری', value: ex.externalUrl ?? '' });
     const fmt = el(
       'select',
@@ -1156,7 +1038,6 @@ export function renderExercises(container) {
       el('option', { value: '1', selected: ex.published ? 'selected' : undefined }, 'منتشرشده — در بات دیده می‌شود'),
       el('option', { value: '0', selected: !ex.published ? 'selected' : undefined }, 'پیش‌نویس — فقط پنل')
     );
-    // — دید (m136): قابل ویرایش فقط توسط سازنده یا مدیر؛ هم‌ساز (m166) برای همهٔ کارکنان باز است
     const canOwn = ex.createdBy === session.user?.staffId || session.user?.role === 'manager';
     const visSel = el(
       'select',
@@ -1164,13 +1045,10 @@ export function renderExercises(container) {
       el('option', { value: 'public', selected: ex.visibility !== 'private' ? 'selected' : undefined }, 'عمومی — همهٔ همکاران'),
       el('option', { value: 'private', selected: ex.visibility === 'private' ? 'selected' : undefined }, 'خصوصی — فقط من و مدیر')
     );
-    // — m166: هم‌ساز (سازندهٔ دوم) — جای تیک بی‌نامِ «ساختهٔ تیمی»؛ انتخاب واقعی از کارکنان،
-    //   امتیاز تولید محتوا بین سازندهٔ اصلی و هم‌ساز نصف می‌شود؛ «—» یعنی بدون هم‌ساز
     const activeStaff = staffList.filter(
       (s) => s.active === undefined || s.active === 1 || s.active === true
     );
     const coOptions = activeStaff.filter((s) => s.id && s.id !== ex.createdBy);
-    // هم‌سازِ فعلی اگر غیرفعال شده برای نمایش حفظ می‌شود (انتخابِ باز سرِ جایش می‌ماند)
     if (ex.coCreatedBy && !coOptions.some((s) => s.id === ex.coCreatedBy)) {
       const known = staffList.find((s) => s.id === ex.coCreatedBy);
       coOptions.unshift({ id: ex.coCreatedBy, fullName: known?.fullName ?? ex.coCreatedBy });
@@ -1181,12 +1059,6 @@ export function renderExercises(container) {
       el('option', { value: '', selected: !ex.coCreatedBy }, '— بدون هم‌ساز (امتیاز کامل)'),
       ...coOptions.map((s) => el('option', { value: s.id, selected: s.id === ex.coCreatedBy }, s.fullName))
     );
-    // — سازنده (m140): در ویرایش فقط «نمایشِ فقط-خواندنی» است؛ انتخابگر سازنده حذف شد.
-    //   ریشهٔ باگ بازگشت انتساب (۱۳:۴۱ و ۱۴:۲۵ روز ۲۰ اکتبر): فرم ویرایش owner_staff_id
-    //   از-پیش-پرشدهٔ ردیف را در هر ذخیره دوباره می‌فرستاد — حتی با پیش‌فرض m139،
-    //   کشِ کهنهٔ JS روی مرورگر مدیر همان بازگشت را تکرار کرد. حالا:
-    //   ۱) مالکیت دیگر از مسیر ویرایش تغییر نمی‌کند (سرور هم این کلیدها را از PATCH می‌ریزد)
-    //   ۲) انتقال فقط با اکشن صریح مدیر روی POST /api/exercises/:id/reassign انجام می‌شود
     const isManager = session.user?.role === 'manager';
     const currentOwnerName = staffList.find((s) => s.id === ex.createdBy)?.fullName ?? 'نامشخص';
     const creatorChip = el(
@@ -1195,7 +1067,6 @@ export function renderExercises(container) {
       hueDot(ex.createdBy, 9),
       `سازندهٔ فعلی: ${currentOwnerName}`
     );
-    // — انتقال مالکیت (فقط مدیر): دکمهٔ کوچک + پنل تأیید درون‌مودالی (بدون مودال تودرتو)
     let closeEdit = null;
     let reassignToggle = null;
     let reassignPanel = null;
@@ -1227,7 +1098,6 @@ export function renderExercises(container) {
             reason: reReason.value.trim() || undefined
           });
           if (res?.unchanged === true) {
-            // سرور: سازندهٔ فعلی همان مقصد است — هیچ تغییری نکرد
             toast('سازندهٔ تمرین از قبل همین شخص است', 'info');
             reassignPanel.hidden = true;
             return;
@@ -1236,7 +1106,6 @@ export function renderExercises(container) {
           closeEdit?.();
           reloadAll();
         } catch (err) {
-          // ۴۰۳ (غیرمدیر) / ۴۰۴ (تمرین یا همکار ناموجود) / خطای دیگر — پیام سرور نمایش داده می‌شود
           toastError(err);
         } finally {
           reConfirm.disabled = false;
@@ -1291,7 +1160,6 @@ export function renderExercises(container) {
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'هم‌ساز تمرین (سازندهٔ دوم)'), coSel,
         el('div', { class: 'cell-sub', style: { marginTop: '4px' } },
           'اختیاری — با انتخاب همکار، امتیاز تولید محتوا بین سازندهٔ اصلی و او نصف می‌شود')),
-      // — سازندهٔ فعلی (m140): فقط نمایش + دکمهٔ انتقال مالکیت برای مدیر
       el('div', { class: 'field span-2' },
         el('label', { class: 'field__label' }, 'سازندهٔ تمرین'),
         el('div', { class: 'exb-ownerfield__row' }, creatorChip, reassignToggle),
@@ -1306,7 +1174,6 @@ export function renderExercises(container) {
 
     openModal({
       title: 'ویرایش تمرین',
-      // — body به‌صورت تابع: close مودال برای بستنِ پس از انتقال موفق مالکیت نگه داشته می‌شود
       body: (close) => { closeEdit = close; return bodyEl; },
       wide: true,
       actions: [
@@ -1333,15 +1200,11 @@ export function renderExercises(container) {
                     external_url: link.value.trim() || null,
                     published: pub.value === '1',
                     tag_ids: [...selected],
-                    // — m166: هم‌ساز (سازندهٔ دوم) — «—» یعنی برداشتن هم‌ساز (null)
                     co_created_by: coSel.value || null
                   };
-                  // دید فقط سازنده یا مدیر — سرور هم گارد دارد
                   if (canOwn) {
                     patch.visibility = visSel.value;
                   }
-                  // m140: هیچ کلید مالکیت‌حمل (owner_staff_id/created_by) در PATCH فرستاده نمی‌شود —
-                  // مالکیت فقط با POST /api/exercises/:id/reassign تغییر می‌کند
                   await api.patch(`/api/exercises/${ex.id}`, patch);
                   toast('تمرین به‌روزرسانی شد', 'success');
                   close();
@@ -1358,8 +1221,6 @@ export function renderExercises(container) {
       ]
     });
   }
-
-  // ─────────────── مدیریت فایل‌های تمرین (افزودن چندفایلی + حذف) ───────────────
 
   function openFilesModal(ex) {
     const picked = [];
@@ -1481,8 +1342,6 @@ export function renderExercises(container) {
     });
   }
 
-  // ─────────────── حذف نرم ───────────────
-
   async function removeExercise(ex) {
     const ok = await confirmModal({
       title: 'حذف تمرین',
@@ -1499,8 +1358,6 @@ export function renderExercises(container) {
       toastError(err);
     }
   }
-
-  // ─────────────── راه‌اندازی ───────────────
 
   function drawToolbar() {
     const newBtn = isStaff()

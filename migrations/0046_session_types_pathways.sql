@@ -1,25 +1,6 @@
--- مایگریشن اسکیما D1 — انواع جلسه و مسیرها
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- ============================================================
--- — موتور «مسیر تفسیر بالینی» — بخش ۱: نوع نوبت + مسیر پرونده
--- (جدول ۴ اساس‌نامه: سه نحوهٔ ارائه + زمان‌بندی جلسات)
--- ۱) appointments.session_type — نوع جلسه (۵ نوع از جدول ۴؛ NULL = نوبت‌های قدیمی/بدون نوع)
--- بدون CHECK در SQL (الگوی D7) — enum در @core/shared + اعتبارسنجی Zod
--- ۲) students.pathway — مسیر پرونده (learning = اختلال یادگیری / rehab = توانبخشی ذهنی-جسمی)
--- NULL = هنوز تعیین نشده (رفتار همهٔ ردیف‌های موجود)
--- ۳) فرم‌های سیستمی مسیر تفسیر (is_system=1):
--- - ce-results-v1: فرم نتایج — جمع‌بندی نتایج ارزیابی
--- - ce-wechsler-w4-v1: فرم نتایج وکسلر ۴ (WISC-IV) — آمادهٔ اتصال به موتور تحلیل
--- - ce-rehab-cog-v1: ارزیابی شناختی کاردرمانی ذهنی (شاخهٔ توانبخشی)
--- - ce-rehab-motor-v1: ارزیابی حرکتی-جسمی (شاخهٔ توانبخشی)
--- - ce-rehab-adl-v1: مهارت‌های خودیاری و زندگی روزمره (شاخهٔ توانبخشی)
--- additive — هیچ ستون/جدول موجودی تغییر نمی‌کند؛ نوبت‌های قدیمی session_type=NULL می‌مانند
--- ============================================================
-
 ALTER TABLE appointments ADD COLUMN session_type TEXT;
 ALTER TABLE students ADD COLUMN pathway TEXT;
 
--- ─── فرم نتایج — جمع‌بندی نتایج ارزیابی (هر دو مسیر) ───
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8900-4000-8000-000000000001',
@@ -38,7 +19,6 @@ VALUES (
   1
 );
 
--- ─── فرم نتایج وکسلر ۴ (WISC-IV) — آمادهٔ اتصال به موتور تحلیل وکسلر ───
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8900-4000-8000-000000000002',
@@ -57,7 +37,6 @@ VALUES (
   1
 );
 
--- ─── ارزیابی شناختی کاردرمانی ذهنی — شاخهٔ توانبخشی ───
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8900-4000-8000-000000000003',
@@ -76,7 +55,6 @@ VALUES (
   1
 );
 
--- ─── ارزیابی حرکتی-جسمی — شاخهٔ توانبخشی ───
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8900-4000-8000-000000000004',
@@ -95,7 +73,6 @@ VALUES (
   1
 );
 
--- ─── مهارت‌های خودیاری و زندگی روزمره — شاخهٔ توانبخشی ───
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8900-4000-8000-000000000005',

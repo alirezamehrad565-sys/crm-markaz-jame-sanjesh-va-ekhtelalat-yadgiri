@@ -1,40 +1,17 @@
-// Case-formulation engine (موتور فرمول‌بندی مورد) — public TypeScript API.
-//
-// EXTRACTED MODULE: the engine body lives in engine.js, a byte-verbatim
-// extraction of worker/bundle.js lines 29109-30981 (commit 365d103, "m130
-// (1.00.9)", extracted 2026-02-01 by task 39-d2). This file only adds types and
-// re-exports the entry point. NOT yet wired into the build: production still
-// runs the bundle; equivalence is proven by tests/golden/formulation-golden.test.mjs.
-//
-// Interface (mirrors the bundle call site — bundle.js:31066-31078,
-// createReasoningEngineService.getCaseFormulation for route
-// GET /api/students/:id/case-formulation):
-//   formulateCase({ events, wechsler, ot, gates, child }, { now? }) -> formulation JSON
-//     events   : completed case_events rows, most recent first
-//     wechsler : wechsler engine output (or wechslerFromEvent(payload)) or null
-//     ot       : OT profile (otEngine.getOtProfile) or null
-//     gates    : standard-pathway gates (otEngine.getGates) or null
-//     child    : { id, ageYears, grade }
-
 import {
   formulateCase as formulateCaseRaw,
   buildCaseFormulation,
   wechslerFromEvent,
   ageYearsFromBirthDate,
 } from "./engine.js";
-// T6 (m148-b) — فرمول‌بندی روی خروجی موتور شک: یک محاسبه، چند کارت UI (افزودنی — بدون تغییر کلیدهای قدیمی)
 import type { RankedHypothesis } from "../clinical-engine/types";
 import type { ConvergenceItem } from "../clinical-engine/convergence";
 import { runInference } from "../clinical-engine/infer";
 
-// ─────────────────────────── input types ───────────────────────────
-
-/** One completed case_event row, as loaded by loadEvidenceEvents (bundle.js:31006-31037). */
 export interface EvidenceEvent {
   eventId?: string;
   toolKey: string;
   typeTitle?: string | null;
-  /** only "completed" events are consumed (latestPerTool2) */
   status?: string | null;
   occurredAt?: string | null;
   payload?: Readonly<Record<string, { value?: unknown; label?: string } | undefined>> | null;
@@ -50,12 +27,10 @@ export interface EvidenceEvent {
     }[] | null;
     flags?: readonly { label: string; [key: string]: unknown }[] | null;
   } | null;
-  /** band table of the case_event_type — used as color fallback */
   bands?: readonly { label: string; color: string }[] | null;
   subscales?: readonly { id: string; bands?: readonly { label: string; color: string }[] | null }[] | null;
 }
 
-/** Wechsler outcome object from the wechsler engine (or rejected/candidate entry). */
 export interface WechslerOutcome {
   id: string;
   status?: string;
@@ -63,7 +38,6 @@ export interface WechslerOutcome {
   rejectReason?: string | null;
 }
 
-/** Wechsler engine output, or the object built by wechslerFromEvent(). */
 export interface WechslerResult {
   ok?: boolean;
   snapshot?: {
@@ -129,8 +103,6 @@ export interface FormulationOptions {
   now?: () => Date;
 }
 
-// ─────────────────────────── output types ───────────────────────────
-
 export type ConstructLevel = "پایین" | "مرزی" | "قابل‌توجه" | "هم‌گرا-بالا";
 export type SourceType = "parent" | "teacher" | "examiner" | "performance";
 
@@ -178,27 +150,15 @@ export interface FormulationResult {
   confidence: number; // 0.1-0.95
   capsFa: string[];
   disclaimer: string;
-  /**
-   * T6 (m148-b) — کلیدهای افزودنی: خروجی موتور شک واحد روی همان رویدادها (یک محاسبه، چند کارت).
-   * ranked و convergence از runInference می‌آیند — موتور شک تک‌منبع فرضیه‌ها و هم‌گرایی منابع است.
-   */
   inferenceRanked?: readonly RankedHypothesis[];
   inferenceConvergence?: readonly ConvergenceItem[];
 }
 
-// ─────────────────────────── public API ───────────────────────────
-
-/**
- * Pure case-formulation engine — exact behavioral twin of
- * buildCaseFormulation in worker/bundle.js (lines 30763-30872).
- */
 export function formulateCase(
   evidence: FormulationEvidence,
   options?: FormulationOptions
 ): FormulationResult {
   const raw = formulateCaseRaw(evidence as never, options) as unknown as FormulationResult;
-  // T6 (m148-b) — خروجی موتور شک (فرضیه‌های رتبه‌خورده + هم‌گرایی سه‌حالته) افزوندنی می‌شود؛
-  // بقیهٔ ساختار عیناً سرجایش است (پاریتی طلایی formulation).
   const inf = runInference((evidence.events ?? []) as never, options);
   return { ...raw, inferenceRanked: inf.ranked, inferenceConvergence: inf.convergence };
 }

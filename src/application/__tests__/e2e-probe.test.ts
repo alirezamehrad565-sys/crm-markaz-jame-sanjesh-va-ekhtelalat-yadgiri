@@ -1,15 +1,3 @@
-/**
- * تست‌های e2e — آزمون‌های عملکرد مرکزی (T12/m160)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-probe.test.ts — حلقهٔ کامل «ارزیابی عملکردی = آزمون درمانگر در مرکز»:
-// سه حوزهٔ ثابت (خواندن/نوشتن/حساب) با POST مسیر اختصاصی /case-events/probe؛
-// تحلیل هنجاری سمت سرور (درصد انتظار پایه با هنجار صدک ۵۰ + باند سه‌حالته + پرچم‌های علمی)؛
-// رویداد completed با payload برچسب‌دار (chip_metric_N/norm_fa/fa_summary)؛
-// حوزهٔ نامعتبر/فیلد جا/خارج از قلم‌رو/پایهٔ نامعتبر → ۴۰۰ فارسی و بدون رکورد؛
-// type از کتابخانهٔ فعال باتری حل می‌شود (بدون type جدید — is_system=0 و active=1)؛
-// RBAC همان گیت ثبت رویداد (منشی ۴۰۳)؛ audit هم‌تراکنش (case_event.probe_created).
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, Api, asRole, createStudent } from '../../test/harness';
 
@@ -48,7 +36,6 @@ describe('آزمون‌های عملکرد مرکزی — ارزیابی درم�
 
   it('خواندن — ثبت معتبر → تحلیل هنجاری، پرچم رمزگشایی، payload برچسب‌دار و audit', async () => {
     expect(probeCount(A)).toBe(0);
-    // wcpm=45 در برابر انتظار پایهٔ سوم (۱۰۷) → ۴۲٪ → «پایین‌تر از انتظار پایه»؛ pseudo=7 → پرچم
     const res = await probe('read', { text_grade: 'سوم', wcpm: 45, errors: 6, pseudo_correct: 7, comprehension: 1, notes: 'تعقیب با انگشت' });
     expect(res.status).toBe(201);
     const ev = (res.body as { data: ProbeEvent }).data;
@@ -61,7 +48,6 @@ describe('آزمون‌های عملکرد مرکزی — ارزیابی درم�
     expect(ev.analysis?.flags?.some((f) => f.key === 'pseudo_correct')).toBe(true);
     expect(ev.analysis?.flags?.some((f) => f.key === 'comprehension')).toBe(true);
 
-    // payload — فیلدها با ارقام فارسی + ردیف‌های عددی + هنجار مرجع + خلاصه
     expect(ev.payload?.text_grade).toEqual({ value: 'سوم', label: 'متن استفاده‌شده (پایه)' });
     expect(ev.payload?.wcpm.value).toBe('۴۵');
     expect(ev.payload?.chip_metric_1.label).toBe('واژهٔ درست در دقیقه');
@@ -73,11 +59,9 @@ describe('آزمون‌های عملکرد مرکزی — ارزیابی درم�
     expect(ev.payload?.norm_fa.value).toContain('Hasbrouck & Tindal');
     expect(ev.payload?.fa_summary.value).toContain('آزمون خواندن: ۴۲٪ انتظار پایهٔ سوم');
 
-    // خط خلاصهٔ تایم‌لاین هم‌شکل بقیهٔ ابزارها
     expect(ev.summary).toContain('امتیاز: ۴۲ از ۱۰۰');
     expect(ev.summary).toContain('پایین‌تر از انتظار پایه');
 
-    // type کتابخانه‌ای از مایگریشن باتری — بدون type جدید (عضو رسمی باتری: active=1, is_system=1)
     const trow = A.sql
       .prepare(`SELECT key, active, is_system FROM case_event_types WHERE key = 'ce-probe-read-v1'`)
       .get() as { key: string; active: number; is_system: number };
@@ -88,7 +72,6 @@ describe('آزمون‌های عملکرد مرکزی — ارزیابی درم�
       .get() as { c: number };
     expect(tcount.c).toBe(1);
 
-    // audit هم‌تراکنش
     const audits = A.sql
       .prepare(`SELECT action FROM audit_log WHERE resource_type = 'case_event' AND resource_id = ?`)
       .all(ev.id) as { action: string }[];
@@ -105,7 +88,6 @@ describe('آزمون‌های عملکرد مرکزی — ارزیابی درم�
   });
 
   it('نوشتن — قاعدهٔ ترکیبی: نرخ خطای بالا → «پایین‌تر از انتظار پایه» با پرچم روانی', async () => {
-    // ۸ خطا از ۲۰ واژه (نرخ ۴۰٪) + روانی ۳۰ از ۴۵ (۶۷٪) → danger با دو منبع
     const res = await probe('write', { dict_grade: 'سوم', dict_words: 20, err_phonetic: 5, err_visual: 2, err_rule: 1, alpha15s: 30, handwriting_note: 'خط ناپایدار' });
     expect(res.status).toBe(201);
     const ev = (res.body as { data: ProbeEvent }).data;
@@ -127,7 +109,6 @@ describe('آزمون‌های عملکرد مرکزی — ارزیابی درم�
   });
 
   it('حساب — تشدید مستند: مقایسهٔ مقدار ≥۶ → «پایین‌تر از انتظار پایه» حتی با درصد پایهٔ قابل قبول', async () => {
-    // digits 30 از ۳۵ (۸۶٪ → مرزی پایه) اما مقایسهٔ ۶ خطا → تشدید به danger
     const res = await probe('calc', { calc_grade: 'سوم', digits2min: 30, compare_errors: 6, number_line_pct: 12, word_problem_support: 'متوسط' });
     expect(res.status).toBe(201);
     const ev = (res.body as { data: ProbeEvent }).data;

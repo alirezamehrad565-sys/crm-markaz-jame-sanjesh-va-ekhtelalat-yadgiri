@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — rules
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Unit tests for pure working-hour rules
-
 import { describe, expect, it } from 'vitest';
 import { findOverlap, minuteToLabel, totalWeeklyMinutes } from '../rules';
 import type { HourRange } from '../rules';

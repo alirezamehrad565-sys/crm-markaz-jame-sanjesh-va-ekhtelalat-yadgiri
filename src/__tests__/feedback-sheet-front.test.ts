@@ -1,12 +1,4 @@
-/**
- * تست‌های واحد — برگهٔ بازخورد خانواده (T9/m152 — composer خالص فرانت)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// feedback-sheet-front.test.ts — سازندهٔ خالص buildFeedbackSheet از feedback-sheet.js فرانت:
 // الگوی format-front.test.ts — فایل public/assets/js خارج از include تایپ‌اسکریپت است؛ import با @ts-ignore.
-// قطعی: بدون DOM/Date — ورودی { student, formulation, plan, todayLabel } و خروجی ساخت‌یافتهٔ ثابت.
-// پوشش: سربرگ · نقاط قوت (سازهٔ پایین + فال‌بک خنثی) · آنچه دیده شد (نگاشت کلید + حذف ناشناخته) ·
-// گام‌های بعدی (فقط core شناخته‌شده + ساده‌سازی §) · توصیه‌های خانه (ثابت) · قطعی‌بودن · متن ساده.
 
 // @ts-ignore — فایل.js فرانت، خارج از include تایپ‌اسکریپت است
 import { buildFeedbackSheet, feedbackSheetTextOf } from '../../public/assets/js/feedback-sheet.js';
@@ -71,7 +63,6 @@ describe('buildFeedbackSheet — سازندهٔ خالص برگهٔ بازخور
     expect(texts.some((t: any) => t.includes('تمرکز و پیگیری کارها') && t.includes('نیاز به توجه و کمک بیشتر دارد'))).toBe(true);
     expect(texts.some((t: any) => t.includes('یادگیری مهارت‌های درسی') && t.includes('کمی نیاز به توجه دارد'))).toBe(true);
     expect(texts.some((t: any) => t.includes('نگرانی یا غم') && t.includes('به‌روشنی به توجه و کمک بیشتر نیاز دارد'))).toBe(true);
-    // کلید ناشناخته و سازهٔ «پایین» در این بخش نیستند
     expect(texts.some((t: any) => t.includes('ناشناخته'))).toBe(false);
     expect(texts.some((t: any) => t.includes('زبان و توانایی بیان'))).toBe(false);
   });

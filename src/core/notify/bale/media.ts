@@ -1,24 +1,10 @@
-/**
- * هستهٔ اعلان و کلاینت بات بله — ارسال رسانه در بات
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// دریافت فایل رسانه‌ای از بله (حلقهٔ بازگشت تکلیف):
-// file_id پیام → getFile → file_path → دانلود باینری از /file/bot<token>/
-// قراردادها:
-// * fetch تزریقی است (قابل تست بدون شبکه) — الگوی client.ts
-// * خطا هرگز token لو نمی‌دهد؛ FetchMediaError با پیام بی‌خطر
-// * available=false یعنی توکن بله تنظیم نیست — caller پاسخ «فعال نیست» می‌دهد
-
 export interface FetchedMedia {
   bytes: Uint8Array;
-  /** mime از هدر پاسخ دانلود — در نبودش null (caller پیش‌فرض می‌گذارد) */
   mime: string | null;
 }
 
 export interface MediaFetcher {
-  /** false = توکن بله تنظیم نشده — دریافت رسانه ممکن نیست */
   readonly available: boolean;
-  /** دانلود باینری فایل — هر خطا → FetchMediaError (بدون جزئیات شبکه) */
   fetch(fileId: string): Promise<FetchedMedia>;
 }
 
@@ -37,7 +23,6 @@ interface GetFileResponse {
 
 export interface BaleMediaFetcherOptions {
   token: string;
-  /** برای تست یا تغییر دامنه API */
   apiBase?: string;
   fetchImpl?: typeof fetch;
 }

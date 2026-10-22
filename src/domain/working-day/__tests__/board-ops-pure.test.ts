@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — board-ops-pure
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// فاز ۱ — تست pure نوار وضعیت عملیاتی (opsStats) و صف ۶۰ دقیقهٔ آینده (buildQueue)
-
 import { describe, expect, it } from 'vitest';
 import { buildQueue, isTerminalOps, opsStatsFromAppointments } from '../pure';
 import type { WorkingDayAppointment } from '@core/shared';

@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — runtime-secret
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// کلید امضای نشست: env → dev → secret ران‌تایم از settings (هم‌سنگ باندل زنده)
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   resolveSessionSecret,
@@ -14,7 +8,6 @@ import {
   SETTINGS_AUTH_SECRET_KEY
 } from '../runtime-secret';
 
-/** فیک D1 — فقط prepare.bind.first/run با جدول settings در حافظه */
 function fakeD1(rows: Map<string, string>, writes: string[] = []): D1Database {
   const store = rows;
   const db = {
@@ -101,7 +94,6 @@ describe('resolveSessionSecret', () => {
     expect(secret1).toMatch(/^[0-9a-f]{64}$/);
     expect(writes).toEqual(['insert']);
 
-    // کش ایزولیت: فراخوانی دوم هیچ کوئری اضافه نمی‌زند
     const secret2 = await resolveSessionSecret({ ENV: 'production', DB: db });
     expect(secret2).toBe(secret1);
     expect(writes).toEqual(['insert']);

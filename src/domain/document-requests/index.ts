@@ -1,9 +1,3 @@
-/**
- * ماژول درخواست مدارک از خانواده/معلم با بله — نقطهٔ ورود و صادرات‌های ماژول (barrel)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// مرز عمومی ماژول document-requests — تنها نقطه import ماژول‌های دیگر
-
 export { createDocumentRequestService } from './service';
 export { registerRoutes } from './routes';
 export {

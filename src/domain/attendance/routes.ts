@@ -1,9 +1,3 @@
-/**
- * ماژول حضور و غیاب — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// ۳ endpoint حضور — بدون business logic
-
 import { MarkAttendanceSchema } from '@core/shared';
 import { getAuthContext } from '@core/auth';
 import type { AppHono } from '@core/shared';
@@ -26,7 +20,6 @@ export function registerRoutes(app: AppHono, service: AttendanceService): void {
   app.get('/api/attendance/pending', async (c) => {
     const actor = getAuthContext(c);
     let staffId = c.req.query('staff_id');
-    // درمانگر همیشه فقط صف جلسات خودش را می‌بیند (پارامتر ورودی نادیده گرفته می‌شود)
     if (actor.role === 'therapist') staffId = actor.staffId;
     const items = await service.listPending(staffId);
     return c.json({ data: items }, 200);
@@ -35,7 +28,6 @@ export function registerRoutes(app: AppHono, service: AttendanceService): void {
   app.get('/api/attendance/stats', async (c) => {
     const actor = getAuthContext(c);
     let staffId = c.req.query('staff_id') ?? '';
-    // درمانگر فقط آمار جلسات خودش
     if (actor.role === 'therapist') staffId = actor.staffId;
     const from = c.req.query('from') ?? '1970-01-01T00:00:00.000Z';
     const to = c.req.query('to') ?? '9999-12-31T23:59:59.999Z';

@@ -1,20 +1,6 @@
-/**
- * مدارک بله — درخواست مدارک از خانواده/معلم + کارت «مدارک دریافتی از بله» (m151 — T2 · بازطراحی m166)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// document-requests.js — پنل دسترسی سریع پرونده:
-// «درخواست مدارک» → پیام بله به گیرنده‌های انتخابی (خانواده و/یا معلم) →
-// گیرنده عکس/فایل می‌فرستد → همین کارت روی پروفایل همه را با بندانگشتی/تاریخ شمسی/تگ نشان می‌دهد.
-// m166: فرم ساخت‌یافته حذف شد — توضیح آزاد کوتاه + چند تگ روشن (پیش‌فرض یا دلخواه)؛
-// دستهٔ مبهم «گزارش بی‌بی‌اسک» برداشته شد و کلیدهای درخواست‌های قدیمی با برچسب قدیمی نمایش می‌آیند.
-// الگوها: تامبنیل lazy با IntersectionObserver (views/exercises.js) + کارت tl-item__card
-// + مودال openModal با چیپ‌های انتخاب — بدون رنگ/فونت جدید (توکن‌های m144 دست‌نخورده).
-
 import { api } from './api.js';
 import { el, icon, openModal, confirmModal, toast, toastError } from './ui.js';
 import { fa, formatJalaliDateTime } from './format.js';
-
-// ───────────── تگ‌ها و گیرنده‌ها — قرارداد با pure.ts (m166) ─────────────
 
 const DOC_TAGS = [
   { key: 'narrative', label: 'نمونهٔ روایی' },
@@ -25,7 +11,6 @@ const DOC_TAGS = [
   { key: 'other', label: 'سایر مدارک' }
 ];
 
-/** برچسب کلیدهای درخواست‌های قدیمی (m151) — فقط برای نمایش رکوردهای قدیمی */
 const DOC_LEGACY_TAG_LABELS = {
   teacher_report: 'گزارش کتبی معلم',
   prev_eval: 'ارزیابی/گزارش قبلی'
@@ -38,7 +23,6 @@ const DOC_RECIPIENTS = [
 
 const DOC_TAGS_MAX = 8;
 
-/** برچسب یک تگ — پیش‌فرض/قدیمی → برچسب فارسی؛ تگ دلخواه → متن خودش */
 function docTagLabel(tag) {
   const preset = DOC_TAGS.find((x) => x.key === tag);
   if (preset) return preset.label;
@@ -50,7 +34,6 @@ const DOC_STATUS_LABEL = { sent: 'در انتظار مدارک', received: 'مد
 
 const docFileUrl = (doc) => `/api/students/${doc.studentId}/received-docs/${doc.id}/file`;
 
-/** mime قطعی: اعلامی سالم → پسوند (رکوردهای octet-stream) — الگوی exercises.js */
 function resolvedMime(doc) {
   const declared = String(doc.mime ?? '').toLowerCase();
   if (declared && declared !== 'application/octet-stream') return declared;
@@ -60,7 +43,6 @@ function resolvedMime(doc) {
   return declared || 'application/octet-stream';
 }
 
-/** تگ‌های درخواستِ متناظر مدرک — رکورد بدون درخواست → خنثی */
 function tagBadges(doc, requestOfId) {
   const req = doc.requestId ? requestOfId.get(doc.requestId) : null;
   if (!req) return el('span', { class: 'cell-sub' }, 'بدون درخواست باز');
@@ -68,8 +50,6 @@ function tagBadges(doc, requestOfId) {
     ...(req.tags ?? []).map((t) => el('span', { class: 'badge badge--neutral' }, docTagLabel(t)))
   );
 }
-
-// ─────────────── مودال «درخواست مدارک» — گیرنده + تگ + توضیح آزاد ───────────────
 
 export function openDocRequestModal(student, { onSent } = {}) {
   const pickedRecipients = new Set(['family']); // — خانواده پیش‌فرض؛ معلم به‌اختیار
@@ -104,7 +84,6 @@ export function openDocRequestModal(student, { onSent } = {}) {
         paintTags();
       }
     }, t.label));
-    // — تگ دلخواه: چیپ فعال؛ کلیک = حذف
     for (const t of pickedTags) {
       if (DOC_TAGS.some((x) => x.key === t)) continue;
       chips.push(el('button', {
@@ -198,8 +177,6 @@ export function openDocRequestModal(student, { onSent } = {}) {
   void close;
 }
 
-// ─────────────── پیش‌نمایش مدرک (عکس/PDF) — الگوی preview تمرین‌ها ───────────────
-
 function openDocPreviewModal(doc) {
   let currentUrl = null;
   const status = el('div', { class: 'exb-preview__status' });
@@ -258,7 +235,6 @@ function openDocPreviewModal(doc) {
   })();
 }
 
-/** دانلود مستقیم مدرک — همان الگوی blob دانلود تمرین‌ها */
 export async function openDocDownload(doc) {
   try {
     const res = await fetch(docFileUrl(doc), {
@@ -277,9 +253,6 @@ export async function openDocDownload(doc) {
   }
 }
 
-// ─────────────── کارت «مدارک دریافتی از بله» ───────────────
-
-/** بندانگشتی مدرک — عکس: lazy objectURL؛ بقیه: کاشی نوع — الگوی تامبنیل بانک تمرین */
 function docThumb(doc) {
   const mime = resolvedMime(doc);
   const stage = el('div', {
@@ -318,10 +291,6 @@ function docThumb(doc) {
   return stage;
 }
 
-/**
- * کارت مدارک پرونده — در پروفایل دانش‌آموز (پایین کارت وضعیت) mount می‌شود.
- * onChanged بعد از ارسال درخواست/بستن، رندر دوبارهٔ پروفایل را صدا می‌زند.
- */
 export function renderDocsQuickCard(mount, student, { onChanged } = {}) {
   mount.replaceChildren(el('div', { class: 'card' }, el('div', { class: 'card__body' }, el('span', { class: 'cell-sub' }, 'در حال بارگذاری مدارک…'))));
 
@@ -336,12 +305,10 @@ export function renderDocsQuickCard(mount, student, { onChanged } = {}) {
       requests = reqRes.data ?? [];
       docs = docsRes.data ?? [];
     } catch {
-      // — مدارک اختیاری‌اند؛ خطا کارت را خالی رها می‌کند
     }
     const requestOfId = new Map(requests.map((r) => [r.id, r]));
     const openRequests = requests.filter((r) => r.status !== 'closed');
 
-    // ── ردیف درخواست‌های باز — وضعیت + گیرنده + تگ‌ها (رکورد قدیمی: برچسب قدیمی) ──
     const requestRows = openRequests.map((r) => {
       const recipientBadges = (r.recipients ?? ['family']).map((rc) => {
         const meta = DOC_RECIPIENTS.find((x) => x.key === rc);
@@ -377,7 +344,6 @@ export function renderDocsQuickCard(mount, student, { onChanged } = {}) {
       );
     });
 
-    // ── فهرست مدارک دریافتی ──
     const docRows = docs.map((d) => el('div', { class: 'tl-item__card', style: { display: 'flex', gap: 'var(--sp-3)', alignItems: 'stretch' } },
       docThumb(d),
       el('div', { style: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px', justifyContent: 'center' } },
@@ -423,7 +389,6 @@ function mimePreviewable(doc) {
   return mime === 'application/pdf' || mime.startsWith('image/');
 }
 
-/** پیام خالی کارت — کوتاه و راهنما */
 function emptyDocsHint(hasOpen) {
   return el('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' } },
     el('span', { class: 'cell-sub' },

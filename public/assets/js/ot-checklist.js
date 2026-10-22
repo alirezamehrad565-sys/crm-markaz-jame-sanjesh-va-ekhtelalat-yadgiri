@@ -1,17 +1,6 @@
-/**
- * چک‌لیست کاردرمانی — فرانت
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// ot-checklist.js — چک‌لیست ۷ حیطه‌ای کاردرمانی ذهنی + نتیجهٔ نیاز ویژه + کارت پروتکل
-// فلو دوفازی شناسایی → مداخله: ارزیابی مهارتی = ورودی مشترک شناسایی؛ حین ارزیابی مداخله هم انجام می‌شود؛
-// جلسهٔ بعد از «نقطهٔ فعلی» هر حیطه ادامه پیدا می‌کند (اولین مهارتی که «بلد است» نشده).
-// خط قرمز پلن §۱ هم‌چنان برقرار است: ثبت نیاز ویژه/پروتکل فقط تصمیم درمانگر است، نه موتور.
-
 import { api } from './api.js';
 import { el, icon, toast, toastError, formModal } from './ui.js';
 import { fa, formatJalaliDateTime } from './format.js';
-
-// ───────── دادهٔ ثابت سمت مرورگر (هم‌قرارداد با @core/shared و ot-engine) ─────────
 
 export const OT_STATUS = {
   mastered: { label: 'بلد است', cls: 'badge--success', tone: 'ok' },
@@ -19,7 +8,6 @@ export const OT_STATUS = {
   not_yet: { label: 'هنوز نه', cls: 'badge--neutral', tone: 'diff' }
 };
 
-/** سطح راهنمای «با کمک» — هم‌قرارداد با OT_PROMPT_LEVELS در ot-engine */
 export const OT_PROMPT_LEVELS = {
   verbal: 'راهنمای کلامی',
   gestural: 'ژستی / الگودهی',
@@ -56,7 +44,6 @@ const PROTOCOL_OPTIONS = [
 
 const PROTOCOL_LABELS = Object.fromEntries(PROTOCOL_OPTIONS.map((o) => [o.value, o.label]));
 
-/** نگاشت پیش‌فرض نیاز→پروتکل */
 const PROTOCOL_SUGGESTIONS = {
   dyslexia: { protocol: 'learning', secondary: null },
   dysgraphia: { protocol: 'learning', secondary: null },
@@ -101,8 +88,6 @@ const PROTOCOL_STEPS = {
     ['خانواده و آموزگاران', 'جلسهٔ خانواده‌محور + آموزش آموزگاران با گزارش پیشرفت حیطه‌ای'],
     ['بازسنجی حیطه‌ای', 'مقایسهٔ پروفایل با جلسهٔ اول — ۸ تا ۱۲ جلسه']
   ],
-  // m162 — فلوی توانبخشی: ارزیابی عملکردی (خط پایهٔ عددی) → چک‌لیست مهارتی (نقطهٔ شروع هر حیطه،
-  // اولویت با حیطه‌های پرچم‌دار خط پایه) → مداخلهٔ جلسه‌به‌جلسه از نقطهٔ ادامه → پیشرفت و بازسنجی.
   rehab: [
     ['ارزیابی پایه', 'شرح‌حال + ارزیابی عملکردی ذهنی — خط پایهٔ عددی شش حیطه با سطح راهنما (وکسلر و چک‌لیست‌های خانواده/معلم اختیاری)'],
     ['چک‌لیست مهارتی', 'نقطهٔ شروع هر حیطه از چک‌لیست مهارتی ۷ حیطه‌ای — اولویت پیمایش با حیطه‌های پرچم‌دار خط پایه'],
@@ -111,13 +96,11 @@ const PROTOCOL_STEPS = {
   ]
 };
 
-/** چیپ پروتکل فعال — سربرگ تب تفسیر */
 export function protocolChip(protocol) {
   if (!protocol || !PROTOCOL_LABELS[protocol]) return null;
   return el('span', { class: 'badge badge--accent proto-chip' }, icon('target', 13), PROTOCOL_LABELS[protocol]);
 }
 
-/** کارت پروتکل فاز مداخله — گام‌ها اطلاعاتی‌اند؛ اجرا با ابزار خودِ پروتکل */
 export function protocolCard(protocol) {
   if (!protocol || !PROTOCOL_STEPS[protocol]) return null;
   return el('div', { class: 'card proto-card' },
@@ -138,12 +121,6 @@ export function protocolCard(protocol) {
   );
 }
 
-// ───────── نتیجهٔ نیاز ویژه — دروازهٔ فاز مداخله ─────────
-
-/**
- * مودال ثبت نتیجهٔ نیاز ویژه: جمع‌بندی شواهد + نیاز نهایی + پروتکل (اصلی/پشتیبان) + اهداف.
- * ثبت = ساخت رویداد ce-needs-v1 + فعال شدن پروتکل روی پرونده (فاز مداخله).
- */
 export function openNeedsModal({ student, gates, canDecide, refresh }) {
   if (!canDecide) { toast('ثبت نتیجهٔ نیاز ویژه فقط توسط مدیر یا درمانگرِ مسئول پرونده مجاز است'); return; }
 
@@ -154,7 +131,6 @@ export function openNeedsModal({ student, gates, canDecide, refresh }) {
     .map((g) => `${g.label}: ${g.detail}`)
     .join('\n');
 
-  // پیشنهاد پیش‌فرض نیاز→پروتکل — پاسخ سرور مرجع است؛ نقشهٔ محلی پشتیبان
   const suggestions = gates?.protocolSuggestions ?? PROTOCOL_SUGGESTIONS;
 
   formModal({
@@ -204,27 +180,13 @@ export function openNeedsModal({ student, gates, canDecide, refresh }) {
   });
 }
 
-// ───────── چک‌لیست ۷ حیطه‌ای کاردرمانی ذهنی ─────────
-
-/**
- * کارت اصلی چک‌لیست ۷ حیطه‌ای — ارزیابی مهارتی حین مداخله.
- * profile خروجی GET /api/students/:id/ot/profile است؛ تغییرها محلی انباشته و
- * با «ثبت جلسه» یک‌جا POST می‌شوند (items + گزارش جلسه → تایم‌لاین).
- * m162 — فلوی مسیرآگاه: protocolLabel برچسب پروتکل در عنوان/مودال ثبت؛
- * priorityDomains (حیطه‌های پرچم‌دار خط پایهٔ عملکردی توانبخشی) بج «اولویت» می‌گیرند
- * و حیطهٔ فعال پیش‌فرض اولین اولویتِ ناتمام است — ترتیب «ارزیابی عملکردی اول،
- * چک‌لیست مهارتی دوم» در خود کارت دیده می‌شود.
- */
 export function otChecklistCard({ student, profile, canDecide, refresh, scrollTarget = false, protocolLabel = 'کاردرمانی ذهنی', priorityDomains = [] }) {
   if (!profile) return null;
 
-  // تغییرهای ثبت‌نشدهٔ این جلسه — skillId → {status, prevStatus, promptLevel}
   const pending = new Map();
   let activeDomain = null;
-  // نمای پیمایش اولیه: ۳ مهارت نخستِ نمره‌نخوردهٔ حیطه — پیمایش ۸۴ آیتم در یک جلسه ممکن نیست
   let sweepMode = false;
 
-  // m162 — حیطهٔ فعال پیش‌فرض: اولین حیطهٔ اولویت‌دارِ ناتمام؛ بعد اولین ناتمام؛ بعد حیطهٔ اول
   const prioritySet = new Set(priorityDomains);
   const firstPriorityIncomplete = profile.domains.find((d) => prioritySet.has(d.key) && d.scored < d.total);
   const firstPriority = profile.domains.find((d) => prioritySet.has(d.key));
@@ -237,14 +199,12 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
     return p ? p.status : skill.status;
   }
 
-  /** رندر در جای ثابت — هر build، محتوای wrapper را عوض می‌کند (کارت stale نمی‌ماند) */
   const root = el('div', { class: 'ot-card-wrap' });
 
   function build() {
     const t = profile.totals;
     const pctOf = (d) => (d.total ? Math.round((d.mastered / d.total) * 100) : 0);
 
-    // ── نوار خلاصهٔ ۷ حیطه ──
     const domainStrip = el('div', { class: 'ot-domains' },
       profile.domains.map((d) => {
         const pend = [...pending.keys()].filter((sid) => d.skills.some((s) => s.skillId === sid)).length;
@@ -270,14 +230,11 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
       t.withHelp > 0 ? el('span', { class: 'badge badge--warning' }, `با کمک: ${fa(t.withHelp)}`) : null,
       t.secondarySkills > 0 ? el('span', { class: 'badge badge--neutral', title: 'مهارت‌های هم‌سازه که در شمارش پیشرفت دوباره شمرده نمی‌شوند (m91)' }, `مهارت مکمل: ${fa(t.secondarySkills)}`) : null,
       t.sessions > 0 ? el('span', { class: 'cell-sub' }, `${fa(t.sessions)} جلسه ثبت‌شده${t.lastSessionAt ? ` — آخرین: ${formatJalaliDateTime(t.lastSessionAt)}` : ''}`) : el('span', { class: 'cell-sub' }, 'هنوز جلسه‌ای ثبت نشده — ارزیابی و مداخله از همین‌جا شروع می‌شود'),
-      // m162 — اولویت پیمایش از خط پایهٔ عملکردی (فلوی توانبخشی: ارزیابی اول، چک‌لیست دوم)
       priorityDomains.length ? el('span', { class: 'cell-sub ot-priority-hint' }, icon('target', 13), 'اولویت پیمایش از خط پایهٔ عملکردی: ', el('b', {}, priorityDomains.map((k) => profile.domains.find((d) => d.key === k)?.title ?? k).join('، '))) : null,
       hasResume ? el('span', { class: 'cell-sub ot-resume-hint' }, icon('bookmark', 13), 'جلسهٔ بعد از نقطه‌های نشانه‌دار ادامه پیدا می‌کند — تسلط با دو جلسهٔ پیاپی «بلد است» تأیید می‌شود') : null
     );
 
-    // ── ردیف‌های مهارت حیطهٔ فعال ──
     const d = profile.domains.find((x) => x.key === activeDomain) ?? profile.domains[0];
-    // نمای پیمایش اولیه: ۳ مهارت نخستِ نمره‌نخوردهٔ این حیطه + هر مورد در انتظار ثبت همین جلسه
     let visibleSkills = d.skills;
     if (sweepMode) {
       const unscored = d.skills.filter((s) => !s.status && !pending.has(s.skillId)).slice(0, 3);
@@ -309,7 +266,6 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
               ? el('div', { class: 'ot-skill__note' }, `سطح راهنما: ${OT_PROMPT_LEVELS[s.promptLevel] ?? s.promptLevel}`)
               : null,
             s.latestNote ? el('div', { class: 'ot-skill__note' }, `یادداشت: ${s.latestNote}`) : null,
-            // انتخابگر سطح راهنما — فقط وقتی «با کمک» همین جلسه ثبت می‌شود
             pendingNow && pendingEntry.status === 'with_help'
               ? el('div', { class: 'ot-skill__prompt' },
                   el('span', { class: 'cell-sub' }, 'سطح راهنما:'),
@@ -350,7 +306,6 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
       })
     );
 
-    // ── نوار ثبت جلسه ──
     const saveBar = canDecide
       ? el('div', { class: 'ot-savebar' },
           el('span', { class: 'cell-sub' },
@@ -397,7 +352,6 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
     return root;
   }
 
-  /** مودال پایان جلسه: تمرکز + خلاصه + تکلیف → POST یک‌جا */
   function openSessionSaveModal(domain) {
     const items = [...pending.entries()].map(([skillId, v]) => ({
       skill_id: skillId,
@@ -447,31 +401,17 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
   return root;
 }
 
-// ───────── m162 — پنل پیشرفت جلسه به جلسه ─────────
-
-/**
- * پنل «پیشرفت جلسه به جلسه» — داوری عینی روند مداخله (موج m162).
- * progress خروجی GET /api/students/:id/ot/progress است (واکشی در load مشترک — GET رشد نمی‌کند):
- *  · تایم‌لاین جلسات: نوار انباشتهٔ بلد/با کمک/هنوز نه در هر جلسه + تسلط تأییدشدهٔ جدید
- *  · منحنی محوشدن راهنما: توزیع سطح راهنمای «با کمک» هر جلسه
- *  · خط پایهٔ عملکردی (توانبخشی): شش حیطهٔ ce-rehab-fx-v1 با باند و سطح راهنما — مرجع مقایسه
- * بدون جلسه → حالت خالی؛ بدون progress (خطای واکشی) → null.
- * m163 — onReassess: دکمهٔ «بازسنجی خط پایه» در سربرگ بلوک خط پایه (فقط توانبخشی + حق تصمیم)
- * — بازسنجی ۸–۱۲ جلسه با مودال همان فرم؛ تک‌منبعِ خط پایه همین پنل است (حذف تکرار مرحلهٔ ۴).
- */
 export function otProgressPanel({ progress, protocolLabel = 'کاردرمانی ذهنی', onReassess = null, studentId = null }) {
   if (!progress) return null;
   const { sessions, baseline, baselineSummary, baselineAt, summary } = progress;
   const faNum = (n) => fa(n);
 
-  // ── نوار انباشتهٔ یک جلسه — سه پاره با flex-grow بر حسب شمار ──
   const trendBar = (s) => el('div', { class: 'ot-trend__bar', role: 'img', 'aria-label': `${fa(s.mastered)} بلد، ${fa(s.withHelp)} با کمک، ${fa(s.notYet)} هنوز نه` },
     s.mastered > 0 ? el('span', { class: 'is-ok', style: { flex: String(s.mastered) } }) : null,
     s.withHelp > 0 ? el('span', { class: 'is-warn', style: { flex: String(s.withHelp) } }) : null,
     s.notYet > 0 ? el('span', { class: 'is-diff', style: { flex: String(s.notYet) } }) : null
   );
 
-  // خط راهنمای جلسه — توزیع سطح راهنمای «با کمک» (منحنی محوشدن راهنما)
   const promptLine = (s) => {
     const parts = Object.entries(OT_PROMPT_LEVELS)
       .filter(([k]) => (s.prompts?.[k] ?? 0) > 0)
@@ -491,14 +431,12 @@ export function otProgressPanel({ progress, protocolLabel = 'کاردرمانی 
     promptLine(s)
   ));
 
-  // ── خط پایهٔ عملکردی — شش حیطه با باند رنگی و سطح راهنما (مرجع مقایسه) ──
   const BAND_CLS = { ok: 'badge--success', warn: 'badge--warning', danger: 'badge--error' };
   const baselineBlock = baseline?.length
     ? el('div', { class: 'ot-baseline' },
         el('div', { class: 'clx-sub__title' },
           'خط پایهٔ عملکردی',
           baselineAt ? el('span', { class: 'cell-sub' }, formatJalaliDateTime(baselineAt)) : null,
-          // m163 — بازسنجی همان شش تکلیف (۸–۱۲ جلسه) — دکمه فقط با حق تصمیم از کارفرمای پنل
           onReassess
             ? el('button', {
                 class: 'btn btn--ghost btn--sm ot-baseline__reassess',
@@ -527,7 +465,6 @@ export function otProgressPanel({ progress, protocolLabel = 'کاردرمانی 
       summary.sessions > 0 ? el('span', { class: 'badge badge--info' }, `${fa(summary.sessions)} جلسه`) : null,
       summary.sessions > 0 ? el('span', { class: 'badge badge--success' }, `تسلط تأییدشده: ${fa(summary.confirmedMastered)}`) : null,
       summary.withHelp > 0 ? el('span', { class: 'badge badge--warning' }, `با کمک: ${fa(summary.withHelp)}`) : null,
-      // m164 — ورود به گزارش چاپی پیشرفت (چک‌لیست‌محور + سنجه‌های علمی)
       studentId
         ? el('button', {
             class: 'btn btn--ghost btn--sm print-hide',

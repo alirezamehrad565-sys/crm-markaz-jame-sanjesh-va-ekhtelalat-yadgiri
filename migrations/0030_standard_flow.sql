@@ -1,18 +1,3 @@
--- مایگریشن اسکیما D1 — جریان استاندارد
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- ============================================================
--- — جریان استاندارد پرونده: ادغام assessments در case-events
--- اهداف:
--- ۱) پیوست فایل برای رویدادهای پرونده (جایگزین assessment_files)
--- ۲) وضعیت «پیش‌نویس» برای گزارش جلسه (draft → completed | cancelled)
--- ۳) لینک مصوبهٔ کمیسیون از assessment_id به case_event_id
--- ۴) مهاجرت کامل دادهٔ assessments/assessment_files به case_events/case_event_files
--- (id سندها حفظ می‌شود — traceability؛ جدول قدیمی دست‌نخورده به‌عنوان آرشیو می‌ماند)
--- ۵) seed: پروندهٔ وکسلر + نوع مهاجرت‌یافتهٔ ارزیابی بالینی
--- قراردادها: فقط اضافه‌ای؛ بدون CHECK (الگوی D7)؛ idempotent.
--- ============================================================
-
--- ─── ۱) پیوست رویداد پرونده ───
 CREATE TABLE IF NOT EXISTS case_event_files (
   id             TEXT PRIMARY KEY,
   case_event_id  TEXT NOT NULL REFERENCES case_events(id),
@@ -25,11 +10,9 @@ CREATE TABLE IF NOT EXISTS case_event_files (
 );
 CREATE INDEX IF NOT EXISTS idx_case_event_files_event ON case_event_files(case_event_id);
 
--- ─── ۲) لینک مصوبهٔ کمیسیون به رویداد پرونده (ستون قدیمی assessment_id آرشیو می‌ماند) ───
 ALTER TABLE committee_items ADD COLUMN case_event_id TEXT REFERENCES case_events(id);
 CREATE INDEX IF NOT EXISTS idx_committee_items_event ON committee_items(case_event_id);
 
--- ─── ۳) seed — نوع مهاجرت سندهای ارزیابی قدیمی ───
 INSERT INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, created_by)
 VALUES (
   'seed-legacy-assessment-0001', 'legacy_assessment', 'ارزیابی بالینی (سند قدیم)', 'session', '📄', 0,
@@ -37,7 +20,6 @@ VALUES (
   NULL, 'system'
 ) ON CONFLICT(id) DO NOTHING;
 
--- ─── ۴) seed — پروندهٔ وکسلر (تصمیم کاربر: «وکسلر با فرم گزارش خودش») ───
 INSERT INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, created_by)
 VALUES (
   'seed-wechsler-0001', 'wechsler', 'پروندهٔ وکسلر', 'session', '🧠', 0,
@@ -45,7 +27,6 @@ VALUES (
   NULL, 'system'
 ) ON CONFLICT(id) DO NOTHING;
 
--- ─── ۵) مهاجرت داده — سندهای ارزیابی → رویداد پرونده (id حفظ می‌شود) ───
 INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
                          status, payload, summary, created_by, created_at, updated_at)
 SELECT a.id,
@@ -75,13 +56,11 @@ SELECT a.id,
   FROM assessments a
  WHERE NOT EXISTS (SELECT 1 FROM case_events e WHERE e.id = a.id);
 
--- ─── ۶) مهاجرت پیوست‌ها ───
 INSERT INTO case_event_files (id, case_event_id, filename, mime_type, size_bytes, content_b64, created_by, created_at)
 SELECT f.id, f.assessment_id, f.filename, f.mime_type, f.size_bytes, f.content_b64, f.created_by, f.created_at
   FROM assessment_files f
  WHERE NOT EXISTS (SELECT 1 FROM case_event_files cf WHERE cf.id = f.id);
 
--- ─── ۷) مهاجرت لینک مصوبه‌های کمیسیون ───
 UPDATE committee_items
    SET case_event_id = assessment_id
  WHERE assessment_id IS NOT NULL

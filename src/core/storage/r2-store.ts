@@ -1,11 +1,3 @@
-/**
- * ذخیره‌سازی فایل — D1/R2/تکه‌تکه — ذخیره‌ساز R2 (ظرفیت بالا)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// آداپتر R2 — فقط وقتی binding (مثلاً EXERCISE_FILES) در wrangler.toml تعریف شده باشد
-// سقف اندازه در این حالت عملاً بالاتر است؛ اعتبارسنجی اندازه همچنان در دامنه انجام می‌شود.
-// mime منبع حقیقتش ستون file_mime جدول exercises است — این آداپتر mime خنثی برمی‌گرداند.
-
 import type { ObjectStore, R2LikeBucket, StoredObject } from './types';
 import { MAX_EXERCISE_PANEL_FILE_BYTES } from '@core/shared';
 
@@ -18,7 +10,6 @@ export function createR2ObjectStore(bucket: R2LikeBucket): ObjectStore {
       await bucket.put(key, bytes);
     },
 
-    /** — مونتاژ Blob از قطعات — بدون کپی کامل (Blob فقط ارجاع نگه می‌دارد) */
     async putSegments(key, segments): Promise<void> {
       const blob = new Blob(segments as unknown as ArrayBufferView[]);
       await bucket.put(key, blob as unknown as Uint8Array);

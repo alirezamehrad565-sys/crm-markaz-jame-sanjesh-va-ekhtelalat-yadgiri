@@ -1,13 +1,3 @@
-/**
- * اعلان‌های کاربردی و بات‌های نقش‌آگاه بله — بات بانک تمرین (تکلیف و بازگشت فایل)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// جریان تو‌در‌توی «بانک تمرین» بات برای همکاران و معلمان:
-// ریشه → دستهٔ برچسب → فهرست تمرین → جزئیات → انتخاب دانش‌آموز → تأیید → ارسال به اولیا
-// وضعیت منو در bot_menu_state (chat_id → JSON) نگه داشته می‌شود چون شناسه‌ها UUIDاند و
-// callback_data بیش از ۶۴ بایت نمی‌پذیرد — callback فقط اندیس حمل می‌کند.
-// گیت نقش روی «هر» مرحله دوباره چک می‌شود (الگوی دولایه — حتی برای callback).
-
 import type { DbClient } from '@core/db';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
@@ -25,23 +15,19 @@ export interface BotReply {
   buttons: InlineButton[][] | null;
 }
 
-/** زیرمجموعهٔ exb از BotCommand — Extract روی kind */
 export type ExbCommand = Extract<BotCommand, { kind: `exb_${string}` }>;
 
 export interface ExbBotDeps {
   db: DbClient;
   audit: AuditWriter;
   logger: Logger;
-  /** هستهٔ صف اعلان — ارسال تکلیف به اولیا از همین مسیر با dedup */
   notify: NotifyService;
   settings: SettingsService;
   exerciseBank: ExerciseBankService;
-  /** آدرس عمومی سامانه برای لینک دانلود — خالی یعنی لینک در پیام نمی‌آید */
   publicBaseUrl: string | null;
   now?: () => Date;
 }
 
-/** بازیگر بات برای ثبت تکلیف و audit */
 const EXB_ACTOR: AuthContext = {
   staffId: 'bale-bot',
   email: 'bale-bot@system.local',
@@ -51,17 +37,11 @@ const EXB_ACTOR: AuthContext = {
 
 interface ExbState {
   v: 1;
-  /** برچسب‌های آخرین نمای دسته — اندیس callback به این اشاره می‌کند */
   cats?: string[];
-  /** تمرین‌های آخرین نمای فهرست */
   ex?: { id: string; title: string }[];
-  /** — بسته‌های آخرین نمای فهرست بسته‌ها */
   pk?: { id: string; title: string }[];
-  /** دانش‌آموزان آخرین نمای انتخاب */
   stu?: { id: string; name: string }[];
-  /** callback فهرست مبدأ برای «بازگشت» از جزئیات */
   back?: string;
-  /** آخرین yes اجرا شد — جلوگیری از دوباره‌ارسال با دکمهٔ قدیمی */
   sent?: boolean;
 }
 
@@ -89,8 +69,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
   const log = logger.child('exb-bot');
   const now = deps.now ?? (() => new Date());
 
-  // ───────────── state helpers ─────────────
-
   async function readState(chatId: string): Promise<ExbState> {
     const row = await db.queryOne<{ payload: string }>(
       `SELECT payload FROM bot_menu_state WHERE chat_id = ?`,
@@ -114,8 +92,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
     );
   }
 
-  // ───────────── گیت نقش + کلید قطع ─────────────
-
   async function gate(chatId: string): Promise<Gate> {
     const enabled = await settings.getExerciseBankEnabled();
     if (!enabled) return { ok: false, reason: 'disabled' };
@@ -133,7 +109,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
     );
     if (!owner) return { ok: false, reason: 'denied' };
     if (owner.kind !== 'staff' && owner.kind !== 'class') return { ok: false, reason: 'denied' };
-    // ناظر اداره از بانک تمرین محروم است (بدون دادهٔ اسم‌دار)
     if (owner.kind === 'staff' && owner.role === 'supervisor') return { ok: false, reason: 'denied' };
     return { ok: true, owner: { kind: owner.kind, refId: owner.ref_id, role: owner.role } };
   }
@@ -149,8 +124,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
     text: '⏳ این منو قدیمی است — دکمهٔ «بانک تمرین» را دوباره بزنید.',
     buttons: [[{ text: '📚 بانک تمرین', callbackData: 'exb:root' }]]
   };
-
-  // ───────────── دامنهٔ دانش‌آموزان فرستنده ─────────────
 
   interface StudentLite {
     id: string;
@@ -168,7 +141,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
       return rows;
     }
     if (owner.role === 'therapist') {
-      // دانش‌آموزان جلسات درمانگر — همان مرز «نوبت‌های من»
       const rows = await db.query<{ id: string; name: string }>(
         `SELECT DISTINCT s.id, s.first_name || ' ' || s.last_name AS name
            FROM appointment_students ax
@@ -180,7 +152,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
       );
       return rows;
     }
-    // مدیر/منشی — همهٔ پرونده‌های فعال (دفتر)
     const rows = await db.query<{ id: string; name: string }>(
       `SELECT id, first_name || ' ' || last_name AS name
          FROM students WHERE active = 1
@@ -188,8 +159,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
     );
     return rows;
   }
-
-  // ───────────── نماها ─────────────
 
   async function renderRoot(): Promise<BotReply> {
     const text = [
@@ -225,7 +194,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
     const slice = list.slice((safePage - 1) * EXB_PAGE_SIZE, safePage * EXB_PAGE_SIZE);
 
     const state = await readState(chatId);
-    // لیست کامل برچسب‌های همین دسته ذخیره می‌شود — اندیس callback جهانی است
     state.cats = list.map((t) => t.id);
     delete state.ex;
     delete state.stu;
@@ -239,7 +207,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
     const nav: InlineButton[] = [];
     if (safePage > 1) nav.push({ text: '▶ بعدی', callbackData: `exb:cats:${cat}:${safePage - 1}` });
     if (safePage < totalPages) nav.push({ text: '◀ قبلی', callbackData: `exb:cats:${cat}:${safePage + 1}` });
-    // RTL: «قبلی» در سمت چپ مفهوم «صفحهٔ بعد» را می‌دهد — برچسب‌ها از دید کاربر فارسی‌اند
     nav.push({ text: '↩ بازگشت', callbackData: 'exb:root' });
     rows.push(nav);
 
@@ -307,7 +274,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
     if (exercise.description) lines.push('', exercise.description);
     if (exercise.tags.length > 0) lines.push('', `🏷 ${exercise.tags.map((t) => t.name).join('، ')}`);
     if (exercise.files.length > 0) {
-      // چند فایل: همه (تا ۶ مورد) با نام و حجم
       lines.push('', `📎 فایل‌های پیوست (${faDigits(exercise.files.length)}):`);
       for (const f of exercise.files.slice(0, 6)) {
         lines.push(`• ${f.filename} (${formatSize(f.size)})`);
@@ -379,8 +345,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
     };
   }
 
-  // ───────────── ارسال به اولیا ─────────────
-
   async function guardianChats(studentId: string): Promise<string[]> {
     const linkRows = await db.query<{ chat_id: string }>(
       `SELECT DISTINCT chat_id FROM bot_links
@@ -415,7 +379,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
       };
     }
 
-    // ثبت تکلیف (گارد سرویس: منتشرشده + دانش‌آموز فعال)
     const assignment = await exerciseBank.assign(
       {
         exerciseId: exercise.id,
@@ -427,7 +390,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
       EXB_ACTOR
     );
 
-    // لینک امضاشده فقط با PUBLIC_BASE_URL معنا دارد — یک لینک برای هر فایل
     const extraLines = [`تمرین: ${exercise.title}`];
     if (exercise.description) extraLines.push(exercise.description);
     if (deps.publicBaseUrl && exercise.files.length > 0) {
@@ -443,7 +405,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
       extraLines.push('برای دریافت فایل تمرین با دفتر مرکز تماس بگیرید.');
     }
 
-    // مقصدها: bot_links متصل + prefs دستی (الگوی )
     const targets = await guardianChats(student.id);
     const channel: 'bale' | 'internal' = notify.getChannel('bale') ? 'bale' : 'internal';
     const clinicName = await settings.getClinicName();
@@ -476,7 +437,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
     });
     log.info('exercise.homework.sent', { assignmentId: assignment.id, targets: targets.length, enqueued });
 
-    // جلوگیری از دوباره‌ارسال با دکمهٔ قدیمی
     state.sent = true;
     await writeState(chatId, state);
 
@@ -489,10 +449,7 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
     };
   }
 
-  // ───────────── نقطهٔ ورود ─────────────
-
   return {
-    /** «بانک تمرین» یا /bank — منوی ریشه */
     async root(chatId: string): Promise<BotReply> {
       const g = await gate(chatId);
       if (!g.ok) return deniedReply(g.reason);
@@ -506,7 +463,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
       return renderRoot();
     },
 
-    /** همهٔ callbackهای exb: */
     async handle(chatId: string, cmd: ExbCommand): Promise<BotReply> {
       const g = await gate(chatId);
       if (!g.ok) return deniedReply(g.reason);

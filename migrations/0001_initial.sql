@@ -1,11 +1,3 @@
--- مایگریشن اسکیما D1 — اسکیمای اولیه
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- migrations/0001_initial.sql
--- Initial schema for center-system MVP (scheduling discipline)
--- مطابق ARCHITECTURE.md بخش ۸.۲
--- ────────────────────────────────────────────────────────────
-
--- ───────────── staff ─────────────
 CREATE TABLE IF NOT EXISTS staff (
   id          TEXT PRIMARY KEY,
   email       TEXT NOT NULL UNIQUE,
@@ -15,7 +7,6 @@ CREATE TABLE IF NOT EXISTS staff (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- ───────────── schools ─────────────
 CREATE TABLE IF NOT EXISTS schools (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL,
@@ -26,7 +17,6 @@ CREATE TABLE IF NOT EXISTS schools (
   active      INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))
 );
 
--- ───────────── students ─────────────
 CREATE TABLE IF NOT EXISTS students (
   id                TEXT PRIMARY KEY,
   national_id       TEXT NOT NULL UNIQUE,
@@ -45,7 +35,6 @@ CREATE TABLE IF NOT EXISTS students (
 CREATE INDEX IF NOT EXISTS idx_students_school_id ON students(school_id);
 CREATE INDEX IF NOT EXISTS idx_students_last_name ON students(last_name);
 
--- ───────────── appointments ─────────────
 CREATE TABLE IF NOT EXISTS appointments (
   id          TEXT PRIMARY KEY,
   staff_id    TEXT NOT NULL REFERENCES staff(id),
@@ -62,7 +51,6 @@ CREATE TABLE IF NOT EXISTS appointments (
 CREATE INDEX IF NOT EXISTS idx_appointments_staff_time ON appointments(staff_id, start_at, end_at);
 CREATE INDEX IF NOT EXISTS idx_appointments_batch ON appointments(batch_id);
 
--- ───────────── appointment_students ─────────────
 CREATE TABLE IF NOT EXISTS appointment_students (
   appointment_id TEXT NOT NULL REFERENCES appointments(id),
   student_id     TEXT NOT NULL REFERENCES students(id),
@@ -75,7 +63,6 @@ CREATE TABLE IF NOT EXISTS appointment_students (
 CREATE INDEX IF NOT EXISTS idx_appt_students_student ON appointment_students(student_id);
 CREATE INDEX IF NOT EXISTS idx_appt_students_attendance ON appointment_students(attendance);
 
--- ───────────── audit_log (append-only) ─────────────
 CREATE TABLE IF NOT EXISTS audit_log (
   id            TEXT PRIMARY KEY,
   actor_id      TEXT NOT NULL,
@@ -88,7 +75,6 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_resource ON audit_log(resource_type, resource_id);
 CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_id);
 
--- ───────────── schema_migrations ─────────────
 CREATE TABLE IF NOT EXISTS schema_migrations (
   version    INTEGER PRIMARY KEY,
   applied_at TEXT NOT NULL DEFAULT (datetime('now'))

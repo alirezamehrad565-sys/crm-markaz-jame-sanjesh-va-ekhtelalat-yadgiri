@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — pure
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست‌های pure جستجوی سراسری — پاک‌سازی عبارت و گروه‌بندی
-
 import { describe, expect, it } from 'vitest';
 import { SEARCH_QUERY_MAX_LENGTH } from '@core/shared';
 import {

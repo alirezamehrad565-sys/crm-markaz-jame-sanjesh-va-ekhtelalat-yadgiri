@@ -1,12 +1,3 @@
-/**
- * تست‌های e2e — student-waitlist
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-student-waitlist.test.ts — ادغام لیست انتظار با ماژول دانش‌آموزان
-// تیک «منتظر دریافت خدمت» → ورودی متصل؛ وضعیت پذیرش در فهرست دانش‌آموزان؛
-// پذیرش خودکار با حضور و با اتمام جلسه روی بورد؛ RBAC و idempotency
-// دادهٔ ماک: seed-dev + fixtureهای API
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -64,11 +55,9 @@ describe('تیک «منتظر دریافت خدمت»', () => {
     expect(entry.source).toBe('school');
     expect(entry.serviceType).toBe('کاردرمانی');
 
-    // audit هم‌تراکنش
     const audits = A.sql.prepare(`SELECT action FROM audit_log WHERE resource_id = ? AND action = 'waitlist.waiting_set'`).all(entry.id);
     expect(audits.length).toBe(1);
 
-    // فهرست لیست انتظار — نام زندهٔ پرونده + studentId
     const list = await sec.get('/api/waitlist');
     const found = (list.body as { data: EntryBody[] }).data.find((e) => e.id === entry.id);
     expect(found?.studentId).toBe(st.id);
@@ -92,7 +81,6 @@ describe('تیک «منتظر دریافت خدمت»', () => {
     expect(updated.id).toBe(first.id);
     expect(updated.priority).toBe('urgent');
 
-    // فقط یک ورودی باز برای این پرونده
     const list = await sec.get('/api/waitlist');
     const open = (list.body as { data: EntryBody[] }).data.filter((e) => e.studentId === st.id && ['waiting', 'called', 'scheduled'].includes(e.status));
     expect(open.length).toBe(1);
@@ -114,11 +102,9 @@ describe('تیک «منتظر دریافت خدمت»', () => {
     const rows = await studentsOf(sec);
     expect(rows.find((r) => r.id === st.id)?.waitStatus).toBeNull();
 
-    // idempotent — دوباره خروج، ورودی باز نمی‌ماند
     const again = await waitStatus(sec, st.id, false);
     expect((again.body as { data: EntryBody | null }).data).toBeNull();
 
-    // audit خروج
     const audits = A.sql.prepare(`SELECT action FROM audit_log WHERE resource_id = ? AND action = 'waitlist.waiting_cleared'`).all(entry.id);
     expect(audits.length).toBe(1);
   });
@@ -154,19 +140,15 @@ describe('پذیرش خودکار با اولین جلسهٔ واقعی', () => 
     const mark = await sec.patch(`/api/attendance/${apptId}/${st.id}`, { status: 'present' });
     expect(mark.status).toBe(200);
 
-    // «وقتی وارد چرخه شون میکنیم باید پاک بشن از لیست انتظار»: getById ۴۰۴
     const after = await sec.get(`/api/waitlist/${entry.id}`);
     expect(after.status).toBe(404);
 
-    // و در فهرست لیست انتظار هم نیست
     const list = await sec.get('/api/waitlist');
     expect((list.body as { data: EntryBody[] }).data.find((e) => e.id === entry.id)).toBeUndefined();
 
-    // audit پذیرش ثبت شده
     const audits = A.sql.prepare(`SELECT action FROM audit_log WHERE resource_id = ? AND action = 'waitlist.admitted'`).all(entry.id);
     expect(audits.length).toBe(1);
 
-    // projection دیگر وضعیت انتظار نمی‌دهد (ورودی پاک شده) — پرونده در «دانش‌آموزان» عادی است
     const rows = await studentsOf(sec);
     expect(rows.find((r) => r.id === st.id)?.waitStatus).toBeNull();
   });
@@ -183,7 +165,6 @@ describe('پذیرش خودکار با اولین جلسهٔ واقعی', () => 
       expect(r.status).toBe(200);
     }
 
-    // پذیرش از مسیر بورد هم یعنی خروج کامل از لیست (soft delete)
     const after = await sec.get(`/api/waitlist/${entry.id}`);
     expect(after.status).toBe(404);
     const dbRow = A.sql.prepare(`SELECT status, deleted_at FROM waitlist WHERE id = ?`).get(entry.id) as { status: string; deleted_at: string | null };
@@ -193,7 +174,6 @@ describe('پذیرش خودکار با اولین جلسهٔ واقعی', () => 
     const rows = await studentsOf(sec);
     expect(rows.find((r) => r.id === st.id)?.waitStatus).toBeNull();
 
-    // D6 — وضعیت عملیاتی اعلان نمی‌سازد: فقط اعلان‌های ساخت نوبت
     const notifCount = A.sql.prepare(`SELECT COUNT(*) AS cnt FROM notifications`).all() as Array<{ cnt: number }>;
     expect(Array.isArray(notifCount)).toBe(true);
   });

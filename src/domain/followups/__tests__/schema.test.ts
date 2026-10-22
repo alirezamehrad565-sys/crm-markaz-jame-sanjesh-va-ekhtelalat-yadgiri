@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — schema
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// schema.test.ts — فاز ۳: اعتبارسنجی ورودی ساخت/ویرایش پیگیری (Zod — مرز عمومی @core/shared)
-
 import { describe, it, expect } from 'vitest';
 import { NewFollowUpSchema, UpdateFollowUpSchema } from '@core/shared';
 

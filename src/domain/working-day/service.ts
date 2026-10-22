@@ -1,16 +1,3 @@
-/**
- * ماژول بورد روز کاری — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// بورد «مدیریت روز کاری در یک نگاه»
-// مالک WRITE جدول day_notes؛ بقیه فقط-خواندنی (appointment-core مالک نوبت‌ها است)
-// قواعد:
-// - بورد هر تاریخی قابل مشاهده است (مرور گذشته/آینده)
-// - ثبت حضور همکاران فقط امروز تهران — همان قاعده (این ماژول مسئول آن نیست؛
-// ثبت از طریق StaffAttendanceService انجام می‌شود)
-// - توضیحات روز append-only: هر ثبت با نویسنده + زمان؛ حذف فقط مدیر
-// - audit هم‌تراکنش (قانون ۴)
-
 import type {
   AuthContext,
   DayNote,
@@ -40,15 +27,10 @@ export interface WorkingDayDeps {
   db: DbClient;
   audit: AuditWriter;
   logger: Logger;
-  /** خلاصه حضور همکاران همان روز (قاعده «فقط امروز» مالکش است) */
   staffAttendance: StaffAttendanceService;
 }
 
 export interface WorkingDayService {
-  /**
-   * — بازیگر اختیاری: درمانگر بورد را فقط برای خودش می‌بیند
-   * (ستون خودش + آمار همان + بدون «سایر نوبت‌ها»)؛ دفتر کل مرکز را می‌بیند.
-   */
   getBoard(date: string, actor?: AuthContext): Promise<WorkingDayBoard>;
   addNote(date: string, body: string, actor: AuthContext): Promise<DayNote>;
   deleteNote(id: string, actor: AuthContext): Promise<void>;
@@ -79,14 +61,12 @@ interface BoardApptRow {
   start_at: string;
   end_at: string;
   status: 'scheduled' | 'cancelled';
-  /** فاز ۱ (تصمیم D1) — NULL = برنامه‌ریزی‌شدهٔ عادی */
   ops_status: string | null;
   note: string | null;
   version: number;
   student_id: string | null;
   student_attendance: string | null;
   student_name: string | null;
-  /** — موبایل ولیّ برای تماس سریع از بورد */
   student_phone: string | null;
 }
 
@@ -94,14 +74,12 @@ interface NoteRow {
   id: string;
   date: string;
   body: string;
-  /** فاز ۱ (تصمیم D2) — human/system */
   kind: string;
   created_by: string;
   created_at: string;
   creator_name: string;
 }
 
-/** تبدیل ردیف‌های join شده نوبت+دانش‌آموز به نوبت‌های بورد — pure */
 export function rowsToAppointments(rows: BoardApptRow[]): WorkingDayAppointment[] {
   const byId = new Map<string, WorkingDayAppointment>();
   for (const r of rows) {
@@ -139,7 +117,6 @@ export function createWorkingDayService(deps: WorkingDayDeps): WorkingDayService
 
   return {
     async getBoard(date: string, actor?: AuthContext): Promise<WorkingDayBoard> {
-      // درمانگر فقط کارت خودش: ستون‌ها/آمار/صف نسبت به خودش اشتقاق می‌یابند
       const therapistStaffId = actor?.role === 'therapist' ? actor.staffId : null;
       const weekday = iranianWeekdayOfYmd(date);
       const range = tehranDayRange(date);
@@ -177,9 +154,6 @@ export function createWorkingDayService(deps: WorkingDayDeps): WorkingDayService
           [date]
         ),
         deps.staffAttendance.daySummary(date),
-        // شمارش رویدادهای پروندهٔ همان روز (نوار وضعیت بورد §7.1) — فقط-خواندنی
-        // (assessments بازنشسته شد؛ مرز روز تهران از tehranDayRange می‌آید)
-        // برای درمانگر فقط گزارش‌های خودش شمرده می‌شود
         db.query<{ n: number }>(
           therapistStaffId
             ? `SELECT COUNT(*) AS n
@@ -198,7 +172,6 @@ export function createWorkingDayService(deps: WorkingDayDeps): WorkingDayService
       ]);
 
       const allAppointments = rowsToAppointments(apptRows);
-      // scope درمانگر: فقط نوبت‌های خودش؛ «سایر نوبت‌ها» دفتر است
       const appointments = therapistStaffId
         ? allAppointments.filter((a) => a.staffId === therapistStaffId)
         : allAppointments;
@@ -243,11 +216,9 @@ export function createWorkingDayService(deps: WorkingDayDeps): WorkingDayService
 
       const sessionStats: WorkingDaySessionStats = sessionStatsFromAppointments(appointments);
 
-      // ─── فاز ۱: نوار وضعیت عملیاتی + صف ۶۰ دقیقه (Projection از همان نوبت‌ها) ───
       const opsStats = opsStatsFromAppointments(appointments);
       const staffNameById = new Map(staffRows.map((s) => [s.id, s.full_name]));
       const staffNameOf = (staffId: string): string => staffNameById.get(staffId) ?? '—';
-      // صف فقط برای «امروز» معنا دارد؛ مرور گذشته/آینده خالی برمی‌گردد
       const queue = isToday
         ? buildQueue(appointments, new Date().toISOString(), {
             windowMinutes: OPS_QUEUE_WINDOW_MINUTES,

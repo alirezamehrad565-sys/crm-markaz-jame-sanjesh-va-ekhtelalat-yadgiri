@@ -1,7 +1,3 @@
-/* ═══════════════════════════════════════════════════════════════
-   base.css — ریست، تایپوگرافی، پوسته اپ (RTL)
-   ═══════════════════════════════════════════════════════════════ */
-
 *,
 *::before,
 *::after {
@@ -61,7 +57,6 @@ textarea {
   background: color-mix(in srgb, var(--primary) 24%, transparent);
 }
 
-/* اسکرول‌بار ظریف */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
@@ -73,8 +68,6 @@ textarea {
   border-radius: var(--radius-full);
 }
 *::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
-
-/* ─────────────── پوسته: سایدبار راست + محتوا ─────────────── */
 
 .shell {
   display: flex;
@@ -92,7 +85,6 @@ textarea {
   background: var(--surface);
   border-inline-start: 1px solid var(--border); /* RTL: سمت راست بصری نیست — سایدبار اول DOM است */
   border-inline-end: 1px solid var(--border);
-  /* m166-e — عمق لایه‌ای به سمت محتوا: نزدیک تیره + پخش ملایم از پایین */
   box-shadow: var(--shadow-sidebar);
   height: 100vh;
   z-index: 40;
@@ -118,8 +110,6 @@ textarea {
   border-radius: 50%;
   display: block;
 }
-/* m166-e — برند: فاصلهٔ خطوط هماهنگ با مقیاس تایپ (نام چندخطی با ارتفاع خط بدنه،
-   زیرنویس فشرده‌تر با جدایی 2px — قبلاً خطوط چسبیده بودند) */
 .brand__name {
   font-weight: 700;
   font-size: var(--fs-md);
@@ -161,7 +151,6 @@ textarea {
   text-align: start;
   transition: background var(--fast), color var(--fast), box-shadow var(--fast), transform var(--fast);
 }
-/* m166-e — هاور/فوکوس حرفه‌ای‌تر: سطح + حاشیهٔ داخلی ظریف + فشردن ملایم */
 .nav__item:hover {
   background: var(--surface-2);
   color: var(--text);
@@ -185,8 +174,6 @@ textarea {
   color: var(--text-3);
 }
 
-/* ─────────────── ناحیه اصلی ─────────────── */
-
 .main {
   flex: 1;
   min-width: 0;
@@ -207,7 +194,6 @@ textarea {
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
 }
-/* m106 — عنوان بزرگ topbar حذف شد (تکرار عنوان)؛ #page-title فقط sr-only است */
 .sr-only {
   position: absolute;
   width: 1px; height: 1px;
@@ -235,23 +221,17 @@ textarea {
   margin: 0 auto;
 }
 
-/* ─────────────── m25 — لایهٔ حرکت (ورود نرم نما + احترام به reduced-motion) ─────────────── */
-
 @keyframes view-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
-/* فقط روی ناوبری واقعی فعال می‌شود (کلاس را router.js می‌گذارد) — رفرش داخلی نما بدون انیمیشن */
 .view-enter { animation: view-in var(--normal) both; }
 
-/* کارت‌های تعاملی — بلندشدن ملایم روی هاور (فقط دستگاه‌های pointer دار) */
 @media (hover: hover) {
   .card--lift { transition: transform var(--fast), box-shadow var(--fast); }
   .card--lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
 }
 
-/* m114 — استگرگر ورود محتوا: فرزندان ظرف .stagger با تأخیر پلکانی بالا می‌آیند
-   کاربرد: گرید KPI داشبورد. بعد از ۸ فرزند، تأخیر ثابت می‌ماند. */
 @keyframes stagger-in {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
@@ -266,7 +246,6 @@ textarea {
 .stagger > *:nth-child(7) { animation-delay: 240ms; }
 .stagger > *:nth-child(n+8) { animation-delay: 280ms; }
 
-/* کاربران حساس به حرکت — انیمیشن‌ها خاموش */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -275,7 +254,6 @@ textarea {
   }
 }
 
-/* هدر صفحه درون محتوا */
 .page-head {
   display: flex;
   align-items: center;
@@ -296,16 +274,10 @@ textarea {
   margin-top: calc(var(--sp-1) * -1);
 }
 
-/* ─────────────── واکنش‌گرایی ─────────────── */
-
 .menu-btn { display: none; }
 
 @media (max-width: 920px) {
   .shell { display: block; }
-  /* M15.1-fix: drawer در RTL باید سمت راست (کنار دکمه منو) باز شود.
-     inset-inline-end در RTL سمت چپ است — ترکیب قبلی نوار ۹۰px بسته را روی صفحه جا می‌گذاشت.
-     m166-e — بازشدن نرم و سریع (transform+opacity، ~180ms ease-out) + گوشهٔ گرد لبهٔ آزاد
-     + عمق لایه‌ای از پایین (توکن --shadow-sidebar) */
   .sidebar {
     position: fixed;
     inset-inline-start: 0;
@@ -345,7 +317,6 @@ textarea {
   .topbar { padding: 0 var(--sp-4); }
 }
 
-/* وضعیت بارگذاری و خطای کلی */
 .state-block {
   padding: var(--sp-8) var(--sp-4);
   text-align: center;
@@ -353,7 +324,6 @@ textarea {
 }
 .state-block .spinner { margin-inline: auto; }
 
-/* دسترس‌پذیری */
 :focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
@@ -367,10 +337,7 @@ textarea {
   }
 }
 
-/* ═══════════════ M7 — موبایل‌فرندلی ═══════════════ */
-
 @media (max-width: 640px) {
-  /* چیپ کاربر فشرده: فقط نقش بماند (کلیک → تغییر هویت) */
   .topbar__user b { display: none; }
   .topbar__user { padding: var(--sp-1) var(--sp-2); }
   .topbar { gap: var(--sp-2); }
@@ -382,12 +349,6 @@ textarea {
   .page-head__title { font-size: var(--fs-xl); }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   m69 — ناوبری گروهی + Topbar v2 + آواتار
-   افزودنی: همهٔ رفتارهای v1 حفظ می‌شوند؛ این بلوک فقط ارتقا می‌دهد
-   ═══════════════════════════════════════════════════════════════ */
-
-/* برچسب گروه با خط دنباله */
 .nav__label {
   display: flex; align-items: center; gap: 8px;
   font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
@@ -398,10 +359,8 @@ textarea {
   content: ''; flex: 1; height: 1px;
   background: color-mix(in srgb, var(--border) 70%, transparent);
 }
-/* گروه بی‌برچسب (ناظر) — فاصلهٔ اول */
 .nav__label:empty { padding-top: var(--sp-2); }
 
-/* آیتم فعال — قرص نرم + نوار ۳px سمت شروع (RTL درست) + درخشش ملایم (m114) */
 .nav__item { position: relative; }
 .nav__item.is-active { font-weight: 600; }
 .nav__item.is-active::before {
@@ -412,14 +371,12 @@ textarea {
 .nav__item.is-active {
   box-shadow: 0 2px 10px color-mix(in srgb, var(--primary) 14%, transparent);
 }
-/* m114 — آیکن ناوبری روی هاور یک قدم به جلو (در RTL: به چپ) */
 @media (hover: hover) {
   .nav__item svg { transition: transform var(--fast); }
   .nav__item:hover svg { transform: translateX(-2px); }
   html[dir='ltr'] .nav__item:hover svg { transform: translateX(2px); }
 }
 
-/* Topbar: فقط مسیر راهنما (m106 — عنوان بزرگ فقط در page-headِ نماست تا دوبار تکرار نشود) */
 .topbar__title-wrap {
   display: flex; flex-direction: column; justify-content: center;
   min-width: 0; margin-inline-end: auto;
@@ -434,7 +391,6 @@ textarea {
 .topbar__crumb-sep { color: var(--text-3); opacity: .6; flex: none; }
 .topbar__crumb-page { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 
-/* آواتار حرف اول نام */
 .avatar {
   width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
   background: var(--primary); color: var(--on-primary);
@@ -444,7 +400,6 @@ textarea {
 .topbar__user { padding-inline: 8px 14px; }
 .topbar__user .badge { font-size: 10px; padding: 1px 8px; }
 
-/* دراور موبایل — پولیش لبه و دستگیره */
 @media (max-width: 920px) {
   .sidebar { border-inline-end: none; box-shadow: var(--shadow-sidebar); }
   .sidebar-backdrop {

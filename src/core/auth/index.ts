@@ -1,9 +1,3 @@
-/**
- * احراز هویت هسته — JWT، رمز، کلید API و گارد نقش — نقطهٔ ورود و صادرات‌های ماژول (barrel)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// مرز عمومی ماژول auth
-
 export { authMiddleware, requireRole, getAuthContext, supervisorGate } from './middleware';
 export { getStaffById, listStaff, resolveStaffByEmail } from './staff';
 export type { StaffRow } from './staff';

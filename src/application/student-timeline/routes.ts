@@ -1,9 +1,3 @@
-/**
- * سرویس تایم‌لاین پرونده — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// فاز ۶ — GET /api/students/:id/timeline — خواندن آزاد داخل مرکز (هم‌سطح خواندن پرونده)
-
 import type { AppHono } from '@core/shared';
 import { getAuthContext } from '@core/auth';
 import type { StudentTimelineService } from './types';

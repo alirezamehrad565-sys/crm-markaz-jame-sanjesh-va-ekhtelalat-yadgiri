@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — webhook-exb
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// webhook-exb.test.ts — پارس pure دستورهای بانک تمرین (label + /bank + callback exb:)
-
 import { describe, it, expect } from 'vitest';
 import { parseBotUpdate } from '../webhook';
 
@@ -21,7 +15,6 @@ describe('پارس «بانک تمرین»: برچسب متنی و /bank', () =>
   it('برچسب «بانک تمرین» و تغییرش‌ها → exb_root', () => {
     expect(parseBotUpdate(msg('بانک تمرین'))).toEqual({ kind: 'exb_root', chatId: '7300' });
     expect(parseBotUpdate(msg('بانک تمرینها'))).toEqual({ kind: 'exb_root', chatId: '7300' });
-    // ZWNJ نرمال می‌شود
     expect(parseBotUpdate(msg('بانک\u200cتمرین'))).toEqual({ kind: 'exb_root', chatId: '7300' });
   });
 

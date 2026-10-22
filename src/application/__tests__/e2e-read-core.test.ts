@@ -1,16 +1,3 @@
-/**
- * تست‌های e2e — چیپ هستهٔ خواندن (T10/m153)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-read-core.test.ts — حلقهٔ کامل ابزار میکروی «هستهٔ خواندن» مرحلهٔ مهارت‌ها:
-// ثبت معتبر (پنج مؤلفه) → رویداد completed با تحلیل باند + payload برچسب‌دار + پیشنهاد شرطی
-// (readCoreAdviceOf — فقط ابزار رسمی باتری با دلیل، بدون برچسب تشخیصی)؛
-// آیتم جا/خارج از بازه → خطای اعتبارسنجی فارسی و بدون رکورد؛ لبه‌های باند (۰/۱/۲/۳/۴/۱۰)؛
-// الگوی «درک زبانی» (نمای سادهٔ خواندن): درک گیردار با رمزگشایی/روانی برقرار → فقط چک‌لیست زبان؛
-// درک گیردار با رمزگشایی گیردار → پیشنهاد جدا نمی‌گیرد (از هم‌گیری کدگشایی پیروی می‌کند)؛
-// ensure idempotent type سیستمی (بدون مایگریشن)؛ RBAC همان گیت ثبت رویداد (منشی ۴۰۳)؛
-// موتور/rules از این ابزار مصرفی ندارد (افزودنی خالص — رفتار ابزارهای موجود دست‌نخورده).
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, Api, asRole, createStudent } from '../../test/harness';
 
@@ -49,7 +36,6 @@ describe('حلقهٔ چیپ هستهٔ خواندن — مسیر اختصاصی 
 
   it('ثبت معتبر (پنج مؤلفه) → رویداد completed با باند، پیشنهاد شرطی و type سیستمی تضمین‌شده', async () => {
     expect(chipCount(A)).toBe(0);
-    // pa=2, dec=1, flu=0, voc=1, comp=0 → جمع ۴ (باند «ضعف آشکار»)
     const res = await chip({ pa: 2, dec: 1, flu: 0, voc: 1, comp: 0 });
     expect(res.status).toBe(201);
     const ev = (res.body as { data: ChipEvent }).data;
@@ -61,7 +47,6 @@ describe('حلقهٔ چیپ هستهٔ خواندن — مسیر اختصاصی 
     expect(ev.analysis?.answered).toBe(5);
     expect(ev.analysis?.band).toBe('ضعف آشکار');
 
-    // payload — آیتم‌ها با برچسب سطح + نمرهٔ کل + باند + خلاصهٔ فارسی
     expect(ev.payload?.pa).toEqual({ value: 'ضعف آشکار', label: 'آگاهی واج‌شناختی (بخشیدن و ترکیب صدا، قافیه)' });
     expect(ev.payload?.dec.value).toBe('مرزی');
     expect(ev.payload?.comp.value).toBe('برقرار');
@@ -69,7 +54,6 @@ describe('حلقهٔ چیپ هستهٔ خواندن — مسیر اختصاصی 
     expect(ev.payload?.chip_band.value).toBe('ضعف آشکار');
     expect(ev.payload?.fa_summary.value).toContain('هستهٔ خواندن: ۴ از ۱۰');
 
-    // پیشنهاد شرطی — ترتیب رسمی باتری: چک‌لیست ملاکی (pa + جمع≥۴) → پروب (dec) → زبان (voc)
     expect(ev.payload?.advice_1?.label).toContain('چک‌لیست دشواری خواندن');
     expect(ev.payload?.advice_1?.value).toContain('آگاهی واج‌شناختی');
     expect(ev.payload?.advice_1?.value).toContain('الگوی ضعف گسترده');
@@ -79,18 +63,15 @@ describe('حلقهٔ چیپ هستهٔ خواندن — مسیر اختصاصی 
     expect(ev.payload?.advice_3?.value).toContain('واژگان');
     expect(ev.payload?.advice_4).toBeUndefined();
 
-    // خط خلاصهٔ تایم‌لاین هم‌شکل بقیهٔ چک‌لیست‌ها
     expect(ev.summary).toContain('امتیاز: ۴ از ۱۰');
     expect(ev.summary).toContain('ضعف آشکار');
 
-    // type سیستمی ساخته شد — خارج کتابخانهٔ فرم (active=0) و محافظت‌شده
     const trow = A.sql
       .prepare(`SELECT key, active, is_system FROM case_event_types WHERE key = 'ce-read-core-v1'`)
       .get() as { key: string; active: number; is_system: number };
     expect(trow.is_system).toBe(1);
     expect(trow.active).toBe(0);
 
-    // audit هم‌تراکنش
     const audits = A.sql
       .prepare(`SELECT action FROM audit_log WHERE resource_type = 'case_event' AND resource_id = ?`)
       .all(ev.id) as { action: string }[];
@@ -102,7 +83,6 @@ describe('حلقهٔ چیپ هستهٔ خواندن — مسیر اختصاصی 
     expect(res.status).toBe(201);
     const ev = (res.body as { data: ChipEvent }).data;
     expect(ev.analysis?.band).toBe('بدون نشان');
-    // جمع صفر → هیچ پیشنهاد شرطی‌ای نمی‌آید (بدون advice_N)
     expect(ev.payload?.advice_1).toBeUndefined();
     const rows = A.sql
       .prepare(`SELECT COUNT(*) AS c FROM case_event_types WHERE key = 'ce-read-core-v1'`)
@@ -116,7 +96,6 @@ describe('حلقهٔ چیپ هستهٔ خواندن — مسیر اختصاصی 
     expect(one.status).toBe(201);
     const evOne = (one.body as { data: ChipEvent }).data;
     expect(evOne.analysis?.band).toBe('بدون نشان');
-    // pa مرزی منفرد → هنوز پیشنهاد شرطی دارد (قاعدهٔ pa از جمع ۱ مستقل است)
     expect(evOne.payload?.advice_1?.label).toContain('چک‌لیست دشواری خواندن');
     const two = await chip({ pa: 1, dec: 1, flu: 0, voc: 0, comp: 0 });
     expect(((two.body as { data: ChipEvent }).data).analysis?.band).toBe('گیر مرزی');
@@ -129,7 +108,6 @@ describe('حلقهٔ چیپ هستهٔ خواندن — مسیر اختصاصی 
     const evTen = (ten.body as { data: ChipEvent }).data;
     expect(evTen.analysis?.band).toBe('ضعف آشکار');
     expect(evTen.analysis?.score).toBe(10);
-    // الگوی گسترده: رمزگشایی هم گیردار → درک مطلب پیشنهاد جدا نمی‌گیرد؛ سه ابزار دقیق
     expect(evTen.payload?.advice_1?.label).toContain('چک‌لیست دشواری خواندن');
     expect(evTen.payload?.advice_2?.value).toContain('واژهٔ بی‌معنی');
     expect(evTen.payload?.advice_2?.value).toContain('روانی');

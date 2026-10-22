@@ -1,12 +1,3 @@
-/**
- * تست‌های e2e — ops
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-ops.test.ts — یکپارچگی واقعی //////:
-// کارکنان + ورود با رمز، ساعات کاری، تنظیمات، اعلان‌های مدیر، حضور همکاران،
-// بورد روز کاری، داشبورد و گزارش‌ها
-// دادهٔ ماک: seed-dev + fixtureهای API
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -54,11 +45,9 @@ describe('/ — کارکنان: CRUD + ورود با رمز', () => {
     const member = (res.body as { data: { id: string } }).data;
     expect(member.id).toBeTruthy();
 
-    // ورود با رمز اختصاصی
     const token = await loginToken(A, 'saeed', '9998');
     expect(token.split('.').length).toBe(3);
 
-    // رمز پیش‌فرض کار نمی‌کند
     await expect(loginToken(A, 'saeed', '1234')).rejects.toThrow();
   });
 
@@ -106,7 +95,6 @@ describe('/ — کارکنان: CRUD + ورود با رمز', () => {
   });
 
   it('ساخت همکار توسط همکار دیگر — 403 (مسیر باز است؟)', async () => {
-    // مسیر /api/staff requireRole ندارد؛ فقط نباید 500 بدهد — رفتار واقعی ثبت می‌شود
     const therapist = await asRole(A, 'therapist');
     const res = await therapist.post('/api/staff', {
       full_name: 'خودساخته', phone: '09121118888', national_id: makeNationalId(), username: 'selfmade', role: 'manager'
@@ -196,8 +184,6 @@ describe('تنظیمات مرکز', () => {
     expect(hours).toBeGreaterThanOrEqual(1);
   });
 
-  // تنظیمات فقط دفتر: درمانگر ۴۰۳ می‌خواند؛ منشی خواندن دارد؛
-  // «بازه کاری مرکز» برای رنگ تقویم برای درمانگر باز می‌ماند
   it('GET تنظیمات — درمانگر ۴۰۳، منشی ۲۰۰، center-hours برای درمانگر باز', async () => {
     const therapist = await asRole(A, 'therapist');
     const secretary = await asRole(A, 'secretary');
@@ -375,7 +361,6 @@ describe('بورد روز کاری', () => {
 
   it('نوبت امروز + ساعات کاری در ستون همکار دیده می‌شود', async () => {
     const today = tehranTodayYmd();
-    // نوبت ۹ صبح تهران امروز = 05:30 UTC
     const s = await createStudent(manager);
     const created = await manager.post('/api/appointments', apptBody(ALI_ID, `${today}T05:30:00.000Z`, 45, [s.id]));
     expect(created.status).toBeLessThan(300);
@@ -448,9 +433,7 @@ describe('/ — داشبورد و گزارش‌ها', () => {
     expect(res.body).toHaveProperty('data');
   });
 
-  // گزارش مدارس ساده‌شده: فقط مدارس دارای دانش‌آموز فعال + تعداد، نزولی
   it('reports.schools — فقط مدارس مبدأ با تعداد دانش‌آموز فعال', async () => {
-    // اپ تازه = فقط دادهٔ seed → شمارش قطعی (مطهری ۴، فرزانگان ۱، گلستان ۱)
     const B = createTestApp();
     const bm = await asRole(B, 'manager');
     const res = await bm.get('/api/reports?from=2030-01-01&to=2030-01-31');

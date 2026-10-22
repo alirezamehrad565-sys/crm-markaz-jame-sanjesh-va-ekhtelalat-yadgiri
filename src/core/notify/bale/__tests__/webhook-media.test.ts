@@ -1,10 +1,3 @@
-/**
- * تست‌های واحد — webhook-media
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// webhook-media.test.ts — پارس pure پیام‌های رسانه‌ای و callback حلقهٔ بازگشت
-// عکس (آرایهٔ سایزها) / سند / کپشن / sub:pick — و این‌که جریان‌های قبلی دست‌نخورده‌اند
-
 import { describe, it, expect } from 'vitest';
 import { parseBotUpdate, pickLargestPhoto, extractMedia, normalizeCaption } from '../webhook';
 import type { BaleUpdateMessage } from '../webhook';

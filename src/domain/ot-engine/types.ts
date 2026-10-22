@@ -1,13 +1,5 @@
-/**
- * موتور چک‌لیست کاردرمانی (OT) — تایپ‌های ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// موتور چک‌لیست ۷ حیطه‌ای کاردرمانی ذهنی + گیت‌های فاز شناسایی
-// حیطه‌ها و وضعیت‌ها enum در کد (بدون CHECK در SQL — الگوی D7)
-
 import type { StudentProtocol } from '@core/shared';
 
-/** کلیدهای هفت حیطه چک‌لیست — ترتیب نمایشی هم همین است */
 export const OT_DOMAINS = ['gross', 'fine', 'visual', 'auditory', 'cognitive', 'adl', 'social'] as const;
 
 export type OtDomain = (typeof OT_DOMAINS)[number];
@@ -22,7 +14,6 @@ export const OT_DOMAIN_LABELS: Record<OtDomain, string> = {
   social: 'مهارت‌های اجتماعی-هیجانی و بازی'
 };
 
-/** وضعیت هر مهارت — درمانگر حین مداخله ثبت می‌کند */
 export const OT_SKILL_STATUSES = ['mastered', 'with_help', 'not_yet'] as const;
 
 export type OtSkillStatus = (typeof OT_SKILL_STATUSES)[number];
@@ -33,10 +24,6 @@ export const OT_SKILL_STATUS_LABELS: Record<OtSkillStatus, string> = {
   not_yet: 'هنوز نه'
 };
 
-/**
- * سطح راهنما برای وضعیت «با کمک»:
- * سلسله‌مراتب استاندارد کمترترین کمک تا بیشترین — ثبت سطح کمک، سنجش استقلال واقعی را ممکن می‌کند.
- */
 export const OT_PROMPT_LEVELS = ['verbal', 'gestural', 'partial_physical', 'full_physical'] as const;
 
 export type OtPromptLevel = (typeof OT_PROMPT_LEVELS)[number];
@@ -48,7 +35,6 @@ export const OT_PROMPT_LEVEL_LABELS: Record<OtPromptLevel, string> = {
   full_physical: 'راهنمای فیزیکی کامل'
 };
 
-/** پنجرهٔ تازگی ورودی‌های شناسایی — داوری روانشناسی P0-4 */
 export const OT_GATE_FRESH_MONTHS = 12;
 
 export interface OtSkillRow {
@@ -57,34 +43,25 @@ export interface OtSkillRow {
   ord: number;
   title: string;
   criterion: string;
-  /** بازهٔ سنی موردانتظار (مرجع رشدی) — null = ردیف قدیمی */
   expectedAge: string | null;
-  /** گروه سازه — مهارت‌های هم‌سازه (مثلاً دکمه در ظریف و خودیاری) — null = مستقل */
   skillGroup: string | null;
-  /** فقط مهارت‌های primary در شمارش پیشرفت/پیمایش می‌آیند */
   isPrimary: boolean;
 }
 
-/** وضعیت فعلی یک مهارت برای یک دانش‌آموز (مشتق از آخرین ردیف ot_progress) */
 export interface OtSkillState {
   skillId: string;
   ord: number;
   title: string;
   criterion: string;
-  /** آخرین وضعیت ثبت‌شده — null = هنوز نمره نخورده */
   status: OtSkillStatus | null;
-  /** اولین وضعیت ثبت‌شده — برای دیدن مسیر «هنوز نه ← با کمک ← بلد» */
   firstStatus: OtSkillStatus | null;
-  /** تسلط تأییدشده = دو جلسهٔ متوالی «بلد است» */
   masteryConfirmed: boolean;
-  /** آخرین سطح راهنمای ثبت‌شده برای «با کمک» */
   promptLevel: OtPromptLevel | null;
   expectedAge: string | null;
   skillGroup: string | null;
   isPrimary: boolean;
   latestAt: string | null;
   latestNote: string | null;
-  /** چند جلسهٔ متمایز روی این مهارت کار شده */
   sessions: number;
 }
 
@@ -92,19 +69,13 @@ export interface OtDomainProgress {
   key: OtDomain;
   title: string;
   skills: OtSkillState[];
-  /** نقطهٔ ادامهٔ حیطه = اولین مهارتِ primary که تسلط دوجلسه‌ای ندارد — null = حیطه کامل */
   resumeSkillId: string | null;
-  /** تسلط تأییدشده (دوجلسه‌ای) */
   mastered: number;
-  /** «بلد است» تک‌جلسه‌ای — منتظر تأیید جلسهٔ دوم */
   masteredPending: number;
   withHelp: number;
   notYet: number;
-  /** نمره‌گرفته‌های primary (مبنای پیمایش) */
   scored: number;
-  /** شمار مهارت‌های primary حیطه (مبنای درصد پیشرفت) */
   total: number;
-  /** همهٔ ردیف‌ها شامل مکمل‌ها — برای نمایش کامل فهرست */
   totalAll: number;
 }
 
@@ -114,71 +85,52 @@ export interface OtProfile {
     scored: number;
     total: number;
     mastered: number;
-    /** «بلد است» تک‌جلسه‌ای در انتظار تأیید */
     masteredPending: number;
     withHelp: number;
     notYet: number;
-    /** شمار مهارت‌های مکمل (غیر primary) — برای نمایش */
     secondarySkills: number;
-    /** شمار جلسات متمایز ثبت‌شده (session_id یکتا) */
     sessions: number;
     lastSessionAt: string | null;
   };
 }
 
-// ───────── m162 — نمای پیشرفت جلسه‌به‌جلسه (GET /ot/progress) ─────────
-
-/** یک جلسه در تایم‌لاین پیشرفت — از تجمیع ot_progress بر حسب session_id */
 export interface OtProgressSessionEntry {
-  /** شناسهٔ جلسه — ردیف‌های قدیمیِ بدون جلسه: raw:<rowid> */
   sessionId: string;
-  /** شمارهٔ ترتیبی ۱-base بر حسب ترتیب زمانی */
   ord: number;
   occurredAt: string;
-  /** مهارت‌های نمره‌گرفتهٔ این جلسه (فقط primary) */
   total: number;
   mastered: number;
   withHelp: number;
   notYet: number;
-  /** تسلط‌هایی که با همین جلسه قاعدهٔ دوجلسه‌ای‌شان تأیید شد */
   confirmedNew: number;
-  /** توزیع سطح راهنمای «با کمک» این جلسه — کلید سطح → شمار */
   prompts: Record<string, number>;
-  /** شمار وضعیت‌ها به تفکیک حیطه (فقط primary) — مبنای نوار انباشتهٔ حیطه‌ای */
   domains: { key: OtDomain; mastered: number; withHelp: number; notYet: number }[];
 }
 
-/** یک ردیف خط پایهٔ ارزیابی عملکردی توانبخشی — از payload آخرین ce-rehab-fx-v1 */
 export interface OtProgressBaselineEntry {
   key: string;
   label: string;
-  /** مقدار خام فارسی‌شده + واحد — «۷ دقیقهٔ تمرکز پیوسته» */
   valueFa: string;
   band: string;
   color: string;
-  /** سطح راهنمای خط پایه — مبنای منحنی محوشدن راهنما */
   prompt: string;
 }
 
 export interface OtProgressOutput {
   sessions: OtProgressSessionEntry[];
-  /** خط پایهٔ عملکردی (پرونده‌های توانبخشی با ثبت fx) — null یعنی ثبت نشده */
   baseline: OtProgressBaselineEntry[] | null;
   baselineSummary: string | null;
   baselineAt: string | null;
   summary: {
     sessions: number;
-    /** شمار مهارت‌هایی که الان تسلط دوجلسه‌ای تأییدشده دارند */
     confirmedMastered: number;
     withHelp: number;
     lastAt: string | null;
   };
 }
 
-/** یک گیت فاز شناسایی — ورودی‌های مشترک همهٔ مسیرها */
 export interface IdentificationGate {
   key: 'anamnesis' | 'behavioral' | 'wechsler' | 'skills' | 'needs';
-  /** جایگاه نمایشی — m161: مسیرآگاه (توانبخشی ۱–۳، مسیر استاندارد ۱–۵) */
   ord: number;
   label: string;
   hint: string;
@@ -194,13 +146,10 @@ export interface GatesOutput {
     scored: number;
     total: number;
     domainsCovered: number;
-    /** حیطه‌هایی با حداقل ۳ مهارت نمره‌گرفته */
     domainsMin3: number;
     domainTitles: string[];
   };
-  /** پیشنهاد پیش‌فرض نیاز→پروتکل (فقط پیشنهاد — تصمیم با درمانگر) */
   protocolSuggestions: Record<string, { protocol: StudentProtocol; secondary: StudentProtocol | null } | null>;
-  /** مسیر پرونده — m161: پایهٔ گیت‌های مسیرآگاه (null = فاز شناسایی بدون مسیر) */
   pathway: string | null;
 }
 
@@ -215,7 +164,6 @@ export interface OtSessionSaveInput {
 export interface OtSessionSaveResult {
   sessionId: string;
   saved: number;
-  /** مهارت‌هایی که با این جلسه تسلط دوجلسه‌ای‌شان تأیید شد */
   masteryConfirmed: number;
   summary: string;
 }

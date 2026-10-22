@@ -1,16 +1,3 @@
-/**
- * اعلان‌های کاربردی و بات‌های نقش‌آگاه بله — رخدادهای چرخهٔ حیات اعلان
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// برنامه‌ریز pure اعلان‌های چرخه حیات نوبت — بدون دیتابیس/شبکه
-// ورودی: رویداد + نوبت + نام‌ها + مقصدها (chat) + پرچم‌های تنظیمات
-// خروجی: پیام‌های آماده صف‌گذاری
-// قوانین:
-// * پرچم خاموش (notify_on_*) → هیچ پیامی
-// * ولیّ بدون chat_id → رد (ساکت)
-// * دانش‌آموزان حضورِ cancelled در رویدادهای created/moved اعلان نمی‌گیرند
-// * معلم فقط اگر chat متصل داشته باشد (staff_bot_links) اعلان می‌گیرد
-
 import type {
   Appointment,
   NotificationChannel,
@@ -35,19 +22,13 @@ export interface LifecycleNotifyPlan {
 export interface PlanLifecycleInput {
   event: LifecycleEvent;
   appointment: Appointment;
-  /** زمان قبلی — فقط برای moved */
   previous?: { startAt: string; endAt: string };
   staffName: string;
   studentNames: Map<string, string>;
-  /** studentId → { channel, chatId } از notification_prefs */
   studentTargets: Map<string, { channel: NotificationChannel; chatId: string }>;
-  /** chat_idهای متصل به معلم (staff_bot_links) */
   staffChats: string[];
-  /** — studentId → کلاس مدرسه‌اش (اعلان به معلم مدرسه) */
   classTargets?: Map<string, { channel: NotificationChannel; chatId: string; className: string }>;
-  /** کانال ارسال پیام‌های کارمند — bale یا internal (بدون توکن) */
   staffChannel?: NotificationChannel;
-  /** پرچم ماژول تنظیمات */
   enabled: boolean;
   clinicName?: string;
 }
@@ -64,7 +45,6 @@ const STAFF_TEMPLATE: Record<LifecycleEvent, NotificationTemplateId> = {
   cancelled: 'staff_appointment_cancelled'
 };
 
-/** — قالب‌های معلم مدرسه (اعلان مراجعه دانش‌آموز کلاس خودش) */
 const TEACHER_TEMPLATE: Record<LifecycleEvent, NotificationTemplateId> = {
   created: 'teacher_appointment_created',
   moved: 'teacher_appointment_changed',
@@ -88,16 +68,9 @@ export function planLifecycleNotifications(input: PlanLifecycleInput): Lifecycle
 
   const plans: LifecycleNotifyPlan[] = [];
 
-  /**
-   * فیلتر حضور دانش‌آموز:
-   * - created/moved → دانش‌آموزِ حضورِ cancelled اعلان نمی‌گیرد
-   * - cancelled → همهٔ دانش‌آموزان اعلان می‌گیرند (چون خود cancel، حضور همه را cancelled می‌کند؛
-   * بدون این استثنا والد هیچ‌وقت پیام لغو نمی‌گرفت — باگ که در کشف شد)
-   */
   const studentGetsNotice = (attendance: string): boolean =>
     input.event === 'cancelled' ? true : attendance !== 'cancelled';
 
-  // ─── ولیّ هر دانش‌آموز ───
   for (const s of appt.students) {
     if (!studentGetsNotice(s.attendance)) continue;
     const target = input.studentTargets.get(s.studentId);
@@ -119,12 +92,10 @@ export function planLifecycleNotifications(input: PlanLifecycleInput): Lifecycle
       },
       studentId: s.studentId,
       staffId: null,
-      // moved: زمان جدید در کلید هست → هر جابه‌جایی پیام خودش را دارد (و dedup تکرار جلوگیری می‌کند)
       dedupKey: `lc:${input.event}:${appt.id}:${input.previous?.startAt ?? ''}:${target.chatId}`
     });
   }
 
-  // ─── معلم (کارمند) نوبت ───
   const staffChannel: NotificationChannel = input.staffChannel ?? 'bale';
   for (const chatId of input.staffChats) {
     plans.push({
@@ -147,7 +118,6 @@ export function planLifecycleNotifications(input: PlanLifecycleInput): Lifecycle
     });
   }
 
-  // ─── معلم مدرسه هر دانش‌آموز (چت متصل به کلاس) ───
   for (const s of appt.students) {
     if (!studentGetsNotice(s.attendance)) continue;
     const target = input.classTargets?.get(s.studentId);
@@ -177,10 +147,6 @@ export function planLifecycleNotifications(input: PlanLifecycleInput): Lifecycle
   return plans;
 }
 
-/**
- * ساخت ردیف‌های برنامه برای پیام «برنامه کلاس‌ها» (/today و /week) — pure.
- * viewer: دانش‌آموز (نام متخصص) یا کارمند (نام دانش‌آموزان)
- */
 export function buildScheduleEntries(
   appointments: Appointment[],
   viewer: { kind: 'student' | 'staff'; names: Map<string, string> }

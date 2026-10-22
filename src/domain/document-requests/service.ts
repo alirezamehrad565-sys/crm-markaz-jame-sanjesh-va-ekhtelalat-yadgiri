@@ -1,23 +1,3 @@
-/**
- * ماژول درخواست مدارک از خانواده/معلم با بله — سرویس اصلی و منطق کسب‌وکار (m151 — T2 · بازطراحی m166)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// جریان: درمانگر درخواست می‌سازد (گیرنده: خانواده و/یا معلم) → پیام بله به چت‌های
-// گیرنده (خانواده: bot_links + notification_prefs — الگوی notifyHomeworkGraded؛
-// معلم: class_bot_links کلاسِ دانش‌آموز — الگوی case-events.teacherChats) →
-// گیرنده عکس/فایل می‌فرستد → webhook رسانه‌ای (media_received) → tryHandleMedia:
-//   * چت خانواده → جدیدترین درخواست بازِ پرونده‌های متصل
-//   * چت کلاس → فقط درخواست‌های بازِ «گیرندهٔ معلم» همان کلاس (رسانهٔ بی‌درخواست مسیر قبلی)
-//   * بدون درخواست متناظر → null (جریان بازگشت تکلیف بدون تغییر ادامه می‌دهد)
-//   * درخواست متناظر → دانلود با MediaFetcher → ObjectStore (انبار مشترک بانک تمرین) →
-//     رکورد student_received_docs + ارتقای status درخواست sent→received
-// الگوها: enqueue/dedup از notify، audit هم‌تراکنش از exercise.addSubmission
-//
-// — مدل داده (m166، بدون مایگریشن): ستون templates همان ستون m151 است و JSON
-//   ذخیره می‌کند؛ شکل قدیمی: آرایهٔ کلید قالب‌ها (گیرنده همیشه خانواده)؛
-//   شکل جدید: { t: [تگ‌ها], r: [گیرنده‌ها] }. فقط همین سرویس ستون را می‌خواند و
-//   هر دو شکل پارس می‌شود — رکوردهای قدیمی با مدل جدید درست نمایش داده می‌شوند.
-
 import type { AuthContext } from '@core/shared';
 import { ConflictError, NotFoundError, ValidationError } from '@core/errors';
 import type { NotifyService, MediaFetcher, BotMedia } from '@core/notify';
@@ -43,8 +23,6 @@ import {
   parseDocTags,
   resolveDocFileName
 } from './pure';
-
-// ───────────── Row shapes ─────────────
 
 interface DocRequestRow {
   id: string;
@@ -74,14 +52,11 @@ interface ReceivedDocRow {
   stored_at: string;
 }
 
-// ───────────── کدک ستون templates (بدون مایگریشن — m166) ─────────────
-
 const DOC_RECIPIENT_KEYS: readonly DocRecipient[] = ['family', 'teacher'];
 
 function parseStoredDocPayload(raw: string): { tags: string[]; recipients: DocRecipient[] } {
   try {
     const parsed = JSON.parse(raw) as unknown;
-    // — رکورد قدیمی m151: آرایهٔ کلید قالب‌ها؛ گیرنده همیشه خانواده
     if (Array.isArray(parsed)) {
       return { tags: parsed.filter((x): x is string => typeof x === 'string'), recipients: ['family'] };
     }
@@ -94,7 +69,6 @@ function parseStoredDocPayload(raw: string): { tags: string[]; recipients: DocRe
       return { tags, recipients: recipients.length > 0 ? recipients : ['family'] };
     }
   } catch {
-    // — مقدار خراب → خالی؛ کارت بدون تگ نمایش داده می‌شود
   }
   return { tags: [], recipients: ['family'] };
 }
@@ -135,7 +109,6 @@ function docRowToRecord(r: ReceivedDocRow): ReceivedDoc {
   };
 }
 
-/** بازیگر بات برای ثبت مدرک و audit — الگوی SUB_ACTOR بات بازگشت تکلیف */
 const DOC_BOT_ACTOR: AuthContext = {
   staffId: 'bale-bot',
   email: 'bale-bot@system.local',
@@ -143,7 +116,6 @@ const DOC_BOT_ACTOR: AuthContext = {
   displayName: 'بات بله'
 };
 
-/** SELECT مشترک درخواست با نام ثبت‌کننده */
 const DOC_REQUEST_SELECT = `SELECT r.id, r.student_id, r.templates, r.custom_note, r.status, r.sent_at,
        r.closed_at, r.due_hint, r.requested_by, r.delivered_chats,
        s.full_name AS requested_by_name
@@ -155,7 +127,6 @@ export function createDocumentRequestService(deps: DocumentRequestDeps) {
   const log = logger.child('doc-requests');
   const now = deps.now ?? (() => new Date());
 
-  /** چت‌های خانوادهٔ متصل — bot_links + prefs بله، ادغام و یکتاسازی (الگوی اعلان غیبت) */
   async function familyChatsOf(studentId: string): Promise<string[]> {
     const linkRows = await db.query<{ chat_id: string }>(
       `SELECT DISTINCT chat_id FROM bot_links
@@ -170,7 +141,6 @@ export function createDocumentRequestService(deps: DocumentRequestDeps) {
     return [...new Set([...linkRows.map((r) => r.chat_id), ...prefRows.map((r) => r.chat_id)])];
   }
 
-  /** چت‌های معلمِ کلاسِ دانش‌آموز — class_bot_links متصل (الگوی case-events.teacherChats) */
   async function teacherChatsOf(studentId: string): Promise<string[]> {
     const rows = await db.query<{ chat_id: string }>(
       `SELECT DISTINCT l.chat_id
@@ -182,7 +152,6 @@ export function createDocumentRequestService(deps: DocumentRequestDeps) {
     return [...new Set(rows.map((r) => r.chat_id))];
   }
 
-  /** دانش‌آموزان متصل به یک chat خانواده — bot_links منبع حقیقت اتصال (الگوی بات بازگشت تکلیف) */
   async function linkedStudentIds(chatId: string): Promise<string[]> {
     const rows = await db.query<{ student_id: string }>(
       `SELECT DISTINCT student_id FROM bot_links WHERE chat_id = ? AND status = 'linked' AND student_id IS NOT NULL`,
@@ -191,7 +160,6 @@ export function createDocumentRequestService(deps: DocumentRequestDeps) {
     return [...new Set(rows.map((r) => r.student_id))];
   }
 
-  /** دانش‌آموزان کلاسِ متصل به یک chat معلم — class_bot_links (رسانهٔ چت کلاس) */
   async function classStudentIds(chatId: string): Promise<string[]> {
     const rows = await db.query<{ student_id: string }>(
       `SELECT DISTINCT s.id AS student_id
@@ -203,11 +171,6 @@ export function createDocumentRequestService(deps: DocumentRequestDeps) {
     return [...new Set(rows.map((r) => r.student_id))];
   }
 
-  /**
-   * جدیدترین درخواست بازِ متناظر میان پرونده‌های داده‌شده —
-   * needRecipient خالی: هر درخواستی (چت خانواده)؛
-   * needRecipient: فقط درخواست‌هایی که آن گیرنده درشان ثبت شده (چت کلاس → معلم)
-   */
   async function newestOpenRequest(studentIds: string[], needRecipient: DocRecipient | null): Promise<{ id: string; student_id: string } | null> {
     const placeholders = studentIds.map(() => '?').join(', ');
     const rows = await db.query<{ id: string; student_id: string; templates: string }>(
@@ -235,7 +198,6 @@ export function createDocumentRequestService(deps: DocumentRequestDeps) {
       if (!tags) {
         throw new ValidationError('حداقل یک تگ مدرک انتخاب کنید');
       }
-      // — گیرنده: غایب/خالی → خانواده (سازگاری فراخوان‌های قدیمی)؛ نامعتبر → خطای شفاف
       const recipients = input.recipients === undefined || input.recipients === null
         ? (['family'] as DocRecipient[])
         : parseDocRecipients(input.recipients);
@@ -245,7 +207,6 @@ export function createDocumentRequestService(deps: DocumentRequestDeps) {
       const customNote = normalizeDocNote(input.customNote);
       const dueHint = normalizeDocNote(input.dueHint, 60);
 
-      // — چت‌های هر گیرنده؛ گیرندهٔ بدون چت → خطای شفاف (ارسال ناقصِ ساکت ممنوع)
       const wantFamily = recipients.includes('family');
       const wantTeacher = recipients.includes('teacher');
       const familyChats = wantFamily ? await familyChatsOf(studentId) : [];
@@ -347,7 +308,6 @@ export function createDocumentRequestService(deps: DocumentRequestDeps) {
     },
 
     async tryHandleMedia(chatId: string, media: BotMedia, caption: string | null): Promise<DocBotReply | null> {
-      // — اول چت خانواده (هر درخواست باز)؛ بعد چت کلاس (فقط درخواستِ گیرندهٔ معلم)
       const familyIds = await linkedStudentIds(chatId);
       let openRow = familyIds.length > 0 ? await newestOpenRequest(familyIds, null) : null;
       if (!openRow) {
@@ -362,7 +322,6 @@ export function createDocumentRequestService(deps: DocumentRequestDeps) {
       );
       const studentName = studentNameRow?.name ?? 'دانش‌آموز';
 
-      // گاردها — همان ترتیب بات بازگشت تکلیف: نوع قبل از دانلود، حجم قبل و بعد
       const guard = guardDocMedia(media);
       if (guard === 'bad_type') {
         return { text: renderTemplate('bot_doc_bad_type'), buttons: null };
@@ -401,7 +360,6 @@ export function createDocumentRequestService(deps: DocumentRequestDeps) {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [id, openRow.student_id, openRow.id, media.type, fileName, mime, fetched.bytes.length, key, caption, chatId]
         );
-        // — اولین مدرک، درخواست را به «received» می‌برد (باز می‌ماند تا بسته شود)
         await tx.execute(
           `UPDATE document_requests SET status = 'received' WHERE id = ? AND status = 'sent'`,
           [openRow.id]

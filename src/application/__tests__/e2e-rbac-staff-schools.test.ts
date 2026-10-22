@@ -1,10 +1,3 @@
-/**
- * تست‌های e2e — rbac-staff-schools
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-rbac-staff-schools.test.ts — تفکیک نقش‌ها
-// تنظیم کارکنان (حساب‌ها) و ساختار مدارس/کلاس‌ها فقط مدیر — معلم/منشی 403؛ خواندن آزاد
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, asRole, makeNationalId } from '../../test/harness';
 
@@ -81,7 +74,6 @@ describe('ساختار مدارس/کلاس‌ها فقط مدیر', () => {
     expect((await sec.post('/api/schools', schoolBody)).status).toBe(403);
     expect((await ther.post('/api/schools', schoolBody)).status).toBe(403);
 
-    // خواندن آزاد — فرم‌ها به لیست مدارس/کلاس‌ها نیاز دارند
     expect((await ther.get('/api/schools')).status).toBe(200);
     expect((await sec.get('/api/classes')).status).toBe(200);
 

@@ -1,10 +1,3 @@
-/**
- * سرویس جستجوی سراسری — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// جستجوی سراسری — چهار منبع: دانش‌آموزان، کارکنان، مدارس، برچسب‌ها
-// فقط خواندنی است؛ هیچ writeی انجام نمی‌دهد.
-
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 import { SEARCH_QUERY_MIN_LENGTH } from '@core/shared';
@@ -16,11 +9,7 @@ export interface SearchDeps {
   logger: Logger;
 }
 
-/** سقف نتایج هر گروه — کوچک نگه داشتن پاسخ برای UX پالت سرچ */
 const PER_GROUP_LIMIT = { students: 6, staff: 4, schools: 3, tags: 4, waitlist: 4 };
-
-/** برچسب سبک برای subtitle کارکنان/برچسب‌ها — نمایش سمت فرانت با label map انجام می‌شود؛
- * اینجا فقط مقدار خام برمی‌گردد تا لایه API از copy فرانت بی‌خبر بماند. */
 
 export interface SearchService {
   globalSearch(rawQuery: string): Promise<GlobalSearchResult>;
@@ -80,7 +69,6 @@ export function createSearchService(deps: SearchDeps): SearchService {
             LIMIT ${PER_GROUP_LIMIT.tags}`,
           [pattern]
         ),
-        // فاز W — منبع پنجم: متقاضیان لیست انتظار (نام/تلفن)
         db.query<{ id: string; first_name: string; last_name: string; phone: string; status: string }>(
           `SELECT id, first_name, last_name, phone, status
              FROM waitlist
@@ -116,7 +104,6 @@ export function createSearchService(deps: SearchDeps): SearchService {
         },
         {
           type: 'school',
-          // زیرنویس: کد مدرسه اگر دارد، وگرنه نوع
           items: schoolRows.map(
             (r): SearchItem => ({ type: 'school', id: r.id, title: r.name, subtitle: r.code ?? r.kind })
           )

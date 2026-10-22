@@ -1,13 +1,3 @@
-/**
- * کلاینت D1 و helper های کوئری — کلاینت HTTP/API
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Wrapper روی D1 binding — query پارامتری + transaction واقعی با batch (atomic)
-// قوانین داخلی:
-// - SQL فقط پارامتری (قانون ۱)
-// - transaction با batch D1 — اگر یکی شکست بخورد همه rollback می‌شوند
-// - migration خط فرمان است، نه API
-
 import type { Logger } from '@core/logger';
 
 export interface DbClient {
@@ -15,11 +5,6 @@ export interface DbClient {
   queryOne<T>(sql: string, params?: unknown[]): Promise<T | null>;
   execute(sql: string, params?: unknown[]): Promise<D1Result>;
   batch(statements: D1PreparedStatement[]): Promise<D1Result[]>;
-  /**
-   * تراکنش واقعی: همه writeهای انجام‌شده روی tx جمع می‌شوند و در پایان با یک
-   * d1.batch اتمیک اجرا می‌خوانند. اگر fn خطا بدهد، هیچ writeی اجرا نمی‌شود.
-   * خواندن‌های داخل tx به دیتابیس زنده می‌روند (D1 از interactive transaction پشتیبانی نمی‌کند).
-   */
   transaction<T>(fn: (tx: DbClient) => Promise<T>): Promise<T>;
 }
 

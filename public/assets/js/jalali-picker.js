@@ -1,15 +1,3 @@
-/**
- * تقویم انتخاب تاریخ جلالی
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// jalali-picker.js — +: ویجت انتخاب تاریخ جلالی برای فرم‌ها
-// سه راه ورود: تایپ مستقیم در کادر (رقم فارسی/عربی/انگلیسی، جداکنندهٔ / -. و فشردهٔ ۸رقمی)
-// + پرش یک‌کلیکی ماه/سال از منوی کشویی تقویم + ناوبری ماه‌به‌ماه و میان‌بُرهای امروز/فردا
-// API:
-// jalaliDateInput({ value, allowClear, onChange }) → { root, hiddenInput, setYmd, getYmd }
-// در formModal با type: 'jalali-date' استفاده می‌شود (مقدار جدید = میلادی YYYY-MM-DD؛
-// رکوردهای قدیمی/seed با مقدار جلالی هم درست نمایش داده و ویرایش می‌شوند — m131)
-
 import { el, icon } from './ui.js';
 import {
   addDaysYmd,
@@ -25,28 +13,21 @@ import {
   toJalali
 } from './format.js';
 
-// منطق خالص (طول ماه + پارس ورودی) در format.js است — تست‌پذیر در vitest
 export { jalaliMonthLength, parseJalaliInput } from './format.js';
 
 const DOW_SHORT = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
 
-// ─────────────── مقدار ذخیره‌شدهٔ دو-قالبی (m131) ───────────────
-// رکوردهای قدیمی/seed تاریخ جلالی دارند (۱۲۰۰–۱۵۰۰) و مقادیر جدیدِ picker/بات میلادی‌اند
-// (≥۱۷۰۰) — نمایش/تقویم باید قالب را تشخیص دهد تا ویرایش رکورد قدیمی به سال ~۷۷۰ نپرد.
 const pad2c = (n) => (n < 10 ? `0${n}` : String(n));
 
-/** YMD ذخیره‌شده → متن نمایشی کادر (همیشه جلالی) */
 const displayOfStored = (ymd) => (storedDateKind(ymd) === 'gregorian'
   ? formatJalaliNumeric(ymd)
   : fa(String(ymd).replace(/-/g, '/')));
 
-/** YMD ذخیره‌شده → اجزای جلالی — میلادی تبدیل می‌شود؛ جلالی مستقیم خوانده می‌شود */
 const jalaliPartsOfStored = (ymd) => {
   const [y, m, d] = String(ymd).split('-').map(Number);
   return storedDateKind(ymd) === 'gregorian' ? toJalali(y, m, d) : { jy: y, jm: m, jd: d };
 };
 
-/** YMD ذخیره‌شده → YMD میلادی معادل (مقایسه با سلول‌های تقویم) */
 const gregorianYmdOfStored = (ymd) => {
   if (storedDateKind(ymd) !== 'gregorian') {
     const { jy, jm, jd } = jalaliPartsOfStored(ymd);
@@ -56,10 +37,6 @@ const gregorianYmdOfStored = (ymd) => {
   return ymd;
 };
 
-/**
- * ویجت تاریخ: کادر قابل تایپ + دکمهٔ تقویم + input hidden (حامل YMD میلادی) + پاپ‌اور تقویم
- * hiddenInput همان input اصلی فرم است — formModal بدون تغییر کار می‌کند.
- */
 export function jalaliDateInput({ value = '', allowClear = true, onChange } = {}) {
   const hiddenInput = el('input', { type: 'hidden' });
 
@@ -95,8 +72,6 @@ export function jalaliDateInput({ value = '', allowClear = true, onChange } = {}
     if (!silent) onChange?.(ymd || '');
   }
 
-  // ─────────────── پاپ‌اور تقویم ───────────────
-
   let pop = null;
   let view = null; // {jy, jm} ماه در حال نمایش
 
@@ -131,7 +106,6 @@ export function jalaliDateInput({ value = '', allowClear = true, onChange } = {}
     const selected = hiddenInput.value || null;
     const selectedG = selected ? gregorianYmdOfStored(selected) : null;
 
-    // سرصفحه: دو منوی کشویی ماه/سال + ناوبری ماه‌به‌ماه — پرش مستقیم به هر سال
     const monthSel = el('select', { class: 'select jdate__sel', 'aria-label': 'ماه' },
       JALALI_MONTHS.map((m, i) => el('option', { value: String(i + 1) }, m)));
     monthSel.value = String(view.jm);
@@ -159,7 +133,6 @@ export function jalaliDateInput({ value = '', allowClear = true, onChange } = {}
       el('button', { type: 'button', class: 'btn btn--ghost btn--icon btn--sm', 'aria-label': 'ماه بعد', onclick: () => shiftMonth(1) }, icon('chevL', 15))
     );
 
-    // میان‌بُرها
     const quick = el('div', { class: 'jdate__quick' },
       el('button', { type: 'button', class: 'chip', onclick: () => pick(today) }, 'امروز'),
       el('button', { type: 'button', class: 'chip', onclick: () => pick(addDaysYmd(today, 1)) }, 'فردا'),
@@ -168,12 +141,10 @@ export function jalaliDateInput({ value = '', allowClear = true, onChange } = {}
         : null
     );
 
-    // ردیف روزهای هفته
     const dows = el('div', { class: 'jdate__grid jdate__grid--head' },
       DOW_SHORT.map((d) => el('span', { class: 'jdate__dow' }, d))
     );
 
-    // شبکه روزها — شنبه اول هفته
     const g = toGregorian(view.jy, view.jm, 1);
     const firstYmd = `${g.gy}-${String(g.gm).padStart(2, '0')}-${String(g.gd).padStart(2, '0')}`;
     const offset = iranianWeekdayOfYmd(firstYmd); // 0=شنبه
@@ -214,12 +185,9 @@ export function jalaliDateInput({ value = '', allowClear = true, onChange } = {}
     closePop();
   }
 
-  // ─────────────── تایپ آزاد در کادر ───────────────
-
   field.addEventListener('input', () => {
     field.classList.remove('is-invalid');
     field.classList.toggle('is-empty', field.value.trim() === '');
-    // پیش‌نمایش زنده: اگر تقویم باز است و ورودی کامل معتبر شد، تقویم به همان ماه برود
     if (pop) {
       const ymd = parseJalaliInput(field.value);
       if (ymd) {
@@ -256,14 +224,12 @@ export function jalaliDateInput({ value = '', allowClear = true, onChange } = {}
     if (ymd) {
       if (ymd !== hiddenInput.value) setYmd(ymd);
     } else {
-      // نامعتبر: برگشت به مقدار قبلی + هشدار کوتاه قرمز
       setYmd(hiddenInput.value || '', true);
       field.classList.add('is-invalid');
       setTimeout(() => field.classList.remove('is-invalid'), 1500);
     }
   });
 
-  // مقدار اولیه بدون فراخوانی onChange — وگرنه تغییر دهنده‌ها حین رندر حلقه می‌زنند
   setYmd(value, true);
 
   return { root, hiddenInput, setYmd, getYmd: () => hiddenInput.value || '' };

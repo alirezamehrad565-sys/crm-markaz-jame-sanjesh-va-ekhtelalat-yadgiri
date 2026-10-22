@@ -1,19 +1,8 @@
-/**
- * ماژول فرانت
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// bot-link.js —: لینک احراز هویت خودکار بات بله (ble.ir/<bot>?start=<code>)
-// منبع نام کاربری: GET /api/notifications/bot-username
-// ۱) مقدار ذخیره‌شدهٔ تنظیمات (bot_username) ۲) تشخیص خودکار با Bale getMe (یک‌بار کش می‌شود)
-// کد نامشخص/ناموفق → null → تماس‌کننده راهنمای قدیمی «/link CODE» را نشان می‌دهد.
-
 import { api } from './api.js';
 import { el, icon, openModal, toast } from './ui.js';
 
-/** کش در طول عمر صفحه — undefined = هنوز resolve نشده | null = ناموفق | string */
 let cachedUsername;
 
-/** نام کاربری بات (بدون @) — force=true → دور زدن کش و تشخیص مجدد */
 export async function resolveBotUsername(force = false) {
   if (!force && cachedUsername !== undefined) return cachedUsername;
   try {
@@ -25,14 +14,12 @@ export async function resolveBotUsername(force = false) {
   return cachedUsername;
 }
 
-/** لینک احراز خودکار — username ناموجود → null */
 export function buildBotLink(username, code) {
   const u = typeof username === 'string' ? username.trim().replace(/^@/, '') : '';
   if (!u || !code) return null;
   return `https://ble.ir/${u}?start=${encodeURIComponent(code)}`;
 }
 
-/** کپی متن در کلیپ‌بورد با fallback صفحهٔ قدیمی‌تر */
 async function copyText(text) {
   try {
     await navigator.clipboard?.writeText(text);
@@ -52,10 +39,6 @@ async function copyText(text) {
   }
 }
 
-/**
- * باکس لینک احراز خودکار — داخل مودال کد اتصال.
- * username null → null (تماس‌کننده fallback متنی می‌گذارد)
- */
 export function botLinkBox(link, code) {
   if (!link) return null;
 
@@ -86,10 +69,6 @@ export function botLinkBox(link, code) {
   );
 }
 
-/**
- * مودال «کد اتصال بات بله» — کد + (لینک احراز در صورت وجود نام کاربری) + راهنما.
- * برای کد کارمند (staff.js) و کد خانواده (student-profile.js)
- */
 export async function openBotLinkModal(code, { intro, extraHint } = {}) {
   const username = await resolveBotUsername();
   const link = buildBotLink(username, code);

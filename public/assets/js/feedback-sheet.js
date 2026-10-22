@@ -1,22 +1,5 @@
-/**
- * برگهٔ بازخورد ساخت‌یافتهٔ خانواده (T9/m152)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// feedback-sheet.js — برگهٔ یک‌صفحه‌ای والدپسند برای دادن/فرستادن به خانواده، پس از صورت‌بندی.
-// ترکیب کاملاً سمت مرورگر از داده‌هایی که تب شناسایی از قبل گرفته (صفر GET تازه):
-//   formulation (GET /case-formulation — از پیش‌گرفته) + plan (GET /checklist-plan — از پیش‌گرفته).
-// قراردادها:
-// - buildFeedbackSheet تابع خالص و قطعی است (بدون DOM/Date) — تست‌پذیر (src/__tests__/feedback-sheet-front.test.ts)
-// - زبان والدپسند — بدون اصطلاح تشخیصی و بدون زبان موتور؛ کلید سازهٔ ناشناخته حذف می‌شود (فال‌بک نرم)
-// - ارائه: مودال پیش‌نمایش + «کپی متن» + «چاپ» — ارسال بله عمداً وایر نشده (کار آینده)
-// - چاپ: پنجرهٔ تازه با حداقل استایل RTL درون‌خطی و window.print() — فقط خود برگه
-// - تایپوگرافی/توکن m144 دست‌نخورده — بدون رنگ/فونت/انیمیشن تازه
-
 import { el, icon, openModal, toast } from './ui.js';
 
-// ───────── جدول‌های نگاشت ثابت (کلیدهای موتور → جملهٔ سادهٔ فارسی) ─────────
-
-/** کلیدهای سازهٔ صورت‌بندی (CONSTRUCT_KEYS موتور case-formulation) → جملهٔ والدپسند */
 const CONSTRUCT_FINDINGS = {
   attention_exec: 'تمرکز و پیگیری کارها برای او سخت‌تر از هم‌سن‌هایش است.',
   externalizing: 'کنترل رفتار و رعایت قواعد برای او چالش‌برانگیز است.',
@@ -28,7 +11,6 @@ const CONSTRUCT_FINDINGS = {
   social_adl: 'در مهارت‌های روزمره و دوست‌یابی به راهنمایی بیشتری نیاز دارد.'
 };
 
-/** همان کلیدها برای سازه‌های «پایین» → جملهٔ نقطهٔ قوت */
 const CONSTRUCT_STRENGTHS = {
   attention_exec: 'توانایی توجه و تمرکز خوبی دارد.',
   externalizing: 'در رفتار و رعایت قواعد وضعیت خوبی دارد.',
@@ -40,14 +22,12 @@ const CONSTRUCT_STRENGTHS = {
   social_adl: 'مهارت‌های اجتماعی و خودیاری او خوب است.'
 };
 
-/** سطح سازه → عبارت والدپسند (فقط سازه‌های بالاتر از «پایین» می‌آیند) */
 const LEVEL_PLAIN = {
   'مرزی': 'کمی نیاز به توجه دارد',
   'قابل‌توجه': 'نیاز به توجه و کمک بیشتر دارد',
   'هم‌گرای-بالا': 'به‌روشنی به توجه و کمک بیشتر نیاز دارد'
 };
 
-/** کلیدهای ابزار پلن چک‌لیست → نام ساده برای خانواده (کلید ناشناخته → آیتم حذف) */
 const PLAN_TOOL_PLAIN = {
   'ce-snap-iv-p-v1': 'پرسش‌نامهٔ توجه و بی‌قراری (خانواده)',
   'ce-snap-iv-t-v1': 'پرسش‌نامهٔ توجه و بی‌قراری (معلم)',
@@ -70,7 +50,6 @@ const PLAN_TOOL_PLAIN = {
   'ce-anamnesis-v3': 'شرح‌حال جلسهٔ نخست'
 };
 
-/** توصیه‌های خانه — محتوای ثابت (پنج توصیهٔ عملی) */
 const HOME_TIPS = [
   'تمرین‌ها را کوتاه و سرحال نگه دارید — هر روز در یک ساعت مشخص، بهتر از یک جلسهٔ طولانی است.',
   'دستورها را کوتاه و قدم‌به‌قدم بدهید؛ یک دستور در هر بار و همراه تماس چشمی.',
@@ -79,7 +58,6 @@ const HOME_TIPS = [
   'با معلم کلاس در تماس بمانید و پیشرفت‌های کوچک را دوطرفه خبر دهید.'
 ];
 
-/** حذف ارجاعات فنی از دلیل پلن (§ها) — متن قابل خواندن برای خانواده */
 function simplifyReason(reasonFa) {
   return String(reasonFa ?? '')
     .replace(/\(§[^)]*\)/g, '')
@@ -89,19 +67,13 @@ function simplifyReason(reasonFa) {
     .replace(/[.\s]+$/, '');
 }
 
-/** نام امن دانش‌آموز — قرینهٔ studentLabel (case-events) */
 function studentNameOf(student) {
   return [student?.firstName, student?.lastName].filter(Boolean).join(' ').trim() || 'دانش‌آموز';
 }
 
-/**
- * سازندهٔ خالص برگه — ورودی: دادهٔ ازپیش‌گرفتهٔ تب + برچسب تاریخ (قطعی؛ بدون Date).
- * خروجی ساخت‌یافته: سربرگ + چهار بخش ثابت؛ هر بخش items خالی → خط راهنمای خنثی.
- */
 export function buildFeedbackSheet({ student, formulation, plan, todayLabel = '—' }) {
   const constructs = Array.isArray(formulation?.constructs) ? formulation.constructs.filter(Boolean) : [];
 
-  // ۲) نقاط قوت — سازه‌های «پایین» = وضعیت مثبت/سالم
   const strengthItems = constructs
     .filter((c) => c.level === 'پایین' && CONSTRUCT_STRENGTHS[c.key])
     .map((c) => ({ text: CONSTRUCT_STRENGTHS[c.key] }));
@@ -109,7 +81,6 @@ export function buildFeedbackSheet({ student, formulation, plan, todayLabel = '�
     strengthItems.push({ text: 'بر اساس اطلاعات فعلی، نقطهٔ قوت خاصی ثبت نشده است؛ با ادامهٔ جلسات نقاط قوت او را با هم تقویت می‌کنیم.', muted: true });
   }
 
-  // ۳) آنچه در ارزیابی دیده شد — سازه‌های بالاتر از «پایین»، بازنویسی ساده (کلید ناشناخته → حذف)
   const findingItems = constructs
     .filter((c) => c.level !== 'پایین' && CONSTRUCT_FINDINGS[c.key])
     .map((c) => {
@@ -120,7 +91,6 @@ export function buildFeedbackSheet({ student, formulation, plan, todayLabel = '�
     findingItems.push({ text: 'در ارزیابی فعلی الگوی خاصی که نیاز به توجه داشته باشد ثبت نشده است.', muted: true });
   }
 
-  // ۴) گام‌های بعدی — آیتم‌های هسته‌ای پلن با دلیل ساده‌شده (حداکثر ۴)
   const coreItems = (Array.isArray(plan?.items) ? plan.items : [])
     .filter((it) => it && it.priority === 'core' && PLAN_TOOL_PLAIN[it.toolKey])
     .slice(0, 4)
@@ -147,7 +117,6 @@ export function buildFeedbackSheet({ student, formulation, plan, todayLabel = '�
   };
 }
 
-/** متن سادهٔ برگه — برای «کپی متن» (و یکسان با پیش‌نمایش) */
 export function feedbackSheetTextOf(sheet) {
   const lines = [
     sheet.center,
@@ -166,9 +135,6 @@ export function feedbackSheetTextOf(sheet) {
   return lines.join('\n').trim();
 }
 
-// ───────── ارائه — مودال پیش‌نمایش + کپی + چاپ ─────────
-
-/** کپی در کلیپ‌بورد با fallback — قرینهٔ copyText (clinical-insights) */
 async function copyText(text, okMsg) {
   try {
     if (navigator.clipboard?.writeText) {
@@ -186,12 +152,10 @@ async function copyText(text, okMsg) {
   }
 }
 
-/** Escape حداقلی برای HTML چاپ */
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/** پنجرهٔ چاپ — فقط خود برگه با حداقل استایل RTL درون‌خطی (بدون وابستگی به CSS سایت) */
 function printFeedbackSheet(sheet) {
   const html = `<!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8" />
@@ -228,7 +192,6 @@ ${sheet.sections.map((s) => `<h2>${esc(s.title)}</h2><ul>${s.items.map((it) => `
   win.print();
 }
 
-/** پیش‌نمایش مودال برگه — «کپی متن» + «چاپ» و همین دو (ارسال بله عمداً وایر نشده) */
 export function openFeedbackSheetModal({ student, formulation, plan, todayLabel }) {
   const sheet = buildFeedbackSheet({ student, formulation, plan, todayLabel });
 

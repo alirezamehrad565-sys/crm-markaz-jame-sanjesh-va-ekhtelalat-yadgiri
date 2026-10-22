@@ -1,9 +1,3 @@
-/**
- * سرویس جستجوی سراسری — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// GET /api/search?q=… — جستجوی سراسری (فقط خواندنی، همه کارکنان)
-
 import type { AppHono } from '@core/shared';
 import type { SearchService } from './service';
 

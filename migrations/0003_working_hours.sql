@@ -1,11 +1,3 @@
--- مایگریشن اسکیما D1 — ساعات کاری
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- migrations/0003_working_hours.sql
---: weekly working hours per staff member (بازه‌های کاری)
--- weekday convention (Iranian week): 0 = Saturday (شنبه) … 6 = Friday (جمعه)
--- start_minute/end_minute: minutes since midnight, Tehran local time (+03:30)
--- ────────────────────────────────────────────────────────────
-
 CREATE TABLE IF NOT EXISTS working_hours (
   id           TEXT PRIMARY KEY,
   staff_id     TEXT NOT NULL REFERENCES staff(id),

@@ -1,15 +1,3 @@
-/**
- * رویدادساز — فرانت
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// case-events.js — رویدادهای پرونده (تایم‌لاین + گزارش‌نویسی جلسات) — پیش‌نویس + پیوست
-// ماژول مشترک: فرم پویا از تعریف فیلد نوع (فرم‌ساز پنل) + مودال جزئیات رویداد + لغو
-// گزارش جلسه می‌تواند «پیش‌نویس» ذخیره شود و بعداً نهایی شود؛ پیوست سند/تصویر دارد
-// RBAC ثبت: مدیر/درمانگر (سرور گارد دارد) — منشی فقط خواننده
-// جریان واحد گزارش جلسه: اگر «نوع پیش‌فرض» قابل تشخیص باشد (آخرین نوع استفاده‌شدهٔ
-// همین همکار یا صریح از تماس‌گیرنده)، مستقیم فرم پویا باز می‌شود — بدون گام انتخاب نوع؛
-// تاریخ وقوع هم پیش‌فرض همان جلسه است نه امروز. انتخابگر نوع همچنان با «تغییر نوع فرم» در دسترس است.
-
 import { api } from './api.js';
 import { fa, tehranTodayYmd, formatJalaliDateTime, formatJalaliNumeric } from './format.js';
 import { el, icon, openModal, formModal, confirmModal, toast, toastError, statusBadge } from './ui.js';
@@ -19,12 +7,10 @@ import { typeIconNode } from './case-event-icons.js';
 import { wechslerEventAnalysisSection } from './wechsler-profile.js'; // — نیم‌رخ کامل وکسلر در مودال (m133)
 const STATUS_LABELS = { draft: 'پیش‌نویس', completed: 'ثبت‌شده', pending_family: 'در انتظار خانواده', cancelled: 'لغوشده' };
 
-/** برچسب امن نام دانش‌آموز — دیگر هرگز «undefined» در عنوان مودال‌ها */
 function studentLabel(student) {
   return [student?.firstName, student?.lastName].filter(Boolean).join(' ').trim() || 'دانش‌آموز';
 }
 
-/** کلید حافظهٔ «آخرین نوع فرم استفاده‌شده» — به ازای هر همکار */
 function lastTypeKey() {
   return `cs.caseEventLastType:${session.user?.staffId ?? 'anon'}`;
 }
@@ -37,25 +23,15 @@ function writeLastTypeId(typeId) {
   try { localStorage.setItem(lastTypeKey(), typeId); } catch { /* بی‌خیال */ }
 }
 
-/** انواع فعال — با کش کوتاه در هر رندر فراخوانی می‌شود */
 export async function fetchCaseEventTypes(activeOnly = true) {
   const res = await api.get(`/api/case-events/types${activeOnly ? '?active=true' : ''}`);
   return res.data ?? [];
 }
 
-/**
- * — سه‌هدف روشن «چه کسی فرم را پر می‌کند» (دستور کاربر:
- * «فرم‌ها و رویدادها مشخص نیست توسط کی باید پر بشه — سه هدف درمانگر، خانواده، معلم»)
- * - درمانگر: گزارش جلسه/یادداشت/ابزارهای بالینی — همین‌جا در سایت پر می‌شود
- * - خانواده/معلم: چک‌لیست‌های قابل ارسال — پیام بله با لینک امن وب‌فرم
- * با دو فلگ موجود محاسبه می‌شود (بدون مایگریشن): category + familyFillable + audience
- */
 export function fillTargetOf(type) {
-  // — T5 (m150): پکیج فرم جامع خانواده — دستهٔ session اما مسیر ارسال بله برای خانواده
   if (type?.key === 'ce-comp-family-v2' && type?.familyFillable) {
     return { key: 'family', group: 'family', label: 'خانواده', badge: 'فرم جامع خانواده — با بله', badgeClass: 'badge--accent' };
   }
-  // — T7 (m150-b): پکیج فرم جامع معلم — یک لینک مستقل به‌ازای هر معلم («انتخاب معلم»)
   if (type?.key === 'ce-comp-teacher-v2' && type?.familyFillable) {
     return { key: 'teacher', group: 'teacher', label: 'معلم', badge: 'فرم جامع معلم — با بله (انتخاب معلم)', badgeClass: 'badge--warning' };
   }
@@ -71,19 +47,10 @@ export function fillTargetOf(type) {
   return { key: 'therapist', group: 'therapist', label: 'درمانگر', badge: 'فرم درمانگر — همین‌جا در سایت', badgeClass: 'badge--info' };
 }
 
-/** آیا کاربر جاری اجازهٔ ثبت رویداد دارد؟ (تصمیم ۸ — نویسنده + مدیر) */
 export function canCreateCaseEvents() {
   return Boolean(session.user && ['manager', 'therapist'].includes(session.user.role));
 }
 
-/**
- * مودال ثبت رویداد/گزارش — جریان واحد:
- * ۱) اگر defaultTypeId (یا آخرین نوع استفاده‌شدهٔ همین همکار) بین انواع فعال باشد
- * → مستقیم فرم پویا باز می‌شود (بدون گام انتخاب نوع) و تاریخ وقوع = occurredYmd.
- * ۲) وگرنه انتخابگر نوع باز می‌شود (تاریخ هم پیش‌فرض occurredYmd/امروز).
- * «تغییر نوع فرم» داخل فرم پویا، انتخابگر را دوباره باز می‌کند.
- * onSaved(event) بعد از ثبت موفق صدا می‌شود.
- */
 export async function openCaseEventForm({ student, appointmentId = null, onSaved, defaultTypeId = null, occurredYmd = null, onlyKeys = null, pickerTitle = null }) {
   let types = [];
   try {
@@ -96,7 +63,6 @@ export async function openCaseEventForm({ student, appointmentId = null, onSaved
     toast('هنوز نوعی رویداد ساخته نشده — مدیر از «فرم‌ها و پرسش‌نامه‌ها» نوع بسازد.');
     return;
   }
-  // فیلتر هدفمند (گام‌نمای مسیر ارزیابی): فقط کلیدهای خواسته‌شده + بدون «آخرین نوع»
   if (onlyKeys && onlyKeys.length > 0) {
     const allowed = new Set(onlyKeys);
     const filtered = types.filter((t) => allowed.has(t.key));
@@ -108,8 +74,6 @@ export async function openCaseEventForm({ student, appointmentId = null, onSaved
     return;
   }
 
-  // تشخیص نوع پیش‌فرض: صریح از تماس‌گیرنده → آخرین استفادهٔ همکار → هیچ
-  // کل مسیر رندر در گارد است؛ خطای UI دیگر بی‌صدا نیست و به‌صورت toast دیده می‌شود
   try {
     const preferred = types.find((t) => t.id === defaultTypeId) ?? types.find((t) => t.id === readLastTypeId()) ?? null;
     if (preferred) {
@@ -130,29 +94,19 @@ export async function openCaseEventForm({ student, appointmentId = null, onSaved
   }
 }
 
-/**
- * انتخابگر نوع (گام ۱ قدیمی) — کارت‌های بصری با آیکون وکتور
- * — گروه‌بندی سه‌هدف: «پر کردن توسط درمانگر (همین‌جا)» / «خانواده (با بله)» / «معلم (با بله)»؛
- * کارت‌های خانواده/معلم مستقیم مودال «ارسال با بله» را باز می‌کنند — دیگر فرم درمانگر با
- * فرم خانواده قاطی نیست و معلوم است هر فرم توسط کی پر می‌شود.
- * — جستجوی فرم + معرفی روایی (description) + زیرنویس هدفمند به‌جای «N فیلد»
- */
 function openTypePicker({ student, appointmentId = null, onSaved, allTypes, occurredYmd = null, pickerTitle = null }) {
   const types = allTypes ?? [];
 
-  // تقسیم سه‌هدف بر اساس fillTargetOf — ترتیب داخل هر گروه: رایج‌ترین‌ها اول
   const rank = { session: 0, checklist: 1, note: 2 };
   const ordered = [...types].sort((a, b) => (rank[a.category] ?? 3) - (rank[b.category] ?? 3));
   const byTarget = { therapist: [], family: [], teacher: [] };
   for (const t of ordered) byTarget[fillTargetOf(t).group].push(t);
 
-  // جستجوی فرم (نام سادهٔ روایی جستجو می‌شود)
   const searchInput = el('input', {
     class: 'input', type: 'search', placeholder: 'جستجوی فرم…',
     style: { marginBottom: 'var(--sp-3)', width: '100%' }, autocomplete: 'off'
   });
 
-  // تاریخ وقوع فقط برای فرم‌های درمانگر معنا دارد (فرم خانواده/معلم با ارسال بله ساخته می‌شود)
   const therapistList = byTarget.therapist;
   const dateCtl = therapistList.length > 0 ? jalaliDateInput({ value: occurredYmd || tehranTodayYmd() }) : null;
   const hiddenYmd = dateCtl?.hiddenInput ?? null;
@@ -199,7 +153,6 @@ function openTypePicker({ student, appointmentId = null, onSaved, allTypes, occu
     }
   ];
 
-  // زیرنویس هدفمند هر دسته (به‌جای «N فیلد» بی‌معنی)
   const PURPOSE = {
     session: 'فرم ثبت جلسه/سنجش — پر کردن توسط شما',
     checklist: 'پرسش‌نامهٔ رفتاری — پاسخ‌دهی با علامت زدن',
@@ -260,19 +213,13 @@ function openTypePicker({ student, appointmentId = null, onSaved, allTypes, occu
   searchInput.addEventListener('input', () => renderGrid(searchInput.value));
 }
 
-/** گام فرم پویا بر اساس فیلدهای نوع — دکمهٔ کناری «ذخیرهٔ پیش‌نویس» — نوار «تغییر نوع فرم»
- * — معرفی روایی (description) در سربرگ فرم + نوار پیشرفت فرم‌های بلند + پیش‌نویس برای چک‌لیست */
 function openDynamicForm({ student, type, occurredYmd, appointmentId, onSaved, allTypes = null }) {
   const fields = (type.fields ?? []).map((f) => fieldToForm(f));
   const target = fillTargetOf(type);
-  // برچسب صادقانه: ثبت در سایت هیچ چیزی برای کسی ارسال نمی‌کند؛
-  // ارسال چک‌لیست به خانواده/معلم فقط از مسیر مودال «ارسال با بله» انجام می‌شود.
   const submitLabel = 'ثبت روی تایم‌لاین';
-  // عنوان با وکتور + بج «چه کسی پر می‌کند»
   const titleNode = el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '7px' } },
     typeIconNode(type.category, type.icon, 18),
     `${type.title} — ${studentLabel(student)}`);
-  // پیش‌نویس برای همهٔ دسته‌ها فعال شد (چک‌لیست بلند SCARED/SNAP هم نیمه‌کاره ذخیره می‌شود)
   formModal({
     title: titleNode,
     wide: true,
@@ -288,14 +235,10 @@ function openDynamicForm({ student, type, occurredYmd, appointmentId, onSaved, a
     }
   });
 
-  // نوار زمینه بالای فرم: تاریخ وقوع + تغییر نوع فرم (وقتی انواع بیشتری هست)
-  // فوری و روی «آخرین» form-grid — نکتهٔ آموخته: setTimeout + querySelector اولین
-  // فرم (مودال در حال خروج قبلی) را می‌گرفت و نوار گم می‌شد.
   try {
     const grids = document.querySelectorAll('.modal .form-grid');
     const form = grids[grids.length - 1];
     if (form) {
-      // معرفی روایی فرم (یک تا دو جملهٔ ساده — از توضیح سیستمی نوع)
       const intro = (type.description ?? '').trim();
       if (intro) {
         form.prepend(el('div', { class: 'form-intro', style: { gridColumn: '1 / -1' } }, intro));
@@ -305,7 +248,6 @@ function openDynamicForm({ student, type, occurredYmd, appointmentId, onSaved, a
             class: 'btn btn--ghost btn--sm',
             type: 'button',
             onclick: () => {
-              // بستن همین فرم و بازگشت به انتخابگر نوع
               const overlay = form.closest('.modal-overlay');
               if (overlay) {
                 const xBtn = overlay.querySelector('.modal__head .btn--icon');
@@ -326,7 +268,6 @@ function openDynamicForm({ student, type, occurredYmd, appointmentId, onSaved, a
         changeBtn
       );
       form.prepend(bar);
-      // نوار پیشرفت برای فرم‌های بلند (۸ فیلد و بیشتر) — «۱۲ از ۴۱ پاسخ داده شد»
       const countable = (type.fields ?? []).filter((f) => f.type !== 'heading');
       if (countable.length >= 8) {
         const progressText = el('span', { style: { fontWeight: '600' } });
@@ -350,7 +291,6 @@ function openDynamicForm({ student, type, occurredYmd, appointmentId, onSaved, a
   } catch { /* تزریق نوار حیاتی نیست */ }
 }
 
-/** ثبت نهایی یا پیش‌نویس — — به‌خاطرسپاری آخرین نوع استفاده‌شده */
 async function submitEvent({ student, type, occurredYmd, appointmentId, values, draft, onSaved }) {
   const body = { eventTypeId: type.id, values: {}, draft };
   if (occurredYmd) body.occurredAt = `${occurredYmd}T12:00:00.000Z`;
@@ -371,8 +311,6 @@ async function submitEvent({ student, type, occurredYmd, appointmentId, values, 
   onSaved?.(res.data);
 }
 
-/** نگاشت فیلد تعریف نوع → فیلد formModal کیت UI
- * — scale با لنگر کلامی (scaleLabels) → چیپ انتخابی؛ heading → سربرگ بخش */
 function fieldToForm(f) {
   if (f.type === 'heading') {
     return { name: f.key, label: f.label, type: 'heading', span: 2 };
@@ -401,7 +339,6 @@ function fieldToForm(f) {
   }
 }
 
-/** بخش پیوست‌ها در مودال جزئیات — فهرست + دانلود + حذف + آپلود */
 function renderFilesSection(event, canEdit, onChanged) {
   const wrap = el('div', {});
   const listWrap = el('div', {});
@@ -488,7 +425,6 @@ function renderFilesSection(event, canEdit, onChanged) {
   return wrap;
 }
 
-/** مودال جزئیات رویداد — payload به شکل برچسب:مقدار + تحلیل چک‌لیست + پیش‌نویس/لغو */
 export function openCaseEventDetail(event, { onChanged } = {}) {
   const canEdit = Boolean(session.user && ['manager', 'therapist'].includes(session.user.role));
   const body = el('div', {});
@@ -509,7 +445,6 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
       style: { fontSize: '13px', padding: '8px 12px', marginBottom: '12px' }
     }, `امتیاز تحلیل: ${fa(event.analysis.score)} از ${fa(maxTotal)}${event.analysis.band ? ` — ${event.analysis.band}` : ''}`));
 
-    // تحلیل v2 موتور تشخیص: تفسیر خودکار + زیرمقیاس‌ها + آیتم‌های بحرانی
     const a = event.analysis;
     if (a.interpretation) {
       body.appendChild(el('div', {
@@ -548,7 +483,6 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
   }
 
   const payload = event.payload ?? {};
-  // m133 — خروجی JSON موتور وکسلر حالا خودش این‌جا رندر می‌شود (نیم‌رخ کامل پیش از فهرست payload)
   const hasEngineOutput = 'engine_output' in payload && String(payload['engine_output']?.value ?? '').length > 0;
   let wEng = null;
   if (hasEngineOutput) {
@@ -559,7 +493,6 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
   }
   const keys = Object.keys(payload).filter((k) => k !== 'engine_output' && payload[k] && String(payload[k].value ?? '').length > 0);
   if (wEng) {
-    // نیم‌رخ کامل (شاخص‌ها + فرضیه‌ها + حوزه‌های ضعیف + پرچم‌های روایی) بالای فهرست payload
     const wSection = wechslerEventAnalysisSection(wEng);
     if (wSection) body.appendChild(wSection);
     body.appendChild(el('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' } },
@@ -633,7 +566,6 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
               }
             }, 'لغو رویداد')
         : null,
-      // حذف رویداد (فقط مدیر — دستور کاربر)
       session.user?.role === 'manager'
         ? (close) =>
             el('button', {
@@ -662,19 +594,6 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
   });
 }
 
-// ───────── موتور تشخیص و مداخله: ارسال چک‌لیست با یک کلیک ─────────
-/**
- * مودال «ارسال چک‌لیست» — درخواست اصلی کاربر:
- * «با یه دکمه چک‌لیست سیاهه رفتاری اخنباخ یا چک‌لیست بیش فعالی در اختیار خانواده
- * قرار میگیره تو بله و نتیجهش برمیگرده به سایت»
- * جریان: انتخاب قالب (پیشنهاد هوشمند بر اساس برچسب‌های دانش‌آموز) → گیرنده (خانواده/معلم)
- * → یک کلیک: رویداد «در انتظار پاسخ» ساخته + پیام بله با لینک امن وب‌فرم ارسال می‌شود.
- * — T7 (m150-b): فرم‌های معلمی (پکیج فرم جامع معلم/چک‌لیست معلم) «انتخاب معلم» دارند:
- *   انتخاب معلم ثبت‌شده یا افزودن معلم تازه → رویداد لنگر مستقل + لینک مستقل به‌ازای همان معلم
- *   («چند معلم = چند لینک مستقل»)؛ پیام بله با قالب معلم‌محور می‌رود و اگر چت کلاس متصل نباشد
- *   لینک کپی‌شدنی همچنان صادر می‌شود. پاسخ هر معلم با نامش («پاسخ معلم: X») روی پرونده می‌نشیند.
- * onSent(event, sendResult) بعد از ارسال موفق صدا می‌شود.
- */
 export async function openChecklistSendModal({ student, typeId = null, onSent }) {
   if (!canCreateCaseEvents()) {
     toast('ثبت چک‌لیست برای نقش شما فعال نیست');
@@ -687,7 +606,6 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
     toastError(err);
     return;
   }
-  // — T7: پکیج فرم جامع معلم هم قابل ارسال است
   const checklists = suggestions.filter(
     (s) => s.type.familyFillable && (s.type.category === 'checklist' || s.type.key === 'ce-comp-family-v2' || s.type.key === 'ce-comp-teacher-v2')
   );
@@ -696,7 +614,6 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
     return;
   }
 
-  // — T7: معلم‌های ثبت‌شدهٔ پرونده برای «انتخاب معلم» (خطا → فهرست خالی + افزودن تازه)
   let teachers = [];
   try {
     teachers = (await api.get(`/api/students/${student.id}/teachers`)).data ?? [];
@@ -704,7 +621,6 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
 
   const preselected = checklists.find((s) => s.type.id === typeId) ?? null;
   const matchedCount = checklists.filter((s) => s.score > 0).length;
-  // برچسب‌های متنی تمیز (بدون ایموجی/ستاره؛ پیشنهادها با پسوند «مناسب» مشخص‌اند)
   const typeOptions = checklists.map((s) => ({
     value: s.type.id,
     label:
@@ -712,7 +628,6 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
       (s.score > 0 ? ` — مناسب: ${s.matched.map((m) => m.name).join('، ')}` : '')
   }));
 
-  /** آیا قالب انتخابی/مخاطب، جریان معلم است؟ — toggling فیلدهای معلم */
   const isTeacherFlow = (typeIdVal, audienceVal) => {
     const chosen = checklists.find((s) => s.type.id === typeIdVal);
     if (!chosen) return false;
@@ -846,7 +761,6 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
           toast('همین حالا ارسال شده — برای یادآوری مجدد یک دقیقه بعد تلاش کنید', 'warning');
         }
       } catch (err) {
-        // چت کلاس متصل نیست — لینک کپی‌شدنی معلم همچنان صادر می‌شود (مسیر T7)
         if (!teacherName) throw err;
         const issued = await api.post(`/api/case-events/${created.data.id}/teacher-link`, {
           teacher_name: teacherName,
@@ -856,14 +770,12 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
         toast('چت کلاس در بله متصل نیست — لینک فرم آماده است؛ آن را کپی کنید و برای معلم بفرستید', 'warning');
       }
       onSent?.(created.data, send?.data ?? { sent: 0, targets: [], link });
-      // پنل نتیجه: لینک مستقل این معلم برای کپی (به‌خصوص وقتی چت متصل نیست)
       if (teacherName && link) openTeacherLinkResult({ link, teacherName, student });
       return true;
     }
   });
 }
 
-/** — T7: پنل نتیجهٔ «لینک مستقل معلم» — کپی با یک کلیک */
 function openTeacherLinkResult({ link, teacherName, student }) {
   const copyBtn = el('button', { class: 'btn btn--soft btn--sm' }, icon('copy', 15), 'کپی لینک');
   copyBtn.addEventListener('click', async () => {

@@ -1,10 +1,3 @@
-/**
- * تست‌های e2e — todos
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-todos.test.ts — فاز ۴ (کارهای داخلی منشی↔مدیر): قواعد نقش §9، self-task 400،
-// مالکیت ویرایش/تکمیل، soft delete §28، badge شمارش‌ها، audit هم‌تراکنش و قالب اعلان todo_assigned
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, Api, asRole, MANAGER_ID, SECRETARY_ID, ALI_ID } from '../../test/harness';
 
@@ -93,7 +86,6 @@ describe('فاز ۴ — ساخت کار و قواعد نقش §9', () => {
     expect(t.assignerId).toBe(MANAGER_ID);
     expect(listBody(await m.get('/api/todos?box=inbox')).data.some((x) => x.id === t.id)).toBe(true);
     expect(listBody(await m.get('/api/todos?box=outbox')).data.some((x) => x.id === t.id)).toBe(true);
-    // کار شخصی اعلان todo_assigned نمی‌سازد (اعلان به خودی بی‌معناست)
     expect(A.sql.prepare(`SELECT id FROM notifications WHERE template = 'todo_assigned'`).all().length).toBe(0);
   });
 
@@ -135,7 +127,6 @@ describe('فاز ۴ — صندوق‌ها و badge', () => {
     expect(inbox.data.some((t) => t.id === mine.id)).toBe(true);
     expect(inbox.data.every((t) => t.assigneeId === SECRETARY_ID)).toBe(true);
 
-    // صندوق‌های معکوس خالی‌اند
     expect(listBody(await m.get('/api/todos?box=inbox')).data.some((t) => t.id === mine.id)).toBe(false);
     expect(listBody(await s.get('/api/todos?box=outbox')).data.some((t) => t.id === mine.id)).toBe(false);
   });
@@ -152,8 +143,6 @@ describe('فاز ۴ — صندوق‌ها و badge', () => {
     expect((await s.post(`/api/todos/${done.id}/complete`)).status).toBe(200); // انجام‌شده از badge خارج
 
     const inbox = listBody(await s.get('/api/todos?box=inbox'));
-    // urgent = فوری آینده + فوریِ عقب‌افتاده؛ overdue = عقب‌افتادهٔ عادی + فوریِ عقب‌افتاده؛
-    // attention = شمار یکتا: فوری آینده + عقب‌افتادهٔ عادی + فوریِ عقب‌افتاده = ۳ (انجام‌شده حذف)
     expect(inbox.badge).toEqual({ urgent: 2, overdue: 2, attention: 3 });
   });
 });
@@ -168,7 +157,6 @@ describe('فاز ۴ — ویرایش inline و مالکیت', () => {
     const updated = todoOf(res);
     expect(updated.title).toBe('عنوان تازه');
     expect(updated.priority).toBe('urgent');
-    // پایان روز تهران ۱۴ اکتبر = 2026-10-14T20:29:59.999Z
     expect(updated.dueAt).toBe('2026-10-14T20:29:59.999Z');
     const audits = auditRows(A, t.id).map((r) => r.action);
     expect(audits).toEqual(['todo.created', 'todo.updated']);
@@ -248,7 +236,6 @@ describe('فاز ۴ — حذف نرم §28', () => {
     const again = await m.patch(`/api/todos/${t.id}`, { deleted: true });
     expect(again.status).toBe(404);
 
-    // رکورد فیزیکی سر جایش است — soft delete
     const row = A.sql.prepare('SELECT deleted_at, status FROM todos WHERE id = ?').get(t.id) as { deleted_at: string; status: string };
     expect(row.status).toBe('pending');
     expect(row.deleted_at).not.toBeNull();
@@ -289,7 +276,6 @@ describe('فاز ۴ — چک‌لیست کار', () => {
     const listed = listBody(await m.get('/api/todos?box=outbox')).data.find((x) => x.id === t.id);
     expect(listed?.checklist?.[0]).toEqual({ text: 'مورد یک', done: true });
     expect(listed?.checklist?.[1]).toEqual({ text: 'مورد دو', done: false });
-    // بازگردانی وضعیت توسط ثبت‌کننده هم مجاز
     expect((await m.post(`/api/todos/${t.id}/checklist`, { index: 0, done: false })).status).toBe(200);
   });
 
@@ -327,7 +313,6 @@ describe('فاز ۴ — چک‌لیست کار', () => {
     const m = await asRole(A, 'manager');
     const s = await asRole(A, 'secretary');
     const t = await createTodo(m, { checklist: ['الف', 'ب'] });
-    // مسئول کار حق جایگزینی کامل ندارد (ویرایش مالِ ثبت‌کننده است)
     expect(
       (await s.patch(`/api/todos/${t.id}`, { checklist: [{ text: 'دستکاری', done: true }] })).status
     ).toBe(403);

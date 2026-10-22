@@ -1,16 +1,7 @@
-/**
- * نمای نیازهای ویژه
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/special-needs.js — فاز ۷: نیازهای ویژه (§12) — گرید مدرسه×پایه + «نیاز به توجه دارد»
-// فقط منشی/مدیر (nav + گارد سرور). دادهٔ خام از گرید، متریک‌ها سمت کلاینت سوییچ می‌شوند.
-
 import { api, qs } from '../api.js';
 import { fa, STUDENT_GRADES, gradeLabel } from '../format.js';
 import { el, icon, openModal, statusBadge, dataTable, loadingState, skeletonState, emptyState, errorState } from '../ui.js';
 import { session } from '../state.js';
-
-// ─── قرارداد یکسان با pure سمت سرور ───
 
 const TYPE_LABELS = {
   dyslexia: 'نارساخوانی (دیس‌لکسی)',
@@ -42,7 +33,6 @@ const METRICS = [
   { key: 'attention', label: 'نیازمند توجه' }
 ];
 
-// وضعیت ماژول — بین رندرها حفظ می‌شود (فیلترها + متریک فعال)
 let state = { schoolId: '', grade: '', severity: '', metric: 'count' };
 
 export async function renderSpecialNeeds(container) {
@@ -68,8 +58,6 @@ export async function renderSpecialNeeds(container) {
 
   const canEdit = session.user && ['manager', 'secretary'].includes(session.user.role);
 
-  // ─── KPIها ───
-
   const sev = grid.overall.bySeverity ?? {};
   const kpis = el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-5)' } },
     kpi('شناسایی‌شده', fa(grid.overall.special), `از ${fa(grid.overall.total)} دانش‌آموز فعال`, 'primary'),
@@ -78,8 +66,6 @@ export async function renderSpecialNeeds(container) {
     kpi('متوسط', fa(sev.moderate ?? 0), 'شدت نیاز ویژه', 'accent'),
     kpi('شدید', fa(sev.severe ?? 0), 'شدت نیاز ویژه', 'error')
   );
-
-  // ─── فیلترها ───
 
   const select = (label, value, options, onchange) => {
     const sel = el('select', { class: 'input', onchange: (e) => onchange(e.target.value) },
@@ -110,12 +96,8 @@ export async function renderSpecialNeeds(container) {
     )
   );
 
-  // ─── heatmap جدول ───
-
   const maxVal = maxCellMetric(grid);
   const heatTable = buildHeatmap(grid, maxVal);
-
-  // ─── «نیاز به توجه دارد» ───
 
   const attentionCard = buildAttentionCard(grid.attention, canEdit, container);
 
@@ -136,8 +118,6 @@ export async function renderSpecialNeeds(container) {
     attentionCard
   );
 }
-
-// ─────────────── اجزا ───────────────
 
 function kpi(label, value, hint, tone) {
   return el('div', { class: 'kpi' },
@@ -226,7 +206,6 @@ function buildHeatmap(grid, maxVal) {
   );
 }
 
-/** کلیک روی سلول → تفکیک همان مدرسه (drill-down با حفظ Context) */
 function cellDetail(schoolName, schoolId, grade) {
   if (!schoolId) return;
   openModal({
@@ -298,7 +277,6 @@ function buildAttentionCard(attention, canEdit, container) {
             el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' } },
               a.specialNeedType ? el('span', { class: 'badge badge--primary' }, TYPE_LABELS[a.specialNeedType] ?? a.specialNeedType) : null,
               a.specialNeedSeverity ? el('span', { class: `badge badge--${SEVERITY_TONES[a.specialNeedSeverity] ?? 'neutral'}` }, SEVERITY_LABELS[a.specialNeedSeverity] ?? a.specialNeedSeverity) : null,
-              // چیپ وضعیت پرونده حذف شد (نردبان «تحت پایش/…» کنار گذاشته شد)
               ...a.reasons.map((r) => el('span', { class: 'badge badge--warning' }, REASON_LABELS[r] ?? r))
             )
           ),
@@ -315,4 +293,3 @@ function buildAttentionCard(attention, canEdit, container) {
     el('div', { class: 'card__body' }, list)
   );
 }
-

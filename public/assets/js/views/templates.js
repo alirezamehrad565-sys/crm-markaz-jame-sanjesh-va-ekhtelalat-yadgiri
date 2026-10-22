@@ -1,19 +1,3 @@
-/**
- * نمای قالب‌ساز جلسات مداخله (مسیر بالینی)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// templates.js — تب مستقل «مدیریت قالب‌ها» در سایدبار (خواست کاربر:
-// «مدیریت قالب ها رو بکن یه تب جدا تو ساید بار»)
-// محتوا: فهرست قالب‌های مسیر + ساخت/ویرایش با فرم‌ساز پروتکل جلسه به جلسه —
-// هر جلسه: عنوان + تمرین/تکلیف/بازی/دستورالعمل
-// نوار «امتیاز محتوای من» حذف شد (امتیازدهی فقط در کارکنان + داشبورد)
-// از clinical-insights.js منتقل شد؛ «ساخت مسیر از قالب» در تب تفسیر بالینی پابرجاست.
-// (۱) ورودی «کلید قالب (لاتین)» حذف شد — کلید هنگام ذخیره خودکار تولید می‌شود؛
-// (۲) دکمهٔ «از بانک تمرین» در فیلد تمرین هر جلسه — انتخابگر بانک تمرین (exercise-pick.js).
-// دکمهٔ «افزودن رویداد» در فیلد رویداد (فرم/پرسش‌نامه) هر جلسه — انتخابگر رویدادساز
-// (event-pick.js؛ خواست کاربر: «منظورم از دکمه افزودن رویداد همون افزودن فرم و
-// پرسشنامه به قالب جلسات مداخله است») — انواع آیتم از clinical-content.js (تک‌منبع).
-
 import { api } from '../api.js';
 import { el, icon, toast, toastError, confirmModal, openModal, emptyState, skeletonState, errorState } from '../ui.js';
 import { fa } from '../format.js';
@@ -24,8 +8,6 @@ import { SESSION_ITEM_TYPES } from '../clinical-content.js'; // — تک‌من�
 
 const PROTOCOL_LABELS = { rehab: 'توانبخشی', learning: 'اختلال یادگیری', slow_learner: 'دیرآموز', mental_ot: 'کاردرمانی ذهنی' };
 
-// کلید قالب خودکار تولید می‌شود (خواست کاربر: حذف ورودی «کلید قالب (لاتین)»)
-// الگو: tpl-<۲ رقम سال میلادی><۳ رقم شمارهٔ روز سال>-<۶ نویسهٔ تصادفی> — با الگوی KEY_RE سرور سازگار است
 const KEY_RE = /^[a-z0-9][a-z0-9-]{3,59}$/;
 function autoTemplateKey() {
   const now = new Date();
@@ -36,18 +18,15 @@ function autoTemplateKey() {
   return `tpl-${stamp}-${rand}`;
 }
 
-// کلاس نشان رنگی هر نوع آیتم (رویداد → آبی info)
 const ITEM_BADGE_CLASS = { exercise: 'path-session__item--exercise', homework: 'path-session__item--homework', game: 'path-session__item--game', event: 'path-session__item--event', instruction: 'path-session__item--instruction' };
 
 function canUse() {
   return Boolean(session.user && ['manager', 'therapist'].includes(session.user.role));
 }
 
-/** مودال ویرایشگر قالب — مشخصات + سازندهٔ پروتکل جلسه به جلسه (از ) */
 function openEditor(tpl, targets, { onSaved }) {
   const isNew = !tpl;
 
-  // ── سازندهٔ بلوک یک جلسهٔ پروتکل ──
   const sessionBlocks = el('div', { class: 'tpl-sessions' });
   const renumber = () => {
     [...sessionBlocks.querySelectorAll('.tpl-session__num')].forEach((n, i) => { n.textContent = `جلسهٔ ${fa(i + 1)}`; });
@@ -56,8 +35,6 @@ function openEditor(tpl, targets, { onSaved }) {
     const titleInput = el('input', { class: 'input', placeholder: 'مثلاً: ارزیابی پایهٔ خواندن و تنظیم هدف' });
     titleInput.value = data.title ?? '';
     const itemInputs = {};
-    // m143 — آکاردئون: سربرگ جلسه (شماره + عنوان زنده + فلش)؛ فیلدها فقط در حالت باز —
-    // قالب ۸ جلسه‌ای دیگر ۴۰ تکست‌اریای خالی نمی‌سازد و اسکرول مودال مهار می‌شود
     const ttlPreview = el('span', { class: 'tpl-session__ttl' }, titleInput.value.trim() || 'بدون عنوان');
     titleInput.addEventListener('input', () => { ttlPreview.textContent = titleInput.value.trim() || 'بدون عنوان'; });
     const block = el('div', { class: `tpl-session${open ? ' is-open' : ''}` },
@@ -77,8 +54,6 @@ function openEditor(tpl, targets, { onSaved }) {
           ta.value = (data.items ?? []).find((it) => it.type === t.key)?.text ?? '';
           itemInputs[t.key] = ta;
           const field = el('div', { class: 'field span-2' });
-          // فیلد «تمرین»: دکمهٔ «از بانک تمرین» کنار برچسب — انتخاب از بانک به متن اضافه می‌شود
-          // فیلد «رویداد (فرم/پرسش‌نامه)»: دکمهٔ «افزودن رویداد» کنار برچسب — انتخاب از رویدادساز
           if (t.key === 'exercise') {
             field.appendChild(el('div', { class: 'field__labelrow' },
               el('label', { class: 'field__label' }, t.label),
@@ -102,8 +77,6 @@ function openEditor(tpl, targets, { onSaved }) {
     renumber();
   };
 
-  // ── مشخصات قالب ──
-  // ورودی «کلید قالب (لاتین)» حذف شد؛ کلید هنگام ذخیره خودکار ساخته می‌شود
   const titleInput = el('input', { class: 'input', placeholder: 'مثلاً: توانبخشی — چرخهٔ هشت‌جلسه‌ای خواندن' });
   titleInput.value = tpl?.title ?? '';
   const descTa = el('textarea', { class: 'textarea', rows: 2, placeholder: 'توضیح کوتاه قالب' });
@@ -117,7 +90,6 @@ function openEditor(tpl, targets, { onSaved }) {
     ...targets.map((t) => el('option', { value: t.key }, t.title)));
   targetSel.value = tpl?.targetKey ?? '';
 
-  // m143 — دکمهٔ افزودن جلسه (سربرگ بخش + پایان فهرست، هر دو همین دکمه‌اند)
   const addSessionBtn = el('button', { class: 'btn btn--soft btn--sm', type: 'button',
     onclick: () => addSessionBlock() }, icon('plus', 13), 'افزودن جلسه');
 
@@ -132,14 +104,12 @@ function openEditor(tpl, targets, { onSaved }) {
       'پروتکل جلسه به جلسه',
       addSessionBtn),
     sessionBlocks,
-    // m143 — دکمهٔ افزودن جلسه هم در پایان فهرست (روی موبایل دیگر تا بالای مودال اسکرول نمی‌شود)
     el('div', { class: 'tpl-sessions__add' },
       el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => addSessionBlock() },
         icon('plus', 13), 'افزودن جلسه')),
     el('div', { class: 'cell-sub' }, 'هر جلسه: عنوان + تمرین/تکلیف/بازی/فرم/دستورالعمل — برای ویرایش، روی سربرگ جلسه بزنید. هنگام ساخت مسیر از قالب، جلسات به‌صورت برنامه‌ریزی‌شده روی مسیر کپی می‌شوند.')
   );
 
-  // m143 — دکمهٔ ذخیره در حین ثبت قفل می‌شود + دکمهٔ انصراف هم‌سبک سایر مودال‌ها
   let closeModal = null;
   const saveBtn = el('button', { class: 'btn btn--primary', type: 'button', onclick: onSave }, 'ذخیره قالب');
   async function onSave() {
@@ -157,7 +127,6 @@ function openEditor(tpl, targets, { onSaved }) {
     saveBtn.disabled = true;
     try {
       if (isNew) {
-        // کلید خودکار؛ در تعارض (کلید تکراری نادر) تا ۳ بار با کلید تازه تلاش می‌شود
         let saved = false, lastErr = null;
         for (let attempt = 0; attempt < 3 && !saved; attempt += 1) {
           const key = autoTemplateKey();
@@ -231,7 +200,6 @@ export async function renderTemplates(container) {
       icon('plus', 16), 'قالب جدید')
   );
 
-  // ── فهرست قالب‌ها ──
   const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
     ...templates.map((t) => {
       const itemTypesCount = (t.sessions ?? []).reduce((sum, s) => sum + (s.items?.length ?? 0), 0);

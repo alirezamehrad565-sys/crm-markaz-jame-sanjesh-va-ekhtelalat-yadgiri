@@ -1,23 +1,7 @@
-/**
- * فرانت لیست انتظار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// waitlist.js — فاز W: لیست انتظار (لیست پشت‌نوبتی‌های مرکز)
-// ماژول مستقل شد (NAV «لیست انتظار» #/waitlist)؛ دیگر تب ماژول دانش‌آموزان نیست —
-// «لیست دانش‌آموز فعال مرکز با یه لیست دیگه تو این فلو ادغام شده که اونم باید جدا کنیم»
-// قواعد UX:
-// * ردیف urgent رنگی؛ ستون‌های «آخرین تماس» و «مدت انتظار»
-// * اکشن‌های inline متناسب با وضعیت (تماس/نوبت بده/رد/نیامد/انصراف)
-// * ترتیب دستی با دکمه‌های بالا/پایین (همان manual_order سرور) + بازگشت به ترتیب خودکار
-// * هر تغییر رویداد window «waitlist:changed» را می‌فرستد (badge منو + ویجت بورد)
-
 import { api } from './api.js';
-// بازطراحی UI: اکشن‌های فشرده (منوی سرریز ⋯) + ادغام ستون‌های «آخرین تماس/مدت انتظار»
 import { el, icon, formModal, confirmModal, openModal, toast, toastError, dataTable, emptyState, skeletonState, phoneCell, rowMenu } from './ui.js';
 import { fa, addDaysYmd, relativeDayLabel, tehranTodayYmd, tehranYmdMinuteToIso, tehranYmdOfIso, timeToMinute, gridTimes, toUtcIso } from './format.js';
 import { session } from './state.js'; // — دسترسی نقش‌محور (درمانگر: فقط افزودن)
-
-// ─────────────── برچسب‌ها ───────────────
 
 export const WL_STATUS_LABELS = {
   waiting: 'در انتظار',
@@ -51,12 +35,10 @@ function wlBadge(status) {
   return el('span', { class: `badge badge--${WL_BADGE_TONES[status] ?? 'neutral'}` }, WL_STATUS_LABELS[status] ?? status);
 }
 
-/** وضعیت‌های باز — اکشن‌ها فقط برای این‌ها معنا دارد */
 function isOpen(entry) {
   return entry.status === 'waiting' || entry.status === 'called';
 }
 
-/** «مدت انتظار» — برای ورودی‌های باز: روزهای گذشته از ثبت */
 function waitDurationLabel(entry, nowMs = Date.now()) {
   if (!isOpen(entry)) return '—';
   const created = toUtcIso(entry.createdAt).getTime();
@@ -76,8 +58,6 @@ function dispatchChanged() {
   window.dispatchEvent(new CustomEvent('waitlist:changed'));
 }
 
-// ─────────────── داده‌های پایه فرم‌ها ───────────────
-
 let metaCache = null;
 async function ensureMeta() {
   if (metaCache) return metaCache;
@@ -94,11 +74,8 @@ async function ensureMeta() {
   return metaCache;
 }
 
-// ─────────────── فرم افزودن متقاضی ───────────────
-
 async function openAddModal(container, rerender, prefillName = '') {
   const meta = await ensureMeta();
-  // پل سنجش → لیست انتظار: نام کامل از کارت «نیازمند پیگیری» سنجش روزانه پیش‌پُر می‌شود
   const prefillParts = prefillName.trim().split(/\s+/);
   const prefillFirst = prefillParts.length > 1 ? prefillParts.slice(0, -1).join(' ') : prefillName.trim();
   const prefillLast = prefillParts.length > 1 ? prefillParts[prefillParts.length - 1] : '';
@@ -111,7 +88,6 @@ async function openAddModal(container, rerender, prefillName = '') {
       : {},
     fields: [
       {
-        // پیوند پروندهٔ موجود (جایگزین تیک حذف‌شدهٔ فرم دانش‌آموز): مشخصات از خود پرونده پر می‌شود
         name: 'student_id',
         label: 'پروندهٔ دانش‌آموز موجود (اختیاری — سرچ‌دار)',
         type: 'searchable-select',
@@ -125,7 +101,6 @@ async function openAddModal(container, rerender, prefillName = '') {
       { name: 'national_id', label: 'کد ملی (اختیاری — برای ساخت پرونده لازم می‌شود)', maxlength: 10, ltr: true },
       { name: 'birth_date', label: 'تاریخ تولد (اختیاری)', type: 'jalali-date' },
       {
-        // دراپ‌داون سرچ‌دار (لیست مدارس بلند است)
         name: 'school_id',
         label: 'مدرسه (اختیاری — سرچ‌دار)',
         type: 'searchable-select',
@@ -176,9 +151,6 @@ async function openAddModal(container, rerender, prefillName = '') {
   });
 }
 
-// ─────────────── فرم ویرایش ورودی ───────────────
-
-/** ویرایش کامل متقاضی — همان فیلدهای ثبت + PATCH — برای همهٔ وضعیت‌ها باز است */
 async function openEditModal(entry, rerender) {
   const meta = await ensureMeta();
   formModal({
@@ -204,7 +176,6 @@ async function openEditModal(entry, rerender) {
       { name: 'national_id', label: 'کد ملی (اختیاری — برای ساخت پرونده لازم می‌شود)', maxlength: 10, ltr: true },
       { name: 'birth_date', label: 'تاریخ تولد (اختیاری)', type: 'jalali-date' },
       {
-        // دراپ‌داون سرچ‌دار (لیست مدارس بلند است)
         name: 'school_id',
         label: 'مدرسه (اختیاری — سرچ‌دار)',
         type: 'searchable-select',
@@ -254,7 +225,6 @@ async function openEditModal(entry, rerender) {
   });
 }
 
-/** — ثبت «نیامد» با پیام شفاف (پیگیری خودکار ساخته می‌شود) */
 async function openNoShowModal(entry, rerender) {
   const ok = await confirmModal({
     title: `ثبت عدم مراجعه — ${entry.firstName} ${entry.lastName}`,
@@ -272,7 +242,6 @@ async function openNoShowModal(entry, rerender) {
   }
 }
 
-/** — ثبت «انصراف» با پیام شفاف */
 async function openCancelModal(entry, rerender) {
   const ok = await confirmModal({
     title: `ثبت انصراف — ${entry.firstName} ${entry.lastName}`,
@@ -290,7 +259,6 @@ async function openCancelModal(entry, rerender) {
   }
 }
 
-/** — بازگشت خروجِ اشتباه به صف انتظار (رد/نیامد/منصرف → در انتظار) */
 function openReopenModal(entry, rerender) {
   formModal({
     title: `بازگشت به صف انتظار — ${entry.firstName} ${entry.lastName}`,
@@ -310,10 +278,6 @@ function openReopenModal(entry, rerender) {
   });
 }
 
-/**
- * — حذف کامل ورودی لیست انتظار (ثبت اشتباه/تکراری).
- * سرور soft-delete می‌کند (audit می‌ماند) — از همهٔ لیست‌ها پاک می‌شود؛ برگشت ندارد.
- */
 async function openDeleteModal(entry, rerender) {
   const ok = await confirmModal({
     title: `حذف از لیست انتظار — ${entry.firstName} ${entry.lastName}`,
@@ -331,8 +295,6 @@ async function openDeleteModal(entry, rerender) {
     toastError(err);
   }
 }
-
-// ─────────────── فرم‌های اکشن ردیف ───────────────
 
 function openCallModal(entry, rerender) {
   formModal({
@@ -372,7 +334,6 @@ function openRejectModal(entry, rerender) {
   });
 }
 
-/** تبدیل به نوبت — همان قرارداد فرم «نوبت جدید» با پروندهٔ خودکار */
 async function openScheduleModal(entry, rerender) {
   const meta = await ensureMeta();
   const tomorrow = addDaysYmd(tehranTodayYmd(), 1);
@@ -386,7 +347,6 @@ async function openScheduleModal(entry, rerender) {
         label: 'درمانگر',
         type: 'select',
         required: true,
-        // نوبت فقط به درمانگر داده می‌شود (مدیر/منشی ارائه‌دهندهٔ جلسه نیستند)
         value: meta.staff.find((s) => s.role === 'therapist' && s.active !== false)?.id,
         options: meta.staff.filter((s) => s.active !== false && s.role === 'therapist').map((s) => ({ value: s.id, label: `${s.fullName ?? s.full_name ?? ''}` }))
       },
@@ -455,18 +415,14 @@ async function openScheduleModal(entry, rerender) {
   });
 }
 
-/** تاریخ جلالی ذخیره‌شده (YYYY-MM-DD) + «HH:MM» → ISO UTC — همان قرارداد appointments */
 function toIso(ymd, hhmm) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd ?? '') || !/^\d{2}:\d{2}$/.test(hhmm ?? '')) return null;
   return tehranYmdMinuteToIso(ymd, timeToMinute(hhmm));
 }
 
-/** گزینه‌های ساعت روی شبکه ۱۵ دقیقه‌ای */
 function gridTimeOptions() {
   return gridTimes('06:00', '22:00').map((t) => ({ value: t, label: t }));
 }
-
-// ─────────────── ترتیب دستی (بالا/پایین) ───────────────
 
 async function moveRow(entry, direction, container, rerender) {
   const res = await api.get('/api/waitlist');
@@ -503,8 +459,6 @@ async function resetOrder(rerender) {
   }
 }
 
-// ─────────────── رندر اصلی ───────────────
-
 export async function renderWaitlist(container, initialQuery = '', prefillName = '') {
   container.replaceChildren(skeletonState('table', 5));
 
@@ -532,7 +486,6 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
       'select',
       { class: 'select', style: { width: 'auto' }, onchange: (e) => { state.status = e.target.value; renderList(); } },
       el('option', { value: '' }, 'همه وضعیت‌ها'),
-      // «پذیرفته شد» دیگر در فهرست نیست: با پذیرش، ورودی soft delete می‌شود و از لیست پاک است
       Object.entries(WL_STATUS_LABELS).filter(([value]) => value !== 'admitted')
         .map(([value, label]) => el('option', { value, selected: value === state.status }, label))
     );
@@ -555,7 +508,6 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
       }
     });
     const addBtn = el('button', { class: 'btn btn--primary btn--sm', onclick: () => openAddModal(container, rerender, prefillName) }, icon('plus', 16), 'متقاضی جدید');
-    // «ترتیب خودکار» و جابه‌جایی دستی ابزار دفتر است؛ درمانگر دسترسی ندارد
     const isOfficeUser = session.user?.role === 'manager' || session.user?.role === 'secretary';
     const autoBtn = isOfficeUser
       ? el('button', { class: 'btn btn--ghost btn--sm', onclick: () => resetOrder(rerender) }, icon('refresh', 16), 'ترتیب خودکار')
@@ -569,7 +521,6 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
           render: (r) => el('div', {},
             el('strong', {}, `${r.firstName} ${r.lastName}`),
             r.serviceType ? el('div', { class: 'muted', style: { fontSize: '12px' } }, r.serviceType) : null,
-            // لینک پروندهٔ متصل
             r.studentId
               ? el('button', {
                   class: 'linklike', style: { fontSize: '12px', cursor: 'pointer', background: 'none', border: 'none', color: 'var(--primary)', padding: '0' },
@@ -578,7 +529,6 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
               : el('div', { class: 'muted', style: { fontSize: '11px' } }, 'بدون پرونده')
           )
         },
-        // باجت تماس سیستمی کنار تلفن ولیّ در لیست انتظار
         { key: 'phone', label: 'تلفن ولی', render: (r) => phoneCell(r.phone, `تماس با ولیّ ${r.name ?? ''} — ${fa(r.phone)}`) },
         { key: 'source', label: 'منبع', render: (r) => WL_SOURCE_LABELS[r.source] ?? r.source },
         {
@@ -587,7 +537,6 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
           render: (r) => (r.priority === 'urgent' ? el('span', { class: 'badge badge--danger' }, 'فوری') : el('span', { class: 'badge' }, 'معمولی'))
         },
         { key: 'status', label: 'وضعیت', render: (r) => wlBadge(r.status) },
-        // «مدت انتظار» + «آخرین تماس» در یک ستون دوخطی (کاهش عرض جدول)
         {
           key: 'follow',
           label: 'انتظار / تماس',
@@ -601,8 +550,6 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
             );
           }
         },
-        // درمانگر بدون ستون عملیات (فقط افزودن) — دفتر همهٔ اکشن‌ها را دارد
-        // عرض ثابت ستون عملیات: سلول با اکشن‌های فشرده دیگر جدول را نمی‌شکند
         ...(isOfficeUser ? [{
           key: 'actions',
           label: 'عملیات',
@@ -622,7 +569,6 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
       rowClass: (r) => (r.priority === 'urgent' && isOpen(r) ? 'wl-row--urgent' : null)
     });
 
-    // راهنمای وضعیت‌ها — فشرده‌سازی به یک خط کوتاه (خواست کاربر: کاهش راهنمایی‌ها)
     const legend = el('div', { class: 'muted', style: { fontSize: '12px', margin: '0 4px', lineHeight: 1.9 } },
       'چرخهٔ وضعیت: ',
       el('strong', {}, 'در انتظار'), ' ← ',
@@ -630,29 +576,21 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
       el('strong', {}, 'نوبت داده شد'),
       ' · پذیرش = خروج خودکار از لیست'
     );
-    // عنوان تکراری حذف شد (سربرگ صفحه «لیست انتظار» را دارد) — فیلترها + اکشن‌ها
     const toolbar = el('div', { class: 'week-bar' },
       statusSel, prioritySel, searchInput,
       el('div', { class: 'spacer' }),
       autoBtn, addBtn
     );
 
-    // راهنمای دسترسی درمانگر — کوتاه‌شده
     const roleNote = isOfficeUser
       ? null
       : el('div', { class: 'alert alert--info', style: { marginBottom: 'var(--sp-3)' } },
           icon('info', 17),
           el('span', {}, 'دسترسی شما: فقط ثبت متقاضی جدید.'));
 
-    // roleNote فقط برای درمانگر است؛ null هرگز به DOM نرود (درس: null → متن "null")
     container.replaceChildren(...[roleNote, toolbar, legend, table].filter(Boolean));
   }
 
-  /**
-   * — اکشن‌های فشردهٔ ردیف: ۱–۲ اکشن اصلی inline + بقیه در منوی سرریز ⋯ (rowMenu).
-   * قبلاً تا ۹ دکمه در یک سلول رندر می‌شد و ردیف‌ها چندخطی و بهم‌ریخته می‌شدند.
-   * قواعد وضعیت همان است — فقط چیدمان فشرده شد.
-   */
   function wlActions(r) {
     const wrap = el('div', { class: 'wl-actions', onclick: (e) => e.stopPropagation() });
     if (isOpen(r)) {
@@ -683,12 +621,10 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
         ] })
       );
     } else if (r.status === 'admitted') {
-      // پذیرفته‌شده‌ها از لیست پاک می‌شوند؛ این شاخه فقط برای ردیف‌های گذرا دیده می‌شود
       wrap.append(
         el('span', { class: 'muted', style: { fontSize: '12px' } }, 'پذیرش نهایی — پرونده فعال در «دانش‌آموزان»')
       );
     } else {
-      // rejected / no_show / cancelled — خروج‌های قابل بازگشت
       wrap.append(
         el('button', { class: 'btn btn--ghost btn--sm', title: 'بازگشت به صف انتظار', onclick: () => openReopenModal(r, rerender) }, icon('undo', 14), 'بازگشت به صف'),
         rowMenu({ items: [
@@ -704,9 +640,6 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
   await renderList();
 }
 
-// ─────────────── نمای ماژول مستقل «لیست انتظار» (#/waitlist) ───────────────
-
-/** صفحهٔ کامل ماژول لیست انتظار — سربرگ + بدنه (q/prefill از query مسیر) */
 export async function renderWaitlistModule(container, ctx = {}) {
   const body = el('div', {});
   container.replaceChildren(
@@ -718,9 +651,6 @@ export async function renderWaitlistModule(container, ctx = {}) {
   await renderWaitlist(body, ctx.query?.q ?? '', ctx.query?.prefill ?? '');
 }
 
-// ─────────────── ویجت بورد منشی + badge ───────────────
-
-/** شمارنده‌ها برای بورد/منو — یک درخواست سبک */
 export async function fetchWaitlistBadge() {
   try {
     const res = await api.get('/api/waitlist/badge');
@@ -730,7 +660,6 @@ export async function fetchWaitlistBadge() {
   }
 }
 
-/** کارت کوچک «لیست انتظار» برای گوشهٔ بورد روز کاری — کلیک: مودال فهرست کامل */
 export async function renderWaitlistBoardWidget(asideEl) {
   const badge = await fetchWaitlistBadge();
   if (badge.waiting === 0 && badge.urgent === 0) {

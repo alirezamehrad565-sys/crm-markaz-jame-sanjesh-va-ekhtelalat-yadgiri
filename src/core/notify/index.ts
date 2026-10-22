@@ -1,9 +1,3 @@
-/**
- * هستهٔ اعلان و کلاینت بات بله — نقطهٔ ورود و صادرات‌های ماژول (barrel)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// مرز عمومی ماژول notify — تنها نقطه import برای لایه‌های بالاتر
-
 export { createNotifyService } from './service';
 export type { NotifyDeps, NotifyService, EnqueueOutcome } from './service';
 export { renderTemplate, renderScheduleMessage } from './templates';

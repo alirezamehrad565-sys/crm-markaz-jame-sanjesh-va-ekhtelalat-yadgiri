@@ -1,24 +1,3 @@
--- مایگریشن D1 — فرم جامع معلم + انتخاب معلم (T7 — m150-b موج ۳)
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- ============================================================
--- تصمیم کارفرما (طرح واحد §۲ P0 ردیف ۴ + §۳ — قطعی):
--- ۱) student_teachers — چند معلم روی پروندهٔ دانش‌آموز (نام/کلاس/راه ارتباطی)؛
---    «چند معلم = چند لینک مستقل» فرم جامع معلم. seed یکتا از معلمِ کلاس فعلی
---    (students teacher_name/teacher_phone پروجکشن‌شده از classes — ستون‌های قدیمی
---    هرگز حذف/تغییر نمی‌کنند؛ دادهٔ قدیمی دست‌نخورده).
--- ۲) ce-sld-class-t-v1 — ملاک‌های کلاسی خواندن/نوشتن/حساب (فرم معلم، ۱۲ آیتم،
---    زیرمقیاس‌های sld_read/sld_write/sld_calc هم‌نام سیگنال‌های شرح‌حال v3).
--- ۳) ce-comp-teacher-v2 — پکیج فرم جامع معلم: یک لینک به‌ازای هر معلم، رندر بخش‌به‌بخش،
---    یک submit → رویداد مستقل به‌ازای هر کامپوننت (ce-snap-iv-t-v1/ce-sdq-t-v1/ce-sld-class-t-v1
---    به‌ترتیب — قرارداد COMPOSITE_TEACHER_COMPONENTS در case-events/pure.ts) + رویداد زمینه.
---    تکی‌های v1 معلم (snap-t/sdq-t) عیناً فعال می‌مانند — هم‌گرایی والد×معلم با همان subscaleIds.
--- — بازتولید: منبع حقیقت فیلدها src/domain/clinical-engine/battery-composite.json؛
---   هر تغییر ملاک = مایگریشن جدید. idempotent: CREATE IF NOT EXISTS + INSERT OR IGNORE + WHERE NOT EXISTS.
---   اجرای ریموت با ریلیز مجری اصلی (در تست‌ها خودکار اعمال می‌شود).
--- ============================================================
-
--- ─── ۱) جدول معلم‌های دانش‌آموز ───
-
 CREATE TABLE IF NOT EXISTS student_teachers (
   id          TEXT PRIMARY KEY,
   student_id  TEXT NOT NULL REFERENCES students(id),
@@ -30,8 +9,6 @@ CREATE TABLE IF NOT EXISTS student_teachers (
 
 CREATE INDEX IF NOT EXISTS idx_student_teachers_student ON student_teachers(student_id, created_at);
 
--- seed یکتا از معلمِ کلاس فعلی (students.teacher_name/teacher_phone — پروجکشن کلاس؛
--- ستون‌های قدیمی classes دست‌نخورده؛ اجرای دوباره ردیف تازه نمی‌سازد)
 INSERT INTO student_teachers (id, student_id, name, class_label, contact, created_at)
 SELECT lower(hex(randomblob(16))), s.id, trim(c.teacher_name), c.name, c.teacher_phone, datetime('now')
   FROM students s
@@ -42,7 +19,6 @@ SELECT lower(hex(randomblob(16))), s.id, trim(c.teacher_name), c.name, c.teacher
          WHERE t.student_id = s.id AND t.name = trim(c.teacher_name)
        );
 
--- ─── ۲) ce-sld-class-t-v1 — ملاک‌های کلاسی خواندن/نوشتن/حساب — فرم معلم ───
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000020',
@@ -63,7 +39,6 @@ VALUES (
 
 UPDATE case_event_types SET description = 'دوازده جملهٔ کوتاه دربارهٔ کارکرد روزمرهٔ دانش‌آموز شما در کلاس — روانی و دقت خواندن، املاء و نگارش، و حساب. برای هر جمله بگویید چه اندازه در کلاس به‌چشم شما می‌خورد. پاسخ درست یا غلط ندارد؛ مشاهدهٔ واقعی شما ارزشمندترین دادهٔ ماست. حدود ۴ دقیقه وقت می‌برد.' WHERE key = 'ce-sld-class-t-v1' AND description IS NULL;
 
--- ─── ۳) ce-comp-teacher-v2 — فرم جامع معلم — بستهٔ کامل مشاهدهٔ کلاس ───
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000021',
@@ -83,5 +58,3 @@ VALUES (
 );
 
 UPDATE case_event_types SET description = 'یک لینک جداگانه برای هر معلم؛ چهار بخش پشت‌سرهم: چند پرسش کوتاه مشاهدهٔ کلاس، چک‌لیست توجه و بی‌قراری (SNAP-IV)، پرسش‌نامهٔ رفتار (SDQ) و ملاک‌های کلاسی خواندن/نوشتن/حساب. پاسخ‌ها جداگانه نمره می‌خورند و روی پروندهٔ دانش‌آموز با نام شما ثبت می‌شوند. حدود ۱۵ تا ۲۰ دقیقه وقت می‌برد؛ می‌توانید آرام و بدون عجله جلو بروید — همهٔ پاسخ‌ها یک‌جا در پایان ارسال می‌شود.' WHERE key = 'ce-comp-teacher-v2' AND description IS NULL;
-
--- پایان 0062

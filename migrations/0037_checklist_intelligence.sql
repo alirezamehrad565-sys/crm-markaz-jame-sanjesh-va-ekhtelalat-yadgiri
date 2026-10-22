@@ -1,24 +1,8 @@
--- مایگریشن اسکیما D1 — هوش چک‌لیست
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- ============================================================
--- — موتور تشخیص و مداخله — فاز ۱ (رویدادساز هوشمند)
--- فقط اضافه‌ای:
--- case_event_types.tags برچسب‌های اختلال/پایهٔ قالب (JSON آرایهٔ tag id) — مبنای پیشنهاد هوشمند
--- case_event_types.audience مخاطب قالب: family | teacher | both
--- case_events.sent_at/sent_count شمارش ارسال پیام بله (ارسال با یک کلیک)
--- seed: کتابخانهٔ سنجش آماده (SDQ والدین / کانرز کوتاه / چک‌لیست رفتاری الگوی اخنباخ /
--- چک‌لیست کلاس معلم) — با key ثابت و INSERT OR IGNORE (idempotent)
--- برچسب‌های seed به idهای ثابت مایگریشن 0006 وصل‌اند (ADHD/اضطراب — idempotent).
--- ============================================================
-
 ALTER TABLE case_event_types ADD COLUMN tags TEXT;
 ALTER TABLE case_event_types ADD COLUMN audience TEXT NOT NULL DEFAULT 'family';
 ALTER TABLE case_events ADD COLUMN sent_at TEXT;
 ALTER TABLE case_events ADD COLUMN sent_count INTEGER NOT NULL DEFAULT 0;
 
--- ───────────── کتابخانهٔ سنجش آماده ─────────────
-
--- ۱) SDQ — پرسشنامهٔ نقاط قوت و دشواری‌ها (والدین) — ۲۵ آیتم، نمرهٔ کل ۰ تا ۴۰
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by)
 VALUES (
   'bbbbbbbb-7600-4000-8000-000000000001',
@@ -54,7 +38,6 @@ VALUES (
   NULL, 'family', 1, 'seed-m76'
 );
 
--- ۲) کانرز کوتاه — نشانه‌های بیش‌فعالی/کم‌توجهی (والدین و معلم) — ۱۰ آیتم ۰ تا ۳
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by)
 VALUES (
   'bbbbbbbb-7600-4000-8000-000000000002',
@@ -75,7 +58,6 @@ VALUES (
   '["aaaaaaaa-0000-4000-8000-000000000004"]', 'both', 1, 'seed-m76'
 );
 
--- ۳) چک‌لیست رفتاری کودک — الگوی کاربردی اخنباخ (والدین) — ۲۰ آیتم ۰ تا ۲
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by)
 VALUES (
   'bbbbbbbb-7600-4000-8000-000000000003',
@@ -106,7 +88,6 @@ VALUES (
   '["aaaaaaaa-0000-4000-8000-000000000004","aaaaaaaa-0000-4000-8000-000000000007"]', 'family', 1, 'seed-m76'
 );
 
--- ۴) چک‌لیست رفتار کلاس (معلم) — ۱۲ آیتم ۰ تا ۳ — مخاطب: معلم
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by)
 VALUES (
   'bbbbbbbb-7600-4000-8000-000000000004',

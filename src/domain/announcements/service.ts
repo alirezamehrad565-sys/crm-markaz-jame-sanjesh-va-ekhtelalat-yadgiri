@@ -1,10 +1,3 @@
-/**
- * ماژول اعلان مدیر — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// اعلان‌های مدیر: صفحه ورود + پنل کارمندان + ارسال با بات
-// مالک WRITE جدول announcements؛ ارسال بات از طریق هسته notify (صف + dispatch)
-
 import type {
   AnnouncementPublic,
   AnnouncementRecord,
@@ -23,7 +16,6 @@ export interface AnnouncementDeps {
   audit: AuditWriter;
   logger: Logger;
   notify: NotifyService;
-  /** آیا کانال بله واقعی فعال است؟ (تعیین کانال صف ارسال) */
   baleEnabled: boolean;
   clinicName?: string;
 }
@@ -131,7 +123,6 @@ export function createAnnouncementService(deps: AnnouncementDeps): AnnouncementS
     },
 
     async listPublic() {
-      // endpoint عمومی — فقط اعلان‌های فعال صفحه ورود، بدون فیلدهای مدیریتی
       const rows = await db.query<AnnouncementRow>(
         `SELECT ${SELECT_COLS} FROM announcements a JOIN staff s ON s.id = a.created_by
           WHERE a.active = 1 AND a.show_login = 1
@@ -221,7 +212,6 @@ export function createAnnouncementService(deps: AnnouncementDeps): AnnouncementS
       if (!rec) throw new NotFoundError('اعلان');
       if (!rec.active) throw new ValidationError('اعلان بایگانی‌شده قابل ارسال نیست');
 
-      // ─── مقصدها بر اساس هدف ───
       let rows: { chat_id: string; staff_id: string | null }[];
       if (target === 'staff') {
         rows = await db.query<{ chat_id: string; staff_id: string | null }>(
@@ -230,7 +220,6 @@ export function createAnnouncementService(deps: AnnouncementDeps): AnnouncementS
             WHERE sbl.status = 'linked' AND sbl.chat_id IS NOT NULL AND s.active = 1`
         );
       } else {
-        // خانواده‌ها: گفتگوهای متصل دانش‌آموزان + chat_id دستی در prefs
         rows = await db.query<{ chat_id: string; staff_id: string | null }>(
           `SELECT chat_id, NULL AS staff_id FROM bot_links
             WHERE status = 'linked' AND chat_id IS NOT NULL
@@ -260,7 +249,6 @@ export function createAnnouncementService(deps: AnnouncementDeps): AnnouncementS
 
       const dispatch: DispatchSummary = await notify.dispatchPending();
 
-      // پرچم ارسال — برای نمایش وضعیت در UI
       const flagCol = target === 'staff' ? 'bot_sent_staff' : 'bot_sent_families';
       await db.transaction(async (tx) => {
         await tx.execute(

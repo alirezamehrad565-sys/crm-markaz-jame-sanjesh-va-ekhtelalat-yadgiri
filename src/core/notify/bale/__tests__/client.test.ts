@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — client
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست آداپتور بله با fetch تزریقی — شامل reply_markup دکمه‌های inline
-
 import { describe, expect, it } from 'vitest';
 import { createBaleChannel } from '../client';
 

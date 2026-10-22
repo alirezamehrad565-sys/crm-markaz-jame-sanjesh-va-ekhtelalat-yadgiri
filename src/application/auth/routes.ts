@@ -1,14 +1,3 @@
-/**
- * ورود و نشست پنل — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// صفحه ورود با رمز: POST /api/auth/login
-// خارج از authMiddleware رجیستر می‌شود (مثل /health و /public/announcements)
-// جریان: username/password → verify (PBKDF2 یا legacy SHA-256) → JWT نشست (HS256, ۳۰ روز)
-// ارتقای شفاف: هش legacy (SHA-256 بدون salt) در اولین ورود موفق به PBKDF2 ارتقا می‌یابد
-// هم‌سنگ باندل زنده: throttle ورود (۵ تلاش ناموفق در ۱۵ دقیقه به‌ازای هر username)
-// + کلید امضا از resolveSessionSecret (بدون fallback هاردکد در تولید)
-
 import type { AppHono } from '@core/shared';
 import { LoginSchema } from '@core/shared';
 import { findStaffByUsername, signSessionJwt, verifyPassword, hashPassword, isLegacyPasswordHash, resolveSessionSecret } from '@core/auth';
@@ -16,7 +5,6 @@ import { AuthError, RateLimitError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 
-// ─── پارامترهای throttle ورود (هم‌نام باندل زنده) ───
 const LOGIN_MAX_FAILURES = 5;
 const LOGIN_WINDOW_MINUTES = 15;
 const LOGIN_WINDOW_MS = LOGIN_WINDOW_MINUTES * 60 * 1000;
@@ -25,7 +13,6 @@ function windowFloorIso(): string {
   return new Date(Date.now() - LOGIN_WINDOW_MS).toISOString();
 }
 
-/** ثانیه‌های باقی‌ماندهٔ قفل — ۰ یعنی قفل نیست */
 async function throttleRemainingSeconds(db: D1Database, identity: string): Promise<number> {
   const row = await db
     .prepare('SELECT fail_count, window_start FROM login_throttle WHERE identity = ? LIMIT 1')
@@ -40,7 +27,6 @@ async function throttleRemainingSeconds(db: D1Database, identity: string): Promi
   return Math.max(1, Math.ceil((LOGIN_WINDOW_MS - elapsed) / 1000));
 }
 
-/** ثبت تلاش ناموفق — پنجرهٔ لغزان ۱۵ دقیقه‌ای به‌ازای identity (upsert) */
 async function recordLoginFailure(db: D1Database, identity: string): Promise<void> {
   await db
     .prepare(
@@ -60,12 +46,10 @@ async function recordLoginFailure(db: D1Database, identity: string): Promise<voi
     .run();
 }
 
-/** پاک‌سازی throttle پس از ورود موفق (و ردیف‌های منقضی — best-effort) */
 async function clearThrottle(db: D1Database, identity: string): Promise<void> {
   try {
     await db.prepare('DELETE FROM login_throttle WHERE identity = ? OR window_start <= ?').bind(identity, windowFloorIso()).run();
   } catch {
-    /* پاک‌سازی هرگز ورود موفق را شکست نمی‌دهد */
   }
 }
 
@@ -78,7 +62,6 @@ export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
   app.post('/api/auth/login', async (c) => {
     const body = LoginSchema.parse(await c.req.json<unknown>());
 
-    // throttle ورود: قبل از هر کوئری staff (بدون نشت وجود/نبود کاربر)
     const identity = body.username.trim().toLowerCase();
     const blockedFor = await throttleRemainingSeconds(c.env.DB, identity);
     if (blockedFor > 0) {
@@ -106,7 +89,6 @@ export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
         resourceId: staff?.id ?? 'unknown',
         changes: { reason: { from: null, to: staff ? 'inactive' : 'not_found' } }
       });
-      // پیام عامدانه کلی — فاش کردن وجود/نبود کارمند لازم نیست
       throw new AuthError('نام کاربری یا رمز عبور اشتباه است');
     }
 
@@ -125,7 +107,6 @@ export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
 
     await clearThrottle(c.env.DB, identity);
 
-    // ارتقای شفاف هش legacy → PBKDF2 (به‌محض اولین ورود موفق؛ best-effort)
     if (staff.password_hash && isLegacyPasswordHash(staff.password_hash)) {
       try {
         const upgraded = await hashPassword(body.password);
@@ -134,7 +115,6 @@ export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
           .run();
         deps.logger.child('auth').info('login.password_upgraded', { staffId: staff.id });
       } catch (err) {
-        // ارتقا هرگز ورود را شکست نمی‌دهد — در ورود بعدی دوباره تلاش می‌شود
         deps.logger.child('auth').warn('login.password_upgrade_failed', {
           error: err instanceof Error ? err.message : String(err)
         });
@@ -173,6 +153,5 @@ export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
     );
   });
 
-  // خروج سمت سرور معنای واقعی ندارد (توکن stateless است) — برای تقارن API نگه داشته شد
   app.post('/api/auth/logout', (c) => c.json({ data: { ok: true } }, 200));
 }

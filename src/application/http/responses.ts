@@ -1,9 +1,3 @@
-/**
- * زیرساخت پاسخ و خطای HTTP — قالب پاسخ‌های استاندارد API
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Response helpers — فرمت استاندارد { data, meta } و pagination
-
 import type { PaginatedResult, PaginationMeta } from '@core/shared';
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@core/shared';
 
@@ -28,7 +22,6 @@ export function paginate<T>(
   return { data: items, meta };
 }
 
-/** پارس پارامترهای pagination از query string */
 export function pageParams(query: Record<string, string | undefined>): { page: number; pageSize: number } {
   return {
     page: Number.parseInt(query.page ?? '1', 10) || 1,

@@ -1,13 +1,3 @@
-/**
- * سرویس تایم‌لاین پرونده — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// فاز ۶ — گردآوری رویدادهای تایم‌لاین از منابع موجود (read-only — هیچ جدولی نمی‌نویسد)
-// منابع §11.2 whitelist: audit_log (student.create/tags.replace/case_status.changed +
-// appointment.move + session_note.* + followup.* + waitlist.* + committee.*)، appointments(+ops_status/
-// attendance)، notifications (sent)، followups — merge قطعی در pure.ts
-// assessments بازنشسته شد (سندها به case_events مهاجرت کردند؛ kind 'assessment' حذف)
-
 import { NotFoundError } from '@core/errors';
 import { FOLLOWUP_OPEN_STATUSES } from '@core/shared';
 import type { AuthContext } from '@core/shared';
@@ -69,7 +59,6 @@ interface NotificationRow {
   sent_at: string;
 }
 
-/** — مصوبهٔ کمیسیون + جلسهٔ والد آن */
 interface CommitteeItemRow {
   id: string;
   topic: string;
@@ -78,7 +67,6 @@ interface CommitteeItemRow {
   meeting_date: string;
 }
 
-/** — رویداد پرونده (فرم جلسه/چک‌لیست) + عنوان نوع */
 interface CaseEventRow {
   id: string;
   occurred_at: string;
@@ -97,7 +85,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
     return ids.map(() => '?').join(', ');
   }
 
-  /** نام بازیگران از staff — خارج از staff (system/bot) → null */
   async function actorNames(actorIds: string[]): Promise<Map<string, string>> {
     const unique = [...new Set(actorIds)];
     const map = new Map<string, string>();
@@ -121,7 +108,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
 
       const raw: TimelineEvent[] = [];
 
-      // ─── ۱) audit رویدادهای مستقیم پرونده (whitelist — student.update هرگز) ───
       const studentAudits = await db.query<AuditRow>(
         `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
            FROM audit_log
@@ -131,7 +117,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         [studentId]
       );
 
-      // ─── ۲) نوبت‌های دانش‌آموز + رویداد state در start_at ───
       const appts = await db.query<ApptRow>(
         `SELECT a.id, a.start_at, a.end_at, a.status, a.ops_status,
                 a_s.attendance, s.full_name AS staff_name
@@ -144,7 +129,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
       );
       const apptIds = appts.map((a) => a.id);
 
-      // ─── ۳) audit جابه‌جایی نوبت‌ها (appointment.move) ───
       const moveAudits: AuditRow[] = apptIds.length
         ? await db.query<AuditRow>(
             `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
@@ -156,7 +140,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
           )
         : [];
 
-      // ─── ۴) audit گزارش جلسه (composite resource_id «apptId/studentId») ───
       const noteAudits = await db.query<AuditRow>(
         `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
            FROM audit_log
@@ -167,7 +150,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         [`%/${studentId}`]
       );
 
-      // ─── ۵) پیگیری‌های پرونده + audit آنها ───
       const followups = await db.query<FollowUpRow>(
         `SELECT id, title, due_at, status FROM followups WHERE student_id = ?`,
         [studentId]
@@ -183,7 +165,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
           )
         : [];
 
-      // ─── ۶) لیست انتظار متصل + audit آنها (waiting_set/schedule/admitted) ───
       const waitlistRows = await db.query<WaitlistRow>(
         `SELECT id, created_at FROM waitlist WHERE student_id = ?`,
         [studentId]
@@ -200,7 +181,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
           )
         : [];
 
-      // ─── ۸) پیام‌های ارسال‌شده به خانواده (فقط sent) ───
       const notifications = await db.query<NotificationRow>(
         `SELECT id, template, channel, sent_at
            FROM notifications
@@ -209,7 +189,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         [studentId]
       );
 
-      // ─── ۹) — مصوبات کمیسیون پرونده + audit آنها ───
       const committeeItems = await db.query<CommitteeItemRow>(
         `SELECT i.id, i.topic, i.decision_status, m.title AS meeting_title, m.meeting_date
            FROM committee_items i
@@ -229,7 +208,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
           )
         : [];
 
-      // ─── ۱۰) — تکلیف‌های تمرین + audit ارسال/بازگشت/تصحیح ───
       const assignments = await db.query<{ id: string; exercise_title: string }>(
         `SELECT a.id, e.title AS exercise_title
            FROM exercise_assignments a
@@ -249,7 +227,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
           )
         : [];
 
-      // ─── ۱۱) — رویدادهای پرونده (فرم جلسه/چک‌لیست) — مستقیم از جدول مالک ───
       const caseEvents = await db.query<CaseEventRow>(
         `SELECT e.id, e.occurred_at, e.status, e.summary, e.analysis, s.full_name AS staff_name,
                 e.filled_by_chat_id, t.title AS type_title, t.icon AS type_icon, t.category AS type_category
@@ -261,8 +238,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         [studentId]
       );
 
-      // ─── ۱۲) — تصمیم‌های مسیر مداخله (audit مسیرهای پرونده) — فاز بهبود §۱۰.۲ ───
-      // فقط ساخت و تصمیم (create/decision)؛ toggle گام‌ها نویز عملیاتی است و عمداً حذف می‌شود
       const pathAudits: AuditRow[] = await db.query<AuditRow>(
         `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
            FROM audit_log
@@ -273,7 +248,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         [studentId]
       );
 
-      // ─── نام بازیگران ───
       const actors = await actorNames([
         ...studentAudits.map((a) => a.actor_id),
         ...moveAudits.map((a) => a.actor_id),
@@ -285,8 +259,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         ...pathAudits.map((a) => a.actor_id)
       ]);
       const actorOf = (id: string): string | null => actors.get(id) ?? null;
-
-      // ─── ساخت رویدادها ───
 
       for (const a of studentAudits) {
         if (a.action === 'student.create') {
@@ -303,7 +275,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
           const to = labelOf(CASE_STATUS_LABELS_FA, changes?.case_status?.to);
           raw.push({ at: a.created_at, kind: 'case_status', title: 'وضعیت پرونده تغییر کرد', subtitle: `از «${from}» به «${to}»`, actor: actorOf(a.actor_id), ref: { type: 'student', id: studentId } });
         } else if (a.action === 'student.special_need.changed') {
-          // فاز ۷ — §12: نیاز ویژه در تایم‌لاین — فقط نوع/شدت (id فیلدها، §12.10)
           const changes = parseChanges(a.changes);
           const toType = changes?.special_need_type?.to;
           const toSev = changes?.special_need_severity?.to;
@@ -315,7 +286,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
             raw.push({ at: a.created_at, kind: 'special_need', title: 'نیاز ویژه ثبت شد', subtitle: sevLabel === '—' ? typeLabel : `${typeLabel} — شدت: ${sevLabel}`, actor: actorOf(a.actor_id), ref: { type: 'student', id: studentId } });
           }
         } else if (a.action === 'student.owner.changed') {
-          // -c — مسئول پرونده — زیرنویس با نام همکاران (نه id)
           const changes = parseChanges(a.changes);
           const fromId = typeof changes?.owner_staff_id?.from === 'string' ? changes.owner_staff_id.from : null;
           const toId = typeof changes?.owner_staff_id?.to === 'string' ? changes.owner_staff_id.to : null;
@@ -410,7 +380,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         });
       }
 
-      // ─── رویدادهای کمیسیون (مطرح‌شدن + تصمیم) ───
       const ciById = new Map(committeeItems.map((ci) => [ci.id, ci]));
       for (const ca of committeeAudits) {
         const ci = ciById.get(ca.resource_id);
@@ -451,7 +420,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         }
       }
 
-      // ─── رویدادهای تکلیف و بازگشت تمرین + -c تصحیح ───
       const asgTitleById = new Map(assignments.map((a) => [a.id, a.exercise_title]));
       for (const ea of exerciseAudits) {
         const title = asgTitleById.get(ea.resource_id) ?? 'تمرین';
@@ -476,7 +444,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         } else {
           const changes = parseChanges(ea.changes);
           const filename = typeof changes?.filename?.to === 'string' ? changes.filename.to : null;
-          // ref به خود بازگشت (نه تکلیف) — چند صفحهٔ بازگشتیِ یک تکلیف ادغام نمی‌شوند
           const submissionId = typeof changes?.submissionId?.to === 'string' ? changes.submissionId.to : ea.resource_id;
           raw.push({
             at: ea.created_at,
@@ -489,7 +456,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         }
       }
 
-      // ─── رویدادهای مسیر مداخله (ساخت/تصمیم) — شفافیت تصمیم بالینی برای مدیر ───
       const PATH_STATUS_LABELS_FA: Record<string, string> = {
         suggested: 'پیشنهاد موتور',
         reviewed: 'بازبینی‌شده',
@@ -521,7 +487,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         }
       }
 
-      // ─── رویدادهای پرونده (فرم جلسه/چک‌لیست خانواده) ───
       for (const ce of caseEvents) {
         const cancelled = ce.status === 'cancelled';
         const pending = ce.status === 'pending_family';
@@ -544,12 +509,10 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         });
       }
 
-      // ─── merge قطعی + فیلتر + صفحه‌بندی ───
       const merged = mergeTimelineEvents(raw);
       const filtered = filterTimelineEvents(merged, filters);
       const { page, hasMore } = paginateTimeline(filtered, filters.limit, filters.offset);
 
-      // ─── «اقدام بعدی» از همان منابع (قبل از فیلتر — همیشه وضعیت فعلی) ───
       const nowIso = new Date().toISOString();
       const nextApptRow = appts
         .filter((a) => a.status === 'scheduled' && a.start_at > nowIso)
@@ -567,8 +530,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
   };
 }
 
-// ───────────── helpers ─────────────
-
 function parseChanges(json: string | null): Record<string, { from?: unknown; to?: unknown }> | null {
   if (!json) return null;
   try {
@@ -583,7 +544,6 @@ function labelOf(map: Record<string, string>, value: unknown): string {
   return map[value] ?? value;
 }
 
-/** جزئیات تغییر برچسب‌ها — «+۲ / −۱» (اعداد فارسی) */
 function tagsDetail(added: number, removed: number): string | null {
   const parts: string[] = [];
   if (added > 0) parts.push(`+${added.toLocaleString('fa-IR')}`);
@@ -591,7 +551,6 @@ function tagsDetail(added: number, removed: number): string | null {
   return parts.length > 0 ? parts.join(' / ') : null;
 }
 
-/** تعداد روز انتظار (کف) */
 function waitDays(fromIso: string, toIso: string): number | null {
   const from = Date.parse(fromIso);
   const to = Date.parse(toIso);

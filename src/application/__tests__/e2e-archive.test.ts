@@ -1,12 +1,3 @@
-/**
- * تست‌های e2e — -archive
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e--archive.test.ts — (0.54.0): آرشیو انعطاف‌پذیر + تاریخچهٔ تحصیلی
-// ۱) کد ملی اختیاری در ثبت آرشیو → نگه‌دارندهٔ یکتای «NAS-…» + ثبت واقعی بعداً از PATCH
-// ۲) چرخهٔ فعال همچنان کد ملی الزامی دارد؛ کد ملی ثبت‌شده غیرقابل تغییر است
-// ۳) تاریخچهٔ تحصیلی: افزودن پشت‌سرهم سال، فهرست، حذف، گیت نقش (دفتر/درمانگر)
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -61,7 +52,6 @@ describe('کد ملی اختیاری در آرشیو', () => {
     expect(st.nationalId).toBeTruthy();
     expect(st.nationalId!.startsWith('NAS-')).toBe(true);
 
-    // در فهرست آرشیو دیده می‌شود
     const list = await sec.get('/api/students?active=false&page_size=200');
     expect((list.body as { data: StudentBody[] }).data.find((r) => r.id === st.id)).toBeTruthy();
   });

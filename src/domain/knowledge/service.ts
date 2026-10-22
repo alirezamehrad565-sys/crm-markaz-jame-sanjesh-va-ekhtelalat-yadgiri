@@ -1,15 +1,3 @@
-/**
- * ماژول پایگاه دانش — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// دانش‌افزایی مرکز
-// پایگاه دانش داخلی همکاران (نکتهٔ آموزشی/پروتکل/مقاله/خبر) — الگوی اعلان‌های
-// مالکیت WRITE: دفتر (مدیر/منشی) — حذف کامل فقط مدیر؛ خواندن همهٔ همکاران احرازشده
-// — پیوست فایل/تصویر مقاله (دستور کاربر: «توی قسمت دانش‌افزایی باید بشه فایل
-// مقاله یا تصویر گذاشت») — بازاستفادهٔ کامل از الگوی پیوست بانک تمرین (0036):
-// جدول پیوست + ObjectStore مشترک (R2 یا D1 تکه‌تکه روی exercise_file_chunks)
-// + سقف حجم/نوع/تعداد همان تمرین‌ها (validateExerciseFileBytes)
-
 import type { AuthContext, KnowledgeCategory, KnowledgeFileMeta, KnowledgeRecord } from '@core/shared';
 import { MAX_EXERCISE_ATTACHMENT_COUNT, MAX_EXERCISE_FILES_PER_UPLOAD, MAX_EXERCISE_UPLOAD_CHUNK_BYTES } from '@core/shared';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
@@ -33,7 +21,6 @@ interface KnowledgeRow {
   updated_at: string;
 }
 
-/** — ردیف پیوست مقالهٔ دانش */
 interface AttachmentRow {
   id: string;
   knowledge_id: string;
@@ -63,7 +50,6 @@ function rowToRecord(row: KnowledgeRow, attachments: KnowledgeFileMeta[]): Knowl
 const SELECT_COLS = `k.id, k.title, k.body, k.category, k.pinned, k.published,
        k.created_by, s.full_name AS created_by_name, k.created_at, k.updated_at`;
 
-/** اتصال قطعات — فقط برای آداپترهای بدون putSegments (فایل‌های کوچک) */
 function concatSegments(segments: Uint8Array[]): Uint8Array {
   if (segments.length === 1) return segments[0];
   const total = segments.reduce((n, s) => n + s.length, 0);
@@ -76,7 +62,6 @@ function concatSegments(segments: Uint8Array[]): Uint8Array {
   return out;
 }
 
-/** بایت → base64 (برای تکه‌های بارگذاری پیوسته — الگوی بانک تمرین) */
 function bytesToBase64Str(bytes: Uint8Array): string {
   let bin = '';
   const CHUNK = 0x8000;
@@ -90,7 +75,6 @@ export interface KnowledgeDeps {
   db: DbClient;
   audit: AuditWriter;
   logger: Logger;
-  /** — ذخیره‌ساز فایل (همان ObjectStore بانک تمرین: R2 یا D1 تکه‌تکه) */
   storage: ObjectStore;
 }
 
@@ -98,7 +82,6 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
   const { db, audit, logger, storage } = deps;
   const log = logger.child('knowledge');
 
-  /** گارد نوشتن — همان مدیریت دانش: دفتر (مدیر/منشی) */
   function assertWriter(actor: AuthContext): void {
     if (actor.role !== 'manager' && actor.role !== 'secretary') {
       throw new ForbiddenError('مدیریت دانش‌افزایی فقط برای دفتر (مدیر/منشی) مجاز است');
@@ -114,7 +97,6 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
     return rowToRecord(row, await attachmentsOf(id));
   }
 
-  /** — پیوست‌های یک مقاله به ترتیب ثبت */
   async function attachmentsOf(itemId: string): Promise<KnowledgeFileMeta[]> {
     const rows = await db.query<AttachmentRow>(
       `SELECT id, knowledge_id, file_key, file_name, file_mime, file_size, created_at
@@ -124,7 +106,6 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
     return rows.map((r) => ({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size }));
   }
 
-  /** — پیوست‌های چند مقاله به‌صورت دسته‌ای (برای فهرست‌ها) */
   async function attachmentsForItems(itemIds: string[]): Promise<Map<string, KnowledgeFileMeta[]>> {
     const map = new Map<string, KnowledgeFileMeta[]>();
     if (itemIds.length === 0) return map;
@@ -144,7 +125,6 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
     return map;
   }
 
-  /** — پیوست باید موجود و متعلق به همین مقاله باشد */
   async function assertAttachment(itemId: string, fileId: string): Promise<AttachmentRow> {
     const att = await db.queryOne<AttachmentRow>(
       `SELECT id, knowledge_id, file_key, file_name, file_mime, file_size, created_at
@@ -155,14 +135,12 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
     return att;
   }
 
-  /** — اعتبارسنجی یک فایل باینری (سقف حجم/نوع همان تمرین‌ها) */
   function validatePrepared(file: { filename: string; mimeType: string; size: number }): { filename: string; mime: string } {
     const verdict = validateExerciseFileBytes(file, storage.maxObjectBytes);
     if (!verdict.ok) throw new ValidationError(verdict.reason);
     return { filename: sanitizeFilename(file.filename), mime: file.mimeType.toLowerCase() };
   }
 
-  /** — سقف تعداد پیوست هر مقاله */
   async function assertAttachmentCount(itemId: string, adding: number): Promise<void> {
     const countRow = await db.queryOne<{ n: number }>(
       `SELECT COUNT(*) AS n FROM knowledge_attachments WHERE knowledge_id = ?`,
@@ -175,7 +153,6 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
 
   return {
     async listPublished() {
-      // سنجاق‌شده اول، سپس تازه‌ترین — فقط منتشرشده‌ها
       const rows = await db.query<KnowledgeRow>(
         `SELECT ${SELECT_COLS} FROM knowledge_items k JOIN staff s ON s.id = k.created_by
           WHERE k.published = 1
@@ -259,7 +236,6 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
     async remove(id, actor) {
       const existing = await getById(id);
       if (!existing) throw new NotFoundError('مقالهٔ دانش');
-      // کلیدهای پیوست قبل از حذف ردیف‌ها جمع می‌شود (حذف آبجکت بعد از تراکنش)
       const attRows = await db.query<{ file_key: string }>(
         `SELECT file_key FROM knowledge_attachments WHERE knowledge_id = ?`,
         [id]
@@ -275,7 +251,6 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
           changes: { title: { from: existing.title, to: null } }
         });
       });
-      // پاک‌سازی آبجکت‌های ذخیره‌ساز — بهترین‌تلاش؛ مقاله قبلاً حذف شده است
       for (const k of attRows) {
         await storage.delete(k.file_key).catch((err: unknown) => {
           log.warn('knowledge.attachment.storage.delete.failed', { key: k.file_key, error: err instanceof Error ? err.message : String(err) });
@@ -285,7 +260,6 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
       return { id };
     },
 
-    /** — افزودن چند پیوست (multipart باینری) — هر فایل مستقل اعتبارسنجی و ذخیره می‌شود */
     async addFiles(id, files, actor) {
       assertWriter(actor);
       const existing = await getById(id);
@@ -296,13 +270,11 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
       }
       await assertAttachmentCount(id, files.length);
 
-      // اعتبارسنجی همه قبل از هر نوشتنی — نیمه‌تمام نمی‌ماند
       const preparedList = files.map((f) => ({ ...validatePrepared(f), segments: f.segments, size: f.size }));
 
       for (const prepared of preparedList) {
         const attId = crypto.randomUUID();
         const key = `knowledge/${id}/${attId}`;
-        // نوشتن از قطعات (بدون concat کامل) با fallback به put ساده
         if (storage.putSegments) {
           await storage.putSegments(key, prepared.segments);
         } else {
@@ -331,7 +303,6 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
       return (await getById(id)) as KnowledgeRecord;
     },
 
-    /** — شروع بارگذاری پیوسته: ردیف پیوست با متادیتا ساخته می‌شود؛ تکه‌ها بعداً می‌آیند */
     async beginChunkedUpload(id, input, actor) {
       assertWriter(actor);
       const existing = await getById(id);
@@ -358,7 +329,6 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
       return { fileId: attId };
     },
 
-    /** — دریافت یک تکهٔ باینری (بدنهٔ خام ≤ ۱ مگابایت) و پیوستن به تکه‌های همان پیوست */
     async putUploadChunk(id, fileId, seq, bytes, actor) {
       assertWriter(actor);
       const att = await assertAttachment(id, fileId);
@@ -375,7 +345,6 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
       return { received: bytes.length };
     },
 
-    /** — پایان بارگذاری پیوسته: شمار و مجموع تکه‌ها با متادیتای اعلام‌شده سنجیده می‌شود */
     async completeChunkedUpload(id, fileId, actor) {
       assertWriter(actor);
       const att = await assertAttachment(id, fileId);
@@ -383,8 +352,6 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
         `SELECT COUNT(*) AS n, SUM(length(content)) AS bl FROM exercise_file_chunks WHERE key = ?`,
         [att.file_key]
       );
-      // طول base64 هر تکه جداگانه حساب می‌شود — تکهٔ ۱ مگابایتی باقیماندهٔ ۱ بر ۳
-      // دارد و padding آن طول کل را نسبت به کدگذاری پیوسته جابه‌جا می‌کند
       const b64Len = (n: number): number => Math.ceil(n / 3) * 4;
       const fullChunks = Math.floor(att.file_size / MAX_EXERCISE_UPLOAD_CHUNK_BYTES);
       const rest = att.file_size % MAX_EXERCISE_UPLOAD_CHUNK_BYTES;
@@ -407,7 +374,6 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
       return (await getById(id)) as KnowledgeRecord;
     },
 
-    /** — حذف یک پیوست مقاله */
     async deleteAttachment(id, fileId, actor) {
       assertWriter(actor);
       const existing = await getById(id);
@@ -428,7 +394,6 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
       return (await getById(id)) as KnowledgeRecord;
     },
 
-    /** — دانلود یک پیوست مشخص (همهٔ همکاران احرازشده) */
     async getAttachmentFile(id, fileId) {
       const row = await db.queryOne<{ id: string }>(`SELECT id FROM knowledge_items WHERE id = ?`, [id]);
       if (!row) return null;

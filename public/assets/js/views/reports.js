@@ -1,12 +1,3 @@
-/**
- * نمای گزارش‌ها
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/reports.js — گزارش دوره چاپی: KPI + نمودارهای سبک + چاپ
-// تب «تحلیل پیشرفته»: روند هفتگی، قیف لیست انتظار، پوشش‌ها + خروجی CSV
-// رفع تکرار: «جلسات درمانگران مرکز» با «بار کاری همکاران» یکی بود → فقط بار کاری ماند
-// گزارش مدارس ساده‌شده برگشت: فقط مدارس مبدأ دانش‌آموزان فعال با تعداد
-
 import { api, qs } from '../api.js';
 import { fa, addDaysYmd, formatJalaliNumeric, iranianWeekdayOfYmd, tehranTodayYmd, toJalali, WEEKDAY_NAMES } from '../format.js';
 import { el, icon, skeletonState, errorState, dataTable, emptyState, toast } from '../ui.js';
@@ -30,13 +21,11 @@ export async function renderReports(container) {
     local.from = d.from;
     local.to = d.to;
   }
-  // سوییچ دو حالت گزارش
   const modeSeg = el('div', { class: 'tabs', style: { marginBottom: 'var(--sp-4)' } },
     el('button', { class: `tab${local.mode === 'periodic' ? ' is-active' : ''}`, onclick: () => { local.mode = 'periodic'; renderReports(container); } }, 'گزارش دوره'),
     el('button', { class: `tab${local.mode === 'advanced' ? ' is-active' : ''}`, onclick: () => { local.mode = 'advanced'; renderReports(container); } }, 'تحلیل پیشرفته')
   );
 
-  // سوییچ حالت بالای صفحه (هم‌تراز با مسیرهای خطا) + اسکلتون به‌جای اسپینر
   container.replaceChildren(modeSeg, skeletonState('table', 6));
   if (local.mode === 'advanced') {
     let adv;
@@ -62,8 +51,6 @@ export async function renderReports(container) {
 }
 
 function buildView(r, container) {
-  // ─────────────── نوار بازه + چاپ ───────────────
-  // تقویم جلالی به‌جای ورودی متنی بازه
   const fromWidget = jalaliDateInput({ value: r.from, allowClear: false, onChange: applyRange });
   const toWidget = jalaliDateInput({ value: r.to, allowClear: false, onChange: applyRange });
 
@@ -100,11 +87,8 @@ function buildView(r, container) {
     el('button', { class: 'btn btn--primary btn--sm', onclick: () => window.print() }, icon('printer', 16), 'چاپ گزارش')
   );
 
-  // ─────────────── کارت‌های KPI ───────────────
   const pct = (v) => `${fa(Math.round((v ?? 0) * 100))}٪`;
-  // نرخ بدون داده «—» می‌خواند نه «۰٪»؛ صفرِ واقعی با صفرِ «ثبت‌نشده» یکی نیست
   const ratePct = (rate, markedCount) => markedCount > 0 ? pct(rate) : '—';
-  // اعشار یک‌رقمی برای میانگین‌ها
   const fa1 = (v) => fa(Math.round((v ?? 0) * 10) / 10);
   const kpiGrid = el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-5)' } },
     kpi('نوبت‌های بازه', r.appointments.total, `روزانه ${fa(r.appointments.avgPerDay)}`, 'primary'),
@@ -118,7 +102,6 @@ function buildView(r, container) {
     kpi('حضور همکاران', ratePct(r.staffAttendance.attendanceRate, r.staffAttendance.present ?? 0), `${fa(r.staffAttendance.absent + r.staffAttendance.leave + r.staffAttendance.sick)} روز عدم حضور`, 'neutral')
   );
 
-  // ─────────────── نمودار روند روزانه + دونات حضور ───────────────
   const points = r.byDay.map((p) => ({ date: jalaliTick(p.date), total: p.total, cancelled: p.cancelled }));
   const trendCard = el('div', { class: 'card' },
     el('div', { class: 'card__head' },
@@ -143,8 +126,6 @@ function buildView(r, container) {
     el('div', { class: 'card__body' }, attDonut)
   );
 
-  // ─────────────── بار کاری همکاران ( — تنها جای شمار جلسات هر همکار؛
-  // کارت تکراری «جلسات درمانگران مرکز» حذف شد — هر دو یک داده را نشان می‌دادند) ───────────────
   const staffCard = el('div', { class: 'card' },
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, 'بار کاری همکاران'),
@@ -165,8 +146,6 @@ function buildView(r, container) {
     )
   );
 
-  // ─────────────── گزارش مدارس (بازگشت ساده‌شده) ───────────────
-  // فقط مدارسی که از آن‌ها دانش‌آموز فعال داریم + تعداد — بدون جلسات و ستون‌های اضافه
   const schoolsCard = el('div', { class: 'card' },
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, 'مدارس مبدأ دانش‌آموزان'),
@@ -184,9 +163,6 @@ function buildView(r, container) {
           })
     )
   );
-
-  // ─────────────── برچسب‌های پرتکرار + پرتکرارترین دانش‌آموزان ───────────────
-  // ( بخش «همکاری معلم‌های مدارس» حذف شد؛ کارت سادهٔ مدارس برگرده)
 
   const topStudentsCard = el('div', { class: 'card' },
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'پرتکرارترین دانش‌آموزان')),
@@ -214,7 +190,6 @@ function buildView(r, container) {
       )
     : null;
 
-  // ─────────────── خروجی ───────────────
   return el('div', {},
     el('div', { class: 'page-head' },
       el('div', { class: 'page-head__title' }, 'گزارش دوره'),
@@ -231,7 +206,6 @@ function buildView(r, container) {
 }
 
 function kpi(label, value, sub, tone = 'primary', fmt) {
-  // مقدار null یعنی «بدون داده در بازه» — «—» می‌خواند نه ۰ (هم‌الگوی نرخ‌ها)
   if (value === null || value === undefined) {
     return el('div', { class: `kpi kpi--${tone}` },
       el('div', { class: 'kpi__label' }, label),
@@ -241,7 +215,6 @@ function kpi(label, value, sub, tone = 'primary', fmt) {
   }
   const valueEl = el('div', { class: 'kpi__value' }, '۰');
   if (fmt) {
-    // فرمت‌سفر سفارشی (میانگین‌های اعشاری): countUp هر فریم گرد می‌کند، پس مستقیم می‌نویسیم
     valueEl.textContent = fmt(value);
   } else {
     countUp(valueEl, value, { formatter: (v) => fa(v) });
@@ -253,7 +226,6 @@ function kpi(label, value, sub, tone = 'primary', fmt) {
   );
 }
 
-/** برچسب کوتاه جلالی برای تیک نمودار — «۰۵ مهر» */
 function jalaliTick(ymd) {
   const [gy, gm, gd] = ymd.split('-').map(Number);
   const j = toJalali(gy, gm, gd);
@@ -263,13 +235,10 @@ function jalaliTick(ymd) {
 
 const JALALI_MONTHS_SHORT = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
 
-// ─────────────── تحلیل پیشرفته (فاز ۸ بازطراحی‌شده) ───────────────
-
 function buildAdvancedView(adv, container) {
   const pct = (v) => (v === null || v === undefined) ? '—' : `${fa(Math.round(v * 100))}٪`;
   const days = (v) => (v === null || v === undefined) ? '—' : `${fa(v)} روز`;
 
-  // نوار بازه — همان الگوی گزارش دوره
   const fromWidget = jalaliDateInput({ value: adv.from, allowClear: false, onChange: applyRange });
   const toWidget = jalaliDateInput({ value: adv.to, allowClear: false, onChange: applyRange });
   function applyRange() {
@@ -302,7 +271,6 @@ function buildAdvancedView(adv, container) {
     el('button', { class: 'btn btn--soft btn--sm', onclick: () => exportCsv(adv) }, icon('download', 16), 'خروجی CSV')
   );
 
-  // ─── KPI پوشش‌ها ───
   const kpiGrid = el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-5)' } },
     kpi('پوشش گزارش پرونده', pct(adv.assessments.coverageRate), `${fa(adv.assessments.withAny)} از ${fa(adv.assessments.activeStudents)} پروندهٔ فعال`, 'primary'),
     kpi('پوشش گزارش جلسه', pct(adv.sessionNotes.coverageRate), `${fa(adv.sessionNotes.withNote)} از ${fa(adv.sessionNotes.sessions)} جلسه`, 'accent'),
@@ -312,7 +280,6 @@ function buildAdvancedView(adv, container) {
     kpi('مصوبات کمیسیون', pct(adv.committee.approvalRate), `${fa(adv.committee.heldMeetings)} جلسهٔ برگزارشده`, 'accent')
   );
 
-  // ─── روند هفتگی (شنبه‌محور) ───
   const weeklyCard = el('div', { class: 'card' },
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, 'روند هفتگی جلسات'),
@@ -332,7 +299,6 @@ function buildAdvancedView(adv, container) {
     )
   );
 
-  // ─── قیف لیست انتظار ───
   const funnelDonut = donut({
     segments: [
       { label: 'در صف', value: adv.waitlist.open, tone: 'warning' },
@@ -353,7 +319,6 @@ function buildAdvancedView(adv, container) {
     )
   );
 
-  // ─── جدول هفتگی + پرونده بدون ارزیابی ───
   const weeksTable = dataTable({
     columns: [
       { label: 'هفته (شنبه)', render: (w) => formatJalaliNumeric(w.weekStart) },
@@ -382,7 +347,6 @@ function buildAdvancedView(adv, container) {
   );
 }
 
-/** خروجی CSV — روند هفتگی + قیف؛ UTF-8 با BOM برای اکسل فارسی */
 function exportCsv(adv) {
   const esc = (v) => {
     const s = String(v ?? '');

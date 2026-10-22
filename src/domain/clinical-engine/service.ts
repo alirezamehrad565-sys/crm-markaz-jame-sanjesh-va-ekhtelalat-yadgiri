@@ -1,11 +1,3 @@
-/**
- * موتور بالینی — باتری‌ها، قواعد، روایت و اهداف مداخله — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// سرویس موتور بالینی: تفسیر زنده + مسیر مداخله + پروتکل قضاوت درمانگر (پلن §۵ و §۷)
-// RBAC (پلن §۷): مشاهده — مدیر/منشی/درمانگرِ مسئول؛ ساخت مسیر و تصمیم — مدیر یا درمانگرِ مسئول.
-// جدول intervention_paths تنها جدول جدید این ماژول است؛ تفسیر همیشه محاسبهٔ زندهٔ قطعی است.
-
 import type { AuthContext } from '@core/shared';
 import type { DbClient } from '@core/db';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
@@ -28,19 +20,13 @@ import { checklistPlanContextOf, recommendChecklistPlan } from './recommender';
 import { narrativeOf, narrativeOfHypothesis } from './narrative';
 import { ALL_TARGETS_INCLUDING_REHAB, targetOf } from './targets';
 
-// ───────── سقف‌ها و قواعد پروتکل (پلن §۱۱) ─────────
-
-/** سقف مسیر فعال هم‌زمان برای یک دانش‌آموز */
 export const MAX_ACTIVE_PATHS = 2;
-/** حداکثر طول یادداشت تصمیم */
 export const DECISION_NOTE_MAX = 500;
 
 export interface ClinicalPathDecisionInput {
   action: 'confirm' | 'edit' | 'reject' | 'need_info';
   note?: string | null;
-  /** فقط action=edit — تغییر هدف */
   targetKey?: string | null;
-  /** فقط action=confirm — تمرین‌های انتخابی درمانگر از بانک */
   exerciseIds?: string[] | null;
 }
 
@@ -103,8 +89,6 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
   const now = deps.now ?? (() => new Date());
   const iso = () => now().toISOString();
 
-  // ───────── RBAC (پلن §۷) ─────────
-
   async function loadStudent(studentId: string): Promise<StudentRow> {
     const row = await db.queryOne<StudentRow>(
       `SELECT id, first_name, last_name, grade, owner_staff_id FROM students WHERE id = ?`,
@@ -118,21 +102,17 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     return `${s.first_name} ${s.last_name}`.trim();
   }
 
-  /** مشاهدهٔ تفسیر/مسیر: مدیر، منشی، یا درمانگرِ مسئول پرونده */
   function assertCanView(student: StudentRow, actor: AuthContext): void {
     if (actor.role === 'manager' || actor.role === 'secretary') return;
     if (actor.role === 'therapist' && student.owner_staff_id === actor.staffId) return;
     throw new ForbiddenError('تفسیر بالینی فقط برای مدیر، منشی یا درمانگرِ مسئول پرونده قابل مشاهده است');
   }
 
-  /** تصمیم و ساخت مسیر: مدیر یا درمانگرِ مسئول (منشی فقط مشاهده — پلن §۱۱) */
   function assertCanDecide(student: StudentRow, actor: AuthContext): void {
     if (actor.role === 'manager') return;
     if (actor.role === 'therapist' && student.owner_staff_id === actor.staffId) return;
     throw new ForbiddenError('ثبت تصمیم فقط توسط مدیر یا درمانگرِ مسئول پرونده مجاز است');
   }
-
-  // ───────── دادهٔ ورودی موتور ─────────
 
   async function loadEvidenceEvents(studentId: string): Promise<EvidenceEvent[]> {
     const rows = await db.query<EventJoinRow>(
@@ -167,12 +147,9 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     }));
   }
 
-  // ───────── تفسیر زنده ─────────
-
   async function getInsights(studentId: string, actor: AuthContext): Promise<InferenceOutput & {
     student: { id: string; name: string; grade: string | null };
     narrative: ReturnType<typeof narrativeOf>['text'];
-    /** — روایت سه‌بخشی مستقل هر فرضیه برای کارت‌های پنل (پلن §۶ و §۱۰) */
     ranked: (InferenceOutput['ranked'][number] & { narrative: ReturnType<typeof narrativeOfHypothesis> })[];
   }> {
     const student = await loadStudent(studentId);
@@ -188,13 +165,6 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     };
   }
 
-  // ───────── پیشنهادگر چک‌لیست (T3/m147) ─────────
-
-  /**
-   * پلن پیشنهادی چک‌لیست از سیگنال‌ها — محاسبهٔ زندهٔ قطعی (بدون ذخیره‌سازی؛ مثل تفسیر).
-   * ورودی: سیگنال‌های وکسلر (T1) + شرح‌حال v3 (T4) + شواهد موجود پرونده + id_adapt (T5).
-   * RBAC همان تفسیر: مدیر/منشی/درمانگرِ مسئول — خواندن است، تصمیم نیست.
-   */
   async function getChecklistPlan(studentId: string, actor: AuthContext): Promise<ChecklistPlan> {
     const student = await loadStudent(studentId);
     assertCanView(student, actor);
@@ -203,8 +173,6 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     log.debug('checklist plan computed', { studentId, planType: plan.planType, items: plan.items.length });
     return plan;
   }
-
-  // ───────── مسیرهای مداخله ─────────
 
   function pathRowToRecord(r: PathRow): InterventionPathRecord {
     return {
@@ -259,11 +227,9 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     const student = await loadStudent(studentId);
     assertCanDecide(student, actor);
 
-    // هدف باید در دانش‌نامه باشد — درمانگر حتی هدفی که موتور رتبه‌بندی نکرده می‌تواند بسازد (پلن §۷)
     const target = targetOf(input.targetKey);
     if (!target) throw new ValidationError('هدف انتخابی در دانش‌نامهٔ موتور وجود ندارد');
 
-    // snapshot فرضیهٔ موتور — اگر هدف در رتبهٔ فعلی بود (پایهٔ کالیبراسیون )
     const events = await loadEvidenceEvents(studentId);
     const result = runInference(events, { now });
     const hypothesis = result.ranked.find((h) => h.targetKey === input.targetKey) ?? null;
@@ -314,7 +280,6 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
 
     switch (input.action) {
       case 'confirm':
-        // سقف مسیر فعال هم‌زمان (پلن §۱۱) — در لحظهٔ ورود به active
         {
           const activeRow = await db.queryOne<{ n: number }>(
             `SELECT COUNT(*) AS n FROM intervention_paths
@@ -356,8 +321,6 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
       note
     };
 
-    // یادآور بازسنجی ۴–۶ هفته (فاز بهبود §۱۰.۳): در تأیید مسیر، reassess_at — که UI وعده می‌دهد —
-    // بالاخره نوشته می‌شود (میانهٔ پنجرهٔ ۴–۶ هفته = ۳۵ روز)؛ در سایر تصمیم‌ها مقدار قبلی حفظ می‌شود
     const REASSESS_WINDOW_DAYS = 35;
     const reassessAt = newStatus === 'active'
       ? new Date(Date.now() + REASSESS_WINDOW_DAYS * 86400000).toISOString()
@@ -386,10 +349,6 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     return pathRowToRecord(await loadPathRow(pathId));
   }
 
-  /**
-   * — علامت‌زدن گام مسیر مداخله (چک‌لیست مراحل پلن §۱۰ ردیف UI)
-   * فقط مدیر/درمانگرِ مسئول؛ فقط مسیر فعال (مراحل، کارِ اجرایی مداخله است)؛ toggle — دوباره لمس = لغو
-   */
   async function toggleStep(pathId: string, stepKey: string, actor: AuthContext): Promise<InterventionPathRecord> {
     const row = await loadPathRow(pathId);
     const student = await loadStudent(row.student_id);
@@ -429,7 +388,6 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     return pathRowToRecord(row);
   }
 
-  /** فهرست دانش‌نامه — برای فرم‌های پنل و بات — + اهداف شاخهٔ توانبخشی */
   async function listTargets(): Promise<{ key: string; title: string; group: string }[]> {
     return ALL_TARGETS_INCLUDING_REHAB.map((t) => ({ key: t.key, title: t.title, group: t.group }));
   }

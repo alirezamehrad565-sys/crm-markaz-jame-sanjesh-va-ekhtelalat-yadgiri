@@ -1,14 +1,3 @@
-/**
- * ماژول حضور و غیاب — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// ثبت وضعیت حضور هر دانش‌آموز — مالک WRITE فقط ستون‌های attendance و note در appointment_students
-// قواعد:
-// - mark فقط اگر نوبت scheduled باشد (نوبت cancelled → خطا)
-// - mark روی نوبت گذشته مجاز (ثبت دیرهنگام)
-// - تغییر بعد از ثبت مجاز (قابل بازگردانی)
-// - listPending نوبت‌های گذشته با pending را برمی‌گرداند
-
 import type { AuthContext, AttendanceStats, PendingAttendanceItem } from '@core/shared';
 import { ForbiddenError, ValidationError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
@@ -21,7 +10,6 @@ export interface AttendanceDeps {
   logger: Logger;
 }
 
-/** — ناظر ثبت حضور (برای اعلان هوشمند غیبت) */
 export interface AttendanceObserver {
   onMarked(appointmentId: string, studentId: string, status: string): Promise<void>;
 }
@@ -36,7 +24,6 @@ export interface AttendanceService {
   ): Promise<{ appointmentId: string; studentId: string; status: string }>;
   listPending(staffId?: string): Promise<PendingAttendanceItem[]>;
   getStats(staffId: string, from: string, to: string): Promise<AttendanceStats>;
-  /** — تزریق ناظر (حل وابستگی چرخه‌ای در api-routing) */
   setObserver(observer: AttendanceObserver): void;
 }
 
@@ -49,7 +36,6 @@ export function createAttendanceService(deps: AttendanceDeps): AttendanceService
       observer = o;
     },
     async mark(appointmentId, studentId, status, note, actor) {
-      // درمانگر فقط جلسات خودش را حاضر-غیاب می‌کند؛ دفتر کل مرکز
       const row = await db.queryOne<{ appt_status: string; attendance: string; staff_id: string }>(
         `SELECT a.status AS appt_status, s.attendance, a.staff_id
            FROM appointments a
@@ -83,7 +69,6 @@ export function createAttendanceService(deps: AttendanceDeps): AttendanceService
       });
 
       logger.child('mark').info('attendance.marked', { status });
-      // اعلان هوشمند غیبت (best-effort؛ خطای اعلان ثبت حضور را خراب نمی‌کند)
       if (observer) {
         try {
           await observer.onMarked(appointmentId, studentId, status);
@@ -151,7 +136,6 @@ export function createAttendanceService(deps: AttendanceDeps): AttendanceService
           case 'cancelled': cancelled = r.cnt; break;
         }
       }
-      // تأخیر «حضور» است؛ مخرج نرخ غیبت شامل تأخیر هم می‌شود
       const denominator = present + late + absent;
       const absenceRate = denominator > 0 ? absent / denominator : 0;
       return { present, absent, late, pending, cancelled, absenceRate };

@@ -1,14 +1,3 @@
-/**
- * سرویس تنظیمات مرکز — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// ماژول تنظیمات — مالک WRITE جدول settings
-// بازه کاری مرکز «عمدتاً ثابت» است → یک‌جا در تنظیمات تعریف و به همه کارکنان اعمال می‌شود.
-// قوانین:
-// * هر کلید مقدار JSON دارد؛ مقادیر غایب = DEFAULT_SETTINGS / DEFAULT_CENTER_HOURS
-// * بازه‌های مرکز روی شبکه ۱۵ دقیقه‌ای و بدون هم‌پوشانی (خطای سخت ۴۰۹ — مثل working-hours)
-// * هر تغییر audit می‌شود
-
 import type { DbClient } from '@core/db';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
@@ -22,7 +11,6 @@ import {
 import { ConflictError } from '@core/errors';
 import { findOverlap } from '@domain/working-hours/rules';
 import type { WorkingHoursService } from '@domain/working-hours';
-// — پیش‌فرض‌های موتور امتیازدهی از تک‌منبع حقیقت (worker/scoring.js) می‌آیند
 import {
   ADMIN_USAGE_CAP,
   CONTENT_FORMULA,
@@ -34,11 +22,8 @@ export interface SettingsDeps {
   db: DbClient;
   audit: AuditWriter;
   logger: Logger;
-  /** برای «اعمال روی همه کارکنان» */
   workingHours: WorkingHoursService;
-  /** fallback نام مرکز از env (اگر در DB تنظیم نشده باشد) */
   envClinicName?: string;
-  /** meta فقط-خواندنی زیرساخت اعلان */
   baleConfigured: boolean;
   webhookEnabled: boolean;
 }
@@ -51,53 +36,32 @@ export interface UpdateSettingsInput {
   notifyOnCancel?: boolean;
   notifyDigest?: boolean;
   notifyWaitlist?: boolean;
-  /** — شماره تماس عمومی مرکز */
   clinicPhone?: string;
-  /** — ساعت ارسال پیش‌نویس اعلان نوبت جدید (0..23 تهران) */
   notifyBatchHour?: number;
-  /** — نام کاربری بات بله (با یا بدون @؛ خالی = پاک کردن برای تشخیص خودکار) */
   botUsername?: string;
-  /** — جایگزینی کامل بازه‌های شاخص سنجش (سال/ماه شمسی) */
   screeningTargets?: ScreeningTargetConfig[];
 }
 
-/** — ورودی به‌روزرسانی پیکربندی امتیازدهی (PUT /api/settings/scoring) */
 export interface UpdateScoringConfigInput {
-  /** تاریخ شروع شمارش امتیاز — YYYY-MM-DD میلادیِ روز تهران */
   epochYmd: string;
   weights: ScoringWeights;
 }
 
 export interface SettingsService {
-  /** خواندن کامل تنظیمات (با اعمال پیش‌فرض‌ها) */
   get(): Promise<CenterSettings>;
-  /** به‌روزرسانی تنظیمات متنی/عددی/بولی */
   update(input: UpdateSettingsInput, actor: AuthContext): Promise<CenterSettings>;
-  /** بازه کاری مرکز — پیش‌فرض ۹–۱۷ */
   getCenterHours(): Promise<CenterHourRange[]>;
-  /** جایگزینی کامل بازه کاری مرکز (اتمیک) */
   replaceCenterHours(items: CenterHourRange[], actor: AuthContext): Promise<CenterHourRange[]>;
-  /** اعمال بازه مرکز روی برنامه هفتگی همه کارکنان فعال */
   applyCenterHoursToAllStaff(actor: AuthContext): Promise<{ staffCount: number; ranges: number }>;
-  /** خواندن سریع نام مرکز (برای قالب پیام‌ها) */
   getClinicName(): Promise<string>;
-  /** — شماره تماس عمومی مرکز (خالی = ثبت نشده) */
   getClinicPhone(): Promise<string>;
-  /** — ساعت ارسال پیش‌نویس اعلان نوبت جدید (0..23 تهران) */
   getBatchHour(): Promise<number>;
-  /** — یوزرنیم بات بله برای ساخت لینک اتصال (خالی = ثبت نشده) */
   getBotUsername(): Promise<string>;
-  /** — ثبت/به‌روزرسانی یوزرنیم بات (اعتبارسنجی لاتین + audit) */
   setBotUsername(username: string, actor: AuthContext): Promise<string>;
-  /** خواندن سریع پرچم‌های اعلان چرخه حیات */
   getNotifyFlags(): Promise<{ onCreate: boolean; onMove: boolean; onCancel: boolean; digestEnabled: boolean; waitlistEnabled: boolean; defaultReminderHours: number }>;
-  /** — کلید قطع بانک تمرین (جریان بات + ثبت تکلیف) */
   getExerciseBankEnabled(): Promise<boolean>;
-  /** — شاخص سنجش: بازه‌های هدف (سال/ماه شمسی) — مسیر سریع برای داشبورد */
   getScreeningTargets(): Promise<ScreeningTargetConfig[]>;
-  /** — پیکربندی امتیازدهی همکاران (تاریخ شروع + وزن‌ها — فقط مدیر) */
   getScoringConfig(): Promise<ScoringConfig>;
-  /** — به‌روزرسانی پیکربندی امتیازدهی (فقط مدیر) */
   updateScoringConfig(input: UpdateScoringConfigInput, actor: AuthContext): Promise<ScoringConfig>;
 }
 
@@ -106,27 +70,21 @@ interface SettingRow {
   value: string;
 }
 
-// ── تبدیل تاریخ شروع شمارش (روز تهران ↔ cutoff UTC) ──────────────────
-
-/** روز تهران (YYYY-MM-DD) → نیمه‌شب تهران به UTC «YYYY-MM-DD HH:MM:SS» */
 function epochUtcOfTehranYmd(ymd: string): string {
   const utcMs = Date.parse(`${ymd}T00:00:00.000Z`) - TEHRAN_OFFSET_MINUTES * 60_000;
   return new Date(utcMs).toISOString().slice(0, 19).replace('T', ' ');
 }
 
-/** cutoff UTC «YYYY-MM-DD HH:MM:SS» → روز تهران (YYYY-MM-DD) */
 function tehranYmdOfEpochUtc(epoch: string): string {
   const ms = Date.parse(`${epoch.replace(' ', 'T')}Z`) + TEHRAN_OFFSET_MINUTES * 60_000;
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-/** وزن ذخیره‌شدهٔ معتبر — عدد صحیح در بازه، وگرنه undefined */
 function sanitizeWeight(v: unknown, max = 10_000): number | undefined {
   const n = Number(v);
   return Number.isInteger(n) && n >= 0 && n <= max ? n : undefined;
 }
 
-/** پیش‌فرض وزن‌ها — از خود موتور امتیاز (تک‌منبع حقیقت) */
 function defaultScoringWeights(): ScoringWeights {
   const w: Record<string, number> = {};
   for (const x of [...CONTENT_FORMULA.production, ...CONTENT_FORMULA.usage, ...CONTENT_FORMULA.reference]) {
@@ -137,7 +95,6 @@ function defaultScoringWeights(): ScoringWeights {
   return w as unknown as ScoringWeights;
 }
 
-/** وزن‌های ذخیره‌شدهٔ سالم + پرکردن غایب‌ها با پیش‌فرض */
 function mergeScoringWeights(stored: unknown): ScoringWeights {
   const base = defaultScoringWeights();
   if (!stored || typeof stored !== 'object') return base;
@@ -360,34 +317,29 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
           const parsed = JSON.parse(row.value) as unknown;
           if (typeof parsed === 'string' && parsed.trim().length > 0) return parsed;
         } catch {
-          /* corrupt value → fallback */
         }
       }
       return deps.envClinicName ?? DEFAULT_SETTINGS[SETTING_KEYS.CLINIC_NAME];
     },
 
-    /** — شماره تماس عمومی مرکز */
     async getClinicPhone(): Promise<string> {
       const stored = await readAll();
       const v = stored.get(SETTING_KEYS.CLINIC_PHONE);
       return typeof v === 'string' ? v : DEFAULT_SETTINGS[SETTING_KEYS.CLINIC_PHONE];
     },
 
-    /** — ساعت ارسال پیش‌نویس اعلان نوبت جدید */
     async getBatchHour(): Promise<number> {
       const stored = await readAll();
       const v = stored.get(SETTING_KEYS.NOTIFY_BATCH_HOUR);
       return typeof v === 'number' ? v : DEFAULT_SETTINGS[SETTING_KEYS.NOTIFY_BATCH_HOUR];
     },
 
-    /** — یوزرنیم بات بله برای ساخت لینک اتصال (ble.ir/<bot>?start=CODE) */
     async getBotUsername(): Promise<string> {
       const stored = await readAll();
       const v = stored.get(SETTING_KEYS.BOT_USERNAME);
       return typeof v === 'string' ? v.trim().replace(/^@/, '') : '';
     },
 
-    /** — ثبت/به‌روزرسانی یوزرنیم بات (اعتبارسنجی + audit) */
     async setBotUsername(username: string, actor: AuthContext): Promise<string> {
       const clean = username.trim().replace(/^@/, '');
       if (clean.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean)) {
@@ -435,7 +387,6 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
       return Array.isArray(v) ? (v as ScreeningTargetConfig[]) : [];
     },
 
-    /** — پیکربندی امتیازدهی: پیش‌فرض موتور + مقدار ذخیره‌شدهٔ مدیر */
     async getScoringConfig(): Promise<ScoringConfig> {
       const row = await db.queryOne<{ value: string }>(
         `SELECT value FROM settings WHERE key = ?`,
@@ -461,11 +412,9 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
       };
     },
 
-    /** — ذخیرهٔ پیکربندی امتیازدهی (فقط مدیر — در routes اعمال می‌شود) */
     async updateScoringConfig(input: UpdateScoringConfigInput, actor: AuthContext): Promise<ScoringConfig> {
       const before = await this.getScoringConfig();
       const epoch = epochUtcOfTehranYmd(input.epochYmd);
-      // فقط وزن‌های شناخته‌شده ذخیره می‌شوند — بقیهٔ کلیدها نادیده گرفته می‌شوند
       const clean = mergeScoringWeights(input.weights as unknown);
       await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean }, actor);
       const changed = (Object.keys(clean) as (keyof ScoringWeights)[]).filter(

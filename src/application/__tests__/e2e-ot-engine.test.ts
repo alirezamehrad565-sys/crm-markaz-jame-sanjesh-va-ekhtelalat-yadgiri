@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — ot-engine
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-ot-engine.test.ts — /: فلو دوفازی شناسایی → مداخله + چک‌لیست ۷ حیطه‌ای کاردرمانی ذهنی
-//: تازگی ۱۲ماههٔ گیت‌ها، حداقل ۳ نمره در حیطه، قاعدهٔ تسلط دوجلسه‌ای، سطح راهنمای «با کمک»،
-// مهارت‌های primary/مکمل، پیشنهاد نیاز→پروتکل، snapshot گیت‌ها در ثبت نیاز
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -81,7 +73,6 @@ describe('/ — گیت‌های شناسایی و RBAC', () => {
     expect(body.otCoverage.total).toBe(83); // — فقط primary (۸۴ − ۱ مکمل دکمه/زیپ)
     expect(body.otCoverage.scored).toBe(0);
     expect(body.otCoverage.domainsMin3).toBe(0);
-    // نگاشت پیشنهاد نیاز→پروتکل
     expect(body.protocolSuggestions.dyslexia?.protocol).toBe('learning');
     expect(body.protocolSuggestions.slow_learner?.protocol).toBe('slow_learner');
     expect(body.protocolSuggestions.adhd?.protocol).toBe('mental_ot');
@@ -202,7 +193,6 @@ describe('/ — پروفایل مهارتی، نقطهٔ ادامه، تسلط �
     expect(saved.masteryConfirmed).toBe(0); // جلسهٔ اول — هنوز تأیید نمی‌شود
     expect(saved.summary).toContain('جلسهٔ کاردرمانی ذهنی');
 
-    // تکرار همان مهارت در یک درخواست → dedupe (آخرین وضعیت)
     const dup = await ali.post(`/api/students/${studentId}/ot/sessions`, {
       items: [
         { skill_id: 'ot-gross-03', status: 'not_yet' },
@@ -219,7 +209,6 @@ describe('/ — پروفایل مهارتی، نقطهٔ ادامه، تسلط �
     expect(gross.mastered).toBe(0); // — تسلط تک‌جلسه‌ای تأیید نیست
     expect(gross.masteredPending).toBe(1);
     expect(gross.withHelp).toBe(2);
-    // نقطهٔ ادامه = اولین primary بدون تسلط دوجلسه‌ای → ot-gross-01 هنوز معلق است
     expect(gross.resumeSkillId).toBe('ot-gross-01');
     const s1 = gross.skills.find((s) => s.skillId === 'ot-gross-01')!;
     expect(s1.status).toBe('mastered');
@@ -234,9 +223,7 @@ describe('/ — پروفایل مهارتی، نقطهٔ ادامه، تسلط �
     expect(s3.status).toBe('with_help'); // آخرین وضعیت ملاک است (dedupe)
     expect(s3.promptLevel).toBe('gestural');
 
-    // گزارش جلسه در تایم‌لاین (case_events) — رکورد typeTitle دارد
     const events = dataOf<{ typeTitle?: string }[]>(await ali.get(`/api/students/${studentId}/case-events`));
-    // عنوان فرم جلسه در m132 به «گزارش جلسهٔ کاردرمانی ذهنی» تغییر کرد (migration 0055)
     expect(events.some((e) => e.typeTitle === 'گزارش جلسهٔ کاردرمانی ذهنی')).toBe(true);
   });
 
@@ -251,12 +238,10 @@ describe('/ — پروفایل مهارتی، نقطهٔ ادامه، تسلط �
     const gross = prof.domains.find((d) => d.key === 'gross')!;
     expect(gross.mastered).toBe(1);
     expect(gross.masteredPending).toBe(0);
-    // ترتیب جدید: چهاردست‌وپا (ot-gross-03) ردیف ۲ است؛ بعد از تأیید مهارت ۱، ادامه از آن‌جاست
     expect(gross.resumeSkillId).toBe('ot-gross-03');
   });
 
   it('گیت مهارتی با حداقل ۳ نمره در هر ۷ حیطه سبز می‌شود', async () => {
-    // gross: ۳ مهارت نمره‌گرفته (۰۱، ۰۲، ۰۳) — برای ۶ حیطهٔ دیگر ۳ نمونه ثبت می‌شود
     const rest = ['fine', 'visual', 'aud', 'cog', 'adl', 'soc'];
     const items = rest.flatMap((d) =>
       ['01', '02', '03'].map((n) => ({ skill_id: `ot-${d}-${n}`, status: 'not_yet' as const }))
@@ -332,7 +317,6 @@ describe('/ — نتیجهٔ نیاز ویژه و فعال‌سازی پروتک
     expect(needsGate.detail).toContain('کاردرمانی ذهنی');
 
     const events = dataOf<{ typeTitle?: string; summary?: string }[]>(await ali.get(`/api/students/${studentId}/case-events`));
-    // عنوان فرم نیاز ویژه در m132 به «تعیین نیاز ویژه و پروتکل مداخله» تغییر کرد (migration 0055)
     const needsEvent = events.find((e) => e.typeTitle === 'تعیین نیاز ویژه و پروتکل مداخله');
     expect(needsEvent).toBeDefined();
     expect(needsEvent!.summary).toContain('دیرآموز');

@@ -1,16 +1,3 @@
-/**
- * تست‌های e2e — ارزیابی عملکردی توانبخشی ذهنی (m161)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-rehab-fx.test.ts — حلقهٔ کامل «ارزیابی عملکردی = آزمون درمانگر در مرکز» (مسیر توانبخشی):
-// شش حیطهٔ شناختی پایه با دادهٔ خام + سطح راهنما در POST مسیر اختصاصی /case-events/rehab-fx؛
-// تحلیل ملاکی سمت سرور (ملاک هر حیطه = ملاک کمی ot_skills؛ باند کلی از ترکیب شش حیطه)؛
-// رویداد completed با payload برچسب‌دار (fx_{key}_band/fx_{key}_prompt/chip_metric_N/advice_N)؛
-// حیطهٔ جا/خارج از قلم‌رو/راهنمای نامعتبر → ۴۰۰ فارسی و بدون رکورد؛
-// type ce-rehab-fx-v1 idempotent ensure می‌شود (active=0 — خارج کتابخانه، is_system=1)؛
-// RBAC همان گیت ثبت رویداد (منشی ۴۰۳)؛ audit هم‌تراکنش (case_event.rehab_fx_created)؛
-// گیت‌های مسیرآگاه: pathway=rehab → سه گیت [anamnesis, skills, needs] — وکسلر/چک‌لیست‌ها اختیاری.
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, Api, asRole, createStudent } from '../../test/harness';
 
@@ -31,7 +18,6 @@ interface GatesBody {
   otCoverage: { scored: number; total: number; domainsCovered: number; domainsMin3: number };
 }
 
-/** ورودی کامل شش‌حیطه‌ای — نیم‌رخ قوی (همه در انتظار: ۱۲/۱/۵/۱/۰/۱۰ + داستان ۳) */
 const STRONG_VALUES = {
   d_att_sus: 12, d_att_sel: 1, d_wm: 5, d_inh: 1, d_flex: 0, d_ps: 10, d_ps_story: 3,
   p_att_sus: 'بدون راهنما', p_att_sel: 'بدون راهنما', p_wm: 'بدون راهنما',
@@ -39,7 +25,6 @@ const STRONG_VALUES = {
   notes: 'همکاری خوب — با تشویق کلامی ادامه داد'
 };
 
-/** ورودی نیم‌رخ ضعیف — سه حیطه ضعیف + دو مرزی + یک در انتظار */
 const WEAK_VALUES = {
   d_att_sus: 3, d_att_sel: 8, d_wm: 2, d_inh: 3, d_flex: 1, d_ps: 7,
   p_att_sus: 'راهنمای کلامی', p_wm: 'لمسی جزئی'
@@ -77,7 +62,6 @@ describe('ارزیابی عملکردی توانبخشی ذهنی — ثبت د�
 
     expect(ev.status).toBe('completed');
     expect(ev.typeTitle).toContain('ارزیابی عملکردی توانبخشی ذهنی');
-    // ۳ حیطه ضعیف (att_sus=3، wm=2، att_sel=8) → «نیاز به مداخلهٔ همه‌جانبهٔ ذهنی»
     expect(ev.analysis?.band).toBe('نیاز به مداخلهٔ همه‌جانبهٔ ذهنی');
     expect(ev.analysis?.score).toBe(1); // فقط flex=1 در انتظار
     expect(ev.analysis?.maxScore).toBe(6);
@@ -86,7 +70,6 @@ describe('ارزیابی عملکردی توانبخشی ذهنی — ثبت د�
     expect(ev.analysis?.flags?.some((f) => f.key === 'wm')).toBe(true);
     expect(ev.analysis?.flags?.some((f) => f.key === 'att_sel')).toBe(true);
 
-    // payload — فیلد خام با رقم فارسی + باند و سطح راهنمای هر حیطه + ردیف‌های عددی + ملاک مرجع + خلاصه
     expect(ev.payload?.d_att_sus).toEqual({ value: '۳', label: 'توجه پایدار — دقیقهٔ تمرکز پیوسته' });
     expect(ev.payload?.fx_att_sus_band.value).toBe('ضعف آشکار');
     expect(ev.payload?.fx_att_sus_prompt.value).toBe('راهنمای کلامی');
@@ -97,12 +80,10 @@ describe('ارزیابی عملکردی توانبخشی ذهنی — ثبت د�
     expect(ev.payload?.chip_band).toEqual({ value: 'نیاز به مداخلهٔ همه‌جانبهٔ ذهنی', label: 'باند کلی' });
     expect(ev.payload?.norm_fa.value).toContain('ot-cog-07');
     expect(ev.payload?.fa_summary.value).toContain('۱ حیطه در انتظار، ۲ مرزی، ۳ ضعف از ۶');
-    // پیشنهاد حیطه‌ای — فقط حیطه‌های مرزی/ضعیف به ترتیب نمایش
     expect(ev.payload?.advice_1.label).toContain('توجه پایدار');
     expect(ev.payload?.advice_1.value).toContain('تایمر دیداری');
     expect(ev.summary).toContain('امتیاز: ۱ از ۶');
 
-    // type — idempotent ensure، خارج کتابخانه (active=0) اما سیستمی
     const trow = A.sql
       .prepare(`SELECT key, active, is_system, created_by FROM case_event_types WHERE key = 'ce-rehab-fx-v1'`)
       .get() as { key: string; active: number; is_system: number; created_by: string };
@@ -114,7 +95,6 @@ describe('ارزیابی عملکردی توانبخشی ذهنی — ثبت د�
       .get() as { c: number };
     expect(tcount.c).toBe(1);
 
-    // audit هم‌تراکنش
     const audits = A.sql
       .prepare(`SELECT action FROM audit_log WHERE resource_type = 'case_event' AND resource_id = ?`)
       .all(ev.id) as { action: string }[];
@@ -183,11 +163,9 @@ describe('ارزیابی عملکردی توانبخشی ذهنی — ثبت د�
     const gates = (res.body as { data: GatesBody }).data;
     expect(gates.pathway).toBe('rehab');
     expect(gates.gates.map((g) => g.key)).toEqual(['anamnesis', 'skills', 'needs']);
-    // شماره‌گذاری از جایگاه واقعی — وکسلر/چک‌لیست‌ها از مسیر خارج‌اند
     expect(gates.gates.map((g) => g.ord)).toEqual([1, 2, 3]);
     const skills = gates.gates.find((g) => g.key === 'skills')!;
     expect(skills.label).toContain('ارزیابی عملکردی توانبخشی');
-    // ارزیابی عملکردی ثبت شده (تست اول) → گیت مهارتی سبز است حتی با OT۷ خالی
     expect(skills.done).toBe(true);
     expect(skills.detail).toContain('خط پایهٔ شش حیطه‌ای موجود است');
     const needs = gates.gates.find((g) => g.key === 'needs')!;
@@ -209,7 +187,6 @@ describe('ارزیابی عملکردی توانبخشی ذهنی — ثبت د�
     expect(skillsBefore.done).toBe(false);
     expect(skillsBefore.detail).toContain('هنوز ثبت نشده');
 
-    // پوشش کامل OT۷ (۷ حیطه × ۳ مهارت mastered) → گیت سبز حتی بدون فرم عملکردی
     const all = A.sql.prepare(`SELECT id, domain FROM ot_skills WHERE COALESCE(is_primary, 1) = 1 ORDER BY domain, ord`).all() as { id: string; domain: string }[];
     const byDomain = new Map<string, string[]>();
     for (const s of all) {

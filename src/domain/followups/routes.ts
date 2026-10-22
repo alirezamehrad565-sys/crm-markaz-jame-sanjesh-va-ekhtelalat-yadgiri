@@ -1,13 +1,3 @@
-/**
- * ماژول پیگیری‌ها — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// REST endpoints پیگیری — بدون business logic
-// RBAC:
-// - GET (فهرست/تکی): همهٔ نقش‌های داخلی — «اقدام بعدی» اطلاعات عملیاتی مرکز است
-// - POST: فقط manager/secretary (درمانگرها پیگیری را از هوک گزارش جلسه می‌گیرند)
-// - PATCH: قاعدهٔ مالکیت در سرویس (مدیر/منشی یا خودِ مسئول) — درمانگرِ غیرمسئول ۴۰۳
-
 import type { AppHono } from '@core/shared';
 import { NewFollowUpSchema, UpdateFollowUpSchema } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';

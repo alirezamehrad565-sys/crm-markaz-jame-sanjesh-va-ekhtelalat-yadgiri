@@ -1,9 +1,3 @@
-/**
- * کلاس های خطای تایپ‌دار — کلاس‌های خطا
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Typed error classes — هر خطا یک HTTP status مشخص دارد
-
 export type ErrorCode =
   | 'VALIDATION_ERROR'
   | 'AUTH_ERROR'
@@ -65,7 +59,6 @@ export class ConflictError extends AppError {
   }
 }
 
-/** — هم‌سنگ باندل زنده: تلاش ناموفق بیش از حد (ورود/دود کردن) — 429 با Retry-After */
 export class RateLimitError extends AppError {
   readonly retryAfterSeconds: number;
 

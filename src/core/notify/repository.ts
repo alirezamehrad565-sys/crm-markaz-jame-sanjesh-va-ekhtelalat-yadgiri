@@ -1,10 +1,3 @@
-/**
- * هستهٔ اعلان و کلاینت بات بله — لایهٔ دسترسی به داده (D1)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// SQL پارامتری برای notifications / notification_prefs / bot_links
-// مالکیت write این سه جدول فقط همین ماژول است (قانون ownership سند معماری).
-
 import type {
   BotLinkRecord,
   NotificationChannel,
@@ -14,8 +7,6 @@ import type {
   NotificationTemplateId,
   TemplateVars
 } from '@core/shared';
-
-// ───────────── Row shapes ─────────────
 
 export interface NotificationRow {
   id: string;
@@ -30,7 +21,6 @@ export interface NotificationRow {
   attempts: number;
   last_error: string | null;
   dedup_key: string | null;
-  /** — ساعت ارسال (NULL = فوری) */
   send_at: string | null;
   sent_at: string | null;
   created_at: string;
@@ -56,8 +46,6 @@ export interface BotLinkRow {
   created_at: string;
   updated_at: string;
 }
-
-// ───────────── Mappers ─────────────
 
 export function rowToNotification(row: NotificationRow): NotificationRecord {
   let payload: TemplateVars = {};
@@ -110,8 +98,6 @@ export function rowToBotLink(row: BotLinkRow): BotLinkRecord {
   };
 }
 
-// ───────────── notifications ─────────────
-
 const NOTIFICATION_COLS =
   'id, channel, template, recipient, student_id, appointment_id, staff_id, payload, status, attempts, last_error, dedup_key, send_at, sent_at, created_at, updated_at';
 
@@ -125,7 +111,6 @@ export function insertNotification(input: {
   staffId: string | null;
   payload: TemplateVars;
   dedupKey: string | null;
-  /** — ساعت ارسال؛ NULL = فوری */
   sendAt: string | null;
   nowIso: string;
 }): { sql: string; params: unknown[] } {
@@ -184,10 +169,6 @@ export function selectNotifications(filters: {
   };
 }
 
-/**
- * — رکوردهای آمادهٔ ارسال: pending با attempts آزاد و ساعت ارسال گذشته
- * (send_at NULL = فوری). پیش‌نویس‌های آینده پشت این فیلتر می‌مانند.
- */
 export function selectPendingNotifications(limit: number, maxAttempts: number, nowIso: string): { sql: string; params: unknown[] } {
   return {
     sql: `SELECT ${NOTIFICATION_COLS}
@@ -200,7 +181,6 @@ export function selectPendingNotifications(limit: number, maxAttempts: number, n
   };
 }
 
-/** — رهاسازی یک رکورد (ارسال فوری از Outbox) — از failed هم برمی‌گردد */
 export function releaseNotificationById(id: string, nowIso: string): { sql: string; params: unknown[] } {
   return {
     sql: `UPDATE notifications
@@ -210,7 +190,6 @@ export function releaseNotificationById(id: string, nowIso: string): { sql: stri
   };
 }
 
-/** — رهاسازی همهٔ پیش‌نویس‌ها (دکمهٔ «ارسال فوری صف») */
 export function releaseAllDrafts(nowIso: string): { sql: string; params: unknown[] } {
   return {
     sql: `UPDATE notifications
@@ -220,7 +199,6 @@ export function releaseAllDrafts(nowIso: string): { sql: string; params: unknown
   };
 }
 
-/** تلاش‌های بیش از حد → skipped تا صف بلاک نشود */
 export function stalePendingToSkipped(maxAttempts: number, nowIso: string): { sql: string; params: unknown[] } {
   return {
     sql: `UPDATE notifications
@@ -274,8 +252,6 @@ export function notificationStatusCounts(): { sql: string; params: unknown[] } {
   };
 }
 
-// ───────────── notification_prefs ─────────────
-
 export function selectPrefs(studentId: string): { sql: string; params: unknown[] } {
   return {
     sql: `SELECT student_id, channel, chat_id, reminders_enabled, reminder_hours_before, updated_at
@@ -326,8 +302,6 @@ export function upsertPrefs(input: {
   };
 }
 
-// ───────────── bot_links ─────────────
-
 const BOT_LINK_COLS = 'id, code, student_id, chat_id, status, created_by, created_at, updated_at';
 
 export function insertBotLink(input: {
@@ -364,7 +338,6 @@ export function selectBotLinks(filters: { studentId?: string; limit: number }): 
   };
 }
 
-/** — لینک چندبارمصرف: اتصال دوباره (همین چت = idempotent، چت تازه = انتقال اتصال) */
 export function linkBotLink(id: string, chatId: string, nowIso: string): { sql: string; params: unknown[] } {
   return {
     sql: `UPDATE bot_links
@@ -374,9 +347,6 @@ export function linkBotLink(id: string, chatId: string, nowIso: string): { sql: 
   };
 }
 
-// ───────────── ورود خودکار (اتصال مستقیم با کد ملی/تلفن) ─────────────
-
-/** ساخت اتصال مستقیم دانش‌آموز بدون کد (identify) — idempotency در سرویس با selectBotLinkIdFor */
 export function insertBotLinkLinked(input: {
   id: string;
   code: string;
@@ -391,7 +361,6 @@ export function insertBotLinkLinked(input: {
   };
 }
 
-/** ساخت اتصال مستقیم کارمند بدون کد (identify) */
 export function insertStaffLinkLinked(input: {
   id: string;
   code: string;
@@ -406,7 +375,6 @@ export function insertStaffLinkLinked(input: {
   };
 }
 
-/** آیا این chat قبلاً به این دانش‌آموز متصل شده؟ (idempotency identify) */
 export function selectBotLinkIdFor(studentId: string, chatId: string): { sql: string; params: unknown[] } {
   return {
     sql: `SELECT id FROM bot_links WHERE student_id = ? AND chat_id = ? AND status = 'linked' LIMIT 1`,
@@ -414,7 +382,6 @@ export function selectBotLinkIdFor(studentId: string, chatId: string): { sql: st
   };
 }
 
-/** آیا این chat قبلاً به این کارمند متصل شده؟ */
 export function selectStaffLinkIdFor(staffId: string, chatId: string): { sql: string; params: unknown[] } {
   return {
     sql: `SELECT id FROM staff_bot_links WHERE staff_id = ? AND chat_id = ? AND status = 'linked' LIMIT 1`,
@@ -422,15 +389,12 @@ export function selectStaffLinkIdFor(staffId: string, chatId: string): { sql: st
   };
 }
 
-/** همهٔ دانش‌آموزان متصل به یک chat (والد با چند فرزند — bot_links منبع حقیقت اتصال است) */
 export function selectStudentIdsByChat(chatId: string): { sql: string; params: unknown[] } {
   return {
     sql: `SELECT DISTINCT student_id FROM bot_links WHERE chat_id = ? AND status = 'linked'`,
     params: [chatId]
   };
 }
-
-// ───────────── staff_bot_links ─────────────
 
 export interface StaffBotLinkRow {
   id: string;
@@ -492,7 +456,6 @@ export function selectStaffLinks(filters: { staffId?: string; limit: number }): 
   };
 }
 
-/** — لینک چندبارمصرف: اتصال دوبارهٔ کد کارمند (انتقال به چت تازه هم مجاز) */
 export function linkStaffLink(id: string, chatId: string, nowIso: string): { sql: string; params: unknown[] } {
   return {
     sql: `UPDATE staff_bot_links
@@ -502,7 +465,6 @@ export function linkStaffLink(id: string, chatId: string, nowIso: string): { sql
   };
 }
 
-/** chat_idهای متصل یک کارمند (برای ارسال اعلان) */
 export function selectStaffChats(staffId: string): { sql: string; params: unknown[] } {
   return {
     sql: `SELECT DISTINCT chat_id FROM staff_bot_links
@@ -510,8 +472,6 @@ export function selectStaffChats(staffId: string): { sql: string; params: unknow
     params: [staffId]
   };
 }
-
-// ───────────── class_bot_links ─────────────
 
 export interface ClassBotLinkRow {
   id: string;
@@ -535,7 +495,6 @@ export function rowToClassBotLink(row: ClassBotLinkRow): import('@core/shared').
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
-  // — ستون‌های JOIN فهرست مدیریت (اختیاری)
   const extra = row as ClassBotLinkRow & { class_name?: string | null; school_name?: string | null };
   if (extra.class_name !== undefined) rec.className = extra.class_name;
   if (extra.school_name !== undefined) rec.schoolName = extra.school_name;
@@ -572,7 +531,6 @@ export function selectClassLinks(filters: { classId?: string; limit: number }): 
       params: [filters.classId, filters.limit]
     };
   }
-  // — فهرست مدیریت لینک معلم‌ها: نام کلاس/مدرسه هم می‌آید
   return {
     sql: `SELECT l.id, l.code, l.class_id, l.chat_id, l.status, l.created_by, l.created_at, l.updated_at,
                  c.name AS class_name, sc.name AS school_name
@@ -584,7 +542,6 @@ export function selectClassLinks(filters: { classId?: string; limit: number }): 
   };
 }
 
-/** — لینک چندبارمصرف: فقط کد «لغوشده» مرده می‌ماند؛ اتصال دوبارهٔ کد فعال مجاز است */
 export function linkClassLink(id: string, chatId: string, nowIso: string): { sql: string; params: unknown[] } {
   return {
     sql: `UPDATE class_bot_links
@@ -594,7 +551,6 @@ export function linkClassLink(id: string, chatId: string, nowIso: string): { sql
   };
 }
 
-/** chat_idهای متصل یک کلاس (اعلان به معلم مدرسه) */
 export function selectClassChats(classId: string): { sql: string; params: unknown[] } {
   return {
     sql: `SELECT DISTINCT chat_id FROM class_bot_links
@@ -603,7 +559,6 @@ export function selectClassChats(classId: string): { sql: string; params: unknow
   };
 }
 
-/** resolve یک chat بله → کارمند یا دانش‌آموز یا کلاس (اول کارمند، بعد کلاس، بعد دانش‌آموز) */
 export function resolveChatOwner(chatId: string): { sql: string; params: unknown[] } {
   return {
     sql: `SELECT 'staff' AS kind, l.staff_id AS ref_id, COALESCE(s.role_ext, s.role) AS role

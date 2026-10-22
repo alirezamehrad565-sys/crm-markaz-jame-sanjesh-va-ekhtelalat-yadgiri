@@ -1,8 +1,3 @@
-/**
- * تست‌های واحد — templates-
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// رندررهای بات نقش‌آگاه: نتیجهٔ جستجو + برنامهٔ مرکز + راهنماهای نقش‌محور
 import { describe, expect, it } from 'vitest';
 import { renderTemplate } from '../templates';
 import { renderCenterSchedule, renderSearchResults } from '../templates';
@@ -59,7 +54,6 @@ describe('renderCenterSchedule', () => {
     const text = renderCenterSchedule({ title: '📋 برنامهٔ مرکز', rows });
     expect(text).toContain('مورد دیگر');
     expect(text).toContain('روز کاری');
-    // ۱۲ ردیف نمایش داده شده
     const bodyLines = text.split('\n').filter((l) => l.includes('دانش‌آموز'));
     expect(bodyLines.length).toBe(12);
   });
@@ -84,7 +78,6 @@ describe('راهنماهای نقش‌محور — هر نقش فقط دستور
 
   it('متخصص — جستجو و پیگیری دارد؛ وضعیت مرکز ندارد (: منوی دانش‌آموز)', () => {
     const t = renderTemplate('bot_help_therapist');
-    // جستجوی آزاد جای خود را به منوی ساخت‌یافتهٔ «دانش‌آموزان فعال» داد
     expect(t).toContain('دانش‌آموزان فعال');
     expect(t).toContain('پیام به خانواده');
     expect(t).toContain('پیگیری‌های من');
@@ -103,7 +96,6 @@ describe('راهنماهای نقش‌محور — هر نقش فقط دستور
   it('والد — حضور فرزند و تمرین‌های انجام‌نشده دارد؛ پیگیری و جستجو ندارد', () => {
     const t = renderTemplate('bot_help_parent');
     expect(t).toContain('حضور فرزند');
-    // برچسب دقیق دستور کاربر
     expect(t).toContain('نوبت‌های دانش‌آموز من');
     expect(t).toContain('تمرین‌های انجام‌نشده');
     expect(t).not.toContain('/search');

@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — schema
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// فاز ۲ — تست pure اعتبارسنجی next_action و اسکیمای گزارش جلسه (D7)
-
 import { describe, expect, it } from 'vitest';
 import { NEXT_ACTION_VALUES, SESSION_NOTE_MAX, SaveSessionNoteSchema } from '@core/shared';
 import { normalizeNextAction } from '../service';

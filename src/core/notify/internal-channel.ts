@@ -1,10 +1,3 @@
-/**
- * هستهٔ اعلان و کلاینت بات بله — کانال اعلان داخلی (وقتی بات در دسترس نیست)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// کانال internal — ارسال «مجازی» (فقط log) برای توسعه، تست و پیام‌های درون‌سیستمی
-// در production بدون توکن بله هم dispatch صف را سبز نگه می‌دارد (قابل مشاهده در log).
-
 import type { Logger } from '@core/logger';
 import type { NotifyChannel, OutboundMessage, SendResult } from './types';
 

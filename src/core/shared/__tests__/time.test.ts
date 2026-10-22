@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — time
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست کمکی‌های زمانی اضافه‌شده در — pure
-
 import { describe, expect, it } from 'vitest';
 import { addDaysYmd, tehranTimeLabel } from '../time';
 

@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — pure
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست‌های pure ماژول برچسب‌ها — بدون دیتابیس
-
 import { describe, expect, it } from 'vitest';
 import type { TagRef } from '@core/shared';
 import { diffStudentTags, normalizeTagName } from '../pure';
@@ -46,7 +40,6 @@ describe('diffStudentTags', () => {
   it('T6: آیتم تکراری در ورودی، diff را نمی‌شکند (set semantics)', () => {
     const next = [tag('a', 'اضطراب'), tag('a', 'اضطراب')];
     const diff = diffStudentTags([], next);
-    // next دارای id تکراری است — added بر اساس نام دوبار می‌آید؛ ولی سرویس قبل از diff یکتا می‌کند
     expect(diff.added.length).toBe(2);
     expect(diffStudentTags(next, next)).toEqual({ added: [], removed: [] });
   });

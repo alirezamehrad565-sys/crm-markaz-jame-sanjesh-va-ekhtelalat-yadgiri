@@ -1,12 +1,3 @@
-/**
- * ماژول رویدادساز (فرم/پرسش‌نامه/چک‌لیست) — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// REST endpoints رویدادهای پرونده — بدون business logic، فقط سیم به سرویس
-// RBAC: — فرم‌ساز (انواع) همگانی شد برای سه نقش مرکز (دستور کاربر: «دسترسی به فرم‌ساز و
-// بانک تمرین همگانی باشه»)؛ ثبت/ویرایش رویداد مدیر+درمانگر (جریان گزارش دست‌نخورده)؛
-// ارسال چک‌لیست با بله: سه نقش؛ خواندن همهٔ نقش‌های داخلی. مسیر عمومی پر کردن با توکن.
-
 import type { AppHono } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
 import { CaseEventTypeInputSchema, CaseEventTypeUpdateSchema, packageComponentsOf, teacherBindingOfPayload } from './pure';
@@ -15,7 +6,6 @@ import { renderFillFormPage, renderPackageFormPage } from './public-form';
 import type { PackageFormModel, PackageToolBlock } from './public-form';
 
 export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsService): void {
-  // ───────── کاتالوگ انواع ─────────
 
   app.get('/api/case-events/types', async (c) => {
     const items = await service.listTypes({
@@ -25,7 +15,6 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: items }, 200);
   });
 
-  // فرم‌ساز همگانی: سه نقش مرکز (دستور کاربر)
   app.post('/api/case-events/types', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = CaseEventTypeInputSchema.parse(await c.req.json<unknown>());
@@ -46,33 +35,26 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ ok: true }, 200);
   });
 
-  // حذف قالب (فقط مدیر) — فقط اگر هیچ رویدادی به آن وصل نباشد
   app.delete('/api/case-events/types/:id', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     await service.deleteType(c.req.param('id'), actor);
     return c.json({ ok: true }, 200);
   });
 
-  // ───── موتور تشخیص و مداخله ─────
-
-  /** پیشنهاد قالب چک‌لیست مناسب دانش‌آموز بر اساس برچسب‌هایش */
   app.get('/api/students/:id/case-events/suggest', async (c) => {
     const items = await service.suggestTypesForStudent(c.req.param('id'));
     return c.json({ data: items }, 200);
   });
 
-  /** صف «در انتظار پاسخ» — چک‌لیست‌های pending_family */
   app.get('/api/case-events/pending', async (c) => {
     const items = await service.listPendingChecklists();
     return c.json({ data: items }, 200);
   });
 
-  /** ارسال با یک کلیک — پیام بله با لینک امن وب‌فرم به خانواده/معلم */
   app.post('/api/case-events/:id/send', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json<{ audience?: string; note?: string; teacher_name?: string; teacher_id?: string }>().catch(() => null);
     const audience = body?.audience === 'family' || body?.audience === 'teacher' || body?.audience === 'both' ? body.audience : null;
-    // — T7: اتصال معلم اختیاری — نام/شناسه معلم از انتخابگر معلم می‌آید
     const result = await service.sendChecklistLink(
       c.req.param('id'),
       { audience, note: body?.note ?? null, teacherName: body?.teacher_name ?? null, teacherId: body?.teacher_id ?? null },
@@ -81,7 +63,6 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: result }, 200);
   });
 
-  // — T7: صدور/کپی لینک امن به‌ازای یک معلم مشخص (بدون ارسال بله) — چند معلم = چند لینک مستقل
   app.post('/api/case-events/:id/teacher-link', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json<{ teacher_name?: string; teacher_id?: string }>().catch(() => null);
@@ -93,8 +74,6 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: result }, 200);
   });
 
-  // ───────── رویدادهای دانش‌آموز ─────────
-
   app.get('/api/students/:id/case-events', async (c) => {
     const items = await service.listEventsByStudent(c.req.param('id'), {
       limit: c.req.query('limit') ? Number(c.req.query('limit')) : undefined
@@ -102,7 +81,6 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: items }, 200);
   });
 
-  // رویدادهای چند نوبت یک‌جا (batch — «گزارش جلسات من») — خروجی: {appointmentId: events[]}
   app.get('/api/case-events/by-appointments', async (c) => {
     const ids = (c.req.query('ids') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
     const map = await service.listEventsByAppointments(ids);
@@ -111,14 +89,12 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: out }, 200);
   });
 
-  // جزئیات یک رویداد (deep-link از تایم‌لاین) — همهٔ نقش‌های داخلی
   app.get('/api/case-events/:id', async (c) => {
     const item = await service.getEventById(c.req.param('id'));
     if (!item) return c.json({ error: { code: 'NOT_FOUND', message: 'رویداد یافت نشد' } }, 404);
     return c.json({ data: item }, 200);
   });
 
-  // رویدادهای متصل به یک نوبت (نشانگر «گزارش ثبت‌شده» در جلسات/نوبت‌ها)
   app.get('/api/appointments/:id/case-events', async (c) => {
     const items = await service.listEventsByAppointment(c.req.param('id'));
     return c.json({ data: items }, 200);
@@ -141,8 +117,6 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: item }, 201);
   });
 
-  // — T9/m152: چیپ غربالگری حسی — ثبت دوکلیکی تب شناسایی (همان گیت ثبت رویداد؛
-  //   سطح جا/خارج از بازه → 400 فارسی؛ type ce-sensory-chip-v1 در سرویس idempotent ensure می‌شود)
   app.post('/api/students/:id/case-events/sensory-chip', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json<{ levels?: Record<string, unknown> }>().catch(() => null);
@@ -150,8 +124,6 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: item }, 201);
   });
 
-  // — T10/m153: چیپ هستهٔ خواندن — ثبت دوکلیکی مرحلهٔ مهارت‌ها (همان گیت ثبت رویداد؛
-  //   سطح جا/خارج از بازه → 400 فارسی؛ type ce-read-core-v1 در سرویس idempotent ensure می‌شود)
   app.post('/api/students/:id/case-events/read-core', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json<{ levels?: Record<string, unknown> }>().catch(() => null);
@@ -159,8 +131,6 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: item }, 201);
   });
 
-  // — T12/m160: آزمون عملکرد مرکزی (خواندن/نوشتن/حساب) — ارزیابی درمانگر در مرکز، مرحلهٔ ۴ مسیر یادگیری؛
-  //   {area:'read'|'write'|'calc', values} — فیلد جا/خارج از قلم‌رو → 400 فارسی؛ type از کتابخانهٔ فعال باتری.
   app.post('/api/students/:id/case-events/probe', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json<{ area?: string; values?: Record<string, unknown> }>().catch(() => null);
@@ -168,9 +138,6 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: item }, 201);
   });
 
-  // — m161: ارزیابی عملکردی توانبخشی ذهنی (ce-rehab-fx-v1) — خط پایهٔ مسیر توانبخشی، ثبت درمانگر در مرکز؛
-  //   {values: {d_att_sus…, p_att_sus…, d_ps_story?, notes?}} — حیطهٔ جا/خارج از قلم‌رو → 400 فارسی؛
-  //   type در سرویس idempotent ensure می‌شود (active=0 — خارج کتابخانه).
   app.post('/api/students/:id/case-events/rehab-fx', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json<{ values?: Record<string, unknown> }>().catch(() => null);
@@ -185,7 +152,6 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: item }, 200);
   });
 
-  // نهایی‌سازی پیش‌نویس گزارش
   app.post('/api/case-events/:id/finalize', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const item = await service.finalizeEvent(c.req.param('id'), actor);
@@ -198,14 +164,11 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: item }, 200);
   });
 
-  // حذف رویداد (دستور کاربر: «امکان حذف رویداد ها برای مدیر فراهم بشه») — حذف نرم، فقط مدیر
   app.delete('/api/case-events/:id', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     await service.deleteEvent(c.req.param('id'), actor);
     return c.json({ ok: true }, 200);
   });
-
-  // ───────── پیوست‌ها ─────────
 
   app.post('/api/case-events/:id/files', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
@@ -242,7 +205,6 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
   });
 }
 
-/** مسیرهای عمومی (بدون auth) — پر کردن چک‌لیست با توکن؛ در api-routing رجیستر می‌شود */
 export function registerCaseEventPublicRoutes(
   app: AppHono,
   service: CaseEventsService,
@@ -250,7 +212,6 @@ export function registerCaseEventPublicRoutes(
 ): void {
   const FILL_PATH = '/public/case-events/:id/fill';
 
-  /** — T5: مدل رندر پکیج چند-ابزاری — بلوک زمینه + سربرگ اختصاصی هر کامپوننت به‌ترتیب */
   function packageModelOf(
     pkgType: CaseEventTypeRecord,
     comps: CaseEventTypeRecord[],
@@ -293,7 +254,6 @@ export function registerCaseEventPublicRoutes(
     return {
       packageTitle: `${pkgType.icon ?? ''} ${pkgType.title}`.trim(),
       studentName: studentName ?? '',
-      // — T7: لینک به‌ازای معلم خاص — سربرگ «فرم شما — X»
       teacherLabel: teacherName ? `فرم شما — ${teacherName}` : null,
       description: pkgType.description ?? null,
       context: { title: ctxTitle, fields: ctxFields },
@@ -308,7 +268,6 @@ export function registerCaseEventPublicRoutes(
     if (!event) {
       return c.html(fillErrorPage('این فرم پیدا نشد.'), 404);
     }
-    // توکن در همین پاسخ اعتبارسنجی می‌شود (بدون افشای دلیل دقیق در صفحه)
     const valid = await service.verifyFillToken(id, token);
     if (!valid) {
       return c.html(fillErrorPage('پیوند این فرم معتبر نیست.'), 403);
@@ -318,10 +277,8 @@ export function registerCaseEventPublicRoutes(
     }
     const studentName = await helpers.studentNameOf(event.studentId);
     const type = await service.getTypeById(event.eventTypeId);
-    // — T7: لینک به معلم گره خورده؟ — نامش روی سربرگ فرم می‌آید (پکیج و تکی هر دو)
     const teacherName = teacherBindingOfPayload(event.payload)?.name ?? null;
 
-    // — T5: پکیج چند-ابزاری → رندر بخش‌به‌بخش (زمینه + هر ابزار با سربرگ خودش)
     if (type && packageComponentsOf(type.key)) {
       const comps = await service.listPackageComponentTypes(event.eventTypeId);
       if (!comps) {
@@ -337,7 +294,6 @@ export function registerCaseEventPublicRoutes(
       });
     }
 
-    // بخش‌بندی زیرمقیاس‌ها: آیتم‌های پیوستهٔ یک زیرمقیاس زیر یک سربرگ
     const subscaleName = new Map((type?.subscales ?? []).map((s) => [s.id, s.name] as const));
     const sections: { title: string | null; items: { key: string; label: string; scaleMax?: number; scoredOptions?: { label: string }[]; scaleLabels?: string[] }[] }[] = [];
     for (const f of type?.fields ?? []) {
@@ -359,10 +315,8 @@ export function registerCaseEventPublicRoutes(
       typeTitle: `${event.typeIcon ?? ''} ${event.typeTitle}`.trim(),
       studentName: studentName ?? '',
       sections,
-      // سربرگ بر اساس گیرنده + معرفی روایی فرم
       audience: event.typeAudience ?? type?.audience ?? 'family',
       description: type?.description ?? null,
-      // — T7: لینک معلم → «فرم شما — X»
       teacherLabel: teacherName ? `فرم شما — ${teacherName}` : null
     };
     return new Response(renderFillFormPage(model, token), {
@@ -377,7 +331,6 @@ export function registerCaseEventPublicRoutes(
 
   app.post(FILL_PATH, async (c) => {
     const id = c.req.param('id');
-    // — T5: پکیج چند-ابزاری — مقدارهای متنی بلوک زمینه هم کنار نمره‌های عددی می‌آیند
     const body = await c.req.json<{ token?: string; answers?: Record<string, number | string> }>().catch(() => null);
     if (!body || !body.token || !body.answers) {
       return c.json({ error: { code: 'BAD_REQUEST', message: 'درخواست نامعتبر است' } }, 400);
@@ -398,7 +351,6 @@ export function registerCaseEventPublicRoutes(
   });
 }
 
-/** تبدیل ارقام برای شمارهٔ بخش سربرگ‌های پکیج */
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
 function faNum(n: number): string {
   return String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);

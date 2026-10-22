@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — students-domain
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-students-domain.test.ts — یکپارچگی واقعی ///:
-// مدارس/کلاس‌ها/دانش‌آموزان/برچسب‌ها/جستجوی سراسری/پرونده ارزیابی
-// دادهٔ ماک: seed-dev (۴ کارمند، ۳ مدرسه، ۶ دانش‌آموز) + fixtureهای APIی
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -117,7 +109,6 @@ describe('دانش‌آموزان: CRUD + اعتبارسنجی', () => {
   });
 
   it('get by national-id با ارقام فارسی هم کار می‌کند', async () => {
-    // علی محمدی از seed — ۰۰۱۲۳۴۵۶۷۹
     const res = await manager.get('/api/students/by-national-id/۰۰۱۲۳۴۵۶۷۹');
     expect(res.status).toBe(200);
     const data = (res.body as { data: { id: string } }).data;
@@ -171,8 +162,6 @@ describe('مدارس و کلاس‌ها', () => {
     expect(data.principalName).toBe('خانم رضوی');
   });
 
-  // ─── کد رسمی مدرسه + یادداشت ───
-
   it('ساخت مدرسه با کد رسمی و یادداشت — 201 و بازخوانی + PATCH یادداشت', async () => {
     const res = await manager.post('/api/schools', {
       name: 'دبستان کددار m60',
@@ -209,7 +198,6 @@ describe('مدارس و کلاس‌ها', () => {
     const data = res.body as { data: { groups: Array<{ type: string; items: Array<{ id: string; subtitle?: string }> }> } };
     const schoolGroup = data.data.groups.find((g) => g.type === 'school');
     expect(schoolGroup?.items.length).toBeGreaterThanOrEqual(1);
-    // زیرنویس = خود کد
     expect(schoolGroup?.items[0]?.subtitle).toBe('44990001');
   });
 
@@ -235,7 +223,6 @@ describe('مدارس و کلاس‌ها', () => {
     });
     expect(dup.status).toBe(409);
 
-    // اتصال دانش‌آموز به کلاس
     const s = await createStudent(manager, { school_id: SCHOOL1_ID });
     const linked = await manager.patch(`/api/students/${s.id}`, { class_id: classId });
     expect(linked.status).toBe(200);
@@ -251,7 +238,6 @@ describe('مدارس و کلاس‌ها', () => {
   });
 
   it('ساخت کلاس توسط همکار — 403 (نقش اجازه نمی‌دهد؟ مسیر باز است — بررسی رفتار واقعی)', async () => {
-    // مسیر /api/classes بدون requireRole است؛ حداقل نباید 500 بدهد
     const res = await secretary.post('/api/classes', {
       school_id: SCHOOL1_ID,
       name: 'کلاس منشی'
@@ -336,7 +322,6 @@ describe('پروندهٔ رویداد (جایگزین ارزیابی)', () => {
   let typeId: string;
 
   const simpleType = async (): Promise<string> => {
-    // نوع اختصاصی با یک فیلد الزامی — مستقل از seedهای
     const created = await manager.post('/api/case-events/types', {
       title: 'گزارش جلسهٔ آزمون m66',
       category: 'session',
@@ -382,18 +367,15 @@ describe('پروندهٔ رویداد (جایگزین ارزیابی)', () => {
     });
     const id = ((created.body as { data: { id: string } }).data).id;
 
-    // نهایی‌سازی با فیلد الزامی خالی — خطای اعتبارسنجی
     const early = await therapist.post(`/api/case-events/${id}/finalize`, {});
     expect(early.status).toBe(400);
 
-    // پر کردن فیلد الزامی + نهایی‌سازی
     const patch = await therapist.patch(`/api/case-events/${id}`, { values: { goal: 'افزایش واژگان' } });
     expect(patch.status).toBe(200);
     const fin = await therapist.post(`/api/case-events/${id}/finalize`, {});
     expect(fin.status).toBe(200);
     expect(((fin.body as { data: { status: string } }).data).status).toBe('completed');
 
-    // نهایی‌سازی دوباره — 409
     const again = await therapist.post(`/api/case-events/${id}/finalize`, {});
     expect(again.status).toBe(409);
   });
@@ -414,7 +396,6 @@ describe('پروندهٔ رویداد (جایگزین ارزیابی)', () => {
     expect(addFile.status).toBe(201);
     const fileId = ((addFile.body as { data: { id: string } }).data).id;
 
-    // MIME مجاز نیست
     const badMime = await therapist.post(`/api/case-events/${id}/files`, {
       filename: 'evil.sh',
       mime_type: 'application/x-sh',
@@ -422,17 +403,14 @@ describe('پروندهٔ رویداد (جایگزین ارزیابی)', () => {
     });
     expect(badMime.status).toBe(400);
 
-    // خواندن محتوا — پاسخ باینری است (نه JSON)
     const read = await therapist.get(`/api/case-events/${id}/files/${fileId}`);
     expect(read.status).toBe(200);
     expect(typeof read.body).toBe('string');
     expect(read.body as string).toContain('گزارش پیشرفت');
 
-    // فهرست پیوست‌ها
     const list = await therapist.get(`/api/case-events/${id}/files`);
     expect(((list.body as { data: unknown[] }).data).length).toBe(1);
 
-    // حذف پیوست توسط همکار غیرثبت‌کننده — 403
     const del = await manager.delete(`/api/case-events/${id}/files/${fileId}`);
     expect(del.status).toBe(200);
   });
@@ -477,7 +455,6 @@ describe('شمارش ارزیابی‌ها در پاسخ فهرست دانش‌�
     });
     expect(await countOf(studentId)).toBe(2);
 
-    // لغو رویداد — شمارش باید ۱ شود
     const id = ((e1.body as { data: { id: string } }).data).id;
     const cancel = await therapist.post(`/api/case-events/${id}/cancel`, {});
     expect(cancel.status).toBe(200);
@@ -510,7 +487,6 @@ describe('حذف پرونده با بقایای حذف‌نرم (کشف زنده
     expect(created.status).toBe(201);
     const eventId = (created.body as { data: { id: string } }).data.id;
 
-    // حذف نرم رویداد (DELETE — فقط مدیر طبق RBAC؛ cancel لغو است نه حذف) — گارد حذف پرونده از آن عبور می‌کند ولی FK می‌ماند
     const soft = await manager.delete(`/api/case-events/${eventId}`);
     expect(soft.status).toBe(200);
 
@@ -523,7 +499,6 @@ describe('حذف پرونده با بقایای حذف‌نرم (کشف زنده
     const studentId = (await createStudent(therapist)).id;
     const p = await therapist.post(`/api/students/${studentId}/clinical-paths`, { target_key: 'dyslexia' });
     expect(p.status).toBe(201);
-    // مسیر فعال نیاز به تصمیم دارد؛ حتی «پیشنهاد» هم FK دارد — حذف پرونده باید تمیز انجام شود
     const del = await manager.delete(`/api/students/${studentId}`);
     expect(del.status).toBe(204);
   });

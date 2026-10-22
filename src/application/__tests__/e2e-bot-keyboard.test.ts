@@ -1,10 +1,3 @@
-/**
- * تست‌های e2e — bot-keyboard
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-bot-keyboard.test.ts — دکمه‌های ثابت ناوبری بات + «درباره مرکز» + ارتقای رمز PBKDF2
-// اپ واقعی Hono + اسکیمای واقعی migrations + webhook بله با secret تست
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, WEBHOOK_SECRET } from '../../test/harness';
 
@@ -34,13 +27,11 @@ async function bot(A: ReturnType<typeof createTestApp>, raw: Update): Promise<Bo
 
 const tx = (t: string, chatId: number): Update => ({ update_id: 1, message: { chat: { id: chatId }, text: t } });
 
-// chatها: 7301 همکار (علی) | 7302 مدیر | 7303 والد | 7399 بدون اتصال
 const CHAT_ALI = 7301;
 const CHAT_MANAGER = 7302;
 const CHAT_PARENT = 7303;
 const CHAT_NONE = 7399;
 
-// شناسه‌های seed-dev
 const ALI_NID = '3149977797';
 const MANAGER_NID = '3672818690';
 
@@ -139,10 +130,8 @@ describe('دکمه‌های ثابت ناوبری + دربارهٔ مرکز + ا
   it('رمز legacy SHA-256 در اولین ورود موفق به PBKDF2 ارتقا می‌یابد و ورود بعدی هم سالم است', async () => {
     const { Api } = await import('../../test/harness');
 
-    // حساب دست‌نخورده (در همین فایل با آن login نشده — asRole فقط manager را وارد می‌کند)
     const USERNAME = 'secretary';
 
-    // قبل از ورود: هش legacy (SHA-256 hex ۶۴ نویسه)
     const before = A.sql.prepare('SELECT password_hash FROM staff WHERE username = ?').get(USERNAME) as {
       password_hash: string;
     };
@@ -152,19 +141,16 @@ describe('دکمه‌های ثابت ناوبری + دربارهٔ مرکز + ا
     const login1 = await api.post('/api/auth/login', { username: USERNAME, password: '1234' });
     expect(login1.status).toBe(200);
 
-    // بعد از ورود: هش نسخه‌دار PBKDF2
     const after = A.sql.prepare('SELECT password_hash FROM staff WHERE username = ?').get(USERNAME) as {
       password_hash: string;
     };
     expect(after.password_hash.startsWith('pbkdf2$')).toBe(true);
     expect(after.password_hash).not.toBe(before.password_hash);
 
-    // ورود دوم با همان رمز — از مسیر PBKDF2
     const api2 = new Api(A);
     const login2 = await api2.post('/api/auth/login', { username: USERNAME, password: '1234' });
     expect(login2.status).toBe(200);
 
-    // رمز غلط همچنان رد می‌شود
     const api3 = new Api(A);
     const bad = await api3.post('/api/auth/login', { username: USERNAME, password: '0000' });
     expect(bad.status).toBe(401);
@@ -176,7 +162,6 @@ describe('دکمه‌های ثابت ناوبری + دربارهٔ مرکز + ا
     expect(isLegacyPasswordHash(h)).toBe(false);
     expect(await verifyPassword('رمز-آزمایشی-۱۲۳', h)).toBe(true);
     expect(await verifyPassword('رمز-غلط', h)).toBe(false);
-    // legacy هنوز verify می‌شود
     expect(isLegacyPasswordHash('03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4')).toBe(true);
     expect(await verifyPassword('1234', '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4')).toBe(true);
   });

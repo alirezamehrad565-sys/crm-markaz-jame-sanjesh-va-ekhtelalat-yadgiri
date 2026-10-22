@@ -1,58 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// scoring.js (v2 — m140) — موتور امتیازدهی سراسری درمانگران + تابلوی پیشرفت
-//: صفرسازی + وزن یکنواخت اقدام‌های پایه + سقف اداری مدیر/معاون + شرح امتیاز
-// ─────────────────────────────────────────────────────────────────────────────
-// خواست کاربر:
-// «امتیاز همه کارکنان رو حذف صفر کن از الان همه چیز ها شروع بشه»
-// «تعریف دانش آموز و... هر کدوم 1 امتیاز بشه»
-// «یه بالانس کن که امتیاز مدیر و معاون بیشتر از درمانگران پیشرفت نکنه برای کارای اداری»
-//
-// → SCORING_EPOCH: هر فعالیتی قبل از این لحظه در تابلو صفر است (شروع تازه).
-// → همهٔ اقدام‌های پایهٔ استفاده از سامانه = ۱ امتیاز (پرونده، نوبت، گزارش، …).
-// → نقش‌های دفتری (مدیر و معاون/منشی) هرچقدر هم کار اداری ثبت کنند، سهم «فعالیت
-// اداری»‌شان در هر دوره سقف دارد — پیشرفت تابلو با تولید محتوا و کار بالینی است.
-// خواست کاربر:
-// «فرمول ارجاع و.. رو سراسری کن ما یه تابلوی پیشرفت داریم برای درمانگران»
-// «میخوام استفاده ای که از سایت میکنن ملاک امتیازشون بشه»
-// «ثبت گزارش، اینکه خودشون نوبت ثبت کنن، دانش آموز تعریف کنن، کسی رو تو لیست
-// انتظار بزارن و... سراسری باشه — از قالب ها تمرین ها... همه اطلاعات رو جمع
-// کنه لاگ ها رو بخونه و بزاره داخل تابلوی پیشرفت درمانگران»
-//
-// بازنویسی v2 (m140) — بدون تغییر شکل پاسخ تابلو؛ تغییرها:
-// ۱) ضد-اسنپ‌شات (درس 43-A): ایزولیت طولانی‌عمر Worker می‌تواند نشست D1 کهنه را
-//    نگه دارد و «مقدار اصلاح‌شدهٔ» created_by را کهنه بخواند → همهٔ خواندن‌های
-//    تابلو/شرح از نشست تازهٔ first-primary می‌رود (feature-detect — ماک تست بدون
-//    withSession همان env.DB را می‌گیرد تا vitest بشکند).
-// ۲) ارجاع تمرین (exerciseRefs): ارسال‌های کلاسی (assigned_by با پیشوند
-//    «class:<id>» — معلم مدرسه ردیف staff ندارد) «استفادهٔ همکار» نیستند →
-//    از ارجاع حذف شدند؛ ولی در «استفاده» (exerciseUses) همچنان شمرده می‌شوند.
-// ۳) ورود مردهٔ «assessment.create» از USAGE_FORMULA حذف شد — هیچ سرویسی
-//    هیچ‌وقت این audit action را نمی‌نوشت (grep=0) → ردیف مرده بود.
-// ۴) GET /api/scoring/explain (فقط مدیر) — شرح شفاف امتیاز یک همکار در یک دوره؛
-//    رتبه/امتیازها از همان computeBoard همان دوره خوانده می‌شود (تک‌منبع حقیقت).
-//
-// طراحی ثابت:
-// - تک‌فرمول سراسری: امتیاز = محتوا (تولید + استفاده + ارجاع)
-// + استفادهٔ واقعی از سامانه (projection مستقیم روی audit_log).
-// - فرمول در هیچ UI‌ای نشان داده نمی‌شود و در پاسخ API تابلو هم نیست
-//   (تنها استثنا: explain — مخصوص مدیر، عمداً با اجازهٔ کاربر).
-// - بدون شمارندهٔ نگهداری‌شده — همه‌چیز محاسبهٔ زنده از دادهٔ واقعی است؛
-//   حذف یا دستکاری رکورد خودش در امتیاز منعکس می‌شود (شفافیت).
-// - این ماژول فقط می‌خواند (READ-ONLY) — هیچ endpoint نوشتنی ندارد.
-// - احراز هویت همان نشست HS256 باندل اصلی است (AUTH_SECRET / settings /
-// dev-secret — همان ترتیب resolveSessionSecret).
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── فرمول سراسری — تک‌منبع حقیقت وزن‌ها (فقط سمت سرور؛ UI فرمول را نشان نمی‌دهد) ──
-
-/**
- * بخش محتوا — بازتنظیم وزن‌ها به دستور کاربر:
- * «تولید تمرین نمرهش بیاد پایین تر ارجاع نمره رو خیلی بالاتر ببره»
- * تولیدِ محتوا فی‌نفسه امتیاز کمتری دارد؛ محتوایی که همکاران واقعاً مصرف کنند
- * (ارجاع/استفادهٔ همکار) امتیاز چند برابر می‌گیرد — تمرکز تابلو بر محتوای
- * به‌کاررفته است نه انبار تمرین. لنگر: یک اقدام پایهٔ سامانه = ۱ امتیاز.
- * وزن‌ها فقط همین‌جاست (سمت سرور) — هیچ UI‌ای فرمول را نشان نمی‌دهد.
- */
 export const CONTENT_FORMULA = {
   production: [
     { key: 'exercises', weight: 4, label: 'تمرین' },
@@ -72,15 +17,6 @@ export const CONTENT_FORMULA = {
   ]
 };
 
-/**
- * بخش استفادهٔ سراسری — از audit_log
- * فقط اقدام‌های «سازنده» امتیاز دارند؛ ویرایش/حذف/جابه‌جایی امتیاز ندارد.
- * — وزن یکنواخت: هر اقدام پایه = ۱ امتیاز (خواست کاربر: «تعریف دانش آموز
- * و... هر کدوم 1 امتیاز بشه»). تفاوت واقعی امتیاز را تولید محتوا می‌سازد.
- * — v2: «assessment.create» حذف شد — هیچ سرویسی این action را در audit_log
- * نمی‌نویسد (سنجش‌ها از مسیرهای دیگر ثبت می‌شوند) → ورود مرده بود.
- * ترتیب: [action، وزن، برچسب فارسی، گروه]
- */
 export const USAGE_FORMULA = [
   ['student.create', 1, 'تشکیل پروندهٔ دانش‌آموز', 'پرونده'],
   ['appointment.create', 1, 'ثبت نوبت', 'نوبت‌دهی'],
@@ -102,51 +38,19 @@ export const USAGE_FORMULA = [
   ['announcement.create', 1, 'انتشار اعلان', 'محتوا']
 ];
 
-// ── صفرسازی و بالانس نقش‌های دفتری ──────────────────────────────────
-
-/**
- * شروع دورهٔ امتیاز (UTC «YYYY-MM-DD HH:MM:SS») — هر فعالیتِ قبل از این لحظه
- * در تابلو صفر است (خواست کاربر: «امتیاز همه کارکنان رو حذف صفر کن از الان
- * همه چیز ها شروع بشه»). — از تنظیمات قابل‌تغییر است (تنظیمات ←
- * «امتیازبندی همکاران»)؛ این ثابت فقط پیش‌فرضِ پیش از ذخیرهٔ تنظیمات است.
- */
 export const SCORING_EPOCH = '2026-10-14 20:30:00';
 
-/**
- * — سقف فعالیت اداری نقش‌های دفتری در هر دوره.
- * مدیر و معاون/منشی کار اداری زیاد انجام می‌دهند (پرونده، نوبت، لیست انتظار)؛
- * برای اینکه تابلو با حجم کار اداری جلو نزند، سهم امتیاز «استفادهٔ سامانه»
- * این نقش‌ها در هر دوره سقف دارد. تولید محتوا (تمرین/قالب/فرم) سقف ندارد.
- */
 export const ADMIN_CAP_ROLES = ['manager', 'secretary', 'supervisor'];
 export const ADMIN_USAGE_CAP = 20;
 
-// ── پیکربندی قابل‌تنظیم امتیازدهی (تنظیمات ← «امتیازبندی همکاران») ────
-
-/**
- * خواست کاربر:
- * «یه دسترسی بده که تاریخ شروع محاسبه نمره همکاران که الان 23 ام هست رو
- * خودم انتخاب کنم تو تنظیمات و فرمول امتیاز بندی هم همچنین»
- *
- * → SCORING_EPOCH و وزن‌های فرمول دیگر ثابت نیستند؛ مدیر از تنظیمات (فقط خودش)
- * «تاریخ شروع شمارش» و وزن‌های فرمول را عوض می‌کند. مقادیر در جدول settings
- * با کلید SCORING_CONFIG_KEY ذخیره می‌شود و موتور در هر درخواست می‌خواند.
- * شکل ذخیره‌شده: { epoch: "YYYY-MM-DD HH:MM:SS" (UTC), weights: { … } }
- * هر مقدار غایب/نامعتبر = پیش‌فرض همان ثابت‌های بالای فایل.
- */
 export const SCORING_CONFIG_KEY = 'scoring_config';
 
-/** وزن مؤثر — عدد صحیح مجاز، وگرنه پیش‌فرض */
 export function clampWeight(v, fallback) {
   const n = Number(v);
   if (!Number.isInteger(n) || n < 0 || n > 10000) return fallback;
   return n;
 }
 
-/**
- * فرمول محتوای مؤثر — وزن‌های ذخیره‌شده در تنظیمات روی پیش‌فرض سوار می‌شود.
- * کلیدها همان کلیدهای CONTENT_FORMULA هستند (تک‌منبع حقیقت).
- */
 export function effectiveContentFormula(weights) {
   if (!weights || typeof weights !== 'object') return CONTENT_FORMULA;
   const pick = (list) => list.map((x) => ({ ...x, weight: clampWeight(weights[x.key], x.weight) }));
@@ -157,25 +61,15 @@ export function effectiveContentFormula(weights) {
   };
 }
 
-/**
- * فرمول استفادهٔ مؤثر — «وزن هر اقدام پایه» (baseAction) روی همهٔ اقدام‌های
- * پایه یکنواخت سوار می‌شود (: اقدام‌های پایه وزن یکنواخت دارند).
- */
 export function effectiveUsageFormula(weights) {
   const base = clampWeight(weights?.baseAction ?? 1, 1);
   return USAGE_FORMULA.map(([action, , label, group]) => [action, base, label, group]);
 }
 
-/** سقف فعالیت اداری مؤثر */
 export function effectiveAdminCap(weights) {
   return clampWeight(weights?.adminCap ?? ADMIN_USAGE_CAP, ADMIN_USAGE_CAP);
 }
 
-/**
- * خواندن پیکربندی امتیازدهی از جدول settings — هر خطا/شکل نامعتبر = پیش‌فرض.
- * @param {D1Database} d1
- * @returns {Promise<{epoch?: string, weights?: Record<string, number>}>}
- */
 export async function readScoringConfig(d1) {
   try {
     const row = await d1.prepare(`SELECT value FROM settings WHERE key = ? LIMIT 1`).bind(SCORING_CONFIG_KEY).first();
@@ -193,37 +87,22 @@ export async function readScoringConfig(d1) {
   }
 }
 
-/**
- * cutoff مؤثر دوره = بزرگ‌ترِ cutoff دورهٔ انتخابی و SCORING_EPOCH.
- * نتیجه: همهٔ دوره‌ها هرگز از «شروع دورهٔ امتیاز» قدیمی‌تر نمی‌شوند.
- */
 export function effectiveSince(periodKey, periods = PERIODS, now = new Date(), epoch = SCORING_EPOCH) {
   const cut = periodSinceUtc(periodKey, periods, now);
   if (!cut) return epoch;
   return cut > epoch ? cut : epoch;
 }
 
-/** — سطح‌بندی (تازه‌کار/فعال/…) حذف شد: «باجت‌ها غیرمحترمانه است — فقط امتیاز» */
-
-/** بازه‌های زمانی تابلو — محاسبه روی created_at UTC */
 export const PERIODS = {
   all: { key: 'all', label: 'کل دوره', sinceIso: null },
   month: { key: 'month', label: '۳۰ روز اخیر', days: 30 },
   week: { key: 'week', label: '۷ روز اخیر', days: 7 }
 };
 
-// ── توابع محض (قابل تست بدون Workers runtime) ────────────────────────────────
-
-/** وزن هر action — Map برای lookup سریع */
 export function usageWeightMap(formula = USAGE_FORMULA) {
   return new Map(formula.map(([action, weight]) => [action, weight]));
 }
 
-/**
- * اعمال وزن‌ها روی سطرهای تجمیع‌شدهٔ audit_log
- * @param {Array<{actorId:string, action:string, count:number}>} aggRows
- * @returns {{ points: Record<string, number>, counts: Record<string, Record<string, number>> }}
- */
 export function applyUsageWeights(aggRows, formula = USAGE_FORMULA) {
   const weights = usageWeightMap(formula);
   const points = {};
@@ -237,7 +116,6 @@ export function applyUsageWeights(aggRows, formula = USAGE_FORMULA) {
   return { points, counts };
 }
 
-/** امتیاز بخش محتوا — فرمول مؤثر (: وزن‌های تنظیم‌شده یا پیش‌فرض) */
 export function contentScoreOf(c, formula = CONTENT_FORMULA) {
   const prod = formula.production.reduce((s, x) => s + x.weight * (c[x.key] ?? 0), 0);
   const use = formula.usage.reduce((s, x) => s + x.weight * (c[x.key] ?? 0), 0);
@@ -245,21 +123,10 @@ export function contentScoreOf(c, formula = CONTENT_FORMULA) {
   return { production: prod, usage: use, reference: ref, total: prod + use + ref };
 }
 
-/**
- * — نمرهٔ مشارکت عملی برای «آمار دوره»: جمع وزن‌دار بخش تولید محتوا
- * (تمرین/بسته/قالب/فرم) برای شمارش‌های خام یک بازه — تک‌منبع وزن‌ها همان
- * CONTENT_FORMULA است تا فرمول هیچ‌وقت دو جا نشیند. — formula اختیاری:
- * گزارش دوره هم با وزن‌های تنظیم‌شدهٔ مدیر محاسبه می‌شود.
- * — m140: شمارش تمرینِ ورودی باید وزن‌دار تیمی باشد
- * (SUM(CASE WHEN team_created=1 THEN 0.5 ELSE 1 END)) نه COUNT(*).
- * @param {{exercises?:number, packages?:number, templates?:number, forms?:number}} counts
- * @param {{production?: Array<{key:string, weight:number}>}} [formula]
- */
 export function productionScoreOf(counts, formula = CONTENT_FORMULA) {
   return (formula.production ?? CONTENT_FORMULA.production).reduce((s, x) => s + x.weight * (counts?.[x.key] ?? 0), 0);
 }
 
-/** رتبه‌بندی مسابقه‌ای — امتیاز برابر = رتبه برابر */
 export function rankRows(rows) {
   const sorted = [...rows].sort(
     (a, b) => b.total - a.total || a.fullName.localeCompare(b.fullName, 'fa')
@@ -274,7 +141,6 @@ export function rankRows(rows) {
   });
 }
 
-/** timestamp UTC cutoff برای دوره — null یعنی از ابتدا */
 export function periodSinceUtc(periodKey, periods = PERIODS, now = new Date()) {
   const p = periods[periodKey];
   if (!p) throw new Error(`دورهٔ نامعتبر: ${periodKey}`);
@@ -285,24 +151,6 @@ export function periodSinceUtc(periodKey, periods = PERIODS, now = new Date()) {
     .slice(0, 19);
 }
 
-// ── اجرای واقعی روی D1 ────────────────────────────────────────────────────────
-
-/**
- * — v3 (m141): کل تابلو در «یک» کوئری و «یک» اسنپ‌شات.
- *
- * درس واقعی م۱۳۹/م۱۴۰ (بازگشتِ دوبارهٔ باگ در م۱۴۰): خواندن‌های موازی (Promise.all)
- * روی یک نشست D1 — حتی با withSession('first-primary') — می‌توانند اسنپ‌شات‌های
- * «متفاوت» ببینند؛ نتیجهٔ زنده: فهرست آیتم‌ها ۹ تمرین نشان می‌داد و جمع وزن‌دارِ
- * همان پاسخ صفر بود. راه‌حل ریشه‌ای: شمارش همهٔ دسته‌ها + استفادهٔ سامانه + ردیفِ
- * همهٔ کارکنان در «یک» SELECT (زیرکوئری‌های همبسته) — کوئریِ اولِ نشستِ
- * first-primary همیشه از primary می‌خواند و همهٔ ستون‌ها از یک لحظهٔ واحد می‌آیند؛
- * مسیر ساختاریِ واگراییِ «فهرست در برابر جمع» کاملاً بسته می‌شود.
- * nonce تصادفی هم هر کش احتمالی سطح statement را دور می‌زند.
- *
- * @param {string|null} sinceUtc — null یعنی بدون فیلتر دوره
- * @param {Array<string>} usageActions — کلیدهای اقدام‌های وزن‌دار استفاده
- * @returns {{sql: string, params: Array}} — ترتیب پارامترها دقیقاً مطابق ظهورِ ? در SQL
- */
 function boardSqlAndParams(sinceUtc, usageActions) {
   const P = [];
   const since = (col) => {
@@ -310,12 +158,8 @@ function boardSqlAndParams(sinceUtc, usageActions) {
     P.push(sinceUtc);
     return ` AND ${col} >= ?`;
   };
-  // ستون‌های محتوا — هر کدام یک زیرکوئری همبسته روی s.id (همان فیلترهای نسخهٔ قبل)
   const metrics = [
     ['exercises',
-      // تولید محتوا — m166: تمرین با هم‌ساز واقعی (co_created_by) نصف وزن برای هر دو نفر
-      // (سازندهٔ اصلی ۰٫۵ + هم‌ساز ۰٫۵ = ۱)؛ تمرین تیمیِ قدیمی (team_created=1) هم ۰٫۵.
-      // همان زیرکوئری برای ردیفِ هم‌ساز هم ۰٫۵ می‌دهد — جمعِ هر تمرین در تابلو = ۱.
       `(SELECT COALESCE(SUM(CASE WHEN e.co_created_by IS NOT NULL OR e.team_created = 1 THEN 0.5 ELSE 1 END), 0)
           FROM exercises e
          WHERE e.deleted_at IS NULL
@@ -330,44 +174,36 @@ function boardSqlAndParams(sinceUtc, usageActions) {
       `(SELECT COUNT(*) FROM case_event_types f
         WHERE f.is_system = 0 AND f.active = 1 AND f.created_by = s.id${since('f.created_at')})`],
     ['exerciseUses',
-      // استفاده از تمرین‌ها (ارسال‌های کلاسی هم «استفاده» هستند)
       `(SELECT COUNT(*)
           FROM exercise_assignments a JOIN exercises e ON e.id = a.exercise_id
          WHERE e.deleted_at IS NULL AND e.created_by = s.id
            AND a.status != 'cancelled'${since('a.created_at')})`],
     ['exerciseRefs',
-      // ارجاع تمرین — مصرف توسط همکار دیگر؛ ارسال‌های کلاسی ('class:<id>'))
-      // معلم مدرسه ردیف staff ندارد → «استفادهٔ همکار» نیست (در استفاده می‌آید)
       `(SELECT COUNT(*)
           FROM exercise_assignments a JOIN exercises e ON e.id = a.exercise_id
          WHERE e.deleted_at IS NULL AND e.created_by = s.id
            AND a.status != 'cancelled' AND a.assigned_by != e.created_by
            AND (a.assigned_by IS NULL OR a.assigned_by NOT LIKE 'class:%')${since('a.created_at')})`],
     ['templateUses',
-      // استفاده از قالب‌ها — مسیر ساخته‌شده از قالب
       `(SELECT COUNT(*)
           FROM intervention_paths p JOIN pathway_templates t ON t.key = p.template_key
          WHERE p.deleted_at IS NULL AND t.created_by = s.id${since('p.created_at')})`],
     ['templateRefs',
-      // ارجاع قالب — ساخت مسیر توسط همکار دیگر
       `(SELECT COUNT(*)
           FROM intervention_paths p JOIN pathway_templates t ON t.key = p.template_key
          WHERE p.deleted_at IS NULL AND t.created_by = s.id
            AND p.created_by != t.created_by${since('p.created_at')})`],
     ['formFills',
-      // استفاده از فرم‌های دست‌ساز
       `(SELECT COUNT(*)
           FROM case_events ce JOIN case_event_types f ON f.id = ce.event_type_id
          WHERE f.is_system = 0 AND f.created_by = s.id
            AND ce.status != 'cancelled'${since('ce.created_at')})`],
     ['formRefs',
-      // ارجاع فرم — ثبت توسط همکار دیگر
       `(SELECT COUNT(*)
           FROM case_events ce JOIN case_event_types f ON f.id = ce.event_type_id
          WHERE f.is_system = 0 AND f.created_by = s.id AND ce.status != 'cancelled'
            AND ce.staff_id IS NOT NULL AND ce.staff_id != f.created_by${since('ce.created_at')})`]
   ];
-  // استفادهٔ سامانه — JSON تجمیعی audit_log در همان ردیف (پارامترهایش بعد از since ها)
   P.push(...usageActions);
   const actionList = usageActions.map(() => '?').join(',');
   const usageJson = `(SELECT COALESCE(json_group_array(json_object('a', u.action, 'c', u.c)), '[]')
@@ -386,12 +222,6 @@ function boardSqlAndParams(sinceUtc, usageActions) {
   return { sql, params: P };
 }
 
-/**
- * محاسبهٔ تابلوی پیشرفت برای یک دوره — v3: تک‌کوئریِ تک‌اسنپ‌شات
- * @param {D1Database} d1
- * @param {string|null} sinceUtc «YYYY-MM-DD HH:MM:SS» UTC یا null (پیش از فراخوانی، effectiveSince اعمال شود)
- * @param {{contentFormula?: object, usageFormula?: Array, adminCap?: number}} [cfg] — وزن‌های مؤثر
- */
 export async function computeBoard(d1, sinceUtc, cfg = {}) {
   const contentFormula = cfg.contentFormula ?? CONTENT_FORMULA;
   const usageFormula = cfg.usageFormula ?? USAGE_FORMULA;
@@ -401,7 +231,6 @@ export async function computeBoard(d1, sinceUtc, cfg = {}) {
   const { sql, params } = boardSqlAndParams(sinceUtc, usageActions);
   const boardRows = await d1.prepare(sql).bind(...params).all();
 
-  // استفادهٔ سراسری — از usageJsonِ همان ردیف‌ها (همان projection قبلی روی audit_log)
   const agg = [];
   for (const r of boardRows.results) {
     let arr = [];
@@ -431,8 +260,6 @@ export async function computeBoard(d1, sinceUtc, cfg = {}) {
       formRefs: Number(r.formRefs) || 0
     };
     const cs = contentScoreOf(content, contentFormula);
-    // سقف فعالیت اداری نقش‌های دفتری (مدیر و معاون): پیشرفت تابلو
-    // با حجم کار اداری بالا نمی‌رود؛ تولید محتوا کامل حساب می‌شود.
     const rawUsage = usagePoints[r.staffId] ?? 0;
     const isAdminRole = ADMIN_CAP_ROLES.includes(r.role);
     const usage = isAdminRole ? Math.min(rawUsage, adminCap) : rawUsage;
@@ -456,8 +283,6 @@ export async function computeBoard(d1, sinceUtc, cfg = {}) {
   });
   return rankRows(rows);
 }
-
-// ── احراز هویت نشست — همان قرارداد باندل اصلی (HS256) ────────────────────────
 
 function b64uDecode(part) {
   const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
@@ -506,7 +331,6 @@ async function resolveSessionSecret(env) {
       if (typeof parsed === 'string' && parsed.length >= 32) return parsed;
     } catch { /* سطر خراب → ساخت secret جدید در باندل اصلی */ }
   }
-  // secret در settings نیست — نمی‌سازیم (سازندهٔ رسمی همان باندل است)؛ بی‌مجاز پاس می‌دهیم
   throw new Error('sys_auth_secret یافت نشد');
 }
 
@@ -518,18 +342,6 @@ async function requireAuth(request, env) {
   return verifySessionJwt(token, secret);
 }
 
-// ── هندلر مسیرهای /api/scoring/* ──────────────────────────────────────────────
-
-/**
- * — v2 (درس 43-A): ضد-اسنپ‌شاتِ نشست D1.
- * ایزولیت طولانی‌عمر Worker ممکن است نشست (session) قدیمی D1 را نگه دارد و
- * اسنپ‌شات «پیش از اصلاحِ داده» بخواند — باگ واقعی م139: تابلو پس از اصلاح
- * مستقیم created_by هنوز مقدار کهنه را نشان می‌داد تا دیپلوی سرد.
- * راه‌حل: همهٔ خواندن‌های تابلو/شرح روی نشست تازهٔ «first-primary» انجام می‌شود
- * (خواندن همیشه از primary = آخرین نوشته). feature-detect: ماک D1 تست‌ها
- * (node:sqlite) withSession ندارد → همان binding اصلی برمی‌گردد تا vitest نشکند.
- * @param {{DB?: unknown}} env
- */
 function scoringDb(env) {
   if (env.DB && typeof env.DB.withSession === 'function') {
     return env.DB.withSession('first-primary');
@@ -544,13 +356,6 @@ function json(data, status = 200) {
   });
 }
 
-/**
- * لمسِ بی‌اثر برای پیش‌بردن bookmark نشست D1 — درس تکرارشدهٔ م۱۳۹/م۱۴۰.
- * یک UPDATE بی‌اثر روی settings (مقدار = خودش) تراکنشِ نوشتنِ کوچکی می‌سازد که
- * bookmark نشست را به «آخرین حالت ثابت‌شده» می‌برد؛ همهٔ خواندن‌های بعدیِ همان
- * نشست read-your-writes می‌شوند و دیگر اسنپ‌شات کهنه برنمی‌گردند.
- * در محیط تست (جدول settings نیست) بی‌صدا رد می‌شود.
- */
 const BOOKMARK_TOUCH_SQL = `INSERT INTO settings (key, value) VALUES ('scoring_config', '{}')
                              ON CONFLICT(key) DO UPDATE SET value = settings.value`;
 
@@ -558,8 +363,6 @@ export async function bumpSessionBookmark(db) {
   try {
     await db.prepare(BOOKMARK_TOUCH_SQL).run();
   } catch {
-    // بی‌خطر: در ماک/تست‌ها جدول settings نیست؛ خواندن‌ها به قرارداد نشست
-    // («first-primary») تکیه می‌کنند.
   }
 }
 
@@ -572,29 +375,21 @@ export async function handleScoring(request, env) {
     return json({ error: 'UNAUTHORIZED', message: 'ابتدا وارد حساب شوید' }, 401);
   }
 
-  // — v2: نشست تازهٔ D1 برای همهٔ خواندن‌ها (ضد-اسنپ‌شات — درس 43-A)
   const db = scoringDb(env);
-  // — v3 (m141): پیش‌بردن bookmark نشست با لمسِ بی‌اثر — خواندن‌های بعدی
-  // همین نشست تضمینی «آخرین نوشته» را می‌بینند (درس تکرارشدهٔ م۱۳۹/م۱۴۰).
   await bumpSessionBookmark(db);
 
-  // GET /api/scoring/board?period=all|month|week — تابلوی پیشرفت درمانگران
   if (path === '/api/scoring/board' && request.method === 'GET') {
     const periodKey = url.searchParams.get('period') ?? 'all';
     if (!PERIODS[periodKey]) {
       return json({ error: 'VALIDATION_ERROR', message: 'دورهٔ نامعتبر است' }, 400);
     }
-    // پیکربندی از تنظیمات: تاریخ شروع شمارش + وزن‌های فرمول (مدیر)
     const cfg = await readScoringConfig(db);
-    // صفرسازی: cutoff مؤثر هرگز قدیمی‌تر از تاریخ شروع انتخابی نیست
     const since = effectiveSince(periodKey, PERIODS, new Date(), cfg.epoch ?? SCORING_EPOCH);
     const rows = await computeBoard(db, since, {
       contentFormula: effectiveContentFormula(cfg.weights),
       usageFormula: effectiveUsageFormula(cfg.weights),
       adminCap: effectiveAdminCap(cfg.weights)
     });
-    // فرمول دیگر در پاسخ نیست: وزن‌ها سمت سرور می‌مانند و هیچ UI‌ای
-    // آن را نمایش نمی‌دهد («بدون اینکه از فرمول مطلع بشن»)
     return json({
       data: {
         period: PERIODS[periodKey].key,
@@ -606,10 +401,7 @@ export async function handleScoring(request, env) {
     });
   }
 
-  // GET /api/scoring/explain?staffId=<uuid>&period=all|month|week
-  // — v2: شرح شفاف امتیاز یک همکار — فقط مدیر مرکز (عمداً؛ فرمول برای کارکنان پنهان می‌ماند)
   if (path === '/api/scoring/explain' && request.method === 'GET') {
-    // نقش فراخوان همیشه تازه از DB خوانده می‌شود (نه فقط از توکن)
     const meRow = await db
       .prepare(`SELECT id, COALESCE(role_ext, role) AS role FROM staff WHERE id = ? LIMIT 1`)
       .bind(authed.sub)
@@ -635,20 +427,14 @@ export async function handleScoring(request, env) {
     const usageFormula = effectiveUsageFormula(cfg.weights);
     const adminCap = effectiveAdminCap(cfg.weights);
 
-    // تابلو همان دوره — رتبه و امتیازها از همان computeBoard خوانده می‌شود
-    // (تک‌منبع حقیقت: شرح هرگز با تابلو نمی‌خواند)
     const rows = await computeBoard(db, since, { contentFormula, usageFormula, adminCap });
     const row = rows.find((r) => r.staffId === staffId);
     if (!row) {
       return json({ error: 'NOT_FOUND', message: 'کارمند یافت نشد' }, 404);
     }
 
-    // آیتم‌های محتوا per-staff — دقیقاً همان فیلترهای کوئری تابلوی تک‌اسنپ‌شات
-    // — v3: ترتیبی (نه Promise.all) — خواندن‌های پشت‌سرهمِ یک نشست هرگز از
-    // اسنپ‌شاتِ خواندن قبلیِ همان نشست عقب‌تر نیستند.
     const W = since ? ' AND created_at >= ?' : '';
     const P = since ? [since] : [];
-    // m166: آیتم‌های تمرین — تمرین‌های ساختهٔ این همکار + تمرین‌هایی که هم‌سازش بوده
     const exerciseItems = await db
       .prepare(`SELECT id, title, team_created, co_created_by FROM exercises WHERE deleted_at IS NULL AND (created_by = ? OR co_created_by = ?)${W} ORDER BY created_at`)
       .bind(staffId, staffId, ...P).all();
@@ -664,10 +450,7 @@ export async function handleScoring(request, env) {
 
     const prodW = (key) => contentFormula.production.find((x) => x.key === key)?.weight ?? 0;
     const exWeight = prodW('exercises');
-    // تمرین: count = شمارش خام؛ effectiveWeight = وزن مؤثر هر قلم (تیمی/هم‌سازدار نصف)
     const exerciseList = exerciseItems.results.map((r) => {
-      // m166: هم‌ساز بودن هم «نصف امتیاز» است — تمرینِ ساختهٔ دیگری که این همکار
-      // هم‌سازش بوده در همین فهرست با وزن ۰٫۵ می‌آید
       const teamCreated = r.team_created === 1 || Boolean(r.co_created_by);
       return {
         id: r.id,
@@ -677,7 +460,6 @@ export async function handleScoring(request, env) {
       };
     });
 
-    // استفادهٔ سامانه — از usageDetail همان ردیف تابلو (شمارش‌های audit_log) + برچسب/وزن فرمول مؤثر
     const uWeights = usageWeightMap(usageFormula);
     const uLabels = Object.fromEntries(usageFormula.map(([a, , label]) => [a, label]));
     const actions = Object.entries(row.usageDetail)
@@ -699,8 +481,6 @@ export async function handleScoring(request, env) {
         generatedAt: new Date().toISOString(),
         staff: { staffId: row.staffId, fullName: row.fullName, role: row.role },
         content: {
-          // — v3 (m141): weighted = «جمع وزن‌دار به امتیاز» = شمارش وزن‌دار تیمی × وزن
-          // فرمول مؤثر (همان عددی که در سرجمع بخش دیده می‌شود — ۱۱ تمرین × ۱۰ = ۱۱۰)
           exercises: {
             count: exerciseList.length,
             weighted: row.content.exercises * exWeight,
@@ -717,14 +497,12 @@ export async function handleScoring(request, env) {
             count: row.content.templates,
             weighted: row.content.templates * prodW('templates'),
             weight: prodW('templates'),
-            // — ستون انسانی قالب «title» است؛ شناسهٔ منطقی «key»
             items: templateItems.results.map((r) => ({ id: r.key, title: r.title }))
           },
           forms: {
             count: row.content.forms,
             weighted: row.content.forms * prodW('forms'),
             weight: prodW('forms'),
-            // — قرارداد پین‌شده: فیلد «name» (ستون واقعی جدول: title)
             items: formItems.results.map((r) => ({ id: r.id, name: r.title }))
           }
         },

@@ -1,15 +1,3 @@
-/**
- * D1 درون‌حافظه‌ای برای تست‌ها
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// ماک D1Database روی node:sqlite — برای تست‌های یکپارچه بدون Miniflare
-// فقط همان سطح APIای که اپ استفاده می‌کند را پیاده می‌کند:
-// prepare(sql) → bind(...params) → all / first / run
-// batch(stmts) — اتمیک (BEGIN/COMMIT؛ خطا → ROLLBACK)
-// پارامترها: boolean → 1/0 و undefined → null (رفتار نزدیک به D1)
-// نکته: node:sqlite با process.getBuiltinModule بارگذاری می‌شود تا vite/vitest
-// آن را bundle نکند (import ایستای node:sqlite در vitest resolve نمی‌شود).
-
 type SqliteModule = typeof import('node:sqlite');
 
 function loadSqlite(): SqliteModule {
@@ -22,10 +10,8 @@ function loadSqlite(): SqliteModule {
 
 const { DatabaseSync } = loadSqlite();
 
-/** کلاس DatabaseSync برای هارنس (ساخت DB در حافظه) */
 export { DatabaseSync };
 
-/** تایپ نمونهٔ DatabaseSync (بدون تداخل value/type) */
 export type DatabaseSyncInstance = import('node:sqlite').DatabaseSync;
 
 type BoundValue = string | number | bigint | null;
@@ -36,7 +22,6 @@ function normalizeParam(p: unknown): BoundValue {
   if (p === null || typeof p === 'string' || typeof p === 'number' || typeof p === 'bigint') {
     return p;
   }
-  // بافر/آرایه بایت — در این پروژه استفاده نمی‌شود؛ محافظت:
   if (p instanceof Uint8Array) return Buffer.from(p).toString('base64');
   throw new TypeError(`پارامتر غیرقابل bind برای D1 ماک: ${typeof p}`);
 }
@@ -56,7 +41,6 @@ export class MockD1PreparedStatement {
     return new MockD1PreparedStatement(this.store, this.sql, params);
   }
 
-  /** اجرای همگام — برای batch داخلی هم استفاده می‌شود */
   private execSync(): { rows: Record<string, unknown>[]; changes: number | bigint } {
     const stmt = this.store.prepare(this.sql);
     const params = this.params.map(normalizeParam);
@@ -110,7 +94,6 @@ export class MockD1 {
     this.store.exec('BEGIN IMMEDIATE');
     try {
       for (const stmt of statements) {
-        // execSync خصوصی است — با cast امن به آن دسترسی داریم تا batch اتمیک بماند
         const { changes } = (
           stmt as unknown as { execSync(): { rows: Record<string, unknown>[]; changes: number | bigint } }
         ).execSync();
@@ -124,7 +107,6 @@ export class MockD1 {
     }
   }
 
-  /** دسترسی خام برای fixture/_assert در تست‌ها */
   get rawStore(): import('node:sqlite').DatabaseSync {
     return this.store;
   }

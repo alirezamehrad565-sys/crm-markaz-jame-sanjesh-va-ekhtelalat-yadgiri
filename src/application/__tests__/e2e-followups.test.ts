@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — followups
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-followups.test.ts — فاز ۳ (بنیاد پیگیری): ساخت/خواندن RBAC، ماتریس ترنزیشن،
-// مالکیت ویرایش (مسئول/مدیر/منشی)، audit (created/updated/completed)، گروه‌بندی §13.4
-// با مرزهای تهران، mine=1 و فیلتر موجودیت — overdue کاملاً computed است (بدون ستون)
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -80,7 +72,6 @@ describe('فاز ۳ — ساخت، خواندن و RBAC', () => {
 
     expect(fu.status).toBe('open');
     expect(fu.dueAt).toBeTruthy();
-    // نرمال‌سازی toISOString — قالب یکنواخت با میلی‌ثانیه (مقایسهٔ رشته‌ای مرزها معتبر می‌ماند)
     expect(fu.dueAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     expect(Date.parse(fu.dueAt as string)).toBeGreaterThanOrEqual(before + 7 * DAY - 1000);
     expect(Date.parse(fu.dueAt as string)).toBeLessThanOrEqual(after + 7 * DAY + 1000);

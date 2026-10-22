@@ -1,12 +1,3 @@
-/**
- * تست‌های e2e — پیوست فایل/تصویر مقالهٔ دانش
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-knowledge-files.test.ts — پیوست دانش‌افزایی
-// آپلود چندفایلی multipart (تصویر/PDF) + بارگذاری پیوستهٔ تکه‌ای فایل بزرگ
-// + دانلود تکی + حذف + پاک‌سازی قطعه‌های ذخیره + RBAC همان مدیریت دانش
-// الگوی e2e-exercise-files — سقف حجم/نوع همان تمرین‌ها
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, asRole, Api } from '../../test/harness';
 import { createAuditWriter } from '@core/audit';
@@ -33,7 +24,6 @@ function makeFile(bytes: Uint8Array, name: string, type: string): File {
   return new File([bytes as unknown as ArrayBuffer], name, { type });
 }
 
-/** درخواست multipart خام به اپ — FormData مستقیم (بدون Content-Type دستی) */
 async function postForm(api: Api, path: string, form: FormData): Promise<{ status: number; body: unknown }> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   const token = api['token'] as string | null;
@@ -91,7 +81,6 @@ describe('پیوست فایل/تصویر مقالهٔ دانش', () => {
     });
     expect(created.status).toBe(201);
     const knId = dataOf<KnowledgeView>(created).id;
-    // مقالهٔ تازه بدون پیوست
     expect(dataOf<KnowledgeView>(created).attachments).toEqual([]);
 
     const form = new FormData();
@@ -106,7 +95,6 @@ describe('پیوست فایل/تصویر مقالهٔ دانش', () => {
     expect(rec.attachments[0].mime).toBe('image/png');
     expect(rec.attachments[1].filename).toBe('rahnama.pdf');
 
-    // فهرست مدیریتی و عمومی هر دو پیوست را برمی‌گردانند
     const manage = dataOf<KnowledgeView[]>(await manager.get('/api/knowledge/manage'));
     expect(manage.find((k) => k.id === knId)?.attachments).toHaveLength(2);
     const pub = dataOf<KnowledgeView[]>(await therapist.get('/api/knowledge'));
@@ -207,7 +195,6 @@ describe('پیوست فایل/تصویر مقالهٔ دانش', () => {
     expect(up.status).toBe(400);
     expect(JSON.stringify(up.body)).toContain('حداکثر 10 فایل');
 
-    // سرویس‌محور: با ۱۹ پیوست موجود، افزودن ۲ فایل دیگر از سقف ۲۰ می‌گذرد
     const svc = createKnowledgeService({
       db: A.db,
       audit: createAuditWriter(A.db),
@@ -222,7 +209,6 @@ describe('پیوست فایل/تصویر مقالهٔ دانش', () => {
         segments: [PNG_BYTES],
         size: PNG_BYTES.length
       }));
-    // ۱۹ پیوست در دو دستهٔ مجاز (سقف ۱۰ در هر بار)
     await svc.addFiles(knId, small(0, 10), actor);
     await svc.addFiles(knId, small(10, 19), actor);
     await expect(
@@ -234,7 +220,6 @@ describe('پیوست فایل/تصویر مقالهٔ دانش', () => {
     const created = await manager.post('/api/knowledge', { title: 'مقالهٔ فایل بزرگ', body: 'راهنمای چندصفحه‌ای' });
     const knId = dataOf<KnowledgeView>(created).id;
 
-    // الگوی شبه‌تصادفی قطعی — ۴ مگابایت (۴ تکهٔ ۱ مگابایتی)
     const big = new Uint8Array(4 * 1024 * 1024);
     let seed = 987654321;
     for (let i = 0; i < big.length; i += 1) {
@@ -263,7 +248,6 @@ describe('پیوست فایل/تصویر مقالهٔ دانش', () => {
     expect(att[0].filename).toBe('rasane-bozorg.pdf');
     expect(att[0].size).toBe(big.length);
 
-    // مونتاژ بایت‌به‌بایت درست است
     const svc = createKnowledgeService({
       db: A.db,
       audit: createAuditWriter(A.db),

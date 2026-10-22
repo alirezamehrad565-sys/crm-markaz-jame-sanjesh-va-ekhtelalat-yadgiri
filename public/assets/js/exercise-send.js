@@ -1,12 +1,3 @@
-/**
- * ارسال تمرین به خانواده
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// exercise-send.js — ارسال تمرین با بله + تب «تمرین‌ها»ی پروفایل دانش‌آموز
-// جریان یک‌کلیکی هم‌تراز موتور چک‌لیست:
-// پیشنهاد برچسب‌محور (★) → انتخاب تمرین/بستهٔ آماده → پیام بله به چت ولیّ‌ها با لینک امن دانلود
-// تب پروفایل: تاریخچهٔ بسته‌های تکلیف با وضعیت هر تمرین، بازگشتی خانواده و یادآوری.
-
 import { api } from './api.js';
 import { el, icon, toast, toastError, confirmModal, formModal, openModal, statusBadge, emptyState, loadingState, errorState } from './ui.js';
 import { fa, formatJalaliNumeric, safeExternalHref } from './format.js';
@@ -20,7 +11,6 @@ function studentLabel(student) {
   return `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || 'دانش‌آموز';
 }
 
-/** دانلود فایل بازگشتی خانواده (با توکن پنل) */
 export async function downloadSubmissionFile(submissionId, filename) {
   try {
     const res = await fetch(`/api/exercises/submissions/${submissionId}/file`, {
@@ -39,12 +29,6 @@ export async function downloadSubmissionFile(submissionId, filename) {
   }
 }
 
-/**
- * مودال «ارسال تمرین با بله» — انتخاب چندتایی تمرین ( — بدون تقسیم‌بندی بسته:
- * هرچند تمرین انتخاب شود در یک پیام می‌رود)
- * پیشنهاد ★ = تطبیق برچسب دانش‌آموز با برچسب تمرین (موتور )
- * onSent(batch, sendResult) بعد از ارسال صدا می‌شود.
- */
 export async function openExerciseSendModal({ student, onSent }) {
   if (!isStaff()) {
     toast('ارسال تمرین برای نقش شما فعال نیست');
@@ -65,11 +49,9 @@ export async function openExerciseSendModal({ student, onSent }) {
 
   const picked = new Set(); // exerciseId → انتخاب‌ها
   if (exercises.some((s) => s.score > 0)) {
-    // پیشنهادهای ★ از قبل تیک می‌خورند — درمانگر فقط تنظیم می‌کند
     for (const s of exercises) if (s.score > 0) picked.add(s.exercise.id);
   }
 
-  // ─── بدنهٔ مودال ───
   const search = el('input', { class: 'input exb-search', placeholder: 'جستجوی تمرین…', style: { marginBottom: 'var(--sp-2)' } });
   const listBox = el('div', { style: { maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--sp-2)' } });
   const hint = el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)' } });
@@ -90,7 +72,6 @@ export async function openExerciseSendModal({ student, onSent }) {
   function drawList() {
     const filtered = exercises.filter((s) => matchQ(s.exercise.title));
     const rows = filtered.map((s) => {
-      // پیشنهاد برچسب با وکتور ستاره به‌جای نویسهٔ ★ متن
       const star = s.score > 0;
       const box = el('input', { type: 'checkbox', value: s.exercise.id });
       box.checked = picked.has(s.exercise.id);
@@ -99,7 +80,6 @@ export async function openExerciseSendModal({ student, onSent }) {
         else picked.delete(s.exercise.id);
         updateCount();
       });
-      // زیرنویس: پیشنهاد برچسب / قالب + نشان لینک بیرونی
       const subParts = [];
       if (s.matched.length > 0) subParts.push(`مناسب: ${s.matched.map((m) => m.name).join('، ')}`);
       else subParts.push(s.exercise.format === 'game' ? 'بازی' : s.exercise.format === 'instruction' ? 'دستورالعمل' : 'کاربرگ');
@@ -175,9 +155,6 @@ export async function openExerciseSendModal({ student, onSent }) {
   });
 }
 
-/**
- * تب «تمرین‌ها»ی پروفایل دانش‌آموز — بسته‌های تکلیف با وضعیت هر تمرین + بازگشتی‌ها + یادآوری
- */
 export async function renderExercisesTab(box, { student, onChanged }) {
   box.replaceChildren(loadingState());
   let batches;
@@ -226,12 +203,6 @@ export async function renderExercisesTab(box, { student, onChanged }) {
     return { badge: statusBadge('assigned') };
   }
 
-  // ─────────────── تصحیح تکلیف (m137) ───────────────
-  // زنجیرهٔ نمره‌دهی: بازگشت خانواده (done) → بازخورد درمانگر (corrected) →
-  // اعلان «✅ تکلیف شما تصحیح شد» در بلهٔ خانواده + رویداد «تمرین تصحیح شد» در تایم‌لاین.
-  // تا m136 هیچ UIای این endpoint را صدا نمی‌زد و بازخورد ثبت‌شده هم جایی نمایش داده نمی‌شد.
-
-  /** — مودال ثبت/ویرایش بازخورد — POST /api/exercises/assignments/:id/grade */
   function openGradeModal(item, onChanged) {
     formModal({
       title: `بازخورد تکلیف — ${item.exerciseTitle}`,
@@ -258,7 +229,6 @@ export async function renderExercisesTab(box, { student, onChanged }) {
     });
   }
 
-  /** — سطر بازخوردِ ثبت‌شدهٔ یک تکلیف (feedback/gradedAt از listBatches می‌آید) */
   function feedbackLine(item) {
     if (!item.feedback) return null;
     return el(
@@ -291,7 +261,6 @@ export async function renderExercisesTab(box, { student, onChanged }) {
 
   const cards = batches.map((b) => {
     const done = b.items.filter((i) => i.status === 'done' || i.status === 'corrected').length;
-    // — گارد تصحیح هم‌سو با سرور: ثبت‌کنندهٔ تکلیف یا مدیر (تکلیف کلاسِ معلم = همهٔ کارکنان)
     const canGrade = isStaff()
       && (session.user.role === 'manager'
         || b.assignedBy === session.user.staffId
@@ -304,9 +273,7 @@ export async function renderExercisesTab(box, { student, onChanged }) {
         { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap', padding: '6px 0', borderTop: '1px solid var(--border)' } },
         el('b', { style: { flex: 1, minWidth: '140px' } }, item.exerciseTitle),
         badge,
-        // — بازخورد ثبت‌شده (m137: تا قبل از این جایی نمایش داده نمی‌شد)
         feedbackLine(item),
-        // — کنش تصحیح (m137): حلقهٔ نمره‌دهی کامل می‌شود؛ تصحیحِ دوباره هم مجاز است
         canGrade && gradeable(item)
           ? el(
               'button',
@@ -319,8 +286,6 @@ export async function renderExercisesTab(box, { student, onChanged }) {
               item.status === 'corrected' ? 'ویرایش بازخورد' : 'تصحیح'
             )
           : null,
-        // لینک بازی/تمرین آنلاین بیرونی
-        // فقط http/https به‌صورت لینک رندر می‌شود (دفاع دوم در برابر href نامعتبر)
         safeExternalHref(item.externalUrl)
           ? el('a', { class: 'btn btn--ghost btn--sm', href: safeExternalHref(item.externalUrl), target: '_blank', rel: 'noopener', title: `باز کردن بازی/تمرین آنلاین — ${item.externalUrl}` }, icon('zap', 13), 'بازی')
           : null,

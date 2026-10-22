@@ -1,8 +1,3 @@
-/**
- * تست‌های واحد — templates-
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// پارسر + رندررهای «لیست انتظار ↔ بات»
 import { describe, expect, it } from 'vitest';
 import { parseBotUpdate } from '../bale/webhook';
 import { renderTemplate, renderWaitlistList } from '../templates';

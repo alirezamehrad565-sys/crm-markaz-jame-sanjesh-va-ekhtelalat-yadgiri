@@ -1,12 +1,3 @@
-/**
- * تست‌های e2e — -bot-v2
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e--bot-v2.test.ts — بات نقش‌محور نسخهٔ ۲
-// عموم ۴دکمه‌ای، منوی دانش‌آموز (فهرست→اقدام)، پیام به خانواده (فرم دولایه)،
-// ارسال تکلیف از پروفایل، تمرین‌های انجام‌نشدهٔ خانواده، فعالیت کلاس معلم، آگاهی‌های اختلالات
-// اپ واقعی Hono + اسکیمای migrations + webhook با secret تست (بدون توکن بله — reply در بدنه)
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -64,11 +55,9 @@ describe('بات نقش‌محور نسخهٔ ۲', () => {
     A = createTestApp();
     manager = await asRole(A, 'manager');
 
-    // اتصال مدیر و درمانگر
     expect((await bot(A, tx(MANAGER_NID, CHAT_MGR))).reply).toContain('اتصال انجام شد');
     expect((await bot(A, tx('3149977797', CHAT_ALI))).reply).toContain('اتصال انجام شد');
 
-    // دانش‌آموز + جلسهٔ علی + والد متصل
     const s = await createStudent(manager, { first_name: 'آوا', last_name: 'نسل‌دو' });
     studentId = s.id;
     studentName = 'آوا نسل‌دو';
@@ -77,8 +66,6 @@ describe('بات نقش‌محور نسخهٔ ۲', () => {
     expect(appt.status).toBe(201);
     expect((await bot(A, tx(parentNid, CHAT_PARENT))).reply).toContain('اتصال انجام شد');
   });
-
-  // ─── عموم ۴دکمه‌ای ───
 
   it('مهمان /start → کیبورد چهار دکمه‌ای عموم (م64)', async () => {
     const res = await bot(A, tx('/start', CHAT_NONE));
@@ -94,8 +81,6 @@ describe('بات نقش‌محور نسخهٔ ۲', () => {
     expect(auth.reply).toContain('/link CODE');
     expect(auth.reply).toContain('یک گفتگو');
   });
-
-  // ─── منوی دانش‌آموز + پیام به خانواده ───
 
   it('درمانگر «دانش‌آموزان فعال» → دکمهٔ نام → منوی اقدام چهارگانه', async () => {
     const list = await bot(A, tx('دانش‌آموزان فعال', CHAT_ALI));
@@ -119,7 +104,6 @@ describe('بات نقش‌محور نسخهٔ ۲', () => {
     const start = await bot(A, cb(msgData, CHAT_ALI, 12));
     expect(start.reply).toContain('متن پیام را بفرستید');
 
-    // متن کوتاه رد می‌شود
     const bad = await bot(A, tx('x', CHAT_ALI));
     expect(bad.reply).toContain('۲ تا ۵۰۰');
 
@@ -130,7 +114,6 @@ describe('بات نقش‌محور نسخهٔ ۲', () => {
     const done = await bot(A, cb('stu:msg:do', CHAT_ALI, 13));
     expect(done.reply).toContain('ارسال شد');
 
-    // رکورد صف با قالب تازه
     const rows = A.sql
       .prepare(`SELECT template, payload, recipient FROM notifications WHERE template = 'bot_family_message' ORDER BY created_at DESC`)
       .all() as { template: string; payload: string; recipient: string }[];
@@ -140,7 +123,6 @@ describe('بات نقش‌محور نسخهٔ ۲', () => {
     expect(payload.extra).toContain('پنج دقیقه');
     expect(payload.senderName.length).toBeGreaterThan(0);
 
-    // audit
     const auditRow = A.sql
       .prepare(`SELECT action FROM audit_log WHERE action = 'bot.family_message' ORDER BY created_at DESC LIMIT 1`)
       .get() as { action: string } | undefined;
@@ -190,8 +172,6 @@ describe('بات نقش‌محور نسخهٔ ۲', () => {
     expect((JSON.parse(hw!.payload) as { studentName: string }).studentName).toBe('آوا نسل‌دو');
   });
 
-  // ─── خانواده ───
-
   it('خانواده «تمرین‌های انجام‌نشده» → تکلیف باز فرزند؛ «نوبت‌های دانش‌آموز من» → برچسب جدید کار می‌کند', async () => {
     const pending = await bot(A, tx('تمرین‌های انجام‌نشده', CHAT_PARENT));
     expect(pending.reply).toContain('تکلیف‌های باز');
@@ -209,10 +189,7 @@ describe('بات نقش‌محور نسخهٔ ۲', () => {
     expect(stu.reply).toContain('معلمان');
   });
 
-  // ─── معلم مدرسه ───
-
   it('معلم مدرسه «فعالیت کلاس» → شمارش + فهرست؛ «آگاهی‌های اختلالات» → منو → آیتم با لینک', async () => {
-    // کلاس + دانش‌آموز + معلم متصل
     const school = ((await manager.post('/api/schools', { name: 'دبستان m64', kind: 'school', gender_type: 'male' })).body as { data: { id: string } }).data;
     const cls = ((await manager.post('/api/classes', { school_id: school.id, name: 'پنجم الف m64', teacher_name: 'معلم m64', teacher_phone: '09170002233' })).body as { data: { id: string } }).data;
     await createStudent(manager, { first_name: 'شاگرد', last_name: 'کلاس m64', school_id: school.id, class_id: cls.id, guardian_phone: '09123334455' });
@@ -232,7 +209,6 @@ describe('بات نقش‌محور نسخهٔ ۲', () => {
     expect(sec.reply).toContain('راهنمای اختلال‌ها');
     const item = await bot(A, cb(sec.buttons![0][0].callbackData, CHAT_TEACHER, 41));
     expect(item.reply).toContain('نارساخوانی');
-    // لینک فقط با PUBLIC_BASE_URL تنظیم‌شده می‌آید؛ وگرنه نسخهٔ چاپی پیشنهاد می‌شود
     expect(item.reply?.includes('🔗') || item.reply?.includes('نسخهٔ چاپی')).toBe(true);
   });
 
@@ -243,8 +219,6 @@ describe('بات نقش‌محور نسخهٔ ۲', () => {
     const sec = await bot(A, cb('dis:d', CHAT_NONE, 50));
     expect(sec.reply).toContain('دفاتر آموزشی');
   });
-
-  // ─── دفتر و ناظر ───
 
   it('مدیر «دانش‌آموزان فعال» دارد (همهٔ پرونده‌ها)؛ منشی بدون KPI؛ ناظر فقط KPI', async () => {
     const mgrList = await bot(A, tx('دانش‌آموزان فعال', CHAT_MGR));

@@ -1,34 +1,4 @@
 #!/usr/bin/env node
-/**
- * route-diff.mjs — Phase 0 debt quantifier (Task 39-b)
- *
- * Quantifies which routes exist ONLY in worker/bundle.js (the live production
- * code = extraction backlog) vs ONLY in the TypeScript source tree src/
- * (stale/dead-code candidates) vs COMMON to both.
- *
- * Extraction rules (derived from studying this codebase):
- *   - Routes are registered as `app.<method>('/path', ...)` on a single root
- *     Hono app. The receiver identifier is `app` (esbuild never renames it:
- *     verified 100% of registrations in both src and bundle).
- *   - Line-anchored match `^\s*app\.(get|post|put|delete|patch|all|on)(` —
- *     this automatically skips Hono library doc comments (`* app.get(...)`)
- *     and non-route `.get(` calls (Map/Header/URLSearchParams lookups).
- *   - `app.use(...)` is middleware, NOT a route → excluded by design.
- *   - A first argument that is an identifier is resolved through a file-local
- *     `const NAME = '/path'` table (e.g. FILL_PATH in case-events routes).
- *   - `app.route('/prefix', sub)` static prefixes are resolved best-effort
- *     for single-level sub-apps (`const sub = new Hono()` registered via
- *     `app.route(prefix, sub)`). (This codebase currently uses zero sub-apps;
- *     the logic is a safety net for future refactors.)
- *   - Path params are canonicalized to `:param` for matching
- *     (`:id`, `:sid`, `:id{[0-9]+}` → `:param`); wildcards `*` are kept.
- *
- * Usage (from deploy127/):
- *   node scripts/route-diff.mjs           # human report → stdout + route-diff-report.txt
- *   node scripts/route-diff.mjs --json    # machine-readable JSON on stdout instead
- *
- * Node >= 18, ZERO npm dependencies. Read-only: never modifies src/ or bundle.
- */
 
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname, sep } from 'node:path';
@@ -42,9 +12,6 @@ const REPORT_FILE = join(HERE, 'route-diff-report.txt');
 
 const METHODS = ['get', 'post', 'put', 'delete', 'patch', 'all', 'on'];
 
-// ─── helpers ────────────────────────────────────────────────────────────────
-
-/** Recursively collect *.ts files under dir, skipping test trees. */
 function walkTs(dir, out = []) {
   let entries;
   try {
@@ -64,14 +31,6 @@ function walkTs(dir, out = []) {
   return out;
 }
 
-/**
- * Best-effort canonicalization of a route path:
- *  - collapse duplicate slashes
- *  - Hono regex-constrained params  `:id{...}`  → `:param`
- *  - plain params                   `:anything` → `:param`
- *  - wildcard segments              `*`         → kept as-is
- * Returns null for paths that cannot be canonicalized sensibly.
- */
 function canonicalizePath(rawPath) {
   let p = rawPath.trim();
   if (p === '') return null;
@@ -82,7 +41,6 @@ function canonicalizePath(rawPath) {
   return p;
 }
 
-/** Shape key without param names but with param positions preserved. */
 function shapeKey(method, rawPath) {
   let p = rawPath.trim();
   if (!p.startsWith('/')) p = '/' + p;
@@ -92,11 +50,9 @@ function shapeKey(method, rawPath) {
   return `${method} ${p}`;
 }
 
-/** Extract a quoted string starting at index i (after the opening paren/space). */
 function parseStringLiteral(line, i) {
   const q = line[i];
   if (q !== '"' && q !== "'" && q !== '`') return null;
-  // template literal with interpolation → not statically resolvable
   if (q === '`' && line.includes('${', i)) return { unresolved: true };
   let j = i + 1;
   let out = '';
@@ -114,10 +70,6 @@ function parseStringLiteral(line, i) {
   return null; // unterminated on this line
 }
 
-/**
- * Extract route registrations from one source text.
- * Returns { routes: [{method, path, line}], unresolvedConst: [...], unparsable: [...] }
- */
 function extractFromText(text, opts = {}) {
   const routes = [];
   const unresolvedConst = [];
@@ -128,7 +80,6 @@ function extractFromText(text, opts = {}) {
 
   const lines = text.split('\n');
 
-  // Pass 1: file-local const table + sub-app detection + mount points.
   lines.forEach((line, idx) => {
     let m = line.match(/^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(['"`])(.*?)\2\s*;?\s*$/);
     if (m && m[3].startsWith('/')) {
@@ -148,7 +99,6 @@ function extractFromText(text, opts = {}) {
     }
   });
 
-  // Pass 2: route registrations.
   const re = new RegExp(`^\\s*([\\w$]+)\\.(${METHODS.join('|')})\\(\\s*`);
   lines.forEach((line, idx) => {
     const m = line.match(re);
@@ -161,7 +111,6 @@ function extractFromText(text, opts = {}) {
     if (!isRootApp && !isSubApp) return; // Map/Header/etc. .get(...) — not a route
 
     let i = m[0].length;
-    // skip whitespace
     while (i < line.length && /\s/.test(line[i])) i += 1;
 
     let rawPath = null;
@@ -175,7 +124,6 @@ function extractFromText(text, opts = {}) {
       const id = line.slice(i).match(/[A-Za-z_$][\w$]*/)?.[0];
       if (id && constTable.has(id)) rawPath = constTable.get(id);
       else if (id) {
-        // Constant we cannot resolve statically.
         unresolvedConst.push({ method, id, line: lineNo, receiver });
         bad = true;
       } else bad = true;
@@ -188,7 +136,6 @@ function extractFromText(text, opts = {}) {
       return;
     }
 
-    // Sub-app registrations on a locally-declared Hono instance.
     if (isSubApp) {
       const prefixes = mounts.get(receiver);
       if (prefixes && prefixes.length) {
@@ -197,7 +144,6 @@ function extractFromText(text, opts = {}) {
         }
         return;
       }
-      // Declared but never mounted — record with marker so it is visible.
       routes.push({ method, path: rawPath, line: lineNo, receiver, unmounted: true });
       return;
     }
@@ -215,9 +161,6 @@ function joinPrefix(prefix, path) {
   return prefix + path;
 }
 
-// ─── extraction ─────────────────────────────────────────────────────────────
-
-/** key: canonical "METHOD /path" → origins */
 function collect(files) {
   const map = new Map(); // canonical key -> { key, method, path, origins: [label] }
   const shapeMap = new Map(); // shape key -> Set of canonical keys
@@ -269,8 +212,6 @@ const src = collect(srcFilesRel);
 const bundleRel = 'worker/bundle.js';
 const bundle = collect([bundleRel]);
 
-// ─── diff ───────────────────────────────────────────────────────────────────
-
 const onlyInBundle = [];
 const onlyInSrc = [];
 const common = [];
@@ -284,7 +225,6 @@ for (const [key, entry] of src.map) {
   if (!bundle.map.has(key)) onlyInSrc.push(entry);
 }
 
-// Param-name drift: same shape, different exact key, on both sides.
 for (const [sk, srcKeys] of src.shapeMap) {
   const bKeys = bundle.shapeMap.get(sk);
   if (!bKeys) continue;
@@ -303,7 +243,6 @@ onlyInSrc.sort(sortByKey);
 common.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 paramDrift.sort((a, b) => (a.shape < b.shape ? -1 : 1));
 
-// Group bundle-only routes by first two path segments (area summary).
 function areaOf(key) {
   const parts = key.split(' ')[1].split('/').filter(Boolean);
   const a = parts.slice(0, 2).join('/');
@@ -315,8 +254,6 @@ for (const r of onlyInBundle) {
   bundleOnlyByArea.set(a, (bundleOnlyByArea.get(a) ?? 0) + 1);
 }
 const areas = [...bundleOnlyByArea.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
-
-// ─── output ─────────────────────────────────────────────────────────────────
 
 const L = [];
 const out = (s = '') => L.push(s);

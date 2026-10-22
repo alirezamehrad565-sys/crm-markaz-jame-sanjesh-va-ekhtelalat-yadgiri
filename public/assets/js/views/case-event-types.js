@@ -1,18 +1,3 @@
-/**
- * نمای رویدادساز
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/case-event-types.js — فرم‌ساز انواع رویداد — ریورک «رویدادساز» — فرم‌ساز حرفه‌ای روان‌سنجی
-// دستور کاربر: «نمیتونی تو سوالات گزینه ای برای هر گزینه نمره تعیین کنی و....
-// چک لیست ها باید با به روز ترین متد های حرفه ای تو زمینه روانشناسی ساخته بشه»
-// قابلیت‌های v2:
-// - گزینه‌ای نمره‌دار (single): هر گزینه نمرهٔ خودش را دارد — نمره از گیرنده پنهان است (اصل سنجش استاندارد)
-// - آیتم معکوس (reverse) — آیتم بحرانی (critical) با آستانه
-// - زیرمقیاس‌ها (subscales) با باند مستقل + خروج از نمرهٔ کل (مثل مقیاس نقاط قوت SDQ)
-// - باندهای تحلیل با رنگ (مطلوب/مرزی/قابل توجه) + توصیهٔ خودکار هر باند → تفسیر خودکار موتور تشخیص
-// - حذف قالب (فقط مدیر) و حذف رویداد (فقط مدیر)
-// RBAC: فرم‌ساز همگانی برای سه نقش مرکز — حذف فقط مدیر
-
 import { api } from '../api.js';
 import { fa, formatJalaliDateTime } from '../format.js';
 import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyState, errorState, skeletonState } from '../ui.js';
@@ -37,7 +22,6 @@ const SCALE_MAX_LIMIT = 10;
 const FIELD_OPTIONS_MAX = 12;
 const SUBSCALES_MAX = 8;
 
-/** نقش‌های مجاز این ماژول — همگانی برای سه نقش مرکز */
 function canUse() {
   return Boolean(session.user && ['manager', 'secretary', 'therapist'].includes(session.user.role));
 }
@@ -45,7 +29,6 @@ function isManager() {
   return Boolean(session.user && session.user.role === 'manager');
 }
 
-/** ماکسیمم نمرهٔ آیتم — قرینهٔ itemMaxScore سرور */
 function itemMax(f) {
   if (f.type === 'single') {
     const opts = f.scoredOptions ?? [];
@@ -118,8 +101,6 @@ export async function renderCaseEventTypes(container) {
   container.replaceChildren(head, tabs, body);
   body.replaceChildren(renderLibrary());
 
-  // ───────── تب ۱ — کتابخانهٔ فرم‌ها ─────────
-
   function renderLibrary() {
     const wrap = el('div', {});
     const chip = (label, active, onClick) => el('button', {
@@ -185,8 +166,6 @@ export async function renderCaseEventTypes(container) {
     return wrap;
   }
 
-  // ───────── تب ۲ — در انتظار پاسخ ─────────
-
   function renderPending() {
     if (state.pending.length === 0) {
       return emptyState({
@@ -240,7 +219,6 @@ export async function renderCaseEventTypes(container) {
               } catch (err) { toastError(err); }
             }
           }, icon('x', 14), 'لغو'),
-          // حذف رویداد (فقط مدیر)
           isManager()
             ? el('button', {
                 class: 'btn btn--danger btn--sm',
@@ -264,8 +242,6 @@ export async function renderCaseEventTypes(container) {
     );
   }
 
-  // ───────── کارت قالب (کتابخانه) ─────────
-
   function typeCard(t) {
     const tagChips = (t.tags ?? [])
       .map((id) => ({ id, name: state.tagName?.get?.(id) ?? null }))
@@ -288,7 +264,6 @@ export async function renderCaseEventTypes(container) {
             el('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' } },
               el('b', {}, t.title),
               el('span', { class: 'badge badge--neutral' }, CATEGORY_LABELS[t.category] ?? t.category),
-              // بج سه‌هدف «چه کسی پر می‌کند» برای همهٔ قالب‌ها (درمانگر/خانواده/معلم)
               el('span', { class: `badge ${fillTargetOf(t).badgeClass}` }, fillTargetOf(t).badge),
               !t.active ? el('span', { class: 'badge badge--neutral' }, 'غیرفعال') : null
             ),
@@ -335,7 +310,6 @@ export async function renderCaseEventTypes(container) {
                 }
               }, icon('x', 14), 'غیرفعال‌سازی')
             : null,
-          // حذف کامل قالب (فقط مدیر — فقط بدون رویداد متصل)
           isManager()
             ? el('button', {
                 class: 'btn btn--danger btn--sm',
@@ -359,8 +333,6 @@ export async function renderCaseEventTypes(container) {
       )
     );
   }
-
-  // ───────── انتخاب دانش‌آموز برای ارسال از کارت قالب ─────────
 
   function openStudentPicker(type) {
     const results = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', margin: '10px 0', maxHeight: '320px', overflowY: 'auto' } });
@@ -411,16 +383,12 @@ export async function renderCaseEventTypes(container) {
   }
 }
 
-// ═══════════════════ — سازندهٔ حرفه‌ای قالب (فرم‌ساز v2) ═══════════════════
-// مودال سفارشی با پنج بخش: مشخصات / زیرمقیاس‌ها / آیتم‌ها / باندهای تحلیل / برچسب‌ها
-
 function openTypeForm({ type = null, tagName = null, onSaved }) {
   const isEdit = Boolean(type);
   const isChecklistInit = isEdit ? type.category === 'checklist' : true;
   const st = {
     title: type?.title ?? '',
     category: type?.category ?? 'checklist',
-    // آیکون وکتوری به‌جای ایموجی؛ ایموجی‌های قدیمی به آیکون دسته مهاجرت می‌کنند
     icon: TYPE_ICON_CHOICES.includes(type?.icon ?? '') ? type.icon : 'clipboard',
     familyFillable: type?.familyFillable ?? (isChecklistInit ? true : false),
     audience: type?.audience ?? 'family',
@@ -432,7 +400,6 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
   const tagMap = tagName instanceof Map ? tagName : new Map(Object.entries(tagName ?? {}));
   const availableTags = [...tagMap.entries()].map(([id, name]) => ({ id, name }));
 
-  // ─── ساختار مودال ───
   const { close } = openModal({
     title: isEdit ? `ویرایش قالب: ${type.title}` : 'قالب جدید — فرم‌ساز سنجش',
     wide: true,
@@ -451,14 +418,12 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
 
   function v(text) { return String(text ?? '').trim(); }
 
-  // ─── بخش ۱: مشخصات ───
   function specsSection() {
     const titleInput = el('input', { class: 'input', type: 'text', value: st.title, placeholder: 'مثلاً: پرسش‌نامهٔ رفتار کودک — فرم خانواده', style: { width: '100%' } });
     titleInput.addEventListener('input', () => { st.title = titleInput.value; });
     const catSelect = el('select', { class: 'input', style: { width: '100%' }, onchange: (e) => { st.category = e.target.value; rerender(); } },
       ...Object.entries(CATEGORY_LABELS).map(([value, label]) => el('option', { value, selected: st.category === value }, label)));
 
-    // انتخابگر آیکون وکتوری (جایگزین ورودی ایموجی)
     const iconPicker = el('div', { class: 'iconpicker' },
       ...TYPE_ICON_CHOICES.map((name) =>
         el('button', {
@@ -484,11 +449,9 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
         ...Object.entries(AUDIENCE_LABELS).map(([value, label]) => el('option', { value, selected: st.audience === value }, label)));
       rows.appendChild(fieldWrap('گیرنده می‌تواند خودش پر کند (وب‌فرم/بات)', ff, 'فقط دستهٔ چک‌لیست — نتیجهٔ پر شدن خودکار تحلیل می‌شود'));
       rows.appendChild(fieldWrap('مخاطب پیش‌فرض ارسال', audSelect, 'خانواده = ولیّ‌های متصل بله — معلم = چت متصل کلاس'));
-      // راهنمای سه‌هدف
       rows.appendChild(el('div', { class: 'cell-sub', style: { gridColumn: '1 / -1' } },
         `پرکنندهٔ این فرم: خانواده/معلم با پیام بله (لینک امن وب‌فرم) — در انتخابگر پروفایل زیر گروه «${AUDIENCE_LABELS[st.audience] ?? 'خانواده'}» دیده می‌شود.`));
     } else {
-      // شفافیت: فرم‌های جلسه/یادداشت همیشه درمانگر هستند
       rows.appendChild(el('div', { class: 'cell-sub', style: { gridColumn: '1 / -1' } },
         'پرکنندهٔ این فرم: درمانگر — در پروفایل دانش‌آموز، همین‌جا در سایت باز و پر می‌شود (ثبت روی تایم‌لاین پرونده).'));
     }
@@ -499,7 +462,6 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     );
   }
 
-  // ─── بخش ۲: زیرمقیاس‌ها (فقط چک‌لیست) ───
   function subscalesSection() {
     const subs = st.subscales ?? [];
     const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', margin: '8px 0' } });
@@ -545,7 +507,6 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     );
   }
 
-  // ─── بخش ۳: آیتم‌ها ───
   function fieldsSection() {
     const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', margin: '8px 0' } });
     if (st.fields.length === 0) {
@@ -601,7 +562,6 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     );
   }
 
-  // ─── بخش ۴: باندهای تحلیل (فقط چک‌لیست) ───
   function bandsSection() {
     const maxTotal = totalMax(st.fields, st.subscales);
     const chips = st.bands?.length
@@ -625,7 +585,6 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     );
   }
 
-  // ─── بخش ۵: برچسب‌ها ───
   function tagsSection() {
     const chips = availableTags.length === 0
       ? el('p', { class: 'cell-sub', style: { margin: '4px 0' } }, 'برچسبی تعریف نشده است.')
@@ -646,7 +605,6 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     );
   }
 
-  // ─── رندر کل بدنه ───
   function rerender() {
     if (!bodySlot) return;
     const parts = [specsSection()];
@@ -673,7 +631,6 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     );
   }
 
-  // ─── ذخیره نهایی ───
   async function save(closeModal) {
     if (v(st.title).length < 2) { toast('عنوان قالب الزامی است', 'error'); return; }
     if (st.fields.length === 0) { toast('حداقل یک آیتم فرم لازم است', 'error'); return; }
@@ -711,7 +668,6 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     }
   }
 
-  // ───────── ویرایشگر زیرمقیاس ─────────
   function openSubscaleEditor(initial, onSave) {
     formModal({
       title: initial ? `ویرایش زیرمقیاس: ${initial.name}` : 'زیرمقیاس جدید',
@@ -734,7 +690,6 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     });
   }
 
-  // ───────── ویرایشگر باندها (کل چک‌لیست یا زیرمقیاس) ─────────
   function openBandsEditor(initial, expectedMax, onSave) {
     let rows = (initial && initial.length > 0)
       ? JSON.parse(JSON.stringify(initial))
@@ -808,7 +763,6 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     }
   }
 
-  // ───────── ویرایشگر آیتم — قلب فرم‌ساز v2 ─────────
   function openFieldEditor(initial, onSave) {
     const f = initial
       ? JSON.parse(JSON.stringify(initial))

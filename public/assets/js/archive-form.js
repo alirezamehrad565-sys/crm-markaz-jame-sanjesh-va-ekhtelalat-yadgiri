@@ -1,38 +1,13 @@
-/**
- * فرم بایگانی و صندوق خروجی
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// archive-form.js — فرم مستقل «دانش‌آموز آرشیو» + پنجرهٔ «تاریخچهٔ تحصیلی»
-// به دستور کاربر:
-// * «اضافه کردن دانش آموز به ارشیو مشکل داره اول کاری کن که کد ملی اجباری نباشه اونجا
-// و فرم نباید عین فرم اضافه کردن دانش آموز فعال باشه»
-// * «دانش آموز از سال های قبل اومده باید یه حالت تاریخچه تحصیلی داشته باشه که کجا
-// درس خونده دانش اموز سطحش اون سال چی بوده توضیحات — یه فرمی که بشه هی اطلاعات
-// سال اضافه کرد»
-// تفاوت‌های فرم آرشیو با فرم دانش‌آموز فعال (student-form.js):
-// - کد ملی اختیاری است (بدون کد ملی → سرور نگه‌دارندهٔ یکتای «NAS-…» می‌گذارد؛
-// بعداً از همان فرم ویرایش قابل ثبت واقعی است)
-// - تلفن ولیّ اختیاری است؛ کلاسِ جاری حذف شده (دانش‌آموز سال‌های قبل)
-// - پس از ساخت پرونده، پنجرهٔ «تاریخچهٔ تحصیلی» بلافاصله باز می‌شود تا سال‌به‌سال
-// سابقه ثبت شود (مدرسه/سطح/توضیحات هر سال)
-
 import { api } from './api.js';
 import { el, openModal, formModal, confirmModal, toast, toastError, loadingState, emptyState, icon } from './ui.js';
 import { STUDENT_GRADES, isPlaceholderNid, fa } from './format.js';
 import { session } from './state.js';
 import { ensureFormMeta, normalizePhone } from './student-form.js';
 
-/** دفتر (منشی/مدیر) — ثبت/حذف تاریخچه و تعیین مسئول پرونده */
 function isOffice() {
   return session.user?.role === 'manager' || session.user?.role === 'secretary';
 }
 
-/**
- * فرم «دانش‌آموز آرشیو» — تعریف جدید یا ویرایش پروندهٔ آرشیو.
- * options:
- * student — پروندهٔ موجود برای ویرایش (null = تعریف جدید)
- * onSaved — پس از ذخیره ({ id, student }) — student فقط در تعریف جدید پر است
- */
 export async function openArchiveStudentForm({ student = null, onSaved } = {}) {
   const meta = await ensureFormMeta();
   const isEdit = Boolean(student);
@@ -56,8 +31,6 @@ export async function openArchiveStudentForm({ student = null, onSaved } = {}) {
         value: student?.gender ?? ''
       },
       {
-        // سطح/پایهٔ فعلی — برای پروندهٔ سال‌های قبل می‌تواند خالی بماند؛
-        // سابقهٔ سال‌های قبل در «تاریخچهٔ تحصیلی» ثبت می‌شود
         name: 'grade', label: 'سطح/پایهٔ فعلی', type: 'select',
         placeholder: 'بدون پایه',
         options: STUDENT_GRADES.map((g) => ({ value: g, label: g })),
@@ -87,7 +60,6 @@ export async function openArchiveStudentForm({ student = null, onSaved } = {}) {
       ] : [])
     ],
     onSubmit: async (values) => {
-      // تلفن اختیاری است — ولی اگر پر شده باید معتبر باشد
       let phone = '';
       if (values.guardian_phone) {
         phone = normalizePhone(values.guardian_phone);
@@ -107,7 +79,6 @@ export async function openArchiveStudentForm({ student = null, onSaved } = {}) {
           school_id: values.school_id || null,
           guardian_name: values.guardian_name || undefined,
           guardian_phone: phone || undefined,
-          // ثبت کد ملی پروندهٔ نگه‌دارنده‌دار (فقط وقتی فیلد پر شده باشد)
           ...(isPlaceholderNid(student.nationalId) && values.national_id ? { national_id: values.national_id } : {})
         });
         savedStudent = res.data ?? student;
@@ -117,7 +88,6 @@ export async function openArchiveStudentForm({ student = null, onSaved } = {}) {
         toast('تغییرات پروندهٔ آرشیو ذخیره شد', 'success');
       } else {
         const res = await api.post('/api/students', {
-          // کد ملی اختیاری — خالی = سرور نگه‌دارندهٔ یکتای «NAS-…» می‌گذارد
           ...(values.national_id ? { national_id: values.national_id } : {}),
           first_name: values.first_name,
           last_name: values.last_name,
@@ -138,13 +108,6 @@ export async function openArchiveStudentForm({ student = null, onSaved } = {}) {
   });
 }
 
-/**
- * پنجرهٔ «تاریخچهٔ تحصیلی» — سابقهٔ سال‌به‌سال: کجا درس خوانده، سطح همان سال، توضیحات.
- * دفتر (منشی/مدیر) می‌تواند پشت‌سرهم سال اضافه/حذف کند؛ بقیه فقط می‌بینند.
- * options:
- * student — پرونده (id/firstName/lastName لازم است)
- * onChanged — پس از هر افزودن/حذف (اختیاری)
- */
 export function openEducationHistory(student, { onChanged } = {}) {
   const canEdit = isOffice();
   const listWrap = el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } });
@@ -215,7 +178,6 @@ export function openEducationHistory(student, { onChanged } = {}) {
     }));
   }
 
-  // ─── فرم «افزودن سال» — فقط دفتر ───
   let addBlock = null;
   if (canEdit) {
     const yearIn = el('input', { class: 'input', placeholder: 'مثلاً ۱۴۰۲–۱۴۰۳', maxlength: '20', autocomplete: 'off' });

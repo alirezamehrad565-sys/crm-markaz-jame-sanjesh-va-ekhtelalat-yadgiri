@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — exercise-bank-bot
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-exercise-bank-bot.test.ts — جریان تو‌در‌توی «بانک تمرین» بات
-// ورود همکار/والد → منوی ریشه → فهرست → جزئیات → انتخاب دانش‌آموز → تأیید → پیام خانواده
-// اپ واقعی Hono + اسکیمای migrations + webhook با secret تست (بدون توکن بله — reply در بدنه)
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -64,22 +56,18 @@ describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلی�
     A = createTestApp();
     manager = await asRole(A, 'manager');
 
-    // اتصال مدیر و همکار (ورود خودکار با کد ملی)
     expect((await bot(A, tx(MANAGER_NID, CHAT_MGR))).reply).toContain('اتصال انجام شد');
     const ALI_NID = '3149977797'; // کد ملی علی — seed-dev (مطابق e2e-bot-roles)
     expect((await bot(A, tx(ALI_NID, CHAT_ALI))).reply).toContain('اتصال انجام شد');
 
-    // دانش‌آموز + والد متصل
     const s = await createStudent(manager, { first_name: 'سینا', last_name: 'تمرین‌زاده' });
     studentId = s.id;
     studentName = 'سینا تمرین‌زاده';
     expect((await bot(A, tx(s.nationalId, CHAT_PARENT))).reply).toContain('اتصال انجام شد');
 
-    // جلسهٔ علی با این دانش‌آموز — دامنهٔ «دانش‌آموزان من» درمانگر
     const appt = await manager.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(30), 45, [studentId]));
     expect(appt.status).toBe(201);
 
-    // تمرین منتشرشده با فایل
     const ex = await manager.post('/api/exercises', {
       title: exerciseTitle,
       description: 'پنج واژه را در جمله بیاورید.',
@@ -90,7 +78,6 @@ describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلی�
     expect(ex.status).toBe(201);
     exerciseId = (ex.body as { data: { id: string } }).data.id;
 
-    // اتصال معلم کلاس (ردیف مستقیم class_bot_link — ساخت کد elsewhere تست شده)
     A.sql
       .prepare(
         `INSERT INTO classes (id, school_id, name, active) VALUES ('30000000-0000-0000-0000-0000000000c1', '10000000-0000-0000-0000-000000000001', 'چهارم الف', 1)`
@@ -107,8 +94,6 @@ describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلی�
       )
       .run(String(CHAT_CLASS));
   });
-
-  // ─── گیت نقش ───
 
   it('«بانک تمرین» بدون اتصال و برای والد → انکار', async () => {
     const none = await bot(A, tx('بانک تمرین', CHAT_NONE));
@@ -129,8 +114,6 @@ describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلی�
     expect(teacher.reply).toContain('بانک تمرین');
   });
 
-  // ─── منوی ریشه و فهرست ───
-
   it('ریشهٔ بانک تمرین برای درمانگر → دکمه‌های مسیر', async () => {
     const res = await bot(A, tx('بانک تمرین', CHAT_ALI));
     expect(res.handled).toBe(true);
@@ -143,7 +126,6 @@ describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلی�
 
   it('همهٔ تمرین‌ها → آیتم → جزئیات با دکمهٔ ارسال', async () => {
     const list = await bot(A, cb('exb:lst:a:0:1', CHAT_ALI, 11));
-    // عنوان روی دکمه ممکن است تا ۲۶ نویسه کوتاه شده باشد
     expect(list.buttons!.flat().some((b) => b.text.startsWith(exerciseTitle.slice(0, 20)))).toBe(true);
     const flat = list.buttons!.flat();
     const itemBtn = flat.find((b) => b.callbackData.startsWith('exb:item:'));
@@ -160,10 +142,7 @@ describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلی�
     expect(stale.reply).toContain('قدیمی');
   });
 
-  // ─── ارسال تکلیف ───
-
   it('جریان کامل: فهرست دانش‌آموزان درمانگر → انتخاب → تأیید → ثبت و پیام خانواده', async () => {
-    // فهرست تمرین (state تازه)
     await bot(A, cb('exb:lst:a:0:1', CHAT_ALI, 21));
     const students = await bot(A, cb('exb:send:0:1', CHAT_ALI, 22));
     expect(students.reply).toContain('کدام دانش‌آموز');
@@ -179,7 +158,6 @@ describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلی�
     expect(sent.reply).toContain('ثبت شد');
     expect(sent.reply).toContain('ارسال شد');
 
-    // رکورد تکلیف
     const rows = A.sql
       .prepare(`SELECT assigned_by, assigned_via, student_id, exercise_id FROM exercise_assignments WHERE exercise_id = ?`)
       .all(exerciseId) as { assigned_by: string; assigned_via: string; student_id: string; exercise_id: string }[];
@@ -188,7 +166,6 @@ describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلی�
     expect(rows[0].assigned_via).toBe('bot');
     expect(rows[0].student_id).toBe(studentId);
 
-    // اعلان صف‌شده با dedup و ارسال موفق (کانال internal)
     const notes = A.sql
       .prepare(`SELECT template, status, dedup_key, recipient FROM notifications WHERE template = 'homework_assigned'`)
       .all() as { template: string; status: string; dedup_key: string; recipient: string }[];
@@ -197,7 +174,6 @@ describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلی�
     expect(notes[0].recipient).toBe(String(CHAT_PARENT));
     expect(notes[0].dedup_key.startsWith('hw:')).toBe(true);
 
-    // دوباره‌فشردن دکمهٔ yes قدیمی → «قبلاً ارسال شد»
     const again = await bot(A, cb(yes!.callbackData, CHAT_ALI, 25));
     expect(again.reply).toContain('قبلاً ارسال شد');
     const rowsAfter = A.sql
@@ -207,7 +183,6 @@ describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلی�
   });
 
   it('مدیر: همهٔ دانش‌آموزان فعال را می‌بیند؛ معلم کلاس: دانش‌آموز کلاس با assigned_by class:', async () => {
-    // مدیر — شاید دانش‌آموز در صفحهٔ بعد باشد (۷ پرونده فعال؛ صفحه ۶تایی)
     await bot(A, cb('exb:lst:a:0:1', CHAT_MGR, 31));
     let mgrStudents = await bot(A, cb('exb:send:0:1', CHAT_MGR, 32));
     for (let page = 2; page <= 3 && !mgrStudents.buttons!.flat().some((b) => b.text === studentName); page++) {
@@ -215,7 +190,6 @@ describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلی�
     }
     expect(mgrStudents.buttons!.flat().some((b) => b.text === studentName)).toBe(true);
 
-    // معلم کلاس — از ریشه تا تأیید
     const root = await bot(A, tx('بانک تمرین', CHAT_CLASS));
     expect(root.reply).toContain('بانک تمرین مرکز');
 
@@ -243,7 +217,6 @@ describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلی�
       .run();
     const res = await bot(A, tx('بانک تمرین', CHAT_ALI));
     expect(res.reply).toContain('غیرفعال');
-    // برگشت
     A.sql.prepare(`DELETE FROM settings WHERE key = 'exercise_bank_enabled'`).run();
   });
 });

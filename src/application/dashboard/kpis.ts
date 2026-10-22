@@ -1,9 +1,3 @@
-/**
- * سرویس داشبورد و KPI ها — محاسبهٔ KPI ها
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// محاسبات pure کارت‌های عملیاتی داشبورد — بدون دیتابیس، مستقیماً قابل تست
-
 import type {
   Appointment,
   DashboardStaffCard,
@@ -19,7 +13,6 @@ export interface StaffInfo {
   role: StaffRole;
 }
 
-/** شمارش وضعیت نوبت‌ها */
 export function computeStatusCounts(appointments: Appointment[]): {
   total: number;
   scheduled: number;
@@ -34,7 +27,6 @@ export function computeStatusCounts(appointments: Appointment[]): {
   return { total: appointments.length, scheduled, cancelled };
 }
 
-/** کارت‌های به تفکیک کارکنان — فقط متخصصانی که نوبت دارند */
 export function computeStaffCards(
   appointments: Appointment[],
   staffInfo: Map<string, StaffInfo>
@@ -61,7 +53,6 @@ export function computeStaffCards(
   return cards;
 }
 
-/** آمار حضور از روی نوبت‌ها (شامل students) — نرخ غیبت = absent / (present + late + absent) */
 export function computeAttendanceStats(appointments: Appointment[]): AttendanceStats {
   let present = 0;
   let absent = 0;
@@ -90,7 +81,6 @@ export function computeAttendanceStats(appointments: Appointment[]): AttendanceS
   };
 }
 
-/** گروه‌بندی نوبت‌ها بر اساس روز تقویمی تهران */
 export function groupByDay(appointments: Appointment[]): DashboardSummaryDay[] {
   const byDay = new Map<string, { total: number; scheduled: number; cancelled: number }>();
   for (const a of appointments) {
@@ -106,7 +96,6 @@ export function groupByDay(appointments: Appointment[]): DashboardSummaryDay[] {
     .map(([date, counts]) => ({ date, ...counts }));
 }
 
-/** اولین نوبت scheduled در آینده (برای کارت «نوبت بعدی») */
 export function findNextAppointment(
   appointments: Appointment[],
   nowIso: string
@@ -121,9 +110,6 @@ export function findNextAppointment(
   return best ? { id: best.id, staffId: best.staffId, startAt: best.startAt, endAt: best.endAt } : null;
 }
 
-// ───────────── تابلوی رقابتی درمانگران ─────────────
-
-/** وزن‌های امتیاز ترکیبی — فرمول شفاف که در UI هم نشان داده می‌شود */
 export const SCORE_WEIGHTS = { sessions: 2, exercises: 3, events: 1, followups: 1 } as const;
 
 export interface TherapistActivityCounts {
@@ -133,16 +119,10 @@ export interface TherapistActivityCounts {
   followups: number;
 }
 
-/** امتیاز ترکیبی شفاف — جلسات×۲ + تمرین×۳ + رویداد×۱ + پیگیری×۱ */
 export function scoreOf(c: TherapistActivityCounts): number {
   return c.sessions * SCORE_WEIGHTS.sessions + c.exercises * SCORE_WEIGHTS.exercises + c.events * SCORE_WEIGHTS.events + c.followups * SCORE_WEIGHTS.followups;
 }
 
-/**
- * تابلوی رقابتی — فقط درمانگرها (دستور: ستون‌های رقابت درمانی‌اند؛ مدیر/منشی
- * رقیب درمانی نیستند). رتبه‌بندی استاندارد مسابقه: هم‌امتیاز = رتبهٔ یکسان، بعدی پرش می‌کند.
- * ترتیب نمایش: امتیاز نزولی، سپس جلسات نزولی، سپس نام.
- */
 export function computeScoreboard(
   therapists: Array<{ id: string; name: string }>,
   counts: Map<string, TherapistActivityCounts>
@@ -163,7 +143,6 @@ export function computeScoreboard(
 
   entries.sort((a, b) => b.score - a.score || b.sessions - a.sessions || a.staffName.localeCompare(b.staffName, 'fa'));
 
-  // رتبهٔ استاندارد: هم‌امتیازها رتبهٔ یکی می‌گیرند
   for (let i = 0; i < entries.length; i++) {
     if (i > 0 && entries[i].score === entries[i - 1].score) {
       entries[i].rank = entries[i - 1].rank;
@@ -174,12 +153,10 @@ export function computeScoreboard(
   return entries;
 }
 
-/** شمارش جلسات برگزارشده به تفکیک درمانگر — نوبتِ غیرلغوشده با حداقل یک «حاضر» */
 export function countSessionsPerStaff(appointments: Appointment[]): Map<string, number> {
   const byStaff = new Map<string, number>();
   for (const a of appointments) {
     if (a.status === 'cancelled') continue;
-    // تأخیر هم حضور است
     if (!a.students.some((s) => s.attendance === 'present' || s.attendance === 'late')) continue;
     byStaff.set(a.staffId, (byStaff.get(a.staffId) ?? 0) + 1);
   }

@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — waitlist
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-waitlist.test.ts — یکپارچگی فاز W: CRUD، تماس، تبدیل اتمیک به نوبت،
-// رد/نیامد/انصراف، ترتیب دستی، badge، منبع جستجو، RBAC و پذیرش خودکار از حضور
-// دادهٔ ماک: seed-dev + fixtureهای API
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -130,7 +122,6 @@ describe('فاز W — تماس، ویرایش، ترتیب', () => {
     expect(after.lastCallAt).toBeTruthy();
     expect(after.note).toContain('همراه بود');
 
-    // تماس دوم — called→called مجاز، شمارنده افزایش می‌یابد
     const res2 = await sec.post(`/api/waitlist/${e.id}/call`, {});
     expect(entryOf(res2).callCount).toBe(2);
   });
@@ -169,7 +160,6 @@ describe('فاز W — تماس، ویرایش، ترتیب', () => {
     expect(ids.indexOf(c.id)).toBeLessThan(ids.indexOf(a.id));
     expect(ids.indexOf(a.id)).toBeLessThan(ids.indexOf(b.id));
 
-    // ورودی جدید — به انتهای بخش باز append می‌شود (حالت دستی فعال است)
     const d = await createEntry(sec, { last_name: 'ترتیب‌ت' });
     const list2 = await sec.get('/api/waitlist');
     const ids2 = (list2.body as { data: WaitlistEntryBody[] }).data.filter((x) => ['waiting', 'called'].includes(x.status)).map((x) => x.id);
@@ -213,7 +203,6 @@ describe('فاز W — تبدیل به نوبت (اتمیک)', () => {
     expect(out.entry.admittedStudentId).toBe(out.student.id);
     expect(out.entry.status).toBe('scheduled');
 
-    // پرونده واقعاً ساخته شده
     const byNid = await sec.get(`/api/students/by-national-id/${nid}`);
     expect(byNid.status).toBe(200);
   });
@@ -262,22 +251,18 @@ describe('فاز W — تبدیل به نوبت (اتمیک)', () => {
     const mark = await sec.patch(`/api/attendance/${apptId}/${STUDENT1_ID}`, { status: 'present' });
     expect(mark.status).toBe(200);
 
-    // «وقتی وارد چرخه شون میکنیم باید پاک بشن از لیست انتظار»: getById ۴۰۴ و از فهرست هم نیست
     const fresh = await sec.get(`/api/waitlist/${e.id}`);
     expect(fresh.status).toBe(404);
     const list = await sec.get('/api/waitlist');
     expect((list.body as { data: unknown[] }).data.find((row) => (row as { id: string }).id === e.id)).toBeUndefined();
 
-    // ردیف در DB با وضعیت نهایی admitted + deleted_at بایگانی شده
     const dbRow = A.sql.prepare(`SELECT status, deleted_at FROM waitlist WHERE id = ?`).get(e.id) as { status: string; deleted_at: string | null };
     expect(dbRow.status).toBe('admitted');
     expect(dbRow.deleted_at).toBeTruthy();
 
-    // audit ثبت شده
     const auditRows = A.sql.prepare(`SELECT action FROM audit_log WHERE resource_id = ? AND action = 'waitlist.admitted'`).all(e.id);
     expect(auditRows.length).toBe(1);
 
-    // ورودی حذف‌شده دیگر قابل تماس/ویرایش نیست (۴۰۴ — نه ۴۰۹)
     const call = await sec.post(`/api/waitlist/${e.id}/call`, {});
     expect(call.status).toBe(404);
   });
@@ -313,7 +298,6 @@ describe('فاز W — رد/نیامد/انصراف، حذف نرم، badge، ج
     expect(again.status).toBe(409);
   });
 
-  // ویرایش ورودی (PATCH) + بازگشت خروجِ اشتباه به صف (reopen)
   it('PATCH ویرایش فیلدها → شکل پاسخ به‌روز؛ admitted برای reopen 409', async () => {
     const e = await createEntry(sec, { last_name: 'قابل‌ویرایش' });
     const patch = await sec.patch(`/api/waitlist/${e.id}`, {
@@ -343,10 +327,8 @@ describe('فاز W — رد/نیامد/انصراف، حذف نرم، badge، ج
       .all(rej.id);
     expect(auditRows.length).toBe(1);
 
-    // admitted بن‌بست است
     const admEntry = await createEntry(s2, { last_name: 'پذیرفته‌شده' });
     await s2.post(`/api/waitlist/${admEntry.id}/call`, {});
-    // admitted فقط با جلسهٔ واقعی رخ می‌دهد؛ اینجا مستقیم DB برای تست ماتریس
     A.sql.prepare(`UPDATE waitlist SET status = 'admitted' WHERE id = ?`).run(admEntry.id);
     const denied = await s2.post(`/api/waitlist/${admEntry.id}/reopen`, {});
     expect(denied.status).toBe(409);

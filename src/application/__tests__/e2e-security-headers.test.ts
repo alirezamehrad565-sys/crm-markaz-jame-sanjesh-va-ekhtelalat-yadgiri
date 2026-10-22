@@ -1,14 +1,6 @@
-/**
- * تست‌های e2e — security-headers
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-security-headers.test.ts — هدرهای امنیتی سراسری + سیاست کش مسیرهای عمومی
-// همهٔ درخواست‌ها از روی اپ واقعی Hono می‌گذرند؛ هدرها مستقیم از Response خوانده می‌شوند.
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, Api } from '../../test/harness';
 
-/** درخواست خام به اپ واقعی — برای خواندن همهٔ هدرهای پاسخ */
 async function rawRequest(A: ReturnType<typeof createTestApp>, url: string): Promise<Response> {
   const fakeCtx = {
     waitUntil: () => undefined,
@@ -39,12 +31,10 @@ describe('هدرهای امنیتی سراسری (Worker)', () => {
     const api = new Api(A);
     const login = await api.post('/api/auth/login', { username: 'manager', password: '1234' });
     expect(login.status).toBe(200);
-    // login از همان خط لولهٔ /api/* می‌گذرد → no-store
     expect(login.cacheControl).toBe('no-store');
   });
 
   it('مسیر ناشناختهٔ API (۴۰۱ — احراز قبل از ۴۰۴) — هدرهای امنیتی حاضرند', async () => {
-    // /api/* ناشناخته اول ۴۰۱ می‌گیرد (وجود/نبود مسیر فاش نمی‌شود) — رفتار درست
     const res = await rawRequest(A, '/api/no-such-route');
     expect(res.status).toBe(401);
     expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');

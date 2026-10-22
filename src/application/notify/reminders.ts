@@ -1,11 +1,3 @@
-/**
- * اعلان‌های کاربردی و بات‌های نقش‌آگاه بله — یادآوری نوبت‌ها
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// برنامه‌ریز pure یادآوری نوبت — بدون دیتابیس/شبکه (کاملاً قابل تست)
-// ورودی: نوبت‌های بازه + تنظیمات اعلان + نقشه نام‌ها
-// خروجی: پیام‌های آماده صف‌گذاری + ردشدگی‌ها با دلیل
-
 import type {
   Appointment,
   NotificationChannel,
@@ -36,7 +28,6 @@ export interface ReminderSkip {
 export interface ReminderPlanResult {
   plans: ReminderPlan[];
   skips: ReminderSkip[];
-  /** جفت نوبت×دانش‌آموزِ فعال که واقعاً بررسی شدند */
   considered: number;
 }
 
@@ -47,24 +38,14 @@ export interface PlanRemindersInput {
   staffNames: Map<string, string>;
   nowIso: string;
   horizonHours: number;
-  /** — ساعت پیش‌فرض یادآوری از تنظیمات (وقتی دانش‌آموز prefs ندارد) */
   defaultHoursBefore?: number;
   clinicName?: string;
 }
 
-/** کلید idempotency — برای هر (نوبت، دانش‌آموز) حداکثر یک یادآوری همیشه‌اشتملی */
 export function reminderDedupKey(appointmentId: string, studentId: string): string {
   return `reminder:${appointmentId}:${studentId}`;
 }
 
-/**
- * قوانین انتخاب:
- * 1. فقط نوبت‌های scheduled و حضورهای غیر cancelled
- * 2. نوبت باید در آینده و داخل افق باشد (start - now ≤ horizon)
- * 3. reminders_enabled=false → رد
- * 4. بدون chat_id → رد (no_chat)
- * 5. اگر (start - now) < reminder_hours_before ساعت → رد (too_soon)
- */
 export function planReminders(input: PlanRemindersInput): ReminderPlanResult {
   const nowMs = Date.parse(input.nowIso);
   const horizonMs = input.horizonHours * 60 * 60 * 1000;
@@ -135,7 +116,6 @@ export function planReminders(input: PlanRemindersInput): ReminderPlanResult {
   return { plans, skips, considered };
 }
 
-/** تجمیع ردشدگی‌ها برای summary cron */
 export function summarizeSkips(skips: ReminderSkip[]): {
   skippedDisabled: number;
   skippedNoChat: number;
@@ -155,7 +135,6 @@ export function summarizeSkips(skips: ReminderSkip[]): {
   return { skippedDisabled, skippedNoChat, skippedTooSoon, cancelled };
 }
 
-/** ساخت summary کامل cron از نتیجه planner + نتیجه enqueue */
 export function buildEnqueueSummary(
   result: ReminderPlanResult,
   enqueued: number,

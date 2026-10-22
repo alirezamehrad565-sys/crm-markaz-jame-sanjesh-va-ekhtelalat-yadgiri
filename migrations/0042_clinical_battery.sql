@@ -1,23 +1,7 @@
--- مایگریشن اسکیما D1 — باتری بالینی
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- ============================================================
--- — هستهٔ علمی موتور بالینی (پلن نسخهٔ ۲ — docs/clinical-engine-plan.md §۴)
--- ۱) ستون is_system: حفاظت ابزارهای سیستمی از ویرایش/حذف پنل
--- ۲) وکسلر v2: افزودن FRI/سن + فعال‌سازی (ملاک IQ دیرآموزی ۷۰–۸۵)
--- ۳) برچسب‌های جدید: ODD (disorder) + ۸ برچسب وضعیت‌های غیراختلالی (custom)
--- ۴) باتری battery-v1: ۱۵ ابزار ثابت از JSON تک‌منبع (SDQ معلم، SNAP-IV والد/معلم،
--- SCARED-41، DCDQ'07، چک‌لیست‌های ملاکی DSM-5-TR خواندن/نوشتن/ریاضی/اتیسم/زبان/ODD،
--- شرح حال v2 و سه پروب عملکردی CBM)
--- — بازتولید: ستون description (معرفی روایی) + عنوان‌ها/لنگرهای سادهٔ
--- منبع: src/domain/clinical-engine/battery-*.json — تغییر ملاک = battery-v2 و migration جدید
--- ============================================================
-
 ALTER TABLE case_event_types ADD COLUMN is_system INTEGER NOT NULL DEFAULT 0;
 
--- حفاظت ابزارهای استاندارد موجود
 UPDATE case_event_types SET is_system = 1 WHERE key IN ('anamnesis', 'intervention', 'home_behavior', 'legacy_assessment', 'wechsler', 'sdq-parent', 'conners-short', 'achenbach-practical', 'teacher-classroom', 'quick-multi-v1');
 
--- وکسلر v2 — پروفایل WISC-V کامل + فعال‌سازی
 UPDATE case_event_types SET
   title = 'آزمون هوش وکسلر — ثبت درمانگر',
   fields = '[{"key":"version","label":"نسخهٔ آزمون","type":"select","options":["وکسلر پیش‌دبستانی (WPPSI-IV)","وکسلر کودکان (WISC-V)"],"required":true},{"key":"age_at_test","label":"سن کودک در زمان آزمون (سال)","type":"number"},{"key":"fsiq","label":"هوشبهر کلی (FSIQ)","type":"number","required":true},{"key":"vci","label":"شاخص درک کلامی (VCI)","type":"number"},{"key":"vsi","label":"شاخص استدلال دیداری-فضایی (VSI)","type":"number"},{"key":"fri","label":"شاخص استدلال سیال (FRI)","type":"number"},{"key":"wmi","label":"شاخص حافظهٔ کاری (WMI)","type":"number"},{"key":"psi","label":"شاخص سرعت پردازش (PSI)","type":"number"},{"key":"profile_note","label":"یادداشت پروفایل (قوی/ضعیف‌ترین شاخص و شکاف‌ها)","type":"longtext"},{"key":"interpretation","label":"تفسیر و تحلیل پروفایل","type":"longtext"},{"key":"recommendation","label":"توصیه‌ها","type":"longtext"},{"key":"next_action","label":"اقدام بعدی","type":"select","options":["هیچ","پیگیری","نوبت بعدی","تماس با خانواده","ارجاع"]}]',
@@ -25,7 +9,6 @@ UPDATE case_event_types SET
 WHERE key = 'wechsler' AND deleted_at IS NULL;
 UPDATE case_event_types SET is_system = 1 WHERE key = 'wechsler';
 
--- ───────────── برچسب‌های جدید (idempotent) ─────────────
 INSERT OR IGNORE INTO tags (id, name, category) VALUES
   ('aaaaaaaa-0000-4000-8000-00000000000a', 'رفتاری و نافرمانی (ODD)', 'disorder'),
   ('aaaaaaaa-0000-4000-8000-00000000000b', 'حافظهٔ کاری و پردازش', 'custom'),
@@ -37,9 +20,6 @@ INSERT OR IGNORE INTO tags (id, name, category) VALUES
   ('aaaaaaaa-0000-4000-8000-00000000000h', 'استرس محیطی و خانوادگی', 'custom'),
   ('aaaaaaaa-0000-4000-8000-00000000000i', 'تک‌درس ضعیف', 'custom');
 
--- ───────────── باتری ثابت battery-v1 (۱۵ ابزار) ─────────────
-
--- ce-sdq-t-v1 — پرسش‌نامهٔ رفتار کودک — فرم معلم (SDQ) [منبع: Goodman 1997 — باندهای نسخهٔ معلم (4-17 teacher scoring sheet)؛ بازآفرینی فارسی — کالیبراسیون.: لنگر پاسخ توصیفی (درستی) مطابق مرجع + عنوان روایی]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000001',
@@ -58,7 +38,6 @@ VALUES (
   1
 );
 
--- ce-snap-iv-p-v1 — چک‌لیست توجه و بی‌قراری — فرم خانواده (SNAP-IV) [منبع: Swanson SNAP-IV-26 (رایگان) — لنگرهای رسمی شدت (اصلاً/کمی/خیلی/خیلی زیاد). برش‌ها صدک ۹۵ والد: کم‌توجهی ۱٫۷۸، تکانشگری ۱٫۴۴، نافرمانی ۱٫۴۷ (Swanson 2001؛ نافرمانی در از ۱٫۶۷ تصحیح شد) — کالیبراسیون ]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000002',
@@ -77,7 +56,6 @@ VALUES (
   1
 );
 
--- ce-snap-iv-t-v1 — چک‌لیست توجه و بی‌قراری — فرم معلم (SNAP-IV) [منبع: Swanson SNAP-IV-26 — لنگرهای رسمی شدت. برش‌ها صدک ۹۵ معلم: کم‌توجهی ۲٫۵۶، تکانشگری ۱٫۸۰، نافرمانی ۱٫۳۸ (Swanson 2001) — کالیبراسیون ]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000003',
@@ -96,7 +74,6 @@ VALUES (
   1
 );
 
--- ce-scared-p-v1 — پرسش‌نامهٔ اضطراب کودک — فرم خانواده (SCARED) [منبع: Birmaher 1999 (رایگان) — لنگرهای رسمی درستی. برش کل نسخهٔ والد در منبع اصلی ۳۰؛ مطالعات ایرانی ۲۳–۲۵؛ برش عملیاتی این سامانه ۲۵ — کالیبراسیون. برش زیرمقیاس‌ها (۷/۹/۵/۶) از نسخهٔ مرجع — با دادهٔ مرکز بازبینی می‌شود]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000004',
@@ -115,7 +92,6 @@ VALUES (
   1
 );
 
--- ce-dcdq-v1 — پرسش‌نامهٔ هماهنگی حرکتی — فرم خانواده (DCDQ) [منبع: Wilson DCDQ'07 (رایگان با ارجاع) — لنگرهای رسمی شباهت‌سنجی پنج‌درجه‌ای. برش کل نسخهٔ خام ۱۵..۷۵ → سیستم ۰..۶۰: ۵–۷٫۱۱ سال = ۳۱؛ ۸–۹٫۱۱ = ۴۰؛ ۱۰–۱۵ = ۴۲ (در مرز بالایی باند مرزی از ۴۰ به ۴۱ اصلاح شد) — کالیبراسیون ]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000005',
@@ -134,7 +110,6 @@ VALUES (
   1
 );
 
--- ce-sld-read-v1 — چک‌لیست دشواری خواندن — فرم خانواده و معلم (ملاک‌های DSM) [منبع: ملاک‌های اختلال یادگیری خاص — خواندن (F81.0) بازآفرینی فارسی؛ هر آیتم به ملاک حرف‌دار در rules.ts گره خورده؛ لنگر شدت سه‌درجه‌ای ]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000006',
@@ -153,7 +128,6 @@ VALUES (
   1
 );
 
--- ce-sld-wri-v1 — چک‌لیست دشواری نوشتن — فرم خانواده و معلم (ملاک‌های DSM) [منبع: ملاک‌های اختلال یادگیری خاص — بیان نوشتاری (F81.81) بازآفرینی فارسی؛ گره ملاک‌ها در rules.ts؛ لنگر شدت سه‌درجه‌ای ]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000007',
@@ -172,7 +146,6 @@ VALUES (
   1
 );
 
--- ce-sld-calc-v1 — چک‌لیست دشواری حساب — فرم خانواده و معلم (ملاک‌های DSM) [منبع: ملاک‌های اختلال یادگیری خاص — ریاضی (F81.2) بازآفرینی فارسی؛ گره ملاک‌ها در rules.ts؛ لنگر شدت سه‌درجه‌ای ]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000008',
@@ -191,7 +164,6 @@ VALUES (
   1
 );
 
--- ce-asd-criteria-v1 — چک‌لیست نشانه‌های اتیسم — فرم خانواده و معلم (ملاک‌های DSM) [منبع: ملاک‌های ASD (F84.0): A هر سه، B حداقل دو از چهار — بازآفرینی فارسی؛ قاعدهٔ ملاکی در rules.ts؛ ارجاع تخصصی همیشه خط قرمز است؛ لنگر شدت سه‌درجه‌ای ]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000009',
@@ -210,7 +182,6 @@ VALUES (
   1
 );
 
--- ce-speech-criteria-v1 — چک‌لیست زبان و گفتار — فرم خانواده و معلم (ملاک‌های DSM) [منبع: اختلال زبان (F80.2) / اختلال اصوات گفتار (F80.0) / روانی گفتار (F80.81) — بازآفرینی فارسی؛ آیتم بحرانی کم‌شنوایی = ارجاع؛ لنگر شدت سه‌درجه‌ای ]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000010',
@@ -229,7 +200,6 @@ VALUES (
   1
 );
 
--- ce-odd-criteria-v1 — چک‌لیست لجبازی و نافرمانی — فرم خانواده و معلم (ملاک‌های DSM) [منبع: ملاک‌های ODD (F91.3): حداقل ۴ ملاک A با نمرهٔ ۲ + طول ≥۶ ماه — قاعده در rules.ts؛ تفکیک از ADHD تکانشی الزامی؛ لنگر شدت سه‌درجه‌ای ]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000011',
@@ -248,7 +218,6 @@ VALUES (
   1
 );
 
--- ce-anamnesis-v2 — گفت‌وگوی اول — شرح‌حال کودک [منبع: شرح‌حال نظام‌مند کودک (هفت بخش) + فیلدهای ساخت‌یافتهٔ تفریق تشخیصی موتور (تغییر مدرسه/غیبت/بحران، مشکل حسی، زبان خانواده، مداخلهٔ قبلی) — بازطراحی روایی با سربرگ بخش؛ کلیدهای مصرفی infer.ts دست‌نخورده ماندند]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000012',
@@ -267,7 +236,6 @@ VALUES (
   1
 );
 
--- ce-probe-read-v1 — آزمون کوتاه خواندن — ثبت درمانگر [منبع: CBM خواندن: واژهٔ درست در دقیقه (هنجار پنجاهم صدک در instruments.ts) + خطا + کدگشایی واژهٔ بی‌معنی (۲۰ مورد)]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000013',
@@ -286,7 +254,6 @@ VALUES (
   1
 );
 
--- ce-probe-write-v1 — آزمون کوتاه نوشتن — ثبت درمانگر [منبع: دیکتهٔ خطادار به تفکیک نوع (آوایی/تصویری/قاعده‌ای) + روانی نوشتن حروف در ۱۵ ثانیه (هنجار در instruments.ts)]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000014',
@@ -305,7 +272,6 @@ VALUES (
   1
 );
 
--- ce-probe-calc-v1 — آزمون کوتاه حساب — ثبت درمانگر [منبع: CBM حساب: ارقام درست در ۲ دقیقه + مقایسهٔ مقدار (۱۰ جفت) + خطای برآورد خط عددی (٪) — هنجار در instruments.ts]
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-8200-4000-8000-000000000015',
@@ -323,5 +289,3 @@ VALUES (
   NULL,
   1
 );
-
--- پایان 0042

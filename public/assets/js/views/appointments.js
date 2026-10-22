@@ -1,15 +1,3 @@
-/**
- * نمای نوبت‌دهی و تقویم هفتگی
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/appointments.js — تقویم هفتگی نوبت‌ها (: time-grid + نوبت‌گذاری سریع)
-// امکانات:
-// * نمای شبکه زمانی هفتگی (۰۶:۰۰ تا ۲۲:۰۰، سلول‌های ۳۰ دقیقه‌ای، اسنپ ۱۵ دقیقه)
-// * کلیک روی هر سلول → ایجاد سریع با تاریخ/ساعت پیش‌پر و چیپ‌های مدت
-// * درگ‌انددراپ نوبت روی شبکه → جابه‌جایی (move) با 409-safe
-// * سایه «خارج از بازه کاری مرکز» (از تنظیمات) + خط «الان»
-// * کپی از هفته قبل / برگردان / جزئیات / ویرایش / لغو / حضور / افزودن و حذف دانش‌آموز
-
 import { api, qs } from '../api.js';
 import {
   addDaysYmd,
@@ -36,9 +24,7 @@ import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ ثابت هر 
 import { sessionTypeOf, sessionTypeChip, sessionTypeOptions } from '../session-type.js'; // — نوع جلسه (جدول ۴)
 import { openCaseEventForm, openCaseEventDetail, canCreateCaseEvents } from '../case-events.js';
 import { session } from '../state.js';
-// تب لیست انتظار به «دانش‌آموزان» منتقل شد (import حذف شد)
 
-// ─────────────── ثابت‌های شبکه ───────────────
 const DAY_START = 6 * 60;    // کف مطلق شبکه (فقط پشتیبان)
 const DAY_END = 22 * 60;     // سقف مطلق — فقط اگر نوبت واقعی بیرون بزند باز می‌شود
 const CELL_MINUTES = 30;     // هر سلول ۳۰ دقیقه
@@ -48,16 +34,8 @@ const PPM_OFF = 0.5;         // — ساعت‌های بیرون بازهٔ کا
 const WORK_CAP = 21 * 60;    // — شیفت عصر فعال شد: بازهٔ کاری مرکز تا ۲۱:۰۰ رندر می‌شود (قبلاً ۱۸:۰۰)
 let WORK_PPM = PPM_WORK_WEEK; // در ابتدای هر رندر بر اساس حالت تنظیم می‌شود
 
-// مقیاس عمودی شبکه: پنجرهٔ دینامیک بر مبنای بازهٔ کاری مرکز + نوبت‌های واقعی؛
-// دقیقه‌های داخل بازهٔ کاری با WORK_PPM و بیرون آن با PPM_OFF نگاشت می‌شوند تا
-// کل شبکه کوتاه‌تر شود و کارت‌های داخل بازهٔ کاری فضای بیشتری بگیرند.
 let SCALE = null; // { start, end, workStart, workEnd, yOf(m), span(a, b), total }
 
-/**
- * — ساخت مقیاس عمودی شبکه.
- * مرزها: پاکت بازهٔ کاری مرکز روی روزهای نمایان (سقف ۲۱:۰۰ از — شیفت عصر؛ دادهٔ واقعی بیرون‌زده همیشه باز می‌شود)،
- * با ۳۰ دقیقه بالشتک فشرده اطراف. اگر تنظیم ساعت مرکز بارگذاری نشده باشد ۸ تا ۱۸ فرض می‌شود.
- */
 function buildScale(visibleYmds, items) {
   const wdSet = new Set(visibleYmds.map((ymd) => iranianWeekdayOfYmd(ymd)));
   let wStart = Infinity, wEnd = -Infinity, hasHours = false;
@@ -69,7 +47,6 @@ function buildScale(visibleYmds, items) {
   }
   if (!hasHours) { wStart = 8 * 60; wEnd = 18 * 60; }
 
-  // مرز داده — نوبت‌های واقعی هرگز نباید از قاب بیرون بزنند
   let dStart = Infinity, dEnd = -Infinity;
   for (const a of items) {
     dStart = Math.min(dStart, timeToMinute(tehranTimeOfIso(a.startAt)));
@@ -94,7 +71,6 @@ function buildScale(visibleYmds, items) {
 }
 const DURATIONS = [15, 30, 45, 60, 90, 120];
 
-// فاز ۲ — گزارش جلسه: اقدام بعدی (D7) + قاعدهٔ نویسنده (§8.2)
 const NEXT_ACTION_LABELS = { none: 'هیچ', follow_up: 'پیگیری', next_appointment: 'نوبت بعدی', contact: 'تماس با خانواده', referral: 'ارجاع' };
 
 function canWriteSession(appt) {
@@ -103,15 +79,12 @@ function canWriteSession(appt) {
   return session.user.role === 'therapist' && session.user.staffId === appt.staffId;
 }
 
-// فاز ۵ — مدیریت نوبت (زمان/لغو/دانش‌آموزان): مدیر/منشی همه (نقش ناظر + مداخله)؛
-// درمانگر فقط نوبت‌های خودش — هم‌سو با گارد scope سرور
 function canManage(appt) {
   if (!session.user) return false;
   const r = session.user.role;
   return r === 'manager' || r === 'secretary' || (r === 'therapist' && session.user.staffId === appt.staffId);
 }
 
-// وضعیت ماژول — بین رندرها حفظ می‌شود
 const state = {
   weekStart: null, // YMD شنبه
   viewMode: null,  // 'week' | 'day' — پیش‌فرض همیشه هفتگی (تصمیم کاربر)؛ نمای روزانه با سوییچ دستی
@@ -127,7 +100,6 @@ const state = {
   centerHours: [] // [{weekday, startMinute, endMinute}]
 };
 
-/** — همه دانش‌آموزان فعال (MAX_PAGE_SIZE سرور ۱۰۰ است — صفحه‌به‌صفحه) */
 async function fetchAllStudents() {
   const out = [];
   let page = 1;
@@ -141,10 +113,6 @@ async function fetchAllStudents() {
   return out;
 }
 
-/**
- * — کلاس وضعیت کارت نوبت برای رنگ‌بندی:
- * لغو (status) → راه‌راه هم‌رنگ · برگزارشده (ops=completed) → تینت عمیق + تیک · نیامد (ops=no_show) → لبهٔ قرمز
- */
 function apptStatusClass(a) {
   if (a.status === 'cancelled') return ' is-cancelled';
   if (a.opsStatus === 'completed') return ' is-attended';
@@ -155,7 +123,6 @@ function apptStatusClass(a) {
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function renderAppointments(container, ctx = {}) {
-  // لیست انتظار به ماژول «دانش‌آموزان» منتقل شد؛ لینک‌های قدیمی ریدایرکت می‌شوند
   if (ctx.query?.tab === 'waitlist') {
     location.replace('#/waitlist'); // — ماژول مستقل
     return;
@@ -164,14 +131,11 @@ export async function renderAppointments(container, ctx = {}) {
   if (!state.weekStart) state.weekStart = weekStartOf(tehranTodayYmd());
   if (!state.viewMode) state.viewMode = 'week'; // — پیش‌فرض هفتگی در همهٔ دستگاه‌ها (تصمیم کاربر)
   if (!state.dayYmd) state.dayYmd = tehranTodayYmd();
-  // فاز ۵ — درمانگر: برنامهٔ خودش (فیلتر کارمند قفل روی خودش)
   const isTherapist = session.user?.role === 'therapist';
   if (isTherapist) state.staffFilter = session.user.staffId;
   WORK_PPM = state.viewMode === 'day' ? PPM_WORK_DAY : PPM_WORK_WEEK;
-  // هفتهٔ متناظر روز/هفتهٔ جاری — منبع داده fetch (سوییچ حالت بدون refetch اضافه)
   state.weekStart = weekStartOf(state.viewMode === 'day' ? state.dayYmd : state.weekStart);
 
-  // اسکلتون به‌جای اسپینر در بارگذاری اولیهٔ تقویم
   container.replaceChildren(skeletonState('cards', 3));
 
   const [staffRes, studentsRes, centerRes, myStuRes] = await Promise.allSettled([
@@ -181,7 +145,6 @@ export async function renderAppointments(container, ctx = {}) {
     isTherapist ? api.get('/api/appointments/my-students') : Promise.resolve(null)
   ]);
   if (staffRes.status === 'fulfilled') state.staffList = staffRes.value.data;
-  // نوبت/تقویم ابزار نقش درمانگر است؛ ستون‌ها و انتخاب‌گرها فقط درمانگرها (مدیر/منشی/ناظر ستون نمی‌گیرند)
   state.therapistList = state.staffList.filter((s) => s.role === 'therapist');
   if (studentsRes.status === 'fulfilled') {
     state.studentsAll = studentsRes.value;
@@ -204,17 +167,13 @@ export async function renderAppointments(container, ctx = {}) {
     return;
   }
 
-  // ─────────────── نوار ابزار (سوییچ حالت هفته/روز + ناوبری) ───────────────
   const isDay = state.viewMode === 'day';
   const weekLabel = `${formatJalaliShort(state.weekStart)} تا ${formatJalaliShort(weekEnd)}`;
 
-  // تب «لیست انتظار» حذف شد (در «دانش‌آموزان» ادغام شده)
   const modeSeg = el('div', { class: 'seg mode-seg' },
     el('button', { class: `seg__btn${!isDay ? ' is-active' : ''}`, onclick: () => setMode('week') }, 'هفته'),
     el('button', { class: `seg__btn${isDay ? ' is-active' : ''}`, onclick: () => setMode('day') }, 'روز')
   );
-  // فاز ۵ — درمانگر: بدون انتخاب کارمند (فقط برنامهٔ خودش)
-  // دفتر: چیپ‌های رنگی درمانگر (به‌جای select) — نقطهٔ رنگ = رنگ کارت‌های جلسهٔ او
   const staffSelect = isTherapist
     ? el('span', { class: 'badge badge--neutral', style: { padding: '6px 10px' } }, `برنامهٔ من — ${staffName(session.user.staffId)}`)
     : el(
@@ -228,8 +187,6 @@ export async function renderAppointments(container, ctx = {}) {
         state.therapistList.map((s) =>
           el(
             'button',
-            // کلاس hue روی خود چیپ: حالت فعال هم‌رنگ کارت‌های جلسهٔ همان درمانگر می‌شود
-            // (تا فقط نقطهٔ رنگی داخل چیپ رنگ داشت و tint حالت فعال بی‌اثر بود)
             { class: `staff-chip ${hueClass(s.id)}${state.staffFilter === s.id ? ' is-active' : ''}`, onclick: () => { state.staffFilter = s.id; rerender(container); } },
             hueDot(s.id),
             s.fullName
@@ -261,11 +218,9 @@ export async function renderAppointments(container, ctx = {}) {
     newBtn
   );
 
-  // ─────────────── شبکه زمانی (هفتگی یا روزانه چندستونی) ───────────────
   const today = tehranTodayYmd();
   const byDay = groupByDay(appointments);
 
-  // پنجرهٔ دینامیک شبکه: بازهٔ کاری مرکز (سقف ۱۸:۰۰) + فشرده‌سازی ساعت‌های بیرون
   const visibleYmds = isDay
     ? [state.dayYmd]
     : Array.from({ length: 7 }, (_, i) => addDaysYmd(state.weekStart, i));
@@ -274,7 +229,6 @@ export async function renderAppointments(container, ctx = {}) {
   const gridInner = el('div', { class: 'grid-inner' });
 
   if (isDay) {
-    // ─── نمای روز: یک ستون برای هر درمانگر (اتاق خودش) — ؛ — فقط درمانگرها ستون می‌گیرند ───
     const dayItems = byDay.get(state.dayYmd) ?? [];
     const dayStaff = state.staffFilter
       ? state.therapistList.filter((s) => s.id === state.staffFilter)
@@ -287,8 +241,6 @@ export async function renderAppointments(container, ctx = {}) {
       ? '56px minmax(0, 1fr)'
       : `56px repeat(${cols.length}, minmax(170px, 1fr))`;
 
-    // ستون ساعت (gutter) — برچسب‌ها فقط وقتی جا دارند رندر می‌شوند (منطقهٔ فشرده هر دو ساعت)
-    // gutter صریحاً در ردیف بدنه (ر2) می‌نشیند تا برچسب‌ها دقیقاً با خط سلول‌ها تراز باشند
     const gutter = el('div', { style: { position: 'relative', height: `${SCALE.total}px`, gridRow: '2', gridColumn: '1' } });
     let lastLabelY = -100;
     for (let m = SCALE.start; m < SCALE.end; m += CELL_MINUTES) {
@@ -321,11 +273,9 @@ export async function renderAppointments(container, ctx = {}) {
       gridInner.appendChild(buildDayColumn(state.dayYmd, items, state.dayYmd === today, { showStaffName: false }));
     }
   } else {
-    // ─── نمای هفته: هفت ستون روز ───
     gridInner.style.gridTemplateColumns = '';
     const days = Array.from({ length: 7 }, (_, i) => addDaysYmd(state.weekStart, i));
 
-    // ستون ساعت (gutter) — صریحاً در ردیف بدنه (ر2) تا برچسب‌ها با سلول‌ها تراز باشند
     const gutter = el('div', { style: { position: 'relative', height: `${SCALE.total}px`, gridRow: '2', gridColumn: '1' } });
     let lastLabelY = -100;
     for (let m = SCALE.start; m < SCALE.end; m += CELL_MINUTES) {
@@ -359,7 +309,6 @@ export async function renderAppointments(container, ctx = {}) {
     }
   }
 
-  // راهنمای رنگ: وقتی بیش از یک درمانگر در نماست (فقط دفتر)
   const visibleHues = new Set(appointments.filter((a) => !state.staffFilter).map((a) => a.staffId));
   const legend = !isTherapist && visibleHues.size > 1
     ? el(
@@ -373,18 +322,15 @@ export async function renderAppointments(container, ctx = {}) {
       )
     : null;
 
-  // filter(Boolean): replaceChildren(null) رشتهٔ «null» تزریق می‌کند (نمای روز: راهنمای سوایپ وجود ندارد)
   container.replaceChildren(
     ...[
       bar,
       legend,
-      // در موبایل هفته بیش از یک صفحه عرض دارد؛ راهنمای سوایپ نشان بده
       !isDay ? el('div', { class: 'swipe-hint is-week' }, icon('chevL', 14), 'برای دیدن روزهای دیگر، تقویم را بکشید') : null,
       el('div', { class: 'grid-wrap' }, el('div', { class: 'grid-scroll' }, gridInner))
     ].filter(Boolean)
   );
 
-  // اسکرول خودکار به ابتدای بازه کاری مرکز (فقط وقتی صفحه تازه باز شده)
   autoScrollToWorkingHours();
 
   function autoScrollToWorkingHours() {
@@ -412,7 +358,6 @@ export async function renderAppointments(container, ctx = {}) {
       const weekEndYmd = addDaysYmd(state.weekStart, 6);
       const dayInThisWeek = state.weekStart <= state.dayYmd && state.dayYmd <= weekEndYmd;
       if (!dayInThisWeek) {
-        // روز انتخابی به هفتهٔ فعلی نمی‌آید → امروز اگر داخل هفته است، وگرنه شنبه
         state.dayYmd = (state.weekStart <= todayYmd && todayYmd <= weekEndYmd) ? todayYmd : state.weekStart;
       }
     }
@@ -420,18 +365,14 @@ export async function renderAppointments(container, ctx = {}) {
   }
 }
 
-// ─────────────── ستون یک روز ───────────────
-
 function buildDayColumn(ymd, items, isToday, opts = {}) {
   const showStaffName = opts.showStaffName !== false;
   const col = el('div', { class: `grid-day${isToday ? ' is-today' : ''}` });
 
-  // سایه‌های خارج از بازه کاری مرکز
   for (const off of offRanges(ymd)) {
     col.appendChild(el('div', { class: 'grid-off', style: { top: `${off.top}px`, height: `${off.height}px` } }));
   }
 
-  // سلول‌های ۳۰ دقیقه‌ای (کلیک → ایجاد سریع؛ درگ → جابه‌جایی) — ارتفاع متغیر: داخل بازهٔ کاری بلند، بیرون فشرده
   for (let m = SCALE.start; m < SCALE.end; m += CELL_MINUTES) {
     const cell = el('div', {
       class: `grid-cell${m % 60 === 0 ? ' is-hour' : ''}`,
@@ -449,10 +390,8 @@ function buildDayColumn(ymd, items, isToday, opts = {}) {
     col.appendChild(cell);
   }
 
-  // کارت‌های نوبت
   for (const a of items) col.appendChild(apptOnGrid(a, ymd, { showStaffName }));
 
-  // خط «الان» برای امروز
   if (isToday) {
     const nowMin = currentTehranMinute();
     if (nowMin >= SCALE.start && nowMin <= SCALE.end) {
@@ -485,7 +424,6 @@ function currentTehranMinute() {
   return t.getUTCHours() * 60 + t.getUTCMinutes();
 }
 
-// برچسب/آیکون حضور دانش‌آموز (هم برچسب title کارت، هم آیکون ردیف‌ها)
 const STU_ATT_LABEL = { present: 'حاضر', late: 'تأخیر', absent: 'غایب', pending: 'در انتظار', cancelled: 'لغو' };
 const STU_ATT_ICON = { present: ['check', 'ok'], late: ['clock', 'late'], absent: ['x', 'err'] };
 
@@ -496,12 +434,9 @@ function apptOnGrid(a, ymd, opts = {}) {
   const top = Math.max(0, SCALE.yOf(Math.max(startMin, SCALE.start)));
   const height = Math.max(28, SCALE.span(startMin, endMin) - 3);
 
-  // هوشمندی تراکم: کارت بلند (≥۵۶px) ردیف‌های دانش‌آموز با آیکون حضور می‌گیرد؛
-  // کارت کوتاه (۱۵–۳۰ دقیقه) مثل قبل تک‌خطی می‌ماند تا بریده نشود
   const tall = height >= 56;
   const students = (a.students ?? []).map((s) => state.studentNames.get(s.studentId) ?? 'دانش‌آموز');
 
-  // title غنی‌شده: یک خط برای هر دانش‌آموز با وضعیت حضورش
   const stType = sessionTypeOf(a.sessionType); // — نوع جلسه در title
   const titleLines = [
     `${fa(tehranTimeOfIso(a.startAt))} – ${fa(tehranTimeOfIso(a.endAt))}`,
@@ -512,7 +447,6 @@ function apptOnGrid(a, ymd, opts = {}) {
       : ['بدون دانش‌آموز'])
   ];
 
-  // ردیف‌های دانش‌آموز: حداکثر ۳ ردیف + «+N» برای سرریز (فقط کارت بلند)
   const stuRows = (a.students ?? []).slice(0, 3).map((s) => {
     const name = state.studentNames.get(s.studentId) ?? 'دانش‌آموز';
     const ic = STU_ATT_ICON[s.attendance];
@@ -528,7 +462,6 @@ function apptOnGrid(a, ymd, opts = {}) {
   const card = el(
     'div',
     {
-      // رنگ درمانگر + وضعیت (برگزارشده/لغو/نیامد) روی کارت گرید
       class: `grid-appt${apptStatusClass(a)} ${hueClass(a.staffId)}`,
       style: { top: `${top}px`, height: `${height}px` },
       draggable: 'true',
@@ -537,11 +470,9 @@ function apptOnGrid(a, ymd, opts = {}) {
     },
     el('span', { class: 'grid-appt__time' },
       a.opsStatus === 'completed' && a.status !== 'cancelled' ? el('span', { class: 'appt-tick' }, icon('check', 10)) : null,
-      // نشانگر نقطه‌ای «نوبت دارای توضیح» داخل ردیف ساعت
       a.note ? el('span', { class: 'grid-appt__noted', title: a.note }) : null,
       `${fa(tehranTimeOfIso(a.startAt))} – ${fa(tehranTimeOfIso(a.endAt))}`
     ),
-    // نشان نوع جلسه روی کارت بلند (فردی/گروهی/خانواده/آموزگاران/ذهنی)
     tall ? sessionTypeChip(a.sessionType) : null,
     tall && showStaffName ? el('span', { class: 'grid-appt__title' }, staffName(a.staffId)) : null,
     tall && stuRows.length > 0
@@ -560,8 +491,6 @@ function apptOnGrid(a, ymd, opts = {}) {
   return card;
 }
 
-// ─────────────── درگ‌انددراپ → move ───────────────
-
 async function handleDrop(e, targetYmd, cellMinute, cell) {
   let payload;
   try {
@@ -571,14 +500,12 @@ async function handleDrop(e, targetYmd, cellMinute, cell) {
   }
   if (!payload?.id) return;
 
-  // اسنپ ۱۵ دقیقه‌ای داخل سلول ۳۰ دقیقه‌ای (ارتفاع سلول‌ها متغیر است → نسبت واقعی سلول)
   const rect = cell.getBoundingClientRect();
   const offsetY = e.clientY - rect.top;
   const inner = Math.floor(((offsetY / Math.max(rect.height, 1)) * CELL_MINUTES) / 15) * 15;
   const newMinute = Math.min(cellMinute + inner, 24 * 60 - 15);
   const snapped = Math.round(newMinute / 15) * 15;
 
-  // فقط جابه‌جایی زمان در همان روز از طریق درگ — تغییر روز از ویرایش
   if (targetYmd === payload.fromYmd) {
     const newStartAt = tehranYmdMinuteToIso(targetYmd, snapped);
     try {
@@ -591,7 +518,6 @@ async function handleDrop(e, targetYmd, cellMinute, cell) {
       rerender(document.getElementById('outlet'));
     }
   } else {
-    // روز متفاوت → ویرایشگر زمان باز می‌شود (تاریخ جدید = روز مقصد)
     let a;
     try {
       a = (await api.get(`/api/appointments${qs({ id: payload.id })}`)).data;
@@ -606,8 +532,6 @@ async function handleDrop(e, targetYmd, cellMinute, cell) {
   }
 }
 
-// ─────────────── helpers ───────────────
-
 function errorView(err) {
   return el('div', {},
     el('div', { class: 'week-bar' },
@@ -620,9 +544,6 @@ function errorView(err) {
 function rerender(container) {
   renderAppointments(container);
 }
-
-// پیش‌فرض نمای روزانه بر اساس عرض صفحه حذف شد: تقویم همیشه هفتگی باز می‌شود
-// (نمای روزانه با سوییچ «روزانه» در نوار بالا در دسترس است)
 
 function weekStartOf(ymd) {
   return addDaysYmd(ymd, -iranianWeekdayOfYmd(ymd));
@@ -649,15 +570,12 @@ function staffName(id) {
   return state.staffList.find((s) => s.id === id)?.fullName ?? 'کارمند';
 }
 
-// ─────────────── ایجاد سریع نوبت (کلیک روی سلول) ───────────────
-
 function openQuickCreate(ymd, minute) {
   openCreateModal(document.getElementById('outlet'), { ymd, minute });
 }
 
 function openCreateModal(container, preset = {}) {
   const picked = new Set();
-  // فاز ۵ — درمانگر: picker فقط از «دانش‌آموزان من» (اشتقاق D4) — منشی/مدیر همهٔ فعال‌ها
   const isTher = session.user?.role === 'therapist';
   const allStudents = isTher ? state.myStudents : state.studentsAll;
   const defaultYmd = preset.ymd ?? (state.weekStart === weekStartOf(tehranTodayYmd()) ? tehranTodayYmd() : state.weekStart);
@@ -676,8 +594,6 @@ function openCreateModal(container, preset = {}) {
             el('label', { class: `pick-list__item${picked.has(s.id) ? ' is-picked' : ''}` },
               el('input', { type: 'checkbox', checked: picked.has(s.id), onchange: (e) => { e.target.checked ? picked.add(s.id) : picked.delete(s.id); drawList(); } }),
               el('span', {}, `${s.firstName} ${s.lastName}`),
-              // badge «پذیرش شده» حذف شد: با پذیرشِ ورودی لیست انتظار پاک می‌شود و
-              // projection دیگر هرگز 'admitted' برنمی‌گرداند (شاخهٔ مرده)
               isTher && s.waitStatus === 'waiting' ? el('span', { class: 'badge badge--warning' }, 'منتظر') : null,
               el('span', { style: { marginInlineStart: 'auto', fontSize: 'var(--fs-xs)', color: 'var(--text-3)' } }, s.grade ? `پایه ${gradeLabel(s.grade)}` : '')
             )
@@ -689,7 +605,6 @@ function openCreateModal(container, preset = {}) {
   let durationValue = preset.duration ?? state.lastDuration;
   let chipBox = null;
 
-  // نوع جلسه: انتخاب نوع، مدت پیش‌فرض همان نوع (جدول ۴) را ست می‌کند (قابل تغییر)
   const sessionTypeField = () => document.querySelector('.modal select[name="session_type"]');
   const durationField = () => document.querySelector('.modal select[name="duration"]');
 
@@ -728,12 +643,10 @@ function openCreateModal(container, preset = {}) {
     }
   });
 
-  // تزریق: چیپ‌های مدت سریع + انتخاب دانش‌آموز + اتصال نوع جلسه → مدت پیش‌فرض
   setTimeout(() => {
     const form = document.querySelector('.modal .form-grid');
     if (!form) return;
 
-    // چیپ‌ها بعد از فیلد مدت
     const durationSelect = durationField();
     if (durationSelect) {
       chipBox = el('div', { class: 'chip-row', style: { marginTop: '-10px', marginBottom: 'var(--sp-3)' } });
@@ -756,7 +669,6 @@ function openCreateModal(container, preset = {}) {
       durationSelect.closest('.field').insertAdjacentElement('afterend', chipBox);
     }
 
-    // انتخاب نوع جلسه → مدت پیش‌فرض همان نوع + چیپ فعال‌شونده
     const typeSelect = sessionTypeField();
     if (typeSelect && durationSelect) {
       typeSelect.addEventListener('change', () => {
@@ -777,8 +689,6 @@ function openCreateModal(container, preset = {}) {
   }, 50);
 }
 
-// ─────────────── جزئیات نوبت ───────────────
-
 async function openDetailModal(appointmentId) {
   let a;
   try {
@@ -789,8 +699,6 @@ async function openDetailModal(appointmentId) {
   }
 
   const studentsBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
-
-  // ─────────────── فاز ۲: بلوک گزارش جلسه (per-student) ───────────────
 
   function sessionReportBlock(a, s) {
     const writable = canWriteSession(a) && a.status !== 'cancelled';
@@ -842,7 +750,6 @@ async function openDetailModal(appointmentId) {
                 onclick: async () => {
                   try {
                     const prof = await api.get(`/api/students/${s.studentId}`);
-                    // جریان واحد: نوع پیش‌فرض = آخرین نوع همین جلسه، تاریخ = روز جلسه
                     const lastType = [...apptEvents]
                       .filter((e) => e.status !== 'cancelled' && e.eventTypeId)
                       .sort((x, y) => (x.createdAt < y.createdAt ? 1 : -1))[0]?.eventTypeId ?? null;
@@ -868,7 +775,6 @@ async function openDetailModal(appointmentId) {
       );
     }
 
-    // فقط-خواندن (منشی / درمانگر غیرمالک / نوبت لغوشده) — فقط وقتی محتوا دارد
     const hasNote = Boolean(s.sessionNote && s.sessionNote.trim());
     const hasAction = Boolean(s.nextAction && s.nextAction !== 'none');
     if (!hasNote && !hasAction) return null;
@@ -881,7 +787,6 @@ async function openDetailModal(appointmentId) {
     );
   }
 
-  // رویدادهای ساخت‌یافتهٔ این جلسه (نشانگر «گزارش ثبت شد» + باز کردن جزئیات)
   let apptEvents = [];
   try {
     apptEvents = (await api.get(`/api/appointments/${a.id}/case-events`)).data ?? [];
@@ -961,8 +866,6 @@ async function openDetailModal(appointmentId) {
   };
   renderStudents();
 
-  // افزودن دانش‌آموز با جستجو (هم‌سو با فرم نوبت جدید) به‌جای select بلند
-  // درمانگر فقط از «دانش‌آموزان من» انتخاب می‌کند (سرور هم assertStudentsInScope دارد)
   const isTherapistHere = session.user?.role === 'therapist';
   const addPool = isTherapistHere ? state.myStudents : state.studentsAll;
   const addSearch = el('input', { class: 'input', placeholder: isTherapistHere ? 'جستجو در دانش‌آموزان من…' : 'جستجوی نام دانش‌آموز…', style: { marginBottom: '6px' } });
@@ -1005,7 +908,6 @@ async function openDetailModal(appointmentId) {
         row('ساعت', `${fa(tehranTimeOfIso(a.startAt))} تا ${fa(tehranTimeOfIso(a.endAt))} (${durationLabel(durationMin)})`),
         row('کارمند', staffName(a.staffId)),
         row('وضعیت', statusBadge(a.status)),
-        // نوع جلسه (جدول ۴) — نوبت‌های قدیمی بدون نوع
         sessionTypeChip(a.sessionType) ? row('نوع جلسه', sessionTypeChip(a.sessionType)) : null,
         a.note ? row('یادداشت', a.note) : null
       ),
@@ -1050,8 +952,6 @@ async function openDetailModal(appointmentId) {
               }
             }, icon('x', 16), 'لغو نوبت')
         : null,
-      // حذف کامل نوبت ثبت‌شدهٔ اشتباه/تکراری (نه لغو — پاک‌شدن از تقویم)؛
-      // سابقهٔ جلسه یا گزارش جلسه → سرور 409 می‌دهد و پیام راهنما نمایش داده می‌شود
       canManage(a)
         ? (closeRoot) =>
             el('button', {
@@ -1083,8 +983,6 @@ async function openDetailModal(appointmentId) {
 function row(key, val) {
   return el('div', { class: 'info-list__row' }, el('span', { class: 'info-list__key' }, key), el('span', { class: 'info-list__val' }, val));
 }
-
-// ─────────────── ویرایش زمان (move + resize) ───────────────
 
 function openEditModal(a, currentDuration, preset = {}) {
   const ymd = preset.ymd ?? isoToYmd(a.startAt);
@@ -1130,8 +1028,6 @@ function openEditModal(a, currentDuration, preset = {}) {
     }
   });
 }
-
-// ─────────────── کپی هفته / برگردان ───────────────
 
 async function copyPrevWeek() {
   const source = addDaysYmd(state.weekStart, -7);

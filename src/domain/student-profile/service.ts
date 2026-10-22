@@ -1,9 +1,3 @@
-/**
- * ماژول پروندهٔ دانش‌آموز — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Business logic مدارس و دانش‌آموزان با audit هم‌تراکنش
-
 import type { AuthContext, SchoolKind, SpecialNeedSeverity, SpecialNeedType, StudentCaseStatus, StudentPathway } from '@core/shared';
 import { faDigits, PLACEHOLDER_NATIONAL_ID_PREFIX } from '@core/shared';
 import { NotFoundError, ConflictError, ValidationError } from '@core/errors';
@@ -34,7 +28,6 @@ import type { TagRef } from '@core/shared';
 export function createStudentProfileService(deps: StudentProfileDeps): StudentProfileService {
   const { db, audit, logger } = deps;
 
-  /** اعتبارسنجی مشترک: کلاس باید فعال و متعلق به مدرسه دانش‌آموز باشد */
   async function requireClassForStudent(classId: string, schoolId: string | null | undefined): Promise<ClassRow> {
     const cls = await db.queryOne<ClassRow>(`SELECT id, school_id, name, teacher_name, teacher_phone, active FROM classes WHERE id = ?`, [classId]);
     if (!cls || cls.active !== 1) throw new NotFoundError('کلاس');
@@ -45,12 +38,10 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
   }
 
   const service: StudentProfileService = {
-    // ───────────── Schools ─────────────
 
     async createSchool(input: NewSchoolInput, actor: AuthContext): Promise<School> {
       const id = crypto.randomUUID();
       await db.transaction(async (tx) => {
-        // یکتایی کد مدرسه (ایندکس UNIQUE پشتیبان است؛ خطای دوستانه می‌دهیم)
         if (input.code) {
           const dup = await tx.queryOne<{ id: string }>(`SELECT id FROM schools WHERE code = ?`, [input.code]);
           if (dup) throw new ConflictError('این کد مدرسه قبلاً برای مدرسهٔ دیگری ثبت شده است');
@@ -110,7 +101,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
           sets.push('name = ?');
           changes.name = { from: row.name, to: patch.name };
         }
-        // یکتایی کد مدرسه هنگام ویرایش
         if (patch.code !== undefined && patch.code !== row.code) {
           if (patch.code) {
             const dup = await tx.queryOne<{ id: string }>(`SELECT id FROM schools WHERE code = ? AND id != ?`, [patch.code, id]);
@@ -149,7 +139,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         }
 
         if (sets.length > 0) {
-          // پارامترها دقیقاً به همان ترتیب sets ساخته می‌شوند
           const setIndex: Record<string, unknown> = {
             'name = ?': patch.name,
             'kind = ?': patch.kind,
@@ -172,7 +161,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
           });
         }
 
-        // ساخت پاسخ در حافظه — خواندن داخل همان تراکنش مقدار کهنه می‌دهد (writeها batch می‌شوند)
         const merged: Record<string, unknown> = { ...row };
         if (sets.includes('name = ?')) merged.name = patch.name;
         if (sets.includes('kind = ?')) merged.kind = patch.kind;
@@ -205,11 +193,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       });
     },
 
-    /**
-     * — حذف کامل مدرسهٔ ثبت‌شدهٔ اشتباه (غلط تایپی/تکراری).
-     * گارد ارجاع: اگر دانش‌آموز یا کلاس به این مدرسه متصل باشد → 409
-     * (به‌جای حذف از «غیرفعال‌سازی» استفاده کنید). خالی بودن → DELETE + audit.
-     */
     async deleteSchool(id: string, actor: AuthContext): Promise<void> {
       await db.transaction(async (tx) => {
         const row = await tx.queryOne<{ id: string; name: string }>(`SELECT id, name FROM schools WHERE id = ?`, [id]);
@@ -232,8 +215,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       });
       logger.child('school').info('school.deleted', { id });
     },
-
-    // ───────────── Classes ─────────────
 
     async createClass(input: NewClassInput, actor: AuthContext): Promise<SchoolClass> {
       const school = await db.queryOne<{ id: string }>(`SELECT id FROM schools WHERE id = ? AND active = 1`, [input.schoolId]);
@@ -331,7 +312,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         }
       });
 
-      // خواندن بعد از تراکنش — خواندن داخل تراکنش مقدار کهنه می‌دهد (writeها batch می‌شوند)
       const updated = await db.queryOne<ClassRow>(
         `SELECT c.id, c.school_id, sc.name AS school_name, c.name, c.teacher_name, c.teacher_phone, c.active,
                 (SELECT COUNT(*) FROM students st WHERE st.class_id = c.id AND st.active = 1) AS student_count
@@ -347,7 +327,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         if (!row) throw new NotFoundError('کلاس');
         if (row.active === 0) throw new ConflictError('کلاس قبلاً غیرفعال شده است');
 
-        // دانش‌آموزان کلاس از کلاس خارج می‌شوند (فیلد null می‌شود) — سابقه حفظ می‌شود
         await tx.execute(`UPDATE students SET class_id = NULL WHERE class_id = ?`, [id]);
         await tx.execute(`UPDATE classes SET active = 0 WHERE id = ?`, [id]);
         await audit.logInTransaction(tx, {
@@ -361,11 +340,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       });
     },
 
-    /**
-     * — حذف کامل کلاس ثبت‌شدهٔ اشتباه.
-     * گارد ارجاع: اگر دانش‌آموزی در کلاس باشد → 409. خالی بودن → DELETE + audit
-     * (class_bot_links متصل با FK خاموش — کلاس خالی لینک هم ندارد).
-     */
     async deleteClass(id: string, actor: AuthContext): Promise<void> {
       await db.transaction(async (tx) => {
         const row = await tx.queryOne<{ id: string; name: string }>(`SELECT id, name FROM classes WHERE id = ?`, [id]);
@@ -412,12 +386,9 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       return map;
     },
 
-    // ───────────── Students ─────────────
-
     async createStudent(input: NewStudentInput, actor: AuthContext): Promise<Student> {
       const student = await db.transaction((tx) => service.createStudentWithin(tx, input, actor));
       logger.child('createStudent').info('student.created');
-      // read-back بعد از commit — برای className/teacherName و تطبیق کامل پاسخ
       const fresh = await this.getStudentById(student.id);
       return fresh as Student;
     },
@@ -425,9 +396,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
     async createStudentWithin(tx, input, actor): Promise<Student> {
       const id = crypto.randomUUID();
 
-      // کد ملی اختیاری است: در آرشیو (و هر مسیر بدون کد ملی) نگه‌دارندهٔ یکتای
-      // «NAS-…» می‌گیرد تا قید NOT NULL UNIQUE ستون حفظ شود؛ ثبت کد ملی واقعی بعداً
-      // از ویرایش پروفایل ممکن است (فقط «اولین ثبت» — گارد در updateStudent).
       let nationalId = input.nationalId ?? null;
       if (!nationalId) {
         for (;;) {
@@ -440,7 +408,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         }
       }
 
-      // یکتایی کد ملی واقعی — بدون حذف فیزیکی، active=1 (read از DB زنده)
       if (input.nationalId) {
         const existing = await tx.queryOne<{ id: string }>(`SELECT id FROM students WHERE national_id = ?`, [input.nationalId]);
         if (existing) throw new ConflictError('این کد ملی قبلاً ثبت شده است');
@@ -454,13 +421,11 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         await requireClassForStudent(input.classId, input.schoolId);
       }
 
-      // مسئول پرونده در لحظهٔ تعریف: همکار واقعی و فعال مرکز (۴۰۴ به‌جای FK خاموش)
       if (input.ownerStaffId) {
         const owner = await tx.queryOne<{ id: string; active: number }>(`SELECT id, active FROM staff WHERE id = ?`, [input.ownerStaffId]);
         if (!owner || owner.active !== 1) throw new NotFoundError('همکار');
       }
 
-      // ثبت مستقیم در آرشیو (دیتابیس دانش‌آموزان نیاز ویژهٔ شهر): active=0
       const active = input.archived ? 0 : 1;
 
       const nowIso = new Date().toISOString();
@@ -500,7 +465,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         }
       });
 
-      // پاسخ در حافظه — فیلدهای join (className/teacherName) بعد از commit با read-back پر می‌شوند
       const student: Student = {
         id,
         nationalId,
@@ -539,7 +503,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       const offset = (filters.page - 1) * filters.pageSize;
       const rows = await db.query<StudentRow>(sql, [...params, limit, offset]);
 
-      // total با همان فیلترها (بدون limit/offset)
       const countConditions: string[] = [];
       const countParams: unknown[] = [];
       if (filters.query) {
@@ -563,7 +526,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         countConditions.push('active = ?');
         countParams.push(filters.active ? 1 : 0);
       }
-      // همان فیلترهای دامنه/مسئول در شمارش صفحه‌بندی
       if (filters.ownerId) {
         countConditions.push('owner_staff_id = ?');
         countParams.push(filters.ownerId);
@@ -583,7 +545,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
 
       const items = rows.map(rowToStudent);
 
-      // پیوست برچسب‌های فعال به هر ردیف (یک کوئری برای کل صفحه)
       if (items.length > 0) {
         const { sql: tagSql, params: tagParams } = tagsForStudentsQuery(items.map((s) => s.id));
         const tagRows = await db.query<StudentTagJoinRow>(tagSql, tagParams);
@@ -596,7 +557,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         for (const s of items) s.tags = byStudent.get(s.id) ?? [];
       }
 
-      // شمارش ارزیابی‌های فعال هر ردیف (یک کوئری برای کل صفحه — الگوی )
       if (items.length > 0) {
         const { sql: cntSql, params: cntParams } = assessmentCountsForStudentsQuery(items.map((s) => s.id));
         const cntRows = await db.query<{ student_id: string; n: number }>(cntSql, cntParams);
@@ -662,8 +622,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         if (patch.guardianRelation !== undefined && patch.guardianRelation !== row.guardian_relation) setMap.push(['guardian_relation', patch.guardianRelation, row.guardian_relation]);
         if (patch.guardianPhone !== undefined && patch.guardianPhone !== row.guardian_phone) setMap.push(['guardian_phone', patch.guardianPhone, row.guardian_phone]);
 
-        // ثبت کد ملی پرونده‌های نگه‌دارنده‌دار (NAS-…) — فقط «اولین ثبت»؛
-        // پرونده‌ای که کد ملی واقعی دارد همان سیاست قبل «غیرقابل تغییر» را دارد.
         if (patch.nationalId !== undefined && patch.nationalId !== row.national_id) {
           if (!(row.national_id ?? '').startsWith(PLACEHOLDER_NATIONAL_ID_PREFIX)) {
             throw new ConflictError('کد ملی این پرونده قبلاً ثبت شده و قابل تغییر نیست');
@@ -687,7 +645,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
           for (const [col, to, from] of setMap) {
             changes[col] = { from, to };
           }
-          // بدون PII در audit — کد ملی فقط با نشانگر
           if (changes.national_id) changes.national_id = { from: 'NAS-placeholder', to: '***' };
           await audit.logInTransaction(tx, {
             actorId: actor.staffId,
@@ -698,18 +655,12 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
           });
         }
 
-        // ساخت پاسخ در حافظه — خواندن داخل همان تراکنش مقدار کهنه می‌دهد (writeها batch می‌شوند)
         const merged: Record<string, unknown> = { ...row };
         for (const [col, to] of setMap) merged[col] = to;
         return rowToStudent(merged as unknown as StudentRow);
       });
     },
 
-    /**
-     * فاز ۶ — تغییر وضعیت پرونده (§14.2، تصمیم D5) — فقط منشی/مدیر (RBAC در route).
-     * همان مقدار = no-op بدون audit؛ مقدار جدید با audit هم‌تراکنش
-     * «student.case_status.changed» — منبع رویداد تایم‌لاین فاز ۶.
-     */
     async changeCaseStatus(id: string, caseStatus: StudentCaseStatus, actor: AuthContext): Promise<Student> {
       return db.transaction(async (tx) => {
         const row = await tx.queryOne<StudentRow>(
@@ -725,7 +676,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         if (!row) throw new NotFoundError('دانش‌آموز');
 
         if (row.case_status === caseStatus) {
-          // no-op idempotent — بدون UPDATE و بدون audit
           return rowToStudent(row);
         }
 
@@ -742,11 +692,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       });
     },
 
-    /**
-     * — تعیین/برداشتن مسیر پرونده (learning/rehab) — RBAC در route:
-     * مدیر/منشی + درمانگرِ مسئول پرونده. همان مقدار = no-op بدون audit؛
-     * تغییر با audit هم‌تراکنش «student.pathway.changed» — منبع رویداد تایم‌لاین.
-     */
     async changePathway(id: string, pathway: StudentPathway | null, actor: AuthContext): Promise<Student> {
       return db.transaction(async (tx) => {
         const row = await tx.queryOne<StudentRow>(
@@ -762,7 +707,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         if (!row) throw new NotFoundError('دانش‌آموز');
 
         if (row.pathway === pathway) {
-          // no-op idempotent — بدون UPDATE و بدون audit
           return rowToStudent(row);
         }
 
@@ -779,11 +723,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       });
     },
 
-    /**
-     * -c — تعیین/برداشتن «مسئول پرونده» — فقط منشی/مدیر (RBAC در route).
-     * همان مقدار = no-op بدون audit؛ مقدار جدید با audit هم‌تراکنش
-     * «student.owner.changed» — منبع رویداد تایم‌لاین («مسئول پرونده تغییر کرد»).
-     */
     async changeOwner(id: string, ownerStaffId: string | null, actor: AuthContext): Promise<Student> {
       return db.transaction(async (tx) => {
         const row = await tx.queryOne<StudentRow>(
@@ -800,12 +739,10 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         if (!row) throw new NotFoundError('دانش‌آموز');
 
         if (row.owner_staff_id === ownerStaffId) {
-          // no-op idempotent — بدون UPDATE و بدون audit
           return rowToStudent(row);
         }
 
         if (ownerStaffId !== null) {
-          // مسئول باید همکار واقعی و فعال مرکز باشد (۴۰۴ به‌جای FK خاموش)
           const staff = await tx.queryOne<{ id: string; active: number }>(
             `SELECT id, active FROM staff WHERE id = ?`,
             [ownerStaffId]
@@ -829,12 +766,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       });
     },
 
-    /**
-     * فاز ۷ — ثبت/ویرایش نیاز ویژه (§12، تصمیم D3) — فقط منشی/مدیر (RBAC در route).
-     * همان مقدار = no-op بدون audit؛ مقدار جدید با audit هم‌تراکنش
-     * «student.special_need.changed» — فقط id فیلدها (§12.10) — منبع رویداد تایم‌لاین.
-     * identified_at: مقدار صریح > در اولین شناسایی «الان» > حفظ مقدار قبلی.
-     */
     async changeSpecialNeed(
       id: string,
       patch: { specialNeedType: SpecialNeedType | null; specialNeedSeverity: SpecialNeedSeverity | null; identifiedAt?: string | null },
@@ -858,15 +789,9 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
           row.special_need_severity === patch.specialNeedSeverity &&
           patch.identifiedAt === undefined;
         if (noOp) {
-          // no-op idempotent — بدون UPDATE و بدون audit
           return rowToStudent(row);
         }
 
-        // قاعدهٔ identified_at (مستند در types):
-        // ۱) پاک‌کردن نوع → identified_at هم NULL
-        // ۲) مقدار صریح (null یا ISO) → همان
-        // ۳) نامعلوم + نوع جدید غیر NULL با نوع قبلی NULL → «الان» (اولین شناسایی)
-        // ۴) نامعلوم + بقیهٔ حالت‌ها → حفظ مقدار قبلی
         let identifiedAt: string | null;
         if (patch.specialNeedType === null) {
           identifiedAt = null;
@@ -927,7 +852,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       });
     },
 
-    /** — فعال‌سازی مجدد دانش‌آموز غیرفعال (قرینه deactivate؛ رفع بن‌بست UX) */
     async activateStudent(id: string, actor: AuthContext): Promise<Student> {
       return db.transaction(async (tx) => {
         const row = await tx.queryOne<StudentRow>(
@@ -953,15 +877,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       });
     },
 
-    /**
-     * — حذف کامل پروندهٔ دانش‌آموز ثبت‌شدهٔ اشتباه (نه آرشیو — پاک‌شدن از لیست‌ها).
-     * انگیزهٔ اصلی: پروندهٔ غلط (نام اشتباه با کد ملی درست) که به‌خاطر UNIQUE بودن
-     * national_id اجازهٔ ثبت مجدد نمی‌داد.
-     * گارد ارجاع — اگر سابقهٔ واقعی دارد → 409 با راهنمای «انتقال به آرشیو»:
-     * appointment_students / waitlist (هر دو ستون) / case_events / followups /
-     * assessments / exercise_assignments / exercise_submissions / committee_items
-     * خالی بودن → DELETE خود دانش‌آموز + برچسب‌هایش (student_tags) + audit.
-     */
     async deleteStudent(id: string, actor: AuthContext): Promise<void> {
       await db.transaction(async (tx) => {
         const row = await tx.queryOne<{ id: string; first_name: string; last_name: string }>(
@@ -989,9 +904,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         }
 
         await tx.execute(`DELETE FROM student_tags WHERE student_id = ?`, [id]);
-        // بقایای حذف‌نرم: رویدادهای حذف‌نرم‌شده (deleted_at NOT NULL) و مسیرهای مداخله
-        // هنوز ردیف FK به students دارند و DELETE پرونده را با FOREIGN KEY constraint می‌شکنند
-        // (کشف زندهٔ هنگام پاکسازی پروندهٔ آزمون) — این‌ها زبالهٔ همان پرونده‌اند و با آن حذف می‌شوند
         await tx.execute(`DELETE FROM case_events WHERE student_id = ?`, [id]);
         await tx.execute(`DELETE FROM intervention_paths WHERE student_id = ?`, [id]);
         await tx.execute(`DELETE FROM students WHERE id = ?`, [id]);
@@ -1069,8 +981,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       }));
     },
 
-    // ───────────── تاریخچهٔ تحصیلی ─────────────
-
     async listEducationHistory(studentId: string): Promise<EducationHistoryEntry[]> {
       const student = await db.queryOne<{ id: string }>(`SELECT id FROM students WHERE id = ?`, [studentId]);
       if (!student) throw new NotFoundError('دانش‌آموز');
@@ -1090,7 +1000,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         const student = await tx.queryOne<{ id: string }>(`SELECT id FROM students WHERE id = ?`, [studentId]);
         if (!student) throw new NotFoundError('دانش‌آموز');
         const newId = crypto.randomUUID();
-        // created_at با دقت میلی‌ثانیه — افزودن پشت‌سرهم سال‌ها ترتیب پایدار بگیرد
         await tx.execute(
           `INSERT INTO student_education_history (id, student_id, study_year, school_name, level, notes, created_by, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f','now'))`,
@@ -1106,7 +1015,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         return newId;
       });
       logger.child('student').info('student.education_history.added', { studentId });
-      // read-back بعد از commit — برای createdByName کامل
       const row = await db.queryOne<EduHistoryRow>(
         `SELECT h.id, h.student_id, h.study_year, h.school_name, h.level, h.notes, h.created_by, h.created_at,
                 (SELECT st2.full_name FROM staff st2 WHERE st2.id = h.created_by) AS created_by_name
@@ -1134,8 +1042,6 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       });
       logger.child('student').info('student.education_history.deleted', { studentId });
     },
-
-    // ───────────── معلم‌های دانش‌آموز (T7 — m150-b) ─────────────
 
     async listStudentTeachers(studentId: string): Promise<StudentTeacher[]> {
       const student = await db.queryOne<{ id: string }>(`SELECT id FROM students WHERE id = ?`, [studentId]);

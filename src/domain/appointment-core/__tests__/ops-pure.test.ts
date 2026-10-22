@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — ops-pure
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// فاز ۱ — تست pure ماتریس ترنزیشن وضعیت عملیاتی (تصمیم D1)
-
 import { describe, expect, it } from 'vitest';
 import { APPOINTMENT_OPS_STATUSES } from '@core/shared';
 import {
@@ -21,7 +15,6 @@ describe('ماتریس ترنزیشن وضعیت عملیاتی (D1)', () => {
     expect(canTransitionOps('none', 'checked_in')).toBe(true);
     expect(canTransitionOps('none', 'delayed')).toBe(true);
     expect(canTransitionOps('none', 'no_show')).toBe(true);
-    // شروع مستقیم جلسه یا پرش به پایان‌حالت ممنوع
     expect(canTransitionOps('none', 'in_session')).toBe(false);
     expect(canTransitionOps('none', 'completed')).toBe(false);
   });

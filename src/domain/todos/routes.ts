@@ -1,22 +1,9 @@
-/**
- * ماژول کارهای داخلی — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// REST endpoints کارهای داخلی — بدون business logic
-// RBAC (§9): کل ماژول فقط manager/secretary — درمانگر 403 می‌گیرد حتی برای خواندن.
-// - GET /api/todos?box=inbox|outbox فهرست صندوق + badge
-// - POST /api/todos ساخت کار (گیرنده: همکار یا خودم — کار شخصی )
-// - PATCH /api/todos/:id ویرایش inline + چک‌لیست + حذف نرم (مالکیت در سرویس)
-// - POST /api/todos/:id/complete تکمیل (مالکیت در سرویس)
-// - POST /api/todos/:id/checklist افزودن/تغییر مورد چک‌لیست
-
 import type { AppHono } from '@core/shared';
 import { NewTodoSchema, UpdateTodoSchema } from '@core/shared';
 import { z } from 'zod';
 import { getAuthContext, requireRole } from '@core/auth';
 import type { TodosService } from './types';
 
-/** بدنهٔ endpoint چک‌لیست — یا {text} برای افزودن، یا {index, done} برای تغییر وضعیت */
 const TodoChecklistOpSchema = z
   .object({
     text: z.string().trim().min(1).max(200).optional(),

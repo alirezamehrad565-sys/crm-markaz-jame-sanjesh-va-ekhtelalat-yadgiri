@@ -1,23 +1,5 @@
--- مایگریشن اسکیما D1 — شناسایی و مداخلهٔ OT۷
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- ============================================================
--- (0.72.0) — فلو دوفازی «شناسایی → مداخله» + موتور چک‌لیست ۷ حیطه‌ای کاردرمانی ذهنی
--- ۱) students.protocol — پروتکل مداخله پس از «نتیجهٔ نیاز ویژه»
--- learning = اختلال یادگیری / slow_learner = دیرآموز / mental_ot = کاردرمانی ذهنی /
--- rehab = توانبخشی ذهنی-جسمی — NULL = هنوز در فاز شناسایی
--- بدون CHECK در SQL (الگوی D7) — enum در @core/shared + اعتبارسنجی Zod
--- ۲) ot_skills — فهرست مرجع ۸۴ مهارت (۷ حیطه × ۱۲ مهارت) مرتب از آسان به دشوار
--- منبع: src/domain/ot-engine/skills.ts — تغییر ملاک = ot-skills-v2 و migration جدید
--- ۳) ot_progress — لاگ هر ثبت وضعیت مهارت (جلسه‌محور؛ وضعیت فعلی = آخرین ردیف)
--- session_id ردیف‌های یک جلسه را به هم می‌بندد؛ خلاصهٔ جلسه در case_events می‌رود
--- ۴) فرم سیستمی ce-needs-v1: نتیجهٔ نیاز ویژه — دروازهٔ ورود به فاز مداخله
--- ۵) فرم سیستمی ce-ot-session-v1: گزارش جلسهٔ کاردرمانی ذهنی (تایم‌لاین)
--- additive — هیچ ستون/جدول موجودی تغییر نمی‌کند
--- ============================================================
-
 ALTER TABLE students ADD COLUMN protocol TEXT;
 
--- ─── فهرست مرجع مهارت‌ها — حیطهٔ ۱: حرکات درشت ───
 CREATE TABLE IF NOT EXISTS ot_skills (
   id        TEXT PRIMARY KEY,
   domain    TEXT NOT NULL,   -- gross|fine|visual|auditory|cognitive|adl|social
@@ -43,7 +25,6 @@ CREATE TABLE IF NOT EXISTS ot_progress (
 
 CREATE INDEX IF NOT EXISTS idx_ot_progress_student ON ot_progress(student_id, skill_id, occurred_at);
 
--- ─── حیطهٔ ۱ — حرکات درشت ───
 INSERT OR IGNORE INTO ot_skills (id, domain, ord, title, criterion) VALUES
   ('ot-gross-01', 'gross', 1,  'نشستن پایدار روی صندلی بدون تکیه‌گاه', '۱۰ دقیقه نشستن فعال بدون افتادن یا تکیه به میز'),
   ('ot-gross-02', 'gross', 2,  'غلت‌زدن به هر دو طرف روی تشک', '۳ غلت پیوسته در هر جهت بدون توقف'),
@@ -58,7 +39,6 @@ INSERT OR IGNORE INTO ot_skills (id, domain, ord, title, criterion) VALUES
   ('ot-gross-11', 'gross', 11, 'پرش تک‌پا', '۵ پرش پیوسته با هر پا روی خط'),
   ('ot-gross-12', 'gross', 12, 'دویدن با توقف و تغییر جهت', 'دویدن، توقف کامل در علامت و دویدن در جهت مخالف بدون افتادن');
 
--- ─── حیطهٔ ۲ — حرکات ظریف ───
 INSERT OR IGNORE INTO ot_skills (id, domain, ord, title, criterion) VALUES
   ('ot-fine-01', 'fine', 1,  'برداشتن تکهٔ کوچک با نوک انگشت', '۱۰ تکه با الگوی پنس (شست-اشاره) بدون به‌کارگیری کف دست'),
   ('ot-fine-02', 'fine', 2,  'مچاله‌کردن کاغذ با یک دست', 'ساختن گوی کاغذی با یک دست — بدون کمک دست دوم'),
@@ -73,7 +53,6 @@ INSERT OR IGNORE INTO ot_skills (id, domain, ord, title, criterion) VALUES
   ('ot-fine-11', 'fine', 11, 'بستن بند کفش یا جابه‌جایی با انبر', 'گره پایهٔ بند کفش یا انتقال ۱۰ تکه با انبر به ظرف'),
   ('ot-fine-12', 'fine', 12, 'کپی حروف و اعداد در اندازهٔ مناسب خط', '۱۰ حرف/عدد خوانا روی خط‌دار');
 
--- ─── حیطهٔ ۳ — ادراک دیداری ───
 INSERT OR IGNORE INTO ot_skills (id, domain, ord, title, criterion) VALUES
   ('ot-visual-01', 'visual', 1,  'تطابق کارت‌ها (هم‌یابی شکل ساده)', '۱۰ جفت کارت بدون خطا'),
   ('ot-visual-02', 'visual', 2,  'یافتن تفاوت دو تصویر مشابه', '۴ تفاوت از ۵ تفاوت'),
@@ -88,7 +67,6 @@ INSERT OR IGNORE INTO ot_skills (id, domain, ord, title, criterion) VALUES
   ('ot-visual-11', 'visual', 11, 'تشخیص حرف یا شکل برعکس (چرخش ذهنی)', 'تفکیک حرف درست از آینه‌ای در ۹ از ۱۰'),
   ('ot-visual-12', 'visual', 12, 'بازتولید توالی الگو از نمونه', 'ساختن الگوی رنگ/شکل سه‌عضوی و ادامهٔ آن');
 
--- ─── حیطهٔ ۴ — ادراک شنیداری ───
 INSERT OR IGNORE INTO ot_skills (id, domain, ord, title, criterion) VALUES
   ('ot-aud-01', 'auditory', 1,  'برگرداندن سر به سمت صدا', 'محلی‌سازی صدای پشت سر در ۴ از ۵ بار'),
   ('ot-aud-02', 'auditory', 2,  'تمایز صدای اشیای آشنا', 'تشخیص زنگ، کفزنی و کاغذ با چشم بسته'),
@@ -103,7 +81,6 @@ INSERT OR IGNORE INTO ot_skills (id, domain, ord, title, criterion) VALUES
   ('ot-aud-11', 'auditory', 11, 'شنیدن دستور در نویز پس‌زمینه', 'اجرای دستور با پخش صدای ملایم پس‌زمینه'),
   ('ot-aud-12', 'auditory', 12, 'درک داستان کوتاه', 'پاسخ درست به دو سؤال چه/چرا از داستان');
 
--- ─── حیطهٔ ۵ — توجه و مهارت‌های ذهنی ───
 INSERT OR IGNORE INTO ot_skills (id, domain, ord, title, criterion) VALUES
   ('ot-cog-01', 'cognitive', 1,  'شناخت و نام‌بردن رنگ‌ها', '۸ رنگ پایه با نام درست'),
   ('ot-cog-02', 'cognitive', 2,  'شناخت شکل‌های پایه', 'دایره/مربع/مثلث/ستاره با نام'),
@@ -118,7 +95,6 @@ INSERT OR IGNORE INTO ot_skills (id, domain, ord, title, criterion) VALUES
   ('ot-cog-11', 'cognitive', 11, 'انعطاف ذهنی — تغییر قاعده وسط کار', 'تغییر قاعدهٔ طبقه‌بندی و ادامه بدون گِر'),
   ('ot-cog-12', 'cognitive', 12, 'حل مسئله — پازل و توالی داستان', 'پازل ۶–۱۲ تکه و ترتیب درست ۴ تصویر داستانی');
 
--- ─── حیطهٔ ۶ — خودیاری و زندگی روزمره ───
 INSERT OR IGNORE INTO ot_skills (id, domain, ord, title, criterion) VALUES
   ('ot-adl-01', 'adl', 1,  'خوردن با قاشق بدون کمک', 'خوردن کامل یک وعده با حداقل ریختن'),
   ('ot-adl-02', 'adl', 2,  'نوشیدن از لیوان بدون سرریز', 'نوشیدن کامل بدون سرریز'),
@@ -133,7 +109,6 @@ INSERT OR IGNORE INTO ot_skills (id, domain, ord, title, criterion) VALUES
   ('ot-adl-11', 'adl', 11, 'آماده‌کردن کوله و وسایل شخصی', 'طبق برنامهٔ روز بدون فراموشی اصلی'),
   ('ot-adl-12', 'adl', 12, 'روتار کامل بهداشت فردی بدون یادآوری', 'قبل از غذا و بعد از سرویس — خودراهبر');
 
--- ─── حیطهٔ ۷ — مهارت‌های اجتماعی-هیجانی و بازی ───
 INSERT OR IGNORE INTO ot_skills (id, domain, ord, title, criterion) VALUES
   ('ot-soc-01', 'social', 1,  'بازی موازی کنار هم‌سال', '۱۰ دقیقه بازی کنار هم بدون تعارض'),
   ('ot-soc-02', 'social', 2,  'تماس چشمی هنگام سلام و خداحافظی', 'رو به رو شدن و تماس چشمی کوتاه'),
@@ -148,7 +123,6 @@ INSERT OR IGNORE INTO ot_skills (id, domain, ord, title, criterion) VALUES
   ('ot-soc-11', 'social', 11, 'مدیریت ناکامی کوچک (باخت در بازی)', 'با راهنمای کم — بدون گریه شدید یا پرتاب'),
   ('ot-soc-12', 'social', 12, 'بازی گروهی قاعده‌دار تا پایان', 'ماندن تا پایان با پذیرش برد و باخت');
 
--- ─── فرم سیستمی — نتیجهٔ نیاز ویژه (دروازهٔ فاز مداخله) ───
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-9000-4000-8000-000000000001',
@@ -167,7 +141,6 @@ VALUES (
   1
 );
 
--- ─── فرم سیستمی — گزارش جلسهٔ کاردرمانی ذهنی (خلاصهٔ هر جلسه در تایم‌لاین) ───
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales, is_system)
 VALUES (
   'bbbbbbbb-9000-4000-8000-000000000002',

@@ -1,10 +1,3 @@
-/**
- * تست‌های e2e — session-notes
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-session-notes.test.ts — فاز ۲ (گزارش جلسه): قواعد نویسنده، سقف کاراکتر،
-// نوبت لغوشده، خواندن آزاد، idempotent، audit بدون متن (PII §20)، پاک کردن، 404/400
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -66,12 +59,10 @@ describe('فاز ۲ — قواعد نویسنده و خواندن', () => {
     expect(saved.sessionNote).toContain('پاسخ‌دهی خوب');
     expect(saved.nextAction).toBe('next_appointment');
 
-    // GET اختصاصی — خواندن آزاد
     const read = await sec.get(URL(appt.id));
     expect(read.status).toBe(200);
     expect(noteOf(read).sessionNote).toContain('پاسخ‌دهی خوب');
 
-    // مسیر repository — نوبتِ خوانده‌شده گزارش را در students دارد
     const ap = await ali.get(`/api/appointments?id=${appt.id}`);
     const st = (ap.body as { data: { students: Array<{ sessionNote?: string | null; nextAction?: string | null }> } }).data.students[0];
     expect(st.sessionNote).toContain('پاسخ‌دهی خوب');
@@ -84,7 +75,6 @@ describe('فاز ۲ — قواعد نویسنده و خواندن', () => {
     const bySec = await sec.put(URL(appt.id), { session_note: 'منشی نمی‌نویسد', next_action: 'none' });
     expect(bySec.status).toBe(403);
 
-    // نوبت متعلق به مریم است؛ علی غیرمالک است
     const appt2 = await createAppt(mgr, MARYAM_ID);
     const byOtherTherapist = await ali.put(URL(appt2.id), { session_note: 'غیرمالک', next_action: 'none' });
     expect(byOtherTherapist.status).toBe(403);
@@ -183,14 +173,12 @@ describe('فاز ۲ — audit، idempotent و پاک کردن', () => {
     const rows = auditRows(A, appt.id);
     expect(rows.map((r) => r.action)).toEqual(['session_note.created', 'session_note.updated']);
 
-    // متن هرگز در changes نمی‌آید — فقط طول
     for (const r of rows) {
       expect(r.changes).not.toContain('متن محرمانه');
       const changes = JSON.parse(r.changes ?? '{}') as { session_note?: { from: number; to: number } };
       expect(typeof changes.session_note?.to).toBe('number');
     }
 
-    // همان محتوای قبلی → no-op؛ audit اضافه نمی‌شود
     const again = await mgr.put(URL(appt.id), { session_note: text + ' ادامه', next_action: 'follow_up' });
     expect(again.status).toBe(200);
     expect(auditRows(A, appt.id)).toHaveLength(2);
@@ -211,7 +199,6 @@ describe('فاز ۲ — audit، idempotent و پاک کردن', () => {
     expect(raw.session_note).toBeNull();
     expect(raw.next_action).toBeNull();
 
-    // خواندن تکی نوبت با درمانگرِ صاحب برنامه (نوبت متعلق به ALI است)
     const ap = await ali.get(`/api/appointments?id=${appt.id}`);
     expect((ap.body as { data: { version: number } }).data.version).toBe(appt.version);
   });
@@ -222,7 +209,6 @@ describe('فاز ۲ — audit، idempotent و پاک کردن', () => {
     expect(res.status).toBe(200);
     expect(noteOf(res).nextAction).toBe('follow_up');
 
-    // پیگیری خودکار — متصل به همان نوبت/دانش‌آموز
     const list = await sec.get(`/api/followups?entity_type=appointment&entity_id=${appt.id}`);
     expect(list.status).toBe(200);
     const items = (list.body as { data: Array<{ id: string; assigneeId: string; studentId: string | null; status: string; dueAt: string | null; title: string }> }).data;
@@ -233,7 +219,6 @@ describe('فاز ۲ — audit، idempotent و پاک کردن', () => {
     expect(items[0].dueAt).toBeTruthy(); // مهلت پیش‌فرض +۷ روز
     expect(items[0].title).toContain('علی'); // نام دانش‌آموز در عنوان
 
-    // audit followup.created هم‌تراکنش — با resource_id خودِ پیگیری
     const created = A.sql
       .prepare(`SELECT resource_id FROM audit_log WHERE action = 'followup.created' AND resource_type = 'followup'`)
       .all() as Array<{ resource_id: string }>;
@@ -250,19 +235,15 @@ describe('فاز ۲ — audit، idempotent و پاک کردن', () => {
     await ali.put(URL(appt.id), { session_note: 'گزارش اول', next_action: 'follow_up' });
     expect(await count()).toBe(1);
 
-    // همان محتوا — no-op idempotent مسیر قدیمی؛ هوک آتش نمی‌گیرد
     await ali.put(URL(appt.id), { session_note: 'گزارش اول', next_action: 'follow_up' });
     expect(await count()).toBe(1);
 
-    // متن عوض شد ولی همچنان follow_up — «ورود» جدید نیست
     await ali.put(URL(appt.id), { session_note: 'گزارش اول — ادامه', next_action: 'follow_up' });
     expect(await count()).toBe(1);
 
-    // خروج از follow_up — پیگیری موجود دست‌نخورده می‌ماند (مدیریتش با PATCH خودش است)
     await ali.put(URL(appt.id), { session_note: 'گزارش اول — ادامه', next_action: 'none' });
     expect(await count()).toBe(1);
 
-    // ورود دوباره به follow_up — قصد صریح جدید → پیگیری دوم
     await ali.put(URL(appt.id), { session_note: 'گزارش دوم', next_action: 'follow_up' });
     expect(await count()).toBe(2);
   });

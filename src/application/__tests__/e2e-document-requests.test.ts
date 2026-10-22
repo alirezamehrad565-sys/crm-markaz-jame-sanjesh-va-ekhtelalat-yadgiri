@@ -1,14 +1,3 @@
-/**
- * تست‌های e2e — document-requests (m151 — T2 · بازطراحی m166)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-document-requests.test.ts — حلقهٔ کامل «درخواست مدارک با بله»:
-// درمانگر درخواست می‌سازد (توضیح آزاد + تگ‌های روشن؛ گیرنده: خانواده و/یا معلم) →
-// پیام بله به چت گیرنده‌ها → عکس/فایل می‌آید (وبهوک واقعی + fetcher تزریقی) → مدرک در GET
-// ظاهر می‌شود → فایل دانلود می‌شود → بستن درخواست → رسانهٔ بعدی دوباره مسیر فعلی بله
-// (بازگشت تکلیف) را می‌رود. رسانهٔ چت کلاس فقط به درخواستِ «گیرندهٔ معلم» می‌چسبد.
-// سازگاری رکوردهای قدیمی m151 (آرایهٔ JSON در ستون templates) هم پین شده است.
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -94,7 +83,6 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
     const s = await createStudent(manager, { first_name: 'آوا', last_name: 'مدارکی' });
     studentId = s.id;
     studentNid = s.nationalId;
-    // اتصال چت خانواده — bot_links منبع حقیقت نگاشت چت↔دانش‌آموز
     expect((await bot(tx(studentNid, CHAT_PARENT))).reply).toContain('اتصال انجام شد');
   });
 
@@ -137,19 +125,16 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
     expect(data.data.request.recipients).toEqual(['family']);
     expect(data.data.deliveredChats).toBe(1);
 
-    // — پیام درخواست در صف اعلان با قالب تازه
     const notes = A.sql
       .prepare(`SELECT template, recipient, status FROM notifications WHERE template = 'doc_request_sent'`)
       .all() as { template: string; recipient: string; status: string }[];
     expect(notes.some((n) => n.recipient === String(CHAT_PARENT) && n.status === 'sent')).toBe(true);
 
-    // — audit ثبت درخواست
     const audits = A.sql
       .prepare(`SELECT action FROM audit_log WHERE resource_type = 'document_request' AND resource_id = ?`)
       .all(requestId) as { action: string }[];
     expect(audits.some((a) => a.action === 'document.request.sent')).toBe(true);
 
-    // — GET فهرست درخواست‌ها
     const list = await therapist.get(`/api/students/${studentId}/document-requests`);
     expect(list.status).toBe(200);
     const items = (list.body as { data: { id: string; status: string }[] }).data;
@@ -163,10 +148,8 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
     expect(res.reply).toContain('دریافت شد');
     expect(res.reply).toContain(studentName.split(' ')[0]);
 
-    // بزرگ‌ترین سایز دانلود شد
     expect(fetchCalls).toEqual(['DOC-FILE-1_b']);
 
-    // رکورد مدرک
     const rows = A.sql
       .prepare(`SELECT id, student_id, request_id, media_kind, file_mime, chat_id, caption FROM student_received_docs`)
       .all() as { id: string; student_id: string; request_id: string; media_kind: string; file_mime: string; chat_id: string; caption: string }[];
@@ -178,17 +161,14 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
     expect(rows[0].chat_id).toBe(String(CHAT_PARENT));
     expect(rows[0].caption).toBe('عکس املاهای این هفته');
 
-    // درخواست به received ارتقا یافت
     const st = A.sql.prepare(`SELECT status FROM document_requests WHERE id = ?`).get(requestId) as { status: string };
     expect(st.status).toBe('received');
 
-    // audit دریافت
     const audits = A.sql
       .prepare(`SELECT action FROM audit_log WHERE resource_type = 'student_received_doc'`)
       .all() as { action: string }[];
     expect(audits.some((a) => a.action === 'document.doc.received')).toBe(true);
 
-    // GET پنل — مدرک با برچسب درخواست
     const list = await manager.get(`/api/students/${studentId}/received-docs`);
     expect(list.status).toBe(200);
     const docs = (list.body as { data: { id: string; requestId: string | null; mediaKind: string; size: number }[] }).data;
@@ -197,7 +177,6 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
     expect(docs[0].mediaKind).toBe('photo');
     expect(docs[0].size).toBeGreaterThan(0);
 
-    // دانلود فایل از پنل
     const dl = await manager.req('GET', `/api/students/${studentId}/received-docs/${docs[0].id}/file`);
     expect(dl.status).toBe(200);
     const text = typeof dl.body === 'string' ? dl.body : '';
@@ -229,11 +208,9 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
     expect(data.data.status).toBe('closed');
     expect(data.data.closedAt).not.toBeNull();
 
-    // بستن دوباره → تعارض
     const again = await therapist.post(`/api/requests/${requestId}/close`);
     expect(again.status).toBe(409);
 
-    // عکس بعدی خانواده → دیگر ضمیمهٔ مدارک نمی‌شود؛ جریان بازگشت تکلیف همان پاسخ قدیمی را می‌دهد
     const res2 = await bot(photo(CHAT_PARENT, 'AFTER-CLOSE'));
     expect(res2.reply).toContain('تکلیف بازی');
     const count = (A.sql.prepare(`SELECT COUNT(*) AS c FROM student_received_docs`).get() as { c: number }).c;
@@ -253,7 +230,6 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
   });
 
   it('دخالت therapist روی درخواست پروندهٔ دیگر — ثبت برای دانش‌آموز موجود بدون چت بله خطا می‌دهد', async () => {
-    // پروندهٔ تازه بدون چت متصل → پیام راهنمای ساخت لینک
     const s3 = await createStudent(manager, { first_name: 'بی', last_name: 'چت' });
     const res = await therapist.post(`/api/students/${s3.id}/document-requests`, { tags: ['other'] });
     expect(res.status).toBe(400);
@@ -261,10 +237,7 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
     expect(body.message).toContain('لینک اتصال خانواده');
   });
 
-  // ─── m166: گیرندهٔ معلم + هر دو گیرنده + تگ دلخواه + سازگاری رکورد قدیمی ───
-
   it('گیرندهٔ معلم بدون چت کلاس → ۴۰۰ فارسی؛ سپس با اتصال کلاس، پیام به چت معلم می‌رود', async () => {
-    // — قبل از اتصال کلاس: خطای شفاف
     const noClass = await therapist.post(`/api/students/${studentId}/document-requests`, {
       tags: ['narrative', 'exam'],
       recipients: ['teacher']
@@ -272,7 +245,6 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
     expect(noClass.status).toBe(400);
     expect((noClass.body as { message?: string }).message).toContain('چت معلمِ کلاس');
 
-    // — کلاس + چت معلمِ متصل (الگوی e2e-teacher-package: class_bot_links)
     A.sql.prepare(
       `INSERT INTO classes (id, school_id, name, teacher_name, teacher_phone, active)
        VALUES ('c-doc-req', ?, 'ششم ب', 'سرکار موسوی', '09120000009', 1)`
@@ -301,7 +273,6 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
   });
 
   it('رسانهٔ چت کلاس فقط به درخواستِ گیرندهٔ معلم می‌چسبد — جریان‌های دیگر دست‌نخورده', async () => {
-    // درخواست معلم‌محور قبلی بسته می‌شود تا فقط درخواستِ فقط‌خانواده باز بماند
     expect((await therapist.post(`/api/requests/${teacherRequestId}/close`)).status).toBe(200);
 
     const famReq = await therapist.post(`/api/students/${studentId}/document-requests`, {
@@ -311,13 +282,11 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
     expect(famReq.status).toBe(201);
 
     const before = (A.sql.prepare(`SELECT COUNT(*) AS c FROM student_received_docs WHERE student_id = ?`).get(studentId) as { c: number }).c;
-    // — عکس معلم در چت کلاس، وقتی درخواستِ معلم‌محور بازی نیست → به درخواست خانواده نمی‌چسبد
     const denied = await bot(photo(CHAT_TEACHER, 'TEACHER-DENIED'));
     expect(denied.reply).toContain('متصل نیست');
     const after = (A.sql.prepare(`SELECT COUNT(*) AS c FROM student_received_docs WHERE student_id = ?`).get(studentId) as { c: number }).c;
     expect(after).toBe(before);
 
-    // — درخواستِ گیرندهٔ معلم → عکس بعدی معلم به همان ضمیمه و وضعیت received می‌شود
     const tReq = await therapist.post(`/api/students/${studentId}/document-requests`, {
       tags: ['exam'],
       recipients: ['teacher']

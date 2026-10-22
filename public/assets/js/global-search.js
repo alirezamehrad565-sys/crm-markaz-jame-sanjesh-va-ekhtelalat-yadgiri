@@ -1,10 +1,3 @@
-/**
- * جستجوی سراسری (Ctrl+K)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// global-search.js — جستجوی سراسری با Ctrl+K
-// پالت سرچ در topbar: دانش‌آموز، همکار، مدرسه، برچسب — با ناوبری صفحه‌کلید
-
 import { api } from './api.js';
 import { el, icon, openModal } from './ui.js';
 
@@ -21,7 +14,6 @@ const KIND_LABELS = { school: 'مدرسه', kindergarten: 'مهدکودک' };
 
 let opened = false;
 
-/** سیم‌کشی دکمه topbar + شورت‌کات جهانی — یک‌بار در app.js صدا زده می‌شود */
 export function initGlobalSearch() {
   const btn = document.getElementById('global-search-btn');
   if (btn) btn.addEventListener('click', openPalette);
@@ -32,7 +24,6 @@ export function initGlobalSearch() {
       openPalette();
       return;
     }
-    // «/» وقتی کاربر داخل input/select/textarea نیست
     if (e.key === '/' && !opened) {
       const t = e.target;
       const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
@@ -137,7 +128,6 @@ export function openPalette() {
 
   function itemSubtitle(item) {
     if (item.type === 'staff') return ROLE_LABELS[item.subtitle] ?? null;
-    // زیرنویس مدرسه یا kind است یا کد رسمی؛ کد همان‌طور که هست نمایش داده می‌شود
     if (item.type === 'school') return KIND_LABELS[item.subtitle] ?? item.subtitle ?? null;
     if (item.type === 'tag') {
       const n = Number.parseInt(item.subtitle ?? '', 10);

@@ -1,13 +1,3 @@
-/**
- * هستهٔ اعلان و کلاینت بات بله — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// هسته صف اعلان — enqueue با idempotency + dispatch با کانال تزریقی
-// قوانین:
-// * کانال‌ها با registerChannel تزریق می‌شوند (بدون وابستگی مستقیم به بله)
-// * dispatch هرگز throw نمی‌کند — خطای هر رکورد مستقل ثبت می‌شود
-// * dedup_key یعنی «حداکثر یک پیام از این نوع» (idempotency یادآوری‌ها)
-
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 import type {
@@ -37,9 +27,7 @@ import type { EnqueueInput, NotifyChannel, NotifyListFilters, SendResult } from 
 export interface NotifyDeps {
   db: DbClient;
   logger: Logger;
-  /** برای تست‌ها قابل تزریق است */
   now?: () => Date;
-  /** حداکثر تلاش هر رکورد (پیش‌فرض: ثابت سراسری) */
   maxAttempts?: number;
 }
 
@@ -49,19 +37,12 @@ export interface EnqueueOutcome {
 }
 
 export interface NotifyService {
-  /** ثبت کانال ارسال — هر کانال فقط یک‌بار (آخرین تزریق برنده است) */
   registerChannel(channel: NotifyChannel): void;
-  /** کانال ثبت‌شده یا null */
   getChannel(name: string): NotifyChannel | null;
-  /** ساخت رکورد pending — با dedup_key تکراری، رکورد جدید نمی‌سازد */
   enqueue(input: EnqueueInput): Promise<EnqueueOutcome>;
-  /** ارسال همه pendingهای آماده (send_at گذشته یا فوری) — خروجی همیشه جمع کامل است */
   dispatchPending(limit?: number): Promise<DispatchSummary>;
-  /** failedها را دوباره صف می‌کند */
   retryFailed(limit?: number): Promise<number>;
-  /** — رهاسازی یک رکورد (ارسال فوری؛ از failed هم) — true اگر وضعیت تغییر کرد */
   release(id: string): Promise<boolean>;
-  /** — رهاسازی همهٔ پیش‌نویس‌ها (send_at آینده) — تعداد رهاسازی‌شده */
   releaseAllDrafts(): Promise<number>;
   list(filters: NotifyListFilters): Promise<NotificationRecord[]>;
   getById(id: string): Promise<NotificationRecord | null>;
@@ -94,7 +75,6 @@ export function createNotifyService(deps: NotifyDeps): NotifyService {
     async enqueue(input: EnqueueInput): Promise<EnqueueOutcome> {
       const nowIso = now().toISOString();
 
-      // best-effort idempotency: چک قبل از insert؛ مسابقه (race) با UNIQUE index پوشش داده می‌شود
       if (input.dedupKey) {
         const existing = await db.queryOne<{ id: string }>(
           'SELECT id FROM notifications WHERE dedup_key = ?',
@@ -136,7 +116,6 @@ export function createNotifyService(deps: NotifyDeps): NotifyService {
       const nowIso = now().toISOString();
       const summary: DispatchSummary = { processed: 0, sent: 0, failed: 0, skipped: 0 };
 
-      // رکوردهای خسته (تلاش زیاد) از صف خارج می‌شوند
       await db.execute(...spreadInsert(stalePendingToSkipped(maxAttempts, nowIso)));
 
       const pending = await db
@@ -174,7 +153,6 @@ export function createNotifyService(deps: NotifyDeps): NotifyService {
         try {
           result = await channel.send({ to: row.recipient, text });
         } catch (err) {
-          // قرارداد کانال: نباید throw کند — اما محافظت می‌کنیم
           result = { ok: false, error: err instanceof Error ? err.message : 'UNKNOWN' };
         }
 
@@ -205,14 +183,12 @@ export function createNotifyService(deps: NotifyDeps): NotifyService {
       return changes;
     },
 
-    /** — ارسال فوری یک رکورد از Outbox */
     async release(id: string): Promise<boolean> {
       const res = await db.execute(...spreadInsert(releaseNotificationById(id, now().toISOString())));
       const changes = (res.meta as { changes?: number } | undefined)?.changes ?? 0;
       return changes > 0;
     },
 
-    /** — ارسال فوری همهٔ پیش‌نویس‌ها */
     async releaseAllDrafts(): Promise<number> {
       const res = await db.execute(...spreadInsert(releaseAllDrafts(now().toISOString())));
       const changes = (res.meta as { changes?: number } | undefined)?.changes ?? 0;
@@ -256,14 +232,10 @@ export function createNotifyService(deps: NotifyDeps): NotifyService {
   };
 }
 
-// ───────────── helpers ─────────────
-
-/** اجرای statement builder به شکل execute(sql, params) */
 function spreadInsert(stmt: { sql: string; params: unknown[] }): [string, unknown[]] {
   return [stmt.sql, stmt.params];
 }
 
-/** payload JSON دیتابیس → آبجکت */
 function rowFromDb(row: NotificationRow): NotificationRecord {
   let payload: NotificationRecord['payload'] = {};
   try {

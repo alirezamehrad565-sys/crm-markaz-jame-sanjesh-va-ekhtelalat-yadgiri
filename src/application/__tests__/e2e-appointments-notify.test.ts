@@ -1,12 +1,3 @@
-/**
- * تست‌های e2e — appointments-notify
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-appointments-notify.test.ts — یکپارچگی واقعی ///:
-// چرخهٔ حیات نوبت، موتور تعارض، copy-week، حضور و غیاب، صف اعلان‌ها، وب‌هوک بات
-// قواعد واقعی: نوبت باید حداقل یک دانش‌آموز داشته باشد و روی شبکهٔ ۱۵ دقیقه‌ای باشد.
-// دادهٔ ماک: seed-dev + fixtureهای ساخته‌شده از API
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { computeBatchSendAt } from '../notify/batch'; // — خنثی‌سازی بمب زمانی اعلان‌ها
 import {
@@ -81,11 +72,8 @@ describe('چرخهٔ حیات نوبت + موتور تعارض', () => {
   });
 
   it('هم‌پوشانی نوبت همان همکار — 201 ولی با هشدار نرم تعارض (طراحی )', async () => {
-    // فاز ۵: درمانگرِ نویسنده = ali خودش است (staff_id=ALI_ID ✓) و STUDENT1_ID سابقهٔ
-    // نوبت با ali دارد (نوبت خط بالا) — گارد محدودهٔ دانش‌آموز پاس می‌شود؛ هدفِ تست تداخل نرم است
     const res = await therapist.post('/api/appointments', apptBody(ALI_ID, '2030-01-07T10:15:00.000Z', 30, [STUDENT1_ID]));
     expect(res.status).toBe(201);
-    // تداخل سخت بلاک نمی‌شود؛ هشدار نرم در پاسخ می‌آید (مسیر اصلاح دستی مدیر)
     const warnings = (res.body as { warnings?: unknown[] }).warnings;
     expect(Array.isArray(warnings)).toBe(true);
     expect(warnings!.length).toBeGreaterThanOrEqual(1);
@@ -193,7 +181,6 @@ describe('چرخهٔ حیات نوبت + موتور تعارض', () => {
     expect(batchId).toBeTruthy();
     expect(result.data.copied).toBeGreaterThanOrEqual(2);
 
-    // خواندن با خودِ درمانگر (نوبت‌های کپی‌شده متعلق به ALI است)
     const list = await therapist.get('/api/appointments?from=2030-01-14T00:00:00.000Z&to=2030-01-20T23:59:59.999Z');
     const items = (list.body as { data: Array<{ batchId: string | null }> }).data;
     expect(items.filter((x) => x.batchId === batchId)).toHaveLength(result.data.copied);
@@ -206,7 +193,6 @@ describe('چرخهٔ حیات نوبت + موتور تعارض', () => {
   });
 
   it('لیست نوبت‌ها با فیلتر staff_id و بازهٔ زمانی (نمای خود درمانگر)', async () => {
-    // خواندن لیست با درمانگرِ صاحب برنامه (staff_id همکار → 403 — تست‌های پایین‌تر)
     const res = await therapist.get(`/api/appointments?staff_id=${ALI_ID}&from=2030-01-07T00:00:00.000Z&to=2030-01-09T23:59:59.999Z`);
     expect(res.status).toBe(200);
     const items = (res.body as { data: Array<{ staffId: string; startAt: string }> }).data;
@@ -225,7 +211,6 @@ describe('چرخهٔ حیات نوبت + موتور تعارض', () => {
     });
     expect(check.status).toBe(200);
     const data = check.body as { data: unknown[] };
-    // نوبت ۱۰:۰۰–۱۰:۳۰ علی وجود دارد؛ بازهٔ ۱۰:۱۵–۱۰:۴۵ باید هم‌پوشانی بدهد
     expect(Array.isArray(data.data) ? data.data.length : 1).toBeGreaterThanOrEqual(1);
   });
 });
@@ -308,7 +293,6 @@ describe('// — صف اعلان‌ها، یادآورها و وب‌هوک با
   });
 
   it('ساخت نوبت → اعلان appointment_created برای خانواده + معلم (staff link متصل)', async () => {
-    // اتصال معلم با کد staff link + وب‌هوک /link
     const link = await manager.post('/api/notifications/staff-links', { staff_id: ALI_ID });
     expect(link.status).toBe(201);
     const code = (link.body as { data: { code: string } }).data.code;
@@ -318,12 +302,9 @@ describe('// — صف اعلان‌ها، یادآورها و وب‌هوک با
     expect(hookBody.handled).toBe(true);
     expect(hookBody.reply).toContain('اتصال');
 
-    // خانواده
     const s = await createStudent(manager);
     await manager.put(`/api/notifications/prefs/${s.id}`, { channel: 'internal', chat_id: 'internal-chat-9' });
 
-    // پیش‌بینی رفتار «ساعت ارسال» با همان تابع pure سرور: بعد از گذر ساعت ارسال
-    // امروز (پیش‌فرض ۱۸ تهران) اعلان ثبت نوبت عمداً فوری می‌رود و پیش‌نویس نمی‌ماند
     const startIso = quarterHourFromNow(3 * 24 * 60);
     const expectDraft =
       computeBatchSendAt({ nowIso: new Date().toISOString(), appointmentStartIso: startIso, batchHour: 18 }) !== null;
@@ -335,12 +316,10 @@ describe('// — صف اعلان‌ها، یادآورها و وب‌هوک با
     const items = (list.body as { data: Array<{ template: string; status: string; recipient: string | null; sendAt: string | null }> }).data;
     const templates = items.map((n) => n.template);
     expect(templates).toContain('appointment_created');
-    // اعلان ثبت نوبت (۳ روز بعد) پیش‌نویس می‌ماند تا «ساعت ارسال» (send_at آینده)
     if (expectDraft) {
       expect(items.some((n) => n.template === 'appointment_created' && n.recipient === 'internal-chat-9' && n.status === 'pending' && n.sendAt)).toBe(true);
       expect(items.some((n) => n.template === 'staff_appointment_created' && n.recipient === '5150' && n.status === 'pending' && n.sendAt)).toBe(true);
     } else {
-      // بعد از ساعت ارسال امروز — هر دو فوری ارسال شده‌اند
       expect(items.some((n) => n.template === 'appointment_created' && n.recipient === 'internal-chat-9' && n.status === 'sent')).toBe(true);
       expect(items.some((n) => n.template === 'staff_appointment_created' && n.recipient === '5150' && n.status === 'sent')).toBe(true);
     }
@@ -371,7 +350,6 @@ describe('// — صف اعلان‌ها، یادآورها و وب‌هوک با
     const s1 = (stats1.body as { data: Record<string, number> }).data;
     expect(typeof s1.pending).toBe('number');
 
-    // شمارش پیش‌نویس‌های آینده (send_at > الان) از صندوق اعلان‌ها
     const outbox1 = await manager.get('/api/notifications/outbox');
     expect(outbox1.status).toBe(200);
     const ob1 = (outbox1.body as { data: { drafts: Array<{ sendAt: string | null }> } }).data;
@@ -382,7 +360,6 @@ describe('// — صف اعلان‌ها، یادآورها و وب‌هوک با
 
     const stats2 = await manager.get('/api/notifications/stats');
     const s2 = (stats2.body as { data: { pending: number } }).data;
-    // فقط پیش‌نویس‌های رسیده به موعد مانده‌اند — بقیهٔ صف فرستاده شده
     expect(s2.pending).toBe(futureDrafts);
   });
 
@@ -421,7 +398,6 @@ describe('// — صف اعلان‌ها، یادآورها و وب‌هوک با
     const hookBody = (await hooked.json()) as { reply: string };
     expect(hookBody.reply).toContain('اتصال');
 
-    // دانش‌آموز باید هم‌مدرسهٔ کلاس باشد (قاعدهٔ requireClassForStudent)
     const s = await createStudent(manager, { school_id: schoolId });
     const patched = await manager.patch(`/api/students/${s.id}`, { class_id: classId });
     expect(patched.status).toBe(200);

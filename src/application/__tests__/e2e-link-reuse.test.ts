@@ -1,15 +1,3 @@
-/**
- * تست‌های e2e — link-reuse
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// لینک‌های احراز هویت چندبارمصرف
-// ۱) کد خانواده: استفادهٔ دوباره از همین چت = idempotent (موفق)
-// ۲) کد خانواده: استفاده از چت تازه = انتقال اتصال (bot_links + prefs به چت تازه)
-// ۳) کد کارمند: اتصال دوباره از چت تازه (انتقال)
-// ۴) کد کلاس: اتصال دوباره از چت تازه؛ کد لغوشده مرده می‌ماند
-// ۵) دیپ‌لینک: /start CODE مثل /link CODE کار می‌کند
-// اپ واقعی Hono + migrations واقعی + webhook بله با secret تست
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, WEBHOOK_SECRET, asRole, createStudent } from '../../test/harness';
 import type { Api } from '../../test/harness';
@@ -36,7 +24,6 @@ async function bot(A: A, raw: Update): Promise<BotResponse> {
 
 const tx = (t: string, chatId: number): Update => ({ update_id: Math.floor(Math.random() * 1e9), message: { chat: { id: chatId }, text: t } });
 
-// chatها: 7601 والد اول | 7602 والد دوم (چت تازه) | 7603 همکار | 7604 همکار دوم | 7605 معلم | 7606 معلم دوم
 const CHAT_PARENT1 = 7601;
 const CHAT_PARENT2 = 7602;
 const CHAT_STAFF1 = 7603;
@@ -60,7 +47,6 @@ describe('لینک احراز هویت چندبارمصرف', () => {
     const first = await bot(A, tx(`/link ${code}`, CHAT_PARENT1));
     expect(first.reply).toContain('اتصال با موفقیت');
 
-    // — قبلاً یک‌بارمصرف بود و «معتبر نیست» می‌داد؛ حالا دوباره کار می‌کند
     const again = await bot(A, tx(`/link ${code}`, CHAT_PARENT1));
     expect(again.reply).toContain('اتصال با موفقیت');
     expect(again.reply).not.toContain('معتبر نیست');
@@ -77,7 +63,6 @@ describe('لینک احراز هویت چندبارمصرف', () => {
     expect(moved.reply).toContain('اتصال با موفقیت');
     expect(moved.reply).toContain('منتقل شد');
 
-    // انتقال انجام شد — prefs به چت تازه رفت
     const prefs = await manager.get(`/api/notifications/prefs/${kid.id}`);
     const prefsData = (prefs.body as { data: { chatId: string | null; remindersEnabled: boolean } }).data;
     expect(prefsData.chatId).toBe('7602');
@@ -92,11 +77,9 @@ describe('لینک احراز هویت چندبارمصرف', () => {
     const first = await bot(A, tx(`/link ${code}`, CHAT_STAFF1));
     expect(first.reply).toContain('اتصال با موفقیت');
 
-    // — از چت دوم با همین کد (via /start payload — دیپ‌لینک)
     const moved = await bot(A, tx(`/start ${code}`, CHAT_STAFF2));
     expect(moved.reply).toContain('اتصال با موفقیت');
 
-    // هر دو چت حالا نقش همکار دارند؟ — چت دوم بله؛ چت اول فقط اگر ردیف دیگری داشته باشد
     const kb2 = await bot(A, tx('/start', CHAT_STAFF2));
     expect(JSON.stringify(kb2.keyboard)).toContain('پیگیری\u200cهای من');
   });
@@ -112,7 +95,6 @@ describe('لینک احراز هویت چندبارمصرف', () => {
     const moved = await bot(A, tx(`/link ${code}`, CHAT_TEACHER2));
     expect(moved.reply).toContain('اتصال با موفقیت');
 
-    // چت تازه معلم شناخته می‌شود
     const kb = await bot(A, tx('/start', CHAT_TEACHER2));
     expect(JSON.stringify(kb.keyboard)).toContain('ثبت متقاضی');
   });
@@ -127,7 +109,6 @@ describe('لینک احراز هویت چندبارمصرف', () => {
 
     await manager.delete(`/api/notifications/class-links/${link.id}`);
 
-    // همان چت و چت تازه — هر دو رد می‌شوند
     const same = await bot(A, tx(`/link ${link.code}`, CHAT_TEACHER1));
     expect(same.reply).toContain('معتبر نیست');
     const fresh = await bot(A, tx(`/link ${link.code}`, CHAT_TEACHER2));

@@ -1,10 +1,3 @@
-/**
- * تست‌های e2e — exercise-bank
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-exercise-bank.test.ts — بانک تمرین از پنل
-// CRUD کامل + فیلتر برچسب + دانلود کارکنان + لینک امضاشدهٔ خانواده + اعتبارسنجی + RBAC
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -118,7 +111,6 @@ describe('بانک تمرین: پنل، فایل، برچسب، لینک خان�
     const publishedOnly = await manager.get('/api/exercises?published=true');
     expect((publishedOnly.body as { data: { items: { id: string }[] } }).data.items.map((i) => i.id)).not.toContain(exerciseId);
 
-    // برگشت به انتشار
     await manager.patch(`/api/exercises/${exerciseId}`, { published: true });
   });
 
@@ -138,7 +130,6 @@ describe('بانک تمرین: پنل، فایل، برچسب، لینک خان�
     expect(file.status).toBe(200);
     expect(file.body).toBe('<html><body>کاربرگ HTML</body></html>');
 
-    // دانلود بدون توکن — 401 (authMiddleware روی /api/*)
     const raw = await new Api(A).get(`/api/exercises/${exerciseId}/file`);
     expect(raw.status).toBe(401);
   });
@@ -155,12 +146,10 @@ describe('بانک تمرین: پنل، فایل، برچسب، لینک خان�
     const tampered = await A.app.request(`/public/exercise-files/${exerciseId}?token=${token}x`, {}, A.env as never);
     expect(tampered.status).toBe(404);
 
-    // شناسهٔ تضمینی متفاوت (اگر اولین نویسه 'a' باشد 'b' وگرنه 'a') — بدون flaky بودن
     const otherExerciseId = (exerciseId[0] === 'a' ? 'b' : 'a') + exerciseId.slice(1);
     const wrongId = await A.app.request(`/public/exercise-files/${otherExerciseId}?token=${token}`, {}, A.env as never);
     expect(wrongId.status).toBe(404);
 
-    // غیرمنتشر → مسیر عمومی بسته
     await manager.patch(`/api/exercises/${exerciseId}`, { published: false });
     const hidden = await A.app.request(`/public/exercise-files/${exerciseId}?token=${token}`, {}, A.env as never);
     expect(hidden.status).toBe(404);
@@ -214,7 +203,6 @@ describe('بانک تمرین: پنل، فایل، برچسب، لینک خان�
     expect(list.status).toBe(200);
     expect((list.body as { data: { id: string }[] }).data.map((r) => r.id)).toContain(assigned.id);
 
-    // تمرین ناموجود / دانش‌آموز ناموجود
     await expect(
       directService.assign(
         { exerciseId: 'ffffffff-ffff-4fff-8fff-ffffffffffff', studentId: student.id, assignedBy: 'x', via: 'bot' },
@@ -238,8 +226,6 @@ describe('بانک تمرین: پنل، فایل، برچسب، لینک خان�
   });
 });
 
-// ─── — مالکیت تمرین (m140): PATCH نمی‌تواند created_by را تغییر دهد؛ انتقال فقط با
-// POST /:id/reassign (فقط مدیر) — رگرسیونِ باگ واقعی 43-A (بازگشت انتساب با فرم ویرایش کهنه)
 describe('بانک تمرین: مالکیت (owner_staff_id بسته + reassign فقط-مدیر)', () => {
   let A: ReturnType<typeof createTestApp>;
   let manager: Api;
@@ -250,7 +236,6 @@ describe('بانک تمرین: مالکیت (owner_staff_id بسته + reassign 
     A = createTestApp();
     manager = await asRole(A, 'manager');
     therapist = await asRole(A, 'therapist');
-    // تمرینِ ساخته‌شده با حساب مدیر (شبیه‌سازی «ثبت زیر نشست مشترک» — درس 42-F/43-A)
     const res = await manager.post('/api/exercises', { title: 'شمارش برعکس (مالکیت)', format: 'worksheet' });
     expect(res.status).toBe(201);
     exerciseId = (res.body as { data: { id: string; createdBy: string } }).data.id;
@@ -260,7 +245,6 @@ describe('بانک تمرین: مالکیت (owner_staff_id بسته + reassign 
     const before = await manager.get(`/api/exercises/${exerciseId}`);
     const createdBefore = (before.body as { data: { createdBy: string } }).data.createdBy;
 
-    // حتی از حساب خودِ مدیر — با owner_staff_id اشاره به درمانگر (فرم کهنه)
     const patch = await manager.patch(`/api/exercises/${exerciseId}`, {
       title: 'شمارش برعکس (مالکیت) — ویرایش ساده',
       owner_staff_id: ALI_ID
@@ -272,7 +256,6 @@ describe('بانک تمرین: مالکیت (owner_staff_id بسته + reassign 
     const reread = await manager.get(`/api/exercises/${exerciseId}`);
     expect((reread.body as { data: { createdBy: string } }).data.createdBy).toBe(createdBefore);
 
-    // هیچ audit «exercise.reassigned» از مسیر PATCH نوشته نشده
     const audits = A.sql.prepare(
       `SELECT COUNT(*) AS cnt FROM audit_log WHERE action = 'exercise.reassigned' AND resource_id = ?`
     ).get(exerciseId) as { cnt: number };
@@ -289,11 +272,9 @@ describe('بانک تمرین: مالکیت (owner_staff_id بسته + reassign 
     expect(body.data.createdBy).toBe(ALI_ID);
     expect(body.unchanged).toBeUndefined(); // تغییر واقعی — پرچم بدون‌عمل ندارد
 
-    // پاسخ هم‌شکل GET /api/exercises/:id است
     const viaGet = await manager.get(`/api/exercises/${exerciseId}`);
     expect((viaGet.body as { data: { createdBy: string } }).data.createdBy).toBe(ALI_ID);
 
-    // سطر audit — از و to + reason
     const audit = A.sql.prepare(
       `SELECT actor_id, changes FROM audit_log WHERE action = 'exercise.reassigned' AND resource_id = ? ORDER BY rowid DESC LIMIT 1`
     ).get(exerciseId) as { actor_id: string; changes: string };
@@ -338,8 +319,6 @@ describe('بانک تمرین: مالکیت (owner_staff_id بسته + reassign 
   });
 });
 
-// ─── — m166: هم‌ساز تمرین (سازندهٔ دوم) — امتیاز تولید محتوا بین دو نفر نصف می‌شود؛
-// جای تیک بی‌نامِ team_created، انتخاب واقعی همکار از فهرست کارکنان
 describe('بانک تمرین: هم‌ساز تمرین (co_created_by — سازندهٔ دوم)', () => {
   let A: ReturnType<typeof createTestApp>;
   let manager: Api;

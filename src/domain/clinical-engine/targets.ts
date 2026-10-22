@@ -1,13 +1,3 @@
-/**
- * موتور بالینی — باتری‌ها، قواعد، روایت و اهداف مداخله — اهداف مداخله
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// دانش‌نامهٔ ۱۸ هدف (پلن §۳): ۱۰ بالینی (با DSM) + ۸ پشتیبان (بدون برچسب اختلال)
-// نشانه‌های خانه/مدرسه و ۳ تمرین فوری هر هدف عیناً از دفترهای آموزشی مرکز (public/downloads/dossiers/)
-// مسیر مرکز: مشاهده و ثبت ← ارزیابی تخصصی ← مداخله و جلسات ← پایش و گزارش (دیرآموزی: پروتکل ۵ گامی)
-// T4 (m148): فهرست ابزار پیشنهادی اهداف، شرح‌حال را به نسخهٔ ۳ (فرم فعال ورودی جدید) اشاره می‌دهد —
-// نسخهٔ ۲ فقط برای پرونده‌های قدیمی است (رویدادهای موجود دست‌نخورده رندر می‌شوند).
-
 import type { ClinicalTarget, PathStep } from './types';
 
 const STANDARD_PATH: PathStep[] = [
@@ -535,13 +525,7 @@ export const SUPPORT_TARGETS: ClinicalTarget[] = [
   }
 ];
 
-/** همهٔ ۱۸ هدف */
 export const ALL_TARGETS: ClinicalTarget[] = [...CLINICAL_TARGETS, ...SUPPORT_TARGETS];
-
-// ───────────── اهداف شاخهٔ توانبخشی ذهنی-جسمی ─────────────
-// خارج از دانش‌نامهٔ ۱۸گانه‌اند: فرضیهٔ موتور نمی‌سازند (بدون قاعده در rules.ts) و
-// برچسب DSM نمی‌گیرند — هدفِ دستی درمانگر در مسیر توانبخشی. گام‌ها بر اساس
-// نحوهٔ ارائهٔ جدول ۴ اساس‌نامه: ارزیابی پایه ← مداخله فردی/گروهی ← خانواده‌محور ← پایش.
 
 const REHAB_PATH: PathStep[] = [
   { key: 'baseline', title: 'ارزیابی پایه (شناختی/حرکتی/خودیاری)' },
@@ -666,17 +650,14 @@ export const REHAB_TARGETS: ClinicalTarget[] = [
   }
 ];
 
-/** همهٔ اهداف قابل انتخاب در مسیر مداخله — ۱۸ دانش‌نامه + ۴ توانبخشی */
 export const ALL_TARGETS_INCLUDING_REHAB: ClinicalTarget[] = [...ALL_TARGETS, ...REHAB_TARGETS];
 
 const BY_KEY = new Map(ALL_TARGETS_INCLUDING_REHAB.map((t) => [t.key, t]));
 
-/** یک هدف با کلید */
 export function targetOf(key: string): ClinicalTarget | undefined {
   return BY_KEY.get(key);
 }
 
-/** شمار تمرین‌های seed — همیشه ۱۸ × ۳ = ۵۴ */
 export function totalExerciseCount(): number {
   return ALL_TARGETS.reduce((sum, t) => sum + t.exercises.length, 0);
 }

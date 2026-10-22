@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — -exercise-packages
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e--exercise-packages.test.ts — بانک تمرین ۲.۰ + اتصال به پروفایل
-// بستهٔ تمرینی (CRUD + انتشار) / پیشنهاد برچسب‌محور / بستهٔ تکلیف (batch) / ارسال پنل با لینک امن
-// / یادآوری (dedup دقیقه) / گارد تمرین پیش‌نویس / آمار مصرف / RBAC سه نقش
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, asRole, createStudent } from '../../test/harness';
 
@@ -207,7 +199,6 @@ describe('پیشنهاد برچسب‌محور + بستهٔ تکلیف + ارس�
     expect(found.sentAt).toBeTruthy();
     expect(found.sentCount).toBe(out.sent);
 
-    // یادآوری فوری — dedup دقیقه
     const again = await therapist.post(`/api/exercises/batches/${batchId}/send`, {});
     expect(dataOf<{ sent: number }>(again).sent).toBe(0);
   });
@@ -224,7 +215,6 @@ describe('پیشنهاد برچسب‌محور + بستهٔ تکلیف + ارس�
     const list0 = dataOf<BatchRec[]>(await manager.get(`/api/students/${studentId}/exercises/batches`));
     const assignmentId = list0.find((b) => b.id === batchId)!.items[0].assignmentId;
 
-    // حلقهٔ بازگشت خانواده فقط از مسیر بات است — سرویس مستقیم (الگوی تست )
     const { MockD1 } = await import('../../test/mock-d1');
     const { createDb } = await import('@core/db');
     const { createExerciseBankService } = await import('@domain/exercise-bank');

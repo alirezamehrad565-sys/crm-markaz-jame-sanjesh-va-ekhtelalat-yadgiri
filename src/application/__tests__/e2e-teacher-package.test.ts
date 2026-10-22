@@ -1,14 +1,3 @@
-/**
- * تست‌های e2e — فرم جامع معلم (ce-comp-teacher-v2) + انتخاب معلم (T7 — m150-b)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// آینهٔ e2e-case-event-forms (T5) برای پکیج معلم:
-// ۱) CRUD معلم‌ها روی پرونده (student_teachers — مایگریشن 0062) + seed یکتا + RBAC
-// ۲) صدور لینک مستقل به‌ازای هر معلم («چند معلم = چند لینک مستقل») + گره‌خوردن نام معلم
-// ۳) رندر بخش‌به‌بخش با سربرگ «فرم شما — X» + یک submit → رویداد مستقل هر کامپوننت + رویداد زمینه
-// ۴) هر رویداد «پاسخ معلم: X» می‌گیرد — هم‌گرایی والد×معلم با همان subscaleIds
-// ۵) رگرسیون: فرم‌های تکی معلم (snap-t/sdq-t) عیناً همان مسیر قبلی
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -71,7 +60,6 @@ describe('انتخاب معلم — CRUD معلم‌های پرونده (student
   });
 
   it('seed یکتای مایگریشن 0062 — معلمِ کلاس فعلی یک‌بار می‌آید؛ اجرای دوباره ردیف تازه نمی‌سازد؛ ستون‌های قدیمی دست‌نخورده', async () => {
-    // کلاس با معلم + دانش‌آموز متصل (مستقیم در DB — الگوی دادهٔ واقعی)
     A.sql.prepare(
       `INSERT INTO classes (id, school_id, name, teacher_name, teacher_phone, active)
        VALUES ('c-t7-seed', ?, 'پنجم الف', 'سرکار امینی', '09120000001', 1)`
@@ -88,7 +76,6 @@ describe('انتخاب معلم — CRUD معلم‌های پرونده (student
     expect(rows[0].name).toBe('سرکار امینی');
     expect(rows[0].class_label).toBe('پنجم الف');
     expect(rows[0].contact).toBe('09120000001');
-    // ستون‌های قدیمی classes همان‌جا هستند (دست‌نخورده)
     const cls = A.sql.prepare(`SELECT teacher_name, teacher_phone FROM classes WHERE id = 'c-t7-seed'`).get() as { teacher_name: string; teacher_phone: string };
     expect(cls.teacher_name).toBe('سرکار امینی');
   });
@@ -134,7 +121,6 @@ describe('فرم جامع معلم (ce-comp-teacher-v2) — پکیج + گره‌
     expect(ctxFields.some((f) => f.type === 'heading')).toBe(true);
     expect(ctxFields.every((f) => f.type !== 'scale' && f.type !== 'single')).toBe(true);
     expect(pkgRow.audience).toBe('teacher');
-    // زیرمقیاس‌های تکی معلم = عین والد (هم‌گرایی بی‌بازنویسی موتور)
     const subsOf = (key: string): string[] =>
       JSON.parse((A.sql.prepare(`SELECT subscales FROM case_event_types WHERE key = ?`).get(key) as { subscales: string }).subscales ?? '[]').map((s: { id: string }) => s.id);
     expect(subsOf('ce-snap-iv-t-v1')).toEqual(subsOf('ce-snap-iv-p-v1'));
@@ -158,7 +144,6 @@ describe('فرم جامع معلم (ce-comp-teacher-v2) — پکیج + گره‌
     expect(out2.link).not.toBe(out1.link);
     expect(out2.link).toContain(`/public/case-events/${ev2.id}/fill?token=`);
 
-    // اتصال بی‌نام → ۴۰۰ فارسی
     const bad = await manager.post(`/api/case-events/${ev2.id}/teacher-link`, { teacher_name: '  ' });
     expect(bad.status).toBe(400);
   });
@@ -174,7 +159,6 @@ describe('فرم جامع معلم (ce-comp-teacher-v2) — پکیج + گره‌
     expect(html).toContain('بخش ۲ از ۴ — چک‌لیست توجه و بی‌قراری — فرم معلم (SNAP-IV)');
     expect(html).toContain('بخش ۳ از ۴ — پرسش‌نامهٔ رفتار کودک — فرم معلم (SDQ)');
     expect(html).toContain('بخش ۴ از ۴ — ملاک‌های کلاسی خواندن/نوشتن/حساب — فرم معلم');
-    // آیتم معلم‌محور ملاک‌های کلاسی + لنگر مشاهده
     expect(html).toContain('در دیکته، خطای حذف یا جابه‌جایی حرف‌ها دارد');
     expect(html).toContain('به‌روشنی و مکرر');
     expect(html).toContain(row.fill_token);
@@ -185,12 +169,9 @@ describe('فرم جامع معلم (ce-comp-teacher-v2) — پکیج + گره‌
 
     const answers: Record<string, number | string> = {};
     for (const k of COMPONENTS) for (const f of fieldsOf(k)) answers[f.key] = 0;
-    // SNAP-IV معلم: کم‌توجهی ماکسیمم (۹ آیتم × ۳ = ۲۷)؛ بقیه صفر
     for (let i = 1; i <= 9; i++) answers[`s0${i}`] = 3;
-    // ملاک‌های کلاسی: خواندن مرزی (۳)، نوشتن عادی (۰)، حساب قابل توجه (هر ۴ آیتم = ۲ → ۸)
     answers['r01'] = 1; answers['r02'] = 1; answers['r03'] = 1;
     for (const k of ['m01', 'm02', 'm03', 'm04']) answers[k] = 2;
-    // زمینهٔ معلم
     answers['obs_role'] = 'معلم کلاس';
     answers['obs_period'] = 'بیش از یک سال';
     answers['main_concern'] = 'در کلاس ریاضی گیر می‌کند';
@@ -202,7 +183,6 @@ describe('فرم جامع معلم (ce-comp-teacher-v2) — پکیج + گره‌
     });
     expect(post.status).toBe(200);
 
-    // تک‌مصرف
     const post2 = await A.app.request(`/public/case-events/${row.id}/fill`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -210,7 +190,6 @@ describe('فرم جامع معلم (ce-comp-teacher-v2) — پکیج + گره‌
     });
     expect(post2.status).toBe(409);
 
-    // رویداد زمینه — «پاسخ معلم» + پاسخ‌های ساخت‌یافته
     const anchor = A.sql.prepare(`SELECT status, payload FROM case_events WHERE id = ?`).get(row.id) as { status: string; payload: string };
     expect(anchor.status).toBe('completed');
     const anchorPayload = JSON.parse(anchor.payload) as Record<string, { value: string; label: string }>;
@@ -218,7 +197,6 @@ describe('فرم جامع معلم (ce-comp-teacher-v2) — پکیج + گره‌
     expect(anchorPayload.obs_role.value).toBe('معلم کلاس');
     expect(anchorPayload.main_concern.value).toBe('در کلاس ریاضی گیر می‌کند');
 
-    // سه رویداد مستقل — زیرمقیاس‌های خودشان + «پاسخ معلم»
     const rows = A.sql.prepare(
       `SELECT t.key AS type_key, e.payload, e.analysis
          FROM case_events e JOIN case_event_types t ON t.id = e.event_type_id
@@ -280,7 +258,6 @@ describe('فرم جامع معلم (ce-comp-teacher-v2) — پکیج + گره‌
   });
 
   it('ارسال بله با اتصال معلم → قالب bot_teacher_package_link + لینک در پاسخ + اتصال ثبت می‌شود', async () => {
-    // چت متصل کلاس (الگوی T5) — دانش‌آموز باید کلاس داشته باشد (کلاس + لینک در همین DB)
     A.sql.prepare(
       `INSERT INTO classes (id, school_id, name, teacher_name, teacher_phone, active)
        VALUES ('c-t7-chat', ?, 'پنجم ب', 'سرکار موسوی', '09120000002', 1)`
@@ -330,7 +307,6 @@ describe('فرم جامع معلم (ce-comp-teacher-v2) — پکیج + گره‌
     expect(a.score).toBe(26);
     expect(a.subscaleScores.map((s) => s.id)).toEqual(['ia', 'hi', 'odd']);
 
-    // تکی معلم با اتصال معلم → پاسخ با نام معلم
     const created2 = dataOf<{ id: string }>(await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-sdq-t-v1'], values: {} }));
     await manager.post(`/api/case-events/${created2.id}/teacher-link`, { teacher_name: teacher2.name, teacher_id: teacher2.id });
     const tokenRow2 = A.sql.prepare(`SELECT fill_token FROM case_events WHERE id = ?`).get(created2.id) as { fill_token: string };

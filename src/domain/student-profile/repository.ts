@@ -1,9 +1,3 @@
-/**
- * ماژول پروندهٔ دانش‌آموز — لایهٔ دسترسی به داده (D1)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// SQL پارامتری برای students و schools — مالکیت write فقط این ماژول
-
 export interface SchoolRow {
   id: string;
   name: string;
@@ -13,7 +7,6 @@ export interface SchoolRow {
   address: string | null;
   principal_name: string | null;
   principal_phone: string | null;
-  /** — کد رسمی مدرسه + یادداشت */
   code: string | null;
   notes: string | null;
   active: number;
@@ -32,7 +25,6 @@ export interface ClassRow {
 
 export interface StudentRow {
   id: string;
-  /** — پرونده‌های بدون کد ملی (آرشیو) نگه‌دارندهٔ یکتای «NAS-…» دارند */
   national_id: string | null;
   first_name: string;
   last_name: string;
@@ -43,25 +35,19 @@ export interface StudentRow {
   class_id: string | null;
   class_name: string | null;
   teacher_name: string | null;
-  // تلفن معلم از کلاس (باجت تماس با معلم در پروفایل)
   teacher_phone: string | null;
   guardian_name: string | null;
   guardian_relation: string | null;
   guardian_phone: string | null;
   active: number;
   created_at: string;
-  /** فاز ۶ — وضعیت پرونده (§12.1) — NULL = بدون وضعیت ثبت‌شده */
   case_status: string | null;
-  /** — مسیر پرونده (learning/rehab) — NULL = تعیین‌نشده */
   pathway: string | null;
-  /** فاز ۷ — نیاز ویژهٔ شناسایی‌شده (§12، D3) — NULL = ثبت‌نشده */
   special_need_type: string | null;
   special_need_severity: string | null;
   identified_at: string | null;
-  /** — projection وضعیت پذیرش از waitlist */
   wait_status: string | null;
   wait_since: string | null;
-  /** -c — مسئول پرونده (سپردن رسمی پرونده به درمانگر) */
   owner_staff_id: string | null;
   owner_name: string | null;
 }
@@ -126,9 +112,6 @@ export function rowToStudent(row: StudentRow): import('./types').Student {
   };
 }
 
-/**
- * — سابقهٔ تحصیلی سال‌به‌سال (student_education_history — مایگریشن 0035)
- */
 export interface EduHistoryRow {
   id: string;
   student_id: string;
@@ -155,9 +138,6 @@ export function rowToEducationHistory(row: EduHistoryRow): import('./types').Edu
   };
 }
 
-/**
- * — T7 (m150-b): ردیف معلم‌های دانش‌آموز (student_teachers — مایگریشن 0062)
- */
 export interface StudentTeacherRow {
   id: string;
   student_id: string;
@@ -178,23 +158,12 @@ export function rowToStudentTeacher(row: StudentTeacherRow): import('./types').S
   };
 }
 
-/**
- * — projection وضعیت پذیرش از جدول waitlist (بدون تغییر ساختار جدول students):
- * waiting → ورودی باز متصل دارد (منتظر نوبت‌دهی/پذیرش)
- * admitted → ورودی پذیرش‌شده دارد (اولین جلسهٔ واقعی ثبت شده)
- * با EXISTS — هیچ ردیفی duplicate نمی‌شود؛ wait_since = شروع انتظار
- */
 export const STUDENT_WAIT_PROJECTION = `,
        CASE WHEN EXISTS (SELECT 1 FROM waitlist wq WHERE wq.student_id = s.id AND wq.deleted_at IS NULL AND wq.status IN ('waiting','called','scheduled')) THEN 'waiting'
             WHEN EXISTS (SELECT 1 FROM waitlist wa WHERE wa.student_id = s.id AND wa.deleted_at IS NULL AND wa.status = 'admitted') THEN 'admitted'
             ELSE NULL END AS wait_status,
        (SELECT wq2.created_at FROM waitlist wq2 WHERE wq2.student_id = s.id AND wq2.deleted_at IS NULL AND wq2.status IN ('waiting','called','scheduled') ORDER BY wq2.created_at LIMIT 1) AS wait_since`;
 
-/**
- * -c — projection مسئول پرونده — با ستون students.owner_staff_id (مایگریشن 0029)
- * فقط برای کوئری‌هایی که به staff جوین ندارند؛ نام مسئول با subquery می‌آید تا
- * کوئری‌های موجود دست نخورده بمانند.
- */
 export const STUDENT_OWNER_PROJECTION = `,
        s.owner_staff_id,
        (SELECT st2.full_name FROM staff st2 WHERE st2.id = s.owner_staff_id) AS owner_name`;
@@ -205,9 +174,7 @@ export function studentSearchQuery(filters: {
   grade?: string;
   tagId?: string;
   active?: boolean;
-  /** — فیلتر مسئول پرونده (دفتر) */
   ownerId?: string;
-  /** — دامنهٔ درمانگر: مسئولِ خودش یا سابقهٔ جلسه با خودش (هم‌ارز my-students) */
   staffScope?: string;
 }): { sql: string; params: unknown[] } {
   const conditions: string[] = [];
@@ -238,7 +205,6 @@ export function studentSearchQuery(filters: {
     params.push(filters.ownerId);
   }
   if (filters.staffScope) {
-    // همان مرز «دانش‌آموزان من» (فاز ۵ / -c): مسئول پرونده بودن OR سابقهٔ جلسهٔ واقعی
     conditions.push(
       `(s.owner_staff_id = ? OR EXISTS (
          SELECT 1 FROM appointments a
@@ -270,7 +236,6 @@ export interface StudentTagJoinRow {
   color: string | null;
 }
 
-/** برچسب‌های فعال چند دانش‌آموز در یک کوئری — برای پیوست به ردیف‌های فهرست */
 export function tagsForStudentsQuery(studentIds: string[]): { sql: string; params: unknown[] } {
   if (studentIds.length === 0) return { sql: '', params: [] };
   const placeholders = studentIds.map(() => '?').join(', ');
@@ -284,8 +249,6 @@ export function tagsForStudentsQuery(studentIds: string[]): { sql: string; param
   };
 }
 
-/** / — شمارش رویدادهای پروندهٔ فعال چند دانش‌آموز در یک کوئری
- * (assessments بازنشسته شد — سندها به case_events مهاجرت کردند؛ شمارش رویدادهای غیرلغو) */
 export function assessmentCountsForStudentsQuery(studentIds: string[]): { sql: string; params: unknown[] } {
   if (studentIds.length === 0) return { sql: '', params: [] };
   const placeholders = studentIds.map(() => '?').join(', ');
