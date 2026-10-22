@@ -280,14 +280,13 @@ function chipsRow(view) {
 
 /** «خوانش روان‌سنجی نیم‌رخ» — m156: خوانش مستقل نیم‌رخ هوشی؛ فقط شواهد (بدون فرضیه/سناریو/وزن).
  * ورودی: view.psychometrics — از gates.wechslerSummary یا engine_output رویداد.
+ * m157 — نمودار نیم‌رخ از این بخش جدا شد (chartBlock): نمودار فقط به snapshot نیاز دارد و
+ * رویدادهای قدیمیِ بدون psychometrics هم باید نمودار داشته باشند — خوانش متنی فقط با ps.
  */
 function psychometricsSection(view) {
   const ps = view.psychometrics ?? null;
   if (!ps) return null;
   const blocks = [];
-  // m157 — نمودار نیم‌رخ (شاخص‌های شناختی + خرده‌آزمون‌ها) بالای خوانش — نبود دادهٔ کافی = نبود نمودار
-  const chart = wechslerProfileChart(view);
-  if (chart) blocks.push(chart);
   if (ps.summaryFa) blocks.push(el('div', { style: { lineHeight: 1.9, fontSize: '13px' } }, ps.summaryFa));
   if ((ps.gaps ?? []).length) {
     blocks.push(el('div', { class: 'clx-chips', style: { marginTop: '6px' } },
@@ -361,8 +360,18 @@ function nestedProfileBody(view) {
 
   const subs = [];
   // m156 — خوانش روان‌سنجی نیم‌رخ: نخستین آکاردئون؛ حتی برای رویدادهای قدیمیِ بدون profile
+  // m157 — نمودار نیم‌رخ بالای خوانش در همان آکاردئون؛ نمودار مستقل از psychometrics است
+  // (رویدادهای قدیمیِ بدون خوانش ذخیره‌شده هم نمودار دارند) — برچسب بر اساس محتوای موجود
+  const chart = wechslerProfileChart(view);
   const psych = psychometricsSection(view);
-  if (psych) subs.push(subAcc({ key: 'psych', label: 'خوانش روان‌سنجی نیم‌رخ', count: null, body: psych }));
+  if (chart || psych) {
+    subs.push(subAcc({
+      key: psych ? 'psych' : 'chart',
+      label: psych ? 'خوانش روان‌سنجی نیم‌رخ' : 'نمودار نیم‌رخ وکسلر',
+      count: null,
+      body: [chart, psych]
+    }));
+  }
   if (p) {
     const idxCount = indexRowCount(p);
     const idx = idxCount ? indexRowsSection(p) : null;
@@ -430,6 +439,7 @@ function renderProfile(view, { nested = false } = {}) {
     head,
     el('div', { class: 'card__body' },
       chipsRow(view),
+      wechslerProfileChart(view), // m157 — نمودار نیم‌رخ: مستقل از psychometrics (رویدادهای قدیمی هم)
       psychometricsSection(view),
       p ? indexRowsSection(p) : null,
       p ? step5Section(p) : null,
