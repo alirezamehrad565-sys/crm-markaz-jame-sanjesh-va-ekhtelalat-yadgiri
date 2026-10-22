@@ -126,6 +126,55 @@ export interface OtProfile {
   };
 }
 
+// ───────── m162 — نمای پیشرفت جلسه‌به‌جلسه (GET /ot/progress) ─────────
+
+/** یک جلسه در تایم‌لاین پیشرفت — از تجمیع ot_progress بر حسب session_id */
+export interface OtProgressSessionEntry {
+  /** شناسهٔ جلسه — ردیف‌های قدیمیِ بدون جلسه: raw:<rowid> */
+  sessionId: string;
+  /** شمارهٔ ترتیبی ۱-base بر حسب ترتیب زمانی */
+  ord: number;
+  occurredAt: string;
+  /** مهارت‌های نمره‌گرفتهٔ این جلسه (فقط primary) */
+  total: number;
+  mastered: number;
+  withHelp: number;
+  notYet: number;
+  /** تسلط‌هایی که با همین جلسه قاعدهٔ دوجلسه‌ای‌شان تأیید شد */
+  confirmedNew: number;
+  /** توزیع سطح راهنمای «با کمک» این جلسه — کلید سطح → شمار */
+  prompts: Record<string, number>;
+  /** شمار وضعیت‌ها به تفکیک حیطه (فقط primary) — مبنای نوار انباشتهٔ حیطه‌ای */
+  domains: { key: OtDomain; mastered: number; withHelp: number; notYet: number }[];
+}
+
+/** یک ردیف خط پایهٔ ارزیابی عملکردی توانبخشی — از payload آخرین ce-rehab-fx-v1 */
+export interface OtProgressBaselineEntry {
+  key: string;
+  label: string;
+  /** مقدار خام فارسی‌شده + واحد — «۷ دقیقهٔ تمرکز پیوسته» */
+  valueFa: string;
+  band: string;
+  color: string;
+  /** سطح راهنمای خط پایه — مبنای منحنی محوشدن راهنما */
+  prompt: string;
+}
+
+export interface OtProgressOutput {
+  sessions: OtProgressSessionEntry[];
+  /** خط پایهٔ عملکردی (پرونده‌های توانبخشی با ثبت fx) — null یعنی ثبت نشده */
+  baseline: OtProgressBaselineEntry[] | null;
+  baselineSummary: string | null;
+  baselineAt: string | null;
+  summary: {
+    sessions: number;
+    /** شمار مهارت‌هایی که الان تسلط دوجلسه‌ای تأییدشده دارند */
+    confirmedMastered: number;
+    withHelp: number;
+    lastAt: string | null;
+  };
+}
+
 /** یک گیت فاز شناسایی — ورودی‌های مشترک همهٔ مسیرها */
 export interface IdentificationGate {
   key: 'anamnesis' | 'behavioral' | 'wechsler' | 'skills' | 'needs';

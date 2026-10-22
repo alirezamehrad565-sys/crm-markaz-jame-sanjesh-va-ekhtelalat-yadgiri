@@ -23,7 +23,7 @@ import { bankPickButton, appendExerciseToTextarea } from './exercise-pick.js'; /
 import { eventPickButton, appendEventToTextarea } from './event-pick.js'; // — افزودن رویداد (فرم/پرسش‌نامه) به جلسه
 import { openCaseEventForm } from './case-events.js';
 import { pathwayChip, canEditPathway, openPathwayModal } from './session-type.js'; // — مسیر پرونده
-import { otChecklistCard, protocolChip, protocolCard, NEEDS_KEY, OT_SESSION_KEY } from './ot-checklist.js'; // — فلو دوفازی شناسایی→مداخله (openNeedsModal در کارت جمع‌بندی)
+import { otChecklistCard, otProgressPanel, protocolChip, protocolCard, NEEDS_KEY, OT_SESSION_KEY } from './ot-checklist.js'; // — فلو دوفازی شناسایی→مداخله (openNeedsModal در کارت جمع‌بندی) + پنل پیشرفت جلسه‌به‌جلسه (m162)
 import { synthesisSection, fetchFormulation } from './case-formulation.js'; // — کارت واحد جمع‌بندی تشخیصی (m134)
 import { wechslerProfileBlock, wechslerSourceBadge, connectionsSection, WEAKEST_FA } from './wechsler-profile.js'; // — نیم‌رخ وکسلر (m133+m134) + «پیوند با سایر اطلاعات» (m135 → مرحلهٔ ۵)
 // محتوای ثابت (کلیدهای ابزار، برچسب‌ها، متن مراحل) از ماژول محتوا
@@ -722,6 +722,26 @@ function rehabFxEventOf(events, typesById) {
   const typeId = typesById.get(REHAB_FX_KEY)?.id ?? null;
   if (!typeId) return null;
   return (events ?? []).find((e) => e.eventTypeId === typeId && e.status !== 'cancelled') ?? null;
+}
+
+/**
+ * m162 — اولویت‌های حیطه‌ای از خط پایهٔ عملکردی → کلیدهای حیطهٔ چک‌لیست مهارتی.
+ * ترتیب علمی: حیطه‌های «ضعف آشکار» قبل از «مرزی»؛ نگاشت fx→OT۷:
+ * att_sus/att_sel/inh/flex/ps → cognitive (توجه و مهارت‌های ذهنی) · wm → auditory (ادراک شنیداری).
+ * خروجی: حداکثر دو کلید حیطهٔ OT۷ به ترتیب شدت — مبنای بج «اولویت» و حیطهٔ فعال پیش‌فرض کارت مهارتی.
+ */
+const FX_TO_OT_DOMAIN = { att_sus: 'cognitive', att_sel: 'cognitive', wm: 'auditory', inh: 'cognitive', flex: 'cognitive', ps: 'cognitive' };
+function rehabPriorityDomains(fx) {
+  if (!fx?.payload) return [];
+  const weak = [];
+  const warn = [];
+  for (const a of REHAB_FX_AREAS) {
+    const band = fx.payload[`fx_${a.key}_band`]?.value;
+    const dom = FX_TO_OT_DOMAIN[a.key];
+    if (band === 'ضعف آشکار') weak.push(dom);
+    else if (band === 'مرزی') warn.push(dom);
+  }
+  return [...new Set([...weak, ...warn])].slice(0, 2);
 }
 
 /** مودال میکروی ثبت — شش عدد + توالی داستان + سطح راهنمای هر حیطه + مشاهده → POST مسیر اختصاصی */
@@ -1606,6 +1626,7 @@ export async function renderClinicalTab(box, { student }) {
     let typesById = new Map(); // — کلید → تعریف نوع (فرم‌های نتایج/وکسلر/توانبخشی)
     let gates = null; // — گیت‌های شناسایی + فاز/پروتکل
     let otProfile = null; // — پروفایل چک‌لیست ۷ حیطه‌ای (فقط MODE_OT واکشی می‌شود — m136)
+    let otProgress = null; // — پیشرفت جلسه‌به‌جلسه (m162 — فقط MODE_OT واکشی می‌شود)
     let skillsMode = SKILL_MODE_SLD; // — حالت مرحلهٔ ۴؛ درست زیر از گیت‌ها/مسیر حل می‌شود
     let events = []; // — پاسخ واحد /case-events؛ ردیف‌های مراحل ۱/۲/۴ از همین می‌آید (GET رشد نمی‌کند)
     let plan = null; // — پلن پیشنهادی چک‌لیست (T3/m147) — کارت مرحلهٔ وکسلر
@@ -1624,7 +1645,13 @@ export async function renderClinicalTab(box, { student }) {
       // قاعدهٔ قبلی واکشی در فاز شناسایی برای «همه» true بود → ریشهٔ باگ «چک‌لیست توانبخشی برای همه».
       skillsMode = resolveSkillsMode({ gates, student });
       if (skillsMode === SKILL_MODE_OT) {
-        otProfile = await api.get(`/api/students/${student.id}/ot/profile`).then((r) => r.data).catch(() => null);
+        // m162 — پروفایل + پیشرفت جلسه‌به‌جلسه هم‌زمان واکشی می‌شوند (دو GET موازی — GET رشد نمی‌کند)
+        const [profRes, progRes] = await Promise.all([
+          api.get(`/api/students/${student.id}/ot/profile`).catch(() => null),
+          api.get(`/api/students/${student.id}/ot/progress`).catch(() => null)
+        ]);
+        otProfile = profRes?.data ?? null;
+        otProgress = progRes?.data ?? null;
       }
       // T4 (m148): فهرست کامل نوع‌ها برای نگاشت تاریخچه (نسخهٔ ۲ قدیمی هم رندر شود) —
       // ولی ورودی جدید فقط فرم فعال نسخهٔ ۳ را باز می‌کند (anamnesisTypeId با active=true).
@@ -1904,9 +1931,28 @@ export async function renderClinicalTab(box, { student }) {
     );
 
     // ── کارت چک‌لیست مهارتی مرحلهٔ ۴ — فقط در حالت OT سوار می‌شود (m136 رفع باگ: منحصر به مسیر/پروتکل OT) ──
-    // مصرف‌کنندهٔ otChecklistCard در کل فرانت همین‌جاست؛ ot-checklist.js دست‌نخورده ماند.
+    // m162 — فلوی مسیرآگاه:
+    //  · فاز شناسایی: کارت در مرحلهٔ ۴ (زیر خط پایهٔ ارزیابی عملکردی) می‌ماند — ترتیب «ارزیابی اول، چک‌لیست دوم»؛
+    //  · فاز مداخله (rehab/mental_ot): کارت زندهٔ ثبت جلسه + پنل پیشرفت به مرحلهٔ مداخله منتقل می‌شوند —
+    //    کار درمانی جلسه‌به‌جلسه همان‌جا انجام می‌شود، نه در آرشیو مراحل شناسایی.
+    const otInIntervention = phase === 'intervention' && (protocol === 'rehab' || protocol === 'mental_ot');
+    const otProtocolLabel = (protocol === 'rehab' || (!protocol && student.pathway === 'rehab'))
+      ? 'توانبخشی ذهنی-جسمی'
+      : 'کاردرمانی ذهنی';
+    // m162 — اولویت‌های حیطه‌ای از خط پایهٔ عملکردی (فقط توانبخشی)
+    const otPriorityDomains = isRehabCase
+      ? rehabPriorityDomains(rehabFxEventOf(events, typesById))
+      : [];
     const otCard = skillsMode === SKILL_MODE_OT && otProfile
-      ? otChecklistCard({ student, profile: otProfile, canDecide, refresh, scrollTarget: true })
+      ? otChecklistCard({
+          student, profile: otProfile, canDecide, refresh,
+          scrollTarget: !otInIntervention,
+          protocolLabel: otProtocolLabel,
+          priorityDomains: otPriorityDomains
+        })
+      : null;
+    const otProgressNode = skillsMode === SKILL_MODE_OT && otInIntervention
+      ? otProgressPanel({ progress: otProgress, protocolLabel: otProtocolLabel })
       : null;
 
     // ── بدنهٔ هر مرحله (§3.1–3.6) ──
@@ -1975,7 +2021,9 @@ export async function renderClinicalTab(box, { student }) {
           if (isRehabCase) {
             body.push(rehabFxSection({ student, events, typesById, canDecide, refresh }));
           }
-          if (otCard) body.push(otCard);
+          // m162 — فاز مداخله: کارت زندهٔ پایش به مرحلهٔ مداخله منتقل شده — این‌جا فقط نشانگر می‌ماند
+          if (otCard && !otInIntervention) body.push(otCard);
+          else if (otInIntervention) body.push(el('div', { class: 'cell-sub' }, icon('clipboard', 13), ' ', SM.protocol.monitoringMoved));
           if (!otCard && !isRehabCase && !g?.detail) body.push(el('div', { class: 'cell-sub' }, SM.skills.emptyHint));
           body.push(seenChipsBlock(insights)); // تنها جای چیپ‌های «چه فرم‌هایی آمده» در مرحلهٔ ۴
           if (!g?.done) {
@@ -2009,12 +2057,15 @@ export async function renderClinicalTab(box, { student }) {
         const body = [];
         if (!protocol) body.push(el('div', { class: 'cell-sub' }, SM.protocol.lockedNote));
         if (quickStart) body.push(quickStart);
+        // m162 — پنل پیشرفت جلسه‌به‌جلسه + کارت زندهٔ ثبت جلسه — قلب فرایند مداخلهٔ OT/توانبخشی
+        if (otInIntervention && otProgressNode) body.push(otProgressNode);
+        if (otInIntervention && otCard) body.push(otCard);
         body.push(pathsSection);
         if (protocol) {
           const strip = protocolStrip(protoCardNode);
           if (strip) body.push(strip);
-          // پیوند مرحلهٔ ۴ — پروتکل‌های OT + توانبخشی (m161: rehab هم پایش مهارتی مرحلهٔ ۴ دارد)
-          if (protocol === 'mental_ot' || protocol === 'rehab') {
+          // پیوند پایش — فقط وقتی کارت زنده در همین بدنه نیست (فال‌بک)
+          if ((protocol === 'mental_ot' || protocol === 'rehab') && !otCard) {
             body.push(el('div', { class: 'cell-sub' }, icon('clipboard', 13), ' ', SM.protocol.monitoringLink));
           }
         }
