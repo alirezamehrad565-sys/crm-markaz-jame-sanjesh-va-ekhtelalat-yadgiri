@@ -1,10 +1,3 @@
-/**
- * تست‌های e2e — advanced-report
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-advanced-report.test.ts — تحلیل پیشرفته — RBAC، شکل پاسخ، قیف لیست انتظار
-// (با مسیر واقعی admitted از audit)، پوشش ارزیابی، گزارش جلسه، پیگیری، کمیسیون
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, Api, asRole, createStudent, apptBody, ALI_ID } from '../../test/harness';
 
@@ -69,11 +62,9 @@ describe('محاسبات با دادهٔ واقعی', () => {
     const t = await asRole(A, 'therapist'); // خواندن لیست با درمانگرِ صاحب برنامه (: دفتر هم مجاز است)
     const st = await createStudent(m);
 
-    // دو نوبت در همان هفتهٔ ۱۴۰۵/۰۷ (میلادی اکتبر ۲۰۲۶) — ۰۶:۰۰Z = ۰۹:۳۰ تهران
     await m.post('/api/appointments', apptBody(ALI_ID, '2026-10-03T06:00:00.000Z', 45, [st.id]));
     await m.post('/api/appointments', apptBody(ALI_ID, '2026-10-05T06:00:00.000Z', 45, [st.id]));
 
-    // گزارش جلسه روی نوبت اول (per-student)
     const appts = dataOf<{ id: string; students: { studentId: string }[] }[]>(
       await t.get(`/api/appointments?from=2026-10-01T00:00:00.000Z&to=2026-10-10T23:59:59.999Z`)
     );
@@ -101,9 +92,7 @@ describe('محاسبات با دادهٔ واقعی', () => {
     const t = await asRole(A, 'therapist'); // خواندن لیست با درمانگرِ صاحب برنامه (: دفتر هم مجاز است)
     const st = await createStudent(m);
 
-    // متقاضی متصل با پرونده
     await m.post(`/api/students/${st.id}/wait-status`, { awaiting: true, source: 'school', priority: 'normal' });
-    // نوبت + حضور «حاضر» → پذیرش خودکار از ناظر حضور
     await m.post('/api/appointments', apptBody(ALI_ID, '2026-10-06T06:00:00.000Z', 45, [st.id]));
     const appts = dataOf<{ id: string; students: { id: string }[] }[]>(
       await t.get(`/api/appointments?from=2026-10-01T00:00:00.000Z&to=2026-10-10T23:59:59.999Z`)
@@ -112,7 +101,6 @@ describe('محاسبات با دادهٔ واقعی', () => {
     if (!appt) throw new Error('نوبت با دانش‌آموز پیدا نشد');
     await m.patch(`/api/attendance/${appt.id}/${st.id}`, { status: 'present' });
 
-    // یک رد متقاضی بدون پرونده
     const wl = await m.post('/api/waitlist', {
       first_name: 'متقاضی',
       last_name: 'ریجکت‌شده',
@@ -127,7 +115,6 @@ describe('محاسبات با دادهٔ واقعی', () => {
     }>(await m.get(`/api/reports/advanced?from=${FROM}&to=${TO}`));
     expect(adv.waitlist.admitted).toBeGreaterThanOrEqual(1);
     expect(adv.waitlist.rejected).toBeGreaterThanOrEqual(1);
-    // پذیرش از مسیر ناظر حضور audit «waitlist.admitted» می‌نویسد → میانگین قابل محاسبه
     expect(adv.waitlist.avgWaitDays).not.toBeNull();
     expect(adv.waitlist.conversionRate).not.toBeNull();
     expect(adv.waitlist.conversionRate).toBeGreaterThan(0);
@@ -137,7 +124,6 @@ describe('محاسبات با دادهٔ واقعی', () => {
     const A = createTestApp();
     const m = await asRole(A, 'manager');
     const st = await createStudent(m);
-    // ماژول کمیسیون از کد قطع شد؛ KPI تحلیل همچنان دادهٔ تاریخی جدول‌ها را می‌خواند
     A.sql
       .prepare(
         `INSERT INTO committee_meetings (id, title, meeting_date, status, created_by, created_at, updated_at)

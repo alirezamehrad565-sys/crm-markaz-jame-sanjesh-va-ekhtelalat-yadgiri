@@ -1,15 +1,8 @@
-/**
- * تست‌های واحد — time-
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// time-.test.ts — تبدیل شمسی→میلادی (jalaliToGregorianYmd) — مبنای «ابتدای سال شمسی» در شاخص سنجش داشبورد
-
 import { describe, it, expect } from 'vitest';
 import { jalaliToGregorianYmd, toJalaliParts } from '../time';
 
 describe('jalaliToGregorianYmd', () => {
   it('۱ فروردین سال‌های شناخته‌شده به میلادی درست تبدیل می‌شود', () => {
-    // نوروز ۱۴۰۳ = 2024-03-20 (سال کبیسه)، نوروز ۱۴۰۴ = 2025-03-21، نوروز ۱۴۰۵ = 2026-03-21
     expect(jalaliToGregorianYmd(1403, 1, 1)).toBe('2024-03-20');
     expect(jalaliToGregorianYmd(1404, 1, 1)).toBe('2025-03-21');
     expect(jalaliToGregorianYmd(1405, 1, 1)).toBe('2026-03-21');

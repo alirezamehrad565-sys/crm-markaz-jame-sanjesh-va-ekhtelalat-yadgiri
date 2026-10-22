@@ -1,15 +1,3 @@
--- مایگریشن اسکیمای D1 — درخواست مدارک از خانواده با بله (m151 — T2)
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- ============================================================
--- — فاز ۱ طرح واحد ارتقا: «درخواست مدارک» → بله → عکس/فایل خانواده → پرونده
--- جریان: درمانگر روی پروندهٔ دانش‌آموز درخواست می‌سازد → پیام بله به چت‌های
--- خانوادهٔ متصل (bot_links + prefs — همان الگوی اعلان‌های موجود) → خانواده
--- عکس/فایل می‌فرستد → webhook رسانه → دانلود با MediaFetcher → ObjectStore
--- (همان انبار بانک تمرین: D1 تکه‌تکه / R2) → رکورد student_received_docs
--- قراردادها: بدون CHECK (الگوی D7)، حذف نرم ندارد، status: sent/received/closed؛
--- رکورد مدارک مستقل از درخواست هم ممکن نیست — فقط با درخواست باز ضبط می‌شود.
--- ============================================================
-
 CREATE TABLE IF NOT EXISTS document_requests (
   id TEXT PRIMARY KEY,
   student_id TEXT NOT NULL REFERENCES students(id),
@@ -27,7 +15,6 @@ CREATE TABLE IF NOT EXISTS document_requests (
 CREATE INDEX IF NOT EXISTS idx_document_requests_student ON document_requests(student_id, sent_at);
 CREATE INDEX IF NOT EXISTS idx_document_requests_status ON document_requests(status);
 
--- مدارک دریافتی از بله — هر پیام رسانه‌ای خانواده یک ردیف (چند عکس مجاز)
 CREATE TABLE IF NOT EXISTS student_received_docs (
   id TEXT PRIMARY KEY,
   student_id TEXT NOT NULL REFERENCES students(id),

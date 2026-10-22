@@ -1,20 +1,4 @@
 #!/usr/bin/env node
-// ─────────────────────────────────────────────────────────────────────────────
-// seed-classes-teachers.mjs — seed کلاس‌ها (زیرمجموعهٔ هر مدرسه) با معلم
-//
-//   node scripts/seed-classes-teachers.mjs [--yes] [--dry-run]
-//        [--base https://<دامنه-استقرار-شما>]
-//        [--user <شناسهٔ کاربری>] [--pass <رمز>] [--code CODE] (فقط یک مدرسه)
-//
-// امن‌سازی: شناسه/رمز پیش‌فرض ندارد — فقط از آرگومان یا متغیر محیطی خوانده می‌شود
-//
-// امن‌ها:
-//   • فقط POST /api/classes روی مدارس فعال — هیچ ویرایش/حذفی روی دادهٔ موجود
-//   • idempotent: اگر کلاسی با همان نام در همان مدرسه باشد، رد می‌شود
-//   • نام معلم متناسب با جنسیت مدرسه (دخترانه→زن، پسرانه→مرد، مختلط→متناوب)
-//   • تلفن‌ها یکتا و قالب 09xxxxxxxxx؛ چند کلاس عمداً بدون معلم/تلفن برای تنوع تست
-//   • --dry-run هیچ درخواستی نمی‌زند؛ نقشهٔ کامل را نشان می‌دهد
-// ─────────────────────────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -34,15 +18,12 @@ if (!USER || !PASS) {
   process.exit(1);
 }
 
-// ─── ساختار کلاس‌ها: دبستان — هر پایه یک «الف»؛ برای بعضی مدارس «ب» پایه‌های ۱-۳ ───
 const GRADES = ['اول', 'دوم', 'سوم', 'چهارم', 'پنجم', 'ششم'];
 
-// ─── مخزن نام‌های معلم (ایرانی واقع‌گرایانه با طعم محلی) ───
 const FEMALE_FIRST = ['مریم', 'زهرا', 'فاطمه', 'لیلا', 'نرگس', 'سارا', 'الهام', 'شیرین', 'پریسا', 'نازنین', 'مینا', 'سمانه', 'رقیه', 'فرشته', 'سمیرا', 'مهناز', 'ژاله', 'شیما', 'فرزانه', 'اعظم', 'خدیجه', 'بتول', 'ثریا', 'پروین', 'شهناز', 'طاهره', 'عذرا', 'فرحناز', 'گلناز', 'مهری', 'نیلوفر', 'هانیه', 'یاسمن', 'آتنا', 'درسا', 'رویا', 'صدف', 'غزاله', 'بهاره', 'نسرین'];
 const MALE_FIRST = ['علی', 'محمد', 'حسین', 'رضا', 'مهدی', 'امیر', 'سعید', 'حمید', 'کوروش', 'آرش', 'بابک', 'سامان', 'فرهاد', 'مسعود', 'جواد', 'احمد', 'محمود', 'یاسر', 'میلاد', 'بهروز', 'سیاوش', 'کاوه', 'هومن', 'پویا', 'رامین', 'سینا', 'شاهین', 'وحید', 'غلام', 'عبدالله', 'جمال', 'رسول', 'اکبر', 'ناصر', 'داود', 'هادی', 'مصطفی', 'یوسف', 'مهرداد', 'امید'];
 const LAST = ['صادری', 'دهنوی', 'کوهنجانی', 'مهارلویی', 'تزنگی', 'زارعی', 'لطفی', 'مومنی', 'اکبری', 'فلاحی', 'باهنری', 'شفیعی', 'منتظری', 'کمالی', 'کریمی', 'حسینی', 'رجبی', 'صالحی', 'عسکری', 'مدنی', 'مظلومی', 'مفتاحی', 'حیدری', 'نیکبخت', 'نصیری', 'جاوید', 'نادری', 'حیدرپوری', 'جلالی‌فر', 'جهادی', 'محمودی', 'شهبازی', 'پناهی', 'نوروزی', 'رضایی', 'سلیمی', 'خرده‌پا', 'ابراهیم‌زاده', 'ثابت', 'روحانی', 'صادقی', 'هاشمی', 'جلوداری', 'خانی', 'امینی'];
 
-// ─── LCG قطعی (برای بازتولید‌پذیری seed) ───
 function hashStr(s) {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
@@ -53,7 +34,6 @@ function lcg(seed) {
   return () => { st = (Math.imul(st, 1664525) + 1013904223) >>> 0; return st / 4294967296; };
 }
 
-// ─── تولیدکنندهٔ نام/تلفن یکتا ───
 const usedNames = new Set();
 const usedPhones = new Set();
 function pickTeacher(gender, rnd, seq) {
@@ -79,7 +59,6 @@ function pickPhone(rnd) {
   return undefined;
 }
 
-// ─── API helpers ───
 async function api(path, { method = 'GET', token, body } = {}) {
   const res = await fetch(BASE + path, {
     method,
@@ -97,7 +76,6 @@ console.log(line);
 console.log('🌱 seed-classes-teachers — کلاس‌های زیرمجموعهٔ مدارس + معلم روی', BASE);
 console.log(line);
 
-// ─── ۱) ورود ───
 const login = await api('/api/auth/login', { method: 'POST', body: { username: USER, password: PASS } });
 if (login.status !== 200 || !login.json?.data?.token) {
   console.error('✘ ورود ناموفق:', login.status, login.json?.error?.message || login.text.slice(0, 200));
@@ -106,25 +84,21 @@ if (login.status !== 200 || !login.json?.data?.token) {
 const token = login.json.data.token;
 console.log(`   ورود: ✓ (${login.json.data.staff.fullName} — ${login.json.data.staff.role})`);
 
-// ─── ۲) مدارس فعال ───
 const schoolsRes = await api('/api/schools', { token });
 if (schoolsRes.status !== 200) { console.error('✘ گرفتن مدارس ناموفق:', schoolsRes.status); process.exit(1); }
 const schools = schoolsRes.json.data.filter((s) => s.active && (!ONLY || s.code === ONLY));
 if (!schools.length) { console.error('✘ مدرسه‌ای یافت نشد' + (ONLY ? ` با کد ${ONLY}` : '')); process.exit(1); }
 console.log(`   مدارس فعال: ${schools.length}` + (ONLY ? ` (فقط کد ${ONLY})` : ''));
 
-// ─── ۳) نقشهٔ کلاس‌ها (قطعی — بازتولید‌پذیر) ───
 let seq = 0;
 const plan = [];
 for (let si = 0; si < schools.length; si++) {
   const s = schools[si];
   const rnd = lcg(hashStr(s.code || s.id));
   const rows = GRADES.map((g, gi) => ({ name: `${g} الف`, gi }));
-  // هر پنجمین مدرسه: «ب» موازی برای پایه‌های ۱-۳ (تنوع تست: چند شعبه در یک پایه)
   if (si % 5 === 2) for (let gi = 0; gi < 3; gi++) rows.push({ name: `${GRADES[gi]} ب`, gi });
   for (const r of rows) {
     seq++;
-    // ~۵٪ بدون معلم (تست جریان «افزودن معلم بعداً»)؛ بقیه با معلم؛ ~۱۰٪ بی‌تلفن
     const noTeacher = seq % 19 === 0;
     const gt = s.genderType ?? s.gender_type; // API camelCase می‌دهد
     const gender = gt === 'female' ? 'female' : gt === 'male' ? 'male' : (r.gi + si) % 2 ? 'female' : 'male';
@@ -153,12 +127,10 @@ if (DRY) {
   process.exit(0);
 }
 
-// ─── ۴) اجرای idempotent ───
 let created = 0, skipped = 0, failed = 0;
 const errors = [];
 const perSchool = new Map();
 for (const p of plan) {
-  // موجودی کلاس‌های این مدرسه (بدون پارامتر active = همه — پیش‌نیاز: seed مدارس!)
   if (!perSchool.has(p.school.id)) {
     const ex = await api(`/api/classes?school_id=${p.school.id}`, { token });
     perSchool.set(p.school.id, new Set((ex.json?.data || []).map((c) => c.name)));

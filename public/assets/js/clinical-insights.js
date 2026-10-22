@@ -1,21 +1,3 @@
-/**
- * مسیر بالینی — قالب‌ساز و جلسات مداخله
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// clinical-insights.js — تب «تفسیر بالینی» پروفایل دانش‌آموز — بازسازی m135 (آکاردئون ۶ مرحله‌ای) + m136
-// ساختار (UX-SPEC): نوار باریک (clxacc-toolbar) + فلوی عمودی شش <details> (clxacc-flow) + یک disclaimer.
-//   ۱ شرح‌حال → ۲ چک‌لیست‌های خانواده و معلم (+ شک بالینی) → ۳ وکسلر ۴ (افشای تدریجی؛ شش آکاردئون تودرتو
-//   همیشه‌بسته) → ۴ ارزیابی عملکردی → ۵ جمع‌بندی تشخیصی (+ پیوند با سایر اطلاعات) → ۶ مداخله (m165 — میزکار چک‌لیست مهارتی؛ تغییر قالب در انتهای تب).
-// m165 fix — خانهٔ چک‌لیست مهارتی برای پرونده‌های OT (توانبخشی/کاردرمانی ذهنی) همیشه تب مداخله است —
-//   حتی در فاز شناسایی (درخواست کاربر: «باید این چک‌لیست رو از بخش ارزیابی ببری تو مداخله»). مرحلهٔ ۴ فقط خط پایه + نشانگر.
-// یک چیدمان برای هر دو فاز (P1): فاز فقط گام بازِ پیش‌فرض، بج‌ها و CTAها را عوض می‌کند.
-// m136: (۱) مرحلهٔ ۴ حالت‌آگاه شد — ماتریس resolveSkillsMode؛ چک‌لیست مهارتی فقط برای مسیر/پروتکل OT
-//   (رفع باگ «چک‌لیست توانبخشی برای همه»)؛ (۲) سربرگ‌ها ردیف ریزآمار .clxacc__stats گرفتند — صفر GET تازه.
-// قرارداد mount دست‌نخورده: renderClinicalTab(box, {student}) از views/student-profile.js.
-// بودجهٔ GET ثابت (§8.1): ۳ موازی + ترتیبی؛ پاسخ واحد /case-events بین مراحل ۱/۲/۴ مشترک است.
-// خط قرمز پلن §۱: خروجی موتور همیشه «غربالگری/فرضیه» است — «هدف درمانی نهایی» فقط با تأیید
-// درمانگر روی مسیر مداخله (active) ثبت می‌شود؛ متن موتور هرگز برای خانواده/معلم ارسال نمی‌شود.
-
 import { api } from './api.js';
 import { el, icon, confirmModal, formModal, toast, toastError, emptyState, loadingState } from './ui.js';
 import { fa, formatJalaliDateTime, formatStoredJalaliNumeric, tehranTodayYmd, toJalali, gradeLabel } from './format.js';
@@ -28,7 +10,6 @@ import { pathwayChip, canEditPathway, openPathwayModal } from './session-type.js
 import { otChecklistCard, otProgressPanel, protocolChip, protocolCard, NEEDS_KEY, OT_SESSION_KEY } from './ot-checklist.js'; // — فلو دوفازی شناسایی→مداخله (openNeedsModal در کارت جمع‌بندی) + پنل پیشرفت جلسه‌به‌جلسه (m162)
 import { synthesisSection, fetchFormulation } from './case-formulation.js'; // — کارت واحد جمع‌بندی تشخیصی (m134)
 import { wechslerProfileBlock, wechslerSourceBadge, connectionsSection, WEAKEST_FA } from './wechsler-profile.js'; // — نیم‌رخ وکسلر (m133+m134) + «پیوند با سایر اطلاعات» (m135 → مرحلهٔ ۵)
-// محتوای ثابت (کلیدهای ابزار، برچسب‌ها، متن مراحل) از ماژول محتوا
 import {
   ANAMNESIS_KEY,
   ANAMNESIS_LEGACY_KEY,
@@ -58,7 +39,6 @@ import {
   PLAN_META
 } from './clinical-content.js';
 
-/** آیا کاربرِ فعلی حق تصمیم دارد؟ (پلن §۷ — مدیر یا درمانگرِ مسئول؛ منشی فقط مشاهده) */
 function canDecideFor(student) {
   const u = session.user;
   if (!u) return false;
@@ -66,41 +46,22 @@ function canDecideFor(student) {
   return u.role === 'therapist' && Boolean(student.ownerStaffId) && student.ownerStaffId === u.staffId;
 }
 
-// ───────── T6 (m148-b) — هم‌گرایی منابع: فقط سه حالت خوانا + یک جملهٔ دلالت (اصل ۳ طرح: پشت‌پردهٔ نامرئی) ─────────
-// هیچ وزن/امتیازی نمایش داده نمی‌شود — فقط برچسب حالت و جملهٔ دلالت از موتور (insights.convergence).
 const CONV_BADGE = { 'هم‌گرا': 'badge--success', 'تنها': 'badge--info', 'واگرا': 'badge--warning' };
 const CONV_ICON = { 'هم‌گرا': 'check', 'تنها': 'eye', 'واگرا': 'alert' };
 
-/** آیتم هم‌گرایی یک هدف رتبه‌خورده — از کلید افزودنی convergence پاسخ موتور */
 function convergenceOf(insights, targetKey) {
   return (insights?.convergence ?? []).find((c) => c.targetKey === targetKey) ?? null;
 }
 
-// ───────── m136 — حالت‌های مرحلهٔ ۴ «ارزیابی عملکردی» ─────────
-// رفع باگ: چک‌لیست مهارتی توانبخشی برای «همه» رندر می‌شد چون قاعدهٔ قدیمی واکشی OT در فاز شناسایی همیشه true بود.
-
-/** چک‌لیست ۷ حیطه‌ای مهارتی — ابزار مسیر توانبخشی/کاردرمانی ذهنی */
 const SKILL_MODE_OT = 'ot';
-/** چک‌لیست‌های خواندن/نوشتن/ریاضی + پروب‌های عملکرد — ابزار مسیر یادگیری */
 const SKILL_MODE_SLD = 'sld';
 
-/**
- * ماتریس حالت مرحلهٔ ۴ — تک‌منبع شاخه‌زنی (واکشی ot/profile + glance + CTA + بدنه):
- *   فاز مداخله + protocol ∈ {rehab, mental_ot}        → MODE_OT
- *   فاز مداخله + protocol ∈ {learning, slow_learner}  → MODE_SLD
- *   فاز شناسایی + student.pathway === 'rehab'         → MODE_OT (چک‌لیست مهارتی = غربالگری توانبخشی)
- *   فاز شناسایی + بقیه (null = پیش‌فرض یادگیری، learning، slow_learner) → MODE_SLD
- *   دفاعی: پاسخ /clinical-gates نیامده → مثل شناسایی از student.pathway (protocol null می‌ماند).
- * منبع مسیر: student.pathway ستون پذیرش است (constants.ts:70-72؛ null = مسیر یادگیری) —
- * فیلد pathway قرارداد پاسخ گیت‌ها نیست؛ شاخه‌زنی هرگز آن را از پاسخ گیت‌ها نمی‌خواند.
- */
 function resolveSkillsMode({ gates, student }) {
   const proto = gates?.protocol ?? null;
   if (proto) return (proto === 'rehab' || proto === 'mental_ot') ? SKILL_MODE_OT : SKILL_MODE_SLD;
   return student?.pathway === 'rehab' ? SKILL_MODE_OT : SKILL_MODE_SLD;
 }
 
-/** حذف تکرار متنی — کلید: متن نرمال‌شده */
 function dedupeTexts(items) {
   const seen = new Set();
   const out = [];
@@ -115,18 +76,11 @@ function dedupeTexts(items) {
   return out;
 }
 
-/** چیپ کوچک شمارشی برای خلاصهٔ ملاک‌ها */
 function countChip(label, n, cls) {
   if (!n) return null;
   return el('span', { class: `badge ${cls}`, title: `${label}: ${fa(n)}` }, `${label} ${fa(n)}`);
 }
 
-// ───────── m136 — ریزآمار سربرگ آکاردئون‌ها (ردیف .clxacc__stats زیر glance) ─────────
-
-/**
- * یک آمار ریز سربرگ — برچسب + مقدار (اعداد باید پیش‌فرض fa() باشند).
- * value خالی → null (قاعدهٔ «آمار خالی رندر نمی‌شود»)؛ warn → رنگ هشدار (مثلاً سیگنال سطح «محتمل»).
- */
 function statItem(label, value, { warn = false, hint = null } = {}) {
   if (value == null || value === '') return null;
   return el('span', { class: `clxacc__stat${warn ? ' clxacc__stat--warn' : ''}`, ...(hint ? { title: hint } : {}) },
@@ -134,12 +88,10 @@ function statItem(label, value, { warn = false, hint = null } = {}) {
     el('b', {}, value));
 }
 
-/** آمار شمارشی — صفر رندر نمی‌شود (سربرگ شلوغ نشود؛ glance حالت صفر را می‌گوید) */
 function countStat(label, n, opts) {
   return n > 0 ? statItem(label, fa(n), opts) : null;
 }
 
-/** — سن از تاریخ تولد (شمسی ذخیره‌شده یا میلادی) — «۹ سال و ۴ ماه» */
 function ageLineFromBirthDate(birthDate) {
   if (!birthDate) return null;
   const s = String(birthDate).replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).trim();
@@ -148,7 +100,6 @@ function ageLineFromBirthDate(birthDate) {
   if (m && Number(m[1]) >= 1200 && Number(m[1]) <= 1500) {
     [jy, jm, jd] = [Number(m[1]), Number(m[2]), Number(m[3])];
   } else if (m && Number(m[1]) > 1700) {
-    // میلادی ذخیره‌شدهٔ فرم → شمسی
     const j = toJalali(Number(m[1]), Number(m[2]), Number(m[3]));
     [jy, jm, jd] = [j.jy, j.jm, j.jd];
   } else {
@@ -164,14 +115,12 @@ function ageLineFromBirthDate(birthDate) {
   return `${fa(years)} سال و ${fa(months)} ماه`;
 }
 
-/** لیست آیتم‌دار با آیکون */
 function iconList(items, iconKey, toneClass) {
   return el('ul', { class: 'clx-list' },
     items.map((t) => el('li', {}, icon(iconKey, 14), el('span', {}, t)))
   );
 }
 
-/** کپی متنی در کلیپ‌بورد با fallback */
 async function copyText(text, okMsg) {
   try {
     if (navigator.clipboard?.writeText) {
@@ -189,9 +138,6 @@ async function copyText(text, okMsg) {
   }
 }
 
-// ───────── m135 — سازندهٔ فلوی آکاردئونی (clxacc) — جایگزین کارت‌های همیشه‌باز (§3/§5) ─────────
-
-/** کلاس حالت <details> — ماتریس §5 */
 function stateClassOf(state) {
   if (state === 'done' || state === 'needsDone') return 'is-done';
   if (state === 'current') return 'is-current';
@@ -199,7 +145,6 @@ function stateClassOf(state) {
   return 'is-todo';
 }
 
-/** نشان وضعیت سربرگ — واژگان تک‌منبع STAGE2_META.badges (بازنویسی stageStatusBadge قدیم) */
 function clxaccStateBadge(state) {
   const B = STAGE2_META.badges;
   switch (state) {
@@ -212,12 +157,6 @@ function clxaccStateBadge(state) {
   }
 }
 
-/**
- * سازندهٔ یک بخش آکاردئون (سربرگ summary + بدنه) — آناتومی §3.
- * stats: ردیف ریزآمار m136 داخل heading، زیر glance — فقط دادهٔ ازپیش‌گرفته؛ آمار خالی/صفرِ بی‌معنا رندر نمی‌شود.
- * ویژگی open هنگام ساخت ست می‌شود (بدون فلش پس از paint — §8.3)؛ aria-expanded سربرگ آینهٔ open است
- * و با شنوندهٔ واگذارشدهٔ toggle هم‌گام می‌ماند (§8.4).
- */
 function clxaccSection({ key, num, title, glance, stats = [], chips = [], state = 'todo', cta = null, body = [], open = false }) {
   const statNodes = (stats ?? []).filter(Boolean);
   const summary = el('summary', { class: 'clxacc__head', 'aria-expanded': open ? 'true' : 'false' },
@@ -239,8 +178,6 @@ function clxaccSection({ key, num, title, glance, stats = [], chips = [], state 
     el('div', { class: 'clxacc__body' }, ...body.filter(Boolean)));
 }
 
-// ───────── ماندگاری وضعیت باز/بسته (§5 — فقط idها؛ هرگز محتوای بالینی؛ هرگز localStorage) ─────────
-
 const openStateKey = (studentId) => `clxacc.open:${studentId}`;
 
 function loadOpenIds(studentId) {
@@ -254,19 +191,11 @@ function saveOpenIds(studentId, ids) {
   try { sessionStorage.setItem(openStateKey(studentId), JSON.stringify(ids)); } catch { /* حالت خصوصی مرورگر */ }
 }
 
-/** آینه‌کردن aria-expanded سربرگ با وضعیت details (§8.4 — برای صفحه‌خوان‌های قدیمی) */
 function syncAria(details) {
   const s = details.querySelector(':scope > summary');
   if (s) s.setAttribute('aria-expanded', details.open ? 'true' : 'false');
 }
 
-// ───────── بلوک تصمیم شک بالینی — بدنهٔ مرحلهٔ چک‌لیست‌ها (بدنه تغییر نکرده — MOVE از استپر حذف‌شده) ─────────
-
-/**
- * — بلوک «نقطهٔ تصمیم شک بالینی» — بدنهٔ مرحلهٔ «چک‌لیست‌های خانواده و معلم»:
- * سیگنال چک‌لیست‌های تازه + تصمیم ثبت‌شدهٔ درمانگر (فرم ce-clinical-suspicion-v1).
- * m156 — فقط با داده رندر می‌شود: بدون سیگنال و بدون تصمیم ← null (بدون بلوک خالی «بدون تصمیم»).
- */
 function suspicionBlock({ student, gates, typesById, canDecide, refresh }) {
   const sus = gates.suspicion ?? { signals: [], decided: false, decidedAt: null, decidedSummary: null };
   const hasContent = (sus.signals ?? []).length > 0 || sus.decided;
@@ -314,17 +243,6 @@ function suspicionBlock({ student, gates, typesById, canDecide, refresh }) {
   );
 }
 
-// ───────── کارت «ابزارهای پیشنهادی گام بعد» — پلن چک‌لیست (T3/m147) — بدنهٔ مرحلهٔ وکسلر ─────────
-
-/**
- * کارت پلن پیشنهادی چک‌لیست — بعد از نیم‌رخ وکسلر (داخل بدنهٔ مرحلهٔ وکسلر):
- * ۱) پلن با اولویت و دلیل هر آیتم (reasonFa از موتور — بدون جعبهٔ سیاه).
- * ۲) «تأیید یک‌کلیکی» = همان جریان موجود ارسال فرم (openCaseEventForm با فقط‌کلیدهای پلن)
- *   با پیش‌انتخاب ابزارهای پلن؛ مسیرهای بله/معلم داخل همان انتخابگر باز می‌شوند.
- * ۳) «ویرایش/انتخاب دستی» = کتابخانهٔ کامل فرم‌ها — برگشت به دستی همیشه ممکن (بدون قفل).
- * ۴) خط قرمز (مسیر ID/TBI) روی همهٔ حالت‌ها — m156: پانویس انکار حذف شد.
- * فقط توکن/کلاس m144 موجود؛ بدون رنگ/فونت تازه؛ RTL.
- */
 function checklistPlanCard({ student, plan, typesById, canDecide, refresh }) {
   if (!plan) return null;
   const M = PLAN_META;
@@ -377,11 +295,6 @@ function checklistPlanCard({ student, plan, typesById, canDecide, refresh }) {
   );
 }
 
-// ───────── T9/m152 — چیپ غربالگری حسی (قرارداد ≤۲کلیک) — بدنهٔ مرحلهٔ شرح‌حال ─────────
-// ابزار میکروی «حساسیت حسی» — سه مجرا × سه سطح، جمع ۰..۶ (تعریف سمت سرور: ce-sensory-chip-v1).
-// گیت: آخرین شرح‌حال نسخهٔ ۳ کامل‌شده با sensory_concern «متوسط»/«زیاد» — از پاسخ مشترک
-// رویدادها (صفر GET تازه — §8.1). ثبت: مودال میکرو (کلیک ۱) + «ثبت» (کلیک ۲) → POST
-// مسیر اختصاصی /case-events/sensory-chip. پس از ثبت: نشان فقط‌خواندنی با باند ذخیره‌شده.
 const SENSORY_CHIP_KEY = 'ce-sensory-chip-v1';
 const SENSORY_CHIP_ITEMS = [
   { key: 'sound', label: 'صدا (صوت)' },
@@ -389,10 +302,8 @@ const SENSORY_CHIP_ITEMS = [
   { key: 'touch', label: 'لمس و بافت (لمس/جنس لباس/بافت غذا)' }
 ];
 const SENSORY_CHIP_LEVELS = ['بدون حساسیت', 'حساسیت جزئی', 'حساسیت آزارنده'];
-/** نگرانی حسی شرح‌حال v3 که چیپ را روشن می‌کند (قرارداد infer.ts — anam.sensory) */
 const SENSORY_CONCERN_GATE = ['متوسط', 'زیاد — نگران‌کننده'];
 
-/** نشان باند چیپ — رنگ از جدول باندهای type (ok/warn/danger → کلاس‌های موجود) */
 function sensoryBandBadge(text, color) {
   const cls = color === 'ok' ? 'badge--success'
     : color === 'warn' ? 'badge--warning'
@@ -401,10 +312,6 @@ function sensoryBandBadge(text, color) {
   return el('span', { class: `badge ${cls}` }, text);
 }
 
-/**
- * کارت چیپ حسی — null یعنی رندر نشود (بدون نگرانی حسی و بدون ثبت قبلی).
- * ثبت قبلی → نشان فقط‌خواندنی («ثبت شد — باند») در هر حالت؛ گرنه گیت شرح‌حال + اقدام.
- */
 function sensoryChipCard({ student, events, typesById, canDecide, refresh }) {
   const chipTypeId = typesById.get(SENSORY_CHIP_KEY)?.id ?? null;
   const existing = chipTypeId
@@ -425,7 +332,6 @@ function sensoryChipCard({ student, events, typesById, canDecide, refresh }) {
         existing.occurredAt ? el('div', { class: 'cell-sub' }, `ثبت: ${formatJalaliDateTime(existing.occurredAt)}`) : null));
   }
 
-  // گیت — آخرین شرح‌حال نسخهٔ ۳ کامل‌شده (پاسخ‌ها DESC مرتب‌اند — اولین = آخرین)
   const anamId = typesById.get(ANAMNESIS_KEY)?.id ?? null;
   const lastAnam = anamId
     ? (events ?? []).find((e) => e.eventTypeId === anamId && e.status === 'completed' && e.payload?.sensory_concern?.value)
@@ -437,14 +343,12 @@ function sensoryChipCard({ student, events, typesById, canDecide, refresh }) {
     el('strong', { class: 'clx-plan__title' }, icon('activity', 15), 'حساسیت حسی'),
     el('span', { class: 'badge badge--warning' }, `نگرانی شرح‌حال: ${concern}`));
 
-  // بینندهٔ بدون حق ثبت — فقط اطلاع (ثبت با مدیر/درمانگر)
   if (!canDecide) {
     return el('div', { class: 'card clx-sensory' },
       el('div', { class: 'card__body' }, head,
         el('div', { class: 'cell-sub' }, 'نگرانی حسی در شرح‌حال ثبت شده — پروفایل مشاهده‌شده توسط درمانگر ثبت می‌شود.')));
   }
 
-  // کلیک ۱ — مودال میکرو: سه ردیف × دکمه‌های سطح (پیش‌فرض «بدون حساسیت») — کلیک ۲ = ثبت
   const openChipModal = () => {
     formModal({
       title: 'چیپ غربالگری حسی — سه مشاهده، سه سطح',
@@ -473,12 +377,6 @@ function sensoryChipCard({ student, events, typesById, canDecide, refresh }) {
         el('button', { class: 'btn btn--primary btn--sm', onclick: openChipModal }, icon('zap', 14), 'ثبت مشاهدهٔ حسی'))));
 }
 
-// ───────── T10/m153 — چیپ هستهٔ خواندن (قرارداد ≤۲کلیک + پیشنهاد شرطی) — بدنهٔ مرحلهٔ مهارت‌ها ─────────
-// ابزار میکروی «هستهٔ خواندن» — پنج مؤلفه × سه سطح، جمع ۰..۱۰ (تعریف سمت سرور: ce-read-core-v1).
-// گیت: آخرین شرح‌حال نسخهٔ ۳ کامل‌شده با sld_read_concern نگران (کم/متوسط/زیاد) — از پاسخ مشترک
-// رویدادها (صفر GET تازه — §8.1). ثبت: مودال میکرو (کلیک ۱) + «ثبت» (کلیک ۲) → POST
-// مسیر اختصاصی /case-events/read-core. پس از ثبت: نشان فقط‌خواندنی + پیشنهاد شرطی گام بعد
-// (readCoreAdviceOf سمت سرور — ابزار رسمی باتری با دلیل؛ بدون برچسب تشخیصی).
 const READ_CORE_KEY = 'ce-read-core-v1';
 const READ_CORE_ITEMS = [
   { key: 'pa', label: 'آگاهی واج‌شناختی (بخشیدن و ترکیب صدا، قافیه)' },
@@ -488,10 +386,8 @@ const READ_CORE_ITEMS = [
   { key: 'comp', label: 'درک مطلب (پاسخ به پرسش‌های متن)' }
 ];
 const READ_CORE_LEVELS = ['برقرار', 'مرزی', 'ضعف آشکار'];
-/** نگرانی خواندن شرح‌حال v3 که چیپ را روشن می‌کند (قرارداد infer.ts — anam.sld_read) */
 const READ_CONCERN_GATE = ['کم', 'متوسط', 'زیاد — نگران‌کننده'];
 
-/** ردیف‌های پیشنهاد شرطی از payload (advice_1..advice_9 — ترتیب عددی) */
 function readCoreAdviceRows(payload) {
   const rows = [];
   for (let i = 1; i <= 9; i++) {
@@ -501,11 +397,6 @@ function readCoreAdviceRows(payload) {
   return rows;
 }
 
-/**
- * کارت چیپ هستهٔ خواندن — null یعنی رندر نشود (بدون نگرانی خواندن و بدون ثبت قبلی).
- * ثبت قبلی → نشان فقط‌خواندنی («ثبت شد — باند») + پیشنهاد شرطی ذخیره‌شده در هر حالت؛
- * گرنه گیت شرح‌حال + اقدام. (فقط حالت SLD مرحلهٔ ۴ — فراخوانی شرطی‌شده در bodyOf.skills)
- */
 function readCoreChipCard({ student, events, typesById, canDecide, refresh }) {
   const chipTypeId = typesById.get(READ_CORE_KEY)?.id ?? null;
   const existing = chipTypeId
@@ -532,7 +423,6 @@ function readCoreChipCard({ student, events, typesById, canDecide, refresh }) {
         existing.occurredAt ? el('div', { class: 'cell-sub' }, `ثبت: ${formatJalaliDateTime(existing.occurredAt)}`) : null));
   }
 
-  // گیت — آخرین شرح‌حال نسخهٔ ۳ کامل‌شده (پاسخ‌ها DESC مرتب‌اند — اولین = آخرین)
   const anamId = typesById.get(ANAMNESIS_KEY)?.id ?? null;
   const lastAnam = anamId
     ? (events ?? []).find((e) => e.eventTypeId === anamId && e.status === 'completed' && e.payload?.sld_read_concern?.value)
@@ -544,14 +434,12 @@ function readCoreChipCard({ student, events, typesById, canDecide, refresh }) {
     el('strong', { class: 'clx-plan__title' }, icon('book', 15), 'هستهٔ خواندن'),
     el('span', { class: 'badge badge--warning' }, `نگرانی شرح‌حال: ${concern}`));
 
-  // بینندهٔ بدون حق ثبت — فقط اطلاع (ثبت با مدیر/درمانگر)
   if (!canDecide) {
     return el('div', { class: 'card clx-readcore' },
       el('div', { class: 'card__body' }, head,
         el('div', { class: 'cell-sub' }, 'نگرانی خواندن در شرح‌حال ثبت شده — پروفایل مشاهده‌شدهٔ هستهٔ خواندن توسط درمانگر ثبت می‌شود.')));
   }
 
-  // کلیک ۱ — مودال میکرو: پنج ردیف × دکمه‌های سطح (پیش‌فرض «برقرار») — کلیک ۲ = ثبت
   const openChipModal = () => {
     formModal({
       title: 'چیپ هستهٔ خواندن — پنج مؤلفه، سه سطح',
@@ -583,10 +471,6 @@ function readCoreChipCard({ student, events, typesById, canDecide, refresh }) {
         el('button', { class: 'btn btn--primary btn--sm', onclick: openChipModal }, icon('zap', 14), 'ثبت مشاهدهٔ خواندن'))));
 }
 
-// ───────── T12/m160 — آزمون‌های عملکرد مرکزی (خواندن/نوشتن/حساب) — بدنهٔ مرحلهٔ مهارت‌ها (حالت SLD) ─────────
-// ارزیابی عملکردی = آزمونِ درمانگر در مرکز (CBM) — نه چک‌لیست خانواده/معلم (آن‌ها مرحلهٔ ۲).
-// سه حوزهٔ ثابت با فرم اختصاصی: ثبت → POST /case-events/probe {area, values} → تحلیل هنجاری
-// سمت سرور (درصد انتظار پایه + باند سه‌حالته + پرچم‌ها). پس از ثبت: نشان باند + ردیف‌های عددی.
 const PROBE_GRADE_OPTS = ['اول', 'دوم', 'سوم', 'چهارم', 'پنجم', 'ششم', 'هفتم', 'هشتم'].map((g) => ({ value: g, label: g }));
 const PROBE_SUPPORT_OPTS = ['کم', 'متوسط', 'زیاد', 'بی‌راه‌حل'].map((s) => ({ value: s, label: s }));
 const PROBE_AREAS = [
@@ -629,14 +513,12 @@ const PROBE_AREAS = [
   }
 ];
 
-/** آخرین رویداد ثبت‌شدهٔ یک حوزهٔ پروب (غیرلغوشده) — null یعنی ثبت نشده */
 function probeEventOf(area, events, typesById) {
   const typeId = typesById.get(area.typeKey)?.id ?? null;
   if (!typeId) return null;
   return (events ?? []).find((e) => e.eventTypeId === typeId && e.status !== 'cancelled') ?? null;
 }
 
-/** مودال میکروی ثبت آزمون — فیلدهای طراحی‌شدهٔ همان حوزه + POST مسیر اختصاصی */
 function openProbeModal(area, student, onDone) {
   formModal({
     title: `${area.title} — ثبت درمانگر در مرکز`,
@@ -653,11 +535,6 @@ function openProbeModal(area, student, onDone) {
   });
 }
 
-/**
- * بخش «آزمون‌های عملکرد مرکزی» — سه کارت (خواندن/نوشتن/حساب):
- * ثبت‌شده → نشان باند رنگی + ردیف‌های عددی (chip_metric_N) + هنجار مرجع + تاریخ؛
- * بدون ثبت + حق ثبت → توضیح + دکمهٔ مودال میکرو؛ بدون حق ثبت → فقط اطلاع.
- */
 function probeAssessSection({ student, events, typesById, canDecide, refresh }) {
   const cards = PROBE_AREAS.map((area) => {
     const existing = probeEventOf(area, events, typesById);
@@ -705,11 +582,6 @@ function probeAssessSection({ student, events, typesById, canDecide, refresh }) 
     el('div', { class: 'clx-probe__grid' }, ...cards));
 }
 
-// ───────── m161 — ارزیابی عملکردی توانبخشی ذهنی — بدنهٔ مرحلهٔ مهارت‌ها (حالت توانبخشی) ─────────
-// تمرکز مسیر توانبخشی ذهنی-جسمی روی «کار درمانی ذهنی» است: شش حیطهٔ شناختی پایه با دادهٔ خام
-// عددی + سطح راهنمای هر حیطه (خط پایهٔ محوشدن راهنما) — آزمونِ درمانگر در مرکز، حین جلسهٔ اول.
-// ملاک هر حیطه = ملاک کمی مهارت متناظر در چک‌لیست ۷ حیطه‌ای (ot_skills) — ارزیابی پایه و
-// ماتریس مداخله جلسه‌به‌جلسه یک زبان مشترک دارند. آینهٔ backend pure.ts (REHAB_FX_DOMAINS).
 const REHAB_FX_PROMPTS = ['بدون راهنما', 'راهنمای کلامی', 'ژستی / الگودهی', 'لمسی جزئی', 'راهنمای فیزیکی کامل'];
 const REHAB_FX_AREAS = [
   { key: 'att_sus', label: 'توجه پایدار', unit: 'دقیقهٔ تمرکز پیوسته', max: 15, hint: 'روی یک فعالیت ساخت‌یافته چقدر پیوسته می‌ماند؟ (ملاک: ۱۰ دقیقه بدون یادآوری)' },
@@ -720,19 +592,12 @@ const REHAB_FX_AREAS = [
   { key: 'ps', label: 'حل مسئله — پازل', unit: 'تکهٔ درست از ۱۲', max: 12, hint: 'پازل چند تکه را درست گذاشت؟ (ملاک: ۶–۱۲ تکه + ترتیب داستان)' }
 ];
 
-/** آخرین رویداد ارزیابی عملکردی توانبخشی (غیرلغوشده) — null یعنی ثبت نشده */
 function rehabFxEventOf(events, typesById) {
   const typeId = typesById.get(REHAB_FX_KEY)?.id ?? null;
   if (!typeId) return null;
   return (events ?? []).find((e) => e.eventTypeId === typeId && e.status !== 'cancelled') ?? null;
 }
 
-/**
- * m162 — اولویت‌های حیطه‌ای از خط پایهٔ عملکردی → کلیدهای حیطهٔ چک‌لیست مهارتی.
- * ترتیب علمی: حیطه‌های «ضعف آشکار» قبل از «مرزی»؛ نگاشت fx→OT۷:
- * att_sus/att_sel/inh/flex/ps → cognitive (توجه و مهارت‌های ذهنی) · wm → auditory (ادراک شنیداری).
- * خروجی: حداکثر دو کلید حیطهٔ OT۷ به ترتیب شدت — مبنای بج «اولویت» و حیطهٔ فعال پیش‌فرض کارت مهارتی.
- */
 const FX_TO_OT_DOMAIN = { att_sus: 'cognitive', att_sel: 'cognitive', wm: 'auditory', inh: 'cognitive', flex: 'cognitive', ps: 'cognitive' };
 function rehabPriorityDomains(fx) {
   if (!fx?.payload) return [];
@@ -747,7 +612,6 @@ function rehabPriorityDomains(fx) {
   return [...new Set([...weak, ...warn])].slice(0, 2);
 }
 
-/** مودال میکروی ثبت — شش عدد + توالی داستان + سطح راهنمای هر حیطه + مشاهده → POST مسیر اختصاصی */
 function openRehabFxModal(student, onDone) {
   const fields = [];
   for (const a of REHAB_FX_AREAS) {
@@ -776,10 +640,6 @@ function openRehabFxModal(student, onDone) {
   });
 }
 
-/**
- * m163 — بلوک تاشوی «پشتوانهٔ علمی و نحوهٔ استفاده» — بسته‌شده صفر نویز بصری؛ بازشده استدلال کامل.
- * متن پایدار از clinical-content (REHAB_FX_GUIDE) — این‌جا فقط ساختار رندر.
- */
 function rehabFxScienceNote() {
   return el('details', { class: 'rehab-fx-guide' },
     el('summary', {}, icon('compass', 13), REHAB_FX_GUIDE.title),
@@ -787,13 +647,6 @@ function rehabFxScienceNote() {
       ...REHAB_FX_GUIDE.items.map((t) => el('div', { class: 'cell-sub' }, t))));
 }
 
-/**
- * بخش «ارزیابی عملکردی توانبخشی ذهنی» — یک کارت:
- * ثبت‌شده → نشان باند کلی + ردیف شش حیطه (مقدار خام — باند + سطح راهنما) + ملاک مرجع + پیشنهادهای حیطه‌ای؛
- * بدون ثبت + حق ثبت → توضیح + دکمهٔ مودال میکرو؛ بدون حق ثبت → فقط اطلاع.
- * m163 — بلوک تاشوی پشتوانهٔ علمی/نحوهٔ استفاده در هر دو حالت + این کارت فقط در فاز شناسایی
- * سوار می‌شود (در فاز مداخله خط پایه تک‌منبع در پنل پیشرفت است — حذف تکرار).
- */
 function rehabFxSection({ student, events, typesById, canDecide, refresh }) {
   const existing = rehabFxEventOf(events, typesById);
   if (existing) {
@@ -847,12 +700,6 @@ function rehabFxSection({ student, events, typesById, canDecide, refresh }) {
       rehabFxScienceNote()));
 }
 
-/**
- * — بلوک «زمینهٔ تفسیر» — بدنهٔ مرحلهٔ وکسلر (بدنه تغییر نکرده — m134)
- * سن/تولد/پایه/مسیر پرونده کنار خروجی کمی وکسلر (FSIQ/صدک/پراکندگی) — تا نیم‌رخ
- * همیشه در بستر سن و پایهٔ تحصیلی خوانده شود؛ همان بستری که موتور وکسلر با
- * تاریخ تولد نرمال‌سازی می‌کند.
- */
 function interpretationContext({ student, gates }) {
   const ageLine = ageLineFromBirthDate(student.birthDate);
   const w = gates?.wechslerSummary ?? null;
@@ -892,10 +739,6 @@ function interpretationContext({ student, gates }) {
   );
 }
 
-/**
- * — دکمهٔ اقدام هر گیت — CTA سربرگ و بدنهٔ آکاردئون‌ها
- * گیت «needs» این‌جا دکمه ندارد: اقدام اصلی مرحلهٔ ۵ دکمهٔ داخل کارت جمع‌بندی است (تک‌منبع).
- */
 function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide, refresh, skillsMode, events, isRehabCase }) {
   if (!g) return null;
   const typeIdOf = (key) => typesById.get(key)?.id ?? null;
@@ -917,10 +760,6 @@ function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide
         ? act(GATE_GLOSS.wechsler.actionLabel, 'btn--soft', () => openCaseEventForm({ student, defaultTypeId: typeIdOf(WISC4_KEY), onSaved: refresh }))
         : null;
     case 'skills':
-      // حالت مرحلهٔ ۴ از ماتریس resolveSkillsMode می‌آید (m136) — T12/m160: SLD → ثبت آزمون عملکرد
-      // مرکزی (اولین حوزهٔ ثبت‌نشده — مودال میکروی همان حوزه؛ چک‌لیست خانواده/معلم جای خود مرحلهٔ ۲ است)؛
-      // هر سه ثبت شده → CTA نمی‌خواهد (بدنه سه کارت ثبت‌شده دارد)؛
-      // OT → اسکرول به لنگر چک‌لیست مهارتی در همین بدنه.
       if (skillsMode === SKILL_MODE_SLD) {
         if (!canDecide) return null;
         const nextProbe = PROBE_AREAS.find((a) => !probeEventOf(a, events, typesById));
@@ -928,12 +767,10 @@ function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide
           ? act(GATE_GLOSS.skills.learningActionLabel, 'btn--soft', () => openProbeModal(nextProbe, student, refresh))
           : null;
       }
-      // m161 — حالت توانبخشی: بدون خط پایه → مودال میکروی ارزیابی عملکردی؛ با ثبت → همان مودال (بازسنجی خط پایه)
       if (isRehabCase) {
         if (!canDecide) return null;
         return act(GATE_GLOSS.skills.rehabActionLabel, 'btn--soft', () => openRehabFxModal(student, refresh));
       }
-      // m165 fix — لنگر چک‌لیست حالا در تب مداخله است: اول بخش مداخله باز، بعد اسکرول به لنگر
       return act(GATE_GLOSS.skills.rehabActionLabel, 'btn--soft', () => {
         const iv = document.getElementById('clxacc-intervention');
         if (iv && !iv.open) iv.open = true;
@@ -944,16 +781,11 @@ function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide
   }
 }
 
-/**
- * — «پیوند با سایر اطلاعات» (m134؛ m156 — فقط پیوندهای روان‌سنجی، بدون فرضیه)
- * ۱) نیم‌رخ وکسلر صورت‌بندی (FSIQ/GAI + شاخص‌ها)  ۲) هم‌خوانی حوزه‌های ضعیف وکسلر × سازه‌های برجسته.
- */
 function wechslerConnections({ formulation, insights, gates }) {
   const lines = [];
   const w = gates?.wechslerSummary ?? null;
   void insights;
 
-  // ۱) صورت‌بندی پرونده — پیوند روان‌سنجی نیم‌رخ
   const link = formulation?.wechslerLink ?? null;
   if (link) {
     const bits = [];
@@ -962,7 +794,6 @@ function wechslerConnections({ formulation, insights, gates }) {
     if (bits.length) lines.push(`صورت‌بندی پرونده روی نیم‌رخ وکسلر سوار است: ${bits.join(' · ')}`);
   }
 
-  // ۲) هم‌خوانی حوزه‌های ضعیف وکسلر با سازه‌های برجستهٔ صورت‌بندی
   const WEAK_KEYWORDS = {
     language: ['زبان', 'کلام'], attention: ['توجه'], working_memory: ['حافظه'],
     processing_speed: ['سرعت پردازش'], visual_spatial: ['دیداری'], fluid_reasoning: ['استدلال'],
@@ -986,26 +817,17 @@ function wechslerConnections({ formulation, insights, gates }) {
   return dedupeTexts(lines).slice(0, 6);
 }
 
-// ───────── ردیف‌های رویداد مشترک مراحل ۱/۲/۴ (جایگزین latestResultsCard — یک GET مشترک، §8.1) ─────────
-
-// برچسب‌های پایه از ماژول محتوا؛ دو ردیف مختص ot-checklist این‌جا اضافه می‌شود
 const RESULTS_LABELS = {
   ...RESULTS_EVENT_LABELS,
   [NEEDS_KEY]: 'نتیجهٔ نیاز ویژه',
   [OT_SESSION_KEY]: 'جلسهٔ کاردرمانی ذهنی'
 };
 
-/** نشان وضعیت ثبت رویداد */
 const rowStatusBadge = (e) =>
   e.status === 'completed' ? el('span', { class: 'badge badge--success' }, 'ثبت‌شده')
     : e.status === 'draft' ? el('span', { class: 'badge badge--warning' }, 'پیش‌نویس')
       : el('span', { class: 'badge badge--neutral' }, e.status);
 
-/**
- * فهرست ردیف رویداد یک مرحله — از پاسخ واحد /case-events (بدون GET تازه).
- * keys: کلیدهای ابزار؛ cap: سقف ردیف‌های نمایان؛ expandable: مازاد با «{n} مورد دیگر…» تاشو می‌شود (§4).
- * بدون CTA عمومی — اقدام هر مرحله فقط CTA خودِ مرحله است (CONTENT-SPEC یافتهٔ ۷).
- */
 function eventRowsBlock({ events, typesById, keys, cap = 6, expandable = true }) {
   const wantedIds = new Set(keys.map((k) => typesById.get(k)?.id).filter(Boolean));
   const wantedKeyOf = (typeId) => {
@@ -1033,7 +855,6 @@ function eventRowsBlock({ events, typesById, keys, cap = 6, expandable = true })
   return { count: mine.length, node: el('div', { class: 'clxacc-rows', dataset: { clxmore: '1' } }, ...rows) };
 }
 
-/** چیپ‌های «شواهد موجود» — جفت کانونی عنوان/متن‌خالی (K3/K4) — دو جای رندر: مرحلهٔ ۴ + تاشوی موتور مرحلهٔ ۵ */
 function seenChipsBlock(insights) {
   const seenTitles = insights.dataCoverage?.seenTitles ?? [];
   return el('div', { class: 'clx-sub' },
@@ -1123,8 +944,6 @@ function hypothesisCard(h, rank, { student, paths, canDecide, refresh, conv }) {
   );
 }
 
-// ───────── جدول ملاک‌های DSM چهارحالته (پلن §۵ گام ۱ — همیشه کامل نمایش داده می‌شود) ─────────
-
 function criteriaGroups(criteria, ranked) {
   const titleOf = {};
   for (const h of ranked ?? []) titleOf[h.targetKey] = h.targetTitle;
@@ -1135,7 +954,6 @@ function criteriaGroups(criteria, ranked) {
   }
   if (groups.size === 0) return null;
 
-  // هدفِ فرضیهٔ برتر به‌صورت پیش‌فرض باز است
   const topKey = (ranked ?? [])[0]?.targetKey ?? null;
 
   return el('div', { class: 'clx-crits' },
@@ -1173,8 +991,6 @@ function criteriaGroups(criteria, ranked) {
     })
   );
 }
-
-// ───────── کارت مسیر مداخله (پروتکل قضاوت §۷) — بدنهٔ مرحلهٔ ۶ ─────────
 
 function decisionButtons(path, { student, refresh, canDecide }) {
   if (!canDecide) return null;
@@ -1255,9 +1071,6 @@ function decisionButtons(path, { student, refresh, canDecide }) {
   );
 }
 
-// ───────── / — ساخت مسیر از قالب + نوار مداخله + برنامهٔ جلسه به جلسه ─────────
-
-/** نشان پروتکل قالب */
 const TEMPLATE_PROTOCOL_BADGE = {
   learning: { cls: 'badge--info', label: 'یادگیری' },
   slow_learner: { cls: 'badge--warning', label: 'دیرآموز' },
@@ -1265,10 +1078,6 @@ const TEMPLATE_PROTOCOL_BADGE = {
   rehab: { cls: 'badge--success', label: 'توانبخشی' }
 };
 
-// m165 — کارت‌های «شروع از قالب» حذف شد: پیش‌فرض تب مداخله = چک‌لیست مهارتی؛ ساخت/تعویض مسیر از قالب
-// فقط از طریق دکمهٔ «تغییر قالب مداخله» در انتهای تب (openTemplatePathModal پایین).
-
-/** مودال «ساخت مسیر از قالب» — قالب‌های سیستمی pathway_templates (: پشتیبانی presetKey) */
 async function openTemplatePathModal({ student, refresh, presetKey = null }) {
   let templates = [];
   let targets = [];
@@ -1317,9 +1126,6 @@ async function openTemplatePathModal({ student, refresh, presetKey = null }) {
   });
 }
 
-// ───────── پروتکل جلسه به جلسه — UI قالب‌ساز به تب مستقل «مدیریت قالب‌ها» (views/templates.js, ) منتقل شد ─────────
-
-/** — نوار مداخله — پیشرفت سگمنت‌های مسیر (گام‌های قالب) */
 function pathBand(p) {
   const steps = p.steps ?? [];
   if (!steps.length) return null;
@@ -1332,7 +1138,6 @@ function pathBand(p) {
   );
 }
 
-/** — برنامهٔ جلسه به جلسه (بدنهٔ نوار مداخلهٔ توانبخشی) */
 function pathSessionsBlock(p, { student, canDecide, refresh }) {
   const sessions = p.sessions ?? [];
   const planned = sessions.filter((s) => s.status === 'planned');
@@ -1360,8 +1165,6 @@ function pathSessionsBlock(p, { student, canDecide, refresh }) {
               ...SESSION_ITEM_TYPES.map((t) => ({
                 name: `item_${t.key}`, type: 'textarea', label: t.label, rows: 2,
                 placeholder: t.placeholder, span: 2,
-                // فیلد تمرین: دکمهٔ «از بانک تمرین» کنار برچسب
-                // فیلد رویداد: دکمهٔ «افزودن رویداد» (فرم/پرسش‌نامه از رویدادساز) کنار برچسب
                 ...(t.key === 'exercise' ? { extra: (ta) => bankPickButton({ onPick: (ex) => appendExerciseToTextarea(ta, ex.title) }) } : {}),
                 ...(t.key === 'event' ? { extra: (ta) => eventPickButton({ onPick: (t2) => appendEventToTextarea(ta, t2.title) }) } : {})
               }))
@@ -1383,7 +1186,6 @@ function pathSessionsBlock(p, { student, canDecide, refresh }) {
       }, icon('plus', 14), 'افزودن جلسه')
     : null;
 
-  /** ویرایش جلسه — عنوان/هدف + آیتم‌های پیوست */
   const openEditSessionModal = (s) => {
     const current = Object.fromEntries((s.items ?? []).map((it) => [it.type, it.text]));
     formModal({
@@ -1395,8 +1197,6 @@ function pathSessionsBlock(p, { student, canDecide, refresh }) {
         ...SESSION_ITEM_TYPES.map((t) => ({
           name: `item_${t.key}`, type: 'textarea', label: t.label, rows: 2,
           value: current[t.key] ?? '', placeholder: t.placeholder, span: 2,
-          // فیلد تمرین: دکمهٔ «از بانک تمرین» کنار برچسب
-          // فیلد رویداد: دکمهٔ «افزودن رویداد» (فرم/پرسش‌نامه از رویدادساز) کنار برچسب
           ...(t.key === 'exercise' ? { extra: (ta) => bankPickButton({ onPick: (ex) => appendExerciseToTextarea(ta, ex.title) }) } : {}),
           ...(t.key === 'event' ? { extra: (ta) => eventPickButton({ onPick: (t2) => appendEventToTextarea(ta, t2.title) }) } : {})
         }))
@@ -1552,12 +1352,6 @@ function pathCard(p, { student, canDecide, refresh }) {
   );
 }
 
-// ───────── مرحلهٔ ۶ — نوار گام‌های استاندارد پروتکل فعال (§3.6 — MOVE از protocolCard) ─────────
-
-/**
- * برچسب فارسی پروتکل — از PROTOCOL_LABELS درون ot-checklist (export نشده؛ دست‌نخورده) استخراج
- * می‌شود تا واژگان «پروتکل …» تک‌منبع بماند؛ پروتکل ناشناخته → خود کلید (دفاعی).
- */
 function protocolLabelOf(protoCardNode, protocol) {
   if (!protocol) return null;
   const title = protoCardNode?.querySelector('.card__title')?.textContent ?? '';
@@ -1566,10 +1360,6 @@ function protocolLabelOf(protoCardNode, protocol) {
   return label || String(protocol);
 }
 
-/**
- * نوار گام‌های استاندارد پروتکل فعال — محتوای بدنهٔ protocolCard بدون کروم کارت (§6: MOVE).
- * متن‌های PROTOCOL_STEPS verbatim از ot-checklist می‌ماند؛ فقط تیتر نوار از STAGE2_META (I5) است.
- */
 function protocolStrip(protoCardNode) {
   if (!protoCardNode) return null;
   const steps = protoCardNode.querySelector('.clx-journey__steps');
@@ -1579,12 +1369,6 @@ function protocolStrip(protoCardNode) {
     steps);
 }
 
-// ───────── رندر اصلی تب ─────────
-
-/**
- * تب «تفسیر بالینی» پروفایل — فلوی آکاردئونی ۶ مرحله‌ای (m135) + پروتکل قضاوت.
- * data.refresh داخلی است (فقط این تب دوباره بار می‌شود نه کل پروفایل).
- */
 export async function renderClinicalTab(box, { student }) {
   const canDecide = canDecideFor(student);
 
@@ -1612,11 +1396,8 @@ export async function renderClinicalTab(box, { student }) {
       paths = pathRes.data ?? [];
       gates = gatesRes?.data ?? null;
       plan = planRes?.data ?? null;
-      // حالت مرحلهٔ ۴ — ماتریس resolveSkillsMode (m136): فقط MODE_OT پروفایل مهارتی می‌گیرد؛
-      // قاعدهٔ قبلی واکشی در فاز شناسایی برای «همه» true بود → ریشهٔ باگ «چک‌لیست توانبخشی برای همه».
       skillsMode = resolveSkillsMode({ gates, student });
       if (skillsMode === SKILL_MODE_OT) {
-        // m162 — پروفایل + پیشرفت جلسه‌به‌جلسه هم‌زمان واکشی می‌شوند (دو GET موازی — GET رشد نمی‌کند)
         const [profRes, progRes] = await Promise.all([
           api.get(`/api/students/${student.id}/ot/profile`).catch(() => null),
           api.get(`/api/students/${student.id}/ot/progress`).catch(() => null)
@@ -1624,14 +1405,11 @@ export async function renderClinicalTab(box, { student }) {
         otProfile = profRes?.data ?? null;
         otProgress = progRes?.data ?? null;
       }
-      // T4 (m148): فهرست کامل نوع‌ها برای نگاشت تاریخچه (نسخهٔ ۲ قدیمی هم رندر شود) —
-      // ولی ورودی جدید فقط فرم فعال نسخهٔ ۳ را باز می‌کند (anamnesisTypeId با active=true).
       try {
         const types = (await api.get('/api/case-events/types')).data ?? [];
         anamnesisTypeId = types.find((t) => t.key === ANAMNESIS_KEY && t.active)?.id ?? null;
         typesById = new Map(types.map((t) => [t.key, t]));
       } catch { anamnesisTypeId = null; }
-      // پاسخ واحد رویدادها — قبلاً داخل latestResultsCard گرفته می‌شد؛ الان مشترک مراحل ۱/۲/۴ است
       try {
         events = (await api.get(`/api/students/${student.id}/case-events`)).data ?? [];
       } catch { events = []; }
@@ -1647,27 +1425,20 @@ export async function renderClinicalTab(box, { student }) {
     const refresh = () => { load(); };
     const hasData = (insights.ranked?.length ?? 0) > 0 || (insights.criteria?.length ?? 0) > 0;
 
-    // ── فاز و پروتکل از گیت‌ها؛ fallback: اگر گیت‌ها نیامد، فاز شناسایی ──
     const protocol = gates?.protocol ?? null;
-    // m161 — حالت توانبخشی: مسیر پرونده rehab یا پروتکل فعال توانبخشی — مبنای مرحلهٔ ۴ و شماره‌گذاری گیت‌ها
     const isRehabCase = student.pathway === 'rehab' || protocol === 'rehab';
     const phase = protocol ? 'intervention' : 'identification';
     const SM = STAGE2_META.stages;
-    // دفاعی (§8.9): ترتیب و تعداد گیت‌ها مالکیت سرور است؛ اگر پاسخ گیت‌ها نیامده باشد،
-    // اسکلت استاندارد می‌سازیم تا تب خالی نماند — با پاسخ سرور، هر تعداد/ترتیبی رندر می‌شود.
     const gatesList = (gates?.gates ?? []).length
       ? gates.gates
       : (gates ? [] : ['anamnesis', 'wechsler', 'behavioral', 'skills', 'needs'].map((k) => ({ key: k, done: false, ord: SM[k].num, label: SM[k].title, detail: null })));
     const gateByKey = (key) => gatesList.find((g) => g.key === key) ?? null;
     const stageCtx = { student, gates, typesById, anamnesisTypeId, canDecide, refresh, skillsMode, events, isRehabCase };
 
-    // دادهٔ صورت‌بندی — یک‌بار fetch؛ هم به wechslerConnections می‌رود هم به کارت جمع‌بندی (null-safe)
     const formulation = await fetchFormulation({ student });
 
-    // ── «پیوند با سایر اطلاعات» — خطوط اتصال وکسلر به بقیهٔ ابزارها (m134) — رندر در مرحلهٔ ۵ ──
     const connections = wechslerConnections({ formulation, insights, gates });
 
-    // ── حالت‌های مراحل — §5: iterate گیت‌ها به ترتیب سرور؛ گام جاری = اولین ناتمام؛ پروتکل فعال → مرحلهٔ ۶ ──
     const wSummary = gates?.wechslerSummary ?? null;
     const wechslerEmpty = !wSummary
       || (wSummary.fsiq == null && wSummary.percentile == null && !wSummary.profile);
@@ -1677,8 +1448,6 @@ export async function renderClinicalTab(box, { student }) {
 
     const stateOf = (key) => {
       if (phase === 'intervention') return key === 'intervention' ? 'current' : 'done'; // آرشیو مراحل ۱–۵
-      // m165 fix — OT: تب مداخله در فاز شناسایی هم میزکار زندهٔ چک‌لیست است — نه قفل؛
-      // مسیر استاندارد (غیر OT) تا ثبت نتیجهٔ نیاز ویژه قفل می‌ماند.
       if (key === 'intervention') return skillsMode === SKILL_MODE_OT ? 'todo' : 'locked';
       const g = gateByKey(key);
       if (key === 'needs') return g?.done ? 'needsDone' : (currentKey === key ? 'current' : 'todo');
@@ -1687,7 +1456,6 @@ export async function renderClinicalTab(box, { student }) {
       return currentKey === key ? 'current' : 'todo';
     };
 
-    // ── خط «در یک نگاه» هر سربرگ — ترکیب طبق قواعد CONTENT-SPEC §3 ──
     const idsOf = (keys) => keys.map((k) => typesById.get(k)?.id).filter(Boolean);
     const countCompleted = (keys) => {
       const ids = new Set(idsOf(keys));
@@ -1715,8 +1483,6 @@ export async function renderClinicalTab(box, { student }) {
         return line;
       },
       skills: () => {
-        // glance حالت‌آگاه (m136 + m161): توانبخشی → خط پایهٔ ارزیابی عملکردی ذهنی؛
-        // OT → پوشش پیمایش از gates.otCoverage؛ SLD → شمار پروب‌ها از پاسخ مشترک رویدادها.
         if (skillsMode === SKILL_MODE_OT) {
           if (isRehabCase) {
             const fx = rehabFxEventOf(events, typesById);
@@ -1745,7 +1511,6 @@ export async function renderClinicalTab(box, { student }) {
         return s.length > 64 ? `${s.slice(0, 64)}…` : s;
       },
       intervention: () => {
-        // m165 fix — OT: میزکار زنده — نه قفل
         if (!protocol) return skillsMode === SKILL_MODE_OT ? SM.protocol.glanceWorkspace : SM.protocol.glanceLocked;
         const label = protocolLabelOf(protoCardNode, protocol);
         if (!paths.length) return SM.protocol.glanceNoPath.replace('{protocol}', label);
@@ -1756,14 +1521,11 @@ export async function renderClinicalTab(box, { student }) {
       }
     };
 
-    // ── ریزآمار سربرگ‌ها (m136 — B) — فقط دادهٔ ازپیش‌گرفته (صفر GET تازه)؛ آمار خالی حذف ──
     const ST = STAGE2_META.stats;
-    // آخرین ثبت شرح‌حال — از پاسخ مشترک رویدادها (بدون GET تازه)
     const anamTypeIds = new Set([ANAMNESIS_KEY, ANAMNESIS_LEGACY_KEY].map((k) => typesById.get(k)?.id).filter(Boolean));
     const lastAnamAt = (events ?? [])
       .filter((e) => anamTypeIds.has(e.eventTypeId) && e.status !== 'cancelled')
       .reduce((m, e) => (e.occurredAt && (!m || e.occurredAt > m) ? e.occurredAt : m), null);
-    // «کهنه است» فقط وقتی که detail سرور همین را بگوید (پنجرهٔ ۱۲ ماه سمت سرور قضاوت می‌شود)
     const anamStale = String(gateByKey('anamnesis')?.detail ?? '').includes('کهنه');
     const statsOf = {
       anamnesis: () => [
@@ -1794,7 +1556,6 @@ export async function renderClinicalTab(box, { student }) {
       skills: () => {
         if (skillsMode === SKILL_MODE_OT) {
           const stats = [];
-          // m161 — توانبخشی: حیطه‌های پایهٔ در انتظار از ارزیابی عملکردی ذهنی
           if (isRehabCase) {
             const fx = rehabFxEventOf(events, typesById);
             if (fx?.analysis?.score != null) stats.push(statItem(ST.skillsFx, `${fa(Number(fx.analysis.score))} از ${fa(6)}`));
@@ -1825,7 +1586,6 @@ export async function renderClinicalTab(box, { student }) {
       },
       intervention: () => {
         const stats = [];
-        // چیپ پیشنهاد پروتکل — فقط وقتی مرحلهٔ ۶ قفل شناسایی است
         if (!protocol && formulation?.protocolSuggestion?.protocol) {
           const sug = formulation.protocolSuggestion.protocol;
           stats.push(el('span', {
@@ -1833,7 +1593,6 @@ export async function renderClinicalTab(box, { student }) {
             ...(formulation.protocolSuggestion.rationaleFa ? { title: formulation.protocolSuggestion.rationaleFa } : {})
           }, icon('compass', 12), `${ST.protocolSuggestion} ${TEMPLATE_PROTOCOL_BADGE[sug]?.label ?? sug}`));
         }
-        // گام‌های مسیر (انجام‌شده از کل) + جلسات برنامه‌ریزی‌شده — از پاسخ /clinical-paths
         let stepsDone = 0;
         let stepsTotal = 0;
         let planned = 0;
@@ -1848,13 +1607,10 @@ export async function renderClinicalTab(box, { student }) {
       }
     };
 
-    // ── ردیف‌های رویداد هر مرحله — از پاسخ واحد (§8.1) ──
     const anamRows = eventRowsBlock({ events, typesById, keys: [ANAMNESIS_KEY, ANAMNESIS_LEGACY_KEY], cap: 1, expandable: false }); // — T4: v3 + تاریخچهٔ v2
     const checklistRows = eventRowsBlock({ events, typesById, keys: [...SCREEN_KEYS, ...SPECIFIC_KEYS], cap: 6, expandable: true });
-    // T12/m160 — ردیف‌های مرحلهٔ ۴: پروب‌ها کارت اختصاصی دارند (probeAssessSection)؛ این‌جا فقط فرم نتایج عمومی
     const resultsRows = eventRowsBlock({ events, typesById, keys: [RESULTS_KEY], cap: 6, expandable: true });
 
-    // ── داده‌های مرحلهٔ ۵ — جدول DSM + فرضیه‌ها + شواهد موجود، پشت تاشوی «جزئیات موتور تشخیصی» ──
     const hypotheses = hasData
       ? el('div', { class: 'clx-section' },
           el('div', { class: 'clx-section__title' }, icon('sparkles', 16), 'فرضیه‌ها — به ترتیب شواهد'),
@@ -1880,9 +1636,6 @@ export async function renderClinicalTab(box, { student }) {
       engineDetails: [critsSection, hypotheses, seenBlock].filter(Boolean)
     });
 
-    // ── داده‌های مرحلهٔ ۶ (m165 — میزکار مداخله) — پیش‌فرض = چک‌لیست مهارتی جلسه‌به‌جلسه؛ مسیرها بعد؛ تغییر قالب فقط در انتهای تب ──
-    // m165 fix — خانهٔ چک‌لیست مهارتی برای OT (توانبخشی/کاردرمانی ذهنی) همیشه تب مداخله است — حتی در فاز شناسایی
-    // (درخواست کاربر: «باید این چک‌لیست رو از بخش ارزیابی ببری تو مداخله»)؛ فاز فقط خط پایه/نشانگرها را عوض می‌کند.
     const otStage6Home = skillsMode === SKILL_MODE_OT;
     const protoCardNode = protocol ? protocolCard(protocol) : null;
     const emptyPathLine = paths.length
@@ -1896,8 +1649,6 @@ export async function renderClinicalTab(box, { student }) {
         ? el('div', { class: 'clx-paths' }, paths.map((p) => pathCard(p, { student, canDecide, refresh })))
         : emptyPathLine
     );
-    // m165 — دکمهٔ واحد انتهای تب مداخله: تغییر قالب (ساخت/تعویض مسیر از قالب) — جایگزین کارت «شروع از قالب» و «مدیریت قالب‌ها»
-    // m165 fix — برای OT در فاز شناسایی هم هست (تب مداخله میزکار همیشگی است؛ پیام «مسیری ثبت نشده» به همین دکمه ارجاع می‌دهد)
     const tplChangeRow = canDecide && (phase === 'intervention' || otStage6Home)
       ? el('div', { class: 'clx-actions clx-tplchange' },
           el('button', {
@@ -1906,13 +1657,9 @@ export async function renderClinicalTab(box, { student }) {
           }, icon('puzzle', 14), 'تغییر قالب مداخله'))
       : null;
 
-    // ── کارت چک‌لیست مهارتی مرحلهٔ ۴ — فقط در حالت OT سوار می‌شود (m136 رفع باگ: منحصر به مسیر/پروتکل OT) ──
-    // m162 — فلوی مسیرآگاه: کارت زندهٔ ثبت جلسه + پنل پیشرفت کار درمانی جلسه‌به‌جلسه را انجام می‌دهند.
-    // m165 fix — هر دو به تب مداخله منتقل شدند و آن‌جا می‌مانند (هر دو فاز) — تعریف otStage6Home بالا.
     const otProtocolLabel = (protocol === 'rehab' || (!protocol && student.pathway === 'rehab'))
       ? 'توانبخشی ذهنی-جسمی'
       : 'کاردرمانی ذهنی';
-    // m162 — اولویت‌های حیطه‌ای از خط پایهٔ عملکردی (فقط توانبخشی)
     const otPriorityDomains = isRehabCase
       ? rehabPriorityDomains(rehabFxEventOf(events, typesById))
       : [];
@@ -1928,21 +1675,17 @@ export async function renderClinicalTab(box, { student }) {
       ? otProgressPanel({
           progress: otProgress,
           protocolLabel: otProtocolLabel,
-          // m164 — دکمهٔ «گزارش پیشرفت» (صفحهٔ چاپی چک‌لیست‌محور)
           studentId: student.id,
-          // m163 — بازسنجی خط پایه در فاز مداخله (۸–۱۲ جلسه) — مودال همان فرم؛ تک‌منبع پنل پیشرفت
           onReassess: isRehabCase && canDecide ? () => openRehabFxModal(student, refresh) : null
         })
       : null;
 
-    // ── بدنهٔ هر مرحله (§3.1–3.6) ──
     const bodyOf = {
       anamnesis: () => {
         const g = gateByKey('anamnesis');
         const body = [];
         if (g?.detail) body.push(el('div', { class: 'cell-sub' }, g.detail));
         if (anamRows.node) body.push(anamRows.node);
-        // T9/m152 — چیپ حسی: گیت نگرانی حسی شرح‌حال v3 + ثبت دوکلیکی (داده از پاسخ مشترک رویدادها)
         const sensoryChip = sensoryChipCard({ student, events, typesById, canDecide, refresh });
         if (sensoryChip) body.push(sensoryChip);
         if (!g?.done) {
@@ -1975,7 +1718,6 @@ export async function renderClinicalTab(box, { student }) {
       wechsler: () => {
         const profileBody = wechslerProfileBlock({ summary: wSummary, nested: true });
         if (!profileBody) {
-          // حالت بدون داده (§3.3 — is-locked + بج «ثبت نشده») — راهنما + CTA ثبت وکسلر
           const body = [emptyState({
             iconName: 'brain',
             title: SM.wechsler.glanceEmpty,
@@ -1985,25 +1727,18 @@ export async function renderClinicalTab(box, { student }) {
           if (cta) body.push(el('div', { class: 'clx-actions' }, cta));
           return body;
         }
-        // زمینهٔ تفسیر همیشه بالای بدنه؛ سپس کارت پلن پیشنهادی (T3) + شش آکاردئون تودرتو + پانویس خط قرمز
         const body = [interpretationContext({ student, gates }), profileBody];
-        // کارت پلن فقط پس از تکمیل گیت وکسلر می‌نشیند (قرارداد T3) — با دلیل هر آیتم و دو اقدام
         const planCard = checklistPlanCard({ student, plan, typesById, canDecide, refresh });
         if (planCard) body.push(planCard);
         return body;
       },
       skills: () => {
-        // بدنهٔ حالت‌آگاه (m136 + T12/m160 + m161) — توانبخشی: خط پایهٔ عملکردی + چک‌لیست مهارتی؛
-        // OT: کارت مهارتی + چیپ‌ها + CTA اسکرول؛ SLD: سه کارت آزمون عملکرد مرکزی + چیپ هستهٔ خواندن.
         const g = gateByKey('skills');
         const body = [];
         if (skillsMode === SKILL_MODE_OT) {
-          // m163 — حذف تکرار خط پایه: کارت کامل ارزیابی عملکردی فقط در فاز شناسایی؛ در فاز مداخله
-          // خط پایه تک‌منبع در پنل پیشرفت (مرحلهٔ مداخله) به‌عنوان مرجع مقایسه + بازسنجی می‌نشیند.
           if (isRehabCase && phase !== 'intervention') {
             body.push(rehabFxSection({ student, events, typesById, canDecide, refresh }));
           }
-          // m165 fix — چک‌لیست مهارتی همیشه در تب مداخله است (خواست کاربر) — این‌جا فقط نشانگر
           body.push(el('div', { class: 'cell-sub' }, icon('clipboard', 13), ' ',
             phase === 'intervention'
               ? (isRehabCase ? SM.protocol.monitoringMovedRehab : SM.protocol.monitoringMoved)
@@ -2016,10 +1751,7 @@ export async function renderClinicalTab(box, { student }) {
           }
           return body;
         }
-        // T12/m160 — ارزیابی عملکردی = آزمون درمانگر در مرکز: سه کارت + مودال میکرو + تحلیل هنجاری
         body.push(probeAssessSection({ student, events, typesById, canDecide, refresh }));
-        // T10/m153 — چیپ هستهٔ خواندن: گیت نگرانی خواندن شرح‌حال v3 + ثبت دوکلیکی + پیشنهاد شرطی
-        // (از پاسخ مشترک رویدادها، صفر GET تازه)
         const readCore = readCoreChipCard({ student, events, typesById, canDecide, refresh });
         if (readCore) body.push(readCore);
         body.push(seenChipsBlock(insights)); // تنها جای چیپ‌های «چه فرم‌هایی آمده» در مرحلهٔ ۴
@@ -2039,27 +1771,22 @@ export async function renderClinicalTab(box, { student }) {
       },
       intervention: () => {
         const body = [];
-        // m165 fix — OT: میزکار در هر دو فاز؛ یادداشت ملایم به‌جای قفل. مسیر استاندارد: همان قفل شناسایی
         if (!protocol) body.push(el('div', { class: 'cell-sub' }, otStage6Home ? SM.protocol.workspaceNote : SM.protocol.lockedNote));
-        // m165 — پیش‌فرض تب مداخله = کارت زندهٔ ثبت جلسه (چک‌لیست مهارتی جلسه‌به‌جلسه) + پنل پیشرفت — بالای همه‌چیز
         if (otStage6Home && otCard) body.push(otCard);
         if (otStage6Home && otProgressNode) body.push(otProgressNode);
         body.push(pathsSection);
         if (protocol) {
           const strip = protocolStrip(protoCardNode);
           if (strip) body.push(strip);
-          // پیوند پایش — فقط وقتی کارت زنده در همین بدنه نیست (فال‌بک)
           if ((protocol === 'mental_ot' || protocol === 'rehab') && !otCard) {
             body.push(el('div', { class: 'cell-sub' }, icon('clipboard', 13), ' ', SM.protocol.monitoringLink));
           }
         }
-        // m165 — اقدام ثانویهٔ قالب همیشه انتهای تب است — یک دکمه، جای دیگری نیست
         if (tplChangeRow) body.push(tplChangeRow);
         return body;
       }
     };
 
-    // ── ساخت بخش‌ها — به ترتیب سرور گیت‌ها + مرحلهٔ ۶ مشتق (کلید ناشناخته → بخش عمومی با g.label) ──
     const CTA_GATE_KEYS = ['anamnesis', 'behavioral', 'wechsler', 'skills'];
     const sections = [];
     for (const g of gatesList) {
@@ -2073,8 +1800,6 @@ export async function renderClinicalTab(box, { student }) {
       const stats = known ? ((statsOf[g.key]?.() ?? []).filter(Boolean)) : [];
       sections.push(clxaccSection({
         key: g.key,
-        // m161 — شماره‌گذاری مسیرآگاه: سرور ord هر گیت را بر حسب جایگاه واقعی می‌فرستد
-        // (توانبخشی ۱–۳، مسیر استاندارد ۱–۵)؛ meta.num فقط فال‌بک سربرگ‌های قدیمی است.
         num: g.ord ?? meta?.num ?? null,
         title: meta?.title ?? g.label,
         glance,
@@ -2086,7 +1811,6 @@ export async function renderClinicalTab(box, { student }) {
         open: false
       }));
     }
-    // مرحلهٔ پایانی — گیت سرور نیست؛ از gates.protocol مشتق می‌شود (§3.6) — شماره = بعد از آخرین گیت (m161)
     sections.push(clxaccSection({
       key: 'intervention',
       num: (gatesList.length || 5) + 1,
@@ -2095,13 +1819,11 @@ export async function renderClinicalTab(box, { student }) {
       stats: statsOf.intervention().filter(Boolean),
       chips: [],
       state: stateOf('intervention'),
-      // m165 — بدون CTA در سربرگ: تنها اقدام قالب = دکمهٔ واحد «تغییر قالب مداخله» در انتهای بدنه
       cta: null,
       body: bodyOf.intervention(),
       open: false
     }));
 
-    // ── بازِ پیش‌فرض — §5: دقیقاً یک بخش top-level = گام جاری؛ cold-start → مرحلهٔ ۱؛ ماندگاری سشن ──
     const persisted = loadOpenIds(student.id);
     let openIds = [];
     if (persisted.length) {
@@ -2122,7 +1844,6 @@ export async function renderClinicalTab(box, { student }) {
 
     const flow = el('div', { class: 'clxacc-flow' }, ...sections);
 
-    // ── شنونده‌های واگذارشدهٔ فلوی (§8.4) — یک toggle (capture؛ رویداد details bubble نمی‌شود) + یک click ──
     flow.addEventListener('toggle', (e) => {
       const d = e.target;
       if (!(d instanceof HTMLDetailsElement) || !d.matches('details[data-clxacc]')) return;
@@ -2132,7 +1853,6 @@ export async function renderClinicalTab(box, { student }) {
       }
     }, true);
     flow.addEventListener('click', (e) => {
-      // «{n} سطر/مورد دیگر…» — بازکردن سطرهای پنهان با toggle کلاس (§4 — بدون re-render)
       const more = e.target.closest?.('.clxacc__more');
       if (more) {
         e.preventDefault();
@@ -2148,12 +1868,10 @@ export async function renderClinicalTab(box, { student }) {
         more.remove();
         return;
       }
-      // CTA داخل <summary> — کلیکِ دکمه نباید آکاردئون را toggle کند (§8.6)
       const summary = e.target.closest?.('summary.clxacc__head');
       if (summary && e.target.closest?.('button')) e.preventDefault();
     });
 
-    // ── نوار باریک بالای تب — فاز/مسیر/پروتکل + تولد/سن/پایه + سه دکمه + آخرین محاسبه (§3) ──
     const ageLine = ageLineFromBirthDate(student.birthDate);
     const profileChips = [
       student.birthDate ? el('span', { class: 'badge badge--neutral' }, `تولد: ${formatStoredJalaliNumeric(student.birthDate)}`) : null,
@@ -2191,8 +1909,6 @@ export async function renderClinicalTab(box, { student }) {
       )
     );
 
-    // ── یک قطعهٔ واحد — بدون patch جزئی؛ refresh = load کامل (§8.2) ──
-    // m156 — پانویس انکار (disclaimer) از پایین تب حذف شد.
     box.replaceChildren(el('div', { class: 'clx' }, toolbar, flow));
   }
 

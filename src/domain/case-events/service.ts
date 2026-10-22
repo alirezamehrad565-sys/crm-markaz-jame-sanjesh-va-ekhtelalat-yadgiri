@@ -1,10 +1,3 @@
-/**
- * ماژول رویدادساز (فرم/پرسش‌نامه/چک‌لیست) — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// سرویس رویدادهای پرونده — مالک WRITE جداول case_event_types و case_events
-// الگوی پروژه: همهٔ writeها با audit هم‌تراکنش؛ حذف فقط نرم؛ اعتبارسنجی در pure.
-
 import { NotFoundError, ForbiddenError, ConflictError, ValidationError } from '@core/errors';
 import type { AuthContext } from '@core/shared';
 import { FOLLOWUP_DEFAULT_DUE_DAYS } from '@core/shared';
@@ -62,7 +55,6 @@ interface EventRow {
   sent_count: number;           //
   created_by: string;
   created_at: string;
-  // join
   type_title: string;
   type_category: string;
   type_icon: string | null;
@@ -72,7 +64,6 @@ interface EventRow {
   student_name?: string;        // — join صف انتظار
 }
 
-/** — ردیف پیوست */
 interface EventFileRow {
   id: string;
   case_event_id: string;
@@ -152,16 +143,11 @@ function eventRowToRecord(r: EventRow): CaseEventRecord {
   };
 }
 
-/** تولید کلید یکتا برای نوع ساخته‌شده از پنل */
 function newTypeKey(): string {
   const rnd = crypto.randomUUID().replace(/-/g, '').slice(0, 10);
   return `t-${rnd}`;
 }
 
-/**
- * — گیت ابزار سیستمی: قالب‌های باتری بالینی (is_system=1) از پنل
- * قابل ویرایش/غیرفعال‌سازی/حذف نیستند — تغییر ملاک فقط با نسخهٔ جدید کد.
- */
 function assertNotSystemType(row: TypeRow, action: string): void {
   if (row.is_system === 1) {
     throw new ConflictError(`این ابزار سیستمیِ باتری بالینی است و ${action} آن از پنل مجاز نیست — تغییر ملاک فقط با نسخهٔ جدید سامانه`);
@@ -173,7 +159,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
   const log = logger.child('case-events');
   const now = deps.now ?? (() => new Date());
   const fillExpiryHours = deps.fillExpiryHours ?? 168;
-  /** — ناظر ارسال (در api-routing به notify وصل می‌شود) */
   let sendFn: SendObserver | null = null;
 
   const EVENT_SELECT = `
@@ -196,7 +181,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     return row;
   }
 
-  /** — T5: حل نوع با کلید منطقی (کامپوننت‌های پکیج با کلید قرارداد) */
   async function loadTypeRowByKey(key: string): Promise<TypeRow | null> {
     return db.queryOne<TypeRow>(
       `SELECT * FROM case_event_types WHERE key = ? AND deleted_at IS NULL`,
@@ -209,11 +193,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     if (!row) throw new NotFoundError('دانش‌آموز');
   }
 
-  /**
-   * — T9/m152: تضمین وجود type چیپ حسی — idempotent (بدون مایگریشن؛ کلید unique است).
-   * type سیستمیِ خارج کتابخانه است (active=0) تا فقط از مسیر اختصاصی چیپ ثبت شود و
-   * فرم عمومی/انتخابگر پنل آن را نبیند — تعریف آینهٔ battery-screening.json (pure.ts) است.
-   */
   async function ensureSensoryChipType(): Promise<TypeRow> {
     const existing = await loadTypeRowByKey(SENSORY_CHIP_KEY);
     if (existing) return existing;
@@ -239,11 +218,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     return row;
   }
 
-  /**
-   * — T10/m153: تضمین وجود type چیپ هستهٔ خواندن — idempotent (بدون مایگریشن؛ کلید unique است).
-   * type سیستمیِ خارج کتابخانه است (active=0) تا فقط از مسیر اختصاصی چیپ ثبت شود و
-   * فرم عمومی/انتخابگر پنل آن را نبیند — تعریف آینهٔ battery-screening.json (pure.ts) است.
-   */
   async function ensureReadCoreType(): Promise<TypeRow> {
     const existing = await loadTypeRowByKey(READ_CORE_KEY);
     if (existing) return existing;
@@ -269,11 +243,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     return row;
   }
 
-  /**
-   * — m161: تضمین وجود type ارزیابی عملکردی توانبخشی ذهنی — idempotent (بدون مایگریشن؛ کلید unique است).
-   * الگوی چیپ هستهٔ خواندن: type سیستمیِ خارج کتابخانه (active=0) — ثبت فقط از مسیر اختصاصی
-   * فرم عملکردی تا رویداد بدون تحلیل از فرم عمومی ساخته نشود. تعریف از pure.ts (REHAB_FX_*).
-   */
   async function ensureRehabFxType(): Promise<TypeRow> {
     const existing = await loadTypeRowByKey(REHAB_FX_KEY);
     if (existing) return existing;
@@ -298,7 +267,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     return row;
   }
 
-  /** گیت نویسنده/مدیر برای ویرایش و لغو */
   function assertEditor(actor: AuthContext, creatorId: string): void {
     if (actor.role === 'manager') return;
     if (actor.staffId === creatorId) return;
@@ -311,7 +279,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     return row;
   }
 
-  /** — هوک «اقدام بعدی»: فیلد next_action=پیگیری → پیگیری خودکار در همان تراکنش */
   async function runFollowUpHook(
     tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
     event: { id: string; student_id: string },
@@ -336,7 +303,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     );
   }
 
-  /** — T7: گره‌زدن نام معلم به رویداد لنگر (پیش از ارسال/صدور لینک) — payload نواری برای فرم عمومی و پاسخ‌ها */
   async function bindTeacherToEvent(row: EventRow, teacher: { name: string; teacherId: string | null }): Promise<void> {
     const current = parseJson<Record<string, unknown> | null>(row.payload, null) ?? {};
     current['teacher_binding'] = { name: teacher.name, teacherId: teacher.teacherId };
@@ -346,15 +312,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     );
   }
 
-  /**
-   * — T5 (m150): جریان submit پکیج فرم جامع خانواده — یک submit، چند رویداد:
-   * ۱) حل کامپوننت‌ها به‌ترتیب قرارداد (packageComponentsOf — آینهٔ battery-composite.json)
-   * ۲) اعتبارسنجی کامل بودن پاسخ + تحلیل هر کامپوننت با همان موتور v2 (زیرمقیاس/باند خودش)
-   * ۳) بلوک زمینهٔ پکیج با همان قرارداد payload برچسب‌دار
-   * ۴) یک تراکنش: تکمیل رویداد لنگر + ساخت رویداد مستقل به‌ازای هر کامپوننت
-   * موتور بعداً رویداد کامپوننت‌ها را مثل ابزار تکی می‌خواند (toolKey = کلید type کامپوننت).
-   * — T7: اگر لینک به معلمی گره خورده باشد، payload همهٔ رویدادها «پاسخ معلم: X» می‌گیرد.
-   */
   async function fillPackageFlow(
     row: EventRow,
     anchorType: CaseEventTypeRecord,
@@ -370,10 +327,8 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       }
     }
     const values = input.values;
-    // — T7: اتصال معلم (لینک به‌ازای معلم خاص) — به payload همهٔ رویدادها تزریق می‌شود
     const teacher = teacherBindingOfPayload(parseJson<unknown>(row.payload, null));
 
-    // ۱) حل رکورد کامپوننت‌ها از DB — به‌ترتیب قرارداد
     const compTypes: CaseEventTypeRecord[] = [];
     for (const key of components) {
       const trow = await loadTypeRowByKey(key);
@@ -382,7 +337,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       compTypes.push(typeRowToRecord(trow));
     }
 
-    // ۲) هر کامپوننت: همهٔ آیتم‌ها پاسخ‌داده + تحلیل v2 (معکوس/گزینهٔ نمره‌دار/زیرمقیاس/پرچم)
     const filled: { comp: CaseEventTypeRecord; analysis: CaseEventAnalysis; payload: Record<string, { value: string; label: string }>; summary: string | null }[] = [];
     for (const comp of compTypes) {
       const numeric: Record<string, number> = {};
@@ -398,8 +352,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         numeric[f.key] = n;
       }
       const analysis = analyzeChecklist(comp.fields, comp.bands, numeric, comp.subscales);
-      // payload نمایشی: برچسب گزینه برای گزینه‌ای نمره‌دار؛ نمرهٔ خام برای scale
-      // — T7: اتصال معلم → «پاسخ معلم: X» در payload هر کامپوننت
       const payload = withTeacherName((() => {
         const p: Record<string, { value: string; label: string }> = {};
         for (const f of comp.fields) {
@@ -412,12 +364,9 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       filled.push({ comp, analysis, payload, summary: buildSummary(payload, analysis) });
     }
 
-    // ۳) بلوک زمینهٔ پکیج — همان قرارداد فرم درمانگر (الزامیِ خالی → خطا)
-    // — T7: اتصال معلم → «پاسخ معلم: X» در رویداد زمینهٔ پکیج هم
     const ctxPayload = withTeacherName(buildEventPayload(anchorType.fields, values, true), teacher);
     const ctxSummary = buildSummary(ctxPayload, null);
 
-    // ۴) تراکنش واحد — یا همه یا هیچ
     const occurredAt = now().toISOString();
     const sourceTag = input.viaWeb ? `web:${occurredAt}` : (input.sourceChatId ?? 'unknown');
     await db.transaction(async (tx) => {
@@ -472,7 +421,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
   }
 
   return {
-    // ───────── کاتالوگ انواع ─────────
 
     async listTypes(filters) {
       const conds: string[] = ['deleted_at IS NULL'];
@@ -593,7 +541,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return true;
     },
 
-    /** — حذف قالب (فقط مدیر) — فقط وقتی هیچ رویدادی به آن وصل نباشد؛ وگرنه خطا (غیرفعال‌سازی پیشنهاد می‌شود) */
     async deleteType(id, actor) {
       if (actor.role !== 'manager') {
         throw new ForbiddenError('حذف قالب فقط برای مدیر مجاز است');
@@ -622,8 +569,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return true;
     },
 
-    // ───────── رویدادها ─────────
-
     async listEventsByStudent(studentId, filters) {
       const limit = Math.min(Math.max(filters?.limit ?? 50, 1), 200);
       const rows = await db.query<EventRow>(
@@ -633,7 +578,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return rows.map(eventRowToRecord);
     },
 
-    /** — رویدادهای یک نوبت (نشانگر «گزارش ثبت‌شده» در جلسات/نوبت‌ها) */
     async listEventsByAppointment(appointmentId) {
       const rows = await db.query<EventRow>(
         `${EVENT_SELECT} AND e.appointment_id = ? ORDER BY e.occurred_at DESC, e.created_at DESC`,
@@ -642,7 +586,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return rows.map(eventRowToRecord);
     },
 
-    /** — رویدادهای چند نوبت یک‌جا (نشانگر گزارش در «گزارش جلسات من») */
     async listEventsByAppointments(appointmentIds) {
       const ids = [...new Set(appointmentIds)].filter((x) => typeof x === 'string' && x.length > 0).slice(0, 100);
       if (ids.length === 0) return new Map();
@@ -675,8 +618,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       if (!type.active) throw new ConflictError('این نوع رویداد غیرفعال است');
 
       const isChecklist = type.category === 'checklist';
-      // — T5: پکیج چند-ابزاری — رویداد لنگر با توکن ساخته می‌شود؛ پاسخ خانواده در
-      // submit، به‌ازای هر کامپوننت رویداد مستقل می‌سازد + رویداد همین type (زمینه)
       const isPackage = packageComponentsOf(type.key) !== null;
       const asDraft = Boolean(input.draft) && !isChecklist && !isPackage; // چک‌لیست/پکیج هرگز پیش‌نویس نمی‌شود
       let status: CaseEventStatus = 'completed';
@@ -687,7 +628,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       let fillExpires: string | null = null;
 
       if (isChecklist || isPackage) {
-        // چک‌لیست/پکیج — رویداد با وضعیت «در انتظار پاسخ خانواده» ساخته می‌شود
         status = 'pending_family';
         fillToken = crypto.randomUUID();
         fillExpires = new Date(now().getTime() + fillExpiryHours * 3600_000).toISOString();
@@ -722,7 +662,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
             fieldCount: { from: null, to: type.fields.length }
           }
         });
-        // هوک اقدام بعدی فقط برای گزارش نهایی‌شده (نه پیش‌نویس)
         if (!asDraft) {
           await runFollowUpHook(tx, { id, student_id: input.studentId }, type.fields, payload, actor);
         }
@@ -731,15 +670,8 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return eventRowToRecord(await getEventRow(id));
     },
 
-    /**
-     * — T9/m152: ثبت چیپ غربالگری حسی — مسیر اختصاصیِ دوکلیکی تب شناسایی.
-     * تفاوت با createEvent: رویداد همین‌جا completed می‌شود (چک‌لیستِ غیرخانواده‌پر است —
-     * pending_family و توکن بی‌معناست)؛ تحلیل v2 + payload برچسب‌دار در همان تراکنش.
-     * آیتم جا/خارج از بازه → ValidationError فارسی (بدون رکورد).
-     */
     async createSensoryChipEvent(studentId, input, actor) {
       await assertStudent(studentId);
-      // اول اعتبارسنجی — ورودی خراب هیچ ردی (نه event نه type) نمی‌گذارد
       const levels = validateSensoryChipLevels(input.levels);
       const type = typeRowToRecord(await ensureSensoryChipType());
       const payload = buildSensoryChipPayload(levels);
@@ -771,16 +703,8 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return eventRowToRecord(await getEventRow(id));
     },
 
-    /**
-     * — T10/m153: ثبت چیپ هستهٔ خواندن — مسیر اختصاصیِ دوکلیکی مرحلهٔ مهارت‌ها (حالت SLD).
-     * تفاوت با createEvent: رویداد همین‌جا completed می‌شود (چک‌لیستِ غیرخانواده‌پر است —
-     * pending_family و توکن بی‌معناست)؛ تحلیل v2 + payload برچسب‌دار + پیشنهاد شرطی
-     * (readCoreAdviceOf → advice_N) در همان تراکنش.
-     * آیتم جا/خارج از بازه → ValidationError فارسی (بدون رکورد).
-     */
     async createReadCoreEvent(studentId, input, actor) {
       await assertStudent(studentId);
-      // اول اعتبارسنجی — ورودی خراب هیچ ردی (نه event نه type) نمی‌گذارد
       const levels = validateReadCoreLevels(input.levels);
       const type = typeRowToRecord(await ensureReadCoreType());
       const payload = buildReadCorePayload(levels);
@@ -812,16 +736,8 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return eventRowToRecord(await getEventRow(id));
     },
 
-    /**
-     * — T12/m160: ثبت آزمون عملکرد مرکزی (خواندن/نوشتن/حساب) — ارزیابیِ درمانگر در مرکز.
-     * تفاوت با createEvent: رویداد همین‌جا completed می‌شود و تحلیل هنجاری (درصد انتظار
-     * پایه + باند + پرچم‌های علمی) در همان تراکنش ساخته می‌شود — مسیر عمومی برای
-     * category=session تحلیل نمی‌سازد. type از کتابخانهٔ فعال باتری با کلید منطقی حل
-     * می‌شود (بدون ensure — عضو رسمی باتری است)؛ حوزه/فیلد خراب → خطای فارسی بدون رکورد.
-     */
     async createProbeEvent(studentId, input, actor) {
       await assertStudent(studentId);
-      // اول اعتبارسنجی — ورودی خراب هیچ ردی نمی‌گذارد
       const areaRaw = String(input.area ?? '').trim();
       if (!(areaRaw in PROBE_AREA_KEYS)) {
         throw new ValidationError('حوزهٔ آزمون نامعتبر است — خواندن، نوشتن یا حساب');
@@ -862,16 +778,8 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return eventRowToRecord(await getEventRow(id));
     },
 
-    /**
-     * — m161: ثبت ارزیابی عملکردی توانبخشی ذهنی — آزمونِ درمانگر در مرکز (خط پایهٔ مسیر توانبخشی).
-     * تفاوت با createEvent: رویداد همین‌جا completed می‌شود و تحلیل ملاکی (باند هر شش حیطه +
-     * باند کلی از ترکیب + پرچم‌ها + پیشنهاد حیطه‌ای) در همان تراکنش ساخته می‌شود.
-     * type ce-rehab-fx-v1 idempotent ensure می‌شود (active=0 — خارج کتابخانه، فقط مسیر اختصاصی).
-     * حیطهٔ جا/خارج از قلم‌رو/راهنمای نامعتبر → ValidationError فارسی بدون هیچ رکورد.
-     */
     async createRehabFxEvent(studentId, input, actor) {
       await assertStudent(studentId);
-      // اول اعتبارسنجی — ورودی خراب هیچ ردی (نه event نه type) نمی‌گذارد
       const values = validateRehabFxValues(input.values);
       const type = typeRowToRecord(await ensureRehabFxType());
       const result = analyzeRehabFx(values);
@@ -923,7 +831,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
           mergedValues[f.key] = null;
         }
       }
-      // پیش‌نویس همچنان سخت‌گیری کمتر دارد؛ ثبت‌شده strict می‌ماند
       const payload = buildEventPayload(type.fields, mergedValues, row.status !== 'draft');
       const summary = input.summary?.trim() ? input.summary.trim() : buildSummary(payload, null);
       await db.execute(
@@ -941,7 +848,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return eventRowToRecord(await getEventRow(id));
     },
 
-    /** — نهایی‌سازی پیش‌نویس: اعتبارسنجی الزامی + تولید خلاصه + هوک اقدام بعدی */
     async finalizeEvent(id, actor) {
       await db.transaction(async (tx) => {
         const row = await tx.queryOne<EventRow>(`${EVENT_SELECT} AND e.id = ?`, [id]);
@@ -972,7 +878,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         await runFollowUpHook(tx, { id, student_id: row.student_id }, type.fields, payload, actor);
         log.info('event.finalized', { id });
       });
-      // بازخوانی پس از تراکنش
       return eventRowToRecord(await getEventRow(id));
     },
 
@@ -997,8 +902,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return eventRowToRecord(await getEventRow(id));
     },
 
-    /** — حذف نرم رویداد (فقط مدیر) — دستور کاربر: «امکان حذف رویداد ها برای مدیر فراهم بشه»
-     * از همهٔ فهرست‌ها/تایم‌لاین/صف انتظار پنهان می‌شود؛ audit برای شفافیت می‌ماند */
     async deleteEvent(id, actor) {
       if (actor.role !== 'manager') {
         throw new ForbiddenError('حذف رویداد فقط برای مدیر مجاز است');
@@ -1021,8 +924,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       });
       log.info('event.deleted', { id, deletedBy: actor.staffId });
     },
-
-    // ───────── پیوست‌ها ─────────
 
     async addEventFile(eventId, input, actor) {
       const check = validateFileInput(input);
@@ -1100,7 +1001,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
           [fileId, eventId]
         );
         if (!row) throw new NotFoundError('پیوست');
-        // گیت: ثبت‌کنندهٔ رویداد یا مدیر — هم‌تراز ویرایش خود رویداد
         const event = await tx.queryOne<{ staff_id: string | null; created_by: string }>(
           `SELECT staff_id, created_by FROM case_events WHERE id = ?`,
           [eventId]
@@ -1117,8 +1017,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         });
       });
     },
-
-    // ───────── حلقهٔ خانواده ─────────
 
     async guardianChats(studentId) {
       const linkRows = await db.query<{ chat_id: string }>(
@@ -1139,9 +1037,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return chats.includes(chatId);
     },
 
-    // ───────── موتور تشخیص و مداخله ─────────
-
-    /** چت‌های معلمِ کلاسِ دانش‌آموز — class_bot_links متصل */
     async teacherChats(studentId) {
       const rows = await db.query<{ chat_id: string }>(
         `SELECT DISTINCT l.chat_id
@@ -1153,7 +1048,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return [...new Set(rows.map((r) => r.chat_id))];
     },
 
-    /** قالب‌های چک‌لیست مناسب دانش‌آموز — مرتب بر هم‌پوشانی برچسب‌ها (موتور پیشنهاد) */
     async suggestTypesForStudent(studentId) {
       const [tagRows, typeRows] = await Promise.all([
         db.query<{ id: string; name: string }>(
@@ -1180,7 +1074,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
           .filter((m) => m.name.length > 0);
         return { type, matched, score: matched.length };
       });
-      // ترتیب: تطابق برچسب بیشتر → مخاطب نزدیک‌تر به خانواده (both > family > teacher) → عنوان فارسی
       const audienceRank: Record<string, number> = { both: 0, family: 1, teacher: 2 };
       items.sort(
         (a, b) =>
@@ -1191,7 +1084,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return items;
     },
 
-    /** صف «در انتظار پاسخ» — چک‌لیست‌های pending_family با نام دانش‌آموز و وضعیت ارسال */
     async listPendingChecklists() {
       const rows = await db.query<EventRow>(
         `SELECT e.id, e.event_type_id, e.student_id, e.staff_id, s.full_name AS staff_name,
@@ -1230,24 +1122,15 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       });
     },
 
-    /**
-     * — ارسال با یک کلیک: رویداد باید چک‌لیستِ در انتظار باشد؛
-     * گیرنده‌ها از audience قالب (یا صریح درخواست) resolved می‌شوند؛
-     * پیام با لینک امن وب‌فرم از observer (notify) می‌رود؛ شمارش واقعی برمی‌گردد.
-     * — T7: teacherName/teacherId اختیاری — لینک به نام معلم گره می‌خورد (فرم «فرم شما — X» می‌بیند
-     * و پاسخ‌ها «پاسخ معلم: X» می‌گیرند)؛ قالب پیام هم bot_teacher_package_link می‌شود.
-     */
     async sendChecklistLink(eventId, input, actor) {
       if (!sendFn) throw new ConflictError('سرویس اعلان در دسترس نیست');
       const row = await getEventRow(eventId);
       const type = typeRowToRecord(await loadTypeRow(row.event_type_id));
-      // — T5: پکیج فرم جامع هم مسیر ارسال لینک امن را باز می‌کند (افزودنی — الگوی چک‌لیست)
       const isPkg = packageComponentsOf(type.key) !== null;
       if (row.type_category !== 'checklist' && !isPkg) throw new ValidationError('این رویداد چک‌لیست نیست');
       if (row.status !== 'pending_family') throw new ConflictError('این چک‌لیست در انتظار پاسخ نیست (قبلاً پر یا لغو شده)');
       if (!type.familyFillable) throw new ValidationError('این فرم برای پر کردن از سمت گیرنده طراحی نشده است');
 
-      // — T7: اتصال معلم — نام معتبر یا خطای فارسی؛ گره‌زدن قبل از ارسال
       const teacherName = sanitizeTeacherName(input.teacherName ?? null);
       if (input.teacherName != null && String(input.teacherName).trim() !== '' && !teacherName) {
         throw new ValidationError('نام معلم برای اتصال لینک نامعتبر است');
@@ -1282,9 +1165,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         link
       ].filter((x): x is string => Boolean(x)).join('\n');
 
-      // dedup داخل همان دقیقه (ضد دابل‌کلیک) — ارسال دوباره در دقیقهٔ بعد آزاد است
       const minuteBucket = Math.floor(now().getTime() / 60_000);
-      // — T7: با اتصال معلم، پیام با قالب معلم‌محور (سلام به نام معلم) می‌رود
       const template = teacher ? 'bot_teacher_package_link' as const : 'bot_checklist_link' as const;
       const sent = await sendFn({
         studentId: row.student_id,
@@ -1315,10 +1196,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return { sent, targets: chats, link };
     },
 
-    /**
-     * — T7: صدور/کپی لینک امن به‌ازای یک معلم مشخص — بدون ارسال بله.
-     * مدرسه بدون چت متصل هم کار می‌کند؛ چند معلم = چند رویداد لنگر مستقل = چند لینک مستقل.
-     */
     async issueTeacherFillLink(eventId, input, actor) {
       const row = await getEventRow(eventId);
       const type = typeRowToRecord(await loadTypeRow(row.event_type_id));
@@ -1367,10 +1244,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return `${base}/public/case-events/${id}/fill?token=${row.fill_token}`;
     },
 
-    /**
-     * — T5: رکورد کامپوننت‌های پکیج به‌ترتیب قرارداد (فرم عمومی پکیجی).
-     * نوعِ پکیج نباشد → null؛ کامپوننتِ غایب → خطا با پیام فارسی.
-     */
     async listPackageComponentTypes(typeId) {
       const type = typeRowToRecord(await loadTypeRow(typeId));
       const comps = packageComponentsOf(type.key);
@@ -1386,7 +1259,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
 
     async fillByFamily(id, input, actor) {
       const row = await getEventRow(id);
-      // — T5: پکیج فرم جامع — یک submit → رویداد مستقل به‌ازای هر کامپوننت + رویداد زمینه
       const anchorType = typeRowToRecord(await loadTypeRow(row.event_type_id));
       const pkgComponents = packageComponentsOf(anchorType.key);
       if (pkgComponents) {
@@ -1398,7 +1270,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       if (row.status === 'cancelled') throw new ConflictError('این چک‌لیست لغو شده است');
       if (row.status !== 'pending_family') throw new ConflictError('این چک‌لیست قبلاً پاسخ گرفته است');
       if (input.viaWeb) {
-        // گیت توکن — بررسی در مسیر عمومی انجام شده؛ این‌جا انقضا دوباره چک می‌شود
         if (!row.fill_expires_at || new Date(row.fill_expires_at).getTime() < now().getTime()) {
           throw new ConflictError('مهلت پر کردن این چک‌لیست تمام شده است');
         }
@@ -1413,14 +1284,10 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
           throw new ValidationError(`آیتم «${f.label}» بی‌پاسخ مانده است`);
         }
       }
-      // تحلیل v2: معکوس/گزینه‌های نمره‌دار/زیرمقیاس/پرچم بحرانی/تفسیر خودکار
-      // (مسیر تکی — پاسخ‌ها عددی‌اند؛ پکیج از fillPackageFlow جداگانه می‌گذرد)
       const numericValues: Record<string, number> = Object.fromEntries(
         Object.entries(values).map(([k, v]) => [k, Number(v)])
       );
       const analysis = analyzeChecklist(type.fields, bands, numericValues, subscales);
-      // payload نمایشی: نمرهٔ خام برای scale؛ برچسب گزینه برای گزینه‌ای نمره‌دار
-      // — T7: فرم معلمِ تک که لینکش به معلم گره خورده → «پاسخ معلم: X» در payload
       const teacher = teacherBindingOfPayload(parseJson<unknown>(row.payload, null));
       const payload = withTeacherName((() => {
         const p: Record<string, { value: string; label: string }> = {};

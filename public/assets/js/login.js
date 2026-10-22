@@ -1,11 +1,3 @@
-/**
- * صفحهٔ ورود
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// login.js — صفحه ورود با رمز
-// امنیت طبق تصمیم کاربر اولویت نیست؛ ولی تجربه کاربری تمیز و هم‌سازگار با زبان طراحی است.
-// جریان: نام کاربری + رمز → POST /api/auth/login → ذخیره توکن → رویداد cs:login
-
 import { api, setToken, setDevStaffId } from './api.js';
 import { el, icon } from './ui.js';
 
@@ -37,7 +29,6 @@ async function drawPublicAnnouncements(box) {
       )
     );
   } catch {
-    /* اعلان عمومی نیست — بی‌اهمیت */
   }
 }
 
@@ -91,7 +82,6 @@ export function renderLoginPage(onSuccess) {
       setDevStaffId(res.data.staff.id);
       sessionStorage.setItem(SESSION_KEY, '1');
       onSuccess?.(res.data.staff);
-      // بوت تمیز از نو — رندر مسیر با نشست تازه
       setTimeout(() => location.reload(), 250);
     } catch (err) {
       errorBox.textContent = err.message || 'ورود ناموفق بود.';
@@ -134,7 +124,6 @@ export function renderLoginPage(onSuccess) {
   return { submit };
 }
 
-/** بازگرداندن پوسته اپ بعد از ورود (یا در صورت وجود نشست معتبر هنگام بوت) */
 export function showApp() {
   const root = document.getElementById('login-root');
   if (root) root.style.display = 'none';

@@ -1,14 +1,3 @@
-/**
- * ماژول هستهٔ نوبت‌دهی — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Business logic نوبت — مالک WRITE جدول‌های appointments و appointment_students
-// قواعد کلیدی:
-// - version اجباری برای update/move/resize/cancel — قدیمی → ConflictError 409
-// - audit هم‌تراکنش با تغییر (logInTransaction در همان batch)
-// - تداخل فقط هشدار نرم — منطق تداخل در conflict-engine (setter injection)
-// - زمان ISO UTC، شبکه ۱۵ دقیقه‌ای
-
 import type { AppointmentStudent, AuthContext, ConflictWarning } from '@core/shared';
 import { addMinutes, isOnGrid, SLOT_MINUTES } from '@core/shared';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
@@ -25,7 +14,6 @@ interface ConflictChecker {
   checkOverlap(proposed: { staffId: string; startAt: string; endAt: string; excludeId?: string }): Promise<ConflictWarning[]>;
 }
 
-/** ردیف خروجی listMyStudents (فاز ۵) */
 interface MyStudentRow {
   id: string;
   first_name: string;
@@ -41,31 +29,18 @@ interface MyStudentRow {
   wait_since: string | null;
 }
 
-/**
- * فاز ۵ — projection وضعیت پذیرش (همان قرارداد پروجکشن در student-profile؛
- * اینجا inline تا اتصال عرضی بین دامنه‌ها ساخته نشود — الگوی COALESCE در waitlist هم همین است):
- * waiting → ورودی باز متصل دارد؛ admitted → ورودی پذیرش‌شده دارد
- */
 const MY_STUDENT_WAIT_PROJECTION = `,
        CASE WHEN EXISTS (SELECT 1 FROM waitlist wq WHERE wq.student_id = s.id AND wq.deleted_at IS NULL AND wq.status IN ('waiting','called','scheduled')) THEN 'waiting'
             WHEN EXISTS (SELECT 1 FROM waitlist wa WHERE wa.student_id = s.id AND wa.deleted_at IS NULL AND wa.status = 'admitted') THEN 'admitted'
             ELSE NULL END AS wait_status,
        (SELECT wq2.created_at FROM waitlist wq2 WHERE wq2.student_id = s.id AND wq2.deleted_at IS NULL AND wq2.status IN ('waiting','called','scheduled') ORDER BY wq2.created_at LIMIT 1) AS wait_since`;
 
-/**
- * فاز ۵ — تفکیک نقش در نوشتن نوبت: مدیر/منشی همهٔ نوبت‌ها؛
- * درمانگر فقط نوبت‌های خودش (staff_id = خود او). خواندن بدون تغییر باز می‌ماند (بورد/گزارش‌ها).
- */
 function assertAppointmentScope(actor: AuthContext, targetStaffId: string): void {
   if (actor.role === 'manager' || actor.role === 'secretary') return;
   if (actor.role === 'therapist' && actor.staffId === targetStaffId) return;
   throw new ForbiddenError('شما فقط به نوبت‌های خودتان دسترسی دارید');
 }
 
-/**
- * فاز ۵ — دانش‌آموزِ قابل نوبت‌دهی برای درمانگر (D4): فقط دانش‌آموزانی که
- * سابقهٔ نوبت با خودِ او دارند. منشی/مدیر بدون محدودیت (نوبت‌دهی اولیه = intake).
- */
 async function assertStudentsInScope(
   reader: { query<T>(sql: string, params?: unknown[]): Promise<T[]> },
   actor: AuthContext,
@@ -106,7 +81,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
 
   const logNotify = logger.child('appointment.notify');
 
-  /** ناظر چرخه حیات هرگز عملیات اصلی را شکست نمی‌دهد (best-effort) */
   async function fireLifecycle(
     event: 'created' | 'moved' | 'cancelled',
     appointment: Appointment,
@@ -168,12 +142,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       return rows.map((r) => rowToAppointment(r, (byAppointment.get(r.id) ?? []).map(rowToStudent)));
     },
 
-    /**
-     * فاز ۵ — دانش‌آموزانِ فعالِ مرتبط با همکار جاری (D4: اشتقاق از سابقهٔ نوبت)
-     * + badge وضعیت پذیرش (پروجکشن از waitlist). پذیرش‌شده‌ها اول.
-     * -c — پرونده‌های «تحت مسئولیت» همکار هم اضافه می‌شود (students.owner_staff_id).
-     * خواندن آزاد است — خروجی همیشه نسبت به خودِ بازیگر محاسبه می‌شود.
-     */
     async listMyStudents(actor: AuthContext): Promise<MyStudent[]> {
       const rows = await db.query<MyStudentRow>(
         `SELECT s.id, s.first_name, s.last_name, s.grade, s.school_id,
@@ -222,7 +190,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
 
       const { appointment, warnings } = await db.transaction((tx) => service.createWithinTx(tx, input, actor));
 
-      //: اعلان «نوبت جدید» برای معلم و ولیّ دانش‌آموزان — بعد از commit
       await fireLifecycle('created', appointment);
 
       return { appointment, warnings };
@@ -236,8 +203,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
         throw new ValidationError('حداقل یک دانش‌آموز لازم است');
       }
 
-      // فاز ۵ — RBAC: درمانگر فقط برای خودش و فقط دانش‌آموزان خودش
-      // (مسیر waitlist.schedule هم از همین گارد می‌گذرد — بازیگرش منشی/مدیر است)
       assertAppointmentScope(actor, input.staffId);
       await assertStudentsInScope(tx, actor, input.students.map((s) => s.studentId));
 
@@ -266,7 +231,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
         }
       });
 
-      // پاسخ در حافظه — خواندن داخل تراکنش مقدار کهنه می‌دهد (writeها هنوز batch نشده‌اند)
       const appointment: Appointment = {
         id,
         staffId: input.staffId,
@@ -291,7 +255,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
         )
       };
 
-      // هشدار نرم تداخل — read از DB زنده؛ ردیف جدید هنوز flush نشده (خودش exclude است)
       let warnings: ConflictWarning[] = [];
       if (conflictEngine) {
         warnings = await conflictEngine.checkOverlap({
@@ -336,7 +299,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
           });
         }
 
-        // ساخت پاسخ در حافظه — خواندن داخل همان تراکنش مقدار کهنه می‌دهد (writeها batch می‌شوند)
         const students = await loadStudents(tx, id);
         const merged = noteChanged ? { ...row, note: patch.note, version: row.version + 1 } : row;
         return rowToAppointment(merged as AppointmentRow, students.map(rowToStudent));
@@ -385,7 +347,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
         });
       }
 
-      //: اعلان «تغییر زمان» با زمان قبلی
       await fireLifecycle('moved', appointment, { startAt: current.startAt, endAt: current.endAt });
 
       return { appointment, warnings };
@@ -447,8 +408,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
           `UPDATE appointments SET status = 'cancelled', version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [id, version]
         );
-        //: حضور «همه» دانش‌آموزان این نوبت cancelled می‌شود — نه فقط pending؛
-        // present/absentِ مانده از جلسه لغوشده آمار گزارش را خراب می‌کرد
         await tx.execute(`UPDATE appointment_students SET attendance = 'cancelled' WHERE appointment_id = ? AND attendance != 'cancelled'`, [id]);
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -461,31 +420,17 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
 
       const cancelled = (await service.getById(id)) as Appointment;
 
-      //: اعلان «لغو نوبت» برای معلم و ولیّ دانش‌آموزان
       await fireLifecycle('cancelled', cancelled);
 
       return cancelled;
     },
 
-    /**
-     * — حذف کامل نوبت ثبت‌شدهٔ اشتباه (نه لغو — پاک‌شدن از تقویم و «لیست فردا»).
-     * گاردها:
-     * - scope: دفتر (مدیر/منشی) هر نوبت؛ درمانگر فقط نوبت خودش (هم‌سوی cancel/create)
-     * - سابقهٔ جلسه (حاضر/غایب یا یادداشت جلسه) → 409 — از «لغو نوبت» استفاده شود
-     * - گزارش جلسهٔ ثبت‌شده در تایم‌لاین (case_events) → 409 — سند بالینی نابود نمی‌شود
-     * اثرهای جانبی داخل تراکنش:
-     * - ورودی لیست انتظارِ «scheduled» متصل → بازگشت خودکار به صف «waiting» + audit
-     * - ردیف‌های appointment_students پاک می‌شوند (یادداشت جلسهٔ ثبت‌نشده هم با آن می‌رود)
-     * - اعلان‌های متصل با ON DELETE SET NULL بی‌مقصد می‌شوند (FK)
-     * - audit «appointment.delete» هم‌تراکنش (رد پا در audit_log می‌ماند)
-     */
     async remove(id: string, actor: AuthContext): Promise<void> {
       const current = await service.getById(id);
       if (!current) throw new NotFoundError('نوبت');
       assertAppointmentScope(actor, current.staffId);
 
       await db.transaction(async (tx) => {
-        // ۱) سند بالینی؟ — گزارش جلسهٔ ثبت‌شده در تایم‌لاین هرگز با نوبت پاک نمی‌شود
         const events = await tx.queryOne<{ cnt: number }>(
           `SELECT COUNT(*) AS cnt FROM case_events WHERE appointment_id = ?`,
           [id]
@@ -494,9 +439,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
           throw new ConflictError('برای این نوبت گزارش جلسه در تایم‌لاین ثبت شده — حذف مجاز نیست');
         }
 
-        // ۲) سابقهٔ واقعی جلسه فقط برای جلسهٔ «تمام‌شده» سد می‌شود؛
-        // ثبت حضور (حاضر/غایب) یا یادداشت روی جلسهٔ آینده/در جریان خودش ثبتِ پیش‌ماتِ
-        // اشتباه است (دقیقاً سناریوی نوبت تکراری فردا با «غایب») و با خود نوبت پاک می‌شود
         const finished = current.endAt <= new Date().toISOString();
         if (finished) {
           const history = await tx.queryOne<{ cnt: number }>(
@@ -510,9 +452,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
           }
         }
 
-        // ۳) ورودی لیست انتظار متصل → بازگشت خودکار به صف (قرینه waitlist.schedule)
-        //: هر ورودیِ متصل پوشش داده می‌شود — ارجاع‌های کهنهٔ غیر-scheduled
-        // (نیامد/انصراف/بازگشت به صف قبل از مایگریشن 0033) FK حذف را می‌بستند
         const linked = await tx.query<{ id: string; status: string }>(
           `SELECT id, status FROM waitlist
             WHERE scheduled_appointment_id = ? AND deleted_at IS NULL`,
@@ -554,7 +493,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
           }
         }
 
-        // ۴) حذف کامل — دانش‌آموزان نوبت + خود نوبت
         await tx.execute(`DELETE FROM appointment_students WHERE appointment_id = ?`, [id]);
         await tx.execute(`DELETE FROM appointments WHERE id = ?`, [id]);
 
@@ -574,12 +512,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       logger.child('appointment.delete').info('appointment.deleted', { id });
     },
 
-    /**
-     * فاز ۱ (تصمیم D1) — تغییر وضعیت عملیاتی نوبت روی بورد منشی.
-     * بدون version-check (اقدام سریع عملیاتی؛ last-write-wins + audit) و بدون
-     * bump نسخه — start_at/end_at/status دست‌نخورده می‌مانند.
-     * بدون اعلان (تصمیم D6). همان‌وضعیت = no-op idempotent بدون audit.
-     */
     async setOpsStatus(id: string, opsStatus: AppointmentOpsStatus, actor: AuthContext): Promise<Appointment> {
       const { result, changed, studentIds, from } = await db.transaction(async (tx) => {
         const q = selectAppointmentById(id);
@@ -609,7 +541,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
           });
         }
 
-        // پاسخ در حافظه — خواندن داخل همان تراکنش مقدار کهنه می‌دهد (writeها batch می‌شوند)
         const students = await loadStudents(tx, id);
         const merged = from !== opsStatus ? { ...row, ops_status: opsStatus } : row;
         return {
@@ -620,7 +551,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
         };
       });
 
-      // ناظر وضعیت عملیاتی بعد از commit (best-effort؛ بدون اعلان — D6)
       if (opsObserver && changed) {
         try {
           await opsObserver.onOpsStatusChanged(
@@ -640,7 +570,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       return result;
     },
 
-    /** — برگرداندن نوبت لغوشده به وضعیت «برنامه‌ریزی‌شده» (قرینه cancel) */
     async restore(id: string, version: number, actor: AuthContext): Promise<Appointment> {
       const current = await service.getById(id);
       if (!current) throw new NotFoundError('نوبت');
@@ -655,7 +584,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
           `UPDATE appointments SET status = 'scheduled', version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [id, version]
         );
-        // قرینه cancel: حضورهای «لغو‌شده» دوباره در انتظار می‌شوند
         await tx.execute(`UPDATE appointment_students SET attendance = 'pending' WHERE appointment_id = ? AND attendance = 'cancelled'`, [id]);
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -668,7 +596,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
 
       const restored = (await service.getById(id)) as Appointment;
 
-      // اعلان برقراری نوبت — همان قالب «ثبت نوبت» تا ولیّ و معلم در جریان قرار گیرند
       await fireLifecycle('created', restored);
 
       return restored;
@@ -712,7 +639,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
         if (!row) throw new NotFoundError('نوبت');
         assertAppointmentScope(actor, row.staff_id); // فاز ۵ — قبل از بررسی وضعیت
 
-        // با الگوی collector نمی‌توان تعداد تغییرات را خواند؛ ابتدا وجود بررسی می‌شود
         const existing = await tx.queryOne<{ student_id: string }>(
           `SELECT student_id FROM appointment_students WHERE appointment_id = ? AND student_id = ?`,
           [appointmentId, studentId]

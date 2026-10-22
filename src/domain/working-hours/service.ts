@@ -1,10 +1,3 @@
-/**
- * ماژول ساعات کاری — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Business logic for weekly working hours — overlap is a HARD error here
-// (unlike appointments where conflict-engine only warns: base data must be consistent)
-
 import type { AuthContext } from '@core/shared';
 import { ConflictError, ForbiddenError, NotFoundError } from '@core/errors';
 import type { DbClient } from '@core/db';
@@ -36,7 +29,6 @@ function rowToWorkingHour(row: WorkingHourRow): WorkingHour {
   };
 }
 
-/** ranges of one staff+weekday, mapped to rule input shape */
 async function loadStaffRanges(db: DbClient, staffId: string): Promise<HourRange[]> {
   const rows = await db.query<{ weekday: number; start_minute: number; end_minute: number }>(
     `SELECT weekday, start_minute, end_minute FROM working_hours WHERE staff_id = ?`,
@@ -48,10 +40,6 @@ async function loadStaffRanges(db: DbClient, staffId: string): Promise<HourRange
 export function createWorkingHoursService(deps: WorkingHoursDeps): WorkingHoursService {
   const { db, audit, logger } = deps;
 
-  /**
-   * فاز ۵ — ساعات کاری: مدیر/منشی همه؛ درمانگر فقط برنامهٔ خودش
-   * (ساعت کاری مبنای نوبت‌دهی خودکار اوست — دستکاری برنامهٔ همکار مجاز نیست)
-   */
   function assertHoursScope(actor: AuthContext, staffId: string): void {
     if (actor.role === 'manager' || actor.role === 'secretary') return;
     if (actor.role === 'therapist' && actor.staffId === staffId) return;
@@ -119,7 +107,6 @@ export function createWorkingHoursService(deps: WorkingHoursDeps): WorkingHoursS
       }
 
       await db.transaction(async (tx) => {
-        // Full replace — simple and predictable for the weekly editor UI
         await tx.execute(`DELETE FROM working_hours WHERE staff_id = ?`, [staffId]);
         for (const range of items) {
           await tx.execute(

@@ -1,11 +1,3 @@
-/**
- * کلاینت HTTP فرانت — fetch با خطای یکدست و هدر احراز
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// api.js — thin fetch wrapper for the Worker API
-//: احراز هویت صفحه ورود — توکن نشست در localStorage + هدر Authorization
-// (در محیط توسعه هم X-Dev-Staff-Id فرستاده می‌شود؛ در production نادیده گرفته می‌شود)
-
 const STAFF_ID_KEY = 'cs.staffId';
 const TOKEN_KEY = 'cs.token';
 
@@ -27,7 +19,6 @@ export function setToken(token) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
-/** خروج کامل — توکن و هویت توسعه پاک می‌شوند */
 export function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(STAFF_ID_KEY);
@@ -68,7 +59,6 @@ async function request(method, path, body) {
   try {
     payload = await res.json();
   } catch {
-    // 204 و پاسخ‌های بدون بدنه
   }
 
   if (!res.ok) {
@@ -91,10 +81,6 @@ export const api = {
   del: (path) => request('DELETE', path)
 };
 
-/**
- * — ارسال FormData (multipart) — Content-Type دستی ست نمی‌شود تا مرورگر
- * boundary بسازد؛ همان مرز خطا/توکن request اصلی
- */
 async function requestForm(method, path, formData) {
   const headers = { Accept: 'application/json' };
   const token = getToken();
@@ -115,7 +101,6 @@ async function requestForm(method, path, formData) {
   try {
     payload = await res.json();
   } catch {
-    // 204 و پاسخ‌های بدون بدنه
   }
   if (!res.ok) {
     const err = new Error(payload?.message || ERROR_TEXT[payload?.error] || `خطا (${res.status})`);
@@ -127,15 +112,10 @@ async function requestForm(method, path, formData) {
   return payload ?? {};
 }
 
-/** — POST فرم چندبخشی (بارگذاری چندفایلی بانک تمرین) */
 api.postForm = (path, formData) => requestForm('POST', path, formData);
 
-/** — PUT بدنهٔ باینری خام (تکه‌های بارگذاری پیوستهٔ فایل بزرگ) */
 api.putRaw = (path, arrayBuffer) => requestRaw('PUT', path, arrayBuffer);
 
-/**
- * — درخواست با بدنهٔ باینری خام — Content-Type: application/octet-stream
- */
 async function requestRaw(method, path, arrayBuffer) {
   const headers = { Accept: 'application/json', 'Content-Type': 'application/octet-stream' };
   const token = getToken();
@@ -156,7 +136,6 @@ async function requestRaw(method, path, arrayBuffer) {
   try {
     payload = await res.json();
   } catch {
-    // پاسخ بدون بدنه
   }
   if (!res.ok) {
     const err = new Error(payload?.message || ERROR_TEXT[payload?.error] || `خطا (${res.status})`);
@@ -168,7 +147,6 @@ async function requestRaw(method, path, arrayBuffer) {
   return payload ?? {};
 }
 
-/** ساخت query string از object (فیلدهای null/undefined حذف می‌شوند) */
 export function qs(params) {
   const pairs = Object.entries(params ?? {})
     .filter(([, v]) => v !== undefined && v !== null && v !== '')

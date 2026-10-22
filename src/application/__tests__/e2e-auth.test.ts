@@ -1,10 +1,3 @@
-/**
- * تست‌های e2e — auth
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-auth.test.ts — یکپارچگی واقعی: ورود، نشست، RBAC، هدرهای زیرساختی
-// همهٔ درخواست‌ها از روی اپ واقعی Hono با اسکیمای واقعی migrations می‌گذرند.
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { APP_VERSION, APP_MILESTONE } from '@core/version';
 import {
@@ -30,8 +23,6 @@ describe('/ — auth & session (API واقعی)', () => {
     expect(res.status).toBe(200);
     const body = res.body as { ok: boolean; version: string; milestone: string };
     expect(body.ok).toBe(true);
-    // نسخه باید با تک‌منبع حقیقت (core/version.ts) یکی باشد —
-    // این همان عددی است که پس از هر deploy برای تأیید به‌روزرسانی چک می‌شود.
     expect(body.version).toBe(APP_VERSION);
     expect(body.milestone).toBe(APP_MILESTONE);
   });
@@ -53,7 +44,6 @@ describe('/ — auth & session (API واقعی)', () => {
     expect(res.status).toBe(401);
     const err = res.body as { error: string; message: string };
     expect(err.error).toBe('AUTH_ERROR');
-    // پیام نباید فاش کند که کاربر وجود دارد یا رمز غلط است
     expect(err.message).toContain('نام کاربری یا رمز');
   });
 
@@ -138,7 +128,6 @@ describe('/ — auth & session (API واقعی)', () => {
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{invalid' },
       A.env as never
     );
-    // چون login بیرون از auth است، بدنه خراب باید 400 بدهد
     expect(res.status).toBe(400);
   });
 
@@ -196,7 +185,6 @@ describe('RBAC — نقش‌ها روی endpointهای محافظت‌شده', (
   it('ساخت برچسب: مدیر و درمانگر مجاز (m166 — خواست کاربر)، منشی ۴۰۳؛ خواندن برای همه آزاد است', async () => {
     const list = await therapist.get('/api/tags');
     expect(list.status).toBe(200);
-    // — m166: همکار درمانگر باید بتواند برچسب اضافه کند (بانک تمرین)
     const byTherapist = await therapist.post('/api/tags', { name: 'برچسب همکار درمانگر', category: 'custom' });
     expect(byTherapist.status).toBe(201);
     const denied = await secretary.post('/api/tags', { name: 'برچسب منشی', category: 'custom' });

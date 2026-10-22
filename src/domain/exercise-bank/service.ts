@@ -1,10 +1,3 @@
-/**
- * ماژول بانک تمرین — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Business logic بانک تمرین — audit هم‌تراکنش (قانون ۴)
-// فایل: رابط ObjectStore (D1 پیش‌فرض / R2 اختیاری) — لینک خانواده: HMAC امضاشده با انقضا
-
 import type { AuthContext, TagCategory, TagRef } from '@core/shared';
 import { EXB_DOWNLOAD_TTL_SECONDS, EXERCISE_FEEDBACK_MAX, EXERCISE_FEEDBACK_MIN, SUBMISSION_ATTACH_WINDOW_HOURS, SUBMISSION_NOTE_MAX } from '@core/shared';
 import { EXERCISE_BATCH_NOTE_MAX, MAX_EXERCISE_ATTACHMENT_COUNT, MAX_EXERCISE_BATCH_LINKS, MAX_EXERCISE_FILES_PER_UPLOAD, MAX_EXERCISE_FILE_BYTES, MAX_EXERCISE_UPLOAD_CHUNK_BYTES } from '@core/shared';
@@ -58,7 +51,6 @@ import type {
   UpdatePackageInput
 } from './types';
 
-/** اتصال قطعات — فقط برای آداپترهای بدون putSegments (فایل‌های کوچک مسیر JSON) */
 function concatSegments(segments: Uint8Array[]): Uint8Array {
   if (segments.length === 1) return segments[0];
   const total = segments.reduce((n, s) => n + s.length, 0);
@@ -77,16 +69,13 @@ interface ExerciseRow {
   description: string | null;
   format: string;
   published: number;
-  /** — لینک بازی/تمرین آنلاین بیرونی */
   external_url?: string | null;
   file_name: string | null;
   file_mime: string | null;
   file_size: number | null;
   file_key: string | null;
-  /** — آمار مصرف */
   assign_count?: number;
   created_by: string;
-  /** — m166: هم‌ساز (سازندهٔ دوم) — امتیاز نصف بین دو نفر */
   co_created_by?: string | null;
   deleted_at?: string | null;
   created_at: string;
@@ -104,7 +93,6 @@ interface TagJoinRow extends TagRow {
   exercise_id: string;
 }
 
-/** — ردیف پیوست تمرین */
 interface AttachmentRow {
   id: string;
   exercise_id: string;
@@ -124,7 +112,6 @@ interface AssignmentRow {
   note: string | null;
   status: string;
   created_at: string;
-  // -c — تصحیح
   feedback: string | null;
   graded_by: string | null;
   graded_at: string | null;
@@ -149,13 +136,10 @@ interface SubmissionRow {
   exercise_title: string;
   first_name: string;
   last_name: string;
-  // -c — وضعیت تکلیف مادر + بازخورد تصحیح
   assignment_status: string;
   assignment_feedback: string | null;
   assignment_graded_at: string | null;
 }
-
-// ─── ردیف‌های بستهٔ تمرینی/تکلیف ───
 
 interface PackageDbRow {
   id: string;
@@ -209,7 +193,6 @@ interface BatchItemDbRow {
   submission_at: string | null;
 }
 
-/** decode base64 → بایت (محیط Workers: atob در دسترس است) */
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -244,21 +227,18 @@ async function hmacSign(message: string, secret: string): Promise<string> {
 
 async function hmacVerify(message: string, signature: string, secret: string): Promise<boolean> {
   const expected = await hmacSign(message, secret);
-  // مقایسهٔ ثابت‌زمان ساده — طول برابر نهایتاً بررسی نویسه‌به‌نویسه
   if (expected.length !== signature.length) return false;
   let diff = 0;
   for (let i = 0; i < expected.length; i += 1) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
   return diff === 0;
 }
 
-/** گارد RBAC نوشتن — هر سه نقش پنل مرکز (معلم مدرسه از پنل دسترسی ندارد) */
 function assertStaffRole(actor: AuthContext): void {
   if (actor.role !== 'manager' && actor.role !== 'therapist' && actor.role !== 'secretary') {
     throw new ForbiddenError('مدیریت بانک تمرین فقط برای کارکنان مرکز مجاز است');
   }
 }
 
-/** — اعتبارسنجی و نوشتن برچسب‌های بسته — همه باید فعال و موجود باشند */
 async function replacePackageTags(tx: { execute: (sql: string, params?: unknown[]) => Promise<unknown>; query: <T>(sql: string, params?: unknown[]) => Promise<T[]> }, packageId: string, tagIds: string[]): Promise<void> {
   const unique = [...new Set(tagIds)];
   await tx.execute(`DELETE FROM exercise_package_tags WHERE package_id = ?`, [packageId]);
@@ -274,12 +254,10 @@ async function replacePackageTags(tx: { execute: (sql: string, params?: unknown[
   }
 }
 
-/** LIKE امن — % و _ و \ ورودی خنثی می‌شود */
 function escapeLike(q: string): string {
   return q.replace(/[\\%_]/g, (m) => '\\' + m);
 }
 
-/** ردیف join تکلیف → رکورد API (camelCase) — مشترک بین listAssignments و حلقهٔ بازگشت */
 function assignmentRowToRecord(r: AssignmentRow): AssignmentRecord {
   return {
     id: r.id,
@@ -299,7 +277,6 @@ function assignmentRowToRecord(r: AssignmentRow): AssignmentRecord {
   };
 }
 
-/** SELECT مشترک تکلیف با join تمرین/دانش‌آموز و نام تصحیح‌کننده */
 const ASSIGNMENT_SELECT = `
   SELECT a.id, a.exercise_id, a.student_id, a.assigned_by, a.assigned_via, a.note, a.status, a.created_at,
          a.feedback, a.graded_by, a.graded_at, gs.full_name AS graded_by_name,
@@ -314,10 +291,8 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
   const log = logger.child('exercise-bank');
   const now = deps.now ?? (() => new Date());
 
-  // -c — ناظر تصحیح (اعلان خانواده) — در api-routing وصل می‌شود
   let gradeObserver: ((record: AssignmentRecord) => Promise<void>) | null = null;
 
-  // ناظر ارسال بستهٔ تکلیف (صف بله) — در api-routing وصل می‌شود
   let sendFn: BatchSendObserver | null = null;
 
   async function tagsForExercises(exerciseIds: string[]): Promise<Map<string, TagRef[]>> {
@@ -364,7 +339,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
     };
   }
 
-  /** — پیوست‌های چند تمرین به‌صورت دسته‌ای (برای فهرست) */
   async function attachmentsForExercises(exerciseIds: string[]): Promise<Map<string, ExerciseFileMetaWithId[]>> {
     const map = new Map<string, ExerciseFileMetaWithId[]>();
     if (exerciseIds.length === 0) return map;
@@ -384,7 +358,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
     return map;
   }
 
-  /** — پیوست‌های یک تمرین به ترتیب ثبت */
   async function attachmentsOf(exerciseId: string): Promise<ExerciseFileMetaWithId[]> {
     const rows = await db.query<AttachmentRow>(
       `SELECT id, exercise_id, file_key, file_name, file_mime, file_size, created_at
@@ -394,8 +367,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
     return rows.map((r) => ({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size }));
   }
 
-
-  /** — چت‌های ولیّ‌های متصل یک دانش‌آموز (bot_links + notification_prefs — الگوی ) */
   async function guardianChatsOf(studentId: string): Promise<string[]> {
     const linkRows = await db.query<{ chat_id: string }>(
       `SELECT DISTINCT chat_id FROM bot_links
@@ -420,8 +391,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
     );
   }
 
-  /** — m166: اعتبارسنجی هم‌ساز تمرین — باید کارمند فعال و مخالف سازندهٔ اصلی باشد
-   * خروجی: null (بدون هم‌ساز) یا شناسهٔ تأییدشده */
   async function resolveCoCreator(raw: string | null | undefined, creatorId: string): Promise<string | null> {
     if (raw === undefined || raw === null || String(raw).trim() === '') return null;
     const coId = String(raw).trim();
@@ -436,7 +405,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
     return coId;
   }
 
-  /** اعتبارسنجی و نوشتن برچسب‌ها — همه باید فعال و موجود باشند */
   async function replaceTags(tx: typeof db, exerciseId: string, tagIds: string[]): Promise<void> {
     const unique = [...new Set(tagIds)];
     await tx.execute(`DELETE FROM exercise_tags WHERE exercise_id = ?`, [exerciseId]);
@@ -453,8 +421,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
   }
 
   async function validateFile(file: NewExerciseFileInput): Promise<{ bytes: Uint8Array; mime: string; filename: string; size: number }> {
-    // مسیر JSON قدیمی (base64) همان سقف محافظه‌کارانهٔ ۵۱۲ کیلوبایت را دارد؛
-    // فایل‌های بزرگ از مسیر multipart باینری (سقف آداپتر: ۵۰ مگابایت) می‌روند
     const verdict = validateExerciseFileInput(file, MAX_EXERCISE_FILE_BYTES);
     if (!verdict.ok) throw new ValidationError(verdict.reason);
     const filename = sanitizeFilename(file.filename);
@@ -463,7 +429,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
     return { bytes: base64ToBytes(b64), mime, filename, size: estimateBase64Bytes(b64) };
   }
 
-  /** — آماده‌سازی فایل باینری مستقیم (مسیر multipart پخش‌جریانی) */
   function validatePreparedBytes(file: NewExerciseFileBytesInput): { segments: Uint8Array[]; mime: string; filename: string; size: number } {
     const verdict = validateExerciseFileBytes({ filename: file.filename, mimeType: file.mimeType, size: file.size }, storage.maxObjectBytes);
     if (!verdict.ok) throw new ValidationError(verdict.reason);
@@ -475,7 +440,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
     };
   }
 
-  /** — پیوست باید موجود و متعلق به همین تمرین باشد */
   async function assertAttachment(exerciseId: string, fileId: string): Promise<AttachmentRow> {
     const att = await db.queryOne<AttachmentRow>(
       `SELECT id, exercise_id, file_key, file_name, file_mime, file_size, created_at
@@ -486,7 +450,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
     return att;
   }
 
-  /** بایت → base64 (برای تکه‌های بارگذاری پیوسته) */
   function bytesToBase64Str(bytes: Uint8Array): string {
     let bin = '';
     const CHUNK = 0x8000;
@@ -496,7 +459,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
     return btoa(bin);
   }
 
-  /** — آیتم‌های چند بسته به‌صورت دسته‌ای */
   async function itemsForPackages(packageIds: string[]): Promise<Map<string, PackageItem[]>> {
     const map = new Map<string, PackageItem[]>();
     if (packageIds.length === 0) return map;
@@ -517,7 +479,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
     return map;
   }
 
-  /** — ردیف بسته → رکورد API (با آیتم‌ها و برچسب‌ها) */
   async function packageRowToRecord(row: PackageDbRow): Promise<ExercisePackageRecord> {
     const [tagRows, itemMap] = await Promise.all([
       db.query<TagRow>(
@@ -553,7 +514,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       maxFilesPerUpload: MAX_EXERCISE_FILES_PER_UPLOAD
     } as ExerciseUploadLimits,
 
-    /** -c — اتصال ناظر تصحیح (اعلان خانواده) */
     setGradeObserver(observer: (record: AssignmentRecord) => Promise<void>): void {
       gradeObserver = observer;
     },
@@ -574,7 +534,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         conds.push('EXISTS (SELECT 1 FROM exercise_tags et WHERE et.exercise_id = e.id AND et.tag_id = ?)');
         params.push(filters.tagId);
       }
-      // فیلتر چندبرچسبی AND (ناوبری تو در تو: اختلال + پایه همزمان)
       for (const tid of filters.tagIds ?? []) {
         if (!tid) continue;
         conds.push('EXISTS (SELECT 1 FROM exercise_tags et WHERE et.exercise_id = e.id AND et.tag_id = ?)');
@@ -607,7 +566,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       return { items, total: total, page: win.page, pageSize, hasMore: win.hasMore };
     },
 
-    /** — شمارش تمرین هر برچسب + کل — برای کاشی‌های دستهٔ اختلال در ناوبری تو در تو */
     async facets(): Promise<ExerciseFacets> {
       const totalRow = await db.queryOne<{ total: number }>(
         'SELECT COUNT(*) AS total FROM exercises WHERE deleted_at IS NULL'
@@ -647,7 +605,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         fileMeta = { filename: prepared.filename, mime: prepared.mime, size: prepared.size };
       }
 
-      // — m166: هم‌ساز (سازندهٔ دوم) — کارمند فعال مخالف سازندهٔ اصلی؛ امتیاز نصف بین دو نفر
       const coCreatorId = await resolveCoCreator(input.coCreatedBy, actor.staffId);
 
       await db.transaction(async (tx) => {
@@ -669,7 +626,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
             actor.staffId
           ]
         );
-        // اولین فایل هم‌زمان یک پیوست ثبت می‌شود (منبع حقیقت پیوست‌ها)
         if (fileMeta) {
           await tx.execute(
             `INSERT INTO exercise_attachments (id, exercise_id, file_key, file_name, file_mime, file_size)
@@ -705,8 +661,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       const title = input.title !== undefined ? normalizeExerciseTitle(input.title) : undefined;
       if (title !== undefined && title.length < 2) throw new ValidationError('عنوان تمرین حداقل ۲ نویسه است');
 
-      // — m166: هم‌ساز — فقط وقتی کلید در payload آمده باشد دست می‌خورد (null = برداشتن)
-      // (پیش از تراکنش — خواندن از db داخل تراکنش tx نیست)
       const coCreatorId = input.coCreatedBy !== undefined
         ? await resolveCoCreator(input.coCreatedBy, row.created_by)
         : undefined;
@@ -746,7 +700,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
           changes: {
             ...(input.title !== undefined ? { title: { from: row.title, to: title ?? null } } : {}),
             ...(input.published !== undefined ? { published: { from: row.published === 1, to: input.published } } : {}),
-            // — m166: تغییر هم‌ساز روی امتیاز اثر دارد — در تاریخچه می‌ماند
             ...(input.coCreatedBy !== undefined ? { coCreatedBy: { from: row.co_created_by ?? null, to: coCreatorId ?? null } } : {})
           }
         });
@@ -757,9 +710,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       return updated as ExerciseRecord;
     },
 
-    // — m140: انتقال مالکیت تمرین — فقط مدیر؛ مسیر اختصاصی با audit «exercise.reassigned»
-    // (ویرایش ساده هرگز created_by را تغییر نمی‌دهد — درس 43-A: فرم ویرایشِ کهنه
-    // owner_staff_id قدیمی را دوباره می‌فرستاد و انتساب مدیر را بی‌صدا برمی‌گرداند)
     async reassign(id: string, input: ReassignExerciseInput, actor: AuthContext): Promise<ReassignExerciseResult> {
       assertStaffRole(actor);
       if (actor.role !== 'manager') {
@@ -774,7 +724,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       );
       if (!ownerRow) throw new NotFoundError('کارمند');
 
-      // بدون‌عمل — مالک از قبل همان است؛ هیچ نوشتنی انجام نمی‌شود
       if (input.staffId === row.created_by) {
         const current = await this.getById(id);
         return { record: current as ExerciseRecord, unchanged: true };
@@ -826,8 +775,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       if (!row) throw new NotFoundError('تمرین');
 
       const prepared = await validateFile(file);
-      // تعویض «فایل اصلی»: اگر اصلی یک پیوست است، محتوای همان کلید در‌جا عوض می‌شود؛
-      // وگرنه فایل جدید با کلید کلاسیک exercise/<id> به‌عنوان اولین پیوست ثبت می‌شود
       const first = (await attachmentsOf(id))[0] ?? null;
       const key = first ? row.file_key! : `exercise/${id}`;
       await storage.put(key, prepared.bytes, prepared.mime);
@@ -868,7 +815,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       return updated as ExerciseRecord;
     },
 
-    /** — افزودن چند فایل (multipart باینری) — هر فایل مستقل اعتبارسنجی و ذخیره می‌شود */
     async addFiles(id: string, files: NewExerciseFileBytesInput[], actor: AuthContext): Promise<ExerciseRecord> {
       assertStaffRole(actor);
       const row = await getExerciseRow(id);
@@ -878,7 +824,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         throw new ValidationError(`حداکثر ${MAX_EXERCISE_FILES_PER_UPLOAD} فایل در هر بار بارگذاری`);
       }
 
-      // اعتبارسنجی همه قبل از هر نوشتنی — نیمه‌تمام نمی‌ماند
       const preparedList = files.map((f) => validatePreparedBytes(f));
 
       const hasPrimary = Boolean(row.file_key);
@@ -888,7 +833,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         const prepared = preparedList[i];
         const attId = crypto.randomUUID();
         const key = `exercise/${id}/${attId}`;
-        // نوشتن از قطعات (بدون concat کامل) با fallback به put ساده
         if (storage.putSegments) {
           await storage.putSegments(key, prepared.segments);
         } else {
@@ -900,7 +844,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
              VALUES (?, ?, ?, ?, ?, ?)`,
             [attId, id, key, prepared.filename, prepared.mime, prepared.size]
           );
-          // اگر تمرین فایل اصلی نداشت، اولین فایلِ این دسته اصلی می‌شود
           if (!hasPrimary && i === 0) {
             await tx.execute(
               `UPDATE exercises SET file_name = ?, file_mime = ?, file_size = ?, file_key = ?, updated_at = datetime('now') WHERE id = ?`,
@@ -926,7 +869,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       return updated as ExerciseRecord;
     },
 
-    /** — شروع بارگذاری پیوسته: ردیف پیوست با متادیتا ساخته می‌شود؛ تکه‌ها بعداً می‌آیند */
     async beginChunkedUpload(
       id: string,
       input: { filename: string; mimeType: string; size: number },
@@ -967,7 +909,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       return { fileId: attId };
     },
 
-    /** — دریافت یک تکهٔ باینری (بدنهٔ خام ≤ ۱ مگابایت) و پیوستن به تکه‌های همان پیوست */
     async putUploadChunk(id: string, fileId: string, seq: number, bytes: Uint8Array, actor: AuthContext): Promise<{ received: number }> {
       assertStaffRole(actor);
       await assertAttachment(id, fileId);
@@ -984,7 +925,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       return { received: bytes.length };
     },
 
-    /** — پایان بارگذاری پیوسته: شمار و مجموع تکه‌ها با متادیتای اعلام‌شده سنجیده می‌شود */
     async completeChunkedUpload(id: string, fileId: string, actor: AuthContext): Promise<ExerciseRecord> {
       assertStaffRole(actor);
       const att = await assertAttachment(id, fileId);
@@ -1012,7 +952,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       return updated as ExerciseRecord;
     },
 
-    /** — حذف یک پیوست؛ اگر اصلی بود، قدیمی‌ترین پیوست بعدی جای آن را می‌گیرد */
     async deleteAttachment(id: string, fileId: string, actor: AuthContext): Promise<ExerciseRecord> {
       assertStaffRole(actor);
       const row = await getExerciseRow(id);
@@ -1024,7 +963,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       );
       if (!att) throw new NotFoundError('فایل تمرین');
 
-      // تراکنش D1 تعاملی نیست — «پیوست بعدی» قبل از شروع تراکنش محاسبه می‌شود
       const remaining = await db.query<AttachmentRow>(
         `SELECT id, exercise_id, file_key, file_name, file_mime, file_size, created_at
            FROM exercise_attachments WHERE exercise_id = ? ORDER BY created_at, rowid`,
@@ -1035,7 +973,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       await storage.delete(att.file_key);
       await db.transaction(async (tx) => {
         await tx.execute(`DELETE FROM exercise_attachments WHERE id = ?`, [att.id]);
-        // اگر حذف‌شده فایل اصلی بود → قدیمی‌ترین پیوست باقی‌مانده اصلی می‌شود (یا اصلی حذف می‌شود)
         if (row.file_key === att.file_key) {
           await tx.execute(
             `UPDATE exercises SET file_name = ?, file_mime = ?, file_size = ?, file_key = ?, updated_at = datetime('now') WHERE id = ?`,
@@ -1056,7 +993,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       return updated as ExerciseRecord;
     },
 
-    /** — دانلود یک پیوست مشخص (کارکنان) */
     async getAttachmentFile(id: string, fileId: string): Promise<{ bytes: Uint8Array; filename: string; mime: string } | null> {
       const row = await getExerciseRow(id);
       if (!row) return null;
@@ -1081,7 +1017,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
 
     async mintDownloadToken(exerciseId: string, fileId?: string | null): Promise<string> {
       const exp = Math.floor(Date.now() / 1000) + EXB_DOWNLOAD_TTL_SECONDS;
-      // fileId اختیاری: «exerciseId.fileId.exp» (UUID نقطه ندارد — parse از راست امن است)
       const payload = fileId ? `${exerciseId}.${fileId}.${exp}` : `${exerciseId}.${exp}`;
       const signature = await hmacSign(payload, downloadSecret);
       return `${base64UrlEncode(payload)}.${signature}`;
@@ -1103,7 +1038,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       const head = payload.slice(0, sep);
       const exp = Number(payload.slice(sep + 1));
       if (!Number.isInteger(exp) || exp * 1000 < Date.now()) return null;
-      // سرِ payload ممکن است «exerciseId» یا «exerciseId.fileId» باشد
       const headDot = head.indexOf('.');
       const exerciseId = headDot > 0 ? head.slice(0, headDot) : head;
       const fileId = headDot > 0 ? head.slice(headDot + 1) : null;
@@ -1124,7 +1058,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         [id]
       );
       if (!row) return null;
-      // توکنِ پیوست مشخص → خواندن از جدول پیوست‌ها
       if (verified.fileId) {
         const att = await db.queryOne<AttachmentRow>(
           `SELECT id, exercise_id, file_key, file_name, file_mime, file_size
@@ -1154,8 +1087,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         other: rows.filter((r) => r.category === 'school_type' || r.category === 'custom').map(ref)
       };
     },
-
-    // ───────────── بستهٔ تمرینی ─────────────
 
     async listPackages(filters: ListPackagesFilters, _actor: AuthContext): Promise<PackageListResult> {
       const pageSize = Math.min(Math.max(filters.pageSize ?? 20, 1), 100);
@@ -1203,7 +1134,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       const title = normalizeExerciseTitle(input.title);
       if (title.length < 2) throw new ValidationError('عنوان بسته حداقل ۲ نویسه است');
 
-      // تمرین‌ها باید موجود و فعال باشند — ترتیب ورودی حفظ می‌شود
       const uniqueIds = [...new Set(input.exerciseIds)];
       const found = await db.query<{ id: string }>(
         `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${uniqueIds.map(() => '?').join(', ')})`,
@@ -1322,9 +1252,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       log.info('exercise_package.deleted', { id });
     },
 
-    // ───────────── پیشنهاد برچسب‌محور + بستهٔ تکلیف + ارسال پنل ─────────────
-
-    /** تطبیق برچسب دانش‌آموز × برچسب تمرین/بسته — همان الگوی suggestTypesForStudent چک‌لیست */
     async suggestForStudent(studentId: string): Promise<StudentExerciseSuggestions> {
       const [tagRows, exerciseRows, packageRows] = await Promise.all([
         db.query<{ id: string; name: string }>(
@@ -1357,7 +1284,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         const matched = exercise.tags.filter((t) => studentTagIds.has(t.id)).map((t) => ({ id: t.id, name: tagNames.get(t.id) ?? t.name }));
         return { exercise, matched, score: matched.length };
       });
-      // ترتیب: تطابق بیشتر → پرکاربردتر → جدیدتر
       exercises.sort(
         (a, b) => b.score - a.score || (b.exercise.assignCount ?? 0) - (a.exercise.assignCount ?? 0) || a.exercise.title.localeCompare(b.exercise.title, 'fa')
       );
@@ -1376,14 +1302,12 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
     },
 
     async createBatch(input: CreateBatchInput, actor: AuthContext): Promise<BatchRecord> {
-      // گارد نقش پنل در route انجام می‌شود؛ بات با EXB_ACTOR صدا می‌زند
       const student = await db.queryOne<{ id: string; first_name: string; last_name: string }>(
         `SELECT id, first_name, last_name FROM students WHERE id = ? AND active = 1`,
         [input.studentId]
       );
       if (!student) throw new NotFoundError('دانش‌آموز');
 
-      // تعیین تمرین‌ها: بستهٔ آماده یا فهرست مستقیم
       let exercises: { id: string; title: string }[] = [];
       let packageTitle: string | null = null;
       if (input.packageId) {
@@ -1437,9 +1361,7 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
              VALUES (?, ?, ?, ?, ?, ?, 'assigned', ?)`,
             [assignmentId, ex.id, input.studentId, input.assignedBy, input.via === 'bot' ? 'bot' : 'panel', null, batchId]
           );
-          // آمار مصرف تمرین
           await tx.execute(`UPDATE exercises SET assign_count = assign_count + 1 WHERE id = ?`, [ex.id]);
-          // تایم‌لاین پرونده از audit «exercise.assigned» تغذیه می‌شود — همان الگوی تکلیف تکی
           await audit.logInTransaction(tx, {
             actorId: actor.staffId,
             action: 'exercise.assigned',
@@ -1542,7 +1464,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       }));
     },
 
-    /** ارسال/یادآوری: چت ولیّ‌ها → پیام با لینک امن دانلود هر فایل → sent_at/count + audit */
     async sendBatch(batchId: string, input: { note?: string | null }, actor: AuthContext): Promise<{ sent: number; targets: string[] }> {
       if (!sendFn) throw new ConflictError('سرویس اعلان در دسترس نیست');
       const batch = await db.queryOne<BatchDbRow>(
@@ -1559,7 +1480,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         throw new ConflictError('هیچ چت متصلی برای این دانش‌آموز پیدا نشد — اول ولیّ را با کد اتصال به بات وصل کنید');
       }
 
-      // تکلیف‌های فعال بسته + فایل‌های هر تمرین
       const items = await db.query<{ id: string; exercise_id: string; status: string; title: string }>(
         `SELECT a.id, a.exercise_id, a.status, e.title
            FROM exercise_assignments a
@@ -1578,7 +1498,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       for (const item of items) {
         lines.push('', `• ${item.title}`);
         const ex = await this.getById(item.exercise_id);
-        // لینک بازی/تمرین آنلاین بیرونی: مستقیم در پیام خانواده
         if (ex?.externalUrl) lines.push(`🎮 باز کردن بازی/تمرین آنلاین: ${ex.externalUrl}`);
         if (base && linkBudget > 0) {
           const files = ex?.files ?? [];
@@ -1595,7 +1514,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       }
       lines.push('', 'پس از انجام تمرین‌ها، نتیجه را با عکس برای همین چت بفرستید.');
 
-      // dedup داخل همان دقیقه (ضد دابل‌کلیک) — یادآوری در دقیقهٔ بعد آزاد است
       const minuteBucket = Math.floor(now().getTime() / 60_000);
       const sent = await sendFn({
         studentId: batch.student_id,
@@ -1627,7 +1545,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
     setSendObserver(fn: BatchSendObserver | null): void {
       sendFn = fn;
     },
-
 
     async assign(input: AssignExerciseInput, actor: AuthContext): Promise<AssignmentRecord> {
       const row = await db.queryOne<ExerciseRow>(
@@ -1710,8 +1627,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       }));
     },
 
-    // ───────────── c — تصحیح تکلیف ─────────────
-
     async gradeAssignment(assignmentId: string, input: { feedback: string }, actor: AuthContext): Promise<AssignmentRecord> {
       const feedback = input.feedback.replace(/\s+/g, ' ').trim();
       const len = Array.from(feedback).length;
@@ -1732,7 +1647,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         throw new ConflictError('تصحیح فقط برای تکلیفِ انجام‌شده (بازگشتی ثبت‌شده) ممکن است');
       }
 
-      // گیت: ثبت‌کنندهٔ تکلیف (staff) یا مدیر — ثبت‌کنندهٔ کلاس (class:*) هر همکار مرکز مجاز
       const isClassAssigner = row.assigned_by.startsWith('class:');
       if (!isClassAssigner && row.assigned_by !== actor.staffId && actor.role !== 'manager') {
         throw new ForbiddenError('تصحیح فقط توسط ثبت‌کنندهٔ تکلیف یا مدیر مجاز است');
@@ -1760,7 +1674,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         [assignmentId]
       );
       const record = assignmentRowToRecord(updated!);
-      // ناظر اعلان — خطا عملیات را fail نمی‌کند (الگوی todos.setNotifier)
       if (gradeObserver) {
         try {
           await gradeObserver(record);
@@ -1771,13 +1684,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       return record;
     },
 
-    // ───────────── حلقهٔ بازگشت فایل ─────────────
-
-    /**
-     * تصمیم قطعی مسیر پیام رسانه‌ای خانواده:
-     * دقیقاً یک تکلیف باز → auto | چند تکلیف باز → pick (سقف ۱۰) |
-     * بدون باز ولی بازگشتی در پنجرهٔ ۴۸ ساعت → extra (صفحهٔ بعدی همان تکلیف) | none
-     */
     async resolveSubmissionTarget(studentIds: string[]): Promise<SubmissionTarget> {
       const unique = [...new Set(studentIds)].filter((id) => id.length > 0);
       if (unique.length === 0) return { mode: 'none' };
@@ -1806,7 +1712,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         };
       }
 
-      // پنجرهٔ پیوست: آخرین بازگشتیِ اخیر → صفحهٔ بعدی همان تکلیف
       const windowLabel = `-${SUBMISSION_ATTACH_WINDOW_HOURS} hours`;
       const extraRow = await db.queryOne<AssignmentRow>(
         `SELECT a.id, a.exercise_id, a.student_id, a.assigned_by, a.assigned_via, a.note, a.status, a.created_at,
@@ -1828,7 +1733,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       return { mode: 'none' };
     },
 
-    /** ثبت نتیجهٔ بازگشتی: فایل در ObjectStore + رکورد + done تکلیف + audit هم‌تراکنش */
     async addSubmission(input: AddSubmissionInput, actor: AuthContext): Promise<SubmissionRecord> {
       const assignment = await db.queryOne<{ id: string; student_id: string; status: string }>(
         `SELECT a.id, a.student_id, a.status
@@ -1894,7 +1798,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       return found as SubmissionRecord;
     },
 
-    /** فهرست بازگشتی‌ها — پنل و تایید بات */
     async listSubmissions(filters: ListSubmissionsFilters): Promise<SubmissionRecord[]> {
       const conds: string[] = ['1 = 1'];
       const params: unknown[] = [];
@@ -1944,7 +1847,6 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       }));
     },
 
-    /** دانلود فایل بازگشتی برای کارکنان — بدون گیت نقش اضافه (خواندن پنل) */
     async getSubmissionFile(submissionId: string): Promise<{ bytes: Uint8Array; filename: string; mime: string } | null> {
       const row = await db.queryOne<{ file_key: string | null; file_name: string | null; file_mime: string | null }>(
         `SELECT file_key, file_name, file_mime FROM exercise_submissions WHERE id = ?`,
@@ -1958,5 +1860,4 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
   };
 }
 
-/** نوع بازگشتی کارخانه — برای وایرینگ و تزریق در notify */
 export type ExerciseBankService = ReturnType<typeof createExerciseBankService>;

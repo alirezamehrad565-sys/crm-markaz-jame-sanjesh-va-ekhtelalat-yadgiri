@@ -1,13 +1,3 @@
-/**
- * موتور چک‌لیست کاردرمانی (OT) — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// سرویس فلو دوفازی «شناسایی → مداخله»:
-// ۱) گیت‌های شناسایی (ورودی مشترک: شرح‌حال / چک‌لیست رفتاری / وکسلر / ارزیابی مهارتی / نیاز ویژه)
-// ۲) پروفایل چک‌لیست ۷ حیطه‌ای کاردرمانی ذهنی + ثبت جلسه (ارزیابی = مداخله، ادامه از نقطهٔ قبلی)
-// ۳) نتیجهٔ نیاز ویژه — فعال‌سازی پروتکل مداخله (دروازهٔ فاز مداخله)
-// RBAC هم‌الگوی موتور بالینی: مشاهده — مدیر/منشی/درمانگرِ مسئول؛ ثبت — مدیر یا درمانگرِ مسئول.
-
 import type { AuthContext } from '@core/shared';
 import { NEED_PROTOCOL_SUGGESTIONS, STUDENT_PROTOCOL_LABELS, type StudentProtocol } from '@core/shared';
 import type { DbClient } from '@core/db';
@@ -33,8 +23,6 @@ import type {
 } from './types';
 import { OT_DOMAINS, OT_DOMAIN_LABELS, OT_GATE_FRESH_MONTHS, OT_PROMPT_LEVEL_LABELS, OT_SKILL_STATUS_LABELS } from './types';
 
-// ───────── سقف‌ها ─────────
-
 export const OT_SKILL_NOTE_MAX = 300;
 export const OT_FOCUS_MAX = 200;
 export const OT_SUMMARY_MAX = 2000;
@@ -42,7 +30,6 @@ export const OT_HOMEWORK_MAX = 300;
 export const NEEDS_TEXT_MAX = 4000;
 export const NEEDS_PLAN_MAX = 300;
 
-/** کلیدهای ابزار هر گیت شناسایی — T4 (m148): شرح‌حال نسخهٔ ۳ هم گیت را سبز می‌کند (نسخهٔ ۲ برای پرونده‌های قدیمی) */
 const ANAMNESIS_KEYS = ['ce-anamnesis-v3', 'ce-anamnesis-v2', 'anamnesis'];
 const BEHAVIORAL_KEYS = ['sdq-parent', 'ce-sdq-t-v1', 'ce-snap-iv-p-v1', 'ce-snap-iv-t-v1', 'ce-scared-p-v1', 'ce-dcdq-v1'];
 const WECHSLER_KEYS = ['ce-wechsler-w4-v1', 'wechsler'];
@@ -50,14 +37,10 @@ const WECHSLER_KEYS = ['ce-wechsler-w4-v1', 'wechsler'];
 const NEEDS_EVENT_KEY = 'ce-needs-v1';
 const OT_SESSION_EVENT_KEY = 'ce-ot-session-v1';
 
-/** کلید ارزیابی عملکردی توانبخشی — آینهٔ case-events/pure.ts (m161) — بدون واردکردن از دامنهٔ دیگر */
 const REHAB_FX_EVENT_KEY = 'ce-rehab-fx-v1';
-/** چک‌لیست‌های درسی مسیر یادگیری — آینهٔ SLD_CHECKLIST_KEYS (m147) */
 const SLD_CHECKLIST_EVENT_KEYS = ['ce-sld-read-v1', 'ce-sld-wri-v1', 'ce-sld-calc-v1'];
-/** ترتیب گیت‌های مسیر توانبخشی — m161: سه گیت متمرکز؛ وکسلر/چک‌لیست‌ها اختیاری */
 const REHAB_PATHWAY_ORDER = ['anamnesis', 'skills', 'needs'] as const;
 
-/** برچسب فارسی نیاز ویژه — هم‌قرارداد با special-needs/pure.ts */
 const NEED_TYPE_LABELS: Record<string, string> = {
   dyslexia: 'نارساخوانی (دیس‌لکسی)',
   dysgraphia: 'نارسانویسی (دیس‌گرافی)',
@@ -82,11 +65,9 @@ interface StudentRow {
   owner_staff_id: string | null;
   protocol: string | null;
   case_status: string | null;
-  /** مسیر پرونده — m161: پایهٔ گیت‌های مسیرآگاه (null = تعیین نشده) */
   pathway: string | null;
 }
 
-/** آخرین ثبت هر ابزار شناسایی — برای گیت تازگی‌آگاه */
 interface SeenMetaRow {
   tool_key: string;
   last_at: string;
@@ -126,7 +107,6 @@ function parseText(v: string | null | undefined, max: number): string | null {
   return t ? t.slice(0, max) : null;
 }
 
-/** تازگی ثبت — پنجرهٔ ۱۲ ماه (داوری روانشناسی P0-4) */
 function isFresh(lastAt: string | undefined, nowFn: () => Date): boolean {
   if (!lastAt) return false;
   const t = Date.parse(lastAt.includes('T') ? lastAt : `${lastAt.replace(' ', 'T')}Z`);
@@ -139,8 +119,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
   const log = logger.child('ot-engine');
   const now = deps.now ?? (() => new Date());
   const iso = () => now().toISOString();
-
-  // ───────── RBAC — هم‌الگوی موتور بالینی ─────────
 
   async function loadStudent(studentId: string): Promise<StudentRow> {
     const row = await db.queryOne<StudentRow>(
@@ -163,10 +141,7 @@ export function createOtEngineService(deps: OtEngineDeps) {
     throw new ForbiddenError('ثبت فقط توسط مدیر یا درمانگرِ مسئول پرونده مجاز است');
   }
 
-  // ───────── دادهٔ پایه ─────────
-
   async function loadSeenToolMeta(studentId: string): Promise<Map<string, string>> {
-    // تجمیع در SQL — بدون LIMIT خطرناک؛ آخرین ثبت هر ابزار مبنای تازگی است
     const rows = await db.query<SeenMetaRow>(
       `SELECT t.key AS tool_key, MAX(e.occurred_at) AS last_at
          FROM case_events e
@@ -198,7 +173,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
       if (n > 0) covered.push(OT_DOMAIN_LABELS[d]);
       if (n >= 3) domainsMin3 += 1;
     }
-    // فقط مهارت‌های primary در شمارش کل
     const totalRow = await db.queryOne<{ n: number }>(
       `SELECT COUNT(*) AS n FROM ot_skills WHERE COALESCE(is_primary, 1) = 1`
     );
@@ -209,16 +183,11 @@ export function createOtEngineService(deps: OtEngineDeps) {
     return v && v in STUDENT_PROTOCOL_LABELS ? (v as StudentProtocol) : null;
   }
 
-  // ───────── ۱) گیت‌های شناسایی ─────────
-
-  /** محاسبهٔ گیت‌ها — هم برای API و هم برای snapshot هنگام ثبت نیاز ویژه */
   async function computeGates(student: StudentRow): Promise<GatesOutput> {
     const [seen, otCoverage] = await Promise.all([loadSeenToolMeta(student.id), loadOtCoverage(student.id)]);
     const protocol = clampProtocol(student.protocol);
 
-    /** شمار ابزارهای ثبت‌شدهٔ تازه (۱۲ ماه اخیر) */
     const freshCount = (keys: string[]) => keys.filter((k) => isFresh(seen.get(k), now)).length;
-    /** شمار کل ثبت‌ها بدون توجه به تازگی — برای پیام «کهنه» */
     const rawCount = (keys: string[]) => keys.filter((k) => seen.has(k)).length;
 
     const nAnam = freshCount(ANAMNESIS_KEYS);
@@ -235,9 +204,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
 
     const staleNote = ` — کهنه است (بیش از ${'۱۲'} ماه؛ بازثبت لازم)`;
     const isLearning = student.pathway === 'learning';
-    // — m161: مسیر توانبخشی ذهنی-جسمی — گیت‌های متمرکز: شرح‌حال + ارزیابی عملکردی + نیاز؛
-    // وکسلر و چک‌لیست‌های خانواده/معلم اختیاری‌اند (بدون گیت). ملاک گیت rehab = ثبت ce-rehab-fx-v1
-    // (پنجرهٔ ۱۲ ماه)؛ پوشش OT۷ برای پرونده‌های قدیمی هم پذیرفته است.
     const isRehab = student.pathway === 'rehab';
 
     const skillsStatus = isRehab
@@ -261,7 +227,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
             detail: `${otCoverage.scored} مهارت نمره‌گرفته — ${domMin3} حیطه از ۷ با حداقل ۳ نمره`
           };
 
-    // — m161: گیت‌های مبنایی کلیدمحور — ترتیب/تعداد مسیرآگاه: توانبخشی سه گیت، بقیه مسیر استاندارد پنج‌گیت
     const stageStatus: Record<string, { done: boolean; detail: string }> = {
       anamnesis: {
         done: nAnam > 0,
@@ -335,8 +300,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
     return computeGates(student);
   }
 
-  // ───────── ۲) پروفایل چک‌لیست ۷ حیطه‌ای ─────────
-
   async function getOtProfile(studentId: string, actor: AuthContext): Promise<OtProfile> {
     const student = await loadStudent(studentId);
     assertCanView(student, actor);
@@ -357,7 +320,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
       )
     ]);
 
-    /** رکورد وضعیت برای قاعدهٔ تسلط دوجلسه‌ای */
     interface Rec {
       status: OtSkillStatus;
       sessionKey: string;
@@ -392,7 +354,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
         .map<OtSkillState>((s) => {
           const list = recsBySkill.get(s.id) ?? [];
           const last = list.length > 0 ? list[list.length - 1] : null;
-          // قاعدهٔ تسلط دوجلسه‌ای: آخرین جلسه «بلد است» + آخرین رکورد از جلسهٔ متفاوتِ قبلی هم «بلد است»
           let masteryConfirmed = false;
           if (last && last.status === 'mastered') {
             for (let i = list.length - 2; i >= 0; i--) {
@@ -424,7 +385,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
           };
         });
 
-      // نقطهٔ ادامه = اولین مهارتِ primary بدون تسلط دوجلسه‌ای
       const firstNotConfirmed = skills.find((s) => s.isPrimary && !(s.status === 'mastered' && s.masteryConfirmed));
       const primary = skills.filter((s) => s.isPrimary);
       domains.push({
@@ -467,9 +427,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
     };
   }
 
-  // ───────── m162 — نمای پیشرفت جلسه‌به‌جلسه ─────────
-
-  /** کلیدهای شش حیطهٔ خط پایهٔ عملکردی — هم‌قرارداد REHAB_FX_DOMAINS (case-events/pure) */
   const REHAB_FX_BASELINE_LABELS: Record<string, string> = {
     att_sus: 'توجه پایدار',
     att_sel: 'توجه انتخابی',
@@ -478,18 +435,12 @@ export function createOtEngineService(deps: OtEngineDeps) {
     flex: 'انعطاف ذهنی',
     ps: 'حل مسئله'
   };
-  /** برچسب باند → رنگ نمایشی (هم‌قرارداد باندهای ce-rehab-fx-v1) */
   const REHAB_FX_BAND_COLORS: Record<string, string> = {
     'در انتظار': 'ok',
     'مرزی': 'warn',
     'ضعف آشکار': 'danger'
   };
 
-  /**
-   * پیشرفت جلسه‌به‌جلسه — تایم‌لاین جلسات از ot_progress + خط پایهٔ عملکردی از آخرین
-   * ce-rehab-fx-v1. فقط تجمیعِ دادهٔ موجود (بدون نوع رویداد جدید)؛ مبنای پنل پیشرفت
-   * و داوری‌های عینی: روند تسلط، منحنی محوشدن راهنما، مقایسه با خط پایه.
-   */
   async function getOtProgress(studentId: string, actor: AuthContext): Promise<OtProgressOutput> {
     const student = await loadStudent(studentId);
     assertCanView(student, actor);
@@ -514,7 +465,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
       )
     ]);
 
-    // ── تایم‌لاین جلسات — گروه‌بندی صعودی بر حسب sessionKey (هم‌قرارداد getOtProfile) ──
     interface SessionAgg {
       sessionId: string;
       occurredAt: string;
@@ -527,7 +477,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
       domains: Map<OtDomain, { mastered: number; withHelp: number; notYet: number }>;
     }
     const sessionsBy = new Map<string, SessionAgg>();
-    /** آخرین وضعیت هر مهارت تا ردیف جاری — برای قاعدهٔ دوجلسه‌ای و جمع‌بندی تأییدشده‌ها */
     const skillHistory = new Map<string, { sessionKey: string; status: string }[]>();
 
     for (const r of rows) {
@@ -546,7 +495,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
         sessionsBy.set(sessionKey, agg);
       }
       const hist = skillHistory.get(r.skill_id) ?? [];
-      // قاعدهٔ دوجلسه‌ای: «بلد است» این جلسه + آخرین رکوردِ جلسهٔ متفاوتِ قبلی هم «بلد است»
       if (r.status === 'mastered') {
         for (let i = hist.length - 1; i >= 0; i--) {
           if (hist[i].sessionKey !== sessionKey) {
@@ -592,7 +540,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
         }))
       }));
 
-    // جمع‌بندی — وضعیت فعلی هر مهارت از کل تاریخچه (هم‌قرارداد قاعدهٔ پروفایل)
     let confirmedMastered = 0;
     let currentWithHelp = 0;
     for (const [, hist] of skillHistory) {
@@ -609,7 +556,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
       }
     }
 
-    // ── خط پایهٔ عملکردی — از payload آخرین ce-rehab-fx-v1 (d_* + fx_*_band + fx_*_prompt) ──
     let baseline: OtProgressBaselineEntry[] | null = null;
     let baselineSummary: string | null = null;
     let baselineAt: string | null = null;
@@ -657,13 +603,10 @@ export function createOtEngineService(deps: OtEngineDeps) {
     };
   }
 
-  // ───────── ثبت جلسهٔ کاردرمانی ذهنی ─────────
-
   async function saveOtSession(studentId: string, input: OtSessionSaveInput, actor: AuthContext): Promise<OtSessionSaveResult> {
     const student = await loadStudent(studentId);
     assertCanWrite(student, actor);
 
-    // حذف تکراری — آخرین وضعیت هر مهارت ملاک است؛ سطح راهنما فقط برای «با کمک» معنا دارد
     const bySkill = new Map<string, { status: OtSkillStatus; note: string | null; promptLevel: OtPromptLevel | null }>();
     for (const it of input.items) {
       const prompt = it.status === 'with_help' && it.promptLevel && it.promptLevel in OT_PROMPT_LEVEL_LABELS
@@ -679,7 +622,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
     const ids = [...bySkill.keys()];
     if (ids.length === 0) throw new ValidationError('حداقل یک مهارت با وضعیت لازم است');
 
-    // اعتبارسنجی شناسهٔ مهارت‌ها
     const validRows = await db.query<{ id: string }>(
       `SELECT id FROM ot_skills WHERE id IN (${ids.map(() => '?').join(', ')})`,
       ids
@@ -688,7 +630,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
     const unknown = ids.filter((x) => !valid.has(x));
     if (unknown.length > 0) throw new ValidationError(`شناسهٔ مهارت نامعتبر: ${unknown[0]}`);
 
-    // قاعدهٔ تسلط دوجلسه‌ای: «بلد است» این جلسه فقط اگر جلسهٔ قبل هم «بلد است» بود تأیید می‌شود
     const prevRows = await db.query<{ skill_id: string; status: string }>(
       `SELECT skill_id, status
          FROM ot_progress
@@ -723,7 +664,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
       : `جلسهٔ کاردرمانی ذهنی — ${bySkill.size} مهارت ثبت شد (${mastered} بلد، ${withHelp} با کمک، ${notYet} هنوز نه)`;
     if (masteryConfirmed > 0) timelineSummary += ` — ${masteryConfirmed} تسلط دوجلسه‌ای تأیید شد`;
 
-    // نوع رویداد گزارش جلسه
     const typeRow = await db.queryOne<EventTypeRow>(
       `SELECT id, key FROM case_event_types WHERE key = ? AND active = 1`,
       [OT_SESSION_EVENT_KEY]
@@ -773,8 +713,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
     return { sessionId, saved: bySkill.size, masteryConfirmed, summary: timelineSummary };
   }
 
-  // ───────── ۳) نتیجهٔ نیاز ویژه — دروازهٔ فاز مداخله ─────────
-
   async function setNeeds(studentId: string, input: NeedsSummaryInput, actor: AuthContext): Promise<NeedsSummaryResult> {
     const student = await loadStudent(studentId);
     assertCanWrite(student, actor);
@@ -800,7 +738,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
     if (goals) payload.goals = { value: goals, label: 'اهداف کوچک دورهٔ اول' };
     if (sessionPlan) payload.session_plan = { value: sessionPlan, label: 'برنامهٔ جلسات' };
 
-    // snapshot وضعیت گیت‌ها هنگام تصمیم — کیفیت شواهد پشت انتخاب درمانگر مستند می‌ماند
     const gatesSnapshot = await computeGates(student);
     payload.gates_snapshot = {
       value: JSON.stringify({
@@ -830,8 +767,6 @@ export function createOtEngineService(deps: OtEngineDeps) {
         );
       }
       await tx.execute(`UPDATE students SET protocol = ? WHERE id = ?`, [input.protocol, studentId]);
-      // گذار خودکار وضعیت پرونده (فاز بهبود §۱۰.۲): ثبت نیاز ویژه یعنی ورود عملی به فاز مداخله —
-      // وضعیت‌های پیشرفته‌تر (monitoring/archived) دست‌نخورده می‌مانند تا تصمیم انسانی بی‌اثر نشود
       const prevStatus = student.case_status ?? null;
       if (prevStatus !== 'in_intervention' && prevStatus !== 'monitoring' && prevStatus !== 'archived') {
         await tx.execute(`UPDATE students SET case_status = 'in_intervention' WHERE id = ?`, [studentId]);

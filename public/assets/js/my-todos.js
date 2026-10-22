@@ -1,14 +1,3 @@
-/**
- * کارت «کارهای من» داشبورد
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// my-todos.js — فاز ۴: کارت «کارهای من» روی داشبورد (هماهنگی داخلی منشی↔مدیر §9)
-// دو صندوق با tabs موجود: دریافتی (inbox) / واگذارشدهٔ من (outbox)
-// - افزودن سریع inline (عنوان + گیرنده + اولویت + مهلت جلالی اختیاری)
-// - — کارِ شخصی: گیرنده = «برای خودم»؛ چک‌لیست موارد دلخواه با تیک و افزودن فوری
-// - تکمیل با checkbox (فقط مسئول) · ویرایش inline با formModal (فقط ثبت‌کننده) · حذف نرم
-// - بعد از هر تغییر رویداد «todos:changed» پخش می‌شود تا badge منو در app.js تازه شود
-
 import { api } from './api.js';
 import {
   el,
@@ -27,7 +16,6 @@ import { fa, formatJalaliNumeric, tehranYmdOfIso } from './format.js';
 import { jalaliDateInput } from './jalali-picker.js';
 import { session } from './state.js';
 
-/** کارت فقط برای جفت secretary↔manager — §9 (درمانگر اصلاً این ماژول را نمی‌بیند) */
 export function canSeeTodos() {
   return Boolean(session.user && (session.user.role === 'manager' || session.user.role === 'secretary'));
 }
@@ -43,12 +31,10 @@ function dueLabel(t) {
   return `مهلت: ${fa(formatJalaliNumeric(tehranYmdOfIso(t.dueAt)))}`;
 }
 
-/** — کارِ شخصی: ثبت‌کننده و مسئول یک نفرند */
 function isPersonal(t) {
   return t.assignerId && t.assigneeId && t.assignerId === t.assigneeId;
 }
 
-/** — نشان پیشرفت چک‌لیست «۲/۵» یا null */
 function progressBadge(t) {
   if (!t.checklist || t.checklist.length === 0) return null;
   const done = t.checklist.filter((i) => i.done).length;
@@ -65,7 +51,6 @@ export function renderMyTodosCard() {
   const body = el('div', { class: 'card__body' });
   const card = el(
     'div',
-    // m145 — ریتم فاصلهٔ یکنواخت داشبورد: کارت بدون حاشیهٔ پایین به کارت قبلی می‌چسبید (0px seam)
     { class: 'card todos-card', style: { marginBottom: 'var(--sp-4)' } },
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('check', 18), 'کارهای من'), countBadge),
     body
@@ -115,8 +100,6 @@ export function renderMyTodosCard() {
     );
   }
 
-  // ─────────────── افزودن سریع ───────────────
-
   function quickAddRow() {
     const title = el('input', { class: 'input', placeholder: 'کار جدید… (شخصی یا واگذاری)', maxlength: 200, autocomplete: 'off' });
     const sel = el(
@@ -134,7 +117,6 @@ export function renderMyTodosCard() {
     );
     const due = jalaliDateInput({ value: '', allowClear: true });
 
-    // ردیف بازشوی چک‌لیست (هر خط یک مورد)
     const checkToggle = el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: toggleChecklist }, icon('plus', 14), 'چک‌لیست');
     const checkArea = el('textarea', {
       class: 'input todo-quick__checklist',
@@ -207,9 +189,6 @@ export function renderMyTodosCard() {
     );
   }
 
-  // ─────────────── چک‌لیست هر کار ───────────────
-
-  /** تیک یک مورد */
   async function toggleItem(t, index, done, scopeEl, listEl) {
     try {
       const res = await api.post(`/api/todos/${t.id}/checklist`, { index, done });
@@ -217,7 +196,6 @@ export function renderMyTodosCard() {
       const fresh = progressBadge(t);
       const old = scopeEl?.querySelector('.todo-progress');
       if (old && fresh) old.replaceWith(fresh);
-      // بازترسیم بلوک چک‌لیست برای خط‌خوردگی بصری مورد
       if (listEl) {
         const freshList = checklistBlock(t);
         listEl.replaceWith(freshList);
@@ -229,7 +207,6 @@ export function renderMyTodosCard() {
     }
   }
 
-  /** افزودن مورد از داخل کارت */
   async function appendItem(t, text, listEl) {
     try {
       const res = await api.post(`/api/todos/${t.id}/checklist`, { text });
@@ -241,7 +218,6 @@ export function renderMyTodosCard() {
     }
   }
 
-  /** بازترسیم بلوک چک‌لیست بعد از افزودن مورد */
   function redrawChecklist(t, listEl) {
     const fresh = checklistBlock(t);
     listEl.replaceWith(fresh);
@@ -275,7 +251,6 @@ export function renderMyTodosCard() {
       );
     });
 
-    // افزودن مورد — برای کارِ باز که من در آن دخالتم (مسئول یا ثبت‌کننده)
     if (!isDoneTask) {
       const input = el('input', { class: 'input todo-checklist__add', placeholder: 'مورد جدید…', maxlength: 200 });
       input.addEventListener('keydown', (e) => {
@@ -290,8 +265,6 @@ export function renderMyTodosCard() {
     }
     return listEl;
   }
-
-  // ─────────────── صندوق دریافتی ───────────────
 
   function inboxList(items) {
     if (items.length === 0) {
@@ -336,8 +309,6 @@ export function renderMyTodosCard() {
     );
   }
 
-  // ─────────────── صندوق واگذارشده ───────────────
-
   function outboxList(items) {
     if (items.length === 0) {
       return emptyState({
@@ -381,8 +352,6 @@ export function renderMyTodosCard() {
     );
   }
 
-  // ─────────────── اکشن‌ها ───────────────
-
   async function completeTodo(t) {
     try {
       await api.post(`/api/todos/${t.id}/complete`);
@@ -421,7 +390,6 @@ export function renderMyTodosCard() {
       ],
       submitLabel: 'ذخیره',
       onSubmit: async (v) => {
-        // تشخیص حفظ وضعیت تیک: موردِ هم‌متن، done قبلی‌اش می‌ماند
         const lines = String(v.checklist ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
         if (lines.length > CHECKLIST_MAX) throw new Error(`چک‌لیست بیش از ${fa(CHECKLIST_MAX)} مورد ندارد`);
         const prevMap = new Map((t.checklist ?? []).map((i) => [i.text, i.done]));

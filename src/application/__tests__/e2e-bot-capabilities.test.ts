@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — bot-capabilities
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-bot-capabilities.test.ts — بات اطلاع‌رسان
-// «پیگیری‌های من» + تکمیل از بات + «حضور فرزند» + «وضعیت مرکز» + خلاصهٔ روز + یادآور پیگیری
-// اپ واقعی Hono + اسکیمای واقعی migrations + webhook بله با secret تست
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -29,7 +21,6 @@ interface BotResponse {
   buttons: { text: string; callbackData: string }[][] | null;
 }
 
-/** ارسال آپدیت خام بله به webhook */
 async function bot(A: ReturnType<typeof createTestApp>, raw: Update): Promise<BotResponse> {
   const res = await A.app.request(
     `/webhook/bale/${WEBHOOK_SECRET}`,
@@ -49,13 +40,11 @@ const cb = (data: string, chatId: number): Update => ({
   callback_query: { id: 9, data, message: { chat: { id: chatId } } }
 });
 
-// chatها: 7101 همکار (علی) | 7102 مدیر | 7103 والد | 7199 بدون اتصال
 const CHAT_ALI = 7101;
 const CHAT_MANAGER = 7102;
 const CHAT_PARENT = 7103;
 const CHAT_NONE = 7199;
 
-// شناسه‌های seed-dev
 const ALI_NID = '3149977797';
 const MANAGER_NID = '3672818690';
 
@@ -70,13 +59,11 @@ describe('بات اطلاع‌رسان: پیگیری‌ها، حضور فرزن�
     A = createTestApp();
     manager = await asRole(A, 'manager');
 
-    // اتصال همکار و مدیر با کد ملی (ورود خودکار )
     const linkAli = await bot(A, tx(ALI_NID, CHAT_ALI));
     expect(linkAli.reply).toContain('اتصال انجام شد');
     const linkMgr = await bot(A, tx(MANAGER_NID, CHAT_MANAGER));
     expect(linkMgr.reply).toContain('اتصال انجام شد');
 
-    // والد: پروندهٔ تازه با شمارهٔ ولیّ یکتا → اتصال chat والد با کد ملی فرزند
     const s = await createStudent(manager, { guardian_phone: '09125550077' });
     parentStudentId = s.id;
     const linkParent = await bot(A, tx(s.nationalId, CHAT_PARENT));
@@ -109,7 +96,6 @@ describe('بات اطلاع‌رسان: پیگیری‌ها، حضور فرزن�
       entity_id: s.id,
       title: 'تهیهٔ برگه ارزیابی',
       assignee_id: ALI_ID
-      // بدون due_at → مهلت پیش‌فرض +۷ روز (قرارداد POST)؛ حذف مهلت با PATCH (null = بی‌مهلت)
     });
     fuNoDueId = (noDue.body as { data: { id: string } }).data.id;
     const cleared = await manager.patch(`/api/followups/${fuNoDueId}`, { due_at: null });
@@ -142,11 +128,9 @@ describe('بات اطلاع‌رسان: پیگیری‌ها، حضور فرزن�
     expect(audit[0].action).toBe('followup.completed');
     expect(audit[0].actor_id).toBe('bale-bot');
 
-    // تکرار روی پیگیری بسته → رد
     const again = await bot(A, cb(`fudone:${fuOverdueId}`, CHAT_ALI));
     expect(again.reply).toContain('تعلق ندارد یا بسته شده');
 
-    // پیگیری مسئول دیگر (زهرا — chat متصل ندارد) → رد
     const s = await createStudent(manager);
     const other = await manager.post('/api/followups', {
       entity_type: 'student',
@@ -160,7 +144,6 @@ describe('بات اطلاع‌رسان: پیگیری‌ها، حضور فرزن�
   });
 
   it('«وضعیت مرکز» مدیر → متریک‌ها؛ همکار → انکار؛ بدون اتصال → راهنما', async () => {
-    // یک نوبت امروز تا متریک «جلسات امروز» صفر نباشد
     const s = await createStudent(manager);
     await manager.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(60), 30, [s.id]));
 
@@ -178,7 +161,6 @@ describe('بات اطلاع‌رسان: پیگیری‌ها، حضور فرزن�
   });
 
   it('«حضور فرزند» والد → آمار حاضر/غایب ۳۰ روز؛ همکار → انکار', async () => {
-    // دو جلسهٔ گذشته: یکی حاضر، یکی غایب
     const appt1 = await manager.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(-120), 30, [parentStudentId]));
     const appt2 = await manager.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(-240), 30, [parentStudentId]));
     const appt1Id = (appt1.body as { data: { id: string } }).data.id;
@@ -198,7 +180,6 @@ describe('بات اطلاع‌رسان: پیگیری‌ها، حضور فرزن�
   });
 
   it('خلاصهٔ روز — پوش همکار/خانواده + یادآور پیگیری؛ اجرای دوم duplicate؛ پرچم خاموش', async () => {
-    // پیگیری عقب‌افتادهٔ جدید برای علی (یادآور صبحگاهی)
     const s = await createStudent(manager);
     await manager.post('/api/followups', {
       entity_type: 'student',
@@ -208,10 +189,8 @@ describe('بات اطلاع‌رسان: پیگیری‌ها، حضور فرزن�
       due_at: new Date(Date.now() - 86400000).toISOString()
     });
 
-    // نوبت امروز برای فرزندِ والدِ متصل (پوش خانواده)
     await manager.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(90), 30, [parentStudentId]));
 
-    // GET تنظیمات — پیش‌فرض روشن
     const before = await manager.get('/api/settings');
     expect((before.body as { data: { notifyDigest: boolean } }).data.notifyDigest).toBe(true);
 
@@ -229,7 +208,6 @@ describe('بات اطلاع‌رسان: پیگیری‌ها، حضور فرزن�
     expect(summary.followupNudges).toBeGreaterThanOrEqual(1); // پیگیری عقب‌افتادهٔ علی
     expect(summary.skippedEmpty).toBeGreaterThanOrEqual(1); // chat مدیر — امروز نوبتی ندارد
 
-    // ردیف‌های صف: digest_staff برای 7101 و digest_family برای 7103 و fu-nudge برای علی
     const rows = A.sql
       .prepare(`SELECT template, recipient, dedup_key, status FROM notifications WHERE template IN ('digest_staff','digest_family','followup_nudge') AND rowid > ?`)
       .all(rowsBefore) as Array<{ template: string; recipient: string; dedup_key: string; status: string }>;
@@ -237,7 +215,6 @@ describe('بات اطلاع‌رسان: پیگیری‌ها، حضور فرزن�
     expect(rows.some((r) => r.template === 'digest_family' && r.recipient === '7103' && r.status === 'sent')).toBe(true);
     expect(rows.some((r) => r.template === 'followup_nudge' && r.dedup_key.includes(ALI_ID) && r.status === 'sent')).toBe(true);
 
-    // اجرای دوم — همه duplicate، ردیف جدید ساخته نمی‌شود (duplicate یادآورِ پیگیری در summary.duplicates شمرده نمی‌شود)
     const res2 = await manager.post('/api/notifications/digest');
     const summary2 = (res2.body as { data: { duplicates: number; staffSent: number; familySent: number; followupNudges: number; enqueued: number } }).data;
     expect(summary2.duplicates).toBe(summary.staffSent + summary.familySent);
@@ -249,7 +226,6 @@ describe('بات اطلاع‌رسان: پیگیری‌ها، حضور فرزن�
     const afterSecond = countRows();
     expect(afterSecond).toBe(rowsBefore + rows.length);
 
-    // خاموشی پرچم → بدون صف‌گذاری
     const off = await manager.put('/api/settings', { notify_digest: false });
     expect((off.body as { data: { notifyDigest: boolean } }).data.notifyDigest).toBe(false);
     const res3 = await manager.post('/api/notifications/digest');

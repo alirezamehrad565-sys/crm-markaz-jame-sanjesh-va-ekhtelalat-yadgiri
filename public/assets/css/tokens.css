@@ -1,10 +1,3 @@
-/* ═══════════════════════════════════════════════════════════════
-   tokens.css — Design Language «سامانه مرکز جامع» (v1)
-   فونت: Vazirmatn  •  پالت: آبی تلگرامی روی کرم گرم (روشن) / ذغالی (تاریک)
-   همه رنگ‌ها فقط از همین توکن‌ها مصرف می‌شوند — هیچ رنگ خام در viewها نیست.
-   ═══════════════════════════════════════════════════════════════ */
-
-/* ─────────────── فونت (self-hosted) ─────────────── */
 @font-face {
   font-family: 'Vazirmatn';
   src: url('../fonts/Vazirmatn-Regular.woff2') format('woff2');
@@ -34,10 +27,6 @@
   font-display: swap;
 }
 
-/* ─────────────── m107/m166-e — مقیاس تایپوگرافی (مرجع واحد) ───────────────
-   اندازه:  --fs-xs 13 · --fs-sm 14 · --fs-md 15 · --fs-lg 16 · --fs-xl 19 · --fs-2xl 23 · --fs-3xl 28
-   ارتفاع خط (زیر): چهار نقش مشخص — ترکیب‌های دلخواه ممنوع
-   فاصله:   فقط از مقیاس --sp-* (پایهٔ 4px) استفاده شود */
 :root {
   --lh-body: 1.8;    /* متن بدنهٔ فارسی — خوانایی */
   --lh-heading: 1.4; /* عنوان‌ها (h1–h4، card/tab titleها) */
@@ -45,12 +34,10 @@
   --lh-ui: 1.5;      /* کنترل‌های تک‌خطی: دکمه، تب، چیپ، بج */
 }
 
-/* ─────────────── Light Mode (پیش‌فرض) ─────────────── */
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
 
-  /* سطوح */
   --bg: #F7F3EA;            /* پس‌زمینه اصلی — کرم گرم */
   --surface: #FFFDF8;       /* کارت */
   --surface-2: #F0ECE3;     /* سطح ۲ */
@@ -58,27 +45,23 @@
   --border: #DDD8CD;
   --border-1: #DDD8CD;      /* مترادف --border */
 
-  /* متن */
   --text: #202529;
   --text-1: #202529;        /* مترادف --text — برخی viewها از این نام استفاده می‌کنند */
   --text-2: #687078;
   --text-3: #8B9297;
 
-  /* آبی اصلی */
   --primary: #229ED9;
   --primary-hover: #168AC1;
   --primary-soft: #E2F3FC;
   --on-primary: #FFFFFF;
   --on-primary-soft: #10628A;
 
-  /* کهربایی (accent) */
   --accent: #D89428;
   --accent-hover: #C08220;
   --accent-soft: #F7E9CC;
   --on-accent: #FFFFFF;
   --on-accent-soft: #8A5C10;
 
-  /* معنایی */
   --success: #3F8F68;
   --success-soft: #E2F0E8;
   --error: #C85450;
@@ -89,14 +72,11 @@
   --info: #229ED9;          /* مترادف --primary */
   --brand: #229ED9;         /* مترادف --primary */
 
-  /* سایه و ارتفاع — m144: «عمق نرم» — لایهٔ دوم بلندتر و محسوس‌تر برای عمق واقعی */
   --shadow-1: 0 1px 2px rgba(32, 42, 58, 0.06), 0 4px 14px rgba(32, 42, 58, 0.065);
   --shadow-2: 0 2px 6px rgba(32, 42, 58, 0.07), 0 10px 28px rgba(32, 42, 58, 0.11);
   --shadow-3: 0 6px 16px rgba(32, 42, 58, 0.08), 0 20px 48px rgba(32, 42, 58, 0.16);
-  /* m166-e — عمق سایدبار/دراپر: سایهٔ لایه‌ای از پایین (نزدیک تیره + پخش ملایم) */
   --shadow-sidebar: 0 8px 18px rgba(32, 42, 58, 0.10), 0 26px 52px rgba(32, 42, 58, 0.15);
 
-  /* شکل — m144: یک پله گردتر (استاندارد مدرن) */
   --radius-sm: 10px;
   --radius-md: 14px;        /* مترادف radius — برخی viewها از این نام استفاده می‌کنند */
   --radius-2: 14px;         /* مترادف radius-md — برخی viewها از این نام استفاده می‌کنند */
@@ -105,19 +85,16 @@
   --radius-xl: 22px;        /* m144 — مودال دسکتاپ */
   --radius-full: 999px;
 
-  /* حرکت */
   --ease: cubic-bezier(0.2, 0.6, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
   --fast: 140ms var(--ease);
   --normal: 240ms var(--ease);
   --slow: 380ms var(--ease);
 
-  /* اسکرول‌بار */
   --scrollbar-thumb: #CFC8B9;
   --scrollbar-thumb-hover: #B9B1A0;
 }
 
-/* ─────────────── Dark Mode (m70 — v2 نرم و گرم: سیاهِ عمیق حذف شد) ─────────────── */
 :root[data-theme='dark'] {
   color-scheme: dark;
 
@@ -155,18 +132,15 @@
   --info: #2AABEE;          /* مترادف --primary */
   --brand: #2AABEE;         /* مترادف --primary */
 
-  /* m144 — عمق نرم در تاریک: لایهٔ دوم بلندتر، آلفا کمی بالاتر (روی سطح تیره سایه باید عمیق‌تر باشد) */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.32), 0 3px 10px rgba(0, 0, 0, 0.28);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.40), 0 2px 6px rgba(0, 0, 0, 0.30);
   --shadow-3: 0 12px 36px rgba(0, 0, 0, 0.50), 0 4px 10px rgba(0, 0, 0, 0.34);
-  /* m166-e — معادل تاریکِ سایهٔ سایدبار (آلفای بالاتر روی سطح تیره) */
   --shadow-sidebar: 0 8px 20px rgba(0, 0, 0, 0.40), 0 26px 56px rgba(0, 0, 0, 0.50);
 
   --scrollbar-thumb: #3C434E;
   --scrollbar-thumb-hover: #4A525E;
 }
 
-/* ─────────────── توکن‌های غیررنگی ─────────────── */
 :root {
   --font: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
 
@@ -191,22 +165,14 @@
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 28%, transparent);
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   m69 — Design Tokens v2 (افزودنی؛ هیچ کلید v1 تغییر نام نمی‌کند)
-   پالت درمانگر ۸‌رنگی + جفت‌های معنایی soft/strong + حرکت و فوکوس v2
-   ═══════════════════════════════════════════════════════════════ */
-
 :root,
 :root[data-theme='light'] {
-  /* جفت‌های معنایی — روی-رنگ برای متن روی سطوح رنگی */
   --success-hover: #27784F;  --on-success: #FFFFFF;  --on-success-soft: #1D5A40;
   --warning-hover: #A87118;  --on-warning: #FFFFFF;  --on-warning-soft: #7A530F;
   --error-hover:  #B04440;   --on-error:  #FFFFFF;  --on-error-soft:  #8C3230;
   --info: #2493CE; --info-hover: #1D7FB4; --info-soft: #DFF1FB;
   --on-info: #FFFFFF; --on-info-soft: #0D5B84;
 
-  /* پالت ۸‌رنگی درمانگرها (گرم‌ملایم — هماهنگ با کرم و آبی برند)
-     soft = پس‌زمینهٔ کارت جلسه · strong = نوار/نقطه/حاشیه · on = متن روی soft */
   --hue-1-soft:#DCEEF9; --hue-1-strong:#229ED9; --hue-1-on:#0C587E;  /* آبی برند */
   --hue-2-soft:#D9F0EA; --hue-2-strong:#1F9E85; --hue-2-on:#10594C;  /* فیروزه‌ای */
   --hue-3-soft:#E7EFD3; --hue-3-strong:#7E9C33; --hue-3-on:#4A5C17;  /* زیتونی */
@@ -224,7 +190,6 @@
   --info: #4FB3E8; --info-hover: #6FC2EF; --info-soft: #1C3B4E;
   --on-info: #06202E; --on-info-soft: #93CFEF;
 
-  /* soft ها با سطوح تازهٔ م70 هم‌تراز شدند (روشن‌تر، نشسته روی surface جدید) */
   --hue-1-soft:#204257; --hue-1-strong:#4DB6EA; --hue-1-on:#A8DCF6;
   --hue-2-soft:#184640; --hue-2-strong:#3FBEA2; --hue-2-on:#8ADFCB;
   --hue-3-soft:#39461F; --hue-3-strong:#A3C158; --hue-3-on:#C9DE92;
@@ -236,13 +201,10 @@
 }
 
 :root {
-  /* ارتفاع — سطح ۴ برای پوشش درگ/اورلی — m144: همگام با مقیاس عمق نرم */
   --shadow-4: 0 8px 22px rgba(15, 23, 42, 0.10), 0 26px 60px rgba(15, 23, 42, 0.18);
-  /* مقیاس z-index (رسمی‌سازی مقادیر موجود) */
   --z-sticky: 30; --z-sidebar: 40; --z-backdrop: 45; --z-dropdown: 60;
   --z-popover: 80; --z-modal: 100; --z-toast: 200; --z-drag: 300;
 
-  /* حرکت — مدت‌ها + ریزتعامل‌های نام‌دار */
   --dur-1: 120ms; --dur-2: 180ms; --dur-3: 240ms; --dur-4: 380ms;
   --ease-out: cubic-bezier(0.2, 0.6, 0.3, 1);
   --motion-lift:  transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
@@ -250,30 +212,22 @@
   --motion-enter: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out);
   --motion-fill:  width .5s var(--ease-out), stroke-dashoffset .7s var(--ease-out), height .55s var(--ease-out);
 
-  /* فوکوس v2 — حلقهٔ دولپه که روی پس‌زمینه‌های رنگی هم دیده می‌شود */
   --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px color-mix(in srgb, var(--primary) 55%, transparent);
 
-  /* تایپوگرافی */
   --fs-display: 2.75rem; /* 44 — فقط امتیاز هیرو */
   --lh-tight: 1.25;
 
-  /* ─── m114 — UI Modernization v3 ─── */
-  /* گرادیان برند — دکمهٔ اصلی، هیرو، هدر کارت ویژه */
   --grad-primary: linear-gradient(135deg, #2FB1E8 0%, #229ED9 55%, #1B8CC4 100%);
   --grad-primary-hover: linear-gradient(135deg, #28A5DC 0%, #168AC1 55%, #127BAE 100%);
-  /* درخشش ملایم دکمهٔ اصلی و آیتم فعال ناوبری */
   --glow-primary: 0 4px 14px color-mix(in srgb, var(--primary) 38%, transparent);
-  /* اسکلتون — پایه و موج */
   --skel-base: color-mix(in srgb, var(--text-3) 16%, var(--surface-2));
   --skel-shine: color-mix(in srgb, var(--text-3) 7%, var(--surface));
-  /* هالهٔ حالت خالی */
   --empty-halo: color-mix(in srgb, var(--primary) 9%, transparent);
 }
 
 :root[data-theme='dark'] {
   --shadow-4: 0 10px 26px rgba(0, 0, 0, 0.38), 0 28px 64px rgba(0, 0, 0, 0.50);
 
-  /* m114 — معادل‌های تاریک */
   --grad-primary: linear-gradient(135deg, #3BB5F0 0%, #2AABEE 55%, #2196D6 100%);
   --grad-primary-hover: linear-gradient(135deg, #4FC0F4 0%, #45B8F2 55%, #35A8E2 100%);
   --glow-primary: 0 4px 18px color-mix(in srgb, var(--primary) 30%, transparent);
@@ -282,7 +236,6 @@
   --empty-halo: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
-/* ارقام جدولی — اعداد ستونی (تاریخ/ساعت/امتیاز) */
 .num, .kpi__value, .grid-appt__time, .wd-tl__time, .hero-score__value,
 .score-tile__value, .lb-score b, .spark__num, .goal-mini__val,
 .tl-strip__label, .staff-chip__count {

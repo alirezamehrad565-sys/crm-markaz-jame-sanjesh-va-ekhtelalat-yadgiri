@@ -1,10 +1,3 @@
-/**
- * ماژول لیست انتظار — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// REST endpoints لیست انتظار — بدون business logic
-// RBAC: خواندن برای همهٔ کارکنان؛ هر تغییر فقط manager/secretary
-
 import type { AppHono } from '@core/shared';
 import {
   NewWaitlistSchema,
@@ -35,7 +28,6 @@ export function registerWaitlistRoutes(app: AppHono, service: WaitlistService): 
     return c.json({ data: badge }, 200);
   });
 
-  // ترتیب دستی — باید قبل از /:id ثبت شود تا id ثابت با مسیر اشتباه نشود
   app.post('/api/waitlist/reorder', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = WaitlistReorderSchema.parse(await c.req.json<unknown>());
@@ -57,7 +49,6 @@ export function registerWaitlistRoutes(app: AppHono, service: WaitlistService): 
     return c.json({ data: entry }, 200);
   });
 
-  // «معلم مرکز» (درمانگر) هم می‌تواند متقاضی ثبت کند؛ پذیرش/دور همچنان منشی/مدیر
   app.post('/api/waitlist', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = NewWaitlistSchema.parse(await c.req.json<unknown>());
@@ -81,8 +72,6 @@ export function registerWaitlistRoutes(app: AppHono, service: WaitlistService): 
     return c.json({ data: entry }, 201);
   });
 
-  // ─── تیک «منتظر دریافت خدمت» روی پروندهٔ دانش‌آموز (ورود/خروج لیست انتظار پذیرش) ───
-  // ثبت متقاضی برای درمانگر هم باز شد (هم‌راستا با POST /api/waitlist)
   app.post('/api/students/:id/wait-status', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = StudentWaitStatusSchema.parse(await c.req.json<unknown>());
@@ -166,7 +155,6 @@ export function registerWaitlistRoutes(app: AppHono, service: WaitlistService): 
     return c.json({ data: entry }, 200);
   });
 
-  // بازگشت خروجِ اشتباه به صف انتظار (از rejected/no_show/cancelled؛ admitted نهایی است)
   app.post('/api/waitlist/:id/reopen', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = WaitlistCallSchema.parse(await c.req.json<unknown>());

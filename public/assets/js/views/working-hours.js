@@ -1,21 +1,6 @@
-/**
- * نمای ساعات کاری
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/working-hours.js — ویرایشگر برنامه هفتگی
-// تقویم کاری بصری بین ساعت ۰۷ تا ۱۴ (درخواست کاربر):
-// کافی است روی شبکه بکشید (ماوس یا لمس) تا بازه‌های کاری رنگ شوند؛
-// کشیدن دوباره روی همان خانه‌ها پاک می‌کند.
-// گسترش شبکه به ۰۶–۲۱ (فعال‌سازی شیفت عصر) + جداکنندهٔ شیفت + اسکرول داخلی با سرستون چسبان.
-// بازه‌های بیرون از ۰۶–۲۱ (داده‌های قدیمی) به‌صورت چیپ زیر شبکه با امکان حذف نشان داده می‌شوند.
-//: هسته ویرایشگر (weeklyEditor) کامپوننت مشترک «بازه کاری کارکنان» و
-// تب «بازه کاری مرکز» در تنظیمات است — API کامپوننت حفظ شده است.
-
 import { api, qs } from '../api.js';
 import { fa, gridTimes, minuteToLabel, timeToMinute, weeklyHoursLabel, WEEKDAY_NAMES, WEEKDAY_ABBRS } from '../format.js';
 import { el, icon, toast, toastError, emptyState } from '../ui.js';
-
-// ───────────── ثابت‌های شبکه بصری ─────────────
 
 const GRID_START_MINUTE = 6 * 60;   // ۰۶:۰۰
 const GRID_END_MINUTE = 21 * 60;    // ۲۱:۰۰
@@ -23,11 +8,6 @@ const SHIFT_BREAK_MINUTE = 14 * 60; // — مرز نمایشی شیفت صبح/�
 const SLOT_MINUTES = 30;            // رزولوشن نقاشی (مضرب ۱۵ دقیقه‌ایِ اسکیما)
 const SLOT_COUNT = (GRID_END_MINUTE - GRID_START_MINUTE) / SLOT_MINUTES; // ۳۰ ردیف
 
-/**
- * کامپوننت ویرایشگر هفتگی — items را درجا تغییر می‌دهد.
- * @param {{items: {weekday:number,startMinute:number,endMinute:number}[], onChanged?: () => void}} opts
- * @returns {{root: HTMLElement, getItems: () => any[], totalMinutes: () => number, hasOverlap: () => boolean}}
- */
 export function weeklyEditor(opts) {
   let items = [...opts.items];
 
@@ -56,8 +36,6 @@ export function weeklyEditor(opts) {
     if (opts.onChanged) opts.onChanged();
   }
 
-  // ───────────── مدل: مجموعه خانه‌های پر (weekday, slotIndex) ─────────────
-
   const filled = new Set(); // key = wd*100 + slot
   const key = (wd, slot) => wd * 100 + slot;
 
@@ -78,7 +56,6 @@ export function weeklyEditor(opts) {
     return items.filter((r) => r.startMinute < GRID_START_MINUTE || r.endMinute > GRID_END_MINUTE);
   }
 
-  /** بازسازی items از خانه‌های پر + بازه‌های خارج شبکه — pure */
   function rebuildItems() {
     const next = [];
     for (let wd = 0; wd < 7; wd++) {
@@ -96,7 +73,6 @@ export function weeklyEditor(opts) {
         }
       }
     }
-    // بازه‌های خارج از شبکه حفظ می‌شوند
     for (const r of outOfGridRanges()) {
       const clipped = next.some((x) => x.weekday === r.weekday && x.startMinute < r.endMinute && r.startMinute < x.endMinute);
       if (!clipped) next.push(r);
@@ -104,13 +80,10 @@ export function weeklyEditor(opts) {
     items = next;
   }
 
-  // ───────────── رندر شبکه ─────────────
-
   const cells = new Map(); // key → cell element
 
   const grid = el('div', {
     class: 'wgrid',
-    // لمس: جلوگیری از اسکرول هنگام نقاشی
     style: { touchAction: 'none' }
   });
 
@@ -126,7 +99,6 @@ export function weeklyEditor(opts) {
 
   for (let slot = 0; slot < SLOT_COUNT; slot++) {
     const minute = GRID_START_MINUTE + slot * SLOT_MINUTES;
-    // جداکنندهٔ نمایشی شیفت صبح/عصر پیش از ردیف ۱۴:۰۰
     if (minute === SHIFT_BREAK_MINUTE) {
       grid.appendChild(
         el('div', { class: 'wgrid__shift-break' }, `شروع شیفت عصر — از ${fa(minuteToLabel(SHIFT_BREAK_MINUTE))}`)
@@ -155,8 +127,6 @@ export function weeklyEditor(opts) {
     filled[on ? 'add' : 'delete'](key(wd, slot));
   }
 
-  // ───────────── نقاشی با pointer events (ماوس + لمس) ─────────────
-
   let painting = false;
   let paintValue = true;
 
@@ -178,7 +148,6 @@ export function weeklyEditor(opts) {
     if (!hit) return;
     e.preventDefault();
     painting = true;
-    // مقدار نقاشی بر اساس وضعیت خانه شروع — کشیدن روی پرها پاک می‌کند
     paintValue = !filled.has(key(hit.wd, hit.slot));
     paintCell(hit.wd, hit.slot, paintValue);
   });
@@ -203,8 +172,6 @@ export function weeklyEditor(opts) {
       notifyChanged();
     }
   });
-
-  // ───────────── چیپ‌های بازه‌ها (زیر شبکه) ─────────────
 
   const chips = el('div', { class: 'wchips' });
 
@@ -242,8 +209,6 @@ export function weeklyEditor(opts) {
   for (const [k, cell] of cells) cell.classList.toggle('is-on', filled.has(k));
   drawChips();
 
-  // ───────────── تنظیم سریع (یک بازهٔ یکسان «از ساعت تا ساعت» روی روزهای انتخابی) ─────────────
-
   const QUICK_SCOPES = {
     all: [0, 1, 2, 3, 4, 5, 6],
     sat_thu: [0, 1, 2, 3, 4],
@@ -262,7 +227,6 @@ export function weeklyEditor(opts) {
     el('option', { value: 'sat_wed' }, 'شنبه تا چهارشنبه (۴ روز)')
   );
 
-  /** جایگزینی کامل برنامهٔ فعلی با یک بازهٔ یکسان روی روزهای انتخاب‌شده — تا وقتی «ذخیره» نشود فقط همین‌جاست */
   function applyQuick() {
     const from = timeToMinute(quickFrom.value);
     const to = timeToMinute(quickTo.value);
@@ -301,8 +265,6 @@ export function weeklyEditor(opts) {
     hasOverlap
   };
 }
-
-// ─────────────── صفحه «بازه کاری کارکنان» (به‌عنوان بخشی از تنظیمات هم رندر می‌شود) ───────────────
 
 const local = {
   staffId: '',

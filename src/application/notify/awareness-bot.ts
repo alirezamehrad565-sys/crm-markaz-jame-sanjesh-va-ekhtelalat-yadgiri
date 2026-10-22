@@ -1,19 +1,8 @@
-/**
- * اعلان‌های کاربردی و بات‌های نقش‌آگاه بله — بات نقش‌آگاه بله (منو و مسیرها)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// منوی «آگاهی‌های اختلالات»: محتوای آموزشی عمومی مرکز داخل بات
-// ریشه (dis:root) → دو بخش: t=راهنمای تخصصی اختلال‌ها (۹) / d=دفاتر آموزشی A4 (۱۸)
-// بخش → فهرست دکمه‌های عنوان‌دار (صفحه‌بندی ۸تایی) → آیتم → پیام عنوان + لینک عمومی
-// بدون گیت داده: فایل‌ها روی سایت عمومی‌اند و برای همهٔ نقش‌ها حتی مهمان باز است.
-// شناسه‌ها اندیس آرایهٔ استاتیک‌اند — state لازم ندارد (برخلاف exb/stu).
-
 import type { InlineButton } from '@core/notify';
 import type { AwSection } from '@core/notify';
 import { faDigits } from '@core/shared';
 
 export interface AwBotDeps {
-  /** آدرس عمومی سامانه — خالی = پیام بدون لینک (نسخهٔ چاپی از دفتر) */
   publicBaseUrl: string | null;
 }
 
@@ -22,7 +11,6 @@ export interface AwBotReply {
   buttons: InlineButton[][] | null;
 }
 
-/** سقف دکمه‌های هر صفحهٔ بخش */
 export const AW_PAGE_SIZE = 8;
 
 interface AwItem {
@@ -31,7 +19,6 @@ interface AwItem {
   hint: string;
 }
 
-/** راهنمای تخصصی اختلال‌ها — پوشهٔ /downloads/training */
 const TRAINING: AwItem[] = [
   { title: 'نارساخوانی (دیس‌لکسی)', file: 'ekhtelal-01-narsakhaani.html', hint: 'شناخت علائم و راه‌های همراهی در خانه و کلاس' },
   { title: 'نارسانویسی (دیس‌گرافی)', file: 'ekhtelal-02-narsanevisi.html', hint: 'دشواری نوشتن و خوشنویسی؛ تمرین‌های پیشنهادی' },
@@ -44,7 +31,6 @@ const TRAINING: AwItem[] = [
   { title: 'دیرآموزی و پروتکل دیرآموز', file: 'ekhtelal-09-diramuzi.html', hint: 'یادگیری آهسته‌تر با روش ساخت‌یافته' }
 ];
 
-/** دفاتر آموزشی A4 — پوشهٔ /downloads/dossiers */
 const DOSSIERS: AwItem[] = [
   { title: 'دفتر ۰۱ — نارساخوانی', file: 'd-01-narsakhani.html', hint: 'گزارش A4 برای چاپ' },
   { title: 'دفتر ۰۲ — نارسانویسی', file: 'd-02-narsanevisi.html', hint: 'گزارش A4 برای چاپ' },
@@ -81,7 +67,6 @@ export function createAwarenessBot(deps: AwBotDeps) {
   }
 
   return {
-    /** منوی ریشه — دو دکمهٔ بخش */
     async root(): Promise<AwBotReply> {
       return {
         text: [
@@ -97,7 +82,6 @@ export function createAwarenessBot(deps: AwBotDeps) {
       };
     },
 
-    /** فهرست یک بخش با صفحه‌بندی */
     async section(section: AwSection, page: number): Promise<AwBotReply> {
       const items = sectionItems(section);
       const totalPages = Math.max(1, Math.ceil(items.length / AW_PAGE_SIZE));
@@ -120,7 +104,6 @@ export function createAwarenessBot(deps: AwBotDeps) {
       };
     },
 
-    /** پیام یک آیتم: عنوان + توضیح یک‌خطی + لینک عمومی */
     async item(section: AwSection, idx: number): Promise<AwBotReply> {
       const items = sectionItems(section);
       const it = items[idx];

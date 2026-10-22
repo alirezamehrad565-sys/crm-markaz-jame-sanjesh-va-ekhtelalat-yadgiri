@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — storage
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// storage.test.ts — آداپترهای ObjectStore (d1 با MockD1 واقعی + r2 با باکت جعلی)
-
 import { describe, it, expect } from 'vitest';
 import { createTestDb } from '../../../test/harness';
 import { MockD1 } from '../../../test/mock-d1';
@@ -30,7 +24,6 @@ describe('d1-store: چرخهٔ کامل بایت روی MockD1', () => {
     expect(first!.mime).toBe('application/pdf');
     expect(first!.size).toBe(15);
 
-    // بازنویسی همان کلید
     await store.put('exercise/a', bytesOf('v2'), 'text/html');
     const second = await store.get('exercise/a');
     expect(new TextDecoder().decode(second!.bytes)).toBe('v2');
@@ -38,9 +31,7 @@ describe('d1-store: چرخهٔ کامل بایت روی MockD1', () => {
 
     await store.delete('exercise/a');
     expect(await store.get('exercise/a')).toBeNull();
-    // حذف کلید ناموجود — خطا نمی‌دهد
     await expect(store.delete('exercise/a')).resolves.toBeUndefined();
-    // کلید ناموجود
     expect(await store.get('exercise/nope')).toBeNull();
   });
 
@@ -85,7 +76,6 @@ describe('r2-store: باکت ساختاری جعلی', () => {
     await store.put('exercise/r2', bytesOf('cloud file'), 'application/pdf');
     const got = await store.get('exercise/r2');
     expect(new TextDecoder().decode(got!.bytes)).toBe('cloud file');
-    // mime در آداپتر R2 خنثی است — منبع حقیقت mime جدول exercises است
     expect(got!.mime).toBe('application/octet-stream');
 
     await store.delete('exercise/r2');

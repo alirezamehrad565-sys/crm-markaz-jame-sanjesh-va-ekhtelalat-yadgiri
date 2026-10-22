@@ -1,9 +1,3 @@
-/**
- * ماژول پروندهٔ دانش‌آموز — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// ۱۱ endpoint مدارس و دانش‌آموزان — با Zod validation
-
 import type { AppHono, SchoolKind } from '@core/shared';
 import { ChangeCaseStatusSchema, ChangeOwnerSchema, ChangePathwaySchema, ChangeSpecialNeedSchema, NewClassSchema, NewEducationHistorySchema, NewSchoolSchema, NewStudentSchema, UpdateClassSchema, UpdateSchoolSchema, UpdateStudentSchema } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
@@ -13,7 +7,6 @@ import { pageParams } from '@app/http';
 import { z } from 'zod';
 import type { StudentProfileService } from './types';
 
-/** — T7 (m150-b): اعتبارسنجی ورودی معلم تازه (اسکیمای محلی — الگوی pure دامنه‌ها) */
 const StudentTeacherSchema = z.object({
   name: z.string().min(2, 'نام معلم الزامی است (۲ تا ۱۲۰ نویسه)').max(120, 'نام معلم حداکثر ۱۲۰ نویسه است'),
   class_label: z.string().max(120).optional(),
@@ -21,9 +14,7 @@ const StudentTeacherSchema = z.object({
 });
 
 export function registerRoutes(app: AppHono, service: StudentProfileService): void {
-  // ───────────── Schools ─────────────
 
-  // ساختار مدارس/کلاس‌ها فقط مدیر (تفکیک نقش‌ها: معلم/منشی تنظیم نمی‌کنند؛ خواندن آزاد برای فرم‌ها)
   app.post('/api/schools', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     const body = NewSchoolSchema.parse(await c.req.json<unknown>());
@@ -67,14 +58,11 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
     return c.json({ data: school }, 200);
   });
 
-  // حذف کامل مدرسهٔ ثبت‌شدهٔ اشتباه — فقط مدیر؛ ارجاع دارد → 409
   app.delete('/api/schools/:id', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     await service.deleteSchool(c.req.param('id'), actor);
     return c.body(null, 204);
   });
-
-  // ───────────── Classes ─────────────
 
   app.post('/api/classes', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
@@ -118,20 +106,15 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
     return c.json({ data: cls }, 200);
   });
 
-  // حذف کامل کلاس ثبت‌شدهٔ اشتباه — فقط مدیر؛ دانش‌آموز دارد → 409
   app.delete('/api/classes/:id', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     await service.deleteClass(c.req.param('id'), actor);
     return c.body(null, 204);
   });
 
-  // ───────────── Students ─────────────
-
   app.post('/api/students', async (c) => {
     const actor = getAuthContext(c);
     const body = NewStudentSchema.parse(await c.req.json<unknown>());
-    // درمانگر فقط «دانش‌آموز فعال برای خودش» تعریف می‌کند: مسئول پرونده اجباراً خودش
-    // و ثبت همیشه در چرخهٔ فعال (نه آرشیو)؛ دفتر (مدیر/منشی) مثل قبل آزاد است.
     const ownerStaffId = actor.role === 'therapist' ? actor.staffId : body.owner_staff_id;
     const archived = actor.role === 'therapist' ? false : body.archived;
     const student = await service.createStudent(
@@ -147,10 +130,8 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
         guardianName: body.guardian_name,
         guardianRelation: body.guardian_relation,
         guardianPhone: body.guardian_phone,
-        // مسئول پرونده در لحظهٔ تعریف + ثبت مستقیم در آرشیو
         ownerStaffId,
         archived,
-        // مسیر پرونده در لحظهٔ تعریف (پذیرش)
         pathway: body.pathway
       },
       actor
@@ -161,8 +142,6 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
   app.get('/api/students', async (c) => {
     const actor = getAuthContext(c);
     const { page, pageSize } = pageParams(c.req.query() as Record<string, string | undefined>);
-    // مرز «لیست دانش‌آموزهای هر معلم»: درمانگر فقط پرونده‌های مسئولِ خودش یا
-    // با سابقهٔ جلسهٔ خودش را می‌بیند؛ دفتر کل مرکز + امکان فیلتر به‌ازای هر همکار.
     const staffScope = actor.role === 'therapist' ? actor.staffId : undefined;
     const ownerRaw = c.req.query('owner_id') || undefined;
     const ownerId = actor.role === 'therapist' ? undefined : (ownerRaw && /^[0-9a-f-]{36}$/i.test(ownerRaw) ? ownerRaw : undefined);
@@ -215,7 +194,6 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
         guardianName: body.guardian_name,
         guardianRelation: body.guardian_relation,
         guardianPhone: body.guardian_phone,
-        /** — ثبت کد ملی پروندهٔ نگه‌دارنده‌دار (NAS-…) — فقط «اولین ثبت» */
         nationalId: body.national_id
       },
       actor
@@ -229,22 +207,18 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
     return c.json({ data: student }, 200);
   });
 
-  // ─── activate ───
   app.post('/api/students/:id/activate', async (c) => {
     const actor = getAuthContext(c);
     const student = await service.activateStudent(c.req.param('id'), actor);
     return c.json({ data: student }, 200);
   });
 
-  // حذف کامل پروندهٔ ثبت‌شدهٔ اشتباه — فقط دفتر (مدیر/منشی)؛
-  // سابقه دارد → 409 با راهنمای «انتقال به آرشیو»
   app.delete('/api/students/:id', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     await service.deleteStudent(c.req.param('id'), actor);
     return c.body(null, 204);
   });
 
-  // ─── case status (فاز ۶ — §14.2، D5) — فقط منشی/مدیر؛ درمانگر ۴۰۳ ───
   app.patch('/api/students/:id/case-status', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = ChangeCaseStatusSchema.parse(await c.req.json<unknown>());
@@ -252,8 +226,6 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
     return c.json({ data: student }, 200);
   });
 
-  // ─── مسیر پرونده (learning/rehab) — مدیر/منشی + درمانگرِ مسئول (گارد مالکیت در سرویس نیست؛
-  // همین‌جا coarse: درمانگر فقط پروندهٔ خودش — الگوی canDecideFor تب بالینی) ───
   app.patch('/api/students/:id/pathway', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = ChangePathwaySchema.parse(await c.req.json<unknown>());
@@ -266,7 +238,6 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
     return c.json({ data: student }, 200);
   });
 
-  // ─── c — مسئول پرونده — فقط منشی/مدیر؛ درمانگر ۴۰۳ ───
   app.patch('/api/students/:id/owner', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = ChangeOwnerSchema.parse(await c.req.json<unknown>());
@@ -274,7 +245,6 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
     return c.json({ data: student }, 200);
   });
 
-  // ─── special need (فاز ۷ — §12، D3) — فقط منشی/مدیر؛ درمانگر ۴۰۳ ───
   app.patch('/api/students/:id/special-need', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = ChangeSpecialNeedSchema.parse(await c.req.json<unknown>());
@@ -290,8 +260,6 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
     return c.json({ data: student }, 200);
   });
 
-  // ───────────── Student appointments ─────────────
-
   app.get('/api/students/:id/appointments', async (c) => {
     const items = await service.listStudentAppointments(c.req.param('id'), {
       from: c.req.query('from') || undefined,
@@ -300,9 +268,6 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
     });
     return c.json({ data: items }, 200);
   });
-
-  // ───────────── تاریخچهٔ تحصیلی ─────────────
-  // خواندن: همهٔ نقش‌ها (پروفایل)؛ ثبت/حذف: فقط دفتر — منشی/مدیر (هم‌راستا با آرشیو)
 
   app.get('/api/students/:id/education-history', async (c) => {
     const items = await service.listEducationHistory(c.req.param('id'));
@@ -325,9 +290,6 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
     await service.deleteEducationHistory(c.req.param('id'), c.req.param('entryId'), actor);
     return c.body(null, 204);
   });
-
-  // ─── T7 (m150-b): معلم‌های دانش‌آموز — چند معلم = چند لینک مستقل فرم جامع معلم ───
-  // خواندن: همهٔ نقش‌های داخلی (پروفایل)؛ ثبت/حذف: سه نقش مرکز (معلم‌ها برای جریان فرم معلم لازم‌اند)
 
   app.get('/api/students/:id/teachers', async (c) => {
     const items = await service.listStudentTeachers(c.req.param('id'));

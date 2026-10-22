@@ -1,18 +1,3 @@
-/**
- * نمای بایگانی
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/archive.js — آرشیو مرکز (دیتابیس دانش‌آموزان نیاز ویژهٔ شهر)
-// به دستور کاربر: «لیست ارشیو (دیتابیس دانش آموزان نیاز ویژه شهر) تو لیست ارشیو هم
-// بشه دانش آموز تعریف کرد با برچسب و...»
-// شامل: پرونده‌های خارج‌شده از چرخه (active=0) + ثبت مستقیم با برچسب + بازگشت به چرخه
-// فقط منشی/مدیر (NAV + گارد سرور از مسیر students).
-// به دستور کاربر:
-// * «کد ملی اجباری نباشه و فرم نباید عین فرم اضافه کردن دانش آموز فعال باشه»
-// → فرم مستقل آرشیو (archive-form.js — کد ملی/تلفن اختیاری، بدون کلاس جاری)
-// * «تاریخچه تحصیلی — کجا درس خونده، سطحش اون سال چی بوده، توضیحات»
-// → پنجرهٔ تاریخچهٔ تحصیلی در اکشن هر ردیف + باز شدن خودکار پس از ثبت جدید
-
 import { api, qs } from '../api.js';
 import { fa, gradeLabel, isPlaceholderNid } from '../format.js';
 import { el, icon, confirmModal, toast, toastError, dataTable, skeletonState, emptyState, phoneCell } from '../ui.js';
@@ -34,7 +19,6 @@ const local = {
 export async function renderArchive(container) {
   container.replaceChildren(skeletonState('table', 6));
 
-  // فراداده یک‌بار — جستجوی تایپی درخواست اضافی نمی‌سازد
   if (local.schools.length === 0 && local.tags.length === 0 && local.classes.length === 0) {
     try {
       const [schoolsRes, tagsRes, classesRes] = await Promise.all([
@@ -76,7 +60,6 @@ export async function renderArchive(container) {
     return teacher ? `${name} — ${teacher}` : name;
   };
 
-  // ─────────────── toolbar ───────────────
   const searchInput = el('input', { class: 'input', placeholder: 'جستجو: نام یا کد ملی…', value: local.query });
   let debounce;
   searchInput.addEventListener('input', () => {
@@ -103,14 +86,12 @@ export async function renderArchive(container) {
     el('button', { class: 'btn btn--primary btn--sm', onclick: () => openArchiveStudentForm({
       onSaved: ({ student }) => {
         renderArchive(container);
-        // پس از ثبت پروندهٔ آرشیو، ثبت سابقهٔ تحصیلی سال‌های قبل در ادامهٔ کار
         if (student) setTimeout(() => openEducationHistory(student, { onChanged: () => {} }), 150);
       }
     }) },
       icon('plus', 16), 'دانش‌آموز جدید در آرشیو')
   );
 
-  // ─────────────── جدول ───────────────
   const hasFilter = Boolean(local.query || local.schoolId || local.tagId);
   const table = dataTable({
     columns: [
@@ -130,7 +111,6 @@ export async function renderArchive(container) {
         )
       },
       { key: 'tags', label: 'برچسب‌ها', render: (s) => tagChipsPreview(s.tags, 3) },
-      // باجت تماس سیستمی کنار تلفن ولیّ در آرشیو هم
       { key: 'guardianPhone', label: 'تلفن ولی', render: (s) => s.guardianPhone
         ? phoneCell(s.guardianPhone, `تماس با ولیّ ${s.firstName ?? ''} ${s.lastName ?? ''} — ${fa(s.guardianPhone)}`)
         : el('span', { class: 'cell-sub' }, '—') },
@@ -138,7 +118,6 @@ export async function renderArchive(container) {
         key: 'actions', label: 'عملیات', align: 'end',
         render: (s) => el('div', { class: 'cell-actions' },
           el('button', { class: 'btn btn--ghost btn--sm', title: 'پروفایل', onclick: () => { location.hash = `#/students/${s.id}`; } }, icon('user', 15)),
-          // تاریخچهٔ تحصیلی: کجا درس خوانده، سطح هر سال، توضیحات
           el('button', {
             class: 'btn btn--ghost btn--sm', title: 'تاریخچهٔ تحصیلی',
             onclick: () => openEducationHistory(s)
@@ -160,7 +139,6 @@ export async function renderArchive(container) {
               } catch (err) { toastError(err); }
             }
           }, icon('check', 15), 'فعال‌سازی'),
-          // حذف کامل پروندهٔ ثبت‌شدهٔ اشتباه از آرشیو (فقط دفتر؛ سرور گارد سابقه دارد)
           el('button', {
             class: 'btn btn--danger btn--sm', title: 'حذف کامل پرونده — فقط اگر هیچ سابقه‌ای نداشته باشد',
             onclick: async () => {
@@ -193,7 +171,6 @@ export async function renderArchive(container) {
     }
   });
 
-  // ─────────────── صفحه‌بندی ───────────────
   const meta = result.meta ?? { page: 1, totalPages: 1, total: 0 };
   const pager = el('div', { class: 'pager' },
     el('span', {}, `صفحه ${fa(meta.page)} از ${fa(meta.totalPages)} · ${fa(meta.total)} پرونده`),
@@ -212,13 +189,11 @@ export async function renderArchive(container) {
     el('div', { class: 'card card__body--flush', style: { boxShadow: 'var(--shadow-1)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' } }, table, pager)
   );
 
-  // حفظ تایپ پیوسته
   searchInput.focus();
   const end = searchInput.value.length;
   searchInput.setSelectionRange(end, end);
 }
 
-/** ویرایشگر برچسب از فهرست آرشیو */
 function openRowTagEditor(student, container) {
   openTagEditor({
     student,
@@ -232,7 +207,6 @@ function openRowTagEditor(student, container) {
   });
 }
 
-/** فیلتر برچسب‌ها — منوی بازشونده گروه‌بندی‌شده (هم‌الگوی ماژول دانش‌آموزان) */
 function buildTagDropdown(container) {
   const panel = el('div', { class: 'dd__panel', style: { display: 'none' } });
   const activeTag = local.tagId ? local.tags.find((t) => t.id === local.tagId) : null;

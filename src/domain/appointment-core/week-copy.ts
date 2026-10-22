@@ -1,13 +1,3 @@
-/**
- * ماژول هستهٔ نوبت‌دهی — کپی هفتهٔ نوبت‌ها
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// کپی هفته نوبت‌ها + بازگردانی (undo) — با batch_id و تراکنش اتمیک
-// قراردادها:
-// - copyWeek یک batch_id تولید می‌کند
-// - undoCopyWeek فقط نوبت‌های کپی‌شده‌ای را حذف می‌کند که هیچ حضور ثبت‌شده‌ای ندارند
-// - تداخل‌ها هشدار نرم — آن نوبت کپی نمی‌شود و در خروجی گزارش می‌شود
-
 import type { AuthContext, ConflictWarning } from '@core/shared';
 import { tehranDayRange } from '@core/shared';
 import { ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
@@ -29,7 +19,6 @@ interface WeekCopyCtx {
 export async function copyWeek(ctx: WeekCopyCtx & { input: CopyWeekInput }): Promise<CopyWeekResult> {
   const { db, audit, logger, actor, input } = ctx;
 
-  // sanity: باید دوشنبه باشند (ISO weekday 1)
   for (const [label, ymd] of [['source_monday', input.sourceMonday], ['target_monday', input.targetMonday]] as const) {
     const day = new Date(`${ymd}T00:00:00.000Z`).getUTCDay();
     if (day !== 1) {
@@ -40,7 +29,6 @@ export async function copyWeek(ctx: WeekCopyCtx & { input: CopyWeekInput }): Pro
     throw new ValidationError('target_monday باید بعد از source_monday باشد');
   }
 
-  // فاز ۵ — درمانگر فقط هفتهٔ خودش را کپی می‌کند (staff_id الزامی و برابر خودش)
   if (actor.role === 'therapist' && input.staffId !== actor.staffId) {
     throw new ForbiddenError('کپی هفته فقط برای برنامهٔ خودِ شما مجاز است');
   }
@@ -68,7 +56,6 @@ export async function copyWeek(ctx: WeekCopyCtx & { input: CopyWeekInput }): Pro
     return { batchId: null, copied: 0, conflicts: [], dryRun: input.dryRun ?? false };
   }
 
-  // حضور دانش‌آموزان منبع (برای کپی شرکت‌کنندگان)
   const ids = sourceRows.map((r) => r.id);
   const placeholders = ids.map(() => '?').join(',');
   const studentRows = await db.query<{ appointment_id: string; student_id: string; facet_id: string | null }>(
@@ -90,7 +77,6 @@ export async function copyWeek(ctx: WeekCopyCtx & { input: CopyWeekInput }): Pro
     const newStart = new Date(Date.parse(row.start_at) + shiftMs).toISOString();
     const newEnd = new Date(Date.parse(row.end_at) + shiftMs).toISOString();
 
-    // هشدار نرم تداخل با نوبت‌های موجود همان متخصص در هفته هدف
     const overlap = await db.queryOne<{ id: string; start_at: string; end_at: string }>(
       `SELECT id, start_at, end_at FROM appointments
         WHERE staff_id = ? AND status != 'cancelled' AND start_at < ? AND end_at > ? LIMIT 1`,
@@ -159,7 +145,6 @@ export async function undoCopyWeek(ctx: WeekCopyCtx & { batchId: string }): Prom
     throw new NotFoundError('دسته کپی هفته');
   }
 
-  // فاز ۵ — برگردانی دسته فقط در محدودهٔ خودِ درمانگر
   if (actor.role === 'therapist') {
     const staffRows = await db.query<{ staff_id: string }>(
       `SELECT DISTINCT staff_id FROM appointments WHERE batch_id = ?`,
@@ -170,7 +155,6 @@ export async function undoCopyWeek(ctx: WeekCopyCtx & { batchId: string }): Prom
     }
   }
 
-  // فقط نوبت‌هایی قابل حذف‌اند که هیچ حضوری (غیر pending) برایشان ثبت نشده
   const placeholders = batchRows.map(() => '?').join(',');
   const attended = await db.query<{ appointment_id: string }>(
     `SELECT DISTINCT appointment_id FROM appointment_students

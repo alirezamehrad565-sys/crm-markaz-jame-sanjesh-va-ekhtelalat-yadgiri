@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — bot-selfauth
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-bot-selfauth.test.ts — ورود خودکار بات با کد ملی/شماره تلفن
-// «نوبت‌های من» برای والد و همکار + لغو دومرحله‌ای نوبت توسط همکار + اعلان خودکار خانواده
-// دادهٔ ماک: seed-dev + دانش‌آموزان ساخته‌شده از API
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -30,7 +22,6 @@ interface BotResponse {
   buttons: { text: string; callbackData: string }[][] | null;
 }
 
-/** ارسال آپدیت خام بله به webhook */
 async function bot(A: ReturnType<typeof createTestApp>, raw: Update): Promise<BotResponse> {
   const res = await A.app.request(
     `/webhook/bale/${WEBHOOK_SECRET}`,
@@ -50,7 +41,6 @@ const cb = (data: string, chatId: number): Update => ({
   callback_query: { id: 9, data, message: { chat: { id: chatId } } }
 });
 
-// chatها: 7001 همکار (علی) | 7002 والد دو فرزند | 7003 بدون اتصال | 7004 والد تک (لغو) | 7005 والد تک (کد ملی)
 const CHAT_STAFF = 7001;
 const CHAT_PARENT2 = 7002;
 const CHAT_NONE = 7003;
@@ -67,7 +57,6 @@ describe('ورود خودکار بات با کد ملی/شماره تلفن', ()
   });
 
   it('همکار با کد ملی فارسی متصل می‌شود — staff_bot_links با status=linked', async () => {
-    // علی رضایی: national_id = 3149977797 (seed)
     const res = await bot(A, tx('۳۱۴۹۹۷۷۷۹۷', CHAT_STAFF));
     expect(res.handled).toBe(true);
     expect(res.reply).toContain('اتصال انجام شد');
@@ -111,7 +100,6 @@ describe('ورود خودکار بات با کد ملی/شماره تلفن', ()
     const flat = res.buttons!.flat();
     expect(flat.some((b) => b.callbackData === `ask:${apptId}` && b.text.includes('لغو'))).toBe(true);
 
-    // /today هم مثل قبل برای chat متصل کار می‌کند (رگرسیون)
     const today = await bot(A, tx('/today', CHAT_STAFF));
     expect(today.reply).toContain('برنامه امروز');
   });

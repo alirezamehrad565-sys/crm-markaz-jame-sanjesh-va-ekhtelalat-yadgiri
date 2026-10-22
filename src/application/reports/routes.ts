@@ -1,9 +1,3 @@
-/**
- * سرویس گزارش‌ها (دوره، تحلیل پیشرفته، مدارس) — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// + — endpoint گزارش دوره و تحلیل پیشرفته (فقط مدیر و منشی — داده‌های مرکزی)
-
 import type { AppHono } from '@core/shared';
 import { ReportQuerySchema } from '@core/shared';
 import { requireRole } from '@core/auth';
@@ -19,7 +13,6 @@ export function registerRoutes(app: AppHono, service: ReportService): void {
     return c.json({ data }, 200);
   });
 
-  // تحلیل پیشرفته: روند هفتگی، قیف لیست انتظار، پوشش‌ها — همان RBAC و همان Schema بازه
   app.get('/api/reports/advanced', requireRole('manager', 'secretary'), async (c) => {
     const query = ReportQuerySchema.parse({
       from: c.req.query('from') || '',

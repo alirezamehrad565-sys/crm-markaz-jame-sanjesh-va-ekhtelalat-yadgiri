@@ -48,3 +48,5 @@ wrangler.prod.toml
 
 # بکاپ‌های D1 — هرگز کامیت نشود
 backups/
+
+scripts/route-diff-report.txt

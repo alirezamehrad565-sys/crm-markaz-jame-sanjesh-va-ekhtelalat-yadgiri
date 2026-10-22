@@ -1,17 +1,7 @@
-/**
- * تست‌های پیشنهادگر چک‌لیست (T3/m147 — ۱۴ قاعدهٔ §۲.۴ سند m146 + سناریوی دیرآموز §۳.۱ طرح واحد)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// recommender.test.ts — تابع خالص؛ ورودی یکسان → پلن یکسان (قطعیت و بازتولیدپذیری، سند §۴).
-// پوشش: ۱۴ قاعدهٔ سند + قاعدهٔ همیشه‌برقرار (باتری پایه) + پلن دیرآموز (پروب‌محور + فرم جامع
-// خانواده + تفکیک انطباقی ID) + مرز ۸۵–۸۹ + خط قرمز ID + جامع/تکی + حذف ابزار موجود + پوشش پکیج.
-
 import { describe, it, expect } from 'vitest';
 import { checklistPlanContextOf, recommendChecklistPlan, PLAN_TOOL_KEYS, RECOMMENDER_THRESHOLDS } from '../recommender';
 import { fsiqBandOf } from '../signals';
 import type { EvidenceEvent } from '../types';
-
-// ───────── سازنده‌های رویداد ─────────
 
 const EV = (e: Partial<EvidenceEvent> & { toolKey: string; eventId: string }): EvidenceEvent => ({
   typeTitle: e.toolKey,
@@ -24,7 +14,6 @@ const EV = (e: Partial<EvidenceEvent> & { toolKey: string; eventId: string }): E
   ...e
 });
 
-/** خروجی موتور وکسلر — شکل T1 (profile + snapshot + signals) با برش‌های دادهٔ تست */
 function wechslerEngine(opts: {
   fsiq: number;
   vci?: number | null;
@@ -32,7 +21,6 @@ function wechslerEngine(opts: {
   wmi?: number | null;
   psi?: number | null;
   scatter?: number;
-  /** نمرهٔ معیار زیرآزمون‌ها بر اساس کد (AR/CD/IN/DS/LN/VO/SI/SS) */
   subs?: Record<string, number>;
   step5Weak?: string[];
 }): Record<string, unknown> {
@@ -77,7 +65,6 @@ function wechslerEngine(opts: {
   };
 }
 
-/** رویداد وکسلر با engine_output ساخته‌شده (مسیر T1) */
 function wechslerEvent(engine: Record<string, unknown> | null, manual?: Record<string, number>): EvidenceEvent {
   const payload: Record<string, { value: string; label: string }> = {};
   if (engine) payload['engine_output'] = { value: JSON.stringify(engine), label: 'خروجی موتور تفسیر' };
@@ -85,13 +72,11 @@ function wechslerEvent(engine: Record<string, unknown> | null, manual?: Record<s
   return EV({ eventId: 'w1', toolKey: 'ce-wechsler-w4-v1', payload: Object.keys(payload).length ? payload : null });
 }
 
-/** شرح‌حال نسخهٔ ۳ — فیلدهای ساخت‌یافته + متن آزاد */
 function anamV3(fields: Record<string, string>): EvidenceEvent {
   const payload = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, { value: v, label: k }]));
   return EV({ eventId: 'a1', toolKey: 'ce-anamnesis-v3', payload });
 }
 
-/** شرح‌حال نسخهٔ ۲ — فقط متن آزاد (فال‌بک پرونده‌های قدیمی) */
 function anamV2(fields: Record<string, string>): EvidenceEvent {
   return EV({
     eventId: 'a0',
@@ -100,7 +85,6 @@ function anamV2(fields: Record<string, string>): EvidenceEvent {
   });
 }
 
-/** رویداد سنجهٔ انطباق روزمره (id_adapt) — نمرهٔ ۰..۲۴، بالاتر = انطباق بهتر (T5) */
 function idAdaptEvent(score: number): EvidenceEvent {
   const band = score <= 12 ? 'پایین — نیاز به بررسی' : score <= 17 ? 'مرزی' : 'نرمال';
   const color = score <= 12 ? 'danger' : score <= 17 ? 'warn' : 'ok';
@@ -118,7 +102,6 @@ function idAdaptEvent(score: number): EvidenceEvent {
   });
 }
 
-/** رویداد ابزار موجود پرونده (برای حذف تکرار/شواهد فعال) */
 function toolEvent(toolKey: string, danger = false): EvidenceEvent {
   return EV({
     eventId: `t-${toolKey}`,
@@ -129,14 +112,11 @@ function toolEvent(toolKey: string, danger = false): EvidenceEvent {
   });
 }
 
-/** نیم‌رخ یکنواخت — همهٔ شاخص‌ها هم‌ارزش (برای کیس‌های باندی) */
 function uniformEngine(fsiq: number, scatter = 2): Record<string, unknown> {
   return wechslerEngine({ fsiq, vci: fsiq, pri: fsiq, wmi: fsiq, psi: fsiq, scatter });
 }
 
 const TOOL = PLAN_TOOL_KEYS;
-
-// ───────── آزمون‌ها ─────────
 
 describe('قاعدهٔ ۰ — باتری پایهٔ غربال عمومی (همیشه‌برقرار)', () => {
   it('پروندهٔ خالی → فقط SDQ والد + معلم با اولویت core و پلن تکی + پانویس خط قرمز', () => {
@@ -159,7 +139,6 @@ describe('قاعدهٔ ۵ — پلن دیرآموز (BIF) + تفکیک انطب�
     const plan = recommendChecklistPlan(checklistPlanContextOf([wechslerEvent(uniformEngine(78))]));
     const keys = plan.items.map((i) => i.toolKey);
     expect(keys).toEqual(expect.arrayContaining([TOOL.probeRead, TOOL.probeWrite, TOOL.probeCalc, TOOL.compFamily, TOOL.anamnesisV3, TOOL.sdqT]));
-    // فرم جامع خانواده SDQ والد را پوشش می‌دهد — نسخهٔ تکیِ پوشش‌شده حذف است
     expect(keys).not.toContain(TOOL.sdqP);
     expect(keys.filter((k) => k.startsWith('ce-sld-'))).toEqual([]);
     expect(plan.items.every((i) => i.priority === 'core')).toBe(true);
@@ -265,7 +244,6 @@ describe('قاعده‌های پروفایلی ۱ تا ۱۴ (بیرون از م�
     const probeRead = plan.items.find((i) => i.toolKey === TOOL.probeRead);
     expect(read?.priority).toBe('core');
     expect(probeRead?.priority).toBe('core');
-    // دو حوزهٔ دیگر فقط optional (سند: «دو حوزهٔ دیگر optional»)
     expect(plan.items.find((i) => i.toolKey === TOOL.sldWri)?.priority).toBe('optional');
     expect(plan.items.find((i) => i.toolKey === TOOL.sldCalc)?.priority).toBe('optional');
   });

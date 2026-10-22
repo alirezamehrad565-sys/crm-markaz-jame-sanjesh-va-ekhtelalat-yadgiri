@@ -1,8 +1,3 @@
-/**
- * تست‌های واحد — time-
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست‌های کمکی‌های زمانی جدید (جلالی سمت سرور)
 import { describe, expect, it } from 'vitest';
 import {
   addDaysYmd,
@@ -16,7 +11,6 @@ import {
 
 describe('jalali helpers', () => {
   it('converts known gregorian dates to jalali', () => {
-    // 2026-10-06 میلادی = ۱۴ مهر ۱۴۰۵
     const j = toJalaliParts(2026, 10, 6);
     expect(j.jy).toBe(1405);
     expect(j.jm).toBe(7);
@@ -35,15 +29,12 @@ describe('jalali helpers', () => {
   });
 
   it('formats full label with weekday', () => {
-    // 2026-10-06 سه‌شنبه است
     expect(jalaliFullLabel('2026-10-06')).toContain('سه‌شنبه');
     expect(jalaliFullLabel('2026-10-06')).toContain('۱۴ مهر ۱۴۰۵');
   });
 
   it('iranian weekday: saturday=0, friday=6', () => {
-    // 2025-10-04 شنبه
     expect(iranianWeekdayOfYmd('2025-10-04')).toBe(0);
-    // 2025-10-10 جمعه
     expect(iranianWeekdayOfYmd('2025-10-10')).toBe(6);
   });
 

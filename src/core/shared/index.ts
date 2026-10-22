@@ -1,10 +1,3 @@
-/**
- * زیرساخت مشترک — زمان تهران، کدملی، اسکیمای Zod و ثابت‌ها — نقطهٔ ورود و صادرات‌های ماژول (barrel)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// مرز عمومی ماژول shared — تنها نقطه import سایر ماژول‌ها
-
-// Schemas (Zod)
 export {
   AppointmentStatusSchema,
   AttendanceStatusSchema,
@@ -23,7 +16,6 @@ export {
   ChangeSpecialNeedSchema,
   SpecialNeedTypeSchema,
   SpecialNeedSeveritySchema,
-  // اسکیماهای کمیسیون حذف شدند (ماژول قطع شد)
   NewFollowUpSchema,
   UpdateFollowUpSchema,
   NewTodoSchema,
@@ -110,7 +102,6 @@ export {
   ScoringConfigSchema
 } from './schemas';
 
-// Types
 export type {
   Appointment,
   AppointmentOpsStatus,
@@ -208,13 +199,11 @@ export type {
   TodoChecklistItem,
   TodoPriority,
   TodoStatus,
-  // انواع کمیسیون حذف شدند (ماژول قطع شد)
   AdvancedReport,
   AdvancedWeekPoint,
   WaitlistFunnel
 } from './types';
 
-// Constants
 export {
   APPOINTMENT_STATUS,
   APPOINTMENT_OPS_STATUSES,
@@ -304,7 +293,6 @@ export {
   STUDENT_CASE_STATUSES,
   SPECIAL_NEED_TYPES,
   SPECIAL_NEED_SEVERITIES,
-  // ثابت‌های کمیسیون حذف شدند (ماژول قطع شد)
   EXERCISE_FORMATS,
   EXERCISE_TITLE_MAX,
   EXERCISE_DESCRIPTION_MAX,
@@ -330,7 +318,6 @@ export {
   EXERCISE_FEEDBACK_MIN,
 } from './constants';
 
-// Time helpers (pure)
 export {
   addDaysYmd,
   addMinutes,
@@ -351,19 +338,14 @@ export {
   WEEKDAY_NAMES_FA
 } from './time';
 
-// App infrastructure types
 export type { AppHono } from './app';
 
-// Case status (فاز ۶)
 export type { StudentCaseStatus } from './constants';
 
-// Knowledge
 export type { KnowledgeCategory } from './constants';
 
-// Special needs (فاز ۷)
 export type { SpecialNeedType, SpecialNeedSeverity } from './constants';
 
-// Session types + pathways
 export {
   SESSION_TYPES,
   SESSION_TYPE_KEYS,
@@ -373,7 +355,6 @@ export {
 } from './constants';
 export type { SessionTypeKey, StudentPathway } from './constants';
 
-// Protocols
 export {
   STUDENT_PROTOCOLS,
   STUDENT_PROTOCOL_LABELS,
@@ -383,8 +364,6 @@ export {
 } from './constants';
 export type { StudentProtocol } from './constants';
 
-// National ID (pure)
 export { isValidIranianNationalId, normalizeNationalId } from './national-id';
 
-// Feature flags (قطع/وصل ماژول‌ها بدون حذف کد)
 export { FEATURES } from './features';

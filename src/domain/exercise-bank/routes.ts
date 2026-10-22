@@ -1,12 +1,3 @@
-/**
- * ماژول بانک تمرین — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// REST endpoints بانک تمرین — بدون business logic، فقط سیم به سرویس
-// RBAC: خواندن برای همهٔ کارکنان؛ نوشتن (ساخت/ویرایش/حذف/فایل) برای هر سه نقش مرکز
-// + گارد سرویس (assertStaffRole) — الگوی دولایه.
-// مسیر عمومی /public/exercise-files/:id در api-routing (قبل از authMiddleware) رجیستر می‌شود.
-
 import type { AppHono } from '@core/shared';
 import { CreateExerciseBatchSchema, NewExercisePackageSchema, NewExerciseSchema, ReassignExerciseSchema, ReplaceExerciseFileSchema, UpdateExercisePackageSchema, UpdateExerciseSchema, UuidSchema } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
@@ -14,7 +5,6 @@ import { NotFoundError, ValidationError } from '@core/errors';
 import type { ExerciseBankService } from './types';
 import { parseMultipartStream } from './multipart';
 
-/** — MIME از پسوند برای مرورگرهایی که نوع خالی می‌دهند (.mkv/.avi/…) */
 const EXT_MIME_FALLBACK: Record<string, string> = {
   mp4: 'video/mp4',
   m4v: 'video/x-m4v',
@@ -48,7 +38,6 @@ function guessMime(filename: string, declared: string): string {
   return EXT_MIME_FALLBACK[ext] ?? t ?? 'application/octet-stream';
 }
 
-/** Content-Disposition امن با نام فایل UTF-8 */
 function downloadHeaders(filename: string, mimeType: string, inline: boolean): Record<string, string> {
   const asciiFallback = filename.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_');
   const type = mimeType === 'text/html' ? 'text/html; charset=utf-8' : mimeType;
@@ -59,18 +48,14 @@ function downloadHeaders(filename: string, mimeType: string, inline: boolean): R
 }
 
 export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankService): void {
-  // ─── meta — قبل از مسیر:id تا با پارامتر اشتباه نشود ───
   app.get('/api/exercises/meta', async (c) => {
     const categories = await service.categories();
-    // شمارش تمرین هر برچسب برای کاشی‌های دستهٔ اختلال (ناوبری تو در تو)
     const facets = await service.facets();
     return c.json({ data: { storage: service.storageName, limits: service.limits, categories, facets } }, 200);
   });
 
-  // ─── فهرست + ساخت ───
   app.get('/api/exercises', async (c) => {
     const actor = getAuthContext(c);
-    // tag_ids جداشده با ویرگول: فیلتر AND چندبرچسبی (اختلال + پایه)
     const tagIds = (c.req.query('tag_ids') ?? '')
       .split(',')
       .map((s) => s.trim())
@@ -110,7 +95,6 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
     return c.json({ data: created }, 201);
   });
 
-  // ─── بازگشتی‌ها (پنل) — قبل از:id تا با پارامتر اشتباه نشود ───
   app.get('/api/exercises/submissions', async (c) => {
     const studentId = c.req.query('student_id') || undefined;
     if (studentId) UuidSchema.parse(studentId);
@@ -133,15 +117,12 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
     });
   });
 
-  // ─── c — تصحیح تکلیف (وضعیت + بازخورد متنی؛ اعلان خانواده از ناظر) ───
   app.post('/api/exercises/assignments/:id/grade', requireRole('manager', 'therapist', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json<{ feedback?: string }>();
     const record = await service.gradeAssignment(UuidSchema.parse(c.req.param('id')), { feedback: body.feedback ?? '' }, actor);
     return c.json({ data: record }, 200);
   });
-
-  // ═══════ — بسته‌های تمرینی ═══════
 
   app.get('/api/exercises/packages', async (c) => {
     const actor = getAuthContext(c);
@@ -203,7 +184,6 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
     return c.json({ data: { ok: true } }, 200);
   });
 
-  // ─── یک تمرین ───
   app.get('/api/exercises/:id', async (c) => {
     const exercise = await service.getById(c.req.param('id'));
     if (!exercise) throw new NotFoundError('تمرین');
@@ -229,8 +209,6 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
     return c.json({ data: updated }, 200);
   });
 
-  // — m140: انتقال مالکیت تمرین — فقط مدیر (ویرایش ساده دیگر owner_staff_id نمی‌پذیرد؛ درس 43-A)
-  // پاسخ: تغییر → { data } ، بدون‌عمل (مالک از قبل همان) → { data, unchanged: true }
   app.post('/api/exercises/:id/reassign', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     const body = ReassignExerciseSchema.parse(await c.req.json<unknown>());
@@ -250,7 +228,6 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
     return c.json({ data: { ok: true } }, 200);
   });
 
-  // ─── فایل ───
   app.put('/api/exercises/:id/file', requireRole('manager', 'therapist', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = ReplaceExerciseFileSchema.parse(await c.req.json<unknown>());
@@ -271,7 +248,6 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
     });
   });
 
-  // ─── پیوست‌های چندگانه (multipart پخش‌جریانی — بدون formData و بدون OOM) ───
   app.post('/api/exercises/:id/files', requireRole('manager', 'therapist', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const id = UuidSchema.parse(c.req.param('id'));
@@ -291,7 +267,6 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
     return c.json({ data: updated }, 201);
   });
 
-  // ─── بارگذاری پیوستهٔ فایل‌های بزرگ (هر تکه یک درخواست کوچک — امن با سقف CPU) ───
   app.post('/api/exercises/:id/files/begin', requireRole('manager', 'therapist', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const id = UuidSchema.parse(c.req.param('id'));
@@ -345,7 +320,6 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
     return c.json({ data: updated }, 200);
   });
 
-  // ─── تکلیف‌های یک تمرین (پنل) ───
   app.get('/api/exercises/:id/assignments', async (c) => {
     const items = await service.listAssignments({
       exerciseId: c.req.param('id'),
@@ -354,15 +328,11 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
     return c.json({ data: items }, 200);
   });
 
-  // ═══════ — پیشنهاد برچسب‌محور + بستهٔ تکلیف (پروفایل دانش‌آموز) ═══════
-
-  /** پیشنهاد تمرین/بستهٔ مناسب بر اساس برچسب‌های دانش‌آموز */
   app.get('/api/students/:id/exercises/suggest', requireRole('manager', 'therapist', 'secretary'), async (c) => {
     const suggestions = await service.suggestForStudent(UuidSchema.parse(c.req.param('id')));
     return c.json({ data: suggestions }, 200);
   });
 
-  /** ساخت بستهٔ تکلیف (بدون ارسال) — ارسال با POST /api/exercises/batches/:id/send */
   app.post('/api/students/:id/exercises/batches', requireRole('manager', 'therapist', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const studentId = UuidSchema.parse(c.req.param('id'));
@@ -381,7 +351,6 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
     return c.json({ data: batch }, 201);
   });
 
-  /** فهرست بسته‌های تکلیف دانش‌آموز — تب «تمرین‌ها»ی پروفایل */
   app.get('/api/students/:id/exercises/batches', requireRole('manager', 'therapist', 'secretary'), async (c) => {
     const studentId = UuidSchema.parse(c.req.param('id'));
     const items = await service.listBatches({
@@ -391,7 +360,6 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
     return c.json({ data: items }, 200);
   });
 
-  /** ارسال/یادآوری بستهٔ تکلیف به چت ولیّ‌ها با لینک امن دانلود */
   app.post('/api/exercises/batches/:id/send', requireRole('manager', 'therapist', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json<{ note?: string | null }>().catch(() => ({ note: null }));

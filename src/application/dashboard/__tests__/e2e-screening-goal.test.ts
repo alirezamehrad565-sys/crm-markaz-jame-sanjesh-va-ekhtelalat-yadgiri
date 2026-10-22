@@ -1,10 +1,3 @@
-/**
- * تست‌های e2e — screening-goal
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-screening-goal.test.ts — شاخص سنجش (تنظیمات) + گزارش کوتاه/تحقق هدفگذاری داشبورد
-// مسیر کامل: PUT /api/settings (فقط مدیر) → ثبت سنجش → GET /api/dashboard/screening-goal
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, asRole, Api } from '../../../test/harness';
 import { toJalaliParts, tehranTodayYmd, jalaliToGregorianYmd } from '@core/shared';
@@ -36,7 +29,6 @@ describe('شاخص سنجش و تحقق هدفگذاری', () => {
     expect(goal.jalaliYear).toBe(j.jy);
     expect(goal.yearDone).toBe(0);
     expect(Array.isArray(goal.months)).toBe(true);
-    // تا ماه جاری ماه‌ها ساخته شده‌اند
     expect((goal.months as unknown[]).length).toBe(j.jm);
   });
 
@@ -76,7 +68,6 @@ describe('شاخص سنجش و تحقق هدفگذاری', () => {
       months: { month: number; done: number }[];
     }>(res);
 
-    // برچسب آزاد «مهدکودک ستاره» عادی را کم نمی‌کند (قاعدهٔ )
     expect(goal.todayCount).toBe(2);
     expect(goal.weekCount).toBe(2);
     expect(goal.monthCount).toBe(2);
@@ -85,11 +76,9 @@ describe('شاخص سنجش و تحقق هدفگذاری', () => {
     expect(goal.yearReferrals).toBe(1);
     expect(goal.referralRate).toBe(50);
 
-    // تحقق هدف: ۲ از ۴۰۰ → ۱٪ (round) و باقی‌مانده ۳۹۸
     expect(goal.target).toBe(400);
     expect(goal.targetPercent).toBe(Math.round((goal.yearDone / 400) * 100));
     expect(goal.targetRemaining).toBe(400 - goal.yearDone);
-    // هدف ماه تنظیم نشده → null ولی monthlyDone = ۲
     expect(goal.monthlyTarget).toBeNull();
     const cur = goal.months.find((m) => m.month === j.jm);
     expect(cur?.done).toBe(2);
@@ -112,7 +101,6 @@ describe('شاخص سنجش و تحقق هدفگذاری', () => {
   });
 
   it('سنجش‌های سال قبل در سال جاری جمع نمی‌شوند', async () => {
-    // روزی قطعاً قبل از ابتدای سال شمسی جاری (۳۷۰ روز عقب)
     const prevYearDay = new Date(Date.now() + 210 * 60_000 - 370 * 86_400_000).toISOString().slice(0, 10);
     const res = await mgr.post('/api/screening', { name: 'قدیمی تستی', tags: [], day: prevYearDay });
     expect(res.status).toBe(201);
@@ -124,8 +112,6 @@ describe('شاخص سنجش و تحقق هدفگذاری', () => {
     expect(goal.todayCount).toBe(2);
   });
 });
-
-// ───────────── بازهٔ سفارشی + اهداف همزمان ─────────────
 
 describe('بازهٔ زمانی سفارشی و چند هدف همزمان', () => {
   let A: ReturnType<typeof createTestApp>;

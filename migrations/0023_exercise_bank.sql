@@ -1,19 +1,3 @@
--- مایگریشن اسکیما D1 — بانک تمرین
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- ============================================================
--- — بانک تمرین و کاربرگ (S3 پلن AI-MODULE §۷) — فقط اضافه‌ای
--- جدول‌ها:
--- exercises تمرین/کاربرگ (یک فایل برای هر تمرین — قابل تعویض)
--- exercise_tags برچسب‌گذاری با تاکسونومی مشترک tags (پایه/اختلال/سفارشی)
--- exercise_assignments تکلیف ارسال‌شده به خانواده (از بات یا پنل)
--- exercise_files ذخیرهٔ فایل داخل D1 (الگوی assessments؛ پیش‌فرض بدون R2 —
--- با فعال‌شدن binding ریدهٔ R2 این جدول استفاده نمی‌شود)
--- bot_menu_state وضعیت منوی تو‌در‌توی بات برای هر chat (شناسه‌ها UUID هستند و
--- callback_data بیش از ۶۴ بایت نمی‌پذیرد — اندیس به‌جای شناسه)
--- قراردادها: بدون CHECK در SQL (الگوی D7 — enum در کد)، حذف فقط نرم،
--- assigned_by بدون FK به staff (معلم مدرسه ردیف staff ندارد؛ شکل: staff id یا class:<id>)
--- ============================================================
-
 CREATE TABLE IF NOT EXISTS exercises (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -32,7 +16,6 @@ CREATE TABLE IF NOT EXISTS exercises (
 
 CREATE INDEX IF NOT EXISTS idx_exercises_published ON exercises(published, deleted_at, created_at);
 
--- برچسب‌ها از تاکسونومی مشترک tags — دسته‌های disorder/grade/custom
 CREATE TABLE IF NOT EXISTS exercise_tags (
   exercise_id TEXT NOT NULL REFERENCES exercises(id),
   tag_id TEXT NOT NULL REFERENCES tags(id),
@@ -55,7 +38,6 @@ CREATE TABLE IF NOT EXISTS exercise_assignments (
 CREATE INDEX IF NOT EXISTS idx_exercise_assignments_student ON exercise_assignments(student_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_exercise_assignments_exercise ON exercise_assignments(exercise_id, created_at);
 
--- ObjectStore پیش‌فرض (D1) — محتوا base64؛ متادیتا جدا از محتوا خوانده می‌شود
 CREATE TABLE IF NOT EXISTS exercise_files (
   key TEXT PRIMARY KEY,
   mime TEXT NOT NULL,
@@ -64,7 +46,6 @@ CREATE TABLE IF NOT EXISTS exercise_files (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- وضعیت منوی تو‌در‌توی بات — فقط برای جریان بانک تمرین (exb)
 CREATE TABLE IF NOT EXISTS bot_menu_state (
   chat_id TEXT PRIMARY KEY,
   payload TEXT NOT NULL,                        -- JSON: {v, cats?, filter?, ex?, stu?, sent?}

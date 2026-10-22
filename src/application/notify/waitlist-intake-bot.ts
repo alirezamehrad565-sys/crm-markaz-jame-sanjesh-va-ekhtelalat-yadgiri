@@ -1,14 +1,3 @@
-/**
- * اعلان‌های کاربردی و بات‌های نقش‌آگاه بله — بات ثبت اولیهٔ لیست انتظار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// جریان «ثبت متقاضی» معلم مدرسه از بات بله:
-// «ثبت متقاضی» (یا /add) → نام → موبایل ولیّ → تاریخ تولد (اختیاری) → شرح نیاز (اختیاری)
-// → جمع‌بندی با دکمهٔ تأیید → INSERT waitlist با source='teacher' و اتصال به کلاس معلم
-// گیت دولایه (الگوی exb): شروع و تأیید هر دو دوباره اتصال کلاس را چک می‌کنند.
-// state در bot_menu_state (chat_id → JSON) — فقط ردیف همین chat بازنویسی می‌شود.
-// خانواده‌ها (kind=student) و مهمان‌ها مسیر ثبت ندارند — پیام «تماس با مرکز» می‌گیرند.
-
 import type { DbClient } from '@core/db';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
@@ -45,8 +34,6 @@ const CONFIRM_BUTTONS: InlineButton[][] = [
   ]
 ];
 
-// ───────────── state helpers ─────────────
-
 export async function readWlIntakeState(db: DbClient, chatId: string): Promise<WlIntakeState | null> {
   const row = await db.queryOne<{ payload: string }>(`SELECT payload FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
   if (!row) return null;
@@ -71,9 +58,6 @@ export async function clearWlIntakeState(db: DbClient, chatId: string): Promise<
   await db.execute(`DELETE FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
 }
 
-// ───────────── اعتبارسنجی گام‌ها ─────────────
-
-/** نام: حداقل ۳ نویسه، حاوی حرف (نه فقط عدد) */
 function validName(raw: string): string | null {
   const t = raw.replace(/\s+/g, ' ').trim();
   if (t.length < 3 || t.length > 120) return null;
@@ -81,18 +65,12 @@ function validName(raw: string): string | null {
   return t;
 }
 
-/** موبایل ولیّ: 09xxxxxxxxx — ارقام فارسی/عربی و 98+ هم پذیرفته می‌شود */
 function validPhone(raw: string): string | null {
   const digits = normalizePhoneDigits(stripToDigits(raw));
   if (digits.length === 11 && digits.startsWith('09')) return digits;
   return null;
 }
 
-/**
- * تاریخ تولد اختیاری: «-» یا «رد» = رد شدن؛
- * 1398/05/12 یا 1398-05-12 = شمسی → میلادی؛ 2018-05-12 = میلادی مستقیم.
- * خروجی YYYY-MM-DD میلادی یا null (نامعتبر) یا '' (رد شده).
- */
 function validBirth(raw: string): string | null | '' {
   const t = raw.trim();
   if (t === '-' || t === 'رد' || t === 'ندارد' || t.length === 0) return '';
@@ -107,7 +85,6 @@ function validBirth(raw: string): string | null | '' {
   return null;
 }
 
-/** شرح نیاز اختیاری: «-» = رد؛ سقف ۳۰۰ نویسه */
 function validNeed(raw: string): string | null | '' {
   const t = raw.replace(/\s+/g, ' ').trim();
   if (t === '-' || t === 'ندارد' || t.length === 0) return '';
@@ -115,14 +92,11 @@ function validNeed(raw: string): string | null | '' {
   return t;
 }
 
-// ───────────── جریان ─────────────
-
 export function createWaitlistIntakeBot(deps: WlIntakeDeps) {
   const { db, audit, logger } = deps;
   const log = logger.child('wl-intake');
   const now = deps.now ?? (() => new Date());
 
-  /** کلاس متصل به chat معلم — با نام کلاس/مدرسه + سازندهٔ کد (created_by برای waitlist) */
   async function linkedClass(chatId: string): Promise<{ classId: string; schoolId: string; className: string; schoolName: string; createdBy: string } | null> {
     const row = await db.queryOne<{ id: string; school_id: string; name: string; school_name: string; created_by: string }>(
       `SELECT c.id, c.school_id, c.name, sc.name AS school_name, l.created_by
@@ -142,7 +116,6 @@ export function createWaitlistIntakeBot(deps: WlIntakeDeps) {
   const cancelHint = '\n\nبرای لغو: /cancel';
 
   async function start(chatId: string): Promise<WlBotReply> {
-    // گیت نقش — دستور عمومی است، برای هر نقش پاسخ متفاوت
     const owner = await db.queryOne<{ kind: string; role: string | null }>(
       `SELECT 'staff' AS kind, s.role AS role
          FROM staff_bot_links l JOIN staff s ON s.id = l.staff_id
@@ -223,7 +196,6 @@ export function createWaitlistIntakeBot(deps: WlIntakeDeps) {
       };
     }
 
-    // step === 'need' → جمع‌بندی
     const need = validNeed(raw);
     if (need === null) return { text: '⚠️ متن طولانی است (سقف ۳۰۰ نویسه) — کوتاه‌تر بفرستید یا: -' + cancelHint, buttons: null };
     const final: WlIntakeState = { ...st, need: need || undefined };
@@ -247,7 +219,6 @@ export function createWaitlistIntakeBot(deps: WlIntakeDeps) {
     if (!st || !st.name || !st.phone) {
       return { text: 'فرمی در جریان نیست — با «ثبت متقاضی» یا /add شروع کنید.', buttons: null };
     }
-    // گیت دولایه — اتصال کلاس دوباره چک می‌شود
     const cls = await linkedClass(chatId);
     if (!cls) {
       await clearWlIntakeState(db, chatId);

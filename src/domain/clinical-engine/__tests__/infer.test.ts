@@ -1,10 +1,3 @@
-/**
- * تست‌های واحد — infer
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// infer.test.ts — موتور شناسایی — امتیاز شواهد، جدول ملاک‌ها، هم‌رأیی، تفریق، گپ و لحن ساده
-// همهٔ ورودی‌ها EvidenceEvent دست‌ساز — بدون I/O (قرارداد ماژول pure)
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -13,8 +6,6 @@ import { narrativeOf, narrativeOfHypothesis, faNum } from '../narrative';
 import { WCPM_NORM_50TH } from '../instruments';
 import { CONFIDENCE_THRESHOLDS } from '../rules';
 import type { EvidenceEvent } from '../types';
-
-// ───────── سازندهٔ رویداد چک‌لیست ─────────
 
 const SLD_READ_BANDS = [
   { max: 10, label: 'در محدودهٔ انتظار', color: 'ok' },
@@ -68,8 +59,6 @@ function sldEvent(overrides: {
   };
 }
 
-// ───────── آزمون‌ها ─────────
-
 describe('موتور شناسایی (پلن §۵)', () => {
   it('دادهٔ خالی → بدون فرضیه و اقدام بعدی «کامل کنید» (m156: پانویس انکار حذف شد)', () => {
     const out = runInference([], { now: () => new Date('2026-10-13T06:00:00.000Z') });
@@ -88,11 +77,9 @@ describe('موتور شناسایی (پلن §۵)', () => {
 
     const dys = out.ranked.find((h) => h.targetKey === 'dyslexia');
     expect(dys).toBeDefined();
-    // قواعد پایه: crita danger دو مرجع (۲+۲)؛ هم‌رأیی: جمع جفت ×۱٫۵ = ۶
     expect(dys!.score).toBeCloseTo(6, 5);
     expect(dys!.confidence).toBe('زیاد');
     expect(dys!.evidenceFa.some((e) => e.includes('خانه و مدرسه') && e.includes('وزن شواهد بیشتر'))).toBe(true);
-    // ملاک‌ها: a1/a2/a3 + sld.b + sld.c (هر دو مرجع endorsed) برآورده؛ sld.d همه صفر → not_met
     const crit = Object.fromEntries(out.criteria.filter((c) => c.targetKey === 'dyslexia').map((c) => [c.criterionId, c.status]));
     expect(crit['dyslexia.a1']).toBe('met');
     expect(crit['dyslexia.a2']).toBe('met');
@@ -108,7 +95,6 @@ describe('موتور شناسایی (پلن §۵)', () => {
     const teacher = sldEvent({ eventId: 'e2', values: { rA1: 0, rA2: 0, rA3: 0, rA4: 0, rA5: 0, rA6: 0, rB1: 0, rB2: 0, rC1: 0, rD1: 0 }, occurredAt: '2026-10-02T08:00:00.000Z' });
     const out = runInference([teacher, parent]);
     const dys = out.ranked.find((h) => h.targetKey === 'dyslexia')!;
-    // فقط مرجع خانه danger (۲) — معلم در محدودهٔ انتظار
     expect(dys.score).toBeCloseTo(2, 5);
     expect(dys.confidence).toBe('متوسط');
     expect(out.discrepancies.some((d) => d.includes('نارساخوانی') && d.includes('خانه و مدرسه') && d.includes('نیست'))).toBe(true);
@@ -136,7 +122,6 @@ describe('موتور شناسایی (پلن §۵)', () => {
   });
 
   it('وکسلر مرزی ۷۰–۸۵ → شاهد دیرآموزی؛ خارج بازه → هیچ', () => {
-    // m132+: فرم قدیمی wechsler بازنشسته شده — قاعدهٔ دیرآموزی کلید جدید ce-wechsler-w4-v1 را می‌خواند
     const wechsler = (fsiq: number): EvidenceEvent => ({
       eventId: `w${fsiq}`,
       toolKey: 'ce-wechsler-w4-v1',
@@ -182,7 +167,6 @@ describe('موتور شناسایی (پلن §۵)', () => {
     };
     const out = runInference([w, anam]);
     const slow = out.ranked.find((h) => h.targetKey === 'slow_learner')!;
-    // wechsler ۲ + anamnesis ۱ = ۳
     expect(slow.score).toBeCloseTo(3, 5);
     expect(slow.evidenceFa.some((e) => e.includes('شرح حال'))).toBe(true);
   });
@@ -216,8 +200,6 @@ describe('موتور شناسایی (پلن §۵)', () => {
   });
 });
 
-// ───────── T4 (m148) — شرح‌حال نسخهٔ ۳: سیگنال + فال‌بک دقیق نسخهٔ ۲ ─────────
-
 const T4_NOW = { now: () => new Date('2026-10-22T06:30:00.000Z') };
 
 function anamEvent(toolKey: string, payload: Record<string, string>, occurredAt = '2026-10-03T07:00:00.000Z'): EvidenceEvent {
@@ -250,11 +232,7 @@ function w4Event(fsiq: number): EvidenceEvent {
   };
 }
 
-/** خروجی بدون کلیدهای افزودنی/متغیر — برای مقایسهٔ بایت‌به‌بایت با پایهٔ پیش از T4 */
 function legacyView(out: ReturnType<typeof runInference>): Record<string, unknown> {
-  // کلیدهای افزودنی لایه‌ای (T4: anamnesisSignals · T6: convergence) از دید پاریتی حذف می‌شوند —
-  // پروندهٔ فقط-v2 همهٔ کلیدهای قدیمی را بایت‌به‌بایت نگه می‌دارد.
-  // m156 — disclaimer از قرارداد خروجی حذف شد؛ در پایهٔ ثبت‌شدهٔ T4 هست → از دید پاریتی حذف می‌شود.
   const { anamnesisSignals: _signals, convergence: _conv, ...rest } = out;
   const { disclaimer: _disc, ...legacy } = rest as Record<string, unknown>;
   return legacy;
@@ -280,7 +258,6 @@ describe('شرح‌حال v3 — سیگنال‌های ساخت‌یافته (T4
     });
     const sig = anamnesisSignalsOf(v3);
     expect(sig).toHaveLength(13);
-    // ترتیب قطعی بر اساس کلید
     expect(sig.map((s) => s.key)).toEqual([...sig.map((s) => s.key)].sort());
     for (const s of sig) {
       expect(s.source).toBe('anamnesis');
@@ -340,7 +317,6 @@ describe('شرح‌حال v3 — سیگنال‌های ساخت‌یافته (T4
     const v2Old = anamEvent(ANAMNESIS_V2_KEY, { chief_complaint: 'افت تحصیلی در همهٔ درس‌ها' }, '2026-09-01T07:00:00.000Z');
     const v3New = anamEvent(ANAMNESIS_V3_KEY, { chief_complaint: 'مشکل در مدرسه', decline_scope: 'افت محسوسی ندارم' }, '2026-10-20T07:00:00.000Z');
     const out = runInference([v2Old, v3New], T4_NOW);
-    // متن v2 دارای «افت+همه» است ولی نسخهٔ ۳ ترجیح دارد → پرچم از decline_scope v3 (ندارم) گرفته نمی‌شود
     expect(out.ranked.find((h) => h.targetKey === 'slow_learner')).toBeUndefined();
     expect(out.anamnesisSignals.length).toBeGreaterThanOrEqual(0);
   });
@@ -356,7 +332,6 @@ describe('شرح‌حال v3 — سیگنال‌های ساخت‌یافته (T4
     const baseline = JSON.parse(readFileSync(new URL('../../../../scripts/t4-baseline.json', import.meta.url), 'utf8')) as {
       outputs: Record<string, ReturnType<typeof runInference> | undefined>;
     };
-    // بازسازی دقیق فیکسچرها — همان سازنده‌های فایل ثبت پایه
     const wechsler = (fsiq: number): EvidenceEvent => ({ ...w4Event(fsiq), eventId: 'w4' });
     const probeRead = (wcpm: number, grade: string): EvidenceEvent => ({
       eventId: 'p1', toolKey: 'ce-probe-read-v1', typeTitle: 'پروب خواندن', status: 'completed',
@@ -377,19 +352,15 @@ describe('شرح‌حال v3 — سیگنال‌های ساخت‌یافته (T4
       expect(base, name).toBeTruthy();
       const out = runInference(events, T4_NOW);
       if (name === 'f4_wechsler_no_anamnesis') {
-        // تنها دلتای مجاز: پیشنهاد گپ شرح‌حال (nextActions و missingFa) حالا به فرم فعال (نسخهٔ ۳) اشاره می‌کند —
-        // با نرمال‌سازی عنوان نسخهٔ ۳ به عنوان نسخهٔ ۲، بقیهٔ خروجی باید بایت‌به‌بایت برابر باشد.
         const norm = (o: unknown): unknown =>
           JSON.parse(JSON.stringify(o).replaceAll('گفت‌وگوی اول — شرح‌حال کودک (نسخهٔ ۳)', 'گفت‌وگوی اول — شرح‌حال کودک')) as unknown;
         const outNorm = norm(legacyView(out));
         const baseNorm = norm(legacyView(base as ReturnType<typeof runInference>));
-        // اثبات اینکه دلتای واقعی همین بود: پیشنهاد گپ در خروجی امروز با عنوان نسخهٔ ۳ آمده و در پایه با عنوان نسخهٔ ۲
         expect(JSON.stringify(legacyView(out))).toContain('گفت‌وگوی اول — شرح‌حال کودک (نسخهٔ ۳) هنوز ارسال/ثبت نشده');
         expect(JSON.stringify(base as unknown)).toContain('گفت‌وگوی اول — شرح‌حال کودک هنوز ارسال/ثبت نشده');
         expect(outNorm).toEqual(baseNorm);
         continue;
       }
-      // پرونده‌های فقط-v2 (و بی‌شرح‌حال): تمام کلیدهای قدیمی بایت‌به‌بایت + کلید افزودنی خالی
       expect(legacyView(out)).toEqual(legacyView(base as ReturnType<typeof runInference>));
       expect(out.anamnesisSignals).toEqual([]);
     }
@@ -408,7 +379,6 @@ describe('لحن ساده (پلن §۶)', () => {
     expect(full.text).not.toContain('جایگزین قضاوت بالینی');
     expect(full.text).not.toContain('قطعاً');
     expect(full.text).not.toContain('صد در صد');
-    // عدد در جدول ملاک‌ها فارسی است
     const n = narrativeOfHypothesis(out.ranked[0]);
     expect(n.saw).toMatch(/[۰-۹]/);
     expect(n.saw).not.toMatch(/[0-9]/);

@@ -1,11 +1,3 @@
-/**
- * تست‌های واحد — pure
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// pure.test.ts — فاز ۳: ماتریس ترنزیشن، مهلت پیش‌فرض، گروه‌بندی §13.4 با مرزهای تهران
-// now ثابت: 2026-10-07T08:00:00Z = چهارشنبه ۱۱:۳۰ تهران
-// todayEnd = 2026-10-07T20:29:59.999Z · weekEnd = 2026-10-14T20:29:59.999Z (+۷ روز تهران)
-
 import { describe, it, expect } from 'vitest';
 import type { FollowUpStatus } from '@core/shared';
 import { FOLLOWUP_STATUSES } from '@core/shared';

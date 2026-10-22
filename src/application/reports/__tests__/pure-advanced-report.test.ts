@@ -1,27 +1,17 @@
-/**
- * تست‌های واحد — pure-advanced-report
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// pure-advanced-report.test.ts — روند هفتگی شنبه‌محور + میانگین انتظار + نرخ nullable
-
 import { describe, it, expect } from 'vitest';
 import { weekStartOfYmd, buildWeeklyTrend, avgWaitDaysOf, safeRateOrNull } from '../pure';
 
 describe('weekStartOfYmd (شنبه‌محور)', () => {
   it('W1: شنبه همان روز است', () => {
-    // 2026-10-03 شنبه است (ایرانی weekday 0)
     expect(weekStartOfYmd('2026-10-03')).toBe('2026-10-03');
   });
 
   it('W2: وسط هفته به شنبهٔ همان هفته برمی‌گردد', () => {
-    // 2026-10-05 دوشنبه است → شنبه 2026-10-03
     expect(weekStartOfYmd('2026-10-05')).toBe('2026-10-03');
-    // 2026-10-09 جمعه است → شنبه 2026-10-03
     expect(weekStartOfYmd('2026-10-09')).toBe('2026-10-03');
   });
 
   it('W3: یکشنبه به شنبهٔ قبل برمی‌گردد (هفته شنبه شروع می‌شود)', () => {
-    // 2026-10-04 یکشنبه (weekday 1) → شنبه 2026-10-03
     expect(weekStartOfYmd('2026-10-04')).toBe('2026-10-03');
   });
 });

@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — submission-loop
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-submission-loop.test.ts — حلقهٔ کامل بازگشت فایل از بات تا پنل و تایم‌لاین
-// تکلیف از بات (exb) → خانواده عکس می‌فرستد → auto/extra/pick → ثبت در D1 + اعلان به همکار →
-// وضعیت done + audit + تایم‌لاین + دانلود پنل
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -90,7 +82,6 @@ describe('حلقهٔ کامل بازگشت فایل (وبهوک واقعی + fet
     return (await res.json()) as BotResponse;
   }
 
-  /** راه‌رفتن در منوی exb تا ثبت تکلیف برای اولین دانش‌آموز فهرست درمانگر */
   async function sendHomeworkFromBot(): Promise<void> {
     await bot(cb('exb:lst:a:0:1', CHAT_ALI, 100));
     const students = await bot(cb('exb:send:0:1', CHAT_ALI, 101));
@@ -107,7 +98,6 @@ describe('حلقهٔ کامل بازگشت فایل (وبهوک واقعی + fet
     A = createTestApp(undefined, { mediaFetcher: fakeFetcher() });
     manager = await asRole(A, 'manager');
 
-    // اتصال همکار و والد
     expect((await bot(tx(ALI_NID, CHAT_ALI))).reply).toContain('اتصال انجام شد');
 
     const s = await createStudent(manager, { first_name: 'نسیم', last_name: 'بازگشتی' });
@@ -115,11 +105,9 @@ describe('حلقهٔ کامل بازگشت فایل (وبهوک واقعی + fet
     studentName = 'نسیم بازگشتی';
     expect((await bot(tx(s.nationalId, CHAT_PARENT))).reply).toContain('اتصال انجام شد');
 
-    // جلسهٔ علی — دامنهٔ «دانش‌آموزان من» درمانگر
     const appt = await manager.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(30), 45, [studentId]));
     expect(appt.status).toBe(201);
 
-    // تمرین منتشرشده
     const ex = await manager.post('/api/exercises', {
       title: exerciseTitle,
       description: 'سه واژه بخوانید.',
@@ -129,7 +117,6 @@ describe('حلقهٔ کامل بازگشت فایل (وبهوک واقعی + fet
     expect(ex.status).toBe(201);
     exerciseId = (ex.body as { data: { id: string } }).data.id;
 
-    // تکلیف اول از بات
     await sendHomeworkFromBot();
   });
 
@@ -140,10 +127,8 @@ describe('حلقهٔ کامل بازگشت فایل (وبهوک واقعی + fet
     expect(res.reply).toContain('دریافت شد');
     expect(res.reply).toContain(exerciseTitle);
 
-    // بزرگ‌ترین سایز دانلود شد
     expect(fetchCalls).toEqual(['FILE-1_b']);
 
-    // رکورد بازگشت
     const subs = A.sql
       .prepare(`SELECT assignment_id, student_id, file_name, file_mime, source_chat_id, note FROM exercise_submissions`)
       .all() as { assignment_id: string; student_id: string; file_name: string; file_mime: string; source_chat_id: string; note: string }[];
@@ -153,13 +138,11 @@ describe('حلقهٔ کامل بازگشت فایل (وبهوک واقعی + fet
     expect(subs[0].source_chat_id).toBe(String(CHAT_PARENT));
     expect(subs[0].note).toBe('صفحهٔ اول را حل کرد');
 
-    // تکلیف done شد
     const asg = A.sql
       .prepare(`SELECT status FROM exercise_assignments WHERE exercise_id = ?`)
       .all(exerciseId) as { status: string }[];
     expect(asg[0].status).toBe('done');
 
-    // اعلان بازگشت به علی (کانال internal — بدون توکن بله) با dedup
     const notes = A.sql
       .prepare(`SELECT template, status, recipient, dedup_key FROM notifications WHERE template = 'homework_returned'`)
       .all() as { template: string; status: string; recipient: string; dedup_key: string }[];
@@ -175,7 +158,6 @@ describe('حلقهٔ کامل بازگشت فایل (وبهوک واقعی + fet
       .prepare(`SELECT id, file_name, file_mime FROM exercise_submissions ORDER BY created_at, id`)
       .all() as { id: string; file_name: string; file_mime: string }[];
     expect(subs).toHaveLength(2);
-    // هر دو ردیف موجودند (ترتیب created_at ثانیه‌ای است — با some چک می‌کنیم)
     expect(subs.some((s) => s.file_name === 'باقی-صفحات.pdf' && s.file_mime === 'application/pdf')).toBe(true);
     expect(subs.some((s) => s.file_mime === 'image/jpeg')).toBe(true);
   });
@@ -195,7 +177,6 @@ describe('حلقهٔ کامل بازگشت فایل (وبهوک واقعی + fet
   });
 
   it('چند تکلیف باز → منوی انتخاب (sub:pick) → پیوست به انتخاب خانواده', async () => {
-    // دو تمرین جدید + دو تکلیف → والد دو تکلیف باز دارد → منو
     const ex2 = await manager.post('/api/exercises', {
       title: 'تمرین دوم حلقه',
       format: 'game',
@@ -211,7 +192,6 @@ describe('حلقهٔ کامل بازگشت فایل (وبهوک واقعی + fet
     expect(ex3.status).toBe(201);
     await sendHomeworkFromBot();
 
-    // دو تکلیف باز → والد عکس می‌فرستد → منو
     const menu = await bot(photo(CHAT_PARENT, 'FILE-3'));
     expect(menu.reply).toContain('کدام تکلیف');
     expect(menu.buttons).not.toBeNull();
@@ -237,14 +217,11 @@ describe('حلقهٔ کامل بازگشت فایل (وبهوک واقعی + fet
     const stranger = await bot(photo(CHAT_STRANGER, 'FILE-X'));
     expect(stranger.reply).toContain('متصل نیست');
 
-    // همهٔ تکلیف‌های باقی‌مانده را قطعی می‌بندیم (مستقل از ترتیب فهرست)
     A.sql.prepare(`UPDATE exercise_assignments SET status = 'done' WHERE status = 'assigned'`).run();
-    // بازگشتی‌ها را از پنجره خارج کنیم
     A.sql.prepare(`UPDATE exercise_submissions SET created_at = datetime('now', '-72 hours')`).run();
     const none = await bot(photo(CHAT_PARENT, 'FILE-Y'));
     expect(none.reply).toContain('تکلیف بازی');
 
-    // بازگردانی زمان برای تست‌های بعدی
     A.sql.prepare(`UPDATE exercise_submissions SET created_at = datetime('now')`).run();
   });
 
@@ -262,7 +239,6 @@ describe('حلقهٔ کامل بازگشت فایل (وبهوک واقعی + fet
   it('تایم‌لاین: هم «تکلیف تمرین ارسال شد» و هم «نتیجهٔ تمرین بازگشت»', async () => {
     const res = await manager.get(`/api/students/${studentId}/timeline?kinds=exercise`);
     expect(res.status).toBe(200);
-    // قرارداد این endpoint: data خود آرایهٔ رویدادهاست
     const events = (res.body as { data: { kind: string; title: string; subtitle: string | null }[] }).data;
     expect(events.length).toBeGreaterThanOrEqual(5);
     expect(events.every((e) => e.kind === 'exercise')).toBe(true);

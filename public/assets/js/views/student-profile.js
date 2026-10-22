@@ -1,13 +1,3 @@
-/**
- * نمای پروندهٔ دانش‌آموز
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/student-profile.js — فاز ۶: پروفایل زنده (§14) با تب‌ها + تایم‌لاین (§11)
-// اطلاعات پایه / تاریخچه / جلسات / ارزیابی‌ها / ارتباطات + «وضعیت فعلی» و «اقدام بعدی»
-// m166-c: تب «پیگیری‌ها» حذف شد (سیستم اقدام/پیگیری مصرف نشد — ثبت گزارش جلسه کافی است؛ داده و API دست‌نخورده)
-// m166-c: تب «ارتباطات» ریمک شد — دو کارت «خانواده»/«معلم»: لینک احراز بات + دعوت با پیامک آماده (sms:)
-// m166-c: «افزودن معلم» حذف شد (تک‌معلم دورهٔ ابتدایی) — نمایش/حذف معلمِ موجود باقی است
-
 import { api, qs } from '../api.js';
 import { fa, enDigits, formatJalaliDateTime, formatJalaliNumeric, formatStoredJalaliNumeric, STUDENT_GRADES, gradeLabel, isPlaceholderNid } from '../format.js';
 import { el, icon, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, tabs, callBadge } from '../ui.js';
@@ -21,8 +11,6 @@ import { openEducationHistory } from '../archive-form.js'; // — تاریخچه
 import { openStudentForm } from '../student-form.js'; // — فرم مشترک ویرایش (کد ملی/مسئول/مسیر) — جایگزین فرم قدیمی داخلی
 import { openBotLinkModal, resolveBotUsername, buildBotLink } from '../bot-link.js'; // — لینک احراز خودکار بات (m166: ساخت لینک در تب ارتباطات هم)
 import { renderDocsQuickCard } from '../document-requests.js'; // — m151: درخواست مدارک با بله + کارت مدارک دریافتی
-
-// — گارد و مودال مسیر پرونده به session-type.js منتقل شد (مصرف مشترک با تب تفسیر)
 
 const KIND_META = {
   student_created: { icon: 'user', tone: 'success' },
@@ -52,7 +40,6 @@ const TIMELINE_FILTERS = [
   { key: 'profile', label: 'پرونده', kinds: 'student_created,case_status,special_need,tags,waitlist' }
 ];
 
-// فاز ۷ — قرارداد یکسان با pure سمت سرور (§12، D3)
 const SPECIAL_NEED_TYPE_LABELS = {
   dyslexia: 'نارساخوانی (دیس‌لکسی)',
   dysgraphia: 'نارسانویسی (دیس‌گرافی)',
@@ -71,7 +58,6 @@ const SPECIAL_NEED_SEVERITY_TONES = { mild: 'neutral', moderate: 'warning', seve
 const TIMELINE_PAGE = 30;
 
 export async function renderStudentProfile(container, ctx) {
-  // — اسکلتون بارگذاری پروفایل
   container.replaceChildren(skeletonState('list', 6));
   const id = ctx.params.id;
 
@@ -111,7 +97,6 @@ export async function renderStudentProfile(container, ctx) {
     staff = staffRes.data;
     timeline = tlRes;
   } catch {
-    // نوبت‌ها، برچسب‌ها، رویدادها و تایم‌لاین اختیاری‌اند — ادامه می‌دهیم
   }
 
   const schoolName = (sid) => schools.find((s) => s.id === sid)?.name ?? null;
@@ -119,17 +104,11 @@ export async function renderStudentProfile(container, ctx) {
   const canManageTags = session.user && ['manager', 'secretary', 'therapist'].includes(session.user.role);
   const canSendReport = session.user && ['manager', 'secretary', 'therapist'].includes(session.user.role);
   const canManageCase = session.user && ['manager', 'secretary'].includes(session.user.role);
-  // — تفسیر بالینی (RBAC پلن §۷): مدیر/منشی مشاهده + درمانگرِ مسئول پرونده؛
-  // تصمیم فقط مدیر یا درمانگرِ مسئول — منشی فقط می‌خواند (دکمه‌ها داخل ماژول گارد می‌شوند)
   const canSeeClinical = session.user && (
     ['manager', 'secretary'].includes(session.user.role) ||
     (session.user.role === 'therapist' && Boolean(student.ownerStaffId) && student.ownerStaffId === session.user.staffId)
   );
 
-  // ─── وضعیت فعلی (§14) — هدر زنده ───
-
-  // — نردبان «وضعیت پرونده» (شناسایی‌شده/در انتظار ارزیابی/…/تحت پایش) حذف شد؛
-  // چرخهٔ واقعی حالا سه‌لیستی است: لیست انتظار ← دانش‌آموزان (با مسئول پرونده) ← آرشیو
   const nextActionBlock = buildNextActionBlock(timeline.nextAction);
 
   const statusCard = el('div', { class: 'card' },
@@ -142,7 +121,6 @@ export async function renderStudentProfile(container, ctx) {
             statusBadge(student.active ? 'active' : 'inactive'),
             student.gender ? statusBadge(student.gender) : null,
             student.grade ? el('span', { class: 'badge badge--neutral' }, gradeLabel(student.grade)) : null,
-            // — مسیر پرونده (learning/rehab) + ویرایش سریع
             pathwayChip(student.pathway),
             canEditPathway(student)
               ? el('button', {
@@ -171,12 +149,10 @@ export async function renderStudentProfile(container, ctx) {
                 class: 'btn btn--primary btn--sm',
                 onclick: () => openCaseEventForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
               }, icon('plus', 15), 'ثبت رویداد پرونده'),
-              // — موتور تشخیص و مداخله: ارسال یک‌کلیکی چک‌لیست با بله (پیشنهاد بر اساس برچسب‌ها)
               el('button', {
                 class: 'btn btn--soft btn--sm',
                 onclick: () => openChecklistSendModal({ student, onSent: () => renderStudentProfile(container, ctx) })
               }, icon('zap', 15), 'ارسال چک‌لیست با بله'),
-              // — بانک تمرین ۲.۰: ارسال یک‌کلیکی تمرین/بستهٔ تمرینی با بله (پیشنهاد بر اساس برچسب‌ها)
               el('button', {
                 class: 'btn btn--soft btn--sm',
                 onclick: () => openExerciseSendModal({ student, onSent: () => renderStudentProfile(container, ctx) })
@@ -187,8 +163,6 @@ export async function renderStudentProfile(container, ctx) {
       )
     )
   );
-
-  // ─── تب‌ها (§14.4) ───
 
   const content = el('div', {});
 
@@ -209,18 +183,15 @@ export async function renderStudentProfile(container, ctx) {
   const tabBar = tabs(
     [
       { key: 'info', label: 'اطلاعات پایه', icon: 'user', onSelect: selectTab },
-      // — تب تفسیر بالینی (موتور تشخیص‌گذاری) — فقط برای نقش‌های مجاز
       ...(canSeeClinical ? [{ key: 'clinical', label: 'تفسیر بالینی', icon: 'brain', onSelect: selectTab }] : []),
       { key: 'timeline', label: 'تاریخچه', icon: 'clock', onSelect: selectTab },
       { key: 'sessions', label: `جلسات (${fa(appointments.length)})`, icon: 'calendar', onSelect: selectTab },
       { key: 'exercises', label: 'تمرین‌ها', icon: 'file', onSelect: selectTab },
-      // — m166: تب «پیگیری‌ها» حذف شد — اقدام/پیگیری بعدی مصرف نشد؛ ثبت گزارش جلسه در تب جلسات کافی است
       { key: 'comms', label: 'ارتباطات', icon: 'bot', onSelect: selectTab }
     ],
     'info'
   );
 
-  // — m151 — کارت «مدارک دریافتی از بله» (پنل دسترسی سریع پرونده)
   const docsMount = el('div', { style: { marginTop: 'var(--sp-4)' } });
   renderDocsQuickCard(docsMount, student, { onChanged: () => renderStudentProfile(container, ctx) });
 
@@ -235,8 +206,6 @@ export async function renderStudentProfile(container, ctx) {
     el('div', { style: { marginTop: 'var(--sp-4)' } }, content)
   );
 
-  // — deep-link تب‌ها: #/students/:id?tab=sessions|timeline|comms|exercises|clinical
-  //   + ?filter=… برای فیلتر تایم‌لاین — m166: لینک‌های قدیمی tab=followups به تایم‌لاین (فیلتر پیگیری) می‌روند
   const requestedTab = ctx.query?.tab;
   const timelineDeepFilter = ctx.query?.filter ?? (requestedTab === 'followups' ? 'followups' : null);
   const knownTabs = ['info', 'timeline', 'sessions', 'comms', 'exercises'];
@@ -244,19 +213,13 @@ export async function renderStudentProfile(container, ctx) {
   if (requestedTab === 'followups') selectTab('timeline');
   else selectTab(knownTabs.includes(requestedTab) ? requestedTab : 'info');
 
-  // ═══════════════ تب — تمرین‌ها ═══════════════
-
   function renderExercisesTabContent(box) {
     renderExercisesTab(box, { student, onChanged: () => renderStudentProfile(container, ctx) });
   }
 
-  // ═══════════════ تب — تفسیر بالینی ═══════════════
-
   function renderClinicalTabContent(box) {
     renderClinicalTab(box, { student });
   }
-
-  // ═══════════════ تب ۱ — اطلاعات پایه ═══════════════
 
   function renderInfoTab(box) {
     const tagsRow = el('div', { class: 'profile-tags' },
@@ -287,7 +250,6 @@ export async function renderStudentProfile(container, ctx) {
             row('کد ملی', el('span', { dir: 'ltr' }, isPlaceholderNid(student.nationalId) ? '— (ثبت نشده)' : fa(student.nationalId))),
             row('تاریخ تولد', student.birthDate ? formatStoredJalaliNumeric(student.birthDate) : '—'),
             row('مدرسه', schoolName(student.schoolId) ?? '—'),
-            // — باجت تماس با معلم کنار نام معلم (تلفن از کلاس مدرسه)
             row('کلاس', student.className
               ? el('span', { class: 'cell-phone' },
                   el('span', {}, student.teacherName
@@ -299,7 +261,6 @@ export async function renderStudentProfile(container, ctx) {
               : '—'),
             row('نام ولی', student.guardianName ?? '—'),
             row('نسبت ولی', relationLabel(student.guardianRelation)),
-            // — باجت تماس سریع کنار شمارهٔ ولیّ در پروفایل هم
             row('تلفن ولی', student.guardianPhone
               ? el('span', { class: 'cell-phone' },
                   el('span', { dir: 'ltr' }, fa(student.guardianPhone)),
@@ -309,7 +270,6 @@ export async function renderStudentProfile(container, ctx) {
           ),
           el('div', { style: { marginTop: 'var(--sp-4)' } }, tagsRow),
           buildSpecialNeedBlock(student, canManageCase, container, ctx),
-          // — تاریخچهٔ تحصیلی: سابقهٔ سال‌به‌سال (به‌خصوص پرونده‌های آرشیو)
           el('div', {
             class: 'card',
             style: { marginTop: 'var(--sp-4)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--sp-3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-3)', flexWrap: 'wrap' }
@@ -323,13 +283,10 @@ export async function renderStudentProfile(container, ctx) {
               onclick: () => openEducationHistory(student, { onChanged: () => renderStudentProfile(container, ctx) })
             }, icon('eye', 15), 'مشاهده / مدیریت')
           ),
-          // — T7: کارت «معلم» — پاسخ فرم جامع معلم با نام او روی پرونده می‌نشیند (m166: تک‌معلم ابتدایی)
           renderTeachersCard(student, container, ctx),
           el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', marginTop: 'var(--sp-4)' } },
             el('button', {
               class: 'btn btn--soft btn--sm',
-              // — فرم مشترک student-form.js (کد ملی + مسئول پرونده + مسیر پرونده)
-              // به‌جای فرم قدیمی داخلی که کد ملی/مسئول/مسیر نداشت
               onclick: () => openStudentForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
             }, icon('edit', 15), 'ویرایش اطلاعات'),
             canSendReport
@@ -344,15 +301,11 @@ export async function renderStudentProfile(container, ctx) {
     );
   }
 
-  // ═══════════════ تب ۲ — تاریخچه (تایم‌لاین §11) ═══════════════
-
   function renderTimelineTab(box) {
-    // — m166: فیلتر اولیه از deep-link (?tab=timeline&filter=followups) — لینک‌های قدیمی تب پیگیری‌ها زنده می‌مانند
     const deepFilter = TIMELINE_FILTERS.some((f) => f.key === timelineDeepFilter) ? timelineDeepFilter : null;
     const state = {
       filter: deepFilter ?? 'all',
       offset: 0,
-      // — دادهٔ پیش‌بارگیری‌شده فقط فهرست «همه» است — با فیلتر عمیق از صفر بارگیری می‌شود
       hasMore: deepFilter ? false : (timeline.meta?.hasMore ?? false),
       events: deepFilter ? [] : [...timeline.data],
       loading: false
@@ -430,14 +383,10 @@ export async function renderStudentProfile(container, ctx) {
     else paint();
   }
 
-  // — نقشهٔ مقصد کلیک هر kind تایم‌لاین — «همه‌چیز روی یک تایم‌لاین» واقعاً کلیک‌پذیر است
-  // — بازگردانی: لینک تقویم برای همهٔ نقش‌ها (تقویم برای دفتر هم فعال شد)
   const KIND_LINKS = {
     session_note: { hash: '#/reports', label: 'یادداشت جلسه در «گزارش جلسات من»' },
     exercise: { hash: '#/exercises', label: 'مشاهده در بانک تمرین' },
-    // — m166: تب پیگیری‌ها حذف شد — لینک‌های قدیمی به تایم‌لاین با فیلتر «پیگیری» هدایت می‌شوند
     followup: { hash: `#/students/${id}?tab=timeline&filter=followups`, label: 'مشاهده در تاریخچه (فیلتر پیگیری)' },
-    // — لینک «کمیسیون» حذف شد (ماژول قطع شد)؛ رویدادهای تاریخی committee بدون لینک می‌مانند
     appointment: { hash: '#/appointments', label: 'مشاهده در تقویم نوبت‌ها' },
     appointment_moved: { hash: '#/appointments', label: 'مشاهده در تقویم نوبت‌ها' },
     notification: { hash: `#/students/${id}?tab=comms`, label: 'مشاهده در تب ارتباطات' },
@@ -446,7 +395,6 @@ export async function renderStudentProfile(container, ctx) {
 
   function timelineItem(e) {
     const meta = KIND_META[e.kind] ?? { icon: 'clock', tone: 'neutral' };
-    // — رویداد پرونده: کلیک → مودال جزئیات (فرم کامل + پیوست + تحلیل + لغو)
     const isCaseEvent = e.kind === 'case_event' && e.ref?.type === 'case_event';
     const link = !isCaseEvent ? KIND_LINKS[e.kind] : null;
     const clickable = isCaseEvent || Boolean(link);
@@ -472,7 +420,6 @@ export async function renderStudentProfile(container, ctx) {
       ),
       e.subtitle ? el('div', { class: 'tl-item__sub' }, e.subtitle) : null,
       e.actor ? el('div', { class: 'tl-item__actor' }, `توسط ${e.actor}`) : null,
-      // — بج سه‌هدف: این فرم توسط کی پر شده/می‌شود؟ (درمانگر در سایت — خانواده/معلم با بله)
       isCaseEvent ? (() => {
         const ev = caseEvents.find((x) => x.id === e.ref?.id);
         if (!ev) return null;
@@ -487,8 +434,6 @@ export async function renderStudentProfile(container, ctx) {
     );
   }
 
-  // ═══════════════ تب ۳ — جلسات ═══════════════
-
   function renderSessionsTab(box) {
     const counts = { present: 0, absent: 0, pending: 0, cancelled: 0 };
     for (const a of appointments) counts[a.myAttendance] = (counts[a.myAttendance] ?? 0) + 1;
@@ -499,7 +444,6 @@ export async function renderStudentProfile(container, ctx) {
       el('span', { class: 'badge badge--warning' }, `${fa(counts.pending)} در انتظار`)
     );
 
-    // — ستون «گزارش»: رویدادهای ساخت‌یافتهٔ متصل به همان نوبت + یادداشت جلسه
     const noteApptIds = new Set(
       noteEvents
         .map((n) => (n.ref?.id ? String(n.ref.id).split('/')[0] : null))
@@ -563,10 +507,6 @@ export async function renderStudentProfile(container, ctx) {
     );
   }
 
-  // ═══════════════ تب — ارتباطات (m166 — ریمک: دعوت خانواده/معلم یک‌جا) ═══════════════
-  // — دو کارت «خانواده» و «معلم»: ساخت/نمایش لینک احراز بات + دعوت با پیامک آماده (sms:)
-  // — تب «پیگیری‌ها» حذف شد: اقدام/پیگیری بعدی مصرف نشد؛ ثبت گزارش جلسه کافی است (داده و API دست‌نخورده)
-
   async function renderCommsTab(box) {
     box.replaceChildren(skeletonState('list', 4));
     const canManageNotify = Boolean(session.user && ['manager', 'secretary'].includes(session.user.role));
@@ -592,7 +532,6 @@ export async function renderStudentProfile(container, ctx) {
       )
     );
 
-    // — یادآوری/اعلان‌ها فقط منشی/مدیر (ساخت لینک خانواده به کارت «خانواده» منتقل شد)
     const notifyCard = canManageNotify ? await buildNotifyCard(student.id) : null;
 
     box.replaceChildren(
@@ -605,8 +544,6 @@ export async function renderStudentProfile(container, ctx) {
     );
   }
 }
-
-// ─────────────── بلوک «اقدام بعدی» (§14) ───────────────
 
 function buildNextActionBlock(nextAction) {
   if (!nextAction) {
@@ -636,8 +573,6 @@ function buildNextActionBlock(nextAction) {
   );
 }
 
-// -c — ادیتور «مسئول پرونده» — فقط منشی/مدیر (لایهٔ دوم RBAC؛ سرور هم ۴۰۳)
-// — مسئول پرونده در فرم تعریف هم انتخاب می‌شود؛ این ادیتور برای جابه‌جایی بعدی است
 function buildOwnerEditor(student, onSaved) {
   let staff = [];
   api.get('/api/staff').then((res) => { staff = (res.data ?? []).filter((s) => s.active !== false); fillSel(); }).catch(() => {});
@@ -680,9 +615,6 @@ function row(key, val) {
   return el('div', { class: 'info-list__row' }, el('span', { class: 'info-list__key' }, key), el('span', { class: 'info-list__val' }, val));
 }
 
-// ═══════════════ فاز ۷ — بلوک نیاز ویژه (§12، D3) ═══════════════
-
-/** بلوک «نیاز ویژه» در تب اطلاعات پایه — نمایش + فرم ویرایش فقط برای منشی/مدیر */
 function buildSpecialNeedBlock(student, canManage, container, ctx) {
   const hasNeed = Boolean(student.specialNeedType);
   const info = el('div', { class: 'sn-profile' },
@@ -716,7 +648,6 @@ function buildSpecialNeedBlock(student, canManage, container, ctx) {
   );
 }
 
-/** فرم ثبت/ویرایش نیاز ویژه — PATCH /api/students/:id/special-need (فقط منشی/مدیر) */
 function openSpecialNeedForm(student, onSaved) {
   const current = student.specialNeedType ?? '';
   const currentSev = student.specialNeedSeverity ?? '';
@@ -752,11 +683,6 @@ function openSpecialNeedForm(student, onSaved) {
   });
 }
 
-/** — کارت «معلم» روی پرونده (m166 — تک‌معلم دورهٔ ابتدایی):
- * «افزودن معلم» حذف شد — معلم کلاس خودکار ثبت می‌شود (seed از معلمِ کلاس +
- * انتخاب/افزودن در جریان ارسال فرم معلم)؛ نمایش و حذف معلمِ موجود اینجاست.
- * پاسخ فرم جامع معلم با نام او («پاسخ معلم: X») روی پرونده می‌نشیند.
- */
 function renderTeachersCard(student, container, ctx) {
   const canManage = Boolean(session.user && ['manager', 'secretary', 'therapist'].includes(session.user.role));
   const listWrap = el('div', { style: { display: 'grid', gap: 'var(--sp-2)' } }, el('div', { class: 'cell-sub' }, 'در حال بارگذاری…'));
@@ -815,7 +741,6 @@ function renderTeachersCard(student, container, ctx) {
   );
 }
 
-/** — ارسال گزارش درباره دانش‌آموز به معلم مدرسه‌اش (چت متصل کلاس) */
 function openTeacherReportModal(student) {
   const textarea = el('textarea', {
     class: 'textarea', rows: 5,
@@ -858,19 +783,12 @@ function relationLabel(rel) {
   return { father: 'پدر', mother: 'مادر', other: 'سایر' }[rel] ?? rel ?? '—';
 }
 
-// ─────────────── کارت اعلان‌ها ───────────────
-// — فرم قدیمی ویرایش (openEditForm) حذف شد — openStudentForm مشترک جایگزین شد
-// (کد ملی/مسئول پرونده/مسیر پرونده در فرم مشترک هست؛ دوبله‌سازی برداشته شد)
-// — m166: بخش «ساخت لینک اتصال خانواده» از این کارت به کارت «خانواده» در تب ارتباطات منتقل شد
-
-/** کارت تنظیمات یادآوری نوبت — فقط منشی/مدیر (لینک‌ها در کارت «خانواده» مدیریت می‌شوند) */
 async function buildNotifyCard(studentId) {
   let prefs = null;
   try {
     const prefsRes = await api.get(`/api/notifications/prefs/${studentId}`).catch(() => null);
     prefs = prefsRes?.data ?? null;
   } catch {
-    // اعلان‌ها اختیاری‌اند
   }
 
   const channelSel = el('select', { class: 'select' },
@@ -919,14 +837,10 @@ async function buildNotifyCard(studentId) {
   );
 }
 
-// ─────────────── m166 — تب ارتباطات: کارت‌های دعوت (خانواده/معلم) ───────────────
-
-/** نرمال‌سازی شمارهٔ تلفن برای پیوند sms:/tel: — ارقام فارسی/عربی → لاتین + حذف جداکننده‌ها */
 function normalizePhoneValue(phone) {
   return enDigits(String(phone ?? '')).trim().replace(/[^\d+]/g, '');
 }
 
-/** کپی متن در کلیپ‌بورد با fallback صفحهٔ قدیمی‌تر — همان الگوی bot-link.js (آن ماژول فقط-خواندنی است) */
 async function copyTextFallback(text) {
   try {
     await navigator.clipboard?.writeText(text);
@@ -946,7 +860,6 @@ async function copyTextFallback(text) {
   }
 }
 
-/** — کد اتصالِ قابل استفاده از فهرست لینک‌ها: «در انتظار» ← «متصل» ← آخرین رکورد */
 function pickActiveLinkCode(links) {
   return links.find((l) => l.status === 'pending')?.code
     ?? links.find((l) => l.status === 'linked')?.code
@@ -954,13 +867,6 @@ function pickActiveLinkCode(links) {
     ?? null;
 }
 
-/**
- * بخش «دعوت با پیامک» — مشترک بین کارت خانواده و کارت معلم (m166).
- * متن دعوت آماده به عضویت بات بله با لینک احراز واقعی؛ روی گوشی با کلیک، برنامهٔ
- * پیامک گوشی با شماره و متنِ پرشده باز می‌شود: sms:<شماره>?&body=<متن encoded>
- * شمارهٔ ذخیره‌شده نبود → ورودی inline؛ روی دسکتاپ (بدون برنامهٔ پیامک) «کپی متن دعوت» هست.
- * بعد از ساخت لینک، refresh() پیش‌نمایش و دکمه‌ها را به‌روز می‌کند.
- */
 function buildSmsInviteSection({ heading, storedPhone, phonePlaceholder, getInvite, noCodeHint }) {
   const phoneInput = el('input', {
     class: 'input', type: 'tel', dir: 'ltr', maxlength: 20,
@@ -983,7 +889,6 @@ function buildSmsInviteSection({ heading, storedPhone, phonePlaceholder, getInvi
     }
   }, icon('copy', 14), 'کپی متن دعوت');
 
-  // — href در لحظهٔ کلیک ساخته می‌شود تا شمارهٔ ورودی inline هم لحاظ شود
   smsLink.addEventListener('click', (e) => {
     const inv = getInvite();
     const phone = storedPhone || normalizePhoneValue(phoneInput.value);
@@ -1029,7 +934,6 @@ function buildSmsInviteSection({ heading, storedPhone, phonePlaceholder, getInvi
   };
 }
 
-/** — چیپ فهرست لینک‌های اتصال با «دیدن لینک» (مودال bot-link — چندبارمصرف) */
 function paintLinkChips(box, links, { emptyText }) {
   box.replaceChildren(
     ...(links.length === 0
@@ -1047,11 +951,6 @@ function paintLinkChips(box, links, { emptyText }) {
   );
 }
 
-/**
- * کارت «خانواده» — لینک احراز بات ولیّ + دعوت پیامکی (m166).
- * لینک از مکانیزم موجود bot-link می‌آید: POST /api/notifications/links { student_id }
- * → کد ۶ نویسه‌ای → buildBotLink(username, code) = https://ble.ir/<bot>?start=<code>
- */
 async function buildFamilyInviteCard(student, { canManage }) {
   let links = [];
   try {
@@ -1096,7 +995,6 @@ async function buildFamilyInviteCard(student, { canManage }) {
             toast('لینک اتصال خانواده ساخته شد', 'success');
             paintLinks();
             smsSection.refresh();
-            // — نمایش کد + لینک احراز خودکار (خانواده با کلیک متصل می‌شود)
             await openBotLinkModal(res.data.code, { intro: 'این کد/لینک را به ولیّ دانش‌آموز بدهید تا گفتگوی باتش متصل شود:' });
           } catch (err) {
             toastError(err);
@@ -1120,11 +1018,6 @@ async function buildFamilyInviteCard(student, { canManage }) {
   );
 }
 
-/**
- * کارت «معلم» — لینک احراز بات معلم کلاس + دعوت پیامکی (m166).
- * لینک معلم = کد اتصال باتِ معلمِ کلاس (همان مکانیزم class-links پنل «مدارس»):
- * GET/POST /api/notifications/class-links { class_id } → buildBotLink(username, code)
- */
 async function buildTeacherInviteCard(student, { canManage }) {
   if (!student.classId) {
     return el('div', { class: 'card' },

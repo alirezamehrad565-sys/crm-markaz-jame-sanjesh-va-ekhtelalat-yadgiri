@@ -1,13 +1,6 @@
-/**
- * تست‌های واحد — password
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست هش رمز صفحه ورود (PBKDF2 نسخه‌دار + سازگاری legacy SHA-256)
-
 import { describe, it, expect } from 'vitest';
 import { hashPassword, verifyPassword, isLegacyPasswordHash, DEFAULT_PASSWORD } from '../password';
 
-/** SHA-256 «1234» — فرمت legacy که در migration 0011 و bootstrap.sql نشسته */
 const LEGACY_1234 = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
 
 describe('hashPassword', () => {
@@ -62,9 +55,7 @@ describe('verifyPassword', () => {
 
   it('رمز پیش‌فرض سامانه ۱۲۳۴ است — هم legacy و هم فرمت جدید تأیید می‌شود', async () => {
     expect(DEFAULT_PASSWORD).toBe('1234');
-    // legacy (چیزی که bootstrap/seed می‌سازد)
     expect(await verifyPassword(DEFAULT_PASSWORD, LEGACY_1234)).toBe(true);
-    // فرمت جدید (چیزی که staff service الان می‌سازد)
     expect(await verifyPassword(DEFAULT_PASSWORD, await hashPassword(DEFAULT_PASSWORD))).toBe(true);
   });
 });

@@ -1,25 +1,10 @@
-/**
- * فرم افزودن/ویرایش دانش‌آموز
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// student-form.js — فرم مشترک تعریف/ویرایش دانش‌آموز
-// مصرف‌کنندگان: views/students.js (چرخهٔ فعال) + views/archive.js (آرشیو — دیتابیس شهر)
-// به دستور کاربر:
-// * «مسئول پرونده» همین‌جا در لحظهٔ تعریف به یکی از همکاران سپرده می‌شود
-// (دیگر نیاز به ثبت مجدد و ویرایش دوباره در پروفایل نیست)
-// * حالت آرشیو: پرونده با active=0 ساخته می‌شود (دیتابیس دانش‌آموزان نیاز ویژهٔ شهر)
-// * تیک «منتظر دریافت خدمت» حذف شد — لیست انتظار ماژول مستقل شد (#/waitlist)
-
 import { api } from './api.js';
 import { el, formModal, toast, toastError } from './ui.js';
 import { STUDENT_GRADES, isPlaceholderNid } from './format.js';
 import { STUDENT_PATHWAYS } from './session-type.js'; // — مسیر پرونده
 import { session } from './state.js';
 
-// ─────────────── فرادادهٔ فرم (مدارس/کلاس‌ها/همکاران) ───────────────
-
 let metaCache = null;
-/** — بین فرم دانش‌آموز فعال و فرم آرشیو مشترک است */
 export async function ensureFormMeta() {
   if (metaCache) return metaCache;
   const [schoolsRes, classesRes, staffRes] = await Promise.allSettled([
@@ -35,23 +20,14 @@ export async function ensureFormMeta() {
   return metaCache;
 }
 
-/** دفتر (منشی/مدیر) می‌تواند مسئول پرونده را تعیین کند — endpoint سرور هم همان RBAC را دارد */
 function canAssignOwner() {
   return session.user?.role === 'manager' || session.user?.role === 'secretary';
 }
 
-/**
- * فرم دانش‌آموز — تعریف جدید یا ویرایش.
- * options:
- * student — پروندهٔ موجود برای ویرایش (null = تعریف جدید)
- * archived — تعریف در آرشیو (active=0 — دیتابیس شهر)
- * onSaved — پس از ذخیرهٔ موفق (پروندهٔ ذخیره‌شده پاس داده می‌شود)
- */
 export async function openStudentForm({ student = null, archived = false, onSaved } = {}) {
   const meta = await ensureFormMeta();
   const isEdit = Boolean(student);
   const isOffice = canAssignOwner();
-  // درمانگر: «دانش‌آموز فعال برای خودش» — مسئول پرونده همیشه خودش (سرور هم اجبار می‌کند)
   const isTherapist = session.user?.role === 'therapist';
 
   formModal({
@@ -79,14 +55,12 @@ export async function openStudentForm({ student = null, archived = false, onSave
         value: student?.gender ?? ''
       },
       {
-        // پایه تحصیلی هاردکد (آموزش‌وپرورش: تا ششم ابتدایی)
         name: 'grade', label: 'پایه تحصیلی', type: 'select',
         placeholder: 'بدون پایه',
         options: STUDENT_GRADES.map((g) => ({ value: g, label: g })),
         value: student?.grade ?? ''
       },
       {
-        // دراپ‌داون سرچ‌دار — با ۴۰+ مدرسه انتخاب با تایپ انجام می‌شود
         name: 'school_id', label: 'مدرسه (سرچ‌دار)', type: 'searchable-select',
         placeholder: 'نام مدرسه را جستجو کنید…',
         options: meta.schools.filter((s) => s.active).map((s) => ({ value: s.id, label: s.name })),
@@ -112,7 +86,6 @@ export async function openStudentForm({ student = null, archived = false, onSave
         hint: 'موبایل ۱۱ رقمی — مثل ۰۹۱۲۳۴۵۶۷۸۹. برای دریافت اعلان بات، ولیّ با /link CODE بات را متصل می‌کند.',
         placeholder: '09123456789'
       },
-      // ─── مسئول پرونده در لحظهٔ تعریف ───
       ...(isOffice ? [
         {
           name: 'owner_staff_id', label: 'مسئول پرونده', type: 'select', span: 2,
@@ -122,7 +95,6 @@ export async function openStudentForm({ student = null, archived = false, onSave
           hint: 'پرونده به این همکار سپرده می‌شود و در «لیست دانش‌آموزهای» او نمایش داده می‌شود — درمانگرِ نوبت اول هم به‌طور خودکار مسئول می‌شود.'
         }
       ] : []),
-      // ─── مسیر پرونده (موتور مسیر تفسیر بالینی) — در پذیرش تعیین، بعداً قابل تغییر ───
       {
         name: 'pathway', label: 'مسیر پرونده', type: 'select', span: 2,
         placeholder: '— هنوز تعیین نشده (تفسیر پیش‌فرض: مسیر یادگیری)',
@@ -132,7 +104,6 @@ export async function openStudentForm({ student = null, archived = false, onSave
       }
     ],
     onSubmit: async (values) => {
-      // اعتبارسنجی موبایل ولیّ — ارقام فارسی هم پذیرفته می‌شود
       const phone = normalizePhone(values.guardian_phone);
       if (!/^09\d{9}$/.test(phone)) {
         throw new Error('شماره موبایل ولیّ معتبر نیست — باید ۱۱ رقم و با ۰۹ شروع شود');
@@ -150,14 +121,11 @@ export async function openStudentForm({ student = null, archived = false, onSave
           guardian_name: values.guardian_name || undefined,
           guardian_relation: values.guardian_relation || undefined,
           guardian_phone: phone,
-          // ثبت کد ملی پروندهٔ نگه‌دارنده‌دار (فقط وقتی فیلد واقعاً پر شده باشد)
           ...(isPlaceholderNid(student.nationalId) && values.national_id ? { national_id: values.national_id } : {})
         });
-        // تغییر مسئول پرونده در همان فرم (endpoint اختصاصی با audit خودش)
         if (isOffice && values.owner_staff_id !== undefined && (values.owner_staff_id || null) !== (student.ownerStaffId ?? null)) {
           await api.patch(`/api/students/${student.id}/owner`, { owner_staff_id: values.owner_staff_id || null });
         }
-        // تغییر مسیر پرونده از همان فرم (endpoint اختصاصی با audit خودش)
         if ((values.pathway || null) !== (student.pathway ?? null)) {
           await api.patch(`/api/students/${student.id}/pathway`, { pathway: values.pathway || null });
         }
@@ -175,10 +143,8 @@ export async function openStudentForm({ student = null, archived = false, onSave
           guardian_name: values.guardian_name || undefined,
           guardian_relation: values.guardian_relation || undefined,
           guardian_phone: phone,
-          // / — مسئول پرونده در لحظهٔ تعریف؛ درمانگر اجباراً خودش
           owner_staff_id: isOffice ? (values.owner_staff_id || undefined) : (isTherapist ? session.user.staffId : undefined),
           archived: archived || undefined,
-          // مسیر پرونده در لحظهٔ تعریف (پذیرش)
           pathway: values.pathway || undefined
         });
         savedId = created.data?.id;
@@ -188,7 +154,6 @@ export async function openStudentForm({ student = null, archived = false, onSave
     }
   });
 
-  // cascade کلاس بر اساس مدرسه انتخابی — مدرسه کمبوباکس سرچ‌دار است (input hidden)
   setTimeout(() => {
     const form = document.querySelector('.modal .form-grid');
     if (!form) return;
@@ -204,12 +169,10 @@ export async function openStudentForm({ student = null, archived = false, onSave
         el('option', { value: '' }, list.length === 0 ? 'کلاسی ثبت نشده' : 'بدون کلاس'),
         ...list.map((c) => el('option', { value: c.id }, c.teacherName ? `${c.name} — ${c.teacherName}` : c.name))
       );
-      // حفظ انتخاب قبلی اگر هنوز معتبر است
       if (prev && list.some((c) => c.id === prev)) classSel.value = prev;
     };
 
     schoolSel.addEventListener('change', refill);
-    // پیش‌فرض: کلاس‌های مدرسه فعلی دانش‌آموز
     const initialSchool = student?.schoolId ?? '';
     if (initialSchool) {
       schoolSel.value = initialSchool;
@@ -219,7 +182,6 @@ export async function openStudentForm({ student = null, archived = false, onSave
   }, 50);
 }
 
-/** نرمال‌سازی شماره: ارقام فارسی → لاتین، حذف فاصله و خط تیره و +۹۸ */
 export function normalizePhone(raw) {
   let v = String(raw || '')
     .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
@@ -229,7 +191,6 @@ export function normalizePhone(raw) {
   return v;
 }
 
-/** پاک‌سازی کش فراداده — بعد از عملیات مدارس/کارکنان صدا زده می‌شود */
 export function invalidateStudentFormMeta() {
   metaCache = null;
 }

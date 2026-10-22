@@ -1,82 +1,50 @@
-// format.js — توابع کمکی خالص: ارقام فارسی، تقویم جلالی، زمان تهران
-// بدون DOM تا در Node (vitest) هم واحد-تست‌پذیر باشد.
-
-// ─────────────── ارقام فارسی ───────────────
-
 const FA_DIGITS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
 
-/** تبدیل همهٔ ارقام لاتین رشته به ارقام فارسی — برای نمایش به کاربر */
 export function fa(input) {
   return String(input).replace(/\d/g, (d) => FA_DIGITS[Number(d)]);
 }
 
-/** وارونهٔ fa: رقم‌های فارسی (۰-۹) و عربی (٠-٩) → رقم لاتین — برای پارس ورودی کاربر */
 export function enDigits(input) {
   return String(input)
     .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
     .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 }
 
-/**
- * — نگه‌دارندهٔ کد ملی (پرونده‌های ثبت‌شدهٔ بدون کد ملی — آرشیو):
- * سرور مقدار یکتای «NAS-…» می‌گذارد تا قید UNIQUE حفظ شود؛ در UI مثل «بدون کد ملی»
- * نمایش داده می‌شود و از فرم ویرایش قابل ثبت واقعی است.
- */
 export const PLACEHOLDER_NID_PREFIX = 'NAS-';
 
 export function isPlaceholderNid(nid) {
   return Boolean(nid) && String(nid).startsWith(PLACEHOLDER_NID_PREFIX);
 }
 
-// ─────────────── تهران (+03:30 ثابت) ───────────────
-
-// اختلاف ساعت تهران نسبت به UTC به میلی‌ثانیه (3:30) — ایران DST ندارد
 const TEHRAN_OFFSET_MS = 210 * 60 * 1000;
 
-/** دو-رقمی‌سازی ساده برای HH:MM و YYYY-MM-DD */
 const pad2 = (n) => (n < 10 ? `0${n}` : String(n));
 
-/**
- * — نرمال‌ساز ورودی زمان به Date (UTC معادل). نمایش زمان نباید به TZ مرورگر
- * وابسته باشد — هر رشته‌ای از بک‌اند به شکل یکسان تفسیر می‌شود:
- * - «…Z» یا «…±HH:MM» → همان‌طور (از قبل کامل)
- * - «YYYY-MM-DD HH:MM:SS[.sss]» (قرارداد SQLite datetime('now') = UTC) → فاصله→T + Z
- * - «YYYY-MM-DDTHH:MM:SS[.sss]» بدون منطقه → + Z (قرارداد بک‌اند: naive یعنی UTC)
- * - «YYYY-MM-DD» (تاریخ خالص) → T00:00:00Z
- * خروجی همیشه Date است؛ ورودی نامعتبر → Invalid Date (بدون throw — مثل رفتار قبلی).
- */
 export function toUtcIso(value) {
   if (value instanceof Date) return value;
   const s = String(value ?? '').trim();
   if (!s) return new Date(NaN);
   if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(s)) return new Date(s);
-  // تاریخ خالص (بدون زمان)
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T00:00:00.000Z`);
-  // naive با فاصله یا T
   const m = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)$/);
   if (m) return new Date(`${m[1]}T${m[2]}Z`);
-  // هر چیز دیگر — به مرورگر بسپار (رفتار قبلی)
   return new Date(s);
 }
 
-/** ISO UTC → تاریخ YYYY-MM-DD به وقت تهران */
 export function tehranYmdOfIso(iso) {
   const t = new Date(toUtcIso(iso).getTime() + TEHRAN_OFFSET_MS);
   return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`;
 }
 
-/** ISO UTC → ساعت HH:MM به وقت تهران */
 export function tehranTimeOfIso(iso) {
   const t = new Date(toUtcIso(iso).getTime() + TEHRAN_OFFSET_MS);
   return `${pad2(t.getUTCHours())}:${pad2(t.getUTCMinutes())}`;
 }
 
-/** الآن → YYYY-MM-DD تهران */
 export function tehranTodayYmd(now = new Date()) {
   return tehranYmdOfIso(now.toISOString());
 }
 
-/** YYYY-MM-DD تهران → مرز UTC آن روز {start, end} (ISO) */
 export function tehranDayRange(ymd) {
   const startMs = Date.parse(`${ymd}T00:00:00.000Z`) - TEHRAN_OFFSET_MS;
   return {
@@ -85,20 +53,16 @@ export function tehranDayRange(ymd) {
   };
 }
 
-/** افزودن n روز تقویمی به YMD (خود تاریخ — بدون درگیری ساعت) */
 export function addDaysYmd(ymd, n) {
   const ms = Date.parse(`${ymd}T00:00:00.000Z`) + n * 24 * 60 * 60 * 1000;
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-/** روز هفتهٔ ایرانیِ YMD تهران: ۰ = شنبه … ۶ = جمعه */
 export function iranianWeekdayOfYmd(ymd) {
   const ms = new Date(`${ymd}T12:00:00.000Z`).getTime() + TEHRAN_OFFSET_MS; // midday → safe
   const jsDay = new Date(ms).getUTCDay(); // 0=Sun … 6=Sat
   return (jsDay + 1) % 7;
 }
-
-// ─────────────── تبدیل جلالی (الگوریتم jalaali-js، مجوز MIT) ───────────────
 
 const div = (a, b) => Math.trunc(a / b);
 const mod = (a, b) => a - Math.trunc(a / b) * b;
@@ -150,13 +114,11 @@ function d2g(jdn) {
   return { gy, gm, gd };
 }
 
-/** میلادی YMD → {jy, jm, jd} جلالی */
 export function toJalali(gy, gm, gd) {
   const jdn = g2d(gy, gm, gd);
   return d2j(jdn);
 }
 
-/** جلالی {jy, jm, jd} → میلادی {gy, gm, gd} */
 export function toGregorian(jy, jm, jd) {
   const r = jalCal(jy, true);
   return d2g(j2d(jy, jm, jd, r));
@@ -166,11 +128,6 @@ function j2d(jy, jm, jd, r) {
   return g2d(r.gy, 3, r.march) + (jm - 1) * 31 - div(jm, 7) * (jm - 7) + jd - 1;
 }
 
-/**
- * پارس تاریخ جلالی از ورودی آزاد: «۱۴۰۴/۷/۱۴»، «۱۴۰۴-۰۷-۱۴»، «۱۴۰۴۰۷۱۴»
- * → YYYY-MM-DD میلادی یا null
- *: جداسازی با جداکننده هم پذیرفته می‌شود (روز/ماه یک‌رقمی اشکال ندارد)
- */
 export function parseJalaliToYmd(input) {
   if (!input) return null;
   const latin = String(input)
@@ -192,7 +149,6 @@ export function parseJalaliToYmd(input) {
   return `${g.gy}-${pad2(g.gm)}-${pad2(g.gd)}`;
 }
 
-/** YYYY-MM-DD تهران + دقیقه از نیمه‌شب → ISO UTC */
 export function tehranYmdMinuteToIso(ymd, minute) {
   const startMs = Date.parse(`${ymd}T00:00:00.000Z`) - TEHRAN_OFFSET_MS;
   return new Date(startMs + minute * 60 * 1000).toISOString();
@@ -223,17 +179,12 @@ function d2j(jdn) {
   return { jy, jm, jd };
 }
 
-// ─────────────── قالب‌بندی‌های نمایشی ───────────────
-
 export const WEEKDAY_NAMES = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
 
-/** — نام تک‌حرفی روزها برای گرید هفتگی در موبایل (هم‌اندیس با WEEKDAY_NAMES) */
 export const WEEKDAY_ABBRS = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
 
-/** — پایه‌های تحصیلی ثابت (هم‌سان با STUDENT_GRADES سمت سرور) */
 export const STUDENT_GRADES = ['پیش‌دبستانی', 'اول', 'دوم', 'سوم', 'چهارم', 'پنجم', 'ششم'];
 
-/** — نمایش مقاوم پایه: مقادیر قدیمی (grade-3، ارقام فارسی/لاتین، «کلاس سوم») → لیبل استاندارد */
 export function gradeLabel(grade) {
   if (!grade) return '';
   if (STUDENT_GRADES.includes(grade)) return grade;
@@ -255,7 +206,6 @@ export const JALALI_MONTHS = [
   'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
 ];
 
-/** YYYY-MM-DD → «۱۴۰۴/۰۷/۱۴» */
 export function formatJalaliNumeric(ymd) {
   if (!ymd) return '—';
   const [y, m, d] = ymd.split('-').map(Number);
@@ -263,21 +213,11 @@ export function formatJalaliNumeric(ymd) {
   return fa(`${j.jy}/${pad2(j.jm)}/${pad2(j.jd)}`);
 }
 
-/**
- * — تشخیص قالب تاریخ ذخیره‌شده: رکوردهای قدیمی/seed جلالی‌اند (سال ۱۲۰۰–۱۵۰۰)
- * و مقادیر جدید (خروجی jalali-picker و بات بله) میلادی (سال ≥۱۷۰۰).
- * همان قرارداد ageLineFromBirthDate (clinical-insights) و parseBirthDateLoose (باندل).
- */
 export function storedDateKind(ymd) {
   const y = Number(String(ymd ?? '').slice(0, 4));
   return y >= 1700 ? 'gregorian' : 'jalali';
 }
 
-/**
- * تاریخ ذخیره‌شدهٔ تولد → همیشه «۱۳۹۱/۰۷/۰۲» (شمسیِ نمایشی)
- * مقدار DB دو-قالبی است: رکوردهای قدیمی جلالی (seed) و جدید میلادی (خروجی picker/بات)
- * → میلادی ≥۱۷۰۰ به جلالی تبدیل می‌شود؛ جلالیِ ذخیره‌شده همان‌طور نمایش داده می‌شود (m131).
- */
 export function formatStoredJalaliNumeric(ymd) {
   if (!ymd) return '—';
   const s = String(ymd);
@@ -285,9 +225,6 @@ export function formatStoredJalaliNumeric(ymd) {
   return fa(s.replace(/-/g, '/'));
 }
 
-// ─────────────── پارس ورودی آزاد تاریخ جلالی (تقویم فرم‌ها) ───────────────
-
-/** تعداد روزهای یک ماه جلالی (با کبیسهٔ واقعی از خود الگوریتم jalaali) */
 export function jalaliMonthLength(jy, jm) {
   if (jm <= 6) return 31;
   if (jm <= 11) return 30;
@@ -296,12 +233,6 @@ export function jalaliMonthLength(jy, jm) {
   return back.jm === 12 && back.jd === 30 ? 30 : 29;
 }
 
-/**
- * پارس ورودی آزاد تاریخ جلالی → YMD میلادی، null = نامعتبر، '' = خالی
- * «۱۴۰۲/۵/۱۴» یا «1402-05-14» یا «۱۴۰۲.۵.۱۴» یا «۱۴۰۲ ۵ ۱۴» یا فشردهٔ ۸رقمی «۱۴۰۲۰۵۱۴»
- * با رقم فارسی/عربی/لاتین. اعتبارسنجی با گردش کامل جلالی→میلادی→جلالی —
- * روز نامعتبر (مثل ۳۰ اسفند سال غیرکبیسه) و ماه/سال خارج از بازه را می‌گیرد.
- */
 export function parseJalaliInput(raw) {
   const s = enDigits(String(raw ?? '')).trim();
   if (!s) return '';
@@ -325,7 +256,6 @@ export function parseJalaliInput(raw) {
   return `${g.gy}-${String(g.gm).padStart(2, '0')}-${String(g.gd).padStart(2, '0')}`;
 }
 
-/** YYYY-MM-DD → «شنبه ۱۴ مهر ۱۴۰۴» */
 export function formatJalaliFull(ymd) {
   if (!ymd) return '—';
   const [y, m, d] = ymd.split('-').map(Number);
@@ -333,7 +263,6 @@ export function formatJalaliFull(ymd) {
   return `${WEEKDAY_NAMES[iranianWeekdayOfYmd(ymd)]} ${fa(j.jd)} ${JALALI_MONTHS[j.jm - 1]} ${fa(j.jy)}`;
 }
 
-/** YYYY-MM-DD → «۱۴ مهر» */
 export function formatJalaliShort(ymd) {
   if (!ymd) return '—';
   const [y, m, d] = ymd.split('-').map(Number);
@@ -341,14 +270,12 @@ export function formatJalaliShort(ymd) {
   return `${fa(j.jd)} ${JALALI_MONTHS[j.jm - 1]}`;
 }
 
-/** ISO UTC → «شنبه ۱۴ مهر، ۰۸:۳۰» */
 export function formatJalaliDateTime(iso) {
   if (!iso) return '—';
   const ymd = tehranYmdOfIso(iso);
   return `${formatJalaliShort(ymd)}، ${fa(tehranTimeOfIso(iso))}`;
 }
 
-/** برچسب امروز/فردا/دیروز برای YMD تهران */
 export function relativeDayLabel(ymd) {
   const today = tehranTodayYmd();
   if (ymd === today) return 'امروز';
@@ -357,20 +284,15 @@ export function relativeDayLabel(ymd) {
   return null;
 }
 
-// ─────────────── دقیقه ↔ HH:MM ───────────────
-
-/** دقیقه از نیمه‌شب → برچسب «۰۸:۳۰» */
 export function minuteToLabel(minute) {
   return `${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}`;
 }
 
-/** برچسب «۰۸:۳۰» → دقیقه از نیمه‌شب */
 export function timeToMinute(hhmm) {
   const [h, m] = hhmm.split(':').map(Number);
   return h * 60 + m;
 }
 
-/** گزینه‌های شبکه ۱۵ دقیقه‌ای بین دو ساعت — ['06:00','06:15',…] */
 export function gridTimes(from = '06:00', to = '22:00') {
   const out = [];
   for (let m = timeToMinute(from); m <= timeToMinute(to); m += 15) {
@@ -379,7 +301,6 @@ export function gridTimes(from = '06:00', to = '22:00') {
   return out;
 }
 
-/** فاصله انسانی دو لحظه (دقیقه) → «۹۰ دقیقه» */
 export function durationLabel(minutes) {
   if (minutes < 60) return `${fa(minutes)} دقیقه`;
   const h = Math.floor(minutes / 60);
@@ -387,14 +308,12 @@ export function durationLabel(minutes) {
   return m === 0 ? `${fa(h)} ساعت` : `${fa(h)} ساعت و ${fa(m)} دقیقه`;
 }
 
-/** ساعت‌های هفتگی: «۲۳٫۵ ساعت» */
 export function weeklyHoursLabel(minutes) {
   const hours = minutes / 60;
   const text = Number.isInteger(hours) ? String(hours) : hours.toFixed(1).replace('.', '٫');
   return `${fa(text)} ساعت`;
 }
 
-/** — فقط http/https به‌عنوان href بیرونی امن است (دفاع دوم در برابر javascript:/data:) */
 export function safeExternalHref(url) {
   if (typeof url !== 'string') return null;
   const trimmed = url.trim();

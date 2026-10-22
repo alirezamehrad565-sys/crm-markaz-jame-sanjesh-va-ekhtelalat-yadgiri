@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — format-front
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// format-front.test.ts — تست هلپرهای نمایش زمان فرانت (format.js بدون DOM)
-// هدف: نمایش زمان نباید به TZ مرورگر وابسته باشد (یافتهٔ ثبت‌شدهٔ ).
 // format.js در public/assets/js است — عمداً خارج از تایپ‌چک TS؛ import با @ts-ignore.
 // @ts-ignore — فایل.js فرانت، خارج از include تایپ‌اسکریپت است
 import { enDigits, formatJalaliNumeric, formatStoredJalaliNumeric, jalaliMonthLength, parseJalaliInput, storedDateKind, toUtcIso, tehranTimeOfIso, tehranYmdOfIso } from '../../public/assets/js/format.js';
@@ -56,7 +50,6 @@ describe('tehranTimeOfIso با همهٔ قالب‌ها یکسان است', () =
   });
 
   test('مستقل از TZ محلی: محاسبه با آفست ثابت +03:30', () => {
-    // ۲۰:۳۰ UTC = ۲۴:۰۰ تهران → مرز روز
     expect(tehranTimeOfIso('2026-10-08T20:30:00.000Z')).toBe('00:00');
   });
 });
@@ -75,8 +68,6 @@ describe('tehranYmdOfIso با قالب‌های naive', () => {
     expect(tehranYmdOfIso('2026-10-08')).toBe('2026-10-08');
   });
 });
-
-// ─────────────── ویجت تاریخ: تایپ آزاد + رقم‌ها ───────────────
 
 describe('enDigits (نرمال‌سازی رقم کاربر)', () => {
   test('رقم فارسی → لاتین', () => {
@@ -149,8 +140,6 @@ describe('jalaliMonthLength (کبیسهٔ واقعی)', () => {
   });
 });
 
-// ─────────────── تولد دو-قالبی: تشخیص قالب + نمایش همیشه‌شمسی (m131) ───────────────
-
 describe('storedDateKind (تشخیص قالب تاریخ ذخیره‌شده)', () => {
   test('جلالی: سال ۱۲۰۰–۱۵۰۰ (رکوردهای قدیمی/seed)', () => {
     expect(storedDateKind('1391-07-02')).toBe('jalali');
@@ -182,7 +171,6 @@ describe('formatStoredJalaliNumeric (نمایش تولد — همیشه شمسی
   });
 
   test('هر دو قالبِ معادل یک خروجی یکسان می‌دهند', () => {
-    // ۱۳۹۱/۰۷/۰۲ جلالی = 2012-09-23 میلادی
     expect(formatStoredJalaliNumeric('1391-07-02')).toBe(formatStoredJalaliNumeric('2012-09-23'));
   });
 

@@ -1,11 +1,3 @@
-/**
- * بنر اعلان صفحه ورود
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// announcements.js — بنر اعلان‌های مدیر
-// صفحه ورود (endpoint عمومی) + پنل کارمندان (endpoint احرازشده) — ادغام بدون تکرار
-// بستن هر بنر تا پایان نشست در sessionStorage نگه داشته می‌شود.
-
 import { api } from './api.js';
 import { el, icon } from './ui.js';
 
@@ -30,19 +22,15 @@ export async function initAnnouncementBanners() {
   if (!mount) return;
 
   const items = new Map();
-  // نسخه عمومی — همیشه (حتی قبل از احراز هویت / صفحه ورود)
   try {
     const pub = await api.get('/public/announcements');
     for (const a of pub.data ?? []) items.set(a.id, a);
   } catch {
-    /* بی‌اهمیت */
   }
-  // نسخه پنل — فقط وقتی احراز هویت فعال است
   try {
     const panel = await api.get('/api/announcements');
     for (const a of panel.data ?? []) items.set(a.id, a);
   } catch {
-    /* 401 طبیعی است */
   }
 
   if (items.size === 0) {

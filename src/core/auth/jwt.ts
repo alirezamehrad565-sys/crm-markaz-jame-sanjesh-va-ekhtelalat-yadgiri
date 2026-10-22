@@ -1,10 +1,3 @@
-/**
- * احراز هویت هسته — JWT، رمز، کلید API و گارد نقش — تولید و اعتبارسنجی JWT
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Verify JWT با WebCrypto (Cloudflare Access) — قانون ۷: JWT حتماً verify شود
-// کلید عمومی تیم به مدت ۵ دقیقه cache می‌شود.
-
 export interface AccessJwtPayload {
   email: string;
   exp: number;
@@ -45,10 +38,6 @@ function base64UrlDecode(part: string): Uint8Array {
   return bytes;
 }
 
-/**
- * Verify امضای RS256 و exp یک Cloudflare Access JWT.
- * در صورت نامعتبر بودن، null برمی‌گرداند (به‌جای throw — تصمیم 401 با فراخواننده).
- */
 export async function verifyAccessToken(token: string, teamDomain: string): Promise<AccessJwtPayload | null> {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
@@ -90,7 +79,6 @@ export async function verifyAccessToken(token: string, teamDomain: string): Prom
   return payload;
 }
 
-/** تست‌ها/cache را ریست می‌کند (تنها برای محیط تست) */
 export function resetJwksCache(): void {
   jwksCache = null;
 }

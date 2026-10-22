@@ -1,79 +1,43 @@
-/**
- * نیم‌رخ وکسلر ۴ — کارت کامل + بخش تحلیل مودال رویداد
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// wechsler-profile.js — نمایش کامل نیم‌رخ وکسلر (m133 + توسعهٔ m134 + مسیر تودرتوی m135):
-// منبع داده یکی از دو است: gates.wechslerSummary (گیت‌های شناسایی؛ خروجی wechslerSummaryOf بک‌اند)
-// یا engine_output پارس‌شدهٔ رویداد وکسلر (مودال جزئیات).
-// هر دو مسیر به یک view نرمال تبدیل و با یک رندر مشترک (renderProfile) نمایش داده می‌شوند.
-// توسعهٔ m134 — وقتی بک‌اند «profile» کامل فرستد (قرارداد ۳۹-۱)، بخش‌های زیر اضافه می‌شود:
-//   نیم‌رخ شاخص‌ها (scaled/صدک/طبقه + قوی‌ترین/ضعیف‌ترین + گام ۵) · جدول ۱۵ خرده‌آزمون
-//   مقایسه‌های دوبه‌دو · مقایسه‌های خوشه‌ای (جفت‌ها) · پیوند با سایر اطلاعات (connections).
-// توسعهٔ m135 (بازسازی تب تفسیر بالینی) — renderProfile دو مسیر دارد:
-//   • مسیر مودال (پیش‌فرض؛ flat) — رفتار قبلی بدون تغییر برای case-events.js.
-//   • مسیر تودرتوی تب ({nested:true}) — شش <details class="clxacc clxacc--sub"> همیشه‌بسته
-//     (§4: نیم‌رخ شاخص‌ها / گام ۵ / جدول خرده‌آزمون با سقف ۱۰ سطر / دوبه‌دو / خوشه‌ای / حوزه‌های ضعیف و پرچم‌های روایی)
-//     + پانویس خط قرمز از STAGE2_META (تک‌منبع مشترک مسیر تب و مودال — CONTENT-SPEC یافتهٔ ۵).
-// «پیوند با سایر اطلاعات» (connectionsSection) از بدنهٔ وکسلر خارج شد — خروجی آن سمت
-// clinical-insights در مرحلهٔ ۵ (جمع‌بندی تشخیصی) رندر می‌شود (UX-SPEC §4).
-// T8 (m149) — صحنهٔ فرضیه‌های موتور حذف شد؛ m156 — خوانش مستقل روان‌سنجی نیم‌رخ (psychometrics)
-// جای آن را به‌عنوان نخستین بخش گرفت: فقط شواهد نیم‌رخ (FSIQ/شاخص‌ها/پراکندگی/گپ‌ها) — بدون فرضیه.
-// هر دو مسیر به یک view نرمال تبدیل و با یک رندر مشترک (renderProfile) نمایش داده می‌شوند. همهٔ بخش‌ها «دفاعی» رندر می‌شوند:
-// نبود داده = نبود بخش؛ بدون profile هم رندر چیپ‌محور دست‌نخورده کار می‌کند.
-
 import { el, icon } from './ui.js';
 import { fa } from './format.js';
 import { GATE_GLOSS, STAGE2_META } from './clinical-content.js'; // — «ثبت دستی» + پانویس خط قرمز یک‌بار در کل کد (رفع تکرار ۳۹-C + یافتهٔ ۵ CONTENT-SPEC)
 import { wechslerProfileChart } from './wechsler-chart.js'; // — نمودار نیم‌رخ (پنل شاخص‌ها + پنل خرده‌آزمون‌ها) — درخواست کاربر m157
 
-// ─────────────── نقشه‌های ثابت ───────────────
-
-/** نام فارسی حوزه‌های ضعیف موتور وکسلر — کلید ناشناخته → خود کلید */
 export const WEAKEST_FA = { language: 'زبان و بیان', knowledge: 'دانش و شناخت', working_memory: 'حافظهٔ فعال', attention: 'توجه و تمرکز', processing_speed: 'سرعت پردازش', visual_spatial: 'دیداری‌فضایی', fluid_reasoning: 'استدلال سیال', crystallized: 'دانش جابه‌جاشده', fine_motor: 'مهارت حرکتی ظریف', academic: 'مهارت‌های تحصیلی', executive: 'کارکردهای اجرایی', social: 'اجتماعی', adaptive: 'سازشی' };
 
-/** نام فارسی شاخص‌ها — همسان با INDEX_SPEC موتور؛ ورودی بک‌اند می‌تواند fa خودش را بفرستد */
 const WISC_INDEX_FA = { VCI: 'درک کلامی', PRI: 'استدلال ادراکی', WMI: 'حافظهٔ فعال', PSI: 'سرعت پردازش', FSIQ: 'مقیاس کامل' };
 
-/** نام فارسی ۱۵ خرده‌آزمون — همسان با SUBTESTS موتور (برای مسیر مودال که fa ندارد) */
 const WISC_SUBTEST_FA = {
   BD: 'طراحی مکعب‌ها', SI: 'تشابهات', DS: 'فراخنای ارقام', PCn: 'مفاهیم تصویری', CD: 'رمزگذاری',
   VC: 'واژگان', LN: 'توالی حرف-عدد', MR: 'استدلال ماتریسی', CO: 'درک مطلب', SS: 'جستجوی نماد',
   PCm: 'تکمیل تصاویر', CA: 'خط‌زنی', IN: 'اطلاعات', AR: 'حساب', WR: 'استدلال کلمه'
 };
 
-/** عدد یک‌رقمی اعشار — «۹٫۴» */
 function faFixed1(n) {
   const v = Number(n);
   if (!Number.isFinite(v)) return '—';
   return fa(v.toFixed(1)).replace('.', '٫');
 }
 
-/** سرتیتر کوچک بخش‌های داخل کارت — هم‌سبک clx-sub__title */
 function subTitle(ic, text) {
   return el('div', { class: 'clx-sub__title', style: { marginTop: 'var(--sp-3, 12px)' } }, icon(ic, 14), ' ', text);
 }
 
-/** برچسب سطح روایی گام ۵ — قوت/ضعف/بدون برچسب */
 const STEP5_BADGE = {
   'قوت': 'badge--success',
   'ضعف': 'badge--warning'
 };
 
-/** چیپ منبع تحلیل — موتور یا ثبت دستی (E10/E11 — تک‌منبع برای سربرگ تب و کارت مودال) */
 export function wechslerSourceBadge(engine) {
   return engine
     ? el('span', { class: 'badge badge--accent' }, 'موتور')
     : el('span', { class: 'badge badge--warning', title: GATE_GLOSS.wechsler.manualNote }, 'ثبت دستی');
 }
 
-// ─────────────── بخش‌های نیم‌رخ کامل (دفاعی — فقط با داده) ───────────────
-
-/** شمار سطرهای معتبر شاخص‌ها — برای بج شمارندهٔ آکاردئون تودرتوی ۳.۱ (m135 §4) */
 function indexRowCount(profile) {
   return (profile?.indices ?? []).filter((ix) => ix && (ix.scaled != null || ix.percentile != null)).length;
 }
 
-/** «نیم‌رخ شاخص‌ها» — سطر هر شاخص: scaled + صدک + طبقه؛ قوی‌ترین/ضعیف‌ترین هایلایت؛ GAI + میانگین‌های فرد (بدون گام ۵ — جداسازی m135 §4) */
 export function indexRowsSection(profile) {
   const rows = (profile.indices ?? []).filter((ix) => ix && (ix.scaled != null || ix.percentile != null));
   if (!rows.length) return null;
@@ -95,7 +59,6 @@ export function indexRowsSection(profile) {
     );
   });
 
-  // GAI با جزئیات (نمره + صدک + بازهٔ اطمینان) — فقط وقتی gaiMeta هست
   const gaiRow = profile.gaiMeta && profile.gaiMeta.scaled != null
     ? el('div', { class: 'clx-widx__row' },
         el('strong', { class: 'clx-widx__name' }, 'هوشبهر عملی بدون سرعت'),
@@ -105,7 +68,6 @@ export function indexRowsSection(profile) {
         profile.gaiMeta.ci95 ? el('span', { class: 'badge badge--neutral' }, `بازهٔ اطمینان ۹۵٪: ${profile.gaiMeta.ci95}`) : null)
     : null;
 
-  // خط میانگین‌های فرد — بستر تفسیر گام ۵
   const metaBits = [];
   if (profile.personalIndexMean != null && profile.personalIndexMean > 0) metaBits.push(`میانگین شاخص‌های فرد: ${faFixed1(profile.personalIndexMean)}`);
   if (profile.personalSubMean != null && profile.personalSubMean > 0) metaBits.push(`میانگین خرده‌آزمون‌ها: ${faFixed1(profile.personalSubMean)}`);
@@ -121,7 +83,6 @@ export function indexRowsSection(profile) {
   );
 }
 
-/** «قوت و ضعف فردی — گام ۵» — فاصلهٔ هر شاخص از میانگین شخصی (جداسازی m135 §4 — آکاردئون ۳.۲) */
 export function step5Section(profile) {
   const step5 = profile.step5 ?? [];
   if (!step5.length) return null;
@@ -143,7 +104,6 @@ export function step5Section(profile) {
     el('div', { class: 'clx-widx' }, ...step5Rows));
 }
 
-/** «جدول خرده‌آزمون‌ها» — ۱۵ سطر: نام | نمرهٔ مقیاس | قوت/ضعف | نقش (هسته/جانشین) */
 function subtestTableSection(profile) {
   const subs = profile.subtests ?? [];
   if (!subs.length) return null;
@@ -180,7 +140,6 @@ function subtestTableSection(profile) {
         el('tbody', {}, ...rows))));
 }
 
-/** همان جدول با سقف ۱۰ سطر + «{n} سطر دیگر…» (m135 §4 — فقط مسیر تودرتوی تب) */
 function subtestTableCapped(profile) {
   const node = subtestTableSection(profile);
   if (!node) return null;
@@ -194,7 +153,6 @@ function subtestTableCapped(profile) {
   return node;
 }
 
-/** «مقایسه‌های دوبه‌دو خرده‌آزمون‌ها» — اجراشده‌ها نمایان؛ side:'na' پشت تاشو */
 function comparisonsSection(profile) {
   const comps = profile.comparisons ?? [];
   if (!comps.length) return null;
@@ -220,7 +178,6 @@ function comparisonsSection(profile) {
       : null);
 }
 
-/** «مقایسه‌های خوشه‌ای» (جفت‌ها) — برنده + فاصله؛ تفسیر و پیشنهاد تاشو */
 function pairsSection(profile) {
   const pairs = profile.pairs ?? [];
   if (!pairs.length) return null;
@@ -241,7 +198,6 @@ function pairsSection(profile) {
     el('div', { class: 'clx-wpairs' }, ...items));
 }
 
-/** «پیوند با سایر اطلاعات» — خطوط ساخته‌شده در clinical-insights (فرمولاسیون + فرضیه‌ها) */
 export function connectionsSection(connections) {
   const list = Array.isArray(connections) ? connections.filter(Boolean) : [];
   return el('div', {},
@@ -251,9 +207,6 @@ export function connectionsSection(connections) {
       : el('div', { class: 'clx-wconn__empty' }, 'هنوز دادهٔ کافی برای پیوند نیم‌رخ با سایر ابزارها وجود ندارد.'));
 }
 
-// ─────────────── بلوک‌های مشترک هر دو مسیر رندر ───────────────
-
-/** ردیف چیپ‌های خلاصه — FSIQ/شاخص‌ها/پراکندگی/سن/بازهٔ پایش */
 function chipsRow(view) {
   const chips = [];
   if (view.fsiq != null) {
@@ -269,7 +222,6 @@ function chipsRow(view) {
     idxChip('PSI', view.psi),
     idxChip('GAI', view.gai)
   );
-  // K2 (CONTENT-SPEC): پراکندگی ماکس−مین ربطی به گیت GAI ندارد (موتور GAI را روی فاصلهٔ VCI−PRI می‌بندد)
   if (view.indexScatter != null && view.indexScatter > 0) {
     chips.push(el('span', { class: 'badge badge--warning', title: 'ماکس − مین شاخص‌ها؛ پراکندگی ≥۲۳ یعنی نیم‌رخ ناهمگن' }, `پراکندگی ${fa(view.indexScatter)}`));
   }
@@ -278,11 +230,6 @@ function chipsRow(view) {
   return chips.length ? el('div', { class: 'clx-chips' }, ...chips) : null;
 }
 
-/** «خوانش روان‌سنجی نیم‌رخ» — m156: خوانش مستقل نیم‌رخ هوشی؛ فقط شواهد (بدون فرضیه/سناریو/وزن).
- * ورودی: view.psychometrics — از gates.wechslerSummary یا engine_output رویداد.
- * m157 — نمودار نیم‌رخ از این بخش جدا شد (chartBlock): نمودار فقط به snapshot نیاز دارد و
- * رویدادهای قدیمیِ بدون psychometrics هم باید نمودار داشته باشند — خوانش متنی فقط با ps.
- */
 function psychometricsSection(view) {
   const ps = view.psychometrics ?? null;
   if (!ps) return null;
@@ -296,7 +243,6 @@ function psychometricsSection(view) {
     blocks.push(el('div', { style: { marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' } },
       ...ps.patterns.map((p) => el('div', { style: { fontSize: '12px', color: 'var(--ink-2, #555)' } }, icon('sparkles', 12), ' ', p.textFa))));
   }
-  // m159 — بلوک رویکرد پردازش اطلاعات: چهار مرحلهٔ پردازش با سطح هنجاری + وضعیت شخصی + دلالت آموزشی
   const LEVEL_BADGE = { 'قوت': 'badge--success', 'متوسط': 'badge--neutral', 'مرزی': 'badge--warning', 'ضعف': 'badge--error' };
   if ((ps.processing ?? []).length) {
     const rows = ps.processing.map((p) => el('div', {
@@ -310,7 +256,6 @@ function psychometricsSection(view) {
       el('div', { style: { fontWeight: 700, fontSize: '12px', marginBottom: '4px' } }, icon('activity', 13), ' رویکرد پردازش اطلاعات'),
       el('div', { style: { display: 'flex', flexDirection: 'column' } }, ...rows)));
   }
-  // m159 — جهت‌گیری توان/کارایی (گپ ≥۱۰) — جملهٔ کامل در راهنمای چیپ
   if (ps.abilityProficiency) {
     const ap = ps.abilityProficiency;
     blocks.push(el('div', { class: 'clx-chips', style: { marginTop: '6px' } },
@@ -321,7 +266,6 @@ function psychometricsSection(view) {
         ? `توان بالاتر از کارایی — گپ ${fa(Math.abs(ap.gap))} نمره`
         : `کارایی بالاتر از توان — گپ ${fa(Math.abs(ap.gap))} نمره`)));
   }
-  // m159 — پراکندگی درون‌شاخص (≥۵) — تفسیر واحد شاخص با احتیاط
   if ((ps.scatterWithin ?? []).length) {
     blocks.push(el('div', { class: 'clx-chips', style: { marginTop: '6px' } },
       ...ps.scatterWithin.map((s) => el('span', { class: 'badge badge--warning', title: s.textFa },
@@ -331,7 +275,6 @@ function psychometricsSection(view) {
   return el('div', {}, subTitle('brain', 'خوانش روان‌سنجی نیم‌رخ'), ...blocks);
 }
 
-/** بلوک حوزه‌های ضعیف */
 function weakBlock(view) {
   const weakChips = (view.weakDomains ?? []).map((d) =>
     el('span', { class: 'badge badge--warning' }, WEAKEST_FA[d] ?? d)
@@ -342,7 +285,6 @@ function weakBlock(view) {
     el('div', { class: 'clx-chips' }, ...weakChips));
 }
 
-/** بلوک پرچم‌های روایی */
 function flagsBlock(view) {
   const flags = (view.flagsFa ?? []).map((f) =>
     el('div', { style: { display: 'flex', gap: '6px', alignItems: 'flex-start', fontSize: '12px', color: 'var(--warn, #a06a00)', lineHeight: 1.8 } },
@@ -356,17 +298,10 @@ function flagsBlock(view) {
     el('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' } }, ...flags));
 }
 
-// ─────────────── مسیر تودرتوی تب (m135 §4 — شش آکاردئون همیشه‌بسته) ───────────────
-
-/** بج شمارندهٔ سربرگ‌های تودرتو — صفر یا نبود داده = بدون بج (R3: هرگز «۱۰ مقایسه» قطعی نمی‌گوییم) */
 function subCount(tpl, n) {
   return n > 0 && tpl ? tpl.replace('{n}', fa(n)) : null;
 }
 
-/**
- * آکاردئون تودرتوی وکسلر — همان آناتومی clxaccSection تب ولی بدون وضعیت/CTA/«در یک نگاه».
- * نسخهٔ محلی برای پرهیز از چرخهٔ import با clinical-insights (این ماژول زیرِ آن است).
- */
 function subAcc({ key, label, count, body }) {
   const nodes = (Array.isArray(body) ? body : [body]).filter(Boolean);
   if (!nodes.length) return null;
@@ -379,20 +314,11 @@ function subAcc({ key, label, count, body }) {
     el('div', { class: 'clxacc__body' }, ...nodes));
 }
 
-/**
- * بدنهٔ تودرتوی مرحلهٔ ۳ تب — چیپ‌ها + شش <details class="clxacc clxacc--sub"> (همه بسته) + پانویس خط قرمز.
- * «زمینهٔ تفسیر» (interpretationContext) سمت clinical-insights بالای همین نود می‌نشیند (§3.3 body order).
- * ثبت دستی (engine:false بدون profile) → آکاردئون‌های عددی ۳.۱–۳.۵ حذف؛ فقط ۳.۶ حوزه‌های ضعیف/پرچم‌ها (R2).
- * T8 (m149) — آکاردئون ۳.۶ دیگر فرضیه‌های موتور ندارد؛ فقط حوزه‌های ضعیف + پرچم‌های روایی.
- */
 function nestedProfileBody(view) {
   const p = view.profile ?? null;
   const S = STAGE2_META.sub;
 
   const subs = [];
-  // m156 — خوانش روان‌سنجی نیم‌رخ: نخستین آکاردئون؛ حتی برای رویدادهای قدیمیِ بدون profile
-  // m157 — نمودار نیم‌رخ بالای خوانش در همان آکاردئون؛ نمودار مستقل از psychometrics است
-  // (رویدادهای قدیمیِ بدون خوانش ذخیره‌شده هم نمودار دارند) — برچسب بر اساس محتوای موجود
   const chart = wechslerProfileChart(view);
   const psych = psychometricsSection(view);
   if (chart || psych) {
@@ -424,7 +350,6 @@ function nestedProfileBody(view) {
     if (prs) subs.push(subAcc({ key: 'pairs', label: S.pairs.label, count: subCount(S.pairs.count, (p.pairs ?? []).length), body: prs }));
   }
 
-  // ۳.۶ — حوزه‌های ضعیف + پرچم‌های روایی (با هر داده‌ای که هست) — T8/m149: فرضیه‌های موتور حذف شدند
   const weakBlk = weakBlock(view);
   const flagsBlk = flagsBlock(view);
   if (weakBlk || flagsBlk) {
@@ -438,23 +363,9 @@ function nestedProfileBody(view) {
     ...subs);
 }
 
-// ─────────────── رندر مشترک نیم‌رخ ───────────────
-
-/**
- * رندر کامل نیم‌رخ از view نرمال‌شده:
- * {fsiq, vci, pri, wmi, psi, gai, indexScatter, percentile, cls,
- *  weakDomains, flagsFa, monitoringInterval, ageLine, engine, profile}
- * T8 (m149) — mainName/mainLevel/hypotheses از view حذف شدند (صحنهٔ فرضیه‌ها برداشته شد).
- *
- * دو مسیر (m135):
- *  • پیش‌فرض flat — کارت کامل مودال (case-events.js)؛ رفتار m134 بدون تغییر.
- *  • {nested:true} — بدنهٔ تودرتوی تب (شش آکاردئون بسته؛ بدون سربرگ کارت).
- * «پیوند با سایر اطلاعات» از هر دو مسیر خارج شد — رندر آن در مرحلهٔ ۵ تب (clinical-insights).
- */
 function renderProfile(view, { nested = false } = {}) {
   if (nested) return nestedProfileBody(view);
 
-  // مسیر مودال (flat) — سربرگ کارت + چیپ منبع: موتور یا ثبت دستی
   const head = el('div', { class: 'card__head' },
     el('div', { class: 'card__title', style: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' } },
       icon('brain', 16),
@@ -463,7 +374,6 @@ function renderProfile(view, { nested = false } = {}) {
     )
   );
 
-  // بخش‌های نیم‌رخ کامل (m134) — هر کدام فقط با دادهٔ موجود
   const p = view.profile ?? null;
 
   return el('div', { class: 'card', style: { marginBottom: 'var(--sp-3, 14px)' } },
@@ -483,14 +393,6 @@ function renderProfile(view, { nested = false } = {}) {
   );
 }
 
-// ─────────────── export ۱ — بدنهٔ تب تفسیر بالینی (از گیت‌ها) ───────────────
-
-/**
- * نیم‌رخ وکسلر برای تب تفسیر بالینی — از gates.wechslerSummary.
- * summary.profile (قرارداد ۳۹-۱) اختیاری است: نبودش = رندر چیپ‌محور (T8/m149: بدون صحنهٔ فرضیه‌ها).
- * nested:true → مسیر تودرتوی تب (m135 §4)؛ پیش‌فرض flat برای سازگاری.
- * null خروجی یعنی «دادهٔ وکسلری معنادار نیست» → تب بدنهٔ حالت خالی می‌سازد.
- */
 export function wechslerProfileBlock({ summary, nested = false }) {
   if (!summary) return null;
   if (summary.fsiq == null && summary.percentile == null && !summary.profile) return null;
@@ -514,20 +416,11 @@ export function wechslerProfileBlock({ summary, nested = false }) {
   }, { nested });
 }
 
-// ─────────────── export ۲ — بخش مودال رویداد (از engine_output) ───────────────
-
-/**
- * بخش تحلیل نیم‌رخ وکسلر برای مودال جزئیات رویداد — ورودی: engine_output پارس‌شده.
- * snapshot موتور → همان view؛ بخش‌های نیم‌رخ کامل از snapshot ساخته می‌شوند
- * (snapshot پارس‌شدهٔ ذخیره‌شده: indices/subtests/s5rows/pairs/subStrong/subWeak/...).
- * مقایسه‌های دوبه‌دو در engine_output ذخیره نمی‌شوند (compact) → بخش دوبه‌دو در مودال نمی‌آید.
- */
 export function wechslerEventAnalysisSection(engineOutput) {
   const c = engineOutput;
   if (!c || !c.ok) return null;
   const snap = c.snapshot ?? {};
 
-  // snapshot.indices: {VCI:{scaled,percentile,ci,cls}, ...} → قرارداد profile.indices
   const indices = ['VCI', 'PRI', 'WMI', 'PSI', 'FSIQ']
     .map((k) => {
       const ix = snap.indices?.[k];

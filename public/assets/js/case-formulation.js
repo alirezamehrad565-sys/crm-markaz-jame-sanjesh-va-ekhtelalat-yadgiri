@@ -1,16 +1,3 @@
-/**
- * جمع‌بندی تشخیصی — تلفیق دو موتور در یک کارت
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// case-formulation.js — کارت «جمع‌بندی تشخیصی» (m134 — بازطراحی فلوی تفسیر بالینی)
-// پیش‌تر چهار کارت جدا (سازه‌ها/الگوها/پیوند وکسلر/گام بعدی) + دو فهرست پرچم جدا داشتیم؛
-// حالا خروجی موتور صورت‌بندی (GET /case-formulation) و موتور فرضیه‌ها (GET /clinical-insights)
-// در «یک» کارت ادغام می‌شود و جزئیات عددی پشت تاشوی «جزئیات موتور تشخیصی» می‌رود.
-// قرارداد: خروجی همیشه «الگو/شواهد» است — تشخیص رسمی فقط با متخصص؛ «هدف درمانی نهایی» فقط
-// با تصمیم درمانگر (ثبت نیاز ویژه یا مسیر مداخله) — همان خط قرمز پلن §۱.
-// نکتهٔ m134: narrative/otLink از payload بک‌اند حذف شده‌اند و این‌جا هم مصرف نمی‌شوند؛
-// «چه دیدیم» از insights.narrative (رشته یا {saw}) به‌عنوان خط پیش‌روی کدر کارت می‌آید.
-
 import { api } from './api.js';
 import { el, icon } from './ui.js';
 import { fa, formatJalaliFull, tehranTodayYmd } from './format.js';
@@ -60,7 +47,6 @@ function levelBar(level) {
   return el('span', { style: { display: 'inline-flex', alignItems: 'center', marginInlineStart: '6px' } }, segs);
 }
 
-/** حذف تکرار متنی — کلید: متن نرمال‌شده */
 function dedupeTexts(items) {
   const seen = new Set();
   const out = [];
@@ -75,7 +61,6 @@ function dedupeTexts(items) {
   return out;
 }
 
-/** سطر یک سازه — سطح + نوار + شواهد تاشو */
 function constructRow(c) {
   const elevated = c.level !== 'پایین';
   const evList = (c.evidenceFa ?? []).map((e) =>
@@ -102,7 +87,6 @@ function constructRow(c) {
   );
 }
 
-/** کارت الگو (هم‌بودی) — ردشده‌ها حذف */
 function patternCard(p) {
   if (!p || p.status === 'ruled_out') return null;
   const cls = p.status === 'active' ? 'badge--success' : p.status === 'candidate' ? 'badge--warning' : 'badge--neutral';
@@ -120,7 +104,6 @@ function patternCard(p) {
   );
 }
 
-/** خط پیش‌روی کارت — «چه دیدیم» (m156: فقط خط اول روایت — متن چندخطی در سربرگ کارت نمی‌ریزد) */
 function narrativeLead(insights) {
   const n = insights?.narrative;
   if (!n) return null;
@@ -131,7 +114,6 @@ function narrativeLead(insights) {
   return el('div', { class: 'clx-syn__lead' }, icon('message', 13), el('span', {}, text));
 }
 
-/** «توضیح اصلی» — صورت‌بندی + نزدیک‌ترین فرضیهٔ موتور در یک بلوک */
 function primaryBlock({ f, insights }) {
   const primary = f?.primaryProfile ?? null;
   const top = (insights?.ranked ?? [])[0] ?? null;
@@ -156,7 +138,6 @@ function primaryBlock({ f, insights }) {
   );
 }
 
-/** «پرچم‌های ارجاع» — تلفیق redFlags صورت‌بندی + referralFlags موتور (حذف تکرار) */
 function mergedFlagsBlock({ f, insights }) {
   const rich = (f?.redFlags ?? []).filter((r) => r && r.textFa);
   const plain = dedupeTexts([
@@ -174,7 +155,6 @@ function mergedFlagsBlock({ f, insights }) {
       ...plain.map((t) => el('div', { class: 'clx-flag' }, icon('alert', 15), el('span', {}, t)))));
 }
 
-/** «ناهم‌رأیی‌ها» — discrepancies موتور + conflictFa سازه‌ها (حذف تکرار) */
 function mergedConflictsBlock({ f, insights }) {
   const fromConstructs = (f?.constructs ?? []).flatMap((c) => c.conflictFa ?? []);
   const items = dedupeTexts([...(insights?.discrepancies ?? []), ...fromConstructs]);
@@ -184,7 +164,6 @@ function mergedConflictsBlock({ f, insights }) {
     el('ul', { class: 'clx-list' }, items.map((t) => el('li', {}, icon('clock', 14), el('span', {}, t)))));
 }
 
-/** «گام بعدی» — اقدام‌ها + پایش + پیشنهاد پروتکل (فقط نمایشی — قاب «پیشنهاد موتور») */
 function nextStepsBlock({ f, insights }) {
   const actions = (f?.nextActions ?? []).length ? f.nextActions : (insights?.nextActions ?? []);
   if (!actions.length && !f?.monitoring && !f?.protocolSuggestion) return null;
@@ -227,10 +206,6 @@ function nextStepsBlock({ f, insights }) {
     caps);
 }
 
-/**
- * fetch دادهٔ صورت‌بندی — جدا از رندر، تا clinical-insights یک‌بار بگیرد و هم به
- * wechslerConnections بدهد هم به synthesisSection (null-safe؛ خطا هرگز بالا نمی‌آید).
- */
 export async function fetchFormulation({ student }) {
   try {
     return (await api.get(`/api/students/${student.id}/case-formulation`)).data;
@@ -239,21 +214,12 @@ export async function fetchFormulation({ student }) {
   }
 }
 
-/**
- * کارت واحد «جمع‌بندی تشخیصی» — جایگزین ۴ کارت صورت‌بندی + بلوک‌های موازی موتور.
- * formulation: دادهٔ پیش‌گرفته (fetchFormulation) — اگر null بود همین‌جا یک‌بار fetch می‌شود.
- * engineDetails: گره‌های آمادهٔ clinical-insights (جدول DSM + فرضیه‌ها + نتایج + شواهد)
- * که پشت تاشوی «جزئیات موتور تشخیصی» می‌نشینند؛ خالی = تاشو حذف.
- * plan: پلن پیشنهادی چک‌لیست (T3) — بخش «گام‌های بعدی» برگهٔ بازخورد از آن می‌آید (T9/m152).
- * خروجی null یعنی «نمایش نده» — هرگز تب را نمی‌شکند.
- */
 export async function synthesisSection({ student, formulation = null, insights = {}, gates = null, canDecide = false, refresh, engineDetails = null, plan = null }) {
   const f = formulation ?? await fetchFormulation({ student });
 
   const top = (insights?.ranked ?? [])[0] ?? null;
   if (!f && !top && !(insights?.referralFlags ?? []).length) return null;
 
-  // سربرگ — انسجام شواهد + اطمینان + پوشش داده
   const coveragePercent = f?.dataCoverage?.percent ?? insights?.dataCoverage?.percent ?? null;
   const headBadges = [
     f?.coherence ? el('span', { class: `badge ${COHERENCE_BADGE[f.coherence] ?? 'badge--neutral'}` }, `شواهد: ${f.coherence}`) : null,
@@ -261,7 +227,6 @@ export async function synthesisSection({ student, formulation = null, insights =
     coveragePercent != null ? el('span', { class: 'badge badge--info' }, `پوشش داده: ${fa(coveragePercent)}٪`) : null
   ].filter(Boolean);
 
-  // سازه‌های برجسته — فقط غیرِ «پایین»
   const elevated = (f?.constructs ?? []).filter((c) => c && c.level !== 'پایین');
   const constructsBlock = elevated.length
     ? el('div', {},
@@ -269,7 +234,6 @@ export async function synthesisSection({ student, formulation = null, insights =
         el('div', { class: 'clx-syn__constructs' }, ...elevated.map(constructRow)))
     : null;
 
-  // الگوها — فعال‌ها (حداکثر ۴) جلو؛ نامزدها پشت تاشو
   const allPatterns = (f?.patterns ?? []).filter((p) => p && p.status !== 'ruled_out');
   const activePatterns = allPatterns.filter((p) => p.status === 'active').slice(0, 4);
   const candidatePatterns = allPatterns.filter((p) => p.status !== 'active');
@@ -284,7 +248,6 @@ export async function synthesisSection({ student, formulation = null, insights =
           : null)
     : null;
 
-  // تاشوی جزئیات موتور — محتوا از clinical-insights می‌آید (تک‌منبع؛ این‌جا فقط قاب)
   const detailNodes = Array.isArray(engineDetails) ? engineDetails.filter(Boolean) : [];
   const detailsBlock = detailNodes.length
     ? el('details', { class: 'clx-syn__engine' },
@@ -292,7 +255,6 @@ export async function synthesisSection({ student, formulation = null, insights =
         el('div', { class: 'clx-syn__enginedetail' }, ...detailNodes))
     : null;
 
-  // اقدام اصلی — دروازهٔ فاز مداخله (گیت ۵؛ پس از ثبت، دکمه حذف می‌شود)
   const needsDone = Boolean((gates?.gates ?? []).find((g) => g.key === 'needs')?.done);
   const needsBtn = canDecide && !needsDone
     ? el('button', {
@@ -301,9 +263,6 @@ export async function synthesisSection({ student, formulation = null, insights =
       }, icon('check', 15), 'ثبت نتیجهٔ نیاز ویژه')
     : null;
 
-  // — T9/m152: برگهٔ بازخورد خانواده — ترکیب والدپسند از همین داده‌ها (صفر GET تازه، بدون بک‌اند جدید)
-  //   فقط وقتی صورت‌بندی هست (کارت خودش گارد دارد)؛ متن موتور هرگز عیناً برای خانواده نمی‌رود —
-  //   composer بازنویسی ساده می‌کند و چاپ/کپی دارد (ارسال بله کار آینده است).
   const feedbackBtn = f
     ? el('button', {
         class: 'btn btn--soft btn--sm',

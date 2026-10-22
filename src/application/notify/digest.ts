@@ -1,35 +1,22 @@
-/**
- * اعلان‌های کاربردی و بات‌های نقش‌آگاه بله — خلاصهٔ روز بات
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// برنامه‌ریز pure «خلاصهٔ روز» و «یادآور پیگیری» بات اطلاع‌رسان
-// بدون دیتابیس/شبکه — گروه‌بندی و متن‌سازی؛ اجرا در service.ts (همان الگوی reminders.ts)
-
 import { faDigits, jalaliFullLabel, tehranYmdOf } from '@core/shared';
 import type { FollowUp } from '@core/shared';
 import { followUpGroupOf } from '@domain/followups';
 import type { FollowupListGroups, FollowupListItem } from '@core/notify';
 
-/** خلاصهٔ یک چرخهٔ «خلاصهٔ روز» — شمارش کامل برای لاگ/audit/API */
 export interface DigestSummary {
   dateYmd: string;
-  /** پرچم notify_digest از تنظیمات — در صورت خاموشی همهٔ شمارنده‌ها صفر است */
   flagEnabled: boolean;
   staffSent: number;
   familySent: number;
   classSent: number;
   followupNudges: number;
-  /** یادآور بازسنجی مسیرهای فعال (reassess_at ≤ ۷ روز) — فاز بهبود §۱۰.۳ */
   reassessNudges: number;
   enqueued: number;
   duplicates: number;
-  /** chatهایی که امروز برنامه‌ای نداشتند — پوش نمی‌گیرند (بدون اسپم) */
   skippedEmpty: number;
-  /** — پیام KPI هفتگی ناظرهای اداره (فقط شنبه‌ها؛ غیرشنبه ۰) */
   kpiSent: number;
 }
 
-/** آیتم پیگیری بات — از رکورد دامنه با برچسب جلالی مهلت */
 function toListItem(f: FollowUp): FollowupListItem {
   return {
     id: f.id,
@@ -38,10 +25,6 @@ function toListItem(f: FollowUp): FollowupListItem {
   };
 }
 
-/**
- * گروه‌بندی پیگیری‌های باز یک مسئول بر اساس مرزهای §13.4 (تهران) — pure.
- * رکوردهای بسته (done/cancelled) نادیده گرفته می‌شوند — ورودی از فهرست «open» می‌آید.
- */
 export function groupFollowUpsForBot(list: FollowUp[], now: Date): FollowupListGroups {
   const groups: FollowupListGroups = { overdue: [], today: [], week: [], future: [], open: [] };
   for (const f of list) {
@@ -52,10 +35,6 @@ export function groupFollowUpsForBot(list: FollowUp[], now: Date): FollowupListG
   return groups;
 }
 
-/**
- * بدنهٔ پوش «یادآور پیگیری» — خطوط شمارش + حداکثر ۸ آیتم اول (عقب‌افتاده → امروز) — pure.
- * خروجی برای vars.extra قالب followup_nudge.
- */
 export function followupsNudgeBody(list: FollowUp[], now: Date): {
   total: number;
   overdue: number;

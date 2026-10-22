@@ -1,10 +1,3 @@
-/**
- * نمای تنظیمات
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/settings.js — ماژول تنظیمات
-// تب‌ها: بازه کاری مرکز (ثابت) / بازه کاری کارکنان / اعلان‌ها و بات / امتیازبندی همکاران / کلیدها و اتصال‌ها
-
 import { api } from '../api.js';
 import { fa, enDigits, formatJalaliDateTime, JALALI_MONTHS, tehranTodayYmd, toJalali, parseJalaliInput, formatJalaliNumeric, formatJalaliFull } from '../format.js';
 import { el, icon, tabs, toast, toastError, formModal, confirmModal, loadingState, skeletonState, errorState, openModal, statusBadge, dataTable } from '../ui.js';
@@ -15,8 +8,6 @@ import { weeklyEditor, renderStaffHoursInto } from './working-hours.js';
 
 const local = { tab: 'center' };
 
-// — تب «کلیدها و اتصال‌ها» فعلاً از UI قطع است (کاربر دستی تنظیم می‌کند).
-// همگام با FEATURES.apiKeys سمت بک‌اند (src/core/shared/features.ts) — کد drawKeys سر جای خود است.
 const API_KEYS_UI_ENABLED = false;
 
 export async function renderSettings(container, ctx = {}) {
@@ -28,9 +19,7 @@ export async function renderSettings(container, ctx = {}) {
   if (local.tab === 'keys' && !API_KEYS_UI_ENABLED) local.tab = 'center';
   if (local.tab === 'announce' && session.user?.role !== 'manager') local.tab = 'center';
   if (local.tab === 'sanj' && session.user?.role !== 'manager') local.tab = 'center';
-  // — امتیازبندی همکاران: فقط مدیر (فرمول از غیرمدیر پنهان است — )
   if (local.tab === 'scoring' && session.user?.role !== 'manager') local.tab = 'center';
-  // — تب دانش‌افزایی: ابزار دفتر (مدیر/منشی)
   if (local.tab === 'knowledge' && !['manager', 'secretary'].includes(session.user?.role)) local.tab = 'center';
   const staffParam = params.get('staff') ?? '';
 
@@ -47,12 +36,9 @@ export async function renderSettings(container, ctx = {}) {
     { key: 'center', label: 'بازه کاری مرکز', icon: 'clock' },
     { key: 'staff', label: 'بازه کاری کارکنان', icon: 'users' },
     { key: 'notify', label: 'اعلان‌ها و بات', icon: 'bell' },
-    // — شاخص سنجش: هدفگذاری غربال برای داشبورد — فقط مدیر
     ...(isManager ? [{ key: 'sanj', label: 'شاخص سنجش', icon: 'dashboard' }] : []),
-    // — امتیازبندی همکاران: تاریخ شروع شمارش + وزن‌های فرمول — فقط مدیر
     ...(isManager ? [{ key: 'scoring', label: 'امتیازبندی همکاران', icon: 'trophy' }] : []),
     ...(isManager ? [{ key: 'announce', label: 'اعلان‌های مدیر', icon: 'zap' }] : []),
-    // — دانش‌افزایی: پایگاه دانش داخلی همکاران (مدیر/منشی)
     ...(['manager', 'secretary'].includes(session.user?.role) ? [{ key: 'knowledge', label: 'دانش‌افزایی', icon: 'file' }] : []),
     ...(API_KEYS_UI_ENABLED ? [{ key: 'keys', label: 'کلیدها و اتصال‌ها', icon: 'link' }] : [])
   ];
@@ -97,8 +83,6 @@ export async function renderSettings(container, ctx = {}) {
     body
   );
 }
-
-// ─────────────── تب ۱: بازه کاری مرکز ───────────────
 
 function drawCenter(body, settings) {
   let saveBtn = null;
@@ -164,14 +148,11 @@ function drawCenter(body, settings) {
   );
 }
 
-// ─────────────── + — تب: شاخص سنجش (هدفگذاری غربال — بازهٔ سفارشی و اهداف همزمان) ───────────────
-
 function currentJalaliYear() {
   const [gy, gm, gd] = tehranTodayYmd().split('-').map(Number);
   return toJalali(gy, gm, gd).jy;
 }
 
-/** — برچسب فارسی بازهٔ یک هدف — آینهٔ backend goalPeriodLabelOf */
 function sanjPeriodLabel(item) {
   let base;
   if (item.mode === 'custom' && item.from && item.to) {
@@ -186,7 +167,6 @@ function sanjPeriodLabel(item) {
 }
 
 function drawSanjGoal(body, settings) {
-  // کپی محلی برای ویرایش — تا ذخیره، settings اصلی دست‌نخورده می‌ماند
   const items = (settings.screeningTargets ?? []).map((t) =>
     t.from && t.to
       ? { mode: 'custom', year: Number(t.year), month: null, target: Number(t.target), title: t.title ?? '', from: t.from, to: t.to }
@@ -252,7 +232,6 @@ function drawSanjGoal(body, settings) {
         modeSelect.addEventListener('change', () => {
           item.mode = modeSelect.value;
           if (item.mode === 'custom' && !item.from) {
-            // پیش‌فرض معقول: از امروز تا پایان سال شمسی جاری
             item.from = tehranTodayYmd();
             const [gy, gm, gd] = item.from.split('-').map(Number);
             item.year = toJalali(gy, gm, gd).jy;
@@ -337,7 +316,6 @@ function drawSanjGoal(body, settings) {
   }
 
   async function save() {
-    // اعتبارسنجی سمت کاربر — پیام خطای صریح پیش از رفتن به سرور
     const seen = new Set();
     for (const [i, t] of items.entries()) {
       let year = Number(t.year);
@@ -417,8 +395,6 @@ function drawSanjGoal(body, settings) {
   drawRows();
 }
 
-// ─────────────── تب ۳: اعلان‌ها و بات ───────────────
-
 function drawNotify(body, settings) {
   const botStatus = el('div', { class: 'bot-status' },
     icon('bot', 22),
@@ -431,7 +407,6 @@ function drawNotify(body, settings) {
       'دستورهای بات: «نوبت‌های من» · «پیگیری‌های من» · «حضور فرزند» · «وضعیت مرکز» · /today · /week · /link CODE · /myid')
   );
 
-  // — لینک احراز خودکار: نمایش نام کاربری بات + دکمهٔ تشخیص خودکار (getMe)
   const botUserRow = el('div', { class: 'info-list__row' },
     el('span', { class: 'info-list__key' }, 'نام کاربری بات (لینک احراز خودکار)'),
     el('span', { class: 'info-list__val', style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
@@ -532,8 +507,6 @@ function openNotifyForm(settings) {
     }
   });
 }
-
-// ─────────────── تب ۴: کلیدها و اتصال‌ها ───────────────
 
 function drawKeys(body, settings) {
   const listBox = el('div', {});
@@ -690,9 +663,6 @@ function showTokenOnce(created) {
   });
 }
 
-// ─────────────── تب: امتیازبندی همکاران (تاریخ شروع شمارش + وزن‌های فرمول — فقط مدیر) ───────────────
-
-/** گروه‌های فرم وزن — ترتیب با فرمول موتور امتیاز (worker/scoring.js) یکی است */
 const SCORING_WEIGHT_GROUPS = [
   {
     title: 'تولید محتوا',
@@ -728,7 +698,6 @@ const SCORING_WEIGHT_GROUPS = [
   }
 ];
 
-/** — فرم پیکربندی امتیازدهی — خواندن از /api/settings/scoring (فقط مدیر) */
 async function drawScoringConfig(body) {
   body.replaceChildren(loadingState('در حال خواندن پیکربندی امتیازبندی…'));
   let cfg;
@@ -742,7 +711,6 @@ async function drawScoringConfig(body) {
   let saveBtn;
   const weightInputs = {};
 
-  // ── تاریخ شروع شمارش (جلالی — مثل شاخص سنجش) ──
   const epochInput = el('input', {
     class: 'input', type: 'text', dir: 'ltr', value: formatJalaliNumeric(cfg.epochYmd),
     placeholder: '۱۴۰۵/۰۷/۲۳', 'aria-label': 'تاریخ شروع شمارش امتیاز (شمسی)', style: { maxWidth: '160px' }
@@ -763,7 +731,6 @@ async function drawScoringConfig(body) {
     epochHint
   );
 
-  // ── وزن‌های فرمول ──
   const groupCards = SCORING_WEIGHT_GROUPS.map((group) =>
     el('div', { class: 'scw-group' },
       el('div', { class: 'scw-group__title' }, group.title),
@@ -807,13 +774,11 @@ async function drawScoringConfig(body) {
   }, icon('check', 16), 'ذخیرهٔ امتیازبندی');
 
   async function save() {
-    // اعتبارسنجی تاریخ شروع (جلالی → میلادی روز تهران)
     const epochYmd = parseJalaliInput(epochInput.value);
     if (!epochYmd) {
       toast('تاریخ شروع شمارش را کامل و معتبر وارد کنید (مثلاً ۱۴۰۵/۰۷/۲۳)', 'error');
       return;
     }
-    // اعتبارسنجی وزن‌ها — عدد صحیح نامنفی
     const weights = {};
     for (const group of SCORING_WEIGHT_GROUPS) {
       for (const item of group.items) {

@@ -1,15 +1,3 @@
-/**
- * تست‌های e2e — -therapist-permissions
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e--therapist-permissions.test.ts — گسترش دسترسی درمانگر
-// دستور کاربر:
-// ۱) «درمانگر اجازه داشته باشه برای جلسات خودش این حضور غیاب رو انجام بده»
-// → mark روی جلسهٔ خودش ۲۰۰ / جلسهٔ همکار ۴۰۳ + صف pending همیشه خودِ او
-// ۲) «دسترسی ماژول رویداد ساز رو بهش بدم» → در e2e- پوشش داده شد (۲۰۱ برای درمانگر)
-// ۳) «دانش آموز فعال برای خودش تعریف کنه» → POST /api/students با مسئول اجباری خودش
-// ۴) «لیست انتظار فقط اضافه» → POST ۲۰۱ ولی PATCH/حذف/نوبت‌دهی ۴۰۳
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -38,7 +26,6 @@ describe('دسترسی‌های تازهٔ درمانگر', () => {
   });
 
   it('حضور و غیاب: درمانگر روی جلسهٔ خودش ۲۰۰ می‌گیرد', async () => {
-    // intake طبق قاعدهٔ D4 از دفتر: منشی نوبت اول را برای علی ثبت می‌کند
     const student = await createStudent(secretary);
     const made = await secretary.post('/api/appointments', apptBody(ALI_ID, tehranTodayAt(10), 45, [student.id]));
     expect(made.status).toBe(201);
@@ -50,22 +37,17 @@ describe('دسترسی‌های تازهٔ درمانگر', () => {
 
   it('حضور و غیاب: درمانگر روی جلسهٔ همکار ۴۰۳ می‌گیرد (مالکیت)', async () => {
     const student = await createStudent(secretary);
-    // نوبتِ مریم (intake از دفتر) — علی نباید بتواند حاضر-غیاب کند
     const made = await secretary.post('/api/appointments', apptBody(MARYAM_ID, tehranTodayAt(11), 45, [student.id]));
     expect(made.status).toBe(201);
     const apptId = (made.body as { data: { id: string } }).data.id;
 
     const forbidden = await ali.patch(`/api/attendance/${apptId}/${student.id}`, { status: 'present' });
     expect(forbidden.status).toBe(403);
-    // دفتر (مدیر) روی همان نوبت آزاد است
     const office = await manager.patch(`/api/attendance/${apptId}/${student.id}`, { status: 'absent' });
     expect(office.status).toBe(200);
   });
 
   it('صف حضور معوق درمانگر همیشه فقط جلسات خودش است (پارامتر staff_id نادیده)', async () => {
-    // دو نوبت گذشته از دفتر — یکی برای علی، یکی برای مریم — بدون ثبت حضور
-    // رفع flaky: قبلاً «امروز ساعت ۷ منهای ۲ ساعت» بود که در ساعات شبانهروز
-    // (بامداد تا ۹ صبح تهران) هنوز آینده بود و صف خالی برمی‌گشت؛ حالا لنگر دیروز است.
     const ymdYesterday = new Date(Date.now() + 210 * 60_000 - 24 * 3600_000).toISOString().slice(0, 10);
     const pastAli = new Date(Date.parse(`${ymdYesterday}T10:00:00.000Z`) - 210 * 60_000).toISOString();
     const pastMaryam = new Date(Date.parse(`${ymdYesterday}T11:00:00.000Z`) - 210 * 60_000).toISOString();
@@ -126,14 +108,12 @@ describe('دسترسی‌های تازهٔ درمانگر', () => {
     expect((await ali.post(`/api/waitlist/reorder`, { ids: [id] })).status).toBe(403);
     expect((await ali.delete(`/api/waitlist/${id}`)).status).toBe(403);
 
-    // منشی همان کارها را می‌تواند
     expect((await secretary.patch(`/api/waitlist/${id}`, { first_name: 'اصلاح دفتر' })).status).toBe(200);
   });
 
   it('آمار حضور درمانگر فقط جلسات خودش (stats scope)', async () => {
     const res = await ali.get('/api/attendance/stats?staff_id=nothing');
     expect(res.status).toBe(200);
-    // فقط نباید ۴۰۰/۴۰۳ بخورد — scope اجباری خودش پاس شده
     const stats = (res.body as { data: { present: number; absent: number } }).data;
     expect(typeof stats.present).toBe('number');
   });

@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — pure
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست pure توابع بورد روز کاری
-
 import { describe, expect, it } from 'vitest';
 import {
   groupAppointmentsByStaff,

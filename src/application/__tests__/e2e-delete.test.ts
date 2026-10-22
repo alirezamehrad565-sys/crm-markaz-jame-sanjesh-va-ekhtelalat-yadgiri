@@ -1,16 +1,3 @@
-/**
- * تست‌های e2e — -delete
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e--delete.test.ts — (0.49.1): «هر چیزی که ثبت می‌شود اشتباه هم ثبت می‌شود — باید قابل پاک‌کردن باشد»
-// پوشش:
-// ۱) نوبت — حذف کامل ثبت اشتباه/تکراری (نه لغو): scope نقش‌ها، گارد سابقهٔ جلسه/گزارش جلسه (409)،
-// بازگشت خودکار ورودی لیست انتظار متصل به صف، حذف نوبتِ لغوشده
-// ۲) لیست انتظار — DELETE موجود (UI ) — رفتار سرور
-// ۳) مدارس/کلاس‌ها — حذف خالی OK؛ ارجاع‌دار → 409؛ فقط مدیر
-// ۴) همکار — حذف تازه‌ساخت OK؛ سابقه‌دار → 409؛ خودِ بازیگر/آخرین مدیر → خطا؛ فقط مدیر
-// ۵) دانش‌آموز — حذف بدون سابقه OK (رفع قفل UNIQUE کد ملی)؛ سابقه‌دار → 409؛ فقط دفتر
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -60,7 +47,6 @@ describe('حذف کامل نوبت (ثبت اشتباه/تکراری)', () => {
     const created = await mgr.post('/api/appointments', apptBody(MARYAM_ID, quarterHourFromNow(240), 45, [st.id]));
     const appt = (created.body as { data: ApptJson }).data;
 
-    // حضور واقعی جلسه — از مسیر رسمی attendance (همان که «آمد» کارت نوبت صدا می‌زند)
     const marked = await mgr.patch(`/api/attendance/${appt.id}/${st.id}`, { status: 'present' });
     expect(marked.status).toBe(200);
 
@@ -144,7 +130,6 @@ describe('حذف کامل نوبت (ثبت اشتباه/تکراری)', () => {
     });
     expect(sched.status).toBe(201);
 
-    // مسیر واقعی کاربر: نیامد روی scheduled → بازگشت به صف
     const noShow = await mgr.post(`/api/waitlist/${eid}/no-show`, {});
     expect(noShow.status).toBe(200);
     const afterNoShow = (noShow.body as { data: { status: string; scheduledAppointmentId: string | null } }).data;
@@ -176,7 +161,6 @@ describe('حذف کامل نوبت (ثبت اشتباه/تکراری)', () => {
     expect(sched.status).toBe(201);
     const apptId = (sched.body as { data: { appointment: { id: string } } }).data.appointment.id;
 
-    // شبیه‌سازی دادهٔ کهنهٔ پیش از مایگریشن 0033: وضعیت waiting ولی ارجاع FK باقی مانده
     A.sql.prepare(`UPDATE waitlist SET status = 'waiting' WHERE id = ?`).run(eid);
 
     const del = await mgr.delete(`/api/appointments/${apptId}`);
@@ -192,7 +176,6 @@ describe('حذف کامل نوبت (ثبت اشتباه/تکراری)', () => {
   it('درمانگر نوبت خودش را حذف می‌کند — ۲۰۴؛ نوبت همکار → ۴۰۳', async () => {
     const ther = await asRole(A, 'therapist');
 
-    // D4 — نوبت اول (intake) با منشی تا دانش‌آموز «دانش‌آموزِ علی» شود
     const st = await createStudent(mgr);
     const intake = await mgr.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(240), 45, [st.id]));
     expect(intake.status).toBe(201);
@@ -270,7 +253,6 @@ describe('حذف مدرسه و کلاس', () => {
     const back = await mgr.get(`/api/schools/${emptyId}`);
     expect(back.status).toBe(404);
 
-    // مدرسهٔ seed با دانش‌آموز → 409
     const delBusy = await mgr.delete(`/api/schools/${SCHOOL1_ID}`);
     expect(delBusy.status).toBe(409);
   });
@@ -283,11 +265,9 @@ describe('حذف مدرسه و کلاس', () => {
     expect(cls.status).toBe(201);
     const clsId = (cls.body as { data: { id: string } }).data.id;
 
-    // کلاس خالی → حذف OK
     const del = await mgr.delete(`/api/classes/${clsId}`);
     expect(del.status).toBe(204);
 
-    // کلاس با دانش‌آموز → 409
     const cls2 = await mgr.post('/api/classes', { school_id: schoolId, name: 'کلاس پر' });
     const cls2Id = (cls2.body as { data: { id: string } }).data.id;
     const st = await createStudent(mgr, { school_id: schoolId, class_id: cls2Id });
@@ -339,7 +319,6 @@ describe('حذف همکار', () => {
   });
 
   it('همکار سابقه‌دار (نوبت دارد) → ۴۰۹ با راهنمای غیرفعال‌سازی', async () => {
-    // یک نوبت واقعی برای ALI بساز (با دانش‌آموز — حداقل یک لازم است) → ALI ارجاع دارد
     const st = await createStudent(mgr);
     const appt = await mgr.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(240), 45, [st.id]));
     expect(appt.status).toBe(201);
@@ -357,12 +336,10 @@ describe('حذف همکار', () => {
     const staff = await createStaff('secretary', 'x1');
     const del = await ther.delete(`/api/staff/${staff.id}`);
     expect(del.status).toBe(403);
-    // پاک‌سازی
     await mgr.delete(`/api/staff/${staff.id}`);
   });
 
   it('مدیر دوم قابل حذف است (آخرین مدیر نیست) — ولی آخرین مدیر فعال حذف نمی‌شود', async () => {
-    // دو مدیر داریم → یکی (غیر بازیگر) قابل حذف
     const m2 = await createStaff('manager', 'm2');
     const delM2 = await mgr.delete(`/api/staff/${m2.id}`);
     expect(delM2.status).toBe(204);
@@ -387,7 +364,6 @@ describe('حذف پروندهٔ دانش‌آموز', () => {
     const back = await sec.get(`/api/students/${st.id}`);
     expect(back.status).toBe(404);
 
-    // رفع قفل UNIQUE کد ملی — ثبت مجدد با همان کد ملی OK
     const again = await sec.post('/api/students', {
       national_id: nid,
       first_name: 'ثبت مجدد',

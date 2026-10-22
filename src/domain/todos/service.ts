@@ -1,17 +1,3 @@
-/**
- * ماژول کارهای داخلی — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Business logic کارهای داخلی (فاز ۴) — مالک WRITE جدول todos
-// قواعد §9 (+):
-// - گیرنده فقط manager/secretary — و از کارِ شخصی (گیرنده = خودِ بازیگر) مجاز است
-// - ویرایش/حذف نرم فقط توسط ثبت‌کننده (assigner)؛ تکمیل فقط توسط مسئول (assignee)
-// - چک‌لیست: افزودن/تغییر مورد توسط ثبت‌کننده یا مسئول؛ تکمیل خودکار کار رخ نمی‌دهد
-// - audit هم‌تراکنش (قانون ۴) — title در audit مجاز است (دادهٔ PII نیست؛ §9/§13 هم‌ارز)
-// - حذف فقط نرم (deleted_at — §28)؛ کارِ حذف‌شده از همهٔ فهرست‌ها و UPDATEها خارج است (404)
-// - اعلان todo_assigned پس از commit با ناظر تزریقی — خطای آن عملیات را fail نمی‌کند؛
-// برای کارِ شخصی (گیرنده = ثبت‌کننده) اعلان حذف می‌شود (اعلان به خودی بی‌معناست)
-
 import type { AuthContext, Todo, TodoChecklistItem, TodoStatus } from '@core/shared';
 import { ValidationError, ForbiddenError, NotFoundError, ConflictError } from '@core/errors';
 import { TODO_CHECKLIST_MAX } from '@core/shared';
@@ -48,7 +34,6 @@ interface TodoRow {
   updated_at: string;
 }
 
-/** — تجزیهٔ امن JSON چک‌لیست؛ شکل خراب → null (هرگز throw نمی‌کند) */
 function parseChecklist(raw: string | null): TodoChecklistItem[] | null {
   if (!raw) return null;
   try {
@@ -96,10 +81,6 @@ const SELECT_BASE = `
     LEFT JOIN staff sa ON sa.id = t.assigner_id
     LEFT JOIN staff se ON se.id = t.assignee_id`;
 
-/**
- * نرمال‌سازی مهلت: تاریخ خالی (YYYY-MM-DD) = پایانِ همان روزِ تهران تا «مهلت روز»
- * معنا پیدا کند؛ ISO کامل عیناً نرمال می‌شود؛ null = حذف مهلت.
- */
 function normalizeDueAt(value: string | null | undefined): string | null {
   if (value === null) return null;
   if (value === undefined || value === '') return null;
@@ -109,9 +90,6 @@ function normalizeDueAt(value: string | null | undefined): string | null {
   return new Date(ms).toISOString();
 }
 
-// ── نرمال‌سازی چک‌لیست (سرویس مالک داده؛ دفاع در عمق روی خروجی Zod) ──
-
-/** متن‌های خام → JSON ذخیره‌سازی (همه done=false)؛ خالی/تعریف‌نشده → null */
 function m108NormalizeChecklistTexts(texts: string[] | undefined): string | null {
   if (!texts || texts.length === 0) return null;
   const seen = new Set<string>();
@@ -126,7 +104,6 @@ function m108NormalizeChecklistTexts(texts: string[] | undefined): string | null
   return items.length > 0 ? JSON.stringify(items) : null;
 }
 
-/** شکل کامل {text, done} → JSON ذخیره‌سازی؛ null/خالی → null (حذف چک‌لیست) */
 function m108NormalizeChecklistItems(items: TodoChecklistItem[] | null | undefined): string | null {
   if (!items || items.length === 0) return null;
   const seen = new Set<string>();
@@ -147,19 +124,12 @@ export function createTodosService(deps: TodoDeps): TodosService {
 
   let notifier: TodoAssignedNotifier | null = null;
 
-  /** رکورد فعال (حذف‌نشده) — کارِ حذف‌شده 404 است، انگار وجود ندارد */
   async function loadActiveRow(tx: Pick<DbClient, 'queryOne'>, id: string): Promise<TodoRow> {
     const row = await tx.queryOne<TodoRow>(`${SELECT_BASE} WHERE t.id = ? AND t.deleted_at IS NULL`, [id]);
     if (!row) throw new NotFoundError('کار');
     return row;
   }
 
-  /**
-   * اعتبارسنجی گیرنده — قاعدهٔ جفت secretary↔manager (§9)
-   * — کارِ شخصی (گیرنده = خودِ بازیگر) مجاز است؛ فقط باید privileged باشد
-   * (کل ماژول manager/secretary است — بازیگر همیشه privileged است؛ برای قرارداد
-   * آینده نقش گیرندهٔ غیرخودی هم همین‌جا چک می‌شود).
-   */
   async function assertValidAssignee(tx: Pick<DbClient, 'queryOne'>, assigneeId: string, actor: AuthContext): Promise<void> {
     if (assigneeId === actor.staffId) return; // — کار شخصی
     const row = await tx.queryOne<{ id: string; role: string; active: number }>(
@@ -175,7 +145,6 @@ export function createTodosService(deps: TodoDeps): TodosService {
 
   const service: TodosService = {
     async list(filters: TodoListFilters, actor: AuthContext): Promise<TodoListResult> {
-      // نقش خواندن: کل ماژول manager/secretary است (routes هم requireRole دارد) — گارد محافظتی
       if (actor.role !== 'manager' && actor.role !== 'secretary') {
         throw new ForbiddenError('کارهای داخلی فقط بین منشی و مدیر رد و بدل می‌شود');
       }
@@ -190,7 +159,6 @@ export function createTodosService(deps: TodoDeps): TodosService {
           LIMIT 200`,
         [actor.staffId]
       );
-      // badge فقط برای inbox معنا دارد؛ outbox هم همان ساختار را با صفرها برمی‌گرداند
       const badge =
         filters.box === 'inbox'
           ? computeBadge(rows.map((r) => ({ status: r.status as TodoStatus, priority: r.priority, dueAt: r.due_at })))
@@ -203,7 +171,6 @@ export function createTodosService(deps: TodoDeps): TodosService {
       if (title.length < 2) throw new ValidationError('عنوان کار حداقل ۲ نویسه است');
       const dueAt = normalizeDueAt(input.dueAt);
       const priority = input.priority ?? 'normal';
-      // موارد اولیهٔ چک‌لیست: نرمال‌سازی متن؛ همهٔ done=false؛ سقف ۲۰
       const checklistRaw = m108NormalizeChecklistTexts(input.checklist);
 
       const id = crypto.randomUUID();
@@ -230,8 +197,6 @@ export function createTodosService(deps: TodoDeps): TodosService {
       });
       log.info('todo.created', { id, personal: input.assigneeId === actor.staffId });
 
-      // اعلان بعد از commit — خطای ناظر هرگز عملیات اصلی را fail نمی‌کند
-      // کارِ شخصی (گیرنده = ثبت‌کننده) اعلان نمی‌گیرد
       if (input.assigneeId === actor.staffId) {
         const created = (await service.list({ box: 'outbox' }, actor)).data.find((t) => t.id === id);
         if (!created) throw new NotFoundError('کار');
@@ -253,7 +218,6 @@ export function createTodosService(deps: TodoDeps): TodosService {
       await db.transaction(async (tx) => {
         const row = await loadActiveRow(tx, id);
 
-        // RBAC: ویرایش/حذف فقط توسط ثبت‌کننده (assigner)
         if (row.assigner_id !== actor.staffId) {
           throw new ForbiddenError('ویرایش کار فقط توسط ثبت‌کنندهٔ آن مجاز است');
         }
@@ -263,7 +227,6 @@ export function createTodosService(deps: TodoDeps): TodosService {
         const params: unknown[] = [];
 
         if (patch.deleted === true) {
-          // حذف نرم — روی کارِ انجام‌شده هم مجاز (خانه‌تکانی)؛ §28
           sets.push(`deleted_at = ?`);
           params.push(new Date().toISOString());
           changes.deleted_at = { from: null, to: 'set' };
@@ -298,8 +261,6 @@ export function createTodosService(deps: TodoDeps): TodosService {
             changes.priority = { from: row.priority, to: patch.priority };
           }
           if (patch.checklist !== undefined) {
-            // جایگزینی کامل چک‌لیست؛ null = حذف؛ شکل نهایی از Zod می‌آید ولی
-            // سقف/شکل را دوباره نرمال می‌کنیم (دفاع در عمق — سرویس مالک داده است)
             const nextRaw = m108NormalizeChecklistItems(patch.checklist);
             const currentRaw = row.checklist;
             if (nextRaw !== currentRaw) {
@@ -327,7 +288,6 @@ export function createTodosService(deps: TodoDeps): TodosService {
           changes
         });
       });
-      // read-back بعد از commit — برای حذف نرم هم پاسخ همان رکورد (با deleted_at) برمی‌گردد
       const updated = await db.queryOne<TodoRow>(`${SELECT_BASE} WHERE t.id = ?`, [id]);
       if (!updated) throw new NotFoundError('کار');
       return rowToTodo(updated);
@@ -337,7 +297,6 @@ export function createTodosService(deps: TodoDeps): TodosService {
       await db.transaction(async (tx) => {
         const row = await loadActiveRow(tx, id);
 
-        // RBAC: تکمیل فقط توسط مسئول انجام (assignee) — ثبت‌کننده هم 403 است
         if (row.assignee_id !== actor.staffId) {
           throw new ForbiddenError('انجام کار فقط توسط مسئول همان کار ثبت می‌شود');
         }
@@ -368,8 +327,6 @@ export function createTodosService(deps: TodoDeps): TodosService {
       if (!updated) throw new NotFoundError('کار');
       return rowToTodo(updated);
     },
-
-    // ── چک‌لیست کار (ثبت‌کننده یا مسئول؛ فقط کارِ باز) ──
 
     async addChecklistItem(id: string, text: string, actor: AuthContext): Promise<Todo> {
       const clean = text.trim();

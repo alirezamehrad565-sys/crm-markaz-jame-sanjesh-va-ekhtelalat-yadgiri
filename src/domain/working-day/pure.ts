@@ -1,9 +1,3 @@
-/**
- * ماژول بورد روز کاری — توابع خالص منطق محض (بدون I/O)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// + فاز ۱ — توابع pure بورد «مدیریت روز کاری» — بدون I/O و قابل تست
-
 import type {
   AppointmentOpsStatus,
   AppointmentStatus,
@@ -14,11 +8,6 @@ import type {
 } from '@core/shared';
 import { OPS_QUEUE_WINDOW_MINUTES, OPS_TERMINAL_STATUSES } from '@core/shared';
 
-/**
- * گروه‌بندی نوبت‌ها بر اساس ستون همکارها.
- * نوبت‌های همکارِ حاضر در ستون‌ها → byStaff؛ بقیه → unassigned (بی‌صاحب).
- * ترتیب داخل هر ستون: زمان شروع (صعودی) — ورودی باید مرتب باشد یا اینجا مرتب می‌شود.
- */
 export function groupAppointmentsByStaff<T extends { staffId: string; startAt: string }>(
   appointments: T[],
   knownStaffIds: ReadonlySet<string>
@@ -42,11 +31,6 @@ export function groupAppointmentsByStaff<T extends { staffId: string; startAt: s
   return { byStaff, unassigned };
 }
 
-/**
- * آمار حضور جلسات روز — از نوبت‌های بورد.
- * total = تعداد کل دانش‌آموزِ نوبت‌های scheduled (بدون لغوشده)
- * cancelledAppointments = تعداد نوبت‌های لغوشده (دانش‌آموزانشان شمرده نمی‌شود)
- */
 export function sessionStatsFromAppointments(appointments: readonly WorkingDayAppointment[]): WorkingDaySessionStats {
   let present = 0;
   let absent = 0;
@@ -69,7 +53,6 @@ export function sessionStatsFromAppointments(appointments: readonly WorkingDayAp
   return { total, present, absent, pending, cancelledAppointments };
 }
 
-/** نرمال‌سازی متن توضیحات روز — فشرده‌سازی فاصله‌ها و خطوط خالی تکراری */
 export function normalizeDayNoteBody(raw: string): string {
   return raw
     .replace(/\r\n/g, '\n')
@@ -80,22 +63,15 @@ export function normalizeDayNoteBody(raw: string): string {
     .trim();
 }
 
-// ───────────── فاز ۱ — نوار وضعیت عملیاتی (§7.1) ─────────────
-
 interface OpsSourceRow {
   status: AppointmentStatus;
   opsStatus?: AppointmentOpsStatus | null;
 }
 
-/** آیا نوبت به پایان فلوی عملیاتی رسیده؟ (پایان‌حالت‌ها = completed/no_show) */
 export function isTerminalOps(ops: AppointmentOpsStatus | null | undefined): boolean {
   return ops !== null && ops !== undefined && (OPS_TERMINAL_STATUSES as readonly string[]).includes(ops);
 }
 
-/**
- * شمارش وضعیت عملیاتی نوبت‌های همان روز — از همان نوبت‌های بورد (Projection؛ بدون جدول جدید).
- * planned = scheduled بدون ops_status؛ cancelled از status.
- */
 export function opsStatsFromAppointments(appointments: readonly OpsSourceRow[]): WorkingDayOpsStats {
   const stats: WorkingDayOpsStats = {
     planned: 0,
@@ -124,8 +100,6 @@ export function opsStatsFromAppointments(appointments: readonly OpsSourceRow[]):
   return stats;
 }
 
-// ───────────── فاز ۱ — صف ۶۰ دقیقهٔ آینده (§7.2) ─────────────
-
 interface QueueSourceRow {
   id: string;
   staffId: string;
@@ -136,14 +110,6 @@ interface QueueSourceRow {
   students: readonly { name: string }[];
 }
 
-/**
- * صف «اقدام‌های نزدیک» بورد منشی — derivation خالص از نوبت‌های بورد (بدون query/جدول جدید).
- * ورود: نوبت‌های scheduled که
- * - به فلوی عملیاتی رسیده‌اند و پایان‌حالت نیستند (آمده/تأخیر/در جلسه → هنوز اقدام لازم دارند)، یا
- * - بدون وضعیت عملیاتی‌اند و شروعشان تا windowMinutes دقیقهٔ آینده است (فرصت ثبت «آمد/تأخیر/نیامد»).
- * نوبت‌هایی که تمام‌شده/نیامد/لغوشده‌اند از صف خارج می‌شوند.
- * ترتیب: زمان شروع صعودی. staffNameOf برای نوبت بی‌صاحب «—» برمی‌گرداند.
- */
 export function buildQueue(
   appointments: readonly QueueSourceRow[],
   nowIso: string,
@@ -156,8 +122,6 @@ export function buildQueue(
     .filter((a) => {
       if (a.status === 'cancelled') return false;
       if (isTerminalOps(a.opsStatus)) return false;
-      // started-but-open (آمده/تأخیر/در جلسه) همیشه در صف می‌ماند تا تکمیل شود؛
-      // بدون‌وضعیت فقط وقتی که شروعش در پنجرهٔ آینده است
       if (a.opsStatus) return true;
       return Date.parse(a.startAt) <= deadline;
     })

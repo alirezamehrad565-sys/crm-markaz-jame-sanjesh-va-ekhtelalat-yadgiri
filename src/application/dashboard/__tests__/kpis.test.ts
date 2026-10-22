@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — kpis
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست‌های pure محاسبات KPI داشبورد — بدون دیتابیس
-
 import { describe, expect, it } from 'vitest';
 import type { Appointment } from '@core/shared';
 import {
@@ -92,8 +86,6 @@ describe('dashboard KPIs (pure)', () => {
   });
 
   it('T5: گروه‌بندی روزانه با مرز تهران — 2026-10-12T20:14Z همان ۱۲ اکتبر تهران است', () => {
-    // 2026-10-12T20:14:00Z = 2026-10-12 23:44 تهران → همان روز
-    // 2026-10-12T20:45:00Z = 2026-10-13 00:15 تهران → روز بعد!
     const rows = [
       appt({ id: 'a1', startAt: '2026-10-12T20:14:00.000Z' }),
       appt({ id: 'a2', startAt: '2026-10-12T20:45:00.000Z' })
@@ -116,8 +108,6 @@ describe('dashboard KPIs (pure)', () => {
     expect(next?.id).toBe('next1');
   });
 });
-
-// ───────────── تابلوی رقابتی (pure) ─────────────
 
 describe('scoreboard (pure)', () => {
   const T = (id: string, name: string) => ({ id, name });

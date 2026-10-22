@@ -1,17 +1,5 @@
--- مایگریشن اسکیما D1 — متن‌های روایت
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- ============================================================
--- — بازنویسی روایی متن‌های فرم‌ها + لنگرهای پاسخ + صحت‌سنجی برش‌ها
--- (خواستهٔ کاربر: «سوالات فرم‌ها عنوان فرم‌ها باید زبان ساده‌تر و روایی‌تر بگیره»
--- + فرم شرح‌حال کامل + تصحیح علمی باندهای sdq-parent/SNAP-IV والد/DCDQ)
--- additive: ستون description + UPDATE عنوان/توضیح/فیلدها/باندها از JSON تک‌منبع
--- کلید فیلدها دست‌نخورده — موتور نمره‌گذاری و تشخیص بی‌تأثیر می‌ماند؛
--- رویدادهای قدیمی با label ذخیره‌شده در payload همچنان خوانا هستند.
--- ============================================================
-
 ALTER TABLE case_event_types ADD COLUMN description TEXT;
 
--- ce-sdq-t-v1
 UPDATE case_event_types SET
   title = 'پرسش‌نامهٔ رفتار کودک — فرم معلم (SDQ)',
   description = 'بیست‌وپنج جملهٔ کوتاه دربارهٔ رفتار و حال دانش‌آموز در مدرسه — از احساسات و توجه تا دوستی‌ها و مهارت‌های اجتماعی. پاسخ درست یا غلط ندارد؛ هر جمله را با توجه به شش ماه گذشته علامت بزنید. حدود ۵ دقیقه وقت می‌برد.',
@@ -22,7 +10,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-sdq-t-v1' AND deleted_at IS NULL;
 
--- ce-snap-iv-p-v1
 UPDATE case_event_types SET
   title = 'چک‌لیست توجه و بی‌قراری — فرم خانواده (SNAP-IV)',
   description = 'بیست‌وشش جمله دربارهٔ توجه، بی‌قراری و تندی‌عصبانیت فرزندتان در خانه. برای هر جمله مشخص کنید رفتار چقدر شبیه اوست — پاسخ درست یا غلط ندارد. حدود ۱۰ دقیقه وقت می‌برد.',
@@ -33,7 +20,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-snap-iv-p-v1' AND deleted_at IS NULL;
 
--- ce-snap-iv-t-v1
 UPDATE case_event_types SET
   title = 'چک‌لیست توجه و بی‌قراری — فرم معلم (SNAP-IV)',
   description = 'بیست‌وشش جمله دربارهٔ توجه، بی‌قراری و تندی‌عصبانیت دانش‌آموز در کلاس. برای هر جمله مشخص کنید رفتار چقدر شبیه اوست — پاسخ درست یا غلط ندارد. حدود ۱۰ دقیقه وقت می‌برد.',
@@ -44,7 +30,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-snap-iv-t-v1' AND deleted_at IS NULL;
 
--- ce-scared-p-v1
 UPDATE case_event_types SET
   title = 'پرسش‌نامهٔ اضطراب کودک — فرم خانواده (SCARED)',
   description = 'چهل‌ویک جمله دربارهٔ ترس‌ها و نگرانی‌های فرزندتان — از دل‌درد و ترس از تاریکی تا نگرانی در جمع و مدرسه. پاسخ درست یا غلط ندارد؛ حدود ۱۰ تا ۱۵ دقیقه وقت می‌برد.',
@@ -55,7 +40,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-scared-p-v1' AND deleted_at IS NULL;
 
--- ce-dcdq-v1
 UPDATE case_event_types SET
   title = 'پرسش‌نامهٔ هماهنگی حرکتی — فرم خانواده (DCDQ)',
   description = 'پانزده جمله دربارهٔ مهارت‌های حرکتی فرزندتان — از پرتاب توپ و بالا رفتن از پله تا دست‌خط و استفاده از قیچی. بگویید هر جمله چقدر شبیه اوست؛ پاسخ درست یا غلط ندارد. حدود ۱۰ دقیقه وقت می‌برد.',
@@ -66,7 +50,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-dcdq-v1' AND deleted_at IS NULL;
 
--- ce-sld-read-v1
 UPDATE case_event_types SET
   title = 'چک‌لیست دشواری خواندن — فرم خانواده و معلم (ملاک‌های DSM)',
   description = 'ده جمله دربارهٔ دشواری‌های خواندن — از کندخوانی و جابه‌جایی حروف تا املا. برای هر جمله مشخص کنید این حالت چقدر در کودک دیده می‌شود. پاسخ این فرم کنار آزمون عملکردی خواندن معنی کامل می‌دهد.',
@@ -77,7 +60,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-sld-read-v1' AND deleted_at IS NULL;
 
--- ce-sld-wri-v1
 UPDATE case_event_types SET
   title = 'چک‌لیست دشواری نوشتن — فرم خانواده و معلم (ملاک‌های DSM)',
   description = 'ده جمله دربارهٔ دشواری‌های نوشتن — از جمله‌سازی و املا تا دست‌خط و خستگی دست. برای هر جمله مشخص کنید این حالت چقدر در کودک دیده می‌شود.',
@@ -88,7 +70,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-sld-wri-v1' AND deleted_at IS NULL;
 
--- ce-sld-calc-v1
 UPDATE case_event_types SET
   title = 'چک‌لیست دشواری حساب — فرم خانواده و معلم (ملاک‌های DSM)',
   description = 'ده جمله دربارهٔ دشواری‌های حساب — از فهم مقدار و شمارش تا حل مسئله. برای هر جمله مشخص کنید این حالت چقدر در کودک دیده می‌شود.',
@@ -99,7 +80,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-sld-calc-v1' AND deleted_at IS NULL;
 
--- ce-asd-criteria-v1
 UPDATE case_event_types SET
   title = 'چک‌لیست نشانه‌های اتیسم — فرم خانواده و معلم (ملاک‌های DSM)',
   description = 'شانزده جمله دربارهٔ ارتباط، بازی و رفتارهای تکراری — از تماس چشمی و واکنش متقابل تا چسبیدن به روتین و واکنش به صدا و نور. این فرم به‌تنهایی تشخیص نمی‌دهد؛ پرچم ارجاع تخصصی همیشه فعال است.',
@@ -110,7 +90,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-asd-criteria-v1' AND deleted_at IS NULL;
 
--- ce-speech-criteria-v1
 UPDATE case_event_types SET
   title = 'چک‌لیست زبان و گفتار — فرم خانواده و معلم (ملاک‌های DSM)',
   description = 'سیزده جمله دربارهٔ فهم و ساختن جمله‌ها، تلفظ کلمه‌ها و روانی گفتار. جملهٔ آخر دربارهٔ شنوایی است — اگر پررنگ علامت بخورد، اول بررسی شنوایی توصیه می‌شود.',
@@ -121,7 +100,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-speech-criteria-v1' AND deleted_at IS NULL;
 
--- ce-odd-criteria-v1
 UPDATE case_event_types SET
   title = 'چک‌لیست لجبازی و نافرمانی — فرم خانواده و معلم (ملاک‌های DSM)',
   description = 'دوازده جمله دربارهٔ لجبازی، عصبانیت و تلافی‌جویی. اگر این رفتارها با بی‌قراری و تندمزاجی قاطی شده باشد، موتور در تفسیر بالینی راه تفکیک را نشان می‌دهد.',
@@ -132,7 +110,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-odd-criteria-v1' AND deleted_at IS NULL;
 
--- ce-anamnesis-v2
 UPDATE case_event_types SET
   title = 'گفت‌وگوی اول — شرح‌حال کودک',
   description = 'فرم گفت‌وگوی اول با خانواده، پیش از هر آزمونی: مشکل از کِی شروع شده، بارداری و تولد چطور گذشت، رشد و خواب و سلامت، خانه و مدرسه، و نقاط قوت کودک. همین فرم پایهٔ تصمیم‌های بعدی ارزیابی است — پر کردن آن حدود ۲۰ دقیقه وقت می‌برد.',
@@ -143,7 +120,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-anamnesis-v2' AND deleted_at IS NULL;
 
--- ce-probe-read-v1
 UPDATE case_event_types SET
   title = 'آزمون کوتاه خواندن — ثبت درمانگر',
   description = 'یک دقیقه خواندن بلند از متن هم‌پایه + بیست واژهٔ بی‌معنی: تعداد واژه‌های درست در دقیقه و خطاها را ثبت کنید. نتیجه خودکار با انتظار پایه مقایسه می‌شود.',
@@ -154,7 +130,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-probe-read-v1' AND deleted_at IS NULL;
 
--- ce-probe-write-v1
 UPDATE case_event_types SET
   title = 'آزمون کوتاه نوشتن — ثبت درمانگر',
   description = 'یک دیکتهٔ هم‌پایه با شمارش خطا به تفکیک نوع (صدا و حرف، شباهت شکل حروف، نگارشی) + نوشتن حروف در ۱۵ ثانیه برای سنجش روانی دست.',
@@ -165,7 +140,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-probe-write-v1' AND deleted_at IS NULL;
 
--- ce-probe-calc-v1
 UPDATE case_event_types SET
   title = 'آزمون کوتاه حساب — ثبت درمانگر',
   description = 'دو دقیقه محاسبهٔ سریع + ده جفت مقایسهٔ عدد + جای‌گذاری روی خط عددی. نتیجه خودکار با انتظار پایه مقایسه می‌شود.',
@@ -176,7 +150,6 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'ce-probe-calc-v1' AND deleted_at IS NULL;
 
--- ───────────── پچ فرم قدیمی sdq-parent (لنگر توصیفی + باندهای والدی) ─────────────
 UPDATE case_event_types SET
   title = 'پرسش‌نامهٔ رفتار کودک — فرم خانواده (SDQ)',
   description = 'بیست‌وپنج جملهٔ کوتاه دربارهٔ رفتار و حال فرزندتان در خانه — از احساسات و توجه تا دوستی‌ها. پاسخ درست یا غلط ندارد؛ هر جمله را با توجه به شش ماه گذشته علامت بزنید. حدود ۵ دقیقه وقت می‌برد.',
@@ -185,17 +158,11 @@ UPDATE case_event_types SET
   updated_at = datetime('now')
 WHERE key = 'sdq-parent' AND deleted_at IS NULL;
 
--- ───────────── نام‌گذاری روایی ابزارهای قدیمی ─────────────
 UPDATE case_event_types SET title = 'پرسش‌نامهٔ غربال سریع — فرم خانواده', description = 'پرسش‌های کوتاه چندگزینه‌ای برای گرفتن تصویر اولیه از وضعیت فرزندتان — مناسب اولین تماس. نتیجه به درمانگر کمک می‌کند مسیر ارزیابی را سریع‌تر بچیند.', updated_at = datetime('now') WHERE key = 'quick-multi-v1' AND deleted_at IS NULL;
 UPDATE case_event_types SET title = 'مشاهدهٔ رفتار در کلاس — فرم معلم', description = 'چند جملهٔ کوتاه دربارهٔ رفتار دانش‌آموز در کلاس — از توجه و تکمیل کار تا تعامل با هم‌کلاسی‌ها. دید معلم برای پرونده حیاتی است.', updated_at = datetime('now') WHERE key = 'teacher-classroom' AND deleted_at IS NULL;
 UPDATE case_event_types SET title = 'چک‌لیست رفتار کودک — فرم خانواده', description = 'جمله‌هایی دربارهٔ رفتار و حال فرزندتان در خانه. علامت‌زدن صادقانه به درمانگر کمک می‌کند تصویر واقعی خانه را ببیند.', updated_at = datetime('now') WHERE key = 'achenbach-practical' AND deleted_at IS NULL;
 UPDATE case_event_types SET title = 'مشاهدهٔ رفتار در خانه — فرم خانواده', description = 'جمله‌هایی دربارهٔ رفتار فرزندتان در زندگی روزمرهٔ خانه — خواب، بازی، گفت‌وگو و پیروی از قواعد.', updated_at = datetime('now') WHERE key = 'home_behavior' AND deleted_at IS NULL;
 UPDATE case_event_types SET title = 'گزارش جلسهٔ مداخله', description = 'روایت کوتاه جلسهٔ درمان: چه کاری انجام شد، واکنش کودک چه بود و گام بعدی چیست — این گزارش روی تایم‌لاین پرونده می‌نشیند.', updated_at = datetime('now') WHERE key = 'intervention' AND deleted_at IS NULL;
 
--- ───────────── تکراری‌های قدیمی → غیرفعال (جایگزین شده با باتری v1) ─────────────
--- «شرح حال» قدیمی → «گفت‌وگوی اول — شرح‌حال کودک» جایگزین شده است
 UPDATE case_event_types SET active = 0, updated_at = datetime('now') WHERE key = 'anamnesis' AND deleted_at IS NULL;
--- «کانرز کوتاه» با SNAP-IV والد/معلم جایگزین شده (تصمیم پلن v2 §۴)
 UPDATE case_event_types SET active = 0, updated_at = datetime('now') WHERE key = 'conners-short' AND deleted_at IS NULL;
-
--- پایان 0045

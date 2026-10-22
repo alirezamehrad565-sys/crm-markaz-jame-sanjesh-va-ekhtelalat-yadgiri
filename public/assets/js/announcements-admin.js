@@ -1,10 +1,3 @@
-/**
- * پنل مدیریت اعلان‌ها
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// announcements-admin.js — مدیریت اعلان‌ها (تب تنظیمات، فقط مدیر)
-// ساخت/ویرایش/بایگانی/حذف اعلان + ارسال با بات به همکاران و خانواده‌ها
-
 import { api } from './api.js';
 import { el, icon, toast, toastError, confirmModal, formModal, emptyState, loadingState } from './ui.js';
 import { formatJalaliDateTime } from './format.js';
@@ -31,8 +24,6 @@ export function drawAnnouncementsAdmin(body) {
   );
   loadList(list);
 }
-
-// ─────────────── فرم ساخت ───────────────
 
 function composeForm(onSaved) {
   const title = el('input', { class: 'input', placeholder: 'عنوان اعلان…', maxlength: 120 });
@@ -78,8 +69,6 @@ function composeForm(onSaved) {
     el('div', { style: { display: 'flex', justifyContent: 'flex-end' } }, submit)
   );
 }
-
-// ─────────────── فهرست ───────────────
 
 async function loadList(list) {
   list.replaceChildren(loadingState());

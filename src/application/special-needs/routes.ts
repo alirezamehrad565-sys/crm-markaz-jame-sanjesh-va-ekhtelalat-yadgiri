@@ -1,17 +1,9 @@
-/**
- * سرویس نیازهای ویژه — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// فاز ۷ — دو endpoint فقط-خواندنی؛ RBAC: فقط منشی/مدیر (درمانگر ۴۰۳)
-// گرید/هوش مدیریتی دادهٔ تجمیعی است — در دامنهٔ درمانگر نیست (§12/§15)
-
 import type { AppHono } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
 import { SPECIAL_NEED_SEVERITIES } from '@core/shared';
 import type { SpecialNeedsService } from './types';
 
 export function registerSpecialNeedsRoutes(app: AppHono, service: SpecialNeedsService): void {
-  // ─── گرید مدرسه×پایه + فهرست «نیاز به توجه دارد» (§12) ───
   app.get('/api/special-needs/grid', requireRole('manager', 'secretary'), async (c) => {
     const severityRaw = c.req.query('severity');
     const severity = severityRaw && (SPECIAL_NEED_SEVERITIES as readonly string[]).includes(severityRaw)
@@ -28,7 +20,6 @@ export function registerSpecialNeedsRoutes(app: AppHono, service: SpecialNeedsSe
     return c.json({ data }, 200);
   });
 
-  // ─── وضعیت همکاری مدرسه (§15) — نام‌گذاری neutral (بدون واژهٔ هوش) ───
   app.get('/api/schools/:id/overview', requireRole('manager', 'secretary'), async (c) => {
     const data = await service.schoolOverview(c.req.param('id'), getAuthContext(c));
     return c.json({ data }, 200);

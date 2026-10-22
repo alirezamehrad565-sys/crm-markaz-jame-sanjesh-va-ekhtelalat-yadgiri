@@ -1,46 +1,23 @@
-// clinical-content.js — محتوای ثابت تب «تفسیر بالینی» — جداسازی محتوا از موتور
-// ─────────────────────────────────────────────────────────────────────────────
-// همهٔ متن‌ها، برچسب‌ها، کلیدهای ابزار و متادیتای گام‌های «مسیر بالینی» این‌جاست.
-// موتور (clinical-insights.js) فقط منطق رندر و ارتباط با API دارد؛ ویرایش محتوا
-// (چیدمان گام‌ها، متن راهنما، برچسب وضعیت‌ها) بدون دست‌زدن به منطق از همین فایل انجام می‌شود.
-//
-// قرارداد کلیدها: کلیدهای ابزار باید با تعریف case_event_types سمت سرور هم‌خوان بمانند
-//.
-
-// ───────── کلیدهای ابزار مسیر ارزیابی ─────────
-
-/** گام ۱ — شرح‌حال — T4 (m148): ورودی جدید = نسخهٔ ۳ (نسخهٔ ۲ فقط برای پرونده‌های قدیمی) */
 export const ANAMNESIS_KEY = 'ce-anamnesis-v3';
-/** شرح‌حال قدیمی — فقط برای نمایش تاریخچهٔ پرونده‌هایی که قبلاً v2 دارند (ورودی جدید بسته است) */
 export const ANAMNESIS_LEGACY_KEY = 'ce-anamnesis-v2';
 
-/** گام ۳ مسیر استاندارد (T3/m147: وکسلر گام ۲ شد) — غربالگری: SDQ خانواده (پیوست سامانه) + SDQ معلم */
 export const SCREEN_KEYS = ['sdq-parent', 'ce-sdq-t-v1'];
 
-/** گام ۳ (ادامه) — فرم‌های تخصصی بنا به نشانه‌ها */
 export const SPECIFIC_KEYS = [
   'ce-snap-iv-p-v1', 'ce-snap-iv-t-v1', 'ce-scared-p-v1', 'ce-dcdq-v1',
   'ce-sld-read-v1', 'ce-sld-wri-v1', 'ce-sld-calc-v1',
   'ce-asd-criteria-v1', 'ce-speech-criteria-v1', 'ce-odd-criteria-v1'
 ];
 
-/** گام ۴ مسیر یادگیری — آزمون‌های کوتاه عملکرد */
 export const PROBE_KEYS = ['ce-probe-read-v1', 'ce-probe-write-v1', 'ce-probe-calc-v1'];
-
-// ───────── شاخهٔ توانبخشی + وکسلر ۴ ─────────
 
 export const REHAB_COG_KEY = 'ce-rehab-cog-v1';
 export const REHAB_MOTOR_KEY = 'ce-rehab-motor-v1';
 export const REHAB_ADL_KEY = 'ce-rehab-adl-v1';
 export const REHAB_JOURNEY_KEYS = [REHAB_COG_KEY, REHAB_MOTOR_KEY, REHAB_ADL_KEY];
 
-/** m161 — ارزیابی عملکردی توانبخشی ذهنی (خط پایهٔ مسیر توانبخشی — ثبت درمانگر در مرکز) */
 export const REHAB_FX_KEY = 'ce-rehab-fx-v1';
 
-/**
- * m163 — پشتوانهٔ علمی و نحوهٔ استفادهٔ خط پایهٔ عملکردی — متن پایدار (رندر تاشو در کارت خط پایه).
- * نگارش صادقانه: مرز ابزار هم داخل متن است (ملاک‌محور، نه هنجاری؛ مکمل، نه جایگزین آزمون رسمی).
- */
 export const REHAB_FX_GUIDE = {
   title: 'پشتوانهٔ علمی و نحوهٔ استفاده',
   items: [
@@ -53,25 +30,16 @@ export const REHAB_FX_GUIDE = {
   ]
 };
 
-/** فرم نتایج عمومی */
 export const RESULTS_KEY = 'ce-results-v1';
 
-/** وکسلر ۴ — ثبت نمرهٔ خام (: مربی فقط خام وارد می‌کند؛ موتور استاندارد می‌سازد) */
 export const WISC4_KEY = 'ce-wechsler-w4-v1';
 
-/** فرم تصمیم شک بالینی — مرحلهٔ چک‌لیست‌ها (پس از وکسلر در ترتیب جدید T3) */
 export const SUSPICION_KEY = 'ce-clinical-suspicion-v1';
 
-/** قالب مسیر خالیِ شاخهٔ یادگیری — درمانگر جلسات را بر حسب نیم‌رخ می‌سازد */
 export const LEARNING_BLANK_TEMPLATE_KEY = 'tpl-learning-blank';
 
-/** — چک‌لیست‌های خواندن/نوشتن/ریاضی — گیت گام ۴ مسیر یادگیری */
 export const SLD_CHECKLIST_KEYS = ['ce-sld-read-v1', 'ce-sld-wri-v1', 'ce-sld-calc-v1'];
-// SLD_CHECKLIST_TITLES حذف شد (39-C — export مرده بود؛ برچسب‌ها از تعریف فرم سرور می‌آید)
 
-// ───────── برچسب‌های وضعیت ─────────
-
-/** وضعیت چهارحالتهٔ ملاک‌های DSM (پلن §۵ گام ۱) */
 export const CRITERION_STATUS = {
   met: { label: 'برآورده', cls: 'badge--success' },
   partial: { label: 'ناقص', cls: 'badge--warning' },
@@ -79,7 +47,6 @@ export const CRITERION_STATUS = {
   unknown: { label: 'نیاز به بررسی', cls: 'badge--info' }
 };
 
-/** اطمینان توصیفی — هرگز قطعیت ادعا نمی‌کند (پلن §۶ قاعدهٔ ۴) */
 export const CONFIDENCE_BADGE = {
   'کم': 'badge--neutral',
   'متوسط': 'badge--warning',
@@ -107,8 +74,6 @@ export const DECISION_LABEL = {
   need_info: 'نیاز به اطلاعات بیشتر'
 };
 
-// ───────── انواع آیتم پیوست جلسه (خواستهٔ کاربر) — +رویداد (فرم/پرسش‌نامه) ─────────
-
 export const SESSION_ITEM_TYPES = [
   { key: 'exercise', label: 'تمرین', placeholder: 'مثلاً: تمرین آگاهی واجی — حذف صدای اول واژه (۵ دقیقه)' },
   { key: 'homework', label: 'تکلیف', placeholder: 'مثلاً: خواندن برگهٔ تمرین برای خانواده + ثبت زمان' },
@@ -118,8 +83,6 @@ export const SESSION_ITEM_TYPES = [
 ];
 
 export const SESSION_ITEM_LABELS = Object.fromEntries(SESSION_ITEM_TYPES.map((t) => [t.key, t.label]));
-
-// ───────── برچسب فرم‌های نتایج (کارت «نتایج ارزیابی») ─────────
 
 export const RESULTS_EVENT_LABELS = {
   [REHAB_COG_KEY]: 'ارزیابی شناختی',
@@ -131,7 +94,6 @@ export const RESULTS_EVENT_LABELS = {
   [SUSPICION_KEY]: 'تصمیم شک بالینی'
 };
 
-/** مکمل متنی برای هر گام — کلیدها با کلیدهای گیت سرور (STANDARD_PATHWAY_ORDER) هم‌خوان‌اند */
 export const GATE_GLOSS = {
   anamnesis: {
     actionLabel: 'ثبت شرح‌حال'
@@ -152,7 +114,6 @@ export const GATE_GLOSS = {
   }
 };
 
-/** بلوک تصمیم شک بالینی — عنوان و متن‌ها (m156: بدون بج «بدون تصمیم» و بلوک خالی — فقط با داده/تصمیم رندر می‌شود) */
 export const SUSPICION_CONTENT = {
   head: 'تصمیم شک بالینی',
   decidedBadge: 'تصمیم ثبت شد',
@@ -162,8 +123,6 @@ export const SUSPICION_CONTENT = {
   levelWatch: 'قابل پایش',
   sourcesPrefix: 'منابع: '
 };
-
-// ───────── زمینهٔ تفسیر (داده‌های جمعیت‌شناختی × خروجی موتور) ─────────
 
 export const CONTEXT_META = {
   title: 'زمینهٔ تفسیر — دانش‌آموز در آینهٔ داده‌ها',
@@ -183,16 +142,6 @@ export const CONTEXT_META = {
     `با صدک ${percentile} و پایهٔ تحصیلی جاری، انتظار عملکرد کلاس را با نیم‌رخ شناختی بسنجید — فاصلهٔ معنادار، شاخص اصلی مسیر یادگیری است.`
 };
 
-// ───────── مراحل آکاردئونی تب تفسیر بالینی (m135 — جایگزین STEPPER_META و STAGE_META) ─────────
-
-/**
- * متادیتای ۶ مرحلهٔ آکاردئونی — کلیدهای گیت با STANDARD_PATHWAY_ORDER سرور هم‌خوان‌اند؛
- * «protocol» گیت سرور نیست (از gates.protocol می‌آید — UX-SPEC §3.6). سرور مالک
- * label/detail گیت‌هاست؛ این‌جا فقط عنوان سربرگ، خط «در یک نگاه» و متن‌های حالت خالی/قفل.
- * قرارداد placeholder‌ها: {n} {m} {k} اعداد فارسی‌شده با fa()؛ {date} با formatJalaliDateTime؛
- * {coh} هم‌گرا/ناقص/واگرا؛ {p} درصد اطمینان؛ {protocol}/{status} — m156: {main} حذف شد (بدون فرضیه)
- * برچسب‌های PROTOCOL_LABELS و PATH_STATUS_LABEL. هیچ عدد لاتینی در متن‌ها مجاز نیست.
- */
 export const STAGE2_META = {
   stages: {
     anamnesis: {
@@ -227,7 +176,6 @@ export const STAGE2_META = {
       glanceSld: '{n} از ۳ آزمون عملکرد مرکزی ثبت شده',
       glanceSldZero: 'آزمون عملکرد مرکزی ثبت نشده است',
       glanceFallback: 'پس از تعیین مسیر پرونده فعال می‌شود',
-      // m161 — مسیر توانبخشی: ارزیابی عملکردی = آزمون درمانگر در مرکز (شش حیطهٔ شناختی پایه)
       glanceFxNone: 'ارزیابی عملکردی توانبخشی ثبت نشده است',
       glanceFxDone: 'خط پایهٔ ذهنی ثبت شد — {ok} حیطه در انتظار از ۶',
       emptyHint: 'ارزیابی عملکردی = آزمونِ درمانگر در مرکز (خواندن، نوشتن، حساب) — در جلسهٔ حضوری از کودک گرفته می‌شود و همین‌جا ثبت می‌گردد. چک‌لیست‌های خانواده و معلم جای خود در مرحلهٔ ۲ است.'
@@ -240,19 +188,15 @@ export const STAGE2_META = {
     },
     protocol: {
       num: 6,
-      // m165 — تب مداخله خودش میزکار است (پیش‌فرض = چک‌لیست مهارتی جلسه‌به‌جلسه)؛ تغییر قالب یک اقدام ثانویه در انتهای تب است
       title: 'مداخله',
       glanceActive: '{protocol} · مسیر: {status}',
       glanceNoPath: '{protocol} · مسیری ثبت نشده',
       glanceLocked: 'پس از ثبت نتیجهٔ نیاز ویژه باز می‌شود',
-      // m165 fix — پرونده‌های OT: تب مداخله در هر دو فاز میزکار زندهٔ چک‌لیست است — نه قفل
       glanceWorkspace: 'میزکار مداخله — چک‌لیست مهارتی و ثبت جلسه‌به‌جلسه',
       workspaceNote: 'مسیر و پروتکل پس از جمع‌بندی تشخیصی فعال می‌شود؛ ثبت جلسه‌به‌جلسهٔ چک‌لیست مهارتی از همین میزکار انجام می‌شود.',
       lockedNote: 'این مرحله با ثبت نتیجهٔ نیاز ویژه در مرحلهٔ ۵ باز می‌شود — آن‌جا جمع‌بندی شواهد و پروتکل مداخله انتخاب می‌شود.',
       protocolStripTitle: 'گام‌های استاندارد پروتکل فعال',
-      // m162 — پایش زندهٔ جلسه‌به‌جلسه در فاز مداخله داخل مرحلهٔ مداخله است؛ این متن‌ها نشانگر/فال‌بک‌اند
       monitoringMoved: 'پایش مهارتی و ثبت جلسهٔ بعد به مرحلهٔ مداخله (آخرین مرحله) منتقل شده است — آن‌جا پنل پیشرفت جلسه‌به‌جلسه هم دارد',
-      // m163 — حذف تکرار خط پایه در فاز مداخله: تک‌منبع = پنل پیشرفت (مرجع مقایسه + بازسنجی)
       monitoringMovedRehab: 'خط پایهٔ عملکردی ثبت‌شده در پنل پیشرفت (مرحلهٔ مداخله) مرجع مقایسهٔ جلسه‌به‌جلسه است و بازسنجی هم از همان‌جا — این‌جا تکرار نمی‌شود',
       monitoringLink: 'پایش مهارتی و پیشرفت جلسه‌به‌جلسه در همین مرحله ادامه دارد'
     }
@@ -271,15 +215,10 @@ export const STAGE2_META = {
     subtests:    { label: 'جدول خرده‌آزمون‌ها', count: '{n} آزمون' },
     comparisons: { label: 'مقایسه‌های دوبه‌دو خرده‌آزمون‌ها', count: '{n} مقایسه' },
     pairs:       { label: 'مقایسه‌های خوشه‌ای — تحلیل تفاضلی', count: '{n} جفت' },
-    // T8 (m149) — فرضیه‌های موتور از این بخش حذف شدند؛ m156 — کلید هم به weakflags تغییر کرد
     weakflags:   { label: 'حوزه‌های ضعیف و پرچم‌های روایی', count: '{n} مورد' }
   },
   showMoreRows: '{n} سطر دیگر…',
   showMoreItems: '{n} مورد دیگر…',
-  /**
-   * برچسب‌های ریزآمار سربرگ‌ها (m136) — ردیف .clxacc__stats زیر glance؛
-   * همهٔ اعداد با fa() فارسی می‌شوند و آمار بدون داده اصلاً رندر نمی‌شود.
-   */
   stats: {
     anamnesisLast: 'آخرین شرح‌حال',
     anamnesisStaleLabel: 'تازگی',
@@ -302,7 +241,6 @@ export const STAGE2_META = {
   }
 };
 
-/** کارت جمع‌بندی تشخیصی — تیترهای بخش‌های داخلی */
 export const SYNTHESIS_META = {
   title: 'جمع‌بندی تشخیصی',
   primaryTitle: 'توضیح اصلی',
@@ -318,13 +256,6 @@ export const SYNTHESIS_META = {
   seenTitle: 'شواهد موجود'
 };
 
-// ───────── کارت «ابزارهای پیشنهادی گام بعد» — پلن چک‌لیست (T3/m147؛ m156: بدون واژهٔ «باتری/موتور») ─────────
-
-/**
- * متادیتای کارت پلن پیشنهادی — بعد از گیت وکسلر در تب شناسایی.
- * «تأیید یک‌کلیکی» همان جریان موجود ارسال فرم (رویدادساز/بله) را با پیش‌انتخاب ابزارهای
- * پلن طی می‌کند؛ «ویرایش/انتخاب دستی» همیشه کتابخانهٔ کامل را باز می‌کند (برگشت به دستی بدون قفل).
- */
 export const PLAN_META = {
   title: 'ابزارهای پیشنهادی گام بعد',
   planTypeLabel: { جامع: 'پلن جامع', تکی: 'پلن تکی' },

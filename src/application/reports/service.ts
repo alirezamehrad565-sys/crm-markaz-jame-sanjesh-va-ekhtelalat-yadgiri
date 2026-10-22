@@ -1,10 +1,3 @@
-/**
- * سرویس گزارش‌ها (دوره، تحلیل پیشرفته، مدارس) — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// سرویس گزارش دوره (چاپی): کوئری‌های تجمعی + ترکیب با pureها
-// فقط خواندنی — هیچ write
-
 import type {
   AdvancedReport,
   PeriodReport,
@@ -15,8 +8,6 @@ import type {
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 import { tehranRange } from '@core/shared';
-// وزن‌های «نمرهٔ مشارکت عملی» از موتور سراسری امتیاز می‌آیند (تک‌منبع حقیقت)
-// اگر مدیر وزن‌ها را در تنظیمات عوض کرده باشد، گزارش هم با همان وزن‌ها حساب می‌شود
 import { effectiveContentFormula, productionScoreOf, SCORING_CONFIG_KEY } from '../../../worker/scoring.js';
 import {
   avgWaitDaysOf,
@@ -29,7 +20,6 @@ import {
 } from './pure';
 import type { ApptMinuteRow, StudentSessionRow } from './pure';
 
-/** — وزن‌های تنظیم‌شدهٔ مدیر از settings (fallback = پیش‌فرض موتور) */
 async function readScoringWeights(db: DbClient): Promise<Record<string, number> | undefined> {
   try {
     const row = await db.queryOne<{ value: string }>(
@@ -53,7 +43,6 @@ export interface ReportDeps {
 
 export interface ReportService {
   getReport(from: string, to: string): Promise<PeriodReport>;
-  /** — تحلیل پیشرفته (فاز ۸) — Projection فقط-خواندنی از همهٔ ماژول‌ها */
   getAdvancedReport(from: string, to: string): Promise<AdvancedReport>;
 }
 
@@ -64,7 +53,6 @@ export function createReportService(deps: ReportDeps): ReportService {
     async getReport(from, to) {
       const range = tehranRange(from, to);
 
-      // ─── نوبت‌های بازه (به‌وقت تهران) ───
       const apptRows = await db.query<{ id: string; staff_id: string; start_at: string; end_at: string; status: string }>(
         `SELECT id, staff_id, start_at, end_at, status
            FROM appointments
@@ -72,7 +60,6 @@ export function createReportService(deps: ReportDeps): ReportService {
         [range.start, range.end]
       );
 
-      // ─── حضور دانش‌آموزان در نوبت‌های بازه ───
       const attRows = await db.query<{ attendance: string; appt_status: string }>(
         `SELECT s.attendance, a.status AS appt_status
            FROM appointment_students s
@@ -89,7 +76,6 @@ export function createReportService(deps: ReportDeps): ReportService {
         else attendance.pending++;
       }
 
-      // ─── حضور همکاران ───
       const staffAttRows = await db.query<{ status: string }>(
         `SELECT status FROM staff_attendance WHERE date >= ? AND date <= ?`,
         [from, to]
@@ -103,7 +89,6 @@ export function createReportService(deps: ReportDeps): ReportService {
         else if (r.status === 'sick') staffAttendance.sick++;
       }
 
-      // ─── نام/نقش کارکنان ───
       const staffRows = await db.query<{ id: string; full_name: string; role: string }>(
         `SELECT id, full_name, role FROM staff`
       );
@@ -112,8 +97,6 @@ export function createReportService(deps: ReportDeps): ReportService {
         staffRows.map((s) => [s.id, (['manager', 'therapist', 'secretary'].includes(s.role) ? s.role : 'therapist') as StaffRole])
       );
 
-      // ─── میانگین زمان انتظار تا نوبت‌دهی (نوبت‌دهی‌های درون بازه) ───
-      // لحظهٔ نوبت‌دهی = لحظهٔ ساخت نوبتِ متصل به متقاضی (scheduled_appointment_id)
       const schedRows = await db.query<{ wl_created: string; appt_created: string }>(
         `SELECT strftime('%Y-%m-%dT%H:%M:%SZ', w.created_at) AS wl_created,
                 strftime('%Y-%m-%dT%H:%M:%SZ', a.created_at) AS appt_created
@@ -127,8 +110,6 @@ export function createReportService(deps: ReportDeps): ReportService {
         avgDays: avgWaitDaysOf(schedRows.map((r) => ({ createdAt: r.wl_created, admittedAt: r.appt_created })))
       };
 
-      // ─── نمرهٔ مشارکت عملی تیم: تولید محتوا در بازه (وزن‌ها از scoring.js) ───
-      // — m140: شمارش تمرین وزن‌دار تیمی است (team_created=1 → ۰٫۵) — هم‌سو با تابلوی امتیاز
       const practicalRow = await db.queryOne<{
         exercises: number;
         packages: number;
@@ -153,7 +134,6 @@ export function createReportService(deps: ReportDeps): ReportService {
         score: productionScoreOf(practicalCounts, effectiveContentFormula(await readScoringWeights(db)))
       };
 
-      // ─── دانش‌آموزان برتر ───
       const studentSessionRows = await db.query<StudentSessionRow>(
         `SELECT s.student_id, st.first_name || ' ' || st.last_name AS student_name,
                 s.attendance, a.status AS appt_status
@@ -164,7 +144,6 @@ export function createReportService(deps: ReportDeps): ReportService {
         [range.start, range.end]
       );
 
-      // ─── برچسب‌های پرتکرار ───
       const tagRows = await db.query<{ id: string; name: string; category: string; count: number }>(
         `SELECT t.id, t.name, t.category, COUNT(st.student_id) AS count
            FROM tags t
@@ -181,15 +160,12 @@ export function createReportService(deps: ReportDeps): ReportService {
         count: r.count
       }));
 
-      // ─── دانش‌آموزان جدید بازه ───
       const newStudentsRow = await db.queryOne<{ n: number }>(
         `SELECT COUNT(*) AS n FROM students
           WHERE created_at >= ? AND created_at <= ?`,
         [range.start, range.end]
       );
 
-      // ─── مدارس مبدأ دانش‌آموزان (فقط مدارس دارای دانش‌آموز فعال + تعداد) ───
-      // snapshot جاری — وابسته به بازه نیست؛ INNER JOIN مدارس بدون دانش‌آموز را حذف می‌کند
       const schoolRows = await db.query<{ id: string; name: string; students: number }>(
         `SELECT sc.id, sc.name, COUNT(st.id) AS students
            FROM schools sc
@@ -203,8 +179,6 @@ export function createReportService(deps: ReportDeps): ReportService {
         students: r.students
       }));
 
-      // ─── میانگین جلسات مداخله به ازای هر دانش‌آموزِ تحت خدمت بازه ───
-      // جلسه = ردیف نوبت×دانش‌آموز غیرلغوشده در بازه (همان تعریف «جلسات» سامانه)
       const servedRows = studentSessionRows.filter((r) => r.apptStatus !== 'cancelled');
       const servedStudents = new Set(servedRows.map((r) => r.studentId)).size;
       const perStudent = {
@@ -234,13 +208,11 @@ export function createReportService(deps: ReportDeps): ReportService {
         },
         attendance: {
           ...attendance,
-          // تأخیر در مخرج نرخ غیبت هم می‌آید (حضورِ دیررس)
           absenceRate: safeRate(attendance.absent, attendance.present + attendance.late + attendance.absent)
         },
         staffAttendance: {
           ...staffAttendance,
           unmarked: 0, // در سطح بازه شمارش unmarked بی‌معناست — فقط ثبت‌شده‌ها
-          // تأخیر شکلِ حضور است: صورت و مخرج نرخ حضور هر دو شامل آن
           attendanceRate: safeRate(staffAttendance.present + staffAttendance.late, staffAttendance.present + staffAttendance.late + staffAttendance.absent + staffAttendance.leave + staffAttendance.sick)
         },
         newStudents: newStudentsRow?.n ?? 0,
@@ -266,11 +238,9 @@ export function createReportService(deps: ReportDeps): ReportService {
       return report;
     },
 
-    /** — تحلیل پیشرفته: روند هفتگی + قیف لیست انتظار + پوشش‌ها (همه Projection) */
     async getAdvancedReport(from, to) {
       const range = tehranRange(from, to);
 
-      // ─── ۱) روند هفتگی — نوبت‌ها و حضور بازه ───
       const apptRows = await db.query<{ start_at: string; status: string; ops_status: string | null }>(
         `SELECT start_at, status, ops_status FROM appointments
           WHERE start_at >= ? AND start_at <= ?`,
@@ -290,7 +260,6 @@ export function createReportService(deps: ReportDeps): ReportService {
         to
       );
 
-      // ─── ۲) قیف لیست انتظار (کل تاریخ — وضعیت فعلی) ───
       const wlRows = await db.query<{ status: string; created_at: string }>(
         `SELECT status, created_at FROM waitlist`
       );
@@ -327,8 +296,6 @@ export function createReportService(deps: ReportDeps): ReportService {
         conversionRate: safeRateOrNull(countBy('admitted'), countBy('admitted') + countBy('rejected') + countBy('no_show') + countBy('cancelled'))
       };
 
-      // ─── ۳) پوشش گزارش ساخت‌یافتهٔ پرونده ───
-      // کلید پاسخ «assessments» برای سازگاری فرانت حفظ شده است.
       const eventRows = await db.query<{ student_id: string; has_final: number }>(
         `SELECT e.student_id,
                 MAX(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END) AS has_final
@@ -350,7 +317,6 @@ export function createReportService(deps: ReportDeps): ReportService {
         coverageRate: safeRateOrNull(withAny, activeStudents)
       };
 
-      // ─── ۴) پوشش گزارش جلسه (نوبت×دانش‌آموز غیرلغوشدهٔ بازه) ───
       const noteRow = await db.queryOne<{ total: number; with_note: number }>(
         `SELECT COUNT(*) AS total,
                 SUM(CASE WHEN s.session_note IS NOT NULL AND s.session_note != '' THEN 1 ELSE 0 END) AS with_note
@@ -365,7 +331,6 @@ export function createReportService(deps: ReportDeps): ReportService {
         coverageRate: safeRateOrNull(noteRow?.with_note ?? 0, noteRow?.total ?? 0)
       };
 
-      // ─── ۵) پیگیری‌ها ───
       const fuRows = await db.query<{ status: string; due_at: string | null; completed_at: string | null }>(
         `SELECT status, due_at, completed_at FROM followups`
       );
@@ -382,7 +347,6 @@ export function createReportService(deps: ReportDeps): ReportService {
         completionRate: safeRateOrNull(doneInPeriod, doneInPeriod + openFu.length)
       };
 
-      // ─── ۶) کمیسیون — جلسات برگزارشده با تاریخ در بازه ───
       const cmRow = await db.queryOne<{ n: number }>(
         `SELECT COUNT(*) AS n FROM committee_meetings
           WHERE status = 'held' AND deleted_at IS NULL AND meeting_date >= ? AND meeting_date <= ?`,

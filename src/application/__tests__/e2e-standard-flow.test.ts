@@ -1,12 +1,3 @@
-/**
- * تست‌های e2e — -standard-flow
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e--standard-flow.test.ts — جریان استاندارد پرونده
-// ادغام assessments در case-events (seed مهاجرت + وکسلر)، چرخهٔ پیش‌نویس/نهایی‌سازی،
-// هوک «اقدام بعدی» (پیگیری خودکار)، گزارش متصل به نوبت (+ batch)،
-// نمای چرخهٔ پرونده در بات (تاریخچه/چک‌لیست‌های او/نتایج خانواده) و صفحه‌بندی فهرست.
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -54,8 +45,6 @@ function dataOf<T>(res: { body: unknown }): T {
   return (res.body as { data: T }).data;
 }
 
-// ───────────── پنل — seedها + چرخهٔ پیش‌نویس + هوک اقدام بعدی ─────────────
-
 describe('کاتالوگ انواع: seed مهاجرت + وکسلر', () => {
   it('types شامل «ارزیابی بالینی (سند قدیم)» و «پروندهٔ وکسلر» است (فرم‌ساز بدون انتشار نسخه)', async () => {
     const A = createTestApp();
@@ -66,10 +55,8 @@ describe('کاتالوگ انواع: seed مهاجرت + وکسلر', () => {
     const legacy = types.find((t) => t.key === 'legacy_assessment');
     expect(legacy).toBeTruthy();
     expect(legacy!.title).toContain('ارزیابی');
-    // فرم قدیمی وکسلر (0042) با 0054 بازنشسته شد — از فهرست حذف است (رفتار فاز بهبود §۱۰.۱)
     const wechsler = types.find((t) => t.key === 'wechsler');
     expect(wechsler).toBeUndefined();
-    // فرم مرجع وکسلر ۴ (0050 + تکمیل 0054) فیلدهای واقعی ثبت خام دارد — از جمله «اقدام بعدی»
     const w4 = types.find((t) => t.key === 'ce-wechsler-w4-v1');
     expect(w4).toBeTruthy();
     expect(w4!.fields.some((f) => f.key === 'raw_si')).toBe(true);
@@ -98,8 +85,6 @@ describe('چرخهٔ پیش‌نویس/نهایی‌سازی + هوک اقدام
     const s = await createStudent(manager, { first_name: 'ارسیا', last_name: 'واستاندارد' });
     studentId = s.id;
     const types = dataOf<Array<{ key: string; id: string }>>(await manager.get('/api/case-events/types?active=true'));
-    // فرم قدیمی وکسلر با 0054 بازنشسته شد — چرخهٔ پیش‌نویس/نهایی‌سازی با یک نوع فرم‌سازِ تستی با
-    // «اقدام بعدی» الزامی (select شامل «پیگیری») انجام می‌شود؛ رفتار هوک بدون وابستگی به میراث
     const created = dataOf<{ id: string }>(await manager.post('/api/case-events/types', {
       title: 'فرم تست اقدام بعدی',
       category: 'session',
@@ -201,7 +186,6 @@ describe('گزارش متصل به نوبت + batch', () => {
     const types = dataOf<Array<{ key: string; id: string }>>(await manager.get('/api/case-events/types?active=true'));
     typeId = types.find((t) => t.key === 'intervention')!.id;
 
-    // نوبتِ یک ساعت پیش (روی شبکهٔ ۱۵ دقیقه‌ای) با همان دانش‌آموز
     const start = quarterHourFromNow(-60);
     const appt = await manager.post('/api/appointments', apptBody(ALI_ID, start, 45, [studentId]));
     expect(appt.status).toBe(201);
@@ -230,8 +214,6 @@ describe('گزارش متصل به نوبت + batch', () => {
     expect(map[appointmentId]!.length).toBe(1);
   });
 });
-
-// ───────────── بات — نمای چرخهٔ پرونده + صفحه‌بندی ─────────────
 
 describe('بات: تاریخچه/چک‌لیست‌های او/صفحه‌بندی/نتایج خانواده', () => {
   let A: ReturnType<typeof createTestApp>;
@@ -273,7 +255,6 @@ describe('بات: تاریخچه/چک‌لیست‌های او/صفحه‌بند
     const c0 = await bot(A, cb(`stu:ckl:${idx}`, CHAT_ALI, 32));
     expect(c0.reply).toContain('چک‌لیست');
 
-    // ساخت چک‌لیست از ویزارد
     await bot(A, cb(`stu:tl:${idx}`, CHAT_ALI, 33));
     const types = await bot(A, cb(`tl:types:${idx}:checklist`, CHAT_ALI, 34));
     const startCb = types.buttons!.flat().find((b) => b.callbackData.startsWith('tl:start:'))!.callbackData;
@@ -281,7 +262,6 @@ describe('بات: تاریخچه/چک‌لیست‌های او/صفحه‌بند
     const done = await bot(A, cb('tl:do', CHAT_ALI, 36));
     expect(done.reply).toContain('رویداد ثبت شد');
 
-    // ویزارد state را پاک می‌کند — فهرست دوباره باز می‌شود (الگوی )
     const relist = await bot(A, tx('دانش‌آموزان فعال', CHAT_ALI, 361));
     const stuCb2 = relist.buttons!.flat().find((b) => b.callbackData.startsWith('stu:menu:'))!.callbackData;
     const idx2 = stuCb2.split(':')[2];
@@ -291,13 +271,11 @@ describe('بات: تاریخچه/چک‌لیست‌های او/صفحه‌بند
   });
 
   it('خانواده: «چک‌لیست‌های من» پس از پاسخ → نتیجه با امتیاز در همان فهرست', async () => {
-    // والد پاسخ می‌دهد
     const list = await bot(A, tx('چک‌لیست‌های من', CHAT_PARENT));
     const fillBtn = list.buttons!.flat().find((b) => b.callbackData.startsWith('clf:fill:'))!;
     expect(fillBtn).toBeTruthy();
     const eventId = fillBtn.callbackData.split(':')[2];
     await bot(A, cb(fillBtn.callbackData, CHAT_PARENT, 40));
-    // ۸ آیتم چک‌لیست رفتار — همه ۰
     for (let i = 0; i < 8; i++) await bot(A, cb('clf:a:0', CHAT_PARENT, 41 + i));
     const sent = await bot(A, cb('clf:do', CHAT_PARENT, 60));
     expect(sent.reply).toContain('پاسخ‌های شما ثبت شد');
@@ -325,8 +303,6 @@ describe('بات: تاریخچه/چک‌لیست‌های او/صفحه‌بند
     expect(cancel.reply).toContain('پیام لغو شد');
   });
 });
-
-// ───────────── قالب‌های جدید ─────────────
 
 describe('قالب‌های بات', () => {
   it('bot_family_message_sent — «پیام» نه «تکلیف»', () => {

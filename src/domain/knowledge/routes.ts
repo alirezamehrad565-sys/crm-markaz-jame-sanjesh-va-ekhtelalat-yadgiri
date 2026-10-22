@@ -1,12 +1,3 @@
-/**
- * ماژول پایگاه دانش — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// دانش‌افزایی
-// RBAC: خواندن همهٔ همکاران احرازشده؛ ساخت/ویرایش دفتر (مدیر/منشی)؛ حذف فقط مدیر
-// — پیوست فایل/تصویر: آپلود multipart پخش‌جریانی + بارگذاری پیوستهٔ تکه‌ای برای
-// فایل‌های بزرگ + دانلود تکی — همان الگوی بانک تمرین؛ مجوز نوشتن پیوست = دفتر.
-
 import type { AppHono } from '@core/shared';
 import { NewKnowledgeSchema, UpdateKnowledgeSchema, UuidSchema } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
@@ -14,7 +5,6 @@ import { NotFoundError, ValidationError } from '@core/errors';
 import { parseMultipartStream } from '@domain/exercise-bank/multipart';
 import type { KnowledgeService } from './types';
 
-/** — MIME از پسوند برای مرورگرهایی که نوع خالی می‌دهند — همان نگاشت بانک تمرین */
 const EXT_MIME_FALLBACK: Record<string, string> = {
   mp4: 'video/mp4',
   m4v: 'video/x-m4v',
@@ -48,7 +38,6 @@ function guessMime(filename: string, declared: string): string {
   return EXT_MIME_FALLBACK[ext] ?? t ?? 'application/octet-stream';
 }
 
-/** Content-Disposition امن با نام فایل UTF-8 — همیشه attachment (الگوی تمرین) */
 function downloadHeaders(filename: string, mimeType: string): Record<string, string> {
   const asciiFallback = filename.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_');
   return {
@@ -58,19 +47,16 @@ function downloadHeaders(filename: string, mimeType: string): Record<string, str
 }
 
 export function registerKnowledgeRoutes(app: AppHono, service: KnowledgeService): void {
-  // فهرست برای همهٔ همکاران (داشبورد → کارت دانش‌افزایی)
   app.get('/api/knowledge', async (c) => {
     const items = await service.listPublished();
     return c.json({ data: items }, 200);
   });
 
-  // فهرست مدیریتی (تنظیمات → تب دانش)
   app.get('/api/knowledge/manage', requireRole('manager', 'secretary'), async (c) => {
     const items = await service.listAll();
     return c.json({ data: items }, 200);
   });
 
-  // ساخت (دفتر)
   app.post('/api/knowledge', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = NewKnowledgeSchema.parse(await c.req.json<unknown>());
@@ -81,7 +67,6 @@ export function registerKnowledgeRoutes(app: AppHono, service: KnowledgeService)
     return c.json({ data: result }, 201);
   });
 
-  // ویرایش (دفتر)
   app.patch('/api/knowledge/:id', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = UpdateKnowledgeSchema.parse(await c.req.json<unknown>());
@@ -99,14 +84,12 @@ export function registerKnowledgeRoutes(app: AppHono, service: KnowledgeService)
     return c.json({ data: result }, 200);
   });
 
-  // حذف کامل (فقط مدیر — الگوی اعلان‌ها)
   app.delete('/api/knowledge/:id', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     const result = await service.remove(c.req.param('id'), actor);
     return c.json({ data: result }, 200);
   });
 
-  // ─── پیوست‌های مقاله — چندفایلی multipart پخش‌جریانی (الگوی بانک تمرین) ───
   app.post('/api/knowledge/:id/files', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const id = UuidSchema.parse(c.req.param('id'));
@@ -126,7 +109,6 @@ export function registerKnowledgeRoutes(app: AppHono, service: KnowledgeService)
     return c.json({ data: updated }, 201);
   });
 
-  // ─── بارگذاری پیوستهٔ فایل‌های بزرگ (هر تکه یک درخواست کوچک — امن با سقف CPU) ───
   app.post('/api/knowledge/:id/files/begin', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const id = UuidSchema.parse(c.req.param('id'));
@@ -161,7 +143,6 @@ export function registerKnowledgeRoutes(app: AppHono, service: KnowledgeService)
     return c.json({ data: updated }, 200);
   });
 
-  // ─── دانلود/حذف یک پیوست ───
   app.get('/api/knowledge/:id/files/:fileId', async (c) => {
     const id = UuidSchema.parse(c.req.param('id'));
     const fileId = UuidSchema.parse(c.req.param('fileId'));

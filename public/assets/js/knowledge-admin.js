@@ -1,14 +1,3 @@
-/**
- * پنل پایگاه دانش
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// knowledge-admin.js — مدیریت دانش‌افزایی (تب تنظیمات، دفتر)
-// دستور کاربر: «باید بخش‌هایی برای اطلاع‌رسانی و دانش‌افزایی بگذاریم»
-// ساخت/ویرایش/انتشار/حذف مقالهٔ دانش — نمایش روی داشبورد همهٔ همکاران
-// — پیوست فایل/تصویر (دستور کاربر: «توی قسمت دانش‌افزایی باید بشه فایل مقاله
-// یا تصویر گذاشت») — همان الگوی پیوست بانک تمرین: آپلود چندتایی + تکه‌ای برای
-// فایل‌های بزرگ، تامب‌نیل تصویر، چیپ فایل، حذف، بازکردن در تب جدید
-
 import { api } from './api.js';
 import { el, icon, toast, toastError, confirmModal, formModal, emptyState, loadingState, openModal } from './ui.js';
 import { session } from './state.js';
@@ -17,9 +6,7 @@ import { fa, formatJalaliDateTime } from './format.js';
 const CATEGORY_LABELS = { tip: 'نکتهٔ آموزشی', protocol: 'پروتکل درمانی', article: 'مقاله', news: 'خبر مرکز' };
 const CATEGORY_BADGE = { tip: 'badge--primary', protocol: 'badge--success', article: 'badge--accent', news: 'badge--neutral' };
 
-// سقف‌ها — همان بانک تمرین (پیش‌فرض اولیه؛ مرز قطعی سمت سرور اعمال می‌شود)
 const LIMITS = { maxFileBytes: 50 * 1024 * 1024, maxFilesPerUpload: 10, maxAttachments: 20 };
-/** MIME از پسوند — برای مرورگرهایی که نوع خالی می‌دهند (.mkv/.avi/…) */
 const EXT_MIME_FALLBACK = {
   mp4: 'video/mp4', m4v: 'video/x-m4v', webm: 'video/webm', mov: 'video/quicktime',
   avi: 'video/x-msvideo', mkv: 'video/x-matroska', '3gp': 'video/3gpp', wmv: 'video/x-ms-wmv',
@@ -36,7 +23,6 @@ function isImageMime(mime) {
   return String(mime ?? '').toLowerCase().startsWith('image/');
 }
 
-/** MIME یک فایل محلی: نوع اعلامی مرورگر یا fallback پسوند */
 function localMime(file) {
   const t = (file.type || '').toLowerCase();
   if (t && t !== 'application/octet-stream') return t;
@@ -53,7 +39,6 @@ function sizeLabel(bytes) {
   return bytes >= 1024 ? `${fa(Math.round(bytes / 1024))} کیلوبایت` : `${fa(bytes)} بایت`;
 }
 
-/** — اعتبارسنجی سمت کاربر (همان مرز سرور پیوست تمرین): نوع + حجم + خالی‌نبودن */
 function validateLocalFile(file) {
   const mime = localMime(file);
   const ext = (file.name || '').split('.').pop()?.toLowerCase() ?? '';
@@ -69,7 +54,6 @@ function validateLocalFile(file) {
   return mime;
 }
 
-/** — آپلود یک فایل: تا ۳ مگابایت multipart مستقیم؛ بزرگ‌تر تکه‌تکه (الگوی تمرین) */
 async function uploadAttachment(itemId, file) {
   if (file.size <= MULTIPART_MAX_BYTES) {
     const form = new FormData();
@@ -89,7 +73,6 @@ async function uploadAttachment(itemId, file) {
   await api.post(`/api/knowledge/${itemId}/files/${fileId}/complete`, {});
 }
 
-/** — آپلود چند فایل پشت‌سرهم با گزارش پیشرفت */
 async function uploadAttachments(itemId, files, onProgress) {
   for (let i = 0; i < files.length; i += 1) {
     onProgress?.(i + 1, files.length, files[i].name);
@@ -97,7 +80,6 @@ async function uploadAttachments(itemId, files, onProgress) {
   }
 }
 
-/** دریافت امن فایل پیوست (Bearer → blob) — الگوی دانلود بانک تمرین */
 async function fetchAttachmentBlob(itemId, file) {
   const token = localStorage.getItem('cs.token') ?? '';
   const res = await fetch(`/api/knowledge/${itemId}/files/${file.id}`, {
@@ -107,7 +89,6 @@ async function fetchAttachmentBlob(itemId, file) {
   return res.blob();
 }
 
-/** بازکردن پیوست در تب جدید — blob URL با همان احراز صفحه */
 function openAttachmentInTab(itemId, file) {
   fetchAttachmentBlob(itemId, file)
     .then((blob) => {
@@ -118,7 +99,6 @@ function openAttachmentInTab(itemId, file) {
     .catch(toastError);
 }
 
-/** تامب‌نیل تصویر — واکشی blob و گذاشتن در src */
 function buildThumb(itemId, file) {
   const img = el('img', {
     src: '',
@@ -142,7 +122,6 @@ function buildThumb(itemId, file) {
   return img;
 }
 
-/** چیپ/تامب‌نیل یک پیوست + بازکردن در تب جدید + حذف */
 function attachmentChip(itemId, file, onChanged) {
   const name = el('span', { class: 'exb-file-chip__name', title: file.filename }, file.filename);
   const size = el('span', { class: 'exb-file-chip__size' }, sizeLabel(file.size));
@@ -182,7 +161,6 @@ function attachmentChip(itemId, file, onChanged) {
   );
 }
 
-/** بخش پیوست‌های یک مقاله — چیپ‌ها + دکمهٔ افزودن چندفایلی */
 function attachmentsSection(k, refresh) {
   const wrap = el('div', { class: 'exb-picked', style: { marginTop: '8px' } });
   const input = el('input', { type: 'file', multiple: true, style: { display: 'none' } });
@@ -265,9 +243,6 @@ export function drawKnowledgeAdmin(body) {
   loadList(list);
 }
 
-// ─────────────── فرم ساخت ───────────────
-
-/** ناحیهٔ درگ‌اند‌دراپ چندفایلی + کلیک برای انتخاب — الگوی بانک تمرین */
 function buildDropzone(onFiles) {
   const input = el('input', { type: 'file', multiple: true, style: { display: 'none' } });
   const hint = `${fa(Math.round(LIMITS.maxFileBytes / (1024 * 1024)))} مگابایت`;
@@ -298,7 +273,6 @@ function buildDropzone(onFiles) {
   return el('div', {}, input, zone);
 }
 
-/** فهرست فایل‌های انتخاب‌شدهٔ فرم ساخت به شکل چیپ با دکمهٔ حذف */
 function buildPickedChips(files, onChange) {
   const wrap = el('div', { class: 'exb-picked' });
   function draw() {
@@ -338,7 +312,6 @@ function composeForm(onSaved) {
   const chkPublished = el('input', { type: 'checkbox' });
   chkPublished.checked = true; // پیش‌فرض منطقی — انتشار فوری
 
-  // پیوست‌های مقالهٔ جدید — پس از ثبت مقاله آپلود می‌شوند
   const picked = [];
   let chips = null;
   const dropzoneWrap = el('div', {});
@@ -391,7 +364,6 @@ function composeForm(onSaved) {
       onSaved();
     } catch (err) {
       toastError(err);
-      // مقاله ساخته شده ولی پیوست ناقص مانده — فهرست تازه‌سازی شود تا از همان‌جا تکمیل شود
       if (createdId) onSaved();
     } finally {
       submit.disabled = false;
@@ -411,8 +383,6 @@ function composeForm(onSaved) {
     el('div', { style: { display: 'flex', justifyContent: 'flex-end' } }, submit)
   );
 }
-
-// ─────────────── فهرست ───────────────
 
 async function loadList(list) {
   list.replaceChildren(loadingState());

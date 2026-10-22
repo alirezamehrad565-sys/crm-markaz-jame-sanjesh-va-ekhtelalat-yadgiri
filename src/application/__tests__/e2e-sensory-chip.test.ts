@@ -1,13 +1,3 @@
-/**
- * تست‌های e2e — چیپ غربالگری حسی (T9/m152)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-sensory-chip.test.ts — حلقهٔ کامل ابزار میکروی «حساسیت حسی» تب شناسایی:
-// ثبت معتبر (سه آیتم) → رویداد completed با تحلیل باند + payload برچسب‌دار؛
-// آیتم جا/خارج از بازه → خطای اعتبارسنجی فارسی و بدون رکورد؛ لبه‌های باند (۰/۱/۳/۶)؛
-// ensure idempotent type سیستمی (بدون مایگریشن — اولین ثبت type را می‌سازد، دومی همان را می‌خواند)؛
-// RBAC همان گیت ثبت رویداد (منشی ۴۰۳) — و موتور/rules از این ابزار مصرفی ندارد (رفتار ابزارهای موجود دست‌نخورده).
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, Api, asRole, createStudent } from '../../test/harness';
 
@@ -52,30 +42,25 @@ describe('حلقهٔ چیپ غربالگری حسی — مسیر اختصاصی 
 
     expect(ev.status).toBe('completed');
     expect(ev.typeTitle).toContain('چیپ غربالگری حسی');
-    // جمع ۳ از ۶ → باند دوم (۲–۳ جزئی)
     expect(ev.analysis?.score).toBe(3);
     expect(ev.analysis?.maxScore).toBe(6);
     expect(ev.analysis?.answered).toBe(3);
     expect(ev.analysis?.band).toBe('حساسیت جزئی');
-    // payload — آیتم‌ها با برچسب سطح + نمرهٔ کل + باند + خلاصهٔ فارسی
     expect(ev.payload?.sound).toEqual({ value: 'حساسیت آزارنده', label: 'صدا (صوت)' });
     expect(ev.payload?.light.value).toBe('حساسیت جزئی');
     expect(ev.payload?.touch.value).toBe('بدون حساسیت');
     expect(ev.payload?.chip_total).toEqual({ value: '3', label: 'نمرهٔ کل' });
     expect(ev.payload?.chip_band.value).toBe('حساسیت جزئی');
     expect(ev.payload?.fa_summary.value).toContain('حساسیت حسی: ۳ از ۶');
-    // خط خلاصهٔ تایم‌لاین هم‌شکل بقیهٔ چک‌لیست‌ها
     expect(ev.summary).toContain('امتیاز: ۳ از ۶');
     expect(ev.summary).toContain('حساسیت جزئی');
 
-    // type سیستمی ساخته شد — خارج کتابخانهٔ فرم (active=0) و محافظت‌شده
     const trow = A.sql
       .prepare(`SELECT key, active, is_system FROM case_event_types WHERE key = 'ce-sensory-chip-v1'`)
       .get() as { key: string; active: number; is_system: number };
     expect(trow.is_system).toBe(1);
     expect(trow.active).toBe(0);
 
-    // audit هم‌تراکنش
     const audits = A.sql
       .prepare(`SELECT action FROM audit_log WHERE resource_type = 'case_event' AND resource_id = ?`)
       .all(ev.id) as { action: string }[];

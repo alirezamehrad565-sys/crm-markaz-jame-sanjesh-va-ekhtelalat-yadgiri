@@ -1,14 +1,3 @@
-/**
- * ماژول غربالگری — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// سرویس سنجش روزانه — مالک انحصاری جدول screening_entries
-// قواعد:
-// - ثبت/ویرایش/حذف فقط منشی/مدیر (RBAC در routes)؛ خواندن همهٔ نقش‌ها
-// - ثبت سریع: نام آزاد + برچسب‌ها — هیچ پروفایلی ساخته نمی‌شود
-// - KPI روی «همان ورودی‌های فیلترشده» در pure محاسبه می‌شود
-// - audit هم‌تراکنش (قانون ۴) — بدون PII اضافه (فقط نام کوتاه‌شده)
-
 import type { AuthContext } from '@core/shared';
 import { tehranTodayYmd } from '@core/shared';
 import { NotFoundError, ValidationError } from '@core/errors';
@@ -35,15 +24,12 @@ import {
   screeningStats
 } from './pure';
 
-/** نقش هر برچسب ثابت — برای tagsSummary */
 const KIND_BY_LABEL = new Map<string, ScreeningTagCount['kind']>(
   SCREENING_PREDEFINED_TAGS.map((t) => [t.label, t.kind as ScreeningTagCount['kind']])
 );
 
-/** مجموعهٔ برچسب‌های ارجاع تخصصی — برای rangeSummary */
 const REFERRAL_SET = new Set<string>(SCREENING_REFERRAL_TAGS);
 
-/** پارس امن JSON آرایهٔ برچسب‌ها — مقدار خراب = آرایهٔ خالی */
 function parseTagsJson(raw: string): string[] {
   try {
     const parsed = JSON.parse(raw);
@@ -151,8 +137,6 @@ export function createScreeningService(deps: ScreeningDeps) {
         .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'fa'));
     },
 
-    // ─── خواندنی‌های سبک برای داشبورد (گزارش کوتاه + تحقق هدفگذاری) ───
-
     async dayCounts(from: string, to: string): Promise<ScreeningDayCount[]> {
       const rows = await db.query<{ day: string; count: number }>(
         `SELECT day, COUNT(*) AS count
@@ -188,7 +172,6 @@ export function createScreeningService(deps: ScreeningDeps) {
       input: { name: string; tags: string[]; day?: string },
       actor: AuthContext
     ): Promise<ScreeningEntry> {
-      // پارس دفاعی: هشتگ‌های داخل نام هم برچسب می‌شوند (قرارداد «هر چیزی با #»)
       const parsed = parseEntryInput(input.name);
       const name = normalizeName(parsed.name);
       if (!name) {

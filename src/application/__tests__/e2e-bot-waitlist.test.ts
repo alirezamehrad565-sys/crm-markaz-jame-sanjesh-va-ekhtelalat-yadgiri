@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — bot-waitlist
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-bot-waitlist.test.ts — لیست انتظار ↔ بات
-// ۱) دستور «لیست انتظار» فقط مدیر/منشی (ماتریس نقش) ۲) اعلان «نوبت خالی شد» به دفتر
-// با پرچم notify_waitlist، dedup، و رد chatهای غیردفتری — اپ واقعی + migrations واقعی
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -46,7 +38,6 @@ async function bot(A: ReturnType<typeof createTestApp>, raw: Update): Promise<Bo
 
 const tx = (t: string, chatId: number): Update => ({ update_id: 1, message: { chat: { id: chatId }, text: t } });
 
-// chatها: 7401 مدیر | 7402 همکار (علی) | 7403 والد | 7499 بدون اتصال
 const CHAT_MGR = 7401;
 const CHAT_ALI = 7402;
 const CHAT_PARENT = 7403;
@@ -77,7 +68,6 @@ describe('لیست انتظار ↔ بات', () => {
     const parent = await bot(A, tx('لیست انتظار', CHAT_PARENT));
     expect(parent.reply).toContain('فقط برای همکاران مرکز است');
 
-    // درمانگر (معلم مرکز) هم فهرست را می‌بیند (فقط-خواندن)
     const ali = await bot(A, tx('/waitlist', CHAT_ALI));
     expect(ali.reply).toContain('لیست انتظار');
   });
@@ -108,7 +98,6 @@ describe('لیست انتظار ↔ بات', () => {
     expect(res.reply).toContain('کاردرمانی');
     expect(res.reply).toContain('گفتاردرمانی');
     expect(res.reply).toContain('در انتظار');
-    // فوری بالای عادی (ترتیب پنل)
     const urgentPos = res.reply!.indexOf('حسینی‌فر');
     const normalPos = res.reply!.indexOf('رضایی‌مبارکه');
     expect(urgentPos).toBeGreaterThan(-1);
@@ -124,7 +113,6 @@ describe('لیست انتظار ↔ بات', () => {
     const cancel = await manager.post(`/api/appointments/${appt.id}/cancel`, { version: appt.version });
     expect(cancel.status).toBe(200);
 
-    // پیام در صف برای مدیر — با فیلتر appointment_id از API صف خوانده می‌شود
     const list = await manager.get(`/api/notifications?appointment_id=${appt.id}&limit=50`);
     expect(list.status).toBe(200);
     const rows = (list.body as { data: { recipient: string | null; template: string; appointmentId: string | null }[] }).data
@@ -158,7 +146,6 @@ describe('لیست انتظار ↔ بات', () => {
     const rows2 = (list2.body as { data: { appointmentId: string | null; recipient: string | null; template: string }[] }).data
       .filter((r) => r.template === 'waitlist_slot_freed');
     const forAppt2 = rows2.filter((r) => r.appointmentId === appt.id);
-    // برای مدیرِ متصل فقط یک رکورد — نسخهٔ سوم dedup شده
     expect(forAppt2.filter((r) => r.recipient === String(CHAT_MGR)).length).toBe(1);
   });
 
@@ -178,13 +165,11 @@ describe('لیست انتظار ↔ بات', () => {
     const rows2 = (list2.body as { data: { appointmentId: string | null; template: string }[] }).data;
     expect(rows2.filter((r) => r.template === 'waitlist_slot_freed').length).toBe(0);
 
-    // برگرداندن پرچم برای رفتار پیش‌فرض
     const restore = await manager.put('/api/settings', { notify_waitlist: true });
     expect((restore.body as { data: { notifyWaitlist: boolean } }).data.notifyWaitlist).toBe(true);
   });
 
   it('لیست انتظار خالی → لغو نوبت اعلان «خالی شد» نمی‌سازد', async () => {
-    // همهٔ ورودی‌های باز را می‌بندیم (cancel)
     const list = await manager.get('/api/waitlist?status=waiting&limit=200');
     const rows = (list.body as { data: { id: string; status: string }[] }).data;
     for (const r of rows) {

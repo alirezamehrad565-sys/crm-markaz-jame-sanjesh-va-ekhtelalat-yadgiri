@@ -1,10 +1,3 @@
-/**
- * هارنس تست — ساخت اپ کامل با D1 شبیه‌سازی‌شده
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// هارنس تست یکپارچه — اپ واقعی Hono + اسکیمای واقعی migrations + داده ماک seed-dev
-// بدون وابستگی جدید: D1 با node:sqlite ماک می‌شود (src/test/mock-d1.ts)
-
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -18,8 +11,6 @@ import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { MediaFetcher } from '@core/notify';
 import { createApp } from '@app/api-routing';
-
-// ───────────── شناسه‌های ثابت seed-dev ─────────────
 
 export const MANAGER_ID = '00000000-0000-0000-0000-000000000001';
 export const ALI_ID = '00000000-0000-0000-0000-000000000002'; // therapist
@@ -40,13 +31,9 @@ export const STUDENT6_ID = '20000000-0000-0000-0000-000000000006';
 export const TAG_DISORDER_1 = 'aaaaaaaa-0000-4000-8000-000000000001'; // نارساخوانی
 export const TAG_GRADE_5 = 'aaaaaaaa-0000-4000-8000-000000000106'; // پنجم
 
-// ───────────── مسیرها ─────────────
-
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.resolve(HERE, '../../migrations');
 const SEED_DEV = path.resolve(HERE, '../../scripts/seed-dev.sql');
-
-// ───────────── DB ساختگی با اسکیمای واقعی ─────────────
 
 export function createTestDb(seed = true): DatabaseSyncInstance {
   const db = new DatabaseSync(':memory:');
@@ -60,8 +47,6 @@ export function createTestDb(seed = true): DatabaseSyncInstance {
   return db;
 }
 
-// ───────────── لاگر ساکت (خروجی تست تمیز بماند) ─────────────
-
 function silentLogger(scope = 'test'): Logger {
   const base: Logger = {
     debug: () => undefined,
@@ -73,8 +58,6 @@ function silentLogger(scope = 'test'): Logger {
   };
   return base;
 }
-
-// ───────────── اپ کامل با env ماک ─────────────
 
 export interface TestApp {
   sql: DatabaseSyncInstance;
@@ -106,7 +89,6 @@ export function createTestApp(
     teamDomain: 'test.team.example.com',
     baleToken: null,
     webhookSecret: WEBHOOK_SECRET,
-    // ارسال چک‌لیست با یک کلیک: لینک امن وب‌فرم در تست‌ها ساخته شود
     publicBaseUrl: 'https://center.test.example.com',
     mediaFetcher: opts?.mediaFetcher ?? null
   });
@@ -117,8 +99,6 @@ export function createTestApp(
   };
   return { sql: store, d1, db, app, env };
 }
-
-// ───────────── کلاینت HTTP درون-فرآیندی ─────────────
 
 const FAKE_CTX = { waitUntil: () => undefined, passThroughOnException: () => undefined } as unknown as ExecutionContext;
 
@@ -135,7 +115,6 @@ export class Api {
     private token: string | null = null
   ) {}
 
-  /** جایگزینی توکن (برای سوئیچ نقش) */
   withToken(token: string | null): Api {
     return new Api(this.testApp, token);
   }
@@ -170,7 +149,6 @@ export class Api {
   delete(url: string) { return this.req('DELETE', url); }
 }
 
-/** ورود با username/password واقعی — توکن نشست برمی‌گرداند */
 export async function loginToken(testApp: TestApp, username: string, password = '1234'): Promise<string> {
   const res = await new Api(testApp).post('/api/auth/login', { username, password });
   if (res.status !== 200) throw new Error(`login failed for ${username}: ${JSON.stringify(res.body)}`);
@@ -186,13 +164,10 @@ const ROLE_USERNAME: Record<Role, string> = {
   therapist: 'ali'
 };
 
-/** کلاینت احرازشده با نقش مشخص */
 export async function asRole(testApp: TestApp, role: Role): Promise<Api> {
   const token = await loginToken(testApp, ROLE_USERNAME[role]);
   return new Api(testApp, token);
 }
-
-// ───────────── تولید کد ملی معتبر (checksum رسمی) ─────────────
 
 let nidCounter = 791000000;
 export function makeNationalId(): string {
@@ -206,17 +181,12 @@ export function makeNationalId(): string {
   return core + String(check);
 }
 
-// ───────────── fixtures پرکاربرد ─────────────
-
 export interface CreatedStudent {
   id: string;
-  /** شکل واقعی پاسخ API (camelCase) */
   nationalId: string;
-  /** همان مقدار برای سازگاری با نام ستون DB */
   national_id: string;
 }
 
-/** ساخت دانش‌آموز از طریق API واقعی */
 export async function createStudent(
   api: Api,
   overrides: Record<string, unknown> = {}
@@ -241,7 +211,6 @@ export async function createStudent(
   return { id: body.data.id, nationalId: body.data.nationalId, national_id: body.data.nationalId };
 }
 
-/** بدنه نوبت روی شبکه ۱۵ دقیقه‌ای */
 export function apptBody(staffId: string, startIso: string, durationMin = 45, studentIds: string[] = []) {
   const start = new Date(startIso);
   const end = new Date(start.getTime() + durationMin * 60000);
@@ -253,7 +222,6 @@ export function apptBody(staffId: string, startIso: string, durationMin = 45, st
   };
 }
 
-/** شروع گرد‌شده به ربع ساعت بعد از offset دقیقه از حالا (برای یادآورها) */
 export function quarterHourFromNow(offsetMinutes: number): string {
   const now = Date.now();
   const q = 15 * 60000;
@@ -261,11 +229,6 @@ export function quarterHourFromNow(offsetMinutes: number): string {
   return new Date(aligned).toISOString();
 }
 
-/**
- * ISO یک لحظهٔ «امروز تهران» روی ساعت دیواری مشخص.
- * تست‌های زمان‌محور (برنامهٔ امروز بات و…) را از عبور نیمه‌شب ایمن می‌کند —
- * quarterHourFromNow با offset بزرگ بعدِ ~۲۱:۴۵ تهران به روز بعد می‌افتد.
- */
 export function tehranTodayAt(hour: number, minute = 0): string {
   const ymd = new Date(Date.now() + 210 * 60_000).toISOString().slice(0, 10);
   const hh = String(hour).padStart(2, '0');

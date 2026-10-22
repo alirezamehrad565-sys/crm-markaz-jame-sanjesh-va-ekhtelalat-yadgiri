@@ -1,15 +1,3 @@
-/**
- * موتور بالینی — باتری‌ها، قواعد، روایت و اهداف مداخله — استنتاج بالینی از نتایج
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// موتور شناسایی (پلن §۵): ملاک‌محور + وزن‌دار + تفریقی + ناهم‌رأیی + گپ اطلاعاتی
-// بدون I/O — ورودی EvidenceEvent[] نرمال‌شده؛ خروجی InferenceOutput قطعی و بازتولیدپذیر.
-// قراردادها:
-// - فقط رویدادهای completed مصرف می‌شوند (سرویس فیلتر می‌کند — این‌جا هم محافظت می‌شود)
-// - «آخرین اندازه‌گیری» برای امتیاز شواهد: جدیدترین رویداد هر ابزار
-// - جدول ملاک‌ها از «دو رویداد آخر هر ابزار» نظر می‌گیرد (والد + معلم — پلن §۵ گام ۱)
-// - هم‌رأیی والد/معلم: جفت شاهد danger از دو مرجعِ consensus — هر دو ×۱٫۵ (پلن §۵ گام ۲)
-
 import type {
   EvidenceEvent,
   EvidenceRule,
@@ -27,13 +15,9 @@ import { DSM_RECORDS } from './dsm-criteria';
 import { targetOf } from './targets';
 import { WCPM_NORM_50TH, ALPHA_15S_NORM, DIGITS_2MIN_NORM, batteryDef } from './instruments';
 import { WECHSLER_W4_EVENT_KEY, wechslerEngineOutputOf } from './wechsler-link';
-// T4 (m148) — لایهٔ سیگنال شرح‌حال: قرارداد ClinicalSignal از signals.ts (افزودنی — بدون تغییر کلیدهای قدیمی)
 import type { ClinicalSignal, SignalDomain, WechslerFsiqBand } from './signals';
 import { makeSignal, sortSignals } from './signals';
-// T6 (m148-b) — هم‌گرایی چندمنبعی: جدول طبقه‌بندی منابع + طبقه‌بندی خوانا سه‌حالته
 import { convergenceSourceOfTool, convergenceItemOf, idAdaptLevelOfEvent, ID_ADAPT_EVENT_KEY, type ConvergenceSource, type ConvergenceItem } from './convergence';
-
-// ───────── نگاشت پروب‌ها (هاردکد — پلن §۴ لایهٔ ۳) ─────────
 
 export const PROBES: ProbeDef[] = [
   { toolKey: 'ce-probe-read-v1', valueField: 'wcpm', gradeField: 'text_grade', norm: WCPM_NORM_50TH, fa: 'پروب روانی‌خواندن' },
@@ -45,23 +29,13 @@ function probeDefOf(toolKey: string): ProbeDef | undefined {
   return PROBES.find((p) => p.toolKey === toolKey);
 }
 
-// ───────── شرح‌حال — کلیدهای ابزار (T4 m148) ─────────
-
-/** نسخهٔ ۲ — فقط برای پرونده‌های قدیمی (برای ورودی جدید غیرفعال شده) */
 export const ANAMNESIS_V2_KEY = 'ce-anamnesis-v2';
-/** نسخهٔ ۳ — فرم ساخت‌یافتهٔ جدید؛ حل شواهد شرح‌حال نسخهٔ ۳ را ترجیح می‌دهد */
 export const ANAMNESIS_V3_KEY = 'ce-anamnesis-v3';
 
-/** آخرین شرح‌حال مؤثر پرونده — نسخهٔ ۳ اگر رویداد داشته باشد، وگرنه نسخهٔ ۲ (فال‌بک دقیق) — مصرف‌کننده: تست‌ها */
 export function latestAnamnesisKeyOf(latest: Map<string, EvidenceEvent>): string {
   return latest.has(ANAMNESIS_V3_KEY) ? ANAMNESIS_V3_KEY : ANAMNESIS_V2_KEY;
 }
 
-// ───────── سیگنال‌های شرح‌حال نسخهٔ ۳ (T4 m148 — قرارداد کلیدها برای T3/T6) ─────────
-
-// فیلدهای ساخت‌یافتهٔ نسخهٔ ۳ با گزینه‌های ثابت می‌آیند؛ هر گزینه به شدت ۰..۱ نگاشت می‌شود.
-// جدول بازه‌های نگرانی ۴تایی — مشترک بین فیلدهای concern (قرارداد فرم v3):
-//   «بدون نگرانی»=۰ · «کم»=۰٫۳۳ · «متوسط»=۰٫۶۷ · «زیاد — نگران‌کننده»=۱
 const ANAMNESIS_V3_LEVEL4: Record<string, number> = {
   'بدون نگرانی': 0,
   'کم': 0.33,
@@ -74,7 +48,6 @@ const level4Of = (label: string): number | null => {
   return v === undefined ? null : v;
 };
 
-/** جدول نگاشت فیلد نسخهٔ ۳ → سیگنال (تک‌منبع قرارداد؛ منبع همیشه anamnesis) */
 const ANAMNESIS_V3_SIGNAL_SPEC: { fieldKey: string; sigKey: string; domain: SignalDomain; faHead: string; valueOf: (label: string) => number | null }[] = [
   { fieldKey: 'sld_read_concern', sigKey: 'anam.sld_read', domain: 'academic', faHead: 'خواندن', valueOf: level4Of },
   { fieldKey: 'sld_write_concern', sigKey: 'anam.sld_write', domain: 'academic', faHead: 'نوشتن و املا', valueOf: level4Of },
@@ -91,17 +64,11 @@ const ANAMNESIS_V3_SIGNAL_SPEC: { fieldKey: string; sigKey: string; domain: Sign
   { fieldKey: 'school_change', sigKey: 'anam.school_change', domain: 'academic', faHead: 'تغییر مدرسه (سه سال اخیر)', valueOf: (l) => ({ 'هیچ': 0, 'یک بار': 0.33, 'دو بار': 0.67, 'سه بار یا بیشتر': 1 }[l] ?? null) }
 ];
 
-/** نگاشت گزینهٔ نسخهٔ ۳ به شدت ۰..۱ از جدول قرارداد — ناشناخته → null */
 function anamV3ValueOf(fieldKey: string, label: string): number | null {
   const spec = ANAMNESIS_V3_SIGNAL_SPEC.find((s) => s.fieldKey === fieldKey);
   return spec ? spec.valueOf(label) : null;
 }
 
-/**
- * سیگنال‌های شرح‌حال از آخرین رویداد نسخهٔ ۳ — افزودنی (کلید جدید anamnesisSignals).
- * فقط نسخهٔ ۳ سیگنال می‌دهد؛ نسخهٔ ۲ دقیقاً رفتار امروز (هیوریستیک متن) را دارد → []
- * گزینهٔ ناشناخته/فیلد بی‌پاسخ نادیده گرفته می‌شود — خروجی قطعی و مرتب‌شده با sortSignals.
- */
 export function anamnesisSignalsOf(event: EvidenceEvent | undefined): ClinicalSignal[] {
   if (!event || event.toolKey !== ANAMNESIS_V3_KEY || !event.payload) return [];
   const signals: ClinicalSignal[] = [];
@@ -115,27 +82,8 @@ export function anamnesisSignalsOf(event: EvidenceEvent | undefined): ClinicalSi
   return sortSignals(signals);
 }
 
-// ───────── هم‌گرایی پردازشی SLD — رویکرد پردازش اطلاعات (m159) ─────────
-
-/**
- * قرارداد هم‌گرایی پردازشی سه هدف یادگیری با نیم‌رخ وکسلر (طرح m159 §۲):
- *   خواندن  → فشار بر حافظهٔ کاری (حلقهٔ وابستهٔ شنیداری) و سرعت/خودکارسازی؛ تقابل: توان کلامی/استدلالی سالم
- *   نوشتن   → فشار بر نگه‌داشت در حین تولید نوشتاری و خودکارسازی دیداری-حرکتی؛ تقابل: همان
- *   حساب    → فشار بر حافظهٔ کاری عددی، استدلال دیداری-منطقی و خودکارسازی؛ تقابل: توان کلامی
- * پایهٔ علمی: تعریف عملیاتی SLD با الگوی قوت/ضعف (Flanagan & Kaufman — کاربرد بالینی WISC-IV) +
- * رویکرد پردازش اطلاعات (ورودی دیداری/شنیداری → نگه‌داشت → اجرای خودکار). WISC-IV proxy:
- * PRI=ورودی/استدلال دیداری، VCI=دانش/زبان، WMI=نگه‌داشت، PSI=خودکارسازی.
- *
- * خطوط قرمز (m156 محفوظ):
- *  - هرگز از نمرهٔ وکسلر تنها سناریو ساخته نمی‌شود — این تقویت فقط وقتی اعمال می‌شود که
- *    شواهد تحصیلی همان هدف (چک‌لیست ملاکی/پروب) موجود باشد (گیت hasData حلقهٔ قواعد).
- *  - مسیر فعال ID بر آن مقدم است — در idPathActive هیچ تقویتی اعمال نمی‌شود.
- *  - متن‌ها «الگوی هم‌گرا/همسو»اند، نه تشخیص؛ جمع‌بندی با قضاوت درمانگر.
- */
 interface SldProcessingSpec {
-  /** شاخص‌های مرتبط — ضعف هرکدام (هنجاری <۸۵ یا گام ۵ ضعف شخصی) شاهد هم‌گرایی است */
   related: ('vci' | 'pri' | 'wmi' | 'psi')[];
-  /** شاخص‌های تقابل — سالم (≥۹۰ و بدون گام ۵ ضعف) جملهٔ «حفظ توان» را فعال می‌کند */
   contrast: ('vci' | 'pri' | 'wmi' | 'psi')[];
   faHead: string;
   mechanism: string;
@@ -164,33 +112,20 @@ const SLD_PROCESSING: Record<string, SldProcessingSpec> = {
   }
 };
 
-/** ضعف شاخص مرتبط: هنجاری <۸۵ یا ضعف شخصی گام ۵ (نسبت به میانگین خود دانش‌آموز) */
 const isWeakRelated = (facts: { vci: number | null; pri: number | null; wmi: number | null; psi: number | null; step5Weak: string[] }, key: 'vci' | 'pri' | 'wmi' | 'psi'): boolean =>
   (facts[key] !== null && facts[key] < 85) || facts.step5Weak.includes(key.toUpperCase());
 
-/** حفظ شاخص تقابل: هنجاری ≥۹۰ و بدون ضعف شخصی گام ۵ */
 const isIntactContrast = (facts: { vci: number | null; pri: number | null; wmi: number | null; psi: number | null; step5Weak: string[] }, key: 'vci' | 'pri' | 'wmi' | 'psi'): boolean =>
   facts[key] !== null && facts[key] >= 90 && !facts.step5Weak.includes(key.toUpperCase());
-
-// ───────── ابزارهای کمکی ─────────
 
 function completed(events: EvidenceEvent[]): EvidenceEvent[] {
   return events.filter((e) => e.status === 'completed');
 }
 
-/** عدد فارسی برای جملات موتور (T6) */
 function faNum(n: number): string {
   return String(n).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
 }
 
-// ───────── قواعد سیگنالی وکسلر — تفکیک انطباقی ID/دیرآموز (T6 m148-b — §۳.۱) ─────────
-
-/**
- * اطلاعات پروفایل وکسلر برای قواعد سیگنالی — فقط از profile (T1).
- * رویدادهای قدیمی بدون profile → همه null: قواعد جدید خاموش می‌مانند و رفتار امروز
- * بایت‌به‌بایت حفظ می‌شود (پاریتی پرونده‌های قدیمی).
- * m159 — شاخص‌های چهارگانه + وضعیت شخصی گام ۵ برای قواعد هم‌گرایی پردازشی SLD افزوده شد.
- */
 function wechslerProfileFactsOf(event: EvidenceEvent | undefined): {
   fsiq: number | null;
   band: WechslerFsiqBand | null;
@@ -204,8 +139,6 @@ function wechslerProfileFactsOf(event: EvidenceEvent | undefined): {
   const profile = wechslerEngineOutputOf(event)?.profile ?? null;
   const idxNum = (x?: { scaled?: number | null } | null): number | null =>
     typeof x?.scaled === 'number' ? x.scaled : null;
-  // m159 — قرارداد m148-b محفوظ: بدون profile → همه null (قواعد باند/ID/انطباق خاموش).
-  // پوشش داده‌گِیری انطباق برای رویدادهای قدیمی عهدهٔ پیشنهادگر (T3) است که fsiq خام را می‌خواند.
   const fsiq = typeof profile?.fsiq === 'number' ? profile.fsiq : null;
   const bandRaw = typeof profile?.fsiqBand === 'string' ? profile.fsiqBand : null;
   const band = (bandRaw as WechslerFsiqBand | null) ?? (fsiq !== null ? fsiqBandOf(fsiq) : null);
@@ -223,7 +156,6 @@ function wechslerProfileFactsOf(event: EvidenceEvent | undefined): {
   };
 }
 
-/** جدیدترین رویداد هر کلید ابزار (ورودی نزولی زمانی — اولین = جدیدترین) */
 function latestPerTool(events: EvidenceEvent[]): Map<string, EvidenceEvent> {
   const map = new Map<string, EvidenceEvent>();
   for (const e of events) {
@@ -232,7 +164,6 @@ function latestPerTool(events: EvidenceEvent[]): Map<string, EvidenceEvent> {
   return map;
 }
 
-/** دو رویداد آخر هر ابزار — منابع جدول ملاک‌ها و هم‌رأیی */
 function latestTwoPerTool(events: EvidenceEvent[]): Map<string, EvidenceEvent[]> {
   const map = new Map<string, EvidenceEvent[]>();
   for (const e of events) {
@@ -262,11 +193,8 @@ function payloadText(e: EvidenceEvent, keys: string[]): string {
   return keys.map((k) => e.payload?.[k]?.value ?? '').join(' ');
 }
 
-// ───────── رنگ هر قاعدهٔ شواهد از یک رویداد مشخص ─────────
-
 type BandColor = 'ok' | 'warn' | 'danger';
 
-/** رنگ تحقق یک قاعده نسبت به رویداد داده‌شده — null یعنی داده‌ای نیست */
 function ruleColor(rule: EvidenceRule, event: EvidenceEvent | undefined): BandColor | null {
   if (!event) return null;
 
@@ -278,7 +206,6 @@ function ruleColor(rule: EvidenceRule, event: EvidenceEvent | undefined): BandCo
     if (value === null || !grade) return null;
     const n = def.norm[grade];
     if (!n) return null;
-    // قرارداد پروب (قبلاً probeStatus): زیر ۸۰٪ هنجار = پایین از انتظار (شاهد اصلی)
     return value < n * 0.8 ? 'danger' : 'ok';
   }
 
@@ -288,62 +215,45 @@ function ruleColor(rule: EvidenceRule, event: EvidenceEvent | undefined): BandCo
     return fsiq >= BIF_IQ_RANGE.min && fsiq <= BIF_IQ_RANGE.max ? 'danger' : 'ok';
   }
 
-  // anamnesis با پرچم هدف‌محور جداگانه اعمال می‌شود (anamnesisFlagFor) — این‌جا null
   if (rule.kind === 'anamnesis') return null;
 
-  // instrument / sdq — از تحلیل چک‌لیست (زیرمقیاس یا کل)
   const analysis = event.analysis;
   if (!analysis) return null;
   if (rule.subscaleId) {
     const ss = analysis.subscaleScores?.find((s) => s.id === rule.subscaleId);
     if (!ss) return null;
     if (ss.color) return ss.color;
-    // فال‌بک رویدادهای قدیمی: برچسب باند → رنگ از تعریف زیرمقیاس
     const def = event.subscales?.find((s) => s.id === rule.subscaleId);
     return colorOfBandLabel(ss.band, def?.bands ?? null);
   }
   return colorOfBandLabel(analysis.band, event.bands);
 }
 
-/**
- * پرچم‌های شرح‌حال — هیوریستیک شفاف v1 روی متن فیلدهای آزاد (کامنت‌دار و تست‌پذیر).
- * با دادهٔ مرکز به فلگ ساخت‌یافتهٔ دقیق ارتقا می‌یابد.
- * T4 (m148): نسخهٔ ۲ عیناً همین هیوریستیک می‌ماند (فال‌بک دقیق پرونده‌های قدیمی)؛
- * نسخهٔ ۳ پرچم را از کلیدهای ساخت‌یافته می‌گیرد — نه از متن آزاد.
- */
 const ANAMNESIS_TEXT_FIELDS = ['chief_complaint', 'weak_subjects', 'development', 'medical'];
 
 function anamnesisFlagFor(targetKey: string, event: EvidenceEvent | undefined): boolean {
-  // نسخهٔ ۳ — کلیدهای ساخت‌یافته (قرارداد فرم v3)
   if (event && event.toolKey === ANAMNESIS_V3_KEY) {
     if (targetKey === 'slow_learner') {
-      // «افت همه‌درسی/بیشترِ درس‌ها» — از گزینهٔ ساخت‌یافتهٔ decline_scope (≥۰٫۶۷)
       const v = anamV3ValueOf('decline_scope', event.payload?.['decline_scope']?.value ?? '');
       return v !== null && v >= 0.67;
     }
     if (targetKey === 'anxiety') {
-      // «نشانهٔ جسمانی صبحگاهی بدون علت پزشکی» — گزینه‌های «گاهی» و «بیشتر روزها» (همان حساسیت متن آزاد v2)
       const v = anamV3ValueOf('morning_somatic', event.payload?.['morning_somatic']?.value ?? '');
       return v !== null && v >= 0.5;
     }
     return false;
   }
-  // نسخهٔ ۲ — هیوریستیک متن آزاد (بایت‌به‌بایت رفتار امروز)
   if (!event || event.toolKey !== ANAMNESIS_V2_KEY) return false;
   const text = payloadText(event, ANAMNESIS_TEXT_FIELDS);
   if (!text) return false;
   if (targetKey === 'slow_learner') {
-    // «افت تحصیلی تدریجی همه‌درسی» — الگوی متن آزاد v1
     return text.includes('افت') && (text.includes('همه') || text.includes('همۀ'));
   }
   if (targetKey === 'anxiety') {
-    // «نشانهٔ جسمانی صبحگاهی بدون علت پزشکی»
     return text.includes('صبح') && ['دل‌درد', 'دل درد', 'تهوع', 'شکم', 'استفراغ', 'سردرد'].some((w) => text.includes(w));
   }
   return false;
 }
-
-// ───────── گام ۱ — جدول وضعیت ملاک‌ها ─────────
 
 function criterionStatus(criterionId: string, ruleSet: RuleSet, perTool: Map<string, EvidenceEvent[]>): DsmCriterionStatus {
   const entries = ruleSet.criteriaMap.filter((m) => m.criterionId === criterionId);
@@ -369,14 +279,12 @@ function criterionStatus(criterionId: string, ruleSet: RuleSet, perTool: Map<str
     }
   }
 
-  // «باند بالا در دو مرجع = برآورده؛ یکی = ناقص؛ هیچ = نامشخص/نیاز به بررسی» (پلن §۵ گام ۱)
   if (metCount >= 2) return { criterionId, status: 'met', sources };
   if (metCount === 1) return { criterionId, status: 'partial', sources };
   if (answeredEvents > 0 && zeroOnly) return { criterionId, status: 'not_met', sources };
   return { criterionId, status: 'unknown', sources };
 }
 
-/** تعداد ملاک‌های A با نمرهٔ کامل از هر مرجع — قاعدهٔ ویژهٔ ODD (≥۴ از ۸) */
 function fullCriteriaCount(targetKey: string, perTool: Map<string, EvidenceEvent[]>): number {
   const ruleSet = rulesOf(targetKey);
   if (!ruleSet) return 0;
@@ -394,7 +302,6 @@ function fullCriteriaCount(targetKey: string, perTool: Map<string, EvidenceEvent
   return full;
 }
 
-/** الگوی ملاکی اتیسم: هر سه A برآورده + تعداد Bهای برآورده (قاعدهٔ §۵ — حداقل ۲ از ۴) */
 function autismPattern(perTool: Map<string, EvidenceEvent[]>): { allA: boolean; bMet: number } {
   const ruleSet = rulesOf('autism');
   if (!ruleSet) return { allA: false, bMet: 0 };
@@ -404,12 +311,6 @@ function autismPattern(perTool: Map<string, EvidenceEvent[]>): { allA: boolean; 
   return { allA, bMet };
 }
 
-// ───────── هم‌رأیی والد/معلم (گام ۲ — ×۱٫۵) ─────────
-
-/**
- * آیا این رویداد، شاهد danger برای یکی از قواعد danger همان ابزار می‌سازد؟
- * خروجی: وزن قاعدهٔ محقق‌شده (برای محاسبهٔ ضریب) — یا null.
- */
 function dangerWeightOf(rules: EvidenceRule[], toolKey: string, event: EvidenceEvent): number | null {
   for (const rule of rules) {
     if (rule.toolKey !== toolKey || rule.band !== 'danger') continue;
@@ -420,9 +321,7 @@ function dangerWeightOf(rules: EvidenceRule[], toolKey: string, event: EvidenceE
 }
 
 interface ConsensusResult {
-  /** نیم‌جمع وزن جفت — به امتیاز اضافه می‌شود تا جفت = ۱٫۵ برابر جمع پایه */
   bonus: number;
-  /** شاهد تک‌مرجعی خانه بدون تأیید معلم — برای خط ناهم‌رأیی */
   oneSided: boolean;
 }
 
@@ -430,24 +329,19 @@ function consensusOf(ruleSet: RuleSet, perTool: Map<string, EvidenceEvent[]>): C
   if (!ruleSet.consensus) return { bonus: 0, oneSided: false };
   const { parent, teacher } = ruleSet.consensus;
   const parentEvents = perTool.get(parent) ?? [];
-  // ابزار یکسان (مثل چک‌لیست‌های ملاکی والد+معلم): دو رویداد جدا؛ ابزار متفاوت (SNAP والد/معلم)
   const teacherEvents = teacher === parent ? parentEvents.slice(1) : perTool.get(teacher) ?? [];
   const pw = parentEvents.length > 0 ? dangerWeightOf(ruleSet.evidence, parent, parentEvents[0]) : null;
   const tw = teacherEvents.length > 0 ? dangerWeightOf(ruleSet.evidence, teacher, teacherEvents[0]) : null;
   if (pw !== null && tw !== null) {
     return { bonus: pw * 0.5 + tw * 0.5, oneSided: false };
   }
-  // ناهم‌رأیی فقط وقتی هر دو مرجع پاسخ داده‌اند ولی فقط یکی danger است
   if (parentEvents.length > 0 && teacherEvents.length > 0 && (pw !== null) !== (tw !== null)) {
     return { bonus: 0, oneSided: true };
   }
   return { bonus: 0, oneSided: false };
 }
 
-// ───────── موتور اصلی ─────────
-
 export interface InferOptions {
-  /** ISO UTC — تزریقی برای تست */
   now?: () => Date;
 }
 
@@ -459,7 +353,6 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
 
   const seen = [...latest.keys()];
   const seenTitles = [...new Set([...latest.values()].map((e) => e.typeTitle))];
-  // شرح‌حال مؤثر پرونده (نسخهٔ ۳ ترجیح، فال‌بک نسخهٔ ۲) + سیگنال‌های افزودنی (فقط نسخهٔ ۳ سیگنال می‌دهد)
   const anamKey = latest.has(ANAMNESIS_V3_KEY) ? ANAMNESIS_V3_KEY : ANAMNESIS_V2_KEY;
   const anamnesisSignals = anamnesisSignalsOf(latest.get(ANAMNESIS_V3_KEY));
 
@@ -469,42 +362,29 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
   const referralFlags: string[] = [];
   const nextActionsSet = new Set<string>();
 
-  // ── T6 (m148-b) — زمینهٔ قواعد سیگنالی وکسلر (همه از دادهٔ موجود؛ بدون محاسبهٔ تازه) ──
   const wEvent = latest.get(WECHSLER_W4_EVENT_KEY);
   const wFacts = wechslerProfileFactsOf(wEvent);
   const adapt = idAdaptLevelOfEvent(latest.get(ID_ADAPT_EVENT_KEY));
-  // m156 — زمینهٔ فرضیه‌های وکسلر (hypCtx/sigValOf/domainWeakIndexOf) حذف شد؛ نیم‌رخ هوشی فقط
-  // از طریق قواعد سیگنالی پروفایل (FSIQ band/ID red-line) خوانده می‌شود — هیچ فرضیه‌ای از وکسلر نمی‌آید.
-  // خط قرمز مسیر ID (§۳.۱): FSIQ ≤ ۷۰ «و» انطباق پایین → ارجاع؛
-  // در این مسیر هیچ تقویت دیرآموزی اعمال نمی‌شود — دو مسیر ID و دیرآموز هرگز هم‌پوشان نمی‌شوند.
   const idPathActive = wFacts.fsiq !== null && wFacts.fsiq <= ID_PATH_MAX_FSIQ && adapt === 'low';
   if (idPathActive) {
     referralFlags.push('خط قرمز — مسیر ناتوانی هوشی: هوش‌بهر کل ۷۰ یا کمتر همراه انطباق روزمرهٔ «پایین» است؛ پرونده برای ارجاع تخصصی (روان‌پزشک/مدیر پرونده) علامت خورد — پلن چک‌لیست رفتاری پیشنهاد نمی‌شود.');
     nextActionsSet.add('مسیر ناتوانی هوشی (ID) فعال شده است — «ارجاع» به متخصص تخصصی پیش از هر پلن آموزشی؛ فرضیهٔ دیرآموزی تقویت نمی‌شود.');
   }
-  // مرز پایین یکنواخت (۸۵–۸۹ با پراکندگی زیر سقف تفسیر واحد) — فقط توصیهٔ پایش، بدون برچسب تشخیصی (§۳.۱)
   if (!idPathActive && wFacts.band === 'LOW_BORDER' && wFacts.indexScatter !== null && wFacts.indexScatter < SCATTER_UNIFORM_MAX) {
     nextActionsSet.add('نیم‌رخ هوشی در «مرز پایین» با شاخص‌های یکنواخت است — بدون برچسب تشخیصی، پایش دوره‌ای (شش‌ماهه) پیشنهاد می‌شود.');
   }
-  // ── m159 — سناریوهای تکمیلی ID ──
-  // الف) FSIQ ۷۱–۷۵ + انطباق «پایین» — با احتساب خطای استاندارد اندازه‌گیری وکسلر (SEM ≈ ۳ نمره؛
-  // بازهٔ اطمینان ۹۵٪ ≈ ±۶٫۶) نمرهٔ ۷۵ می‌تواند توان واقعی ~۷۰ باشد؛ ملاک عملیاتی DSM «تقریباً ۷۰ یا کمتر»
-  // → پرچم ارجاع، نه فعال‌سازی مسیر ID.
   if (!idPathActive && wFacts.fsiq !== null && wFacts.fsiq >= 71 && wFacts.fsiq <= 75 && adapt === 'low') {
     referralFlags.push('هوش‌بهر کل ۷۱–۷۵ همراه انطباق روزمرهٔ «پایین» است — با احتساب خطای استاندارد اندازه‌گیری وکسلر (SEM حدود ۳ نمره)، ناتوانی هوشی رد نمی‌شود؛ ارزیابی تخصصی انطباق و مشورت ارجاع لازم است.');
   }
-  // ب) FSIQ در بازهٔ ID ولی انطباق ثبت‌نشده → اقدام بعدی؛ تفکیک مسیر ID از دیرآموزی به سنجهٔ انطباق وابسته است
   if (wFacts.fsiq !== null && wFacts.fsiq <= ID_PATH_MAX_FSIQ && adapt === 'unknown' && wEvent) {
     nextActionsSet.add('هوش‌بهر کل ۷۰ یا کمتر است ولی سنجهٔ انطباق روزمره ثبت نشده — تفکیک مسیر ناتوانی هوشی از دیرآموزی به ثبت آن وابسته است (فرم جامع خانواده).');
   }
-  // جمع‌آوری منابع هم‌گرایی (T6 — در همین یک محاسبه؛ ماتریس هرگز به UI نمی‌آید)
   const convergenceMap = new Map<string, { positive: ConvergenceSource[]; data: ConvergenceSource[] }>();
 
   for (const ruleSet of RULES) {
     const target = targetOf(ruleSet.targetKey);
     if (!target) continue;
 
-    // ۰) گیت داده: بدون هیچ رویدادِ معنادار از ابزارهای همین هدف → رد شود (بدون ملاک‌های بی‌معنی)
     const toolKeys = new Set<string>([
       ...ruleSet.evidence.map((r) => r.toolKey),
       ...ruleSet.criteriaMap.map((m) => m.toolKey)
@@ -513,17 +393,13 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
       toolKeys.add(ruleSet.consensus.parent);
       toolKeys.add(ruleSet.consensus.teacher);
     }
-    // شرح‌حال: قواعد به کلید v2 اشاره می‌کنند — اگر پرونده نسخهٔ ۳ دارد، همان هم شاهد است (T4)
     if (toolKeys.has(ANAMNESIS_V2_KEY)) toolKeys.add(anamKey);
-    // m156 — هیچ تقویت فرضیه‌ای از وکسلر به هیچ هدفی تزریق نمی‌شود (اتصال قطع شد).
     const hasData = [...toolKeys].some((k) => {
       const e = latest.get(k);
       return Boolean(e && (e.analysis || e.payload));
     });
     if (!hasData) continue;
 
-    // ۱) امتیاز شواهد — instrument/sdq از «دو مرجع» (دو رویداد آخر هر ابزار)؛
-    // پروب/وکسلر از آخرین اندازه‌گیری؛ band = رنگِ دقیقِ لازم (warn فقط مرزی، danger فقط بالینی)
     const evidenceFa: string[] = [];
     const seenFa = new Set<string>();
     const addFa = (fa: string) => {
@@ -532,7 +408,6 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
         evidenceFa.push(fa);
       }
     };
-    // منابع هم‌گرایی همین هدف (T6) — مثبت = شواهد همان‌جهت؛ داده = رویداد مرتبط با تحلیل/پاسخ
     const srcPositive: ConvergenceSource[] = [];
     const srcData: ConvergenceSource[] = [];
     const noteSource = (toolKey: string, fired: boolean) => {
@@ -544,7 +419,6 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
     let score = 0;
     for (const rule of ruleSet.evidence) {
       if (rule.kind === 'anamnesis') continue; // با پرچم هدف‌محور پایین
-      // T6 — شواهد وکسلریِ دیرآموزی (باند BIF) یک‌جا در بلوک «قوی‌ترین تک‌تقویت» پایین اعمال می‌شود
       if (rule.kind === 'wechsler' && ruleSet.targetKey === 'slow_learner') continue;
       if (rule.kind === 'probe' || rule.kind === 'wechsler') {
         const color = ruleColor(rule, latest.get(rule.toolKey));
@@ -560,7 +434,6 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
         addFa(rule.fa);
       }
     }
-    // منابع هم‌گرایی از قواعد ابزاری — فقط رویدادِ دارای داده (رنگ null = داده‌ای نیست)
     for (const rule of ruleSet.evidence) {
       if (rule.kind === 'anamnesis') continue;
       if (ruleSet.targetKey === 'slow_learner' && rule.kind === 'wechsler') continue;
@@ -578,11 +451,6 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
       }
     }
 
-    // ── T6 (m148-b) — خانوادهٔ شواهد BIF هدف دیرآموزی: «قوی‌ترین تک‌تقویت» — هیچ‌وقت جمع نمی‌شوند ──
-    // (قبل از بلوک شرح‌حال — تا ترتیب متن شواهد با رفتار امروز یکسان بماند)
-    // دو نامزد (m156 — نامزد فرضیه‌ای حذف شد): ۱) قاعدهٔ خام fsiq (رفتار امروز — بازهٔ ۷۰–۸۵ در BIF_IQ_RANGE)؛
-    // ۲) سیگنال پروفایل (فقط رویدادهای دارای profile — T1): FSIQ ۷۰–۸۴ + انطباق عادی/ثبت‌نشده.
-    // فقط قوی‌ترین یکی به امتیاز می‌رود؛ مسیر ID فعال → هیچ تقویتی اعمال نمی‌شود (عدم هم‌پوشانی).
     if (ruleSet.targetKey === 'slow_learner') {
       const cands: { weight: number; fa: string }[] = [];
       for (const rule of ruleSet.evidence) {
@@ -594,9 +462,7 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
         }
       }
       if (wEvent?.payload || wEvent?.analysis) noteSource(WECHSLER_W4_EVENT_KEY, false);
-      // انطباق «پایین» خانواده با مسیر دیرآموزی هم‌رأی نیست — منبع خانواده با دادهٔ مخالف (T6)
       if (adapt === 'low' && latest.has(ID_ADAPT_EVENT_KEY)) noteSource(ID_ADAPT_EVENT_KEY, false);
-      // نامزد ۲ — سیگنال پروفایل: باند BIF (۷۰–۸۴) با انطباق عادی یا ثبت‌نشده
       if (!idPathActive && wFacts.fsiq !== null && wFacts.fsiq >= FSIQ_BAND_BIF.min && wFacts.fsiq <= FSIQ_BAND_BIF.max && (adapt === 'normal' || adapt === 'unknown')) {
         cands.push({
           weight: 1,
@@ -608,16 +474,11 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
         if (best) {
           score += best.weight;
           addFa(best.fa);
-          // هر دو نامزد از رویداد وکسلر می‌آیند — تقویتِ اعمال‌شده = شاهد مثبت منبع «آزمون»
           noteSource(WECHSLER_W4_EVENT_KEY, true);
         }
       }
     }
 
-    // ── m159 — هم‌گرایی پردازشی SLD (رویکرد پردازش اطلاعات) ──
-    // شرط‌های فعال‌شدن (هر سه لازم): ۱) هدف یکی از سه هدف یادگیری؛ ۲) شواهد تحصیلی همان هدف
-    // موجود است (گیت hasData بالا — چک‌لیست ملاکی/پروب)؛ ۳) پروفایل وکسلر با شاخص‌های عددی موجود
-    // و مسیر ID فعال نیست. ساختار «تک‌تقویت» مثل دیرآموزی — +۱ امتیاز، هرگز جمع‌شونده.
     const sldSpec = SLD_PROCESSING[ruleSet.targetKey];
     if (sldSpec && !idPathActive && wFacts.fsiq !== null) {
       const weakRel = sldSpec.related.filter((k) => isWeakRelated(wFacts, k));
@@ -632,25 +493,20 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
           ? `در نیم‌رخ وکسلر، ${weakFa} پایین‌تر از حد انتظار است و ${contrastFa} حفظ شده است — الگوی هم‌گرا با دشواری ${sldSpec.faHead} (رویکرد پردازش اطلاعات: ${sldSpec.mechanism})؛ شاهد پشتیبان ملاک‌های تحصیلی.${bifNote}`
           : `در نیم‌رخ وکسلر ${weakFa} پایین است — همسو با دشواری ${sldSpec.faHead} (${sldSpec.mechanism})؛ چون نیم‌رخ کلی ضعیف است، تعبیر اختصاصی محدودتر می‌ماند.${bifNote}`);
         score += 1;
-        // تقویت اعمال‌شده = شاهد مثبت منبع «آزمون شناختی» در هم‌گرایی
         noteSource(WECHSLER_W4_EVENT_KEY, true);
       } else if (wEvent?.payload || wEvent?.analysis) {
-        // وکسلر داده دارد ولی پردازشِ هم‌جهت ندارد — منبع با دادهٔ بی‌نشانه (مبنای حالت «واگرا»)
         noteSource(WECHSLER_W4_EVENT_KEY, false);
       }
     }
 
-    // پرچم شرح‌حال هدف‌محور (w۱) — نسخهٔ ۳ ترجیح دارد؛ بی‌نسخهٔ ۳، نسخهٔ ۲ با هیوریستیک امروز
     const anamRule = ruleSet.evidence.find((r) => r.kind === 'anamnesis');
     const anamFired = Boolean(anamRule) && anamnesisFlagFor(ruleSet.targetKey, latest.get(anamKey));
     if (anamFired) {
       score += 1;
       if (anamRule) evidenceFa.push(anamRule.fa);
     }
-    // منبع خانواده برای اهداف دارای قاعدهٔ شرح‌حال — مثبت اگر پرچم همان‌جهت داشت (T6)
     if (anamRule && latest.get(anamKey)?.payload) noteSource(anamKey, anamFired);
 
-    // ۲) هم‌رأیی والد/معلم — جفت danger هر دو مرجع → جمع جفت ×۱٫۵
     const consensus = consensusOf(ruleSet, perTool);
     score += consensus.bonus;
     if (consensus.bonus > 0) {
@@ -659,7 +515,6 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
       discrepancies.push(`برای «${target.title}» گزارش خانه و مدرسه هم‌رأی نیست — هیچ‌کدام را قطعی نگیرید؛ بررسی بیشتر لازم است.`);
     }
 
-    // ۳) قواعد ویژهٔ ملاکی
     if (ruleSet.targetKey === 'odd') {
       const full = fullCriteriaCount('odd', perTool);
       if (full >= ODD_MIN_FULL_CRITERIA) {
@@ -675,7 +530,6 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
       }
     }
 
-    // ۴) جدول ملاک‌ها — همیشه کامل حتی برای فرضیه‌های نشده (پلن §۵ گام ۱)
     const dsm = DSM_RECORDS[ruleSet.targetKey];
     const critSummary = { met: 0, partial: 0, unknown: 0, notMet: 0 };
     if (dsm) {
@@ -686,11 +540,8 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
       }
     }
 
-    // ۵) گپ اطلاعاتی — ابزار بعدی همان هدف
     const missingFa: string[] = [];
     for (const toolKey of ruleSet.nextInstrument) {
-      // شرح‌حال (T4): وجود هرکدام از نسخهٔ ۲ یا ۳ گپ را پر می‌کند؛ اگر هیچ‌کدام نیست،
-      // پیشنهاد به فرم فعال (نسخهٔ ۳) اشاره می‌کند — پروندهٔ قدیمیِ فقط-v2 بایت‌به‌بایت امروز می‌ماند.
       const satisfied = latest.has(toolKey) || (toolKey === ANAMNESIS_V2_KEY && latest.has(ANAMNESIS_V3_KEY));
       const displayKey = toolKey === ANAMNESIS_V2_KEY && !latest.has(ANAMNESIS_V2_KEY) ? ANAMNESIS_V3_KEY : toolKey;
       if (!satisfied) {
@@ -699,11 +550,9 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
       }
     }
 
-    // ۶) اطمینان توصیفی (آستانه‌های §۵ — کم/متوسط/زیاد)
     const confidence: ConfidenceLevel =
       score >= CONFIDENCE_THRESHOLDS.high ? 'زیاد' : score >= CONFIDENCE_THRESHOLDS.medium ? 'متوسط' : 'کم';
 
-    // ۷) تفریق‌ها فقط برای فرضیه‌های جدی
     const differentialsFa = confidence === 'کم' ? [] : ruleSet.differentials.map((d) => d.fa);
 
     if (score > 0) {
@@ -719,10 +568,8 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
       });
     }
 
-    // ۸) گپ → اقدام بعدی
     for (const m of missingFa) nextActionsSet.add(m);
 
-    // ۹) خط قرمز — آیتم‌های بحرانی ابزارهای همین هدف
     const consensusTools = [ruleSet.consensus?.parent, ruleSet.consensus?.teacher].filter(Boolean) as string[];
     for (const toolKey of new Set([...consensusTools, ...ruleSet.evidence.filter((r) => r.kind === 'instrument').map((r) => r.toolKey)])) {
       for (const e of perTool.get(toolKey) ?? []) {
@@ -732,17 +579,13 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
       }
     }
 
-    // ثبت منابع هم‌گرایی این هدف (T6)
     convergenceMap.set(ruleSet.targetKey, { positive: srcPositive, data: srcData });
   }
 
-  // رتبه‌بندی: امتیاز ↓ سپس ملاک‌های برآورده ↓ (sort پایدار ترتیب سند را حفظ می‌کند)
   hypotheses.sort((a, b) => b.score - a.score || b.criteriaSummary.met - a.criteriaSummary.met);
 
-  // سقف فرضیه (پلن §۱۱ پیش‌فرض: ۳)
   const ranked = hypotheses.slice(0, 3);
 
-  // پرچم اجتناب از مدرسه (SCARED sch — برش از قواعد: SCARED_SCHOOL_CUTOFF)
   const sch = latest.get('ce-scared-p-v1')?.analysis?.subscaleScores?.find((s) => s.id === 'sch');
   if (sch && sch.score >= SCARED_SCHOOL_CUTOFF) {
     nextActionsSet.add('اجتناب از مدرسه در SCARED گزارش شده — با معلم و خانواده دربارهٔ موقعیت مدرسه صحبت کنید.');
@@ -752,7 +595,6 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
     nextActionsSet.add('هنوز دادهٔ کافی برای فرضیه نیست — SDQ (والد/معلم) و شرح حال ساخت‌یافته را کامل کنید.');
   }
 
-  // T6 (m148-b) — هم‌گرایی چندمنبعی فرضیه‌های رتبه‌خورده (سه حالت خوانا؛ ماتریس پشت‌پرده می‌ماند)
   const convergence: ConvergenceItem[] = [];
   for (const h of ranked) {
     const s = convergenceMap.get(h.targetKey);
@@ -770,9 +612,7 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
     nextActions: [...nextActionsSet].slice(0, 8),
     dataCoverage: { seen, seenTitles },
     referralFlags: [...new Set(referralFlags)].slice(0, 10),
-    // T4 (m148) — کلید افزودنی: سیگنال‌های شرح‌حال نسخهٔ ۳ (پروندهٔ فقط-v2 → [])
     anamnesisSignals
   };
-  // T6 (m148-b) — کلید افزودنی هم‌گرایی؛ ساختار قبلی عیناً حفظ شده (لنگر t4-verify سرجایش است)
   return { ...output, convergence };
 }

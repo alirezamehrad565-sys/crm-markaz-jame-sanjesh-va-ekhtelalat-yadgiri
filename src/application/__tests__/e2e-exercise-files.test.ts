@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — -exercise-files
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e--exercise-files.test.ts — پیوست‌های چندگانهٔ تمرین
-// چند فایل برای هر تمرین (multipart باینری) + ویدیو + سقف ۵۰ مگابایت آداپترمحور
-// + دانلود/حذف تکی + ارتقای فایل اصلی + توکن امضاشدهٔ پیوست + آداپتر D1 تکه‌تکه
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, asRole, Api, WEBHOOK_SECRET } from '../../test/harness';
 import { createAuditWriter } from '@core/audit';
@@ -35,7 +27,6 @@ function makeFile(bytes: Uint8Array, name: string, type: string): File {
   return new File([bytes as unknown as ArrayBuffer], name, { type });
 }
 
-/** درخواست multipart خام به اپ — FormData مستقیم (بدون Content-Type دستی) */
 async function postForm(api: Api, path: string, form: FormData): Promise<{ status: number; body: unknown }> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   const token = api['token'] as string | null;
@@ -103,10 +94,8 @@ describe('پیوست‌های چندگانهٔ تمرین', () => {
     expect(rec.files[0].filename).toBe('carbarg.png');
     expect(rec.files[1].filename).toBe('ammoresh-video.mp4');
     expect(rec.files[1].mime).toBe('video/mp4');
-    // فایل اصلی = اولین پیوست (سازگاری بات/لینک خانواده)
     expect(rec.file?.filename).toBe('carbarg.png');
 
-    // آینهٔ ستون‌های file_* روی exercises
     const row = A.sql.prepare('SELECT file_name, file_key FROM exercises WHERE id = ?').get(exId) as { file_name: string; file_key: string };
     expect(row.file_name).toBe('carbarg.png');
     expect(row.file_key).toBe(`exercise/${exId}/${rec.files[0].id}`);
@@ -159,7 +148,6 @@ describe('پیوست‌های چندگانهٔ تمرین', () => {
     expect(after.files[0].filename).toBe('a.png');
     expect(after.file?.filename).toBe('a.png');
 
-    // قطعه‌های ذخیرهٔ فایل حذف‌شده هم پاک شده‌اند
     const chunks = A.sql.prepare('SELECT COUNT(*) AS n FROM exercise_file_chunks WHERE key = ?').get(`exercise/${exId}/${rec.files[1].id}`) as { n: number };
     expect(chunks.n).toBe(0);
   });
@@ -192,7 +180,6 @@ describe('پیوست‌های چندگانهٔ تمرین', () => {
     const up = await postForm(manager, `/api/exercises/${exId}/files`, form);
     const rec = (up.body as { data: ExerciseView }).data;
 
-    // سرویس مستقیم برای توکن (downloadSecret هم‌گام با هارنس)
     const svc = createExerciseBankService({
       db: A.db,
       audit: createAuditWriter(A.db),
@@ -211,7 +198,6 @@ describe('پیوست‌های چندگانهٔ تمرین', () => {
     expect(dl1.status).toBe(200);
     expect(await dl1.text()).toBe('%PNG-fake-worksheet-image');
 
-    // توکن بدون پیوست = فایل اصلی
     const tMain = await svc.mintDownloadToken(exId);
     const dlMain = await A.app.request(`/public/exercise-files/${exId}?token=${tMain}`, {}, A.env as never);
     expect(dlMain.status).toBe(200);
@@ -265,7 +251,6 @@ describe('پیوست‌های چندگانهٔ تمرین', () => {
       storage: createChunkedD1ObjectStore(A.db),
       downloadSecret: WEBHOOK_SECRET
     });
-    // الگوی شبه‌تصادفی قطعی — ۴ مگابایت (۳ قطعهٔ ۱.۵MB)
     const big = new Uint8Array(4 * 1024 * 1024);
     let seed = 123456789;
     for (let i = 0; i < big.length; i += 1) {
@@ -309,7 +294,6 @@ describe('پیوست‌های چندگانهٔ تمرین', () => {
     expect(rec.files[0].filename).toBe('new.pdf');
     expect(rec.file?.mime).toBe('application/pdf');
 
-    // قطعه‌های ذخیرهٔ همین تمرین — بعد از تعویض فقط محتوای جدید (۱ قطعهٔ کوچک)
     const cnt = A.sql.prepare(
       "SELECT COUNT(*) AS n FROM exercise_file_chunks WHERE key LIKE ?"
     ).get(`exercise/${exId}/%`) as { n: number };

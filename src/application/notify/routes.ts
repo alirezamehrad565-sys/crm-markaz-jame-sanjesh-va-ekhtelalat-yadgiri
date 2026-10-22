@@ -1,11 +1,3 @@
-/**
- * اعلان‌های کاربردی و بات‌های نقش‌آگاه بله — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// مسیرهای REST اعلان‌ها + webhook بات بله
-// قانون: هیچ business logic اینجا نیست — فقط wire به سرویس + Zod parse
-// توجه: /webhook/* خارج از authMiddleware است (auth فقط /api/* را می‌پوشاند) — secret در مسیر
-
 import type { AppHono } from '@core/shared';
 import { z } from 'zod';
 import {
@@ -22,7 +14,6 @@ import { ValidationError } from '@core/errors';
 import type { NotifyAppService } from './service';
 
 export function registerRoutes(app: AppHono, service: NotifyAppService): void {
-  // ─── صف اعلان‌ها ───
   app.get('/api/notifications', async (c) => {
     const query = NotificationListQuerySchema.parse({
       status: c.req.query('status') || undefined,
@@ -44,13 +35,11 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 200);
   });
 
-  // ───: صندوق اعلان‌ها (Outbox) — پیش‌نویس‌ها + ناموفق‌ها؛ فقط مدیر/منشی ───
   app.get('/api/notifications/outbox', requireRole('manager', 'secretary'), async (c) => {
     const data = await service.outbox();
     return c.json({ data }, 200);
   });
 
-  /** — ارسال فوری یک رکورد از صندوق (رهاسازی پیش‌نویس یا تلاش دوبارهٔ ناموفق) */
   app.post('/api/notifications/:id/release', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const id = UuidSchema.parse(c.req.param('id'));
@@ -58,14 +47,12 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 200);
   });
 
-  /** — تلاش دوبارهٔ همهٔ ناموفق‌ها */
   app.post('/api/notifications/failed/retry', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const data = await service.retryFailed(actor);
     return c.json({ data }, 200);
   });
 
-  // ─── عملیات عملیاتی (فقط مدیر) ───
   app.post('/api/notifications/dispatch', requireRole('manager'), async (c) => {
     const data = await service.dispatchPending(50);
     return c.json({ data }, 200);
@@ -76,13 +63,11 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 200);
   });
 
-  // ───: خلاصهٔ روز بات — تریگر دستی (cron صبح خودش اجرا می‌کند) ───
   app.post('/api/notifications/digest', requireRole('manager'), async (c) => {
     const data = await service.sendDailyDigest();
     return c.json({ data }, 200);
   });
 
-  // ─── تنظیمات اعلان دانش‌آموز ───
   app.get('/api/notifications/prefs/:studentId', async (c) => {
     const studentId = UuidSchema.parse(c.req.param('studentId'));
     const data = await service.getPrefs(studentId);
@@ -106,7 +91,6 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 200);
   });
 
-  // ─── کدهای اتصال بات ───
   app.post('/api/notifications/links', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = CreateLinkSchema.parse(await c.req.json<unknown>());
@@ -121,7 +105,6 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 200);
   });
 
-  // ───: کدهای اتصال بات کارکنان (معلم‌ها) ───
   app.post('/api/notifications/staff-links', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     const body = z.object({ staff_id: UuidSchema }).parse(await c.req.json<unknown>());
@@ -136,13 +119,11 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 200);
   });
 
-  // ───: نام کاربری بات برای ساخت لینک اتصال خودکار (ble.ir/<bot>?start=CODE) ───
   app.get('/api/notifications/bot-username', requireRole('manager', 'secretary'), async (c) => {
     const data = await service.resolveBotUsername();
     return c.json({ data }, 200);
   });
 
-  // ───: کدهای اتصال بات معلم مدرسه (به کلاس) ───
   app.post('/api/notifications/class-links', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = CreateClassLinkSchema.parse(await c.req.json<unknown>());
@@ -157,7 +138,6 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 200);
   });
 
-  // ───: لغو کد اتصال معلم — مدیریت لینک‌ها بدون تولید کد جدید ───
   app.delete('/api/notifications/class-links/:id', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const id = UuidSchema.parse(c.req.param('id'));
@@ -165,7 +145,6 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 200);
   });
 
-  // ───: ارسال گزارش به معلم مدرسه ───
   app.post('/api/notifications/teacher-report', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = TeacherReportSchema.parse(await c.req.json<unknown>());
@@ -173,7 +152,6 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data }, 201);
   });
 
-  // ─── ارسال آزمایشی ───
   app.post('/api/notifications/test', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     const body = TestMessageSchema.parse(await c.req.json<unknown>());
@@ -184,7 +162,6 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     return c.json({ data: result }, result.ok ? 200 : 502);
   });
 
-  // ─── Webhook بات بله (بدون auth — secret در مسیر) ───
   app.post('/webhook/bale/:secret', async (c) => {
     if (!service.isWebhookEnabled()) {
       return c.json({ error: { code: 'NOT_FOUND', message: 'webhook غیرفعال است' } }, 404);
@@ -210,12 +187,10 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
       }
     }
 
-    // همیشه 200 — تا بله بی‌جهت retry نکند؛ reply برای دیباگ/تست بدون توکن برگردانده می‌شود
     return c.json({ ok: true, handled, sent, reply, buttons, keyboard }, 200);
   });
 }
 
-/** استخراج chat_id از آپدیت خام برای ارسال پاسخ */
 function extractChatId(update: object): string | null {
   const u = update as { message?: unknown; edited_message?: unknown; callback_query?: { message?: { chat?: { id?: number | string } } } };
   const msg = (u.message ?? u.edited_message ?? u.callback_query?.message) as { chat?: { id?: number | string } } | undefined;

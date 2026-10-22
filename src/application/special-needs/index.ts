@@ -1,9 +1,3 @@
-/**
- * سرویس نیازهای ویژه — نقطهٔ ورود و صادرات‌های ماژول (barrel)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// فاز ۷ — نیازهای ویژه + وضعیت همکاری مدرسه (§12 + §15)
-
 export { createSpecialNeedsService } from './service';
 export { registerSpecialNeedsRoutes } from './routes';
 export {

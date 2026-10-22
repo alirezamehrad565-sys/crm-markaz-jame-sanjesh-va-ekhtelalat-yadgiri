@@ -1,14 +1,3 @@
-/**
- * انتخابگر تمرین از بانک تمرین
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// exercise-pick.js — انتخابگر تمرین از بانک تمرین برای پیوست جلسه‌ها
-// (خواست کاربر: «امکان اضافه کردن تمرین از بانک تمرین رو به جلسه ها اضافه کن»)
-// کاربرد: قالب‌ساز (views/templates.js) + افزودن/ویرایش جلسهٔ برنامهٔ جلسه به جلسه
-// (clinical-insights.js — از طریق قابلیت extra در formModal).
-// پیوند تمرین به جلسه متنی است (شِمای سرور: type + text) — عنوان تمرین انتخابی
-// به کادر «تمرین» آن جلسه اضافه می‌شود؛ سقف ۵۰۰ نویسهٔ آیتم رعایت می‌شود.
-
 import { api } from './api.js';
 import { el, icon, toast, toastError, openModal, skeletonState, emptyState } from './ui.js';
 import { fa } from './format.js';
@@ -17,7 +6,6 @@ import { hueDot } from './staff-hue.js'; // — چیپ رنگی سازندهٔ �
 const PAGE_SIZE = 50; // با جستجو + چیپ دسته کافی است — مرور کامل در تب «بانک تمرین»
 const ITEM_TEXT_MAX = 500; // PATHWAY_SESSION_ITEM_TEXT_MAX سمت سرور
 
-/** افزودن عنوان تمرین به کادر متنی آیتم جلسه — جداکنندهٔ «؛ » و سقف ۵۰۰ نویسه */
 export function appendExerciseToTextarea(ta, title) {
   if (!ta || !title) return;
   const prev = ta.value.trim();
@@ -31,7 +19,6 @@ export function appendExerciseToTextarea(ta, title) {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-/** دکمهٔ کوچک «از بانک تمرین» — در ردیف برچسب فیلد تمرین قرار می‌گیرد */
 export function bankPickButton({ onPick }) {
   return el('button', {
     class: 'btn btn--ghost btn--sm expick-open',
@@ -41,15 +28,10 @@ export function bankPickButton({ onPick }) {
   }, icon('download', 13), 'از بانک تمرین');
 }
 
-/**
- * مودال انتخابگر تمرین — جستجو + چیپ دستهٔ اختلال/پایه + فهرست تمرین‌ها.
- * onPick(ex) با تمرین انتخابی صدا و مودال بسته می‌شود.
- */
 export function openExercisePicker({ onPick } = {}) {
   const state = { q: '', tagIds: [] };
   let tags = { disorder: [], grade: [] };
   let seq = 0; // پاسخ‌های کهنهٔ جستجو نادیده گرفته شوند
-  // نگاشت سازنده برای چیپ رنگی — با فهرست تمرین‌ها موازی می‌آید؛ خطا بی‌صدا
   let staffNames = new Map();
   const staffReady = (async () => {
     try {
@@ -141,8 +123,6 @@ export function openExercisePicker({ onPick } = {}) {
     }
   }
 
-  // نکته: از.exb-search استفاده نمی‌کنیم — flex:1 1 220px آن در بدنهٔ ستونی مودال،
-  // ورودی جستجو را غول‌پیکر می‌کند (در مرورگر دیده شد) —.input ساده کافی است
   const search = el('input', { class: 'input', placeholder: 'جستجوی عنوان یا توضیح تمرین…' });
   let debounce = null;
   search.addEventListener('input', () => {
@@ -161,7 +141,6 @@ export function openExercisePicker({ onPick } = {}) {
       foot)
   });
 
-  // متا (دستهٔ اختلال + پایه) — بی‌صدا؛ اگر نیامد فقط جستجو کار می‌کند
   (async () => {
     try {
       const res = await api.get('/api/exercises/meta');

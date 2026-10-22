@@ -1,15 +1,3 @@
-/**
- * نمای فهرست دانش‌آموزان
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/students.js — مدیریت دانش‌آموزان فعال مرکز: جستجو + فیلتر مدرسه/برچسب/مسئول + CRUD + صفحه‌بندی
-// تفکیک فلو به دستور کاربر:
-// * تب «لیست انتظار» از این ماژول جدا شد → ماژول مستقل #/waitlist
-// («لیست دانش آموز فعال مرکز با یه لیست دیگه تو این فلو ادغام شده که اونم باید جدا کنیم»)
-// * تیک «منتظر دریافت خدمت» از فرم حذف شد — پشت‌نوبتی‌ها فقط در لیست انتظار زندگی می‌کنند
-// * ستون و فیلتر «مسئول پرونده» اضافه شد — «دانش آموز به هر همکاری داده شد تو لیست
-// دانش آموزای اون معلم نشون میده» (لیست درمانگر خودکار scope می‌شود — سرور)
-
 import { api, qs } from '../api.js';
 import { fa, gradeLabel, isPlaceholderNid } from '../format.js';
 import { el, icon, confirmModal, toast, toastError, dataTable, statusBadge, loadingState, skeletonState, emptyState, callBadge } from '../ui.js';
@@ -32,20 +20,16 @@ const local = {
   staff: []
 };
 
-/** — بعد از رندر مجدد جستجو، فوکوس و مکان‌نما به ورودی برمی‌گردد */
 let searchRefocus = false;
 
 function isOffice() {
   return session.user?.role === 'manager' || session.user?.role === 'secretary';
 }
 
-// درمانگر هم «دانش‌آموز فعال برای خودش» تعریف می‌کند (مسئول پرونده اجباراً خودش — سرور هم)
 function canCreateStudent() {
   return isOffice() || session.user?.role === 'therapist';
 }
 
-/** فراداده (مدارس/برچسب‌ها/کلاس‌ها/همکاران) فقط اگر خالی است گرفته می‌شود؛
- * جستجوی تایپی دیگر درخواست اضافی در هر کلید نمی‌سازد */
 async function ensureMeta() {
   if (local.schools.length === 0 && local.tags.length === 0 && local.classes.length === 0) {
     const [schoolsRes, tagsRes, classesRes] = await Promise.all([
@@ -68,7 +52,6 @@ async function ensureMeta() {
 }
 
 export async function renderStudents(container, ctx) {
-  // لینک‌های قدیمی تب لیست انتظار به ماژول مستقل می‌روند
   if (ctx?.query?.tab === 'waitlist') {
     const carry = [];
     if (ctx.query.q) carry.push(`q=${encodeURIComponent(ctx.query.q)}`);
@@ -77,7 +60,6 @@ export async function renderStudents(container, ctx) {
     return;
   }
 
-  // فیلتر برچسب از پالت جستجوی سراسری: #/students?tag_id=…
   if (ctx?.query && 'tag_id' in ctx.query) local.tagId = ctx.query.tag_id || '';
 
   container.replaceChildren(skeletonState('table', 6));
@@ -114,10 +96,8 @@ export async function renderStudents(container, ctx) {
     return teacher ? `${name} — ${teacher}` : name;
   };
   const ownerName = (id) => local.staff.find((s) => s.id === id)?.fullName ?? null;
-  // درمانگر: برچسب مسئول پرونده برای پرونده‌های خودش «خود شما» باشد (فهرست همکاران را ندارد)
   const ownerBadgeLabel = (id) => (id === session.user?.staffId ? 'خود شما' : ownerName(id) ?? 'همکار');
 
-  // ─────────────── toolbar ───────────────
   const searchInput = el('input', { class: 'input', placeholder: 'جستجو: نام یا کد ملی…', value: local.query });
   let debounce;
   searchInput.addEventListener('input', () => {
@@ -135,10 +115,6 @@ export async function renderStudents(container, ctx) {
     local.schools.map((s) => el('option', { value: s.id, selected: s.id === local.schoolId }, s.name))
   );
 
-  // ─────────────── فیلتر مسئول پرونده (دفتر) ───────────────
-  // به‌جای select، چیپ‌های رنگی هم‌الگوی «تقویم نوبت‌ها»: نقطهٔ رنگ هر چیپ =
-  // همان رنگی که ردیف‌های دانش‌آموزانِ آن درمانگر در جدول می‌گیرند؛ با بیش از ۵ همکار
-  // چیپ‌ها افقی اسکرول می‌خورند تا ابزار بلند نشود
   let ownerChips = null;
   if (isOffice() && local.staff.length > 0) {
     const pickOwner = (id) => { local.ownerId = id; local.page = 1; renderStudents(container); };
@@ -159,7 +135,6 @@ export async function renderStudents(container, ctx) {
     );
   }
 
-  // ─────────────── فیلتر برچسب‌ها — منوی بازشونده ───────────────
   const activeTag = local.tagId ? local.tags.find((t) => t.id === local.tagId) : null;
   const tagFilter = local.tags.length > 0 ? buildTagDropdown(container) : null;
 
@@ -238,7 +213,6 @@ export async function renderStudents(container, ctx) {
     return root;
   }
 
-  // ─────────────── table ───────────────
   const hasFilter = Boolean(local.query || local.schoolId || local.tagId || local.ownerId);
   const columns = [
     {
@@ -257,8 +231,6 @@ export async function renderStudents(container, ctx) {
       )
     },
     { key: 'tags', label: 'برچسب‌ها', render: (s) => tagChipsPreview(s.tags, 3) },
-    // مسئول پرونده همیشه دیده می‌شود (تفکیک لیست هر همکار)
-    // نقطهٔ رنگ = رنگ نوار ردیف همان درمانگر در جدول — تطابق فیلتر و جدول
     {
       key: 'owner', label: 'مسئول پرونده',
       render: (s) => s.ownerStaffId
@@ -267,13 +239,11 @@ export async function renderStudents(container, ctx) {
             el('span', { class: 'badge badge--accent' }, ownerBadgeLabel(s.ownerStaffId)))
         : el('span', { class: 'cell-sub', title: 'هنوز مسئولی تعیین نشده' }, '—')
     },
-    // باجت تماس سریع (الگوی روز کاری) کنار شمارهٔ ولیّ
     { key: 'guardianPhone', label: 'تلفن ولی', render: (s) => s.guardianPhone
       ? el('span', { class: 'cell-phone' },
           el('span', { dir: 'ltr' }, fa(s.guardianPhone)),
           callBadge(s.guardianPhone, `تماس با ولیّ ${s.firstName} ${s.lastName} — ${fa(s.guardianPhone)}`))
       : el('span', { class: 'cell-sub' }, '—') },
-    // شمارش رویدادهای پروندهٔ فعال — صفر بی‌سروصدا با «—»
     {
       key: 'assessmentCount', label: 'رویداد', align: 'center',
       render: (s) => (s.assessmentCount ?? 0) > 0
@@ -318,7 +288,6 @@ export async function renderStudents(container, ctx) {
                 } catch (err) { toastError(err); }
               }
             }, icon('check', 15)),
-        // حذف کامل پروندهٔ ثبت‌شدهٔ اشتباه (بدون سابقه) — رفع قفل UNIQUE کد ملی
         el('button', {
           class: 'btn btn--danger btn--sm', title: 'حذف کامل پرونده — فقط اگر هیچ سابقه‌ای نداشته باشد',
           onclick: async () => {
@@ -338,8 +307,6 @@ export async function renderStudents(container, ctx) {
     columns,
     rows: result.data,
     onRowClick: (s) => { location.hash = `#/students/${s.id}`; },
-    // نوار رنگ درمانگر روی ردیف (CSS:.table tbody tr[class*='hue-']) —
-    // «فیلتر کردن با چشم»: هر ردیف هم‌رنگ چیپ درمانگر مسئولش
     rowClass: (s) => (s.ownerStaffId ? hueClass(s.ownerStaffId) : null),
     empty: {
       iconName: 'student',
@@ -354,7 +321,6 @@ export async function renderStudents(container, ctx) {
     }
   });
 
-  // ─────────────── pagination ───────────────
   const meta = result.meta ?? { page: 1, totalPages: 1, total: 0 };
   const pager = el('div', { class: 'pager' },
     el('span', {}, `صفحه ${fa(meta.page)} از ${fa(meta.totalPages)} · ${fa(meta.total)} نفر`),
@@ -362,7 +328,6 @@ export async function renderStudents(container, ctx) {
     el('button', { class: 'btn btn--ghost btn--sm', disabled: meta.page >= meta.totalPages, onclick: () => { local.page += 1; renderStudents(container); } }, 'بعدی')
   );
 
-  // راهنمای رنگ ردیف‌ها: فقط وقتی در همین صفحه حداقل دو درمانگرِ مسئول دیده می‌شود
   let legend = null;
   if (isOffice()) {
     const ownerIds = [...new Set(result.data.filter((s) => s.ownerStaffId).map((s) => s.ownerStaffId))];
@@ -378,7 +343,6 @@ export async function renderStudents(container, ctx) {
     }
   }
 
-  // filter(Boolean): replaceChildren(null) رشتهٔ «null» تزریق می‌کند (همان الگوی در تقویم — legend در نمای مدیر/منشی null می‌شود)
   container.replaceChildren(
     ...[
     el('div', { class: 'page-head' },
@@ -395,7 +359,6 @@ export async function renderStudents(container, ctx) {
     ].filter(Boolean)
   );
 
-  // حفظ تایپ پیوسته: فوکوس + مکان‌نما به انتهای عبارت
   if (searchRefocus) {
     searchRefocus = false;
     searchInput.focus();
@@ -404,7 +367,6 @@ export async function renderStudents(container, ctx) {
   }
 }
 
-/** ویرایشگر برچسب از فهرست — برچسب‌های فعلی ردیف استفاده می‌شود */
 function openRowTagEditor(student, container) {
   openTagEditor({
     student,

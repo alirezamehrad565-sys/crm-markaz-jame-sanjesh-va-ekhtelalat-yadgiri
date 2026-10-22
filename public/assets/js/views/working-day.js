@@ -1,32 +1,3 @@
-/**
- * نمای بورد روز کاری
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/working-day.js — بازطراحی کامل ماژول «روز کاری» — چیدمان عمودی کارت‌به‌کارت
-//
-// ساختار جدید (به ترتیب صریح کاربر):
-// کارت ۱ — تقویم: تقویم ماه جلالی با انتخاب روز با یک کلیک + ناوبری سریع
-// (روز قبل/برو به امروز/روز بعد + ماه قبل/ماه بعد)
-// کارت ۲ — حضور و غیاب همکاران: کوچک و فشرده؛ فقط همکارانی که امروز شیفت دارند
-// (بازهٔ کاری در برنامهٔ هفتگی) وارد فرایند حضور و غیاب می‌شوند؛
-// بقیه فقط یک خط اطلاع‌رسانی در پانویس کارت هستند — بدون هیچ دکمهٔ حضوری
-// کارت ۳ — درمانگران و نوبت‌ها: تایم‌لاین عمودی به‌ازای هر درمانگر (به ترتیب
-// زودترین نوبت) — خط «الان» (تایم‌لاین محبوب) حفظ شده است؛
-// ثبت حضور/غیاب دانش‌آموز و اکشن‌های عملیاتی هر نوبت فقط روی خودِ کارت
-// نوبت است (حذف صف تکراری ۶۰دقیقه و منوی ⋯ — «یک جا، نه چند جا»)
-// کارت ۴ — سنجش‌های این روز (ویجت ماژول سنجش روزانه)
-// کارت ۵ — توضیحات روز (لاگ append-only مدیر/منشی)
-// پایین — ثبت‌های عقب‌افتاده (روزهای گذشته) + ویجت لیست انتظار
-//
-// رفع شکایت «چند بار حضور و غیاب می‌گیرد»: با یک ضربه روی «آمد»/«نیامد»، حضورِ
-// دانش‌آموزانِ بدونِ ثبتِ همان نوبت هم خودکار ثبت می‌شود (از مسیر رسمی
-// PATCH /api/attendance — با audit و اعلان غیبت )؛ ثبت دستی تک‌تک دانش‌آموزان
-// فقط برای استثناها (مثلاً یکی از دو نفر نیامد) روی همان کارت باقی می‌ماند.
-//
-// حفظ‌شده از نسخه‌های قبل: auto-refresh نرم هر ۳۰ ثانیه (فقط امروز، بدون مودال/تایپ)،
-// پرامپت گزارش جلسه پس از «اتمام جلسه»، ساخت پیگیری غیبت پس از «نیامد»، تماس سریع
-// ولیّ، یادداشت حضور همکار، یادداشت نوبت، حذف توضیح روز (فقط مدیر).
-
 import { api, qs } from '../api.js';
 import {
   addDaysYmd,
@@ -56,7 +27,6 @@ import { session } from '../state.js';
 const local = { date: tehranTodayYmd(), viewJ: null }; // viewJ: ماه نمایش تقویم {jy, jm}
 let currentContainer = null;
 
-// تأخیر (کهربایی) اضافه شد؛ بیماری بنفش، مرخصی آبی — رنگ‌ها متمایز
 const STAFF_STATUS = [
   { key: 'present', label: 'حاضر', cls: 'ok' },
   { key: 'absent', label: 'غایب', cls: 'err' },
@@ -66,12 +36,10 @@ const STAFF_STATUS = [
 ];
 
 const STAFF_STATUS_LABEL = { present: 'حاضر', absent: 'غایب', late: 'تأخیر', leave: 'مرخصی', sick: 'بیماری' };
-// مرخصی آبی و بیماری بنفش (قبلاً هر دو warning بودند و از هم تفکیک نمی‌شدند)
 const STAFF_STATUS_BADGE = { present: 'success', absent: 'error', late: 'warning', leave: 'info', sick: 'sick' };
 const SESSION_STATUS_CLS = { present: 'ok', late: 'warn', absent: 'err', pending: 'muted', cancelled: 'muted' };
 const SESSION_STATUS_LABEL = { present: 'حاضر', late: 'تأخیر', absent: 'غایب', pending: 'در انتظار', cancelled: 'لغو' };
 
-// فاز ۱ — ماتریس ترنزیشن عملیاتی — قرینه D1 در src/domain/appointment-core/pure.ts
 const OPS_LABEL = { checked_in: 'آمد', delayed: 'تأخیر', in_session: 'در جلسه', completed: 'انجام شد', no_show: 'نیامد' };
 const OPS_ACTIONS = {
   none: [
@@ -95,10 +63,8 @@ const OPS_ACTIONS = {
   no_show: []
 };
 
-// ترتیب نمایش خلاصهٔ عملیاتی سربرگ بلوک درمانگر (فقط غیرصفرها، حداکثر ۳ پیل)
 const OPS_STAT_ORDER = ['none', 'checked_in', 'delayed', 'in_session', 'completed', 'no_show'];
 
-// رنگ گرهٔ تایم‌لاین بر اساس وضعیت عملیاتی
 const OPS_DOT = {
   none: 'wd-tl__dot--planned',
   checked_in: 'wd-tl__dot--checked_in',
@@ -112,12 +78,10 @@ function canManage() {
   return session.user?.role === 'manager' || session.user?.role === 'secretary';
 }
 
-// درمانگر: کپی روز کاری با کارت خودش (سرور بورد را نسبت به خودش scope می‌کند)
 function isTherapist() {
   return session.user?.role === 'therapist';
 }
 
-/** — عملیات بوردی (آمد/شروع/اتمام/نیامد) — دفتر روی همه، درمانگر روی کارت خودش */
 function canOperate() {
   return canManage() || isTherapist();
 }
@@ -126,14 +90,11 @@ function canDeleteNotes() {
   return session.user?.role === 'manager';
 }
 
-// فاز ۳ — غیبت‌هایی که برایشان پیگیری ساخته شده (گارد دوباره‌سازی در همین نشست)
 const absenceFollowUpDone = new Set();
 
 function rerender() {
   if (currentContainer) renderWorkingDay(currentContainer);
 }
-
-// ─────────────── auto-refresh نرم (فاز ۱ §7.7) ───────────────
 
 const REFRESH_MS = 30000;
 let refreshTimer = null;
@@ -146,7 +107,6 @@ function stopRefresh() {
   }
 }
 
-/** درست پس از رندر — صفحهٔ بازی/حالت ویرایش نباید زیر پای کاربر عوض شود */
 function isBoardBusy() {
   if (document.hidden) return true;
   if (document.querySelector('.modal-overlay')) return true; // مودال بازی
@@ -166,7 +126,6 @@ async function softRefresh() {
     monthApptsCache.clear(); // — بورد عوض شده؛ نقاط تقویم هم از دادهٔ تازه پر شوند
     await renderWorkingDay(currentContainer, { silent: true, keepScroll: true });
   } catch {
-    /* بی‌صدا — دورهٔ بعد تلاش می‌شود */
   }
 }
 
@@ -175,29 +134,23 @@ function startRefresh() {
   refreshTimer = setInterval(softRefresh, REFRESH_MS);
 }
 
-// خروج از view (routechange بعد از رندر fire می‌شود) — تایمر فقط برای همین صفحه است
 document.addEventListener('routechange', (e) => {
   const path = e.detail?.path ?? '';
   if (!String(path).startsWith('working-day')) stopRefresh();
 });
 
-// ─────────────── کمکی‌های تقویم جلالی ───────────────
-
 const pad2 = (n) => (n < 10 ? `0${n}` : String(n));
 
-/** YYYY-MM-DD میلادی → {jy, jm, jd} جلالی */
 function jalaliOfYmd(ymd) {
   const [y, m, d] = ymd.split('-').map(Number);
   return toJalali(y, m, d);
 }
 
-/** {jy, jm, jd} جلالی → YYYY-MM-DD میلادی */
 function ymdOfJalali(jy, jm, jd) {
   const g = toGregorian(jy, jm, jd);
   return `${g.gy}-${pad2(g.gm)}-${pad2(g.gd)}`;
 }
 
-/** ماه جلالی ± delta (با لف سال) */
 function shiftJalaliMonth(jy, jm, delta) {
   let m = jm + delta;
   let y = jy;
@@ -205,8 +158,6 @@ function shiftJalaliMonth(jy, jm, delta) {
   if (m > 12) { m = 1; y += 1; }
   return { jy: y, jm: m };
 }
-
-// ─────────────── رندر اصلی ───────────────
 
 export async function renderWorkingDay(container, opts = {}) {
   currentContainer = container;
@@ -236,8 +187,6 @@ export async function renderWorkingDay(container, opts = {}) {
     el('button', { class: 'btn btn--ghost btn--sm', onclick: () => rerender() }, icon('refresh', 16), 'به‌روزرسانی')
   );
 
-  // چیدمان عمودی کارت‌به‌کارت — جایگزین چیدمان دو ستونی قدیمی
-  // درمانگر: بدون کارت حضور همکاران و سنجش دفتری؛ فقط تقویم + کارت خودش + توضیحات روز
   const flow = el('div', { class: 'wd-flow' });
   const sanjSlot = el('div', {}); // کارت ۴ — ویجت سنجش (async)
   const auxSlot = el('div', { class: 'wd-aux' }); // پایین: عقب‌افتاده‌ها + لیست انتظار
@@ -255,28 +204,20 @@ export async function renderWorkingDay(container, opts = {}) {
   container.replaceChildren(content);
   if (scrollY !== null) window.scrollTo({ top: scrollY });
 
-  // نقاط رنگی تقویم: ناهمگام و بی‌صدا؛ بعد از اولین رسم، سلول‌های همین رندر را وصله می‌کند
   fillCalDots();
 
-  // فهرست سنجش‌های همان روز (ابزار دفتر؛ خطاها ویجت را می‌شکند نه بورد را)
   if (canManage()) {
     import('./screening.js')
       .then(({ renderScreeningDayWidget }) => renderScreeningDayWidget(sanjSlot, local.date))
       .catch(() => {});
   }
-  // فاز W — ویجت کوچک لیست انتظار
   import('../waitlist.js').then(({ renderWaitlistBoardWidget }) => renderWaitlistBoardWidget(auxSlot)).catch(() => {});
-  // صف عقب‌افتاده‌ها (روزهای گذشته) — حفظ از
   drawOverdue(auxSlot, board);
 
-  // فاز ۱ — به‌روزرسانی خودکار فقط روی ورک‌فلوی «امروز»
   if (board.isToday) startRefresh();
   else stopRefresh();
 }
 
-// ─────────────── چیپ فشردهٔ آمار (سربرگ کارت‌ها) ───────────────
-
-/** چیپ عدد+برچسب؛ شرح کامل در title — چیپ صفر رندر نمی‌شود (قاعده ) */
 function chip(num, label, tone, title) {
   if (!num || num <= 0) return null;
   return el('div', { class: `wd-opschip wd-opschip--${tone}`, title: title || label },
@@ -285,10 +226,7 @@ function chip(num, label, tone, title) {
   );
 }
 
-// ─────────────── کارت ۱ — تقویم ───────────────
-
 function calCard(board) {
-  // ماه نمایشی: viewJ اگر کاربر ماه را عوض کرده، وگرنه ماهِ روز انتخابی
   const view = local.viewJ ?? jalaliOfYmd(local.date);
   const firstYmd = ymdOfJalali(view.jy, view.jm, 1);
   const firstWd = iranianWeekdayOfYmd(firstYmd);
@@ -323,7 +261,6 @@ function calCard(board) {
     el('button', { class: 'btn btn--ghost btn--icon btn--sm', type: 'button', 'aria-label': 'ماه بعد', title: 'ماه بعد', onclick: () => { local.viewJ = nextM; rerender(); } }, icon('chevL', 16))
   );
 
-  // ناوبری سریع روزی — حفظ از نوار روز قدیمی
   const quick = el('div', { class: 'wd-cal__quick' },
     el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { local.date = addDaysYmd(local.date, -1); local.viewJ = null; rerender(); } }, icon('chevR', 15), 'روز قبل'),
     el('button', { class: 'btn btn--soft btn--sm', type: 'button', disabled: board.isToday, title: board.isToday ? 'همین الان روی امروز هستید' : 'پرش به امروز', onclick: () => { local.date = tehranTodayYmd(); local.viewJ = null; rerender(); } }, 'برو به امروز'),
@@ -349,14 +286,9 @@ function calCard(board) {
   );
 }
 
-// ─────────────── نقاط رنگی تقویم («تقویم‌ها چیزی نشان ندهند» رفع می‌شود) ───────────────
-
-/** کش نوبت‌های هر ماهِ نمایشی — کلید «jy-jm»؛ جابه‌جایی سریع بین ماه‌ها دوباره نمی‌گیرد.
- * هر مدخل با TTL کوتاه تازه می‌شود و با هر تغییر بورد (auto-refresh) کلاً خالی می‌شود. */
 const monthApptsCache = new Map(); // 'jy-jm' → { at, list }
 const MONTH_APTS_TTL = 60000;
 
-/** نوبت‌های ماه نمایشی تقویم (from/to میلادیِ ابتدا و انتهای ماه جلالی) */
 async function fetchMonthAppts(view) {
   const key = `${view.jy}-${view.jm}`;
   const hit = monthApptsCache.get(key);
@@ -365,26 +297,17 @@ async function fetchMonthAppts(view) {
   const firstYmd = ymdOfJalali(view.jy, view.jm, 1);
   const lastYmd = ymdOfJalali(view.jy, view.jm, jalaliMonthLength(view.jy, view.jm));
   const params = { from: tehranDayRange(firstYmd).start, to: tehranDayRange(lastYmd).end };
-  // درمانگر فقط نقطه‌های جلسه‌های خودش را می‌بیند (هم‌سو با scope بورد)
   if (isTherapist()) params.staff_id = session.user?.staffId;
 
   let list = [];
   try {
     list = (await api.get(`/api/appointments${qs(params)}`)).data ?? [];
   } catch {
-    /* بی‌صدا — تقویم موقتاً بدون نقطه می‌ماند؛ دورهٔ بعد تلاش می‌شود */
   }
   monthApptsCache.set(key, { at: Date.now(), list });
   return list;
 }
 
-/**
- * نقاط رنگی زیر شمارهٔ هر روز: حداکثر ۳ نقطه (هر درمانگرِ آن روز یک نقطه،
- * به ترتیب زودترین نوبت) + «+N» اگر درمانگر بیشتری باشد. نوبت‌های لغوشده
- * کلاً نادیده گرفته می‌شوند. بعد از هر رندر صدا زده می‌شود و فقط داخل سلول‌های
- * آماده (dataset.ymd) وصله می‌کند — ری‌رندر کامل نمی‌کند تا با auto-refresh
- * و اسکرول نجنگد. idempotent است: نقاط قبلی پاک و از نو گذاشته می‌شوند.
- */
 async function fillCalDots() {
   const grid = currentContainer?.querySelector?.('.wd-cal__grid');
   if (!grid || !grid.isConnected) return;
@@ -392,10 +315,8 @@ async function fillCalDots() {
   const list = await fetchMonthAppts(view);
   if (!grid.isConnected) return; // حین گرفتن داده، رندر عوض شده — این نسخه را دور بریز
 
-  // پاک‌سازی نقاط قبلی — فراخوانی دوباره باید بی‌اثر (idempotent) باشد
   for (const old of grid.querySelectorAll('.wd-cal__dots')) old.remove();
 
-  // روز → نوبت‌های غیرلغوشدهٔ آن روز
   const byDay = new Map();
   for (const ap of list) {
     if (ap.status === 'cancelled') continue;
@@ -408,7 +329,6 @@ async function fillCalDots() {
     const cell = grid.querySelector(`.wd-cal__cell[data-ymd="${ymd}"]`);
     if (!cell) continue;
 
-    // زودترین نوبتِ هر درمانگر → ترتیب نقاط همان است
     const earliest = new Map();
     for (const ap of dayList) {
       const prev = earliest.get(ap.staffId);
@@ -422,23 +342,17 @@ async function fillCalDots() {
       hues.slice(0, 3).map((h) => el('span', { class: `wd-cal__dot hue-${h}` })),
       hues.length > 3 ? el('span', { class: 'wd-cal__more' }, `+${fa(hues.length - 3)}`) : null
     ));
-    // مثل «۱۴ آبان — ۵ جلسه (۲ درمانگر)» — راهنمای هاور بدون شلوغی
     cell.title = `${fa(jalaliOfYmd(ymd).jd)} ${JALALI_MONTHS[view.jm - 1]} — ${fa(dayList.length)} جلسه (${fa(hues.length)} درمانگر)`;
   }
 }
 
-// ─────────────── کارت ۲ — حضور و غیاب همکاران ───────────────
-
 function attCard(board) {
   const canMark = board.isToday && canManage();
 
-  // قاعدهٔ جدید: فقط همکارانی که امروز شیفت دارند (بازهٔ کاری در برنامهٔ هفتگی)
-  // وارد فرایند حضور و غیاب می‌شوند؛ بقیه فقط یک خط اطلاع‌رسانی در پانویس کارت‌اند.
   const all = board.staff ?? [];
   const working = all.filter((c) => c.dayHours.length > 0);
   const off = all.filter((c) => c.dayHours.length === 0);
 
-  // آمار فقط روی همکارانِ شیفت‌دار — با summary سرور (همهٔ همکاران) قاطی نمی‌شود
   const counts = { present: 0, absent: 0, late: 0, leave: 0, sick: 0, unmarked: 0 };
   for (const c of working) {
     const st = c.attendance?.status;
@@ -480,7 +394,6 @@ function attCard(board) {
 function attRow(col, board, canMark) {
   const st = col.attendance?.status;
 
-  // ── سگمنت وضعیت حضور
   const seg = el('div', { class: 'att-seg wd-att__seg', role: 'group', 'aria-label': `وضعیت حضور ${col.fullName}` });
   const segBtns = new Map();
   for (const s of STAFF_STATUS) {
@@ -504,7 +417,6 @@ function attRow(col, board, canMark) {
   if (st) segBtns.get(st)?.classList.add('is-active');
   else seg.classList.add('wd-seg--unset');
 
-  // ── یادداشت حضور (فقط امروز)
   const noteBtn = canMark
     ? el('button', {
         class: 'btn btn--ghost btn--icon btn--sm',
@@ -537,13 +449,10 @@ function attRow(col, board, canMark) {
   );
 }
 
-// ─────────────── کارت ۳ — درمانگران و نوبت‌ها (تایم‌لاین عمودی) ───────────────
-
 function apptsCard(board) {
   const ss = board.sessionStats;
   const ops = board.opsStats;
 
-  // دفاع لایهٔ دوم: درمانگر فقط بلوک خودش (سرور هم scope کرده)
   const selfId = session.user?.staffId ?? null;
   const staffBlocks = (board.staff ?? [])
     .filter((c) => !isTherapist() || c.staffId === selfId)
@@ -585,7 +494,6 @@ function apptsCard(board) {
   );
 }
 
-/** بلوک یک درمانگر: سربرگ + تایم‌لاین نوبت‌ها */
 function staffBlock(col, board) {
   const st = col.attendance?.status;
   const hoursChip = col.dayHours.length > 0
@@ -595,8 +503,6 @@ function staffBlock(col, board) {
       )
     : el('span', { class: 'wd-hours wd-hours--off' }, 'بدون بازهٔ کاری');
 
-  // خلاصهٔ عملیاتی کوچک کنار باج شمارنده: شمارش وضعیت‌های غیرصفر (لغوشده‌ها حساب نمی‌شوند؛
-  // حداکثر ۳ پیل + باج تا سربرگ یک‌خطی بماند — فضای کم می‌شکند، نه بیرون بزند)
   const opsCounts = new Map();
   for (const ap of col.appointments) {
     if (ap.status === 'cancelled') continue;
@@ -611,7 +517,6 @@ function staffBlock(col, board) {
 
   return el('div', { class: `wd-block${st === 'absent' ? ' wd-block--absent' : ''}` },
     el('div', { class: 'wd-block__head' },
-      // آواتار با هویت رنگی همان درمانگر (رنگش هم‌رنگ لبهٔ کارت‌های نوبتش)
       el('div', { class: `staff-mini__avatar ${hueClass(col.staffId)}` }, col.fullName.trim().charAt(0)),
       el('div', { class: 'wd-block__title' },
         el('div', { class: 'wd-block__name' }, col.fullName),
@@ -632,7 +537,6 @@ function staffBlock(col, board) {
   );
 }
 
-/** بلوک «سایر نوبت‌ها» — نوبت‌های بی‌صاحب یا همکار غیرفعال (حفظ از ) */
 function otherStaffBlock(board) {
   return el('div', { class: 'wd-block wd-block--other' },
     el('div', { class: 'wd-block__head' },
@@ -646,8 +550,6 @@ function otherStaffBlock(board) {
     timeline(board.unassigned, { isToday: false })
   );
 }
-
-// ─────────────── تایم‌لاین عمودی نوبت‌ها (حفظ + تقویت) ───────────────
 
 function timeline(appointments, board) {
   const isToday = board.isToday;
@@ -682,7 +584,6 @@ function apptItem(a) {
   );
 }
 
-/** خط «الان» — تایم‌لاین زندهٔ روز (فقط امروز) */
 function nowItem(nowLabel) {
   return el('div', { class: 'wd-tl__item wd-tl__item--now' },
     el('div', { class: 'wd-tl__time' }),
@@ -693,9 +594,6 @@ function nowItem(nowLabel) {
   );
 }
 
-// ─────────────── کارت نوبت روی تایم‌لاین ───────────────
-
-/** — کلاس وضعیت برای رنگ‌بندی کارت (مشابه appointments.js) */
 function wdApptStatusClass(a) {
   if (a.status === 'cancelled') return '';
   if (a.opsStatus === 'completed') return ' is-attended';
@@ -706,17 +604,13 @@ function wdApptStatusClass(a) {
 function apptCard(a) {
   const cancelled = a.status === 'cancelled';
   const opsKey = a.opsStatus ?? 'none';
-  // مدت نوبت برای چیپ فشردهٔ سربرگ
   const durMin = Math.round((Date.parse(a.endAt) - Date.parse(a.startAt)) / 60000);
-  // نوع جلسه برای چیپ نوع (جدول ۴)
   const stType = sessionTypeOf(a.sessionType);
 
   const head = el('div', { class: 'wd-appt__time' },
     a.opsStatus ? statusBadge(a.opsStatus) : null,
     cancelled ? el('span', { class: 'badge badge--neutral' }, 'لغوشده') : null,
-    // نشان نوع جلسه (فردی/گروهی/خانواده/آموزگاران/ذهنی)
     stType ? el('span', { class: `st-chip st-chip--${stType.key}`, title: stType.hint }, stType.short) : null,
-    // چیپ‌های فشردهٔ اطلاعات: مدت + شمار دانش‌آموز (هم‌سبک چیپ بازهٔ کاری)
     el('span', { class: 'wd-hours', title: 'مدت این نوبت' }, `${fa(Math.max(0, durMin))} دقیقه`),
     a.students.length > 0
       ? el('span', { class: 'wd-hours', title: 'تعداد دانش‌آموزان این نوبت' }, `${fa(a.students.length)} دانش‌آموز`)
@@ -729,7 +623,6 @@ function apptCard(a) {
       title: a.note || 'افزودن/ویرایش توضیحات نوبت',
       onclick: () => openAppointmentNoteModal(a)
     }, icon('edit', 13)),
-    // حذف کامل نوبت ثبت‌شدهٔ اشتباه/تکراری از روی تایم‌لاین روز کاری
     canManage()
       ? el('button', {
           class: 'btn btn--ghost btn--icon btn--sm wd-appt__del',
@@ -741,10 +634,6 @@ function apptCard(a) {
       : null
   );
 
-  /**
-   * — حذف کامل نوبت از تقویم (نه لغو). سابقهٔ جلسه/گزارش جلسه → 409 سرور
-   * با پیام راهنما؛ ورودی لیست انتظار متصل خودکار به صف برمی‌گردد.
-   */
   async function deleteAppointment(appt) {
     const ok = await confirmModal({
       title: 'حذف کامل نوبت',
@@ -769,8 +658,6 @@ function apptCard(a) {
   const studentRows = a.students.map((s) => {
     const cls = SESSION_STATUS_CLS[s.attendance] ?? 'muted';
     return el('div', { class: 'wd-appt__student' },
-      // آواتار حرفی کوچک دانش‌آموز: تشخیص سریع‌تر ردیف‌ها — خنثی، بدون رنگ درمانگر
-      // (رنگ درمانگر عمداً فقط روی لبهٔ کارت است تا دو کد رنگی قاطی نشوند)
       el('span', { class: 'wd-appt__savatar', 'aria-hidden': 'true' }, String(s.name ?? '').trim().charAt(0)),
       el('a', {
         class: 'wd-appt__sname',
@@ -778,7 +665,6 @@ function apptCard(a) {
         href: `#/students/${s.studentId}?tab=timeline`,
         onclick: (e) => e.stopPropagation()
       }, s.name),
-      // تماس سریع با ولیّ از روی بورد (همان دسترسی صفحهٔ دانش‌آموزان)
       s.phone
         ? el('a', {
             class: 'wd-appt__sphone',
@@ -788,8 +674,6 @@ function apptCard(a) {
             onclick: (e) => e.stopPropagation()
           }, icon('phone', 12))
         : null,
-      // گزارش جلسه (فرم رسمی ) از روی کارت روز کاری — دکمهٔ رسمی ثانویه یادداشت سریع
-      // برای مدیر و درمانگر؛ فرم با نوع پیش‌فرض و تاریخ همان روز جلسه باز می‌شود
       !cancelled && canCreateCaseEvents()
         ? el('button', {
             class: 'btn btn--ghost btn--icon btn--sm wd-appt__report',
@@ -809,7 +693,6 @@ function apptCard(a) {
               title: `حاضر — ${s.name}`,
               onclick: () => markStudent(a, s, 'present')
             }, icon('check', 13)),
-            // تأخیر: حاضر با تأخیر — غیبت حساب نمی‌شود
             el('button', {
               class: 'wd-appt__sbtn wd-appt__sbtn--warn',
               type: 'button',
@@ -829,10 +712,7 @@ function apptCard(a) {
     );
   });
 
-  // اکشن‌های عملیاتی روی خود کارت (جایگزین صف تکراری و منوی ⋯)
-  // درمانگر هم روی کارت جلسات خودش: آمد/تأخیر/شروع/اتمام/نیامد (سرور هم مالکیت را می‌سنجد)
   const acts = (!cancelled && canOperate()) ? (OPS_ACTIONS[opsKey] ?? []) : [];
-  // فاز ۳ — بعد از «نیامد»، اقدام بعدی ساخت پیگیری غیبت است (context پرشده) — ابزار دفتر
   const followUp = opsKey === 'no_show' && canManage() && !absenceFollowUpDone.has(a.id);
   const opsRow = (acts.length > 0 || followUp)
     ? el('div', { class: 'wd-appt__ops' },
@@ -855,7 +735,6 @@ function apptCard(a) {
       )
     : null;
 
-  // رنگ ثابت درمانگر + وضعیت روی کارت روز کاری (لغو با wd-appt--cancelled v1)
   return el('div', { class: `wd-appt${cancelled ? ' wd-appt--cancelled' : ''}${wdApptStatusClass(a)} ${hueClass(a.staffId)}` },
     head,
     notePreview,
@@ -864,15 +743,6 @@ function apptCard(a) {
   );
 }
 
-// ─────────────── اکشن‌های عملیاتی + همگام‌سازی حضور ───────────────
-
-/**
- * ترنزیشن وضعیت عملیاتی — قرینه ماتریس سرور؛ ترنزیشن نامعتبر سمت سرور 409 می‌دهد.
- * — رفع «چند بار حضور و غیاب گرفتن»: «آمد» حضورِ دانش‌آموزانِ بدونِ ثبت را
- * «حاضر» و «نیامد» آن‌ها را «غایب» ثبت می‌کند — از مسیر رسمی
- * PATCH /api/attendance (با audit و اعلان هوشمند غیبت )؛ ثبت‌های دستیِ قبلی
- * دست‌نخورده می‌مانند و ثبت تک‌تک دانش‌آموزان فقط برای استثناها باقی است.
- */
 async function setOps(appt, to) {
   try {
     await api.post(`/api/appointments/${appt.id}/ops-status`, { ops_status: to });
@@ -881,7 +751,6 @@ async function setOps(appt, to) {
     if (to === 'checked_in' || to === 'no_show') {
       const status = to === 'checked_in' ? 'present' : 'absent';
       for (const s of appt.students ?? []) {
-        // تأخیرِ ثبت‌شده با «آمد» بازنویسی نمی‌شود
         if (s.attendance !== 'present' && s.attendance !== 'late' && s.attendance !== 'absent' && s.attendance !== 'cancelled') {
           try {
             await api.patch(`/api/attendance/${appt.id}/${s.studentId}`, { status });
@@ -902,8 +771,6 @@ async function setOps(appt, to) {
   }
 }
 
-// گزارش جلسه از روی کارت روز کاری (همان جریان واحد ):
-// پروفایل → فرم رسمی رویداد با نوع پیش‌فرض و تاریخِ روزِ جلسه — متصل به همین نوبت
 async function openSessionReport(appt, s) {
   try {
     const prof = await api.get(`/api/students/${s.studentId}`);
@@ -921,8 +788,6 @@ async function openSessionReport(appt, s) {
   }
 }
 
-// «بستن جلسه = گرفتن گزارش»: بعد از «اتمام جلسه» پرامپت ثبت گزارش
-// گزارش ساخت‌یافته (رویداد پرونده) برای هر دانش‌آموز حاضر از پروفایلش ثبت می‌شود.
 async function promptSessionReport(appointmentId) {
   if (!canCreateCaseEvents()) return;
   let students = [];
@@ -958,7 +823,6 @@ async function promptSessionReport(appointmentId) {
   });
 }
 
-/** فاز ۳ — هوک ② (§37): ساخت پیگیری غیبت با context پرشده — بدون مودال چندمرحله‌ای */
 async function createAbsenceFollowUp(appt) {
   const single = appt.students.length === 1 ? appt.students[0] : null;
   const timeLabel = fa(tehranTimeOfIso(appt.startAt));
@@ -992,8 +856,6 @@ async function markStudent(appt, student, status) {
     toastError(err);
   }
 }
-
-// ─────────────── کارت ۵ — توضیحات روز (لاگ) ───────────────
 
 function notesCard(board) {
   const list = board.notes.length > 0
@@ -1076,8 +938,6 @@ function notesCard(board) {
   );
 }
 
-// ─────────────── ثبت‌های عقب‌افتاده (حفظ از — روزهای گذشته) ───────────────
-
 async function drawOverdue(slot, board) {
   let pending;
   try {
@@ -1126,8 +986,6 @@ async function markOverdue(p, status) {
     toastError(err);
   }
 }
-
-// ─────────────── مودال‌های یادداشت ───────────────
 
 function openAttendanceNoteModal(col, board) {
   formModal({

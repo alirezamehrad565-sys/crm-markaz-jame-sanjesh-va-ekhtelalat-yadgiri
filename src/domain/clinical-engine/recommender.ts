@@ -1,67 +1,26 @@
-/**
- * موتور بالینی — باتری‌ها، قواعد، روایت و اهداف مداخله — پیشنهادگر چک‌لیست (T3/m147)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// پیشنهادگر چک‌لیست — «قلب طرح» سند m146 §۲.۴ (۱۴ قاعدهٔ ملاکی) + سناریوی دیرآموز
-// §۳.۱ طرح واحد. تابع خالص و بازتولیدپذیر: ورودی یکسان → پلن یکسان (بدون I/O، بدون اعداد تصادفی).
-//
-// منابع ورودی (قراردادهای موج ۱ و ۲):
-//  - سیگنال‌های وکسلر (T1/m146): engine_output.profile {fsiq, fsiqBand, acid, cad, indexScatter,
-//    step5, ...} در payload رویداد ce-wechsler-w4-v1 — رویدادهای قدیمی‌تر به فیلدهای دستی
-//    (fsiq/vci/pri/wmi/psi) و fsiqBandOf فال‌بک می‌کنند.
-//  - سیگنال‌های شرح‌حال نسخهٔ ۳ (T4/m148): anamnesisSignalsOf → ClinicalSignal[] (نسخهٔ ۲ فقط
-//    کلیدواژهٔ متن آزاد).
-//  - شواهد ابزارهای موجود پرونده + رویداد id_adapt (T5/m150): از همان events بارگیری‌شده.
-//
-// خط قرمزها (سند §۳.۱ و §۲.۴ قاعدهٔ ۶ و ۱۰):
-//  - مسیر ID: FSIQ ≤۶۹ همراه انطباق پایین (id_adapt = danger) → بدون هیچ پلن ابزار؛
-//    پاسخ با referralFa شفاف — تفکیک انطباقی، دو مسیر ID و دیرآموز هرگز هم‌پوشان نمی‌شوند.
-//  - TBI: PSI منفردِ پایین‌ترین با گپ معنادار + سابقهٔ آسیب/بیماری → ارجاع پزشکی (خط قرمز)
-//    در کنار باتری پایه.
-//  - هر پیشنهاد بدون «چرا» نمی‌آید (reasonFa) — m156: پانویس انکار از خروجی حذف شد.
-//
-// قاعدهٔ slow_learner هدف مستقل موتور شک v2 است (موج ۳/T6) — این‌جا فقط در پیشنهادگر ظاهر می‌شود.
-
 import type { EvidenceEvent } from './types';
 import type { ClinicalSignal, WechslerFsiqBand } from './signals';
 import { fsiqBandOf } from './signals';
 import { WECHSLER_W4_EVENT_KEY, wechslerEngineOutputOf } from './wechsler-link';
 import { anamnesisSignalsOf, ANAMNESIS_V3_KEY } from './infer';
 
-// ───────── آستانه‌های شفاف — تک‌منبع کالیبراسیون (سند §۲.۴ — «آستانه‌ها قابل مرور») ─────────
-
 export const RECOMMENDER_THRESHOLDS = {
-  /** گپ شاخصی معنادار (قاعدهٔ ۱ و ۲ و ۱۰) */
   INDEX_GAP_HIGH: 10,
-  /** گپ شاخص دوم در قاعدهٔ ADHD */
   INDEX_GAP_SECONDARY: 5,
-  /** شاخص ضعیف (قاعدهٔ ۴ و ۸) */
   LOW_INDEX: 85,
-  /** پراکندگی شدید — سقف تفسیر واحد FSIQ (قاعدهٔ ۱۴) */
   SCATTER_SEVERE: 23,
-  /** پراکندگی معنادار دواستثنایی (قاعدهٔ ۱۱) */
   SCATTER_TWO_E: 20,
-  /** شاخص قوی دواستثنایی (قاعدهٔ ۱۱) */
   STRONG_INDEX: 120,
-  /** سقف ضعف اجرایی دواستثنایی (قاعدهٔ ۱۱) */
   EXEC_WEAK: 90,
-  /** زیرآزمون تیراژ ضعیف (قاعدهٔ ۲ و ۳) */
   SUBTEST_WEAK: 7,
-  /** آستانهٔ نشانهٔ ساخت‌یافتهٔ شرح‌حال (جدول ۴تایی: کم=۰٫۳۳، متوسط=۰٫۶۷) */
   SIGNAL_ENDORSED: 0.5,
-  /** آستانهٔ نشانهٔ قوی شرح‌حال */
   SIGNAL_STRONG: 0.67,
-  /** سقف تفسیر یکنواخت NORMAL (قاعدهٔ ۱۳) */
   NORMAL_INDEX_MAX: 110
 } as const;
 
-/** بازهٔ دیرآموزی/مرزی — هم‌تراز FSIQ_BAND_RANGES (باند BIF) و بازهٔ «مرز پایین» */
 export const BIF_PLAN_RANGE = { min: 70, max: 84 } as const;
 export const LOW_BORDER_RANGE = { min: 85, max: 89 } as const;
 
-// ───────── کلیدهای ابزار باتری — فقط ابزارهای موجود در باتری رسمی پیشنهاد می‌شوند ─────────
-
-/** کلیدهای ثابت ابزارهای پیشنهادی — با battery jsons و migrations هم‌خوان */
 export const PLAN_TOOL_KEYS = {
   snapP: 'ce-snap-iv-p-v1',
   snapT: 'ce-snap-iv-t-v1',
@@ -83,7 +42,6 @@ export const PLAN_TOOL_KEYS = {
   anamnesisV3: 'ce-anamnesis-v3'
 } as const;
 
-/** کامپوننت‌های پکیج فرم جامع خانواده — ارسال این پکیج این‌ها را پوشش می‌دهد (T5) */
 const COMP_FAMILY_COVERS: readonly string[] = [
   'ce-snap-iv-p-v1',
   'ce-sdq-p-v1',
@@ -91,59 +49,40 @@ const COMP_FAMILY_COVERS: readonly string[] = [
   'ce-id-adapt-v1'
 ];
 
-// ───────── تایپ خروجی — قرارداد کارت پلن (تب شناسایی) و موج‌های بعدی ─────────
-
 export type PlanPriority = 'core' | 'recommended' | 'optional';
 export type PlanType = 'جامع' | 'تکی';
 
-/** یک آیتم پلن — شکل سند §۲.۴: ابزار + اولویت + چرا (فرضیه‌های پشت آیتم) */
 export interface PlanItem {
   toolKey: string;
   priority: PlanPriority;
-  /** دلیل فارسی قابل‌نمایش — هیچ پیشنهادی بدون «چرا» نیست (قاعدهٔ همیشه‌برقرار سند) */
   reasonFa: string;
-  /** قاعده‌های سند که این آیتم از آن‌ها آمده (مثلاً ['r5','r1'] — ردگیری کالیبراسیون) */
   hypothesisKeys: string[];
 }
 
-/** خروجی پیشنهادگر — قرارداد GET /api/students/:id/checklist-plan */
 export interface ChecklistPlan {
-  /** جامع = فرم جامع/چندحوزه‌ای؛ تکی = تک‌حوزه (تصمیم باز ۱ سند — مهرشده: بله) */
   planType: PlanType;
   items: PlanItem[];
-  /** پایهٔ تصمیم — یک جملهٔ شفاف فارسی (بدون محاسبهٔ پشت‌پرده) */
   basis: string;
-  /** خط قرمز ارجاع — مسیر ID یا ارجاع پزشکی؛ بدون خط قرمز null */
   referralFa: string | null;
 }
 
-/** ورودی خالص پیشنهادگر — همهٔ قطعات از رویدادهای پرونده مشتق می‌شوند (checklistPlanContextOf) */
 export interface ChecklistPlanContext {
-  /** آخرین رویداد وکسلر ۴ — یا null (پیشنهادگر بدون نیم‌رخ فقط باتری پایه می‌دهد) */
   wechslerEvent: EvidenceEvent | null;
-  /** سیگنال‌های شرح‌حال نسخهٔ ۳ (T4) — پروندهٔ بدون نسخهٔ ۳ → [] */
   anamnesisSignals: ClinicalSignal[];
-  /** آخرین شرح‌حال مؤثر (نسخهٔ ۳ ترجیح، فال‌بک نسخهٔ ۲) — برای کلیدواژه‌های هم‌بودی */
   anamnesisEvent: EvidenceEvent | null;
-  /** همهٔ رویدادهای کامل پرونده — ابزارهای موجود + id_adapt + شواهد فعال چک‌لیست‌ها */
   events: EvidenceEvent[];
 }
 
-// ───────── استخراج قطعات از رویدادها (خالص) ─────────
-
-/** عدد از payload فارسی/لاتین — همان قرارداد num در infer */
 function numOf(value: string | null | undefined): number | null {
   if (value === null || value === undefined || value === '') return null;
   const n = Number(String(value).replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))));
   return Number.isFinite(n) ? n : null;
 }
 
-/** عدد فارسی برای متن‌های reasonFa/basis */
 function faNum(n: number): string {
   return String(n).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
 }
 
-/** زیرآزمون‌های snapshot — نگاشت کد → نمرهٔ معیار */
 function subtestsOf(engine: Record<string, unknown> | null): Map<string, number> {
   const map = new Map<string, number>();
   const snap = engine?.['snapshot'] as { subtests?: { code?: string; scaled?: unknown }[] } | undefined;
@@ -155,7 +94,6 @@ function subtestsOf(engine: Record<string, unknown> | null): Map<string, number>
   return map;
 }
 
-/** اطلاعات نیم‌رخ وکسلر — از profile (T1) ترجیح، فال‌بک snapshot و فیلدهای دستی رویداد */
 interface WechslerFacts {
   available: boolean;
   fsiq: number | null;
@@ -167,17 +105,11 @@ interface WechslerFacts {
   indexScatter: number | null;
   acid: boolean;
   cad: boolean;
-  /** تیراژ سرعت (رمزگردانی یا جست‌وجوی نماد) ضعیف */
   tirageLow: boolean;
-  /** رمزگذاری < جست‌وجوی نماد */
   codingBelowSymbol: boolean;
-  /** فراخنای ارقام ضعیف (≤۷) */
   digitsSpanLow: boolean;
-  /** توالی حرف-عدد ضعیف (≤۶) */
   letterNumberLow: boolean;
-  /** واژگان/تشابهات ضعیف (≤۷) */
   vocabLow: boolean;
-  /** شاخص‌های ضعف گام ۵ (کلیدهای VCI/PRI/WMI/PSI) */
   step5Weak: string[];
 }
 
@@ -205,7 +137,6 @@ function extractWechslerFacts(event: EvidenceEvent | null): WechslerFacts {
     indices?: Record<string, { scaled?: number } | undefined>;
   } | null;
 
-  // فیلدهای دستی رویداد (فرم‌های قدیمی بدون engine_output ساخته‌شده)
   const manual = (k: string): number | null => numOf(event.payload?.[k]?.value);
 
   const idxOf = (k: 'VCI' | 'PRI' | 'WMI' | 'PSI'): number | null =>
@@ -223,7 +154,6 @@ function extractWechslerFacts(event: EvidenceEvent | null): WechslerFacts {
   const fsiq = profile?.fsiq ?? snap?.fsiq ?? manual('fsiq');
   const fsiqBand: WechslerFsiqBand | null = profile?.fsiqBand ?? (fsiq !== null ? fsiqBandOf(fsiq) : null);
   const scatter = profile?.indexScatter ?? snap?.indexScatter ?? null;
-  // شاخص‌های ضعف گام ۵ — فقط از profile (T1)؛ رکورد می‌تواند {key} یا رشته باشد
   const step5Weak = (profile?.step5?.weaknesses ?? [])
     .map((w) => (typeof w === 'string' ? w : (w as { key?: string })?.key ?? ''))
     .filter((k) => ['VCI', 'PRI', 'WMI', 'PSI'].includes(k));
@@ -255,7 +185,6 @@ function extractWechslerFacts(event: EvidenceEvent | null): WechslerFacts {
   };
 }
 
-/** سطح انطباق روزمره از رویداد ce-id-adapt-v1 (یا رویداد کامپوننت پکیج — T5) */
 export type IdAdaptLevel = 'low' | 'border' | 'normal' | 'unknown';
 
 function idAdaptLevelOf(events: EvidenceEvent[]): { level: IdAdaptLevel; event: EvidenceEvent | null } {
@@ -269,12 +198,8 @@ function idAdaptLevelOf(events: EvidenceEvent[]): { level: IdAdaptLevel; event: 
   return { level: 'unknown', event: ev };
 }
 
-// ───────── نشانه‌های شرح‌حال — ساخت‌یافته (v3) ترجیح، کلیدواژهٔ متن (هر دو نسخه) مکمل ─────────
-
-/** فیلدهای متن آزاد شرح‌حال — در هر دو نسخهٔ ۲ و ۳ همین کلیدها متن آزاد دارند */
 const ANAM_TEXT_FIELDS = ['chief_complaint', 'weak_subjects', 'development', 'medical'];
 
-/** کلیدواژه‌های هم‌بودی — نشانهٔ SLD/ADHD/اجتماعی/بحران/آسیب در متن شرح‌حال (سند §۳.۱) */
 const COMORBID_KEYWORDS: Record<'sld' | 'adhd' | 'social' | 'crisis' | 'injury', string[]> = {
   sld: ['یادگیری', 'خواندن', 'نوشتن', 'املا', 'املاء', 'ریاضی', 'حساب', 'دیکت'],
   adhd: ['بیش‌فعال', 'بیش فعال', 'بی‌قرار', 'کم‌توجه', 'کم توجه', 'تمرکز', 'تکانش'],
@@ -295,19 +220,12 @@ function textHas(text: string, words: string[]): boolean {
 interface AnamFacts {
   signals: Map<string, ClinicalSignal>;
   text: string;
-  /** نشانهٔ یادگیری خاص — سیگنال ساخت‌یافته یا کلیدواژه */
   sld: boolean;
-  /** حوزهٔ شکایت یادگیری — v3 ساخت‌یافته؛ خالی = نامشخص */
   sldDomains: { read: boolean; write: boolean; calc: boolean };
-  /** نشانهٔ توجه/بی‌قراری قوی */
   attention: boolean;
-  /** نشانهٔ هیجانی (اضطراب امتحان/صبحگاهی/بحران) */
   emotional: boolean;
-  /** رخداد بحرانی زندگی (قاعدهٔ ۹) */
   crisis: boolean;
-  /** سابقهٔ آسیب/بیماری (قاعدهٔ ۱۰) */
   injury: boolean;
-  /** نشانهٔ اجتماعی (قاعدهٔ ۸) */
   social: boolean;
 }
 
@@ -344,12 +262,9 @@ function extractAnamFacts(ctx: ChecklistPlanContext): AnamFacts {
   };
 }
 
-/** ابزارهای موجود پرونده — هر رویداد کاملِ هر ابزار (تکرار پیشنهاد بی‌معناست) */
 function existingToolsOf(events: EvidenceEvent[]): Set<string> {
   return new Set(events.map((e) => e.toolKey));
 }
-
-// ───────── موتور اصلی — ۱۴ قاعده + قاعدهٔ همیشه‌برقرار ─────────
 
 const PRIORITY_ORDER: Record<PlanPriority, number> = { core: 0, recommended: 1, optional: 2 };
 
@@ -357,7 +272,6 @@ class PlanBuilder {
   items = new Map<string, PlanItem>();
   domains = new Set<string>();
   notes: string[] = [];
-  /** خط قرمز سطح پلن (ارجاع پزشکی TBI) — مسیر ID مستقیم برمی‌گردد و از این نمی‌گذرد */
   referral: string | null = null;
 
   add(toolKey: string, priority: PlanPriority, reasonFa: string, ruleKey: string): void {
@@ -366,16 +280,11 @@ class PlanBuilder {
       this.items.set(toolKey, { toolKey, priority, reasonFa, hypothesisKeys: [ruleKey] });
       return;
     }
-    // ادغام آیتم تکراری از دو قاعده — اولویت بالاتر (core) می‌ماند و دلایل جمع می‌شوند
     if (PRIORITY_ORDER[priority] < PRIORITY_ORDER[prev.priority]) prev.priority = priority;
     if (!prev.hypothesisKeys.includes(ruleKey)) prev.hypothesisKeys.push(ruleKey);
   }
 }
 
-/**
- * پیشنهاد پلن چک‌لیست — تابع خالص (۱۴ قاعدهٔ §۲.۴ + دیرآموز §۳.۱).
- * ترتیب قواعد = ترتیب سند؛ قاعدهٔ ID (خط قرمز) مقدم بر همه است.
- */
 export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan {
   const facts = extractWechslerFacts(ctx.wechslerEvent);
   const anam = extractAnamFacts(ctx);
@@ -391,7 +300,6 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
   const wmiGap = gapOf(facts.wmi);
   const psiGap = gapOf(facts.psi);
 
-  // ── خط قرمز ID (قاعدهٔ ۶ + §۳.۱): FSIQ ≤۶۹ + انطباق پایین → بدون پلن ابزار ──
   if (band === 'ID' && adapt.level === 'low') {
     return {
       planType: 'جامع',
@@ -401,9 +309,6 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
     };
   }
 
-  // ── قاعدهٔ ۵ — دیرآموز/BIF (§۳.۱): FSIQ ۷۰–۸۴ (هر وضعیت انطباقی) یا ≤۶۹ با انطباق حفظ‌شده ──
-  // ملاک ID = FSIQ ≤۷۰ «و» انطباق پایین — پس ۷۰–۸۴ حتی با انطباق پایین در مسیر دیرآموز می‌ماند
-  // (با هشدار انطباقی) و دو مسیر هرگز هم‌پوشان نمی‌شوند.
   const bifCondition =
     band === 'BIF' ||
     (band === 'ID' && (adapt.level === 'normal' || adapt.level === 'border'));
@@ -435,7 +340,6 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
     if (adapt.level === 'low') {
       builder.notes.push('انطباق روزمره «پایین» گزارش شده — با وجود بازهٔ هوشی مرزی، مسیر ارجاع تکمیلی را بررسی کنید.');
     }
-    // هم‌بودی پروفایلی (§۳.۱): چک‌لیست‌های ملاکی فقط با نشانهٔ هم‌بودی
     const sldComorbid = anam.sld || facts.acid;
     const adhdComorbid = anam.attention || facts.cad ||
       (wmiGap !== null && wmiGap >= RECOMMENDER_THRESHOLDS.INDEX_GAP_HIGH) ||
@@ -460,8 +364,6 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
       builder.domains.add('attention');
     }
   } else {
-    // FSIQ در بازهٔ ناتوانی هوشی ولی انطباق ثبت‌نشده → تکلیف مسیر نامشخص است؛
-    // سنجهٔ انطباق (داخل فرم جامع خانواده) پیش از هر تصمیمی لازم است — نه چک‌لیست رفتاری.
     if (band === 'ID' && adapt.level === 'unknown') {
       builder.add(
         PLAN_TOOL_KEYS.compFamily,
@@ -471,12 +373,9 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
       );
       builder.notes.push('تا تکمیل سنجهٔ انطباق، مسیر ID مهر نمی‌شود — ملاک تفکیک انطباقی دو مسیر را جدای هم نگه می‌دارد.');
     }
-    // ── قاعده‌های پروفایلی ۱ تا ۱۴ — فقط وقتی مسیر دیرآموز فعال نیست ──
     applyProfileRules({ builder, facts, anam, band, abilityMax, wmiGap, psiGap });
   }
 
-  // ── قاعدهٔ ۰ (همیشه‌برقرار) — باتری پایهٔ غربال عمومی: SDQ والد + معلم، جدا از هر الگو ──
-  // فرم جامع خانواده در پلن، SDQ والد (و SNAP و SCARED) را پوشش می‌دهد — دوباره‌گویی ممنوع.
   const familyInPlan = builder.items.has(PLAN_TOOL_KEYS.compFamily);
   const parentSdqPresent = existing.has(PLAN_TOOL_KEYS.sdqP) || existing.has('sdq-parent');
   const teacherSdqPresent = existing.has(PLAN_TOOL_KEYS.sdqT);
@@ -497,10 +396,8 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
     );
   }
 
-  // ── ابزارهای موجود پرونده پیشنهاد نمی‌شوند + پوشش پکیج جامع ──
   const items = [...builder.items.values()].filter((it) => {
     if (existing.has(it.toolKey) && it.toolKey !== PLAN_TOOL_KEYS.anamnesisV3) return false;
-    // پکیج جامع کامپوننت‌هایش را پوشش می‌دهد (T5) — نسخهٔ تکیِ پوشش‌شده حذف می‌شود
     if (familyInPlan && COMP_FAMILY_COVERS.includes(it.toolKey)) return false;
     return true;
   });
@@ -508,7 +405,6 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
     PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] || (a.toolKey < b.toolKey ? -1 : a.toolKey > b.toolKey ? 1 : 0)
   );
 
-  // ── نوع پلن — جامع وقتی فرم جامع در پلن است یا ≥۲ حوزه درگیر؛ تکی تک‌حوزه (تصمیم مهرشده) ──
   const planType: PlanType = familyInPlan || builder.domains.size >= 2 ? 'جامع' : 'تکی';
 
   return {
@@ -518,8 +414,6 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
     referralFa: builder.referral
   };
 }
-
-// ───────── قاعده‌های ۱ تا ۱۴ — فقط بیرون از مسیر دیرآموز اجرا می‌شوند ─────────
 
 function applyProfileRules(args: {
   builder: PlanBuilder;
@@ -537,7 +431,6 @@ function applyProfileRules(args: {
   }
   const T = RECOMMENDER_THRESHOLDS;
 
-  // قاعدهٔ ۲ — SLD: گپ ≥۱۰ WMI/PSI از توان + تیراژ ضعیف یا الگوی ACID/CAD
   const sldGap = (wmiGap !== null && wmiGap >= T.INDEX_GAP_HIGH) || (psiGap !== null && psiGap >= T.INDEX_GAP_HIGH);
   if (sldGap && (facts.tirageLow || facts.acid || facts.cad)) {
     const domainOf: [boolean, string, string, string][] = [
@@ -546,7 +439,6 @@ function applyProfileRules(args: {
       [anam.sldDomains.calc, PLAN_TOOL_KEYS.sldCalc, 'حساب', PLAN_TOOL_KEYS.probeCalc]
     ];
     const declared = domainOf.filter(([on]) => on);
-    // بدون شکایت مشخص، الگوی ACID به حوزهٔ کلاسیک خواندن می‌رود (سند §۲.۴ قاعدهٔ ۲)
     const chosen = declared.length ? declared : [domainOf[0]];
     for (const [, cKey, label, pKey] of chosen) {
       builder.add(cKey, 'core', `گپ ${wmiGap !== null && wmiGap >= T.INDEX_GAP_HIGH ? 'حافظهٔ کاری' : 'سرعت پردازش'} ≥۱۰ نمره از توان${facts.acid ? ' با الگوی ACID' : facts.cad ? ' با الگوی CAD' : ' همراه تیراژ ضعیف'} — چک‌لیست ملاکی ${label} (قاعدهٔ ۲).`, 'r2');
@@ -559,7 +451,6 @@ function applyProfileRules(args: {
     builder.domains.add('academic');
   }
 
-  // قاعدهٔ ۱ — ADHD: یک شاخص ≥۱۰ زیر توان و شاخص دیگر ≥۵ زیر (دو شاخص جدا — سند §۲.۴)
   const gapHighSecond =
     (wmiGap !== null && wmiGap >= T.INDEX_GAP_HIGH && psiGap !== null && psiGap >= T.INDEX_GAP_SECONDARY) ||
     (psiGap !== null && psiGap >= T.INDEX_GAP_HIGH && wmiGap !== null && wmiGap >= T.INDEX_GAP_SECONDARY);
@@ -572,21 +463,18 @@ function applyProfileRules(args: {
     builder.domains.add('attention');
   }
 
-  // قاعدهٔ ۳ — DLD: VCI ≤۸۵ با واژگان/تشابهات ضعیف
   if (facts.vci !== null && facts.vci <= T.LOW_INDEX && facts.vocabLow) {
     builder.add(PLAN_TOOL_KEYS.speech, 'core', `شاخص کلامی ${faNum(facts.vci)} با واژگان/تشابهات ضعیف — چک‌لیست زبان و گفتار (قاعدهٔ ۳).`, 'r3');
     builder.add(PLAN_TOOL_KEYS.probeRead, 'recommended', 'پروب روانی‌خواندن در سن مدرسه — تفکیک زبان از خواندن (قاعدهٔ ۳).', 'r3');
     builder.domains.add('language');
   }
 
-  // قاعدهٔ ۴ — APD: WMI ≤۸۵ با فراخنای ارقام یا توالی حرف-عدد ضعیف
   if (facts.wmi !== null && facts.wmi <= T.LOW_INDEX && (facts.digitsSpanLow || facts.letterNumberLow)) {
     builder.add(PLAN_TOOL_KEYS.speech, 'core', `حافظهٔ کاری ${faNum(facts.wmi)} با فراخنای ارقام/توالی حرف-عدد ضعیف — چک‌لیست زبان + بررسی پردازش شنیداری (قاعدهٔ ۴).`, 'r4');
     builder.notes.push('الگوی پردازش شنیداری — ارجاع شنوایی‌شناسی (APD) در نوبت‌گیری در نظر گرفته شود.');
     builder.domains.add('language');
   }
 
-  // قاعدهٔ ۷ — NVLD: VCI−PRI ≥۱۰ و VCI−PSI ≥۱۰ (تقویت: رمزگذاری < جست‌وجوی نماد)
   if (facts.vci !== null && facts.pri !== null && facts.psi !== null &&
       facts.vci - facts.pri >= T.INDEX_GAP_HIGH && facts.vci - facts.psi >= T.INDEX_GAP_HIGH) {
     builder.add(PLAN_TOOL_KEYS.sldCalc, 'core', 'شکاف کلامی/غیرکلامی ≥۱۰ — چک‌لیست ملاکی حساب (تقریب عملیاتی NVLD — قاعدهٔ ۷).', 'r7');
@@ -596,7 +484,6 @@ function applyProfileRules(args: {
     builder.domains.add('motor');
   }
 
-  // قاعدهٔ ۸ — ASD: WMI/PSI ≤۸۵ + رمزگذاری < جست‌وجوی نماد + بدون الگوی یکپارچه
   if (!builder.items.has(PLAN_TOOL_KEYS.asd) &&
       ((facts.wmi !== null && facts.wmi <= T.LOW_INDEX) || (facts.psi !== null && facts.psi <= T.LOW_INDEX)) &&
       facts.codingBelowSymbol && !facts.acid && !facts.cad) {
@@ -608,7 +495,6 @@ function applyProfileRules(args: {
     builder.domains.add('social');
   }
 
-  // قاعدهٔ ۹ — MOOD: PSI/WMI ≤۸۵ + رخداد مهم زندگی در شرح‌حال
   if (((facts.psi !== null && facts.psi <= T.LOW_INDEX) || (facts.wmi !== null && facts.wmi <= T.LOW_INDEX)) && anam.crisis) {
     builder.add(PLAN_TOOL_KEYS.scared, 'core', 'شاخص ضعیف همراه رخداد مهم زندگی در شرح‌حال — پرسش‌نامهٔ اضطراب کودک (قاعدهٔ ۹).', 'r9');
     builder.add(PLAN_TOOL_KEYS.sdqT, 'recommended', 'زیرمقیاس هیجانی SDQ معلم — مکمل عامل خلقی (قاعدهٔ ۹).', 'r9');
@@ -618,7 +504,6 @@ function applyProfileRules(args: {
     builder.domains.add('emotional');
   }
 
-  // قاعدهٔ ۱۰ — TBI (خط قرمز پزشکی): PSI منفردِ پایین‌ترین با گپ معنادار + سابقهٔ آسیب/بیماری
   if (facts.psi !== null && facts.wmi !== null && facts.vci !== null && facts.pri !== null &&
       facts.psi < facts.wmi && facts.psi < facts.vci && facts.psi < facts.pri &&
       abilityMax !== null && abilityMax - facts.psi >= T.INDEX_GAP_HIGH && anam.injury) {
@@ -627,7 +512,6 @@ function applyProfileRules(args: {
     builder.domains.add('attention');
   }
 
-  // قاعدهٔ ۱۱ — TWO_E: شاخص ≥۱۲۰ + ضعف اجرایی ≤۹۰ + پراکندگی ≥۲۰
   const strongIdx = [facts.vci, facts.pri].filter((v): v is number => v !== null && v >= T.STRONG_INDEX);
   const execWeak = (facts.wmi !== null && facts.wmi <= T.EXEC_WEAK) || (facts.psi !== null && facts.psi <= T.EXEC_WEAK);
   if (strongIdx.length > 0 && execWeak && facts.indexScatter !== null && facts.indexScatter >= T.SCATTER_TWO_E) {
@@ -636,7 +520,6 @@ function applyProfileRules(args: {
     builder.domains.add('academic');
   }
 
-  // قاعدهٔ ۱۲ — DOMAIN_WEAK: FSIQ ≥۹۰ و گام ۵ ضعف شخصی ≥۱ حوزه
   if (facts.fsiq !== null && facts.fsiq >= 90 && facts.step5Weak.length > 0) {
     const map: Record<string, [string, string]> = {
       WMI: [PLAN_TOOL_KEYS.snapP, 'حافظهٔ کاری'],
@@ -655,7 +538,6 @@ function applyProfileRules(args: {
     }
   }
 
-  // قاعدهٔ ۱۳ و ۱۴ و «مرز پایین» — فقط یادداشتِ پایه (ابزارها همان باتری پایه است)
   if (band === 'LOW_BORDER' &&
       (facts.indexScatter === null || facts.indexScatter < T.SCATTER_SEVERE) && !facts.acid && !facts.cad &&
       !builder.items.has(PLAN_TOOL_KEYS.sldRead) && !builder.items.has(PLAN_TOOL_KEYS.sldWri) && !builder.items.has(PLAN_TOOL_KEYS.sldCalc) &&
@@ -674,8 +556,6 @@ function applyProfileRules(args: {
 
   void band;
 }
-
-// ───────── متن پایهٔ تصمیم — شفاف و بدون محاسبهٔ پشت‌پرده ─────────
 
 const DOMAIN_FA: Record<string, string> = {
   academic: 'یادگیری',
@@ -731,9 +611,6 @@ function bandLabelFa(band: WechslerFsiqBand): string {
   return map[band] ?? band;
 }
 
-// ───────── مشتق‌سازی زمینه از رویدادها — مصرف‌کنندهٔ سرویس و تست‌ها ─────────
-
-/** جدیدترین رویداد هر کلید — ورودی نزولی زمانی (قرارداد loadEvidenceEvents) */
 function latestByKey(events: EvidenceEvent[]): Map<string, EvidenceEvent> {
   const map = new Map<string, EvidenceEvent>();
   for (const e of events) {
@@ -742,7 +619,6 @@ function latestByKey(events: EvidenceEvent[]): Map<string, EvidenceEvent> {
   return map;
 }
 
-/** ساخت زمینهٔ پلن از رویدادهای خام پرونده — همان قطعات قراردادی T1/T4/T5 */
 export function checklistPlanContextOf(events: EvidenceEvent[]): ChecklistPlanContext {
   const done = events.filter((e) => e.status === 'completed');
   const latest = latestByKey(done);

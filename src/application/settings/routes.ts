@@ -1,24 +1,14 @@
-/**
- * سرویس تنظیمات مرکز — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// مسیرهای REST تنظیمات — بدون business logic (فقط wire + Zod)
-// قانون RBAC: تغییر تنظیمات فقط مدیر؛ خواندن کامل فقط دفتر
-// («بازه کاری مرکز» برای رنگ تقویم همه نقش‌ها باز می‌ماند)
-
 import type { AppHono } from '@core/shared';
 import { ReplaceCenterHoursSchema, ScoringConfigSchema, UpdateSettingsSchema } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
 import type { SettingsService } from './service';
 
 export function registerSettingsRoutes(app: AppHono, service: SettingsService): void {
-  // ─── خواندن کامل — فقط دفتر (: درمانگر به ماژول تنظیمات دسترسی ندارد) ───
   app.get('/api/settings', requireRole('manager', 'secretary'), async (c) => {
     const data = await service.get();
     return c.json({ data }, 200);
   });
 
-  // ─── به‌روزرسانی عمومی (فقط مدیر) ───
   app.put('/api/settings', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     const body = UpdateSettingsSchema.parse(await c.req.json<unknown>());
@@ -41,7 +31,6 @@ export function registerSettingsRoutes(app: AppHono, service: SettingsService): 
     return c.json({ data }, 200);
   });
 
-  // ─── بازه کاری مرکز ───
   app.get('/api/settings/center-hours', async (c) => {
     const data = await service.getCenterHours();
     return c.json({ data }, 200);
@@ -57,14 +46,12 @@ export function registerSettingsRoutes(app: AppHono, service: SettingsService): 
     return c.json({ data }, 200);
   });
 
-  // ─── اعمال بازه مرکز روی همه کارکنان ───
   app.post('/api/settings/center-hours/apply-to-all', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     const data = await service.applyCenterHoursToAllStaff(actor);
     return c.json({ data }, 200);
   });
 
-  // ─── پیکربندی امتیازدهی همکاران — فقط مدیر (فرمول از غیرمدیر پنهان است — ) ───
   app.get('/api/settings/scoring', requireRole('manager'), async (c) => {
     const data = await service.getScoringConfig();
     return c.json({ data }, 200);

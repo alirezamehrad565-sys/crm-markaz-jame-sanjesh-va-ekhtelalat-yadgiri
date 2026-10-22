@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — -scoring-v2
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e--scoring-v2.test.ts — موتور تشخیص داخلی فاز ۲
-// نمره‌گذاری حرفه‌ای روان‌سنجی: گزینه‌ای نمره‌دار / آیتم معکوس / آیتم بحرانی / زیرمقیاس با excludeFromTotal
-// + تفسیر خودکار + ارتقای seedها + حذف رویداد و قالب (فقط مدیر) + سازگاری قالب‌های قدیمی
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, asRole, createStudent } from '../../test/harness';
 import { analyzeChecklist, itemScoreOf, totalPossible } from '../../domain/case-events/pure';
@@ -190,14 +182,12 @@ describe('موتور نمره‌گذاری: پر کردن چک‌لیست v2', (
       await manager.get(`/api/case-events/${quickEventId}`)
     );
     const a = ev.analysis;
-    // نمره: q1=2 (گزینه سوم) + q2=1 + q3=3 + q4=1 + q5 معکوس (2-0=2) + q6=3 = ۱۲ از ۱۷
     expect(a.score).toBe(12);
     expect(a.maxScore).toBe(17);
     expect(a.band).toBe('مرزی — نیاز به توجه');
     expect(a.flags?.map((f) => f.key)).toEqual(['q6']);
     expect(a.interpretation).toContain('آیتم بحرانی');
     expect(a.interpretation).toContain('نمرهٔ کل: ۱۲ از ۱۷');
-    // payload نمایشی گزینه‌ای نمره‌دار = برچسب گزینه (نه اندیس)
     expect(ev.payload.q6.value).toBe('جسمی — به خود یا دیگری');
   });
 
@@ -205,11 +195,8 @@ describe('موتور نمره‌گذاری: پر کردن چک‌لیست v2', (
     const answers: Record<string, number> = {};
     const keys = Array.from({ length: 25 }, (_, i) => `i${String(i + 1).padStart(2, '0')}`);
     for (const k of keys) answers[k] = 0;
-    // هیجانی کامل: i03,i08,i13,i16 = ۲ → ۸ از ۸ → قابل توجه
     for (const k of ['i03', 'i08', 'i13', 'i16']) answers[k] = 2;
-    // آیتم‌های معکوس با پاسخ کامل (۲) مؤثرشان ۰ می‌شود — پاسخ ۰ یعنی رفتار نامطلوب (روان‌سنجی درست)
     for (const k of ['i07', 'i11', 'i14', 'i23', 'i24']) answers[k] = 2;
-    // معکوس i24 = ۰ → مؤثر ۲ در بیش‌فعالی
     const res = await A.app.request(`/public/case-events/${sdqEventId}/fill`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -288,14 +275,12 @@ describe('حذف رویداد و قالب (فقط مدیر — دستور کار
     expect(after.some((e) => e.id === sessionId)).toBe(false);
     const gone = await manager.get(`/api/case-events/${sessionId}`);
     expect(gone.status).toBe(404);
-    // حذف دوباره → ۴۰۴
     expect((await manager.delete(`/api/case-events/${sessionId}`)).status).toBe(404);
   });
 
   it('حذف قالب با رویداد متصل رد می‌شود (۴۰۹)؛ قالب بی‌استفاده حذف می‌شود؛ منشی اجازهٔ حذف ندارد', async () => {
     const types = dataOf<TypeRow[]>(await manager.get('/api/case-events/types'));
     const usedType = types.find((t) => t.key === 'session-report') ?? types.find((t) => t.category === 'session')!;
-    // رویداد جلسهٔ حذف‌شده هم به این قالب وصل است — حذف قالب باید رد شود (سابقهٔ audit)
     expect((await manager.delete(`/api/case-events/types/${usedType.id}`)).status).toBe(409);
 
     const sec = await asRole(A, 'secretary');

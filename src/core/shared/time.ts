@@ -1,10 +1,3 @@
-/**
- * زیرساخت مشترک — زمان تهران، کدملی، اسکیمای Zod و ثابت‌ها — زمان، منطقهٔ تهران و مرز روزها
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// کمکی‌های زمانی — ذخیره ISO UTC، نمایش Asia/Tehran (قانون ۱۰)
-// توابع pure و قابل تست. ایران از ۱۴۰۱ ساعت تابستانی ندارد → آفست ثابت +03:30
-
 import { TEHRAN_OFFSET_MINUTES } from './constants';
 
 const TEHRAN_OFFSET_MS = TEHRAN_OFFSET_MINUTES * 60 * 1000;
@@ -13,18 +6,11 @@ function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
 }
 
-/**
- * لحظه فعلی (یا لحظه داده‌شده) به YYYY-MM-DD به وقت تهران.
- */
 export function tehranTodayYmd(now: Date = new Date()): string {
   const tehran = new Date(now.getTime() + TEHRAN_OFFSET_MS);
   return `${tehran.getUTCFullYear()}-${pad2(tehran.getUTCMonth() + 1)}-${pad2(tehran.getUTCDate())}`;
 }
 
-/**
- * مرزهای UTC یک روز تقویمی تهران.
- * 2026-10-12 (تهران) → 2026-10-11T20:30:00.000Z تا 2026-10-12T20:29:59.999Z
- */
 export function tehranDayRange(ymd: string): { start: string; end: string } {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
     throw new Error(`INVALID_DATE: ${ymd}`);
@@ -37,25 +23,16 @@ export function tehranDayRange(ymd: string): { start: string; end: string } {
   };
 }
 
-/**
- * مرزهای UTC بازه [fromYmd, toYmd] به وقت تهران (شامل هر دو روز).
- */
 export function tehranRange(fromYmd: string, toYmd: string): { start: string; end: string } {
   const a = tehranDayRange(fromYmd);
   const b = tehranDayRange(toYmd);
   return { start: a.start, end: b.end };
 }
 
-/**
- * YYYY-MM-DD روز تهرانِ یک لحظه ISO UTC.
- */
 export function tehranYmdOf(isoUtc: string): string {
   return tehranTodayYmd(new Date(isoUtc));
 }
 
-/**
- * آیا زمان روی شبکه SLOT دقیقه‌ای است؟ (دقیقه و ثانیه/میلی‌ثانیه صفر و دقیقه مضرب slot)
- */
 export function isOnGrid(isoUtc: string, slotMinutes: number): boolean {
   const ms = Date.parse(isoUtc);
   if (Number.isNaN(ms)) return false;
@@ -63,16 +40,10 @@ export function isOnGrid(isoUtc: string, slotMinutes: number): boolean {
   return seconds % (slotMinutes * 60) === 0;
 }
 
-/**
- * جمع/تفاضل دقیقه روی یک ISO UTC.
- */
 export function addMinutes(isoUtc: string, minutes: number): string {
   return new Date(Date.parse(isoUtc) + minutes * 60 * 1000).toISOString();
 }
 
-/**
- * برچسب ساعت تهران (HH:MM) برای یک لحظه ISO UTC — در قالب‌های پیام استفاده می‌شود.
- */
 export function tehranTimeLabel(isoUtc: string): string {
   const ms = Date.parse(isoUtc);
   if (Number.isNaN(ms)) throw new Error(`INVALID_DATE: ${isoUtc}`);
@@ -80,10 +51,6 @@ export function tehranTimeLabel(isoUtc: string): string {
   return `${pad2(tehran.getUTCHours())}:${pad2(tehran.getUTCMinutes())}`;
 }
 
-/**
- * YYYY-MM-DD + n روز (math تقویمی روی تاریخ، بدون درگیری به منطقه زمانی).
- * برای محاسبه «فردا تهران» در cron یادآوری‌ها.
- */
 export function addDaysYmd(ymd: string, days: number): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
     throw new Error(`INVALID_DATE: ${ymd}`);
@@ -91,9 +58,6 @@ export function addDaysYmd(ymd: string, days: number): string {
   const ms = Date.parse(`${ymd}T00:00:00.000Z`) + days * 24 * 60 * 60 * 1000;
   return new Date(ms).toISOString().slice(0, 10);
 }
-
-// ───────────── Jalali ─────────────
-// الگوریتم jalaali-js (MIT) — نسخه فشرده سمت سرور برای قالب پیام‌ها
 
 const div = (a: number, b: number): number => Math.trunc(a / b);
 const mod = (a: number, b: number): number => a - Math.trunc(a / b) * b;
@@ -181,12 +145,10 @@ function d2j(jdn: number): { jy: number; jm: number; jd: number } {
   return { jy, jm, jd };
 }
 
-/** Gregorian YMD → {jy, jm, jd} */
 export function toJalaliParts(gy: number, gm: number, gd: number): { jy: number; jm: number; jd: number } {
   return d2j(g2d(gy, gm, gd));
 }
 
-/** Jalali {jy, jm, jd} → Gregorian YMD (مثلاً ۱ فروردین → ابتدای سال) */
 export function jalaliToGregorianYmd(jy: number, jm: number, jd: number): string {
   const r = jalCal(jy, false);
   const jdn = j2d(jy, jm, jd, r);
@@ -194,32 +156,27 @@ export function jalaliToGregorianYmd(jy: number, jm: number, jd: number): string
   return `${g.gy}-${pad2(g.gm)}-${pad2(g.gd)}`;
 }
 
-/** روز هفته ایرانی (۰=شنبه…۶=جمعه) برای یک YMD */
 export function iranianWeekdayOfYmd(ymd: string): number {
   const ms = new Date(`${ymd}T12:00:00.000Z`).getTime() + TEHRAN_OFFSET_MS; // ظهر → امن
   const jsDay = new Date(ms).getUTCDay(); // 0=Sun … 6=Sat
   return (jsDay + 1) % 7;
 }
 
-/** ارقام فارسی */
 export function faDigits(input: string | number): string {
   const fa = '۰۱۲۳۴۵۶۷۸۹';
   return String(input).replace(/\d/g, (d) => fa[Number(d)]);
 }
 
-/** دقیقه از نیمه‌شب → HH:MM */
 export function minuteToLabel(minute: number): string {
   return `${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}`;
 }
 
-/** YYYY-MM-DD (میلادی تهران) → «۱۴ مهر ۱۴۰۴» */
 export function jalaliLabel(ymd: string): string {
   const [gy, gm, gd] = ymd.split('-').map(Number);
   const j = toJalaliParts(gy, gm, gd);
   return faDigits(`${j.jd} ${JALALI_MONTHS_FA[j.jm - 1]} ${j.jy}`);
 }
 
-/** YYYY-MM-DD (میلادی تهران) → «شنبه ۱۴ مهر ۱۴۰۴» */
 export function jalaliFullLabel(ymd: string): string {
   return `${WEEKDAY_NAMES_FA[iranianWeekdayOfYmd(ymd)]} ${jalaliLabel(ymd)}`;
 }

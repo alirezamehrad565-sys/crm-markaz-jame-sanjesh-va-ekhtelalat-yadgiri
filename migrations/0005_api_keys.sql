@@ -1,11 +1,3 @@
--- مایگریشن اسکیما D1 — کلیدهای API
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- 0005_api_keys.sql — کلیدهای API برای اتصال سرویس‌های خارجی و اتوماسیون
--- امنیت:
--- * مقدار واقعی کلید هرگز ذخیره نمی‌شود — فقط SHA-256 hex (key_hash)
--- * prefix برای نمایش امن و جستجو نگه داشته می‌شود (مثل ck_a1b2c3d4…)
--- * ابطال = active=0 + revoked_at (کلیدهای باطل‌شده هرگز حذف نمی‌شوند — audit trail)
-
 CREATE TABLE IF NOT EXISTS api_keys (
   id           TEXT PRIMARY KEY,
   name         TEXT NOT NULL,

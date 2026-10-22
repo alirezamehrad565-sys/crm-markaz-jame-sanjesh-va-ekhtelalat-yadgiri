@@ -1,11 +1,3 @@
-/**
- * نمای صندوق خروجی
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// outbox.js — صندوق اعلان‌ها (فقط مدیر/منشی)
-// سه صندوق: پیش‌نویس‌های «ساعت ارسال» (send_at آینده) / آمادهٔ ارسال فوری / ناموفق‌ها
-// سرور requireRole('manager','secretary') و اینجا هم گارد لایهٔ دوم
-
 import { api } from '../api.js';
 import { el, icon, toast, toastError, emptyState, skeletonState, statusBadge } from '../ui.js';
 import { fa, formatJalaliDateTime } from '../format.js';

@@ -1,21 +1,3 @@
-/**
- * نمای برد پیشرفت
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// progress-board.js — تابلوی پیشرفت درمانگران — مؤلفهٔ تعبیه‌شدنی
-//
-// خواست کاربر:
-// «نه این منوی جدید اضافه کاریه — همون سیستم قبلی یعنی به مدیر نشون بده تو
-// قسمت کارکنان و درمانگران؛ تو داشبورد کارت تابلوی پیشرفت رو ببینن به صورت
-// خلاصه بدون اینکه از فرمول مطلع بشن»
-// «بخش های مختلف امتیاز بندی که تو سایت پراکنده شده یکپارچه بشه و محدود بشه
-// به این دو قسمت»
-//
-// → این مؤلفه فقط در «کارکنان» (نمای مدیر) تعبیه می‌شود؛ داشبورد کارت خلاصهٔ
-// خودش را جدا دارد. پنل فرمول حذف شد — وزن‌ها فقط سمت سرور می‌مانند.
-// سرچشمهٔ امتیاز: فرمول سراسری = محتوا (تولید/استفاده/ارجاع) + استفادهٔ واقعی
-// سامانه از audit_log — محاسبهٔ زندهٔ فقط-خواندنی از /api/scoring/board.
-
 import { api } from '../api.js';
 import { el, icon, toastError, emptyState, skeletonState, errorState, openModal } from '../ui.js';
 import { fa, formatJalaliNumeric, tehranYmdOfIso, tehranTimeOfIso } from '../format.js';
@@ -32,14 +14,12 @@ function roleChip(role) {
   return el('span', { class: 'cell-sub' }, ROLE_LABELS[role] ?? role);
 }
 
-/** — عدد فارسی با ممیزِ فارسی: «۱۰٫۵» — وزن تیمی ۰٫۵ شمارش تمرین‌ها را اعشاری می‌کند (m140) */
 function faScore(n) {
   const v = Math.round(Number(n) * 100) / 100;
   if (!Number.isFinite(v)) return fa(0);
   return fa(Number.isInteger(v) ? String(v) : String(v).replace('.', '٫'));
 }
 
-/** سکوی قهرمانی — سه نفر اول */
 function podium(rows, meId) {
   const top = rows.filter((r) => r.total > 0).slice(0, 3);
   if (!top.length) return null;
@@ -56,7 +36,6 @@ function podium(rows, meId) {
   );
 }
 
-/** ردیف تفصیلی یک همکار — کلیک = باز/بسته شدن تفکیک (شمارش واقعی، بدون وزن) */
 function boardRow(row, meId, period) {
   const isOpen = { v: false };
   const detail = el('div', { class: 'pb-row__detail', hidden: true });
@@ -67,8 +46,6 @@ function boardRow(row, meId, period) {
       el('span', { class: 'badge badge--neutral' }, `${row.usageLabels[action] ?? action}: ${fa(c)}`)
     );
 
-  // — جزئیات کامل امتیاز (m140): هر سطر دکمهٔ خودش را دارد؛ باز کردن مودال با دریافت
-  //   تنبلِ GET /api/scoring/explain?staffId=…&period=<دورهٔ فعلی تابلو> — خطا هرگز تابلو را نمی‌شکند
   const explainBtn = el(
     'button',
     {
@@ -120,9 +97,6 @@ function boardRow(row, meId, period) {
   return el('div', { class: 'pb-rowwrap' }, rowEl, detail);
 }
 
-// ── m140 — جزئیات امتیاز (پاسخ GET /api/scoring/explain) ─────────────────────
-
-/** سکشن داخل مودال جزئیات — سربرگ + خلاصهٔ شمارش + بدنه */
 function explainSection(title, summary, ...body) {
   return el('div', { class: 'pb-explain__sec' },
     el('div', { class: 'pb-explain__sec-head' },
@@ -131,7 +105,6 @@ function explainSection(title, summary, ...body) {
     ...body);
 }
 
-/** ردیف یک قلم شمرده‌شده — عنوان + نشان اختیاری (تیمی/شمارش) + عدد اختیاری */
 function explainItem(titleText, badgeText, valueText) {
   return el('div', { class: 'pb-explain__item' },
     el('span', { class: 'pb-explain__item-title', title: titleText }, titleText),
@@ -139,11 +112,6 @@ function explainItem(titleText, badgeText, valueText) {
     valueText ? el('span', { class: 'pb-explain__item-w' }, valueText) : null);
 }
 
-/**
- * بدنهٔ مودال «جزئیات امتیاز» پس از رسیدن پاسخ explain.
- * شکل قرارداد: staff/content{exercises,packages,templates,forms}/usage/totals —
- * هر فیلد غایب با پیش‌فرض خنثی جبران می‌شود تا پاسخ ناقص هرگز مودال را نشکند.
- */
 function renderExplain(d) {
   const c = d.content ?? {};
   const ex = c.exercises ?? { count: 0, weighted: 0, items: [] };
@@ -154,7 +122,6 @@ function renderExplain(d) {
   const t = d.totals ?? {};
   const emptyNote = () => el('span', { class: 'cell-sub' }, 'در این دوره موردی نیست');
 
-  // سربرگ — همکار + دوره + شروع شمارش + زمان محاسبه (جلالی، وقت تهران)
   const head = el('div', { class: 'pb-explain__head' },
     el('b', {}, `${d.staff?.fullName ?? '—'}${d.staff?.role ? ` — ${ROLE_LABELS[d.staff.role] ?? d.staff.role}` : ''}`),
     el('span', { class: 'cell-sub' }, `دوره: ${d.periodLabel ?? d.period ?? '—'}`),
@@ -164,7 +131,6 @@ function renderExplain(d) {
         `محاسبه: ${formatJalaliNumeric(tehranYmdOfIso(d.generatedAt))} — ${fa(String(tehranTimeOfIso(d.generatedAt)))}`)
       : null);
 
-  // تمرین‌ها — قلم‌به‌قلم با وزن مؤثر (تمرین تیمی = نصف)
   const exItems = (ex.items ?? []).map((it) =>
     explainItem(it.title ?? it.id, it.teamCreated ? 'تیمی → نصف امتیاز' : null,
       `${faScore(it.effectiveWeight)} امتیاز`));
@@ -172,7 +138,6 @@ function renderExplain(d) {
     `${faScore(ex.count)} مورد — جمع وزن‌دار ${faScore(ex.weighted)} امتیاز`,
     el('div', { class: 'pb-explain__items' }, ...(exItems.length ? exItems : [emptyNote()])));
 
-  // بسته‌ها / قالب‌ها / فرم‌ها — شمارش + جمع وزن (امتیاز) + فهرست عناوین
   const listSec = (label, box, nameKey) => {
     const items = (box.items ?? []).map((it) => explainItem(it[nameKey] ?? it.id, null, null));
     return explainSection(label,
@@ -180,7 +145,6 @@ function renderExplain(d) {
       el('div', { class: 'pb-explain__items' }, ...(items.length ? items : [emptyNote()])));
   };
 
-  // اقدام‌های سامانه — برچسب × شمارش = امتیاز؛ با سقف اداری اگر خورده باشد
   const actions = (u.actions ?? []).filter((a) => (a.count ?? 0) > 0);
   const usageItems = actions.map((a) =>
     explainItem(a.label ?? a.action, `${fa(a.count ?? 0)} بار`, `${faScore(a.points ?? 0)} امتیاز`));
@@ -194,7 +158,6 @@ function renderExplain(d) {
     el('div', { class: 'pb-explain__items' },
       ...(usageItems.length ? usageItems : [el('span', { class: 'cell-sub' }, 'فعالیت ثبت‌شده‌ای در این دوره نیست')])));
 
-  // پانوشت — مجموع‌ها + رتبه
   const totals = el('div', { class: 'pb-explain__totals' },
     el('div', { class: 'pb-explain__total' }, el('span', { class: 'cell-sub' }, 'مجموع محتوا'), el('b', {}, faScore(t.contentScore ?? 0))),
     el('div', { class: 'pb-explain__total' }, el('span', { class: 'cell-sub' }, 'استفادهٔ سامانه'), el('b', {}, faScore(t.usagePoints ?? 0))),
@@ -211,7 +174,6 @@ function renderExplain(d) {
     totals);
 }
 
-/** مودال جزئیات امتیاز — دریافت تنبل؛ خطا درون مودال نشان داده می‌شود و تابلو سالم می‌ماند */
 function openExplainModal(row, period) {
   const box = el('div', { class: 'pb-explain' },
     el('div', { class: 'pb-explain__loading' }, 'در حال دریافت جزئیات امتیاز…'));
@@ -229,10 +191,6 @@ function openExplainModal(row, period) {
         el('span', { class: 'cell-sub' }, err?.message ?? ''))));
 }
 
-/**
- * تابلوی پیشرفت درمانگران — مؤلفهٔ تعبیه‌شدنی در بخش «کارکنان» (مدیر).
- * بازهٔ زمانی + سکو + رتبه‌بندی با تفکیک بازشدنی — بدون نمایش فرمول.
- */
 export function renderProgressBoardCard(container) {
   const tabs = el('div', { class: 'pb-tabs' },
     PERIOD_TABS.map((t) =>
@@ -268,7 +226,6 @@ export function renderProgressBoardCard(container) {
       data.rows.map((r) => boardRow(r, meId, currentPeriod)));
     const podiumEl = podium(data.rows, meId);
     const updatedAt = `${formatJalaliNumeric(tehranYmdOfIso(data.generatedAt))} — ${fa(String(tehranTimeOfIso(data.generatedAt)))}`;
-    // شروع دورهٔ امتیاز (صفرسازی): هر فعالیتی قبل از این تاریخ در تابلو نیست
     const sinceNote = data.since
       ? `شروع شمارش امتیازها: ${formatJalaliNumeric(tehranYmdOfIso(data.since))}`
       : null;

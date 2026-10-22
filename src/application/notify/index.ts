@@ -1,9 +1,3 @@
-/**
- * اعلان‌های کاربردی و بات‌های نقش‌آگاه بله — نقطهٔ ورود و صادرات‌های ماژول (barrel)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// مرز عمومی ماژول notify (application) — تنها نقطه import برای api-routing
-
 export { createNotifyAppService } from './service';
 export type { NotifyAppDeps, NotifyAppService, UpsertPrefsInput, BotReply } from './service';
 export { groupFollowUpsForBot, followupsNudgeBody } from './digest';

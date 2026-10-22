@@ -1,10 +1,3 @@
-/**
- * ماژول هستهٔ نوبت‌دهی — لایهٔ دسترسی به داده (D1)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// SQL پارامتری برای appointments و appointment_students — مالکیت write فقط این ماژول
-// هیچ کوئری dynamic unsafe — همه پارامتری (قانون ۱)
-
 import type { AppointmentOpsStatus, AppointmentStatus, AppointmentStudent, NextAction } from '@core/shared';
 
 export interface AppointmentRow {
@@ -13,9 +6,7 @@ export interface AppointmentRow {
   start_at: string;
   end_at: string;
   status: AppointmentStatus;
-  /** فاز ۱ (تصمیم D1) — وضعیت عملیاتی؛ NULL = برنامه‌ریزی‌شدهٔ عادی */
   ops_status: AppointmentOpsStatus | null;
-  /** — نوع جلسه (جدول ۴ اساس‌نامه) — NULL = بدون نوع (نوبت‌های قدیمی) */
   session_type: string | null;
   note: string | null;
   version: number;
@@ -31,7 +22,6 @@ export interface AppointmentStudentRow {
   facet_id: string | null;
   attendance: string;
   note: string | null;
-  /** فاز ۲ — گزارش جلسه (ستون‌های مالکیت session-notes) */
   session_note: string | null;
   next_action: string | null;
 }

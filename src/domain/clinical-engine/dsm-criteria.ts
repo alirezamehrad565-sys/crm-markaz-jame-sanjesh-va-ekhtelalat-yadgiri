@@ -1,14 +1,5 @@
-/**
- * موتور بالینی — باتری‌ها، قواعد، روایت و اهداف مداخله — معیارهای DSM
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// لایهٔ ۱ موتور: ملاک‌های DSM-5-TR ده هدف بالینی — بازآفرینی فارسی ساده
-// متن‌ها «بازآفرینی» ملاک‌ها هستند (نه ترجمهٔ لفظ‌به‌لفظ متن حق‌نویزی‌شده)؛
-// شناسهٔ هر ملاک با criteriaMap در rules.ts و آیتم‌های چک‌لیست باتری گره می‌خورد.
-
 import type { DsmRecord } from './types';
 
-/** ساختار مشترک ملاک‌های اختلال یادگیری خاص (§DSM-5-TR 315.x) — فقط ملاک A در هر حوزه تفاوت می‌کند */
 function sldRecord(areaFa: string, areaEn: string, icd: string, aCriteria: { id: string; group: 'A'; textFa: string }[]): DsmRecord {
   return {
     nameFa: `اختلال یادگیری خاص — ${areaFa}`,
@@ -27,9 +18,7 @@ function sldRecord(areaFa: string, areaEn: string, icd: string, aCriteria: { id:
   };
 }
 
-/** ملاک‌های A ده هدف — متن‌ها به زبان ساده */
 export const DSM_RECORDS: Record<string, DsmRecord> = {
-  // ─── اختلال یادگیری خاص — سه حوزه (هر ملاک A خودش را دارد؛ B/C/D مشترک) ───
   dyslexia: sldRecord('خواندن', 'Specific Learning Disorder with Impairment in Reading (Dyslexia)', 'F81.0', [
     { id: 'dyslexia.a1', group: 'A', textFa: 'خواندن واژه ناقص یا پرتلاش است: کند، پرخطا، حدس‌زدنی یا حرف‌جابه‌جایی.' },
     { id: 'dyslexia.a2', group: 'A', textFa: 'دشواری در فهم رابطهٔ حرف و صدا، کدگشایی واژه و مهارت‌های آوایی زبان.' },
@@ -45,7 +34,6 @@ export const DSM_RECORDS: Record<string, DsmRecord> = {
     { id: 'dyscalculia.a2', group: 'A', textFa: 'حفظ و یادآوری حقایق حسابی و دقت محاسبه دشوار است.' },
     { id: 'dyscalculia.a3', group: 'A', textFa: 'استدلال کمی و حل مسئلهٔ کلامی مشکل دارد.' }
   ]),
-  // ─── ADHD ───
   adhd: {
     nameFa: 'اختلال بیش‌فعالی/کم‌توجهی',
     nameEn: 'Attention-Deficit/Hyperactivity Disorder',
@@ -63,7 +51,6 @@ export const DSM_RECORDS: Record<string, DsmRecord> = {
     exclusionsFa: ['اسکیزوفرنی/اختلال پارانویی', 'اختلال ماده یا محرک', 'اضطراب/افسردگی به‌تنهایی', 'اختلال حسی'],
     referralFa: ['تصمیم دارودرمانی فقط با پزشک', 'در صورت شک رشد حسی/شنوایی: ارجاع متخصص مربوط']
   },
-  // ─── ASD ───
   autism: {
     nameFa: 'اختلال طیف اتیسم',
     nameEn: 'Autism Spectrum Disorder',
@@ -85,7 +72,6 @@ export const DSM_RECORDS: Record<string, DsmRecord> = {
     exclusionsFa: ['نارسایی فکری به‌تنهایی', 'اختلال زبانی به‌تنهایی'],
     referralFa: ['ارزیابی تخصصی اتیسم همیشه خط قرمز است — چک‌لیست فقط غربال است', 'در صورت شک شنوایی: ارجاع شنوایی‌شناس']
   },
-  // ─── زبان/گفتار ───
   speech_language: {
     nameFa: 'اختلال زبانی/گفتار',
     nameEn: 'Language Disorder / Speech Sound Disorder / Childhood-Onset Fluency Disorder',
@@ -103,7 +89,6 @@ export const DSM_RECORDS: Record<string, DsmRecord> = {
     exclusionsFa: ['کم‌شنوایی', 'نارسایی فکری', 'اختلال حرکتی دهان'],
     referralFa: ['ارزیابی گفتار-زبان توسط گفتاردرمانگر الزامی است', 'آیتم بحرانی کم‌شنوایی → ارجاع شنوایی‌شناس قبل از هر مداخله']
   },
-  // ─── اضطراب ───
   anxiety: {
     nameFa: 'اختلال اضطرابی کودکان (فراگیر/جدایی/اجتماعی)',
     nameEn: 'Generalized Anxiety / Separation Anxiety / Social Anxiety Disorder',
@@ -121,7 +106,6 @@ export const DSM_RECORDS: Record<string, DsmRecord> = {
     exclusionsFa: ['اثر ماده/دارو', 'اختلال جسمی (تیروئید و مشابه)', 'اضطراب فقط در موقعیت امتحان'],
     referralFa: ['ارزیابی بالینی اضطراب و آموزش والدگریِ همراهِ آرام', 'در صورت نشانهٔ جسمانی شدید: بررسی پزشکی']
   },
-  // ─── DCD ───
   motor_coordination: {
     nameFa: 'اختلال رشدی هماهنگی حرکتی',
     nameEn: 'Developmental Coordination Disorder',
@@ -137,7 +121,6 @@ export const DSM_RECORDS: Record<string, DsmRecord> = {
     exclusionsFa: ['نارسایی فکری', 'اختلال بینایی', 'بیماری عصبی-عضلانی'],
     referralFa: ['ارزیابی کاردرمانی حرکتی', 'در صورت شک بیماری عصبی-عضلانی: ارجاع نورولوژی']
   },
-  // ─── ODD ───
   odd: {
     nameFa: 'اختلال نافرمانی مقابله‌ای',
     nameEn: 'Oppositional Defiant Disorder',
@@ -160,7 +143,6 @@ export const DSM_RECORDS: Record<string, DsmRecord> = {
     exclusionsFa: ['روان‌گسیختگی', 'اختلال ماده', 'افسردگی/شیدایی', 'ODD فقط پادست ADHD نیست — تفکیک الزامی'],
     referralFa: ['مربی والدگری + قرارداد رفتاری مشترک', 'در صورت پرخاشگری شدید: ارزیابی تخصصی رفتار']
   },
-  // ─── دیرآموزی — وضعیت آموزشی، نه تشخیص DSM ───
   slow_learner: {
     nameFa: 'دیرآموزی — عملکرد فکری مرزی (وضعیت آموزشی)',
     nameEn: 'Borderline Intellectual Functioning (educational status, not a DSM disorder)',
@@ -178,7 +160,6 @@ export const DSM_RECORDS: Record<string, DsmRecord> = {
   }
 };
 
-/** رکورد ملاک‌های یک هدف (فقط گروه clinical) */
 export function dsmOf(targetKey: string): DsmRecord | undefined {
   return DSM_RECORDS[targetKey];
 }

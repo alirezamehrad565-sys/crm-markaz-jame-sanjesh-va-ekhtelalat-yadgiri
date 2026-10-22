@@ -1,8 +1,3 @@
-// T6 (m148-b) — وریفای ناحیهٔ موتور شک v2 در worker/bundle.js
-// الگوی t2/t3-verify: واردکردن مستقیم باندل در Node خاموش می‌شود (شیم‌های unenv)؛
-// پس ناحیه با لنگر متنی استخراج و در vm اجرا می‌شود و رفتار روی کدِ بایت‌به‌بایت تولید آزموده می‌شود.
-// ناحیه: "var FSIQ_BANDS = [" تا "__name2(runInference, \"runInference\");" — همهٔ وابستگی‌های
-// runInference (RULES/targets/DSM/batteryDef/anamnesis/wechsler-link/convergence) داخل همین بازه‌اند.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
@@ -26,7 +21,6 @@ const shims = `
 var __defProp = Object.defineProperty;
 var __name = (t, v) => __defProp(t, "name", { value: v, configurable: true });
 var __name2 = __name;
-// num از ناحیهٔ موتور وکسلر (بیرون این استخراج) — همان معنا: ارقام فارسی/لاتین → عدد
 var num = (x) => {
   if (x === null || x === undefined || x === "") return NaN;
   const s2 = String(x).replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)]);
@@ -53,7 +47,6 @@ function ok(cond, label) {
 }
 const eq = (got, want, label) => ok(got === want, `${label} (got=${JSON.stringify(got)} want=${JSON.stringify(want)})`);
 
-// ─── ۱) ثابت‌های بازهٔ FSIQ — تک‌منبع از FSIQ_BANDS ───
 eq(R("FSIQ_BAND_BIF")?.min, 70, "FSIQ_BAND_BIF.min=70");
 eq(R("FSIQ_BAND_BIF")?.max, 84, "FSIQ_BAND_BIF.max=84");
 eq(R("FSIQ_BAND_LOW_BORDER")?.min, 85, "FSIQ_BAND_LOW_BORDER.min=85");
@@ -61,7 +54,6 @@ eq(R("FSIQ_BAND_LOW_BORDER")?.max, 89, "FSIQ_BAND_LOW_BORDER.max=89");
 eq(R("ID_PATH_MAX_FSIQ"), 70, "ID_PATH_MAX_FSIQ=70");
 eq(R("SCATTER_UNIFORM_MAX"), 23, "SCATTER_UNIFORM_MAX=23");
 
-// ─── ۲ و ۳) m156 — اتصال فرضیه‌ای قطع است (ماشین فرضیه‌های وکسلر حذف شده) ───
 ok(R("WECHSLER_HYP_IDS") === undefined, "WECHSLER_HYP_IDS حذف شده (m156)");
 ok(R("WECHSLER_HYP_TARGETS") === undefined, "WECHSLER_HYP_TARGETS حذف شده (m156)");
 ok(R("WECHSLER_HYP_NAMES") === undefined, "WECHSLER_HYP_NAMES حذف شده (m156)");
@@ -73,7 +65,6 @@ ok(!bundle.includes("ENGINE_DISCLAIMER"), "ENGINE_DISCLAIMER از باندل ح�
 ok(R("wechslerEngineOutputOf") !== undefined, "پیوند فقط پروفایل: wechslerEngineOutputOf سرجایش است");
 ok(R("wechslerProfileFactsOf") !== undefined, "قواعد سیگنالی پروفایل (FSIQ band) سرجایش‌اند");
 
-// ─── ۴) هم‌گرایی — سه حالت خوانا ───
 const convItem = R("convergenceItemOf");
 const c1 = convItem("adhd", "بیش‌فعالی/کم‌توجهی", ["family", "teacher"], ["family", "teacher"]);
 eq(c1?.state, "هم‌گرا", "دو منبع → هم‌گرا");
@@ -85,7 +76,6 @@ const c3 = convItem("adhd", "بیش‌فعالی/کم‌توجهی", ["family"],
 eq(c3?.state, "تنها", "تک‌منبع → تنها");
 ok(c3.implicationFa.includes("فقط از سوی خانواده"), "جملهٔ تنها");
 eq(convItem("adhd", "x", [], []), null, "بی‌منبع مثبت → null");
-// پکیج تجمیعی هرگز دو منبع نمی‌سازد — جدول تک‌منبع
 const srcOf = R("convergenceSourceOfTool");
 eq(srcOf("ce-comp-family-v2"), "family", "پکیج خانواده → یک منبع family");
 eq(srcOf("ce-snap-iv-p-v1"), "family", "کامپوننت پکیج → family");
@@ -115,7 +105,6 @@ const oldFacts = factsOf(w4Ev([{ id: "DLD", weight: 0.5 }]));
 eq(oldFacts.fsiq, null, "رویداد قدیمی بدون profile → fsiq null");
 eq(oldFacts.band, null, "رویداد قدیمی → band null");
 
-// ─── ۵) runInference انتها-به-انتها روی کد باندل ───
 const runInf = R("runInference");
 const snapEv = (form, color, at) => ({
   toolKey: form === "p" ? "ce-snap-iv-p-v1" : "ce-snap-iv-t-v1",
@@ -133,7 +122,6 @@ const anamV3Ev = (decline, at) => ({
   payload: { decline_scope: { value: decline } }
 });
 
-// ۵-۱) مسیر ID خط قرمز: FSIQ ≤۷۰ + انطباق پایین → ارجاع، بدون تقویت دیرآموزی
 {
   const out = runInf([
     w4Ev([{ id: "BIF", weight: 0.6 }], { fsiq: 68, fsiqBand: "ID", indexScatter: null }),
@@ -143,7 +131,6 @@ const anamV3Ev = (decline, at) => ({
   ok(out.nextActions.some((a) => a.includes("ارجاع")), "مسیر ID → اقدام بعدی ارجاع");
   eq(out.ranked.find((h) => h.targetKey === "slow_learner"), undefined, "مسیر ID → فرضیهٔ دیرآموزی تقویت نمی‌شود");
 }
-// ۵-۲) دیرآموز: FSIQ ۷۸ + انطباق ثبت‌نشده → تقویت slow_learner + هم‌گرا با شرح‌حال
 {
   const out = runInf([
     w4Ev([], { fsiq: 78, fsiqBand: "BIF", indexScatter: 6 }),
@@ -155,7 +142,6 @@ const anamV3Ev = (decline, at) => ({
   const conv = (out.convergence ?? []).find((c) => c.targetKey === "slow_learner");
   eq(conv?.state, "هم‌گرا", "آزمون + خانواده → هم‌گرا");
 }
-// ۵-۳) دیرآموز با انطباق پایین خانواده (۷۸>۷۰ پس مسیر ID نیست ولی تقویت سرکوب می‌شود)
 {
   const out = runInf([
     w4Ev([], { fsiq: 78, fsiqBand: "BIF", indexScatter: 6 }),
@@ -163,7 +149,6 @@ const anamV3Ev = (decline, at) => ({
   ]);
   eq(out.ranked.find((h) => h.targetKey === "slow_learner"), undefined, "FSIQ ۷۸ + انطباق پایین → تقویت سرکوب");
 }
-// ۵-۴) مرز پایین یکنواخت: فقط پایش، بدون برچسب
 {
   const out = runInf([w4Ev([], { fsiq: 87, fsiqBand: "LOW_BORDER", indexScatter: 4 })]);
   ok(out.nextActions.some((a) => a.includes("پایش")), "مرز پایین یکنواخت → توصیهٔ پایش");
@@ -173,12 +158,10 @@ const anamV3Ev = (decline, at) => ({
   const out = runInf([w4Ev([], { fsiq: 87, fsiqBand: "LOW_BORDER", indexScatter: 30 })]);
   ok(!out.nextActions.some((a) => a.includes("مرز پایین")), "پراکندگی بالا → پایش یکنواخت نیست");
 }
-// ۵-۵) فرضیهٔ قدیمی بدون پروفایل: BIF → نگاشت تازه اعمال می‌شود (تغییر عمدی)
 {
   const out = runInf([w4Ev([{ id: "BIF", weight: 0.5 }])]);
   eq(out.ranked.find((h) => h.targetKey === "slow_learner"), undefined, "فرضیهٔ BIF قدیمی → هیچ دیرآموزی (m156)");
 }
-// ۵-۶) هم‌گرایی والد×معلم برای ADHD — پاریتی رفتار امروز + حالت هم‌گرا
 {
   const out = runInf([
     snapEv("p", "danger", "2026-10-03T08:00:00.000Z"),
@@ -189,7 +172,6 @@ const anamV3Ev = (decline, at) => ({
   const conv = (out.convergence ?? []).find((c) => c.targetKey === "adhd");
   eq(conv?.state, "هم‌گرا", "خانواده + مدرسه → هم‌گرا");
 }
-// ۵-۷) کلیدهای افزودنی — ترتیب و ترکیب عیناً حفظ
 {
   const out = runInf([snapEv("p", "danger", "2026-10-03T08:00:00.000Z")]);
   eq(JSON.stringify(Object.keys(out)), JSON.stringify([
@@ -197,14 +179,12 @@ const anamV3Ev = (decline, at) => ({
     "nextActions", "dataCoverage", "referralFlags", "anamnesisSignals", "convergence"
   ]), "کلیدهای خروجی — قدیمی‌ها سرجایشان + convergence در انتها");
 }
-// ۵-۸) رویداد خالی — پاریتی کامل (فرضیه‌ای نیست، convergence [])
 {
   const out = runInf([]);
   eq(out.ranked.length, 0, "بدون داده → بدون فرضیه");
   eq((out.convergence ?? []).length, 0, "بدون داده → convergence خالی");
 }
 
-// ─── ۶) صورت‌بندی روی خروجی موتور شک — پل سرویس (خارج از ناحیهٔ استخراج طلایی) ───
 const svcStart = bundle.indexOf("async function getCaseFormulation(studentId, actor) {");
 const svcEnd = bundle.indexOf("__name2(getCaseFormulation, \"getCaseFormulation\");", svcStart);
 const svc = bundle.slice(svcStart, svcEnd);

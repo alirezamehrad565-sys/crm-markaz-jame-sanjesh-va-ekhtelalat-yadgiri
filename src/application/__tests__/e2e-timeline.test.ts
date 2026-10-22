@@ -1,10 +1,3 @@
-/**
- * تست‌های e2e — timeline
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-timeline.test.ts — فاز ۶: endpoint تایم‌لاین روی اپ واقعی
-// whitelist §11.2، RBAC خواندن، case-status (RBAC/no-op/audit)، nextAction، فیلترها و صفحه‌بندی
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -62,7 +55,6 @@ describe('فاز ۶ — تایم‌لاین دانش‌آموز', () => {
     expect(created).toBeTruthy();
     expect(created!.actor).toBe('مدیر مرکز');
     expect(created!.ref?.id).toBe(studentId);
-    // رگرسیون فاز ۶ — created_atِ audit باید ISO UTC باشد (نه فرمت SQLite «YYYY-MM-DD HH:MM:SS»)
     expect(created!.at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/);
 
     const missing = await mgr.get('/api/students/99999999-9999-9999-9999-999999999999/timeline');
@@ -87,7 +79,6 @@ describe('فاز ۶ — تایم‌لاین دانش‌آموز', () => {
   });
 
   it('نوبت → رویداد appointment در start_at؛ جابه‌جایی → appointment_moved با از/به', async () => {
-    // intake با مدیر — تا درمانگر سابقهٔ مشترک داشته باشد (قاعدهٔ فاز ۵)
     const apptRes = await mgr.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(2880), 45, [studentId]));
     expect(apptRes.status).toBe(201);
     const appt = (apptRes.body as { data: { id: string; startAt: string } }).data;
@@ -112,14 +103,12 @@ describe('فاز ۶ — تایم‌لاین دانش‌آموز', () => {
     expect(moved!.subtitle).toMatch(/از .+ به .+/);
     expect(moved!.actor).toBe('دکتر علی رضایی');
 
-    // nextAction — نوبت آیندهٔ scheduled
     const bodyAll = bodyOf(await mgr.get(URL(studentId)));
     expect(bodyAll.nextAction?.type).toBe('appointment');
     expect(bodyAll.nextAction?.id).toBe(appt.id);
   });
 
   it('گزارش جلسه → session_note.created؛ هوک follow_up → followup.created با عنوان', async () => {
-    // نوبت نزدیک برای نویسنده
     const apptRes = await mgr.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(90), 45, [studentId]));
     const appt = (apptRes.body as { data: { id: string } }).data;
 
@@ -139,7 +128,6 @@ describe('فاز ۶ — تایم‌لاین دانش‌آموز', () => {
     expect(fuEv).toBeTruthy();
     expect(fuEv!.subtitle).toContain('پیگیری');
 
-    // گزارش به‌روزشده → session_note.updated
     await ali.put(`/api/appointments/${appt.id}/students/${studentId}/note`, {
       session_note: 'گزارش آزمون تایم‌لاین — به‌روزرسانی.',
       next_action: 'follow_up'
@@ -149,11 +137,9 @@ describe('فاز ۶ — تایم‌لاین دانش‌آموز', () => {
   });
 
   it('case-status — فقط منشی/مدیر؛ no-op بدون audit؛ رویداد با از/به', async () => {
-    // درمانگر ۴۰۳
     const forbidden = await ali.patch(`/api/students/${studentId}/case-status`, { case_status: 'in_intervention' });
     expect(forbidden.status).toBe(403);
 
-    // مقدار نامعتبر → 400
     const bad = await sec.patch(`/api/students/${studentId}/case-status`, { case_status: 'unknown_state' });
     expect(bad.status).toBe(400);
 
@@ -166,7 +152,6 @@ describe('فاز ۶ — تایم‌لاین دانش‌آموز', () => {
     expect((ok.body as { data: { caseStatus: string } }).data.caseStatus).toBe('in_intervention');
     expect(auditCount()).toBe(before + 1);
 
-    // همان مقدار — no-op بدون audit جدید
     const again = await sec.patch(`/api/students/${studentId}/case-status`, { case_status: 'in_intervention' });
     expect(again.status).toBe(200);
     expect(auditCount()).toBe(before + 1);
@@ -178,8 +163,6 @@ describe('فاز ۶ — تایم‌لاین دانش‌آموز', () => {
     expect(ev!.actor).toBe('زهرا کریمی');
   });
 
-  // assessments بازنشسته شد؛ سند ارزیابی اکنون case-event است و kind آن
-  // «case_event» روی تایم‌لاین می‌نشیند (تست کامل در e2e--standard-flow).
   it('گزارش ساخت‌یافتهٔ جلسه → رویداد case_event روی تایم‌لاین', async () => {
     const created = await mgr.post('/api/case-events/types', { title: 'گزارش جلسهٔ تایم‌لاین m66', category: 'session', fields: [{ key: 'g', label: 'g', type: 'text' }] });
     expect(created.status).toBe(201);

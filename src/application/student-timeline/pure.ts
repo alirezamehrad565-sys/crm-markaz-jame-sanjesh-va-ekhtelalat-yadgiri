@@ -1,17 +1,7 @@
-/**
- * سرویس تایم‌لاین پرونده — توابع خالص منطق محض (بدون I/O)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// فاز ۶ — merge قطعی و بی‌side-effect رویدادهای تایم‌لاین (§11.2/§11.6)
-// هیچ I/O ندارد — ورودی رویدادهای خام از service می‌آید؛ خروجی پاسخ نهایی
-
 import { faDigits, jalaliLabel, tehranTimeLabel, tehranYmdOf } from '@core/shared';
 import type { TimelineEvent, TimelineFilters, TimelineKind, TimelineNextAction } from './types';
 import { TIMELINE_KINDS } from './types';
 
-// ───────────── لیبل‌های فارسی (نمایشی — قرارداد یکسان با فرانت) ─────────────
-
-/** لیبل وضعیت پرونده (§12.1) — در subtitle رویداد case_status مصرف می‌شود */
 export const CASE_STATUS_LABELS_FA: Record<string, string> = {
   identified: 'شناسایی‌شده',
   awaiting_assessment: 'در انتظار ارزیابی',
@@ -20,7 +10,6 @@ export const CASE_STATUS_LABELS_FA: Record<string, string> = {
   archived: 'بایگانی'
 };
 
-/** لیبل نوع نیاز ویژه (فاز ۷ — §12، D3) — هم‌تراز taxonomy برچسب‌های disorder */
 export const SPECIAL_NEED_TYPE_LABELS_FA: Record<string, string> = {
   dyslexia: 'نارساخوانی (دیس‌لکسی)',
   dysgraphia: 'نارسانویسی (دیس‌گرافی)',
@@ -34,14 +23,12 @@ export const SPECIAL_NEED_TYPE_LABELS_FA: Record<string, string> = {
   other: 'سایر'
 };
 
-/** لیبل شدت نیاز ویژه (فاز ۷) */
 export const SPECIAL_NEED_SEVERITY_LABELS_FA: Record<string, string> = {
   mild: 'خفیف',
   moderate: 'متوسط',
   severe: 'شدید'
 };
 
-/** عنوان پیام خانواده بر اساس template — فقط قالب‌های سمت خانواده */
 export const NOTIFICATION_TITLES_FA: Record<string, string> = {
   appointment_reminder: 'یادآوری نوبت به خانواده ارسال شد',
   appointment_created: 'اعلان ثبت نوبت به خانواده ارسال شد',
@@ -53,7 +40,6 @@ export const NOTIFICATION_TITLES_FA: Record<string, string> = {
   generic: 'پیام به خانواده ارسال شد'
 };
 
-/** — برچسب وضعیت تصمیم کمیسیون (در subtitle رویداد committee مصرف می‌شود) */
 export const COMMITTEE_DECISION_LABELS_FA: Record<string, string> = {
   pending: 'در انتظار تصمیم',
   approved: 'مصوب',
@@ -61,12 +47,9 @@ export const COMMITTEE_DECISION_LABELS_FA: Record<string, string> = {
   deferred: 'موکول شد'
 };
 
-/** — برچسب جلالی تاریخ خالص YYYY-MM-DD میلادی (جلسهٔ کمیسیون) */
 export function jalaliLabelOf(ymd: string): string {
   return jalaliLabel(ymd);
 }
-
-// ───────────── عنوان وضعیت جلسه از دادهٔ فعلی نوبت ─────────────
 
 export interface AppointmentStateInput {
   status: string; // scheduled | cancelled
@@ -76,11 +59,6 @@ export interface AppointmentStateInput {
   endAt: string;
 }
 
-/**
- * عنوان/زیرعنوان رویداد جلسه — از وضعیت فعلی نوبت (row-based).
- * attendance.mark و cancel/restore به‌صورت state در همین رویداد ادغام می‌شوند
- * (انحراف مستند از Spec: دو رویداد برای یک جلسه ساخته نمی‌شود — روایت تمیز).
- */
 export function appointmentEventState(a: AppointmentStateInput): { title: string; subtitle: string | null } {
   const durationMin = Math.max(0, Math.round((Date.parse(a.endAt) - Date.parse(a.startAt)) / 60000));
   const who = null; // staffName در service اضافه می‌شود
@@ -92,7 +70,6 @@ export function appointmentEventState(a: AppointmentStateInput): { title: string
   if (a.opsStatus === 'no_show' || (a.opsStatus === null && a.attendance === 'absent')) {
     return { title: 'جلسه — عدم حضور', subtitle: subtitleWith(null, `${faDigits(durationMin)} دقیقه`) };
   }
-  // حاضر با تأخیر (فقط وقتی وضعیت عملیاتی ندارد؛ وگرنه وضعیت عملیاتی ملاک است)
   if (a.opsStatus === null && a.attendance === 'late') {
     return { title: 'جلسه — حضور با تأخیر', subtitle: subtitleWith(null, `${faDigits(durationMin)} دقیقه`) };
   }
@@ -111,25 +88,17 @@ export function appointmentEventState(a: AppointmentStateInput): { title: string
   return { title: 'نوبت جلسه', subtitle: subtitleWith(null, `${faDigits(durationMin)} دقیقه — در انتظار برگزاری`) };
 }
 
-/** ترکیب نام همکار با جزئیات — «علی محمدی — ۴۵ دقیقه» */
 export function subtitleWith(staffName: string | null, detail: string | null): string | null {
   const parts = [staffName, detail].filter((p): p is string => Boolean(p));
   return parts.length > 0 ? parts.join(' — ') : null;
 }
 
-/** برچسب فارسی تاریخ‌وقت از ISO UTC — «۲۲ مهر ۱۴۰۵ ۱۰:۰۰» */
 export function jalaliDateTimeLabel(isoUtc: string): string {
   const ymd = tehranYmdOf(isoUtc);
   const time = tehranTimeLabel(isoUtc);
   return `${jalaliLabel(ymd)} ${time}`;
 }
 
-// ───────────── merge قطعی ─────────────
-
-/**
- * مرتب‌سازی قطعی: at نزولی → kind صعودی → ref.id صعودی؛ حذف duplicateهای کامل
- * (at+kind+ref یکسان). هرگز ورودی را تغییر نمی‌دهد.
- */
 export function mergeTimelineEvents(raw: readonly TimelineEvent[]): TimelineEvent[] {
   const seen = new Set<string>();
   const unique: TimelineEvent[] = [];
@@ -149,7 +118,6 @@ export function mergeTimelineEvents(raw: readonly TimelineEvent[]): TimelineEven
   });
 }
 
-/** فیلتر from/to/kinds — kinds نامعتبر نادیده گرفته می‌شود (whitelist) */
 export function filterTimelineEvents(events: readonly TimelineEvent[], filters: TimelineFilters): TimelineEvent[] {
   const validKinds = filters.kinds
     ? new Set<TimelineKind>(filters.kinds.filter((k): k is TimelineKind => (TIMELINE_KINDS as readonly string[]).includes(k)))
@@ -162,15 +130,12 @@ export function filterTimelineEvents(events: readonly TimelineEvent[], filters: 
   });
 }
 
-/** صفحه‌بندی — limit پیش‌فرض ۵۰، سقف ۲۰۰ */
 export function paginateTimeline(events: readonly TimelineEvent[], limit?: number, offset?: number): { page: TimelineEvent[]; limit: number; offset: number; hasMore: boolean } {
   const lim = Math.min(Math.max(1, limit ?? 50), 200);
   const off = Math.max(0, offset ?? 0);
   const page = events.slice(off, off + lim);
   return { page, limit: lim, offset: off, hasMore: off + page.length < events.length };
 }
-
-// ───────────── «اقدام بعدی» (§14 — derivation از دادهٔ موجود) ─────────────
 
 export interface NextAppointmentCandidate {
   id: string;
@@ -184,12 +149,6 @@ export interface NextFollowUpCandidate {
   dueAt: string | null;
 }
 
-/**
- * قاعدهٔ قطعی:
- * ۱) نوبت آیندهٔ scheduled نزدیک‌تر → «جلسه بعدی — نام همکار»
- * ۲) وگرنه بازترین follow-up (due_at نهNULL: از قدیمی‌ترین؛ NULL در انتها؛ tie-break id)
- * ۳) هیچ → null
- */
 export function deriveNextAction(
   nextAppointment: NextAppointmentCandidate | null,
   openFollowups: readonly NextFollowUpCandidate[]
@@ -215,7 +174,6 @@ export function deriveNextAction(
   return null;
 }
 
-/** پارس resource_id کامپوزیت «appointmentId/studentId» (attendance/session_note) */
 export function parseCompositeRef(resourceId: string): { appointmentId: string; studentId: string } | null {
   const idx = resourceId.indexOf('/');
   if (idx <= 0 || idx === resourceId.length - 1) return null;

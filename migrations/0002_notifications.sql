@@ -1,15 +1,3 @@
--- مایگریشن اسکیما D1 — اعلان‌ها
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- migrations/0002_notifications.sql
--- — Notification module: queue + student prefs + Bale bot link codes
--- مطابق ARCHITECTURE.md بخش اعلان‌ها (v0.3)
--- قوانین:
--- * notifications صف ارسال است — status transitions: pending → sent | failed | skipped
--- * dedup_key یکتا (partial unique index) → idempotency یادآوری‌ها
--- * append-only نیست؛ اما هیچ DELETE خودکار نداریم (پاک‌سازی بعداً با job عملیاتی)
--- ────────────────────────────────────────────────────────────
-
--- ───────────── notifications (صف ارسال) ─────────────
 CREATE TABLE IF NOT EXISTS notifications (
   id             TEXT PRIMARY KEY,
   channel        TEXT NOT NULL CHECK (channel IN ('bale', 'internal')),
@@ -33,7 +21,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedup
 CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_student ON notifications(student_id);
 
--- ───────────── notification_prefs (تنظیمات اعلان هر دانش‌آموز) ─────────────
 CREATE TABLE IF NOT EXISTS notification_prefs (
   student_id            TEXT PRIMARY KEY REFERENCES students(id) ON DELETE CASCADE,
   channel               TEXT NOT NULL DEFAULT 'bale' CHECK (channel IN ('bale', 'internal')),
@@ -43,8 +30,6 @@ CREATE TABLE IF NOT EXISTS notification_prefs (
   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- ───────────── bot_links (اتصال گفتگوی بله ↔ دانش‌آموز با کد) ─────────────
--- جریان: منشی/مدیر کد می‌سازد → ولیّ با /link CODE به بات پیام می‌دهد → link می‌شود
 CREATE TABLE IF NOT EXISTS bot_links (
   id         TEXT PRIMARY KEY,
   code       TEXT NOT NULL UNIQUE,

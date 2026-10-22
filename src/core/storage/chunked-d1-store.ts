@@ -1,20 +1,8 @@
-/**
- * ذخیره‌سازی فایل — D1/R2/تکه‌تکه — ذخیره‌ساز D1 تکه‌تکه برای فایل‌های بزرگ
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// آداپتر D1 تکه‌تکه: فایل‌های بزرگ (تا ۵۰ مگابایت) بدون نیاز به R2
-// هر فایل به قطعات ~۱.۵ مگابایتی BLOB شکسته می‌شود (زیر سقف ۲ مگابایتی ردیف D1)
-// و در جدول exercise_file_chunks ذخیره می‌شود. خواندن صفحه‌به‌صفحه است تا حافظهٔ
-// Worker (۱۲۸MB) امن بماند. فعال‌شدن R2 در آینده = تعویض آداپتر در api-routing،
-// بدون هیچ تغییر دیگری (سقف همان ۵۰ مگابایت می‌ماند و دیتابیس سبک می‌شود).
-
 import type { DbClient } from '@core/db';
 import { MAX_EXERCISE_PANEL_FILE_BYTES } from '@core/shared';
 import type { ObjectStore, StoredObject } from './types';
 
-/** حجم هر قطعه — ۱.۵ مگابایت باینری (پایین‌تر از سقف ۲MB ردیف D1) */
 const CHUNK_BYTES = 1_500_000;
-/** چند قطعه در هر کوئری خواندن — ۶ × ۱.۵MB ≈ ۹MB در هر صفحه */
 const PAGE_CHUNKS = 6;
 
 interface ChunkRow {
@@ -22,7 +10,6 @@ interface ChunkRow {
   content: Uint8Array | string;
 }
 
-/** قطعهٔ ذخیره‌شده → بایت (D1 واقعی: BLOB؛ MockD1 تست: base64 متن) */
 function chunkToBytes(row: ChunkRow): Uint8Array {
   const c = row.content;
   if (typeof c === 'string') {
@@ -34,9 +21,6 @@ function chunkToBytes(row: ChunkRow): Uint8Array {
   return new Uint8Array(c);
 }
 
-/** بایت → base64 تکه‌تکه — بومی و سریع (چرا TEXT و نه BLOB: سریال‌سازی پارامتر
- * باینری در بایندینگ D1 به‌شدت پرهزینه است — ~۱۷۰ns/بایت CPU — و باعث خطای
- * 1102 روی آپلودهای چند مگابایتی می‌شد؛ پارامتر رشته‌ای مسیر سریع بایندینگ است) */
 function bytesToBase64(bytes: Uint8Array): string {
   let bin = '';
   const CHUNK = 0x8000;
@@ -46,9 +30,7 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-/** نوشتن قطعات به‌صورت base64 TEXT — هر قطعه به‌محض کامل‌شدن می‌رود (بدون concat کامل) */
 async function writeSegments(db: DbClient, key: string, segments: Uint8Array[]): Promise<void> {
-  // بقایای احتمالی تلاش نیمه‌تمام قبلیِ همین کلید پاک می‌شود
   await db.execute(`DELETE FROM exercise_file_chunks WHERE key = ?`, [key]);
   const chunk = new Uint8Array(CHUNK_BYTES);
   let fill = 0;
@@ -84,7 +66,6 @@ export function createChunkedD1ObjectStore(db: DbClient): ObjectStore {
       await writeSegments(db, key, [bytes]);
     },
 
-    /** — نوشتن از قطعات بدون concat کامل */
     async putSegments(key: string, segments: Uint8Array[]): Promise<void> {
       await writeSegments(db, key, segments);
     },
@@ -97,7 +78,6 @@ export function createChunkedD1ObjectStore(db: DbClient): ObjectStore {
       const total = countRow?.n ?? 0;
       if (total === 0) return null;
 
-      // صفحه‌به‌صفحه خوانده می‌شود تا حافظهٔ isolate امن بماند
       const parts: Uint8Array[] = [];
       let size = 0;
       for (let offset = 0; offset < total; offset += PAGE_CHUNKS) {

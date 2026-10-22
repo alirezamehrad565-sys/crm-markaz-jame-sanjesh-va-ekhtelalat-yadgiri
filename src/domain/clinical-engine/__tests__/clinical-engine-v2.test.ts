@@ -1,20 +1,7 @@
-/**
- * تست‌های موتور شک v2 (T6 / m148-b)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// پوشش:
-//  ۱) m156 — اتصال فرضیه‌ای قطع است: فرضیه‌های engine_output وکسلر (قدیم و جدید) نادیده گرفته می‌شوند
-//  ۲) تفکیک انطباقی ID/دیرآموز (§۳.۱): FSIQ ≤ ۷۰ + انطباق پایین → ارجاع و بدون تقویت دیرآموزی
-//  ۳) قاعدهٔ BIF: FSIQ ۷۰–۸۴ + انطباق عادی/ثبت‌نشده → تقویت؛ «قوی‌ترین تک‌تقویت» بدون جمع
-//  ۴) مرز پایین یکنواخت (۸۵–۸۹) → فقط پایش، بدون برچسب و بدون تقویت
-//  ۵) هم‌گرایی چندمنبعی: سه حالت خوانا + پاریتی کلیدهای قدیمی خروجی
-
 import { describe, it, expect } from 'vitest';
 import { runInference } from '../infer';
 import { convergenceItemOf, convergenceSourceOfTool, ID_ADAPT_EVENT_KEY } from '../convergence';
 import type { EvidenceEvent } from '../types';
-
-// ───────── سازنده‌های رویداد ─────────
 
 function ev(toolKey: string, opts: Partial<EvidenceEvent> = {}): EvidenceEvent {
   return {
@@ -30,7 +17,6 @@ function ev(toolKey: string, opts: Partial<EvidenceEvent> = {}): EvidenceEvent {
   };
 }
 
-/** رویداد وکسلر ۴ با خروجی موتور اختیاری + fsiq دستی اختیاری */
 function w4(opts: { engine?: Record<string, unknown> | null; fsiq?: string; occurredAt?: string } = {}): EvidenceEvent {
   const payload: Record<string, { value: string; label: string }> = {};
   if (opts.fsiq !== undefined) payload['fsiq'] = { value: opts.fsiq, label: 'هوشبهر کلی' };
@@ -38,7 +24,6 @@ function w4(opts: { engine?: Record<string, unknown> | null; fsiq?: string; occu
   return ev('ce-wechsler-w4-v1', { payload: Object.keys(payload).length ? payload : null, occurredAt: opts.occurredAt });
 }
 
-/** خروجی موتور با پروفایل T1 (منبع قواعد سیگنالی جدید) */
 function engineWithProfile(opts: {
   fsiq: number;
   fsiqBand?: string;
@@ -59,7 +44,6 @@ function engineWithProfile(opts: {
   };
 }
 
-/** سنجهٔ انطباق روزمره (T5) — score تعیین‌کنندهٔ باند است (danger ≤۱۲ / warn ۱۳–۱۷ / ok ۱۸+) */
 function idAdapt(score: number, color: 'danger' | 'warn' | 'ok', occurredAt = '2026-10-04T08:00:00.000Z'): EvidenceEvent {
   return ev(ID_ADAPT_EVENT_KEY, {
     occurredAt,
@@ -67,15 +51,12 @@ function idAdapt(score: number, color: 'danger' | 'warn' | 'ok', occurredAt = '2
   });
 }
 
-/** چک‌لیست SNAP با زیرمقیاس مشخص و رنگ باند */
 function snap(form: 'p' | 't', ia: number, color: 'danger' | 'warn' | 'ok' | null, occurredAt = '2026-10-04T08:00:00.000Z'): EvidenceEvent {
   return ev(form === 'p' ? 'ce-snap-iv-p-v1' : 'ce-snap-iv-t-v1', {
     occurredAt,
     analysis: { score: ia, band: null, answered: 9, total: 9, maxScore: 27, subscaleScores: [{ id: 'ia', name: 'کم‌توجهی', score: ia, max: 27, band: null, color }] }
   });
 }
-
-// ───────── ۱) m156 — اتصال فرضیه‌ای قطع است ─────────
 
 describe('m156 — فرضیه‌های وکسلر به موتور واحد تغذیه نمی‌شوند', () => {
   it('فرضیه‌های engine_output رویداد وکسلر (قدیم m98) نادیده گرفته می‌شوند — اتیسم با یک فرضیهٔ وکسلری ساخته نمی‌شود', () => {
@@ -108,8 +89,6 @@ describe('m156 — فرضیه‌های وکسلر به موتور واحد تغ�
   });
 });
 
-// ───────── ۲ و ۳ و ۴) قواعد سیگنالی FSIQ — تفکیک انطباقی ID/BIF ─────────
-
 describe('T6 — قواعد سیگنالی وکسلر (infer) — تفکیک ID/دیرآموز و پایش مرز پایین', () => {
   it('FSIQ ≤ ۷۰ + انطباق پایین → پرچم ارجاع + اقدام «ارجاع» — بدون هیچ تقویت دیرآموزی', () => {
     const out = runInference([
@@ -138,7 +117,6 @@ describe('T6 — قواعد سیگنالی وکسلر (infer) — تفکیک ID/
     const slow = out.ranked.find((h) => h.targetKey === 'slow_learner')!;
     expect(slow.score).toBeCloseTo(2, 5); // ۲ (قاعدهٔ خام) نه ۳ — جمع ممنوع
     expect(slow.evidenceFa.filter((e) => e.includes('دیرآموزی')).length).toBeLessThanOrEqual(1);
-    // و پرچم/اقدام مسیر ID هم نیست
     expect(out.referralFlags.some((f) => f.includes('مسیر ناتوانی هوشی'))).toBe(false);
   });
 
@@ -162,7 +140,6 @@ describe('T6 — قواعد سیگنالی وکسلر (infer) — تفکیک ID/
 
   it('پروندهٔ قدیمی (بدون profile) عیناً رفتار امروز — تقویت پروفایل و خط قرمز ID خاموش', () => {
     const out = runInference([w4({ fsiq: '65' }), idAdapt(8, 'danger')]);
-    // بدون profile، قاعدهٔ سیگنالی جدید فعال نمی‌شود؛ فقط قاعدهٔ خام (۶۵ خارج ۷۰–۸۵ → هیچ)
     expect(out.referralFlags.some((f) => f.includes('مسیر ناتوانی هوشی'))).toBe(false);
     expect(out.ranked.find((h) => h.targetKey === 'slow_learner')).toBeUndefined();
   });
@@ -186,8 +163,6 @@ describe('T6 — قواعد سیگنالی وکسلر (infer) — تفکیک ID/
   });
 });
 
-// ───────── ۵) هم‌گرایی چندمنبعی ─────────
-
 describe('T6 — هم‌گرایی چندمنبعی (سه حالت خوانا)', () => {
   it('طبقه‌بندی خالص: هم‌گرا (≥۲ منبع) / تنها (۱ منبع) / واگرا (دادهٔ مخالف) / بی‌شاهد → null', () => {
     const conv = (p: string[], d: string[]) => convergenceItemOf('adhd', 'بیش‌فعالی/کم‌توجهی', p as never, d as never);
@@ -196,7 +171,6 @@ describe('T6 — هم‌گرایی چندمنبعی (سه حالت خوانا)',
     expect(conv(['family'], ['family'])!.state).toBe('تنها');
     expect(conv(['family'], ['family', 'teacher'])!.state).toBe('واگرا');
     expect(conv([], ['family'])).toBeNull();
-    // هیچ عدد/وزنی در خروجی نیست — فقط کلید هدف + حالت + جملهٔ دلالت
     const item = conv(['family', 'teacher'], ['family', 'teacher'])!;
     expect(Object.keys(item).sort()).toEqual(['implicationFa', 'state', 'targetKey']);
     expect(item.implicationFa).toContain('خانواده');
@@ -243,7 +217,6 @@ describe('T6 — هم‌گرایی چندمنبعی (سه حالت خوانا)',
       idAdapt(8, 'danger')
     ]);
     const slow = out.ranked.find((h) => h.targetKey === 'slow_learner');
-    // قاعدهٔ خام fsiq با فیلد دستی نیست؛ تقویت پروفایل هم با انطباق پایین سرکوب است → فرضیه‌ای نیست
     expect(slow).toBeUndefined();
   });
 

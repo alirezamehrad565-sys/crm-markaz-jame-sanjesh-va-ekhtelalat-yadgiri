@@ -1,10 +1,3 @@
-/**
- * موتور تشخیص تداخل نوبت — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// سرویس conflict-engine — wrapper دیتابیس‌خوان روی هسته pure
-// هیچ‌وقت به دیتابیس نمی‌نویسد؛ فقط SELECT.
-
 import type { DbClient } from '@core/db';
 import type { ConflictWarning } from '@core/shared';
 import { findOverlaps } from './engine';
@@ -15,9 +8,7 @@ export interface ConflictEngineDeps {
 }
 
 export interface ConflictEngine {
-  /** هشدارهای هم‌پوشانی برای یک پنجره پیشنهادی */
   checkOverlap(proposed: ProposedWindow): Promise<ConflictWarning[]>;
-  /** یافتن همه جفت‌تداخل‌های یک متخصص در بازه — فقط برای debug/داشبورد */
   findConflicts(staffId: string, from: string, to: string): Promise<ConflictWarning[]>;
 }
 
@@ -44,7 +35,6 @@ export function createConflictEngine(deps: ConflictEngineDeps): ConflictEngine {
 
   return {
     async checkOverlap(proposed: ProposedWindow): Promise<ConflictWarning[]> {
-      // بازه‌های نزدیک همان متخصص + همان روز کافی است؛ بازه را کمی بزرگ می‌گیریم
       const rows = await db.query<AppointmentRow>(
         `SELECT id, staff_id, start_at, end_at, status
            FROM appointments
@@ -73,7 +63,6 @@ export function createConflictEngine(deps: ConflictEngineDeps): ConflictEngine {
       const warnings: ConflictWarning[] = [];
       const seen = new Set<string>();
 
-      // جفت‌تداخل‌ها: برای هر نوبت، هم‌پوشانی با نوبت‌های بعدی در همان بازه
       for (let i = 0; i < existing.length; i++) {
         const proposed: ProposedWindow = {
           staffId,

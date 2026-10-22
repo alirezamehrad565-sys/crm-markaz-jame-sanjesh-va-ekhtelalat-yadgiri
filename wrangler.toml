@@ -1,14 +1,9 @@
 name = "center-system"
-# ورودی دولایهٔ Worker: باندل بک‌اند (bundle.js) + لایهٔ امتیاز سراسری (scoring.js)
 main = "worker/entry.js"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
-# شناسهٔ حساب Cloudflare خود را اینجا بگذارید (پس از «npx wrangler d1 create»)
-# یا هنگام استقرار با متغیر محیطی CLOUDFLARE_ACCOUNT_ID بدهید.
 account_id = "REPLACE_WITH_YOUR_CLOUDFLARE_ACCOUNT_ID"
 
-# ───────────── فایل‌های استاتیک (پنل مدیریت) ─────────────
-# فایل‌های public/ مستقیم سرو می‌شوند؛ مسیرهای بدون فایل به Worker می‌روند (API)
 [assets]
 directory = "./public"
 binding = "ASSETS"
@@ -19,43 +14,14 @@ database_name = "center-system-db"
 database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
 migrations_dir = "migrations"
 
-# ───────────── Cron Triggers (یادآوری‌ها + خلاصهٔ روز + ساعت ارسال) ─────────────
-# 17:00Z = 20:30 تهران (شب قبل) و 06:30Z = 10:00 تهران (صبح روز جلسه)
-# 04:00Z = 07:30 تهران — «خلاصهٔ روز» بات + KPI هفتگی ناظرها در شنبه‌ها
-# 14:30Z = 18:00 تهران — «ساعت ارسال» پیش‌نویس‌های اعلان نوبت (با notify_batch_hour هم‌گام)
-# dedup_key تضمین می‌کند اجرای مکرر پیام تکراری نسازد
 [triggers]
 crons = ["0 17 * * *", "30 6 * * *", "0 4 * * *", "30 14 * * *"]
 
-# ───────────── Variables (غیر حساس) ─────────────
 [vars]
-# پیش‌فرض امن: «production». بای‌پس توسعه‌ای (هدر X-Dev-Staff-Id) فقط با ENV=development
-# فعال می‌شود؛ اگر پیش‌فرض development بود، استقرار دستیِ بدون --var آن را ناخواسته به
-# تولید می‌برد (CWE-489). استقرار رسمی (scripts/update-remote.mjs) همیشه --var ENV:production می‌گذارد.
-# توسعهٔ محلی: فایل .dev.vars (ENV=development) که فقط wrangler dev می‌خواند.
 ENV = "production"
-# در صورت استفاده از Cloudflare Access، دامنهٔ تیم خود را بگذارید (اختیاری)
 CF_ACCESS_TEAM_DOMAIN = ""
-# نام مرکز در متن اعلان‌ها (اختیاری)
 CLINIC_NAME = "مرکز جامع"
-# آدرس عمومی سامانه برای لینک «دانلود کاربرگ» در پیام خانواده
-# خالی = پیام بدون لینک می‌رود (فقط متن تمرین)؛ نمونه: https://your-worker.your-subdomain.workers.dev
 PUBLIC_BASE_URL = ""
 
-# ─── ذخیرهٔ فایل تمرین‌ها ───
-# پیش‌فرض: داخل D1 (سقف ۵۱۲KB هر فایل — الگوی assessments) — بدون نیاز به کاری.
-# برای ظرفیت بیشتر R2 را فعال کنید:
-#   1) npx wrangler r2 bucket create center-exercise-files
-#   2) بلوک زیر را از کامنت خارج کنید و deploy کنید (کد خودکار R2 را برمی‌دارد)
-# [[r2_buckets]]
-# binding = "EXERCISE_FILES"
-# bucket_name = "center-exercise-files"
-
-# ───────────── Secrets (با wrangler secret put تنظیم کنید) ─────────────
-# npx wrangler secret put BALE_BOT_TOKEN
-# npx wrangler secret put BALE_WEBHOOK_SECRET
-# در dev محلی: فایل .dev.vars  →  BALE_BOT_TOKEN=...  /  BALE_WEBHOOK_SECRET=...
-
-# ───────────── Observability ─────────────
 [observability]
 enabled = true

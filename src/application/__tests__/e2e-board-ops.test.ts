@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — board-ops
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-board-ops.test.ts — فاز ۱ (بورد منشی): وضعیت عملیاتی نوبت + بورد غنی‌شده
-// فلوی آمد→در جلسه→انجام شد، نیامد، ترنزیشن‌های نامعتبر، idempotent، RBAC،
-// audit هم‌تراکنش، D6 (بدون اعلان)، بورد (opsStats/queue/kind/ارزیابی)
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -58,7 +50,6 @@ function boardBody(res: { body: unknown }): BoardBody {
   return (res.body as { data: BoardBody }).data;
 }
 
-/** نوبت ۳۰ دقیقهٔ دیگر — همیشه داخل پنجرهٔ ۶۰ دقیقهٔ صف */
 async function createSoon(api: Api) {
   const start = quarterHourFromNow(30);
   const res = await api.post('/api/appointments', apptBody(ALI_ID, start, 45, [STUDENT1_ID]));
@@ -105,13 +96,11 @@ describe('فاز ۱ — فلوی کامل وضعیت عملیاتی', () => {
     expect(r3.status).toBe(200);
     expect(apptOf(r3).opsStatus).toBe('completed');
 
-    // GET تکی — از مسیر repository (خواندن با درمانگرِ صاحب برنامه — نوبتِ ALI)
     const ther = await asRole(A, 'therapist');
     const get = await ther.get(`/api/appointments?id=${appt.id}`);
     expect(apptOf(get).opsStatus).toBe('completed');
     expect(apptOf(get).version).toBe(appt.version); // بدون bump نسخه (D1)
 
-    // audit هم‌تراکنش — سه ترنزیشن واقعی (idempotent نبوده)
     expect(countAudit(A, appt.id)).toBe(3);
   });
 
@@ -181,12 +170,10 @@ describe('فاز ۱ — RBAC، لغو، خطاها، D6', () => {
     const bySec = await sec.post(`/api/appointments/${appt.id}/ops-status`, { ops_status: 'checked_in' });
     expect(bySec.status).toBe(200);
 
-    // درمانگر روی کارت خودش عملیات بوردی دارد (آمد → شروع جلسه)
     const own = await ther.post(`/api/appointments/${appt.id}/ops-status`, { ops_status: 'in_session' });
     expect(own.status).toBe(200);
     expect(apptOf(own).opsStatus).toBe('in_session');
 
-    // نوبت همکار (مریم) — ۴۰۳
     const otherStart = tehranTodayAt(14, 0); // — فقط «نوبت دیگری برای همکار» کافی است؛ ایمن به نیمه‌شب
     const other = await mgr.post('/api/appointments', apptBody(MARYAM_ID, otherStart, 45, [STUDENT2_ID]));
     expect(other.status).toBe(201);
@@ -222,14 +209,12 @@ describe('فاز ۱ — RBAC، لغو، خطاها، D6', () => {
     expect(after).toBe(before);
   });
 
-  // ارگونومی API: کلید حذف‌شده و null هر دو «بدون توضیح» معنا دارند (قبلاً 400 می‌داد)
   it('ایجاد نوبت با note: null — 200/201 و ذخیرهٔ NULL (nullish)', async () => {
     const start = tehranTodayAt(13, 0); // — ایمن به گذر نیمه‌شب (قبلاً offset 120min flaky بود)
     const res = await mgr.post('/api/appointments', { ...apptBody(ALI_ID, start, 45, [STUDENT1_ID]), note: null });
     expect(res.status).toBe(201);
     expect(apptOf(res).note ?? null).toBeNull();
 
-    // ویرایش با null هم مجاز است — یعنی «پاک‌کردن توضیح»
     const patch = await mgr.patch(`/api/appointments/${apptOf(res).id}`, { note: null, version: apptOf(res).version });
     expect(patch.status).toBe(200);
     expect((patch.body as { data: ApptBody }).data.note ?? null).toBeNull();
@@ -255,7 +240,6 @@ describe('فاز ۱ — بورد غنی‌شده (opsStats/queue/kind/ارزیا
     expect(plannedBefore).toBeGreaterThanOrEqual(1);
     expect(typeof board1.assessmentsToday).toBe('number');
 
-    // صف فقط برای امروز پر می‌شود
     if (board1.isToday) {
       const item = board1.queue.find((q) => q.appointmentId === appt.id);
       expect(item).toBeTruthy();
@@ -273,12 +257,10 @@ describe('فاز ۱ — بورد غنی‌شده (opsStats/queue/kind/ارزیا
     expect(board2.opsStats.noShow).toBe(board1.opsStats.noShow + 1);
     expect(board2.opsStats.planned).toBe(plannedBefore - 1);
     if (board2.isToday) {
-      // نیامد پایان‌حالت است — باید از صف خارج شود
       expect(board2.queue.some((q) => q.appointmentId === appt.id)).toBe(false);
     }
   });
 
-  // تماس سریع با ولیّ از بورد: موبایل ولیّ در ردیف دانش‌آموزِ کارت بورد هست
   it('بورد — دانش‌آموزِ نوبت phone ولیّ را دارد (تماس سریع)', async () => {
     const appt = await createSoon(mgr);
     const day = tehranYmdOf(quarterHourFromNow(30));
@@ -287,7 +269,6 @@ describe('فاز ۱ — بورد غنی‌شده (opsStats/queue/kind/ارزیا
       .find((a) => a.id === appt.id);
     expect(card).toBeTruthy();
     const st = card?.students.find((s) => s.studentId === STUDENT1_ID);
-    // موبایل ولیّ از رکورد دانش‌آموز می‌آید — فقط غیرتهی و نرمال‌شدهٔ ۰۹xx
     expect(st?.phone ?? null).toBe('09121110001');
   });
 
@@ -297,7 +278,6 @@ describe('فاز ۱ — بورد غنی‌شده (opsStats/queue/kind/ارزیا
     expect(note.status).toBe(201);
     expect((note.body as { data: { kind?: string } }).data.kind).toBe('human');
 
-    // Projection سیستمی آینده — مسیر خواندن D2 از همین حالا آماده است
     A.sql
       .prepare(
         `INSERT INTO day_notes (id, date, body, kind, created_by, created_at)
@@ -313,9 +293,6 @@ describe('فاز ۱ — بورد غنی‌شده (opsStats/queue/kind/ارزیا
   });
 });
 
-// بورد روز کاری ابزار دفتر بود؛ — به دستور کاربر درمانگر هم «کپی روز کاری» دارد:
-// همان طراحی، ولی بورد نسبت به خودش scope می‌شود (فقط ستون خودش؛ بدون «سایر نوبت‌ها»؛
-// آمار/صف از نوبت‌های خودش) — نوبت‌های همکاران دیده نمی‌شود
 describe('بورد روز کاری درمانگر (scope به خودش)', () => {
   it('دفتر کل مرکز را می‌بیند؛ درمانگر فقط ستون خودش + آمار همان (200)', async () => {
     const A = createTestApp();
@@ -326,9 +303,6 @@ describe('بورد روز کاری درمانگر (scope به خودش)', () => 
     expect((await mgr.get('/api/working-day')).status).toBe(200);
     expect((await sec.get('/api/working-day')).status).toBe(200);
 
-    // دو نوبت: یکی برای علی (درمانگر تست) و یکی برای مریم (همکار)
-    // m128 — ساعت ثابت صبح به‌جای now+offset: بعدِ ~۲۱:۴۵ تهران، quarterHourFromNow
-    // به روز بعد می‌غلتد و بوردِ «امروز» خالی می‌شد (flaky ساعتی)
     const start = tehranTodayAt(11, 0);
     const mine = await mgr.post('/api/appointments', apptBody(ALI_ID, start, 45, [STUDENT1_ID]));
     expect(mine.status).toBe(201);

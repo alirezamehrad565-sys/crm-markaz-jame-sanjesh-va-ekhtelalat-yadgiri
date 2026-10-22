@@ -1,11 +1,3 @@
-/**
- * تست‌های e2e — bot-roles
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-bot-roles.test.ts — بات نقش‌آگاه
-// ماتریس نقش × دستور: راهنمای نقش‌محور + /search (فقط همکاران) + «برنامهٔ مرکز» (فقط مدیر/منشی)
-// اپ واقعی Hono + اسکیمای واقعی migrations + webhook بله با secret تست
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -31,7 +23,6 @@ interface BotResponse {
   buttons: { text: string; callbackData: string }[][] | null;
 }
 
-/** ارسال آپدیت خام بله به webhook */
 async function bot(A: ReturnType<typeof createTestApp>, raw: Update): Promise<BotResponse> {
   const res = await A.app.request(
     `/webhook/bale/${WEBHOOK_SECRET}`,
@@ -47,14 +38,12 @@ async function bot(A: ReturnType<typeof createTestApp>, raw: Update): Promise<Bo
 
 const tx = (t: string, chatId: number): Update => ({ update_id: 1, message: { chat: { id: chatId }, text: t } });
 
-// chatها: 7201 مدیر | 7202 همکار (علی) | 7203 منشی | 7204 والد | 7299 بدون اتصال
 const CHAT_MGR = 7201;
 const CHAT_ALI = 7202;
 const CHAT_SEC = 7203;
 const CHAT_PARENT = 7204;
 const CHAT_NONE = 7299;
 
-// کدهای ملی seed-dev
 const MANAGER_NID = '3672818690';
 const ALI_NID = '3149977797';
 const SECRETARY_NID = '1566009243';
@@ -67,18 +56,14 @@ describe('بات نقش‌آگاه: راهنمای نقش‌محور، /search،
     A = createTestApp();
     manager = await asRole(A, 'manager');
 
-    // اتصال سه کارمند با کد ملی (ورود خودکار )
     expect((await bot(A, tx(MANAGER_NID, CHAT_MGR))).reply).toContain('اتصال انجام شد');
     expect((await bot(A, tx(ALI_NID, CHAT_ALI))).reply).toContain('اتصال انجام شد');
     expect((await bot(A, tx(SECRETARY_NID, CHAT_SEC))).reply).toContain('اتصال انجام شد');
 
-    // والد: پروندهٔ تازه با شمارهٔ ولیّ یکتا → اتصال با کد ملی فرزند
     const s = await createStudent(manager, { guardian_phone: '09125550088' });
     const linkParent = await bot(A, tx(s.nationalId, CHAT_PARENT));
     expect(linkParent.reply).toContain('اتصال انجام شد');
   });
-
-  // ─── راهنمای نقش‌محور ───
 
   it('/help بدون اتصال → راهنمای مهمان (مسیر ورود)', async () => {
     const res = await bot(A, tx('/help', CHAT_NONE));
@@ -100,7 +85,6 @@ describe('بات نقش‌آگاه: راهنمای نقش‌محور، /search،
   it('/help متخصص → منوی همکار با منوی دانش‌آموز؛ وضعیت مرکز ندارد', async () => {
     const res = await bot(A, tx('/help', CHAT_ALI));
     expect(res.reply).toContain('همکار (متخصص)');
-    // جستجوی آزاد جای خود را به منوی ساخت‌یافتهٔ «دانش‌آموزان فعال» داد
     expect(res.reply).toContain('دانش‌آموزان فعال');
     expect(res.reply).toContain('پیام به خانواده');
     expect(res.reply).not.toContain('وضعیت مرکز');
@@ -122,8 +106,6 @@ describe('بات نقش‌آگاه: راهنمای نقش‌محور، /search،
     const mgr = await bot(A, tx('/xyz', CHAT_MGR));
     expect(mgr.reply).toContain('مدیر/منشی');
   });
-
-  // ─── /search ───
 
   it('/search بدون اتصال → راهنمای مهمان؛ والد → پیام انکار', async () => {
     const none = await bot(A, tx('/search محمدی', CHAT_NONE));
@@ -153,8 +135,6 @@ describe('بات نقش‌آگاه: راهنمای نقش‌محور، /search،
     expect(short.reply).toContain('راهنمای بات');
   });
 
-  // ─── برنامهٔ مرکز ───
-
   it('«برنامه مرکز» متخصص/والد → پیام انکار', async () => {
     const ali = await bot(A, tx('/center', CHAT_ALI));
     expect(ali.reply).toContain('فقط برای مدیر و منشی است');
@@ -164,7 +144,6 @@ describe('بات نقش‌آگاه: راهنمای نقش‌محور، /search،
   });
 
   it('«برنامه مرکز» مدیر → نوبت‌های امروز همهٔ همکاران با نام دانش‌آموز؛ لغوشده برچسب دارد', async () => {
-    // دو نوبت امروز روی ساعت دیواری ثابت تهران (۰۹:۰۰ و ۱۰:۰۰) — ایمن از عبور نیمه‌شب
     const a1 = await manager.post('/api/appointments', apptBody(ALI_ID, tehranTodayAt(9, 0), 45, [STUDENT1_ID]));
     expect(a1.status).toBe(201);
     const appt1 = (a1.body as { data: { id: string; version: number } }).data;
@@ -185,7 +164,6 @@ describe('بات نقش‌آگاه: راهنمای نقش‌محور، /search،
   });
 
   it('«برنامه مرکز» منشی → همان دید دفتر؛ روز خالی → پیام خالی بودن', async () => {
-    // منشی روی DB تازهٔ همین تست — نوبت‌های بالا را می‌بیند
     const res = await bot(A, tx('/center', CHAT_SEC));
     expect(res.reply).toContain('دکتر علی رضایی');
   });

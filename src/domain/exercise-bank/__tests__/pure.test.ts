@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — pure
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// pure.test.ts — منطق خالص بانک تمرین
-
 import { describe, it, expect } from 'vitest';
 import {
   normalizeExerciseTitle,

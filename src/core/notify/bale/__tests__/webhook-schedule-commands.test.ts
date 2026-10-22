@@ -1,8 +1,3 @@
-/**
- * تست‌های واحد — webhook-
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست‌های پارس دستورهای جدید بات (/today و /week)
 import { describe, expect, it } from 'vitest';
 import { parseBotUpdate } from '../webhook';
 

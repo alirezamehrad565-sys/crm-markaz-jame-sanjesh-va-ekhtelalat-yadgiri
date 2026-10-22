@@ -1,11 +1,3 @@
-/**
- * نمودارهای SVG خام (ستونی/دونات)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// charts.js — نمودارهای سبک SVG بدون وابستگی
-// انیمیشن‌های CSS-محور (scaleY / stroke-dashoffset / width) — سبک و روان
-// همه توابع Element برمی‌گردانند؛ رنگ‌ها از CSS متغیر می‌خوانند.
-
 import { el } from './ui.js';
 import { fa } from './format.js';
 
@@ -19,17 +11,10 @@ function svg(tag, attrs = {}) {
   return node;
 }
 
-/** احترام به prefers-reduced-motion */
 function prefersReducedMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-// ─────────────── نمودار ستونی ───────────────
-
-/**
- * نمودار ستونی روزانه — ورودی: {date, total, cancelled}[]
- * maxهای سقف‌دار، انیمیشن رشد از پایین، tooltip بومی با title
- */
 export function barChart({ points, height = 170, valueFormatter = (v) => String(v) }) {
   const wrap = el('div', { class: 'chart chart--bars' });
   if (!points.length) {
@@ -46,7 +31,6 @@ export function barChart({ points, height = 170, valueFormatter = (v) => String(
     class: 'chart__svg',
     role: 'img'
   });
-  // خطوط راهنما (۳ سطح)
   for (const frac of [1, 0.5]) {
     const y = pad.top + (height - pad.top - pad.bottom) * (1 - frac);
     node.appendChild(svg('line', { x1: 0, x2: W, y1: y, y2: y, class: 'chart__grid' }));
@@ -67,7 +51,6 @@ export function barChart({ points, height = 170, valueFormatter = (v) => String(
       class: `chart__bar${p.cancelled > 0 ? ' chart__bar--mixed' : ''}`,
       style: `animation-delay: ${Math.min(i * 18, 500)}ms`
     });
-    // انیمیشن رشد — با CSS animation روی attribute? SVG attr animation سخت است؛ با JS transition
     if (!prefersReducedMotion()) {
       requestAnimationFrame(() => {
         rect.setAttribute('y', y);
@@ -80,7 +63,6 @@ export function barChart({ points, height = 170, valueFormatter = (v) => String(
     g.appendChild(title);
     node.appendChild(g);
 
-    // برچسب روز (هر n تا بسته به عرض)
     if (points.length <= 16 || i % Math.ceil(points.length / 16) === 0) {
       const t = svg('text', { x: slot * i + slot / 2, y: height - 6, class: 'chart__tick', 'text-anchor': 'middle' });
       t.textContent = p.date.slice(8, 10);
@@ -92,12 +74,6 @@ export function barChart({ points, height = 170, valueFormatter = (v) => String(
   return wrap;
 }
 
-// ─────────────── نمودار دونات ───────────────
-
-/**
- * دونات حضور — segments: {label, value, tone}[]
- * با انیمیشن stroke-dashoffset و مقدار مرکزی
- */
 export function donut({ segments, centerLabel = '', size = 190, stroke = 26 }) {
   const wrap = el('div', { class: 'chart chart--donut' });
   const total = segments.reduce((a, s) => a + s.value, 0);
@@ -130,7 +106,6 @@ export function donut({ segments, centerLabel = '', size = 190, stroke = 26 }) {
     circle.appendChild(title);
     node.appendChild(circle);
     acc += frac;
-    // انیمیشن به موقعیت نهایی
     if (!prefersReducedMotion()) {
       requestAnimationFrame(() => {
         circle.setAttribute('stroke-dashoffset', c / 4 - acc * c + c); // اصلاح نسبی — با transition
@@ -138,7 +113,6 @@ export function donut({ segments, centerLabel = '', size = 190, stroke = 26 }) {
     }
   }
 
-  // عدد مرکزی
   const centerText = svg('text', { x: '50%', y: '50%', class: 'chart__center', 'text-anchor': 'middle', 'dominant-baseline': 'central' });
   centerText.textContent = String(total);
   const centerCap = svg('text', { x: '50%', y: `${50 + 18}%`, class: 'chart__center-cap', 'text-anchor': 'middle' });
@@ -161,12 +135,6 @@ export function donut({ segments, centerLabel = '', size = 190, stroke = 26 }) {
   return wrap;
 }
 
-// ─────────────── میله‌های افقی ───────────────
-
-/**
- * رتبه‌بندی افقی — items: {label, value, hint?, tone?}
- * انیمیشن width + مقدار فارسی
- */
 export function hbars({ items, valueFormatter = (v) => String(v) }) {
   const wrap = el('div', { class: 'chart chart--hbars' });
   if (!items.length) {
@@ -194,7 +162,6 @@ export function hbars({ items, valueFormatter = (v) => String(v) }) {
       )
     )
   );
-  // انیمیشن width — بعد از paint
   if (!prefersReducedMotion()) {
     requestAnimationFrame(() => {
       wrap.querySelectorAll('.chart__hbar-fill').forEach((f) => {
@@ -209,13 +176,7 @@ export function hbars({ items, valueFormatter = (v) => String(v) }) {
   return wrap;
 }
 
-// ─────────────── شمارنده متحرک ───────────────
-
-/**
- * شمارش انیمیشنی عدد فارسی — از ۰ تا value در مدت کوتاه
- */
 export function countUp(el_, value, { duration = 700, formatter = (v) => String(v) } = {}) {
-  // مقادیر غیرعددی (مثل «۱۰٪») مستقیم نمایش داده می‌شوند
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     el_.textContent = formatter(value);
     return;
@@ -235,13 +196,6 @@ export function countUp(el_, value, { duration = 700, formatter = (v) => String(
   requestAnimationFrame(frame);
 }
 
-// ─────────────── نمودار خطی (m164 — گزارش پیشرفت چک‌لیست‌محور) ───────────────
-
-/**
- * نمودار خطی SVG چاپ‌پسند — بدون انیمیشن سنگین (خروجی چاپ باید کامل و قابل استناد باشد).
- * ورودی: points: [{ x: برچسب محور, y: عدد, note? }] · yMin/yMax اختیاری · خطوط راهنما + نقاط + برچسب محور.
- * محور زمان چپ→راست (قدیم→جدید) — قرارداد استاندارد نمودار روند حتی در متن RTL.
- */
 export function lineChart({ points, yMin = 0, yMax = null, height = 190, valueFormatter = (v) => fa(Math.round(v)) }) {
   const wrap = el('div', { class: 'chart chart--line' });
   if (!points.length) {
@@ -262,7 +216,6 @@ export function lineChart({ points, yMin = 0, yMax = null, height = 190, valueFo
   const plotH = height - pad.top - pad.bottom;
   const plotW = W - pad.left - pad.right;
   const yOf = (v) => pad.top + plotH * (1 - (v - lo) / span);
-  // خطوط راهنما — سه سطح با برچسب مقدار
   for (const frac of [0, 0.5, 1]) {
     const v = lo + span * frac;
     const y = yOf(v);
@@ -274,7 +227,6 @@ export function lineChart({ points, yMin = 0, yMax = null, height = 190, valueFo
   const xOf = (i) => (points.length > 1
     ? pad.left + (plotW * i) / (points.length - 1)
     : pad.left + plotW / 2);
-  // خط روند + نقاط
   const poly = points.map((p, i) => `${xOf(i).toFixed(1)},${yOf(p.y).toFixed(1)}`).join(' ');
   node.appendChild(svg('polyline', { points: poly, class: 'chart__line', fill: 'none' }));
   points.forEach((p, i) => {
@@ -283,7 +235,6 @@ export function lineChart({ points, yMin = 0, yMax = null, height = 190, valueFo
     ti.textContent = `${p.x}: ${valueFormatter(p.y)}${p.note ? ` — ${p.note}` : ''}`;
     c.appendChild(ti);
     node.appendChild(c);
-    // برچسب محور X — تا ۱۲ نقطه همه؛ بیشتر → هر نقطهٔ زوج
     if (points.length <= 12 || i % 2 === 0) {
       const t = svg('text', { x: xOf(i).toFixed(1), y: height - 9, class: 'chart__axis', 'text-anchor': 'middle' });
       t.textContent = p.x;

@@ -1,11 +1,3 @@
--- مایگریشن اسکیما D1 — برچسب‌ها
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- migrations/0006_tags.sql
--- — برچسب‌گذاری دانش‌آموز (نوع اختلال، پایه تحصیلی، نوع مدرسه، سفارشی)
--- برچسب‌ها soft-state هستند (active 0/1) — تاریخچه student_tags حفظ می‌شود.
--- ────────────────────────────────────────────────────────────
-
--- ───────────── tags (taxonomy مشترک) ─────────────
 CREATE TABLE IF NOT EXISTS tags (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL,
@@ -17,7 +9,6 @@ CREATE TABLE IF NOT EXISTS tags (
 );
 CREATE INDEX IF NOT EXISTS idx_tags_category ON tags(category);
 
--- ───────────── student_tags (پیوند چند‌به‌چند) ─────────────
 CREATE TABLE IF NOT EXISTS student_tags (
   student_id TEXT NOT NULL REFERENCES students(id),
   tag_id     TEXT NOT NULL REFERENCES tags(id),
@@ -26,9 +17,6 @@ CREATE TABLE IF NOT EXISTS student_tags (
 );
 CREATE INDEX IF NOT EXISTS idx_student_tags_tag ON student_tags(tag_id);
 
--- ───────────── برچسب‌های پیش‌فرض (idempotent — INSERT OR IGNORE) ─────────────
-
--- نوع اختلال
 INSERT OR IGNORE INTO tags (id, name, category) VALUES
   ('aaaaaaaa-0000-4000-8000-000000000001', 'نارساخوانی (دیس‌لکسی)', 'disorder'),
   ('aaaaaaaa-0000-4000-8000-000000000002', 'نارسانویسی (دیس‌گرافی)', 'disorder'),
@@ -39,7 +27,6 @@ INSERT OR IGNORE INTO tags (id, name, category) VALUES
   ('aaaaaaaa-0000-4000-8000-000000000007', 'اضطراب', 'disorder'),
   ('aaaaaaaa-0000-4000-8000-000000000008', 'اختلال هماهنگی حرکتی', 'disorder');
 
--- پایه تحصیلی
 INSERT OR IGNORE INTO tags (id, name, category) VALUES
   ('aaaaaaaa-0000-4000-8000-000000000101', 'پیش‌دبستانی', 'grade'),
   ('aaaaaaaa-0000-4000-8000-000000000102', 'اول', 'grade'),
@@ -55,7 +42,6 @@ INSERT OR IGNORE INTO tags (id, name, category) VALUES
   ('aaaaaaaa-0000-4000-8000-000000000112', 'یازدهم', 'grade'),
   ('aaaaaaaa-0000-4000-8000-000000000113', 'دوازدهم', 'grade');
 
--- نوع مدرسه
 INSERT OR IGNORE INTO tags (id, name, category) VALUES
   ('aaaaaaaa-0000-4000-8000-000000000201', 'دولتی', 'school_type'),
   ('aaaaaaaa-0000-4000-8000-000000000202', 'غیرانتفاعی', 'school_type'),

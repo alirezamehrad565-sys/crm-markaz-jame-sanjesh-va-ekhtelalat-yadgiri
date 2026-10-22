@@ -1,11 +1,3 @@
-/**
- * تست‌های واحد — pure
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// pure.test.ts — اعتبارسنجی خالص رویدادهای پرونده
-// buildEventPayload (الزامی/select/number/scale/سقف متن)، analyzeChecklist (امتیاز/باند)
-// و validateTypeDefinition (قواعد فرم‌ساز)
-
 import { describe, it, expect } from 'vitest';
 import {
   analyzeChecklist,
@@ -134,8 +126,6 @@ describe('validateTypeDefinition (فرم‌ساز)', () => {
   });
 });
 
-// ───────── زبان روایی: heading + scaleLabels ─────────
-
 describe('سربرگ بخش (heading) و لنگرهای کلامی (scaleLabels)', () => {
   it('heading در فرم جلسه مجاز است و در payload/جمع نمره ظاهر نمی‌شود', () => {
     const fields: CaseEventField[] = [
@@ -238,7 +228,6 @@ describe('پکیج فرم جامع خانواده (T5) — قرارداد رزو
   });
 
   it('تعریف فرم‌های تکی بدون packageComponents — رفتار امروز دست‌نخورده (بدون شاخهٔ پکیج)', () => {
-    // جلسهٔ خانواده‌پذیر بدون اعلام پکیج همان‌طور که قبل رد می‌شود
     expect(() =>
       validateTypeDefinition({ category: 'session', fields: ctxFields, familyFillable: true })
     ).toThrow(/چک‌لیست/);

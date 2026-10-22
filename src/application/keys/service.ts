@@ -1,13 +1,3 @@
-/**
- * سرویس کلیدهای API — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// ماژول کلیدهای API — مالک جدول api_keys
-// قوانین:
-// * مقدار کلید هرگز ذخیره نمی‌شود (فقط SHA-256) و فقط یک‌بار برگردانده می‌شود
-// * ساخت/ابطال فقط مدیر (RBAC در routes) + audit همیشگی
-// * کلیدهای باطل‌شده حذف نمی‌شوند — append-only برای trace
-
 import type { DbClient } from '@core/db';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
@@ -59,8 +49,6 @@ export function createKeysService(deps: KeysDeps): KeysService {
     async create(name: string, role: StaffRole, actor: AuthContext): Promise<ApiKeyCreated> {
       const { token, prefix, keyHash } = await generateApiKey('live');
       const id = crypto.randomUUID();
-      // تاریخ‌ها در کد تولید می‌شوند تا record بدون read-after-write داخل tx ساخته شود
-      // (batch collector — writes داخل tx تا پایان batch اعمال نمی‌شوند)
       const createdAt = new Date().toISOString();
 
       const record: ApiKeyRecord = await db.transaction(async (tx) => {

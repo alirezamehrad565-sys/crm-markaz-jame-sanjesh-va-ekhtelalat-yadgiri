@@ -1,11 +1,3 @@
-/**
- * نمای مدارس و کلاس‌ها
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/schools.js — مدیریت مدارس و مهدکودک‌ها + کلاس‌ها با معلم
-// — جستجوی زندهٔ مدارس (نام/کد/مدیر/تلفن/نشانی) و کلاس‌ها (نام/معلم/تلفن) —
-// فیلتر سمت کلاینت؛ فهرست مدارس کوچک است و درخواست سروری لازم ندارد.
-
 import { api, qs } from '../api.js';
 import { session } from '../state.js';
 import { fa, enDigits } from '../format.js';
@@ -15,12 +7,10 @@ import { resolveBotUsername, buildBotLink, botLinkBox } from '../bot-link.js'; /
 
 let showInactive = false;
 
-/** — غیرفعال‌سازی مدرسه/کلاس فقط مدیر (سرور هم ۴۰۳ می‌دهد) */
 function canDeactivate() {
   return session.user?.role === 'manager';
 }
 
-/** — نرمال‌سازی برای جستجو: رقم فارسی/عربی → لاتین، حروف عربی → فارسی، بدون حساسیت به ی/ك */
 function searchable(text) {
   return enDigits(String(text ?? ''))
     .toLowerCase()
@@ -28,7 +18,6 @@ function searchable(text) {
     .replace(/\s+/g, ' ');
 }
 
-/** — آیا ردیف با عبارت جستجو مطابق است؟ (همهٔ فیلدها به یک رشته چسبانده می‌شوند) */
 function matchesQuery(rowFields, query) {
   const q = searchable(query).trim();
   if (!q) return true;
@@ -46,7 +35,6 @@ export async function renderSchools(container) {
     return;
   }
 
-  // — جستجوی زندهٔ مدارس — فقط جدول دوباره رسم می‌شود؛ فوکوس ورودی نمی‌پرد
   const searchInput = el('input', {
     class: 'input', type: 'search',
     placeholder: 'جستجو: نام، کد، مدیر یا تلفن…',
@@ -70,7 +58,6 @@ export async function renderSchools(container) {
       'نمایش غیرفعال‌ها'
     ),
     el('div', { class: 'spacer' }),
-    // — دکمهٔ «لینک معلم‌ها» حذف شد (بی‌کاربرد؛ مدیریت کد اتصال از «کلاس‌ها و معلم‌ها»ی هر مدرسه انجام می‌شود)
     el('button', { class: 'btn btn--primary btn--sm', onclick: () => openForm(null, container) }, icon('plus', 16), 'مدرسه جدید')
   );
 
@@ -79,7 +66,6 @@ export async function renderSchools(container) {
         key: 'name', label: 'نام',
         render: (s) => el('div', {},
           el('div', { class: 'cell-main' }, s.name),
-          // — کد رسمی مدرسه زیر نام (برای شناسایی سریع در نظام)
           s.code ? el('div', { class: 'cell-sub', dir: 'ltr' }, fa(s.code)) : null,
           s.address ? el('div', { class: 'cell-sub' }, s.address) : null
         )
@@ -90,7 +76,6 @@ export async function renderSchools(container) {
         render: (s) => s.principalName
           ? el('div', {},
               el('div', { class: 'cell-main' }, s.principalName),
-              // — باجت تماس سریع (الگوی روز کاری) کنار شمارهٔ مدیر
               s.principalPhone
                 ? el('div', { class: 'cell-sub cell-phone' },
                     el('span', { dir: 'ltr' }, fa(s.principalPhone)),
@@ -125,7 +110,6 @@ export async function renderSchools(container) {
                 }
               }, icon('x', 15))
             : null,
-          // — حذف کامل مدرسهٔ ثبت‌شدهٔ اشتباه (فقط اگر خالی باشد — سرور گارد می‌گذارد)
           canDeactivate()
             ? el('button', {
                 class: 'btn btn--danger btn--sm', title: 'حذف کامل — فقط اگر دانش‌آموز/کلاس نداشته باشد',
@@ -201,7 +185,6 @@ function openForm(school, container) {
         options: [{ value: 'mixed', label: 'مختلط' }, { value: 'male', label: 'پسرانه' }, { value: 'female', label: 'دخترانه' }],
         value: school?.genderType ?? 'mixed'
       },
-      // — کد رسمی مدرسه (نظام) — یکتا؛ برای جستجو هم به‌کار می‌رود
       { name: 'code', label: 'کد مدرسه', type: 'tel', ltr: true, value: school?.code, hint: 'کد یکتا در نظام آموزش‌وپرورش' },
       { name: 'phone', label: 'تلفن', type: 'tel', ltr: true, value: school?.phone },
       { name: 'principal_name', label: 'نام مدیر', value: school?.principalName, hint: 'برای ارتباط مرکز با مدرسه' },
@@ -235,9 +218,6 @@ function openForm(school, container) {
   });
 }
 
-// ─────────────── وضعیت همکاری مدرسه (فاز ۷ — §15) ───────────────
-
-/** متریک‌های همکاری + بخش «نیاز به توجه دارد» — بازخواندن از /api/schools/:id/overview */
 async function openSchoolOverview(school) {
   const box = openModal({
     title: `وضعیت همکاری — ${school.name}`,
@@ -299,8 +279,6 @@ const REASON_LABELS = {
   no_recent_session: 'بیش از ۳۰ روز جلسه ندارد'
 };
 
-// ─────────────── مدیریت کلاس‌ها و معلم‌ها ───────────────
-
 function openClassManager(school, container) {
   let classes = [];
   let classSearch = null; // — ورودی جستجو در body مودال ساخته می‌شود؛ در این اسکوپ نگه داشته می‌شود
@@ -313,7 +291,6 @@ function openClassManager(school, container) {
     body: (close) => {
       const addBtn = el('button', { class: 'btn btn--primary btn--sm', onclick: () => openClassForm(school, null, refresh) }, icon('plus', 15), 'کلاس جدید');
 
-      // — جستجوی کلاس‌ها (نام کلاس/معلم/تلفن) — همان فیلتر سمت کلاینت
       classSearch = el('input', {
         class: 'input', type: 'search',
         placeholder: 'جستجوی کلاس یا معلم…',
@@ -361,7 +338,6 @@ function openClassManager(school, container) {
       }));
       return;
     }
-    // — فیلتر زنده با عبارت جستجو
     const q = classSearch ? classSearch.value.trim() : '';
     const filtered = classes.filter((c) => matchesQuery(
       [c.name, c.teacherName, c.teacherPhone], q
@@ -377,7 +353,6 @@ function openClassManager(school, container) {
             )
           },
           { key: 'teacherName', label: 'معلم', render: (c) => c.teacherName ?? el('span', { class: 'cell-sub' }, '—') },
-          // — باجت تماس سریع کنار تلفن معلم
           { key: 'teacherPhone', label: 'تلفن معلم', render: (c) => c.teacherPhone
             ? el('span', { class: 'cell-phone' },
                 el('span', { dir: 'ltr' }, fa(c.teacherPhone)),
@@ -404,7 +379,6 @@ function openClassManager(school, container) {
                   } catch (err) { toastError(err); }
                 }
               }, icon('x', 15)) : null,
-              // — حذف کامل کلاس ثبت‌شدهٔ اشتباه (فقط اگر خالی باشد — سرور گارد می‌گذارد)
               canDeactivate() ? el('button', {
                 class: 'btn btn--danger btn--sm', title: 'حذف کامل کلاس — فقط اگر دانش‌آموز نداشته باشد',
                 onclick: async () => {
@@ -424,7 +398,6 @@ function openClassManager(school, container) {
           }
         ],
         rows: filtered,
-        // — وقتی جستجو نتیجه ندارد، پیام هدفمند به‌جای خالیِ عمومی
         empty: q
           ? { iconName: 'search', title: 'کلاسی مطابق جستجو پیدا نشد', hint: 'بخشی از نام کلاس یا نام/تلفن معلم را امتحان کنید.' }
           : undefined
@@ -465,7 +438,6 @@ function openClassManager(school, container) {
     });
   }
 
-  /** لغو کد اتصال معلم — از پنجرهٔ «کد اتصال معلم» هر کلاس (؛ در پنجرهٔ سراسری حذف شد، این مسیر می‌ماند) */
   async function revoke(link, after) {
     if (!(await confirmModal({
       title: 'لغو کد اتصال',
@@ -485,7 +457,6 @@ function openClassManager(school, container) {
   }
 
   async function openTeacherLink(cls) {
-    // — کد قبلی «مشاهده» می‌شود؛ کد جدید فقط با دکمهٔ صریح «تولید کد جدید» ساخته می‌شود
     let links;
     try {
       links = (await api.get(`/api/notifications/class-links${qs({ class_id: cls.id })}`)).data;
@@ -493,7 +464,6 @@ function openClassManager(school, container) {
       toastError(err);
       return;
     }
-    // — نام کاربری بات برای لینک احراز خودکار (ذخیره‌شده یا تشخیص خودکار؛ ناموفق → null)
     const botUsername = await resolveBotUsername();
 
     const listBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } });
@@ -507,7 +477,6 @@ function openClassManager(school, container) {
       const linkedList = linksList.filter((l) => l.status === 'linked');
       const others = linksList.filter((l) => l.status !== 'pending' && l.status !== 'linked');
 
-      // — کد متصل: لینک دوباره قابل استفاده است (انتقال به گفتگوی جدید)
       const linkedBlock = linkedList.length > 0
         ? linkedList.slice(0, 1).map((l) =>
             el('div', { class: 'token-box' },
@@ -528,7 +497,6 @@ function openClassManager(school, container) {
             el('div', { class: 'token-box' },
               el('span', { style: { fontSize: 'var(--fs-sm)', color: 'var(--text-2)' } }, 'کد فعال (در انتظار اتصال):'),
               el('b', { dir: 'ltr', style: { fontSize: 'var(--fs-xl)', letterSpacing: '3px', display: 'block', marginTop: '8px', textAlign: 'center' } }, l.code),
-              // — لینک احراز خودکار (وقتی نام کاربری بات در دسترس است)
               botLinkBox(buildBotLink(botUsername, l.code), l.code),
               el('div', { style: { display: 'flex', justifyContent: 'center', marginTop: '10px' } },
                 canDeactivate() || session.user?.role === 'secretary'

@@ -1,16 +1,5 @@
-/**
- * احراز هویت هسته — JWT، رمز، کلید API و گارد نقش — خواندن امن secret در زمان اجرا
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// هم‌سنگ باندل زنده: کلید امضای نشست بدون fallback هاردکد در تولید.
-// ترتیب: env.AUTH_SECRET (≥۱۶ نویسه) → dev/test مقدار ثابت توسعه → تولید: secret تصادفی
-// که یک‌بار در settings (sys_auth_secret) ساخته و کش می‌شود.
-// انگیزه: حذف ریسک «امضای نشست با secret عمومی» در استقرار بدون secret (A04/CWE-798).
-
-/** کلید settings برای secret ران‌تایم — هم‌نام باندل زنده */
 export const SETTINGS_AUTH_SECRET_KEY = 'sys_auth_secret';
 
-/** فقط برای توسعه/تست — هرگز در production مسیر امضا نیست (resolveSessionSecret) */
 export const DEV_AUTH_SECRET = 'center-dev-session-secret';
 
 export function isDevEnv(envValue: string | undefined): boolean {
@@ -22,7 +11,6 @@ interface SecretStore {
   execute(sql: string, params?: unknown[]): Promise<unknown>;
 }
 
-/** D1 خام → SecretStore (همان الگوی باندل زنده) */
 export function d1AsSecretStore(db: D1Database): SecretStore {
   return {
     async queryOne<T>(sql: string, params: unknown[] = []): Promise<T | null> {
@@ -41,7 +29,6 @@ function randomHexSecret(): string {
 
 let cachedSecret: string | null = null;
 
-/** خواندن/ساخت secret ران‌تایم در settings — idempotent و کش در ایزولیت */
 export async function getOrCreateRuntimeSecret(store: SecretStore): Promise<string> {
   if (cachedSecret) return cachedSecret;
 
@@ -57,7 +44,6 @@ export async function getOrCreateRuntimeSecret(store: SecretStore): Promise<stri
         return cachedSecret;
       }
     } catch {
-      /* مقدار خراب → بازسازی در ادامه */
     }
   }
 
@@ -74,17 +60,10 @@ export async function getOrCreateRuntimeSecret(store: SecretStore): Promise<stri
   return secret;
 }
 
-/** فقط برای تست — کش ایزولیت را خالی می‌کند */
 export function resetRuntimeSecretCache(): void {
   cachedSecret = null;
 }
 
-/**
- * کلید امضای نشست:
- * ۱) env.AUTH_SECRET معتبر (≥۱۶) — مسیر تولید با wrangler secret
- * ۲) dev/test — مقدار ثابت توسعه (بدون D1)
- * ۳) تولید بدون secret — secret ران‌تایم تصادفی از settings
- */
 export async function resolveSessionSecret(env: {
   AUTH_SECRET?: string;
   ENV: string;

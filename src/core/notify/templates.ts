@@ -1,16 +1,8 @@
-/**
- * هستهٔ اعلان و کلاینت بات بله — قالب پیام‌های اعلان
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// قالب‌های پیام فارسی — pure و بدون وابستگی به دیتابیس/شبکه
-// قانون: متن پیام‌ها فارسی است (مستندات فارسی/کد انگلیسی)؛ فقط رندر، بدون منطق.
-
 import { DEFAULT_CLINIC_NAME, faDigits, jalaliFullLabel } from '@core/shared';
 import type { NotificationTemplateId, TemplateVars } from '@core/shared';
 
 const UNKNOWN_TEMPLATE_FALLBACK = 'اطلاع‌رسانی سامانه مرکز';
 
-/** یک ردیف برنامه (خروجی buildScheduleEntries) — برای رندر پیام */
 export interface ScheduleEntry {
   timeLabel: string;   // HH:MM تهران
   title: string;       // نام دانش‌آموز یا متخصص
@@ -22,10 +14,6 @@ function line(parts: (string | undefined)[], separator = ' '): string {
   return parts.filter((p): p is string => Boolean(p && p.length > 0)).join(separator);
 }
 
-/**
- * رندر نهایی پیام برای هر قالب.
- * هر قالب چندخطی است (قالب بله/تلگرام‌مانند) و فقط از TemplateVars مصرف می‌کند.
- */
 export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = {}): string {
   const clinic = vars.clinicName?.trim() || DEFAULT_CLINIC_NAME;
 
@@ -71,8 +59,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         `به ${vars.dateYmd ? jalaliFullLabel(vars.dateYmd) : '—'} ساعت ${faDigits(vars.timeLabel ?? '—')} تغییر یافت.`,
         vars.staffName ? `متخصص: ${vars.staffName}` : undefined
       ].filter((l): l is string => l !== undefined).join('\n');
-
-    // ─── قالب‌های کارمند (معلم) ───
 
     case 'staff_appointment_created':
       return [
@@ -187,8 +173,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         'از پنل مدیریت، بخش «حضور و غیاب» تکمیل کنید.'
       ].filter((l) => l !== '').join('\n');
 
-    // ─── قالب‌های معلم مدرسه — (اعلان نوبت دانش‌آموز کلاس خودش) ───
-
     case 'teacher_appointment_created':
       return [
         '🎓 اطلاع‌رسانی مراجعه دانش‌آموز',
@@ -230,8 +214,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         '',
         `— ${clinic}`
       ].filter((l) => l !== '').join('\n');
-
-    // ─── ورود خودکار با کد ملی/شماره تلفن ───
 
     case 'bot_identify_staff':
       return [
@@ -279,8 +261,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         'لطفاً کد ملی خود را بفرستید.'
       ].join('\n');
 
-    // ─── لغو نوبت توسط همکار از داخل بات ───
-
     case 'bot_cancel_ask':
       return [
         '⚠️ لغو این نوبت؟',
@@ -315,8 +295,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         '«نوبت‌های من» را بفرستید تا فهرست به‌روز را ببینید.'
       ].join('\n');
 
-    // ─── فاز ۴ — کار داخلی منشی↔مدیر (§9.5) ───
-
     case 'todo_assigned':
       return [
         '📋 کار جدید برای شما',
@@ -329,8 +307,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
 
     case 'generic':
       return vars.extra?.trim() || UNKNOWN_TEMPLATE_FALLBACK;
-
-    // ─── خلاصهٔ روز (پوش صبحگاهی) ───
 
     case 'digest_staff':
       return [
@@ -419,8 +395,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         '',
         'برای دیدن تحقق اهداف غربال، با مدیر یا منشی مرکز هماهنگ شوید.'
       ].join('\n');
-
-    // ─── بات نقش‌آگاه: هر مخاطب فقط دستورهای نقش خودش را می‌بیند ───
 
     case 'bot_help_guest':
       return [
@@ -512,7 +486,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         'برای تغییر یا لغو نوبت با دفتر مرکز تماس بگیرید.'
       ].join('\n');
 
-    // ─── «درباره مرکز» (/about یا دکمهٔ متنی «درباره مرکز») ───
     case 'bot_about':
       return [
         `🏥 ${clinic}`,
@@ -530,7 +503,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         '/help — دیدن امکانات این بات بر اساس نقش شما'
       ].join('\n');
 
-    // ─── ثبت متقاضی لیست انتظار توسط معلم مدرسه ───
     case 'bot_wl_denied_staff':
       return [
         'ℹ️ «ثبت متقاضی» از بات مخصوص معلمان مدارس است.',
@@ -586,8 +558,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         'همکاران برنامهٔ خودشان را با «نوبت‌های من» یا /today می‌بینند.'
       ].join('\n');
 
-    // ─── لیست انتظار ↔ بات ───
-
     case 'bot_waitlist_denied':
       return [
         '⚠️ «لیست انتظار» فقط برای همکاران مرکز است.',
@@ -604,8 +574,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         '',
         'لیست انتظار را از پنل دنب کنید یا «لیست انتظار» را در همین بات بفرستید.'
       ].filter((l) => l !== '').join('\n');
-
-    // ─── بانک تمرین: تکلیف به خانواده + پاسخ‌های بات ───
 
     case 'homework_assigned':
       return [
@@ -646,7 +614,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         vars.extra?.trim() || ''
       ].filter((l) => l !== '').join('\n');
 
-    // ─── تأیید پیام به خانواده (قبلاً از قالب «تکلیف» استفاده می‌کرد — اشتباه) ───
     case 'bot_family_message_sent':
       return [
         `✅ پیام شما برای خانوادهٔ «${vars.studentName ?? 'دانش‌آموز'}» ارسال شد.`,
@@ -654,15 +621,12 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         vars.extra?.trim() || ''
       ].filter((l) => l !== '').join('\n');
 
-    // ─── پیام درست وقتی سرویس رویدادهای پرونده در دسترس نیست ───
     case 'bot_case_events_disabled':
       return [
         '⚙️ سرویس رویدادها و گزارش‌های پرونده موقتاً در دسترس نیست.',
         '',
         'از پنل مدیریت استفاده کنید یا با مدیر مرکز تماس بگیرید.'
       ].join('\n');
-
-    // ─── موتور تشخیص و مداخله: ارسال چک‌لیست با یک کلیک ───
 
     case 'bot_checklist_link':
       return [
@@ -673,8 +637,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         '',
         'پس از ثبت پاسخ، نتیجه به‌طور خودکار برای درمانگر مرکز می‌آید.'
       ].filter((l): l is string => l !== undefined && l !== '').join('\n');
-
-    // ─── T7 m150-b: فرم جامع معلم — لینک گره‌خورده به نام معلم (پیام معلم‌محور) ───
 
     case 'bot_teacher_package_link':
       return [
@@ -688,8 +650,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         'پیشاپیش از وقتی که می‌گذارید ممنونیم 🙏'
       ].filter((l): l is string => l !== undefined && l !== '').join('\n');
 
-    // ─── حلقهٔ بازگشت فایل: اعلان به کارکنان + پاسخ‌های بات ───
-
     case 'homework_returned':
       return [
         '📤 نتیجهٔ تکلیف بازگشت',
@@ -700,8 +660,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         '',
         'فایل نتیجه در پروندهٔ دانش‌آموز (تایم‌لاین) ثبت شد.'
       ].filter((l) => l !== '').join('\n');
-
-    // ─── m151 — مدارک بله: درخواست مدارک از خانواده + پاسخ‌های بات ───
 
     case 'doc_request_sent':
       return [
@@ -792,8 +750,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         'کد اتصال خانواده را از دفتر مرکز بگیرید و همین‌جا بفرستید تا چت شما متصل شود.'
       ].join('\n');
 
-    // ─── بات نقش‌محور CRM ───
-
     case 'bot_contact': {
       const phone = (vars.phone ?? '').trim();
       const head = phone
@@ -880,8 +836,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         'دسترسی شما فقط به گزارش‌های تجمیعی است (بدون اطلاعات شخصی).'
       ].join('\n');
 
-    // ─── بات نقش‌محور نسخهٔ ۲ ───
-
     case 'bot_services':
       return [
         `🌟 خدمات ${clinic}`,
@@ -942,8 +896,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         vars.senderName ? `— ${vars.senderName}` : undefined
       ].filter((l): l is string => l !== undefined && l !== '').join('\n');
 
-    // ─── تایم‌لاین و گزارش‌نویسی: چک‌لیست خانواده + تصحیح تمرین ───
-
     case 'bot_checklist_assigned':
       return [
         '📝 چک‌لیست خانگی جدید',
@@ -987,17 +939,12 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
       ].join('\n');
 
     default: {
-      // exhaustive guard — اضافه شدن قالب جدید بدون رندر، در typecheck می‌گیرد
       const never: never = id;
       return String(never);
     }
   }
 }
 
-/**
- * رندر پیام «برنامه کلاس‌ها» برای دستورهای /today و /week بات — pure.
- * entries خالی → پیام «برنامه‌ای ندارید» با همان عنوان.
- */
 export function renderScheduleMessage(opts: {
   title: string;            // مثلاً «برنامه امروز شما — شنبه ۱۴ مهر ۱۴۰۴»
   entries: ScheduleEntry[];
@@ -1020,12 +967,6 @@ export function renderScheduleMessage(opts: {
   return [head.trim(), '', ...body].join('\n');
 }
 
-// ───────────── بات اطلاع‌رسان ─────────────
-
-/**
- * بدنهٔ چندخطی «خلاصهٔ روز» (بدون عنوان — عنوان در قالب صف است) — pure.
- * همان قالب ردیف‌های renderScheduleMessage؛ برای صف‌گذاری با templateهای digest_* استفاده می‌شود.
- */
 export function renderDigestBody(entries: ScheduleEntry[]): string {
   if (entries.length === 0) return '🕐 موردی برای امروز ثبت نشده است.';
   return entries
@@ -1038,28 +979,20 @@ export function renderDigestBody(entries: ScheduleEntry[]): string {
     .join('\n');
 }
 
-/** یک آیتم پیگیری در پیام بات */
 export interface FollowupListItem {
   id: string;
   title: string;
-  /** برچسب جلالی مهلت — null = بدون مهلت */
   dueLabel: string | null;
 }
 
-/** گروه‌بندی §13.4 به‌صورت از پیش محاسبه‌شده (خروجی groupFollowUpsForBot) */
 export interface FollowupListGroups {
   overdue: FollowupListItem[];
   today: FollowupListItem[];
   week: FollowupListItem[];
   future: FollowupListItem[];
-  /** بازِ بی‌مهلت */
   open: FollowupListItem[];
 }
 
-/**
- * پیام «پیگیری‌های من» بات — گروه‌بندی عقب‌افتاده/امروز/هفته/بدون مهلت — pure.
- * هیچ گروهی → پیام «میزی خالی».
- */
 export function renderFollowupsMessage(opts: {
   title: string;
   groups: FollowupListGroups;
@@ -1097,7 +1030,6 @@ export function renderFollowupsMessage(opts: {
   return sections.join('\n');
 }
 
-/** آمار حضور یک فرزند در بازهٔ گزارش */
 export interface AttendanceChildSummary {
   name: string;
   present: number;
@@ -1106,7 +1038,6 @@ export interface AttendanceChildSummary {
   cancelled: number;
 }
 
-/** پیام «حضور فرزند» بات — یک خط برای هر فرزند — pure */
 export function renderAttendanceSummary(opts: {
   title: string;
   children: AttendanceChildSummary[];
@@ -1128,7 +1059,6 @@ export function renderAttendanceSummary(opts: {
   return [head, '', ...lines].join('\n');
 }
 
-/** پیام «وضعیت مرکز» بات (مدیر/منشی) — pure */
 export function renderCenterStatus(opts: {
   title: string;
   sessionsToday: number;
@@ -1137,7 +1067,6 @@ export function renderCenterStatus(opts: {
   waitlistOpen: number;
   followupsOverdue: number;
   followupsToday: number;
-  /** — سنجه‌های چرخهٔ استاندارد پرونده */
   pendingChecklists?: number;
   sessionsWithoutReport?: number;
   clinicName?: string;
@@ -1155,15 +1084,11 @@ export function renderCenterStatus(opts: {
   return [head, '', ...lines].join('\n');
 }
 
-// ───────────── بات نقش‌آگاه ─────────────
-
-/** یک ردیف نتیجهٔ /search — عمداً بدون national_id/تلفن (PII در پنل می‌ماند) */
 export interface BotSearchItem {
   name: string;
   grade: string | null;
 }
 
-/** پیام نتیجهٔ جستجوی دانش‌آموز در بات — pure */
 export function renderSearchResults(opts: {
   title: string;
   items: BotSearchItem[];
@@ -1180,7 +1105,6 @@ export function renderSearchResults(opts: {
   return [head, '', ...lines].join('\n');
 }
 
-/** یک ردیف «برنامهٔ مرکز» — یک نوبت با متخصص و دانش‌آموزانش */
 export interface CenterScheduleRow {
   timeLabel: string;
   staffName: string;
@@ -1188,13 +1112,8 @@ export interface CenterScheduleRow {
   cancelled: boolean;
 }
 
-/** سقف ردیف‌های «برنامهٔ مرکز» — پیام بات باید جمع‌وجور بماند */
 export const CENTER_SCHEDULE_MAX_ROWS = 12;
 
-/**
- * پیام «برنامهٔ مرکز» (/center — فقط مدیر/منشی) — pure.
- * مرتب‌سازی بر اساس ساعت؛ سقف ۱۲ ردیف + شمارندهٔ ادامه با ارجاع به بورد پنل.
- */
 export function renderCenterSchedule(opts: {
   title: string;
   rows: CenterScheduleRow[];
@@ -1223,25 +1142,15 @@ export function renderCenterSchedule(opts: {
   return [head, '', ...body].join('\n') + tail;
 }
 
-// ───────────── لیست انتظار ↔ بات ─────────────
-
-/** یک ردیف «لیست انتظار» در بات */
 export interface WaitlistListItem {
   name: string;
   service: string | null;
   urgent: boolean;
-  /** روز کاملِ سپری‌شده از ثبت — صفر = امروز */
   daysWaiting: number;
 }
 
-/** سقف ردیف‌های «لیست انتظار» در پیام بات */
 export const WAITLIST_LIST_MAX_ROWS = 8;
 
-/**
- * پیام «لیست انتظار» (/waitlist — فقط مدیر/منشی) — pure.
- * ترتیب ورودی همان ترتیب پنل است (orderWaitlist دامنه — قبلاً اعمال شده)؛
- * سقف ۸ ردیف + شمارندهٔ کل.
- */
 export function renderWaitlistList(opts: {
   title: string;
   items: WaitlistListItem[];
@@ -1271,9 +1180,6 @@ export function renderWaitlistList(opts: {
   return [head, '', ...body].join('\n') + tail;
 }
 
-// ───────────── شاخص سنجش («هدف سنجش» — هماهنگ با داشبورد سایت) ─────────────
-
-/** یک هدف سنجش برای پیام بات — آینهٔ سبک DashboardScreeningGoalItem */
 export interface BotScreeningGoalItem {
   periodLabel: string;
   target: number;
@@ -1283,10 +1189,8 @@ export interface BotScreeningGoalItem {
   status: 'active' | 'upcoming' | 'past';
 }
 
-/** سقف ردیف هدف در پیام بات */
 export const SCREENING_GOAL_MAX_ROWS = 10;
 
-/** پیام «هدف سنجش» برای مدیر/منشی — pure؛ همان اعداد داشبورد */
 export function renderScreeningGoal(opts: {
   title: string;
   todayCount: number;

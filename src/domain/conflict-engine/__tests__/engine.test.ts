@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — engine
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// ۹ تست هسته pure — بدون نیاز به Miniflare
-
 import { describe, expect, it } from 'vitest';
 import { findOverlaps } from '../engine';
 import type { ExistingAppointment, ProposedWindow } from '../engine';

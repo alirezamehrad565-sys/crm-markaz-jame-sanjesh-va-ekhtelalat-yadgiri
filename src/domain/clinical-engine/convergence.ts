@@ -1,24 +1,9 @@
-/**
- * موتور بالینی — هم‌گرایی چندمنبعی (T6/m148-b — طرح واحد §۳ ردیف «گزارش هم‌گرایی»)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// اصل ۳ طرح واحد — «پشت‌پردهٔ نامرئی»: ماتریس منابع، وزن‌ها و امتیازها هرگز به درمانگر
-// نشان داده نمی‌شود؛ خروجی این ماژول فقط سه حالت خوانا («هم‌گرا» / «تنها» / «واگرا») و
-// یک جملهٔ دلالت فارسی برای هر فرضیهٔ رتبه‌خورده است — بدون هیچ عدد و مکانیک.
-// جمع‌آوری منابع (کدام ابزار از کدام منبع آمد و آیا شواهد همان‌جهت دارد) در infer.ts و
-// «در همان یک محاسبه» انجام می‌شود (بدون گذر دوم روی رویدادها)؛ این ماژول فقط
-// طبقه‌بندی خوانا + جدول تک‌منبع طبقه‌بندی کلید ابزار → منبع را دارد.
-
 import type { EvidenceEvent } from './types';
 import { batteryDef } from './instruments';
 
-// ───────────── منابع مستقل هم‌گرایی ─────────────
-
-/** پنج منبع مستقل — هر بستهٔ تجمیعی = یک منبع (خودِ informant)، هرگز چند منبع */
 export const CONVERGENCE_SOURCES = ['family', 'teacher', 'test', 'probe', 'clinician'] as const;
 export type ConvergenceSource = (typeof CONVERGENCE_SOURCES)[number];
 
-/** برچسب فارسی منابع — در جملهٔ دلالت می‌آید (خوانا، بدون کلید فنی) */
 export const CONVERGENCE_SOURCE_FA: Record<ConvergenceSource, string> = {
   family: 'خانواده',
   teacher: 'مدرسه',
@@ -27,37 +12,18 @@ export const CONVERGENCE_SOURCE_FA: Record<ConvergenceSource, string> = {
   clinician: 'چک‌لیست ملاکی'
 };
 
-/** سه حالت خوانا — هیچ حالت عددی/وزنی وجود ندارد */
 export type ConvergenceState = 'هم‌گرا' | 'تنها' | 'واگرا';
 
-/** یک آیتم هم‌گرایی — شکل کلید افزودنی `convergence` در InferenceOutput */
 export interface ConvergenceItem {
   targetKey: string;
   state: ConvergenceState;
-  /** یک جملهٔ دلالت فارسی — آمادهٔ نمایش، بدون عدد و وزن */
   implicationFa: string;
 }
 
-// ───────────── کلیدهای رویدادهای چند-ابزاری (تک‌منبع قرارداد) ─────────────
-
-/** سنجهٔ انطباق روزمره (T5/m150) — مصرف مشترک: تفکیک ID/BIF در infer و جدول منابع این‌جا */
 export const ID_ADAPT_EVENT_KEY = 'ce-id-adapt-v1';
 
-/** پکیج فرم جامع خانواده (T5/m150) — کامپوننت‌هایش ذاتاً منبع خانواده‌اند: یک منبع، نه چند منبع */
 export const COMPOSITE_FAMILY_EVENT_KEY = 'ce-comp-family-v2';
 
-/**
- * جدول طبقه‌بندی کلید ابزار → منبع مستقل (تک‌منبع قرارداد T6).
- *  - family: شرح‌حال (هر دو نسخه)، SDQ/SNAP/SCARED والد (و legacy sdq-parent)، سنجهٔ
- *    انطباق روزمره، پکیج جامع خانواده. کامپوننت‌های پکیج (snap-p/sdq-p/scared/id-adapt)
- *    ذاتاً در همین جدول خانواده‌اند — یعنی پکیج هرگز چند منبع مستقل نمی‌سازد.
- *  - teacher: SDQ/SNAP معلم + پکیج جامع معلم (T7 — از همین موج در جدول ثبت است تا هرگز
- *    منبع جدایی نسازد) + فال‌بک مخاطب «معلم» برای کلیدهای آینده.
- *  - test: خروجی موتور وکسلر ۴ (engine_output).
- *  - probe: سه پروب عملکردی.
- *  - clinician: چک‌لیست‌های ملاکی آزماینده (سه SLD، odd، asd، speech) — مخاطب «both» آنها
- *    آزماینده است.
- */
 const SOURCE_BY_TOOL: Record<string, ConvergenceSource> = {
   'ce-anamnesis-v3': 'family',
   'ce-anamnesis-v2': 'family',
@@ -82,11 +48,6 @@ const SOURCE_BY_TOOL: Record<string, ConvergenceSource> = {
   'ce-speech-criteria-v1': 'clinician'
 };
 
-/**
- * منبع مستقل یک کلید ابزار — ناشناخته → null (بی‌نقش در هم‌گرایی).
- * کلیدهای ناشناختهٔ آینده با مخاطب «معلم» (batteryDef) خودکار معلم شمرده می‌شوند
- * («any teacher-audience event») تا فرم جامع معلم T7 بدون تغییر این‌جا بنشیند.
- */
 export function convergenceSourceOfTool(toolKey: string): ConvergenceSource | null {
   const direct = SOURCE_BY_TOOL[toolKey];
   if (direct) return direct;
@@ -95,20 +56,6 @@ export function convergenceSourceOfTool(toolKey: string): ConvergenceSource | nu
   return null;
 }
 
-// ───────────── طبقه‌بندی خوانا — سه حالت + جملهٔ دلالت ─────────────
-
-/**
- * طبقه‌بندی خوانا برای یک هدف رتبه‌خورده از نقشهٔ منابع همان هدف.
- * ورودی (از infer — همان یک محاسبه):
- *   positive — منابعی که شواهد همان‌جهت برای این هدف دارند؛
- *   withData — منابعی که دادهٔ مرتبط این هدف را دارند (مثبت یا بی‌نشانه).
- * خروجی:
- *   ≥۲ منبع مستقل مثبت → «هم‌گرا»
- *   دقیقاً یک منبع مثبت + منبعِ دارای داده اما بی‌نشانه → «واگرا» (منابع هم‌رأی نیستند)
- *   دقیقاً یک منبع مثبت بدون مخالفت → «تنها»
- *   بدون منبع مثبت → null (فرضیهٔ بی‌شاهد — چیزی برای گفتن نیست)
- * جملهٔ دلالت فقط نام منابع را به فارسی می‌گوید — هیچ وزن/امتیازی در آن نیست.
- */
 export function convergenceItemOf(
   targetKey: string,
   targetTitle: string,
@@ -144,14 +91,8 @@ export function convergenceItemOf(
   };
 }
 
-/** سطح انطباق روزمره از رویداد ce-id-adapt-v1 — قرارداد باندهای T5 (خواندن رنگ/برچسب باند) */
 export type AdaptLevel = 'low' | 'border' | 'normal' | 'unknown';
 
-/**
- * سطح انطباق از آخرین رویداد سنجه (نسخهٔ تکی یا کامپوننت پکیج — هر دو با همین کلید می‌آیند).
- * رویداد بالاتر = انطباق بهتر؛ باند danger («پایین — نیاز به بررسی») = low.
- * بدون رویداد/زیرمقیاس → unknown («normal-or-absent» قواعد ID/BIF همین را می‌گیرد).
- */
 export function idAdaptLevelOfEvent(event: EvidenceEvent | undefined | null): AdaptLevel {
   const ss = event?.analysis?.subscaleScores?.find((s) => s.id === 'id_adapt') ?? null;
   if (!ss) return 'unknown';

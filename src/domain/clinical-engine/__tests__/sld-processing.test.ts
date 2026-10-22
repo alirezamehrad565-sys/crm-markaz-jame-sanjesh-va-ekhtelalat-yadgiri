@@ -1,18 +1,6 @@
-/**
- * تست‌های m159 — هم‌گرایی پردازشی SLD (رویکرد پردازش اطلاعات) + سناریوهای تکمیلی ID
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// سطر قرارداد (طرح m159):
-//  ۱) قاعدهٔ پردازشی SLD هرگز از وکسلر تنها سناریو نمی‌سازد — فقط با شواهد تحصیلی هم‌زمان
-//  ۲) مسیر فعال ID بر تقویت SLD مقدم است (عدم هم‌پوشانی)
-//  ۳) FSIQ ۷۱–۷۵ + انطباق پایین → پرچم SEM؛ FSIQ ≤۷۰ بدون انطباق → اقدام ثبت سنجه
-//  ۴) بازهٔ BIF → یادداشت احتیاط در متن شاهد
-
 import { describe, it, expect } from 'vitest';
 import { runInference } from '../infer';
 import type { EvidenceEvent } from '../types';
-
-// ───────── سازنده‌ها ─────────
 
 const SLD_READ_BANDS = [
   { max: 10, label: 'در محدودهٔ انتظار', color: 'ok' },
@@ -43,7 +31,6 @@ function sldReadDanger(eventId: string): EvidenceEvent {
   };
 }
 
-/** رویداد وکسلر با پروفایل کامل (شکل buildWechslerProfile — فقط فیلدهای مصرفی infer) */
 function w4Profile(opts: {
   eventId?: string;
   fsiq: number;
@@ -76,7 +63,6 @@ function w4Profile(opts: {
   };
 }
 
-/** سنجهٔ انطباق روزمره (ce-id-adapt-v1) — رنگ زیرمقیاس تعیین سطح انطباق */
 function idAdapt(color: 'ok' | 'warn' | 'danger'): EvidenceEvent {
   return {
     eventId: 'adapt',
@@ -98,8 +84,6 @@ function idAdapt(color: 'ok' | 'warn' | 'danger'): EvidenceEvent {
   };
 }
 
-// ───────── آزمون‌ها ─────────
-
 describe('m159 — هم‌گرایی پردازشی SLD', () => {
   it('الگوی هم‌گرا: چک‌لیست خواندن danger + WMI/PSI ضعیف + VCI سالم → شاهد پردازشی با تقابل و هم‌گرای دو منبع', () => {
     const out = runInference([
@@ -113,7 +97,6 @@ describe('m159 — هم‌گرایی پردازشی SLD', () => {
     expect(ev!).toContain('حافظهٔ فعال و سرعت پردازش');
     expect(ev!).toContain('درک کلامی');
     expect(ev!).toContain('رویکرد پردازش اطلاعات');
-    // دو منبع مثبت (ملاکی + آزمون) → هم‌گرا
     const conv = (out.convergence ?? []).find((c) => c.targetKey === 'dyslexia');
     expect(conv?.state).toBe('هم‌گرا');
   });
@@ -146,7 +129,6 @@ describe('m159 — هم‌گرایی پردازشی SLD', () => {
     ]);
     expect(out.referralFlags.some((f) => f.includes('خط قرمز — مسیر ناتوانی هوشی'))).toBe(true);
     const h = out.ranked.find((x) => x.targetKey === 'dyslexia');
-    // فرضیهٔ تحصیلی بدون تقویت وکسلری می‌ماند
     expect(h?.evidenceFa.some((t) => t.includes('الگوی هم‌گرا با دشواری')) ?? false).toBe(false);
   });
 });
@@ -158,7 +140,6 @@ describe('m159 — سناریوهای تکمیلی ID', () => {
       idAdapt('danger')
     ]);
     expect(out.referralFlags.some((f) => f.includes('۷۱–۷۵') && f.includes('SEM'))).toBe(true);
-    // مسیر ID خط قرمز اصلی فعال نشده
     expect(out.referralFlags.some((f) => f.includes('خط قرمز — مسیر ناتوانی هوشی'))).toBe(false);
   });
 

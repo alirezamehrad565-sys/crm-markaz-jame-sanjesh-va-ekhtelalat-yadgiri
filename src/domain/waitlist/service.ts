@@ -1,15 +1,3 @@
-/**
- * ماژول لیست انتظار — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Business logic لیست انتظار (فاز W) — مالک WRITE جدول waitlist
-// قواعد:
-// - audit هم‌تراکنش (قانون ۴)؛ متن یادداشت در audit نمی‌آید (فقط نشانه)
-// - وضعیت فقط از endpointهای اختصاصی با ماتریس pure.ts
-// - /schedule اتمیک است: پرونده (در صورت نیاز) + نوبت + به‌روزرسانی ورودی
-// در یک db.transaction — بدون duplicate منطق (createWithinTx/createStudentWithin)
-// - اعلان «نوبت جدید» بعد از commit از همان مسیر observer نوبت می‌آید
-
 import type { AuthContext, WaitlistBadge, WaitlistEntry } from '@core/shared';
 import { WAITLIST_ALERT_DAYS, WAITLIST_LIST_LIMIT, WAITLIST_QUEUE_STATUSES } from '@core/shared';
 import { ConflictError, NotFoundError, ValidationError } from '@core/errors';
@@ -104,7 +92,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
     return row;
   }
 
-  /** وضعیت ورودی را با audit هم‌تراکنش به‌روز می‌کند (endpointهای اختصاصی) */
   async function transitionEntry(
     tx: DbClient,
     row: WaitlistRow,
@@ -117,8 +104,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
       throw new ConflictError(`تغییر وضعیت از «${row.status}» به «${to}» مجاز نیست`, undefined);
     }
     const newNote = noteAppend ? appendNote(row.note, noteAppend.label, noteAppend.text) : row.note;
-    // خروج از «scheduled» یعنی نوبت متصل دیگر معتبر نیست؛ ارجاع FK باید همان‌جا
-    // خنثی شود وگرنه حذف بعدیِ آن نوبت با «FOREIGN KEY constraint failed» می‌شکند
     const leavingScheduled = row.status === 'scheduled' && to !== 'scheduled';
     await tx.execute(
       `UPDATE waitlist
@@ -168,7 +153,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
     async create(input: NewWaitlistInput, actor: AuthContext): Promise<WaitlistEntry> {
       const id = crypto.randomUUID();
       await db.transaction(async (tx) => {
-        // ورودی متصل به پرونده: مشخصات هویتی همیشه از خود دانش‌آموز پر می‌شود
         let identity = {
           firstName: input.firstName,
           lastName: input.lastName,
@@ -284,7 +268,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
           });
         }
       });
-      // read-back بعد از commit — خواندن داخل تراکنش مقدار کهنه می‌دهد
       return (await service.getById(id)) as WaitlistEntry;
     },
 
@@ -318,24 +301,20 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
         throw new ValidationError('زمان پایان باید بعد از زمان شروع باشد');
       }
 
-      // ۱) تراکنش اتمیک: پرونده (در صورت نیاز) + نوبت + ورودی
       const { studentId, createdStudent, warnings } = await db.transaction(async (tx) => {
         const row = await loadEntry(tx, id);
         if (!canTransition(row.status as WaitlistEntry['status'], 'scheduled')) {
           throw new ConflictError('این ورودی قبلاً نهایی شده و دوباره نوبت‌دهی نمی‌شود', undefined);
         }
 
-        // ۲) تطبیق دانش‌آموز: پروندهٔ متصلِ ورودی > student_id صریح > national_id > تلفن ولیّ
         let studentId: string;
         let createdStudent: boolean;
         if (row.student_id) {
-          // ورودی متصل: پرونده از قبل مشخص است (تیک «منتظر دریافت خدمت»)
           const hit = await tx.queryOne<{ id: string }>(`SELECT id FROM students WHERE id = ? AND active = 1`, [row.student_id]);
           if (!hit) throw new NotFoundError('دانش‌آموز');
           studentId = hit.id;
           createdStudent = false;
         } else if (input.studentId) {
-          // پروندهٔ صریح — فقط بررسی وجود و فعال بودن
           const hit = await tx.queryOne<{ id: string }>(`SELECT id FROM students WHERE id = ? AND active = 1`, [input.studentId]);
           if (!hit) throw new NotFoundError('دانش‌آموز');
           studentId = hit.id;
@@ -357,7 +336,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
             studentId = match.studentId;
             createdStudent = false;
           } else {
-            // ۳) پروندهٔ جدید — کد ملی لازم است (students.national_id NOT NULL UNIQUE)
             const nid = input.nationalId ?? row.national_id;
             if (!nid) {
               throw new ValidationError('برای ساخت پروندهٔ جدید کد ملی لازم است — ابتدا کد ملی را از خانواده بگیرید یا پروندهٔ موجود را انتخاب کنید');
@@ -372,7 +350,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
                 schoolId: row.school_id ?? undefined,
                 classId: row.class_id ?? undefined,
                 guardianPhone: row.phone,
-                // «دانش‌آموز به هر همکاری داده شد…»: درمانگرِ نوبتِ اول، مسئول پرونده می‌شود
                 ownerStaffId: input.staffId
               },
               actor
@@ -382,7 +359,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
           }
         }
 
-        // ۴) نوبت واقعی از همان منطق appointment-core (بدون duplicate)
         const { appointment, warnings } = await deps.appointments.createWithinTx(
           tx,
           {
@@ -395,7 +371,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
           actor
         );
 
-        // ۵) به‌روزرسانی ورودی + audit — همه در همان batch
         await tx.execute(
           `UPDATE waitlist SET status = 'scheduled', scheduled_appointment_id = ?, admitted_student_id = ?, updated_at = datetime('now') WHERE id = ?`,
           [appointment.id, studentId, id]
@@ -416,7 +391,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
         return { studentId, createdStudent, warnings };
       });
 
-      // ۶) بعد از commit: read-back + اعلان از مسیر observer نوبت (best-effort)
       const entry = await service.getById(id);
       if (!entry) throw new NotFoundError('ورودی لیست انتظار');
       const appointment = await deps.appointments.getById(entry.scheduledAppointmentId as string);
@@ -433,12 +407,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
       };
     },
 
-    /**
-     * — تیک «منتظر دریافت خدمت» روی پروندهٔ دانش‌آموز:
-     * awaiting=true → ساخت ورودی متصل (یا به‌روزرسانی منبع/نوع خدمت/اولویت همان)
-     * awaiting=false → لغو ورودی(های) باز متصل (خروج از لیست انتظار)
-     * پاسخ null = هیچ تغییری لازم نبود (idempotent)
-     */
     async setStudentWaiting(studentId: string, input: StudentWaitStatusInput, actor: AuthContext): Promise<WaitlistEntry | null> {
       const resultId = await db.transaction(async (tx): Promise<string | null> => {
         const st = await tx.queryOne<{
@@ -458,7 +426,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
 
         if (input.awaiting) {
           if (open.length > 0) {
-            // ورودی باز موجود — فقط منبع/نوع خدمت/اولویت را همگام کن (idempotent)
             const row = open[0];
             const changes: Record<string, { from: unknown; to: unknown }> = {};
             if (row.source !== input.source) changes.source = { from: row.source, to: input.source };
@@ -480,7 +447,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
             }
             return null;
           }
-          // ورودی جدید — هویت از پرونده
           if (!st.guardian_phone) {
             throw new ValidationError('برای افزودن به لیست انتظار، تلفن ولیّ در پرونده لازم است');
           }
@@ -502,7 +468,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
           return id;
         }
 
-        // awaiting=false — لغو همهٔ ورودی‌های باز متصل
         let lastId: string | null = null;
         for (const row of open) {
           const full = await loadEntry(tx, row.id);
@@ -525,7 +490,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
           label: 'رد شد',
           text: reason
         });
-        // فاز ۳ — هوک §37: رد ورودی → پیگیری با مسئول/مهلت (پیشنهاد کاربر) — همان تراکنش
         await deps.followups.createWithinTx(
           tx,
           {
@@ -545,7 +509,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
       await db.transaction(async (tx) => {
         const row = await loadEntry(tx, id);
         await transitionEntry(tx, row, 'no_show', 'waitlist.no_show', actor.staffId);
-        // فاز ۳ — هوک §37: مراجعه‌کنندهٔ نیامده → پیگیری با مسئول/مهلت — همان تراکنش
         await deps.followups.createWithinTx(
           tx,
           {
@@ -569,7 +532,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
       return (await service.getById(id)) as WaitlistEntry;
     },
 
-    // بازگشت خروجِ اشتباه به صف (رد/نیامد/انصراف → در انتظار) — تعیین وضعیت شفاف
     async reopen(id: string, note: string | undefined, actor: AuthContext): Promise<WaitlistEntry> {
       await db.transaction(async (tx) => {
         const row = await loadEntry(tx, id);
@@ -654,12 +616,7 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
 
     async onAttendanceMarked(appointmentId: string, studentId: string, status: string): Promise<void> {
       try {
-        // تأخیر هم «اولین جلسهٔ واقعی» است (دانش‌آموز آمده، فقط دیررس)
         if (status !== 'present' && status !== 'late') return;
-        // پذیرش خودکار: هم نوبتِ متصلِ کلاسیک و هم هر ورودیِ بازِ متصل به همین پرونده
-        // «پذیرش = خروج از لیست انتظار» به دستور کاربر: ورودی با اولین جلسهٔ واقعی
-        // از لیست پاک می‌شود (soft delete — تاریخچه در audit و تایم‌لاین می‌ماند) و پرونده
-        // که از قبل ساخته شده در «دانش‌آموزان» فعال دیده می‌شود.
         const rows = await db.query<{ id: string; status: string }>(
           `SELECT id, status FROM waitlist
             WHERE deleted_at IS NULL AND status IN ('waiting','called','scheduled')
@@ -686,7 +643,6 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
           log.info('waitlist.admitted', { appointmentId, waitlistId: row.id, from: row.status });
         }
       } catch (err) {
-        // ناظر هرگز عملیات اصلی (ثبت حضور) را شکست نمی‌دهد
         log.warn('waitlist.admission.observer.failed', {
           error: err instanceof Error ? err.message : String(err)
         });

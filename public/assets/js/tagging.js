@@ -1,10 +1,3 @@
-/**
- * رابط برچسب‌گذاری
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// tagging.js — کامپوننت برچسب دانش‌آموز: چیپ + ویرایشگر مودال
-// دسته‌ها: نوع اختلال / پایه تحصیلی / نوع مدرسه / سفارشی
-
 import { api } from './api.js';
 import { el, icon, openModal, confirmModal, toast, toastError } from './ui.js';
 
@@ -21,7 +14,6 @@ function fa(n) {
   return String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 }
 
-/** دریافت همه برچسب‌های فعال — در خطا فهرست خالی برمی‌گردد (برچسب‌ها حیاتی نیستند) */
 export async function fetchTags() {
   try {
     const res = await api.get('/api/tags?active=true');
@@ -31,7 +23,6 @@ export async function fetchTags() {
   }
 }
 
-/** دریافت برچسب‌های فعال یک دانش‌آموز */
 export async function fetchStudentTags(studentId) {
   try {
     const res = await api.get(`/api/students/${studentId}/tags`);
@@ -41,7 +32,6 @@ export async function fetchStudentTags(studentId) {
   }
 }
 
-/** یک چیپ برچسب — رنگ از دسته یا color اختصاصی */
 export function tagChip(tag, { removable = false, onRemove } = {}) {
   const chip = el('span', {
     class: `tag-chip tag-chip--${tag.category}`,
@@ -56,7 +46,6 @@ export function tagChip(tag, { removable = false, onRemove } = {}) {
   return chip;
 }
 
-/** چیپ‌های فشرده برای سلول جدول — حداکثر n عدد + «+n» */
 export function tagChipsPreview(tags, max = 3) {
   if (!tags || tags.length === 0) return el('span', { class: 'cell-sub' }, '—');
   const shown = tags.slice(0, max).map((t) => tagChip(t));
@@ -64,11 +53,6 @@ export function tagChipsPreview(tags, max = 3) {
   return el('div', { class: 'tag-chips' }, ...shown);
 }
 
-/**
- * ویرایشگر برچسب‌های دانش‌آموز — مودال با بخش‌های دسته‌بندی
- * opts: { student, tags (همه فعال), current (برچسب‌های فعلی دانش‌آموز),
- * canCreateTag (مدیر), onSaved(newTags) }
- */
 export function openTagEditor({ student, tags, current, canCreateTag = false, onSaved }) {
   const selected = new Set(current.map((t) => t.id));
   let allTags = [...tags];
@@ -86,10 +70,6 @@ export function openTagEditor({ student, tags, current, canCreateTag = false, on
     }
   }
 
-  /**
-   * — حذف برچسب (غیرفعال‌سازی نرم — فقط مدیر).
-   * از فهرست انتخاب حذف می‌شود؛ تاریخچهٔ پرونده‌ها حفظ می‌ماند.
-   */
   async function removeTag(t) {
     const usage = t.usageCount ?? 0;
     const ok = await confirmModal({
@@ -128,7 +108,6 @@ export function openTagEditor({ student, tags, current, canCreateTag = false, on
           onclick: () => toggle(t.id, btn)
         }, el('span', { class: 'tag-chip__dot', 'aria-hidden': 'true' }), t.name);
         if (t.color) btn.style.setProperty('--tag-color', t.color);
-        // دکمهٔ حذف برچسب فقط برای مدیر
         if (canCreateTag) {
           const delBtn = el('button', {
             type: 'button',
@@ -152,7 +131,6 @@ export function openTagEditor({ student, tags, current, canCreateTag = false, on
       ));
     }
 
-    // بخش ساخت برچسب (فقط مدیر)
     if (canCreateTag) {
       const nameInput = el('input', { class: 'input', placeholder: 'نام برچسب جدید…', maxlength: '60' });
       const catSel = el('select', { class: 'select' },

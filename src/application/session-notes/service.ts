@@ -1,23 +1,3 @@
-/**
- * سرویس گزارش جلسه و اقدام بعدی — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// فاز ۲ (گزارش جلسه — Master Spec v2.0 §8) — مالک WRITE فقط سه ستون
-// session_note / next_action / session_type_id در appointment_students
-// (attendance و بقیهٔ ستون‌ها دست ماژول‌های مالک خودشان است — همان الگوی attendance)
-// قواعد:
-// - نویسنده: همکارِ همان نوبت یا مدیر؛ منشی/سایرین ۴۰۳ (§8.2)
-// - خواندن: همهٔ نقش‌های داخلی آزاد است
-// - نوشتن فقط روی نوبتِ غیرلغوشده (لغوشده → ۴۰۹)
-// - جایگزینی کامل متن (نه append)؛ متن خالی = پاک کردن گزارش
-// - 'none' در ورودی = «هیچ اقدامی» → در DB به‌صورت NULL ذخیره می‌شود (D7)
-// - PII §20: متن گزارش هرگز در audit نمی‌آید — فقط طول متن + کد اقدام
-// - audit هم‌تراکنش (قانون ۴)؛ بدون bump نسخه نوبت (ستون‌های مستقل)
-// فاز ۳ (هوک §37): ورود به next_action=follow_up در همان تراکنش یک پیگیری
-// متصل به همان student/appointment می‌سازد (مسئول = نویسنده، مهلت پیش‌فرض +۷ روز).
-// فقط روی «ورود» — قبلاً follow_up بود دوباره ساخته نمی‌شود؛ خروج از follow_up
-// پیگیری موجود را تغییر نمی‌دهد (مدیریت وضعیت پیگیری با PATCH خودش است).
-
 import type { AuthContext, NextAction } from '@core/shared';
 import { FOLLOWUP_DEFAULT_DUE_DAYS, SESSION_NOTE_MAX } from '@core/shared';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
@@ -30,24 +10,18 @@ export interface SessionNoteDeps {
   db: DbClient;
   audit: AuditWriter;
   logger: Logger;
-  /** فاز ۳ — هوک ساخت پیگیری در همان تراکنش PUT note */
   followups: Pick<FollowUpsService, 'createWithinTx'>;
 }
 
-/** رکورد گزارش جلسه — شکل پاسخ API */
 export interface SessionNoteRecord {
   appointmentId: string;
   studentId: string;
-  /** NULL = ثبت‌نشده/پاک‌شده */
   sessionNote: string | null;
-  /** NULL = هیچ اقدامی ('none') */
   nextAction: NextAction | null;
 }
 
 export interface SaveSessionNoteInput {
-  /** متن کامل گزارش — پس از trim؛ خالی = پاک کردن */
   sessionNote: string;
-  /** 'none' = پاک کردن اقدام */
   nextAction: NextAction;
 }
 
@@ -64,7 +38,6 @@ interface SessionNoteRow {
   next_action: string | null;
 }
 
-/** 'none' → NULL (قرارداد ذخیره‌سازی D7) */
 export function normalizeNextAction(value: NextAction): NextAction | null {
   return value === 'none' ? null : value;
 }
@@ -97,7 +70,6 @@ export function createSessionNotesService(deps: SessionNoteDeps): SessionNotesSe
           throw new ConflictError('نوبت لغوشده گزارش جلسه نمی‌گیرد');
         }
 
-        // قاعدهٔ نویسنده (§8.2): همکارِ همان نوبت یا مدیر — بقیه ۴۰۳
         const isOwner = row.staff_id === actor.staffId;
         if (actor.role !== 'manager' && !isOwner) {
           throw new ForbiddenError('ثبت گزارش جلسه فقط توسط همکارِ همان نوبت یا مدیر مجاز است');
@@ -106,7 +78,6 @@ export function createSessionNotesService(deps: SessionNoteDeps): SessionNotesSe
         const prevNote = row.session_note ?? '';
         const prevAction = (row.next_action ?? null) as NextAction | null;
 
-        // no-op idempotent — همان محتوا بدون تغییر
         if (prevNote === note && prevAction === nextAction) {
           return { appointmentId, studentId, sessionNote: prevNote.length > 0 ? prevNote : null, nextAction: prevAction };
         }
@@ -116,7 +87,6 @@ export function createSessionNotesService(deps: SessionNoteDeps): SessionNotesSe
           [note.length > 0 ? note : null, nextAction, appointmentId, studentId]
         );
 
-        // PII §20 — فقط طول متن و کد اقدام؛ نه خود متن
         const created = prevNote.length === 0 && note.length > 0;
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -129,7 +99,6 @@ export function createSessionNotesService(deps: SessionNoteDeps): SessionNotesSe
           }
         });
 
-        // ─── فاز ۳ — هوک §37: ورود به follow_up → ساخت پیگیری در همین تراکنش ───
         if (nextAction === 'follow_up' && prevAction !== 'follow_up') {
           const studentLabel = (row.student_name ?? '').trim();
           await deps.followups.createWithinTx(

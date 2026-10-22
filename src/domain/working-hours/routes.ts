@@ -1,9 +1,3 @@
-/**
- * ماژول ساعات کاری — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Working-hours REST endpoints — no business logic here
-
 import type { AppHono } from '@core/shared';
 import { NewWorkingHourSchema, ReplaceWeekSchema, UuidSchema } from '@core/shared';
 import { getAuthContext } from '@core/auth';
@@ -11,7 +5,6 @@ import { ValidationError } from '@core/errors';
 import type { WorkingHoursService } from './types';
 
 export function registerRoutes(app: AppHono, service: WorkingHoursService): void {
-  // ─── list (by staff, or everything) ───
   app.get('/api/working-hours', async (c) => {
     const staffId = c.req.query('staff_id');
     if (staffId) {
@@ -23,7 +16,6 @@ export function registerRoutes(app: AppHono, service: WorkingHoursService): void
     return c.json({ data: items }, 200);
   });
 
-  // ─── add single range ───
   app.post('/api/working-hours', async (c) => {
     const actor = getAuthContext(c);
     const body = NewWorkingHourSchema.parse(await c.req.json<unknown>());
@@ -35,7 +27,6 @@ export function registerRoutes(app: AppHono, service: WorkingHoursService): void
     return c.json({ data: item }, 201);
   });
 
-  // ─── bulk replace weekly plan (must be registered before /:id if any) ───
   app.put('/api/working-hours/staff/:staffId', async (c) => {
     const actor = getAuthContext(c);
     const staffId = UuidSchema.parse(c.req.param('staffId'));
@@ -48,7 +39,6 @@ export function registerRoutes(app: AppHono, service: WorkingHoursService): void
     return c.json({ data: items }, 200);
   });
 
-  // ─── delete single range ───
   app.delete('/api/working-hours/:id', async (c) => {
     const actor = getAuthContext(c);
     await service.remove(c.req.param('id'), actor);

@@ -1,16 +1,8 @@
-/**
- * تست‌های واحد — pure
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// pure.test.ts — منطق خالص لیست انتظار (فاز W):
-// ماتریس وضعیت، ترتیب خودکار/دستی، هشدار سررسید، تطبیق دانش‌آموز، append یادداشت
-
 import { describe, it, expect } from 'vitest';
 import { WAITLIST_TRANSITIONS, canTransition, orderWaitlist, isOverdue, matchStudent, appendNote } from '../pure';
 
 describe('ماتریس ترنزیشن وضعیت', () => {
   it('waiting می‌تواند به همهٔ حالت‌های فعال/نهایی برود', () => {
-    // admitted هم اضافه شد: جلسهٔ واقعی برای پروندهٔ متصل، پذیرش مستقیم ثبت می‌کند
     expect(WAITLIST_TRANSITIONS.waiting).toEqual(['called', 'scheduled', 'admitted', 'rejected', 'no_show', 'cancelled']);
     expect(canTransition('called', 'admitted')).toBe(true);
   });
@@ -22,10 +14,8 @@ describe('ماتریس ترنزیشن وضعیت', () => {
   });
 
   it('وضعیت‌های نهایی — فقط admitted بن‌بست است؛ خروج‌ها به waiting بازمی‌گردند', () => {
-    // admitted نهایی است (پروندهٔ واقعی ساخته شده)
     expect(WAITLIST_TRANSITIONS.admitted).toEqual([]);
     expect(canTransition('admitted', 'waiting')).toBe(false);
-    // خروج‌های اشتباه قابل بازگشت‌اند (بازگشت به صف انتظار)
     for (const s of ['rejected', 'no_show', 'cancelled'] as const) {
       expect(WAITLIST_TRANSITIONS[s]).toEqual(['waiting']);
       expect(canTransition(s, 'waiting')).toBe(true);

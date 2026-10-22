@@ -1,16 +1,6 @@
-/**
- * احراز هویت هسته — JWT، رمز، کلید API و گارد نقش — نشست JWT پنل
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// JWT نشست صفحه ورود (HS256 با WebCrypto)
-// جریان: POST /api/auth/login → signSessionJwt → فرانت در Authorization: Bearer می‌فرستد
-// middleware ترتیب: dev bypass → API key → session JWT → Cloudflare Access JWT
-// عمر توکن: ۳۰ روز — محیط آموزشی/داخلی؛ امنیت اولویت بالا نیست (تصمیم کاربر)
-
 export interface SessionJwtPayload {
   sub: string;              // staff id
   name: string;             // نام نمایشی
-  /** — supervisor (ناظر اداره) از role_ext می‌آید — COALESCE(role_ext, role) در login */
   role: 'manager' | 'therapist' | 'secretary' | 'supervisor';
   email: string;            // legacy — ممکن است synthetic باشد
   iat: number;
@@ -44,7 +34,6 @@ async function hmacKey(secret: string): Promise<CryptoKey> {
   );
 }
 
-/** ساخت توکن نشست — secret از env.AUTH_SECRET (fallback توسعه‌ای) */
 export async function signSessionJwt(
   staff: { id: string; fullName: string; role: SessionJwtPayload['role']; email: string },
   secret: string
@@ -71,7 +60,6 @@ export async function signSessionJwt(
   return { token, expiresAt: new Date(payload.exp * 1000).toISOString() };
 }
 
-/** verify امضا + انقضا — نامعتبر → null (تصمیم 401 با فراخواننده) */
 export async function verifySessionJwt(token: string, secret: string): Promise<SessionJwtPayload | null> {
   const parts = token.split('.');
   if (parts.length !== 3) return null;

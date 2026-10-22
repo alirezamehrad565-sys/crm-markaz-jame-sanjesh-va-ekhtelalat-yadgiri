@@ -1,16 +1,8 @@
-/**
- * تست‌های واحد — digest
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست pure برنامه‌ریز «خلاصهٔ روز» و «یادآور پیگیری» — بدون دیتابیس
-// مرزهای گروه‌بندی با now تزریق‌شده — قطعی (بدون وابستگی به ساعت اجرا)
-
 import { describe, expect, it } from 'vitest';
 import { groupFollowUpsForBot, followupsNudgeBody } from '../digest';
 import { renderFollowupsMessage, renderDigestBody, renderAttendanceSummary, renderCenterStatus } from '@core/notify';
 import type { FollowUp } from '@core/shared';
 
-/** رکورد پیگیری حداقلی برای تست (فقط فیلدهای مصرفی گروه‌بندی مهم است) */
 function fu(overrides: Partial<FollowUp> & { id: string }): FollowUp {
   return {
     entityType: 'student',
@@ -31,7 +23,6 @@ function fu(overrides: Partial<FollowUp> & { id: string }): FollowUp {
   } as FollowUp;
 }
 
-/** now ثابت — ۱۴ مهر ۱۴۰۴، ۰۸:۰۰ تهران (04:30Z) */
 const NOW = new Date('2026-10-06T04:30:00.000Z');
 
 describe('groupFollowUpsForBot (pure) — گروه‌بندی §13.4', () => {

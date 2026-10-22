@@ -1,16 +1,3 @@
-/**
- * تست‌های e2e — -dashboard
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e--dashboard.test.ts — (0.50.0): بازطراحی داشبورد
-// پوشش:
-// ۱) دانش‌افزایی — خواندن همهٔ نقش‌ها؛ ساخت دفتر (مدیر/منشی)؛ حذف فقط مدیر؛
-// پیش‌نویس از فهرست عمومی مخفی؛ سنجاق‌شده اول
-// ۲) تابلوی رقابتی — GET /api/dashboard/leaderboard در m140 حذف شد (مسیر مرده — تابلوی
-// پیشرفت زنده = /api/scoring/board)؛ شمارنده‌ها با «کارنامهٔ من» (/api/dashboard/me) می‌خوانند
-// ۳) کارنامهٔ من (/api/dashboard/me) — شمارنده‌ها + یادداشت جاافتاده + نوبت بعدی
-// ۴) داشبورد امروز — بدون رگرسیون (KPIها سر جا)
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { addDaysYmd, tehranTodayYmd } from '@core/shared';
 import {
@@ -25,7 +12,6 @@ import {
   MARYAM_ID
 } from '../../test/harness';
 
-/** — فردا ساعت مشخص تهران: تست «نوبت بعدی» نباید به ساعتِ اجرا وابسته باشد (رفع time-bomb) */
 function tehranTomorrowAt(hour: number, minute = 0): string {
   const ymd = addDaysYmd(tehranTodayYmd(), 1);
   const hh = String(hour).padStart(2, '0');
@@ -118,7 +104,6 @@ describe('تابلوی رقابتی و کارنامهٔ من', () => {
     const st = await createStudent(mgr, { first_name: 'سینا', last_name: 'رقابتی' });
     studentId = st.id;
 
-    // نوع رویداد ساده برای شمارش «طراحی رویداد»
     const t = await mgr.post('/api/case-events/types', {
       title: 'یادداشت مشاهدهٔ m68',
       category: 'session',
@@ -129,7 +114,6 @@ describe('تابلوی رقابتی و کارنامهٔ من', () => {
   });
 
   it('فعالیت‌های علی (۲ جلسهٔ حاضر، ۱ تمرین، ۱ رویداد، ۱ پیگیری) امتیاز ۱۱ و رتبهٔ ۱ می‌گیرد', async () => {
-    // ─── ۲ جلسهٔ امروز با «حاضر» ───
     const appt1 = await mgr.post('/api/appointments', apptBody(ALI_ID, tehranTodayAt(10), 45, [studentId]));
     expect(appt1.status).toBe(201);
     const a1 = (appt1.body as { data: { id: string } }).data.id;
@@ -141,7 +125,6 @@ describe('تابلوی رقابتی و کارنامهٔ من', () => {
     const m2 = await mgr.patch(`/api/attendance/${a2}/${studentId}`, { status: 'present' });
     expect(m2.status).toBe(200);
 
-    // ─── ۱ تمرینِ علی ───
     const ex = await ther.post('/api/exercises', {
       title: 'تمرین همخوان پایانی',
       format: 'worksheet',
@@ -150,19 +133,15 @@ describe('تابلوی رقابتی و کارنامهٔ من', () => {
     });
     expect(ex.status).toBe(201);
 
-    // ─── ۱ رویداد پروندهٔ علی ───
     const ev = await ther.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeId, values: { note: 'پیشرفت در همخوان‌ها' } });
     expect(ev.status).toBe(201);
 
-    // ─── ۱ پیگیریِ علی از مسیر واقعی: یادداشت جلسه با next_action=follow_up ───
     const note = await ther.put(`/api/appointments/${a1}/students/${studentId}/note`, {
       session_note: 'جلسهٔ اول خوب پیش رفت',
       next_action: 'follow_up'
     });
     expect(note.status).toBe(200);
 
-    // ─── شمارنده‌ها — تابلوی رقابتی قدیم حذف شده؛ از «کارنامهٔ من» می‌خوانیم ───
-    // — m140: GET /api/dashboard/leaderboard حذف شد (مسیر مرده؛ تابلوی پیشرفت زنده = /api/scoring/board)
     const deadBoard = await ther.get('/api/dashboard/leaderboard');
     expect(deadBoard.status).toBe(404);
 
@@ -181,7 +160,6 @@ describe('تابلوی رقابتی و کارنامهٔ من', () => {
     const apptId = (appt.body as { data: { id: string } }).data.id;
     await mgr.post(`/api/appointments/${apptId}/cancel`, { version: 1 });
 
-    // — m140: تابلو از /api/dashboard/leaderboard حذف شد؛ شمارش از «کارنامهٔ من» مریم
     const maryamApi = new Api(A, await loginToken(A, 'maryam'));
     const me = dataOf<{ sessions: number; score: number }>(await maryamApi.get('/api/dashboard/me'));
     expect(me.sessions).toBe(0);
@@ -204,14 +182,12 @@ describe('تابلوی رقابتی و کارنامهٔ من', () => {
     expect(me.exercises).toBe(1);
     expect(me.events).toBe(1);
     expect(me.followups).toBe(1);
-    // دو جلسهٔ حاضر؛ یکی یادداشت دارد → یکی جاافتاده
     expect(me.missingNotes).toBe(1);
     expect(me.rank?.position).toBe(1);
     expect(me.sessionsPrev).toBe(0);
   });
 
   it('نوبت بعدیِ من — اولین scheduled آینده با نام دانش‌آموز', async () => {
-    // نوبت فردا (نه امروز ۱۷:۰۰): بعد از گذر ساعتِ ثابت، نوبت «گذشته» می‌شد و تست می‌ترکید
     await mgr.post('/api/appointments', apptBody(ALI_ID, tehranTomorrowAt(10), 45, [studentId]));
     const me = dataOf<{ nextAppointment: { studentNames: string[] } | null }>(await ther.get('/api/dashboard/me'));
     expect(me.nextAppointment).not.toBeNull();

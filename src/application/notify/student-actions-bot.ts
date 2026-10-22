@@ -1,14 +1,3 @@
-/**
- * اعلان‌های کاربردی و بات‌های نقش‌آگاه بله — بات اقدامات دانش‌آموز
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// جریان «دانش‌آموزمحور» بات:
-// الف) همکاران مرکز (درمانگر/مدیر/منشی): «دانش‌آموزان فعال» → دکمهٔ نام → منوی اقدام:
-// ارسال تکلیف / پیام به خانواده / تمرین‌های او / نوبت‌های او
-// ب) معلم مدرسه: «فعالیت کلاس» — تکلیف‌های باز و تازهٔ دانش‌آموزان کلاس (فقط‌خواندنی)
-// state در bot_menu_state با flow='stu' (فهرست دانش‌آموزان + تمرین‌ها) و flow='stu_msg'
-// (فرم دو مرحله‌ای پیام خانواده). گیت دولایه: شروع + اجرا هر دو دوباره چک می‌شوند.
-
 import type { DbClient } from '@core/db';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
@@ -20,10 +9,8 @@ import type { ExerciseBankService } from '@domain/exercise-bank';
 import type { SettingsService } from '@app/settings';
 import { renderTemplate } from '@core/notify';
 
-/** حداکثر نام دانش‌آموز در فهرست همکاران (صفحه‌بندی ۶تایی روی همان) */
 export const STU_LIST_LIMIT = 30;
 const STU_PAGE_SIZE = 6;
-/** سقف نویسهٔ پیام خانواده */
 export const FAMILY_MSG_MAX = 500;
 const FAMILY_MSG_MIN = 2;
 
@@ -34,12 +21,10 @@ export interface StuBotDeps {
   notify: NotifyService;
   settings: SettingsService;
   exerciseBank: ExerciseBankService | null;
-  /** — آدرس عمومی سامانه برای لینک دانلود کاربرگ (خالی = پیام بدون لینک) */
   publicBaseUrlEnv: string | null;
   now?: () => Date;
 }
 
-/** بازیگر بات برای ثبت تکلیف/audit */
 const STU_ACTOR: AuthContext = {
   staffId: 'bale-bot',
   email: 'bale-bot@system.local',
@@ -55,9 +40,7 @@ export interface StuListItem {
 interface StuState {
   v: 1;
   flow: 'stu';
-  /** فهرست دانش‌آموزان آخرین نمای فهرست — اندیس callback به این اشاره می‌کند */
   students: StuListItem[];
-  /** تمرین‌های آخرین نمای «ارسال تکلیف» */
   exercises?: { id: string; title: string }[];
 }
 
@@ -118,8 +101,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
   const log = logger.child('stu-bot');
   const now = deps.now ?? (() => new Date());
 
-  // ───────── گیت + دامنه ─────────
-
   interface Owner {
     kind: 'staff' | 'class';
     refId: string;
@@ -141,7 +122,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     return row ? { kind: row.kind as 'staff' | 'class', refId: row.ref_id, role: row.role } : null;
   }
 
-  /** گیت همکاران مرکز — ناظر اداره محروم (بدون دادهٔ اسم‌دار) */
   async function staffGate(chatId: string): Promise<Owner | null> {
     const owner = await resolveOwner(chatId);
     if (!owner || owner.kind !== 'staff') return null;
@@ -149,7 +129,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     return owner;
   }
 
-  /** دامنهٔ فهرست: درمانگر = دانش‌آموزان جلسات خودش + پرونده‌های تحت مسئولیت؛ مدیر/منشی = همهٔ فعال (سقف ۳۰) */
   async function scopedStudents(owner: Owner): Promise<StuListItem[]> {
     if (owner.role === 'therapist') {
       return db.query<StuListItem>(
@@ -193,7 +172,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     buttons: [[{ text: '👥 دانش‌آموزان فعال', callbackData: 'stu:list' }]]
   };
 
-  /** چت‌های ولیّ یک دانش‌آموز — bot_links + prefs (الگوی /) */
   async function guardianChats(studentId: string): Promise<string[]> {
     const linkRows = await db.query<{ chat_id: string }>(
       `SELECT DISTINCT chat_id FROM bot_links
@@ -216,9 +194,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     return row?.n ?? 0;
   }
 
-  // ───────── نماها ─────────
-
-  /** «دانش‌آموزان فعال» — فهرست دکمه‌ای برای همکاران مرکز — صفحه‌بندی کامل (الگوی بانک تمرین) */
   async function list(chatId: string, page = 1): Promise<StuBotReply> {
     const owner = await staffGate(chatId);
     if (!owner) {
@@ -256,7 +231,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     };
   }
 
-  /** منوی اقدام دانش‌آموز — خلاصهٔ پرونده + چهار دکمه */
   async function menu(chatId: string, idx: number): Promise<StuBotReply> {
     const owner = await staffGate(chatId);
     if (!owner) return { text: renderTemplate('bot_my_students_denied'), buttons: null };
@@ -301,7 +275,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
           { text: '🗓 نوبت‌های او', callbackData: `stu:appts:${idx}` },
           { text: '📋 رویداد/گزارش', callbackData: `stu:tl:${idx}` }
         ],
-        // نمای چرخهٔ پرونده: تاریخچه + چک‌لیست‌های او
         [
           { text: '🕘 تاریخچه', callbackData: `stu:hist:${idx}` },
           { text: '📝 چک‌لیست‌های او', callbackData: `stu:ckl:${idx}` }
@@ -311,7 +284,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     };
   }
 
-  /** فهرست تمرین‌های منتشرشده برای ارسال (دانش‌آموز از قبل انتخاب شده) */
   async function sendExercises(chatId: string, stuIdx: number, page: number): Promise<StuBotReply> {
     const owner = await staffGate(chatId);
     if (!owner) return { text: renderTemplate('bot_my_students_denied'), buttons: null };
@@ -351,7 +323,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     };
   }
 
-  /** تأیید ارسال تکلیف */
   async function pick(chatId: string, stuIdx: number, exIdx: number): Promise<StuBotReply> {
     const owner = await staffGate(chatId);
     if (!owner) return { text: renderTemplate('bot_my_students_denied'), buttons: null };
@@ -370,7 +341,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     };
   }
 
-  /** اجرای ارسال تکلیف — همان موتور بانک تمرین (ثبت + پیام خانواده + audit) */
   async function yes(chatId: string, stuIdx: number, exIdx: number): Promise<StuBotReply> {
     const owner = await staffGate(chatId);
     if (!owner) return { text: renderTemplate('bot_my_students_denied'), buttons: null };
@@ -398,7 +368,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
       STU_ACTOR
     );
 
-    // یک لینک امضاشده برای هر فایل تمرین
     const extraLines = [`تمرین: ${exercise.title}`];
     if (exercise.description) extraLines.push(exercise.description);
     if (deps.publicBaseUrlEnv && exercise.files.length > 0) {
@@ -455,9 +424,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     };
   }
 
-  // ───────── پیام به خانواده (فرم دو مرحله‌ای) ─────────
-
-  /** شروع فرم — ولیّ متصل ندارند همین‌جا باخبر می‌شوند */
   async function msgStart(chatId: string, idx: number): Promise<StuBotReply> {
     const owner = await staffGate(chatId);
     if (!owner) return { text: renderTemplate('bot_my_students_denied'), buttons: null };
@@ -480,7 +446,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     };
   }
 
-  /** دریافت متن پیام — اعتبارسنجی + جمع‌بندی با دکمهٔ تأیید */
   async function msgFeed(chatId: string, raw: string): Promise<StuBotReply | null> {
     const st = await readStuMsgState(db, chatId);
     if (!st || st.step !== 'body') return null;
@@ -511,7 +476,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     };
   }
 
-  /** اجرای ارسال — صف bot_family_message + audit؛ گیت دولایه */
   async function msgConfirm(chatId: string): Promise<StuBotReply> {
     const owner = await staffGate(chatId);
     if (!owner) return { text: renderTemplate('bot_my_students_denied'), buttons: null };
@@ -571,7 +535,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     log.info('stu.family_message', { studentId: st.studentId, enqueued, by: owner.refId });
     await clearStuState(db, chatId);
 
-    // قالب اختصاصی پیام (قبلاً «تکلیف ثبت شد» نمایش می‌داد — اشتباه)
     return {
       text: renderTemplate('bot_family_message_sent', { studentName: st.studentName, extra: `پیام شما به ${faDigits(String(enqueued))} گفتگوی خانواده ارسال شد.` }),
       buttons: null
@@ -583,9 +546,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     return { text: '✖️ پیام لغو شد.', buttons: null };
   }
 
-  // ───────── نماهای فقط‌خواندنی ─────────
-
-  /** تمرین‌های دانش‌آموز — باز‌ها اول، بعد آخرین انجام‌شده‌ها */
   async function homework(chatId: string, idx: number): Promise<StuBotReply> {
     const owner = await staffGate(chatId);
     if (!owner) return { text: renderTemplate('bot_my_students_denied'), buttons: null };
@@ -621,7 +581,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     };
   }
 
-  /** نوبت‌های ۱۴ روز آیندهٔ دانش‌آموز — فقط‌خواندنی */
   async function appointments(chatId: string, idx: number): Promise<StuBotReply> {
     const owner = await staffGate(chatId);
     if (!owner) return { text: renderTemplate('bot_my_students_denied'), buttons: null };
@@ -655,9 +614,6 @@ export function createStudentActionsBot(deps: StuBotDeps) {
     };
   }
 
-  // ───────── فعالیت کلاس (معلم مدرسه) ─────────
-
-  /** «فعالیت کلاس» — شمارش باز + ۸ آیتم آخر کلاس؛ فقط معلم کلاس */
   async function classActivity(chatId: string): Promise<StuBotReply> {
     const owner = await resolveOwner(chatId);
     if (!owner || owner.kind !== 'class') {

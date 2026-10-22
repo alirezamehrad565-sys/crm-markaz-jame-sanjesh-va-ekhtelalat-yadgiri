@@ -1,13 +1,3 @@
-/**
- * تست‌های e2e — -student-flow
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e--student-flow.test.ts — (0.49.0): چرخهٔ سه‌لیستی دانش‌آموز
-// ۱) آرشیو: ثبت مستقیم با archived → active=0 + فهرست ?active=false + بازگشت به چرخه
-// ۲) مسئول پرونده در لحظهٔ تعریف (owner_staff_id در POST /api/students)
-// ۳) مرز «لیست دانش‌آموزهای هر معلم»: scope درمانگر روی GET /api/students + فیلتر owner_id دفتر
-// ۴) نوبت‌دهی از لیست انتظار → پروندهٔ جدید مسئولش همان درمانگر نوبت اول
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createTestApp,
@@ -56,11 +46,9 @@ describe('آرشیو (دیتابیس دانش‌آموزان نیاز ویژهٔ
     const st = (created.body as { data: StudentRow }).data;
     expect(st.active).toBe(false);
 
-    // در فهرست آرشیو هست
     const archive = await sec.get('/api/students?active=false&page_size=200');
     expect(rowsOf(archive).find((r) => r.id === st.id)).toBeTruthy();
 
-    // در فهرست فعال مرکز نیست
     const active = await sec.get('/api/students?active=true&page_size=200');
     expect(rowsOf(active).find((r) => r.id === st.id)).toBeUndefined();
   });
@@ -105,7 +93,6 @@ describe('مسئول پرونده در لحظهٔ تعریف', () => {
   });
 
   it('نوبت‌دهی از لیست انتظار برای متقاضیِ بدون پرونده — مسئول پرونده = درمانگر نوبت اول', async () => {
-    // ورودی مستقل (بدون student_id) با کد ملی
     const nid = makeNationalId();
     const entry = await sec.post('/api/waitlist', {
       first_name: 'نوبت‌گیر',

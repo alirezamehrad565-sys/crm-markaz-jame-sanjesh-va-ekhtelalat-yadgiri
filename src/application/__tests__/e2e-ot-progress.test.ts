@@ -1,14 +1,3 @@
-/**
- * تست‌های e2e — پیشرفت جلسه‌به‌جلسه (m162)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// e2e-ot-progress.test.ts — GET /api/students/:id/ot/progress:
-// تایم‌لاین جلسات از تجمیع ot_progress بر حسب session_id (فقط primary؛ ردیف نامعتبر نادیده؛
-// ردیف بدون جلسه = جلسهٔ مستقل raw:*)؛ قاعدهٔ تسلط دوجلسه‌ای به‌صورت confirmedNew در همان جلسه؛
-// توزیع سطح راهنمای «با کمک» (منحنی محوشدن راهنما)؛ شمار به تفکیک حیطه؛
-// خط پایهٔ عملکردی از آخرین ce-rehab-fx-v1 غیرلغوشده (band/color/prompt) — آخرین ثبت ملاک است؛
-// خلاصهٔ جمع‌بندی (تسلط تأییدشدهٔ فعلی)؛ RBAC هم‌الگوی پروفایل (منشی ۲۰۰، درمانگرِ غیرمسئول ۴۰۳).
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, Api, asRole, loginToken, createStudent } from '../../test/harness';
 
@@ -61,7 +50,6 @@ describe('پیشرفت جلسه‌به‌جلسه — GET /ot/progress (m162)', 
     secretary = await asRole(A, 'secretary');
     manager = await asRole(A, 'manager');
     maryam = new Api(A, await loginToken(A, 'maryam'));
-    // مالک پرونده = درمانگر — RBAC موتور OT: درمانگرِ غیرمسئول ۴۰۳
     const s = await createStudent(therapist, { first_name: 'نیما', last_name: 'روندپیمای', pathway: 'rehab' });
     studentId = s.id;
   });
@@ -104,7 +92,6 @@ describe('پیشرفت جلسه‌به‌جلسه — GET /ot/progress (m162)', 
 
     expect(body.sessions).toHaveLength(2);
     expect(body.sessions.map((s) => s.ord)).toEqual([1, 2]);
-    // ترتیب زمانی صعودی — جلسهٔ اول قبل از دوم
     expect(body.sessions[0].occurredAt <= body.sessions[1].occurredAt).toBe(true);
 
     const first = body.sessions[0];
@@ -129,7 +116,6 @@ describe('پیشرفت جلسه‌به‌جلسه — GET /ot/progress (m162)', 
   });
 
   it('خط پایهٔ عملکردی — از آخرین ce-rehab-fx-v1؛ ثبت دوم جایگزین می‌شود', async () => {
-    // خط پایهٔ اول — نیم‌رخ ضعیف (سه حیطه ضعیف + راهنمای ثبت‌شده)
     const weak = await therapist.post(`/api/students/${studentId}/case-events/rehab-fx`, {
       values: {
         d_att_sus: 3, d_att_sel: 8, d_wm: 2, d_inh: 1, d_flex: 1, d_ps: 7,
@@ -138,7 +124,6 @@ describe('پیشرفت جلسه‌به‌جلسه — GET /ot/progress (m162)', 
     });
     expect(weak.status).toBe(201);
     await sleep(10);
-    // خط پایهٔ دوم — نیم‌رخ قوی؛ «آخرین ثبت» باید ملاک باشد
     const strong = await therapist.post(`/api/students/${studentId}/case-events/rehab-fx`, {
       values: {
         d_att_sus: 12, d_att_sel: 1, d_wm: 5, d_inh: 1, d_flex: 0, d_ps: 10,
@@ -159,23 +144,19 @@ describe('پیشرفت جلسه‌به‌جلسه — GET /ot/progress (m162)', 
     expect(attSus.prompt).toBe('بدون راهنما');
     const wm = body.baseline!.find((b) => b.key === 'wm')!;
     expect(wm.valueFa).toContain('رقم'); // واحد از label فیلد payload می‌آید
-    // تایم‌لاین جلسات دست‌نخورده — خط پایه فقط بخش پایه را پر می‌کند
     expect(body.summary.sessions).toBe(2);
   });
 
   it('ردیف بدون جلسه = جلسهٔ مستقل (raw:*)؛ ردیف نامعتبر نادیده؛ مکمل‌ها شمرده نمی‌شوند', async () => {
     const now = new Date().toISOString();
-    // ردیف با وضعیت نامعتبر — نادیده گرفته می‌شود
     A.sql.prepare(
       `INSERT INTO ot_progress (id, student_id, skill_id, status, session_id, occurred_at, created_at)
        VALUES ('op-invalid', ?, 'ot-gross-04', 'magic', 'sess-x', ?, ?)`
     ).run(studentId, now, now);
-    // ردیف بدون جلسه — مستقل شمرده می‌شود
     A.sql.prepare(
       `INSERT INTO ot_progress (id, student_id, skill_id, status, session_id, occurred_at, created_at)
        VALUES ('op-legacy', ?, 'ot-gross-05', 'with_help', NULL, ?, ?)`
     ).run(studentId, now, now);
-    // ردیف مهارت مکمل (غیر primary) — خارج از شمارش
     const sec = A.sql.prepare(`SELECT id FROM ot_skills WHERE COALESCE(is_primary, 1) = 0 LIMIT 1`).get() as { id: string } | undefined;
     if (sec) {
       A.sql.prepare(
@@ -185,7 +166,6 @@ describe('پیشرفت جلسه‌به‌جلسه — GET /ot/progress (m162)', 
     }
 
     const body = dataOf(await therapist.get(`/api/students/${studentId}/ot/progress`));
-    // دو جلسهٔ ثبت‌شدهٔ قبلی + جلسهٔ مستقل legacy = ۳ (ردیف نامعتبر و مکمل شمرده نمی‌شوند)
     expect(body.summary.sessions).toBe(3);
     const legacy = body.sessions.find((s) => s.sessionId.startsWith('raw:'));
     expect(legacy).toBeTruthy();

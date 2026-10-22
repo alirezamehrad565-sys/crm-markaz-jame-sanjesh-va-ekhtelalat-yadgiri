@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — battery
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست‌های هستهٔ علمی: اعتبار باتری (زود + معنایی)، پوشش باندها، گره ملاک‌ها، ۱۸ هدف/۵۴ تمرین
-
 import { describe, it, expect } from 'vitest';
 import {
   BATTERY,
@@ -19,8 +13,6 @@ import type { EvidenceEvent } from '../types';
 import { CaseEventTypeInputSchema, validateTypeDefinition, resolveBandV2, FIELDS_MAX, packageComponentsOf, COMPOSITE_FAMILY_COMPONENTS } from '@domain/case-events/pure';
 import type { CaseEventBand, CaseEventSubscale } from '@domain/case-events';
 
-// ابزارهای استاندارد موجود در DB (قبل از ) — قواعد به آن‌ها هم ارجاع می‌دهند
-// (m132+: فرم وکسلر قدیمی wechsler بازنشسته شد — قواعد به فرم جدید ce-wechsler-w4-v1 ارجاع می‌دهند)
 const EXISTING_TOOLS = new Set([
   'sdq-parent', 'conners-short', 'achenbach-practical', 'teacher-classroom', 'quick-multi-v1',
   'anamnesis', 'intervention', 'home_behavior', 'legacy_assessment', 'wechsler', 'ce-wechsler-w4-v1'
@@ -85,7 +77,6 @@ describe('باتری battery-v1 — اعتبار ساختاری', () => {
     expect(p?.fields?.length).toBe(26);
     expect(t?.fields?.length).toBe(26);
     expect(t?.fields?.[0].key).toBe(p?.fields?.[0].key);
-    // باندها متفاوت‌اند (برش معلم بالاتر در کم‌توجهی)
     const pIa = (p?.subscales as CaseEventSubscale[]).find((s) => s.id === 'ia');
     const tIa = (t?.subscales as CaseEventSubscale[]).find((s) => s.id === 'ia');
     expect(pIa?.bands?.[0].max).toBe(16);
@@ -99,7 +90,6 @@ describe('باتری battery-v1 — اعتبار ساختاری', () => {
 });
 
 describe('شرح‌حال — نسخهٔ ۲ و نسخهٔ ۳ (T4 m148)', () => {
-  /** قرارداد کلیدهای ساخت‌یافتهٔ نسخهٔ ۳ که موتور می‌خواند (infer.ts — منبع سیگنال) */
   const V3_ENGINE_KEYS = [
     'sld_read_concern', 'sld_write_concern', 'sld_calc_concern', 'attention_concern', 'hyper_concern',
     'exam_anxiety', 'morning_somatic', 'crisis_event', 'sensory_concern', 'home_language',
@@ -128,7 +118,6 @@ describe('شرح‌حال — نسخهٔ ۲ و نسخهٔ ۳ (T4 m148)', () => {
     expect(v3?.fields?.filter((f) => f.type === 'heading')).toHaveLength(7);
     const keys = new Set(v3?.fields?.map((f) => f.key));
     for (const k of V3_ENGINE_KEYS) expect(keys.has(k), `کلید موتور v3: ${k}`).toBe(true);
-    // متن آزاد پایه حفظ شده
     expect(v3?.fields?.find((f) => f.key === 'chief_complaint')?.required).toBe(true);
     expect(keys.has('weak_subjects')).toBe(true);
   });
@@ -136,7 +125,6 @@ describe('شرح‌حال — نسخهٔ ۲ و نسخهٔ ۳ (T4 m148)', () => {
   it('گزینه‌های کلیدهای موتور نسخهٔ ۳ با جدول نگاشت موتور هم‌خوان است', () => {
     const v3 = batteryDef('ce-anamnesis-v3');
     const opt = (k: string): string[] => v3?.fields?.find((f) => f.key === k)?.options ?? [];
-    // مقیاس نگرانی ۴تایی مشترک
     for (const k of ['sld_read_concern', 'sld_write_concern', 'sld_calc_concern', 'attention_concern', 'hyper_concern', 'exam_anxiety', 'sensory_concern']) {
       expect(opt(k), k).toEqual(['بدون نگرانی', 'کم', 'متوسط', 'زیاد — نگران‌کننده']);
     }
@@ -155,13 +143,10 @@ describe('T5 (m150) — فرم جامع خانواده: SDQ والد رسمی + 
     expect(p?.audience).toBe('family');
     expect(p?.familyFillable).toBe(true);
     expect(p?.fields?.length).toBe(25);
-    // همان ساختار آیتم‌ها (کلید و ترتیب و لنگرهای پاسخ) — متن والدپسند
     expect(p?.fields?.map((f) => f.key)).toEqual(t?.fields?.map((f) => f.key));
     expect(p?.fields?.map((f) => f.scaleLabels)).toEqual(t?.fields?.map((f) => f.scaleLabels));
-    // پنج آیتمِ متکی به کلاس بازنویسی والدپسند شده — بقیه عین معلم
     const diffKeys = p?.fields?.filter((f, i) => f.label !== t?.fields?.[i].label).map((f) => f.key);
     expect(diffKeys).toEqual(['i06', 'i09', 'i11', 'i14', 'i19']);
-    // زیرمقیاس‌ها و باندها هم‌سان معلم (هم‌گرایی والد×معلم خودکار)
     expect(p?.subscales?.map((s) => s.id)).toEqual(['emo', 'cond', 'hyper', 'peer', 'pros']);
     expect(JSON.stringify(p?.subscales)).toBe(JSON.stringify(t?.subscales));
     expect(JSON.stringify(p?.bands)).toBe(JSON.stringify(t?.bands));
@@ -179,11 +164,9 @@ describe('T5 (m150) — فرم جامع خانواده: SDQ والد رسمی + 
     }
     expect(d?.subscales?.map((s) => s.id)).toEqual(['id_adapt']);
     const bands = d?.bands as CaseEventBand[];
-    // معکوس: نمرهٔ کم = باند خطر
     expect(resolveBandV2(5, bands)?.color).toBe('danger');
     expect(resolveBandV2(15, bands)?.color).toBe('warn');
     expect(resolveBandV2(22, bands)?.color).toBe('ok');
-    // سقف آخر = بیشینهٔ ممکن (۲۴) — جمع ماکسیمم آیتم‌ها
     expect((d?.fields ?? []).reduce((sum, f) => sum + (f.scaleMax ?? 3), 0)).toBe(24);
     expect(bands[bands.length - 1].max).toBe(24);
   });
@@ -210,13 +193,10 @@ describe('T5 (m150) — فرم جامع خانواده: SDQ والد رسمی + 
     expect(packageComponentsOf('ce-comp-family-v2')).toEqual([...COMPOSITE_FAMILY_COMPONENTS]);
     expect(packageComponentsOf('ce-sdq-t-v1')).toBeNull();
     expect(packageComponentsOf(undefined)).toBeNull();
-    // کلیدهای آیتم کامپوننت‌ها در کل پکیج یکتا (payload تخت امن است)
     const allKeys = COMPOSITE_FAMILY_COMPONENTS.flatMap((k) => (batteryDef(k)?.fields ?? []).map((f) => f.key));
     expect(new Set(allKeys).size).toBe(allKeys.length);
-    // زمینهٔ پکیج با هیچ کامپوننتی تداخل کلید ندارد
     const ctxKeys = (batteryDef('ce-comp-family-v2')?.fields ?? []).map((f) => f.key);
     expect(allKeys.filter((k) => ctxKeys.includes(k))).toEqual([]);
-    // تک‌تک کامپوننت‌ها عضو باتری‌اند (پنل/موتور همان‌طور می‌خوانند)
     for (const k of COMPOSITE_FAMILY_COMPONENTS) {
       expect(batteryDef(k), k).toBeTruthy();
     }
@@ -318,7 +298,6 @@ describe('قواعد شواهد — گره ابزار/آیتم/ملاک', () => 
   it('هر آیتم criteriaMap واقعاً در ابزار مربوط وجود دارد', () => {
     for (const r of RULES) {
       for (const c of r.criteriaMap) {
-        // معادل batteryScoredFields حذف‌شده: فقط آیتم‌های نمره‌دار (scale/single)
         const fields = c.toolKey.startsWith('ce-')
           ? (batteryDef(c.toolKey)?.fields ?? []).filter((f) => f.type === 'scale' || f.type === 'single')
           : [];
@@ -390,7 +369,6 @@ describe('پروب‌ها — هنجار و وضعیت', () => {
   });
 
   it('قرارداد پروب در موتور شناسایی: زیر ۸۰٪ هنجار = شاهد خطر؛ در انتظار/بدون پایه = بدون شاهد', () => {
-    // مصرف‌کنندهٔ واقعی هنجارها ruleColor داخل infer.ts است — قرارداد از همان‌جا سنجیده می‌شود
     const probe = (wcpm: number | null, grade: string | null): EvidenceEvent => ({
       eventId: 'p1',
       toolKey: 'ce-probe-read-v1',
@@ -406,14 +384,11 @@ describe('پروب‌ها — هنجار و وضعیت', () => {
       subscales: null
     });
     const dysOf = (e: EvidenceEvent) => runInference([e]).ranked.find((h) => h.targetKey === 'dyslexia');
-    // زیر ۸۰٪ هنجار «دوم» (۰٫۸×۸۹ ≈ ۷۱) → شاهد پروب با وزن ۲
     const low = dysOf(probe(40, 'دوم'))!;
     expect(low).toBeDefined();
     expect(low.score).toBeGreaterThanOrEqual(CONFIDENCE_THRESHOLDS.medium);
     expect(low.evidenceFa.some((e) => e.includes('پروب خواندن'))).toBe(true);
-    // در بازهٔ انتظار (۹۰ ∈ ۷۱..۱۰۷) → بدون شاهد
     expect(dysOf(probe(90, 'دوم'))).toBeUndefined();
-    // پایهٔ ناموجود در هنجار / مقدار یا پایهٔ غایب → نادیده
     expect(dysOf(probe(40, 'نهم'))).toBeUndefined();
     expect(dysOf(probe(null, 'دوم'))).toBeUndefined();
     expect(dysOf(probe(40, null))).toBeUndefined();

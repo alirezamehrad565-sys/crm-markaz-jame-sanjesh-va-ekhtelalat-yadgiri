@@ -1,10 +1,3 @@
-/**
- * تست‌های واحد — submissions
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// submissions.test.ts — منطق دامنهٔ حلقهٔ بازگشت فایل
-// resolveSubmissionTarget (auto/pick/extra/none) + addSubmission (فایل + done + audit) + list/getFile
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestDb, STUDENT1_ID, STUDENT2_ID, ALI_ID } from '../../../test/harness';
 import { MockD1 } from '../../../test/mock-d1';
@@ -102,7 +95,6 @@ describe('دامنهٔ بازگشت فایل روی DB واقعی (migrations)',
     expect(subs[0].note).toBe('صفحهٔ اول');
     expect(subs[0].sourceChatId).toBe('9900');
 
-    // فایل واقعاً در ObjectStore (D1)
     const file = await service.getSubmissionFile(subs[0].id);
     expect(file).not.toBeNull();
     expect(file!.filename).toBe('javab.jpg');
@@ -116,7 +108,6 @@ describe('دامنهٔ بازگشت فایل روی DB واقعی (migrations)',
 
   it('پنجرهٔ ۴۸ ساعت: بازگشت بعدی بدون تکلیف باز → extra به همان تکلیف', async () => {
     const service = makeService();
-    // تکلیف دوم هم done می‌شود (auto در تست قبل پیوست نشد — اینجا دستی)
     const t = await service.resolveSubmissionTarget([STUDENT1_ID]);
     expect(t.mode).toBe('auto');
     if (t.mode === 'auto') {
@@ -129,9 +120,7 @@ describe('دامنهٔ بازگشت فایل روی DB واقعی (migrations)',
         SUB_ACTOR()
       );
     }
-    // قطعی‌سازی ترتیب: بازگشتیِ تکلیف اول را یک ثانیه عقب می‌بریم (created_at ثانیه‌ای است)
     sql.prepare(`UPDATE exercise_submissions SET created_at = datetime('now', '-1 second') WHERE assignment_id = ?`).run(asg1);
-    // حالا هیچ تکلیف بازی نیست ولی بازگشتی تازه هست → extra
     const target = await service.resolveSubmissionTarget([STUDENT1_ID]);
     expect(target.mode).toBe('extra');
     if (target.mode === 'extra') {
@@ -140,7 +129,6 @@ describe('دامنهٔ بازگشت فایل روی DB واقعی (migrations)',
   });
 
   it('بیرون آمدن از پنجره (بازگشتی قدیمی‌تر از ۴۸ ساعت) → none', async () => {
-    // آخرین بازگشتی را ۷۲ ساعت عقب می‌بریم — مستقیم در SQL پایهٔ تست
     sql.prepare(`UPDATE exercise_submissions SET created_at = datetime('now', '-72 hours')`).run();
     const service = makeService();
     const target = await service.resolveSubmissionTarget([STUDENT1_ID]);
@@ -171,7 +159,6 @@ describe('دامنهٔ بازگشت فایل روی DB واقعی (migrations)',
 
   it('نوع فایل نامجاز در بازگشت → ValidationError (whitelist مشترک)', async () => {
     const service = makeService();
-    // تکلیف جدید بساز تا وضعیت assigned باشد
     const a3 = await service.assign({ exerciseId: ex1, studentId: STUDENT2_ID, assignedBy: ALI_ID, via: 'panel' }, ACTOR);
     await expect(
       service.addSubmission(
@@ -180,8 +167,6 @@ describe('دامنهٔ بازگشت فایل روی DB واقعی (migrations)',
       )
     ).rejects.toMatchObject({ name: 'ValidationError' });
   });
-
-  // ───────────── helpers ─────────────
 
   function silentLogger() {
     const base = () => undefined;

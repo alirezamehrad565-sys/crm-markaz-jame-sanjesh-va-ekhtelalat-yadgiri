@@ -1,8 +1,3 @@
-/**
- * تست‌های واحد — lifecycle
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تست‌های برنامه‌ریز pure اعلان‌های چرخه حیات + رندر برنامه
 import { describe, expect, it } from 'vitest';
 import { planLifecycleNotifications, buildScheduleEntries } from '../lifecycle';
 import { renderScheduleMessage, renderTemplate } from '@core/notify';

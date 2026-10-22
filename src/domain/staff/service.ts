@@ -1,11 +1,3 @@
-/**
- * ماژول کارکنان — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Business logic of staff management — audit co-transaction (rule 4)
-// Soft state (active 0/1) — never hard delete: appointments reference staff.
-// v۲: بدون ایمیل اجباری — تلفن + کد ملی + نام کاربری + رمز (SHA-256)
-
 import type { AuthContext, StaffRole } from '@core/shared';
 import { DEFAULT_PASSWORD, hashPassword } from '@core/auth';
 import { ConflictError, NotFoundError } from '@core/errors';
@@ -16,7 +8,6 @@ interface StaffRow {
   email: string;
   full_name: string;
   role: StaffRole;
-  /** — نقش مؤثر ناظر (NULL = نقش عادی) — مایگریشن 0028 */
   role_ext: string | null;
   active: number;
   notify_enabled: number;
@@ -26,15 +17,9 @@ interface StaffRow {
   created_at: string;
 }
 
-/**
- * — نقش مؤثر = COALESCE(role_ext, role).
- * ستون role فقط سه مقدار CHECK-دار می‌پذیرد (0001)؛ «ناظر اداره» با
- * role='secretary' + role_ext='supervisor' ذخیره می‌شود و همه‌جا نقش مؤثر می‌آید.
- */
 const STAFF_COLS =
   'id, email, full_name, COALESCE(role_ext, role) AS role, active, notify_enabled, phone, national_id, username, role_ext, created_at';
 
-/** نقش ورودی API → جفت ستون‌های DB (م62) */
 function roleToColumns(role: StaffRole): { role: string; roleExt: string | null } {
   return role === 'supervisor'
     ? { role: 'secretary', roleExt: 'supervisor' }
@@ -56,7 +41,6 @@ function rowToMember(row: StaffRow): StaffMember {
   };
 }
 
-/** ایمیل synthetic برای ستون legacy NOT NULL UNIQUE — در UI نمایش داده نمی‌شود */
 function syntheticEmail(): string {
   const rnd = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
   return `auto-${rnd}@local`;
@@ -161,7 +145,6 @@ export function createStaffService(deps: StaffDeps): StaffService {
         }
         if (patch.role !== undefined && patch.role !== row.role) {
           const roleCols = roleToColumns(patch.role);
-          // از = نقش مؤثر قبلی؛ تا = نقش مؤثر جدید (ستون‌ها جدا نوشته می‌شوند)
           setMap.push(['role', roleCols.role, row.role]);
           setMap.push(['role_ext', roleCols.roleExt, row.role_ext]);
           roleOverride = patch.role;
@@ -170,7 +153,6 @@ export function createStaffService(deps: StaffDeps): StaffService {
           setMap.push(['notify_enabled', patch.notifyEnabled ? 1 : 0, row.notify_enabled]);
         }
 
-        // رمز — فقط وقتی صریحاً ارسال شده (خالی/ناموجود = بدون تغییر)
         if (patch.password !== undefined && patch.password.trim() !== '') {
           const passwordHash = await hashPassword(patch.password.trim());
           await tx.execute(`UPDATE staff SET password_hash = ? WHERE id = ?`, [passwordHash, id]);
@@ -193,7 +175,6 @@ export function createStaffService(deps: StaffDeps): StaffService {
           });
         }
 
-        // ساخت پاسخ در حافظه — خواندن داخل همان تراکنش مقدار کهنه می‌دهد (writeها batch می‌شوند)
         const merged: StaffRow = { ...row };
         for (const [col, to] of setMap) (merged as unknown as Record<string, unknown>)[col] = to;
         if (roleOverride) merged.role = roleOverride; // نقش مؤثر در پاسخ
@@ -225,17 +206,6 @@ export function createStaffService(deps: StaffDeps): StaffService {
       });
     },
 
-    /**
-     * — حذف کامل همکار ثبت‌شدهٔ اشتباه (نام غلط / ثبت تکراری چند دقیقه پیش).
-     * گاردها:
-     * - حذف حساب خود بازیگر → خطا
-     * - آخرین مدیر فعال مرکز → خطا (دفتر بی‌مدیر نمی‌ماند)
-     * - هر سابقهٔ واقعی (نوبت / ساعت کاری / حضور همکار / دانش‌آموزِ مسئول / todo /
-     * followup / متقاضی ثبت‌کننده / رویداد پرونده / سنجش / اعلان / تمرین / api key /
-     * توضیح روز کاری / رویداد استاندارد) → ConflictError با راهنمای «غیرفعال‌سازی»
-     * خالی بودن → DELETE + audit («settings_staff_links» با CASCADE پاک می‌شود،
-     * «notifications.staff_id» با SET NULL بی‌مقصد می‌شود).
-     */
     async remove(id: string, actor: AuthContext): Promise<void> {
       await db.transaction(async (tx) => {
         const row = await tx.queryOne<StaffRow>(`SELECT ${STAFF_COLS} FROM staff WHERE id = ?`, [id]);

@@ -1,10 +1,3 @@
-/**
- * سرویس داشبورد و KPI ها — هدف غربالگری داشبورد
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// محاسبهٔ pure هدف‌های سنجش (سال/ماه/بازهٔ سفارشی) — مشترک بین داشبورد و بات بله
-// ورودی‌ها: تنظیمات هدفگذاری + شمارش روزانهٔ سنجش + امروز تهران؛ خروجی: کارت‌های هدف مستقل
-
 import type { DashboardScreeningGoalItem, ScreeningTargetConfig } from '@core/shared';
 import {
   JALALI_MONTHS_FA,
@@ -14,7 +7,6 @@ import {
   toJalaliParts
 } from '@core/shared';
 
-/** شمارش سنجش یک روز — هم‌شکل ScreeningDayCount دامنه (برای وابستگی کمتر، بازتعریف ساختاری) */
 export interface GoalDayCount {
   day: string; // YYYY-MM-DD
   count: number;
@@ -22,25 +14,21 @@ export interface GoalDayCount {
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-/** برچسب عددی جلالیِ یک تاریخ میلادی: «۱۴۰۵/۰۵/۰۱» */
 function faJalaliYmd(gYmd: string): string {
   const [gy, gm, gd] = gYmd.split('-').map(Number);
   const j = toJalaliParts(gy, gm, gd);
   return faDigits(`${j.jy}/${pad2(j.jm)}/${pad2(j.jd)}`);
 }
 
-/** پایان ماه جلالی — با کبیسهٔ واقعی (اول ماه بعد منهای یک روز) */
 export function jalaliMonthEndYmd(jy: number, jm: number): string {
   const nextStart = jm >= 12 ? jalaliToGregorianYmd(jy + 1, 1, 1) : jalaliToGregorianYmd(jy, jm + 1, 1);
   return addDaysYmd(nextStart, -1);
 }
 
-/** پایان سال جلالی */
 export function jalaliYearEndYmd(jy: number): string {
   return addDaysYmd(jalaliToGregorianYmd(jy + 1, 1, 1), -1);
 }
 
-/** پنجرهٔ میلادی یک هدف — حالت سفارشی/ماه/سال */
 export function goalWindowOf(t: ScreeningTargetConfig): { fromYmd: string; toYmd: string } {
   if (t.from && t.to) return { fromYmd: t.from, toYmd: t.to };
   if (t.month !== null && t.month !== undefined) {
@@ -49,7 +37,6 @@ export function goalWindowOf(t: ScreeningTargetConfig): { fromYmd: string; toYmd
   return { fromYmd: jalaliToGregorianYmd(t.year, 1, 1), toYmd: jalaliYearEndYmd(t.year) };
 }
 
-/** برچسب فارسی بازهٔ هدف — با عنوان اختیاری در ابتدای آن */
 export function goalPeriodLabelOf(t: ScreeningTargetConfig): string {
   const base =
     t.from && t.to
@@ -61,14 +48,12 @@ export function goalPeriodLabelOf(t: ScreeningTargetConfig): string {
   return title ? `${title} — ${base}` : base;
 }
 
-/** وضعیت هدف نسبت به امروز */
 export function goalStatusOf(fromYmd: string, toYmd: string, todayYmd: string): DashboardScreeningGoalItem['status'] {
   if (todayYmd < fromYmd) return 'upcoming';
   if (todayYmd > toYmd) return 'past';
   return 'active';
 }
 
-/** جمع سنجش‌های داخل یک پنجره از شمارش روزانه */
 export function goalDoneOf(dayCounts: GoalDayCount[], fromYmd: string, toYmd: string): number {
   let done = 0;
   for (const d of dayCounts) {
@@ -77,7 +62,6 @@ export function goalDoneOf(dayCounts: GoalDayCount[], fromYmd: string, toYmd: st
   return done;
 }
 
-/** — همهٔ هدف‌ها به کارت مستقل — مرتب: فعال ← آینده ← گذشته و سپس زودترشروع‌تر */
 export function summarizeScreeningGoals(
   targets: ScreeningTargetConfig[],
   dayCounts: GoalDayCount[],
@@ -109,7 +93,6 @@ export function summarizeScreeningGoals(
   });
 }
 
-/** پنجرهٔ کوئری شمارش روزانه — حداقل سال جاری تا امروز + همهٔ پنجره‌های هدف‌ها */
 export function goalsQueryWindow(
   targets: ScreeningTargetConfig[],
   todayYmd: string

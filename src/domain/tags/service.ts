@@ -1,10 +1,3 @@
-/**
- * ماژول برچسب‌گذاری — سرویس اصلی و منطق کسب‌وکار
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// Business logic برچسب‌ها — audit هم‌تراکنش (قانون ۴)
-// برچسب‌ها هرگز hard-delete نمی‌شوند (active 0/1) تا تاریخچه student_tags معتبر بماند.
-
 import type { TagCategory, TagRecord, TagRef } from '@core/shared';
 import { ConflictError, NotFoundError } from '@core/errors';
 import { diffStudentTags, normalizeTagName } from './pure';
@@ -143,7 +136,6 @@ export function createTagService(deps: TagDeps): TagService {
 
         const unique = [...new Set(tagIds)];
 
-        // اعتبارسنجی: همه برچسب‌ها باید فعال و موجود باشند
         if (unique.length > 0) {
           const placeholders = unique.map(() => '?').join(', ');
           const found = await tx.query<{ id: string }>(
@@ -153,7 +145,6 @@ export function createTagService(deps: TagDeps): TagService {
           if (found.length !== unique.length) throw new NotFoundError('برچسب');
         }
 
-        // وضعیت فعلی و بعدی برای diff
         const currentRows = await tx.query<TagRow>(
           `SELECT t.id, t.name, t.category, t.color, t.active
              FROM student_tags st JOIN tags t ON t.id = st.tag_id
@@ -173,7 +164,6 @@ export function createTagService(deps: TagDeps): TagService {
         const next = nextRows.map(rowToRef);
         const diff = diffStudentTags(current, next);
 
-        // بدون تغییر — از نوشتن بی‌دلیل پرهیز می‌کنیم
         if (diff.added.length === 0 && diff.removed.length === 0) {
           return current;
         }

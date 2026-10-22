@@ -1,10 +1,3 @@
-/**
- * موتور چک‌لیست کاردرمانی (OT) — مسیرهای REST ماژول
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// REST موتور کاردرمانی ذهنی + گیت‌های شناسایی + نتیجهٔ نیاز ویژه
-// فقط سیم به سرویس — RBAC مالک پرونده در سرویس چک می‌شود (هم‌الگوی موتور بالینی).
-
 import { z } from 'zod';
 import type { AppHono } from '@core/shared';
 import { STUDENT_PROTOCOLS } from '@core/shared';
@@ -23,7 +16,6 @@ const OtSessionItemSchema = z
     prompt_level: z.enum(OT_PROMPT_LEVELS).nullish()
   })
   .superRefine((val, ctx) => {
-    // داوری کاردرمانی P0-2: «با کمک» بدون سطح راهنما پذیرفته نیست
     if (val.status === 'with_help' && !val.prompt_level) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['prompt_level'], message: 'برای «با کمک» انتخاب سطح راهنما الزامی است' });
     }
@@ -47,28 +39,24 @@ export const NeedsSummarySchema = z.object({
 });
 
 export function registerOtEngineRoutes(app: AppHono, service: OtEngineService): void {
-  // گیت‌های شناسایی + فاز پرونده — خواندن: مدیر/منشی/درمانگرِ مسئول
   app.get('/api/students/:id/clinical-gates', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const data = await service.getGates(c.req.param('id'), actor);
     return c.json({ data }, 200);
   });
 
-  // پروفایل چک‌لیست ۷ حیطه‌ای — خواندن: مدیر/منشی/درمانگرِ مسئول
   app.get('/api/students/:id/ot/profile', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const data = await service.getOtProfile(c.req.param('id'), actor);
     return c.json({ data }, 200);
   });
 
-  // m162 — پیشرفت جلسه‌به‌جلسه (تایم‌لاین جلسات + خط پایهٔ عملکردی) — خواندن: مدیر/منشی/درمانگرِ مسئول
   app.get('/api/students/:id/ot/progress', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const data = await service.getOtProgress(c.req.param('id'), actor);
     return c.json({ data }, 200);
   });
 
-  // ثبت جلسهٔ کاردرمانی ذهنی (دسته‌مهارت + گزارش جلسه) — فقط مدیر/درمانگرِ مسئول
   app.post('/api/students/:id/ot/sessions', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = OtSessionSaveSchema.parse(await c.req.json<unknown>());
@@ -91,7 +79,6 @@ export function registerOtEngineRoutes(app: AppHono, service: OtEngineService): 
     return c.json({ data }, 201);
   });
 
-  // نتیجهٔ نیاز ویژه — فعال‌سازی پروتکل مداخله — فقط مدیر/درمانگرِ مسئول
   app.post('/api/students/:id/needs-summary', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = NeedsSummarySchema.parse(await c.req.json<unknown>());

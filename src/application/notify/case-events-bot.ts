@@ -1,15 +1,3 @@
-/**
- * اعلان‌های کاربردی و بات‌های نقش‌آگاه بله — بات رویدادساز (توزیع فرم و دریافت پاسخ)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// جریان «رویداد/گزارش» بات:
-// الف) همکاران مرکز: منوی دانش‌آموز → «رویداد/گزارش» → دسته → نوع → ویزارد فرم
-// مرحله‌به‌مرحله (هر فیلد یک پیام؛ select/scale با دکمه؛ اختیاری با دکمهٔ رد)
-// ب) خانواده: «چک‌لیست‌های من» → فهرست چک‌لیست‌های در انتظار → پر کردن آیتم‌به‌آیتم
-// (تصمیم ۳ طراحی: چک‌لیست بلندتر از ۸ آیتم → لینک وب‌فرم امن)
-// state در bot_menu_state با flow='tl' (انتخاب نوع) / 'tl_form' / 'clf_form'.
-// گیت دولایه: شروع + اجرا هر دو دوباره چک می‌شوند — الگوی /.
-
 import type { DbClient } from '@core/db';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
@@ -26,7 +14,6 @@ import type { SettingsService } from '@app/settings';
 import type { StuListItem } from './student-actions-bot';
 import { clearStuState } from './student-actions-bot';
 
-/** سقف نویسهٔ پاسخ متنی کوتاه/بلند در ویزارد بات — هم‌تراز pure دامنه */
 const TEXT_MAX = 200;
 const LONGTEXT_MAX = 2000;
 
@@ -37,7 +24,6 @@ export interface CaseEventsBotDeps {
   notify: NotifyService;
   settings: SettingsService;
   caseEvents: CaseEventsService | null;
-  /** آدرس عمومی سامانه برای لینک وب‌فرم چک‌لیست بلند (خالی = بدون لینک) */
   publicBaseUrlEnv: string | null;
   now?: () => Date;
 }
@@ -47,7 +33,6 @@ export interface TlBotReply {
   buttons: InlineButton[][] | null;
 }
 
-/** بازیگر بات برای ثبت رویداد — staffId واقعیِ همکار در createEvent تزریق می‌شود */
 const TL_ACTOR: AuthContext = {
   staffId: 'bale-bot',
   email: 'bale-bot@system.local',
@@ -55,7 +40,6 @@ const TL_ACTOR: AuthContext = {
   displayName: 'بات بله'
 };
 
-/** حالت انتخاب نوع (فهرست دانش‌آموز + idهای نوعِ دستهٔ انتخابی) */
 export interface TlPickState {
   v: 1;
   flow: 'tl';
@@ -65,7 +49,6 @@ export interface TlPickState {
   typeTitles: string[];
 }
 
-/** حالت ویزارد فرم رویداد (همکار) */
 export interface TlFormState {
   v: 1;
   flow: 'tl_form';
@@ -77,12 +60,10 @@ export interface TlFormState {
   fields: CaseEventField[];
   step: number;
   answers: Record<string, string>;
-  /** — گزارش جلسه به نوبت اخیر همان دانش‌آموز متصل می‌شود (گزارش الزامی هر جلسه) */
   appointmentId?: string | null;
   appointmentLabel?: string | null;
 }
 
-/** حالت ویزارد چک‌لیست خانواده */
 export interface ClfFormState {
   v: 1;
   flow: 'clf_form';
@@ -120,14 +101,11 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     text: '⏳ این منو قدیمی است — دکمهٔ «دانش‌آموزان فعال» را دوباره بزنید.',
     buttons: [[{ text: '👥 دانش‌آموزان فعال', callbackData: 'stu:list' }]]
   };
-  // خانواده پیام STALE غلط می‌گرفت (راهنما به دکمهٔ همکاران اشاره می‌کرد)
   const STALE_FAMILY: TlBotReply = {
     text: '⏳ این منو قدیمی است — دکمهٔ «چک‌لیست‌های من» را دوباره بزنید.',
     buttons: [[{ text: '📝 چک‌لیست‌های من', callbackData: 'clf_list' }]]
   };
   const STALE = STALE_STAFF;
-
-  // ───────── state ─────────
 
   async function readState<T extends BotState>(chatId: string, flow: T['flow']): Promise<T | null> {
     const row = await db.queryOne<{ payload: string }>(`SELECT payload FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
@@ -153,7 +131,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     await clearStuState(db, chatId);
   }
 
-  /** گیت همکاران مرکز + نقش معتبر برای ثبت رویداد — ناظر/معلم کلاس/ناشناس رد */
   async function staffOwner(chatId: string): Promise<{ staffId: string; role: string } | null> {
     const row = await db.queryOne<{ staff_id: string; role: string | null }>(
       `SELECT l.staff_id, COALESCE(s.role_ext, s.role) AS role
@@ -163,12 +140,10 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     );
     if (!row) return null;
     if (row.role !== 'manager' && row.role !== 'therapist' && row.role !== 'secretary') return null;
-    // تصمیم ۸ طراحی: ثبت گزارش فقط مدیر/درمانگر — منشی فقط خواننده
     if (row.role === 'secretary') return null;
     return { staffId: row.staff_id, role: row.role };
   }
 
-  /** — گیت خواننده: منشی هم تایم‌لاین/چک‌لیست را می‌بیند (فقط‌خواندنی) */
   async function staffReader(chatId: string): Promise<boolean> {
     const row = await db.queryOne<{ role: string | null }>(
       `SELECT COALESCE(s.role_ext, s.role) AS role
@@ -183,12 +158,10 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     return { staffId, email: 'bale-bot@system.local', role: role as AuthContext['role'], displayName: 'بات بله' };
   }
 
-  /** چت‌های ولیّ یک دانش‌آموز — از سرویس دامنه (bot_links + prefs) */
   async function guardianChats(studentId: string): Promise<string[]> {
     return caseEvents ? caseEvents.guardianChats(studentId) : [];
   }
 
-  /** چت‌های متصل یک همکار (اعلان نتیجهٔ چک‌لیست) */
   async function staffChats(staffId: string): Promise<string[]> {
     const rows = await db.query<{ chat_id: string }>(
       `SELECT chat_id FROM staff_bot_links WHERE staff_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
@@ -197,9 +170,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     return rows.map((r) => r.chat_id);
   }
 
-  // ───────── الف) همکاران — ویزارد رویداد ─────────
-
-  /** ورود از منوی دانش‌آموز:stu:tl:<idx> → نمایش سه دسته */
   async function startCategory(chatId: string, stuIdx: number): Promise<TlBotReply> {
     const owner = await staffOwner(chatId);
     if (!owner) return { text: renderTemplate('bot_case_event_denied'), buttons: null };
@@ -218,7 +188,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     };
   }
 
-  /** خواندن خام state (فهرست دانش‌آموزان) — flow='stu' */
   async function readRawState(chatId: string): Promise<{ students?: StuListItem[] } | null> {
     const row = await db.queryOne<{ payload: string }>(`SELECT payload FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
     if (!row) return null;
@@ -231,7 +200,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     }
   }
 
-  /** فهرست انواع فعال دسته — برای چک‌لیست‌ها فقط family_fillable */
   async function listTypes(chatId: string, stuIdx: number, cat: string): Promise<TlBotReply> {
     const owner = await staffOwner(chatId);
     if (!owner) return { text: renderTemplate('bot_case_event_denied'), buttons: null };
@@ -268,7 +236,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     };
   }
 
-  /** شروع فرم: چک‌لیست → تأیید مستقیم (بدون فیلد درمانگر)؛ بقیه → ویزارد فیلدها */
   async function startForm(chatId: string, stuIdx: number, typeIdx: number): Promise<TlBotReply> {
     const owner = await staffOwner(chatId);
     if (!owner) return { text: renderTemplate('bot_case_event_denied'), buttons: null };
@@ -283,7 +250,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     }
 
     if (type.category === 'checklist') {
-      // چک‌لیست فیلد درمانگر ندارد — تأیید مستقیم ساخت و اطلاع‌رسانی به خانواده
       await writeState(chatId, {
         v: 1,
         flow: 'tl_form',
@@ -314,7 +280,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
       };
     }
 
-    // گزارش جلسه: اگر نوبت اخیر (۱۴ ساعت گذشته) همین دانش‌آموز هست، خودکار متصل می‌شود
     let appointmentId: string | null = null;
     let appointmentLabel: string | null = null;
     if (type.category === 'session') {
@@ -363,7 +328,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     return promptField(chatId);
   }
 
-  /** پیام فیلد جاری — متن آزاد یا دکمه‌ای */
   async function promptField(chatId: string): Promise<TlBotReply> {
     const st = await readState<TlFormState>(chatId, 'tl_form');
     if (!st) return STALE;
@@ -392,7 +356,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
         buttons: [row, f.required ? [] : [{ text: '⏭ رد کردن', callbackData: 'tl:skip' }]].filter((r) => r.length > 0)
       };
     }
-    // text / longtext / number — با پیام متنی
     const hint = f.type === 'longtext' ? 'متن را بفرستید' : f.type === 'number' ? 'عدد را بفرستید' : 'متن کوتاه را بفرستید';
     const limit = f.type === 'longtext' ? LONGTEXT_MAX : TEXT_MAX;
     const buttons: InlineButton[][] | null = f.required ? null : [[{ text: '⏭ رد کردن', callbackData: 'tl:skip' }]];
@@ -402,7 +365,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     };
   }
 
-  /** پاسخ گزینه‌ای/نمره‌ای به فیلد جاری */
   async function optionPick(chatId: string, value: number): Promise<TlBotReply> {
     const st = await readState<TlFormState>(chatId, 'tl_form');
     if (!st) return STALE;
@@ -424,7 +386,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     return st.fields[st.step] ? promptField(chatId) : buildConfirm(chatId);
   }
 
-  /** رد کردن فیلد اختیاری */
   async function skipField(chatId: string): Promise<TlBotReply> {
     const st = await readState<TlFormState>(chatId, 'tl_form');
     if (!st) return STALE;
@@ -438,7 +399,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     return st.fields[st.step] ? promptField(chatId) : buildConfirm(chatId);
   }
 
-  /** ورودی متنی آزاد — فیلد جاری text/longtext/number */
   async function feedInput(chatId: string, raw: string): Promise<TlBotReply | null> {
     const st = await readState<TlFormState>(chatId, 'tl_form');
     if (!st) return null;
@@ -467,7 +427,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     return st.fields[st.step] ? promptField(chatId) : buildConfirm(chatId);
   }
 
-  /** جمع‌بندی ویزارد — تأیید نهایی */
   async function buildConfirm(chatId: string): Promise<TlBotReply> {
     const st = await readState<TlFormState>(chatId, 'tl_form');
     if (!st) return STALE;
@@ -498,7 +457,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     };
   }
 
-  /** اجرای ثبت — createEvent + اعلان چک‌لیست به خانواده */
   async function confirmCreate(chatId: string): Promise<TlBotReply> {
     const owner = await staffOwner(chatId);
     if (!owner) return { text: renderTemplate('bot_case_event_denied'), buttons: null };
@@ -557,7 +515,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     };
   }
 
-  /** اعلان چک‌لیست به ولیّ‌ها + لینک وب‌فرم برای فرم بلند — خروجی: خط توضیح برای پیام همکار */
   async function notifyChecklistAssigned(event: CaseEventRecord, studentName: string, typeTitle: string, byChatId: string): Promise<string> {
     const chats = await guardianChats(event.studentId);
     const type = caseEvents ? await caseEvents.getTypeById(event.eventTypeId) : null;
@@ -616,9 +573,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     return { text: '✖️ ثبت رویداد لغو شد.', buttons: null };
   }
 
-  // ───────── ب) خانواده — چک‌لیست‌های من ─────────
-
-  /** دانش‌آموزان متصل به چت خانواده */
   async function familyStudentIds(chatId: string): Promise<string[]> {
     const linkRows = await db.query<{ student_id: string }>(
       `SELECT DISTINCT student_id FROM bot_links WHERE chat_id = ? AND status = 'linked' AND student_id IS NOT NULL`,
@@ -631,7 +585,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     return [...new Set([...linkRows.map((r) => r.student_id), ...prefRows.map((r) => r.student_id)].filter((x): x is string => Boolean(x)))];
   }
 
-  /** «چک‌لیست‌های من» — فهرست چک‌لیست‌های در انتظار پاسخ خانواده */
   async function listMine(chatId: string): Promise<TlBotReply> {
     if (!caseEvents) return { text: renderTemplate('bot_case_events_disabled'), buttons: null };
     const studentIds = await familyStudentIds(chatId);
@@ -650,7 +603,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
         LIMIT 8`,
       studentIds
     );
-    // نتایج قبلی: خانواده بعد از پاسخ، نتیجه/روند را همین‌جا می‌بیند
     const doneRows = await db.query<{ type_title: string; type_icon: string | null; first_name: string; last_name: string; analysis: string | null; occurred_at: string }>(
       `SELECT t.title AS type_title, t.icon AS type_icon, s.first_name, s.last_name, e.analysis, e.occurred_at
          FROM case_events e
@@ -688,12 +640,10 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     return { text, buttons };
   }
 
-  /** شروع پر کردن — گیت خانواده + مسیر بات/وب (تصمیم ۳) */
   async function startFill(chatId: string, eventId: string): Promise<TlBotReply> {
     if (!caseEvents) return { text: renderTemplate('bot_case_events_disabled'), buttons: null };
     const event = await caseEvents.getEventById(eventId);
     const pkgType = event ? await caseEvents.getTypeById(event.eventTypeId) : null;
-    // — T5: پکیج فرم جامع هم در «چک‌لیست‌های من» می‌آید ولی همیشه مسیر وب‌فرم بخش‌به‌بخش می‌ماند
     const isPackage = Boolean(pkgType && packageComponentsOf(pkgType.key));
     if (!event || (event.typeCategory !== 'checklist' && !isPackage)) {
       return { text: '⚠️ این چک‌لیست پیدا نشد.', buttons: null };
@@ -710,7 +660,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     if (fields.length === 0) return { text: '⚠️ این چک‌لیست فاقد آیتم است.', buttons: null };
 
     if (isPackage) {
-      // فرم جامع چندبخشی — فقط با لینک امن وب (رندر بخش‌به‌بخش + یک submit)
       const link = deps.publicBaseUrlEnv ? await caseEvents.mintFillLink(event.id, deps.publicBaseUrlEnv) : null;
       if (link) {
         return {
@@ -729,7 +678,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     }
 
     if (fields.length > CHECKLIST_BOT_MAX_ITEMS) {
-      // تصمیم ۳: فرم بلند → وب‌فرم امن
       const link = deps.publicBaseUrlEnv ? await caseEvents.mintFillLink(event.id, deps.publicBaseUrlEnv) : null;
       if (link) {
         return {
@@ -744,7 +692,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
           buttons: null
         };
       }
-      // بدون publicBaseUrl — همان بات ادامه می‌دهیم (بهترین تلاش)
     }
 
     const stuName = await db.queryOne<{ name: string }>(
@@ -765,7 +712,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     return promptClfItem(chatId);
   }
 
-  /** پیام آیتم جاری چک‌لیست خانواده — پشتیبانی گزینه‌ای نمره‌دار (فقط برچسب، بدون نمره) */
   async function promptClfItem(chatId: string): Promise<TlBotReply> {
     const st = await readState<ClfFormState>(chatId, 'clf_form');
     if (!st) return STALE;
@@ -802,7 +748,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     };
   }
 
-  /** پاسخ به آیتم جاری — گزینه‌ای نمره‌دار = اندیس گزینه */
   async function answerItem(chatId: string, value: number): Promise<TlBotReply> {
     const st = await readState<ClfFormState>(chatId, 'clf_form');
     if (!st) return STALE;
@@ -838,12 +783,10 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     };
   }
 
-  /** ثبت نهایی پاسخ‌های خانواده + اعلان به درمانگر */
   async function confirmFill(chatId: string): Promise<TlBotReply> {
     const st = await readState<ClfFormState>(chatId, 'clf_form');
     if (!st || !caseEvents) return STALE;
 
-    // گیت دوباره در اجرا (دولایه)
     const allowed = await caseEvents.assertFamilyChat(st.studentId, chatId);
     if (!allowed) {
       await clearState(chatId);
@@ -875,7 +818,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     });
     log.info('clf.filled', { eventId: event.id, chatId });
 
-    // اعلان نتیجه به ثبت‌کننده (درمانگر) — اگر به بات متصل باشد
     if (event.staffId) {
       const chats = await staffChats(event.staffId);
       const clinicName = await settings.getClinicName();
@@ -915,9 +857,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     return { text: '✖️ پر کردن چک‌لیست لغو شد — هر وقت آماده بودید از «چک‌لیست‌های من» دوباره شروع کنید.', buttons: null };
   }
 
-  // ───────── ج) — نمای چرخهٔ پرونده در منوی دانش‌آموز ─────────
-
-  /** «🕘 تاریخچه» — ۱۰ رویداد آخر پرونده (گزارش جلسه، چک‌لیست، یادداشت) + نوبت‌های اخیر */
   async function history(chatId: string, idx: number): Promise<TlBotReply> {
     if (!(await staffReader(chatId))) return { text: renderTemplate('bot_case_event_denied'), buttons: null };
     const raw = await readRawState(chatId);
@@ -944,7 +883,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     };
   }
 
-  /** «📝 چک‌لیست‌های او» — در انتظار خانواده + آخرین نتایج با امتیاز/باند */
   async function checklists(chatId: string, idx: number): Promise<TlBotReply> {
     if (!(await staffReader(chatId))) return { text: renderTemplate('bot_case_event_denied'), buttons: null };
     const raw = await readRawState(chatId);
@@ -993,7 +931,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
   }
 
   return {
-    // همکاران
     startCategory,
     listTypes,
     startForm,
@@ -1002,16 +939,13 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     feedInput,
     confirmCreate,
     abortCreate,
-    // خانواده
     listMine,
     startFill,
     answerItem,
     confirmFill,
     abortFill,
-    // نمای چرخهٔ پرونده
     history,
     checklists,
-    // state readers (تست + intercept)
     readTlFormState: (chatId: string) => readState<TlFormState>(chatId, 'tl_form'),
     readClfFormState: (chatId: string) => readState<ClfFormState>(chatId, 'clf_form')
   };

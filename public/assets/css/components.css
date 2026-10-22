@@ -1,9 +1,3 @@
-/* ═══════════════════════════════════════════════════════════════
-   components.css — دکمه، فرم، کارت، جدول، مودال، توست، بج و …
-   ═══════════════════════════════════════════════════════════════ */
-
-/* ─────────────── دکمه‌ها ─────────────── */
-
 .btn {
   display: inline-flex;
   align-items: center;
@@ -27,7 +21,6 @@
 }
 
 .btn--primary {
-  /* m114 — گرادیان برند + درخشش ملایم: عمق مدرن بدون خروج از زبان طراحی */
   background: var(--grad-primary, var(--primary));
   color: var(--on-primary);
 }
@@ -73,8 +66,6 @@
   padding: 0;
   border-radius: var(--radius);
 }
-
-/* ─────────────── فرم‌ها ─────────────── */
 
 .field {
   display: flex;
@@ -129,8 +120,6 @@
   background-repeat: no-repeat;
   padding-inline-start: var(--sp-6);
 }
-
-/* ───────────── combo — دراپ‌داون سرچ‌دار (m66.7 — مثلاً ۴۰ مدرسه) ───────────── */
 
 .combo {
   position: relative;
@@ -188,15 +177,12 @@
   gap: var(--sp-4);
 }
 .form-grid .span-2 { grid-column: span 2; }
-/* m84.3 — نوار زمینهٔ فرم (تاریخ وقوع/پرکننده/تغییر نوع): 1/-1 در هر تعداد ستون درست است؛
-   اسپنِ ثابت «2» در گرید تک‌ستونیِ موبایل ستون ضمنی می‌ساخت و کل فرم بهم می‌ریخت */
 .form-grid__bar { grid-column: 1 / -1; }
 @media (max-width: 640px) {
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .span-2 { grid-column: span 1; }
 }
 
-/* سوییچ */
 .switch {
   position: relative;
   width: 42px;
@@ -230,8 +216,6 @@
 .switch input:checked + .switch__track::after { transform: translateX(-18px); }
 html[dir='ltr'] .switch input:checked + .switch__track::after { transform: translateX(18px); }
 
-/* ─────────────── کارت ─────────────── */
-
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -245,15 +229,11 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   gap: var(--sp-3);
   padding: var(--sp-4) var(--sp-5);
   border-bottom: 1px solid var(--border);
-  /* m94 — سرریز موبایل: سرِ کارت با بج/دکمهٔ بلند باید بشکند، نه اینکه صفحه را
-     افقی بکشد (تب تفسیر بالینی — کارت OT در ۳۶۶px جا نمی‌شد و UI موبایل بهم می‌ریخت) */
   flex-wrap: wrap;
 }
 .card__title { font-size: var(--fs-lg); font-weight: 700; line-height: var(--lh-heading, 1.4); margin-inline-end: auto; } /* m166-e */
 .card__body { padding: var(--sp-5); }
 .card__body--flush { padding: 0; }
-
-/* ─────────────── جدول ─────────────── */
 
 .table-wrap { overflow-x: auto; }
 .table {
@@ -286,9 +266,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .table tbody tr.is-clickable { cursor: pointer; }
 .table tbody tr.is-clickable:hover { background: color-mix(in srgb, var(--primary) 6%, transparent); }
 
-/* ─── جدول ریسپانسیو (M15.2): ردیف → کارت انباشته در موبایل ───
-   الگوی CSS خالص: سربرگ پنهان، هر td یک ردیف «برچسب: مقدار»، هر tr یک کارت.
-   برچسب‌ها از data-label (توسط dataTable) می‌آیند — بدون تکرار کد JS. */
 @media (max-width: 640px) {
   .table-wrap { overflow-x: visible; }
   .table { display: block; }
@@ -322,16 +299,12 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
     color: var(--text-3);
   }
   .table td > * { min-width: 0; }
-  /* سلول نام: برجسته، بدون برچسب — خودش گویاست */
   .table td:first-child { font-weight: 600; }
   .table td:first-child::before { display: none; }
-  /* سلول عملیات: دکمه‌ها در یک ردیف قابل شکستن، بدون برچسب */
   .table td:last-child { padding-top: var(--sp-2); }
   .table td:last-child::before { display: none; }
   .table td:last-child .cell-actions { flex-wrap: wrap; justify-content: flex-start; }
 }
-
-/* ─────────────── بج و چیپ ─────────────── */
 
 .badge {
   display: inline-flex;
@@ -350,7 +323,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .badge--warning { background: var(--warning-soft); color: var(--warning); }
 .badge--neutral { background: var(--surface-3);    color: var(--text-2); }
 .badge--accent  { background: var(--accent-soft);  color: var(--on-accent-soft); }
-/* m84.1 — بج مرخصی (آبی) و بیماری (بنفش) — قبلاً هر دو warning بودند */
 .badge--info    { background: var(--info-soft, var(--accent-soft)); color: var(--info, var(--accent)); }
 .badge--sick    { background: color-mix(in srgb, var(--sick, #9333EA) 14%, transparent); color: var(--sick, #9333EA); }
 
@@ -378,8 +350,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   line-height: var(--lh-ui, 1.5); /* m166-e — هماهنگ با مقیاس تایپ */
 }
 
-/* ─────────────── هشدارها ─────────────── */
-
 .alert {
   display: flex;
   gap: var(--sp-3);
@@ -394,13 +364,10 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .alert--error   { background: var(--error-soft);   color: var(--error);   border-color: color-mix(in srgb, var(--error) 30%, transparent); }
 .alert--info    { background: var(--primary-soft); color: var(--on-primary-soft); border-color: color-mix(in srgb, var(--primary) 25%, transparent); }
 
-/* ─────────────── مودال ─────────────── */
-
 .modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(15, 17, 19, 0.5);
-  /* m144 — شیشهٔ مات‌تر و اشباع‌تر: عمق واقعی پشت مودال */
   backdrop-filter: blur(8px) saturate(1.15);
   -webkit-backdrop-filter: blur(8px) saturate(1.15);
   display: grid;
@@ -419,11 +386,9 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-3);
-  /* m114 — ورود فنری نرم (اسپرینگ سبک) */
   animation: pop-in var(--dur-4, 380ms) var(--ease-spring) both;
 }
 
-/* m26 — خروج نرم مودال (هماهنگ با is-leaving در ui.js) */
 @keyframes modal-out {
   to { opacity: 0; transform: scale(0.96) translateY(6px); }
 }
@@ -465,13 +430,10 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .modal__foot .spacer { margin-inline-start: auto; }
 
 @keyframes fade-in { from { opacity: 0; } }
-/* m114 — پاپ فنری: کمی بزرگ‌تر از قبل شروع می‌شود تا حس «پرش به جلو» بدهد */
 @keyframes pop-in {
   from { opacity: 0; transform: translateY(12px) scale(0.965); }
   60% { opacity: 1; }
 }
-
-/* ─────────────── توست ─────────────── */
 
 .toast-stack {
   position: fixed;
@@ -494,7 +456,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   box-shadow: var(--shadow-3);
   font-size: var(--fs-sm);
   font-weight: 500;
-  /* m114 — ورود فنری از پایین با اورشوت ملایم */
   animation: toast-in var(--dur-4, 380ms) var(--ease-spring) both;
 }
 .toast.is-leaving { animation: toast-out var(--fast) both; }
@@ -508,8 +469,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   60% { opacity: 1; }
 }
 @keyframes toast-out { to { opacity: 0; transform: translateY(8px); } }
-
-/* ─────────────── اسپینر و حالت خالی ─────────────── */
 
 .spinner {
   width: 22px;
@@ -534,7 +493,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   width: 52px;
   height: 52px;
   border-radius: var(--radius-lg);
-  /* m114 — هالهٔ برند دور آیکن حالت خالی */
   background: var(--empty-halo, var(--surface-2));
   box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 5%, transparent);
   display: grid;
@@ -544,8 +502,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .empty__title { font-weight: 600; color: var(--text-2); }
 .empty__hint { font-size: var(--fs-sm); max-width: 340px; }
 .empty .btn { margin-top: var(--sp-2); }
-
-/* ─────────────── گروه دکمه‌ای (segmented) ─────────────── */
 
 .seg {
   display: inline-flex;
@@ -571,8 +527,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   color: var(--text);
   box-shadow: var(--shadow-1);
 }
-
-/* ─────────────── کی‌پی‌آی ─────────────── */
 
 .kpi-grid {
   display: grid;
@@ -619,8 +573,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .kpi--error    { --kpi-tint: var(--error); }
 .kpi--neutral  { --kpi-tint: var(--text-3); }
 
-/* ─────────────── M6 — کلیدها و توکن ─────────────── */
-
 .code-block {
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -650,9 +602,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   margin: var(--sp-3) 0 0;
 }
 
-/* ═══════════════ M7 — موبایل‌فرندلی ═══════════════ */
-
-/* مودال به‌صورت bottom-sheet در صفحه‌های کوچک */
 @media (max-width: 640px) {
   .modal-overlay {
     padding: 0;
@@ -672,19 +621,16 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   from { opacity: 0; transform: translateY(24px); }
 }
 
-/* جلوگیری از زوم خودکار iOS هنگام فوکوس روی فرم */
 @media (max-width: 640px) {
   .input, .select, .textarea { font-size: 16px; }
 }
 
-/* فشرده‌سازی برای صفحه‌های خیلی کوچک */
 @media (max-width: 480px) {
   .table th, .table td { padding: var(--sp-2) var(--sp-3); }
   .kpi { padding: var(--sp-3) var(--sp-4); }
   .kpi__value { font-size: var(--fs-xl); }
 }
 
-/* هدف لمسی راحت‌تر روی دستگاه‌های لمسی */
 @media (pointer: coarse) {
   .seg__btn { padding: 9px var(--sp-4); }
   .chip { padding: 7px var(--sp-4); }
@@ -692,9 +638,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   .btn--sm { padding: 8px var(--sp-3); }
 }
 
-/* ═══════════════ M8 — برچسب‌ها + جستجوی سراسری ═══════════════ */
-
-/* ─── رنگ دسته برچسب‌ها (بر پایه توکن‌های موجود) ─── */
 .tag-chip, .tag-toggle {
   --tag-color: var(--text-3);
 }
@@ -704,7 +647,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .tag-chip--custom, .tag-toggle--custom     { --tag-color: #9A6BD6; }
 :root[data-theme='dark'] .tag-chip--custom, :root[data-theme='dark'] .tag-toggle--custom { --tag-color: #B590E8; }
 
-/* m81 — حذف برچسب توسط مدیر: چیپ + دکمهٔ حذف کوچک در یک ردیف */
 .tag-toggle-wrap { display: inline-flex; align-items: center; gap: 3px; }
 .tag-del {
   display: inline-flex; align-items: center; justify-content: center;
@@ -715,7 +657,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 }
 .tag-del:hover { color: var(--error); background: var(--error-soft); }
 
-/* ─── چیپ برچسب ─── */
 .tag-chip {
   display: inline-flex;
   align-items: center;
@@ -763,7 +704,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 }
 .tag-more { font-size: var(--fs-xs); color: var(--text-3); align-self: center; }
 
-/* ─── فیلتر برچسب در toolbar دانش‌آموزان ─── */
 .tag-filter {
   display: flex;
   align-items: flex-start;
@@ -791,7 +731,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   gap: 6px;
 }
 
-/* ─── دکمه toggle برچسب (فیلتر + ویرایشگر) ─── */
 .tag-toggle {
   display: inline-flex;
   align-items: center;
@@ -816,7 +755,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tag-color) 25%, transparent);
 }
 
-/* ─── ویرایشگر برچسب‌ها (مودال) ─── */
 .tag-editor {
   display: flex;
   flex-direction: column;
@@ -851,7 +789,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   align-items: center;
 }
 
-/* ─── پروفایل: ردیف برچسب‌ها ─── */
 .profile-tags {
   margin-top: var(--sp-4);
   padding-top: var(--sp-4);
@@ -866,7 +803,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   gap: 6px;
 }
 
-/* ─── دکمه جستجوی سراسری در topbar ─── */
 .gsearch-btn {
   display: inline-flex;
   align-items: center;
@@ -899,7 +835,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   padding: 1px 6px;
 }
 
-/* ─── پالت جستجو ─── */
 .modal--gsearch .modal__body { display: flex; flex-direction: column; gap: var(--sp-3); }
 .gsearch__input { font-size: var(--fs-lg); }
 .gsearch__results {
@@ -996,7 +931,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 
 .spinner--sm { width: 20px; height: 20px; border-width: 2px; }
 
-/* ─── ریسپانسیو M8 ─── */
 @media (max-width: 860px) {
   .gsearch-btn__label, .gsearch-btn kbd { display: none; }
   .gsearch-btn { min-width: 0; padding: 8px; }
@@ -1008,11 +942,8 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   .gsearch__results { max-height: 52vh; }
 }
 
-/* ─────────────── M15.1 — تقویم جلالی (jalali-picker) ─────────────── */
-
 .jdate { position: relative; }
 
-/* m66.1 — تریگر: دکمهٔ تقویم + کادر قابل تایپ */
 .jdate__row { display: flex; gap: 6px; }
 .jdate__field { flex: 1; min-width: 0; }
 .jdate__field.is-empty { color: var(--text-3); }
@@ -1049,7 +980,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   gap: var(--sp-2);
 }
 
-/* m66.1 — سرصفحه: ناوبری ماه + دو منوی کشویی ماه/سال (پرش یک‌کلیکی به هر سال) */
 .jdate__head {
   display: flex;
   align-items: center;
@@ -1104,11 +1034,8 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 }
 .jdate__hint { font-size: var(--fs-xs); color: var(--text-3); text-align: center; }
 
-/* ─── M21: وضعیت پذیرش در جدول دانش‌آموزان (چند badge عمودی) ─── */
 .table .cell-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .wl-actions .linklike { display: inline-flex; align-items: center; }
-
-/* ═══════════════ m35 — سنجش روزانه (غربال نوآموزان) ═══════════════ */
 
 .sanj-composer {
   display: flex;
@@ -1143,7 +1070,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   gap: var(--sp-2);
 }
 
-/* m70 — ردیف دومنظوره: موبایل ستونی، دسکتاپ یک‌خطی (نام | برچسب‌ها | عملیات) */
 .sanj-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1236,7 +1162,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   white-space: nowrap;
 }
 
-/* m70 — فلوی سنجش روزانه v2: ورودی بزرگ + چیپ‌های درشت‌تر + دوستونهٔ دسکتاپ */
 .input--xl {
   font-size: var(--fs-lg);
   font-weight: 500;
@@ -1273,9 +1198,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   }
 }
 
-/* ═══════════════ m37 — شاخص سنجش (داشبورد + تنظیمات + ویجت روز کاری) ═══════════════ */
-
-/* گزارش کوتاه سنجش — چهار شاخص فوری */
 .goal-report {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1308,7 +1230,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   max-width: 100%;
 }
 
-/* نوار تحقق هدف سال */
 .goal-block {
   display: grid;
   gap: var(--sp-2);
@@ -1336,7 +1257,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 }
 .goal-noset { margin-bottom: var(--sp-3); }
 .goal-spark { margin-top: var(--sp-1); }
-/* m71 — فهرست اهداف همزمان (کارت سنجش داشبورد) */
 .goal-rows {
   display: grid;
   gap: var(--sp-3);
@@ -1362,7 +1282,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   flex-wrap: wrap;
 }
 
-/* ویجت «سنجش‌های این روز» در روز کاری */
 .sanj-widget__empty {
   display: flex;
   align-items: center;
@@ -1397,7 +1316,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   flex-wrap: wrap;
 }
 
-/* ویرایشگر شاخص سنجش در تنظیمات */
 .sanj-targets { display: grid; gap: var(--sp-2); }
 .sanj-targets__row {
   display: flex;
@@ -1415,12 +1333,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   .goal-report { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   m69 — کارت v2 + KPI v2 + تصویرسازی + جداکننده
-   افزودنی: v1 دست‌نخورده؛ این بلوک امکان‌های تازه اضافه می‌کند
-   ═══════════════════════════════════════════════════════════════ */
-
-/* چیپ آیکون در سربرگ کارت */
 .card__ico {
   width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
   display: grid; place-items: center;
@@ -1438,7 +1350,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   font-size: var(--fs-sm); color: var(--text-2);
 }
 
-/* KPI v2 — ردیف آیکون + ترند ▲▼ */
 .kpi__row { display: flex; align-items: center; gap: var(--sp-2); }
 .kpi__ico {
   width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
@@ -1455,7 +1366,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .kpi__trend--down { color: var(--error); background: var(--error-soft); }
 .kpi--neutral .kpi__ico { color: var(--text-3); background: var(--surface-3); }
 
-/* تصویرسازی حالت خالی */
 .illo { width: min(180px, 62%); height: auto; display: block; margin-inline: auto; padding: var(--sp-2) 0; }
 .illo svg { width: 100%; height: auto; overflow: visible; }
 .illo--hero {
@@ -1464,7 +1374,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 }
 .empty { display: flex; flex-direction: column; align-items: center; text-align: center; }
 
-/* جداکنندهٔ بخش با خط محوشونده */
 .divider {
   display: flex; align-items: center; gap: var(--sp-3);
   margin: var(--sp-5) 0 var(--sp-4);
@@ -1472,12 +1381,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 }
 .divider::before { content: ''; flex: 1; height: 1px; background: linear-gradient(to left, var(--border), transparent); }
 .divider::after { content: ''; flex: 1; height: 1px; background: linear-gradient(to right, var(--border), transparent); }
-
-/* ═══════════════════════════════════════════════════════════════
-   m114 — سیستم اسکلتون (Skeleton) — بارگذاری مدرن به‌جای اسپینر
-   .skel بلوک پایه · ترکیب‌ها: skeletonState() در ui.js
-   احترام به prefers-reduced-motion: موج خاموش می‌شود (base.css)
-   ═══════════════════════════════════════════════════════════════ */
 
 @keyframes skel-wave {
   0% { background-position: 200% 0; }
@@ -1496,14 +1399,12 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   min-height: 12px;
 }
 
-/* ترکیب‌های پرکاربرد */
 .skel--line   { height: 12px; }
 .skel--line--lg { height: 16px; }
 .skel--title  { height: 20px; width: 38%; border-radius: var(--radius); }
 .skel--chip   { height: 26px; width: 88px; border-radius: var(--radius-full); }
 .skel--block  { height: 64px; border-radius: var(--radius); }
 
-/* ردیف جدولی: آواتار + دو خط + چیپ */
 .skel-row {
   display: flex;
   align-items: center;
@@ -1520,7 +1421,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .skel-row__lines .skel--line:last-child { width: 55%; }
 .skel-row__meta { width: 76px; flex-shrink: 0; }
 
-/* کارت اسکلتی برای گریدهای KPI/داشبورد */
 .skel-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -1532,7 +1432,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   gap: var(--sp-3);
 }
 
-/* ظرف اسکلتون — جایگزین state-block در بارگذاری اولیهٔ فهرست‌ها */
 .skel-state {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1552,7 +1451,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   padding: var(--sp-5);
 }
 
-/* کاربران حساس به حرکت: فقط پالس آهستهٔ شفافیت، بدون موج افقی */
 @media (prefers-reduced-motion: reduce) {
   .skel {
     animation: skel-pulse 1.8s ease-in-out infinite;
@@ -1564,7 +1462,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   }
 }
 
-/* ─────────────── m115 — منوی سرریز عملیات ردیف (⋯) ─────────────── */
 .row-menu {
   position: relative;
   display: inline-flex;
@@ -1592,7 +1489,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   gap: 2px;
   animation: rowmenu-in 130ms var(--ease-spring, ease-out);
 }
-/* display:flex نویسنده بر hidden مرورگر اولویت می‌یابد — بستن صریح */
 .row-menu__pop[hidden] { display: none; }
 @keyframes rowmenu-in {
   from { opacity: 0; transform: translateY(-5px) scale(0.98); }
@@ -1623,7 +1519,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   background: var(--border-1, var(--border, #e5e7eb));
 }
 
-/* ─── m117 — انتخابگر تمرین از بانک تمرین (پیوست جلسه‌ها) ─── */
 .expick-chipswrap {
   display: flex;
   flex-direction: column;
@@ -1631,7 +1526,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   max-height: 132px; /* دو ردیف چیپ زیاد است — سرریز اسکرول می‌شود */
   overflow-y: auto;
 }
-/* display:flex نویسنده بر hidden مرورگر اولویت می‌یابد — بستن صریح (درس m115) */
 .expick-chipswrap[hidden] { display: none; }
 .expick-chips {
   display: flex;
@@ -1668,7 +1562,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .expick-row .btn { flex: 0 0 auto; }
 .expick-foot { margin-top: 2px; }
 
-/* m117 — ردیف برچسب فیلد (برچسب + دکمهٔ کناری مثل «از بانک تمرین») */
 .field__labelrow {
   display: flex;
   align-items: center;

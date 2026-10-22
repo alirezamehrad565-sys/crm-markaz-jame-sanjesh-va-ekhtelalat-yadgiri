@@ -1,27 +1,6 @@
--- مایگریشن اسکیما D1 — امتیازدهی چک‌لیست نسخهٔ ۲
--- سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
--- ============================================================
--- — موتور تشخیص داخلی — فاز ۲: نمره‌گذاری حرفه‌ای روان‌سنجی + حذف مدیر
--- دستور کاربر:
--- «امکان حذف رویداد ها برای مدیر فراهم بشه»
--- «نمیتونی تو سوالات گزینه ای برای هر گزینه نمره تعیین کنی»
--- «چک لیست ها باید با به روز ترین متد های حرفه ای تو زمینه روانشناسی ساخته بشه»
--- فقط اضافه‌ای (بازگشت‌پذیر):
--- case_events.deleted_at/deleted_by حذف نرم رویداد (فقط مدیر) — append-only می‌ماند
--- case_event_types.subscales زیرمقیاس‌های چک‌لیست (JSON: [{id,name,excludeFromTotal?,bands?}])
--- فیلدهای v2 داخل JSON ستون fields: scoredOptions (نمرهٔ هر گزینه) / reverse / critical / criticalMin / subscaleId
--- باندها: +color (ok|warn|danger) +advice (تفسیر و توصیهٔ خودکار)
--- ارتقای seedهای به ساختار روان‌سنجی v2 (SDQ: پنج زیرمقیاس + آیتم معکوس + نمرهٔ کل بدون رفتار اجتماعی)
--- + seed پنجم: غربال چندگزینه‌ای سریع (نمونهٔ نمره‌گذاری هر گزینه + آیتم بحرانی)
--- ============================================================
-
 ALTER TABLE case_events ADD COLUMN deleted_at TEXT;
 ALTER TABLE case_events ADD COLUMN deleted_by TEXT;
 ALTER TABLE case_event_types ADD COLUMN subscales TEXT;
-
--- ───────────── ۱) SDQ والدین — پنج زیرمقیاس استاندارد + آیتم معکوس ─────────────
--- نمرهٔ کل دشواری‌ها = هیجانی + رفتاری + بیش‌فعالی + هم‌سالان (۰..۳۸ — ۱۹ آیتم) — رفتار اجتماعی مطلوب جدا محاسبه می‌شود
--- آیتم‌های مثبت‌گویی (i07,i11,i14,i23,i24) معکوس نمره می‌گیرند
 
 UPDATE case_event_types SET
 subscales = '[
@@ -64,16 +43,12 @@ bands = '[
 updated_at = updated_at
 WHERE key = 'sdq-parent' AND deleted_at IS NULL;
 
--- ───────────── ۲) کانرز کوتاه — توصیهٔ خودکار باندها ─────────────
-
 UPDATE case_event_types SET
 bands = '[
   {"max":14,"label":"در محدودهٔ عادی","color":"ok","advice":"نشانه‌های بیش‌فعالی/کم‌توجهی عادی است — پایش دوره‌ای کافی است."},
   {"max":19,"label":"مرزی — نیاز به توجه","color":"warn","advice":"نمرهٔ مرزی؛ تکمیل هم‌زمان چک‌لیست معلم و مشاهدهٔ کلاس توصیه می‌شود."},
   {"max":9999,"label":"قابل توجه — نیاز به ارزیابی تخصصی","color":"danger","advice":"نشانه‌ها بالاست؛ ارزیابی چندمرجعی ADHD و برنامهٔ مداخلهٔ ساخت‌یافته لازم است."}]'
 WHERE key = 'conners-short' AND deleted_at IS NULL;
-
--- ───────────── ۳) چک‌لیست رفتاری کودک — چهار زیرمقیاس + آیتم بحرانی ─────────────
 
 UPDATE case_event_types SET
 subscales = '[
@@ -109,9 +84,6 @@ bands = '[
   {"max":9999,"label":"قابل توجه — نیاز به ارزیابی تخصصی","color":"danger","advice":"نشانه‌ها بالاست؛ ارزیابی تخصصی و جلسهٔ کمیسیون پرونده پیشنهاد می‌شود."}]'
 WHERE key = 'achenbach-practical' AND deleted_at IS NULL;
 
--- ───────────── ۴) چک‌لیست کلاس معلم — شایستگی (معکوس) جدا از نشان‌های اختلال ─────────────
--- نمرهٔ کل = فقط نشان‌های اختلال (۰..۱۸)؛ شایستگی کلاسی به‌عنوان نقطهٔ قوت جدا محاسبه می‌شود
-
 UPDATE case_event_types SET
 subscales = '[
   {"id":"competence","name":"شایستگی کلاسی (نقطهٔ قوت)","excludeFromTotal":true,"bands":[{"max":8,"label":"ضعیف — نیازمند پیگیری","color":"danger","advice":"شایستگی کلاسی پایین است؛ هماهنگی معلم-مرکز و تمرین مهارتی لازم است."},{"max":12,"label":"متوسط","color":"warn"},{"max":9999,"label":"مطلوب","color":"ok"}]},
@@ -135,8 +107,6 @@ bands = '[
   {"max":10,"label":"مرزی — نیاز به توجه","color":"warn","advice":"نشان‌های مرزی؛ هماهنگی با خانواده و بازپرسانی چهار هفته بعد توصیه می‌شود."},
   {"max":9999,"label":"قابل توجه — نیاز به ارزیابی تخصصی","color":"danger","advice":"نشان‌ها بالاست؛ ارزیابی چندمرجعی و مداخلهٔ کلاسی ساخت‌یافته لازم است."}]'
 WHERE key = 'teacher-classroom' AND deleted_at IS NULL;
-
--- ───────────── ۵) seed جدید: غربال چندگزینه‌ای سریع — نمونهٔ نمرهٔ هر گزینه + آیتم بحرانی ─────────────
 
 INSERT OR IGNORE INTO case_event_types (id, key, title, category, icon, family_fillable, fields, bands, tags, audience, active, created_by, subscales)
 VALUES (

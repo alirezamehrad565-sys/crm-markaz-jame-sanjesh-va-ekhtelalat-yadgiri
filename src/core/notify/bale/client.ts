@@ -1,18 +1,7 @@
-/**
- * هستهٔ اعلان و کلاینت بات بله — کلاینت HTTP/API
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// آداپتور کانال بله — Bot API رسمی (tapi.bale.ai)
-// قوانین:
-// * fetch تزریقی است (قابل تست بدون شبکه)
-// * send هرگز throw نمی‌کند — خطا در SendResult برمی‌گردد (قرارداد NotifyChannel)
-// * token در URL قرار می‌گیرد و در logها هرگز نوشته نمی‌شود
-
 import type { NotifyChannel, OutboundMessage, SendResult } from '../types';
 
 export interface BaleClientOptions {
   token: string;
-  /** برای تست یا تغییر دامنه API */
   apiBase?: string;
   fetchImpl?: typeof fetch;
 }
@@ -38,7 +27,6 @@ export function createBaleChannel(options: BaleClientOptions): NotifyChannel {
           chat_id: message.to,
           text: message.text
         };
-        // دکمه‌های inline (لغو نوبت توسط همکار)
         if (message.buttons && message.buttons.length > 0) {
           payload.reply_markup = {
             inline_keyboard: message.buttons.map((row) =>
@@ -46,7 +34,6 @@ export function createBaleChannel(options: BaleClientOptions): NotifyChannel {
             )
           };
         } else if (message.keyboard && message.keyboard.length > 0) {
-          // کیبورد ثابت ناوبری (دکمه‌های متنی پایین چت — همیشه نمایان)
           payload.reply_markup = {
             keyboard: message.keyboard.map((row) => row.map((text) => ({ text }))),
             resize_keyboard: true
@@ -74,7 +61,6 @@ export function createBaleChannel(options: BaleClientOptions): NotifyChannel {
           externalId: messageId != null ? String(messageId) : undefined
         };
       } catch (err) {
-        // خطای شبکه/DNS و… — بدون لو دادن token
         return {
           ok: false,
           error: `BALE_NETWORK: ${err instanceof Error ? err.message : 'unknown'}`

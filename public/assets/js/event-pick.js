@@ -1,16 +1,3 @@
-/**
- * انتخابگر رویداد (فرم/پرسش‌نامه) از رویدادساز
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// event-pick.js — انتخابگر «رویداد» (فرم/پرسش‌نامه) از رویدادساز برای پیوست جلسه‌ها
-// (خواست کاربر: «دکمه افزودن رویداد هم باید توی قالب باشه» — توضیح کاربر:
-// «منظورم از دکمه افزودن رویداد همون افزودن فرم و پرسش‌نامه به قالب جلسات مداخله است»)
-// کاربرد: قالب‌ساز (views/templates.js) + افزودن/ویرایش جلسهٔ برنامهٔ جلسه به جلسه
-// (clinical-insights.js — از طریق قابلیت extra در مودال فرم‌ساز عمومی).
-// پیوند رویداد به جلسه متنی است (شِمای سرور: type + text — type تازهٔ 'event') —
-// عنوان فرم/پرسش‌نامهٔ انتخابی از رویدادساز به کادر «رویداد (فرم/پرسش‌نامه)» آن جلسه
-// اضافه می‌شود؛ سقف ۵۰۰ نویسهٔ آیتم رعایت می‌شود.
-
 import { api } from './api.js';
 import { el, icon, toast, openModal, emptyState, skeletonState } from './ui.js';
 import { fa } from './format.js';
@@ -22,7 +9,6 @@ const CATEGORY_LABELS = { session: 'جلسه', checklist: 'چک‌لیست', not
 const AUDIENCE_LABELS = { family: 'خانواده', teacher: 'معلم کلاس', both: 'خانواده و معلم' };
 const CATEGORY_KEYS = ['session', 'checklist', 'note'];
 
-/** افزودن عنوان فرم/پرسش‌نامه به کادر متنی آیتم جلسه — جداکنندهٔ «؛ » و سقف ۵۰۰ نویسه */
 export function appendEventToTextarea(ta, title) {
   if (!ta || !title) return;
   const prev = ta.value.trim();
@@ -36,7 +22,6 @@ export function appendEventToTextarea(ta, title) {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-/** دکمهٔ کوچک «افزودن رویداد» — در ردیف برچسب فیلد فرم/پرسش‌نامهٔ جلسه قرار می‌گیرد */
 export function eventPickButton({ onPick }) {
   return el('button', {
     class: 'btn btn--ghost btn--sm expick-open',
@@ -46,10 +31,6 @@ export function eventPickButton({ onPick }) {
   }, icon('puzzle', 13), 'افزودن رویداد');
 }
 
-/**
- * مودال انتخابگر رویداد (فرم/پرسش‌نامه) — جستجو + چیپ دسته + فهرست انواع فعال رویدادساز.
- * onPick(t) با نوع انتخابی صدا و مودال بسته می‌شود.
- */
 export function openEventPicker({ onPick } = {}) {
   const state = { q: '', cat: 'all' };
   let types = null; // null = در حال بارگذاری
@@ -124,7 +105,6 @@ export function openEventPicker({ onPick } = {}) {
     renderList();
   }
 
-  // نکته: از.exb-search استفاده نمی‌کنیم —.input ساده در بدنهٔ ستونی مودال امن است
   const search = el('input', { class: 'input', placeholder: 'جستجوی عنوان فرم یا پرسش‌نامه…' });
   search.addEventListener('input', () => { state.q = search.value.trim(); renderList(); });
 

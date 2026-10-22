@@ -1,16 +1,3 @@
-/**
- * ماژول حضور و غیاب — حضور کارکنان
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// حضور و غیاب روزانه همکاران (مالک WRITE جدول staff_attendance)
-// قاعده جدید کاربر: «حضور و غیاب کارمند برای همان روز باشد»
-// قواعد:
-// - ثبت/اصلاح فقط برای «امروز تهران» مجاز است (canMarkDate) — آینده/گذشته ۴۰۰
-// - upsert روی (staff_id, date): ثبت مجدد همان روز = اصلاح وضعیت
-// - فقط کارکنان فعال قابل ثبت هستند (staff.active = 1)
-// - مشاهده تاریخچه (list / range-summary) بدون محدودیت می‌ماند
-// - audit هم‌تراکنش (قانون ۴)
-
 import type {
   AuthContext,
   StaffAttendanceDaySummary,
@@ -24,10 +11,6 @@ import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
 
-/**
- * — قاعده «فقط همان روز»: ثبت وضعیت فقط برای امروز تهران مجاز است.
- * pure و قابل تست — todayYmd تزریقی است (تست‌پذیری بدون ساعت واقعی).
- */
 export function canMarkDate(date: string, todayYmd: string): boolean {
   return date === todayYmd;
 }
@@ -78,13 +61,11 @@ function rowToRecord(row: StaffAttendanceRow): StaffAttendanceRecord {
   };
 }
 
-/** تعداد روزهای بازه (شامل دو سر) — برای تولید فهرست روزهای کاری */
 export function countDaysInclusive(from: string, to: string): number {
   const ms = Date.parse(to) - Date.parse(from);
   return Math.floor(ms / (24 * 60 * 60 * 1000)) + 1;
 }
 
-/** فهرست همه روزهای بازه (صعودی) — برای محاسبه unmarked */
 export function daysInRange(from: string, to: string): string[] {
   const out: string[] = [];
   const n = countDaysInclusive(from, to);
@@ -97,7 +78,6 @@ export function daysInRange(from: string, to: string): string[] {
   return out;
 }
 
-/** تجمیع رکوردها به خلاصه روزانه — pure و قابل تست */
 export function aggregateDay(date: string, rows: StaffAttendanceRow[], totalActiveStaff: number): StaffAttendanceDaySummary {
   const summary: StaffAttendanceDaySummary = {
     date,
@@ -123,7 +103,6 @@ export function aggregateDay(date: string, rows: StaffAttendanceRow[], totalActi
   return summary;
 }
 
-/** تجمیع رکوردها به خلاصه هر همکار — pure و قابل تست */
 export function aggregateRange(
   from: string,
   to: string,
@@ -188,7 +167,6 @@ export function createStaffAttendanceService(deps: StaffAttendanceDeps): StaffAt
       await db.transaction(async (tx) => {
         if (existing) {
           recordId = existing.id;
-          // note: undefined → حفظ یادداشت قبلی، "" → پاک کردن، متن → جایگزینی
           await tx.execute(
             `UPDATE staff_attendance SET status = ?, note = COALESCE(?, note), updated_at = ? WHERE id = ?`,
             [input.status, input.note ?? null, nowIso, existing.id]

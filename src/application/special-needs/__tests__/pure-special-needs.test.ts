@@ -1,9 +1,3 @@
-/**
- * تست‌های واحد — pure-special-needs
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// pure-special-needs.test.ts — فاز ۷: محاسبات قطعی گرید/توجه (بدون I/O)
-
 import { describe, it, expect } from 'vitest';
 import {
   deriveAttentionReasons,

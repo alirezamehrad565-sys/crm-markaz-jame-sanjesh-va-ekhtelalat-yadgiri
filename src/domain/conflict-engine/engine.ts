@@ -1,11 +1,3 @@
-/**
- * موتور تشخیص تداخل نوبت — موتور اصلی
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// تشخیص تداخل — Pure function. بدون side-effect، بدون database write.
-// قاعده: دو نوبت غیرلغوشده هم‌پوشان برای یک متخصص → هشدار نرم (ConflictWarning[])
-// هم‌پوشانی: start_a < end_b AND end_a > start_b (مرز دقیق = بدون تداخل)
-
 export interface ExistingAppointment {
   id: string;
   staffId: string;
@@ -31,10 +23,6 @@ export interface OverlapWarning {
   proposedEndAt: string;
 }
 
-/**
- * هسته pure الگوریتم — بدون دیتابیس، مستقیماً قابل تست.
- * نوبت‌های cancelled حساب نمی‌شوند؛ excludeId نادیده گرفته می‌شود.
- */
 export function findOverlaps(
   existing: ExistingAppointment[],
   proposed: ProposedWindow
@@ -53,7 +41,6 @@ export function findOverlaps(
     const aEnd = Date.parse(appt.endAt);
     if (Number.isNaN(aStart) || Number.isNaN(aEnd)) continue;
 
-    // هم‌پوشانی: start_a < end_b AND end_a > start_b
     const overlaps = aStart < pEnd && aEnd > pStart;
     if (overlaps) {
       warnings.push({

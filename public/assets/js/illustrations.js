@@ -1,11 +1,3 @@
-/**
- * تصاویر SVG داخلی (بدون فایل خارجی)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// illustrations.js — تصویرسازی‌های SVG حالت خالی + نقش‌ونگار هیرو
-// همهٔ رنگ‌ها از CSS variables می‌آیند → در تم تاریک خودکار هماهنگ می‌شوند.
-// بدون فایل خارجی — همان تزئینِ خطی-مینیمال که کاربر انتخاب کرد.
-
 function svg(inner, cls = 'illo') {
   const span = document.createElement('span');
   span.className = cls;
@@ -14,21 +6,18 @@ function svg(inner, cls = 'illo') {
   return span;
 }
 
-/** اعلانی منتشر نشده — زنگ ساکت */
 export const illoNoAnnouncements = () => svg(`
   <path d="M80 30a20 20 0 0 1 20 20c0 15 6 19 6 19H54s6-4 6-19a20 20 0 0 1 20-20Z" fill="var(--surface-2)" stroke="var(--border)"/>
   <path d="M73 76a7 7 0 0 0 14 0" stroke="var(--border)" stroke-width="3" stroke-linecap="round"/>
   <path d="M104 36h8l-8 8h8" stroke="var(--text-3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M118 26h6l-6 6h6" stroke="var(--surface-3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`);
 
-/** پایگاه دانش خالی — کتاب باز با ستاره */
 export const illoKnowledge = () => svg(`
   <path d="M80 42c-10-8-24-10-34-8v52c10-2 24 0 34 8V42Z" fill="var(--primary-soft)" stroke="var(--primary)"/>
   <path d="M80 42c10-8 24-10 34-8v52c-10-2-24 0-34 8" fill="var(--surface-2)" stroke="var(--border)"/>
   <path d="M80 42v52" stroke="var(--border)"/>
   <path d="M118 24l2.5 6 6 2.5-6 2.5-2.5 6-2.5-6-6-2.5 6-2.5 2.5-6Z" fill="var(--accent-soft)" stroke="var(--accent)"/>`);
 
-/** نقش‌ونگار گوشهٔ هیروی داشبورد — حلقه‌های محو برند */
 export const illoHeroOrnament = () => svg(`
   <circle cx="190" cy="20" r="90" stroke="var(--primary-soft)" stroke-width="26"/>
   <circle cx="190" cy="20" r="46" stroke="color-mix(in srgb, var(--accent) 18%, transparent)" stroke-width="10"/>
