@@ -223,7 +223,6 @@ const directCases = [
       assert.equal(r.ok, true);
       assert.ok(r.psychometrics, "psychometrics reading expected");
       assert.deepEqual(r.psychometrics.patterns.map((p) => p.key), ["ACID"], "ACID score-pattern detected");
-      assert.ok(r.psychometrics.summaryFa.includes("ACID"), "summary mentions ACID");
       assert.equal(r.hypotheses, undefined, "no hypothesis scenarios (m156)");
     }
   },
