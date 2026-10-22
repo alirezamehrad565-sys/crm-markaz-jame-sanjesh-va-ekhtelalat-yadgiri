@@ -13,4 +13,4 @@
 export const APP_VERSION = '1.00.38';
 
 /** شمارهٔ ماژول (milestone) متناظر با این نسخه — برای لاگ و پشتیبانی */
-export const APP_MILESTONE = 'm161';
+export const APP_MILESTONE = 'm163';
