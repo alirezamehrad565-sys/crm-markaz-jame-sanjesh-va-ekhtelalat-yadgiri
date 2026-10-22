@@ -1,5 +1,5 @@
 /**
- * ماژول درخواست مدارک از خانواده با بله — مسیرهای REST ماژول (m151 — T2)
+ * ماژول درخواست مدارک از خانواده/معلم با بله — مسیرهای REST ماژول (m151 — T2 · بازطراحی m166)
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
 // REST endpoints مدارک — بدون business logic، فقط سیم به سرویس
@@ -14,15 +14,23 @@ import type { DocumentRequestService } from './service';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function registerRoutes(app: AppHono, service: DocumentRequestService): void {
-  // ─── ثبت درخواست + ارسال پیام بله به خانواده ───
+  // ─── ثبت درخواست + ارسال پیام بله به گیرنده‌ها (خانواده و/یا معلم) ───
   app.post('/api/students/:id/document-requests', async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json<unknown>().catch(() => ({}));
-    const raw = (body ?? {}) as { templates?: unknown; custom_note?: unknown; due_hint?: unknown };
+    const raw = (body ?? {}) as {
+      tags?: unknown;
+      templates?: unknown;
+      recipients?: unknown;
+      custom_note?: unknown;
+      due_hint?: unknown;
+    };
     const result = await service.create(
       c.req.param('id'),
       {
-        templates: (Array.isArray(raw.templates) ? raw.templates : []) as never,
+        // — m166: tags جدید؛ templates کلید قدیمی برای سازگاری فراخوان‌های قبلی
+        tags: raw.tags ?? raw.templates,
+        recipients: raw.recipients,
         customNote: typeof raw.custom_note === 'string' ? raw.custom_note : null,
         dueHint: typeof raw.due_hint === 'string' ? raw.due_hint : null
       },

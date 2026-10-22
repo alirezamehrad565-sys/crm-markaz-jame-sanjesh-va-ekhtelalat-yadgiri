@@ -174,6 +174,7 @@ export type {
   AnnouncementPublic,
   AnnouncementSendSummary,
   KnowledgeRecord,
+  KnowledgeFileMeta,
   TherapistScoreEntry,
   TherapistScoreboard,
   MyPerformanceStats,

@@ -1,10 +1,12 @@
 /**
- * مدارک بله — درخواست مدارک از خانواده + کارت «مدارک دریافتی از بله» (m151 — T2)
+ * مدارک بله — درخواست مدارک از خانواده/معلم + کارت «مدارک دریافتی از بله» (m151 — T2 · بازطراحی m166)
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
 // document-requests.js — پنل دسترسی سریع پرونده:
-// «درخواست مدارک» → پیام بله به چت خانواده → خانواده عکس/فایل می‌فرستد →
-// همین کارت روی پروفایل همه را با بندانگشتی/تاریخ شمسی/برچسب قالب نشان می‌دهد.
+// «درخواست مدارک» → پیام بله به گیرنده‌های انتخابی (خانواده و/یا معلم) →
+// گیرنده عکس/فایل می‌فرستد → همین کارت روی پروفایل همه را با بندانگشتی/تاریخ شمسی/تگ نشان می‌دهد.
+// m166: فرم ساخت‌یافته حذف شد — توضیح آزاد کوتاه + چند تگ روشن (پیش‌فرض یا دلخواه)؛
+// دستهٔ مبهم «گزارش بی‌بی‌اسک» برداشته شد و کلیدهای درخواست‌های قدیمی با برچسب قدیمی نمایش می‌آیند.
 // الگوها: تامبنیل lazy با IntersectionObserver (views/exercises.js) + کارت tl-item__card
 // + مودال openModal با چیپ‌های انتخاب — بدون رنگ/فونت جدید (توکن‌های m144 دست‌نخورده).
 
@@ -12,17 +14,39 @@ import { api } from './api.js';
 import { el, icon, openModal, confirmModal, toast, toastError } from './ui.js';
 import { fa, formatJalaliDateTime } from './format.js';
 
-const DOC_TEMPLATES = [
-  { key: 'dictation', label: 'نمونهٔ املا و نوشتن‌های کلاسی' },
-  { key: 'report_card', label: 'کارنامه و برگه‌های مدرسه' },
-  { key: 'teacher_report', label: 'گزارش کتبی معلم' },
-  { key: 'prev_eval', label: 'ارزیابی/گزارش قبلی (بی‌بی‌اسک، گفتاردرمانی و…)' }
+// ───────────── تگ‌ها و گیرنده‌ها — قرارداد با pure.ts (m166) ─────────────
+
+const DOC_TAGS = [
+  { key: 'narrative', label: 'نمونهٔ روایی' },
+  { key: 'dictation', label: 'نمونهٔ املا' },
+  { key: 'exam', label: 'برگهٔ امتحان' },
+  { key: 'report_card', label: 'کارنامه' },
+  { key: 'homework', label: 'نمونهٔ تکلیف' },
+  { key: 'other', label: 'سایر مدارک' }
 ];
+
+/** برچسب کلیدهای درخواست‌های قدیمی (m151) — فقط برای نمایش رکوردهای قدیمی */
+const DOC_LEGACY_TAG_LABELS = {
+  teacher_report: 'گزارش کتبی معلم',
+  prev_eval: 'ارزیابی/گزارش قبلی'
+};
+
+const DOC_RECIPIENTS = [
+  { key: 'family', label: 'خانواده' },
+  { key: 'teacher', label: 'معلم' }
+];
+
+const DOC_TAGS_MAX = 8;
+
+/** برچسب یک تگ — پیش‌فرض/قدیمی → برچسب فارسی؛ تگ دلخواه → متن خودش */
+function docTagLabel(tag) {
+  const preset = DOC_TAGS.find((x) => x.key === tag);
+  if (preset) return preset.label;
+  return DOC_LEGACY_TAG_LABELS[tag] ?? String(tag);
+}
 
 const DOC_STATUS_BADGE = { sent: 'warning', received: 'success', closed: 'neutral' };
 const DOC_STATUS_LABEL = { sent: 'در انتظار مدارک', received: 'مدارک رسید', closed: 'بسته‌شده' };
-
-const IMG_MIME = /^image\//;
 
 const docFileUrl = (doc) => `/api/students/${doc.studentId}/received-docs/${doc.id}/file`;
 
@@ -36,46 +60,107 @@ function resolvedMime(doc) {
   return declared || 'application/octet-stream';
 }
 
-/** برچسب قالب‌های درخواستِ متناظر — رکورد بدون درخواست → خنثی */
-function templateBadges(doc, requestOfId) {
+/** تگ‌های درخواستِ متناظر مدرک — رکورد بدون درخواست → خنثی */
+function tagBadges(doc, requestOfId) {
   const req = doc.requestId ? requestOfId.get(doc.requestId) : null;
   if (!req) return el('span', { class: 'cell-sub' }, 'بدون درخواست باز');
   return el('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
-    ...(req.templates ?? []).map((t) => {
-      const meta = DOC_TEMPLATES.find((x) => x.key === t);
-      return el('span', { class: 'badge badge--neutral' }, meta?.label ?? t);
-    })
+    ...(req.tags ?? []).map((t) => el('span', { class: 'badge badge--neutral' }, docTagLabel(t)))
   );
 }
 
-// ─────────────── مودال «درخواست مدارک» ───────────────
+// ─────────────── مودال «درخواست مدارک» — گیرنده + تگ + توضیح آزاد ───────────────
 
 export function openDocRequestModal(student, { onSent } = {}) {
-  const picked = new Set();
-  const chips = DOC_TEMPLATES.map((t) => {
+  const pickedRecipients = new Set(['family']); // — خانواده پیش‌فرض؛ معلم به‌اختیار
+  const pickedTags = new Set();
+
+  const recipientChips = DOC_RECIPIENTS.map((r) => {
     const chip = el('button', {
       type: 'button',
       class: 'chip',
       onclick: () => {
-        if (picked.has(t.key)) picked.delete(t.key);
-        else picked.add(t.key);
-        chip.classList.toggle('is-active', picked.has(t.key));
+        if (pickedRecipients.has(r.key)) pickedRecipients.delete(r.key);
+        else pickedRecipients.add(r.key);
+        chip.classList.toggle('is-active', pickedRecipients.has(r.key));
       }
-    }, t.label);
+    }, r.label);
+    if (pickedRecipients.has(r.key)) chip.classList.add('is-active');
     return chip;
+  });
+
+  const tagBox = el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } });
+
+  function paintTags() {
+    const chips = DOC_TAGS.map((t) => el('button', {
+      type: 'button',
+      class: `chip${pickedTags.has(t.key) ? ' is-active' : ''}`,
+      onclick: () => {
+        if (pickedTags.has(t.key)) pickedTags.delete(t.key);
+        else if (pickedTags.size >= DOC_TAGS_MAX) {
+          toast(`بیش از ${fa(DOC_TAGS_MAX)} تگ نمی‌شود`, 'warning');
+          return;
+        } else pickedTags.add(t.key);
+        paintTags();
+      }
+    }, t.label));
+    // — تگ دلخواه: چیپ فعال؛ کلیک = حذف
+    for (const t of pickedTags) {
+      if (DOC_TAGS.some((x) => x.key === t)) continue;
+      chips.push(el('button', {
+        type: 'button',
+        class: 'chip is-active',
+        title: 'حذف تگ دلخواه',
+        onclick: () => {
+          pickedTags.delete(t);
+          paintTags();
+        }
+      }, t, ' ', icon('x', 11)));
+    }
+    tagBox.replaceChildren(...chips);
+  }
+  paintTags();
+
+  const customTag = el('input', {
+    class: 'input',
+    placeholder: 'تگ دلخواه — مثل «گزارش معلم خصوصی»',
+    maxlength: 40
+  });
+  const addCustomTag = () => {
+    const text = String(customTag.value ?? '').replace(/\s+/g, ' ').trim();
+    if (!text) return;
+    if (pickedTags.size >= DOC_TAGS_MAX) {
+      toast(`بیش از ${fa(DOC_TAGS_MAX)} تگ نمی‌شود`, 'warning');
+      return;
+    }
+    pickedTags.add(text.slice(0, 40));
+    customTag.value = '';
+    paintTags();
+  };
+  customTag.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      addCustomTag();
+    }
   });
 
   const note = el('textarea', {
     class: 'textarea', rows: 3,
-    placeholder: 'یادداشت اختیاری — مثلاً: فقط صفحات آخرین کارنامه کافی است.'
+    placeholder: 'توضیح آزاد (اختیاری) — مثلاً: چند نمونه املای ماه اخیر و آخرین کارنامه کافی است.'
   });
 
   const { close } = openModal({
-    title: 'درخواست مدارک از خانواده',
+    title: 'درخواست مدارک',
     body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
       el('p', { style: { margin: 0, color: 'var(--text-2)', fontSize: 'var(--fs-sm)' } },
-        `پیام درخواست با بات بله به گفتگوی خانوادهٔ ${student.firstName} ${student.lastName} ارسال می‌شود؛ عکس/فایلی که بفرستند مستقیم به همین پرونده ضمیمه می‌شود.`),
-      el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } }, ...chips),
+        `پیام درخواست با بات بله به گیرنده‌های انتخابی (خانواده و/یا معلم) ارسال می‌شود؛ عکس/فایلی که بفرستند مستقیم به پروندهٔ ${student.firstName} ${student.lastName} ضمیمه می‌شود.`),
+      el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
+        el('span', { class: 'cell-sub' }, 'گیرنده:'),
+        ...recipientChips),
+      tagBox,
+      el('div', { style: { display: 'flex', gap: '6px' } },
+        customTag,
+        el('button', { class: 'btn btn--soft btn--sm', type: 'button', onclick: addCustomTag }, icon('plus', 14), 'افزودن')),
       note
     ),
     actions: [
@@ -83,17 +168,22 @@ export function openDocRequestModal(student, { onSent } = {}) {
       (c) => {
         const btn = el('button', { class: 'btn btn--primary' }, icon('bot', 16), 'ارسال درخواست');
         btn.onclick = async () => {
-          if (picked.size === 0) {
-            toast('حداقل یک قالب مدرک انتخاب کنید', 'warning');
+          if (pickedRecipients.size === 0) {
+            toast('حداقل یک گیرنده انتخاب کنید', 'warning');
+            return;
+          }
+          if (pickedTags.size === 0) {
+            toast('حداقل یک تگ مدرک انتخاب کنید', 'warning');
             return;
           }
           btn.disabled = true;
           try {
             const res = await api.post(`/api/students/${student.id}/document-requests`, {
-              templates: [...picked],
+              tags: [...pickedTags],
+              recipients: [...pickedRecipients],
               custom_note: note.value.trim() || null
             });
-            toast(`درخواست برای ${fa(res.data.deliveredChats)} گفتگوی خانواده ارسال شد`, 'success');
+            toast(`درخواست برای ${fa(res.data.deliveredChats)} گفتگو ارسال شد`, 'success');
             c();
             onSent?.();
           } catch (err) {
@@ -251,25 +341,27 @@ export function renderDocsQuickCard(mount, student, { onChanged } = {}) {
     const requestOfId = new Map(requests.map((r) => [r.id, r]));
     const openRequests = requests.filter((r) => r.status !== 'closed');
 
-    // ── ردیف درخواست‌های باز ──
+    // ── ردیف درخواست‌های باز — وضعیت + گیرنده + تگ‌ها (رکورد قدیمی: برچسب قدیمی) ──
     const requestRows = openRequests.map((r) => {
-      const badges = (r.templates ?? []).map((t) => {
-        const meta = DOC_TEMPLATES.find((x) => x.key === t);
-        return el('span', { class: 'badge badge--neutral' }, meta?.label ?? t);
+      const recipientBadges = (r.recipients ?? ['family']).map((rc) => {
+        const meta = DOC_RECIPIENTS.find((x) => x.key === rc);
+        return el('span', { class: 'badge badge--info' }, `به ${meta?.label ?? rc}`);
       });
+      const tagBadges = (r.tags ?? []).map((t) => el('span', { class: 'badge badge--neutral' }, docTagLabel(t)));
       return el('div', { class: 'tl-item__card', style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
         el('span', { class: `badge badge--${DOC_STATUS_BADGE[r.status] ?? 'neutral'}` }, DOC_STATUS_LABEL[r.status] ?? r.status),
-        ...badges,
+        ...recipientBadges,
+        ...tagBadges,
         r.customNote ? el('span', { class: 'cell-sub' }, r.customNote) : null,
         el('span', { style: { flex: 1 } }),
         el('span', { class: 'cell-sub' }, `${formatJalaliDateTime(r.sentAt)} — ${fa(r.deliveredChats)} گفتگو`),
         el('button', {
           class: 'btn btn--ghost btn--sm',
-          title: 'پس از بستن، مدارک جدیدِ خانواده به این درخواست ضمیمه نمی‌شود',
+          title: 'پس از بستن، مدارک جدیدِ گیرنده‌ها به این درخواست ضمیمه نمی‌شود',
           onclick: async () => {
             const ok = await confirmModal({
               title: 'بستن درخواست مدارک',
-              message: 'درخواست بسته شود؟ خانواده دیگر مدارک جدید برای همین درخواست نمی‌فرستد.',
+              message: 'درخواست بسته شود؟ خانواده و معلم دیگر مدارک جدید برای همین درخواست نمی‌فرستند.',
               confirmLabel: 'بستن درخواست'
             });
             if (!ok) return;
@@ -291,7 +383,7 @@ export function renderDocsQuickCard(mount, student, { onChanged } = {}) {
       el('div', { style: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px', justifyContent: 'center' } },
         el('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' } },
           el('b', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, d.fileName),
-          templateBadges(d, requestOfId)
+          tagBadges(d, requestOfId)
         ),
         el('div', { class: 'cell-sub' },
           `${formatJalaliDateTime(d.storedAt)} — ${d.mediaKind === 'photo' ? 'عکس' : 'فایل'}${d.caption ? ` — «${d.caption}»` : ''}`)
@@ -336,7 +428,7 @@ function emptyDocsHint(hasOpen) {
   return el('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' } },
     el('span', { class: 'cell-sub' },
       hasOpen
-        ? 'درخواست ارسال شده — به‌محض اینکه خانواده عکس یا فایل بفرستد، همین‌جا جمع می‌شود.'
-        : 'درخواست بفرستید تا مدارک خانواده این‌جا جمع شود — عکس املا، کارنامه، گزارش معلم و ارزیابی‌های قبلی با بله به پرونده ضمیمه می‌شود.')
+        ? 'درخواست ارسال شده — به‌محض اینکه خانواده یا معلم عکس یا فایل بفرستد، همین‌جا جمع می‌شود.'
+        : 'درخواست بفرستید تا مدارک این‌جا جمع شود — نمونهٔ روایی، املا، برگهٔ امتحان و کارنامه از خانواده یا معلم با بله به پرونده ضمیمه می‌شود.')
   );
 }

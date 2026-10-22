@@ -1,22 +1,42 @@
 /**
- * ماژول درخواست مدارک از خانواده با بله — توابع خالص منطق محض (بدون I/O)
+ * ماژول درخواست مدارک از خانواده/معلم با بله — توابع خالص منطق محض (بدون I/O)
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
 // منطق خالص مدارک — قابل تست بدون دیتابیس
 // الگوی exercise-bank/pure: اعتبارسنجی ورودی + نرمال‌سازی + گاردهای رسانه
+// m166: قالب‌های ساخت‌یافته → تگ‌های روشن پیش‌فرض + تگ دلخواه کوتاه؛ دستهٔ مبهم
+// «گزارش بی‌بی‌اسک» حذف شد — کلیدهای قدیمی فقط برای نمایش درست رکوردهای قدیمی می‌مانند.
 
 import { ALLOWED_EXERCISE_FILE_MIME_TYPES, MAX_EXERCISE_FILE_BYTES } from '@core/shared';
-import type { DocMediaKind, DocRequestTemplate } from './types';
+import type { DocMediaKind, DocRecipient, DocTagKey } from './types';
 
-/** برچسب فارسی قالب‌های مدارک — متن پیام درخواست و برچسب کارت پنل */
-export const DOC_REQUEST_TEMPLATE_LABELS: Record<DocRequestTemplate, string> = {
-  dictation: 'نمونهٔ املا و نوشتن‌های کلاسی',
-  report_card: 'کارنامه و برگه‌های مدرسه',
-  teacher_report: 'گزارش کتبی معلم',
-  prev_eval: 'ارزیابی/گزارش قبلی (بی‌بی‌اسک، گفتاردرمانی و…)'
+/** تگ‌های پیش‌فرض درخواست مدارک — به‌زبان روزمرهٔ درمانگر/معلم (m166) */
+export const DOC_TAG_PRESET_LABELS: Record<DocTagKey, string> = {
+  narrative: 'نمونهٔ روایی',
+  dictation: 'نمونهٔ املا',
+  exam: 'برگهٔ امتحان',
+  report_card: 'کارنامه',
+  homework: 'نمونهٔ تکلیف',
+  other: 'سایر مدارک'
 };
 
-const TEMPLATE_KEYS = Object.keys(DOC_REQUEST_TEMPLATE_LABELS) as DocRequestTemplate[];
+/** برچسب کلیدهای قدیمی (m151) — فقط برای نمایش رکوردهای قدیمی؛ در فرم جدید نمی‌آید */
+export const DOC_TAG_LEGACY_LABELS: Record<string, string> = {
+  teacher_report: 'گزارش کتبی معلم',
+  prev_eval: 'ارزیابی/گزارش قبلی'
+};
+
+const PRESET_KEYS = Object.keys(DOC_TAG_PRESET_LABELS) as DocTagKey[];
+
+/** برچسب فارسی گیرنده‌ها — کارت پنل */
+export const DOC_RECIPIENT_LABELS: Record<DocRecipient, string> = {
+  family: 'خانواده',
+  teacher: 'معلم'
+};
+
+/** سقف نویسهٔ هر تگ دلخواه / تعداد تگ‌ها — ضد شلوغی کارت و پیام */
+export const DOC_TAG_MAX_CHARS = 40;
+export const DOC_TAGS_MAX = 8;
 
 /** سقف نویسهٔ یادداشت/مهلت — هم‌تراز کپشن پیام بله */
 export const DOC_NOTE_MAX = 500;
@@ -28,17 +48,42 @@ export const DOC_REQUEST_STATUS_LABELS: Record<string, string> = {
   closed: 'بسته‌شده'
 };
 
+/** برچسب یک تگ — پیش‌فرض/قدیمی → برچسب فارسی؛ تگ دلخواه → متن خودش */
+export function docTagLabel(tag: string): string {
+  return DOC_TAG_PRESET_LABELS[tag as DocTagKey] ?? DOC_TAG_LEGACY_LABELS[tag] ?? tag;
+}
+
+/** نرمال‌سازی یک تگ دلخواه — فروکاستن فاصله + سقف نویسه (Array.from — امن برای نیم‌فاصله/اموجی) */
+export function normalizeDocTag(raw: string): string | null {
+  if (typeof raw !== 'string') return null;
+  const s = raw.replace(/[\u0000-\u001F]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (s.length === 0) return null;
+  return Array.from(s).slice(0, DOC_TAG_MAX_CHARS).join('');
+}
+
 /**
- * پارس/اعتبارسنجی قالب‌های درخواست — آرایهٔ خالی یا ناشناخته → null
- * ترتیب ورودی حفظ و تکرار حذف می‌شود (سقف = همهٔ قالب‌ها)
+ * پارس تگ‌های درخواست — کلید پیش‌فرض عیناً؛ بقیه به‌عنوان تگ دلخواه نرمال می‌شود.
+ * غیر آرایه/آیتم غیر رشته‌ای → null (خطای ۴۰۰)؛ آیتم خالی حذف؛ تکرار حذف؛ سقف ۸ تگ.
  */
-export function parseDocTemplates(raw: unknown): DocRequestTemplate[] | null {
+export function parseDocTags(raw: unknown): string[] | null {
   if (!Array.isArray(raw)) return null;
-  const out: DocRequestTemplate[] = [];
+  const out: string[] = [];
   for (const item of raw) {
     if (typeof item !== 'string') return null;
-    if (!TEMPLATE_KEYS.includes(item as DocRequestTemplate)) return null;
-    if (!out.includes(item as DocRequestTemplate)) out.push(item as DocRequestTemplate);
+    const tag = PRESET_KEYS.includes(item as DocTagKey) ? item : normalizeDocTag(item);
+    if (!tag || out.includes(tag)) continue;
+    out.push(tag);
+  }
+  return out.length > 0 ? out.slice(0, DOC_TAGS_MAX) : null;
+}
+
+/** پارس گیرنده‌ها — زیرمجموعهٔ family/teacher بدون تکرار؛ نامعتبر یا خالی → null */
+export function parseDocRecipients(raw: unknown): DocRecipient[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: DocRecipient[] = [];
+  for (const item of raw) {
+    if (item !== 'family' && item !== 'teacher') return null;
+    if (!out.includes(item)) out.push(item);
   }
   return out.length > 0 ? out : null;
 }
@@ -70,7 +115,7 @@ export function resolveDocFileName(media: { type: DocMediaKind; fileName: string
   return `مدرک-${stamp}.${ext}`;
 }
 
-/** گارد رسانهٔ خانواده — عکس همیشه مجاز؛ سند با whitelist همان تمرین‌ها؛ سقف حجم مشترک */
+/** گارد رسانهٔ خانواده/معلم — عکس همیشه مجاز؛ سند با whitelist همان تمرین‌ها؛ سقف حجم مشترک */
 export function guardDocMedia(media: { type: DocMediaKind; mime: string | null; size: number | null }): 'ok' | 'bad_type' | 'too_large' {
   if (media.type === 'document') {
     const declaredMime = (media.mime ?? 'application/octet-stream').toLowerCase();
@@ -85,10 +130,10 @@ export function guardDocMedia(media: { type: DocMediaKind; mime: string | null; 
 }
 
 /** متن بدنهٔ پیام درخواست (بدون سلام/پانویس — آن‌ها در قالب notify است) */
-export function buildDocRequestBody(templates: DocRequestTemplate[], customNote: string | null, dueHint: string | null): string {
+export function buildDocRequestBody(tags: string[], customNote: string | null, dueHint: string | null): string {
   const lines = ['این مدارک را برای پرونده نیاز داریم:'];
-  for (const t of templates) {
-    lines.push(`• ${DOC_REQUEST_TEMPLATE_LABELS[t]}`);
+  for (const t of tags) {
+    lines.push(`• ${docTagLabel(t)}`);
   }
   if (customNote) lines.push('', customNote);
   if (dueHint) lines.push(`مهلت پیشنهادی: ${dueHint}`);

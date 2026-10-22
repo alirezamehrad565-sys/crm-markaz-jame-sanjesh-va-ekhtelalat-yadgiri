@@ -1,7 +1,7 @@
 ════════════════════════════════════════════════════════════════════════
  Route Diff Report — deploy127 (src/**/*.ts  vs  worker/bundle.js)
 ════════════════════════════════════════════════════════════════════════
-Generated : 2026-10-22T09:47:00.061Z
+Generated : 2026-10-22T19:54:19.170Z
 SRC files : 196 TypeScript files under src/ (tests excluded)
 BUNDLE    : worker/bundle.js
 Rules     : line-anchored `app.<method>(` registrations; file-local const
@@ -10,27 +10,27 @@ Rules     : line-anchored `app.<method>(` registrations; file-local const
             middleware NOT counted; comments never matched.
 
 ── Totals ──────────────────────────────────────────────────────────────
-SRC registrations (raw)        :  235  (unique: 235)
-BUNDLE registrations (raw)     :  243  (unique: 243)
+SRC registrations (raw)        :  241  (unique: 241)
+BUNDLE registrations (raw)     :  249  (unique: 249)
 
 ONLY_IN_BUNDLE (extraction backlog) : 8
 ONLY_IN_SRC (stale/dead candidates) : 0
-COMMON                              : 235
+COMMON                              : 241
 
 ── ONLY_IN_BUNDLE (routes that exist only in the live bundle) ──────────
-  DELETE /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:31523]
-  GET /api/pathway-templates   [worker/bundle.js:31460]
-  GET /api/students/:param/case-formulation   [worker/bundle.js:33406]
-  PATCH /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:31512]
-  PATCH /api/pathway-templates/:param   [worker/bundle.js:31483]
-  POST /api/client-errors   [worker/bundle.js:44821]
-  POST /api/clinical-paths/:param/sessions   [worker/bundle.js:31502]
-  POST /api/pathway-templates   [worker/bundle.js:31464]
+  DELETE /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:31560]
+  GET /api/pathway-templates   [worker/bundle.js:31497]
+  GET /api/students/:param/case-formulation   [worker/bundle.js:33443]
+  PATCH /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:31549]
+  PATCH /api/pathway-templates/:param   [worker/bundle.js:31520]
+  POST /api/client-errors   [worker/bundle.js:45318]
+  POST /api/clinical-paths/:param/sessions   [worker/bundle.js:31539]
+  POST /api/pathway-templates   [worker/bundle.js:31501]
 
 ── ONLY_IN_SRC (routes that exist only in src — stale/dead-code candidates) ──
   (none)
 
-── COMMON (235) ────────────────────────────────────────────────
+── COMMON (241) ────────────────────────────────────────────────
   DELETE /api/announcements/:param   [src ×1 | bundle ×1]
   DELETE /api/appointments/:param   [src ×1 | bundle ×1]
   DELETE /api/appointments/:param/students/:param   [src ×1 | bundle ×1]
@@ -42,6 +42,7 @@ COMMON                              : 235
   DELETE /api/exercises/:param/files/:param   [src ×1 | bundle ×1]
   DELETE /api/exercises/packages/:param   [src ×1 | bundle ×1]
   DELETE /api/knowledge/:param   [src ×1 | bundle ×1]
+  DELETE /api/knowledge/:param/files/:param   [src ×1 | bundle ×1]
   DELETE /api/notifications/class-links/:param   [src ×1 | bundle ×1]
   DELETE /api/schools/:param   [src ×1 | bundle ×1]
   DELETE /api/screening/:param   [src ×1 | bundle ×1]
@@ -88,6 +89,7 @@ COMMON                              : 235
   GET /api/followups/:param   [src ×1 | bundle ×1]
   GET /api/keys   [src ×1 | bundle ×1]
   GET /api/knowledge   [src ×1 | bundle ×1]
+  GET /api/knowledge/:param/files/:param   [src ×1 | bundle ×1]
   GET /api/knowledge/manage   [src ×1 | bundle ×1]
   GET /api/me   [src ×1 | bundle ×1]
   GET /api/notifications   [src ×1 | bundle ×1]
@@ -204,6 +206,9 @@ COMMON                              : 235
   POST /api/keys   [src ×1 | bundle ×1]
   POST /api/keys/:param/revoke   [src ×1 | bundle ×1]
   POST /api/knowledge   [src ×1 | bundle ×1]
+  POST /api/knowledge/:param/files   [src ×1 | bundle ×1]
+  POST /api/knowledge/:param/files/:param/complete   [src ×1 | bundle ×1]
+  POST /api/knowledge/:param/files/begin   [src ×1 | bundle ×1]
   POST /api/notifications/:param/release   [src ×1 | bundle ×1]
   POST /api/notifications/class-links   [src ×1 | bundle ×1]
   POST /api/notifications/digest   [src ×1 | bundle ×1]
@@ -259,6 +264,7 @@ COMMON                              : 235
   PUT /api/appointments/:param/students/:param/note   [src ×1 | bundle ×1]
   PUT /api/exercises/:param/file   [src ×1 | bundle ×1]
   PUT /api/exercises/:param/files/:param/chunks/:param   [src ×1 | bundle ×1]
+  PUT /api/knowledge/:param/files/:param/chunks/:param   [src ×1 | bundle ×1]
   PUT /api/notifications/prefs/:param   [src ×1 | bundle ×1]
   PUT /api/settings   [src ×1 | bundle ×1]
   PUT /api/settings/center-hours   [src ×1 | bundle ×1]

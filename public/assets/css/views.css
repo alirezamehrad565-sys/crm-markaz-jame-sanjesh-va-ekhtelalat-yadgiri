@@ -372,6 +372,7 @@
   padding: 10px 18px;
   font-size: var(--fs-md);
   font-weight: 600;
+  line-height: var(--lh-ui, 1.5); /* m166-e — از مقیاس تایپ */
   color: var(--text-2);
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -959,8 +960,8 @@ body.is-login { background: var(--bg); }
   to { opacity: 1; transform: scale(1); }
 }
 
-.login__title { text-align: center; font-size: var(--fs-lg); font-weight: 700; color: var(--text-1); }
-.login__sub { text-align: center; font-size: var(--fs-sm); color: var(--text-3); margin-top: -6px; }
+.login__title { text-align: center; font-size: var(--fs-lg); font-weight: 700; line-height: var(--lh-heading, 1.4); color: var(--text-1); }
+.login__sub { text-align: center; font-size: var(--fs-sm); line-height: var(--lh-snug, 1.6); color: var(--text-3); margin-top: -6px; }
 
 .login__form { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .login__form .field-label { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); margin-top: 6px; }

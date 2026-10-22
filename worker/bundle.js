@@ -1046,9 +1046,10 @@ function boardSqlAndParams(sinceUtc, usageActions) {
   };
   const metrics = [
     ["exercises",
-      `(SELECT COALESCE(SUM(CASE WHEN e.team_created = 1 THEN 0.5 ELSE 1 END), 0)
+      `(SELECT COALESCE(SUM(CASE WHEN e.co_created_by IS NOT NULL OR e.team_created = 1 THEN 0.5 ELSE 1 END), 0)
           FROM exercises e
-         WHERE e.deleted_at IS NULL AND e.created_by = s.id${since("e.created_at")})`],
+         WHERE e.deleted_at IS NULL
+           AND (e.created_by = s.id OR e.co_created_by = s.id)${since("e.created_at")})`],
     ["packages",
       `(SELECT COUNT(*) FROM exercise_packages p
         WHERE p.deleted_at IS NULL AND p.created_by = s.id${since("p.created_at")})`],
@@ -1327,15 +1328,18 @@ async function handleScoring(request, env3) {
     // (تا count شرح همیشه با count تابلو یکی باشد)
     const W = since ? " AND created_at >= ?" : "";
     const P = since ? [since] : [];
-    const exerciseItems = await db.prepare(`SELECT id, title, team_created FROM exercises WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all();
+    // — m166: آیتم‌های تمرین — تمرین‌های ساختهٔ این همکار + تمرین‌هایی که هم‌سازش بوده
+    const exerciseItems = await db.prepare(`SELECT id, title, team_created, co_created_by FROM exercises WHERE deleted_at IS NULL AND (created_by = ? OR co_created_by = ?)${W} ORDER BY created_at`).bind(staffId, staffId, ...P).all();
     const packageItems = await db.prepare(`SELECT id, title FROM exercise_packages WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all();
     const templateItems = await db.prepare(`SELECT key, title FROM pathway_templates WHERE active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all();
     const formItems = await db.prepare(`SELECT id, title FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all();
     const prodW = /* @__PURE__ */ __name((key) => contentFormula.production.find((x) => x.key === key)?.weight ?? 0, "prodW");
     const exWeight = prodW("exercises");
-    // تمرین: count = شمارش خام؛ effectiveWeight = وزن مؤثر هر قلم (تیمی نصف)
+    // تمرین: count = شمارش خام؛ effectiveWeight = وزن مؤثر هر قلم (تیمی/هم‌سازدار نصف)
     const exerciseList = exerciseItems.results.map((r) => {
-      const teamCreated = r.team_created === 1;
+      // — m166: هم‌ساز بودن هم «نصف امتیاز» است — تمرینِ ساختهٔ دیگری که این همکار
+      // هم‌سازش بوده در همین فهرست با وزن ۰٫۵ می‌آید
+      const teamCreated = r.team_created === 1 || Boolean(r.co_created_by);
       return {
         id: r.id,
         title: r.title,
@@ -4151,8 +4155,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.41";
-var APP_MILESTONE = "m165";
+var APP_VERSION = "1.00.42";
+var APP_MILESTONE = "m166";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -9331,6 +9335,7 @@ var NewExerciseSchema = external_exports.object({
   format: ExerciseFormatSchema.default("worksheet"),
   external_url: external_exports.string().trim().max(500, "\u0644\u06CC\u0646\u06A9 \u0628\u06CC\u0634 \u0627\u0632 \u06F5\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").refine((v) => v === "" || /^https?:\/\//i.test(v), "\u0644\u06CC\u0646\u06A9 \u0628\u0627\u06CC\u062F \u0628\u0627 http:// \u06CC\u0627 https:// \u0634\u0631\u0648\u0639 \u0634\u0648\u062F").nullable().optional(),
   tag_ids: external_exports.array(UuidSchema).max(10, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F0 \u0628\u0631\u0686\u0633\u0628 \u0628\u0631\u0627\u06CC \u0647\u0631 \u062A\u0645\u0631\u06CC\u0646").optional().default([]),
+  co_created_by: UuidSchema.nullable().optional(),
   published: external_exports.boolean().optional().default(true),
   visibility: external_exports.enum(["public", "private"]).optional(),
   team_created: external_exports.boolean().optional(),
@@ -9343,6 +9348,8 @@ var UpdateExerciseSchema = external_exports.object({
   format: ExerciseFormatSchema.optional(),
   external_url: external_exports.string().trim().max(500, "\u0644\u06CC\u0646\u06A9 \u0628\u06CC\u0634 \u0627\u0632 \u06F5\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").refine((v) => v === "" || /^https?:\/\//i.test(v), "\u0644\u06CC\u0646\u06A9 \u0628\u0627\u06CC\u062F \u0628\u0627 http:// \u06CC\u0627 https:// \u0634\u0631\u0648\u0639 \u0634\u0648\u062F").nullable().optional(),
   tag_ids: external_exports.array(UuidSchema).max(10, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F0 \u0628\u0631\u0686\u0633\u0628 \u0628\u0631\u0627\u06CC \u0647\u0631 \u062A\u0645\u0631\u06CC\u0646").optional(),
+  // — m166: هم‌ساز (سازندهٔ دوم) — null یعنی برداشتن هم‌ساز؛ created_by دست نمی‌خورد
+  co_created_by: UuidSchema.nullable().optional(),
   published: external_exports.boolean().optional(),
   visibility: external_exports.enum(["public", "private"]).optional(),
   team_created: external_exports.boolean().optional()
@@ -9350,7 +9357,7 @@ var UpdateExerciseSchema = external_exports.object({
   // (درس 43-A: فرم ویرایشِ کهنه owner_staff_id را دوباره می‌فرستاد و انتساب را برمی‌گرداند)
   // zod به‌صورت پیش‌فرض کلید ناشناخته را strip می‌کند → حتی اگر کلاینت کهنه بفرستد، نادیده گرفته می‌شود
 }).refine(
-  (v) => v.title !== void 0 || v.description !== void 0 || v.format !== void 0 || v.external_url !== void 0 || v.tag_ids !== void 0 || v.published !== void 0 || v.visibility !== void 0 || v.team_created !== void 0,
+  (v) => v.title !== void 0 || v.description !== void 0 || v.format !== void 0 || v.external_url !== void 0 || v.tag_ids !== void 0 || v.co_created_by !== void 0 || v.published !== void 0 || v.visibility !== void 0 || v.team_created !== void 0,
   { message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u06CC\u0644\u062F \u0628\u0631\u0627\u06CC \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" }
 );
 // — m140: انتقال مالکیت تمرین فقط از مسیر اختصاصی مدیر (POST /api/exercises/:id/reassign)
@@ -18993,6 +19000,7 @@ function createExerciseBankService(deps) {
       visibility: row.visibility === "private" ? "private" : "public",
       teamCreated: row.team_created === 1,
       createdBy: row.created_by,
+      coCreatedBy: row.co_created_by ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
@@ -19049,13 +19057,28 @@ function createExerciseBankService(deps) {
     return db.queryOne(
       `SELECT id, title, description, format, published, external_url,
               file_name, file_mime, file_size, file_key, assign_count,
-              visibility, team_created, created_by, created_at, updated_at
+              visibility, team_created, created_by, co_created_by, created_at, updated_at
          FROM exercises WHERE id = ? AND deleted_at IS NULL`,
       [id]
     );
   }
   __name(getExerciseRow, "getExerciseRow");
   __name2(getExerciseRow, "getExerciseRow");
+  // — m166: اعتبارسنجی هم‌ساز تمرین — باید کارمند فعال و مخالف سازندهٔ اصلی باشد
+  // خروجی: null (بدون هم‌ساز) یا شناسهٔ تأییدشده
+  async function resolveCoCreator(raw, creatorId) {
+    if (raw === void 0 || raw === null || String(raw).trim() === "")
+      return null;
+    const coId = String(raw).trim();
+    if (coId === creatorId)
+      throw new ValidationError("\u0647\u0645\u200C\u0633\u0627\u0632 \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0647\u0645\u0627\u0646 \u0633\u0627\u0632\u0646\u062F\u0647\u0654 \u0627\u0635\u0644\u06CC \u062A\u0645\u0631\u06CC\u0646 \u0628\u0627\u0634\u062F");
+    const staffRow = await db.queryOne(`SELECT id FROM staff WHERE id = ? AND active = 1`, [coId]);
+    if (!staffRow)
+      throw new NotFoundError("\u0647\u0645\u200C\u0633\u0627\u0632");
+    return coId;
+  }
+  __name(resolveCoCreator, "resolveCoCreator");
+  __name2(resolveCoCreator, "resolveCoCreator");
   async function replaceTags(tx, exerciseId, tagIds) {
     const unique = [...new Set(tagIds)];
     await tx.execute(`DELETE FROM exercise_tags WHERE exercise_id = ?`, [exerciseId]);
@@ -19220,7 +19243,7 @@ function createExerciseBankService(deps) {
       const rows = await db.query(
         `SELECT e.id, e.title, e.description, e.format, e.published, e.external_url,
                 e.file_name, e.file_mime, e.file_size, e.file_key, e.assign_count,
-                e.visibility, e.team_created, e.created_by, e.created_at, e.updated_at
+                e.visibility, e.team_created, e.created_by, e.co_created_by, e.created_at, e.updated_at
            FROM exercises e ${where}
           ORDER BY e.created_at DESC, e.id DESC
           LIMIT ${pageSize} OFFSET ${win.offset}`,
@@ -19278,10 +19301,12 @@ function createExerciseBankService(deps) {
         await storage.put(key, prepared.bytes, prepared.mime);
         fileMeta = { filename: prepared.filename, mime: prepared.mime, size: prepared.size };
       }
+      // — m166: هم‌ساز (سازندهٔ دوم) — کارمند فعال مخالف سازندهٔ اصلی؛ امتیاز نصف بین دو نفر
+      const coCreatorId = await resolveCoCreator(input.coCreatedBy, creatorId);
       await db.transaction(async (tx) => {
         await tx.execute(
-          `INSERT INTO exercises (id, title, description, format, published, external_url, file_name, file_mime, file_size, file_key, visibility, team_created, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO exercises (id, title, description, format, published, external_url, file_name, file_mime, file_size, file_key, visibility, team_created, co_created_by, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
             title22,
@@ -19295,6 +19320,7 @@ function createExerciseBankService(deps) {
             fileMeta ? `exercise/${id}` : null,
             input.visibility === "private" ? "private" : "public",
             input.teamCreated ? 1 : 0,
+            coCreatorId,
             creatorId
           ]
         );
@@ -19318,6 +19344,7 @@ function createExerciseBankService(deps) {
             storage: { from: null, to: storage.name },
             visibility: { from: null, to: input.visibility === "private" ? "private" : "public" },
             teamCreated: { from: null, to: Boolean(input.teamCreated) },
+            ...coCreatorId ? { coCreatedBy: { from: null, to: coCreatorId } } : {},
             ...creatorId !== actor.staffId ? { createdBy: { from: null, to: creatorId }, sessionActor: actor.staffId } : {}
           }
         });
@@ -19342,6 +19369,9 @@ function createExerciseBankService(deps) {
       // — m140: ویرایش ساده هرگز مالکیت (created_by) را تغییر نمی‌دهد — درس 43-A:
       // فرم ویرایش کهنه owner_staff_id قدیمی را دوباره می‌فرستاد و انتساب مدیر را بی‌صدا برمی‌گرداند.
       // انتقال مالکیت فقط از مسیر اختصاصی reassign (پایین) ممکن است.
+      // — m166: هم‌ساز — فقط وقتی کلید در payload آمده باشد دست می‌خورد (null = برداشتن)
+      // (پیش از تراکنش — خواندن از db داخل تراکنش tx نیست)
+      const coCreatorId = input.coCreatedBy !== void 0 ? await resolveCoCreator(input.coCreatedBy, row.created_by) : void 0;
       await db.transaction(async (tx) => {
         await tx.execute(
           `UPDATE exercises
@@ -19352,6 +19382,7 @@ function createExerciseBankService(deps) {
                   external_url = CASE WHEN ? THEN ? ELSE external_url END,
                   visibility = COALESCE(?, visibility),
                   team_created = COALESCE(?, team_created),
+                  co_created_by = CASE WHEN ? THEN ? ELSE co_created_by END,
                   updated_at = datetime('now')
             WHERE id = ?`,
           [
@@ -19364,6 +19395,8 @@ function createExerciseBankService(deps) {
             input.externalUrl !== void 0 ? input.externalUrl?.trim() ? input.externalUrl.trim() : null : null,
             visibility,
             teamCreated,
+            input.coCreatedBy !== void 0 ? 1 : 0,
+            coCreatorId ?? null,
             id
           ]
         );
@@ -19379,7 +19412,9 @@ function createExerciseBankService(deps) {
             ...input.title !== void 0 ? { title: { from: row.title, to: title22 ?? null } } : {},
             ...input.published !== void 0 ? { published: { from: row.published === 1, to: input.published } } : {},
             ...visibility !== null ? { visibility: { from: row.visibility ?? "public", to: visibility } } : {},
-            ...teamCreated !== null ? { teamCreated: { from: row.team_created === 1, to: teamCreated === 1 } } : {}
+            ...teamCreated !== null ? { teamCreated: { from: row.team_created === 1, to: teamCreated === 1 } } : {},
+            // — m166: تغییر هم‌ساز روی امتیاز اثر دارد — در تاریخچه می‌ماند
+            ...input.coCreatedBy !== void 0 ? { coCreatedBy: { from: row.co_created_by ?? null, to: coCreatorId ?? null } } : {}
           }
         });
       });
@@ -20839,6 +20874,7 @@ function registerExerciseBankRoutes(app, service) {
         visibility: body.visibility,
         teamCreated: body.team_created,
         ownerStaffId: body.owner_staff_id ?? void 0,
+        coCreatedBy: body.co_created_by ?? null,
         file: body.file ? { filename: body.file.filename, mimeType: body.file.mime_type, contentB64: body.file.content_b64 } : null
       },
       actor
@@ -20953,7 +20989,8 @@ function registerExerciseBankRoutes(app, service) {
         tagIds: body.tag_ids,
         published: body.published,
         visibility: body.visibility,
-        teamCreated: body.team_created
+        teamCreated: body.team_created,
+        coCreatedBy: body.co_created_by
         // — m140: owner_staff_id حذف شد — ویرایش ساده مالکیت را تغییر نمی‌دهد
       },
       actor
@@ -34824,7 +34861,8 @@ function registerRoutes4(app, service) {
     });
     return c.json({ data: items }, 200);
   });
-  app.post("/api/tags", requireRole("manager"), async (c) => {
+  // — m166: درمانگر هم می‌تواند برچسب (دستهٔ سفارشی) بسازد — بانک تمرین و پروفایل
+  app.post("/api/tags", requireRole("manager", "therapist"), async (c) => {
     const actor = getAuthContext(c);
     const body = NewTagSchema.parse(await c.req.json());
     const tag = await service.create(
@@ -35499,7 +35537,7 @@ function registerAnnouncementRoutes(app, service) {
 }
 __name(registerAnnouncementRoutes, "registerAnnouncementRoutes");
 __name2(registerAnnouncementRoutes, "registerAnnouncementRoutes");
-function rowToRecord3(row) {
+function rowToRecord3(row, attachments = []) {
   return {
     id: row.id,
     title: row.title,
@@ -35507,6 +35545,8 @@ function rowToRecord3(row) {
     category: row.category,
     pinned: row.pinned === 1,
     published: row.published === 1,
+    // — m166: پیوست‌های مقاله (PDF/تصویر/…) به ترتیب ثبت — الگوی پیوست تمرین
+    attachments,
     createdBy: row.created_by,
     createdByName: row.created_by_name ?? null,
     createdAt: row.created_at,
@@ -35518,16 +35558,93 @@ __name2(rowToRecord3, "rowToRecord");
 var SELECT_COLS2 = `k.id, k.title, k.body, k.category, k.pinned, k.published,
        k.created_by, s.full_name AS created_by_name, k.created_at, k.updated_at`;
 function createKnowledgeService(deps) {
-  const { db, audit, logger } = deps;
+  const { db, audit, logger, storage } = deps;
+  const log = logger.child("knowledge");
   async function getById(id) {
     const row = await db.queryOne(
       `SELECT ${SELECT_COLS2} FROM knowledge_items k JOIN staff s ON s.id = k.created_by WHERE k.id = ?`,
       [id]
     );
-    return row ? rowToRecord3(row) : null;
+    if (!row)
+      return null;
+    return rowToRecord3(row, await attachmentsOf(id));
   }
   __name(getById, "getById");
   __name2(getById, "getById");
+  // — پیوست‌های یک مقاله به ترتیب ثبت (m166 — جدول knowledge_attachments از مایگریشن 0063)
+  async function attachmentsOf(itemId) {
+    const rows = await db.query(
+      `SELECT id, knowledge_id, file_key, file_name, file_mime, file_size, created_at
+         FROM knowledge_attachments WHERE knowledge_id = ? ORDER BY created_at, rowid`,
+      [itemId]
+    );
+    return rows.map((r) => ({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size }));
+  }
+  __name(attachmentsOf, "attachmentsOf");
+  __name2(attachmentsOf, "attachmentsOf");
+  // — پیوست‌های چند مقاله به‌صورت دسته‌ای (برای فهرست‌ها)
+  async function attachmentsForItems(itemIds) {
+    const map = /* @__PURE__ */ new Map();
+    if (itemIds.length === 0)
+      return map;
+    const placeholders = itemIds.map(() => "?").join(", ");
+    const rows = await db.query(
+      `SELECT id, knowledge_id, file_key, file_name, file_mime, file_size, created_at
+         FROM knowledge_attachments
+        WHERE knowledge_id IN (${placeholders})
+        ORDER BY created_at, rowid`,
+      itemIds
+    );
+    for (const r of rows) {
+      const list = map.get(r.knowledge_id) ?? [];
+      list.push({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size });
+      map.set(r.knowledge_id, list);
+    }
+    return map;
+  }
+  __name(attachmentsForItems, "attachmentsForItems");
+  __name2(attachmentsForItems, "attachmentsForItems");
+  // — پیوست باید موجود و متعلق به همین مقاله باشد
+  async function assertAttachment(itemId, fileId) {
+    const att = await db.queryOne(
+      `SELECT id, knowledge_id, file_key, file_name, file_mime, file_size, created_at
+         FROM knowledge_attachments WHERE id = ? AND knowledge_id = ?`,
+      [fileId, itemId]
+    );
+    if (!att)
+      throw new NotFoundError("\u0641\u0627\u06CC\u0644 \u0645\u0642\u0627\u0644\u0647");
+    return att;
+  }
+  __name(assertAttachment, "assertAttachment");
+  __name2(assertAttachment, "assertAttachment");
+  // — اعتبارسنجی یک فایل باینری (سقف حجم/نوع همان تمرین‌ها)
+  function validatePrepared(file) {
+    const verdict = validateExerciseFileBytes({ filename: file.filename, mimeType: file.mimeType, size: file.size }, storage.maxObjectBytes);
+    if (!verdict.ok)
+      throw new ValidationError(verdict.reason);
+    return { filename: sanitizeFilename(file.filename), mime: file.mimeType.toLowerCase() };
+  }
+  __name(validatePrepared, "validatePrepared");
+  __name2(validatePrepared, "validatePrepared");
+  // — سقف تعداد پیوست هر مقاله (همان ثابت بانک تمرین)
+  async function assertAttachmentCount(itemId, adding) {
+    const countRow = await db.queryOne(`SELECT COUNT(*) AS n FROM knowledge_attachments WHERE knowledge_id = ?`, [itemId]);
+    if ((countRow?.n ?? 0) + adding > MAX_EXERCISE_ATTACHMENT_COUNT)
+      throw new ValidationError(`\u062D\u062F\u0627\u06A9\u062B\u0631 ${MAX_EXERCISE_ATTACHMENT_COUNT} \u0641\u0627\u06CC\u0644 \u0628\u0631\u0627\u06CC \u0647\u0631 \u0645\u0642\u0627\u0644\u0647`);
+  }
+  __name(assertAttachmentCount, "assertAttachmentCount");
+  __name2(assertAttachmentCount, "assertAttachmentCount");
+  // — بایت → base64 (برای تکه‌های بارگذاری پیوسته — الگوی بانک تمرین)
+  function bytesToBase64Str(bytes) {
+    let bin = "";
+    const CHUNK = 32768;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+    }
+    return btoa(bin);
+  }
+  __name(bytesToBase64Str, "bytesToBase64Str");
+  __name2(bytesToBase64Str, "bytesToBase64Str");
   return {
     async listPublished() {
       const rows = await db.query(
@@ -35536,7 +35653,8 @@ function createKnowledgeService(deps) {
           ORDER BY k.pinned DESC, k.created_at DESC
           LIMIT 30`
       );
-      return rows.map(rowToRecord3);
+      const attMap = await attachmentsForItems(rows.map((r) => r.id));
+      return rows.map((r) => rowToRecord3(r, attMap.get(r.id) ?? []));
     },
     async listAll() {
       const rows = await db.query(
@@ -35544,7 +35662,8 @@ function createKnowledgeService(deps) {
           ORDER BY k.pinned DESC, k.created_at DESC
           LIMIT 200`
       );
-      return rows.map(rowToRecord3);
+      const attMap = await attachmentsForItems(rows.map((r) => r.id));
+      return rows.map((r) => rowToRecord3(r, attMap.get(r.id) ?? []));
     },
     async create(input, actor) {
       const id = crypto.randomUUID();
@@ -35607,7 +35726,13 @@ function createKnowledgeService(deps) {
       const existing = await getById(id);
       if (!existing)
         throw new NotFoundError("\u0645\u0642\u0627\u0644\u0647\u0654 \u062F\u0627\u0646\u0634");
+      // — کلیدهای پیوست قبل از حذف ردیف‌ها جمع می‌شود (حذف آبجکت بعد از تراکنش)
+      const attRows = await db.query(
+        `SELECT file_key FROM knowledge_attachments WHERE knowledge_id = ?`,
+        [id]
+      );
       await db.transaction(async (tx) => {
+        await tx.execute(`DELETE FROM knowledge_attachments WHERE knowledge_id = ?`, [id]);
         await tx.execute(`DELETE FROM knowledge_items WHERE id = ?`, [id]);
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -35617,8 +35742,164 @@ function createKnowledgeService(deps) {
           changes: { title: { from: existing.title, to: null } }
         });
       });
-      logger.child("knowledge").info("knowledge.deleted", { id });
+      // — پاک‌سازی آبجکت‌های ذخیره‌ساز — بهترین‌تلاش؛ مقاله قبلاً حذف شده است
+      for (const k of attRows) {
+        await storage.delete(k.file_key).catch((err) => {
+          log.warn("knowledge.attachment.storage.delete.failed", { key: k.file_key, error: err instanceof Error ? err.message : String(err) });
+        });
+      }
+      log.info("knowledge.deleted", { id, attachments: attRows.length });
       return { id };
+    },
+    /** — m166: افزودن چند پیوست (multipart باینری) — هر فایل مستقل اعتبارسنجی و ذخیره می‌شود */
+    async addFiles(id, files, actor) {
+      const existing = await getById(id);
+      if (!existing)
+        throw new NotFoundError("\u0645\u0642\u0627\u0644\u0647\u0654 \u062F\u0627\u0646\u0634");
+      if (!Array.isArray(files) || files.length === 0)
+        throw new ValidationError("\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u0627\u06CC\u0644 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+      if (files.length > MAX_EXERCISE_FILES_PER_UPLOAD)
+        throw new ValidationError(`\u062D\u062F\u0627\u06A9\u062B\u0631 ${MAX_EXERCISE_FILES_PER_UPLOAD} \u0641\u0627\u06CC\u0644 \u062F\u0631 \u0647\u0631 \u0628\u0627\u0631 \u0628\u0627\u0631\u06AF\u0630\u0627\u0631\u06CC`);
+      await assertAttachmentCount(id, files.length);
+      // اعتبارسنجی همه قبل از هر نوشتنی — نیمه‌تمام نمی‌ماند
+      const preparedList = files.map((f) => ({ ...validatePrepared(f), segments: f.segments, size: f.size }));
+      for (const prepared of preparedList) {
+        const attId = crypto.randomUUID();
+        const key = `knowledge/${id}/${attId}`;
+        // نوشتن از قطعات (بدون concat کامل) با fallback به put ساده
+        if (storage.putSegments) {
+          await storage.putSegments(key, prepared.segments);
+        } else {
+          await storage.put(key, concatSegments(prepared.segments), prepared.mime);
+        }
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            `INSERT INTO knowledge_attachments (id, knowledge_id, file_key, file_name, file_mime, file_size)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [attId, id, key, prepared.filename, prepared.mime, prepared.size]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: "knowledge.files.added",
+            resourceType: "knowledge",
+            resourceId: id,
+            changes: {
+              filename: { from: null, to: prepared.filename },
+              sizeBytes: { from: null, to: prepared.size }
+            }
+          });
+        });
+      }
+      log.info("knowledge.files.added", { id, count: preparedList.length });
+      return await getById(id);
+    },
+    /** — m166: شروع بارگذاری پیوسته: ردیف پیوست با متادیتا ساخته می‌شود؛ تکه‌ها بعداً می‌آیند */
+    async beginChunkedUpload(id, input, actor) {
+      const existing = await getById(id);
+      if (!existing)
+        throw new NotFoundError("\u0645\u0642\u0627\u0644\u0647\u0654 \u062F\u0627\u0646\u0634");
+      const prepared = validatePrepared({ filename: input.filename, mimeType: input.mimeType, size: input.size });
+      await assertAttachmentCount(id, 1);
+      const attId = crypto.randomUUID();
+      const key = `knowledge/${id}/${attId}`;
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO knowledge_attachments (id, knowledge_id, file_key, file_name, file_mime, file_size)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [attId, id, key, prepared.filename, prepared.mime, input.size]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "knowledge.file.upload.began",
+          resourceType: "knowledge",
+          resourceId: id,
+          changes: { filename: { from: null, to: prepared.filename }, sizeBytes: { from: null, to: input.size } }
+        });
+      });
+      log.info("knowledge.file.upload.began", { id, fileId: attId, size: input.size });
+      return { fileId: attId };
+    },
+    /** — m166: دریافت یک تکهٔ باینری (بدنهٔ خام ≤ ۱ مگابایت) و پیوستن به تکه‌های همان پیوست */
+    async putUploadChunk(id, fileId, seq, bytes, actor) {
+      const att = await assertAttachment(id, fileId);
+      if (!Number.isInteger(seq) || seq < 0 || seq > 1024)
+        throw new ValidationError("\u0634\u0645\u0627\u0631\u0647 \u062A\u06A9\u0647 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+      if (bytes.length === 0)
+        throw new ValidationError("\u062A\u06A9\u0647\u0654 \u062E\u0627\u0644\u06CC");
+      if (bytes.length > MAX_EXERCISE_UPLOAD_CHUNK_BYTES)
+        throw new ValidationError("\u062D\u062C\u0645 \u062A\u06A9\u0647 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
+      await db.execute(
+        `INSERT INTO exercise_file_chunks (key, seq, content) VALUES (?, ?, ?)
+         ON CONFLICT(key, seq) DO UPDATE SET content = excluded.content`,
+        [att.file_key, seq, bytesToBase64Str(bytes)]
+      );
+      return { received: bytes.length };
+    },
+    /** — m166: پایان بارگذاری پیوسته: شمار و مجموع تکه‌ها با متادیتای اعلام‌شده سنجیده می‌شود */
+    async completeChunkedUpload(id, fileId, actor) {
+      const att = await assertAttachment(id, fileId);
+      const stat = await db.queryOne(
+        `SELECT COUNT(*) AS n, SUM(length(content)) AS bl FROM exercise_file_chunks WHERE key = ?`,
+        [att.file_key]
+      );
+      // طول base64 هر تکه جداگانه حساب می‌شود — تکهٔ ۱ مگابایتی باقیماندهٔ ۱ بر ۳
+      // دارد و padding آن طول کل را نسبت به کدگذاری پیوسته جابه‌جا می‌کند
+      const b64Len = (n) => Math.ceil(n / 3) * 4;
+      const fullChunks = Math.floor(att.file_size / MAX_EXERCISE_UPLOAD_CHUNK_BYTES);
+      const rest = att.file_size % MAX_EXERCISE_UPLOAD_CHUNK_BYTES;
+      const expectedRows = rest === 0 ? fullChunks : fullChunks + 1;
+      const expectedB64 = fullChunks * b64Len(MAX_EXERCISE_UPLOAD_CHUNK_BYTES) + (rest === 0 ? 0 : b64Len(rest));
+      if (!stat || stat.n !== expectedRows || (stat.bl ?? 0) !== expectedB64)
+        throw new ConflictError("\u0628\u0627\u0631\u06AF\u0630\u0627\u0631\u06CC \u0646\u0627\u0642\u0635 \u0627\u0633\u062A \u2014 \u062A\u06A9\u0647\u200C\u0647\u0627 \u0628\u0627 \u062D\u062C\u0645 \u0627\u0639\u0644\u0627\u0645\u200C\u0634\u062F\u0647 \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A\u0646\u062F\u061B \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F \u06CC\u0627 \u0641\u0627\u06CC\u0644 \u0631\u0627 \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F");
+      await db.transaction(async (tx) => {
+        await tx.execute(`UPDATE knowledge_items SET updated_at = datetime('now') WHERE id = ?`, [id]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "knowledge.files.added",
+          resourceType: "knowledge",
+          resourceId: id,
+          changes: { filename: { from: null, to: att.file_name }, sizeBytes: { from: null, to: att.file_size }, mode: { from: null, to: "chunked" } }
+        });
+      });
+      log.info("knowledge.files.chunked.completed", { id, fileId, size: att.file_size });
+      return await getById(id);
+    },
+    /** — m166: حذف یک پیوست مقاله */
+    async deleteAttachment(id, fileId, actor) {
+      const existing = await getById(id);
+      if (!existing)
+        throw new NotFoundError("\u0645\u0642\u0627\u0644\u0647\u0654 \u062F\u0627\u0646\u0634");
+      const att = await assertAttachment(id, fileId);
+      await storage.delete(att.file_key);
+      await db.transaction(async (tx) => {
+        await tx.execute(`DELETE FROM knowledge_attachments WHERE id = ?`, [att.id]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "knowledge.file.deleted",
+          resourceType: "knowledge",
+          resourceId: id,
+          changes: { filename: { from: att.file_name, to: null }, sizeBytes: { from: att.file_size, to: null } }
+        });
+      });
+      log.info("knowledge.file.deleted", { id, fileId });
+      return await getById(id);
+    },
+    /** — m166: دانلود یک پیوست مشخص (همهٔ همکاران احرازشده) */
+    async getAttachmentFile(id, fileId) {
+      const row = await db.queryOne(`SELECT id FROM knowledge_items WHERE id = ?`, [id]);
+      if (!row)
+        return null;
+      const att = await db.queryOne(
+        `SELECT id, knowledge_id, file_key, file_name, file_mime, file_size
+           FROM knowledge_attachments WHERE id = ? AND knowledge_id = ?`,
+        [fileId, id]
+      );
+      if (!att)
+        return null;
+      const obj = await storage.get(att.file_key);
+      if (!obj)
+        return null;
+      return { bytes: obj.bytes, filename: att.file_name, mime: att.file_mime ?? obj.mime };
     }
   };
 }
@@ -35662,6 +35943,77 @@ function registerKnowledgeRoutes(app, service) {
     const actor = getAuthContext(c);
     const result = await service.remove(c.req.param("id"), actor);
     return c.json({ data: result }, 200);
+  });
+  // ─── m166: پیوست‌های مقاله — چندفایلی multipart پخش‌جریانی (الگوی بانک تمرین) ───
+  app.post("/api/knowledge/:id/files", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const contentType = c.req.header("content-type") ?? "";
+    const parsed = await parseMultipartStream(c.req.raw.body, contentType);
+    if (parsed.files.length === 0)
+      throw new ValidationError("\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u0627\u06CC\u0644 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+    const files = parsed.files.filter((f) => f.size > 0).map((f) => ({
+      filename: f.filename || "file",
+      mimeType: guessMime(f.filename ?? "", f.mimeType ?? ""),
+      segments: f.segments,
+      size: f.size
+    }));
+    if (files.length === 0)
+      throw new ValidationError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0641\u0627\u06CC\u0644\u200C\u0647\u0627 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
+    const updated = await service.addFiles(id, files, actor);
+    return c.json({ data: updated }, 201);
+  });
+  // ─── m166: بارگذاری پیوستهٔ فایل‌های بزرگ (هر تکه یک درخواست کوچک — امن با سقف CPU) ───
+  app.post("/api/knowledge/:id/files/begin", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const body = await c.req.json();
+    const result = await service.beginChunkedUpload(
+      id,
+      {
+        filename: String(body.filename ?? "file"),
+        mimeType: String(body.mime ?? body.mime_type ?? "application/octet-stream"),
+        size: Number(body.size ?? 0)
+      },
+      actor
+    );
+    return c.json({ data: result }, 201);
+  });
+  app.put("/api/knowledge/:id/files/:fileId/chunks/:seq", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const fileId = UuidSchema.parse(c.req.param("fileId"));
+    const seq = Number(c.req.param("seq"));
+    const buf = await c.req.arrayBuffer();
+    const result = await service.putUploadChunk(id, fileId, seq, new Uint8Array(buf), actor);
+    return c.json({ data: result }, 200);
+  });
+  app.post("/api/knowledge/:id/files/:fileId/complete", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const fileId = UuidSchema.parse(c.req.param("fileId"));
+    const updated = await service.completeChunkedUpload(id, fileId, actor);
+    return c.json({ data: updated }, 200);
+  });
+  // ─── m166: دانلود/حذف یک پیوست ───
+  app.get("/api/knowledge/:id/files/:fileId", async (c) => {
+    const id = UuidSchema.parse(c.req.param("id"));
+    const fileId = UuidSchema.parse(c.req.param("fileId"));
+    const file = await service.getAttachmentFile(id, fileId);
+    if (!file)
+      throw new NotFoundError("\u0641\u0627\u06CC\u0644 \u0645\u0642\u0627\u0644\u0647");
+    return new Response(file.bytes, {
+      status: 200,
+      // — m137: ?disposition=inline برای پیش‌نمایش امن (تصویر/PDF) — الگوی تمرین
+      headers: fileResponseHeaders(file.filename, file.mime, c)
+    });
+  });
+  app.delete("/api/knowledge/:id/files/:fileId", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const fileId = UuidSchema.parse(c.req.param("fileId"));
+    const updated = await service.deleteAttachment(id, fileId, actor);
+    return c.json({ data: updated }, 200);
   });
 }
 __name(registerKnowledgeRoutes, "registerKnowledgeRoutes");
@@ -37761,14 +38113,79 @@ __name2(createExerciseSubmissionBot, "createExerciseSubmissionBot");
 // نگاشت چت↔دانش‌آموز: bot_links (همان منبع بات بازگشت تکلیف). انبار فایل: همان ObjectStore
 // بانک تمرین. tryHandleMedia فقط وقتی «درخواست باز» هست رسانه را می‌گیرد؛ وگرنه null —
 // یعنی جریان‌های فعلی بله (بازگشت تکلیف) بدون تغییر ادامه می‌دهند (تست‌های webhook سبز می‌مانند).
+// — m166: مدل داده (بدون مایگریشن): ستون templates همان ستون m151 است و JSON ذخیره می‌کند؛
+//   شکل قدیمی: آرایهٔ کلید قالب‌ها (گیرنده همیشه خانواده)؛ شکل جدید: { t: [تگ‌ها], r: [گیرنده‌ها] }.
+//   گیرندهٔ معلم: پیام از طریق class_bot_links کلاسِ دانش‌آموز (الگوی case-events.teacherChats)؛
+//   رسانهٔ چت کلاس فقط به درخواست‌های «گیرندهٔ معلم» می‌چسبد (چسبیدن به درخواست خانواده ممنوع).
 var DOC_REQUEST_TEMPLATE_LABELS = {
-  dictation: "نمونهٔ املا و نوشتن‌های کلاسی",
-  report_card: "کارنامه و برگه‌های مدرسه",
+  narrative: "نمونهٔ روایی",
+  dictation: "نمونهٔ املا",
+  exam: "برگهٔ امتحان",
+  report_card: "کارنامه",
+  homework: "نمونهٔ تکلیف",
+  other: "سایر مدارک",
+  // — برچسب کلیدهای قدیمی m151 — فقط برای نمایش رکوردهای قدیمی؛ در فرم جدید نمی‌آید
   teacher_report: "گزارش کتبی معلم",
-  prev_eval: "ارزیابی/گزارش قبلی (بی‌بی‌اسک، گفتاردرمانی و…)"
+  prev_eval: "ارزیابی/گزارش قبلی"
 };
 var DOC_NOTE_MAX = 500;
 var DOC_TEMPLATE_KEYS = Object.keys(DOC_REQUEST_TEMPLATE_LABELS);
+// — تگ‌های پیش‌فرض ۶گانهٔ m166 (به‌زبان روزمرهٔ درمانگر/معلم) + سقف‌های ضد شلوغی
+var DOC_TAG_PRESET_KEYS = ["narrative", "dictation", "exam", "report_card", "homework", "other"];
+var DOC_TAG_MAX_CHARS = 40;
+var DOC_TAGS_MAX = 8;
+var DOC_RECIPIENT_KEYS = ["family", "teacher"];
+function docTagLabel(tag) {
+  return DOC_REQUEST_TEMPLATE_LABELS[tag] ?? tag;
+}
+__name(docTagLabel, "docTagLabel");
+__name2(docTagLabel, "docTagLabel");
+// — نرمال‌سازی یک تگ دلخواه — فروکاستن فاصله + سقف نویسه (Array.from — امن برای نیم‌فاصله/اموجی)
+function normalizeDocTag(raw) {
+  if (typeof raw !== "string")
+    return null;
+  const s = raw.replace(/[\u0000-\u001F]+/g, " ").replace(/\s+/g, " ").trim();
+  if (s.length === 0)
+    return null;
+  return Array.from(s).slice(0, DOC_TAG_MAX_CHARS).join("");
+}
+__name(normalizeDocTag, "normalizeDocTag");
+__name2(normalizeDocTag, "normalizeDocTag");
+// — پارس تگ‌های درخواست: کلید پیش‌فرض عیناً؛ بقیه به‌عنوان تگ دلخواه نرمال می‌شود.
+// غیر آرایه/آیتم غیر رشته‌ای → null (خطای ۴۰۰)؛ آیتم خالی حذف؛ تکرار حذف؛ سقف ۸ تگ.
+function parseDocTags(raw) {
+  if (!Array.isArray(raw))
+    return null;
+  const out = [];
+  for (const item of raw) {
+    if (typeof item !== "string")
+      return null;
+    const tag = DOC_TAG_PRESET_KEYS.includes(item) ? item : normalizeDocTag(item);
+    if (!tag || out.includes(tag))
+      continue;
+    out.push(tag);
+  }
+  return out.length > 0 ? out.slice(0, DOC_TAGS_MAX) : null;
+}
+__name(parseDocTags, "parseDocTags");
+__name2(parseDocTags, "parseDocTags");
+// — پارس گیرنده‌ها — زیرمجموعهٔ family/teacher بدون تکرار؛ نامعتبر یا خالی → null
+function parseDocRecipients(raw) {
+  if (!Array.isArray(raw))
+    return null;
+  const out = [];
+  for (const item of raw) {
+    if (item !== "family" && item !== "teacher")
+      return null;
+    if (!out.includes(item))
+      out.push(item);
+  }
+  return out.length > 0 ? out : null;
+}
+__name(parseDocRecipients, "parseDocRecipients");
+__name2(parseDocRecipients, "parseDocRecipients");
+// — پارس قدیمی قالب‌های m151 — کلیدهای شناخته‌شدهٔ جدول برچسب‌ها؛ ناشناخته/خالی → null
+// (برای سازگاری فراخوان‌های قدیمی و آزمون ناحیهٔ باندل — مسیر جدید parseDocTags است)
 function parseDocTemplates(raw) {
   if (!Array.isArray(raw))
     return null;
@@ -37783,6 +38200,30 @@ function parseDocTemplates(raw) {
 }
 __name(parseDocTemplates, "parseDocTemplates");
 __name2(parseDocTemplates, "parseDocTemplates");
+// — کدک ستون templates (بدون مایگریشن — m166): هر دو شکل پارس می‌شود
+function parseStoredDocPayload(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    // — رکورد قدیمی m151: آرایهٔ کلید قالب‌ها؛ گیرنده همیشه خانواده
+    if (Array.isArray(parsed))
+      return { tags: parsed.filter((x) => typeof x === "string"), recipients: ["family"] };
+    if (parsed && typeof parsed === "object") {
+      const tags = Array.isArray(parsed.t) ? parsed.t.filter((x) => typeof x === "string") : [];
+      const recipients = Array.isArray(parsed.r) ? parsed.r.filter((x) => DOC_RECIPIENT_KEYS.includes(x)) : [];
+      return { tags, recipients: recipients.length > 0 ? recipients : ["family"] };
+    }
+  } catch {
+  }
+  // — مقدار خراب → خالی؛ کارت بدون تگ نمایش داده می‌شود
+  return { tags: [], recipients: ["family"] };
+}
+__name(parseStoredDocPayload, "parseStoredDocPayload");
+__name2(parseStoredDocPayload, "parseStoredDocPayload");
+function serializeDocPayload(tags, recipients) {
+  return JSON.stringify({ t: tags, r: recipients });
+}
+__name(serializeDocPayload, "serializeDocPayload");
+__name2(serializeDocPayload, "serializeDocPayload");
 function normalizeDocNote(raw, max = DOC_NOTE_MAX) {
   if (typeof raw !== "string")
     return null;
@@ -37820,10 +38261,11 @@ function guardDocMedia(media, allowedMimes, maxBytes) {
 }
 __name(guardDocMedia, "guardDocMedia");
 __name2(guardDocMedia, "guardDocMedia");
-function buildDocRequestBody(templates, customNote, dueHint) {
+// — متن بدنهٔ پیام درخواست: تگ پیش‌فرض/قدیمی → برچسب فارسی؛ تگ دلخواه → متن خودش
+function buildDocRequestBody(tags, customNote, dueHint) {
   const lines = ["این مدارک را برای پرونده نیاز داریم:"];
-  for (const t of templates)
-    lines.push(`• ${DOC_REQUEST_TEMPLATE_LABELS[t] ?? t}`);
+  for (const t of tags)
+    lines.push(`• ${docTagLabel(t)}`);
   if (customNote)
     lines.push("", customNote);
   if (dueHint)
@@ -37844,18 +38286,13 @@ var DOC_REQUEST_SELECT = `SELECT r.id, r.student_id, r.templates, r.custom_note,
   FROM document_requests r
   LEFT JOIN staff s ON s.id = r.requested_by`;
 function requestRowToDocRecord(r) {
-  let templates = [];
-  try {
-    const parsed = JSON.parse(r.templates);
-    if (Array.isArray(parsed))
-      templates = parsed;
-  } catch {
-    templates = [];
-  }
+  // — m166: هر دو شکل ستون templates پارس می‌شود — رکوردهای قدیمی با مدل جدید درست نمایش داده می‌شوند
+  const { tags, recipients } = parseStoredDocPayload(r.templates);
   return {
     id: r.id,
     studentId: r.student_id,
-    templates,
+    tags,
+    recipients,
     customNote: r.custom_note,
     status: r.status,
     sentAt: r.sent_at,
@@ -37914,28 +38351,87 @@ function createDocumentRequestService(deps) {
   }
   __name(linkedStudentIds, "linkedStudentIds");
   __name2(linkedStudentIds, "linkedStudentIds");
+  // — m166: چت‌های معلمِ کلاسِ دانش‌آموز — class_bot_links متصل (الگوی case-events.teacherChats)
+  async function teacherChatsOf(studentId) {
+    const rows = await db.query(
+      `SELECT DISTINCT l.chat_id
+         FROM class_bot_links l
+         JOIN students s ON s.class_id = l.class_id
+        WHERE s.id = ? AND l.status = 'linked' AND l.chat_id IS NOT NULL`,
+      [studentId]
+    );
+    return [...new Set(rows.map((r) => r.chat_id))];
+  }
+  __name(teacherChatsOf, "teacherChatsOf");
+  __name2(teacherChatsOf, "teacherChatsOf");
+  // — m166: دانش‌آموزان کلاسِ متصل به یک chat معلم — class_bot_links (رسانهٔ چت کلاس)
+  async function classStudentIds(chatId) {
+    const rows = await db.query(
+      `SELECT DISTINCT s.id AS student_id
+         FROM class_bot_links l
+         JOIN students s ON s.class_id = l.class_id
+        WHERE l.chat_id = ? AND l.status = 'linked'`,
+      [chatId]
+    );
+    return [...new Set(rows.map((r) => r.student_id))];
+  }
+  __name(classStudentIds, "classStudentIds");
+  __name2(classStudentIds, "classStudentIds");
+  // — جدیدترین درخواست بازِ متناظر میان پرونده‌های داده‌شده —
+  // needRecipient خالی: هر درخواستی (چت خانواده)؛
+  // needRecipient: فقط درخواست‌هایی که آن گیرنده درشان ثبت شده (چت کلاس → معلم)
+  async function newestOpenRequest(studentIds, needRecipient) {
+    const placeholders = studentIds.map(() => "?").join(", ");
+    const rows = await db.query(
+      `SELECT id, student_id, templates FROM document_requests
+        WHERE status != 'closed' AND student_id IN (${placeholders})
+        ORDER BY sent_at DESC, id DESC LIMIT 25`,
+      studentIds
+    );
+    for (const row of rows) {
+      if (!needRecipient)
+        return row;
+      if (parseStoredDocPayload(row.templates).recipients.includes(needRecipient))
+        return row;
+    }
+    return null;
+  }
+  __name(newestOpenRequest, "newestOpenRequest");
+  __name2(newestOpenRequest, "newestOpenRequest");
   return {
     async create(studentId, input, actor) {
       const student = await db.queryOne(`SELECT id, first_name, last_name FROM students WHERE id = ?`, [studentId]);
       if (!student)
         throw new NotFoundError("دانش‌آموز");
-      const templates = parseDocTemplates(input.templates);
-      if (!templates)
-        throw new ValidationError("حداقل یک قالب مدرک معتبر انتخاب کنید");
+      const tags = parseDocTags(input.tags ?? input.templates);
+      if (!tags)
+        throw new ValidationError("حداقل یک تگ مدرک انتخاب کنید");
+      // — گیرنده: غایب/خالی → خانواده (سازگاری فراخوان‌های قدیمی)؛ نامعتبر → خطای شفاف
+      const recipients = input.recipients === void 0 || input.recipients === null ? ["family"] : parseDocRecipients(input.recipients);
+      if (!recipients)
+        throw new ValidationError("گیرندهٔ درخواست نامعتبر است — «خانواده» و/یا «معلم» را انتخاب کنید");
       const customNote = normalizeDocNote(input.customNote);
       const dueHint = normalizeDocNote(input.dueHint, 60);
-      const chats = await familyChatsOf(studentId);
-      if (chats.length === 0) {
+      // — چت‌های هر گیرنده؛ گیرندهٔ بدون چت → خطای شفاف (ارسال ناقصِ ساکت ممنوع)
+      const wantFamily = recipients.includes("family");
+      const wantTeacher = recipients.includes("teacher");
+      const familyChats = wantFamily ? await familyChatsOf(studentId) : [];
+      const teacherChats = wantTeacher ? await teacherChatsOf(studentId) : [];
+      if (wantFamily && familyChats.length === 0) {
         throw new ValidationError("هیچ گفتگوی بله‌ای به پروندهٔ این دانش‌آموز متصل نیست — ابتدا از کارت «یادآوری و اعلان‌ها» لینک اتصال خانواده را بسازید");
       }
+      if (wantTeacher && teacherChats.length === 0) {
+        throw new ValidationError("چت معلمِ کلاس این دانش‌آموز در بله متصل نیست — درخواست ارسال نشد؛ گیرندهٔ «معلم» را بردارید یا اتصال چت کلاس را بسازید");
+      }
+      const chats = [...new Set([...familyChats, ...teacherChats])];
       const id = crypto.randomUUID();
       const studentName = `${student.first_name} ${student.last_name}`.trim();
       await db.execute(
         `INSERT INTO document_requests (id, student_id, templates, custom_note, status, sent_at, due_hint, requested_by, delivered_chats)
          VALUES (?, ?, ?, ?, 'sent', ?, ?, ?, 0)`,
-        [id, studentId, JSON.stringify(templates), customNote, now().toISOString(), dueHint, actor.staffId]
+        [id, studentId, serializeDocPayload(tags, recipients), customNote, now().toISOString(), dueHint, actor.staffId]
       );
-      const extra = buildDocRequestBody(templates, customNote, dueHint);
+      const extra = buildDocRequestBody(tags, customNote, dueHint);
       const clinicName = await settings.getClinicName();
       const channel = notify.getChannel("bale") ? "bale" : "internal";
       let delivered = 0;
@@ -37962,11 +38458,12 @@ function createDocumentRequestService(deps) {
         resourceId: id,
         changes: {
           studentId: { from: null, to: studentId },
-          templates: { from: null, to: templates },
+          tags: { from: null, to: tags },
+          recipients: { from: null, to: recipients },
           deliveredChats: { from: null, to: delivered }
         }
       });
-      log.info("doc.request.sent", { id, studentId, delivered });
+      log.info("doc.request.sent", { id, studentId, tags, recipients, delivered });
       const row = await db.queryOne(`${DOC_REQUEST_SELECT} WHERE r.id = ?`, [id]);
       return { request: requestRowToDocRecord(row), deliveredChats: delivered };
     },
@@ -38007,16 +38504,13 @@ function createDocumentRequestService(deps) {
       return requestRowToDocRecord(fresh);
     },
     async tryHandleMedia(chatId, media, caption) {
-      const studentIds = await linkedStudentIds(chatId);
-      if (studentIds.length === 0)
-        return null;
-      const placeholders = studentIds.map(() => "?").join(", ");
-      const openRow = await db.queryOne(
-        `SELECT id, student_id FROM document_requests
-          WHERE status != 'closed' AND student_id IN (${placeholders})
-          ORDER BY sent_at DESC, id DESC LIMIT 1`,
-        studentIds
-      );
+      // — اول چت خانواده (هر درخواست باز)؛ بعد چت کلاس (فقط درخواستِ گیرندهٔ معلم)
+      const familyIds = await linkedStudentIds(chatId);
+      let openRow = familyIds.length > 0 ? await newestOpenRequest(familyIds, null) : null;
+      if (!openRow) {
+        const classIds = await classStudentIds(chatId);
+        openRow = classIds.length > 0 ? await newestOpenRequest(classIds, "teacher") : null;
+      }
       if (!openRow)
         return null;
       const studentNameRow = await db.queryOne(`SELECT first_name || ' ' || last_name AS name FROM students WHERE id = ?`, [openRow.student_id]);
@@ -38093,7 +38587,9 @@ function registerDocumentRequestRoutes(app, service) {
     const body = await c.req.json().catch(() => ({}));
     const raw = body ?? {};
     const result = await service.create(c.req.param("id"), {
-      templates: Array.isArray(raw.templates) ? raw.templates : [],
+      // — m166: tags جدید؛ templates کلید قدیمی برای سازگاری فراخوان‌های قبلی
+      tags: raw.tags ?? raw.templates,
+      recipients: raw.recipients,
       customNote: typeof raw.custom_note === "string" ? raw.custom_note : null,
       dueHint: typeof raw.due_hint === "string" ? raw.due_hint : null
     }, actor);
@@ -44729,7 +45225,8 @@ function createServices(deps) {
     baleEnabled: Boolean(deps.baleToken),
     clinicName: deps.clinicName
   });
-  const knowledge = createKnowledgeService({ db, audit, logger });
+  // ─── سرویس دانش‌افزایی (خواندن همه؛ مدیریت دفتر) — پیوست مقاله همان ObjectStore تمرین ───
+  const knowledge = createKnowledgeService({ db, audit, logger, storage: exerciseStorage });
   const clinicalEngine = createClinicalEngineService({ db, audit, logger });
   const otEngine = createOtEngineService({ db, audit, logger });
   const reasoningEngine = createReasoningEngineService({ db, logger, otEngine });

@@ -263,8 +263,9 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
       waitingCount !== null
         ? kpi('لیست انتظار', fa(waitingCount), 'متقاضیِ در صف (در انتظار/فراخوانده)', waitingCount > 0 ? 'accent' : 'neutral')
         : null,
-      kpi('دانش‌آموزان فعال', fa(todayData.studentsSummary.totalStudents), `در ${fa(todayData.studentsSummary.totalSchools)} مدرسه`, 'primary'),
-      kpi('تداخل‌های فعال', fa(todayData.activeConflicts), 'تداخل زمانی نوبت‌ها', todayData.activeConflicts > 0 ? 'error' : 'neutral')
+      // m166-a — کارت «تداخل‌های فعال» حذف شد (بازخورد کاربر: تداخل نوبت‌ها موضوعیت ندارد)؛
+      // محاسبهٔ activeConflicts سمت سرور به قوت خود برقرار است.
+      kpi('دانش‌آموزان فعال', fa(todayData.studentsSummary.totalStudents), `در ${fa(todayData.studentsSummary.totalSchools)} مدرسه`, 'primary')
     )
   );
 

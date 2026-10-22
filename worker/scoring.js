@@ -313,10 +313,13 @@ function boardSqlAndParams(sinceUtc, usageActions) {
   // ستون‌های محتوا — هر کدام یک زیرکوئری همبسته روی s.id (همان فیلترهای نسخهٔ قبل)
   const metrics = [
     ['exercises',
-      // تولید محتوا — تمرین تیمی (team_created=1) نصف وزن می‌گیرد (خواست کاربر)
-      `(SELECT COALESCE(SUM(CASE WHEN e.team_created = 1 THEN 0.5 ELSE 1 END), 0)
+      // تولید محتوا — m166: تمرین با هم‌ساز واقعی (co_created_by) نصف وزن برای هر دو نفر
+      // (سازندهٔ اصلی ۰٫۵ + هم‌ساز ۰٫۵ = ۱)؛ تمرین تیمیِ قدیمی (team_created=1) هم ۰٫۵.
+      // همان زیرکوئری برای ردیفِ هم‌ساز هم ۰٫۵ می‌دهد — جمعِ هر تمرین در تابلو = ۱.
+      `(SELECT COALESCE(SUM(CASE WHEN e.co_created_by IS NOT NULL OR e.team_created = 1 THEN 0.5 ELSE 1 END), 0)
           FROM exercises e
-         WHERE e.deleted_at IS NULL AND e.created_by = s.id${since('e.created_at')})`],
+         WHERE e.deleted_at IS NULL
+           AND (e.created_by = s.id OR e.co_created_by = s.id)${since('e.created_at')})`],
     ['packages',
       `(SELECT COUNT(*) FROM exercise_packages p
         WHERE p.deleted_at IS NULL AND p.created_by = s.id${since('p.created_at')})`],
@@ -645,9 +648,10 @@ export async function handleScoring(request, env) {
     // اسنپ‌شاتِ خواندن قبلیِ همان نشست عقب‌تر نیستند.
     const W = since ? ' AND created_at >= ?' : '';
     const P = since ? [since] : [];
+    // m166: آیتم‌های تمرین — تمرین‌های ساختهٔ این همکار + تمرین‌هایی که هم‌سازش بوده
     const exerciseItems = await db
-      .prepare(`SELECT id, title, team_created FROM exercises WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`)
-      .bind(staffId, ...P).all();
+      .prepare(`SELECT id, title, team_created, co_created_by FROM exercises WHERE deleted_at IS NULL AND (created_by = ? OR co_created_by = ?)${W} ORDER BY created_at`)
+      .bind(staffId, staffId, ...P).all();
     const packageItems = await db
       .prepare(`SELECT id, title FROM exercise_packages WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`)
       .bind(staffId, ...P).all();
@@ -660,9 +664,11 @@ export async function handleScoring(request, env) {
 
     const prodW = (key) => contentFormula.production.find((x) => x.key === key)?.weight ?? 0;
     const exWeight = prodW('exercises');
-    // تمرین: count = شمارش خام؛ effectiveWeight = وزن مؤثر هر قلم (تیمی نصف)
+    // تمرین: count = شمارش خام؛ effectiveWeight = وزن مؤثر هر قلم (تیمی/هم‌سازدار نصف)
     const exerciseList = exerciseItems.results.map((r) => {
-      const teamCreated = r.team_created === 1;
+      // m166: هم‌ساز بودن هم «نصف امتیاز» است — تمرینِ ساختهٔ دیگری که این همکار
+      // هم‌سازش بوده در همین فهرست با وزن ۰٫۵ می‌آید
+      const teamCreated = r.team_created === 1 || Boolean(r.co_created_by);
       return {
         id: r.id,
         title: r.title,

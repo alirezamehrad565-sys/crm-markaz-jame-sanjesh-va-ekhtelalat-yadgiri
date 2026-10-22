@@ -1012,7 +1012,9 @@ export const ExerciseFileSchema = z.object({
   content_b64: z.string().min(1, 'محتوای فایل الزامی است').max(1_200_000, 'حجم فایل بیش از حد مجاز است')
 });
 
-/** ساخت تمرین جدید — فایل اختیاری (تمرین می‌تواند فقط دستورالعمل متنی باشد) */
+/** ساخت تمرین جدید — فایل اختیاری (تمرین می‌تواند فقط دستورالعمل متنی باشد)
+ * — m166: co_created_by = سازندهٔ دوم واقعی (انتخاب از کارکنان) — امتیاز تولید محتوا
+ *   بین سازندهٔ اصلی و هم‌ساز نصف می‌شود (جای تیک بی‌نامِ team_created). */
 export const NewExerciseSchema = z.object({
   title: z
     .string()
@@ -1034,6 +1036,7 @@ export const NewExerciseSchema = z.object({
     .nullable()
     .optional(),
   tag_ids: z.array(UuidSchema).max(10, 'حداکثر ۱۰ برچسب برای هر تمرین').optional().default([]),
+  co_created_by: UuidSchema.nullable().optional(),
   published: z.boolean().optional().default(true),
   file: ExerciseFileSchema.nullable().optional()
 });
@@ -1068,11 +1071,13 @@ export const UpdateExerciseSchema = z
       .nullable()
       .optional(),
     tag_ids: z.array(UuidSchema).max(10, 'حداکثر ۱۰ برچسب برای هر تمرین').optional(),
+    // — m166: هم‌ساز (سازندهٔ دوم) — null یعنی برداشتن هم‌ساز؛ created_by دست نمی‌خورد
+    co_created_by: UuidSchema.nullable().optional(),
     published: z.boolean().optional()
   })
   .strip()
   .refine(
-    (v) => v.title !== undefined || v.description !== undefined || v.format !== undefined || v.external_url !== undefined || v.tag_ids !== undefined || v.published !== undefined,
+    (v) => v.title !== undefined || v.description !== undefined || v.format !== undefined || v.external_url !== undefined || v.tag_ids !== undefined || v.co_created_by !== undefined || v.published !== undefined,
     { message: 'حداقل یک فیلد برای ویرایش لازم است' }
   );
 

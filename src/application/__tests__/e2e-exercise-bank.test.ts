@@ -337,3 +337,73 @@ describe('بانک تمرین: مالکیت (owner_staff_id بسته + reassign 
     expect(unknownStaff.status).toBe(404);
   });
 });
+
+// ─── — m166: هم‌ساز تمرین (سازندهٔ دوم) — امتیاز تولید محتوا بین دو نفر نصف می‌شود؛
+// جای تیک بی‌نامِ team_created، انتخاب واقعی همکار از فهرست کارکنان
+describe('بانک تمرین: هم‌ساز تمرین (co_created_by — سازندهٔ دوم)', () => {
+  let A: ReturnType<typeof createTestApp>;
+  let manager: Api;
+  let therapist: Api;
+
+  beforeAll(async () => {
+    A = createTestApp();
+    manager = await asRole(A, 'manager');
+    therapist = await asRole(A, 'therapist');
+  });
+
+  it('ساخت با هم‌ساز: coCreatedBy در پاسخ ثبت می‌شود', async () => {
+    const res = await manager.post('/api/exercises', {
+      title: 'تمرین تیمی هم‌سازدار',
+      format: 'worksheet',
+      co_created_by: ALI_ID
+    });
+    expect(res.status).toBe(201);
+    const ex = (res.body as { data: { id: string; createdBy: string; coCreatedBy: string | null } }).data;
+    expect(ex.createdBy).toBe(MANAGER_ID);
+    expect(ex.coCreatedBy).toBe(ALI_ID);
+
+    const viaGet = await manager.get(`/api/exercises/${ex.id}`);
+    expect((viaGet.body as { data: { coCreatedBy: string | null } }).data.coCreatedBy).toBe(ALI_ID);
+  });
+
+  it('هم‌ساز = خودِ سازنده ۴۰۰ و کارمند ناموجود ۴۰۴', async () => {
+    const selfCo = await manager.post('/api/exercises', {
+      title: 'تمرین هم‌سازِ خودم',
+      format: 'worksheet',
+      co_created_by: MANAGER_ID
+    });
+    expect(selfCo.status).toBe(400);
+
+    const ghost = await manager.post('/api/exercises', {
+      title: 'تمرین هم‌ساز ناموجود',
+      format: 'worksheet',
+      co_created_by: 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+    });
+    expect(ghost.status).toBe(404);
+  });
+
+  it('ویرایش: هم‌ساز تغییر می‌کند و با null برداشته می‌شود؛ مالکیت (createdBy) ثابت می‌ماند', async () => {
+    const res = await therapist.post('/api/exercises', { title: 'روخوانی واژه‌ها', format: 'instruction' });
+    const ex = (res.body as { data: { id: string; createdBy: string } }).data;
+
+    const set = await therapist.patch(`/api/exercises/${ex.id}`, { co_created_by: MARYAM_ID });
+    expect(set.status).toBe(200);
+    expect((set.body as { data: { coCreatedBy: string | null } }).data.coCreatedBy).toBe(MARYAM_ID);
+
+    const clear = await therapist.patch(`/api/exercises/${ex.id}`, { co_created_by: null });
+    expect(clear.status).toBe(200);
+    expect((clear.body as { data: { coCreatedBy: string | null } }).data.coCreatedBy).toBeNull();
+
+    const reread = await manager.get(`/api/exercises/${ex.id}`);
+    const body = (reread.body as { data: { createdBy: string; coCreatedBy: string | null } }).data;
+    expect(body.createdBy).toBe(ALI_ID);
+    expect(body.coCreatedBy).toBeNull();
+  });
+
+  it('هم‌ساز نباید خودِ سازندهٔ فعلی باشد (ویرایش) — ۴۰۰', async () => {
+    const res = await therapist.post('/api/exercises', { title: 'دقت و تمرکز — مازید', format: 'game' });
+    const ex = (res.body as { data: { id: string } }).data;
+    const patch = await therapist.patch(`/api/exercises/${ex.id}`, { co_created_by: ALI_ID });
+    expect(patch.status).toBe(400);
+  });
+});

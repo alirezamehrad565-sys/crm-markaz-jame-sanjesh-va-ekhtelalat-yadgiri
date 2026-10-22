@@ -193,10 +193,13 @@ describe('RBAC — نقش‌ها روی endpointهای محافظت‌شده', (
     expect(ok.status).toBe(200);
   });
 
-  it('ساخت برچسب فقط مدیر — همکار ۴۰۳ ولی خواندن برای همه آزاد است', async () => {
+  it('ساخت برچسب: مدیر و درمانگر مجاز (m166 — خواست کاربر)، منشی ۴۰۳؛ خواندن برای همه آزاد است', async () => {
     const list = await therapist.get('/api/tags');
     expect(list.status).toBe(200);
-    const denied = await therapist.post('/api/tags', { name: 'برچسب همکار', category: 'custom' });
+    // — m166: همکار درمانگر باید بتواند برچسب اضافه کند (بانک تمرین)
+    const byTherapist = await therapist.post('/api/tags', { name: 'برچسب همکار درمانگر', category: 'custom' });
+    expect(byTherapist.status).toBe(201);
+    const denied = await secretary.post('/api/tags', { name: 'برچسب منشی', category: 'custom' });
     expect(denied.status).toBe(403);
   });
 

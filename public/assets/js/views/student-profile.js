@@ -3,10 +3,13 @@
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
 // views/student-profile.js — فاز ۶: پروفایل زنده (§14) با تب‌ها + تایم‌لاین (§11)
-// اطلاعات پایه / تاریخچه / جلسات / ارزیابی‌ها / پیگیری‌ها / ارتباطات + «وضعیت فعلی» و «اقدام بعدی»
+// اطلاعات پایه / تاریخچه / جلسات / ارزیابی‌ها / ارتباطات + «وضعیت فعلی» و «اقدام بعدی»
+// m166-c: تب «پیگیری‌ها» حذف شد (سیستم اقدام/پیگیری مصرف نشد — ثبت گزارش جلسه کافی است؛ داده و API دست‌نخورده)
+// m166-c: تب «ارتباطات» ریمک شد — دو کارت «خانواده»/«معلم»: لینک احراز بات + دعوت با پیامک آماده (sms:)
+// m166-c: «افزودن معلم» حذف شد (تک‌معلم دورهٔ ابتدایی) — نمایش/حذف معلمِ موجود باقی است
 
 import { api, qs } from '../api.js';
-import { fa, formatJalaliDateTime, formatJalaliNumeric, formatStoredJalaliNumeric, STUDENT_GRADES, gradeLabel, isPlaceholderNid } from '../format.js';
+import { fa, enDigits, formatJalaliDateTime, formatJalaliNumeric, formatStoredJalaliNumeric, STUDENT_GRADES, gradeLabel, isPlaceholderNid } from '../format.js';
 import { el, icon, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, tabs, callBadge } from '../ui.js';
 import { session } from '../state.js';
 import { fetchTags, fetchStudentTags, tagChip, openTagEditor } from '../tagging.js';
@@ -16,7 +19,7 @@ import { renderClinicalTab } from '../clinical-insights.js'; // — تب تفس�
 import { pathwayChip, canEditPathway, openPathwayModal } from '../session-type.js'; // — مسیر پرونده
 import { openEducationHistory } from '../archive-form.js'; // — تاریخچهٔ تحصیلی
 import { openStudentForm } from '../student-form.js'; // — فرم مشترک ویرایش (کد ملی/مسئول/مسیر) — جایگزین فرم قدیمی داخلی
-import { openBotLinkModal } from '../bot-link.js'; // — لینک احراز خودکار بات
+import { openBotLinkModal, resolveBotUsername, buildBotLink } from '../bot-link.js'; // — لینک احراز خودکار بات (m166: ساخت لینک در تب ارتباطات هم)
 import { renderDocsQuickCard } from '../document-requests.js'; // — m151: درخواست مدارک با بله + کارت مدارک دریافتی
 
 // — گارد و مودال مسیر پرونده به session-type.js منتقل شد (مصرف مشترک با تب تفسیر)
@@ -197,7 +200,6 @@ export async function renderStudentProfile(container, ctx) {
       clinical: renderClinicalTabContent, //
       timeline: renderTimelineTab,
       sessions: renderSessionsTab,
-      followups: renderFollowupsTab,
       comms: renderCommsTab,
       exercises: renderExercisesTabContent
     }[key];
@@ -212,7 +214,7 @@ export async function renderStudentProfile(container, ctx) {
       { key: 'timeline', label: 'تاریخچه', icon: 'clock', onSelect: selectTab },
       { key: 'sessions', label: `جلسات (${fa(appointments.length)})`, icon: 'calendar', onSelect: selectTab },
       { key: 'exercises', label: 'تمرین‌ها', icon: 'file', onSelect: selectTab },
-      { key: 'followups', label: 'پیگیری‌ها', icon: 'bell', onSelect: selectTab },
+      // — m166: تب «پیگیری‌ها» حذف شد — اقدام/پیگیری بعدی مصرف نشد؛ ثبت گزارش جلسه در تب جلسات کافی است
       { key: 'comms', label: 'ارتباطات', icon: 'bot', onSelect: selectTab }
     ],
     'info'
@@ -233,11 +235,14 @@ export async function renderStudentProfile(container, ctx) {
     el('div', { style: { marginTop: 'var(--sp-4)' } }, content)
   );
 
-  // — deep-link تب‌ها: #/students/:id?tab=sessions|timeline|followups|comms|exercises|clinical
+  // — deep-link تب‌ها: #/students/:id?tab=sessions|timeline|comms|exercises|clinical
+  //   + ?filter=… برای فیلتر تایم‌لاین — m166: لینک‌های قدیمی tab=followups به تایم‌لاین (فیلتر پیگیری) می‌روند
   const requestedTab = ctx.query?.tab;
-  const knownTabs = ['info', 'timeline', 'sessions', 'followups', 'comms', 'exercises'];
+  const timelineDeepFilter = ctx.query?.filter ?? (requestedTab === 'followups' ? 'followups' : null);
+  const knownTabs = ['info', 'timeline', 'sessions', 'comms', 'exercises'];
   if (canSeeClinical) knownTabs.splice(1, 0, 'clinical');
-  selectTab(knownTabs.includes(requestedTab) ? requestedTab : 'info');
+  if (requestedTab === 'followups') selectTab('timeline');
+  else selectTab(knownTabs.includes(requestedTab) ? requestedTab : 'info');
 
   // ═══════════════ تب — تمرین‌ها ═══════════════
 
@@ -318,7 +323,7 @@ export async function renderStudentProfile(container, ctx) {
               onclick: () => openEducationHistory(student, { onChanged: () => renderStudentProfile(container, ctx) })
             }, icon('eye', 15), 'مشاهده / مدیریت')
           ),
-          // — T7 (m150-b): کارت «معلم‌ها» — چند معلم = چند لینک مستقل فرم جامع معلم
+          // — T7: کارت «معلم» — پاسخ فرم جامع معلم با نام او روی پرونده می‌نشیند (m166: تک‌معلم ابتدایی)
           renderTeachersCard(student, container, ctx),
           el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', marginTop: 'var(--sp-4)' } },
             el('button', {
@@ -342,7 +347,16 @@ export async function renderStudentProfile(container, ctx) {
   // ═══════════════ تب ۲ — تاریخچه (تایم‌لاین §11) ═══════════════
 
   function renderTimelineTab(box) {
-    const state = { filter: 'all', offset: 0, hasMore: timeline.meta?.hasMore ?? false, events: [...timeline.data], loading: false };
+    // — m166: فیلتر اولیه از deep-link (?tab=timeline&filter=followups) — لینک‌های قدیمی تب پیگیری‌ها زنده می‌مانند
+    const deepFilter = TIMELINE_FILTERS.some((f) => f.key === timelineDeepFilter) ? timelineDeepFilter : null;
+    const state = {
+      filter: deepFilter ?? 'all',
+      offset: 0,
+      // — دادهٔ پیش‌بارگیری‌شده فقط فهرست «همه» است — با فیلتر عمیق از صفر بارگیری می‌شود
+      hasMore: deepFilter ? false : (timeline.meta?.hasMore ?? false),
+      events: deepFilter ? [] : [...timeline.data],
+      loading: false
+    };
 
     const list = el('div', { class: 'tl-list' });
     const moreBtn = el('button', { class: 'btn btn--soft btn--sm', style: { marginTop: 'var(--sp-4)' }, onclick: () => loadMore() }, icon('refresh', 15), 'نمایش رویدادهای بیشتر');
@@ -421,7 +435,8 @@ export async function renderStudentProfile(container, ctx) {
   const KIND_LINKS = {
     session_note: { hash: '#/reports', label: 'یادداشت جلسه در «گزارش جلسات من»' },
     exercise: { hash: '#/exercises', label: 'مشاهده در بانک تمرین' },
-    followup: { hash: `#/students/${id}?tab=followups`, label: 'مشاهده در تب پیگیری‌ها' },
+    // — m166: تب پیگیری‌ها حذف شد — لینک‌های قدیمی به تایم‌لاین با فیلتر «پیگیری» هدایت می‌شوند
+    followup: { hash: `#/students/${id}?tab=timeline&filter=followups`, label: 'مشاهده در تاریخچه (فیلتر پیگیری)' },
     // — لینک «کمیسیون» حذف شد (ماژول قطع شد)؛ رویدادهای تاریخی committee بدون لینک می‌مانند
     appointment: { hash: '#/appointments', label: 'مشاهده در تقویم نوبت‌ها' },
     appointment_moved: { hash: '#/appointments', label: 'مشاهده در تقویم نوبت‌ها' },
@@ -548,89 +563,43 @@ export async function renderStudentProfile(container, ctx) {
     );
   }
 
-  // ═══════════════ تب ۵ — پیگیری‌ها (فاز ۳ + نمایش فاز ۶) ═══════════════
+  // ═══════════════ تب — ارتباطات (m166 — ریمک: دعوت خانواده/معلم یک‌جا) ═══════════════
+  // — دو کارت «خانواده» و «معلم»: ساخت/نمایش لینک احراز بات + دعوت با پیامک آماده (sms:)
+  // — تب «پیگیری‌ها» حذف شد: اقدام/پیگیری بعدی مصرف نشد؛ ثبت گزارش جلسه کافی است (داده و API دست‌نخورده)
 
-  async function renderFollowupsTab(box) {
+  async function renderCommsTab(box) {
     box.replaceChildren(skeletonState('list', 4));
-    let followups = [];
+    const canManageNotify = Boolean(session.user && ['manager', 'secretary'].includes(session.user.role));
+
+    let familyCard = null;
+    let teacherCard = null;
     try {
-      const res = await api.get(`/api/followups${qs({ student_id: id, group: 'all' })}`);
-      followups = res.data;
+      familyCard = await buildFamilyInviteCard(student, { canManage: canManageNotify });
+      teacherCard = await buildTeacherInviteCard(student, { canManage: canManageNotify });
     } catch (err) {
-      box.replaceChildren(emptyState({ iconName: 'alert', title: 'خطا در دریافت پیگیری‌ها', hint: err.message }));
+      box.replaceChildren(emptyState({ iconName: 'alert', title: 'بارگذاری بخش ارتباطات ناموفق بود', hint: err?.message ?? '' }));
       return;
     }
 
-    const canAct = (fu) => ['manager', 'secretary'].includes(session.user?.role) || fu.assigneeId === session.user?.staffId;
-    const isOverdue = (fu) => (fu.status === 'open' || fu.status === 'in_progress') && fu.dueAt && new Date(fu.dueAt).getTime() < Date.now();
-
-    async function transition(fu, nextStatus, confirmLabel) {
-      if (nextStatus === 'cancelled' || nextStatus === 'done') {
-        const ok = await confirmModal({ title: 'تغییر وضعیت پیگیری', message: `"${fu.title}" به وضعیت «${{ done: 'تکمیل شد', cancelled: 'لغوشده' }[nextStatus]}» تغییر کند؟`, confirmLabel, danger: nextStatus === 'cancelled' });
-        if (!ok) return;
-      }
-      try {
-        await api.patch(`/api/followups/${fu.id}`, { status: nextStatus });
-        toast('وضعیت پیگیری به‌روزرسانی شد', 'success');
-        renderStudentProfile(container, ctx);
-      } catch (err) {
-        toastError(err);
-      }
-    }
-
-    box.replaceChildren(
-      el('div', { class: 'card' },
-        el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, `پیگیری‌های این پرونده (${fa(followups.length)})`)),
-        el('div', { class: 'card__body' },
-          followups.length === 0
-            ? emptyState({ iconName: 'bell', title: 'پیگیری بازی وجود ندارد', hint: 'پیگیری‌ها از گزارش جلسه (اقدام بعدی: پیگیری) یا غیبت‌ها ساخته می‌شوند و همین‌جا دیده می‌شوند.' })
-            : el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } },
-                ...followups.map((fu) =>
-                  el('div', { class: 'tl-item__card', style: { borderInlineStartWidth: '3px', borderInlineStartColor: isOverdue(fu) ? 'var(--error)' : 'var(--border)' } },
-                    el('div', { class: 'tl-item__head' },
-                      el('b', { class: 'tl-item__title' }, fu.title),
-                      statusBadge(fu.status)
-                    ),
-                    el('div', { class: 'tl-item__sub' },
-                      `مسئول: ${fu.assigneeName ?? '—'}`,
-                      fu.dueAt ? ` — سررسید: ${formatJalaliDateTime(fu.dueAt)}` : ' — بدون مهلت',
-                      isOverdue(fu) ? el('span', { class: 'badge badge--error', style: { marginInlineStart: '6px' } }, 'سررسید گذشته') : null
-                    ),
-                    canAct(fu) && (fu.status === 'open' || fu.status === 'in_progress')
-                      ? el('div', { style: { display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' } },
-                          fu.status === 'open'
-                            ? el('button', { class: 'btn btn--ghost btn--sm', onclick: () => transition(fu, 'in_progress') }, icon('zap', 14), 'شروع')
-                            : null,
-                          el('button', { class: 'btn btn--soft btn--sm', onclick: () => transition(fu, 'done', 'تکمیل') }, icon('check', 14), 'تکمیل'),
-                          el('button', { class: 'btn btn--ghost btn--sm', onclick: () => transition(fu, 'cancelled', 'لغو') }, icon('x', 14), 'لغو')
-                        )
-                      : null
-                  )
-                )
-              )
-        )
+    const reportsCard = el('div', { class: 'card' },
+      el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'گزارش‌های ارسالی')),
+      el('div', { class: 'card__body' },
+        el('p', { class: 'cell-sub', style: { margin: '0 0 var(--sp-3)' } },
+          'گزارش‌های ثبت‌شده برای خانواده و معلم مدرسه در تب «تاریخچه» (رویدادهای پیام) قابل مشاهده است.'),
+        canSendReport
+          ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openTeacherReportModal(student) }, icon('bot', 15), 'ارسال گزارش به معلم مدرسه')
+          : null
       )
     );
-  }
 
-  // ═══════════════ تب ۶ — ارتباطات ═══════════════
-
-  async function renderCommsTab(box) {
-    const canManageNotify = session.user && ['manager', 'secretary'].includes(session.user.role);
-    const notifyCard = canManageNotify ? await buildNotifyCard(id) : null;
+    // — یادآوری/اعلان‌ها فقط منشی/مدیر (ساخت لینک خانواده به کارت «خانواده» منتقل شد)
+    const notifyCard = canManageNotify ? await buildNotifyCard(student.id) : null;
 
     box.replaceChildren(
       el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' } },
-        el('div', { class: 'card' },
-          el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'گزارش‌های ارسالی')),
-          el('div', { class: 'card__body' },
-            el('p', { class: 'cell-sub', style: { margin: '0 0 var(--sp-3)' } },
-              'گزارش‌های ثبت‌شده برای خانواده و معلم مدرسه در تب «تاریخچه» (رویدادهای پیام) قابل مشاهده است.'),
-            canSendReport
-              ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openTeacherReportModal(student) }, icon('bot', 15), 'ارسال گزارش به معلم مدرسه')
-              : null
-          )
-        ),
+        familyCard,
+        teacherCard,
+        reportsCard,
         notifyCard
       )
     );
@@ -783,17 +752,14 @@ function openSpecialNeedForm(student, onSaved) {
   });
 }
 
-/** — T7 (m150-b): کارت «معلم‌ها» روی پرونده — فهرست + افزودن/حذف
- * مکملِ فیلد تک‌معلم کلاس (که در «اطلاعات پایه» همان قبل می‌ماند — دست‌نخورده)؛
- * «چند معلم = چند لینک مستقل» فرم جامع معلم — پاسخ هر معلم با نامش («پاسخ معلم: X»)
- * روی پرونده می‌نشیند و در جریان ارسال فرم معلم به‌عنوان «انتخاب معلم» مصرف می‌شود.
+/** — کارت «معلم» روی پرونده (m166 — تک‌معلم دورهٔ ابتدایی):
+ * «افزودن معلم» حذف شد — معلم کلاس خودکار ثبت می‌شود (seed از معلمِ کلاس +
+ * انتخاب/افزودن در جریان ارسال فرم معلم)؛ نمایش و حذف معلمِ موجود اینجاست.
+ * پاسخ فرم جامع معلم با نام او («پاسخ معلم: X») روی پرونده می‌نشیند.
  */
 function renderTeachersCard(student, container, ctx) {
   const canManage = Boolean(session.user && ['manager', 'secretary', 'therapist'].includes(session.user.role));
   const listWrap = el('div', { style: { display: 'grid', gap: 'var(--sp-2)' } }, el('div', { class: 'cell-sub' }, 'در حال بارگذاری…'));
-  const addBtn = canManage
-    ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openAddTeacher() }, icon('plus', 15), 'افزودن معلم')
-    : null;
 
   async function reload() {
     try {
@@ -801,9 +767,7 @@ function renderTeachersCard(student, container, ctx) {
       const items = res.data ?? [];
       listWrap.replaceChildren(
         ...(items.length === 0
-          ? [el('div', { class: 'cell-sub' }, canManage
-            ? 'هنوز معلمی ثبت نشده — برای فرم جامع معلم، معلم‌ها را اضافه کنید.'
-            : 'معلمی ثبت نشده است.')]
+          ? [el('div', { class: 'cell-sub' }, 'معلمی ثبت نشده است — با انتخاب کلاس مدرسه یا ارسال فرم معلم، معلم کلاس خودکار ثبت می‌شود.')]
           : items.map((t) => el('div', {
             style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-2)', flexWrap: 'wrap', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: 'var(--sp-2) var(--sp-3)' }
           },
@@ -836,28 +800,6 @@ function renderTeachersCard(student, container, ctx) {
     }
   }
 
-  function openAddTeacher() {
-    formModal({
-      title: 'افزودن معلم — پروندهٔ دانش‌آموز',
-      submitLabel: 'افزودن',
-      fields: [
-        { name: 'name', label: 'نام و نام خانوادگی معلم', type: 'text', required: true, maxlength: 120, span: 2, placeholder: 'مثلاً سرکار موسوی' },
-        { name: 'class_label', label: 'کلاس/درس (اختیاری)', type: 'text', maxlength: 120, span: 2, placeholder: 'مثل «چهارم ب — ریاضی»' },
-        { name: 'contact', label: 'راه ارتباطی (اختیاری — تلفن/بله)', type: 'text', maxlength: 60, ltr: true, span: 2 }
-      ],
-      onSubmit: async (v) => {
-        await api.post(`/api/students/${student.id}/teachers`, {
-          name: v.name,
-          class_label: v.class_label || undefined,
-          contact: v.contact || undefined
-        });
-        toast('معلم اضافه شد');
-        reload();
-        return true;
-      }
-    });
-  }
-
   reload();
   return el('div', {
     class: 'card',
@@ -865,10 +807,9 @@ function renderTeachersCard(student, container, ctx) {
   },
     el('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-2)', flexWrap: 'wrap', marginBottom: 'var(--sp-2)' } },
       el('div', {},
-        el('div', { class: 'card__title', style: { fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' } }, icon('users', 16), 'معلم‌ها'),
-        el('div', { class: 'cell-sub', style: { marginTop: '2px' } }, 'چند معلم = چند لینک مستقل فرم جامع معلم — پاسخ هر معلم با نامش روی پرونده می‌نشیند')
-      ),
-      addBtn
+        el('div', { class: 'card__title', style: { fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' } }, icon('users', 16), 'معلم'),
+        el('div', { class: 'cell-sub', style: { marginTop: '2px' } }, 'پاسخ فرم جامع معلم با نام او روی پرونده می‌نشیند — دورهٔ ابتدایی یک معلمِ کلاس دارد')
+      )
     ),
     listWrap
   );
@@ -920,15 +861,14 @@ function relationLabel(rel) {
 // ─────────────── کارت اعلان‌ها ───────────────
 // — فرم قدیمی ویرایش (openEditForm) حذف شد — openStudentForm مشترک جایگزین شد
 // (کد ملی/مسئول پرونده/مسیر پرونده در فرم مشترک هست؛ دوبله‌سازی برداشته شد)
+// — m166: بخش «ساخت لینک اتصال خانواده» از این کارت به کارت «خانواده» در تب ارتباطات منتقل شد
 
+/** کارت تنظیمات یادآوری نوبت — فقط منشی/مدیر (لینک‌ها در کارت «خانواده» مدیریت می‌شوند) */
 async function buildNotifyCard(studentId) {
   let prefs = null;
-  let links = [];
   try {
     const prefsRes = await api.get(`/api/notifications/prefs/${studentId}`).catch(() => null);
     prefs = prefsRes?.data ?? null;
-    const linksRes = await api.get(`/api/notifications/links${qs({ student_id: studentId })}`);
-    links = linksRes.data;
   } catch {
     // اعلان‌ها اختیاری‌اند
   }
@@ -962,52 +902,6 @@ async function buildNotifyCard(studentId) {
     }
   }, 'ذخیره');
 
-  const linkListBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
-    links.length === 0
-      ? el('span', { style: { fontSize: 'var(--fs-sm)', color: 'var(--text-3)' } }, 'لینکی ساخته نشده است.')
-      : links.slice(0, 4).map((l) =>
-          // — لینک‌ها چندبارمصرف‌اند؛ «دیدن لینک» برای ارسال دوباره/انتقال به گفتگوی جدید
-          el('div', { class: 'chip', style: { gap: '8px' } },
-            el('b', { dir: 'ltr' }, l.code),
-            statusBadge(l.status),
-            el('button', {
-              class: 'btn btn--ghost btn--sm',
-              onclick: () => openBotLinkModal(l.code, {
-                intro: 'این لینک دوباره قابل استفاده است — برای گفتگوی جدید همان را بفرستید:'
-              })
-            }, 'دیدن لینک')
-          )
-        )
-  );
-
-  const linkBtn = el('button', {
-    class: 'btn btn--soft btn--sm',
-    onclick: async () => {
-      linkBtn.disabled = true;
-      try {
-        const res = await api.post('/api/notifications/links', { student_id: studentId });
-        toast('لینک اتصال خانواده ساخته شد', 'success');
-        linkListBox.prepend(el('div', { class: 'chip', style: { gap: '8px' } },
-          el('b', { dir: 'ltr' }, res.data.code),
-          statusBadge(res.data.status),
-          el('button', {
-            class: 'btn btn--ghost btn--sm',
-            onclick: () => openBotLinkModal(res.data.code, {
-              intro: 'این لینک دوباره قابل استفاده است — برای گفتگوی جدید همان را بفرستید:'
-            })
-          }, 'دیدن لینک')
-        ));
-        // — نمایش کد + لینک احراز خودکار (خانواده با کلیک متصل می‌شود)
-        await openBotLinkModal(res.data.code, {
-          intro: 'این کد/لینک را به ولیّ دانش‌آموز بدهید تا گفتگوی باتش متصل شود:'
-        });
-      } catch (err) {
-        toastError(err);
-      }
-      linkBtn.disabled = false;
-    }
-  }, icon('bot', 15), 'ساخت لینک اتصال خانواده');
-
   return el('div', { class: 'card' },
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'یادآوری و اعلان‌ها')),
     el('div', { class: 'card__body', style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' } },
@@ -1019,9 +913,296 @@ async function buildNotifyCard(studentId) {
         enabledCb,
         el('span', { style: { fontSize: 'var(--fs-sm)' } }, 'یادآوری خودکار فعال باشد')
       ),
-      el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } }, saveBtn, linkBtn),
-      prefs?.chatId ? el('div', { class: 'alert alert--info' }, icon('bot', 16), el('span', {}, `اتصال فعال — chat_id: ${fa(prefs.chatId)}`)) : null,
-      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'لینک‌های اتصال اخیر'), linkListBox)
+      el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } }, saveBtn),
+      prefs?.chatId ? el('div', { class: 'alert alert--info' }, icon('bot', 16), el('span', {}, `اتصال فعال — chat_id: ${fa(prefs.chatId)}`)) : null
+    )
+  );
+}
+
+// ─────────────── m166 — تب ارتباطات: کارت‌های دعوت (خانواده/معلم) ───────────────
+
+/** نرمال‌سازی شمارهٔ تلفن برای پیوند sms:/tel: — ارقام فارسی/عربی → لاتین + حذف جداکننده‌ها */
+function normalizePhoneValue(phone) {
+  return enDigits(String(phone ?? '')).trim().replace(/[^\d+]/g, '');
+}
+
+/** کپی متن در کلیپ‌بورد با fallback صفحهٔ قدیمی‌تر — همان الگوی bot-link.js (آن ماژول فقط-خواندنی است) */
+async function copyTextFallback(text) {
+  try {
+    await navigator.clipboard?.writeText(text);
+    return true;
+  } catch {
+    try {
+      const tmp = el('textarea', { style: { position: 'fixed', opacity: '0' } });
+      tmp.value = text;
+      document.body.appendChild(tmp);
+      tmp.select();
+      const ok = document.execCommand('copy');
+      tmp.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
+/** — کد اتصالِ قابل استفاده از فهرست لینک‌ها: «در انتظار» ← «متصل» ← آخرین رکورد */
+function pickActiveLinkCode(links) {
+  return links.find((l) => l.status === 'pending')?.code
+    ?? links.find((l) => l.status === 'linked')?.code
+    ?? links[0]?.code
+    ?? null;
+}
+
+/**
+ * بخش «دعوت با پیامک» — مشترک بین کارت خانواده و کارت معلم (m166).
+ * متن دعوت آماده به عضویت بات بله با لینک احراز واقعی؛ روی گوشی با کلیک، برنامهٔ
+ * پیامک گوشی با شماره و متنِ پرشده باز می‌شود: sms:<شماره>?&body=<متن encoded>
+ * شمارهٔ ذخیره‌شده نبود → ورودی inline؛ روی دسکتاپ (بدون برنامهٔ پیامک) «کپی متن دعوت» هست.
+ * بعد از ساخت لینک، refresh() پیش‌نمایش و دکمه‌ها را به‌روز می‌کند.
+ */
+function buildSmsInviteSection({ heading, storedPhone, phonePlaceholder, getInvite, noCodeHint }) {
+  const phoneInput = el('input', {
+    class: 'input', type: 'tel', dir: 'ltr', maxlength: 20,
+    placeholder: phonePlaceholder ?? 'شمارهٔ همراه…',
+    style: { maxWidth: '220px' }
+  });
+
+  const previewBox = el('div', {});
+  const phoneRow = el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } });
+  const actionsRow = el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center' } });
+
+  const smsLink = el('a', { class: 'btn btn--primary btn--sm', style: { textDecoration: 'none' } }, icon('send', 15), 'دعوت با پیامک');
+  const copyBtn = el('button', {
+    class: 'btn btn--soft btn--sm',
+    onclick: async () => {
+      const inv = getInvite();
+      if (!inv?.text) { toast(noCodeHint ?? 'اول لینک اتصال را بسازید', 'warning'); return; }
+      const ok = await copyTextFallback(inv.text);
+      toast(ok ? 'متن دعوت کپی شد' : 'کپی نشد — متن را دستی انتخاب کنید', ok ? 'success' : 'error');
+    }
+  }, icon('copy', 14), 'کپی متن دعوت');
+
+  // — href در لحظهٔ کلیک ساخته می‌شود تا شمارهٔ ورودی inline هم لحاظ شود
+  smsLink.addEventListener('click', (e) => {
+    const inv = getInvite();
+    const phone = storedPhone || normalizePhoneValue(phoneInput.value);
+    if (!inv?.text) { e.preventDefault(); toast(noCodeHint ?? 'اول لینک اتصال را بسازید', 'warning'); return; }
+    if (!phone || phone.length < 7) {
+      e.preventDefault();
+      toast('شمارهٔ گیرنده را وارد کنید', 'warning');
+      if (!storedPhone) phoneInput.focus();
+      return;
+    }
+    smsLink.href = `sms:${phone}?&body=${encodeURIComponent(inv.text)}`;
+  });
+
+  function refresh() {
+    const inv = getInvite();
+    phoneRow.replaceChildren(
+      el('span', { class: 'field__label', style: { margin: 0 } }, 'شمارهٔ گیرنده:'),
+      storedPhone ? el('b', { dir: 'ltr' }, fa(storedPhone)) : phoneInput
+    );
+    if (!inv?.text) {
+      smsLink.removeAttribute('href');
+      smsLink.title = noCodeHint ?? 'اول لینک اتصال بسازید';
+      previewBox.replaceChildren(el('p', { class: 'cell-sub', style: { margin: 0 } }, noCodeHint ?? 'هنوز لینک اتصالی ساخته نشده است.'));
+      actionsRow.replaceChildren(copyBtn);
+      return;
+    }
+    smsLink.removeAttribute('title');
+    previewBox.replaceChildren(
+      el('div', { class: 'token-box', style: { fontFamily: 'inherit', wordBreak: 'break-word', margin: 0, lineHeight: '1.9', userSelect: 'all' } }, inv.text)
+    );
+    actionsRow.replaceChildren(smsLink, copyBtn);
+  }
+  refresh();
+
+  return {
+    root: el('div', { style: { borderTop: '1px dashed var(--border)', paddingTop: 'var(--sp-3)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)', marginTop: 'var(--sp-2)' } },
+      el('div', { class: 'card__title', style: { fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' } }, icon('message', 15), heading),
+      previewBox,
+      phoneRow,
+      actionsRow
+    ),
+    refresh
+  };
+}
+
+/** — چیپ فهرست لینک‌های اتصال با «دیدن لینک» (مودال bot-link — چندبارمصرف) */
+function paintLinkChips(box, links, { emptyText }) {
+  box.replaceChildren(
+    ...(links.length === 0
+      ? [el('span', { class: 'cell-sub' }, emptyText)]
+      : links.slice(0, 4).map((l) =>
+          el('div', { class: 'chip', style: { gap: '8px' } },
+            el('b', { dir: 'ltr' }, l.code),
+            statusBadge(l.status),
+            el('button', {
+              class: 'btn btn--ghost btn--sm',
+              onclick: () => openBotLinkModal(l.code, { intro: 'این لینک چندبارمصرف است — برای گفتگوی جدید همان را بفرستید:' })
+            }, 'دیدن لینک')
+          )
+        ))
+  );
+}
+
+/**
+ * کارت «خانواده» — لینک احراز بات ولیّ + دعوت پیامکی (m166).
+ * لینک از مکانیزم موجود bot-link می‌آید: POST /api/notifications/links { student_id }
+ * → کد ۶ نویسه‌ای → buildBotLink(username, code) = https://ble.ir/<bot>?start=<code>
+ */
+async function buildFamilyInviteCard(student, { canManage }) {
+  let links = [];
+  try {
+    links = (await api.get(`/api/notifications/links${qs({ student_id: student.id })}`)).data ?? [];
+  } catch { links = []; }
+  const botUsername = await resolveBotUsername();
+
+  const getInvite = () => {
+    const code = pickActiveLinkCode(links);
+    if (!code) return null;
+    const link = buildBotLink(botUsername, code);
+    return {
+      code, link,
+      text: `والد گرامی، ${student.firstName} ${student.lastName}؛ برای همکاری‌های بیشتر با مرکز اختلال یادگیری لطفاً از طریق بات زیر در بله اقدام فرمایید. ${link ?? `کد اتصال: ${code} — در بات بله، دستور /link ${code} را بفرستید`}`
+    };
+  };
+
+  const listBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
+  const paintLinks = () => paintLinkChips(listBox, links, {
+    emptyText: canManage ? 'هنوز لینکی ساخته نشده — با «ساخت لینک اتصال» یکی بسازید.' : 'هنوز لینکی ساخته نشده است.'
+  });
+  paintLinks();
+
+  const smsSection = buildSmsInviteSection({
+    heading: 'دعوت ولیّ دانش‌آموز با پیامک',
+    storedPhone: normalizePhoneValue(student.guardianPhone) || null,
+    phonePlaceholder: 'مثلاً ۰۹۱۲۳۴۵۶۷۸۹',
+    getInvite,
+    noCodeHint: canManage
+      ? 'برای دعوت پیامکی، اول با «ساخت لینک اتصال» لینک بسازید.'
+      : 'هنوز لینک اتصالی ساخته نشده است — ساخت لینک در دست منشی/مدیر است.'
+  });
+
+  const genBtn = canManage
+    ? el('button', {
+        class: 'btn btn--primary btn--sm',
+        onclick: async () => {
+          genBtn.disabled = true;
+          try {
+            const res = await api.post('/api/notifications/links', { student_id: student.id });
+            links = [res.data, ...links];
+            toast('لینک اتصال خانواده ساخته شد', 'success');
+            paintLinks();
+            smsSection.refresh();
+            // — نمایش کد + لینک احراز خودکار (خانواده با کلیک متصل می‌شود)
+            await openBotLinkModal(res.data.code, { intro: 'این کد/لینک را به ولیّ دانش‌آموز بدهید تا گفتگوی باتش متصل شود:' });
+          } catch (err) {
+            toastError(err);
+          }
+          genBtn.disabled = false;
+        }
+      }, icon('plus', 15), 'ساخت لینک اتصال')
+    : null;
+
+  return el('div', { class: 'card' },
+    el('div', { class: 'card__head' },
+      el('div', { class: 'card__title' }, icon('users', 16), 'خانواده'),
+      genBtn
+    ),
+    el('div', { class: 'card__body', style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
+      el('p', { class: 'cell-sub', style: { margin: 0 } },
+        'لینک احراز خودکار بات بله — ولیّ با کلیک روی لینک به بات متصل می‌شود و اعلان نوبت‌ها و گزارش‌ها را می‌گیرد. لینک چندبارمصرف است و منقضی نمی‌شود.'),
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'لینک‌های اتصال خانواده'), listBox),
+      smsSection.root
+    )
+  );
+}
+
+/**
+ * کارت «معلم» — لینک احراز بات معلم کلاس + دعوت پیامکی (m166).
+ * لینک معلم = کد اتصال باتِ معلمِ کلاس (همان مکانیزم class-links پنل «مدارس»):
+ * GET/POST /api/notifications/class-links { class_id } → buildBotLink(username, code)
+ */
+async function buildTeacherInviteCard(student, { canManage }) {
+  if (!student.classId) {
+    return el('div', { class: 'card' },
+      el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('school', 16), 'معلم')),
+      el('div', { class: 'card__body' },
+        el('p', { class: 'cell-sub', style: { margin: 0 } },
+          'این دانش‌آموز هنوز کلاسی ندارد — برای لینک و دعوت معلم، ابتدا در «ویرایش اطلاعات» کلاس مدرسه را انتخاب کنید.')
+      )
+    );
+  }
+
+  let links = [];
+  try {
+    links = (await api.get(`/api/notifications/class-links${qs({ class_id: student.classId })}`)).data ?? [];
+  } catch { links = []; }
+  const botUsername = await resolveBotUsername();
+
+  const getInvite = () => {
+    const code = pickActiveLinkCode(links);
+    if (!code) return null;
+    const link = buildBotLink(botUsername, code);
+    const opening = student.teacherName
+      ? `همکار گرامی، ${student.teacherName}؛ یکی از دانش‌آموزان کلاس شما به مرکز اختلال یادگیری شهرستان مراجعه کرده است. برای دریافت گزارش‌ها و همکاری با مرکز جامع از لینک زیر اقدام فرمایید.`
+      : 'همکار گرامی؛ یکی از دانش‌آموزان کلاس شما به مرکز اختلال یادگیری شهرستان مراجعه کرده است. برای دریافت گزارش‌ها و همکاری با مرکز جامع از لینک زیر اقدام فرمایید.';
+    return {
+      code, link,
+      text: `${opening} ${link ?? `کد اتصال: ${code} — در بات بله، دستور /link ${code} را بفرستید`}`
+    };
+  };
+
+  const listBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
+  const paintLinks = () => paintLinkChips(listBox, links, {
+    emptyText: canManage ? 'هنوز کد اتصالی برای این کلاس ساخته نشده — با «تولید کد جدید» یکی بسازید.' : 'هنوز کد اتصالی برای این کلاس ساخته نشده است.'
+  });
+  paintLinks();
+
+  const smsSection = buildSmsInviteSection({
+    heading: 'دعوت معلم با پیامک',
+    storedPhone: normalizePhoneValue(student.teacherPhone) || null,
+    phonePlaceholder: 'مثلاً ۰۹۱۲۳۴۵۶۷۸۹',
+    getInvite,
+    noCodeHint: canManage
+      ? 'برای دعوت پیامکی، اول با «تولید کد جدید» لینک بسازید.'
+      : 'هنوز کد اتصالی برای این کلاس ساخته نشده است — ساخت کد در دست منشی/مدیر است.'
+  });
+
+  const genBtn = canManage
+    ? el('button', {
+        class: 'btn btn--primary btn--sm',
+        onclick: async () => {
+          genBtn.disabled = true;
+          try {
+            const res = await api.post('/api/notifications/class-links', { class_id: student.classId });
+            links = [res.data, ...links];
+            toast('کد اتصال معلم ساخته شد', 'success');
+            paintLinks();
+            smsSection.refresh();
+            await openBotLinkModal(res.data.code, { intro: 'این کد/لینک را به معلم کلاس بدهید تا گفتگوی باتش متصل شود:' });
+          } catch (err) {
+            toastError(err);
+          }
+          genBtn.disabled = false;
+        }
+      }, icon('plus', 15), 'تولید کد جدید')
+    : null;
+
+  return el('div', { class: 'card' },
+    el('div', { class: 'card__head' },
+      el('div', { class: 'card__title' }, icon('school', 16), 'معلم'),
+      genBtn
+    ),
+    el('div', { class: 'card__body', style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
+      el('p', { class: 'cell-sub', style: { margin: 0 } },
+        student.teacherName
+          ? `اتصال بات معلم کلاس «${student.className ?? ''}» — معلم: ${student.teacherName}. با کلیک روی لینک، بات معلم باز و اتصال خودکار انجام می‌گیرد؛ اعلان مراجعهٔ دانش‌آموزان کلاس و برنامهٔ روز/هفته می‌گیرد.`
+          : `اتصال بات معلم کلاس «${student.className ?? ''}» — با کلیک روی لینک، بات معلم باز و اتصال خودکار انجام می‌گیرد.`),
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'کدهای اتصال معلم'), listBox),
+      smsSection.root
     )
   );
 }

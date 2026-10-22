@@ -389,8 +389,8 @@ export function createServices(deps: AppDeps): Services {
     clinicName: deps.clinicName
   });
 
-  // ─── سرویس دانش‌افزایی (خواندن همه؛ مدیریت دفتر) ───
-  const knowledge = createKnowledgeService({ db, audit, logger });
+  // ─── سرویس دانش‌افزایی (خواندن همه؛ مدیریت دفتر) — پیوست مقاله همان ObjectStore تمرین ───
+  const knowledge = createKnowledgeService({ db, audit, logger, storage: exerciseStorage });
 
   // ─── موتور بالینی — تفسیر زنده + مسیر مداخله + پروتکل قضاوت ───
   const clinicalEngine = createClinicalEngineService({ db, audit, logger });
