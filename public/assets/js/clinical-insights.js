@@ -6,6 +6,8 @@
 // ساختار (UX-SPEC): نوار باریک (clxacc-toolbar) + فلوی عمودی شش <details> (clxacc-flow) + یک disclaimer.
 //   ۱ شرح‌حال → ۲ چک‌لیست‌های خانواده و معلم (+ شک بالینی) → ۳ وکسلر ۴ (افشای تدریجی؛ شش آکاردئون تودرتو
 //   همیشه‌بسته) → ۴ ارزیابی عملکردی → ۵ جمع‌بندی تشخیصی (+ پیوند با سایر اطلاعات) → ۶ مداخله (m165 — میزکار چک‌لیست مهارتی؛ تغییر قالب در انتهای تب).
+// m165 fix — خانهٔ چک‌لیست مهارتی برای پرونده‌های OT (توانبخشی/کاردرمانی ذهنی) همیشه تب مداخله است —
+//   حتی در فاز شناسایی (درخواست کاربر: «باید این چک‌لیست رو از بخش ارزیابی ببری تو مداخله»). مرحلهٔ ۴ فقط خط پایه + نشانگر.
 // یک چیدمان برای هر دو فاز (P1): فاز فقط گام بازِ پیش‌فرض، بج‌ها و CTAها را عوض می‌کند.
 // m136: (۱) مرحلهٔ ۴ حالت‌آگاه شد — ماتریس resolveSkillsMode؛ چک‌لیست مهارتی فقط برای مسیر/پروتکل OT
 //   (رفع باگ «چک‌لیست توانبخشی برای همه»)؛ (۲) سربرگ‌ها ردیف ریزآمار .clxacc__stats گرفتند — صفر GET تازه.
@@ -931,8 +933,11 @@ function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide
         if (!canDecide) return null;
         return act(GATE_GLOSS.skills.rehabActionLabel, 'btn--soft', () => openRehabFxModal(student, refresh));
       }
+      // m165 fix — لنگر چک‌لیست حالا در تب مداخله است: اول بخش مداخله باز، بعد اسکرول به لنگر
       return act(GATE_GLOSS.skills.rehabActionLabel, 'btn--soft', () => {
-        document.getElementById('ot-checklist-anchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const iv = document.getElementById('clxacc-intervention');
+        if (iv && !iv.open) iv.open = true;
+        requestAnimationFrame(() => document.getElementById('ot-checklist-anchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
       });
     default:
       return null;
@@ -1672,7 +1677,9 @@ export async function renderClinicalTab(box, { student }) {
 
     const stateOf = (key) => {
       if (phase === 'intervention') return key === 'intervention' ? 'current' : 'done'; // آرشیو مراحل ۱–۵
-      if (key === 'intervention') return 'locked'; // تا ثبت نتیجهٔ نیاز ویژه
+      // m165 fix — OT: تب مداخله در فاز شناسایی هم میزکار زندهٔ چک‌لیست است — نه قفل؛
+      // مسیر استاندارد (غیر OT) تا ثبت نتیجهٔ نیاز ویژه قفل می‌ماند.
+      if (key === 'intervention') return skillsMode === SKILL_MODE_OT ? 'todo' : 'locked';
       const g = gateByKey(key);
       if (key === 'needs') return g?.done ? 'needsDone' : (currentKey === key ? 'current' : 'todo');
       if (key === 'wechsler' && wechslerEmpty) return 'noData'; // §5 — بدون بازشدن خودکار
@@ -1738,7 +1745,8 @@ export async function renderClinicalTab(box, { student }) {
         return s.length > 64 ? `${s.slice(0, 64)}…` : s;
       },
       intervention: () => {
-        if (!protocol) return SM.protocol.glanceLocked;
+        // m165 fix — OT: میزکار زنده — نه قفل
+        if (!protocol) return skillsMode === SKILL_MODE_OT ? SM.protocol.glanceWorkspace : SM.protocol.glanceLocked;
         const label = protocolLabelOf(protoCardNode, protocol);
         if (!paths.length) return SM.protocol.glanceNoPath.replace('{protocol}', label);
         const statusKey = paths.some((p) => p.status === 'active') ? 'active'
@@ -1873,6 +1881,9 @@ export async function renderClinicalTab(box, { student }) {
     });
 
     // ── داده‌های مرحلهٔ ۶ (m165 — میزکار مداخله) — پیش‌فرض = چک‌لیست مهارتی جلسه‌به‌جلسه؛ مسیرها بعد؛ تغییر قالب فقط در انتهای تب ──
+    // m165 fix — خانهٔ چک‌لیست مهارتی برای OT (توانبخشی/کاردرمانی ذهنی) همیشه تب مداخله است — حتی در فاز شناسایی
+    // (درخواست کاربر: «باید این چک‌لیست رو از بخش ارزیابی ببری تو مداخله»)؛ فاز فقط خط پایه/نشانگرها را عوض می‌کند.
+    const otStage6Home = skillsMode === SKILL_MODE_OT;
     const protoCardNode = protocol ? protocolCard(protocol) : null;
     const emptyPathLine = paths.length
       ? null
@@ -1886,7 +1897,8 @@ export async function renderClinicalTab(box, { student }) {
         : emptyPathLine
     );
     // m165 — دکمهٔ واحد انتهای تب مداخله: تغییر قالب (ساخت/تعویض مسیر از قالب) — جایگزین کارت «شروع از قالب» و «مدیریت قالب‌ها»
-    const tplChangeRow = phase === 'intervention' && canDecide
+    // m165 fix — برای OT در فاز شناسایی هم هست (تب مداخله میزکار همیشگی است؛ پیام «مسیری ثبت نشده» به همین دکمه ارجاع می‌دهد)
+    const tplChangeRow = canDecide && (phase === 'intervention' || otStage6Home)
       ? el('div', { class: 'clx-actions clx-tplchange' },
           el('button', {
             class: 'btn btn--soft btn--sm',
@@ -1895,11 +1907,8 @@ export async function renderClinicalTab(box, { student }) {
       : null;
 
     // ── کارت چک‌لیست مهارتی مرحلهٔ ۴ — فقط در حالت OT سوار می‌شود (m136 رفع باگ: منحصر به مسیر/پروتکل OT) ──
-    // m162 — فلوی مسیرآگاه:
-    //  · فاز شناسایی: کارت در مرحلهٔ ۴ (زیر خط پایهٔ ارزیابی عملکردی) می‌ماند — ترتیب «ارزیابی اول، چک‌لیست دوم»؛
-    //  · فاز مداخله (rehab/mental_ot): کارت زندهٔ ثبت جلسه + پنل پیشرفت به مرحلهٔ مداخله منتقل می‌شوند —
-    //    کار درمانی جلسه‌به‌جلسه همان‌جا انجام می‌شود، نه در آرشیو مراحل شناسایی.
-    const otInIntervention = phase === 'intervention' && (protocol === 'rehab' || protocol === 'mental_ot');
+    // m162 — فلوی مسیرآگاه: کارت زندهٔ ثبت جلسه + پنل پیشرفت کار درمانی جلسه‌به‌جلسه را انجام می‌دهند.
+    // m165 fix — هر دو به تب مداخله منتقل شدند و آن‌جا می‌مانند (هر دو فاز) — تعریف otStage6Home بالا.
     const otProtocolLabel = (protocol === 'rehab' || (!protocol && student.pathway === 'rehab'))
       ? 'توانبخشی ذهنی-جسمی'
       : 'کاردرمانی ذهنی';
@@ -1910,12 +1919,12 @@ export async function renderClinicalTab(box, { student }) {
     const otCard = skillsMode === SKILL_MODE_OT && otProfile
       ? otChecklistCard({
           student, profile: otProfile, canDecide, refresh,
-          scrollTarget: !otInIntervention,
+          scrollTarget: true, // m165 fix — لنگر اسکرول CTA مرحلهٔ ۴؛ کارت حالا همیشه در تب مداخله است
           protocolLabel: otProtocolLabel,
           priorityDomains: otPriorityDomains
         })
       : null;
-    const otProgressNode = skillsMode === SKILL_MODE_OT && otInIntervention
+    const otProgressNode = otStage6Home
       ? otProgressPanel({
           progress: otProgress,
           protocolLabel: otProtocolLabel,
@@ -1991,13 +2000,15 @@ export async function renderClinicalTab(box, { student }) {
         if (skillsMode === SKILL_MODE_OT) {
           // m163 — حذف تکرار خط پایه: کارت کامل ارزیابی عملکردی فقط در فاز شناسایی؛ در فاز مداخله
           // خط پایه تک‌منبع در پنل پیشرفت (مرحلهٔ مداخله) به‌عنوان مرجع مقایسه + بازسنجی می‌نشیند.
-          if (isRehabCase && !otInIntervention) {
+          if (isRehabCase && phase !== 'intervention') {
             body.push(rehabFxSection({ student, events, typesById, canDecide, refresh }));
           }
-          // m162 — فاز مداخله: کارت زندهٔ پایش به مرحلهٔ مداخله منتقل شده — این‌جا فقط نشانگر می‌ماند
-          if (otCard && !otInIntervention) body.push(otCard);
-          else if (otInIntervention) body.push(el('div', { class: 'cell-sub' }, icon('clipboard', 13), ' ', isRehabCase ? SM.protocol.monitoringMovedRehab : SM.protocol.monitoringMoved));
-          if (!otCard && !isRehabCase && !g?.detail) body.push(el('div', { class: 'cell-sub' }, SM.skills.emptyHint));
+          // m165 fix — چک‌لیست مهارتی همیشه در تب مداخله است (خواست کاربر) — این‌جا فقط نشانگر
+          body.push(el('div', { class: 'cell-sub' }, icon('clipboard', 13), ' ',
+            phase === 'intervention'
+              ? (isRehabCase ? SM.protocol.monitoringMovedRehab : SM.protocol.monitoringMoved)
+              : SM.protocol.monitoringMoved));
+          if (!isRehabCase && !g?.detail) body.push(el('div', { class: 'cell-sub' }, SM.skills.emptyHint));
           body.push(seenChipsBlock(insights)); // تنها جای چیپ‌های «چه فرم‌هایی آمده» در مرحلهٔ ۴
           if (!g?.done) {
             const cta = gateActionOf(g, stageCtx);
@@ -2028,10 +2039,11 @@ export async function renderClinicalTab(box, { student }) {
       },
       intervention: () => {
         const body = [];
-        if (!protocol) body.push(el('div', { class: 'cell-sub' }, SM.protocol.lockedNote));
+        // m165 fix — OT: میزکار در هر دو فاز؛ یادداشت ملایم به‌جای قفل. مسیر استاندارد: همان قفل شناسایی
+        if (!protocol) body.push(el('div', { class: 'cell-sub' }, otStage6Home ? SM.protocol.workspaceNote : SM.protocol.lockedNote));
         // m165 — پیش‌فرض تب مداخله = کارت زندهٔ ثبت جلسه (چک‌لیست مهارتی جلسه‌به‌جلسه) + پنل پیشرفت — بالای همه‌چیز
-        if (otInIntervention && otCard) body.push(otCard);
-        if (otInIntervention && otProgressNode) body.push(otProgressNode);
+        if (otStage6Home && otCard) body.push(otCard);
+        if (otStage6Home && otProgressNode) body.push(otProgressNode);
         body.push(pathsSection);
         if (protocol) {
           const strip = protocolStrip(protoCardNode);
