@@ -159,6 +159,15 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: item }, 201);
   });
 
+  // — T12/m160: آزمون عملکرد مرکزی (خواندن/نوشتن/حساب) — ارزیابی درمانگر در مرکز، مرحلهٔ ۴ مسیر یادگیری؛
+  //   {area:'read'|'write'|'calc', values} — فیلد جا/خارج از قلم‌رو → 400 فارسی؛ type از کتابخانهٔ فعال باتری.
+  app.post('/api/students/:id/case-events/probe', requireRole('manager', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json<{ area?: string; values?: Record<string, unknown> }>().catch(() => null);
+    const item = await service.createProbeEvent(c.req.param('id'), { area: body?.area ?? '', values: body?.values ?? {} }, actor);
+    return c.json({ data: item }, 201);
+  });
+
   app.patch('/api/case-events/:id', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json<{ values?: Record<string, string | number | null>; summary?: string }>();

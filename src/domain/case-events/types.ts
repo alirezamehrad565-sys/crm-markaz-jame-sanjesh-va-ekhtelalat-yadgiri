@@ -301,6 +301,13 @@ export interface CaseEventsService {
    * type با کلید ce-read-core-v1 در همان فراخوانی idempotent ensure می‌شود (بدون مایگریشن).
    */
   createReadCoreEvent(studentId: string, input: { levels: Record<string, unknown> }, actor: AuthContext): Promise<CaseEventRecord>;
+  /**
+   * — T12/m160: ثبت آزمون عملکرد مرکزی (خواندن/نوشتن/حساب) — ارزیابیِ درمانگر در مرکز، مرحلهٔ ۴ مسیر یادگیری.
+   * مسیر اختصاصی — رویداد completed با تحلیل هنجاری (درصد انتظار پایه + باند سه‌حالته + پرچم‌های علمی)؛
+   * type از کتابخانهٔ فعال باتری (ce-probe-*-v1 — category=session) با کلید منطقی حل می‌شود.
+   * حوزهٔ نامعتبر/فیلد جا/خارج از قلم‌رو → ValidationError فارسی (بدون رکورد).
+   */
+  createProbeEvent(studentId: string, input: { area: string; values: Record<string, unknown> }, actor: AuthContext): Promise<CaseEventRecord>;
   updateEvent(id: string, input: { values?: Record<string, string | number | null>; summary?: string }, actor: AuthContext): Promise<CaseEventRecord>;
   /** — نهایی‌سازی پیش‌نویس: اعتبارسنجی الزامی + هوک اقدام بعدی */
   finalizeEvent(id: string, actor: AuthContext): Promise<CaseEventRecord>;

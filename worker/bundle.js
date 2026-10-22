@@ -4151,8 +4151,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.34";
-var APP_MILESTONE = "m153";
+var APP_VERSION = "1.00.35";
+var APP_MILESTONE = "m160";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -21790,6 +21790,217 @@ function analyzeReadCore(levels) {
 }
 __name(analyzeReadCore, "analyzeReadCore");
 __name2(analyzeReadCore, "analyzeReadCore");
+// ───────── آزمون‌های عملکرد مرکزی — پروب‌های خواندن/نوشتن/حساب (T12/m160) — آینهٔ case-events/pure.ts ─────────
+// ارزیابی عملکردی = آزمون درمانگر در مرکز (CBM) — هنجار صدک ۵۰ آینهٔ instruments.ts؛
+// باند بر حسب «درصد انتظار پایه»: <۷۰ پایین‌تر از انتظار · ۷۰–۸۹ مرزی · ≥۹۰ در انتظار پایه.
+var PROBE_GRADE_OPTIONS = ["اول", "دوم", "سوم", "چهارم", "پنجم", "ششم", "هفتم", "هشتم"];
+var PROBE_WCPM_NORM_50TH = {
+  "اول": 60, "دوم": 89, "سوم": 107, "چهارم": 123, "پنجم": 139, "ششم": 150, "هفتم": 150, "هشتم": 150
+};
+var PROBE_ALPHA_15S_NORM = {
+  "اول": 20, "دوم": 35, "سوم": 45, "چهارم": 50, "پنجم": 55, "ششم": 60, "هفتم": 60, "هشتم": 60
+};
+var PROBE_DIGITS_2MIN_NORM = {
+  "اول": 15, "دوم": 25, "سوم": 35, "چهارم": 45, "پنجم": 55, "ششم": 55, "هفتم": 55, "هشتم": 55
+};
+var PROBE_BANDS = [
+  { max: 69, label: "پایین‌تر از انتظار پایه", color: "danger", advice: "عملکرد پایین‌تر از انتظار هم‌پایه‌ها — ارزیابی هدفمند حوزه و طراحی مداخلهٔ مستقیم آغاز شود." },
+  { max: 89, label: "مرزی", color: "warn", advice: "عملکرد مرزی نزدیک انتظار پایه — پایش هفتگی پروب و تمرین هدفمند در جلسات توصیه می‌شود." },
+  { max: 2147483647, label: "در انتظار پایه", color: "ok", advice: "عملکرد در انتظار پایه است — پایش دوره‌ای با پروب کافی است." }
+];
+var PROBE_AREA_KEYS = {
+  read: "ce-probe-read-v1",
+  write: "ce-probe-write-v1",
+  calc: "ce-probe-calc-v1"
+};
+var PROBE_AREA_LABELS = { read: "خواندن", write: "نوشتن", calc: "حساب" };
+var PROBE_FIELD_SPECS = {
+  read: [
+    { key: "text_grade", label: "متن استفاده‌شده (پایه)", required: true, grade: true },
+    { key: "wcpm", label: "تعداد واژه‌های درست در یک دقیقه", min: 0, max: 400, required: true },
+    { key: "errors", label: "تعداد خطا در همان یک دقیقه", min: 0, max: 200, required: false },
+    { key: "pseudo_correct", label: "واژه‌های بی‌معنی که درست خواند (از ۲۰)", min: 0, max: 20, required: true },
+    { key: "comprehension", label: "فهم متن (پاسخ درست از ۳ پرسش ساده)", min: 0, max: 3, required: false },
+    { key: "notes", label: "مشاهدهٔ درمانگر", required: false, text: true }
+  ],
+  write: [
+    { key: "dict_grade", label: "دیکتهٔ استفاده‌شده (پایه)", required: true, grade: true },
+    { key: "dict_words", label: "تعداد واژهٔ دیکته", min: 1, max: 100, required: true },
+    { key: "err_phonetic", label: "خطای صدا و حرف", min: 0, max: 100, required: true },
+    { key: "err_visual", label: "خطای شباهت حروف (ب/پ/ت…)", min: 0, max: 100, required: false },
+    { key: "err_rule", label: "خطای نگارشی (فاصله، «ان/آن»…)", min: 0, max: 100, required: false },
+    { key: "alpha15s", label: "حروف درست نوشته‌شده در ۱۵ ثانیه", min: 0, max: 120, required: true },
+    { key: "handwriting_note", label: "کیفیت دست‌خط", required: false, text: true }
+  ],
+  calc: [
+    { key: "calc_grade", label: "سطح آزمون (پایه)", required: true, grade: true },
+    { key: "digits2min", label: "ارقام درست در دو دقیقه", min: 0, max: 400, required: true },
+    { key: "compare_errors", label: "خطای مقایسهٔ مقدار از ۱۰ جفت", min: 0, max: 10, required: true },
+    { key: "number_line_pct", label: "میانگین خطای جای‌گذاری روی خط عددی (درصد)", min: 0, max: 100, required: false },
+    { key: "word_problem_support", label: "نیاز به راهنمایی در مسئلهٔ کلامی", required: false, options: ["کم", "متوسط", "زیاد", "بی‌راه‌حل"] },
+    { key: "notes", label: "مشاهدهٔ درمانگر", required: false, text: true }
+  ]
+};
+function probeNumber(raw2, spec) {
+  const n = typeof raw2 === "number" ? raw2 : Number(String(raw2 ?? "").trim().replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))));
+  if (!Number.isInteger(n) || n < spec.min || n > spec.max) {
+    throw new ValidationError(`«${spec.label}» باید بین ${faNum2(spec.min)} تا ${faNum2(spec.max)} باشد`);
+  }
+  return n;
+}
+__name(probeNumber, "probeNumber");
+__name2(probeNumber, "probeNumber");
+function validateProbeValues(area, values) {
+  const raw2 = values && typeof values === "object" ? values : {};
+  const out = {};
+  for (const spec of PROBE_FIELD_SPECS[area]) {
+    const v = raw2[spec.key];
+    if (v === void 0 || v === null || String(v).trim() === "") {
+      if (spec.required) throw new ValidationError(`آیتم «${spec.label}» بی‌پاسخ مانده است`);
+      continue;
+    }
+    if ("grade" in spec) {
+      const s = String(v).trim();
+      if (!PROBE_GRADE_OPTIONS.includes(s)) {
+        throw new ValidationError(`«${spec.label}» از گزینه‌های مجاز نیست`);
+      }
+      out[spec.key] = s;
+    } else if ("options" in spec) {
+      const s = String(v).trim();
+      if (!spec.options.includes(s)) {
+        throw new ValidationError(`«${spec.label}» از گزینه‌های مجاز نیست`);
+      }
+      out[spec.key] = s;
+    } else if ("text" in spec) {
+      out[spec.key] = String(v).trim().slice(0, 600);
+    } else {
+      out[spec.key] = probeNumber(v, spec);
+    }
+  }
+  return out;
+}
+__name(validateProbeValues, "validateProbeValues");
+__name2(validateProbeValues, "validateProbeValues");
+function probePct(value, norm) {
+  return Math.round(value / norm * 100);
+}
+__name(probePct, "probePct");
+__name2(probePct, "probePct");
+function probeBandOf(pct) {
+  return resolveBandV2(pct, PROBE_BANDS) ?? PROBE_BANDS[PROBE_BANDS.length - 1];
+}
+__name(probeBandOf, "probeBandOf");
+__name2(probeBandOf, "probeBandOf");
+function analyzeProbe(area, v) {
+  const flags = [];
+  const metrics = [];
+  if (area === "read") {
+    const grade = String(v.text_grade);
+    const norm = PROBE_WCPM_NORM_50TH[grade];
+    const wcpm = Number(v.wcpm);
+    const pct = probePct(wcpm, norm);
+    const band = probeBandOf(pct);
+    metrics.push({ value: `${faNum2(wcpm)} (انتظار پایهٔ ${grade}: ${faNum2(norm)})`, label: "واژهٔ درست در دقیقه" });
+    const pseudo = Number(v.pseudo_correct);
+    metrics.push({ value: `${faNum2(pseudo)} از ${faNum2(20)}`, label: "رمزگشایی واژهٔ بی‌معنی" });
+    if (pseudo < 10) flags.push({ key: "pseudo_correct", label: "رمزگشایی واژهٔ بی‌معنی پایین (کمتر از ۱۰ از ۲۰)", value: pseudo });
+    if (v.comprehension !== void 0) {
+      const comp = Number(v.comprehension);
+      metrics.push({ value: `${faNum2(comp)} از ${faNum2(3)}`, label: "فهم متن" });
+      if (comp <= 1) flags.push({ key: "comprehension", label: "فهم متن پایین (۱ پرسش یا کمتر از ۳)", value: comp });
+    }
+    if (v.errors !== void 0) {
+      metrics.push({ value: `${faNum2(Number(v.errors))} خطا`, label: "خطای خواندن در همان دقیقه" });
+    }
+    const normFa = `انتظار پایهٔ ${grade} — صدک ۵۰ مرجع (Hasbrouck & Tindal 2017): ${faNum2(norm)} واژه درست در دقیقه`;
+    return { pct, band, metrics, flags, normFa, faSummary: `آزمون خواندن: ${faNum2(pct)}٪ انتظار پایهٔ ${grade} — ${band.label}` };
+  }
+  if (area === "write") {
+    const grade = String(v.dict_grade);
+    const words = Number(v.dict_words);
+    const phon = Number(v.err_phonetic);
+    const visual = Number(v.err_visual ?? 0);
+    const rule = Number(v.err_rule ?? 0);
+    const totalErr = phon + visual + rule;
+    const errRate = words > 0 ? totalErr / words : 1;
+    const spellPct = Math.round((1 - errRate) * 100);
+    const alpha = Number(v.alpha15s);
+    const norm = PROBE_ALPHA_15S_NORM[grade];
+    const fluPct = probePct(alpha, norm);
+    const band = errRate > 0.25 || fluPct < 70 ? PROBE_BANDS[0] : errRate > 0.1 || fluPct < 90 ? PROBE_BANDS[1] : PROBE_BANDS[2];
+    metrics.push({ value: `${faNum2(spellPct)}٪ (${faNum2(totalErr)} خطا از ${faNum2(words)} واژه)`, label: "دقت املایی" });
+    metrics.push({ value: `${faNum2(alpha)} حرف (انتظار پایهٔ ${grade}: ${faNum2(norm)})`, label: "روانی نوشتن در ۱۵ ثانیه" });
+    if (phon > 0) metrics.push({ value: faNum2(phon), label: "خطای صدا و حرف" });
+    if (visual > 0) metrics.push({ value: faNum2(visual), label: "خطای شباهت حروف" });
+    if (rule > 0) metrics.push({ value: faNum2(rule), label: "خطای نگارشی" });
+    if (fluPct < 80) flags.push({ key: "alpha15s", label: `روانی نوشتن پایین‌تر از انتظار پایه (${faNum2(fluPct)}٪)`, value: alpha });
+    const normFa = `انتظار پایهٔ ${grade}: ${faNum2(norm)} حرف درست در ۱۵ ثانیه (برآورد اولیه — کالیبراسیون با دادهٔ مرکز)`;
+    const head = spellPct >= 0 && spellPct <= 100 ? `${faNum2(spellPct)}٪` : `بیش از انتظار — ${faNum2(totalErr)} خطا از ${faNum2(words)} واژه`;
+    return { pct: Math.max(0, spellPct), band, metrics, flags, normFa, faSummary: `آزمون نوشتن: دقت املایی ${head} — ${band.label}` };
+  }
+  const grade = String(v.calc_grade);
+  const norm = PROBE_DIGITS_2MIN_NORM[grade];
+  const digits = Number(v.digits2min);
+  const pct = probePct(digits, norm);
+  let band = probeBandOf(pct);
+  const compareErr = Number(v.compare_errors);
+  metrics.push({ value: `${faNum2(digits)} (انتظار پایهٔ ${grade}: ${faNum2(norm)})`, label: "ارقام درست در دو دقیقه" });
+  metrics.push({ value: `${faNum2(compareErr)} از ${faNum2(10)}`, label: "خطای مقایسهٔ مقدار" });
+  if (v.number_line_pct !== void 0) {
+    const nl = Number(v.number_line_pct);
+    metrics.push({ value: `${faNum2(nl)}٪`, label: "خطای خط عددی" });
+  }
+  if (v.word_problem_support !== void 0) {
+    metrics.push({ value: String(v.word_problem_support), label: "راهنمایی مسئلهٔ کلامی" });
+  }
+  const nlPct = v.number_line_pct !== void 0 ? Number(v.number_line_pct) : 0;
+  const support = v.word_problem_support !== void 0 ? String(v.word_problem_support) : "کم";
+  if (compareErr >= 6 || nlPct >= 25 || support === "بی‌راه‌حل") band = PROBE_BANDS[0];
+  else if ((compareErr >= 4 || nlPct >= 15 || support === "زیاد") && band === PROBE_BANDS[2]) band = PROBE_BANDS[1];
+  if (compareErr >= 4) flags.push({ key: "compare_errors", label: `مقایسهٔ مقدار ضعیف (${faNum2(compareErr)} خطا از ۱۰)`, value: compareErr });
+  if (nlPct >= 25) flags.push({ key: "number_line_pct", label: `برآورد خط عددی ضعیف (${faNum2(nlPct)}٪ خطا)`, value: nlPct });
+  const normFa = `انتظار پایهٔ ${grade}: ${faNum2(norm)} رقم درست در دو دقیقه (برآورد اولیه — کالیبراسیون با دادهٔ مرکز)`;
+  return { pct, band, metrics, flags, normFa, faSummary: `آزمون حساب: ${faNum2(pct)}٪ انتظار پایهٔ ${grade} — ${band.label}` };
+}
+__name(analyzeProbe, "analyzeProbe");
+__name2(analyzeProbe, "analyzeProbe");
+function buildProbePayload(area, v, result) {
+  const payload = {};
+  for (const spec of PROBE_FIELD_SPECS[area]) {
+    const val = v[spec.key];
+    if (val === void 0) continue;
+    const display = typeof val === "number" ? faNum2(val) : val;
+    payload[spec.key] = { value: display, label: spec.label };
+  }
+  result.metrics.forEach((m, i) => {
+    payload[`chip_metric_${i + 1}`] = { value: m.value, label: m.label };
+  });
+  payload["chip_band"] = { value: result.band.label, label: "باند" };
+  payload["norm_fa"] = { value: result.normFa, label: "هنجار مرجع" };
+  payload["fa_summary"] = { value: result.faSummary, label: `خلاصهٔ آزمون ${PROBE_AREA_LABELS[area]}` };
+  return payload;
+}
+__name(buildProbePayload, "buildProbePayload");
+__name2(buildProbePayload, "buildProbePayload");
+function probeAnalysisOf(area, v, result) {
+  const spec = PROBE_FIELD_SPECS[area];
+  const interpretationLines = [
+    result.faSummary,
+    result.normFa,
+    ...(result.flags ?? []).map((f) => `پرچم: ${f.label}`)
+  ];
+  return {
+    score: result.pct,
+    band: result.band.label,
+    answered: Object.keys(v).length,
+    total: spec.length,
+    maxScore: 100,
+    flags: result.flags.length > 0 ? result.flags : void 0,
+    interpretation: interpretationLines.join("\n")
+  };
+}
+__name(probeAnalysisOf, "probeAnalysisOf");
+__name2(probeAnalysisOf, "probeAnalysisOf");
 var CASE_EVENT_TRANSITIONS = {
   draft: ["completed", "cancelled"],
   completed: ["cancelled"],
@@ -24316,6 +24527,50 @@ function createCaseEventsService(deps) {
       log32.info("event.read_core_created", { id, studentId, score: analysis.score, band: analysis.band });
       return eventRowToRecord(await getEventRow(id));
     },
+    // — T12/m160: ثبت آزمون عملکرد مرکزی (خواندن/نوشتن/حساب) — ارزیابی درمانگر در مرکز؛
+    //   رویداد همین‌جا completed می‌شود؛ تحلیل هنجاری (درصد انتظار پایه + باند + پرچم‌ها) در همان تراکنش؛
+    //   type از کتابخانهٔ فعال باتری با کلید منطقی حل می‌شود (بدون ensure — عضو رسمی باتری است).
+    async createProbeEvent(studentId, input, actor) {
+      await assertStudent(studentId);
+      const areaRaw = String(input.area ?? "").trim();
+      if (!(areaRaw in PROBE_AREA_KEYS)) {
+        throw new ValidationError("حوزهٔ آزمون نامعتبر است — خواندن، نوشتن یا حساب");
+      }
+      const area = areaRaw;
+      const values = validateProbeValues(area, input.values);
+      const typeRow = await loadTypeRowByKey(PROBE_AREA_KEYS[area]);
+      if (!typeRow) throw new ConflictError("ابزار آزمون عملکرد در کتابخانهٔ فرم نیست");
+      const type = typeRowToRecord(typeRow);
+      const result = analyzeProbe(area, values);
+      const payload = buildProbePayload(area, values, result);
+      const analysis = probeAnalysisOf(area, values, result);
+      const summary = buildSummary(payload, analysis);
+      const id = crypto.randomUUID();
+      const occurredAt = now().toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
+                                    status, payload, analysis, summary, fill_token, fill_expires_at, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, NULL, ?, 'completed', ?, ?, ?, NULL, NULL, ?, ?, ?)`,
+          [id, type.id, studentId, actor.staffId, occurredAt, JSON.stringify(payload), JSON.stringify(analysis), summary, actor.staffId, occurredAt, occurredAt]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "case_event.probe_created",
+          resourceType: "case_event",
+          resourceId: id,
+          changes: {
+            eventTypeId: { from: null, to: type.id },
+            studentId: { from: null, to: studentId },
+            area: { from: null, to: area },
+            pct: { from: null, to: result.pct },
+            band: { from: null, to: result.band.label }
+          }
+        });
+      });
+      log32.info("event.probe_created", { id, studentId, area, pct: result.pct, band: result.band.label });
+      return eventRowToRecord(await getEventRow(id));
+    },
     async updateEvent(id, input, actor) {
       const row = await getEventRow(id);
       assertEditor(actor, row.staff_id ?? row.created_by);
@@ -25463,6 +25718,14 @@ function registerCaseEventsRoutes(app, service) {
     const actor = getAuthContext(c);
     const body = await c.req.json().catch(() => null);
     const item = await service.createReadCoreEvent(c.req.param("id"), { levels: body?.levels ?? {} }, actor);
+    return c.json({ data: item }, 201);
+  });
+  // — T12/m160: آزمون عملکرد مرکزی (خواندن/نوشتن/حساب) — ارزیابی درمانگر در مرکز، مرحلهٔ ۴ مسیر یادگیری؛
+  //   {area:'read'|'write'|'calc', values} — فیلد جا/خارج از قلم‌رو → 400 فارسی؛ type از کتابخانهٔ فعال باتری.
+  app.post("/api/students/:id/case-events/probe", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json().catch(() => null);
+    const item = await service.createProbeEvent(c.req.param("id"), { area: body?.area ?? "", values: body?.values ?? {} }, actor);
     return c.json({ data: item }, 201);
   });
   app.patch("/api/case-events/:id", requireRole("manager", "therapist"), async (c) => {

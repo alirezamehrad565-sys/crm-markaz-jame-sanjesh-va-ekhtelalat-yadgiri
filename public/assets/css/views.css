@@ -2856,6 +2856,20 @@ tr.wl-row--urgent > td:first-child {
 .clx-readcore__advice { display: flex; flex-direction: column; gap: 6px; margin-top: var(--sp-2, 8px); padding: var(--sp-2, 8px); border: 1px solid var(--line); border-radius: var(--radius-sm, 8px); background: var(--surface-2, transparent); }
 .clx-readcore__advice-row { display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; min-width: 0; font-size: var(--fs-sm); }
 
+/* ───────── T12/m160 — آزمون‌های عملکرد مرکزی (بدنهٔ مرحلهٔ ۴ — حالت SLD) ───────── */
+/* فقط توکن‌های موجود — بدون رنگ/فونت تازه (خط قرمز m144) */
+.clx-probe-wrap { display: flex; flex-direction: column; gap: var(--sp-2, 8px); margin-top: var(--sp-2, 8px); }
+.clx-probe-wrap__head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.clx-probe-wrap__head strong { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); }
+.clx-probe__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--sp-2, 8px); }
+.clx-probe .card__body { display: flex; flex-direction: column; gap: var(--sp-2, 8px); height: 100%; }
+.clx-probe.is-done { border-color: var(--line-strong, var(--line)); }
+.clx-probe__metrics { display: flex; flex-direction: column; gap: 4px; padding: var(--sp-2, 8px); border: 1px solid var(--line); border-radius: var(--radius-sm, 8px); background: var(--surface-2, transparent); }
+.clx-probe__metric { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; min-width: 0; font-size: var(--fs-sm); }
+.clx-probe__metric b { font-variant-numeric: tabular-nums; }
+.clx-probe__summary { font-weight: 600; }
+.clx-probe__norm { display: flex; align-items: flex-start; gap: 4px; }
+
 /* نوار مداخله — سگمنت‌های پیشرفت مسیر قالبی */
 .path-band { display: flex; gap: 4px; margin: var(--sp-2, 8px) 0; min-width: 0; }
 .path-band__seg {
