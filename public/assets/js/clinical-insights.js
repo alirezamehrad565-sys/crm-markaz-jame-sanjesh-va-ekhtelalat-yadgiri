@@ -5,7 +5,7 @@
 // clinical-insights.js — تب «تفسیر بالینی» پروفایل دانش‌آموز — بازسازی m135 (آکاردئون ۶ مرحله‌ای) + m136
 // ساختار (UX-SPEC): نوار باریک (clxacc-toolbar) + فلوی عمودی شش <details> (clxacc-flow) + یک disclaimer.
 //   ۱ شرح‌حال → ۲ چک‌لیست‌های خانواده و معلم (+ شک بالینی) → ۳ وکسلر ۴ (افشای تدریجی؛ شش آکاردئون تودرتو
-//   همیشه‌بسته) → ۴ ارزیابی عملکردی → ۵ جمع‌بندی تشخیصی (+ پیوند با سایر اطلاعات) → ۶ ورود به قالب مداخله.
+//   همیشه‌بسته) → ۴ ارزیابی عملکردی → ۵ جمع‌بندی تشخیصی (+ پیوند با سایر اطلاعات) → ۶ مداخله (m165 — میزکار چک‌لیست مهارتی؛ تغییر قالب در انتهای تب).
 // یک چیدمان برای هر دو فاز (P1): فاز فقط گام بازِ پیش‌فرض، بج‌ها و CTAها را عوض می‌کند.
 // m136: (۱) مرحلهٔ ۴ حالت‌آگاه شد — ماتریس resolveSkillsMode؛ چک‌لیست مهارتی فقط برای مسیر/پروتکل OT
 //   (رفع باگ «چک‌لیست توانبخشی برای همه»)؛ (۲) سربرگ‌ها ردیف ریزآمار .clxacc__stats گرفتند — صفر GET تازه.
@@ -1252,7 +1252,7 @@ function decisionButtons(path, { student, refresh, canDecide }) {
 
 // ───────── / — ساخت مسیر از قالب + نوار مداخله + برنامهٔ جلسه به جلسه ─────────
 
-/** — نشان پروتکل قالب */
+/** نشان پروتکل قالب */
 const TEMPLATE_PROTOCOL_BADGE = {
   learning: { cls: 'badge--info', label: 'یادگیری' },
   slow_learner: { cls: 'badge--warning', label: 'دیرآموز' },
@@ -1260,58 +1260,8 @@ const TEMPLATE_PROTOCOL_BADGE = {
   rehab: { cls: 'badge--success', label: 'توانبخشی' }
 };
 
-/**
- * — کارت‌های «شروع از قالب» (ری‌رایت پیشنهاد ۳ — قالب‌محور)
- * وقتی هنوز مسیری ثبت نشده، قالب‌های فعالِ هم‌راستا با پروتکل اول نمایش داده می‌شوند؛
- * «ساخت مسیر» مودال قالب را با همان قالبِ پیش‌انتخاب‌شده باز می‌کند.
- */
-async function templateQuickStart({ student, refresh, canDecide, protocol }) {
-  let templates = [];
-  try {
-    templates = (await api.get('/api/pathway-templates')).data ?? [];
-  } catch { return null; }
-  if (!templates.length || !canDecide) return null;
-
-  // قالب‌های هم‌راستا با پروتکل پرونده اول؛ اگر پروتکل نداریم، همهٔ فعال‌ها
-  const ordered = protocol
-    ? [...templates.filter((t) => t.protocol === protocol), ...templates.filter((t) => !t.protocol || t.protocol !== protocol)]
-    : templates;
-  const shown = ordered.slice(0, 3);
-  if (!shown.length) return null;
-
-  const cards = shown.map((t) => {
-    const pb = TEMPLATE_PROTOCOL_BADGE[t.protocol] ?? null;
-    const nSteps = (t.steps ?? []).length;
-    const nSessions = (t.sessions ?? []).length;
-    return el('div', { class: 'clx-tpl' },
-      el('div', { class: 'clx-tpl__head' },
-        el('strong', { class: 'clx-tpl__title' }, t.title),
-        pb ? el('span', { class: `badge ${pb.cls}` }, pb.label) : null,
-        t.isSystem ? el('span', { class: 'badge badge--neutral' }, 'سیستمی') : null
-      ),
-      t.description ? el('div', { class: 'cell-sub clx-tpl__desc' }, t.description) : null,
-      el('div', { class: 'clx-tpl__meta' },
-        nSteps ? el('span', { class: 'badge badge--neutral' }, `${fa(nSteps)} گام`) : null,
-        nSessions ? el('span', { class: 'badge badge--neutral' }, `${fa(nSessions)} جلسهٔ آماده`) : null,
-        (!nSteps && !nSessions) ? el('span', { class: 'badge badge--neutral' }, 'بدون گام آماده') : null
-      ),
-      el('div', { class: 'clx-tpl__act' },
-        el('button', {
-          class: 'btn btn--primary btn--sm',
-          onclick: () => openTemplatePathModal({ student, refresh, presetKey: t.key })
-        }, icon('zap', 14), 'ساخت مسیر')
-      )
-    );
-  });
-
-  return el('div', { class: 'clx-quickstart' },
-    el('div', { class: 'clx-quickstart__title' }, icon('puzzle', 15), 'شروع از قالب — مسیر آماده'),
-    el('div', { class: 'clx-quickstart__grid' }, ...cards),
-    shown.length < templates.length
-      ? el('div', { class: 'cell-sub' }, `${fa(templates.length - shown.length)} قالب فعال دیگر در «مدیریت قالب‌ها» موجود است.`)
-      : null
-  );
-}
+// m165 — کارت‌های «شروع از قالب» حذف شد: پیش‌فرض تب مداخله = چک‌لیست مهارتی؛ ساخت/تعویض مسیر از قالب
+// فقط از طریق دکمهٔ «تغییر قالب مداخله» در انتهای تب (openTemplatePathModal پایین).
 
 /** مودال «ساخت مسیر از قالب» — قالب‌های سیستمی pathway_templates (: پشتیبانی presetKey) */
 async function openTemplatePathModal({ student, refresh, presetKey = null }) {
@@ -1922,29 +1872,27 @@ export async function renderClinicalTab(box, { student }) {
       engineDetails: [critsSection, hypotheses, seenBlock].filter(Boolean)
     });
 
-    // ── داده‌های مرحلهٔ ۶ — مسیرها + شروع از قالب + کارت پروتکل (استخراج نوار گام‌ها) ──
+    // ── داده‌های مرحلهٔ ۶ (m165 — میزکار مداخله) — پیش‌فرض = چک‌لیست مهارتی جلسه‌به‌جلسه؛ مسیرها بعد؛ تغییر قالب فقط در انتهای تب ──
     const protoCardNode = protocol ? protocolCard(protocol) : null;
-    const quickStart = paths.length || !canDecide
-      ? null
-      : await templateQuickStart({ student, refresh, canDecide, protocol });
     const emptyPathLine = paths.length
       ? null
       : el('div', { class: 'cell-sub' }, hasData
-          ? 'مسیری ثبت نشده — از قالب‌های آماده یا فرضیه‌ها بسازید.'
+          ? 'مسیری ثبت نشده است — در صورت نیاز از «تغییر قالب مداخله» در انتهای همین تب استفاده کنید.'
           : 'مسیری ثبت نشده است.');
     const pathsSection = el('div', { class: 'clx-section' },
-      el('div', { class: 'clx-section__title' }, icon('target', 16), 'مسیر مداخله و تصمیم شما',
-        canDecide
-          ? el('span', { style: { marginInlineStart: 'auto', display: 'inline-flex', gap: '6px', flexWrap: 'wrap' } },
-              el('button', {
-                class: 'btn btn--ghost btn--sm',
-                onclick: () => { location.hash = '#/templates'; }
-              }, icon('grid', 14), 'مدیریت قالب‌ها'))
-          : null),
+      el('div', { class: 'clx-section__title' }, icon('target', 16), 'مسیر مداخله و تصمیم شما'),
       paths.length
         ? el('div', { class: 'clx-paths' }, paths.map((p) => pathCard(p, { student, canDecide, refresh })))
         : emptyPathLine
     );
+    // m165 — دکمهٔ واحد انتهای تب مداخله: تغییر قالب (ساخت/تعویض مسیر از قالب) — جایگزین کارت «شروع از قالب» و «مدیریت قالب‌ها»
+    const tplChangeRow = phase === 'intervention' && canDecide
+      ? el('div', { class: 'clx-actions clx-tplchange' },
+          el('button', {
+            class: 'btn btn--soft btn--sm',
+            onclick: () => openTemplatePathModal({ student, refresh })
+          }, icon('puzzle', 14), 'تغییر قالب مداخله'))
+      : null;
 
     // ── کارت چک‌لیست مهارتی مرحلهٔ ۴ — فقط در حالت OT سوار می‌شود (m136 رفع باگ: منحصر به مسیر/پروتکل OT) ──
     // m162 — فلوی مسیرآگاه:
@@ -2081,10 +2029,9 @@ export async function renderClinicalTab(box, { student }) {
       intervention: () => {
         const body = [];
         if (!protocol) body.push(el('div', { class: 'cell-sub' }, SM.protocol.lockedNote));
-        if (quickStart) body.push(quickStart);
-        // m162 — پنل پیشرفت جلسه‌به‌جلسه + کارت زندهٔ ثبت جلسه — قلب فرایند مداخلهٔ OT/توانبخشی
-        if (otInIntervention && otProgressNode) body.push(otProgressNode);
+        // m165 — پیش‌فرض تب مداخله = کارت زندهٔ ثبت جلسه (چک‌لیست مهارتی جلسه‌به‌جلسه) + پنل پیشرفت — بالای همه‌چیز
         if (otInIntervention && otCard) body.push(otCard);
+        if (otInIntervention && otProgressNode) body.push(otProgressNode);
         body.push(pathsSection);
         if (protocol) {
           const strip = protocolStrip(protoCardNode);
@@ -2094,6 +2041,8 @@ export async function renderClinicalTab(box, { student }) {
             body.push(el('div', { class: 'cell-sub' }, icon('clipboard', 13), ' ', SM.protocol.monitoringLink));
           }
         }
+        // m165 — اقدام ثانویهٔ قالب همیشه انتهای تب است — یک دکمه، جای دیگری نیست
+        if (tplChangeRow) body.push(tplChangeRow);
         return body;
       }
     };
@@ -2134,9 +2083,8 @@ export async function renderClinicalTab(box, { student }) {
       stats: statsOf.intervention().filter(Boolean),
       chips: [],
       state: stateOf('intervention'),
-      cta: canDecide
-        ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openTemplatePathModal({ student, refresh }) }, icon('puzzle', 14), 'ساخت مسیر از قالب')
-        : null,
+      // m165 — بدون CTA در سربرگ: تنها اقدام قالب = دکمهٔ واحد «تغییر قالب مداخله» در انتهای بدنه
+      cta: null,
       body: bodyOf.intervention(),
       open: false
     }));

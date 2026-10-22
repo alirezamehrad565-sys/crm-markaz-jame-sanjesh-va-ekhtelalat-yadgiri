@@ -3007,34 +3007,12 @@ tr.wl-row--urgent > td:first-child {
   .path-session__ops { width: 100%; justify-content: flex-end; }
 }
 
-/* ───────── m116 — شروع از قالب + زمینهٔ تفسیر ───────── */
-
-/* m116 — کارت‌های «شروع از قالب» (قالب‌محور) */
-.clx-quickstart {
-  border: 1px solid var(--line); border-radius: var(--radius-md, 10px);
-  padding: var(--sp-3, 12px); margin-top: var(--sp-2, 8px);
-  background: var(--surface-2, transparent); min-width: 0;
-}
-.clx-quickstart__title {
-  display: flex; align-items: center; gap: 6px;
-  font-weight: 700; font-size: var(--fs-sm); margin-bottom: var(--sp-2, 8px);
-}
-.clx-quickstart__grid {
-  display: grid; gap: var(--sp-2, 8px);
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); min-width: 0;
-}
-.clx-tpl {
-  display: flex; flex-direction: column; gap: 6px; min-width: 0;
-  border: 1px solid var(--line); border-radius: var(--radius-md, 10px);
-  padding: var(--sp-2, 10px); background: var(--surface);
-}
-.clx-tpl__head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
-.clx-tpl__title { font-size: var(--fs-sm); min-width: 0; }
-.clx-tpl__desc { min-width: 0; }
-.clx-tpl__meta { display: flex; gap: 4px; flex-wrap: wrap; min-width: 0; }
-.clx-tpl__act { margin-top: auto; }
-@media (max-width: 640px) {
-  .clx-quickstart__grid { grid-template-columns: 1fr; }
+/* ───────── m165 — تب مداخله: دکمهٔ واحد «تغییر قالب مداخله» در انتهای تب ───────── */
+/* (m116 — کارت‌های «شروع از قالب» حذف شد؛ CSS یتیم پاک‌سازی شد) */
+.clx-tplchange {
+  margin-top: var(--sp-3, 12px);
+  padding-top: var(--sp-2, 8px);
+  border-top: 1px dashed var(--line);
 }
 
 /* m116 — زمینهٔ تفسیر (جمعیت‌شناختی × خروجی موتور) */
