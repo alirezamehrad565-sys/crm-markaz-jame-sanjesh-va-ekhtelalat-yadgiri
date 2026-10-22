@@ -124,7 +124,7 @@ export const GATE_GLOSS = {
     manualNote: 'ثبت دستی — برای تحلیل موتور، نمرهٔ خام ۱۵ خرده‌آزمون را در فرم وکسلر ۴ ثبت کنید'
   },
   skills: {
-    learningActionLabel: 'ثبت چک‌لیست خواندن/نوشتن/ریاضی',
+    learningActionLabel: 'ثبت آزمون عملکرد مرکزی',
     rehabActionLabel: 'چک‌لیست مهارتی'
   },
   needs: {
@@ -204,10 +204,10 @@ export const STAGE2_META = {
       num: 4,
       title: 'ارزیابی عملکردی',
       glanceOt: 'پیمایش {n} از {m} مهارت',
-      glanceSld: '{n} چک‌لیست خواندن/نوشتن/ریاضی و پروب پاسخ‌شده',
-      glanceSldZero: 'چک‌لیست عملکردی پاسخ نشده است',
+      glanceSld: '{n} از ۳ آزمون عملکرد مرکزی ثبت شده',
+      glanceSldZero: 'آزمون عملکرد مرکزی ثبت نشده است',
       glanceFallback: 'پس از تعیین مسیر پرونده فعال می‌شود',
-      emptyHint: 'ارزیابی عملکردی بسته به مسیر پرونده انتخاب می‌شود — چک‌لیست خواندن/نوشتن/ریاضی یا چک‌لیست مهارتی پس از تعیین مسیر فعال می‌شود.'
+      emptyHint: 'ارزیابی عملکردی = آزمونِ درمانگر در مرکز (خواندن، نوشتن، حساب) — در جلسهٔ حضوری از کودک گرفته می‌شود و همین‌جا ثبت می‌گردد. چک‌لیست‌های خانواده و معلم جای خود در مرحلهٔ ۲ است.'
     },
     needs: {
       num: 5,
@@ -259,8 +259,8 @@ export const STAGE2_META = {
     wechslerReassess: 'بازسنجی',
     skillsCoverage: 'مهارت پیمایش‌شده',
     skillsDomains: 'حیطهٔ فعال',
-    skillsSld: 'چک‌لیست درسی',
-    skillsProbe: 'پروب عملکرد',
+    skillsSld: 'آزمون مرکزی',
+    skillsProbe: 'چک‌لیست درسی',
     needsCoverage: 'پوشش داده',
     needsConstructs: 'سازهٔ برجسته',
     needsPatterns: 'الگوی فعال',

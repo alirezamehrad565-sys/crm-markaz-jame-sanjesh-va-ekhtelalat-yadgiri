@@ -579,6 +579,128 @@ function readCoreChipCard({ student, events, typesById, canDecide, refresh }) {
         el('button', { class: 'btn btn--primary btn--sm', onclick: openChipModal }, icon('zap', 14), 'ثبت مشاهدهٔ خواندن'))));
 }
 
+// ───────── T12/m160 — آزمون‌های عملکرد مرکزی (خواندن/نوشتن/حساب) — بدنهٔ مرحلهٔ مهارت‌ها (حالت SLD) ─────────
+// ارزیابی عملکردی = آزمونِ درمانگر در مرکز (CBM) — نه چک‌لیست خانواده/معلم (آن‌ها مرحلهٔ ۲).
+// سه حوزهٔ ثابت با فرم اختصاصی: ثبت → POST /case-events/probe {area, values} → تحلیل هنجاری
+// سمت سرور (درصد انتظار پایه + باند سه‌حالته + پرچم‌ها). پس از ثبت: نشان باند + ردیف‌های عددی.
+const PROBE_GRADE_OPTS = ['اول', 'دوم', 'سوم', 'چهارم', 'پنجم', 'ششم', 'هفتم', 'هشتم'].map((g) => ({ value: g, label: g }));
+const PROBE_SUPPORT_OPTS = ['کم', 'متوسط', 'زیاد', 'بی‌راه‌حل'].map((s) => ({ value: s, label: s }));
+const PROBE_AREAS = [
+  {
+    key: 'read', typeKey: 'ce-probe-read-v1', icon: 'book',
+    title: 'آزمون کوتاه خواندن', desc: 'یک دقیقه خواندن بلند از متن هم‌پایه + بیست واژهٔ بی‌معنی؛ نتیجه با انتظار پایه مقایسه می‌شود (صدک ۵۰ مرجع).',
+    fields: [
+      { name: 'text_grade', type: 'select', label: 'متن استفاده‌شده (پایه)', options: PROBE_GRADE_OPTS, required: true, span: 2 },
+      { name: 'wcpm', type: 'number', label: 'واژه‌های درست در یک دقیقه', required: true, span: 1 },
+      { name: 'errors', type: 'number', label: 'خطا در همان یک دقیقه', span: 1 },
+      { name: 'pseudo_correct', type: 'number', label: 'واژهٔ بی‌معنی درست‌خوانده (از ۲۰)', required: true, span: 1 },
+      { name: 'comprehension', type: 'number', label: 'فهم متن (از ۳ پرسش)', span: 1 },
+      { name: 'notes', type: 'textarea', label: 'مشاهدهٔ درمانگر (تعقیب با انگشت، خستگی، حدس‌زدن…)', span: 2 }
+    ]
+  },
+  {
+    key: 'write', typeKey: 'ce-probe-write-v1', icon: 'edit',
+    title: 'آزمون کوتاه نوشتن', desc: 'یک دیکتهٔ هم‌پایه با شمارش خطا به تفکیک نوع + نوشتن حروف در ۱۵ ثانیه برای روانی دست.',
+    fields: [
+      { name: 'dict_grade', type: 'select', label: 'دیکتهٔ استفاده‌شده (پایه)', options: PROBE_GRADE_OPTS, required: true, span: 2 },
+      { name: 'dict_words', type: 'number', label: 'تعداد واژهٔ دیکته', required: true, span: 1 },
+      { name: 'alpha15s', type: 'number', label: 'حروف درست در ۱۵ ثانیه', required: true, span: 1 },
+      { name: 'err_phonetic', type: 'number', label: 'خطای صدا و حرف', required: true, span: 1 },
+      { name: 'err_visual', type: 'number', label: 'خطای شباهت حروف (ب/پ/ت…)', span: 1 },
+      { name: 'err_rule', type: 'number', label: 'خطای نگارشی (فاصله، «ان/آن»…)', span: 1 },
+      { name: 'handwriting_note', type: 'text', label: 'کیفیت دست‌خط (اندازه، خط، فشار قلم)', span: 2 }
+    ]
+  },
+  {
+    key: 'calc', typeKey: 'ce-probe-calc-v1', icon: 'grid',
+    title: 'آزمون کوتاه حساب', desc: 'دو دقیقه محاسبهٔ سریع + ده جفت مقایسهٔ عدد + جای‌گذاری روی خط عددی؛ نتیجه با انتظار پایه مقایسه می‌شود.',
+    fields: [
+      { name: 'calc_grade', type: 'select', label: 'سطح آزمون (پایه)', options: PROBE_GRADE_OPTS, required: true, span: 2 },
+      { name: 'digits2min', type: 'number', label: 'ارقام درست در دو دقیقه', required: true, span: 1 },
+      { name: 'compare_errors', type: 'number', label: 'خطای مقایسهٔ مقدار (از ۱۰ جفت)', required: true, span: 1 },
+      { name: 'number_line_pct', type: 'number', label: 'خطای خط عددی (درصد)', span: 1 },
+      { name: 'word_problem_support', type: 'select', label: 'راهنمایی مسئلهٔ کلامی', options: PROBE_SUPPORT_OPTS, span: 1 },
+      { name: 'notes', type: 'textarea', label: 'مشاهدهٔ درمانگر (شمارش انگشتی، اضطراب حساب…)', span: 2 }
+    ]
+  }
+];
+
+/** آخرین رویداد ثبت‌شدهٔ یک حوزهٔ پروب (غیرلغوشده) — null یعنی ثبت نشده */
+function probeEventOf(area, events, typesById) {
+  const typeId = typesById.get(area.typeKey)?.id ?? null;
+  if (!typeId) return null;
+  return (events ?? []).find((e) => e.eventTypeId === typeId && e.status !== 'cancelled') ?? null;
+}
+
+/** مودال میکروی ثبت آزمون — فیلدهای طراحی‌شدهٔ همان حوزه + POST مسیر اختصاصی */
+function openProbeModal(area, student, onDone) {
+  formModal({
+    title: `${area.title} — ثبت درمانگر در مرکز`,
+    submitLabel: 'ثبت آزمون',
+    fields: area.fields,
+    onSubmit: async (vals) => {
+      try {
+        await api.post(`/api/students/${student.id}/case-events/probe`, { area: area.key, values: vals });
+        toast('آزمون عملکرد ثبت شد — باند و مقایسه با انتظار پایه همین‌جا می‌نشیند', 'success');
+        onDone();
+        return true;
+      } catch (err) { toastError(err); return false; }
+    }
+  });
+}
+
+/**
+ * بخش «آزمون‌های عملکرد مرکزی» — سه کارت (خواندن/نوشتن/حساب):
+ * ثبت‌شده → نشان باند رنگی + ردیف‌های عددی (chip_metric_N) + هنجار مرجع + تاریخ؛
+ * بدون ثبت + حق ثبت → توضیح + دکمهٔ مودال میکرو؛ بدون حق ثبت → فقط اطلاع.
+ */
+function probeAssessSection({ student, events, typesById, canDecide, refresh }) {
+  const cards = PROBE_AREAS.map((area) => {
+    const existing = probeEventOf(area, events, typesById);
+    if (existing) {
+      const bandLabel = existing.analysis?.band ?? existing.payload?.chip_band?.value ?? null;
+      const color = ((existing.typeBands ?? []).find((b) => b.label === bandLabel) ?? {}).color ?? null;
+      const metricRows = [];
+      for (let i = 1; i <= 6; i++) {
+        const m = existing.payload?.[`chip_metric_${i}`];
+        if (m?.value) metricRows.push(el('div', { class: 'clx-probe__metric' }, el('span', {}, m.label), el('b', {}, m.value)));
+      }
+      return el('div', { class: 'card clx-probe is-done' },
+        el('div', { class: 'card__body' },
+          el('div', { class: 'clx-plan__head' },
+            el('strong', { class: 'clx-plan__title' }, icon(area.icon, 15), area.title),
+            sensoryBandBadge(`ثبت شد — ${bandLabel ?? '—'}`, color)),
+          existing.payload?.fa_summary?.value
+            ? el('div', { class: 'cell-sub clx-probe__summary' }, existing.payload.fa_summary.value)
+            : null,
+          metricRows.length
+            ? el('div', { class: 'clx-probe__metrics' }, ...metricRows)
+            : null,
+          existing.payload?.norm_fa?.value
+            ? el('div', { class: 'cell-sub clx-probe__norm' }, icon('compass', 12), ' ', existing.payload.norm_fa.value)
+            : null,
+          existing.occurredAt ? el('div', { class: 'cell-sub' }, `ثبت: ${formatJalaliDateTime(existing.occurredAt)}`) : null));
+    }
+    const act = canDecide
+      ? el('div', { class: 'clx-actions' },
+          el('button', { class: 'btn btn--primary btn--sm', onclick: () => openProbeModal(area, student, refresh) },
+            icon('zap', 14), 'ثبت آزمون'))
+      : null;
+    return el('div', { class: 'card clx-probe' },
+      el('div', { class: 'card__body' },
+        el('div', { class: 'clx-plan__head' },
+          el('strong', { class: 'clx-plan__title' }, icon(area.icon, 15), area.title),
+          el('span', { class: 'badge badge--neutral' }, 'ثبت نشده')),
+        el('div', { class: 'cell-sub' }, area.desc),
+        act));
+  });
+  return el('div', { class: 'clx-probe-wrap', id: 'func-assess-anchor' },
+    el('div', { class: 'clx-probe-wrap__head' },
+      el('strong', {}, icon('zap', 15), 'آزمون‌های عملکرد مرکزی — ثبت درمانگر'),
+      el('span', { class: 'cell-sub' }, 'در مرکز، حضوری، از خود کودک — چک‌لیست خانواده و معلم جای خود در مرحلهٔ ۲ است.')),
+    el('div', { class: 'clx-probe__grid' }, ...cards));
+}
+
 /**
  * — بلوک «زمینهٔ تفسیر» — بدنهٔ مرحلهٔ وکسلر (بدنه تغییر نکرده — m134)
  * سن/تولد/پایه/مسیر پرونده کنار خروجی کمی وکسلر (FSIQ/صدک/پراکندگی) — تا نیم‌رخ
@@ -628,7 +750,7 @@ function interpretationContext({ student, gates }) {
  * — دکمهٔ اقدام هر گیت — CTA سربرگ و بدنهٔ آکاردئون‌ها
  * گیت «needs» این‌جا دکمه ندارد: اقدام اصلی مرحلهٔ ۵ دکمهٔ داخل کارت جمع‌بندی است (تک‌منبع).
  */
-function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide, refresh, skillsMode }) {
+function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide, refresh, skillsMode, events }) {
   if (!g) return null;
   const typeIdOf = (key) => typesById.get(key)?.id ?? null;
   const act = (label, cls, onclick) => el('button', { class: `btn ${cls} btn--sm`, onclick }, icon('send', 14), label);
@@ -649,15 +771,16 @@ function gateActionOf(g, { student, gates, typesById, anamnesisTypeId, canDecide
         ? act(GATE_GLOSS.wechsler.actionLabel, 'btn--soft', () => openCaseEventForm({ student, defaultTypeId: typeIdOf(WISC4_KEY), onSaved: refresh }))
         : null;
     case 'skills':
-      // حالت مرحلهٔ ۴ از ماتریس resolveSkillsMode می‌آید (m136) — SLD → چک‌لیست‌های خواندن/نوشتن/ریاضی؛
+      // حالت مرحلهٔ ۴ از ماتریس resolveSkillsMode می‌آید (m136) — T12/m160: SLD → ثبت آزمون عملکرد
+      // مرکزی (اولین حوزهٔ ثبت‌نشده — مودال میکروی همان حوزه؛ چک‌لیست خانواده/معلم جای خود مرحلهٔ ۲ است)؛
+      // هر سه ثبت شده → CTA نمی‌خواهد (بدنه سه کارت ثبت‌شده دارد)؛
       // OT → اسکرول به لنگر چک‌لیست مهارتی در همین بدنه.
       if (skillsMode === SKILL_MODE_SLD) {
-        return act(GATE_GLOSS.skills.learningActionLabel, 'btn--soft', () => openCaseEventForm({
-          student,
-          onlyKeys: SLD_CHECKLIST_KEYS,
-          pickerTitle: 'چک‌لیست‌های خواندن، نوشتن و ریاضی',
-          onSaved: refresh
-        }));
+        if (!canDecide) return null;
+        const nextProbe = PROBE_AREAS.find((a) => !probeEventOf(a, events, typesById));
+        return nextProbe
+          ? act(GATE_GLOSS.skills.learningActionLabel, 'btn--soft', () => openProbeModal(nextProbe, student, refresh))
+          : null;
       }
       return act(GATE_GLOSS.skills.rehabActionLabel, 'btn--soft', () => {
         document.getElementById('ot-checklist-anchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1423,7 +1546,7 @@ export async function renderClinicalTab(box, { student }) {
       ? gates.gates
       : (gates ? [] : ['anamnesis', 'wechsler', 'behavioral', 'skills', 'needs'].map((k) => ({ key: k, done: false, ord: SM[k].num, label: SM[k].title, detail: null })));
     const gateByKey = (key) => gatesList.find((g) => g.key === key) ?? null;
-    const stageCtx = { student, gates, typesById, anamnesisTypeId, canDecide, refresh, skillsMode };
+    const stageCtx = { student, gates, typesById, anamnesisTypeId, canDecide, refresh, skillsMode, events };
 
     // دادهٔ صورت‌بندی — یک‌بار fetch؛ هم به wechslerConnections می‌رود هم به کارت جمع‌بندی (null-safe)
     const formulation = await fetchFormulation({ student });
@@ -1485,7 +1608,7 @@ export async function renderClinicalTab(box, { student }) {
           if (cov?.total) return SM.skills.glanceOt.replace('{n}', fa(cov.scored)).replace('{m}', fa(cov.total));
           return gateByKey('skills')?.detail || SM.skills.glanceFallback;
         }
-        const k = countCompleted([...SLD_CHECKLIST_KEYS, ...PROBE_KEYS]);
+        const k = countCompleted(PROBE_KEYS);
         return k > 0 ? SM.skills.glanceSld.replace('{n}', fa(k)) : SM.skills.glanceSldZero;
       },
       needs: () => {
@@ -1556,8 +1679,8 @@ export async function renderClinicalTab(box, { student }) {
           ];
         }
         return [
-          countStat(ST.skillsSld, countCompleted(SLD_CHECKLIST_KEYS)),
-          countStat(ST.skillsProbe, countCompleted(PROBE_KEYS))
+          countStat(ST.skillsSld, countCompleted(PROBE_KEYS)),
+          countStat(ST.skillsProbe, countCompleted(SLD_CHECKLIST_KEYS))
         ];
       },
       needs: () => {
@@ -1600,7 +1723,8 @@ export async function renderClinicalTab(box, { student }) {
     // ── ردیف‌های رویداد هر مرحله — از پاسخ واحد (§8.1) ──
     const anamRows = eventRowsBlock({ events, typesById, keys: [ANAMNESIS_KEY, ANAMNESIS_LEGACY_KEY], cap: 1, expandable: false }); // — T4: v3 + تاریخچهٔ v2
     const checklistRows = eventRowsBlock({ events, typesById, keys: [...SCREEN_KEYS, ...SPECIFIC_KEYS], cap: 6, expandable: true });
-    const probeRows = eventRowsBlock({ events, typesById, keys: [...PROBE_KEYS, RESULTS_KEY], cap: 6, expandable: true });
+    // T12/m160 — ردیف‌های مرحلهٔ ۴: پروب‌ها کارت اختصاصی دارند (probeAssessSection)؛ این‌جا فقط فرم نتایج عمومی
+    const resultsRows = eventRowsBlock({ events, typesById, keys: [RESULTS_KEY], cap: 6, expandable: true });
 
     // ── داده‌های مرحلهٔ ۵ — جدول DSM + فرضیه‌ها + شواهد موجود، پشت تاشوی «جزئیات موتور تشخیصی» ──
     const hypotheses = hasData
@@ -1716,24 +1840,28 @@ export async function renderClinicalTab(box, { student }) {
         return body;
       },
       skills: () => {
-        // بدنهٔ حالت‌آگاه (m136) — OT: کارت مهارتی + چیپ‌ها + CTA اسکرول؛
-        // SLD: چیپ‌ها + ردیف‌های پروب/نتایج + CTA ارسال چک‌لیست‌های خواندن/نوشتن/ریاضی.
+        // بدنهٔ حالت‌آگاه (m136 + T12/m160) — OT: کارت مهارتی + چیپ‌ها + CTA اسکرول؛
+        // SLD: سه کارت آزمون عملکرد مرکزی (ثبت درمانگر در مرکز) + چیپ هستهٔ خواندن + ردیف فرم نتایج.
         const g = gateByKey('skills');
         const body = [];
         if (skillsMode === SKILL_MODE_OT) {
           if (otCard) body.push(otCard);
           if (!otCard && !g?.detail) body.push(el('div', { class: 'cell-sub' }, SM.skills.emptyHint));
-        } else if (!probeRows.node && !g?.detail) {
-          body.push(el('div', { class: 'cell-sub' }, SM.skills.emptyHint));
+          body.push(seenChipsBlock(insights)); // تنها جای چیپ‌های «چه فرم‌هایی آمده» در مرحلهٔ ۴
+          if (!g?.done) {
+            const cta = gateActionOf(g, stageCtx);
+            if (cta) body.push(el('div', { class: 'clx-actions' }, cta));
+          }
+          return body;
         }
+        // T12/m160 — ارزیابی عملکردی = آزمون درمانگر در مرکز: سه کارت + مودال میکرو + تحلیل هنجاری
+        body.push(probeAssessSection({ student, events, typesById, canDecide, refresh }));
         // T10/m153 — چیپ هستهٔ خواندن: گیت نگرانی خواندن شرح‌حال v3 + ثبت دوکلیکی + پیشنهاد شرطی
-        // (فقط حالت SLD — از پاسخ مشترک رویدادها، صفر GET تازه)
-        if (skillsMode === SKILL_MODE_SLD) {
-          const readCore = readCoreChipCard({ student, events, typesById, canDecide, refresh });
-          if (readCore) body.push(readCore);
-        }
+        // (از پاسخ مشترک رویدادها، صفر GET تازه)
+        const readCore = readCoreChipCard({ student, events, typesById, canDecide, refresh });
+        if (readCore) body.push(readCore);
         body.push(seenChipsBlock(insights)); // تنها جای چیپ‌های «چه فرم‌هایی آمده» در مرحلهٔ ۴
-        if (skillsMode === SKILL_MODE_SLD && probeRows.node) body.push(probeRows.node);
+        if (resultsRows.node) body.push(resultsRows.node);
         if (!g?.done) {
           const cta = gateActionOf(g, stageCtx);
           if (cta) body.push(el('div', { class: 'clx-actions' }, cta));

@@ -16,13 +16,15 @@ import type {
 } from './types';
 import { CASE_EVENT_STATUSES } from './types';
 import {
-  analyzeChecklist, analyzeReadCore, analyzeSensoryChip, base64ToBytes, buildEventPayload, buildReadCorePayload,
+  analyzeChecklist, analyzeProbe, analyzeReadCore, analyzeSensoryChip, base64ToBytes, buildEventPayload, buildProbePayload, buildReadCorePayload,
   buildSensoryChipPayload, buildSummary, canTransitionStatus, estimateBase64Bytes, EVENT_FILES_MAX,
-  extractFollowUpAction, packageComponentsOf, READ_CORE_BANDS, READ_CORE_FIELDS, READ_CORE_KEY, READ_CORE_SUBSCALES,
+  extractFollowUpAction, packageComponentsOf, PROBE_AREA_KEYS, probeAnalysisOf,
+  READ_CORE_BANDS, READ_CORE_FIELDS, READ_CORE_KEY, READ_CORE_SUBSCALES,
   READ_CORE_TYPE_ID, resolveBand, SENSORY_CHIP_BANDS, SENSORY_CHIP_FIELDS, SENSORY_CHIP_KEY, SENSORY_CHIP_SUBSCALES,
   SENSORY_CHIP_TYPE_ID, sanitizeFilename, sanitizeTeacherName, stripDataUrlPrefix, teacherBindingOfPayload,
-  validateFileInput, validateReadCoreLevels, validateSensoryChipLevels, validateTypeDefinition, withTeacherName
+  validateFileInput, validateProbeValues, validateReadCoreLevels, validateSensoryChipLevels, validateTypeDefinition, withTeacherName
 } from './pure';
+import type { ProbeArea } from './pure';
 
 interface TypeRow {
   id: string;
@@ -778,6 +780,56 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         });
       });
       log.info('event.read_core_created', { id, studentId, score: analysis.score, band: analysis.band });
+      return eventRowToRecord(await getEventRow(id));
+    },
+
+    /**
+     * — T12/m160: ثبت آزمون عملکرد مرکزی (خواندن/نوشتن/حساب) — ارزیابیِ درمانگر در مرکز.
+     * تفاوت با createEvent: رویداد همین‌جا completed می‌شود و تحلیل هنجاری (درصد انتظار
+     * پایه + باند + پرچم‌های علمی) در همان تراکنش ساخته می‌شود — مسیر عمومی برای
+     * category=session تحلیل نمی‌سازد. type از کتابخانهٔ فعال باتری با کلید منطقی حل
+     * می‌شود (بدون ensure — عضو رسمی باتری است)؛ حوزه/فیلد خراب → خطای فارسی بدون رکورد.
+     */
+    async createProbeEvent(studentId, input, actor) {
+      await assertStudent(studentId);
+      // اول اعتبارسنجی — ورودی خراب هیچ ردی نمی‌گذارد
+      const areaRaw = String(input.area ?? '').trim();
+      if (!(areaRaw in PROBE_AREA_KEYS)) {
+        throw new ValidationError('حوزهٔ آزمون نامعتبر است — خواندن، نوشتن یا حساب');
+      }
+      const area = areaRaw as ProbeArea;
+      const values = validateProbeValues(area, input.values);
+      const typeRow = await loadTypeRowByKey(PROBE_AREA_KEYS[area]);
+      if (!typeRow) throw new ConflictError('ابزار آزمون عملکرد در کتابخانهٔ فرم نیست');
+      const type = typeRowToRecord(typeRow);
+      const result = analyzeProbe(area, values);
+      const payload = buildProbePayload(area, values, result);
+      const analysis = probeAnalysisOf(area, values, result);
+      const summary = buildSummary(payload, analysis);
+      const id = crypto.randomUUID();
+      const occurredAt = now().toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
+                                    status, payload, analysis, summary, fill_token, fill_expires_at, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, NULL, ?, 'completed', ?, ?, ?, NULL, NULL, ?, ?, ?)`,
+          [id, type.id, studentId, actor.staffId, occurredAt, JSON.stringify(payload), JSON.stringify(analysis), summary, actor.staffId, occurredAt, occurredAt]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'case_event.probe_created',
+          resourceType: 'case_event',
+          resourceId: id,
+          changes: {
+            eventTypeId: { from: null, to: type.id },
+            studentId: { from: null, to: studentId },
+            area: { from: null, to: area },
+            pct: { from: null, to: result.pct },
+            band: { from: null, to: result.band.label }
+          }
+        });
+      });
+      log.info('event.probe_created', { id, studentId, area, pct: result.pct, band: result.band.label });
       return eventRowToRecord(await getEventRow(id));
     },
 
