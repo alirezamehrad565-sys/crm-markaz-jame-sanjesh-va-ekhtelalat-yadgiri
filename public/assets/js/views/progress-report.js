@@ -1,16 +1,3 @@
-/**
- * نمای گزارش پیشرفت چک‌لیست‌محور (m164)
- * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
- */
-// views/progress-report.js — گزارش چاپی پیشرفت جلسه‌به‌جلسه بر مدار چک‌لیست مهارتی OT۷
-// سنجه‌های علمی (بدون عدد ساختگی — همه از دادهٔ ثبت‌شده):
-//  · نمرهٔ ترکیبی هر جلسه = (بلد×۱ + با‌کمک×۰٫۵) ÷ مهارت‌های ارزیابی‌شده — شیب OLS روی جلسات
-//  · منحنی محو راهنما = میانگین سطح راهنمای «با کمک» هر جلسه (۱ کلامی … ۴ فیزیکی کامل)
-//  · خط پایهٔ عملکردی ↔ بازسنجی — شش حیطهٔ ce-rehab-fx-v1: تغییر عدد، باند، سطح راهنما
-//  · RCI = Δ ÷ SE_diff ؛ SE از دامنهٔ مقیاس (دامنه÷√۱۲) — تخمین محافظه‌کارانهٔ صادقانه تا هنگام هنجارش
-// خروجی: صفحهٔ چاپ‌پسند (دکمهٔ «چاپ / ذخیرهٔ PDF» → window.print) — چاپ A4 بدون کروم اپ
-// مسیر: #/students/:id/progress-report — دکمهٔ ورود از سربرگ «پیشرفت جلسه به جلسه»
-
 import { api, qs } from '../api.js';
 import {
   fa, enDigits, toGregorian, tehranTodayYmd, toUtcIso, tehranYmdOfIso,
@@ -21,44 +8,31 @@ import { lineChart } from '../charts.js';
 import { OT_PROMPT_LEVELS, NEEDS_KEY } from '../ot-checklist.js';
 import { REHAB_FX_KEY } from '../clinical-content.js';
 
-// ─────────────── ثابت‌های سنجه ───────────────
-
-/** ترتیب ترتیبی سطح راهنمای جلسات OT — ۱ کمترین کمک … ۴ بیشترین */
 const PROMPT_ORD = { verbal: 1, gestural: 2, partial_physical: 3, full_physical: 4 };
 
-/** ترتیب ترتیبی سطح راهنمای خط پایهٔ عملکردی (REHAB_FX_PROMPTS) — ۰ یعنی بدون راهنما */
 const FX_PROMPT_ORD = { 'بدون راهنما': 0, 'راهنمای کلامی': 1, 'ژستی / الگودهی': 2, 'لمسی جزئی': 3, 'راهنمای فیزیکی کامل': 4 };
 
-/** شش حیطهٔ خط پایهٔ عملکردی — هم‌قرارداد REHAB_FX_AREAS (clinical-insights) */
 const FX_LABELS = { att_sus: 'توجه پایدار', att_sel: 'توجه انتخابی', wm: 'حافظهٔ کاری', inh: 'بازداری', flex: 'انعطاف ذهنی', ps: 'حل مسئله' };
-/** جهت مطلوب: +۱ = عدد بیشتر بهتر · −۱ = عدد کمتر بهتر */
 const FX_DIR = { att_sus: 1, att_sel: -1, wm: 1, inh: -1, flex: 1, ps: 1 };
-/** دامنهٔ مقیاس هر حیطه — مبنای تخمین SE در RCI */
 const FX_RANGE = { att_sus: 15, att_sel: 20, wm: 9, inh: 10, flex: 4, ps: 12 };
 const FX_UNIT = { att_sus: 'دقیقه', att_sel: 'خطا', wm: 'رقم', inh: 'خطا', flex: 'کمک', ps: 'تکه' };
 
-/** پایایی بازآزمایی فرضی برای RCI — صادقانه مستند می‌شود؛ تا هنگام هنجارش ابزار فرض بالینی است */
 const RCI_RELIABILITY = 0.8;
 
 const STATUS_LABELS = { mastered: 'بلد است', with_help: 'با کمک', not_yet: 'هنوز نه' };
 const STATUS_CLS = { mastered: 'badge--success', with_help: 'badge--warning', not_yet: 'badge--neutral' };
 
-// ─────────────── محاسبات سنجه ───────────────
-
-/** تبدیل مقدار رشته‌ای payload به عدد (تحمل ارقام فارسی) */
 function num(v) {
   if (v == null) return null;
   const n = Number(enDigits(String(v)));
   return Number.isFinite(n) ? n : null;
 }
 
-/** نمرهٔ ترکیبی یک جلسه — درصد (۰–۱۰۰) */
 function sessionScore(s) {
   if (!s.total) return 0;
   return ((s.mastered + 0.5 * s.withHelp) / s.total) * 100;
 }
 
-/** شیب خط کمینه‌مربع‌ها (OLS) روی توالی y — واحد: به‌ازای هر جلسه */
 function olsSlope(ys) {
   const n = ys.length;
   if (n < 2) return 0;
@@ -73,7 +47,6 @@ function olsSlope(ys) {
   return den ? numr / den : 0;
 }
 
-/** تفسیر شیب نمرهٔ تسلط (واحد: نمرهٔ درصدی در هر جلسه) */
 function trendVerdict(slope) {
   if (slope >= 5) return { label: 'بهبود روشن', cls: 'badge--success', good: 1, text: 'نمرهٔ ترکیبی تسلط به‌طور متوسط در هر جلسه رشد محسوس دارد.' };
   if (slope >= 2) return { label: 'بهبود تدریجی', cls: 'badge--success', good: 1, text: 'نمرهٔ ترکیبی تسلط روند صعودی آرام اما پیوسته دارد.' };
@@ -82,14 +55,12 @@ function trendVerdict(slope) {
   return { label: 'افت روشن', cls: 'badge--error', good: -1, text: 'نمرهٔ ترکیبی تسلط روند نزولی آشکار دارد — بازنگری برنامهٔ مداخله لازم است.' };
 }
 
-/** تفسیر شیب محو راهنما (منفی = راهنما کمتر می‌شود = استقلال بیشتر) */
 function promptVerdict(slope) {
   if (slope <= -0.15) return { label: 'محو راهنما در جریان', cls: 'badge--success', text: 'میانگین سطح راهنمای «با کمک» جلسه‌به‌جلسه کم می‌شود — استقلال‌یابی در حرکت است.' };
   if (slope < 0.15) return { label: 'بدون تغییر محسوس', cls: 'badge--neutral', text: 'سطح راهنمای موردنیاز تقریباً ثابت مانده است — با خط پایه و ملاک‌ها قضاوت شود.' };
   return { label: 'افزایش وابستگی به راهنما', cls: 'badge--warning', text: 'میانگین سطح راهنما رو به افزایش است — تکلیف را ساده‌تر یا قدم‌ها را ریزتر کنید.' };
 }
 
-/** شاخص تغییر قابل‌اتکا — جهت‌آگاه (مثبت = تغییر مطلوب) */
 function rciOf(x1, x2, key) {
   const se = FX_RANGE[key] / Math.sqrt(12); // تخمین محافظه‌کارانهٔ SE از دامنهٔ مقیاس
   const seDiff = Math.SQRT2 * se * Math.sqrt(1 - RCI_RELIABILITY);
@@ -97,7 +68,6 @@ function rciOf(x1, x2, key) {
   return ((x2 - x1) * FX_DIR[key]) / seDiff;
 }
 
-/** استخراج شش حیطهٔ عددی از payload یک رویداد rehab-fx */
 function fxVals(ev) {
   const p = ev?.payload ?? {};
   const out = {};
@@ -113,7 +83,6 @@ function fxVals(ev) {
   return out;
 }
 
-/** خط سن — از تاریخ تولد (جلالی یا میلادی) تا امروزِ تهران */
 function ageLineOf(birthDate) {
   if (!birthDate) return null;
   const s = String(birthDate).replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).trim();
@@ -138,14 +107,11 @@ function ageLineOf(birthDate) {
   return years > 0 ? `${fa(years)} سال و ${fa(months)} ماه` : `${fa(months)} ماه`;
 }
 
-/** برچسب فارسی پروتکل فعال — نقشهٔ بستهٔ شناخته‌شده؛ ناشناخته → خود کلید (دفاعی) */
 const PROTOCOL_LABELS = {
   rehab: 'توانبخشی ذهنی-جسمی',
   mental_ot: 'کاردرمانی ذهنی',
   learning: 'اختلال یادگیری'
 };
-
-// ─────────────── رندر ───────────────
 
 export async function renderProgressReport(container, ctx) {
   container.replaceChildren(skeletonState('list', 6));
@@ -166,13 +132,11 @@ export async function renderProgressReport(container, ctx) {
     api.get(`/api/students/${id}/case-events${qs({ limit: 200 })}`).then((r) => r.data ?? []).catch(() => []),
     api.get('/api/case-events/types').then((r) => r.data ?? []).catch(() => [])
   ]);
-  // پروتکل/فاز از گیت‌های بالینی می‌آید (m164 — رکورد دانش‌آموز پروتکل ندارد)
   const protocolKey = gates?.protocol ?? student.protocol ?? null;
   const phaseLabel = gates?.phase === 'intervention' ? 'مداخله' : gates?.phase === 'identification' ? 'شناسایی' : (gates?.phase ?? null);
   const typesById = new Map(tyRes.map((t) => [t.key, t]));
   const events = evRes;
 
-  // ── رویدادهای خط پایهٔ عملکردی — مرتب صعودی؛ اولین و آخرین = پایه ↔ بازسنجی ──
   const rehabTypeId = typesById.get(REHAB_FX_KEY)?.id ?? null;
   const rehabEvents = rehabTypeId
     ? events
@@ -183,7 +147,6 @@ export async function renderProgressReport(container, ctx) {
   const fxLast = rehabEvents[rehabEvents.length - 1] ?? null;
   const hasRetest = rehabEvents.length >= 2;
 
-  // ── رویداد نتیجهٔ نیاز ویژه — اهداف و برنامهٔ جلسات ثبت‌شده ──
   const needsTypeId = typesById.get(NEEDS_KEY)?.id ?? null;
   const needsEvent = needsTypeId
     ? events
@@ -196,7 +159,6 @@ export async function renderProgressReport(container, ctx) {
   const totals = profile?.totals ?? null;
   const sheetParts = [];
 
-  // ── نوار ابزار (چاپ نمی‌شود) ──
   sheetParts.push(el('div', { class: 'toolbar print-hide' },
     el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { location.hash = `#/students/${id}`; } },
       icon('chevR', 14), 'بازگشت به پروفایل'),
@@ -205,7 +167,6 @@ export async function renderProgressReport(container, ctx) {
       icon('printer', 15), 'چاپ / ذخیرهٔ PDF')
   ));
 
-  // ── سربرگ گزارش ──
   const sessionRange = sessions.length
     ? `${formatJalaliDateTime(sessions[0].occurredAt)} تا ${formatJalaliDateTime(sessions[sessions.length - 1].occurredAt)}`
     : '—';
@@ -227,7 +188,6 @@ export async function renderProgressReport(container, ctx) {
     )
   ));
 
-  // ── نوار شاخص‌های کلیدی ──
   const kpi = (numv, label) => el('div', { class: 'pr-kpi' },
     el('div', { class: 'pr-kpi__num' }, fa(numv)),
     el('div', { class: 'pr-kpi__label' }, label));
@@ -240,7 +200,6 @@ export async function renderProgressReport(container, ctx) {
     kpi(totals ? `${fa(totals.scored)}/${fa(totals.total)}` : '—', 'مهارت‌های ارزیابی‌شده از چک‌لیست')
   ));
 
-  // ── کارت روند جلسه‌به‌جلسه ──
   const scorePoints = sessions.map((s) => ({
     x: `ج${fa(s.ord)}`,
     y: Math.round(sessionScore(s) * 10) / 10,
@@ -271,7 +230,6 @@ export async function renderProgressReport(container, ctx) {
     )
   ));
 
-  // ── کارت محو راهنما ──
   const promptPoints = sessions.map((s) => {
     if (!s.withHelp || !s.prompts) return null;
     let wsum = 0;
@@ -307,33 +265,23 @@ export async function renderProgressReport(container, ctx) {
     )
   ));
 
-  // ── کارت چک‌لیست مهارتی — وضعیت فعلی (قلب گزارش) ──
   const checklistCard = buildChecklistCard(profile);
   sheetParts.push(checklistCard);
 
-  // ── کارت خط پایهٔ عملکردی ↔ بازسنجی (+ RCI) ──
   sheetParts.push(buildBaselineCard({ fxFirst, fxLast, hasRetest, rehabCount: rehabEvents.length }));
 
-  // ── کارت اهداف و توصیه‌ها ──
   sheetParts.push(buildGoalsCard({ profile, needsEvent, fxLast, sessions }));
 
-  // ── پانویس ──
   sheetParts.push(el('div', { class: 'pr-foot' },
     el('span', {}, `تولید خودکار از سامانه — تاریخ گزارش: ${formatJalaliNumeric(tehranTodayYmd())}`),
     el('span', {}, 'این گزارش مبنای استناد بالینی پیشرفت جلسه‌به‌جلسه است؛ تفسیر نهایی با درمانگر.')
   ));
 
-  const outlet = el('div', { class: 'content' }, el('div', { class: 'pr-sheet' }, ...sheetParts));
-  container.replaceChildren(outlet);
-  return outlet;
+  const root = el('div', { class: 'pr-sheet' }, ...sheetParts);
+  container.replaceChildren(root);
+  return root;
 }
 
-// ─────────────── سازندهٔ کارت چک‌لیست مهارتی ───────────────
-
-/**
- * جدول وضعیت فعلی چک‌لیست مهارتی OT۷ — قلب گزارش.
- * هر حیطه با سرفصل و جمع وضعیت‌ها؛ زیر آن مهارت‌ها با ملاک، وضعیت، تسلط دوجلسه‌ای و سطح راهنما.
- */
 function buildChecklistCard(profile) {
   if (!profile?.domains?.length) {
     return el('div', { class: 'card' },
@@ -367,32 +315,26 @@ function buildChecklistCard(profile) {
       ));
     }
   }
-  return el('div', { class: 'card' },
+  return el('div', { class: 'card card--break' },
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('clipboard', 16), 'چک‌لیست مهارتی — وضعیت فعلی'),
       el('span', { class: 'badge badge--info' }, `${fa(profile.totals?.scored ?? 0)} از ${fa(profile.totals?.total ?? 0)} مهارت ارزیابی‌شده`)),
     el('div', { class: 'card__body' },
-      el('table', { class: 'pr-table' },
-        el('thead', null, el('tr', null,
-          el('th', {}, 'حیطه / مهارت'),
-          el('th', {}, 'ملاک عملکرد'),
-          el('th', {}, 'وضعیت فعلی'),
-          el('th', {}, 'تسلط دوجلسه‌ای'),
-          el('th', {}, 'سطح راهنمای اخیر'))),
-        el('tbody', null, ...rows)),
+      el('div', { class: 'pr-scroll' },
+        el('table', { class: 'pr-table' },
+          el('thead', null, el('tr', null,
+            el('th', {}, 'حیطه / مهارت'),
+            el('th', {}, 'ملاک عملکرد'),
+            el('th', {}, 'وضعیت فعلی'),
+            el('th', {}, 'تسلط دوجلسه‌ای'),
+            el('th', {}, 'سطح راهنمای اخیر'))),
+          el('tbody', null, ...rows))),
       el('div', { class: 'pr-note' },
         'وضعیت‌ها از آخرین ثبت هر مهارت در جلسات کاردرمانی ذهنی استخراج شده است. «تسلط دوجلسه‌ای» یعنی «بلد است» در دو جلسهٔ متوالی — طبق قاعدهٔ داوری دوجلسه‌ای سامانه؛ سطح راهنما فقط برای وضعیت «با کمک» معنا دارد.')
     )
   );
 }
 
-// ─────────────── سازندهٔ کارت خط پایه ↔ بازسنجی (+RCI) ───────────────
-
-/**
- * جدول شش حیطهٔ خط پایهٔ عملکردی — ثبت اول ↔ آخرین ثبت (بازسنجی ۸–۱۲ جلسه).
- * ستون‌ها: عدد اول، باند اول، عدد بازسنجی، باند بازسنجی، تغییر (جهت‌آگاه)، RCI.
- * با یک ثبت: فقط خط پایه + یادآوری بازسنجی. RCI فقط با دو ثبت.
- */
 function buildBaselineCard({ fxFirst, fxLast, hasRetest, rehabCount = 0 }) {
   const head = el('div', { class: 'card__head' },
     el('div', { class: 'card__title' }, icon('brain', 16), 'خط پایهٔ عملکردی ↔ بازسنجی — شش حیطهٔ شناختی'));
@@ -423,7 +365,6 @@ function buildBaselineCard({ fxFirst, fxLast, hasRetest, rehabCount = 0 }) {
         : d < 0
           ? { text: 'افت', cls: 'pr-verdict--bad' }
           : { text: 'بدون تغییر', cls: 'pr-verdict--flat' };
-      // تغییر سطح راهنما — حذف‌شدن راهنما در نبود افت عدد هم پیشرفت است (استقلال‌یابی)
       const p1 = FX_PROMPT_ORD[a.prompt];
       const p2 = FX_PROMPT_ORD[b.prompt];
       if (p1 != null && p2 != null && p1 !== p2) {
@@ -467,7 +408,8 @@ function buildBaselineCard({ fxFirst, fxLast, hasRetest, rehabCount = 0 }) {
 
   return el('div', { class: 'card' }, head,
     el('div', { class: 'card__body' },
-      el('table', { class: 'pr-table' }, thead, el('tbody', null, ...rows)),
+      el('div', { class: 'pr-scroll' },
+        el('table', { class: 'pr-table' }, thead, el('tbody', null, ...rows))),
       el('div', { class: 'pr-note' }, noteText)
     )
   );
@@ -481,14 +423,6 @@ function tehranYmdOf(iso) {
   }
 }
 
-// ─────────────── سازندهٔ کارت اهداف و توصیه‌ها ───────────────
-
-/**
- * اهداف و توصیه‌ها — دو منبع:
- *  ۱) ثبت‌شده توسط درمانگر (رویداد نتیجهٔ نیاز ویژه: اهداف کوچک + برنامهٔ جلسات)
- *  ۲) پیشنهاد خودکار سامانه از دادهٔ چک‌لیست: مهارت‌های «با کمک» = اهداف نزدیک؛
- *     حیطه‌های پرچم‌دار خط پایه (باند ضعف آشکار/مرزی) = اولویت مداخله
- */
 function buildGoalsCard({ profile, needsEvent, fxLast }) {
   const goals = needsEvent?.payload?.goals?.value ?? null;
   const plan = needsEvent?.payload?.session_plan?.value ?? null;
@@ -513,7 +447,7 @@ function buildGoalsCard({ profile, needsEvent, fxLast }) {
     }
   }
 
-  return el('div', { class: 'card' },
+  return el('div', { class: 'card card--break' },
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('target', 16), 'اهداف دوره و توصیه‌ها')),
     el('div', { class: 'card__body', style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
       goals ? el('div', null,

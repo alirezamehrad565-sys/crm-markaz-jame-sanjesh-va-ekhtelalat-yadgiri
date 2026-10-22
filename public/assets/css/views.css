@@ -1,9 +1,3 @@
-/* ═══════════════════════════════════════════════════════════════
-   views.css — استایل اختصاصی نماها (تقویم هفتگی، برنامه کاری، …)
-   ═══════════════════════════════════════════════════════════════ */
-
-/* ─────────────── نوار هفته (نوبت‌ها) ─────────────── */
-
 .week-bar {
   display: flex;
   align-items: center;
@@ -19,8 +13,6 @@
   text-align: center;
 }
 .week-bar .spacer { flex: 1; }
-
-/* ─────────────── ویرایشگر برنامه هفتگی (بازه کاری) ─────────────── */
 
 .sched {
   display: flex;
@@ -61,8 +53,6 @@
   gap: var(--sp-2);
 }
 
-/* ─────────────── نمودار میله‌ای کوچک داشبورد ─────────────── */
-
 .spark {
   display: flex;
   align-items: flex-end;
@@ -87,14 +77,12 @@
   transition: height var(--normal);
   position: relative;
 }
-/* m37 — ماه‌های بالاتر از ریتم هدف سال (هدف/۱۲) در نمودار تحقق سنجش */
 .spark__bar--ahead {
   background: linear-gradient(to top, var(--success), var(--success));
 }
 .spark__num { font-size: var(--fs-xs); font-weight: 700; color: var(--text-2); }
 .spark__day { font-size: var(--fs-xs); color: var(--text-3); }
 
-/* آواتار کوچک همکار — روز کاری (staff-mini__avatar از working-day.js) */
 .staff-mini__avatar {
   width: 38px;
   height: 38px;
@@ -134,8 +122,6 @@
   flex-shrink: 0;
 }
 
-/* ─────────────── نوار ابزار جستجو/فیلتر ─────────────── */
-
 .toolbar {
   display: flex;
   gap: var(--sp-2);
@@ -150,7 +136,6 @@
   .toolbar .input { width: 100%; }
 }
 
-/* صفحه‌بندی ساده */
 .pager {
   display: flex;
   align-items: center;
@@ -161,7 +146,6 @@
   color: var(--text-2);
 }
 
-/* انتخاب چندگانه دانش‌آموزان در فرم نوبت */
 .pick-list {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -181,8 +165,6 @@
 .pick-list__item.is-picked { background: var(--primary-soft); }
 .pick-list__item input { accent-color: var(--primary); }
 
-/* ═══════════════ M5 — تقویم زمان‌بندی (time-grid) + نوبت‌گذاری سریع ═══════════════ */
-
 .grid-wrap {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -191,7 +173,6 @@
 }
 .grid-scroll { overflow-x: auto; }
 
-/* M15.2 — راهنمای سوایپ افقی نمای هفته در موبایل (فقط وقتی هفته تمام‌عرض نیست) */
 .swipe-hint {
   display: none;
   align-items: center;
@@ -211,7 +192,6 @@
   position: relative;
 }
 
-/* سرستون روزها */
 .grid-head {
   position: sticky;
   top: 0;
@@ -227,7 +207,6 @@
 .grid-head__date { display: block; font-size: var(--fs-xs); color: var(--text-3); font-weight: 400; }
 .grid-head.is-today .grid-head__date { color: var(--on-primary-soft); }
 
-/* برچسب ساعت سمت راست */
 .gutter {
   font-size: var(--fs-xs);
   color: var(--text-3);
@@ -238,7 +217,6 @@
   user-select: none;
 }
 
-/* ستون روز — بدنه با موقعیت نسبی برای کارت‌های absolute */
 .grid-day {
   position: relative;
   border-inline-end: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
@@ -246,7 +224,6 @@
 }
 .grid-day.is-today { background: color-mix(in srgb, var(--primary-soft) 28%, transparent); }
 
-/* خط افقی هر سلول ۳۰ دقیقه‌ای */
 .grid-cell {
   border-bottom: 1px solid color-mix(in srgb, var(--border) 34%, transparent);
   transition: background var(--fast);
@@ -258,7 +235,6 @@
 }
 .grid-day.is-weekend .grid-cell { background: color-mix(in srgb, var(--surface-3) 30%, transparent); }
 
-/* ناحیه غیر کاری (خارج بازه کاری مرکز) */
 .grid-off {
   position: absolute;
   inset-inline: 0;
@@ -272,7 +248,6 @@
 }
 .grid-day.is-today .grid-off { opacity: 0.55; }
 
-/* کارت نوبت روی شبکه — m88: نفس بیشتر (padding/فاصلهٔ خط بیشتر، کارت با PPM بلندترِ بازهٔ کاری بزرگ‌تر می‌شود) */
 .grid-appt {
   position: absolute;
   inset-inline: 4px;
@@ -314,7 +289,6 @@
   text-overflow: ellipsis;
 }
 
-/* خط «الان» */
 .grid-now {
   position: absolute;
   inset-inline: 0;
@@ -334,10 +308,8 @@
   background: var(--accent);
 }
 
-/* درگ‌اور */
 .grid-day.drop-target .grid-cell { background: var(--primary-soft); }
 
-/* چیپ‌های مدت سریع */
 .chip-row { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 .chip {
   border: 1px solid var(--border);
@@ -356,8 +328,6 @@
   border-color: var(--primary);
   color: #fff;
 }
-
-/* ═══════════════ M5 — تب‌های صفحه تنظیمات ═══════════════ */
 
 .tabs {
   display: flex;
@@ -396,7 +366,6 @@
 .settings-section h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-lg); }
 .settings-section .hint-text { color: var(--text-3); font-size: var(--fs-sm); margin: 0 0 var(--sp-4); }
 
-/* m110 — فرم «امتیازبندی همکاران» (تنظیمات — فقط مدیر) */
 .scw-group { margin: 0 0 var(--sp-4); }
 .scw-group__title { font-weight: 700; font-size: var(--fs-sm); margin-bottom: var(--sp-2); }
 .scw-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--sp-2) var(--sp-3); }
@@ -404,7 +373,6 @@
 .scw-item .input { max-width: 130px; }
 .scw-item .cell-sub { line-height: 1.6; }
 
-/* نوار وضعیت بات */
 .bot-status {
   display: flex;
   align-items: center;
@@ -418,25 +386,19 @@
   flex-wrap: wrap;
 }
 
-/* ═══════════════ M7 — موبایل‌فرندلی ═══════════════ */
-
-/* نمای روزانه تقویم — یک ستون تمام‌عرض به‌جای هفت ستون */
 .grid-inner--day {
   grid-template-columns: 56px minmax(0, 1fr);
 }
 
-/* سوییچ حالت هفته/روز — همه‌جا فعال (M12: نمای چند درمانگر در دسکتاپ هم کاربردی است) */
 .mode-seg { display: inline-flex; }
 
 @media (max-width: 760px) {
-  /* نوار هفته: عنوان منعطف */
   .week-bar__title {
     min-width: 0;
     flex: 1 1 auto;
   }
   .week-bar .btn--sm { padding: 6px 10px; }
 
-  /* کارت نوبت روی شبکه: خواناتر برای لمس */
   .grid-appt {
     font-size: var(--fs-sm);
     padding: 6px 11px;
@@ -451,9 +413,6 @@
   .staff-mini__total { font-size: var(--fs-lg); }
 }
 
-/* ═══════════════ M9: حضور و غیاب ═══════════════ */
-
-/* نوار ناوبری روز */
 .att-day {
   display: flex;
   align-items: center;
@@ -469,7 +428,6 @@
   min-width: 0;
 }
 
-/* چیپ‌های خلاصه روز */
 .att-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -492,13 +450,11 @@
 .att-chip span { color: var(--text-2); font-size: var(--fs-sm); }
 .att-chip--present  { border-inline-start-color: var(--success); }
 .att-chip--absent   { border-inline-start-color: var(--error); }
-/* m84.1 — رنگ‌های متمایز: تأخیر کهربایی، مرخصی آبی، بیماری بنفش */
 .att-chip--late     { border-inline-start-color: var(--warning); }
 .att-chip--leave    { border-inline-start-color: var(--info, var(--accent)); }
 .att-chip--sick     { border-inline-start-color: var(--sick, #9333EA); }
 .att-chip--unmarked { border-inline-start-color: var(--text-3, var(--border)); opacity: 0.92; }
 
-/* ردیف همکار */
 .att-list { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4); }
 .att-row {
   display: flex;
@@ -521,7 +477,6 @@
 }
 .att-month__cap { opacity: 0.7; }
 
-/* کنترل وضعیت بخش‌بندی‌شده */
 .att-seg {
   display: inline-flex;
   background: var(--surface-2);
@@ -546,13 +501,11 @@
 .att-seg__btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .att-seg__btn--ok.is-active   { background: var(--success); color: #fff; }
 .att-seg__btn--err.is-active  { background: var(--error); color: #fff; }
-/* m84.1 — تأخیر کهربایی، مرخصی آبی (accent)، بیماری بنفش — دیگر دو رنگ یکی نیست */
 .att-seg__btn--late.is-active { background: var(--warning); color: var(--on-warning, #fff); }
 .att-seg__btn--info.is-active { background: var(--accent); color: #fff; }
 .att-seg__btn--sick.is-active { background: var(--sick, #9333EA); color: #fff; }
 .att-seg__btn--warn.is-active { background: var(--warning); color: #fff; }
 
-/* نشان یادداشت */
 .att-note {
   display: inline-flex;
   align-items: center;
@@ -569,7 +522,6 @@
   text-overflow: ellipsis;
 }
 
-/* دکمه غایب ملایم */
 .btn--danger-ghost {
   background: transparent;
   color: var(--error);
@@ -577,7 +529,6 @@
 }
 .btn--danger-ghost:hover:not(:disabled) { background: var(--error-soft); }
 
-/* m84.1 — دکمه تأخیر ملایم (حاضر با تأخیر) */
 .btn--warn-ghost {
   background: transparent;
   color: var(--warning);
@@ -585,7 +536,6 @@
 }
 .btn--warn-ghost:hover:not(:disabled) { background: var(--warning-soft); }
 
-/* آواتار متناوب دانش‌آموز */
 .staff-mini__avatar--alt {
   background: var(--accent-soft, var(--surface-2));
   color: var(--accent);
@@ -598,9 +548,6 @@
   .att-summary { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* ═══════════════ M10: اعلان‌های مدیر ═══════════════ */
-
-/* بنرها (صفحه ورود + پنل) */
 #ann-banner-root { padding: 0; }
 .ann-stack {
   display: flex;
@@ -640,7 +587,6 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* مدیریت اعلان‌ها */
 .ann-compose { display: flex; flex-direction: column; gap: var(--sp-3); }
 .ann-compose .input, .ann-compose .textarea { width: 100%; }
 .ann-checks { display: flex; gap: var(--sp-5); flex-wrap: wrap; }
@@ -668,8 +614,6 @@
   .ann-stack { padding: var(--sp-3) var(--sp-3) 0; }
   .ann-item__date { margin-inline-start: 0; width: 100%; }
 }
-
-/* ═══════════════ M11/M12: نمودارهای سبک ═══════════════ */
 
 .chart { width: 100%; }
 .chart__empty { color: var(--text-3); font-size: var(--fs-sm); text-align: center; padding: var(--sp-5) 0; margin: 0; }
@@ -721,8 +665,6 @@
 .chart__hbar-fill--error { background: var(--error); }
 .chart__hbar-hint { font-size: var(--fs-xs); color: var(--text-3); margin-top: 3px; }
 
-/* ═══════════════ M12: منوی بازشونده ═══════════════ */
-
 .dd { position: relative; display: inline-block; }
 .dd__panel {
   position: absolute;
@@ -771,10 +713,7 @@
 .dd__item.is-on .count { color: var(--on-primary-soft); }
 .dd__all { border-bottom: 1px solid var(--border); margin-bottom: 4px; padding-bottom: 6px; }
 
-/* سرستون درمانگر در نمای روزانه چندستونی */
 .grid-head--staff { display: flex; flex-direction: column; gap: 2px; align-items: center; }
-
-/* ═══════════════ M12: چاپ گزارش ═══════════════ */
 
 @media print {
   .sidebar, .topbar, .toast-stack, .sidebar-backdrop, .menu-btn,
@@ -787,7 +726,6 @@
   .page-head__title { font-size: var(--fs-xl); }
 }
 
-/* گرید دوستونی گزارش */
 .report-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -795,15 +733,7 @@
   margin-bottom: var(--sp-4);
 }
 
-/* ════════════════════════════════════════════════════════════
-   M14 — تقویم کاری بصری (wgrid) + صفحه ورود (login) + نوار امروز حضور
-   ════════════════════════════════════════════════════════════ */
-
-/* ─── تقویم بصری هفتگی ۰۶–۲۱ (m109 — شیفت صبح + عصر) ─── */
-
 .sched--visual { display: flex; flex-direction: column; gap: var(--sp-3); }
-
-/* ─── m111 — ردیف «تنظیم سریع» ویرایشگر برنامهٔ هفتگی (تب بازه کاری مرکز و کارکنان) ─── */
 
 .sched-quick {
   display: flex;
@@ -835,7 +765,6 @@
   user-select: none;
   -webkit-user-select: none;
   cursor: pointer;
-  /* m109 — گرید ۱۵ ساعته بلند است؛ درون کارت اسکرول بخورد (نه کل صفحه) */
   max-height: 60vh;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -847,11 +776,9 @@
 .wgrid__day {
   text-align: center; font-size: var(--fs-xs); font-weight: 700;
   color: var(--text-2); padding: 4px 0;
-  /* m109 — سرستون چسبان هنگام اسکرول شبکه */
   position: sticky; top: 0; z-index: 2;
   background: var(--surface);
 }
-/* m109 — جداکنندهٔ نمایشی شیفت صبح/عصر (ردیف کامل عرض شبکه) */
 .wgrid__shift-break {
   grid-column: 1 / -1;
   display: flex; align-items: center; gap: 8px;
@@ -865,7 +792,6 @@
 }
 .wgrid__day-abbr { display: none; }
 @media (max-width: 720px) {
-  /* نام کامل روزها در عرض کم روی‌هم می‌افتد → تک‌حرفی */
   .wgrid__day-full { display: none; }
   .wgrid__day-abbr { display: inline; }
 }
@@ -892,7 +818,6 @@
 }
 .wgrid__cell:active { transform: scale(0.96); }
 
-/* چیپ‌های روز زیر شبکه */
 .wchips { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
 .wchips__day {
   display: flex; flex-direction: column; gap: 5px; align-items: center;
@@ -910,8 +835,6 @@
   .wchips { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .wchips__day:nth-last-child(-n+3) { grid-column: auto / span 1; }
 }
-
-/* ─── صفحه ورود (M14) ─── */
 
 body.is-login { background: var(--bg); }
 
@@ -931,7 +854,6 @@ body.is-login { background: var(--bg); }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  /* m114 — عمق بیشتر + لبهٔ نوری بالای کارت */
   box-shadow: var(--shadow-3);
   border-top: 2px solid color-mix(in srgb, var(--primary) 45%, var(--border));
   padding: 32px 28px 26px;
@@ -944,7 +866,6 @@ body.is-login { background: var(--bg); }
   to { opacity: 1; transform: none; }
 }
 
-/* m114 — ورود لوگو با اسپرینگ ملایم + هالهٔ برند */
 .login__logo {
   width: 76px; height: 76px; border-radius: 50%;
   display: block;
@@ -975,9 +896,6 @@ body.is-login { background: var(--bg); }
   padding: 8px 12px; font-size: var(--fs-sm);
 }
 
-/* m107 — .login__hint حذف شد (راهنمای رمز پیش‌فرض به خواست کاربر + امنیت برداشته شد) */
-
-/* m114 — نوار برند پایین کارت ورود: امضای زبان طراحی */
 .login-card::after {
   content: '';
   order: 99;
@@ -989,8 +907,6 @@ body.is-login { background: var(--bg); }
   opacity: 0.85;
 }
 
-/* ─── نوار «امروز» حضور و غیاب ─── */
-
 .att-day__hint { font-size: var(--fs-xs); color: var(--text-3); align-self: center; }
 
 @media (max-width: 640px) {
@@ -998,16 +914,11 @@ body.is-login { background: var(--bg); }
   .att-day__hint { width: 100%; order: 3; }
 }
 
-/* ─────────────── m66.6: بازطراحی «روز کاری» — چیدمان عمودی کارت‌به‌کارت ─────────────── */
-/* ساختار: تقویم ← حضور و غیاب همکاران ← درمانگران و نوبت‌ها (تایم‌لاین) ← سنجش ← توضیحات روز */
-
-/* جریان عمودی کارت‌ها — جایگزین چیدمان دو ستونی */
 .wd-flow { display: flex; flex-direction: column; gap: var(--sp-4); }
 .wd-flow .page-head { margin-bottom: 0; }
 .wd-aux { display: flex; flex-direction: column; gap: var(--sp-4); }
 .wd-att__chips { display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; }
 
-/* کارت ۱ — تقویم ماه جلالی + ناوبری سریع روز/ماه */
 .wd-cal__quick { display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; }
 .wd-cal__bar {
   display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
@@ -1031,7 +942,6 @@ body.is-login { background: var(--bg); }
   text-align: center; font-size: var(--fs-xs); font-weight: 700;
   color: var(--text-3); padding: 4px 0;
 }
-/* m87 — سلول تقویم بلندتر و ستونی شد تا شمارهٔ روز + نقاط رنگی درمانگرها جا شوند */
 .wd-cal__cell {
   height: 44px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
@@ -1046,7 +956,6 @@ body.is-login { background: var(--bg); }
 .wd-cal__cell.is-selected { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
 .wd-cal__cell.is-selected:hover { background: var(--primary); }
 
-/* کارت ۲ — حضور و غیاب همکاران (فقط شیفت‌دارهای امروز در فرایند؛ بقیه پانویس) */
 .wd-att { display: flex; flex-direction: column; }
 .wd-att__row {
   display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
@@ -1069,7 +978,6 @@ body.is-login { background: var(--bg); }
 }
 .wd-att__off b { font-weight: 600; color: var(--text-2); }
 
-/* کارت ۳ — بلوک هر درمانگر */
 .wd-blocks { display: flex; flex-direction: column; }
 .wd-block { padding: var(--sp-3); border-top: 1px solid var(--border); }
 .wd-blocks .wd-block:first-child { border-top: none; padding-top: 0; }
@@ -1080,7 +988,6 @@ body.is-login { background: var(--bg); }
 .wd-block__name { font-weight: 700; font-size: var(--fs-sm); }
 .wd-block__meta { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-top: 2px; }
 
-/* تایم‌لاین عمودی نوبت‌ها — ریل + گرهٔ وضعیت + خط «الان» (حفظ خط زمانی محبوب) */
 .wd-tl { display: flex; flex-direction: column; }
 .wd-tl__item {
   display: grid;
@@ -1123,16 +1030,12 @@ body.is-login { background: var(--bg); }
 }
 .wd-tl__nowline::after { content: ''; flex: 1; height: 1px; background: var(--accent); opacity: 0.45; }
 
-/* اکشن‌های عملیاتی روی خود کارت نوبت — یک جا، نه چند جا (m66.6) */
 .wd-appt__ops { display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; margin-top: 2px; }
 .wd-appt__time .spacer { flex: 1; }
 
-/* m67.1 — دکمهٔ حذف کامل نوبت روی کارت (خنثی؛ hover قرمز) */
 .wd-appt__del { color: var(--text-3); }
 .wd-appt__del:hover:not(:disabled) { color: var(--error); background: var(--error-soft); }
 
-/* m25 — تماس سریع با ولیّ روی کارت نوبت */
-/* m80 — همان باجت عمومی شد: .call-badge کنار شماره‌ها در جدول مدارس/دانش‌آموزان */
 .wd-appt__sphone,
 .call-badge {
   display: inline-flex; align-items: center; justify-content: center;
@@ -1143,14 +1046,11 @@ body.is-login { background: var(--bg); }
 .wd-appt__sphone:hover, .call-badge:hover { color: var(--primary); background: var(--primary-soft); transform: scale(1.12); }
 .wd-appt__sphone:active, .call-badge:active { transform: scale(0.94); }
 
-/* m80 — ردیف شماره + باجت تماس داخل سلول جدول */
 .cell-phone { display: inline-flex; align-items: center; gap: 6px; }
 
-/* m81 — چیپ لینک بازی/تمرین آنلاین روی کارت تمرین */
 .exb-link-chip { text-decoration: none; color: var(--primary); font-weight: 600; }
 .exb-link-chip:hover { background: var(--primary-soft); color: var(--primary); }
 
-/* چیپ بازه کاری همان روز */
 .wd-hours {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: var(--fs-xs); color: var(--text-2);
@@ -1159,8 +1059,6 @@ body.is-login { background: var(--bg); }
 }
 .wd-hours--off { color: var(--text-3); font-style: italic; background: transparent; border: 1px dashed var(--border); }
 
-/* کارت نوبت روی بورد — m87: رنگ درمانگر مثل .appt-card مصرف می‌شود
-   (کلاس hue-N روی خود کارت هست ولی قبلاً مصرف نمی‌شد و کارت خاکستری می‌ماند) */
 .wd-appt {
   background: var(--appt-soft);
   border: 1px solid color-mix(in srgb, var(--appt-strong) 32%, var(--border));
@@ -1177,28 +1075,22 @@ body.is-login { background: var(--bg); }
   border-radius: 4px; padding: 3px 8px; white-space: pre-wrap;
 }
 .wd-appt__students { display: flex; flex-direction: column; gap: 4px; }
-/* m142 — در عرض کم، وضعیت/دکمه‌ها به خط بعد می‌شکنند تا دکمه‌ها از کارت بیرون نزنند */
 .wd-appt__student { display: flex; align-items: center; gap: 6px; row-gap: 4px; flex-wrap: wrap; font-size: var(--fs-xs); }
 .wd-appt__student--none { color: var(--text-3); justify-content: center; padding: 2px 0; }
-/* m142 — basis ۹۶px: نام دانش‌آموز هرگز تا صفر فرو نمی‌پزد (ریشهٔ «نام دیده نمی‌شود»)؛
-   min-width:0 می‌ماند تا بیضی‌نمایی نام‌های خیلی بلند روی دسکتاپ کار کند */
 .wd-appt__sname { flex: 1 1 96px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-sm); }
 .wd-appt__sactions { display: inline-flex; gap: 4px; }
 
-/* پیل وضعیت حضور جلسه */
 .wd-mark {
   font-size: 10px; font-weight: 700; border-radius: 999px; padding: 1px 7px;
   white-space: nowrap;
 }
 .wd-mark--ok     { background: var(--success-soft, #E2F0E8); color: var(--success); }
 .wd-mark--err    { background: var(--error-soft, #F9E7E6); color: var(--error); }
-/* m84.1 — تأخیر کهربایی، بیماری بنفش */
 .wd-mark--warn   { background: var(--warning-soft, #F7E9CC); color: var(--warning); }
 .wd-mark--sick   { background: color-mix(in srgb, var(--sick, #9333EA) 14%, transparent); color: var(--sick, #9333EA); }
 .wd-mark--pending { background: var(--surface); color: var(--text-3); border: 1px dashed var(--border); }
 .wd-mark--muted  { background: var(--surface); color: var(--text-3); }
 
-/* دکمه‌های علامت سریع حاضر/غایب */
 .wd-appt__sbtn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; border-radius: 50%;
@@ -1209,11 +1101,9 @@ body.is-login { background: var(--bg); }
 .wd-appt__sbtn:hover { transform: scale(1.12); }
 .wd-appt__sbtn--ok:hover   { background: var(--success); border-color: var(--success); color: #fff; }
 .wd-appt__sbtn--err:hover  { background: var(--error); border-color: var(--error); color: #fff; }
-/* m84.1 — تأخیر روی کارت روز کاری */
 .wd-appt__sbtn--warn:hover { background: var(--warning); border-color: var(--warning); color: var(--on-warning, #fff); }
 .wd-appt__sbtn:active { transform: scale(0.94); }
 
-/* توضیحات روز (لاگ) */
 .wd-notes-card .card__title { display: flex; align-items: center; gap: 6px; }
 .wd-notes { display: flex; flex-direction: column; gap: var(--sp-2); max-height: 420px; overflow-y: auto; }
 .wd-notes--empty {
@@ -1236,11 +1126,7 @@ body.is-login { background: var(--bg); }
 .wd-note-form__input { width: 100%; resize: vertical; min-height: 64px; }
 .wd-note-form .btn { align-self: flex-start; }
 
-/* دکمه نوبتِ دارای توضیح — نقطه نشانگر */
 .btn--icon.has-note { color: var(--warning); }
-
-/* ─────────────── فاز ۱ — وضعیت عملیاتی ─────────────── */
-/* m66.6: چیپ‌های wd-opschip در سربرگ کارت‌های روز کاری مصرف می‌شوند */
 
 .wd-opschip {
   display: flex; align-items: baseline; gap: 5px;
@@ -1259,11 +1145,9 @@ body.is-login { background: var(--bg); }
 .wd-opschip--success { background: var(--success-soft); color: var(--success);         border-color: transparent; }
 .wd-opschip--error   { background: var(--error-soft);   color: var(--error);           border-color: transparent; }
 .wd-opschip--info    { background: var(--surface-2);    color: var(--text-2);          border-style: dashed; }
-/* m84.1 — چیپ بیماری بنفش */
 .wd-opschip--sick    { background: color-mix(in srgb, var(--sick, #9333EA) 14%, transparent); color: var(--sick, #9333EA); border-color: transparent; }
 .wd-opschip--muted   { opacity: 0.72; }
 
-/* ردیف سیستمی لاگ روز (D2) */
 .wd-note--system {
   border-inline-start-color: var(--text-3);
   border-inline-start-style: dashed;
@@ -1275,7 +1159,6 @@ body.is-login { background: var(--bg); }
   margin-bottom: 2px;
 }
 
-/* موبایل — m66.6: تایم‌لاین و سگمنت حضور */
 @media (max-width: 760px) {
   .wd-tl__item { grid-template-columns: 50px 16px minmax(0, 1fr); }
   .wd-tl__time { font-size: var(--fs-xs); }
@@ -1284,17 +1167,12 @@ body.is-login { background: var(--bg); }
   .wd-att__actions .att-seg__btn { flex: 1; padding-inline: 4px; }
   .wd-cal__quick { width: 100%; }
   .wd-cal__quick .btn { flex: 1; }
-  /* m142 — موبایل روز کاری: نفس کشیدن کارت‌ها؛ کارت نوبت به‌جای ~۲۲۰px
-     ~۲۴۰px عرض می‌گیرد و ردیف دانش‌آموز دیگر سرریز نمی‌کند */
   .wd-flow .card__body { padding: var(--sp-3); }
   .wd-appts-card .wd-block { padding: var(--sp-2) 10px; }
   .wd-appt { padding: var(--sp-2) 10px; }
   .wd-appt__time, .wd-appt__ops { row-gap: 4px; }
 }
 
-/* ─────────────── فاز W — لیست انتظار ─────────────── */
-
-/* badge منو — شمارندهٔ سررسید لیست انتظار */
 .nav__badge {
   display: inline-flex;
   align-items: center;
@@ -1312,7 +1190,6 @@ body.is-login { background: var(--bg); }
 }
 .nav__badge[hidden] { display: none; }
 
-/* ردیف فوری لیست انتظار */
 tr.wl-row--urgent > td {
   background: color-mix(in srgb, #dc2626 8%, transparent);
 }
@@ -1320,7 +1197,6 @@ tr.wl-row--urgent > td:first-child {
   box-shadow: inset 3px 0 0 #dc2626;
 }
 
-/* اکشن‌های inline ردیف */
 .wl-actions {
   display: flex;
   align-items: center;
@@ -1329,7 +1205,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .wl-actions .btn--icon { width: 26px; height: 26px; padding: 0; }
 
-/* کارت لیست انتظار در بورد روز کاری */
 .wl-board-card {
   margin-top: 14px;
   padding: 12px;
@@ -1364,7 +1239,6 @@ tr.wl-row--urgent > td:first-child {
   font-size: 14px;
 }
 
-/* ─────────────── فاز ۲ — گزارش جلسه در مودال جزئیات نوبت ─────────────── */
 .sess-note {
   display: flex;
   flex-direction: column;
@@ -1395,8 +1269,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .sess-note__actions .select { font-size: var(--fs-xs); padding: 4px 8px; }
 .sess-note--ro { gap: 5px; }
-
-/* ───────────── فاز ۴ — کارت «کارهای من» (هماهنگی داخلی) ───────────── */
 
 .todo-quick {
   display: flex;
@@ -1457,7 +1329,6 @@ tr.wl-row--urgent > td:first-child {
 
 .todo-item__actions { display: flex; gap: var(--sp-1); flex-shrink: 0; }
 
-/* ── m108 — چک‌لیست کار ── */
 .todo-checklist-zone:empty { display: none; }
 .todo-checklist {
   margin-top: var(--sp-2);
@@ -1506,8 +1377,6 @@ tr.wl-row--urgent > td:first-child {
   .todo-note { max-width: 100%; white-space: normal; }
 }
 
-/* ───────────── فاز ۶ — تایم‌لاین دانش‌آموز (§11) ───────────── */
-
 .tl-filters {
   display: flex;
   gap: var(--sp-2);
@@ -1530,7 +1399,6 @@ tr.wl-row--urgent > td:first-child {
   padding-bottom: var(--sp-4);
 }
 
-/* خط عمودی اتصال */
 .tl-item::before {
   content: '';
   position: absolute;
@@ -1600,7 +1468,6 @@ tr.wl-row--urgent > td:first-child {
   color: var(--text-3);
 }
 
-/* بلوک «اقدام بعدی» — پروفایل زنده §14 */
 .next-action {
   display: flex;
   align-items: center;
@@ -1628,7 +1495,6 @@ tr.wl-row--urgent > td:first-child {
 .next-action--followup { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); background: color-mix(in srgb, var(--warning) 8%, transparent); }
 .next-action--followup .next-action__icon { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
 
-/* سوییچ وضعیت پرونده */
 .case-status-edit { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; }
 
 @media (max-width: 480px) {
@@ -1637,14 +1503,10 @@ tr.wl-row--urgent > td:first-child {
   .tl-item::before { inset-inline-start: 14px; }
 }
 
-/* ───────────── فاز ۷ — نیازهای ویژه (§12) + وضعیت همکاری مدرسه (§15) ───────────── */
-
-/* فیلترهای بالای گرید */
 .sn-filter { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
 .sn-filter .input { min-width: 150px; }
 .sn-metrics { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 
-/* heatmap مدرسه×پایه */
 .sn-heatmap { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .sn-heatmap th, .sn-heatmap td {
   border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
@@ -1672,7 +1534,6 @@ tr.wl-row--urgent > td:first-child {
 .sn-heatmap .sn-cell--3 { background: color-mix(in srgb, var(--primary) 38%, transparent); }
 .sn-heatmap .sn-cell--4 { background: color-mix(in srgb, var(--primary) 58%, transparent); color: #fff; }
 
-/* نقطهٔ توجه روی سلول */
 .sn-attention-dot {
   position: absolute;
   top: 6px;
@@ -1684,7 +1545,6 @@ tr.wl-row--urgent > td:first-child {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 25%, transparent);
 }
 
-/* فهرست «نیاز به توجه دارد» */
 .sn-attention-list { display: flex; flex-direction: column; gap: var(--sp-3); }
 .sn-attention-item {
   display: flex;
@@ -1696,7 +1556,6 @@ tr.wl-row--urgent > td:first-child {
   background: color-mix(in srgb, var(--warning) 5%, transparent);
 }
 
-/* بلوک نیاز ویژه در پروفایل */
 .sn-profile-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-2, 10px);
@@ -1704,7 +1563,6 @@ tr.wl-row--urgent > td:first-child {
   background: color-mix(in srgb, var(--surface-2, var(--surface)) 45%, transparent);
 }
 
-/* متریک‌های وضعیت همکاری مدرسه (مودال) */
 .so-metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -1722,8 +1580,6 @@ tr.wl-row--urgent > td:first-child {
   .sn-heatmap th, .sn-heatmap td { min-width: 52px; padding: 8px; }
   .sn-heatmap .sn-row-head { min-width: 130px; }
 }
-
-/* ─────────────── m34 — بانک تمرین (exb) ─────────────── */
 
 .exb-filters {
   display: flex;
@@ -1851,7 +1707,6 @@ tr.wl-row--urgent > td:first-child {
   direction: ltr;
 }
 
-/* m76 — چیپ‌های چندفایلی تمرین */
 .exb-files { display: flex; flex-wrap: wrap; gap: 6px; }
 .exb-file-chip {
   display: inline-flex;
@@ -1891,7 +1746,6 @@ tr.wl-row--urgent > td:first-child {
 .exb-file-chip__btn:hover { background: var(--primary-soft); color: var(--primary); }
 .exb-file-chip__btn--danger:hover { background: var(--error-soft); color: var(--error); }
 
-/* m76 — چیپ‌های فایل انتخاب‌شده در فرم (قبل از بارگذاری) */
 .exb-picked { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .exb-picked__chip {
   display: inline-flex;
@@ -1925,7 +1779,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .exb-picked__x:hover { color: var(--error); }
 
-/* m76 — خط پیشرفت بارگذاری پیوسته */
 .exb-progress {
   margin-top: 10px;
   font-size: var(--fs-xs, 12px);
@@ -1959,7 +1812,6 @@ tr.wl-row--urgent > td:first-child {
   }
 }
 
-/* ═══════════ m54 — راهنمای گام‌به‌گام سامانه (#/help) ═══════════ */
 .help { display: flex; flex-direction: column; gap: var(--sp-5); max-width: 980px; margin-inline: auto; }
 
 .help-hero {
@@ -2031,7 +1883,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .help-tip svg { flex: none; margin-top: 3px; color: var(--accent); }
 
-/* ── بخش بات ── */
 .help-bot {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
   padding: var(--sp-5); box-shadow: var(--shadow-1); scroll-margin-top: 80px;
@@ -2082,9 +1933,6 @@ tr.wl-row--urgent > td:first-child {
   .help-bot__grid { grid-template-columns: 1fr; }
 }
 
-/* ─────────────── m68 — داشبورد بازطراحی‌شده ─────────────── */
-
-/* هیروی امتیاز درمانگر */
 .hero-score {
   position: relative; overflow: hidden;
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4);
@@ -2112,9 +1960,7 @@ tr.wl-row--urgent > td:first-child {
   border-color: var(--accent);
   color: var(--accent);
 }
-/* m103 — قواعد hero-score__formula/delta/best حذف شدند (فرمول و مقایسهٔ ماه قبل از هیرو خارج شد) */
 
-/* کاشی‌های تلاش (چهار متریک رقابتی) */
 .score-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3); }
 .score-tile {
   display: block; width: 100%; text-align: start;
@@ -2129,9 +1975,6 @@ tr.wl-row--urgent > td:first-child {
 .score-tile__prev.is-up { color: var(--success); }
 .score-tile__prev.is-down { color: var(--error); }
 
-/* تابلوی رقابتی (leaderboard) — m76 بازطراحی ضدهم‌پوشانی
-   قواعد ایمنی: نام با ellipsis برش می‌خورد؛ چیپ‌ها می‌شکنند؛ امتیاز ستون ثابت خودش را دارد؛
-   بدون color-mix و بدون baseline-trick تا در همهٔ مرورگرها یکسان رندر شود */
 .lb-list { display: flex; flex-direction: column; gap: var(--sp-2); }
 .lb-row {
   display: flex;
@@ -2209,15 +2052,12 @@ tr.wl-row--urgent > td:first-child {
   overflow: hidden;
 }
 .lb-row__fill { height: 100%; border-radius: 999px; background: var(--primary); }
-/* m110 — .lb-row__chips/.lb-chip حذف شدند (باجت سطح برداشته شد؛ CSS مرده پاک شد) */
 
-/* اطلاع‌رسانی */
 .an-item { border-bottom: 1px dashed var(--border); padding: var(--sp-2) 0; }
 .an-item:last-child { border-bottom: none; padding-bottom: 0; }
 .an-item__title { font-weight: 700; margin-bottom: 2px; }
 .an-item__body { font-size: var(--fs-sm); color: var(--text-2); line-height: 1.9; }
 
-/* دانش‌افزایی */
 .kn-item {
   display: flex; align-items: center; gap: var(--sp-2); width: 100%; text-align: start;
   background: none; border: none; border-bottom: 1px dashed var(--border);
@@ -2243,12 +2083,6 @@ tr.wl-row--urgent > td:first-child {
 
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   m69 — رنگ‌بندی کارت جلسه بر اساس درمانگر + وضعیت
-   کدگذاری: رنگ درمانگر (hue-1..8) × وضعیت نوبت (برگزارشده/لغو/نیامد)
-   در .grid-appt (گرید هفتگی) و .appt-card (لیست روزانه) و .wd-appt (روز کاری)
-   ═══════════════════════════════════════════════════════════════ */
-
 .grid-appt, .appt-card, .wd-appt {
   --appt-soft: var(--surface-2);
   --appt-strong: var(--text-3);
@@ -2263,7 +2097,6 @@ tr.wl-row--urgent > td:first-child {
 .hue-7 { --appt-soft: var(--hue-7-soft); --appt-strong: var(--hue-7-strong); --appt-on: var(--hue-7-on); }
 .hue-8 { --appt-soft: var(--hue-8-soft); --appt-strong: var(--hue-8-strong); --appt-on: var(--hue-8-on); }
 
-/* کارت روی شبکهٔ زمانی — هندسهٔ v1 دست‌نخورده؛ فقط رنگ از متغیر درمانگر */
 .grid-appt {
   background: var(--appt-soft);
   border: 1px solid color-mix(in srgb, var(--appt-strong) 42%, transparent);
@@ -2271,7 +2104,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .grid-appt__time { color: var(--appt-on); }
 
-/* برگزارشده (ops = completed) — تینت عمیق‌تر + تیک سبز */
 .grid-appt.is-attended, .appt-card.is-attended, .wd-appt.is-attended {
   background: color-mix(in srgb, var(--appt-strong) 16%, var(--appt-soft));
   border-color: color-mix(in srgb, var(--appt-strong) 55%, transparent);
@@ -2282,7 +2114,6 @@ tr.wl-row--urgent > td:first-child {
   display: inline-grid; place-items: center;
 }
 
-/* لغوشده — راه‌راه مورب هم‌رنگ درمانگر (هویت رنگی حفظ می‌شود) */
 .grid-appt.is-cancelled, .appt-card.is-cancelled, .wd-appt.is-cancelled,
 .wd-appt--cancelled {
   background:
@@ -2297,22 +2128,17 @@ tr.wl-row--urgent > td:first-child {
 }
 .is-cancelled .grid-appt__time, .is-cancelled .appt-card__time { color: var(--text-3); text-decoration: line-through; }
 
-/* نیامد (ops = no_show) — لبهٔ قرمز، تینت درمانگر حفظ می‌شود */
 .grid-appt.is-noshow, .appt-card.is-noshow, .wd-appt.is-noshow {
   border-inline-start: 4px solid var(--error);
   border-color: color-mix(in srgb, var(--error) 40%, transparent);
   background: color-mix(in srgb, var(--error) 7%, var(--appt-soft));
 }
 
-/* کارت لیست روزانه — نوار رنگی سمت شروع */
 .appt-card { border-inline-start: 4px solid var(--appt-strong); background: var(--appt-soft); }
 .appt-card__bar { background: var(--appt-strong); display: none; }
 
-/* ستون «امروز» — پررنگ‌تر */
 .grid-day.is-today .grid-cell { background: color-mix(in srgb, var(--primary-soft) 18%, transparent); }
 .grid-head.is-today { box-shadow: inset 0 3px 0 var(--primary); }
-
-/* ─────────────── چیپ فیلتر درمانگر + راهنمای رنگ ─────────────── */
 
 .staff-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
 .staff-chip {
@@ -2354,8 +2180,6 @@ tr.wl-row--urgent > td:first-child {
 .appt-legend__item { display: inline-flex; align-items: center; gap: 6px; }
 .appt-legend__name { font-weight: 600; color: var(--text-1); }
 
-/* ─────────────── m69 — نوار خط زمانی امروز (داشبورد دفتر) ─────────────── */
-
 .tl-strip {
   display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px;
   overflow-x: auto;
@@ -2372,52 +2196,33 @@ tr.wl-row--urgent > td:first-child {
 .tl-strip__dot.is-cancelled { opacity: 0.35; }
 .tl-strip__label { font-size: 10px; color: var(--text-3); }
 
-/* ═══════════════════════════════════════════════════════════════
-   m87 — رنگ درمانگر روی جدول دانش‌آموزان + تقویت‌های کارت روز کاری
-   اصل: کلاس hue-N متغیرهای --appt-* را روی هر عنصری می‌آورد؛
-   قوانین var-محور می‌نویسیم نه per-hue (۳ قانون به‌جای ۲۴ قانون)
-   ═══════════════════════════════════════════════════════════════ */
-
-/* نوار رنگ درمانگر روی ردیف جدول — کلاس hue روی خود <tr> است؛
-   تینت ملایم همهٔ سلول‌ها + نوار ۴px لبهٔ شروع ردیف (سمت راست در RTL).
-   در موبایل هم ردیف کارت‌مانند می‌شود و همین تینت‌ها سر جایشان می‌مانند */
 .table tbody tr[class*='hue-'] td { background: color-mix(in srgb, var(--appt-soft) 40%, transparent); }
 .table tbody tr[class*='hue-'] td:first-child { box-shadow: inset -4px 0 0 var(--appt-strong); }
 .table tbody tr[class*='hue-']:hover td { background: color-mix(in srgb, var(--appt-soft) 52%, transparent); }
 
-/* ستون «مسئول پرونده» — نقطهٔ رنگ + باج، کنار هم */
 .cell-owner { display: inline-flex; align-items: center; gap: 6px; }
 
-/* نقطهٔ توخالی «بدون مسئول» در راهنمای رنگ جدول دانش‌آموزان */
 .appt-legend__none {
   width: 8px; height: 8px; border-radius: 50%;
   border: 1.5px solid var(--text-3); flex-shrink: 0;
 }
 
-/* چیپ‌های فیلتر وقتی همکارها زیادند — اسکرول افقی به‌جای پیچ عمودی */
 .staff-chips--scroll {
   display: flex; flex-wrap: nowrap; overflow-x: auto;
   max-width: 100%; padding-bottom: 2px;
 }
-/* m87 — چیپ فعالِ بدون hue (چیپ «همه») — متغیرهای --appt-* روی آن تعریف نیست؛
-   حالت فعال خنثی با رنگ اصلی، مثل هاور چیپ‌ها */
 .staff-chip.is-active:not([class*='hue-']) {
   background: var(--primary-soft);
   border-color: var(--primary);
   color: var(--primary);
 }
 
-/* آواتار بلوک درمانگر در روز کاری — با هویت رنگی همان درمانگر */
 .staff-mini__avatar[class*='hue-'] { background: var(--appt-soft); color: var(--appt-strong); }
 
-/* خلاصهٔ عملیاتی کوچک سربرگ بلوک درمانگر (باج شمارنده + پیل‌های وضعیت) */
 .wd-block__stats { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 
-/* سربرگ کارت نوبت روز کاری با چیپ‌های تازه — در عرض کم بشکند، نه بیرون بزند */
 .wd-appt__time { flex-wrap: wrap; }
 
-/* آواتار حرفی ۲۰px دانش‌آموز در ردیف‌های کارت روز کاری — خنثی؛
-   رنگ درمانگر عمداً فقط روی لبهٔ کارت است */
 .wd-appt__savatar {
   width: 20px; height: 20px; border-radius: 50%;
   background: var(--surface-3); color: var(--text-2);
@@ -2425,19 +2230,15 @@ tr.wl-row--urgent > td:first-child {
   display: inline-grid; place-items: center; flex-shrink: 0;
 }
 
-/* نقاط رنگی تقویم روز کاری — هر روز، یک نقطه به ازای هر درمانگر آن روز
-   (نقطه کلاس hue-N خودش را دارد؛ --appt-strong روی خودش حل می‌شود) */
 .wd-cal__dots { display: flex; align-items: center; justify-content: center; gap: 2px; line-height: 1; }
 .wd-cal__dot {
   width: 5px; height: 5px; border-radius: 50%;
   background: var(--appt-strong, var(--text-3)); flex-shrink: 0;
 }
 .wd-cal__more { font-size: 8.5px; color: var(--text-3); line-height: 1; font-weight: 700; }
-/* m87 — روی روزِ انتخاب‌شده (پس‌زمینهٔ primary) نقطه‌ها هاله و «+N» متن روشن می‌گیرند تا گم نشوند */
 .wd-cal__cell.is-selected .wd-cal__dot { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--surface) 82%, transparent); }
 .wd-cal__cell.is-selected .wd-cal__more { color: var(--on-primary); }
 
-/* ردیف‌های دانش‌آموز روی کارت گرید هفتگی — آیکون حضور + نام، تک‌خطی فشرده */
 .grid-appt__stu { display: flex; align-items: center; gap: 3px; min-width: 0; white-space: nowrap; overflow: hidden; }
 .grid-appt__stu--more { font-size: var(--fs-xs); color: var(--text-3); }
 .stu-ic { display: inline-flex; flex-shrink: 0; }
@@ -2445,14 +2246,11 @@ tr.wl-row--urgent > td:first-child {
 .stu-ic--late { color: var(--warning); }
 .stu-ic--err { color: var(--error); }
 
-/* نشانگر نقطه‌ای «نوبت دارای توضیح» داخل ردیف ساعت کارت گرید */
 .grid-appt__noted {
   display: inline-block; width: 6px; height: 6px; border-radius: 50%;
   background: var(--warning); flex-shrink: 0;
   margin-inline-end: 4px; vertical-align: middle;
 }
-
-/* ─────────────── m69 — هیرو داشبورد با رینگ «بهترین ماهِ من» ─────────────── */
 
 .hero-score__ring { position: relative; width: 96px; height: 96px; flex-shrink: 0; }
 .hero-score__ring .ring-svg { display: block; }
@@ -2463,9 +2261,7 @@ tr.wl-row--urgent > td:first-child {
 }
 .ring-center b { font-size: 26px; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; line-height: 1.1; }
 .ring-center span { font-size: 10px; color: var(--text-3); }
-/* m103 — hero-score__best حذف شد (مقایسهٔ ماه‌های قبل از هیرو خارج شد) */
 
-/* میله‌های افقی «چه مدت در انتظارند؟» */
 .aging-row { display: grid; grid-template-columns: 88px 1fr 48px; align-items: center; gap: var(--sp-3); padding: var(--sp-1) 0; }
 .aging-row__label { font-size: var(--fs-sm); color: var(--text-2); }
 .aging-row__bar { height: 10px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
@@ -2475,7 +2271,6 @@ tr.wl-row--urgent > td:first-child {
 .aging-row__fill--late { background: var(--error); }
 .aging-row__num { font-size: var(--fs-sm); font-weight: 700; text-align: end; font-variant-numeric: tabular-nums; }
 
-/* ردیف پیگیری سررسیده (داشبورد دفتر) */
 .fu-row {
   display: flex; align-items: center; gap: var(--sp-3);
   padding: var(--sp-2) 0;
@@ -2485,12 +2280,8 @@ tr.wl-row--urgent > td:first-child {
 .fu-row__main { flex: 1; min-width: 0; }
 .fu-row__title { font-weight: 600; font-size: var(--fs-sm); }
 
-/* حالت خالی با وکتور */
 .an-empty { display: flex; flex-direction: column; align-items: center; padding: var(--sp-2) 0; }
 
-/* ───────────────────────── m84 — ناوبری تو در تو بانک تمرین + وکتور جایگزین ایموجی ───────────────────────── */
-
-/* ناوبری: کاشی دستهٔ اختلال (سطح ۱) → چیپ پایه/جستجو (سطح ۲) */
 .exb-nav { display: flex; flex-direction: column; gap: var(--sp-3); margin-bottom: var(--sp-4); }
 .exb-cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 8px; }
 .exb-cat {
@@ -2516,7 +2307,6 @@ tr.wl-row--urgent > td:first-child {
 .exb-grades { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .exb-format { display: inline-flex; align-items: center; gap: 4px; }
 
-/* انتخابگر آیکون وکتوری فرم‌ساز (جایگزین ورودی ایموجی) */
 .iconpicker { display: flex; flex-wrap: wrap; gap: 6px; }
 .iconpicker__btn {
   width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border);
@@ -2527,14 +2317,11 @@ tr.wl-row--urgent > td:first-child {
 .iconpicker__btn:hover { border-color: var(--primary); color: var(--primary); }
 .iconpicker__btn.is-active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
 
-/* انتخابگر نوع رویداد — کارت‌های گروه‌بندی‌شده با آیکون وکتور */
 .typegrid { display: flex; flex-direction: column; gap: var(--sp-4); }
 .typegrid__group { display: flex; flex-direction: column; gap: 8px; }
 .typegrid__group-title { font-size: var(--fs-sm); font-weight: 700; color: var(--text-2); display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .typegrid__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
-/* m84.3 — بج «چه کسی پر می‌کند» روی کارت نوع */
 .typegrid__badge { flex-shrink: 0; align-self: center; white-space: nowrap; }
-/* m84.3 — موبایل: کارت‌ها همیشه تک‌ستونی؛ عنوان فرم هم بدون سرریز */
 @media (max-width: 480px) {
   .typegrid__grid { grid-template-columns: 1fr; }
   .typegrid__item { flex-wrap: wrap; }
@@ -2555,11 +2342,8 @@ tr.wl-row--urgent > td:first-child {
 .typegrid__text { display: flex; flex-direction: column; min-width: 0; }
 .typegrid__text b { font-size: var(--fs-sm); line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ═════════════ m85 — تب «تفسیر بالینی» (موتور تشخیص‌گذاری) ═════════════ */
-
 .clx { display: flex; flex-direction: column; gap: var(--sp-4); }
 
-/* پرچم‌های خط قرمز (ارجاع فوری) */
 .clx-flags { display: flex; flex-direction: column; gap: var(--sp-2); }
 .clx-flag {
   display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px;
@@ -2569,7 +2353,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .clx-flag svg { flex-shrink: 0; margin-top: 2px; }
 
-/* بخش‌بندی تب */
 .clx-section { display: flex; flex-direction: column; gap: var(--sp-3); }
 .clx-section__title {
   display: flex; align-items: center; gap: 7px;
@@ -2577,7 +2360,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .clx-hyps, .clx-paths { display: flex; flex-direction: column; gap: var(--sp-3); }
 
-/* کارت فرضیه */
 .clx-hyp__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .clx-hyp__rank {
   width: 24px; height: 24px; border-radius: var(--radius-full); flex-shrink: 0;
@@ -2589,7 +2371,6 @@ tr.wl-row--urgent > td:first-child {
 .clx-hyp__title svg { color: var(--primary); }
 .clx-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: var(--sp-2); }
 
-/* زیرلیست‌ها: شواهد / گپ / تفریق */
 .clx-sub { margin-top: var(--sp-3); display: flex; flex-direction: column; gap: 6px; }
 .clx-sub__title {
   display: flex; align-items: center; gap: 6px;
@@ -2602,7 +2383,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .clx-list li svg { flex-shrink: 0; margin-top: 4px; color: var(--text-2); }
 
-/* یادداشت «مسیر این هدف ثبت است» */
 .clx-livenote {
   margin-top: var(--sp-3); display: flex; align-items: center; gap: 7px;
   font-size: var(--fs-xs, 12px); color: var(--text-2);
@@ -2610,7 +2390,6 @@ tr.wl-row--urgent > td:first-child {
   border-radius: var(--radius-md); padding: 8px 10px;
 }
 
-/* جدول ملاک‌ها */
 .clx-crit {
   border: 1px solid var(--border); border-radius: var(--radius-md);
   background: var(--surface); overflow: hidden;
@@ -2629,7 +2408,6 @@ tr.wl-row--urgent > td:first-child {
 .clx-crit__grp { flex-shrink: 0; min-width: 24px; text-align: center; }
 .clx-crit__text { line-height: 1.8; }
 
-/* مسیر مداخله */
 .clx-path--active { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
 .clx-steps { margin-top: var(--sp-3); display: flex; flex-direction: column; gap: 6px; }
 .clx-step {
@@ -2659,25 +2437,18 @@ tr.wl-row--urgent > td:first-child {
 
 .clx-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; margin-top: var(--sp-3); }
 
-/* m156 — پانویس انکار (.clx-disclaimer) حذف شد — تب دیگر متن انکار ندارد */
-
-/* ───────── m86 — زبان روایی و مسیر ارزیابی ───────── */
-
-/* سربرگ بخش‌بندی فرم‌های بلند (شرح‌حال) */
 .form-heading {
   font-size: var(--fs-sm); font-weight: 700; color: var(--brand);
   padding: var(--sp-3) var(--sp-3) var(--sp-2);
   border-bottom: 2px solid var(--brand-soft, rgba(34,158,217,.25));
   margin-top: var(--sp-2);
 }
-/* معرفی روایی فرم در سربرگ فرم پویا */
 .form-intro {
   font-size: var(--fs-xs, 12px); color: var(--text-2); line-height: 1.9;
   background: var(--surface-2, var(--bg-2, #F7F3EA));
   border-radius: var(--radius-md); padding: var(--sp-3);
   margin-bottom: var(--sp-2);
 }
-/* آیتم لیکرت با لنگر کلامی — چیپ انتخابی */
 .chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   border: 1px solid var(--line); background: var(--surface); color: var(--text-1);
@@ -2687,20 +2458,15 @@ tr.wl-row--urgent > td:first-child {
 }
 .chip:hover { border-color: var(--brand); }
 .chip.is-on { background: var(--brand-soft, #D9EDF7); border-color: var(--brand); font-weight: 700; color: var(--brand-deep, #12384f); }
-/* نوار پیشرفت فرم بلند */
 .form-progress { margin: 0 0 var(--sp-2); font-size: var(--fs-xs, 12px); color: var(--text-2); }
 .form-progress__bar { height: 5px; background: var(--line); border-radius: 999px; overflow: hidden; margin-top: 4px; }
 .form-progress__fill { height: 100%; width: 0%; background: var(--brand); border-radius: 999px; transition: width .2s; }
-/* چیپ‌های «کم است» کلیک‌پذیر روی کارت فرضیه */
-/* m94 — موبایل: بج سراسری nowrap است؛ این چیپ‌ها متن بلند دارند و باید داخل کارت بشکنند
-   وگرنه کل صفحه را افقی می‌کشند (تب تفسیر بالینی در موبایل بهم می‌ریخت) */
 .clx-missing-btn {
   cursor: pointer; border: 1px dashed currentColor;
   white-space: normal; text-align: start; min-width: 0; max-width: 100%;
 }
 .clx-missing-btn:hover { filter: brightness(.96); }
 .clx-missing-btn svg { margin-left: 4px; flex-shrink: 0; margin-top: 2px; }
-/* کارت «مسیر ارزیابی» — پنج گام */
 .clx-journey__steps { display: grid; gap: var(--sp-2); grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 .clx-journey__step {
   border: 1px solid var(--line); border-radius: var(--radius-md);
@@ -2714,14 +2480,10 @@ tr.wl-row--urgent > td:first-child {
   .chip { padding: 7px 12px; } /* لمس راحت‌تر در موبایل */
 }
 
-/* موبایل — m84.3 قرارداد: تک‌ستونی و بدون سرریز */
 @media (max-width: 640px) {
   .clx-crit summary { flex-wrap: wrap; }
 }
 
-/* ───────────── m89 — نوع جلسه + مسیر پرونده ───────────── */
-
-/* نشان کوچک نوع جلسه روی کارت‌ها و جدول‌ها — رنگ ثابت هر نوع (دوگانه‌پسند/تیره-روشن) */
 .st-chip {
   display: inline-flex; align-items: center;
   padding: 1px 8px; border-radius: var(--radius-full);
@@ -2734,7 +2496,6 @@ tr.wl-row--urgent > td:first-child {
 .st-chip--teacher_ed { background: var(--accent-soft);   color: var(--on-accent-soft); }
 .st-chip--mental_ot  { background: var(--error-soft);    color: var(--error); }
 
-/* نشان مسیر پرونده در سربرگ پروفایل/تب تفسیر */
 .path-chip {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 10px; border-radius: var(--radius-full);
@@ -2744,13 +2505,9 @@ tr.wl-row--urgent > td:first-child {
 .path-chip--learning { background: var(--info-soft, var(--accent-soft)); color: var(--info, var(--accent)); }
 .path-chip--rehab    { background: var(--warning-soft); color: var(--warning); }
 
-/* ───────── m90 — فلو دوفازی شناسایی → مداخله + چک‌لیست ۷ حیطه‌ای کاردرمانی ذهنی ───────── */
-
-/* کارت پروتکل فاز مداخله */
 .proto-chip { display: inline-flex; align-items: center; gap: 4px; }
 .proto-card .card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap; }
 
-/* نوار خلاصهٔ ۷ حیطه */
 .ot-domains { display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .ot-domain-chip {
   display: flex; flex-direction: column; gap: 4px; align-items: stretch;
@@ -2769,14 +2526,11 @@ tr.wl-row--urgent > td:first-child {
 .ot-progress { height: 5px; border-radius: 999px; background: var(--line); overflow: hidden; }
 .ot-progress__fill { display: block; height: 100%; background: var(--success); border-radius: 999px; transition: width .25s; }
 
-/* خط خلاصهٔ کل */
 .ot-totals { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: var(--sp-3) 0 var(--sp-2); }
 .ot-resume-hint { display: inline-flex; align-items: center; gap: 4px; }
 
-/* سربرگ حیطهٔ فعال */
 .ot-domain-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: var(--sp-2); }
 
-/* ردیف مهارت */
 .ot-skills { display: flex; flex-direction: column; }
 .ot-skill {
   display: flex; align-items: center; gap: 10px;
@@ -2795,13 +2549,11 @@ tr.wl-row--urgent > td:first-child {
 .ot-skill__title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-weight: 600; font-size: var(--fs-sm); }
 .ot-skill__crit { font-size: var(--fs-xs, 11px); color: var(--text-2); margin-top: 2px; }
 .ot-skill__note { font-size: var(--fs-xs, 11px); color: var(--text-3); margin-top: 2px; }
-/* m91 — انتخابگر سطح راهنمای «با کمک» */
 .ot-skill__prompt { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .ot-skill__prompt .select { max-width: 220px; font-size: var(--fs-xs, 12px); padding: 4px 8px; }
 .ot-resume-badge { display: inline-flex; align-items: center; gap: 3px; }
 .ot-pend-badge { display: inline-flex; align-items: center; }
 
-/* دکمه‌های سه‌حالتهٔ وضعیت */
 .ot-skill__seg { flex-shrink: 0; display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
 .ot-seg__btn {
   padding: 4px 10px; font-size: var(--fs-xs, 11px); background: transparent;
@@ -2813,16 +2565,12 @@ tr.wl-row--urgent > td:first-child {
 .ot-seg__btn--warn.is-picked { background: var(--warning); color: var(--on-primary, #fff); }
 .ot-seg__btn--diff.is-picked { background: var(--text-3); color: var(--on-primary, #fff); }
 
-/* نوار ثبت جلسه */
 .ot-savebar {
   display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
   flex-wrap: wrap; margin-top: var(--sp-3); padding-top: var(--sp-2); border-top: 1px solid var(--line);
 }
 .ot-savebar .btn[disabled] { opacity: .5; cursor: not-allowed; }
 
-/* ───────── m162 — فلوی مسیر توانبخشی: اولویت خط پایه + پیشرفت جلسه‌به‌جلسه ───────── */
-
-/* چیپ حیطهٔ پرچم‌دار خط پایهٔ عملکردی — ستارهٔ اولویت + حلقهٔ هشدار ملایم */
 .ot-domain-chip.is-priority { border-color: color-mix(in srgb, var(--warning) 55%, var(--line)); }
 .ot-domain-chip__prio {
   position: absolute; top: 3px; inset-inline-start: 6px; font-size: 9px; line-height: 14px;
@@ -2831,7 +2579,6 @@ tr.wl-row--urgent > td:first-child {
 .ot-priority-hint { display: inline-flex; align-items: center; gap: 4px; color: var(--text-2); }
 .ot-priority-hint b { color: var(--text-1); }
 
-/* پنل پیشرفت جلسه‌به‌جلسه */
 .ot-progress-panel { margin-bottom: var(--sp-3, 12px); }
 .ot-trend { display: grid; gap: 10px; }
 .ot-trend__row {
@@ -2862,7 +2609,6 @@ tr.wl-row--urgent > td:first-child {
 .ot-trend__empty { display: flex; align-items: flex-start; gap: 8px; }
 .ot-trend__note { display: flex; align-items: flex-start; gap: 6px; margin-top: var(--sp-2, 8px); padding-top: var(--sp-2, 8px); border-top: 1px dashed var(--line); }
 
-/* خط پایهٔ عملکردی — شش چیپ حیطه با باند رنگی */
 .ot-baseline { margin-bottom: var(--sp-2, 8px); }
 .ot-baseline__strip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .ot-baseline__chip {
@@ -2874,7 +2620,6 @@ tr.wl-row--urgent > td:first-child {
 .ot-baseline__value { font-weight: 700; color: var(--text-1); }
 .ot-baseline__reassess { margin-inline-start: auto; }
 
-/* m163 — بلوک تاشوی «پشتوانهٔ علمی و نحوهٔ استفاده» کارت خط پایه — بسته = صفر نویز */
 .rehab-fx-guide { margin-top: var(--sp-2, 8px); border-top: 1px dashed var(--line); padding-top: var(--sp-2, 8px); }
 .rehab-fx-guide > summary {
   cursor: pointer; list-style: none;
@@ -2897,9 +2642,6 @@ tr.wl-row--urgent > td:first-child {
   .ot-seg__btn { flex: 1; text-align: center; }
 }
 
-/* ───────── m97 — مسیر بالینی استاندارد: شک بالینی + نوار مداخله + جلسه به جلسه ───────── */
-
-/* بلوک نقطهٔ تصمیم شک بالینی (بین گام ۲ و ۳ مسیر استاندارد) */
 .clx-suspicion {
   border: 1px dashed var(--line); border-radius: var(--radius-md, 10px);
   padding: var(--sp-2, 12px); margin-top: var(--sp-2, 8px); background: var(--surface-2, transparent);
@@ -2913,8 +2655,6 @@ tr.wl-row--urgent > td:first-child {
 .clx-suspicion__decision { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: var(--sp-2, 8px); min-width: 0; }
 .clx-suspicion__act { margin-top: var(--sp-2, 8px); }
 
-/* ───────── T3 (m147؛ m156) — کارت «ابزارهای پیشنهادی گام بعد» (پلن چک‌لیست در بدنهٔ مرحلهٔ وکسلر) ───────── */
-/* فقط توکن‌های موجود — بدون رنگ/فونت تازه (خط قرمز m144) */
 .clx-plan { margin-top: var(--sp-3, 12px); }
 .clx-plan__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; margin-bottom: var(--sp-2, 8px); }
 .clx-plan__head strong { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); }
@@ -2923,13 +2663,9 @@ tr.wl-row--urgent > td:first-child {
 .clx-plan__item { min-width: 0; padding: var(--sp-2, 8px); border: 1px solid var(--line); border-radius: var(--radius-sm, 8px); }
 .clx-plan__itemhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
 
-/* ───────── T10/m153 — چیپ هستهٔ خواندن (بدنهٔ مرحلهٔ ۴ — حالت SLD) ───────── */
-/* فقط توکن‌های موجود — بدون رنگ/فونت تازه (خط قرمز m144) */
 .clx-readcore__advice { display: flex; flex-direction: column; gap: 6px; margin-top: var(--sp-2, 8px); padding: var(--sp-2, 8px); border: 1px solid var(--line); border-radius: var(--radius-sm, 8px); background: var(--surface-2, transparent); }
 .clx-readcore__advice-row { display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; min-width: 0; font-size: var(--fs-sm); }
 
-/* ───────── T12/m160 — آزمون‌های عملکرد مرکزی (بدنهٔ مرحلهٔ ۴ — حالت SLD) ───────── */
-/* فقط توکن‌های موجود — بدون رنگ/فونت تازه (خط قرمز m144) */
 .clx-probe-wrap { display: flex; flex-direction: column; gap: var(--sp-2, 8px); margin-top: var(--sp-2, 8px); }
 .clx-probe-wrap__head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .clx-probe-wrap__head strong { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); }
@@ -2942,7 +2678,6 @@ tr.wl-row--urgent > td:first-child {
 .clx-probe__summary { font-weight: 600; }
 .clx-probe__norm { display: flex; align-items: flex-start; gap: 4px; }
 
-/* نوار مداخله — سگمنت‌های پیشرفت مسیر قالبی */
 .path-band { display: flex; gap: 4px; margin: var(--sp-2, 8px) 0; min-width: 0; }
 .path-band__seg {
   flex: 1 1 0; min-width: 0; height: 8px; border-radius: 999px;
@@ -2950,7 +2685,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .path-band__seg.is-done { background: var(--success); }
 
-/* برنامهٔ جلسه به جلسه */
 .path-sessions { margin-top: var(--sp-3, 12px); }
 .path-sessions .clx-sub__title {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0;
@@ -2974,7 +2708,6 @@ tr.wl-row--urgent > td:first-child {
 .path-session__placeholder { border: 1px dashed var(--line); border-radius: var(--radius-md, 10px); padding: var(--sp-2, 10px); }
 .path-session__next { display: inline-flex; align-items: center; gap: 6px; margin-top: var(--sp-2, 8px); }
 
-/* m100 — آیتم‌های پیوست جلسه (تمرین/تکلیف/بازی/فرم/دستورالعمل) — m118: +رویداد (فرم/پرسش‌نامه) */
 .path-session__items { display: flex; flex-direction: column; gap: 3px; margin-top: 3px; min-width: 0; }
 .path-session__item {
   font-size: var(--fs-xs, 11px); color: var(--ink-2, #555); line-height: 1.7;
@@ -2987,7 +2720,6 @@ tr.wl-row--urgent > td:first-child {
 .path-session__item--event { border-inline-start-color: var(--info, #229ED9); }
 .path-session__item--instruction { border-inline-start-color: var(--ink-3, #999); }
 
-/* m100 — مدیریت قالب‌های مسیر: فهرست + سازندهٔ پروتکل جلسه به جلسه */
 .tpl-list-row {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 9px 2px; border-bottom: 1px solid var(--line); min-width: 0;
@@ -3008,15 +2740,12 @@ tr.wl-row--urgent > td:first-child {
   .path-session__ops { width: 100%; justify-content: flex-end; }
 }
 
-/* ───────── m165 — تب مداخله: دکمهٔ واحد «تغییر قالب مداخله» در انتهای تب ───────── */
-/* (m116 — کارت‌های «شروع از قالب» حذف شد؛ CSS یتیم پاک‌سازی شد) */
 .clx-tplchange {
   margin-top: var(--sp-3, 12px);
   padding-top: var(--sp-2, 8px);
   border-top: 1px dashed var(--line);
 }
 
-/* m116 — زمینهٔ تفسیر (جمعیت‌شناختی × خروجی موتور) */
 .clx-ctx {
   border: 1px solid var(--line); border-radius: var(--radius-md, 10px);
   padding: var(--sp-3, 12px); margin-bottom: var(--sp-3, 12px);
@@ -3048,7 +2777,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .clx-ctx__guide svg { flex-shrink: 0; margin-top: 2px; }
 
-/* m101 — تب مستقل «مدیریت قالب‌ها» (m103 — نوار امتیاز حذف شد) */
 .tpl-card { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; }
 .tpl-card__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .tpl-card__title { font-weight: 700; }
@@ -3069,7 +2797,6 @@ tr.wl-row--urgent > td:first-child {
   .tpl-card__actions .btn { flex: 1; }
 }
 
-/* ── m102 — تابلوی پیشرفت درمانگران (progress-board.js) ── */
 .pb-tabs { display: flex; gap: 8px; margin: var(--sp-3) 0 var(--sp-4); flex-wrap: wrap; }
 .pb-tab.is-active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 
@@ -3112,9 +2839,6 @@ tr.wl-row--urgent > td:first-child {
   .pb-detail-grid { grid-template-columns: 1fr; }
 }
 
-/* ═════════ m134 — فلوی مرحله‌ای تفسیر بالینی + نیم‌رخ وکسلر + کارت جمع‌بندی ═════════ */
-
-/* ─── کارت جمع‌بندی تشخیصی (تلفیق دو موتور) ─── */
 .clx-synthesis { border-color: color-mix(in srgb, var(--primary) 22%, var(--border)); }
 .clx-syn__badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .clx-syn__lead {
@@ -3169,7 +2893,6 @@ tr.wl-row--urgent > td:first-child {
   display: flex; flex-direction: column; gap: var(--sp-3);
 }
 
-/* ─── نیم‌رخ وکسلر: شاخص‌ها + گام ۵ ─── */
 .clx-widx { display: flex; flex-direction: column; }
 .clx-widx__row {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -3189,13 +2912,11 @@ tr.wl-row--urgent > td:first-child {
 }
 .clx-widx__scaled { font-size: var(--fs-xs, 12px); color: var(--text-2); }
 
-/* ─── جدول خرده‌آزمون‌ها ─── */
 .clx-wsub__table td, .clx-wsub__table th { vertical-align: middle; }
 .clx-wsub__table tr.is-strong td { background: var(--success-soft); }
 .clx-wsub__table tr.is-weak td { background: var(--warning-soft); }
 .clx-wsub__table td:first-child { font-weight: 600; }
 
-/* ─── مقایسه‌های دوبه‌دوی خرده‌آزمون‌ها ─── */
 .clx-wcmp { display: flex; flex-direction: column; gap: 6px; }
 .clx-wcmp__row {
   border: 1px solid var(--border); border-radius: var(--radius-md);
@@ -3213,7 +2934,6 @@ tr.wl-row--urgent > td:first-child {
 .clx-wcmp__skipped > summary:hover { color: var(--text-2); }
 .clx-wcmp__skipped[open] > summary { margin-bottom: 8px; }
 
-/* ─── مقایسه‌های خوشه‌ای (جفت‌ها) ─── */
 .clx-wpairs { display: flex; flex-direction: column; gap: 8px; }
 .clx-wpair {
   border: 1px solid var(--border); border-radius: var(--radius-md);
@@ -3235,7 +2955,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .clx-wpair__advice svg { flex-shrink: 0; margin-top: 3px; }
 
-/* ─── پیوند با سایر اطلاعات ─── */
 .clx-wconn { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .clx-wconn li {
   display: flex; align-items: flex-start; gap: 8px;
@@ -3248,21 +2967,15 @@ tr.wl-row--urgent > td:first-child {
   padding: 7px 10px; width: fit-content; max-width: 100%;
 }
 
-/* ─── پوشش جدول ملاک‌ها ─── */
 .clx-crits { display: flex; flex-direction: column; gap: var(--sp-2); }
 
-/* موبایل — m134 */
 @media (max-width: 640px) {
   .clx-widx__name { min-width: 110px; }
   .clx-syn__lead { align-items: flex-start; }
 }
 
-/* ═════════ m135 — clxacc: آکاردئون فلوی تفسیر بالینی ═════════ */
-
-/* فلو عمودی آکاردئون‌ها — جایگزین نوار وضعیت + کارت‌های همیشه‌باز (§7) */
 .clxacc-flow { display: flex; flex-direction: column; gap: var(--sp-3); }
 
-/* کارت آکاردئون (<details>) */
 .clxacc {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -3271,7 +2984,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .clxacc[open] { border-color: color-mix(in srgb, var(--primary) 25%, var(--border)); }
 
-/* سربرگ summary — هدف لمسی ۴۴px + بدون مارکر بومی + ضدانتخاب متن */
 .clxacc__head {
   display: flex; align-items: center; gap: 10px;
   padding: 10px var(--sp-3);
@@ -3280,7 +2992,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .clxacc__head::-webkit-details-marker { display: none; }
 
-/* دایرهٔ شماره ۳۰px — میراث بصری clx-stage__num (حذف‌شده) */
 .clxacc__num {
   flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
@@ -3290,7 +3001,6 @@ tr.wl-row--urgent > td:first-child {
 
 .clxacc__heading { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .clxacc__title { font-size: var(--fs-md); font-weight: 700; color: var(--text); }
-/* خلاصهٔ تک‌خطی «یک نگاه» */
 .clxacc__glance {
   font-size: var(--fs-xs); color: var(--text-2);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -3298,27 +3008,23 @@ tr.wl-row--urgent > td:first-child {
 .clxacc__chips { display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
 .clxacc__act { flex-shrink: 0; } /* حداکثر یک CTA کوچک — دکمه از .btn سراسری می‌آید */
 
-/* شورون — فلپ ۱۸۰° هنگام بازشدن (در RTL هم فلپ بصری کافی است) */
 .clxacc__chev {
   flex-shrink: 0; display: inline-block; line-height: 0; color: var(--text-3);
   transition: transform var(--normal);
 }
 .clxacc[open] > .clxacc__head .clxacc__chev { transform: rotate(180deg); }
 
-/* بدنه — فقط هنگام بازشدن انیمیت می‌شود (بستنِ details با CSS شدنی نیست) */
 .clxacc__body {
   padding: var(--sp-3) var(--sp-4) var(--sp-4);
   border-top: 1px solid var(--border);
   display: flex; flex-direction: column; gap: var(--sp-3);
 }
 @keyframes clxacc-open { from { opacity: 0; transform: translateY(-4px); } }
-/* --normal خودِ «زمان + ایزینگ» است (240ms var(--ease))؛ افزودن var(--ease) جداگانه شورت‌هند را نامعتبر می‌کند */
 .clxacc[open] > .clxacc__body { animation: clxacc-open var(--normal); }
 @media (prefers-reduced-motion: reduce) {
   .clxacc[open] > .clxacc__body { animation: none; }
 }
 
-/* حالت‌ها — نوار inline-start جایگزین ::before کارت مرحله (§5) */
 .clxacc.is-current { border-inline-start: 3px solid var(--primary); }
 .clxacc.is-done { border-inline-start: 3px solid var(--success); }
 .clxacc.is-current .clxacc__num {
@@ -3330,13 +3036,11 @@ tr.wl-row--urgent > td:first-child {
 .clxacc.is-locked .clxacc__num { opacity: .65; }
 .clxacc.is-locked .clxacc__act { display: none; }
 
-/* آکاردئون تودرتو (۳.۱–۳.۶ وکسلر) — min-height ۴۴px از قاعدهٔ پایه حفظ می‌شود */
 .clxacc--sub { margin: 0; border-radius: var(--radius-sm); }
 .clxacc--sub[open] { background: var(--surface-2); }
 .clxacc--sub > .clxacc__head { padding: 8px var(--sp-3); }
 .clxacc--sub > .clxacc__head .clxacc__title { font-size: var(--fs-sm); }
 
-/* شمارندهٔ ردیف‌ها در سربرگ‌های تودرتو — هم‌خانوادهٔ badge--neutral */
 .clxacc__count {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 1px 8px; border-radius: var(--radius-full);
@@ -3345,27 +3049,22 @@ tr.wl-row--urgent > td:first-child {
   white-space: nowrap; flex-shrink: 0;
 }
 
-/* دکمهٔ «نمایش همه» — تمام‌عرض ghost (از .btn.btn--ghost سراسری) */
 .clxacc__more { width: 100%; min-height: 40px; }
 
-/* سقف ۱۰ سطر جدول خرده‌آزمون + حالت بازِ همهٔ سطرها */
 .clxacc-table.is-truncated tr:nth-child(n+11) { display: none; }
 .clxacc-table.is-expanded tr { display: table-row; }
 
-/* پانویس خط قرمز وکسلر — همان ظاهر .clx-wconn__empty */
 .clxacc-footnote {
   font-size: var(--fs-xs, 12px); color: var(--text-3);
   border: 1px dashed var(--line); border-radius: var(--radius-md);
   padding: 7px 10px; width: fit-content; max-width: 100%;
 }
 
-/* نوار باریک بالای تب — الگوی چینش clx-toolbar حذف‌شده */
 .clxacc-toolbar {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--sp-3); flex-wrap: wrap;
 }
 
-/* ردیف‌های رویداد مشترک مراحل ۱/۲/۴ (مهاجرت latestResultsCard) */
 .clxacc-rows { display: flex; flex-direction: column; list-style: none; margin: 0; padding: 0; }
 .clxacc-rows > * {
   display: flex; align-items: flex-start; gap: 8px;
@@ -3374,7 +3073,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .clxacc-rows > *:last-child { border-bottom: 0; }
 
-/* موبایل — m135 */
 @media (max-width: 480px) {
   .clxacc__head { flex-wrap: wrap; padding: 10px var(--sp-3); }
   .clxacc__glance { white-space: normal; } /* اجازهٔ ۲ خط */
@@ -3383,13 +3081,10 @@ tr.wl-row--urgent > td:first-child {
   .clxacc__body { padding: var(--sp-3); }
 }
 
-/* موبایل نوار باریک — همان قرارداد تک‌ستونی m84.3 قدیم */
 @media (max-width: 640px) {
   .clxacc-toolbar { flex-direction: column; align-items: stretch; }
   .clxacc-toolbar > div:last-child { display: flex; gap: var(--sp-2); }
 }
-
-/* ═════════ m136 — clxacc stats row: ریزآمار پراطلاعات سربرگ مراحل ═════════ */
 
 .clxacc__stats {
   display: flex; align-items: center; flex-wrap: wrap;
@@ -3401,15 +3096,11 @@ tr.wl-row--urgent > td:first-child {
 .clxacc__stat--warn { color: var(--warning); }
 .clxacc__stat--warn b { color: inherit; }
 
-/* ۴۸۰px — سربرگ wrap می‌شود؛ ردیف آمار هم فاصله‌ها را جمع می‌کند */
 @media (max-width: 480px) {
   .clxacc__stats { gap: 2px 10px; }
 }
 
-/* ═══ m136 — exb owner/preview/badges ═══ */
-/* سربرگ کارت: بج‌ها (چیپ سازنده + قالب/انتشار/خصوصی/تیمی) wrap شوند */
 .exb-card__badges { flex-wrap: wrap; justify-content: flex-end; }
-/* چیپ سازنده — غیرتعاملی؛ رنگ از staff-chip/hue-<n> (همان پالت درمانگر) */
 .exb-owner {
   cursor: default;
   padding: 2px 8px;
@@ -3422,7 +3113,6 @@ tr.wl-row--urgent > td:first-child {
 .expick-owner { cursor: default; padding: 1px 8px; font-size: var(--fs-xs); }
 .expick-owner:hover, .expick-owner:active { border-color: var(--border); color: var(--text-2); }
 .expick-owner .staff-chip__dot { width: 8px; height: 8px; }
-/* بنر «ثبت به نام شما» — شفافیت هویت در مودال تمرین جدید */
 .exb-attrib {
   display: flex; align-items: center; gap: 8px;
   padding: 8px var(--sp-3);
@@ -3430,10 +3120,8 @@ tr.wl-row--urgent > td:first-child {
   background: var(--primary-soft);
   font-size: var(--fs-sm); font-weight: 600; color: var(--text-1);
 }
-/* سوییچ «ساختهٔ تیمی» */
 .exb-check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: var(--fs-sm); color: var(--text-1); }
 .exb-check input { width: 16px; height: 16px; accent-color: var(--primary); flex: none; }
-/* لایهٔ پیش‌نمایش درون‌برنامه‌ای (تصویر / PDF) */
 .exb-preview { display: flex; flex-direction: column; gap: var(--sp-2); }
 .exb-preview__status { font-size: var(--fs-xs); color: var(--text-3); min-height: 1.2em; }
 .exb-preview__stage {
@@ -3451,8 +3139,6 @@ tr.wl-row--urgent > td:first-child {
   .exb-card__badges { justify-content: flex-start; }
 }
 
-/* ═══ m137 — fixes ═══ */
-/* سطر بازخورد تصحیح تکلیف (تب «تمرین‌ها»ی پروفایل) — تمام‌عرض زیر عنوان ردیف */
 .exb-grade {
   flex-basis: 100%;
   display: flex;
@@ -3466,7 +3152,6 @@ tr.wl-row--urgent > td:first-child {
   padding: 6px var(--sp-2);
 }
 .exb-grade__text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-/* نوار جانشین PDF در پیش‌نمایش بانک تمرین — دکمهٔ «باز کردن در تب جدید» */
 .exb-preview__pdfbar {
   display: flex;
   align-items: center;
@@ -3476,8 +3161,6 @@ tr.wl-row--urgent > td:first-child {
 }
 .exb-preview__pdfbar:empty { display: none; }
 
-/* ═════════ m143 — بانک تمرین: بندانگشتی کارت + سربرگ ستونی + آکاردئون قالب ═════════ */
-/* بندانگشتی سربرگ کارت تمرین — لبه‌به‌لبه با کارت (نوار منفیِ پدینگ کارت) */
 .exb-thumb {
   position: relative;
   height: 150px;
@@ -3499,11 +3182,9 @@ tr.wl-row--urgent > td:first-child {
 .exb-thumb--click:hover .exb-thumb__tile { color: var(--primary); }
 .exb-thumb--click:hover img { filter: brightness(0.97); }
 
-/* سربرگ کارت ستونی: عنوان بالا، نشان‌ها زیرش — دیگر روی موبایل عنوان له نمی‌شود */
 .exb-card__head { flex-direction: column; align-items: flex-start; }
 .exb-card__badges { flex-wrap: wrap; }
 
-/* توضیح کارت: حداکثر ۳ خط — متن کامل در title attr و ویرایش در دسترس است */
 .exb-card__desc {
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -3512,7 +3193,6 @@ tr.wl-row--urgent > td:first-child {
   overflow: hidden;
 }
 
-/* آکاردئون جلسهٔ قالب — سربرگ کلیک‌پذیر؛ فیلدها فقط در حالت باز (m143) */
 .tpl-session__toggle {
   flex: 1; min-width: 0;
   display: flex; align-items: center; gap: 8px;
@@ -3532,12 +3212,8 @@ tr.wl-row--urgent > td:first-child {
 .tpl-session .tpl-session__head { margin-bottom: 0; }
 .tpl-sessions__add { display: flex; justify-content: center; padding: 4px 0 2px; }
 
-/* ═════════ m140 — scoring v2: سازندهٔ فقط-خواندنی ویرایش + انتقال مالکیت + جزئیات امتیاز ═════════ */
-/* ۱) مودال ویرایش تمرین: ردیف سازنده — چیپ فقط-خواندنی (همان پالت staff-chip/exb-owner)
-      + دکمهٔ کوچک «انتقال مالکیت به همکار…» (فقط مدیر) */
 .exb-ownerfield__row { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 
-/* ۲) پنل کوچک تأیید انتقال مالکیت — درون همان مودال ویرایش باز می‌شود (بدون مودال تودرتو) */
 .exb-reassign {
   margin-top: var(--sp-2);
   padding: var(--sp-2) var(--sp-3);
@@ -3554,8 +3230,6 @@ tr.wl-row--urgent > td:first-child {
   .exb-reassign__row { grid-template-columns: 1fr; }
 }
 
-/* ۳) مودال «جزئیات امتیاز» تابلوی پیشرفت — پاسخ GET /api/scoring/explain
-      الگو: همان کارت/جدول RTL بقیهٔ نماها؛ سکشن‌ها زیر هم، قلم‌ها با خط چین */
 .pb-explain { display: flex; flex-direction: column; gap: var(--sp-3); }
 .pb-explain__loading,
 .pb-explain__error {
@@ -3605,17 +3279,13 @@ tr.wl-row--urgent > td:first-child {
   .pb-explain__totals { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* ۴) نوار دکمهٔ «جزئیات امتیاز و شمارش» در پنل بازشدنی هر سطر تابلو */
 .pb-detail-tools {
   display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
   margin-bottom: var(--sp-2);
 }
 
-/* ═══════════════ m164 — گزارش پیشرفت چک‌لیست‌محور (چاپ/PDF) ═══════════════ */
-
 .pr-sheet { display: flex; flex-direction: column; gap: var(--sp-4); }
 
-/* سربرگ گزارش — برند + عنوان + متادیتا */
 .pr-head { border-bottom: 2px solid var(--primary); padding-bottom: var(--sp-3); display: flex; flex-direction: column; gap: 6px; }
 .pr-head__brand { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--text-3); }
 .pr-head__title { margin: 0; font-size: var(--fs-xl); font-weight: 800; color: var(--text-1); }
@@ -3624,14 +3294,13 @@ tr.wl-row--urgent > td:first-child {
 .pr-meta__label { font-size: var(--fs-xs); color: var(--text-3); }
 .pr-meta__value { font-size: var(--fs-sm); font-weight: 700; color: var(--text-1); }
 
-/* نوار شاخص‌های کلیدی */
 .pr-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--sp-3); }
 .pr-kpi { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--sp-3); text-align: center; display: flex; flex-direction: column; gap: 4px; }
 .pr-kpi__num { font-size: var(--fs-xl); font-weight: 800; color: var(--primary); line-height: 1.2; }
 .pr-kpi__label { font-size: var(--fs-xs); color: var(--text-2); }
 
-/* جدول‌های گزارش */
 .pr-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.pr-scroll { overflow-x: auto; }
 .pr-table th, .pr-table td { border: 1px solid var(--border); padding: 6px 8px; text-align: right; vertical-align: middle; }
 .pr-table th { background: var(--surface-2); font-weight: 700; font-size: var(--fs-xs); color: var(--text-2); white-space: nowrap; }
 .pr-table td.is-num { text-align: center; white-space: nowrap; }
@@ -3639,33 +3308,32 @@ tr.wl-row--urgent > td:first-child {
 .pr-chip { margin-inline-start: 6px; }
 .pr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 
-/* رأی روند در جدول خط پایه */
 .pr-verdict { font-weight: 800; }
 .pr-verdict--good { color: var(--success); }
 .pr-verdict--bad { color: var(--error); }
 .pr-verdict--flat { color: var(--text-2); }
 
-/* یادداشت پانویس کارت‌ها — فرمول و مرزهای تفسیر */
 .pr-note { font-size: var(--fs-xs); color: var(--text-3); line-height: 2; border-top: 1px dashed var(--border); padding-top: var(--sp-2); margin-top: var(--sp-2); }
 
-/* پانویس گزارش */
 .pr-foot { border-top: 1px solid var(--border); padding-top: var(--sp-2); font-size: var(--fs-xs); color: var(--text-3); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
 
-/* نمودار خطی — استایل مشترک با chart__grid موجود */
 .chart--line { width: 100%; }
 .chart__line { stroke: var(--primary); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; fill: none; }
 .chart__dot { fill: var(--primary); }
 .chart__axis { font-size: 10px; fill: var(--text-3); font-family: inherit; }
 
-/* چاپ — A4 فشرده و بدون شکستگی ناخوشایند */
 @media print {
   @page { size: A4; margin: 13mm 12mm; }
   .pr-sheet { gap: 10px; }
+  .pr-scroll { overflow: visible; }
   .pr-table { font-size: 10.5pt; table-layout: auto; }
   .pr-table th, .pr-table td { padding: 4px 6px; }
   .pr-table th { white-space: normal; }
   .pr-table td { word-wrap: break-word; }
+  .pr-table thead { display: table-header-group; }
   .pr-table tr, .pr-domain-row { break-inside: avoid; }
-  .card { break-inside: avoid; }
+  .pr-kpis { grid-template-columns: repeat(3, 1fr); }
+  .card--break { break-inside: auto; }
+  .card--break .card__head { break-inside: avoid; }
   .chart--line { break-inside: avoid; }
 }
