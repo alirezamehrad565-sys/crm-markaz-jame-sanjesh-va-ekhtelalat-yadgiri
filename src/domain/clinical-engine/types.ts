@@ -190,8 +190,6 @@ export interface InferenceOutput {
   dataCoverage: { seen: string[]; seenTitles: string[] };
   /** پرچم‌های خط قرمز (آیتم بحرانی/ارجاع) */
   referralFlags: string[];
-  /** پانویس خط قرمز — پلن §۱ (هر خروجی موتور بدون استثنا) */
-  disclaimer: string;
   /**
    * T4 (m148) — کلید افزودنی: سیگنال‌های شرح‌حال (فقط از آخرین رویداد نسخهٔ ۳).
    * پروندهٔ فقط-v2 / بی‌شرح‌حال → [] — هیچ کلید قدیمی دیگری تغییر نمی‌کند (اثبات: t4-baseline).

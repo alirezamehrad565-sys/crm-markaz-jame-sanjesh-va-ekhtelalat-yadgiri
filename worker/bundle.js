@@ -4151,7 +4151,7 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.29";
+var APP_VERSION = "1.00.30";
 var APP_MILESTONE = "m149+m152";
 var external_exports = {};
 __export(external_exports, {
@@ -22472,7 +22472,6 @@ function pairsFromClusters(clusters, pairs) {
 }
 __name(pairsFromClusters, "pairsFromClusters");
 __name2(pairsFromClusters, "pairsFromClusters");
-var HYPOTHESIS_ORDER = ["SLD", "ADHD", "ID", "BIF", "DLD", "NVLD", "TBI", "ASD", "TWO_E", "MOOD", "APD", "NORMAL", "DOMAIN_WEAK"];
 
 var MIN_AGE = 6;
 var MAX_AGE = 16;
@@ -22800,225 +22799,6 @@ function hasValidityFlag(flags) {
 }
 __name(hasValidityFlag, "hasValidityFlag");
 __name2(hasValidityFlag, "hasValidityFlag");
-function subScaled(snap, code) {
-  const t = snap.subtests.find((s) => s.code === code);
-  return t ? t.scaled : null;
-}
-__name(subScaled, "subScaled");
-__name2(subScaled, "subScaled");
-function lowestSub(snap) {
-  let best = null;
-  for (const s of snap.subtests) {
-    if (typeof s.scaled !== "number")
-      continue;
-    if (!best || s.scaled < best.scaled)
-      best = { code: s.code, scaled: s.scaled };
-  }
-  return best;
-}
-__name(lowestSub, "lowestSub");
-__name2(lowestSub, "lowestSub");
-function idxV(snap, k) {
-  const v = snap.indices[k];
-  return v && snap.computable[k] && typeof v.scaled === "number" ? v.scaled : null;
-}
-__name(idxV, "idxV");
-__name2(idxV, "idxV");
-var gap = /* @__PURE__ */ __name2((a, b) => a - b, "gap");
-function activateHypotheses(snap, baseAnswers) {
-  const out = [];
-  const V = idxV(snap, "VCI");
-  const P = idxV(snap, "PRI");
-  const W = idxV(snap, "WMI");
-  const S = idxV(snap, "PSI");
-  const F = snap.fsiq;
-  const upper = [V, P].filter((x) => x !== null);
-  const upperMin = upper.length ? Math.min(...upper) : null;
-  const CD = subScaled(snap, "CD");
-  const SS = subScaled(snap, "SS");
-  const DS = subScaled(snap, "DS");
-  const LN = subScaled(snap, "LN");
-  const AR = subScaled(snap, "AR");
-  const IN = subScaled(snap, "IN");
-  const VC = subScaled(snap, "VC");
-  const SI = subScaled(snap, "SI");
-  const low7 = /* @__PURE__ */ __name2((x) => x !== null && x <= 7, "low7");
-  const low6 = /* @__PURE__ */ __name2((x) => x !== null && x <= 6, "low6");
-  if (upperMin !== null && W !== null && S !== null) {
-    const wGap = W <= upperMin - 10;
-    const sGap = S <= upperMin - 10;
-    const subClue = low7(CD) || low7(SS) || low7(DS);
-    if ((wGap || sGap) && subClue) {
-      const clues = [];
-      if (wGap)
-        clues.push(`WMI \u06CC\u0627\u0632\u062F\u0647 \u0646\u0645\u0631\u0647 \u06CC\u0627 \u0628\u06CC\u0634\u062A\u0631 \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u062A\u0648\u0627\u0646 (${upperMin}\u2212${W})`);
-      if (sGap)
-        clues.push(`PSI \u06CC\u0627\u0632\u062F\u0647 \u0646\u0645\u0631\u0647 \u06CC\u0627 \u0628\u06CC\u0634\u062A\u0631 \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u062A\u0648\u0627\u0646 (${upperMin}\u2212${S})`);
-      if (low7(CD))
-        clues.push("\u0631\u0645\u0632\u06AF\u0630\u0627\u0631\u06CC \u0646\u0645\u0631\u0647\u0654 \u062A\u0631\u0627\u0632 \u06F7 \u06CC\u0627 \u06A9\u0645\u062A\u0631");
-      if (low7(SS))
-        clues.push("\u062C\u0633\u062A\u062C\u0648\u06CC \u0646\u0645\u0627\u062F \u0646\u0645\u0631\u0647\u0654 \u062A\u0631\u0627\u0632 \u06F7 \u06CC\u0627 \u06A9\u0645\u062A\u0631");
-      if (low7(DS))
-        clues.push("\u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645 \u0646\u0645\u0631\u0647\u0654 \u062A\u0631\u0627\u0632 \u06F7 \u06CC\u0627 \u06A9\u0645\u062A\u0631");
-      let w = 0.35;
-      const acid = [AR, CD, IN, DS].every((x) => x !== null) && [AR, CD, IN, DS].every((x) => x <= 7);
-      if (acid) {
-        w += 0.05;
-        clues.push("\u0627\u0644\u06AF\u0648\u06CC ACID \u0645\u062B\u0628\u062A \u0627\u0633\u062A");
-      }
-      out.push({ id: "SLD", weight: w, clues });
-    }
-  }
-  if (upperMin !== null && W !== null && S !== null) {
-    const bothBelow = W <= upperMin - 5 && S <= upperMin - 5;
-    const onePlus = (S <= upperMin - 10 || W <= upperMin - 10) && low7(DS);
-    if (bothBelow || onePlus) {
-      const clues = ["WMI \u0648 PSI \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 VCI/PRI"];
-      if (S <= upperMin - 10)
-        clues.push(`\u0627\u0641\u062A PSI (${upperMin}\u2212${S})`);
-      if (W <= upperMin - 10)
-        clues.push(`\u0627\u0641\u062A WMI (${upperMin}\u2212${W})`);
-      let w = 0.3;
-      const lo = lowestSub(snap);
-      if (lo && lo.code === "CD") {
-        w += 0.05;
-        clues.push("\u0631\u0645\u0632\u06AF\u0630\u0627\u0631\u06CC \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631\u06CC\u0646 \u062E\u0631\u062F\u0647\u200C\u0622\u0632\u0645\u0648\u0646 \u0627\u062C\u0631\u0627\u0634\u062F\u0647 \u0627\u0633\u062A");
-      }
-      out.push({ id: "ADHD", weight: w, clues });
-    }
-  }
-  if (F !== null && F <= 72 && V !== null && P !== null && W !== null && S !== null) {
-    const allLow = [V, P, W, S].every((x) => x <= 88);
-    if (allLow) {
-      out.push({
-        id: "ID",
-        weight: 0.4,
-        clues: [
-          `\u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644 ${F} \u0628\u0627 \u062E\u0637\u0627\u06CC \u0627\u0646\u062F\u0627\u0632\u0647\u200C\u06AF\u06CC\u0631\u06CC \u0632\u06CC\u0631 \u06F7\u06F0`,
-          "\u0647\u0645\u0647\u0654 \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u062F\u0631 \u0646\u0627\u062D\u06CC\u0647\u0654 \u067E\u0627\u06CC\u06CC\u0646 \u06CC\u0627 \u0645\u0631\u0632\u06CC",
-          `\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC: ${snap.indexScatter}`
-        ]
-      });
-    }
-  }
-  if (F !== null && F >= 70 && F < 85) {
-    const clues = [`\u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644 ${F} \u062F\u0631 \u0646\u0627\u062D\u06CC\u0647\u0654 \u0645\u0631\u0632\u06CC \u06F7\u06F0\u2013\u06F8\u06F5`];
-    let w = 0.3;
-    const vals = [W, S, V, P].filter((x) => x !== null);
-    if (W !== null && vals.length >= 3 && vals.every((x) => x >= W)) {
-      w += 0.05;
-      clues.push("WMI \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631\u06CC\u0646 \u0634\u0627\u062E\u0635 \u0627\u0633\u062A");
-    }
-    out.push({ id: "BIF", weight: w, clues });
-  }
-  if (V !== null && (V <= 85 && (low7(VC) || low7(SI)))) {
-    const clues = [`VCI \u067E\u0627\u06CC\u06CC\u0646 (${V})`];
-    let w = 0.35;
-    if (low6(VC))
-      clues.push("\u0648\u0627\u0698\u06AF\u0627\u0646 \u0646\u0645\u0631\u0647\u0654 \u062A\u0631\u0627\u0632 \u06F6 \u06CC\u0627 \u06A9\u0645\u062A\u0631");
-    if (low6(SI))
-      clues.push("\u062A\u0634\u0627\u0628\u0647\u200C\u0647\u0627 \u0646\u0645\u0631\u0647\u0654 \u062A\u0631\u0627\u0632 \u06F6 \u06CC\u0627 \u06A9\u0645\u062A\u0631");
-    if (W !== null && W < V)
-      clues.push(`WMI \u0622\u0633\u06CC\u0628\u200C\u067E\u0630\u06CC\u0631 (${W} \u062F\u0631 \u0628\u0631\u0627\u0628\u0631 VCI ${V})`);
-    if (low6(VC) && low6(SI))
-      w += 0.05;
-    out.push({ id: "DLD", weight: w, clues });
-  }
-  if (V !== null && P !== null && gap(V, P) >= 10 && S !== null && gap(V, S) >= 10) {
-    const clues = [
-      `VCI \u062F\u0647 \u0646\u0645\u0631\u0647 \u06CC\u0627 \u0628\u06CC\u0634\u062A\u0631 \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 PRI (${V} \u062F\u0631 \u0628\u0631\u0627\u0628\u0631 ${P})`,
-      `VCI \u062F\u0647 \u0646\u0645\u0631\u0647 \u06CC\u0627 \u0628\u06CC\u0634\u062A\u0631 \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 PSI (${S})`
-    ];
-    let w = 0.3;
-    if (low7(CD)) {
-      clues.push("\u0631\u0645\u0632\u06AF\u0630\u0627\u0631\u06CC \u067E\u0627\u06CC\u06CC\u0646");
-      w += 0.05;
-    }
-    out.push({ id: "NVLD", weight: w, clues });
-  }
-  if (S !== null) {
-    const others = [V, P, W].filter((x) => x !== null);
-    const isLowest = others.length >= 3 && others.every((x) => x >= S + 10) && S <= 75;
-    if (isLowest) {
-      const clues = [`PSI \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631\u06CC\u0646 \u0634\u0627\u062E\u0635 \u0628\u0627 \u0641\u0627\u0635\u0644\u0647\u0654 \u0645\u0639\u0646\u0627\u062F\u0627\u0631 (${S})`];
-      const w = 0.35;
-      const lo = lowestSub(snap);
-      if (lo && lo.code === "CD") {
-        clues.push("\u0631\u0645\u0632\u06AF\u0630\u0627\u0631\u06CC \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631\u06CC\u0646 \u062E\u0631\u062F\u0647\u200C\u0622\u0632\u0645\u0648\u0646");
-      }
-      out.push({ id: "TBI", weight: w, clues });
-    }
-  }
-  if (W !== null && S !== null && W <= 85 && S <= 85 && CD !== null && SS !== null && CD < SS) {
-    const clues = [
-      `WMI (${W}) \u0648 PSI (${S}) \u067E\u0627\u06CC\u06CC\u0646`,
-      `\u0631\u0645\u0632\u06AF\u0630\u0627\u0631\u06CC (${CD}) \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u062C\u0633\u062A\u062C\u0648\u06CC \u0646\u0645\u0627\u062F (${SS})`,
-      "\u0646\u06CC\u0645\u200C\u0631\u062E \u0628\u062F\u0648\u0646 \u0627\u0644\u06AF\u0648\u06CC \u06CC\u06A9\u067E\u0627\u0631\u0686\u0647"
-    ];
-    let w = 0.25;
-    if (W <= 80 && S <= 80)
-      w += 0.05;
-    out.push({ id: "ASD", weight: w, clues });
-  }
-  if (upper.length) {
-    const strong = upper.filter((x) => x >= 120);
-    const weakPerf = [W, S].filter((x) => x !== null && x <= 90);
-    if (strong.length && weakPerf.length && snap.indexScatter >= 20) {
-      const clues = [
-        `\u0634\u0627\u062E\u0635 \u062A\u0648\u0627\u0646\u0627\u06CC\u06CC ${strong.join(" \u0648 ")} \u0628\u0631\u0627\u0628\u0631 \u06F1\u06F2\u06F0 \u06CC\u0627 \u0628\u0627\u0644\u0627\u062A\u0631`,
-        `\u0634\u0627\u062E\u0635 \u06A9\u0627\u0631\u0627\u06CC\u06CC ${weakPerf.join(" \u0648 ")} \u0628\u0631\u0627\u0628\u0631 \u06F9\u06F0 \u06CC\u0627 \u06A9\u0645\u062A\u0631`,
-        `\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0634\u062F\u06CC\u062F (${snap.indexScatter})`
-      ];
-      out.push({ id: "TWO_E", weight: 0.3, clues });
-    }
-  }
-  if (S !== null && S <= 85 || W !== null && W <= 85) {
-    const clues = ["\u0627\u0641\u062A \u063A\u06CC\u0631\u0627\u062E\u062A\u0635\u0627\u0635\u06CC \u062F\u0631 PSI/WMI"];
-    if (baseAnswers["BQ4"] === "yes") {
-      clues.push("\u0631\u0648\u06CC\u062F\u0627\u062F \u0645\u0647\u0645 \u0632\u0646\u062F\u06AF\u06CC \u0627\u062E\u06CC\u0631 \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A");
-      out.push({ id: "MOOD", weight: 0.25, clues });
-    } else
-      out.push({ id: "MOOD", weight: 0.2, clues });
-  }
-  if (W !== null && W <= 85 && (low7(LN) || low7(DS))) {
-    const clues = [`WMI \u067E\u0627\u06CC\u06CC\u0646 (${W})`];
-    let w = 0.25;
-    if (low6(LN)) {
-      clues.push("\u062A\u0648\u0627\u0644\u06CC \u062D\u0631\u0641-\u0639\u062F\u062F \u0646\u0645\u0631\u0647\u0654 \u062A\u0631\u0627\u0632 \u06F6 \u06CC\u0627 \u06A9\u0645\u062A\u0631");
-      w += 0.05;
-    }
-    if (low7(DS))
-      clues.push("\u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645 \u067E\u0627\u06CC\u06CC\u0646");
-    out.push({ id: "APD", weight: w, clues });
-  }
-  const allNormal = V !== null && P !== null && W !== null && S !== null && [V, P, W, S].every((x) => x >= 90 && x <= 110);
-  if (allNormal && F !== null && F >= 90 && snap.indexScatter <= 22) {
-    out.push({
-      id: "NORMAL",
-      weight: 0.5,
-      clues: ["\u0647\u0631 \u0686\u0647\u0627\u0631 \u0634\u0627\u062E\u0635 \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u06F9\u06F0\u2013\u06F1\u06F1\u06F0", `\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0645\u062C\u0627\u0632 (${snap.indexScatter})`]
-    });
-  }
-  if (F !== null && F >= 90 && snap.step5Weak.length >= 1) {
-    const clues = [
-      `\u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644 \u0646\u0631\u0645\u0627\u0644 (${F})`,
-      `${snap.step5Weak.join(" \u0648 ")} \u062F\u0633\u062A\u200C\u06A9\u0645 \u06F1 \u0627\u0646\u062D\u0631\u0627\u0641 \u0645\u0639\u06CC\u0627\u0631 \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0645\u06CC\u0627\u0646\u06AF\u06CC\u0646 \u0634\u062E\u0635\u06CC \u0627\u0633\u062A`
-    ];
-    out.push({ id: "DOMAIN_WEAK", weight: 0.4, clues });
-  }
-  if (!out.length) {
-    out.push({
-      id: "NORMAL",
-      weight: 0.5,
-      clues: ["\u0647\u06CC\u0686 \u0627\u0644\u06AF\u0648\u06CC \u0627\u062E\u062A\u0635\u0627\u0635\u06CC \u062F\u0631 \u0646\u06CC\u0645\u0631\u062E \u06CC\u0627\u0641\u062A \u0646\u0634\u062F\u061B \u062E\u0648\u0627\u0646\u0634 \u0645\u062D\u0627\u0641\u0638\u0647\u200C\u06A9\u0627\u0631\u0627\u0646\u0647: \u0646\u06CC\u0645\u0631\u062E \u0646\u0631\u0645\u0627\u0644"]
-    });
-  }
-  const order2 = new Map(HYPOTHESIS_ORDER.map((id, i) => [id, i]));
-  out.sort((a, b) => b.weight - a.weight || (order2.get(a.id) ?? 99) - (order2.get(b.id) ?? 99));
-  return out;
-}
-__name(activateHypotheses, "activateHypotheses");
-__name2(activateHypotheses, "activateHypotheses");
 var INDEX_DOMAINS = {
   VCI: ["language", "knowledge"],
   PRI: ["visual_spatial", "reasoning"],
@@ -23218,6 +22998,109 @@ function buildWechslerProfile(result) {
 }
 __name(buildWechslerProfile, "buildWechslerProfile");
 __name2(buildWechslerProfile, "buildWechslerProfile");
+
+// ─── m156 — خوانش مستقل روان‌سنجی نیم‌رخ هوشی (فقط شواهد؛ بدون فرضیه/سناریو/وزن) ───
+// این تابع تنها خوانندهٔ نهایی نیم‌رخ است: هوش‌بهر کل، شاخص‌ها، پراکندگی، قوت/ضعف گام ۵،
+// گپ‌های میان‌شاخصی، الگوهای نمره‌ای ACID/CAD و پرچم‌های روایی — همه از snapshot/flags موجود؛
+// هیچ محاسبهٔ تشخیصی تازه‌ای انجام نمی‌شود و هیچ برچسب بالینی‌ای صادر نمی‌کند.
+function psychometricProfile(result) {
+  const snap = result?.snapshot;
+  if (!result || result.ok === false || !snap)
+    return null;
+  const faName = (k) => INDEX_SPEC[k]?.fa ?? k;
+  const pctOf = (v) => v && typeof v.percentile === "number" ? v.percentile : null;
+  const idxOf = (k) => {
+    const v = snap.indices?.[k];
+    if (!v || typeof v.scaled !== "number" || snap.computable?.[k] === false)
+      return null;
+    return { key: k, fa: faName(k), scaled: v.scaled, percentile: pctOf(v), cls: v.cls ?? null };
+  };
+  const fsiq = typeof snap.fsiq === "number" ? snap.fsiq : null;
+  const bandEntry = fsiq !== null ? FSIQ_BANDS.find((b) => fsiq >= b.min && fsiq <= b.max) ?? null : null;
+  const indices = ["VCI", "PRI", "WMI", "PSI"].map(idxOf).filter(Boolean);
+  const scatter = typeof snap.indexScatter === "number" ? snap.indexScatter : null;
+  // گام ۵ — قوت/ضعف فردی؛ فقط ردیف‌های دارای برچسب معنادار
+  const strengths = [];
+  const weaknesses = [];
+  for (const r of snap.s5rows ?? []) {
+    if (r.strength !== STRENGTH && r.strength !== WEAKNESS)
+      continue;
+    const item = { key: r.key, fa: faName(r.key), diff: Math.abs(num(r.diff) || 0) };
+    (r.strength === WEAKNESS ? weaknesses : strengths).push(item);
+  }
+  // گپ‌های میان‌شاخصی — فاصلهٔ شاخص‌های اجرایی از توان بالایی (کمینهٔ VCI/PRI) و فاصلهٔ VCI/PRI
+  const gaps = [];
+  const vals = {};
+  for (const ix of indices)
+    vals[ix.key] = ix.scaled;
+  const upper = [vals.VCI, vals.PRI].filter((x) => x !== void 0);
+  if (upper.length) {
+    const upperMin = Math.min(...upper);
+    for (const k of ["WMI", "PSI"]) {
+      if (vals[k] !== void 0 && upperMin - vals[k] >= 10) {
+        const d = upperMin - vals[k];
+        gaps.push({ key: k, fa: faName(k), diff: d, textFa: `${faName(k)} به میزان ${faNum3(d)} نمره پایین‌تر از توان بالایی نیم‌رخ (کمینهٔ درک کلامی/استدلال ادراکی) است.` });
+      }
+    }
+    if (vals.VCI !== void 0 && vals.PRI !== void 0 && Math.abs(vals.VCI - vals.PRI) >= 10) {
+      const hi = vals.VCI > vals.PRI ? "VCI" : "PRI";
+      const lo = hi === "VCI" ? "PRI" : "VCI";
+      const d = Math.abs(vals.VCI - vals.PRI);
+      gaps.push({ key: `${hi}_${lo}`, fa: `${faName(hi)} / ${faName(lo)}`, diff: d, textFa: `فاصلهٔ ${faName(hi)} و ${faName(lo)} برابر ${faNum3(d)} نمره است — ${faName(hi)} بالاتر از ${faName(lo)} قرار دارد.` });
+    }
+  }
+  // الگوهای نمره‌ای — توصیف الگوی نمرهٔ ترازی خرده‌آزمون‌ها؛ بدون برچسب تشخیصی
+  const sub = (code) => {
+    const t = (snap.subtests ?? []).find((s) => s.code === code);
+    return t && typeof t.scaled === "number" ? t.scaled : null;
+  };
+  const low7 = (x) => x !== null && x <= 7;
+  const patterns = [];
+  if (["AR", "CD", "IN", "DS"].every((c) => low7(sub(c))))
+    patterns.push({ key: "ACID", textFa: "الگوی نمره‌ای ACID دیده می‌شود: حساب، رمزگذاری، اطلاعات و فراخنای ارقام هم‌زمان در تراز ۷ یا کمترند — کار عددی و بار حافظهٔ فعال در کلاس فشار می‌بیند." });
+  else if (["AR", "CD", "DS"].every((c) => low7(sub(c))))
+    patterns.push({ key: "CAD", textFa: "الگوی نمره‌ای CAD دیده می‌شود: حساب، رمزگذاری و فراخنای ارقام هم‌زمان در تراز ۷ یا کمترند — حافظهٔ فعال و تمرکز در کار عددی فشار می‌بیند." });
+  const validityNotes = (result.flags ?? []).map((f) => f.fa);
+  // خوانش یک‌پارچه — جمله‌های کوتاه فارسی، فقط داده
+  const sentences = [];
+  if (fsiq !== null && bandEntry)
+    sentences.push(`هوش‌بهر کل ${faNum3(fsiq)} در ${bandEntry.fa} قرار دارد.`);
+  if (indices.length >= 2) {
+    const sorted = [...indices].sort((a, b) => a.scaled - b.scaled);
+    const lo = sorted[0];
+    const hi = sorted[sorted.length - 1];
+    sentences.push(`چهار شاخص اصلی از ${faNum3(lo.scaled)} (${lo.fa}) تا ${faNum3(hi.scaled)} (${hi.fa}) در نوسان است.`);
+  }
+  if (scatter !== null) {
+    if (scatter >= 23)
+      sentences.push(`پراکندگی بین‌شاخصی ${faNum3(scatter)} نمره است — نیم‌رخ ناهمگن است و هوش‌بهر کل به‌تنهایی تصویر واحدی از توان کلی نمی‌دهد؛ خوانش باید روی شاخص‌ها انجام شود.`);
+    else
+      sentences.push(`پراکندگی بین‌شاخصی ${faNum3(scatter)} نمره است — نیم‌رخ همگن است و هوش‌بهر کل تصویر معتبری از توان کلی می‌دهد.`);
+  }
+  for (const w of weaknesses)
+    sentences.push(`${w.fa} نسبت به میانگین شاخص‌های خود دانش‌آموز ${faNum3(w.diff)} نمره ضعف معنادار دارد (گام ۵).`);
+  for (const st of strengths)
+    sentences.push(`${st.fa} نسبت به میانگین شاخص‌های خود دانش‌آموز ${faNum3(st.diff)} نمره قوت معنادار دارد (گام ۵).`);
+  for (const g of gaps)
+    sentences.push(g.textFa);
+  for (const p of patterns)
+    sentences.push(p.textFa);
+  if (!sentences.length)
+    sentences.push("نیم‌رخ محاسبه‌شده کامل نیست — با ثبت خرده‌آزمون‌های بیشتری خوانش کامل می‌شود.");
+  return {
+    fsiq: fsiq === null ? null : { value: fsiq, band: bandEntry?.band ?? null, bandFa: bandEntry?.fa ?? null, percentile: pctOf(snap.indices?.FSIQ), computable: snap.computable?.FSIQ !== false },
+    indices,
+    scatter: scatter === null ? null : { value: scatter, homogeneous: scatter < 23 },
+    strengths,
+    weaknesses,
+    gaps,
+    patterns,
+    validityNotes,
+    summaryFa: sentences.join(" ")
+  };
+}
+__name(psychometricProfile, "psychometricProfile");
+__name2(psychometricProfile, "psychometricProfile");
 function profileSignals(result) {
   const snap = result?.snapshot;
   const analysis = result?.analysis;
@@ -23313,7 +23196,6 @@ function runWechslerAnalysis(input) {
       analysis: null,
       snapshot: null,
       flags: emptyFlags,
-      hypotheses: [],
       weakDomains: [],
       monitoringInterval: "",
       signals: [],
@@ -23323,7 +23205,6 @@ function runWechslerAnalysis(input) {
   const analysis = analyzeWisc(validation.raw, validation.testDate, validation.birthDate, strict);
   const snapshot = buildSnapshot(analysis, validation.computable);
   const flags = computeFlags(snapshot);
-  const hyps = activateHypotheses(snapshot, baseAnswers);
   const domains = weakDomains(snapshot);
   const monitor = monitoringInterval(snapshot);
   const result = {
@@ -23333,15 +23214,16 @@ function runWechslerAnalysis(input) {
     analysis,
     snapshot,
     flags,
-    hypotheses: hyps,
     weakDomains: domains,
     monitoringInterval: monitor
   };
   // T1 (m146) — فیلدهای افزودنی سیگنال/پروفایل: از همان snapshot/analysis بالا ساخته می‌شوند
-  // T8 (m149) — لایهٔ تفسیر موازی حذف شد؛ فرضیه‌های {id, weight, clues} تنها خروجی بالینی موتورند
-  // و تفسیر/جمع‌بندی با موتور واحد (clinical-engine) است.
+  // T8 (m149) — لایهٔ تفسیر موازی حذف شد.
+  // m156 — «سناریوساز فرضیه» (activateHypotheses) به‌کلی حذف شد؛ موتور فقط روان‌سنجی است و
+  // خوانش مستقل نیم‌رخ هوشی با psychometricProfile ساخته می‌شود (بدون فرضیه، بدون وزن، بدون برچسب).
   result.signals = profileSignals(result);
   result.profile = buildWechslerProfile(result);
+  result.psychometrics = psychometricProfile(result);
   return result;
 }
 __name(runWechslerAnalysis, "runWechslerAnalysis");
@@ -23456,10 +23338,11 @@ function compactWechslerOutput(result) {
     flags: result.flags,
     weakDomains: result.weakDomains,
     monitoringInterval: result.monitoringInterval,
-    hypotheses: (result.hypotheses ?? []).map((h) => ({ id: h.id, weight: h.weight })),
     // T1 (m146) — افزودنی: سیگنال/پروفایل در خروجی فشرده هم می‌آیند (compact/engineVersion دست‌نخورده)
     signals: result.signals ?? [],
-    profile: result.profile ?? null
+    profile: result.profile ?? null,
+    // m156 — خوانش مستقل روان‌سنجی نیم‌رخ (بدون فرضیه) — hypotheses از خروجی حذف شد
+    psychometrics: result.psychometrics ?? null
   };
 }
 __name(compactWechslerOutput, "compactWechslerOutput");
@@ -23492,7 +23375,6 @@ function applyWechslerEngineToPayload(payload, birthDateRaw, occurredAtIso) {
       analysis: null,
       snapshot: null,
       flags: [],
-      hypotheses: [],
       weakDomains: [],
       monitoringInterval: ""
     };
@@ -27582,7 +27464,6 @@ var DIGITS_2MIN_NORM = {
   "\u0647\u0641\u062A\u0645": 55,
   "\u0647\u0634\u062A\u0645": 55
 };
-var ENGINE_DISCLAIMER = "\u0627\u06CC\u0646 \u062A\u062D\u0644\u06CC\u0644 \u0627\u0628\u0632\u0627\u0631 \u063A\u0631\u0628\u0627\u0644\u06AF\u0631\u06CC \u0627\u0633\u062A \u0648 \u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646 \u0642\u0636\u0627\u0648\u062A \u0628\u0627\u0644\u06CC\u0646\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0646\u06CC\u0633\u062A. \u062A\u0635\u0645\u06CC\u0645 \u0646\u0647\u0627\u06CC\u06CC \u0628\u0627 \u0645\u062A\u062E\u0635\u0635 \u0627\u0646\u0633\u0627\u0646 \u0627\u0633\u062A.";
 var BATTERY_LABEL = `\u0628\u0627\u062A\u0631\u06CC \u0628\u0627\u0644\u06CC\u0646\u06CC \u062B\u0627\u0628\u062A \u0633\u0631\u0648\u0633\u062A\u0627\u0646 \u2014 ${BATTERY_VERSION}`;
 function sldRecord(areaFa, areaEn, icd, aCriteria) {
   return {
@@ -28727,64 +28608,10 @@ function payloadText(e, keys) {
 }
 __name(payloadText, "payloadText");
 __name2(payloadText, "payloadText");
-// ─── پیوند وکسلر ۴ با موتور تشخیصی (فرم ce-wechsler-w4-v1 — فرضیه‌های engine_output) ───
-var WECHSLER_HYP_IDS = ["SLD", "ADHD", "ID", "BIF", "DLD", "NVLD", "TBI", "ASD", "TWO_E", "MOOD", "APD", "NORMAL", "DOMAIN_WEAK"];
-// T6 (m148-b) — نگاشت کامل سیزده‌فرضیه‌ای: هر شناسه صریح است — یا هدف بالینی، یا «عمداً null» با دلیل.
-// ID هرگز نباید slow_learner را تقویت کند (تفکیک انطباقی §۳.۱ — مسیر ID فقط خط قرمز ارجاع است).
-var WECHSLER_HYP_TARGETS = { DLD: "speech_language", APD: "speech_language", MOOD: "anxiety", ADHD: "adhd", ASD: "autism", BIF: "slow_learner", ID: null, NVLD: null, TBI: null, TWO_E: null, NORMAL: null, SLD: null, DOMAIN_WEAK: null };
-// SLD و DOMAIN_WEAK پویا هستند — با wechslerHypTargetOf از زمینهٔ همان پرونده حل می‌شوند.
-function wechslerHypTargetOf(hypId, ctx = {}) {
-  if (hypId === "SLD") {
-    const c = ctx.sld;
-    if (!c)
-      return null;
-    const cands = [];
-    if (c.read !== null && c.read !== undefined)
-      cands.push(["dyslexia", c.read]);
-    if (c.write !== null && c.write !== undefined)
-      cands.push(["dysgraphia", c.write]);
-    if (c.calc !== null && c.calc !== undefined)
-      cands.push(["dyscalculia", c.calc]);
-    if (!cands.length)
-      return null;
-    return cands.reduce((a, b) => b[1] > a[1] ? b : a)[0];
-  }
-  if (hypId === "DOMAIN_WEAK") {
-    switch (ctx.domainWeakIndex) {
-      case "WMI":
-        return "working_memory";
-      case "VCI":
-        return "speech_language";
-      case "PRI":
-        return "motor_coordination";
-      default:
-        return null;
-    }
-  }
-  return WECHSLER_HYP_TARGETS[hypId] ?? null;
-}
-__name(wechslerHypTargetOf, "wechslerHypTargetOf");
-__name2(wechslerHypTargetOf, "wechslerHypTargetOf");
-// شاخص ضعف گام ۵ برای حل DOMAIN_WEAK — اولین ضعفِ شناخته‌شده از profile (T1) با فال‌بک snapshot
-function domainWeakIndexOf(event) {
-  const c = wechslerEngineOutputOf(event);
-  if (!c)
-    return null;
-  const pick = (arr) => {
-    for (const w of Array.isArray(arr) ? arr : []) {
-      const key = typeof w === "string" ? w : (w ?? null)?.key ?? null;
-      if (key && ["VCI", "PRI", "WMI", "PSI"].includes(key))
-        return key;
-    }
-    return null;
-  };
-  const profile = c["profile"];
-  const snap = c["snapshot"];
-  return pick(profile?.step5?.weaknesses) ?? pick(snap?.step5Weak);
-}
-__name(domainWeakIndexOf, "domainWeakIndexOf");
-__name2(domainWeakIndexOf, "domainWeakIndexOf");
-var WECHSLER_HYP_NAMES = { DLD: "اختلال زبانی (DLD)", BIF: "عملکرد مرزی/دیرآموزی (BIF)", APD: "اختلال پردازش شنیداری (APD)", MOOD: "عامل خلقی/اضطرابی (MOOD)", ADHD: "بیش‌فعالی/کم‌توجهی (ADHD)", ASD: "اطیسم (ASD)", ID: "ناتوانی هوشی (ID)", SLD: "اختلال یادگیری خاص (SLD)", NVLD: "یادگیری غیرکلامی (NVLD)", TBI: "آسیب مغزی اکتسابی (TBI)", TWO_E: "دواستثنایی (2e)", DOMAIN_WEAK: "ضعف حوزه‌ای", NORMAL: "نیم‌رخ عادی" };
+// ─── پیوند وکسلر ۴ با موتور واحد (m156) — فقط پروفایل روان‌سنجی ───
+// m156: ماشین فرضیه‌های وکسلر (WECHSLER_HYP_IDS/TARGETS/NAMES + wechslerHypTargetOf +
+// wechslerHypothesisBoost) به‌کلی حذف شد. موتور واحد دیگر هیچ فرضیه‌ای از وکسلر نمی‌گیرد؛
+// تنها قواعد سیگنالی پروفایل (FSIQ/باند/پراکندگی) در infer می‌مانند — نیم‌رخ هوشی، نه سناریو.
 function wechslerEngineOutputOf(event) {
   if (!event)
     return null;
@@ -28800,26 +28627,6 @@ function wechslerEngineOutputOf(event) {
 }
 __name(wechslerEngineOutputOf, "wechslerEngineOutputOf");
 __name2(wechslerEngineOutputOf, "wechslerEngineOutputOf");
-function wechslerHypothesisBoost(event, targetKey, ctx = {}) {
-  const c = wechslerEngineOutputOf(event);
-  if (!c)
-    return null;
-  const hyps = (c.hypotheses ?? []).filter((h) => {
-    const t = wechslerHypTargetOf(h.id ?? "", ctx);
-    return t !== null && t === targetKey;
-  });
-  if (!hyps.length)
-    return null;
-  const best = hyps.reduce((a, b) => b.weight > a.weight ? b : a);
-  const w = Number(best.weight) || 0;
-  if (!(w >= 0.18))
-    return null;
-  const weight = w >= 0.3 ? 2 : 1;
-  const name = WECHSLER_HYP_NAMES[best.id] ?? best.id;
-  return { weight, fa: `نیم‌رخ وکسلر ۴ با فرضیهٔ «${name}» هم‌گراست (وزن ${w >= 0.3 ? "بالا" : "متوسط"}).` };
-}
-__name(wechslerHypothesisBoost, "wechslerHypothesisBoost");
-__name2(wechslerHypothesisBoost, "wechslerHypothesisBoost");
 // ───────────── T6 (m148-b) — هم‌گرایی چندمنبعی (آینهٔ convergence.ts — اصل ۳: پشت‌پردهٔ نامرئی) ─────────────
 // ماتریس منابع و وزن‌ها هرگز به درمانگر نمی‌آید؛ فقط سه حالت خوانا + یک جملهٔ دلالت فارسی.
 var CONVERGENCE_SOURCE_FA = { family: "خانواده", teacher: "مدرسه", test: "آزمون شناختی", probe: "پروب عملکردی", clinician: "چک‌لیست ملاکی" };
@@ -29409,8 +29216,7 @@ function recommendChecklistPlan(ctx) {
       planType: "جامع",
       items: [],
       basis: `هوش‌بهر کل ${recFaNum(fsiq ?? 0)} در بازهٔ ناتوانی هوشی است و انطباق روزمره «پایین» گزارش شده — طبق ملاک تفکیک انطباقی، مسیر ارجاع ناتوانی هوشی (ID) فعال می‌شود و سامانه پلن ابزاری پیشنهاد نمی‌کند؛ تصمیم و ارجاع با متخصص است.`,
-      referralFa: "خط قرمز — مسیر ناتوانی هوشی (FSIQ ≤ ۷۰ همراه انطباق پایین): پلن چک‌لیست رفتاری پیشنهاد نمی‌شود؛ پرونده برای ارجاع تخصصی (روان‌پزشک/مدیر پرونده) علامت خورد.",
-      disclaimer: ENGINE_DISCLAIMER
+      referralFa: "خط قرمز — مسیر ناتوانی هوشی (FSIQ ≤ ۷۰ همراه انطباق پایین): پلن چک‌لیست رفتاری پیشنهاد نمی‌شود؛ پرونده برای ارجاع تخصصی (روان‌پزشک/مدیر پرونده) علامت خورد."
     };
   }
   // ── قاعدهٔ ۵ — دیرآموز/BIF (§۳.۱): FSIQ ۷۰–۸۴ (هر وضعیت انطباقی) یا ≤۶۹ با انطباق حفظ‌شده ──
@@ -29493,8 +29299,7 @@ function recommendChecklistPlan(ctx) {
     planType,
     items,
     basis: recBuildBasis({ facts, anam, adapt, domains: builder.domains, notes: builder.notes, planType, band }),
-    referralFa: builder.referral,
-    disclaimer: ENGINE_DISCLAIMER
+    referralFa: builder.referral
   };
 }
 __name(recommendChecklistPlan, "recommendChecklistPlan");
@@ -29632,8 +29437,8 @@ function runInference(events, options = {}) {
   const wEvent = latest.get("ce-wechsler-w4-v1");
   const wFacts = wechslerProfileFactsOf(wEvent);
   const adapt = idAdaptLevelOfEvent(latest.get(ID_ADAPT_EVENT_KEY));
-  const sigValOf = (key) => anamnesisSignals.find((s) => s.key === key)?.value ?? null;
-  const hypCtx = { sld: { read: sigValOf("anam.sld_read"), write: sigValOf("anam.sld_write"), calc: sigValOf("anam.sld_calc") }, domainWeakIndex: domainWeakIndexOf(wEvent) };
+  // m156 — زمینهٔ فرضیه‌های وکسلر (hypCtx/sigValOf/domainWeakIndexOf) حذف شد؛ نیم‌رخ هوشی فقط
+  // از طریق قواعد سیگنالی پروفایل (FSIQ band/ID red-line) خوانده می‌شود.
   // خط قرمز مسیر ID (§۳.۱): FSIQ ≤ ۷۰ «و» انطباق پایین → ارجاع؛
   // در این مسیر هیچ تقویت دیرآموزی اعمال نمی‌شود — دو مسیر ID و دیرآموز هرگز هم‌پوشان نمی‌شوند.
   const idPathActive = wFacts.fsiq !== null && wFacts.fsiq <= ID_PATH_MAX_FSIQ && adapt === "low";
@@ -29661,13 +29466,11 @@ function runInference(events, options = {}) {
     }
     if (toolKeys.has(ANAMNESIS_V2_KEY))
       toolKeys.add(anamKey);
-    // تقویت وکسلر خودش شاهد است — فرضیه‌های engine_output فرم ce-wechsler-w4-v1 به هدف همین ruleSet
-    // T6: زمینهٔ پرونده (SLD/DOMAIN_WEAK) برای حل قطعی فرضیه‌های پویا پاس داده می‌شود.
-    const wBoost0 = wechslerHypothesisBoost(latest.get("ce-wechsler-w4-v1"), ruleSet.targetKey, hypCtx);
+    // m156 — هیچ تقویت فرضیه‌ای از وکسلر به هیچ هدفی تزریق نمی‌شود (اتصال قطع شد).
     const hasData = [...toolKeys].some((k) => {
       const e = latest.get(k);
       return Boolean(e && (e.analysis || e.payload));
-    }) || Boolean(wBoost0);
+    });
     if (!hasData)
       continue;
     const evidenceFa = [];
@@ -29746,10 +29549,8 @@ function runInference(events, options = {}) {
             cands.push({ weight: rule.weight, fa: rule.fa });
         }
       }
-      if (wBoost0)
-        cands.push(wBoost0);
       if (wEvent?.payload || wEvent?.analysis)
-        noteSource("ce-wechsler-w4-v1", Boolean(wBoost0));
+        noteSource("ce-wechsler-w4-v1", false);
       // انطباق «پایین» خانواده با مسیر دیرآموزی هم‌رأی نیست — منبع خانواده با دادهٔ مخالف (T6)
       if (adapt === "low" && latest.has(ID_ADAPT_EVENT_KEY))
         noteSource(ID_ADAPT_EVENT_KEY, false);
@@ -29765,7 +29566,7 @@ function runInference(events, options = {}) {
         if (best) {
           score += best.weight;
           addFa(best.fa);
-          // هر سه نامزد از رویداد وکسلر می‌آیند — تقویتِ اعمال‌شده = شاهد مثبت منبع «آزمون» (T6)
+          // هر دو نامزد (قاعدهٔ خام fsiq / سیگنال باند پروفایل) از رویداد وکسلر می‌آیند — شاهد مثبت منبع «آزمون»
           noteSource("ce-wechsler-w4-v1", true);
         }
       }
@@ -29781,13 +29582,6 @@ function runInference(events, options = {}) {
     // منبع خانواده برای اهداف دارای قاعدهٔ شرح‌حال — مثبت اگر پرچم همان‌جهت داشت (T6)
     if (anamRule && latest.get(anamKey)?.payload)
       noteSource(anamKey, anamFired);
-    // تقویت فرضیهٔ وکسلر ۴ — وزن ۲ (بالا) یا ۱ (متوسط) به امتیاز و متن شاهد به شواهد
-    // T6: هدف دیرآموزی در بلوک ویژهٔ بالا با سیاست «قوی‌ترین تک‌تقویت» اعمال می‌شود.
-    if (wBoost0 && ruleSet.targetKey !== "slow_learner") {
-      score += wBoost0.weight;
-      evidenceFa.push(wBoost0.fa);
-      noteSource("ce-wechsler-w4-v1", true);
-    }
     const consensus = consensusOf(ruleSet, perTool);
     score += consensus.bonus;
     if (consensus.bonus > 0) {
@@ -29872,7 +29666,6 @@ function runInference(events, options = {}) {
     nextActions: [...nextActionsSet].slice(0, 8),
     dataCoverage: { seen, seenTitles },
     referralFlags: [...new Set(referralFlags)].slice(0, 10),
-    disclaimer: ENGINE_DISCLAIMER,
     anamnesisSignals
   };
   // T6 (m148-b) — کلید افزودنی هم‌گرایی؛ ساختار قبلی عیناً حفظ شده
@@ -29966,7 +29759,6 @@ function narrativeOf(result) {
       ...result.ranked.slice(1).map((h) => `\u2022 ${h.targetTitle} \u2014 \u0627\u0637\u0645\u06CC\u0646\u0627\u0646 ${h.confidence}`)
     );
   }
-  lines.push("", `\u2014 ${result.disclaimer}`);
   const text = lines.join("\n");
   assertPlainTone(text);
   return { top, text };
@@ -31563,40 +31355,6 @@ function applySnapPairBonus(rows, snapP, snapT) {
 }
 __name(applySnapPairBonus, "applySnapPairBonus");
 __name2(applySnapPairBonus, "applySnapPairBonus");
-var OUTCOME_CONSTRUCT = {
-  SLD: "academic_learning",
-  ADHD: "attention_exec",
-  ID: "general_cog",
-  BIF: "general_cog",
-  DLD: "language_comm",
-  NVLD: "general_cog",
-  ASD: "social_adl",
-  MOOD: "internalizing",
-  APD: "language_comm",
-  TBI: null,
-  // فقط پرچم (CR6)
-  TWO_E: null,
-  // الگوی P7 جداگانه ارزیابی می‌شود
-  NORMAL: null,
-  // بدون تزریق (CR1)
-  DOMAIN_WEAK: null
-  // از مسیر weakDomains وزن ۱
-};
-var OUTCOME_NAME_FA = {
-  SLD: "\u0636\u0639\u0641 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC",
-  ADHD: "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647",
-  ID: "\u0627\u0641\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u0647\u0645\u0647\u200C\u06AF\u06CC\u0631",
-  BIF: "\u0645\u0631\u0632 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC",
-  DLD: "\u0636\u0639\u0641 \u0632\u0628\u0627\u0646",
-  NVLD: "\u0627\u0644\u06AF\u0648\u06CC \u0646\u0627\u0628\u0631\u0627\u0628\u0631\u06CC \u06A9\u0644\u0627\u0645\u06CC/\u063A\u06CC\u0631\u06A9\u0644\u0627\u0645\u06CC",
-  ASD: "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0627\u062C\u062A\u0645\u0627\u0639\u06CC-\u0627\u0631\u062A\u0628\u0627\u0637\u06CC",
-  MOOD: "\u062F\u0644\u0645\u0634\u063A\u0648\u0644\u06CC \u0647\u06CC\u062C\u0627\u0646\u06CC",
-  APD: "\u067E\u0631\u062F\u0627\u0632\u0634 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC",
-  TBI: "\u0633\u0627\u0628\u0642\u0647\u0654 \u0622\u0633\u06CC\u0628/\u062A\u063A\u06CC\u06CC\u0631 \u0646\u0627\u06AF\u0647\u0627\u0646\u06CC \u0639\u0645\u0644\u06A9\u0631\u062F",
-  TWO_E: "\u0627\u0633\u062A\u0639\u062F\u0627\u062F \u062F\u0648\u06AF\u0627\u0646\u0647",
-  NORMAL: "\u0646\u06CC\u0645\u0631\u062E \u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0627\u0646\u062A\u0638\u0627\u0631",
-  DOMAIN_WEAK: "\u0636\u0639\u0641 \u062D\u06CC\u0637\u0647\u200C\u0627\u06CC \u062E\u0627\u0635"
-};
 function monitoringParse(interval) {
   if (!interval)
     return null;
@@ -31637,9 +31395,6 @@ function injectWechsler(result) {
       scatterFlag: false,
       substitutes: [],
       monitoringMonths: null,
-      mainId: null,
-      comorbidId: null,
-      rejectFa: [],
       weakDomainsFa: []
     };
   }
@@ -31655,9 +31410,6 @@ function injectWechsler(result) {
     iqValue: null,
     indexScatter: snap.indexScatter ?? null,
     indicesFa: [],
-    main: result.main?.id ?? null,
-    mainNameFa: result.main ? OUTCOME_NAME_FA[result.main.id] ?? result.main.id : null,
-    comorbid: result.comorbid?.id ?? null,
     weakDomainsFa: result.weakDomains ?? [],
     validityFlagsFa: (result.flags ?? []).filter((f) => f.validity).map((f) => f.fa)
   };
@@ -31715,27 +31467,10 @@ function injectWechsler(result) {
   if (fsiqVal !== null && fsiqVal >= IQ_GIFTED_FSIQ || gaiVal !== null && gaiVal >= IQ_GIFTED_FSIQ) {
     rows.push({ construct: "general_cog", toolId: WECHSLER_TOOL, signal: "wisc_iq_gifted", weight: 1, danger: false, sourceType: "examiner", textFa: "\u0638\u0631\u0641\u06CC\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u06A9\u0644\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u062D\u062F \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0633\u062A." });
   }
-  const injectOutcome = /* @__PURE__ */ __name2((o, comorbid) => {
-    if (!o || o.status !== "active")
-      return;
-    const construct = OUTCOME_CONSTRUCT[o.id] ?? null;
-    if (construct) {
-      const weight = o.level === "\u0628\u0627\u0644\u0627" ? 2 : o.level === "\u0645\u062A\u0648\u0633\u0637" ? 1 : 0;
-      if (weight > 0) {
-        rows.push({ construct, toolId: WECHSLER_TOOL, signal: `wisc_${comorbid ? "comorbid" : "main"}_${o.id.toLowerCase()}`, weight, danger: o.level === "\u0628\u0627\u0644\u0627", sourceType: "examiner", textFa: `\u0645\u0648\u062A\u0648\u0631 \u0648\u06A9\u0633\u0644\u0631 \u0646\u06CC\u0645\u0631\u062E \u0631\u0627 \u0647\u0645\u200C\u0631\u0627\u0633\u062A\u0627 \u0628\u0627 ${OUTCOME_NAME_FA[o.id] ?? o.id} \u062A\u0641\u0633\u06CC\u0631 \u06A9\u0631\u062F\u0647 \u0627\u0633\u062A${comorbid ? " (\u0628\u0647\u200C\u0639\u0646\u0648\u0627\u0646 \u0647\u0645\u200C\u0628\u0648\u062F\u06CC)" : ""}.` });
-      }
-    }
-  }, "injectOutcome");
-  injectOutcome(result.main, false);
-  injectOutcome(result.comorbid, true);
-  const rejectFa = [];
-  for (const o of result.outcomes ?? []) {
-    if (o.status === "rejected" && o.level === "\u0628\u0627\u0644\u0627" && o.rejectReason) {
-      rejectFa.push(`${OUTCOME_NAME_FA[o.id] ?? o.id}: ${o.rejectReason}`);
-    }
-  }
+  // m156 — outcomes/main/comorbid موتور قدیم خوانده نمی‌شوند؛ حوزه‌های ضعیف خودشان
+  // روان‌سنجی‌اند (شاخص < ۸۵) و مستقیم به سازه‌ها تزریق می‌شوند.
   const weakDomainsFa = result.weakDomains ?? [];
-  if (result.main?.id === "DOMAIN_WEAK" && weakDomainsFa.length > 0) {
+  if (weakDomainsFa.length > 0) {
     const map = [
       { kw: ["\u062D\u0627\u0641\u0638\u0647", "\u0633\u0631\u0639\u062A"], construct: "attention_exec", fa: "\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC/\u0633\u0631\u0639\u062A \u067E\u0631\u062F\u0627\u0632\u0634" },
       { kw: ["\u06A9\u0644\u0627\u0645\u06CC", "\u0632\u0628\u0627\u0646"], construct: "language_comm", fa: "\u062F\u0631\u06A9 \u06A9\u0644\u0627\u0645\u06CC" },
@@ -31755,9 +31490,6 @@ function injectWechsler(result) {
     scatterFlag,
     substitutes,
     monitoringMonths: monitoringParse(result.monitoringInterval),
-    mainId: result.main?.id ?? null,
-    comorbidId: result.comorbid?.id ?? null,
-    rejectFa,
     weakDomainsFa
   };
 }
@@ -31927,7 +31659,7 @@ function detectDivergences(norm, wInj, otStatuses) {
       affects: ["attention_exec", "internalizing"]
     });
   }
-  if (wInj.mainId === "NORMAL" && ctx.anyChecklistDanger) {
+  if (wInj.iqValue !== null && wInj.iqValue >= 90 && wInj.iqValue <= 110 && !wInj.scatterFlag && ctx.anyChecklistDanger) {
     out.push({
       code: "D7",
       fa: "\u062A\u0639\u0627\u0631\u0636 \u0646\u06CC\u0633\u062A: \u0648\u06A9\u0633\u0644\u0631 \u0638\u0631\u0641\u06CC\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u0631\u0627 \u0645\u06CC\u200C\u0633\u0646\u062C\u062F\u060C \u0646\u0647 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0631\u0641\u062A\u0627\u0631\u06CC\u061B \u06AF\u0632\u0627\u0631\u0634\u200C\u0647\u0627 \u0645\u06A9\u0645\u0644 \u06CC\u06A9\u062F\u06CC\u06AF\u0631\u0646\u062F."
@@ -32426,7 +32158,7 @@ function suggestProtocol(norm, redFlags, wInj, patterns, levels) {
   if (redFlags.some((r) => r.urgent) || wInj.iqValue !== null && wInj.iqValue <= IQ_ID_MAX || patternActive("P12_GLOBAL_WEAK")) {
     return { protocol: "rehab", rationaleFa: "\u067E\u0631\u0686\u0645 \u0641\u0648\u0631\u06CC \u06CC\u0627 \u0627\u0641\u062A \u0647\u0645\u0647\u200C\u06AF\u06CC\u0631 \u0634\u0646\u0627\u062E\u062A\u06CC \u0641\u0639\u0627\u0644 \u0627\u0633\u062A \u2014 \u0645\u0633\u06CC\u0631 \u062A\u0648\u0627\u0646\u0628\u062E\u0634\u06CC \u0648 \u0627\u0631\u062C\u0627\u0639 \u062A\u062E\u0635\u0635\u06CC \u0627\u0648\u0644\u0648\u06CC\u062A \u062F\u0627\u0631\u062F." };
   }
-  const academicSig = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || wInj.mainId === "SLD" || wInj.comorbidId === "SLD" || patternActive("P1_SLD_x_ADHD") || patternActive("P5_LANG_x_SLD") || patternActive("P6_BIF_x_SLD");
+  const academicSig = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || patternActive("P1_SLD_x_ADHD") || patternActive("P5_LANG_x_SLD") || patternActive("P6_BIF_x_SLD");
   if (academicSig) {
     const secondary = atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || atLeastLevel(levels, "internalizing", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") ? "mental_ot" : void 0;
     return {
@@ -32519,7 +32251,7 @@ function buildCaseFormulation(input, options = {}) {
     if (p)
       c.sharedWith = p;
   }
-  const differentialsFa = [...parsimonyDiffs, ...wInj.rejectFa];
+  const differentialsFa = [...parsimonyDiffs];
   if (norm.ctx.homeLanguageNote)
     differentialsFa.push(norm.ctx.homeLanguageNote);
   const redFlags = detectRedFlags(norm, wInj, patterns);
@@ -32634,17 +32366,10 @@ function wechslerFromEvent(payload) {
     analysis: null,
     snapshot,
     flags: [],
-    hypotheses: [],
-    answers: {},
-    autoNotes: [],
-    queue: [],
-    outcomes: [],
-    main: null,
-    comorbid: null,
     weakDomains: [],
-    monitoringInterval: "",
-    binaryScenarios: [],
-    treatments: {}
+    monitoringInterval: ""
+    // m156 — کلیدهای legacy (hypotheses/answers/queue/outcomes/main/comorbid/binaryScenarios/treatments)
+    // از شکل دستی حذف شدند؛ رویدادهای قدیمیِ D1 دست‌نخورده‌اند و injectWechsler دیگر آن‌ها را نمی‌خواند.
   };
 }
 __name(wechslerFromEvent, "wechslerFromEvent");
@@ -33199,8 +32924,8 @@ function createOtEngineService(deps) {
             pairs: (snap.pairs ?? []).map((p) => ({ label: p.label ?? "", winner: p.winner ?? "", diff: p.diff ?? 0, text: p.text ?? "", advice: p.advice ?? "" })),
             comparisons: []
           };
-          // T8 (m149) — مقایسه‌های دوبه‌دو (بخشی از لایهٔ تفسیر موازی) حذف شدند؛
-          // خلاصهٔ گیت‌ها به نیم‌رخ روان‌سنجی (snapshot) و فرضیه‌ها بسنده می‌کند.
+          // T8 (m149) — مقایسه‌های دوبه‌دو حذف شدند؛ m156 — فرضیه‌ها/mainName هم حذف شدند:
+          // خلاصهٔ گیت‌ها فقط نیم‌رخ روان‌سنجی (snapshot) + خوانش مستقل psychometrics است.
           return {
             fsiq: snap.fsiq ?? null,
             vci: snap.indices?.VCI?.scaled ?? null,
@@ -33212,9 +32937,7 @@ function createOtEngineService(deps) {
             indexScatter: snap.indexScatter ?? null,
             cls: snap.indices?.FSIQ?.cls ?? null,
             percentile: typeof snap.indices?.FSIQ?.percentile === "number" ? snap.indices.FSIQ.percentile : null,
-            mainName: c.main?.name ?? null,
-            mainLevel: c.main?.level ?? null,
-            hypotheses: (c.hypotheses ?? []).map((h) => ({ id: h.id, weight: h.weight, name: WECHSLER_HYP_NAMES[h.id] ?? h.id })),
+            psychometrics: c.psychometrics ?? null,
             weakDomains: c.weakDomains ?? [],
             flagsFa: (c.flags ?? []).map((f) => f.fa),
             monitoringInterval: c.monitoringInterval ?? null,
@@ -33236,7 +32959,7 @@ function createOtEngineService(deps) {
     const manual = { fsiq: n("fsiq"), vci: n("vci"), pri: n("pri"), wmi: n("wmi"), psi: n("psi") };
     if (manual.fsiq === null && manual.vci === null && manual.pri === null && manual.wmi === null && manual.psi === null)
       return null;
-    return { ...manual, occurredAt: w.occurredAt, gai: null, indexScatter: null, cls: null, percentile: null, mainName: null, mainLevel: null, hypotheses: [], weakDomains: [], flagsFa: [], monitoringInterval: null, ageLine: null, engine: false };
+    return { ...manual, occurredAt: w.occurredAt, gai: null, indexScatter: null, cls: null, percentile: null, psychometrics: null, weakDomains: [], flagsFa: [], monitoringInterval: null, ageLine: null, engine: false };
   }
   __name(wechslerSummaryOf, "wechslerSummaryOf");
   __name2(wechslerSummaryOf, "wechslerSummaryOf");

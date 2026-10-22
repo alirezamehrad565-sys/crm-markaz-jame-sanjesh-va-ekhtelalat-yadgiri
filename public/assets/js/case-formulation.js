@@ -120,12 +120,14 @@ function patternCard(p) {
   );
 }
 
-/** خط پیش‌روی کارت — «چه دیدیم» (documented choice: رشتهٔ narrative کامل یا narrative.saw) */
+/** خط پیش‌روی کارت — «چه دیدیم» (m156: فقط خط اول روایت — متن چندخطی در سربرگ کارت نمی‌ریزد) */
 function narrativeLead(insights) {
   const n = insights?.narrative;
   if (!n) return null;
-  const text = typeof n === 'string' ? n.trim() : (typeof n.saw === 'string' ? n.saw.trim() : '');
-  if (!text) return null;
+  const raw = typeof n === 'string' ? n : (typeof n.saw === 'string' ? n.saw : '');
+  const firstLine = String(raw).split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+  if (!firstLine) return null;
+  const text = firstLine.length > 160 ? `${firstLine.slice(0, 159).trimEnd()}…` : firstLine;
   return el('div', { class: 'clx-syn__lead' }, icon('message', 13), el('span', {}, text));
 }
 

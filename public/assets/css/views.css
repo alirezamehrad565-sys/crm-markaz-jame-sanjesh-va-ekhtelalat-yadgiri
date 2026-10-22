@@ -2658,14 +2658,7 @@ tr.wl-row--urgent > td:first-child {
 
 .clx-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; margin-top: var(--sp-3); }
 
-/* پانویس خط قرمز — پلن §۱ */
-.clx-disclaimer {
-  display: flex; gap: 8px; align-items: flex-start;
-  padding: 10px 12px; border-radius: var(--radius-md);
-  background: var(--error-soft); color: var(--error);
-  font-size: var(--fs-xs, 12px); font-weight: 600; line-height: 1.9;
-}
-.clx-disclaimer svg { flex-shrink: 0; margin-top: 2px; }
+/* m156 — پانویس انکار (.clx-disclaimer) حذف شد — تب دیگر متن انکار ندارد */
 
 /* ───────── m86 — زبان روایی و مسیر ارزیابی ───────── */
 
@@ -2848,7 +2841,7 @@ tr.wl-row--urgent > td:first-child {
 .clx-suspicion__decision { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: var(--sp-2, 8px); min-width: 0; }
 .clx-suspicion__act { margin-top: var(--sp-2, 8px); }
 
-/* ───────── T3 (m147) — کارت «پیشنهاد باتری از موتور» (پلن چک‌لیست در بدنهٔ مرحلهٔ وکسلر) ───────── */
+/* ───────── T3 (m147؛ m156) — کارت «ابزارهای پیشنهادی گام بعد» (پلن چک‌لیست در بدنهٔ مرحلهٔ وکسلر) ───────── */
 /* فقط توکن‌های موجود — بدون رنگ/فونت تازه (خط قرمز m144) */
 .clx-plan { margin-top: var(--sp-3, 12px); }
 .clx-plan__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; margin-bottom: var(--sp-2, 8px); }
@@ -2857,7 +2850,6 @@ tr.wl-row--urgent > td:first-child {
 .clx-plan__items { display: flex; flex-direction: column; gap: var(--sp-2, 8px); margin-top: var(--sp-2, 8px); }
 .clx-plan__item { min-width: 0; padding: var(--sp-2, 8px); border: 1px solid var(--line); border-radius: var(--radius-sm, 8px); }
 .clx-plan__itemhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
-.clx-plan__disclaimer { display: flex; align-items: center; gap: 6px; margin-top: var(--sp-2, 8px); }
 
 /* نوار مداخله — سگمنت‌های پیشرفت مسیر قالبی */
 .path-band { display: flex; gap: 4px; margin: var(--sp-2, 8px) 0; min-width: 0; }

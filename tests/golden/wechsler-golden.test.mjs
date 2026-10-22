@@ -107,7 +107,12 @@ const directCases = [
       assert.equal(r.validation.years, 6);
       assert.equal(r.validation.band, "sq-6");
       assert.equal(typeof r.snapshot.fsiq, "number");
-      assert.ok(r.hypotheses.some((h) => h.id === "NORMAL"), "NORMAL should activate on a balanced profile");
+      // m156 — خوانش مستقل روان‌سنجی: نیم‌رخ همگن، بدون هیچ فرضیه‌ای
+      assert.ok(r.psychometrics, "psychometrics reading expected");
+      assert.equal(r.psychometrics.scatter.homogeneous, true, "balanced profile is homogeneous");
+      assert.ok(r.psychometrics.summaryFa.includes("هوش‌بهر کل"), "summaryFa names FSIQ");
+      assert.equal(r.psychometrics.patterns.length, 0, "no score-pattern on a balanced profile");
+      assert.equal(r.hypotheses, undefined, "hypotheses are gone from the engine output (m156)");
     }
   },
   {
@@ -210,18 +215,16 @@ const directCases = [
     }
   },
   {
-    name: "ACID profile — AR/CD/IN/DS all ≤ 7 (SLD + ADHD activation)",
+    name: "ACID profile — AR/CD/IN/DS all ≤ 7 (score-pattern reading, m156: بدون سناریو)",
     birth: [1394, 5, 2],
     test: [1406, 7, 1],
     raw: profile(12, { AR: 5, CD: 5, IN: 5, DS: 5 }),
     expect(r) {
       assert.equal(r.ok, true);
-      const ids = r.hypotheses.map((h) => h.id);
-      assert.ok(ids.includes("SLD"), "SLD should activate");
-      assert.ok(ids.includes("ADHD"), "ADHD should activate");
-      const sld = r.hypotheses.find((h) => h.id === "SLD");
-      assert.ok(sld.clues.some((c) => c.includes("ACID")), "ACID bonus clue expected");
-      assert.ok(sld.weight > 0.35, "ACID pattern adds +0.05 to the SLD base weight");
+      assert.ok(r.psychometrics, "psychometrics reading expected");
+      assert.deepEqual(r.psychometrics.patterns.map((p) => p.key), ["ACID"], "ACID score-pattern detected");
+      assert.ok(r.psychometrics.summaryFa.includes("ACID"), "summary mentions ACID");
+      assert.equal(r.hypotheses, undefined, "no hypothesis scenarios (m156)");
     }
   },
   {
@@ -298,40 +301,21 @@ const directCases = [
     }
   },
   {
-    name: "baseAnswers + skippedHypotheses — T8 (m149): پالایش وزن MOOD با BQ4؛ قرارداد ورودی حفظ شده",
+    name: "baseAnswers + skippedHypotheses — m156: قرارداد ورودی پذیرفته و نادیده گرفته می‌شود؛ خروجی فقط روان‌سنجی",
     birth: [1394, 5, 2],
     test: [1406, 7, 1],
     raw: profile(12, { AR: 5, CD: 5, IN: 5, DS: 5 }),
     opts: {
-      baseAnswers: {
-        "SLD:A1": "yes",
-        "SLD:A2": "yes",
-        "SLD:A3": "yes",
-        "SLD:B1": "yes",
-        "SLD:B2": "yes",
-        "SLD:B3": "yes",
-        "SLD:C1": "no",
-        "ADHD:A1": "yes",
-        "ADHD:A2": "yes",
-        "ADHD:B2": "yes",
-        BQ4: "yes"
-      },
+      baseAnswers: { BQ4: "yes" },
       skippedHypotheses: ["MOOD"]
     },
     expect(r) {
       assert.equal(r.ok, true);
-      // شواهد فرضیه‌ای — تنها خروجی بالینی موتور (T8/m149)
-      const sld = r.hypotheses.find((h) => h.id === "SLD");
-      assert.ok(sld, "SLD hypothesis expected");
-      assert.ok(sld.weight > 0.35, "ACID pattern adds +0.05 to the SLD base weight");
-      assert.ok(Array.isArray(sld.clues) && sld.clues.length > 0, "clues must flow with the evidence");
-      const mood = r.hypotheses.find((h) => h.id === "MOOD");
-      assert.ok(mood, "MOOD hypothesis expected");
-      assert.equal(mood.weight, 0.25, "BQ4=yes refines the MOOD weight (0.2 → 0.25)");
-      assert.ok(mood.clues.some((c) => c.includes("رویداد")), "BQ4 clue present");
-      // لایهٔ تفسیر موازی حذف شده — هیچ‌کدام از این کلیدها دیگر تولید نمی‌شوند
-      for (const k of ["queue", "answers", "autoNotes", "outcomes", "main", "comorbid", "binaryScenarios", "treatments"]) {
-        assert.ok(!(k in r), `result must NOT carry the removed parallel-interpretation key ${k}`);
+      assert.ok(r.psychometrics, "psychometrics reading expected");
+      assert.deepEqual(r.psychometrics.patterns.map((p) => p.key), ["ACID"], "ACID pattern intact");
+      // لایهٔ فرضیه/تفسیر موازی حذف شده — هیچ‌کدام از این کلیدها دیگر تولید نمی‌شوند
+      for (const k of ["hypotheses", "queue", "answers", "autoNotes", "outcomes", "main", "comorbid", "binaryScenarios", "treatments"]) {
+        assert.ok(!(k in r), `result must NOT carry the removed key ${k}`);
       }
     }
   }
@@ -727,18 +711,15 @@ test("meta | compact هنوز engineVersion m98 و compact:true است و signal
   const compact = extracted.compactWechslerOutput(extracted.runWechslerAnalysis(input));
   assert.equal(compact.compact, true);
   assert.equal(compact.engineVersion, "m98");
-  for (const k of ["ok", "ageLine", "years", "band", "validation", "snapshot", "flags", "weakDomains", "monitoringInterval", "hypotheses"]) {
+  for (const k of ["ok", "ageLine", "years", "band", "validation", "snapshot", "flags", "weakDomains", "monitoringInterval"]) {
     assert.ok(k in compact, `compact keeps legacy key ${k}`);
   }
-  // T8 (m149) — شواهد فرضیه‌ای {id, weight} تنها خروجی بالینی compact است؛ بقیه حذف شده‌اند
-  for (const k of ["outcomes", "main", "comorbid", "binaryScenarios", "treatments", "queue", "answers", "autoNotes"]) {
+  // T8 (m149) + m156 — لایهٔ فرضیه‌ای به‌کلی حذف شد؛ psychometrics خوانش مستقل نیم‌رخ است
+  for (const k of ["hypotheses", "outcomes", "main", "comorbid", "binaryScenarios", "treatments", "queue", "answers", "autoNotes"]) {
     assert.ok(!(k in compact), `compact must NOT carry the removed key ${k}`);
   }
-  assert.ok(Array.isArray(compact.hypotheses) && compact.hypotheses.length > 0, "compact.hypotheses evidence expected");
-  for (const h of compact.hypotheses) {
-    assert.deepEqual(Object.keys(h).sort(), ["id", "weight"], "hypotheses evidence shape is {id, weight}");
-    assert.equal(typeof h.weight, "number");
-  }
+  assert.ok(compact.psychometrics && typeof compact.psychometrics.summaryFa === "string", "compact.psychometrics additive");
+  assert.ok(Array.isArray(compact.psychometrics.indices), "psychometrics.indices array");
   assert.ok(Array.isArray(compact.signals) && compact.signals.length > 0, "compact.signals additive");
   assert.ok(compact.profile && typeof compact.profile.fsiqBand === "string", "compact.profile additive");
   const refCompact = ref.compactWechslerOutput(ref.runWechslerAnalysis(input));
@@ -771,13 +752,14 @@ test("payload | engine_output فرم واقعی شامل signals/profile است 
   assert.equal(out.compact, true);
   assert.ok(Array.isArray(out.signals));
   assert.ok(out.profile && "fsiqBand" in out.profile);
-  // کلیدهای قدیمی compact در خروجی فرم هم هستند (T8/m149: فرضیه‌ها شواهد، بدون لایهٔ تفسیر موازی)
-  for (const k of ["ok", "ageLine", "years", "band", "validation", "snapshot", "flags", "weakDomains", "monitoringInterval", "hypotheses"]) {
+  // کلیدهای قدیمی compact در خروجی فرم هم هستند (T8/m149 + m156: بدون لایهٔ فرضیه‌ای)
+  for (const k of ["ok", "ageLine", "years", "band", "validation", "snapshot", "flags", "weakDomains", "monitoringInterval"]) {
     assert.ok(k in out, `engine_output keeps legacy key ${k}`);
   }
-  for (const k of ["outcomes", "main", "comorbid", "binaryScenarios", "treatments", "queue", "answers", "autoNotes"]) {
+  for (const k of ["hypotheses", "outcomes", "main", "comorbid", "binaryScenarios", "treatments", "queue", "answers", "autoNotes"]) {
     assert.ok(!(k in out), `engine_output must NOT carry the removed key ${k}`);
   }
+  assert.ok(out.psychometrics && typeof out.psychometrics.summaryFa === "string", "engine_output.psychometrics additive");
   // و همان خروجی با موتور باندل بایت‌به‌بایت یکی است
   const hRef = ref.applyWechslerEngineToPayload(payload, "1398/03/25", OCCURRED_AT);
   assertSame("engine_output parity", JSON.parse(h.payload.engine_output.value), JSON.parse(hRef.payload.engine_output.value));

@@ -27,7 +27,6 @@ interface PlanBody {
   items: PlanItemBody[];
   basis: string;
   referralFa: string | null;
-  disclaimer: string;
 }
 
 function dataOf<T>(res: { body: unknown }): T {
@@ -102,12 +101,11 @@ describe('GET /api/students/:id/checklist-plan — پیشنهادگر چک‌ل�
     const res = await ali.get(`/api/students/${studentId}/checklist-plan`);
     expect(res.status).toBe(200);
     const plan = dataOf<PlanBody>(res);
-    expect(Object.keys(plan).sort()).toEqual(['basis', 'disclaimer', 'items', 'planType', 'referralFa']);
+    expect(Object.keys(plan).sort()).toEqual(['basis', 'items', 'planType', 'referralFa']); // m156: disclaimer حذف شد
     expect(plan.planType).toBe('تکی');
     expect(plan.items.map((i) => i.toolKey)).toEqual(['ce-sdq-p-v1', 'ce-sdq-t-v1']);
     expect(plan.items.every((i) => i.priority === 'core' && i.reasonFa.length > 10 && i.hypothesisKeys.length >= 1)).toBe(true);
     expect(plan.referralFa).toBeNull();
-    expect(plan.disclaimer).toContain('غربالگری');
   });
 
   it('RBAC — مسئول/مدیر/منشی ۲۰۰؛ درمانگر غیرمسئول ۴۰۳؛ دانش‌آموز ناموجود ۴۰۴', async () => {

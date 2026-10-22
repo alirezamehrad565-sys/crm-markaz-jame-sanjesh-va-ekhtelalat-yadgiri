@@ -36,7 +36,6 @@ interface InsightsBody {
   nextActions: string[];
   dataCoverage: { seen: string[]; seenTitles: string[] };
   referralFlags: string[];
-  disclaimer: string;
   student: { id: string; name: string; grade: string | null };
   narrative: string;
 }
@@ -82,7 +81,7 @@ describe('تفسیر بالینی (GET clinical-insights)', () => {
     expect(body.batteryVersion).toBe('battery-v1');
     expect(body.ranked).toHaveLength(0);
     expect(body.criteria).toHaveLength(0);
-    expect(body.disclaimer).toContain('غربالگری');
+    expect('disclaimer' in body).toBe(false); // m156: پانویس انکار حذف شد
     expect(body.student.id).toBe(studentId);
     expect(body.narrative).toContain('فرضیهٔ روشنی ساخته نشده');
   });

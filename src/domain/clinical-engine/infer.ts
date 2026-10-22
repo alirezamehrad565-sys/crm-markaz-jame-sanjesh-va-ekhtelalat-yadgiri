@@ -25,8 +25,8 @@ import type { CaseEventBand } from '@domain/case-events';
 import { RULES, rulesOf, CONFIDENCE_THRESHOLDS, ODD_MIN_FULL_CRITERIA, ASD_B_FULL_CRITERIA, BIF_IQ_RANGE, SCARED_SCHOOL_CUTOFF, FSIQ_BAND_BIF, ID_PATH_MAX_FSIQ, SCATTER_UNIFORM_MAX, fsiqBandOf } from './rules';
 import { DSM_RECORDS } from './dsm-criteria';
 import { targetOf } from './targets';
-import { WCPM_NORM_50TH, ALPHA_15S_NORM, DIGITS_2MIN_NORM, ENGINE_DISCLAIMER, batteryDef } from './instruments';
-import { WECHSLER_W4_EVENT_KEY, wechslerHypothesisBoost, wechslerEngineOutputOf, type WechslerHypContext } from './wechsler-link';
+import { WCPM_NORM_50TH, ALPHA_15S_NORM, DIGITS_2MIN_NORM, batteryDef } from './instruments';
+import { WECHSLER_W4_EVENT_KEY, wechslerEngineOutputOf } from './wechsler-link';
 // T4 (m148) — لایهٔ سیگنال شرح‌حال: قرارداد ClinicalSignal از signals.ts (افزودنی — بدون تغییر کلیدهای قدیمی)
 import type { ClinicalSignal, SignalDomain, WechslerFsiqBand } from './signals';
 import { makeSignal, sortSignals } from './signals';
@@ -144,22 +144,6 @@ function wechslerProfileFactsOf(event: EvidenceEvent | undefined): {
   const band = (bandRaw as WechslerFsiqBand | null) ?? (fsiq !== null ? fsiqBandOf(fsiq) : null);
   const scatter = typeof profile?.indexScatter === 'number' ? profile.indexScatter : null;
   return { fsiq, band, indexScatter: scatter };
-}
-
-/** شاخص ضعف گام ۵ برای حل DOMAIN_WEAK — اولین ضعفِ شناخته‌شده از profile (T1) با فال‌بک snapshot */
-function domainWeakIndexOf(event: EvidenceEvent | undefined): string | null {
-  const c = wechslerEngineOutputOf(event) as unknown as Record<string, unknown> | null;
-  if (!c) return null;
-  const pick = (arr: unknown): string | null => {
-    for (const w of Array.isArray(arr) ? arr : []) {
-      const key = typeof w === 'string' ? w : (w as { key?: string } | null)?.key ?? null;
-      if (key && ['VCI', 'PRI', 'WMI', 'PSI'].includes(key)) return key;
-    }
-    return null;
-  };
-  const profile = c['profile'] as { step5?: { weaknesses?: unknown } | null } | null;
-  const snap = c['snapshot'] as { step5Weak?: unknown } | null;
-  return pick(profile?.step5?.weaknesses) ?? pick(snap?.step5Weak);
 }
 
 /** جدیدترین رویداد هر کلید ابزار (ورودی نزولی زمانی — اولین = جدیدترین) */
@@ -412,12 +396,8 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
   const wEvent = latest.get(WECHSLER_W4_EVENT_KEY);
   const wFacts = wechslerProfileFactsOf(wEvent);
   const adapt = idAdaptLevelOfEvent(latest.get(ID_ADAPT_EVENT_KEY));
-  // زمینهٔ حل فرضیه‌های وابسته به پرونده (SLD/DOMAIN_WEAK) — از سیگنال‌های v3 و پروفایل وکسلر
-  const sigValOf = (key: string): number | null => anamnesisSignals.find((s) => s.key === key)?.value ?? null;
-  const hypCtx: WechslerHypContext = {
-    sld: { read: sigValOf('anam.sld_read'), write: sigValOf('anam.sld_write'), calc: sigValOf('anam.sld_calc') },
-    domainWeakIndex: domainWeakIndexOf(wEvent)
-  };
+  // m156 — زمینهٔ فرضیه‌های وکسلر (hypCtx/sigValOf/domainWeakIndexOf) حذف شد؛ نیم‌رخ هوشی فقط
+  // از طریق قواعد سیگنالی پروفایل (FSIQ band/ID red-line) خوانده می‌شود — هیچ فرضیه‌ای از وکسلر نمی‌آید.
   // خط قرمز مسیر ID (§۳.۱): FSIQ ≤ ۷۰ «و» انطباق پایین → ارجاع؛
   // در این مسیر هیچ تقویت دیرآموزی اعمال نمی‌شود — دو مسیر ID و دیرآموز هرگز هم‌پوشان نمی‌شوند.
   const idPathActive = wFacts.fsiq !== null && wFacts.fsiq <= ID_PATH_MAX_FSIQ && adapt === 'low';
@@ -447,13 +427,11 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
     }
     // شرح‌حال: قواعد به کلید v2 اشاره می‌کنند — اگر پرونده نسخهٔ ۳ دارد، همان هم شاهد است (T4)
     if (toolKeys.has(ANAMNESIS_V2_KEY)) toolKeys.add(anamKey);
-    // تقویت وکسلر خودش شاهد است — فرضیه‌های engine_output فرم ce-wechsler-w4-v1 به هدف همین ruleSet
-    // T6: زمینهٔ پرونده (SLD/DOMAIN_WEAK) برای حل قطعی فرضیه‌های پویا پاس داده می‌شود.
-    const wBoost0 = wechslerHypothesisBoost(latest.get(WECHSLER_W4_EVENT_KEY), ruleSet.targetKey, hypCtx);
+    // m156 — هیچ تقویت فرضیه‌ای از وکسلر به هیچ هدفی تزریق نمی‌شود (اتصال قطع شد).
     const hasData = [...toolKeys].some((k) => {
       const e = latest.get(k);
       return Boolean(e && (e.analysis || e.payload));
-    }) || Boolean(wBoost0);
+    });
     if (!hasData) continue;
 
     // ۱) امتیاز شواهد — instrument/sdq از «دو مرجع» (دو رویداد آخر هر ابزار)؛
@@ -514,9 +492,8 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
 
     // ── T6 (m148-b) — خانوادهٔ شواهد BIF هدف دیرآموزی: «قوی‌ترین تک‌تقویت» — هیچ‌وقت جمع نمی‌شوند ──
     // (قبل از بلوک شرح‌حال — تا ترتیب متن شواهد با رفتار امروز یکسان بماند)
-    // سه نامزد: ۱) قاعدهٔ خام fsiq (رفتار امروز — بازهٔ ۷۰–۸۵ در BIF_IQ_RANGE)؛
-    // ۲) تقویت فرضیهٔ BIF (نگاشت کامل سیزده‌فرضیه‌ای)؛
-    // ۳) تقویت سیگنال پروفایل (فقط رویدادهای دارای profile — T1): FSIQ ۷۰–۸۴ + انطباق عادی/ثبت‌نشده.
+    // دو نامزد (m156 — نامزد فرضیه‌ای حذف شد): ۱) قاعدهٔ خام fsiq (رفتار امروز — بازهٔ ۷۰–۸۵ در BIF_IQ_RANGE)؛
+    // ۲) سیگنال پروفایل (فقط رویدادهای دارای profile — T1): FSIQ ۷۰–۸۴ + انطباق عادی/ثبت‌نشده.
     // فقط قوی‌ترین یکی به امتیاز می‌رود؛ مسیر ID فعال → هیچ تقویتی اعمال نمی‌شود (عدم هم‌پوشانی).
     if (ruleSet.targetKey === 'slow_learner') {
       const cands: { weight: number; fa: string }[] = [];
@@ -528,11 +505,10 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
           if (color === rule.band) cands.push({ weight: rule.weight, fa: rule.fa });
         }
       }
-      if (wBoost0) cands.push(wBoost0); // نامزد ۲ — فرضیهٔ BIF
-      if (wEvent?.payload || wEvent?.analysis) noteSource(WECHSLER_W4_EVENT_KEY, Boolean(wBoost0));
+      if (wEvent?.payload || wEvent?.analysis) noteSource(WECHSLER_W4_EVENT_KEY, false);
       // انطباق «پایین» خانواده با مسیر دیرآموزی هم‌رأی نیست — منبع خانواده با دادهٔ مخالف (T6)
       if (adapt === 'low' && latest.has(ID_ADAPT_EVENT_KEY)) noteSource(ID_ADAPT_EVENT_KEY, false);
-      // نامزد ۳ — سیگنال پروفایل: باند BIF (۷۰–۸۴) با انطباق عادی یا ثبت‌نشده
+      // نامزد ۲ — سیگنال پروفایل: باند BIF (۷۰–۸۴) با انطباق عادی یا ثبت‌نشده
       if (!idPathActive && wFacts.fsiq !== null && wFacts.fsiq >= FSIQ_BAND_BIF.min && wFacts.fsiq <= FSIQ_BAND_BIF.max && (adapt === 'normal' || adapt === 'unknown')) {
         cands.push({
           weight: 1,
@@ -544,7 +520,7 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
         if (best) {
           score += best.weight;
           addFa(best.fa);
-          // هر سه نامزد از رویداد وکسلر می‌آیند — تقویتِ اعمال‌شده = شاهد مثبت منبع «آزمون» (T6)
+          // هر دو نامزد از رویداد وکسلر می‌آیند — تقویتِ اعمال‌شده = شاهد مثبت منبع «آزمون»
           noteSource(WECHSLER_W4_EVENT_KEY, true);
         }
       }
@@ -559,14 +535,6 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
     }
     // منبع خانواده برای اهداف دارای قاعدهٔ شرح‌حال — مثبت اگر پرچم همان‌جهت داشت (T6)
     if (anamRule && latest.get(anamKey)?.payload) noteSource(anamKey, anamFired);
-
-    // تقویت فرضیهٔ وکسلر ۴ — وزن ۲ (بالا) یا ۱ (متوسط) به امتیاز و متن شاهد به شواهد
-    // T6: هدف دیرآموزی در بلوک ویژهٔ بالا با سیاست «قوی‌ترین تک‌تقویت» اعمال می‌شود.
-    if (wBoost0 && ruleSet.targetKey !== 'slow_learner') {
-      score += wBoost0.weight;
-      evidenceFa.push(wBoost0.fa);
-      noteSource(WECHSLER_W4_EVENT_KEY, true);
-    }
 
     // ۲) هم‌رأیی والد/معلم — جفت danger هر دو مرجع → جمع جفت ×۱٫۵
     const consensus = consensusOf(ruleSet, perTool);
@@ -688,7 +656,6 @@ export function runInference(events: EvidenceEvent[], options: InferOptions = {}
     nextActions: [...nextActionsSet].slice(0, 8),
     dataCoverage: { seen, seenTitles },
     referralFlags: [...new Set(referralFlags)].slice(0, 10),
-    disclaimer: ENGINE_DISCLAIMER,
     // T4 (m148) — کلید افزودنی: سیگنال‌های شرح‌حال نسخهٔ ۳ (پروندهٔ فقط-v2 → [])
     anamnesisSignals
   };

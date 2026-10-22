@@ -849,40 +849,6 @@ function applySnapPairBonus(rows, snapP, snapT) {
 }
 __name(applySnapPairBonus, "applySnapPairBonus");
 __name2(applySnapPairBonus, "applySnapPairBonus");
-var OUTCOME_CONSTRUCT = {
-  SLD: "academic_learning",
-  ADHD: "attention_exec",
-  ID: "general_cog",
-  BIF: "general_cog",
-  DLD: "language_comm",
-  NVLD: "general_cog",
-  ASD: "social_adl",
-  MOOD: "internalizing",
-  APD: "language_comm",
-  TBI: null,
-  // فقط پرچم (CR6)
-  TWO_E: null,
-  // الگوی P7 جداگانه ارزیابی می‌شود
-  NORMAL: null,
-  // بدون تزریق (CR1)
-  DOMAIN_WEAK: null
-  // از مسیر weakDomains وزن ۱
-};
-var OUTCOME_NAME_FA = {
-  SLD: "\u0636\u0639\u0641 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC",
-  ADHD: "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647",
-  ID: "\u0627\u0641\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u0647\u0645\u0647\u200C\u06AF\u06CC\u0631",
-  BIF: "\u0645\u0631\u0632 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC",
-  DLD: "\u0636\u0639\u0641 \u0632\u0628\u0627\u0646",
-  NVLD: "\u0627\u0644\u06AF\u0648\u06CC \u0646\u0627\u0628\u0631\u0627\u0628\u0631\u06CC \u06A9\u0644\u0627\u0645\u06CC/\u063A\u06CC\u0631\u06A9\u0644\u0627\u0645\u06CC",
-  ASD: "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0627\u062C\u062A\u0645\u0627\u0639\u06CC-\u0627\u0631\u062A\u0628\u0627\u0637\u06CC",
-  MOOD: "\u062F\u0644\u0645\u0634\u063A\u0648\u0644\u06CC \u0647\u06CC\u062C\u0627\u0646\u06CC",
-  APD: "\u067E\u0631\u062F\u0627\u0632\u0634 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC",
-  TBI: "\u0633\u0627\u0628\u0642\u0647\u0654 \u0622\u0633\u06CC\u0628/\u062A\u063A\u06CC\u06CC\u0631 \u0646\u0627\u06AF\u0647\u0627\u0646\u06CC \u0639\u0645\u0644\u06A9\u0631\u062F",
-  TWO_E: "\u0627\u0633\u062A\u0639\u062F\u0627\u062F \u062F\u0648\u06AF\u0627\u0646\u0647",
-  NORMAL: "\u0646\u06CC\u0645\u0631\u062E \u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0627\u0646\u062A\u0638\u0627\u0631",
-  DOMAIN_WEAK: "\u0636\u0639\u0641 \u062D\u06CC\u0637\u0647\u200C\u0627\u06CC \u062E\u0627\u0635"
-};
 function monitoringParse(interval) {
   if (!interval)
     return null;
@@ -923,9 +889,6 @@ function injectWechsler(result) {
       scatterFlag: false,
       substitutes: [],
       monitoringMonths: null,
-      mainId: null,
-      comorbidId: null,
-      rejectFa: [],
       weakDomainsFa: []
     };
   }
@@ -941,9 +904,6 @@ function injectWechsler(result) {
     iqValue: null,
     indexScatter: snap.indexScatter ?? null,
     indicesFa: [],
-    main: result.main?.id ?? null,
-    mainNameFa: result.main ? OUTCOME_NAME_FA[result.main.id] ?? result.main.id : null,
-    comorbid: result.comorbid?.id ?? null,
     weakDomainsFa: result.weakDomains ?? [],
     validityFlagsFa: (result.flags ?? []).filter((f) => f.validity).map((f) => f.fa)
   };
@@ -1001,27 +961,10 @@ function injectWechsler(result) {
   if (fsiqVal !== null && fsiqVal >= IQ_GIFTED_FSIQ || gaiVal !== null && gaiVal >= IQ_GIFTED_FSIQ) {
     rows.push({ construct: "general_cog", toolId: WECHSLER_TOOL, signal: "wisc_iq_gifted", weight: 1, danger: false, sourceType: "examiner", textFa: "\u0638\u0631\u0641\u06CC\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u06A9\u0644\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u062D\u062F \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0633\u062A." });
   }
-  const injectOutcome = /* @__PURE__ */ __name2((o, comorbid) => {
-    if (!o || o.status !== "active")
-      return;
-    const construct = OUTCOME_CONSTRUCT[o.id] ?? null;
-    if (construct) {
-      const weight = o.level === "\u0628\u0627\u0644\u0627" ? 2 : o.level === "\u0645\u062A\u0648\u0633\u0637" ? 1 : 0;
-      if (weight > 0) {
-        rows.push({ construct, toolId: WECHSLER_TOOL, signal: `wisc_${comorbid ? "comorbid" : "main"}_${o.id.toLowerCase()}`, weight, danger: o.level === "\u0628\u0627\u0644\u0627", sourceType: "examiner", textFa: `\u0645\u0648\u062A\u0648\u0631 \u0648\u06A9\u0633\u0644\u0631 \u0646\u06CC\u0645\u0631\u062E \u0631\u0627 \u0647\u0645\u200C\u0631\u0627\u0633\u062A\u0627 \u0628\u0627 ${OUTCOME_NAME_FA[o.id] ?? o.id} \u062A\u0641\u0633\u06CC\u0631 \u06A9\u0631\u062F\u0647 \u0627\u0633\u062A${comorbid ? " (\u0628\u0647\u200C\u0639\u0646\u0648\u0627\u0646 \u0647\u0645\u200C\u0628\u0648\u062F\u06CC)" : ""}.` });
-      }
-    }
-  }, "injectOutcome");
-  injectOutcome(result.main, false);
-  injectOutcome(result.comorbid, true);
-  const rejectFa = [];
-  for (const o of result.outcomes ?? []) {
-    if (o.status === "rejected" && o.level === "\u0628\u0627\u0644\u0627" && o.rejectReason) {
-      rejectFa.push(`${OUTCOME_NAME_FA[o.id] ?? o.id}: ${o.rejectReason}`);
-    }
-  }
+  // m156 — outcomes/main/comorbid موتور قدیم خوانده نمی‌شوند؛ حوزه‌های ضعیف خودشان
+  // روان‌سنجی‌اند (شاخص < ۸۵) و مستقیم به سازه‌ها تزریق می‌شوند.
   const weakDomainsFa = result.weakDomains ?? [];
-  if (result.main?.id === "DOMAIN_WEAK" && weakDomainsFa.length > 0) {
+  if (weakDomainsFa.length > 0) {
     const map = [
       { kw: ["\u062D\u0627\u0641\u0638\u0647", "\u0633\u0631\u0639\u062A"], construct: "attention_exec", fa: "\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC/\u0633\u0631\u0639\u062A \u067E\u0631\u062F\u0627\u0632\u0634" },
       { kw: ["\u06A9\u0644\u0627\u0645\u06CC", "\u0632\u0628\u0627\u0646"], construct: "language_comm", fa: "\u062F\u0631\u06A9 \u06A9\u0644\u0627\u0645\u06CC" },
@@ -1041,9 +984,6 @@ function injectWechsler(result) {
     scatterFlag,
     substitutes,
     monitoringMonths: monitoringParse(result.monitoringInterval),
-    mainId: result.main?.id ?? null,
-    comorbidId: result.comorbid?.id ?? null,
-    rejectFa,
     weakDomainsFa
   };
 }
@@ -1213,7 +1153,7 @@ function detectDivergences(norm, wInj, otStatuses) {
       affects: ["attention_exec", "internalizing"]
     });
   }
-  if (wInj.mainId === "NORMAL" && ctx.anyChecklistDanger) {
+  if (wInj.iqValue !== null && wInj.iqValue >= 90 && wInj.iqValue <= 110 && !wInj.scatterFlag && ctx.anyChecklistDanger) {
     out.push({
       code: "D7",
       fa: "\u062A\u0639\u0627\u0631\u0636 \u0646\u06CC\u0633\u062A: \u0648\u06A9\u0633\u0644\u0631 \u0638\u0631\u0641\u06CC\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u0631\u0627 \u0645\u06CC\u200C\u0633\u0646\u062C\u062F\u060C \u0646\u0647 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0631\u0641\u062A\u0627\u0631\u06CC\u061B \u06AF\u0632\u0627\u0631\u0634\u200C\u0647\u0627 \u0645\u06A9\u0645\u0644 \u06CC\u06A9\u062F\u06CC\u06AF\u0631\u0646\u062F."
@@ -1712,7 +1652,7 @@ function suggestProtocol(norm, redFlags, wInj, patterns, levels) {
   if (redFlags.some((r) => r.urgent) || wInj.iqValue !== null && wInj.iqValue <= IQ_ID_MAX || patternActive("P12_GLOBAL_WEAK")) {
     return { protocol: "rehab", rationaleFa: "\u067E\u0631\u0686\u0645 \u0641\u0648\u0631\u06CC \u06CC\u0627 \u0627\u0641\u062A \u0647\u0645\u0647\u200C\u06AF\u06CC\u0631 \u0634\u0646\u0627\u062E\u062A\u06CC \u0641\u0639\u0627\u0644 \u0627\u0633\u062A \u2014 \u0645\u0633\u06CC\u0631 \u062A\u0648\u0627\u0646\u0628\u062E\u0634\u06CC \u0648 \u0627\u0631\u062C\u0627\u0639 \u062A\u062E\u0635\u0635\u06CC \u0627\u0648\u0644\u0648\u06CC\u062A \u062F\u0627\u0631\u062F." };
   }
-  const academicSig = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || wInj.mainId === "SLD" || wInj.comorbidId === "SLD" || patternActive("P1_SLD_x_ADHD") || patternActive("P5_LANG_x_SLD") || patternActive("P6_BIF_x_SLD");
+  const academicSig = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || patternActive("P1_SLD_x_ADHD") || patternActive("P5_LANG_x_SLD") || patternActive("P6_BIF_x_SLD");
   if (academicSig) {
     const secondary = atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || atLeastLevel(levels, "internalizing", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") ? "mental_ot" : void 0;
     return {
@@ -1805,7 +1745,7 @@ function buildCaseFormulation(input, options = {}) {
     if (p)
       c.sharedWith = p;
   }
-  const differentialsFa = [...parsimonyDiffs, ...wInj.rejectFa];
+  const differentialsFa = [...parsimonyDiffs];
   if (norm.ctx.homeLanguageNote)
     differentialsFa.push(norm.ctx.homeLanguageNote);
   const redFlags = detectRedFlags(norm, wInj, patterns);
@@ -1920,17 +1860,10 @@ function wechslerFromEvent(payload) {
     analysis: null,
     snapshot,
     flags: [],
-    hypotheses: [],
-    answers: {},
-    autoNotes: [],
-    queue: [],
-    outcomes: [],
-    main: null,
-    comorbid: null,
     weakDomains: [],
-    monitoringInterval: "",
-    binaryScenarios: [],
-    treatments: {}
+    monitoringInterval: ""
+    // m156 — کلیدهای legacy (hypotheses/answers/queue/outcomes/main/comorbid/binaryScenarios/treatments)
+    // از شکل دستی حذف شدند؛ رویدادهای قدیمیِ D1 دست‌نخورده‌اند و injectWechsler دیگر آن‌ها را نمی‌خواند.
   };
 }
 __name(wechslerFromEvent, "wechslerFromEvent");
@@ -1960,6 +1893,7 @@ function ageYearsFromBirthDate(birthDate) {
 }
 __name(ageYearsFromBirthDate, "ageYearsFromBirthDate");
 __name2(ageYearsFromBirthDate, "ageYearsFromBirthDate");
+
 
 
 

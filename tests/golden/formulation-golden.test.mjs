@@ -366,7 +366,8 @@ test("scenario 7: rich multi-informant — SNAP pair x2, SDQ p+t, SCARED, DCDQ, 
   assert.ok(attention.evidenceFa.some((e) => e.signal === "snap_ia_pair"), "parent+teacher agreement pair row");
   assert.ok(got.wechslerLink && got.wechslerLink.iqBasis === "FSIQ");
   assert.ok(got.constructs.find((c) => c.key === "motor_coord").evidenceFa.some((e) => e.toolId === "OtProfile"), "OT delays feed the motor construct evidence");
-  assert.ok(got.differentialsFa.some((d) => d.includes("MOOD") || d.includes("دلمشغولی")), "rejected wechsler outcome → differential");
+  // m156 — outcomes/main/comorbid موتور قدیم دیگر خوانده نمی‌شوند: فرضیهٔ ردشدهٔ MOOD به تفریق تشخیصی نمی‌ریزد
+  assert.ok(got.differentialsFa.every((d) => !(d.includes("شواهد هیجانی کافی نیست"))), "rejected wechsler outcomes no longer leak into differentials (m156)");
 });
 
 test("scenario 8: empty evidence — no events, no wechsler/ot/gates", () => {
