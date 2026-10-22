@@ -19,6 +19,8 @@ import {
   RESULTS_KEY,
   REHAB_FX_KEY,
   REHAB_FX_GUIDE,
+  COGPERF_KEY,
+  COGPERF_GUIDE,
   WISC4_KEY,
   SUSPICION_KEY,
   LEARNING_BLANK_TEMPLATE_KEY,
@@ -698,6 +700,159 @@ function rehabFxSection({ student, events, typesById, canDecide, refresh }) {
         ...REHAB_FX_AREAS.map((a) => el('div', { class: 'clx-probe__metric' }, el('span', {}, a.label), el('b', {}, a.unit)))),
       act,
       rehabFxScienceNote()));
+}
+
+const COGPERF_STATUS = ['معتبر', 'ناقص', 'اجرا نشد', 'نامعتبر'];
+const COGPERF_PROMPTS = ['P0 — فقط دستور اولیه', 'P1 — تکرار استاندارد', 'P2 — راهنمای کلامی عمومی', 'P3 — راهنمای ژستی/دیداری', 'P4 — نمایش/مدل‌سازی'];
+const COGPERF_LEVELS = ['قابل توجه — نیازمند بررسی بیشتر', 'مختلط یا مرزی', 'بدون نشان بالینی در این جلسه', 'داده کافی نیست'];
+const COGPERF_TASKS = [
+  { key: 't01', title: 'مشارکت در فعالیت ساخت‌یافته', unit: 'بازهٔ درگیر از ۶', hint: '۶ بازهٔ ۳۰ثانیه‌ای — در هر بازه درگیر تکلیف بود؟' },
+  { key: 't02', title: 'جست‌وجوی دیداری', unit: 'هدف درست علامت‌خورده', hint: 'برگهٔ نسخه‌دار — تعداد هدف درست' },
+  { key: 't03', title: 'بازگویی توالی اعداد', unit: 'رقم', hint: 'طولانی‌ترین توالی صحیح' },
+  { key: 't04', title: 'اجرای دستور چندمرحله‌ای', unit: 'مرحلهٔ درست از ۳', hint: 'مراحل درست به ترتیب' },
+  { key: 't05', title: 'تغییر قاعده', unit: 'کوشش تا اولین پاسخ درست', hint: 'پس از تغییر قاعدهٔ دسته‌بندی' },
+  { key: 't06', title: 'فعالیت مرحله‌ای', unit: 'مرحلهٔ کامل از ۳', hint: 'به ترتیب، بدون جاانداختن' },
+  { key: 't07', title: 'تطبیق الگوی دیداری', unit: 'پاسخ درست از ۵', hint: 'کارت‌های ثابت نسخه' },
+  { key: 't08', title: 'ساخت الگوی فضایی', unit: 'قطعه در جای درست از ۶', hint: 'جهت‌گیری درست هم ملاک است' },
+  { key: 't09', title: 'حل مسئلهٔ عملی', unit: 'کوشش', hint: 'تعداد کوشش تا نتیجه یا پایان زمان' },
+  { key: 't10', title: 'تکمیل محرک در زمان ثابت', unit: 'پاسخ درست', hint: 'در ۲ دقیقه' },
+  { key: 't11', title: 'مشاهدهٔ راهبرد خودتنظیمی', unit: 'دقیقهٔ بازگشت', hint: 'اختیاری — راهبرد را در یادداشت بنویسید؛ «مشاهده نشد» = اجرا نشد، نه صفر' },
+  { key: 't12', title: 'بازگشت پس از وقفه', unit: 'دقیقهٔ آغاز دوباره', hint: 'اختیاری — بعد از وقفهٔ خنثی' }
+];
+const COGPERF_DOMAINS = [
+  { id: 'att', name: 'توجه و تمرکز', tasks: ['t01', 't02'] },
+  { id: 'mem', name: 'حافظه و یادآوری — بازگویی توالی', tasks: ['t03'] },
+  { id: 'exec', name: 'کارکرد اجرایی و انعطاف', tasks: ['t04', 't05', 't06'] },
+  { id: 'per', name: 'ادراک دیداری-فضایی', tasks: ['t07', 't08'] },
+  { id: 'ps', name: 'حل مسئله', tasks: ['t09'] },
+  { id: 'spd', name: 'سرعت پردازش', tasks: ['t10'] },
+  { id: 'reg', name: 'خودتنظیمی — مشاهده', tasks: ['t11', 't12'] }
+];
+
+function cogPerfEventOf(events, typesById) {
+  const typeId = typesById.get(COGPERF_KEY)?.id ?? null;
+  if (!typeId) return null;
+  return (events ?? []).find((e) => e.eventTypeId === typeId && e.status !== 'cancelled') ?? null;
+}
+
+function openCogPerfModal(student, onDone) {
+  const fields = [];
+  for (const d of COGPERF_DOMAINS) {
+    fields.push({ type: 'heading', label: `${d.name} — تکالیف ${d.tasks.join('، ')}` });
+    for (const tk of d.tasks) {
+      const t = COGPERF_TASKS.find((x) => x.key === tk);
+      fields.push({
+        name: `s_${t.key}`, type: 'select', label: `${t.title} — وضعیت اجرا`, required: true, span: 1,
+        placeholder: 'انتخاب وضعیت…', options: COGPERF_STATUS.map((s) => ({ value: s, label: s }))
+      });
+      fields.push({ name: `d_${t.key}`, type: 'number', label: `${t.title} — شاخص خام`, placeholder: t.unit, hint: t.hint, span: 1 });
+      fields.push({
+        name: `p_${t.key}`, type: 'select', label: `${t.title} — سطح راهنما`, span: 1,
+        placeholder: '—', options: COGPERF_PROMPTS.map((p) => ({ value: p, label: p }))
+      });
+    }
+  }
+  fields.push({ type: 'heading', label: 'سطح توصیفی حیطه‌ها (آزمایشی) — فقط وقتی همهٔ تکالیف حیطه «معتبر» باشند ثبت می‌شود' });
+  for (const d of COGPERF_DOMAINS) {
+    fields.push({
+      name: `lvl_${d.id}`, type: 'select', label: d.name, span: 1,
+      placeholder: '—', options: COGPERF_LEVELS.map((l) => ({ value: l, label: l }))
+    });
+  }
+  fields.push({ name: 'cond', type: 'textarea', label: 'شرایط اجرا — نسخهٔ مواد/کیت، محیط، وقفه‌ها', span: 2, rows: 2 });
+  fields.push({ name: 'note', type: 'textarea', label: 'مشاهدهٔ درمانگر (راهبرد، انگیزه، خستگی…)', span: 2, rows: 2 });
+  formModal({
+    title: 'ارزیابی شناختی — پروتکل عملکردی کاردرمانی ذهنی (ثبت درمانگر در مرکز)',
+    wide: true,
+    submitLabel: 'ثبت پروتکل',
+    fields,
+    onSubmit: async (vals) => {
+      try {
+        await api.post(`/api/students/${student.id}/case-events/cog-perf`, { values: vals });
+        toast('پروتکل عملکردی شناختی ثبت شد — شاخص‌های خام، راهنماها و سطح توصیفی حیطه‌ها همین‌جا می‌نشینند', 'success');
+        onDone();
+        return true;
+      } catch (err) { toastError(err); return false; }
+    }
+  });
+}
+
+function cogPerfScienceNote() {
+  return el('details', { class: 'rehab-fx-guide' },
+    el('summary', {}, icon('compass', 13), COGPERF_GUIDE.title),
+    el('div', { class: 'rehab-fx-guide__body' },
+      ...COGPERF_GUIDE.items.map((t) => el('div', { class: 'cell-sub' }, t))));
+}
+
+function cogPerfSection({ student, events, typesById, canDecide, refresh }) {
+  const existing = cogPerfEventOf(events, typesById);
+  if (existing) {
+    const bandLabel = existing.analysis?.band ?? existing.payload?.chip_band?.value ?? null;
+    const color = ((existing.typeBands ?? []).find((b) => b.label === bandLabel) ?? {}).color ?? null;
+    const taskRows = [];
+    for (const t of COGPERF_TASKS) {
+      const st = existing.payload?.[`st_${t.key}`]?.value;
+      const raw = existing.payload?.[`d_${t.key}`]?.value;
+      if (!st) continue;
+      taskRows.push(el('div', { class: 'clx-probe__metric' },
+        el('span', {}, t.title), el('b', {}, `${raw ?? '—'} · ${st}`)));
+    }
+    const lvlRows = [];
+    for (const d of COGPERF_DOMAINS) {
+      const lvl = existing.payload?.[`lvl_${d.id}`]?.value;
+      if (lvl) lvlRows.push(el('div', { class: 'clx-readcore__advice-row' },
+        el('strong', {}, d.name), el('span', {}, lvl)));
+    }
+    return el('div', { class: 'card clx-probe is-done', id: 'cogperf-anchor' },
+      el('div', { class: 'card__body' },
+        el('div', { class: 'clx-plan__head' },
+          el('strong', { class: 'clx-plan__title' }, icon('brain', 15), 'ارزیابی شناختی — پروتکل عملکردی (خط پایه)'),
+          sensoryBandBadge(`${bandLabel ?? 'ثبت شد'}`, color)),
+        el('div', { class: 'badge badge--warning', style: { width: 'fit-content', margin: '4px 0' } }, 'آزمایشی / اعتبارسنجی‌نشده — بدون برش بالینی'),
+        existing.payload?.fa_summary?.value
+          ? el('div', { class: 'cell-sub clx-probe__summary' }, existing.payload.fa_summary.value)
+          : null,
+        taskRows.length ? el('div', { class: 'clx-probe__metrics' }, ...taskRows) : null,
+        lvlRows.length
+          ? el('div', { class: 'clx-readcore__advice' },
+            el('div', { class: 'cell-sub' }, el('strong', null, 'سطح توصیفی حیطه‌ها — داوری درمانگر، توصیفی/آزمایشی:')),
+            lvlRows)
+          : null,
+        existing.payload?.algo_version?.value
+          ? el('div', { class: 'cell-sub' }, `نسخهٔ الگوریتم: ${existing.payload.algo_version.value} — اصلاح فقط با ثبت جدید (تاریخچه حفظ می‌شود)`)
+          : null,
+        existing.occurredAt ? el('div', { class: 'cell-sub' }, `ثبت: ${formatJalaliDateTime(existing.occurredAt)}`) : null,
+        cogPerfScienceNote()));
+  }
+  const act = canDecide
+    ? el('div', { class: 'clx-actions' },
+      el('button', { class: 'btn btn--primary btn--sm', onclick: () => openCogPerfModal(student, refresh) },
+        icon('zap', 14), 'ثبت پروتکل عملکردی'))
+    : null;
+  return el('div', { class: 'card clx-probe', id: 'cogperf-anchor' },
+    el('div', { class: 'card__body' },
+      el('div', { class: 'clx-plan__head' },
+        el('strong', { class: 'clx-plan__title' }, icon('brain', 15), 'ارزیابی شناختی — پروتکل عملکردی (خط پایه)'),
+        el('span', { class: 'badge badge--neutral' }, 'ثبت نشده')),
+      el('div', { class: 'badge badge--warning', style: { width: 'fit-content', margin: '4px 0' } }, 'آزمایشی / اعتبارسنجی‌نشده — بدون برش بالینی'),
+      el('div', { class: 'cell-sub' }, 'دوازده تکلیف کوتاه ساخت‌یافته با ثبت وضعیت اجرا، شاخص خام و سطح راهنمای هر تکلیف — به‌جای نمرهٔ دادن به رفتار، عملکرد مستقیم کودک ثبت می‌شود؛ خروجی توصیفی است و جایگزین آزمون استاندارد نیست (≈ ۳۰–۳۵ دقیقه، زمان‌ها پیشنهادی پایلوت).'),
+      el('div', { class: 'clx-probe__metrics' },
+        ...COGPERF_TASKS.map((t) => el('div', { class: 'clx-probe__metric' }, el('span', {}, t.title), el('b', {}, t.unit)))),
+      act,
+      cogPerfScienceNote()));
+}
+
+function rehabFxSuggestCard({ student, events, typesById, canDecide, refresh }) {
+  if (rehabFxEventOf(events, typesById) || !canDecide) return null;
+  return el('div', { class: 'card clx-probe' },
+    el('div', { class: 'card__body' },
+      el('div', { class: 'clx-plan__head' },
+        el('strong', { class: 'clx-plan__title' }, icon('brain', 15), 'پیشنهاد — خط پایهٔ عملکردی توانبخشی ذهنی'),
+        el('span', { class: 'badge badge--info' }, 'اختیاری')),
+      el('div', { class: 'cell-sub' }, 'شش تکلیف کوتاه عملکردی (توجه پایدار/انتخابی، حافظهٔ کاری، بازداری، انعطاف، حل مسئله) با دادهٔ خام و سطح راهنما — وقتی در مشاهدهٔ مرکز به گیر شناختی پایه‌ای شک دارید، همین خط پایهٔ ملاک‌محور شروع خوبی است؛ ثبت بعدی آن به فاز مداخلهٔ مسیر توانبخشی و پنل پیشرفت وصل می‌شود.'),
+      el('div', { class: 'clx-actions' },
+        el('button', { class: 'btn btn--soft btn--sm', onclick: () => openRehabFxModal(student, refresh) },
+          icon('zap', 14), 'ثبت ارزیابی عملکردی'))));
 }
 
 function interpretationContext({ student, gates }) {
@@ -1738,6 +1893,7 @@ export async function renderClinicalTab(box, { student }) {
         if (skillsMode === SKILL_MODE_OT) {
           if (isRehabCase && phase !== 'intervention') {
             body.push(rehabFxSection({ student, events, typesById, canDecide, refresh }));
+            body.push(cogPerfSection({ student, events, typesById, canDecide, refresh }));
           }
           body.push(el('div', { class: 'cell-sub' }, icon('clipboard', 13), ' ',
             phase === 'intervention'
@@ -1752,6 +1908,8 @@ export async function renderClinicalTab(box, { student }) {
           return body;
         }
         body.push(probeAssessSection({ student, events, typesById, canDecide, refresh }));
+        const fxSuggest = rehabFxSuggestCard({ student, events, typesById, canDecide, refresh });
+        if (fxSuggest) body.push(fxSuggest);
         const readCore = readCoreChipCard({ student, events, typesById, canDecide, refresh });
         if (readCore) body.push(readCore);
         body.push(seenChipsBlock(insights)); // تنها جای چیپ‌های «چه فرم‌هایی آمده» در مرحلهٔ ۴

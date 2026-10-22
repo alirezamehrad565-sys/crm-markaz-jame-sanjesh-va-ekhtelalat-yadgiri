@@ -67,25 +67,27 @@ export function createDashboardService(deps: DashboardDeps): DashboardService {
 
   async function activityCounts(fromYmd: string, toYmd: string): Promise<Map<string, TherapistActivityCounts>> {
     const range = tehranRange(fromYmd, toYmd);
+    // — شمارنده‌ها با مرز UTC آگاه (range.start/end) مقایسه می‌شوند نه substr تاریخ UTC؛ وگرنه از نیمه‌شب تا ۰۳:۳۰ تهران،
+    //   created_at (UTC روز قبل) از پنجرهٔ روز تهران بیرون می‌افتد و تمرین/رویداد/پیگیری صفر می‌شود (رفع باگ m168).
     const [monthAppointments, exRows, evRows, fuRows] = await Promise.all([
       appointments.list({ from: range.start, to: range.end }),
       db.query<{ staffId: string; cnt: number }>(
         `SELECT created_by AS staffId, COUNT(*) AS cnt FROM exercises
-          WHERE deleted_at IS NULL AND substr(created_at, 1, 10) BETWEEN ? AND ?
+          WHERE deleted_at IS NULL AND replace(created_at, ' ', 'T') >= ? AND replace(created_at, ' ', 'T') < ?
           GROUP BY created_by`,
-        [fromYmd, toYmd]
+        [range.start, range.end]
       ),
       db.query<{ staffId: string; cnt: number }>(
         `SELECT created_by AS staffId, COUNT(*) AS cnt FROM case_events
-          WHERE substr(created_at, 1, 10) BETWEEN ? AND ?
+          WHERE replace(created_at, ' ', 'T') >= ? AND replace(created_at, ' ', 'T') < ?
           GROUP BY created_by`,
-        [fromYmd, toYmd]
+        [range.start, range.end]
       ),
       db.query<{ staffId: string; cnt: number }>(
         `SELECT created_by AS staffId, COUNT(*) AS cnt FROM followups
-          WHERE substr(created_at, 1, 10) BETWEEN ? AND ?
+          WHERE replace(created_at, ' ', 'T') >= ? AND replace(created_at, ' ', 'T') < ?
           GROUP BY created_by`,
-        [fromYmd, toYmd]
+        [range.start, range.end]
       )
     ]);
 

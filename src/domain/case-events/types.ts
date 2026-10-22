@@ -209,6 +209,7 @@ export interface CaseEventsService {
   createReadCoreEvent(studentId: string, input: { levels: Record<string, unknown> }, actor: AuthContext): Promise<CaseEventRecord>;
   createProbeEvent(studentId: string, input: { area: string; values: Record<string, unknown> }, actor: AuthContext): Promise<CaseEventRecord>;
   createRehabFxEvent(studentId: string, input: { values: Record<string, unknown> }, actor: AuthContext): Promise<CaseEventRecord>;
+  createCogPerfEvent(studentId: string, input: { values: Record<string, unknown> }, actor: AuthContext): Promise<CaseEventRecord>;
   updateEvent(id: string, input: { values?: Record<string, string | number | null>; summary?: string }, actor: AuthContext): Promise<CaseEventRecord>;
   finalizeEvent(id: string, actor: AuthContext): Promise<CaseEventRecord>;
   cancelEvent(id: string, actor: AuthContext): Promise<CaseEventRecord>;

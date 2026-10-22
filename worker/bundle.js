@@ -4155,8 +4155,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.43";
-var APP_MILESTONE = "m167";
+var APP_VERSION = "1.00.44";
+var APP_MILESTONE = "m168";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -22253,6 +22253,228 @@ function validateRehabFxValues(values) {
 }
 __name(validateRehabFxValues, "validateRehabFxValues");
 __name2(validateRehabFxValues, "validateRehabFxValues");
+// ───────── ارزیابی شناختی — پروتکل عملکردی کاردرمانی ذهنی (m168) — آینهٔ case-events/pure.ts ─────────
+// دوازده تکلیف ساخت‌یافته با وضعیت اجرا + شاخص خام + سطح راهنما؛ بدون نمرهٔ کل و برش بالینی —
+// سطح توصیفی حیطه‌ای فقط با داوری درمانگر روی حیطهٔ کامل؛ ابزار داخلی آزمایشی/اعتبارسنجی‌نشده.
+var COG_PERF_KEY = "ce-rehab-cogperf-v1";
+var COG_PERF_TYPE_ID = "bbbbbbbb-8200-4000-8000-000000000034";
+var COG_PERF_ALGO_VERSION = "cogperf-v1";
+var COG_PERF_BAND_LABEL = "ثبت شد — نسخهٔ آزمایشی";
+var COG_PERF_VALIDITY_FA = "ابزار داخلی آزمایشی — هنجاری‌نشده و اعتبارسنجی‌نشده؛ بدون برش بالینی؛ نتیجه صرفاً توصیفی است.";
+var COG_PERF_STATUS_OPTIONS = ["معتبر", "ناقص", "اجرا نشد", "نامعتبر"];
+var COG_PERF_PROMPT_OPTIONS = [
+  "P0 — فقط دستور اولیه", "P1 — تکرار استاندارد", "P2 — راهنمای کلامی عمومی",
+  "P3 — راهنمای ژستی/دیداری", "P4 — نمایش/مدل‌سازی"
+];
+var COG_PERF_PROMPT_P4 = "P4 — نمایش/مدل‌سازی";
+var COG_PERF_LEVEL_OPTIONS = [
+  "قابل توجه — نیازمند بررسی بیشتر", "مختلط یا مرزی", "بدون نشان بالینی در این جلسه", "داده کافی نیست"
+];
+var COG_PERF_LEVEL_INSUFFICIENT = "داده کافی نیست";
+var COG_PERF_DOMAINS = [
+  { id: "att", name: "توجه و تمرکز", taskKeys: ["t01", "t02"] },
+  { id: "mem", name: "حافظه و یادآوری — بازگویی توالی", taskKeys: ["t03"] },
+  { id: "exec", name: "کارکرد اجرایی و انعطاف", taskKeys: ["t04", "t05", "t06"] },
+  { id: "per", name: "ادراک دیداری-فضایی", taskKeys: ["t07", "t08"] },
+  { id: "ps", name: "حل مسئله", taskKeys: ["t09"] },
+  { id: "spd", name: "سرعت پردازش", taskKeys: ["t10"] },
+  { id: "reg", name: "خودتنظیمی — مشاهده", taskKeys: ["t11", "t12"] }
+];
+var COG_PERF_TASKS = [
+  { key: "t01", domain: "att", title: "مشارکت در فعالیت ساخت‌یافته", unit: "بازهٔ درگیر از ۶", min: 0, max: 6, rawRequired: true },
+  { key: "t02", domain: "att", title: "جست‌وجوی دیداری", unit: "هدف درست علامت‌خورده", min: 0, max: 99, rawRequired: true },
+  { key: "t03", domain: "mem", title: "بازگویی توالی اعداد", unit: "رقم", min: 0, max: 9, rawRequired: true },
+  { key: "t04", domain: "exec", title: "اجرای دستور چندمرحله‌ای", unit: "مرحلهٔ درست از ۳", min: 0, max: 3, rawRequired: true },
+  { key: "t05", domain: "exec", title: "تغییر قاعده", unit: "کوشش تا اولین پاسخ درست", min: 0, max: 15, rawRequired: true },
+  { key: "t06", domain: "exec", title: "فعالیت مرحله‌ای", unit: "مرحلهٔ کامل از ۳", min: 0, max: 3, rawRequired: true },
+  { key: "t07", domain: "per", title: "تطبیق الگوی دیداری", unit: "پاسخ درست از ۵", min: 0, max: 5, rawRequired: true },
+  { key: "t08", domain: "per", title: "ساخت الگوی فضایی", unit: "قطعه در جای درست از ۶", min: 0, max: 6, rawRequired: true },
+  { key: "t09", domain: "ps", title: "حل مسئلهٔ عملی", unit: "کوشش", min: 0, max: 15, rawRequired: true },
+  { key: "t10", domain: "spd", title: "تکمیل محرک در زمان ثابت", unit: "پاسخ درست", min: 0, max: 99, rawRequired: true },
+  { key: "t11", domain: "reg", title: "مشاهدهٔ راهبرد خودتنظیمی", unit: "دقیقهٔ بازگشت", min: 0, max: 20, rawRequired: false },
+  { key: "t12", domain: "reg", title: "بازگشت پس از وقفه", unit: "دقیقهٔ آغاز دوباره", min: 0, max: 20, rawRequired: false }
+];
+function cogPerfTypeFields() {
+  const fields = [];
+  for (const t of COG_PERF_TASKS) {
+    fields.push({ key: `s_${t.key}`, label: `${t.title} — وضعیت اجرا`, type: "select", options: [...COG_PERF_STATUS_OPTIONS], required: true });
+    fields.push({ key: `d_${t.key}`, label: `${t.title} — شاخص خام (${t.unit}؛ ${faNum2(t.min)}–${faNum2(t.max)})`, type: "number", required: t.rawRequired });
+    fields.push({ key: `p_${t.key}`, label: `${t.title} — سطح راهنما`, type: "select", options: [...COG_PERF_PROMPT_OPTIONS], required: false });
+  }
+  for (const d of COG_PERF_DOMAINS) {
+    fields.push({ key: `lvl_${d.id}`, label: `سطح توصیفی — ${d.name} (آزمایشی)`, type: "select", options: [...COG_PERF_LEVEL_OPTIONS], required: false });
+  }
+  fields.push({ key: "cond", label: "شرایط اجرا — نسخهٔ مواد/کیت، محیط، وقفه‌ها", type: "longtext", required: false });
+  fields.push({ key: "note", label: "مشاهدهٔ درمانگر", type: "longtext", required: false });
+  return fields;
+}
+__name(cogPerfTypeFields, "cogPerfTypeFields");
+__name2(cogPerfTypeFields, "cogPerfTypeFields");
+var cogPerfNumber = (raw3, t) => {
+  const n = typeof raw3 === "number" ? raw3 : Number(String(raw3 ?? "").trim().replace(/[۰-۹]/g, (c) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(c))));
+  if (!Number.isInteger(n) || n < t.min || n > t.max) {
+    throw new ValidationError(`شاخص خام تکلیف «${t.title}» باید بین ${faNum2(t.min)} تا ${faNum2(t.max)} باشد (${t.unit})`);
+  }
+  return n;
+};
+__name(cogPerfNumber, "cogPerfNumber");
+__name2(cogPerfNumber, "cogPerfNumber");
+function validateCogPerfValues(values) {
+  const raw4 = values && typeof values === "object" ? values : {};
+  const out = {};
+  for (const t of COG_PERF_TASKS) {
+    const sRaw = raw4[`s_${t.key}`];
+    if (sRaw === void 0 || sRaw === null || String(sRaw).trim() === "") {
+      throw new ValidationError(`وضعیت اجرای تکلیف «${t.title}» ثبت نشده است`);
+    }
+    const status = String(sRaw).trim();
+    if (!COG_PERF_STATUS_OPTIONS.includes(status)) {
+      throw new ValidationError(`وضعیت اجرای تکلیف «${t.title}» از گزینه‌های مجاز نیست`);
+    }
+    out[`s_${t.key}`] = status;
+    const dRaw = raw4[`d_${t.key}`];
+    const hasRaw = dRaw !== void 0 && dRaw !== null && String(dRaw).trim() !== "";
+    if (status === "معتبر" && !hasRaw && t.rawRequired) {
+      throw new ValidationError(`شاخص خام تکلیف «${t.title}» برای وضعیت «معتبر» الزامی است`);
+    }
+    if (hasRaw) {
+      out[`d_${t.key}`] = cogPerfNumber(dRaw, t);
+    }
+    const pRaw = raw4[`p_${t.key}`];
+    if (pRaw !== void 0 && pRaw !== null && String(pRaw).trim() !== "") {
+      const prompt = String(pRaw).trim();
+      if (!COG_PERF_PROMPT_OPTIONS.includes(prompt)) {
+        throw new ValidationError(`سطح راهنمای تکلیف «${t.title}» از گزینه‌های مجاز نیست`);
+      }
+      out[`p_${t.key}`] = prompt;
+    }
+  }
+  for (const d of COG_PERF_DOMAINS) {
+    const lRaw = raw4[`lvl_${d.id}`];
+    if (lRaw === void 0 || lRaw === null || String(lRaw).trim() === "")
+      continue;
+    const level = String(lRaw).trim();
+    if (!COG_PERF_LEVEL_OPTIONS.includes(level)) {
+      throw new ValidationError(`سطح توصیفی «${d.name}» از گزینه‌های مجاز نیست`);
+    }
+    if (level !== COG_PERF_LEVEL_INSUFFICIENT) {
+      const allValid = d.taskKeys.every((tk) => out[`s_${tk}`] === "معتبر");
+      if (!allValid) {
+        throw new ValidationError(`سطح توصیفی «${d.name}» فقط وقتی قابل ثبت است که همهٔ تکالیف حیطه معتبر باشند — برای دادهٔ ناقص «${COG_PERF_LEVEL_INSUFFICIENT}» را انتخاب کنید`);
+      }
+    }
+    out[`lvl_${d.id}`] = level;
+  }
+  for (const k of ["cond", "note"]) {
+    const v = raw4[k];
+    if (typeof v === "string" && v.trim() !== "")
+      out[k] = v.trim().slice(0, 600);
+  }
+  return out;
+}
+__name(validateCogPerfValues, "validateCogPerfValues");
+__name2(validateCogPerfValues, "validateCogPerfValues");
+function analyzeCogPerf(values) {
+  const tasks = [];
+  const flags = [];
+  let validCount = 0;
+  for (const t of COG_PERF_TASKS) {
+    const status = String(values[`s_${t.key}`]);
+    const hasRaw = values[`d_${t.key}`] !== void 0;
+    const raw = hasRaw ? Number(values[`d_${t.key}`]) : null;
+    const rawFa = hasRaw ? `${faNum2(Number(values[`d_${t.key}`]))} ${t.unit}` : null;
+    const prompt = values[`p_${t.key}`] !== void 0 ? String(values[`p_${t.key}`]) : null;
+    const domain = COG_PERF_DOMAINS.find((d) => d.id === t.domain);
+    tasks.push({ key: t.key, title: t.title, domainId: t.domain, domainName: domain.name, status, raw, rawFa, prompt });
+    if (status === "معتبر")
+      validCount += 1;
+    if (status === "اجرا نشد")
+      flags.push({ key: t.key, label: `${t.title}: اجرا نشد — صفر فرض نشد`, value: 0 });
+    if (status === "ناقص")
+      flags.push({ key: t.key, label: `${t.title}: ناقص — از تفسیر توصیفی کنار گذاشته شد`, value: 0 });
+    if (status === "نامعتبر")
+      flags.push({ key: t.key, label: `${t.title}: نامعتبر — شرایط ثبت رعایت نشد`, value: 0 });
+    if (prompt === COG_PERF_PROMPT_P4) {
+      flags.push({ key: `p_${t.key}`, label: `${t.title}: راهنمای نمایش/مدل‌سازی (P4) — ماهیت تکلیف تغییر کرده و با اجرای مستقل هم‌ارز نیست`, value: 4 });
+    }
+  }
+  const domains = COG_PERF_DOMAINS.map((d) => {
+    const valid = d.taskKeys.filter((tk) => values[`s_${tk}`] === "معتبر").length;
+    const level = values[`lvl_${d.id}`] !== void 0 ? String(values[`lvl_${d.id}`]) : null;
+    return { id: d.id, name: d.name, taskKeys: d.taskKeys, allValid: valid === d.taskKeys.length, validCount: valid, level };
+  });
+  const lvlParts = domains.filter((d) => d.level && d.level !== COG_PERF_LEVEL_INSUFFICIENT);
+  const lvlText = lvlParts.length > 0 ? lvlParts.map((d) => `${d.name}: ${d.level}`).join("، ") : "ثبت نشده";
+  const faSummary = `پروتکل عملکردی شناختی: ${faNum2(validCount)} تکلیف معتبر از ${faNum2(12)} — سطح توصیفی حیطه‌ها: ${lvlText} — ${COG_PERF_VALIDITY_FA}`;
+  const lines = [
+    `پروتکل عملکردی شناختی — کاردرمانی ذهنی (نسخهٔ الگوریتم: ${COG_PERF_ALGO_VERSION})`,
+    `وضعیت اعتبار: ${COG_PERF_VALIDITY_FA}`
+  ];
+  for (const d of domains) {
+    lines.push(`${d.name} — سطح توصیفی: ${d.level ?? "ثبت نشده"}`);
+    for (const t of tasks.filter((x) => x.domainId === d.id)) {
+      lines.push(`· ${t.title}: ${t.status}${t.rawFa ? ` — ${t.rawFa}` : ""}${t.prompt ? ` — ${t.prompt}` : ""}`);
+    }
+  }
+  for (const f of flags)
+    lines.push(`پرچم: ${f.label}`);
+  if (typeof values.cond === "string" && values.cond.trim() !== "")
+    lines.push(`شرایط اجرا: ${values.cond.trim()}`);
+  if (typeof values.note === "string" && values.note.trim() !== "")
+    lines.push(`مشاهدهٔ درمانگر: ${values.note.trim()}`);
+  return {
+    tasks,
+    domains,
+    validCount,
+    flags,
+    band: { max: 9999, label: COG_PERF_BAND_LABEL, color: "ok", advice: COG_PERF_VALIDITY_FA },
+    normFa: "ابزار داخلی ملاک‌محور توصیفی — بدون نمرهٔ کل و بدون برش بالینی؛ حیطه‌ها گروه‌بندی تکالیف‌اند، نه زیرمقیاس نمره‌ای.",
+    faSummary,
+    interpretation: lines.join("\n")
+  };
+}
+__name(analyzeCogPerf, "analyzeCogPerf");
+__name2(analyzeCogPerf, "analyzeCogPerf");
+function buildCogPerfPayload(values, result) {
+  const payload = {};
+  payload["fa_summary"] = { value: result.faSummary, label: "خلاصهٔ پروتکل عملکردی" };
+  for (const t of result.tasks) {
+    payload[`st_${t.key}`] = { value: t.status, label: `${t.title} — وضعیت اجرا` };
+    payload[`d_${t.key}`] = { value: t.rawFa ?? "—", label: `${t.title} — شاخص خام` };
+    if (t.prompt)
+      payload[`p_${t.key}`] = { value: t.prompt, label: `${t.title} — سطح راهنما` };
+  }
+  for (const d of result.domains) {
+    if (d.level)
+      payload[`lvl_${d.id}`] = { value: d.level, label: `سطح توصیفی — ${d.name}` };
+  }
+  payload["chip_band"] = { value: result.band.label, label: "باند" };
+  payload["algo_version"] = { value: COG_PERF_ALGO_VERSION, label: "نسخهٔ الگوریتم" };
+  payload["validity_status"] = { value: COG_PERF_VALIDITY_FA, label: "وضعیت اعتبار" };
+  payload["norm_fa"] = { value: result.normFa, label: "ملاک مرجع" };
+  if (typeof values.cond === "string" && values.cond.trim() !== "") {
+    payload["cond"] = { value: values.cond.trim(), label: "شرایط اجرا" };
+  }
+  if (typeof values.note === "string" && values.note.trim() !== "") {
+    payload["note"] = { value: values.note.trim(), label: "مشاهدهٔ درمانگر" };
+  }
+  return payload;
+}
+__name(buildCogPerfPayload, "buildCogPerfPayload");
+__name2(buildCogPerfPayload, "buildCogPerfPayload");
+function cogPerfAnalysisOf(values, result) {
+  return {
+    score: result.validCount,
+    band: result.band.label,
+    answered: result.tasks.filter((t) => t.status === "معتبر" || t.raw !== null || t.prompt !== null).length,
+    total: COG_PERF_TASKS.length,
+    maxScore: COG_PERF_TASKS.length,
+    flags: result.flags.length > 0 ? result.flags : void 0,
+    interpretation: result.interpretation
+  };
+}
+__name(cogPerfAnalysisOf, "cogPerfAnalysisOf");
+__name2(cogPerfAnalysisOf, "cogPerfAnalysisOf");
 var CASE_EVENT_TRANSITIONS = {
   draft: ["completed", "cancelled"],
   completed: ["cancelled"],
@@ -24303,6 +24525,33 @@ function createCaseEventsService(deps) {
   }
   __name(ensureRehabFxType, "ensureRehabFxType");
   __name2(ensureRehabFxType, "ensureRehabFxType");
+  async function ensureCogPerfType() {
+    const existing = await loadTypeRowByKey(COG_PERF_KEY);
+    if (existing)
+      return existing;
+    await db.execute(
+      `INSERT OR IGNORE INTO case_event_types
+         (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, active, created_by, is_system, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'session', ?, 0, ?, ?, NULL, NULL, 'staff', 0, 'seed-m168', 1, ?, ?)`,
+      [
+        COG_PERF_TYPE_ID,
+        COG_PERF_KEY,
+        "ارزیابی شناختی — پروتکل عملکردی کاردرمانی ذهنی",
+        "دوازده تکلیف ساخت‌یافتهٔ اجرا در مرکز با ثبت وضعیت اجرا، شاخص خام و سطح راهنمای هر تکلیف و سطح توصیفی حیطه‌ها — ابزار داخلی آزمایشی: هنجاری‌نشده و اعتبارسنجی‌نشده، بدون نمرهٔ کل و برش بالینی؛ جایگزین آزمون استاندارد نیست. فقط درمانگر/مدیر؛ از بخش اختصاصی مسیر توانبخشی ثبت می‌شود.",
+        "🧮",
+        JSON.stringify(cogPerfTypeFields()),
+        JSON.stringify([{ max: 9999, label: COG_PERF_BAND_LABEL, color: "ok", advice: "ابزار داخلی آزمایشی — هنجاری‌نشده و اعتبارسنجی‌نشده؛ نتیجه صرفاً توصیفی است و جایگزین آزمون استاندارد نیست." }]),
+        now().toISOString(),
+        now().toISOString()
+      ]
+    );
+    const row = await loadTypeRowByKey(COG_PERF_KEY);
+    if (!row)
+      throw new ConflictError("ثبت type پروتکل عملکردی شناختی ممکن نشد");
+    return row;
+  }
+  __name(ensureCogPerfType, "ensureCogPerfType");
+  __name2(ensureCogPerfType, "ensureCogPerfType");
   async function assertStudent(studentId) {
     const row = await db.queryOne(`SELECT id FROM students WHERE id = ?`, [studentId]);
     if (!row)
@@ -24887,6 +25136,40 @@ function createCaseEventsService(deps) {
       log32.info("event.rehab_fx_created", { id, studentId, ok: result.counts.ok, weak: result.counts.weak, band: result.band.label });
       return eventRowToRecord(await getEventRow(id));
     },
+    async createCogPerfEvent(studentId, input, actor) {
+      await assertStudent(studentId);
+      const values = validateCogPerfValues(input.values);
+      const type = typeRowToRecord(await ensureCogPerfType());
+      const result = analyzeCogPerf(values);
+      const payload = buildCogPerfPayload(values, result);
+      const analysis = cogPerfAnalysisOf(values, result);
+      const summary = buildSummary(payload, null);
+      const id = crypto.randomUUID();
+      const occurredAt = now().toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
+                                    status, payload, analysis, summary, fill_token, fill_expires_at, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, NULL, ?, 'completed', ?, ?, ?, NULL, NULL, ?, ?, ?)`,
+          [id, type.id, studentId, actor.staffId, occurredAt, JSON.stringify(payload), JSON.stringify(analysis), summary, actor.staffId, occurredAt, occurredAt]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "case_event.cog_perf_created",
+          resourceType: "case_event",
+          resourceId: id,
+          changes: {
+            eventTypeId: { from: null, to: type.id },
+            studentId: { from: null, to: studentId },
+            valid: { from: null, to: result.validCount },
+            algo: { from: null, to: "cogperf-v1" },
+            band: { from: null, to: result.band.label }
+          }
+        });
+      });
+      log32.info("event.cog_perf_created", { id, studentId, valid: result.validCount, band: result.band.label });
+      return eventRowToRecord(await getEventRow(id));
+    },
     async updateEvent(id, input, actor) {
       const row = await getEventRow(id);
       assertEditor(actor, row.staff_id ?? row.created_by);
@@ -24894,6 +25177,9 @@ function createCaseEventsService(deps) {
         throw new ConflictError("\u0641\u0642\u0637 \u0631\u0648\u06CC\u062F\u0627\u062F \u062B\u0628\u062A\u200C\u0634\u062F\u0647 \u06CC\u0627 \u067E\u06CC\u0634\u200C\u0646\u0648\u06CC\u0633 \u0642\u0627\u0628\u0644 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0627\u0633\u062A");
       }
       const type = typeRowToRecord(await loadTypeRow(row.event_type_id));
+      if (type.key === COG_PERF_KEY) {
+        throw new ConflictError("رویداد پروتکل عملکردی شناختی با ویرایش عمومی تغییر نمی‌کند — اصلاح را با ثبت جدید انجام دهید تا تاریخچهٔ هر ثبت با نسخهٔ الگوریتم خودش حفظ شود");
+      }
       const mergedValues = {};
       const currentPayload = parseJson(row.payload, null) ?? {};
       for (const f of type.fields) {
@@ -26051,6 +26337,12 @@ function registerCaseEventsRoutes(app, service) {
     const actor = getAuthContext(c);
     const body = await c.req.json().catch(() => null);
     const item = await service.createRehabFxEvent(c.req.param("id"), { values: body?.values ?? {} }, actor);
+    return c.json({ data: item }, 201);
+  });
+  app.post("/api/students/:id/case-events/cog-perf", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json().catch(() => null);
+    const item = await service.createCogPerfEvent(c.req.param("id"), { values: body?.values ?? {} }, actor);
     return c.json({ data: item }, 201);
   });
   app.patch("/api/case-events/:id", requireRole("manager", "therapist"), async (c) => {

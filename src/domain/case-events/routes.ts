@@ -145,6 +145,13 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: item }, 201);
   });
 
+  app.post('/api/students/:id/case-events/cog-perf', requireRole('manager', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json<{ values?: Record<string, unknown> }>().catch(() => null);
+    const item = await service.createCogPerfEvent(c.req.param('id'), { values: body?.values ?? {} }, actor);
+    return c.json({ data: item }, 201);
+  });
+
   app.patch('/api/case-events/:id', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json<{ values?: Record<string, string | number | null>; summary?: string }>();
