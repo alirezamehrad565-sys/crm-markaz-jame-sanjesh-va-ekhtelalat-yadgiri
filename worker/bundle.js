@@ -4152,7 +4152,7 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
   }
 }, "Hono");
 var APP_VERSION = "1.00.30";
-var APP_MILESTONE = "m149+m152";
+var APP_MILESTONE = "m156";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
