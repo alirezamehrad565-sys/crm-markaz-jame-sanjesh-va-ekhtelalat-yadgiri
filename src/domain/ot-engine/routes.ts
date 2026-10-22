@@ -61,6 +61,13 @@ export function registerOtEngineRoutes(app: AppHono, service: OtEngineService): 
     return c.json({ data }, 200);
   });
 
+  // m162 — پیشرفت جلسه‌به‌جلسه (تایم‌لاین جلسات + خط پایهٔ عملکردی) — خواندن: مدیر/منشی/درمانگرِ مسئول
+  app.get('/api/students/:id/ot/progress', requireRole('manager', 'secretary', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const data = await service.getOtProgress(c.req.param('id'), actor);
+    return c.json({ data }, 200);
+  });
+
   // ثبت جلسهٔ کاردرمانی ذهنی (دسته‌مهارت + گزارش جلسه) — فقط مدیر/درمانگرِ مسئول
   app.post('/api/students/:id/ot/sessions', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);

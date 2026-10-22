@@ -2819,6 +2819,64 @@ tr.wl-row--urgent > td:first-child {
 }
 .ot-savebar .btn[disabled] { opacity: .5; cursor: not-allowed; }
 
+/* ───────── m162 — فلوی مسیر توانبخشی: اولویت خط پایه + پیشرفت جلسه‌به‌جلسه ───────── */
+
+/* چیپ حیطهٔ پرچم‌دار خط پایهٔ عملکردی — ستارهٔ اولویت + حلقهٔ هشدار ملایم */
+.ot-domain-chip.is-priority { border-color: color-mix(in srgb, var(--warning) 55%, var(--line)); }
+.ot-domain-chip__prio {
+  position: absolute; top: 3px; inset-inline-start: 6px; font-size: 9px; line-height: 14px;
+  color: var(--warning);
+}
+.ot-priority-hint { display: inline-flex; align-items: center; gap: 4px; color: var(--text-2); }
+.ot-priority-hint b { color: var(--text-1); }
+
+/* پنل پیشرفت جلسه‌به‌جلسه */
+.ot-progress-panel { margin-bottom: var(--sp-3, 12px); }
+.ot-trend { display: grid; gap: 10px; }
+.ot-trend__row {
+  display: grid; gap: 4px 10px;
+  grid-template-columns: minmax(150px, 190px) 1fr minmax(170px, auto);
+  align-items: center;
+}
+.ot-trend__label { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ot-trend__label strong { font-size: var(--fs-sm, 13px); }
+.ot-trend__label span { font-size: var(--fs-xs, 11px); color: var(--text-3); }
+.ot-trend__bar {
+  display: flex; height: 12px; border-radius: 999px; overflow: hidden;
+  background: var(--surface-3);
+}
+.ot-trend__bar span { display: block; height: 100%; min-width: 3px; }
+.ot-trend__bar .is-ok { background: var(--success); }
+.ot-trend__bar .is-warn { background: var(--warning); }
+.ot-trend__bar .is-diff { background: var(--text-3); opacity: .45; }
+.ot-trend__nums {
+  display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-size: var(--fs-xs, 11px); color: var(--text-2); white-space: nowrap;
+}
+.ot-trend__confirm { display: inline-flex; }
+.ot-trend__prompts {
+  grid-column: 2 / -1; font-size: var(--fs-xs, 11px); color: var(--text-3);
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.ot-trend__empty { display: flex; align-items: flex-start; gap: 8px; }
+.ot-trend__note { display: flex; align-items: flex-start; gap: 6px; margin-top: var(--sp-2, 8px); padding-top: var(--sp-2, 8px); border-top: 1px dashed var(--line); }
+
+/* خط پایهٔ عملکردی — شش چیپ حیطه با باند رنگی */
+.ot-baseline { margin-bottom: var(--sp-2, 8px); }
+.ot-baseline__strip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ot-baseline__chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line); border-radius: var(--radius-full);
+  padding: 3px 10px; font-size: var(--fs-xs, 11px); background: var(--surface-2, transparent);
+}
+.ot-baseline__label { color: var(--text-2); }
+.ot-baseline__value { font-weight: 700; color: var(--text-1); }
+
+@media (max-width: 720px) {
+  .ot-trend__row { grid-template-columns: 1fr; }
+  .ot-trend__nums { white-space: normal; }
+}
+
 @media (max-width: 720px) {
   .ot-skill { flex-wrap: wrap; }
   .ot-skill__seg { width: 100%; justify-content: stretch; }

@@ -22,6 +22,9 @@ import type {
   OtDomain,
   OtDomainProgress,
   OtProfile,
+  OtProgressBaselineEntry,
+  OtProgressOutput,
+  OtProgressSessionEntry,
   OtPromptLevel,
   OtSessionSaveInput,
   OtSessionSaveResult,
@@ -464,6 +467,196 @@ export function createOtEngineService(deps: OtEngineDeps) {
     };
   }
 
+  // ───────── m162 — نمای پیشرفت جلسه‌به‌جلسه ─────────
+
+  /** کلیدهای شش حیطهٔ خط پایهٔ عملکردی — هم‌قرارداد REHAB_FX_DOMAINS (case-events/pure) */
+  const REHAB_FX_BASELINE_LABELS: Record<string, string> = {
+    att_sus: 'توجه پایدار',
+    att_sel: 'توجه انتخابی',
+    wm: 'حافظهٔ کاری',
+    inh: 'بازداری',
+    flex: 'انعطاف ذهنی',
+    ps: 'حل مسئله'
+  };
+  /** برچسب باند → رنگ نمایشی (هم‌قرارداد باندهای ce-rehab-fx-v1) */
+  const REHAB_FX_BAND_COLORS: Record<string, string> = {
+    'در انتظار': 'ok',
+    'مرزی': 'warn',
+    'ضعف آشکار': 'danger'
+  };
+
+  /**
+   * پیشرفت جلسه‌به‌جلسه — تایم‌لاین جلسات از ot_progress + خط پایهٔ عملکردی از آخرین
+   * ce-rehab-fx-v1. فقط تجمیعِ دادهٔ موجود (بدون نوع رویداد جدید)؛ مبنای پنل پیشرفت
+   * و داوری‌های عینی: روند تسلط، منحنی محوشدن راهنما، مقایسه با خط پایه.
+   */
+  async function getOtProgress(studentId: string, actor: AuthContext): Promise<OtProgressOutput> {
+    const student = await loadStudent(studentId);
+    assertCanView(student, actor);
+
+    const [rows, baselineEvent] = await Promise.all([
+      db.query<{ id: string; skill_id: string; session_id: string | null; occurred_at: string; status: string; prompt_level: string | null; domain: string; is_primary: number | null }>(
+        `SELECT p.id, p.skill_id, p.session_id, p.occurred_at, p.status, p.prompt_level, s.domain, s.is_primary
+           FROM ot_progress p
+           JOIN ot_skills s ON s.id = p.skill_id
+          WHERE p.student_id = ?
+          ORDER BY p.occurred_at ASC, p.created_at ASC, p.rowid ASC`,
+        [studentId]
+      ),
+      db.queryOne<{ payload: string; occurred_at: string }>(
+        `SELECT e.payload, e.occurred_at
+           FROM case_events e
+           JOIN case_event_types t ON t.id = e.event_type_id
+          WHERE e.student_id = ? AND t.key = ? AND e.status = 'completed' AND e.deleted_at IS NULL
+          ORDER BY e.occurred_at DESC, e.created_at DESC
+          LIMIT 1`,
+        [studentId, REHAB_FX_EVENT_KEY]
+      )
+    ]);
+
+    // ── تایم‌لاین جلسات — گروه‌بندی صعودی بر حسب sessionKey (هم‌قرارداد getOtProfile) ──
+    interface SessionAgg {
+      sessionId: string;
+      occurredAt: string;
+      total: number;
+      mastered: number;
+      withHelp: number;
+      notYet: number;
+      confirmedNew: number;
+      prompts: Record<string, number>;
+      domains: Map<OtDomain, { mastered: number; withHelp: number; notYet: number }>;
+    }
+    const sessionsBy = new Map<string, SessionAgg>();
+    /** آخرین وضعیت هر مهارت تا ردیف جاری — برای قاعدهٔ دوجلسه‌ای و جمع‌بندی تأییدشده‌ها */
+    const skillHistory = new Map<string, { sessionKey: string; status: string }[]>();
+
+    for (const r of rows) {
+      if (!(r.status in OT_SKILL_STATUS_LABELS)) continue; // ردیف نامعتبر — نادیده (D7)
+      const isPrimary = (r.is_primary ?? 1) === 1;
+      const sessionKey = r.session_id ?? `raw:${r.id}`;
+      let agg = sessionsBy.get(sessionKey);
+      if (!agg) {
+        agg = {
+          sessionId: sessionKey,
+          occurredAt: r.occurred_at,
+          total: 0, mastered: 0, withHelp: 0, notYet: 0, confirmedNew: 0,
+          prompts: {},
+          domains: new Map()
+        };
+        sessionsBy.set(sessionKey, agg);
+      }
+      const hist = skillHistory.get(r.skill_id) ?? [];
+      // قاعدهٔ دوجلسه‌ای: «بلد است» این جلسه + آخرین رکوردِ جلسهٔ متفاوتِ قبلی هم «بلد است»
+      if (r.status === 'mastered') {
+        for (let i = hist.length - 1; i >= 0; i--) {
+          if (hist[i].sessionKey !== sessionKey) {
+            if (hist[i].status === 'mastered') agg.confirmedNew += 1;
+            break;
+          }
+        }
+      }
+      hist.push({ sessionKey, status: r.status });
+      skillHistory.set(r.skill_id, hist);
+
+      if (!isPrimary) continue; // مکمل‌ها خارج از شمارش پیشرفت (هم‌قرارداد پروفایل)
+      agg.total += 1;
+      if (r.status === 'mastered') agg.mastered += 1;
+      else if (r.status === 'with_help') agg.withHelp += 1;
+      else agg.notYet += 1;
+      if (r.status === 'with_help' && r.prompt_level && r.prompt_level in OT_PROMPT_LEVEL_LABELS) {
+        agg.prompts[r.prompt_level] = (agg.prompts[r.prompt_level] ?? 0) + 1;
+      }
+      const domAgg = agg.domains.get(r.domain as OtDomain) ?? { mastered: 0, withHelp: 0, notYet: 0 };
+      if (r.status === 'mastered') domAgg.mastered += 1;
+      else if (r.status === 'with_help') domAgg.withHelp += 1;
+      else domAgg.notYet += 1;
+      agg.domains.set(r.domain as OtDomain, domAgg);
+    }
+
+    const sessionList: OtProgressSessionEntry[] = [...sessionsBy.values()]
+      .filter((s) => s.total > 0) // جلسهٔ بی‌مهارتِ primary (فقط مکمل/نامعتبر) شمرده نمی‌شود
+      .sort((a, b) => (a.occurredAt < b.occurredAt ? -1 : a.occurredAt > b.occurredAt ? 1 : 0))
+      .map((s, i) => ({
+        sessionId: s.sessionId,
+        ord: i + 1,
+        occurredAt: s.occurredAt,
+        total: s.total,
+        mastered: s.mastered,
+        withHelp: s.withHelp,
+        notYet: s.notYet,
+        confirmedNew: s.confirmedNew,
+        prompts: s.prompts,
+        domains: OT_DOMAINS.map((d) => ({
+          key: d,
+          ...(s.domains.get(d) ?? { mastered: 0, withHelp: 0, notYet: 0 })
+        }))
+      }));
+
+    // جمع‌بندی — وضعیت فعلی هر مهارت از کل تاریخچه (هم‌قرارداد قاعدهٔ پروفایل)
+    let confirmedMastered = 0;
+    let currentWithHelp = 0;
+    for (const [, hist] of skillHistory) {
+      const last = hist[hist.length - 1];
+      if (!last) continue;
+      if (last.status === 'with_help') currentWithHelp += 1;
+      if (last.status === 'mastered') {
+        for (let i = hist.length - 2; i >= 0; i--) {
+          if (hist[i].sessionKey !== last.sessionKey) {
+            if (hist[i].status === 'mastered') confirmedMastered += 1;
+            break;
+          }
+        }
+      }
+    }
+
+    // ── خط پایهٔ عملکردی — از payload آخرین ce-rehab-fx-v1 (d_* + fx_*_band + fx_*_prompt) ──
+    let baseline: OtProgressBaselineEntry[] | null = null;
+    let baselineSummary: string | null = null;
+    let baselineAt: string | null = null;
+    if (baselineEvent) {
+      try {
+        const payload = JSON.parse(baselineEvent.payload ?? '{}') as Record<string, { value?: unknown; label?: string } | undefined>;
+        const entries: OtProgressBaselineEntry[] = [];
+        for (const [key, label] of Object.entries(REHAB_FX_BASELINE_LABELS)) {
+          const dRow = payload[`d_${key}`];
+          const bandRow = payload[`fx_${key}_band`];
+          if (!dRow || typeof dRow.value !== 'string' || !bandRow || typeof bandRow.value !== 'string') continue;
+          const unit = (dRow.label ?? '').split(' — ')[1] ?? '';
+          entries.push({
+            key,
+            label,
+            valueFa: unit ? `${dRow.value} ${unit}` : dRow.value,
+            band: bandRow.value,
+            color: REHAB_FX_BAND_COLORS[bandRow.value] ?? 'diff',
+            prompt: typeof payload[`fx_${key}_prompt`]?.value === 'string'
+              ? String(payload[`fx_${key}_prompt`]!.value)
+              : 'بدون راهنما'
+          });
+        }
+        if (entries.length > 0) {
+          baseline = entries;
+          baselineSummary = typeof payload['fa_summary']?.value === 'string' ? String(payload['fa_summary']!.value) : null;
+          baselineAt = baselineEvent.occurred_at;
+        }
+      } catch {
+        baseline = null; // payload خراب — خط پایه نمایش داده نمی‌شود
+      }
+    }
+
+    return {
+      sessions: sessionList,
+      baseline,
+      baselineSummary,
+      baselineAt,
+      summary: {
+        sessions: sessionList.length,
+        confirmedMastered,
+        withHelp: currentWithHelp,
+        lastAt: sessionList.length > 0 ? sessionList[sessionList.length - 1].occurredAt : null
+      }
+    };
+  }
+
   // ───────── ثبت جلسهٔ کاردرمانی ذهنی ─────────
 
   async function saveOtSession(studentId: string, input: OtSessionSaveInput, actor: AuthContext): Promise<OtSessionSaveResult> {
@@ -666,7 +859,7 @@ export function createOtEngineService(deps: OtEngineDeps) {
     return { protocol: input.protocol, needType: input.needType, needTypeLabel, eventId: typeRow ? eventId : '' };
   }
 
-  return { getGates, getOtProfile, saveOtSession, setNeeds };
+  return { getGates, getOtProfile, getOtProgress, saveOtSession, setNeeds };
 }
 
 export type OtEngineService = ReturnType<typeof createOtEngineService>;

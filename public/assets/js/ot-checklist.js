@@ -101,11 +101,13 @@ const PROTOCOL_STEPS = {
     ['خانواده و آموزگاران', 'جلسهٔ خانواده‌محور + آموزش آموزگاران با گزارش پیشرفت حیطه‌ای'],
     ['بازسنجی حیطه‌ای', 'مقایسهٔ پروفایل با جلسهٔ اول — ۸ تا ۱۲ جلسه']
   ],
+  // m162 — فلوی توانبخشی: ارزیابی عملکردی (خط پایهٔ عددی) → چک‌لیست مهارتی (نقطهٔ شروع هر حیطه،
+  // اولویت با حیطه‌های پرچم‌دار خط پایه) → مداخلهٔ جلسه‌به‌جلسه از نقطهٔ ادامه → پیشرفت و بازسنجی.
   rehab: [
-    ['ارزیابی پایه', 'ارزیابی شناختی/حرکتی/خودیاری + وکسلر ۴'],
-    ['هدف توانبخشی', 'هدف شناختی/حرکتی/خودیاری/خانواده‌محور از دانش‌نامه'],
-    ['جلسات و مداخله', 'جلسات با نوع نوبت مناسب + تمرین خانگی'],
-    ['پایش و بازسنجی', 'بازسنجی ۴–۶ هفته و گزارش دوره‌ای']
+    ['ارزیابی پایه', 'شرح‌حال + ارزیابی عملکردی ذهنی — خط پایهٔ عددی شش حیطه با سطح راهنما (وکسلر و چک‌لیست‌های خانواده/معلم اختیاری)'],
+    ['چک‌لیست مهارتی', 'نقطهٔ شروع هر حیطه از چک‌لیست مهارتی ۷ حیطه‌ای — اولویت پیمایش با حیطه‌های پرچم‌دار خط پایه'],
+    ['مداخلهٔ جلسه‌به‌جلسه', 'ثبت جلسه از نقطهٔ ادامهٔ هر حیطه + سطح راهنما + تمرین خانگی — حیطه‌به‌حیطه'],
+    ['پیشرفت و بازسنجی', 'روند جلسه‌به‌جلسه (تسلط تأییدشده + محوشدن راهنما) + بازسنجی خط پایه در ۸ تا ۱۲ جلسه']
   ]
 };
 
@@ -208,8 +210,12 @@ export function openNeedsModal({ student, gates, canDecide, refresh }) {
  * کارت اصلی چک‌لیست ۷ حیطه‌ای — ارزیابی مهارتی حین مداخله.
  * profile خروجی GET /api/students/:id/ot/profile است؛ تغییرها محلی انباشته و
  * با «ثبت جلسه» یک‌جا POST می‌شوند (items + گزارش جلسه → تایم‌لاین).
+ * m162 — فلوی مسیرآگاه: protocolLabel برچسب پروتکل در عنوان/مودال ثبت؛
+ * priorityDomains (حیطه‌های پرچم‌دار خط پایهٔ عملکردی توانبخشی) بج «اولویت» می‌گیرند
+ * و حیطهٔ فعال پیش‌فرض اولین اولویتِ ناتمام است — ترتیب «ارزیابی عملکردی اول،
+ * چک‌لیست مهارتی دوم» در خود کارت دیده می‌شود.
  */
-export function otChecklistCard({ student, profile, canDecide, refresh, scrollTarget = false }) {
+export function otChecklistCard({ student, profile, canDecide, refresh, scrollTarget = false, protocolLabel = 'کاردرمانی ذهنی', priorityDomains = [] }) {
   if (!profile) return null;
 
   // تغییرهای ثبت‌نشدهٔ این جلسه — skillId → {status, prevStatus, promptLevel}
@@ -218,9 +224,13 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
   // نمای پیمایش اولیه: ۳ مهارت نخستِ نمره‌نخوردهٔ حیطه — پیمایش ۸۴ آیتم در یک جلسه ممکن نیست
   let sweepMode = false;
 
+  // m162 — حیطهٔ فعال پیش‌فرض: اولین حیطهٔ اولویت‌دارِ ناتمام؛ بعد اولین ناتمام؛ بعد حیطهٔ اول
+  const prioritySet = new Set(priorityDomains);
+  const firstPriorityIncomplete = profile.domains.find((d) => prioritySet.has(d.key) && d.scored < d.total);
+  const firstPriority = profile.domains.find((d) => prioritySet.has(d.key));
   const hasResume = profile.domains.some((d) => d.resumeSkillId && d.scored > 0);
   const firstIncomplete = profile.domains.find((d) => d.scored < d.total);
-  activeDomain = (firstIncomplete ?? profile.domains[0])?.key ?? null;
+  activeDomain = (firstPriorityIncomplete ?? firstPriority ?? firstIncomplete ?? profile.domains[0])?.key ?? null;
 
   function effectiveStatus(skill) {
     const p = pending.get(skill.skillId);
@@ -238,14 +248,16 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
     const domainStrip = el('div', { class: 'ot-domains' },
       profile.domains.map((d) => {
         const pend = [...pending.keys()].filter((sid) => d.skills.some((s) => s.skillId === sid)).length;
+        const isPriority = prioritySet.has(d.key); // m162 — حیطهٔ پرچم‌دار خط پایهٔ عملکردی
         return el('button', {
-          class: `ot-domain-chip${activeDomain === d.key ? ' is-active' : ''}`,
+          class: `ot-domain-chip${activeDomain === d.key ? ' is-active' : ''}${isPriority ? ' is-priority' : ''}`,
           onclick: () => { activeDomain = d.key; build(); },
-          title: `${d.title} — ${fa(d.mastered)} از ${fa(d.total)} تسلط تأییدشده`
+          title: `${d.title} — ${fa(d.mastered)} از ${fa(d.total)} تسلط تأییدشده${isPriority ? ' — اولویت از خط پایهٔ عملکردی' : ''}`
         },
           el('span', { class: 'ot-domain-chip__title' }, d.title),
           el('span', { class: 'ot-domain-chip__nums' }, `${fa(d.mastered)}/${fa(d.total)}`),
           el('span', { class: 'ot-progress' }, el('span', { class: 'ot-progress__fill', style: { width: `${pctOf(d)}%` } })),
+          isPriority ? el('span', { class: 'ot-domain-chip__prio', title: 'حیطهٔ پرچم‌دار خط پایهٔ عملکردی — اولویت پیمایش و مداخله' }, '★') : null,
           pend > 0 ? el('span', { class: 'ot-domain-chip__pend' }, `+${fa(pend)}`) : null
         );
       })
@@ -258,6 +270,8 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
       t.withHelp > 0 ? el('span', { class: 'badge badge--warning' }, `با کمک: ${fa(t.withHelp)}`) : null,
       t.secondarySkills > 0 ? el('span', { class: 'badge badge--neutral', title: 'مهارت‌های هم‌سازه که در شمارش پیشرفت دوباره شمرده نمی‌شوند (m91)' }, `مهارت مکمل: ${fa(t.secondarySkills)}`) : null,
       t.sessions > 0 ? el('span', { class: 'cell-sub' }, `${fa(t.sessions)} جلسه ثبت‌شده${t.lastSessionAt ? ` — آخرین: ${formatJalaliDateTime(t.lastSessionAt)}` : ''}`) : el('span', { class: 'cell-sub' }, 'هنوز جلسه‌ای ثبت نشده — ارزیابی و مداخله از همین‌جا شروع می‌شود'),
+      // m162 — اولویت پیمایش از خط پایهٔ عملکردی (فلوی توانبخشی: ارزیابی اول، چک‌لیست دوم)
+      priorityDomains.length ? el('span', { class: 'cell-sub ot-priority-hint' }, icon('target', 13), 'اولویت پیمایش از خط پایهٔ عملکردی: ', el('b', {}, priorityDomains.map((k) => profile.domains.find((d) => d.key === k)?.title ?? k).join('، '))) : null,
       hasResume ? el('span', { class: 'cell-sub ot-resume-hint' }, icon('bookmark', 13), 'جلسهٔ بعد از نقطه‌های نشانه‌دار ادامه پیدا می‌کند — تسلط با دو جلسهٔ پیاپی «بلد است» تأیید می‌شود') : null
     );
 
@@ -341,7 +355,7 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
       ? el('div', { class: 'ot-savebar' },
           el('span', { class: 'cell-sub' },
             pending.size > 0
-              ? `${fa(pending.size)} وضعیت برای ثبت در جلسهٔ کاردرمانی ذهنی آماده است`
+              ? `${fa(pending.size)} وضعیت برای ثبت در جلسهٔ ${protocolLabel} آماده است`
               : 'وضعیت مهارت‌ها را حین کار با کودک بزنید — سپس جلسه را ثبت کنید'),
           el('button', {
             class: 'btn btn--primary btn--sm',
@@ -353,7 +367,8 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
 
     const card = el('div', { class: 'card ot-card', id: scrollTarget ? 'ot-checklist-anchor' : null },
       el('div', { class: 'card__head' },
-        el('div', { class: 'card__title' }, icon('puzzle', 16), 'ارزیابی مهارتی — چک‌لیست ۷ حیطه‌ای کاردرمانی ذهنی'),
+        el('div', { class: 'card__title' }, icon('puzzle', 16), 'چک‌لیست مهارتی — پایش جلسه به جلسه'),
+        el('span', { class: 'badge badge--accent' }, protocolLabel),
         el('span', { class: 'badge badge--neutral' }, 'حین ارزیابی، مداخله هم انجام می‌شود'),
         canDecide
           ? el('button', {
@@ -392,7 +407,7 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
     const mastered = items.filter((i) => i.status === 'mastered').length;
     const withHelp = items.filter((i) => i.status === 'with_help').length;
     formModal({
-      title: `ثبت جلسهٔ کاردرمانی ذهنی — ${fa(items.length)} مهارت (${fa(mastered)} بلد است${withHelp > 0 ? `، ${fa(withHelp)} با کمک` : ''})`,
+      title: `ثبت جلسهٔ ${protocolLabel} — ${fa(items.length)} مهارت (${fa(mastered)} بلد است${withHelp > 0 ? `، ${fa(withHelp)} با کمک` : ''})`,
       submitLabel: 'ثبت جلسه',
       fields: [
         ...(withHelp > 0
@@ -430,4 +445,85 @@ export function otChecklistCard({ student, profile, canDecide, refresh, scrollTa
 
   build();
   return root;
+}
+
+// ───────── m162 — پنل پیشرفت جلسه به جلسه ─────────
+
+/**
+ * پنل «پیشرفت جلسه به جلسه» — داوری عینی روند مداخله (موج m162).
+ * progress خروجی GET /api/students/:id/ot/progress است (واکشی در load مشترک — GET رشد نمی‌کند):
+ *  · تایم‌لاین جلسات: نوار انباشتهٔ بلد/با کمک/هنوز نه در هر جلسه + تسلط تأییدشدهٔ جدید
+ *  · منحنی محوشدن راهنما: توزیع سطح راهنمای «با کمک» هر جلسه
+ *  · خط پایهٔ عملکردی (توانبخشی): شش حیطهٔ ce-rehab-fx-v1 با باند و سطح راهنما — مرجع مقایسه
+ * بدون جلسه → حالت خالی؛ بدون progress (خطای واکشی) → null.
+ */
+export function otProgressPanel({ progress, protocolLabel = 'کاردرمانی ذهنی' }) {
+  if (!progress) return null;
+  const { sessions, baseline, baselineSummary, baselineAt, summary } = progress;
+  const faNum = (n) => fa(n);
+
+  // ── نوار انباشتهٔ یک جلسه — سه پاره با flex-grow بر حسب شمار ──
+  const trendBar = (s) => el('div', { class: 'ot-trend__bar', role: 'img', 'aria-label': `${fa(s.mastered)} بلد، ${fa(s.withHelp)} با کمک، ${fa(s.notYet)} هنوز نه` },
+    s.mastered > 0 ? el('span', { class: 'is-ok', style: { flex: String(s.mastered) } }) : null,
+    s.withHelp > 0 ? el('span', { class: 'is-warn', style: { flex: String(s.withHelp) } }) : null,
+    s.notYet > 0 ? el('span', { class: 'is-diff', style: { flex: String(s.notYet) } }) : null
+  );
+
+  // خط راهنمای جلسه — توزیع سطح راهنمای «با کمک» (منحنی محوشدن راهنما)
+  const promptLine = (s) => {
+    const parts = Object.entries(OT_PROMPT_LEVELS)
+      .filter(([k]) => (s.prompts?.[k] ?? 0) > 0)
+      .map(([k, lbl]) => `${lbl} ${fa(s.prompts[k])}`);
+    if (!parts.length) return null;
+    return el('div', { class: 'ot-trend__prompts' }, icon('compass', 12), `راهنمای این جلسه: ${parts.join(' · ')}`);
+  };
+
+  const sessionRows = sessions.map((s) => el('div', { class: 'ot-trend__row' },
+    el('div', { class: 'ot-trend__label' },
+      el('strong', {}, `جلسهٔ ${faNum(s.ord)}`),
+      el('span', {}, formatJalaliDateTime(s.occurredAt))),
+    trendBar(s),
+    el('div', { class: 'ot-trend__nums' },
+      `${fa(s.mastered)} بلد · ${fa(s.withHelp)} با کمک · ${fa(s.notYet)} هنوز نه`,
+      s.confirmedNew > 0 ? el('span', { class: 'badge badge--success ot-trend__confirm' }, `تسلط جدید: ${fa(s.confirmedNew)}`) : null),
+    promptLine(s)
+  ));
+
+  // ── خط پایهٔ عملکردی — شش حیطه با باند رنگی و سطح راهنما (مرجع مقایسه) ──
+  const BAND_CLS = { ok: 'badge--success', warn: 'badge--warning', danger: 'badge--error' };
+  const baselineBlock = baseline?.length
+    ? el('div', { class: 'ot-baseline' },
+        el('div', { class: 'clx-sub__title' },
+          'خط پایهٔ عملکردی',
+          baselineAt ? el('span', { class: 'cell-sub' }, formatJalaliDateTime(baselineAt)) : null),
+        baselineSummary ? el('div', { class: 'cell-sub' }, baselineSummary) : null,
+        el('div', { class: 'ot-baseline__strip' },
+          ...baseline.map((b) => el('span', { class: `ot-baseline__chip` , title: `${b.valueFa} — ${b.band} · سطح راهنما: ${b.prompt}` },
+            el('span', { class: 'ot-baseline__label' }, b.label),
+            el('span', { class: 'ot-baseline__value' }, b.valueFa),
+            el('span', { class: `badge ${BAND_CLS[b.color] ?? 'badge--neutral'} ot-baseline__band` }, b.band))))
+      )
+    : null;
+
+  const emptyBlock = sessions.length === 0
+    ? el('div', { class: 'cell-sub ot-trend__empty' },
+        icon('clipboard', 14),
+        `هنوز جلسه‌ای ثبت نشده است — پس از ثبت اولین جلسهٔ ${protocolLabel} از چک‌لیست مهارتی، روند پیشرفت (تسلط تأییدشده، محوشدن راهنما و مقایسه با خط پایه) همین‌جا می‌نشیند.`)
+    : null;
+
+  return el('div', { class: 'card ot-progress-panel' },
+    el('div', { class: 'card__head' },
+      el('div', { class: 'card__title' }, icon('trendingUp', 16), 'پیشرفت جلسه به جلسه'),
+      summary.sessions > 0 ? el('span', { class: 'badge badge--info' }, `${fa(summary.sessions)} جلسه`) : null,
+      summary.sessions > 0 ? el('span', { class: 'badge badge--success' }, `تسلط تأییدشده: ${fa(summary.confirmedMastered)}`) : null,
+      summary.withHelp > 0 ? el('span', { class: 'badge badge--warning' }, `با کمک: ${fa(summary.withHelp)}`) : null
+    ),
+    el('div', { class: 'card__body' },
+      baselineBlock,
+      emptyBlock ?? el('div', { class: 'ot-trend' }, ...sessionRows),
+      sessions.length > 0 && baselineBlock
+        ? el('div', { class: 'cell-sub ot-trend__note' }, icon('compass', 12), ' مقایسهٔ روند با خط پایه: بهبود پایدار یعنی تسلط‌های تأییدشده در حیطه‌های پرچم‌دار خط پایه رشد کند و سطح راهنمای «با کمک» جلسه‌به‌جلسه کم شود.')
+        : null
+    )
+  );
 }

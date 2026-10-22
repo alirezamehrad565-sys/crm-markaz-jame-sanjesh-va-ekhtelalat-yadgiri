@@ -1,7 +1,7 @@
 ════════════════════════════════════════════════════════════════════════
  Route Diff Report — deploy127 (src/**/*.ts  vs  worker/bundle.js)
 ════════════════════════════════════════════════════════════════════════
-Generated : 2026-10-22T08:46:25.300Z
+Generated : 2026-10-22T09:47:00.061Z
 SRC files : 196 TypeScript files under src/ (tests excluded)
 BUNDLE    : worker/bundle.js
 Rules     : line-anchored `app.<method>(` registrations; file-local const
@@ -10,12 +10,12 @@ Rules     : line-anchored `app.<method>(` registrations; file-local const
             middleware NOT counted; comments never matched.
 
 ── Totals ──────────────────────────────────────────────────────────────
-SRC registrations (raw)        :  234  (unique: 234)
-BUNDLE registrations (raw)     :  242  (unique: 242)
+SRC registrations (raw)        :  235  (unique: 235)
+BUNDLE registrations (raw)     :  243  (unique: 243)
 
 ONLY_IN_BUNDLE (extraction backlog) : 8
 ONLY_IN_SRC (stale/dead candidates) : 0
-COMMON                              : 234
+COMMON                              : 235
 
 ── ONLY_IN_BUNDLE (routes that exist only in the live bundle) ──────────
   DELETE /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:31523]
@@ -23,14 +23,14 @@ COMMON                              : 234
   GET /api/students/:param/case-formulation   [worker/bundle.js:33406]
   PATCH /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:31512]
   PATCH /api/pathway-templates/:param   [worker/bundle.js:31483]
-  POST /api/client-errors   [worker/bundle.js:44648]
+  POST /api/client-errors   [worker/bundle.js:44821]
   POST /api/clinical-paths/:param/sessions   [worker/bundle.js:31502]
   POST /api/pathway-templates   [worker/bundle.js:31464]
 
 ── ONLY_IN_SRC (routes that exist only in src — stale/dead-code candidates) ──
   (none)
 
-── COMMON (234) ────────────────────────────────────────────────
+── COMMON (235) ────────────────────────────────────────────────
   DELETE /api/announcements/:param   [src ×1 | bundle ×1]
   DELETE /api/appointments/:param   [src ×1 | bundle ×1]
   DELETE /api/appointments/:param/students/:param   [src ×1 | bundle ×1]
@@ -129,6 +129,7 @@ COMMON                              : 234
   GET /api/students/:param/exercises/batches   [src ×1 | bundle ×1]
   GET /api/students/:param/exercises/suggest   [src ×1 | bundle ×1]
   GET /api/students/:param/ot/profile   [src ×1 | bundle ×1]
+  GET /api/students/:param/ot/progress   [src ×1 | bundle ×1]
   GET /api/students/:param/received-docs   [src ×1 | bundle ×1]
   GET /api/students/:param/received-docs/:param/file   [src ×1 | bundle ×1]
   GET /api/students/:param/tags   [src ×1 | bundle ×1]
@@ -279,5 +280,3 @@ Unresolvable first-arg constants: 0
 Unparsable app.<method>( lines: 0
 
 End of report.
- 
-[route-diff] report written to /home/z/my-project/gh-work/scripts/route-diff-report.txt

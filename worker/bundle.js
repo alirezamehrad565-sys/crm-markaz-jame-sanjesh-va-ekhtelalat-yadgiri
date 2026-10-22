@@ -4151,7 +4151,7 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.36";
+var APP_VERSION = "1.00.37";
 var APP_MILESTONE = "m161";
 var external_exports = {};
 __export(external_exports, {
@@ -34063,6 +34063,174 @@ function createOtEngineService(deps) {
   }
   __name(getOtProfile, "getOtProfile");
   __name2(getOtProfile, "getOtProfile");
+  var REHAB_FX_BASELINE_LABELS = {
+    att_sus: "\u062A\u0648\u062C\u0647 \u067E\u0627\u06CC\u062F\u0627\u0631",
+    att_sel: "\u062A\u0648\u062C\u0647 \u0627\u0646\u062A\u062E\u0627\u0628\u06CC",
+    wm: "\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC",
+    inh: "\u0628\u0627\u0632\u062F\u0627\u0631\u06CC",
+    flex: "\u0627\u0646\u0639\u0637\u0627\u0641 \u0630\u0647\u0646\u06CC",
+    ps: "\u062D\u0644 \u0645\u0633\u0626\u0644\u0647"
+  };
+  var REHAB_FX_BAND_COLORS = {
+    "\u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631": "ok",
+    "\u0645\u0631\u0632\u06CC": "warn",
+    "\u0636\u0639\u0641 \u0622\u0634\u06A9\u0627\u0631": "danger"
+  };
+  async function getOtProgress(studentId, actor) {
+    const student = await loadStudent(studentId);
+    assertCanView(student, actor);
+    const [rows, baselineEvent] = await Promise.all([
+      db.query(
+        `SELECT p.id, p.skill_id, p.session_id, p.occurred_at, p.status, p.prompt_level, s.domain, s.is_primary
+           FROM ot_progress p
+           JOIN ot_skills s ON s.id = p.skill_id
+          WHERE p.student_id = ?
+          ORDER BY p.occurred_at ASC, p.created_at ASC, p.rowid ASC`,
+        [studentId]
+      ),
+      db.queryOne(
+        `SELECT e.payload, e.occurred_at
+           FROM case_events e
+           JOIN case_event_types t ON t.id = e.event_type_id
+          WHERE e.student_id = ? AND t.key = ? AND e.status = 'completed' AND e.deleted_at IS NULL
+          ORDER BY e.occurred_at DESC, e.created_at DESC
+          LIMIT 1`,
+        [studentId, REHAB_FX_KEY]
+      )
+    ]);
+    const sessionsBy = /* @__PURE__ */ new Map();
+    const skillHistory = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      if (!(r.status in OT_SKILL_STATUS_LABELS))
+        continue;
+      const isPrimary = (r.is_primary ?? 1) === 1;
+      const sessionKey = r.session_id ?? `raw:${r.id}`;
+      let agg = sessionsBy.get(sessionKey);
+      if (!agg) {
+        agg = {
+          sessionId: sessionKey,
+          occurredAt: r.occurred_at,
+          total: 0,
+          mastered: 0,
+          withHelp: 0,
+          notYet: 0,
+          confirmedNew: 0,
+          prompts: {},
+          domains: /* @__PURE__ */ new Map()
+        };
+        sessionsBy.set(sessionKey, agg);
+      }
+      const hist = skillHistory.get(r.skill_id) ?? [];
+      if (r.status === "mastered") {
+        for (let i = hist.length - 1; i >= 0; i--) {
+          if (hist[i].sessionKey !== sessionKey) {
+            if (hist[i].status === "mastered")
+              agg.confirmedNew += 1;
+            break;
+          }
+        }
+      }
+      hist.push({ sessionKey, status: r.status });
+      skillHistory.set(r.skill_id, hist);
+      if (!isPrimary)
+        continue;
+      agg.total += 1;
+      if (r.status === "mastered")
+        agg.mastered += 1;
+      else if (r.status === "with_help")
+        agg.withHelp += 1;
+      else
+        agg.notYet += 1;
+      if (r.status === "with_help" && r.prompt_level && r.prompt_level in OT_PROMPT_LEVEL_LABELS)
+        agg.prompts[r.prompt_level] = (agg.prompts[r.prompt_level] ?? 0) + 1;
+      const domAgg = agg.domains.get(r.domain) ?? { mastered: 0, withHelp: 0, notYet: 0 };
+      if (r.status === "mastered")
+        domAgg.mastered += 1;
+      else if (r.status === "with_help")
+        domAgg.withHelp += 1;
+      else
+        domAgg.notYet += 1;
+      agg.domains.set(r.domain, domAgg);
+    }
+    const sessionList = [...sessionsBy.values()].filter((s) => s.total > 0).sort((a, b) => a.occurredAt < b.occurredAt ? -1 : a.occurredAt > b.occurredAt ? 1 : 0).map((s, i) => ({
+      sessionId: s.sessionId,
+      ord: i + 1,
+      occurredAt: s.occurredAt,
+      total: s.total,
+      mastered: s.mastered,
+      withHelp: s.withHelp,
+      notYet: s.notYet,
+      confirmedNew: s.confirmedNew,
+      prompts: s.prompts,
+      domains: OT_DOMAINS.map((d) => ({
+        key: d,
+        ...s.domains.get(d) ?? { mastered: 0, withHelp: 0, notYet: 0 }
+      }))
+    }));
+    let confirmedMastered = 0;
+    let currentWithHelp = 0;
+    for (const [, hist] of skillHistory) {
+      const last = hist[hist.length - 1];
+      if (!last)
+        continue;
+      if (last.status === "with_help")
+        currentWithHelp += 1;
+      if (last.status === "mastered") {
+        for (let i = hist.length - 2; i >= 0; i--) {
+          if (hist[i].sessionKey !== last.sessionKey) {
+            if (hist[i].status === "mastered")
+              confirmedMastered += 1;
+            break;
+          }
+        }
+      }
+    }
+    let baseline = null;
+    let baselineSummary = null;
+    let baselineAt = null;
+    if (baselineEvent) {
+      try {
+        const payload = JSON.parse(baselineEvent.payload ?? "{}");
+        const entries = [];
+        for (const [key, label] of Object.entries(REHAB_FX_BASELINE_LABELS)) {
+          const dRow = payload[`d_${key}`];
+          const bandRow = payload[`fx_${key}_band`];
+          if (!dRow || typeof dRow.value !== "string" || !bandRow || typeof bandRow.value !== "string")
+            continue;
+          const unit = (dRow.label ?? "").split(" \u2014 ")[1] ?? "";
+          entries.push({
+            key,
+            label,
+            valueFa: unit ? `${dRow.value} ${unit}` : dRow.value,
+            band: bandRow.value,
+            color: REHAB_FX_BAND_COLORS[bandRow.value] ?? "diff",
+            prompt: typeof payload[`fx_${key}_prompt`]?.value === "string" ? String(payload[`fx_${key}_prompt`].value) : "\u0628\u062F\u0648\u0646 \u0631\u0627\u0647\u0646\u0645\u0627"
+          });
+        }
+        if (entries.length > 0) {
+          baseline = entries;
+          baselineSummary = typeof payload["fa_summary"]?.value === "string" ? String(payload["fa_summary"].value) : null;
+          baselineAt = baselineEvent.occurred_at;
+        }
+      } catch {
+        baseline = null;
+      }
+    }
+    return {
+      sessions: sessionList,
+      baseline,
+      baselineSummary,
+      baselineAt,
+      summary: {
+        sessions: sessionList.length,
+        confirmedMastered,
+        withHelp: currentWithHelp,
+        lastAt: sessionList.length > 0 ? sessionList[sessionList.length - 1].occurredAt : null
+      }
+    };
+  }
+  __name(getOtProgress, "getOtProgress");
+  __name2(getOtProgress, "getOtProgress");
   async function saveOtSession(studentId, input, actor) {
     const student = await loadStudent(studentId);
     assertCanWrite(student, actor);
@@ -34244,7 +34412,7 @@ function createOtEngineService(deps) {
   }
   __name(setNeeds, "setNeeds");
   __name2(setNeeds, "setNeeds");
-  return { getGates, getOtProfile, saveOtSession, setNeeds };
+  return { getGates, getOtProfile, getOtProgress, saveOtSession, setNeeds };
 }
 __name(createOtEngineService, "createOtEngineService");
 __name2(createOtEngineService, "createOtEngineService");
@@ -34283,6 +34451,11 @@ function registerOtEngineRoutes(app, service) {
   app.get("/api/students/:id/ot/profile", requireRole("manager", "secretary", "therapist"), async (c) => {
     const actor = getAuthContext(c);
     const data = await service.getOtProfile(c.req.param("id"), actor);
+    return c.json({ data }, 200);
+  });
+  app.get("/api/students/:id/ot/progress", requireRole("manager", "secretary", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const data = await service.getOtProgress(c.req.param("id"), actor);
     return c.json({ data }, 200);
   });
   app.post("/api/students/:id/ot/sessions", requireRole("manager", "therapist"), async (c) => {
