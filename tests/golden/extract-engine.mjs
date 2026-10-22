@@ -166,8 +166,7 @@ const EXPORTS = [
   "NORM_MAX_BAND",
   "INDEX_MEMBERS",
   "GAI_MEMBERS",
-  "HYPOTHESES",
-  "TREATMENTS",
+  // T8 (m149) — HYPOTHESES/TREATMENTS حذف شدند؛ فرضیه‌ها {id, weight, clues} تنها خروجی بالینی‌اند
   "MIN_AGE",
   "MAX_AGE"
 ];
@@ -206,9 +205,10 @@ const engineHeader = `// engine.js — WISC-IV Wechsler analysis engine (EXTRACT
 //
 // Region layout (bundle lines):
 //   ${startLine}-${endAIdx + 1}   pure computation core: subtest definitions, norms (NORMS = norms_default,
-//         a 71 KB data line), index/cluster/GAI/step5 math, HYPOTHESES (13 entries),
-//         validation, flags, hypothesis activation/scoring, treatments,
-//         runWechslerAnalysis (engine entry point).
+//         a 71 KB data line), index/cluster/GAI/step5 math, hypothesis activation
+//         (T8/m149: فقط روان‌سنجی + شواهد {id, weight, clues} — لایهٔ تفسیر موازی
+//         outcomes/main/comorbid/binaryScenarios/treatments/queue حذف شده است),
+//         validation, flags, runWechslerAnalysis (engine entry point).
 //   ${startBIdx + 1}-${endLine}   pure payload glue: WISC4_EVENT_KEY, RAW_FIELD_MAP (raw_si..raw_ca + legacy
 //         raw_sim/raw_voc/raw_com/raw_pc), extractRawScores, Jalali/Gregorian date
 //         parsing, compactWechslerOutput, applyWechslerEngineToPayload (the

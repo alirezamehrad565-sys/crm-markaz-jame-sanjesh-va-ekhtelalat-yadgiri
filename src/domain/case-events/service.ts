@@ -16,10 +16,11 @@ import type {
 } from './types';
 import { CASE_EVENT_STATUSES } from './types';
 import {
-  analyzeChecklist, base64ToBytes, buildEventPayload, buildSummary, canTransitionStatus,
-  estimateBase64Bytes, EVENT_FILES_MAX, extractFollowUpAction, packageComponentsOf, resolveBand, sanitizeFilename,
-  sanitizeTeacherName, stripDataUrlPrefix, teacherBindingOfPayload,
-  validateFileInput, validateTypeDefinition, withTeacherName
+  analyzeChecklist, analyzeSensoryChip, base64ToBytes, buildEventPayload, buildSensoryChipPayload, buildSummary,
+  canTransitionStatus, estimateBase64Bytes, EVENT_FILES_MAX, extractFollowUpAction, packageComponentsOf, resolveBand,
+  SENSORY_CHIP_BANDS, SENSORY_CHIP_FIELDS, SENSORY_CHIP_KEY, SENSORY_CHIP_SUBSCALES, SENSORY_CHIP_TYPE_ID,
+  sanitizeFilename, sanitizeTeacherName, stripDataUrlPrefix, teacherBindingOfPayload,
+  validateFileInput, validateSensoryChipLevels, validateTypeDefinition, withTeacherName
 } from './pure';
 
 interface TypeRow {
@@ -203,6 +204,36 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
   async function assertStudent(studentId: string): Promise<void> {
     const row = await db.queryOne<{ id: string }>(`SELECT id FROM students WHERE id = ?`, [studentId]);
     if (!row) throw new NotFoundError('دانش‌آموز');
+  }
+
+  /**
+   * — T9/m152: تضمین وجود type چیپ حسی — idempotent (بدون مایگریشن؛ کلید unique است).
+   * type سیستمیِ خارج کتابخانه است (active=0) تا فقط از مسیر اختصاصی چیپ ثبت شود و
+   * فرم عمومی/انتخابگر پنل آن را نبیند — تعریف آینهٔ battery-screening.json (pure.ts) است.
+   */
+  async function ensureSensoryChipType(): Promise<TypeRow> {
+    const existing = await loadTypeRowByKey(SENSORY_CHIP_KEY);
+    if (existing) return existing;
+    await db.execute(
+      `INSERT OR IGNORE INTO case_event_types
+         (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, active, created_by, is_system, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'checklist', ?, 0, ?, ?, ?, NULL, 'family', 0, 'seed-m152', 1, ?, ?)`,
+      [
+        SENSORY_CHIP_TYPE_ID,
+        SENSORY_CHIP_KEY,
+        'چیپ غربالگری حسی — ثبت درمانگر',
+        'سه مشاهدهٔ کوتاه حسی (صدا، نور، لمس و بافت) در سه سطح — ابزار میکروی دوکلیکی تب شناسایی؛ جایگزین ابزار استاندارد حسی نیست.',
+        '👂',
+        JSON.stringify(SENSORY_CHIP_FIELDS),
+        JSON.stringify(SENSORY_CHIP_BANDS),
+        JSON.stringify(SENSORY_CHIP_SUBSCALES),
+        now().toISOString(),
+        now().toISOString()
+      ]
+    );
+    const row = await loadTypeRowByKey(SENSORY_CHIP_KEY);
+    if (!row) throw new ConflictError('ثبت type چیپ حسی ممکن نشد');
+    return row;
   }
 
   /** گیت نویسنده/مدیر برای ویرایش و لغو */
@@ -635,6 +666,46 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         }
       });
       log.info('event.created', { id, type: type.key, studentId: input.studentId, status });
+      return eventRowToRecord(await getEventRow(id));
+    },
+
+    /**
+     * — T9/m152: ثبت چیپ غربالگری حسی — مسیر اختصاصیِ دوکلیکی تب شناسایی.
+     * تفاوت با createEvent: رویداد همین‌جا completed می‌شود (چک‌لیستِ غیرخانواده‌پر است —
+     * pending_family و توکن بی‌معناست)؛ تحلیل v2 + payload برچسب‌دار در همان تراکنش.
+     * آیتم جا/خارج از بازه → ValidationError فارسی (بدون رکورد).
+     */
+    async createSensoryChipEvent(studentId, input, actor) {
+      await assertStudent(studentId);
+      // اول اعتبارسنجی — ورودی خراب هیچ ردی (نه event نه type) نمی‌گذارد
+      const levels = validateSensoryChipLevels(input.levels);
+      const type = typeRowToRecord(await ensureSensoryChipType());
+      const payload = buildSensoryChipPayload(levels);
+      const analysis = analyzeSensoryChip(levels);
+      const summary = buildSummary(payload, analysis);
+      const id = crypto.randomUUID();
+      const occurredAt = now().toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
+                                    status, payload, analysis, summary, fill_token, fill_expires_at, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, NULL, ?, 'completed', ?, ?, ?, NULL, NULL, ?, ?, ?)`,
+          [id, type.id, studentId, actor.staffId, occurredAt, JSON.stringify(payload), JSON.stringify(analysis), summary, actor.staffId, occurredAt, occurredAt]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'case_event.sensory_chip_created',
+          resourceType: 'case_event',
+          resourceId: id,
+          changes: {
+            eventTypeId: { from: null, to: type.id },
+            studentId: { from: null, to: studentId },
+            total: { from: null, to: analysis.score },
+            band: { from: null, to: analysis.band }
+          }
+        });
+      });
+      log.info('event.sensory_chip_created', { id, studentId, score: analysis.score, band: analysis.band });
       return eventRowToRecord(await getEventRow(id));
     },
 

@@ -22,8 +22,9 @@ export const WECHSLER_W4_EVENT_KEY = 'ce-wechsler-w4-v1' as const;
 
 /**
  * شناسه‌های سیزده‌گانهٔ فرضیهٔ موتور وکسلر ۴ — تک‌منبع نگاشت این ماژول.
- * تست کامل‌بودن (clinical-engine-v2.test.ts) همین فهرست را با HYPOTHESES موتور وکسلر
- * (src/domain/wechsler-engine) هم‌خوان می‌کند تا شناسهٔ آینده‌ای جا نیفتد.
+ * تست کامل‌بودن (clinical-engine-v2.test.ts) همین فهرست را با شناسه‌های فعال‌ساز
+ * موتور وکسلر (src/domain/wechsler-engine) هم‌خوان می‌کند تا شناسهٔ آینده‌ای جا نیفتد.
+ * T8 (m149): موتور دیگر جدول ملاک‌ها را export نمی‌کند — این رجیستری مرجع واحد نام‌هاست.
  */
 export const WECHSLER_HYP_IDS = [
   'SLD',

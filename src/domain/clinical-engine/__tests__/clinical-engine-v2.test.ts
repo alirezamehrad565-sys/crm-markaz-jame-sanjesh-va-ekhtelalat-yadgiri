@@ -18,7 +18,6 @@ import {
   wechslerHypothesisBoost
 } from '../wechsler-link';
 import { convergenceItemOf, convergenceSourceOfTool, ID_ADAPT_EVENT_KEY } from '../convergence';
-import { HYPOTHESES } from '../../wechsler-engine/index.js';
 import type { EvidenceEvent } from '../types';
 
 // ───────── سازنده‌های رویداد ─────────
@@ -86,8 +85,11 @@ function snap(form: 'p' | 't', ia: number, color: 'danger' | 'warn' | 'ok' | nul
 
 describe('T6 — نگاشت ۱۳ فرضیهٔ وکسلر به رجیستری واحد', () => {
   it('هر ۱۳ شناسهٔ موتور وکسلر در جدول نگاشت صریح‌اند (هدف یا null عمدی)', () => {
-    // HYPOTHESES موتور = مرجع واقعی شناسه‌ها؛ جدول ما باید دقیقاً همان‌ها را پوشش دهد
-    const engineIds = HYPOTHESES.map((h) => h.id).sort();
+    // T8 (m149) — جدول ملاک‌های موتور وکسلر حذف شد (لایهٔ تفسیر موازی)؛ فعال‌ساز profile-محور
+    // همان سیزده شناسه را تولید می‌کند — فهرست مرجع این‌جا قفل می‌شود تا شناسهٔ آینده‌ای جا نیفتد
+    const engineIds = [
+      'SLD', 'ADHD', 'ID', 'BIF', 'DLD', 'NVLD', 'TBI', 'ASD', 'TWO_E', 'MOOD', 'APD', 'NORMAL', 'DOMAIN_WEAK'
+    ].sort();
     expect(engineIds).toEqual([...WECHSLER_HYP_IDS].sort());
     for (const id of WECHSLER_HYP_IDS) {
       expect(id in WECHSLER_HYP_TARGETS || id === 'SLD' || id === 'DOMAIN_WEAK', id).toBe(true);

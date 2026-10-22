@@ -16,7 +16,11 @@ export type RawScores = Partial<Record<SubtestCode, number>>;
 /** Jalali date triple [year, month, day]. */
 export type JalaliDate = [number, number, number];
 
-/** Input of runWechslerAnalysis / analyzeWechsler. */
+/** Input of runWechslerAnalysis / analyzeWechsler.
+ *
+ * T8 (m149) — baseAnswers/skippedHypotheses در قرارداد ورودی می‌مانند (پالایش وزن MOOD با BQ4
+ * و سازگاری فراخوانی‌های قدیمی)؛ اما صف پرسش/پاسخ و امتیازدهی ملاک‌ها دیگر تولید نمی‌شود.
+ */
 export interface WechslerAnalysisInput {
   rawScores: RawScores;
   /** Test date as Jalali [y, m, d]. */
@@ -53,32 +57,9 @@ export interface WechslerValidation {
   missing: SubtestCode[];
 }
 
-/** Hypothesis activation produced from the profile only (before questionnaire). */
+/** فرضیهٔ فعال‌شده از نیم‌رخ (پیش از پرسش‌نامه) — تنها خروجی بالینی موتور (T8/m149) */
 export interface WechslerHypothesisActivation {
   id: string;
-  weight: number;
-  clues: string[];
-}
-
-export interface WechslerOutcomeCounts {
-  aYes: number;
-  aTotal: number;
-  bYes: number;
-  bTotal: number;
-  cYes: number;
-  dYes: number;
-  unknown: number;
-}
-
-export interface WechslerOutcome {
-  id: string;
-  name: string;
-  status: "active" | "rejected" | "skipped";
-  level: string;
-  conditional: boolean;
-  capNote: string | null;
-  rejectReason: string | null;
-  counts: WechslerOutcomeCounts;
   weight: number;
   clues: string[];
 }
@@ -114,15 +95,7 @@ export interface WechslerSnapshot {
   subWeak: Array<{ code: string; scaled: number }>;
 }
 
-export interface WechslerTreatment {
-  home: string[];
-  school: string[];
-  referral: string[];
-  progress: string[];
-  stopCriteria: string[];
-}
-
-/** Full engine result (analysis + hypotheses + outcomes + treatments). */
+/** Full engine result (psychometrics + hypothesis evidence — T8/m149: بدون لایهٔ تفسیر موازی). */
 export interface WechslerAnalysisResult {
   ok: boolean;
   ageLine: string;
@@ -131,17 +104,10 @@ export interface WechslerAnalysisResult {
   analysis: Record<string, unknown> | null;
   snapshot: WechslerSnapshot | null;
   flags: Array<{ id: string; fa: string; validity: boolean }>;
+  /** شواهد فرضیه‌ای موتور — موتور واحد همین‌ها را مصرف می‌کند ({id, weight, clues}) */
   hypotheses: WechslerHypothesisActivation[];
-  answers: Record<string, string>;
-  autoNotes: string[];
-  queue: Array<{ key: string; hypId: string; kind: string; fa: string; q: string; ext: boolean }>;
-  outcomes: WechslerOutcome[];
-  main: WechslerOutcome | null;
-  comorbid: WechslerOutcome | null;
   weakDomains: Array<{ domain: string; label: string; indices: string[] }>;
   monitoringInterval: string;
-  binaryScenarios: Array<Record<string, unknown>>;
-  treatments: Record<string, WechslerTreatment>;
   /** T1 (m146) — افزودنی: سیگنال‌های بالینی ساخته‌شده از snapshot/analysis موجود (ok:false → []) */
   signals: WechslerSignal[];
   /** T1 (m146) — افزودنی: پروفایل ساخت‌یافتهٔ خلاصه (ok:false → null) */
@@ -317,7 +283,5 @@ export declare const NORM_MIN_AGE: 6;
 export declare const NORM_MAX_BAND: 14;
 export declare const INDEX_MEMBERS: Record<"VCI" | "PRI" | "WMI" | "PSI" | "FSIQ", string[]>;
 export declare const GAI_MEMBERS: string[];
-export declare const HYPOTHESES: Array<Record<string, any>>;
-export declare const TREATMENTS: Record<string, WechslerTreatment>;
 export declare const MIN_AGE: 6;
 export declare const MAX_AGE: 16;

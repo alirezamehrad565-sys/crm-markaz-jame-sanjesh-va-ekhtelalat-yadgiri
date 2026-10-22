@@ -372,6 +372,102 @@ function checklistPlanCard({ student, plan, typesById, canDecide, refresh }) {
   );
 }
 
+// ───────── T9/m152 — چیپ غربالگری حسی (قرارداد ≤۲کلیک) — بدنهٔ مرحلهٔ شرح‌حال ─────────
+// ابزار میکروی «حساسیت حسی» — سه مجرا × سه سطح، جمع ۰..۶ (تعریف سمت سرور: ce-sensory-chip-v1).
+// گیت: آخرین شرح‌حال نسخهٔ ۳ کامل‌شده با sensory_concern «متوسط»/«زیاد» — از پاسخ مشترک
+// رویدادها (صفر GET تازه — §8.1). ثبت: مودال میکرو (کلیک ۱) + «ثبت» (کلیک ۲) → POST
+// مسیر اختصاصی /case-events/sensory-chip. پس از ثبت: نشان فقط‌خواندنی با باند ذخیره‌شده.
+const SENSORY_CHIP_KEY = 'ce-sensory-chip-v1';
+const SENSORY_CHIP_ITEMS = [
+  { key: 'sound', label: 'صدا (صوت)' },
+  { key: 'light', label: 'نور (نور/رنگ)' },
+  { key: 'touch', label: 'لمس و بافت (لمس/جنس لباس/بافت غذا)' }
+];
+const SENSORY_CHIP_LEVELS = ['بدون حساسیت', 'حساسیت جزئی', 'حساسیت آزارنده'];
+/** نگرانی حسی شرح‌حال v3 که چیپ را روشن می‌کند (قرارداد infer.ts — anam.sensory) */
+const SENSORY_CONCERN_GATE = ['متوسط', 'زیاد — نگران‌کننده'];
+
+/** نشان باند چیپ — رنگ از جدول باندهای type (ok/warn/danger → کلاس‌های موجود) */
+function sensoryBandBadge(text, color) {
+  const cls = color === 'ok' ? 'badge--success'
+    : color === 'warn' ? 'badge--warning'
+      : color === 'danger' ? 'badge--error'
+        : 'badge--neutral';
+  return el('span', { class: `badge ${cls}` }, text);
+}
+
+/**
+ * کارت چیپ حسی — null یعنی رندر نشود (بدون نگرانی حسی و بدون ثبت قبلی).
+ * ثبت قبلی → نشان فقط‌خواندنی («ثبت شد — باند») در هر حالت؛ گرنه گیت شرح‌حال + اقدام.
+ */
+function sensoryChipCard({ student, events, typesById, canDecide, refresh }) {
+  const chipTypeId = typesById.get(SENSORY_CHIP_KEY)?.id ?? null;
+  const existing = chipTypeId
+    ? (events ?? []).find((e) => e.eventTypeId === chipTypeId && e.status !== 'cancelled')
+    : null;
+
+  if (existing) {
+    const bandLabel = existing.analysis?.band ?? existing.payload?.chip_band?.value ?? null;
+    const color = ((existing.typeBands ?? []).find((b) => b.label === bandLabel) ?? {}).color ?? null;
+    return el('div', { class: 'card clx-sensory' },
+      el('div', { class: 'card__body' },
+        el('div', { class: 'clx-plan__head' },
+          el('strong', { class: 'clx-plan__title' }, icon('activity', 15), 'حساسیت حسی'),
+          sensoryBandBadge(`ثبت شد — ${bandLabel ?? '—'}`, color)),
+        existing.summary || existing.payload?.fa_summary?.value
+          ? el('div', { class: 'cell-sub' }, existing.summary || existing.payload.fa_summary.value)
+          : null,
+        existing.occurredAt ? el('div', { class: 'cell-sub' }, `ثبت: ${formatJalaliDateTime(existing.occurredAt)}`) : null));
+  }
+
+  // گیت — آخرین شرح‌حال نسخهٔ ۳ کامل‌شده (پاسخ‌ها DESC مرتب‌اند — اولین = آخرین)
+  const anamId = typesById.get(ANAMNESIS_KEY)?.id ?? null;
+  const lastAnam = anamId
+    ? (events ?? []).find((e) => e.eventTypeId === anamId && e.status === 'completed' && e.payload?.sensory_concern?.value)
+    : null;
+  const concern = lastAnam?.payload?.sensory_concern?.value ?? null;
+  if (!concern || !SENSORY_CONCERN_GATE.includes(concern)) return null;
+
+  const head = el('div', { class: 'clx-plan__head' },
+    el('strong', { class: 'clx-plan__title' }, icon('activity', 15), 'حساسیت حسی'),
+    el('span', { class: 'badge badge--warning' }, `نگرانی شرح‌حال: ${concern}`));
+
+  // بینندهٔ بدون حق ثبت — فقط اطلاع (ثبت با مدیر/درمانگر)
+  if (!canDecide) {
+    return el('div', { class: 'card clx-sensory' },
+      el('div', { class: 'card__body' }, head,
+        el('div', { class: 'cell-sub' }, 'نگرانی حسی در شرح‌حال ثبت شده — پروفایل مشاهده‌شده توسط درمانگر ثبت می‌شود.')));
+  }
+
+  // کلیک ۱ — مودال میکرو: سه ردیف × دکمه‌های سطح (پیش‌فرض «بدون حساسیت») — کلیک ۲ = ثبت
+  const openChipModal = () => {
+    formModal({
+      title: 'چیپ غربالگری حسی — سه مشاهده، سه سطح',
+      submitLabel: 'ثبت',
+      fields: SENSORY_CHIP_ITEMS.map((it) => ({
+        name: it.key, type: 'chips', label: it.label, labels: SENSORY_CHIP_LEVELS, value: 0, span: 2
+      })),
+      onSubmit: async (vals) => {
+        try {
+          await api.post(`/api/students/${student.id}/case-events/sensory-chip`, {
+            levels: { sound: Number(vals.sound), light: Number(vals.light), touch: Number(vals.touch) }
+          });
+          toast('چیپ حسی ثبت شد — نشان باند در همین ردیف می‌نشیند', 'success');
+          refresh();
+          return true;
+        } catch (err) { toastError(err); return false; }
+      }
+    });
+  };
+
+  return el('div', { class: 'card clx-sensory' },
+    el('div', { class: 'card__body' },
+      head,
+      el('div', { class: 'cell-sub' }, 'پروفایل مشاهده‌شدهٔ حسی در سه مجرا (صدا/نور/لمس و بافت) و سه سطح — جمع ۰ تا ۶.'),
+      el('div', { class: 'clx-actions' },
+        el('button', { class: 'btn btn--primary btn--sm', onclick: openChipModal }, icon('zap', 14), 'ثبت مشاهدهٔ حسی'))));
+}
+
 /**
  * — بلوک «زمینهٔ تفسیر» — بدنهٔ مرحلهٔ وکسلر (بدنه تغییر نکرده — m134)
  * سن/تولد/پایه/مسیر پرونده کنار خروجی کمی وکسلر (FSIQ/صدک/پراکندگی) — تا نیم‌رخ
@@ -1426,7 +1522,7 @@ export async function renderClinicalTab(box, { student }) {
       : null;
     const seenBlock = seenChipsBlock(insights);
     const synthesis = await synthesisSection({
-      student, formulation, insights, gates, canDecide, refresh,
+      student, formulation, insights, gates, canDecide, refresh, plan,
       engineDetails: [critsSection, hypotheses, seenBlock].filter(Boolean)
     });
 
@@ -1467,6 +1563,9 @@ export async function renderClinicalTab(box, { student }) {
         const body = [];
         if (g?.detail) body.push(el('div', { class: 'cell-sub' }, g.detail));
         if (anamRows.node) body.push(anamRows.node);
+        // T9/m152 — چیپ حسی: گیت نگرانی حسی شرح‌حال v3 + ثبت دوکلیکی (داده از پاسخ مشترک رویدادها)
+        const sensoryChip = sensoryChipCard({ student, events, typesById, canDecide, refresh });
+        if (sensoryChip) body.push(sensoryChip);
         if (!g?.done) {
           if (!g?.detail && !anamRows.node) {
             body.push(el('div', { class: 'cell-sub' }, SM.anamnesis.emptyHint));
