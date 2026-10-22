@@ -289,6 +289,12 @@ export interface CaseEventsService {
   listEventsByAppointments(appointmentIds: string[]): Promise<Map<string, CaseEventRecord[]>>;
   getEventById(id: string): Promise<CaseEventRecord | null>;
   createEvent(input: CaseEventInput, actor: AuthContext): Promise<CaseEventRecord>;
+  /**
+   * — T9/m152: ثبت چیپ غربالگری حسی (ابزار میکروی دوکلیکی تب شناسایی).
+   * مسیر اختصاصی — رویداد completed با تحلیل باند ساخته می‌شود (نه pending_family)؛
+   * type با کلید ce-sensory-chip-v1 در همان فراخوانی idempotent ensure می‌شود (بدون مایگریشن).
+   */
+  createSensoryChipEvent(studentId: string, input: { levels: Record<string, unknown> }, actor: AuthContext): Promise<CaseEventRecord>;
   updateEvent(id: string, input: { values?: Record<string, string | number | null>; summary?: string }, actor: AuthContext): Promise<CaseEventRecord>;
   /** — نهایی‌سازی پیش‌نویس: اعتبارسنجی الزامی + هوک اقدام بعدی */
   finalizeEvent(id: string, actor: AuthContext): Promise<CaseEventRecord>;

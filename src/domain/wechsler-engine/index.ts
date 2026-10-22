@@ -34,7 +34,6 @@ import {
   type WechslerAnalysisInput,
   type WechslerAnalysisResult,
   type WechslerHookResult,
-  type WechslerOutcome,
   type SubtestCode
 } from "./engine.js";
 
@@ -72,8 +71,6 @@ export {
   NORM_MAX_BAND,
   INDEX_MEMBERS,
   GAI_MEMBERS,
-  HYPOTHESES,
-  TREATMENTS,
   MIN_AGE,
   MAX_AGE,
   // types
@@ -85,9 +82,7 @@ export {
   type WechslerValidationError,
   type WechslerAnalysisResult,
   type WechslerSnapshot,
-  type WechslerOutcome,
   type WechslerHypothesisActivation,
-  type WechslerTreatment,
   type FormPayload,
   type FormFieldEntry,
   type WechslerComputedScores,
@@ -111,15 +106,17 @@ export {
  *               integers within the age-band norm range.
  *   testDate / birthDate — Jalali [year, month, day] triples.
  *   strict (default true) — when true, a VCI/PRI gap > 23 marks GAI invalid.
- *   baseAnswers — questionnaire answers keyed "<HYP_ID>:<CRIT_ID>" ("yes"/"no"/"unknown"),
- *                 plus base question "BQ4" (recent major life event).
- *   skippedHypotheses — hypothesis ids the assessor skipped.
+ *   baseAnswers — legacy input contract (T8/m149): accepted for weight refinement
+ *                 (base question "BQ4" refines the MOOD weight); no queue is produced.
+ *   skippedHypotheses — legacy input contract (T8/m149): accepted, no longer scored.
  *
  * Output: WechslerAnalysisResult — validation (errors/warnings/computable/missing),
- * index scores + FSIQ + GAI (snapshot), flags, activated hypotheses (13 possible ids:
- * SLD ADHD ID BIF DLD NVLD TBI ASD TWO_E MOOD APD NORMAL DOMAIN_WEAK), questionnaire
- * queue/answers, scored outcomes with main/comorbid pick, weak domains, monitoring
- * interval, binary scenarios and treatment plans.
+ * index scores + FSIQ + GAI (snapshot), flags, hypothesis EVIDENCE (13 possible ids:
+ * SLD ADHD ID BIF DLD NVLD TBI ASD TWO_E MOOD APD NORMAL DOMAIN_WEAK — {id, weight, clues}),
+ * weak domains, monitoring interval, signals and the structured profile.
+ * T8 (m149) — the parallel interpretation layer (outcomes/main/comorbid pick,
+ * binary scenarios, treatment plans, questionnaire queue/answers) is REMOVED:
+ * interpretation display belongs to the unified reasoning engine.
  */
 export function analyzeWechsler(input: WechslerAnalysisInput): WechslerAnalysisResult {
   return runWechslerAnalysis(input);
@@ -173,10 +170,3 @@ export const wechslerSubtestCodes: readonly SubtestCode[] = SUBTEST_CODES;
 
 /** Supported age range in whole years (norm tables are clamped to band sq-14 above that). */
 export const wechslerAgeRange: { min: number; max: number } = { min: MIN_AGE, max: MAX_AGE };
-
-/**
- * Convenience: extract main hypothesis id (or null) from an engine result.
- */
-export function mainHypothesisId(result: WechslerAnalysisResult): string | null {
-  return (result.main as WechslerOutcome | null)?.id ?? null;
-}

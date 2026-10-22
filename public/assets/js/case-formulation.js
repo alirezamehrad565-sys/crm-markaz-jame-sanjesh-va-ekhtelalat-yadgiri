@@ -13,8 +13,9 @@
 
 import { api } from './api.js';
 import { el, icon } from './ui.js';
-import { fa } from './format.js';
+import { fa, formatJalaliFull, tehranTodayYmd } from './format.js';
 import { openNeedsModal } from './ot-checklist.js'; // — ثبت نتیجهٔ نیاز ویژه (دروازهٔ فاز مداخله)
+import { openFeedbackSheetModal } from './feedback-sheet.js'; // — T9/m152: برگهٔ بازخورد خانواده (ترکیب سمت مرورگر)
 import { CONFIDENCE_BADGE, SYNTHESIS_META } from './clinical-content.js';
 
 const LEVEL_BADGE = {
@@ -241,9 +242,10 @@ export async function fetchFormulation({ student }) {
  * formulation: دادهٔ پیش‌گرفته (fetchFormulation) — اگر null بود همین‌جا یک‌بار fetch می‌شود.
  * engineDetails: گره‌های آمادهٔ clinical-insights (جدول DSM + فرضیه‌ها + نتایج + شواهد)
  * که پشت تاشوی «جزئیات موتور تشخیصی» می‌نشینند؛ خالی = تاشو حذف.
+ * plan: پلن پیشنهادی چک‌لیست (T3) — بخش «گام‌های بعدی» برگهٔ بازخورد از آن می‌آید (T9/m152).
  * خروجی null یعنی «نمایش نده» — هرگز تب را نمی‌شکند.
  */
-export async function synthesisSection({ student, formulation = null, insights = {}, gates = null, canDecide = false, refresh, engineDetails = null }) {
+export async function synthesisSection({ student, formulation = null, insights = {}, gates = null, canDecide = false, refresh, engineDetails = null, plan = null }) {
   const f = formulation ?? await fetchFormulation({ student });
 
   const top = (insights?.ranked ?? [])[0] ?? null;
@@ -297,6 +299,19 @@ export async function synthesisSection({ student, formulation = null, insights =
       }, icon('check', 15), 'ثبت نتیجهٔ نیاز ویژه')
     : null;
 
+  // — T9/m152: برگهٔ بازخورد خانواده — ترکیب والدپسند از همین داده‌ها (صفر GET تازه، بدون بک‌اند جدید)
+  //   فقط وقتی صورت‌بندی هست (کارت خودش گارد دارد)؛ متن موتور هرگز عیناً برای خانواده نمی‌رود —
+  //   composer بازنویسی ساده می‌کند و چاپ/کپی دارد (ارسال بله کار آینده است).
+  const feedbackBtn = f
+    ? el('button', {
+        class: 'btn btn--soft btn--sm',
+        onclick: () => openFeedbackSheetModal({ student, formulation: f, plan, todayLabel: formatJalaliFull(tehranTodayYmd()) })
+      }, icon('printer', 15), 'برگهٔ بازخورد خانواده')
+    : null;
+  const primaryActions = (feedbackBtn || needsBtn)
+    ? el('div', { class: 'clx-syn__primaryact' }, feedbackBtn, needsBtn)
+    : null;
+
   return el('div', { class: 'card clx-synthesis' },
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('layers', 16), SYNTHESIS_META.title),
@@ -309,6 +324,6 @@ export async function synthesisSection({ student, formulation = null, insights =
       mergedConflictsBlock({ f, insights }),
       mergedFlagsBlock({ f, insights }),
       nextStepsBlock({ f, insights }),
-      needsBtn ? el('div', { class: 'clx-syn__primaryact' }, needsBtn) : null,
+      primaryActions,
       detailsBlock));
 }

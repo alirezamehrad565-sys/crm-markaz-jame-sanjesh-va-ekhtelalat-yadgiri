@@ -298,7 +298,7 @@ const directCases = [
     }
   },
   {
-    name: "baseAnswers + skippedHypotheses — questionnaire scoring paths",
+    name: "baseAnswers + skippedHypotheses — T8 (m149): پالایش وزن MOOD با BQ4؛ قرارداد ورودی حفظ شده",
     birth: [1394, 5, 2],
     test: [1406, 7, 1],
     raw: profile(12, { AR: 5, CD: 5, IN: 5, DS: 5 }),
@@ -320,17 +320,19 @@ const directCases = [
     },
     expect(r) {
       assert.equal(r.ok, true);
-      const sld = r.outcomes.find((o) => o.id === "SLD");
-      assert.ok(sld, "SLD outcome expected");
-      assert.equal(sld.status, "active");
-      assert.ok(sld.counts.aYes > 0 && sld.counts.bYes >= 1);
-      const mood = r.outcomes.find((o) => o.id === "MOOD");
-      assert.ok(mood, "MOOD outcome expected");
-      assert.equal(mood.status, "skipped");
-      for (const key of ["SLD:A1", "BQ4"]) {
-        assert.equal(r.answers[key], "yes", "baseAnswers must be merged into answers");
+      // شواهد فرضیه‌ای — تنها خروجی بالینی موتور (T8/m149)
+      const sld = r.hypotheses.find((h) => h.id === "SLD");
+      assert.ok(sld, "SLD hypothesis expected");
+      assert.ok(sld.weight > 0.35, "ACID pattern adds +0.05 to the SLD base weight");
+      assert.ok(Array.isArray(sld.clues) && sld.clues.length > 0, "clues must flow with the evidence");
+      const mood = r.hypotheses.find((h) => h.id === "MOOD");
+      assert.ok(mood, "MOOD hypothesis expected");
+      assert.equal(mood.weight, 0.25, "BQ4=yes refines the MOOD weight (0.2 → 0.25)");
+      assert.ok(mood.clues.some((c) => c.includes("رویداد")), "BQ4 clue present");
+      // لایهٔ تفسیر موازی حذف شده — هیچ‌کدام از این کلیدها دیگر تولید نمی‌شوند
+      for (const k of ["queue", "answers", "autoNotes", "outcomes", "main", "comorbid", "binaryScenarios", "treatments"]) {
+        assert.ok(!(k in r), `result must NOT carry the removed parallel-interpretation key ${k}`);
       }
-      assert.ok(r.queue.every((q) => !(q.key in (r.answers || {})) || true)); // queue keys documented
     }
   }
 ];
@@ -521,11 +523,9 @@ for (const c of payloadCases) {
 // ---------------------------------------------------------------------------
 // Meta: data tables themselves must be identical between bundle and extraction
 // ---------------------------------------------------------------------------
-test("meta | data tables identical (NORMS, HYPOTHESES, TREATMENTS, maps)", () => {
+test("meta | data tables identical (NORMS, maps) — T8 (m149): جدول‌های تفسیر موازی حذف شدند", () => {
   for (const table of [
     "NORMS",
-    "HYPOTHESES",
-    "TREATMENTS",
     "RAW_FIELD_MAP",
     "SUBTESTS",
     "SUBTEST_FA",
@@ -536,6 +536,9 @@ test("meta | data tables identical (NORMS, HYPOTHESES, TREATMENTS, maps)", () =>
   ]) {
     assertSame(table, extracted[table], ref[table]);
   }
+  // T8 (m149) — این دو دیگر در سطح موتور وجود ندارند
+  assert.equal("HYPOTHESES" in extracted, false, "HYPOTHESES removed from the engine module");
+  assert.equal("TREATMENTS" in extracted, false, "TREATMENTS removed from the engine module");
 });
 
 test("meta | both modules agree on constants and engineVersion", () => {
@@ -724,8 +727,17 @@ test("meta | compact هنوز engineVersion m98 و compact:true است و signal
   const compact = extracted.compactWechslerOutput(extracted.runWechslerAnalysis(input));
   assert.equal(compact.compact, true);
   assert.equal(compact.engineVersion, "m98");
-  for (const k of ["ok", "ageLine", "years", "band", "validation", "snapshot", "flags", "outcomes", "main", "comorbid", "weakDomains", "monitoringInterval", "hypotheses"]) {
+  for (const k of ["ok", "ageLine", "years", "band", "validation", "snapshot", "flags", "weakDomains", "monitoringInterval", "hypotheses"]) {
     assert.ok(k in compact, `compact keeps legacy key ${k}`);
+  }
+  // T8 (m149) — شواهد فرضیه‌ای {id, weight} تنها خروجی بالینی compact است؛ بقیه حذف شده‌اند
+  for (const k of ["outcomes", "main", "comorbid", "binaryScenarios", "treatments", "queue", "answers", "autoNotes"]) {
+    assert.ok(!(k in compact), `compact must NOT carry the removed key ${k}`);
+  }
+  assert.ok(Array.isArray(compact.hypotheses) && compact.hypotheses.length > 0, "compact.hypotheses evidence expected");
+  for (const h of compact.hypotheses) {
+    assert.deepEqual(Object.keys(h).sort(), ["id", "weight"], "hypotheses evidence shape is {id, weight}");
+    assert.equal(typeof h.weight, "number");
   }
   assert.ok(Array.isArray(compact.signals) && compact.signals.length > 0, "compact.signals additive");
   assert.ok(compact.profile && typeof compact.profile.fsiqBand === "string", "compact.profile additive");
@@ -759,9 +771,12 @@ test("payload | engine_output فرم واقعی شامل signals/profile است 
   assert.equal(out.compact, true);
   assert.ok(Array.isArray(out.signals));
   assert.ok(out.profile && "fsiqBand" in out.profile);
-  // کلیدهای قدیمی compact در خروجی فرم هم هستند
-  for (const k of ["ok", "ageLine", "years", "band", "validation", "snapshot", "flags", "outcomes", "main", "comorbid", "weakDomains", "monitoringInterval", "hypotheses"]) {
+  // کلیدهای قدیمی compact در خروجی فرم هم هستند (T8/m149: فرضیه‌ها شواهد، بدون لایهٔ تفسیر موازی)
+  for (const k of ["ok", "ageLine", "years", "band", "validation", "snapshot", "flags", "weakDomains", "monitoringInterval", "hypotheses"]) {
     assert.ok(k in out, `engine_output keeps legacy key ${k}`);
+  }
+  for (const k of ["outcomes", "main", "comorbid", "binaryScenarios", "treatments", "queue", "answers", "autoNotes"]) {
+    assert.ok(!(k in out), `engine_output must NOT carry the removed key ${k}`);
   }
   // و همان خروجی با موتور باندل بایت‌به‌بایت یکی است
   const hRef = ref.applyWechslerEngineToPayload(payload, "1398/03/25", OCCURRED_AT);

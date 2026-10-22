@@ -12,21 +12,20 @@
 // توسعهٔ m135 (بازسازی تب تفسیر بالینی) — renderProfile دو مسیر دارد:
 //   • مسیر مودال (پیش‌فرض؛ flat) — رفتار قبلی بدون تغییر برای case-events.js.
 //   • مسیر تودرتوی تب ({nested:true}) — شش <details class="clxacc clxacc--sub"> همیشه‌بسته
-//     (§4: نیم‌رخ شاخص‌ها / گام ۵ / جدول خرده‌آزمون با سقف ۱۰ سطر / دوبه‌دو / خوشه‌ای / فرضیه‌ها)
+//     (§4: نیم‌رخ شاخص‌ها / گام ۵ / جدول خرده‌آزمون با سقف ۱۰ سطر / دوبه‌دو / خوشه‌ای / حوزه‌های ضعیف و پرچم‌های روایی)
 //     + پانویس خط قرمز از STAGE2_META (تک‌منبع مشترک مسیر تب و مودال — CONTENT-SPEC یافتهٔ ۵).
 // «پیوند با سایر اطلاعات» (connectionsSection) از بدنهٔ وکسلر خارج شد — خروجی آن سمت
 // clinical-insights در مرحلهٔ ۵ (جمع‌بندی تشخیصی) رندر می‌شود (UX-SPEC §4).
-// همهٔ بخش‌ها «دفاعی» رندر می‌شوند: نبود داده = نبود بخش؛ بدون profile هم
-// رندر قدیمی (چیپ شاخص‌ها + فرضیه‌ها) دست‌نخورده کار می‌کند.
+// T8 (m149) — «فرضیه‌های موتور» (صحنهٔ تفسیر موازی) حذف شد: WECHSLER_HYP_NAMES/hypRowsOf/
+// بلوک فرضیه‌ها/چیپ «فرضیهٔ اصلی» — تفسیر با موتور واحد (مرحلهٔ ۵ تب) است. هر دو مسیر به یک view نرمال
+// تبدیل و با یک رندر مشترک (renderProfile) نمایش داده می‌شوند. همهٔ بخش‌ها «دفاعی» رندر می‌شوند:
+// نبود داده = نبود بخش؛ بدون profile هم رندر چیپ‌محور دست‌نخورده کار می‌کند.
 
 import { el, icon } from './ui.js';
 import { fa } from './format.js';
 import { GATE_GLOSS, STAGE2_META } from './clinical-content.js'; // — «ثبت دستی» + پانویس خط قرمز یک‌بار در کل کد (رفع تکرار ۳۹-C + یافتهٔ ۵ CONTENT-SPEC)
 
 // ─────────────── نقشه‌های ثابت ───────────────
-
-/** نام فارسی فرضیه‌های موتور وکسلر — همسان با WECHSLER_HYP_NAMES باندل */
-const WECHSLER_HYP_NAMES = { DLD: 'اختلال زبانی (DLD)', BIF: 'عملکرد مرزی/دیرآموزی (BIF)', APD: 'اختلال پردازش شنیداری (APD)', MOOD: 'عامل خلقی/اضطرابی (MOOD)', ADHD: 'بیش‌فعالی/کم‌توجهی (ADHD)', ASD: 'اطیسم (ASD)', ID: 'ناتوانی هوشی (ID)', SLD: 'اختلال یادگیری خاص (SLD)', NVLD: 'یادگیری غیرکلامی (NVLD)', TBI: 'آسیب مغزی اکتسابی (TBI)', TWO_E: 'دواستثنایی (2e)', DOMAIN_WEAK: 'ضعف حوزه‌ای', NORMAL: 'نیم‌رخ عادی' };
 
 /** نام فارسی حوزه‌های ضعیف موتور وکسلر — کلید ناشناخته → خود کلید */
 export const WEAKEST_FA = { language: 'زبان و بیان', knowledge: 'دانش و شناخت', working_memory: 'حافظهٔ فعال', attention: 'توجه و تمرکز', processing_speed: 'سرعت پردازش', visual_spatial: 'دیداری‌فضایی', fluid_reasoning: 'استدلال سیال', crystallized: 'دانش جابه‌جاشده', fine_motor: 'مهارت حرکتی ظریف', academic: 'مهارت‌های تحصیلی', executive: 'کارکردهای اجرایی', social: 'اجتماعی', adaptive: 'سازشی' };
@@ -40,12 +39,6 @@ const WISC_SUBTEST_FA = {
   VC: 'واژگان', LN: 'توالی حرف-عدد', MR: 'استدلال ماتریسی', CO: 'درک مطلب', SS: 'جستجوی نماد',
   PCm: 'تکمیل تصاویر', CA: 'خط‌زنی', IN: 'اطلاعات', AR: 'حساب', WR: 'استدلال کلمه'
 };
-
-/** وزن اعشاری دو-رقمی با جداکنندهٔ فارسی: 0.4 → «۰٫۴۰» */
-function faWeight(w) {
-  const n = Number(w);
-  return fa(Number.isFinite(n) ? n.toFixed(2) : String(w ?? '')).replace('.', '٫');
-}
 
 /** عدد یک‌رقمی اعشار — «۹٫۴» */
 function faFixed1(n) {
@@ -259,7 +252,7 @@ export function connectionsSection(connections) {
 
 // ─────────────── بلوک‌های مشترک هر دو مسیر رندر ───────────────
 
-/** ردیف چیپ‌های خلاصه — FSIQ/شاخص‌ها/پراکندگی/فرضیهٔ اصلی/سن/بازهٔ پایش */
+/** ردیف چیپ‌های خلاصه — FSIQ/شاخص‌ها/پراکندگی/سن/بازهٔ پایش */
 function chipsRow(view) {
   const chips = [];
   if (view.fsiq != null) {
@@ -279,34 +272,9 @@ function chipsRow(view) {
   if (view.indexScatter != null && view.indexScatter > 0) {
     chips.push(el('span', { class: 'badge badge--warning', title: 'ماکس − مین شاخص‌ها؛ پراکندگی ≥۲۳ یعنی نیم‌رخ ناهمگن' }, `پراکندگی ${fa(view.indexScatter)}`));
   }
-  if (view.mainName) {
-    chips.push(el('span', { class: 'badge badge--info' }, `فرضیهٔ اصلی: ${view.mainName}${view.mainLevel ? ` — ${view.mainLevel}` : ''}`));
-  }
   if (view.ageLine) chips.push(el('span', { class: 'badge badge--neutral' }, `سن آزمون: ${view.ageLine}`));
   if (view.monitoringInterval != null) chips.push(el('span', { class: 'badge badge--neutral' }, `بازهٔ پایش: ${fa(view.monitoringInterval)} ماه`));
   return chips.length ? el('div', { class: 'clx-chips' }, ...chips) : null;
-}
-
-/** فرضیه‌های موتور مرتب‌شدهٔ نزولی + سطرهای آماده */
-function hypRowsOf(view) {
-  const hyps = [...(view.hypotheses ?? [])].sort((a, b) => (Number(b?.weight) || 0) - (Number(a?.weight) || 0));
-  const rows = hyps.map((h) =>
-    el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', padding: '6px 2px', borderTop: '1px solid var(--line, #eee)' } },
-      el('span', { style: { fontWeight: 600 } }, h?.name ?? WECHSLER_HYP_NAMES[h?.id] ?? h?.id ?? ''),
-      el('span', { class: `badge ${Number(h?.weight) >= 0.3 ? 'badge--accent' : 'badge--neutral'}` }, `وزن ${faWeight(h?.weight)}`)
-    )
-  );
-  return { hyps, rows };
-}
-
-/** بلوک فرضیه‌ها — مسیر flat؛ مسیر تودرتو از hypRowsOf استفاده می‌کند */
-function hypsBlock(view) {
-  const { hyps, rows } = hypRowsOf(view);
-  return hyps.length
-    ? el('div', {},
-        subTitle('sparkles', 'فرضیه‌های موتور — به ترتیب وزن'),
-        el('div', { style: { marginTop: '4px' } }, ...rows))
-    : el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-2, 8px)' } }, 'فرضیهٔ غالب واحدی ثبت نشد — نیم‌رخ پراکنده است.');
 }
 
 /** بلوک حوزه‌های ضعیف */
@@ -360,7 +328,8 @@ function subAcc({ key, label, count, body }) {
 /**
  * بدنهٔ تودرتوی مرحلهٔ ۳ تب — چیپ‌ها + شش <details class="clxacc clxacc--sub"> (همه بسته) + پانویس خط قرمز.
  * «زمینهٔ تفسیر» (interpretationContext) سمت clinical-insights بالای همین نود می‌نشیند (§3.3 body order).
- * ثبت دستی (engine:false بدون profile) → آکاردئون‌های عددی ۳.۱–۳.۵ حذف؛ فقط ۳.۶ فرضیه‌ها (R2).
+ * ثبت دستی (engine:false بدون profile) → آکاردئون‌های عددی ۳.۱–۳.۵ حذف؛ فقط ۳.۶ حوزه‌های ضعیف/پرچم‌ها (R2).
+ * T8 (m149) — آکاردئون ۳.۶ دیگر فرضیه‌های موتور ندارد؛ فقط حوزه‌های ضعیف + پرچم‌های روایی.
  */
 function nestedProfileBody(view) {
   const p = view.profile ?? null;
@@ -388,17 +357,12 @@ function nestedProfileBody(view) {
     if (prs) subs.push(subAcc({ key: 'pairs', label: S.pairs.label, count: subCount(S.pairs.count, (p.pairs ?? []).length), body: prs }));
   }
 
-  // ۳.۶ — فرضیه‌ها + حوزه‌های ضعیف + پرچم‌های روایی (با هر داده‌ای که هست)
-  const { hyps, rows } = hypRowsOf(view);
-  const hypBlock = hyps.length
-    ? el('div', {},
-        subTitle('sparkles', 'فرضیه‌های موتور — به ترتیب وزن'),
-        el('div', { style: { marginTop: '4px' } }, ...rows))
-    : null;
+  // ۳.۶ — حوزه‌های ضعیف + پرچم‌های روایی (با هر داده‌ای که هست) — T8/m149: فرضیه‌های موتور حذف شدند
   const weakBlk = weakBlock(view);
   const flagsBlk = flagsBlock(view);
-  if (hypBlock || weakBlk || flagsBlk) {
-    subs.push(subAcc({ key: 'hypotheses', label: S.hypotheses.label, count: subCount(S.hypotheses.count, hyps.length), body: [hypBlock, weakBlk, flagsBlk] }));
+  if (weakBlk || flagsBlk) {
+    const metaCount = (view.weakDomains ?? []).length + (view.flagsFa ?? []).length;
+    subs.push(subAcc({ key: 'hypotheses', label: S.hypotheses.label, count: subCount(S.hypotheses.count, metaCount), body: [weakBlk, flagsBlk] }));
   }
 
   const chips = chipsRow(view);
@@ -413,8 +377,9 @@ function nestedProfileBody(view) {
 
 /**
  * رندر کامل نیم‌رخ از view نرمال‌شده:
- * {fsiq, vci, pri, wmi, psi, gai, indexScatter, percentile, cls, mainName, mainLevel,
- *  hypotheses, weakDomains, flagsFa, monitoringInterval, ageLine, engine, profile}
+ * {fsiq, vci, pri, wmi, psi, gai, indexScatter, percentile, cls,
+ *  weakDomains, flagsFa, monitoringInterval, ageLine, engine, profile}
+ * T8 (m149) — mainName/mainLevel/hypotheses از view حذف شدند (صحنهٔ فرضیه‌ها برداشته شد).
  *
  * دو مسیر (m135):
  *  • پیش‌فرض flat — کارت کامل مودال (case-events.js)؛ رفتار m134 بدون تغییر.
@@ -445,7 +410,6 @@ function renderProfile(view, { nested = false } = {}) {
       p ? subtestTableSection(p) : null,
       p ? comparisonsSection(p) : null,
       p ? pairsSection(p) : null,
-      hypsBlock(view),
       weakBlock(view),
       flagsBlock(view),
       // یادآوری خط قرمز — یک خط کوتاه؛ متن تک‌منبع از STAGE2_META (CONTENT-SPEC یافتهٔ ۵)؛
@@ -459,13 +423,13 @@ function renderProfile(view, { nested = false } = {}) {
 
 /**
  * نیم‌رخ وکسلر برای تب تفسیر بالینی — از gates.wechslerSummary.
- * summary.profile (قرارداد ۳۹-۱) اختیاری است: نبودش = رندر قبلی (فقط چیپ‌ها + فرضیه‌ها).
+ * summary.profile (قرارداد ۳۹-۱) اختیاری است: نبودش = رندر چیپ‌محور (T8/m149: بدون صحنهٔ فرضیه‌ها).
  * nested:true → مسیر تودرتوی تب (m135 §4)؛ پیش‌فرض flat برای سازگاری.
  * null خروجی یعنی «دادهٔ وکسلری معنادار نیست» → تب بدنهٔ حالت خالی می‌سازد.
  */
 export function wechslerProfileBlock({ summary, nested = false }) {
   if (!summary) return null;
-  if (summary.fsiq == null && summary.percentile == null && !(summary.hypotheses ?? []).length && !summary.profile) return null;
+  if (summary.fsiq == null && summary.percentile == null && !summary.profile) return null;
   return renderProfile({
     fsiq: summary.fsiq ?? null,
     vci: summary.vci ?? null,
@@ -476,9 +440,6 @@ export function wechslerProfileBlock({ summary, nested = false }) {
     indexScatter: summary.indexScatter ?? null,
     percentile: summary.percentile ?? null,
     cls: summary.cls ?? null,
-    mainName: summary.mainName ?? null,
-    mainLevel: summary.mainLevel ?? null,
-    hypotheses: summary.hypotheses ?? [],
     weakDomains: summary.weakDomains ?? [],
     flagsFa: summary.flagsFa ?? [],
     monitoringInterval: summary.monitoringInterval ?? null,
@@ -541,9 +502,6 @@ export function wechslerEventAnalysisSection(engineOutput) {
     indexScatter: snap.indexScatter ?? null,
     percentile: typeof snap.indices?.FSIQ?.percentile === 'number' ? snap.indices.FSIQ.percentile : null,
     cls: snap.indices?.FSIQ?.cls ?? null,
-    mainName: c.main?.name ?? null,
-    mainLevel: c.main?.level ?? null,
-    hypotheses: (c.hypotheses ?? []).map((h) => ({ id: h.id, weight: h.weight, name: WECHSLER_HYP_NAMES[h.id] ?? h.id })),
     weakDomains: c.weakDomains ?? [],
     flagsFa: (c.flags ?? []).map((f) => f.fa),
     monitoringInterval: c.monitoringInterval ?? null,

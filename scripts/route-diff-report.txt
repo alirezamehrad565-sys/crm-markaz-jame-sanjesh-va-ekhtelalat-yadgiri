@@ -1,8 +1,8 @@
 ════════════════════════════════════════════════════════════════════════
  Route Diff Report — deploy127 (src/**/*.ts  vs  worker/bundle.js)
 ════════════════════════════════════════════════════════════════════════
-Generated : 2026-10-20T09:01:09.737Z
-SRC files : 188 TypeScript files under src/ (tests excluded)
+Generated : 2026-10-22T02:11:19.827Z
+SRC files : 196 TypeScript files under src/ (tests excluded)
 BUNDLE    : worker/bundle.js
 Rules     : line-anchored `app.<method>(` registrations; file-local const
             paths resolved (e.g. FILL_PATH); params canonicalized to :param;
@@ -10,26 +10,27 @@ Rules     : line-anchored `app.<method>(` registrations; file-local const
             middleware NOT counted; comments never matched.
 
 ── Totals ──────────────────────────────────────────────────────────────
-SRC registrations (raw)        :  220  (unique: 220)
-BUNDLE registrations (raw)     :  227  (unique: 227)
+SRC registrations (raw)        :  231  (unique: 231)
+BUNDLE registrations (raw)     :  239  (unique: 239)
 
-ONLY_IN_BUNDLE (extraction backlog) : 7
+ONLY_IN_BUNDLE (extraction backlog) : 8
 ONLY_IN_SRC (stale/dead candidates) : 0
-COMMON                              : 220
+COMMON                              : 231
 
 ── ONLY_IN_BUNDLE (routes that exist only in the live bundle) ──────────
-  DELETE /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:29132]
-  GET /api/pathway-templates   [worker/bundle.js:29069]
-  GET /api/students/:param/case-formulation   [worker/bundle.js:31076]
-  PATCH /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:29121]
-  PATCH /api/pathway-templates/:param   [worker/bundle.js:29092]
-  POST /api/clinical-paths/:param/sessions   [worker/bundle.js:29111]
-  POST /api/pathway-templates   [worker/bundle.js:29073]
+  DELETE /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:30846]
+  GET /api/pathway-templates   [worker/bundle.js:30783]
+  GET /api/students/:param/case-formulation   [worker/bundle.js:32796]
+  PATCH /api/clinical-paths/:param/sessions/:param   [worker/bundle.js:30835]
+  PATCH /api/pathway-templates/:param   [worker/bundle.js:30806]
+  POST /api/client-errors   [worker/bundle.js:44023]
+  POST /api/clinical-paths/:param/sessions   [worker/bundle.js:30825]
+  POST /api/pathway-templates   [worker/bundle.js:30787]
 
 ── ONLY_IN_SRC (routes that exist only in src — stale/dead-code candidates) ──
   (none)
 
-── COMMON (220) ────────────────────────────────────────────────
+── COMMON (231) ────────────────────────────────────────────────
   DELETE /api/announcements/:param   [src ×1 | bundle ×1]
   DELETE /api/appointments/:param   [src ×1 | bundle ×1]
   DELETE /api/appointments/:param/students/:param   [src ×1 | bundle ×1]
@@ -47,6 +48,7 @@ COMMON                              : 220
   DELETE /api/staff/:param   [src ×1 | bundle ×1]
   DELETE /api/students/:param   [src ×1 | bundle ×1]
   DELETE /api/students/:param/education-history/:param   [src ×1 | bundle ×1]
+  DELETE /api/students/:param/teachers/:param   [src ×1 | bundle ×1]
   DELETE /api/waitlist/:param   [src ×1 | bundle ×1]
   DELETE /api/working-day/notes/:param   [src ×1 | bundle ×1]
   DELETE /api/working-hours/:param   [src ×1 | bundle ×1]
@@ -68,7 +70,6 @@ COMMON                              : 220
   GET /api/classes/:param   [src ×1 | bundle ×1]
   GET /api/clinical-targets   [src ×1 | bundle ×1]
   GET /api/conflicts   [src ×1 | bundle ×1]
-  GET /api/dashboard/leaderboard   [src ×1 | bundle ×1]
   GET /api/dashboard/me   [src ×1 | bundle ×1]
   GET /api/dashboard/screening-goal   [src ×1 | bundle ×1]
   GET /api/dashboard/summary   [src ×1 | bundle ×1]
@@ -119,14 +120,19 @@ COMMON                              : 220
   GET /api/students/:param/appointments   [src ×1 | bundle ×1]
   GET /api/students/:param/case-events   [src ×1 | bundle ×1]
   GET /api/students/:param/case-events/suggest   [src ×1 | bundle ×1]
+  GET /api/students/:param/checklist-plan   [src ×1 | bundle ×1]
   GET /api/students/:param/clinical-gates   [src ×1 | bundle ×1]
   GET /api/students/:param/clinical-insights   [src ×1 | bundle ×1]
   GET /api/students/:param/clinical-paths   [src ×1 | bundle ×1]
+  GET /api/students/:param/document-requests   [src ×1 | bundle ×1]
   GET /api/students/:param/education-history   [src ×1 | bundle ×1]
   GET /api/students/:param/exercises/batches   [src ×1 | bundle ×1]
   GET /api/students/:param/exercises/suggest   [src ×1 | bundle ×1]
   GET /api/students/:param/ot/profile   [src ×1 | bundle ×1]
+  GET /api/students/:param/received-docs   [src ×1 | bundle ×1]
+  GET /api/students/:param/received-docs/:param/file   [src ×1 | bundle ×1]
   GET /api/students/:param/tags   [src ×1 | bundle ×1]
+  GET /api/students/:param/teachers   [src ×1 | bundle ×1]
   GET /api/students/:param/timeline   [src ×1 | bundle ×1]
   GET /api/students/by-national-id/:param   [src ×1 | bundle ×1]
   GET /api/tags   [src ×1 | bundle ×1]
@@ -177,6 +183,7 @@ COMMON                              : 220
   POST /api/case-events/:param/files   [src ×1 | bundle ×1]
   POST /api/case-events/:param/finalize   [src ×1 | bundle ×1]
   POST /api/case-events/:param/send   [src ×1 | bundle ×1]
+  POST /api/case-events/:param/teacher-link   [src ×1 | bundle ×1]
   POST /api/case-events/types   [src ×1 | bundle ×1]
   POST /api/case-events/types/:param/deactivate   [src ×1 | bundle ×1]
   POST /api/classes   [src ×1 | bundle ×1]
@@ -188,6 +195,7 @@ COMMON                              : 220
   POST /api/exercises/:param/files   [src ×1 | bundle ×1]
   POST /api/exercises/:param/files/:param/complete   [src ×1 | bundle ×1]
   POST /api/exercises/:param/files/begin   [src ×1 | bundle ×1]
+  POST /api/exercises/:param/reassign   [src ×1 | bundle ×1]
   POST /api/exercises/assignments/:param/grade   [src ×1 | bundle ×1]
   POST /api/exercises/batches/:param/send   [src ×1 | bundle ×1]
   POST /api/exercises/packages   [src ×1 | bundle ×1]
@@ -205,6 +213,7 @@ COMMON                              : 220
   POST /api/notifications/staff-links   [src ×1 | bundle ×1]
   POST /api/notifications/teacher-report   [src ×1 | bundle ×1]
   POST /api/notifications/test   [src ×1 | bundle ×1]
+  POST /api/requests/:param/close   [src ×1 | bundle ×1]
   POST /api/schools   [src ×1 | bundle ×1]
   POST /api/schools/:param/deactivate   [src ×1 | bundle ×1]
   POST /api/screening   [src ×1 | bundle ×1]
@@ -215,12 +224,15 @@ COMMON                              : 220
   POST /api/students   [src ×1 | bundle ×1]
   POST /api/students/:param/activate   [src ×1 | bundle ×1]
   POST /api/students/:param/case-events   [src ×1 | bundle ×1]
+  POST /api/students/:param/case-events/sensory-chip   [src ×1 | bundle ×1]
   POST /api/students/:param/clinical-paths   [src ×1 | bundle ×1]
   POST /api/students/:param/deactivate   [src ×1 | bundle ×1]
+  POST /api/students/:param/document-requests   [src ×1 | bundle ×1]
   POST /api/students/:param/education-history   [src ×1 | bundle ×1]
   POST /api/students/:param/exercises/batches   [src ×1 | bundle ×1]
   POST /api/students/:param/needs-summary   [src ×1 | bundle ×1]
   POST /api/students/:param/ot/sessions   [src ×1 | bundle ×1]
+  POST /api/students/:param/teachers   [src ×1 | bundle ×1]
   POST /api/students/:param/wait-status   [src ×1 | bundle ×1]
   POST /api/tags   [src ×1 | bundle ×1]
   POST /api/tags/:param/deactivate   [src ×1 | bundle ×1]
@@ -254,6 +266,7 @@ COMMON                              : 220
 ── Bundle-only routes grouped by area ──────────────────────────────────
   /api/clinical-paths                      3
   /api/pathway-templates                   3
+  /api/client-errors                       1
   /api/students                            1
 
 ── Anomalies ───────────────────────────────────────────────────────────

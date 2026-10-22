@@ -659,6 +659,128 @@ export function buildSummary(payload: Record<string, PayloadEntry> | null, analy
   return Array.from(text).slice(0, EVENT_SUMMARY_MAX).join('');
 }
 
+// ───────── چیپ غربالگری حسی (T9/m152) ─────────
+
+/**
+ * ابزار میکروی «حساسیت حسی» تب شناسایی — سه مشاهدهٔ ثابت × سه سطح، جمع ۰..۶.
+ * تعریف آیتم/باند آینهٔ ورودی battery-screening.json است (هر تغییر ملاک = نسخهٔ جدید کد)؛
+ * ثبت فقط از مسیر اختصاصی سرویس (createSensoryChipEvent) — عضو کتابخانهٔ فرم پنل نیست
+ * و در موتور/rules مصرف نمی‌شود (افزودنی خالص — رفتار ابزارهای موجود دست‌نخورده).
+ */
+export const SENSORY_CHIP_KEY = 'ce-sensory-chip-v1';
+/** شناسهٔ ثابت type — الگوی seed مایگریشن‌ها (bbbbbbbb-8200-…؛ سقف فعلی …021) — ensure داخلی سرویس idempotent است */
+export const SENSORY_CHIP_TYPE_ID = 'bbbbbbbb-8200-4000-8000-000000000031';
+
+/** سه سطح ثابت هر مجرای حسی — نمره ۰..۲ (اندیس همین آرایه) */
+export const SENSORY_CHIP_LEVEL_LABELS: readonly string[] = ['بدون حساسیت', 'حساسیت جزئی', 'حساسیت آزارنده'];
+
+/** سه مجرای ثابت چیپ — کلید/برچسب عین battery-screening.json */
+export const SENSORY_CHIP_ITEMS: readonly { key: string; label: string }[] = [
+  { key: 'sound', label: 'صدا (صوت)' },
+  { key: 'light', label: 'نور (نور/رنگ)' },
+  { key: 'touch', label: 'لمس و بافت (لمس/جنس لباس/بافت غذا)' }
+];
+
+/** تعریف فیلدها — زیرمقیاس واحد sens؛ آینهٔ battery-screening.json */
+export const SENSORY_CHIP_FIELDS: CaseEventField[] = SENSORY_CHIP_ITEMS.map((it) => ({
+  key: it.key,
+  label: it.label,
+  type: 'scale' as const,
+  scaleMax: 2,
+  scaleLabels: [...SENSORY_CHIP_LEVEL_LABELS],
+  required: true,
+  subscaleId: 'sens'
+}));
+
+export const SENSORY_CHIP_SUBSCALES: CaseEventSubscale[] = [
+  { id: 'sens', name: 'پروفایل حسی', bands: null }
+];
+
+/**
+ * باندهای چیپ — ۰–۱ بدون نشان / ۲–۳ جزئی / ۴–۶ قابل توجه (resolveBandV2).
+ * قرارداد CaseEventBandSchema در Zod «max ≥ ۱» را گوار می‌کند؛ بنابراین باند اول از
+ * max:۰ به max:۱ جابه‌جا شد — یک مشاهدهٔ «جزئی» منفرد (جمع ۱) دیگر الگوی نشان‌دار
+ * نیست و در «بدون نشان — پایش عادی» می‌نشیند؛ از جمع ۲ الگوی جزئی و از ۴ الگوی
+ * قابل توجه آغاز می‌شود. منطق سرویس و JSON باتری همگام است.
+ */
+export const SENSORY_CHIP_BANDS: CaseEventBand[] = [
+  { max: 1, label: 'بدون نشان', color: 'ok', advice: 'حساسیت حسی برجسته نیست — پایش دوره‌ای در جلسات عادی کافی است.' },
+  { max: 3, label: 'حساسیت جزئی', color: 'warn', advice: 'حساسیت جزئی — در تنظیم محیط جلسه و توصیه‌های خانه لحاظ شود.' },
+  { max: 6, label: 'حساسیت قابل توجه', color: 'danger', advice: 'حساسیت قابل توجه — در چیدمان مداخله و هماهنگی خانه/مدرسه لحاظ شود؛ ابزار حسی استاندارد در صورت تداوم بررسی شود.' }
+];
+
+export interface SensoryChipLevels {
+  sound: number;
+  light: number;
+  touch: number;
+}
+
+/** نرمال‌سازی رقم فارسی/متنی — قرینهٔ buildEventPayload */
+function sensoryChipNumber(raw: unknown, label: string): number {
+  const n = typeof raw === 'number'
+    ? raw
+    : Number(String(raw ?? '').trim().replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))));
+  if (!Number.isInteger(n) || n < 0 || n > 2) {
+    throw new ValidationError(`سطح «${label}» باید بین ۰ تا ۲ باشد`);
+  }
+  return n;
+}
+
+/**
+ * اعتبارسنجی سه سطح چیپ — آیتم جا/خارج از بازه → ValidationError با پیام فارسی.
+ * ورودی نامعتبر (نوع غلط/آیتم اضافه نادیده) — خروجی همیشه {sound, light, touch} عددی.
+ */
+export function validateSensoryChipLevels(values: unknown): SensoryChipLevels {
+  const raw = (values && typeof values === 'object' ? values : {}) as Record<string, unknown>;
+  const out: Record<string, number> = {};
+  for (const it of SENSORY_CHIP_ITEMS) {
+    const v = raw[it.key];
+    if (v === undefined || v === null || String(v).trim() === '') {
+      throw new ValidationError(`آیتم «${it.label}» بی‌پاسخ مانده است`);
+    }
+    out[it.key] = sensoryChipNumber(v, it.label);
+  }
+  return { sound: out.sound, light: out.light, touch: out.touch };
+}
+
+/** جمع ۰..۶ */
+export function sensoryChipTotalOf(levels: SensoryChipLevels): number {
+  return levels.sound + levels.light + levels.touch;
+}
+
+/** باند چیپ از جمع — همان موتور باند چک‌لیست (resolveBandV2) */
+export function resolveSensoryChipBand(total: number): CaseEventBand {
+  return resolveBandV2(total, SENSORY_CHIP_BANDS) ?? SENSORY_CHIP_BANDS[SENSORY_CHIP_BANDS.length - 1];
+}
+
+/** خلاصهٔ فارسی کوتاه چیپ — «حساسیت حسی: ۳ از ۶ — حساسیت قابل توجه» */
+export function sensoryChipFaSummary(levels: SensoryChipLevels): string {
+  const total = sensoryChipTotalOf(levels);
+  return `حساسیت حسی: ${faNum(total)} از ${faNum(6)} — ${resolveSensoryChipBand(total).label}`;
+}
+
+/**
+ * payload نمایشی چیپ — آیتم‌ها (برچسب سطح) + نمرهٔ کل + باند + خلاصه.
+ * کلیدهای extra با الگوی teacher_binding سازگارند (خواندن با label؛ ویرایش عمومی آن‌ها را دور می‌ریزد).
+ */
+export function buildSensoryChipPayload(levels: SensoryChipLevels): Record<string, PayloadEntry> {
+  const total = sensoryChipTotalOf(levels);
+  const band = resolveSensoryChipBand(total);
+  const payload: Record<string, PayloadEntry> = {};
+  for (const it of SENSORY_CHIP_ITEMS) {
+    payload[it.key] = { value: SENSORY_CHIP_LEVEL_LABELS[levels[it.key as keyof SensoryChipLevels]], label: it.label };
+  }
+  payload['chip_total'] = { value: String(total), label: 'نمرهٔ کل' };
+  payload['chip_band'] = { value: band.label, label: 'باند' };
+  payload['fa_summary'] = { value: sensoryChipFaSummary(levels), label: 'خلاصهٔ چیپ حسی' };
+  return payload;
+}
+
+/** تحلیل چیپ — همان موتور v2 چک‌لیست (نمره/باند/تفسیر) تا تایم‌لاین هم‌شکل بقیهٔ ابزارها شود */
+export function analyzeSensoryChip(levels: SensoryChipLevels): CaseEventAnalysis {
+  return analyzeChecklist(SENSORY_CHIP_FIELDS, SENSORY_CHIP_BANDS, { ...levels }, SENSORY_CHIP_SUBSCALES);
+}
+
 // ───────── ماتریس ترنزیشن وضعیت ─────────
 
 export const CASE_EVENT_TRANSITIONS: Record<string, string[]> = {
