@@ -113,6 +113,39 @@ const directCases = [
       assert.ok(r.psychometrics.summaryFa.includes("هوش‌بهر کل"), "summaryFa names FSIQ");
       assert.equal(r.psychometrics.patterns.length, 0, "no score-pattern on a balanced profile");
       assert.equal(r.hypotheses, undefined, "hypotheses are gone from the engine output (m156)");
+      // m159 — بلوک پردازش: چهار مرحله، همهٔ «متوسط» در نیم‌رخ متوازن؛ بدون جهت‌گیری توان/کارایی
+      assert.equal(r.psychometrics.processing.length, 4, "processing block covers four stages");
+      for (const p of r.psychometrics.processing) {
+        assert.equal(p.level, "متوسط", "balanced profile — every stage average");
+        assert.ok(p.implicationFa.length > 10, "each stage carries an educational implication");
+      }
+      assert.equal(r.psychometrics.abilityProficiency, null, "no ability/proficiency split on a balanced profile");
+      assert.equal(r.psychometrics.scatterWithin.length, 0, "no intraindex scatter on a balanced profile");
+    }
+  },
+  {
+    name: "m159 — ability above proficiency split (strong VCI/PRI vs weak WMI/PSI)",
+    birth: [1396, 3, 15],
+    test: [1406, 4, 20],
+    raw: profile(10, { SI: 14, VC: 13, CO: 13, IN: 13, BD: 13, PCn: 12, MR: 13, DS: 6, LN: 6, AR: 6, CD: 6, SS: 6 }),
+    expect(r) {
+      assert.equal(r.ok, true);
+      const ps = r.psychometrics;
+      // بلوک پردازش — سطح هنجاری: توان قوت، کارایی ضعف
+      assert.equal(ps.processing.length, 4, "processing block covers four stages");
+      const wmi = ps.processing.find((p) => p.key === "WMI");
+      const psi = ps.processing.find((p) => p.key === "PSI");
+      const vci = ps.processing.find((p) => p.key === "VCI");
+      assert.equal(wmi.level, "ضعف");
+      assert.equal(psi.level, "ضعف");
+      assert.equal(vci.level, "قوت");
+      // جهت‌گیری توان/کارایی — گپ ≥۱۰ → کارایی ضعیف‌تر
+      assert.ok(ps.abilityProficiency, "ability/proficiency split expected");
+      assert.equal(ps.abilityProficiency.direction, "proficiency_weaker");
+      assert.ok(ps.abilityProficiency.gap >= 10, "gap crosses the 10-point threshold");
+      assert.ok(ps.summaryFa.includes("توان بالاتر از کارایی"), "summary carries the split sentence");
+      // الگوی CAD هم‌زمان فعال (AR/CD/DS ضعیف؛ IN جزو توان کلامی بالا) — بلوک اختصاصی خودش
+      assert.deepEqual(ps.patterns.map((p) => p.key), ["CAD"]);
     }
   },
   {
