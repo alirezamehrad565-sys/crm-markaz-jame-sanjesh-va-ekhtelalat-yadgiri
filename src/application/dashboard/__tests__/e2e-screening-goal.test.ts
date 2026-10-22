@@ -190,8 +190,9 @@ describe('بازهٔ زمانی سفارشی و چند هدف همزمان', () 
 
   it('اعتبارسنجی: از/تا ناقص → ۴۰۰؛ از > تا → ۴۰۰؛ سفارشی همراه ماه → ۴۰۰', async () => {
     const monthStart = jalaliToGregorianYmd(j.jy, j.jm, 1);
+    const late = jalaliToGregorianYmd(j.jy, j.jm, 20); // — ثابت و مستقل از «امروز» (کم‌حساس به مرز روز/ماه)
     expect((await mgr.put('/api/settings', { screening_targets: [{ year: j.jy, month: null, target: 10, from: monthStart }] })).status).toBe(400);
-    expect((await mgr.put('/api/settings', { screening_targets: [{ year: j.jy, month: null, target: 10, from: today, to: monthStart }] })).status).toBe(400);
-    expect((await mgr.put('/api/settings', { screening_targets: [{ year: j.jy, month: j.jm, target: 10, from: monthStart, to: today }] })).status).toBe(400);
+    expect((await mgr.put('/api/settings', { screening_targets: [{ year: j.jy, month: null, target: 10, from: late, to: monthStart }] })).status).toBe(400);
+    expect((await mgr.put('/api/settings', { screening_targets: [{ year: j.jy, month: j.jm, target: 10, from: monthStart, to: late }] })).status).toBe(400);
   });
 });

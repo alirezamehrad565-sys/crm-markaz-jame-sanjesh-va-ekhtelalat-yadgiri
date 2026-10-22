@@ -9,13 +9,13 @@ import type {
 } from './types';
 import { CASE_EVENT_STATUSES } from './types';
 import {
-  analyzeChecklist, analyzeProbe, analyzeRehabFx, analyzeReadCore, analyzeSensoryChip, base64ToBytes, buildEventPayload, buildProbePayload, buildReadCorePayload,
-  buildRehabFxPayload, buildSensoryChipPayload, buildSummary, canTransitionStatus, estimateBase64Bytes, EVENT_FILES_MAX,
+  analyzeChecklist, analyzeCogPerf, analyzeProbe, analyzeRehabFx, analyzeReadCore, analyzeSensoryChip, base64ToBytes, buildCogPerfPayload, buildEventPayload, buildProbePayload, buildReadCorePayload,
+  buildRehabFxPayload, buildSensoryChipPayload, buildSummary, canTransitionStatus, COG_PERF_BAND_LABEL, COG_PERF_KEY, COG_PERF_TYPE_ID, cogPerfAnalysisOf, cogPerfTypeFields, estimateBase64Bytes, EVENT_FILES_MAX,
   extractFollowUpAction, packageComponentsOf, PROBE_AREA_KEYS, probeAnalysisOf,
   READ_CORE_BANDS, READ_CORE_FIELDS, READ_CORE_KEY, READ_CORE_SUBSCALES,
   READ_CORE_TYPE_ID, rehabFxAnalysisOf, rehabFxTypeFields, REHAB_FX_BANDS, REHAB_FX_KEY, REHAB_FX_TYPE_ID, resolveBand, SENSORY_CHIP_BANDS, SENSORY_CHIP_FIELDS, SENSORY_CHIP_KEY, SENSORY_CHIP_SUBSCALES,
   SENSORY_CHIP_TYPE_ID, sanitizeFilename, sanitizeTeacherName, stripDataUrlPrefix, teacherBindingOfPayload,
-  validateFileInput, validateProbeValues, validateReadCoreLevels, validateRehabFxValues, validateSensoryChipLevels, validateTypeDefinition, withTeacherName
+  validateCogPerfValues, validateFileInput, validateProbeValues, validateReadCoreLevels, validateRehabFxValues, validateSensoryChipLevels, validateTypeDefinition, withTeacherName
 } from './pure';
 import type { ProbeArea } from './pure';
 
@@ -264,6 +264,30 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     );
     const row = await loadTypeRowByKey(REHAB_FX_KEY);
     if (!row) throw new ConflictError('ثبت type ارزیابی عملکردی توانبخشی ممکن نشد');
+    return row;
+  }
+
+  async function ensureCogPerfType(): Promise<TypeRow> {
+    const existing = await loadTypeRowByKey(COG_PERF_KEY);
+    if (existing) return existing;
+    await db.execute(
+      `INSERT OR IGNORE INTO case_event_types
+         (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, active, created_by, is_system, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'session', ?, 0, ?, ?, NULL, NULL, 'staff', 0, 'seed-m168', 1, ?, ?)`,
+      [
+        COG_PERF_TYPE_ID,
+        COG_PERF_KEY,
+        'ارزیابی شناختی — پروتکل عملکردی کاردرمانی ذهنی',
+        'دوازده تکلیف ساخت‌یافتهٔ اجرا در مرکز با ثبت وضعیت اجرا، شاخص خام و سطح راهنمای هر تکلیف و سطح توصیفی حیطه‌ها — ابزار داخلی آزمایشی: هنجاری‌نشده و اعتبارسنجی‌نشده، بدون نمرهٔ کل و برش بالینی؛ جایگزین آزمون استاندارد نیست. فقط درمانگر/مدیر؛ از بخش اختصاصی مسیر توانبخشی ثبت می‌شود.',
+        '🧮',
+        JSON.stringify(cogPerfTypeFields()),
+        JSON.stringify([{ max: 9999, label: COG_PERF_BAND_LABEL, color: 'ok', advice: 'ابزار داخلی آزمایشی — هنجاری‌نشده و اعتبارسنجی‌نشده؛ نتیجه صرفاً توصیفی است و جایگزین آزمون استاندارد نیست.' }]),
+        now().toISOString(),
+        now().toISOString()
+      ]
+    );
+    const row = await loadTypeRowByKey(COG_PERF_KEY);
+    if (!row) throw new ConflictError('ثبت type پروتکل عملکردی شناختی ممکن نشد');
     return row;
   }
 
@@ -813,6 +837,41 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return eventRowToRecord(await getEventRow(id));
     },
 
+    async createCogPerfEvent(studentId, input, actor) {
+      await assertStudent(studentId);
+      const values = validateCogPerfValues(input.values);
+      const type = typeRowToRecord(await ensureCogPerfType());
+      const result = analyzeCogPerf(values);
+      const payload = buildCogPerfPayload(values, result);
+      const analysis = cogPerfAnalysisOf(values, result);
+      const summary = buildSummary(payload, null);
+      const id = crypto.randomUUID();
+      const occurredAt = now().toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
+                                    status, payload, analysis, summary, fill_token, fill_expires_at, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, NULL, ?, 'completed', ?, ?, ?, NULL, NULL, ?, ?, ?)`,
+          [id, type.id, studentId, actor.staffId, occurredAt, JSON.stringify(payload), JSON.stringify(analysis), summary, actor.staffId, occurredAt, occurredAt]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'case_event.cog_perf_created',
+          resourceType: 'case_event',
+          resourceId: id,
+          changes: {
+            eventTypeId: { from: null, to: type.id },
+            studentId: { from: null, to: studentId },
+            valid: { from: null, to: result.validCount },
+            algo: { from: null, to: 'cogperf-v1' },
+            band: { from: null, to: result.band.label }
+          }
+        });
+      });
+      log.info('event.cog_perf_created', { id, studentId, valid: result.validCount, band: result.band.label });
+      return eventRowToRecord(await getEventRow(id));
+    },
+
     async updateEvent(id, input, actor) {
       const row = await getEventRow(id);
       assertEditor(actor, row.staff_id ?? row.created_by);
@@ -820,6 +879,9 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         throw new ConflictError('فقط رویداد ثبت‌شده یا پیش‌نویس قابل ویرایش است');
       }
       const type = typeRowToRecord(await loadTypeRow(row.event_type_id));
+      if (type.key === COG_PERF_KEY) {
+        throw new ConflictError('رویداد پروتکل عملکردی شناختی با ویرایش عمومی تغییر نمی‌کند — اصلاح را با ثبت جدید انجام دهید تا تاریخچهٔ هر ثبت با نسخهٔ الگوریتم خودش حفظ شود');
+      }
       const mergedValues: Record<string, string | number | null> = {};
       const currentPayload = parseJson<Record<string, { value: string; label: string }> | null>(row.payload, null) ?? {};
       for (const f of type.fields) {
