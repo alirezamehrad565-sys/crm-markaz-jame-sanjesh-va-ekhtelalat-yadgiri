@@ -24,6 +24,7 @@
 import { el, icon } from './ui.js';
 import { fa } from './format.js';
 import { GATE_GLOSS, STAGE2_META } from './clinical-content.js'; // — «ثبت دستی» + پانویس خط قرمز یک‌بار در کل کد (رفع تکرار ۳۹-C + یافتهٔ ۵ CONTENT-SPEC)
+import { wechslerProfileChart } from './wechsler-chart.js'; // — نمودار نیم‌رخ (پنل شاخص‌ها + پنل خرده‌آزمون‌ها) — درخواست کاربر m157
 
 // ─────────────── نقشه‌های ثابت ───────────────
 
@@ -284,6 +285,9 @@ function psychometricsSection(view) {
   const ps = view.psychometrics ?? null;
   if (!ps) return null;
   const blocks = [];
+  // m157 — نمودار نیم‌رخ (شاخص‌های شناختی + خرده‌آزمون‌ها) بالای خوانش — نبود دادهٔ کافی = نبود نمودار
+  const chart = wechslerProfileChart(view);
+  if (chart) blocks.push(chart);
   if (ps.summaryFa) blocks.push(el('div', { style: { lineHeight: 1.9, fontSize: '13px' } }, ps.summaryFa));
   if ((ps.gaps ?? []).length) {
     blocks.push(el('div', { class: 'clx-chips', style: { marginTop: '6px' } },
