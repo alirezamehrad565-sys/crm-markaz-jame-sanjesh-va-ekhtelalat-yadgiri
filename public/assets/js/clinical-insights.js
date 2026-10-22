@@ -35,6 +35,7 @@ import {
   PROBE_KEYS,
   RESULTS_KEY,
   REHAB_FX_KEY,
+  REHAB_FX_GUIDE,
   WISC4_KEY,
   SUSPICION_KEY,
   LEARNING_BLANK_TEMPLATE_KEY,
@@ -774,9 +775,22 @@ function openRehabFxModal(student, onDone) {
 }
 
 /**
+ * m163 — بلوک تاشوی «پشتوانهٔ علمی و نحوهٔ استفاده» — بسته‌شده صفر نویز بصری؛ بازشده استدلال کامل.
+ * متن پایدار از clinical-content (REHAB_FX_GUIDE) — این‌جا فقط ساختار رندر.
+ */
+function rehabFxScienceNote() {
+  return el('details', { class: 'rehab-fx-guide' },
+    el('summary', {}, icon('compass', 13), REHAB_FX_GUIDE.title),
+    el('div', { class: 'rehab-fx-guide__body' },
+      ...REHAB_FX_GUIDE.items.map((t) => el('div', { class: 'cell-sub' }, t))));
+}
+
+/**
  * بخش «ارزیابی عملکردی توانبخشی ذهنی» — یک کارت:
  * ثبت‌شده → نشان باند کلی + ردیف شش حیطه (مقدار خام — باند + سطح راهنما) + ملاک مرجع + پیشنهادهای حیطه‌ای؛
  * بدون ثبت + حق ثبت → توضیح + دکمهٔ مودال میکرو؛ بدون حق ثبت → فقط اطلاع.
+ * m163 — بلوک تاشوی پشتوانهٔ علمی/نحوهٔ استفاده در هر دو حالت + این کارت فقط در فاز شناسایی
+ * سوار می‌شود (در فاز مداخله خط پایه تک‌منبع در پنل پیشرفت است — حذف تکرار).
  */
 function rehabFxSection({ student, events, typesById, canDecide, refresh }) {
   const existing = rehabFxEventOf(events, typesById);
@@ -811,7 +825,8 @@ function rehabFxSection({ student, events, typesById, canDecide, refresh }) {
             el('div', { class: 'cell-sub' }, el('strong', null, 'پیشنهاد مداخلهٔ حیطه‌ای — از همین‌جا به جلسات:')),
             adviceRows)
           : null,
-        existing.occurredAt ? el('div', { class: 'cell-sub' }, `ثبت: ${formatJalaliDateTime(existing.occurredAt)}`) : null));
+        existing.occurredAt ? el('div', { class: 'cell-sub' }, `ثبت: ${formatJalaliDateTime(existing.occurredAt)}`) : null,
+        rehabFxScienceNote()));
   }
   const act = canDecide
     ? el('div', { class: 'clx-actions' },
@@ -826,7 +841,8 @@ function rehabFxSection({ student, events, typesById, canDecide, refresh }) {
       el('div', { class: 'cell-sub' }, 'شش حیطهٔ شناختی پایه (توجه پایدار، توجه انتخابی، حافظهٔ کاری، بازداری، انعطاف، حل مسئله) با دادهٔ خام و سطح راهنما — آزمونِ درمانگر در مرکز حین جلسهٔ اول؛ ملاک هر حیطه از چک‌لیست ۷ حیطه‌ای.'),
       el('div', { class: 'clx-probe__metrics' },
         ...REHAB_FX_AREAS.map((a) => el('div', { class: 'clx-probe__metric' }, el('span', {}, a.label), el('b', {}, a.unit)))),
-      act));
+      act,
+      rehabFxScienceNote()));
 }
 
 /**
@@ -1952,7 +1968,12 @@ export async function renderClinicalTab(box, { student }) {
         })
       : null;
     const otProgressNode = skillsMode === SKILL_MODE_OT && otInIntervention
-      ? otProgressPanel({ progress: otProgress, protocolLabel: otProtocolLabel })
+      ? otProgressPanel({
+          progress: otProgress,
+          protocolLabel: otProtocolLabel,
+          // m163 — بازسنجی خط پایه در فاز مداخله (۸–۱۲ جلسه) — مودال همان فرم؛ تک‌منبع پنل پیشرفت
+          onReassess: isRehabCase && canDecide ? () => openRehabFxModal(student, refresh) : null
+        })
       : null;
 
     // ── بدنهٔ هر مرحله (§3.1–3.6) ──
@@ -2018,12 +2039,14 @@ export async function renderClinicalTab(box, { student }) {
         const g = gateByKey('skills');
         const body = [];
         if (skillsMode === SKILL_MODE_OT) {
-          if (isRehabCase) {
+          // m163 — حذف تکرار خط پایه: کارت کامل ارزیابی عملکردی فقط در فاز شناسایی؛ در فاز مداخله
+          // خط پایه تک‌منبع در پنل پیشرفت (مرحلهٔ مداخله) به‌عنوان مرجع مقایسه + بازسنجی می‌نشیند.
+          if (isRehabCase && !otInIntervention) {
             body.push(rehabFxSection({ student, events, typesById, canDecide, refresh }));
           }
           // m162 — فاز مداخله: کارت زندهٔ پایش به مرحلهٔ مداخله منتقل شده — این‌جا فقط نشانگر می‌ماند
           if (otCard && !otInIntervention) body.push(otCard);
-          else if (otInIntervention) body.push(el('div', { class: 'cell-sub' }, icon('clipboard', 13), ' ', SM.protocol.monitoringMoved));
+          else if (otInIntervention) body.push(el('div', { class: 'cell-sub' }, icon('clipboard', 13), ' ', isRehabCase ? SM.protocol.monitoringMovedRehab : SM.protocol.monitoringMoved));
           if (!otCard && !isRehabCase && !g?.detail) body.push(el('div', { class: 'cell-sub' }, SM.skills.emptyHint));
           body.push(seenChipsBlock(insights)); // تنها جای چیپ‌های «چه فرم‌هایی آمده» در مرحلهٔ ۴
           if (!g?.done) {
