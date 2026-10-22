@@ -469,6 +469,116 @@ function sensoryChipCard({ student, events, typesById, canDecide, refresh }) {
         el('button', { class: 'btn btn--primary btn--sm', onclick: openChipModal }, icon('zap', 14), 'ثبت مشاهدهٔ حسی'))));
 }
 
+// ───────── T10/m153 — چیپ هستهٔ خواندن (قرارداد ≤۲کلیک + پیشنهاد شرطی) — بدنهٔ مرحلهٔ مهارت‌ها ─────────
+// ابزار میکروی «هستهٔ خواندن» — پنج مؤلفه × سه سطح، جمع ۰..۱۰ (تعریف سمت سرور: ce-read-core-v1).
+// گیت: آخرین شرح‌حال نسخهٔ ۳ کامل‌شده با sld_read_concern نگران (کم/متوسط/زیاد) — از پاسخ مشترک
+// رویدادها (صفر GET تازه — §8.1). ثبت: مودال میکرو (کلیک ۱) + «ثبت» (کلیک ۲) → POST
+// مسیر اختصاصی /case-events/read-core. پس از ثبت: نشان فقط‌خواندنی + پیشنهاد شرطی گام بعد
+// (readCoreAdviceOf سمت سرور — ابزار رسمی باتری با دلیل؛ بدون برچسب تشخیصی).
+const READ_CORE_KEY = 'ce-read-core-v1';
+const READ_CORE_ITEMS = [
+  { key: 'pa', label: 'آگاهی واج‌شناختی (بخشیدن و ترکیب صدا، قافیه)' },
+  { key: 'dec', label: 'رمزگشایی (خواندن واژهٔ تازه و بی‌معنی)' },
+  { key: 'flu', label: 'روانی خواندن (سرعت و سلاست متن هم‌پایه)' },
+  { key: 'voc', label: 'واژگان (فهم معنی واژه‌های متن)' },
+  { key: 'comp', label: 'درک مطلب (پاسخ به پرسش‌های متن)' }
+];
+const READ_CORE_LEVELS = ['برقرار', 'مرزی', 'ضعف آشکار'];
+/** نگرانی خواندن شرح‌حال v3 که چیپ را روشن می‌کند (قرارداد infer.ts — anam.sld_read) */
+const READ_CONCERN_GATE = ['کم', 'متوسط', 'زیاد — نگران‌کننده'];
+
+/** ردیف‌های پیشنهاد شرطی از payload (advice_1..advice_9 — ترتیب عددی) */
+function readCoreAdviceRows(payload) {
+  const rows = [];
+  for (let i = 1; i <= 9; i++) {
+    const a = payload?.[`advice_${i}`];
+    if (a?.value) rows.push(el('div', { class: 'clx-readcore__advice-row' }, icon('zap', 13), ' ', a.value));
+  }
+  return rows;
+}
+
+/**
+ * کارت چیپ هستهٔ خواندن — null یعنی رندر نشود (بدون نگرانی خواندن و بدون ثبت قبلی).
+ * ثبت قبلی → نشان فقط‌خواندنی («ثبت شد — باند») + پیشنهاد شرطی ذخیره‌شده در هر حالت؛
+ * گرنه گیت شرح‌حال + اقدام. (فقط حالت SLD مرحلهٔ ۴ — فراخوانی شرطی‌شده در bodyOf.skills)
+ */
+function readCoreChipCard({ student, events, typesById, canDecide, refresh }) {
+  const chipTypeId = typesById.get(READ_CORE_KEY)?.id ?? null;
+  const existing = chipTypeId
+    ? (events ?? []).find((e) => e.eventTypeId === chipTypeId && e.status !== 'cancelled')
+    : null;
+
+  if (existing) {
+    const bandLabel = existing.analysis?.band ?? existing.payload?.chip_band?.value ?? null;
+    const color = ((existing.typeBands ?? []).find((b) => b.label === bandLabel) ?? {}).color ?? null;
+    const adviceRows = readCoreAdviceRows(existing.payload);
+    return el('div', { class: 'card clx-readcore' },
+      el('div', { class: 'card__body' },
+        el('div', { class: 'clx-plan__head' },
+          el('strong', { class: 'clx-plan__title' }, icon('book', 15), 'هستهٔ خواندن'),
+          sensoryBandBadge(`ثبت شد — ${bandLabel ?? '—'}`, color)),
+        existing.summary || existing.payload?.fa_summary?.value
+          ? el('div', { class: 'cell-sub' }, existing.summary || existing.payload.fa_summary.value)
+          : null,
+        adviceRows.length
+          ? el('div', { class: 'clx-readcore__advice' },
+            el('div', { class: 'cell-sub' }, el('strong', null, 'پیشنهاد شرطی گام بعد — ابزارهای رسمی باتری:')),
+            adviceRows)
+          : null,
+        existing.occurredAt ? el('div', { class: 'cell-sub' }, `ثبت: ${formatJalaliDateTime(existing.occurredAt)}`) : null));
+  }
+
+  // گیت — آخرین شرح‌حال نسخهٔ ۳ کامل‌شده (پاسخ‌ها DESC مرتب‌اند — اولین = آخرین)
+  const anamId = typesById.get(ANAMNESIS_KEY)?.id ?? null;
+  const lastAnam = anamId
+    ? (events ?? []).find((e) => e.eventTypeId === anamId && e.status === 'completed' && e.payload?.sld_read_concern?.value)
+    : null;
+  const concern = lastAnam?.payload?.sld_read_concern?.value ?? null;
+  if (!concern || !READ_CONCERN_GATE.includes(concern)) return null;
+
+  const head = el('div', { class: 'clx-plan__head' },
+    el('strong', { class: 'clx-plan__title' }, icon('book', 15), 'هستهٔ خواندن'),
+    el('span', { class: 'badge badge--warning' }, `نگرانی شرح‌حال: ${concern}`));
+
+  // بینندهٔ بدون حق ثبت — فقط اطلاع (ثبت با مدیر/درمانگر)
+  if (!canDecide) {
+    return el('div', { class: 'card clx-readcore' },
+      el('div', { class: 'card__body' }, head,
+        el('div', { class: 'cell-sub' }, 'نگرانی خواندن در شرح‌حال ثبت شده — پروفایل مشاهده‌شدهٔ هستهٔ خواندن توسط درمانگر ثبت می‌شود.')));
+  }
+
+  // کلیک ۱ — مودال میکرو: پنج ردیف × دکمه‌های سطح (پیش‌فرض «برقرار») — کلیک ۲ = ثبت
+  const openChipModal = () => {
+    formModal({
+      title: 'چیپ هستهٔ خواندن — پنج مؤلفه، سه سطح',
+      submitLabel: 'ثبت',
+      fields: READ_CORE_ITEMS.map((it) => ({
+        name: it.key, type: 'chips', label: it.label, labels: READ_CORE_LEVELS, value: 0, span: 2
+      })),
+      onSubmit: async (vals) => {
+        try {
+          await api.post(`/api/students/${student.id}/case-events/read-core`, {
+            levels: {
+              pa: Number(vals.pa), dec: Number(vals.dec), flu: Number(vals.flu),
+              voc: Number(vals.voc), comp: Number(vals.comp)
+            }
+          });
+          toast('چیپ هستهٔ خواندن ثبت شد — پیشنهاد شرطی گام بعد در همین ردیف می‌نشیند', 'success');
+          refresh();
+          return true;
+        } catch (err) { toastError(err); return false; }
+      }
+    });
+  };
+
+  return el('div', { class: 'card clx-readcore' },
+    el('div', { class: 'card__body' },
+      head,
+      el('div', { class: 'cell-sub' }, 'پنج مؤلفهٔ خواندن (آگاهی واج‌شناختی، رمزگشایی، روانی، واژگان، درک مطلب) در سه سطح — جمع ۰ تا ۱۰؛ پس از ثبت، پیشنهاد شرطی ابزار گام بعد می‌نشیند.'),
+      el('div', { class: 'clx-actions' },
+        el('button', { class: 'btn btn--primary btn--sm', onclick: openChipModal }, icon('zap', 14), 'ثبت مشاهدهٔ خواندن'))));
+}
+
 /**
  * — بلوک «زمینهٔ تفسیر» — بدنهٔ مرحلهٔ وکسلر (بدنه تغییر نکرده — m134)
  * سن/تولد/پایه/مسیر پرونده کنار خروجی کمی وکسلر (FSIQ/صدک/پراکندگی) — تا نیم‌رخ
@@ -1615,6 +1725,12 @@ export async function renderClinicalTab(box, { student }) {
           if (!otCard && !g?.detail) body.push(el('div', { class: 'cell-sub' }, SM.skills.emptyHint));
         } else if (!probeRows.node && !g?.detail) {
           body.push(el('div', { class: 'cell-sub' }, SM.skills.emptyHint));
+        }
+        // T10/m153 — چیپ هستهٔ خواندن: گیت نگرانی خواندن شرح‌حال v3 + ثبت دوکلیکی + پیشنهاد شرطی
+        // (فقط حالت SLD — از پاسخ مشترک رویدادها، صفر GET تازه)
+        if (skillsMode === SKILL_MODE_SLD) {
+          const readCore = readCoreChipCard({ student, events, typesById, canDecide, refresh });
+          if (readCore) body.push(readCore);
         }
         body.push(seenChipsBlock(insights)); // تنها جای چیپ‌های «چه فرم‌هایی آمده» در مرحلهٔ ۴
         if (skillsMode === SKILL_MODE_SLD && probeRows.node) body.push(probeRows.node);

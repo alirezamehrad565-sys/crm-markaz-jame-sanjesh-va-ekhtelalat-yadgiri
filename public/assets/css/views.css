@@ -2851,6 +2851,11 @@ tr.wl-row--urgent > td:first-child {
 .clx-plan__item { min-width: 0; padding: var(--sp-2, 8px); border: 1px solid var(--line); border-radius: var(--radius-sm, 8px); }
 .clx-plan__itemhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
 
+/* ───────── T10/m153 — چیپ هستهٔ خواندن (بدنهٔ مرحلهٔ ۴ — حالت SLD) ───────── */
+/* فقط توکن‌های موجود — بدون رنگ/فونت تازه (خط قرمز m144) */
+.clx-readcore__advice { display: flex; flex-direction: column; gap: 6px; margin-top: var(--sp-2, 8px); padding: var(--sp-2, 8px); border: 1px solid var(--line); border-radius: var(--radius-sm, 8px); background: var(--surface-2, transparent); }
+.clx-readcore__advice-row { display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; min-width: 0; font-size: var(--fs-sm); }
+
 /* نوار مداخله — سگمنت‌های پیشرفت مسیر قالبی */
 .path-band { display: flex; gap: 4px; margin: var(--sp-2, 8px) 0; min-width: 0; }
 .path-band__seg {

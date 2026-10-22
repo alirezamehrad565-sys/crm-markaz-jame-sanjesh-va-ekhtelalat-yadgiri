@@ -781,6 +781,198 @@ export function analyzeSensoryChip(levels: SensoryChipLevels): CaseEventAnalysis
   return analyzeChecklist(SENSORY_CHIP_FIELDS, SENSORY_CHIP_BANDS, { ...levels }, SENSORY_CHIP_SUBSCALES);
 }
 
+// ───────── چیپ هستهٔ خواندن (T10/m153) ─────────
+
+/**
+ * ابزار میکروی «هستهٔ خواندن» مرحلهٔ مهارت‌ها (حالت SLD) — پنج مؤلفهٔ ثابت × سه سطح، جمع ۰..۱۰.
+ * پایهٔ علمی: پنج مؤلفهٔ خواندن (National Reading Panel 2000) + نمای سادهٔ خواندن
+ * (Simple View of Reading — Gough & Tunmer 1986): درک مطلب = رمزگشایی × فهم زبان.
+ * تعریف آیتم/باند آینهٔ ورودی battery-screening.json است (هر تغییر ملاک = نسخهٔ جدید کد)؛
+ * ثبت فقط از مسیر اختصاصی سرویس (createReadCoreEvent) — عضو کتابخانهٔ فرم پنل نیست
+ * و در موتور/rules مصرف نمی‌شود (افزودنی خالص — رفتار ابزارهای موجود دست‌نخورده).
+ * «پیشنهاد شرطی» تابع خالص readCoreAdviceOf است: الگوی مؤلفه‌های ثبت‌شده → ابزار رسمی
+ * باتریِ گام بعد با دلیل فارسی — بدون هیچ برچسب تشخیصی و بدون ورود به موتور شک.
+ */
+export const READ_CORE_KEY = 'ce-read-core-v1';
+/** شناسهٔ ثابت type — الگوی seed (…031 چیپ حسی) — ensure داخلی سرویس idempotent است */
+export const READ_CORE_TYPE_ID = 'bbbbbbbb-8200-4000-8000-000000000032';
+
+/** سه سطح ثابت هر مؤلفه — نمره ۰..۲ (اندیس همین آرایه) */
+export const READ_CORE_LEVEL_LABELS: readonly string[] = ['برقرار', 'مرزی', 'ضعف آشکار'];
+
+/** پنج مؤلفهٔ ثابت هستهٔ خواندن — کلید/برچسب عین battery-screening.json */
+export const READ_CORE_ITEMS: readonly { key: string; label: string }[] = [
+  { key: 'pa', label: 'آگاهی واج‌شناختی (بخشیدن و ترکیب صدا، قافیه)' },
+  { key: 'dec', label: 'رمزگشایی (خواندن واژهٔ تازه و بی‌معنی)' },
+  { key: 'flu', label: 'روانی خواندن (سرعت و سلاست متن هم‌پایه)' },
+  { key: 'voc', label: 'واژگان (فهم معنی واژه‌های متن)' },
+  { key: 'comp', label: 'درک مطلب (پاسخ به پرسش‌های متن)' }
+];
+
+/** تعریف فیلدها — زیرمقیاس واحد rdcore؛ آینهٔ battery-screening.json */
+export const READ_CORE_FIELDS: CaseEventField[] = READ_CORE_ITEMS.map((it) => ({
+  key: it.key,
+  label: it.label,
+  type: 'scale' as const,
+  scaleMax: 2,
+  scaleLabels: [...READ_CORE_LEVEL_LABELS],
+  required: true,
+  subscaleId: 'rdcore'
+}));
+
+export const READ_CORE_SUBSCALES: CaseEventSubscale[] = [
+  { id: 'rdcore', name: 'هستهٔ خواندن', bands: null }
+];
+
+/**
+ * باندهای چیپ — ۰–۱ بدون نشان / ۲–۳ گیر مرزی / ۴–۱۰ ضعف آشکار (resolveBandV2).
+ * قرارداد Zod «حداکثر باند ≥ ۱» رعایت است؛ یک مؤلفهٔ مرزی منفرد (جمع ۱) در
+ * «بدون نشان» می‌نشیند و الگوی نشان‌دار از جمع ۲ آغاز می‌شود. منطق سرویس و
+ * JSON باتری همگام است.
+ */
+export const READ_CORE_BANDS: CaseEventBand[] = [
+  { max: 1, label: 'بدون نشان', color: 'ok', advice: 'هستهٔ خواندن برقرار است — پایش دوره‌ای در جلسات عادی کافی است.' },
+  { max: 3, label: 'گیر مرزی', color: 'warn', advice: 'گیرهای مرزی در مؤلفه‌های خواندن — در جلسات تقویتی هدفمند لحاظ شود و پس از ۸ هفته بازبینی شود.' },
+  { max: 10, label: 'ضعف آشکار', color: 'danger', advice: 'ضعف آشکار در هستهٔ خواندن — ارزیابی هدفمند خواندن (چک‌لیست ملاکی + پروب) آغاز شود.' }
+];
+
+export interface ReadCoreLevels {
+  pa: number;
+  dec: number;
+  flu: number;
+  voc: number;
+  comp: number;
+}
+
+/** نرمال‌سازی رقم فارسی/متنی — قرینهٔ buildEventPayload */
+function readCoreNumber(raw: unknown, label: string): number {
+  const n = typeof raw === 'number'
+    ? raw
+    : Number(String(raw ?? '').trim().replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))));
+  if (!Number.isInteger(n) || n < 0 || n > 2) {
+    throw new ValidationError(`سطح «${label}» باید بین ۰ تا ۲ باشد`);
+  }
+  return n;
+}
+
+/**
+ * اعتبارسنجی پنج سطح چیپ — آیتم جا/خارج از بازه → ValidationError با پیام فارسی.
+ * ورودی نامعتبر (نوع غلط/آیتم اضافه نادیده) — خروجی همیشه {pa, dec, flu, voc, comp} عددی.
+ */
+export function validateReadCoreLevels(values: unknown): ReadCoreLevels {
+  const raw = (values && typeof values === 'object' ? values : {}) as Record<string, unknown>;
+  const out: Record<string, number> = {};
+  for (const it of READ_CORE_ITEMS) {
+    const v = raw[it.key];
+    if (v === undefined || v === null || String(v).trim() === '') {
+      throw new ValidationError(`آیتم «${it.label}» بی‌پاسخ مانده است`);
+    }
+    out[it.key] = readCoreNumber(v, it.label);
+  }
+  return { pa: out.pa, dec: out.dec, flu: out.flu, voc: out.voc, comp: out.comp };
+}
+
+/** جمع ۰..۱۰ */
+export function readCoreTotalOf(levels: ReadCoreLevels): number {
+  return levels.pa + levels.dec + levels.flu + levels.voc + levels.comp;
+}
+
+/** باند چیپ از جمع — همان موتور باند چک‌لیست (resolveBandV2) */
+export function resolveReadCoreBand(total: number): CaseEventBand {
+  return resolveBandV2(total, READ_CORE_BANDS) ?? READ_CORE_BANDS[READ_CORE_BANDS.length - 1];
+}
+
+/** خلاصهٔ فارسی کوتاه چیپ — «هستهٔ خواندن: ۳ از ۱۰ — گیر مرزی» */
+export function readCoreFaSummary(levels: ReadCoreLevels): string {
+  const total = readCoreTotalOf(levels);
+  return `هستهٔ خواندن: ${faNum(total)} از ${faNum(10)} — ${resolveReadCoreBand(total).label}`;
+}
+
+// ───── پیشنهاد شرطی (قرارداد T10/m153 — تابع خالص و بازتولیدپذیر) ─────
+
+/** برچسب فارسی ابزارهای رسمی باتری که پیشنهاد شرطی به آن‌ها ارجاع می‌دهد */
+export const READ_CORE_TOOL_FA: Record<string, string> = {
+  'ce-sld-read-v1': 'چک‌لیست دشواری خواندن',
+  'ce-probe-read-v1': 'آزمون کوتاه خواندن',
+  'ce-speech-criteria-v1': 'چک‌لیست زبان و گفتار'
+};
+
+export interface ReadCoreAdvice {
+  toolKey: string;
+  /** متن پیشنهاد — چرا و چطور (فارسی قابل‌نمایش) */
+  text: string;
+}
+
+/**
+ * پیشنهاد شرطی گام بعد از الگوی مؤلفه‌ها — تابع خالص (ورودی یکسان → خروجی یکسان).
+ * منطق (NRP 2000 + نمای سادهٔ خواندن — Gough & Tunmer 1986):
+ *  - آگاهی واج‌شناختی گیردار → چک‌لیست ملاکی خواندن (هم‌گرایی خانه/مدرسه) + تمرکز جلسه
+ *  - رمزگشایی گیردار → پروب خواندن با بخش واژهٔ بی‌معنی
+ *  - روانی گیردار → پروب خواندن CBM (واژهٔ درست در دقیقه) — هم‌ابزار رمزگشایی، متن‌ها به‌هم می‌پیوندند
+ *  - واژگان گیردار → چک‌لیست زبان و گفتار (تفریق ریشهٔ زبانی)
+ *  - درک مطلب گیردار با رمزگشایی/روانی برقرار → الگوی «درک زبانی» — چک‌لیست زبان و گفتار
+ *    (درکِ متأثر از رمزگشایی پیشنهاد جدا نمی‌گیرد — از هم‌گیری کدگشایی پیروی می‌کند)
+ *  - جمع ≥۴ (باند ضعف آشکار) → چک‌لیست ملاکی خواندن + پروب خواندن پیش از جلسهٔ بعد
+ * خروجی dedupe‌شده بر کلید ابزار (متن‌های هم‌ابزار join) به ترتیب رسمی باتری —
+ * فقط ابزارهای موجود در باتری رسمی پیشنهاد می‌شوند (همان قاعدهٔ پیشنهادگر T3).
+ */
+export function readCoreAdviceOf(levels: ReadCoreLevels): ReadCoreAdvice[] {
+  const texts = new Map<string, string[]>();
+  const add = (toolKey: string, text: string): void => {
+    const arr = texts.get(toolKey) ?? [];
+    arr.push(text);
+    texts.set(toolKey, arr);
+  };
+  if (levels.pa >= 1) {
+    add('ce-sld-read-v1', 'آگاهی واج‌شناختی گیر می‌کند — چک‌لیست ملاکی خواندن برای هم‌گرایی خانه و مدرسه و تمرکز جلسه روی بخشیدن و ترکیب صدا.');
+  }
+  if (levels.dec >= 1) {
+    add('ce-probe-read-v1', 'رمزگشایی گیر می‌کند — آزمون کوتاه خواندن با بخش واژهٔ بی‌معنی (۲۰ مورد) برای اندازه‌گیری دقیق کدگشایی.');
+  }
+  if (levels.flu >= 1) {
+    add('ce-probe-read-v1', 'روانی گیر می‌کند — آزمون کوتاه خواندن (واژهٔ درست در دقیقه) با متن هم‌پایه.');
+  }
+  if (levels.voc >= 1) {
+    add('ce-speech-criteria-v1', 'واژگان گیر می‌کند — چک‌لیست زبان و گفتار برای تفریق ریشهٔ زبانی.');
+  }
+  if (levels.comp >= 1 && levels.dec === 0 && levels.flu === 0) {
+    add('ce-speech-criteria-v1', 'درک مطلب گیر می‌کند با رمزگشایی و روانی برقرار — الگوی «درک زبانی» (نمای سادهٔ خواندن): ارزیابی فهم شنیداری و زبان.');
+  }
+  if (readCoreTotalOf(levels) >= 4) {
+    add('ce-sld-read-v1', 'الگوی ضعف گسترده در هستهٔ خواندن — چک‌لیست ملاکی خواندن و پروب خواندن پیش از جلسهٔ بعد آغاز شود.');
+  }
+  const order = ['ce-sld-read-v1', 'ce-probe-read-v1', 'ce-speech-criteria-v1'];
+  return order
+    .filter((k) => texts.has(k))
+    .map((toolKey) => ({ toolKey, text: (texts.get(toolKey) ?? []).join(' ') }));
+}
+
+/**
+ * payload نمایشی چیپ — آیتم‌ها (برچسب سطح) + نمرهٔ کل + باند + خلاصه + ردیف‌های
+ * پیشنهاد شرطی (advice_N با برچسب «پیشنهاد گام بعد — ابزار»). کلیدهای extra با
+ * الگوی teacher_binding سازگارند (خواندن با label؛ ویرایش عمومی آن‌ها را دور می‌ریزد).
+ */
+export function buildReadCorePayload(levels: ReadCoreLevels): Record<string, PayloadEntry> {
+  const total = readCoreTotalOf(levels);
+  const band = resolveReadCoreBand(total);
+  const payload: Record<string, PayloadEntry> = {};
+  for (const it of READ_CORE_ITEMS) {
+    payload[it.key] = { value: READ_CORE_LEVEL_LABELS[levels[it.key as keyof ReadCoreLevels]], label: it.label };
+  }
+  payload['chip_total'] = { value: String(total), label: 'نمرهٔ کل' };
+  payload['chip_band'] = { value: band.label, label: 'باند' };
+  payload['fa_summary'] = { value: readCoreFaSummary(levels), label: 'خلاصهٔ چیپ هستهٔ خواندن' };
+  readCoreAdviceOf(levels).forEach((a, i) => {
+    payload[`advice_${i + 1}`] = { value: a.text, label: `پیشنهاد گام بعد — ${READ_CORE_TOOL_FA[a.toolKey] ?? a.toolKey}` };
+  });
+  return payload;
+}
+
+/** تحلیل چیپ — همان موتور v2 چک‌لیست (نمره/باند/تفسیر) تا تایم‌لاین هم‌شکل بقیهٔ ابزارها شود */
+export function analyzeReadCore(levels: ReadCoreLevels): CaseEventAnalysis {
+  return analyzeChecklist(READ_CORE_FIELDS, READ_CORE_BANDS, { ...levels }, READ_CORE_SUBSCALES);
+}
+
 // ───────── ماتریس ترنزیشن وضعیت ─────────
 
 export const CASE_EVENT_TRANSITIONS: Record<string, string[]> = {

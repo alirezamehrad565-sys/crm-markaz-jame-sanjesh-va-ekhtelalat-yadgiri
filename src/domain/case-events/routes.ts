@@ -150,6 +150,15 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: item }, 201);
   });
 
+  // — T10/m153: چیپ هستهٔ خواندن — ثبت دوکلیکی مرحلهٔ مهارت‌ها (همان گیت ثبت رویداد؛
+  //   سطح جا/خارج از بازه → 400 فارسی؛ type ce-read-core-v1 در سرویس idempotent ensure می‌شود)
+  app.post('/api/students/:id/case-events/read-core', requireRole('manager', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json<{ levels?: Record<string, unknown> }>().catch(() => null);
+    const item = await service.createReadCoreEvent(c.req.param('id'), { levels: body?.levels ?? {} }, actor);
+    return c.json({ data: item }, 201);
+  });
+
   app.patch('/api/case-events/:id', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json<{ values?: Record<string, string | number | null>; summary?: string }>();

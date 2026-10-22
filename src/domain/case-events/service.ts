@@ -16,11 +16,12 @@ import type {
 } from './types';
 import { CASE_EVENT_STATUSES } from './types';
 import {
-  analyzeChecklist, analyzeSensoryChip, base64ToBytes, buildEventPayload, buildSensoryChipPayload, buildSummary,
-  canTransitionStatus, estimateBase64Bytes, EVENT_FILES_MAX, extractFollowUpAction, packageComponentsOf, resolveBand,
-  SENSORY_CHIP_BANDS, SENSORY_CHIP_FIELDS, SENSORY_CHIP_KEY, SENSORY_CHIP_SUBSCALES, SENSORY_CHIP_TYPE_ID,
-  sanitizeFilename, sanitizeTeacherName, stripDataUrlPrefix, teacherBindingOfPayload,
-  validateFileInput, validateSensoryChipLevels, validateTypeDefinition, withTeacherName
+  analyzeChecklist, analyzeReadCore, analyzeSensoryChip, base64ToBytes, buildEventPayload, buildReadCorePayload,
+  buildSensoryChipPayload, buildSummary, canTransitionStatus, estimateBase64Bytes, EVENT_FILES_MAX,
+  extractFollowUpAction, packageComponentsOf, READ_CORE_BANDS, READ_CORE_FIELDS, READ_CORE_KEY, READ_CORE_SUBSCALES,
+  READ_CORE_TYPE_ID, resolveBand, SENSORY_CHIP_BANDS, SENSORY_CHIP_FIELDS, SENSORY_CHIP_KEY, SENSORY_CHIP_SUBSCALES,
+  SENSORY_CHIP_TYPE_ID, sanitizeFilename, sanitizeTeacherName, stripDataUrlPrefix, teacherBindingOfPayload,
+  validateFileInput, validateReadCoreLevels, validateSensoryChipLevels, validateTypeDefinition, withTeacherName
 } from './pure';
 
 interface TypeRow {
@@ -233,6 +234,36 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     );
     const row = await loadTypeRowByKey(SENSORY_CHIP_KEY);
     if (!row) throw new ConflictError('ثبت type چیپ حسی ممکن نشد');
+    return row;
+  }
+
+  /**
+   * — T10/m153: تضمین وجود type چیپ هستهٔ خواندن — idempotent (بدون مایگریشن؛ کلید unique است).
+   * type سیستمیِ خارج کتابخانه است (active=0) تا فقط از مسیر اختصاصی چیپ ثبت شود و
+   * فرم عمومی/انتخابگر پنل آن را نبیند — تعریف آینهٔ battery-screening.json (pure.ts) است.
+   */
+  async function ensureReadCoreType(): Promise<TypeRow> {
+    const existing = await loadTypeRowByKey(READ_CORE_KEY);
+    if (existing) return existing;
+    await db.execute(
+      `INSERT OR IGNORE INTO case_event_types
+         (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, active, created_by, is_system, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'checklist', ?, 0, ?, ?, ?, NULL, 'family', 0, 'seed-m153', 1, ?, ?)`,
+      [
+        READ_CORE_TYPE_ID,
+        READ_CORE_KEY,
+        'چیپ هستهٔ خواندن — ثبت درمانگر',
+        'پنج مؤلفهٔ هستهٔ خواندن (آگاهی واج‌شناختی، رمزگشایی، روانی، واژگان، درک مطلب) در سه سطح — ابزار میکروی مرحلهٔ مهارت‌ها؛ پس از ثبت، پیشنهاد شرطی گام بعد بر پایهٔ الگوی مؤلفه‌ها ساخته می‌شود. جایگزین ارزیابی جامع خواندن نیست.',
+        '📖',
+        JSON.stringify(READ_CORE_FIELDS),
+        JSON.stringify(READ_CORE_BANDS),
+        JSON.stringify(READ_CORE_SUBSCALES),
+        now().toISOString(),
+        now().toISOString()
+      ]
+    );
+    const row = await loadTypeRowByKey(READ_CORE_KEY);
+    if (!row) throw new ConflictError('ثبت type چیپ هستهٔ خواندن ممکن نشد');
     return row;
   }
 
@@ -706,6 +737,47 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         });
       });
       log.info('event.sensory_chip_created', { id, studentId, score: analysis.score, band: analysis.band });
+      return eventRowToRecord(await getEventRow(id));
+    },
+
+    /**
+     * — T10/m153: ثبت چیپ هستهٔ خواندن — مسیر اختصاصیِ دوکلیکی مرحلهٔ مهارت‌ها (حالت SLD).
+     * تفاوت با createEvent: رویداد همین‌جا completed می‌شود (چک‌لیستِ غیرخانواده‌پر است —
+     * pending_family و توکن بی‌معناست)؛ تحلیل v2 + payload برچسب‌دار + پیشنهاد شرطی
+     * (readCoreAdviceOf → advice_N) در همان تراکنش.
+     * آیتم جا/خارج از بازه → ValidationError فارسی (بدون رکورد).
+     */
+    async createReadCoreEvent(studentId, input, actor) {
+      await assertStudent(studentId);
+      // اول اعتبارسنجی — ورودی خراب هیچ ردی (نه event نه type) نمی‌گذارد
+      const levels = validateReadCoreLevels(input.levels);
+      const type = typeRowToRecord(await ensureReadCoreType());
+      const payload = buildReadCorePayload(levels);
+      const analysis = analyzeReadCore(levels);
+      const summary = buildSummary(payload, analysis);
+      const id = crypto.randomUUID();
+      const occurredAt = now().toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
+                                    status, payload, analysis, summary, fill_token, fill_expires_at, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, NULL, ?, 'completed', ?, ?, ?, NULL, NULL, ?, ?, ?)`,
+          [id, type.id, studentId, actor.staffId, occurredAt, JSON.stringify(payload), JSON.stringify(analysis), summary, actor.staffId, occurredAt, occurredAt]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'case_event.read_core_created',
+          resourceType: 'case_event',
+          resourceId: id,
+          changes: {
+            eventTypeId: { from: null, to: type.id },
+            studentId: { from: null, to: studentId },
+            total: { from: null, to: analysis.score },
+            band: { from: null, to: analysis.band }
+          }
+        });
+      });
+      log.info('event.read_core_created', { id, studentId, score: analysis.score, band: analysis.band });
       return eventRowToRecord(await getEventRow(id));
     },
 

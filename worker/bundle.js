@@ -4151,8 +4151,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.33";
-var APP_MILESTONE = "m159";
+var APP_VERSION = "1.00.34";
+var APP_MILESTONE = "m153";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -21669,6 +21669,127 @@ function analyzeSensoryChip(levels) {
 }
 __name(analyzeSensoryChip, "analyzeSensoryChip");
 __name2(analyzeSensoryChip, "analyzeSensoryChip");
+// ───────── چیپ هستهٔ خواندن (T10/m153) — آینهٔ case-events/pure.ts ─────────
+// پنج مؤلفه × سه سطح، جمع ۰..۱۰ + پیشنهاد شرطی خالص (readCoreAdviceOf) — ثبت فقط مسیر اختصاصی.
+var READ_CORE_KEY = "ce-read-core-v1";
+var READ_CORE_TYPE_ID = "bbbbbbbb-8200-4000-8000-000000000032";
+var READ_CORE_LEVEL_LABELS = ["برقرار", "مرزی", "ضعف آشکار"];
+var READ_CORE_ITEMS = [
+  { key: "pa", label: "آگاهی واج‌شناختی (بخشیدن و ترکیب صدا، قافیه)" },
+  { key: "dec", label: "رمزگشایی (خواندن واژهٔ تازه و بی‌معنی)" },
+  { key: "flu", label: "روانی خواندن (سرعت و سلاست متن هم‌پایه)" },
+  { key: "voc", label: "واژگان (فهم معنی واژه‌های متن)" },
+  { key: "comp", label: "درک مطلب (پاسخ به پرسش‌های متن)" }
+];
+var READ_CORE_FIELDS = [
+  { key: "pa", label: "آگاهی واج‌شناختی (بخشیدن و ترکیب صدا، قافیه)", type: "scale", scaleMax: 2, scaleLabels: READ_CORE_LEVEL_LABELS, required: true, subscaleId: "rdcore" },
+  { key: "dec", label: "رمزگشایی (خواندن واژهٔ تازه و بی‌معنی)", type: "scale", scaleMax: 2, scaleLabels: READ_CORE_LEVEL_LABELS, required: true, subscaleId: "rdcore" },
+  { key: "flu", label: "روانی خواندن (سرعت و سلاست متن هم‌پایه)", type: "scale", scaleMax: 2, scaleLabels: READ_CORE_LEVEL_LABELS, required: true, subscaleId: "rdcore" },
+  { key: "voc", label: "واژگان (فهم معنی واژه‌های متن)", type: "scale", scaleMax: 2, scaleLabels: READ_CORE_LEVEL_LABELS, required: true, subscaleId: "rdcore" },
+  { key: "comp", label: "درک مطلب (پاسخ به پرسش‌های متن)", type: "scale", scaleMax: 2, scaleLabels: READ_CORE_LEVEL_LABELS, required: true, subscaleId: "rdcore" }
+];
+var READ_CORE_SUBSCALES = [{ id: "rdcore", name: "هستهٔ خواندن", bands: null }];
+var READ_CORE_BANDS = [
+  { max: 1, label: "بدون نشان", color: "ok", advice: "هستهٔ خواندن برقرار است — پایش دوره‌ای در جلسات عادی کافی است." },
+  { max: 3, label: "گیر مرزی", color: "warn", advice: "گیرهای مرزی در مؤلفه‌های خواندن — در جلسات تقویتی هدفمند لحاظ شود و پس از ۸ هفته بازبینی شود." },
+  { max: 10, label: "ضعف آشکار", color: "danger", advice: "ضعف آشکار در هستهٔ خواندن — ارزیابی هدفمند خواندن (چک‌لیست ملاکی + پروب) آغاز شود." }
+];
+function readCoreNumber(raw2, label) {
+  const n = typeof raw2 === "number" ? raw2 : Number(String(raw2 ?? "").trim().replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))));
+  if (!Number.isInteger(n) || n < 0 || n > 2) {
+    throw new ValidationError(`سطح «${label}» باید بین ۰ تا ۲ باشد`);
+  }
+  return n;
+}
+__name(readCoreNumber, "readCoreNumber");
+__name2(readCoreNumber, "readCoreNumber");
+function validateReadCoreLevels(values) {
+  const raw2 = values && typeof values === "object" ? values : {};
+  const out = {};
+  for (const it of READ_CORE_ITEMS) {
+    const v = raw2[it.key];
+    if (v === void 0 || v === null || String(v).trim() === "") {
+      throw new ValidationError(`آیتم «${it.label}» بی‌پاسخ مانده است`);
+    }
+    out[it.key] = readCoreNumber(v, it.label);
+  }
+  return { pa: out.pa, dec: out.dec, flu: out.flu, voc: out.voc, comp: out.comp };
+}
+__name(validateReadCoreLevels, "validateReadCoreLevels");
+__name2(validateReadCoreLevels, "validateReadCoreLevels");
+function readCoreTotalOf(levels) {
+  return levels.pa + levels.dec + levels.flu + levels.voc + levels.comp;
+}
+__name(readCoreTotalOf, "readCoreTotalOf");
+__name2(readCoreTotalOf, "readCoreTotalOf");
+function resolveReadCoreBand(total) {
+  return resolveBandV2(total, READ_CORE_BANDS) ?? READ_CORE_BANDS[READ_CORE_BANDS.length - 1];
+}
+__name(resolveReadCoreBand, "resolveReadCoreBand");
+__name2(resolveReadCoreBand, "resolveReadCoreBand");
+function readCoreFaSummary(levels) {
+  const total = readCoreTotalOf(levels);
+  return `هستهٔ خواندن: ${faNum2(total)} از ${faNum2(10)} — ${resolveReadCoreBand(total).label}`;
+}
+__name(readCoreFaSummary, "readCoreFaSummary");
+__name2(readCoreFaSummary, "readCoreFaSummary");
+var READ_CORE_TOOL_FA = {
+  "ce-sld-read-v1": "چک‌لیست دشواری خواندن",
+  "ce-probe-read-v1": "آزمون کوتاه خواندن",
+  "ce-speech-criteria-v1": "چک‌لیست زبان و گفتار"
+};
+function readCoreAdviceOf(levels) {
+  const texts = /* @__PURE__ */ new Map();
+  const add = (toolKey, text) => {
+    const arr = texts.get(toolKey) ?? [];
+    arr.push(text);
+    texts.set(toolKey, arr);
+  };
+  if (levels.pa >= 1) {
+    add("ce-sld-read-v1", "آگاهی واج‌شناختی گیر می‌کند — چک‌لیست ملاکی خواندن برای هم‌گرایی خانه و مدرسه و تمرکز جلسه روی بخشیدن و ترکیب صدا.");
+  }
+  if (levels.dec >= 1) {
+    add("ce-probe-read-v1", "رمزگشایی گیر می‌کند — آزمون کوتاه خواندن با بخش واژهٔ بی‌معنی (۲۰ مورد) برای اندازه‌گیری دقیق کدگشایی.");
+  }
+  if (levels.flu >= 1) {
+    add("ce-probe-read-v1", "روانی گیر می‌کند — آزمون کوتاه خواندن (واژهٔ درست در دقیقه) با متن هم‌پایه.");
+  }
+  if (levels.voc >= 1) {
+    add("ce-speech-criteria-v1", "واژگان گیر می‌کند — چک‌لیست زبان و گفتار برای تفریق ریشهٔ زبانی.");
+  }
+  if (levels.comp >= 1 && levels.dec === 0 && levels.flu === 0) {
+    add("ce-speech-criteria-v1", "درک مطلب گیر می‌کند با رمزگشایی و روانی برقرار — الگوی «درک زبانی» (نمای سادهٔ خواندن): ارزیابی فهم شنیداری و زبان.");
+  }
+  if (readCoreTotalOf(levels) >= 4) {
+    add("ce-sld-read-v1", "الگوی ضعف گسترده در هستهٔ خواندن — چک‌لیست ملاکی خواندن و پروب خواندن پیش از جلسهٔ بعد آغاز شود.");
+  }
+  const order = ["ce-sld-read-v1", "ce-probe-read-v1", "ce-speech-criteria-v1"];
+  return order.filter((k) => texts.has(k)).map((toolKey) => ({ toolKey, text: (texts.get(toolKey) ?? []).join(" ") }));
+}
+__name(readCoreAdviceOf, "readCoreAdviceOf");
+__name2(readCoreAdviceOf, "readCoreAdviceOf");
+function buildReadCorePayload(levels) {
+  const total = readCoreTotalOf(levels);
+  const band = resolveReadCoreBand(total);
+  const payload = {};
+  for (const it of READ_CORE_ITEMS) {
+    payload[it.key] = { value: READ_CORE_LEVEL_LABELS[levels[it.key]], label: it.label };
+  }
+  payload["chip_total"] = { value: String(total), label: "نمرهٔ کل" };
+  payload["chip_band"] = { value: band.label, label: "باند" };
+  payload["fa_summary"] = { value: readCoreFaSummary(levels), label: "خلاصهٔ چیپ هستهٔ خواندن" };
+  readCoreAdviceOf(levels).forEach((a, i) => {
+    payload[`advice_${i + 1}`] = { value: a.text, label: `پیشنهاد گام بعد — ${READ_CORE_TOOL_FA[a.toolKey] ?? a.toolKey}` };
+  });
+  return payload;
+}
+__name(buildReadCorePayload, "buildReadCorePayload");
+__name2(buildReadCorePayload, "buildReadCorePayload");
+function analyzeReadCore(levels) {
+  return analyzeChecklist(READ_CORE_FIELDS, READ_CORE_BANDS, { ...levels }, READ_CORE_SUBSCALES);
+}
+__name(analyzeReadCore, "analyzeReadCore");
+__name2(analyzeReadCore, "analyzeReadCore");
 var CASE_EVENT_TRANSITIONS = {
   draft: ["completed", "cancelled"],
   completed: ["cancelled"],
@@ -23662,6 +23783,36 @@ function createCaseEventsService(deps) {
   }
   __name(ensureSensoryChipType, "ensureSensoryChipType");
   __name2(ensureSensoryChipType, "ensureSensoryChipType");
+  // — T10/m153: تضمین وجود type چیپ هستهٔ خواندن — idempotent (بدون مایگریشن؛ کلید unique است).
+  // type سیستمیِ خارج کتابخانه است (active=0) تا فقط از مسیر اختصاصی چیپ ثبت شود.
+  async function ensureReadCoreType() {
+    const existing = await loadTypeRowByKey(READ_CORE_KEY);
+    if (existing)
+      return existing;
+    await db.execute(
+      `INSERT OR IGNORE INTO case_event_types
+         (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, active, created_by, is_system, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'checklist', ?, 0, ?, ?, ?, NULL, 'family', 0, 'seed-m153', 1, ?, ?)`,
+      [
+        READ_CORE_TYPE_ID,
+        READ_CORE_KEY,
+        "چیپ هستهٔ خواندن — ثبت درمانگر",
+        "پنج مؤلفهٔ هستهٔ خواندن (آگاهی واج‌شناختی، رمزگشایی، روانی، واژگان، درک مطلب) در سه سطح — ابزار میکروی مرحلهٔ مهارت‌ها؛ پس از ثبت، پیشنهاد شرطی گام بعد بر پایهٔ الگوی مؤلفه‌ها ساخته می‌شود. جایگزین ارزیابی جامع خواندن نیست.",
+        "📖",
+        JSON.stringify(READ_CORE_FIELDS),
+        JSON.stringify(READ_CORE_BANDS),
+        JSON.stringify(READ_CORE_SUBSCALES),
+        now().toISOString(),
+        now().toISOString()
+      ]
+    );
+    const row = await loadTypeRowByKey(READ_CORE_KEY);
+    if (!row)
+      throw new ConflictError("ثبت type چیپ هستهٔ خواندن ممکن نشد");
+    return row;
+  }
+  __name(ensureReadCoreType, "ensureReadCoreType");
+  __name2(ensureReadCoreType, "ensureReadCoreType");
   async function assertStudent(studentId) {
     const row = await db.queryOne(`SELECT id FROM students WHERE id = ?`, [studentId]);
     if (!row)
@@ -24129,6 +24280,40 @@ function createCaseEventsService(deps) {
         });
       });
       log32.info("event.sensory_chip_created", { id, studentId, score: analysis.score, band: analysis.band });
+      return eventRowToRecord(await getEventRow(id));
+    },
+    // — T10/m153: ثبت چیپ هستهٔ خواندن — مسیر اختصاصی دوکلیکی مرحلهٔ مهارت‌ها (حالت SLD)؛
+    //   رویداد همین‌جا completed می‌شود؛ تحلیل v2 + payload برچسب‌دار + پیشنهاد شرطی (advice_N).
+    async createReadCoreEvent(studentId, input, actor) {
+      await assertStudent(studentId);
+      const levels = validateReadCoreLevels(input.levels);
+      const type = typeRowToRecord(await ensureReadCoreType());
+      const payload = buildReadCorePayload(levels);
+      const analysis = analyzeReadCore(levels);
+      const summary = buildSummary(payload, analysis);
+      const id = crypto.randomUUID();
+      const occurredAt = now().toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
+                                    status, payload, analysis, summary, fill_token, fill_expires_at, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, NULL, ?, 'completed', ?, ?, ?, NULL, NULL, ?, ?, ?)`,
+          [id, type.id, studentId, actor.staffId, occurredAt, JSON.stringify(payload), JSON.stringify(analysis), summary, actor.staffId, occurredAt, occurredAt]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "case_event.read_core_created",
+          resourceType: "case_event",
+          resourceId: id,
+          changes: {
+            eventTypeId: { from: null, to: type.id },
+            studentId: { from: null, to: studentId },
+            total: { from: null, to: analysis.score },
+            band: { from: null, to: analysis.band }
+          }
+        });
+      });
+      log32.info("event.read_core_created", { id, studentId, score: analysis.score, band: analysis.band });
       return eventRowToRecord(await getEventRow(id));
     },
     async updateEvent(id, input, actor) {
@@ -25272,6 +25457,14 @@ function registerCaseEventsRoutes(app, service) {
     const item = await service.createSensoryChipEvent(c.req.param("id"), { levels: body?.levels ?? {} }, actor);
     return c.json({ data: item }, 201);
   });
+  // — T10/m153: چیپ هستهٔ خواندن — ثبت دوکلیکی مرحلهٔ مهارت‌ها (همان گیت ثبت رویداد؛
+  //   سطح جا/خارج از بازه → 400 فارسی؛ type در سرویس idempotent ensure می‌شود)
+  app.post("/api/students/:id/case-events/read-core", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json().catch(() => null);
+    const item = await service.createReadCoreEvent(c.req.param("id"), { levels: body?.levels ?? {} }, actor);
+    return c.json({ data: item }, 201);
+  });
   app.patch("/api/case-events/:id", requireRole("manager", "therapist"), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json();
@@ -25745,6 +25938,31 @@ var battery_screening_default = [
       { key: "sound", label: "صدا (صوت)", type: "scale", scaleMax: 2, scaleLabels: ["بدون حساسیت", "حساسیت جزئی", "حساسیت آزارنده"], required: true, subscaleId: "sens" },
       { key: "light", label: "نور (نور/رنگ)", type: "scale", scaleMax: 2, scaleLabels: ["بدون حساسیت", "حساسیت جزئی", "حساسیت آزارنده"], required: true, subscaleId: "sens" },
       { key: "touch", label: "لمس و بافت (لمس/جنس لباس/بافت غذا)", type: "scale", scaleMax: 2, scaleLabels: ["بدون حساسیت", "حساسیت جزئی", "حساسیت آزارنده"], required: true, subscaleId: "sens" }
+    ]
+  },
+  // ─── T10/m153 — چیپ هستهٔ خواندن (آینهٔ battery-screening.json؛ ثبت از مسیر اختصاصی سرویس) ───
+  {
+    key: "ce-read-core-v1",
+    title: "چیپ هستهٔ خواندن — ثبت درمانگر",
+    description: "پنج مؤلفهٔ هستهٔ خواندن (آگاهی واج‌شناختی، رمزگشایی، روانی، واژگان، درک مطلب) در سه سطح — ابزار میکروی مرحلهٔ مهارت‌ها برای ثبت مشاهدهٔ درمانگر؛ پس از ثبت، پیشنهاد شرطی گام بعد بر پایهٔ الگوی مؤلفه‌ها ساخته می‌شود. جایگزین ارزیابی جامع خواندن نیست.",
+    category: "checklist",
+    icon: "📖",
+    familyFillable: false,
+    audience: "family",
+    source: "T10/m153 — پنج مؤلفهٔ خواندن (National Reading Panel 2000) + نمای سادهٔ خواندن (Simple View of Reading — Gough & Tunmer 1986): درک مطلب = رمزگشایی × فهم زبان. باندهای ۰–۱ / ۲–۳ / ۴–۱۰ (قرارداد Zod: حداکثر باند ≥ ۱؛ مؤلفهٔ مرزی منفرد در «بدون نشان»). پیشنهاد شرطی سرور (readCoreAdviceOf — تابع خالص) از الگوی مؤلفه‌ها ابزار رسمی باتری گام بعد را پیشنهاد می‌کند (چک‌لیست ملاکی خواندن / آزمون کوتاه خواندن / چک‌لیست زبان و گفتار) — بدون برچسب تشخیصی. تعریف کد (pure.ts) و سرویس ثبت اختصاصی هم‌گام است.",
+    tags: [],
+    subscales: [{ id: "rdcore", name: "هستهٔ خواندن", bands: null }],
+    bands: [
+      { max: 1, label: "بدون نشان", color: "ok", advice: "هستهٔ خواندن برقرار است — پایش دوره‌ای در جلسات عادی کافی است." },
+      { max: 3, label: "گیر مرزی", color: "warn", advice: "گیرهای مرزی در مؤلفه‌های خواندن — در جلسات تقویتی هدفمند لحاظ شود و پس از ۸ هفته بازبینی شود." },
+      { max: 10, label: "ضعف آشکار", color: "danger", advice: "ضعف آشکار در هستهٔ خواندن — ارزیابی هدفمند خواندن (چک‌لیست ملاکی + پروب) آغاز شود." }
+    ],
+    fields: [
+      { key: "pa", label: "آگاهی واج‌شناختی (بخشیدن و ترکیب صدا، قافیه)", type: "scale", scaleMax: 2, scaleLabels: ["برقرار", "مرزی", "ضعف آشکار"], required: true, subscaleId: "rdcore" },
+      { key: "dec", label: "رمزگشایی (خواندن واژهٔ تازه و بی‌معنی)", type: "scale", scaleMax: 2, scaleLabels: ["برقرار", "مرزی", "ضعف آشکار"], required: true, subscaleId: "rdcore" },
+      { key: "flu", label: "روانی خواندن (سرعت و سلاست متن هم‌پایه)", type: "scale", scaleMax: 2, scaleLabels: ["برقرار", "مرزی", "ضعف آشکار"], required: true, subscaleId: "rdcore" },
+      { key: "voc", label: "واژگان (فهم معنی واژه‌های متن)", type: "scale", scaleMax: 2, scaleLabels: ["برقرار", "مرزی", "ضعف آشکار"], required: true, subscaleId: "rdcore" },
+      { key: "comp", label: "درک مطلب (پاسخ به پرسش‌های متن)", type: "scale", scaleMax: 2, scaleLabels: ["برقرار", "مرزی", "ضعف آشکار"], required: true, subscaleId: "rdcore" }
     ]
   }
 ];
