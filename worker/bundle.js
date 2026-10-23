@@ -1823,8 +1823,8 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.00.56";
-var APP_MILESTONE = "m181";
+var APP_VERSION = "1.00.57";
+var APP_MILESTONE = "m182";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -38744,7 +38744,8 @@ function createBackupService(deps) {
   __name(sendToDestinations, "sendToDestinations");
   async function listTables() {
     const rows = await db.query(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`
+      `SELECT name FROM sqlite_master WHERE type = 'table'
+       AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name`
     );
     return rows.map((r) => r.name);
   }
@@ -38926,7 +38927,16 @@ function createBackupService(deps) {
     async getStatus() {
       const tables = await listTables();
       const withCounts = [];
-      for (const t of tables) withCounts.push({ name: t, rows: await rowCount(t) });
+      for (const t of tables) {
+        try {
+          withCounts.push({ name: t, rows: await rowCount(t) });
+        } catch (err) {
+          logger.warn("backup.status.rowcount_failed", {
+            table: t,
+            err: err instanceof Error ? err.message : String(err)
+          });
+        }
+      }
       const recent = await db.query(
         `SELECT action, resource_id, created_at, changes FROM audit_log
          WHERE action LIKE 'backup.%' ORDER BY created_at DESC, id DESC LIMIT 5`

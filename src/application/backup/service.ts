@@ -337,8 +337,14 @@ export function createBackupService(deps: {
   }
 
   async function listTables(): Promise<string[]> {
+    // ⚠️ m182: جدول داخلی _cf_KV (متعلق به خود D1) روی پروداکشن در sqlite_master هست؛
+    // کوئری زدن روی آن از داخل Worker با «D1_ERROR: not authorized: SQLITE_AUTH» رد می‌شود
+    // (از wrangler/REST مجاز است — فقط binding داخل Worker محافظت می‌شود).
+    // همین امر پنل پشتیبان (status)، خروجی (export) و بازیابی (inspect) را ۵۰۰ می‌کرد.
+    // پس جدول‌های سیستمی sqlite_% و _cf_% همیشه حذف می‌شوند.
     const rows = await db.query<{ name: string }>(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`
+      `SELECT name FROM sqlite_master WHERE type = 'table'
+       AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name`
     );
     return rows.map((r) => r.name);
   }
@@ -535,7 +541,18 @@ export function createBackupService(deps: {
     async getStatus() {
       const tables = await listTables();
       const withCounts: { name: string; rows: number }[] = [];
-      for (const t of tables) withCounts.push({ name: t, rows: await rowCount(t) });
+      // دفاع دوم: اگر جدولی به هر دلیل خوانا نبود، پنل نباید ۵۰۰ بدهد —
+      // همان جدول با هشدار جا می‌ماند و بقیهٔ آمار سالم نمایش داده می‌شود
+      for (const t of tables) {
+        try {
+          withCounts.push({ name: t, rows: await rowCount(t) });
+        } catch (err) {
+          logger.warn('backup.status.rowcount_failed', {
+            table: t,
+            err: err instanceof Error ? err.message : String(err)
+          });
+        }
+      }
       const recent = await db.query<{ action: string; resource_id: string; created_at: string; changes: string | null }>(
         `SELECT action, resource_id, created_at, changes FROM audit_log
          WHERE action LIKE 'backup.%' ORDER BY created_at DESC, id DESC LIMIT 5`
