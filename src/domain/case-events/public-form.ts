@@ -4,6 +4,9 @@ export interface FillFormItem {
   scaleMax?: number;
   scoredOptions?: { label: string }[];
   scaleLabels?: string[];
+  hint?: string | null;        // — m175: مثال ساده زیر گویه (خاکستری)
+  teacherLabel?: string | null; // — m175: متن جایگزین گویه برای فرم معلم
+  teacherHint?: string | null;  // — m175: مثال جایگزین برای فرم معلم
 }
 
 export interface FillFormSection {
@@ -60,7 +63,7 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
   const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   let counter = 0;
   const total = model.sections.reduce((sum, s) => sum + s.items.length, 0);
-  const isTeacherForm = model.audience === 'teacher';
+  const isTeacherForm = model.audience === 'teacher' || !!model.teacherLabel;
   const headTitle = isTeacherForm ? 'پرسش‌نامهٔ دانش‌آموز شما — فرم معلم' : 'پرسش‌نامهٔ فرزند شما';
   const headSub = model.studentName
     ? (isTeacherForm ? `دربارهٔ دانش‌آموز: ${model.studentName}` : `دربارهٔ ${model.studentName}`)
@@ -87,7 +90,9 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
           );
         }
       }
-      return `<div class="item" data-key="${esc(f.key)}"><div class="q">${faNum(counter)}. ${esc(f.label)}</div><div class="opts">${opts.join('')}</div></div>`;
+      const qLabel = isTeacherForm && f.teacherLabel ? f.teacherLabel : f.label;
+      const qHint = isTeacherForm && f.teacherHint ? f.teacherHint : f.hint;
+      return `<div class="item" data-key="${esc(f.key)}"><div class="q">${faNum(counter)}. ${esc(qLabel)}</div>${qHint ? `<div class="hint">${esc(qHint)}</div>` : ''}<div class="opts">${opts.join('')}</div></div>`;
     }).join('');
     const head = sec.title
       ? `<div class="subscale"><span class="subscale__dot"></span>${esc(sec.title)}</div>`
@@ -130,6 +135,7 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
   .item:last-child { border-bottom: 0; }
   .item.is-missing .q { color: #A12622; }
   .q { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+  .hint { font-size: 12px; color: #8A8377; margin: -5px 0 8px; line-height: 1.9; }
   .opts { display: flex; flex-wrap: wrap; gap: 8px; }
   .opt { display: inline-flex; align-items: center; gap: 5px; background: #F7F3EA;
          border: 1px solid #E5DCCB; border-radius: 10px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
@@ -143,6 +149,7 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
   .msg.ok { display: block; background: #E4F5E9; color: #1D6B39; }
   .msg.err { display: block; background: #FDE8E8; color: #A12622; }
   .foot { text-align: center; font-size: 12px; color: #8A8377; margin-top: 18px; }
+  .notice { text-align: center; font-size: 11.5px; color: #8A8377; margin: -4px 0 12px; }
 </style>
 </head>
 <body>
@@ -157,6 +164,7 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
     <span id="progText">پاسخ داده‌شده: ۰ از ${faNum(total)}</span>
     <div class="progress__bar"><div class="progress__fill" id="progFill"></div></div>
   </div>
+  <div class="notice">این فرم تشخیص نیست؛ فقط به تصمیم‌گیری درمانگر کمک می‌کند.</div>
   <form id="f" novalidate>
     ${sections}
     <button class="btn" type="submit">ارسال پاسخ‌ها</button>
@@ -239,6 +247,7 @@ export function renderPackageFormPage(model: PackageFormModel, token: string): s
   const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   let counter = 0;
+  const isTeacherForm = !!model.teacherLabel;
   const renderItems = (sections: FillFormSection[]): string => sections.map((sec) => {
     const items = sec.items.map((f) => {
       counter += 1;
@@ -263,7 +272,9 @@ export function renderPackageFormPage(model: PackageFormModel, token: string): s
           );
         }
       }
-      return `<div class="item" data-key="${esc(f.key)}"><div class="q">${faNum(counter)}. ${esc(f.label)}</div><div class="${optsCls}">${opts.join('')}</div></div>`;
+      const qLabel = isTeacherForm && f.teacherLabel ? f.teacherLabel : f.label;
+      const qHint = isTeacherForm && f.teacherHint ? f.teacherHint : f.hint;
+      return `<div class="item" data-key="${esc(f.key)}"><div class="q">${faNum(counter)}. ${esc(qLabel)}</div>${qHint ? `<div class="hint">${esc(qHint)}</div>` : ''}<div class="${optsCls}">${opts.join('')}</div></div>`;
     }).join('');
     const head = sec.title
       ? `<div class="subscale"><span class="subscale__dot"></span>${esc(sec.title)}</div>`
@@ -355,6 +366,7 @@ export function renderPackageFormPage(model: PackageFormModel, token: string): s
   .item.is-missing { background: #FDF4F3; box-shadow: inset -3px 0 0 #A12622; }
   .item.is-missing .q { color: #A12622; }
   .q { font-weight: 700; font-size: 15px; margin-bottom: 10px; line-height: 1.9; }
+  .hint { font-size: 12.5px; color: #8A8377; margin: -6px 0 9px; line-height: 1.9; }
   .req { color: #A12622; }
   .opts--scale { display: flex; flex-wrap: wrap; gap: 7px; }
   .opts--scale .opt { flex: 1 1 44px; justify-content: center; }
@@ -394,6 +406,7 @@ export function renderPackageFormPage(model: PackageFormModel, token: string): s
   .msg.ok { display: block; background: #E4F5E9; color: #1D6B39; }
   .msg.err { display: block; background: #FDE8E8; color: #A12622; }
   .foot { text-align: center; font-size: 12px; color: #8A8377; margin-top: 18px; }
+  .notice { text-align: center; font-size: 11.5px; color: #8A8377; margin: -4px 0 12px; }
 </style>
 </head>
 <body>
@@ -408,6 +421,7 @@ export function renderPackageFormPage(model: PackageFormModel, token: string): s
     <span id="progText">پاسخ داده‌شده: ۰ از ${faNum(total)}</span>
     <div class="progress__bar"><div class="progress__fill" id="progFill"></div></div>
   </div>
+  <div class="notice">این فرم تشخیص نیست؛ فقط به تصمیم‌گیری درمانگر کمک می‌کند.</div>
   <form id="f" novalidate>
     ${contextBlock}
     ${tools}

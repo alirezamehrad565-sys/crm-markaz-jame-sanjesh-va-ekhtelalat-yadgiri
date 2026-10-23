@@ -237,7 +237,10 @@ export function registerCaseEventPublicRoutes(
         const item = {
           key: f.key, label: f.label, scaleMax: f.scaleMax,
           scoredOptions: f.scoredOptions?.map((o) => ({ label: o.label })),
-          scaleLabels: f.scaleLabels
+          scaleLabels: f.scaleLabels,
+          hint: f.hint ?? null,
+          teacherLabel: f.teacherLabel ?? null,
+          teacherHint: f.teacherHint ?? null
         };
         const last = sections[sections.length - 1];
         if (last && last.title === title) last.items.push(item);
@@ -295,14 +298,17 @@ export function registerCaseEventPublicRoutes(
     }
 
     const subscaleName = new Map((type?.subscales ?? []).map((s) => [s.id, s.name] as const));
-    const sections: { title: string | null; items: { key: string; label: string; scaleMax?: number; scoredOptions?: { label: string }[]; scaleLabels?: string[] }[] }[] = [];
+    const sections: { title: string | null; items: { key: string; label: string; scaleMax?: number; scoredOptions?: { label: string }[]; scaleLabels?: string[]; hint?: string | null; teacherLabel?: string | null; teacherHint?: string | null }[] }[] = [];
     for (const f of type?.fields ?? []) {
       if (f.type !== 'scale' && f.type !== 'single') continue; // — فقط آیتم نمره‌دار به گیرنده می‌رسد
       const title = f.subscaleId ? subscaleName.get(f.subscaleId) ?? null : null;
       const item = {
         key: f.key, label: f.label, scaleMax: f.scaleMax,
         scoredOptions: f.scoredOptions?.map((o) => ({ label: o.label })),
-        scaleLabels: f.scaleLabels
+        scaleLabels: f.scaleLabels,
+        hint: f.hint ?? null,
+        teacherLabel: f.teacherLabel ?? null,
+        teacherHint: f.teacherHint ?? null
       };
       const last = sections[sections.length - 1];
       if (last && last.title === title) {

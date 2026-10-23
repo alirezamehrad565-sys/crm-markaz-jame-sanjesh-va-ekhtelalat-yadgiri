@@ -10,7 +10,7 @@ import { CASE_EVENT_CATEGORIES, CASE_EVENT_FIELD_TYPES, CASE_EVENT_BAND_COLORS }
 export const TYPE_TITLE_MAX = 120;
 export const TYPE_KEY_MAX = 60;
 export const TYPE_ICON_MAX = 16;
-export const FIELD_LABEL_MAX = 120;
+export const FIELD_LABEL_MAX = 240;
 export const FIELD_KEY_MAX = 60;
 export const FIELD_OPTION_MAX = 120;
 export const FIELD_OPTIONS_MAX = 16;
@@ -127,7 +127,7 @@ export function base64ToBytes(b64: string): Uint8Array {
   return bytes;
 }
 
-export const TYPE_DESCRIPTION_MAX = 500;
+export const TYPE_DESCRIPTION_MAX = 1200;
 export const SCALE_LABEL_MAX = 60;
 
 export const CaseEventBandSchema = z.object({
@@ -159,7 +159,10 @@ export const CaseEventFieldSchema = z.object({
   reverse: z.boolean().optional(),
   critical: z.boolean().optional(),
   criticalMin: z.number().int().min(0).max(SCALE_MAX_LIMIT).optional(),
-  subscaleId: z.string().max(SUBSCALE_ID_MAX).nullish()
+  subscaleId: z.string().max(SUBSCALE_ID_MAX).nullish(),
+  hint: z.string().min(1).max(FIELD_LABEL_MAX).optional(),
+  teacherLabel: z.string().min(1).max(FIELD_LABEL_MAX).optional(),
+  teacherHint: z.string().min(1).max(FIELD_LABEL_MAX).optional()
 });
 
 export const CaseEventTypeInputSchema = z.object({
