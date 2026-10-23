@@ -2,6 +2,9 @@
 
 > **وضعیت: پیاده‌سازی شد ✅** — لایهٔ Node (درایور `node:sqlite` + ورودی سرور + کرون + استاتیک + CLI)
 > و بستهٔ داکر (`Dockerfile` + `docker-compose.yml` + اورلی Caddy) تحویل شده است.
+> انتشار خودکار ایمیج روی **GHCR** هم فعال است (`.github/workflows/docker-publish.yml`):
+> با هر پوش روی main و هر تگ `v*`، ایمیج amd64+arm64 ساخته و به
+> `ghcr.io/<مالک>/<مخزن>:latest` منتشر می‌شود — کاربرها بدون build مستقیم `docker pull` می‌کنند.
 > راهنمای اجرا: [`docs/SELF-HOST.fa.md`](SELF-HOST.fa.md) — این سند به‌عنوان طرح مرجع و
 > مستندات معماری/ریسک باقی می‌ماند.
 

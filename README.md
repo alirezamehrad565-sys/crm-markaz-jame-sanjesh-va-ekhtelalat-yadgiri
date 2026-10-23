@@ -13,9 +13,10 @@
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers%20%2B%20D1-F38020?logo=cloudflare&logoColor=white)](wrangler.toml)
-[![Tests](https://img.shields.io/badge/tests-1321%20passed-brightgreen)](package.json)
+[![Tests](https://img.shields.io/badge/tests-1352%20passed-brightgreen)](package.json)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Self-host: Docker](https://img.shields.io/badge/self--host-Docker-2496ED?logo=docker&logoColor=white)](docs/SELF-HOST.fa.md)
+[![GHCR](https://img.shields.io/badge/image-ghcr.io-2088FF?logo=github&logoColor=white)](https://github.com/alirezamehrad565-sys?tab=packages)
 
 ## اجرای بدون Cloudflare (Docker / سرور شخصی)
 
@@ -25,6 +26,13 @@
 ```bash
 cp .env.selfhost.example .env
 docker compose up -d --build      # → http://localhost:3000
+```
+
+یا بدون کلون و build، با ایمیج آمارهٔ GHCR (توسط GitHub Action خودکار منتشر می‌شود):
+
+```bash
+docker pull ghcr.io/alirezamehrad565-sys/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri:latest
+CENTER_IMAGE=ghcr.io/alirezamehrad565-sys/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri:latest docker compose up -d
 ```
 
 راهنمای کامل راه‌اندازی، انتقال داده از Cloudflare، بات بله و پشتیبان‌گیری:

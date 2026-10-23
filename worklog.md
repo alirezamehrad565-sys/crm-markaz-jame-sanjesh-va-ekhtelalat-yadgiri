@@ -272,3 +272,24 @@ Stage Summary:
 - پاریتی با پروداکشن: همان src/index.ts (fetch+scheduled)، همان _headers، همان ۴ کرون، همان مهاجرت‌ها؛ ۱۳۲۱ تست سبز
 - commit اضافه شد و به origin/main پوش شد؛ نسخهٔ اپ تغییر نکرد (بدون bump چهارگانه — کد اپ دست نخورده)
 - پیوست (همان جلسه): هنگام push مشخص شد ریموت جلوتر است (m178–m182 سشن موازی، 1.00.57) → rebase روی 6fe9975 (تنها کانفلیکت: worklog — هر دو سمت حفظ شد؛ شمارهٔ تسک من ۱۲ شد) → روی حالت ادغام‌شده: ۱۳۵۲/۱۳۵۲ test ✓ · tsc src/server 0 ✓ · rebuild سلف‌هاست + دودآزمایی مجدد ✓ (از جمله /api/backup/status = 200 روی لایهٔ Node — ماژول پشتیبان m179+ با درایور node-d1 سازگار است) → push نهایی bc02193 ✓
+
+---
+Task ID: 13 (ghcr-publish + sync-audit)
+Agent: main (Z.ai)
+Task: «میخوام اخرین ورژن یعنی 1.00.59 داکر بشه و تو گیت هاب باشه همزمان اون راه پیاده سازی رو کلاد فلر هم روی گیت ها باشه همه اخرین ورژن ریپو + یک GitHub Action برای build و publish خودکار ایمیج داکر به GHCR تا کاربرها بدون build مستقیم docker pull کنند»
+
+Work Log:
+- **کشف مهم — واگرایی مخزن و پروداکشن**: /health پروداکشن = «1.00.59/m184» ولی سر خط main = «1.00.57/m182 + سلف‌هاست» (origin == local، 0/0). یعنی m183 (1.00.58) و m184 (1.00.59) در سشن‌های موازی مستقر شده‌اند ولی سورس‌شان هرگز commit/push نشده است
+- راستی‌آزمایی دامنهٔ گم‌شده: هر ۷۸ فایل public/ پروداکشن آینه شد (scripts/mirror-prod-assets.mjs) → ۷۵ فایل بایت‌به‌بایت identical با مخزن؛ تنها تفاوت = sw.js (VERSION v1.00.59) و index.html سروِ «/» (فقط ?v=1.00.59 پس از نرمال‌سازی identical) → **تمام تغییرات m183/m184 سمت Worker/بک‌اند است**
+- بازیابی بک‌اند ممکن نشد: توکن CF API در سشن/فایل/کش wrangler موجود نیست (دانلود ورکر مستقر نیازمند API است)؛ upload/worker-v4.1.1.js مربوط به دورهٔ m88 است؛ checkout دیگری روی فایل‌سیستم نیست → سورس m183/m184 فقط در فضای کاری سشن مستقرکننده یا با توکن CF قابل بازگشت است
+- تصمیم ایمنی: bump جعلی نسخه به 1.00.59 انجام نشد (دیپلوی مخزن با برچسب دروغ، رگرسیون m183/m184 را روی پروداکشن برمی‌گرداند) — مخزن صادقانه روی پایهٔ 1.00.57/m182 + سلف‌هاست ماند و شکاف مستند شد
+- **`.github/workflows/docker-publish.yml` ساخته شد**: trigger = push main (path-filtered: src/server/public/migrations/scripts/package/Dockerfile) + تگ v* + workflow_dispatch · permissions packages:write · buildx چندمعماری amd64+arm64 · metadata-action (latest برای main، semver برای v*، sha-کوتاه، branch) · کش type=gha · خلاصهٔ استپ با دستور docker pull
+- docker-compose.yml: image → `${CENTER_IMAGE:-center-system:latest}` تا مسیر pull-only بدون ویرایش فایل کار کند
+- README: بج GHCR + بخش «docker pull» دو خطی؛ DOCKERIZE.md: وضعیت انتشار خودکار ایمیج؛ SELF-HOST.fa.md: زیربخش «راه دوم — ایمیج آمارهٔ GHCR» (docker run مستقل + CENTER_IMAGE در compose + تگ‌ها + بوت‌استرپ با docker exec)
+- وریفای: YAML هر دو workflow معتبر · tsc src 0 · tsc server 0 · build:selfhost ✓ · دودآزمایی زندهٔ dist/server.js (پایهٔ ایمیج GHCR): مهاجرت‌های خودکار ✓ /health 200 با نسخهٔ درست ✓ / 200 html ✓ پاریتی خطای API ✓ · npm test = 1352/1352 ✓ (بج README به ۱۳۵۲ اصلاح شد؛ ci.yml سالم بود — «branches: ain]» خروجی بول‌شدهٔ ترمینال بود نه محتوای فایل)
+- تگ v1.00.57 روی همین کامیت زده شد تا GHCR تگ نسخه‌دار (1.00.57) هم بگیرد؛ پس از بازگشت سورس m183/m184 به مخزن، تگ v1.00.59 و ایمیج متناظر خودکار می‌آید
+
+Stage Summary:
+- اکشن GHCR فعال شد: از این پس هر پوش روی main ایمیج سلف‌هاست را به ghcr.io/alirezamehrad565-sys/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri منتشر می‌کند (latest + sha + main)؛ مسیر «docker pull» در README/SELF-HOST.fa.md/compose سیم‌کشی شد
+- **شکاف باز — سورس m183/m184 (1.00.58–1.00.59) در گیت نیست**: دامنهٔ تغییر = فقط بک‌اند؛ استاتیک پروداکشن identical است. دو راه بازگشت: (۱) در سشن مبدأ commit+push، یا (۲) دادن CLOUDFLARE_API_TOKEN در سشن برای دانلود باندل مستقر (GET accounts/{id}/workers/scripts) و بازسازی
+- مسیر Cloudflare دست‌نخورده ماند (wrangler.prod.toml/ورکر/مهاجرت‌ها بدون تغییر)؛ npm test 1352/1352 ✓
