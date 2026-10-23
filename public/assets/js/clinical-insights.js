@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { el, icon, confirmModal, formModal, toast, toastError, emptyState, loadingState } from './ui.js';
+import { el, icon, confirmModal, formModal, toast, toastError, emptyState, loadingState, scienceNote } from './ui.js';
 import { fa, formatJalaliDateTime, formatStoredJalaliNumeric, tehranTodayYmd, toJalali, gradeLabel } from './format.js';
 import { session } from './state.js';
 import { openExerciseSendModal } from './exercise-send.js';
@@ -36,7 +36,8 @@ import {
   SUSPICION_CONTENT,
   CONTEXT_META,
   SYNTHESIS_META,
-  PLAN_META
+  PLAN_META,
+  TOOL_GUIDES
 } from './clinical-content.js';
 
 function canDecideFor(student) {
@@ -533,6 +534,16 @@ function openProbeModal(area, student, onDone) {
       } catch (err) { toastError(err); return false; }
     }
   });
+  // — m170: بلوک «پشتوانهٔ علمی و نحوهٔ استفاده» بالای فیلدهای پروب
+  try {
+    const grids = document.querySelectorAll('.modal .form-grid');
+    const form = grids[grids.length - 1];
+    const guideNode = scienceNote(TOOL_GUIDES[area.typeKey]);
+    if (form && guideNode) {
+      guideNode.style.gridColumn = '1 / -1';
+      form.prepend(guideNode);
+    }
+  } catch { /* تزریق راهنما حیاتی نیست */ }
 }
 
 function probeAssessSection({ student, events, typesById, canDecide, refresh }) {
@@ -638,6 +649,16 @@ function openRehabFxModal(student, onDone) {
       } catch (err) { toastError(err); return false; }
     }
   });
+  // — m170: بلوک «پشتوانهٔ علمی و نحوهٔ استفاده» بالای فیلدهای خط پایه
+  try {
+    const grids = document.querySelectorAll('.modal .form-grid');
+    const form = grids[grids.length - 1];
+    const guideNode = scienceNote(TOOL_GUIDES[REHAB_FX_KEY]);
+    if (form && guideNode) {
+      guideNode.style.gridColumn = '1 / -1';
+      form.prepend(guideNode);
+    }
+  } catch { /* تزریق راهنما حیاتی نیست */ }
 }
 
 function rehabFxScienceNote() {
