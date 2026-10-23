@@ -39,3 +39,19 @@ Work Log:
 Stage Summary:
 - تولید: 1.00.49 / m173 — پروفایل دانش‌آموز تمیز شد (جای‌نگهدار مرده حذف، اکشن‌ها هم‌اندازه ۳۴/۳۸px)
 - طرح داکرایز مستند شد؛ دو فایل کلیدی شروع (node-d1.ts، node-main.ts) در سند مشخص‌اند
+
+---
+Task ID: m174-doc
+Agent: main (Z.ai)
+Task: نقشهٔ کامل باتری تشخیصی و پرسش‌نامه‌ها برای بازبینی روانشناس (تحویل .md + آپلود)
+
+Work Log:
+- استخراج ground truth از D1 پروداکشن: ۳۹ نوع ابزار (۳۲ فعال) با fields/bands کامل
+- استخراج تعاریف ۴ باتری موتور بالینی: screening(6)/specific(7)/clinical(5)/composite(5) با رجوع‌های علمی (Goodman 1997، Swanson 2001، Birmaher 1999، Wilson DCDQ'07، NRP 2000، Gough & Tunmer 1986)
+- سند docs/clinical/diagnostic-battery-map.md: منطق طراحی، چرخهٔ بالینی، مسیرها/پروتکل‌ها، ۱۱ بخش، جدول جامع ۳۹ ابزار، یادداشت علمی (نقاط قوت/محدودیت) و ۷ پرسش مشخص از بازبین
+- نکات کلیدی سند: برش SCARED=۲۵، برش SDQ والد هم‌سان معلم (تصمیم T5/m150)، برش‌های صدک ۹۵ SNAP در موتور، هنجارهای داخلی پروب‌ها، نسخهٔ قدیمی sdq-parent فعال
+- آپلود: litterbox 72h (لینک اصلی) + temp.sh + tmpfiles — MD5 راستی‌آزمایی شد (b70dc9a9...)
+
+Stage Summary:
+- تحویل: download/diagnostic-battery-map.md (۲۹۳ خط) + نسخهٔ repo در docs/clinical/
+- لینک دانلود کاربر: https://litter.catbox.moe/l19irn.md (۷۲ ساعت)
