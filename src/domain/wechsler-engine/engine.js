@@ -1771,7 +1771,7 @@ function applyWechslerEngineToPayload(payload, birthDateRaw, occurredAtIso) {
       ageLine: "",
       validation: {
         ok: false,
-        errors: [{ kind: "shape", message: "\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u0631 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u0645\u062D\u0627\u0633\u0628\u0647\u0654 \u0645\u0648\u062A\u0648\u0631\u060C \u0627\u0628\u062A\u062F\u0627 \u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u0631\u0627 \u062F\u0631 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u06A9\u0627\u0645\u0644 \u06A9\u0646\u06CC\u062F." }],
+        errors: [{ kind: "shape", message: "\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u0631 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u0645\u062D\u0627\u0633\u0628\u0647\u0654 \u062E\u0648\u062F\u06A9\u0627\u0631\u060C \u0627\u0628\u062A\u062F\u0627 \u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u0631\u0627 \u062F\u0631 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u06A9\u0627\u0645\u0644 \u06A9\u0646\u06CC\u062F." }],
         warnings: [],
         computable: { VCI: false, PRI: false, WMI: false, PSI: false, FSIQ: false },
         raw: raw2,
@@ -1792,7 +1792,7 @@ function applyWechslerEngineToPayload(payload, birthDateRaw, occurredAtIso) {
   }
   const next = { ...payload };
   const compact = compactWechslerOutput(result);
-  next["engine_output"] = { value: JSON.stringify(compact), label: "\u062E\u0631\u0648\u062C\u06CC \u0645\u0648\u062A\u0648\u0631 \u0648\u06A9\u0633\u0644\u0631 \u06F4 (JSON)" };
+  next["engine_output"] = { value: JSON.stringify(compact), label: "\u062A\u062D\u0644\u06CC\u0644 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0648\u06A9\u0633\u0644\u0631 \u06F4 (JSON)" };
   const snap = result.snapshot;
   const computed = {
     fsiq: snap?.fsiq ?? null,
@@ -1804,11 +1804,11 @@ function applyWechslerEngineToPayload(payload, birthDateRaw, occurredAtIso) {
     ageLine: result.ageLine
   };
   if (result.ok && snap) {
-    next["age_at_test"] = { value: result.ageLine, label: "\u0633\u0646 \u062F\u0631 \u0632\u0645\u0627\u0646 \u0622\u0632\u0645\u0648\u0646 (\u0645\u062D\u0627\u0633\u0628\u0647\u0654 \u0645\u0648\u062A\u0648\u0631)" };
+    next["age_at_test"] = { value: result.ageLine, label: "\u0633\u0646 \u062F\u0631 \u0632\u0645\u0627\u0646 \u0622\u0632\u0645\u0648\u0646 (\u0645\u062D\u0627\u0633\u0628\u0647\u0654 \u062E\u0648\u062F\u06A9\u0627\u0631)" };
     const put = /* @__PURE__ */ __name2((k, v) => {
       if (v === null || v === void 0)
         return;
-      next[k] = { value: String(v), label: `${k.toUpperCase()} (\u0645\u062D\u0627\u0633\u0628\u0647\u0654 \u0645\u0648\u062A\u0648\u0631)` };
+      next[k] = { value: String(v), label: `${k.toUpperCase()} (\u0645\u062D\u0627\u0633\u0628\u0647\u0654 \u062E\u0648\u062F\u06A9\u0627\u0631)` };
     }, "put");
     put("fsiq", computed.fsiq);
     put("vci", computed.vci);

@@ -106,3 +106,26 @@ Work Log:
 
 Stage Summary:
 - تحلیل آماده شد: سند در ۵ محور (SDQ چهارباندی والد، SNAP برش ۱٫۸۸، SCARED چیدمان/برش زیرمقیاس، DCDQ باند همه‌سنی، منطق ملاک B) با کد ما می‌خواند و اصلاح می‌خواهد؛ ۱ نقدش مردود (DCDQ حداکثرها)؛ بستهٔ الف/ب/ج پیشنهادی تنظیم شد — اجرا منتظر تأیید کاربر/روانشناس
+
+---
+Task ID: 5 (m176)
+Agent: main (Z.ai)
+Task: «تغییرات رو انجام بده» — بستهٔ الف بازبینی بیرونی + پاک‌سازی واژگان فنی از تعامل درمانگر + دکمهٔ پشتوانهٔ علمی زیر کارت چک‌لیست
+
+Work Log:
+- build scripts: scripts/m176-build.py (JSON+migration+bump) → m176-bundle.py (سینک ساختاری bundle با لنگر ASCII + استخراج رشته‌های TS از سورس/git HEAD + دروازهٔ واژگان) → m176-src.py (هم‌راستاسازی سورس) — چند دور اشکال‌زدایی (کدپوینت ZWNJ، فراروی JSON در باندل، render بدون نقل‌قول، jregion رو‌به‌عقب برای soc)
+- اعداد: SNAP-IV والد ODD 1.47→1.88 (باند ۱۵/۱۹/۲۰+)، معلم HI 1.80→1.78 (مرز ثابت)، SCARED soc 6→8 / sch 1→3 (rules.ts)، DCDQ 31/42/60 + راهنمای سنی، SDQ چهارباندی والد 13/16/19/20+ و معلم 11/15/18/19+، sdq-parent هم‌سان
+- migration 0067_informant_bands_m176.sql (۶ UPDATE) — پاریسی با JSON نهایی
+- دروازهٔ واژگان باندل (بدون source/fields/کامنت + استثنای گویهٔ SNAP): موتور/صدک/کالیبراسیون/m86/بالای برش = ۰ ✓ — ۸ رشتهٔ drift فقط-باندل نیز پاک شد
+- سورس TS: rules (شامل SCARED_SCHOOL_CUTOFF=3)، targets، recommender، types (پیشنهاد سامانه)، service، pure (نُرم پروب «هنجار داخلی مرکز»)، narrative، wechsler-engine، ot-engine
+- فرانت‌اند: case-events، case-formulation، clinical-content، clinical-insights، wechsler-profile، views/case-event-types
+- UI: scienceNote زیر کارت‌ها در openTypePicker (typegrid__cell) + typeCard کتابخانه + CSS (:has با سقوط امن)
+- تست‌ها: battery.test (SDQ تفکیک گزارش‌دهنده + m176 block) + e2e-probe (هنجار داخلی) — 1305 ✓ · tsc 0 ✓ · t4 42/0 ✓ · node --check ✓
+- اسناد: diagnostic-battery-map.md §۲/§۱۰ (m176)؛ checklists-full.md بازتولید (۱۶۰۱ خط — تایپوی «۶ گویه» → ۹، برش‌های جدید)؛ gen-checklists-doc.py + ce-subscales.json سینک
+- bump چهارگانه: index.html/sw.js/version.ts/bundle → 1.00.51/m176
+- commit 8a680d6 → push main ✓ — upload: litterbox 404 (سرویس پایین)؛ tmpfiles موقت + GitHub کانال اصلی
+
+Stage Summary:
+- تولید آمادهٔ deploy: 1.00.51/m176 — منتظر CLOUDFLARE_API_TOKEN معتبر (توکن dbq.sh منقضی: Authentication error 10000)
+- گام‌های deploy پس از توکن: `npx wrangler d1 migrations apply center-system-db --remote --config wrangler.prod.toml` سپس `npx wrangler deploy --config wrangler.prod.toml` و وریفای /health + باندهای زنده
+- تصمیم‌های باز (بستهٔ ب) دست‌نخورده: مکمل اثر SDQ، هم‌ترازسازی چیدمان SCARED، حذف گویه‌های «هوش طبیعی»، شرح‌حال v4، دروازهٔ سنی، آزمون استاندارد ملاک B
