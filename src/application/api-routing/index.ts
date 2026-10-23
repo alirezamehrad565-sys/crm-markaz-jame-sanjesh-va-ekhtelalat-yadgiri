@@ -44,7 +44,7 @@ import { createClinicalEngineService, registerClinicalEngineRoutes } from '@doma
 import type { ClinicalEngineService } from '@domain/clinical-engine';
 import { createOtEngineService, registerOtEngineRoutes } from '@domain/ot-engine';
 import type { OtEngineService } from '@domain/ot-engine';
-import { CASE_EVENT_FILL_EXPIRY_HOURS } from '@core/shared';
+import { CASE_EVENT_FILL_EXPIRY_HOURS, faDigits } from '@core/shared';
 import { createR2ObjectStore, createChunkedD1ObjectStore } from '@core/storage';
 import type { ObjectStore, R2LikeBucket } from '@core/storage';
 import { createTagService, registerRoutes as tagRoutes } from '@domain/tags';
@@ -303,6 +303,44 @@ export function createServices(deps: AppDeps): Services {
     return sent;
   });
 
+  // m172 — اعلان «نتیجهٔ چک‌لیست ثبت شد» به درمانگر ثبت‌کننده؛ هم پر کردن وب و هم بات را پوشش می‌دهد
+  caseEvents.setFillObserver(async (input) => {
+    try {
+      if (!input.staffId) return;
+      const linkRows = await db.query<{ chat_id: string }>(
+        `SELECT chat_id FROM staff_bot_links WHERE staff_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
+        [input.staffId]
+      );
+      const chats = linkRows.map((r) => r.chat_id).filter(Boolean);
+      if (!chats.length) return;
+      const student = await studentProfile.getStudentById(input.studentId);
+      const studentName = student ? `${student.firstName} ${student.lastName}` : null;
+      const channel: 'bale' | 'internal' = notifyCore.getChannel('bale') ? 'bale' : 'internal';
+      const clinicName = await settings.getClinicName();
+      let sent = 0;
+      for (const chat of chats) {
+        const outcome = await notifyCore.enqueue({
+          channel,
+          template: 'bot_checklist_result',
+          recipient: chat,
+          studentId: input.studentId,
+          payload: {
+            studentName: studentName ?? undefined,
+            formTitle: input.teacherName ? `${input.formTitle} (پاسخ معلم: ${input.teacherName})` : input.formTitle,
+            score: input.score != null ? faDigits(String(input.score)) : undefined,
+            band: input.band ?? undefined,
+            clinicName
+          },
+          dedupKey: `ce-result:${input.eventId}:${chat}`
+        });
+        if (!outcome.duplicate) sent += 1;
+      }
+      if (sent > 0) await notifyCore.dispatchPending(50);
+    } catch (err) {
+      logger.warn('case-events.fill_observer_failed', { err: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
   exerciseBank.setSendObserver(async (input) => {
     const channel: 'bale' | 'internal' = notifyCore.getChannel('bale') ? 'bale' : 'internal';
     const clinicName = await settings.getClinicName();
@@ -348,6 +386,9 @@ export function createApp(deps: AppDeps): AppHono {
   const services = createServices(deps);
 
   const app: AppHono = new Hono<{ Bindings: { DB: D1Database; ENV: string; CF_ACCESS_TEAM_DOMAIN: string }; Variables: { authContext: AuthContext; logger: Logger } }>();
+
+  // — هوک تستی: دسترسی به سرویس‌ها برای e2e (مثلاً setFillObserver در آزمون m172)
+  (app as unknown as { __services?: Services }).__services = services;
 
   app.use('*', async (c, next) => {
     c.set('logger', services.logger);

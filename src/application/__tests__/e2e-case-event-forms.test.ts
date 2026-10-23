@@ -783,3 +783,106 @@ describe('T5 — پکیج فرم جامع خانواده (یک لینک، چند
     expect(a.subscaleScores.find((s) => s.id === 'ia')!.band).toBe('در محدودهٔ عادی');
   });
 });
+
+describe('m172 — FillObserver: نتیجهٔ چک‌لیست خانواده/معلم به درمانگر ثبت‌کننده می‌رسد', () => {
+  let A: ReturnType<typeof createTestApp>;
+  let manager: ReturnType<typeof asRole> extends Promise<infer T> ? T : never;
+
+  interface FillInput {
+    eventId: string; studentId: string; staffId: string | null;
+    formTitle: string; score: number | null; band: string | null;
+    teacherName: string | null; via: 'web' | 'bot';
+  }
+
+  beforeAll(async () => {
+    A = createTestApp();
+    manager = await asRole(A, 'manager');
+  });
+
+  it('پر کردن وب‌فرم → observer یک‌بار با via=web، نمره و باندمی‌آید؛ staffId ثبت‌کننده است', async () => {
+    const services = (A.app as unknown as { __services?: { caseEvents: { setFillObserver: (fn: ((i: FillInput) => Promise<void>) | null) => void } } }).__services;
+    expect(services).toBeTruthy();
+    const fills: FillInput[] = [];
+    services!.caseEvents.setFillObserver(async (i) => { fills.push(i); });
+
+    const s = await createStudent(manager, { first_name: 'نازنین', last_name: 'نتیجه' });
+    const studentId = s.id;
+
+    const t = await manager.post('/api/case-events/types', {
+      title: 'چک‌لیست ناظر m172',
+      category: 'checklist',
+      familyFillable: true,
+      fields: [
+        { key: 'i1', label: 'آیتم یک', type: 'scale', scaleMax: 3 },
+        { key: 'i2', label: 'آیتم دو', type: 'scale', scaleMax: 3 }
+      ],
+      bands: [{ max: 2, label: 'مطلوب' }, { max: 4, label: 'توجه' }, { max: 6, label: 'جدی' }]
+    });
+    expect(t.status).toBe(201);
+    const typeId = (t.body as { data: { id: string } }).data.id;
+
+    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeId, values: {} });
+    expect(created.status).toBe(201);
+    const eventId = (created.body as { data: { id: string } }).data.id;
+
+    const row = A.sql.prepare(`SELECT fill_token, staff_id FROM case_events WHERE id = ?`).get(eventId) as { fill_token: string; staff_id: string | null };
+    expect(row.fill_token).toBeTruthy();
+
+    expect(fills.length).toBe(0); // — قبل از پاسخ، اعلانی نیست
+    const post = await A.app.request(`/public/case-events/${eventId}/fill`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: row.fill_token, answers: { i1: 2, i2: 2 } })
+    });
+    expect(post.status).toBe(200);
+
+    expect(fills.length).toBe(1); // — دقیقاً یک اعلان
+    const f = fills[0];
+    expect(f.eventId).toBe(eventId);
+    expect(f.via).toBe('web');
+    expect(f.score).toBe(4);
+    expect(f.band).toBe('توجه');
+    expect(f.staffId).toBe(row.staff_id);
+    expect(f.formTitle).toContain('m172');
+    expect(f.teacherName).toBeNull();
+  });
+
+  it('پاسخ معلم (teacher_binding) → observer نام معلم را می‌فرستد', async () => {
+    const services = (A.app as unknown as { __services?: { caseEvents: { setFillObserver: (fn: ((i: FillInput) => Promise<void>) | null) => void } } }).__services!;
+    const fills: FillInput[] = [];
+    services.caseEvents.setFillObserver(async (i) => { fills.push(i); });
+
+    const s = await createStudent(manager, { first_name: 'بهنام', last_name: 'معلم' });
+    const studentId = s.id;
+
+    const t = await manager.post('/api/case-events/types', {
+      title: 'چک‌لیست معلم m172',
+      category: 'checklist',
+      familyFillable: true,
+      audience: 'teacher',
+      fields: [{ key: 'i1', label: 'آیتم یک', type: 'scale', scaleMax: 3 }],
+      bands: [{ max: 1, label: 'مطلوب' }, { max: 2, label: 'توجه' }, { max: 3, label: 'جدی' }]
+    });
+    expect(t.status).toBe(201);
+    const typeId = (t.body as { data: { id: string } }).data.id;
+
+    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeId, values: {} });
+    const eventId = (created.body as { data: { id: string } }).data.id;
+    const row = A.sql.prepare(`SELECT fill_token FROM case_events WHERE id = ?`).get(eventId) as { fill_token: string };
+
+    // — مقیدکردن معلم به رویداد (مانند لینک معلم)
+    A.sql.prepare(`UPDATE case_events SET payload = ? WHERE id = ?`)
+      .run(JSON.stringify({ teacher_binding: { name: 'خانم صادقی', teacherId: null } }), eventId);
+
+    const post = await A.app.request(`/public/case-events/${eventId}/fill`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: row.fill_token, answers: { i1: 3 } })
+    });
+    expect(post.status).toBe(200);
+
+    expect(fills.length).toBe(1);
+    expect(fills[0].teacherName).toBe('خانم صادقی');
+    expect(fills[0].band).toBe('جدی');
+  });
+});

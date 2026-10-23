@@ -442,6 +442,11 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
     statusBadge(event.status === 'completed' ? 'done' : event.status === 'pending_family' ? 'pending' : event.status === 'draft' ? 'draft' : 'cancelled'),
     el('span', { class: 'cell-sub' }, STATUS_LABELS[event.status] ?? event.status),
     el('span', { class: 'cell-sub' }, formatJalaliDateTime(event.occurredAt)),
+    // m172 — پاسخ‌دهندهٔ واقعی (خانواده/معلم) جدا از ثبت‌کنندهٔ درمانگر؛ دیگر «ثبت: درمانگر» برای پاسخ خانواده گمراه‌کننده نیست
+    event.filledByChatId
+      ? el('span', { class: 'badge badge--accent' },
+          event.payload?.['teacher_name']?.value ? `پاسخ معلم: ${event.payload['teacher_name'].value}` : 'پاسخ خانواده')
+      : null,
     event.staffName ? el('span', { class: 'cell-sub' }, `ثبت: ${event.staffName}`) : null
   );
   body.appendChild(head);
