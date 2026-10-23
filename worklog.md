@@ -271,3 +271,4 @@ Stage Summary:
 - نسخهٔ سلف‌هاست آمادهٔ ران: git clone → cp .env.selfhost.example .env → docker compose up -d --build → localhost:3000 (۴ دستور)
 - پاریتی با پروداکشن: همان src/index.ts (fetch+scheduled)، همان _headers، همان ۴ کرون، همان مهاجرت‌ها؛ ۱۳۲۱ تست سبز
 - commit اضافه شد و به origin/main پوش شد؛ نسخهٔ اپ تغییر نکرد (بدون bump چهارگانه — کد اپ دست نخورده)
+- پیوست (همان جلسه): هنگام push مشخص شد ریموت جلوتر است (m178–m182 سشن موازی، 1.00.57) → rebase روی 6fe9975 (تنها کانفلیکت: worklog — هر دو سمت حفظ شد؛ شمارهٔ تسک من ۱۲ شد) → روی حالت ادغام‌شده: ۱۳۵۲/۱۳۵۲ test ✓ · tsc src/server 0 ✓ · rebuild سلف‌هاست + دودآزمایی مجدد ✓ (از جمله /api/backup/status = 200 روی لایهٔ Node — ماژول پشتیبان m179+ با درایور node-d1 سازگار است) → push نهایی bc02193 ✓
