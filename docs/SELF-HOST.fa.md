@@ -60,6 +60,40 @@ curl http://localhost:3000/health
 > مهاجرت‌های دیتابیس در هر بوت **خودکار و idempotent** اعمال می‌شوند — لازم نیست
 > چیزی دستی اجرا کنید.
 
+### راه دوم — ایمیج آمارهٔ GHCR (بدون کلون و بدون build)
+
+با هر پوش روی main و هر تگ نسخهٔ `v*`، یک GitHub Action ایمیج را خودکار می‌سازد
+و روی **GHCR** منتشر می‌کند (amd64 + arm64). پس اگر نخواهید مخزن را کلون و بیلد کنید:
+
+```bash
+# ۱) ایمیج آماره را بکشید (آخرین نسخهٔ main)
+docker pull ghcr.io/alirezamehrad565-sys/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri:latest
+
+# ۲) بگذارید کنار فایل .env و اجرا کنید
+docker run -d --name center-system \
+  -p 127.0.0.1:3000:3000 \
+  -v center-appdata:/data \
+  -e TZ=Asia/Tehran \
+  --env-file .env \
+  --restart unless-stopped \
+  ghcr.io/alirezamehrad565-sys/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri:latest
+```
+
+اگر با `docker compose` راحت‌ترید، نیازی به ویرایش فایل نیست — کافی است ایمیج را
+با متغیر `CENTER_IMAGE` عوض کنید:
+
+```bash
+CENTER_IMAGE=ghcr.io/alirezamehrad565-sys/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri:latest \
+  docker compose up -d
+```
+
+> بوت‌استرپ روز صفر (بخش ۴) روی این مسیر هم به همان شکل کار می‌کند؛ فقط به‌جای
+> `docker compose exec` از `docker exec center-system ...` استفاده کنید.
+> تگ‌های دیگر: `:1.00.57` (نسخهٔ مشخص) · `:sha-xxxxxxx` (کامیت مشخص) · `:main` (سر خط main).
+> ایمیج روی [github.com/alirezamehrad565-sys?tab=packages](https://github.com/alirezamehrad565-sys?tab=packages) قابل مشاهده است.
+
+
+
 ---
 
 ## ۴) اولین حساب مدیر (روز صفر)

@@ -1,0 +1,106 @@
+# ─────────────────────────────────────────────────────────────
+# انتشار خودکار ایمیج داکر سلف‌هاست روی GHCR (GitHub Container Registry)
+#
+# کاری که می‌کند:
+#   • با هر پوش روی main که کد اپ/سرور/استاتیک/مهاجرت‌ها عوض شود
+#   • با هر تگ نسخهٔ v* (مثلاً v1.00.57)
+#   • دستی از تب Actions (workflow_dispatch)
+# ایمیج آماره را می‌سازد و به ghcr.io منتشر می‌کند تا کاربرها بدون
+# کلون و build، مستقیم `docker pull` کنند.
+#
+# ایمیج: ghcr.io/<مالک>/<مخزن> (از خود مخزن حدس زده می‌شود، حروف کوچک)
+# تگ‌ها: main → latest + main + sha · تگ v1.00.57 → 1.00.57 + 1.00 + latest
+# پلتفرم‌ها: linux/amd64 + linux/arm64 (کد جاوااسکریپت خالص است؛ بدون کامپایل)
+# ─────────────────────────────────────────────────────────────
+name: Docker (GHCR)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'server/**'
+      - 'public/**'
+      - 'migrations/**'
+      - 'scripts/build-selfhost.mjs'
+      - 'scripts/bootstrap.sql'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile'
+      - '.dockerignore'
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Build & Push to GHCR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (برای build چندمعماری)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (تگ‌ها و لیبل‌های OCI)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          # نام مخزن خودکار به حروف کوچک تبدیل می‌شود (الزام GHCR)
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-,format=short
+          labels: |
+            org.opencontainers.image.title=Center System (Self-host)
+            org.opencontainers.image.description=مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام — نسخهٔ سلف‌هاست روی Node.js + SQLite (بدون Cloudflare)
+            org.opencontainers.image.vendor=@sdt144
+            org.opencontainers.image.licenses=UNLICENSED
+
+      - name: Build & Push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          {
+            echo '### ایمیج سلف‌هاست منتشر شد ✔'
+            echo ''
+            echo '```bash'
+            echo 'docker pull ${{ env.REGISTRY }}/${{ github.repository }}:latest'
+            echo '```'
+            echo ''
+            echo 'راهنمای کامل: docs/SELF-HOST.fa.md'
+          } >> "$GITHUB_STEP_SUMMARY"

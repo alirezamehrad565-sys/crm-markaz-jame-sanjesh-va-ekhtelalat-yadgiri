@@ -1,12 +1,15 @@
 # ─────────────────────────────────────────────────────────────
-# docker-compose سلف‌هاست — اجرای ساده: docker compose up -d --build
+# docker-compose سلف‌هاست — دو راه اجرا:
+#   ۱) build محلی:        docker compose up -d --build
+#   ۲) ایمیج آمارهٔ GHCR:  CENTER_IMAGE=ghcr.io/alirezamehrad565-sys/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri:latest docker compose up -d
 # راهنمای کامل: docs/SELF-HOST.fa.md
 # متغیرها از فایل .env کنار همین فایل خوانده می‌شوند (نمونه: .env.selfhost.example)
 # ─────────────────────────────────────────────────────────────
 services:
   app:
     build: .
-    image: center-system:latest
+    # بدون CENTER_IMAGE بیلد محلی استفاده می‌شود؛ برای ایمیج آماره مقدار CENTER_IMAGE را بگذارید
+    image: ${CENTER_IMAGE:-center-system:latest}
     container_name: center-system
     restart: unless-stopped
     # فقط روی localhost گوش می‌دهد؛ انتشار عمومی = لایهٔ Caddy/nginx جلوی آن
