@@ -1,15 +1,15 @@
 // engine.js — WISC-IV Wechsler analysis engine (EXTRACTED, phase 0 / task 39-d1)
 //
-// Source: extracted verbatim from worker/bundle.js lines 21694-23489
+// Source: extracted verbatim from worker/bundle.js lines 22278-24073
 // at commit 365d103 ("m130 (1.00.9)"), engineVersion "m98". Extraction date: 2026-10-20.
 //
 // Region layout (bundle lines):
-//   21694-23300   pure computation core: subtest definitions, norms (NORMS = norms_default,
+//   22278-23884   pure computation core: subtest definitions, norms (NORMS = norms_default,
 //         a 71 KB data line), index/cluster/GAI/step5 math, hypothesis activation
 //         (T8/m149: فقط روان‌سنجی + شواهد {id, weight, clues} — لایهٔ تفسیر موازی
 //         outcomes/main/comorbid/binaryScenarios/treatments/queue حذف شده است),
 //         validation, flags, runWechslerAnalysis (engine entry point).
-//   23301-23489   pure payload glue: WISC4_EVENT_KEY, RAW_FIELD_MAP (raw_si..raw_ca + legacy
+//   23885-24073   pure payload glue: WISC4_EVENT_KEY, RAW_FIELD_MAP (raw_si..raw_ca + legacy
 //         raw_sim/raw_voc/raw_com/raw_pc), extractRawScores, Jalali/Gregorian date
 //         parsing, compactWechslerOutput, applyWechslerEngineToPayload (the
 //         form-payload I/O contract), summarySafePayload.
