@@ -74,8 +74,10 @@ jobs:
             # latest = پوش روی main یا هر تگ نسخهٔ v*
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
             type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            # نکته: نسخه‌های پروژه (1.00.57) صفر پیش‌رو دارند و semver سخت‌گیر نیستند؛
+            # به همین دلیل به‌جای type=semver از type=match با رجکس استفاده می‌کنیم
+            type=match,pattern=v(\d+\.\d+\.\d+),group=1
+            type=match,pattern=v(\d+\.\d+)\.\d+,group=1
             type=sha,prefix=sha-,format=short
           labels: |
             org.opencontainers.image.title=Center System (Self-host)
