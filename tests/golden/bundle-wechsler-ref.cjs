@@ -1,6 +1,6 @@
 // bundle-wechsler-ref.cjs — GENERATED FILE, DO NOT EDIT BY HAND.
 // Golden-test REFERENCE implementation of the WISC-IV Wechsler analysis engine.
-// Region copied VERBATIM from worker/bundle.js lines 21694-23489
+// Region copied VERBATIM from worker/bundle.js lines 22278-24073
 // at commit 365d103 (m130 / 1.00.9), engineVersion "m98".
 // Regenerate with: node tests/golden/extract-engine.mjs
 //

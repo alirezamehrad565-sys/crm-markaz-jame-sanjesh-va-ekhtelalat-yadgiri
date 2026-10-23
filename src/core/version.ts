@@ -1,3 +1,3 @@
-export const APP_VERSION = '1.00.44';
+export const APP_VERSION = '1.00.45';
 
-export const APP_MILESTONE = 'm168';
+export const APP_MILESTONE = 'm169';
