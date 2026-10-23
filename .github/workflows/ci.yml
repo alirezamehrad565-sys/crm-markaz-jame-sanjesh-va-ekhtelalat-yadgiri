@@ -31,5 +31,16 @@ jobs:
       - name: Bundle syntax check (node --check)
         run: node --check worker/bundle.js
 
-      - name: Golden engine tests (node --test)
-        run: node --test tests/golden/
+      # ⚠️ «Golden engine tests» حذف شد — موتور صورت‌بندی از m179 (بازسازی esbuild باندل از src)
+      # دیگر جزو باندل سرور نیست (مصرف‌کنندهٔ آن فقط فرانت‌اند است: public/assets/js/case-formulation.js)
+      # و فرضِ آزمون «برابری src با باندل» بی‌معنا شده بود؛ از آن پس این استپ همیشه قرمز بود.
+      # پاریتی رفتار سرور اکنون با scripts/bundle-smoke.mjs + تست‌های مسیر پوشش داده می‌شود.
+
+      - name: Self-host build & smoke (پایهٔ ایمیج داکر GHCR)
+        run: |
+          npm run build:selfhost
+          DATA_DIR="$(mktemp -d)" PORT=3199 HOST=127.0.0.1 node dist/server.js & SRV=$!
+          sleep 6
+          curl -fsS http://127.0.0.1:3199/health | grep -q '"ok":true'
+          curl -fsS -o /dev/null -w 'index: %{http_code}\n' http://127.0.0.1:3199/
+          kill "$SRV"
