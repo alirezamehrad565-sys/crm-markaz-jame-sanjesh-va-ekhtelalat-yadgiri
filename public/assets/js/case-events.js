@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { fa, tehranTodayYmd, formatJalaliDateTime, formatJalaliNumeric } from './format.js';
-import { el, icon, openModal, formModal, confirmModal, toast, toastError, statusBadge } from './ui.js';
+import { el, icon, openModal, formModal, confirmModal, toast, toastError, statusBadge, scienceNote } from './ui.js';
+import { TOOL_GUIDES } from './clinical-content.js';
 import { jalaliDateInput } from './jalali-picker.js';
 import { session } from './state.js';
 import { typeIconNode } from './case-event-icons.js';
@@ -242,6 +243,14 @@ function openDynamicForm({ student, type, occurredYmd, appointmentId, onSaved, a
       const intro = (type.description ?? '').trim();
       if (intro) {
         form.prepend(el('div', { class: 'form-intro', style: { gridColumn: '1 / -1' } }, intro));
+      }
+      // — m170: بلوک تاشوی «پشتوانهٔ علمی و نحوهٔ استفاده» — بالای فیلدها، بین معرفی و فرم
+      const guideNode = scienceNote(TOOL_GUIDES[type.key]);
+      if (guideNode) {
+        guideNode.style.gridColumn = '1 / -1';
+        const introEl = form.querySelector('.form-intro');
+        if (introEl) introEl.after(guideNode);
+        else form.prepend(guideNode);
       }
       const changeBtn = allTypes && allTypes.length > 1
         ? el('button', {
@@ -774,6 +783,26 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
       return true;
     }
   });
+
+  // — m170: «پشتوانهٔ علمی و نحوهٔ استفاده» چک‌لیست انتخابی — با تغییر قالب به‌روز می‌شود
+  try {
+    const grids = document.querySelectorAll('.modal .form-grid');
+    const form = grids[grids.length - 1];
+    if (form) {
+      const wrap = el('div', { style: { gridColumn: '1 / -1' } });
+      const idToKey = new Map(checklists.map((s) => [s.type.id, s.type.key]));
+      const renderGuide = () => {
+        const sel = form.elements['type_id'];
+        const guide = scienceNote(idToKey.has(sel?.value) ? TOOL_GUIDES[idToKey.get(sel.value)] : null);
+        wrap.replaceChildren(...(guide ? [guide] : []));
+      };
+      renderGuide();
+      const anchor = form.elements['type_id']?.closest('.field');
+      if (anchor) anchor.after(wrap);
+      else form.prepend(wrap);
+      form.addEventListener('change', renderGuide);
+    }
+  } catch { /* تزریق راهنما حیاتی نیست */ }
 }
 
 function openTeacherLinkResult({ link, teacherName, student }) {

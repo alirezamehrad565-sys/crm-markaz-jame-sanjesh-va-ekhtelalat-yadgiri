@@ -774,3 +774,12 @@ export function phoneCell(phone, title) {
     el('span', { dir: 'ltr' }, fa(phone)),
     callBadge(phone, title));
 }
+
+// — m170: بلوک تاشوی «پشتوانهٔ علمی و نحوهٔ استفاده» — عمومی‌شدهٔ rehabFxScienceNote؛ داده از TOOL_GUIDES
+export function scienceNote(guide) {
+  if (!guide || !Array.isArray(guide.items) || guide.items.length === 0) return null;
+  return el('details', { class: 'science-guide' },
+    el('summary', {}, icon('compass', 13), guide.title ?? 'پشتوانهٔ علمی و نحوهٔ استفاده'),
+    el('div', { class: 'rehab-fx-guide__body' },
+      ...guide.items.map((t) => el('div', { class: 'cell-sub' }, t))));
+}
