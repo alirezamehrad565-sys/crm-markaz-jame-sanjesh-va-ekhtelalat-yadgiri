@@ -9,6 +9,9 @@ export const SPECIFIC_KEYS = [
   'ce-asd-criteria-v1', 'ce-speech-criteria-v1', 'ce-odd-criteria-v1'
 ];
 
+// m172 — لنگرهای بستهٔ جامع؛ خودشان ردیف نتیجه ندارند (هر مؤلفه ردیف خودش را دارد)
+export const COMPOSITE_KEYS = ['ce-comp-family-v2', 'ce-comp-teacher-v2'];
+
 export const PROBE_KEYS = ['ce-probe-read-v1', 'ce-probe-write-v1', 'ce-probe-calc-v1'];
 
 export const REHAB_COG_KEY = 'ce-rehab-cog-v1';

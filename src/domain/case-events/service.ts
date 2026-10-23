@@ -5,7 +5,7 @@ import type { DbClient } from '@core/db';
 import type {
   CaseEventAnalysis, CaseEventAudience, CaseEventBand, CaseEventDeps, CaseEventField, CaseEventFileMeta,
   CaseEventInput, CaseEventRecord, CaseEventStatus, CaseEventSubscale, CaseEventTypeInput, CaseEventTypeRecord,
-  CaseEventsService, ChecklistSuggestion, NewCaseEventFileInput, PendingChecklist, SendObserver
+  CaseEventsService, ChecklistSuggestion, FillObserver, FillObserverInput, NewCaseEventFileInput, PendingChecklist, SendObserver
 } from './types';
 import { CASE_EVENT_STATUSES } from './types';
 import {
@@ -53,6 +53,7 @@ interface EventRow {
   fill_expires_at: string | null;
   sent_at: string | null;       //
   sent_count: number;           //
+  filled_by_chat_id: string | null; // — m172: ردیابی پاسخ‌دهنده (خانواده/معلم)
   created_by: string;
   created_at: string;
   type_title: string;
@@ -139,6 +140,7 @@ function eventRowToRecord(r: EventRow): CaseEventRecord {
     fillExpiresAt: r.fill_expires_at,
     sentAt: r.sent_at ?? null,
     sentCount: r.sent_count ?? 0,
+    filledByChatId: r.filled_by_chat_id ?? null,
     createdAt: r.created_at
   };
 }
@@ -160,11 +162,12 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
   const now = deps.now ?? (() => new Date());
   const fillExpiryHours = deps.fillExpiryHours ?? 168;
   let sendFn: SendObserver | null = null;
+  let fillFn: FillObserver | null = null; // — m172: اعلان نتیجه به درمانگر برای پر کردن خانواده/معلم (وب و بات)
 
   const EVENT_SELECT = `
     SELECT e.id, e.event_type_id, e.student_id, e.staff_id, s.full_name AS staff_name,
            e.appointment_id, e.occurred_at, e.status, e.payload, e.analysis, e.summary,
-           e.fill_expires_at, e.sent_at, e.sent_count, e.created_by, e.created_at,
+           e.fill_expires_at, e.sent_at, e.sent_count, e.filled_by_chat_id, e.created_by, e.created_at,
            t.title AS type_title, t.category AS type_category, t.icon AS type_icon, t.bands AS type_bands,
            t.audience AS type_audience, t.family_fillable AS type_family_fillable
       FROM case_events e
@@ -417,7 +420,26 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     log.info('event.package_filled', {
       id: row.id, package: anchorType.key, components: filled.length, via: input.viaWeb ? 'web' : 'bot'
     });
+    await notifyFillResult({ // m172 — برای بستهٔ چندبخشی، اعلان بدون نمره (هر بخش نمرهٔ خودش را دارد)
+      eventId: row.id,
+      studentId: row.student_id,
+      staffId: row.staff_id,
+      formTitle: anchorType.title,
+      score: null,
+      band: null,
+      teacherName: teacher?.name ?? null,
+      via: input.viaWeb ? 'web' : 'bot'
+    });
     return eventRowToRecord(await getEventRow(row.id));
+  }
+
+  async function notifyFillResult(input: FillObserverInput): Promise<void> {
+    if (!fillFn) return;
+    try {
+      await fillFn(input);
+    } catch (err) {
+      log.warn('event.fill_observer_failed', { eventId: input.eventId, err: err instanceof Error ? err.message : String(err) });
+    }
   }
 
   return {
@@ -1225,6 +1247,10 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       sendFn = fn;
     },
 
+    setFillObserver(fn) {
+      fillFn = fn;
+    },
+
     async verifyFillToken(id, token) {
       if (!token || token.length < 8) return false;
       const row = await db.queryOne<{ fill_token: string | null }>(
@@ -1322,6 +1348,16 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         }
       });
       log.info('event.family_filled', { id, answered: analysis.answered, score: analysis.score, via: input.viaWeb ? 'web' : 'bot' });
+      await notifyFillResult({ // m172 — نتیجه به درمانگر ثبت‌کننده می‌رسد (وب و بات)
+        eventId: id,
+        studentId: row.student_id,
+        staffId: row.staff_id,
+        formTitle: type.title,
+        score: analysis.score,
+        band: analysis.band ?? null,
+        teacherName: teacher?.name ?? null,
+        via: input.viaWeb ? 'web' : 'bot'
+      });
       return eventRowToRecord(await getEventRow(id));
     }
   };

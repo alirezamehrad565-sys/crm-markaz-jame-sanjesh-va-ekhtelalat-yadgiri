@@ -145,6 +145,7 @@ export interface CaseEventRecord {
   fillExpiresAt: string | null;
   sentAt: string | null;
   sentCount: number;
+  filledByChatId: string | null; // — «web:…» یا chatId یعنی فرم توسط خانواده/معلم پر شده (m172)
   createdAt: string;
   files?: CaseEventFileMeta[];
 }
@@ -227,6 +228,7 @@ export interface CaseEventsService {
   sendChecklistLink(eventId: string, input: { audience?: CaseEventAudience | null; note?: string | null; teacherName?: string | null; teacherId?: string | null }, actor: AuthContext): Promise<{ sent: number; targets: string[]; link: string | null }>;
   issueTeacherFillLink(eventId: string, input: { teacherName?: string | null; teacherId?: string | null }, actor: AuthContext): Promise<{ link: string; teacherName: string }>;
   setSendObserver(fn: SendObserver | null): void;
+  setFillObserver(fn: FillObserver | null): void;
   assertFamilyChat(studentId: string, chatId: string): Promise<boolean>;
   verifyFillToken(id: string, token: string): Promise<boolean>;
   mintFillLink(id: string, publicBaseUrl: string): Promise<string | null>;
@@ -263,3 +265,15 @@ export interface SendObserverInput {
   dedupBase: string;
 }
 export type SendObserver = (input: SendObserverInput) => Promise<number>;
+
+export interface FillObserverInput {
+  eventId: string;
+  studentId: string;
+  staffId: string | null;   // — درمانگر ثبت‌کننده (گیرندهٔ اعلان نتیجه)
+  formTitle: string;
+  score: number | null;
+  band: string | null;
+  teacherName: string | null; // — «پاسخ معلم» اگر گیرنده معلم بود
+  via: 'web' | 'bot';
+}
+export type FillObserver = (input: FillObserverInput) => Promise<void>;

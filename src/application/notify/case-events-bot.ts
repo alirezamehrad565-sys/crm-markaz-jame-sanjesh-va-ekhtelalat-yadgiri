@@ -162,14 +162,6 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     return caseEvents ? caseEvents.guardianChats(studentId) : [];
   }
 
-  async function staffChats(staffId: string): Promise<string[]> {
-    const rows = await db.query<{ chat_id: string }>(
-      `SELECT chat_id FROM staff_bot_links WHERE staff_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
-      [staffId]
-    );
-    return rows.map((r) => r.chat_id);
-  }
-
   async function startCategory(chatId: string, stuIdx: number): Promise<TlBotReply> {
     const owner = await staffOwner(chatId);
     if (!owner) return { text: renderTemplate('bot_case_event_denied'), buttons: null };
@@ -818,31 +810,8 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     });
     log.info('clf.filled', { eventId: event.id, chatId });
 
-    if (event.staffId) {
-      const chats = await staffChats(event.staffId);
-      const clinicName = await settings.getClinicName();
-      const channel: 'bale' | 'internal' = notify.getChannel('bale') ? 'bale' : 'internal';
-      let enqueued = 0;
-      for (const target of chats) {
-        const outcome = await notify.enqueue({
-          channel,
-          template: 'bot_checklist_result',
-          recipient: target,
-          studentId: event.studentId,
-          payload: {
-            studentName: st.studentName || undefined,
-            formTitle: st.typeTitle,
-            score: faNumStr(String(event.analysis?.score ?? 0)),
-            band: event.analysis?.band ?? null,
-            clinicName
-          },
-          dedupKey: `clf-result:${event.id}:${target}`
-        });
-        if (!outcome.duplicate) enqueued += 1;
-      }
-      if (enqueued > 0) await notify.dispatchPending(50);
-      log.info('clf.result_notified', { eventId: event.id, enqueued });
-    }
+    // m172 — اعلان نتیجه به درمانگر دیگر اینجا انجام نمی‌شود؛
+    // FillObserver مشترک (api-routing) هم پر کردن وب و هم بات را پوشش می‌دهد و از اعلان دوباره جلوگیری می‌کند.
 
     await clearState(chatId);
     const bandLine = event.analysis?.band ? `\nوضعیت: ${event.analysis.band}` : '';

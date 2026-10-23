@@ -75,6 +75,7 @@ interface CaseEventRow {
   analysis: string | null;
   staff_name: string | null;
   filled_by_chat_id: string | null;
+  payload: string | null;
   type_title: string;
   type_icon: string | null;
   type_category: string;
@@ -229,7 +230,7 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
 
       const caseEvents = await db.query<CaseEventRow>(
         `SELECT e.id, e.occurred_at, e.status, e.summary, e.analysis, s.full_name AS staff_name,
-                e.filled_by_chat_id, t.title AS type_title, t.icon AS type_icon, t.category AS type_category
+                e.filled_by_chat_id, e.payload, t.title AS type_title, t.icon AS type_icon, t.category AS type_category
            FROM case_events e
            JOIN case_event_types t ON t.id = e.event_type_id
            LEFT JOIN staff s ON s.id = e.staff_id
@@ -490,9 +491,24 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
       for (const ce of caseEvents) {
         const cancelled = ce.status === 'cancelled';
         const pending = ce.status === 'pending_family';
+        // m172 — تشخیص پاسخ‌دهنده: معلمِ مقیدشده (teacher_name/teacher_binding) ≠ خانواده
+        let informantName: string | null = null;
+        try {
+          const pp = ce.payload ? (JSON.parse(ce.payload) as Record<string, unknown>) : null;
+          const tName = pp?.['teacher_name'];
+          if (typeof tName === 'string' && tName.trim()) informantName = tName.trim();
+          else if (pp?.['teacher_name'] && typeof pp['teacher_name'] === 'object') {
+            const v = (pp['teacher_name'] as { value?: unknown }).value;
+            if (typeof v === 'string' && v.trim()) informantName = v.trim();
+          }
+          if (!informantName && pp?.['teacher_binding']) {
+            const tb = pp['teacher_binding'] as { name?: unknown };
+            if (typeof tb?.name === 'string' && tb.name.trim()) informantName = tb.name.trim();
+          }
+        } catch { /* keep null */ }
         let subtitle: string | null = ce.summary;
         if (cancelled) subtitle = 'رویداد لغو شد';
-        else if (pending) subtitle = 'در انتظار پاسخ خانواده';
+        else if (pending) subtitle = informantName ? 'در انتظار پاسخ معلم' : 'در انتظار پاسخ خانواده';
         else if (ce.analysis) {
           try {
             const an = JSON.parse(ce.analysis) as { score: number; band: string | null; total: number; maxScore?: number };
@@ -504,7 +520,7 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
           kind: 'case_event',
           title: `${ce.type_icon ?? ''} رویداد: ${ce.type_title}`.trim(),
           subtitle,
-          actor: ce.filled_by_chat_id ? 'خانواده' : ce.staff_name,
+          actor: ce.filled_by_chat_id ? (informantName ? `معلم: ${informantName}` : 'خانواده') : ce.staff_name,
           ref: { type: 'case_event', id: ce.id }
         });
       }

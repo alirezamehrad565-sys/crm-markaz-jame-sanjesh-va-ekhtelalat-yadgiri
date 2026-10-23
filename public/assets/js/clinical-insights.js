@@ -5,7 +5,7 @@ import { session } from './state.js';
 import { openExerciseSendModal } from './exercise-send.js';
 import { bankPickButton, appendExerciseToTextarea } from './exercise-pick.js'; // — افزودن تمرین از بانک به جلسه
 import { eventPickButton, appendEventToTextarea } from './event-pick.js'; // — افزودن رویداد (فرم/پرسش‌نامه) به جلسه
-import { openCaseEventForm } from './case-events.js';
+import { openCaseEventForm, openCaseEventDetail } from './case-events.js'; // — m172: بازکردن جزئیات فرم از ردیف‌های تب بالینی
 import { pathwayChip, canEditPathway, openPathwayModal } from './session-type.js'; // — مسیر پرونده
 import { otChecklistCard, otProgressPanel, protocolChip, protocolCard, NEEDS_KEY, OT_SESSION_KEY } from './ot-checklist.js'; // — فلو دوفازی شناسایی→مداخله (openNeedsModal در کارت جمع‌بندی) + پنل پیشرفت جلسه‌به‌جلسه (m162)
 import { synthesisSection, fetchFormulation } from './case-formulation.js'; // — کارت واحد جمع‌بندی تشخیصی (m134)
@@ -37,6 +37,7 @@ import {
   CONTEXT_META,
   SYNTHESIS_META,
   PLAN_META,
+  COMPOSITE_KEYS,
   TOOL_GUIDES
 } from './clinical-content.js';
 
@@ -847,9 +848,18 @@ const RESULTS_LABELS = {
 const rowStatusBadge = (e) =>
   e.status === 'completed' ? el('span', { class: 'badge badge--success' }, 'ثبت‌شده')
     : e.status === 'draft' ? el('span', { class: 'badge badge--warning' }, 'پیش‌نویس')
-      : el('span', { class: 'badge badge--neutral' }, e.status);
+      : e.status === 'pending_family' ? el('span', { class: 'badge badge--warning' }, 'در انتظار پاسخ')
+        : el('span', { class: 'badge badge--neutral' }, e.status);
 
-function eventRowsBlock({ events, typesById, keys, cap = 6, expandable = true }) {
+// m172 — نشان پاسخ‌دهنده: چک‌لیستِ پرشده توسط خانواده/معلم مشخص است
+function informantBadgeOf(e) {
+  if (!e.filledByChatId) return null;
+  const tName = e.payload?.['teacher_name']?.value;
+  return el('span', { class: 'badge badge--accent', style: { fontSize: '11px', padding: '1px 8px' } },
+    tName ? `پاسخ معلم: ${tName}` : 'پاسخ خانواده');
+}
+
+function eventRowsBlock({ events, typesById, keys, cap = 6, expandable = true, onOpen = null }) {
   const wantedIds = new Set(keys.map((k) => typesById.get(k)?.id).filter(Boolean));
   const wantedKeyOf = (typeId) => {
     for (const [k, t] of typesById) if (t.id === typeId) return k;
@@ -860,9 +870,17 @@ function eventRowsBlock({ events, typesById, keys, cap = 6, expandable = true })
 
   const rows = mine.map((e) => {
     const k = wantedKeyOf(e.eventTypeId);
-    return el('div', {},
+    const clickable = Boolean(onOpen); // m172 — ردیف‌ها کلیک‌پذیر: جزئیات + تفسیر موتور مستقیم باز می‌شود
+    return el('div', {
+      ...(clickable ? {
+        role: 'button', tabindex: '0', class: 'clx-row--link',
+        onclick: () => onOpen(e),
+        onkeydown: (ev) => { if (ev.key === 'Enter') onOpen(e); }
+      } : {})
+    },
       el('span', { style: { fontWeight: 600, fontSize: 'var(--fs-sm)' } }, e.typeTitle ?? RESULTS_LABELS[k] ?? 'فرم'),
       rowStatusBadge(e),
+      informantBadgeOf(e),
       el('span', { class: 'cell-sub' }, formatJalaliDateTime(e.occurredAt)),
       e.summary ? el('span', { class: 'cell-sub', style: { flex: 1, minWidth: '160px' } }, e.summary) : null);
   });
@@ -1432,7 +1450,7 @@ export async function renderClinicalTab(box, { student }) {
         typesById = new Map(types.map((t) => [t.key, t]));
       } catch { anamnesisTypeId = null; }
       try {
-        events = (await api.get(`/api/students/${student.id}/case-events`)).data ?? [];
+        events = (await api.get(`/api/students/${student.id}/case-events?limit=200`)).data ?? []; // m172: حد پیش‌فرض ۵۰ تاریخچه را بی‌صدا می‌بُرید
       } catch { events = []; }
     } catch (err) {
       box.replaceChildren(emptyState({
@@ -1444,6 +1462,26 @@ export async function renderClinicalTab(box, { student }) {
     }
 
     const refresh = () => { load(); };
+
+    // m172 — کلیدهای چک‌لیست خانواده/معلم از خود تعریف نوع‌ها خوانده می‌شود، نه فهرست هاردکد؛
+    // هیچ فرم پرشدهٔ خانواده/معلم از ردیف‌های مرحلهٔ رفتاری جا نمی‌ماند
+    const staticChecklistKeys = [...SCREEN_KEYS, ...SPECIFIC_KEYS];
+    const dynamicChecklistKeys = [];
+    for (const [k, t] of typesById) {
+      if (!t || !t.active || t.category !== 'checklist') continue;
+      if (COMPOSITE_KEYS.includes(k) || staticChecklistKeys.includes(k)) continue;
+      if (!['family', 'teacher', 'both'].includes(String(t.audience ?? ''))) continue;
+      dynamicChecklistKeys.push(k);
+    }
+    const checklistAllKeys = [...staticChecklistKeys, ...dynamicChecklistKeys];
+
+    const openEventDetailOf = async (e) => { // m172 — ردیف‌ها کلیک‌پذیر
+      try {
+        const full = (await api.get(`/api/case-events/${e.id}`)).data;
+        openCaseEventDetail(full, { onChanged: refresh });
+      } catch (err) { toastError(err); }
+    };
+
     const hasData = (insights.ranked?.length ?? 0) > 0 || (insights.criteria?.length ?? 0) > 0;
 
     const protocol = gates?.protocol ?? null;
@@ -1485,7 +1523,7 @@ export async function renderClinicalTab(box, { student }) {
     const glanceOf = {
       anamnesis: () => gateByKey('anamnesis')?.detail || SM.anamnesis.glanceEmpty,
       behavioral: () => {
-        const n = countCompleted([...SCREEN_KEYS, ...SPECIFIC_KEYS]);
+        const n = countCompleted(checklistAllKeys);
         const countLine = n === 0 ? SM.behavioral.glanceZero : SM.behavioral.glanceSome.replace('{n}', fa(n));
         const susLine = gates?.suspicion?.decided ? ` · ${SM.behavioral.glanceSuspicion.decided}` : '';
         return `${countLine}${susLine}`;
@@ -1557,7 +1595,7 @@ export async function renderClinicalTab(box, { student }) {
         const sig = gates?.suspicion?.signals ?? [];
         const anyHigh = sig.some((s) => s?.level === 'high');
         return [
-          countStat(ST.behavioralAnswered, countCompleted([...SCREEN_KEYS, ...SPECIFIC_KEYS])),
+          countStat(ST.behavioralAnswered, countCompleted(checklistAllKeys)),
           sig.length
             ? statItem(ST.suspicionSignals, fa(sig.length), {
                 warn: anyHigh,
@@ -1628,9 +1666,9 @@ export async function renderClinicalTab(box, { student }) {
       }
     };
 
-    const anamRows = eventRowsBlock({ events, typesById, keys: [ANAMNESIS_KEY, ANAMNESIS_LEGACY_KEY], cap: 1, expandable: false }); // — T4: v3 + تاریخچهٔ v2
-    const checklistRows = eventRowsBlock({ events, typesById, keys: [...SCREEN_KEYS, ...SPECIFIC_KEYS], cap: 6, expandable: true });
-    const resultsRows = eventRowsBlock({ events, typesById, keys: [RESULTS_KEY], cap: 6, expandable: true });
+    const anamRows = eventRowsBlock({ events, typesById, keys: [ANAMNESIS_KEY, ANAMNESIS_LEGACY_KEY], cap: 1, expandable: false, onOpen: openEventDetailOf }); // — T4: v3 + تاریخچهٔ v2
+    const checklistRows = eventRowsBlock({ events, typesById, keys: checklistAllKeys, cap: 6, expandable: true, onOpen: openEventDetailOf });
+    const resultsRows = eventRowsBlock({ events, typesById, keys: [RESULTS_KEY], cap: 6, expandable: true, onOpen: openEventDetailOf });
 
     const hypotheses = hasData
       ? el('div', { class: 'clx-section' },

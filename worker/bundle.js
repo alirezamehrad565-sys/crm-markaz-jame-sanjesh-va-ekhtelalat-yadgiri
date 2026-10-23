@@ -4155,8 +4155,8 @@ var Hono3 = /* @__PURE__ */ __name2(class extends Hono {
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
 }, "Hono");
-var APP_VERSION = "1.00.47";
-var APP_MILESTONE = "m171";
+var APP_VERSION = "1.00.48";
+var APP_MILESTONE = "m172";
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -16291,7 +16291,7 @@ function createStudentTimelineService(db) {
       ) : [];
       const caseEvents = await db.query(
         `SELECT e.id, e.occurred_at, e.status, e.summary, e.analysis, s.full_name AS staff_name,
-                e.filled_by_chat_id, t.title AS type_title, t.icon AS type_icon, t.category AS type_category
+                e.filled_by_chat_id, e.payload, t.title AS type_title, t.icon AS type_icon, t.category AS type_category
            FROM case_events e
            JOIN case_event_types t ON t.id = e.event_type_id
            LEFT JOIN staff s ON s.id = e.staff_id
@@ -16529,11 +16529,27 @@ function createStudentTimelineService(db) {
       for (const ce of caseEvents) {
         const cancelled = ce.status === "cancelled";
         const pending = ce.status === "pending_family";
+        // m172 — تشخیص پاسخ‌دهنده: معلمِ مقیدشده (teacher_name/teacher_binding) ≠ خانواده
+        let informantName = null;
+        try {
+          const pp = ce.payload ? JSON.parse(ce.payload) : null;
+          const tName = pp?.["teacher_name"];
+          if (typeof tName === "string" && tName.trim()) informantName = tName.trim();
+          else if (pp?.["teacher_name"] && typeof pp["teacher_name"] === "object") {
+            const v = pp["teacher_name"].value;
+            if (typeof v === "string" && v.trim()) informantName = v.trim();
+          }
+          if (!informantName && pp?.["teacher_binding"]) {
+            const tb = pp["teacher_binding"];
+            if (typeof tb?.name === "string" && tb.name.trim()) informantName = tb.name.trim();
+          }
+        } catch {
+        }
         let subtitle = ce.summary;
         if (cancelled)
           subtitle = "\u0631\u0648\u06CC\u062F\u0627\u062F \u0644\u063A\u0648 \u0634\u062F";
         else if (pending)
-          subtitle = "\u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u067E\u0627\u0633\u062E \u062E\u0627\u0646\u0648\u0627\u062F\u0647";
+          subtitle = informantName ? "\u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u067E\u0627\u0633\u062E \u0645\u0639\u0644\u0645" : "\u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u067E\u0627\u0633\u062E \u062E\u0627\u0646\u0648\u0627\u062F\u0647";
         else if (ce.analysis) {
           try {
             const an = JSON.parse(ce.analysis);
@@ -16546,7 +16562,8 @@ function createStudentTimelineService(db) {
           kind: "case_event",
           title: `${ce.type_icon ?? ""} \u0631\u0648\u06CC\u062F\u0627\u062F: ${ce.type_title}`.trim(),
           subtitle,
-          actor: ce.filled_by_chat_id ? "\u062E\u0627\u0646\u0648\u0627\u062F\u0647" : ce.staff_name,
+          // m172 — پاسخ‌دهندهٔ واقعی: معلم با نام / خانواده؛ ثبت‌کنندهٔ درمانگر فقط برای فرم‌های درمانگر
+          actor: ce.filled_by_chat_id ? (informantName ? `\u0645\u0639\u0644\u0645: ${informantName}` : "\u062E\u0627\u0646\u0648\u0627\u062F\u0647") : ce.staff_name,
           ref: { type: "case_event", id: ce.id }
         });
       }
@@ -24163,6 +24180,7 @@ function eventRowToRecord(r) {
     fillExpiresAt: r.fill_expires_at,
     sentAt: r.sent_at ?? null,
     sentCount: r.sent_count ?? 0,
+    filledByChatId: r.filled_by_chat_id ?? null,
     createdAt: r.created_at
   };
 }
@@ -24187,16 +24205,26 @@ function createCaseEventsService(deps) {
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   const fillExpiryHours = deps.fillExpiryHours ?? 168;
   let sendFn = null;
+  let fillFn = null; // — m172: اعلان نتیجه به درمانگر برای پر کردن خانواده/معلم (وب و بات)
   const EVENT_SELECT = `
     SELECT e.id, e.event_type_id, e.student_id, e.staff_id, s.full_name AS staff_name,
            e.appointment_id, e.occurred_at, e.status, e.payload, e.analysis, e.summary,
-           e.fill_expires_at, e.sent_at, e.sent_count, e.created_by, e.created_at,
+           e.fill_expires_at, e.sent_at, e.sent_count, e.filled_by_chat_id, e.created_by, e.created_at,
            t.title AS type_title, t.category AS type_category, t.icon AS type_icon, t.bands AS type_bands,
            t.audience AS type_audience, t.family_fillable AS type_family_fillable
       FROM case_events e
       JOIN case_event_types t ON t.id = e.event_type_id
       LEFT JOIN staff s ON s.id = e.staff_id
      WHERE e.deleted_at IS NULL`;
+  async function notifyFillResult(input) {
+    if (!fillFn) return;
+    try {
+      await fillFn(input);
+    } catch (err) {
+      log32.warn("event.fill_observer_failed", { eventId: input.eventId, err: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  __name(notifyFillResult, "notifyFillResult");
   async function loadTypeRow(id) {
     const row = await db.queryOne(
       `SELECT * FROM case_event_types WHERE id = ? AND deleted_at IS NULL`,
@@ -24458,6 +24486,16 @@ function createCaseEventsService(deps) {
       id: row.id,
       package: anchorType.key,
       components: filled.length,
+      via: input.viaWeb ? "web" : "bot"
+    });
+    await notifyFillResult({ // m172 — برای بستهٔ چندبخشی، اعلان بدون نمره (هر بخش نمرهٔ خودش را دارد)
+      eventId: row.id,
+      studentId: row.student_id,
+      staffId: row.staff_id,
+      formTitle: anchorType.title,
+      score: null,
+      band: null,
+      teacherName: teacher?.name ?? null,
       via: input.viaWeb ? "web" : "bot"
     });
     return eventRowToRecord(await getEventRow(row.id));
@@ -25302,6 +25340,9 @@ function createCaseEventsService(deps) {
     setSendObserver(fn) {
       sendFn = fn;
     },
+    setFillObserver(fn) {
+      fillFn = fn;
+    },
     async verifyFillToken(id, token) {
       if (!token || token.length < 8)
         return false;
@@ -25398,6 +25439,16 @@ function createCaseEventsService(deps) {
         }
       });
       log32.info("event.family_filled", { id, answered: analysis.answered, score: analysis.score, via: input.viaWeb ? "web" : "bot" });
+      await notifyFillResult({ // m172 — نتیجه به درمانگر ثبت‌کننده می‌رسد (وب و بات)
+        eventId: id,
+        studentId: row.student_id,
+        staffId: row.staff_id,
+        formTitle: type.title,
+        score: analysis.score,
+        band: analysis.band ?? null,
+        teacherName: teacher?.name ?? null,
+        via: input.viaWeb ? "web" : "bot"
+      });
       return eventRowToRecord(await getEventRow(id));
     }
   };
@@ -39654,15 +39705,7 @@ function createCaseEventsBot(deps) {
   }
   __name(guardianChats, "guardianChats");
   __name2(guardianChats, "guardianChats");
-  async function staffChats(staffId) {
-    const rows = await db.query(
-      `SELECT chat_id FROM staff_bot_links WHERE staff_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
-      [staffId]
-    );
-    return rows.map((r) => r.chat_id);
-  }
-  __name(staffChats, "staffChats");
-  __name2(staffChats, "staffChats");
+  // m172 — staffChats به api-routing منتقل شد (FillObserver)
   async function startCategory(chatId, stuIdx) {
     const owner = await staffOwner(chatId);
     if (!owner)
@@ -40367,33 +40410,7 @@ ${resultLines.join("\n")}`;
       }
     });
     log32.info("clf.filled", { eventId: event.id, chatId });
-    if (event.staffId) {
-      const chats = await staffChats(event.staffId);
-      const clinicName = await settings.getClinicName();
-      const channel22 = notify.getChannel("bale") ? "bale" : "internal";
-      let enqueued = 0;
-      for (const target of chats) {
-        const outcome = await notify.enqueue({
-          channel: channel22,
-          template: "bot_checklist_result",
-          recipient: target,
-          studentId: event.studentId,
-          payload: {
-            studentName: st.studentName || void 0,
-            formTitle: st.typeTitle,
-            score: faNumStr(String(event.analysis?.score ?? 0)),
-            band: event.analysis?.band ?? null,
-            clinicName
-          },
-          dedupKey: `clf-result:${event.id}:${target}`
-        });
-        if (!outcome.duplicate)
-          enqueued += 1;
-      }
-      if (enqueued > 0)
-        await notify.dispatchPending(50);
-      log32.info("clf.result_notified", { eventId: event.id, enqueued });
-    }
+    // m172 — اعلان نتیجه به درمانگر دیگر اینجا انجام نمی‌شود؛ FillObserver مشترک (api-routing) هم وب و هم بات را پوشش می‌دهد.
     await clearState(chatId);
     const bandLine = event.analysis?.band ? `
 \u0648\u0636\u0639\u06CC\u062A: ${event.analysis.band}` : "";
@@ -45197,6 +45214,45 @@ function createServices(deps) {
       await notifyCore.dispatchPending(50);
     return sent;
   });
+  // m172 — اعلان «نتیجهٔ چک‌لیست ثبت شد» به درمانگر ثبت‌کننده؛ هم پر کردن وب و هم بات را پوشش می‌دهد
+  caseEvents.setFillObserver(async (input) => {
+    try {
+      if (!input.staffId) return;
+      const linkRows = await db.query(
+        `SELECT chat_id FROM staff_bot_links WHERE staff_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
+        [input.staffId]
+      );
+      const chats = linkRows.map((r) => r.chat_id).filter(Boolean);
+      if (!chats.length) return;
+      const student = await studentProfile.getStudentById(input.studentId);
+      const studentName = student ? `${student.firstName} ${student.lastName}` : null;
+      const channel22 = notifyCore.getChannel("bale") ? "bale" : "internal";
+      const clinicName = await settings.getClinicName();
+      let sent = 0;
+      for (const chat of chats) {
+        const outcome = await notifyCore.enqueue({
+          channel: channel22,
+          template: "bot_checklist_result",
+          recipient: chat,
+          studentId: input.studentId,
+          payload: {
+            studentName: studentName ?? void 0,
+            formTitle: input.teacherName ? `${input.formTitle} (پاسخ معلم: ${input.teacherName})` : input.formTitle,
+            score: input.score != null ? faDigits(String(input.score)) : void 0,
+            band: input.band ?? void 0,
+            clinicName
+          },
+          dedupKey: `ce-result:${input.eventId}:${chat}`
+        });
+        if (!outcome.duplicate)
+          sent += 1;
+      }
+      if (sent > 0)
+        await notifyCore.dispatchPending(50);
+    } catch (err) {
+      logger.warn("case-events.fill_observer_failed", { err: err instanceof Error ? err.message : String(err) });
+    }
+  });
   exerciseBank.setSendObserver(async (input) => {
     const channel22 = notifyCore.getChannel("bale") ? "bale" : "internal";
     const clinicName = await settings.getClinicName();
@@ -45239,6 +45295,8 @@ __name2(createServices, "createServices");
 function createApp(deps) {
   const services = createServices(deps);
   const app = new Hono3();
+  // — هوک تستی: دسترسی به سرویس‌ها برای e2e (مثلاً setFillObserver)
+  app.__services = services;
   app.use("*", async (c, next) => {
     c.set("logger", services.logger);
     return next();

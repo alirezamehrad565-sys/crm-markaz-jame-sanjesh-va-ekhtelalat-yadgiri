@@ -3072,6 +3072,8 @@ tr.wl-row--urgent > td:first-child {
   padding-block: 6px;
 }
 .clxacc-rows > *:last-child { border-bottom: 0; }
+.clx-row--link { cursor: pointer; border-radius: 8px; transition: background .15s ease; }
+.clx-row--link:hover, .clx-row--link:focus-visible { background: var(--surface-2, rgba(0,0,0,.04)); outline: none; }
 
 @media (max-width: 480px) {
   .clxacc__head { flex-wrap: wrap; padding: 10px var(--sp-3); }
