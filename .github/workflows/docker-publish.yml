@@ -71,7 +71,8 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ github.repository }}
           # نام مخزن خودکار به حروف کوچک تبدیل می‌شود (الزام GHCR)
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            # latest = پوش روی main یا هر تگ نسخهٔ v*
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
