@@ -60,6 +60,8 @@
 .btn--danger:hover:not(:disabled) { background: var(--error-soft); }
 
 .btn--sm { padding: 5px var(--sp-3); font-size: var(--fs-sm); border-radius: var(--radius-sm); }
+/* m173 — سلکت هم‌اندازهٔ btn--sm (مثل ردیف «مسئول پرونده» در پروفایل دانش‌آموز) */
+.select--sm { padding-block: 5px; font-size: var(--fs-sm); border-radius: var(--radius-sm); }
 .btn--icon {
   width: 40px;
   height: 40px;
@@ -636,6 +638,7 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   .chip { padding: 7px var(--sp-4); }
   .tab { padding: 12px 16px; }
   .btn--sm { padding: 8px var(--sp-3); }
+  .select--sm { padding-block: 8px; }
 }
 
 .tag-chip, .tag-toggle {

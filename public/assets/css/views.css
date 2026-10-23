@@ -1496,6 +1496,16 @@ tr.wl-row--urgent > td:first-child {
 .next-action--followup .next-action__icon { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
 
 .case-status-edit { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; }
+.case-status-edit .cell-sub { flex-shrink: 0; white-space: nowrap; }
+
+/* m173 — نوار اکشن‌های کارت وضعیت پروفایل: ردیف‌های منظم و هم‌ارتفاع (دکمه و سلکت یک اندازه) */
+.profile-actions { display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-4); }
+.profile-actions__row { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
+.profile-actions .btn, .profile-actions .select { height: 34px; }
+
+@media (pointer: coarse) {
+  .profile-actions .btn, .profile-actions .select { height: 38px; }
+}
 
 @media (max-width: 480px) {
   .tl-item { gap: var(--sp-2); }

@@ -141,10 +141,10 @@ export async function renderStudentProfile(container, ctx) {
           )
         )
       ),
-      el('div', { style: { marginTop: 'var(--sp-4)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
+      el('div', { class: 'profile-actions' },
         nextActionBlock,
         canCreateCaseEvents()
-          ? el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+          ? el('div', { class: 'profile-actions__row' },
               el('button', {
                 class: 'btn btn--primary btn--sm',
                 onclick: () => openCaseEventForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
@@ -152,11 +152,11 @@ export async function renderStudentProfile(container, ctx) {
               el('button', {
                 class: 'btn btn--soft btn--sm',
                 onclick: () => openChecklistSendModal({ student, onSent: () => renderStudentProfile(container, ctx) })
-              }, icon('zap', 15), 'ارسال چک‌لیست با بله'),
+              }, icon('checklist', 15), 'ارسال چک‌لیست با بله'),
               el('button', {
                 class: 'btn btn--soft btn--sm',
                 onclick: () => openExerciseSendModal({ student, onSent: () => renderStudentProfile(container, ctx) })
-              }, icon('zap', 15), 'ارسال تمرین با بله')
+              }, icon('file', 15), 'ارسال تمرین با بله')
             )
           : null,
         canManageCase ? buildOwnerEditor(student, () => renderStudentProfile(container, ctx)) : null
@@ -546,15 +546,8 @@ export async function renderStudentProfile(container, ctx) {
 }
 
 function buildNextActionBlock(nextAction) {
-  if (!nextAction) {
-    return el('div', { class: 'next-action' },
-      el('div', { class: 'next-action__icon' }, icon('zap', 16)),
-      el('div', {},
-        el('div', { class: 'next-action__title' }, 'اقدام بعدی ثبت نشده'),
-        el('div', { class: 'next-action__sub' }, 'با ثبت نوبت آینده یا پیگیری باز، همین‌جا نمایش داده می‌شود.')
-      )
-    );
-  }
+  // — m173: مکانیک پیگیری/اقدام بعدی حذف شده؛ وقتی اقدام واقعی وجود ندارد هیچ بلوکی رندر نمی‌شود (جای‌نگهدار حذف شد)
+  if (!nextAction) return null;
   if (nextAction.type === 'appointment') {
     return el('div', { class: 'next-action' },
       el('div', { class: 'next-action__icon' }, icon('calendar', 16)),
@@ -576,7 +569,7 @@ function buildNextActionBlock(nextAction) {
 function buildOwnerEditor(student, onSaved) {
   let staff = [];
   api.get('/api/staff').then((res) => { staff = (res.data ?? []).filter((s) => s.active !== false); fillSel(); }).catch(() => {});
-  const sel = el('select', { class: 'select', style: { maxWidth: '220px' } },
+  const sel = el('select', { class: 'select select--sm', style: { width: 'auto', minWidth: '210px', maxWidth: '300px', flex: '1 1 210px' } },
     el('option', { value: '' }, student.ownerStaffId ? 'برداشتن مسئول' : 'بدون مسئول — انتخاب کنید…')
   );
   function fillSel() {
@@ -605,7 +598,7 @@ function buildOwnerEditor(student, onSaved) {
   }, icon('user', 15), 'ثبت مسئول');
 
   return el('div', { class: 'case-status-edit' },
-    el('span', { class: 'cell-sub' }, 'مسئول پرونده:'),
+    el('span', { class: 'cell-sub', style: { flexShrink: 0, whiteSpace: 'nowrap' } }, 'مسئول پرونده:'),
     sel,
     btn
   );
