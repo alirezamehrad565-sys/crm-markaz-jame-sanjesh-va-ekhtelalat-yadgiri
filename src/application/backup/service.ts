@@ -24,13 +24,16 @@ export const BACKUP_FORMAT = 'gh-backup';
 export const BACKUP_FORMAT_VERSION = 1;
 
 // جدول‌های سیستمی که هرگز در بازیابی دست نمی‌خورند
-const SKIP_RESTORE_TABLES = new Set(['schema_migrations']);
+// (d1_migrations = تاریخچهٔ مهاجرت‌های خود D1 — بازگرداندن نسخهٔ کهنه‌اش
+// باعث می‌شود «d1 migrations apply» بعدی سعی کند مهاجرت‌های اعمال‌شده را دوباره بزند)
+const SKIP_RESTORE_TABLES = new Set(['schema_migrations', 'd1_migrations']);
 // جدول نگهداری بایت فایل‌های پیوستی (سنگین‌ترین جدول — به‌صورت اختیاری در پشتیبان می‌آید)
 export const FILES_TABLE = 'exercise_file_chunks';
 
 const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const MAX_REQUEST_BYTES = 60 * 1024 * 1024; // سقف حجم فایل پشتیبان هنگام بازیابی
 const PAGE_SIZE = 400; // صفحهٔ خواندن ردیف‌ها هنگام خروجی گرفتن
+const FILES_PAGE_SIZE = 4; // ردیف‌های جدول فایل‌ها تا ~۲ مگابایت هرکدام‌اند — صفحهٔ کوچک تا یک کوئری سنگین نشود
 const MAX_STATEMENTS_PER_BATCH = 30; // تعداد دستور در هر batch درج
 const MAX_BATCH_PARAM_BYTES = 2 * 1024 * 1024; // حدود حجم پارامترهای هر batch
 const MAX_COLUMNS = 90; // زیر سقف ۱۰۰ پارامتر D1 در هر دستور
@@ -140,11 +143,27 @@ function assertIdent(name: string): string {
   return name;
 }
 
+// ارقام فارسی/عربی → لاتین (برای آیدی بله که کاربر ممکن است با کیبورد فارسی بنویسد)
+const FA_AR_DIGITS = '۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩';
+export function normalizeDigits(input: string): string {
+  return input.replace(/[۰-۹٠-٩]/g, (ch) => String(FA_AR_DIGITS.indexOf(ch) % 10));
+}
+
+function toByteView(v: unknown): Uint8Array | null {
+  if (v instanceof Uint8Array) return v;
+  if (v instanceof ArrayBuffer) return new Uint8Array(v);
+  if (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === 'number')) {
+    return Uint8Array.from(v as number[]);
+  }
+  return null;
+}
+
 function encodeValue(v: unknown): unknown {
-  if (v instanceof Uint8Array) {
+  const bytes = toByteView(v);
+  if (bytes) {
     let bin = '';
     const CH = 0x8000;
-    for (let i = 0; i < v.length; i += CH) bin += String.fromCharCode(...v.subarray(i, i + CH));
+    for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode(...bytes.subarray(i, i + CH));
     return btoa(bin);
   }
   return v ?? null;
@@ -210,7 +229,7 @@ export function createBackupService(deps: {
     return input.map((raw) => {
       const d = (raw ?? {}) as Record<string, unknown>;
       const label = typeof d.label === 'string' ? d.label.trim() : '';
-      const chatId = typeof d.chat_id === 'string' ? d.chat_id.trim() : '';
+      const chatId = normalizeDigits(typeof d.chat_id === 'string' ? d.chat_id.trim() : '');
       if (!label || label.length > 60) {
         throw new ValidationError('هر مقصد باید یک نام کوتاه داشته باشد (حداکثر ۶۰ نویسه)');
       }
@@ -409,6 +428,27 @@ export function createBackupService(deps: {
     if (unknownInFile.length > 0) {
       problems.push(`این جدول‌ها در پایگاه دادهٔ فعلی وجود ندارند (نسخهٔ اسکیما تفاوت دارد): ${unknownInFile.join('، ')}`);
     }
+    // پیش‌اعتبارسنجی ستون‌های الزامی (NOT NULL بدون پیش‌فرض) — اگر در فایل نیستند،
+    // درج وسط کار شکست می‌خورد؛ همین حالا با پیام روشن رد می‌کنیم تا پایگاه داده دست‌نخورده بماند
+    for (const name of fileTables) {
+      if (SKIP_RESTORE_TABLES.has(name) || !current.includes(name)) continue;
+      const info = await db.query<{ name: string; notnull: number; dflt_value: unknown }>(
+        `PRAGMA table_info("${name}")`
+      );
+      const required = info
+        .filter((c) => c.notnull === 1 && (c.dflt_value === null || c.dflt_value === undefined))
+        .map((c) => c.name);
+      if (required.length === 0) continue;
+      const missing = new Set<string>();
+      for (const row of env.tables[name]?.rows ?? []) {
+        for (const col of required) if (!(col in (row as Record<string, unknown>))) missing.add(col);
+      }
+      if (missing.size > 0) {
+        problems.push(
+          `جدول «${name}»: این ستون‌های الزامی در ردیف‌های فایل نیست (${[...missing].join('، ')}) — فایل از نسخهٔ قدیمی‌تری است`
+        );
+      }
+    }
     const tables = fileTables.map((name) => ({
       name,
       rows: (env.tables[name]?.rows ?? []).length
@@ -428,7 +468,7 @@ export function createBackupService(deps: {
     };
   }
 
-  async function restoreTable(
+  async function insertTableRows(
     table: string,
     data: BackupTableData,
     warnings: string[]
@@ -445,19 +485,19 @@ export function createBackupService(deps: {
     if (fileExtra.size > 0) {
       warnings.push(`جدول «${table}»: ستون‌های ناشناختهٔ فایل نادیده گرفته شد (${[...fileExtra].join('، ')})`);
     }
+    if (data.rows.length === 0) return { restoredRows: 0, skippedColumns: [...fileExtra] };
+
     const colList = cols.map((c) => `"${c}"`).join(', ');
     const placeholders = cols.map(() => '?').join(', ');
     const insertSql = `INSERT INTO "${table}" (${colList}) VALUES (${placeholders})`;
     const selfRef = await hasSelfReference(table);
 
-    // گروه اول: پاک‌سازی + اولین بخش درج‌ها در یک تراکنش اتمیک
     let batch: D1PreparedStatement[] = [db.prepare('PRAGMA defer_foreign_keys = ON')];
-    batch.push(db.prepare(`DELETE FROM "${table}"`));
     let paramBytes = 0;
     let restored = 0;
 
-    const flush = async (isLast = false) => {
-      if (batch.length <= 1 && !isLast) return;
+    const flush = async () => {
+      if (batch.length <= 1) return;
       try {
         await db.batch(batch);
       } catch (err) {
@@ -481,11 +521,12 @@ export function createBackupService(deps: {
       paramBytes += JSON.stringify(params).length;
       restored += 1;
       const stmtCount = batch.length - 1; // منهای PRAGMA
+      // جدول خودارجاع باید همهٔ ردیف‌هایش در یک batch بماند (ارجاع به هم نوع‌ها)
       if (!selfRef && (stmtCount >= MAX_STATEMENTS_PER_BATCH || paramBytes >= MAX_BATCH_PARAM_BYTES)) {
         await flush();
       }
     }
-    await flush(true);
+    await flush();
 
     return { restoredRows: restored, skippedColumns: [...fileExtra] };
   }
@@ -517,49 +558,62 @@ export function createBackupService(deps: {
     buildExportStream(includeFiles: boolean) {
       const encoder = new TextEncoder();
       const excluded = includeFiles ? [] : [FILES_TABLE];
-      const stream = new ReadableStream<Uint8Array>({
-        async start(controller) {
-          const push = (s: string) => controller.enqueue(encoder.encode(s));
-          try {
-            const allTables = await listTables();
-            const tables = allTables.filter((t) => !excluded.includes(t));
-            const head = JSON.stringify({
-              format: BACKUP_FORMAT,
-              format_version: BACKUP_FORMAT_VERSION,
-              app_version: APP_VERSION,
-              milestone: APP_MILESTONE,
-              created_at: new Date().toISOString(),
-              include_files: includeFiles,
-              excluded_tables: excluded
-            });
-            push(`${head.slice(0, -1)},"tables":{`);
-            for (let i = 0; i < tables.length; i++) {
-              const t = tables[i];
-              const count = await rowCount(t);
-              push(`${i > 0 ? ',' : ''}"${t}":{"row_count":${count},"rows":[`);
-              for (let offset = 0; ; offset += PAGE_SIZE) {
-                const rows = await db.query<Record<string, unknown>>(
-                  `SELECT * FROM "${t}" LIMIT ${PAGE_SIZE} OFFSET ${offset}`
-                );
-                if (rows.length === 0) break;
-                for (let r = 0; r < rows.length; r++) {
-                  const clean: Record<string, unknown> = {};
-                  for (const [k, v] of Object.entries(rows[r])) clean[k] = encodeValue(v);
-                  push(`${r > 0 || offset > 0 ? ',' : ''}${JSON.stringify(clean)}`);
-                }
-                if (rows.length < PAGE_SIZE) break;
-              }
-              push(']}');
+
+      // مولد صفحه‌به‌صفحه — هر «pull» فقط یک گام جلو می‌رود تا صف استریم
+      // (و حافظهٔ Worker) همیشه کوچک بماند، حتی برای فایل پشتیبان صد مگابایتی
+      async function* exportGen(): AsyncGenerator<string> {
+        const allTables = await listTables();
+        const tables = allTables.filter((t) => !excluded.includes(t));
+        const head = JSON.stringify({
+          format: BACKUP_FORMAT,
+          format_version: BACKUP_FORMAT_VERSION,
+          app_version: APP_VERSION,
+          milestone: APP_MILESTONE,
+          created_at: new Date().toISOString(),
+          include_files: includeFiles,
+          excluded_tables: excluded
+        });
+        yield `${head.slice(0, -1)},"tables":{`;
+        for (let i = 0; i < tables.length; i++) {
+          const t = tables[i];
+          const count = await rowCount(t);
+          yield `${i > 0 ? ',' : ''}"${t}":{"row_count":${count},"rows":[`;
+          let emitted = 0;
+          const page = t === FILES_TABLE ? FILES_PAGE_SIZE : PAGE_SIZE;
+          for (let offset = 0; ; offset += page) {
+            const rows = await db.query<Record<string, unknown>>(
+              `SELECT * FROM "${t}" LIMIT ${page} OFFSET ${offset}`
+            );
+            if (rows.length === 0) break;
+            for (const r of rows) {
+              const clean: Record<string, unknown> = {};
+              for (const [k, v] of Object.entries(r)) clean[k] = encodeValue(v);
+              yield `${emitted > 0 ? ',' : ''}${JSON.stringify(clean)}`;
+              emitted += 1;
             }
-            push('}}');
-            controller.close();
+            if (rows.length < page) break;
+          }
+          yield ']}';
+        }
+        yield '}}';
+      }
+
+      const it = exportGen();
+      return new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          try {
+            const { value, done } = await it.next();
+            if (done) controller.close();
+            else controller.enqueue(encoder.encode(value));
           } catch (err) {
             logger.error('backup.export.failed', { error: err instanceof Error ? err.message : String(err) });
             controller.error(err);
           }
+        },
+        cancel() {
+          void it.return(undefined);
         }
       });
-      return stream;
     },
 
     async inspect(input: unknown) {
@@ -599,30 +653,45 @@ export function createBackupService(deps: {
       const reportTables: RestoreReport['tables'] = [];
       let totalRows = 0;
 
+      // ── فاز ۱: خالی‌کردن همهٔ جدول‌های هدف در یک تراکنش واحد ──
+      // چون تا پایان همین batch همهٔ جدول‌ها خالی می‌شوند، هیچ ردیف کهنی نمی‌ماند
+      // که به ردیف حذف‌شدهٔ یک جدول والد ارجاع بدهد — ریشهٔ خطای
+      // «FOREIGN KEY constraint failed» در بازیابی دادهٔ واقعی همین بود:
+      // حذف+درجِ هر جدول جداگانه بود و فرزندان کهن به درج‌های chunk بعدیِ والد برمی‌خوردند.
+      const wipe: D1PreparedStatement[] = [db.prepare('PRAGMA defer_foreign_keys = ON')];
+      for (const t of target) wipe.push(db.prepare(`DELETE FROM "${assertIdent(t)}"`));
+      try {
+        await db.batch(wipe);
+      } catch (err) {
+        logger.error('backup.restore.wipe_failed', {
+          tables: target.length,
+          error: err instanceof Error ? err.message : String(err)
+        });
+        throw new ValidationError(
+          `پاک‌سازی داده‌های فعلی برای بازیابی ناموفق بود: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+
+      // ── فاز ۲: درج ردیف‌ها در ترتیب توپولوژیک (والد قبل از فرزند) ──
       const levels = await topoLevels(target);
       for (const level of levels) {
         if (level.merged && level.tables.length > 1) {
-          // چرخهٔ FK — همه در یک batch
+          // چرخهٔ FK — همهٔ درج‌ها در یک batch با تعویق کلید خارجی
           const batch: D1PreparedStatement[] = [db.prepare('PRAGMA defer_foreign_keys = ON')];
-          const projected: { table: string; cols: string[]; rows: Record<string, unknown>[] }[] = [];
           for (const t of level.tables) {
             const cols = await tableColumns(t);
-            batch.push(db.prepare(`DELETE FROM "${t}"`));
-            projected.push({ table: t, cols, rows: env.tables[t]?.rows ?? [] });
-          }
-          for (const p of projected) {
-            const colList = p.cols.map((c) => `"${c}"`).join(', ');
-            const placeholders = p.cols.map(() => '?').join(', ');
-            for (const row of p.rows) {
+            const colList = cols.map((c) => `"${c}"`).join(', ');
+            const placeholders = cols.map(() => '?').join(', ');
+            for (const row of env.tables[t]?.rows ?? []) {
               batch.push(
                 db.prepare(
-                  `INSERT INTO "${p.table}" (${colList}) VALUES (${placeholders})`,
-                  p.cols.map((c) => encodeValue(row[c]))
+                  `INSERT INTO "${t}" (${colList}) VALUES (${placeholders})`,
+                  cols.map((c) => encodeValue(row[c]))
                 )
               );
               totalRows += 1;
             }
-            reportTables.push({ name: p.table, restoredRows: p.rows.length, skippedColumns: [] });
+            reportTables.push({ name: t, restoredRows: (env.tables[t]?.rows ?? []).length, skippedColumns: [] });
           }
           try {
             await db.batch(batch);
@@ -634,7 +703,7 @@ export function createBackupService(deps: {
           continue;
         }
         for (const t of level.tables) {
-          const res = await restoreTable(t, env.tables[t] ?? { rows: [] }, warnings);
+          const res = await insertTableRows(t, env.tables[t] ?? { rows: [] }, warnings);
           totalRows += res.restoredRows;
           reportTables.push({ name: t, restoredRows: res.restoredRows, skippedColumns: res.skippedColumns });
         }

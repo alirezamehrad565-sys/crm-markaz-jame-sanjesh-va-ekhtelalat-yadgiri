@@ -1823,8 +1823,8 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.00.55";
-var APP_MILESTONE = "m180";
+var APP_VERSION = "1.00.56";
+var APP_MILESTONE = "m181";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -38570,11 +38570,12 @@ __name(sendBaleDocument, "sendBaleDocument");
 // src/application/backup/service.ts
 var BACKUP_FORMAT = "gh-backup";
 var BACKUP_FORMAT_VERSION = 1;
-var SKIP_RESTORE_TABLES = /* @__PURE__ */ new Set(["schema_migrations"]);
+var SKIP_RESTORE_TABLES = /* @__PURE__ */ new Set(["schema_migrations", "d1_migrations"]);
 var FILES_TABLE = "exercise_file_chunks";
 var IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 var MAX_REQUEST_BYTES = 60 * 1024 * 1024;
 var PAGE_SIZE = 400;
+var FILES_PAGE_SIZE = 4;
 var MAX_STATEMENTS_PER_BATCH = 30;
 var MAX_BATCH_PARAM_BYTES = 2 * 1024 * 1024;
 var MAX_COLUMNS = 90;
@@ -38583,11 +38584,26 @@ function assertIdent(name) {
   return name;
 }
 __name(assertIdent, "assertIdent");
+var FA_AR_DIGITS = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669";
+function normalizeDigits(input) {
+  return input.replace(/[۰-۹٠-٩]/g, (ch) => String(FA_AR_DIGITS.indexOf(ch) % 10));
+}
+__name(normalizeDigits, "normalizeDigits");
+function toByteView(v) {
+  if (v instanceof Uint8Array) return v;
+  if (v instanceof ArrayBuffer) return new Uint8Array(v);
+  if (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "number")) {
+    return Uint8Array.from(v);
+  }
+  return null;
+}
+__name(toByteView, "toByteView");
 function encodeValue(v) {
-  if (v instanceof Uint8Array) {
+  const bytes = toByteView(v);
+  if (bytes) {
     let bin = "";
     const CH = 32768;
-    for (let i = 0; i < v.length; i += CH) bin += String.fromCharCode(...v.subarray(i, i + CH));
+    for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode(...bytes.subarray(i, i + CH));
     return btoa(bin);
   }
   return v ?? null;
@@ -38625,7 +38641,7 @@ function createBackupService(deps) {
     return input.map((raw2) => {
       const d = raw2 ?? {};
       const label = typeof d.label === "string" ? d.label.trim() : "";
-      const chatId = typeof d.chat_id === "string" ? d.chat_id.trim() : "";
+      const chatId = normalizeDigits(typeof d.chat_id === "string" ? d.chat_id.trim() : "");
       if (!label || label.length > 60) {
         throw new ValidationError("\u0647\u0631 \u0645\u0642\u0635\u062F \u0628\u0627\u06CC\u062F \u06CC\u06A9 \u0646\u0627\u0645 \u06A9\u0648\u062A\u0627\u0647 \u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F (\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F6\u06F0 \u0646\u0648\u06CC\u0633\u0647)");
       }
@@ -38817,6 +38833,23 @@ function createBackupService(deps) {
     if (unknownInFile.length > 0) {
       problems.push(`\u0627\u06CC\u0646 \u062C\u062F\u0648\u0644\u200C\u0647\u0627 \u062F\u0631 \u067E\u0627\u06CC\u06AF\u0627\u0647 \u062F\u0627\u062F\u0647\u0654 \u0641\u0639\u0644\u06CC \u0648\u062C\u0648\u062F \u0646\u062F\u0627\u0631\u0646\u062F (\u0646\u0633\u062E\u0647\u0654 \u0627\u0633\u06A9\u06CC\u0645\u0627 \u062A\u0641\u0627\u0648\u062A \u062F\u0627\u0631\u062F): ${unknownInFile.join("\u060C ")}`);
     }
+    for (const name of fileTables) {
+      if (SKIP_RESTORE_TABLES.has(name) || !current.includes(name)) continue;
+      const info = await db.query(
+        `PRAGMA table_info("${name}")`
+      );
+      const required = info.filter((c) => c.notnull === 1 && (c.dflt_value === null || c.dflt_value === void 0)).map((c) => c.name);
+      if (required.length === 0) continue;
+      const missing = /* @__PURE__ */ new Set();
+      for (const row of env.tables[name]?.rows ?? []) {
+        for (const col of required) if (!(col in row)) missing.add(col);
+      }
+      if (missing.size > 0) {
+        problems.push(
+          `\u062C\u062F\u0648\u0644 \xAB${name}\xBB: \u0627\u06CC\u0646 \u0633\u062A\u0648\u0646\u200C\u0647\u0627\u06CC \u0627\u0644\u0632\u0627\u0645\u06CC \u062F\u0631 \u0631\u062F\u06CC\u0641\u200C\u0647\u0627\u06CC \u0641\u0627\u06CC\u0644 \u0646\u06CC\u0633\u062A (${[...missing].join("\u060C ")}) \u2014 \u0641\u0627\u06CC\u0644 \u0627\u0632 \u0646\u0633\u062E\u0647\u0654 \u0642\u062F\u06CC\u0645\u06CC\u200C\u062A\u0631\u06CC \u0627\u0633\u062A`
+        );
+      }
+    }
     const tables = fileTables.map((name) => ({
       name,
       rows: (env.tables[name]?.rows ?? []).length
@@ -38836,7 +38869,7 @@ function createBackupService(deps) {
     };
   }
   __name(buildSummary2, "buildSummary");
-  async function restoreTable(table, data, warnings) {
+  async function insertTableRows(table, data, warnings) {
     assertIdent(table);
     const cols = await tableColumns(table);
     if (cols.length > MAX_COLUMNS) {
@@ -38849,16 +38882,16 @@ function createBackupService(deps) {
     if (fileExtra.size > 0) {
       warnings.push(`\u062C\u062F\u0648\u0644 \xAB${table}\xBB: \u0633\u062A\u0648\u0646\u200C\u0647\u0627\u06CC \u0646\u0627\u0634\u0646\u0627\u062E\u062A\u0647\u0654 \u0641\u0627\u06CC\u0644 \u0646\u0627\u062F\u06CC\u062F\u0647 \u06AF\u0631\u0641\u062A\u0647 \u0634\u062F (${[...fileExtra].join("\u060C ")})`);
     }
+    if (data.rows.length === 0) return { restoredRows: 0, skippedColumns: [...fileExtra] };
     const colList = cols.map((c) => `"${c}"`).join(", ");
     const placeholders = cols.map(() => "?").join(", ");
     const insertSql = `INSERT INTO "${table}" (${colList}) VALUES (${placeholders})`;
     const selfRef = await hasSelfReference(table);
     let batch = [db.prepare("PRAGMA defer_foreign_keys = ON")];
-    batch.push(db.prepare(`DELETE FROM "${table}"`));
     let paramBytes = 0;
     let restored = 0;
-    const flush = /* @__PURE__ */ __name(async (isLast = false) => {
-      if (batch.length <= 1 && !isLast) return;
+    const flush = /* @__PURE__ */ __name(async () => {
+      if (batch.length <= 1) return;
       try {
         await db.batch(batch);
       } catch (err) {
@@ -38885,10 +38918,10 @@ function createBackupService(deps) {
         await flush();
       }
     }
-    await flush(true);
+    await flush();
     return { restoredRows: restored, skippedColumns: [...fileExtra] };
   }
-  __name(restoreTable, "restoreTable");
+  __name(insertTableRows, "insertTableRows");
   const service = {
     async getStatus() {
       const tables = await listTables();
@@ -38914,49 +38947,59 @@ function createBackupService(deps) {
     buildExportStream(includeFiles) {
       const encoder2 = new TextEncoder();
       const excluded = includeFiles ? [] : [FILES_TABLE];
-      const stream = new ReadableStream({
-        async start(controller) {
-          const push = /* @__PURE__ */ __name((s) => controller.enqueue(encoder2.encode(s)), "push");
-          try {
-            const allTables = await listTables();
-            const tables = allTables.filter((t) => !excluded.includes(t));
-            const head = JSON.stringify({
-              format: BACKUP_FORMAT,
-              format_version: BACKUP_FORMAT_VERSION,
-              app_version: APP_VERSION,
-              milestone: APP_MILESTONE,
-              created_at: (/* @__PURE__ */ new Date()).toISOString(),
-              include_files: includeFiles,
-              excluded_tables: excluded
-            });
-            push(`${head.slice(0, -1)},"tables":{`);
-            for (let i = 0; i < tables.length; i++) {
-              const t = tables[i];
-              const count = await rowCount(t);
-              push(`${i > 0 ? "," : ""}"${t}":{"row_count":${count},"rows":[`);
-              for (let offset = 0; ; offset += PAGE_SIZE) {
-                const rows = await db.query(
-                  `SELECT * FROM "${t}" LIMIT ${PAGE_SIZE} OFFSET ${offset}`
-                );
-                if (rows.length === 0) break;
-                for (let r = 0; r < rows.length; r++) {
-                  const clean = {};
-                  for (const [k, v] of Object.entries(rows[r])) clean[k] = encodeValue(v);
-                  push(`${r > 0 || offset > 0 ? "," : ""}${JSON.stringify(clean)}`);
-                }
-                if (rows.length < PAGE_SIZE) break;
-              }
-              push("]}");
+      async function* exportGen() {
+        const allTables = await listTables();
+        const tables = allTables.filter((t) => !excluded.includes(t));
+        const head = JSON.stringify({
+          format: BACKUP_FORMAT,
+          format_version: BACKUP_FORMAT_VERSION,
+          app_version: APP_VERSION,
+          milestone: APP_MILESTONE,
+          created_at: (/* @__PURE__ */ new Date()).toISOString(),
+          include_files: includeFiles,
+          excluded_tables: excluded
+        });
+        yield `${head.slice(0, -1)},"tables":{`;
+        for (let i = 0; i < tables.length; i++) {
+          const t = tables[i];
+          const count = await rowCount(t);
+          yield `${i > 0 ? "," : ""}"${t}":{"row_count":${count},"rows":[`;
+          let emitted = 0;
+          const page = t === FILES_TABLE ? FILES_PAGE_SIZE : PAGE_SIZE;
+          for (let offset = 0; ; offset += page) {
+            const rows = await db.query(
+              `SELECT * FROM "${t}" LIMIT ${page} OFFSET ${offset}`
+            );
+            if (rows.length === 0) break;
+            for (const r of rows) {
+              const clean = {};
+              for (const [k, v] of Object.entries(r)) clean[k] = encodeValue(v);
+              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean)}`;
+              emitted += 1;
             }
-            push("}}");
-            controller.close();
+            if (rows.length < page) break;
+          }
+          yield "]}";
+        }
+        yield "}}";
+      }
+      __name(exportGen, "exportGen");
+      const it = exportGen();
+      return new ReadableStream({
+        async pull(controller) {
+          try {
+            const { value, done } = await it.next();
+            if (done) controller.close();
+            else controller.enqueue(encoder2.encode(value));
           } catch (err) {
             logger.error("backup.export.failed", { error: err instanceof Error ? err.message : String(err) });
             controller.error(err);
           }
+        },
+        cancel() {
+          void it.return(void 0);
         }
       });
-      return stream;
     },
     async inspect(input) {
       return buildSummary2(input);
@@ -38991,29 +39034,37 @@ function createBackupService(deps) {
       const warnings = [];
       const reportTables = [];
       let totalRows = 0;
+      const wipe = [db.prepare("PRAGMA defer_foreign_keys = ON")];
+      for (const t of target) wipe.push(db.prepare(`DELETE FROM "${assertIdent(t)}"`));
+      try {
+        await db.batch(wipe);
+      } catch (err) {
+        logger.error("backup.restore.wipe_failed", {
+          tables: target.length,
+          error: err instanceof Error ? err.message : String(err)
+        });
+        throw new ValidationError(
+          `\u067E\u0627\u06A9\u200C\u0633\u0627\u0632\u06CC \u062F\u0627\u062F\u0647\u200C\u0647\u0627\u06CC \u0641\u0639\u0644\u06CC \u0628\u0631\u0627\u06CC \u0628\u0627\u0632\u06CC\u0627\u0628\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
       const levels = await topoLevels(target);
       for (const level of levels) {
         if (level.merged && level.tables.length > 1) {
           const batch = [db.prepare("PRAGMA defer_foreign_keys = ON")];
-          const projected = [];
           for (const t of level.tables) {
             const cols = await tableColumns(t);
-            batch.push(db.prepare(`DELETE FROM "${t}"`));
-            projected.push({ table: t, cols, rows: env.tables[t]?.rows ?? [] });
-          }
-          for (const p of projected) {
-            const colList = p.cols.map((c) => `"${c}"`).join(", ");
-            const placeholders = p.cols.map(() => "?").join(", ");
-            for (const row of p.rows) {
+            const colList = cols.map((c) => `"${c}"`).join(", ");
+            const placeholders = cols.map(() => "?").join(", ");
+            for (const row of env.tables[t]?.rows ?? []) {
               batch.push(
                 db.prepare(
-                  `INSERT INTO "${p.table}" (${colList}) VALUES (${placeholders})`,
-                  p.cols.map((c) => encodeValue(row[c]))
+                  `INSERT INTO "${t}" (${colList}) VALUES (${placeholders})`,
+                  cols.map((c) => encodeValue(row[c]))
                 )
               );
               totalRows += 1;
             }
-            reportTables.push({ name: p.table, restoredRows: p.rows.length, skippedColumns: [] });
+            reportTables.push({ name: t, restoredRows: (env.tables[t]?.rows ?? []).length, skippedColumns: [] });
           }
           try {
             await db.batch(batch);
@@ -39025,7 +39076,7 @@ function createBackupService(deps) {
           continue;
         }
         for (const t of level.tables) {
-          const res = await restoreTable(t, env.tables[t] ?? { rows: [] }, warnings);
+          const res = await insertTableRows(t, env.tables[t] ?? { rows: [] }, warnings);
           totalRows += res.restoredRows;
           reportTables.push({ name: t, restoredRows: res.restoredRows, skippedColumns: res.skippedColumns });
         }

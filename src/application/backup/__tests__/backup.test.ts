@@ -196,6 +196,87 @@ describe('پشتیبان‌گیری — ستون‌های ناشناخته', () 
   });
 });
 
+// ─── m181 — رگرسیون‌های دیباگ روی دادهٔ واقعی پروداکشن ───
+
+describe('پشتیبان‌گیری — رگرسیون‌های بازیابی واقعی (m181)', () => {
+  it('جدول والدِ چندچانکه (بیش از ۳۰ ردیف) با فرزندِ ارجاع‌دهنده به چانک بعدی بازیابی می‌شود', async () => {
+    // ریشهٔ خطای «FOREIGN KEY constraint failed» در پروداکشن: کد قدیم DELETE+INSERT
+    // هر جدول را جداگانه می‌کرد؛ فرزندان قدیمی به والدِ حذف‌شدهٔ چانک بعدی برمی‌خوردند.
+    const t = createTestApp();
+    t.sql.exec(`
+      CREATE TABLE zz_many_parent (id TEXT PRIMARY KEY, label TEXT NOT NULL);
+      CREATE TABLE zz_many_child (id TEXT PRIMARY KEY, parent_id TEXT NOT NULL REFERENCES zz_many_parent(id));
+    `);
+    const inserts: string[] = [];
+    for (let i = 1; i <= 35; i++) {
+      inserts.push(`INSERT INTO zz_many_parent (id, label) VALUES ('p${String(i).padStart(2, '0')}', 'والد ${i}');`);
+    }
+    // فرزند به ردیف ۳۳ ارجاع دارد — بیرون از چانک اولِ ۳۰تایی
+    inserts.push(`INSERT INTO zz_many_child (id, parent_id) VALUES ('c1', 'p33');`);
+    t.sql.exec(inserts.join('\n'));
+
+    const manager = await asRole(t, 'manager');
+    const backup = (await manager.get('/api/backup/export')).body;
+    const res = await manager.post('/api/backup/restore', { backup, confirm: true });
+    expect(res.status).toBe(200);
+    expect((t.sql.prepare('SELECT COUNT(*) AS c FROM zz_many_parent').get() as { c: number }).c).toBe(35);
+    expect((t.sql.prepare('SELECT COUNT(*) AS c FROM zz_many_child').get() as { c: number }).c).toBe(1);
+  });
+
+  it('تاریخچهٔ مهاجرت‌های D1 (d1_migrations) در بازیابی دست نمی‌خورد', async () => {
+    const t = createTestApp();
+    t.sql.exec(`
+      CREATE TABLE d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL);
+      INSERT INTO d1_migrations (name) VALUES ('0001_initial.sql');
+      INSERT INTO d1_migrations (name) VALUES ('0002_notifications.sql');
+    `);
+    const manager = await asRole(t, 'manager');
+    const backup = (await manager.get('/api/backup/export')).body;
+    // بعد از پشتیبان، یک مهاجرت جدید «اعمال» می‌شود
+    t.sql.exec(`INSERT INTO d1_migrations (name) VALUES ('0003_new_migration.sql');`);
+    const res = await manager.post('/api/backup/restore', { backup, confirm: true });
+    expect(res.status).toBe(200);
+    const rows = t.sql.prepare('SELECT name FROM d1_migrations ORDER BY id').all() as { name: string }[];
+    // مهاجرت‌های قدیمی حفظ می‌شوند (پشتیبان) و مهاجرتِ بعد از پشتیبان هم پاک نمی‌شود (skip)
+    expect(rows.map((r) => r.name)).toContain('0002_notifications.sql');
+    expect(rows.map((r) => r.name)).toContain('0003_new_migration.sql');
+  });
+
+  it('آیدی بله با ارقام فارسی پذیرفته و لاتین ذخیره می‌شود', async () => {
+    const t = createTestApp();
+    const manager = await asRole(t, 'manager');
+    const res = await manager.put('/api/backup/delivery', {
+      destinations: [{ id: '', label: 'مدیر مرکز', chat_id: '۱۲۳۴۵۶۷۸۹', active: true }],
+      auto_send: { enabled: false, destination_ids: [], include_files: false }
+    });
+    expect(res.status).toBe(200);
+    const data = (res.body as { data: { destinations: { chat_id: string }[] } }).data;
+    expect(data.destinations[0].chat_id).toBe('123456789');
+  });
+
+  it('فایل ناقص (ستون الزامی غایب) را قبل از هر نوشتنی رد می‌کند', async () => {
+    const t = createTestApp();
+    const manager = await asRole(t, 'manager');
+    const backup = (await manager.get('/api/backup/export')) as unknown as { body: { tables: Record<string, { rows: Record<string, unknown>[] }> } };
+    // national_id در students «NOT NULL بدون پیش‌فرض» است — حذفش یعنی فایل ناقص
+    const students = backup.body.tables.students;
+    expect(students.rows.length).toBeGreaterThan(0);
+    delete students.rows[0].national_id;
+
+    const inspect = await manager.post('/api/backup/inspect', backup.body);
+    expect(inspect.status).toBe(200);
+    const summary = (inspect.body as { data: { schemaCompatible: boolean; problems: string[] } }).data;
+    expect(summary.schemaCompatible).toBe(false);
+    expect(summary.problems.join(' ')).toContain('national_id');
+
+    const res = await manager.post('/api/backup/restore', { backup: backup.body, confirm: true });
+    expect(res.status).toBe(400);
+    // دیتابیس دست‌نخورده مانده باشد
+    const after = await manager.get('/api/students');
+    expect((after.body as { data: unknown[] }).data.length).toBeGreaterThan(0);
+  });
+});
+
 // ─── m180 — ارسال پشتیبان به آیدی بله (مقصد انتخابی) ───
 
 describe('ارسال پشتیبان به بله — مقصدها', () => {
