@@ -12,6 +12,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
+    "typecheck:server": "tsc -p tsconfig.node-server.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "migrate:local": "wrangler d1 migrations apply center-system-db --local",
@@ -19,17 +20,21 @@
     "seed:local": "wrangler d1 execute center-system-db --local --file=scripts/seed-dev.sql",
     "bootstrap": "wrangler d1 execute center-system-db --local --file=scripts/bootstrap.sql",
     "bootstrap:remote": "wrangler d1 execute center-system-db --remote --file=scripts/bootstrap.sql",
+    "build:selfhost": "node scripts/build-selfhost.mjs",
+    "start:selfhost": "node dist/server.js",
     "update": "node scripts/update-remote.mjs",
     "update:dry": "node scripts/update-remote.mjs --dry-run",
     "backup:remote": "node scripts/update-remote.mjs --backup-only"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.5",
     "hono": "^4.6.14",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250109.0",
     "@types/node": "^22.20.5",
+    "esbuild": "^0.28.2",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8",
     "wrangler": "^3.99.0"

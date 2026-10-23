@@ -249,3 +249,25 @@ Work Log:
 Stage Summary:
 - تولید: 1.00.57 / m182 — ریشهٔ اصلی «پنل پشتیبان باز نمی‌شود» جدول داخلی _cf_KV خودِ D1 بود؛ status/export/inspect/restore همه از فیلتر سیستمی عبور می‌کنند و پنل روی پروداکشن واقعی سبز است
 - درس: آزمون ماژول‌های D1 باید یا روی binding واقعی ورکر باشد یا جدول‌های داخلی D1 (_cf_%) را شبیه‌سازی کند؛ محیط محلی (node:sqlite/miniflare) این محافظت را ندارد
+
+Task ID: 12 (dockerize-selfhost)
+Agent: main (Z.ai)
+Task: «تو گیت ها یه نسخه داکرایز شده اماده ران روی لوکال یا سرور شخصی بزارم برای کسایی که نمیخوان از کلاد فلر استفاده کنن + دستورالعمل راه‌اندازی»
+
+Work Log:
+- نقطهٔ شروع: طرح m173 (docs/DOCKERIZE.md) — فاز ۱ و ۲ همان طرح اجرا شد (اجرای نیتیو Node، نه مسیر موقت miniflare)
+- src/core/db/node-d1.ts — درایور D1-سازگار روی node:sqlite (WAL + foreign_keys + busy_timeout؛ پاریتی کامل قرارداد MockD1 که ۱۳۰۵ تست روی آن سبز است؛ بایند Uint8Array→BLOB parity با D1 واقعی)
+- src/core/db/selfhost-migrate.ts — runner مهاجرت با جدول _selfhost_migrations + حالت هوشمند «dump کامل D1 موجود → ثبت بدون اجرا» (جلوگیری از ALTER تکراری پس از d1 export/import)
+- server/ — node-main.ts (serve@hono/node-server → استاتیک → worker.fetch با env سازگار Workers)، static.ts (پارسر واقعی public/_headers + ETag/304 + ضد traversal)، crons.ts (۴ عبارت پروداکشن از REMINDER_CRONS/BATCH_CRON/DIGEST_CRON با UTC پاریتی + تریگر دستی CRON_MANUAL)، cli.ts (migrate/sql/status برای bootstrap و بازیابی dump)، env.ts
+- scripts/build-selfhost.mjs — esbuild bundle → dist/server.js (2.1MB خودکفا بدون node_modules) + dist/cli.js
+- دودآزمایی زنده: ۶۹ مهاجرت خودکار ✓، /health ✓، کش پوسته/JS/SW دقیقاً مطابق _headers ✓، 304 ✓، 404 JSON پاریتی worker ✓، bootstrap→login manager/1234→JWT→/api/me ✓، zod validation روی POST ✓، کرون دستی ✓، cli status (۵۷ جدول) ✓، خاموشی نرم + WAL ✓
+- داکر: Dockerfile (دو مرحله‌ای node:24-bookworm-slim، کاربر غیر-root، HEALTHCHECK بدون curl) + docker-compose.yml (پورت فقط localhost، volume appdata) + اورلی docker-compose.caddy.yml + Caddyfile (TLS خودکار) + .env.selfhost.example + .dockerignore
+- راهنما: docs/SELF-HOST.fa.md (۱۳ بخش: شروع سریع، روز صفر، انتقال d1 export، بات بله/setWebhook، پشتیبان‌گیری VACUUM INTO، آپدیت، اجرای بدون Docker، عیب‌یابی) + بخش سلف‌هاست در README + نوار وضعیت پیاده‌سازی در DOCKERIZE.md
+- تست: +۱۶ تست جدید (node-d1/selfhost-migrate ۶، static ۷، crons ۳) — مجموع ۱۳۲۱/۱۳۲۱ ✓ · tsc src 0 ✓ · tsc server 0 ✓ (tsconfig.node-server.json + script typecheck:server)
+- وابستگی‌ها: @hono/node-server (dep)، esbuild (devDep) — wrangler/workerd در ایمیج ران‌تایم وجود ندارد
+- تغییرات از پیش موجود دست‌نخورده ماند: worklog (جلسهٔ m177) و تغییر صفر-بایتی 0067 — کامیت نشدند با این کار
+
+Stage Summary:
+- نسخهٔ سلف‌هاست آمادهٔ ران: git clone → cp .env.selfhost.example .env → docker compose up -d --build → localhost:3000 (۴ دستور)
+- پاریتی با پروداکشن: همان src/index.ts (fetch+scheduled)، همان _headers، همان ۴ کرون، همان مهاجرت‌ها؛ ۱۳۲۱ تست سبز
+- commit اضافه شد و به origin/main پوش شد؛ نسخهٔ اپ تغییر نکرد (بدون bump چهارگانه — کد اپ دست نخورده)

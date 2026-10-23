@@ -13,8 +13,22 @@
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers%20%2B%20D1-F38020?logo=cloudflare&logoColor=white)](wrangler.toml)
-[![Tests](https://img.shields.io/badge/tests-1083%20passed-brightgreen)](package.json)
+[![Tests](https://img.shields.io/badge/tests-1321%20passed-brightgreen)](package.json)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Self-host: Docker](https://img.shields.io/badge/self--host-Docker-2496ED?logo=docker&logoColor=white)](docs/SELF-HOST.fa.md)
+
+## اجرای بدون Cloudflare (Docker / سرور شخصی)
+
+سامانه دو بستر دارد: **Cloudflare Workers + D1** (استقرار ابری) و **Node.js + SQLite داخل Docker**
+(سرور شخصی/لوکال) — با همان کد و همان رفتار:
+
+```bash
+cp .env.selfhost.example .env
+docker compose up -d --build      # → http://localhost:3000
+```
+
+راهنمای کامل راه‌اندازی، انتقال داده از Cloudflare، بات بله و پشتیبان‌گیری:
+**[docs/SELF-HOST.fa.md](docs/SELF-HOST.fa.md)** · طرح فنی: [docs/DOCKERIZE.md](docs/DOCKERIZE.md)
 
 ## ماژول‌های سامانه
 
