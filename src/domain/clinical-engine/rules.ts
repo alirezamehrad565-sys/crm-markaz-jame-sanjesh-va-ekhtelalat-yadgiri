@@ -14,7 +14,7 @@ export const CONFIDENCE_THRESHOLDS = { medium: 2, high: 3.5 } as const;
 
 export const ODD_MIN_FULL_CRITERIA = 4;
 export const ASD_B_FULL_CRITERIA = 2;
-export const SCARED_SCHOOL_CUTOFF = 1;
+export const SCARED_SCHOOL_CUTOFF = 3;
 export const BIF_IQ_RANGE = { min: 70, max: 85 } as const;
 
 export { FSIQ_BAND_RANGES, fsiqBandOf, fsiqBandFaOf } from './signals';
@@ -99,10 +99,10 @@ export const RULES: RuleSet[] = [
     targetKey: 'adhd',
     batteryVersion: 'battery-v1',
     evidence: [
-      { kind: 'instrument', toolKey: 'ce-snap-iv-p-v1', subscaleId: 'ia', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'نمرهٔ کم‌توجهی در فرم والد بالای برش (صدک ۹۵) است.' },
-      { kind: 'instrument', toolKey: 'ce-snap-iv-p-v1', subscaleId: 'hi', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'نمرهٔ بیش‌فعالی/تکانشگری در فرم والد بالای برش است.' },
-      { kind: 'instrument', toolKey: 'ce-snap-iv-t-v1', subscaleId: 'ia', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'نمرهٔ کم‌توجهی در فرم معلم بالای برش است.' },
-      { kind: 'instrument', toolKey: 'ce-snap-iv-t-v1', subscaleId: 'hi', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'نمرهٔ بیش‌فعالی/تکانشگری در فرم معلم بالای برش است.' },
+      { kind: 'instrument', toolKey: 'ce-snap-iv-p-v1', subscaleId: 'ia', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'نمرهٔ کم‌توجهی در فرم والد بالای حد انتظار است.' },
+      { kind: 'instrument', toolKey: 'ce-snap-iv-p-v1', subscaleId: 'hi', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'نمرهٔ بیش‌فعالی/تکانشگری در فرم والد بالای حد انتظار است.' },
+      { kind: 'instrument', toolKey: 'ce-snap-iv-t-v1', subscaleId: 'ia', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'نمرهٔ کم‌توجهی در فرم معلم بالای حد انتظار است.' },
+      { kind: 'instrument', toolKey: 'ce-snap-iv-t-v1', subscaleId: 'hi', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'نمرهٔ بیش‌فعالی/تکانشگری در فرم معلم بالای حد انتظار است.' },
       { kind: 'sdq', toolKey: 'sdq-parent', subscaleId: 'hyper', band: 'danger', weight: EVIDENCE_WEIGHTS.sdqDanger, fa: 'زیرمقیاس بیش‌فعالی SDQ والد قابل توجه است.' },
       { kind: 'sdq', toolKey: 'ce-sdq-t-v1', subscaleId: 'hyper', band: 'danger', weight: EVIDENCE_WEIGHTS.sdqDanger, fa: 'زیرمقیاس بیش‌فعالی SDQ معلم قابل توجه است.' }
     ],
@@ -147,9 +147,9 @@ export const RULES: RuleSet[] = [
     targetKey: 'speech_language',
     batteryVersion: 'battery-v1',
     evidence: [
-      { kind: 'instrument', toolKey: 'ce-speech-criteria-v1', subscaleId: 'lang', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'فهم/ساخت زبان بالای برش گزارش شده است.' },
-      { kind: 'instrument', toolKey: 'ce-speech-criteria-v1', subscaleId: 'speech', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'تلفظ اصوات بالای برش گزارش شده است.' },
-      { kind: 'instrument', toolKey: 'ce-speech-criteria-v1', subscaleId: 'fluency', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'روانی گفتار بالای برش گزارش شده است.' }
+      { kind: 'instrument', toolKey: 'ce-speech-criteria-v1', subscaleId: 'lang', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'فهم/ساخت زبان بالای حد انتظار گزارش شده است.' },
+      { kind: 'instrument', toolKey: 'ce-speech-criteria-v1', subscaleId: 'speech', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'تلفظ اصوات بالای حد انتظار گزارش شده است.' },
+      { kind: 'instrument', toolKey: 'ce-speech-criteria-v1', subscaleId: 'fluency', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'روانی گفتار بالای حد انتظار گزارش شده است.' }
     ],
     consensus: { parent: 'ce-speech-criteria-v1', teacher: 'ce-speech-criteria-v1' },
     criteriaMap: [
@@ -168,8 +168,8 @@ export const RULES: RuleSet[] = [
     targetKey: 'anxiety',
     batteryVersion: 'battery-v1',
     evidence: [
-      { kind: 'instrument', toolKey: 'ce-scared-p-v1', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'نمرهٔ کل SCARED بالای برش ۲۵ است.' },
-      { kind: 'instrument', toolKey: 'ce-scared-p-v1', subscaleId: 'gad', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'عامل اضطراب فراگیر بالای برش است.' },
+      { kind: 'instrument', toolKey: 'ce-scared-p-v1', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'نمرهٔ کل SCARED بالای مرز ۲۵ است.' },
+      { kind: 'instrument', toolKey: 'ce-scared-p-v1', subscaleId: 'gad', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'عامل اضطراب فراگیر بالای حد انتظار است.' },
       { kind: 'sdq', toolKey: 'sdq-parent', subscaleId: 'emo', band: 'danger', weight: EVIDENCE_WEIGHTS.sdqDanger, fa: 'زیرمقیاس هیجانی SDQ والد قابل توجه است.' },
       { kind: 'sdq', toolKey: 'ce-sdq-t-v1', subscaleId: 'emo', band: 'danger', weight: EVIDENCE_WEIGHTS.sdqDanger, fa: 'زیرمقیاس هیجانی SDQ معلم قابل توجه است.' },
       { kind: 'anamnesis', toolKey: 'ce-anamnesis-v2', band: 'danger', weight: EVIDENCE_WEIGHTS.anamnesisFlag, fa: 'نشانهٔ جسمانی صبحگاهی بدون علت پزشکی در شرح حال ثبت شده است.' }
@@ -190,8 +190,8 @@ export const RULES: RuleSet[] = [
     targetKey: 'motor_coordination',
     batteryVersion: 'battery-v1',
     evidence: [
-      { kind: 'instrument', toolKey: 'ce-dcdq-v1', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'نمرهٔ کل DCDQ پایین‌تر از برش سنی است.' },
-      { kind: 'instrument', toolKey: 'ce-dcdq-v1', band: 'warn', weight: EVIDENCE_WEIGHTS.instrumentWarn, fa: 'نمرهٔ کل DCDQ در ناحیهٔ مرزی سنی است.' }
+      { kind: 'instrument', toolKey: 'ce-dcdq-v1', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'نمرهٔ کل DCDQ پایین‌تر از مرزِ گروه سنی است.' },
+      { kind: 'instrument', toolKey: 'ce-dcdq-v1', band: 'warn', weight: EVIDENCE_WEIGHTS.instrumentWarn, fa: 'نمرهٔ کل DCDQ بسته به سن در بازهٔ مرزی است — با مرزِ گروه سنی مقایسه شود.' }
     ],
     consensus: undefined,
     criteriaMap: [
@@ -208,9 +208,9 @@ export const RULES: RuleSet[] = [
     targetKey: 'odd',
     batteryVersion: 'battery-v1',
     evidence: [
-      { kind: 'instrument', toolKey: 'ce-odd-criteria-v1', subscaleId: 'crita', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'الگوی مقابله‌گری بالای برش گزارش شده است.' },
+      { kind: 'instrument', toolKey: 'ce-odd-criteria-v1', subscaleId: 'crita', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: 'الگوی مقابله‌گری بالای حد انتظار گزارش شده است.' },
       { kind: 'instrument', toolKey: 'ce-odd-criteria-v1', subscaleId: 'crita', band: 'warn', weight: EVIDENCE_WEIGHTS.instrumentWarn, fa: 'چند ملاک مقابله‌گری با نمرهٔ کامل گزارش شده است.' },
-      { kind: 'instrument', toolKey: 'ce-snap-iv-p-v1', subscaleId: 'odd', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentWarn, fa: 'زیرمقیاس نافرمانی SNAP-IV والد بالای برش است.' },
+      { kind: 'instrument', toolKey: 'ce-snap-iv-p-v1', subscaleId: 'odd', band: 'danger', weight: EVIDENCE_WEIGHTS.instrumentWarn, fa: 'زیرمقیاس نافرمانی SNAP-IV والد بالای حد انتظار است.' },
       { kind: 'sdq', toolKey: 'sdq-parent', subscaleId: 'cond', band: 'danger', weight: EVIDENCE_WEIGHTS.sdqDanger, fa: 'زیرمقیاس رفتاری SDQ والد قابل توجه است.' }
     ],
     consensus: { parent: 'ce-odd-criteria-v1', teacher: 'ce-odd-criteria-v1' },

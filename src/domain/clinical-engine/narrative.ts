@@ -9,7 +9,7 @@ const CERTAINTY_WORDS = ['قطعاً', 'بلاشک', 'حتماً تشخیص', '�
 
 export function assertPlainTone(text: string): void {
   for (const w of CERTAINTY_WORDS) {
-    if (text.includes(w)) throw new Error(`لحن ساده: واژهٔ ممنوع «${w}» در متن موتور`);
+    if (text.includes(w)) throw new Error(`لحن ساده: واژهٔ ممنوع «${w}» در متن خروجی`);
   }
 }
 

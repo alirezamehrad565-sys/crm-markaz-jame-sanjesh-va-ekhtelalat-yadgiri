@@ -913,7 +913,7 @@ export function analyzeProbe(area: ProbeArea, v: Record<string, string | number>
     if (v.errors !== undefined) {
       metrics.push({ value: `${faNumProbe(Number(v.errors))} خطا`, label: 'خطای خواندن در همان دقیقه' });
     }
-    const normFa = `انتظار پایهٔ ${grade} — صدک ۵۰ مرجع (Hasbrouck & Tindal 2017): ${faNumProbe(norm)} واژه درست در دقیقه`;
+    const normFa = `انتظار پایهٔ ${grade}: حدود ${faNumProbe(norm)} واژه درست در دقیقه (هنجار داخلی مرکز — برای پیگیری پیشرفت)`;
     return { pct, band, metrics, flags, normFa, faSummary: `آزمون خواندن: ${faNumProbe(pct)}٪ انتظار پایهٔ ${grade} — ${band.label}` };
   }
 
@@ -938,7 +938,7 @@ export function analyzeProbe(area: ProbeArea, v: Record<string, string | number>
     if (visual > 0) metrics.push({ value: faNumProbe(visual), label: 'خطای شباهت حروف' });
     if (rule > 0) metrics.push({ value: faNumProbe(rule), label: 'خطای نگارشی' });
     if (fluPct < 80) flags.push({ key: 'alpha15s', label: `روانی نوشتن پایین‌تر از انتظار پایه (${faNumProbe(fluPct)}٪)`, value: alpha });
-    const normFa = `انتظار پایهٔ ${grade}: ${faNumProbe(norm)} حرف درست در ۱۵ ثانیه (برآورد اولیه — کالیبراسیون با دادهٔ مرکز)`;
+    const normFa = `انتظار پایهٔ ${grade}: حدود ${faNumProbe(norm)} حرف درست در ۱۵ ثانیه (هنجار داخلی مرکز — برای پیگیری پیشرفت)`;
     const head = spellPct >= 0 && spellPct <= 100
       ? `${faNumProbe(spellPct)}٪`
       : `بیش از انتظار — ${faNumProbe(totalErr)} خطا از ${faNumProbe(words)} واژه`;
@@ -966,7 +966,7 @@ export function analyzeProbe(area: ProbeArea, v: Record<string, string | number>
   else if ((compareErr >= 4 || nlPct >= 15 || support === 'زیاد') && band === PROBE_BANDS[2]) band = PROBE_BANDS[1];
   if (compareErr >= 4) flags.push({ key: 'compare_errors', label: `مقایسهٔ مقدار ضعیف (${faNumProbe(compareErr)} خطا از ۱۰)`, value: compareErr });
   if (nlPct >= 25) flags.push({ key: 'number_line_pct', label: `برآورد خط عددی ضعیف (${faNumProbe(nlPct)}٪ خطا)`, value: nlPct });
-  const normFa = `انتظار پایهٔ ${grade}: ${faNumProbe(norm)} رقم درست در دو دقیقه (برآورد اولیه — کالیبراسیون با دادهٔ مرکز)`;
+  const normFa = `انتظار پایهٔ ${grade}: حدود ${faNumProbe(norm)} رقم درست در دو دقیقه (هنجار داخلی مرکز — برای پیگیری پیشرفت)`;
   return { pct, band, metrics, flags, normFa, faSummary: `آزمون حساب: ${faNumProbe(pct)}٪ انتظار پایهٔ ${grade} — ${band.label}` };
 }
 
@@ -982,7 +982,7 @@ export function buildProbePayload(area: ProbeArea, v: Record<string, string | nu
     payload[`chip_metric_${i + 1}`] = { value: m.value, label: m.label };
   });
   payload['chip_band'] = { value: result.band.label, label: 'باند' };
-  payload['norm_fa'] = { value: result.normFa, label: 'هنجار مرجع' };
+  payload['norm_fa'] = { value: result.normFa, label: 'انتظار پایه (هنجار داخلی مرکز)' };
   payload['fa_summary'] = { value: result.faSummary, label: `خلاصهٔ آزمون ${PROBE_AREA_LABELS[area]}` };
   return payload;
 }

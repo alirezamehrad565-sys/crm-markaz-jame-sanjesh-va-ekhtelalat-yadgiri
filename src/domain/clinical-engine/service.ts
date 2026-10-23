@@ -228,7 +228,7 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     assertCanDecide(student, actor);
 
     const target = targetOf(input.targetKey);
-    if (!target) throw new ValidationError('هدف انتخابی در دانش‌نامهٔ موتور وجود ندارد');
+    if (!target) throw new ValidationError('هدف انتخابی در فهرست شناخته‌شدهٔ سامانه نیست');
 
     const events = await loadEvidenceEvents(studentId);
     const result = runInference(events, { now });
@@ -270,7 +270,7 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
 
     const note = input.note?.trim() ? input.note.trim().slice(0, DECISION_NOTE_MAX) : null;
     if (input.action === 'reject' && !note) {
-      throw new ValidationError('رد فرضیه بدون یادداشت مجاز نیست — دلیل رد برای کالیبراسیون موتور لازم است');
+      throw new ValidationError('رد فرضیه بدون یادداشت مجاز نیست — دلیل رد برای بهبود جمع‌بندی‌های بعدی لازم است');
     }
 
     let newStatus: InterventionPathStatus;
@@ -300,7 +300,7 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
       case 'edit':
         newStatus = 'reviewed';
         if (!input.targetKey) throw new ValidationError('اصلاح فرضیه بدون هدف جدید مجاز نیست');
-        if (!targetOf(input.targetKey)) throw new ValidationError('هدف جدید در دانش‌نامهٔ موتور وجود ندارد');
+        if (!targetOf(input.targetKey)) throw new ValidationError('هدف جدید در فهرست شناخته‌شدهٔ سامانه نیست');
         changes.target_key = { from: row.target_key, to: input.targetKey };
         targetKey = input.targetKey;
         break;

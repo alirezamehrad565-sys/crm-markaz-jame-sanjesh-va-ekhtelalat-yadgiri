@@ -2342,6 +2342,15 @@ tr.wl-row--urgent > td:first-child {
   cursor: pointer; text-align: right;
   transition: border-color .15s ease, background .15s ease;
 }
+/* — m176: کارت + پشتوانهٔ علمی در یک سلول — */
+.typegrid__cell { display: flex; flex-direction: column; min-width: 0; }
+.typegrid__cell > .typegrid__item { flex: 1; }
+.typegrid__cell:has(> .science-guide) > .typegrid__item { border-radius: 12px 12px 0 0; }
+.typegrid__cell > .science-guide {
+  margin-top: 0; border: 1px solid var(--border); border-top: 1px dashed var(--line);
+  border-radius: 0 0 12px 12px; padding: 7px 12px 9px; background: var(--surface);
+}
+.card__body > .science-guide { margin-top: var(--sp-3); }
 .typegrid__item:hover { border-color: var(--primary); background: var(--primary-soft); }
 .typegrid__icon {
   width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;

@@ -30,7 +30,7 @@ const STEP5_BADGE = {
 
 export function wechslerSourceBadge(engine) {
   return engine
-    ? el('span', { class: 'badge badge--accent' }, 'موتور')
+    ? el('span', { class: 'badge badge--accent' }, 'خودکار')
     : el('span', { class: 'badge badge--warning', title: GATE_GLOSS.wechsler.manualNote }, 'ثبت دستی');
 }
 
@@ -369,7 +369,7 @@ function renderProfile(view, { nested = false } = {}) {
   const head = el('div', { class: 'card__head' },
     el('div', { class: 'card__title', style: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' } },
       icon('brain', 16),
-      'نیم‌رخ وکسلر ۴ — تحلیل موتور',
+      'نیم‌رخ وکسلر ۴ — تحلیل خودکار',
       wechslerSourceBadge(view.engine)
     )
   );
