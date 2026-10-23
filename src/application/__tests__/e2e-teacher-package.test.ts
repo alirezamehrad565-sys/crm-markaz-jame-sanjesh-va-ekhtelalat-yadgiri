@@ -159,8 +159,8 @@ describe('فرم جامع معلم (ce-comp-teacher-v2) — پکیج + گره‌
     expect(html).toContain('بخش ۲ از ۴ — چک‌لیست توجه و بی‌قراری — فرم معلم (SNAP-IV)');
     expect(html).toContain('بخش ۳ از ۴ — پرسش‌نامهٔ رفتار کودک — فرم معلم (SDQ)');
     expect(html).toContain('بخش ۴ از ۴ — ملاک‌های کلاسی خواندن/نوشتن/حساب — فرم معلم');
-    expect(html).toContain('در دیکته، خطای حذف یا جابه‌جایی حرف‌ها دارد');
-    expect(html).toContain('به‌روشنی و مکرر');
+    expect(html).toContain('در دیکته، حرف‌ها را جا می‌اندازد یا جابه‌جا می‌نویسد');
+    expect(html).toContain('به‌روشنی و بارها');
     expect(html).toContain(row.fill_token);
   });
 

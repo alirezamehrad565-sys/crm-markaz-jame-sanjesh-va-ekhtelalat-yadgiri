@@ -60,6 +60,9 @@ export interface CaseEventField {
   critical?: boolean;
   criticalMin?: number;
   subscaleId?: string | null;
+  hint?: string | null;        // — m175: مثال ساده زیر گویه (نمایش خاکستری در فرم عمومی)
+  teacherLabel?: string | null; // — m175: متن جایگزین گویه برای فرم معلم
+  teacherHint?: string | null;  // — m175: مثال جایگزین برای فرم معلم
 }
 
 export interface CaseEventBand {
