@@ -1,0 +1,25 @@
+# ─────────────────────────────────────────────────────────────
+# لایهٔ HTTPS عمومی — فقط برای استقرار روی سرور با دامنهٔ واقعی
+# استفاده:  docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
+# دامنه را در .env روی PUBLIC_DOMAIN بگذارید؛ Caddy گواهی Let's Encrypt را خودکار می‌گیرد.
+# ─────────────────────────────────────────────────────────────
+services:
+  caddy:
+    image: caddy:2
+    container_name: center-system-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-app.example.ir}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+
+volumes:
+  caddydata: {}
+  caddyconfig: {}

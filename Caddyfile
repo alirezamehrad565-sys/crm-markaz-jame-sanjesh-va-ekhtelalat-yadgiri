@@ -1,0 +1,5 @@
+# Caddy — TLS خودکار Let's Encrypt + ریورس پراکسی به کانتینر اپ
+{$PUBLIC_DOMAIN} {
+	encode gzip
+	reverse_proxy app:3000
+}

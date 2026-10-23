@@ -1,0 +1,33 @@
+# ─────────────────────────────────────────────────────────────
+# docker-compose سلف‌هاست — اجرای ساده: docker compose up -d --build
+# راهنمای کامل: docs/SELF-HOST.fa.md
+# متغیرها از فایل .env کنار همین فایل خوانده می‌شوند (نمونه: .env.selfhost.example)
+# ─────────────────────────────────────────────────────────────
+services:
+  app:
+    build: .
+    image: center-system:latest
+    container_name: center-system
+    restart: unless-stopped
+    # فقط روی localhost گوش می‌دهد؛ انتشار عمومی = لایهٔ Caddy/nginx جلوی آن
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      PORT: 3000
+      DATA_DIR: /data
+      TZ: ${TZ:-Asia/Tehran}
+      # — هویت سامانه —
+      CLINIC_NAME: ${CLINIC_NAME:-مرکز جامع}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      # — بات بله (اختیاری) —
+      BALE_BOT_TOKEN: ${BALE_BOT_TOKEN:-}
+      BALE_WEBHOOK_SECRET: ${BALE_WEBHOOK_SECRET:-}
+      # — رمز امضا (اختیاری؛ ≥۱۶ کاراکتر توصیه می‌شود) —
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      # — آزمون کرون دستی: فقط برای دیباگ مقدار ۱ بگذارید —
+      CRON_MANUAL: ${CRON_MANUAL:-0}
+    volumes:
+      - appdata:/data
+
+volumes:
+  appdata: {}
