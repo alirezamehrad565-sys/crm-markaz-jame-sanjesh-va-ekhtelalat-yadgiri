@@ -37,7 +37,6 @@ backups/
 
 # Tool artifacts
 tool-results/
-worklog.md
 download/
 
 # Public download center (data-bearing visuals — repo stays code-only)
