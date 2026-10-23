@@ -507,3 +507,62 @@ describe('پشتیبان خودکار شبانه (m180)', () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+// ─── m182 — جدول داخلی _cf_KV (D1) نباید پشتیبان‌گیری را ۵۰۰ کند ───
+// روی پروداکشن، D1 جدول داخلی _cf_KV را در sqlite_master دارد و هر کوئری روی آن
+// از داخل Worker با «not authorized: SQLITE_AUTH» رد می‌شود. همین امر status/export/
+// inspect را ۵۰۰ می‌کرد (پنل پشتیبان روی پروداکشن باز نمی‌شد).
+describe('پشتیبان‌گیری در حضور جدول داخلی _cf_KV (m182)', () => {
+  function plantCfKv(t: ReturnType<typeof createTestApp>): void {
+    t.sql.exec('CREATE TABLE _cf_KV (key TEXT PRIMARY KEY, value BLOB)');
+    t.sql.exec("INSERT INTO _cf_KV (key, value) VALUES ('probe', x'00')");
+  }
+
+  it('وضعیت با _cf_KV هم ۲۰۰ برمی‌گرداند و جدول سیستمی را نشان نمی‌دهد', async () => {
+    const t = createTestApp();
+    plantCfKv(t);
+    const api = await asRole(t, 'manager');
+    const res = await api.get('/api/backup/status');
+    expect(res.status).toBe(200);
+    const data = (res.body as { data: { tables: { name: string }[] } }).data;
+    expect(data.tables.find((x) => x.name === '_cf_KV')).toBeUndefined();
+    expect(data.tables.find((x) => x.name === 'staff')).toBeDefined();
+  });
+
+  it('خروجی پشتیبان هرگز _cf_KV را شامل نمی‌شود', async () => {
+    const t = createTestApp();
+    plantCfKv(t);
+    const api = await asRole(t, 'manager');
+    const res = await api.get('/api/backup/export');
+    expect(res.status).toBe(200);
+    const env = res.body as unknown as { tables: Record<string, unknown> };
+    expect(env.tables._cf_KV).toBeUndefined();
+  });
+
+  it('inspect فایل بدون _cf_KV را در پایگاه‌دادهٔ دارای _cf_KV سازگار می‌داند', async () => {
+    const t = createTestApp();
+    plantCfKv(t);
+    const api = await asRole(t, 'manager');
+    const backup = (await api.get('/api/backup/export')).body;
+    const res = await api.post('/api/backup/inspect', backup);
+    expect(res.status).toBe(200);
+    const data = (res.body as { data: { schemaCompatible: boolean; problems: string[] } }).data;
+    expect(data.schemaCompatible).toBe(true);
+    expect(data.problems).toHaveLength(0);
+  });
+
+  it('چرخهٔ رفت‌وبرگشت کامل با _cf_KV حاضر سالم است', async () => {
+    const t = createTestApp();
+    plantCfKv(t);
+    const manager = await asRole(t, 'manager');
+    const backup = (await manager.get('/api/backup/export')).body;
+    t.sql.exec("DELETE FROM students");
+    const res = await manager.post('/api/backup/restore', { backup, confirm: true });
+    expect(res.status).toBe(200);
+    const after = await manager.get('/api/students');
+    expect((after.body as { data: unknown[] }).data.length).toBeGreaterThan(0);
+    // جدول سیستمی دست نخورده باقی مانده باشد
+    const kv = t.sql.prepare("SELECT COUNT(*) AS c FROM _cf_KV").get() as { c: number };
+    expect(kv.c).toBe(1);
+  });
+});
