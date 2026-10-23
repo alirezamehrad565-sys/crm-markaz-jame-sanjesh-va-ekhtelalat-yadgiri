@@ -114,6 +114,37 @@ async function requestForm(method, path, formData) {
 
 api.postForm = (path, formData) => requestForm('POST', path, formData);
 
+// دانلود فایل باینری/JSON با توکن احراز هویت (برای پشتیبان‌گیری)
+api.downloadBlob = async (path) => {
+  const headers = { Accept: '*/*' };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const staffId = getDevStaffId();
+  if (staffId) headers['X-Dev-Staff-Id'] = staffId;
+  let res;
+  try {
+    res = await fetch(path, { headers });
+  } catch {
+    const err = new Error(ERROR_TEXT.NETWORK);
+    err.code = 'NETWORK';
+    throw err;
+  }
+  if (!res.ok) {
+    let payload = null;
+    try { payload = await res.json(); } catch { /* متن خام */ }
+    const err = new Error(payload?.message || ERROR_TEXT[payload?.error] || `خطا (${res.status})`);
+    err.status = res.status;
+    err.code = payload?.error;
+    throw err;
+  }
+  const disposition = res.headers.get('content-disposition') ?? '';
+  const utf8Name = /filename\*=UTF-8''([^;]+)/.exec(disposition)?.[1];
+  const asciiName = /filename="?([^";]+)"?/.exec(disposition)?.[1];
+  let filename = asciiName ?? 'download';
+  if (utf8Name) { try { filename = decodeURIComponent(utf8Name); } catch { filename = utf8Name; } }
+  return { blob: await res.blob(), filename };
+};
+
 api.putRaw = (path, arrayBuffer) => requestRaw('PUT', path, arrayBuffer);
 
 async function requestRaw(method, path, arrayBuffer) {

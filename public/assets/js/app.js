@@ -7,6 +7,7 @@ import { renderDashboard } from './views/dashboard.js';
 import { renderAppointments } from './views/appointments.js';
 import { renderStaff } from './views/staff.js';
 import { renderSettings } from './views/settings.js';
+import { renderBackup } from './views/backup.js';
 import { renderSchools } from './views/schools.js';
 import { renderStudents } from './views/students.js';
 import { renderStudentProfile } from './views/student-profile.js';
@@ -111,7 +112,8 @@ const NAV = [
   { hash: '#/outbox', label: 'صندوق اعلان‌ها', icon: 'bell', group: 'مرکز', roles: ['manager', 'secretary'] },
   { hash: '#/case-event-types', label: 'فرم‌ها و پرسش‌نامه‌ها', icon: 'timeline', group: 'ارزیابی و درمان', roles: ['manager', 'secretary', 'therapist'] }, // — نام روایی
   { hash: '#/special-needs', label: 'نیازهای ویژه', icon: 'clip', group: 'مرکز', roles: ['manager', 'secretary'] },
-  { hash: '#/settings', label: 'تنظیمات', icon: 'settings', group: 'مرکز', roles: ['manager', 'secretary'] }
+  { hash: '#/settings', label: 'تنظیمات', icon: 'settings', group: 'مرکز', roles: ['manager', 'secretary'] },
+  { hash: '#/backup', label: 'پشتیبان‌گیری', icon: 'save', group: 'مرکز', roles: ['manager'] }
 ];
 
 const GROUP_ORDER = ['امروز', 'برنامه‌ریزی', 'دانش‌آموزان', 'ارزیابی و درمان', 'مرکز']; // — نام روایی
@@ -328,6 +330,7 @@ register('#/reports', {
 });
 register('#/staff', { title: 'کارکنان', render: managerOnly(renderStaff) });
 register('#/settings', { title: 'تنظیمات', render: roleOnly(['manager', 'secretary'], renderSettings, 'تنظیمات فقط برای دفتر مرکز (مدیر و منشی) فعال است.') });
+register('#/backup', { title: 'پشتیبان‌گیری و بازیابی', render: managerOnly(renderBackup) }); // m179 — فقط مدیر
 register('#/working-hours', { title: 'تنظیمات', render: renderSettings }); // — مسیر قدیمی → تنظیمات
 register('#/schools', { title: 'مدارس', render: roleOnly(['manager', 'secretary'], renderSchools) }); // — منشی مجاز
 register('#/students', { title: 'دانش‌آموزان', render: renderStudents });

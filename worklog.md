@@ -172,3 +172,27 @@ Work Log:
 Stage Summary:
 - تولید: 1.00.53 / m178 — کل زنجیرهٔ متن‌ها (شرح‌حال → توضیح ابزارها → راهنمای پشتوانهٔ علمی → متاهای داشبورد) لحن دوستانه و ساده دارد
 - ثابت ماند: کلیدها، گویه‌های استاندارد، نمره‌دهی، باندهای m176
+
+---
+Task ID: 8 (m179)
+Agent: main (Z.ai)
+Task: مکانیک پشتیبان‌گیری و بازیابی داده‌ها — داخل خود سامانه (درخواست کاربر: «سیستم پشتیبان‌گیری از سایت و بارگذاری پشتیبان تو دیتابیس»)
+
+Work Log:
+- طراحی سه‌لایه: (۱) درون‌سامانه‌ای JSON gh-backup برای مدیر، (۲) CLI SQL عملیات (backup:remote موجود + بازیابی دستی wrangler)، (۳) Time Travel خود D1 (۳۰ روز)
+- ماژول src/application/backup/: service (status/export استریمی/inspect/restore) + routes (requireRole('manager')) + README
+- قالب gh-backup v1: پاکت (نسخه/زمان/include_files/excluded_tables) + tables{rows,row_count}؛ schema_migrations فقط اطلاعاتی؛ BLOB→base64
+- مکانیک بازیابی: اعتبارسنجی + برابری مجموعه جداول → ترتیب توپولوژیک از PRAGMA foreign_key_list (Kahn؛ چرخه=یک batch) → هر جدول DELETE+INSERT در یک batch اتمیک با PRAGMA defer_foreign_keys=ON → chunking تطبیقی (۳۰ دستور/۲MB؛ درج تک‌ردیفی زیر سقف ۱۰۰ پارامتر D1؛ self-ref=یک batch) → پروجکشن ستونی + هشدار → گزارش + audit_log
+- امنیت: فقط manager؛ supervisor با supervisorGate مسدود؛ سقف ۶۰MB؛ inspect بدون نوشتن؛ UI دو گارد (فایل اطمینان اجباری + تایپ «بازیابی»)
+- صفحهٔ #/backup (فقط مدیر) با ۴ کارت؛ api.downloadBlob جدید؛ NAV+register
+- DbClient.prepare اضافه شد (برای batch)؛ /health سورس با باندل هم‌راستا شد (db:up/503 — m138)
+- ⭐ پایان ویرایش جراحی باندل: worker/src-entry.mjs + scripts/build-worker-bundle.mjs (esbuild از src) + scripts/bundle-smoke.mjs (برابری رفتاری دو باندل روی ۱۱ مسیر) — برابری m178↔بازسازی‌شده تأیید شد؛ فقط نسخه تفاوت دارد
+- 1317 test ✓ (۱۲ تست جدید پشتیبان: رفت‌وبرگشت کامل/RBAC/چرخهٔ FK/بازیابی سبک/پروجکشن) · tsc 0 ✓ · node --check ✓
+- گیت واژگان m179 (scripts/m179-vocab-gate.py، خام+escaped) ✓ — بدون موتور/کالیبراسیون/سیگنال
+- bump چهارگانه → 1.00.54/m179 (index.html، sw.js، version.ts، باندل بازسازی‌شده)
+- آزمون مسیرهای پشتیبان روی خود باندل (scripts/m179-bundle-backup-check.mjs): status/export(56 جدول)/inspect/restore رفت‌وبرگشت/گارد تأیید — همه سبز
+
+Stage Summary:
+- تولید: 1.00.54 / m179 — مدیر مرکز بدون ابزار بیرونی پشتیبان JSON می‌گیرد و فایل پشتیبان را داخل خود اپ به دیتابیس برمی‌گرداند؛ CLI SQL و Time Travel لایه‌های پشتیبان‌اند
+- فایل پشتیبان = gh-backup v1؛ سند عملیات: docs/BACKUP.md؛ جزئیات مکانیک: src/application/backup/README.md
+- باندل از این پس همیشه از src بازسازی می‌شود (سند در README ماژول)
