@@ -3,11 +3,22 @@ import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import { ValidationError } from '@core/errors';
 import { APP_VERSION, APP_MILESTONE } from '@core/version';
+import {
+  SETTING_KEYS,
+  BACKUP_MAX_DESTINATIONS,
+  BACKUP_MAX_SEND_BYTES,
+  BACKUP_CHAT_ID_RE
+} from '@core/shared';
+import { sendBaleDocument } from '@core/notify/bale/documents';
+import type { SendResult } from '@core/notify/types';
 
-// ─── مکانیک پشتیبان‌گیری و بازیابی (m179) ───
+// ─── مکانیک پشتیبان‌گیری و بازیابی (m179) + ارسال به آیدی بله (m180) ───
 // قالب فایل: gh-backup v1 (JSON با پاکت) — همهٔ جداول دیتابیس به‌جز جدول‌های سیستمی
 // بازیابی = جایگزینی کامل هر جدول در یک تراکنش (delete + insert در یک batch اتمیک)
 // ترتیب جداول: توپولوژیک بر اساس کلیدهای خارجی واقعی (PRAGMA foreign_key_list)
+// m180: خروجی همان پاکت به‌صورت فایل با متد sendDocument ربات بله به مقصدهای
+// انتخابی (آیدی عددی بله) فرستاده می‌شود؛ مقصدها و تنظیم ارسال خودکار شبانه در
+// جدول settings (کلیدهای backup_destinations / backup_auto_send) ذخیره می‌شوند.
 
 export const BACKUP_FORMAT = 'gh-backup';
 export const BACKUP_FORMAT_VERSION = 1;
@@ -71,6 +82,59 @@ export interface RestoreReport {
   warnings: string[];
 }
 
+// ─── m180 — ارسال پشتیبان به آیدی بله ───
+
+export interface BackupDestination {
+  id: string;
+  label: string;
+  chat_id: string;
+  active: boolean;
+}
+
+export interface AutoSendConfig {
+  enabled: boolean;
+  destination_ids: string[];
+  include_files: boolean;
+}
+
+export interface DeliveryConfig {
+  bot_ready: boolean;
+  destinations: BackupDestination[];
+  auto_send: AutoSendConfig;
+}
+
+export interface SendDestinationResult {
+  id: string;
+  label: string;
+  chat_id: string;
+  ok: boolean;
+  error?: string;
+  message_id?: string;
+}
+
+export interface SendReport {
+  ok: boolean;
+  filename: string;
+  size_bytes: number;
+  include_files: boolean;
+  sent: number;
+  failed: number;
+  results: SendDestinationResult[];
+}
+
+export type BackupDocumentSender = (opts: {
+  chatId: string;
+  filename: string;
+  bytes: Uint8Array;
+  caption?: string;
+}) => Promise<SendResult>;
+
+export interface ScheduledAutoSendOutcome {
+  skipped: boolean;
+  reason?: 'disabled' | 'no_destination' | 'no_bot';
+  report?: SendReport;
+}
+
 function assertIdent(name: string): string {
   if (!IDENT_RE.test(name)) throw new ValidationError(`نام جدول غیرمجاز است: ${name.slice(0, 40)}`);
   return name;
@@ -98,14 +162,160 @@ export interface BackupService {
   logExport(actor: { staffId: string }, includeFiles: boolean): Promise<void>;
   inspect(input: unknown): Promise<BackupSummary>;
   restore(actor: { staffId: string }, input: unknown, opts: { confirmed: boolean }): Promise<RestoreReport>;
+  // m180 — ارسال به آیدی بله
+  getDelivery(): Promise<DeliveryConfig>;
+  saveDelivery(actor: { staffId: string }, input: unknown): Promise<DeliveryConfig>;
+  sendBackup(actor: { staffId: string }, input: unknown): Promise<SendReport>;
+  runScheduledAutoSend(): Promise<ScheduledAutoSendOutcome>;
 }
 
 export function createBackupService(deps: {
   db: DbClient;
   audit: AuditWriter;
   logger: Logger;
+  baleToken?: string | null;
+  sender?: BackupDocumentSender | null;
 }): BackupService {
-  const { db, audit, logger } = deps;
+  const { db, audit, logger, baleToken, sender } = deps;
+
+  // ─── m180 — خواندن/نوشتن تنظیمات ارسال ───
+
+  async function readSetting<T>(key: string, fallback: T): Promise<T> {
+    try {
+      const row = await db.queryOne<{ value: string }>(`SELECT value FROM settings WHERE key = ?`, [key]);
+      if (!row?.value) return fallback;
+      return (JSON.parse(row.value) as T) ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  async function writeSetting(key: string, value: unknown, updatedBy: string): Promise<void> {
+    await db.query(
+      `INSERT INTO settings (key, value, updated_by, updated_at)
+       VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT(key) DO UPDATE SET
+         value = excluded.value, updated_by = excluded.updated_by, updated_at = datetime('now')`,
+      [key, JSON.stringify(value), updatedBy]
+    );
+  }
+
+  function sanitizeDestinations(input: unknown): BackupDestination[] {
+    if (!Array.isArray(input)) throw new ValidationError('لیست مقصدها نامعتبر است');
+    if (input.length > BACKUP_MAX_DESTINATIONS) {
+      throw new ValidationError(`بیشتر از ${BACKUP_MAX_DESTINATIONS} مقصد نمی‌توانید ذخیره کنید`);
+    }
+    const seenIds = new Set<string>();
+    const seenChats = new Set<string>();
+    return input.map((raw) => {
+      const d = (raw ?? {}) as Record<string, unknown>;
+      const label = typeof d.label === 'string' ? d.label.trim() : '';
+      const chatId = typeof d.chat_id === 'string' ? d.chat_id.trim() : '';
+      if (!label || label.length > 60) {
+        throw new ValidationError('هر مقصد باید یک نام کوتاه داشته باشد (حداکثر ۶۰ نویسه)');
+      }
+      if (!BACKUP_CHAT_ID_RE.test(chatId)) {
+        throw new ValidationError(
+          `آیدی بله «${chatId.slice(0, 24) || 'خالی'}» معتبر نیست — آیدی بله عددی است (مثال: ۱۲۳۴۵۶۷۸۹)`
+        );
+      }
+      const id = typeof d.id === 'string' && d.id.length > 0 ? d.id : crypto.randomUUID();
+      if (seenIds.has(id)) throw new ValidationError('شناسهٔ مقصد تکراری است');
+      seenIds.add(id);
+      if (seenChats.has(chatId)) {
+        throw new ValidationError(`آیدی «${chatId}» دوبار وارد شده است`);
+      }
+      seenChats.add(chatId);
+      return { id, label, chat_id: chatId, active: d.active !== false };
+    });
+  }
+
+  function sanitizeAutoSend(input: unknown, destinations: BackupDestination[]): AutoSendConfig {
+    const raw = (input ?? {}) as Record<string, unknown>;
+    const ids = Array.isArray(raw.destination_ids)
+      ? raw.destination_ids.filter((x): x is string => typeof x === 'string')
+      : [];
+    const known = new Set(destinations.map((d) => d.id));
+    if (ids.some((id) => !known.has(id))) {
+      throw new ValidationError('مقصدهای ارسال خودکار باید از مقصدهای ذخیره‌شده انتخاب شوند');
+    }
+    return {
+      enabled: raw.enabled === true,
+      destination_ids: ids,
+      include_files: raw.include_files === true
+    };
+  }
+
+  function resolveSender(): BackupDocumentSender | null {
+    if (sender) return sender;
+    if (!baleToken) return null;
+    return (opts) =>
+      sendBaleDocument({
+        token: baleToken,
+        chatId: opts.chatId,
+        filename: opts.filename,
+        bytes: opts.bytes,
+        caption: opts.caption,
+        mime: 'application/json'
+      });
+  }
+
+  function backupStamp(): string {
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}`;
+  }
+
+  async function collectExport(includeFiles: boolean): Promise<{ bytes: Uint8Array; filename: string }> {
+    const stream = service.buildExportStream(includeFiles);
+    const buf = await new Response(stream).arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    if (bytes.byteLength > BACKUP_MAX_SEND_BYTES) {
+      throw new ValidationError(
+        'حجم فایل پشتیبان برای ارسال به بله زیاد است (سقف ۴۸ مگابایت) — گزینهٔ «همراه‌کردن فایل‌های پیوستی» را خاموش کنید'
+      );
+    }
+    return { bytes, filename: `backup-${backupStamp()}.json` };
+  }
+
+  function buildCaption(): string {
+    const when = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    return `پشتیبان سامانه — ${when} (UTC) — نسخهٔ ${APP_VERSION} (${APP_MILESTONE})`;
+  }
+
+  async function sendToDestinations(
+    chosen: BackupDestination[],
+    includeFiles: boolean
+  ): Promise<SendReport> {
+    const senderFn = resolveSender();
+    if (!senderFn) {
+      throw new ValidationError('توکن ربات بله تنظیم نشده است — بدون آن ارسال پشتیبان به آیدی ممکن نیست');
+    }
+    const { bytes, filename } = await collectExport(includeFiles);
+    const caption = buildCaption();
+    const results: SendDestinationResult[] = [];
+    for (const d of chosen) {
+      const r = await senderFn({ chatId: d.chat_id, filename, bytes, caption });
+      results.push({
+        id: d.id,
+        label: d.label,
+        chat_id: d.chat_id,
+        ok: r.ok,
+        error: r.error,
+        message_id: r.externalId
+      });
+    }
+    const sent = results.filter((r) => r.ok).length;
+    return {
+      ok: sent > 0,
+      filename,
+      size_bytes: bytes.byteLength,
+      include_files: includeFiles,
+      sent,
+      failed: results.length - sent,
+      results
+    };
+  }
 
   async function listTables(): Promise<string[]> {
     const rows = await db.query<{ name: string }>(
@@ -440,6 +650,119 @@ export function createBackupService(deps: {
       });
       logger.info('backup.restore.done', { tables: reportTables.length, rows: totalRows, ms: durationMs });
       return { ok: true, durationMs, totalRows, tables: reportTables, warnings };
+    },
+
+    // ─── m180 — ارسال پشتیبان به آیدی بله (مقصد انتخابی) ───
+
+    async getDelivery(): Promise<DeliveryConfig> {
+      const destinations = await readSetting<BackupDestination[]>(SETTING_KEYS.BACKUP_DESTINATIONS, []);
+      const auto = await readSetting<Partial<AutoSendConfig>>(SETTING_KEYS.BACKUP_AUTO_SEND, {});
+      return {
+        bot_ready: Boolean(sender || baleToken),
+        destinations,
+        auto_send: {
+          enabled: auto.enabled === true,
+          destination_ids: Array.isArray(auto.destination_ids) ? auto.destination_ids : [],
+          include_files: auto.include_files === true
+        }
+      };
+    },
+
+    async saveDelivery(actor, input) {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const destinations = sanitizeDestinations(raw.destinations ?? []);
+      const auto = sanitizeAutoSend(raw.auto_send, destinations);
+      await writeSetting(SETTING_KEYS.BACKUP_DESTINATIONS, destinations, actor.staffId);
+      await writeSetting(SETTING_KEYS.BACKUP_AUTO_SEND, auto, actor.staffId);
+      try {
+        await audit.log({
+          actorId: actor.staffId,
+          action: 'backup.delivery_update',
+          resourceType: 'backup',
+          resourceId: 'delivery',
+          changes: {
+            destinations: { from: null, to: destinations.length },
+            auto_send: { from: null, to: auto.enabled ? 'on' : 'off' }
+          }
+        });
+      } catch (err) {
+        logger.warn('backup.delivery.audit_failed', { err: err instanceof Error ? err.message : String(err) });
+      }
+      return {
+        bot_ready: Boolean(sender || baleToken),
+        destinations,
+        auto_send: auto
+      };
+    },
+
+    async sendBackup(actor, input): Promise<SendReport> {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const ids = Array.isArray(raw.destinations)
+        ? raw.destinations.filter((x): x is string => typeof x === 'string')
+        : [];
+      if (ids.length === 0) {
+        throw new ValidationError('حداقل یک مقصد (آیدی بله) را انتخاب کنید');
+      }
+      const includeFiles = raw.include_files === true;
+      const destinations = await readSetting<BackupDestination[]>(SETTING_KEYS.BACKUP_DESTINATIONS, []);
+      const chosen = destinations.filter((d) => ids.includes(d.id));
+      if (chosen.length !== ids.length) {
+        throw new ValidationError('برخی مقصدهای انتخابی پیدا نشدند — لیست مقصدها را ذخیره کنید و دوباره تلاش کنید');
+      }
+      const inactive = chosen.filter((d) => !d.active).map((d) => d.label);
+      if (inactive.length > 0) {
+        throw new ValidationError(`این مقصدها غیرفعال‌اند و ارسال نمی‌شوند: ${inactive.join('، ')}`);
+      }
+      const report = await sendToDestinations(chosen, includeFiles);
+      try {
+        await audit.log({
+          actorId: actor.staffId,
+          action: 'backup.send',
+          resourceType: 'backup',
+          resourceId: report.filename,
+          changes: {
+            sent: { from: null, to: report.sent },
+            failed: { from: null, to: report.failed },
+            include_files: { from: null, to: includeFiles }
+          }
+        });
+      } catch (err) {
+        logger.warn('backup.send.audit_failed', { err: err instanceof Error ? err.message : String(err) });
+      }
+      logger.info('backup.send.done', {
+        sent: report.sent,
+        failed: report.failed,
+        bytes: report.size_bytes
+      });
+      return report;
+    },
+
+    async runScheduledAutoSend(): Promise<ScheduledAutoSendOutcome> {
+      const auto = await readSetting<Partial<AutoSendConfig>>(SETTING_KEYS.BACKUP_AUTO_SEND, {});
+      if (auto.enabled !== true) return { skipped: true, reason: 'disabled' };
+      const destinations = await readSetting<BackupDestination[]>(SETTING_KEYS.BACKUP_DESTINATIONS, []);
+      const chosen = destinations.filter(
+        (d) => (auto.destination_ids ?? []).includes(d.id) && d.active
+      );
+      if (chosen.length === 0) return { skipped: true, reason: 'no_destination' };
+      const includeFiles = auto.include_files === true;
+      const report = await sendToDestinations(chosen, includeFiles);
+      try {
+        await audit.log({
+          actorId: 'system',
+          action: 'backup.auto_send',
+          resourceType: 'backup',
+          resourceId: report.filename,
+          changes: {
+            sent: { from: null, to: report.sent },
+            failed: { from: null, to: report.failed }
+          }
+        });
+      } catch (err) {
+        logger.warn('backup.auto.audit_failed', { err: err instanceof Error ? err.message : String(err) });
+      }
+      logger.info('backup.auto.done', { sent: report.sent, failed: report.failed });
+      return { skipped: false, report };
     }
   };
 

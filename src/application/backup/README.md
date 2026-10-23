@@ -56,3 +56,10 @@
 ## ساخت باندل ورکر
 
 `worker/bundle.js` دیگر دستی ویرایش نمی‌شود؛ از منبع با `node scripts/build-worker-bundle.mjs` (esbuild) ساخته می‌شود و برابری رفتاری آن با `scripts/bundle-smoke.mjs` آزموده می‌شود.
+
+## m180 — ارسال پشتیبان به آیدی بله (مقصد انتخابی)
+
+- **مقصدها**: آرایهٔ `{id, label, chat_id, active}` در `settings` با کلید `backup_destinations` (حداکثر ۱۰، آیدی عددی بله با `BACKUP_CHAT_ID_RE`، بدون تکرار). ذخیره کامل = `PUT /api/backup/delivery` (مقصدها + `backup_auto_send` با هم).
+- **ارسال**: `POST /api/backup/send {destinations: [id], include_files?}` — پاکت `gh-backup` یک‌بار در حافظه ساخته (`collectExport`، سقف `BACKUP_MAX_SEND_BYTES` = ۴۸MB) و برای هر مقصد انتخابیِ فعال با `sendBaleDocument` (multipart → `tapi.bale.ai/bot<token>/sendDocument`) فرستاده می‌شود؛ خطای یک مقصد بقیه را متوقف نمی‌کند و گزارش رودررویی + `audit backup.send` برمی‌گردد.
+- **پشتیبان خودکار شبانه**: کلید `backup_auto_send` = `{enabled, destination_ids, include_files}`؛ در cron دیجست (`0 4 * * *`) بعد از حلقهٔ اعلان‌ها، `runScheduledAutoSend()` فقط اگر enabled + مقصد فعالِ انتخاب‌شده وجود داشته باشد اجرا می‌شود (`audit backup.auto_send`).
+- **sender تزریقی**: `createBackupService({sender})` / `AppDeps.backupDocumentSender` برای تست‌ها؛ در پروداکشن از `baleToken` ساخته می‌شود. `bot_ready` در `GET /api/backup/delivery` وضعیت توکن را می‌گوید.

@@ -2,13 +2,23 @@ import { api } from '../api.js';
 import { fa, formatJalaliDateTime } from '../format.js';
 import { el, icon, toast, toastError, loadingState, errorState } from '../ui.js';
 
-// ─── پشتیبان‌گیری و بازیابی (m179) — فقط مدیر مرکز ───
+// ─── پشتیبان‌گیری و بازیابی (m179) + ارسال به آیدی بله (m180) — فقط مدیر مرکز ───
 // مکانیک: گرفتن یک فایل JSON از کل داده‌ها + بازیابی جایگزینی‌کل با دو گارد امنیتی
 // (گام ۱: فایل اطمینان از وضعیت فعلی — گام ۲: تایپ عبارت تأیید)
+// m180: همان فایل پشتیبان با ربات بله به مقصدهای انتخابی (آیدی‌های عددی ذخیره‌شده)
+// فرستاده می‌شود؛ ارسال خودکار شبانه هم اختیاری و قابل خاموش/روشن کردن است.
 
 const CONFIRM_WORD = 'بازیابی';
 const LAST_BACKUP_KEY = 'cs.lastBackupAt';
 const MAX_FILE_BYTES = 60 * 1024 * 1024;
+
+const BACKUP_ACTION_LABELS = {
+  'backup.export': 'دریافت پشتیبان',
+  'backup.restore': 'بازیابی پشتیبان',
+  'backup.send': 'ارسال پشتیبان به بله',
+  'backup.auto_send': 'پشتیبان خودکار شبانه',
+  'backup.delivery_update': 'به‌روزرسانی مقصدهای ارسال'
+};
 
 function fmtNum(n) {
   return fa(Number(n).toLocaleString('en-US'));
@@ -53,6 +63,197 @@ function section(title, iconName, hint, ...children) {
   );
 }
 
+// ─── m180 — بخش «ارسال پشتیبان به بله» با مقصد انتخابی ───
+// سه کارت داخلی: (۱) مدیریت مقصدها (آیدی‌های عددی بله)، (۲) ارسال دستی به تیک‌خوردها،
+// (۳) پشتیبان خودکار شبانه. ذخیره = PUT /api/backup/delivery؛ ارسال = POST /api/backup/send
+function drawDelivery(delivery) {
+  let botReady = Boolean(delivery.bot_ready);
+  const state = {
+    destinations: (delivery.destinations || []).map((d) => ({ ...d })),
+    auto: { ...delivery.auto_send }
+  };
+  const refs = { autoOn: null, autoFiles: null }; // عناصر زندهٔ بخش ارسال خودکار
+
+  const root = el('div', { class: 'settings-section', style: { marginBottom: 'var(--sp-4)' } });
+
+  function redraw() {
+    root.replaceChildren(build());
+  }
+
+  function chipCheckList(checkedIds, includeInactive, group) {
+    return state.destinations
+      .filter((d) => includeInactive || d.active)
+      .map((d) => {
+        const c = el('input', { type: 'checkbox', checked: checkedIds.includes(d.id) });
+        c.dataset.id = d.id;
+        c.dataset.group = group;
+        return el('label', {
+          style: {
+            display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
+            padding: '6px 10px', border: '1px solid var(--line, #e2e8f0)', borderRadius: '8px',
+            fontSize: 'var(--fs-sm)', marginTop: '6px'
+          }
+        }, c, ` ${d.label || 'بدون نام'} (${d.chat_id})${d.active ? '' : ' — غیرفعال'}`);
+      });
+  }
+
+  function build() {
+    const box = el('div', {});
+
+    // سرگروه + هشدار توکن
+    box.appendChild(el('h3', {}, icon('send', 18), ' ', 'ارسال پشتیبان به بله (آیدی انتخابی)'));
+    box.appendChild(el('p', { class: 'hint-text' },
+      'فایل پشتیبان با ربات مرکز مستقیماً به آیدی بلهٔ انتخابی‌تان فرستاده می‌شود — لازم نیست چیزی دانلود و جابه‌جا کنید. اول آیدی‌های موردنظر را در «مدیریت مقصدها» ذخیره کنید؛ بعد هر بار مقصدهای همان ارسال را تیک بزنید. فایل پشتیبان اطلاعات حساس دارد — آیدی گرو‌ه‌ها را فقط به افراد مطمئن بدهید.'));
+    if (!botReady) {
+      box.appendChild(el('div', { style: { color: 'var(--error, #b91c1c)', fontWeight: 600, marginTop: '6px' } },
+        icon('alert', 16), ' توکن ربات بله هنوز روی سرور تنظیم نشده است — تا وقتی «BALE_BOT_TOKEN» ست نشود، ارسال انجام نمی‌شود.'));
+    }
+
+    // ── ۱) مدیریت مقصدها ──
+    const rowsBox = el('div', {});
+    function renderRows() {
+      rowsBox.replaceChildren();
+      if (state.destinations.length === 0) {
+        rowsBox.appendChild(smallText('هنوز مقصدی نیست — با «افزودن مقصد» آیدی بله‌تان را اضافه کنید.'));
+      }
+      state.destinations.forEach((d) => {
+        const labelInp = el('input', { type: 'text', value: d.label, placeholder: 'نام (مثلاً مدیر مرکز)', style: { flex: '2', minWidth: '120px' } });
+        const chatInp = el('input', { type: 'text', value: d.chat_id, placeholder: 'آیدی عددی بله', dir: 'ltr', style: { flex: '2', minWidth: '120px', textAlign: 'left' } });
+        const activeInp = el('input', { type: 'checkbox', checked: d.active });
+        labelInp.addEventListener('input', () => { d.label = labelInp.value; });
+        chatInp.addEventListener('input', () => { d.chat_id = chatInp.value.trim(); });
+        activeInp.addEventListener('change', () => { d.active = activeInp.checked; });
+        rowsBox.appendChild(el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' } },
+          labelInp,
+          chatInp,
+          el('label', { style: { display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', cursor: 'pointer', fontSize: 'var(--fs-xs)' } }, activeInp, ' فعال'),
+          el('button', {
+            class: 'btn btn--ghost', title: 'حذف این مقصد',
+            onclick: () => {
+              state.destinations = state.destinations.filter((x) => x !== d);
+              state.auto.destination_ids = state.auto.destination_ids.filter((id) => id !== d.id);
+              redraw();
+            }
+          }, icon('trash', 16))
+        ));
+      });
+    }
+    renderRows();
+
+    const addBtn = el('button', { class: 'btn', style: { marginTop: 'var(--sp-2)' }, onclick: () => {
+      state.destinations.push({ id: '', label: '', chat_id: '', active: true });
+      redraw();
+    } }, icon('plus', 16), ' افزودن مقصد');
+
+    const saveBtn = el('button', { class: 'btn btn--primary', style: { marginTop: 'var(--sp-2)' } },
+      icon('save', 16), ' ذخیرهٔ مقصدها و تنظیمات');
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      try {
+        const res = (await api.put('/api/backup/delivery', collectPayload())).data;
+        state.destinations = (res.destinations || []).map((d) => ({ ...d }));
+        state.auto = { ...res.auto_send };
+        botReady = Boolean(res.bot_ready);
+        toast('تنظیمات ارسال پشتیبان ذخیره شد', 'success');
+        redraw();
+      } catch (err) {
+        toastError(err);
+        saveBtn.disabled = false;
+      }
+    });
+
+    box.appendChild(el('div', { style: { marginTop: 'var(--sp-3)' } },
+      el('h4', { style: { fontSize: 'var(--fs-sm)', margin: '0 0 4px' } }, 'مدیریت مقصدها (آیدی‌های بله)'),
+      rowsBox,
+      addBtn, ' ', saveBtn
+    ));
+
+    // ── ۲) ارسال دستی به تیک‌خوردها ──
+    const sendChecksBox = el('div', {});
+    chipCheckList([], false, 'send').forEach((n) => sendChecksBox.appendChild(n));
+    const sendFilesInp = el('input', { type: 'checkbox' });
+    const sendBtn = el('button', { class: 'btn btn--primary', style: { marginTop: 'var(--sp-2)' } },
+      icon('send', 16), ' ارسال فایل پشتیبان به بله');
+    const sendResultBox = el('div', {});
+    sendBtn.addEventListener('click', async () => {
+      const ids = [...sendChecksBox.querySelectorAll('input:checked')].map((c) => c.dataset.id);
+      if (ids.length === 0) {
+        toastError(new Error('حداقل یک مقصد را برای این ارسال تیک بزنید'));
+        return;
+      }
+      sendBtn.disabled = true;
+      sendBtn.replaceChildren(icon('refresh', 16), ' در حال ساخت فایل پشتیبان…');
+      sendResultBox.replaceChildren();
+      try {
+        const report = (await api.post('/api/backup/send', { destinations: ids, include_files: sendFilesInp.checked })).data;
+        sendResultBox.replaceChildren(
+          el('div', { style: { marginTop: 'var(--sp-2)' } },
+            smallText(`فایل «${report.filename}» — ${fmtNum(report.size_bytes)} بایت — ${fa(report.sent)} موفق، ${fa(report.failed)} ناموفق`),
+            ...report.results.map((r) => smallText(
+              `${r.ok ? icon('check', 14) : icon('alert', 14)} ${r.label} (${r.chat_id}): ${r.ok ? 'ارسال شد' : (r.error || 'خطا')}`
+            ))
+          )
+        );
+        if (report.failed === 0) {
+          toast('فایل پشتیبان به همهٔ مقصدهای انتخابی ارسال شد', 'success');
+        } else {
+          toast('ارسال انجام شد اما برخی مقصدها خطا داشتند — پایین همین کارت را ببینید', 'info');
+        }
+      } catch (err) {
+        toastError(err);
+      }
+      sendBtn.disabled = false;
+      sendBtn.replaceChildren(icon('send', 16), ' ارسال فایل پشتیبان به بله');
+    });
+
+    box.appendChild(el('div', { style: { marginTop: 'var(--sp-3)' } },
+      el('h4', { style: { fontSize: 'var(--fs-sm)', margin: '0 0 4px' } }, 'ارسال فوری — مقصدهای این ارسال را تیک بزنید'),
+      state.destinations.filter((d) => d.active).length === 0
+        ? smallText('اول مقصدها را ذخیره کنید تا اینجا فهرست شوند.')
+        : sendChecksBox,
+      el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'var(--sp-2)', cursor: 'pointer' } },
+        sendFilesInp, ' همراه‌کردن فایل‌های پیوستی (حجم بیشتر)'),
+      sendBtn,
+      sendResultBox
+    ));
+
+    // ── ۳) پشتیبان خودکار شبانه ──
+    const autoOnInp = el('input', { type: 'checkbox', checked: state.auto.enabled });
+    const autoChecksBox = el('div', {});
+    chipCheckList(state.auto.destination_ids, true, 'auto').forEach((n) => autoChecksBox.appendChild(n));
+    const autoFilesInp = el('input', { type: 'checkbox', checked: state.auto.include_files });
+    refs.autoOn = autoOnInp;
+    refs.autoFiles = autoFilesInp;
+
+    box.appendChild(el('div', { style: { marginTop: 'var(--sp-3)' } },
+      el('h4', { style: { fontSize: 'var(--fs-sm)', margin: '0 0 4px' } }, 'پشتیبان خودکار شبانه (اختیاری)'),
+      el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'var(--sp-2)', cursor: 'pointer' } },
+        autoOnInp, ' هر شب حدود ۷:۳۰ صبح به‌وقت تهران، خودکار بفرست'),
+      autoChecksBox,
+      el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'var(--sp-2)', cursor: 'pointer' } },
+        autoFilesInp, ' همراه‌کردن فایل‌های پیوستی در ارسال خودکار'),
+      smallText('اگر روشن باشد ولی مقصدی تیک نخورده باشد، آن شب چیزی فرستاده نمی‌شود. برای اعمال تغییرها «ذخیره» را بزنید.')
+    ));
+
+    return box;
+  }
+
+  function collectPayload() {
+    const autoBoxes = [...root.querySelectorAll('input[data-group="auto"]')];
+    return {
+      destinations: state.destinations.map((d) => ({ id: d.id, label: d.label, chat_id: d.chat_id, active: d.active })),
+      auto_send: {
+        enabled: refs.autoOn ? refs.autoOn.checked === true : false,
+        destination_ids: autoBoxes.filter((c) => c.checked).map((c) => c.dataset.id),
+        include_files: refs.autoFiles ? refs.autoFiles.checked === true : false
+      }
+    };
+  }
+
+  redraw();
+  return root;
+}
+
 function smallText(...children) {
   return el('div', { style: { fontSize: 'var(--fs-xs)', color: 'var(--text-3)', marginTop: '4px' } }, ...children);
 }
@@ -66,6 +267,14 @@ export async function renderBackup(container) {
   } catch (err) {
     container.replaceChildren(errorState(err, () => renderBackup(container)));
     return;
+  }
+
+  // m180 — تنظیمات ارسال به بله (اگر خطا خورد، بقیهٔ پنل کار می‌کند)
+  let delivery = null;
+  try {
+    delivery = (await api.get('/api/backup/delivery')).data;
+  } catch {
+    delivery = null;
   }
 
   const wrap = el('div', {});
@@ -91,7 +300,7 @@ export async function renderBackup(container) {
       ? el('div', { style: { marginTop: 'var(--sp-3)' } },
           el('h4', { style: { fontSize: 'var(--fs-sm)', margin: '0 0 6px' } }, 'رویدادهای اخیر پشتیبان‌گیری:'),
           ...status.recent.map((r) => smallText(
-            `${r.action === 'backup.export' ? 'دریافت پشتیبان' : r.action === 'backup.restore' ? 'بازیابی پشتیبان' : r.action} — ${formatJalaliDateTime(isoOfAudit(r.created_at))}`
+            `${BACKUP_ACTION_LABELS[r.action] || r.action} — ${formatJalaliDateTime(isoOfAudit(r.created_at))}`
           )))
       : null
   ));
@@ -121,6 +330,9 @@ export async function renderBackup(container) {
       filesCheck, ' همراه‌کردن فایل‌های پیوستی (حجم بیشتر)'),
     downloadBtn
   ));
+
+  // ─── ارسال پشتیبان به آیدی بله (m180 — مقصد انتخابی) ───
+  if (delivery) wrap.appendChild(drawDelivery(delivery));
 
   // ─── بازیابی ───
   const fileInput = el('input', { type: 'file', accept: '.json,application/json', style: { marginTop: 'var(--sp-3)' } });

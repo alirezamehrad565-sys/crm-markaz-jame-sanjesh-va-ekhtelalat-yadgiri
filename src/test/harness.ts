@@ -10,6 +10,7 @@ import { createAuditWriter } from '@core/audit';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { MediaFetcher } from '@core/notify';
+import type { BackupDocumentSender } from '@app/backup';
 import { createApp } from '@app/api-routing';
 
 export const MANAGER_ID = '00000000-0000-0000-0000-000000000001';
@@ -59,6 +60,8 @@ function silentLogger(scope = 'test'): Logger {
   return base;
 }
 
+export { silentLogger };
+
 export interface TestApp {
   sql: DatabaseSyncInstance;
   d1: MockD1;
@@ -76,7 +79,11 @@ export const WEBHOOK_SECRET = 'wh-test-secret';
 
 export function createTestApp(
   sql?: DatabaseSyncInstance,
-  opts?: { mediaFetcher?: MediaFetcher | null }
+  opts?: {
+    mediaFetcher?: MediaFetcher | null;
+    baleToken?: string | null;
+    backupDocumentSender?: BackupDocumentSender | null;
+  }
 ): TestApp {
   const store = sql ?? createTestDb();
   const d1 = new MockD1(store);
@@ -87,10 +94,11 @@ export function createTestApp(
     audit,
     logger: silentLogger('it'),
     teamDomain: 'test.team.example.com',
-    baleToken: null,
+    baleToken: opts?.baleToken ?? null,
     webhookSecret: WEBHOOK_SECRET,
     publicBaseUrl: 'https://center.test.example.com',
-    mediaFetcher: opts?.mediaFetcher ?? null
+    mediaFetcher: opts?.mediaFetcher ?? null,
+    backupDocumentSender: opts?.backupDocumentSender ?? null
   });
   const env = {
     DB: d1 as unknown as D1Database,
