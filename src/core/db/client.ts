@@ -4,6 +4,7 @@ export interface DbClient {
   query<T>(sql: string, params?: unknown[]): Promise<T[]>;
   queryOne<T>(sql: string, params?: unknown[]): Promise<T | null>;
   execute(sql: string, params?: unknown[]): Promise<D1Result>;
+  prepare(sql: string, params?: unknown[]): D1PreparedStatement;
   batch(statements: D1PreparedStatement[]): Promise<D1Result[]>;
   transaction<T>(fn: (tx: DbClient) => Promise<T>): Promise<T>;
 }
@@ -25,6 +26,10 @@ export function createDb(d1: D1Database, logger?: Logger): DbClient {
       return d1.prepare(sql).bind(...params).run();
     },
 
+    prepare(sql: string, params: unknown[] = []): D1PreparedStatement {
+      return d1.prepare(sql).bind(...params);
+    },
+
     async batch(statements: D1PreparedStatement[]): Promise<D1Result[]> {
       if (statements.length === 0) return [];
       return d1.batch(statements);
@@ -36,6 +41,7 @@ export function createDb(d1: D1Database, logger?: Logger): DbClient {
       const tx: DbClient = {
         query: <T>(sql: string, params: unknown[] = []) => base.query<T>(sql, params),
         queryOne: <T>(sql: string, params: unknown[] = []) => base.queryOne<T>(sql, params),
+        prepare: (sql, params = []) => base.prepare(sql, params),
         execute: (sql, params = []) => {
           statements.push(d1.prepare(sql).bind(...params));
           return Promise.resolve({ success: true, meta: {} } as unknown as D1Result);

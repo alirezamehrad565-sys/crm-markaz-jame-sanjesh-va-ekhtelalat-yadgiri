@@ -67,6 +67,8 @@ import type { MediaFetcher } from '@core/notify';
 import type { NotifyAppService } from '@app/notify';
 import { createSettingsService, registerSettingsRoutes } from '@app/settings';
 import type { SettingsService } from '@app/settings';
+import { createBackupService, registerBackupRoutes } from '@app/backup';
+import type { BackupService } from '@app/backup';
 import { createKeysService, registerKeysRoutes } from '@app/keys';
 import type { KeysService } from '@app/keys';
 import { createSearchService, registerSearchRoutes } from '@app/search';
@@ -126,6 +128,7 @@ export interface Services {
   caseEvents: CaseEventsService;
   clinicalEngine: ClinicalEngineService;
   otEngine: OtEngineService;
+  backup: BackupService;
 }
 
 export function createServices(deps: AppDeps): Services {
@@ -379,7 +382,10 @@ export function createServices(deps: AppDeps): Services {
 
   const otEngine = createOtEngineService({ db, audit, logger });
 
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine };
+  // m179 — مکانیک پشتیبان‌گیری و بازیابی
+  const backup = createBackupService({ db, audit, logger });
+
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, backup };
 }
 
 export function createApp(deps: AppDeps): AppHono {
@@ -430,16 +436,26 @@ export function createApp(deps: AppDeps): AppHono {
     });
   });
 
-  app.get('/health', (c) => c.json(
-    {
-      ok: true,
-      version: APP_VERSION,
-      milestone: APP_MILESTONE,
-      ts: new Date().toISOString()
-    },
-    200,
-    { 'Cache-Control': 'no-store' }
-  ));
+  // — m138: سلامت واقعی = دسترسی D1 هم آزموده می‌شود؛ خرابی → 503 تا مانیتور بیرونی متوجه شود
+  app.get('/health', async (c) => {
+    let dbOk = true;
+    try {
+      await services.db.queryOne('SELECT 1 AS ok');
+    } catch {
+      dbOk = false;
+    }
+    return c.json(
+      {
+        ok: dbOk,
+        db: dbOk ? 'up' : 'down',
+        version: APP_VERSION,
+        milestone: APP_MILESTONE,
+        ts: new Date().toISOString()
+      },
+      dbOk ? 200 : 503,
+      { 'Cache-Control': 'no-store' }
+    );
+  });
 
   app.get('/public/announcements', async (c) => {
     const items = await services.announcements.listPublic();
@@ -517,6 +533,8 @@ export function createApp(deps: AppDeps): AppHono {
   workingHoursRoutes(app, services.workingHours);
 
   registerSettingsRoutes(app, services.settings);
+
+  registerBackupRoutes(app, services.backup); // m179 — پشتیبان‌گیری و بازیابی
 
   if (FEATURES.apiKeys) registerKeysRoutes(app, services.keys);
 
