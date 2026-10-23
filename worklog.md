@@ -73,3 +73,21 @@ Work Log:
 Stage Summary:
 - سند «متن کامل چک‌لیست‌ها» تولید/کامیت/پابلیش شد — لینک دانلود: https://litter.catbox.moe/qxor8i.md (۷۲ ساعت اعتبار)
 - نکته: آیتم بحرانی فقط achenbach a13 و speech «بررسی شنوایی» (خارج از نمرهٔ کل)
+
+---
+Task ID: 3
+Agent: main (Z.ai)
+Task: «این ویرایش‌ها رو انجام بده» — اعمال بستهٔ کاربردی اختلال یادگیری (متن سادهٔ ۴ فرم SLD) از فایل آپلودی کاربر
+
+Work Log:
+- استخراج متن‌های ساده از فایل آپلودی؛ نگاشت ۱:۱ به کلیدهای فعلی (rA1..rD1 / wA1..wD1 / cA1..cD1 / r01..m04) — ثابت: کلید/ترتیب/نمره‌دهی/زیرمقیاس/آستانه‌ها
+- scripts/m175-build.py: ساخت fields جدید (label+scaleLabels+hint+teacherLabel/teacherHint) + مهاجرت 0066 + سینک battery-specific/composite.json + سینک جراحی bundle.js (۶۲ جایگزینی با assert)
+- کشف‌های bundle: faNum→faNum4، فرمت تک‌خطی battery-specific (hex uppercase) در برابر چندخطی composite (lowercase hex)، drift optsCls در fill renderer — همه با الگوی واقعی bundle هندل شد
+- src: types.ts (سه پراپ اختیاری)، pure.ts (FIELD_LABEL_MAX 240، TYPE_DESCRIPTION_MAX 1200، zod)، public-form.ts (qLabel/qHint + CSS .hint + notice «این فرم تشخیص نیست» در هر دو رندرکننده + isTeacherForm با teacherLabel)، routes.ts (پاس‌ترو در دو builder)
+- تست جدید public-form.test.ts (۴ کیس) + به‌روزرسانی دو assert متن قدیمی در e2e-teacher-package.test.ts
+- 1304 test ✓ · tsc 0 ✓ · migration 0066 روی پروداکشن ✓ · deploy ✓ · /health = 1.00.50/m175 ✓
+- وریفای پروداکشن: read (10 hint، 6 teacherLabel)، wri (5، 1)، calc (4، 0)، class-t (12، 0) — دقیقاً مطابق سند کاربر
+
+Stage Summary:
+- نسخهٔ 1.00.50/m175 پابلیش شد؛ متن‌های ساده + مثال‌ها + لنگرهای جدید زنده است
+- تصمیم‌های باز §۹ سند کاربر (تفکیک نمرهٔ نشانه‌ها، نمایش جدا گویه ۱۰، هشدار سن، کارت جدا/ذخیرهٔ خودکار موبایل) عمداً اعمال نشد — منتظر نظر روانشناس/کاربر
