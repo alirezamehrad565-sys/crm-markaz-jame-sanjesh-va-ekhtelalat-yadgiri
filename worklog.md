@@ -55,3 +55,22 @@
 - اسکریپت‌های موقت در `/home/z/my-project/scripts/` (نه /tmp)
 - بازخورد کاربر روی متن: فارسی ساده، جملات کوتاه، بدون اصطلاح تخصصی
 - خطوط RTL در ترمینال ممکن است به‌هم‌ریخته نمایش داده شوند (`const [m...` مثل `const onth...` دیده شد) — با Read/tsc راستی‌آزمایی شود
+
+---
+Task ID: m169
+Agent: main (Z.ai)
+Task: حذف فرم جدید (پروتکل عملکردی شناختی ce-rehab-cogperf-v1) + بازیابی worklog به مخزن + ساده‌سازی شدید متن «پشتوانهٔ علمی و نحوهٔ استفاده» خط پایه
+
+Work Log:
+- کشف rollback فضای کار: HEAD محلی m165 بود، worklog.md حذف شده بود؛ با git reset --hard origin/main به m168 برگشت
+- بازگشت جراحی m168→m167: pure/routes/service/types.ts + clinical-content.js + clinical-insights.js؛ حذف ۳ سند docs/clinical + e2e-cog-perf.test.ts + migration 0065
+- کشف مهم: رفع شمارنده‌های «کارنامهٔ من» (مرز UTC/تهران) در m168 فقط در src بود و به worker/bundle.js نرسیده بود (نسخهٔ زنده ۱.۰۰.۴۴ بدون رفع بود) → رفع جراحی روی bundle (پایه m167) اعمال شد
+- REHAB_FX_GUIDE با ۶ بند فارسی ساده بازنویسی شد (حذف اصطلاحات: سازه/زدپد/least-to-most prompting/تک‌آزمودنی A→B)
+- wrangler.prod.toml (gitignored، حاوی شناسه‌های واقعی) در rollback از بین رفته بود → بازسازی شد (account 6665…c4bf / db cf6bae8d-d574-4b8e-8a99-3b7462ef3f9e)
+- worklog.md به مخزن اضافه شد (از .gitignore خارج شد) — نسخهٔ مخزنی توکن ندارد، نسخهٔ محلی /home/z/my-project/worklog.md توکن کامل دارد
+- D1: migration 0065 اعمال شده بود و cogperf در تولید اصلاً ساخته نشده بود (صفر رویداد) → فقط ce-rehab-cog-v1 دوباره active=1 شد
+- نسخهٔ چهارتایی bump: 1.00.45 / m169 + CHANGELOG + 1298 test ✓ + golden ✓ + tsc 0 ✓
+
+Stage Summary:
+- تولید: 1.00.45 / m169 — /health ✓، cogperf در types نیست ✓، ce-rehab-cog-v1 فعال ✓، متن سادهٔ راهنما در asset زنده ✓
+- commit: 94bc13a (m169) + 8fb1c6b (worklog follow-up) — push شده به origin/main
