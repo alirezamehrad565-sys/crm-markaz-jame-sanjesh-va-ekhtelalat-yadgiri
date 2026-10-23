@@ -458,7 +458,7 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
       }
 
       const PATH_STATUS_LABELS_FA: Record<string, string> = {
-        suggested: 'پیشنهاد موتور',
+        suggested: 'پیشنهاد سامانه',
         reviewed: 'بازبینی‌شده',
         active: 'در مداخله',
         closed: 'بسته‌شده'

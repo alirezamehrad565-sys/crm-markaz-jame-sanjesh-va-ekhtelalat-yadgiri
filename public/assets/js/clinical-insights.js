@@ -870,7 +870,7 @@ function eventRowsBlock({ events, typesById, keys, cap = 6, expandable = true, o
 
   const rows = mine.map((e) => {
     const k = wantedKeyOf(e.eventTypeId);
-    const clickable = Boolean(onOpen); // m172 — ردیف‌ها کلیک‌پذیر: جزئیات + تفسیر موتور مستقیم باز می‌شود
+    const clickable = Boolean(onOpen); // m172 — ردیف‌ها کلیک‌پذیر: جزئیات + تفسیر مستقیم باز می‌شود
     return el('div', {
       ...(clickable ? {
         role: 'button', tabindex: '0', class: 'clx-row--link',
@@ -947,7 +947,7 @@ function hypothesisCard(h, rank, { student, paths, canDecide, refresh, conv }) {
         el('span', { class: 'clx-hyp__rank' }, fa(rank)),
         el('strong', { class: 'clx-hyp__title' }, h.targetTitle),
         el('span', { class: `badge ${CONFIDENCE_BADGE[h.confidence] ?? 'badge--neutral'}` }, `اطمینان ${h.confidence}`),
-        el('span', { class: 'cell-sub', title: 'جمع وزن شواهد — عدد فنی موتور' }, `امتیاز شواهد: ${fa(h.score)}`)
+        el('span', { class: 'cell-sub', title: 'جمع وزن شواهد — عدد راهنما' }, `امتیاز شواهد: ${fa(h.score)}`)
       ),
       el('div', { class: 'clx-chips' },
         countChip('برآورده', cs.met, 'badge--success'),

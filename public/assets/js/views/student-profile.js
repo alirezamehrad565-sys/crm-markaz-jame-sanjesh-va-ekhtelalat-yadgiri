@@ -5,7 +5,7 @@ import { session } from '../state.js';
 import { fetchTags, fetchStudentTags, tagChip, openTagEditor } from '../tagging.js';
 import { openCaseEventForm, openCaseEventDetail, canCreateCaseEvents, openChecklistSendModal, fillTargetOf } from '../case-events.js'; // — رویدادهای پرونده + ارسال چک‌لیست + سه‌هدف
 import { openExerciseSendModal, renderExercisesTab } from '../exercise-send.js'; // — ارسال تمرین با بله + تب تمرین‌ها
-import { renderClinicalTab } from '../clinical-insights.js'; // — تب تفسیر بالینی (موتور شناسایی + پروتکل قضاوت)
+import { renderClinicalTab } from '../clinical-insights.js'; // — تب تفسیر بالینی + پروتکل قضاوت
 import { pathwayChip, canEditPathway, openPathwayModal } from '../session-type.js'; // — مسیر پرونده
 import { openEducationHistory } from '../archive-form.js'; // — تاریخچهٔ تحصیلی
 import { openStudentForm } from '../student-form.js'; // — فرم مشترک ویرایش (کد ملی/مسئول/مسیر) — جایگزین فرم قدیمی داخلی
