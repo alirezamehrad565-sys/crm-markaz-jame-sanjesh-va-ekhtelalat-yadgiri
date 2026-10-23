@@ -11,6 +11,17 @@ import { el, icon, toast, toastError, loadingState, errorState } from '../ui.js'
 const CONFIRM_WORD = 'بازیابی';
 const LAST_BACKUP_KEY = 'cs.lastBackupAt';
 const MAX_FILE_BYTES = 60 * 1024 * 1024;
+const BALE_SEND_CAP_TEXT = 'فایل‌های پیوستی اگر روی‌هم از حدود ۴۸ مگابایت بیشتر شوند برای بله زیاد است — در آن حالت از «دریافت فایل پشتیبان» استفاده کنید.';
+
+// ارقام فارسی/عربی → لاتین (برای فیلد آیدی بله)
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+const AR_DIGITS = '٠١٢٣٤٥٦٧٨٩';
+function normalizeDigits(input) {
+  return String(input).replace(/[۰-۹٠-٩]/g, (ch) => {
+    const i = FA_DIGITS.indexOf(ch);
+    return String(i >= 0 ? i : AR_DIGITS.indexOf(ch));
+  });
+}
 
 const BACKUP_ACTION_LABELS = {
   'backup.export': 'دریافت پشتیبان',
@@ -121,7 +132,7 @@ function drawDelivery(delivery) {
         const chatInp = el('input', { type: 'text', value: d.chat_id, placeholder: 'آیدی عددی بله', dir: 'ltr', style: { flex: '2', minWidth: '120px', textAlign: 'left' } });
         const activeInp = el('input', { type: 'checkbox', checked: d.active });
         labelInp.addEventListener('input', () => { d.label = labelInp.value; });
-        chatInp.addEventListener('input', () => { d.chat_id = chatInp.value.trim(); });
+        chatInp.addEventListener('input', () => { d.chat_id = normalizeDigits(chatInp.value).replace(/[\s-]/g, ''); });
         activeInp.addEventListener('change', () => { d.active = activeInp.checked; });
         rowsBox.appendChild(el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' } },
           labelInp,
@@ -213,6 +224,7 @@ function drawDelivery(delivery) {
         : sendChecksBox,
       el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'var(--sp-2)', cursor: 'pointer' } },
         sendFilesInp, ' همراه‌کردن فایل‌های پیوستی (حجم بیشتر)'),
+      smallText(BALE_SEND_CAP_TEXT),
       sendBtn,
       sendResultBox
     ));
@@ -232,7 +244,8 @@ function drawDelivery(delivery) {
       autoChecksBox,
       el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'var(--sp-2)', cursor: 'pointer' } },
         autoFilesInp, ' همراه‌کردن فایل‌های پیوستی در ارسال خودکار'),
-      smallText('اگر روشن باشد ولی مقصدی تیک نخورده باشد، آن شب چیزی فرستاده نمی‌شود. برای اعمال تغییرها «ذخیره» را بزنید.')
+      smallText('اگر روشن باشد ولی مقصدی تیک نخورده باشد، آن شب چیزی فرستاده نمی‌شود. برای اعمال تغییرها «ذخیره» را بزنید.'),
+      smallText(BALE_SEND_CAP_TEXT)
     ));
 
     return box;
