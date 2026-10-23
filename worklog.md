@@ -293,3 +293,19 @@ Stage Summary:
 - اکشن GHCR فعال شد: از این پس هر پوش روی main ایمیج سلف‌هاست را به ghcr.io/alirezamehrad565-sys/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri منتشر می‌کند (latest + sha + main)؛ مسیر «docker pull» در README/SELF-HOST.fa.md/compose سیم‌کشی شد
 - **شکاف باز — سورس m183/m184 (1.00.58–1.00.59) در گیت نیست**: دامنهٔ تغییر = فقط بک‌اند؛ استاتیک پروداکشن identical است. دو راه بازگشت: (۱) در سشن مبدأ commit+push، یا (۲) دادن CLOUDFLARE_API_TOKEN در سشن برای دانلود باندل مستقر (GET accounts/{id}/workers/scripts) و بازسازی
 - مسیر Cloudflare دست‌نخورده ماند (wrangler.prod.toml/ورکر/مهاجرت‌ها بدون تغییر)؛ npm test 1352/1352 ✓
+
+---
+Task ID: 13-b (ci-red → green)
+Agent: main (Z.ai)
+Task: رفع قرمزی همیشگی CI — «Golden engine tests (node --test)»
+
+Work Log:
+- بررسی ران‌های Actions پس از پوش: CI روی main از قبل قرمز بود (۳ ران شکست پیش از کامیت‌های این سشن)؛ استپ شکسته = فقط «Golden engine tests» — typecheck/۱۳۵۲ تست/node --check همگی سبز
+- ریشه‌یابی: آزمون طلایی، برابری src/domain/case-formulation/engine.js با برشِ باندل را ادعا می‌کرد؛ رفرنس‌ها آخرین بار در m170 تولید شده بودند و در m179 (بازسازی esbuild باندل از src) منطق بازسازی باندل عوض شد
+- کشف ساختاری: موتور صورت‌بندی از m179 به‌بعد **اصلاً در باندل سرور نیست** — هیچ ماژولی در src/server آن را import نمی‌کند (esbuild tree-shake کرده)؛ مصرف‌کنندهٔ واقعی فقط فرانت‌اند است (public/assets/js/case-formulation.js + clinical-insights.js). مولد رفرنس (generate-bundle-ref.mjs) هم با انکرهای قدیمی روی باندل جدید کرش می‌کند (anchor not found: var CONSTRUCT_KEYS)
+- یعنی فرضِ آزمون («src ≡ باندل سرور») از m179 بی‌معنا بود و استپ همیشه‌قرمز بود؛ پاریتی رفتار سرور از همان م179 با bundle-smoke.mjs + تست‌های مسیر پوشش داده شده است
+- اقدام: حذف tests/golden + حذف استپ از ci.yml (با کامنت توضیحی) + افزودن استپ «Self-host build & smoke» به CI (بیلد dist/server.js + boot + /health + /) تا مسیر ایمیج GHCR هم در CI پوشیده شود
+- src/domain/case-formulation/engine.js دست‌نخورده ماند (یافته برای تصمیم بعدی: کپی مرده کنار نسخهٔ فعال فرانت‌اند — کاندیدای پاک‌سازی یا اتصال مجدد سمت سرور؛ نیازمند تأیید کاربر)
+
+Stage Summary:
+- CI اکنون: tsc + ۱۳۵۲ تست + node --check + دودآزمایی سلف‌هاست — بدون استپ همیشه‌قرمز
