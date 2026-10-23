@@ -12,11 +12,12 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# سورس لایهٔ سرور و اپ + اسکریپت بیلد
+# سورس لایهٔ سرور و اپ + اسکریپت بیلد + worker (سرویس‌های src به worker/scoring.js ارجاع می‌دهند)
 COPY tsconfig.json ./tsconfig.json
 COPY src ./src
 COPY server ./server
 COPY scripts ./scripts
+COPY worker ./worker
 
 RUN node scripts/build-selfhost.mjs
 
