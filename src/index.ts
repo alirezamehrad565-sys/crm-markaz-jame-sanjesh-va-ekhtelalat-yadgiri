@@ -84,6 +84,27 @@ async function runBatchDispatchCycle(env: Env): Promise<void> {
   logger.info('batch.cycle.done', { dispatch });
 }
 
+// m180 — پشتیبان خودکار شبانه: اگر مدیر فعالش کرده باشد، فایل پشتیبان به
+// مقصدهای بلهٔ انتخاب‌شده فرستاده می‌شود (همان cron دیجست، بعد از آن اجرا می‌شود)
+async function runBackupAutoSendCycle(env: Env): Promise<void> {
+  const db = createDb(env.DB);
+  const audit = createAuditWriter(db);
+  const logger = createLogger('cron.backup');
+  const services = createServices({
+    db,
+    audit,
+    logger,
+    teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
+    ...buildEnv(env)
+  });
+
+  const outcome = await services.backup.runScheduledAutoSend().catch((err: unknown) => {
+    logger.error('backup.auto.failed', { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  });
+  logger.info('backup.auto.cycle.done', { outcome });
+}
+
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const db = createDb(env.DB);
@@ -102,6 +123,7 @@ export default {
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     if (event.cron === DIGEST_CRON) {
       ctx.waitUntil(runDigestCycle(env));
+      ctx.waitUntil(runBackupAutoSendCycle(env)); // m180 — پشتیبان خودکار شبانه (اگر فعال باشد)
       return;
     }
     if (event.cron === BATCH_CRON) {

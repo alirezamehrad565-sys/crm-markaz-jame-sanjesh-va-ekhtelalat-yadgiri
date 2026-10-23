@@ -68,7 +68,7 @@ import type { NotifyAppService } from '@app/notify';
 import { createSettingsService, registerSettingsRoutes } from '@app/settings';
 import type { SettingsService } from '@app/settings';
 import { createBackupService, registerBackupRoutes } from '@app/backup';
-import type { BackupService } from '@app/backup';
+import type { BackupService, BackupDocumentSender } from '@app/backup';
 import { createKeysService, registerKeysRoutes } from '@app/keys';
 import type { KeysService } from '@app/keys';
 import { createSearchService, registerSearchRoutes } from '@app/search';
@@ -94,6 +94,7 @@ export interface AppDeps {
   exerciseBucket?: unknown;
   downloadSecret?: string | null;
   publicBaseUrl?: string | null;
+  backupDocumentSender?: BackupDocumentSender | null; // m180 — تزریق ارسال‌کنندهٔ آزمایشی
 }
 
 export interface Services {
@@ -383,7 +384,7 @@ export function createServices(deps: AppDeps): Services {
   const otEngine = createOtEngineService({ db, audit, logger });
 
   // m179 — مکانیک پشتیبان‌گیری و بازیابی
-  const backup = createBackupService({ db, audit, logger });
+  const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null }); // m180 — ارسال به آیدی بله
 
   return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, backup };
 }

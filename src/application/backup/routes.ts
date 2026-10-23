@@ -56,4 +56,27 @@ export function registerBackupRoutes(app: AppHono, service: BackupService): void
     const data = await service.restore(actor, body, { confirmed });
     return c.json({ data }, 200);
   });
+
+  // ─── m180 — ارسال پشتیبان به آیدی بله (مقصد انتخابی) ───
+
+  // تنظیمات ارسال: مقصدها (آیدی‌های بله) + ارسال خودکار شبانه
+  app.get('/api/backup/delivery', requireRole('manager'), async (c) => {
+    const data = await service.getDelivery();
+    return c.json({ data }, 200);
+  });
+
+  app.put('/api/backup/delivery', requireRole('manager'), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json<Record<string, unknown>>();
+    const data = await service.saveDelivery(actor, body);
+    return c.json({ data }, 200);
+  });
+
+  // ارسال فایل پشتیبان به مقصدهای انتخاب‌شده (sendDocument ربات بله)
+  app.post('/api/backup/send', requireRole('manager'), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json<{ destinations?: unknown; include_files?: boolean }>();
+    const data = await service.sendBackup(actor, body ?? {});
+    return c.json({ data }, 200);
+  });
 }

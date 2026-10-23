@@ -1823,8 +1823,8 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.00.54";
-var APP_MILESTONE = "m179";
+var APP_VERSION = "1.00.55";
+var APP_MILESTONE = "m180";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -6078,8 +6078,15 @@ var SETTING_KEYS = {
   CLINIC_PHONE: "clinic_phone",
   NOTIFY_BATCH_HOUR: "notify_batch_hour",
   SCORING_CONFIG: "scoring_config",
-  BOT_USERNAME: "bot_username"
+  BOT_USERNAME: "bot_username",
+  BACKUP_DESTINATIONS: "backup_destinations",
+  // m180 — مقصدهای ارسال پشتیبان به بله (JSON)
+  BACKUP_AUTO_SEND: "backup_auto_send"
+  // m180 — پشتیبان خودکار شبانه (JSON)
 };
+var BACKUP_MAX_DESTINATIONS = 10;
+var BACKUP_MAX_SEND_BYTES = 48 * 1024 * 1024;
+var BACKUP_CHAT_ID_RE = /^-?\d{3,32}$/;
 var DEFAULT_SETTINGS = {
   [SETTING_KEYS.CLINIC_NAME]: DEFAULT_CLINIC_NAME,
   [SETTING_KEYS.DEFAULT_REMINDER_HOURS]: DEFAULT_REMINDER_HOURS_BEFORE,
@@ -38523,6 +38530,43 @@ function registerSettingsRoutes(app, service) {
 }
 __name(registerSettingsRoutes, "registerSettingsRoutes");
 
+// src/core/notify/bale/documents.ts
+async function sendBaleDocument(options) {
+  const base = (options.apiBase ?? "https://tapi.bale.ai").replace(/\/+$/, "");
+  const doFetch = options.fetchImpl ?? fetch;
+  const url = `${base}/bot${options.token}/sendDocument`;
+  try {
+    const form = new FormData();
+    form.append("chat_id", options.chatId);
+    if (options.caption) form.append("caption", options.caption);
+    form.append(
+      "document",
+      new File([options.bytes.slice().buffer], options.filename, {
+        type: options.mime ?? "application/octet-stream"
+      })
+    );
+    const res = await doFetch(url, { method: "POST", body: form });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || body.ok === false) {
+      return {
+        ok: false,
+        error: `BALE_${res.status}: ${body.description ?? "unknown error"}`
+      };
+    }
+    const messageId = body.result?.message_id;
+    return {
+      ok: true,
+      externalId: messageId != null ? String(messageId) : void 0
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: `BALE_NETWORK: ${err instanceof Error ? err.message : "unknown"}`
+    };
+  }
+}
+__name(sendBaleDocument, "sendBaleDocument");
+
 // src/application/backup/service.ts
 var BACKUP_FORMAT = "gh-backup";
 var BACKUP_FORMAT_VERSION = 1;
@@ -38550,7 +38594,138 @@ function encodeValue(v) {
 }
 __name(encodeValue, "encodeValue");
 function createBackupService(deps) {
-  const { db, audit, logger } = deps;
+  const { db, audit, logger, baleToken, sender } = deps;
+  async function readSetting(key, fallback) {
+    try {
+      const row = await db.queryOne(`SELECT value FROM settings WHERE key = ?`, [key]);
+      if (!row?.value) return fallback;
+      return JSON.parse(row.value) ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  __name(readSetting, "readSetting");
+  async function writeSetting(key, value, updatedBy) {
+    await db.query(
+      `INSERT INTO settings (key, value, updated_by, updated_at)
+       VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT(key) DO UPDATE SET
+         value = excluded.value, updated_by = excluded.updated_by, updated_at = datetime('now')`,
+      [key, JSON.stringify(value), updatedBy]
+    );
+  }
+  __name(writeSetting, "writeSetting");
+  function sanitizeDestinations(input) {
+    if (!Array.isArray(input)) throw new ValidationError("\u0644\u06CC\u0633\u062A \u0645\u0642\u0635\u062F\u0647\u0627 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+    if (input.length > BACKUP_MAX_DESTINATIONS) {
+      throw new ValidationError(`\u0628\u06CC\u0634\u062A\u0631 \u0627\u0632 ${BACKUP_MAX_DESTINATIONS} \u0645\u0642\u0635\u062F \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u06CC\u062F \u0630\u062E\u06CC\u0631\u0647 \u06A9\u0646\u06CC\u062F`);
+    }
+    const seenIds = /* @__PURE__ */ new Set();
+    const seenChats = /* @__PURE__ */ new Set();
+    return input.map((raw2) => {
+      const d = raw2 ?? {};
+      const label = typeof d.label === "string" ? d.label.trim() : "";
+      const chatId = typeof d.chat_id === "string" ? d.chat_id.trim() : "";
+      if (!label || label.length > 60) {
+        throw new ValidationError("\u0647\u0631 \u0645\u0642\u0635\u062F \u0628\u0627\u06CC\u062F \u06CC\u06A9 \u0646\u0627\u0645 \u06A9\u0648\u062A\u0627\u0647 \u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F (\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F6\u06F0 \u0646\u0648\u06CC\u0633\u0647)");
+      }
+      if (!BACKUP_CHAT_ID_RE.test(chatId)) {
+        throw new ValidationError(
+          `\u0622\u06CC\u062F\u06CC \u0628\u0644\u0647 \xAB${chatId.slice(0, 24) || "\u062E\u0627\u0644\u06CC"}\xBB \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A \u2014 \u0622\u06CC\u062F\u06CC \u0628\u0644\u0647 \u0639\u062F\u062F\u06CC \u0627\u0633\u062A (\u0645\u062B\u0627\u0644: \u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9)`
+        );
+      }
+      const id = typeof d.id === "string" && d.id.length > 0 ? d.id : crypto.randomUUID();
+      if (seenIds.has(id)) throw new ValidationError("\u0634\u0646\u0627\u0633\u0647\u0654 \u0645\u0642\u0635\u062F \u062A\u06A9\u0631\u0627\u0631\u06CC \u0627\u0633\u062A");
+      seenIds.add(id);
+      if (seenChats.has(chatId)) {
+        throw new ValidationError(`\u0622\u06CC\u062F\u06CC \xAB${chatId}\xBB \u062F\u0648\u0628\u0627\u0631 \u0648\u0627\u0631\u062F \u0634\u062F\u0647 \u0627\u0633\u062A`);
+      }
+      seenChats.add(chatId);
+      return { id, label, chat_id: chatId, active: d.active !== false };
+    });
+  }
+  __name(sanitizeDestinations, "sanitizeDestinations");
+  function sanitizeAutoSend(input, destinations) {
+    const raw2 = input ?? {};
+    const ids = Array.isArray(raw2.destination_ids) ? raw2.destination_ids.filter((x) => typeof x === "string") : [];
+    const known = new Set(destinations.map((d) => d.id));
+    if (ids.some((id) => !known.has(id))) {
+      throw new ValidationError("\u0645\u0642\u0635\u062F\u0647\u0627\u06CC \u0627\u0631\u0633\u0627\u0644 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0628\u0627\u06CC\u062F \u0627\u0632 \u0645\u0642\u0635\u062F\u0647\u0627\u06CC \u0630\u062E\u06CC\u0631\u0647\u200C\u0634\u062F\u0647 \u0627\u0646\u062A\u062E\u0627\u0628 \u0634\u0648\u0646\u062F");
+    }
+    return {
+      enabled: raw2.enabled === true,
+      destination_ids: ids,
+      include_files: raw2.include_files === true
+    };
+  }
+  __name(sanitizeAutoSend, "sanitizeAutoSend");
+  function resolveSender() {
+    if (sender) return sender;
+    if (!baleToken) return null;
+    return (opts) => sendBaleDocument({
+      token: baleToken,
+      chatId: opts.chatId,
+      filename: opts.filename,
+      bytes: opts.bytes,
+      caption: opts.caption,
+      mime: "application/json"
+    });
+  }
+  __name(resolveSender, "resolveSender");
+  function backupStamp() {
+    const d = /* @__PURE__ */ new Date();
+    const p = /* @__PURE__ */ __name((n) => String(n).padStart(2, "0"), "p");
+    return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}`;
+  }
+  __name(backupStamp, "backupStamp");
+  async function collectExport(includeFiles) {
+    const stream = service.buildExportStream(includeFiles);
+    const buf = await new Response(stream).arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    if (bytes.byteLength > BACKUP_MAX_SEND_BYTES) {
+      throw new ValidationError(
+        "\u062D\u062C\u0645 \u0641\u0627\u06CC\u0644 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646 \u0628\u0631\u0627\u06CC \u0627\u0631\u0633\u0627\u0644 \u0628\u0647 \u0628\u0644\u0647 \u0632\u06CC\u0627\u062F \u0627\u0633\u062A (\u0633\u0642\u0641 \u06F4\u06F8 \u0645\u06AF\u0627\u0628\u0627\u06CC\u062A) \u2014 \u06AF\u0632\u06CC\u0646\u0647\u0654 \xAB\u0647\u0645\u0631\u0627\u0647\u200C\u06A9\u0631\u062F\u0646 \u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u067E\u06CC\u0648\u0633\u062A\u06CC\xBB \u0631\u0627 \u062E\u0627\u0645\u0648\u0634 \u06A9\u0646\u06CC\u062F"
+      );
+    }
+    return { bytes, filename: `backup-${backupStamp()}.json` };
+  }
+  __name(collectExport, "collectExport");
+  function buildCaption() {
+    const when = (/* @__PURE__ */ new Date()).toISOString().slice(0, 16).replace("T", " ");
+    return `\u067E\u0634\u062A\u06CC\u0628\u0627\u0646 \u0633\u0627\u0645\u0627\u0646\u0647 \u2014 ${when} (UTC) \u2014 \u0646\u0633\u062E\u0647\u0654 ${APP_VERSION} (${APP_MILESTONE})`;
+  }
+  __name(buildCaption, "buildCaption");
+  async function sendToDestinations(chosen, includeFiles) {
+    const senderFn = resolveSender();
+    if (!senderFn) {
+      throw new ValidationError("\u062A\u0648\u06A9\u0646 \u0631\u0628\u0627\u062A \u0628\u0644\u0647 \u062A\u0646\u0638\u06CC\u0645 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0628\u062F\u0648\u0646 \u0622\u0646 \u0627\u0631\u0633\u0627\u0644 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646 \u0628\u0647 \u0622\u06CC\u062F\u06CC \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A");
+    }
+    const { bytes, filename } = await collectExport(includeFiles);
+    const caption = buildCaption();
+    const results = [];
+    for (const d of chosen) {
+      const r = await senderFn({ chatId: d.chat_id, filename, bytes, caption });
+      results.push({
+        id: d.id,
+        label: d.label,
+        chat_id: d.chat_id,
+        ok: r.ok,
+        error: r.error,
+        message_id: r.externalId
+      });
+    }
+    const sent = results.filter((r) => r.ok).length;
+    return {
+      ok: sent > 0,
+      filename,
+      size_bytes: bytes.byteLength,
+      include_files: includeFiles,
+      sent,
+      failed: results.length - sent,
+      results
+    };
+  }
+  __name(sendToDestinations, "sendToDestinations");
   async function listTables() {
     const rows = await db.query(
       `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`
@@ -38865,6 +39040,112 @@ function createBackupService(deps) {
       });
       logger.info("backup.restore.done", { tables: reportTables.length, rows: totalRows, ms: durationMs });
       return { ok: true, durationMs, totalRows, tables: reportTables, warnings };
+    },
+    // ─── m180 — ارسال پشتیبان به آیدی بله (مقصد انتخابی) ───
+    async getDelivery() {
+      const destinations = await readSetting(SETTING_KEYS.BACKUP_DESTINATIONS, []);
+      const auto = await readSetting(SETTING_KEYS.BACKUP_AUTO_SEND, {});
+      return {
+        bot_ready: Boolean(sender || baleToken),
+        destinations,
+        auto_send: {
+          enabled: auto.enabled === true,
+          destination_ids: Array.isArray(auto.destination_ids) ? auto.destination_ids : [],
+          include_files: auto.include_files === true
+        }
+      };
+    },
+    async saveDelivery(actor, input) {
+      const raw2 = input ?? {};
+      const destinations = sanitizeDestinations(raw2.destinations ?? []);
+      const auto = sanitizeAutoSend(raw2.auto_send, destinations);
+      await writeSetting(SETTING_KEYS.BACKUP_DESTINATIONS, destinations, actor.staffId);
+      await writeSetting(SETTING_KEYS.BACKUP_AUTO_SEND, auto, actor.staffId);
+      try {
+        await audit.log({
+          actorId: actor.staffId,
+          action: "backup.delivery_update",
+          resourceType: "backup",
+          resourceId: "delivery",
+          changes: {
+            destinations: { from: null, to: destinations.length },
+            auto_send: { from: null, to: auto.enabled ? "on" : "off" }
+          }
+        });
+      } catch (err) {
+        logger.warn("backup.delivery.audit_failed", { err: err instanceof Error ? err.message : String(err) });
+      }
+      return {
+        bot_ready: Boolean(sender || baleToken),
+        destinations,
+        auto_send: auto
+      };
+    },
+    async sendBackup(actor, input) {
+      const raw2 = input ?? {};
+      const ids = Array.isArray(raw2.destinations) ? raw2.destinations.filter((x) => typeof x === "string") : [];
+      if (ids.length === 0) {
+        throw new ValidationError("\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0645\u0642\u0635\u062F (\u0622\u06CC\u062F\u06CC \u0628\u0644\u0647) \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F");
+      }
+      const includeFiles = raw2.include_files === true;
+      const destinations = await readSetting(SETTING_KEYS.BACKUP_DESTINATIONS, []);
+      const chosen = destinations.filter((d) => ids.includes(d.id));
+      if (chosen.length !== ids.length) {
+        throw new ValidationError("\u0628\u0631\u062E\u06CC \u0645\u0642\u0635\u062F\u0647\u0627\u06CC \u0627\u0646\u062A\u062E\u0627\u0628\u06CC \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F\u0646\u062F \u2014 \u0644\u06CC\u0633\u062A \u0645\u0642\u0635\u062F\u0647\u0627 \u0631\u0627 \u0630\u062E\u06CC\u0631\u0647 \u06A9\u0646\u06CC\u062F \u0648 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F");
+      }
+      const inactive = chosen.filter((d) => !d.active).map((d) => d.label);
+      if (inactive.length > 0) {
+        throw new ValidationError(`\u0627\u06CC\u0646 \u0645\u0642\u0635\u062F\u0647\u0627 \u063A\u06CC\u0631\u0641\u0639\u0627\u0644\u200C\u0627\u0646\u062F \u0648 \u0627\u0631\u0633\u0627\u0644 \u0646\u0645\u06CC\u200C\u0634\u0648\u0646\u062F: ${inactive.join("\u060C ")}`);
+      }
+      const report = await sendToDestinations(chosen, includeFiles);
+      try {
+        await audit.log({
+          actorId: actor.staffId,
+          action: "backup.send",
+          resourceType: "backup",
+          resourceId: report.filename,
+          changes: {
+            sent: { from: null, to: report.sent },
+            failed: { from: null, to: report.failed },
+            include_files: { from: null, to: includeFiles }
+          }
+        });
+      } catch (err) {
+        logger.warn("backup.send.audit_failed", { err: err instanceof Error ? err.message : String(err) });
+      }
+      logger.info("backup.send.done", {
+        sent: report.sent,
+        failed: report.failed,
+        bytes: report.size_bytes
+      });
+      return report;
+    },
+    async runScheduledAutoSend() {
+      const auto = await readSetting(SETTING_KEYS.BACKUP_AUTO_SEND, {});
+      if (auto.enabled !== true) return { skipped: true, reason: "disabled" };
+      const destinations = await readSetting(SETTING_KEYS.BACKUP_DESTINATIONS, []);
+      const chosen = destinations.filter(
+        (d) => (auto.destination_ids ?? []).includes(d.id) && d.active
+      );
+      if (chosen.length === 0) return { skipped: true, reason: "no_destination" };
+      const includeFiles = auto.include_files === true;
+      const report = await sendToDestinations(chosen, includeFiles);
+      try {
+        await audit.log({
+          actorId: "system",
+          action: "backup.auto_send",
+          resourceType: "backup",
+          resourceId: report.filename,
+          changes: {
+            sent: { from: null, to: report.sent },
+            failed: { from: null, to: report.failed }
+          }
+        });
+      } catch (err) {
+        logger.warn("backup.auto.audit_failed", { err: err instanceof Error ? err.message : String(err) });
+      }
+      logger.info("backup.auto.done", { sent: report.sent, failed: report.failed });
+      return { skipped: false, report };
     }
   };
   return service;
@@ -38916,6 +39197,22 @@ function registerBackupRoutes(app, service) {
     const body = await c.req.json();
     const confirmed = body?.confirm === true;
     const data = await service.restore(actor, body, { confirmed });
+    return c.json({ data }, 200);
+  });
+  app.get("/api/backup/delivery", requireRole("manager"), async (c) => {
+    const data = await service.getDelivery();
+    return c.json({ data }, 200);
+  });
+  app.put("/api/backup/delivery", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json();
+    const data = await service.saveDelivery(actor, body);
+    return c.json({ data }, 200);
+  });
+  app.post("/api/backup/send", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json();
+    const data = await service.sendBackup(actor, body ?? {});
     return c.json({ data }, 200);
   });
 }
@@ -40119,7 +40416,7 @@ function createServices(deps) {
   const knowledge = createKnowledgeService({ db, audit, logger, storage: exerciseStorage });
   const clinicalEngine = createClinicalEngineService({ db, audit, logger });
   const otEngine = createOtEngineService({ db, audit, logger });
-  const backup = createBackupService({ db, audit, logger });
+  const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null });
   return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, backup };
 }
 __name(createServices, "createServices");
@@ -40455,6 +40752,24 @@ async function runBatchDispatchCycle(env) {
   logger.info("batch.cycle.done", { dispatch });
 }
 __name(runBatchDispatchCycle, "runBatchDispatchCycle");
+async function runBackupAutoSendCycle(env) {
+  const db = createDb(env.DB);
+  const audit = createAuditWriter(db);
+  const logger = createLogger("cron.backup");
+  const services = createServices({
+    db,
+    audit,
+    logger,
+    teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
+    ...buildEnv(env)
+  });
+  const outcome = await services.backup.runScheduledAutoSend().catch((err) => {
+    logger.error("backup.auto.failed", { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  });
+  logger.info("backup.auto.cycle.done", { outcome });
+}
+__name(runBackupAutoSendCycle, "runBackupAutoSendCycle");
 var src_default = {
   async fetch(request, env, _ctx) {
     const db = createDb(env.DB);
@@ -40472,6 +40787,7 @@ var src_default = {
   async scheduled(event, env, ctx) {
     if (event.cron === DIGEST_CRON) {
       ctx.waitUntil(runDigestCycle(env));
+      ctx.waitUntil(runBackupAutoSendCycle(env));
       return;
     }
     if (event.cron === BATCH_CRON) {

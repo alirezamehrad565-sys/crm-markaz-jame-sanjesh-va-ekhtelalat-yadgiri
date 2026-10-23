@@ -269,8 +269,15 @@ export const SETTING_KEYS = {
   CLINIC_PHONE: 'clinic_phone',
   NOTIFY_BATCH_HOUR: 'notify_batch_hour',
   SCORING_CONFIG: 'scoring_config',
-  BOT_USERNAME: 'bot_username'
+  BOT_USERNAME: 'bot_username',
+  BACKUP_DESTINATIONS: 'backup_destinations', // m180 — مقصدهای ارسال پشتیبان به بله (JSON)
+  BACKUP_AUTO_SEND: 'backup_auto_send' // m180 — پشتیبان خودکار شبانه (JSON)
 } as const;
+
+// ─── m180 — ارسال پشتیبان به آیدی بله ───
+export const BACKUP_MAX_DESTINATIONS = 10;
+export const BACKUP_MAX_SEND_BYTES = 48 * 1024 * 1024; // سقف امن زیر سقف ~۵۰ مگابایت بله
+export const BACKUP_CHAT_ID_RE = /^-?\d{3,32}$/; // آیدی عددی بله (کاربر/گروه/کانال)
 
 export const DEFAULT_SETTINGS = {
   [SETTING_KEYS.CLINIC_NAME]: DEFAULT_CLINIC_NAME,

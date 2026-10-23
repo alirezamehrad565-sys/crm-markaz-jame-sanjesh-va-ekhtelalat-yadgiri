@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { createTestApp, asRole, MANAGER_ID, ALI_ID } from '../../../test/harness';
+import { createTestApp, asRole, silentLogger } from '../../../test/harness';
+import { createServices } from '@app/api-routing';
+import { createAuditWriter } from '@core/audit';
 import { BACKUP_FORMAT } from '../service';
 import { APP_VERSION, APP_MILESTONE } from '../../../core/version';
 
@@ -191,5 +193,236 @@ describe('پشتیبان‌گیری — ستون‌های ناشناخته', () 
     expect(res.status).toBe(200);
     const report = (res.body as { data: { warnings: string[] } }).data;
     expect(report.warnings.join(' ')).toContain('__future_column');
+  });
+});
+
+// ─── m180 — ارسال پشتیبان به آیدی بله (مقصد انتخابی) ───
+
+describe('ارسال پشتیبان به بله — مقصدها', () => {
+  it('فهرست مقصدهای خالی را با bot_ready=false برمی‌گرداند', async () => {
+    const t = createTestApp();
+    const manager = await asRole(t, 'manager');
+    const res = await manager.get('/api/backup/delivery');
+    expect(res.status).toBe(200);
+    const data = (res.body as { data: { bot_ready: boolean; destinations: unknown[]; auto_send: { enabled: boolean; destination_ids: string[] } } }).data;
+    expect(data.bot_ready).toBe(false);
+    expect(data.destinations).toHaveLength(0);
+    expect(data.auto_send.enabled).toBe(false);
+  });
+
+  it('مقصدها را ذخیره می‌کند و دوباره می‌خواند (انتخابی)', async () => {
+    const t = createTestApp();
+    const manager = await asRole(t, 'manager');
+    const save = await manager.put('/api/backup/delivery', {
+      destinations: [
+        { id: 'd1', label: 'مدیر مرکز', chat_id: '123456789', active: true },
+        { label: 'دفتر', chat_id: '987654321', active: false }
+      ],
+      auto_send: { enabled: true, destination_ids: ['d1'], include_files: false }
+    });
+    expect(save.status).toBe(200);
+    const saved = (save.body as { data: { destinations: { id: string; label: string; chat_id: string; active: boolean }[]; auto_send: { enabled: boolean } } }).data;
+    expect(saved.destinations).toHaveLength(2);
+    expect(saved.destinations[0].id).toBe('d1');
+    expect(saved.destinations[1].id).toBeTruthy(); // id خودکار ساخته شد
+    expect(saved.destinations[1].active).toBe(false);
+    expect(saved.auto_send.enabled).toBe(true);
+
+    const read = await manager.get('/api/backup/delivery');
+    const again = (read.body as { data: { destinations: unknown[]; auto_send: { destination_ids: string[] } } }).data;
+    expect(again.destinations).toHaveLength(2);
+    expect(again.auto_send.destination_ids).toEqual(['d1']);
+
+    const audits = t.sql.prepare("SELECT COUNT(*) AS c FROM audit_log WHERE action = 'backup.delivery_update'").get() as { c: number };
+    expect(audits.c).toBe(1);
+  });
+
+  it('آیدی غیرعددی، آیدی تکراری و بدون نام را رد می‌کند', async () => {
+    const t = createTestApp();
+    const manager = await asRole(t, 'manager');
+    expect(
+      (await manager.put('/api/backup/delivery', { destinations: [{ label: 'بدون آیدی', chat_id: 'abc@x', active: true }] })).status
+    ).toBe(400);
+    expect(
+      (await manager.put('/api/backup/delivery', { destinations: [{ label: 'الف', chat_id: '12', active: true }] })).status
+    ).toBe(400);
+    expect((await manager.put('/api/backup/delivery', { destinations: [{ chat_id: '123456789' }] })).status).toBe(400);
+    expect(
+      (await manager.put('/api/backup/delivery', {
+        destinations: [
+          { id: 'a', label: 'الف', chat_id: '123456789' },
+          { id: 'b', label: 'ب', chat_id: '123456789' }
+        ]
+      })).status
+    ).toBe(400);
+    expect(
+      (await manager.put('/api/backup/delivery', { destinations: Array.from({ length: 11 }, (_, i) => ({ id: `x${i}`, label: `م${i}`, chat_id: `12345678${i}` })) })).status
+    ).toBe(400);
+  });
+
+  it('درمانگر و منشی به تنظیمات ارسال دسترسی ندارند', async () => {
+    const t = createTestApp();
+    const therapist = await asRole(t, 'therapist');
+    expect((await therapist.get('/api/backup/delivery')).status).toBe(403);
+    expect((await therapist.put('/api/backup/delivery', { destinations: [] })).status).toBe(403);
+    const secretary = await asRole(t, 'secretary');
+    expect((await secretary.post('/api/backup/send', { destinations: ['x'] })).status).toBe(403);
+  });
+});
+
+describe('ارسال پشتیبان به بله — مکانیک ارسال', () => {
+  function fakeSender(calls: { chatId: string; filename: string; bytes: Uint8Array; caption?: string }[]) {
+    return async (opts: { chatId: string; filename: string; bytes: Uint8Array; caption?: string }) => {
+      calls.push(opts);
+      return { ok: true, externalId: `msg-${calls.length}` };
+    };
+  }
+
+  it('فایل پشتیبان را فقط به مقصدهای انتخاب‌شده می‌فرستد و گزارش می‌دهد', async () => {
+    const calls: { chatId: string; filename: string; bytes: Uint8Array; caption?: string }[] = [];
+    const t = createTestApp(undefined, { backupDocumentSender: fakeSender(calls) });
+    const manager = await asRole(t, 'manager');
+
+    await manager.put('/api/backup/delivery', {
+      destinations: [
+        { id: 'd1', label: 'مدیر', chat_id: '111111111', active: true },
+        { id: 'd2', label: 'دفتر', chat_id: '222222222', active: true }
+      ]
+    });
+
+    const res = await manager.post('/api/backup/send', { destinations: ['d2'] });
+    expect(res.status).toBe(200);
+    const report = (res.body as { data: { ok: boolean; sent: number; failed: number; results: { chat_id: string; ok: boolean; message_id?: string }[]; size_bytes: number; filename: string } }).data;
+    expect(report.ok).toBe(true);
+    expect(report.sent).toBe(1);
+    expect(report.failed).toBe(0);
+    expect(report.results[0].chat_id).toBe('222222222');
+    expect(report.results[0].message_id).toBe('msg-1');
+    expect(report.size_bytes).toBeGreaterThan(0);
+    expect(report.filename).toMatch(/^backup-\d{8}-\d{4}\.json$/);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].chatId).toBe('222222222');
+    // فایل ارسالی همان قالب gh-backup است
+    const env = JSON.parse(new TextDecoder().decode(calls[0].bytes)) as { format: string };
+    expect(env.format).toBe(BACKUP_FORMAT);
+    expect(calls[0].caption).toContain('پشتیبان سامانه');
+
+    const audits = t.sql.prepare("SELECT COUNT(*) AS c FROM audit_log WHERE action = 'backup.send'").get() as { c: number };
+    expect(audits.c).toBe(1);
+  });
+
+  it('بدون انتخاب مقصد یا با مقصد ناشناخته رد می‌کند', async () => {
+    const calls: { chatId: string; filename: string; bytes: Uint8Array; caption?: string }[] = [];
+    const t = createTestApp(undefined, { backupDocumentSender: fakeSender(calls) });
+    const manager = await asRole(t, 'manager');
+    expect((await manager.post('/api/backup/send', { destinations: [] })).status).toBe(400);
+    expect((await manager.post('/api/backup/send', {})).status).toBe(400);
+    expect((await manager.post('/api/backup/send', { destinations: ['nope'] })).status).toBe(400);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('بدون توکن ربات، خطای روشن فارسی می‌دهد', async () => {
+    const t = createTestApp(); // بدون sender و بدون baleToken
+    const manager = await asRole(t, 'manager');
+    await manager.put('/api/backup/delivery', { destinations: [{ id: 'd1', label: 'مدیر', chat_id: '111111111' }] });
+    const res = await manager.post('/api/backup/send', { destinations: ['d1'] });
+    expect(res.status).toBe(400);
+    expect((res.body as { message?: string }).message).toContain('توکن ربات بله');
+  });
+
+  it('خطای شبکهٔ بله برای یک مقصد، بقیه را متوقف نمی‌کند', async () => {
+    const t = createTestApp(undefined, {
+      backupDocumentSender: async (opts) => (opts.chatId === '111111111' ? { ok: false, error: 'BALE_500: boom' } : { ok: true, externalId: 'm9' })
+    });
+    const manager = await asRole(t, 'manager');
+    await manager.put('/api/backup/delivery', {
+      destinations: [
+        { id: 'd1', label: 'خراب', chat_id: '111111111', active: true },
+        { id: 'd2', label: 'سالم', chat_id: '222222222', active: true }
+      ]
+    });
+    const res = await manager.post('/api/backup/send', { destinations: ['d1', 'd2'] });
+    expect(res.status).toBe(200);
+    const report = (res.body as { data: { ok: boolean; sent: number; failed: number; results: { chat_id: string; ok: boolean; error?: string }[] } }).data;
+    expect(report.sent).toBe(1);
+    expect(report.failed).toBe(1);
+    expect(report.results[0].ok).toBe(false);
+    expect(report.results[0].error).toContain('BALE_500');
+    expect(report.results[1].ok).toBe(true);
+  });
+});
+
+describe('پشتیبان خودکار شبانه (m180)', () => {
+  function fakeSender(calls: { chatId: string }[]) {
+    return async (opts: { chatId: string }) => {
+      calls.push({ chatId: opts.chatId });
+      return { ok: true, externalId: 'auto-1' };
+    };
+  }
+
+  it('خاموش = هیچ‌چیز نمی‌فرستد', async () => {
+    const calls: { chatId: string }[] = [];
+    const t = createTestApp(undefined, { backupDocumentSender: fakeSender(calls) });
+    const services = createServices({
+      db: t.db,
+      audit: createAuditWriter(t.db),
+      logger: silentLogger('test'),
+      teamDomain: 'test'
+    });
+    const out = await services.backup.runScheduledAutoSend();
+    expect(out.skipped).toBe(true);
+    expect(out.reason).toBe('disabled');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('روشن = به مقصدهای انتخاب‌شده فعال می‌فرستد و در دفتر ثبت می‌کند', async () => {
+    const calls: { chatId: string }[] = [];
+    const t = createTestApp(undefined, { backupDocumentSender: fakeSender(calls) });
+    const manager = await asRole(t, 'manager');
+    const put = await manager.put('/api/backup/delivery', {
+      destinations: [
+        { id: 'd1', label: 'مدیر', chat_id: '111111111', active: true },
+        { id: 'd2', label: 'خاموش', chat_id: '222222222', active: false }
+      ],
+      auto_send: { enabled: true, destination_ids: ['d1', 'd2'], include_files: false }
+    });
+    expect(put.status).toBe(200);
+
+    const services = createServices({
+      db: t.db,
+      audit: createAuditWriter(t.db),
+      logger: silentLogger('test'),
+      teamDomain: 'test',
+      backupDocumentSender: fakeSender(calls)
+    });
+    const out = await services.backup.runScheduledAutoSend();
+    expect(out.skipped).toBe(false);
+    expect(out.report?.sent).toBe(1); // مقصد غیرفعال حذف شد
+    expect(out.report?.results[0].chat_id).toBe('111111111');
+    expect(calls).toHaveLength(1);
+
+    const audits = t.sql.prepare("SELECT COUNT(*) AS c FROM audit_log WHERE action = 'backup.auto_send'").get() as { c: number };
+    expect(audits.c).toBe(1);
+  });
+
+  it('روشن بدون مقصد فعال = skip', async () => {
+    const calls: { chatId: string }[] = [];
+    const t = createTestApp(undefined, { backupDocumentSender: fakeSender(calls) });
+    const manager = await asRole(t, 'manager');
+    await manager.put('/api/backup/delivery', {
+      destinations: [{ id: 'd1', label: 'مدیر', chat_id: '111111111', active: false }],
+      auto_send: { enabled: true, destination_ids: ['d1'] }
+    });
+    const services = createServices({
+      db: t.db,
+      audit: createAuditWriter(t.db),
+      logger: silentLogger('test'),
+      teamDomain: 'test'
+    });
+    const out = await services.backup.runScheduledAutoSend();
+    expect(out.skipped).toBe(true);
+    expect(out.reason).toBe('no_destination');
+    expect(calls).toHaveLength(0);
   });
 });

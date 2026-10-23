@@ -4,7 +4,14 @@ export type {
   BackupStatus,
   BackupSummary,
   BackupEnvelope,
-  RestoreReport
+  RestoreReport,
+  BackupDestination,
+  AutoSendConfig,
+  DeliveryConfig,
+  SendDestinationResult,
+  SendReport,
+  BackupDocumentSender,
+  ScheduledAutoSendOutcome
 } from './service';
 export { BACKUP_FORMAT, BACKUP_FORMAT_VERSION, FILES_TABLE } from './service';
 export { registerBackupRoutes } from './routes';
