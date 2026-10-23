@@ -7,7 +7,7 @@ import {
 import { runInference } from '../infer';
 import { CLINICAL_TARGETS, SUPPORT_TARGETS, ALL_TARGETS, targetOf, totalExerciseCount } from '../targets';
 import { DSM_RECORDS } from '../dsm-criteria';
-import { RULES, rulesOf, CONFIDENCE_THRESHOLDS, ODD_MIN_FULL_CRITERIA, BIF_IQ_RANGE } from '../rules';
+import { RULES, rulesOf, CONFIDENCE_THRESHOLDS, ODD_MIN_FULL_CRITERIA, BIF_IQ_RANGE, SCARED_SCHOOL_CUTOFF } from '../rules';
 import { BATTERY_VERSION } from '../types';
 import type { EvidenceEvent } from '../types';
 import { CaseEventTypeInputSchema, validateTypeDefinition, resolveBandV2, FIELDS_MAX, packageComponentsOf, COMPOSITE_FAMILY_COMPONENTS } from '@domain/case-events/pure';
@@ -136,7 +136,7 @@ describe('شرح‌حال — نسخهٔ ۲ و نسخهٔ ۳ (T4 m148)', () => {
 });
 
 describe('T5 (m150) — فرم جامع خانواده: SDQ والد رسمی + سنجهٔ انطباق + پکیج', () => {
-  it('SDQ والد: ۲۵ آیتم با همان کلید/ترتیب/لنگر نسخهٔ معلم، زیرمقیاس‌ها دقیقاً emo/cond/hyper/peer/pros و برش‌ها هم‌سان', () => {
+  it('SDQ والد: ۲۵ آیتم با همان کلید/ترتیب/لنگر نسخهٔ معلم، زیرمقیاس‌ها دقیقاً emo/cond/hyper/peer/pros، باندهای کل رسمی به‌تفکیک گزارش‌دهنده (m176)', () => {
     const p = batteryDef('ce-sdq-p-v1');
     const t = batteryDef('ce-sdq-t-v1');
     expect(p).toBeTruthy();
@@ -149,7 +149,19 @@ describe('T5 (m150) — فرم جامع خانواده: SDQ والد رسمی + 
     expect(diffKeys).toEqual(['i06', 'i09', 'i11', 'i14', 'i19']);
     expect(p?.subscales?.map((s) => s.id)).toEqual(['emo', 'cond', 'hyper', 'peer', 'pros']);
     expect(JSON.stringify(p?.subscales)).toBe(JSON.stringify(t?.subscales));
-    expect(JSON.stringify(p?.bands)).toBe(JSON.stringify(t?.bands));
+    // — m176: برش کل رسمی چهارباندی — والد ۱۳/۱۶/۱۹، معلم ۱۱/۱۵/۱۸ (برگهٔ رسمی ۴–۱۷، sdqinfo)
+    const pb = p?.bands as CaseEventBand[];
+    const tb = t?.bands as CaseEventBand[];
+    expect(pb.map((b) => (b.max === 9999 ? 'X' : b.max))).toEqual([13, 16, 19, 'X']);
+    expect(tb.map((b) => (b.max === 9999 ? 'X' : b.max))).toEqual([11, 15, 18, 'X']);
+    expect(pb.length).toBe(4);
+    expect(tb.length).toBe(4);
+    expect(resolveBandV2(13, pb)?.color).toBe('ok');
+    expect(resolveBandV2(14, pb)?.color).toBe('warn');
+    expect(resolveBandV2(20, pb)?.color).toBe('danger');
+    expect(resolveBandV2(11, tb)?.color).toBe('ok');
+    expect(resolveBandV2(12, tb)?.color).toBe('warn');
+    expect(resolveBandV2(19, tb)?.color).toBe('danger');
   });
 
   it('سنجهٔ انطباق: ۱۲ آیتم ۰–۲، زیرمقیاس واحد id_adapt، نمرهٔ بالاتر = انطباق بهتر (باندهای پایین/مرزی/نرمال)', () => {
@@ -230,11 +242,31 @@ describe('باتری — برش‌ها و باندها (شواهد منتشرش�
     expect(last.max).toBeGreaterThanOrEqual(60);
   });
 
-  it('SNAP-IV والد: برش کم‌توجهی ۱۷ (میانگین ۱٫۷۸×۹) بالای صدک ۹۵', () => {
+  it('SNAP-IV والد: برش کم‌توجهی ۱۶ (میانگین ۱٫۷۸×۹) و نافرمانی ۱۵ (۱٫۸۸×۸ — m176)', () => {
     const def = batteryDef('ce-snap-iv-p-v1');
     const ia = (def?.subscales as CaseEventSubscale[]).find((s) => s.id === 'ia');
     expect(ia?.bands?.length).toBe(3);
     expect(ia?.bands?.[0].max).toBe(16);
+    const odd = (def?.subscales as CaseEventSubscale[]).find((s) => s.id === 'odd');
+    expect(odd?.bands?.[0].max).toBe(15);
+    expect(odd?.bands?.[1].max).toBe(19);
+    // — m176: برش نافرمانی والد = ۱٫۸۸ (Swanson 2001/Bussing 2008) — ۱٫۶۷ برش ترکیبی والد است نه نافرمانی
+  });
+
+  it('m176 — SCARED: برش اجتماعی ۸ (عادی ≤۷) و مدرسه ۳ در قواعد؛ DCDQ: باندهای سنی محتاطانه ۳۱/۴۲/۶۰', () => {
+    const scared = batteryDef('ce-scared-p-v1');
+    const soc = (scared?.subscales as CaseEventSubscale[]).find((s) => s.id === 'soc');
+    expect(soc?.bands?.[0].max).toBe(7);
+    const sch = (scared?.subscales as CaseEventSubscale[]).find((s) => s.id === 'sch');
+    expect(sch?.name).toBe('ترس از مدرسه');
+    expect(SCARED_SCHOOL_CUTOFF).toBe(3);
+    const dcdq = batteryDef('ce-dcdq-v1');
+    const db = dcdq?.bands as CaseEventBand[];
+    expect(db.map((b) => b.max)).toEqual([31, 42, 60]);
+    expect(resolveBandV2(31, db)?.color).toBe('danger');
+    expect(resolveBandV2(35, db)?.color).toBe('warn');
+    expect(resolveBandV2(43, db)?.color).toBe('ok');
+    expect(db[1].advice).toContain('۵ تا ۷ سال: ۳۱');
   });
 
   it('چک‌لیست‌های ملاکی SLD: زیرمقیاس C/D خارج از جمع کل (مثل prosocial SDQ)', () => {

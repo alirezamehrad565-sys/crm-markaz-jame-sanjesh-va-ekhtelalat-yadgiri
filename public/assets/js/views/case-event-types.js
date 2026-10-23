@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { fa, formatJalaliDateTime } from '../format.js';
-import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyState, errorState, skeletonState } from '../ui.js';
+import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyState, errorState, skeletonState, scienceNote } from '../ui.js';
+import { TOOL_GUIDES } from '../clinical-content.js';
 import { session } from '../state.js';
 import { openChecklistSendModal, fillTargetOf } from '../case-events.js';
 import { CATEGORY_ICONS, TYPE_ICON_CHOICES, typeIconNode } from '../case-event-icons.js';
@@ -329,7 +330,9 @@ export async function renderCaseEventTypes(container) {
                 }
               }, icon('x', 14), 'حذف')
             : null
-        )
+        ),
+        // — m176: «پشتوانهٔ علمی و نحوهٔ استفاده» زیر هر کارت چک‌لیست
+        scienceNote(TOOL_GUIDES[t.key])
       )
     );
   }
@@ -571,7 +574,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
             title: b.advice ?? ''
           }, `تا ${b.max === 9999 ? '∞' : fa(b.max)}: ${b.label}`)))
       : el('p', { class: 'cell-sub', style: { margin: '8px 0' } },
-          'بدون باند — نتیجه فقط جمع نمره گزارش می‌شود. با باندها، موتور تشخیص به‌طور خودکار تفسیر و توصیهٔ بالینی تولید می‌کند.');
+          'بدون باند — نتیجه فقط جمع نمره گزارش می‌شود. با باندها، سامانه به‌طور خودکار تفسیر و توصیهٔ بالینی تولید می‌کند.');
     const rows = el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
       el('button', { class: 'btn btn--soft btn--sm', onclick: () => openBandsEditor(st.bands, maxTotal, (nb) => { st.bands = nb; rerender(); }) },
         st.bands?.length ? 'ویرایش باندها' : 'تعریف باندهای تحلیل'),
@@ -836,7 +839,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
         });
         parts.push(el('div', {},
           el('div', { style: { fontWeight: '600', fontSize: '13px', margin: '8px 0 2px' } },
-            `گزینه‌های نمره‌دار — نمرهٔ هر گزینه فقط برای موتور تشخیص است و به گیرنده نمایش داده نمی‌شود`),
+            `گزینه‌های نمره‌دار — نمرهٔ هر گزینه فقط برای جمع‌بندی بالینی است و به گیرنده نمایش داده نمی‌شود`),
           optsList,
           (f.scoredOptions?.length ?? 0) < FIELD_OPTIONS_MAX
             ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => { f.scoredOptions.push({ label: '', score: (f.scoredOptions.length * 1) }); rerender(); } }, icon('plus', 14), 'گزینهٔ جدید')

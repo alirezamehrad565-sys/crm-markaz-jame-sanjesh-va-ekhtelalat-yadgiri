@@ -152,7 +152,7 @@ export const INTERVENTION_PATH_STATUSES = ['suggested', 'reviewed', 'active', 'c
 export type InterventionPathStatus = (typeof INTERVENTION_PATH_STATUSES)[number];
 
 export const INTERVENTION_PATH_STATUS_LABELS: Record<InterventionPathStatus, string> = {
-  suggested: 'پیشنهاد موتور',
+  suggested: 'پیشنهاد سامانه',
   reviewed: 'بازبینی‌شده',
   active: 'در مداخله',
   closed: 'بسته‌شده'

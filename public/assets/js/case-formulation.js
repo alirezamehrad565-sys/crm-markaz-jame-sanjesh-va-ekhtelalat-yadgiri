@@ -170,7 +170,7 @@ function nextStepsBlock({ f, insights }) {
 
   const protocolLine = f?.protocolSuggestion
     ? el('div', { style: { marginBottom: '8px' } },
-        el('span', { class: 'badge badge--info' }, 'پیشنهاد موتور'),
+        el('span', { class: 'badge badge--info' }, 'پیشنهاد سامانه'),
         el('strong', {}, ' پروتکل پیشنهادی: '),
         PROTOCOL_FA[f.protocolSuggestion.protocol] ?? f.protocolSuggestion.protocol ?? '—',
         f.protocolSuggestion.secondary ? ` + ثانویه: ${PROTOCOL_FA[f.protocolSuggestion.secondary] ?? f.protocolSuggestion.secondary}` : '',

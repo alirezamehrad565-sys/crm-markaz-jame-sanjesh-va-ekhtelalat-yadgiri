@@ -1056,7 +1056,7 @@ function decisionButtons(path, { student, refresh, canDecide }) {
       submitLabel: 'ثبت اصلاح',
       fields: [
         { name: 'target_key', type: 'select', label: 'هدف درمانی جدید', required: true, options, placeholder: 'انتخاب کنید…' },
-        { name: 'note', type: 'textarea', label: 'یادداشت (دلیل اصلاح — برای کالیبراسیون موتور)', rows: 2 }
+        { name: 'note', type: 'textarea', label: 'یادداشت (دلیل اصلاح — برای بهبود جمع‌بندی‌های بعدی)', rows: 2 }
       ],
       onSubmit: async (vals) => {
         if (!vals.target_key) { toast('هدف جدید را انتخاب کنید'); return false; }
@@ -1071,7 +1071,7 @@ function decisionButtons(path, { student, refresh, canDecide }) {
       title: `رد فرضیه «${path.targetTitle}»`,
       submitLabel: 'ثبت رد',
       fields: [
-        { name: 'note', type: 'textarea', label: 'دلیل رد (اجباری — دادهٔ کالیبراسیون موتور)', required: true, rows: 3 }
+        { name: 'note', type: 'textarea', label: 'دلیل رد (اجباری — برای بهبود جمع‌بندی‌های بعدی)', required: true, rows: 3 }
       ],
       onSubmit: async (vals) => {
         if (!vals.note?.trim()) { toast('رد بدون یادداشت مجاز نیست'); return false; }

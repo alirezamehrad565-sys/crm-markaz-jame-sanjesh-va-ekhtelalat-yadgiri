@@ -426,7 +426,7 @@ function applyProfileRules(args: {
 }): void {
   const { builder, facts, anam, band, abilityMax, wmiGap, psiGap } = args;
   if (!facts.available) {
-    builder.notes.push('نیم‌رخ وکسلر هنوز ثبت نشده — پیشنهاد موتور پس از ثبت وکسلر کامل می‌شود.');
+    builder.notes.push('نیم‌رخ وکسلر هنوز ثبت نشده — پیشنهادها پس از ثبت وکسلر کامل می‌شود.');
     return;
   }
   const T = RECOMMENDER_THRESHOLDS;

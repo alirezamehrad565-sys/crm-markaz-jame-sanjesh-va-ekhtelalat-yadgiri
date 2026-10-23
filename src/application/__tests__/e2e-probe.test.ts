@@ -55,8 +55,9 @@ describe('آزمون‌های عملکرد مرکزی — ارزیابی درم�
     expect(ev.payload?.chip_metric_1.value).toContain('۱۰۷');
     expect(ev.payload?.chip_metric_2.label).toBe('رمزگشایی واژهٔ بی‌معنی');
     expect(ev.payload?.chip_band).toEqual({ value: 'پایین‌تر از انتظار پایه', label: 'باند' });
-    expect(ev.payload?.norm_fa.value).toContain('صدک ۵۰');
-    expect(ev.payload?.norm_fa.value).toContain('Hasbrouck & Tindal');
+    expect(ev.payload?.norm_fa.value).toContain('هنجار داخلی مرکز');
+    expect(ev.payload?.norm_fa.value).toContain('۱۰۷');
+    expect(ev.payload?.norm_fa.label).toBe('انتظار پایه (هنجار داخلی مرکز)');
     expect(ev.payload?.fa_summary.value).toContain('آزمون خواندن: ۴۲٪ انتظار پایهٔ سوم');
 
     expect(ev.summary).toContain('امتیاز: ۴۲ از ۱۰۰');

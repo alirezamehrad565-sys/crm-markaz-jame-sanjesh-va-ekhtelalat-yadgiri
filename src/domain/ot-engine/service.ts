@@ -270,7 +270,7 @@ export function createOtEngineService(deps: OtEngineDeps) {
             : key === 'anamnesis'
               ? 'فرم «گفت‌وگوی اول» با خانواده — پایهٔ همهٔ تصمیم‌ها'
               : key === 'wechsler'
-                ? 'فرم نتایج وکسلر — خروجی موتور تحلیل در فیلد engine_output؛ زیر ۶ سال WPPSI/Leiter'
+                ? 'فرم نتایج وکسلر — تحلیل ساخت‌یافته زیر فرم؛ زیر ۶ سال WPPSI/Leiter'
                 : key === 'behavioral'
                   ? 'SNAP-IV والد و معلم، SDQ، SCARED، DCDQ — با بله ارسال می‌شود؛ پنجرهٔ اعتبار ۱۲ ماه'
                   : 'جمع‌بندی شواهد + انتخاب پروتکل مداخله — پرونده وارد فاز مداخله می‌شود';

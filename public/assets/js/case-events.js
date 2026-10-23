@@ -191,15 +191,19 @@ function openTypePicker({ student, appointmentId = null, onSaved, allTypes, occu
           ...(g.before ? [g.before] : []),
           el('div', { class: 'typegrid__grid' },
             ...list.map((t) =>
-              el('button', {
-                class: 'typegrid__item',
-                onclick: () => g.pick(t)
-              },
-              el('span', { class: 'typegrid__icon' }, typeIconNode(t.category, t.icon, 19)),
-              el('span', { class: 'typegrid__text' },
-                el('b', {}, t.title),
-                el('span', { class: 'cell-sub' }, t.description || PURPOSE[t.category] || '')),
-              el('span', { class: `badge ${fillTargetOf(t).badgeClass} typegrid__badge` }, fillTargetOf(t).label)
+              el('div', { class: 'typegrid__cell' },
+                el('button', {
+                  class: 'typegrid__item',
+                  onclick: () => g.pick(t)
+                },
+                el('span', { class: 'typegrid__icon' }, typeIconNode(t.category, t.icon, 19)),
+                el('span', { class: 'typegrid__text' },
+                  el('b', {}, t.title),
+                  el('span', { class: 'cell-sub' }, t.description || PURPOSE[t.category] || '')),
+                el('span', { class: `badge ${fillTargetOf(t).badgeClass} typegrid__badge` }, fillTargetOf(t).label)
+                ),
+                // — m176: «پشتوانهٔ علمی و نحوهٔ استفاده» زیر هر کارت چک‌لیست
+                scienceNote(TOOL_GUIDES[t.key])
               )
             )
           )
@@ -464,7 +468,7 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
       body.appendChild(el('div', {
         style: { background: 'var(--surface-2, #f7f3ea)', borderRadius: '12px', padding: '12px 14px', marginBottom: '12px', whiteSpace: 'pre-wrap', fontSize: '13px', lineHeight: '1.9' }
       },
-      el('b', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' } }, icon('compass', 14), 'تفسیر خودکار موتور تشخیص'),
+      el('b', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' } }, icon('compass', 14), 'تفسیر خودکار سامانه'),
       a.interpretation));
     }
     if (a.subscaleScores && a.subscaleScores.length > 0) {
@@ -510,16 +514,16 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
     const wSection = wechslerEventAnalysisSection(wEng);
     if (wSection) body.appendChild(wSection);
     body.appendChild(el('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' } },
-      el('span', { class: 'badge badge--accent' }, 'تحلیل موتور وکسلر ۴ ثبت شد')
+      el('span', { class: 'badge badge--accent' }, 'تحلیل خودکار وکسلر ۴ ثبت شد')
     ));
   } else if (hasEngineOutput) {
     body.appendChild(el('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' } },
-      el('span', { class: 'badge badge--accent' }, 'تحلیل موتور وکسلر ۴ ثبت شد'),
+      el('span', { class: 'badge badge--accent' }, 'تحلیل خودکار وکسلر ۴ ثبت شد'),
       el('span', { class: 'cell-sub' }, 'شاخص‌ها و نیم‌رخ در تب تفسیر بالینی نمایش داده می‌شود')
     ));
   }
   if (keys.length === 0) {
-    body.appendChild(el('p', { class: 'cell-sub' }, hasEngineOutput ? 'نمرهٔ خام ثبت و موتور محاسبه کرد.' : 'هنوز پاسخی ثبت نشده است.'));
+    body.appendChild(el('p', { class: 'cell-sub' }, hasEngineOutput ? 'نمرهٔ خام ثبت و تحلیل خودکار انجام شد.' : 'هنوز پاسخی ثبت نشده است.'));
   } else {
     const list = el('div', { class: 'info-list' });
     for (const k of keys) {

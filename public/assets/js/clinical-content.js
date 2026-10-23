@@ -64,7 +64,7 @@ export const PATH_STATUS_BADGE = {
 };
 
 export const PATH_STATUS_LABEL = {
-  suggested: 'پیشنهاد موتور',
+  suggested: 'پیشنهاد سامانه',
   reviewed: 'بازبینی‌شده',
   active: 'در مداخله',
   closed: 'بسته‌شده'
@@ -106,7 +106,7 @@ export const GATE_GLOSS = {
   },
   wechsler: {
     actionLabel: 'ثبت نمرهٔ خام وکسلر ۴',
-    manualNote: 'ثبت دستی — برای تحلیل موتور، نمرهٔ خام ۱۵ خرده‌آزمون را در فرم وکسلر ۴ ثبت کنید'
+    manualNote: 'ثبت دستی — برای تحلیل خودکار، نمرهٔ خام ۱۵ خرده‌آزمون را در فرم وکسلر ۴ ثبت کنید'
   },
   skills: {
     learningActionLabel: 'ثبت آزمون عملکرد مرکزی',
@@ -129,7 +129,7 @@ export const SUSPICION_CONTENT = {
 
 export const CONTEXT_META = {
   title: 'زمینهٔ تفسیر — دانش‌آموز در آینهٔ داده‌ها',
-  hint: 'خروجی موتور همیشه در بستر سن و پایهٔ تحصیلی خوانده شود — همان چیزی که وکسلر با تاریخ تولد نرمال‌سازی می‌کند.',
+  hint: 'نتیجهٔ تحلیل همیشه در بستر سن و پایهٔ تحصیلی خوانده شود — همان چیزی که وکسلر با تاریخ تولد نرمال‌سازی می‌کند.',
   rows: {
     age: 'سن',
     birthDate: 'تاریخ تولد',
@@ -166,11 +166,11 @@ export const STAGE2_META = {
       title: 'وکسلر ۴ — نیم‌رخ هوشی',
       glanceFsiq: 'FSIQ {fsiq} (صدک {p})',
       glanceFsiqOnly: 'FSIQ {fsiq}',
-      glanceManual: 'ثبت دستی — نیم‌رخ موتور برای این ثبت ساخته نشده',
+      glanceManual: 'ثبت دستی — نیم‌رخ خودکار برای این ثبت ساخته نشده',
       glanceEmpty: 'نمرهٔ خام وکسلر ثبت نشده است',
       glanceDate: 'ثبت: {date}',
       bodyCta: 'ثبت نمرهٔ خام وکسلر ۴',
-      emptyHint: 'با ثبت نمرهٔ خام ۱۵ خرده‌آزمون، موتور FSIQ، شاخص‌ها، پراکندگی و خوانش روان‌سنجی نیم‌رخ را همین‌جا محاسبه و نمایش می‌دهد.'
+      emptyHint: 'با ثبت نمرهٔ خام ۱۵ خرده‌آزمون، تحلیل خودکار FSIQ، شاخص‌ها، پراکندگی و خوانش روان‌سنجی نیم‌رخ را همین‌جا محاسبه و نمایش می‌دهد.'
     },
     skills: {
       num: 4,
@@ -247,8 +247,8 @@ export const STAGE2_META = {
 export const SYNTHESIS_META = {
   title: 'جمع‌بندی تشخیصی',
   primaryTitle: 'توضیح اصلی',
-  primaryHint: 'صورت‌بندی پرونده + نزدیک‌ترین فرضیهٔ موتور — دو نگاه به یک روایت',
-  topHypothesis: 'نزدیک‌ترین فرضیهٔ موتور',
+  primaryHint: 'صورت‌بندی پرونده + نزدیک‌ترین فرضیهٔ سامانه — دو نگاه به یک روایت',
+  topHypothesis: 'نزدیک‌ترین فرضیهٔ سامانه',
   constructsTitle: 'سازه‌های برجسته',
   patternsTitle: 'الگوهای تلفیقی',
   candidatesLabel: 'الگوهای نامزد',

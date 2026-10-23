@@ -88,7 +88,7 @@ export function wechslerHookErrorMessage(result: WechslerAnalysisResult | null):
   if (result?.ok) return null;
   const msgs = result?.validation?.errors ?? [];
   const first = msgs.length ? msgs[0].message : "";
-  const prefix = "موتور وکسلر ۴: ";
+  const prefix = "تحلیل وکسلر ۴: ";
   if (msgs.length > 1) return `${prefix}${first} (+${msgs.length - 1} خطای دیگر)`;
   return `${prefix}${first || "ورودی نامعتبر است"}`;
 }
