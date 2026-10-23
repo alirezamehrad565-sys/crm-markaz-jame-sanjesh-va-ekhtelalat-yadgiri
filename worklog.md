@@ -55,3 +55,21 @@ Work Log:
 Stage Summary:
 - تحویل: download/diagnostic-battery-map.md (۲۹۳ خط) + نسخهٔ repo در docs/clinical/
 - لینک دانلود کاربر: https://litter.catbox.moe/l19irn.md (۷۲ ساعت)
+
+---
+Task ID: 2
+Agent: main (Z.ai)
+Task: «خود چک لیست ها رو هم میخوام» — سند متن کامل گویه‌های همهٔ چک‌لیست‌ها/پرسش‌نامه‌ها + آپلود فایل .md
+
+Work Log:
+- استخراج تعاریف واقعی از پروداکشن D1: ۳۹ سطر case_event_types (fields/subscales/bands/description/audience) به scripts/ce-*.json
+- استخراج ثابت‌های کد: REHAB-FX (۶ تکلیف + ملاک‌ها + سطح راهنما)، چیپ حسی (۳ مجرا)، هنجار صدک ۵۰ پروب‌ها (instruments.ts)، باندهای زیرمقیاسی SNAP-IV از battery JSON
+- تأیید برنامه‌ای: گویه‌های SNAP-IV والد==معلم (۲۶)؛ SDQ والد/معلم: ۵ گویهٔ متفاوت متن
+- ساخت scripts/gen-checklists-doc.py → docs/clinical/checklists-full.md (۱۵۹۱ خط، ۶۳هزار نویسه): لنگرها + متن کامل گویه‌ها به تفکیک زیرمقیاس + باند کل/زیرمقیاس + آیتم بحرانی ⚠️ + هنجار پروب + پیوست غیرفعال‌ها (کانرز/آخنباخ/مشاهدهٔ کلاس)
+- QA: هر ۳۹ کلید موجود؛ ۳۲۸ ردیف گویه = دقیقاً همهٔ آیتم‌های نمره‌دار DB (SNAP-IV-T به‌عنوان نسخهٔ یکسان حذف شد)
+- Commit a380bc1 → push main
+- آپلود: catbox/0x0/transfer.sh/file.io ناموفق یا کوتاه‌مدت؛ litterbox 72h موفق → https://litter.catbox.moe/qxor8i.md (MD5 تطبیق)
+
+Stage Summary:
+- سند «متن کامل چک‌لیست‌ها» تولید/کامیت/پابلیش شد — لینک دانلود: https://litter.catbox.moe/qxor8i.md (۷۲ ساعت اعتبار)
+- نکته: آیتم بحرانی فقط achenbach a13 و speech «بررسی شنوایی» (خارج از نمرهٔ کل)
