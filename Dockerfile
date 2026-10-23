@@ -12,10 +12,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# سورس لایهٔ سرور و اپ
+# سورس لایهٔ سرور و اپ + اسکریپت بیلد
 COPY tsconfig.json ./tsconfig.json
 COPY src ./src
 COPY server ./server
+COPY scripts ./scripts
 
 RUN node scripts/build-selfhost.mjs
 
