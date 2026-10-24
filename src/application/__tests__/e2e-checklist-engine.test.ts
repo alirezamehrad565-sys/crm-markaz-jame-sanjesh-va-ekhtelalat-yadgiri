@@ -80,7 +80,7 @@ describe('موتور پیشنهاد بر اساس برچسب‌های دانش�
     const matchedKeys = sug.filter((x) => x.score > 0).map((x) => x.type.key);
     expect(matchedKeys).toContain('ce-snap-iv-p-v1');
     expect(matchedKeys).toContain('ce-snap-iv-t-v1');
-    expect(sug.every((x) => x.type.category === 'checklist' || x.type.key === 'ce-comp-family-v2' || x.type.key === 'ce-comp-teacher-v2')).toBe(true);
+    expect(sug.every((x) => x.type.category === 'checklist')).toBe(true); // — m186: پیشنهاد فقط چک‌لیست تکی
 
     const s2 = await createStudent(m, {});
     const sug2 = dataOf<Suggestion[]>(await m.get(`/api/students/${s2.id}/case-events/suggest`));

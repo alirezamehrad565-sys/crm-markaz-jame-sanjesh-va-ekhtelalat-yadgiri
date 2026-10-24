@@ -372,3 +372,24 @@ Work Log:
 Stage Summary:
 - تب تفسیر بالینی اکنون نیم‌رخ وکسلر را هم برای رویدادهای قدیمی (با engine_output) و هم رویدادهای تازه (هوک دوباره فعال) نشان می‌دهد؛ سیگنال‌های شک بالینی مرحلهٔ رفتاری هم برگشت
 - رفتار دوباره با باندل اصلی m98 برابر است + امتیاز اضافه: خلاصهٔ رویداد دیگر JSON موتور را لو نمی‌دهد
+
+---
+Task ID: 16 (drop-composite-forms-plan-flow)
+Agent: main (Z.ai)
+Task: حذف «فرم جامع معلم/خانواده» (طرح ناکام) + فلو تازهٔ «فرم‌های لازم بعد از وکسلر» — تیک چندتایی و ارسال گروهی به خانواده/معلم
+
+Work Log:
+- راستی‌آزمایی D1 پروداکشن: صفر رویداد با نوع‌های ce-comp-family-v2/ce-comp-teacher-v2 → حذف قطعی امن
+- باتری: سه ابزار واقعی باتری کامپوزیت (sdq-p → screening، id-adapt + sld-class-t → specific) منتقل و battery-composite.json حذف شد؛ instruments.ts سه‌منبعی شد (۲۱ ابزار)
+- بک‌اند: pure.ts (COMPOSITE_*/packageComponentsOf/شاخهٔ اعتبارسنجی پکیج)، service.ts (fillPackageFlow/isPackage/listPackageComponentTypes)، routes.ts (packageModelOf + شاخهٔ GET پکیج)، public-form.ts (renderPackageFormPage ~۲۹۵ خط)، convergence.ts، types.ts، index.ts، case-events-bot.ts (شاخهٔ isPackage بات)، قالب bot_teacher_package_link → bot_teacher_checklist_link
+- پیشنهادگر (recommender.ts): PLAN_TOOL_KEYS بدون compFamily؛ مسیر BIF حالا سنجهٔ انطباق روزمرهٔ تکی + باتری رفتاری SDQ والد/معلم (r0 با دامنهٔ behavior) را پیشنهاد می‌کند — planType = دامنه‌های ≥۲؛ مسیر ID/انطباق‌نامعلوم → idAdapt تکی
+- فرانت: کارت پلن زیر نتیجهٔ وکسلر حالا تیک انتخابی دارد (همه از پیش علامت‌خورده) + دکمهٔ «ارسال فرم‌های انتخابی با بله (N)» → مودال ارسال گروهی openChecklistBatchSendModal: فهرست تیک‌دار با نشان گیرنده، انتخاب معلم مشترک برای فرم‌های مدرسه، یادداشت مشترک، ساخت+ارسال ترتیبی هر فرم (fallback صدور لینک معلم وقتی چت کلاس قطع است) + خلاصهٔ نتیجه با کپی لینک؛ «انتخاب دستی از کتابخانه» باقی است
+- پاک‌سازی فرانت: fillTargetOf/فیلتر suggest/isTeacherFlow بدون کلیدهای comp؛ COMPOSITE_KEYS و راهنماهای جامع از clinical-content حذف؛ feedback-sheet بدون برچسب جامع
+- مایگریشن ۰۰۷۰: حذف دو نوع جامع (پروداکشن اعمال شد — ۰ باقی‌مانده)
+- تست‌ها: ۷ فایل به‌روز (battery/pure/public-form/clinical-engine-v2/recommender/e2e-plan/e2e-forms/e2e-teacher) — ۲ تست پکیجی حذف و به‌جای آن قرارداد حذف + فرم تکی معلم/خانواده بازنویسی شد — 1282/1282 ✓ tsc ✓ بیلد سلف‌هاست ✓ (بوت + /health + ۷۲ مایگریشن لوکال)
+- bump چهارگانه → 1.00.61/m186 + build-worker-bundle (بدون هیچ رفرنس comp) + دیپلوی wrangler پروداکشن + مایگریشن ریموت ۰۰۷۰
+- وریفای زنده: /health = 1.00.61/m186؛ سه فایل فرانت نو (batch modal present، بدون COMPOSITE_KEYS)؛ DB پروداکشن بدون نوع جامع
+
+Stage Summary:
+- «فرم جامع معلم/خانواده» به‌کلی حذف شد (کد، باتری، DB، مستندات)؛ فلو تازه زیر نتیجهٔ وکسلر: انتخاب تکیِ فرم‌های لازم و ارسال گروهی به خانواده/معلم
+- پروداکشن روی 1.00.61/m186؛ CI/داکر با پوش main + تگ v1.00.61 (تگ v1.00.60 طبق سیاست تک‌نسخه حذف می‌شود)

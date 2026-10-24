@@ -30,27 +30,6 @@ export const CHECKLIST_BOT_MAX_ITEMS = 8;
 export const EVENT_FILES_MAX = 10;
 export const NEXT_ACTION_FIELD_KEY = 'next_action';
 
-export const COMPOSITE_FAMILY_KEY = 'ce-comp-family-v2';
-export const COMPOSITE_FAMILY_COMPONENTS: readonly string[] = [
-  'ce-snap-iv-p-v1',
-  'ce-sdq-p-v1',
-  'ce-scared-p-v1',
-  'ce-id-adapt-v1'
-];
-
-export function packageComponentsOf(typeKey: string | null | undefined): readonly string[] | null {
-  if (typeKey === COMPOSITE_FAMILY_KEY) return COMPOSITE_FAMILY_COMPONENTS;
-  if (typeKey === COMPOSITE_TEACHER_KEY) return COMPOSITE_TEACHER_COMPONENTS;
-  return null;
-}
-
-export const COMPOSITE_TEACHER_KEY = 'ce-comp-teacher-v2';
-export const COMPOSITE_TEACHER_COMPONENTS: readonly string[] = [
-  'ce-snap-iv-t-v1',
-  'ce-sdq-t-v1',
-  'ce-sld-class-t-v1'
-];
-
 export const TEACHER_BINDING_KEY = 'teacher_binding';
 export const TEACHER_NAME_FIELD_KEY = 'teacher_name';
 export const TEACHER_NAME_LABEL = 'پاسخ معلم';
@@ -190,45 +169,7 @@ export function validateTypeDefinition(input: {
   bands?: CaseEventBand[] | null;
   familyFillable?: boolean;
   subscales?: CaseEventSubscale[] | null;
-  packageComponents?: string[] | null;
 }): void {
-  const pkg = input.packageComponents ?? null;
-  if (pkg && pkg.length > 0) {
-    if (input.familyFillable !== true) {
-      throw new ValidationError('فرم پکیجی برای پر کردن توسط خانواده طراحی نشده است');
-    }
-    if (input.bands && input.bands.length > 0) {
-      throw new ValidationError('فرم پکیجی باند کل ندارد — نمره‌دهی در کامپوننت‌هاست');
-    }
-    if (input.subscales && input.subscales.length > 0) {
-      throw new ValidationError('فرم پکیجی زیرمقیاس ندارد — زیرمقیاس‌ها در کامپوننت‌هاست');
-    }
-    if (new Set(pkg).size !== pkg.length) {
-      throw new ValidationError('کامپوننت‌های پکیج تکراری‌اند');
-    }
-    const ctxKeys = new Set<string>();
-    for (const f of input.fields) {
-      if (f.type === 'heading') {
-        if (!f.label || f.label.trim().length === 0) {
-          throw new ValidationError('متن سربرگ بخش نمی‌تواند خالی باشد');
-        }
-        continue;
-      }
-      if (f.type === 'scale' || f.type === 'single') {
-        throw new ValidationError(`آیتم نمره‌دار «${f.label}» در فرم پکیجی مجاز نیست — نمره‌دهی در کامپوننت‌هاست`);
-      }
-      if (ctxKeys.has(f.key)) throw new ValidationError(`کلید فیلد تکراری است: ${f.key}`);
-      ctxKeys.add(f.key);
-      if (f.type === 'select' && (!f.options || f.options.length < 2)) {
-        throw new ValidationError(`فیلد انتخابی «${f.label}» حداقل به دو گزینه نیاز دارد`);
-      }
-      if (f.type !== 'select' && f.options) {
-        throw new ValidationError(`فیلد «${f.label}» گزینهٔ انتخابی ندارد — نوع آن select نیست`);
-      }
-    }
-    return;
-  }
-
   const keys = new Set<string>();
   const isChecklist = input.category === 'checklist';
   const subscaleIds = new Set((input.subscales ?? []).map((s) => s.id));

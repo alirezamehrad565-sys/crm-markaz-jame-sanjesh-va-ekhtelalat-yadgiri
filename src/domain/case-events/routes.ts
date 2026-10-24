@@ -1,9 +1,8 @@
 import type { AppHono } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
-import { CaseEventTypeInputSchema, CaseEventTypeUpdateSchema, packageComponentsOf, teacherBindingOfPayload } from './pure';
-import type { CaseEventsService, CaseEventTypeInput, CaseEventTypeRecord } from './types';
-import { renderFillFormPage, renderPackageFormPage } from './public-form';
-import type { PackageFormModel, PackageToolBlock } from './public-form';
+import { CaseEventTypeInputSchema, CaseEventTypeUpdateSchema, teacherBindingOfPayload } from './pure';
+import type { CaseEventsService, CaseEventTypeInput } from './types';
+import { renderFillFormPage } from './public-form';
 
 export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsService): void {
 
@@ -212,58 +211,6 @@ export function registerCaseEventPublicRoutes(
 ): void {
   const FILL_PATH = '/public/case-events/:id/fill';
 
-  function packageModelOf(
-    pkgType: CaseEventTypeRecord,
-    comps: CaseEventTypeRecord[],
-    studentName: string | null,
-    teacherName: string | null = null
-  ): PackageFormModel {
-    const ctxFields = pkgType.fields
-      .filter((f) => f.type === 'select' || f.type === 'text' || f.type === 'longtext')
-      .map((f) => ({
-        key: f.key,
-        label: f.label,
-        type: f.type as 'select' | 'text' | 'longtext',
-        options: f.options,
-        required: f.required
-      }));
-    const ctxTitle = pkgType.fields.find((f) => f.type === 'heading')?.label ?? 'زمینهٔ خانواده';
-    const tools: PackageToolBlock[] = comps.map((comp, idx) => {
-      const subscaleName = new Map((comp.subscales ?? []).map((s) => [s.id, s.name] as const));
-      const sections: PackageToolBlock['sections'] = [];
-      for (const f of comp.fields) {
-        if (f.type !== 'scale' && f.type !== 'single') continue; // — فقط آیتم نمره‌دار به گیرنده می‌رسد
-        const title = f.subscaleId ? subscaleName.get(f.subscaleId) ?? null : null;
-        const item = {
-          key: f.key, label: f.label, scaleMax: f.scaleMax,
-          scoredOptions: f.scoredOptions?.map((o) => ({ label: o.label })),
-          scaleLabels: f.scaleLabels,
-          hint: f.hint ?? null,
-          teacherLabel: f.teacherLabel ?? null,
-          teacherHint: f.teacherHint ?? null
-        };
-        const last = sections[sections.length - 1];
-        if (last && last.title === title) last.items.push(item);
-        else sections.push({ title, items: [item] });
-      }
-      return {
-        toolKey: comp.key,
-        toolTitle: `بخش ${faNum(idx + 2)} از ${faNum(comps.length + 1)} — ${comp.title}`,
-        toolIntro: comp.description ?? null,
-        itemCount: sections.reduce((sum, s) => sum + s.items.length, 0),
-        sections
-      };
-    });
-    return {
-      packageTitle: `${pkgType.icon ?? ''} ${pkgType.title}`.trim(),
-      studentName: studentName ?? '',
-      teacherLabel: teacherName ? `فرم شما — ${teacherName}` : null,
-      description: pkgType.description ?? null,
-      context: { title: ctxTitle, fields: ctxFields },
-      tools
-    };
-  }
-
   app.get(FILL_PATH, async (c) => {
     const id = c.req.param('id');
     const token = c.req.query('token') ?? '';
@@ -281,21 +228,6 @@ export function registerCaseEventPublicRoutes(
     const studentName = await helpers.studentNameOf(event.studentId);
     const type = await service.getTypeById(event.eventTypeId);
     const teacherName = teacherBindingOfPayload(event.payload)?.name ?? null;
-
-    if (type && packageComponentsOf(type.key)) {
-      const comps = await service.listPackageComponentTypes(event.eventTypeId);
-      if (!comps) {
-        return c.html(fillErrorPage('این فرم پیدا نشد.'), 404);
-      }
-      return new Response(renderPackageFormPage(packageModelOf(type, comps, studentName, teacherName), token), {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/html; charset=utf-8',
-          'Cache-Control': 'no-store',
-          'X-Robots-Tag': 'noindex, nofollow'
-        }
-      });
-    }
 
     const subscaleName = new Map((type?.subscales ?? []).map((s) => [s.id, s.name] as const));
     const sections: { title: string | null; items: { key: string; label: string; scaleMax?: number; scoredOptions?: { label: string }[]; scaleLabels?: string[]; hint?: string | null; teacherLabel?: string | null; teacherHint?: string | null }[] }[] = [];

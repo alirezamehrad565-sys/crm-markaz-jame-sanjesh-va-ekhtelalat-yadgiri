@@ -7,7 +7,7 @@ import type { InlineButton, NotifyService } from '@core/notify';
 import { renderTemplate } from '@core/notify';
 import { truncateLabel } from '@domain/exercise-bank';
 import type { CaseEventField, CaseEventRecord, CaseEventsService } from '@domain/case-events';
-import { CHECKLIST_BOT_MAX_ITEMS, packageComponentsOf } from '@domain/case-events';
+import { CHECKLIST_BOT_MAX_ITEMS } from '@domain/case-events';
 
 export interface CaseEventsBotDeps {
   db: DbClient;
@@ -163,9 +163,8 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
   async function startFill(chatId: string, eventId: string): Promise<TlBotReply> {
     if (!caseEvents) return { text: renderTemplate('bot_case_events_disabled'), buttons: null };
     const event = await caseEvents.getEventById(eventId);
-    const pkgType = event ? await caseEvents.getTypeById(event.eventTypeId) : null;
-    const isPackage = Boolean(pkgType && packageComponentsOf(pkgType.key));
-    if (!event || (event.typeCategory !== 'checklist' && !isPackage)) {
+    const type = event ? await caseEvents.getTypeById(event.eventTypeId) : null;
+    if (!event || event.typeCategory !== 'checklist') {
       return { text: '⚠️ این چک‌لیست پیدا نشد.', buttons: null };
     }
     if (event.status !== 'pending_family') {
@@ -175,27 +174,8 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     if (!allowed) {
       return { text: '⚠️ این چک‌لیست برای فرزندان متصل به این چت نیست.', buttons: null };
     }
-    const type = pkgType;
     const fields = type?.fields ?? [];
     if (fields.length === 0) return { text: '⚠️ این چک‌لیست فاقد آیتم است.', buttons: null };
-
-    if (isPackage) {
-      const link = deps.publicBaseUrlEnv ? await caseEvents.mintFillLink(event.id, deps.publicBaseUrlEnv) : null;
-      if (link) {
-        return {
-          text: [
-            `🧺 ${event.typeTitle}`,
-            '',
-            'این فرم جامع چند بخش دارد و در بات جا نمی‌شود.',
-            'با لینک امن زیر در مرورگر پر کنید — می‌توانید آرام جلو بروید و همه را یک‌جا بفرستید (۷ روز اعتبار):',
-            '',
-            link
-          ].join('\n'),
-          buttons: null
-        };
-      }
-      return { text: 'این فرم جامع با لینک وب پر می‌شود — لینک امن از دفتر مرکز برای شما ارسال می‌شود.', buttons: null };
-    }
 
     if (fields.length > CHECKLIST_BOT_MAX_ITEMS) {
       const link = deps.publicBaseUrlEnv ? await caseEvents.mintFillLink(event.id, deps.publicBaseUrlEnv) : null;

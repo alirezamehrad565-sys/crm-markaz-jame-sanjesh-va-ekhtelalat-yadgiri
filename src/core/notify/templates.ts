@@ -581,7 +581,7 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         'پس از ثبت پاسخ، نتیجه به‌طور خودکار برای درمانگر مرکز می‌آید.'
       ].filter((l): l is string => l !== undefined && l !== '').join('\n');
 
-    case 'bot_teacher_package_link':
+    case 'bot_teacher_checklist_link':
       return [
         '📝 فرم مشاهدهٔ کلاس — فرم معلم',
         '',

@@ -1,7 +1,6 @@
 import screeningJson from './battery-screening.json';
 import specificJson from './battery-specific.json';
 import clinicalJson from './battery-clinical.json';
-import compositeJson from './battery-composite.json';
 import type { BatteryDef } from './types';
 
 type RawBatteryDef = BatteryDef;
@@ -9,8 +8,7 @@ type RawBatteryDef = BatteryDef;
 const RAW: RawBatteryDef[] = [
   ...(screeningJson as unknown as RawBatteryDef[]),
   ...(specificJson as unknown as RawBatteryDef[]),
-  ...(clinicalJson as unknown as RawBatteryDef[]),
-  ...(compositeJson as unknown as RawBatteryDef[])
+  ...(clinicalJson as unknown as RawBatteryDef[])
 ];
 
 function resolveBattery(defs: RawBatteryDef[]): BatteryDef[] {

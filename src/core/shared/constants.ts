@@ -213,7 +213,7 @@ export const NOTIFICATION_TEMPLATES = [
 
   'bot_checklist_link',
 
-  'bot_teacher_package_link',
+  'bot_teacher_checklist_link',
 
   'doc_request_sent',
   'bot_doc_received',

@@ -229,7 +229,6 @@ export interface CaseEventsService {
   assertFamilyChat(studentId: string, chatId: string): Promise<boolean>;
   verifyFillToken(id: string, token: string): Promise<boolean>;
   mintFillLink(id: string, publicBaseUrl: string): Promise<string | null>;
-  listPackageComponentTypes(typeId: string): Promise<CaseEventTypeRecord[] | null>;
   fillByFamily(id: string, input: { values: Record<string, number | string>; sourceChatId: string | null; viaWeb: boolean }, actor: AuthContext): Promise<CaseEventRecord>;
 }
 
@@ -257,7 +256,7 @@ export interface PendingChecklist {
 export interface SendObserverInput {
   studentId: string;
   chats: string[];
-  template: 'bot_checklist_link' | 'bot_teacher_package_link';
+  template: 'bot_checklist_link' | 'bot_teacher_checklist_link';
   vars: import('@core/shared').TemplateVars;
   dedupBase: string;
 }

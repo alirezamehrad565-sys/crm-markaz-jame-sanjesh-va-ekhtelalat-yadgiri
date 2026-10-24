@@ -197,5 +197,4 @@ export interface BatteryDef {
   subscales?: CaseEventSubscale[] | null;
   bands?: CaseEventBand[] | null;
   sameItemsAs?: string;
-  packageComponents?: string[];
 }

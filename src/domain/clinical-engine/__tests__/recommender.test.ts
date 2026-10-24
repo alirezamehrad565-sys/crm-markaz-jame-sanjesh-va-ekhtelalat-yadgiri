@@ -135,11 +135,10 @@ describe('قاعدهٔ ۰ — باتری پایهٔ غربال عمومی (هم�
 });
 
 describe('قاعدهٔ ۵ — پلن دیرآموز (BIF) + تفکیک انطباقی از ID (§۳.۱)', () => {
-  it('FSIQ ۷۸ یکنواخت بدون انطباق → سه پروب + فرم جامع خانواده + شرح‌حال v3؛ بدون چک‌لیست ملاکی', () => {
+  it('FSIQ ۷۸ یکنواخت بدون انطباق → سه پروب + سنجهٔ انطباق + باتری رفتاری (SDQ والد/معلم) + شرح‌حال v3؛ بدون چک‌لیست ملاکی (m186 — بدون فرم جامع)', () => {
     const plan = recommendChecklistPlan(checklistPlanContextOf([wechslerEvent(uniformEngine(78))]));
     const keys = plan.items.map((i) => i.toolKey);
-    expect(keys).toEqual(expect.arrayContaining([TOOL.probeRead, TOOL.probeWrite, TOOL.probeCalc, TOOL.compFamily, TOOL.anamnesisV3, TOOL.sdqT]));
-    expect(keys).not.toContain(TOOL.sdqP);
+    expect(keys).toEqual(expect.arrayContaining([TOOL.probeRead, TOOL.probeWrite, TOOL.probeCalc, TOOL.idAdapt, TOOL.anamnesisV3, TOOL.sdqP, TOOL.sdqT]));
     expect(keys.filter((k) => k.startsWith('ce-sld-'))).toEqual([]);
     expect(plan.items.every((i) => i.priority === 'core')).toBe(true);
     expect(plan.planType).toBe('جامع');
@@ -164,11 +163,11 @@ describe('قاعدهٔ ۵ — پلن دیرآموز (BIF) + تفکیک انطب�
     expect(plan.items.some((i) => i.toolKey === TOOL.sldWri || i.toolKey === TOOL.sldCalc)).toBe(false);
   });
 
-  it('هم‌بودی توجه با گپ شاخصی ≥۱۰ → SNAP معلم core و SNAP والدِ پوشش‌شدهٔ پکیج حذف', () => {
+  it('هم‌بودی توجه با گپ شاخصی ≥۱۰ → SNAP والد و معلم هر دو core (m186 — پکیجِ پوشش‌دهنده حذف شده)', () => {
     const engine = wechslerEngine({ fsiq: 78, vci: 82, pri: 81, wmi: 70, psi: 77, scatter: 8 });
     const plan = recommendChecklistPlan(checklistPlanContextOf([wechslerEvent(engine)]));
     expect(plan.items.map((i) => i.toolKey)).toContain(TOOL.snapT);
-    expect(plan.items.map((i) => i.toolKey)).not.toContain(TOOL.snapP);
+    expect(plan.items.map((i) => i.toolKey)).toContain(TOOL.snapP);
     expect(plan.planType).toBe('جامع');
   });
 
@@ -186,17 +185,19 @@ describe('قاعدهٔ ۵ — پلن دیرآموز (BIF) + تفکیک انطب�
     expect(plan.basis).toContain('ناتوانی هوشی');
   });
 
-  it('FSIQ ۶۵ + انطباق ثبت‌نشده → فقط فرم جامع خانواده برای تفکیک؛ مسیر ID مهر نمی‌شود', () => {
+  it('FSIQ ۶۵ + انطباق ثبت‌نشده → سنجهٔ انطباق روزمره برای تفکیک؛ مسیر ID مهر نمی‌شود (m186)', () => {
     const plan = recommendChecklistPlan(checklistPlanContextOf([wechslerEvent(uniformEngine(65))]));
-    expect(plan.items.map((i) => i.toolKey)).toEqual([TOOL.compFamily, TOOL.sdqT]);
+    expect(plan.items.map((i) => i.toolKey)).toEqual([TOOL.idAdapt, TOOL.sdqP, TOOL.sdqT]);
     expect(plan.items[0].reasonFa).toContain('تفکیک');
     expect(plan.referralFa).toBeNull();
   });
 
-  it('FSIQ ۶۵ + انطباق نرمال → مسیر ID تأیید نمی‌شود؛ پلن پروب‌محور دیرآموز می‌آید', () => {
+  it('FSIQ ۶۵ + انطباق نرمال → مسیر ID تأیید نمی‌شود؛ پلن پروب‌محور دیرآموز می‌آید (انطباقِ موجود دوباره پیشنهاد نمی‌شود)', () => {
     const plan = recommendChecklistPlan(checklistPlanContextOf([wechslerEvent(uniformEngine(65)), idAdaptEvent(20)]));
     expect(plan.referralFa).toBeNull();
-    expect(plan.items.map((i) => i.toolKey)).toEqual(expect.arrayContaining([TOOL.probeRead, TOOL.compFamily]));
+    const keys = plan.items.map((i) => i.toolKey);
+    expect(keys).toEqual(expect.arrayContaining([TOOL.probeRead]));
+    expect(keys).not.toContain(TOOL.idAdapt); // — انطباق نرمال ثبت شده؛ ابزار تکراری نمی‌آید
   });
 
   it('رویداد وکسلرِ پیش از T1 (فقط فیلد دستی) → فال‌بک fsiqBandOf و همان پلن دیرآموز', () => {
@@ -392,7 +393,7 @@ describe('قرارداد خروجی — پایداری و پاکیزگی', () =>
     const known = new Set<string>([
       TOOL.snapP, TOOL.snapT, TOOL.sdqP, TOOL.sdqT, TOOL.scared, TOOL.dcdq,
       TOOL.sldRead, TOOL.sldWri, TOOL.sldCalc, TOOL.asd, TOOL.speech, TOOL.odd,
-      TOOL.probeRead, TOOL.probeWrite, TOOL.probeCalc, TOOL.compFamily, TOOL.idAdapt, TOOL.anamnesisV3
+      TOOL.probeRead, TOOL.probeWrite, TOOL.probeCalc, TOOL.idAdapt, TOOL.anamnesisV3
     ]);
     const samples = [
       checklistPlanContextOf([wechslerEvent(uniformEngine(78))]),

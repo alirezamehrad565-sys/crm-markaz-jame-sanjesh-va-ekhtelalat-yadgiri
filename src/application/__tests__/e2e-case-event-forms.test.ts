@@ -494,14 +494,11 @@ describe('پارس callbackها و قالب‌های جدید', () => {
   });
 });
 
-describe('T5 — پکیج فرم جامع خانواده (یک لینک، چند رویداد مستقل)', () => {
+describe('m186 — فرم‌های تکی خانواده جای «فرم جامع» (هر فرم = یک رویداد = یک لینک)', () => {
   let A: ReturnType<typeof createTestApp>;
   let manager: ReturnType<typeof asRole> extends Promise<infer T> ? T : never;
   let studentId = '';
-  let pkgEventId = '';
   const typeIds: Record<string, string> = {};
-  const PKG = 'ce-comp-family-v2';
-  const COMPONENTS = ['ce-snap-iv-p-v1', 'ce-sdq-p-v1', 'ce-scared-p-v1', 'ce-id-adapt-v1'];
 
   const dataOf = <T>(res: { body: unknown }): T => (res.body as { data: T }).data;
   const fieldsOf = (key: string): { key: string; type: string; scaleMax?: number }[] =>
@@ -510,28 +507,30 @@ describe('T5 — پکیج فرم جامع خانواده (یک لینک، چند
   beforeAll(async () => {
     A = createTestApp();
     manager = await asRole(A, 'manager');
-    const s = await createStudent(manager, { first_name: 'امید', last_name: 'جامع‌آزمون' });
+    const s = await createStudent(manager, { first_name: 'امید', last_name: 'تکی‌آزمون' });
     studentId = s.id;
     A.sql
       .prepare(
         `INSERT INTO bot_links (id, code, student_id, chat_id, status, created_by, created_at, updated_at)
-         VALUES ('bb000000-7600-4000-8000-000000000501', 'M76T5CODE', ?, '9151', 'linked', 'seed', datetime('now'), datetime('now'))`
+         VALUES ('bb000000-7600-4000-8000-000000000501', 'M86T5CODE', ?, '9151', 'linked', 'seed', datetime('now'), datetime('now'))`
       )
       .run(studentId);
     const types = dataOf<Array<{ id: string; key: string }>>(await manager.get('/api/case-events/types?active=true'));
-    for (const k of [PKG, ...COMPONENTS]) {
+    for (const k of ['ce-snap-iv-p-v1', 'ce-sdq-p-v1', 'ce-scared-p-v1', 'ce-id-adapt-v1']) {
       const t = types.find((x) => x.key === k);
       expect(t, k).toBeTruthy();
       typeIds[k] = t!.id;
     }
+    // — دو فرم جامع دیگر در کتابخانه نیست
+    expect(types.find((x) => x.key === 'ce-comp-family-v2')).toBeUndefined();
+    expect(types.find((x) => x.key === 'ce-comp-teacher-v2')).toBeUndefined();
   });
 
-  it('ساخت رویداد لنگر پکیج → pending_family با توکن؛ صف «در انتظار پاسخ» نشان می‌دهد', async () => {
-    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds[PKG], values: {} });
+  it('SNAP-IV والد تکی: ساخت → در انتظار خانواده + توکن؛ صف «در انتظار پاسخ» نشان می‌دهد', async () => {
+    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-snap-iv-p-v1'], values: {} });
     expect(created.status).toBe(201);
-    const rec = dataOf<{ id: string; status: string; typeCategory: string }>(created);
+    const rec = dataOf<{ id: string; status: string }>(created);
     expect(rec.status).toBe('pending_family');
-    pkgEventId = rec.id;
     const tokenRow = A.sql.prepare(`SELECT fill_token FROM case_events WHERE id = ?`).get(rec.id) as { fill_token: string };
     expect(tokenRow.fill_token).toBeTruthy();
 
@@ -540,138 +539,18 @@ describe('T5 — پکیج فرم جامع خانواده (یک لینک، چند
   });
 
   it('ارسال با بله (خانواده) → sent≥۱ و لینک امن در پیام', async () => {
-    const res = await manager.post(`/api/case-events/${pkgEventId}/send`, { audience: 'family' });
+    const rows = A.sql.prepare(
+      `SELECT e.id FROM case_events e JOIN case_event_types t ON t.id = e.event_type_id
+        WHERE t.key = 'ce-snap-iv-p-v1' AND e.student_id = ? AND e.status = 'pending_family'`
+    ).all(studentId) as { id: string }[];
+    const res = await manager.post(`/api/case-events/${rows[0].id}/send`, { audience: 'family' });
     expect(res.status).toBe(200);
     const out = dataOf<{ sent: number; targets: string[] }>(res);
     expect(out.sent).toBeGreaterThanOrEqual(1);
     expect(out.targets).toContain('9151');
   });
 
-  it('GET صفحهٔ پکیج → HTML بخش‌به‌بخش: زمینه + سربرگ اختصاصی چهار ابزار به‌ترتیب', async () => {
-    const row = A.sql.prepare(`SELECT id, fill_token FROM case_events WHERE event_type_id = ? AND status = 'pending_family'`).get(typeIds[PKG]) as { id: string; fill_token: string };
-    const page = await A.app.request(`/public/case-events/${row.id}/fill?token=${row.fill_token}`);
-    expect(page.status).toBe(200);
-    const html = await page.text();
-    expect(html).toContain('فرم جامع خانواده');
-    expect(html).toContain('زمینهٔ خانواده');
-    expect(html).toContain('این فرم را چه کسی پر می‌کند؟');
-    expect(html).toContain('بخش ۲ از ۵ — چک‌لیست توجه و بی‌قراری — فرم خانواده (SNAP-IV)');
-    expect(html).toContain('بخش ۳ از ۵ — پرسش‌نامهٔ رفتار کودک — فرم خانواده (SDQ)');
-    expect(html).toContain('بخش ۴ از ۵ — پرسش‌نامهٔ اضطراب کودک — فرم خانواده (SCARED)');
-    expect(html).toContain('بخش ۵ از ۵ — سنجهٔ انطباق روزمره — فرم خانواده');
-    expect(html).toContain('بیشتر تنهایی بازی می‌کند و سراغ بازی گروهی نمی‌رود');
-    expect(html).toContain('خواسته یا نیازش را با کلمه یا اشارهٔ روشن بیان می‌کند');
-    expect(html).toContain('ارسال همهٔ پاسخ‌ها');
-    expect(html).toContain(row.fill_token);
-  });
-
-  it('POST کامل → ۴ رویداد مستقل با زیرمقیاس‌های درست + رویداد زمینه؛ POST دوباره → ۴۰۹', async () => {
-    const row = A.sql.prepare(`SELECT id, fill_token FROM case_events WHERE event_type_id = ? AND status = 'pending_family'`).get(typeIds[PKG]) as { id: string; fill_token: string };
-
-    const answers: Record<string, number | string> = {};
-    for (const k of COMPONENTS) {
-      for (const f of fieldsOf(k)) answers[f.key] = 0;
-    }
-    for (let i = 1; i <= 9; i++) answers[`s0${i}`] = 3;
-    for (const f of fieldsOf('ce-id-adapt-v1')) answers[f.key] = 2;
-    answers['filled_by'] = 'مادر';
-    answers['main_concern'] = 'نگران درس خواندن او هستم';
-    answers['recent_changes'] = 'مدرسه عوض کرد';
-
-    const post = await A.app.request(`/public/case-events/${row.id}/fill`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ token: row.fill_token, answers })
-    });
-    expect(post.status).toBe(200);
-
-    const post2 = await A.app.request(`/public/case-events/${row.id}/fill`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ token: row.fill_token, answers })
-    });
-    expect(post2.status).toBe(409);
-
-    const anchor = A.sql.prepare(`SELECT status, payload, analysis, summary FROM case_events WHERE id = ?`).get(row.id) as { status: string; payload: string; analysis: string | null; summary: string };
-    expect(anchor.status).toBe('completed');
-    const anchorPayload = JSON.parse(anchor.payload) as Record<string, { value: string; label: string }>;
-    expect(anchorPayload.filled_by.value).toBe('مادر');
-    expect(anchorPayload.main_concern.value).toBe('نگران درس خواندن او هستم');
-    expect(anchor.analysis).toBeNull();
-
-    const rows = A.sql.prepare(
-      `SELECT t.key AS type_key, e.analysis, e.status, e.staff_id
-         FROM case_events e JOIN case_event_types t ON t.id = e.event_type_id
-        WHERE e.student_id = ? AND e.status = 'completed' AND e.id != ?`
-    ).all(studentId, row.id) as Array<{ type_key: string; analysis: string; status: string; staff_id: string | null }>;
-    expect(rows.length).toBe(4);
-    const byKey = Object.fromEntries(rows.map((r) => [r.type_key, JSON.parse(r.analysis) as {
-      score: number; band: string | null; subscaleScores: { id: string; score: number; max: number; band: string | null }[];
-    }]));
-
-    expect(Object.keys(byKey)).toEqual(expect.arrayContaining(COMPONENTS));
-    const snap = byKey['ce-snap-iv-p-v1'];
-    expect(snap.subscaleScores.map((s) => s.id)).toEqual(['ia', 'hi', 'odd']);
-    const ia = snap.subscaleScores.find((s) => s.id === 'ia')!;
-    expect(ia.score).toBe(27);
-    expect(ia.max).toBe(27);
-    expect(ia.band).toBe('قابل توجه — نیاز به بررسی بیشتر');
-    expect(snap.subscaleScores.find((s) => s.id === 'hi')!.band).toBe('در محدودهٔ عادی');
-
-    const sdq = byKey['ce-sdq-p-v1'];
-    expect(sdq.subscaleScores.map((s) => s.id)).toEqual(['emo', 'cond', 'hyper', 'peer', 'pros']);
-    expect(sdq.score).toBe(10);
-    expect(sdq.band).toBe('در محدودهٔ عادی');
-    expect(sdq.subscaleScores.find((s) => s.id === 'pros')!.band).toBe('نیازمند تقویت — قابل توجه');
-
-    const scared = byKey['ce-scared-p-v1'];
-    expect(scared.subscaleScores.map((s) => s.id)).toEqual(['panic', 'gad', 'sep', 'soc', 'sch']);
-    expect(scared.band).toBe('در محدودهٔ عادی');
-
-    const ida = byKey['ce-id-adapt-v1'];
-    expect(ida.subscaleScores.map((s) => s.id)).toEqual(['id_adapt']);
-    expect(ida.score).toBe(24);
-    expect(ida.band).toBe('نرمال');
-
-    expect(rows.every((r) => r.staff_id === null)).toBe(true);
-    const timeline = dataOf<Array<{ typeTitle: string }>>(await manager.get(`/api/students/${studentId}/case-events`));
-    expect(timeline.filter((e) => e.typeTitle.includes('SNAP-IV')).length).toBe(1);
-  });
-
-  it('POST ناقص (یک آیتم جامانده) → ۴۰۹ فارسی و هیچ رویدادی ساخته نمی‌شود (تراکنش)', async () => {
-    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds[PKG], values: {} });
-    const rec = dataOf<{ id: string }>(created);
-    const tokenRow = A.sql.prepare(`SELECT fill_token FROM case_events WHERE id = ?`).get(rec.id) as { fill_token: string };
-    const answers: Record<string, number | string> = {};
-    for (const k of COMPONENTS) {
-      for (const f of fieldsOf(k)) answers[f.key] = 1;
-    }
-    answers['filled_by'] = 'پدر';
-    delete answers['sc01']; // یک آیتم SCARED جامانده
-    const post = await A.app.request(`/public/case-events/${rec.id}/fill`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ token: tokenRow.fill_token, answers })
-    });
-    expect(post.status).toBe(409);
-    const body = (await post.json()) as { error: { message: string } };
-    expect(body.error.message).toContain('بی‌پاسخ');
-    const anchorRow = A.sql.prepare(`SELECT status FROM case_events WHERE id = ?`).get(rec.id) as { status: string };
-    expect(anchorRow.status).toBe('pending_family');
-  });
-
-  it('بات: پکیج در «چک‌لیست‌های من» می‌آید و با لینک وب پاسخ می‌گیرد (نه ویزارد چت)', async () => {
-    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds[PKG], values: {} });
-    const rec = dataOf<{ id: string }>(created);
-    const mine = await bot(A, tx('چک‌لیست‌های من', 9151));
-    expect(mine.reply).toContain('در انتظار پاسخ');
-    expect(mine.buttons?.flat().some((b) => b.callbackData === `clf:fill:${rec.id}`)).toBe(true);
-    const start = await bot(A, cb(`clf:fill:${rec.id}`, 9151, 5051));
-    expect(start.reply).toContain('فرم جامع');
-    expect(start.reply).toMatch(/https?:\/\//);
-  });
-
-  it('رگرسیون لینک تکی: SNAP-IV والد مستقل همان مسیر قبلی وب‌فرم را دارد و پکیجی رندر نمی‌شود', async () => {
+  it('وب‌فرم تکی: GET صفحهٔ تک‌فرمی (بدون سربرگ «بخش ۲ از ۵») + POST کامل → تحلیل؛ POST دوباره → ۴۰۹', async () => {
     const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-snap-iv-p-v1'], values: {} });
     const rec = dataOf<{ id: string }>(created);
     const tokenRow = A.sql.prepare(`SELECT fill_token FROM case_events WHERE id = ?`).get(rec.id) as { fill_token: string };
@@ -679,7 +558,7 @@ describe('T5 — پکیج فرم جامع خانواده (یک لینک، چند
     expect(page.status).toBe(200);
     const html = await page.text();
     expect(html).toContain('چک‌لیست توجه و بی‌قراری — فرم خانواده (SNAP-IV)');
-    expect(html).not.toContain('بخش ۲ از ۵');
+    expect(html).not.toContain('بخش ۲ از');
     const answers: Record<string, number> = {};
     for (const f of fieldsOf('ce-snap-iv-p-v1')) answers[f.key] = 1;
     const post = await A.app.request(`/public/case-events/${rec.id}/fill`, {
@@ -691,8 +570,27 @@ describe('T5 — پکیج فرم جامع خانواده (یک لینک، چند
     const analysisRow = A.sql.prepare(`SELECT analysis FROM case_events WHERE id = ?`).get(rec.id) as { analysis: string };
     const a = JSON.parse(analysisRow.analysis) as { score: number; band: string | null; subscaleScores: { id: string; band: string | null }[] };
     expect(a.score).toBe(26);
-    expect(a.band).toBeNull();
-    expect(a.subscaleScores.find((s) => s.id === 'ia')!.band).toBe('در محدودهٔ عادی');
+    expect(a.subscaleScores.map((x) => x.id)).toEqual(['ia', 'hi', 'odd']);
+    expect(a.subscaleScores.find((x) => x.id === 'ia')!.band).toBe('در محدودهٔ عادی');
+
+    const post2 = await A.app.request(`/public/case-events/${rec.id}/fill`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: tokenRow.fill_token, answers })
+    });
+    expect(post2.status).toBe(409);
+  });
+
+  it('بات: چک‌لیست بلند خانواده (SNAP-IV ۲۷ آیتمی) در «چک‌لیست‌های من» می‌آید و با لینک وب پاسخ می‌گیرد', async () => {
+    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-sdq-p-v1'], values: {} });
+    const rec = dataOf<{ id: string }>(created);
+    const mine = await bot(A, tx('چک‌لیست‌های من', 9151));
+    expect(mine.reply).toContain('در انتظار پاسخ');
+    expect(mine.buttons?.flat().some((b) => b.callbackData === `clf:fill:${rec.id}`)).toBe(true);
+    const start = await bot(A, cb(`clf:fill:${rec.id}`, 9151, 5051));
+    expect(start.reply).toContain('لینک امن');
+    expect(start.reply).toMatch(/https?:\/\//);
+    expect(start.reply).not.toContain('فرم جامع'); // — m186: متن بستهٔ جامع دیگر وجود ندارد
   });
 });
 

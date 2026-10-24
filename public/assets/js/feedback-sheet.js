@@ -44,8 +44,6 @@ const PLAN_TOOL_PLAIN = {
   'ce-probe-read-v1': 'آزمون کوتاه روان‌خوانی',
   'ce-probe-write-v1': 'آزمون کوتاه نوشتن',
   'ce-probe-calc-v1': 'آزمون کوتاه حساب',
-  'ce-comp-family-v2': 'فرم جامع خانواده',
-  'ce-comp-teacher-v2': 'فرم جامع معلم',
   'ce-id-adapt-v1': 'پرسش‌نامهٔ مهارت‌های روزمره و سازگاری',
   'ce-anamnesis-v3': 'شرح‌حال جلسهٔ نخست'
 };

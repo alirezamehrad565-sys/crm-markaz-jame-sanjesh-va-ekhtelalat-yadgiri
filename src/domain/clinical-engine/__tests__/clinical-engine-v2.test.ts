@@ -177,8 +177,8 @@ describe('T6 — هم‌گرایی چندمنبعی (سه حالت خوانا)',
     expect(item.implicationFa).toContain('مدرسه');
   });
 
-  it('جدول منابع: پکیج جامع = یک منبع خانواده؛ کلید ناشناختهٔ معلمی با batteryDef معلم می‌شود', () => {
-    expect(convergenceSourceOfTool('ce-comp-family-v2')).toBe('family');
+  it('جدول منابع: فرم‌های تکی خانواده/معلم منبع خود را دارند (m186 — بدون پکیج جامع)؛ کلید ناشناختهٔ معلمی با batteryDef معلم می‌شود', () => {
+    expect(convergenceSourceOfTool('ce-comp-family-v2')).toBeNull();
     expect(convergenceSourceOfTool('ce-snap-iv-p-v1')).toBe('family');
     expect(convergenceSourceOfTool(ID_ADAPT_EVENT_KEY)).toBe('family');
     expect(convergenceSourceOfTool('sdq-parent')).toBe('family');
