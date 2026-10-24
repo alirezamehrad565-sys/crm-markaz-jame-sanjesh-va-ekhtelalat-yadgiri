@@ -138,10 +138,64 @@ export interface IdentificationGate {
   detail: string;
 }
 
+export interface WechslerSummary {
+  fsiq: number | null;
+  vci: number | null;
+  pri: number | null;
+  wmi: number | null;
+  psi: number | null;
+  gai: number | null;
+  indexScatter: number | null;
+  cls: string | null;
+  percentile: number | null;
+  weakDomains: string[];
+  flagsFa: string[];
+  monitoringInterval: string | null;
+  ageLine: string | null;
+  occurredAt: string | null;
+  event: { date: string } | null;
+  engine: boolean;
+  profile: {
+    indices: { key: string; scaled: number | null; percentile: number | null; cls: string | null }[];
+    gaiMeta: { scaled?: number | null; percentile?: number | null; ci95?: string | null } | null;
+    spreads: Record<string, number | undefined>;
+    weakestIndex: string | null;
+    strongestIndex: string | null;
+    personalIndexMean: number | null;
+    personalSubMean: number | null;
+    outOfBandSubs: number | null;
+    subtests: { code: string; scaled: number | null; core: null }[];
+    subStrong: { code: string }[];
+    subWeak: { code: string }[];
+    step5: Record<string, unknown>[];
+    pairs: Record<string, unknown>[];
+    comparisons: null;
+  } | null;
+  psychometrics: Record<string, unknown> | null;
+}
+
+export interface SuspicionSignal {
+  construct: string;
+  label: string;
+  level: 'watch' | 'high';
+  levelLabel: string;
+  sources: string[];
+  evidence: string[];
+}
+
+export interface SuspicionOutput {
+  signals: SuspicionSignal[];
+  decided: boolean;
+  decidedAt: string | null;
+  decidedSummary: string | null;
+}
+
 export interface GatesOutput {
   phase: 'identification' | 'intervention';
   protocol: StudentProtocol | null;
   gates: IdentificationGate[];
+  suspicion?: SuspicionOutput | null;
+  wechslerSummary?: WechslerSummary | null;
   otCoverage: {
     scored: number;
     total: number;

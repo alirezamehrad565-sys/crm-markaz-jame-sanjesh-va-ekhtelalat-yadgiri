@@ -19,7 +19,10 @@ import type {
   OtSessionSaveInput,
   OtSessionSaveResult,
   OtSkillState,
-  OtSkillStatus
+  OtSkillStatus,
+  SuspicionOutput,
+  SuspicionSignal,
+  WechslerSummary
 } from './types';
 import { OT_DOMAINS, OT_DOMAIN_LABELS, OT_GATE_FRESH_MONTHS, OT_PROMPT_LEVEL_LABELS, OT_SKILL_STATUS_LABELS } from './types';
 
@@ -40,6 +43,23 @@ const OT_SESSION_EVENT_KEY = 'ce-ot-session-v1';
 const REHAB_FX_EVENT_KEY = 'ce-rehab-fx-v1';
 const SLD_CHECKLIST_EVENT_KEYS = ['ce-sld-read-v1', 'ce-sld-wri-v1', 'ce-sld-calc-v1'];
 const REHAB_PATHWAY_ORDER = ['anamnesis', 'skills', 'needs'] as const;
+
+const SUSPICION_EVENT_KEY = 'ce-clinical-suspicion-v1';
+const SNAP_CUTOFFS = {
+  parent: { ia: { warn: 11, danger: 16 }, hi: { danger: 13 } },
+  teacher: { ia: { warn: 14, danger: 16 }, hi: { danger: 11 } }
+} as const;
+const SCARED_DANGER = 25;
+const SCARED_WARN_MIN = 20;
+const SCARED_STRONG = 30;
+const SUSPICION_LEVEL_LABELS: Record<string, string> = {
+  watch: 'قابل پایش',
+  high: 'محتمل — شواهد هم‌گرا'
+};
+const SUSPICION_CONSTRUCT_LABELS: Record<string, string> = {
+  adhd: 'بیش‌فعالی/کم‌توجهی',
+  anxiety: 'اضطراب'
+};
 
 const NEED_TYPE_LABELS: Record<string, string> = {
   dyslexia: 'نارساخوانی (دیس‌لکسی)',
@@ -95,6 +115,16 @@ interface EventTypeRow {
   key: string;
 }
 
+interface StageEventRow {
+  eventId: string;
+  toolKey: string;
+  status: string;
+  occurredAt: string;
+  payload: Record<string, { value: string; label: string }> | null;
+  analysis: { score?: number | null; band?: string | null; subscaleScores?: { id: string; name: string; score: number; max: number; band: string | null; color?: string | null }[] } | null;
+  subscales: { id: string; bands?: { label: string; color?: string | null }[] }[] | null;
+}
+
 interface OtEngineDeps {
   db: DbClient;
   audit: AuditWriter;
@@ -112,6 +142,255 @@ function isFresh(lastAt: string | undefined, nowFn: () => Date): boolean {
   const t = Date.parse(lastAt.includes('T') ? lastAt : `${lastAt.replace(' ', 'T')}Z`);
   if (Number.isNaN(t)) return false;
   return nowFn().getTime() - t <= OT_GATE_FRESH_MONTHS * 30 * 24 * 3600 * 1000;
+}
+
+function makeIsFreshIso(nowFn: () => Date): (isoAt: string) => boolean {
+  return (isoAt: string) => {
+    const t = Date.parse(isoAt.includes('T') ? isoAt : `${isoAt.replace(' ', 'T')}Z`);
+    if (Number.isNaN(t)) return false;
+    return nowFn().getTime() - t <= OT_GATE_FRESH_MONTHS * 30 * 24 * 3600 * 1000;
+  };
+}
+
+function parseJsonSafe<T>(raw: string | null): T | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+function faNum(value: number | string): string {
+  const fa = '۰۱۲۳۴۵۶۷۸۹';
+  return String(value).replace(/\d/g, (d) => fa[Number(d)]);
+}
+
+function numOf(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(String(value).replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))));
+  return Number.isFinite(n) ? n : null;
+}
+
+function subscaleScoreOf(event: StageEventRow, id: string): { score: number; band: string | null; color?: string | null } | null {
+  return event.analysis?.subscaleScores?.find((s) => s.id === id) ?? null;
+}
+
+function subscaleColorOf(event: StageEventRow, id: string): string | null {
+  const ss = subscaleScoreOf(event, id);
+  if (!ss) return null;
+  if (ss.color) return ss.color;
+  const def = event.subscales?.find((s) => s.id === id);
+  return ss.band && def ? def.bands?.find((x) => x.label === ss.band)?.color ?? null : null;
+}
+
+function sourceOf(toolKey: string): 'parent' | 'teacher' {
+  if (toolKey.includes('-t-') || toolKey === 'ce-sdq-t-v1' || toolKey === 'teacher-classroom') return 'teacher';
+  return 'parent';
+}
+
+function sourceFa(toolKey: string): string {
+  return sourceOf(toolKey) === 'teacher' ? 'معلم' : 'والد';
+}
+
+function roleOf(toolKey: string): 'parent' | 'teacher' {
+  return sourceOf(toolKey);
+}
+
+interface SuspicionHit {
+  construct: 'adhd' | 'anxiety';
+  level: 'watch' | 'high';
+  source: string;
+  text: string;
+}
+
+function computeSuspicion(behavioralEvents: StageEventRow[], decisionEvent: StageEventRow | null, isFreshIso: (isoAt: string) => boolean): SuspicionOutput {
+  const latest = new Map<string, StageEventRow>();
+  for (const e of behavioralEvents) {
+    if (e.status !== 'completed') continue;
+    if (!isFreshIso(e.occurredAt)) continue;
+    if (!latest.has(e.toolKey)) latest.set(e.toolKey, e);
+  }
+
+  const hits: SuspicionHit[] = [];
+  for (const [toolKey, event] of latest) {
+    if (toolKey === 'ce-snap-iv-p-v1' || toolKey === 'ce-snap-iv-t-v1') {
+      const cut = SNAP_CUTOFFS[roleOf(toolKey)];
+      const src = sourceFa(toolKey);
+      const ia = subscaleScoreOf(event, 'ia');
+      const iaNum = ia ? ia.score : numOf(event.payload?.['ia_total']?.value);
+      const iaDanger = iaNum !== null ? iaNum >= cut.ia.danger : subscaleColorOf(event, 'ia') === 'danger';
+      const iaWarn = !iaDanger && iaNum !== null ? iaNum >= cut.ia.warn : !iaDanger && subscaleColorOf(event, 'ia') === 'warn';
+      if (iaDanger) {
+        hits.push({ construct: 'adhd', level: 'high', source: sourceOf(toolKey), text: `بی‌توجهی در SNAP-IV ${src} پرخطر است${iaNum !== null ? ` (نمرهٔ ${faNum(iaNum)} از ${faNum(27)})` : ''}` });
+      } else if (iaWarn) {
+        hits.push({ construct: 'adhd', level: 'watch', source: sourceOf(toolKey), text: `بی‌توجهی در SNAP-IV ${src} کمی بالاتر از معمول است${iaNum !== null ? ` (نمرهٔ ${faNum(iaNum)})` : ''}` });
+      }
+      const hi = subscaleScoreOf(event, 'hi');
+      const hiNum = hi ? hi.score : numOf(event.payload?.['hi_total']?.value);
+      const hiDanger = hiNum !== null ? hiNum >= cut.hi.danger : subscaleColorOf(event, 'hi') === 'danger';
+      if (hiDanger) {
+        hits.push({ construct: 'adhd', level: 'high', source: sourceOf(toolKey), text: `بی‌قراری/تکانش در SNAP-IV ${src} پرخطر است${hiNum !== null ? ` (نمرهٔ ${faNum(hiNum)})` : ''}` });
+      }
+      continue;
+    }
+    if (toolKey === 'sdq-parent' || toolKey === 'ce-sdq-t-v1') {
+      const src = sourceFa(toolKey);
+      if (subscaleColorOf(event, 'hyper') === 'danger') {
+        hits.push({ construct: 'adhd', level: 'high', source: sourceOf(toolKey), text: `بیش‌فعالی در SDQ ${src} پرخطر گزارش شده است` });
+      }
+      if (subscaleColorOf(event, 'emo') === 'danger') {
+        hits.push({ construct: 'anxiety', level: 'watch', source: sourceOf(toolKey), text: `مشکلات هیجانی در SDQ ${src} پرخطر گزارش شده است` });
+      }
+      continue;
+    }
+    if (toolKey === 'ce-scared-p-v1') {
+      const total = event.analysis?.score ?? numOf(event.payload?.['total']?.value);
+      if (total !== null) {
+        if (total >= SCARED_STRONG) {
+          hits.push({ construct: 'anxiety', level: 'high', source: 'parent', text: `نمرهٔ کل اضطراب (SCARED والد) در باند اختصاصی است (${faNum(total)})` });
+        } else if (total >= SCARED_DANGER) {
+          hits.push({ construct: 'anxiety', level: 'high', source: 'parent', text: `نمرهٔ کل اضطراب (SCARED والد) پرخطر است (${faNum(total)} از ${faNum(82)})` });
+        } else if (total >= SCARED_WARN_MIN) {
+          hits.push({ construct: 'anxiety', level: 'watch', source: 'parent', text: `نمرهٔ کل اضطراب (SCARED والد) کمی بالاتر از معمول است (${faNum(total)})` });
+        }
+      }
+      continue;
+    }
+  }
+
+  const signals: SuspicionSignal[] = [];
+  for (const construct of ['adhd', 'anxiety'] as const) {
+    const mine = hits.filter((h) => h.construct === construct);
+    if (mine.length === 0) continue;
+    const level: 'watch' | 'high' = mine.some((h) => h.level === 'high') ? 'high' : 'watch';
+    const sources = [...new Set(mine.map((h) => h.source))];
+    const evidence = mine.map((h) => h.text).slice(0, 4);
+    if (sources.includes('parent') && sources.includes('teacher')) {
+      evidence.push('خانه و مدرسه هم‌رأی گزارش می‌دهند (هم‌گرایی چندمنبعی)');
+    }
+    signals.push({
+      construct,
+      label: SUSPICION_CONSTRUCT_LABELS[construct] ?? construct,
+      level,
+      levelLabel: SUSPICION_LEVEL_LABELS[level] ?? level,
+      sources,
+      evidence
+    });
+  }
+
+  return {
+    signals,
+    decided: Boolean(decisionEvent),
+    decidedAt: decisionEvent?.occurredAt ?? null,
+    decidedSummary: decisionEvent?.payload?.['decision']?.value ?? decisionEvent?.payload?.['suspect']?.value ?? null
+  };
+}
+
+const WISC_INDEX_KEYS = ['VCI', 'PRI', 'WMI', 'PSI', 'FSIQ'] as const;
+
+function wechslerSummaryOf(events: StageEventRow[]): WechslerSummary | null {
+  const w = events.find((e) => WECHSLER_KEYS.includes(e.toolKey));
+  if (!w) return null;
+
+  const engineRaw = w.payload?.['engine_output']?.value?.trim();
+  if (engineRaw) {
+    try {
+      const c = JSON.parse(engineRaw) as {
+        ok?: unknown;
+        snapshot?: {
+          fsiq?: number | null;
+          gai?: number | null;
+          indexScatter?: number | null;
+          indices?: Record<string, { scaled?: number | null; percentile?: number | null; cls?: string | null } | undefined>;
+          spreads?: Record<string, number | undefined>;
+          weakestIndex?: string | null;
+          strongestIndex?: string | null;
+          personalIndexMean?: number | null;
+          personalSubMean?: number | null;
+          outOfBandSubs?: number | null;
+          subtests?: { code: string; scaled?: number | null }[] | null;
+          subStrong?: { code: string }[] | null;
+          subWeak?: { code: string }[] | null;
+          gaiMeta?: { scaled?: number | null; percentile?: number | null; ci95?: string | null } | null;
+          s5rows?: Record<string, unknown>[] | null;
+          pairs?: Record<string, unknown>[] | null;
+        } | null;
+        weakDomains?: string[] | null;
+        flags?: { fa?: string }[] | null;
+        monitoringInterval?: string | null;
+        ageLine?: string | null;
+        psychometrics?: Record<string, unknown> | null;
+      };
+      const snap = c.snapshot;
+      if (c.ok && snap) {
+        const profile = (snap.subtests?.length || snap.indices && WISC_INDEX_KEYS.some((k) => snap.indices?.[k])) ? {
+          indices: WISC_INDEX_KEYS
+            .map((k) => {
+              const ix = snap.indices?.[k];
+              if (!ix || (ix.scaled == null && ix.percentile == null)) return null;
+              return { key: k, scaled: ix.scaled ?? null, percentile: ix.percentile ?? null, cls: ix.cls ?? null };
+            })
+            .filter((ix): ix is NonNullable<typeof ix> => ix !== null),
+          gaiMeta: snap.gaiMeta ?? null,
+          spreads: snap.spreads ?? {},
+          weakestIndex: snap.weakestIndex ?? null,
+          strongestIndex: snap.strongestIndex ?? null,
+          personalIndexMean: snap.personalIndexMean ?? null,
+          personalSubMean: snap.personalSubMean ?? null,
+          outOfBandSubs: snap.outOfBandSubs ?? null,
+          subtests: (snap.subtests ?? []).map((s) => ({ code: s.code, scaled: s.scaled ?? null, core: null })),
+          subStrong: (snap.subStrong ?? []).map((s) => ({ code: s.code })),
+          subWeak: (snap.subWeak ?? []).map((s) => ({ code: s.code })),
+          step5: snap.s5rows ?? [],
+          pairs: snap.pairs ?? [],
+          comparisons: null
+        } : null;
+        return {
+          fsiq: snap.fsiq ?? null,
+          vci: snap.indices?.VCI?.scaled ?? null,
+          pri: snap.indices?.PRI?.scaled ?? null,
+          wmi: snap.indices?.WMI?.scaled ?? null,
+          psi: snap.indices?.PSI?.scaled ?? null,
+          gai: snap.gai ?? null,
+          indexScatter: snap.indexScatter ?? null,
+          cls: snap.indices?.FSIQ?.cls ?? null,
+          percentile: typeof snap.indices?.FSIQ?.percentile === 'number' ? snap.indices.FSIQ.percentile : null,
+          weakDomains: c.weakDomains ?? [],
+          flagsFa: (c.flags ?? []).map((f) => f.fa ?? '').filter(Boolean),
+          monitoringInterval: c.monitoringInterval ?? null,
+          ageLine: c.ageLine ?? null,
+          occurredAt: w.occurredAt,
+          event: { date: w.occurredAt },
+          engine: true,
+          profile,
+          psychometrics: c.psychometrics ?? null
+        };
+      }
+    } catch {
+      // خروجی موتور ناخوانا — به مسیر دستی می‌افتیم
+    }
+  }
+
+  const n = (k: string) => numOf(w.payload?.[k]?.value);
+  const manual = { fsiq: n('fsiq'), vci: n('vci'), pri: n('pri'), wmi: n('wmi'), psi: n('psi') };
+  if (manual.fsiq === null && manual.vci === null && manual.pri === null && manual.wmi === null && manual.psi === null) return null;
+  return {
+    ...manual,
+    gai: null,
+    indexScatter: null,
+    cls: null,
+    percentile: null,
+    weakDomains: [],
+    flagsFa: [],
+    monitoringInterval: null,
+    ageLine: null,
+    occurredAt: w.occurredAt,
+    event: { date: w.occurredAt },
+    engine: false,
+    profile: null,
+    psychometrics: null
+  };
 }
 
 export function createOtEngineService(deps: OtEngineDeps) {
@@ -179,12 +458,49 @@ export function createOtEngineService(deps: OtEngineDeps) {
     return { scored, total: totalRow?.n ?? 0, domainsCovered: covered.length, domainsMin3, domainTitles: covered };
   }
 
+  async function loadStageEvents(studentId: string): Promise<StageEventRow[]> {
+    const keys = [...BEHAVIORAL_KEYS, ...WECHSLER_KEYS, SUSPICION_EVENT_KEY];
+    const rows = await db.query<{
+      id: string;
+      tool_key: string;
+      status: string;
+      occurred_at: string;
+      payload: string | null;
+      analysis: string | null;
+      type_subscales: string | null;
+    }>(
+      `SELECT e.id,
+              t.key            AS tool_key,
+              e.status,
+              e.occurred_at,
+              e.payload,
+              e.analysis,
+              t.subscales      AS type_subscales
+         FROM case_events e
+         JOIN case_event_types t ON t.id = e.event_type_id
+        WHERE e.student_id = ? AND e.status = 'completed' AND e.deleted_at IS NULL
+          AND t.key IN (${keys.map(() => '?').join(', ')})
+        ORDER BY e.occurred_at DESC, e.created_at DESC
+        LIMIT 200`,
+      [studentId, ...keys]
+    );
+    return rows.map((r) => ({
+      eventId: r.id,
+      toolKey: r.tool_key,
+      status: r.status,
+      occurredAt: r.occurred_at,
+      payload: parseJsonSafe<Record<string, { value: string; label: string }>>(r.payload),
+      analysis: parseJsonSafe<StageEventRow['analysis']>(r.analysis),
+      subscales: parseJsonSafe<StageEventRow['subscales']>(r.type_subscales)
+    }));
+  }
+
   function clampProtocol(v: string | null): StudentProtocol | null {
     return v && v in STUDENT_PROTOCOL_LABELS ? (v as StudentProtocol) : null;
   }
 
   async function computeGates(student: StudentRow): Promise<GatesOutput> {
-    const [seen, otCoverage] = await Promise.all([loadSeenToolMeta(student.id), loadOtCoverage(student.id)]);
+    const [seen, otCoverage, stageEvents] = await Promise.all([loadSeenToolMeta(student.id), loadOtCoverage(student.id), loadStageEvents(student.id)]);
     const protocol = clampProtocol(student.protocol);
 
     const freshCount = (keys: string[]) => keys.filter((k) => isFresh(seen.get(k), now)).length;
@@ -288,6 +604,12 @@ export function createOtEngineService(deps: OtEngineDeps) {
       phase: protocol ? 'intervention' : 'identification',
       protocol,
       gates,
+      suspicion: computeSuspicion(
+        stageEvents.filter((e) => BEHAVIORAL_KEYS.includes(e.toolKey)),
+        stageEvents.find((e) => e.toolKey === SUSPICION_EVENT_KEY) ?? null,
+        makeIsFreshIso(now)
+      ),
+      wechslerSummary: wechslerSummaryOf(stageEvents),
       otCoverage,
       protocolSuggestions: NEED_PROTOCOL_SUGGESTIONS,
       pathway: student.pathway

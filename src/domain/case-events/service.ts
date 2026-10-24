@@ -18,6 +18,40 @@ import {
   validateFileInput, validateProbeValues, validateReadCoreLevels, validateRehabFxValues, validateSensoryChipLevels, validateTypeDefinition, withTeacherName
 } from './pure';
 import type { ProbeArea } from './pure';
+import { applyWechslerEngineToPayload, WISC4_EVENT_KEY } from '../wechsler-engine';
+
+type PayloadMap = Record<string, { value: string; label: string }>;
+
+async function studentBirthDate(db: DbClient, studentId: string): Promise<string | null> {
+  const row = await db.queryOne<{ birth_date: string | null }>(
+    `SELECT birth_date FROM students WHERE id = ?`,
+    [studentId]
+  );
+  return row?.birth_date ?? null;
+}
+
+function summarySafePayload(payload: PayloadMap): PayloadMap {
+  const { engine_output: _engineOutput, ...rest } = payload;
+  return rest;
+}
+
+async function applyWechslerHook(
+  db: DbClient,
+  typeKey: string,
+  payload: PayloadMap,
+  studentId: string,
+  occurredAtIso: string
+): Promise<PayloadMap> {
+  if (typeKey !== WISC4_EVENT_KEY) return payload;
+  const birthDate = await studentBirthDate(db, studentId);
+  const hook = applyWechslerEngineToPayload(payload, birthDate, occurredAtIso);
+  if (!hook.ran) return payload;
+  if (!hook.result?.ok) {
+    const msgs = (hook.result?.validation?.errors ?? []).map((e) => e.message);
+    throw new ValidationError(msgs.length ? `موتور وکسلر ۴: ${msgs[0]}${msgs.length > 1 ? ` (+${msgs.length - 1} خطای دیگر)` : ''}` : 'موتور وکسلر ۴: ورودی نامعتبر است');
+  }
+  return hook.payload as PayloadMap;
+}
 
 interface TypeRow {
   id: string;
@@ -655,7 +689,10 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         fillExpires = new Date(now().getTime() + fillExpiryHours * 3600_000).toISOString();
       } else {
         payload = buildEventPayload(type.fields, input.values ?? {}, !asDraft);
-        summary = buildSummary(payload, null);
+        if (!asDraft) {
+          payload = await applyWechslerHook(db, type.key, payload, input.studentId, input.occurredAt ?? now().toISOString());
+        }
+        summary = buildSummary(summarySafePayload(payload), null);
         if (asDraft) status = 'draft';
       }
 
@@ -853,8 +890,11 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
           mergedValues[f.key] = null;
         }
       }
-      const payload = buildEventPayload(type.fields, mergedValues, row.status !== 'draft');
-      const summary = input.summary?.trim() ? input.summary.trim() : buildSummary(payload, null);
+      let payload = buildEventPayload(type.fields, mergedValues, row.status !== 'draft');
+      if (row.status !== 'draft') {
+        payload = await applyWechslerHook(db, type.key, payload, row.student_id, row.occurred_at);
+      }
+      const summary = input.summary?.trim() ? input.summary.trim() : buildSummary(summarySafePayload(payload), null);
       await db.execute(
         `UPDATE case_events SET payload = ?, summary = ?, updated_at = ? WHERE id = ?`,
         [JSON.stringify(payload), summary, now().toISOString(), id]
@@ -885,10 +925,11 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
           mergedValues[f.key] = f.key in currentPayload ? currentPayload[f.key].value : null;
         }
         const payload = buildEventPayload(type.fields, mergedValues, true); // سخت‌گیری کامل
-        const summary = buildSummary(payload, null);
+        const hookedPayload = await applyWechslerHook(db, type.key, payload, row.student_id, row.occurred_at);
+        const summary = buildSummary(summarySafePayload(hookedPayload), null);
         await tx.execute(
           `UPDATE case_events SET status = 'completed', payload = ?, summary = ?, updated_at = ? WHERE id = ?`,
-          [JSON.stringify(payload), summary, now().toISOString(), id]
+          [JSON.stringify(hookedPayload), summary, now().toISOString(), id]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
