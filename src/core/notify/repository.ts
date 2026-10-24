@@ -574,3 +574,47 @@ export function resolveChatOwner(chatId: string): { sql: string; params: unknown
     params: [chatId, chatId, chatId]
   };
 }
+
+// ─── قطع اتصال (m184) — پاک‌سازی همهٔ اتصال‌ها و وضعیت‌های یک گفتگو ───
+
+export function unlinkBotLinksByChat(chatId: string): { sql: string; params: unknown[] } {
+  return {
+    sql: `UPDATE bot_links
+             SET chat_id = NULL, status = 'pending', updated_at = ?
+           WHERE chat_id = ? AND status = 'linked'`,
+    params: [chatId, chatId]
+  };
+}
+
+export function unlinkStaffLinksByChat(chatId: string): { sql: string; params: unknown[] } {
+  return {
+    sql: `UPDATE staff_bot_links
+             SET chat_id = NULL, status = 'pending', updated_at = ?
+           WHERE chat_id = ? AND status = 'linked'`,
+    params: [chatId, chatId]
+  };
+}
+
+export function unlinkClassLinksByChat(chatId: string): { sql: string; params: unknown[] } {
+  return {
+    sql: `UPDATE class_bot_links
+             SET chat_id = NULL, status = 'pending', updated_at = ?
+           WHERE chat_id = ? AND status = 'linked'`,
+    params: [chatId, chatId]
+  };
+}
+
+export function clearPrefsChatByChat(chatId: string): { sql: string; params: unknown[] } {
+  return {
+    sql: `UPDATE notification_prefs SET chat_id = NULL, updated_at = ?
+           WHERE chat_id = ?`,
+    params: [chatId, chatId]
+  };
+}
+
+export function deleteBotMenuStateByChat(chatId: string): { sql: string; params: unknown[] } {
+  return {
+    sql: `DELETE FROM bot_menu_state WHERE chat_id = ?`,
+    params: [chatId]
+  };
+}

@@ -46,7 +46,7 @@ const CHAT_NONE = 7499;
 const MANAGER_NID = '3672818690';
 const ALI_NID = '3149977797';
 
-describe('لیست انتظار ↔ بات', () => {
+describe('لیست انتظار ↔ اعلان لغو نوبت (m184: منوی بات حذف شد)', () => {
   let A: ReturnType<typeof createTestApp>;
   let manager: Api;
 
@@ -59,50 +59,18 @@ describe('لیست انتظار ↔ بات', () => {
 
     const s = await createStudent(manager, { guardian_phone: '09125550099' });
     expect((await bot(A, tx(s.nationalId, CHAT_PARENT))).reply).toContain('اتصال انجام شد');
-  });
 
-  it('«لیست انتظار» بدون اتصال → راهنمای مهمان؛ والد → انکار؛ درمانگر → فهرست', async () => {
-    const none = await bot(A, tx('/waitlist', CHAT_NONE));
-    expect(none.reply).toContain('پس از اتصال');
-
-    const parent = await bot(A, tx('لیست انتظار', CHAT_PARENT));
-    expect(parent.reply).toContain('فقط برای همکاران مرکز است');
-
-    const ali = await bot(A, tx('/waitlist', CHAT_ALI));
-    expect(ali.reply).toContain('لیست انتظار');
-  });
-
-  it('«لیست انتظار» مدیر → متقاضیان باز به ترتیب پنل (فوری اول) + روز انتظار', async () => {
+    // متقاضیان باز لیست انتظار — شرط اعلان «نوبت خالی شد» (در m184 فهرست‌برداری از بات حذف شد ولی اعلان باقی است)
     const w1 = await manager.post('/api/waitlist', {
-      first_name: 'حسین',
-      last_name: 'رضایی‌مبارکه',
-      phone: '09123330011',
-      source: 'self',
-      priority: 'normal',
-      service_type: 'گفتاردرمانی'
+      first_name: 'حسین', last_name: 'رضایی‌مبارکه', phone: '09123330011',
+      source: 'self', priority: 'normal', service_type: 'گفتاردرمانی'
     });
     expect(w1.status).toBe(201);
     const w2 = await manager.post('/api/waitlist', {
-      first_name: 'زهرا',
-      last_name: 'حسینی‌فر',
-      phone: '09123330012',
-      source: 'school',
-      priority: 'urgent',
-      service_type: 'کاردرمانی'
+      first_name: 'زهرا', last_name: 'حسینی‌فر', phone: '09123330012',
+      source: 'school', priority: 'urgent', service_type: 'کاردرمانی'
     });
     expect(w2.status).toBe(201);
-
-    const res = await bot(A, tx('/waitlist', CHAT_MGR));
-    expect(res.reply).toContain('لیست انتظار');
-    expect(res.reply).toContain('🔴 فوری');
-    expect(res.reply).toContain('کاردرمانی');
-    expect(res.reply).toContain('گفتاردرمانی');
-    expect(res.reply).toContain('در انتظار');
-    const urgentPos = res.reply!.indexOf('حسینی‌فر');
-    const normalPos = res.reply!.indexOf('رضایی‌مبارکه');
-    expect(urgentPos).toBeGreaterThan(-1);
-    expect(normalPos).toBeGreaterThan(-1);
-    expect(urgentPos).toBeLessThan(normalPos);
   });
 
   it('لغو نوبت → «نوبت خالی شد» فقط به chat دفتر (مدیر/منشی متصل)؛ همکار نمی‌گیرد', async () => {

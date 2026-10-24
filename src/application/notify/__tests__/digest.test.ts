@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { groupFollowUpsForBot, followupsNudgeBody } from '../digest';
-import { renderFollowupsMessage, renderDigestBody, renderAttendanceSummary, renderCenterStatus } from '@core/notify';
+import { renderFollowupsMessage, renderDigestBody, renderAttendanceSummary } from '@core/notify';
 import type { FollowUp } from '@core/shared';
 
 function fu(overrides: Partial<FollowUp> & { id: string }): FollowUp {
@@ -121,21 +121,5 @@ describe('رندررهای پیام بات (pure)', () => {
     expect(text).toContain('• پویا امیدی: حاضر ۸ · غایب ۱ · بدون ثبت ۲');
     expect(text).toContain('• پریا امیدی: حاضر ۰ · غایب ۰'); // بدون «لغو ۰»
     expect(text).not.toContain('لغو ۰');
-  });
-
-  it('renderCenterStatus — چهار متریک با ارقام فارسی', () => {
-    const text = renderCenterStatus({
-      title: 'وضعیت مرکز',
-      sessionsToday: 6,
-      presentToday: 4,
-      absentToday: 1,
-      waitlistOpen: 3,
-      followupsOverdue: 2,
-      followupsToday: 1
-    });
-    expect(text).toContain('جلسات امروز: ۶');
-    expect(text).toContain('حاضر: ۴');
-    expect(text).toContain('لیست انتظار باز: ۳');
-    expect(text).toContain('۲ عقب‌افتاده · ۱ امروز');
   });
 });

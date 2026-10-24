@@ -67,9 +67,9 @@ describe('بات نقش‌محور نسخهٔ ۲', () => {
     expect((await bot(A, tx(parentNid, CHAT_PARENT))).reply).toContain('اتصال انجام شد');
   });
 
-  it('مهمان /start → کیبورد چهار دکمه‌ای عموم (م64)', async () => {
+  it('مهمان /start → کیبورد عموم (م64 + فایل‌های آموزشی m184)', async () => {
     const res = await bot(A, tx('/start', CHAT_NONE));
-    expect(res.keyboard).toEqual([['معرفی مرکز', 'خدمات مرکز'], ['راه‌های ارتباطی', 'احراز هویت']]);
+    expect(res.keyboard).toEqual([['معرفی مرکز', 'خدمات مرکز'], ['راه‌های ارتباطی', 'احراز هویت'], ['فایل‌های آموزشی']]);
   });
 
   it('دکمهٔ «خدمات مرکز» مهمان → چهار خدمت؛ «احراز هویت» → دو مسیر + قفل اتصال دوم', async () => {
@@ -82,97 +82,17 @@ describe('بات نقش‌محور نسخهٔ ۲', () => {
     expect(auth.reply).toContain('یک گفتگو');
   });
 
-  it('درمانگر «دانش‌آموزان فعال» → دکمهٔ نام → منوی اقدام چهارگانه', async () => {
-    const list = await bot(A, tx('دانش‌آموزان فعال', CHAT_ALI));
-    expect(list.reply).toContain('دانش‌آموزان فعال');
-    expect(list.buttons?.some((row) => row.some((b) => b.text.includes('آوا نسل‌دو')))).toBe(true);
-
-    const idx = list.buttons!.findIndex((row) => row.some((b) => b.text.includes('آوا نسل‌دو')));
-    const data = list.buttons![idx][0].callbackData; // stu:menu:<i>
-    const menu = await bot(A, cb(data, CHAT_ALI, 10));
-    expect(menu.reply).toContain('آوا نسل‌دو');
-    expect(menu.buttons?.flat().map((b) => b.text).join('|')).toContain('ارسال تکلیف');
-    expect(menu.buttons?.flat().map((b) => b.text).join('|')).toContain('پیام به خانواده');
-  });
-
-  it('پیام به خانواده: شروع → متن → جمع‌بندی → تأیید → صف bot_family_message + audit', async () => {
-    const list = await bot(A, tx('دانش‌آموزان فعال', CHAT_ALI));
-    const idx = list.buttons!.findIndex((row) => row.some((b) => b.text.includes('آوا نسل‌دو')));
-    const menuData = list.buttons![idx][0].callbackData;
-    const menu = await bot(A, cb(menuData, CHAT_ALI, 11));
-    const msgData = menu.buttons!.flat().find((b) => b.text.includes('پیام به خانواده'))!.callbackData; // stu:msg:<i>
-    const start = await bot(A, cb(msgData, CHAT_ALI, 12));
-    expect(start.reply).toContain('متن پیام را بفرستید');
-
-    const bad = await bot(A, tx('x', CHAT_ALI));
-    expect(bad.reply).toContain('۲ تا ۵۰۰');
-
-    const summary = await bot(A, tx('لطفاً تمرین این هفته را هر روز پنج دقیقه انجام دهید.', CHAT_ALI));
-    expect(summary.reply).toContain('جمع‌بندی پیام');
-    expect(summary.reply).toContain('آوا نسل‌دو');
-
-    const done = await bot(A, cb('stu:msg:do', CHAT_ALI, 13));
-    expect(done.reply).toContain('ارسال شد');
-
-    const rows = A.sql
-      .prepare(`SELECT template, payload, recipient FROM notifications WHERE template = 'bot_family_message' ORDER BY created_at DESC`)
-      .all() as { template: string; payload: string; recipient: string }[];
-    expect(rows.length).toBeGreaterThan(0);
-    const payload = JSON.parse(rows[0].payload) as { studentName: string; extra: string; senderName: string };
-    expect(payload.studentName).toBe('آوا نسل‌دو');
-    expect(payload.extra).toContain('پنج دقیقه');
-    expect(payload.senderName.length).toBeGreaterThan(0);
-
-    const auditRow = A.sql
-      .prepare(`SELECT action FROM audit_log WHERE action = 'bot.family_message' ORDER BY created_at DESC LIMIT 1`)
-      .get() as { action: string } | undefined;
-    expect(auditRow?.action).toBe('bot.family_message');
-  });
-
-  it('پیام به خانواده برای دانش‌آموزِ بدون ولیّ متصل → پیام صادقانه بدون فرم', async () => {
-    const s2 = await createStudent(manager, { first_name: 'بی‌ولی', last_name: 'نسل‌دو' });
-    await manager.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(90), 45, [s2.id]));
-
-    const list = await bot(A, tx('دانش‌آموزان فعال', CHAT_ALI));
-    const row = list.buttons!.find((r) => r.some((b) => b.text.includes('بی‌ولی')))!;
-    const menu = await bot(A, cb(row[0].callbackData, CHAT_ALI, 20));
-    const msgData = menu.buttons!.flat().find((b) => b.text.includes('پیام به خانواده'))!.callbackData;
-    const res = await bot(A, cb(msgData, CHAT_ALI, 21));
-    expect(res.reply).toContain('متصل نیست');
-  });
-
-  it('ارسال تکلیف از پروفایل دانش‌آموز → assignment + پیام homework_assigned', async () => {
+  it('خانواده «تمرین‌های انجام‌نشده» → تکلیف باز فرزند (ثبت از پنل — m184)؛ «نوبت‌های دانش‌آموز من» کار می‌کند', async () => {
     const ex = await manager.post('/api/exercises', {
       title: 'تمرین منوی دانش‌آموز',
-      description: 'از مسیر stu:send',
+      description: 'ثبت از پنل — m184',
       format: 'worksheet',
       published: true
     });
     expect(ex.status).toBe(201);
-
-    const list = await bot(A, tx('دانش‌آموزان فعال', CHAT_ALI));
-    const idx = list.buttons!.findIndex((row) => row.some((b) => b.text.includes('آوا نسل‌دو')));
-    const menu = await bot(A, cb(list.buttons![idx][0].callbackData, CHAT_ALI, 30));
-    const sendData = menu.buttons!.flat().find((b) => b.text.includes('ارسال تکلیف'))!.callbackData; // stu:send:<i>:1
-    const exercises = await bot(A, cb(sendData, CHAT_ALI, 31));
-    expect(exercises.reply).toContain('تمرین را انتخاب کنید');
-
-    const pickData = exercises.buttons![0][0].callbackData; // stu:pick:<s>:<e>
-    const confirm = await bot(A, cb(pickData, CHAT_ALI, 32));
-    expect(confirm.reply).toContain('تأیید ارسال تکلیف');
-
-    const yesData = confirm.buttons![0].find((b) => b.text === '✅ ارسال')!.callbackData;
-    const sent = await bot(A, cb(yesData, CHAT_ALI, 33));
-    expect(sent.reply).toContain('ثبت شد');
-
-    const hw = A.sql
-      .prepare(`SELECT template, payload FROM notifications WHERE template = 'homework_assigned' ORDER BY created_at DESC LIMIT 1`)
-      .get() as { template: string; payload: string } | undefined;
-    expect(hw?.template).toBe('homework_assigned');
-    expect((JSON.parse(hw!.payload) as { studentName: string }).studentName).toBe('آوا نسل‌دو');
-  });
-
-  it('خانواده «تمرین‌های انجام‌نشده» → تکلیف باز فرزند؛ «نوبت‌های دانش‌آموز من» → برچسب جدید کار می‌کند', async () => {
+    const exId = (ex.body as { data: { id: string } }).data.id;
+    const batch = await manager.post(`/api/students/${studentId}/exercises/batches`, { exercise_ids: [exId] });
+    expect(batch.status).toBe(201);
     const pending = await bot(A, tx('تمرین‌های انجام‌نشده', CHAT_PARENT));
     expect(pending.reply).toContain('تکلیف‌های باز');
     expect(pending.reply).toContain('تمرین منوی دانش‌آموز');
@@ -182,11 +102,11 @@ describe('بات نقش‌محور نسخهٔ ۲', () => {
     expect(appts.reply).toContain('نوبت');
   });
 
-  it('خانواده از «فعالیت کلاس» و «دانش‌آموزان فعال» رد می‌شود (پیام نقش‌محور)', async () => {
+  it('خانواده از «فعالیت کلاس» رد می‌شود؛ «دانش‌آموزان فعال» دیگر دکمه نیست (m184)', async () => {
     const activity = await bot(A, tx('فعالیت کلاس', CHAT_PARENT));
     expect(activity.reply).toContain('معلمان');
     const stu = await bot(A, tx('دانش‌آموزان فعال', CHAT_PARENT));
-    expect(stu.reply).toContain('معلمان');
+    expect(stu.handled).toBe(false);
   });
 
   it('معلم مدرسه «فعالیت کلاس» → شمارش + فهرست؛ «آگاهی‌های اختلالات» → منو → آیتم با لینک', async () => {
@@ -220,16 +140,15 @@ describe('بات نقش‌محور نسخهٔ ۲', () => {
     expect(sec.reply).toContain('دفاتر آموزشی');
   });
 
-  it('مدیر «دانش‌آموزان فعال» دارد (همهٔ پرونده‌ها)؛ منشی بدون KPI؛ ناظر فقط KPI', async () => {
+  it('مدیر «بانک تمرین» دارد؛ «دانش‌آموزان فعال» دیگر دکمهٔ بات نیست (m184)', async () => {
+    const mgrRoot = await bot(A, tx('بانک تمرین', CHAT_MGR));
+    expect(mgrRoot.reply).toContain('بانک تمرین مرکز');
     const mgrList = await bot(A, tx('دانش‌آموزان فعال', CHAT_MGR));
-    expect(mgrList.reply).toContain('دانش‌آموزان فعال');
-    expect(mgrList.buttons?.length).toBeGreaterThan(0);
+    expect(mgrList.handled).toBe(false);
   });
 
-  it('callback منسوخ/نامعتبر stu و dis به‌صورت امن نادیده یا stale می‌شود', async () => {
-    const stale = await bot(A, cb('stu:menu:999', CHAT_ALI, 60));
-    expect(stale.reply).toContain('قدیمی است');
-    const ignored = await bot(A, cb('stu:weird:1', CHAT_ALI, 61));
+  it('callback منسوخ stu و نامعتبر dis به‌صورت امن نادیده می‌شود (m184)', async () => {
+    const ignored = await bot(A, cb('stu:menu:999', CHAT_ALI, 60));
     expect(ignored.handled).toBe(false);
     const disBad = await bot(A, cb('dis:zz', CHAT_NONE, 62));
     expect(disBad.handled).toBe(false);

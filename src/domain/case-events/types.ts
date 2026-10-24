@@ -13,12 +13,6 @@ export const CASE_EVENT_AUDIENCE_LABELS: Record<CaseEventAudience, string> = {
   both: 'خانواده و معلم'
 };
 
-export const CASE_EVENT_CATEGORY_LABELS: Record<CaseEventCategory, string> = {
-  session: 'جلسه',
-  checklist: 'چک‌لیست',
-  note: 'یادداشت'
-};
-
 export const CASE_EVENT_FIELD_TYPES = ['text', 'longtext', 'number', 'select', 'scale', 'single', 'heading'] as const;
 export type CaseEventFieldType = (typeof CASE_EVENT_FIELD_TYPES)[number];
 

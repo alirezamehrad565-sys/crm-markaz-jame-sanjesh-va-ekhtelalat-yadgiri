@@ -34,8 +34,8 @@ import { createFollowUpsService, registerFollowUpRoutes } from '@domain/followup
 import type { FollowUpsService } from '@domain/followups';
 import { createTodosService, registerTodoRoutes } from '@domain/todos';
 import type { TodosService } from '@domain/todos';
-import { createExerciseBankService, registerExerciseBankRoutes } from '@domain/exercise-bank';
-import type { ExerciseBankService } from '@domain/exercise-bank';
+import { createExerciseBankService, registerExerciseBankRoutes, sendBaleDocument } from '@domain/exercise-bank';
+import type { ExerciseBankService, ExerciseFileSender } from '@domain/exercise-bank';
 import { createDocumentRequestService, registerRoutes as documentRequestRoutes } from '@domain/document-requests';
 import type { DocumentRequestService } from '@domain/document-requests';
 import { createCaseEventsService, registerCaseEventsRoutes, registerCaseEventPublicRoutes } from '@domain/case-events';
@@ -95,6 +95,7 @@ export interface AppDeps {
   downloadSecret?: string | null;
   publicBaseUrl?: string | null;
   backupDocumentSender?: BackupDocumentSender | null; // m180 — تزریق ارسال‌کنندهٔ آزمایشی
+  exerciseFileSender?: ExerciseFileSender | null; // m184 — تزریق ارسال‌کنندهٔ فایل تمرین (تست/سلف‌هاست)
 }
 
 export interface Services {
@@ -156,13 +157,31 @@ export function createServices(deps: AppDeps): Services {
   const exerciseStorage: ObjectStore = deps.exerciseBucket
     ? createR2ObjectStore(deps.exerciseBucket as R2LikeBucket)
     : createChunkedD1ObjectStore(db);
+  const exerciseFileSender: ExerciseFileSender | null =
+    deps.exerciseFileSender !== undefined
+      ? deps.exerciseFileSender
+      : deps.baleToken
+        ? async (chatId, file) => {
+            const result = await sendBaleDocument({
+              token: deps.baleToken as string,
+              chatId,
+              filename: file.filename,
+              bytes: file.bytes,
+              mime: file.mime,
+              caption: file.caption ?? undefined
+            });
+            if (!result.ok) logger.warn('exercise.file.send_failed', { chatId, error: result.error });
+            return result.ok;
+          }
+        : null;
   const exerciseBank = createExerciseBankService({
     db,
     audit,
     logger,
     storage: exerciseStorage,
     downloadSecret: deps.downloadSecret ?? deps.webhookSecret ?? 'insecure-dev-secret',
-    publicBaseUrl: deps.publicBaseUrl ?? null
+    publicBaseUrl: deps.publicBaseUrl ?? null,
+    fileSender: exerciseFileSender
   });
 
   const caseEvents = createCaseEventsService({
@@ -244,8 +263,8 @@ export function createServices(deps: AppDeps): Services {
     exerciseBank,
     documentRequests,
     publicBaseUrl: deps.publicBaseUrl ?? null,
+    fileSender: exerciseFileSender,
     caseEvents,
-    screening,
     mediaFetcher:
       deps.mediaFetcher !== undefined
         ? deps.mediaFetcher

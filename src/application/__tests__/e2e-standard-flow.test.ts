@@ -215,7 +215,7 @@ describe('گزارش متصل به نوبت + batch', () => {
   });
 });
 
-describe('بات: تاریخچه/چک‌لیست‌های او/صفحه‌بندی/نتایج خانواده', () => {
+describe('بات خانواده: «چک‌لیست‌های من» (m184 — فلو همکار حذف شد)', () => {
   let A: ReturnType<typeof createTestApp>;
   let manager: ReturnType<typeof asRole> extends Promise<infer T> ? T : never;
   let studentId = '';
@@ -227,50 +227,15 @@ describe('بات: تاریخچه/چک‌لیست‌های او/صفحه‌بند
     const s = await createStudent(manager, { first_name: 'سام', last_name: 'وبات' });
     studentId = s.id;
     parentNid = s.nationalId;
-    const own = await manager.patch(`/api/students/${studentId}/owner`, { owner_staff_id: ALI_ID });
-    expect(own.status).toBe(200);
-    expect((await bot(A, tx(ALI_NID, CHAT_ALI))).reply).toContain('اتصال انجام شد');
     expect((await bot(A, tx(parentNid, CHAT_PARENT))).reply).toContain('اتصال انجام شد');
+
+    const types = (await manager.get('/api/case-events/types?active=true')).body as { data: { id: string; title: string }[] };
+    const homeBehavior = types.data.find((x) => x.title.includes('پایش رفتار در خانه'));
+    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: homeBehavior!.id, values: {} });
+    expect(created.status).toBe(201);
   });
 
-  async function openMenu(): Promise<{ idx: string }> {
-    const list = await bot(A, tx('دانش‌آموزان فعال', CHAT_ALI));
-    const stuCb = list.buttons!.flat().find((b) => b.callbackData.startsWith('stu:menu:'))!.callbackData;
-    const idx = stuCb.split(':')[2];
-    const menu = await bot(A, cb(stuCb, CHAT_ALI, 30));
-    expect(menu.buttons!.flat().some((b) => b.callbackData === `stu:hist:${idx}`)).toBe(true);
-    expect(menu.buttons!.flat().some((b) => b.callbackData === `stu:ckl:${idx}`)).toBe(true);
-    return { idx };
-  }
-
-  it('«تاریخچه» — خالی → راهنمای ثبت؛ دکمهٔ ثبت رویداد دارد', async () => {
-    const { idx } = await openMenu();
-    const h = await bot(A, cb(`stu:hist:${idx}`, CHAT_ALI, 31));
-    expect(h.reply).toContain('هنوز رویدادی');
-    expect(h.buttons!.flat().some((b) => b.callbackData === `stu:tl:${idx}`)).toBe(true);
-  });
-
-  it('«چک‌لیست‌های او» — خالی → راهنمای ساخت؛ پس از ساخت → در انتظار پاسخ', async () => {
-    const { idx } = await openMenu();
-    const c0 = await bot(A, cb(`stu:ckl:${idx}`, CHAT_ALI, 32));
-    expect(c0.reply).toContain('چک‌لیست');
-
-    await bot(A, cb(`stu:tl:${idx}`, CHAT_ALI, 33));
-    const types = await bot(A, cb(`tl:types:${idx}:checklist`, CHAT_ALI, 34));
-    const startCb = types.buttons!.flat().find((b) => b.callbackData.startsWith('tl:start:'))!.callbackData;
-    await bot(A, cb(startCb, CHAT_ALI, 35));
-    const done = await bot(A, cb('tl:do', CHAT_ALI, 36));
-    expect(done.reply).toContain('رویداد ثبت شد');
-
-    const relist = await bot(A, tx('دانش‌آموزان فعال', CHAT_ALI, 361));
-    const stuCb2 = relist.buttons!.flat().find((b) => b.callbackData.startsWith('stu:menu:'))!.callbackData;
-    const idx2 = stuCb2.split(':')[2];
-    await bot(A, cb(stuCb2, CHAT_ALI, 362));
-    const c1 = await bot(A, cb(`stu:ckl:${idx2}`, CHAT_ALI, 37));
-    expect(c1.reply).toContain('در انتظار پاسخ خانواده');
-  });
-
-  it('خانواده: «چک‌لیست‌های من» پس از پاسخ → نتیجه با امتیاز در همان فهرست', async () => {
+  it('خانواده: «چک‌لیست‌های من» → پر کردن هشت آیتمی → نتیجه با امتیاز در همان فهرست', async () => {
     const list = await bot(A, tx('چک‌لیست‌های من', CHAT_PARENT));
     const fillBtn = list.buttons!.flat().find((b) => b.callbackData.startsWith('clf:fill:'))!;
     expect(fillBtn).toBeTruthy();
@@ -285,32 +250,14 @@ describe('بات: تاریخچه/چک‌لیست‌های او/صفحه‌بند
     expect(again.reply).toContain(eventId.slice(0, 1) === '' ? '—' : 'امتیاز');
   });
 
-  it('صفحه‌بندی «دانش‌آموزان فعال» — stu:list:2 پاسخ می‌دهد (فهرست کوتاه → صفحهٔ ۱ clamp می‌شود)', async () => {
-    const parsed = parseBotUpdate(cb('stu:list:2', CHAT_ALI));
-    expect(parsed?.kind).toBe('stu_list');
-    const p = await bot(A, cb('stu:list:2', CHAT_ALI, 70));
-    expect(p.handled).toBe(true);
-    expect(p.reply).toContain('دانش‌آموزان فعال');
-  });
-
-  it('/cancel وسط «پیام به خانواده» → پیام درست لغو می‌شود (نه پیام لیست انتظار)', async () => {
-    const list = await bot(A, tx('دانش‌آموزان فعال', CHAT_ALI));
-    const stuCb = list.buttons!.flat().find((b) => b.callbackData.startsWith('stu:menu:'))!.callbackData;
-    const idx = stuCb.split(':')[2];
-    await bot(A, cb(stuCb, CHAT_ALI, 80));
-    await bot(A, cb(`stu:msg:${idx}`, CHAT_ALI, 81));
-    const cancel = await bot(A, tx('/cancel', CHAT_ALI, 82));
-    expect(cancel.reply).toContain('پیام لغو شد');
+  it('/cancel بدون فرم فعال → نادیده (handled=false)', async () => {
+    const cancel = await bot(A, tx('/cancel', CHAT_PARENT, 82));
+    expect(cancel.handled).toBe(false);
+    expect(cancel.reply).toBeNull();
   });
 });
 
 describe('قالب‌های بات', () => {
-  it('bot_family_message_sent — «پیام» نه «تکلیف»', () => {
-    const t = renderTemplate('bot_family_message_sent', { studentName: 'سارا', extra: 'به ۱ گفتگو ارسال شد.' });
-    expect(t).toContain('پیام شما برای خانوادهٔ «سارا» ارسال شد');
-    expect(t).not.toContain('تکلیف');
-  });
-
   it('bot_case_events_disabled — پیام درست برای سرویس رویداد', () => {
     const t = renderTemplate('bot_case_events_disabled', {});
     expect(t).toContain('رویدادها و گزارش‌های پرونده');

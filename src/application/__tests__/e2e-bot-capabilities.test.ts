@@ -48,7 +48,7 @@ const CHAT_NONE = 7199;
 const ALI_NID = '3149977797';
 const MANAGER_NID = '3672818690';
 
-describe('بات اطلاع‌رسان: پیگیری‌ها، حضور فرزند، وضعیت مرکز، خلاصهٔ روز', () => {
+describe('بات اطلاع‌رسان: پیگیری‌ها، حضور فرزند، خلاصهٔ روز (m184)', () => {
   let A: ReturnType<typeof createTestApp>;
   let manager: Api;
   let parentStudentId = '';
@@ -141,23 +141,6 @@ describe('بات اطلاع‌رسان: پیگیری‌ها، حضور فرزن�
     const otherId = (other.body as { data: { id: string } }).data.id;
     const foreign = await bot(A, cb(`fudone:${otherId}`, CHAT_ALI));
     expect(foreign.reply).toContain('تعلق ندارد یا بسته شده');
-  });
-
-  it('«وضعیت مرکز» مدیر → متریک‌ها؛ همکار → انکار؛ بدون اتصال → راهنما', async () => {
-    const s = await createStudent(manager);
-    await manager.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(60), 30, [s.id]));
-
-    const mgr = await bot(A, tx('وضعیت مرکز', CHAT_MANAGER));
-    expect(mgr.reply).toContain('وضعیت مرکز');
-    expect(mgr.reply).toContain('جلسات امروز');
-    expect(mgr.reply).toContain('لیست انتظار باز');
-    expect(mgr.reply).toContain('پیگیری‌ها');
-
-    const ali = await bot(A, tx('وضعیت مرکز', CHAT_ALI));
-    expect(ali.reply).toContain('فقط برای مدیر و منشی');
-
-    const none = await bot(A, tx('وضعیت مرکز', CHAT_NONE));
-    expect(none.reply).toContain('راهنمای بات');
   });
 
   it('«حضور فرزند» والد → آمار حاضر/غایب ۳۰ روز؛ همکار → انکار', async () => {

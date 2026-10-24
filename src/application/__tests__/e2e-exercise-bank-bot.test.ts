@@ -44,7 +44,7 @@ const CHAT_NONE = 7499;
 const MANAGER_NID = '3672818690';
 const PDF_B64 = Buffer.from('%PDF-1.4 worksheet for bot flow').toString('base64');
 
-describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلیف به اولیا', () => {
+describe('بات: بانک تمرین تو‌در‌تو و دریافت فایل (m184: ارسال از بات حذف شد)', () => {
   let A: ReturnType<typeof createTestApp>;
   let manager: Api;
   let exerciseId = '';
@@ -124,7 +124,7 @@ describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلی�
     expect(flat.some((b) => b.callbackData === 'exb:cats:d:1')).toBe(true);
   });
 
-  it('همهٔ تمرین‌ها → آیتم → جزئیات با دکمهٔ ارسال', async () => {
+  it('همهٔ تمرین‌ها → آیتم → جزئیات با دکمهٔ دریافت فایل (m184)', async () => {
     const list = await bot(A, cb('exb:lst:a:0:1', CHAT_ALI, 11));
     expect(list.buttons!.flat().some((b) => b.text.startsWith(exerciseTitle.slice(0, 20)))).toBe(true);
     const flat = list.buttons!.flat();
@@ -134,79 +134,12 @@ describe('بات: بانک تمرین تو‌در‌تو و ارسال تکلی�
     const detail = await bot(A, cb(itemBtn!.callbackData, CHAT_ALI, 12));
     expect(detail.reply).toContain(exerciseTitle);
     expect(detail.reply).toContain('vazheha.pdf');
-    expect(detail.buttons!.flat().some((b) => b.callbackData.startsWith('exb:send:'))).toBe(true);
+    expect(detail.buttons!.flat().some((b) => b.callbackData.startsWith('exb:file:'))).toBe(true);
   });
 
   it('اندیس خارج از state → پیام منوی قدیمی', async () => {
     const stale = await bot(A, cb('exb:item:9', CHAT_ALI, 13));
     expect(stale.reply).toContain('قدیمی');
-  });
-
-  it('جریان کامل: فهرست دانش‌آموزان درمانگر → انتخاب → تأیید → ثبت و پیام خانواده', async () => {
-    await bot(A, cb('exb:lst:a:0:1', CHAT_ALI, 21));
-    const students = await bot(A, cb('exb:send:0:1', CHAT_ALI, 22));
-    expect(students.reply).toContain('کدام دانش‌آموز');
-    const pick = students.buttons!.flat().find((b) => b.callbackData.startsWith('exb:pick:'));
-    expect(pick).toBeDefined();
-
-    const confirm = await bot(A, cb(pick!.callbackData, CHAT_ALI, 23));
-    expect(confirm.reply).toContain(studentName);
-    const yes = confirm.buttons!.flat().find((b) => b.callbackData.startsWith('exb:yes:'));
-    expect(yes).toBeDefined();
-
-    const sent = await bot(A, cb(yes!.callbackData, CHAT_ALI, 24));
-    expect(sent.reply).toContain('ثبت شد');
-    expect(sent.reply).toContain('ارسال شد');
-
-    const rows = A.sql
-      .prepare(`SELECT assigned_by, assigned_via, student_id, exercise_id FROM exercise_assignments WHERE exercise_id = ?`)
-      .all(exerciseId) as { assigned_by: string; assigned_via: string; student_id: string; exercise_id: string }[];
-    expect(rows).toHaveLength(1);
-    expect(rows[0].assigned_by).toBe(ALI_ID);
-    expect(rows[0].assigned_via).toBe('bot');
-    expect(rows[0].student_id).toBe(studentId);
-
-    const notes = A.sql
-      .prepare(`SELECT template, status, dedup_key, recipient FROM notifications WHERE template = 'homework_assigned'`)
-      .all() as { template: string; status: string; dedup_key: string; recipient: string }[];
-    expect(notes).toHaveLength(1);
-    expect(notes[0].status).toBe('sent');
-    expect(notes[0].recipient).toBe(String(CHAT_PARENT));
-    expect(notes[0].dedup_key.startsWith('hw:')).toBe(true);
-
-    const again = await bot(A, cb(yes!.callbackData, CHAT_ALI, 25));
-    expect(again.reply).toContain('قبلاً ارسال شد');
-    const rowsAfter = A.sql
-      .prepare(`SELECT COUNT(*) AS c FROM exercise_assignments WHERE exercise_id = ?`)
-      .get(exerciseId) as { c: number };
-    expect(rowsAfter.c).toBe(1);
-  });
-
-  it('مدیر: همهٔ دانش‌آموزان فعال را می‌بیند؛ معلم کلاس: دانش‌آموز کلاس با assigned_by class:', async () => {
-    await bot(A, cb('exb:lst:a:0:1', CHAT_MGR, 31));
-    let mgrStudents = await bot(A, cb('exb:send:0:1', CHAT_MGR, 32));
-    for (let page = 2; page <= 3 && !mgrStudents.buttons!.flat().some((b) => b.text === studentName); page++) {
-      mgrStudents = await bot(A, cb(`exb:send:0:${page}`, CHAT_MGR, 32 + page));
-    }
-    expect(mgrStudents.buttons!.flat().some((b) => b.text === studentName)).toBe(true);
-
-    const root = await bot(A, tx('بانک تمرین', CHAT_CLASS));
-    expect(root.reply).toContain('بانک تمرین مرکز');
-
-    await bot(A, cb('exb:lst:a:0:1', CHAT_CLASS, 33));
-    const pickStudents = await bot(A, cb('exb:send:0:1', CHAT_CLASS, 34));
-    const pick = pickStudents.buttons!.flat().find((b) => b.callbackData.startsWith('exb:pick:'));
-    expect(pick).toBeDefined();
-    const confirm = await bot(A, cb(pick!.callbackData, CHAT_CLASS, 35));
-    const yes = confirm.buttons!.flat().find((b) => b.callbackData.startsWith('exb:yes:'));
-    const sent = await bot(A, cb(yes!.callbackData, CHAT_CLASS, 36));
-    expect(sent.reply).toContain('ثبت شد');
-
-    const rows = A.sql
-      .prepare(`SELECT assigned_by, assigned_via FROM exercise_assignments WHERE exercise_id = ? ORDER BY created_at DESC`)
-      .all(exerciseId) as { assigned_by: string; assigned_via: string }[];
-    expect(rows[0].assigned_by.startsWith('class:')).toBe(true);
-    expect(rows[0].assigned_via).toBe('bot');
   });
 
   it('کلید قطع: exercise_bank_enabled=false → پیام غیرفعال', async () => {

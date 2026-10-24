@@ -48,7 +48,7 @@ const MANAGER_NID = '3672818690';
 const ALI_NID = '3149977797';
 const SECRETARY_NID = '1566009243';
 
-describe('بات نقش‌آگاه: راهنمای نقش‌محور، /search، «برنامهٔ مرکز»', () => {
+describe('بات نقش‌آگاه: راهنمای نقش‌محور (m184)', () => {
   let A: ReturnType<typeof createTestApp>;
   let manager: Api;
 
@@ -72,23 +72,14 @@ describe('بات نقش‌آگاه: راهنمای نقش‌محور، /search،
     expect(res.reply).toContain('/link CODE');
   });
 
-  it('/help مدیر و منشی → منوی دفتر (/search + برنامه مرکز + وضعیت مرکز)', async () => {
-    for (const chat of [CHAT_MGR, CHAT_SEC]) {
+  it('/help مدیر و منشی و متخصص → منوی نقش (m184: فایل‌های آموزشی + قطع اتصال؛ /search ندارد)', async () => {
+    for (const chat of [CHAT_MGR, CHAT_SEC, CHAT_ALI]) {
       const res = await bot(A, tx('/help', chat));
-      expect(res.reply).toContain('مدیر/منشی');
-      expect(res.reply).toContain('/search نام');
-      expect(res.reply).toContain('برنامه مرکز');
-      expect(res.reply).toContain('وضعیت مرکز');
+      expect(res.reply).toContain('راهنمای بات');
+      expect(res.reply).toContain('فایل‌های آموزشی');
+      expect(res.reply).toContain('قطع اتصال');
+      expect(res.reply).not.toContain('/search');
     }
-  });
-
-  it('/help متخصص → منوی همکار با منوی دانش‌آموز؛ وضعیت مرکز ندارد', async () => {
-    const res = await bot(A, tx('/help', CHAT_ALI));
-    expect(res.reply).toContain('همکار (متخصص)');
-    expect(res.reply).toContain('دانش‌آموزان فعال');
-    expect(res.reply).toContain('پیام به خانواده');
-    expect(res.reply).not.toContain('وضعیت مرکز');
-    expect(res.reply).not.toContain('برنامه مرکز');
   });
 
   it('/help والد → منوی خانواده؛ جستجو و پیگیری ندارد', async () => {
@@ -107,64 +98,4 @@ describe('بات نقش‌آگاه: راهنمای نقش‌محور، /search،
     expect(mgr.reply).toContain('مدیر/منشی');
   });
 
-  it('/search بدون اتصال → راهنمای مهمان؛ والد → پیام انکار', async () => {
-    const none = await bot(A, tx('/search محمدی', CHAT_NONE));
-    expect(none.reply).toContain('پس از اتصال');
-
-    const parent = await bot(A, tx('/search محمدی', CHAT_PARENT));
-    expect(parent.reply).toContain('فقط برای همکاران مرکز است');
-  });
-
-  it('/search مدیر → دانش‌آموز seed پیدا می‌شود (نام + پایه، بدون PII)', async () => {
-    const res = await bot(A, tx('/search محمدی', CHAT_MGR));
-    expect(res.reply).toContain('جستجوی «محمدی»');
-    expect(res.reply).toContain('علی محمدی');
-    expect(res.reply).not.toMatch(/0012345679/); // کد ملی در بات نمی‌آید
-  });
-
-  it('/search متخصص → همان مرز همکاران (پنل را آینه می‌کند)', async () => {
-    const res = await bot(A, tx('/search کریمی', CHAT_ALI));
-    expect(res.reply).toContain('سارا کریمی');
-  });
-
-  it('/search بدون نتیجه → پیام یافت نشدن؛ پرس‌وجوی خیلی کوتاه → راهنما', async () => {
-    const empty = await bot(A, tx('/search ززززز', CHAT_MGR));
-    expect(empty.reply).toContain('یافت نشد');
-
-    const short = await bot(A, tx('/search م', CHAT_MGR));
-    expect(short.reply).toContain('راهنمای بات');
-  });
-
-  it('«برنامه مرکز» متخصص/والد → پیام انکار', async () => {
-    const ali = await bot(A, tx('/center', CHAT_ALI));
-    expect(ali.reply).toContain('فقط برای مدیر و منشی است');
-
-    const parent = await bot(A, tx('برنامه مرکز', CHAT_PARENT));
-    expect(parent.reply).toContain('فقط برای مدیر و منشی است');
-  });
-
-  it('«برنامه مرکز» مدیر → نوبت‌های امروز همهٔ همکاران با نام دانش‌آموز؛ لغوشده برچسب دارد', async () => {
-    const a1 = await manager.post('/api/appointments', apptBody(ALI_ID, tehranTodayAt(9, 0), 45, [STUDENT1_ID]));
-    expect(a1.status).toBe(201);
-    const appt1 = (a1.body as { data: { id: string; version: number } }).data;
-
-    const a2 = await manager.post('/api/appointments', apptBody(MARYAM_ID, tehranTodayAt(10, 0), 45, [STUDENT2_ID]));
-    expect(a2.status).toBe(201);
-    const appt2 = (a2.body as { data: { id: string; version: number } }).data;
-    const cancel = await manager.post(`/api/appointments/${appt2.id}/cancel`, { version: appt2.version });
-    expect(cancel.status).toBe(200);
-
-    const res = await bot(A, tx('/center', CHAT_MGR));
-    expect(res.reply).toContain('برنامهٔ مرکز');
-    expect(res.reply).toContain('دکتر علی رضایی');
-    expect(res.reply).toContain('علی محمدی');
-    expect(res.reply).toContain('مریم احمدی');
-    expect(res.reply).toContain('(لغوشده)');
-    expect(res.buttons).toBeNull();
-  });
-
-  it('«برنامه مرکز» منشی → همان دید دفتر؛ روز خالی → پیام خالی بودن', async () => {
-    const res = await bot(A, tx('/center', CHAT_SEC));
-    expect(res.reply).toContain('دکتر علی رضایی');
-  });
 });

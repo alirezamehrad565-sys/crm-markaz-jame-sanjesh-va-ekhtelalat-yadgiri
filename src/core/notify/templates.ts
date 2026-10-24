@@ -382,20 +382,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         'کد ملی فرزند یا شمارهٔ همراه ثبت‌شده را بفرستید تا گفتگو متصل شود.'
       ].join('\n');
 
-    case 'bot_status_denied':
-      return [
-        '⚠️ «وضعیت مرکز» فقط برای مدیر و منشی است.',
-        '',
-        'اگر مدیر یا منشی هستید، اتصال گفتگوی شما باید با نقش مدیر/منشی انجام شود.'
-      ].join('\n');
-
-    case 'bot_goal_denied':
-      return [
-        '⚠️ «هدف سنجش» فقط برای مدیر و منشی است.',
-        '',
-        'برای دیدن تحقق اهداف غربال، با مدیر یا منشی مرکز هماهنگ شوید.'
-      ].join('\n');
-
     case 'bot_help_guest':
       return [
         '📋 راهنمای بات:',
@@ -403,6 +389,7 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         '🏥 «معرفی مرکز» — مرکز و مدل همکاری سه‌ضلعی',
         '🌟 «خدمات مرکز» — چهار خدمت اصلی',
         '☎ «راه‌های ارتباطی» — تلفن دفتر و ساعات پاسخگویی',
+        '📁 «فایل‌های آموزشی» — فایل‌های عمومی مرکز',
         '🔑 «احراز هویت» — مسیرهای اتصال گفتگو',
         '🔑 یا: کد ملی ۱۰ رقمی / شمارهٔ همراه ۰۹… را بفرستید',
         '/link CODE — اتصال با کد دریافتی از منشی',
@@ -410,80 +397,105 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         '/myid — نمایش شناسه این گفتگو',
         '/help — همین راهنما',
         '',
-        'پس از اتصال، دستورهای نقش شما فعال می‌شود.'
+        'پس از اتصال، دستورهای نقش شما فعال می‌شود و دکمهٔ «قطع اتصال» هم اضافه می‌شود.'
       ].join('\n');
 
     case 'bot_help_office':
       return [
         '📋 راهنمای بات — مدیر/منشی:',
         '',
-        '🗓 «نوبت‌های من» — نوبت‌های پیش‌روی شما',
-        '/today — برنامه امروز شما',
-        '/week — برنامه این هفته شما',
-        '🔎 /search نام — جستجوی دانش‌آموز',
-        '🏥 «وضعیت مرکز» — خلاصهٔ امروز مرکز',
-        '📋 «برنامه مرکز» — برنامهٔ امروز همهٔ همکاران',
-        '⏳ «لیست انتظار» — متقاضیان باز',
-        '📊 «هدف سنجش» — تحقق اهداف غربال (ماه/بازه/سال)',
-        '✅ «پیگیری‌های من» — پیگیری‌های روی میز شما',
-        '👥 «دانش‌آموزان فعال» — منوی اقدام هر دانش‌آموز (تکلیف/پیام خانواده/رویداد و گزارش)',
-        '📚 «بانک تمرین» — مرور کاربرگ‌ها و ارسال تکلیف به خانواده',
-        '📤 «اعلان‌های در صف» — پیش‌نویس‌ها و ناموفق‌ها + ارسال فوری',
-        '/about — دربارهٔ مرکز',
-        '/myid — شناسه این گفتگو',
-        '/help — همین راهنما',
-        'مدیر: 📊 «گزارش KPI» — شاخص‌های تجمیعی'
+        '🗓 «نوبت‌های من» — نوبت‌های پیش‌روی شما (/today · /week)',
+        '✅ «پیگیری‌های من» — پیگیری‌های روی میز شما + دکمهٔ انجام شد',
+        '📚 «بانک تمرین» — مرور کاربرگ‌ها و فایل‌ها',
+        '📁 «فایل‌های آموزشی» — فایل‌های عمومی مرکز',
+        '🗓 لغو نوبت خودتان — دکمهٔ لغو زیر هر نوبت آینده',
+        '🏥 «درباره مرکز» — معرفی مرکز',
+        '🔌 «قطع اتصال» — خروج از نقش و قطع این گفتگو',
+        '',
+        'مدیریت مرکز و گزارش‌ها در پنل وب انجام می‌شود؛',
+        'این بات برای اطلاع‌رسانی و پیگیری شخصی است.'
       ].join('\n');
 
     case 'bot_help_therapist':
       return [
         '📋 راهنمای بات — همکار (متخصص):',
         '',
-        '🗓 «نوبت‌های من» — نوبت‌های پیش‌روی شما',
-        '/today — برنامه امروز شما',
-        '/week — برنامه این هفته شما',
-        '✅ «پیگیری‌های من» — پیگیری‌های روی میز شما',
-        '👥 «دانش‌آموزان فعال» — انتخاب دانش‌آموز:',
-        '   📤 ارسال تکلیف · ✉️ پیام به خانواده · 📚 تمرین‌های او · 🗓 نوبت‌های او',
-        '   📋 رویداد/گزارش (شرح حال، مداخله، وکسلر، چک‌لیست خانواده) · 🕘 تاریخچه · 📝 چک‌لیست‌های او',
-        '📚 «بانک تمرین» — مرور کاربرگ‌ها و ارسال تکلیف (مسیر تمرین‌محور)',
-        '📤 «اعلان‌های در صف» — وضعیت صف اعلان‌های مرکز',
-        '/about — دربارهٔ مرکز',
-        '/myid — شناسه این گفتگو',
-        '/help — همین راهنما'
+        '🗓 «نوبت‌های من» — نوبت‌های پیش‌روی شما (/today · /week)',
+        '✅ «پیگیری‌های من» — پیگیری‌های روی میز شما + دکمهٔ انجام شد',
+        '📚 «بانک تمرین» — مرور کاربرگ‌ها و فایل‌ها',
+        '📁 «فایل‌های آموزشی» — فایل‌های عمومی مرکز',
+        '🗓 لغو نوبت خودتان — دکمهٔ لغو زیر هر نوبت آینده',
+        '🏥 «درباره مرکز» — معرفی مرکز',
+        '🔌 «قطع اتصال» — خروج از نقش و قطع این گفتگو',
+        '',
+        'پروندهٔ دانش‌آموزان، ثبت گزارش و ارسال تکلیف از پنل وب انجام می‌شود.'
       ].join('\n');
 
     case 'bot_help_class':
       return [
         '📋 راهنمای بات — معلم مدرسه:',
         '',
-        '🗓 «نوبت‌های کلاس من» — مراجعه‌های دانش‌آموزان کلاس شما در مرکز',
-        '/today و /week — برنامهٔ امروز/هفتهٔ کلاس',
-        '🎓 «دانش‌آموزان من» — فهرست کلاس با وضعیت پرونده',
-        '➕ «ثبت متقاضی» — افزودن مورد نیازی جدید به لیست انتظار مرکز',
-        '📌 «فعالیت کلاس» — تکلیف‌های باز و تازهٔ دانش‌آموزان کلاس',
-        '📚 «بانک تمرین» — ارسال کاربرگ و تکلیف بر حسب اختلال به خانوادهٔ دانش‌آموزان کلاس',
-        '📖 «آگاهی‌های اختلالات» — ۹ راهنمای تخصصی + ۱۸ دفتر آموزشی A4 با لینک مستقیم (دستور /awareness)',
-        '/about — دربارهٔ مرکز',
-        '/myid — شناسه این گفتگو',
-        '/help — همین راهنما'
+        '🗓 «نوبت‌های کلاس من» — مراجعه‌های دانش‌آموزان کلاس شما (/today · /week)',
+        '📌 «فعالیت کلاس» — تکلیف‌های باز و تازهٔ کلاس',
+        '📚 «بانک تمرین» — مرور کاربرگ‌ها و فایل‌های آموزشی',
+        '📖 «آگاهی‌های اختلالات» — راهنمای اختلال‌ها (دستور /awareness)',
+        '🏥 «درباره مرکز» — معرفی مرکز',
+        '🔌 «قطع اتصال» — خروج از نقش و قطع این گفتگو',
+        '',
+        'معرفی متقاضی جدید و مدیریت کلاس از پنل وب انجام می‌شود؛',
+        'برای معرفی مورد جدید با دفتر مرکز تماس بگیرید.'
       ].join('\n');
 
     case 'bot_help_parent':
       return [
         '📋 راهنمای بات — والدین:',
         '',
-        '🗓 «نوبت‌های دانش‌آموز من» — نوبت‌های پیش‌روی فرزندان',
-        '/today · /week — برنامهٔ امروز/هفته',
+        '🗓 «نوبت‌های دانش‌آموز من» — نوبت‌های پیش‌روی فرزندان (/today · /week)',
         '📚 «تمرین‌های انجام‌نشده» — تکلیف‌های باز فرزندان',
         '📝 «چک‌لیست‌های من» — چک‌لیست‌های در انتظار پاسخ شما + نتایج قبلی',
         '📊 «حضور فرزند» — آمار ۳۰ روز اخیر',
+        '📁 «فایل‌های آموزشی» — فایل‌های عمومی مرکز',
         '📤 ارسال نتیجهٔ تکلیف — عکس یا فایل نتیجه را همین‌جا بفرستید',
-        '/about — دربارهٔ مرکز',
-        '/myid — شناسه این گفتگو',
-        '/help — همین راهنما',
+        '🏥 «درباره مرکز» — معرفی مرکز',
+        '🔌 «قطع اتصال» — خروج از نقش و قطع این گفتگو',
         '',
         'برای تغییر یا لغو نوبت با دفتر مرکز تماس بگیرید.'
+      ].join('\n');
+
+    case 'bot_unlink_confirm':
+      return [
+        '🔌 قطع اتصال این گفتگو؟',
+        '',
+        'با قطع اتصال:',
+        '• اعلان‌ها و یادآوری‌ها دیگر به این گفتگو نمی‌آید',
+        '• دستورهای نقش شما (نوبت‌ها، پیگیری‌ها، چک‌لیست‌ها و…) غیرفعال می‌شود',
+        '',
+        'برای اتصال دوباره کافی است کد ملی/شمارهٔ همراه خود را بفرستید یا /link CODE بزنید.'
+      ].join('\n');
+
+    case 'bot_unlink_done':
+      return [
+        '✅ اتصال این گفتگو قطع شد.',
+        '',
+        'از این پس اعلانی دریافت نمی‌کنید.',
+        'برای شروع دوباره: کد ملی یا شمارهٔ همراه ثبت‌شده را بفرستید، یا کد اتصال از دفتر مرکز بگیرید و /link CODE بزنید.'
+      ].join('\n');
+
+    case 'bot_unlink_not_connected':
+      return [
+        'ℹ️ این گفتگو از قبل متصل نیست.',
+        '',
+        'برای اتصال، کد ملی یا شمارهٔ همراه خود را بفرستید یا /link CODE بزنید.'
+      ].join('\n');
+
+    case 'bot_unlink_cancelled':
+      return ['✖️ انصراف دادید — اتصال سر جای خودش ماند.'].join('\n');
+
+    case 'bot_class_activity_denied':
+      return [
+        '⚠️ «فعالیت کلاس» فقط برای معلمانِ متصل به کلاس فعال است.',
+        '',
+        'اگر معلم هستید، کد اتصال کلاس را از دفتر مرکز بگیرید و /link CODE بفرستید.'
       ].join('\n');
 
     case 'bot_about':
@@ -503,68 +515,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         '/help — دیدن امکانات این بات بر اساس نقش شما'
       ].join('\n');
 
-    case 'bot_wl_denied_staff':
-      return [
-        'ℹ️ «ثبت متقاضی» از بات مخصوص معلمان مدارس است.',
-        '',
-        'همکاران مرکز متقاضی را از پنل ← «لیست انتظار» یا دستور «لیست انتظار» همین‌جا می‌بینند و از سایت ثبت می‌کنند.'
-      ].join('\n');
-
-    case 'bot_wl_family_call':
-      return [
-        '📞 ثبت‌نام و نوبت‌دهی فقط از طریق تماس با دفتر مرکز انجام می‌شود.',
-        '',
-        `لطفاً با ${clinic} تماس بگیرید. همکاران دفتر اطلاعات شما را ثبت می‌کنند.`
-      ].join('\n');
-
-    case 'bot_wl_guest_link':
-      return [
-        '🔒 «ثبت متقاضی» فقط برای معلمان متصل به کلاس فعال است.',
-        '',
-        'اگر معلم هستید، کد اتصال را از مرکز بگیرید و بفرستید: /link CODE',
-        '',
-        'خانواده‌های محترم: ثبت‌نام و نوبت‌دهی فقط با تماس تلفنی با دفتر مرکز انجام می‌شود.'
-      ].join('\n');
-
-    case 'bot_wl_cancelled':
-      return ['✖️ ثبت متقاضی لغو شد.', '', 'هر وقت خواستید با «ثبت متقاضی» یا /add دوباره شروع کنید.'].join('\n');
-
-    case 'bot_wl_done':
-      return [
-        '✅ متقاضی با موفقیت در لیست انتظار مرکز ثبت شد.',
-        '',
-        'کارشناسان مرکز پس از بررسی تماس می‌گیرند.',
-        'برای ثبت متقاضی بعدی: «ثبت متقاضی» یا /add'
-      ].join('\n');
-
-    case 'bot_wl_link_lost':
-      return [
-        '⚠️ اتصال این گفتگو به کلاس برقرار نیست (کد لغو شده یا تغییر کرده).',
-        '',
-        'ثبت انجام نشد — لطفاً کد اتصال جدید از مرکز بگیرید: /link CODE'
-      ].join('\n');
-
-    case 'bot_search_denied':
-      return [
-        '⚠️ «جستجو» فقط برای همکاران مرکز است.',
-        '',
-        'اگر همکار مرکز هستید، کد ملی یا شمارهٔ خود را بفرستید تا گفتگوی شما متصل شود.'
-      ].join('\n');
-
-    case 'bot_center_denied':
-      return [
-        '⚠️ «برنامه مرکز» فقط برای مدیر و منشی است.',
-        '',
-        'همکاران برنامهٔ خودشان را با «نوبت‌های من» یا /today می‌بینند.'
-      ].join('\n');
-
-    case 'bot_waitlist_denied':
-      return [
-        '⚠️ «لیست انتظار» فقط برای همکاران مرکز است.',
-        '',
-        'خانواده‌های محترم: برای ثبت‌نام و نوبت با دفتر مرکز تماس بگیرید.'
-      ].join('\n');
-
     case 'waitlist_slot_freed':
       return [
         '🪑 یک نوبت خالی شد:',
@@ -572,7 +522,7 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         `👤 ${vars.staffName ?? '—'} — ${vars.dateYmd ? jalaliFullLabel(vars.dateYmd) : '—'} ساعت ${faDigits(vars.timeLabel ?? '—')}`,
         vars.extra?.trim() || '',
         '',
-        'لیست انتظار را از پنل دنب کنید یا «لیست انتظار» را در همین بات بفرستید.'
+        'لیست انتظار را از پنل وب دنب کنید.'
       ].filter((l) => l !== '').join('\n');
 
     case 'homework_assigned':
@@ -610,13 +560,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
     case 'bot_exercise_sent':
       return [
         `✅ تکلیف برای «${vars.studentName ?? 'دانش‌آموز'}» ثبت شد.`,
-        '',
-        vars.extra?.trim() || ''
-      ].filter((l) => l !== '').join('\n');
-
-    case 'bot_family_message_sent':
-      return [
-        `✅ پیام شما برای خانوادهٔ «${vars.studentName ?? 'دانش‌آموز'}» ارسال شد.`,
         '',
         vars.extra?.trim() || ''
       ].filter((l) => l !== '').join('\n');
@@ -764,48 +707,43 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
     }
 
     case 'bot_public_files': {
-      const links = (vars.links ?? '').trim();
-      const body = links
-        ? ['🔗 لینک‌های آموزشی:', '', links].join('\n')
-        : ['فایل‌های آموزشی روی سایت مرکز بخش «دانلود» قرار دارند.', 'برای دریافت لینک‌ها با دفتر تماس بگیرید.'].join('\n');
-      return [`📁 فایل‌های آموزشی ${clinic}`, '', body].join('\n');
+      const list = (vars.list ?? '').trim();
+      const mode = vars.mode ?? 'guest';
+      const head = `📁 فایل‌های آموزشی ${clinic}`;
+      if (mode === 'staff' || mode === 'class') {
+        return [head, '', 'برای مرور تمرین‌ها و دریافت فایل هر کدام، «بانک تمرین» را باز کنید؛', 'فایل هر تمرین با یک دکمه مستقیم برایتان فرستاده می‌شود.'].join('\n');
+      }
+      if (mode === 'guest') {
+        return [head, '', 'فایل تکلیف‌ها و تمرین‌ها، بعد از ثبت تکلیف مستقیم در همین گفتگو برایتان ارسال می‌شود.', '', 'برای اتصال، کد ملی یا شمارهٔ خودتان را بفرستید.'].join('\n');
+      }
+      if (mode === 'parent_empty') {
+        return [head, '', 'فعلاً فایلی برای تمرین‌های باز فرزندتان نداریم.', 'فایل تکلیف‌های بعدی، همراه پیام تکلیف برایتان ارسال می‌شود.'].join('\n');
+      }
+      return [head, '', 'روی هر تمرین بزنید تا فایلش همین‌جا فرستاده شود:', '', list].filter((l) => l !== '').join('\n');
     }
 
-    case 'bot_my_students':
+    case 'bot_public_files_stale':
       return [
-        `🎓 دانش‌آموزان کلاس ${vars.className ?? ''} — ${vars.count ?? '۰'} نفر`,
+        '🕒 این فهرست قدیمی شده است.',
         '',
-        vars.list ?? '—',
-        '',
-        `برای تکلیف: «بانک تمرین» — برای متقاضی جدید: «ثبت متقاضی»\n(${clinic})`
+        `یک بار دیگر «فایل‌های آموزشی» را بزنید تا فهرست تازه بیاید.`
       ].join('\n');
 
-    case 'bot_my_students_denied':
+    case 'bot_file_sent':
+      return `✅ فایل «${vars.filename ?? 'تمرین'}» برایتان فرستاده شد.`;
+
+    case 'bot_file_unavailable':
       return [
-        '⚠️ این دکمه فقط برای معلمانِ متصل به کلاس فعال است.',
+        '⚠️ این فایل دیگر در دسترس نیست.',
         '',
-        'اگر معلم هستید، کد اتصال کلاس را از دفتر مرکز بگیرید و /link CODE بفرستید.'
+        'ممکن است تمرین ویرایش یا حذف شده باشد — با دفتر مرکز هماهنگ کنید.'
       ].join('\n');
 
-    case 'bot_outbox':
+    case 'bot_file_failed':
       return [
-        '📤 صف اعلان‌های مرکز:',
+        '⚠️ ارسال فایل ناموفق بود.',
         '',
-        `✉ پیش‌نویس (تا ساعت ارسال): ${vars.draftCount ?? '۰'}${vars.nextSend ? `\n⏰ ارسال بعدی: ${vars.nextSend}` : ''}`,
-        `✅ آمادهٔ ارسال (فوری): ${vars.readyCount ?? '۰'}`,
-        `⚠ ناموفق: ${vars.failedCount ?? '۰'}`,
-        '',
-        `(${clinic})`
-      ].join('\n');
-
-    case 'bot_outbox_denied':
-      return ['⚠️ مشاهدهٔ صف اعلان‌ها فقط برای همکاران مرکز است.'].join('\n');
-
-    case 'bot_outbox_flushed':
-      return [
-        '✅ صف رهاسازی شد.',
-        '',
-        `پیش‌نویس آزادشده: ${vars.released ?? '۰'} — ارسال‌شده: ${vars.sent ?? '۰'}\n(${clinic})`
+        'لطفاً چند لحظه بعد دوباره تلاش کنید؛ اگر نشد با دفتر مرکز تماس بگیرید.'
       ].join('\n');
 
     case 'bot_family_link_denied':
@@ -816,24 +754,14 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         `(${clinic})`
       ].join('\n');
 
-    case 'bot_kpi':
-      return [`${vars.title ?? 'گزارش KPI'} (${clinic})`, '', vars.lines ?? '—'].join('\n');
-
-    case 'bot_kpi_denied':
-      return ['⚠️ گزارش KPI فقط برای ناظر اداره و مدیر مرکز فعال است.'].join('\n');
-
     case 'bot_help_supervisor':
       return [
         '📋 راهنمای بات — ناظر اداره:',
         '',
-        '📊 «گزارش KPI» — شاخص‌های تجمیعی ۷ روز اخیر',
-        '   (نوبت‌ها، نرخ حضور، لیست انتظار، دانش‌آموزان)',
-        '📊 گزارش هفتگی هر شنبه صبح خودکار ارسال می‌شود.',
-        '/about — دربارهٔ مرکز',
-        '/myid — شناسه این گفتگو',
-        '/help — همین راهنما',
+        '🏥 «درباره مرکز» — معرفی مرکز',
+        '🔌 «قطع اتصال» — خروج از نقش و قطع این گفتگو',
         '',
-        'دسترسی شما فقط به گزارش‌های تجمیعی است (بدون اطلاعات شخصی).'
+        'گزارش‌های تجمیعی و شاخص‌های مرکز در پنل وب دیده می‌شود.'
       ].join('\n');
 
     case 'bot_services':
@@ -882,32 +810,8 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         '',
         vars.list ?? '—',
         '',
-        'برای ارسال تکلیف جدید: «بانک تمرین» یا «دانش‌آموزان من» را بزنید.'
+        'پس از اتصال، برای خروج از نقش دکمهٔ «قطع اتصال» در پایین گفتگو است.'
       ].join('\n');
-
-    case 'bot_family_message':
-      return [
-        `✉️ پیام از ${clinic}`,
-        '',
-        vars.studentName ? `دربارهٔ: ${vars.studentName}` : undefined,
-        '',
-        vars.extra?.trim() || '',
-        '',
-        vars.senderName ? `— ${vars.senderName}` : undefined
-      ].filter((l): l is string => l !== undefined && l !== '').join('\n');
-
-    case 'bot_checklist_assigned':
-      return [
-        '📝 چک‌لیست خانگی جدید',
-        '',
-        vars.studentName ? `دربارهٔ: ${vars.studentName}` : undefined,
-        `عنوان: ${vars.formTitle ?? 'چک‌لیست'}`,
-        '',
-        'درمانگر مرکز این چک‌لیست را برای مشاهدهٔ وضعیت فرزند شما در خانه ثبت کرده است.',
-        vars.extra?.trim() || undefined,
-        '',
-        'برای پر کردن، دکمهٔ «چک‌لیست‌های من» در پایین گفتگو را بزنید و به آیتم‌ها پاسخ دهید.'
-      ].filter((l): l is string => l !== undefined && l !== '').join('\n');
 
     case 'bot_checklist_result':
       return [
@@ -930,13 +834,6 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         '',
         'برای تمرین‌های بعدی با همان دقت ادامه دهید.'
       ].filter((l): l is string => l !== undefined && l !== '').join('\n');
-
-    case 'bot_case_event_denied':
-      return [
-        '⚠️ این بخش فقط برای همکاران مرکز فعال است.',
-        '',
-        `برای اطلاع‌رسانی به ${clinic} تماس بگیرید.`
-      ].join('\n');
 
     default: {
       const never: never = id;
@@ -1057,172 +954,4 @@ export function renderAttendanceSummary(opts: {
     return `• ${c.name}: ${parts.join(' · ')}`;
   });
   return [head, '', ...lines].join('\n');
-}
-
-export function renderCenterStatus(opts: {
-  title: string;
-  sessionsToday: number;
-  presentToday: number;
-  absentToday: number;
-  waitlistOpen: number;
-  followupsOverdue: number;
-  followupsToday: number;
-  pendingChecklists?: number;
-  sessionsWithoutReport?: number;
-  clinicName?: string;
-}): string {
-  const clinic = opts.clinicName?.trim() || DEFAULT_CLINIC_NAME;
-  const head = `${opts.title} (${clinic})`;
-  const lines = [
-    `🗓 جلسات امروز: ${faDigits(String(opts.sessionsToday))}`,
-    `✅ حاضر: ${faDigits(String(opts.presentToday))} · ❌ غایب: ${faDigits(String(opts.absentToday))}`,
-    `📝 جلسات امروز بدون گزارش: ${faDigits(String(opts.sessionsWithoutReport ?? 0))}`,
-    `⏳ چک‌لیست‌های در انتظار خانواده: ${faDigits(String(opts.pendingChecklists ?? 0))}`,
-    `⏳ لیست انتظار باز: ${faDigits(String(opts.waitlistOpen))}`,
-    `🔔 پیگیری‌ها: ${faDigits(String(opts.followupsOverdue))} عقب‌افتاده · ${faDigits(String(opts.followupsToday))} امروز`
-  ];
-  return [head, '', ...lines].join('\n');
-}
-
-export interface BotSearchItem {
-  name: string;
-  grade: string | null;
-}
-
-export function renderSearchResults(opts: {
-  title: string;
-  items: BotSearchItem[];
-  clinicName?: string;
-}): string {
-  const clinic = opts.clinicName?.trim() || DEFAULT_CLINIC_NAME;
-  const head = `${opts.title} (${clinic})`;
-
-  if (opts.items.length === 0) {
-    return `${head}\n\nموردی با این نام یافت نشد.`;
-  }
-
-  const lines = opts.items.map((it) => `• ${it.name}${it.grade ? ` — ${it.grade}` : ''}`);
-  return [head, '', ...lines].join('\n');
-}
-
-export interface CenterScheduleRow {
-  timeLabel: string;
-  staffName: string;
-  studentNames: string[];
-  cancelled: boolean;
-}
-
-export const CENTER_SCHEDULE_MAX_ROWS = 12;
-
-export function renderCenterSchedule(opts: {
-  title: string;
-  rows: CenterScheduleRow[];
-  clinicName?: string;
-}): string {
-  const clinic = opts.clinicName?.trim() || DEFAULT_CLINIC_NAME;
-  const head = `${opts.title} (${clinic})`;
-
-  if (opts.rows.length === 0) {
-    return `${head}\n\n🕐 موردی برای امروز ثبت نشده است.`;
-  }
-
-  const sorted = [...opts.rows].sort((a, b) => a.timeLabel.localeCompare(b.timeLabel));
-  const shown = sorted.slice(0, CENTER_SCHEDULE_MAX_ROWS);
-  const body = shown.map((r) => {
-    const status = r.cancelled ? ' (لغوشده)' : '';
-    const students = r.studentNames.length > 0 ? r.studentNames.join('، ') : 'بدون دانش‌آموز';
-    return `${faDigits(r.timeLabel)}  ${r.staffName} — ${students}${status}`;
-  });
-
-  const rest = sorted.length - shown.length;
-  const tail =
-    rest > 0
-      ? ['', `… و ${faDigits(String(rest))} مورد دیگر — نمایش کامل: پنل ← «روز کاری»`].join('\n')
-      : '';
-  return [head, '', ...body].join('\n') + tail;
-}
-
-export interface WaitlistListItem {
-  name: string;
-  service: string | null;
-  urgent: boolean;
-  daysWaiting: number;
-}
-
-export const WAITLIST_LIST_MAX_ROWS = 8;
-
-export function renderWaitlistList(opts: {
-  title: string;
-  items: WaitlistListItem[];
-  totalOpen: number;
-  clinicName?: string;
-}): string {
-  const clinic = opts.clinicName?.trim() || DEFAULT_CLINIC_NAME;
-  const head = `${opts.title} (${clinic})`;
-
-  if (opts.totalOpen === 0) {
-    return `${head}\n\n✅ متقاضیِ بازی در لیست انتظار نیست.`;
-  }
-
-  const shown = opts.items.slice(0, WAITLIST_LIST_MAX_ROWS);
-  const body = shown.map((it) => {
-    const prio = it.urgent ? '🔴 فوری' : 'عادی';
-    const service = it.service ? ` — ${it.service}` : '';
-    const days = it.daysWaiting === 0 ? 'امروز' : `${faDigits(String(it.daysWaiting))} روز`;
-    return `• ${it.name} (${prio}${service}) — ${days} در انتظار`;
-  });
-
-  const rest = opts.totalOpen - shown.length;
-  const tail =
-    rest > 0
-      ? ['', `… و ${faDigits(String(rest))} متقاضی دیگر — اقدام: پنل ← «لیست انتظار»`].join('\n')
-      : '';
-  return [head, '', ...body].join('\n') + tail;
-}
-
-export interface BotScreeningGoalItem {
-  periodLabel: string;
-  target: number;
-  done: number;
-  percent: number;
-  remaining: number;
-  status: 'active' | 'upcoming' | 'past';
-}
-
-export const SCREENING_GOAL_MAX_ROWS = 10;
-
-export function renderScreeningGoal(opts: {
-  title: string;
-  todayCount: number;
-  weekCount: number;
-  monthCount: number;
-  goals: BotScreeningGoalItem[];
-  clinicName?: string;
-}): string {
-  const clinic = opts.clinicName?.trim() || DEFAULT_CLINIC_NAME;
-  const head = `${opts.title} (${clinic})`;
-  const counters = `📌 امروز: ${faDigits(String(opts.todayCount))} · ۷ روز اخیر: ${faDigits(String(opts.weekCount))} · ۳۰ روز اخیر: ${faDigits(String(opts.monthCount))}`;
-
-  if (opts.goals.length === 0) {
-    return [head, '', counters, '', '🎯 هنوز هدفی برای سنجش تنظیم نشده است.', 'تنظیم: پنل ← تنظیمات ← شاخص سنجش'].join('\n');
-  }
-
-  const shown = opts.goals.slice(0, SCREENING_GOAL_MAX_ROWS);
-  const body = shown.map((g) => {
-    const mark = g.status === 'upcoming' ? '🕒' : g.percent >= 100 ? '✅' : '🎯';
-    const status = g.status === 'upcoming' ? 'شروع نشده' : g.status === 'past' ? 'پایان‌یافته' : 'در جریان';
-    const detail =
-      g.status === 'upcoming'
-        ? `هدف: ${faDigits(String(g.target))} سنجش`
-        : `${faDigits(String(g.done))} از ${faDigits(String(g.target))} (${faDigits(String(g.percent))}٪)` +
-          (g.status === 'active' && g.remaining > 0 ? ` — ${faDigits(String(g.remaining))} باقی‌مانده` : '');
-    return `${mark} ${g.periodLabel} — ${detail} (${status})`;
-  });
-
-  const rest = opts.goals.length - shown.length;
-  const tail =
-    rest > 0
-      ? ['', `… و ${faDigits(String(rest))} هدف دیگر — نمایش کامل: پنل ← داشبورد`].join('\n')
-      : '';
-  return [head, '', counters, '', ...body].join('\n') + tail;
 }

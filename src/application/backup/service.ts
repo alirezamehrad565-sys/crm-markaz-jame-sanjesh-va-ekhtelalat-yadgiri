@@ -9,7 +9,7 @@ import {
   BACKUP_MAX_SEND_BYTES,
   BACKUP_CHAT_ID_RE
 } from '@core/shared';
-import { sendBaleDocument } from '@core/notify/bale/documents';
+import { sendBaleDocument } from '@domain/exercise-bank/routes';
 import type { SendResult } from '@core/notify/types';
 
 // ─── مکانیک پشتیبان‌گیری و بازیابی (m179) + ارسال به آیدی بله (m180) ───

@@ -1,6 +1,6 @@
 import type { AuthContext, TagCategory, TagRef } from '@core/shared';
 import { EXB_DOWNLOAD_TTL_SECONDS, EXERCISE_FEEDBACK_MAX, EXERCISE_FEEDBACK_MIN, SUBMISSION_ATTACH_WINDOW_HOURS, SUBMISSION_NOTE_MAX } from '@core/shared';
-import { EXERCISE_BATCH_NOTE_MAX, MAX_EXERCISE_ATTACHMENT_COUNT, MAX_EXERCISE_BATCH_LINKS, MAX_EXERCISE_FILES_PER_UPLOAD, MAX_EXERCISE_FILE_BYTES, MAX_EXERCISE_UPLOAD_CHUNK_BYTES } from '@core/shared';
+import { EXERCISE_BATCH_NOTE_MAX, MAX_EXB_BATCH_ATTACH, MAX_EXERCISE_ATTACHMENT_COUNT, MAX_EXERCISE_BATCH_LINKS, MAX_EXERCISE_FILES_PER_UPLOAD, MAX_EXERCISE_FILE_BYTES, MAX_EXERCISE_UPLOAD_CHUNK_BYTES } from '@core/shared';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
 import {
   clampPage,
@@ -287,7 +287,7 @@ const ASSIGNMENT_SELECT = `
     LEFT JOIN staff gs ON gs.id = a.graded_by`;
 
 export function createExerciseBankService(deps: ExerciseBankDeps) {
-  const { db, audit, logger, storage, downloadSecret } = deps;
+  const { db, audit, logger, storage, downloadSecret, fileSender } = deps;
   const log = logger.child('exercise-bank');
   const now = deps.now ?? (() => new Date());
 
@@ -1464,7 +1464,7 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       }));
     },
 
-    async sendBatch(batchId: string, input: { note?: string | null }, actor: AuthContext): Promise<{ sent: number; targets: string[] }> {
+    async sendBatch(batchId: string, input: { note?: string | null }, actor: AuthContext): Promise<{ sent: number; targets: string[]; filesSent: number }> {
       if (!sendFn) throw new ConflictError('سرویس اعلان در دسترس نیست');
       const batch = await db.queryOne<BatchDbRow>(
         `SELECT b.*, s.first_name, s.last_name
@@ -1495,6 +1495,7 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
       if (input.note?.trim()) lines.push(`یادداشت: ${input.note.trim()}`);
       else if (batch.note) lines.push(`یادداشت: ${batch.note}`);
       let linkBudget = MAX_EXERCISE_BATCH_LINKS;
+      const attachQueue: Array<{ exerciseId: string; title: string; fileId: string | null }> = [];
       for (const item of items) {
         lines.push('', `• ${item.title}`);
         const ex = await this.getById(item.exercise_id);
@@ -1506,6 +1507,16 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
             const token = await this.mintDownloadToken(item.exercise_id, f.id || null);
             lines.push(`📎 ${f.filename}: ${base.replace(/\/+$/, '')}/public/exercise-files/${item.exercise_id}?token=${token}`);
             linkBudget -= 1;
+          }
+        }
+        if (fileSender) {
+          const files = ex?.files ?? [];
+          const withIds = files.filter((f) => f.id).map((f) => f.id);
+          if (withIds.length > 0) {
+            for (const fid of withIds)
+              attachQueue.push({ exerciseId: item.exercise_id, title: item.title, fileId: fid });
+          } else if (ex?.file) {
+            attachQueue.push({ exerciseId: item.exercise_id, title: item.title, fileId: null });
           }
         }
       }
@@ -1539,7 +1550,41 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         }
       });
       log.info('exercise.batch.sent', { batchId, targets: chats.length, sent });
-      return { sent, targets: chats };
+      let filesSent = 0;
+      if (fileSender && chats.length > 0 && attachQueue.length > 0) {
+        const studentName = `${batch.first_name ?? ''} ${batch.last_name ?? ''}`.trim() || 'دانش‌آموز';
+        for (const q of attachQueue.slice(0, MAX_EXB_BATCH_ATTACH)) {
+          const file = q.fileId ? await this.getAttachmentFile(q.exerciseId, q.fileId) : await this.getFile(q.exerciseId);
+          if (!file) {
+            log.warn('exercise.batch.file.missing', { batchId, exerciseId: q.exerciseId, fileId: q.fileId });
+            continue;
+          }
+          const caption = `📚 «${q.title}» — ${studentName}`;
+          for (const chat of chats) {
+            try {
+              const ok = await fileSender(chat, {
+                filename: file.filename,
+                bytes: file.bytes,
+                mime: file.mime,
+                caption
+              });
+              if (ok)
+                filesSent += 1;
+            } catch (err) {
+              log.warn('exercise.batch.file.send_failed', {
+                batchId,
+                chat,
+                error: err instanceof Error ? err.message : 'unknown'
+              });
+            }
+          }
+        }
+        if (attachQueue.length > MAX_EXB_BATCH_ATTACH) {
+          log.info('exercise.batch.file.capped', { batchId, total: attachQueue.length, cap: MAX_EXB_BATCH_ATTACH });
+        }
+        log.info('exercise.batch.files.attached', { batchId, filesSent, chats: chats.length });
+      }
+      return { sent, targets: chats, filesSent };
     },
 
     setSendObserver(fn: BatchSendObserver | null): void {

@@ -96,7 +96,7 @@ describe('لینک احراز هویت چندبارمصرف', () => {
     expect(moved.reply).toContain('اتصال با موفقیت');
 
     const kb = await bot(A, tx('/start', CHAT_TEACHER2));
-    expect(JSON.stringify(kb.keyboard)).toContain('ثبت متقاضی');
+    expect(JSON.stringify(kb.keyboard)).toContain('فعالیت کلاس');
   });
 
   it('کد کلاس لغوشده — همچنان مرده است (revoked؛ حتی همان چت قبلی)', async () => {

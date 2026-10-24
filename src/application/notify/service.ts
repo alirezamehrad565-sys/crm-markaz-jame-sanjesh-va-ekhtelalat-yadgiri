@@ -18,6 +18,7 @@ import type {
 } from '@core/shared';
 import {
   LINK_CODE_LENGTH,
+  MAX_EXB_PARENT_FILES,
   REMINDER_HORIZON_HOURS,
   addDaysYmd,
   addMinutes,
@@ -59,6 +60,11 @@ import {
   insertClassLink,
   linkClassLink,
   resolveChatOwner,
+  unlinkBotLinksByChat,
+  unlinkStaffLinksByChat,
+  unlinkClassLinksByChat,
+  clearPrefsChatByChat,
+  deleteBotMenuStateByChat,
   upsertPrefs,
   insertBotLinkLinked,
   selectBotLinkIdFor,
@@ -68,12 +74,9 @@ import {
   normalizePhoneDigits
 } from '@core/notify';
 import type { BotLinkRow, NotifyService, NotifyListFilters, PrefsRow, SendResult, StaffBotLinkRow, ClassBotLinkRow, InlineButton, IdentityFormat, AttendanceChildSummary } from '@core/notify';
-import { renderDigestBody, renderFollowupsMessage, renderAttendanceSummary, renderCenterStatus, renderSearchResults, renderCenterSchedule, renderWaitlistList, renderScreeningGoal } from '@core/notify';
+import { renderDigestBody, renderFollowupsMessage, renderAttendanceSummary } from '@core/notify';
 import type { FollowUpsService } from '@domain/followups';
 import { followUpGroupOf } from '@domain/followups';
-import { orderWaitlist } from '@domain/waitlist';
-import type { ScreeningService } from '@domain/screening';
-import { goalsQueryWindow, summarizeScreeningGoals } from '../dashboard/screening-goal';
 import { buildScheduleEntries, planLifecycleNotifications } from './lifecycle';
 import type { LifecycleEvent } from './lifecycle';
 import { computeBatchSendAt, isCreatedTemplate } from './batch';
@@ -85,15 +88,12 @@ import { createExerciseBankBot } from './exercise-bank-bot';
 import type { ExerciseBankBot } from './exercise-bank-bot';
 import { createExerciseSubmissionBot } from './exercise-submission-bot';
 import type { ExerciseSubmissionBot } from './exercise-submission-bot';
-import { createWaitlistIntakeBot, readWlIntakeState, clearWlIntakeState } from './waitlist-intake-bot';
-import type { WaitlistIntakeBot } from './waitlist-intake-bot';
-import { createStudentActionsBot, readStuMsgState, clearStuState } from './student-actions-bot';
 import { createCaseEventsBot } from './case-events-bot';
-import type { StudentActionsBot } from './student-actions-bot';
 import { createAwarenessBot } from './awareness-bot';
 import type { AwarenessBot, AwBotReply } from './awareness-bot';
 import type { AwSection } from '@core/notify';
-import type { ExerciseBankService } from '@domain/exercise-bank';
+import type { ExerciseBankService, ExerciseFileSender } from '@domain/exercise-bank';
+import { truncateLabel } from '@domain/exercise-bank';
 import type { DocumentRequestService } from '@domain/document-requests';
 import type { MediaFetcher, BotMedia } from '@core/notify';
 
@@ -115,7 +115,7 @@ export interface NotifyAppDeps {
   publicBaseUrl?: string | null;
   mediaFetcher?: MediaFetcher | null;
   caseEvents?: import('@domain/case-events').CaseEventsService | null;
-  screening?: ScreeningService | null;
+  fileSender?: ExerciseFileSender | null;
   now?: () => Date;
 }
 
@@ -173,58 +173,42 @@ export interface OutboxSummary {
 
 export function buildBotKeyboard(owner: { kind: string; role: string | null } | null): string[][] {
   const aboutRow = ['درباره مرکز', 'راهنما'];
+  const unlinkRow = ['قطع اتصال'];
   if (!owner) {
     return [
       ['معرفی مرکز', 'خدمات مرکز'],
-      ['راه‌های ارتباطی', 'احراز هویت']
+      ['راه‌های ارتباطی', 'احراز هویت'],
+      ['فایل‌های آموزشی']
     ];
   }
   if (owner.kind === 'staff') {
-    if (owner.role === 'manager') {
+    if (owner.role === 'manager' || owner.role === 'secretary' || owner.role === 'therapist') {
       return [
         ['نوبت‌های من', 'پیگیری‌های من'],
-        ['برنامه مرکز', 'لیست انتظار'],
-        ['وضعیت مرکز', 'هدف سنجش'],
-        ['بانک تمرین', 'دانش‌آموزان فعال'],
-        ['اعلان‌های در صف', 'گزارش KPI'],
-        aboutRow
-      ];
-    }
-    if (owner.role === 'secretary') {
-      return [
-        ['نوبت‌های من', 'پیگیری‌های من'],
-        ['برنامه مرکز', 'لیست انتظار'],
-        ['وضعیت مرکز', 'هدف سنجش'],
-        ['بانک تمرین', 'دانش‌آموزان فعال'],
-        ['اعلان‌های در صف'],
-        aboutRow
-      ];
-    }
-    if (owner.role === 'therapist') {
-      return [
-        ['نوبت‌های من', 'پیگیری‌های من'],
-        ['دانش‌آموزان فعال', 'بانک تمرین'],
-        ['اعلان‌های در صف'],
-        aboutRow
+        ['بانک تمرین', 'فایل‌های آموزشی'],
+        aboutRow,
+        unlinkRow
       ];
     }
     if (owner.role === 'supervisor') {
-      return [['گزارش KPI'], aboutRow];
+      return [aboutRow, unlinkRow];
     }
-    return [['نوبت‌های من'], aboutRow];
+    return [['نوبت‌های من'], aboutRow, unlinkRow];
   }
   if (owner.kind === 'class') {
     return [
-      ['نوبت‌های کلاس من', 'دانش‌آموزان من'],
-      ['ثبت متقاضی', 'فعالیت کلاس'],
+      ['نوبت‌های کلاس من', 'فعالیت کلاس'],
       ['بانک تمرین', 'آگاهی‌های اختلالات'],
-      aboutRow
+      aboutRow,
+      unlinkRow
     ];
   }
   return [
     ['نوبت‌های دانش‌آموز من', 'تمرین‌های انجام‌نشده'],
     ['چک‌لیست‌های من', 'حضور فرزند'],
-    aboutRow
+    ['فایل‌های آموزشی'],
+    aboutRow,
+    unlinkRow
   ];
 }
 
@@ -257,23 +241,15 @@ export interface NotifyAppService {
   handleFollowupsCommand(chatId: string): Promise<BotReply>;
   handleFollowupDone(chatId: string, followupId: string): Promise<BotReply>;
   handleAttendanceSummary(chatId: string): Promise<BotReply>;
-  handleCenterStatus(chatId: string): Promise<BotReply>;
+  handleUnlinkCommand(chatId: string, phase: 'ask' | 'do' | 'no'): Promise<BotReply>;
   handleHelpCommand(chatId: string): Promise<string>;
-  handleSearchCommand(chatId: string, query: string): Promise<BotReply>;
-  handleCenterScheduleCommand(chatId: string): Promise<BotReply>;
-  handleWaitlistCommand(chatId: string): Promise<BotReply>;
-  handleScreeningGoalCommand(chatId: string): Promise<BotReply>;
+  handleClassActivityCommand(chatId: string): Promise<BotReply>;
   handleContactCommand(): Promise<BotReply>;
   handleServicesCommand(): Promise<BotReply>;
   handleAuthGuideCommand(): Promise<BotReply>;
   handlePendingHomeworkCommand(chatId: string): Promise<BotReply>;
-  handlePublicFilesCommand(): Promise<BotReply>;
-  handleMyStudentsCommand(chatId: string): Promise<BotReply>;
-  handleOutboxCommand(chatId: string): Promise<BotReply>;
-  handleOutboxFlush(chatId: string): Promise<BotReply>;
-  handleKpiCommand(chatId: string): Promise<BotReply>;
-  enqueueWeeklyKpi(nowDate?: Date): Promise<number>;
-  buildKpiVars(nowDate?: Date): Promise<{ ymd: string; title: string; lines: string }>;
+  handlePublicFilesCommand(chatId: string): Promise<BotReply>;
+  handleParentFileGet(chatId: string, idx: number): Promise<BotReply>;
   notifyWaitlistSlotFreed(appointment: Appointment): Promise<void>;
   sendDailyDigest(nowDate?: Date): Promise<DigestSummary>;
   enqueueFollowupNudges(nowDate?: Date): Promise<number>;
@@ -307,6 +283,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
         settings: deps.settings,
         exerciseBank: deps.exerciseBank,
         publicBaseUrl: deps.publicBaseUrl ?? null,
+        fileSender: deps.fileSender ?? null,
         now
       })
     : null;
@@ -325,31 +302,40 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
         })
       : null;
 
-  const wlIntakeBot: WaitlistIntakeBot = createWaitlistIntakeBot({ db, audit, logger, now });
-
-  const stuBot: StudentActionsBot = createStudentActionsBot({
+  const clfBot = createCaseEventsBot({
     db,
     audit,
     logger,
     notify,
-    settings: deps.settings,
-    exerciseBank: deps.exerciseBank ?? null,
-    publicBaseUrlEnv: deps.publicBaseUrl ?? null,
-    now
-  });
-
-  const tlBot = createCaseEventsBot({
-    db,
-    audit,
-    logger,
-    notify,
-    settings: deps.settings,
     caseEvents: deps.caseEvents ?? null,
     publicBaseUrlEnv: deps.publicBaseUrl ?? null,
     now
   });
 
   const awBot: AwarenessBot = createAwarenessBot({ publicBaseUrl: deps.publicBaseUrl ?? null });
+
+  async function readPfState(chatId: string): Promise<{ pfl?: Array<{ e: string; f: string; t: string }> }> {
+    const row = await db.queryOne<{ payload: string }>(
+      `SELECT payload FROM bot_menu_state WHERE chat_id = ?`,
+      [chatId]
+    );
+    if (!row) return {};
+    try {
+      const parsed = JSON.parse(row.payload);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  async function writePfState(chatId: string, state: { pfl?: Array<{ e: string; f: string; t: string }> }): Promise<void> {
+    await db.execute(
+      `INSERT INTO bot_menu_state (chat_id, payload, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(chat_id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`,
+      [chatId, JSON.stringify(state), now().toISOString()]
+    );
+  }
 
   if (deps.baleToken) {
     notify.registerChannel(createBaleChannel({ token: deps.baleToken }));
@@ -731,104 +717,26 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
       const cmd = parseBotUpdate(update);
       const rawText = extractMessageText(update);
       if (!cmd) {
-        if (rawText) {
-          const chatId0 = extractChatIdOf(update) ?? '';
-          const st = await readWlIntakeState(db, chatId0);
-          if (st) {
-            const out = await wlIntakeBot.feedInput(chatId0, rawText);
-            if (out) return { handled: true, reply: out.text, buttons: out.buttons };
-          }
-          const msgSt = await readStuMsgState(db, chatId0);
-          if (msgSt) {
-            const out = await stuBot.msgFeed(chatId0, rawText);
-            if (out) return { handled: true, reply: out.text, buttons: out.buttons };
-          }
-          const tlSt = await tlBot.readTlFormState(chatId0);
-          if (tlSt) {
-            const out = await tlBot.feedInput(chatId0, rawText);
-            if (out) return { handled: true, reply: out.text, buttons: out.buttons };
-          }
+        return { handled: false, reply: null };
+      }
+
+      if (cmd.kind === 'flow_cancel') {
+        const clfActive = await clfBot.readClfFormState(cmd.chatId);
+        if (clfActive) {
+          const out = await clfBot.abortFill(cmd.chatId);
+          return { handled: true, reply: out.text, buttons: out.buttons };
         }
         return { handled: false, reply: null };
       }
 
-      if (cmd.kind === 'wl_intake_cancel') {
-        const msgActive = await readStuMsgState(db, cmd.chatId);
-        if (msgActive) {
-          const out = await stuBot.msgAbort(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        const tlActive = await tlBot.readTlFormState(cmd.chatId);
-        const clfActive = await tlBot.readClfFormState(cmd.chatId);
-        if (tlActive) {
-          const out = await tlBot.abortCreate(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        if (clfActive) {
-          const out = await tlBot.abortFill(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-      }
-      if (cmd.kind === 'wl_intake_confirm') {
-        const out = await wlIntakeBot.confirm(cmd.chatId);
-        return { handled: true, reply: out.text, buttons: out.buttons };
-      }
-      if (cmd.kind === 'wl_intake_abort' || cmd.kind === 'wl_intake_cancel') {
-        const out = await wlIntakeBot.cancel(cmd.chatId);
-        const ownerAfter = await this.resolveOwner(cmd.chatId);
-        return { handled: true, reply: out.text, buttons: out.buttons, keyboard: buildBotKeyboard(ownerAfter) };
-      }
-      if (cmd.kind === 'wl_intake_start') {
-        const out = await wlIntakeBot.start(cmd.chatId);
-        return { handled: true, reply: out.text, buttons: out.buttons };
-      }
-      const flowActive = await readWlIntakeState(db, cmd.chatId);
-      if (flowActive) {
-        if (cmd.kind === 'identify' || cmd.kind === 'unknown') {
-          const input = rawText ?? (cmd.kind === 'unknown' ? cmd.text : cmd.value);
-          const out = await wlIntakeBot.feedInput(cmd.chatId, input);
-          if (out) return { handled: true, reply: out.text, buttons: out.buttons };
-          return { handled: false, reply: null };
-        }
-        if (cmd.kind !== 'media_received' && cmd.kind !== 'sub_pick') {
-          await clearWlIntakeState(db, cmd.chatId);
-        }
-      }
-
-      const stuMsgActive = await readStuMsgState(db, cmd.chatId);
-      if (stuMsgActive) {
-        if (cmd.kind === 'identify' || cmd.kind === 'unknown') {
-          const input = rawText ?? (cmd.kind === 'unknown' ? cmd.text : cmd.value);
-          const out = await stuBot.msgFeed(cmd.chatId, input);
-          if (out) return { handled: true, reply: out.text, buttons: out.buttons };
-          return { handled: false, reply: null };
-        }
-        if (cmd.kind !== 'media_received' && cmd.kind !== 'sub_pick' && cmd.kind !== 'stu_msg_confirm' && cmd.kind !== 'stu_msg_abort') {
-          await clearStuState(db, cmd.chatId);
-        }
-      }
-
-      const tlFormActive = await tlBot.readTlFormState(cmd.chatId);
-      if (tlFormActive) {
-        if (cmd.kind === 'identify' || cmd.kind === 'unknown') {
-          const input = rawText ?? (cmd.kind === 'unknown' ? cmd.text : cmd.value);
-          const out = await tlBot.feedInput(cmd.chatId, input);
-          if (out) return { handled: true, reply: out.text, buttons: out.buttons };
-          return { handled: false, reply: null };
-        }
-        if (cmd.kind !== 'media_received' && cmd.kind !== 'sub_pick' && cmd.kind !== 'tl_do' && cmd.kind !== 'tl_no' && cmd.kind !== 'tl_skip' && cmd.kind !== 'tl_opt') {
-          await tlBot.abortCreate(cmd.chatId);
-        }
-      }
-
-      const clfFormActive = await tlBot.readClfFormState(cmd.chatId);
+      const clfFormActive = await clfBot.readClfFormState(cmd.chatId);
       if (clfFormActive) {
         if (cmd.kind === 'identify' || cmd.kind === 'unknown') {
           const input = (rawText ?? (cmd.kind === 'unknown' ? cmd.text : cmd.value) ?? '').trim();
           const digits = input.replace(/[^۰-۹0-9]/g, '');
           const norm = digits.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
           if (norm.length > 0) {
-            const out = await tlBot.answerItem(cmd.chatId, Number(norm));
+            const out = await clfBot.answerItem(cmd.chatId, Number(norm));
             return { handled: true, reply: out.text, buttons: out.buttons };
           }
           return {
@@ -838,7 +746,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           };
         }
         if (cmd.kind !== 'media_received' && cmd.kind !== 'sub_pick' && cmd.kind !== 'clf_do' && cmd.kind !== 'clf_no' && cmd.kind !== 'clf_a') {
-          await tlBot.abortFill(cmd.chatId);
+          await clfBot.abortFill(cmd.chatId);
         }
       }
 
@@ -904,27 +812,12 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           const out = await this.handleAttendanceSummary(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
-        case 'center_status': {
-          const out = await this.handleCenterStatus(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-
-        case 'search': {
-          const out = await this.handleSearchCommand(cmd.chatId, cmd.query);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'center_schedule': {
-          const out = await this.handleCenterScheduleCommand(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'waitlist_list': {
-          const out = await this.handleWaitlistCommand(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-
-        case 'screening_goal': {
-          const out = await this.handleScreeningGoalCommand(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
+        case 'unlink_ask':
+        case 'unlink_do':
+        case 'unlink_no': {
+          const out = await this.handleUnlinkCommand(cmd.chatId, cmd.kind === 'unlink_ask' ? 'ask' : cmd.kind === 'unlink_do' ? 'do' : 'no');
+          const ownerAfter = await this.resolveOwner(cmd.chatId);
+          return { handled: true, reply: out.text, buttons: out.buttons, keyboard: out.buttons ? undefined : buildBotKeyboard(ownerAfter) };
         }
 
         case 'contact': {
@@ -932,23 +825,11 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           return { handled: true, reply: out.text, buttons: out.buttons, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
         }
         case 'public_files': {
-          const out = await this.handlePublicFilesCommand();
+          const out = await this.handlePublicFilesCommand(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
         }
-        case 'my_students': {
-          const out = await this.handleMyStudentsCommand(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'outbox': {
-          const out = await this.handleOutboxCommand(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'outbox_flush': {
-          const out = await this.handleOutboxFlush(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'kpi_report': {
-          const out = await this.handleKpiCommand(cmd.chatId);
+        case 'pfile_get': {
+          const out = await this.handleParentFileGet(cmd.chatId, cmd.idx);
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
 
@@ -965,7 +846,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
         case 'class_activity': {
-          const out = await stuBot.classActivity(cmd.chatId);
+          const out = await this.handleClassActivityCommand(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
         case 'awareness_root': {
@@ -980,106 +861,24 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
           const out: AwBotReply = await awBot.item(cmd.section as AwSection, cmd.idx);
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
-        case 'stu_list': {
-          const out = await stuBot.list(cmd.chatId, cmd.page ?? 1);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'stu_menu': {
-          const out = await stuBot.menu(cmd.chatId, cmd.idx);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'stu_send': {
-          const out = await stuBot.sendExercises(cmd.chatId, cmd.stuIdx, cmd.page);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'stu_pick': {
-          const out = await stuBot.pick(cmd.chatId, cmd.stuIdx, cmd.exIdx);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'stu_yes': {
-          const out = await stuBot.yes(cmd.chatId, cmd.stuIdx, cmd.exIdx);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'stu_msg_start': {
-          const out = await stuBot.msgStart(cmd.chatId, cmd.idx);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'stu_msg_confirm': {
-          const out = await stuBot.msgConfirm(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'stu_msg_abort': {
-          const out = await stuBot.msgAbort(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'stu_hw': {
-          const out = await stuBot.homework(cmd.chatId, cmd.idx);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'stu_appts': {
-          const out = await stuBot.appointments(cmd.chatId, cmd.idx);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'stu_hist': {
-          const out = await tlBot.history(cmd.chatId, cmd.idx);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'stu_ckl': {
-          const out = await tlBot.checklists(cmd.chatId, cmd.idx);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-
-        case 'stu_tl': {
-          const out = await tlBot.startCategory(cmd.chatId, cmd.idx);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'tl_cat': {
-          const out = await tlBot.startCategory(cmd.chatId, cmd.idx);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'tl_types': {
-          const out = await tlBot.listTypes(cmd.chatId, cmd.stuIdx, cmd.cat);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'tl_start': {
-          const out = await tlBot.startForm(cmd.chatId, cmd.stuIdx, cmd.typeIdx);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'tl_opt': {
-          const out = await tlBot.optionPick(cmd.chatId, cmd.value);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'tl_skip': {
-          const out = await tlBot.skipField(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'tl_do': {
-          const out = await tlBot.confirmCreate(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'tl_no': {
-          const out = await tlBot.abortCreate(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-
         case 'clf_list': {
-          const out = await tlBot.listMine(cmd.chatId);
+          const out = await clfBot.listMine(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
         case 'clf_fill': {
-          const out = await tlBot.startFill(cmd.chatId, cmd.eventId);
+          const out = await clfBot.startFill(cmd.chatId, cmd.eventId);
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
         case 'clf_a': {
-          const out = await tlBot.answerItem(cmd.chatId, cmd.value);
+          const out = await clfBot.answerItem(cmd.chatId, cmd.value);
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
         case 'clf_do': {
-          const out = await tlBot.confirmFill(cmd.chatId);
+          const out = await clfBot.confirmFill(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
         case 'clf_no': {
-          const out = await tlBot.abortFill(cmd.chatId);
+          const out = await clfBot.abortFill(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
 
@@ -1087,14 +886,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
         case 'exb_cats':
         case 'exb_list':
         case 'exb_item':
-        case 'exb_send':
-        case 'exb_pick':
-        case 'exb_yes':
-        case 'exb_pkg':
-        case 'exb_pitem':
-        case 'exb_psend':
-        case 'exb_ppick':
-        case 'exb_pyes': {
+        case 'exb_file': {
           if (!exbBot) {
             return { handled: true, reply: renderTemplate('bot_exercise_disabled') };
           }
@@ -1730,119 +1522,105 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
       return { text, buttons: null };
     },
 
-    async handleCenterStatus(chatId: string): Promise<BotReply> {
+    async handleUnlinkCommand(chatId: string, phase: 'ask' | 'do' | 'no'): Promise<BotReply> {
+      if (phase === 'ask') {
+        const owner2 = await this.resolveOwner(chatId);
+        if (!owner2) {
+          return { text: renderTemplate('bot_unlink_not_connected'), buttons: null };
+        }
+        return { text: renderTemplate('bot_unlink_confirm'), buttons: [[
+          { text: '✅ بله، قطع شود', callbackData: 'unlink:do' },
+          { text: '✖️ انصراف', callbackData: 'unlink:no' }
+        ]] };
+      }
+      if (phase === 'no') {
+        return { text: renderTemplate('bot_unlink_cancelled'), buttons: null };
+      }
       const owner = await this.resolveOwner(chatId);
       if (!owner) {
-        return { text: renderTemplate('bot_help_guest'), buttons: null };
+        return { text: renderTemplate('bot_unlink_not_connected'), buttons: null };
       }
-      if (owner.kind !== 'staff' || (owner.role !== 'manager' && owner.role !== 'secretary')) {
-        return { text: renderTemplate('bot_status_denied'), buttons: null };
-      }
-
-      const nowDate = now();
-      const todayYmd = tehranTodayYmd(nowDate);
-      const { start, end } = tehranRange(todayYmd, todayYmd);
-      const nowIso = nowDate.toISOString();
-
-      const [sessionRow, attRows, waitlistRow, overdueRow, todayRow, pendingCklRow, noReportRow, clinicName] = await Promise.all([
-        db.queryOne<{ n: number }>(
-          `SELECT COUNT(*) AS n FROM appointments WHERE status = 'scheduled' AND start_at >= ? AND start_at < ?`,
-          [start, end]
-        ),
-        db.query<{ attendance: string; cnt: number }>(
-          `SELECT s.attendance, COUNT(*) AS cnt
-             FROM appointment_students s
-             JOIN appointments a ON a.id = s.appointment_id
-            WHERE a.start_at >= ? AND a.start_at < ? AND a.status != 'cancelled'
-            GROUP BY s.attendance`,
-          [start, end]
-        ),
-        db.queryOne<{ n: number }>(`SELECT COUNT(*) AS n FROM waitlist WHERE status IN ('waiting', 'called')`),
-        db.queryOne<{ n: number }>(
-          `SELECT COUNT(*) AS n FROM followups WHERE status IN ('open', 'in_progress') AND due_at IS NOT NULL AND due_at < ?`,
-          [nowIso]
-        ),
-        db.queryOne<{ n: number }>(
-          `SELECT COUNT(*) AS n FROM followups WHERE status IN ('open', 'in_progress') AND due_at IS NOT NULL AND due_at >= ? AND due_at <= ?`,
-          [nowIso, end]
-        ),
-        db.queryOne<{ n: number }>(
-          `SELECT COUNT(*) AS n
-             FROM case_events e JOIN case_event_types t ON t.id = e.event_type_id
-            WHERE e.status = 'pending_family' AND t.family_fillable = 1`
-        ),
-        db.queryOne<{ n: number }>(
-          `SELECT COUNT(*) AS n
-             FROM appointments a
-            WHERE a.start_at >= ? AND a.start_at < ? AND a.status != 'cancelled'
-              AND NOT EXISTS (
-                SELECT 1 FROM case_events ce JOIN case_event_types ct ON ct.id = ce.event_type_id
-                 WHERE ce.appointment_id = a.id AND ct.category = 'session' AND ce.status != 'cancelled'
-              )
-              AND NOT EXISTS (
-                SELECT 1 FROM appointment_students aps
-                 WHERE aps.appointment_id = a.id AND aps.session_note IS NOT NULL AND aps.session_note != ''
-              )`,
-          [start, end]
-        ),
-        deps.settings.getClinicName()
+      const nowIso = now().toISOString();
+      const [familyRes, staffRes, classRes, prefsRes, stateRes] = await Promise.all([
+        db.execute(...spreadStmt(unlinkBotLinksByChat(chatId))),
+        db.execute(...spreadStmt(unlinkStaffLinksByChat(chatId))),
+        db.execute(...spreadStmt(unlinkClassLinksByChat(chatId))),
+        db.execute(...spreadStmt(clearPrefsChatByChat(chatId))),
+        db.execute(...spreadStmt(deleteBotMenuStateByChat(chatId)))
       ]);
-
-      const text = renderCenterStatus({
-        title: `🏥 وضعیت مرکز — ${jalaliFullLabel(todayYmd)}`,
-        sessionsToday: sessionRow?.n ?? 0,
-        presentToday: (attRows.find((r) => r.attendance === 'present')?.cnt ?? 0)
-          + (attRows.find((r) => r.attendance === 'late')?.cnt ?? 0), // — تأخیر هم حضور
-        absentToday: attRows.find((r) => r.attendance === 'absent')?.cnt ?? 0,
-        waitlistOpen: waitlistRow?.n ?? 0,
-        followupsOverdue: overdueRow?.n ?? 0,
-        followupsToday: todayRow?.n ?? 0,
-        pendingChecklists: pendingCklRow?.n ?? 0,
-        sessionsWithoutReport: noReportRow?.n ?? 0,
-        clinicName
+      const family = familyRes.meta?.changes ?? 0;
+      const staff = staffRes.meta?.changes ?? 0;
+      const classes = classRes.meta?.changes ?? 0;
+      const prefs = prefsRes.meta?.changes ?? 0;
+      await audit.log({
+        actorId: 'bale-bot',
+        action: 'notification.bot.chat_unlinked',
+        resourceType: 'bot_link',
+        resourceId: chatId,
+        changes: {
+          familyLinks: { from: null, to: family },
+          staffLinks: { from: null, to: staff },
+          classLinks: { from: null, to: classes },
+          prefsCleared: { from: null, to: prefs }
+        }
       });
-      return { text, buttons: null };
+      log.info('bot.unlink.done', { chatId, family, staff, classes, prefs, state: stateRes.meta?.changes ?? 0 });
+      return { text: renderTemplate('bot_unlink_done'), buttons: null };
     },
 
-    async handleScreeningGoalCommand(chatId: string): Promise<BotReply> {
+    async handleClassActivityCommand(chatId: string): Promise<BotReply> {
       const owner = await this.resolveOwner(chatId);
-      if (!owner) {
-        return { text: renderTemplate('bot_help_guest'), buttons: null };
+      if (!owner || owner.kind !== 'class') {
+        return { text: renderTemplate('bot_class_activity_denied'), buttons: null };
       }
-      if (owner.kind !== 'staff' || (owner.role !== 'manager' && owner.role !== 'secretary')) {
-        return { text: renderTemplate('bot_goal_denied'), buttons: null };
+      const cls = await db.queryOne<{ name: string; school_name: string }>(
+        `SELECT c.name, sc.name AS school_name
+           FROM classes c JOIN schools sc ON sc.id = c.school_id
+          WHERE c.id = ?`,
+        [owner.ref_id]
+      );
+      const openRow = await db.queryOne<{ n: number; students: number }>(
+        `SELECT COUNT(*) AS n, COUNT(DISTINCT ea.student_id) AS students
+           FROM exercise_assignments ea
+           JOIN students s ON s.id = ea.student_id
+          WHERE s.class_id = ? AND s.active = 1 AND ea.status = 'assigned'`,
+        [owner.ref_id]
+      );
+      const latest = await db.query<{ exercise_title: string; student_name: string; status: string; created_at: string }>(
+        `SELECT e.title AS exercise_title, s.first_name || ' ' || s.last_name AS student_name,
+                ea.status, ea.created_at
+           FROM exercise_assignments ea
+           JOIN exercises e ON e.id = ea.exercise_id
+           JOIN students s ON s.id = ea.student_id
+          WHERE s.class_id = ? AND s.active = 1
+          ORDER BY ea.created_at DESC
+          LIMIT 8`,
+        [owner.ref_id]
+      );
+      const HW_STATUS_LABELS: Record<string, string> = {
+        assigned: 'باز',
+        done: 'انجام‌شده',
+        cancelled: 'لغوشده'
+      };
+      const lines = [
+        `تکلیف باز کلاس: ${faDigits(String(openRow?.n ?? 0))} برای ${faDigits(String(openRow?.students ?? 0))} دانش‌آموز`
+      ];
+      if (latest.length > 0) {
+        lines.push('', 'آخرین تکلیف‌ها:');
+        for (const r of latest) {
+          lines.push(`• ${r.exercise_title} — ${r.student_name} — ${HW_STATUS_LABELS[r.status] ?? r.status}`);
+        }
+      } else {
+        lines.push('', 'هنوز تکلیفی برای دانش‌آموزان کلاس ثبت نشده است.');
       }
-      if (!deps.screening) {
-        return { text: '📊 شاخص سنجش این لحظه در دسترس نیست.', buttons: null };
-      }
-
-      const nowDate = now();
-      const todayYmd = tehranTodayYmd(nowDate);
-
-      const targets = await deps.settings.getScreeningTargets();
-      const qw = goalsQueryWindow(targets, todayYmd);
-      const dayCounts = await deps.screening.dayCounts(qw.fromYmd, qw.toYmd);
-
-      const goals = summarizeScreeningGoals(targets, dayCounts, todayYmd);
-      const todayCount = dayCounts.find((d) => d.day === todayYmd)?.count ?? 0;
-      const weekStart = addDaysYmd(todayYmd, -6);
-      const monthStart = addDaysYmd(todayYmd, -29);
-      let weekCount = 0;
-      let monthCount = 0;
-      for (const d of dayCounts) {
-        if (d.day >= weekStart && d.day <= todayYmd) weekCount += d.count;
-        if (d.day >= monthStart && d.day <= todayYmd) monthCount += d.count;
-      }
-
-      const text = renderScreeningGoal({
-        title: `📊 شاخص سنجش — ${jalaliFullLabel(todayYmd)}`,
-        todayCount,
-        weekCount,
-        monthCount,
-        goals,
-        clinicName: await deps.settings.getClinicName()
-      });
-      return { text, buttons: null };
+      return {
+        text: renderTemplate('bot_class_activity', {
+          className: cls ? `${cls.name} — ${cls.school_name}` : 'کلاس',
+          list: lines.join('\n'),
+          clinicName: await deps.settings.getClinicName()
+        }),
+        buttons: null
+      };
     },
 
     async handleHelpCommand(chatId: string): Promise<string> {
@@ -1857,129 +1635,6 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
       }
       if (owner.kind === 'class') return renderTemplate('bot_help_class');
       return renderTemplate('bot_help_parent');
-    },
-
-    async handleSearchCommand(chatId: string, rawQuery: string): Promise<BotReply> {
-      const owner = await this.resolveOwner(chatId);
-      if (!owner) return { text: renderTemplate('bot_help_guest'), buttons: null };
-      if (owner.kind !== 'staff') return { text: renderTemplate('bot_search_denied'), buttons: null };
-      if (owner.role !== 'manager' && owner.role !== 'secretary' && owner.role !== 'therapist') {
-        return { text: renderTemplate('bot_search_denied'), buttons: null };
-      }
-
-      const q = rawQuery.trim().replace(/\s+/g, ' ');
-      if (q.length < 2) {
-        return { text: await this.handleHelpCommand(chatId), buttons: null };
-      }
-
-      const pattern = `%${q}%`;
-      const rows = await db.query<{ first_name: string; last_name: string; grade: string | null }>(
-        `SELECT first_name, last_name, grade
-           FROM students
-          WHERE active = 1
-            AND (first_name LIKE ? OR last_name LIKE ? OR (first_name || ' ' || last_name) LIKE ?)
-          ORDER BY last_name, first_name
-          LIMIT 5`,
-        [pattern, pattern, pattern]
-      );
-
-      const clinicName = await deps.settings.getClinicName();
-      const text = renderSearchResults({
-        title: `🔎 جستجوی «${q}»`,
-        items: rows.map((r) => ({ name: `${r.first_name} ${r.last_name}`, grade: r.grade })),
-        clinicName
-      });
-      log.info('bot.search', { by: owner.ref_id, hits: rows.length });
-      return { text, buttons: null };
-    },
-
-    async handleCenterScheduleCommand(chatId: string): Promise<BotReply> {
-      const owner = await this.resolveOwner(chatId);
-      if (!owner) return { text: renderTemplate('bot_help_guest'), buttons: null };
-      if (owner.kind !== 'staff' || (owner.role !== 'manager' && owner.role !== 'secretary')) {
-        return { text: renderTemplate('bot_center_denied'), buttons: null };
-      }
-
-      const todayYmd = tehranTodayYmd(now());
-      const { start, end } = tehranRange(todayYmd, todayYmd);
-      const list = await appointments.list({ from: start, to: end });
-
-      const staffNames = await staffNamesMap();
-      const studentIds = [...new Set(list.flatMap((a) => a.students.map((s) => s.studentId)))];
-      const names = await studentNamesMap(studentIds);
-
-      const rows = list.map((a) => ({
-        timeLabel: tehranTimeLabel(a.startAt),
-        staffName: staffNames.get(a.staffId) ?? '—',
-        studentNames: a.students
-          .filter((s) => s.attendance !== 'cancelled')
-          .map((s) => names.get(s.studentId) ?? '')
-          .filter((n) => n.length > 0),
-        cancelled: a.status === 'cancelled'
-      }));
-
-      const clinicName = await deps.settings.getClinicName();
-      const text = renderCenterSchedule({
-        title: `📋 برنامهٔ مرکز — ${jalaliFullLabel(todayYmd)}`,
-        rows,
-        clinicName
-      });
-      log.info('bot.center_schedule', { by: owner.ref_id, rows: rows.length });
-      return { text, buttons: null };
-    },
-
-    async handleWaitlistCommand(chatId: string): Promise<BotReply> {
-      const owner = await this.resolveOwner(chatId);
-      if (!owner) return { text: renderTemplate('bot_help_guest'), buttons: null };
-      if (owner.kind !== 'staff' || (owner.role !== 'manager' && owner.role !== 'secretary' && owner.role !== 'therapist')) {
-        return { text: renderTemplate('bot_waitlist_denied'), buttons: null };
-      }
-
-      const rows = await db.query<{
-        id: string;
-        first_name: string;
-        last_name: string;
-        service_type: string | null;
-        priority: 'normal' | 'urgent';
-        status: 'waiting' | 'called';
-        manual_order: number | null;
-        created_at: string;
-        updated_at: string;
-      }>(
-        `SELECT id, first_name, last_name, service_type, priority, status, manual_order, created_at, updated_at
-           FROM waitlist
-          WHERE deleted_at IS NULL AND status IN ('waiting', 'called')`,
-        []
-      );
-
-      const nowMs = now().getTime();
-      const sortedRows = orderWaitlist(
-        rows.map((r) => ({
-          id: r.id,
-          firstName: r.first_name,
-          lastName: r.last_name,
-          serviceType: r.service_type,
-          priority: r.priority,
-          status: r.status,
-          manualOrder: r.manual_order,
-          createdAt: r.created_at,
-          updatedAt: r.updated_at
-        }))
-      );
-      const clinicName = await deps.settings.getClinicName();
-      const text = renderWaitlistList({
-        title: `⏳ لیست انتظار — ${jalaliFullLabel(tehranTodayYmd(now()))}`,
-        items: sortedRows.map((r) => ({
-          name: `${r.firstName} ${r.lastName}`,
-          service: r.serviceType,
-          urgent: r.priority === 'urgent',
-          daysWaiting: waitlistDaysOf(r.createdAt, nowMs)
-        })),
-        totalOpen: sortedRows.length,
-        clinicName
-      });
-      log.info('bot.waitlist', { by: owner.ref_id, open: sortedRows.length });
-      return { text, buttons: null };
     },
 
     async handleContactCommand(): Promise<BotReply> {
@@ -2044,273 +1699,117 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
       };
     },
 
-    async handlePublicFilesCommand(): Promise<BotReply> {
+    /* m184 — «فایل‌های آموزشی» بر اساس نقش:
+       همکار/معلم → راهنمای بانک تمرین (دریافت فایل با دکمهٔ جزئیات)
+       مهمان → توضیح صادقانه + راه اتصال
+       خانواده → فهرست تمرین‌های بازِ فرزندان که فایل دارند + دکمهٔ دریافت با sendDocument */
+    async handlePublicFilesCommand(chatId: string): Promise<BotReply> {
       const clinicName = await deps.settings.getClinicName();
-      const base = (deps.publicBaseUrl ?? '').replace(/\/$/, '');
-      const links = base
-        ? [
-            `${base}/downloads/training/rahnamaye-samaneh.html`,
-            `${base}/downloads/training/faq-samaneh.html`,
-            `${base}/downloads/dossiers/index.html`
-          ].join('\n')
-        : '';
-      return { text: renderTemplate('bot_public_files', { clinicName, links }), buttons: null };
-    },
-
-    async handleMyStudentsCommand(chatId: string): Promise<BotReply> {
       const owner = await this.resolveOwner(chatId);
-      if (!owner) return { text: renderTemplate('bot_help_guest'), buttons: null };
-      if (owner.kind !== 'class') {
-        return { text: renderTemplate('bot_my_students_denied'), buttons: null };
+      if (owner && (owner.kind === 'staff' || owner.kind === 'class')) {
+        return { text: renderTemplate('bot_public_files', { clinicName, mode: 'staff' }), buttons: null };
       }
-
-      const cls = await db.queryOne<{ name: string; school_name: string }>(
-        `SELECT c.name, sc.name AS school_name
-           FROM classes c JOIN schools sc ON sc.id = c.school_id
-          WHERE c.id = ?`,
-        [owner.ref_id]
+      if (!owner) {
+        return { text: renderTemplate('bot_public_files', { clinicName, mode: 'guest' }), buttons: null };
+      }
+      if (!deps.exerciseBank) {
+        return { text: renderTemplate('bot_exercise_disabled'), buttons: null };
+      }
+      if (!(await deps.settings.getExerciseBankEnabled())) {
+        return { text: renderTemplate('bot_exercise_disabled'), buttons: null };
+      }
+      const chatStudentRows = await db.query<{ student_id: string }>(
+        ...spreadStmt(selectStudentIdsByChat(chatId))
       );
-      const rows = await db.query<{
-        first_name: string;
-        last_name: string;
-        grade: string | null;
-        case_status: string | null;
-        special_need_type: string | null;
-      }>(
-        `SELECT first_name, last_name, grade, case_status, special_need_type
-           FROM students
-          WHERE class_id = ? AND active = 1
-          ORDER BY last_name, first_name
-          LIMIT 40`,
-        [owner.ref_id]
+      const prefIds = await db.query<{ student_id: string }>(
+        `SELECT student_id FROM notification_prefs WHERE chat_id = ? AND reminders_enabled = 1`,
+        [chatId]
       );
-
-      const CASE_LABELS: Record<string, string> = {
-        identified: 'شناسایی‌شده',
-        awaiting_assessment: 'در انتظار ارزیابی',
-        in_intervention: 'در مداخله',
-        monitoring: 'پایش',
-        archived: 'بایگانی'
-      };
-      const list = rows
-        .map((r) => {
-          const status = r.case_status ? (CASE_LABELS[r.case_status] ?? r.case_status) : 'بدون پرونده';
-          return `• ${r.first_name} ${r.last_name}${r.grade ? ` (${r.grade})` : ''} — ${status}`;
-        })
-        .join('\n');
-
-      log.info('bot.my_students', { classId: owner.ref_id, count: rows.length });
+      const studentIds = [...new Set([...chatStudentRows.map((r) => r.student_id), ...prefIds.map((r) => r.student_id), owner.ref_id])];
+      const items: Array<{ e: string; f: string; t: string }> = [];
+      const seen = new Set<string>();
+      outer:
+        for (const sid of studentIds) {
+          const list = await deps.exerciseBank.listAssignments({ studentId: sid, limit: 20 });
+          const open = list.filter((a) => a.status === 'assigned');
+          for (const a of open) {
+            const ex = await deps.exerciseBank.getById(a.exerciseId);
+            if (!ex || !ex.published)
+              continue;
+            const fileIds = ex.files.length > 0 ? ex.files.map((f) => f.id) : ex.file ? [''] : [];
+            for (const fid of fileIds) {
+              const key = `${ex.id}:${fid}`;
+              if (seen.has(key))
+                continue;
+              seen.add(key);
+              items.push({ e: ex.id, f: fid, t: a.exerciseTitle });
+              if (items.length >= MAX_EXB_PARENT_FILES)
+                break outer;
+            }
+          }
+        }
+      if (items.length === 0) {
+        return { text: renderTemplate('bot_public_files', { clinicName, mode: 'parent_empty' }), buttons: null };
+      }
+      const state = await readPfState(chatId);
+      state.pfl = items;
+      await writePfState(chatId, state);
+      const buttons = items.map((it, i) => [
+        { text: `\u{1F4CE} ${truncateLabel(it.t, 30)}`, callbackData: `pfl:get:${i}` }
+      ]);
+      log.info('bot.public_files.parent', { chatId, items: items.length });
       return {
-        text: renderTemplate('bot_my_students', {
-          className: cls ? `${cls.name} — ${cls.school_name}` : 'کلاس',
-          count: faDigits(rows.length),
-          list: list || '—',
-          clinicName: await deps.settings.getClinicName()
-        }),
-        buttons: null
+        text: renderTemplate('bot_public_files', { clinicName, mode: 'parent', list: items.map((it) => `\u2022 ${it.t}`).join('\n') }),
+        buttons
       };
     },
 
-    async handleOutboxCommand(chatId: string): Promise<BotReply> {
+    async handleParentFileGet(chatId: string, idx: number): Promise<BotReply> {
       const owner = await this.resolveOwner(chatId);
-      if (!owner) return { text: renderTemplate('bot_help_guest'), buttons: null };
-      if (owner.kind !== 'staff' || (owner.role !== 'manager' && owner.role !== 'secretary' && owner.role !== 'therapist')) {
-        return { text: renderTemplate('bot_outbox_denied'), buttons: null };
+      if (!owner)
+        return { text: renderTemplate('bot_help_guest'), buttons: null };
+      if (!deps.exerciseBank)
+        return { text: renderTemplate('bot_exercise_disabled'), buttons: null };
+      if (!(await deps.settings.getExerciseBankEnabled())) {
+        return { text: renderTemplate('bot_exercise_disabled'), buttons: null };
       }
-
-      const draftRow = await db.queryOne<{ n: number; next: string | null }>(
-        `SELECT COUNT(*) AS n, MIN(send_at) AS next FROM notifications WHERE status = 'pending' AND send_at IS NOT NULL`
-      );
-      const readyRow = await db.queryOne<{ n: number }>(
-        `SELECT COUNT(*) AS n FROM notifications WHERE status = 'pending' AND send_at IS NULL`
-      );
-      const failedRow = await db.queryOne<{ n: number }>(
-        `SELECT COUNT(*) AS n FROM notifications WHERE status = 'failed'`
-      );
-
-      const nextSend = draftRow?.next
-        ? `${tehranTimeLabel(draftRow.next)} (${jalaliFullLabel(tehranYmdOf(draftRow.next))})`
-        : null;
-      const isOffice = owner.role === 'manager' || owner.role === 'secretary';
-      log.info('bot.outbox', { by: owner.ref_id, drafts: draftRow?.n ?? 0, failed: failedRow?.n ?? 0 });
-
-      return {
-        text: renderTemplate('bot_outbox', {
-          draftCount: faDigits(draftRow?.n ?? 0),
-          nextSend,
-          readyCount: faDigits(readyRow?.n ?? 0),
-          failedCount: faDigits(failedRow?.n ?? 0),
-          clinicName: await deps.settings.getClinicName()
-        }),
-        buttons: isOffice
-          ? [[{ text: 'ارسال فوری صف', callbackData: 'outbox:flush' }]]
-          : null
-      };
-    },
-
-    async handleOutboxFlush(chatId: string): Promise<BotReply> {
-      const owner = await this.resolveOwner(chatId);
-      if (!owner) return { text: renderTemplate('bot_help_guest'), buttons: null };
-      if (owner.kind !== 'staff' || (owner.role !== 'manager' && owner.role !== 'secretary')) {
-        return { text: renderTemplate('bot_outbox_denied'), buttons: null };
+      const state = await readPfState(chatId);
+      const items = state.pfl ?? [];
+      const it = items[idx];
+      if (!it)
+        return { text: renderTemplate('bot_public_files_stale'), buttons: null };
+      const ex = await deps.exerciseBank.getById(it.e);
+      if (!ex || !ex.published)
+        return { text: renderTemplate('bot_file_unavailable'), buttons: null };
+      const file = it.f ? await deps.exerciseBank.getAttachmentFile(it.e, it.f) : await deps.exerciseBank.getFile(it.e);
+      if (!file)
+        return { text: renderTemplate('bot_file_unavailable'), buttons: null };
+      if (!deps.fileSender) {
+        log.warn('bot.pfile.file_sender_missing', { chatId });
+        return { text: renderTemplate('bot_file_failed'), buttons: null };
       }
-
-      const released = await notify.releaseAllDrafts();
-      const summary = await notify.dispatchPending(100);
-      await audit.log({
-        actorId: owner.ref_id,
-        action: 'notification.outbox.flush',
-        resourceType: 'notification',
-        resourceId: 'outbox',
-        changes: { released: { from: null, to: released }, sent: { from: null, to: summary.sent } }
-      });
-      log.info('bot.outbox.flush', { by: owner.ref_id, released, sent: summary.sent });
-      return {
-        text: renderTemplate('bot_outbox_flushed', {
-          released: faDigits(released),
-          sent: faDigits(summary.sent),
-          clinicName: await deps.settings.getClinicName()
-        }),
-        buttons: null
-      };
-    },
-
-    async handleKpiCommand(chatId: string): Promise<BotReply> {
-      const owner = await this.resolveOwner(chatId);
-      if (!owner) return { text: renderTemplate('bot_help_guest'), buttons: null };
-      if (owner.kind !== 'staff' || (owner.role !== 'supervisor' && owner.role !== 'manager')) {
-        return { text: renderTemplate('bot_kpi_denied'), buttons: null };
+      let ok = false;
+      try {
+        ok = await deps.fileSender(chatId, {
+          filename: file.filename,
+          bytes: file.bytes,
+          mime: file.mime,
+          caption: `\u{1F4DA} \u00AB${it.t}\u00BB`
+        });
+      } catch (err) {
+        log.warn('bot.pfile.send_error', { chatId, exerciseId: it.e, error: err instanceof Error ? err.message : 'unknown' });
       }
-
-      const vars = await this.buildKpiVars();
-      if (owner.role === 'supervisor') {
+      if (ok) {
         await audit.log({
-          actorId: owner.ref_id,
-          action: 'supervisor.kpi.bot',
-          resourceType: 'kpi',
-          resourceId: vars.ymd,
-          changes: undefined
+          actorId: 'bale-bot',
+          action: 'exercise.file.sent_to_family',
+          resourceType: 'exercise',
+          resourceId: it.e,
+          changes: { filename: { from: null, to: file.filename } }
         });
       }
-      log.info('bot.kpi', { by: owner.ref_id });
-      return {
-        text: renderTemplate('bot_kpi', { ...vars, clinicName: await deps.settings.getClinicName() }),
-        buttons: null
-      };
-    },
-
-    async enqueueWeeklyKpi(nowDate?: Date): Promise<number> {
-      const chats = await db.query<{ chat_id: string }>(
-        `SELECT DISTINCT l.chat_id
-           FROM staff_bot_links l JOIN staff s ON s.id = l.staff_id
-          WHERE l.status = 'linked' AND s.active = 1 AND s.role_ext = 'supervisor'`,
-        []
-      );
-      if (chats.length === 0) return 0;
-
-      const vars = await this.buildKpiVars(nowDate);
-      const clinicName = await deps.settings.getClinicName();
-      let enqueued = 0;
-      for (const row of chats) {
-        const outcome = await notify.enqueue({
-          channel: notify.getChannel('bale') ? 'bale' : 'internal',
-          template: 'bot_kpi',
-          recipient: row.chat_id,
-          payload: { ...vars, clinicName },
-          dedupKey: `kpi-weekly:${vars.ymd}:${row.chat_id}`
-        });
-        if (!outcome.duplicate) enqueued += 1;
-      }
-      if (enqueued > 0) await notify.dispatchPending(50);
-      log.info('kpi.weekly.enqueued', { chats: chats.length, enqueued });
-      return enqueued;
-    },
-
-    async buildKpiVars(nowDate?: Date): Promise<{
-      ymd: string;
-      title: string;
-      lines: string;
-    }> {
-      const end = (nowDate ?? now()).toISOString();
-      const start = addMinutes(end, -7 * 24 * 60);
-      const ymd = tehranYmdOf(end);
-      const startYmd = tehranYmdOf(start);
-
-      const apptRow = await db.queryOne<{ total: number; cancelled: number }>(
-        `SELECT COUNT(*) AS total,
-                SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled
-           FROM appointments
-          WHERE start_at >= ? AND start_at <= ?`,
-        [start, end]
-      );
-      const attRow = await db.queryOne<{ present: number; absent: number }>(
-        `SELECT SUM(CASE WHEN aps.attendance = 'present' THEN 1 ELSE 0 END) AS present,
-                SUM(CASE WHEN aps.attendance = 'absent' THEN 1 ELSE 0 END) AS absent
-           FROM appointment_students aps
-           JOIN appointments a ON a.id = aps.appointment_id
-          WHERE a.start_at >= ? AND a.start_at <= ?`,
-        [start, end]
-      );
-      const waitlistRow = await db.queryOne<{ n: number }>(
-        `SELECT COUNT(*) AS n FROM waitlist WHERE deleted_at IS NULL AND status IN ('waiting', 'called')`
-      );
-      const studentsRow = await db.queryOne<{ active: number; cases: number }>(
-        `SELECT SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END) AS active,
-                SUM(CASE WHEN active = 1 AND case_status IS NOT NULL THEN 1 ELSE 0 END) AS cases
-           FROM students`
-      );
-      const pendingChecklistRow = await db.queryOne<{ n: number }>(
-        `SELECT COUNT(*) AS n
-           FROM case_events e JOIN case_event_types t ON t.id = e.event_type_id
-          WHERE e.status = 'pending_family' AND t.family_fillable = 1`
-      );
-      const noReportRow = await db.queryOne<{ n: number }>(
-        `SELECT COUNT(*) AS n
-           FROM appointments a
-          WHERE a.start_at >= ? AND a.start_at <= ? AND a.status != 'cancelled'
-            AND NOT EXISTS (
-              SELECT 1 FROM case_events ce JOIN case_event_types ct ON ct.id = ce.event_type_id
-               WHERE ce.appointment_id = a.id AND ct.category = 'session' AND ce.status != 'cancelled'
-            )
-            AND NOT EXISTS (
-              SELECT 1 FROM appointment_students aps
-               WHERE aps.appointment_id = a.id AND aps.session_note IS NOT NULL AND aps.session_note != ''
-            )`,
-        [start, end]
-      );
-      const ownerlessRow = await db.queryOne<{ n: number }>(
-        `SELECT COUNT(*) AS n
-           FROM students s
-          WHERE s.active = 1 AND s.owner_staff_id IS NULL
-            AND EXISTS (SELECT 1 FROM appointment_students ax JOIN appointments a2 ON a2.id = ax.appointment_id WHERE ax.student_id = s.id AND a2.status != 'cancelled')`
-      );
-
-      const total = apptRow?.total ?? 0;
-      const cancelled = apptRow?.cancelled ?? 0;
-      const held = Math.max(total - cancelled, 0);
-      const present = attRow?.present ?? 0;
-      const absent = attRow?.absent ?? 0;
-      const attTotal = present + absent;
-      const attendanceRate = attTotal > 0 ? Math.round((present / attTotal) * 100) : null;
-
-      const fa = (n: number) => faDigits(String(n));
-      const lines = [
-        `نوبت‌های ۷ روز اخیر: ${fa(total)} (برگزارشده: ${fa(held)} — لغوشده: ${fa(cancelled)})`,
-        attendanceRate === null
-          ? 'حضور و غیاب: ثبت‌نشده'
-          : `نرخ حضور: ${fa(attendanceRate)}٪ (${fa(present)} حاضر / ${fa(absent)} غایب)`,
-        `جلسات بدون گزارش (۷ روز): ${fa(noReportRow?.n ?? 0)}`,
-        `چک‌لیست‌های در انتظار خانواده: ${fa(pendingChecklistRow?.n ?? 0)}`,
-        `پروندهٔ فعال بدون مسئول: ${fa(ownerlessRow?.n ?? 0)}`,
-        `لیست انتظار باز: ${fa(waitlistRow?.n ?? 0)}`,
-        `دانش‌آموزان فعال: ${fa(studentsRow?.active ?? 0)} — با پروندهٔ نیاز ویژه: ${fa(studentsRow?.cases ?? 0)}`
-      ].join('\n');
-
-      return {
-        ymd,
-        title: `گزارش KPI — بازهٔ ${startYmd} تا ${ymd}`,
-        lines
-      };
+      log.info('bot.pfile.sent', { chatId, exerciseId: it.e, ok });
+      return { text: renderTemplate(ok ? 'bot_file_sent' : 'bot_file_failed', { filename: file.filename }), buttons: null };
     },
 
     async notifyWaitlistSlotFreed(appointment: Appointment): Promise<void> {
@@ -2400,16 +1899,8 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
         reassessNudges: 0,
         enqueued: 0,
         duplicates: 0,
-        skippedEmpty: 0,
-        kpiSent: 0
+        skippedEmpty: 0
       };
-
-      if (iranianWeekdayOfYmd(todayYmd) === 0) {
-        summary.kpiSent = await this.enqueueWeeklyKpi(nowDate).catch((err: unknown) => {
-          log.error('kpi.weekly.failed', { error: err instanceof Error ? err.message : String(err) });
-          return 0;
-        });
-      }
 
       if (!flags.digestEnabled) {
         log.info('digest.disabled', { dateYmd: todayYmd });
@@ -2976,11 +2467,6 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
 }
 
 type Stmt = { sql: string; params: unknown[] };
-function waitlistDaysOf(createdAt: string, nowMs: number): number {
-  const t = Date.parse(createdAt.includes('T') ? createdAt : createdAt.replace(' ', 'T') + 'Z');
-  if (Number.isNaN(t)) return 0;
-  return Math.max(0, Math.floor((nowMs - t) / 86400000));
-}
 
 function spreadStmt(stmt: Stmt): [string, unknown[]] {
   return [stmt.sql, stmt.params];
@@ -2994,10 +2480,3 @@ function extractMessageText(update: unknown): string | null {
   return typeof t === 'string' && t.trim().length > 0 ? t.trim() : null;
 }
 
-function extractChatIdOf(update: unknown): string | null {
-  if (typeof update !== 'object' || update === null) return null;
-  const u = update as { message?: { chat?: { id?: number | string } }; edited_message?: { chat?: { id?: number | string } }; callback_query?: { message?: { chat?: { id?: number | string } } } };
-  const msg = u.message ?? u.edited_message ?? u.callback_query?.message;
-  const id = msg?.chat?.id;
-  return id === undefined || id === null ? null : String(id);
-}

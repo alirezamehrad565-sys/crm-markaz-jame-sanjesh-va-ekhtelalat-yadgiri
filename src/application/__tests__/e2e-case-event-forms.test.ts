@@ -235,7 +235,7 @@ describe('ثبت رویداد از پنل + گیت‌ها + تایم‌لاین'
   });
 });
 
-describe('ویزارد بات رویداد (tl) + چک‌لیست خانواده (clf) + وب‌فرم', () => {
+describe('چک‌لیست خانواده (clf) + وب‌فرم (m184: ویزارد tl حذف شد)', () => {
   let A: ReturnType<typeof createTestApp>;
   let manager: ReturnType<typeof asRole> extends Promise<infer T> ? T : never;
   let studentId = '';
@@ -255,87 +255,16 @@ describe('ویزارد بات رویداد (tl) + چک‌لیست خانواده
     expect((await bot(A, tx(parentNid, CHAT_PARENT))).reply).toContain('اتصال انجام شد');
   });
 
-  it('مسیر کامل ویزارد جلسهٔ مداخله: منوی دانش‌آموز → دسته → نوع → فیلدها → ثبت روی تایم‌لاین', async () => {
-    const list = await bot(A, tx('دانش‌آموزان فعال', CHAT_ALI));
-    const stuBtn = list.buttons!.findIndex((row) => row.some((b) => b.text.includes('سارینا')));
-    expect(stuBtn).toBeGreaterThanOrEqual(0);
-    const stuCb = list.buttons![stuBtn].find((b) => b.text.includes('سارینا'))!.callbackData;
-    const idx = stuCb.split(':')[2];
-
-    const menu = await bot(A, cb(stuCb, CHAT_ALI));
-    expect(menu.buttons!.flat().some((b) => b.callbackData === `stu:tl:${idx}`)).toBe(true);
-
-    const cats = await bot(A, cb(`stu:tl:${idx}`, CHAT_ALI));
-    expect(cats.reply).toContain('دستهٔ رویداد');
-
-    const types = await bot(A, cb(`tl:types:${idx}:session`, CHAT_ALI));
-    const interventionBtn = types.buttons!.flat().find((b) => b.text.includes('گزارش جلسهٔ مداخله'))!;
-    expect(interventionBtn).toBeTruthy();
-    const startCb = interventionBtn.callbackData;
-
-    const f1 = await bot(A, cb(startCb, CHAT_ALI));
-    expect(f1.reply).toContain('هدف جلسه');
-    const f2 = await bot(A, tx('بهبود دامنهٔ توجه با بازی ساختنی', CHAT_ALI));
-    expect(f2.reply).toContain('فعالیت‌های انجام‌شده');
-    const f3 = await bot(A, tx('سه تمرین تطبیق شکل انجام شد و کودک تا پایان همکاری داشت.', CHAT_ALI));
-    expect(f3.reply).toContain('عملکرد کودک');
-    const f4 = await bot(A, tx('پیشرفت محسوس نسبت به جلسهٔ قبل؛ تحمل ناکامی بهتر شد.', CHAT_ALI));
-    expect(f4.buttons!.flat().map((b) => b.callbackData)).toContain('tl:opt:4');
-    const f5 = await bot(A, cb('tl:opt:4', CHAT_ALI));
-    expect(f5.reply).toContain('تکلیف خانه');
-    const f6 = await bot(A, cb('tl:skip', CHAT_ALI));
-    expect(f6.reply).toContain('توصیه به خانواده');
-    const confirm = await bot(A, tx('روزانه ده دقیقه بازی با بلوک‌های رنگی.', CHAT_ALI));
-    expect(confirm.reply).toContain('جمع‌بندی');
-    expect(confirm.buttons!.flat().some((b) => b.callbackData === 'tl:do')).toBe(true);
-
-    const done = await bot(A, cb('tl:do', CHAT_ALI));
-    expect(done.reply).toContain('رویداد ثبت شد');
-
-    const tl = await manager.get(`/api/students/${studentId}/timeline?kinds=case_event`);
-    const events = (tl.body as { data: { title: string; subtitle: string | null; actor: string | null }[] }).data;
-    const ev = events.find((e) => e.title.includes('گزارش جلسهٔ مداخله'));
-    expect(ev).toBeTruthy();
-    expect(ev!.subtitle).toContain('هدف جلسه');
-    expect(ev!.actor).toContain('علی');
-  });
-
-  it('/cancel در میانهٔ ویزارد فرم را لغو می‌کند', async () => {
-    const list = await bot(A, tx('دانش‌آموزان فعال', CHAT_ALI));
-    const stuCb = list.buttons!.flat().find((b) => b.callbackData.startsWith('stu:menu:'))!.callbackData;
-    const idx = stuCb.split(':')[2];
-    await bot(A, cb(stuCb, CHAT_ALI));
-    await bot(A, cb(`stu:tl:${idx}`, CHAT_ALI));
-    const types = await bot(A, cb(`tl:types:${idx}:session`, CHAT_ALI));
-    const startCb = types.buttons!.flat().find((b) => b.callbackData.startsWith('tl:start:'))!.callbackData;
-    await bot(A, cb(startCb, CHAT_ALI));
-    const canceled = await bot(A, tx('/cancel', CHAT_ALI));
-    expect(canceled.reply).toContain('لغو شد');
-    const after = await bot(A, tx('متن بی‌هدف', CHAT_ALI));
-    expect(after.handled === false || after.reply === null).toBe(true);
-  });
-
-  it('ثبت چک‌لیست از بات → وضعیت در انتظار خانواده + اعلان به ولیّ + «چک‌لیست‌های من» والد', async () => {
-    const list = await bot(A, tx('دانش‌آموزان فعال', CHAT_ALI));
-    const stuCb = list.buttons!.flat().find((b) => b.callbackData.startsWith('stu:menu:'))!.callbackData;
-    const idx = stuCb.split(':')[2];
-    await bot(A, cb(stuCb, CHAT_ALI));
-    await bot(A, cb(`stu:tl:${idx}`, CHAT_ALI));
-    const types = await bot(A, cb(`tl:types:${idx}:checklist`, CHAT_ALI));
-    expect(types.buttons!.flat().some((b) => b.text.includes('پایش رفتار در خانه'))).toBe(true); // عنوان روایی — در m132 بازنویسی شد (migration 0055)
-    const startCb = types.buttons!.flat().find((b) => b.callbackData.startsWith('tl:start:'))!.callbackData;
-    const confirm = await bot(A, cb(startCb, CHAT_ALI));
-    expect(confirm.reply).toContain('در انتظار پاسخ خانواده');
-    const done = await bot(A, cb('tl:do', CHAT_ALI));
-    expect(done.reply).toContain('اطلاع‌رسانی شد');
+  it('ثبت چک‌لیست از پنل (m184: فلو بات همکار حذف شد) → وضعیت در انتظار خانواده + «چک‌لیست‌های من» والد', async () => {
+    const types = (await manager.get('/api/case-events/types?active=true')).body as { data: { id: string; title: string }[] };
+    const homeBehavior = types.data.find((x) => x.title.includes('پایش رفتار در خانه')); // عنوان روایی — migration 0055
+    expect(homeBehavior).toBeTruthy();
+    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: homeBehavior!.id, values: {} });
+    expect(created.status).toBe(201);
 
     const rows = A.sql.prepare(`SELECT id, status FROM case_events WHERE student_id = ? AND status = 'pending_family'`).all(studentId) as { id: string; status: string }[];
     expect(rows).toHaveLength(1);
     checklistEventId = rows[0].id;
-
-    const notif = A.sql.prepare(`SELECT template, status FROM notifications WHERE template = 'bot_checklist_assigned' AND student_id = ?`).all(studentId) as { template: string; status: string }[];
-    expect(notif.length).toBeGreaterThanOrEqual(1);
-    expect(notif[0].status).toBe('sent');
 
     const mine = await bot(A, tx('چک‌لیست‌های من', CHAT_PARENT));
     expect(mine.reply).toContain('چک‌لیست‌های در انتظار');
@@ -459,15 +388,9 @@ describe('c — تصحیح تکلیف + مسئول پرونده', () => {
     expect(ex.status).toBe(201);
     const exerciseId = (ex.body as { data: { id: string } }).data.id;
 
-    const list = await bot(A, tx('دانش‌آموزان فعال', CHAT_ALI));
-    const stuCb = list.buttons!.flat().find((b) => b.text.includes('کوروش'))!.callbackData;
-    const idx = stuCb.split(':')[2];
-    await bot(A, cb(stuCb, CHAT_ALI));
-    const send = await bot(A, cb(`stu:send:${idx}:1`, CHAT_ALI));
-    const pickCb = send.buttons!.flat().find((b) => b.text.includes('کاربرگ تصحیح m65'))!.callbackData;
-    await bot(A, cb(pickCb, CHAT_ALI));
-    const yes = await bot(A, cb(pickCb.replace('stu:pick:', 'stu:yes:'), CHAT_ALI));
-    expect(yes.reply).toContain('ارسال شد');
+    // m184: تکلیف از پنل ثبت می‌شود (فلو «دانش‌آموزان فعال» بات حذف شد)
+    const batch = await therapist.post(`/api/students/${studentId}/exercises/batches`, { exercise_ids: [exerciseId] });
+    expect(batch.status).toBe(201);
 
     const asgRow = A.sql.prepare(`SELECT id FROM exercise_assignments WHERE student_id = ? ORDER BY created_at DESC LIMIT 1`).get(studentId) as { id: string };
     assignmentId = asgRow.id;
@@ -537,8 +460,7 @@ describe('c — تصحیح تکلیف + مسئول پرونده', () => {
     const mine = await therapist.get('/api/appointments/my-students');
     expect((mine.body as { data: { id: string }[] }).data.map((s) => s.id)).toContain(studentId);
 
-    const list = await bot(A, tx('دانش‌آموزان فعال', CHAT_ALI));
-    expect(list.buttons!.flat().some((b) => b.text.includes('کوروش'))).toBe(true);
+
 
     const tl = await manager.get(`/api/students/${studentId}/timeline`);
     const events = (tl.body as { data: { title: string; subtitle: string | null }[] }).data;
@@ -553,26 +475,16 @@ describe('c — تصحیح تکلیف + مسئول پرونده', () => {
 });
 
 describe('پارس callbackها و قالب‌های جدید', () => {
-  it('parseTlCallback / parseClfCallback — معتبر و نامعتبر', async () => {
-    const { parseTlCallback, parseClfCallback } = await import('@core/notify/bale/webhook');
-    expect(parseTlCallback('tl:cat:2', '100')?.kind).toBe('tl_cat');
-    expect(parseTlCallback('tl:types:1:checklist', '100')).toMatchObject({ kind: 'tl_types', stuIdx: 1, cat: 'checklist' });
-    expect(parseTlCallback('tl:start:0:3', '100')).toMatchObject({ kind: 'tl_start', stuIdx: 0, typeIdx: 3 });
-    expect(parseTlCallback('tl:opt:4', '100')).toMatchObject({ kind: 'tl_opt', value: 4 });
-    expect(parseTlCallback('tl:skip', '100')?.kind).toBe('tl_skip');
-    expect(parseTlCallback('tl:do', '100')?.kind).toBe('tl_do');
-    expect(parseTlCallback('tl:bad', '100')).toBeNull();
+  it('parseClfCallback — معتبر و نامعتبر (m184: مسیر tl حذف شد)', async () => {
+    const { parseClfCallback } = await import('@core/notify/bale/webhook');
     expect(parseClfCallback('clf:fill:6f1a2b3c-1111-4222-8333-444455556666', '200')).toMatchObject({ kind: 'clf_fill' });
     expect(parseClfCallback('clf:fill:short', '200')).toBeNull();
     expect(parseClfCallback('clf:a:3', '200')).toMatchObject({ kind: 'clf_a', value: 3 });
     expect(parseClfCallback('clf:no', '200')?.kind).toBe('clf_no');
   });
 
-  it('قالب‌های bot_checklist_assigned / bot_checklist_result / homework_graded رندر می‌شوند', async () => {
+  it('قالب‌های bot_checklist_result / homework_graded رندر می‌شوند', async () => {
     const { renderTemplate } = await import('@core/notify');
-    const assigned = renderTemplate('bot_checklist_assigned', { studentName: 'آوا', formTitle: 'چک‌لیست خواب', extra: 'تعداد آیتم‌ها: ۶', clinicName: 'مرکز' });
-    expect(assigned).toContain('چک‌لیست خانگی جدید');
-    expect(assigned).toContain('چک‌لیست خواب');
     const result = renderTemplate('bot_checklist_result', { formTitle: 'چک‌لیست خواب', studentName: 'آوا', score: '۱۲', band: 'نیاز به توجه', clinicName: 'مرکز' });
     expect(result).toContain('امتیاز: ۱۲');
     expect(result).toContain('نیاز به توجه');

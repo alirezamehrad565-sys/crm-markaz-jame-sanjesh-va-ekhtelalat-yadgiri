@@ -36,21 +36,18 @@ describe('پارس callbackهای exb:', () => {
     expect(parseBotUpdate(cb('exb:lst:o:4:2'))).toEqual({ kind: 'exb_list', chatId: '7300', cat: 'o', tagIdx: 4, page: 2 });
   });
 
-  it('item / send / pick / yes', () => {
+  it('item / file / lfile', () => {
     expect(parseBotUpdate(cb('exb:item:3'))).toEqual({ kind: 'exb_item', chatId: '7300', idx: 3 });
-    expect(parseBotUpdate(cb('exb:send:2:1'))).toEqual({ kind: 'exb_send', chatId: '7300', idx: 2, page: 1 });
-    expect(parseBotUpdate(cb('exb:pick:1:4'))).toEqual({ kind: 'exb_pick', chatId: '7300', idx: 1, stuIdx: 4 });
-    expect(parseBotUpdate(cb('exb:yes:0:2'))).toEqual({ kind: 'exb_yes', chatId: '7300', idx: 0, stuIdx: 2 });
+    expect(parseBotUpdate(cb('exb:file:2:1'))).toEqual({ kind: 'exb_file', chatId: '7300', idx: 2, fileIdx: 1 });
+    expect(parseBotUpdate(cb('exb:lfile:4'))).toEqual({ kind: 'exb_file', chatId: '7300', idx: 4, fileIdx: -1 });
   });
 
-  it('pkg / pitem / psend / ppick / pyes', () => {
-    expect(parseBotUpdate(cb('exb:pkg:2'))).toEqual({ kind: 'exb_pkg', chatId: '7300', page: 2 });
-    expect(parseBotUpdate(cb('exb:pitem:1'))).toEqual({ kind: 'exb_pitem', chatId: '7300', idx: 1 });
-    expect(parseBotUpdate(cb('exb:psend:0:3'))).toEqual({ kind: 'exb_psend', chatId: '7300', idx: 0, page: 3 });
-    expect(parseBotUpdate(cb('exb:ppick:2:5'))).toEqual({ kind: 'exb_ppick', chatId: '7300', idx: 2, stuIdx: 5 });
-    expect(parseBotUpdate(cb('exb:pyes:1:0'))).toEqual({ kind: 'exb_pyes', chatId: '7300', idx: 1, stuIdx: 0 });
-    expect(parseBotUpdate(cb('exb:pkg:abc'))).toBeNull();
-    expect(parseBotUpdate(cb('exb:pyes:1'))).toBeNull();
+  it('callbackهای حذف‌شدهٔ m184 → null', () => {
+    expect(parseBotUpdate(cb('exb:send:2:1'))).toBeNull();
+    expect(parseBotUpdate(cb('exb:pick:1:4'))).toBeNull();
+    expect(parseBotUpdate(cb('exb:yes:0:2'))).toBeNull();
+    expect(parseBotUpdate(cb('exb:pkg:2'))).toBeNull();
+    expect(parseBotUpdate(cb('exb:pitem:1'))).toBeNull();
   });
 
   it('callback نامعتبر → null (نادیده)', () => {
