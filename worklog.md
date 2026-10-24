@@ -324,3 +324,31 @@ Work Log:
 Stage Summary:
 - ریپو تمیز شد: بدون تگ، بدون ریلیز، GHCR فقط ۲ نسخهٔ کارا؛ اکشن GHCR سبز و فعال
 - تنها کار باقی‌مانده برای «فقط 1.00.59»: بازگشت سورس m183/m184 (توکن CF یا push از سشن مبدأ)
+
+---
+Task ID: 14 (recover-m184-only-1.00.59)
+Agent: main (Z.ai)
+Task: «تنها نسخهٔ ریپو چه عادی چه داکر فقط 1.00.59 باشد + پوش این نسخه + پاک کردن ریلیزهای قبلی» — ادامهٔ 13-c با توکن Cloudflare
+
+Work Log:
+- توکن CF API + اعتبار R2 از کاربر دریافت شد؛ /workers/scripts فقط یک اسکریپت دارد: center-system (آخرین استقرار 2026-10-23)
+- باندل مستقر با GET scripts/center-system?include_modules=true دانلود شد (multipart → entry.js ۲.۱۴MB، بدون minify با keep-names)
+- بازتولید شکل استقرار: wrangler deploy --dry-run باندل m182 را با همان پالی‌فیل‌های unenv ساخت؛ لیست سکشن‌ها یکسان شد
+- دیفرنسیال prod↔local: ۱۰۶ هانک واقعی داخل worker/bundle.js (بعد از نرمال‌سازی @__PURE__ نویز نسخهٔ esbuild) — نویز پالی‌فیل صفر
+- نگاشت هانک→سورس با زنجیرهٔ دو sourcemap (wrangler map → bundle.js → esbuild map از src) + گزارش حاشیه‌نویسی‌شدهٔ ADD/DEL
+- D1 مستقر با REST چک شد: آخرین مهاجرت 0068_m178 = مخزن → m183/m184 مهاجرت DB نداشتند
+- پورت به سورس (۱۵ فایل): templates.ts (حذف ۲۲ case + افزودن ۹ case قطع اتصال/فایل، حذف ۵ تابع render*، بازنویسی help‌ها)، webhook.ts (BotCommand جدید: unlink_*/pfile_get/exb_file/flow_cancel؛ حذف stu_*/tl_*/wl_intake_*)، service.ts (کیبورد m184، clfBot جایگزین tlBot، handleUnlinkCommand/handleClassActivityCommand/handlePublicFilesCommand نقش‌محور/handleParentFileGet، حذف ۱۱ هندلر)، repository.ts (+۵ unlink)، exercise-bank (service: attachQueue+fileSender؛ routes: sendBaleDocument منتقل‌شده؛ bot: sendFile+دکمه‌های فایل)، api-routing (exerciseFileSender)، constants/types/index‌ها
+- حذف کامل: waitlist-intake-bot.ts (۲۶۶ خط) و student-actions-bot.ts (۶۸۸ خط)
+- کشف مکانیک esbuild: کامنت‌ها در باندل غیر-minify حفظ می‌شوند؛ renameهای log3/raw2/rows2 آرتیفکت wrangler بودند (سورس نام اصلی دارد)؛ باگ نمایش «[h» در ترمینال جلسه فریب‌مانداد ولی باندل سالم بود
+- bump چهارگانه → 1.00.59/m184 (version.ts، index.html ?v=، sw.js VERSION، باندل esbuild)
+- وریفای نهایی: باندل بازسازی‌شده ≡ باندل مستقر (بعد از نرمال‌سازی @__PURE__) = IDENTICAL — یعنی سورس دقیقاً همان چیزی است که روی پروداکشن می‌چرخد
+- تست‌ها: ۴۶ شکست فلوهای حذف‌شده → حذف/بازنویسی (۳ فایل کامل حذف: screening-goal + sections از waitlist/teacher-intake/roles/capabilities/v2/crm/exb-bot؛ ثبت چک‌لیست و تکلیف به مسیر پنل API منتقل شد) → 1285/1285 ✓
+- tsc src/server 0 ✓ bundle-smoke ✓ vocab-gate ✓ build:selfhost ✓
+- پوش main (36dc163): CI ✓ + Docker (GHCR) ✓؛ تگ v1.00.59 → build تگ‌محور ✓
+- پاک‌سازی GHCR: دو نسخهٔ قدیمی (sha-5f12855/1.00.57 و sha-e9d448c) حذف شد (HTTP 204) — باقی‌مانده فقط مانیفست‌های امروز
+- پول ناشناس 1.00.59 با API رجیستری وریفای شد: OCI index amd64+arm64، لِیبل version=1.00.59، revision=36dc163
+
+Stage Summary:
+- مخزن (کلادفلر + داکر + GHCR) اکنون تک‌نسخه‌ای است: فقط 1.00.59/m184 — بدون تگ/ریلیز دیگر، بدون ایمیج قدیمی
+- شکاف تاریخی سورس m183/m184 بسته شد: هر تغییر پروداکشن اکنون در src با تست بازسازی شده است
+- نکته برای آینده: هیچ دیپلوی جدیدی از مخزن لازم نبود — پروداکشن از قبل 1.00.59 بود و مخزن به آن رسید
