@@ -11,7 +11,7 @@ import { CASE_EVENT_STATUSES } from './types';
 import {
   analyzeChecklist, analyzeProbe, analyzeRehabFx, analyzeReadCore, analyzeSensoryChip, base64ToBytes, buildEventPayload, buildProbePayload, buildReadCorePayload,
   buildRehabFxPayload, buildSensoryChipPayload, buildSummary, canTransitionStatus, estimateBase64Bytes, EVENT_FILES_MAX,
-  extractFollowUpAction, packageComponentsOf, PROBE_AREA_KEYS, probeAnalysisOf,
+  extractFollowUpAction, PROBE_AREA_KEYS, probeAnalysisOf,
   READ_CORE_BANDS, READ_CORE_FIELDS, READ_CORE_KEY, READ_CORE_SUBSCALES,
   READ_CORE_TYPE_ID, rehabFxAnalysisOf, rehabFxTypeFields, REHAB_FX_BANDS, REHAB_FX_KEY, REHAB_FX_TYPE_ID, resolveBand, SENSORY_CHIP_BANDS, SENSORY_CHIP_FIELDS, SENSORY_CHIP_KEY, SENSORY_CHIP_SUBSCALES,
   SENSORY_CHIP_TYPE_ID, sanitizeFilename, sanitizeTeacherName, stripDataUrlPrefix, teacherBindingOfPayload,
@@ -349,124 +349,6 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     );
   }
 
-  async function fillPackageFlow(
-    row: EventRow,
-    anchorType: CaseEventTypeRecord,
-    components: readonly string[],
-    input: { values: Record<string, number | string>; sourceChatId: string | null; viaWeb: boolean },
-    actor: AuthContext
-  ): Promise<CaseEventRecord> {
-    if (row.status === 'cancelled') throw new ConflictError('این فرم لغو شده است');
-    if (row.status !== 'pending_family') throw new ConflictError('این فرم قبلاً پاسخ گرفته است');
-    if (input.viaWeb) {
-      if (!row.fill_expires_at || new Date(row.fill_expires_at).getTime() < now().getTime()) {
-        throw new ConflictError('مهلت پر کردن این فرم تمام شده است');
-      }
-    }
-    const values = input.values;
-    const teacher = teacherBindingOfPayload(parseJson<unknown>(row.payload, null));
-
-    const compTypes: CaseEventTypeRecord[] = [];
-    for (const key of components) {
-      const trow = await loadTypeRowByKey(key);
-      if (!trow) throw new ValidationError(`ابزار فرم جامع یافت نشد: ${key}`);
-      if (trow.active !== 1) throw new ValidationError(`ابزار فرم جامع غیرفعال است: ${key}`);
-      compTypes.push(typeRowToRecord(trow));
-    }
-
-    const filled: { comp: CaseEventTypeRecord; analysis: CaseEventAnalysis; payload: Record<string, { value: string; label: string }>; summary: string | null }[] = [];
-    for (const comp of compTypes) {
-      const numeric: Record<string, number> = {};
-      for (const f of comp.fields) {
-        const v = values[f.key];
-        if (v === undefined || v === null || String(v).trim() === '') {
-          throw new ValidationError(`آیتم «${f.label}» بی‌پاسخ مانده است`);
-        }
-        const n = Number(String(v).trim().replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))));
-        if (!Number.isInteger(n)) {
-          throw new ValidationError(`پاسخ آیتم «${f.label}» از گزینه‌های مجاز نیست`);
-        }
-        numeric[f.key] = n;
-      }
-      const analysis = analyzeChecklist(comp.fields, comp.bands, numeric, comp.subscales);
-      const payload = withTeacherName((() => {
-        const p: Record<string, { value: string; label: string }> = {};
-        for (const f of comp.fields) {
-          const raw = numeric[f.key];
-          const display = f.type === 'single' ? (f.scoredOptions?.[raw]?.label ?? String(raw)) : String(raw);
-          p[f.key] = { value: display, label: f.label };
-        }
-        return p;
-      })(), teacher);
-      filled.push({ comp, analysis, payload, summary: buildSummary(payload, analysis) });
-    }
-
-    const ctxPayload = withTeacherName(buildEventPayload(anchorType.fields, values, true), teacher);
-    const ctxSummary = buildSummary(ctxPayload, null);
-
-    const occurredAt = now().toISOString();
-    const sourceTag = input.viaWeb ? `web:${occurredAt}` : (input.sourceChatId ?? 'unknown');
-    await db.transaction(async (tx) => {
-      await tx.execute(
-        `UPDATE case_events
-            SET status = 'completed', payload = ?, summary = ?,
-                filled_by_chat_id = ?, updated_at = ?
-          WHERE id = ?`,
-        [JSON.stringify(ctxPayload), ctxSummary, sourceTag, occurredAt, row.id]
-      );
-      await audit.logInTransaction(tx, {
-        actorId: actor.staffId,
-        action: 'case_event.family_filled',
-        resourceType: 'case_event',
-        resourceId: row.id,
-        changes: {
-          studentId: { from: null, to: row.student_id },
-          packageKey: { from: null, to: anchorType.key },
-          components: { from: null, to: components.length },
-          via: { from: null, to: input.viaWeb ? 'web' : 'bot' },
-          ...(teacher ? { teacherName: { from: null, to: teacher.name } } : {})
-        }
-      });
-      for (const f of filled) {
-        const cid = crypto.randomUUID();
-        await tx.execute(
-          `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
-                                    status, payload, analysis, summary, fill_token, fill_expires_at,
-                                    filled_by_chat_id, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, NULL, NULL, ?, 'completed', ?, ?, ?, NULL, NULL, ?, ?, ?, ?)`,
-          [cid, f.comp.id, row.student_id, occurredAt, JSON.stringify(f.payload), JSON.stringify(f.analysis), f.summary, sourceTag, actor.staffId, occurredAt, occurredAt]
-        );
-        await audit.logInTransaction(tx, {
-          actorId: actor.staffId,
-          action: 'case_event.created',
-          resourceType: 'case_event',
-          resourceId: cid,
-          changes: {
-            eventTypeId: { from: null, to: f.comp.id },
-            studentId: { from: null, to: row.student_id },
-            status: { from: null, to: 'completed' },
-            packageKey: { from: null, to: anchorType.key },
-            ...(teacher ? { teacherName: { from: null, to: teacher.name } } : {})
-          }
-        });
-      }
-    });
-    log.info('event.package_filled', {
-      id: row.id, package: anchorType.key, components: filled.length, via: input.viaWeb ? 'web' : 'bot'
-    });
-    await notifyFillResult({ // m172 — برای بستهٔ چندبخشی، اعلان بدون نمره (هر بخش نمرهٔ خودش را دارد)
-      eventId: row.id,
-      studentId: row.student_id,
-      staffId: row.staff_id,
-      formTitle: anchorType.title,
-      score: null,
-      band: null,
-      teacherName: teacher?.name ?? null,
-      via: input.viaWeb ? 'web' : 'bot'
-    });
-    return eventRowToRecord(await getEventRow(row.id));
-  }
-
   async function notifyFillResult(input: FillObserverInput): Promise<void> {
     if (!fillFn) return;
     try {
@@ -674,8 +556,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       if (!type.active) throw new ConflictError('این نوع رویداد غیرفعال است');
 
       const isChecklist = type.category === 'checklist';
-      const isPackage = packageComponentsOf(type.key) !== null;
-      const asDraft = Boolean(input.draft) && !isChecklist && !isPackage; // چک‌لیست/پکیج هرگز پیش‌نویس نمی‌شود
+      const asDraft = Boolean(input.draft) && !isChecklist; // چک‌لیست هرگز پیش‌نویس نمی‌شود
       let status: CaseEventStatus = 'completed';
       let payload: Record<string, { value: string; label: string }> | null = null;
       let analysis: CaseEventAnalysis | null = null;
@@ -683,7 +564,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       let fillToken: string | null = null;
       let fillExpires: string | null = null;
 
-      if (isChecklist || isPackage) {
+      if (isChecklist) {
         status = 'pending_family';
         fillToken = crypto.randomUUID();
         fillExpires = new Date(now().getTime() + fillExpiryHours * 3600_000).toISOString();
@@ -1123,7 +1004,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         db.query<TypeRow>(
           `SELECT * FROM case_event_types
             WHERE deleted_at IS NULL AND active = 1
-              AND (category = 'checklist' OR (category = 'session' AND family_fillable = 1))
+              AND category = 'checklist'
             ORDER BY created_at`
         )
       ]);
@@ -1161,7 +1042,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
            LEFT JOIN staff s ON s.id = e.staff_id
            JOIN students st ON st.id = e.student_id
           WHERE e.status = 'pending_family'
-            AND (t.category = 'checklist' OR (t.category = 'session' AND t.family_fillable = 1))
+            AND t.category = 'checklist'
             AND e.deleted_at IS NULL
           ORDER BY e.occurred_at DESC LIMIT 100`
       );
@@ -1189,8 +1070,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       if (!sendFn) throw new ConflictError('سرویس اعلان در دسترس نیست');
       const row = await getEventRow(eventId);
       const type = typeRowToRecord(await loadTypeRow(row.event_type_id));
-      const isPkg = packageComponentsOf(type.key) !== null;
-      if (row.type_category !== 'checklist' && !isPkg) throw new ValidationError('این رویداد چک‌لیست نیست');
+      if (row.type_category !== 'checklist') throw new ValidationError('این رویداد چک‌لیست نیست');
       if (row.status !== 'pending_family') throw new ConflictError('این چک‌لیست در انتظار پاسخ نیست (قبلاً پر یا لغو شده)');
       if (!type.familyFillable) throw new ValidationError('این فرم برای پر کردن از سمت گیرنده طراحی نشده است');
 
@@ -1220,7 +1100,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
 
       const studentName = (await deps.studentNameOf?.(row.student_id)) ?? 'دانش‌آموز';
       const note = input.note?.trim() ? input.note.trim() : null;
-      const kindLabel = isPkg ? 'فرم جامع' : 'چک‌لیست';
+      const kindLabel = 'چک‌لیست';
       const extra = [
         `${kindLabel} «${type.title}»`,
         note ? `یادداشت: ${note}` : null,
@@ -1229,7 +1109,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       ].filter((x): x is string => Boolean(x)).join('\n');
 
       const minuteBucket = Math.floor(now().getTime() / 60_000);
-      const template = teacher ? 'bot_teacher_package_link' as const : 'bot_checklist_link' as const;
+      const template = teacher ? 'bot_teacher_checklist_link' as const : 'bot_checklist_link' as const;
       const sent = await sendFn({
         studentId: row.student_id,
         chats,
@@ -1262,8 +1142,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     async issueTeacherFillLink(eventId, input, actor) {
       const row = await getEventRow(eventId);
       const type = typeRowToRecord(await loadTypeRow(row.event_type_id));
-      const isPkg = packageComponentsOf(type.key) !== null;
-      if (row.type_category !== 'checklist' && !isPkg) throw new ValidationError('این رویداد چک‌لیست نیست');
+      if (row.type_category !== 'checklist') throw new ValidationError('این رویداد چک‌لیست نیست');
       if (row.status !== 'pending_family') throw new ConflictError('این چک‌لیست در انتظار پاسخ نیست (قبلاً پر یا لغو شده)');
       if (!type.familyFillable) throw new ValidationError('این فرم برای پر کردن از سمت گیرنده طراحی نشده است');
       const teacherName = sanitizeTeacherName(input.teacherName ?? null);
@@ -1311,26 +1190,9 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       return `${base}/public/case-events/${id}/fill?token=${row.fill_token}`;
     },
 
-    async listPackageComponentTypes(typeId) {
-      const type = typeRowToRecord(await loadTypeRow(typeId));
-      const comps = packageComponentsOf(type.key);
-      if (!comps) return null;
-      const out: CaseEventTypeRecord[] = [];
-      for (const key of comps) {
-        const row = await loadTypeRowByKey(key);
-        if (!row) throw new NotFoundError(`ابزار پکیج (${key})`);
-        out.push(typeRowToRecord(row));
-      }
-      return out;
-    },
-
     async fillByFamily(id, input, actor) {
       const row = await getEventRow(id);
       const anchorType = typeRowToRecord(await loadTypeRow(row.event_type_id));
-      const pkgComponents = packageComponentsOf(anchorType.key);
-      if (pkgComponents) {
-        return fillPackageFlow(row, anchorType, pkgComponents, input, actor);
-      }
       if (row.type_category !== 'checklist') {
         throw new ValidationError('این رویداد چک‌لیست خانواده نیست');
       }

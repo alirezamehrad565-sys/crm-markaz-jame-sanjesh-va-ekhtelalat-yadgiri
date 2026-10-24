@@ -112,7 +112,7 @@ describe('GET /api/students/:id/checklist-plan — پیشنهادگر چک‌ل�
     expect(JSON.stringify(dataOf<PlanBody>(a))).toBe(JSON.stringify(dataOf<PlanBody>(b)));
   });
 
-  it('سناریوی دیرآموز (FSIQ ۷۸) → پلن جامع: سه پروب + فرم جامع خانواده؛ بدون چک‌لیست ملاکی', async () => {
+  it('سناریوی دیرآموز (FSIQ ۷۸) → پلن جامع: سه پروب + سنجهٔ انطباق + باتری رفتاری؛ بدون چک‌لیست ملاکی (m186)', async () => {
     const bif = (await createStudent(ali)).id;
     await insertEvent(A, bif, 'ce-wechsler-w4-v1', {
       engine_output: { value: JSON.stringify(uniformEngine(78)), label: 'خروجی موتور تفسیر' }
@@ -123,8 +123,9 @@ describe('GET /api/students/:id/checklist-plan — پیشنهادگر چک‌ل�
     expect(plan.planType).toBe('جامع');
     const keys = plan.items.map((i) => i.toolKey);
     expect(keys).toEqual(expect.arrayContaining([
-      'ce-probe-read-v1', 'ce-probe-write-v1', 'ce-probe-calc-v1', 'ce-comp-family-v2'
+      'ce-probe-read-v1', 'ce-probe-write-v1', 'ce-probe-calc-v1', 'ce-id-adapt-v1', 'ce-sdq-p-v1', 'ce-sdq-t-v1'
     ]));
+    expect(keys).not.toContain('ce-comp-family-v2'); // — بستهٔ جامع حذف شده (m186)
     expect(keys.some((k) => k.startsWith('ce-sld-'))).toBe(false);
     expect(plan.basis).toContain('مرزی/دیرآموزی');
     expect(plan.referralFa).toBeNull();

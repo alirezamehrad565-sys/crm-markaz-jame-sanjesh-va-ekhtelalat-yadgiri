@@ -5,7 +5,6 @@ import {
   buildSummary,
   itemMaxScore,
   itemScoreOf,
-  packageComponentsOf,
   resolveBand,
   validateTypeDefinition
 } from '../pure';
@@ -171,65 +170,18 @@ describe('سربرگ بخش (heading) و لنگرهای کلامی (scaleLabels)
   });
 });
 
-describe('پکیج فرم جامع خانواده (T5) — قرارداد رزولوشن کامپوننت‌ها', () => {
-  it('packageComponentsOf: فقط کلید پکیج کامپوننت‌ها را به‌ترتیب می‌دهد؛ بقیه null', () => {
-    expect(packageComponentsOf('ce-comp-family-v2')).toEqual([
-      'ce-snap-iv-p-v1', 'ce-sdq-p-v1', 'ce-scared-p-v1', 'ce-id-adapt-v1'
-    ]);
-    expect(packageComponentsOf('ce-snap-iv-p-v1')).toBeNull();
-    expect(packageComponentsOf('sdq-parent')).toBeNull();
-    expect(packageComponentsOf(null)).toBeNull();
-    expect(packageComponentsOf(undefined)).toBeNull();
-    expect(packageComponentsOf('')).toBeNull();
-  });
-
-  const ctxFields: CaseEventField[] = [
-    { key: 'pkg_sec', label: 'زمینهٔ خانواده', type: 'heading' },
-    { key: 'filled_by', label: 'این فرم را چه کسی پر می‌کند؟', type: 'select', options: ['مادر', 'پدر'], required: true },
-    { key: 'main_concern', label: 'دغدغهٔ امروز', type: 'text' }
-  ];
-
-  it('شاخهٔ packageComponents: پکیج درست رد نمی‌شود', () => {
+describe('m186 — حذف بستهٔ «فرم جامع»', () => {
+  it('قرارداد پکیج از pure حذف شده — هیچ کلیدی کامپوننت نمی‌دهد', () => {
+    // packageComponentsOf دیگر وجود ندارد؛ تعریف فرم پکیجی هم دیگر معتبر نیست
     expect(() =>
       validateTypeDefinition({
         category: 'session',
-        fields: ctxFields,
-        familyFillable: true,
-        packageComponents: ['ce-snap-iv-p-v1', 'ce-sdq-p-v1']
+        fields: [
+          { key: 'pkg_sec', label: 'زمینهٔ خانواده', type: 'heading' },
+          { key: 'filled_by', label: 'پرکننده', type: 'select', options: ['مادر', 'پدر'], required: true }
+        ],
+        familyFillable: true
       })
-    ).not.toThrow();
-  });
-
-  it('پکیج بدون خانواده‌پذیری / با باند / با زیرمقیاس / با آیتم نمره‌دار / با کامپوننت تکراری رد می‌شود', () => {
-    expect(() =>
-      validateTypeDefinition({ category: 'session', fields: ctxFields, familyFillable: false, packageComponents: ['ce-sdq-p-v1'] })
-    ).toThrow(/خانواده/);
-    expect(() =>
-      validateTypeDefinition({ category: 'session', fields: ctxFields, familyFillable: true, bands: [{ max: 10, label: 'x' }], packageComponents: ['ce-sdq-p-v1'] })
-    ).toThrow(/باند/);
-    expect(() =>
-      validateTypeDefinition({
-        category: 'session', fields: ctxFields, familyFillable: true,
-        subscales: [{ id: 'x', name: 'زیرمقیاس' }], packageComponents: ['ce-sdq-p-v1']
-      })
-    ).toThrow(/زیرمقیاس/);
-    expect(() =>
-      validateTypeDefinition({
-        category: 'session', familyFillable: true, packageComponents: ['ce-sdq-p-v1'],
-        fields: [{ key: 'scored', label: 'آیتم نمره‌دار', type: 'scale', scaleMax: 2 }]
-      })
-    ).toThrow(/نمره‌دار/);
-    expect(() =>
-      validateTypeDefinition({ category: 'session', fields: ctxFields, familyFillable: true, packageComponents: ['ce-sdq-p-v1', 'ce-sdq-p-v1'] })
-    ).toThrow(/تکراری/);
-    expect(() =>
-      validateTypeDefinition({ category: 'session', fields: ctxFields, familyFillable: true, packageComponents: [] })
-    ).toThrow(/چک‌لیست/); // کامپوننت خالی → شاخهٔ عادی جلسه (خانواده‌پذیر جلسه ممنوع)
-  });
-
-  it('تعریف فرم‌های تکی بدون packageComponents — رفتار امروز دست‌نخورده (بدون شاخهٔ پکیج)', () => {
-    expect(() =>
-      validateTypeDefinition({ category: 'session', fields: ctxFields, familyFillable: true })
-    ).toThrow(/چک‌لیست/);
+    ).toThrow(/چک‌لیست/); // جلسهٔ خانواده‌پذیر بدون پکیج دیگر معنا ندارد — فرم خانواده باید checklist باشد
   });
 });

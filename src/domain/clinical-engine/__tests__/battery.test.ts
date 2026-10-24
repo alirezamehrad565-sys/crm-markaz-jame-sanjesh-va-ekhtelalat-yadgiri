@@ -10,7 +10,7 @@ import { DSM_RECORDS } from '../dsm-criteria';
 import { RULES, rulesOf, CONFIDENCE_THRESHOLDS, ODD_MIN_FULL_CRITERIA, BIF_IQ_RANGE, SCARED_SCHOOL_CUTOFF } from '../rules';
 import { BATTERY_VERSION } from '../types';
 import type { EvidenceEvent } from '../types';
-import { CaseEventTypeInputSchema, validateTypeDefinition, resolveBandV2, FIELDS_MAX, packageComponentsOf, COMPOSITE_FAMILY_COMPONENTS } from '@domain/case-events/pure';
+import { CaseEventTypeInputSchema, validateTypeDefinition, resolveBandV2, FIELDS_MAX } from '@domain/case-events/pure';
 import type { CaseEventBand, CaseEventSubscale } from '@domain/case-events';
 
 const EXISTING_TOOLS = new Set([
@@ -19,10 +19,10 @@ const EXISTING_TOOLS = new Set([
 ]);
 
 describe('باتری battery-v1 — اعتبار ساختاری', () => {
-  it('۲۳ ابزار ثابت دارد و کلیدها یکتا هستند (T4: شرح‌حال نسخهٔ ۳ کنار نسخهٔ ۲ — T5: جامع خانواده — T7: جامع معلم + ملاک‌های کلاسی — T9/m152: چیپ حسی — T10/m153: چیپ هستهٔ خواندن)', () => {
+  it('۲۱ ابزار ثابت دارد و کلیدها یکتا هستند (m186: بدون فرم‌های جامع — T4: شرح‌حال نسخهٔ ۳ کنار نسخهٔ ۲ — T5: SDQ والد + سنجهٔ انطباق — T7: ملاک‌های کلاسی — T9/m152: چیپ حسی — T10/m153: چیپ هستهٔ خواندن)', () => {
     const BATTERY_KEYS = BATTERY.map((d) => d.key);
-    expect(BATTERY.length).toBe(23);
-    expect(new Set(BATTERY_KEYS).size).toBe(23);
+    expect(BATTERY.length).toBe(21);
+    expect(new Set(BATTERY_KEYS).size).toBe(21);
     expect(BATTERY_VERSION).toBe('battery-v1');
   });
 
@@ -43,7 +43,7 @@ describe('باتری battery-v1 — اعتبار ساختاری', () => {
     }
   });
 
-  it('هر ابزار از اعتبارسنجی معنایی (باندها = بیشینهٔ ممکن) می‌گذرد — پکیج با شاخهٔ packageComponents', () => {
+  it('هر ابزار از اعتبارسنجی معنایی (باندها = بیشینهٔ ممکن) می‌گذرد', () => {
     for (const def of BATTERY) {
       expect(() =>
         validateTypeDefinition({
@@ -52,7 +52,6 @@ describe('باتری battery-v1 — اعتبار ساختاری', () => {
           bands: def.bands ?? null,
           familyFillable: def.familyFillable,
           subscales: def.subscales ?? null,
-          packageComponents: def.packageComponents ?? null
         })
       ).not.toThrow(def.key);
     }
@@ -183,34 +182,12 @@ describe('T5 (m150) — فرم جامع خانواده: SDQ والد رسمی + 
     expect(bands[bands.length - 1].max).toBe(24);
   });
 
-  it('پکیج ce-comp-family-v2: دستهٔ جلسه، خانواده‌پذیر، بلوک زمینه ≤۸ فیلد بدون آیتم نمره‌دار و کامپوننت‌ها به‌ترتیب قرارداد', () => {
-    const d = batteryDef('ce-comp-family-v2');
-    expect(d).toBeTruthy();
-    expect(d?.category).toBe('session');
-    expect(d?.familyFillable).toBe(true);
-    expect(d?.audience).toBe('family');
-    expect(d?.bands ?? null).toBeNull();
-    expect(d?.subscales ?? null).toBeNull();
-    expect(d?.packageComponents).toEqual(['ce-snap-iv-p-v1', 'ce-sdq-p-v1', 'ce-scared-p-v1', 'ce-id-adapt-v1']);
-    expect((d?.fields?.length ?? 0)).toBeLessThanOrEqual(8);
-    for (const f of d?.fields ?? []) {
-      expect(['heading', 'select', 'text', 'longtext']).toContain(f.type);
-    }
-    expect(d?.fields?.find((f) => f.key === 'filled_by')?.required).toBe(true);
-  });
-
-  it('پاریتی قرارداد: packageComponents باتری ≡ COMPOSITE_FAMILY_COMPONENTS case-events و بدون تداخل کلید فیلدها', () => {
-    const d = batteryDef('ce-comp-family-v2');
-    expect(d?.packageComponents).toEqual([...COMPOSITE_FAMILY_COMPONENTS]);
-    expect(packageComponentsOf('ce-comp-family-v2')).toEqual([...COMPOSITE_FAMILY_COMPONENTS]);
-    expect(packageComponentsOf('ce-sdq-t-v1')).toBeNull();
-    expect(packageComponentsOf(undefined)).toBeNull();
-    const allKeys = COMPOSITE_FAMILY_COMPONENTS.flatMap((k) => (batteryDef(k)?.fields ?? []).map((f) => f.key));
-    expect(new Set(allKeys).size).toBe(allKeys.length);
-    const ctxKeys = (batteryDef('ce-comp-family-v2')?.fields ?? []).map((f) => f.key);
-    expect(allKeys.filter((k) => ctxKeys.includes(k))).toEqual([]);
-    for (const k of COMPOSITE_FAMILY_COMPONENTS) {
+  it('m186 — دو «فرم جامع» حذف شده‌اند و ابزارهای واقعی (SDQ والد/انطباق/ملاک کلاسی) در باتری می‌مانند', () => {
+    expect(batteryDef('ce-comp-family-v2')).toBeUndefined();
+    expect(batteryDef('ce-comp-teacher-v2')).toBeUndefined();
+    for (const k of ['ce-sdq-p-v1', 'ce-id-adapt-v1', 'ce-sld-class-t-v1']) {
       expect(batteryDef(k), k).toBeTruthy();
+      expect(BATTERY.some((d) => d.key === k), k).toBe(true);
     }
   });
 });

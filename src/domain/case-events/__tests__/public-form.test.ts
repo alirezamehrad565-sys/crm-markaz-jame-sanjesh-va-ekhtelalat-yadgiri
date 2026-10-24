@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderFillFormPage, renderPackageFormPage } from '../public-form';
+import { renderFillFormPage } from '../public-form';
 
 const familyModel = {
   typeTitle: 'چک‌لیست دشواری خواندن',
@@ -88,39 +88,32 @@ describe('فرم عمومی — m175: hint و teacherLabel و خط «این فر
     expect(html).not.toContain('مثلاً از دوستش می‌خواهد بخواند.');
   });
 
-  it('بستهٔ جامع معلم: برچسب جایگزین + hint در renderItems', () => {
-    const html = renderPackageFormPage({
-      packageTitle: 'بستهٔ کامل غربالگری',
+  it('فرم معلم تکی: برچسب «فرم شما — X» + خط «این فرم تشخیص نیست» (m186 — رندر بستهٔ جامع حذف شد)', () => {
+    const html = renderFillFormPage({
+      typeTitle: 'ملاک‌های کلاسی خواندن/نوشتن/حساب — فرم معلم',
       studentName: 'علی',
-      description: null,
-      teacherLabel: 'فرم شما — خانم احمدی',
-      context: { title: 'مشاهدهٔ کلاس', fields: [] },
-      tools: [
+      sections: [
         {
-          toolKey: 'ce-sld-class-t-v1',
-          toolTitle: 'ملاک‌های کلاسی',
-          toolIntro: null,
-          itemCount: 1,
-          sections: [
+          title: 'خواندن در کلاس',
+          items: [
             {
-              title: 'خواندن در کلاس',
-              items: [
-                {
-                  key: 'r01',
-                  label: 'وقتی بلند می‌خواند، کلمه‌ها را حرف‌به‌حرف می‌خواند.',
-                  scaleMax: 2,
-                  scaleLabels: ['اصلاً دیده نمی‌شود', 'تا حدی', 'به‌روشنی و بارها'],
-                  hint: null,
-                  teacherLabel: null,
-                  teacherHint: null
-                }
-              ]
+              key: 'r01',
+              label: 'وقتی بلند می‌خواند، کلمه‌ها را حرف‌به‌حرف می‌خواند.',
+              scaleMax: 2,
+              scaleLabels: ['اصلاً دیده نمی‌شود', 'تا حدی', 'به‌روشنی و بارها'],
+              hint: null,
+              teacherLabel: null,
+              teacherHint: null
             }
           ]
         }
-      ]
+      ],
+      audience: 'teacher',
+      description: null,
+      teacherLabel: 'فرم شما — خانم احمدی'
     }, 'tok');
     expect(html).toContain('این فرم تشخیص نیست');
+    expect(html).toContain('فرم شما — خانم احمدی');
     expect(html).toContain('وقتی بلند می‌خواند، کلمه‌ها را حرف‌به‌حرف می‌خواند.');
   });
 });

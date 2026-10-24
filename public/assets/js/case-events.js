@@ -30,12 +30,6 @@ export async function fetchCaseEventTypes(activeOnly = true) {
 }
 
 export function fillTargetOf(type) {
-  if (type?.key === 'ce-comp-family-v2' && type?.familyFillable) {
-    return { key: 'family', group: 'family', label: 'خانواده', badge: 'فرم جامع خانواده — با بله', badgeClass: 'badge--accent' };
-  }
-  if (type?.key === 'ce-comp-teacher-v2' && type?.familyFillable) {
-    return { key: 'teacher', group: 'teacher', label: 'معلم', badge: 'فرم جامع معلم — با بله (انتخاب معلم)', badgeClass: 'badge--warning' };
-  }
   if (type?.category === 'checklist' && type?.familyFillable) {
     if (type.audience === 'teacher') {
       return { key: 'teacher', group: 'teacher', label: 'معلم', badge: 'فرم معلم — با بله', badgeClass: 'badge--warning' };
@@ -625,7 +619,7 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
     return;
   }
   const checklists = suggestions.filter(
-    (s) => s.type.familyFillable && (s.type.category === 'checklist' || s.type.key === 'ce-comp-family-v2' || s.type.key === 'ce-comp-teacher-v2')
+    (s) => s.type.familyFillable && s.type.category === 'checklist'
   );
   if (checklists.length === 0) {
     toast('هنوز چک‌لیست قابل ارسالی در کتابخانه نیست — از «رویدادساز» اضافه کنید');
@@ -649,7 +643,7 @@ export async function openChecklistSendModal({ student, typeId = null, onSent })
   const isTeacherFlow = (typeIdVal, audienceVal) => {
     const chosen = checklists.find((s) => s.type.id === typeIdVal);
     if (!chosen) return false;
-    return chosen.type.key === 'ce-comp-teacher-v2' || chosen.type.audience === 'teacher' || audienceVal === 'teacher';
+    return chosen.type.audience === 'teacher' || audienceVal === 'teacher';
   };
 
   const teacherOptions = [
@@ -837,5 +831,249 @@ function openTeacherLinkResult({ link, teacherName, student }) {
       () => copyBtn,
       (close) => el('button', { class: 'btn btn--primary', onclick: close }, 'بستن')
     ]
+  });
+}
+
+// — m186: ارسال گروهی فرم‌های انتخابی پلن — منطق تازهٔ زیر نتیجهٔ وکسلر:
+// درمانگر فرم‌های لازم (رفتاری تا ملاک‌های DSM تا توجه) را تیک می‌زند و همه یک‌جا برای خانواده/معلم می‌رود؛
+// هر فرم رویداد و لینک امن مستقل خودش را می‌گیرد (جایگزین «فرم جامع» چندبخشی).
+export async function openChecklistBatchSendModal({ student, types, onDone }) {
+  if (!canCreateCaseEvents()) {
+    toast('ثبت چک‌لیست برای نقش شما فعال نیست');
+    return;
+  }
+  const candidates = (types ?? []).filter((t) => t && t.familyFillable && t.category === 'checklist');
+  if (candidates.length === 0) {
+    toast('فرم قابل ارسالی در فهرست نیست');
+    return;
+  }
+
+  let teachers = [];
+  try {
+    teachers = (await api.get(`/api/students/${student.id}/teachers`)).data ?? [];
+  } catch { teachers = []; }
+
+  const checked = new Map(candidates.map((t) => [t.id, true]));
+  const audienceOf = (t) => (t.audience === 'teacher' ? 'teacher' : t.audience === 'both' ? 'both' : 'family');
+  const needsTeacher = () => [...checked.values()].some(Boolean) &&
+    candidates.some((t) => checked.get(t.id) && audienceOf(t) !== 'family');
+
+  const listWrap = el('div', { class: 'batch-send__list', style: { display: 'flex', flexDirection: 'column', gap: '6px', margin: '0 0 var(--sp-3)' } });
+  const teacherWrap = el('div', {});
+  const noteInput = el('textarea', {
+    class: 'input', rows: 2,
+    placeholder: 'مثلاً: لطفاً تا آخر همین هفته پرش کنید — پاسخ درست و غلط ندارد.'
+  });
+
+  const rowOf = (t) => {
+    const target = fillTargetOf(t);
+    const cb = el('input', { type: 'checkbox', checked: true, style: { width: '17px', height: '17px', accentColor: 'var(--brand, #229ED9)', flex: 'none' } });
+    cb.addEventListener('change', () => {
+      checked.set(t.id, cb.checked);
+      syncTeacher();
+      syncFooter();
+    });
+    return el('label', {
+      style: {
+        display: 'flex', alignItems: 'flex-start', gap: '9px', padding: '9px 11px',
+        background: 'var(--surface-2, #f7f3ea)', borderRadius: '10px', cursor: 'pointer'
+      }
+    },
+      cb,
+      el('span', { style: { flex: '1', minWidth: '0' } },
+        el('b', { style: { fontSize: '13px', display: 'block' } }, t.title),
+        el('span', { class: 'cell-sub', style: { fontSize: '11.5px' } }, t.description || '')),
+      el('span', { class: `badge ${target.badgeClass}`, style: { flex: 'none', alignSelf: 'center' } }, target.label)
+    );
+  };
+  listWrap.append(...candidates.map(rowOf));
+
+  const teacherOptions = [
+    ...teachers.map((t) => ({ value: t.id, label: `${t.name}${t.classLabel ? ` — ${t.classLabel}` : ''}` })),
+    { value: '__new__', label: '＋ معلم تازه…' }
+  ];
+  const teacherSel = el('select', { class: 'input' },
+    el('option', { value: '' }, '— معلم را انتخاب کنید —'),
+    ...teacherOptions.map((o) => el('option', { value: o.value }, o.label)));
+  const newName = el('input', { class: 'input', type: 'text', maxlength: 120, placeholder: 'نام و نام خانوادگی معلم' });
+  const newClass = el('input', { class: 'input', type: 'text', maxlength: 120, placeholder: 'کلاس/درس (اختیاری)' });
+  const newContact = el('input', { class: 'input', type: 'text', maxlength: 60, dir: 'ltr', placeholder: 'راه ارتباطی (اختیاری)' });
+  const newWrap = el('div', { style: { display: 'none', flexDirection: 'column', gap: '6px', marginTop: '6px' } }, newName, newClass, newContact);
+  teacherSel.addEventListener('change', () => {
+    newWrap.style.display = teacherSel.value === '__new__' ? 'flex' : 'none';
+    if (teacherSel.value === '__new__') newName.focus();
+  });
+
+  const syncTeacher = () => {
+    const show = needsTeacher();
+    teacherWrap.style.display = show ? '' : 'none';
+    if (!show) teacherSel.value = '';
+  };
+  teacherWrap.append(
+    el('div', { class: 'field', style: { margin: '0 0 var(--sp-3)' } },
+      el('label', { class: 'field__label' }, 'معلم گیرندهٔ فرم‌های مدرسه — هر معلم لینک مستقل خودش را می‌گیرد'),
+      teacherSel, newWrap,
+      el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'پاسخ فرم با نام همین معلم روی پرونده ثبت می‌شود («پاسخ معلم: نام معلم»).')
+    )
+  );
+  syncTeacher();
+
+  const sendBtn = el('button', { class: 'btn btn--primary' }, icon('send', 15), 'ارسال با بله');
+  const footNote = el('div', { class: 'cell-sub', style: { marginTop: '6px' } });
+  const syncFooter = () => {
+    const n = candidates.filter((t) => checked.get(t.id)).length;
+    sendBtn.disabled = n === 0;
+    footNote.textContent = n === 0 ? 'حداقل یک فرم را انتخاب کنید' : `${fa(n)} فرم انتخاب شده — هر فرم لینک امن و ۷ روز اعتبار خودش را می‌گیرد.`;
+  };
+  syncFooter();
+
+  const modalRef = openModal({
+    title: `ارسال گروهی فرم‌ها — ${studentLabel(student)}`,
+    wide: true,
+    body: el('div', {},
+      el('div', { class: 'cell-sub', style: { margin: '0 0 var(--sp-2)' } }, 'فرم‌های لازم را تیک بزنید — همه یک‌جا ارسال می‌شوند:'),
+      listWrap,
+      teacherWrap,
+      el('div', { class: 'field', style: { margin: '0 0 var(--sp-3)' } },
+        el('label', { class: 'field__label' }, 'یادداشت برای گیرنده‌ها (اختیاری — به همه ضمیمه می‌شود)'),
+        noteInput),
+      footNote
+    ),
+    actions: [
+      () => sendBtn,
+      (close) => el('button', { class: 'btn btn--ghost', onclick: close }, 'انصراف')
+    ]
+  });
+  const close = modalRef.close;
+
+  sendBtn.addEventListener('click', async () => {
+    const chosen = candidates.filter((t) => checked.get(t.id));
+    if (chosen.length === 0) return;
+
+    let teacherName = null;
+    let teacherId = null;
+    const anyTeacher = chosen.some((t) => audienceOf(t) !== 'family');
+    if (anyTeacher) {
+      if (teacherSel.value === '__new__') {
+        if (!newName.value || newName.value.trim().length < 2) {
+          toast('نام و نام خانوادگی معلم تازه را بنویسید', 'warning');
+          newName.focus();
+          return;
+        }
+        try {
+          const added = await api.post(`/api/students/${student.id}/teachers`, {
+            name: newName.value,
+            class_label: newClass.value || undefined,
+            contact: newContact.value || undefined
+          });
+          teacherName = added.data.name;
+          teacherId = added.data.id;
+        } catch (err) {
+          toastError(err);
+          return;
+        }
+      } else if (teacherSel.value) {
+        const t = teachers.find((x) => x.id === teacherSel.value);
+        if (!t) {
+          toast('معلم انتخابی پیدا نشد', 'warning');
+          return;
+        }
+        teacherName = t.name;
+        teacherId = t.id;
+      } else {
+        toast('برای فرم‌های مدرسه، معلم را انتخاب کنید', 'warning');
+        teacherSel.focus();
+        return;
+      }
+    }
+
+    sendBtn.disabled = true;
+    sendBtn.replaceChildren(icon('hourglass', 15), `در حال ارسال ${fa(chosen.length)} فرم…`);
+    const note = noteInput.value.trim() || null;
+    const results = [];
+
+    for (const t of chosen) {
+      const audience = audienceOf(t);
+      const item = { type: t, audience, sent: 0, link: null, error: null };
+      try {
+        const created = await api.post(`/api/students/${student.id}/case-events`, { eventTypeId: t.id, values: {}, draft: false });
+        item.eventId = created.data.id;
+        try {
+          const send = await api.post(`/api/case-events/${created.data.id}/send`, {
+            audience,
+            note,
+            teacher_name: teacherName,
+            teacher_id: teacherId
+          });
+          item.sent = send.data?.sent ?? 0;
+          item.link = send.data?.link ?? null;
+        } catch (err) {
+          // چت کلاس متصل نیست — برای فرم معلم لینک صادر می‌شود تا دستی برسد
+          if (teacherName && audience !== 'family') {
+            const issued = await api.post(`/api/case-events/${created.data.id}/teacher-link`, {
+              teacher_name: teacherName,
+              teacher_id: teacherId
+            });
+            item.link = issued.data?.link ?? null;
+            item.manual = true;
+          } else {
+            throw err;
+          }
+        }
+      } catch (err) {
+        item.error = err instanceof Error ? err.message : 'ارسال انجام نشد';
+      }
+      results.push(item);
+    }
+
+    const okItems = results.filter((r) => !r.error);
+    const failItems = results.filter((r) => r.error);
+    const sentCount = okItems.reduce((sum, r) => sum + (r.manual ? 0 : r.sent), 0);
+    if (okItems.length > 0) {
+      toast(
+        sentCount > 0
+          ? `${fa(okItems.length)} فرم ساخته شد و پیام بله برای ${fa(sentCount)} نفر رفت — نتیجه هر فرم خودکار به پرونده برمی‌گردد`
+          : `${fa(okItems.length)} فرم ساخته شد — لینک‌ها آماده‌اند؛ برای معلم دستی بفرستید`,
+        failItems.length ? 'warning' : 'success'
+      );
+    }
+    for (const f of failItems) toastError(new Error(`${f.type.title}: ${f.error}`));
+
+    const resultRows = results.map((r) => el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 0', borderBottom: '1px solid var(--line, #eee)' } },
+      r.error
+        ? icon('alert', 15)
+        : (r.manual ? icon('copy', 15) : icon('check', 15)),
+      el('span', { style: { flex: '1', minWidth: '0' } },
+        el('b', { style: { fontSize: '12.5px', display: 'block' } }, r.type.title),
+        el('span', { class: 'cell-sub', style: { fontSize: '11.5px' } },
+          r.error ? r.error
+            : r.manual ? 'چت کلاس متصل نیست — لینک زیر را دستی برای معلم بفرستید'
+              : r.sent > 0 ? `پیام بله برای ${fa(r.sent)} نفر ارسال شد`
+                : 'ساخته شد — برای یادآوری مجدد بعداً از «در انتظار خانواده» بفرستید')),
+      r.link && r.manual
+        ? el('button', {
+            class: 'btn btn--soft btn--sm',
+            onclick: async () => {
+              try {
+                await navigator.clipboard.writeText(r.link);
+                toast('لینک کپی شد', 'success');
+              } catch { toast('کپی نشد — لینک را دستی بردارید', 'warning'); }
+            }
+          }, 'کپی لینک')
+        : null
+    ));
+
+    openModal({
+      title: 'نتیجهٔ ارسال گروهی',
+      body: el('div', {},
+        okItems.length ? el('div', { class: 'badge badge--success', style: { marginBottom: '10px' } }, `${fa(okItems.length)} از ${fa(results.length)} فرم با موفقیت رفت`) : null,
+        ...resultRows
+      ),
+      actions: [
+        (c) => el('button', { class: 'btn btn--primary', onclick: () => { c(); } }, 'بستن')
+      ]
+    });
+    close();
+    onDone?.(results);
   });
 }

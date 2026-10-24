@@ -37,17 +37,9 @@ export const PLAN_TOOL_KEYS = {
   probeRead: 'ce-probe-read-v1',
   probeWrite: 'ce-probe-write-v1',
   probeCalc: 'ce-probe-calc-v1',
-  compFamily: 'ce-comp-family-v2',
   idAdapt: 'ce-id-adapt-v1',
   anamnesisV3: 'ce-anamnesis-v3'
 } as const;
-
-const COMP_FAMILY_COVERS: readonly string[] = [
-  'ce-snap-iv-p-v1',
-  'ce-sdq-p-v1',
-  'ce-scared-p-v1',
-  'ce-id-adapt-v1'
-];
 
 export type PlanPriority = 'core' | 'recommended' | 'optional';
 export type PlanType = 'جامع' | 'تکی';
@@ -320,9 +312,9 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
       builder.add(key, 'core', probeReason, 'r5');
     }
     builder.add(
-      PLAN_TOOL_KEYS.compFamily,
+      PLAN_TOOL_KEYS.idAdapt,
       'core',
-      'فرم جامع خانواده با سنجهٔ انطباق روزمره — تفکیک دیرآموزی از مسیر ناتوانی هوشی (§۳.۱) و زمینهٔ خانواده.',
+      'سنجهٔ انطباق روزمره (فرم خانواده) — تفکیک دیرآموزی از مسیر ناتوانی هوشی (§۳.۱) و زمینهٔ خانه.',
       'r5'
     );
     if (!existing.has(PLAN_TOOL_KEYS.anamnesisV3)) {
@@ -335,7 +327,7 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
     }
     builder.domains.add('academic');
     if (adapt.level === 'unknown') {
-      builder.notes.push('انطباق روزمره هنوز ثبت نشده — فرم جامع خانواده آن را پوشش می‌دهد.');
+      builder.notes.push('انطباق روزمره هنوز ثبت نشده — سنجهٔ انطباق روزمره (فرم خانواده) آن را می‌سنجد.');
     }
     if (adapt.level === 'low') {
       builder.notes.push('انطباق روزمره «پایین» گزارش شده — با وجود بازهٔ هوشی مرزی، مسیر ارجاع تکمیلی را بررسی کنید.');
@@ -366,9 +358,9 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
   } else {
     if (band === 'ID' && adapt.level === 'unknown') {
       builder.add(
-        PLAN_TOOL_KEYS.compFamily,
+        PLAN_TOOL_KEYS.idAdapt,
         'core',
-        `هوش‌بهر کل ${faNum(fsiq ?? 0)} پایین‌تر از مرز ۷۰ است ولی انطباق روزمره ثبت نشده — فرم جامع خانواده (با سنجهٔ انطباق) برای تفکیک مسیر ناتوانی هوشی از دیرآموزی لازم است (§۳.۱).`,
+        `هوش‌بهر کل ${faNum(fsiq ?? 0)} پایین‌تر از مرز ۷۰ است ولی انطباق روزمره ثبت نشده — سنجهٔ انطباق روزمره (فرم خانواده) برای تفکیک مسیر ناتوانی هوشی از دیرآموزی لازم است (§۳.۱).`,
         'r6'
       );
       builder.notes.push('تا تکمیل سنجهٔ انطباق، مسیر ID مهر نمی‌شود — ملاک تفکیک انطباقی دو مسیر را جدای هم نگه می‌دارد.');
@@ -376,10 +368,9 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
     applyProfileRules({ builder, facts, anam, band, abilityMax, wmiGap, psiGap });
   }
 
-  const familyInPlan = builder.items.has(PLAN_TOOL_KEYS.compFamily);
   const parentSdqPresent = existing.has(PLAN_TOOL_KEYS.sdqP) || existing.has('sdq-parent');
   const teacherSdqPresent = existing.has(PLAN_TOOL_KEYS.sdqT);
-  if (!familyInPlan && !parentSdqPresent && !existing.has(PLAN_TOOL_KEYS.compFamily)) {
+  if (!parentSdqPresent) {
     builder.add(
       PLAN_TOOL_KEYS.sdqP,
       'core',
@@ -395,17 +386,19 @@ export function recommendChecklistPlan(ctx: ChecklistPlanContext): ChecklistPlan
       'r0'
     );
   }
+  if (!parentSdqPresent || !teacherSdqPresent) {
+    builder.domains.add('behavior'); // — باتری رفتاری پایه (m186: جایگزینِ پوششِ «فرم جامع»)
+  }
 
   const items = [...builder.items.values()].filter((it) => {
     if (existing.has(it.toolKey) && it.toolKey !== PLAN_TOOL_KEYS.anamnesisV3) return false;
-    if (familyInPlan && COMP_FAMILY_COVERS.includes(it.toolKey)) return false;
     return true;
   });
   items.sort((a, b) =>
     PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] || (a.toolKey < b.toolKey ? -1 : a.toolKey > b.toolKey ? 1 : 0)
   );
 
-  const planType: PlanType = familyInPlan || builder.domains.size >= 2 ? 'جامع' : 'تکی';
+  const planType: PlanType = builder.domains.size >= 2 ? 'جامع' : 'تکی';
 
   return {
     planType,

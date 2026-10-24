@@ -22,8 +22,6 @@ export interface ConvergenceItem {
 
 export const ID_ADAPT_EVENT_KEY = 'ce-id-adapt-v1';
 
-export const COMPOSITE_FAMILY_EVENT_KEY = 'ce-comp-family-v2';
-
 const SOURCE_BY_TOOL: Record<string, ConvergenceSource> = {
   'ce-anamnesis-v3': 'family',
   'ce-anamnesis-v2': 'family',
@@ -32,10 +30,8 @@ const SOURCE_BY_TOOL: Record<string, ConvergenceSource> = {
   'ce-snap-iv-p-v1': 'family',
   'ce-scared-p-v1': 'family',
   [ID_ADAPT_EVENT_KEY]: 'family',
-  [COMPOSITE_FAMILY_EVENT_KEY]: 'family',
   'ce-sdq-t-v1': 'teacher',
   'ce-snap-iv-t-v1': 'teacher',
-  'ce-comp-teacher-v2': 'teacher',
   'ce-wechsler-w4-v1': 'test',
   'ce-probe-read-v1': 'probe',
   'ce-probe-write-v1': 'probe',

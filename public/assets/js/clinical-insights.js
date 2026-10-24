@@ -5,7 +5,7 @@ import { session } from './state.js';
 import { openExerciseSendModal } from './exercise-send.js';
 import { bankPickButton, appendExerciseToTextarea } from './exercise-pick.js'; // — افزودن تمرین از بانک به جلسه
 import { eventPickButton, appendEventToTextarea } from './event-pick.js'; // — افزودن رویداد (فرم/پرسش‌نامه) به جلسه
-import { openCaseEventForm, openCaseEventDetail } from './case-events.js'; // — m172: بازکردن جزئیات فرم از ردیف‌های تب بالینی
+import { openCaseEventForm, openCaseEventDetail, openChecklistBatchSendModal } from './case-events.js'; // — m186: ارسال گروهی فرم‌های پلن + m172: بازکردن جزئیات فرم از ردیف‌های تب بالینی
 import { pathwayChip, canEditPathway, openPathwayModal } from './session-type.js'; // — مسیر پرونده
 import { otChecklistCard, otProgressPanel, protocolChip, protocolCard, NEEDS_KEY, OT_SESSION_KEY } from './ot-checklist.js'; // — فلو دوفازی شناسایی→مداخله (openNeedsModal در کارت جمع‌بندی) + پنل پیشرفت جلسه‌به‌جلسه (m162)
 import { synthesisSection, fetchFormulation } from './case-formulation.js'; // — کارت واحد جمع‌بندی تشخیصی (m134)
@@ -37,7 +37,6 @@ import {
   CONTEXT_META,
   SYNTHESIS_META,
   PLAN_META,
-  COMPOSITE_KEYS,
   TOOL_GUIDES
 } from './clinical-content.js';
 
@@ -250,13 +249,25 @@ function checklistPlanCard({ student, plan, typesById, canDecide, refresh }) {
   const M = PLAN_META;
   const titleOf = (key) => typesById.get(key)?.title ?? key;
 
+  // — m186: هر آیتم پلن یک تیک انتخاب دارد (همه از پیش علامت‌خورده)؛ درمانگر لازم‌ها را نگه می‌دارد
+  const checked = new Map((plan.items ?? []).map((it) => [it.toolKey, true]));
   const itemRows = (plan.items ?? []).map((it) => {
     const pb = M.priorityBadge[it.priority] ?? M.priorityBadge.optional;
-    return el('div', { class: 'clx-plan__item' },
-      el('div', { class: 'clx-plan__itemhead' },
-        el('strong', {}, titleOf(it.toolKey)),
-        el('span', { class: `badge ${pb.cls}` }, pb.label)),
-      el('div', { class: 'cell-sub' }, it.reasonFa)
+    const cb = el('input', {
+      type: 'checkbox', checked: true,
+      style: { width: '16px', height: '16px', accentColor: 'var(--brand, #229ED9)', flex: 'none', marginTop: '3px' }
+    });
+    cb.addEventListener('change', () => {
+      checked.set(it.toolKey, cb.checked);
+      syncActions();
+    });
+    return el('label', { class: 'clx-plan__item', style: { display: 'flex', gap: '9px', alignItems: 'flex-start', cursor: 'pointer' } },
+      cb,
+      el('div', { style: { flex: '1', minWidth: '0' } },
+        el('div', { class: 'clx-plan__itemhead' },
+          el('strong', {}, titleOf(it.toolKey)),
+          el('span', { class: `badge ${pb.cls}` }, pb.label)),
+        el('div', { class: 'cell-sub' }, it.reasonFa))
     );
   });
 
@@ -266,20 +277,34 @@ function checklistPlanCard({ student, plan, typesById, canDecide, refresh }) {
         el('span', { class: 'cell-sub' }, plan.referralFa))
     : null;
 
-  const planKeys = (plan.items ?? []).map((i) => i.toolKey);
+  const sendBtn = el('button', { class: 'btn btn--primary btn--sm' }, icon('send', 14), M.sendSelectedLabel);
+  const editBtn = el('button', {
+    class: 'btn btn--soft btn--sm',
+    onclick: () => openCaseEventForm({ student, onSaved: refresh })
+  }, icon('edit', 14), M.editLabel);
   const actions = canDecide
-    ? el('div', { class: 'clx-actions' },
-        planKeys.length
-          ? el('button', {
-              class: 'btn btn--primary btn--sm',
-              onclick: () => openCaseEventForm({ student, onlyKeys: planKeys, pickerTitle: M.confirmPickerTitle, onSaved: refresh })
-            }, icon('zap', 14), M.confirmLabel)
-          : null,
-        el('button', {
-          class: 'btn btn--soft btn--sm',
-          onclick: () => openCaseEventForm({ student, onSaved: refresh })
-        }, icon('edit', 14), M.editLabel))
+    ? el('div', { class: 'clx-actions' }, sendBtn, editBtn)
     : null;
+  const syncActions = () => {
+    const selectedKeys = (plan.items ?? []).map((i) => i.toolKey).filter((k) => checked.get(k));
+    const types = selectedKeys
+      .map((k) => typesById.get(k))
+      .filter((t) => t && t.familyFillable && t.category === 'checklist');
+    sendBtn.disabled = types.length === 0;
+    sendBtn.replaceChildren(icon('send', 14), `${M.sendSelectedLabel}${types.length ? ` (${fa(types.length)})` : ''}`);
+  };
+  sendBtn.addEventListener('click', () => {
+    const selectedKeys = (plan.items ?? []).map((i) => i.toolKey).filter((k) => checked.get(k));
+    const types = selectedKeys
+      .map((k) => typesById.get(k))
+      .filter((t) => t && t.familyFillable && t.category === 'checklist');
+    if (types.length === 0) {
+      toast('حداقل یک فرم قابل ارسال را انتخاب کنید', 'warning');
+      return;
+    }
+    openChecklistBatchSendModal({ student, types, onDone: refresh });
+  });
+  syncActions();
 
   return el('div', { class: 'card clx-plan' },
     el('div', { class: 'card__body' },
@@ -292,7 +317,7 @@ function checklistPlanCard({ student, plan, typesById, canDecide, refresh }) {
         ? el('div', { class: 'clx-plan__items' }, ...itemRows)
         : el('div', { class: 'cell-sub' }, M.emptyItems),
       actions,
-      actions ? el('div', { class: 'cell-sub' }, M.editHint) : null
+      actions ? el('div', { class: 'cell-sub' }, M.sendSelectedHint, ' ', M.editHint) : null
     )
   );
 }
@@ -1469,7 +1494,7 @@ export async function renderClinicalTab(box, { student }) {
     const dynamicChecklistKeys = [];
     for (const [k, t] of typesById) {
       if (!t || !t.active || t.category !== 'checklist') continue;
-      if (COMPOSITE_KEYS.includes(k) || staticChecklistKeys.includes(k)) continue;
+      if (staticChecklistKeys.includes(k)) continue;
       if (!['family', 'teacher', 'both'].includes(String(t.audience ?? ''))) continue;
       dynamicChecklistKeys.push(k);
     }
