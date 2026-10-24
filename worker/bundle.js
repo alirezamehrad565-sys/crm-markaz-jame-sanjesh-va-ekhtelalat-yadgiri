@@ -1823,8 +1823,8 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.00.61";
-var APP_MILESTONE = "m186";
+var APP_VERSION = "1.00.62";
+var APP_MILESTONE = "m187";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -22634,6 +22634,8 @@ __name(fillErrorPage, "fillErrorPage");
 
 // src/domain/clinical-engine/types.ts
 var BATTERY_VERSION = "battery-v1";
+var PATHWAY_SESSION_STATUSES = ["planned", "done", "skipped"];
+var PATHWAY_ITEM_TYPES = ["exercise", "homework", "game", "instruction", "event"];
 var INTERVENTION_PATH_STATUS_LABELS = {
   suggested: "\u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0633\u0627\u0645\u0627\u0646\u0647",
   reviewed: "\u0628\u0627\u0632\u0628\u06CC\u0646\u06CC\u200C\u0634\u062F\u0647",
@@ -29709,6 +29711,18 @@ __name(checklistPlanContextOf, "checklistPlanContextOf");
 // src/domain/clinical-engine/service.ts
 var MAX_ACTIVE_PATHS = 2;
 var DECISION_NOTE_MAX = 500;
+var PATHWAY_SESSION_TITLE_MAX = 120;
+var PATHWAY_SESSION_PLAN_MAX = 500;
+var PATHWAY_SESSION_NOTE_MAX = 300;
+var PATHWAY_SESSION_MAX = 200;
+var PATHWAY_TEMPLATE_SESSIONS_MAX = 100;
+var PATHWAY_SESSION_ITEMS_MAX = 10;
+var PATHWAY_SESSION_ITEM_TEXT_MAX = PATHWAY_SESSION_PLAN_MAX;
+var PATHWAY_TEMPLATE_DESC_MAX = 300;
+var PATHWAY_TEMPLATE_STEP_HINT_MAX = 200;
+var PATHWAY_TEMPLATE_KEY_RE = /^[a-z0-9][a-z0-9-]{3,59}$/;
+var PATHWAY_TEMPLATE_STEP_MAX = 12;
+var PATHWAY_TEMPLATE_PROTOCOLS = ["learning", "slow_learner", "mental_ot", "rehab"];
 function parseJson2(raw2, fallback) {
   if (!raw2) return fallback;
   try {
@@ -29718,6 +29732,54 @@ function parseJson2(raw2, fallback) {
   }
 }
 __name(parseJson2, "parseJson");
+function parseText(v, max) {
+  const t = v?.trim();
+  return t ? t.slice(0, max) : null;
+}
+__name(parseText, "parseText");
+function sanitizeSessionItems(raw2) {
+  if (!Array.isArray(raw2)) return [];
+  const out = [];
+  for (const it of raw2) {
+    const t = it ?? {};
+    if (typeof t.type !== "string" || !PATHWAY_ITEM_TYPES.includes(t.type)) continue;
+    const text = typeof t.text === "string" ? t.text.trim() : "";
+    if (!text) continue;
+    out.push({ type: t.type, text: text.slice(0, PATHWAY_SESSION_ITEM_TEXT_MAX) });
+    if (out.length >= PATHWAY_SESSION_ITEMS_MAX) break;
+  }
+  return out;
+}
+__name(sanitizeSessionItems, "sanitizeSessionItems");
+function sanitizeTemplateSessions(raw2) {
+  if (!Array.isArray(raw2)) return [];
+  const out = [];
+  for (const s of raw2) {
+    const title = typeof s?.title === "string" ? s.title.trim() : "";
+    if (!title) continue;
+    out.push({
+      title: title.slice(0, PATHWAY_SESSION_TITLE_MAX),
+      items: sanitizeSessionItems(s?.items)
+    });
+    if (out.length >= PATHWAY_TEMPLATE_SESSIONS_MAX) break;
+  }
+  return out;
+}
+__name(sanitizeTemplateSessions, "sanitizeTemplateSessions");
+function sanitizeTemplateSteps(raw2) {
+  if (!Array.isArray(raw2)) return [];
+  const out = [];
+  for (const s of raw2) {
+    const key = typeof s?.key === "string" ? s.key.trim().slice(0, 80) : "";
+    const title = typeof s?.title === "string" ? s.title.trim().slice(0, PATHWAY_SESSION_TITLE_MAX) : "";
+    if (!key || !title) continue;
+    const hint = typeof s?.hint === "string" && s.hint.trim() ? s.hint.trim().slice(0, PATHWAY_TEMPLATE_STEP_HINT_MAX) : void 0;
+    out.push(hint ? { key, title, hint } : { key, title });
+    if (out.length >= PATHWAY_TEMPLATE_STEP_MAX) break;
+  }
+  return out;
+}
+__name(sanitizeTemplateSteps, "sanitizeTemplateSteps");
 function createClinicalEngineService(deps) {
   const { db, audit, logger } = deps;
   const log = logger.child("clinical-engine");
@@ -29804,7 +29866,51 @@ function createClinicalEngineService(deps) {
     return plan;
   }
   __name(getChecklistPlan, "getChecklistPlan");
-  function pathRowToRecord(r) {
+  function sessionRowToRecord(r) {
+    const status = PATHWAY_SESSION_STATUSES.includes(r.status) ? r.status : "planned";
+    return {
+      id: r.id,
+      pathwayId: r.pathway_id,
+      ord: r.ord,
+      title: r.title,
+      plan: r.plan,
+      items: sanitizeSessionItems(parseJson2(r.items_json ?? "[]", [])),
+      status,
+      doneAt: r.done_at,
+      note: r.note,
+      createdBy: r.created_by,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at
+    };
+  }
+  __name(sessionRowToRecord, "sessionRowToRecord");
+  async function loadPathSessions(pathwayId) {
+    const rows = await db.query(
+      `SELECT * FROM pathway_sessions WHERE pathway_id = ? ORDER BY ord ASC, created_at ASC`,
+      [pathwayId]
+    );
+    return rows.map(sessionRowToRecord);
+  }
+  __name(loadPathSessions, "loadPathSessions");
+  async function loadSessionsOfPaths(pathIds) {
+    const map = /* @__PURE__ */ new Map();
+    if (pathIds.length === 0) return map;
+    const rows = await db.query(
+      `SELECT * FROM pathway_sessions
+        WHERE pathway_id IN (${pathIds.map(() => "?").join(", ")})
+        ORDER BY ord ASC, created_at ASC`,
+      pathIds
+    );
+    for (const r of rows) {
+      const list = map.get(r.pathway_id);
+      const rec = sessionRowToRecord(r);
+      if (list) list.push(rec);
+      else map.set(r.pathway_id, [rec]);
+    }
+    return map;
+  }
+  __name(loadSessionsOfPaths, "loadSessionsOfPaths");
+  function pathRowToRecord(r, sessions = []) {
     return {
       id: r.id,
       studentId: r.student_id,
@@ -29816,6 +29922,9 @@ function createClinicalEngineService(deps) {
       decision: parseJson2(r.decision, null),
       steps: parseJson2(r.steps, []),
       exerciseIds: parseJson2(r.exercise_ids, []),
+      templateKey: r.template_key ?? null,
+      templateTitle: r.template_title ?? null,
+      sessions,
       reassessAt: r.reassess_at,
       createdBy: r.created_by,
       createdAt: r.created_at,
@@ -29846,34 +29955,69 @@ function createClinicalEngineService(deps) {
         ORDER BY p.created_at DESC`,
       [studentId]
     );
-    return rows.map(pathRowToRecord);
+    const sessionsByPath = await loadSessionsOfPaths(rows.map((r) => r.id));
+    return rows.map((r) => pathRowToRecord(r, sessionsByPath.get(r.id) ?? []));
   }
   __name(listPaths, "listPaths");
   async function createPath(studentId, input, actor) {
     const student = await loadStudent(studentId);
     assertCanDecide(student, actor);
-    const target = targetOf(input.targetKey);
+    let targetKey = input.targetKey?.trim() ?? null;
+    let templateKey = null;
+    let templateTitle = null;
+    let steps;
+    let tplSessions = [];
+    if (input.templateKey) {
+      const tpl = await db.queryOne(
+        `SELECT * FROM pathway_templates WHERE key = ? AND active = 1`,
+        [input.templateKey]
+      );
+      if (!tpl) throw new ValidationError("\u0642\u0627\u0644\u0628 \u0645\u0633\u06CC\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F \u06CC\u0627 \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0627\u0633\u062A");
+      targetKey = targetKey ?? tpl.target_key;
+      templateKey = tpl.key;
+      templateTitle = tpl.title;
+      const tplSteps = parseJson2(tpl.steps, []);
+      steps = tplSteps.map((s) => ({ key: s.key, title: s.title, hint: s.hint, doneAt: null }));
+      tplSessions = sanitizeTemplateSessions(parseJson2(tpl.sessions_json ?? null, []));
+    } else {
+      steps = [];
+    }
+    if (!targetKey) throw new ValidationError("\u0647\u062F\u0641 \u0627\u0646\u062A\u062E\u0627\u0628\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A \u2014 \u0627\u06CC\u0646 \u0642\u0627\u0644\u0628 \u0647\u062F\u0641 \u067E\u06CC\u0634\u200C\u0641\u0631\u0636 \u0646\u062F\u0627\u0631\u062F");
+    const target = targetOf(targetKey);
     if (!target) throw new ValidationError("\u0647\u062F\u0641 \u0627\u0646\u062A\u062E\u0627\u0628\u06CC \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0634\u0646\u0627\u062E\u062A\u0647\u200C\u0634\u062F\u0647\u0654 \u0633\u0627\u0645\u0627\u0646\u0647 \u0646\u06CC\u0633\u062A");
     const events = await loadEvidenceEvents(studentId);
     const result = runInference(events, { now });
-    const hypothesis = result.ranked.find((h) => h.targetKey === input.targetKey) ?? null;
+    const hypothesis = result.ranked.find((h) => h.targetKey === targetKey) ?? null;
     const id = crypto.randomUUID();
-    const steps = target.path.map((s) => ({ key: s.key, title: s.title, doneAt: null }));
+    if (steps.length === 0) {
+      steps = target.path.map((s) => ({ key: s.key, title: s.title, doneAt: null }));
+    }
     const exerciseIds = (input.exerciseIds ?? []).filter((x) => typeof x === "string" && x.length > 0).slice(0, 20);
     await db.execute(
-      `INSERT INTO intervention_paths (id, student_id, target_key, status, engine_hypothesis, steps, exercise_ids, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, 'suggested', ?, ?, ?, ?, ?, ?)`,
-      [id, studentId, input.targetKey, hypothesis ? JSON.stringify(hypothesis) : null, JSON.stringify(steps), JSON.stringify(exerciseIds), actor.staffId, iso(), iso()]
+      `INSERT INTO intervention_paths (id, student_id, target_key, status, engine_hypothesis, steps, exercise_ids, template_key, template_title, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, 'suggested', ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, studentId, targetKey, hypothesis ? JSON.stringify(hypothesis) : null, JSON.stringify(steps), JSON.stringify(exerciseIds), templateKey, templateTitle, actor.staffId, iso(), iso()]
     );
     await audit.log({
       actorId: actor.staffId,
       action: "clinical_path.create",
       resourceType: "intervention_path",
       resourceId: id,
-      changes: { target_key: { from: null, to: input.targetKey } }
+      changes: {
+        target_key: { from: null, to: targetKey },
+        ...templateKey ? { template_key: { from: null, to: templateKey } } : {}
+      }
     });
-    log.info("path created", { studentId, targetKey: input.targetKey, engine: hypothesis !== null });
-    return pathRowToRecord(await loadPathRow(id));
+    for (const [i, ts] of tplSessions.entries()) {
+      if (i >= PATHWAY_SESSION_MAX) break;
+      await db.execute(
+        `INSERT INTO pathway_sessions (id, pathway_id, ord, title, plan, items_json, status, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, ?, 'planned', ?, ?, ?)`,
+        [crypto.randomUUID(), id, i + 1, ts.title, JSON.stringify(ts.items), actor.staffId, iso(), iso()]
+      );
+    }
+    log.info("path created", { studentId, targetKey, template: templateKey, engine: hypothesis !== null, sessionsSeeded: tplSessions.length });
+    return pathRowToRecord(await loadPathRow(id), await loadPathSessions(id));
   }
   __name(createPath, "createPath");
   async function decidePath(pathId, input, actor) {
@@ -29997,20 +30141,249 @@ function createClinicalEngineService(deps) {
     return ALL_TARGETS_INCLUDING_REHAB.map((t) => ({ key: t.key, title: t.title, group: t.group }));
   }
   __name(listTargets, "listTargets");
-  return { getInsights, getChecklistPlan, listPaths, createPath, decidePath, getPath: getPath2, listTargets, toggleStep };
+  function templateRowToSummary(r) {
+    return {
+      key: r.key,
+      title: r.title,
+      description: r.description,
+      protocol: r.protocol,
+      targetKey: r.target_key,
+      steps: parseJson2(r.steps, []),
+      sessions: sanitizeTemplateSessions(parseJson2(r.sessions_json ?? null, [])),
+      isSystem: r.is_system === 1,
+      active: r.active === 1,
+      createdBy: r.created_by ?? null
+    };
+  }
+  __name(templateRowToSummary, "templateRowToSummary");
+  async function listPathTemplates() {
+    const rows = await db.query(
+      `SELECT * FROM pathway_templates WHERE active = 1 ORDER BY is_system DESC, created_at ASC`
+    );
+    return rows.map(templateRowToSummary);
+  }
+  __name(listPathTemplates, "listPathTemplates");
+  async function upsertPathTemplate(input, actor) {
+    const key = input.key.trim();
+    if (!PATHWAY_TEMPLATE_KEY_RE.test(key)) {
+      throw new ValidationError("\u06A9\u0644\u06CC\u062F \u0642\u0627\u0644\u0628 \u0628\u0627\u06CC\u062F \u06F4 \u062A\u0627 \u06F6\u06F0 \u0646\u0648\u06CC\u0633\u0647\u0654 \u0644\u0627\u062A\u06CC\u0646 \u06A9\u0648\u0686\u06A9\u060C \u0631\u0642\u0645 \u06CC\u0627 \u062E\u0637 \u062A\u06CC\u0631\u0647 \u0628\u0627\u0634\u062F");
+    }
+    const existing = await db.queryOne(
+      `SELECT * FROM pathway_templates WHERE key = ?`,
+      [key]
+    );
+    if (input.isUpdate && !existing) throw new NotFoundError("\u0642\u0627\u0644\u0628 \u0645\u0633\u06CC\u0631");
+    if (!input.isUpdate && existing) throw new ConflictError("\u06A9\u0644\u06CC\u062F \u0642\u0627\u0644\u0628 \u062A\u06A9\u0631\u0627\u0631\u06CC \u0627\u0633\u062A");
+    const title = input.title !== void 0 ? input.title?.trim() ? input.title.trim().slice(0, PATHWAY_SESSION_TITLE_MAX) : "" : existing?.title ?? "";
+    if (!title) throw new ValidationError("\u0639\u0646\u0648\u0627\u0646 \u0642\u0627\u0644\u0628 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+    const description = input.description !== void 0 ? parseText(input.description, PATHWAY_TEMPLATE_DESC_MAX) : existing?.description ?? null;
+    const protocol = input.protocol !== void 0 ? input.protocol && PATHWAY_TEMPLATE_PROTOCOLS.includes(input.protocol) ? input.protocol : null : existing?.protocol ?? null;
+    const targetKey = input.targetKey !== void 0 ? parseText(input.targetKey, 40) : existing?.target_key ?? null;
+    if (targetKey && !targetOf(targetKey)) {
+      throw new ValidationError("\u0647\u062F\u0641 \u067E\u06CC\u0634\u200C\u0641\u0631\u0636 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0634\u0646\u0627\u062E\u062A\u0647\u200C\u0634\u062F\u0647\u0654 \u0633\u0627\u0645\u0627\u0646\u0647 \u0646\u06CC\u0633\u062A");
+    }
+    const steps = input.steps !== void 0 ? sanitizeTemplateSteps(input.steps) : parseJson2(existing?.steps ?? "[]", []);
+    const sessions = input.sessions !== void 0 ? sanitizeTemplateSessions(input.sessions) : sanitizeTemplateSessions(parseJson2(existing?.sessions_json ?? null, []));
+    const active = input.active !== void 0 ? input.active ? 1 : 0 : existing?.active ?? 1;
+    if (existing) {
+      await db.execute(
+        `UPDATE pathway_templates
+            SET title = ?, description = ?, protocol = ?, target_key = ?, steps = ?, sessions_json = ?, active = ?, updated_at = ?
+          WHERE key = ?`,
+        [title, description, protocol, targetKey, JSON.stringify(steps), sessions.length ? JSON.stringify(sessions) : null, active, iso(), key]
+      );
+      await audit.log({
+        actorId: actor.staffId,
+        action: "pathway_template.update",
+        resourceType: "pathway_template",
+        resourceId: key,
+        changes: {
+          sessions_count: { from: null, to: sessions.length },
+          active: { from: existing.active === 1, to: active === 1 }
+        }
+      });
+      log.info("pathway template updated", { key, sessions: sessions.length });
+    } else {
+      await db.execute(
+        `INSERT INTO pathway_templates (id, key, title, description, protocol, target_key, steps, sessions_json, is_system, active, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?)`,
+        [crypto.randomUUID(), key, title, description, protocol, targetKey, JSON.stringify(steps), sessions.length ? JSON.stringify(sessions) : null, actor.staffId, iso(), iso()]
+      );
+      await audit.log({
+        actorId: actor.staffId,
+        action: "pathway_template.create",
+        resourceType: "pathway_template",
+        resourceId: key,
+        changes: { sessions_count: { from: null, to: sessions.length } }
+      });
+      log.info("pathway template created", { key, sessions: sessions.length });
+    }
+    const row = await db.queryOne(`SELECT * FROM pathway_templates WHERE key = ?`, [key]);
+    return templateRowToSummary(row);
+  }
+  __name(upsertPathTemplate, "upsertPathTemplate");
+  async function listPathSessions(pathId, actor) {
+    const row = await loadPathRow(pathId);
+    const student = await loadStudent(row.student_id);
+    assertCanView(student, actor);
+    return loadPathSessions(pathId);
+  }
+  __name(listPathSessions, "listPathSessions");
+  async function addPathSession(pathId, input, actor) {
+    const row = await loadPathRow(pathId);
+    const student = await loadStudent(row.student_id);
+    assertCanDecide(student, actor);
+    if (row.status === "closed") {
+      throw new ConflictError("\u0645\u0633\u06CC\u0631 \u0628\u0633\u062A\u0647\u200C\u0634\u062F\u0647 \u062C\u0644\u0633\u0647\u0654 \u062C\u062F\u06CC\u062F \u0646\u0645\u06CC\u200C\u067E\u0630\u06CC\u0631\u062F");
+    }
+    const count = await db.queryOne(
+      `SELECT COUNT(*) AS n FROM pathway_sessions WHERE pathway_id = ?`,
+      [pathId]
+    );
+    if ((count?.n ?? 0) >= PATHWAY_SESSION_MAX) {
+      throw new ConflictError(`\u062D\u062F\u0627\u06A9\u062B\u0631 ${PATHWAY_SESSION_MAX} \u062C\u0644\u0633\u0647 \u0628\u0631\u0627\u06CC \u06CC\u06A9 \u0645\u0633\u06CC\u0631 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A`);
+    }
+    const ord = (count?.n ?? 0) + 1;
+    const id = crypto.randomUUID();
+    const title = input.title.trim().slice(0, PATHWAY_SESSION_TITLE_MAX);
+    const plan = parseText(input.plan, PATHWAY_SESSION_PLAN_MAX);
+    const items = sanitizeSessionItems(input.items);
+    await db.execute(
+      `INSERT INTO pathway_sessions (id, pathway_id, ord, title, plan, items_json, status, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?)`,
+      [id, pathId, ord, title, plan, JSON.stringify(items), actor.staffId, iso(), iso()]
+    );
+    await audit.log({
+      actorId: actor.staffId,
+      action: "clinical_path.session_add",
+      resourceType: "intervention_path",
+      resourceId: pathId,
+      changes: { session_ord: { from: null, to: ord } }
+    });
+    log.info("path session added", { pathId, ord });
+    const created = await db.queryOne(`SELECT * FROM pathway_sessions WHERE id = ?`, [id]);
+    return sessionRowToRecord(created);
+  }
+  __name(addPathSession, "addPathSession");
+  async function updatePathSession(pathId, sessionId, input, actor) {
+    const row = await loadPathRow(pathId);
+    const student = await loadStudent(row.student_id);
+    assertCanDecide(student, actor);
+    const session = await db.queryOne(
+      `SELECT * FROM pathway_sessions WHERE id = ? AND pathway_id = ?`,
+      [sessionId, pathId]
+    );
+    if (!session) throw new NotFoundError("\u062C\u0644\u0633\u0647\u0654 \u0628\u0631\u0646\u0627\u0645\u0647");
+    const nextTitle = input.title !== void 0 && input.title !== null ? input.title.trim() ? input.title.trim().slice(0, PATHWAY_SESSION_TITLE_MAX) : session.title : session.title;
+    const nextPlan = input.plan !== void 0 ? parseText(input.plan, PATHWAY_SESSION_PLAN_MAX) : session.plan;
+    const nextNote = input.note !== void 0 ? parseText(input.note, PATHWAY_SESSION_NOTE_MAX) : session.note;
+    const nextItems = input.items !== void 0 ? JSON.stringify(sanitizeSessionItems(input.items)) : session.items_json;
+    let nextStatus = session.status;
+    let nextDoneAt = session.done_at;
+    if (input.status && input.status !== session.status) {
+      nextStatus = input.status;
+      nextDoneAt = input.status === "done" ? iso() : null;
+    }
+    await db.execute(
+      `UPDATE pathway_sessions SET title = ?, plan = ?, items_json = ?, status = ?, done_at = ?, note = ?, updated_at = ? WHERE id = ?`,
+      [nextTitle, nextPlan, nextItems, nextStatus, nextDoneAt, nextNote, iso(), sessionId]
+    );
+    await audit.log({
+      actorId: actor.staffId,
+      action: "clinical_path.session_update",
+      resourceType: "intervention_path",
+      resourceId: pathId,
+      changes: {
+        session_id: { from: null, to: sessionId },
+        ...input.status && input.status !== session.status ? { status: { from: session.status, to: nextStatus } } : {}
+      }
+    });
+    const updated = await db.queryOne(`SELECT * FROM pathway_sessions WHERE id = ?`, [sessionId]);
+    return sessionRowToRecord(updated);
+  }
+  __name(updatePathSession, "updatePathSession");
+  async function deletePathSession(pathId, sessionId, actor) {
+    const row = await loadPathRow(pathId);
+    const student = await loadStudent(row.student_id);
+    assertCanDecide(student, actor);
+    const session = await db.queryOne(
+      `SELECT * FROM pathway_sessions WHERE id = ? AND pathway_id = ?`,
+      [sessionId, pathId]
+    );
+    if (!session) throw new NotFoundError("\u062C\u0644\u0633\u0647\u0654 \u0628\u0631\u0646\u0627\u0645\u0647");
+    await db.execute(`DELETE FROM pathway_sessions WHERE id = ?`, [sessionId]);
+    await audit.log({
+      actorId: actor.staffId,
+      action: "clinical_path.session_delete",
+      resourceType: "intervention_path",
+      resourceId: pathId,
+      changes: { session_ord: { from: session.ord, to: null } }
+    });
+    log.info("path session deleted", { pathId, sessionId });
+  }
+  __name(deletePathSession, "deletePathSession");
+  return { getInsights, getChecklistPlan, listPaths, createPath, decidePath, getPath: getPath2, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession };
 }
 __name(createClinicalEngineService, "createClinicalEngineService");
 
 // src/domain/clinical-engine/routes.ts
 var TARGET_KEY_MAX = 40;
 var STEP_KEY_MAX = 80;
+var TEMPLATE_KEY_MAX = 60;
 var ClinicalStepToggleSchema = external_exports.object({
   step_key: external_exports.string().min(1).max(STEP_KEY_MAX)
 });
 var ClinicalPathCreateSchema = external_exports.object({
-  target_key: external_exports.string().min(2).max(TARGET_KEY_MAX),
+  target_key: external_exports.string().min(2).max(TARGET_KEY_MAX).nullish(),
+  template_key: external_exports.string().min(4).max(TEMPLATE_KEY_MAX).nullish(),
   note: external_exports.string().max(DECISION_NOTE_MAX).nullish(),
   exercise_ids: external_exports.array(external_exports.string().min(1)).max(20).nullish()
+}).superRefine((v, ctx) => {
+  if (!v.target_key && !v.template_key) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      message: "\u0647\u062F\u0641 \u062F\u0631\u0645\u0627\u0646\u06CC \u06CC\u0627 \u0642\u0627\u0644\u0628 \u0645\u0633\u06CC\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A",
+      path: ["target_key"]
+    });
+  }
+});
+var PathSessionItemSchema = external_exports.object({
+  type: external_exports.enum(PATHWAY_ITEM_TYPES),
+  text: external_exports.string().min(1).max(PATHWAY_SESSION_ITEM_TEXT_MAX)
+});
+var PathSessionAddSchema = external_exports.object({
+  title: external_exports.string().min(2).max(PATHWAY_SESSION_TITLE_MAX),
+  plan: external_exports.string().max(PATHWAY_SESSION_PLAN_MAX).nullish(),
+  items: external_exports.array(PathSessionItemSchema).max(PATHWAY_SESSION_ITEMS_MAX).nullish()
+});
+var PathSessionUpdateSchema = external_exports.object({
+  status: external_exports.enum(PATHWAY_SESSION_STATUSES).nullish(),
+  title: external_exports.string().min(2).max(PATHWAY_SESSION_TITLE_MAX).nullish(),
+  plan: external_exports.string().max(PATHWAY_SESSION_PLAN_MAX).nullish(),
+  note: external_exports.string().max(PATHWAY_SESSION_NOTE_MAX).nullish(),
+  items: external_exports.array(PathSessionItemSchema).max(PATHWAY_SESSION_ITEMS_MAX).nullish()
+});
+var PathwayTemplateSessionSchema = external_exports.object({
+  title: external_exports.string().min(2).max(PATHWAY_SESSION_TITLE_MAX),
+  items: external_exports.array(PathSessionItemSchema).max(PATHWAY_SESSION_ITEMS_MAX)
+});
+var PathwayTemplateUpsertSchema = external_exports.object({
+  title: external_exports.string().min(2).max(PATHWAY_SESSION_TITLE_MAX),
+  description: external_exports.string().max(PATHWAY_TEMPLATE_DESC_MAX).nullish(),
+  protocol: external_exports.enum(["learning", "slow_learner", "mental_ot", "rehab"]).nullish(),
+  target_key: external_exports.string().min(2).max(TARGET_KEY_MAX).nullish(),
+  steps: external_exports.array(
+    external_exports.object({
+      key: external_exports.string().min(1).max(80),
+      title: external_exports.string().min(1).max(PATHWAY_SESSION_TITLE_MAX),
+      hint: external_exports.string().max(200).nullish()
+    })
+  ).max(12).nullish(),
+  sessions: external_exports.array(PathwayTemplateSessionSchema).max(PATHWAY_TEMPLATE_SESSIONS_MAX).nullish(),
+  active: external_exports.boolean().nullish()
+});
+var PathwayTemplateCreateSchema = PathwayTemplateUpsertSchema.extend({
+  key: external_exports.string().regex(PATHWAY_TEMPLATE_KEY_RE, "\u06A9\u0644\u06CC\u062F \u0642\u0627\u0644\u0628: \u06F4 \u062A\u0627 \u06F6\u06F0 \u0646\u0648\u06CC\u0633\u0647\u0654 \u0644\u0627\u062A\u06CC\u0646 \u06A9\u0648\u0686\u06A9\u060C \u0631\u0642\u0645 \u06CC\u0627 \u062E\u0637 \u062A\u06CC\u0631\u0647")
 });
 var ClinicalPathDecisionSchema = external_exports.object({
   action: external_exports.enum(["confirm", "edit", "reject", "need_info"]),
@@ -30047,7 +30420,7 @@ function registerClinicalEngineRoutes(app, service) {
     const body = ClinicalPathCreateSchema.parse(await c.req.json());
     const data = await service.createPath(
       c.req.param("id"),
-      { targetKey: body.target_key, note: body.note ?? null, exerciseIds: body.exercise_ids ?? null },
+      { targetKey: body.target_key ?? null, templateKey: body.template_key ?? null, note: body.note ?? null, exerciseIds: body.exercise_ids ?? null },
       actor
     );
     return c.json({ data }, 201);
@@ -30067,6 +30440,74 @@ function registerClinicalEngineRoutes(app, service) {
     const body = ClinicalStepToggleSchema.parse(await c.req.json());
     const data = await service.toggleStep(c.req.param("id"), body.step_key, actor);
     return c.json({ data }, 200);
+  });
+  app.get("/api/pathway-templates", requireRole("manager", "secretary", "therapist"), async (c) => {
+    const data = await service.listPathTemplates();
+    return c.json({ data }, 200);
+  });
+  app.post("/api/pathway-templates", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = PathwayTemplateCreateSchema.parse(await c.req.json());
+    const data = await service.upsertPathTemplate(
+      {
+        isUpdate: false,
+        key: body.key,
+        title: body.title,
+        description: body.description ?? null,
+        protocol: body.protocol ?? null,
+        targetKey: body.target_key ?? null,
+        steps: body.steps ?? null,
+        sessions: body.sessions ?? null,
+        active: body.active ?? null
+      },
+      actor
+    );
+    return c.json({ data }, 201);
+  });
+  app.patch("/api/pathway-templates/:key", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = PathwayTemplateUpsertSchema.parse(await c.req.json());
+    const data = await service.upsertPathTemplate(
+      {
+        isUpdate: true,
+        key: c.req.param("key"),
+        title: body.title,
+        description: body.description,
+        protocol: body.protocol,
+        targetKey: body.target_key,
+        steps: body.steps,
+        sessions: body.sessions,
+        active: body.active
+      },
+      actor
+    );
+    return c.json({ data }, 200);
+  });
+  app.post("/api/clinical-paths/:id/sessions", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = PathSessionAddSchema.parse(await c.req.json());
+    const data = await service.addPathSession(
+      c.req.param("id"),
+      { title: body.title, plan: body.plan ?? null, items: body.items ?? null },
+      actor
+    );
+    return c.json({ data }, 201);
+  });
+  app.patch("/api/clinical-paths/:id/sessions/:sid", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = PathSessionUpdateSchema.parse(await c.req.json());
+    const data = await service.updatePathSession(
+      c.req.param("id"),
+      c.req.param("sid"),
+      { status: body.status ?? null, title: body.title ?? null, plan: body.plan ?? null, note: body.note ?? null, items: body.items },
+      actor
+    );
+    return c.json({ data }, 200);
+  });
+  app.delete("/api/clinical-paths/:id/sessions/:sid", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    await service.deletePathSession(c.req.param("id"), c.req.param("sid"), actor);
+    return c.json({ data: { ok: true } }, 200);
   });
 }
 __name(registerClinicalEngineRoutes, "registerClinicalEngineRoutes");
@@ -30144,11 +30585,11 @@ var NEED_TYPE_LABELS = {
   tic: "\u0627\u062E\u062A\u0644\u0627\u0644 \u062A\u06CC\u06A9",
   other: "\u0633\u0627\u06CC\u0631"
 };
-function parseText(v, max) {
+function parseText2(v, max) {
   const t = v?.trim();
   return t ? t.slice(0, max) : null;
 }
-__name(parseText, "parseText");
+__name(parseText2, "parseText");
 function isFresh(lastAt, nowFn) {
   if (!lastAt) return false;
   const t = Date.parse(lastAt.includes("T") ? lastAt : `${lastAt.replace(" ", "T")}Z`);
@@ -30818,7 +31259,7 @@ function createOtEngineService(deps) {
       const prompt = it.status === "with_help" && it.promptLevel && it.promptLevel in OT_PROMPT_LEVEL_LABELS ? it.promptLevel : null;
       bySkill.set(it.skillId, {
         status: it.status,
-        note: parseText(it.note, OT_SKILL_NOTE_MAX),
+        note: parseText2(it.note, OT_SKILL_NOTE_MAX),
         promptLevel: prompt
       });
     }
@@ -30849,9 +31290,9 @@ function createOtEngineService(deps) {
     const mastered = [...bySkill.values()].filter((v) => v.status === "mastered").length;
     const withHelp = [...bySkill.values()].filter((v) => v.status === "with_help").length;
     const notYet = bySkill.size - mastered - withHelp;
-    const focus = parseText(input.focus, OT_FOCUS_MAX);
-    const summaryText = parseText(input.summary, OT_SUMMARY_MAX);
-    const homework = parseText(input.homework, OT_HOMEWORK_MAX);
+    const focus = parseText2(input.focus, OT_FOCUS_MAX);
+    const summaryText = parseText2(input.summary, OT_SUMMARY_MAX);
+    const homework = parseText2(input.homework, OT_HOMEWORK_MAX);
     const payload = {};
     if (focus) payload.focus = { value: focus, label: "\u062D\u06CC\u0637\u0647\u200C\u0647\u0627\u06CC \u062A\u0645\u0631\u06A9\u0632" };
     if (summaryText) payload.summary = { value: summaryText, label: "\u062E\u0644\u0627\u0635\u0647\u0654 \u062C\u0644\u0633\u0647" };
@@ -30914,9 +31355,9 @@ function createOtEngineService(deps) {
     if (secondary === input.protocol) throw new ValidationError("\u067E\u0631\u0648\u062A\u06A9\u0644 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646 \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0628\u0627 \u067E\u0631\u0648\u062A\u06A9\u0644 \u0627\u0635\u0644\u06CC \u06CC\u06A9\u06CC \u0628\u0627\u0634\u062F");
     const protocolLabel = STUDENT_PROTOCOL_LABELS[input.protocol];
     const secondaryLabel = secondary ? STUDENT_PROTOCOL_LABELS[secondary] : null;
-    const evidence = parseText(input.evidence, NEEDS_TEXT_MAX);
-    const goals = parseText(input.goals, NEEDS_TEXT_MAX);
-    const sessionPlan = parseText(input.sessionPlan, NEEDS_PLAN_MAX);
+    const evidence = parseText2(input.evidence, NEEDS_TEXT_MAX);
+    const goals = parseText2(input.goals, NEEDS_TEXT_MAX);
+    const sessionPlan = parseText2(input.sessionPlan, NEEDS_PLAN_MAX);
     const payload = {};
     if (evidence) payload.evidence = { value: evidence, label: "\u062E\u0644\u0627\u0635\u0647\u0654 \u0634\u0648\u0627\u0647\u062F" };
     payload.need_type = { value: needTypeLabel, label: "\u0646\u06CC\u0627\u0632 \u0648\u06CC\u0698\u0647\u0654 \u0646\u0647\u0627\u06CC\u06CC" };

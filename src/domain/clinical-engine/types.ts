@@ -146,6 +146,58 @@ export interface PathStepState {
   key: string;
   title: string;
   doneAt: string | null;
+  hint?: string | null;
+}
+
+// ─── پروتکل جلسه‌به‌جلسهٔ مسیر + قالب مسیر (m187 — بازگردانی بخش مدیریت قالب‌ها) ───
+export const PATHWAY_SESSION_STATUSES = ['planned', 'done', 'skipped'] as const;
+export type PathwaySessionStatus = (typeof PATHWAY_SESSION_STATUSES)[number];
+
+export const PATHWAY_ITEM_TYPES = ['exercise', 'homework', 'game', 'instruction', 'event'] as const;
+export type PathwayItemType = (typeof PATHWAY_ITEM_TYPES)[number];
+
+export interface PathSessionItem {
+  type: PathwayItemType;
+  text: string;
+}
+
+export interface PathSessionRecord {
+  id: string;
+  pathwayId: string;
+  ord: number;
+  title: string;
+  plan: string | null;
+  items: PathSessionItem[];
+  status: PathwaySessionStatus;
+  doneAt: string | null;
+  note: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PathwayTemplateStep {
+  key: string;
+  title: string;
+  hint?: string | null;
+}
+
+export interface PathwayTemplateSession {
+  title: string;
+  items: PathSessionItem[];
+}
+
+export interface PathwayTemplateSummary {
+  key: string;
+  title: string;
+  description: string | null;
+  protocol: string | null;
+  targetKey: string | null;
+  steps: PathwayTemplateStep[];
+  sessions: PathwayTemplateSession[];
+  isSystem: boolean;
+  active: boolean;
+  createdBy: string | null;
 }
 
 export const INTERVENTION_PATH_STATUSES = ['suggested', 'reviewed', 'active', 'closed'] as const;
@@ -169,6 +221,9 @@ export interface InterventionPathRecord {
   decision: PathDecision | null;
   steps: PathStepState[];
   exerciseIds: string[];
+  templateKey: string | null;
+  templateTitle: string | null;
+  sessions: PathSessionRecord[];
   reassessAt: string | null;
   createdBy: string;
   createdAt: string;

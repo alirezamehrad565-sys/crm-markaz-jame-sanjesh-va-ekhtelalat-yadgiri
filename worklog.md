@@ -393,3 +393,20 @@ Work Log:
 Stage Summary:
 - «فرم جامع معلم/خانواده» به‌کلی حذف شد (کد، باتری، DB، مستندات)؛ فلو تازه زیر نتیجهٔ وکسلر: انتخاب تکیِ فرم‌های لازم و ارسال گروهی به خانواده/معلم
 - پروداکشن روی 1.00.61/m186؛ CI/داکر با پوش main + تگ v1.00.61 (تگ v1.00.60 طبق سیاست تک‌نسخه حذف می‌شود)
+
+---
+Task ID: 17 (m187)
+Agent: main (Z.ai)
+Task: «بخش مدیریت قالب ها باگ خورده اونو درست کن» — بازگردانی بک‌اند قالب‌های مسیر و پروتکل جلسه‌به‌جلسه
+
+Work Log:
+- ریشهٔ باگ: فرانت (views/templates.js + clinical-insights.js) به /api/pathway-templates و /api/clinical-paths/:id/sessions درخواست می‌زد ولی هیچ روت/سرویسی در src و باندل مستقر نبود — همان الگوی مفقودِ بازسازی m179 (مثل هوک وکسلر در m185)؛ اثبات: باندل قدیم m178 سه روت pathway-templates داشت، باندل m179 به بعد صفر
+- بازگردانی پاریسی از باندل m178 (تاریخچهٔ گیت) به src: types (PathSessionRecord/PathwayTemplateSummary/وضعیت‌ها/انواع آیتم + templateKey/templateTitle/sessions در رکورد مسیر)، service (ثابت‌های PATHWAY_*، sanitize سه‌گانه، listPathTemplates/upsertPathTemplate با 409/404، listPathSessions/add/update/delete، شاخهٔ template_key در createPath با seed جلسات)، routes (سه روت قالب + سه روت جلسات + ClinicalPathCreateSchema با template_key و superRefine «هدف یا قالب»)
+- تست: e2e-pathway-templates.test.ts — ۹ رگرسیون (CRUD + RBAC + ۴۰۹ کلید تکراری + ساخت مسیر از قالب با seed جلسات + جلسات CRUD + مسیر بستهٔ ۴۰۹ + audit)
+- ۱۲۹۱/۱۲۹۱ ✓ · tsc ۰ ✓ · server-tsc ✓ · vocab-gate ✓ — bump چهارگانه 1.00.62/m187 + build-worker-bundle (۳ رفرنس pathway-templates ≡ باندل m178)
+- دیپلوی: مایگریشن ریموت (بدون مایگریشن جدید — جداول از 0051) → wrangler deploy ✓
+- وریفای زنده: /health = 1.00.62/m187 ✓ · GET /api/pathway-templates = 401 (قبلاً 404) ✓ · جدول pathway_templates پروداکشن فعلاً خالی (این بخش هرگز کار نکرده بود؛ اولین قالب با «قالب جدید» ساخته می‌شود)
+
+Stage Summary:
+- صفحهٔ «مدیریت قالب‌ها» و فلو «ساخت مسیر از قالب» و بلوک جلسات مسیر در تب تفسیر بالینی دوباره زنده است؛ رفتار ۱:۱ با باندل اصلی m98
+- پروداکشن روی 1.00.62/m187؛ main + تگ v1.00.62 پوش شد (تگ قبلی طبق سیاست تک‌نسخه حذف می‌شود)
