@@ -4,8 +4,8 @@ import type { Logger } from '@core/logger';
 import type { AuthContext } from '@core/shared';
 import type { InlineButton, NotifyService } from '@core/notify';
 import type { BotCommand, ExbCat } from '@core/notify';
-import { EXB_PAGE_SIZE, EXB_STUDENTS_PAGE_SIZE, faDigits } from '@core/shared';
-import type { ExerciseBankService } from '@domain/exercise-bank';
+import { EXB_PAGE_SIZE, faDigits } from '@core/shared';
+import type { ExerciseBankService, ExerciseFileSender } from '@domain/exercise-bank';
 import { truncateLabel } from '@domain/exercise-bank';
 import type { SettingsService } from '@app/settings';
 import { renderTemplate } from '@core/notify';
@@ -25,6 +25,7 @@ export interface ExbBotDeps {
   settings: SettingsService;
   exerciseBank: ExerciseBankService;
   publicBaseUrl: string | null;
+  fileSender?: ExerciseFileSender | null;
   now?: () => Date;
 }
 
@@ -65,7 +66,7 @@ function formatSize(bytes: number): string {
 }
 
 export function createExerciseBankBot(deps: ExbBotDeps) {
-  const { db, audit, logger, notify, settings, exerciseBank } = deps;
+  const { db, audit, logger, notify, settings, exerciseBank, fileSender } = deps;
   const log = logger.child('exb-bot');
   const now = deps.now ?? (() => new Date());
 
@@ -132,16 +133,16 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
 
   async function scopedStudents(owner: Owner): Promise<StudentLite[]> {
     if (owner.kind === 'class') {
-      const rows = await db.query<{ id: string; name: string }>(
+      const rows2 = await db.query<{ id: string; name: string }>(
         `SELECT id, first_name || ' ' || last_name AS name
            FROM students WHERE class_id = ? AND active = 1
           ORDER BY last_name, first_name`,
         [owner.refId]
       );
-      return rows;
+      return rows2;
     }
     if (owner.role === 'therapist') {
-      const rows = await db.query<{ id: string; name: string }>(
+      const rows2 = await db.query<{ id: string; name: string }>(
         `SELECT DISTINCT s.id, s.first_name || ' ' || s.last_name AS name
            FROM appointment_students ax
            JOIN appointments a ON a.id = ax.appointment_id
@@ -150,7 +151,7 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
           ORDER BY s.last_name, s.first_name`,
         [owner.refId]
       );
-      return rows;
+      return rows2;
     }
     const rows = await db.query<{ id: string; name: string }>(
       `SELECT id, first_name || ' ' || last_name AS name
@@ -164,7 +165,7 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
     const text = [
       '📚 بانک تمرین مرکز',
       '',
-      'کاربرگ‌ها و بازی‌های آموزشی را مرور کنید و برای هر دانش‌آموز، تکلیف را به چت خانواده‌اش بفرستید.'
+      'کاربرگ‌ها و بازی‌های آموزشی مرکز را مرور کنید؛ فایل هر تمرین را می‌توانید دانلود کنید.'
     ].join('\n');
     return {
       text,
@@ -252,7 +253,7 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
     rows.push(nav);
 
     return {
-      text: `📚 تمرین‌ها — صفحهٔ ${result.page} از ${totalPages} (مجموع ${result.total}):\n\nروی تمرین بزنید تا جزئیات و دکمهٔ ارسال تکلیف بیاید.`,
+      text: `📚 تمرین‌ها — صفحهٔ ${result.page} از ${totalPages} (مجموع ${result.total}):\n\nروی تمرین بزنید تا جزئیات و دکمهٔ دریافت فایل بیاید.`,
       buttons: rows
     };
   }
@@ -273,104 +274,33 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
     lines.push(`قالب: ${FORMAT_LABELS[exercise.format] ?? exercise.format}`);
     if (exercise.description) lines.push('', exercise.description);
     if (exercise.tags.length > 0) lines.push('', `🏷 ${exercise.tags.map((t) => t.name).join('، ')}`);
+    const fileRows: InlineButton[][] = [];
     if (exercise.files.length > 0) {
       lines.push('', `📎 فایل‌های پیوست (${faDigits(exercise.files.length)}):`);
       for (const f of exercise.files.slice(0, 6)) {
         lines.push(`• ${f.filename} (${formatSize(f.size)})`);
       }
       if (exercise.files.length > 6) lines.push(`• و ${faDigits(exercise.files.length - 6)} فایل دیگر`);
+      for (let i = 0; i < Math.min(exercise.files.length, 4); i += 1) {
+        fileRows.push([{ text: `📎 ${truncateLabel(exercise.files[i].filename, 26)}`, callbackData: `exb:file:${idx}:${i}` }]);
+      }
     } else if (exercise.file) {
       lines.push('', `📎 فایل: ${exercise.file.filename} (${formatSize(exercise.file.size)})`);
+      fileRows.push([{ text: '📎 دریافت فایل', callbackData: `exb:lfile:${idx}` }]);
     } else {
       lines.push('', '📎 فایل پیوست ندارد.');
     }
-
+    fileRows.push([{ text: '↩ بازگشت', callbackData: state.back ?? 'exb:root' }]);
     return {
       text: lines.join('\n'),
-      buttons: [
-        [{ text: '📤 ارسال تکلیف به خانواده', callbackData: `exb:send:${idx}:1` }],
-        [{ text: '↩ بازگشت', callbackData: state.back ?? 'exb:root' }]
-      ]
+      buttons: fileRows
     };
   }
 
-  async function renderStudents(chatId: string, owner: Owner, idx: number, page: number): Promise<BotReply> {
+  async function sendFile(chatId: string, idx: number, fileIdx: number): Promise<BotReply> {
     const state = await readState(chatId);
     const lite = state.ex?.[idx];
     if (!lite) return STALE;
-
-    const all = await scopedStudents(owner);
-    if (all.length === 0) {
-      return {
-        text: 'هنوز دانش‌آموزی به شما مرتبط نیست.\n\n• همکاران مرکز: با ثبت جلسه برای دانش‌آموزان، فهرست شما ساخته می‌شود.\n• معلمان: با اتصال کد کلاس، دانش‌آموزان کلاس دیده می‌شوند.',
-        buttons: [[{ text: '↩ بازگشت', callbackData: `exb:item:${idx}` }]]
-      };
-    }
-    const totalPages = Math.max(1, Math.ceil(all.length / EXB_STUDENTS_PAGE_SIZE));
-    const safePage = Math.min(Math.max(page, 1), totalPages);
-    const slice = all.slice((safePage - 1) * EXB_STUDENTS_PAGE_SIZE, safePage * EXB_STUDENTS_PAGE_SIZE);
-
-    state.stu = slice;
-    delete state.sent;
-    await writeState(chatId, state);
-
-    const rows: InlineButton[][] = slice.map((s, i) => [
-      { text: truncateLabel(s.name, 24), callbackData: `exb:pick:${idx}:${i}` }
-    ]);
-    const nav: InlineButton[] = [];
-    if (safePage > 1) nav.push({ text: '▶ بعدی', callbackData: `exb:send:${idx}:${safePage - 1}` });
-    if (safePage < totalPages) nav.push({ text: '◀ قبلی', callbackData: `exb:send:${idx}:${safePage + 1}` });
-    nav.push({ text: '↩ بازگشت', callbackData: `exb:item:${idx}` });
-    rows.push(nav);
-
-    return {
-      text: `📤 ارسال «${lite.title}» به خانوادهٔ کدام دانش‌آموز؟\nصفحهٔ ${safePage} از ${totalPages} — مجموع ${all.length} دانش‌آموز:`,
-      buttons: rows
-    };
-  }
-
-  async function renderConfirm(chatId: string, idx: number, stuIdx: number): Promise<BotReply> {
-    const state = await readState(chatId);
-    const lite = state.ex?.[idx];
-    const student = state.stu?.[stuIdx];
-    if (!lite || !student) return STALE;
-    return {
-      text: `📤 تأیید ارسال تکلیف\n\nتمرین: ${lite.title}\nدانش‌آموز: ${student.name}\n\nکاربرگ به چت متصل ولیّ این دانش‌آموز ارسال می‌شود.`,
-      buttons: [
-        [
-          { text: '✅ ارسال', callbackData: `exb:yes:${idx}:${stuIdx}` },
-          { text: '✖ انصراف', callbackData: `exb:send:${idx}:1` }
-        ]
-      ]
-    };
-  }
-
-  async function guardianChats(studentId: string): Promise<string[]> {
-    const linkRows = await db.query<{ chat_id: string }>(
-      `SELECT DISTINCT chat_id FROM bot_links
-        WHERE student_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
-      [studentId]
-    );
-    const prefRows = await db.query<{ chat_id: string }>(
-      `SELECT chat_id FROM notification_prefs
-        WHERE student_id = ? AND chat_id IS NOT NULL AND channel = 'bale'`,
-      [studentId]
-    );
-    return [...new Set([...linkRows.map((r) => r.chat_id), ...prefRows.map((r) => r.chat_id)])];
-  }
-
-  async function executeSend(chatId: string, owner: Owner, idx: number, stuIdx: number): Promise<BotReply> {
-    const state = await readState(chatId);
-    if (state.sent) {
-      return {
-        text: '✅ این تکلیف از همین منو قبلاً ارسال شد — برای ارسال دوباره، تمرین را دوباره باز کنید.',
-        buttons: [[{ text: '↩ بازگشت', callbackData: state.back ?? 'exb:root' }]]
-      };
-    }
-    const lite = state.ex?.[idx];
-    const student = state.stu?.[stuIdx];
-    if (!lite || !student) return STALE;
-
     const exercise = await exerciseBank.getById(lite.id);
     if (!exercise || !exercise.published) {
       return {
@@ -378,75 +308,36 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
         buttons: [[{ text: '↩ بازگشت', callbackData: state.back ?? 'exb:root' }]]
       };
     }
-
-    const assignment = await exerciseBank.assign(
-      {
-        exerciseId: exercise.id,
-        studentId: student.id,
-        assignedBy: owner.kind === 'class' ? `class:${owner.refId}` : owner.refId,
-        via: 'bot',
-        note: null
-      },
-      EXB_ACTOR
-    );
-
-    const extraLines = [`تمرین: ${exercise.title}`];
-    if (exercise.description) extraLines.push(exercise.description);
-    if (deps.publicBaseUrl && exercise.files.length > 0) {
-      for (const f of exercise.files.slice(0, 6)) {
-        const token = await exerciseBank.mintDownloadToken(exercise.id, f.id);
-        extraLines.push(`📎 ${f.filename}: ${deps.publicBaseUrl.replace(/\/+$/, '')}/public/exercise-files/${exercise.id}?token=${token}`);
-      }
-      if (exercise.files.length > 6) extraLines.push(`و ${faDigits(exercise.files.length - 6)} فایل دیگر با تماس از دفتر مرکز.`);
-    } else if (deps.publicBaseUrl && exercise.file) {
-      const token = await exerciseBank.mintDownloadToken(exercise.id);
-      extraLines.push(`📎 دانلود کاربرگ: ${deps.publicBaseUrl.replace(/\/+$/, '')}/public/exercise-files/${exercise.id}?token=${token}`);
+    const back = [[{ text: '↩ بازگشت', callbackData: state.back ?? 'exb:root' }]];
+    let target: { id: string; filename: string } | null = null;
+    if (fileIdx >= 0) {
+      const f = exercise.files[fileIdx];
+      if (!f) return { text: renderTemplate('bot_file_unavailable'), buttons: back };
+      target = { id: f.id, filename: f.filename };
     } else {
-      extraLines.push('برای دریافت فایل تمرین با دفتر مرکز تماس بگیرید.');
+      if (!exercise.file) return { text: renderTemplate('bot_file_unavailable'), buttons: back };
+      target = { id: '', filename: exercise.file.filename };
     }
-
-    const targets = await guardianChats(student.id);
-    const channel: 'bale' | 'internal' = notify.getChannel('bale') ? 'bale' : 'internal';
-    const clinicName = await settings.getClinicName();
-
-    let enqueued = 0;
-    for (const target of targets) {
-      const outcome = await notify.enqueue({
-        channel,
-        template: 'homework_assigned',
-        recipient: target,
-        studentId: student.id,
-        payload: { studentName: student.name, extra: extraLines.join('\n'), clinicName },
-        dedupKey: `hw:${assignment.id}:${target}`
+    if (!fileSender) {
+      log.warn('exb-bot.file_sender_missing', { chatId, exerciseId: exercise.id });
+      return { text: renderTemplate('bot_file_failed'), buttons: back };
+    }
+    const file = target.id ? await exerciseBank.getAttachmentFile(exercise.id, target.id) : await exerciseBank.getFile(exercise.id);
+    if (!file) return { text: renderTemplate('bot_file_unavailable'), buttons: back };
+    let ok = false;
+    try {
+      ok = await fileSender(chatId, {
+        filename: file.filename,
+        bytes: file.bytes,
+        mime: file.mime,
+        caption: `📚 «${exercise.title}»`
       });
-      if (!outcome.duplicate) enqueued += 1;
+    } catch (err) {
+      log.warn('exb-bot.file_send_error', { chatId, exerciseId: exercise.id, error: err instanceof Error ? err.message : 'unknown' });
     }
-    if (enqueued > 0) await notify.dispatchPending(50);
-
-    await audit.log({
-      actorId: owner.kind === 'class' ? 'bale-bot' : owner.refId,
-      action: 'exercise.homework.sent',
-      resourceType: 'exercise_assignment',
-      resourceId: assignment.id,
-      changes: {
-        exerciseId: { from: null, to: exercise.id },
-        studentId: { from: null, to: student.id },
-        enqueued: { from: null, to: enqueued },
-        targets: { from: null, to: targets.length }
-      }
-    });
-    log.info('exercise.homework.sent', { assignmentId: assignment.id, targets: targets.length, enqueued });
-
-    state.sent = true;
-    await writeState(chatId, state);
-
-    const note = enqueued > 0
-      ? 'به چت خانواده ارسال شد.'
-      : 'ولیّ این دانش‌آموز هنوز به بات متصل نیست — تکلیف در پرونده ثبت شد اما پیامی ارسال نشد.';
-    return {
-      text: renderTemplate('bot_exercise_sent', { studentName: student.name, extra: note }),
-      buttons: [[{ text: '↩ بازگشت به فهرست', callbackData: state.back ?? 'exb:root' }]]
-    };
+    if (ok)
+      audit.log({ actorId: 'bale-bot', action: 'exercise.file.sent_to_staff', resourceType: 'exercise', resourceId: exercise.id, changes: { filename: { from: null, to: file.filename } } }).catch(() => undefined);
+    return { text: renderTemplate(ok ? 'bot_file_sent' : 'bot_file_failed', { filename: file.filename }), buttons: back };
   }
 
   return {
@@ -457,8 +348,6 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
       delete state.cats;
       delete state.ex;
       delete state.pk;
-      delete state.stu;
-      delete state.sent;
       await writeState(chatId, state);
       return renderRoot();
     },
@@ -477,12 +366,8 @@ export function createExerciseBankBot(deps: ExbBotDeps) {
           return renderList(chatId, cmd.cat, cmd.tagIdx, cmd.page);
         case 'exb_item':
           return renderItem(chatId, cmd.idx);
-        case 'exb_send':
-          return renderStudents(chatId, owner, cmd.idx, cmd.page);
-        case 'exb_pick':
-          return renderConfirm(chatId, cmd.idx, cmd.stuIdx);
-        case 'exb_yes':
-          return executeSend(chatId, owner, cmd.idx, cmd.stuIdx);
+        case 'exb_file':
+          return sendFile(chatId, cmd.idx, cmd.fileIdx);
         default:
           return STALE;
       }

@@ -162,18 +162,19 @@ export const NOTIFICATION_TEMPLATES = [
   'bot_followup_rejected',
   'bot_followups_denied',
   'bot_attendance_denied',
-  'bot_status_denied',
 
   'bot_help_guest',
   'bot_help_office',
   'bot_help_therapist',
   'bot_help_class',
   'bot_help_parent',
-  'bot_search_denied',
-  'bot_center_denied',
+  'bot_unlink_confirm',
+  'bot_unlink_done',
+  'bot_unlink_not_connected',
+  'bot_unlink_cancelled',
+  'bot_class_activity_denied',
 
   'waitlist_slot_freed',
-  'bot_waitlist_denied',
 
   'homework_assigned',
   'bot_exercise_denied',
@@ -192,36 +193,22 @@ export const NOTIFICATION_TEMPLATES = [
 
   'bot_about',
 
-  'bot_wl_denied_staff',
-  'bot_wl_family_call',
-  'bot_wl_guest_link',
-  'bot_wl_cancelled',
-  'bot_wl_done',
-  'bot_wl_link_lost',
-
   'bot_contact',
   'bot_public_files',
-  'bot_my_students',
-  'bot_my_students_denied',
-  'bot_outbox',
-  'bot_outbox_denied',
-  'bot_outbox_flushed',
+  'bot_public_files_stale',
+  'bot_file_sent',
+  'bot_file_unavailable',
+  'bot_file_failed',
   'bot_family_link_denied',
-  'bot_kpi',
-  'bot_kpi_denied',
   'bot_help_supervisor',
 
   'bot_services',
   'bot_auth_guide',
   'bot_pending_homework',
-  'bot_family_message',
   'bot_class_activity',
 
-  'bot_checklist_assigned',
   'bot_checklist_result',
   'homework_graded',
-  'bot_case_event_denied',
-  'bot_family_message_sent',
   'bot_case_events_disabled',
 
   'bot_checklist_link',
@@ -232,9 +219,7 @@ export const NOTIFICATION_TEMPLATES = [
   'bot_doc_received',
   'bot_doc_bad_type',
   'bot_doc_too_large',
-  'bot_doc_failed',
-
-  'bot_goal_denied'
+  'bot_doc_failed'
 ] as const;
 
 export const MAX_DISPATCH_ATTEMPTS = 5;
@@ -389,6 +374,10 @@ export const EXERCISE_BATCH_NOTE_MAX = 500;
 
 export const MAX_EXERCISE_BATCH_LINKS = 10;
 
+export const MAX_EXB_BATCH_ATTACH = 6;
+
+export const MAX_EXB_PARENT_FILES = 6;
+
 export const ALLOWED_EXERCISE_VIDEO_MIME_TYPES = [
   'video/mp4',
   'video/webm',
@@ -409,8 +398,6 @@ export const ALLOWED_EXERCISE_FILE_MIME_TYPES = [
 ] as const;
 
 export const EXB_PAGE_SIZE = 5;
-
-export const EXB_STUDENTS_PAGE_SIZE = 6;
 
 export const EXB_DOWNLOAD_TTL_SECONDS = 7 * 24 * 60 * 60;
 

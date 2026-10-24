@@ -159,10 +159,9 @@ describe('parseBotUpdate (pure)', () => {
 });
 
 describe('parseBotUpdate (pure)', () => {
-  it(': دستورهای /followups و /attendance و /status', () => {
+  it(': دستورهای /followups و /attendance', () => {
     expect(parseBotUpdate(updateWithText('/followups'))).toEqual({ kind: 'followups_me', chatId: '111222333' });
     expect(parseBotUpdate(updateWithText('/attendance'))).toEqual({ kind: 'attendance_summary', chatId: '111222333' });
-    expect(parseBotUpdate(updateWithText('/status'))).toEqual({ kind: 'center_status', chatId: '111222333' });
   });
 
   it(': دکمه‌های متنی فارسی (با و بدون نیم‌فاصله)', () => {
@@ -170,7 +169,6 @@ describe('parseBotUpdate (pure)', () => {
     expect(parseBotUpdate(updateWithText('پیگیری های من'))).toEqual({ kind: 'followups_me', chatId: '111222333' });
     expect(parseBotUpdate(updateWithText('حضور فرزند'))).toEqual({ kind: 'attendance_summary', chatId: '111222333' });
     expect(parseBotUpdate(updateWithText('حضور'))).toEqual({ kind: 'attendance_summary', chatId: '111222333' });
-    expect(parseBotUpdate(updateWithText('وضعیت مرکز'))).toEqual({ kind: 'center_status', chatId: '111222333' });
   });
 
   it(': callback «fudone:<id>» → followup_done؛ callback نامعتبر → null', () => {
@@ -189,17 +187,6 @@ describe('parseBotUpdate (pure)', () => {
 });
 
 describe('parseBotUpdate (pure)', () => {
-  it(': دستورهای /goal و /sanj → screening_goal', () => {
-    expect(parseBotUpdate(updateWithText('/goal'))).toEqual({ kind: 'screening_goal', chatId: '111222333' });
-    expect(parseBotUpdate(updateWithText('/sanj'))).toEqual({ kind: 'screening_goal', chatId: '111222333' });
-  });
-
-  it(': دکمه‌های متنی «هدف سنجش» و «شاخص سنجش» → screening_goal', () => {
-    expect(parseBotUpdate(updateWithText('هدف سنجش'))).toEqual({ kind: 'screening_goal', chatId: '111222333' });
-    expect(parseBotUpdate(updateWithText('شاخص سنجش'))).toEqual({ kind: 'screening_goal', chatId: '111222333' });
-    expect(parseBotUpdate(updateWithText('اهداف سنجش'))).toEqual({ kind: 'screening_goal', chatId: '111222333' });
-  });
-
   it(': متن عادی حاوی «هدف» → نویز (نه دستور)', () => {
     expect(parseBotUpdate(updateWithText('هدف ما این است'))).toBeNull();
   });

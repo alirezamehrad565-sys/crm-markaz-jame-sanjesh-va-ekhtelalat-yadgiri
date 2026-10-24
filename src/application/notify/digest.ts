@@ -14,7 +14,6 @@ export interface DigestSummary {
   enqueued: number;
   duplicates: number;
   skippedEmpty: number;
-  kpiSent: number;
 }
 
 function toListItem(f: FollowUp): FollowupListItem {

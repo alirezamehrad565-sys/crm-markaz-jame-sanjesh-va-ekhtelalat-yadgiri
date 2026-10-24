@@ -137,40 +137,6 @@ describe('بات نقش‌محور CRM + قفل اتصال + ناظر اداره
     expect(res.reply).toContain('آموزشی');
   });
 
-  it('معلم متصل: «دانش‌آموزان من» → فهرست کلاس با وضعیت پرونده', async () => {
-    const school = ((await manager.post('/api/schools', { name: 'دبستان آزمون m62', kind: 'school', gender_type: 'male' })).body as { data: { id: string } }).data;
-    const cls = ((await manager.post('/api/classes', { school_id: school.id, name: 'پنجم الف', teacher_name: 'معلم آزمون m62' })).body as { data: { id: string } }).data;
-    await createStudent(manager, { school_id: school.id, class_id: cls.id, guardian_phone: '09127770022' });
-
-    const code = (((await manager.post('/api/notifications/class-links', { class_id: cls.id })).body as { data: { code: string } }).data).code;
-    const linked = await bot(A, tx(`/link ${code}`, CHAT_TEACHER, 301));
-    expect(linked.reply).toContain('اتصال');
-
-    const res = await bot(A, tx('دانش‌آموزان من', CHAT_TEACHER, 302));
-    expect(res.reply).toContain('دانش‌آموزان کلاس پنجم الف');
-    expect(res.reply).toContain('•');
-  });
-
-  it('والد متصل: «دانش‌آموزان من» → رد (فقط معلم کلاس)؛ مهمان → راهنما', async () => {
-    const parent = await bot(A, tx('دانش‌آموزان من', CHAT_FAMILY, 303));
-    expect(parent.reply).toContain('فقط برای معلمان');
-
-    const guest = await bot(A, tx('دانش‌آموزان من', CHAT_NONE, 304));
-    expect(guest.reply).toContain('راهنما');
-  });
-
-  it('والد متصل: «اعلان‌های در صف» → رد؛ همکار مرکز → شمارش صف', async () => {
-    const parent = await bot(A, tx('اعلان‌های در صف', CHAT_FAMILY, 403));
-    expect(parent.reply).toContain('فقط برای همکاران');
-
-    const staffRes = await bot(A, tx(ALI_NID, CHAT_STAFF, 401));
-    expect(staffRes.reply).toContain('اتصال');
-
-    const outbox = await bot(A, tx('اعلان‌های در صف', CHAT_STAFF, 402));
-    expect(outbox.reply).toContain('صف اعلان‌های مرکز');
-    expect(outbox.reply).toContain('پیش‌نویس');
-  });
-
   it('ثبت نوبت آینده → پیش‌نویس در صندوق؛ رهاسازی فوری از API → ارسال', async () => {
     const s = await createStudent(manager, { guardian_phone: '09127770033' });
     await manager.put(`/api/notifications/prefs/${s.id}`, { channel: 'internal', chat_id: 'internal-chat-m62' });
@@ -240,28 +206,6 @@ describe('بات نقش‌محور CRM + قفل اتصال + ناظر اداره
     expect(denied.n).toBeGreaterThanOrEqual(3);
   });
 
-  it('بات ناظر: «گزارش KPI» → گزارش تجمیعی؛ درمانگر → رد؛ مدیر → گزارش می‌بیند', async () => {
-    const supRes = await bot(A, tx(MANAGER_NID, CHAT_SUPERVISOR, 501));
-    expect(supRes.reply).toContain('اتصال');
-
-    const kpi = await bot(A, tx('گزارش KPI', CHAT_SUPERVISOR, 502));
-    expect(kpi.reply).toContain('KPI');
-    expect(kpi.reply).toContain('نوبت');
-
-    const ali2 = await bot(A, tx(ALI_NID, 7706, 503));
-    expect(ali2.reply).toContain('اتصال');
-    const denied = await bot(A, tx('گزارش KPI', 7706, 504));
-    expect(denied.reply).toContain('فقط برای ناظر');
-  });
-
-  it('تنظیمات: notify_batch_hour ذخیره و خوانده می‌شود', async () => {
-    const put = await manager.put('/api/settings', { notify_batch_hour: 20 });
-    expect(put.status).toBe(200);
-    const get = await manager.get('/api/settings');
-    const data = (get.body as { data: { notifyBatchHour: number } }).data;
-    expect(data.notifyBatchHour).toBe(20);
-    await manager.put('/api/settings', { notify_batch_hour: 18 });
-  });
 });
 
 function findStudentId(testApp: A): string {

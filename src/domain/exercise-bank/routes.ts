@@ -4,6 +4,8 @@ import { getAuthContext, requireRole } from '@core/auth';
 import { NotFoundError, ValidationError } from '@core/errors';
 import type { ExerciseBankService } from './types';
 import { parseMultipartStream } from './multipart';
+import type { SendResult } from '@core/notify/types';
+import type { BaleApiResponse, SendDocumentOptions } from '@core/notify/bale/documents';
 
 const EXT_MIME_FALLBACK: Record<string, string> = {
   mp4: 'video/mp4',
@@ -366,4 +368,45 @@ export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankSe
     const result = await service.sendBatch(UuidSchema.parse(c.req.param('id')), { note: body?.note ?? null }, actor);
     return c.json({ data: result }, 200);
   });
+}
+
+/** ارسال مستند به بله با multipart/form-data — m184: از core/notify/bale/documents به اینجا منتقل شد
+ * (هم فرانت پنل و هم سیم‌کشی فایل‌های تمرین از همین نقطه استفاده می‌کنند) */
+export async function sendBaleDocument(options: SendDocumentOptions): Promise<SendResult> {
+  const base = (options.apiBase ?? 'https://tapi.bale.ai').replace(/\/+$/, '');
+  const doFetch = options.fetchImpl ?? fetch;
+  const url = `${base}/bot${options.token}/sendDocument`;
+
+  try {
+    const form = new FormData();
+    form.append('chat_id', options.chatId);
+    if (options.caption) form.append('caption', options.caption);
+    form.append(
+      'document',
+      new File([options.bytes.slice().buffer as ArrayBuffer], options.filename, {
+        type: options.mime ?? 'application/octet-stream'
+      })
+    );
+
+    const res = await doFetch(url, { method: 'POST', body: form });
+    const body = (await res.json().catch(() => ({}))) as BaleApiResponse;
+
+    if (!res.ok || body.ok === false) {
+      return {
+        ok: false,
+        error: `BALE_${res.status}: ${body.description ?? 'unknown error'}`
+      };
+    }
+
+    const messageId = body.result?.message_id;
+    return {
+      ok: true,
+      externalId: messageId != null ? String(messageId) : undefined
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: `BALE_NETWORK: ${err instanceof Error ? err.message : 'unknown'}`
+    };
+  }
 }

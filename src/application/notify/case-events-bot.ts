@@ -2,27 +2,18 @@ import type { DbClient } from '@core/db';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { AuthContext } from '@core/shared';
-import { faDigits, jalaliFullLabel, tehranTimeLabel, tehranYmdOf } from '@core/shared';
+import { faDigits, jalaliFullLabel, tehranYmdOf } from '@core/shared';
 import type { InlineButton, NotifyService } from '@core/notify';
 import { renderTemplate } from '@core/notify';
 import { truncateLabel } from '@domain/exercise-bank';
-import type {
-  CaseEventCategory, CaseEventField, CaseEventRecord, CaseEventsService
-} from '@domain/case-events';
-import { CASE_EVENT_CATEGORY_LABELS, CHECKLIST_BOT_MAX_ITEMS, packageComponentsOf } from '@domain/case-events';
-import type { SettingsService } from '@app/settings';
-import type { StuListItem } from './student-actions-bot';
-import { clearStuState } from './student-actions-bot';
-
-const TEXT_MAX = 200;
-const LONGTEXT_MAX = 2000;
+import type { CaseEventField, CaseEventRecord, CaseEventsService } from '@domain/case-events';
+import { CHECKLIST_BOT_MAX_ITEMS, packageComponentsOf } from '@domain/case-events';
 
 export interface CaseEventsBotDeps {
   db: DbClient;
   audit: AuditWriter;
   logger: Logger;
   notify: NotifyService;
-  settings: SettingsService;
   caseEvents: CaseEventsService | null;
   publicBaseUrlEnv: string | null;
   now?: () => Date;
@@ -33,36 +24,12 @@ export interface TlBotReply {
   buttons: InlineButton[][] | null;
 }
 
-const TL_ACTOR: AuthContext = {
+const CLF_ACTOR: AuthContext = {
   staffId: 'bale-bot',
   email: 'bale-bot@system.local',
   role: 'manager',
   displayName: 'بات بله'
 };
-
-export interface TlPickState {
-  v: 1;
-  flow: 'tl';
-  students: StuListItem[];
-  stuIdx: number;
-  typeIds: string[];
-  typeTitles: string[];
-}
-
-export interface TlFormState {
-  v: 1;
-  flow: 'tl_form';
-  studentId: string;
-  studentName: string;
-  typeId: string;
-  typeTitle: string;
-  category: CaseEventCategory;
-  fields: CaseEventField[];
-  step: number;
-  answers: Record<string, string>;
-  appointmentId?: string | null;
-  appointmentLabel?: string | null;
-}
 
 export interface ClfFormState {
   v: 1;
@@ -76,7 +43,7 @@ export interface ClfFormState {
   answers: Record<string, number>;
 }
 
-type BotState = TlPickState | TlFormState | ClfFormState;
+type BotState = ClfFormState;
 
 const SCALE_HINTS: Record<number, string> = {
   3: '۰ = هرگز، ۱ = گاهی، ۲ = بیشتر وقت‌ها، ۳ = همیشه',
@@ -93,19 +60,14 @@ function faNumStr(s: string): string {
 }
 
 export function createCaseEventsBot(deps: CaseEventsBotDeps) {
-  const { db, audit, logger, notify, settings, caseEvents } = deps;
-  const log = logger.child('tl-bot');
+  const { db, audit, logger, caseEvents } = deps;
+  const log = logger.child('clf-bot');
   const now = deps.now ?? (() => new Date());
 
-  const STALE_STAFF: TlBotReply = {
-    text: '⏳ این منو قدیمی است — دکمهٔ «دانش‌آموزان فعال» را دوباره بزنید.',
-    buttons: [[{ text: '👥 دانش‌آموزان فعال', callbackData: 'stu:list' }]]
-  };
-  const STALE_FAMILY: TlBotReply = {
+  const STALE: TlBotReply = {
     text: '⏳ این منو قدیمی است — دکمهٔ «چک‌لیست‌های من» را دوباره بزنید.',
     buttons: [[{ text: '📝 چک‌لیست‌های من', callbackData: 'clf_list' }]]
   };
-  const STALE = STALE_STAFF;
 
   async function readState<T extends BotState>(chatId: string, flow: T['flow']): Promise<T | null> {
     const row = await db.queryOne<{ payload: string }>(`SELECT payload FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
@@ -128,441 +90,7 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
   }
 
   async function clearState(chatId: string): Promise<void> {
-    await clearStuState(db, chatId);
-  }
-
-  async function staffOwner(chatId: string): Promise<{ staffId: string; role: string } | null> {
-    const row = await db.queryOne<{ staff_id: string; role: string | null }>(
-      `SELECT l.staff_id, COALESCE(s.role_ext, s.role) AS role
-         FROM staff_bot_links l JOIN staff s ON s.id = l.staff_id
-        WHERE l.chat_id = ? AND l.status = 'linked'`,
-      [chatId]
-    );
-    if (!row) return null;
-    if (row.role !== 'manager' && row.role !== 'therapist' && row.role !== 'secretary') return null;
-    if (row.role === 'secretary') return null;
-    return { staffId: row.staff_id, role: row.role };
-  }
-
-  async function staffReader(chatId: string): Promise<boolean> {
-    const row = await db.queryOne<{ role: string | null }>(
-      `SELECT COALESCE(s.role_ext, s.role) AS role
-         FROM staff_bot_links l JOIN staff s ON s.id = l.staff_id
-        WHERE l.chat_id = ? AND l.status = 'linked'`,
-      [chatId]
-    );
-    return Boolean(row && (row.role === 'manager' || row.role === 'therapist' || row.role === 'secretary'));
-  }
-
-  function actorOf(staffId: string, role: string): AuthContext {
-    return { staffId, email: 'bale-bot@system.local', role: role as AuthContext['role'], displayName: 'بات بله' };
-  }
-
-  async function guardianChats(studentId: string): Promise<string[]> {
-    return caseEvents ? caseEvents.guardianChats(studentId) : [];
-  }
-
-  async function startCategory(chatId: string, stuIdx: number): Promise<TlBotReply> {
-    const owner = await staffOwner(chatId);
-    if (!owner) return { text: renderTemplate('bot_case_event_denied'), buttons: null };
-    const raw = await readRawState(chatId);
-    const stu = raw?.students?.[stuIdx];
-    if (!stu) return STALE;
-
-    const cats: CaseEventCategory[] = ['session', 'checklist', 'note'];
-    const rows: InlineButton[][] = cats.map((c) => [
-      { text: `${c === 'checklist' ? '📝' : c === 'session' ? '🧩' : '🗒'} ${CASE_EVENT_CATEGORY_LABELS[c]}`, callbackData: `tl:types:${stuIdx}:${c}` }
-    ]);
-    rows.push([{ text: `↩ بازگشت به ${truncateLabel(stu.name, 12)}`, callbackData: `stu:menu:${stuIdx}` }]);
-    return {
-      text: `📋 ثبت رویداد/گزارش برای «${stu.name}»\n\nدستهٔ رویداد را انتخاب کنید:`,
-      buttons: rows
-    };
-  }
-
-  async function readRawState(chatId: string): Promise<{ students?: StuListItem[] } | null> {
-    const row = await db.queryOne<{ payload: string }>(`SELECT payload FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
-    if (!row) return null;
-    try {
-      const parsed = JSON.parse(row.payload) as { v?: number; flow?: string; students?: StuListItem[] };
-      if (parsed && parsed.v === 1 && parsed.flow === 'stu' && Array.isArray(parsed.students)) return parsed;
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
-  async function listTypes(chatId: string, stuIdx: number, cat: string): Promise<TlBotReply> {
-    const owner = await staffOwner(chatId);
-    if (!owner) return { text: renderTemplate('bot_case_event_denied'), buttons: null };
-    const raw = await readRawState(chatId);
-    const stu = raw?.students?.[stuIdx];
-    if (!stu) return STALE;
-    if (!caseEvents) return { text: renderTemplate('bot_case_events_disabled'), buttons: null };
-
-    const category = cat as CaseEventCategory;
-    if (!CASE_EVENT_CATEGORY_LABELS[category]) return STALE;
-    const types = await caseEvents.listTypes({ activeOnly: true, category });
-    if (types.length === 0) {
-      return {
-        text: `هنوز نوعی در دستهٔ «${CASE_EVENT_CATEGORY_LABELS[category]}» ساخته نشده است.\n\nمدیر می‌تواند از پنل ← «انواع رویداد» نوع جدید بسازد.`,
-        buttons: [[{ text: '↩ بازگشت به دسته‌ها', callbackData: `stu:tl:${stuIdx}` }]]
-      };
-    }
-
-    await writeState(chatId, {
-      v: 1,
-      flow: 'tl',
-      students: raw!.students!,
-      stuIdx,
-      typeIds: types.map((t) => t.id),
-      typeTitles: types.map((t) => `${t.icon ?? ''} ${t.title}`.trim())
-    });
-    const rows: InlineButton[][] = types.map((t, i) => [
-      { text: truncateLabel(`${t.icon ?? ''} ${t.title}`.trim(), 40), callbackData: `tl:start:${stuIdx}:${i}` }
-    ]);
-    rows.push([{ text: '↩ بازگشت به دسته‌ها', callbackData: `stu:tl:${stuIdx}` }]);
-    return {
-      text: `نوع «${CASE_EVENT_CATEGORY_LABELS[category]}» برای «${stu.name}» را انتخاب کنید:`,
-      buttons: rows
-    };
-  }
-
-  async function startForm(chatId: string, stuIdx: number, typeIdx: number): Promise<TlBotReply> {
-    const owner = await staffOwner(chatId);
-    if (!owner) return { text: renderTemplate('bot_case_event_denied'), buttons: null };
-    const pick = await readState<TlPickState>(chatId, 'tl');
-    const stu = pick?.students[stuIdx];
-    const typeId = pick?.typeIds[typeIdx];
-    if (!stu || !typeId || !caseEvents) return STALE;
-
-    const type = await caseEvents.getTypeById(typeId);
-    if (!type || !type.active) {
-      return { text: '⚠️ این نوع رویداد دیگر فعال نیست.', buttons: [[{ text: '↩ بازگشت', callbackData: `stu:tl:${stuIdx}` }]] };
-    }
-
-    if (type.category === 'checklist') {
-      await writeState(chatId, {
-        v: 1,
-        flow: 'tl_form',
-        studentId: stu.id,
-        studentName: stu.name,
-        typeId: type.id,
-        typeTitle: type.title,
-        category: type.category,
-        fields: [],
-        step: type.fields.length,
-        answers: {}
-      });
-      return {
-        text: [
-          `📝 تأیید ثبت چک‌لیست`,
-          '',
-          `چک‌لیست: ${type.title}`,
-          `دانش‌آموز: ${stu.name}`,
-          '',
-          'رویداد با وضعیت «در انتظار پاسخ خانواده» ثبت می‌شود و به چت‌های متصل ولیّ اطلاع‌رسانی می‌شود.'
-        ].join('\n'),
-        buttons: [
-          [
-            { text: '✅ ثبت و اطلاع‌رسانی', callbackData: 'tl:do' },
-            { text: '✖ انصراف', callbackData: 'tl:no' }
-          ]
-        ]
-      };
-    }
-
-    let appointmentId: string | null = null;
-    let appointmentLabel: string | null = null;
-    if (type.category === 'session') {
-      try {
-        const since = new Date(now().getTime() - 14 * 3600_000).toISOString();
-        const appt = await db.queryOne<{ id: string; start_at: string }>(
-          `SELECT a.id, a.start_at
-             FROM appointments a
-             JOIN appointment_students ax ON ax.appointment_id = a.id
-            WHERE ax.student_id = ? AND a.status != 'cancelled' AND a.start_at >= ? AND a.start_at <= ?
-            ORDER BY a.start_at DESC
-            LIMIT 1`,
-          [stu.id, since, now().toISOString()]
-        );
-        if (appt) {
-          appointmentId = appt.id;
-          appointmentLabel = jalaliFullLabel(tehranYmdOf(appt.start_at)) + ' — ' + faDigits(tehranTimeLabel(appt.start_at));
-        }
-      } catch { /* اختیاری */ }
-    }
-
-    await writeState(chatId, {
-      v: 1,
-      flow: 'tl_form',
-      studentId: stu.id,
-      studentName: stu.name,
-      typeId: type.id,
-      typeTitle: type.title,
-      category: type.category,
-      fields: type.fields,
-      step: 0,
-      answers: {},
-      appointmentId,
-      appointmentLabel
-    });
-    if (appointmentLabel) {
-      return {
-        text: `🔗 جلسهٔ اخیر «${stu.name}» پیدا شد:
-🗓 ${appointmentLabel}
-این گزارش به همین نوبت متصل می‌شود.
-
-برای ادامه، فیلدهای فرم را مرحله‌به‌مرحله پاسخ دهید:`,
-        buttons: null
-      };
-    }
-    return promptField(chatId);
-  }
-
-  async function promptField(chatId: string): Promise<TlBotReply> {
-    const st = await readState<TlFormState>(chatId, 'tl_form');
-    if (!st) return STALE;
-    const f = st.fields[st.step];
-    if (!f) return await buildConfirm(chatId);
-
-    const head = `📝 ${st.typeTitle}\nفیلد ${fa(st.step + 1)} از ${fa(st.fields.length)}`;
-    if (f.type === 'select') {
-      const opts = f.options ?? [];
-      const rows: InlineButton[][] = [];
-      for (let i = 0; i < opts.length; i += 2) {
-        const row: InlineButton[] = [{ text: truncateLabel(opts[i], 22), callbackData: `tl:opt:${i}` }];
-        if (opts[i + 1] !== undefined) row.push({ text: truncateLabel(opts[i + 1], 22), callbackData: `tl:opt:${i + 1}` });
-        rows.push(row);
-      }
-      if (!f.required) rows.push([{ text: '⏭ رد کردن', callbackData: 'tl:skip' }]);
-      return { text: `${head}\n\n${f.label}${f.required ? '' : ' (اختیاری)'}:`, buttons: rows };
-    }
-    if (f.type === 'scale') {
-      const max = f.scaleMax ?? 3;
-      const row: InlineButton[] = [];
-      for (let v = 0; v <= max; v++) row.push({ text: faNumStr(String(v)), callbackData: `tl:opt:${v}` });
-      const hint = SCALE_HINTS[max] ?? `۰ تا ${fa(max)}`;
-      return {
-        text: `${head}\n\n${f.label}\n(${hint})${f.required ? '' : ' — اختیاری'}`,
-        buttons: [row, f.required ? [] : [{ text: '⏭ رد کردن', callbackData: 'tl:skip' }]].filter((r) => r.length > 0)
-      };
-    }
-    const hint = f.type === 'longtext' ? 'متن را بفرستید' : f.type === 'number' ? 'عدد را بفرستید' : 'متن کوتاه را بفرستید';
-    const limit = f.type === 'longtext' ? LONGTEXT_MAX : TEXT_MAX;
-    const buttons: InlineButton[][] | null = f.required ? null : [[{ text: '⏭ رد کردن', callbackData: 'tl:skip' }]];
-    return {
-      text: `${head}\n\n${f.label}${f.required ? '' : ' (اختیاری)'} — ${hint} (تا ${faNumStr(String(limit))} نویسه):\nبرای لغو: /cancel`,
-      buttons
-    };
-  }
-
-  async function optionPick(chatId: string, value: number): Promise<TlBotReply> {
-    const st = await readState<TlFormState>(chatId, 'tl_form');
-    if (!st) return STALE;
-    const f = st.fields[st.step];
-    if (!f) return STALE;
-    if (f.type === 'select') {
-      const opts = f.options ?? [];
-      if (value < 0 || value >= opts.length) return STALE;
-      st.answers[f.key] = opts[value];
-    } else if (f.type === 'scale') {
-      const max = f.scaleMax ?? 3;
-      if (value < 0 || value > max) return STALE;
-      st.answers[f.key] = String(value);
-    } else {
-      return STALE;
-    }
-    st.step += 1;
-    await writeState(chatId, st);
-    return st.fields[st.step] ? promptField(chatId) : buildConfirm(chatId);
-  }
-
-  async function skipField(chatId: string): Promise<TlBotReply> {
-    const st = await readState<TlFormState>(chatId, 'tl_form');
-    if (!st) return STALE;
-    const f = st.fields[st.step];
-    if (!f) return STALE;
-    if (f.required) {
-      return { text: '⚠️ این فیلد الزامی است و قابل رد کردن نیست.', buttons: null };
-    }
-    st.step += 1;
-    await writeState(chatId, st);
-    return st.fields[st.step] ? promptField(chatId) : buildConfirm(chatId);
-  }
-
-  async function feedInput(chatId: string, raw: string): Promise<TlBotReply | null> {
-    const st = await readState<TlFormState>(chatId, 'tl_form');
-    if (!st) return null;
-    const f = st.fields[st.step];
-    if (!f) return null;
-    if (f.type === 'select' || f.type === 'scale') return null; // این‌ها دکمه‌ای‌اند
-
-    const text = raw.trim();
-    if (f.type === 'number') {
-      const normalized = faNumStr(text).replace(/[^\d.-]/g, '');
-      const n = Number(normalized);
-      if (!Number.isFinite(n)) {
-        return { text: '⚠️ لطفاً فقط عدد بفرستید (یا /cancel برای لغو).', buttons: null };
-      }
-      st.answers[f.key] = String(n);
-    } else {
-      const max = f.type === 'longtext' ? LONGTEXT_MAX : TEXT_MAX;
-      const len = Array.from(text).length;
-      if (len < 1 || len > max) {
-        return { text: `⚠️ متن باید بین ۱ تا ${faNumStr(String(max))} نویسه باشد — دوباره بفرستید یا /cancel بزنید.`, buttons: null };
-      }
-      st.answers[f.key] = text;
-    }
-    st.step += 1;
-    await writeState(chatId, st);
-    return st.fields[st.step] ? promptField(chatId) : buildConfirm(chatId);
-  }
-
-  async function buildConfirm(chatId: string): Promise<TlBotReply> {
-    const st = await readState<TlFormState>(chatId, 'tl_form');
-    if (!st) return STALE;
-    const lines = [`📋 جمع‌بندی «${st.typeTitle}»`, `دانش‌آموز: ${st.studentName}`, ''];
-    let answered = 0;
-    for (const f of st.fields) {
-      const v = st.answers[f.key];
-      if (v !== undefined && v !== '') {
-        lines.push(`• ${f.label}: ${truncateLabel(v, 80)}`);
-        answered += 1;
-      } else {
-        lines.push(`• ${f.label}: —`);
-      }
-    }
-    if (st.category === 'checklist') {
-      lines.push('', 'رویداد با وضعیت «در انتظار پاسخ خانواده» ثبت می‌شود و به ولیّ‌ها اطلاع‌رسانی می‌شود.');
-    } else {
-      lines.push('', `فیلدهای پرشده: ${fa(answered)} از ${fa(st.fields.length)} — روی تایم‌لاین دانش‌آموز می‌نشیند.`);
-    }
-    return {
-      text: lines.join('\n'),
-      buttons: [
-        [
-          { text: '✅ ثبت', callbackData: 'tl:do' },
-          { text: '✖ انصراف', callbackData: 'tl:no' }
-        ]
-      ]
-    };
-  }
-
-  async function confirmCreate(chatId: string): Promise<TlBotReply> {
-    const owner = await staffOwner(chatId);
-    if (!owner) return { text: renderTemplate('bot_case_event_denied'), buttons: null };
-    const st = await readState<TlFormState>(chatId, 'tl_form');
-    if (!st || !caseEvents) return STALE;
-
-    const values: Record<string, string | number | null> = {};
-    for (const f of st.fields) {
-      const v = st.answers[f.key];
-      values[f.key] = v !== undefined && v !== '' ? v : null;
-    }
-
-    let event: CaseEventRecord;
-    try {
-      event = await caseEvents.createEvent(
-        {
-          eventTypeId: st.typeId,
-          studentId: st.studentId,
-          values,
-          appointmentId: st.appointmentId ?? null
-        },
-        actorOf(owner.staffId, owner.role)
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'ثبت انجام نشد';
-      return { text: `⚠️ ${msg}`, buttons: [[{ text: '↩ بازگشت به جمع‌بندی', callbackData: 'tl:no' }]] };
-    }
-
-    await audit.log({
-      actorId: owner.staffId,
-      action: 'bot.case_event.created',
-      resourceType: 'case_event',
-      resourceId: event.id,
-      changes: {
-        studentId: { from: null, to: st.studentId },
-        eventTypeId: { from: null, to: st.typeId },
-        chatId: { from: null, to: chatId }
-      }
-    });
-    log.info('tl.created', { eventId: event.id, studentId: st.studentId, type: st.typeTitle });
-
-    let notifyNote = '';
-    if (event.status === 'pending_family') {
-      notifyNote = await notifyChecklistAssigned(event, st.studentName, st.typeTitle, chatId);
-    }
-    await clearState(chatId);
-    return {
-      text: [
-        `✅ رویداد ثبت شد — «${st.typeTitle}»`,
-        '',
-        `دانش‌آموز: ${st.studentName}`,
-        st.appointmentLabel ? `🔗 متصل به جلسه: ${st.appointmentLabel}` : null,
-        notifyNote || 'رویداد روی تایم‌لاین پرونده نشست.'
-      ].filter((l): l is string => l !== null).join('\n'),
-      buttons: null
-    };
-  }
-
-  async function notifyChecklistAssigned(event: CaseEventRecord, studentName: string, typeTitle: string, byChatId: string): Promise<string> {
-    const chats = await guardianChats(event.studentId);
-    const type = caseEvents ? await caseEvents.getTypeById(event.eventTypeId) : null;
-    const itemCount = type?.fields.length ?? 0;
-    const useWeb = itemCount > CHECKLIST_BOT_MAX_ITEMS;
-
-    let webLine: string | null = null;
-    if (useWeb && deps.publicBaseUrlEnv) {
-      webLine = await caseEvents!.mintFillLink(event.id, deps.publicBaseUrlEnv);
-    }
-
-    const clinicName = await settings.getClinicName();
-    const channel: 'bale' | 'internal' = notify.getChannel('bale') ? 'bale' : 'internal';
-    let enqueued = 0;
-    for (const target of chats) {
-      const outcome = await notify.enqueue({
-        channel,
-        template: 'bot_checklist_assigned',
-        recipient: target,
-        studentId: event.studentId,
-        payload: {
-          studentName,
-          formTitle: typeTitle,
-          extra: webLine ? `فرم بلند است — با این لینک امن پر کنید (۷ روز اعتبار):\n${webLine}` : `تعداد آیتم‌ها: ${fa(itemCount)} — از دکمهٔ «چک‌لیست‌های من» در پایین چت پر کنید.`,
-          clinicName
-        },
-        dedupKey: `clf:${event.id}:${target}`
-      });
-      if (!outcome.duplicate) enqueued += 1;
-    }
-    if (enqueued > 0) await notify.dispatchPending(50);
-
-    await audit.log({
-      actorId: 'bale-bot',
-      action: 'bot.checklist_assigned',
-      resourceType: 'case_event',
-      resourceId: event.id,
-      changes: {
-        enqueued: { from: null, to: enqueued },
-        viaWeb: { from: null, to: webLine ? 1 : 0 },
-        byChatId: { from: null, to: byChatId }
-      }
-    });
-    log.info('clf.assigned', { eventId: event.id, enqueued, viaWeb: Boolean(webLine) });
-
-    if (enqueued === 0) {
-      return 'ولیّ این دانش‌آموز هنوز به بات متصل نیست — چک‌لیست ثبت شد اما پیامی ارسال نشد. خانواده می‌تواند از دکمهٔ «چک‌لیست‌های من» بعد از اتصال پر کند.';
-    }
-    return webLine
-      ? `به ${fa(enqueued)} گفتگوی خانواده با لینک وب‌فرم اطلاع‌رسانی شد.`
-      : `به ${fa(enqueued)} گفتگوی خانواده اطلاع‌رسانی شد — خانواده با «چک‌لیست‌های من» پاسخ می‌دهد.`;
-  }
-
-  async function abortCreate(chatId: string): Promise<TlBotReply> {
-    await clearState(chatId);
-    return { text: '✖️ ثبت رویداد لغو شد.', buttons: null };
+    await db.execute(`DELETE FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
   }
 
   async function familyStudentIds(chatId: string): Promise<string[]> {
@@ -790,7 +318,7 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
       event = await caseEvents.fillByFamily(
         st.eventId,
         { values: st.answers, sourceChatId: chatId, viaWeb: false },
-        TL_ACTOR
+        CLF_ACTOR
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'ثبت انجام نشد';
@@ -826,96 +354,12 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     return { text: '✖️ پر کردن چک‌لیست لغو شد — هر وقت آماده بودید از «چک‌لیست‌های من» دوباره شروع کنید.', buttons: null };
   }
 
-  async function history(chatId: string, idx: number): Promise<TlBotReply> {
-    if (!(await staffReader(chatId))) return { text: renderTemplate('bot_case_event_denied'), buttons: null };
-    const raw = await readRawState(chatId);
-    const stu = raw?.students?.[idx];
-    if (!stu) return STALE_STAFF;
-    if (!caseEvents) return { text: renderTemplate('bot_case_events_disabled'), buttons: null };
-
-    const events = await caseEvents.listEventsByStudent(stu.id, { limit: 10 });
-    const lines: string[] = [];
-    const STATUS_LABEL: Record<string, string> = { draft: 'پیش‌نویس', completed: '', pending_family: 'در انتظار خانواده', cancelled: 'لغوشده' };
-    for (const e of events) {
-      const st = STATUS_LABEL[e.status] ?? '';
-      lines.push(`• ${e.typeIcon ?? '📋'} ${e.typeTitle} — ${jalaliFullLabel(tehranYmdOf(e.occurredAt))}${st ? ` (${st})` : ''}${e.summary ? `\n   ${truncateLabel(e.summary, 90)}` : ''}`);
-    }
-    if (lines.length === 0) {
-      return {
-        text: `🕘 برای «${stu.name}» هنوز رویدادی (گزارش جلسه، چک‌لیست، یادداشت) ثبت نشده است.\n\nبا «📋 رویداد/گزارش» اولین گزارش را ثبت کنید.`,
-        buttons: [[{ text: '📋 ثبت رویداد/گزارش', callbackData: `stu:tl:${idx}` }], [{ text: '↩ بازگشت', callbackData: `stu:menu:${idx}` }]]
-      };
-    }
-    return {
-      text: [`🕘 تاریخچهٔ پروندهٔ «${stu.name}» (۱۰ رویداد آخر)`, '', ...lines].join('\n'),
-      buttons: [[{ text: '📋 ثبت رویداد/گزارش', callbackData: `stu:tl:${idx}` }], [{ text: '↩ بازگشت', callbackData: `stu:menu:${idx}` }]]
-    };
-  }
-
-  async function checklists(chatId: string, idx: number): Promise<TlBotReply> {
-    if (!(await staffReader(chatId))) return { text: renderTemplate('bot_case_event_denied'), buttons: null };
-    const raw = await readRawState(chatId);
-    const stu = raw?.students?.[idx];
-    if (!stu) return STALE_STAFF;
-    if (!caseEvents) return { text: renderTemplate('bot_case_events_disabled'), buttons: null };
-
-    const rows = await db.query<{ id: string; type_title: string; type_icon: string | null; status: string; analysis: string | null; occurred_at: string; created_at: string }>(
-      `SELECT e.id, t.title AS type_title, t.icon AS type_icon, e.status, e.analysis, e.occurred_at, e.created_at
-         FROM case_events e
-         JOIN case_event_types t ON t.id = e.event_type_id
-        WHERE e.student_id = ? AND t.family_fillable = 1 AND e.status IN ('pending_family', 'completed')
-        ORDER BY (e.status = 'pending_family') DESC, e.occurred_at DESC
-        LIMIT 8`,
-      [stu.id]
-    );
-    const pending = rows.filter((r) => r.status === 'pending_family');
-    const done = rows.filter((r) => r.status === 'completed');
-    const lines: string[] = [];
-    if (pending.length > 0) {
-      lines.push(`در انتظار پاسخ خانواده (${fa(pending.length)}):`);
-      for (const p of pending) lines.push(`• ${p.type_icon ?? '📝'} ${p.type_title} — ${jalaliFullLabel(tehranYmdOf(p.created_at))}`);
-    }
-    if (done.length > 0) {
-      if (lines.length > 0) lines.push('');
-      lines.push('آخرین نتایج:');
-      for (const d of done) {
-        let scoreLine = '';
-        try {
-          const a = d.analysis ? (JSON.parse(d.analysis) as { score?: number; maxScore?: number; band?: string | null; total?: number }) : null;
-          if (a) scoreLine = ` — امتیاز ${fa(a.score ?? 0)} از ${fa(a.maxScore ?? (a.total ?? 0) * 3)}${a.band ? ` (${a.band})` : ''}`;
-        } catch { /* بدون تحلیل */ }
-        lines.push(`• ${d.type_title} — ${jalaliFullLabel(tehranYmdOf(d.occurred_at))}${scoreLine}`);
-      }
-    }
-    if (lines.length === 0) {
-      return {
-        text: `📝 برای «${stu.name}» هنوز چک‌لیست خانواده‌ای ثبت نشده است.\n\nاز «📋 رویداد/گزارش» ← دستهٔ «چک‌لیست» یکی بسازید — خانواده با بات پر می‌کند و نتیجهٔ تحلیل‌شده به شما پیام می‌رود.`,
-        buttons: [[{ text: '📋 ثبت رویداد/گزارش', callbackData: `stu:tl:${idx}` }], [{ text: '↩ بازگشت', callbackData: `stu:menu:${idx}` }]]
-      };
-    }
-    return {
-      text: [`📝 چک‌لیست‌های خانواده — «${stu.name}»`, '', ...lines].join('\n'),
-      buttons: [[{ text: '↩ بازگشت', callbackData: `stu:menu:${idx}` }]]
-    };
-  }
-
   return {
-    startCategory,
-    listTypes,
-    startForm,
-    optionPick,
-    skipField,
-    feedInput,
-    confirmCreate,
-    abortCreate,
     listMine,
     startFill,
     answerItem,
     confirmFill,
     abortFill,
-    history,
-    checklists,
-    readTlFormState: (chatId: string) => readState<TlFormState>(chatId, 'tl_form'),
     readClfFormState: (chatId: string) => readState<ClfFormState>(chatId, 'clf_form')
   };
 }

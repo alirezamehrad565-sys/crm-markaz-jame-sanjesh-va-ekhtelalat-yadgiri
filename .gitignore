@@ -49,3 +49,4 @@ wrangler.prod.toml
 backups/
 
 scripts/route-diff-report.txt
+.recovery/

@@ -83,15 +83,10 @@ describe('حلقهٔ کامل بازگشت فایل (وبهوک واقعی + fet
   }
 
   async function sendHomeworkFromBot(): Promise<void> {
-    await bot(cb('exb:lst:a:0:1', CHAT_ALI, 100));
-    const students = await bot(cb('exb:send:0:1', CHAT_ALI, 101));
-    const pick = students.buttons!.flat().find((b) => b.callbackData.startsWith('exb:pick:'));
-    expect(pick).toBeDefined();
-    const confirm = await bot(cb(pick!.callbackData, CHAT_ALI, 102));
-    const yes = confirm.buttons!.flat().find((b) => b.callbackData.startsWith('exb:yes:'));
-    expect(yes).toBeDefined();
-    const sent = await bot(cb(yes!.callbackData, CHAT_ALI, 103));
-    expect(sent.reply).toContain('ثبت شد');
+    // m184: تکلیف از پنل ثبت می‌شود (فلو exb:send بات حذف شد) — درمانگر (علی) تا اعلان بازگشت به چتش برسد
+    const therapist = await asRole(A, 'therapist');
+    const batch = await therapist.post(`/api/students/${studentId}/exercises/batches`, { exercise_ids: [exerciseId] });
+    expect(batch.status).toBe(201);
   }
 
   beforeAll(async () => {

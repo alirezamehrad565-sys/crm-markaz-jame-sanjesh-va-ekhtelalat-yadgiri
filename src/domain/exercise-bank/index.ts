@@ -11,7 +11,8 @@ export {
   pageWindow,
   truncateLabel
 } from './pure';
-export { registerExerciseBankRoutes } from './routes';
+export { registerExerciseBankRoutes, sendBaleDocument } from './routes';
+export type { ExerciseFileSender } from './types';
 export type {
   ExerciseFormat,
   AssignmentVia,

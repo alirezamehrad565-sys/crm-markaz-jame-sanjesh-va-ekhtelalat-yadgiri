@@ -5,21 +5,12 @@ export type { ScheduleEntry } from './templates';
 export {
   renderDigestBody,
   renderFollowupsMessage,
-  renderAttendanceSummary,
-  renderCenterStatus,
-  renderSearchResults,
-  renderCenterSchedule,
-  renderWaitlistList,
-  renderScreeningGoal
+  renderAttendanceSummary
 } from './templates';
 export type {
   FollowupListItem,
   FollowupListGroups,
-  AttendanceChildSummary,
-  BotSearchItem,
-  CenterScheduleRow,
-  WaitlistListItem,
-  BotScreeningGoalItem
+  AttendanceChildSummary
 } from './templates';
 export { createInternalChannel } from './internal-channel';
 export { createBaleChannel } from './bale/client';
@@ -30,7 +21,6 @@ export {
   parseBotUpdate,
   parseExbCallback,
   parseSubCallback,
-  parseStuCallback,
   parseAwarenessCallback,
   generateLinkCode,
   stripToDigits,
@@ -89,7 +79,12 @@ export {
   selectClassLinks,
   linkClassLink,
   selectClassChats,
-  resolveChatOwner
+  resolveChatOwner,
+  unlinkBotLinksByChat,
+  unlinkStaffLinksByChat,
+  unlinkClassLinksByChat,
+  clearPrefsChatByChat,
+  deleteBotMenuStateByChat
 } from './repository';
 export type {
   NotificationRow,

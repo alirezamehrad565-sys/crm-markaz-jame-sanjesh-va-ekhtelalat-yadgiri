@@ -297,8 +297,14 @@ export interface ExerciseBankDeps {
   storage: ObjectStore;
   downloadSecret: string;
   publicBaseUrl?: string | null;
+  fileSender?: ExerciseFileSender | null;
   now?: () => Date;
 }
+
+export type ExerciseFileSender = (
+  chatId: string,
+  file: { filename: string; bytes: Uint8Array; mime: string; caption?: string }
+) => Promise<boolean>;
 
 export interface ExerciseUploadLimits {
   storage: 'd1' | 'r2';
@@ -318,7 +324,7 @@ export interface ExerciseBankService {
   suggestForStudent(studentId: string): Promise<StudentExerciseSuggestions>;
   createBatch(input: CreateBatchInput, actor: AuthContext): Promise<BatchRecord>;
   listBatches(filters: { studentId: string; limit?: number }): Promise<BatchRecord[]>;
-  sendBatch(batchId: string, input: { note?: string | null }, actor: AuthContext): Promise<{ sent: number; targets: string[] }>;
+  sendBatch(batchId: string, input: { note?: string | null }, actor: AuthContext): Promise<{ sent: number; targets: string[]; filesSent: number }>;
   setSendObserver(observer: BatchSendObserver | null): void;
 
   readonly limits: ExerciseUploadLimits;
