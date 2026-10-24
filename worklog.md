@@ -352,3 +352,23 @@ Stage Summary:
 - مخزن (کلادفلر + داکر + GHCR) اکنون تک‌نسخه‌ای است: فقط 1.00.59/m184 — بدون تگ/ریلیز دیگر، بدون ایمیج قدیمی
 - شکاف تاریخی سورس m183/m184 بسته شد: هر تغییر پروداکشن اکنون در src با تست بازسازی شده است
 - نکته برای آینده: هیچ دیپلوی جدیدی از مخزن لازم نبود — پروداکشن از قبل 1.00.59 بود و مخزن به آن رسید
+
+---
+Task ID: 15 (wechsler-clinical-tab-fix)
+Agent: main (Z.ai)
+Task: «وکسلری که برای دانش‌آموزان وارد می‌کنم در تب تاریخچه می‌نشیند ولی در تب تفسیر بالینی نشان داده نمی‌شود» — تشخیص ریشه در پروداکشن واقعی + بازسازی + دیپلوی
+
+Work Log:
+- تشخیص با دادهٔ واقعی D1 پروداکشن: رویدادهای وکسلر ۲۰/۲۱ اکتبر engine_output دارند، رویداد ۲۴ اکتبر ندارد → رگرسیون زمانی
+- ریشهٔ تاریخی: باندل اصلی (m98-era) هوک applyWechslerHook روی ثبت/ویرایش/نهایی‌سازی فرم WISC-۴ و wechslerSummaryOf/computeSuspicion در computeGates داشت؛ هنگام بازسازی باندل از src (m179/1.00.54) هر دو از سرویس‌های TS جا افتاد و تا امروز کشیده شد
+- بازسازی در case-events/service.ts: studentBirthDate + summarySafePayload + applyWechslerHook (خطای موتور → ValidationError با پیام فارسی) در سه مسیر create/update/finalize
+- بازسازی در ot-engine/service.ts + types: loadStageEvents + wechslerSummaryOf (نیم‌رخ کامل: fsiq/vci/pri/wmi/psi/gai/scatter/cls/percentile/weakDomains/flagsFa/monitoringInterval/ageLine/profile/psychometrics/event.date + مسیر دستی) + computeSuspicion (برش‌های SNAP-IV والد/معلم، SDQ، SCARED + هم‌گرایی چندمنبعی) → suspicion و wechslerSummary در /clinical-gates
+- مایگریشن ۰۰۶۹: seed نوع ce-clinical-suspicion-v1 (در پروداکشن بود ولی در مایگریشن‌های مخزن نبود — نصب تازهٔ داکر آن را نداشت)
+- ۶ تست رگرسیون جدید e2e-wechsler-restoration.test.ts؛ مجموع 1291/1291 ✓ tsc ✓ bundle-smoke ✓ vocab-gate ✓ build:selfhost ✓
+- دیپلوی پروداکشن: مایگریشن ۰۰۶۹ ریموت ✓ → wrangler deploy → /health = 1.00.60/m185 ✓
+- بک‌فیل رویداد امروز (f6ecaf1e) با همان موتور مخزن (engineVersion m98): FSIQ 75، صدک ۵، نیم‌رخ کامل در payload نوشته شد (تغییر ۱ ردیف، به‌همراه بازسازی summary)
+- مخزن تک‌نسخه‌ای ماند: تگ v1.00.59 حذف، main + تگ v1.00.60 پوش شد (CI ✓، Docker در جریان)
+
+Stage Summary:
+- تب تفسیر بالینی اکنون نیم‌رخ وکسلر را هم برای رویدادهای قدیمی (با engine_output) و هم رویدادهای تازه (هوک دوباره فعال) نشان می‌دهد؛ سیگنال‌های شک بالینی مرحلهٔ رفتاری هم برگشت
+- رفتار دوباره با باندل اصلی m98 برابر است + امتیاز اضافه: خلاصهٔ رویداد دیگر JSON موتور را لو نمی‌دهد
