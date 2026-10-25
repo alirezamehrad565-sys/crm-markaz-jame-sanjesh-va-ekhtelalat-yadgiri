@@ -3359,51 +3359,73 @@ tr.wl-row--urgent > td:first-child {
   .chart--line { break-inside: avoid; }
 }
 
-/* ═════════ m188 — کلر بوک مرکز ═════════ */
+/* ═════════ m188 — کلر بوک مرکز · بازطراحی m189 ═════════ */
+
+/* رفع باگ ریشه‌ای: وقتی CSS خودمان display گرید/فلکس می‌دهد، صفت hidden بی‌اثر می‌شد
+   (پاپ‌آپ چاپ همیشه باز بود و جزئیات فازها همیشه باز) — اکنون hidden همیشه برنده است */
+.cb-root [hidden] { display: none !important; }
 
 .cb-root { display: flex; flex-direction: column; gap: var(--sp-4); }
 
+/* — سربرگ و نوار ابزار — */
 .cb-toolbar { display: flex; flex-direction: column; gap: var(--sp-3); align-items: stretch; }
-.cb-toolbar__row--filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+
+/* فیلترها: پنل دسته‌بندی‌شده به‌جای ردیف شلوغ */
+.cb-filters {
+  display: flex; flex-wrap: wrap; gap: var(--sp-3) var(--sp-5); align-items: flex-start;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.cb-fgroup { display: grid; gap: 6px; min-width: 0; }
+.cb-fgroup__label { font-size: 11px; font-weight: 700; color: var(--text-3); letter-spacing: 0.2px; }
+.cb-fgroup__row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 
 .cb-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.cb-chip { cursor: pointer; border: 1px solid var(--border); background: var(--surface); display: inline-flex; align-items: center; gap: 4px; }
+.cb-chip { cursor: pointer; border: 1px solid var(--border); background: var(--surface-2); display: inline-flex; align-items: center; gap: 4px; }
 .cb-chip.is-active { background: var(--primary-soft); border-color: var(--primary); color: var(--primary-hover); font-weight: 600; }
 .cb-chip--tag { font-size: var(--fs-xs); }
 
 .cb-range { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.cb-range .jdate__row { min-width: 150px; }
+.cb-range .jdate__row { min-width: 148px; }
 .cb-range__label { color: var(--text-3); font-size: var(--fs-sm); }
-.cb-search { max-width: 230px; }
+.cb-search { min-width: 210px; }
 
-/* — خط زمانی — */
+/* — خط زمانی — هندسهٔ واحد: خط در ۱۳→۱۶px از لبه، همهٔ نقاط مرکزشان روی ۱۴٫۵px — */
 .cb-timeline-wrap { position: relative; }
-.cb-timeline { position: relative; padding-inline-start: 26px; }
+.cb-timeline { position: relative; padding-inline-start: 44px; }
 .cb-timeline::before {
-  content: ''; position: absolute; inset-inline-start: 9px; top: 6px; bottom: 6px;
-  width: 2px; background: var(--border); border-radius: 2px;
+  content: ''; position: absolute; inset-inline-start: 13px; top: 4px; bottom: 4px;
+  width: 3px; border-radius: 3px;
+  background: linear-gradient(to bottom, transparent, var(--border) 26px, var(--border) calc(100% - 26px), transparent);
 }
 
-.cb-month { display: flex; align-items: center; gap: 10px; margin: var(--sp-4) 0 var(--sp-2); position: relative; }
+.cb-month { position: relative; display: flex; align-items: center; margin: var(--sp-4) 0 var(--sp-2); min-height: 28px; }
 .cb-month__dot {
-  position: absolute; inset-inline-start: -26px; width: 12px; height: 12px; border-radius: 50%;
-  background: var(--primary); border: 2.5px solid var(--surface); box-shadow: 0 0 0 1.5px var(--primary);
-  transform: translateX(0);
+  position: absolute; inset-inline-start: -37px; top: 50%; translate: 0 -50%;
+  width: 15px; height: 15px; border-radius: 50%;
+  background: var(--surface); border: 3px solid var(--primary);
+  box-shadow: 0 0 0 3px var(--surface);
 }
-[dir="rtl"] .cb-month__dot { inset-inline-start: -31px; }
-.cb-month__label { font-size: var(--fs-lg); font-weight: 800; color: var(--text-1); margin: 0; }
+.cb-month__label {
+  margin: 0; font-size: var(--fs-sm); font-weight: 800; color: var(--text-1);
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 4px 14px; border-radius: var(--radius-full);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.cb-month.is-now .cb-month__dot { border-color: var(--accent); }
+.cb-month.is-now .cb-month__label { border-color: var(--accent); color: var(--accent-hover); background: var(--accent-soft); }
 
 /* — کارت‌ها — */
 .cb-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
   padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3); position: relative;
 }
 .cb-card::before {
-  content: ''; position: absolute; inset-inline-start: -21.5px; top: 20px;
-  width: 9px; height: 9px; border-radius: 50%; background: var(--primary); border: 2px solid var(--surface);
-  box-shadow: 0 0 0 1px var(--border);
+  content: ''; position: absolute; inset-inline-start: -35.5px; top: 22px;
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--surface); border: 2.5px solid var(--primary);
+  box-shadow: 0 0 0 3px var(--surface);
 }
-[dir="rtl"] .cb-card::before { inset-inline-start: -21px; }
 
 .cb-card__head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .cb-card__title { font-size: var(--fs-md); font-weight: 700; margin: 0; }
@@ -3420,16 +3442,14 @@ tr.wl-row--urgent > td:first-child {
   padding: 3px 10px; color: var(--text-2);
 }
 
-/* — فاز برنامه: خاکستری و کم‌رنگ تا وقتی مدرک ندارد — */
-.cb-card--plan {
-  background: var(--surface-2); border: 1.5px dashed var(--border);
-  filter: grayscale(0.55); opacity: 0.82;
-}
-.cb-card--plan.has-evidence { filter: grayscale(0.15); opacity: 1; border-style: solid; }
-.cb-card--plan.is-active { border-color: var(--accent); }
-.cb-card--plan.is-done { filter: none; opacity: 1; border-style: solid; border-color: var(--success); }
-.cb-card--plan.is-done::before { background: var(--success); }
-.cb-card--plan::before { background: var(--text-3); }
+/* — فاز برنامه: زبان بصری تمیز به‌جای خاکستری‌کردن همه‌چیز —
+   planned = خط‌چین و پس‌زمینهٔ ملایم · active = حاشیهٔ accent · done = حاشیهٔ سبز و نقطهٔ سبز */
+.cb-card--plan { background: var(--surface-2); border: 1.5px dashed var(--border); }
+.cb-card--plan::before { border-color: var(--text-3); }
+.cb-card--plan.is-active { background: var(--surface); border: 1.5px solid var(--accent); }
+.cb-card--plan.is-active::before { border-color: var(--accent); }
+.cb-card--plan.is-done { border: 1.5px solid color-mix(in srgb, var(--success) 40%, transparent); }
+.cb-card--plan.is-done::before { border-color: var(--success); background: var(--success-soft); }
 
 .cb-badge { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); font-weight: 700; padding: 3px 10px; border-radius: var(--radius-full); white-space: nowrap; }
 .cb-badge--plan { background: var(--surface-3); color: var(--text-2); border: 1px solid var(--border); }
@@ -3448,14 +3468,37 @@ tr.wl-row--urgent > td:first-child {
 .cb-plan__count { font-size: var(--fs-xs); color: var(--success); font-weight: 700; }
 .cb-plan__empty { font-size: var(--fs-xs); color: var(--text-3); }
 .cb-plan__thumb {
-  width: 44px; height: 44px; border-radius: 8px; border: 1px solid var(--border);
+  width: 42px; height: 42px; border-radius: 8px; border: 1px solid var(--border);
   background-size: cover; background-position: center; background-color: var(--surface-3);
 }
 .cb-plan__thumb.is-loaded { cursor: default; }
-.cb-plan__details { margin-top: var(--sp-2); display: grid; gap: var(--sp-2); }
+.cb-plan__details { margin-top: var(--sp-2); padding-top: var(--sp-2); border-top: 1px dashed var(--border); display: grid; gap: var(--sp-2); }
 .cb-plan__sec { font-size: var(--fs-sm); color: var(--text-2); margin: 0; line-height: 1.9; }
-.cb-plan__sec b { color: var(--text-1); }
+.cb-plan__sec b { color: var(--text-1); display: block; margin-bottom: 2px; }
 .cb-plan__sec--empty { color: var(--text-3); font-style: italic; }
+
+/* — جای‌خالی ماه‌های بدون فعالیت: تاریخ و خط همیشه دیده می‌شوند — */
+.cb-empty-slot {
+  position: relative; margin-bottom: var(--sp-3);
+  border: 1.5px dashed var(--border); border-radius: 12px;
+  padding: 13px var(--sp-4); color: var(--text-3); font-size: var(--fs-sm);
+  background: transparent;
+}
+.cb-empty-slot::before {
+  content: ''; position: absolute; inset-inline-start: -34px; top: 50%; translate: 0 -50%;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--surface); border: 2px dashed var(--border);
+  box-shadow: 0 0 0 3px var(--surface);
+}
+
+.cb-empty-hint {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4);
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+  color: var(--text-2); font-size: var(--fs-sm); line-height: 2;
+}
+.cb-empty-hint svg { flex-shrink: 0; color: var(--primary); margin-top: 5px; }
+.cb-empty-hint b { color: var(--text-1); }
 
 /* — رسانهٔ رویداد — */
 .cb-media { display: flex; flex-wrap: wrap; gap: 8px; margin-top: var(--sp-3); }
@@ -3511,7 +3554,9 @@ tr.wl-row--urgent > td:first-child {
   border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2);
 }
 .cb-plansmgr__main { flex: 1; display: grid; gap: 2px; min-width: 0; }
-.cb-plansmgr__main b { font-size: var(--fs-sm); }
+.cb-plansmgr__main b { font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cb-plansmgr__main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cb-plansmgr__row .select { flex-shrink: 0; max-width: 132px; }
 .cb-plansmgr__ops { display: flex; gap: 4px; }
 .cb-print-menu { position: relative; }
 .cb-print-menu__pop {
