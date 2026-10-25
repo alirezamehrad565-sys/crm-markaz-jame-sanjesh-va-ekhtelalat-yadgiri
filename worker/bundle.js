@@ -1823,8 +1823,8 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.00.62";
-var APP_MILESTONE = "m187";
+var APP_VERSION = "1.00.63";
+var APP_MILESTONE = "m188";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -6257,6 +6257,18 @@ var SPECIAL_NEED_TYPES = [
   "other"
 ];
 var SPECIAL_NEED_SEVERITIES = ["mild", "moderate", "severe"];
+var CLEARBOOK_TITLE_MAX = 150;
+var CLEARBOOK_BODY_MAX = 4e3;
+var CLEARBOOK_TAG_MAX = 40;
+var CLEARBOOK_TAGS_PER_ENTRY_MAX = 8;
+var CLEARBOOK_PLAN_TITLE_MAX = 150;
+var CLEARBOOK_PLAN_ACTIONS_MAX = 2e3;
+var CLEARBOOK_CAPTION_MAX = 120;
+var CLEARBOOK_FILES_PER_UPLOAD_MAX = 10;
+var CLEARBOOK_ATTACHMENTS_PER_ENTRY_MAX = 30;
+var CLEARBOOK_ENTRY_PAGE_SIZE = 50;
+var CLEARBOOK_ENTRY_PAGE_MAX = 200;
+var CLEARBOOK_PLAN_STATUSES = ["planned", "active", "done"];
 
 // src/core/shared/national-id.ts
 var PERSIAN_DIGITS = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
@@ -6871,6 +6883,55 @@ var UpdateKnowledgeSchema = external_exports.object({
   category: external_exports.enum(KNOWLEDGE_CATEGORIES).optional(),
   pinned: external_exports.boolean().optional(),
   published: external_exports.boolean().optional()
+});
+var ClearbookYmdSchema = external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u0628\u0627\u06CC\u062F \u062F\u0631 \u0642\u0627\u0644\u0628 \u0645\u06CC\u0644\u0627\u062F\u06CC YYYY-MM-DD \u0630\u062E\u06CC\u0631\u0647 \u0634\u0648\u062F");
+var ClearbookTagsSchema = external_exports.array(external_exports.string().trim().min(2, "\u0628\u0631\u0686\u0633\u0628 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(CLEARBOOK_TAG_MAX, `\u0628\u0631\u0686\u0633\u0628 \u062D\u062F\u0627\u06A9\u062B\u0631 ${CLEARBOOK_TAG_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`)).max(CLEARBOOK_TAGS_PER_ENTRY_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${CLEARBOOK_TAGS_PER_ENTRY_MAX} \u0628\u0631\u0686\u0633\u0628 \u0628\u0631\u0627\u06CC \u0647\u0631 \u0631\u0648\u06CC\u062F\u0627\u062F`).optional().default([]);
+var ClearbookEntryCreateSchema = external_exports.object({
+  title: external_exports.string().trim().min(2, "\u0639\u0646\u0648\u0627\u0646 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(CLEARBOOK_TITLE_MAX),
+  body: external_exports.string().trim().max(CLEARBOOK_BODY_MAX).optional().default(""),
+  event_date: ClearbookYmdSchema,
+  plan_id: UuidSchema.nullable().optional(),
+  tags: ClearbookTagsSchema
+});
+var ClearbookEntryUpdateSchema = external_exports.object({
+  title: external_exports.string().trim().min(2, "\u0639\u0646\u0648\u0627\u0646 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(CLEARBOOK_TITLE_MAX).optional(),
+  body: external_exports.string().trim().max(CLEARBOOK_BODY_MAX).optional(),
+  event_date: ClearbookYmdSchema.optional(),
+  plan_id: UuidSchema.nullable().optional(),
+  tags: ClearbookTagsSchema.optional()
+});
+var ClearbookPlanCreateSchema = external_exports.object({
+  title: external_exports.string().trim().min(2, "\u0639\u0646\u0648\u0627\u0646 \u0641\u0627\u0632 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(CLEARBOOK_PLAN_TITLE_MAX),
+  admin_actions: external_exports.string().trim().max(CLEARBOOK_PLAN_ACTIONS_MAX).optional().default(""),
+  center_actions: external_exports.string().trim().max(CLEARBOOK_PLAN_ACTIONS_MAX).optional().default(""),
+  from_date: ClearbookYmdSchema,
+  to_date: ClearbookYmdSchema.nullable().optional(),
+  status: external_exports.enum(CLEARBOOK_PLAN_STATUSES).optional().default("planned"),
+  tag: external_exports.string().trim().min(2).max(CLEARBOOK_TAG_MAX).nullable().optional()
+});
+var ClearbookPlanUpdateSchema = external_exports.object({
+  title: external_exports.string().trim().min(2, "\u0639\u0646\u0648\u0627\u0646 \u0641\u0627\u0632 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(CLEARBOOK_PLAN_TITLE_MAX).optional(),
+  admin_actions: external_exports.string().trim().max(CLEARBOOK_PLAN_ACTIONS_MAX).optional(),
+  center_actions: external_exports.string().trim().max(CLEARBOOK_PLAN_ACTIONS_MAX).optional(),
+  from_date: ClearbookYmdSchema.optional(),
+  to_date: ClearbookYmdSchema.nullable().optional(),
+  status: external_exports.enum(CLEARBOOK_PLAN_STATUSES).optional(),
+  tag: external_exports.string().trim().min(2).max(CLEARBOOK_TAG_MAX).nullable().optional()
+});
+var ClearbookPlanReorderSchema = external_exports.object({
+  ids: external_exports.array(UuidSchema).min(1, "\u0641\u0647\u0631\u0633\u062A \u062A\u0631\u062A\u06CC\u0628 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A")
+});
+var ClearbookSeedTemplateSchema = external_exports.object({
+  start_year: external_exports.number().int().min(1390, "\u0633\u0627\u0644 \u0634\u0631\u0648\u0639 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A").max(1450, "\u0633\u0627\u0644 \u0634\u0631\u0648\u0639 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A")
+});
+var ClearbookCopyYearSchema = external_exports.object({
+  from_year: external_exports.number().int().min(1390).max(1450),
+  to_year: external_exports.number().int().min(1390).max(1450)
+}).refine((v) => v.to_year > v.from_year && v.to_year - v.from_year <= 5, {
+  message: "\u0633\u0627\u0644 \u0645\u0642\u0635\u062F \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0633\u0627\u0644 \u0645\u0628\u062F\u0623 \u0628\u0627\u0634\u062F (\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F5 \u0633\u0627\u0644 \u0628\u0639\u062F)"
+});
+var ClearbookCaptionSchema = external_exports.object({
+  caption: external_exports.string().trim().max(CLEARBOOK_CAPTION_MAX, `\u06A9\u067E\u0634\u0646 \u062D\u062F\u0627\u06A9\u062B\u0631 ${CLEARBOOK_CAPTION_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`).nullable()
 });
 var CreateClassLinkSchema = external_exports.object({
   class_id: UuidSchema
@@ -15783,7 +15844,7 @@ function createExerciseBankService(deps) {
     return att;
   }
   __name(assertAttachment, "assertAttachment");
-  function bytesToBase64Str2(bytes) {
+  function bytesToBase64Str3(bytes) {
     let bin = "";
     const CHUNK = 32768;
     for (let i = 0; i < bytes.length; i += CHUNK) {
@@ -15791,7 +15852,7 @@ function createExerciseBankService(deps) {
     }
     return btoa(bin);
   }
-  __name(bytesToBase64Str2, "bytesToBase64Str");
+  __name(bytesToBase64Str3, "bytesToBase64Str");
   async function itemsForPackages(packageIds) {
     const map = /* @__PURE__ */ new Map();
     if (packageIds.length === 0) return map;
@@ -16209,7 +16270,7 @@ function createExerciseBankService(deps) {
       await db.execute(
         `INSERT INTO exercise_file_chunks (key, seq, content) VALUES (?, ?, ?)
          ON CONFLICT(key, seq) DO UPDATE SET content = excluded.content`,
-        [`exercise/${id}/${fileId}`, seq, bytesToBase64Str2(bytes)]
+        [`exercise/${id}/${fileId}`, seq, bytesToBase64Str3(bytes)]
       );
       return { received: bytes.length };
     },
@@ -32964,6 +33025,1114 @@ function registerKnowledgeRoutes(app, service) {
 }
 __name(registerKnowledgeRoutes, "registerKnowledgeRoutes");
 
+// src/domain/clearbook/pure.ts
+function normalizeTag(raw2) {
+  return String(raw2 ?? "").replace(/[\u200c\u200f\u200e]/g, "\u200C").replace(/\s+/g, " ").trim();
+}
+__name(normalizeTag, "normalizeTag");
+function dedupeTags(tags) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const t of tags) {
+    const norm = normalizeTag(t);
+    if (norm.length < 2) continue;
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    out.push(norm);
+  }
+  return out;
+}
+__name(dedupeTags, "dedupeTags");
+function escapeLike2(raw2) {
+  return String(raw2 ?? "").replace(/[%_\\]/g, (ch) => `\\${ch}`);
+}
+__name(escapeLike2, "escapeLike");
+function schoolYearOfYmd(ymd) {
+  const [gy, gm, gd] = ymd.split("-").map(Number);
+  const j = toJalaliParts(gy, gm, gd);
+  return j.jm >= 7 ? j.jy : j.jy - 1;
+}
+__name(schoolYearOfYmd, "schoolYearOfYmd");
+function shiftYmdByJalaliYears(ymd, n) {
+  const [gy, gm, gd] = ymd.split("-").map(Number);
+  const j = toJalaliParts(gy, gm, gd);
+  const target = { jy: j.jy + n, jm: j.jm, jd: j.jd };
+  let jd = target.jd;
+  for (; jd >= 29; jd -= 1) {
+    const g = jalaliToGregorianYmd(target.jy, target.jm, jd);
+    const back = toJalaliParts(Number(g.slice(0, 4)), Number(g.slice(5, 7)), Number(g.slice(8, 10)));
+    if (back.jy === target.jy && back.jm === target.jm && back.jd === jd) break;
+  }
+  return jalaliToGregorianYmd(target.jy, target.jm, Math.max(jd, 1));
+}
+__name(shiftYmdByJalaliYears, "shiftYmdByJalaliYears");
+var CLEARBOOK_SEED_TEMPLATE = [
+  {
+    title: "\u0633\u0627\u0632\u0645\u0627\u0646\u200C\u062F\u0647\u06CC \u0648 \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u0627\u0648\u0644\u06CC\u0647",
+    adminActions: "\u062C\u0644\u0633\u0647 \u0628\u0627 \u0627\u062F\u0627\u0631\u0647: \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u0638\u0631\u0641\u06CC\u062A \u0633\u0646\u062C\u0634 \u0646\u0648\u0622\u0645\u0648\u0632\u0627\u0646 \u0627\u06CC\u0631\u0627\u0646\u06CC\u060C \u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0628\u062E\u0634\u0646\u0627\u0645\u0647 \u0628\u0647 \u0645\u0647\u062F\u06A9\u0648\u062F\u06A9\u200C\u0647\u0627.",
+    centerActions: "\u062F\u0631\u06CC\u0627\u0641\u062A \u0622\u0645\u0627\u0631 \u0645\u0648\u0627\u0644\u06CC\u062F \u0627\u06CC\u0631\u0627\u0646\u06CC \u0627\u0632 \u062B\u0628\u062A\u200C\u0627\u062D\u0648\u0627\u0644 (\u0645\u062A\u0648\u0644\u062F\u06CC\u0646 \u0648\u0627\u062C\u062F \u0634\u0631\u0627\u06CC\u0637 \u067E\u06CC\u0634\u200C\u062F\u0628\u0633\u062A\u0627\u0646\u06CC \u0648 \u067E\u06CC\u0634 \u0627\u0632 \u062F\u0628\u0633\u062A\u0627\u0646)\u061B \u062A\u062F\u0648\u06CC\u0646 \u062C\u062F\u0648\u0644 \u0642\u0637\u0639\u06CC \u0632\u0645\u0627\u0646\u200C\u0628\u0646\u062F\u06CC \u0633\u0646\u062C\u0634 \u0628\u06CC\u0646 \u0645\u0647\u062F\u06A9\u0648\u062F\u06A9\u200C\u0647\u0627 \u0648 \u0627\u0637\u0644\u0627\u0639\u200C\u0631\u0633\u0627\u0646\u06CC \u0628\u0647 \u062E\u0627\u0646\u0648\u0627\u062F\u0647\u200C\u0647\u0627.",
+    fromMonth: 7,
+    fromDay: 1,
+    toMonth: 7,
+    toDay: 7,
+    tag: "\u0633\u0627\u0632\u0645\u0627\u0646\u200C\u062F\u0647\u06CC"
+  },
+  {
+    title: "\u0634\u0631\u0648\u0639 \u0633\u0646\u062C\u0634 \u0628\u062F\u0648 \u0648\u0631\u0648\u062F \u0628\u0647 \u062F\u0628\u0633\u062A\u0627\u0646",
+    adminActions: "\u0627\u0631\u0633\u0627\u0644 \u06AF\u0632\u0627\u0631\u0634 \u0647\u0641\u062A\u06AF\u06CC \u067E\u06CC\u0634\u0631\u0641\u062A \u0633\u0646\u062C\u0634 \u0628\u0647 \u0627\u062F\u0627\u0631\u0647 (\u062C\u0647\u062A \u067E\u0627\u06CC\u0634 \u067E\u0648\u0634\u0634 \u0622\u0645\u0627\u0631\u06CC).",
+    centerActions: "\u0633\u0646\u062C\u0634 \u0631\u0648\u0632\u0627\u0646\u0647 \u06F2\u06F0 \u0646\u0641\u0631 (\u06F3 \u0631\u0648\u0632 \u062F\u0631 \u0647\u0641\u062A\u0647)\u061B \u0627\u062C\u0631\u0627\u06CC \u062A\u0633\u062A \u062A\u062E\u0635\u0635\u06CC \u0627\u0631\u062C\u0627\u0639\u0627\u062A \u062F\u0631 \u0628\u0627\u0632\u0647 \u06F1\u06F0 \u0631\u0648\u0632\u0647 \u0648 \u0622\u063A\u0627\u0632 \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC.",
+    fromMonth: 7,
+    fromDay: 8,
+    toMonth: 8,
+    toDay: 30,
+    tag: "\u0633\u0646\u062C\u0634 \u0628\u062F\u0648 \u0648\u0631\u0648\u062F"
+  },
+  {
+    title: "\u0628\u0633\u062A\u0631\u0633\u0627\u0632\u06CC \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC",
+    adminActions: "\u0635\u062F\u0648\u0631 \u0628\u062E\u0634\u0646\u0627\u0645\u0647 \u0627\u0632 \u0627\u062F\u0627\u0631\u0647 \u0628\u0647 \u0645\u062F\u0627\u0631\u0633: \u0645\u0639\u0631\u0641\u06CC \u0645\u0631\u06A9\u0632 \u0648 \u0627\u0628\u0644\u0627\u063A \u0631\u0648\u06CC\u0647 \u0627\u0631\u062C\u0627\u0639 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u062F\u0627\u0631\u0627\u06CC \u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC (SLD) \u0648 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632.",
+    centerActions: "\u0622\u0645\u0627\u062F\u0647\u200C\u0633\u0627\u0632\u06CC \u0638\u0631\u0641\u06CC\u062A \u0645\u0631\u06A9\u0632 \u0628\u0631\u0627\u06CC \u0634\u06CC\u0641\u062A \u0627\u0632 \xAB\u0633\u0646\u062C\u0634\xBB \u0628\u0647 \xAB\u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC\xBB.",
+    fromMonth: 8,
+    fromDay: 1,
+    toMonth: 8,
+    toDay: 10,
+    tag: "\u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC"
+  },
+  {
+    title: "\u0641\u0627\u0632 \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC (SLD)",
+    adminActions: "\u062C\u0644\u0633\u0627\u062A \u062A\u0648\u062C\u06CC\u0647\u06CC \u062D\u0636\u0648\u0631\u06CC \u062F\u0631 \u0645\u062F\u0627\u0631\u0633: \u062D\u0636\u0648\u0631 \u062F\u0631 \u0634\u0648\u0631\u0627\u06CC \u0645\u0639\u0644\u0645\u0627\u0646 \u0628\u0631\u0627\u06CC \u0622\u0645\u0648\u0632\u0634 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0648 \u0646\u062D\u0648\u0647 \u0627\u0631\u062C\u0627\u0639.",
+    centerActions: "\u067E\u0630\u06CC\u0631\u0634 \u0645\u0633\u062A\u0645\u0631 \u0627\u0631\u062C\u0627\u0639\u0627\u062A \u0645\u062F\u0627\u0631\u0633\u061B \u06A9\u0627\u0647\u0634 \u0631\u0648\u0632\u0647\u0627\u06CC \u0633\u0646\u062C\u0634 \u0648 \u0627\u0641\u0632\u0627\u06CC\u0634 \u0638\u0631\u0641\u06CC\u062A \u062F\u0631\u0645\u0627\u0646 (\u06F5 \u062A\u0627 \u06F3\u06F0 \u062C\u0644\u0633\u0647).",
+    fromMonth: 8,
+    fromDay: 11,
+    toMonth: 10,
+    toDay: 30,
+    tag: "\u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC"
+  },
+  {
+    title: "\u0633\u0646\u062C\u0634 \u0627\u062A\u0628\u0627\u0639",
+    adminActions: "\u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u0633\u0627\u0645\u0627\u0646\u0647\u200C\u0627\u06CC: \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u0627\u0632 \u0627\u062F\u0627\u0631\u0647 \u0628\u0631\u0627\u06CC \u0641\u0639\u0627\u0644 \u0634\u062F\u0646 \u062F\u0633\u062A\u0631\u0633\u06CC \u062B\u0628\u062A\u200C\u0646\u0627\u0645 \u0627\u062A\u0628\u0627\u0639 \u062F\u0631 \u0633\u0627\u0645\u0627\u0646\u0647\u200C\u0647\u0627 (\u0633\u06CC\u0631\u062A/\u0633\u0647\u0645\u0627/\u06A9\u062F \u06CC\u06A9\u062A\u0627)\u061B \u0635\u062F\u0648\u0631 \u0628\u062E\u0634\u0646\u0627\u0645\u0647 \u0627\u062A\u0628\u0627\u0639: \u0627\u0637\u0644\u0627\u0639\u200C\u0631\u0633\u0627\u0646\u06CC \u0628\u0647 \u0645\u062F\u0627\u0631\u0633 \u0648 \u0645\u0631\u0627\u062C\u0639 \u0645\u062D\u0644\u06CC \u0628\u0631\u0627\u06CC \u0646\u0648\u0628\u062A\u200C\u06AF\u06CC\u0631\u06CC \u0645\u062A\u0645\u0631\u06A9\u0632 \u0627\u062A\u0628\u0627\u0639.",
+    centerActions: "\u0627\u062E\u062A\u0635\u0627\u0635 \u0634\u06CC\u0641\u062A\u200C\u0647\u0627\u06CC \u06A9\u0627\u0631\u06CC \u0645\u0631\u06A9\u0632 \u0635\u0631\u0641\u0627\u064B \u0628\u0647 \u063A\u0631\u0628\u0627\u0644\u06AF\u0631\u06CC \u0648 \u062A\u0633\u062A \u062A\u062E\u0635\u0635\u06CC \u0646\u0648\u0622\u0645\u0648\u0632\u0627\u0646 \u0627\u062A\u0628\u0627\u0639\u061B \u0627\u062A\u0645\u0627\u0645 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC\u200C\u0647\u0627\u06CC \u0646\u0627\u062A\u0645\u0627\u0645.",
+    fromMonth: 11,
+    fromDay: 1,
+    toMonth: 11,
+    toDay: 30,
+    tag: "\u0633\u0646\u062C\u0634 \u0627\u062A\u0628\u0627\u0639"
+  },
+  {
+    title: "\u06A9\u0645\u06CC\u062A\u0647 \u062C\u0627\u06CC\u200C\u062F\u0647\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC",
+    adminActions: "\u062F\u0639\u0648\u062A\u200C\u0646\u0627\u0645\u0647 \u0631\u0633\u0645\u06CC: \u062F\u0639\u0648\u062A \u0627\u0632 \u0646\u0645\u0627\u06CC\u0646\u062F\u0647 \u0627\u062F\u0627\u0631\u0647\u060C \u0645\u062F\u06CC\u0631\u0627\u0646 \u0645\u062F\u0627\u0631\u0633 \u0627\u0633\u062A\u062B\u0646\u0627\u06CC\u06CC \u0648 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0628\u0631\u0627\u06CC \u062D\u0636\u0648\u0631 \u062F\u0631 \u06A9\u0645\u06CC\u062A\u0647.",
+    centerActions: "\u0628\u0631\u06AF\u0632\u0627\u0631\u06CC \u062C\u0644\u0633\u0627\u062A \u0648 \u0635\u062F\u0648\u0631 \u0631\u0627\u06CC \u0646\u0647\u0627\u06CC\u06CC (\u062C\u0627\u06CC\u200C\u062F\u0647\u06CC \u062F\u0631 \u0633\u06CC\u0633\u062A\u0645 \u0639\u0627\u062F\u06CC \u06CC\u0627 \u0627\u0633\u062A\u062B\u0646\u0627\u06CC\u06CC).",
+    fromMonth: 12,
+    fromDay: 1,
+    toMonth: 12,
+    toDay: 7,
+    tag: "\u06A9\u0645\u06CC\u062A\u0647 \u062C\u0627\u06CC\u200C\u062F\u0647\u06CC"
+  },
+  {
+    title: "\u062A\u062F\u0627\u0648\u0645 \u062F\u0631\u0645\u0627\u0646 \u0648 \u067E\u06CC\u06AF\u06CC\u0631\u06CC",
+    adminActions: "\u0627\u0631\u0633\u0627\u0644 \u06AF\u0632\u0627\u0631\u0634 \u0639\u0645\u0644\u06A9\u0631\u062F \u0634\u0634\u200C\u0645\u0627\u0647\u0647 \u0628\u0647 \u0627\u062F\u0627\u0631\u0647\u061B \u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u0648 \u062A\u0631\u062E\u06CC\u0635 \u067E\u0631\u0648\u0646\u062F\u0647\u200C\u0647\u0627.",
+    centerActions: "\u0627\u062F\u0627\u0645\u0647 \u062F\u0631\u0645\u0627\u0646\u200C\u0647\u0627\u06CC \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0648 \u0645\u062F\u0627\u062E\u0644\u0627\u062A \u0628\u0647\u0646\u06AF\u0627\u0645.",
+    fromMonth: 1,
+    fromDay: 1,
+    toMonth: 2,
+    toDay: 31,
+    tag: "\u062A\u062F\u0627\u0648\u0645 \u062F\u0631\u0645\u0627\u0646"
+  },
+  {
+    title: "\u0622\u0645\u0627\u062F\u0647\u200C\u0633\u0627\u0632\u06CC \u062C\u0647\u0634 \u062A\u062D\u0635\u06CC\u0644\u06CC",
+    adminActions: "\u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0635\u062F\u0648\u0631 \u0628\u062E\u0634\u0646\u0627\u0645\u0647 \u062C\u0647\u0634 \u0627\u0632 \u0627\u062F\u0627\u0631\u0647: \u0627\u0637\u0644\u0627\u0639\u200C\u0631\u0633\u0627\u0646\u06CC \u0634\u0631\u0627\u06CC\u0637\u060C \u0645\u062F\u0627\u0631\u06A9 \u0648 \u0632\u0645\u0627\u0646 \u062B\u0628\u062A\u200C\u0646\u0627\u0645 \u062C\u0647\u0634 \u062A\u062D\u0635\u06CC\u0644\u06CC.",
+    centerActions: "\u062A\u0646\u0638\u06CC\u0645 \u0633\u06CC\u0633\u062A\u0645 \u0646\u0648\u0628\u062A\u200C\u062F\u0647\u06CC \u0648\u06CC\u0698\u0647 \u062C\u0647\u0634 \u062F\u0631 \u0645\u0631\u06A9\u0632.",
+    fromMonth: 2,
+    fromDay: 1,
+    toMonth: 2,
+    toDay: 15,
+    tag: "\u062C\u0647\u0634 \u062A\u062D\u0635\u06CC\u0644\u06CC"
+  },
+  {
+    title: "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u062C\u0647\u0634 \u062A\u062D\u0635\u06CC\u0644\u06CC",
+    adminActions: "\u0627\u0637\u0644\u0627\u0639\u200C\u0631\u0633\u0627\u0646\u06CC \u0645\u062C\u062F\u062F \u0628\u0647 \u0645\u062F\u0627\u0631\u0633 \u062C\u0627\u0645\u0627\u0646\u062F\u0647.",
+    centerActions: "\u0627\u062C\u0631\u0627\u06CC \u0622\u0632\u0645\u0648\u0646\u200C\u0647\u0627\u06CC \u0634\u0646\u0627\u062E\u062A\u06CC \u062C\u0647\u0634 \u0648 \u0627\u0639\u0644\u0627\u0645 \u0646\u062A\u0627\u06CC\u062C \u0628\u0647 \u0645\u062F\u0627\u0631\u0633.",
+    fromMonth: 3,
+    fromDay: 1,
+    toMonth: 3,
+    toDay: 31,
+    tag: "\u062C\u0647\u0634 \u062A\u062D\u0635\u06CC\u0644\u06CC"
+  },
+  {
+    title: "\u0633\u0646\u062C\u0634 \u062A\u06A9\u0645\u06CC\u0644\u06CC (\u062A\u0627\u0628\u0633\u062A\u0627\u0646\u0647)",
+    adminActions: "\u0627\u0637\u0644\u0627\u0639\u06CC\u0647 \u0639\u0645\u0648\u0645\u06CC: \u0641\u0631\u0627\u062E\u0648\u0627\u0646 \u0633\u0646\u062C\u0634 \u0646\u0648\u0622\u0645\u0648\u0632\u0627\u0646 \u062C\u0627\u0645\u0627\u0646\u062F\u0647 (\u0627\u06CC\u0631\u0627\u0646\u06CC \u0648 \u0627\u062A\u0628\u0627\u0639 \u062C\u0627\u0645\u0627\u0646\u062F\u0647).",
+    centerActions: "\u0628\u0627\u0632\u06AF\u0634\u0627\u06CC\u06CC \u0638\u0631\u0641\u06CC\u062A \u0633\u0646\u062C\u0634.",
+    fromMonth: 4,
+    fromDay: 1,
+    toMonth: 5,
+    toDay: 31,
+    tag: "\u0633\u0646\u062C\u0634 \u062A\u0627\u0628\u0633\u062A\u0627\u0646\u0647"
+  },
+  {
+    title: "\u0622\u0645\u0627\u062F\u0647\u200C\u0633\u0627\u0632\u06CC \u062A\u0633\u062A \u0645\u062C\u062F\u062F",
+    adminActions: "\u0635\u062F\u0648\u0631 \u0628\u062E\u0634\u0646\u0627\u0645\u0647 \u062A\u0633\u062A \u0645\u062C\u062F\u062F \u0627\u0632 \u0633\u0648\u06CC \u0627\u062F\u0627\u0631\u0647: \u0627\u0628\u0644\u0627\u063A \u0628\u0647 \u0645\u062F\u06CC\u0631\u0627\u0646 \u0645\u062F\u0627\u0631\u0633 \u062C\u0647\u062A \u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u06A9\u0627\u0646\u062F\u06CC\u062F\u0627\u06CC \u0627\u0646\u062A\u0642\u0627\u0644 \u0622\u0645\u0648\u0632\u0634\u06CC.",
+    centerActions: "\u062A\u0648\u062C\u06CC\u0647 \u0645\u062F\u06CC\u0631\u0627\u0646 \u0645\u062F\u0627\u0631\u0633 \u0628\u0631\u0627\u06CC \u062A\u06A9\u0645\u06CC\u0644 \u0641\u0631\u0645\u200C\u0647\u0627\u06CC \u0639\u0645\u0644\u06A9\u0631\u062F \u062A\u062D\u0635\u06CC\u0644\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u067E\u06CC\u0634 \u0627\u0632 \u0627\u0631\u062C\u0627\u0639.",
+    fromMonth: 5,
+    fromDay: 1,
+    toMonth: 5,
+    toDay: 7,
+    tag: "\u062A\u0633\u062A \u0645\u062C\u062F\u062F"
+  },
+  {
+    title: "\u0627\u062C\u0631\u0627\u06CC \u062A\u0633\u062A \u0645\u062C\u062F\u062F",
+    adminActions: "\u0627\u0631\u0633\u0627\u0644 \u0644\u06CC\u0633\u062A \u0646\u0647\u0627\u06CC\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u062C\u0627\u06CC\u06AF\u0627\u0647 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u0628\u0647 \u0627\u062F\u0627\u0631\u0647 \u062C\u0647\u062A \u062B\u0628\u062A \u062F\u0631 \u0633\u0627\u0645\u0627\u0646\u0647 \u0633\u06CC\u062F\u0627.",
+    centerActions: "\u0627\u062C\u0631\u0627\u06CC \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC\u200C\u0647\u0627\u06CC \u062A\u0634\u062E\u06CC\u0635\u06CC \u0648 \u062A\u0639\u06CC\u06CC\u0646 \u062C\u0627\u06CC\u06AF\u0627\u0647 \u0646\u0647\u0627\u06CC\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC \u0628\u0631\u0627\u06CC \u0633\u0627\u0644 \u062A\u062D\u0635\u06CC\u0644\u06CC \u062C\u062F\u06CC\u062F.",
+    fromMonth: 6,
+    fromDay: 1,
+    toMonth: 6,
+    toDay: 31,
+    tag: "\u062A\u0633\u062A \u0645\u062C\u062F\u062F"
+  }
+];
+function buildSeedPlans(startYear) {
+  return CLEARBOOK_SEED_TEMPLATE.map((row, i) => {
+    const fromYear = row.fromMonth >= 7 ? startYear : startYear + 1;
+    const toYear = row.toMonth >= 7 ? startYear : startYear + 1;
+    return {
+      title: row.title,
+      admin_actions: row.adminActions,
+      center_actions: row.centerActions,
+      from_date: jalaliToGregorianYmd(fromYear, row.fromMonth, row.fromDay),
+      to_date: jalaliToGregorianYmd(toYear, row.toMonth, row.toDay),
+      tag: row.tag,
+      sort_order: i
+    };
+  });
+}
+__name(buildSeedPlans, "buildSeedPlans");
+
+// src/domain/clearbook/service.ts
+var ENTRY_COLS = `e.id, e.plan_id, e.title, e.body, e.event_date, e.created_by,
+       s.full_name AS created_by_name, e.created_at, e.updated_at`;
+var PLAN_COLS = `p.id, p.title, p.admin_actions, p.center_actions, p.from_date, p.to_date,
+       p.status, p.tag, p.sort_order, p.created_by, s.full_name AS created_by_name,
+       p.created_at, p.updated_at`;
+function concatSegments3(segments) {
+  if (segments.length === 1) return segments[0];
+  const total = segments.reduce((n, s) => n + s.length, 0);
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const s of segments) {
+    out.set(s, off);
+    off += s.length;
+  }
+  return out;
+}
+__name(concatSegments3, "concatSegments");
+function bytesToBase64Str2(bytes) {
+  let bin = "";
+  const CHUNK = 32768;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
+__name(bytesToBase64Str2, "bytesToBase64Str");
+function sizeLimitMessage2(bytes) {
+  const mb = bytes / (1024 * 1024);
+  const label = mb >= 1 ? `${faDigits(String(Math.round(mb)))} \u0645\u06AF\u0627\u0628\u0627\u06CC\u062A` : `${faDigits(String(Math.round(bytes / 1024)))} \u06A9\u06CC\u0644\u0648\u0628\u0627\u06CC\u062A`;
+  return `\u062D\u062C\u0645 \u0641\u0627\u06CC\u0644 \u0628\u06CC\u0634 \u0627\u0632 ${label} \u0627\u0633\u062A`;
+}
+__name(sizeLimitMessage2, "sizeLimitMessage");
+function createClearbookService(deps) {
+  const { db, audit, logger, storage } = deps;
+  const log = logger.child("clearbook");
+  function assertOffice(actor) {
+    if (actor.role !== "manager" && actor.role !== "secretary") {
+      throw new ForbiddenError("\u06A9\u0644\u0631 \u0628\u0648\u06A9 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 (\u0645\u062F\u06CC\u0631/\u0645\u0646\u0634\u06CC) \u0641\u0639\u0627\u0644 \u0627\u0633\u062A");
+    }
+  }
+  __name(assertOffice, "assertOffice");
+  function rowToEntry3(row, tags, attachments) {
+    return {
+      id: row.id,
+      planId: row.plan_id,
+      title: row.title,
+      body: row.body ?? "",
+      eventDate: row.event_date,
+      tags,
+      attachments,
+      createdByName: row.created_by_name ?? null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
+  __name(rowToEntry3, "rowToEntry");
+  function rowToPlan(row, evidence) {
+    return {
+      id: row.id,
+      title: row.title,
+      adminActions: row.admin_actions ?? "",
+      centerActions: row.center_actions ?? "",
+      fromDate: row.from_date,
+      toDate: row.to_date,
+      status: row.status ?? "planned",
+      tag: row.tag,
+      sortOrder: row.sort_order,
+      evidence,
+      createdByName: row.created_by_name ?? null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
+  __name(rowToPlan, "rowToPlan");
+  async function tagsOfEntries(entryIds) {
+    const map = /* @__PURE__ */ new Map();
+    if (entryIds.length === 0) return map;
+    const ph = entryIds.map(() => "?").join(", ");
+    const rows = await db.query(
+      `SELECT entry_id, tag FROM clearbook_entry_tags WHERE entry_id IN (${ph}) ORDER BY rowid`,
+      entryIds
+    );
+    for (const r of rows) {
+      const list = map.get(r.entry_id) ?? [];
+      list.push(r.tag);
+      map.set(r.entry_id, list);
+    }
+    return map;
+  }
+  __name(tagsOfEntries, "tagsOfEntries");
+  async function attachmentsOfEntries(entryIds) {
+    const map = /* @__PURE__ */ new Map();
+    if (entryIds.length === 0) return map;
+    const ph = entryIds.map(() => "?").join(", ");
+    const rows = await db.query(
+      `SELECT id, entry_id, file_key, file_name, file_mime, file_size, kind, caption, created_at
+         FROM clearbook_attachments WHERE entry_id IN (${ph}) ORDER BY created_at, rowid`,
+      entryIds
+    );
+    for (const r of rows) {
+      const list = map.get(r.entry_id) ?? [];
+      list.push({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size, kind: r.kind, caption: r.caption });
+      map.set(r.entry_id, list);
+    }
+    return map;
+  }
+  __name(attachmentsOfEntries, "attachmentsOfEntries");
+  async function getEntryRow(id) {
+    return db.queryOne(
+      `SELECT ${ENTRY_COLS} FROM clearbook_entries e JOIN staff s ON s.id = e.created_by WHERE e.id = ?`,
+      [id]
+    );
+  }
+  __name(getEntryRow, "getEntryRow");
+  async function getPlanRow(id) {
+    return db.queryOne(
+      `SELECT ${PLAN_COLS} FROM clearbook_plans p JOIN staff s ON s.id = p.created_by WHERE p.id = ?`,
+      [id]
+    );
+  }
+  __name(getPlanRow, "getPlanRow");
+  async function getEntryRecord(id) {
+    const row = await getEntryRow(id);
+    if (!row) return null;
+    const [tags, atts] = await Promise.all([tagsOfEntries([id]), attachmentsOfEntries([id])]);
+    return rowToEntry3(row, tags.get(id) ?? [], atts.get(id) ?? []);
+  }
+  __name(getEntryRecord, "getEntryRecord");
+  async function getPlanRecord(row) {
+    const countRow = await db.queryOne(
+      `SELECT COUNT(*) AS n FROM clearbook_entries WHERE plan_id = ?`,
+      [row.id]
+    );
+    const thumbRows = await db.query(
+      `SELECT a.id AS file_id, a2.id AS entry_id
+         FROM clearbook_attachments a
+         JOIN clearbook_entries a2 ON a2.id = a.entry_id
+        WHERE a2.plan_id = ? AND a.kind = 'image'
+        ORDER BY a.created_at DESC, a.rowid DESC
+        LIMIT 3`,
+      [row.id]
+    );
+    return rowToPlan(row, { count: countRow?.n ?? 0, thumbs: thumbRows.map((t) => ({ entryId: t.entry_id, fileId: t.file_id })) });
+  }
+  __name(getPlanRecord, "getPlanRecord");
+  function validatePrepared(file) {
+    const mime = String(file.mimeType ?? "").toLowerCase();
+    if (!ALLOWED_FILE_MIME_TYPES.includes(mime)) {
+      throw new ValidationError("\u0646\u0648\u0639 \u0641\u0627\u06CC\u0644 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A \u2014 \u0641\u0642\u0637 \u062A\u0635\u0648\u06CC\u0631 (JPG/PNG/WebP) \u0648 \u0633\u0646\u062F (PDF/Word/Excel/\u0645\u062A\u0646)");
+    }
+    const filename = sanitizeFilename(file.filename);
+    if (!filename) throw new ValidationError("\u0646\u0627\u0645 \u0641\u0627\u06CC\u0644 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+    if (!Number.isFinite(file.size) || file.size <= 0) throw new ValidationError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0641\u0627\u06CC\u0644 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
+    if (file.size > Math.min(storage.maxObjectBytes, MAX_EXERCISE_PANEL_FILE_BYTES)) {
+      throw new ValidationError(sizeLimitMessage2(MAX_EXERCISE_PANEL_FILE_BYTES));
+    }
+    return { filename, mime, kind: mime.startsWith("image/") ? "image" : "doc" };
+  }
+  __name(validatePrepared, "validatePrepared");
+  async function assertEntryExists(id) {
+    const row = await getEntryRow(id);
+    if (!row) throw new NotFoundError("\u0631\u0648\u06CC\u062F\u0627\u062F \u06A9\u0644\u0631 \u0628\u0648\u06A9");
+    return row;
+  }
+  __name(assertEntryExists, "assertEntryExists");
+  async function assertAttachment(entryId, fileId) {
+    const att = await db.queryOne(
+      `SELECT id, entry_id, file_key, file_name, file_mime, file_size, kind, caption, created_at
+         FROM clearbook_attachments WHERE id = ? AND entry_id = ?`,
+      [fileId, entryId]
+    );
+    if (!att) throw new NotFoundError("\u0641\u0627\u06CC\u0644 \u0631\u0648\u06CC\u062F\u0627\u062F");
+    return att;
+  }
+  __name(assertAttachment, "assertAttachment");
+  async function assertAttachmentCount(entryId, adding) {
+    const countRow = await db.queryOne(
+      `SELECT COUNT(*) AS n FROM clearbook_attachments WHERE entry_id = ?`,
+      [entryId]
+    );
+    if ((countRow?.n ?? 0) + adding > CLEARBOOK_ATTACHMENTS_PER_ENTRY_MAX) {
+      throw new ValidationError(`\u062D\u062F\u0627\u06A9\u062B\u0631 ${CLEARBOOK_ATTACHMENTS_PER_ENTRY_MAX} \u0641\u0627\u06CC\u0644 \u0628\u0631\u0627\u06CC \u0647\u0631 \u0631\u0648\u06CC\u062F\u0627\u062F`);
+    }
+  }
+  __name(assertAttachmentCount, "assertAttachmentCount");
+  function assertPlanRange(fromDate, toDate) {
+    if (toDate && toDate < fromDate) throw new ValidationError("\u0628\u0627\u0632\u0647\u0654 \u0632\u0645\u0627\u0646\u06CC \u0641\u0627\u0632 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 \xAB\u062A\u0627\xBB \u0646\u0628\u0627\u06CC\u062F \u0642\u0628\u0644 \u0627\u0632 \xAB\u0627\u0632\xBB \u0628\u0627\u0634\u062F");
+  }
+  __name(assertPlanRange, "assertPlanRange");
+  return {
+    // ─── رویدادها ───
+    async listEntries(opts) {
+      const limit = Math.min(Math.max(1, opts.limit || CLEARBOOK_ENTRY_PAGE_SIZE), CLEARBOOK_ENTRY_PAGE_MAX);
+      const where = [];
+      const params = [];
+      if (opts.from) {
+        where.push("e.event_date >= ?");
+        params.push(opts.from);
+      }
+      if (opts.to) {
+        where.push("e.event_date <= ?");
+        params.push(opts.to);
+      }
+      if (opts.planId) {
+        where.push("e.plan_id = ?");
+        params.push(opts.planId);
+      }
+      if (opts.tag) {
+        where.push(`EXISTS (SELECT 1 FROM clearbook_entry_tags t WHERE t.entry_id = e.id AND t.tag = ?)`);
+        params.push(normalizeTag(opts.tag));
+      }
+      if (opts.q) {
+        const like = `%${escapeLike2(opts.q)}%`;
+        where.push(`(e.title LIKE ? ESCAPE '\\' OR e.body LIKE ? ESCAPE '\\')`);
+        params.push(like, like);
+      }
+      const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+      const rows = await db.query(
+        `SELECT ${ENTRY_COLS} FROM clearbook_entries e JOIN staff s ON s.id = e.created_by
+          ${whereSql}
+          ORDER BY e.event_date ASC, e.created_at ASC, e.id ASC
+          LIMIT ${limit + 1} OFFSET ${Math.max(0, opts.offset)}`,
+        params
+      );
+      const hasMore = rows.length > limit;
+      const page = rows.slice(0, limit);
+      const ids = page.map((r) => r.id);
+      const [tagMap, attMap] = await Promise.all([tagsOfEntries(ids), attachmentsOfEntries(ids)]);
+      return {
+        items: page.map((r) => rowToEntry3(r, tagMap.get(r.id) ?? [], attMap.get(r.id) ?? [])),
+        hasMore
+      };
+    },
+    async getEntry(id) {
+      return getEntryRecord(id);
+    },
+    async createEntry(input, actor) {
+      assertOffice(actor);
+      const id = crypto.randomUUID();
+      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const tags = dedupeTags(input.tags ?? []);
+      if (input.planId) await assertPlanExists(input.planId);
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO clearbook_entries (id, plan_id, title, body, event_date, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, input.planId, input.title, input.body ?? "", input.eventDate, actor.staffId, nowIso, nowIso]
+        );
+        for (const tag of tags) {
+          await tx.execute(`INSERT INTO clearbook_entry_tags (entry_id, tag) VALUES (?, ?)`, [id, tag]);
+        }
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "clearbook.entry.create",
+          resourceType: "clearbook_entry",
+          resourceId: id,
+          changes: {
+            title: { from: null, to: input.title },
+            event_date: { from: null, to: input.eventDate },
+            plan_id: { from: null, to: input.planId },
+            tags: { from: null, to: tags.length }
+          }
+        });
+      });
+      log.info("clearbook.entry.created", { id });
+      return await getEntryRecord(id);
+    },
+    async updateEntry(id, input, actor) {
+      assertOffice(actor);
+      const existingRow = await assertEntryExists(id);
+      const existing = await getEntryRecord(id);
+      const next = {
+        title: input.title ?? existing.title,
+        body: input.body ?? existing.body,
+        eventDate: input.eventDate ?? existing.eventDate,
+        planId: input.planId !== void 0 ? input.planId : existing.planId
+      };
+      if (next.planId) await assertPlanExists(next.planId);
+      const tags = input.tags !== void 0 ? dedupeTags(input.tags) : null;
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE clearbook_entries SET title = ?, body = ?, event_date = ?, plan_id = ?, updated_at = ? WHERE id = ?`,
+          [next.title, next.body, next.eventDate, next.planId, (/* @__PURE__ */ new Date()).toISOString(), id]
+        );
+        if (tags) {
+          await tx.execute(`DELETE FROM clearbook_entry_tags WHERE entry_id = ?`, [id]);
+          for (const tag of tags) {
+            await tx.execute(`INSERT INTO clearbook_entry_tags (entry_id, tag) VALUES (?, ?)`, [id, tag]);
+          }
+        }
+        const changes = {
+          title: { from: existing.title, to: next.title },
+          event_date: { from: existing.eventDate, to: next.eventDate },
+          plan_id: { from: existing.planId, to: next.planId }
+        };
+        if (tags) changes.tags = { from: existing.tags.length, to: tags.length };
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "clearbook.entry.update",
+          resourceType: "clearbook_entry",
+          resourceId: id,
+          changes
+        });
+      });
+      log.info("clearbook.entry.updated", { id });
+      return await getEntryRecord(id);
+    },
+    async removeEntry(id, actor) {
+      assertOffice(actor);
+      const existing = await assertEntryExists(id);
+      const attRows = await db.query(
+        `SELECT file_key FROM clearbook_attachments WHERE entry_id = ?`,
+        [id]
+      );
+      await db.transaction(async (tx) => {
+        await tx.execute(`DELETE FROM clearbook_entry_tags WHERE entry_id = ?`, [id]);
+        await tx.execute(`DELETE FROM clearbook_attachments WHERE entry_id = ?`, [id]);
+        await tx.execute(`DELETE FROM clearbook_entries WHERE id = ?`, [id]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "clearbook.entry.delete",
+          resourceType: "clearbook_entry",
+          resourceId: id,
+          changes: { title: { from: existing.title, to: null } }
+        });
+      });
+      for (const k of attRows) {
+        await storage.delete(k.file_key).catch((err) => {
+          log.warn("clearbook.attachment.storage.delete.failed", { key: k.file_key, error: err instanceof Error ? err.message : String(err) });
+        });
+      }
+      log.info("clearbook.entry.deleted", { id, attachments: attRows.length });
+      return { id };
+    },
+    // ─── پیوست‌ها ───
+    async addFiles(id, files, actor) {
+      assertOffice(actor);
+      await assertEntryExists(id);
+      if (!Array.isArray(files) || files.length === 0) throw new ValidationError("\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u0627\u06CC\u0644 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+      if (files.length > CLEARBOOK_FILES_PER_UPLOAD_MAX) {
+        throw new ValidationError(`\u062D\u062F\u0627\u06A9\u062B\u0631 ${CLEARBOOK_FILES_PER_UPLOAD_MAX} \u0641\u0627\u06CC\u0644 \u062F\u0631 \u0647\u0631 \u0628\u0627\u0631 \u0628\u0627\u0631\u06AF\u0630\u0627\u0631\u06CC`);
+      }
+      await assertAttachmentCount(id, files.length);
+      const preparedList = files.map((f) => ({ ...validatePrepared(f), segments: f.segments, size: f.size }));
+      for (const prepared of preparedList) {
+        const attId = crypto.randomUUID();
+        const key = `clearbook/${id}/${attId}`;
+        if (storage.putSegments) {
+          await storage.putSegments(key, prepared.segments);
+        } else {
+          await storage.put(key, concatSegments3(prepared.segments), prepared.mime);
+        }
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            `INSERT INTO clearbook_attachments (id, entry_id, file_key, file_name, file_mime, file_size, kind)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [attId, id, key, prepared.filename, prepared.mime, prepared.size, prepared.kind]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: "clearbook.entry.files.added",
+            resourceType: "clearbook_entry",
+            resourceId: id,
+            changes: {
+              filename: { from: null, to: prepared.filename },
+              kind: { from: null, to: prepared.kind },
+              sizeBytes: { from: null, to: prepared.size }
+            }
+          });
+        });
+      }
+      log.info("clearbook.entry.files.added", { id, count: preparedList.length });
+      return await getEntryRecord(id);
+    },
+    async beginChunkedUpload(id, input, actor) {
+      assertOffice(actor);
+      await assertEntryExists(id);
+      const prepared = validatePrepared({ filename: input.filename, mimeType: input.mimeType, size: input.size });
+      await assertAttachmentCount(id, 1);
+      const attId = crypto.randomUUID();
+      const key = `clearbook/${id}/${attId}`;
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO clearbook_attachments (id, entry_id, file_key, file_name, file_mime, file_size, kind)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [attId, id, key, prepared.filename, prepared.mime, input.size, prepared.kind]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "clearbook.entry.file.upload.began",
+          resourceType: "clearbook_entry",
+          resourceId: id,
+          changes: { filename: { from: null, to: prepared.filename }, sizeBytes: { from: null, to: input.size } }
+        });
+      });
+      log.info("clearbook.entry.file.upload.began", { id, fileId: attId, size: input.size });
+      return { fileId: attId };
+    },
+    async putUploadChunk(id, fileId, seq, bytes, actor) {
+      assertOffice(actor);
+      const att = await assertAttachment(id, fileId);
+      if (!Number.isInteger(seq) || seq < 0 || seq > 1024) throw new ValidationError("\u0634\u0645\u0627\u0631\u0647 \u062A\u06A9\u0647 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+      if (bytes.length === 0) throw new ValidationError("\u062A\u06A9\u0647\u0654 \u062E\u0627\u0644\u06CC");
+      if (bytes.length > MAX_EXERCISE_UPLOAD_CHUNK_BYTES) throw new ValidationError("\u062D\u062C\u0645 \u062A\u06A9\u0647 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
+      await db.execute(
+        `INSERT INTO exercise_file_chunks (key, seq, content) VALUES (?, ?, ?)
+         ON CONFLICT(key, seq) DO UPDATE SET content = excluded.content`,
+        [att.file_key, seq, bytesToBase64Str2(bytes)]
+      );
+      return { received: bytes.length };
+    },
+    async completeChunkedUpload(id, fileId, actor) {
+      assertOffice(actor);
+      const att = await assertAttachment(id, fileId);
+      const stat = await db.queryOne(
+        `SELECT COUNT(*) AS n, SUM(length(content)) AS bl FROM exercise_file_chunks WHERE key = ?`,
+        [att.file_key]
+      );
+      const b64Len = /* @__PURE__ */ __name((n) => Math.ceil(n / 3) * 4, "b64Len");
+      const fullChunks = Math.floor(att.file_size / MAX_EXERCISE_UPLOAD_CHUNK_BYTES);
+      const rest = att.file_size % MAX_EXERCISE_UPLOAD_CHUNK_BYTES;
+      const expectedRows = rest === 0 ? fullChunks : fullChunks + 1;
+      const expectedB64 = fullChunks * b64Len(MAX_EXERCISE_UPLOAD_CHUNK_BYTES) + (rest === 0 ? 0 : b64Len(rest));
+      if (!stat || stat.n !== expectedRows || (stat.bl ?? 0) !== expectedB64) {
+        throw new ConflictError("\u0628\u0627\u0631\u06AF\u0630\u0627\u0631\u06CC \u0646\u0627\u0642\u0635 \u0627\u0633\u062A \u2014 \u062A\u06A9\u0647\u200C\u0647\u0627 \u0628\u0627 \u062D\u062C\u0645 \u0627\u0639\u0644\u0627\u0645\u200C\u0634\u062F\u0647 \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A\u0646\u062F\u061B \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F \u06CC\u0627 \u0641\u0627\u06CC\u0644 \u0631\u0627 \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F");
+      }
+      await db.transaction(async (tx) => {
+        await tx.execute(`UPDATE clearbook_entries SET updated_at = datetime('now') WHERE id = ?`, [id]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "clearbook.entry.files.added",
+          resourceType: "clearbook_entry",
+          resourceId: id,
+          changes: { filename: { from: null, to: att.file_name }, sizeBytes: { from: null, to: att.file_size }, mode: { from: null, to: "chunked" } }
+        });
+      });
+      log.info("clearbook.entry.files.chunked.completed", { id, fileId, size: att.file_size });
+      return await getEntryRecord(id);
+    },
+    async updateAttachmentCaption(id, fileId, caption, actor) {
+      assertOffice(actor);
+      await assertEntryExists(id);
+      const att = await assertAttachment(id, fileId);
+      await db.transaction(async (tx) => {
+        await tx.execute(`UPDATE clearbook_attachments SET caption = ? WHERE id = ?`, [caption, att.id]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "clearbook.entry.file.caption",
+          resourceType: "clearbook_entry",
+          resourceId: id,
+          changes: { caption: { from: att.caption, to: caption } }
+        });
+      });
+      log.info("clearbook.entry.file.caption", { id, fileId });
+      return await getEntryRecord(id);
+    },
+    async deleteAttachment(id, fileId, actor) {
+      assertOffice(actor);
+      await assertEntryExists(id);
+      const att = await assertAttachment(id, fileId);
+      await storage.delete(att.file_key).catch((err) => {
+        log.warn("clearbook.attachment.storage.delete.failed", { key: att.file_key, error: err instanceof Error ? err.message : String(err) });
+      });
+      await db.transaction(async (tx) => {
+        await tx.execute(`DELETE FROM clearbook_attachments WHERE id = ?`, [att.id]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "clearbook.entry.file.deleted",
+          resourceType: "clearbook_entry",
+          resourceId: id,
+          changes: { filename: { from: att.file_name, to: null }, sizeBytes: { from: att.file_size, to: null } }
+        });
+      });
+      log.info("clearbook.entry.file.deleted", { id, fileId });
+      return await getEntryRecord(id);
+    },
+    async getAttachmentFile(id, fileId) {
+      const att = await assertAttachment(id, fileId);
+      const obj = await storage.get(att.file_key);
+      if (!obj) return null;
+      return { bytes: obj.bytes, filename: att.file_name, mime: att.file_mime ?? obj.mime, kind: att.kind };
+    },
+    // ─── تقویم اجرایی ───
+    async listPlans() {
+      const rows = await db.query(
+        `SELECT ${PLAN_COLS} FROM clearbook_plans p JOIN staff s ON s.id = p.created_by
+          ORDER BY p.from_date ASC, p.sort_order ASC, p.created_at ASC`
+      );
+      return Promise.all(rows.map((r) => getPlanRecord(r)));
+    },
+    async createPlan(input, actor) {
+      assertOffice(actor);
+      assertPlanRange(input.fromDate, input.toDate);
+      const id = crypto.randomUUID();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO clearbook_plans (id, title, admin_actions, center_actions, from_date, to_date, status, tag, sort_order, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT MAX(sort_order) + 1 FROM clearbook_plans), 0), ?, datetime('now'), datetime('now'))`,
+          [id, input.title, input.adminActions ?? "", input.centerActions ?? "", input.fromDate, input.toDate, input.status, input.tag, actor.staffId]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "clearbook.plan.create",
+          resourceType: "clearbook_plan",
+          resourceId: id,
+          changes: {
+            title: { from: null, to: input.title },
+            from_date: { from: null, to: input.fromDate },
+            status: { from: null, to: input.status }
+          }
+        });
+      });
+      log.info("clearbook.plan.created", { id });
+      const row = await getPlanRow(id);
+      return getPlanRecord(row);
+    },
+    async updatePlan(id, input, actor) {
+      assertOffice(actor);
+      const existingRow = await getPlanRow(id);
+      if (!existingRow) throw new NotFoundError("\u0641\u0627\u0632 \u062A\u0642\u0648\u06CC\u0645 \u0627\u062C\u0631\u0627\u06CC\u06CC");
+      const next = {
+        title: input.title ?? existingRow.title,
+        adminActions: input.adminActions ?? existingRow.admin_actions,
+        centerActions: input.centerActions ?? existingRow.center_actions,
+        fromDate: input.fromDate ?? existingRow.from_date,
+        toDate: input.toDate !== void 0 ? input.toDate : existingRow.to_date,
+        status: input.status ?? existingRow.status,
+        tag: input.tag !== void 0 ? input.tag : existingRow.tag
+      };
+      assertPlanRange(next.fromDate, next.toDate);
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE clearbook_plans SET title = ?, admin_actions = ?, center_actions = ?, from_date = ?, to_date = ?, status = ?, tag = ?, updated_at = datetime('now')
+           WHERE id = ?`,
+          [next.title, next.adminActions, next.centerActions, next.fromDate, next.toDate, next.status, next.tag, id]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "clearbook.plan.update",
+          resourceType: "clearbook_plan",
+          resourceId: id,
+          changes: {
+            title: { from: existingRow.title, to: next.title },
+            status: { from: existingRow.status, to: next.status },
+            from_date: { from: existingRow.from_date, to: next.fromDate }
+          }
+        });
+      });
+      log.info("clearbook.plan.updated", { id });
+      const row = await getPlanRow(id);
+      return getPlanRecord(row);
+    },
+    async removePlan(id, actor) {
+      assertOffice(actor);
+      const existingRow = await getPlanRow(id);
+      if (!existingRow) throw new NotFoundError("\u0641\u0627\u0632 \u062A\u0642\u0648\u06CC\u0645 \u0627\u062C\u0631\u0627\u06CC\u06CC");
+      await db.transaction(async (tx) => {
+        await tx.execute(`UPDATE clearbook_entries SET plan_id = NULL WHERE plan_id = ?`, [id]);
+        await tx.execute(`DELETE FROM clearbook_plans WHERE id = ?`, [id]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "clearbook.plan.delete",
+          resourceType: "clearbook_plan",
+          resourceId: id,
+          changes: { title: { from: existingRow.title, to: null } }
+        });
+      });
+      log.info("clearbook.plan.deleted", { id });
+      return { id };
+    },
+    async reorderPlans(ids, actor) {
+      assertOffice(actor);
+      await db.transaction(async (tx) => {
+        for (let i = 0; i < ids.length; i += 1) {
+          await tx.execute(`UPDATE clearbook_plans SET sort_order = ?, updated_at = datetime('now') WHERE id = ?`, [i, ids[i]]);
+        }
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "clearbook.plan.reorder",
+          resourceType: "clearbook_plan",
+          resourceId: ids[0],
+          changes: { count: { from: null, to: ids.length } }
+        });
+      });
+      log.info("clearbook.plan.reordered", { count: ids.length });
+      return { count: ids.length };
+    },
+    async seedTemplate(startYear, actor) {
+      assertOffice(actor);
+      const seeds = buildSeedPlans(startYear);
+      const windowFrom = seeds.reduce((min, s) => s.from_date < min ? s.from_date : min, seeds[0].from_date);
+      const windowTo = seeds.reduce((max, s) => s.to_date && s.to_date > max ? s.to_date : max, seeds[0].from_date);
+      const overlap = await db.queryOne(
+        `SELECT COUNT(*) AS n FROM clearbook_plans WHERE from_date <= ? AND COALESCE(to_date, from_date) >= ?`,
+        [windowTo, windowFrom]
+      );
+      if ((overlap?.n ?? 0) > 0) {
+        throw new ConflictError("\u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0642\u0628\u0644\u0627\u064B \u062A\u0642\u0648\u06CC\u0645 \u0627\u062C\u0631\u0627\u06CC\u06CC \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0627\u0628\u062A\u062F\u0627 \u0641\u0627\u0632\u0647\u0627\u06CC \u0647\u0645\u0627\u0646 \u0628\u0627\u0632\u0647 \u0631\u0627 \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F");
+      }
+      await db.transaction(async (tx) => {
+        for (const seed of seeds) {
+          const id = crypto.randomUUID();
+          await tx.execute(
+            `INSERT INTO clearbook_plans (id, title, admin_actions, center_actions, from_date, to_date, status, tag, sort_order, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?, datetime('now'), datetime('now'))`,
+            [id, seed.title, seed.admin_actions, seed.center_actions, seed.from_date, seed.to_date, seed.tag, seed.sort_order, actor.staffId]
+          );
+        }
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "clearbook.plan.seed",
+          resourceType: "clearbook_plan",
+          resourceId: windowFrom,
+          changes: { start_year: { from: null, to: startYear }, count: { from: null, to: seeds.length } }
+        });
+      });
+      log.info("clearbook.plan.seeded", { startYear, count: seeds.length });
+      return { count: seeds.length };
+    },
+    async copyYear(fromYear, toYear, actor) {
+      assertOffice(actor);
+      const all = await db.query(`SELECT id, from_date FROM clearbook_plans`);
+      const source = all.filter((r) => schoolYearOfYmd(r.from_date) === fromYear);
+      if (source.length === 0) throw new ValidationError("\u0628\u0631\u0627\u06CC \u0633\u0627\u0644 \u062A\u062D\u0635\u06CC\u0644\u06CC \u0645\u0628\u062F\u0623 \u0641\u0627\u0632\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
+      const targetExists = all.some((r) => schoolYearOfYmd(r.from_date) === toYear);
+      if (targetExists) throw new ConflictError("\u0633\u0627\u0644 \u0645\u0642\u0635\u062F \u0627\u0632 \u0642\u0628\u0644 \u062A\u0642\u0648\u06CC\u0645 \u062F\u0627\u0631\u062F \u2014 \u0627\u0628\u062A\u062F\u0627 \u0641\u0627\u0632\u0647\u0627\u06CC \u0622\u0646 \u0633\u0627\u0644 \u0631\u0627 \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F");
+      const shift = toYear - fromYear;
+      const sourceIds = source.map((r) => r.id);
+      const ph = sourceIds.map(() => "?").join(", ");
+      const rows = await db.query(
+        `SELECT ${PLAN_COLS} FROM clearbook_plans p JOIN staff s ON s.id = p.created_by WHERE p.id IN (${ph})`,
+        sourceIds
+      );
+      await db.transaction(async (tx) => {
+        for (const row of rows) {
+          const id = crypto.randomUUID();
+          await tx.execute(
+            `INSERT INTO clearbook_plans (id, title, admin_actions, center_actions, from_date, to_date, status, tag, sort_order, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?, datetime('now'), datetime('now'))`,
+            [
+              id,
+              row.title,
+              row.admin_actions,
+              row.center_actions,
+              shiftYmdByJalaliYears(row.from_date, shift),
+              row.to_date ? shiftYmdByJalaliYears(row.to_date, shift) : null,
+              row.tag,
+              row.sort_order,
+              actor.staffId
+            ]
+          );
+        }
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "clearbook.plan.copy",
+          resourceType: "clearbook_plan",
+          resourceId: rows[0].id,
+          changes: { from_year: { from: null, to: fromYear }, to_year: { from: null, to: toYear }, count: { from: null, to: rows.length } }
+        });
+      });
+      log.info("clearbook.plan.copied", { fromYear, toYear, count: rows.length });
+      return { count: rows.length };
+    },
+    // ─── فیلترها ───
+    async listTags() {
+      const rows = await db.query(
+        `SELECT tag, COUNT(*) AS n FROM clearbook_entry_tags GROUP BY tag ORDER BY n DESC, tag ASC LIMIT 60`
+      );
+      return rows.map((r) => ({ tag: r.tag, count: r.n }));
+    },
+    async listYears() {
+      const rows = await db.query(
+        `SELECT event_date AS d FROM clearbook_entries UNION SELECT from_date AS d FROM clearbook_plans`
+      );
+      const years = /* @__PURE__ */ new Set();
+      for (const r of rows) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(r.d)) years.add(schoolYearOfYmd(r.d));
+      }
+      return [...years].sort((a, b) => b - a);
+    }
+  };
+  async function assertPlanExists(planId) {
+    const row = await db.queryOne(`SELECT id FROM clearbook_plans WHERE id = ?`, [planId]);
+    if (!row) throw new NotFoundError("\u0641\u0627\u0632 \u062A\u0642\u0648\u06CC\u0645 \u0627\u062C\u0631\u0627\u06CC\u06CC");
+  }
+  __name(assertPlanExists, "assertPlanExists");
+}
+__name(createClearbookService, "createClearbookService");
+
+// src/domain/clearbook/routes.ts
+var EXT_MIME_FALLBACK3 = {
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  txt: "text/plain",
+  csv: "text/csv",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+};
+function guessMime3(filename, declared) {
+  const t = (declared || "").toLowerCase();
+  if (t && t !== "application/octet-stream") return t;
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  return EXT_MIME_FALLBACK3[ext] ?? t ?? "application/octet-stream";
+}
+__name(guessMime3, "guessMime");
+function fileHeaders(filename, mimeType, inline) {
+  const asciiFallback = filename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
+  const type = mimeType.startsWith("text/") ? `${mimeType}; charset=utf-8` : mimeType;
+  return {
+    "Content-Type": type,
+    "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+  };
+}
+__name(fileHeaders, "fileHeaders");
+var YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+function optYmd(raw2) {
+  if (!raw2) return void 0;
+  if (!YMD_RE.test(raw2)) throw new ValidationError("\u0628\u0627\u0632\u0647\u0654 \u062A\u0627\u0631\u06CC\u062E \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+  return raw2;
+}
+__name(optYmd, "optYmd");
+function registerClearbookRoutes(app, service) {
+  const office = requireRole("manager", "secretary");
+  app.get("/api/clearbook/entries", office, async (c) => {
+    const q = c.req.query();
+    const result = await service.listEntries({
+      from: optYmd(q.from),
+      to: optYmd(q.to),
+      tag: q.tag || void 0,
+      q: q.q || void 0,
+      planId: q.plan_id ? UuidSchema.parse(q.plan_id) : void 0,
+      limit: Number(q.limit ?? 0) || 50,
+      offset: Math.max(0, Number(q.offset ?? 0) || 0)
+    });
+    return c.json({ data: result.items, meta: { hasMore: result.hasMore } }, 200);
+  });
+  app.post("/api/clearbook/entries", office, async (c) => {
+    const actor = getAuthContext(c);
+    const body = ClearbookEntryCreateSchema.parse(await c.req.json());
+    const result = await service.createEntry(
+      {
+        title: body.title,
+        body: body.body ?? "",
+        eventDate: body.event_date,
+        planId: body.plan_id ?? null,
+        tags: body.tags ?? []
+      },
+      actor
+    );
+    return c.json({ data: result }, 201);
+  });
+  app.patch("/api/clearbook/entries/:id", office, async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const body = ClearbookEntryUpdateSchema.parse(await c.req.json());
+    const result = await service.updateEntry(
+      id,
+      {
+        title: body.title,
+        body: body.body,
+        eventDate: body.event_date,
+        planId: body.plan_id,
+        tags: body.tags
+      },
+      actor
+    );
+    return c.json({ data: result }, 200);
+  });
+  app.delete("/api/clearbook/entries/:id", office, async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const result = await service.removeEntry(id, actor);
+    return c.json({ data: result }, 200);
+  });
+  app.post("/api/clearbook/entries/:id/files", office, async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const contentType = c.req.header("content-type") ?? "";
+    const parsed = await parseMultipartStream(c.req.raw.body, contentType);
+    if (parsed.files.length === 0) throw new ValidationError("\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u0627\u06CC\u0644 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+    const files = parsed.files.filter((f) => f.size > 0).map((f) => ({
+      filename: f.filename || "file",
+      mimeType: guessMime3(f.filename ?? "", f.mimeType ?? ""),
+      segments: f.segments,
+      size: f.size
+    }));
+    if (files.length === 0) throw new ValidationError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0641\u0627\u06CC\u0644\u200C\u0647\u0627 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
+    const updated = await service.addFiles(id, files, actor);
+    return c.json({ data: updated }, 201);
+  });
+  app.post("/api/clearbook/entries/:id/files/begin", office, async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const body = await c.req.json();
+    const result = await service.beginChunkedUpload(
+      id,
+      {
+        filename: String(body.filename ?? "file"),
+        mimeType: String(body.mime ?? body.mime_type ?? "application/octet-stream"),
+        size: Number(body.size ?? 0)
+      },
+      actor
+    );
+    return c.json({ data: result }, 201);
+  });
+  app.put("/api/clearbook/entries/:id/files/:fileId/chunks/:seq", office, async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const fileId = UuidSchema.parse(c.req.param("fileId"));
+    const seq = Number(c.req.param("seq"));
+    const buf = await c.req.arrayBuffer();
+    const result = await service.putUploadChunk(id, fileId, seq, new Uint8Array(buf), actor);
+    return c.json({ data: result }, 200);
+  });
+  app.post("/api/clearbook/entries/:id/files/:fileId/complete", office, async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const fileId = UuidSchema.parse(c.req.param("fileId"));
+    const updated = await service.completeChunkedUpload(id, fileId, actor);
+    return c.json({ data: updated }, 200);
+  });
+  app.patch("/api/clearbook/entries/:id/files/:fileId", office, async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const fileId = UuidSchema.parse(c.req.param("fileId"));
+    const body = ClearbookCaptionSchema.parse(await c.req.json());
+    const updated = await service.updateAttachmentCaption(id, fileId, body.caption, actor);
+    return c.json({ data: updated }, 200);
+  });
+  app.get("/api/clearbook/entries/:id/files/:fileId", office, async (c) => {
+    const id = UuidSchema.parse(c.req.param("id"));
+    const fileId = UuidSchema.parse(c.req.param("fileId"));
+    const file = await service.getAttachmentFile(id, fileId);
+    if (!file) throw new NotFoundError("\u0641\u0627\u06CC\u0644 \u0631\u0648\u06CC\u062F\u0627\u062F");
+    return new Response(file.bytes, {
+      status: 200,
+      headers: fileHeaders(file.filename, file.mime, file.kind === "image")
+    });
+  });
+  app.delete("/api/clearbook/entries/:id/files/:fileId", office, async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const fileId = UuidSchema.parse(c.req.param("fileId"));
+    const updated = await service.deleteAttachment(id, fileId, actor);
+    return c.json({ data: updated }, 200);
+  });
+  app.get("/api/clearbook/plans", office, async (c) => {
+    const items = await service.listPlans();
+    return c.json({ data: items }, 200);
+  });
+  app.post("/api/clearbook/plans", office, async (c) => {
+    const actor = getAuthContext(c);
+    const body = ClearbookPlanCreateSchema.parse(await c.req.json());
+    const result = await service.createPlan(
+      {
+        title: body.title,
+        adminActions: body.admin_actions ?? "",
+        centerActions: body.center_actions ?? "",
+        fromDate: body.from_date,
+        toDate: body.to_date ?? null,
+        status: body.status,
+        tag: body.tag ?? null
+      },
+      actor
+    );
+    return c.json({ data: result }, 201);
+  });
+  app.patch("/api/clearbook/plans/:id", office, async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const body = ClearbookPlanUpdateSchema.parse(await c.req.json());
+    const result = await service.updatePlan(
+      id,
+      {
+        title: body.title,
+        adminActions: body.admin_actions,
+        centerActions: body.center_actions,
+        fromDate: body.from_date,
+        toDate: body.to_date,
+        status: body.status,
+        tag: body.tag
+      },
+      actor
+    );
+    return c.json({ data: result }, 200);
+  });
+  app.delete("/api/clearbook/plans/:id", office, async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const result = await service.removePlan(id, actor);
+    return c.json({ data: result }, 200);
+  });
+  app.post("/api/clearbook/plans/reorder", office, async (c) => {
+    const actor = getAuthContext(c);
+    const body = ClearbookPlanReorderSchema.parse(await c.req.json());
+    const result = await service.reorderPlans(body.ids, actor);
+    return c.json({ data: result }, 200);
+  });
+  app.post("/api/clearbook/plans/seed-template", office, async (c) => {
+    const actor = getAuthContext(c);
+    const body = ClearbookSeedTemplateSchema.parse(await c.req.json());
+    const result = await service.seedTemplate(body.start_year, actor);
+    return c.json({ data: result }, 201);
+  });
+  app.post("/api/clearbook/plans/copy", office, async (c) => {
+    const actor = getAuthContext(c);
+    const body = ClearbookCopyYearSchema.parse(await c.req.json());
+    const result = await service.copyYear(body.from_year, body.to_year, actor);
+    return c.json({ data: result }, 201);
+  });
+  app.get("/api/clearbook/tags", office, async (c) => {
+    const items = await service.listTags();
+    return c.json({ data: items }, 200);
+  });
+  app.get("/api/clearbook/years", office, async (c) => {
+    const items = await service.listYears();
+    return c.json({ data: items }, 200);
+  });
+}
+__name(registerClearbookRoutes, "registerClearbookRoutes");
+
 // src/domain/staff/service.ts
 var STAFF_COLS2 = "id, email, full_name, COALESCE(role_ext, role) AS role, active, notify_enabled, phone, national_id, username, role_ext, created_at";
 function roleToColumns(role) {
@@ -40272,10 +41441,11 @@ function createServices(deps) {
     clinicName: deps.clinicName
   });
   const knowledge = createKnowledgeService({ db, audit, logger, storage: exerciseStorage });
+  const clearbook = createClearbookService({ db, audit, logger, storage: exerciseStorage });
   const clinicalEngine = createClinicalEngineService({ db, audit, logger });
   const otEngine = createOtEngineService({ db, audit, logger });
   const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null });
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, backup };
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, backup };
 }
 __name(createServices, "createServices");
 function createApp(deps) {
@@ -40386,6 +41556,7 @@ function createApp(deps) {
   registerScreeningRoutes(app, services.screening);
   registerAnnouncementRoutes(app, services.announcements);
   registerKnowledgeRoutes(app, services.knowledge);
+  registerClearbookRoutes(app, services.clearbook);
   registerRoutes10(app, services.reports);
   registerSessionNoteRoutes(app, services.sessionNotes);
   registerRoutes6(app, services.staff);

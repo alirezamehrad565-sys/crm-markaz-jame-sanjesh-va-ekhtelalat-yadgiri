@@ -55,6 +55,8 @@ import { createAnnouncementService, registerAnnouncementRoutes } from '@domain/a
 import type { AnnouncementService } from '@domain/announcements';
 import { createKnowledgeService, registerKnowledgeRoutes } from '@domain/knowledge';
 import type { KnowledgeService } from '@domain/knowledge';
+import { createClearbookService, registerClearbookRoutes } from '@domain/clearbook';
+import type { ClearbookService } from '@domain/clearbook';
 import { createStaffService, registerRoutes as staffRoutes } from '@domain/staff';
 import type { StaffService } from '@domain/staff';
 import { createWorkingHoursService, registerRoutes as workingHoursRoutes } from '@domain/working-hours';
@@ -120,6 +122,7 @@ export interface Services {
   notify: NotifyAppService;
   announcements: AnnouncementService;
   knowledge: KnowledgeService;
+  clearbook: ClearbookService;
   reports: ReportService;
   waitlist: WaitlistService;
   followups: FollowUpsService;
@@ -398,6 +401,9 @@ export function createServices(deps: AppDeps): Services {
 
   const knowledge = createKnowledgeService({ db, audit, logger, storage: exerciseStorage });
 
+  // m188 — کلر بوک مرکز: همان ذخیره‌ساز پیوست‌ها (R2 یا D1 تکه‌تکه)
+  const clearbook = createClearbookService({ db, audit, logger, storage: exerciseStorage });
+
   const clinicalEngine = createClinicalEngineService({ db, audit, logger });
 
   const otEngine = createOtEngineService({ db, audit, logger });
@@ -405,7 +411,7 @@ export function createServices(deps: AppDeps): Services {
   // m179 — مکانیک پشتیبان‌گیری و بازیابی
   const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null }); // m180 — ارسال به آیدی بله
 
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, backup };
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, backup };
 }
 
 export function createApp(deps: AppDeps): AppHono {
@@ -544,6 +550,8 @@ export function createApp(deps: AppDeps): AppHono {
   registerAnnouncementRoutes(app, services.announcements);
 
   registerKnowledgeRoutes(app, services.knowledge);
+
+  registerClearbookRoutes(app, services.clearbook); // m188 — کلر بوک مرکز
 
   reportRoutes(app, services.reports);
 

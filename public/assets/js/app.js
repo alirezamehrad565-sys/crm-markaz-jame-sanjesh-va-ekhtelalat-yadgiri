@@ -20,6 +20,7 @@ import { renderScreening } from './views/screening.js';
 import { renderReports } from './views/reports.js';
 import { renderExercises } from './views/exercises.js'; // — بانک تمرین
 import { renderTemplates } from './views/templates.js'; // — مدیریت قالب‌ها (تب مستقل)
+import { renderClearbook } from './views/clearbook.js'; // m188 — کلر بوک مرکز
 import { renderOutbox } from './views/outbox.js'; // — صندوق اعلان‌ها (مدیر/منشی)
 import { renderCaseEventTypes } from './views/case-event-types.js'; // — فرم‌ساز انواع رویداد (مدیر + درمانگر)
 import { emptyState } from './ui.js';
@@ -110,6 +111,7 @@ const NAV = [
   { hash: '#/exercises', label: 'بانک تمرین', icon: 'board', group: 'ارزیابی و درمان' },
   { hash: '#/templates', label: 'مدیریت قالب‌ها', icon: 'grid', group: 'ارزیابی و درمان', roles: ['manager', 'therapist'] },
   { hash: '#/outbox', label: 'صندوق اعلان‌ها', icon: 'bell', group: 'مرکز', roles: ['manager', 'secretary'] },
+  { hash: '#/clearbook', label: 'کلر بوک مرکز', icon: 'book', group: 'مرکز', roles: ['manager', 'secretary'] }, // m188
   { hash: '#/case-event-types', label: 'فرم‌ها و پرسش‌نامه‌ها', icon: 'timeline', group: 'ارزیابی و درمان', roles: ['manager', 'secretary', 'therapist'] }, // — نام روایی
   { hash: '#/special-needs', label: 'نیازهای ویژه', icon: 'clip', group: 'مرکز', roles: ['manager', 'secretary'] },
   { hash: '#/settings', label: 'تنظیمات', icon: 'settings', group: 'مرکز', roles: ['manager', 'secretary'] },
@@ -341,6 +343,7 @@ register('#/archive', { title: 'آرشیو', render: roleOnly(['manager', 'secre
 register('#/exercises', { title: 'بانک تمرین', render: renderExercises }); //
 register('#/templates', { title: 'مدیریت قالب‌ها', render: roleOnly(['manager', 'therapist'], renderTemplates, 'این بخش برای مدیر و درمانگر فعال است.') });
 register('#/outbox', { title: 'صندوق اعلان‌ها', render: roleOnly(['manager', 'secretary'], renderOutbox) }); //
+register('#/clearbook', { title: 'کلر بوک مرکز', render: roleOnly(['manager', 'secretary'], renderClearbook, 'کلر بوک فقط برای دفتر مرکز (مدیر و منشی) فعال است.') }); // m188
 register('#/case-event-types', { title: 'فرم‌ها و پرسش‌نامه‌ها', render: roleOnly(['manager', 'secretary', 'therapist'], renderCaseEventTypes, 'این بخش برای همکاران مرکز فعال است.') }); // //
 register('#/special-needs', { title: 'نیازهای ویژه', render: roleOnly(['manager', 'secretary'], renderSpecialNeeds) }); // فاز ۷ — لایهٔ دوم RBAC
 
