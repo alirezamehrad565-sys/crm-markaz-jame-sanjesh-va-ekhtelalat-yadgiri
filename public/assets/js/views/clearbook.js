@@ -99,6 +99,7 @@ const filters = { year: null, tag: null, from: '', to: '', q: '' };
 const urlCache = new Map(); // `${entryId}/${fileId}` → objectURL
 let _shellBody = null;
 let _toolbar = null;
+let _docCtl = null; // شنیده‌های سطح سند نوار ابزار (چاپ/Escape) — با rebuild کنسل می‌شود
 
 async function fileObjectUrl(entryId, fileId) {
   const key = `${entryId}/${fileId}`;
@@ -256,8 +257,9 @@ function buildToolbar() {
 
   const applyBtn = el('button', {
     class: 'btn btn--soft btn--sm',
+    title: 'بازهٔ دلخواه را بدون محدودیت سال تحصیلی اعمال می‌کند',
     onclick: () => { filters.year = null; refreshAll(); }
-  }, icon('filter', 15), 'اعمال بازه');
+  }, icon('filter', 14), 'اعمال بازه');
 
   const printWrap = el('div', { class: 'cb-print-menu' });
   const printBtn = el('button', { class: 'btn btn--soft btn--sm', onclick: togglePrintMenu }, icon('printer', 15), 'چاپ');
@@ -268,10 +270,39 @@ function buildToolbar() {
       icon('clipboard', 16), el('span', {}, el('b', {}, 'تقویم اجرایی'), el('small', {}, 'جدول رسمی فازها برای اداره')))
   );
   function togglePrintMenu() { menu.hidden = !menu.hidden; }
+  // شنیدهٔ سطح سند: با بازسازی نوار ابزار، شنیدهٔ قبلی با AbortController جمع می‌شود (نبود نشت)
+  _docCtl?.abort();
+  _docCtl = new AbortController();
   document.addEventListener('click', (e) => {
     if (!printWrap.contains(e.target)) menu.hidden = true;
-  }, { once: false });
+  }, { signal: _docCtl.signal });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') menu.hidden = true;
+  }, { signal: _docCtl.signal });
   printWrap.append(printBtn, menu);
+
+  const filtersPanel = el('div', { class: 'cb-filters print-hide' },
+    el('div', { class: 'cb-fgroup' },
+      el('span', { class: 'cb-fgroup__label' }, 'سال تحصیلی'),
+      yearChips
+    ),
+    tagList.length > 0 ? el('div', { class: 'cb-fgroup' },
+      el('span', { class: 'cb-fgroup__label' }, 'برچسب‌ها'),
+      tagChips
+    ) : null,
+    el('div', { class: 'cb-fgroup' },
+      el('span', { class: 'cb-fgroup__label' }, 'بازهٔ تاریخ'),
+      el('div', { class: 'cb-fgroup__row cb-range' },
+        el('span', { class: 'cb-range__label' }, 'از'), fromPicker.root,
+        el('span', { class: 'cb-range__label' }, 'تا'), toPicker.root,
+        applyBtn
+      )
+    ),
+    el('div', { class: 'cb-fgroup' },
+      el('span', { class: 'cb-fgroup__label' }, 'جستجو'),
+      search
+    )
+  );
 
   const toolbar = el('div', { class: 'toolbar cb-toolbar print-hide' },
     el('div', { class: 'cb-toolbar__row' },
@@ -280,21 +311,13 @@ function buildToolbar() {
           el('h2', { class: 'page-head__title' }, 'کلر بوک مرکز'),
           el('p', { class: 'page-head__desc' }, 'برنامهٔ سالانه و شواهد اجرا — هر فاز را با عکس و مستند زنده کنید')),
         el('div', { class: 'spacer' }),
-        el('button', { class: 'btn btn--soft btn--sm', onclick: openPlansManager }, icon('clipboard', 15), 'تقویم اجرایی'),
-        el('button', { class: 'btn btn--soft btn--sm', onclick: () => openPlanModal() }, icon('target', 15), 'فاز جدید'),
-        el('button', { class: 'btn btn--primary btn--sm', onclick: () => openEntryModal() }, icon('plus', 15), 'رویداد جدید'),
+        el('button', { class: 'btn btn--soft btn--sm', onclick: openPlansManager }, icon('clipboard', 14), 'تقویم اجرایی'),
+        el('button', { class: 'btn btn--soft btn--sm', onclick: () => openPlanModal() }, icon('target', 14), 'فاز جدید'),
+        el('button', { class: 'btn btn--primary btn--sm', onclick: () => openEntryModal() }, icon('plus', 14), 'رویداد جدید'),
         printWrap
       )
     ),
-    el('div', { class: 'cb-toolbar__row cb-toolbar__row--filters' },
-      yearChips, tagChips,
-      el('div', { class: 'cb-range' },
-        el('span', { class: 'cb-range__label' }, 'از'), fromPicker.root,
-        el('span', { class: 'cb-range__label' }, 'تا'), toPicker.root,
-        applyBtn
-      ),
-      search
-    )
+    filtersPanel
   );
   return toolbar;
 }
@@ -353,49 +376,101 @@ function plansInRange() {
   });
 }
 
+/** فهرست روز اول هر ماه شمسی بین دو تاریخ — حداکثر max ماه (اسکلت خط زمانی) */
+function monthSpanBetween(fromYmd, toYmd, max = 14) {
+  if (!fromYmd || !toYmd || toYmd < fromYmd) return [];
+  const endJ = jalaliPartsOf(toYmd);
+  const out = [];
+  let j = jalaliPartsOf(fromYmd);
+  for (let guard = 0; guard <= max; guard++) {
+    if (j.jy > endJ.jy || (j.jy === endJ.jy && j.jm > endJ.jm)) break;
+    out.push(ymdOfJalali({ jy: j.jy, jm: j.jm, jd: 1 }));
+    if (out.length >= max) break;
+    j.jm += 1;
+    if (j.jm > 12) { j.jm = 1; j.jy += 1; }
+  }
+  return out;
+}
+
+function monthHeader(sampleYmd, isNow) {
+  return el('div', { class: `cb-month${isNow ? ' is-now' : ''}` },
+    el('span', { class: 'cb-month__dot' }),
+    el('h3', { class: 'cb-month__label' }, monthLabelOf(sampleYmd))
+  );
+}
+
+function emptySlot() {
+  return el('div', { class: 'cb-empty-slot' }, 'فعالیتی در این ماه ثبت نشده است');
+}
+
 function drawTimeline() {
   if (!_shellBody) return;
+  const todayYmd = tehranTodayYmd();
   const planItems = plansInRange().map((p) => ({ kind: 'plan', date: p.fromDate, plan: p }));
   const entryItems = entries.map((e) => ({ kind: 'entry', date: e.eventDate, entry: e }));
   const items = planItems.concat(entryItems).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
-  if (items.length === 0) {
-    _shellBody.replaceChildren(
-      emptyState({
-        iconName: 'book',
-        title: 'کلر بوک خالی است',
-        hint: 'با «فاز جدید» برنامهٔ سالانه را بسازید — یا از «تقویم اجرایی» قالب استاندارد ۱۲ فازه را درج کنید. بعد از اجرای هر برنامه، عکس و مستندش را با «رویداد جدید» به همان فاز بچسبانید.'
-      })
-    );
-    return;
-  }
-
-  const todayYmd = tehranTodayYmd();
-  const timeline = el('div', { class: 'cb-timeline' });
-  let lastMonthKey = '';
-  let planNo = 0;
-  const totalPlans = planItems.length;
-
+  // گروه‌بندی بر حسب ماه — sample برای برچسب ماه
+  const byMonth = new Map(); // 'jy-mm' → { list: [], sample: ymd }
   for (const item of items) {
     const mk = monthKeyOf(item.date);
-    if (mk !== lastMonthKey) {
-      lastMonthKey = mk;
-      timeline.appendChild(el('div', { class: 'cb-month' },
-        el('span', { class: 'cb-month__dot' }),
-        el('h3', { class: 'cb-month__label' }, monthLabelOf(item.date))
-      ));
+    if (!byMonth.has(mk)) byMonth.set(mk, { list: [], sample: item.date });
+    byMonth.get(mk).list.push(item);
+  }
+
+  // اسکلت ماه‌ها: وقتی بازهٔ مشخصی (سال تحصیلی یا بازهٔ دلخواه ≤ ۱۴ ماه) انتخاب شده،
+  // ساختار خط زمانی — خط عمودی و برچسب ماه‌ها — همیشه رسم می‌شود، حتی بدون هیچ فعالیتی
+  let span = [];
+  if (filters.from && filters.to) span = monthSpanBetween(filters.from, filters.to, 14);
+  if (span.length === 0 && items.length === 0) {
+    // «همه سال‌ها» بدون هیچ داده‌ای → اسکلت سال تحصیلی جاری
+    const b = schoolYearBounds(schoolYearOf(todayYmd));
+    span = monthSpanBetween(b.from, b.to, 14);
+  }
+  const useSkeleton = span.length > 0;
+
+  const timeline = el('div', { class: 'cb-timeline' });
+  const monthKeys = useSkeleton ? span.map((d) => monthKeyOf(d)) : [...byMonth.keys()];
+  const planNoByMonthPlan = { n: 0 };
+  const totalPlans = planItems.length;
+  let anyCard = false;
+
+  for (const mk of monthKeys) {
+    const bucket = byMonth.get(mk);
+    const sampleYmd = bucket?.sample ?? span.find((d) => monthKeyOf(d) === mk);
+    const isNow = monthKeyOf(todayYmd) === mk;
+    timeline.appendChild(monthHeader(sampleYmd, isNow));
+
+    if (!bucket || bucket.list.length === 0) {
+      timeline.appendChild(emptySlot());
+      continue;
     }
-    if (item.kind === 'plan') {
-      planNo += 1;
-      timeline.appendChild(planCard(item.plan, planNo, totalPlans, todayYmd));
-    } else {
-      timeline.appendChild(entryCard(item.entry));
+    for (const item of bucket.list) {
+      if (item.kind === 'plan') {
+        planNoByMonthPlan.n += 1;
+        timeline.appendChild(planCard(item.plan, planNoByMonthPlan.n, totalPlans, todayYmd));
+      } else {
+        timeline.appendChild(entryCard(item.entry));
+      }
+      anyCard = true;
     }
   }
 
-  const body = el('div', { class: 'cb-timeline-wrap' }, timeline);
+  const wrap = el('div', { class: 'cb-timeline-wrap' });
+
+  // راهنمای حالت خالی — بالای اسکلت، جمع‌وجور
+  if (!anyCard) {
+    wrap.appendChild(el('div', { class: 'cb-empty-hint print-hide' },
+      icon('info', 17),
+      el('div', {},
+        el('b', {}, 'هنوز فعالیتی در این بازه ثبت نشده است. '),
+        'برنامهٔ سالانه را با «فاز جدید» بسازید یا از «تقویم اجرایی» قالب استاندارد ۱۲ فازه را درج کنید؛ فازها به‌صورت خاکستری روی همین خط می‌نشینند. پس از اجرای هر برنامه، عکس و مستندش را با «رویداد جدید» به همان فاز بچسبانید تا خط زمانی زنده شود.')
+    ));
+  }
+
+  wrap.appendChild(timeline);
   if (hasMore) {
-    body.appendChild(el('div', { class: 'cb-more' },
+    wrap.appendChild(el('div', { class: 'cb-more' },
       el('button', {
         class: 'btn btn--soft',
         onclick: (e) => {
@@ -405,7 +480,7 @@ function drawTimeline() {
       }, 'نمایش رویدادهای بیشتر')
     ));
   }
-  _shellBody.replaceChildren(body);
+  _shellBody.replaceChildren(wrap);
 }
 
 // ─── کارت‌ها ───
@@ -418,8 +493,8 @@ function planCard(p, order, total, todayYmd) {
   const inProgress = todayYmd >= p.fromDate && (!p.toDate || todayYmd <= p.toDate);
   const hasEvidence = p.evidence?.count > 0;
   const details = el('div', { class: 'cb-plan__details', hidden: true },
-    p.adminActions ? el('div', { class: 'cb-plan__sec' }, el('b', {}, 'اقدامات اداری و جلسات:'), el('p', {}, p.adminActions)) : null,
-    p.centerActions ? el('div', { class: 'cb-plan__sec' }, el('b', {}, 'خروجی / اقدام عملیاتی مرکز:'), el('p', {}, p.centerActions)) : null,
+    p.adminActions ? el('div', { class: 'cb-plan__sec' }, el('b', {}, 'اقدامات اداری و جلسات'), el('p', {}, p.adminActions)) : null,
+    p.centerActions ? el('div', { class: 'cb-plan__sec' }, el('b', {}, 'خروجی / اقدام عملیاتی مرکز'), el('p', {}, p.centerActions)) : null,
     (!p.adminActions && !p.centerActions) ? el('p', { class: 'cb-plan__sec cb-plan__sec--empty' }, 'برای این فاز شرح اقدامات ثبت نشده است.') : null
   );
 
@@ -435,7 +510,7 @@ function planCard(p, order, total, todayYmd) {
   const evidence = el('div', { class: 'cb-plan__evidence' },
     hasEvidence
       ? [
-        el('span', { class: 'cb-plan__count' }, `${fa(p.evidence.count)} مدرک اجرا`),
+        el('span', { class: 'cb-plan__count' }, `${fa(p.evidence.count)} فعالیت ثبت‌شده`),
         ...p.evidence.thumbs.map((t) => el('span', { class: 'cb-plan__thumb', dataset: { entry: t.entryId, file: t.fileId } }))
       ]
       : el('span', { class: 'cb-plan__empty' }, 'هنوز مدرکی ثبت نشده — با «ثبت فعالیت برای این برنامه» عکس و مستند اجرا را همین‌جا بگذارید')
@@ -452,10 +527,11 @@ function planCard(p, order, total, todayYmd) {
 
   const actions = el('div', { class: 'cb-card__actions print-hide' },
     el('button', { class: 'btn btn--primary btn--sm', onclick: () => openEntryModal({ plan: p }) }, icon('plus', 14), 'ثبت فعالیت برای این برنامه'),
-    el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { details.hidden = !details.hidden; } }, icon('eye', 14), 'جزئیات برنامه'),
-    el('button', { class: 'btn btn--ghost btn--sm', onclick: () => openPlanModal({ plan: p }) }, icon('edit', 14), 'ویرایش'),
+    el('button', { class: 'btn btn--ghost btn--icon btn--sm', title: 'جزئیات برنامه', 'aria-label': 'نمایش جزئیات برنامه', onclick: () => { details.hidden = !details.hidden; } }, icon('eye', 14)),
+    el('button', { class: 'btn btn--ghost btn--icon btn--sm', title: 'ویرایش فاز', 'aria-label': 'ویرایش فاز', onclick: () => openPlanModal({ plan: p }) }, icon('edit', 14)),
     el('button', {
-      class: 'btn btn--ghost btn--sm cb-danger',
+      class: 'btn btn--ghost btn--icon btn--sm cb-danger',
+      title: 'حذف فاز', 'aria-label': 'حذف فاز',
       onclick: async () => {
         const ok = await confirmModal({ title: 'حذف فاز برنامه', message: `فاز «${p.title}» حذف شود؟ رویدادهای ثبت‌شده حذف نمی‌شوند و فقط اتصالشان باز می‌شود.`, confirmLabel: 'حذف', danger: true });
         if (!ok) return;
@@ -465,7 +541,7 @@ function planCard(p, order, total, todayYmd) {
           refreshAll();
         } catch (err) { toastError(err); }
       }
-    }, icon('trash', 14), 'حذف')
+    }, icon('trash', 14))
   );
 
   return el('article', { class: `cb-card cb-card--plan is-${p.status}${hasEvidence ? ' has-evidence' : ''}` },
@@ -541,9 +617,10 @@ function entryCard(e) {
   }
 
   const actions = el('div', { class: 'cb-card__actions print-hide' },
-    el('button', { class: 'btn btn--ghost btn--sm', onclick: () => openEntryModal({ entry: e }) }, icon('edit', 14), 'ویرایش'),
+    el('button', { class: 'btn btn--ghost btn--icon btn--sm', title: 'ویرایش رویداد', 'aria-label': 'ویرایش رویداد', onclick: () => openEntryModal({ entry: e }) }, icon('edit', 14)),
     el('button', {
-      class: 'btn btn--ghost btn--sm cb-danger',
+      class: 'btn btn--ghost btn--icon btn--sm cb-danger',
+      title: 'حذف رویداد', 'aria-label': 'حذف رویداد',
       onclick: async () => {
         const ok = await confirmModal({ title: 'حذف رویداد', message: `رویداد «${e.title}» و همهٔ عکس‌ها و مستنداتش حذف شود؟`, confirmLabel: 'حذف', danger: true });
         if (!ok) return;
@@ -553,7 +630,7 @@ function entryCard(e) {
           refreshAll();
         } catch (err) { toastError(err); }
       }
-    }, icon('trash', 14), 'حذف')
+    }, icon('trash', 14))
   );
 
   return el('article', { class: 'cb-card cb-card--entry' }, head, tagRow, bodyText, media, actions);
@@ -926,7 +1003,7 @@ function openPlansManager() {
       return el('div', { class: 'cb-plansmgr__row' },
         el('div', { class: 'cb-plansmgr__main' },
           el('b', {}, p.title),
-          el('span', { class: 'cb-doc__size' }, `${rangeLabel(p.fromDate, p.toDate)} · ${fa(p.evidence?.count ?? 0)} مدرک${p.tag ? ` · ${p.tag}` : ''}`)
+          el('span', { class: 'cb-doc__size' }, `${rangeLabel(p.fromDate, p.toDate)} · ${fa(p.evidence?.count ?? 0)} فعالیت${p.tag ? ` · ${p.tag}` : ''}`)
         ),
         statusSel,
         el('div', { class: 'cb-plansmgr__ops' },
@@ -1094,7 +1171,7 @@ async function printAlbum() {
             el('span', { class: 'cbp-plan__badge' }, `فاز ${fa(order)}/${fa(totalPlans)} — برنامه`),
             el('b', {}, p.title),
             el('span', { class: 'cbp-plan__date' }, rangeLabel(p.fromDate, p.toDate)),
-            el('span', { class: 'cbp-plan__status' }, `وضعیت: ${STATUS_LABELS[p.status] ?? p.status} — ${fa(p.evidence?.count ?? 0)} مدرک`)
+            el('span', { class: 'cbp-plan__status' }, `وضعیت: ${STATUS_LABELS[p.status] ?? p.status} — ${fa(p.evidence?.count ?? 0)} فعالیت ثبت‌شده`)
           ),
           p.adminActions ? el('p', { class: 'cbp-plan__sec' }, el('b', {}, 'اقدامات اداری و جلسات: '), p.adminActions) : null,
           p.centerActions ? el('p', { class: 'cbp-plan__sec' }, el('b', {}, 'خروجی / اقدام عملیاتی مرکز: '), p.centerActions) : null
