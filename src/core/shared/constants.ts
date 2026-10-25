@@ -534,3 +534,25 @@ export type SpecialNeedType = (typeof SPECIAL_NEED_TYPES)[number];
 export const SPECIAL_NEED_SEVERITIES = ['mild', 'moderate', 'severe'] as const;
 
 export type SpecialNeedSeverity = (typeof SPECIAL_NEED_SEVERITIES)[number];
+
+// ─── m188 — کلر بوک مرکز (خط زمانی فعالیت‌ها + تقویم اجرایی) ───
+export const CLEARBOOK_TITLE_MAX = 150;
+export const CLEARBOOK_BODY_MAX = 4000;
+export const CLEARBOOK_TAG_MAX = 40;
+export const CLEARBOOK_TAGS_PER_ENTRY_MAX = 8;
+export const CLEARBOOK_PLAN_TITLE_MAX = 150;
+export const CLEARBOOK_PLAN_ACTIONS_MAX = 2000;
+export const CLEARBOOK_CAPTION_MAX = 120;
+export const CLEARBOOK_FILES_PER_UPLOAD_MAX = 10;
+export const CLEARBOOK_ATTACHMENTS_PER_ENTRY_MAX = 30;
+export const CLEARBOOK_ENTRY_PAGE_SIZE = 50;
+export const CLEARBOOK_ENTRY_PAGE_MAX = 200;
+export const CLEARBOOK_PLAN_STATUSES = ['planned', 'active', 'done'] as const;
+
+export type ClearbookPlanStatus = (typeof CLEARBOOK_PLAN_STATUSES)[number];
+
+export const CLEARBOOK_PLAN_STATUS_LABELS: Record<ClearbookPlanStatus, string> = {
+  planned: 'برنامه‌ریزی‌شده',
+  active: 'در جریان',
+  done: 'تکمیل'
+};

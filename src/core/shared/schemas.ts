@@ -2,6 +2,14 @@ import { z } from 'zod';
 import {
   ANNOUNCEMENT_BODY_MAX,
   ANNOUNCEMENT_TITLE_MAX,
+  CLEARBOOK_BODY_MAX,
+  CLEARBOOK_CAPTION_MAX,
+  CLEARBOOK_PLAN_ACTIONS_MAX,
+  CLEARBOOK_PLAN_STATUSES,
+  CLEARBOOK_PLAN_TITLE_MAX,
+  CLEARBOOK_TAG_MAX,
+  CLEARBOOK_TAGS_PER_ENTRY_MAX,
+  CLEARBOOK_TITLE_MAX,
   EDUCATION_HISTORY_LEVEL_MAX,
   EDUCATION_HISTORY_NOTE_MAX,
   EDUCATION_HISTORY_SCHOOL_MAX,
@@ -612,6 +620,74 @@ export const UpdateKnowledgeSchema = z.object({
   category: z.enum(KNOWLEDGE_CATEGORIES).optional(),
   pinned: z.boolean().optional(),
   published: z.boolean().optional()
+});
+
+// ─── m188 — کلر بوک مرکز ───
+const ClearbookYmdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ باید در قالب میلادی YYYY-MM-DD ذخیره شود');
+
+export const ClearbookTagsSchema = z
+  .array(z.string().trim().min(2, 'برچسب حداقل ۲ نویسه است').max(CLEARBOOK_TAG_MAX, `برچسب حداکثر ${CLEARBOOK_TAG_MAX} نویسه است`))
+  .max(CLEARBOOK_TAGS_PER_ENTRY_MAX, `حداکثر ${CLEARBOOK_TAGS_PER_ENTRY_MAX} برچسب برای هر رویداد`)
+  .optional()
+  .default([]);
+
+export const ClearbookEntryCreateSchema = z.object({
+  title: z.string().trim().min(2, 'عنوان حداقل ۲ نویسه است').max(CLEARBOOK_TITLE_MAX),
+  body: z.string().trim().max(CLEARBOOK_BODY_MAX).optional().default(''),
+  event_date: ClearbookYmdSchema,
+  plan_id: UuidSchema.nullable().optional(),
+  tags: ClearbookTagsSchema
+});
+
+export const ClearbookEntryUpdateSchema = z.object({
+  title: z.string().trim().min(2, 'عنوان حداقل ۲ نویسه است').max(CLEARBOOK_TITLE_MAX).optional(),
+  body: z.string().trim().max(CLEARBOOK_BODY_MAX).optional(),
+  event_date: ClearbookYmdSchema.optional(),
+  plan_id: UuidSchema.nullable().optional(),
+  tags: ClearbookTagsSchema.optional()
+});
+
+export const ClearbookPlanCreateSchema = z.object({
+  title: z.string().trim().min(2, 'عنوان فاز حداقل ۲ نویسه است').max(CLEARBOOK_PLAN_TITLE_MAX),
+  admin_actions: z.string().trim().max(CLEARBOOK_PLAN_ACTIONS_MAX).optional().default(''),
+  center_actions: z.string().trim().max(CLEARBOOK_PLAN_ACTIONS_MAX).optional().default(''),
+  from_date: ClearbookYmdSchema,
+  to_date: ClearbookYmdSchema.nullable().optional(),
+  status: z.enum(CLEARBOOK_PLAN_STATUSES).optional().default('planned'),
+  tag: z.string().trim().min(2).max(CLEARBOOK_TAG_MAX).nullable().optional()
+});
+
+export const ClearbookPlanUpdateSchema = z.object({
+  title: z.string().trim().min(2, 'عنوان فاز حداقل ۲ نویسه است').max(CLEARBOOK_PLAN_TITLE_MAX).optional(),
+  admin_actions: z.string().trim().max(CLEARBOOK_PLAN_ACTIONS_MAX).optional(),
+  center_actions: z.string().trim().max(CLEARBOOK_PLAN_ACTIONS_MAX).optional(),
+  from_date: ClearbookYmdSchema.optional(),
+  to_date: ClearbookYmdSchema.nullable().optional(),
+  status: z.enum(CLEARBOOK_PLAN_STATUSES).optional(),
+  tag: z.string().trim().min(2).max(CLEARBOOK_TAG_MAX).nullable().optional()
+});
+
+export const ClearbookPlanReorderSchema = z.object({
+  ids: z.array(UuidSchema).min(1, 'فهرست ترتیب خالی است')
+});
+
+export const ClearbookSeedTemplateSchema = z.object({
+  start_year: z
+    .number()
+    .int()
+    .min(1390, 'سال شروع نامعتبر است')
+    .max(1450, 'سال شروع نامعتبر است')
+});
+
+export const ClearbookCopyYearSchema = z.object({
+  from_year: z.number().int().min(1390).max(1450),
+  to_year: z.number().int().min(1390).max(1450)
+}).refine((v) => v.to_year > v.from_year && v.to_year - v.from_year <= 5, {
+  message: 'سال مقصد باید بعد از سال مبدأ باشد (حداکثر ۵ سال بعد)'
+});
+
+export const ClearbookCaptionSchema = z.object({
+  caption: z.string().trim().max(CLEARBOOK_CAPTION_MAX, `کپشن حداکثر ${CLEARBOOK_CAPTION_MAX} نویسه است`).nullable()
 });
 
 export const CreateClassLinkSchema = z.object({

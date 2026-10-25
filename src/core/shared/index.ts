@@ -61,6 +61,14 @@ export {
   SendAnnouncementSchema,
   NewKnowledgeSchema,
   UpdateKnowledgeSchema,
+  ClearbookEntryCreateSchema,
+  ClearbookEntryUpdateSchema,
+  ClearbookPlanCreateSchema,
+  ClearbookPlanUpdateSchema,
+  ClearbookPlanReorderSchema,
+  ClearbookSeedTemplateSchema,
+  ClearbookCopyYearSchema,
+  ClearbookCaptionSchema,
   ReportQuerySchema,
   StaffRoleSchema,
   TehranYmdSchema,
@@ -320,6 +328,19 @@ export {
   CASE_EVENT_FILL_EXPIRY_HOURS,
   EXERCISE_FEEDBACK_MAX,
   EXERCISE_FEEDBACK_MIN,
+  CLEARBOOK_TITLE_MAX,
+  CLEARBOOK_BODY_MAX,
+  CLEARBOOK_TAG_MAX,
+  CLEARBOOK_TAGS_PER_ENTRY_MAX,
+  CLEARBOOK_PLAN_TITLE_MAX,
+  CLEARBOOK_PLAN_ACTIONS_MAX,
+  CLEARBOOK_CAPTION_MAX,
+  CLEARBOOK_FILES_PER_UPLOAD_MAX,
+  CLEARBOOK_ATTACHMENTS_PER_ENTRY_MAX,
+  CLEARBOOK_ENTRY_PAGE_SIZE,
+  CLEARBOOK_ENTRY_PAGE_MAX,
+  CLEARBOOK_PLAN_STATUSES,
+  CLEARBOOK_PLAN_STATUS_LABELS,
 } from './constants';
 
 export {
@@ -349,6 +370,8 @@ export type { StudentCaseStatus } from './constants';
 export type { KnowledgeCategory } from './constants';
 
 export type { SpecialNeedType, SpecialNeedSeverity } from './constants';
+
+export type { ClearbookPlanStatus } from './constants';
 
 export {
   SESSION_TYPES,
