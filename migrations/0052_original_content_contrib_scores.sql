@@ -1,0 +1,1 @@
+-- no-op migration — contribution scoring reads live tables; kept as a tracking point
