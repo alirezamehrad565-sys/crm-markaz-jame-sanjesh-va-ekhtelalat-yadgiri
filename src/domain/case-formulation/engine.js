@@ -1,0 +1,1902 @@
+// engine.js — موتور صورت‌بندی مورد (Case Formulation) — استخراج‌شده از باندل (کامیت 365d103).
+//
+// بدنهٔ توابع، ثابت‌ها و متن‌های فارسی دست‌نخورده از باندل آمده‌اند؛ سه تفاوت:
+//   ۱. شیم‌های نام (__name/__name2) همین‌جا تعریف می‌شوند — فقط متادیتای name تابع را ست می‌کنند؛
+//   ۲. جدول‌های وابستگی مشترک با کامنتِ مبدأ کپی شده‌اند (در باندل متغیر سراسری بودند)؛
+//   ۳. بلاک export در انتهای فایل اضافه شده است.
+//
+// API عمومی: formulateCase(evidence, options) → JSON صورت‌بندی
+//   evidence = { events, wechsler, ot, gates, child } — همان شیئی که سرویسِ مسیر
+//   case-formulation برای پرونده می‌سازد؛ options.now برای زمان‌گذاری قابل تزریق است.
+
+// ── شیم‌های نام اس‌بیلد (فقط متادیتای name تابع) ──
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+var __name2 = __name;
+
+// ── وابستگی مشترک: فرمترِ رقم فارسی ──
+function faNum5(s) {
+  return String(s).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
+}
+__name(faNum5, "faNum5");
+__name2(faNum5, "faNum");
+
+// ── وابستگی مشترک: نُرم‌های پروزبانهٔ خوانش — صدک ۵۰ ──
+var WCPM_NORM_50TH = {
+  "\u0627\u0648\u0644": 60,
+  "\u062F\u0648\u0645": 89,
+  "\u0633\u0648\u0645": 107,
+  "\u0686\u0647\u0627\u0631\u0645": 123,
+  "\u067E\u0646\u062C\u0645": 139,
+  "\u0634\u0634\u0645": 150,
+  "\u0647\u0641\u062A\u0645": 150,
+  "\u0647\u0634\u062A\u0645": 150
+};
+var ALPHA_15S_NORM = {
+  "\u0627\u0648\u0644": 20,
+  "\u062F\u0648\u0645": 35,
+  "\u0633\u0648\u0645": 45,
+  "\u0686\u0647\u0627\u0631\u0645": 50,
+  "\u067E\u0646\u062C\u0645": 55,
+  "\u0634\u0634\u0645": 60,
+  "\u0647\u0641\u062A\u0645": 60,
+  "\u0647\u0634\u062A\u0645": 60
+};
+var DIGITS_2MIN_NORM = {
+  "\u0627\u0648\u0644": 15,
+  "\u062F\u0648\u0645": 25,
+  "\u0633\u0648\u0645": 35,
+  "\u0686\u0647\u0627\u0631\u0645": 45,
+  "\u067E\u0646\u062C\u0645": 55,
+  "\u0634\u0634\u0645": 55,
+  "\u0647\u0641\u062A\u0645": 55,
+  "\u0647\u0634\u062A\u0645": 55
+};
+
+// ── وابستگی مشترک: بریدهٔ قواعد DSM — موتور فقط هدف‌های autism و odd را از طریق
+//    rulesOf() داخل criteriaMetFor() می‌خواند؛ وزن‌های EVIDENCE_WEIGHTS هم به
+//    مدخل همین دو هدف وصل‌اند ──
+var EVIDENCE_WEIGHTS = {
+  probeDanger: 2,
+  instrumentDanger: 2,
+  instrumentWarn: 1,
+  sdqDanger: 1,
+  anamnesisFlag: 1,
+  /** ضریب هم‌رأیی والد/معلم وقتی هر دو مرجع باند بالا دارند */
+  consensusMultiplier: 1.5
+};
+var RULES = [
+  // ─── اتیسم ───
+  {
+    targetKey: "autism",
+    batteryVersion: "battery-v1",
+    evidence: [
+      { kind: "instrument", toolKey: "ce-asd-criteria-v1", subscaleId: "crita", band: "danger", weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0645\u062D\u0648\u0631\u06CC \u0627\u0631\u062A\u0628\u0627\u0637 \u0627\u062C\u062A\u0645\u0627\u0639\u06CC \u0628\u0627\u0644\u0627 \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A." },
+      { kind: "instrument", toolKey: "ce-asd-criteria-v1", subscaleId: "critb", band: "danger", weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: "\u0627\u0644\u06AF\u0648\u0647\u0627\u06CC \u062A\u06A9\u0631\u0627\u0631\u06CC/\u062D\u0633\u06CC \u0628\u0627\u0644\u0627 \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A." },
+      { kind: "instrument", toolKey: "ce-asd-criteria-v1", subscaleId: "crita", band: "warn", weight: EVIDENCE_WEIGHTS.instrumentWarn, fa: "\u0686\u0646\u062F \u0646\u0634\u0627\u0646\u0647\u0654 \u0627\u062C\u062A\u0645\u0627\u0639\u06CC \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A." }
+    ],
+    consensus: { parent: "ce-asd-criteria-v1", teacher: "ce-asd-criteria-v1" },
+    criteriaMap: [
+      { criterionId: "autism.a1", toolKey: "ce-asd-criteria-v1", itemRefs: ["aA1", "aA2", "aA3"], passScore: 2 },
+      { criterionId: "autism.a2", toolKey: "ce-asd-criteria-v1", itemRefs: ["aA4", "aA5"], passScore: 2 },
+      { criterionId: "autism.a3", toolKey: "ce-asd-criteria-v1", itemRefs: ["aA6"], passScore: 2 },
+      { criterionId: "autism.b1", toolKey: "ce-asd-criteria-v1", itemRefs: ["aB1", "aB2"], passScore: 2 },
+      { criterionId: "autism.b2", toolKey: "ce-asd-criteria-v1", itemRefs: ["aB3", "aB4"], passScore: 2 },
+      { criterionId: "autism.b3", toolKey: "ce-asd-criteria-v1", itemRefs: ["aB5"], passScore: 2 },
+      { criterionId: "autism.b4", toolKey: "ce-asd-criteria-v1", itemRefs: ["aB6", "aB7"], passScore: 2 }
+    ],
+    differentials: [
+      { targetKey: "speech_language", fa: "\u0627\u06AF\u0631 \u0641\u0642\u0637 \u0641\u0647\u0645/\u0628\u06CC\u0627\u0646 \u0632\u0628\u0627\u0646 \u062F\u0634\u0648\u0627\u0631 \u0627\u0633\u062A \u0648 \u0627\u0644\u06AF\u0648\u06CC \u062A\u06A9\u0631\u0627\u0631\u06CC/\u062D\u0633\u06CC \u0646\u062F\u0627\u0631\u062F \u2192 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 \u0628\u06AF\u06CC\u0631\u06CC\u062F." },
+      { targetKey: "anxiety", fa: "\u0627\u06AF\u0631 \u0627\u062C\u062A\u0646\u0627\u0628 \u0627\u062C\u062A\u0645\u0627\u0639\u06CC \u0641\u0642\u0637 \u062F\u0631 \u062C\u0645\u0639\u200C\u0647\u0627\u06CC \u062C\u062F\u06CC\u062F \u0627\u0633\u062A \u0648 \u0631\u0627\u0628\u0637\u0647\u0654 \u0635\u0645\u06CC\u0645\u06CC \u0633\u0627\u0644\u0645 \u062F\u0627\u0631\u062F \u2192 \u0627\u0636\u0637\u0631\u0627\u0628 \u0627\u062C\u062A\u0645\u0627\u0639\u06CC \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F." }
+    ],
+    nextInstrument: ["ce-asd-criteria-v1"]
+  },
+  // ─── ODD ───
+  {
+    targetKey: "odd",
+    batteryVersion: "battery-v1",
+    evidence: [
+      { kind: "instrument", toolKey: "ce-odd-criteria-v1", subscaleId: "crita", band: "danger", weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: "\u0627\u0644\u06AF\u0648\u06CC \u0645\u0642\u0627\u0628\u0644\u0647\u200C\u06AF\u0631\u06CC \u0628\u0627\u0644\u0627\u06CC \u0628\u0631\u0634 \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A." },
+      { kind: "instrument", toolKey: "ce-odd-criteria-v1", subscaleId: "crita", band: "warn", weight: EVIDENCE_WEIGHTS.instrumentWarn, fa: "\u0686\u0646\u062F \u0645\u0644\u0627\u06A9 \u0645\u0642\u0627\u0628\u0644\u0647\u200C\u06AF\u0631\u06CC \u0628\u0627 \u0646\u0645\u0631\u0647\u0654 \u06A9\u0627\u0645\u0644 \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A." },
+      { kind: "instrument", toolKey: "ce-snap-iv-p-v1", subscaleId: "odd", band: "danger", weight: EVIDENCE_WEIGHTS.instrumentWarn, fa: "\u0632\u06CC\u0631\u0645\u0642\u06CC\u0627\u0633 \u0646\u0627\u0641\u0631\u0645\u0627\u0646\u06CC SNAP-IV \u0648\u0627\u0644\u062F \u0628\u0627\u0644\u0627\u06CC \u0628\u0631\u0634 \u0627\u0633\u062A." },
+      { kind: "sdq", toolKey: "sdq-parent", subscaleId: "cond", band: "danger", weight: EVIDENCE_WEIGHTS.sdqDanger, fa: "\u0632\u06CC\u0631\u0645\u0642\u06CC\u0627\u0633 \u0631\u0641\u062A\u0627\u0631\u06CC SDQ \u0648\u0627\u0644\u062F \u0642\u0627\u0628\u0644 \u062A\u0648\u062C\u0647 \u0627\u0633\u062A." }
+    ],
+    consensus: { parent: "ce-odd-criteria-v1", teacher: "ce-odd-criteria-v1" },
+    criteriaMap: [
+      { criterionId: "odd.a1", toolKey: "ce-odd-criteria-v1", itemRefs: ["oA1", "oA6"], passScore: 2 },
+      { criterionId: "odd.a2", toolKey: "ce-odd-criteria-v1", itemRefs: ["oA2"], passScore: 2 },
+      { criterionId: "odd.a3", toolKey: "ce-odd-criteria-v1", itemRefs: ["oA3"], passScore: 2 },
+      { criterionId: "odd.a4", toolKey: "ce-odd-criteria-v1", itemRefs: ["oA4"], passScore: 2 },
+      { criterionId: "odd.a5", toolKey: "ce-odd-criteria-v1", itemRefs: ["oA5"], passScore: 2 },
+      { criterionId: "odd.a7", toolKey: "ce-odd-criteria-v1", itemRefs: ["oA7"], passScore: 2 },
+      { criterionId: "odd.a8", toolKey: "ce-odd-criteria-v1", itemRefs: ["oA8"], passScore: 2 },
+      { criterionId: "odd.b", toolKey: "ce-odd-criteria-v1", itemRefs: ["oB1"], passScore: 2 },
+      { criterionId: "odd.c", toolKey: "ce-odd-criteria-v1", itemRefs: ["oC1"], passScore: 2 },
+      { criterionId: "odd.d", toolKey: "ce-odd-criteria-v1", itemRefs: ["oD1"], passScore: 2 }
+    ],
+    differentials: [
+      { targetKey: "adhd", fa: "\u0627\u06AF\u0631 \u0628\u062F\u0631\u0641\u062A\u0627\u0631\u06CC \u0627\u0632 \u062A\u06A9\u0627\u0646\u0647 \u0627\u0633\u062A (\u0646\u0647 \u0645\u0642\u0627\u0628\u0644\u0647\u200C\u06AF\u0631\u06CC \u0647\u062F\u0641\u0645\u0646\u062F) \u2192 SNAP-IV \u0647\u0631 \u062F\u0648 \u0645\u0631\u062C\u0639." },
+      { targetKey: "family_stress", fa: "\u0627\u06AF\u0631 \u0634\u0631\u0648\u0639 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0628\u0627 \u0628\u062D\u0631\u0627\u0646 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u0627\u0633\u062A \u2192 \u0627\u0633\u062A\u0631\u0633 \u0645\u062D\u06CC\u0637\u06CC \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F." }
+    ],
+    nextInstrument: ["ce-odd-criteria-v1"]
+  },
+];
+function rulesOf(targetKey) {
+  return RULES.find((r) => r.targetKey === targetKey);
+}
+
+// ── ENGINE REGION (verbatim from worker/bundle.js lines 29109-30981) ──
+var CONSTRUCT_KEYS = [
+  "attention_exec",
+  "externalizing",
+  "internalizing",
+  "language_comm",
+  "academic_learning",
+  "motor_coord",
+  "general_cog",
+  "social_adl"
+];
+var CONSTRUCT_LABELS = {
+  attention_exec: "\u062A\u0648\u062C\u0647 \u0648 \u06A9\u0627\u0631\u06A9\u0631\u062F \u0627\u062C\u0631\u0627\u06CC\u06CC",
+  externalizing: "\u0631\u0641\u062A\u0627\u0631 \u0628\u06CC\u0631\u0648\u0646\u06CC\u200C\u0633\u0627\u0632\u06CC (\u0646\u0627\u0641\u0631\u0645\u0627\u0646\u06CC/\u0633\u0644\u0648\u06A9)",
+  internalizing: "\u0647\u06CC\u062C\u0627\u0646 \u062F\u0631\u0648\u0646\u06CC\u200C\u0633\u0627\u0632\u06CC (\u0646\u06AF\u0631\u0627\u0646\u06CC/\u063A\u0645)",
+  language_comm: "\u0632\u0628\u0627\u0646 \u0648 \u0627\u0631\u062A\u0628\u0627\u0637",
+  academic_learning: "\u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC",
+  motor_coord: "\u062D\u0631\u06A9\u062A \u0648 \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC",
+  general_cog: "\u0634\u0646\u0627\u062E\u062A \u06A9\u0644\u06CC",
+  social_adl: "\u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0627\u062C\u062A\u0645\u0627\u0639\u06CC \u0648 \u062E\u0648\u062F\u06CC\u0627\u0631\u06CC"
+};
+var LEVEL_THRESHOLDS = { border: 2, significant: 4, high: 7 };
+var SCORE_CAP = 16;
+var CONSENSUS_MULTIPLIER = 1.5;
+var PROBE_DANGER_RATIO = 0.8;
+var PROBE_WARN_MAX_RATIO = 0.89;
+var INDEX_WEAK_MAX = 84;
+var INDEX_BORDER_MIN = 85;
+var INDEX_BORDER_MAX = 89;
+var INDEX_SCATTER_LIMIT = 23;
+var IQ_ID_MAX = 69;
+var IQ_BIF_MIN = 70;
+var IQ_BIF_MAX = 84;
+var IQ_BORDER_MAX = 89;
+var IQ_SLOW_MIN = 85;
+var IQ_SLOW_MAX = 89;
+var IQ_GIFTED_FSIQ = 120;
+var IQ_GIFTED_INDEX = 130;
+var IQ_HIGH_FSIQ = 115;
+var GAI_FSIQ_GAP = 15;
+var NVLD_INDEX_GAP = 15;
+var OT_DELAYED_DIFFICULTY = 0.6;
+var OT_BORDER_DIFFICULTY = 0.45;
+var OT_MIN_SCORED = 4;
+var OT_AGE_DELAY_YEARS = 2;
+var REHAB_HIGH_MEAN = 2.5;
+var REHAB_WARN_MIN_MEAN = 1.5;
+var SNAP_CUTOFFS = {
+  parent: { ia: { warn: 11, danger: 16 }, hi: { danger: 13 }, odd: { warn: 10, danger: 14 } },
+  teacher: { ia: { warn: 14, danger: 16 }, hi: { danger: 11 }, odd: { warn: 12, danger: 16 } }
+};
+var SCARED_DANGER = 25;
+var SCARED_WARN_MIN = 20;
+var SCARED_STRONG = 30;
+var CRITERIA_CUTOFFS = {
+  sld: { danger: 13, warn: 10 },
+  asd: { danger: 20, warn: 15 },
+  speech: { danger: 16, warn: 11 },
+  odd: { danger: 11, warn: 7 }
+};
+var ODD_MIN_FULL_CRITERIA2 = 4;
+var ASD_B_FULL_CRITERIA2 = 2;
+var SDQ_PROS_WEAK_MAX = 4;
+var TOOL_SOURCE = {
+  "ce-snap-iv-p-v1": "parent",
+  "sdq-parent": "parent",
+  "ce-scared-p-v1": "parent",
+  "ce-dcdq-v1": "parent",
+  "achenbach-practical": "parent",
+  "home_behavior": "parent",
+  "ce-anamnesis-v2": "parent",
+  "ce-snap-iv-t-v1": "teacher",
+  "ce-sdq-t-v1": "teacher",
+  "teacher-classroom": "teacher",
+  "ce-sld-read-v1": "examiner",
+  "ce-sld-wri-v1": "examiner",
+  "ce-sld-calc-v1": "examiner",
+  "ce-asd-criteria-v1": "examiner",
+  "ce-speech-criteria-v1": "examiner",
+  "ce-odd-criteria-v1": "examiner",
+  "ce-wechsler-w4-v1": "examiner",
+  "ce-rehab-cog-v1": "examiner",
+  "ce-rehab-motor-v1": "examiner",
+  "ce-rehab-adl-v1": "examiner",
+  "ce-probe-read-v1": "performance",
+  "ce-probe-write-v1": "performance",
+  "ce-probe-calc-v1": "performance"
+};
+var WECHSLER_TOOL = "ce-wechsler-w4-v1";
+var OT_PROFILE_TOOL = "OtProfile";
+var CONSTRUCT_MIN_COVERAGE = {
+  attention_exec: ["ce-snap-iv-p-v1", "ce-snap-iv-t-v1", WECHSLER_TOOL, "ce-rehab-cog-v1"],
+  externalizing: ["ce-snap-iv-p-v1", "ce-snap-iv-t-v1", "ce-odd-criteria-v1"],
+  internalizing: ["ce-scared-p-v1", "sdq-parent", "ce-sdq-t-v1"],
+  language_comm: ["ce-speech-criteria-v1", WECHSLER_TOOL, `${OT_PROFILE_TOOL}(auditory)`],
+  academic_learning: ["ce-probe-read-v1", "ce-probe-write-v1", "ce-probe-calc-v1", "ce-sld-read-v1", "ce-sld-wri-v1", "ce-sld-calc-v1"],
+  motor_coord: ["ce-dcdq-v1", `${OT_PROFILE_TOOL}(gross/fine)`],
+  general_cog: [WECHSLER_TOOL],
+  social_adl: ["ce-asd-criteria-v1", "sdq-parent", "ce-sdq-t-v1", `${OT_PROFILE_TOOL}(social/adl)`]
+};
+var GATE_DEPENDENT_CONSTRUCTS = {
+  behavioral: ["attention_exec", "externalizing", "internalizing"],
+  skills: ["motor_coord", "social_adl", "general_cog"]
+};
+var ANAMNESIS_KEYWORDS = {
+  attention_exec: ["\u062A\u0648\u062C\u0647", "\u062D\u0648\u0627\u0633\u200C\u067E\u0631\u062A", "\u062D\u0648\u0627\u0633 \u067E\u0631\u062A", "\u0641\u0631\u0627\u0645\u0648\u0634", "\u062A\u06A9\u0644\u06CC\u0641", "\u06CC\u0627\u062F\u0622\u0648\u0631\u06CC", "\u0645\u062F\u0627\u0645 \u06CC\u0627\u062F\u0622\u0648\u0631\u06CC"],
+  externalizing: ["\u067E\u0631\u062E\u0627\u0634\u06AF\u0631\u06CC", "\u06A9\u062A\u06A9", "\u0646\u0627\u0641\u0631\u0645\u0627\u0646\u06CC", "\u062F\u0639\u0648\u0627", "\u0686\u0648\u0646 \u0648 \u0686\u0631\u0627"],
+  internalizing: ["\u0646\u06AF\u0631\u0627\u0646\u06CC", "\u062A\u0631\u0633", "\u063A\u0645", "\u06A9\u0627\u0628\u0648\u0633", "\u0686\u0633\u0628\u06CC\u062F\u0646 \u0628\u0647 \u0648\u0627\u0644\u062F", "\u062F\u0644\u0647\u0631\u0647"],
+  language_comm: ["\u062F\u06CC\u0631 \u062D\u0631\u0641 \u0632\u062F", "\u062F\u06CC\u0631\u062D\u0631\u0641", "\u062C\u0645\u0644\u0647 \u06A9\u0648\u062A\u0627\u0647", "\u062F\u0631\u06A9 \u062F\u0633\u062A\u0648\u0631", "\u06AF\u0641\u062A\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC", "\u0644\u06A9\u0646\u062A", "\u06A9\u0644\u0645\u0627\u062A \u0631\u0627 \u0646\u0645\u06CC\u200C\u06AF\u0648\u06CC\u062F"],
+  academic_learning: ["\u0627\u0645\u0644\u0627", "\u0631\u0648\u0627\u0646\u200C\u062E\u0648\u0627\u0646\u06CC", "\u0631\u0648\u0627\u0646\u062E\u0648\u0627\u0646\u06CC", "\u062F\u06CC\u06A9\u062A\u0647", "\u062C\u062F\u0648\u0644 \u0636\u0631\u0628", "\u06A9\u0646\u062F \u0646\u0648\u0634\u062A\u0646", "\u062E\u0648\u0627\u0646\u062F\u0646"],
+  motor_coord: ["\u062F\u0633\u062A\u200C\u0648\u067E\u0627 \u06A9\u0644\u0641\u062A", "\u062F\u0633\u062A \u0648 \u067E\u0627 \u06A9\u0644\u0641\u062A", "\u0645\u062F\u0627\u062F\u0634 \u0645\u06CC\u200C\u0627\u0641\u062A\u062F", "\u0645\u062F\u0627\u062F \u0645\u06CC\u200C\u0627\u0641\u062A\u062F", "\u0628\u0646\u062F \u06A9\u0641\u0634", "\u0642\u06CC\u0686\u06CC", "\u0628\u062F\u0642\u0644\u0642 \u0631\u0627\u0647 \u0645\u06CC\u200C\u0631\u0648\u062F", "\u0644\u0639 \u0628\u0627\u0632\u06CC"],
+  general_cog: ["\u062F\u06CC\u0631\u0646\u0634\u0633\u062A", "\u062F\u06CC\u0631 \u0646\u0634\u0633\u062A", "\u062F\u06CC\u0631\u0631\u0627\u0647\u200C\u0631\u0641\u062A", "\u062F\u06CC\u0631 \u0631\u0627\u0647 \u0631\u0641\u062A", "\u062F\u06CC\u0631\u0635\u062D\u0628\u062A", "\u062F\u06CC\u0631 \u0635\u062D\u0628\u062A", "\u0628\u0647 \u0647\u0645\u0647\u0654 \u0645\u0631\u0627\u062D\u0644 \u062F\u06CC\u0631 \u0631\u0633\u06CC\u062F", "\u0645\u0631\u0627\u062D\u0644 \u0631\u0634\u062F\u06CC \u062F\u06CC\u0631"],
+  social_adl: ["\u0628\u0627\u0632\u06CC \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F", "\u0628\u0627 \u0628\u0686\u0647\u200C\u0647\u0627 \u0628\u0627\u0632\u06CC \u0646\u0645\u06CC", "\u062A\u0645\u0627\u0633 \u0686\u0634\u0645\u06CC", "\u062F\u0648\u0633\u062A \u0646\u062F\u0627\u0631\u062F", "\u0645\u0648 \u062E\u0648\u0631\u062F\u0646", "\u062A\u0646\u0647\u0627 \u0628\u0627\u0632\u06CC \u0645\u06CC\u200C\u06A9\u0646\u062F"]
+};
+var REDFLAG_KEYWORDS = {
+  tbi: ["\u0636\u0631\u0628\u0647\u0654 \u0633\u0631", "\u0636\u0631\u0628\u0647 \u0633\u0631", "\u0635\u0631\u0639", "\u062A\u0634\u0646\u062C", "\u0627\u0632 \u062F\u0633\u062A \u062F\u0627\u062F\u0646 \u0647\u0648\u0634\u06CC\u0627\u0631\u06CC", "\u06A9\u0648\u0628\u06CC\u062F\u0646 \u0633\u0631"],
+  selfharm: ["\u0622\u0633\u06CC\u0628 \u0628\u0647 \u062E\u0648\u062F", "\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u062F \u0628\u0645\u06CC\u0631\u0645", "\u0627\u0645\u06CC\u062F\u06CC \u0646\u062F\u0627\u0631\u0645", "\u0627\u0645\u06CC\u062F \u0646\u062F\u0627\u0631\u0645", "\u062E\u0648\u062F\u06A9\u0634\u06CC"],
+  regression: ["\u0642\u0628\u0644\u0627\u064B \u0635\u062D\u0628\u062A \u0645\u06CC\u200C\u06A9\u0631\u062F", "\u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC\u0634 \u0631\u0627 \u0627\u0632 \u062F\u0633\u062A \u062F\u0627\u062F", "\u067E\u0633\u200C\u0631\u0641\u062A", "\u0642\u0628\u0644\u0627\u064B \u062D\u0631\u0641 \u0645\u06CC\u200C\u0632\u062F"]
+};
+var CONFIDENCE_SCATTER_SOFT_PENALTY = 0.05;
+var CONFIDENCE_BASE = 0.4;
+var CONFIDENCE_COVERAGE_BONUS = 0.1;
+var CONFIDENCE_WISC_BONUS = 0.1;
+var CONFIDENCE_DANGER_SOURCES_BONUS = 0.1;
+var CONFIDENCE_HIGH_LEVEL_BONUS = 0.05;
+var CONFIDENCE_CAP_PENALTY = 0.15;
+var CONFIDENCE_MIN = 0.1;
+var CONFIDENCE_MAX = 0.95;
+var COVERAGE_GOOD_PERCENT = 60;
+var FORMULATION_DISCLAIMER = "\u0627\u06CC\u0646 \u0635\u0648\u0631\u062A\u200C\u0628\u0646\u062F\u06CC\u060C \u062E\u0644\u0627\u0635\u0647\u200C\u0627\u06CC \u0628\u0627\u0644\u06CC\u0646\u06CC \u0627\u0632 \u0634\u0648\u0627\u0647\u062F \u0645\u0648\u062C\u0648\u062F \u067E\u0631\u0648\u0646\u062F\u0647 \u0627\u0633\u062A\u061B \u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646 \u0645\u0639\u0627\u06CC\u0646\u0647\u0654 \u0628\u0627\u0644\u06CC\u0646\u06CC \u0648 \u062A\u0634\u062E\u06CC\u0635 \u0631\u0633\u0645\u06CC \u062A\u0648\u0633\u0637 \u0645\u062A\u062E\u0635\u0635 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A.";
+function num3(value) {
+  if (value === null || value === void 0 || value === "")
+    return null;
+  const n = Number(String(value).replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))));
+  return Number.isFinite(n) ? n : null;
+}
+__name(num3, "num3");
+__name2(num3, "num");
+function latestPerTool2(events) {
+  const map = /* @__PURE__ */ new Map();
+  for (const e of events) {
+    if (e.status !== "completed")
+      continue;
+    if (!map.has(e.toolKey))
+      map.set(e.toolKey, e);
+  }
+  return map;
+}
+__name(latestPerTool2, "latestPerTool2");
+__name2(latestPerTool2, "latestPerTool");
+function colorOfBandLabel2(label, bands) {
+  if (!label || !bands)
+    return null;
+  return bands.find((b) => b.label === label)?.color ?? null;
+}
+__name(colorOfBandLabel2, "colorOfBandLabel2");
+__name2(colorOfBandLabel2, "colorOfBandLabel");
+function totalColor(event) {
+  const a = event.analysis;
+  if (!a)
+    return null;
+  if (a.band) {
+    const direct = colorOfBandLabel2(a.band, event.bands);
+    if (direct)
+      return direct;
+    if (a.band.includes("\u067E\u0631\u062E\u0637\u0631") || a.band.includes("\u0628\u0627\u0644\u06CC\u0646\u06CC"))
+      return "danger";
+    if (a.band.includes("\u0647\u0634\u062F\u0627\u0631") || a.band.includes("\u0645\u0631\u0632\u06CC"))
+      return "warn";
+    if (a.band.includes("\u0645\u0637\u0644\u0648\u0628") || a.band.includes("\u0645\u0639\u0645\u0648\u0644") || a.band.includes("\u0637\u0628\u06CC\u0639\u06CC"))
+      return "ok";
+  }
+  return null;
+}
+__name(totalColor, "totalColor");
+__name2(totalColor, "totalColor");
+function subscaleScoreOf(event, id) {
+  return event.analysis?.subscaleScores?.find((s) => s.id === id);
+}
+__name(subscaleScoreOf, "subscaleScoreOf");
+__name2(subscaleScoreOf, "subscaleScoreOf");
+function subscaleColor(event, id) {
+  const ss = subscaleScoreOf(event, id);
+  if (!ss)
+    return null;
+  if (ss.color)
+    return ss.color;
+  const def = event.subscales?.find((s) => s.id === id);
+  return colorOfBandLabel2(ss.band, def?.bands ?? null);
+}
+__name(subscaleColor, "subscaleColor");
+__name2(subscaleColor, "subscaleColor");
+function payloadText2(event, keys) {
+  if (!event?.payload)
+    return "";
+  return keys.map((k) => event.payload?.[k]?.value ?? "").join(" ");
+}
+__name(payloadText2, "payloadText2");
+__name2(payloadText2, "payloadText");
+function payloadField(event, key) {
+  return event?.payload?.[key]?.value ?? "";
+}
+__name(payloadField, "payloadField");
+__name2(payloadField, "payloadField");
+function addRow(rows, row) {
+  if (row.weight <= 0)
+    return;
+  rows.push(row);
+}
+__name(addRow, "addRow");
+__name2(addRow, "addRow");
+function criteriaMetFor(toolKey, criterionIds, event) {
+  if (!event)
+    return 0;
+  const targetKey = toolKey === "ce-odd-criteria-v1" ? "odd" : "autism";
+  const ruleSet = rulesOf(targetKey);
+  if (!ruleSet)
+    return 0;
+  const entries = ruleSet.criteriaMap.filter((m) => m.toolKey === toolKey && criterionIds.includes(m.criterionId));
+  let met = 0;
+  for (const m of entries) {
+    const endorsed = m.itemRefs.some((k) => {
+      const v = num3(event.payload?.[k]?.value);
+      return v !== null && v >= m.passScore;
+    });
+    if (endorsed)
+      met += 1;
+  }
+  return met;
+}
+__name(criteriaMetFor, "criteriaMetFor");
+__name2(criteriaMetFor, "criteriaMetFor");
+function oddRuleActive(event) {
+  if (!event)
+    return false;
+  const full = criteriaMetFor("ce-odd-criteria-v1", ["odd.a1", "odd.a2", "odd.a3", "odd.a4", "odd.a5", "odd.a7", "odd.a8"], event);
+  return full >= ODD_MIN_FULL_CRITERIA2;
+}
+__name(oddRuleActive, "oddRuleActive");
+__name2(oddRuleActive, "oddRuleActive");
+function asdRuleActive(event) {
+  if (!event)
+    return false;
+  const allA = criteriaMetFor("ce-asd-criteria-v1", ["autism.a1", "autism.a2", "autism.a3"], event) === 3;
+  const bMet = criteriaMetFor("ce-asd-criteria-v1", ["autism.b1", "autism.b2", "autism.b3", "autism.b4"], event);
+  return allA && bMet >= ASD_B_FULL_CRITERIA2;
+}
+__name(asdRuleActive, "asdRuleActive");
+__name2(asdRuleActive, "asdRuleActive");
+function mapSnap(rows, role, event) {
+  const suffix = role === "parent" ? "p" : "t";
+  const cut = SNAP_CUTOFFS[role];
+  const ia = subscaleScoreOf(event, "ia");
+  const hi = subscaleScoreOf(event, "hi");
+  const odd = subscaleScoreOf(event, "odd");
+  const iaDanger = ia ? ia.score >= cut.ia.danger : false;
+  const iaWarn = ia ? !iaDanger && ia.score >= cut.ia.warn : false;
+  if (!ia) {
+    const c = subscaleColor(event, "ia");
+    if (c === "danger") {
+      addRow(rows, { construct: "attention_exec", toolId: event.toolKey, signal: `snap_${suffix}_ia_danger`, weight: 2, danger: true, sourceType: TOOL_SOURCE[event.toolKey], textFa: role === "parent" ? "\u062F\u0631 \u06AF\u0632\u0627\u0631\u0634 \u0648\u0627\u0644\u062F\u060C \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 \u0628\u0627\u0646\u062F \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A." : "\u0645\u0639\u0644\u0645 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u0631\u0627 \u062F\u0631 \u0628\u0627\u0646\u062F \u067E\u0631\u062E\u0637\u0631 \u06AF\u0632\u0627\u0631\u0634 \u0645\u06CC\u200C\u06A9\u0646\u062F." });
+    } else if (c === "warn") {
+      addRow(rows, { construct: "attention_exec", toolId: event.toolKey, signal: `snap_${suffix}_ia_warn`, weight: 1, danger: false, sourceType: TOOL_SOURCE[event.toolKey], textFa: role === "parent" ? "\u062F\u0631 \u06AF\u0632\u0627\u0631\u0634 \u0648\u0627\u0644\u062F\u060C \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u062D\u062F \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A." : "\u0645\u0639\u0644\u0645 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u0631\u0627 \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u062D\u062F \u0645\u0639\u0645\u0648\u0644 \u06AF\u0632\u0627\u0631\u0634 \u0645\u06CC\u200C\u06A9\u0646\u062F." });
+    }
+  } else if (iaDanger) {
+    addRow(rows, { construct: "attention_exec", toolId: event.toolKey, signal: `snap_${suffix}_ia_danger`, weight: 2, danger: true, sourceType: TOOL_SOURCE[event.toolKey], textFa: role === "parent" ? `\u062F\u0631 \u06AF\u0632\u0627\u0631\u0634 \u0648\u0627\u0644\u062F\u060C \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 \u0628\u0627\u0646\u062F \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (\u0646\u0645\u0631\u0647\u0654 \u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC ${faNum5(ia.score)} \u0627\u0632 ${faNum5(27)}).` : `\u0645\u0639\u0644\u0645 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u0631\u0627 \u062F\u0631 \u0628\u0627\u0646\u062F \u067E\u0631\u062E\u0637\u0631 \u06AF\u0632\u0627\u0631\u0634 \u0645\u06CC\u200C\u06A9\u0646\u062F (\u0646\u0645\u0631\u0647\u0654 ${faNum5(ia.score)}).` });
+  } else if (iaWarn) {
+    addRow(rows, { construct: "attention_exec", toolId: event.toolKey, signal: `snap_${suffix}_ia_warn`, weight: 1, danger: false, sourceType: TOOL_SOURCE[event.toolKey], textFa: role === "parent" ? `\u062F\u0631 \u06AF\u0632\u0627\u0631\u0634 \u0648\u0627\u0644\u062F\u060C \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u062D\u062F \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A (\u0646\u0645\u0631\u0647\u0654 ${faNum5(ia.score)}).` : `\u0645\u0639\u0644\u0645 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u0631\u0627 \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u062D\u062F \u0645\u0639\u0645\u0648\u0644 \u06AF\u0632\u0627\u0631\u0634 \u0645\u06CC\u200C\u06A9\u0646\u062F (\u0646\u0645\u0631\u0647\u0654 ${faNum5(ia.score)}).` });
+  }
+  const hiDanger = hi ? hi.score >= cut.hi.danger : subscaleColor(event, "hi") === "danger";
+  if (hiDanger) {
+    if (iaDanger || iaWarn) {
+      addRow(rows, { construct: "attention_exec", toolId: event.toolKey, signal: `snap_${suffix}_hi_danger`, weight: 2, danger: true, sourceType: TOOL_SOURCE[event.toolKey], textFa: "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0628\u06CC\u200C\u0642\u0631\u0627\u0631\u06CC \u0648 \u062A\u06A9\u0627\u0646\u0634 \u0647\u0645 \u062F\u0631 \u0628\u0627\u0646\u062F \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A." });
+    } else {
+      addRow(rows, { construct: "externalizing", toolId: event.toolKey, signal: `snap_${suffix}_hi_only`, weight: 1, danger: true, sourceType: TOOL_SOURCE[event.toolKey], textFa: "\u0627\u0644\u06AF\u0648\u06CC \u063A\u0627\u0644\u0628\u060C \u0628\u06CC\u200C\u0642\u0631\u0627\u0631\u06CC/\u062A\u06A9\u0627\u0646\u0634 \u0627\u0633\u062A \u0646\u0647 \u062F\u0631\u06AF\u06CC\u0631\u06CC \u0628\u0627 \u062F\u06CC\u06AF\u0631\u0627\u0646." });
+    }
+  }
+  const oddDanger = odd ? odd.score >= cut.odd.danger : subscaleColor(event, "odd") === "danger";
+  const oddWarn = odd ? !oddDanger && odd.score >= cut.odd.warn : subscaleColor(event, "odd") === "warn";
+  if (oddDanger) {
+    addRow(rows, { construct: "externalizing", toolId: event.toolKey, signal: `snap_${suffix}_odd_danger`, weight: 2, danger: true, sourceType: TOOL_SOURCE[event.toolKey], textFa: role === "parent" ? `\u062F\u0631 \u06AF\u0632\u0627\u0631\u0634 \u0648\u0627\u0644\u062F\u060C \u0646\u0627\u0641\u0631\u0645\u0627\u0646\u06CC \u0648 \u062F\u0631\u06AF\u06CC\u0631\u06CC \u062F\u0631 \u0628\u0627\u0646\u062F \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (\u0646\u0645\u0631\u0647\u0654 ${faNum5(odd.score)}).` : `\u0645\u0639\u0644\u0645 \u0631\u0641\u062A\u0627\u0631 \u0646\u0627\u0641\u0631\u0645\u0627\u0646\u0627\u0646\u0647 \u0631\u0627 \u062F\u0631 \u0628\u0627\u0646\u062F \u067E\u0631\u062E\u0637\u0631 \u06AF\u0632\u0627\u0631\u0634 \u0645\u06CC\u200C\u06A9\u0646\u062F (\u0646\u0645\u0631\u0647\u0654 ${faNum5(odd.score)}).` });
+  } else if (oddWarn) {
+    addRow(rows, { construct: "externalizing", toolId: event.toolKey, signal: `snap_${suffix}_odd_warn`, weight: 1, danger: false, sourceType: TOOL_SOURCE[event.toolKey], textFa: role === "parent" ? `\u062F\u0631 \u06AF\u0632\u0627\u0631\u0634 \u0648\u0627\u0644\u062F\u060C \u0646\u0627\u0641\u0631\u0645\u0627\u0646\u06CC \u0648 \u062F\u0631\u06AF\u06CC\u0631\u06CC \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u062D\u062F \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A (\u0646\u0645\u0631\u0647\u0654 ${faNum5(odd.score)}).` : `\u0645\u0639\u0644\u0645 \u0631\u0641\u062A\u0627\u0631 \u0646\u0627\u0641\u0631\u0645\u0627\u0646\u0627\u0646\u0647 \u0631\u0627 \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u062D\u062F \u0645\u0639\u0645\u0648\u0644 \u06AF\u0632\u0627\u0631\u0634 \u0645\u06CC\u200C\u06A9\u0646\u062F (\u0646\u0645\u0631\u0647\u0654 ${faNum5(odd.score)}).` });
+  }
+}
+__name(mapSnap, "mapSnap");
+__name2(mapSnap, "mapSnap");
+function mapSdq(rows, role, event) {
+  const source = TOOL_SOURCE[event.toolKey];
+  const fa2 = role === "parent" ? "\u0648\u0627\u0644\u062F" : "\u0645\u0639\u0644\u0645";
+  const subs = [
+    { id: "hyper", construct: "attention_exec", fa: "\u0628\u06CC\u0634\u200C\u0641\u0639\u0627\u0644\u06CC", signal: `sdq_${role === "parent" ? "p" : "t"}_hyper_danger` },
+    { id: "cond", construct: "externalizing", fa: "\u0645\u0634\u06A9\u0644\u0627\u062A \u0631\u0641\u062A\u0627\u0631\u06CC", signal: `sdq_${role === "parent" ? "p" : "t"}_cond_danger` },
+    { id: "emo", construct: "internalizing", fa: "\u0645\u0634\u06A9\u0644\u0627\u062A \u0647\u06CC\u062C\u0627\u0646\u06CC", signal: `sdq_${role === "parent" ? "p" : "t"}_emo_danger` },
+    { id: "peer", construct: "social_adl", fa: "\u0645\u0634\u06A9\u0644\u0627\u062A \u0647\u0645\u200C\u0633\u0627\u0644\u0627\u0646", signal: `sdq_${role === "parent" ? "p" : "t"}_peer_danger` }
+  ];
+  for (const s of subs) {
+    if (subscaleColor(event, s.id) === "danger") {
+      const w = s.id === "hyper" ? 2 : 1;
+      addRow(rows, { construct: s.construct, toolId: event.toolKey, signal: s.signal, weight: w, danger: true, sourceType: source, textFa: `\u062F\u0631 \u067E\u0631\u0633\u0634\u0646\u0627\u0645\u0647\u0654 \u062A\u0648\u0627\u0646\u0645\u0646\u062F\u06CC\u200C\u0647\u0627 (${fa2})\u060C \u0646\u0645\u0631\u0647\u0654 ${s.fa} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A.` });
+    }
+  }
+  const pros = subscaleScoreOf(event, "pros");
+  if (pros && pros.score <= SDQ_PROS_WEAK_MAX) {
+    addRow(rows, { construct: "social_adl", toolId: event.toolKey, signal: `sdq_${role === "parent" ? "p" : "t"}_pros_weak`, weight: 1, danger: true, sourceType: source, textFa: `\u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0627\u062C\u062A\u0645\u0627\u0639\u06CC-\u0645\u062B\u0628\u062A \u062F\u0631 \u067E\u0631\u0633\u0634\u0646\u0627\u0645\u0647\u0654 \u062A\u0648\u0627\u0646\u0645\u0646\u062F\u06CC\u200C\u0647\u0627 (${fa2}) \u06A9\u0645 \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A.` });
+  }
+}
+__name(mapSdq, "mapSdq");
+__name2(mapSdq, "mapSdq");
+function mapScared(rows, event) {
+  const source = TOOL_SOURCE[event.toolKey];
+  const total = event.analysis?.score ?? null;
+  if (total !== null && total >= SCARED_DANGER) {
+    addRow(rows, { construct: "internalizing", toolId: event.toolKey, signal: "scared_total_danger", weight: 2, danger: true, sourceType: source, textFa: `\u062F\u0631 \u067E\u0631\u0633\u0634\u0646\u0627\u0645\u0647\u0654 \u0627\u0636\u0637\u0631\u0627\u0628 \u06A9\u0648\u062F\u06A9 (\u06AF\u0632\u0627\u0631\u0634 \u0648\u0627\u0644\u062F)\u060C \u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (${faNum5(total)} \u0627\u0632 ${faNum5(82)}).` });
+    if (total >= SCARED_STRONG) {
+      addRow(rows, { construct: "internalizing", toolId: event.toolKey, signal: "scared_total_strong", weight: 1, danger: true, sourceType: source, textFa: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 \u062F\u0631 \u0628\u0627\u0646\u062F \u0627\u062E\u062A\u0635\u0627\u0635\u06CC \u0627\u0633\u062A (${faNum5(total)}) \u2014 \u0627\u062D\u062A\u0645\u0627\u0644 \u0627\u062E\u062A\u0644\u0627\u0644 \u0627\u0636\u0637\u0631\u0627\u0628\u06CC \u0645\u062D\u062A\u0645\u0644\u200C\u062A\u0631.` });
+    }
+  } else if (total !== null && total >= SCARED_WARN_MIN) {
+    addRow(rows, { construct: "internalizing", toolId: event.toolKey, signal: "scared_total_warn", weight: 1, danger: false, sourceType: source, textFa: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u062D\u062F \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A (${faNum5(total)}).` });
+  }
+  const subs = [
+    { id: "panic", fa: "\u0648\u062D\u0634\u062A\u200C\u0632\u062F\u06AF\u06CC", signal: "scared_panic_danger" },
+    { id: "gad", fa: "\u0646\u06AF\u0631\u0627\u0646\u06CC \u0641\u0631\u0627\u06AF\u06CC\u0631", signal: "scared_gad_danger" },
+    { id: "sep", fa: "\u062C\u062F\u0627\u06CC\u06CC", signal: "scared_sep_danger" }
+  ];
+  for (const s of subs) {
+    if (subscaleColor(event, s.id) === "danger") {
+      addRow(rows, { construct: "internalizing", toolId: event.toolKey, signal: s.signal, weight: 1, danger: true, sourceType: source, textFa: `\u0646\u06AF\u0631\u0627\u0646\u06CC \u063A\u0627\u0644\u0628 \u062F\u0631 \u062D\u06CC\u0637\u0647\u0654 ${s.fa} \u0645\u062A\u0645\u0631\u06A9\u0632 \u0627\u0633\u062A.` });
+    }
+  }
+  if (subscaleColor(event, "soc") === "danger") {
+    addRow(rows, { construct: "internalizing", toolId: event.toolKey, signal: "scared_soc_danger", weight: 1, danger: true, sourceType: source, textFa: "\u0646\u06AF\u0631\u0627\u0646\u06CC \u062F\u0631 \u0645\u0648\u0642\u0639\u06CC\u062A\u200C\u0647\u0627\u06CC \u0627\u062C\u062A\u0645\u0627\u0639\u06CC \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A." });
+  }
+  const sch = subscaleScoreOf(event, "sch");
+  if (sch && sch.score >= 1) {
+    addRow(rows, { construct: "internalizing", toolId: event.toolKey, signal: "sch_flag", weight: 1, danger: false, sourceType: source, textFa: "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC\u06CC \u0627\u0632 \u0646\u0627\u062E\u0648\u0634\u0627\u06CC\u0646\u062F\u0634\u062F\u0646 \u0645\u062F\u0631\u0633\u0647/\u0627\u062C\u062A\u0646\u0627\u0628 \u0627\u0632 \u0645\u062F\u0631\u0633\u0647 \u062F\u06CC\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F." });
+  }
+}
+__name(mapScared, "mapScared");
+__name2(mapScared, "mapScared");
+function mapDcdq(rows, event) {
+  const c = totalColor(event);
+  const source = TOOL_SOURCE[event.toolKey];
+  if (c === "danger") {
+    addRow(rows, { construct: "motor_coord", toolId: event.toolKey, signal: "dcdq_danger", weight: 2, danger: true, sourceType: source, textFa: `\u062F\u0631 \u067E\u0631\u0633\u0634\u0646\u0627\u0645\u0647\u0654 \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u062D\u0631\u06A9\u062A\u06CC\u060C \u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0632\u06CC\u0631 \u0628\u0631\u0634 \u0633\u0646\u06CC \u0627\u0633\u062A (${faNum5(event.analysis?.score ?? 0)}).` });
+  } else if (c === "warn") {
+    addRow(rows, { construct: "motor_coord", toolId: event.toolKey, signal: "dcdq_warn", weight: 1, danger: false, sourceType: source, textFa: `\u0646\u0645\u0631\u0647\u0654 \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u062D\u0631\u06A9\u062A\u06CC \u062F\u0631 \u0645\u0631\u0632 \u0628\u0631\u0634 \u0633\u0646\u06CC \u0627\u0633\u062A (${faNum5(event.analysis?.score ?? 0)}).` });
+  }
+}
+__name(mapDcdq, "mapDcdq");
+__name2(mapDcdq, "mapDcdq");
+function mapLegacyBehavior(rows, event) {
+  const c = totalColor(event);
+  if (c !== "danger")
+    return;
+  const source = TOOL_SOURCE[event.toolKey] ?? "parent";
+  const fa2 = source === "teacher" ? "\u0645\u0639\u0644\u0645" : "\u062E\u0627\u0646\u0647";
+  addRow(rows, { construct: "externalizing", toolId: event.toolKey, signal: "legacy_behavior_danger", weight: 1, danger: true, sourceType: source, textFa: `${fa2 === "\u0645\u0639\u0644\u0645" ? "\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0639\u0644\u0645" : "\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0646\u0647"} \u0631\u0641\u062A\u0627\u0631 \u0686\u0627\u0644\u0634\u06CC \u0631\u0627 \u062F\u0631 \u0628\u0627\u0646\u062F \u067E\u0631\u062E\u0637\u0631 \u062B\u0628\u062A \u06A9\u0631\u062F\u0647 \u0627\u0633\u062A.` });
+}
+__name(mapLegacyBehavior, "mapLegacyBehavior");
+__name2(mapLegacyBehavior, "mapLegacyBehavior");
+function mapSld(rows, event, kind) {
+  const total = event.analysis?.score ?? null;
+  const source = TOOL_SOURCE[event.toolKey];
+  const cut = CRITERIA_CUTOFFS.sld;
+  const fa2 = kind === "read" ? "\u062E\u0648\u0627\u0646\u062F\u0646" : kind === "wri" ? "\u0646\u0648\u0634\u062A\u0646" : "\u062D\u0633\u0627\u0628";
+  const subtype = kind === "read" ? "reading" : kind === "wri" ? "writing" : "math";
+  const signal = `sld_${kind}`;
+  if (total === null)
+    return;
+  if (total >= cut.danger) {
+    addRow(rows, { construct: "academic_learning", toolId: event.toolKey, signal: `${signal}_danger`, weight: 2, danger: true, sourceType: source, subtype, textFa: `\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC ${fa2} \u062F\u0631 \u0628\u0627\u0646\u062F \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (${faNum5(total)} \u0627\u0632 ${faNum5(20)}).` });
+  } else if (total >= cut.warn) {
+    addRow(rows, { construct: "academic_learning", toolId: event.toolKey, signal: `${signal}_warn`, weight: 1, danger: false, sourceType: source, subtype, textFa: `\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC ${fa2} \u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0647\u0634\u062F\u0627\u0631 \u0627\u0633\u062A (${faNum5(total)} \u0627\u0632 ${faNum5(20)}).` });
+  }
+}
+__name(mapSld, "mapSld");
+__name2(mapSld, "mapSld");
+function mapAsd(rows, event, ruleActive) {
+  const total = event.analysis?.score ?? null;
+  const source = TOOL_SOURCE[event.toolKey];
+  const cut = CRITERIA_CUTOFFS.asd;
+  if (ruleActive && total !== null && total >= cut.warn || total !== null && total >= cut.danger) {
+    addRow(rows, { construct: "social_adl", toolId: event.toolKey, signal: "asd_danger", weight: 2, danger: true, sourceType: source, textFa: `\u062F\u0631 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC \u0637\u06CC\u0641 \u0627\u062A\u06CC\u0633\u0645\u060C \u0646\u0645\u0631\u0647/\u0642\u0627\u0639\u062F\u0647\u0654 \u0645\u0644\u0627\u06A9\u06CC \u062F\u0631 \u0628\u0627\u0646\u062F \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (${faNum5(total ?? 0)} \u0627\u0632 ${faNum5(32)}).` });
+  } else if (total !== null && total >= cut.warn) {
+    addRow(rows, { construct: "social_adl", toolId: event.toolKey, signal: "asd_warn", weight: 1, danger: false, sourceType: source, textFa: `\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC \u0637\u06CC\u0641 \u0627\u062A\u06CC\u0633\u0645 \u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0647\u0634\u062F\u0627\u0631 \u0627\u0633\u062A (${faNum5(total)} \u0627\u0632 ${faNum5(32)}).` });
+  }
+}
+__name(mapAsd, "mapAsd");
+__name2(mapAsd, "mapAsd");
+function mapSpeech(rows, event) {
+  const total = event.analysis?.score ?? null;
+  const source = TOOL_SOURCE[event.toolKey];
+  const cut = CRITERIA_CUTOFFS.speech;
+  if (total !== null && total >= cut.danger) {
+    addRow(rows, { construct: "language_comm", toolId: event.toolKey, signal: "speech_danger", weight: 2, danger: true, sourceType: source, textFa: `\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646 \u062F\u0631 \u0628\u0627\u0646\u062F \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (${faNum5(total)} \u0627\u0632 ${faNum5(26)}).` });
+  } else if (total !== null && total >= cut.warn) {
+    addRow(rows, { construct: "language_comm", toolId: event.toolKey, signal: "speech_warn", weight: 1, danger: false, sourceType: source, textFa: `\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646 \u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0647\u0634\u062F\u0627\u0631 \u0627\u0633\u062A (${faNum5(total)} \u0627\u0632 ${faNum5(26)}).` });
+  }
+}
+__name(mapSpeech, "mapSpeech");
+__name2(mapSpeech, "mapSpeech");
+function mapOdd(rows, event, ruleActive) {
+  const total = event.analysis?.score ?? null;
+  const source = TOOL_SOURCE[event.toolKey];
+  const cut = CRITERIA_CUTOFFS.odd;
+  if (ruleActive && total !== null && total >= cut.warn || total !== null && total >= cut.danger) {
+    addRow(rows, { construct: "externalizing", toolId: event.toolKey, signal: "odd_danger", weight: 2, danger: true, sourceType: source, textFa: `\u062F\u0631 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC \u0631\u0641\u062A\u0627\u0631 \u0646\u0627\u0641\u0631\u0645\u0627\u0646\u060C \u0646\u0645\u0631\u0647/\u0642\u0627\u0639\u062F\u0647\u0654 \u0645\u0644\u0627\u06A9\u06CC \u062F\u0631 \u0628\u0627\u0646\u062F \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (${faNum5(total ?? 0)} \u0627\u0632 ${faNum5(22)}).` });
+  } else if (total !== null && total >= cut.warn) {
+    addRow(rows, { construct: "externalizing", toolId: event.toolKey, signal: "odd_warn", weight: 1, danger: false, sourceType: source, textFa: `\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC \u0646\u0627\u0641\u0631\u0645\u0627\u0646\u06CC \u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0647\u0634\u062F\u0627\u0631 \u0627\u0633\u062A (${faNum5(total)} \u0627\u0632 ${faNum5(22)}).` });
+  }
+}
+__name(mapOdd, "mapOdd");
+__name2(mapOdd, "mapOdd");
+var PROBE_KINDS = [
+  { kind: "read", toolKey: "ce-probe-read-v1", valueField: "wcpm", gradeField: "text_grade", norm: WCPM_NORM_50TH, fa: "\u062E\u0648\u0627\u0646\u062F\u0646", subtype: "reading" },
+  { kind: "write", toolKey: "ce-probe-write-v1", valueField: "alpha15s", gradeField: "dict_grade", norm: ALPHA_15S_NORM, fa: "\u0646\u0648\u0634\u062A\u0646", subtype: "writing" },
+  { kind: "calc", toolKey: "ce-probe-calc-v1", valueField: "digits2min", gradeField: "calc_grade", norm: DIGITS_2MIN_NORM, fa: "\u062D\u0633\u0627\u0628", subtype: "math" }
+];
+function mapProbes(rows, event, ctx) {
+  const probe = PROBE_KINDS.find((p) => p.toolKey === event.toolKey);
+  if (!probe)
+    return;
+  const value = num3(event.payload?.[probe.valueField]?.value);
+  const grade = event.payload?.[probe.gradeField]?.value ?? null;
+  ctx.probePresent[probe.kind] = true;
+  if (value === null || !grade)
+    return;
+  const n = probe.norm[grade];
+  if (!n)
+    return;
+  const ratio = value / n;
+  const pct = Math.round(ratio * 100);
+  const source = TOOL_SOURCE[event.toolKey];
+  if (ratio < PROBE_DANGER_RATIO) {
+    ctx.probeDanger[probe.kind] = true;
+    addRow(rows, { construct: "academic_learning", toolId: event.toolKey, signal: `probe_${probe.kind}_danger`, weight: 2, danger: true, sourceType: source, subtype: probe.subtype, textFa: `\u062F\u0631 \u067E\u0631\u0648\u0628 ${probe.fa}\u060C \u0639\u0645\u0644\u06A9\u0631\u062F ${faNum5(pct)}\u066A \u0645\u06CC\u0627\u0646\u06AF\u06CC\u0646 \u067E\u0627\u06CC\u0647\u0654 \u062A\u062D\u0635\u06CC\u0644\u06CC \u0627\u0633\u062A (\u0632\u06CC\u0631 \u0622\u0633\u062A\u0627\u0646\u0647\u0654 ${faNum5(80)}\u066A).` });
+  } else if (ratio <= PROBE_WARN_MAX_RATIO) {
+    ctx.probeWarn[probe.kind] = true;
+    addRow(rows, { construct: "academic_learning", toolId: event.toolKey, signal: `probe_${probe.kind}_warn`, weight: 1, danger: false, sourceType: source, subtype: probe.subtype, textFa: `\u062F\u0631 \u067E\u0631\u0648\u0628 ${probe.fa}\u060C \u0639\u0645\u0644\u06A9\u0631\u062F \u06A9\u0645\u06CC \u0632\u06CC\u0631 \u0645\u06CC\u0627\u0646\u06AF\u06CC\u0646 \u067E\u0627\u06CC\u0647\u0654 \u062A\u062D\u0635\u06CC\u0644\u06CC \u0627\u0633\u062A (${faNum5(pct)}\u066A).` });
+  }
+}
+__name(mapProbes, "mapProbes");
+__name2(mapProbes, "mapProbes");
+function rehabMean(event, subscaleId) {
+  const ss = subscaleScoreOf(event, subscaleId);
+  if (!ss || ss.max <= 0)
+    return null;
+  const mean = ss.score * 3 / ss.max;
+  return Number.isFinite(mean) ? mean : null;
+}
+__name(rehabMean, "rehabMean");
+__name2(rehabMean, "rehabMean");
+function mapRehabCog(rows, event) {
+  const source = TOOL_SOURCE[event.toolKey];
+  const groups = [
+    { ids: ["att", "exec", "ps"], construct: "attention_exec", fa: "\u062A\u0648\u062C\u0647/\u06A9\u0627\u0631\u06A9\u0631\u062F \u0627\u062C\u0631\u0627\u06CC\u06CC", signal: "rehab_att" },
+    { ids: ["reg"], construct: "internalizing", fa: "\u062A\u0646\u0638\u06CC\u0645 \u0647\u06CC\u062C\u0627\u0646\u06CC", signal: "rehab_reg", capWeight: 1 },
+    { ids: ["mem", "per"], construct: "general_cog", fa: "\u062D\u0627\u0641\u0638\u0647/\u0627\u062F\u0631\u0627\u06A9", signal: "rehab_mem", capWeight: 1 }
+  ];
+  for (const g of groups) {
+    const means = g.ids.map((id) => rehabMean(event, id)).filter((m) => m !== null);
+    if (means.length === 0)
+      continue;
+    const mean = Math.max(...means);
+    if (mean >= REHAB_HIGH_MEAN) {
+      addRow(rows, { construct: g.construct, toolId: event.toolKey, signal: `${g.signal}_high`, weight: g.capWeight ?? 2, danger: true, sourceType: source, textFa: `\u062F\u0631 \u067E\u0627\u06CC\u0634 \u062A\u0648\u0627\u0646\u0628\u062E\u0634\u06CC\u060C \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC ${g.fa} \u0628\u0647 \u06A9\u0645\u06A9 \u0632\u06CC\u0627\u062F \u0646\u06CC\u0627\u0632 \u062F\u0627\u0631\u0646\u062F.` });
+    } else if (mean >= REHAB_WARN_MIN_MEAN) {
+      addRow(rows, { construct: g.construct, toolId: event.toolKey, signal: `${g.signal}_warn`, weight: 1, danger: false, sourceType: source, textFa: `\u062F\u0631 \u067E\u0627\u06CC\u0634 \u062A\u0648\u0627\u0646\u0628\u062E\u0634\u06CC\u060C \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC ${g.fa} \u0628\u0647 \u06A9\u0645\u06A9 \u0646\u06CC\u0627\u0632 \u062F\u0627\u0631\u0646\u062F.` });
+    }
+  }
+}
+__name(mapRehabCog, "mapRehabCog");
+__name2(mapRehabCog, "mapRehabCog");
+function mapRehabMotor(rows, event) {
+  const source = TOOL_SOURCE[event.toolKey];
+  const ids = ["gross", "bal", "fine", "eye", "post"];
+  const means = ids.map((id) => rehabMean(event, id)).filter((m) => m !== null);
+  if (means.length === 0)
+    return;
+  const mean = means.reduce((a, b) => a + b, 0) / means.length;
+  if (mean >= REHAB_HIGH_MEAN) {
+    addRow(rows, { construct: "motor_coord", toolId: event.toolKey, signal: "rehab_motor_high", weight: 2, danger: true, sourceType: source, textFa: "\u062F\u0631 \u067E\u0627\u06CC\u0634 \u062A\u0648\u0627\u0646\u0628\u062E\u0634\u06CC \u062D\u0631\u06A9\u062A\u06CC\u060C \u0627\u06A9\u062B\u0631 \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627 \u0628\u0647 \u06A9\u0645\u06A9 \u0632\u06CC\u0627\u062F \u0646\u06CC\u0627\u0632 \u062F\u0627\u0631\u0646\u062F." });
+  } else if (mean >= REHAB_WARN_MIN_MEAN) {
+    addRow(rows, { construct: "motor_coord", toolId: event.toolKey, signal: "rehab_motor_warn", weight: 1, danger: false, sourceType: source, textFa: "\u062F\u0631 \u067E\u0627\u06CC\u0634 \u062A\u0648\u0627\u0646\u0628\u062E\u0634\u06CC \u062D\u0631\u06A9\u062A\u06CC\u060C \u0686\u0646\u062F \u0645\u0647\u0627\u0631\u062A \u0628\u0647 \u06A9\u0645\u06A9 \u0646\u06CC\u0627\u0632 \u062F\u0627\u0631\u0646\u062F." });
+  }
+}
+__name(mapRehabMotor, "mapRehabMotor");
+__name2(mapRehabMotor, "mapRehabMotor");
+function mapRehabAdl(rows, event) {
+  const source = TOOL_SOURCE[event.toolKey];
+  const ids = ["org", "soc"];
+  const means = ids.map((id) => rehabMean(event, id)).filter((m) => m !== null);
+  if (means.length === 0)
+    return;
+  const mean = Math.max(...means);
+  if (mean >= REHAB_HIGH_MEAN) {
+    addRow(rows, { construct: "social_adl", toolId: event.toolKey, signal: "rehab_adl_high", weight: 1, danger: true, sourceType: source, textFa: "\u062F\u0631 \u067E\u0627\u06CC\u0634 \u062A\u0648\u0627\u0646\u0628\u062E\u0634\u06CC\u060C \u0633\u0627\u0632\u0645\u0627\u0646\u200C\u062F\u0647\u06CC/\u062A\u0639\u0627\u0645\u0644 \u0627\u062C\u062A\u0645\u0627\u0639\u06CC \u0628\u0647 \u06A9\u0645\u06A9 \u0632\u06CC\u0627\u062F \u0646\u06CC\u0627\u0632 \u062F\u0627\u0631\u062F." });
+  }
+}
+__name(mapRehabAdl, "mapRehabAdl");
+__name2(mapRehabAdl, "mapRehabAdl");
+var ANAM_FIELD_MAP = {
+  attention_exec: ["chief_complaint", "weak_subjects"],
+  externalizing: ["chief_complaint"],
+  internalizing: ["chief_complaint", "development"],
+  language_comm: ["chief_complaint", "development"],
+  academic_learning: ["chief_complaint", "weak_subjects"],
+  motor_coord: ["development", "medical"],
+  general_cog: ["development"],
+  social_adl: ["development", "sensory_issue"]
+};
+function mapAnamnesis(rows, event, ctx) {
+  for (const [constructKey, keywords] of Object.entries(ANAMNESIS_KEYWORDS)) {
+    const fields = ANAM_FIELD_MAP[constructKey] ?? ["chief_complaint"];
+    const text = payloadText2(event, fields);
+    if (!text)
+      continue;
+    if (keywords.some((k) => text.includes(k))) {
+      addRow(rows, { construct: constructKey, toolId: event.toolKey, signal: "anamnesis_kw", weight: 1, danger: false, sourceType: TOOL_SOURCE[event.toolKey], textFa: anamnesisTextFor(constructKey) });
+    }
+  }
+  const medical = payloadField(event, "medical");
+  const dev = payloadField(event, "development");
+  const cc = payloadField(event, "chief_complaint");
+  if (REDFLAG_KEYWORDS.tbi.some((k) => medical.includes(k)))
+    ctx.tbi = true;
+  if (REDFLAG_KEYWORDS.selfharm.some((k) => medical.includes(k) || cc.includes(k)))
+    ctx.selfHarm = true;
+  if (REDFLAG_KEYWORDS.regression.some((k) => dev.includes(k)))
+    ctx.regression = true;
+  ctx.schoolChanges = Boolean(payloadField(event, "school_changes").trim() || payloadField(event, "prior_intervention").trim());
+  ctx.familyStress = Boolean(payloadField(event, "family_stress").trim());
+  const homeLang = payloadField(event, "home_language").trim();
+  if (homeLang && !homeLang.includes("\u0641\u0627\u0631\u0633\u06CC")) {
+    ctx.homeLanguageNote = "\u0632\u0628\u0627\u0646 \u062E\u0627\u0646\u0647 \u0628\u0627 \u0632\u0628\u0627\u0646 \u0645\u062F\u0631\u0633\u0647 \u0645\u062A\u0641\u0627\u0648\u062A \u0627\u0633\u062A\u061B \u062F\u0631 \u062A\u0641\u0633\u06CC\u0631 \u0622\u0632\u0645\u0648\u0646\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u0645\u06CC \u0628\u0627\u06CC\u062F \u0627\u062D\u062A\u06CC\u0627\u0637 \u06A9\u0631\u062F.";
+  }
+}
+__name(mapAnamnesis, "mapAnamnesis");
+__name2(mapAnamnesis, "mapAnamnesis");
+function anamnesisTextFor(construct) {
+  switch (construct) {
+    case "attention_exec":
+      return "\u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644\u060C \u0646\u06AF\u0631\u0627\u0646\u06CC \u0627\u0635\u0644\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u062D\u0648\u0644 \u062A\u0648\u062C\u0647\u060C \u0641\u0631\u0627\u0645\u0648\u0634\u06CC \u0648 \u062A\u06A9\u0644\u06CC\u0641 \u062A\u0648\u0635\u06CC\u0641 \u0634\u062F\u0647 \u0627\u0633\u062A.";
+    case "externalizing":
+      return "\u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644\u060C \u062F\u0631\u06AF\u06CC\u0631\u06CC\u200C\u0647\u0627\u06CC \u0631\u0641\u062A\u0627\u0631\u06CC \u062F\u0631 \u062E\u0627\u0646\u0647/\u0645\u062F\u0631\u0633\u0647 \u062A\u0648\u0635\u06CC\u0641 \u0634\u062F\u0647 \u0627\u0633\u062A.";
+    case "internalizing":
+      return "\u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644\u060C \u0646\u06AF\u0631\u0627\u0646\u06CC/\u063A\u0645\u06AF\u06CC\u0646\u06CC \u06A9\u0648\u062F\u06A9 \u062A\u0648\u0635\u06CC\u0641 \u0634\u062F\u0647 \u0627\u0633\u062A.";
+    case "language_comm":
+      return "\u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644\u060C \u062A\u0623\u062E\u06CC\u0631 \u062F\u0631 \u0634\u0631\u0648\u0639 \u06AF\u0641\u062A\u0627\u0631 \u06CC\u0627 \u0645\u062D\u062F\u0648\u062F\u06CC\u062A \u062C\u0645\u0644\u0647\u200C\u0633\u0627\u0632\u06CC \u062A\u0648\u0635\u06CC\u0641 \u0634\u062F\u0647 \u0627\u0633\u062A.";
+    case "academic_learning":
+      return "\u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644\u060C \u062F\u0631\u0648\u0633 \u062E\u0627\u0635\u06CC \u0628\u0647\u200C\u0639\u0646\u0648\u0627\u0646 \u0645\u0634\u06A9\u0644\u200C\u0633\u0627\u0632 \u062A\u0648\u0635\u06CC\u0641 \u0634\u062F\u0647 \u0627\u0633\u062A.";
+    case "motor_coord":
+      return "\u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644\u060C \u0646\u0627\u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u062D\u0631\u06A9\u062A\u06CC (\u0627\u0641\u062A\u0627\u062F\u0646 \u0645\u062F\u0627\u062F\u060C \u0628\u0646\u062F \u06A9\u0641\u0634 \u0648\u2026) \u062A\u0648\u0635\u06CC\u0641 \u0634\u062F\u0647 \u0627\u0633\u062A.";
+    case "general_cog":
+      return "\u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644\u060C \u062A\u0623\u062E\u06CC\u0631 \u062F\u0631 \u0631\u0633\u06CC\u062F\u0646 \u0628\u0647 \u0645\u0631\u062D\u0644\u0647\u200C\u0647\u0627\u06CC \u0631\u0634\u062F\u06CC \u062A\u0648\u0635\u06CC\u0641 \u0634\u062F\u0647 \u0627\u0633\u062A.";
+    case "social_adl":
+      return "\u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644\u060C \u062F\u0634\u0648\u0627\u0631\u06CC \u062F\u0631 \u0628\u0627\u0632\u06CC \u0628\u0627 \u0647\u0645\u200C\u0633\u0627\u0644\u0627\u0646/\u062A\u0639\u0627\u0645\u0644 \u0627\u062C\u062A\u0645\u0627\u0639\u06CC \u062A\u0648\u0635\u06CC\u0641 \u0634\u062F\u0647 \u0627\u0633\u062A.";
+  }
+}
+__name(anamnesisTextFor, "anamnesisTextFor");
+__name2(anamnesisTextFor, "anamnesisTextFor");
+function normalizeEvents(events) {
+  const latest = latestPerTool2(events);
+  const rows = [];
+  const ctx = {
+    schPositive: false,
+    schoolChanges: false,
+    familyStress: false,
+    homeLanguageNote: null,
+    speechCritical: false,
+    selfHarm: false,
+    regression: false,
+    tbi: false,
+    emoDanger: false,
+    probeDanger: { read: false, write: false, calc: false },
+    probeWarn: { read: false, write: false, calc: false },
+    probePresent: { read: false, write: false, calc: false },
+    sldDanger: { read: false, write: false, calc: false },
+    sldWarn: { read: false, write: false, calc: false },
+    sldPresent: { read: false, write: false, calc: false },
+    anyChecklistDanger: false,
+    criticalFlags: [],
+    hiOnlyDanger: false,
+    dcdqDanger: false
+  };
+  const snapP = latest.get("ce-snap-iv-p-v1");
+  const snapT = latest.get("ce-snap-iv-t-v1");
+  for (const [toolKey, event] of latest) {
+    switch (toolKey) {
+      case "ce-snap-iv-p-v1":
+        mapSnap(rows, "parent", event);
+        break;
+      case "ce-snap-iv-t-v1":
+        mapSnap(rows, "teacher", event);
+        break;
+      case "sdq-parent":
+        mapSdq(rows, "parent", event);
+        break;
+      case "ce-sdq-t-v1":
+        mapSdq(rows, "teacher", event);
+        break;
+      case "ce-scared-p-v1":
+        mapScared(rows, event);
+        break;
+      case "ce-dcdq-v1":
+        mapDcdq(rows, event);
+        break;
+      case "teacher-classroom":
+      case "home_behavior":
+      case "achenbach-practical":
+        mapLegacyBehavior(rows, event);
+        break;
+      case "ce-sld-read-v1":
+        mapSld(rows, event, "read");
+        break;
+      case "ce-sld-wri-v1":
+        mapSld(rows, event, "wri");
+        break;
+      case "ce-sld-calc-v1":
+        mapSld(rows, event, "calc");
+        break;
+      case "ce-asd-criteria-v1":
+        mapAsd(rows, event, asdRuleActive(event));
+        break;
+      case "ce-speech-criteria-v1":
+        mapSpeech(rows, event);
+        break;
+      case "ce-odd-criteria-v1":
+        mapOdd(rows, event, oddRuleActive(event));
+        break;
+      case "ce-probe-read-v1":
+      case "ce-probe-write-v1":
+      case "ce-probe-calc-v1":
+        mapProbes(rows, event, ctx);
+        break;
+      case "ce-rehab-cog-v1":
+        mapRehabCog(rows, event);
+        break;
+      case "ce-rehab-motor-v1":
+        mapRehabMotor(rows, event);
+        break;
+      case "ce-rehab-adl-v1":
+        mapRehabAdl(rows, event);
+        break;
+      case "ce-anamnesis-v2":
+        mapAnamnesis(rows, event, ctx);
+        break;
+      default:
+        break;
+    }
+  }
+  for (const [toolKey, event] of latest) {
+    for (const f of event.analysis?.flags ?? []) {
+      ctx.criticalFlags.push({ toolId: toolKey, label: f.label });
+    }
+  }
+  if (ctx.criticalFlags.some((f) => f.toolId === "ce-speech-criteria-v1"))
+    ctx.speechCritical = true;
+  const scaredEvent = latest.get("ce-scared-p-v1");
+  const sch = scaredEvent ? subscaleScoreOf(scaredEvent, "sch") : void 0;
+  if (sch && sch.score >= 1)
+    ctx.schPositive = true;
+  for (const [kind, toolKey] of [
+    ["read", "ce-sld-read-v1"],
+    ["write", "ce-sld-wri-v1"],
+    ["calc", "ce-sld-calc-v1"]
+  ]) {
+    const ev = latest.get(toolKey);
+    const score = ev?.analysis?.score ?? null;
+    if (score !== null) {
+      ctx.sldPresent[kind] = true;
+      if (score >= CRITERIA_CUTOFFS.sld.danger)
+        ctx.sldDanger[kind] = true;
+      else if (score >= CRITERIA_CUTOFFS.sld.warn)
+        ctx.sldWarn[kind] = true;
+    }
+  }
+  ctx.anyChecklistDanger = rows.some((r) => r.danger && r.toolId !== "ce-anamnesis-v2" && r.construct !== "general_cog");
+  ctx.hiOnlyDanger = rows.some((r) => r.signal.endsWith("_hi_only"));
+  ctx.dcdqDanger = rows.some((r) => r.toolId === "ce-dcdq-v1" && r.danger);
+  applySnapPairBonus(rows, snapP, snapT);
+  return { rows, latest, ctx };
+}
+__name(normalizeEvents, "normalizeEvents");
+__name2(normalizeEvents, "normalizeEvents");
+function applySnapPairBonus(rows, snapP, snapT) {
+  if (!snapP || !snapT)
+    return;
+  const cutP = SNAP_CUTOFFS.parent;
+  const cutT = SNAP_CUTOFFS.teacher;
+  const pair = /* @__PURE__ */ __name2((sub, construct, fa2, signal) => {
+    const p = subscaleScoreOf(snapP, sub);
+    const t = subscaleScoreOf(snapT, sub);
+    if (!p || !t)
+      return;
+    const pDanger = p.score >= (sub === "ia" ? cutP.ia.danger : cutP.odd.danger);
+    const tDanger = t.score >= (sub === "ia" ? cutT.ia.danger : cutT.odd.danger);
+    if (!pDanger || !tDanger)
+      return;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const r = rows[i];
+      if (r.construct === construct && (r.toolId === "ce-snap-iv-p-v1" || r.toolId === "ce-snap-iv-t-v1") && r.signal.startsWith(signal)) {
+        rows.splice(i, 1);
+      }
+    }
+    rows.push({ construct, toolId: "ce-snap-iv-p-v1+ce-snap-iv-t-v1", signal: `${signal}_pair`, weight: 3, danger: true, sourceType: "parent", textFa: `\u0648\u0627\u0644\u062F \u0648 \u0645\u0639\u0644\u0645 \u0647\u0631 \u062F\u0648 ${fa2} \u067E\u0631\u062E\u0637\u0631 \u0631\u0627 \u06AF\u0632\u0627\u0631\u0634 \u06A9\u0631\u062F\u0647\u200C\u0627\u0646\u062F (\u0647\u0645\u200C\u0631\u0623\u06CC\u06CC \u062F\u0648 \u0645\u0646\u0638\u0631).` });
+  }, "pair");
+  pair("ia", "attention_exec", "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC", "snap_ia");
+  pair("odd", "externalizing", "\u0631\u0641\u062A\u0627\u0631 \u0646\u0627\u0641\u0631\u0645\u0627\u0646\u06CC", "snap_odd");
+}
+__name(applySnapPairBonus, "applySnapPairBonus");
+__name2(applySnapPairBonus, "applySnapPairBonus");
+function monitoringParse(interval) {
+  if (!interval)
+    return null;
+  const latin = interval.replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d)));
+  const m = latin.match(/(\d+)/);
+  if (!m)
+    return null;
+  const n = Number(m[1]);
+  return n === 3 || n === 6 || n === 12 ? n : null;
+}
+__name(monitoringParse, "monitoringParse");
+__name2(monitoringParse, "monitoringParse");
+function indexRowLevel(scaled) {
+  if (scaled === null)
+    return 0;
+  if (scaled <= INDEX_WEAK_MAX)
+    return 2;
+  if (scaled >= INDEX_BORDER_MIN && scaled <= INDEX_BORDER_MAX)
+    return 1;
+  return 0;
+}
+__name(indexRowLevel, "indexRowLevel");
+__name2(indexRowLevel, "indexRowLevel");
+function scaledLabel(scaled, percentile) {
+  const p = percentile === null || percentile === void 0 ? "" : `\u060C \u0635\u062F\u06A9 ${faNum5(percentile)}`;
+  return `${faNum5(scaled ?? 0)}${p}`;
+}
+__name(scaledLabel, "scaledLabel");
+__name2(scaledLabel, "scaledLabel");
+function injectWechsler(result) {
+  const rows = [];
+  if (!result || !result.ok || !result.snapshot) {
+    return {
+      rows,
+      link: null,
+      iqBasis: null,
+      iqValue: null,
+      scatterFlag: false,
+      substitutes: [],
+      monitoringMonths: null,
+      weakDomainsFa: []
+    };
+  }
+  const snap = result.snapshot;
+  const indices = snap.indices;
+  const scatterFlag = (snap.indexScatter ?? 0) >= INDEX_SCATTER_LIMIT;
+  const substitutes = snap.substitutes ?? [];
+  const link = {
+    computable: Boolean(snap.computable?.FSIQ ?? true),
+    fsiq: snap.fsiq ?? null,
+    gai: snap.gai ?? null,
+    iqBasis: null,
+    iqValue: null,
+    indexScatter: snap.indexScatter ?? null,
+    indicesFa: [],
+    weakDomainsFa: result.weakDomains ?? [],
+    validityFlagsFa: (result.flags ?? []).filter((f) => f.validity).map((f) => f.fa)
+  };
+  const order2 = ["VCI", "PRI", "WMI", "PSI", "FSIQ"];
+  for (const k of order2) {
+    const ix = indices[k];
+    if (!ix || ix.scaled === null || ix.scaled === void 0)
+      continue;
+    const p = ix.percentile !== null && ix.percentile !== void 0 ? ` (\u0635\u062F\u06A9 ${faNum5(ix.percentile)})` : "";
+    link.indicesFa.push(`${k}=${faNum5(ix.scaled)}${p}`);
+  }
+  const fsiqVal = snap.fsiq ?? null;
+  const gaiVal = snap.gai ?? null;
+  if (!scatterFlag && fsiqVal !== null) {
+    link.iqBasis = "FSIQ";
+    link.iqValue = fsiqVal;
+  } else if (gaiVal !== null && snap.gaiMeta) {
+    link.iqBasis = "GAI";
+    link.iqValue = gaiVal;
+  } else {
+    link.iqBasis = null;
+    link.iqValue = null;
+  }
+  const indexRow = /* @__PURE__ */ __name2((key, construct, textWeak, textBorder) => {
+    const ix = indices[key];
+    if (!ix || ix.scaled === null || ix.scaled === void 0)
+      return;
+    const level = indexRowLevel(ix.scaled);
+    if (level === 0)
+      return;
+    let weight = level;
+    if (substitutes.includes(key))
+      weight = Math.floor(weight / 2);
+    if (weight <= 0)
+      return;
+    add(key, construct, level === 2, weight, level === 2 ? textWeak.replace("{v}", scaledLabel(ix.scaled, ix.percentile)) : textBorder);
+  }, "indexRow");
+  const add = /* @__PURE__ */ __name2((key, construct, danger, weight, text) => {
+    rows.push({ construct, toolId: WECHSLER_TOOL, signal: `wisc_${key.toLowerCase()}_${danger ? "weak" : "border"}`, weight, danger, sourceType: "examiner", textFa: text });
+  }, "add");
+  indexRow("VCI", "language_comm", "\u0634\u0627\u062E\u0635 \u062F\u0631\u06A9 \u06A9\u0644\u0627\u0645\u06CC \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0627\u0646\u062A\u0638\u0627\u0631 \u0633\u0646\u06CC \u0627\u0633\u062A ({v}).", "\u0634\u0627\u062E\u0635 \u062F\u0631\u06A9 \u06A9\u0644\u0627\u0645\u06CC \u062F\u0631 \u0645\u0631\u0632 \u067E\u0627\u06CC\u06CC\u0646 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0633\u062A.");
+  indexRow("PRI", "general_cog", "\u0634\u0627\u062E\u0635 \u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u062F\u06CC\u062F\u0627\u0631\u06CC-\u0641\u0636\u0627\u06CC\u06CC \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0633\u062A ({v}).", "\u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u062F\u06CC\u062F\u0627\u0631\u06CC-\u0641\u0636\u0627\u06CC\u06CC \u062F\u0631 \u0645\u0631\u0632 \u067E\u0627\u06CC\u06CC\u0646 \u0627\u0633\u062A.");
+  indexRow("WMI", "attention_exec", "\u0634\u0627\u062E\u0635 \u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0627\u0646\u062A\u0638\u0627\u0631 \u0633\u0646\u06CC \u0627\u0633\u062A ({v}).", "\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC \u062F\u0631 \u0645\u0631\u0632 \u067E\u0627\u06CC\u06CC\u0646 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0633\u062A.");
+  indexRow("PSI", "attention_exec", "\u0633\u0631\u0639\u062A \u067E\u0631\u062F\u0627\u0632\u0634 \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0627\u0646\u062A\u0638\u0627\u0631 \u0633\u0646\u06CC \u0627\u0633\u062A ({v}).", "\u0633\u0631\u0639\u062A \u067E\u0631\u062F\u0627\u0632\u0634 \u062F\u0631 \u0645\u0631\u0632 \u067E\u0627\u06CC\u06CC\u0646 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0633\u062A.");
+  if (link.iqValue !== null) {
+    const v = link.iqValue;
+    if (v <= IQ_ID_MAX) {
+      rows.push({ construct: "general_cog", toolId: WECHSLER_TOOL, signal: "wisc_iq_id", weight: 2, danger: true, sourceType: "examiner", textFa: `\u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC (${link.iqBasis === "GAI" ? "\u0628\u0631 \u067E\u0627\u06CC\u0647\u0654 GAI" : "FSIQ"}) \u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0633\u062A\u061B \u0628\u0631\u0631\u0633\u06CC \u062A\u062E\u0635\u0635\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A.` });
+    } else if (v <= IQ_BIF_MAX) {
+      rows.push({ construct: "general_cog", toolId: WECHSLER_TOOL, signal: "wisc_iq_bif", weight: 2, danger: true, sourceType: "examiner", textFa: `\u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC \u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 ${faNum5(70)} \u062A\u0627 ${faNum5(84)} \u0627\u0633\u062A (${faNum5(v)}).` });
+    } else if (v <= IQ_BORDER_MAX) {
+      rows.push({ construct: "general_cog", toolId: WECHSLER_TOOL, signal: "wisc_iq_border", weight: 1, danger: false, sourceType: "examiner", textFa: `\u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC \u062F\u0631 \u0645\u0631\u0632 \u067E\u0627\u06CC\u06CC\u0646 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0645\u062A\u0648\u0633\u0637 \u0627\u0633\u062A (${faNum5(v)}).` });
+    }
+  }
+  if (fsiqVal !== null && fsiqVal >= IQ_GIFTED_FSIQ || gaiVal !== null && gaiVal >= IQ_GIFTED_FSIQ) {
+    rows.push({ construct: "general_cog", toolId: WECHSLER_TOOL, signal: "wisc_iq_gifted", weight: 1, danger: false, sourceType: "examiner", textFa: "\u0638\u0631\u0641\u06CC\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u06A9\u0644\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u062D\u062F \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0633\u062A." });
+  }
+  // outcomes/main/comorbid موتور قدیم خوانده نمی‌شوند؛ حوزه‌های ضعیف خودشان
+  // روان‌سنجی‌اند (شاخص < ۸۵) و مستقیم به سازه‌ها تزریق می‌شوند.
+  const weakDomainsFa = result.weakDomains ?? [];
+  if (weakDomainsFa.length > 0) {
+    const map = [
+      { kw: ["\u062D\u0627\u0641\u0638\u0647", "\u0633\u0631\u0639\u062A"], construct: "attention_exec", fa: "\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC/\u0633\u0631\u0639\u062A \u067E\u0631\u062F\u0627\u0632\u0634" },
+      { kw: ["\u06A9\u0644\u0627\u0645\u06CC", "\u0632\u0628\u0627\u0646"], construct: "language_comm", fa: "\u062F\u0631\u06A9 \u06A9\u0644\u0627\u0645\u06CC" },
+      { kw: ["\u062F\u06CC\u062F\u0627\u0631\u06CC", "\u0641\u0636\u0627\u06CC\u06CC"], construct: "general_cog", fa: "\u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u062F\u06CC\u062F\u0627\u0631\u06CC-\u0641\u0636\u0627\u06CC\u06CC" }
+    ];
+    for (const m of map) {
+      if (weakDomainsFa.some((d) => m.kw.some((k) => d.includes(k)))) {
+        rows.push({ construct: m.construct, toolId: WECHSLER_TOOL, signal: "wisc_domain_weak", weight: 1, danger: false, sourceType: "examiner", textFa: `\u062A\u062D\u0644\u06CC\u0644 \u0648\u06A9\u0633\u0644\u0631 ${m.fa} \u0631\u0627 \u0646\u0642\u0637\u0647\u0654 \u0636\u0639\u0641 \u0634\u062E\u0635\u06CC \u0646\u06CC\u0645\u0631\u062E \u06AF\u0632\u0627\u0631\u0634 \u06A9\u0631\u062F\u0647 \u0627\u0633\u062A.` });
+      }
+    }
+  }
+  return {
+    rows,
+    link,
+    iqBasis: link.iqBasis,
+    iqValue: link.iqValue,
+    scatterFlag,
+    substitutes,
+    monitoringMonths: monitoringParse(result.monitoringInterval),
+    weakDomainsFa
+  };
+}
+__name(injectWechsler, "injectWechsler");
+__name2(injectWechsler, "injectWechsler");
+var LEVEL_ORDER = { "\u067E\u0627\u06CC\u06CC\u0646": 0, "\u0645\u0631\u0632\u06CC": 1, "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647": 2, "\u0647\u0645\u200C\u06AF\u0631\u0627\u06CC-\u0628\u0627\u0644\u0627": 3 };
+function levelFromScore(s) {
+  if (s >= LEVEL_THRESHOLDS.high)
+    return "\u0647\u0645\u200C\u06AF\u0631\u0627\u06CC-\u0628\u0627\u0644\u0627";
+  if (s >= LEVEL_THRESHOLDS.significant)
+    return "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647";
+  if (s >= LEVEL_THRESHOLDS.border)
+    return "\u0645\u0631\u0632\u06CC";
+  return "\u067E\u0627\u06CC\u06CC\u0646";
+}
+__name(levelFromScore, "levelFromScore");
+__name2(levelFromScore, "levelFromScore");
+function clampLevel(level, max) {
+  return LEVEL_ORDER[level] > LEVEL_ORDER[max] ? max : level;
+}
+__name(clampLevel, "clampLevel");
+__name2(clampLevel, "clampLevel");
+function atLeastLevel(levels, k, min) {
+  return LEVEL_ORDER[levels.get(k) ?? "\u067E\u0627\u06CC\u06CC\u0646"] >= LEVEL_ORDER[min];
+}
+__name(atLeastLevel, "atLeastLevel");
+__name2(atLeastLevel, "atLeastLevel");
+var OT_DOMAIN_LABEL_FA = {
+  gross: "\u062D\u0631\u06A9\u0627\u062A \u062F\u0631\u0634\u062A",
+  fine: "\u062D\u0631\u06A9\u0627\u062A \u0638\u0631\u06CC\u0641",
+  visual: "\u0627\u062F\u0631\u0627\u06A9 \u062F\u06CC\u062F\u0627\u0631\u06CC",
+  auditory: "\u0627\u062F\u0631\u0627\u06A9 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC",
+  cognitive: "\u062A\u0648\u062C\u0647 \u0648 \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0630\u0647\u0646\u06CC",
+  adl: "\u062E\u0648\u062F\u06CC\u0627\u0631\u06CC",
+  social: "\u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0627\u062C\u062A\u0645\u0627\u0639\u06CC"
+};
+function otDomainStatuses(ot, ageYears2) {
+  if (!ot)
+    return [];
+  const out = [];
+  for (const d of ot.domains) {
+    const scored = d.scored ?? 0;
+    const label = OT_DOMAIN_LABEL_FA[d.key] ?? d.key;
+    if (scored < OT_MIN_SCORED) {
+      out.push({ domain: d.key, titleFa: label, delayed: false, border: false, difficulty: null, scored, ageDelayNote: false });
+      continue;
+    }
+    const difficulty = (d.notYet + d.withHelp) / scored;
+    const delayed = difficulty >= OT_DELAYED_DIFFICULTY;
+    const border = !delayed && difficulty >= OT_BORDER_DIFFICULTY;
+    let ageDelayNote = false;
+    if (ageYears2 !== void 0) {
+      const nums = d.skills.filter((s) => s.status === "not_yet" && s.expectedAge).map((s) => {
+        const m = (s.expectedAge ?? "").match(/(\d+)\s*[-–]\s*(\d+)/);
+        return m ? Number(m[2]) : null;
+      }).filter((n) => n !== null);
+      if (nums.length > 0) {
+        const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
+        ageDelayNote = avg >= ageYears2 + OT_AGE_DELAY_YEARS;
+      }
+    }
+    out.push({ domain: d.key, titleFa: label, delayed, border, difficulty, scored, ageDelayNote });
+  }
+  return out;
+}
+__name(otDomainStatuses, "otDomainStatuses");
+__name2(otDomainStatuses, "otDomainStatuses");
+function injectOt(statuses, rows) {
+  for (const st of statuses) {
+    const delay = st.delayed ? 2 : st.border ? 1 : 0;
+    if (!delay)
+      continue;
+    const suffix = st.delayed ? "delayed" : "border";
+    const pct = st.difficulty !== null ? faNum5(Math.round(st.difficulty * 100)) : "";
+    const ageNote = st.ageDelayNote ? ` \u2014 \u062A\u0623\u062E\u06CC\u0631 \u0628\u06CC\u0634 \u0627\u0632 ${faNum5(2)} \u0633\u0627\u0644 \u062F\u0631 \u0627\u06CC\u0646 \u062D\u06CC\u0637\u0647 \u062F\u06CC\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F` : "";
+    const delayedFa = st.delayed ? `\u0639\u0642\u0628\u200C\u062A\u0631 \u0627\u0632 \u0627\u0646\u062A\u0638\u0627\u0631 \u0633\u0646\u06CC \u0627\u0633\u062A (${pct}\u066A \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627 \u0645\u0633\u0644\u0637\u200C\u0646\u0634\u062F\u0647)` : "\u06A9\u0645\u06CC \u0639\u0642\u0628\u200C\u062A\u0631 \u0627\u0632 \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0633\u062A";
+    switch (st.domain) {
+      case "cognitive":
+        rows.push({ construct: "attention_exec", toolId: OT_PROFILE_TOOL, signal: `ot_cognitive_${suffix}`, weight: Math.min(1, delay), danger: st.delayed, sourceType: "examiner", textFa: `\u062F\u0631 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC\u060C \u062D\u06CC\u0637\u0647\u0654 ${st.titleFa} ${delayedFa}${ageNote}.` });
+        rows.push({ construct: "general_cog", toolId: OT_PROFILE_TOOL, signal: `ot_cognitive_${suffix}_cog`, weight: delay, danger: st.delayed, sourceType: "examiner", textFa: `\u062D\u06CC\u0637\u0647\u0654 \u0634\u0646\u0627\u062E\u062A\u06CC \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC ${delayedFa}${ageNote}.` });
+        break;
+      case "visual":
+        rows.push({ construct: "general_cog", toolId: OT_PROFILE_TOOL, signal: `ot_visual_${suffix}`, weight: delay, danger: st.delayed, sourceType: "examiner", textFa: `\u062D\u06CC\u0637\u0647\u0654 ${st.titleFa} \u062F\u0631 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC ${delayedFa}${ageNote}.` });
+        break;
+      case "auditory":
+        rows.push({ construct: "language_comm", toolId: OT_PROFILE_TOOL, signal: `ot_auditory_${suffix}`, weight: delay, danger: st.delayed, sourceType: "examiner", textFa: `\u062D\u06CC\u0637\u0647\u0654 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC \u062F\u0631 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC ${delayedFa}${ageNote}.` });
+        break;
+      case "fine":
+      case "gross":
+        rows.push({ construct: "motor_coord", toolId: OT_PROFILE_TOOL, signal: `ot_${st.domain}_${suffix}`, weight: delay, danger: st.delayed, sourceType: "examiner", textFa: `\u062D\u06CC\u0637\u0647\u0654 ${st.titleFa} \u062F\u0631 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC ${delayedFa}${ageNote}.` });
+        break;
+      case "social":
+      case "adl":
+        rows.push({ construct: "social_adl", toolId: OT_PROFILE_TOOL, signal: `ot_${st.domain}_${suffix}`, weight: delay, danger: st.delayed, sourceType: "examiner", textFa: `\u062D\u06CC\u0637\u0647\u0654 ${st.titleFa} \u062F\u0631 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC ${delayedFa}${ageNote}.` });
+        break;
+    }
+  }
+}
+__name(injectOt, "injectOt");
+__name2(injectOt, "injectOt");
+function detectDivergences(norm, wInj, otStatuses) {
+  const out = [];
+  const ctx = norm.ctx;
+  for (const p of [
+    { construct: "attention_exec", fa: "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC" },
+    { construct: "externalizing", fa: "\u0631\u0641\u062A\u0627\u0631 \u0646\u0627\u0641\u0631\u0645\u0627\u0646\u06CC" }
+  ]) {
+    const parentDanger = norm.rows.find((r) => r.construct === p.construct && r.sourceType === "parent" && r.danger);
+    const teacherAny = norm.rows.find((r) => r.construct === p.construct && r.sourceType === "teacher");
+    const teacherDanger = norm.rows.find((r) => r.construct === p.construct && r.sourceType === "teacher" && r.danger);
+    if (parentDanger && teacherAny && !teacherDanger) {
+      out.push({
+        code: "D1",
+        fa: `\u06AF\u0632\u0627\u0631\u0634 \u062E\u0627\u0646\u0647 \u062F\u0631\u0628\u0627\u0631\u0647\u0654 ${p.fa} \u067E\u0631\u0631\u0646\u06AF \u0627\u0633\u062A \u0648\u0644\u06CC \u062F\u0631 \u06A9\u0644\u0627\u0633 \u062F\u06CC\u062F\u0647 \u0646\u0634\u062F\u0647\u061B \u0645\u0645\u06A9\u0646 \u0627\u0633\u062A \u0645\u0648\u0642\u0639\u06CC\u062A\u200C\u0648\u06CC\u0698\u0647\u0654 \u062E\u0627\u0646\u0647\u060C \u0627\u0646\u062A\u0638\u0627\u0631 \u0628\u0627\u0644\u0627 \u06CC\u0627 \u06AF\u0632\u0627\u0631\u0634\u200C\u0633\u0648\u06AF\u06CC\u0631\u06CC \u0628\u0627\u0634\u062F\u061B \u0645\u0634\u0627\u0647\u062F\u0647\u0654 \u0645\u0633\u062A\u0642\u06CC\u0645 \u0648 \u0645\u0646\u0638\u0631 \u0645\u0639\u0644\u0645 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A.`,
+        cap: { construct: p.construct, max: "\u0645\u0631\u0632\u06CC" },
+        action: { priority: 2, actionFa: "\u06AF\u0632\u0627\u0631\u0634 \u0645\u0639\u0644\u0645 \u06CC\u0627 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u06A9\u0644\u0627\u0633 \u0628\u0631\u0627\u06CC \u062A\u062B\u0628\u06CC\u062A \u0634\u0648\u0627\u0647\u062F \u0631\u0641\u062A\u0627\u0631\u06CC \u06AF\u0631\u0641\u062A\u0647 \u0634\u0648\u062F.", toolId: "ce-sdq-t-v1", reasonFa: "\u0648\u0627\u06AF\u0631\u0627\u06CC\u06CC \u0648\u0627\u0644\u062F/\u0645\u0639\u0644\u0645 \u2014 \u0634\u0627\u0647\u062F \u062F\u0648\u0645 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A." }
+      });
+    }
+  }
+  for (const t of [
+    { kind: "read", fa: "\u062E\u0648\u0627\u0646\u062F\u0646", probe: "ce-probe-read-v1" },
+    { kind: "write", fa: "\u0646\u0648\u0634\u062A\u0646", probe: "ce-probe-write-v1" },
+    { kind: "calc", fa: "\u062D\u0633\u0627\u0628", probe: "ce-probe-calc-v1" }
+  ]) {
+    if (ctx.sldDanger[t.kind] && ctx.probePresent[t.kind] && !ctx.probeDanger[t.kind] && !ctx.probeWarn[t.kind]) {
+      out.push({
+        code: "D2",
+        fa: `\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC ${t.fa} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A \u0627\u0645\u0627 \u0639\u0645\u0644\u06A9\u0631\u062F \u0648\u0627\u0642\u0639\u06CC \u062F\u0631 \u067E\u0631\u0648\u0628 \u062F\u0631 \u062D\u062F \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0633\u062A\u061B \u0634\u0627\u06CC\u062F \u0641\u0631\u0635\u062A\u200C\u0647\u0627\u06CC \u062A\u0645\u0631\u06CC\u0646 \u0646\u0627\u06A9\u0627\u0641\u06CC \u0628\u0648\u062F\u0647 \u06CC\u0627 \u067E\u0631\u0648\u0628 \u062F\u0631 \u0633\u0637\u062D \u0645\u062A\u0646\u0627\u0633\u0628 \u0627\u062C\u0631\u0627 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A.`,
+        cap: { construct: "academic_learning", max: "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647" },
+        affects: ["academic_learning"],
+        action: { priority: 2, actionFa: `\u0633\u0637\u062D \u0645\u062A\u0646 \u067E\u0631\u0648\u0628 ${t.fa} \u0628\u0631\u0631\u0633\u06CC \u0648 \u062F\u0631 \u0647\u0641\u062A\u0647\u200C\u0647\u0627\u06CC \u0622\u06CC\u0646\u062F\u0647 \u0628\u0627\u0632\u067E\u0631\u0648\u0628 \u0634\u0648\u062F.`, toolId: t.probe, reasonFa: "\u062A\u0639\u0627\u0631\u0636 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A/\u067E\u0631\u0648\u0628 \u2014 \u0628\u0627\u0632\u0633\u0646\u062C\u0634 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A." }
+      });
+    } else if (ctx.probeDanger[t.kind] && ctx.sldPresent[t.kind] && !ctx.sldDanger[t.kind]) {
+      out.push({
+        code: "D3",
+        fa: `\u0639\u0645\u0644\u06A9\u0631\u062F \u0648\u0627\u0642\u0639\u06CC \u062F\u0631 ${t.fa} \u0632\u06CC\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0633\u062A \u0648\u0644\u06CC \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u06CC \u0647\u0646\u0648\u0632 \u067E\u0631\u062E\u0637\u0631 \u0646\u06CC\u0633\u062A\u061B \u067E\u0631\u0648\u0628 \u062D\u0633\u0627\u0633\u200C\u062A\u0631 \u0627\u0633\u062A \u0648 \u0628\u0647\u200C\u0639\u0646\u0648\u0627\u0646 \u0634\u0627\u0647\u062F \u0645\u062D\u0648\u0631\u06CC \u06AF\u0632\u0627\u0631\u0634 \u0645\u06CC\u200C\u0634\u0648\u062F.`,
+        cap: { construct: "academic_learning", max: "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647" },
+        affects: ["academic_learning"],
+        action: { priority: 2, actionFa: `\u0628\u0627\u0632\u067E\u0631\u0648\u0628 ${t.fa} \u062F\u0631 \u0686\u0647\u0627\u0631 \u0647\u0641\u062A\u0647 \u0648 \u0628\u0631\u0631\u0633\u06CC \u0634\u0631\u0627\u06CC\u0637 \u0627\u062C\u0631\u0627 (\u062E\u0633\u062A\u06AF\u06CC/\u0627\u0646\u06AF\u06CC\u0632\u0647).`, reasonFa: "\u067E\u0631\u0648\u0628 \u067E\u0631\u062E\u0637\u0631 \u2014 \u062A\u0623\u06CC\u06CC\u062F \u0628\u0627 \u0628\u0627\u0632\u0633\u0646\u062C\u0634." }
+      });
+    }
+  }
+  const learningDanger = norm.rows.some((r) => r.construct === "academic_learning" && r.danger);
+  if (wInj.iqValue !== null && wInj.iqValue >= IQ_HIGH_FSIQ && learningDanger) {
+    out.push({
+      code: "D4",
+      fa: "\u0638\u0631\u0641\u06CC\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u0628\u0627\u0644\u0627\u0633\u062A \u0627\u0645\u0627 \u0639\u0645\u0644\u06A9\u0631\u062F \u062A\u062D\u0635\u06CC\u0644\u06CC \u0627\u0641\u062A \u06A9\u0631\u062F\u0647\u061B \u0627\u06CC\u0646 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646\u06CC \u0628\u0627 \u0627\u0644\u06AF\u0648\u06CC \u0645\u0634\u06A9\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u06CC\u0627 \u0627\u0633\u062A\u0639\u062F\u0627\u062F \u062F\u0648\u06AF\u0627\u0646\u0647 \u0633\u0627\u0632\u06AF\u0627\u0631 \u0627\u0633\u062A\u060C \u0646\u0647 \u0628\u0627 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0638\u0631\u0641\u06CC\u062A.",
+      cap: { construct: "academic_learning", max: "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647" },
+      affects: ["academic_learning"]
+    });
+  }
+  const snapAttentionDanger = norm.rows.some((r) => r.construct === "attention_exec" && r.toolId.startsWith("ce-snap") && r.danger);
+  const sdqPresent = norm.rows.some((r) => r.toolId.startsWith("sdq-") || r.toolId === "ce-sdq-t-v1");
+  const sdqAttentionDanger = norm.rows.some((r) => r.construct === "attention_exec" && (r.toolId === "sdq-parent" || r.toolId === "ce-sdq-t-v1") && r.danger);
+  if (snapAttentionDanger && sdqPresent && !sdqAttentionDanger) {
+    out.push({
+      code: "D5",
+      fa: "SNAP \u0622\u06CC\u062A\u0645\u200C\u0645\u062D\u0648\u0631 \u0648 \u062D\u0633\u0627\u0633\u200C\u062A\u0631 \u0627\u0633\u062A\u061B SDQ \u067E\u0631\u0633\u0634\u06CC \u0645\u062D\u062F\u0648\u062F\u062A\u0631 \u062F\u0627\u0631\u062F \u2014 \u0627\u06AF\u0631 \u0641\u0642\u0637 SDQ \u0622\u0631\u0627\u0645 \u0627\u0633\u062A \u0648 SNAP \u067E\u0631\u062E\u0637\u0631\u060C SNAP \u0645\u062D\u0648\u0631 \u06AF\u0632\u0627\u0631\u0634 \u0645\u06CC\u200C\u0634\u0648\u062F.",
+      affects: ["attention_exec"]
+    });
+  }
+  const scaredDanger = norm.rows.some((r) => r.toolId === "ce-scared-p-v1" && r.danger && r.construct === "internalizing");
+  if (scaredDanger && snapAttentionDanger) {
+    out.push({
+      code: "D6",
+      fa: "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0647\u0645\u200C\u067E\u0648\u0634\u0627\u0646 (\u0628\u06CC\u200C\u0642\u0631\u0627\u0631\u06CC\u060C \u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC) \u0647\u0645 \u062F\u0631 \u0627\u0636\u0637\u0631\u0627\u0628 \u0648 \u0647\u0645 \u062F\u0631 \u062A\u0648\u062C\u0647 \u062F\u06CC\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u062A\u0631\u062A\u06CC\u0628 \u0632\u0645\u0627\u0646\u06CC \u0634\u0631\u0648\u0639 \u0628\u0627\u06CC\u062F \u0627\u0632 \u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u062A\u0641\u06A9\u06CC\u06A9 \u0634\u0648\u062F.",
+      affects: ["attention_exec", "internalizing"]
+    });
+  }
+  if (wInj.iqValue !== null && wInj.iqValue >= 90 && wInj.iqValue <= 110 && !wInj.scatterFlag && ctx.anyChecklistDanger) {
+    out.push({
+      code: "D7",
+      fa: "\u062A\u0639\u0627\u0631\u0636 \u0646\u06CC\u0633\u062A: \u0648\u06A9\u0633\u0644\u0631 \u0638\u0631\u0641\u06CC\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u0631\u0627 \u0645\u06CC\u200C\u0633\u0646\u062C\u062F\u060C \u0646\u0647 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0631\u0641\u062A\u0627\u0631\u06CC\u061B \u06AF\u0632\u0627\u0631\u0634\u200C\u0647\u0627 \u0645\u06A9\u0645\u0644 \u06CC\u06A9\u062F\u06CC\u06AF\u0631\u0646\u062F."
+    });
+  }
+  const dcdqPresent = norm.rows.some((r) => r.toolId === "ce-dcdq-v1");
+  const otMotorDelayed = otStatuses.some((s) => (s.domain === "gross" || s.domain === "fine") && s.delayed);
+  if (dcdqPresent && !ctx.dcdqDanger && otMotorDelayed) {
+    out.push({
+      code: "D8",
+      fa: "\u067E\u0631\u0633\u0634\u0646\u0627\u0645\u0647\u0654 \u0648\u0627\u0644\u062F \u0628\u0631\u0627\u06CC \u0641\u0639\u0627\u0644\u06CC\u062A\u200C\u0647\u0627\u06CC \u0631\u0648\u0632\u0645\u0631\u0647 \u0627\u0633\u062A \u0648 \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0633\u0646\u062C\u06CC\u062F\u0647\u200C\u0634\u062F\u0647 \u062F\u0631 \u062C\u0644\u0633\u0647\u0654 \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC \u062F\u0642\u06CC\u0642\u200C\u062A\u0631 \u0627\u0633\u062A\u061B \u062A\u0627 \u0647\u0645\u200C\u06AF\u0631\u0627\u06CC\u06CC\u060C \u0633\u0637\u062D \u062D\u0631\u06A9\u062A\u06CC \u0633\u0642\u0641 \u0645\u06CC\u200C\u062E\u0648\u0631\u062F.",
+      cap: { construct: "motor_coord", max: "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647" },
+      affects: ["motor_coord"],
+      action: { priority: 2, actionFa: "\u062C\u0644\u0633\u0647\u0654 \u062F\u0648\u0645 \u062A\u0623\u06CC\u06CC\u062F \u062A\u0633\u0644\u0637 \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u062D\u0631\u06A9\u062A\u06CC \u0648 \u0628\u0627\u0632\u067E\u0631\u0633\u0634\u0646\u0627\u0645\u0647\u0654 DCDQ.", toolId: "ce-dcdq-v1", reasonFa: "\u062A\u0639\u0627\u0631\u0636 DCDQ/\u067E\u0631\u0648\u0641\u0627\u06CC\u0644 OT." }
+    });
+  }
+  const fine = otStatuses.find((s) => s.domain === "fine");
+  const visual = otStatuses.find((s) => s.domain === "visual");
+  const cog = otStatuses.find((s) => s.domain === "cognitive");
+  if (ctx.probeDanger.write && fine && !fine.delayed && !fine.border) {
+    out.push({ code: "DC1", fa: "\u0627\u0641\u062A \u0646\u0648\u0634\u062A\u0646 \u0645\u062D\u062A\u0645\u0644\u200C\u062A\u0631 \u0631\u06CC\u0634\u0647\u0654 \u0632\u0628\u0627\u0646\u06CC-\u0627\u0645\u0644\u0627\u06CC\u06CC \u062F\u0627\u0631\u062F \u062A\u0627 \u062F\u06CC\u062F\u0627\u0631\u06CC-\u062D\u0631\u06A9\u062A\u06CC\u061B \u0632\u06CC\u0631\u0646\u0648\u06CC\u0647\u0654 \u0646\u0648\u0634\u062A\u0646 \u0628\u062F\u0648\u0646 \u0645\u0624\u0644\u0641\u0647\u0654 \u062D\u0631\u06A9\u062A\u06CC \u06AF\u0632\u0627\u0631\u0634 \u0645\u06CC\u200C\u0634\u0648\u062F.", affects: ["academic_learning"] });
+  }
+  if (fine && fine.delayed && ctx.probePresent.write && !ctx.probeDanger.write && !ctx.probeWarn.write) {
+    out.push({ code: "DC2", fa: "\u0636\u0639\u0641 \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0638\u0631\u06CC\u0641 \u0647\u0646\u0648\u0632 \u062F\u0631 \u0646\u0648\u0634\u062A\u0646 \u0645\u062F\u0631\u0633\u0647\u200C\u0627\u06CC \u062E\u0648\u062F \u0631\u0627 \u0646\u0634\u0627\u0646 \u0646\u062F\u0627\u062F\u0647 \u0627\u0633\u062A\u061B \u067E\u0627\u06CC\u0634 \u0634\u0634\u200C\u0645\u0627\u0647\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A.", affects: ["motor_coord"] });
+  }
+  if (visual && visual.delayed && ctx.probePresent.calc && !ctx.probeDanger.calc && !ctx.probeWarn.calc) {
+    out.push({ code: "DC3", fa: "\u0636\u0639\u0641 \u062F\u06CC\u062F\u0627\u0631\u06CC \u0628\u0647 \u0645\u062D\u0627\u0633\u0628\u0647 \u0645\u0646\u062A\u0642\u0644 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A\u061B \u0641\u0639\u0644\u0627\u064B \u0641\u0642\u0637 \u062F\u0631 \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC \u062F\u0646\u0628\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F.", affects: ["general_cog"] });
+  }
+  if ((ctx.probeDanger.read || ctx.probeDanger.calc) && cog && cog.delayed) {
+    out.push({ code: "DC4", fa: "\u0634\u0627\u06CC\u062F \u0628\u062E\u0634\u06CC \u0627\u0632 \u0627\u0641\u062A \u062A\u062D\u0635\u06CC\u0644\u06CC \u0627\u0632 \u062D\u06CC\u0637\u0647\u0654 \u0634\u0646\u0627\u062E\u062A\u06CC \u0628\u0627\u0634\u062F\u061B \u062F\u0631 \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC\u060C \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0634\u0646\u0627\u062E\u062A\u06CC \u0647\u0645 \u0647\u062F\u0641\u200C\u06AF\u0630\u0627\u0631\u06CC \u0634\u0648\u062F.", affects: ["academic_learning"] });
+  }
+  return out;
+}
+__name(detectDivergences, "detectDivergences");
+__name2(detectDivergences, "detectDivergences");
+function scoreConstructs(rows) {
+  const per = /* @__PURE__ */ new Map();
+  const get = /* @__PURE__ */ __name2((k) => {
+    let v = per.get(k);
+    if (!v) {
+      v = { rows: [], rawScore: 0, score: 0, sources: [], tools: /* @__PURE__ */ new Set(), hasParentDanger: false, hasTeacherDanger: false };
+      per.set(k, v);
+    }
+    return v;
+  }, "get");
+  for (const r of rows) {
+    const b = get(r.construct);
+    b.rows.push(r);
+    b.rawScore += r.weight;
+    if (!b.sources.includes(r.sourceType))
+      b.sources.push(r.sourceType);
+    if (!b.tools.has(r.toolId))
+      b.tools.add(r.toolId);
+    if (r.danger && r.sourceType === "parent")
+      b.hasParentDanger = true;
+    if (r.danger && r.sourceType === "teacher")
+      b.hasTeacherDanger = true;
+  }
+  for (const b of per.values()) {
+    const s = b.hasParentDanger && b.hasTeacherDanger ? Math.round(b.rawScore * CONSENSUS_MULTIPLIER) : b.rawScore;
+    b.score = Math.min(Math.max(s, b.rawScore > 0 ? 1 : 0), SCORE_CAP);
+  }
+  return per;
+}
+__name(scoreConstructs, "scoreConstructs");
+__name2(scoreConstructs, "scoreConstructs");
+function buildCaps(per, wInj, gates, divergences) {
+  const result = { globalCapsFa: [], capTexts: /* @__PURE__ */ new Map(), conflictTexts: /* @__PURE__ */ new Map(), capMax: /* @__PURE__ */ new Map() };
+  const setCap = /* @__PURE__ */ __name2((k, max, text) => {
+    const arr = result.capTexts.get(k) ?? [];
+    if (!arr.includes(text))
+      arr.push(text);
+    result.capTexts.set(k, arr);
+    const cur = result.capMax.get(k);
+    if (!cur || LEVEL_ORDER[max] < LEVEL_ORDER[cur])
+      result.capMax.set(k, max);
+  }, "setCap");
+  const setConflict = /* @__PURE__ */ __name2((k, text) => {
+    const arr = result.conflictTexts.get(k) ?? [];
+    if (!arr.includes(text))
+      arr.push(text);
+    result.conflictTexts.set(k, arr);
+  }, "setConflict");
+  for (const [k, b] of per) {
+    if (b.rawScore > 0 && b.tools.size < 3) {
+      setCap(k, "\u0645\u0631\u0632\u06CC", "\u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u062D\u0648\u0632\u0647 \u062A\u0639\u062F\u0627\u062F \u0627\u0628\u0632\u0627\u0631\u0647\u0627\u06CC \u0628\u0631\u0631\u0633\u06CC\u200C\u0634\u062F\u0647 \u06A9\u0645 \u0627\u0633\u062A\u061B \u0646\u062A\u06CC\u062C\u0647 \u0645\u0648\u0642\u062A\u06CC \u0627\u0633\u062A.");
+    }
+  }
+  for (const [k, b] of per) {
+    if (b.rawScore > 0 && b.sources.length === 1) {
+      const fa2 = b.sources[0] === "parent" ? "\u06AF\u0632\u0627\u0631\u0634 \u062E\u0627\u0646\u0648\u0627\u062F\u0647" : b.sources[0] === "teacher" ? "\u06AF\u0632\u0627\u0631\u0634 \u0645\u062F\u0631\u0633\u0647" : b.sources[0] === "examiner" ? "\u0633\u0646\u062C\u0634 \u0622\u0632\u0645\u0648\u0646\u06AF\u0631/\u06A9\u0644\u06CC\u0646\u06CC\u06A9" : "\u0639\u0645\u0644\u06A9\u0631\u062F \u0645\u0633\u062A\u0642\u06CC\u0645 \u06A9\u0648\u062F\u06A9";
+      setCap(k, "\u0645\u0631\u0632\u06CC", `\u0634\u0648\u0627\u0647\u062F \u0641\u0642\u0637 \u0627\u0632 \u06CC\u06A9 \u0645\u0646\u0638\u0631 (${fa2}) \u0622\u0645\u062F\u0647 \u0627\u0633\u062A.`);
+    }
+  }
+  if (wInj.scatterFlag) {
+    result.globalCapsFa.push("\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u0632\u06CC\u0627\u062F \u0627\u0633\u062A (\u06F2\u06F3 \u0648 \u0628\u06CC\u0634\u062A\u0631)\u061B \u0637\u0628\u0642 \u0634\u0648\u0627\u0647\u062F\u060C \u0627\u0639\u062A\u0628\u0627\u0631 \u067E\u06CC\u0634\u200C\u0628\u06CC\u0646\u06CC \u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC \u067E\u0627\u0628\u0631\u062C\u0627\u0633\u062A \u0627\u0645\u0627 \u0628\u0631\u0627\u06CC \u062E\u0648\u0627\u0646\u0627\u06CC\u06CC \u0646\u06CC\u0645\u0631\u062E\u060C \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627 GAI \u0627\u0646\u062C\u0627\u0645 \u0634\u062F\u0647 \u0627\u0633\u062A.");
+  }
+  if (wInj.substitutes.length > 0) {
+    result.globalCapsFa.push("\u0628\u0631\u062E\u06CC \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u0628\u0627 \u062E\u0631\u062F\u0647\u200C\u0622\u0632\u0645\u0648\u0646 \u062C\u0627\u0646\u0634\u06CC\u0646 \u0633\u0627\u062E\u062A\u0647 \u0634\u062F\u0647\u200C\u0627\u0646\u062F\u061B \u0627\u0639\u062A\u0628\u0627\u0631 \u0622\u0646\u200C\u0647\u0627 \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0633\u062A.");
+  }
+  for (const d of divergences) {
+    if (d.cap) {
+      setConflict(d.cap.construct, d.fa);
+      setCap(d.cap.construct, d.cap.max, `\u0648\u0627\u06AF\u0631\u0627\u06CC\u06CC \u0641\u0639\u0627\u0644 (${d.code}) \u2014 \u0633\u0637\u062D \u0627\u06CC\u0646 \u062D\u0648\u0632\u0647 \u0633\u0642\u0641 \u062E\u0648\u0631\u062F\u0647 \u0627\u0633\u062A.`);
+    }
+  }
+  if (gates) {
+    for (const g of gates.gates) {
+      if ((g.key === "behavioral" || g.key === "skills") && !g.done) {
+        result.globalCapsFa.push(`\u06AF\u06CC\u062A \xAB${g.label}\xBB \u0647\u0646\u0648\u0632 \u06A9\u0627\u0645\u0644 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A\u061B \u0633\u0627\u0632\u0647\u200C\u0647\u0627\u06CC \u0648\u0627\u0628\u0633\u062A\u0647 \u0633\u0642\u0641 \u0645\u0631\u0632\u06CC \u062F\u0627\u0631\u0646\u062F.`);
+        for (const k of GATE_DEPENDENT_CONSTRUCTS[g.key]) {
+          setCap(k, "\u0645\u0631\u0632\u06CC", `\u06AF\u06CC\u062A \xAB${g.label}\xBB \u0646\u0627\u0642\u0635 \u0627\u0633\u062A \u2014 \u0633\u0627\u0632\u0647\u200C\u0647\u0627\u06CC \u0648\u0627\u0628\u0633\u062A\u0647 \u0633\u0642\u0641 \u0645\u0631\u0632\u06CC \u062F\u0627\u0631\u0646\u062F.`);
+        }
+      }
+    }
+  }
+  if (!wInj.link) {
+    result.globalCapsFa.push("\u0646\u06CC\u0645\u0631\u062E \u0634\u0646\u0627\u062E\u062A\u06CC \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u06CC\u0627 \u0642\u0627\u0628\u0644 \u0645\u062D\u0627\u0633\u0628\u0647 \u0646\u06CC\u0633\u062A\u061B \u0627\u0644\u06AF\u0648\u0647\u0627\u06CC \u0645\u062A\u06A9\u06CC \u0628\u0631 \u0647\u0648\u0634\u0628\u0647\u0631 \u0641\u0642\u0637 \u062F\u0631 \u062D\u062F \u062D\u062F\u0633 \u0628\u0627\u0642\u06CC \u0645\u06CC\u200C\u0645\u0627\u0646\u0646\u062F.");
+  }
+  return result;
+}
+__name(buildCaps, "buildCaps");
+__name2(buildCaps, "buildCaps");
+function idxValueOf(wInj, key) {
+  const line2 = wInj.link?.indicesFa.find((l) => l.startsWith(`${key}=`));
+  if (!line2)
+    return null;
+  const m = line2.match(/=(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+__name(idxValueOf, "idxValueOf");
+__name2(idxValueOf, "idxValueOf");
+function maxIndexValueOf(wInj) {
+  const vals = (wInj.link?.indicesFa ?? []).map((l) => Number((l.match(/=(\d+)/) ?? [])[1])).filter((n) => Number.isFinite(n));
+  return vals.length ? Math.max(...vals) : 0;
+}
+__name(maxIndexValueOf, "maxIndexValueOf");
+__name2(maxIndexValueOf, "maxIndexValueOf");
+function evaluatePatterns(norm, wInj, levels, otStatuses) {
+  const out = [];
+  const push = /* @__PURE__ */ __name2((p) => out.push(p), "push");
+  const allRows = [...norm.rows, ...wInj.rows];
+  const p12Iq = wInj.iqValue !== null && wInj.iqValue <= IQ_ID_MAX;
+  const p12Ot = otStatuses.filter((s) => s.delayed).length >= 4;
+  const p12Active = p12Iq || p12Ot;
+  const p12Ruled = wInj.iqValue !== null && wInj.iqValue > IQ_BIF_MAX && !p12Ot;
+  push({
+    key: "P12_GLOBAL_WEAK",
+    titleFa: "\u0627\u0641\u062A \u0647\u0645\u0647\u200C\u06AF\u06CC\u0631 \u0634\u0646\u0627\u062E\u062A\u06CC-\u0631\u0634\u062F\u06CC",
+    baseRateFa: "\u062D\u062F\u0648\u062F \u06F1 \u062A\u0627 \u06F3 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
+    constructs: p12Active ? ["general_cog", "social_adl"] : [],
+    status: p12Active ? "active" : p12Ruled ? "ruled_out" : "candidate",
+    rationaleFa: p12Active ? "\u0627\u0641\u062A \u062F\u0631 \u0686\u0646\u062F \u062D\u0648\u0632\u0647\u0654 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0648 \u0647\u0645\u0647\u200C\u06AF\u06CC\u0631 \u062F\u06CC\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0628\u0631\u0631\u0633\u06CC \u062A\u062E\u0635\u0635\u06CC \u0648 \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u062A\u0648\u0627\u0646\u0628\u062E\u0634\u06CC \u0627\u0648\u0644\u0648\u06CC\u062A \u062F\u0627\u0631\u062F." : "\u0646\u0634\u0627\u0646\u0647\u0654 \u0647\u0645\u0647\u200C\u06AF\u06CC\u0631 \u0628\u0648\u062F\u0646 \u0627\u0641\u062A \u062F\u0631 \u062F\u0627\u062F\u0647\u200C\u0647\u0627\u06CC \u0641\u0639\u0644\u06CC \u062A\u062B\u0628\u06CC\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A.",
+    actionFa: p12Active ? "\u0627\u0631\u062C\u0627\u0639 \u0628\u0631\u0631\u0633\u06CC \u062A\u062E\u0635\u0635\u06CC \u0634\u0646\u0627\u062E\u062A\u06CC \u0648 \u0645\u0633\u06CC\u0631 \u062A\u0648\u0627\u0646\u0628\u062E\u0634\u06CC\u061B \u067E\u0627\u06CC\u0634 \u0633\u0647\u200C\u0645\u0627\u0647\u0647." : "\u2014"
+  });
+  const vci = idxValueOf(wInj, "VCI");
+  const pri = idxValueOf(wInj, "PRI");
+  const gap2 = vci !== null && pri !== null ? Math.abs(pri - vci) : null;
+  const visualSupport = otStatuses.some((s) => s.domain === "visual" && s.delayed) || norm.ctx.probeDanger.calc;
+  const p8Active = gap2 !== null && gap2 >= NVLD_INDEX_GAP && visualSupport;
+  const p8Ruled = gap2 !== null && gap2 < NVLD_INDEX_GAP;
+  push({
+    key: "P8_NVLD",
+    titleFa: "\u0646\u0627\u0628\u0631\u0627\u0628\u0631\u06CC \u06A9\u0644\u0627\u0645\u06CC/\u063A\u06CC\u0631\u06A9\u0644\u0627\u0645\u06CC",
+    baseRateFa: "\u06A9\u0645\u200C\u0634\u0627\u06CC\u0639\u061B \u0622\u0645\u0627\u0631 \u062F\u0642\u06CC\u0642\u06CC \u0645\u0646\u062A\u0634\u0631 \u0646\u0634\u062F\u0647",
+    constructs: ["general_cog"],
+    status: p8Active ? "active" : p8Ruled ? "ruled_out" : "candidate",
+    rationaleFa: p8Active ? "\u0634\u06A9\u0627\u0641 \u0622\u0634\u06A9\u0627\u0631 \u0628\u06CC\u0646 \u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u06A9\u0644\u0627\u0645\u06CC \u0648 \u063A\u06CC\u0631\u06A9\u0644\u0627\u0645\u06CC \u0647\u0645\u0631\u0627\u0647 \u0628\u0627 \u0636\u0639\u0641 \u062F\u06CC\u062F\u0627\u0631\u06CC-\u0641\u0636\u0627\u06CC\u06CC \u062F\u06CC\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0628\u0631\u0631\u0633\u06CC \u062A\u062E\u0635\u0635\u06CC \u0627\u06CC\u0646 \u0627\u0644\u06AF\u0648 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A." : "\u0634\u06A9\u0627\u0641 \u0634\u0627\u062E\u0635\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u0645\u06CC/\u063A\u06CC\u0631\u06A9\u0644\u0627\u0645\u06CC \u0628\u0631\u062C\u0633\u062A\u0647 \u0646\u06CC\u0633\u062A \u06CC\u0627 \u0636\u0639\u0641 \u062F\u06CC\u062F\u0627\u0631\u06CC-\u0641\u0636\u0627\u06CC\u06CC \u0647\u0645\u0631\u0627\u0647\u06CC \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F.",
+    actionFa: p8Active ? "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u062A\u062E\u0635\u0635\u06CC \u062F\u06CC\u062F\u0627\u0631\u06CC-\u0641\u0636\u0627\u06CC\u06CC \u0648 \u0628\u0627\u0632\u0646\u06AF\u0631\u06CC \u0627\u0646\u062A\u0638\u0627\u0631\u0627\u062A \u062A\u062D\u0635\u06CC\u0644\u06CC." : "\u2014"
+  });
+  const gifted = wInj.iqValue !== null && wInj.iqValue >= IQ_GIFTED_FSIQ;
+  const giftedIndex = maxIndexValueOf(wInj) >= IQ_GIFTED_INDEX;
+  const learningOrAttention = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
+  const p7Active = (gifted || giftedIndex) && learningOrAttention;
+  const p7Ruled = !gifted && !giftedIndex;
+  push({
+    key: "P7_TWO_E",
+    titleFa: "\u0627\u0633\u062A\u0639\u062F\u0627\u062F \u062F\u0648\u06AF\u0627\u0646\u0647",
+    baseRateFa: "\u062D\u062F\u0648\u062F \u06F2 \u062A\u0627 \u06F5 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
+    constructs: p7Active ? atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") ? ["academic_learning"] : ["attention_exec"] : [],
+    status: p7Active ? "active" : p7Ruled ? "ruled_out" : "candidate",
+    rationaleFa: p7Active ? "\u0638\u0631\u0641\u06CC\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u0628\u0627\u0644\u0627\u0633\u062A \u0648 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062F\u0634\u0648\u0627\u0631\u06CC \u062F\u06CC\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0638\u0631\u0641\u06CC\u062A \u0628\u0627\u0644\u0627 \u0646\u0628\u0627\u06CC\u062F \u0627\u0641\u062A \u0631\u0627 \u0628\u067E\u0648\u0634\u0627\u0646\u062F." : p7Ruled ? "\u0646\u0647 \u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC \u0648 \u0646\u0647 \u0647\u06CC\u0686 \u0634\u0627\u062E\u0635\u06CC \u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0627\u0633\u062A\u0639\u062F\u0627\u062F \u0628\u0627\u0644\u0627 \u0646\u06CC\u0633\u062A\u061B \u0627\u06CC\u0646 \u0627\u0644\u06AF\u0648 \u0631\u062F \u0645\u06CC\u200C\u0634\u0648\u062F." : "\u0638\u0631\u0641\u06CC\u062A \u0628\u0627\u0644\u0627 \u0647\u0646\u0648\u0632 \u062A\u062B\u0628\u06CC\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A.",
+    actionFa: p7Active ? "\u0627\u0646\u062A\u0638\u0627\u0631\u0627\u062A \u062A\u062D\u0635\u06CC\u0644\u06CC \u0645\u062A\u0646\u0627\u0633\u0628 \u0628\u0627 \u0638\u0631\u0641\u06CC\u062A \u0628\u0627\u0644\u0627 \u062A\u0646\u0638\u06CC\u0645 \u0634\u0648\u062F\u061B \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062F\u0634\u0648\u0627\u0631\u06CC \u062C\u062F\u0627\u06AF\u0627\u0646\u0647 \u067E\u0627\u06CC\u0634 \u0634\u0648\u062F." : "\u2014"
+  });
+  const asdDanger = allRows.some((r) => r.toolId === "ce-asd-criteria-v1" && r.danger);
+  const p3Active = asdDanger && atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
+  push({
+    key: "P3_ASD_x_ADHD",
+    titleFa: "\u0647\u0645\u0631\u0627\u0647\u06CC \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0627\u062C\u062A\u0645\u0627\u0639\u06CC-\u0627\u0631\u062A\u0628\u0627\u0637\u06CC \u0648 \u062A\u0648\u062C\u0647",
+    baseRateFa: "\u062D\u062F\u0648\u062F \u06F5\u06F0 \u062A\u0627 \u06F7\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
+    constructs: ["social_adl", "attention_exec"],
+    status: p3Active ? "active" : "candidate",
+    rationaleFa: p3Active ? "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0627\u062C\u062A\u0645\u0627\u0639\u06CC-\u0627\u0631\u062A\u0628\u0627\u0637\u06CC \u0648 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647 \u0647\u0631 \u062F\u0648 \u0627\u0632 \u0686\u0646\u062F \u0645\u0646\u0638\u0631 \u062F\u06CC\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0627\u06CC\u0646 \u062F\u0648 \u0627\u063A\u0644\u0628 \u0647\u0645\u0631\u0627\u0647\u200C\u0627\u0646\u062F \u0648 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0647\u0631 \u062F\u0648 \u0645\u062D\u0648\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A." : "\u06CC\u06A9\u06CC \u0627\u0632 \u062F\u0648 \u062C\u0632\u0621 \u0627\u06CC\u0646 \u0627\u0644\u06AF\u0648 \u0647\u0646\u0648\u0632 \u062A\u062B\u0628\u06CC\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A.",
+    actionFa: p3Active ? "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0647\u0631 \u062F\u0648 \u0645\u062D\u0648\u0631 \u0628\u0627 \u0627\u062D\u062A\u06CC\u0627\u0637 \u062F\u0631 \u062A\u0641\u06A9\u06CC\u06A9\u061B \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0627\u062C\u062A\u0645\u0627\u0639\u06CC-\u0627\u0631\u062A\u0628\u0627\u0637\u06CC \u0648 \u062A\u0648\u062C\u0647 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u062F\u06CC\u062F\u0647 \u0634\u0648\u062F." : "\u2014"
+  });
+  const p1Active = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") && atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
+  push({
+    key: "P1_SLD_x_ADHD",
+    titleFa: "\u0647\u0645\u0631\u0627\u0647\u06CC \u0645\u0634\u06A9\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0648 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647",
+    baseRateFa: "\u062D\u062F\u0648\u062F \u06F3\u06F1 \u062A\u0627 \u06F4\u06F5 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
+    constructs: ["academic_learning", "attention_exec"],
+    status: p1Active ? "active" : "candidate",
+    rationaleFa: p1Active ? "\u0627\u0641\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0648 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647 \u0647\u0631 \u062F\u0648 \u0627\u0632 \u0686\u0646\u062F \u0645\u0646\u0638\u0631 \u0645\u0633\u062A\u0642\u0644 \u062F\u06CC\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0627\u06CC\u0646 \u062F\u0648 \u0627\u063A\u0644\u0628 \u0647\u0645\u0631\u0627\u0647\u200C\u0627\u0646\u062F \u0648 \u0645\u062F\u0627\u062E\u0644\u0647\u0654 \u0647\u0631 \u062F\u0648 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A." : "\u06CC\u06A9\u06CC \u0627\u0632 \u062F\u0648 \u062C\u0632\u0621 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC/\u062A\u0648\u062C\u0647 \u0647\u0646\u0648\u0632 \u0628\u0647 \u0633\u0637\u062D \u062A\u062B\u0628\u06CC\u062A \u0646\u0631\u0633\u06CC\u062F\u0647 \u0627\u0633\u062A.",
+    actionFa: p1Active ? "\u0645\u062F\u0627\u062E\u0644\u0647\u0654 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0648 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u062A\u0648\u062C\u0647 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0622\u063A\u0627\u0632 \u0634\u0648\u062F\u061B \u0628\u0627\u0632\u067E\u0631\u0648\u0628 \u0633\u0647\u200C\u0645\u0627\u0647\u0647." : "\u2014"
+  });
+  const motorSig = allRows.some((r) => r.construct === "motor_coord" && (r.toolId === "ce-dcdq-v1" || r.toolId === OT_PROFILE_TOOL) && r.danger);
+  const p2Active = motorSig && atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
+  push({
+    key: "P2_DCD_x_ADHD",
+    titleFa: "\u0647\u0645\u0631\u0627\u0647\u06CC \u062F\u0634\u0648\u0627\u0631\u06CC \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u062D\u0631\u06A9\u062A\u06CC \u0648 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647",
+    baseRateFa: "\u062D\u062F\u0648\u062F \u06F5\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
+    constructs: ["motor_coord", "attention_exec"],
+    status: p2Active ? "active" : "candidate",
+    rationaleFa: p2Active ? "\u062F\u0634\u0648\u0627\u0631\u06CC \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u062D\u0631\u06A9\u062A\u06CC \u0648 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u062F\u06CC\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0627\u06CC\u0646 \u062F\u0648 \u0627\u063A\u0644\u0628 \u0647\u0645\u0631\u0627\u0647\u200C\u0627\u0646\u062F." : "\u0627\u0644\u06AF\u0648\u06CC \u062D\u0631\u06A9\u062A\u06CC/\u062A\u0648\u062C\u0647 \u0647\u0646\u0648\u0632 \u06A9\u0627\u0645\u0644 \u062A\u062B\u0628\u06CC\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A.",
+    actionFa: p2Active ? "\u062F\u0631 \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u062A\u0648\u062C\u0647\u060C \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u062D\u0631\u06A9\u062A\u06CC \u0647\u0645 \u062C\u0627 \u0628\u06AF\u06CC\u0631\u062F." : "\u2014"
+  });
+  const langSig = allRows.some((r) => r.construct === "language_comm" && r.danger && (r.toolId === "ce-speech-criteria-v1" || r.toolId === WECHSLER_TOOL || r.toolId === OT_PROFILE_TOOL));
+  const p5Active = langSig && atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
+  push({
+    key: "P5_LANG_x_SLD",
+    titleFa: "\u0647\u0645\u0631\u0627\u0647\u06CC \u0636\u0639\u0641 \u0632\u0628\u0627\u0646\u06CC \u0648 \u0627\u0641\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC",
+    baseRateFa: "\u062D\u062F\u0648\u062F \u06F3\u06F5 \u062A\u0627 \u06F5\u06F5 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
+    constructs: ["language_comm", "academic_learning"],
+    status: p5Active ? "active" : "candidate",
+    rationaleFa: p5Active ? "\u0636\u0639\u0641 \u0632\u0628\u0627\u0646\u06CC \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0628\u062E\u0634\u06CC \u0627\u0632 \u0627\u0641\u062A \u062E\u0648\u0627\u0646\u062F\u0646/\u0646\u0648\u0634\u062A\u0646 \u0631\u0627 \u062A\u0648\u0636\u06CC\u062D \u062F\u0647\u062F\u061B \u0645\u062F\u0627\u062E\u0644\u0647\u0654 \u0632\u0628\u0627\u0646\u06CC \u0648 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0628\u0627\u06CC\u062F \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u062F\u06CC\u062F\u0647 \u0634\u0648\u062F." : "\u0627\u0644\u06AF\u0648\u06CC \u0632\u0628\u0627\u0646/\u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0647\u0646\u0648\u0632 \u06A9\u0627\u0645\u0644 \u0646\u06CC\u0633\u062A.",
+    actionFa: p5Active ? "\u0645\u062F\u0627\u062E\u0644\u0647\u0654 \u0632\u0628\u0627\u0646\u06CC \u0648 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0647\u0645\u200C\u0632\u0645\u0627\u0646\u061B \u0633\u0647\u0645 \u0647\u0631 \u06CC\u06A9 \u062F\u0631 \u0628\u0627\u0632\u067E\u0631\u0648\u0628 \u0633\u0646\u062C\u06CC\u062F\u0647 \u0634\u0648\u062F." : "\u2014"
+  });
+  const bif = wInj.iqValue !== null && wInj.iqValue >= IQ_BIF_MIN && wInj.iqValue <= IQ_BIF_MAX;
+  const anyAchievementDanger = norm.ctx.probeDanger.read || norm.ctx.probeDanger.write || norm.ctx.probeDanger.calc || norm.ctx.sldDanger.read || norm.ctx.sldDanger.write || norm.ctx.sldDanger.calc;
+  const p6Active = bif && anyAchievementDanger;
+  const p6Ruled = wInj.iqValue !== null && !bif && !anyAchievementDanger;
+  push({
+    key: "P6_BIF_x_SLD",
+    titleFa: "\u0645\u0631\u0632 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC \u0647\u0645\u0631\u0627\u0647 \u0627\u0641\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC",
+    baseRateFa: "\u062D\u062F\u0648\u062F \u06F2\u06F5 \u062A\u0627 \u06F4\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
+    constructs: ["general_cog", "academic_learning"],
+    status: p6Active ? "active" : p6Ruled ? "ruled_out" : "candidate",
+    rationaleFa: p6Active ? "\u0627\u0646\u062A\u0638\u0627\u0631 \u062A\u062D\u0635\u06CC\u0644\u06CC \u0628\u0627\u06CC\u062F \u0628\u0627 \u0638\u0631\u0641\u06CC\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u062A\u0646\u0638\u06CC\u0645 \u0634\u0648\u062F\u061B \u0627\u06AF\u0631 \u0627\u0641\u062A \u0627\u0632 \u0627\u0646\u062A\u0638\u0627\u0631 \u0638\u0631\u0641\u06CC\u062A \u0628\u06CC\u0634\u062A\u0631 \u0627\u0633\u062A\u060C \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0627\u062E\u062A\u0635\u0627\u0635\u06CC \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A." : "\u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC \u062F\u0631 \u0627\u06CC\u0646 \u0645\u062D\u062F\u0648\u062F\u0647 \u0646\u06CC\u0633\u062A \u06CC\u0627 \u0627\u0641\u062A \u062A\u062D\u0635\u06CC\u0644\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A.",
+    actionFa: p6Active ? "\u0627\u0646\u062A\u0638\u0627\u0631\u0627\u062A \u0648 \u0627\u0647\u062F\u0627\u0641 \u0622\u0645\u0648\u0632\u0634\u06CC \u0628\u0627 \u0638\u0631\u0641\u06CC\u062A \u06A9\u0648\u062F\u06A9 \u062A\u0646\u0638\u06CC\u0645 \u0648 \u067E\u06CC\u0634\u0631\u0641\u062A \u0645\u06A9\u0631\u0631 \u067E\u0627\u06CC\u0634 \u0634\u0648\u062F." : "\u2014"
+  });
+  const psiWmiWeak = allRows.some((r) => r.toolId === WECHSLER_TOOL && r.danger && (r.signal.startsWith("wisc_psi") || r.signal.startsWith("wisc_wmi")));
+  const p9Active = atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") && psiWmiWeak;
+  push({
+    key: "P9_PSI_WMI",
+    titleFa: "\u0627\u0641\u062A \u0633\u0631\u0639\u062A \u067E\u0631\u062F\u0627\u0632\u0634/\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC \u0647\u0645\u0631\u0627\u0647 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647",
+    baseRateFa: "\u062D\u062F\u0648\u062F \u06F3\u06F0 \u062A\u0627 \u06F5\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
+    constructs: ["attention_exec"],
+    status: p9Active ? "active" : "candidate",
+    rationaleFa: p9Active ? "\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC \u0648 \u0633\u0631\u0639\u062A \u067E\u0631\u062F\u0627\u0632\u0634 \u063A\u0627\u0644\u0628\u0627\u064B \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0628\u0627 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647 \u0627\u0641\u062A \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F\u061B \u0627\u06CC\u0646 \u062F\u0648 \u0628\u062E\u0634\u06CC \u0627\u0632 \u0647\u0645\u0627\u0646 \u062A\u0635\u0648\u06CC\u0631 \u062A\u0648\u062C\u0647\u200C\u0627\u0646\u062F\u060C \u0646\u0647 \u06CC\u06A9 \u0645\u0634\u06A9\u0644 \u062C\u062F\u0627." : "\u0627\u0641\u062A \u0633\u0631\u0639\u062A/\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC \u0647\u0646\u0648\u0632 \u0628\u0627 \u062A\u0648\u062C\u0647 \u062A\u062B\u0628\u06CC\u062A\u200C\u0634\u062F\u0647 \u0647\u0645\u0631\u0627\u0647\u06CC \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F.",
+    actionFa: p9Active ? "\u062F\u0631 \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u062A\u0648\u062C\u0647\u060C \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0633\u0631\u0639\u062A \u0648 \u0633\u0627\u0632\u0645\u0627\u0646\u200C\u062F\u0647\u06CC \u062F\u06CC\u062F\u0647 \u0634\u0648\u062F\u061B \u062C\u062F\u0627\u06AF\u0627\u0646\u0647 \u062A\u0634\u062E\u06CC\u0635\u200C\u06AF\u0630\u0627\u0631\u06CC \u0646\u0634\u0648\u062F." : "\u2014"
+  });
+  const gaiFsGap = wInj.link && wInj.link.fsiq !== null && wInj.link.gai !== null ? wInj.link.gai - wInj.link.fsiq : null;
+  const p10Active = gaiFsGap !== null && gaiFsGap >= GAI_FSIQ_GAP;
+  push({
+    key: "P10_GAI_GAP",
+    titleFa: "\u0634\u06A9\u0627\u0641 \u0638\u0631\u0641\u06CC\u062A \u0627\u0633\u062A\u062F\u0644\u0627\u0644\u06CC \u0648 \u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC",
+    baseRateFa: "\u062D\u062F\u0648\u062F \u06F1\u06F0 \u062A\u0627 \u06F2\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
+    constructs: ["general_cog"],
+    status: p10Active ? "active" : "candidate",
+    rationaleFa: p10Active ? "\u0633\u0631\u0639\u062A \u067E\u0631\u062F\u0627\u0632\u0634/\u062A\u0648\u062C\u0647\u060C \u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC \u0631\u0627 \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0638\u0631\u0641\u06CC\u062A \u0648\u0627\u0642\u0639\u06CC \u0646\u0634\u0627\u0646 \u0645\u06CC\u200C\u062F\u0647\u062F\u061B \u062F\u0631 \u062A\u0641\u0633\u06CC\u0631 \u0627\u0632 \u0634\u0627\u062E\u0635 \u0627\u0633\u062A\u062F\u0644\u0627\u0644\u06CC \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u0634\u0648\u062F." : "\u0634\u06A9\u0627\u0641 GAI \u0648 FSIQ \u0628\u0631\u062C\u0633\u062A\u0647 \u0646\u06CC\u0633\u062A.",
+    actionFa: p10Active ? "\u062F\u0631 \u0647\u062F\u0641\u200C\u06AF\u0630\u0627\u0631\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC\u060C \u0638\u0631\u0641\u06CC\u062A \u0627\u0633\u062A\u062F\u0644\u0627\u0644\u06CC \u0645\u0644\u0627\u06A9 \u0628\u0627\u0634\u062F \u0646\u0647 \u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC." : "\u2014"
+  });
+  const p4Active = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") && atLeastLevel(levels, "internalizing", "\u0645\u0631\u0632\u06CC") && (norm.ctx.schPositive || norm.ctx.schoolChanges);
+  push({
+    key: "P4_ANXIETY_SECONDARY",
+    titleFa: "\u0627\u062D\u062A\u0645\u0627\u0644 \u0646\u06AF\u0631\u0627\u0646\u06CC \u0646\u0627\u0634\u06CC \u0627\u0632 \u062A\u062C\u0631\u0628\u0647\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u062A\u062D\u0635\u06CC\u0644\u06CC",
+    baseRateFa: "\u062D\u062F\u0648\u062F \u06F2\u06F0 \u062A\u0627 \u06F4\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
+    constructs: ["academic_learning", "internalizing"],
+    status: p4Active ? "active" : "candidate",
+    rationaleFa: p4Active ? "\u062A\u062C\u0631\u0628\u0647\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u062A\u062D\u0635\u06CC\u0644\u06CC \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0645\u0646\u0634\u0623 \u0646\u06AF\u0631\u0627\u0646\u06CC \u0628\u0627\u0634\u062F\u061B \u062A\u0631\u062A\u06CC\u0628 \u0632\u0645\u0627\u0646\u06CC \u0627\u0632 \u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0645\u0634\u062E\u0635 \u0634\u0648\u062F." : "\u0628\u0631\u0627\u06CC \u062A\u0639\u06CC\u06CC\u0646 \u0631\u0627\u0628\u0637\u0647\u0654 \u0646\u06AF\u0631\u0627\u0646\u06CC \u0648 \u0627\u0641\u062A \u062A\u062D\u0635\u06CC\u0644\u06CC\u060C \u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u062A\u06A9\u0645\u06CC\u0644\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A.",
+    actionFa: p4Active ? "\u0627\u0628\u062A\u062F\u0627 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0648 \u0645\u0634\u0627\u0647\u062F\u0647\u0654 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u06AF\u0631\u0627\u0646\u06CC\u061B \u062F\u0631 \u0635\u0648\u0631\u062A \u062A\u062F\u0627\u0648\u0645\u060C \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0647\u06CC\u062C\u0627\u0646\u06CC \u0645\u0633\u062A\u0642\u0644." : "\u2014"
+  });
+  const attentionDanger = allRows.some((r) => r.construct === "attention_exec" && r.danger);
+  const p11Active = atLeastLevel(levels, "internalizing", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") && !attentionDanger && norm.ctx.familyStress;
+  push({
+    key: "P11_MOOD",
+    titleFa: "\u0627\u062D\u062A\u0645\u0627\u0644 \u062A\u0623\u062B\u06CC\u0631 \u0646\u06AF\u0631\u0627\u0646\u06CC/\u063A\u0645 \u0628\u0631 \u062A\u0648\u062C\u0647",
+    baseRateFa: "\u062D\u062F\u0648\u062F \u06F1\u06F5 \u062A\u0627 \u06F2\u06F5 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
+    constructs: ["internalizing", "attention_exec"],
+    status: p11Active ? "active" : "candidate",
+    rationaleFa: p11Active ? "\u0646\u06AF\u0631\u0627\u0646\u06CC/\u063A\u0645 \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u062A\u0648\u062C\u0647 \u0631\u0627 \u0645\u0648\u0642\u062A\u0627\u064B \u0627\u0641\u062A \u0628\u062F\u0647\u062F\u061B \u0627\u0628\u062A\u062F\u0627 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0647\u06CC\u062C\u0627\u0646\u06CC \u0648 \u0628\u0627\u0632\u0633\u0646\u062C\u06CC \u062A\u0648\u062C\u0647 \u067E\u0633 \u0627\u0632 \u0647\u0634\u062A \u0647\u0641\u062A\u0647." : "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647 \u062F\u0631 \u0633\u0637\u062D \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A\u061B \u0627\u06CC\u0646 \u0627\u0644\u06AF\u0648 \u062F\u0631 \u0627\u0648\u0644\u0648\u06CC\u062A \u0646\u06CC\u0633\u062A.",
+    actionFa: p11Active ? "\u0627\u0628\u062A\u062F\u0627 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0647\u06CC\u062C\u0627\u0646\u06CC\u061B \u0628\u0627\u0632\u0633\u0646\u062C\u06CC \u062A\u0648\u062C\u0647 \u067E\u0633 \u0627\u0632 \u06F8 \u0647\u0641\u062A\u0647." : "\u2014"
+  });
+  return out;
+}
+__name(evaluatePatterns, "evaluatePatterns");
+__name2(evaluatePatterns, "evaluatePatterns");
+var PATTERN_ORDER = ["P12_GLOBAL_WEAK", "P8_NVLD", "P7_TWO_E", "P3_ASD_x_ADHD", "P1_SLD_x_ADHD", "P2_DCD_x_ADHD", "P5_LANG_x_SLD", "P6_BIF_x_SLD", "P9_PSI_WMI", "P10_GAI_GAP", "P4_ANXIETY_SECONDARY", "P11_MOOD"];
+function applyParsimony(patterns, per, levels) {
+  const active = patterns.filter((p) => p.status === "active");
+  const elevated = CONSTRUCT_KEYS.filter((k) => {
+    const lv = levels.get(k) ?? "\u067E\u0627\u06CC\u06CC\u0646";
+    return lv === "\u0647\u0645\u200C\u06AF\u0631\u0627\u06CC-\u0628\u0627\u0644\u0627" || lv === "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647";
+  });
+  let chosen = null;
+  if (active.length > 0) {
+    let best = -1;
+    for (const p of active) {
+      const cover = p.constructs.filter((c) => elevated.includes(c)).length;
+      if (cover > best) {
+        best = cover;
+        chosen = p;
+      } else if (cover === best && chosen && PATTERN_ORDER.indexOf(p.key) < PATTERN_ORDER.indexOf(chosen.key)) {
+        chosen = p;
+      }
+    }
+  }
+  const sharedWith = /* @__PURE__ */ new Map();
+  let primary;
+  const differentialsFa = [];
+  const coveredElevated = chosen ? chosen.constructs.filter((c) => elevated.includes(c)).length : 0;
+  if (chosen && coveredElevated >= 2) {
+    for (const c of chosen.constructs) {
+      if (elevated.includes(c))
+        sharedWith.set(c, chosen.key);
+    }
+    primary = {
+      key: chosen.key,
+      titleFa: chosen.titleFa,
+      rationaleFa: `\u0633\u0627\u0632\u0647\u200C\u0647\u0627\u06CC \u0647\u0645\u200C\u0631\u0627\u0633\u062A\u0627 \u0628\u0627 \u06CC\u06A9 \u062A\u0648\u0636\u06CC\u062D \u062A\u0644\u0641\u06CC\u0642\u06CC \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0646\u062F: ${chosen.rationaleFa}`,
+      sharedConstructKeys: [...sharedWith.keys()]
+    };
+  } else if (chosen && coveredElevated === 1) {
+    primary = { key: chosen.key, titleFa: chosen.titleFa, rationaleFa: chosen.rationaleFa, sharedConstructKeys: [] };
+  } else {
+    let dominant = null;
+    let bestScore = -1;
+    let bestLevel = -1;
+    for (const k of CONSTRUCT_KEYS) {
+      const b = per.get(k);
+      if (!b || b.rawScore === 0)
+        continue;
+      const lv = LEVEL_ORDER[levels.get(k) ?? "\u067E\u0627\u06CC\u06CC\u0646"];
+      if (lv > bestLevel || lv === bestLevel && b.score > bestScore) {
+        dominant = k;
+        bestLevel = lv;
+        bestScore = b.score;
+      }
+    }
+    primary = dominant ? { key: dominant, titleFa: CONSTRUCT_LABELS[dominant], rationaleFa: `\u0628\u0631\u062C\u0633\u062A\u0647\u200C\u062A\u0631\u06CC\u0646 \u062D\u0648\u0632\u0647\u0654 \u0634\u0648\u0627\u0647\u062F \u062F\u0631 \u0627\u06CC\u0646 \u067E\u0631\u0648\u0646\u062F\u0647\u060C ${CONSTRUCT_LABELS[dominant]} \u0627\u0633\u062A\u061B \u0628\u0642\u06CC\u0647\u0654 \u062D\u0648\u0632\u0647\u200C\u0647\u0627 \u0628\u0647\u200C\u0635\u0648\u0631\u062A \u062C\u062F\u0627\u06AF\u0627\u0646\u0647 \u06AF\u0632\u0627\u0631\u0634 \u0645\u06CC\u200C\u0634\u0648\u0646\u062F.`, sharedConstructKeys: [] } : { key: "none", titleFa: "\u0628\u062F\u0648\u0646 \u0627\u0644\u06AF\u0648\u06CC \u0628\u0631\u062C\u0633\u062A\u0647", rationaleFa: "\u0647\u0646\u0648\u0632 \u0634\u0648\u0627\u0647\u062F \u0628\u0631\u062C\u0633\u062A\u0647\u200C\u0627\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A\u061B \u062A\u06A9\u0645\u06CC\u0644 \u0627\u0628\u0632\u0627\u0631\u0647\u0627\u06CC \u0641\u0627\u0632 \u0634\u0646\u0627\u0633\u0627\u06CC\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A.", sharedConstructKeys: [] };
+  }
+  for (const k of elevated) {
+    if (!sharedWith.has(k) && k !== primary.key) {
+      differentialsFa.push(`${CONSTRUCT_LABELS[k]} \u0633\u0637\u062D \u0628\u0631\u062C\u0633\u062A\u0647 \u062F\u0627\u0631\u062F \u0648 \u0628\u0647\u200C\u0639\u0646\u0648\u0627\u0646 \u062A\u0641\u0633\u06CC\u0631 \u0645\u06A9\u0645\u0644 \u062F\u0631 \u06A9\u0646\u0627\u0631 \u062A\u0648\u0636\u06CC\u062D \u0627\u0635\u0644\u06CC \u0628\u0631\u0631\u0633\u06CC \u0634\u0648\u062F.`);
+    }
+  }
+  return { primary, sharedWith, differentialsFa };
+}
+__name(applyParsimony, "applyParsimony");
+__name2(applyParsimony, "applyParsimony");
+function detectRedFlags(norm, wInj, patterns) {
+  const out = [];
+  if (norm.ctx.speechCritical) {
+    out.push({ key: "hearing_loss", textFa: "\u0622\u06CC\u062A\u0645 \u0628\u062D\u0631\u0627\u0646\u06CC \u0646\u0627\u0634\u0646\u0648\u0627\u06CC\u06CC \u062F\u0631 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u06AF\u0641\u062A\u0627\u0631 \u0646\u0634\u0627\u0646\u0647\u200C\u062F\u0627\u0631 \u0634\u062F\u0647 \u0627\u0633\u062A.", actionFa: "\u0627\u0631\u062C\u0627\u0639 \u0634\u0646\u0648\u0627\u06CC\u06CC\u200C\u0633\u0646\u062C\u06CC/\u06AF\u0648\u0634\u200C\u0648\u062D\u0644\u0642 \u067E\u06CC\u0634 \u0627\u0632 \u062A\u0641\u0633\u06CC\u0631 \u0632\u0628\u0627\u0646\u06CC.", urgent: true });
+  }
+  if (norm.ctx.schPositive) {
+    out.push({ key: "school_avoidance", textFa: "\u0632\u06CC\u0631\u0645\u0642\u06CC\u0627\u0633 \u0627\u062C\u062A\u0646\u0627\u0628 \u0627\u0632 \u0645\u062F\u0631\u0633\u0647 \u062F\u0631 \u067E\u0631\u0633\u0634\u0646\u0627\u0645\u0647\u0654 \u0627\u0636\u0637\u0631\u0627\u0628 \u06A9\u0648\u062F\u06A9 \u0646\u0634\u0627\u0646\u0647\u200C\u062F\u0627\u0631 \u0627\u0633\u062A.", actionFa: "\u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u0648\u0627\u0644\u062F-\u0645\u062F\u0631\u0633\u0647 \u0648 \u0628\u0631\u0631\u0633\u06CC \u062A\u062C\u0631\u0628\u0647\u200C\u0647\u0627\u06CC \u0646\u0627\u062E\u0648\u0634\u0627\u06CC\u0646\u062F \u0645\u062F\u0631\u0633\u0647\u061B \u0628\u062E\u0634 \u062A\u063A\u06CC\u06CC\u0631\u0627\u062A \u0645\u062F\u0631\u0633\u0647\u0654 \u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u062A\u06A9\u0645\u06CC\u0644 \u0634\u0648\u062F.", urgent: false });
+  }
+  if (norm.ctx.tbi) {
+    out.push({ key: "tbi_referral", textFa: "\u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644\u060C \u0633\u0627\u0628\u0642\u0647\u0654 \u0636\u0631\u0628\u0647\u0654 \u0633\u0631/\u0635\u0631\u0639 \u062A\u0648\u0635\u06CC\u0641 \u0634\u062F\u0647 \u0627\u0633\u062A.", actionFa: "\u0627\u0631\u062C\u0627\u0639 \u0646\u0648\u0631\u0648\u0644\u0648\u0698\u06CC\u061B \u062A\u0641\u0633\u06CC\u0631 \u0634\u0646\u0627\u062E\u062A\u06CC \u0628\u0627 \u0627\u062D\u062A\u06CC\u0627\u0637 \u0627\u0646\u062C\u0627\u0645 \u0634\u0648\u062F.", urgent: true });
+  }
+  if (wInj.iqValue !== null && wInj.iqValue <= IQ_ID_MAX || patterns.some((p) => p.key === "P12_GLOBAL_WEAK" && p.status === "active")) {
+    out.push({ key: "iq_low", textFa: "\u0634\u0648\u0627\u0647\u062F \u0627\u0641\u062A \u0647\u0645\u0647\u200C\u06AF\u06CC\u0631 \u0634\u0646\u0627\u062E\u062A\u06CC \u062F\u0631 \u0645\u062D\u062F\u0648\u062F\u0647\u0654 \u0646\u06CC\u0627\u0632\u0645\u0646\u062F \u0628\u0631\u0631\u0633\u06CC \u062A\u062E\u0635\u0635\u06CC \u062F\u06CC\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F.", actionFa: "\u0627\u0631\u062C\u0627\u0639 \u0628\u0631\u0631\u0633\u06CC \u062A\u062E\u0635\u0635\u06CC \u0634\u0646\u0627\u062E\u062A\u06CC \u0648 \u0645\u0633\u06CC\u0631 \u062A\u0648\u0627\u0646\u0628\u062E\u0634\u06CC\u061B \u067E\u0627\u06CC\u0634 \u0633\u0647\u200C\u0645\u0627\u0647\u0647.", urgent: false });
+  }
+  if (norm.ctx.emoDanger && norm.ctx.selfHarm) {
+    out.push({ key: "selfharm", textFa: "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062E\u0648\u062F\u0622\u0633\u06CC\u0628/\u0646\u0648\u0645\u06CC\u062F\u06CC \u0647\u0645\u0631\u0627\u0647 \u0645\u0634\u06A9\u0644\u0627\u062A \u0647\u06CC\u062C\u0627\u0646\u06CC \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A.", actionFa: "\u0627\u0631\u062C\u0627\u0639 \u0641\u0648\u0631\u06CC \u0631\u0648\u0627\u0646\u200C\u0634\u0646\u0627\u0633\u06CC \u0628\u0627\u0644\u06CC\u0646\u06CC/\u0631\u0648\u0627\u0646\u200C\u067E\u0632\u0634\u06A9\u06CC \u06A9\u0648\u062F\u06A9.", urgent: true });
+  }
+  if (norm.ctx.regression) {
+    out.push({ key: "regression", textFa: "\u0631\u06AF\u0631\u0633\u06CC\u0648\u0646 \u0631\u0634\u062F\u06CC (\u0627\u0632 \u062F\u0633\u062A \u062F\u0627\u062F\u0646 \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0642\u0628\u0644\u06CC) \u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u062A\u0648\u0635\u06CC\u0641 \u0634\u062F\u0647 \u0627\u0633\u062A.", actionFa: "\u0627\u0631\u062C\u0627\u0639 \u0641\u0648\u0631\u06CC \u062A\u062E\u0635\u0635\u06CC\u061B \u0628\u0631\u0631\u0633\u06CC \u0639\u0644\u0644 \u067E\u0633\u200C\u0631\u0641\u062A.", urgent: true });
+  }
+  return out;
+}
+__name(detectRedFlags, "detectRedFlags");
+__name2(detectRedFlags, "detectRedFlags");
+function computeCoverage(input, presentTools, levels) {
+  const gates = input.gates;
+  const gatesScore = gates && gates.gates.length > 0 ? gates.gates.filter((g) => g.done).length / gates.gates.length : 0;
+  const present = new Set(presentTools);
+  if (input.wechsler) {
+    present.add(WECHSLER_TOOL);
+  }
+  if (input.ot) {
+    present.add(OT_PROFILE_TOOL);
+    present.add(`${OT_PROFILE_TOOL}(auditory)`);
+    present.add(`${OT_PROFILE_TOOL}(gross/fine)`);
+    present.add(`${OT_PROFILE_TOOL}(social/adl)`);
+  }
+  const missing = /* @__PURE__ */ new Set();
+  const covs = [];
+  for (const k of CONSTRUCT_KEYS) {
+    const lv = levels.get(k) ?? "\u067E\u0627\u06CC\u06CC\u0646";
+    if (lv === "\u067E\u0627\u06CC\u06CC\u0646")
+      continue;
+    const need = CONSTRUCT_MIN_COVERAGE[k];
+    const have = need.filter((t) => present.has(t));
+    covs.push(have.length / need.length);
+    for (const t of need)
+      if (!present.has(t))
+        missing.add(t);
+  }
+  const constructCoverage = covs.length ? covs.reduce((a, b) => a + b, 0) / covs.length : 1;
+  const percent = Math.round(100 * (0.5 * gatesScore + 0.5 * constructCoverage));
+  if (gates) {
+    const gateOf = /* @__PURE__ */ __name2((key) => gates.gates.find((g) => g.key === key), "gateOf");
+    if (!gateOf("anamnesis")?.done)
+      missing.add("ce-anamnesis-v2");
+    if (!gateOf("behavioral")?.done)
+      missing.add("ce-sdq-t-v1");
+    if (!gateOf("wechsler")?.done)
+      missing.add(WECHSLER_TOOL);
+    if (!gateOf("skills")?.done)
+      missing.add(OT_PROFILE_TOOL);
+  }
+  return { percent, missing: [...missing] };
+}
+__name(computeCoverage, "computeCoverage");
+__name2(computeCoverage, "computeCoverage");
+function pickNextActions(input, norm, levels, redFlags, wInj, divergences) {
+  const present = new Set(norm.latest.keys());
+  if (input.wechsler)
+    present.add(WECHSLER_TOOL);
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  const add = /* @__PURE__ */ __name2((a) => {
+    const key = a.toolId ?? a.actionFa;
+    if (seen.has(key))
+      return;
+    seen.add(key);
+    out.push(a);
+  }, "add");
+  for (const f of redFlags) {
+    add({ priority: 1, actionFa: f.actionFa, reasonFa: f.textFa });
+  }
+  if (!present.has("ce-anamnesis-v2") && !present.has("ce-anamnesis-v3")) {
+    add({ priority: 1, actionFa: "\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647 (\u06AF\u0641\u062A\u200C\u0648\u06AF\u0648\u06CC \u0627\u0648\u0644) \u0628\u0627 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u062B\u0628\u062A \u0634\u0648\u062F.", toolId: "ce-anamnesis-v3", reasonFa: "\u067E\u0627\u06CC\u0647\u0654 \u0647\u0645\u0647\u0654 \u0633\u0627\u0632\u0647\u200C\u0647\u0627 \u0648 \u067E\u0631\u0686\u0645\u200C\u0647\u0627." });
+  }
+  if (input.gates && !input.gates.gates.find((g) => g.key === "behavioral")?.done) {
+    add({ priority: 1, actionFa: "\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A SDQ \u0645\u0639\u0644\u0645 \u0628\u0631\u0627\u06CC \u062A\u06A9\u0645\u06CC\u0644 \u06AF\u06CC\u062A \u0631\u0641\u062A\u0627\u0631\u06CC \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F.", toolId: "ce-sdq-t-v1", reasonFa: "\u0645\u0646\u0638\u0631 \u0645\u0639\u0644\u0645 \u06A9\u0645\u200C\u0647\u0632\u06CC\u0646\u0647 \u0627\u0633\u062A \u0648 \u0647\u0645\u200C\u0631\u0623\u06CC\u06CC \u0631\u0627 \u0645\u0645\u06A9\u0646 \u0645\u06CC\u200C\u06A9\u0646\u062F." });
+  }
+  if (norm.rows.some((r) => r.construct === "attention_exec" && r.sourceType === "parent") && !present.has("ce-snap-iv-t-v1")) {
+    add({ priority: 1, actionFa: "\u0641\u0631\u0645 \u0645\u0639\u0644\u0645 SNAP-IV \u0628\u0631\u0627\u06CC \u0647\u0645\u200C\u0631\u0623\u06CC\u06CC \u062F\u0648\u0633\u0648\u06CC\u0647\u0654 \u062A\u0648\u062C\u0647 \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F.", toolId: "ce-snap-iv-t-v1", reasonFa: "\u0641\u0639\u0627\u0644\u200C\u0634\u062F\u0646 \u0636\u0631\u06CC\u0628 \u0647\u0645\u200C\u0631\u0623\u06CC\u06CC \u0648 \u0631\u0641\u0639 \u0633\u0642\u0641 \u062A\u06A9\u200C\u0645\u0631\u062C\u0639." });
+  }
+  const TRIADS = [
+    { kind: "read", fa: "\u062E\u0648\u0627\u0646\u062F\u0646", probe: "ce-probe-read-v1", sld: "ce-sld-read-v1" },
+    { kind: "write", fa: "\u0646\u0648\u0634\u062A\u0646", probe: "ce-probe-write-v1", sld: "ce-sld-wri-v1" },
+    { kind: "calc", fa: "\u062D\u0633\u0627\u0628", probe: "ce-probe-calc-v1", sld: "ce-sld-calc-v1" }
+  ];
+  for (const t of TRIADS) {
+    if (norm.ctx.sldDanger[t.kind] && !norm.ctx.probePresent[t.kind]) {
+      add({ priority: 1, actionFa: `\u067E\u0631\u0648\u0628 ${t.fa} \u0628\u0631\u0627\u06CC \u0633\u0646\u062C\u0634 \u0639\u0645\u0644\u06A9\u0631\u062F \u0645\u0633\u062A\u0642\u06CC\u0645 \u0627\u062C\u0631\u0627 \u0634\u0648\u062F.`, toolId: t.probe, reasonFa: "\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u06CC \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A \u0648\u0644\u06CC \u067E\u0631\u0648\u0628 \u0645\u062A\u0646\u0627\u0638\u0631 \u0646\u06CC\u0633\u062A." });
+    }
+  }
+  const anyProbeDanger = norm.ctx.probeDanger.read || norm.ctx.probeDanger.write || norm.ctx.probeDanger.calc;
+  if ((anyProbeDanger || atLeastLevel(levels, "general_cog", "\u0645\u0631\u0632\u06CC")) && input.gates && !input.gates.gates.find((g) => g.key === "wechsler")?.done) {
+    add({ priority: 1, actionFa: "\u0641\u0631\u0645 \u0646\u062A\u0627\u06CC\u062C \u0648\u06A9\u0633\u0644\u0631 \u06F4 \u062B\u0628\u062A \u0648 \u062A\u062D\u0644\u06CC\u0644 \u0634\u0648\u062F.", toolId: WECHSLER_TOOL, reasonFa: "\u0638\u0631\u0641\u06CC\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u0645\u0628\u0646\u0627\u06CC \u062A\u0641\u0633\u06CC\u0631 \u0627\u0641\u062A \u0627\u0633\u062A." });
+  }
+  if (atLeastLevel(levels, "language_comm", "\u0645\u0631\u0632\u06CC") && !present.has("ce-speech-criteria-v1")) {
+    add({ priority: 1, actionFa: "\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646 (\u0634\u0627\u0645\u0644 \u0622\u06CC\u062A\u0645 \u0628\u062D\u0631\u0627\u0646\u06CC \u06A9\u0645\u200C\u0634\u0646\u0648\u0627\u06CC\u06CC) \u0627\u062C\u0631\u0627 \u0634\u0648\u062F.", toolId: "ce-speech-criteria-v1", reasonFa: "\u0633\u0627\u0632\u0647\u0654 \u0632\u0628\u0627\u0646 \u0641\u0639\u0627\u0644 \u0627\u0633\u062A\u061B \u0622\u06CC\u062A\u0645 \u0628\u062D\u0631\u0627\u0646\u06CC \u0634\u0646\u0648\u0627\u06CC\u06CC \u0645\u0647\u0645 \u0627\u0633\u062A." });
+  }
+  for (const t of TRIADS) {
+    if (norm.ctx.probeDanger[t.kind] && !norm.ctx.sldPresent[t.kind]) {
+      add({ priority: 2, actionFa: `\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC ${t.fa} \u0628\u0631\u0627\u06CC \u0627\u062A\u0635\u0627\u0644 \u0628\u0647 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC \u0631\u0633\u0645\u06CC \u062B\u0628\u062A \u0634\u0648\u062F.`, toolId: t.sld, reasonFa: "\u067E\u0631\u0648\u0628 \u067E\u0631\u062E\u0637\u0631 \u2014 \u0645\u0644\u0627\u06A9\u200C\u0633\u0627\u0632\u06CC \u0644\u0627\u0632\u0645." });
+    }
+  }
+  if (norm.rows.some((r) => r.construct === "motor_coord" && (r.toolId === "ce-anamnesis-v2" || r.toolId === "ce-rehab-motor-v1")) && !present.has("ce-dcdq-v1")) {
+    add({ priority: 2, actionFa: "\u067E\u0631\u0633\u0634\u0646\u0627\u0645\u0647\u0654 \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u062D\u0631\u06A9\u062A\u06CC DCDQ \u0628\u0631\u0627\u06CC \u063A\u0631\u0628\u0627\u0644\u06AF\u0631\u06CC \u0627\u0633\u062A\u0627\u0646\u062F\u0627\u0631\u062F \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F.", toolId: "ce-dcdq-v1", reasonFa: "\u0633\u06CC\u06AF\u0646\u0627\u0644 \u062D\u0631\u06A9\u062A\u06CC \u0628\u062F\u0648\u0646 DCDQ." });
+  }
+  if (input.gates && !input.gates.gates.find((g) => g.key === "skills")?.done) {
+    add({ priority: 2, actionFa: "\u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u0645\u0647\u0627\u0631\u062A\u06CC \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC \u062A\u0627 \u062D\u062F\u0627\u0642\u0644 \u06F3 \u0645\u0647\u0627\u0631\u062A \u062F\u0631 \u0647\u0631 \u06F7 \u062D\u06CC\u0637\u0647 \u062A\u06A9\u0645\u06CC\u0644 \u0634\u0648\u062F.", toolId: OT_PROFILE_TOOL, reasonFa: "\u067E\u06CC\u0634\u200C\u0646\u06CC\u0627\u0632 \u0642\u0627\u0639\u062F\u0647\u0654 \u062D\u06CC\u0637\u0647\u0654 \u0639\u0642\u0628\u200C\u0645\u0627\u0646\u062F\u0647." });
+  }
+  if (norm.rows.some((r) => r.construct === "internalizing" && (r.toolId === "sdq-parent" || r.toolId === "ce-sdq-t-v1")) && !present.has("ce-scared-p-v1")) {
+    add({ priority: 2, actionFa: "\u067E\u0631\u0633\u0634\u0646\u0627\u0645\u0647\u0654 \u0627\u0636\u0637\u0631\u0627\u0628 \u06A9\u0648\u062F\u06A9 SCARED \u0628\u0631\u0627\u06CC \u0646\u0648\u0639\u200C\u0634\u0646\u0627\u0633\u06CC \u0646\u06AF\u0631\u0627\u0646\u06CC \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F.", toolId: "ce-scared-p-v1", reasonFa: "\u0633\u06CC\u06AF\u0646\u0627\u0644 \u062F\u0631\u0648\u0646\u06CC\u200C\u0633\u0627\u0632\u06CC \u0641\u0642\u0637 \u0627\u0632 SDQ \u0622\u0645\u062F\u0647 \u0627\u0633\u062A." });
+  }
+  if (atLeastLevel(levels, "social_adl", "\u0645\u0631\u0632\u06CC") && !present.has("ce-asd-criteria-v1")) {
+    add({ priority: 2, actionFa: "\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC \u0637\u06CC\u0641 \u0627\u062A\u06CC\u0633\u0645 \u0627\u062C\u0631\u0627 \u0634\u0648\u062F.", toolId: "ce-asd-criteria-v1", reasonFa: "\u0645\u0644\u0627\u06A9\u200C\u0645\u062D\u0648\u0631\u0633\u0627\u0632\u06CC \u0633\u0627\u0632\u0647\u0654 \u0627\u062C\u062A\u0645\u0627\u0639\u06CC." });
+  }
+  if (atLeastLevel(levels, "externalizing", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") && !present.has("ce-odd-criteria-v1")) {
+    add({ priority: 2, actionFa: "\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC \u0631\u0641\u062A\u0627\u0631 \u0646\u0627\u0641\u0631\u0645\u0627\u0646 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F4 \u0645\u0644\u0627\u06A9 A \u0648 \u0628\u06CC\u0634\u062A\u0631) \u0627\u062C\u0631\u0627 \u0634\u0648\u062F.", toolId: "ce-odd-criteria-v1", reasonFa: "\u0633\u0627\u0632\u0647\u0654 \u0628\u06CC\u0631\u0648\u0646\u06CC\u200C\u0633\u0627\u0632\u06CC \u0628\u0631\u062C\u0633\u062A\u0647 \u0627\u0633\u062A." });
+  }
+  if (wInj.scatterFlag || wInj.substitutes.length > 0) {
+    add({ priority: 2, actionFa: "\u062E\u0631\u062F\u0647\u200C\u0622\u0632\u0645\u0648\u0646\u200C\u0647\u0627\u06CC \u0646\u0627\u0642\u0635/\u062C\u0627\u0646\u0634\u06CC\u0646 \u0648\u06A9\u0633\u0644\u0631 \u0628\u0631\u0627\u06CC \u0631\u0641\u0639 \u0633\u0642\u0641 \u0627\u0639\u062A\u0628\u0627\u0631 \u0628\u0627\u0632\u06AF\u0631\u0641\u062A\u0647 \u0634\u0648\u062F.", toolId: WECHSLER_TOOL, reasonFa: "\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0632\u06CC\u0627\u062F \u06CC\u0627 \u0634\u0627\u062E\u0635 \u062C\u0627\u0646\u0634\u06CC\u0646\u06CC." });
+  }
+  for (const d of divergences) {
+    if (d.action)
+      add(d.action);
+  }
+  if (atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647")) {
+    add({ priority: 3, actionFa: "\u0628\u0627\u0632\u067E\u0631\u0648\u0628 \u0647\u0634\u062A\u200C\u0647\u0641\u062A\u0647 \u067E\u0633 \u0627\u0632 \u0634\u0631\u0648\u0639 \u0645\u062F\u0627\u062E\u0644\u0647 \u0628\u0631\u0627\u06CC \u0633\u0646\u062C\u0634 \u067E\u0627\u0633\u062E \u0628\u0647 \u0645\u062F\u0627\u062E\u0644\u0647.", toolId: "ce-probe-read-v1", reasonFa: "\u067E\u0627\u06CC\u0634 \u067E\u0627\u0633\u062E \u0628\u0647 \u0645\u062F\u0627\u062E\u0644\u0647 \u062F\u0631 \u0633\u0627\u0632\u0647\u0654 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC." });
+  }
+  return out.slice(0, 8);
+}
+__name(pickNextActions, "pickNextActions");
+__name2(pickNextActions, "pickNextActions");
+function suggestProtocol(norm, redFlags, wInj, patterns, levels) {
+  const patternActive = /* @__PURE__ */ __name2((key) => patterns.some((p) => p.key === key && p.status === "active"), "patternActive");
+  if (redFlags.some((r) => r.urgent) || wInj.iqValue !== null && wInj.iqValue <= IQ_ID_MAX || patternActive("P12_GLOBAL_WEAK")) {
+    return { protocol: "rehab", rationaleFa: "\u067E\u0631\u0686\u0645 \u0641\u0648\u0631\u06CC \u06CC\u0627 \u0627\u0641\u062A \u0647\u0645\u0647\u200C\u06AF\u06CC\u0631 \u0634\u0646\u0627\u062E\u062A\u06CC \u0641\u0639\u0627\u0644 \u0627\u0633\u062A \u2014 \u0645\u0633\u06CC\u0631 \u062A\u0648\u0627\u0646\u0628\u062E\u0634\u06CC \u0648 \u0627\u0631\u062C\u0627\u0639 \u062A\u062E\u0635\u0635\u06CC \u0627\u0648\u0644\u0648\u06CC\u062A \u062F\u0627\u0631\u062F." };
+  }
+  const academicSig = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || patternActive("P1_SLD_x_ADHD") || patternActive("P5_LANG_x_SLD") || patternActive("P6_BIF_x_SLD");
+  if (academicSig) {
+    const secondary = atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || atLeastLevel(levels, "internalizing", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") ? "mental_ot" : void 0;
+    return {
+      protocol: "learning",
+      secondary,
+      rationaleFa: "\u0627\u0644\u06AF\u0648\u06CC \u063A\u0627\u0644\u0628 \u0627\u0641\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0627\u0633\u062A\u061B \u0646\u06AF\u0627\u0634\u062A \u0646\u06CC\u0627\u0632\u2192\u067E\u0631\u0648\u062A\u06A9\u0644 (dyslexia/dysgraphia/dyscalculia\u2192learning) \u0627\u0639\u0645\u0627\u0644 \u0634\u062F." + (secondary ? " \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u062B\u0627\u0646\u0648\u06CC\u0647\u0654 \u062A\u0648\u062C\u0647/\u0647\u06CC\u062C\u0627\u0646 \u0646\u06CC\u0632 \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0645\u06CC\u200C\u0634\u0648\u062F." : "")
+    };
+  }
+  const slowIq = wInj.iqValue !== null && wInj.iqValue >= IQ_SLOW_MIN && wInj.iqValue <= IQ_SLOW_MAX;
+  const anyProbeDanger = norm.ctx.probeDanger.read || norm.ctx.probeDanger.write || norm.ctx.probeDanger.calc;
+  const anyProbeWarn = norm.ctx.probeWarn.read || norm.ctx.probeWarn.write || norm.ctx.probeWarn.calc;
+  const anyProbePresent = norm.ctx.probePresent.read || norm.ctx.probePresent.write || norm.ctx.probePresent.calc;
+  const noSldDanger = !norm.ctx.sldDanger.read && !norm.ctx.sldDanger.write && !norm.ctx.sldDanger.calc;
+  if (slowIq && anyProbePresent && !anyProbeDanger && anyProbeWarn && noSldDanger) {
+    return { protocol: "slow_learner", secondary: "mental_ot", rationaleFa: "\u0627\u0645\u0636\u0627\u06CC \u062F\u06CC\u0631\u0622\u0645\u0648\u0632: \u0638\u0631\u0641\u06CC\u062A \u0634\u0646\u0627\u062E\u062A\u06CC \u062F\u0631 \u0645\u0631\u0632 \u067E\u0627\u06CC\u06CC\u0646 \u0645\u062A\u0648\u0633\u0637\u060C \u0639\u0645\u0644\u06A9\u0631\u062F \u062A\u062D\u0635\u06CC\u0644\u06CC \u06A9\u0645\u06CC \u0632\u06CC\u0631 \u0647\u0646\u062C\u0627\u0631 \u0648 \u0628\u062F\u0648\u0646 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u06CC \u067E\u0631\u062E\u0637\u0631." };
+  }
+  if (atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || atLeastLevel(levels, "social_adl", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || atLeastLevel(levels, "language_comm", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || atLeastLevel(levels, "internalizing", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || atLeastLevel(levels, "motor_coord", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647")) {
+    const secondary = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") ? "learning" : void 0;
+    return { protocol: "mental_ot", secondary, rationaleFa: "\u0633\u0627\u0632\u0647\u0654 \u0628\u0631\u062C\u0633\u062A\u0647 \u062F\u0631 \u062D\u0648\u0632\u0647\u0654 \u062A\u0648\u062C\u0647/\u0627\u062C\u062A\u0645\u0627\u0639\u06CC/\u0632\u0628\u0627\u0646/\u0647\u06CC\u062C\u0627\u0646/\u062D\u0631\u06A9\u062A \u0627\u0633\u062A \u2014 \u067E\u0631\u0648\u062A\u06A9\u0644 \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0645\u06CC\u200C\u0634\u0648\u062F." };
+  }
+  return null;
+}
+__name(suggestProtocol, "suggestProtocol");
+__name2(suggestProtocol, "suggestProtocol");
+function suggestMonitoring(redFlags, wInj, levels) {
+  if (redFlags.length > 0) {
+    return { intervalMonths: 3, rationaleFa: redFlags.some((r) => r.urgent) ? "\u067E\u0631\u0686\u0645 \u0641\u0648\u0631\u06CC \u0641\u0639\u0627\u0644 \u0627\u0633\u062A \u2014 \u0627\u0631\u062C\u0627\u0639 \u0648 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0633\u0631\u06CC\u0639 (\u06F3 \u0645\u0627\u0647)." : "\u067E\u0631\u0686\u0645 \u0627\u06CC\u0645\u0646\u06CC \u063A\u06CC\u0631\u0641\u0648\u0631\u06CC \u0641\u0639\u0627\u0644 \u0627\u0633\u062A \u2014 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0633\u0647\u200C\u0645\u0627\u0647\u0647." };
+  }
+  if (wInj.monitoringMonths) {
+    return { intervalMonths: wInj.monitoringMonths, rationaleFa: "\u0641\u0627\u0635\u0644\u0647\u0654 \u067E\u0627\u06CC\u0634 \u0627\u0632 \u062A\u062D\u0644\u06CC\u0644 \u0648\u06A9\u0633\u0644\u0631 \u06AF\u0631\u0641\u062A\u0647 \u0634\u062F." };
+  }
+  if (CONSTRUCT_KEYS.some((k) => (levels.get(k) ?? "\u067E\u0627\u06CC\u06CC\u0646") === "\u0647\u0645\u200C\u06AF\u0631\u0627\u06CC-\u0628\u0627\u0644\u0627")) {
+    return { intervalMonths: 3, rationaleFa: "\u0633\u0627\u0632\u0647\u0654 \u0647\u0645\u200C\u06AF\u0631\u0627\u06CC-\u0628\u0627\u0644\u0627 \u0641\u0639\u0627\u0644 \u0627\u0633\u062A \u2014 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0633\u0647\u200C\u0645\u0627\u0647\u0647." };
+  }
+  if (CONSTRUCT_KEYS.some((k) => (levels.get(k) ?? "\u067E\u0627\u06CC\u06CC\u0646") === "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647")) {
+    return { intervalMonths: 6, rationaleFa: "\u0633\u0627\u0632\u0647\u0654 \u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647 \u0641\u0639\u0627\u0644 \u0627\u0633\u062A \u2014 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0634\u0634\u200C\u0645\u0627\u0647\u0647." };
+  }
+  return { intervalMonths: 12, rationaleFa: "\u0634\u0648\u0627\u0647\u062F \u0628\u0631\u062C\u0633\u062A\u0647\u200C\u0627\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u2014 \u067E\u0627\u06CC\u0634 \u0633\u0627\u0644\u0627\u0646\u0647." };
+}
+__name(suggestMonitoring, "suggestMonitoring");
+__name2(suggestMonitoring, "suggestMonitoring");
+function buildCaseFormulation(input, options = {}) {
+  const now = options.now ?? (() => /* @__PURE__ */ new Date());
+  const norm = normalizeEvents(input.events);
+  const wInj = injectWechsler(input.wechsler);
+  const rows = [...norm.rows, ...wInj.rows];
+  const otStatuses = otDomainStatuses(input.ot, input.child.ageYears);
+  injectOt(otStatuses, rows);
+  const per = scoreConstructs(rows);
+  const divergences = detectDivergences(norm, wInj, otStatuses);
+  const caps = buildCaps(per, wInj, input.gates, divergences);
+  const levels = /* @__PURE__ */ new Map();
+  const constructs = [];
+  for (const k of CONSTRUCT_KEYS) {
+    const b = per.get(k);
+    const empty = !b || b.rawScore === 0;
+    let level = empty ? "\u067E\u0627\u06CC\u06CC\u0646" : levelFromScore(b.score);
+    if (!empty) {
+      if (b.sources.length === 1)
+        level = clampLevel(level, "\u0645\u0631\u0632\u06CC");
+      else if (b.sources.length === 2)
+        level = clampLevel(level, "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
+      if (level === "\u0647\u0645\u200C\u06AF\u0631\u0627\u06CC-\u0628\u0627\u0644\u0627" && divergences.some((d) => d.cap?.construct === k || d.affects?.includes(k))) {
+        level = "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647";
+      }
+      const cap = caps.capMax.get(k);
+      if (cap)
+        level = clampLevel(level, cap);
+    }
+    const evidence = empty ? [] : b.rows.map((r) => ({ toolId: r.toolId, signal: r.signal, weight: r.weight, sourceType: r.sourceType, textFa: r.textFa }));
+    const subtypes = empty ? [] : [...new Set(b.rows.map((r) => r.subtype).filter((s) => Boolean(s)))];
+    constructs.push({
+      key: k,
+      titleFa: CONSTRUCT_LABELS[k],
+      level,
+      score: empty ? 0 : b.score,
+      rawScore: empty ? 0 : b.rawScore,
+      sources: empty ? [] : b.sources,
+      evidenceFa: evidence,
+      conflictFa: caps.conflictTexts.get(k) ?? [],
+      capsFa: caps.capTexts.get(k) ?? void 0,
+      subtypeFa: subtypes.length > 0 ? subtypes : void 0
+    });
+    levels.set(k, level);
+  }
+  const patterns = evaluatePatterns(norm, wInj, levels, otStatuses);
+  const { primary, sharedWith, differentialsFa: parsimonyDiffs } = applyParsimony(patterns, per, levels);
+  for (const c of constructs) {
+    const p = sharedWith.get(c.key);
+    if (p)
+      c.sharedWith = p;
+  }
+  const differentialsFa = [...parsimonyDiffs];
+  if (norm.ctx.homeLanguageNote)
+    differentialsFa.push(norm.ctx.homeLanguageNote);
+  const redFlags = detectRedFlags(norm, wInj, patterns);
+  const presentTools = new Set(norm.latest.keys());
+  if (input.ot)
+    presentTools.add(OT_PROFILE_TOOL);
+  if (input.wechsler)
+    presentTools.add(WECHSLER_TOOL);
+  const coverage = computeCoverage(input, presentTools, levels);
+  const nextActions = pickNextActions(input, norm, levels, redFlags, wInj, divergences);
+  const protocolSuggestion = suggestProtocol(norm, redFlags, wInj, patterns, levels);
+  const monitoring = suggestMonitoring(redFlags, wInj, levels);
+  const elevatedConstructs = constructs.filter((c) => c.level === "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647" || c.level === "\u0647\u0645\u200C\u06AF\u0631\u0627\u06CC-\u0628\u0627\u0644\u0627");
+  const hasDivergenceInMain = divergences.some((d) => d.cap && elevatedConstructs.some((c) => c.key === d.cap.construct));
+  const coherence = hasDivergenceInMain ? "\u0648\u0627\u06AF\u0631\u0627" : elevatedConstructs.length > 0 && elevatedConstructs.every((c) => c.sources.length >= 2) && !elevatedConstructs.some((c) => (c.capsFa ?? []).length) ? "\u0647\u0645\u200C\u06AF\u0631\u0627" : "\u0646\u0627\u0642\u0635";
+  const softScatterPenalty = wInj.scatterFlag ? CONFIDENCE_SCATTER_SOFT_PENALTY : 0;
+  const fullCapCount = Math.max(0, caps.globalCapsFa.length - (wInj.scatterFlag ? 1 : 0));
+  const mainDangerSources = elevatedConstructs.some((c) => c.sources.filter((s) => s === "parent" || s === "teacher").length >= 2);
+  let conf = CONFIDENCE_BASE + (coverage.percent >= COVERAGE_GOOD_PERCENT ? CONFIDENCE_COVERAGE_BONUS : 0) + (wInj.link ? CONFIDENCE_WISC_BONUS : 0) + (mainDangerSources ? CONFIDENCE_DANGER_SOURCES_BONUS : 0) + (elevatedConstructs.some((c) => c.level === "\u0647\u0645\u200C\u06AF\u0631\u0627\u06CC-\u0628\u0627\u0644\u0627") ? CONFIDENCE_HIGH_LEVEL_BONUS : 0) - CONFIDENCE_CAP_PENALTY * fullCapCount - softScatterPenalty;
+  conf = Math.min(CONFIDENCE_MAX, Math.max(CONFIDENCE_MIN, conf));
+  conf = Math.round(conf * 100) / 100;
+  return {
+    schemaVersion: ".2",
+    generatedAt: now().toISOString(),
+    childId: input.child.id,
+    ageYears: input.child.ageYears,
+    grade: input.child.grade ?? null,
+    constructs,
+    coherence,
+    patterns,
+    primaryProfile: primary,
+    differentialsFa: [...new Set(differentialsFa)].slice(0, 8),
+    wechslerLink: wInj.link,
+    redFlags,
+    dataCoverage: coverage,
+    nextActions,
+    protocolSuggestion,
+    monitoring,
+    confidence: conf,
+    capsFa: [...new Set(caps.globalCapsFa)],
+    disclaimer: FORMULATION_DISCLAIMER
+  };
+}
+__name(buildCaseFormulation, "buildCaseFormulation");
+__name2(buildCaseFormulation, "buildCaseFormulation");
+function parseJson3(raw2, fallback) {
+  if (!raw2)
+    return fallback;
+  try {
+    return JSON.parse(raw2);
+  } catch {
+    return fallback;
+  }
+}
+__name(parseJson3, "parseJson3");
+__name2(parseJson3, "parseJson");
+function wechslerFromEvent(payload) {
+  if (!payload)
+    return null;
+  const engineRaw = payload["engine_output"]?.value?.trim();
+  if (engineRaw) {
+    try {
+      const parsed = JSON.parse(engineRaw);
+      if (parsed && typeof parsed === "object" && "ok" in parsed)
+        return parsed;
+    } catch {
+    }
+  }
+  const num5 = /* @__PURE__ */ __name2((key) => {
+    const raw2 = payload[key]?.value;
+    if (raw2 === void 0 || raw2 === null || raw2 === "")
+      return null;
+    const n = Number(String(raw2).replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))));
+    return Number.isFinite(n) ? n : null;
+  }, "num");
+  const vci = num5("vci");
+  const pri = num5("pri");
+  const wmi = num5("wmi");
+  const psi = num5("psi");
+  const fsiq = num5("fsiq");
+  if (fsiq === null && vci === null && pri === null && wmi === null && psi === null)
+    return null;
+  const emptyIndex = /* @__PURE__ */ __name2((v) => ({ scaled: v, percentile: null, ci: null, cls: "" }), "emptyIndex");
+  const values = [vci, pri, wmi, psi, fsiq].filter((v) => v !== null);
+  const scatter = values.length >= 2 ? Math.max(...values) - Math.min(...values) : 0;
+  const snapshot = {
+    indices: { VCI: emptyIndex(vci), PRI: emptyIndex(pri), WMI: emptyIndex(wmi), PSI: emptyIndex(psi), FSIQ: emptyIndex(fsiq) },
+    subtests: [],
+    indexScatter: scatter,
+    spreads: { VCI: 0, PRI: 0, WMI: 0, PSI: 0 },
+    computable: { VCI: vci !== null, PRI: pri !== null, WMI: wmi !== null, PSI: psi !== null, FSIQ: fsiq !== null },
+    substitutes: [],
+    gai: null,
+    gaiMeta: null,
+    fsiq,
+    personalIndexMean: 0,
+    personalSubMean: null,
+    outOfBandSubs: 0,
+    weakestIndex: null,
+    strongestIndex: null,
+    step5Weak: [],
+    step5Strong: [],
+    s5rows: [],
+    pairs: [],
+    subStrong: [],
+    subWeak: []
+  };
+  return {
+    ok: true,
+    ageLine: "",
+    validation: { ok: true, errors: [], warnings: [], computable: { VCI: vci !== null, PRI: pri !== null, WMI: wmi !== null, PSI: psi !== null, FSIQ: fsiq !== null }, raw: {}, testDate: [0, 0, 0], birthDate: [0, 0, 0], years: 0, band: "", missing: [] },
+    analysis: null,
+    snapshot,
+    flags: [],
+    weakDomains: [],
+    monitoringInterval: ""
+    // کلیدهای legacy (hypotheses/answers/queue/outcomes/main/comorbid/binaryScenarios/treatments)
+    // از شکل دستی حذف شدند؛ رویدادهای قدیمیِ D1 دست‌نخورده‌اند و injectWechsler دیگر آن‌ها را نمی‌خواند.
+  };
+}
+__name(wechslerFromEvent, "wechslerFromEvent");
+__name2(wechslerFromEvent, "wechslerFromEvent");
+function ageYearsFromBirthDate(birthDate) {
+  if (!birthDate)
+    return void 0;
+  const m = birthDate.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (!m)
+    return void 0;
+  const y = Number(m[1]);
+  const nowD = /* @__PURE__ */ new Date();
+  if (y > 1900) {
+    const b = new Date(y, Number(m[2]) - 1, Number(m[3]));
+    let age2 = nowD.getFullYear() - b.getFullYear();
+    const md = nowD.getMonth() - b.getMonth();
+    if (md < 0 || md === 0 && nowD.getDate() < b.getDate())
+      age2 -= 1;
+    return age2 >= 0 && age2 < 25 ? age2 : void 0;
+  }
+  const gy = nowD.getFullYear();
+  const gMonth = nowD.getMonth() + 1;
+  const gDay = nowD.getDate();
+  const jNow = gy <= 2026 ? gy - 621 - (gMonth < 3 || gMonth === 3 && gDay < 21 ? 1 : 0) : gy - 621;
+  const age = jNow - y;
+  return age >= 3 && age < 25 ? age : void 0;
+}
+__name(ageYearsFromBirthDate, "ageYearsFromBirthDate");
+__name2(ageYearsFromBirthDate, "ageYearsFromBirthDate");
+
+
+
+
+// ── exports (additive; no bundle counterpart) ──
+export { buildCaseFormulation as formulateCase, buildCaseFormulation, wechslerFromEvent, ageYearsFromBirthDate };
+
+export const __tables = {
+  ANAMNESIS_KEYWORDS, REDFLAG_KEYWORDS, SNAP_CUTOFFS, CRITERIA_CUTOFFS,
+  SCARED_DANGER, SCARED_WARN_MIN, SCARED_STRONG,
+  SDQ_PROS_WEAK_MAX, ODD_MIN_FULL_CRITERIA2, ASD_B_FULL_CRITERIA2,
+  PROBE_DANGER_RATIO, PROBE_WARN_MAX_RATIO, LEVEL_THRESHOLDS, SCORE_CAP,
+  CONSENSUS_MULTIPLIER, CONSTRUCT_KEYS, CONSTRUCT_LABELS, PATTERN_ORDER,
+  CONFIDENCE_BASE, CONFIDENCE_COVERAGE_BONUS, CONFIDENCE_WISC_BONUS,
+  CONFIDENCE_DANGER_SOURCES_BONUS, CONFIDENCE_HIGH_LEVEL_BONUS, CONFIDENCE_CAP_PENALTY,
+  CONFIDENCE_MIN, CONFIDENCE_MAX, COVERAGE_GOOD_PERCENT,
+  WCPM_NORM_50TH, ALPHA_15S_NORM, DIGITS_2MIN_NORM
+};
