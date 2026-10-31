@@ -1,0 +1,99 @@
+<!doctype html>
+<!--
+  پوستهٔ پنل مدیریت — منو، سایدبار و لودینگ ماژول‌ها با نسخه (?v=)
+  سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
+-->
+
+<html lang="fa" dir="rtl" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام</title>
+  <meta name="description" content="سامانه مدیریت نوبت‌دهی، سنجش، کارکنان و مدارس — مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام" />
+  <!-- a11y — theme-color: مقدار استاتیک فقط تا بوت app.js مهم است (applyTheme متای اول را داینامیک به‌روز می‌کند)؛
+       متای دوم فقط برای لحظهٔ قبل از بوت با prefers-color-scheme دارک #191C22 -->
+  <meta name="theme-color" content="#F7F3EA" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#191C22" />
+  <!-- نشان جدید مرکز + PWA: favicon برداری + PNG نسخه‌دار (با هر انتشار «?v=» bump شود) -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.05.0" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/logo-32.png?v=1.05.0" />
+  <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=1.05.0" />
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png?v=1.05.0" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <!-- پیش‌بارگذاری: فونت متغیر واحد (wght ۱۰۰–۹۰۰) + نشان سایدبار/ورود — بهبود LCP -->
+  <link rel="preload" href="/assets/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/assets/img/logo-192.png?v=1.05.0" as="image" fetchpriority="high" />
+  <!-- assetهای نسخه‌دار: با هر انتشار «?v=» را در همین فایل bump کنید
+       تا کش یک‌سالهٔ immutable ــ/ِassets/* در _headers── باطل شود (cache busting) -->
+  <link rel="stylesheet" href="/assets/css/base.css?v=1.05.0" />
+  <link rel="stylesheet" href="/assets/css/components.css?v=1.05.0" />
+  <link rel="stylesheet" href="/assets/css/views.css?v=1.05.0" />
+  <script src="/assets/js/theme-boot.js?v=1.05.0"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand__logo">
+          <img src="/assets/img/logo-192.png?v=1.05.0" alt="نشان مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام" width="40" height="40" />
+        </div>
+        <div>
+          <div class="brand__name">مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام</div>
+          <div class="brand__sub">سامانهٔ مدیریت نوبت‌دهی، سنجش و مراجعان</div>
+        </div>
+      </div>
+
+      <!-- جستجوی سراسری: آیتم اول سایدبار (جابه‌جا شده از تاپ‌بار) — Ctrl+K همچنان فعال -->
+      <button class="side-search" id="global-search-btn" aria-label="جستجوی سراسری (Ctrl+K)" title="جستجوی سراسری (Ctrl+K)">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d=" 20-4.4-4.4"/></svg><!-- I8: aria-hidden -->
+        <span class="side-search__label">جستجو در همه بخش‌ها…</span>
+        <kbd>Ctrl / ⌘ K</kbd>
+      </button>
+
+      <nav class="nav" aria-label="ناوبری اصلی"></nav>
+
+      <div class="sidebar__foot">
+        <!-- نسخه از ?v= استایل‌شیت خوانده می‌شود (خودکار با هر انتشار) -->
+        <span id="shell-version" class="ver-chip">نسخه —</span>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button class="menu-btn" id="menu-btn" aria-label="باز کردن منو">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 6.5h16M4 12h16M4 17.5h16"/></svg><!-- I8 -->
+        </button>
+        <!-- عنوان صفحه فقط یک‌بار: topbar فقط «مسیر راهنما» نشان می‌دهد؛
+             عنوان بزرگ صفحه در page-headِ خود نماست (قبلاً دوبار تکرار می‌شد) -->
+        <div class="topbar__title-wrap">
+          <h1 class="topbar__crumb" id="topbar-crumb" aria-label="مسیر صفحه"></h1>
+          <p class="sr-only" id="page-title">داشبورد</p>
+        </div>
+        <!-- دکمهٔ جستجوی سراسری به اولین آیتم سایدبار منتقل شد -->
+        <button class="btn btn--ghost btn--icon" id="theme-btn" aria-label="تغییر تم"></button>
+        <button class="topbar__user" id="user-chip" title="خروج از حساب" aria-label="خروج از حساب — برای خروج کلیک کنید">
+          <span>در حال بارگذاری…</span>
+        </button>
+      </header>
+
+      <div id="ann-banner-root"></div>
+    <main class="content" id="outlet"></main>
+    </div>
+  </div>
+
+  <!-- /ورودی اپ باندل نام‌دار است (boot.[hash].js؛ هیچ ماژولی app.js را import نمی‌کند؛
+       session → state.js داخل همان باندل تک‌نمونه‌ای است). بازسازی با node scripts/build-client.mjs
+       (در predeploy خودکار است) — hash جدید یعنی کش یک‌ساله هم بی‌خطر باطل می‌شود. -->
+  <link rel="modulepreload" href="/assets/dist/chunk.43HDOTRP.js" />
+  <link rel="modulepreload" href="/assets/dist/chunk.AP5Z5RSU.js" />
+  <link rel="modulepreload" href="/assets/dist/chunk.BQSX272U.js" />
+ <!-- ورودی باندل نام‌دار (hashدار؛ کش یک‌ساله immutable در _headers) — با build-client.mjs بازسازی می‌شود -->
+ <script type="module" src="/assets/dist/boot.3SGMRYAA.js"></script>
+  <!-- ثبت Service Worker (PWA): پس از بار کامل صفحه، بدون رقابت با منابع بحرانی -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+    }
+  </script>
+</body>
+</html>

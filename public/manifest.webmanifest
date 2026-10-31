@@ -1,0 +1,20 @@
+{
+  "name": "مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام",
+  "short_name": "مرکز سنجش",
+  "description": "سامانه مدیریت نوبت‌دهی، سنجش، کارکنان و مدارس",
+  "lang": "fa",
+  "dir": "rtl",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F7F3EA",
+  "theme_color": "#F7F3EA",
+  "icons": [
+    { "src": "/assets/img/maskable-192.png?v=1.00.109", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/assets/img/maskable-512.png?v=1.00.109", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/assets/img/logo-192.png?v=1.00.109", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/img/logo-512.png?v=1.00.109", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
