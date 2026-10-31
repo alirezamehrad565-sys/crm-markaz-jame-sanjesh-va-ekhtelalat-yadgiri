@@ -1,0 +1,836 @@
+/* ═══════════ ادغام توکن‌ها و استایل‌های پایه در یک فایل بحرانی ═══════════
+   ترتیب آبشار حفظ شده (توکن‌ها → استایل‌های پایه)؛ index.html یک درخواست بلاک‌کنندهٔ کمتر دارد.
+   فونت متغیر + fallback کالیبره در بالای همین فایل. */
+
+/* ── فونت ──────────────────────────────────────────────────────────────────
+   فونت متغیر Vazirmatn (محور wght ۱۰۰–۹۰۰) — ۴ فایل/۲۰۴KB → ۱ فایل/۱۰۹KB،
+   ۴ درخواست → ۱. وزن‌های ۴۰۰/۵۰۰/۶۰۰/۷۰۰ از خودِ محور می‌آیند (font-synthesis موضوعیت ندارد).
+   رندر مقایسه شده: عرض و ارتفاع خط در ۴۰۰/۵۰۰/۶۰۰/۷۰۰
+   برابر استاتیک‌ها (dW = ۰٫۰۰٪) — پوشش cmap متغیر = اجتماع ۴ استاتیک (۸۱۱ گلیف). */
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('../fonts/Vazirmatn-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+/* fallback کالیبره‌شده — حذف پرش swap.
+   متریک‌های عمودی دقیقاً از خود Vazirmatn (hhea ۲۱۰۰/۱۱۰۰ روی upem ۲۰۴۸)؛ عرض با
+   size-adjust = میانگین ۲۷۳ نویسهٔ واقعی رابط (Vazirmatn ۰٫۴۹۸۵em در برابر Tahoma ۰٫۵۴۶۹em).
+   کالیبراسیون یک‌باره: scripts/-font-metrics.py (fonttools؛ Tahoma = کلون متریک‌سازگار Wine). */
+@font-face {
+  font-family: 'Vazirmatn Fallback';
+  src: local('Tahoma');
+  font-style: normal;
+  font-weight: 100 900;
+  size-adjust: 91.15%;
+  ascent-override: 112.49%;
+  descent-override: 58.92%;
+  line-gap-override: 0%;
+}
+
+:root {
+  --lh-body: 1.8;    /* متن بدنهٔ فارسی — خوانایی */
+  --lh-heading: 1.4; /* عنوان‌ها (h1–h4، card/tab titleها) */
+  --lh-snug: 1.6;    /* متن فشردهٔ چندخطی (برند، سلول جدول، زیرنویس) */
+  --lh-ui: 1.5;      /* کنترل‌های تک‌خطی: دکمه، تب، چیپ، بج */
+  --lh-relaxed: 1.95; /* خواندن بلند: راهنما، کلربوک، اعلان، خواننده */
+}
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #F7F3EA;            /* پس‌زمینه اصلی — کرم گرم */
+  --surface: #FFFDF8;       /* کارت */
+  --surface-2: #F0ECE3;     /* سطح ۲ */
+  --surface-3: #E8E4DB;     /* سطح ۳ */
+  --border: #DDD8CD;
+  --border-1: #DDD8CD;      /* مترادف --border */
+
+  --text: #202529;
+  --text-1: #202529;        /* مترادف --text — برخی viewها از این نام استفاده می‌کنند */
+  --text-2: #687078;
+  --text-3: #61696F; /* hint/زیرنویس؛ #666B71 → #61696F برای حاشیهٔ AA در thead */
+
+  /* پالت v2: آبی برند تیره‌تر برای کنتراست AA متن روی fill (لینک ۴٫۷۵، سفید روی primary ۵٫۲۶) */
+  --primary: #0D72A8;
+  --primary-hover: #0B6798;
+  --primary-soft: #E4F1FA;
+  --on-primary: #FFFFFF;
+  --on-primary-soft: #0D5780;
+
+  --accent: #D89428;
+  --accent-hover: #C08220;
+  --accent-soft: #F7E9CC;
+  --on-accent: #231703; /* سفید روی کهربایی ۲٫۵۷ بود؛ متن تیره ۶٫۸۵ */
+  --on-accent-soft: #8A5C10;
+  --accent-strong: #96660A; /* accent به‌جای متن خاکستری (متن‌grade روی surface ۴٫۸۷) */
+
+  --success: #267A54; /* سفید روی success ۵٫۲۶ (سگمنت‌های حضور)؛ hover/on در بلوک پایین */
+  --success-soft: #E2F0E8;
+  --error: #B8403A; /* سفید روی error ۵٫۴۸ */
+  --error-soft: #F9E7E6;
+  --warning: #B77D0F; /* on-warning تیره ۷٫۵ */
+  --warning-soft: #F7E9CC;
+  --warning-strong: #8F6408; /* warning به‌عنوان متن (۵٫۱۳) */
+  --sick: #8039DF; /* وضعیت «مرخصی استعلاجی» — : اشباع مهارشده (C≈0.21) */
+  --info-strong: #14679A; /* info به‌عنوان متن */
+  --sick-soft: #EDE3FB; /* جفت بج sick (قبلاً color-mix ۱۴٪ در components.css) */
+  --on-sick: #FFFFFF; /* متن روی توپُر sick (سگمنت حضور) — لایت ۵٫۳۸ */
+  --on-sick-soft: #5B21B6; /* متن روی sick-soft — لایت ۷٫۲۶ */
+  --warn: #8F6408; /* هم‌مقدار --warning-strong؛ برچسب آستانهٔ نمودار (۵٫۱۳ روی کرم) */
+  --danger: #B8403A;        /* مترادف --error — برخی viewها از این نام استفاده می‌کنند */
+  --brand: #0D72A8;         /* مترادف --primary */
+  --focus: #0D72A8; /* حلقهٔ فوکوس بدون color-mix (۴٫۵۶ — WCAG 2.2 §2.4.11) */
+  --backdrop: rgba(20, 23, 29, 0.5); /* پردهٔ مودال؛ جانشین #0F1113 میراثی */
+  --border-strong: #968B76; /* مرز کنترل تعاملی (۳٫۲۸ — WCAG 1.4.11) */
+  --tag-custom: #9A6BD6; /* برچسب رنگی سفارشی از components.css به توکن آمد */
+  /* تعریف اول --info حذف شد (دوبارتعریف؛ نسخهٔ دوم بلوک پایین #2493CE همیشه برنده بود — مقدار زنده تغییری نکرد) */
+
+  --shadow-1: 0 1px 2px rgba(32, 42, 58, 0.06), 0 4px 14px rgba(32, 42, 58, 0.065);
+  --shadow-2: 0 2px 6px rgba(32, 42, 58, 0.07), 0 10px 28px rgba(32, 42, 58, 0.11);
+  --shadow-3: 0 6px 16px rgba(32, 42, 58, 0.08), 0 20px 48px rgba(32, 42, 58, 0.16);
+  --shadow-sidebar: 0 8px 18px rgba(32, 42, 58, 0.10), 0 26px 52px rgba(32, 42, 58, 0.15);
+
+  /* ── مقیاس شعاع (زبان طراحی مشترک «گرد و شناور») ──
+     Tier A  --radius-xl   ۲۲px : سطح اصلی — کارت، مودال، سکشن تنظیمات، پنل راهنما
+     Tier B  --radius-lg   ۲۰px : سطح شناور — دراپ‌داون، پاپ‌اور، توست، منوی ردیف
+     Tier C  --radius-md   ۱۴px : زیرکارت و بلوک درونی — clx، ann، سطرها، هشدارها
+             --radius-sm   ۱۰px : کنترل کوچک — آیکون‌باکس، اسکلتون، thumb
+             --radius-xs    ۸px : میکرو — kbd، آیتم منو، thumb خیلی کوچک
+     Tier P  --radius-full ۹۹۹px : قرصی — دکمه، آیتم منو، بج، چیپ، seg
+             --radius-2xl  ۲۸px : سایدبار شناور (هم‌خانوادهٔTier A ولی برجسته‌تر) */
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius-md: 14px;        /* مترادف radius — برخی viewها از این نام استفاده می‌کنند */
+  --radius-2: 14px;         /* مترادف radius-md — برخی viewها از این نام استفاده می‌کنند */
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 22px; /* مودال دسکتاپ */
+  --radius-2xl: 28px; /* سایدبار گرد شناور (قبلاً هاردکد) */
+  --radius-full: 999px;
+
+  --ease: cubic-bezier(0.2, 0.6, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --fast: 140ms var(--ease);
+  --normal: 240ms var(--ease);
+  --slow: 380ms var(--ease);
+
+  --scrollbar-thumb: #CFC8B9;
+  --scrollbar-thumb-hover: #B9B1A0;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #191C22;            /* After: #0F1113 — سنگ‌فرشِ تیره با ته‌مایهٔ گرم، روشن‌تر و ملایم‌تر */
+  --surface: #22262E;       /* کارت */
+  --surface-2: #2A2F38;     /* سطح ۲ */
+  --surface-3: #333943;     /* سطح ۳ */
+  --border: #3C434E;
+  --border-1: #3C434E;      /* مترادف --border */
+
+  --text: #EEF1F4;
+  --text-1: #EEF1F4;        /* مترادف --text */
+  --text-2: #ADB4BE;
+  --text-3: #8E98A4; /* 4.45/3.95 زیر AA بود؛ 5.46/4.80 */
+
+  --primary: #45B7F0; /* روشن‌تر برای کنتراست روی تیره (۶٫۶۳ روی bg) */
+  --primary-hover: #6CC6F5;
+  --primary-soft: #1C3B4E;
+  --on-primary: #05202E;
+  --on-primary-soft: #7CC7EE;
+
+  --accent: #E5A83B;
+  --accent-hover: #F0BA58;
+  --accent-soft: #463620;
+  --on-accent: #2A1D05;
+  --on-accent-soft: #EBC684;
+  --accent-strong: #F0BA58; /* accent متن‌grade در تیره */
+
+  --success: #5ABE8C;
+  --success-hover: #6FCC9D;
+  --success-soft: #244131;
+  --error: #E97971;
+  --error-hover: #F08A83;
+  --error-soft: #472927;
+  --warning: #E3A63E;
+  --warning-hover: #EDB55A;
+  --warning-soft: #463620;
+  --warning-strong: #EDC063; /* */
+  --sick: #C4B5FD;          /* بنفش روشن‌شده برای کنتراست روی زمینهٔ تیره */
+  --sick-soft: #3A2E58; /* */
+  --on-sick: #2A1454; /* متن تیره روی بنفش روشن تیره — ۸٫۵۸ (قبلاً #fff هاردکد ≈۱٫۸۵) */
+  --on-sick-soft: #D4C5F9; /* ۷٫۶۹ */
+  --warn: #EDC063; /* هم‌مقدار --warning-strong تیره */
+  --danger: #E97971;        /* مترادف --error */
+  --brand: #45B7F0;         /* مترادف --primary */
+  --focus: #6CC6F5; /* ۹٫۴۳ روی surface */
+  --backdrop: rgba(0, 0, 0, 0.62); /* */
+  --border-strong: #626C7A; /* ۳٫۰۰ */
+  --tag-custom: #B590E8; /* */
+  --info-strong: #6FC2EF; /* */
+  /* تعریف اول --info تیره حذف شد (دوبارتعریف؛ #4FB3E8 بلوک پایین برنده بود) */
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.32), 0 3px 10px rgba(0, 0, 0, 0.28);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.40), 0 2px 6px rgba(0, 0, 0, 0.30);
+  --shadow-3: 0 12px 36px rgba(0, 0, 0, 0.50), 0 4px 10px rgba(0, 0, 0, 0.34);
+  --shadow-sidebar: 0 8px 20px rgba(0, 0, 0, 0.40), 0 26px 56px rgba(0, 0, 0, 0.50);
+
+  --scrollbar-thumb: #3C434E;
+  --scrollbar-thumb-hover: #4A525E;
+}
+
+:root {
+  --font: 'Vazirmatn', 'Vazirmatn Fallback', 'Segoe UI', Tahoma, sans-serif; /* fallback کالیبره وسط زنجیره */
+
+  /* نام‌های مستعار سازگاری: توکن‌هایی که در viewها استفاده شده بودند
+     ولی هرگز تعریف نشده بودند (با fallback هاردکد یا بی‌صدا می‌شکستند).
+     حالا تم‌آگاه و رسمی‌اند. */
+  --bg-1: var(--surface);
+  --bg-2: var(--surface-3);
+  --surface-1: var(--surface);
+  --brand-soft: var(--primary-soft);
+  --brand-deep: var(--on-primary-soft);
+  --ink: var(--text);
+  --ink-2: var(--text-2);
+  --ink-3: var(--text-3);
+  --line: var(--border);
+  --line-strong: var(--border);
+  --muted: var(--text-3);
+  --text-sub: var(--text-2);
+  --radius-1: var(--radius-xs);
+
+  --fs-2xs: 0.75rem; /* 12 — : کف خوانایی متن فارسی */
+  --fs-xs: 0.8125rem; /* 13 — : +۱px برای خوانایی فارسی */
+  --fs-sm: 0.875rem; /* 14 — : +۱px */
+  --fs-md: 0.9375rem; /* 15 — بدنه پیش‌فرض (: 14→15 برای خوانایی بهتر) */
+  --fs-lg: 1rem;       /* 16 */
+  --fs-xl: 1.1875rem;  /* 19 */
+  --fs-2xl: 1.4375rem; /* 23 */
+  --fs-3xl: 1.75rem;   /* 28 */
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  --sidebar-w: 248px;
+  --topbar-h: 60px;
+  /* تعریف اول --focus-ring حذف شد (دوبارتعریف؛ نسخهٔ دولایهٔ پایین همیشه برنده بود) */
+}
+
+:root,
+:root[data-theme='light'] {
+  --success-hover: #1E6644;  --on-success: #FFFFFF;  --on-success-soft: #1D5A40;
+  --warning-hover: #9E6C0D; --on-warning: #241A02; --on-warning-soft: #6E4C06; /* سفید روی warning ۳٫۲ بود */
+  --error-hover: #9E362F; --on-error: #FFFFFF; --on-error-soft: #872C27; /* */
+  --info: #1779AE; --info-hover: #14679A; --info-soft: #E3F1FB; /* سفید روی info ۴٫۷۹ */
+  --on-info: #FFFFFF; --on-info-soft: #0B577F;
+
+  /* بازکالیبرهٔ oklch هشت‌گانه (L=60±2, C=0.10-0.13) — hue-1 و hue-8 دیگر هم‌خانوادهٔ آبیِ نزدیک نیستند */
+  --hue-1-soft:#DCEEF9; --hue-1-strong:#288ABB; --hue-1-on:#0C587E;  /* آبی برند */
+  --hue-2-soft:#D9F0EA; --hue-2-strong:#00967C; --hue-2-on:#10594C;  /* فیروزه‌ای */
+  --hue-3-soft:#E7EFD3; --hue-3-strong:#728B37; --hue-3-on:#4A5C17;  /* زیتونی */
+  --hue-4-soft:#F6E7C8; --hue-4-strong:#A97422; --hue-4-on:#7E5510;  /* کهربایی */
+  --hue-5-soft:#FBE3D6; --hue-5-strong:#B7693D; --hue-5-on:#7E3D14;  /* نارنجی مرجانی */
+  --hue-6-soft:#F8E0E7; --hue-6-strong:#B86178; --hue-6-on:#7C3450;  /* گلبهی */
+  --hue-7-soft:#EAE3F8; --hue-7-strong:#8A70BB; --hue-7-on:#533B85;  /* بنفش */
+  --hue-8-soft:#E2E8EE; --hue-8-strong:#4C85B9; --hue-8-on:#37506A;  /* آبی فولادی */
+
+  /* مدال‌های جدول امتیازات (lb-rank) — تزئینی؛ طلایی هم‌خانوادهٔ --accent */
+  --medal-gold: #D89428;
+  --medal-silver: #9BA6AF;
+  --medal-bronze: #C08552;
+}
+
+:root[data-theme='dark'] {
+  --on-success: #06231A; --on-success-soft: #9BD8B6;
+  --on-warning: #2A1D05; --on-warning-soft: #EBC684;
+  --on-error:  #2B0908;  --on-error-soft:  #F0A9A5;
+  --info: #47A8DD; --info-hover: #6FC2EF; --info-soft: #1C3B4E; /* */
+  --on-info: #06202E; --on-info-soft: #93CFEF;
+
+  /* بازکالیبرهٔ oklch تیره (L=74±2) */
+  --hue-1-soft:#204257; --hue-1-strong:#5AB6E9; --hue-1-on:#A8DCF6;
+  --hue-2-soft:#184640; --hue-2-strong:#4AC2A7; --hue-2-on:#8ADFCB;
+  --hue-3-soft:#39461F; --hue-3-strong:#9CB763; --hue-3-on:#C9DE92;
+  --hue-4-soft:#4C3B1B; --hue-4-strong:#D79F52; --hue-4-on:#F0CE93;
+  --hue-5-soft:#4E301D; --hue-5-strong:#E59468; --hue-5-on:#F2B48C;
+  --hue-6-soft:#4B2937; --hue-6-strong:#E78BA2; --hue-6-on:#F0B5C7;
+  --hue-7-soft:#393052; --hue-7-strong:#B59AE9; --hue-7-on:#CDBAEA;
+  --hue-8-soft:#2F3A46; --hue-8-strong:#6DB1F0; --hue-8-on:#BCCBD9;
+
+  /* مدال‌ها — نسخهٔ تیره کمی روشن‌تر برای کنتراست */
+  --medal-gold: #E5A83B;
+  --medal-silver: #C4CDD6;
+  --medal-bronze: #D9A06F;
+}
+
+:root {
+  --shadow-4: 0 8px 22px rgba(15, 23, 42, 0.10), 0 26px 60px rgba(15, 23, 42, 0.18);
+  --shadow-lg: var(--shadow-3); /* نام مستعار برای سایهٔ شناورها (قبلاً تعریف نشده بود و fallback هاردکد می‌خورد) */
+  --z-sticky: 30; --z-sidebar: 40; --z-backdrop: 45; --z-dropdown: 60;
+  --z-popover: 80; --z-row-menu: 90; /* پاپ‌اور منوی ردیف (بین popover و modal) */
+  --z-modal: 100; --z-toast: 200; --z-drag: 300;
+
+  --dur-1: 120ms; --dur-2: 180ms; --dur-3: 240ms; --dur-4: 380ms;
+  --ease-out: cubic-bezier(0.2, 0.6, 0.3, 1);
+  /* توکن‌های مردهٔ --motion-lift/press/enter حذف شدند (صفر مصرف)؛ --motion-fill می‌ماند */
+  --motion-fill:  width .5s var(--ease-out), stroke-dashoffset .7s var(--ease-out), height .55s var(--ease-out);
+  --press: scale(0.985); /* زبان واحد فشار کنترل‌ها */
+
+  /* مقیاس سایز آیکون (I6): جانشین ۱۳ سایز خام ۱۰-۳۰px */
+  --ico-xs: 14px; --ico-sm: 16px; --ico-md: 18px; --ico-lg: 20px; --ico-xl: 26px;
+  --on-medal: #241A08; /* متن مدال‌ها از هاردکد سه‌باره به توکن */
+
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus); /* بدون color-mix */
+
+  --fs-display: 1.625rem; /* 26 — : امتیاز هیرو (حلقهٔ داشبورد)؛ مقدار مردهٔ 44 حذف شد */
+  --lh-tight: 1.25;
+
+  --grad-primary: linear-gradient(135deg, #0F7AB3 0%, #0D72A8 55%, #0B6798 100%); /* سفید ≥۴٫۷ در تمام نقاط */
+  --grad-primary-hover: linear-gradient(135deg, #0C6E9F 0%, #0B6798 55%, #095B85 100%);
+  --glow-primary: 0 4px 14px color-mix(in srgb, var(--primary) 38%, transparent);
+  --skel-base: color-mix(in srgb, var(--text-3) 16%, var(--surface-2));
+  --skel-shine: color-mix(in srgb, var(--text-3) 7%, var(--surface));
+  --empty-halo: color-mix(in srgb, var(--primary) 9%, transparent);
+}
+
+:root[data-theme='dark'] {
+  --shadow-4: 0 10px 26px rgba(0, 0, 0, 0.38), 0 28px 64px rgba(0, 0, 0, 0.50);
+
+  --grad-primary: linear-gradient(135deg, #5FC2F4 0%, #45B7F0 55%, #33A8E6 100%); /* */
+  --grad-primary-hover: linear-gradient(135deg, #6CCDF7 0%, #55BEF2 55%, #3AAAE4 100%);
+  --glow-primary: 0 4px 18px color-mix(in srgb, var(--primary) 30%, transparent);
+  --skel-base: color-mix(in srgb, var(--text-3) 18%, var(--surface-2));
+  --skel-shine: color-mix(in srgb, var(--text-3) 8%, var(--surface-2));
+  --empty-halo: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.num, .kpi__value, .grid-appt__time, .wd-tl__time, .hero-score__value,
+.score-tile__value, .lb-score b, .spark__num, .goal-mini__val,
+.tl-strip__label, .staff-chip__count {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: var(--fs-md);
+  line-height: var(--lh-body, 1.8);
+  color: var(--text);
+  background: var(--bg);
+  transition: background var(--normal), color var(--normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  font-weight: 700;
+  line-height: var(--lh-heading, 1.5);
+}
+h1 { font-size: var(--fs-2xl); }
+h2 { font-size: var(--fs-xl); }
+h3 { font-size: var(--fs-lg); }
+
+p {
+  margin: 0;
+}
+
+/* F3: جدایی پاراگراف در بلوک‌های روایی چند-p (جایگزین گپ صفر pre-wrap) */
+.prose > p + p {
+  margin-top: var(--sp-3);
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+a:hover { color: var(--primary-hover); }
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary) 24%, transparent);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-full);
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+  /* فاصلهٔ دور صفحه تا سایدبار شناور باشد */
+  gap: 14px;
+  padding: 14px;
+}
+
+.sidebar {
+  position: sticky;
+  top: 14px;
+  flex: 0 0 var(--sidebar-w);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: 18px 14px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  /* سایدبار گردِ شناور (جایگزین پنل تمام‌قد چسبیده به لبه) */
+  border-radius: var(--radius-2xl); /* توکن‌شد (۲۸px) */
+  box-shadow: var(--shadow-sidebar);
+  height: calc(100vh - 28px);
+  z-index: 40;
+  transition: background var(--normal);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-2) var(--sp-4);
+}
+.brand__logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-1), 0 0 0 1px var(--border);
+}
+.brand__logo img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: block;
+}
+.brand__name {
+  font-weight: 700;
+  font-size: var(--fs-md);
+  line-height: var(--lh-body, 1.8);
+}
+.brand__sub {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  line-height: var(--lh-snug, 1.6);
+  margin-top: 2px;
+}
+
+/* جستجوی سراسری: اولین آیتم سایدبار (جایگزین دکمهٔ تاپ‌بار) */
+.side-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition: border-color var(--fast), color var(--fast), background var(--fast), box-shadow var(--fast);
+}
+.side-search:hover {
+  border-color: var(--primary);
+  color: var(--text-2);
+  box-shadow: var(--shadow-1);
+}
+.side-search:focus-visible { box-shadow: var(--focus-ring); }
+.side-search__label {
+  flex: 1;
+  text-align: start;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.side-search kbd {
+  font-family: inherit;
+  font-size: 10px;
+  color: var(--text-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 2px 7px;
+  background: var(--surface);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  flex: 1;
+}
+.nav__label {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  padding: var(--sp-3) var(--sp-3) var(--sp-1);
+  font-weight: 500;
+}
+.nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 9px 14px; /* هماهنگ با آیتم قرصی */
+  border-radius: var(--radius-full); /* آیتم‌های قرصی هماهنگ با گردی سایدبار */
+  color: var(--text-2);
+  font-weight: 500;
+  font-size: var(--fs-md);
+  line-height: var(--lh-ui, 1.5);
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: start;
+  transition: background var(--fast), color var(--fast), box-shadow var(--fast), transform var(--fast);
+}
+.nav__item:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 85%, transparent);
+}
+.nav__item:active { transform: scale(0.985); }
+.nav__item:focus-visible { box-shadow: var(--focus-ring); }
+.nav__item.is-active {
+  background: var(--primary-soft);
+  color: var(--on-primary-soft);
+}
+.nav__item svg { flex-shrink: 0; }
+
+.sidebar__foot {
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+/* چیپ نسخه در فوتر سایدبار */
+.sidebar__foot .ver-chip {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  padding: 3px 10px;
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* تاپ‌بار گردِ شناور: همان خانوادهٔ سایدبار (سطح + حاشیه + گردی ۲۸px + سایه).
+   ساختار سه‌لایه: کانتینر شفافِ sticky + ماسک (::before) + پنل مرئی (::after).
+   ماسک محتوای اسکرول‌شده را در شکاف ۱۴px بالای نوار و در گوشه‌های گرد می‌پوشاند
+   (چون .topbar با z-index استکینگ‌کانتکست می‌سازد، پزودو با z-index منفی
+   بالای پس‌زمینهٔ خودش نقاشی می‌شود — پس پنل باید ::after باشد نه پس‌زمینهٔ خود نوار). */
+.topbar {
+  position: sticky;
+  top: 14px; /* هم‌تراز شناوری سایدبار () */
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: var(--topbar-h);
+  padding: 0 var(--sp-5);
+}
+.topbar::before {
+  content: '';
+  position: absolute;
+  z-index: -2;
+  top: -15px;
+  inset-inline: 0;
+  height: calc(100% + 15px);
+  border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+  background: var(--bg);
+  pointer-events: none;
+}
+.topbar::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-1);
+  pointer-events: none;
+}
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  clip: rect(0 0 0 0); clip-path: inset(50%);
+  overflow: hidden; white-space: nowrap;
+}
+.topbar__user {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-full);
+  background: var(--surface-2); /* چیپ یک پله تیره‌تر از پنل (هم‌خانوادهٔ side-search) */
+  border: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  transition: border-color var(--fast), color var(--fast), box-shadow var(--fast);
+}
+.topbar__user:hover {
+  border-color: var(--primary); /* زبان هاور مشترک با side-search */
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+.topbar__user b { color: var(--text); font-weight: 600; }
+
+.content {
+  padding: var(--sp-6);
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.view-enter { animation: view-in var(--normal) both; }
+
+@media (hover: hover) {
+  .card--lift { transition: transform var(--fast), box-shadow var(--fast); }
+  .card--lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+}
+
+@keyframes stagger-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.stagger > * { animation: stagger-in var(--dur-3, 240ms) var(--ease-out) both; }
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 40ms; }
+.stagger > *:nth-child(3) { animation-delay: 80ms; }
+.stagger > *:nth-child(4) { animation-delay: 120ms; }
+.stagger > *:nth-child(5) { animation-delay: 160ms; }
+.stagger > *:nth-child(6) { animation-delay: 200ms; }
+.stagger > *:nth-child(7) { animation-delay: 240ms; }
+.stagger > *:nth-child(n+8) { animation-delay: 280ms; }
+
+/* E2: بلوک سنگین زیرِ فولد — مرورگر محتوای بیرون از دید را layout/paint نمی‌کند
+   (containment فقط وقتی رد می‌شود؛ به‌محض نزدیک‌شدن رندر می‌شود). در چاپ کامل می‌شود
+   تا چاپ خط زمانی کلربوک و جداول بی‌نقص بماند. */
+.cv-block { content-visibility: auto; contain-intrinsic-size: auto 480px; }
+@media print { .cv-block { content-visibility: visible; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-5);
+}
+.page-head__title {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  line-height: var(--lh-heading, 1.4); /* -e — عنوان بزرگ با نقش heading، نه بدنه */
+  margin-inline-end: auto;
+}
+.page-head__desc {
+  width: 100%;
+  color: var(--text-2);
+  font-size: var(--fs-md);
+  margin-top: 2px; /* F7: جدایی عنوان→زیرنویس (جایگزین مارجین منفی) */
+  line-height: var(--lh-snug, 1.6);
+}
+
+.menu-btn { display: none; }
+
+@media (max-width: 920px) {
+  .shell { display: block; padding: 0; } /* فاصلهٔ شناوری فقط دسکتاپ */
+  .sidebar {
+    position: fixed;
+    inset-inline-start: 0;
+    top: 0;
+    height: 100vh; /* دراپر موبایل تمام‌قد (override شناوری دسکتاپ) */
+    width: min(300px, 84vw);
+    transform: translateX(-100%);
+    opacity: 0;
+    transition: transform var(--dur-2, 180ms) var(--ease-out),
+                opacity var(--dur-2, 180ms) var(--ease-out);
+    border-radius: var(--radius-2xl) 0 0 var(--radius-2xl); /* Fallback فیزیکی برای RTL — لبهٔ آزاد چپ */
+    border-start-end-radius: var(--radius-2xl); /* لبهٔ آزاد دراپر موبایل هم‌خانوادهٔ سایدبار دسکتاپ */
+    border-end-end-radius: var(--radius-2xl);
+    box-shadow: var(--shadow-sidebar);
+  }
+  html[dir='rtl'] .sidebar { transform: translateX(100%); } /* پنهان به سمت راست */
+  html[dir='rtl'] .sidebar.is-open { transform: translateX(0); }
+  html[dir='ltr'] .sidebar.is-open { transform: translateX(0); } /* -e — حالت is-open در LTR هم */
+  .sidebar.is-open { opacity: 1; }
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 35;
+    border: none;
+    padding: 0;
+  }
+  .menu-btn {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm); /* آیکون‌باکس، هم‌شکل btn--icon */
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .content { padding: var(--sp-4); }
+  .topbar { padding: 0 var(--sp-4); }
+}
+
+.state-block {
+  padding: var(--sp-8) var(--sp-4);
+  text-align: center;
+  color: var(--text-2);
+}
+.state-block .spinner { margin-inline: auto; }
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  /* border-radius حذف شد: گوشهٔ عناصر قرصی (nav/btn) را خراب می‌کرد */
+}
+
+@media (max-width: 640px) {
+  .topbar__user b { display: none; }
+  .topbar__user { padding: var(--sp-1) var(--sp-2); }
+  .topbar { gap: var(--sp-2); }
+}
+
+@media (max-width: 480px) {
+  .content { padding: var(--sp-3); }
+  .topbar { padding: 0 var(--sp-3); }
+  .page-head__title { font-size: var(--fs-xl); }
+}
+
+.nav__label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.02em; /* S11-18: برچسب گروه منو، کف ۱۲px */
+  color: var(--text-3);
+  padding: var(--sp-4) var(--sp-3) var(--sp-1);
+}
+
+/* F4: اتصال حروف فارسی را نشکن */
+html[lang='fa'] .nav__label { letter-spacing: 0; }
+.nav__label::after {
+  content: ''; flex: 1; height: 1px;
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+}
+.nav__label:empty { padding-top: var(--sp-2); }
+
+.nav__item { position: relative; }
+.nav__item.is-active { font-weight: 600; }
+.nav__item.is-active::before {
+  content: ''; position: absolute;
+  inset-block: 9px; inset-inline-start: 5px; /* هماهنگ با آیتم قرصی */
+  width: 3px; border-radius: 999px; background: var(--primary);
+}
+.nav__item.is-active {
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--primary) 14%, transparent);
+}
+@media (hover: hover) {
+  .nav__item svg { transition: transform var(--fast); }
+  .nav__item:hover svg { transform: translateX(-2px); }
+  html[dir='ltr'] .nav__item:hover svg { transform: translateX(2px); }
+}
+
+.topbar__title-wrap {
+  display: flex; flex-direction: column; justify-content: center;
+  min-width: 0; margin-inline-end: auto;
+}
+.topbar__crumb {
+  display: flex; gap: 7px; align-items: baseline;
+  min-width: 0;
+  font-size: var(--fs-sm); font-weight: 400; line-height: var(--lh-ui, 1.5);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.topbar__crumb-group { color: var(--text-3); flex: none; }
+.topbar__crumb-sep { color: var(--text-3); opacity: .6; flex: none; }
+.topbar__crumb-page { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+
+.avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: var(--primary); color: var(--on-primary);
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; line-height: 1;
+}
+.topbar__user { padding-inline: 8px 14px; }
+.topbar__user .badge { font-size: var(--fs-2xs); padding: 1px 8px; } /* S11-12: بج نقش کاربر، کف ۱۲px */
+
+@media (max-width: 920px) {
+  .sidebar { box-shadow: var(--shadow-sidebar); }
+  /* موبایل: تاپ‌بار تمام‌عرضِ تخت (کپسول شناور فقط دسکتاپ) */
+  .topbar { top: 0; }
+  .topbar::before { display: none; }
+  .topbar::after {
+    border-radius: 0;
+    border-block: 0;
+    border-inline: 0;
+    border-bottom: 1px solid var(--border); /* جداکنندهٔ موبایل () */
+    box-shadow: none;
+  }
+  .sidebar-backdrop {
+    background: var(--backdrop); /* از #0F1113 میراثی به توکن تم */
+    backdrop-filter: blur(2px);
+  }
+  .sidebar::after {
+    content: ''; position: absolute; top: 6px; inset-inline-start: 50%;
+    translate: -50% 0; width: 36px; height: 4px; border-radius: 999px;
+    background: var(--surface-3);
+  }
+}

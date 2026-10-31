@@ -1,0 +1,753 @@
+{
+  "capturedAt": "pre-T4 2eb6a3b",
+  "fixtures": {
+    "f1_v2_slow_learner_flag": [
+      {
+        "eventId": "w4",
+        "toolKey": "ce-wechsler-w4-v1",
+        "typeTitle": "وکسلر ۴ — پروندهٔ تفسیر موتور",
+        "status": "completed",
+        "occurredAt": "2026-10-03T08:00:00.000Z",
+        "payload": {
+          "fsiq": {
+            "value": "80",
+            "label": "هوشبهر کلی"
+          }
+        },
+        "analysis": null,
+        "bands": null,
+        "subscales": null
+      },
+      {
+        "eventId": "a2",
+        "toolKey": "ce-anamnesis-v2",
+        "typeTitle": "گفت‌وگوی اول — شرح‌حال کودک",
+        "status": "completed",
+        "occurredAt": "2026-10-03T07:00:00.000Z",
+        "payload": {
+          "chief_complaint": {
+            "value": "افت تحصیلی تدریجی در همهٔ درس‌ها",
+            "label": "chief_complaint"
+          }
+        },
+        "analysis": null,
+        "bands": null,
+        "subscales": null
+      }
+    ],
+    "f2_v2_anxiety_flag": [
+      {
+        "eventId": "a2",
+        "toolKey": "ce-anamnesis-v2",
+        "typeTitle": "گفت‌وگوی اول — شرح‌حال کودک",
+        "status": "completed",
+        "occurredAt": "2026-10-03T07:00:00.000Z",
+        "payload": {
+          "chief_complaint": {
+            "value": "صبح‌ها دل‌درد دارد و گاهی تهوع پیش از مدرسه",
+            "label": "chief_complaint"
+          }
+        },
+        "analysis": null,
+        "bands": null,
+        "subscales": null
+      }
+    ],
+    "f3_v2_no_flag": [
+      {
+        "eventId": "a2",
+        "toolKey": "ce-anamnesis-v2",
+        "typeTitle": "گفت‌وگوی اول — شرح‌حال کودک",
+        "status": "completed",
+        "occurredAt": "2026-10-03T07:00:00.000Z",
+        "payload": {
+          "chief_complaint": {
+            "value": "تأخیر در تکلم؛ از سه سالگی توجه خانواده جلب شد.",
+            "label": "chief_complaint"
+          },
+          "development": {
+            "value": "راه‌افتادن ۱۴ ماهگی",
+            "label": "development"
+          }
+        },
+        "analysis": null,
+        "bands": null,
+        "subscales": null
+      }
+    ],
+    "f4_wechsler_no_anamnesis": [
+      {
+        "eventId": "w4",
+        "toolKey": "ce-wechsler-w4-v1",
+        "typeTitle": "وکسلر ۴ — پروندهٔ تفسیر موتور",
+        "status": "completed",
+        "occurredAt": "2026-10-03T08:00:00.000Z",
+        "payload": {
+          "fsiq": {
+            "value": "80",
+            "label": "هوشبهر کلی"
+          }
+        },
+        "analysis": null,
+        "bands": null,
+        "subscales": null
+      }
+    ],
+    "f5_empty": [],
+    "f6_v2_probe_read": [
+      {
+        "eventId": "a2",
+        "toolKey": "ce-anamnesis-v2",
+        "typeTitle": "گفت‌وگوی اول — شرح‌حال کودک",
+        "status": "completed",
+        "occurredAt": "2026-10-03T07:00:00.000Z",
+        "payload": {
+          "chief_complaint": {
+            "value": "روان‌خوانی کند است",
+            "label": "chief_complaint"
+          }
+        },
+        "analysis": null,
+        "bands": null,
+        "subscales": null
+      },
+      {
+        "eventId": "p1",
+        "toolKey": "ce-probe-read-v1",
+        "typeTitle": "پروب خواندن",
+        "status": "completed",
+        "occurredAt": "2026-10-03T08:00:00.000Z",
+        "payload": {
+          "wcpm": {
+            "value": "40",
+            "label": "WCPM"
+          },
+          "text_grade": {
+            "value": "دوم",
+            "label": "پایه"
+          }
+        },
+        "analysis": null,
+        "bands": null,
+        "subscales": null
+      }
+    ]
+  },
+  "outputs": {
+    "f1_v2_slow_learner_flag": {
+      "batteryVersion": "battery-v1",
+      "generatedAt": "2026-10-22T06:30:00.000Z",
+      "criteria": [
+        {
+          "criterionId": "anxiety.a1",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "نگرانی و انتظار بدترین‌ها در رخدادهای گوناگون، بیشتر روزها (فراگیر) — یا اضطراب جدایی/اجتماعی برجسته.",
+          "group": "A"
+        },
+        {
+          "criterionId": "anxiety.a2",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "کنترل نگرانی برای کودک دشوار است.",
+          "group": "A"
+        },
+        {
+          "criterionId": "anxiety.a3",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "نشانه‌های همراه: بی‌قراری، خستگی، تمرکز سخت، تحریک‌پذیری، تنش عضلانی، اختلال خواب/جسمانی (دل‌درد، سردرد).",
+          "group": "A"
+        },
+        {
+          "criterionId": "anxiety.b",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "اضطراب/نشانه‌های جسمانی، عملکرد تحصیلی/اجتماعی/خانوادگی را مختل کرده‌اند.",
+          "group": "B"
+        },
+        {
+          "criterionId": "anxiety.c",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "نه با ماده/دارو و نه با اختلال جسمی دیگر بهتر توضیح داده نشود.",
+          "group": "C"
+        },
+        {
+          "criterionId": "anxiety.d",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "محدودیت به موقعیت (مثل فقط امتحان) در تحلیل تفریقی بررسی شود — اضطراب امتحان وضعیت غیراختلالی است.",
+          "group": "D"
+        },
+        {
+          "criterionId": "bif.a",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "هوشبهر کلی در محدودهٔ مرزی (۷۰ تا ۸۵) — وکسلر.",
+          "group": "A"
+        },
+        {
+          "criterionId": "bif.b",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "یادگیری کندتر از انتظار سن در همهٔ درس‌ها با تکرار زیاد؛ دشواری تعمیم به موقعیت تازه.",
+          "group": "B"
+        },
+        {
+          "criterionId": "bif.c",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "افت تحصیلی تدریجی و همه‌درسی با وجود تلاش واقعی.",
+          "group": "C"
+        },
+        {
+          "criterionId": "bif.d",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "سازگاری اجتماعی روزمره نسبتاً سالم است — تفاوت اصلی با نارسایی فکری.",
+          "group": "D"
+        }
+      ],
+      "ranked": [
+        {
+          "targetKey": "slow_learner",
+          "targetTitle": "دیرآموزی",
+          "confidence": "متوسط",
+          "score": 3,
+          "evidenceFa": [
+            "هوشبهر کلی وکسلر در محدودهٔ مرزی (۷۰ تا ۸۵) است.",
+            "افت تحصیلی تدریجی همه‌درسی در شرح حال ثبت شده است."
+          ],
+          "missingFa": [],
+          "differentialsFa": [
+            "اگر استدلال سالم و شکاف پایه‌ای است → فقر فرصت؛ وکسلر فرق اصلی را می‌گوید.",
+            "اگر فقط بار پردازش مشکل دارد و استدلال خوب است → حافظهٔ کاری."
+          ],
+          "criteriaSummary": {
+            "met": 0,
+            "partial": 0,
+            "unknown": 4,
+            "notMet": 0
+          }
+        }
+      ],
+      "discrepancies": [],
+      "nextActions": [
+        "پرسش‌نامهٔ اضطراب کودک — فرم خانواده (SCARED) هنوز ارسال/ثبت نشده است."
+      ],
+      "dataCoverage": {
+        "seen": [
+          "ce-wechsler-w4-v1",
+          "ce-anamnesis-v2"
+        ],
+        "seenTitles": [
+          "وکسلر ۴ — پروندهٔ تفسیر موتور",
+          "گفت‌وگوی اول — شرح‌حال کودک"
+        ]
+      },
+      "referralFlags": [],
+      "disclaimer": "این تحلیل ابزار غربالگری است و جایگزین قضاوت بالینی درمانگر نیست. تصمیم نهایی با متخصص انسان است."
+    },
+    "f2_v2_anxiety_flag": {
+      "batteryVersion": "battery-v1",
+      "generatedAt": "2026-10-22T06:30:00.000Z",
+      "criteria": [
+        {
+          "criterionId": "anxiety.a1",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "نگرانی و انتظار بدترین‌ها در رخدادهای گوناگون، بیشتر روزها (فراگیر) — یا اضطراب جدایی/اجتماعی برجسته.",
+          "group": "A"
+        },
+        {
+          "criterionId": "anxiety.a2",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "کنترل نگرانی برای کودک دشوار است.",
+          "group": "A"
+        },
+        {
+          "criterionId": "anxiety.a3",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "نشانه‌های همراه: بی‌قراری، خستگی، تمرکز سخت، تحریک‌پذیری، تنش عضلانی، اختلال خواب/جسمانی (دل‌درد، سردرد).",
+          "group": "A"
+        },
+        {
+          "criterionId": "anxiety.b",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "اضطراب/نشانه‌های جسمانی، عملکرد تحصیلی/اجتماعی/خانوادگی را مختل کرده‌اند.",
+          "group": "B"
+        },
+        {
+          "criterionId": "anxiety.c",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "نه با ماده/دارو و نه با اختلال جسمی دیگر بهتر توضیح داده نشود.",
+          "group": "C"
+        },
+        {
+          "criterionId": "anxiety.d",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "محدودیت به موقعیت (مثل فقط امتحان) در تحلیل تفریقی بررسی شود — اضطراب امتحان وضعیت غیراختلالی است.",
+          "group": "D"
+        },
+        {
+          "criterionId": "bif.a",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "هوشبهر کلی در محدودهٔ مرزی (۷۰ تا ۸۵) — وکسلر.",
+          "group": "A"
+        },
+        {
+          "criterionId": "bif.b",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "یادگیری کندتر از انتظار سن در همهٔ درس‌ها با تکرار زیاد؛ دشواری تعمیم به موقعیت تازه.",
+          "group": "B"
+        },
+        {
+          "criterionId": "bif.c",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "افت تحصیلی تدریجی و همه‌درسی با وجود تلاش واقعی.",
+          "group": "C"
+        },
+        {
+          "criterionId": "bif.d",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "سازگاری اجتماعی روزمره نسبتاً سالم است — تفاوت اصلی با نارسایی فکری.",
+          "group": "D"
+        }
+      ],
+      "ranked": [
+        {
+          "targetKey": "anxiety",
+          "targetTitle": "اضطراب کودکان",
+          "confidence": "کم",
+          "score": 1,
+          "evidenceFa": [
+            "نشانهٔ جسمانی صبحگاهی بدون علت پزشکی در شرح حال ثبت شده است."
+          ],
+          "missingFa": [
+            "پرسش‌نامهٔ اضطراب کودک — فرم خانواده (SCARED) هنوز ارسال/ثبت نشده است."
+          ],
+          "differentialsFa": [],
+          "criteriaSummary": {
+            "met": 0,
+            "partial": 0,
+            "unknown": 6,
+            "notMet": 0
+          }
+        }
+      ],
+      "discrepancies": [],
+      "nextActions": [
+        "پرسش‌نامهٔ اضطراب کودک — فرم خانواده (SCARED) هنوز ارسال/ثبت نشده است."
+      ],
+      "dataCoverage": {
+        "seen": [
+          "ce-anamnesis-v2"
+        ],
+        "seenTitles": [
+          "گفت‌وگوی اول — شرح‌حال کودک"
+        ]
+      },
+      "referralFlags": [],
+      "disclaimer": "این تحلیل ابزار غربالگری است و جایگزین قضاوت بالینی درمانگر نیست. تصمیم نهایی با متخصص انسان است."
+    },
+    "f3_v2_no_flag": {
+      "batteryVersion": "battery-v1",
+      "generatedAt": "2026-10-22T06:30:00.000Z",
+      "criteria": [
+        {
+          "criterionId": "anxiety.a1",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "نگرانی و انتظار بدترین‌ها در رخدادهای گوناگون، بیشتر روزها (فراگیر) — یا اضطراب جدایی/اجتماعی برجسته.",
+          "group": "A"
+        },
+        {
+          "criterionId": "anxiety.a2",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "کنترل نگرانی برای کودک دشوار است.",
+          "group": "A"
+        },
+        {
+          "criterionId": "anxiety.a3",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "نشانه‌های همراه: بی‌قراری، خستگی، تمرکز سخت، تحریک‌پذیری، تنش عضلانی، اختلال خواب/جسمانی (دل‌درد، سردرد).",
+          "group": "A"
+        },
+        {
+          "criterionId": "anxiety.b",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "اضطراب/نشانه‌های جسمانی، عملکرد تحصیلی/اجتماعی/خانوادگی را مختل کرده‌اند.",
+          "group": "B"
+        },
+        {
+          "criterionId": "anxiety.c",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "نه با ماده/دارو و نه با اختلال جسمی دیگر بهتر توضیح داده نشود.",
+          "group": "C"
+        },
+        {
+          "criterionId": "anxiety.d",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "محدودیت به موقعیت (مثل فقط امتحان) در تحلیل تفریقی بررسی شود — اضطراب امتحان وضعیت غیراختلالی است.",
+          "group": "D"
+        },
+        {
+          "criterionId": "bif.a",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "هوشبهر کلی در محدودهٔ مرزی (۷۰ تا ۸۵) — وکسلر.",
+          "group": "A"
+        },
+        {
+          "criterionId": "bif.b",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "یادگیری کندتر از انتظار سن در همهٔ درس‌ها با تکرار زیاد؛ دشواری تعمیم به موقعیت تازه.",
+          "group": "B"
+        },
+        {
+          "criterionId": "bif.c",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "افت تحصیلی تدریجی و همه‌درسی با وجود تلاش واقعی.",
+          "group": "C"
+        },
+        {
+          "criterionId": "bif.d",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "سازگاری اجتماعی روزمره نسبتاً سالم است — تفاوت اصلی با نارسایی فکری.",
+          "group": "D"
+        }
+      ],
+      "ranked": [],
+      "discrepancies": [],
+      "nextActions": [
+        "پرسش‌نامهٔ اضطراب کودک — فرم خانواده (SCARED) هنوز ارسال/ثبت نشده است.",
+        "هنوز دادهٔ کافی برای فرضیه نیست — SDQ (والد/معلم) و شرح حال ساخت‌یافته را کامل کنید."
+      ],
+      "dataCoverage": {
+        "seen": [
+          "ce-anamnesis-v2"
+        ],
+        "seenTitles": [
+          "گفت‌وگوی اول — شرح‌حال کودک"
+        ]
+      },
+      "referralFlags": [],
+      "disclaimer": "این تحلیل ابزار غربالگری است و جایگزین قضاوت بالینی درمانگر نیست. تصمیم نهایی با متخصص انسان است."
+    },
+    "f4_wechsler_no_anamnesis": {
+      "batteryVersion": "battery-v1",
+      "generatedAt": "2026-10-22T06:30:00.000Z",
+      "criteria": [
+        {
+          "criterionId": "bif.a",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "هوشبهر کلی در محدودهٔ مرزی (۷۰ تا ۸۵) — وکسلر.",
+          "group": "A"
+        },
+        {
+          "criterionId": "bif.b",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "یادگیری کندتر از انتظار سن در همهٔ درس‌ها با تکرار زیاد؛ دشواری تعمیم به موقعیت تازه.",
+          "group": "B"
+        },
+        {
+          "criterionId": "bif.c",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "افت تحصیلی تدریجی و همه‌درسی با وجود تلاش واقعی.",
+          "group": "C"
+        },
+        {
+          "criterionId": "bif.d",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "سازگاری اجتماعی روزمره نسبتاً سالم است — تفاوت اصلی با نارسایی فکری.",
+          "group": "D"
+        }
+      ],
+      "ranked": [
+        {
+          "targetKey": "slow_learner",
+          "targetTitle": "دیرآموزی",
+          "confidence": "متوسط",
+          "score": 2,
+          "evidenceFa": [
+            "هوشبهر کلی وکسلر در محدودهٔ مرزی (۷۰ تا ۸۵) است."
+          ],
+          "missingFa": [
+            "گفت‌وگوی اول — شرح‌حال کودک هنوز ارسال/ثبت نشده است."
+          ],
+          "differentialsFa": [
+            "اگر استدلال سالم و شکاف پایه‌ای است → فقر فرصت؛ وکسلر فرق اصلی را می‌گوید.",
+            "اگر فقط بار پردازش مشکل دارد و استدلال خوب است → حافظهٔ کاری."
+          ],
+          "criteriaSummary": {
+            "met": 0,
+            "partial": 0,
+            "unknown": 4,
+            "notMet": 0
+          }
+        }
+      ],
+      "discrepancies": [],
+      "nextActions": [
+        "گفت‌وگوی اول — شرح‌حال کودک هنوز ارسال/ثبت نشده است."
+      ],
+      "dataCoverage": {
+        "seen": [
+          "ce-wechsler-w4-v1"
+        ],
+        "seenTitles": [
+          "وکسلر ۴ — پروندهٔ تفسیر موتور"
+        ]
+      },
+      "referralFlags": [],
+      "disclaimer": "این تحلیل ابزار غربالگری است و جایگزین قضاوت بالینی درمانگر نیست. تصمیم نهایی با متخصص انسان است."
+    },
+    "f5_empty": {
+      "batteryVersion": "battery-v1",
+      "generatedAt": "2026-10-22T06:30:00.000Z",
+      "criteria": [],
+      "ranked": [],
+      "discrepancies": [],
+      "nextActions": [
+        "هنوز دادهٔ کافی برای فرضیه نیست — SDQ (والد/معلم) و شرح حال ساخت‌یافته را کامل کنید."
+      ],
+      "dataCoverage": {
+        "seen": [],
+        "seenTitles": []
+      },
+      "referralFlags": [],
+      "disclaimer": "این تحلیل ابزار غربالگری است و جایگزین قضاوت بالینی درمانگر نیست. تصمیم نهایی با متخصص انسان است."
+    },
+    "f6_v2_probe_read": {
+      "batteryVersion": "battery-v1",
+      "generatedAt": "2026-10-22T06:30:00.000Z",
+      "criteria": [
+        {
+          "criterionId": "dyslexia.a1",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "dyslexia",
+          "textFa": "خواندن واژه ناقص یا پرتلاش است: کند، پرخطا، حدس‌زدنی یا حرف‌جابه‌جایی.",
+          "group": "A"
+        },
+        {
+          "criterionId": "dyslexia.a2",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "dyslexia",
+          "textFa": "دشواری در فهم رابطهٔ حرف و صدا، کدگشایی واژه و مهارت‌های آوایی زبان.",
+          "group": "A"
+        },
+        {
+          "criterionId": "dyslexia.a3",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "dyslexia",
+          "textFa": "املا ضعیف است — در نوشتن واژه‌ها خطاهای فراوان دارد.",
+          "group": "A"
+        },
+        {
+          "criterionId": "sld.b",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "dyslexia",
+          "textFa": "مهارت‌های آسیب‌دیده به‌طور ملموس و قابل‌سنجش پایین‌تر از انتظار سن است و در عملکرد (مدرسه/کار/زندگی روزانه) اختلال ایجاد می‌کند.",
+          "group": "B"
+        },
+        {
+          "criterionId": "sld.c",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "dyslexia",
+          "textFa": "دشواری از سال‌های اول آموزش رسمی شروع شده؛ البته ممکن است با راهکارهای جبرانی تا بالاتر از آن آشکار نشده باشد.",
+          "group": "C"
+        },
+        {
+          "criterionId": "sld.d",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "dyslexia",
+          "textFa": "بهتر است با نارسایی فکری، اختلال حسی (بینایی/شنوایی)، نبود آموزش کافی یا زبان دوم توضیح داده نشود.",
+          "group": "D"
+        },
+        {
+          "criterionId": "anxiety.a1",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "نگرانی و انتظار بدترین‌ها در رخدادهای گوناگون، بیشتر روزها (فراگیر) — یا اضطراب جدایی/اجتماعی برجسته.",
+          "group": "A"
+        },
+        {
+          "criterionId": "anxiety.a2",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "کنترل نگرانی برای کودک دشوار است.",
+          "group": "A"
+        },
+        {
+          "criterionId": "anxiety.a3",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "نشانه‌های همراه: بی‌قراری، خستگی، تمرکز سخت، تحریک‌پذیری، تنش عضلانی، اختلال خواب/جسمانی (دل‌درد، سردرد).",
+          "group": "A"
+        },
+        {
+          "criterionId": "anxiety.b",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "اضطراب/نشانه‌های جسمانی، عملکرد تحصیلی/اجتماعی/خانوادگی را مختل کرده‌اند.",
+          "group": "B"
+        },
+        {
+          "criterionId": "anxiety.c",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "نه با ماده/دارو و نه با اختلال جسمی دیگر بهتر توضیح داده نشود.",
+          "group": "C"
+        },
+        {
+          "criterionId": "anxiety.d",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "anxiety",
+          "textFa": "محدودیت به موقعیت (مثل فقط امتحان) در تحلیل تفریقی بررسی شود — اضطراب امتحان وضعیت غیراختلالی است.",
+          "group": "D"
+        },
+        {
+          "criterionId": "bif.a",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "هوشبهر کلی در محدودهٔ مرزی (۷۰ تا ۸۵) — وکسلر.",
+          "group": "A"
+        },
+        {
+          "criterionId": "bif.b",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "یادگیری کندتر از انتظار سن در همهٔ درس‌ها با تکرار زیاد؛ دشواری تعمیم به موقعیت تازه.",
+          "group": "B"
+        },
+        {
+          "criterionId": "bif.c",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "افت تحصیلی تدریجی و همه‌درسی با وجود تلاش واقعی.",
+          "group": "C"
+        },
+        {
+          "criterionId": "bif.d",
+          "status": "unknown",
+          "sources": [],
+          "targetKey": "slow_learner",
+          "textFa": "سازگاری اجتماعی روزمره نسبتاً سالم است — تفاوت اصلی با نارسایی فکری.",
+          "group": "D"
+        }
+      ],
+      "ranked": [
+        {
+          "targetKey": "dyslexia",
+          "targetTitle": "نارساخوانی",
+          "confidence": "متوسط",
+          "score": 2,
+          "evidenceFa": [
+            "در پروب خواندن، سرعت یا دقت پایین‌تر از انتظار پایه بود."
+          ],
+          "missingFa": [
+            "چک‌لیست دشواری خواندن — فرم خانواده و معلم (ملاک‌های DSM) هنوز ارسال/ثبت نشده است."
+          ],
+          "differentialsFa": [
+            "اگر استدلال سالم است، شکاف در پایه‌های مشخص و سابقهٔ جابه‌جایی/غیبت دارد → فقر فرصت آموزشی را بررسی کنید.",
+            "اگر خطای املای آوایی با WCPM پایین همراه است، خواندن و نوشتن با هم ارزیابی شوند."
+          ],
+          "criteriaSummary": {
+            "met": 0,
+            "partial": 0,
+            "unknown": 6,
+            "notMet": 0
+          }
+        }
+      ],
+      "discrepancies": [],
+      "nextActions": [
+        "چک‌لیست دشواری خواندن — فرم خانواده و معلم (ملاک‌های DSM) هنوز ارسال/ثبت نشده است.",
+        "پرسش‌نامهٔ اضطراب کودک — فرم خانواده (SCARED) هنوز ارسال/ثبت نشده است."
+      ],
+      "dataCoverage": {
+        "seen": [
+          "ce-anamnesis-v2",
+          "ce-probe-read-v1"
+        ],
+        "seenTitles": [
+          "گفت‌وگوی اول — شرح‌حال کودک",
+          "پروب خواندن"
+        ]
+      },
+      "referralFlags": [],
+      "disclaimer": "این تحلیل ابزار غربالگری است و جایگزین قضاوت بالینی درمانگر نیست. تصمیم نهایی با متخصص انسان است."
+    }
+  }
+}
