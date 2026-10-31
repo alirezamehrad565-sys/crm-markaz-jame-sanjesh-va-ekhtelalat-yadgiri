@@ -1,0 +1,301 @@
+import { api } from './api.js';
+import { el, icon } from './ui.js';
+import { fa, formatJalaliFull, tehranTodayYmd } from './format.js';
+import { openNeedsModal } from './ot-checklist.js'; // — ثبت نتیجهٔ نیاز ویژه (دروازهٔ فاز مداخله)
+import { openFeedbackSheetModal } from './feedback-sheet.js'; // — T9/: برگهٔ بازخورد خانواده (ترکیب سمت مرورگر)
+import { CONFIDENCE_BADGE, SYNTHESIS_META } from './clinical-content.js';
+
+const LEVEL_BADGE = {
+  'پایین': 'badge--neutral',
+  'مرزی': 'badge--warning',
+  'قابل‌توجه': 'badge--warning',
+  'هم‌گرای-بالا': 'badge--danger'
+};
+
+const LEVEL_BAR = {
+  'پایین': 0,
+  'مرزی': 1,
+  'قابل‌توجه': 2,
+  'هم‌گرای-بالا': 3
+};
+
+const COHERENCE_BADGE = {
+  'هم‌گرا': 'badge--success',
+  'ناقص': 'badge--warning',
+  'واگرا': 'badge--danger'
+};
+
+const PROTOCOL_FA = {
+  learning: 'اختلال یادگیری',
+  slow_learner: 'دیرآموز',
+  mental_ot: 'کاردرمانی ذهنی',
+  rehab: 'توانبخشی'
+};
+
+function levelBar(level) {
+  const n = LEVEL_BAR[level] ?? 0;
+  const segs = [];
+  for (let i = 0; i < 3; i++) {
+    segs.push(el('span', {
+      style: {
+        display: 'inline-block', width: '14px', height: '6px', borderRadius: '3px',
+        background: i < n ? 'var(--brand)' : 'var(--line)', /* fallback بنفش قدیم حذف (S4-20) */
+        marginInlineEnd: '2px'
+      }
+    }));
+  }
+  return el('span', { style: { display: 'inline-flex', alignItems: 'center', marginInlineStart: '6px' } }, segs);
+}
+
+function dedupeTexts(items) {
+  const seen = new Set();
+  const out = [];
+  for (const t of items) {
+    const s = String(t ?? '').trim();
+    if (!s) continue;
+    const key = s.replace(/\s+/g, ' ');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
+function constructRow(c) {
+  const elevated = c.level !== 'پایین';
+  const evList = (c.evidenceFa ?? []).map((e) =>
+    el('li', { style: { margin: '3px 0', color: 'var(--ink-2)' } },
+      el('span', { class: 'badge badge--neutral', style: { fontSize: 'var(--fs-2xs)', padding: '1px 6px', marginInlineEnd: '5px' } }, /* S4-15 */ e.sourceType === 'parent' ? 'خانه' : e.sourceType === 'teacher' ? 'مدرسه' : e.sourceType === 'examiner' ? 'کلینیک' : 'عملکرد'),
+      e.textFa
+    ));
+  return el('details', { class: 'clx-syn__construct', style: { borderTop: '1px solid var(--line)', padding: '7px 2px' } },
+    el('summary', { style: { cursor: elevated ? 'pointer' : 'default', listStyle: 'none', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } },
+      el('span', { style: { fontWeight: elevated ? 700 : 400, minWidth: '190px' } }, c.titleFa),
+      el('span', { class: `badge ${LEVEL_BADGE[c.level] ?? 'badge--neutral'}` }, c.level),
+      levelBar(c.level),
+      c.subtypeFa?.length ? el('span', { class: 'badge badge--info', style: { fontSize: 'var(--fs-2xs)' } }, c.subtypeFa.join(' + ')) : null, /* S4-15 */
+      c.sharedWith ? el('span', { class: 'badge badge--info', style: { fontSize: 'var(--fs-2xs)', title: 'با یک توضیح تلفیقی گزارش شد (پارسیمونی)' } }, 'اشتراکی') : null,
+      (c.conflictFa ?? []).length ? el('span', { class: 'badge badge--danger', style: { fontSize: 'var(--fs-2xs)' } }, 'واگرایی') : null
+    ),
+    elevated
+      ? el('ul', { style: { margin: '6px 0 2px', paddingInlineStart: '18px', fontSize: '12px' } },
+          evList,
+          (c.capsFa ?? []).map((t) => el('li', { style: { margin: '3px 0', color: 'var(--warn)' } }, icon('alert', 12), ' ', t)),
+          (c.conflictFa ?? []).map((t) => el('li', { style: { margin: '3px 0', color: 'var(--danger)' } }, icon('alert', 12), ' ', t))
+        )
+      : null
+  );
+}
+
+function patternCard(p) {
+  if (!p || p.status === 'ruled_out') return null;
+  const cls = p.status === 'active' ? 'badge--success' : p.status === 'candidate' ? 'badge--warning' : 'badge--neutral';
+  const label = p.status === 'active' ? 'فعال' : p.status === 'candidate' ? 'نامزد بررسی' : 'ردشده';
+  return el('div', { style: { border: '1px solid var(--line)', borderRadius: '10px', padding: '10px 12px', marginBottom: '8px' } },
+    el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' } },
+      el('strong', {}, p.titleFa),
+      el('span', { class: `badge ${cls}` }, label),
+      el('span', { class: 'cell-sub' }, `شیوع تقریبی: ${p.baseRateFa}`)
+    ),
+    el('div', { style: { fontSize: '12px', color: 'var(--ink-2)' } }, p.rationaleFa),
+    p.status === 'active' && p.actionFa !== '—'
+      ? el('div', { style: { fontSize: '12px', marginTop: '4px' } }, icon('compass', 12), ' ', p.actionFa)
+      : null
+  );
+}
+
+function narrativeLead(insights) {
+  const n = insights?.narrative;
+  if (!n) return null;
+  const raw = typeof n === 'string' ? n : (typeof n.saw === 'string' ? n.saw : '');
+  const firstLine = String(raw).split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+  if (!firstLine) return null;
+  const text = firstLine.length > 160 ? `${firstLine.slice(0, 159).trimEnd()}…` : firstLine;
+  return el('div', { class: 'clx-syn__lead' }, icon('message', 13), el('span', {}, text));
+}
+
+function primaryBlock({ f, insights }) {
+  const primary = f?.primaryProfile ?? null;
+  const top = (insights?.ranked ?? [])[0] ?? null;
+  if (!primary && !top) return null;
+
+  return el('div', {},
+    el('div', { class: 'clx-syn__blocktitle' }, icon('target', 14), ' ', SYNTHESIS_META.primaryTitle),
+    el('div', { class: 'cell-sub' }, SYNTHESIS_META.primaryHint),
+    el('div', { class: 'clx-syn__primary' },
+      primary
+        ? el('div', {},
+            el('div', { class: 'clx-syn__primarytitle' }, primary.titleFa),
+            el('div', { class: 'clx-syn__rationale' }, primary.rationaleFa))
+        : null,
+      top
+        ? el('div', { class: 'clx-syn__tophypo' },
+            el('span', { class: 'cell-sub' }, `${SYNTHESIS_META.topHypothesis}:`),
+            el('strong', {}, top.targetTitle),
+            el('span', { class: `badge ${CONFIDENCE_BADGE[top.confidence] ?? 'badge--neutral'}` }, `اطمینان ${top.confidence}`))
+        : null
+    )
+  );
+}
+
+function mergedFlagsBlock({ f, insights }) {
+  const rich = (f?.redFlags ?? []).filter((r) => r && r.textFa);
+  const plain = dedupeTexts([
+    ...rich.map((r) => r.textFa),
+    ...(insights?.referralFlags ?? [])
+  ]).filter((t) => !rich.some((r) => r.textFa.replace(/\s+/g, ' ') === t.replace(/\s+/g, ' ')));
+
+  if (!rich.length && !plain.length) return null;
+  return el('div', {},
+    el('div', { class: 'clx-syn__blocktitle' }, icon('alert', 14), ' ', SYNTHESIS_META.flagsTitle),
+    el('div', { class: 'clx-flags' },
+      ...rich.map((r) => el('div', { class: `clx-flag ${r.urgent ? 'clx-flag--urgent' : ''}` },
+        icon('alert', 15),
+        el('span', {}, el('strong', {}, r.urgent ? 'ارجاع فوری — ' : ''), r.textFa, ' ', el('span', { class: 'cell-sub' }, r.actionFa)))),
+      ...plain.map((t) => el('div', { class: 'clx-flag' }, icon('alert', 15), el('span', {}, t)))));
+}
+
+function mergedConflictsBlock({ f, insights }) {
+  const fromConstructs = (f?.constructs ?? []).flatMap((c) => c.conflictFa ?? []);
+  const items = dedupeTexts([...(insights?.discrepancies ?? []), ...fromConstructs]);
+  if (!items.length) return null;
+  return el('div', {},
+    el('div', { class: 'clx-syn__blocktitle' }, icon('info', 14), ' ', SYNTHESIS_META.conflictsTitle),
+    el('ul', { class: 'clx-list' }, items.map((t) => el('li', {}, icon('clock', 14), el('span', {}, t)))));
+}
+
+function nextStepsBlock({ f, insights }) {
+  const actions = (f?.nextActions ?? []).length ? f.nextActions : (insights?.nextActions ?? []);
+  if (!actions.length && !f?.monitoring && !f?.protocolSuggestion) return null;
+
+  const protocolLine = f?.protocolSuggestion
+    ? el('div', { style: { marginBottom: '8px' } },
+        el('span', { class: 'badge badge--info' }, 'پیشنهاد سامانه'),
+        el('strong', {}, ' پروتکل پیشنهادی: '),
+        PROTOCOL_FA[f.protocolSuggestion.protocol] ?? f.protocolSuggestion.protocol ?? '—',
+        f.protocolSuggestion.secondary ? ` + ثانویه: ${PROTOCOL_FA[f.protocolSuggestion.secondary] ?? f.protocolSuggestion.secondary}` : '',
+        el('div', { class: 'cell-sub' }, f.protocolSuggestion.rationaleFa)
+      )
+    : null;
+
+  const monitoringLine = f?.monitoring
+    ? el('div', { style: { marginBottom: '8px' } },
+        el('strong', {}, 'بازبینی بعدی: '),
+        `هر ${fa(f.monitoring.intervalMonths)} ماه`,
+        el('div', { class: 'cell-sub' }, f.monitoring.rationaleFa))
+      : null;
+
+  const actionList = actions.length
+    ? el('ol', { class: 'clx-syn__actions' },
+        actions.map((a) => el('li', { style: { margin: '3px 0' } },
+          a?.priority === 1 ? el('span', { class: 'badge badge--danger', style: { fontSize: 'var(--fs-2xs)', marginInlineEnd: '4px' } }, 'فوری') : null, /* S4-15 */
+          a.actionFa ?? a)))
+    : null;
+
+  const caps = (f?.capsFa ?? []).length
+    ? el('div', { class: 'clx-syn__caps' },
+        icon('alert', 13), ' محدودیت‌های داده: ',
+        el('ul', { style: { margin: '3px 0 0', paddingInlineStart: '18px' } }, f.capsFa.map((t) => el('li', {}, t))))
+    : null;
+
+  return el('div', {},
+    el('div', { class: 'clx-syn__blocktitle' }, icon('compass', 14), ' ', SYNTHESIS_META.nextTitle),
+    protocolLine,
+    monitoringLine,
+    actionList,
+    caps);
+}
+
+export async function fetchFormulation({ student }) {
+  try {
+    return (await api.get(`/api/students/${student.id}/case-formulation`)).data;
+  } catch {
+    return null; // کارت اختیاری است — نباید تب را بشکند
+  }
+}
+
+export async function synthesisSection({ student, formulation = null, insights = {}, gates = null, canDecide = false, refresh, engineDetails = null, plan = null }) {
+  const f = formulation ?? await fetchFormulation({ student });
+
+  const top = (insights?.ranked ?? [])[0] ?? null;
+
+  // ثبت نتیجهٔ نیاز ویژه آزاد است (تصمیم صریح کاربر): حتی وقتی موتور هنوز شواهدی ندارد،
+  // کارت جمع‌بندی با دکمهٔ ثبت می‌نشیند؛ با آمدن شواهد، موتور کلینکی فعال و همین‌جا شواهد کنار هم می‌نشیند
+  const needsDone = Boolean((gates?.gates ?? []).find((g) => g.key === 'needs')?.done);
+  const needsBtn = canDecide && !needsDone
+    ? el('button', {
+        class: 'btn btn--primary btn--sm',
+        onclick: () => openNeedsModal({ student, gates, canDecide, refresh })
+      }, icon('check', 15), 'ثبت نتیجهٔ نیاز ویژه')
+    : null;
+
+  if (!f && !top && !(insights?.referralFlags ?? []).length) {
+    if (!needsBtn) return null;
+    return el('div', { class: 'card clx-synthesis' },
+      el('div', { class: 'card__head' },
+        el('div', { class: 'card__title' }, icon('layers', 16), SYNTHESIS_META.title)),
+      el('div', { class: 'card__body' },
+        el('div', { class: 'cell-sub' }, 'موتور بالینی هنوز شواهدی برای کنار هم گذاشتن ندارد — با ثبت شرح‌حال، چک‌لیست‌ها و نتایج، همین‌جا فعال می‌شود و در تصمیم کمک می‌کند.'),
+        el('div', { class: 'clx-syn__primaryact' }, needsBtn)));
+  }
+
+  const coveragePercent = f?.dataCoverage?.percent ?? insights?.dataCoverage?.percent ?? null;
+  const headBadges = [
+    f?.coherence ? el('span', { class: `badge ${COHERENCE_BADGE[f.coherence] ?? 'badge--neutral'}` }, `شواهد: ${f.coherence}`) : null,
+    f?.confidence != null ? el('span', { class: 'badge badge--neutral' }, `اطمینان: ${fa(Math.round(f.confidence * 100))}٪`) : null,
+    coveragePercent != null ? el('span', { class: 'badge badge--info' }, `پوشش داده: ${fa(coveragePercent)}٪`) : null
+  ].filter(Boolean);
+
+  const elevated = (f?.constructs ?? []).filter((c) => c && c.level !== 'پایین');
+  const constructsBlock = elevated.length
+    ? el('div', {},
+        el('div', { class: 'clx-syn__blocktitle' }, icon('grid', 14), ' ', SYNTHESIS_META.constructsTitle),
+        el('div', { class: 'clx-syn__constructs' }, ...elevated.map(constructRow)))
+    : null;
+
+  const allPatterns = (f?.patterns ?? []).filter((p) => p && p.status !== 'ruled_out');
+  const activePatterns = allPatterns.filter((p) => p.status === 'active').slice(0, 4);
+  const candidatePatterns = allPatterns.filter((p) => p.status !== 'active');
+  const patternsBlock = allPatterns.length
+    ? el('div', {},
+        el('div', { class: 'clx-syn__blocktitle' }, icon('sparkles', 14), ' ', SYNTHESIS_META.patternsTitle),
+        activePatterns.length ? el('div', {}, ...activePatterns.map(patternCard)) : el('div', { class: 'cell-sub' }, 'الگوی فعالی تأیید نشده است.'),
+        candidatePatterns.length
+          ? el('details', { class: 'clx-syn__candidates' },
+              el('summary', {}, `${SYNTHESIS_META.candidatesLabel} (${fa(candidatePatterns.length)})`),
+              el('div', {}, ...candidatePatterns.map(patternCard)))
+          : null)
+    : null;
+
+  const detailNodes = Array.isArray(engineDetails) ? engineDetails.filter(Boolean) : [];
+  const detailsBlock = detailNodes.length
+    ? el('details', { class: 'clx-syn__engine' },
+        el('summary', {}, icon('clipboard', 15), ' ', SYNTHESIS_META.detailsTitle),
+        el('div', { class: 'clx-syn__enginedetail' }, ...detailNodes))
+    : null;
+
+  const feedbackBtn = f
+    ? el('button', {
+        class: 'btn btn--soft btn--sm',
+        onclick: () => openFeedbackSheetModal({ student, formulation: f, plan, todayLabel: formatJalaliFull(tehranTodayYmd()) })
+      }, icon('printer', 15), 'برگهٔ بازخورد خانواده')
+    : null;
+  const primaryActions = (feedbackBtn || needsBtn)
+    ? el('div', { class: 'clx-syn__primaryact' }, feedbackBtn, needsBtn)
+    : null;
+
+  return el('div', { class: 'card clx-synthesis' },
+    el('div', { class: 'card__head' },
+      el('div', { class: 'card__title' }, icon('layers', 16), SYNTHESIS_META.title),
+      el('div', { class: 'clx-syn__badges' }, ...headBadges)),
+    el('div', { class: 'card__body' },
+      narrativeLead(insights),
+      primaryBlock({ f, insights }),
+      constructsBlock,
+      patternsBlock,
+      mergedConflictsBlock({ f, insights }),
+      mergedFlagsBlock({ f, insights }),
+      nextStepsBlock({ f, insights }),
+      primaryActions,
+      detailsBlock));
+}

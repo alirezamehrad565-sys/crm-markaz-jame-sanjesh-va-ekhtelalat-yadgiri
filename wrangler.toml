@@ -1,0 +1,28 @@
+name = "center-system"
+main = "worker/entry.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+account_id = "666575717adac931e0cd175d1310c4bf"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "center-system-db"
+database_id = "cf6bae8d-d574-4b8e-8a99-3b7462ef3f9e"
+migrations_dir = "migrations"
+
+[triggers]
+crons = ["0 17 * * *", "30 6 * * *", "0 4 * * *", "30 14 * * *"]
+
+[vars]
+ENV = "production"
+CF_ACCESS_TEAM_DOMAIN = ""
+CLINIC_NAME = "مرکز جامع"
+# مبنای ساخت لینک‌های عمومی (فرم چک‌لیست خانواده/معلم، فایل‌های آموزشی) — بدون اسلش انتهایی
+PUBLIC_BASE_URL = "https://center-system.sanjeshm.workers.dev"
+
+[observability]
+enabled = true
