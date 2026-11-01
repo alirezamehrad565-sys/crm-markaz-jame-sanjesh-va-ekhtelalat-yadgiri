@@ -63,18 +63,42 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(after).toMatch(/height:\s*100dvh/);
   });
 
-  test('نسخه: سو 1.10.1 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار + کلاژ آلبوم)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.10\.1'/);
+  test('نسخه: سو 1.11.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.11\.0'/);
   });
 
-  test('۱.۱۰.۱ — داشبورد مدیر: ردیف dash-duo هم‌قد (حفرهٔ خالی زیر خط زمانی ممنوع)', () => {
-    // دو کارت باید stretch شوند، نه start — وگرنه کارت کوتاهِ خط زمانی زیرش حفرهٔ خالی می‌گذارد
+  test('۱.۱۱.۰ — داشبورد مدیر: ردیف قهرمان «کارهای من» + «اطلاع‌رسانی» هم‌قد و هم‌تراز', () => {
+    // دو کارت باید stretch شوند و بدنهٔ هر دو کش بیاید — وگرنه کارت کوتاه زیرش حفرهٔ خالی می‌گذارد
     expect(views).toMatch(/\.dash-duo\s*\{[^}]*align-items:\s*stretch/);
-    // کارت‌های داخل duo ستونی و تمام‌قد؛ بدنه کش می‌آید
     expect(views).toMatch(/\.dash-duo\s*>\s*\.card\s*\{[^}]*flex-direction:\s*column[^}]*height:\s*100%/);
     expect(views).toMatch(/\.dash-duo\s+\.card__body\s*\{[^}]*flex:\s*1/);
-    // سقف فهرست کارها و نوار ساعت (جلوی رشد بی‌رویهٔ ردیف)
+    // سقف فهرست کارها (جلوی رشد بی‌رویهٔ ردیف)
     expect(views).toMatch(/\.dash-duo\s+\.todo-list\s*\{[^}]*max-height/);
-    expect(views).toMatch(/\.dash-duo\s+\.tl-card\s+\.tl-strip\s*\{[^}]*max-height/);
+    // نسبت قهرمان: کارهای من دوسوم، اطلاع‌رسانی یک‌سوم (درخواست مدیر — ۱.۱۱.۰)
+    expect(views).toMatch(/@media\s*\(min-width:\s*1080px\)\s*\{\s*\.dash-duo\s*\{[^}]*minmax\(0,\s*2fr\)\s+minmax\(300px,\s*1fr\)/);
+  });
+
+  test('۱.۱۱.۰ — داشبورد مدیر: «خط زمانی امروز» حذف شده و «دانش‌افزایی» بالای صفحه است', () => {
+    const dash = readFileSync(join(__dirname, '../../public/assets/js/views/dashboard.js'), 'utf8');
+    // خط زمانی دیگر ساخته نمی‌شود
+    expect(dash).not.toMatch(/todayTimelineCard/);
+    expect(dash).not.toMatch(/'خط زمانی امروز'/);
+    // ردیف قهرمان = کارهای من + اطلاع‌رسانی؛ دانش‌افزایی بلافاصله زیر آن
+    const office = dash.match(/function officeDashboard[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(office).toMatch(/dash-duo/);
+    expect(office).toMatch(/announcementsCard\(announcements\)/);
+    expect(office).toMatch(/knowledgeCard\(knowledge\)/);
+    const duoIdx = office.indexOf('dash-duo');
+    const knIdx = office.indexOf('knowledgeCard(knowledge)');
+    const kpiIdx = office.indexOf("class: `kpi-grid");
+    expect(duoIdx).toBeGreaterThan(-1);
+    expect(knIdx).toBeGreaterThan(duoIdx);
+    expect(kpiIdx).toBeGreaterThan(knIdx);
+    // درمانگر: اعلان و دانش‌افزایی زیر سربرگ، پیش از کارنامهٔ امتیاز
+    const ther = dash.match(/function therapistDashboard[\s\S]*?\n\}/)?.[0] ?? '';
+    const infoIdx = ther.indexOf('infoGrid(knowledge, announcements)');
+    const heroIdx = ther.indexOf('heroScore(');
+    expect(infoIdx).toBeGreaterThan(-1);
+    expect(heroIdx).toBeGreaterThan(infoIdx);
   });
 });

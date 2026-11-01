@@ -4,7 +4,6 @@ import {
   fa,
   iranianWeekdayOfYmd,
   tehranDayRange,
-  tehranNowShifted, /* S1-06 */
   tehranTimeOfIso,
   tehranTodayYmd,
   tehranYmdOfIso,
@@ -12,7 +11,6 @@ import {
   formatJalaliNumeric
 } from '../format.js';
 import { el, icon, loadingState, skeletonState, errorState, statusBadge, emptyState, openModal, progressRing, toast, toastError } from '../ui.js'; // toast/toastError گم‌شده بود: مسیر ذخیرهٔ حسابرسی بی‌بازخورد می‌افتد
-import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ ثابت درمانگر
 import { illoNoAnnouncements, illoKnowledge } from '../illustrations.js'; // — وکتورها
 import { session } from '../state.js';
 import { canSeeTodos, renderMyTodosCard } from '../my-todos.js';
@@ -47,7 +45,6 @@ export async function renderDashboard(container) {
   const knowledge = kpis?.knowledge ?? null;
   const announcements = kpis?.announcements ?? null;
   const waitlist = kpis?.waitlist ?? null;
-  const dayAppts = kpis?.dayAppts ?? null;
   const followups = kpis?.followups ?? null;
   const validation = kpis?.validation ?? null;
 
@@ -61,7 +58,7 @@ export async function renderDashboard(container) {
   if (isTherapist) {
     parts.push(...therapistDashboard(container, { myStats, scoring, knowledge, announcements }));
   } else {
-    parts.push(...officeDashboard(container, { todayData, summaryData, goalData, scoring, knowledge, announcements, waitlist, dayAppts, followups, today, validation }));
+    parts.push(...officeDashboard(container, { todayData, summaryData, goalData, scoring, knowledge, announcements, waitlist, followups, today, validation }));
   }
 
   container.replaceChildren(...parts.filter(Boolean));
@@ -78,6 +75,11 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
       el('button', { class: 'btn btn--ghost btn--sm', onclick: () => renderDashboard(container) }, icon('refresh', 16), 'به‌روزرسانی')
     )
   );
+
+  /* ۱.۱۱.۰ — درخواست مدیر: اعلان و دانش‌افزایی در داشبورد درمانگر هم بیاید بالا —
+     اطلاع‌رسانی مرکز + دانش‌افزایی درست زیر سربرگ، پیش از کارنامهٔ امتیاز */
+  const info = infoGrid(knowledge, announcements);
+  if (info) parts.push(info);
 
   const scoreRows = scoring?.rows ?? [];
   const scoreRow = scoreRows.find((r) => r.staffId === session.user?.staffId) ?? null;
@@ -131,9 +133,6 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
   }
 
   if (scoreRows.length) parts.push(leaderboardCard(scoreRows, 'تابلوی پیشرفت', session.user?.staffId, scoring?.since));
-
-  const info = infoGrid(knowledge, announcements);
-  if (info) parts.push(info);
 
   return parts;
 }
@@ -215,7 +214,7 @@ function scoreTiles(myStats) {
   );
 }
 
-function officeDashboard(container, { todayData, summaryData, goalData, scoring, knowledge, announcements, waitlist, dayAppts, followups, today, validation }) {
+function officeDashboard(container, { todayData, summaryData, goalData, scoring, knowledge, announcements, waitlist, followups, today, validation }) {
   const parts = [];
 
   parts.push(
@@ -247,6 +246,22 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
     ? (waitlist.data ?? waitlist).filter((w) => w.status === 'waiting' || w.status === 'called').length
     : null;
 
+  /* ۱.۱۱.۰ — بازطراحی داشبورد مدیر به روایت خود مدیر:
+     ① «کارهای من» کارت قهرمان صفحه است — بزرگ‌تر (دوسوم عرض) و در صدرِ داشبورد؛
+     ② «اطلاع‌رسانی مرکز» بغل‌به‌بغلِ همان کارت (یک‌سوم باقی‌مانده)؛
+     ③ «دانش‌افزایی» هم بیاید بالا — بلافاصله زیر ردیف قهرمان؛
+     ④ «خط زمانی امروز» حذف شد — مدیران راضی نبودند و ضرورت نداشت (تقویم نوبت‌ها مرجع کامل همان داده است)؛
+     ⑤ بقیهٔ ماژول‌ها (شاخص‌ها، تابلو، پیگیری‌ها، روند و هدف) زیر این سه می‌نشینند. */
+  const todosCard = canSeeTodos() ? renderMyTodosCard() : null;
+  const anCard = announcementsCard(announcements);
+  if (todosCard) {
+    parts.push(el('div', { class: 'dash-duo', style: { marginBottom: 'var(--sp-4)' } }, todosCard, anCard));
+  } else {
+    if (anCard) parts.push(anCard);
+  }
+  const knCard = knowledgeCard(knowledge);
+  if (knCard) parts.push(knCard);
+
   parts.push(
     // A19: stagger فقط در mount اول نشست — هر refresh داده KPIها دوباره «می‌رقصیدند»
     el(
@@ -262,17 +277,6 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
     )
   );
   if (!document.body.dataset.kpiStaggered) document.body.dataset.kpiStaggered = '1'; /* A19 */
-
-  /* UX-ممیزی گلایهٔ ۴: «کارهای من» تمام‌عرض با فضای مرده؛ اکنون دوستونه با «خط زمانی امروز»
-     (موبایل زیر هم، ≥۱۰۸۰px کنار هم — .dash-duo در views.css) */
-  const todosCard = canSeeTodos() ? renderMyTodosCard() : null;
-  const timeline = todayTimelineCard(dayAppts, todayData);
-  if (todosCard && timeline) {
-    parts.push(el('div', { class: 'dash-duo', style: { marginBottom: 'var(--sp-4)' } }, todosCard, timeline));
-  } else {
-    if (todosCard) parts.push(todosCard);
-    if (timeline) parts.push(timeline);
-  }
 
   const scoreRows = scoring?.rows ?? [];
   if (scoreRows.length) {
@@ -296,9 +300,6 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
   }
 
   if (goalData) parts.push(drawScreeningGoalCard(goalData));
-
-  const info = infoGrid(knowledge, announcements);
-  if (info) parts.push(info);
 
   return parts;
 }
@@ -398,66 +399,9 @@ function leaderboardCard(rows, title, meStaffId, since = null) {
   );
 }
 
-function todayTimelineCard(appts, todayData) {
-  if (!Array.isArray(appts) || appts.length === 0) return null;
-  const staffNames = new Map((todayData?.perStaff ?? []).map((s) => [s.staffId, s.staffName]));
-  const nowHour = tehranNowShifted().getUTCHours(); /* S1-06 */
-  const cols = [];
-  for (let h = 6; h <= 21; h += 1) {
-    const inHour = appts.filter((a) => Number(String(tehranTimeOfIso(a.startAt)).slice(0, 2)) === h);
-    cols.push(
-      el(
-        'div',
-        { class: `tl-strip__hour${h === nowHour ? ' is-now' : ''}` },
-        el('div', { class: 'tl-strip__dots' },
-          inHour.map((a) =>
-            el('span', {
-              class: `tl-strip__dot ${hueClass(a.staffId)}${a.status === 'cancelled' ? ' is-cancelled' : ''}`,
-              title: `${fa(tehranTimeOfIso(a.startAt))} — ${staffNames.get(a.staffId) ?? 'درمانگر'}${a.status === 'cancelled' ? ' (لغوشده)' : ''}`,
-              'aria-label': `${fa(tehranTimeOfIso(a.startAt))} — ${staffNames.get(a.staffId) ?? 'درمانگر'}${a.status === 'cancelled' ? ' (لغوشده)' : ''}` /* S1-05: نه فقط tooltip */
-            })
-          )
-        ),
-        el('div', { class: 'tl-strip__label' }, fa(String(h).padStart(2, '0')))
-      )
-    );
-  }
-  /* ۱.۱۰.۱ — راهنمای درمانگرهای امروز زیر نوار ساعت: فضای خالی کارت پر می‌شود و
-     شمارش نوبتِ هر درمانگر یک‌نگاه خوانده می‌شود (هم‌قد شدن دو کارت ردیف dash-duo) */
-  const byStaff = new Map();
-  for (const a of appts) {
-    if (a.status === 'cancelled') continue;
-    const rec = byStaff.get(a.staffId) ?? { name: staffNames.get(a.staffId) ?? 'درمانگر', n: 0 };
-    rec.n += 1;
-    byStaff.set(a.staffId, rec);
-  }
-  const legend = byStaff.size
-    ? el(
-        'div',
-        { class: 'appt-legend tl-legend' },
-        el('span', { class: 'appt-legend__name' }, 'درمانگرها:'),
-        [...byStaff.entries()].map(([id, s]) =>
-          el('span', { class: 'appt-legend__item' }, hueDot(id), s.name, el('span', { class: 'badge badge--neutral' }, fa(s.n)))
-        )
-      )
-    : null;
-  return el(
-    'div',
-    { class: 'card tl-card', style: { marginBottom: 'var(--sp-4)' } },
-    el(
-      'div',
-      { class: 'card__head' },
-      el('div', { class: 'card__title' }, icon('timeline', 16), 'خط زمانی امروز'),
-      el('span', { class: 'badge badge--neutral' }, `${fa(appts.length)} نوبت`)
-    ),
-    el(
-      'div',
-      { class: 'card__body', style: { padding: 'var(--sp-3)' } },
-      el('div', { class: 'tl-strip' }, cols),
-      legend
-    )
-  );
-}
+/* ۱.۱۱.۰ — کارت «خط زمانی امروز» از داشبورد مدیر حذف شد (بازخورد مدیران: ضرورتی نداشت؛
+   تقویم نوبت‌ها #/appointments مرجع کامل همان داده است). تابع سازندهٔ آن و CSSهای tl-card
+   همراهش نیز برداشته شدند. */
 
 function followupsDueCard(rows, todayYmd) {
   const open = (Array.isArray(rows) ? rows : (rows?.data ?? [])).filter((f) => (f.status === 'open' || f.status === 'in_progress') && f.dueAt);
@@ -534,14 +478,16 @@ function waitlistAgingCard(waitlist) {
   );
 }
 
-function infoGrid(knowledge, announcements) {
+/* ۱.۱۱.۰ — کارت اطلاع‌رسانی و کارت دانش‌افزایی از هم جدا شدند تا داشبورد مدیر بتواند
+   «اطلاع‌رسانی» را بغل‌به‌بغلِ «کارهای من» بگذارد و «دانش‌افزایی» را درست زیر آن ردیف بیاورد بالا.
+   infoGrid (جفت دوستونهٔ دو کارت) برای داشبورد درمانگر سرِ جایش می‌ماند. */
+function announcementsCard(announcements) {
   const anItems = (announcements ?? []).slice(0, 3);
-  const knItems = (knowledge ?? []).slice(0, 4);
   const isOffice = ['manager', 'secretary'].includes(session.user?.role);
 
-  const anCard = el(
+  return el(
     'div',
-    { class: 'card' },
+    { class: 'card an-card' },
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('bell', 16), 'اطلاع‌رسانی مرکز')),
     el(
       'div',
@@ -567,10 +513,15 @@ function infoGrid(knowledge, announcements) {
           )
     )
   );
+}
 
-  const knCard = el(
+function knowledgeCard(knowledge) {
+  const knItems = (knowledge ?? []).slice(0, 4);
+  const isOffice = ['manager', 'secretary'].includes(session.user?.role);
+
+  return el(
     'div',
-    { class: 'card' },
+    { class: 'card kn-card', style: { marginBottom: 'var(--sp-4)' } },
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('file', 16), 'دانش‌افزایی'), knItems.length ? el('span', { class: 'badge badge--neutral' }, `${fa(knowledge.length)} مقاله`) : null),
     el(
       'div',
@@ -597,12 +548,14 @@ function infoGrid(knowledge, announcements) {
           )
     )
   );
+}
 
+function infoGrid(knowledge, announcements) {
   return el(
     'div',
-    { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--sp-4)', marginBottom: 'var(--sp-4)' } },
-    anCard,
-    knCard
+    { class: 'info-grid', style: { marginBottom: 'var(--sp-4)' } },
+    announcementsCard(announcements),
+    knowledgeCard(knowledge)
   );
 }
 
