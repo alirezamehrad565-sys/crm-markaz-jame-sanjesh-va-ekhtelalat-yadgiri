@@ -4278,3 +4278,17 @@ body.cb-printing #cb-print-root { display: block; }
   .pr-table thead th { position: static; }
   .has-scroll-x::after { display: none; }
 }
+
+/* ══════════ ممیزی UX با skill «UI/UX Pro Max» (uupm.cc) — نسخهٔ ۱.۰۹.۰ ══════════
+   بلوک لمسی پایانی: بعد از همهٔ بلوک‌های (max-width) می‌آید تا روی دستگاه‌های لمسی
+   برندهٔ آبشار باشد — کف اهداف لمسی WCAG 2.5.8 (≥24px) + فاصلهٔ لمسی (skill: Touch Spacing) */
+@media (pointer: coarse) {
+  /* شبکهٔ ساعات کاری: سلول 14px موبایل → 24px + گپ 6px (خطای فعال‌سازی سلول همسایه کم شود) */
+  .wgrid { gap: 6px; }
+  .wgrid__cell { height: 24px; border-radius: 4px; }
+  /* شورون باز/بستهٔ دستهٔ تمرین: 18px → 28px */
+  .exb-dom__chev { width: 28px; height: 28px; padding: 4px; justify-content: center; flex: none; align-self: center; }
+  /* iOS zoom: کنترل‌های فونت‌ریز scoped به کف 16px */
+  .sess-note__actions .select,
+  .ot-skill__prompt .select { font-size: 16px; }
+}
