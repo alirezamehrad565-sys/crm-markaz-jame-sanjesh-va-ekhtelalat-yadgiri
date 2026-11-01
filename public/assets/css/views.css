@@ -2025,20 +2025,30 @@ tr.wl-row--urgent > td:first-child {
   margin-bottom: var(--sp-4);
 }
 .hero-score__main { min-width: 180px; }
-.hero-score__label { font-size: var(--fs-sm); color: var(--text-2); margin-bottom: var(--sp-1); }
-/* S1-10: کلاس مردهٔ hero-score__value حذف شد (هرگز رندر نمی‌شد)؛ هیروی واقعی ring-center است */
+.hero-score__label { font-size: var(--fs-md); font-weight: 700; color: var(--text-1); margin-bottom: var(--sp-1); } /* v1.08.0: لیبل واقعی کارت — رفع تکرار با تابلوی پیشرفت */
+.hero-score__hint {
+  margin-top: var(--sp-2); display: flex; align-items: center; gap: 5px;
+  font-size: var(--fs-xs); /* رنگ متن از JS: on-primary-soft روی گرادیان */
+}
+.hero-score__hint svg { flex: none; color: var(--accent); }
 .hero-score__rank {
   margin-inline-start: auto;
+  display: flex; align-items: center; gap: var(--sp-2);
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 999px; padding: 10px 18px;
-  font-weight: 700; font-size: var(--fs-md); color: var(--text-1);
+  color: var(--text-1);
   box-shadow: var(--shadow-1);
 }
+.hero-score__rank svg { flex: none; color: var(--text-3); }
+.hero-score__rank-text { display: flex; flex-direction: column; line-height: 1.45; }
+.hero-score__rank-text b { font-size: var(--fs-md); font-weight: 700; }
+.hero-score__rank-text span { font-size: var(--fs-xs); font-weight: 500; color: var(--text-3); }
 .hero-score__rank--gold {
   background: var(--accent-soft);
   border-color: var(--accent);
-  color: var(--accent);
 }
+.hero-score__rank--gold svg,
+.hero-score__rank--gold .hero-score__rank-text b { color: var(--accent); }
 
 .score-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3); }
 .score-tile {
@@ -2157,8 +2167,11 @@ tr.wl-row--urgent > td:first-child {
 .kn-reader { white-space: pre-wrap; line-height: var(--lh-relaxed, 1.95); /* F1: ۲٫۰ → relaxed */ font-size: var(--fs-md); color: var(--text-1); }
 
 @media (max-width: 640px) {
+  /* v1.08.0: چیدمان عمودی کارت ورودی در موبایل — حلقه بالا، متن و رتبه زیر آن، همه وسط‌چین */
+  .hero-score { flex-direction: column; text-align: center; padding: var(--sp-5) var(--sp-4); }
+  .hero-score__main { min-width: 0; display: flex; flex-direction: column; align-items: center; }
+  .hero-score__hint { justify-content: center; }
   .hero-score__rank { margin-inline-start: 0; }
-
 }
 
 .grid-appt, .appt-card, .wd-appt {

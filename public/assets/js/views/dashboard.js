@@ -13,7 +13,7 @@ import {
 } from '../format.js';
 import { el, icon, loadingState, skeletonState, errorState, statusBadge, emptyState, openModal, progressRing, toast, toastError } from '../ui.js'; // toast/toastError گم‌شده بود: مسیر ذخیرهٔ حسابرسی بی‌بازخورد می‌افتد
 import { hueClass } from '../staff-hue.js'; // — رنگ ثابت درمانگر
-import { illoHeroOrnament, illoNoAnnouncements, illoKnowledge } from '../illustrations.js'; // — وکتورها
+import { illoNoAnnouncements, illoKnowledge } from '../illustrations.js'; // — وکتورها
 import { session } from '../state.js';
 import { canSeeTodos, renderMyTodosCard } from '../my-todos.js';
 
@@ -140,14 +140,30 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
 
 function heroScore(scoreRow, rows, since = null) {
   const top = Math.max(1, ...rows.map((r) => r.total));
+  const isTop = scoreRow.rank === 1 && scoreRow.total > 0;
+  const gap = Math.max(0, top - scoreRow.total);
 
+  // — v1.08.0 ریورک کارت ورودی داشبورد درمانگر: حلقهٔ واقعی + نوار رتبهٔ آیکون‌دار + راهنمای فاصله تا صدر؛
+  //   حذف وکتور تزئینی غالب و رفع تکرار عنوان «تابلوی پیشرفت» (لیبل کارت ← «امتیاز کل شما»)
   const rankChip = el(
     'div',
-    { class: `hero-score__rank${scoreRow.rank === 1 ? ' hero-score__rank--gold' : ''}` },
-    `رتبهٔ ${fa(scoreRow.rank)} از ${fa(rows.length)} همکار`
+    { class: `hero-score__rank${isTop ? ' hero-score__rank--gold' : ''}` },
+    icon(isTop ? 'trophy' : 'users', 18),
+    el(
+      'div',
+      { class: 'hero-score__rank-text' },
+      el('b', {}, isTop ? 'صدرنشین تابلوی پیشرفت' : `رتبهٔ ${fa(scoreRow.rank)}`),
+      el('span', {}, isTop ? `با ${fa(scoreRow.total)} امتیاز` : `از ${fa(rows.length)} همکار`)
+    )
   );
 
   const sinceLabel = since ? `شروع شمارش: ${formatJalaliNumeric(tehranYmdOfIso(since))}` : null;
+  const hint =
+    scoreRow.total === 0
+      ? 'با ثبت گزارش جلسه و تمرین در بانک تمرین، امتیاز می‌گیرید'
+      : !isTop && gap > 0
+        ? `${fa(gap)} امتیاز تا صدر تابلو`
+        : null;
 
   return el(
     'div',
@@ -161,13 +177,15 @@ function heroScore(scoreRow, rows, since = null) {
     el(
       'div',
       { class: 'hero-score__main' },
-      el('div', { class: 'hero-score__label' }, 'تابلوی پیشرفت'),
+      el('div', { class: 'hero-score__label' }, 'امتیاز کل شما'),
       sinceLabel
         ? el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)', color: 'var(--on-primary-soft)' } }, sinceLabel) // text-3 روی primary-soft تیره ≈۳٫۴ (S1-11)
+        : null,
+      hint
+        ? el('div', { class: 'hero-score__hint', style: { color: 'var(--on-primary-soft)' } }, icon('zap', 13), hint)
         : null
     ),
-    rankChip,
-    illoHeroOrnament()
+    rankChip
   );
 }
 
