@@ -12,7 +12,7 @@ import {
   formatJalaliNumeric
 } from '../format.js';
 import { el, icon, loadingState, skeletonState, errorState, statusBadge, emptyState, openModal, progressRing, toast, toastError } from '../ui.js'; // toast/toastError گم‌شده بود: مسیر ذخیرهٔ حسابرسی بی‌بازخورد می‌افتد
-import { hueClass } from '../staff-hue.js'; // — رنگ ثابت درمانگر
+import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ ثابت درمانگر
 import { illoNoAnnouncements, illoKnowledge } from '../illustrations.js'; // — وکتورها
 import { session } from '../state.js';
 import { canSeeTodos, renderMyTodosCard } from '../my-todos.js';
@@ -422,16 +422,40 @@ function todayTimelineCard(appts, todayData) {
       )
     );
   }
+  /* ۱.۱۰.۱ — راهنمای درمانگرهای امروز زیر نوار ساعت: فضای خالی کارت پر می‌شود و
+     شمارش نوبتِ هر درمانگر یک‌نگاه خوانده می‌شود (هم‌قد شدن دو کارت ردیف dash-duo) */
+  const byStaff = new Map();
+  for (const a of appts) {
+    if (a.status === 'cancelled') continue;
+    const rec = byStaff.get(a.staffId) ?? { name: staffNames.get(a.staffId) ?? 'درمانگر', n: 0 };
+    rec.n += 1;
+    byStaff.set(a.staffId, rec);
+  }
+  const legend = byStaff.size
+    ? el(
+        'div',
+        { class: 'appt-legend tl-legend' },
+        el('span', { class: 'appt-legend__name' }, 'درمانگرها:'),
+        [...byStaff.entries()].map(([id, s]) =>
+          el('span', { class: 'appt-legend__item' }, hueDot(id), s.name, el('span', { class: 'badge badge--neutral' }, fa(s.n)))
+        )
+      )
+    : null;
   return el(
     'div',
-    { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+    { class: 'card tl-card', style: { marginBottom: 'var(--sp-4)' } },
     el(
       'div',
       { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('timeline', 16), 'خط زمانی امروز'),
       el('span', { class: 'badge badge--neutral' }, `${fa(appts.length)} نوبت`)
     ),
-    el('div', { class: 'card__body', style: { padding: 'var(--sp-3)' } }, el('div', { class: 'tl-strip' }, cols))
+    el(
+      'div',
+      { class: 'card__body', style: { padding: 'var(--sp-3)' } },
+      el('div', { class: 'tl-strip' }, cols),
+      legend
+    )
   );
 }
 
