@@ -322,7 +322,7 @@ html {
 
 .num, .kpi__value, .grid-appt__time, .wd-tl__time, .hero-score__value,
 .score-tile__value, .lb-score b, .spark__num, .goal-mini__val,
-.tl-strip__label, .staff-chip__count {
+.staff-chip__count {
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: 'tnum' 1;
 }

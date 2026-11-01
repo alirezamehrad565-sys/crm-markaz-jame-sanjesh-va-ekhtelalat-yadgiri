@@ -2271,21 +2271,7 @@ tr.wl-row--urgent > td:first-child {
 .appt-legend__item { display: inline-flex; align-items: center; gap: 6px; }
 .appt-legend__name { font-weight: 600; color: var(--text-1); }
 
-.tl-strip {
-  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px;
-  overflow-x: auto;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: var(--sp-2);
-}
-.tl-strip__hour {
-  display: flex; flex-direction: column-reverse; align-items: center; gap: 3px;
-  min-height: 58px; padding: 2px 1px; border-radius: var(--radius-sm);
-}
-.tl-strip__hour.is-now { background: color-mix(in srgb, var(--accent) 14%, transparent); }
-.tl-strip__dots { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; max-width: 100%; }
-.tl-strip__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--appt-strong); }
-.tl-strip__dot.is-cancelled { opacity: 0.35; }
-.tl-strip__label { font-size: 10px; color: var(--text-3); }
+/* ۱.۱۱.۰ — نوار «خط زمانی امروز» (tl-strip) با حذف کارت از داشبورد مدیر بی‌استفاده شد — CSSهایش هم برداشته شد */
 
 .table tbody tr[class*='hue-'] td { background: color-mix(in srgb, var(--appt-soft) 40%, transparent); }
 .table tbody tr[class*='hue-'] td:first-child { box-shadow: inset -4px 0 0 var(--appt-strong); }
@@ -4215,11 +4201,13 @@ body.cb-printing #cb-print-root { display: block; }
 
 /* ═══════════ UX-ممیزی ۱.۰۶ — اصلاحات الگویی سراسری ═══════════ */
 
-/* ── داشبورد: «کارهای من» + «خط زمانی امروز» دوستونه (گلایهٔ ۴) ── */
+/* ── داشبورد: ردیف قهرمان «کارهای من» + «اطلاع‌رسانی مرکز» دوستونه ──
+   ۱.۱۱.۰ — به روایت مدیر: کارهای من بزرگ‌تر (دوسوم) و اطلاع‌رسانی بغلش (یک‌سوم)؛
+   خط زمانی از این ردیف حذف شد. موبایل زیر هم، ≥۱۰۸۰px کنار هم. */
 .dash-duo { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); align-items: stretch; }
 .dash-duo > * { margin-bottom: 0 !important; }
 @media (min-width: 1080px) {
-  .dash-duo { grid-template-columns: minmax(340px, 5fr) minmax(0, 7fr); }
+  .dash-duo { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); }
 }
 /* ۱.۱۰.۰ — بهم‌ریختگی دسکتاپ داشبورد مدیر: خالی‌حالیِ تمام‌صفحهٔ «کارهای من» کنار
    کارت کوتاه «خط زمانی» ناهم‌تراز به‌نظر می‌رسید؛ خالی‌حالی داخل duo جمع‌وجور می‌شود */
@@ -4227,16 +4215,18 @@ body.cb-printing #cb-print-root { display: block; }
 .dash-duo .empty__icon { width: 44px; height: 44px; }
 .dash-duo .empty__icon svg { width: 20px; height: 20px; }
 .dash-duo .empty__hint { font-size: var(--fs-xs); }
-/* ۱.۱۰.۱ — حفرهٔ خالی زیر کارت «خط زمانی» (گزارش مدیر): دو کارت هم‌قد می‌شوند؛
-   بدنهٔ هر کارت کش می‌آید، نوار ساعت در بدنهٔ خط زمانی رشد می‌کند و راهنمای
-   درمانگرها زیر آن می‌نشیند؛ فهرست کارهای من سقف ارتفاع می‌گیرد تا ردیف بی‌رویه بلند نشود */
+/* ۱.۱۱.۰ — حفرهٔ خالی ردیف dash-duo: دو کارت هم‌قد می‌شوند؛ بدنهٔ هر کارت کش می‌آید و
+   فهرست کارهای من سقف ارتفاع می‌گیرد تا ردیف بی‌رویه بلند نشود */
 .dash-duo > .card { display: flex; flex-direction: column; height: 100%; }
 .dash-duo .card__body { flex: 1 1 auto; min-height: 0; }
 .dash-duo .todos-card .card__body { display: flex; flex-direction: column; }
-.dash-duo .todo-list { flex: 1 1 auto; max-height: 348px; overflow-y: auto; }
-.dash-duo .tl-card .card__body { display: flex; flex-direction: column; justify-content: center; gap: var(--sp-3); }
-.dash-duo .tl-card .tl-strip { flex: 1 1 auto; min-height: 104px; max-height: 264px; }
-.dash-duo .tl-legend { margin-bottom: 0; }
+.dash-duo .todo-list { flex: 1 1 auto; max-height: 420px; overflow-y: auto; }
+/* کارت اطلاع‌رسانی داخل ردیف قهرمان: فهرست اعلان‌ها کش می‌آید تا دو کارت هم‌قد بمانند */
+.dash-duo .an-card .card__body { display: flex; flex-direction: column; gap: var(--sp-3); }
+
+/* ── داشبورد درمانگر: جفت اطلاع‌رسانی + دانش‌افزایی (۱.۱۱.۰ بالای صفحه) ── */
+.info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--sp-4); }
+.info-grid .card { margin-bottom: 0 !important; }
 
 /* ── کارهای من: ردیف افزودنِ جمع‌شده پشت دکمهٔ + ── */
 .todo-quick__bar { display: flex; justify-content: flex-start; margin-bottom: var(--sp-3); }

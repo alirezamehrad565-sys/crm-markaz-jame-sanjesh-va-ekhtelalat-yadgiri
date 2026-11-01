@@ -49,7 +49,7 @@ const ALLOW: Record<string, Record<string, string>> = {
     'font-size: 10px;': '.side-search kbd — کلید میان‌بر لاتین (Ctrl و…)',
   },
   'css/views.css': {
-    '.tl-strip__label { font-size: 10px; color: var(--text-3); }': 'رقم فارسی ساعت نوار زمان داشبورد — استثنای رقم ',
+    /* ورودی .tl-strip__label حذف شد: نوار خط زمانی داشبورد مدیر در ۱.۱۱.۰ برداشته شد */
     'display: grid; place-items: center; font-size: 11px; font-weight: 700;': 'help-toc__n — رقم شمارهٔ فهرست در دایرهٔ ۲۰px',
     'display: grid; place-items: center; font-size: 11.5px; font-weight: 700;': 'help-points__n — رقم شماره در دایرهٔ ۲۲px',
     'font-size: 10px; font-weight: 700;': 'wd-appt__savatar — حرف اول نام، aria-hidden تزئینی در دایرهٔ ۲۰px',
