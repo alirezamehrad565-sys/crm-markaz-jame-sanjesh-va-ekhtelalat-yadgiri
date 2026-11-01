@@ -63,7 +63,7 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(after).toMatch(/height:\s*100dvh/);
   });
 
-  test('نسخه: سو 1.09.0 — قفل هم‌نسخه‌ای bump با انتشار ممیزی uupm.cc', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.09\.0'/);
+  test('نسخه: سو 1.10.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار + کلاژ آلبوم)', () => {
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.10\.0'/);
   });
 });
