@@ -4216,7 +4216,7 @@ body.cb-printing #cb-print-root { display: block; }
 /* ═══════════ UX-ممیزی ۱.۰۶ — اصلاحات الگویی سراسری ═══════════ */
 
 /* ── داشبورد: «کارهای من» + «خط زمانی امروز» دوستونه (گلایهٔ ۴) ── */
-.dash-duo { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+.dash-duo { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); align-items: stretch; }
 .dash-duo > * { margin-bottom: 0 !important; }
 @media (min-width: 1080px) {
   .dash-duo { grid-template-columns: minmax(340px, 5fr) minmax(0, 7fr); }
@@ -4227,6 +4227,16 @@ body.cb-printing #cb-print-root { display: block; }
 .dash-duo .empty__icon { width: 44px; height: 44px; }
 .dash-duo .empty__icon svg { width: 20px; height: 20px; }
 .dash-duo .empty__hint { font-size: var(--fs-xs); }
+/* ۱.۱۰.۱ — حفرهٔ خالی زیر کارت «خط زمانی» (گزارش مدیر): دو کارت هم‌قد می‌شوند؛
+   بدنهٔ هر کارت کش می‌آید، نوار ساعت در بدنهٔ خط زمانی رشد می‌کند و راهنمای
+   درمانگرها زیر آن می‌نشیند؛ فهرست کارهای من سقف ارتفاع می‌گیرد تا ردیف بی‌رویه بلند نشود */
+.dash-duo > .card { display: flex; flex-direction: column; height: 100%; }
+.dash-duo .card__body { flex: 1 1 auto; min-height: 0; }
+.dash-duo .todos-card .card__body { display: flex; flex-direction: column; }
+.dash-duo .todo-list { flex: 1 1 auto; max-height: 348px; overflow-y: auto; }
+.dash-duo .tl-card .card__body { display: flex; flex-direction: column; justify-content: center; gap: var(--sp-3); }
+.dash-duo .tl-card .tl-strip { flex: 1 1 auto; min-height: 104px; max-height: 264px; }
+.dash-duo .tl-legend { margin-bottom: 0; }
 
 /* ── کارهای من: ردیف افزودنِ جمع‌شده پشت دکمهٔ + ── */
 .todo-quick__bar { display: flex; justify-content: flex-start; margin-bottom: var(--sp-3); }
