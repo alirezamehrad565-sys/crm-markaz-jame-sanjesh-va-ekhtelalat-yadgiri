@@ -669,7 +669,10 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   from { opacity: 0; transform: translateY(24px); }
 }
 
-@media (max-width: 640px) {
+/* iOS Safari: هر ورودیِ متن با font-size <16px هنگام فوکوس زوم می‌کند — کف 16px روی همهٔ
+   دستگاه‌های لمسی (تبلت ≥640px هم پوشش داده شود؛ قاعدهٔ skill طراحی: base 16px).
+   لَپ‌های scoped فونت‌ریز (sess-note/ot-skill) در انتهای views.css روی لمس اصلاح می‌شوند. */
+@media (pointer: coarse) {
   .input, .select, .textarea { font-size: 16px; }
 }
 
