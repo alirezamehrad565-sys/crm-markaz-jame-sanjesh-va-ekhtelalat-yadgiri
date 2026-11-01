@@ -29,6 +29,14 @@
   line-gap-override: 0%;
 }
 
+/* WCAG 2.4.11 (Focus Not Obscured — AA): با پیمایش/فوکوس صفحه‌ای، عنصرِ فوکوس‌شده
+   هرگز زیر topbar چسبان (60px) پنهان نماند + بازخورد لمسی بومی iOS خاموش (زبان فشار A21 جایگزین دارد) */
+html {
+  scroll-padding-top: calc(var(--topbar-h, 60px) + 12px);
+  scroll-padding-bottom: 12px;
+  -webkit-tap-highlight-color: transparent;
+}
+
 :root {
   --lh-body: 1.8;    /* متن بدنهٔ فارسی — خوانایی */
   --lh-heading: 1.4; /* عنوان‌ها (h1–h4، card/tab titleها) */
@@ -697,7 +705,8 @@ textarea {
     position: fixed;
     inset-inline-start: 0;
     top: 0;
-    height: 100vh; /* دراپر موبایل تمام‌قد (override شناوری دسکتاپ) */
+    height: 100vh; /* دراپر موبایل تمام‌قد (override شناوری دسکتاپ) — fallback */
+    height: 100dvh; /* iOS: نوار آدرس پویا — ارتفاع واقعی viewport */
     width: min(300px, 84vw);
     transform: translateX(-100%);
     opacity: 0;
