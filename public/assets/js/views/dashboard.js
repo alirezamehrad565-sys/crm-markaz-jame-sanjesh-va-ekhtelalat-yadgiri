@@ -85,16 +85,27 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
 
   if (myStats) {
     if (myStats.missingNotes > 0) {
+      /* UX-ممیزی گلایهٔ ۱: دکمه در هم‌ردیفِ متن بود و در عرض کم متن را له می‌کرد —
+         اکنون متن و دکمه در بدنهٔ آلرت دو ردیف مستقل‌اند (wrap هم تضمین CSS می‌شود) */
       parts.push(
         el(
           'div',
           { class: 'alert alert--warning', style: { marginBottom: 'var(--sp-4)' } },
           icon('edit', 18),
-          el('span', {}, `${fa(myStats.missingNotes)} جلسهٔ برگزارشدهٔ این ماه هنوز گزارش جلسه ندارند — گزارشِ نوشته‌شده هم امتیاز رقابت است، هم سند بالینی.`),
           el(
-            'button',
-            { class: 'btn btn--soft btn--sm', onclick: () => { location.hash = '#/working-day'; } },
-            'ثبت گزارش جلسه‌ها'
+            'div',
+            { class: 'alert__body' },
+            el('span', {}, `${fa(myStats.missingNotes)} جلسهٔ برگزارشدهٔ این ماه هنوز گزارش جلسه ندارند — گزارشِ نوشته‌شده هم امتیاز رقابت است، هم سند بالینی.`),
+            el(
+              'div',
+              { class: 'alert__actions' },
+              el(
+                'button',
+                { class: 'btn btn--soft btn--sm', onclick: () => { location.hash = '#/working-day'; } },
+                icon('edit', 14),
+                'ثبت گزارش جلسه‌ها'
+              )
+            )
           )
         )
       );
@@ -234,10 +245,16 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
   );
   if (!document.body.dataset.kpiStaggered) document.body.dataset.kpiStaggered = '1'; /* A19 */
 
-  if (canSeeTodos()) parts.push(renderMyTodosCard());
-
+  /* UX-ممیزی گلایهٔ ۴: «کارهای من» تمام‌عرض با فضای مرده؛ اکنون دوستونه با «خط زمانی امروز»
+     (موبایل زیر هم، ≥۱۰۸۰px کنار هم — .dash-duo در views.css) */
+  const todosCard = canSeeTodos() ? renderMyTodosCard() : null;
   const timeline = todayTimelineCard(dayAppts, todayData);
-  if (timeline) parts.push(timeline);
+  if (todosCard && timeline) {
+    parts.push(el('div', { class: 'dash-duo', style: { marginBottom: 'var(--sp-4)' } }, todosCard, timeline));
+  } else {
+    if (todosCard) parts.push(todosCard);
+    if (timeline) parts.push(timeline);
+  }
 
   const scoreRows = scoring?.rows ?? [];
   if (scoreRows.length) {
@@ -254,39 +271,10 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
   if (validation) parts.push(validationCard(validation.kpis, validation.audits));
 
   if (summaryData) {
-    const maxTotal = Math.max(1, ...summaryData.byDay.map((d) => d.total));
-    parts.push(
-      el(
-        'div',
-        { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
-        el(
-          'div',
-          { class: 'card__head' },
-          el('div', { class: 'card__title' }, 'روند ۷ روز اخیر'),
-          el('span', { class: 'badge badge--neutral' }, `${formatJalaliNumeric(addDaysYmd(todayData.date ?? tehranTodayYmd(), -6))} تا ${formatJalaliNumeric(todayData.date ?? tehranTodayYmd())}`)
-        ),
-        el(
-          'div',
-          { class: 'card__body' },
-          el(
-            'div',
-            { class: 'spark' },
-            summaryData.byDay.map((d) =>
-              el(
-                'div',
-                { class: 'spark__col', 'aria-label': `${formatJalaliNumeric(d.date)} — ${fa(d.total)} نوبت`, role: 'img' },
-                el('div', { class: 'spark__num' }, fa(d.total)),
-                // C13: صفر واقعی = نقطهٔ پایهٔ کم‌رنگ، نه میلهٔ ۴px که از مقدار کم تفکیک‌ناپذیر است
-                d.total === 0
-                  ? el('div', { class: 'spark__bar spark__bar--zero', style: { height: '4px', opacity: '.35' } })
-                  : el('div', { class: 'spark__bar', style: { height: `${Math.max(4, Math.round((d.total / maxTotal) * 72))}px` } }),
-                el('div', { class: 'spark__day' }, WEEKDAY_NAMES[iranianWeekdayOfYmd(d.date)])
-              )
-            )
-          )
-        )
-      )
-    );
+    /* UX-ممیزی P2: «روند ۷ روز اخیر» با همهٔ صفرها = نیم‌صفحهٔ مرده؛
+       اگر در کل هفته حتی یک نوبت نبوده، کارت اصلاً رندر نمی‌شود */
+    const weekHasAny = summaryData.byDay.some((d) => d.total > 0);
+    if (weekHasAny) parts.push(weekTrendCard(summaryData, todayData, today));
   }
 
   if (goalData) parts.push(drawScreeningGoalCard(goalData));
@@ -295,6 +283,40 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
   if (info) parts.push(info);
 
   return parts;
+}
+
+function weekTrendCard(summaryData, todayData) {
+  const maxTotal = Math.max(1, ...summaryData.byDay.map((d) => d.total));
+  return el(
+    'div',
+    { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+    el(
+      'div',
+      { class: 'card__head' },
+      el('div', { class: 'card__title' }, 'روند ۷ روز اخیر'),
+      el('span', { class: 'badge badge--neutral' }, `${formatJalaliNumeric(addDaysYmd(todayData.date ?? tehranTodayYmd(), -6))} تا ${formatJalaliNumeric(todayData.date ?? tehranTodayYmd())}`)
+    ),
+    el(
+      'div',
+      { class: 'card__body' },
+      el(
+        'div',
+        { class: 'spark' },
+        summaryData.byDay.map((d) =>
+          el(
+            'div',
+            { class: 'spark__col', 'aria-label': `${formatJalaliNumeric(d.date)} — ${fa(d.total)} نوبت`, role: 'img' },
+            el('div', { class: 'spark__num' }, fa(d.total)),
+            // C13: صفر واقعی = نقطهٔ پایهٔ کم‌رنگ، نه میلهٔ ۴px که از مقدار کم تفکیک‌ناپذیر است
+            d.total === 0
+              ? el('div', { class: 'spark__bar spark__bar--zero', style: { height: '4px', opacity: '.35' } })
+              : el('div', { class: 'spark__bar', style: { height: `${Math.max(4, Math.round((d.total / maxTotal) * 72))}px` } }),
+            el('div', { class: 'spark__day' }, WEEKDAY_NAMES[iranianWeekdayOfYmd(d.date)])
+          )
+        )
+      )
+    )
+  );
 }
 
 function leaderboardCard(rows, title, meStaffId, since = null) {

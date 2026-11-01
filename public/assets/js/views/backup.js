@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { fa, formatJalaliDateTime } from '../format.js';
-import { el, icon, toast, toastError, loadingState, errorState } from '../ui.js';
+import { el, icon, toast, toastError, loadingState, errorState, skeletonState } from '../ui.js';
 
 // ─── پشتیبان‌گیری و بازیابی () + ارسال به آیدی بله () — فقط مدیر مرکز ───
 // مکانیک: گرفتن یک فایل JSON از کل داده‌ها + بازیابی جایگزینی‌کل با دو گارد امنیتی
@@ -271,12 +271,21 @@ function smallText(...children) {
   return el('div', { style: { fontSize: 'var(--fs-xs)', color: 'var(--text-3)', marginTop: '4px' } }, ...children);
 }
 
+/* UX-ممیزی: گارد تعلیق — درخواست‌های کند به خطای قابل‌اقدام با «تلاش دوباره» تبدیل می‌شوند */
+function withTimeout(p, ms, message) {
+  return Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(message)), ms))
+  ]);
+}
+
 export async function renderBackup(container) {
-  container.replaceChildren(loadingState('در حال خواندن وضعیت داده‌ها…'));
+  /* UX-ممیزی الگوی ۷: اسکلت به‌جای اسپینر تنها + سقف زمانی تا صفحه برای همیشه «در حال خواندن» نماند */
+  container.replaceChildren(skeletonState('list', 5));
 
   let status = null;
   try {
-    status = (await api.get('/api/backup/status')).data;
+    status = (await withTimeout(api.get('/api/backup/status'), 20000, 'خواندن وضعیت داده‌ها بیش از حد طول کشید — اتصال را بررسی کنید و دوباره تلاش کنید.')).data;
   } catch (err) {
     container.replaceChildren(errorState(err, () => renderBackup(container)));
     return;

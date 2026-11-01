@@ -118,7 +118,13 @@ export async function renderAppointments(container, ctx = {}) {
   }
 
   if (!state.weekStart) state.weekStart = weekStartOf(tehranTodayYmd());
-  if (!state.viewMode) state.viewMode = 'week'; // — پیش‌فرض هفتگی در همهٔ دستگاه‌ها (تصمیم کاربر)
+  if (!state.viewMode) {
+    /* UX-ممیزی: نمای هفتگی در موبایل = اسکرول افقی ~۳ برابر عرض صفحه؛
+       اولین ورود در دستگاه لمسی/باریک با «روز» شروع می‌شود (انتخاب کاربر در نشست حفظ می‌شود) */
+    const coarse = window.matchMedia?.('(pointer: coarse)')?.matches;
+    const narrow = window.matchMedia?.('(max-width: 640px)')?.matches;
+    state.viewMode = (coarse || narrow) ? 'day' : 'week';
+  }
   if (!state.dayYmd) state.dayYmd = tehranTodayYmd();
   const isTherapist = session.user?.role === 'therapist';
   if (isTherapist) state.staffFilter = session.user.staffId;

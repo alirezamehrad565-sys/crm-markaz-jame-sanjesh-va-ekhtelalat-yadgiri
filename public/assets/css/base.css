@@ -729,6 +729,18 @@ textarea {
     border: 1px solid var(--border);
     background: var(--surface);
   }
+  .sidebar__close {
+    display: grid;
+    place-items: center;
+    width: 34px; height: 34px;
+    margin-inline-start: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text-2);
+    flex-shrink: 0;
+  }
+  .sidebar__close:hover { background: var(--surface-2); color: var(--text); }
   .content { padding: var(--sp-4); }
   .topbar { padding: 0 var(--sp-4); }
 }
@@ -761,9 +773,19 @@ textarea {
 .nav__label {
   display: flex; align-items: center; gap: 8px;
   font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.02em; /* S11-18: برچسب گروه منو، کف ۱۲px */
-  color: var(--text-3);
+  color: var(--text-2); /* UX-ممیزی گلایهٔ ۵: text-3 عملاً دیده نمی‌شد — یک پله پررنگ‌تر */
   padding: var(--sp-4) var(--sp-3) var(--sp-1);
 }
+
+/* UX-ممیزی گلایهٔ ۵: گروه‌های منو = آکاردئون (details/summary بومی — دسترس‌پذیر بدون JS) */
+.nav__group > summary.nav__label { cursor: pointer; user-select: none; list-style: none; }
+.nav__group > summary.nav__label::-webkit-details-marker { display: none; }
+.nav__group > summary.nav__label:hover { color: var(--text); }
+.nav__group-chev { display: inline-flex; color: var(--text-3); transition: transform var(--fast); flex-shrink: 0; }
+.nav__group[open] > summary.nav__label .nav__group-chev { transform: rotate(180deg); }
+
+/* UX-ممیزی گلایهٔ ۵: دکمهٔ ✕ دراور موبایل (در دسکتاپ پنهان) */
+.sidebar__close { display: none; }
 
 /* F4: اتصال حروف فارسی را نشکن */
 html[lang='fa'] .nav__label { letter-spacing: 0; }

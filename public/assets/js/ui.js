@@ -135,6 +135,25 @@ export function progressRing(value, max, { size = 84, stroke = 8, color = 'var(-
   return ring;
 }
 
+/* UX-ممیزی الگوی ۶: محتوای پهن در قاب باریک بدون نشانهٔ اسکرول —
+   کانتینر اسکرول‌شدنی افقی را با گرادیان لبه علامت می‌زند (تا انتهای اسکرول محو می‌شود) */
+export function markScrollable(node) {
+  if (!node || node.dataset.scrollCueBound) return node;
+  node.dataset.scrollCueBound = '1';
+  const update = () => {
+    const over = node.scrollWidth - node.clientWidth > 8;
+    node.classList.toggle('has-scroll-x', over);
+    const pos = Math.abs(node.scrollLeft); /* RTL: scrollLeft منفی/صفر */
+    const atEnd = pos + node.clientWidth >= node.scrollWidth - 8;
+    node.classList.toggle('at-scroll-end', over && atEnd);
+  };
+  node.addEventListener('scroll', update, { passive: true });
+  if (typeof ResizeObserver === 'function') new ResizeObserver(update).observe(node);
+  else window.addEventListener('resize', update);
+  requestAnimationFrame(update);
+  return node;
+}
+
 export function tabs(items, initialKey) {
   const root = el('div', { class: 'tabs', role: 'tablist' });
   const buttons = new Map();
@@ -149,6 +168,7 @@ export function tabs(items, initialKey) {
     buttons.set(item.key, btn);
     root.appendChild(btn);
   }
+  markScrollable(root);
   const setActive = (key) => {
     for (const [k, btn] of buttons) {
       const on = k === key;
@@ -158,6 +178,7 @@ export function tabs(items, initialKey) {
       // در track اسکرول‌شدنی (موبایل) تب فعال داخل دید بماند
       if (on && btn.isConnected) btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
+    markScrollable(root);
   };
   // S1-16: کلیدهای جهت روی tablist (RTL: چپ = بعدی) + Home/End
   root.addEventListener('keydown', (e) => {

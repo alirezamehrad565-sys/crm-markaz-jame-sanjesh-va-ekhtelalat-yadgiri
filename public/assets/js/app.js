@@ -143,10 +143,10 @@ function buildSidebar() {
   const sidebar = document.getElementById('sidebar');
   const nav = sidebar.querySelector('.nav');
   const role = session.user?.role ?? null;
+  /* UX-ممیزی گلایهٔ ۵: ۲۰ آیتم تخت = منوی خیلی طولانی؛ گروه‌ها آکاردئون شدند (پیش‌فرض باز، قابل جمع‌کردن) */
   nav.replaceChildren(
-    ...navGroupsFor(role).flatMap((group) => [
-      el('div', { class: 'nav__label' }, group.label || ''),
-      ...group.items.map((item) => {
+    ...navGroupsFor(role).map((group) => {
+      const items = group.items.map((item) => {
         const btn = el(
           'button',
           { class: 'nav__item', dataset: { nav: item.hash }, onclick: () => { location.hash = item.hash; closeSidebar(); } },
@@ -160,8 +160,19 @@ function buildSidebar() {
         if (item.hash === '#/waitlist') btn.appendChild(el('span', { class: 'nav__badge nav__badge--waitlist', hidden: true }));
         if (item.hash === '#/dashboard') btn.appendChild(el('span', { class: 'nav__badge nav__badge--todos', hidden: true }));
         return btn;
-      })
-    ])
+      });
+      return el(
+        'details',
+        { class: 'nav__group', open: true },
+        el(
+          'summary',
+          { class: 'nav__label' },
+          el('span', {}, group.label || ''),
+          el('span', { class: 'nav__group-chev', 'aria-hidden': 'true' }, icon('chevD', 13))
+        ),
+        ...items
+      );
+    })
   );
 }
 
@@ -438,8 +449,16 @@ document.getElementById('menu-btn').addEventListener('click', () => {
     sidebar.dataset.focusFromDrawer = '1'; /* بسته‌شدن با کلیک آیتم منو، فوکوس را به menu-btn برنمی‌گرداند — پیمایش ادامه دارد */
     first.focus();
   }
+  /* UX-ممیزی گلایهٔ ۵: آیتم فعال در دراور بلند دیده نمی‌شد — گروهش باز و به دید اسکرول می‌شود */
+  const activeItem = sidebar.querySelector('.nav__item.is-active');
+  if (activeItem) {
+    activeItem.closest('details.nav__group')?.setAttribute('open', '');
+    activeItem.scrollIntoView({ block: 'nearest' });
+  }
   document.addEventListener('keydown', sidebarEsc);
 });
+
+document.getElementById('sidebar-close')?.addEventListener('click', closeSidebar); /* UX-ممیزی: دکمهٔ ✕ دراور موبایل */
 
 const outlet = document.getElementById('outlet');
 initAnnouncementBanners(); // — بنر اعلان‌ها (صفحه ورود + پنل)

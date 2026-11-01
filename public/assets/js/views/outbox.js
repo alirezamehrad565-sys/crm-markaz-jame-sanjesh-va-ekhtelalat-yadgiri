@@ -28,9 +28,10 @@ function templateLabel(t) {
 }
 
 function sectionCard(title, hint, items, actionsBuilder) {
+  /* UX-ممیزی الگوی ۷: سه زبان متفاوت حالت خالی یکی شد — ردیف کوچک با آیکون به‌جای «— ردیفی نیست —» */
   const rows = items.length
     ? items.map(actionsBuilder)
-    : [el('div', { class: 'hint-text', style: { padding: 'var(--sp-3)' } }, '— ردیفی نیست —')];
+    : [el('div', { class: 'sanj-widget__empty', style: { padding: 'var(--sp-4)' } }, icon('check', 15), el('span', {}, 'موردی در این بخش نیست'))];
 
   return el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
     el('div', { style: { padding: 'var(--sp-3) var(--sp-4)', borderBottom: '1px solid var(--border)' } },
@@ -117,7 +118,7 @@ export async function renderOutbox(outlet) {
         `پیش‌نویس ${fa(drafts.length)} · آماده ${fa(ready.length)} · ناموفق ${fa(failed.length)}`)
     ),
     el('p', { class: 'hint-text', style: { marginTop: '0' } },
-      'اعلان «ثبت نوبت جدید» تا «ساعت ارسال» روز (پیش‌فرض ۱۸:۰۰) پیش‌نویس می‌ماند و یک‌جا فرستاده می‌شود؛ تغییر، لغو، تکلیف و غیبت همیشه فوری می‌رود. پیش‌نویسِ منتظر را همین‌جا می‌توانید فوراً بفرستید.'),
+      'اعلان‌های ثبت نوبت تا «ساعت ارسال» (پیش‌فرض ۱۸:۰۰) پیش‌نویس می‌مانند و یک‌جا می‌روند؛ تغییر، لغو، تکلیف و غیبت فوری ارسال می‌شوند.'), /* UX-ممیزی گلایهٔ ۶: پاراگراف ۵ خطی خلاصه شد — جزئیات در hint هر بخش */
     sectionCard(
       'پیش‌نویس‌ها (در انتظار ساعت ارسال)',
       'با «ارسال فوری» پیش از ساعت مقرر هم می‌توانید بفرستید.',

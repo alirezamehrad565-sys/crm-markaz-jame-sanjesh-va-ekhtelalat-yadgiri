@@ -93,12 +93,37 @@ export function renderMyTodosCard() {
       box
     );
 
+    /* UX-ممیزی گلایهٔ ۴: ردیف ۶ کنترلیِ افزودن، همیشه بالا بود و ناحیهٔ میانی را خالی نشان می‌داد؛
+       اکنون پشت دکمهٔ «کار جدید» جمع می‌شود و با باز شدن فوکوس مستقیم روی عنوان می‌رود */
+    if (!quickRow) quickRow = quickAddRow();
+    addToggle.classList.toggle('is-active', !quickRow.hidden);
+
     body.replaceChildren(
-      quickAddRow(),
+      el('div', { class: 'todo-quick__bar' }, addToggle),
+      quickRow,
       tb.root,
       box === 'inbox' ? inboxList(items) : outboxList(items)
     );
   }
+
+  let quickRow = null;
+  const addToggle = el(
+    'button',
+    {
+      class: 'btn btn--soft btn--sm',
+      type: 'button',
+      'aria-expanded': 'false',
+      'aria-controls': 'todo-quick-row',
+      onclick: () => {
+        if (!quickRow) quickRow = quickAddRow();
+        quickRow.hidden = !quickRow.hidden;
+        addToggle.setAttribute('aria-expanded', String(!quickRow.hidden));
+        if (!quickRow.hidden) quickRow.querySelector('input.input')?.focus();
+      }
+    },
+    icon('plus', 15),
+    'کار جدید'
+  );
 
   function quickAddRow() {
     const title = el('input', { class: 'input', placeholder: 'کار جدید… (شخصی یا واگذاری)', maxlength: 200, autocomplete: 'off', 'aria-label': 'عنوان کار جدید' }); /* S1-12 */
@@ -164,6 +189,7 @@ export function renderMyTodosCard() {
         checkArea.hidden = true;
         window.dispatchEvent(new Event('todos:changed'));
         box = 'outbox';
+        quickRow.hidden = true; /* UX-ممیزی: پس از ثبت، ردیف افزودن دوباره جمع می‌شود */
         refresh();
       } catch (err) {
         toastError(err);
@@ -178,7 +204,7 @@ export function renderMyTodosCard() {
 
     return el(
       'div',
-      { class: 'todo-quick' },
+      { class: 'todo-quick', id: 'todo-quick-row', hidden: true },
       title,
       sel,
       prio,

@@ -1,4 +1,4 @@
-import { el } from './ui.js';
+import { el, markScrollable } from './ui.js';
 import { fa } from './format.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -186,7 +186,7 @@ export function barChart({ points, height = 170, valueFormatter = (v) => fa(v) }
 
   // C1: سری متراکم داخل اسکرول افقی (عرض واقعی حفظ می‌شود؛ متن خوانا می‌ماند)
   if (W > 640) {
-    wrap.appendChild(el('div', { class: 'chart__scroll' }, node));
+    wrap.appendChild(markScrollable(el('div', { class: 'chart__scroll' }, node))); /* UX-ممیزی: نشانهٔ اسکرول */
   } else {
     node.removeAttribute('width'); node.removeAttribute('height');
     wrap.appendChild(node);
@@ -440,7 +440,7 @@ export function lineChart({ points, yMin = 0, yMax = null, height = 190, valueFo
     }
   });
   if (W > 640) {
-    wrap.appendChild(el('div', { class: 'chart__scroll' }, node));
+    wrap.appendChild(markScrollable(el('div', { class: 'chart__scroll' }, node))); /* UX-ممیزی: نشانهٔ اسکرول */
   } else {
     wrap.appendChild(node);
   }

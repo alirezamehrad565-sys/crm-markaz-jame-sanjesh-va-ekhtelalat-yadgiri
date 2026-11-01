@@ -44,11 +44,24 @@ export async function renderSettings(container, ctx = {}) {
     ...(API_KEYS_UI_ENABLED ? [{ key: 'keys', label: 'کلیدها و اتصال‌ها', icon: 'link' }] : [])
   ];
 
+  const TAB_DESCS = {
+    center: 'بازه‌های کاری مرکز عمدتاً ثابت هستند — یک‌بار اینجا تنظیم کنید و روی همه کارکنان اعمال کنید.',
+    staff: 'ساعت کاری هر همکار برای جلوگیری از نوبت‌دهی بیرون از بازهٔ مجاز او.',
+    notify: 'قالب پیام‌ها و کانال‌های اطلاع‌رسانی بات و پست الکترونیکی.',
+    sanj: 'شاخص‌های سنجش ساخت‌یافتهٔ مرکز.',
+    scoring: 'قواعد امتیازدهی تابلوی پیشرفت همکاران.',
+    announce: 'ثبت و مدیریت اعلان‌های داخلی مرکز.',
+    knowledge: 'پایگاه دانش مرکز — نکته، پروتکل و مقاله.',
+    keys: 'کلیدهای اتصال بات و سرویس‌های بیرونی.'
+  };
+  const descEl = el('div', { class: 'page-head__desc' }, TAB_DESCS[local.tab] ?? '');
+
   const body = el('div', {});
   const tabBar = tabs(tabDefs, local.tab);
 
   const draw = () => {
     tabBar.setActive(local.tab);
+    descEl.textContent = TAB_DESCS[local.tab] ?? ''; /* UX-ممیزی: زیرنویس «بازهٔ کاری» روی تب‌های بی‌ربط حذف شد */
     body.replaceChildren();
     if (settingsErr) {
       // بارگیری تنظیمات شکسته: فرمِ جعلی با دکمهٔ ذخیرهٔ فعال رندر نمی‌شود (الگوی تب امتیازبندی)
@@ -84,7 +97,7 @@ export async function renderSettings(container, ctx = {}) {
   container.replaceChildren(
     el('div', { class: 'page-head' },
       el('div', { class: 'page-head__title' }, 'تنظیمات'),
-      el('div', { class: 'page-head__desc' }, 'بازه‌های کاری مرکز عمدتاً ثابت هستند — یک‌بار اینجا تنظیم کنید و روی همه کارکنان اعمال کنید.')
+      descEl
     ),
     tabBar.root,
     body
