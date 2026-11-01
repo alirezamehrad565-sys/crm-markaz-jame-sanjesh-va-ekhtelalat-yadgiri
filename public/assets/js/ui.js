@@ -111,19 +111,29 @@ export function isKnownIcon(name) {
 }
 
 export function progressRing(value, max, { size = 84, stroke = 8, color = 'var(--primary)', trackColor = 'var(--surface-3)' } = {}) {
+  // — v1.08.0 ریشه‌کنی باگ حلقه: el() با createElement المان HTML می‌سازد و <svg> در فضانام HTML هرگز رندر نمی‌شد؛
+  //   ساخت با createElementNS اجباری است (آیکون‌ها چون از innerHTML می‌آیند سالم‌اند)
+  const NS = 'http://www.w3.org/2000/svg';
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(1, max > 0 ? value / max : 0));
-  const ring = el(
-    'svg',
-    { width: size, height: size, viewBox: `0 0 ${size} ${size}`, 'aria-hidden': 'true', class: 'ring-svg' },
-    el('circle', { cx: size / 2, cy: size / 2, r, fill: 'none', stroke: trackColor, 'stroke-width': stroke }),
-    el('circle', {
-      cx: size / 2, cy: size / 2, r, fill: 'none', stroke: color, 'stroke-width': stroke,
-      'stroke-linecap': 'round', 'stroke-dasharray': String(c), 'stroke-dashoffset': String(c * (1 - pct)),
-      transform: `rotate(-90 ${size / 2} ${size / 2})`, class: 'ring__fill'
-    })
-  );
+  const ring = document.createElementNS(NS, 'svg');
+  ring.setAttribute('width', String(size));
+  ring.setAttribute('height', String(size));
+  ring.setAttribute('viewBox', `0 0 ${size} ${size}`);
+  ring.setAttribute('aria-hidden', 'true');
+  ring.setAttribute('class', 'ring-svg');
+  const circle = (attrs) => {
+    const cn = document.createElementNS(NS, 'circle');
+    for (const [k, v] of Object.entries(attrs)) cn.setAttribute(k, String(v));
+    return cn;
+  };
+  ring.appendChild(circle({ cx: size / 2, cy: size / 2, r, fill: 'none', stroke: trackColor, 'stroke-width': stroke }));
+  ring.appendChild(circle({
+    cx: size / 2, cy: size / 2, r, fill: 'none', stroke: color, 'stroke-width': stroke,
+    'stroke-linecap': 'round', 'stroke-dasharray': String(c), 'stroke-dashoffset': String(c * (1 - pct)),
+    transform: `rotate(-90 ${size / 2} ${size / 2})`, class: 'ring__fill'
+  }));
   // A9: ترنزیشن حلقه مرده بود (مقدار نهایی هنگام insert) — الگوی دونات: از حالت خالی با rAF به هدف
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const fill = ring.querySelector('.ring__fill');
