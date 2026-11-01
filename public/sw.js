@@ -8,7 +8,7 @@
      • /api/*                           → هیچ‌گاه دخالت نمی‌شود (هرگز کش نمی‌شود)
    نسخه‌گذاری: با هر انتشار VERSION را bump کنید تا کش‌های کهنه در activate پاک شوند.
    ═══════════════════════════════════════════════════════════════ */
-const VERSION = 'v1.09.0';
+const VERSION = 'v1.10.0';
 const CACHE = `shell-${VERSION}`;
 const IMMUTABLE = ['/assets/img/', '/assets/fonts/', '/assets/help/', '/assets/dist/']; // dist نام‌دار
 
