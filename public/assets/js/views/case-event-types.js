@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { fa, formatJalaliDateTime } from '../format.js';
-import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyState, errorState, skeletonState, scienceNote } from '../ui.js';
+import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyState, errorState, skeletonState, scienceNote, rowMenu } from '../ui.js';
 import { TOOL_GUIDES } from '../clinical-content.js';
 import { session } from '../state.js';
 import { openChecklistSendModal, fillTargetOf } from '../case-events.js';
@@ -215,7 +215,8 @@ export async function renderCaseEventTypes(container) {
         ),
         el('div', { class: 'cell-sub', style: { margin: '8px 0' } },
           `ثبت: ${formatJalaliDateTime(p.occurredAt)} — ${sentLine}`),
-        el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+        /* UX-ممیزی فاز ۳: چهار دکمهٔ هم‌اندازه در هر کارت → یک CTA اصلی + منوی «⋯» با تفکیک مخرب‌ها */
+        el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' } },
           el('button', {
             class: 'btn btn--primary btn--sm',
             onclick: async () => {
@@ -228,37 +229,36 @@ export async function renderCaseEventTypes(container) {
               } catch (err) { toastError(err); }
             }
           }, icon('bell', 14), p.sentCount > 0 ? 'یادآوری دوباره' : 'ارسال پیام بله'),
-          el('a', { class: 'btn btn--soft btn--sm', href: `#/students/${p.studentId}` }, icon('student', 14), 'پرونده'),
-          el('button', {
-            class: 'btn btn--ghost btn--sm',
-            onclick: async () => {
-              const ok = await confirmModal({ title: 'لغو چک‌لیست', message: `چک‌لیست «${p.typeTitle}» برای «${p.studentName}» لغو شود؟`, confirmLabel: 'لغو', danger: true });
-              if (!ok) return;
-              try {
-                await api.post(`/api/case-events/${p.id}/cancel`, {});
-                toast('لغو شد');
-                renderCaseEventTypes(container);
-              } catch (err) { toastError(err); }
-            }
-          }, icon('x', 14), 'لغو'),
-          isManager()
-            ? el('button', {
-                class: 'btn btn--danger btn--sm',
-                onclick: async () => {
-                  const ok = await confirmModal({
-                    title: 'حذف رویداد (مدیر)',
-                    message: `چک‌لیست «${p.typeTitle}» برای «${p.studentName}» برای همیشه از صف و پرونده حذف شود؟ این عمل در گزارش رخدادها ثبت می‌شود.`,
-                    confirmLabel: 'حذف', danger: true
-                  });
+          rowMenu({
+            label: `اقدامات بیشتر برای چک‌لیست ${p.studentName}`,
+            items: [
+              { icon: 'student', label: 'پروندهٔ دانش‌آموز', onclick: () => { location.hash = `#/students/${p.studentId}`; } },
+              { icon: 'x', label: 'لغو چک‌لیست', danger: true, onclick: async () => {
+                  const ok = await confirmModal({ title: 'لغو چک‌لیست', message: `چک‌لیست «${p.typeTitle}» برای «${p.studentName}» لغو شود؟`, confirmLabel: 'لغو', danger: true });
                   if (!ok) return;
                   try {
-                    await api.del(`/api/case-events/${p.id}`);
-                    toast('رویداد حذف شد');
+                    await api.post(`/api/case-events/${p.id}/cancel`, {});
+                    toast('لغو شد');
                     renderCaseEventTypes(container);
                   } catch (err) { toastError(err); }
-                }
-              }, icon('x', 14), 'حذف')
-            : null
+                } },
+              isManager()
+                ? { icon: 'trash', label: 'حذف کامل (مدیر)', danger: true, onclick: async () => {
+                    const ok = await confirmModal({
+                      title: 'حذف رویداد (مدیر)',
+                      message: `چک‌لیست «${p.typeTitle}» برای «${p.studentName}» برای همیشه از صف و پرونده حذف شود؟ این عمل در گزارش رخدادها ثبت می‌شود.`,
+                      confirmLabel: 'حذف', danger: true
+                    });
+                    if (!ok) return;
+                    try {
+                      await api.del(`/api/case-events/${p.id}`);
+                      toast('رویداد حذف شد');
+                      renderCaseEventTypes(container);
+                    } catch (err) { toastError(err); }
+                  } }
+                : null
+            ].filter(Boolean)
+          })
         )
       )
     );
@@ -310,47 +310,47 @@ export async function renderCaseEventTypes(container) {
               : null
           )
         ),
-        el('div', { style: { display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' } },
+        /* UX-ممیزی فاز ۳: یک CTA + منوی «⋯» — مخرب‌ها («غیرفعال‌سازی/حذف») از دکمه‌های سطح کارت جدا شدند */
+        el('div', { style: { display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap', alignItems: 'center' } },
           isChecklist && t.familyFillable && t.active
             ? el('button', {
                 class: 'btn btn--primary btn--sm',
                 onclick: () => openStudentPicker(t)
               }, icon('zap', 14), 'ارسال برای دانش‌آموز')
             : null,
-          el('button', { class: 'btn btn--soft btn--sm', onclick: () => openTypeForm({ type: t, tagName: state.tagName, onSaved: () => renderCaseEventTypes(container) }) }, icon('edit', 14), 'ویرایش'),
-          t.active
-            ? el('button', {
-                class: 'btn btn--ghost btn--sm',
-                onclick: async () => {
-                  const ok = await confirmModal({ title: 'غیرفعال‌سازی قالب', message: `«${t.title}» از فهرست انتخاب و ارسال حذف می‌شود (رویدادهای قبلی می‌مانند).`, confirmLabel: 'غیرفعال کن', danger: true });
-                  if (!ok) return;
-                  try {
-                    await api.post(`/api/case-events/types/${t.id}/deactivate`, {});
-                    toast('قالب غیرفعال شد');
-                    renderCaseEventTypes(container);
-                  } catch (err) { toastError(err); }
-                }
-              }, icon('x', 14), 'غیرفعال‌سازی')
-            : null,
-          isManager()
-            ? el('button', {
-                class: 'btn btn--danger btn--sm',
-                title: 'فقط وقتی مجاز است که هیچ رویدادی به این قالب وصل نباشد',
-                onclick: async () => {
-                  const ok = await confirmModal({
-                    title: 'حذف کامل قالب (مدیر)',
-                    message: `«${t.title}» از کتابخانه حذف شود؟ اگر به این قالب رویدادی وصل باشد، حذف رد می‌شود و باید آن را غیرفعال کنید.`,
-                    confirmLabel: 'حذف', danger: true
-                  });
-                  if (!ok) return;
-                  try {
-                    await api.del(`/api/case-events/types/${t.id}`);
-                    toast('قالب حذف شد');
-                    renderCaseEventTypes(container);
-                  } catch (err) { toastError(err); }
-                }
-              }, icon('x', 14), 'حذف')
-            : null
+          rowMenu({
+            label: `اقدامات بیشتر برای «${t.title}»`,
+            items: [
+              { icon: 'edit', label: 'ویرایش قالب', onclick: () => openTypeForm({ type: t, tagName: state.tagName, onSaved: () => renderCaseEventTypes(container) }) },
+              t.active
+                ? { icon: 'x', label: 'غیرفعال‌سازی', danger: true, onclick: async () => {
+                    const ok = await confirmModal({ title: 'غیرفعال‌سازی قالب', message: `«${t.title}» از فهرست انتخاب و ارسال حذف می‌شود (رویدادهای قبلی می‌مانند).`, confirmLabel: 'غیرفعال کن', danger: true });
+                    if (!ok) return;
+                    try {
+                      await api.post(`/api/case-events/types/${t.id}/deactivate`, {});
+                      toast('قالب غیرفعال شد');
+                      renderCaseEventTypes(container);
+                    } catch (err) { toastError(err); }
+                  } }
+                : null,
+              isManager() ? { sep: true } : null,
+              isManager()
+                ? { icon: 'trash', label: 'حذف کامل (مدیر)', danger: true, onclick: async () => {
+                    const ok = await confirmModal({
+                      title: 'حذف کامل قالب (مدیر)',
+                      message: `«${t.title}» از کتابخانه حذف شود؟ اگر به این قالب رویدادی وصل باشد، حذف رد می‌شود و باید آن را غیرفعال کنید.`,
+                      confirmLabel: 'حذف', danger: true
+                    });
+                    if (!ok) return;
+                    try {
+                      await api.del(`/api/case-events/types/${t.id}`);
+                      toast('قالب حذف شد');
+                      renderCaseEventTypes(container);
+                    } catch (err) { toastError(err); }
+                  } }
+                : null
+            ].filter(Boolean)
+          })
         ),
         // — : «پشتوانهٔ علمی و نحوهٔ استفاده» زیر هر کارت چک‌لیست
         scienceNote(TOOL_GUIDES[t.key])

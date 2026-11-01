@@ -485,16 +485,18 @@ function apptsCard(board) {
       el('div', { class: 'card__title' }, icon('board', 16), isTherapist() ? 'جلسات من' : 'درمانگران و نوبت‌ها'),
       el('div', { class: 'wd-att__chips' },
         chip(ss.total, 'جلسه', 'primary', 'جلسه‌های این روز'),
-        chip(ss.pending, 'بدون ثبت', 'neutral', 'جلسات بدون ثبت حضور دانش‌آموز'),
-        chip(ss.present, 'حاضر', 'success'),
-        chip(ss.absent, 'غایب', 'error'),
-        chip(ops.planned, 'در انتظار عملیات', 'info', 'نوبت‌های بدون وضعیت عملیاتی'),
-        chip(ops.checkedIn, 'آمد', 'accent'),
-        chip(ops.delayed, 'تأخیر', 'warn'),
-        chip(ops.inSession, 'در جلسه', 'primary'),
-        chip(ops.completed, 'انجام شد', 'success'),
-        chip(ops.noShow, 'نیامد', 'error'),
-        chip(ops.cancelled, 'لغو', 'muted'),
+        /* UX-ممیزی فاز ۳: دوازده چیپ آماری هم‌زمان سربرگ را پر می‌کرد —
+           چیپ‌های صفر اطلاعی ندارند و فقط شلوغی‌اند؛ فقط شمارنده‌های غیرصفر رندر می‌شوند */
+        ss.pending > 0 ? chip(ss.pending, 'بدون ثبت', 'neutral', 'جلسات بدون ثبت حضور دانش‌آموز') : null,
+        ss.present > 0 ? chip(ss.present, 'حاضر', 'success') : null,
+        ss.absent > 0 ? chip(ss.absent, 'غایب', 'error') : null,
+        ops.planned > 0 ? chip(ops.planned, 'در انتظار عملیات', 'info', 'نوبت‌های بدون وضعیت عملیاتی') : null,
+        ops.checkedIn > 0 ? chip(ops.checkedIn, 'آمد', 'accent') : null,
+        ops.delayed > 0 ? chip(ops.delayed, 'تأخیر', 'warn') : null,
+        ops.inSession > 0 ? chip(ops.inSession, 'در جلسه', 'primary') : null,
+        ops.completed > 0 ? chip(ops.completed, 'انجام شد', 'success') : null,
+        ops.noShow > 0 ? chip(ops.noShow, 'نیامد', 'error') : null,
+        ops.cancelled > 0 ? chip(ops.cancelled, 'لغو', 'muted') : null,
         board.assessmentsToday > 0 ? chip(board.assessmentsToday, 'ارزیابی امروز', 'accent', 'گزارش‌های جلسهٔ ثبت‌شدهٔ امروز') : null
       )
     ),

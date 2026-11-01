@@ -107,12 +107,33 @@ function buildView(r, container) {
   );
 
   const points = r.byDay.map((p) => ({ date: jalaliTick(p.date), total: p.total, cancelled: p.cancelled }));
+  /* UX-ممیزی فاز ۳ (P1): SVG کل بازه تا ۱۰۲۰px در قاب ~۵۳۱px رندر می‌شد و نیمی از نمودار
+     نامرئی بود. پیش‌فرض «۱۴ روز اخیر» (در قاب جا می‌شود)؛ نمای «کل بازه» با چیپ در دسترس می‌ماند. */
+  const CHART_WINDOW = 14;
+  let chartMode = points.length > CHART_WINDOW ? 'recent' : 'all';
+  const chartMount = el('div', {});
+  function drawTrend() {
+    const shown = chartMode === 'recent' ? points.slice(-CHART_WINDOW) : points;
+    chartMount.replaceChildren(deferredChart(() => barChart({ points: shown }), { reserveH: 170 })); /* E3: تعویق ساخت تا نزدیک دید */
+  }
+  drawTrend();
+  let trendToggle = null;
+  if (points.length > CHART_WINDOW) {
+    trendToggle = el('div', { class: 'tl-filters', style: { marginBottom: 'var(--sp-3)' } },
+      el('button', { class: 'chip is-active', type: 'button', 'data-mode': 'recent', onclick: () => { chartMode = 'recent'; syncTrendToggle(); drawTrend(); } }, '۱۴ روز اخیر'),
+      el('button', { class: 'chip', type: 'button', 'data-mode': 'all', onclick: () => { chartMode = 'all'; syncTrendToggle(); drawTrend(); } }, `کل بازه (${fa(points.length)} روز)`));
+    function syncTrendToggle() {
+      trendToggle.querySelectorAll('.chip').forEach((c) => c.classList.toggle('is-active', c.dataset.mode === chartMode));
+    }
+  }
   const trendCard = el('div', { class: 'card' },
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, 'روند روزانه نوبت‌ها'),
-      el('span', { class: 'badge badge--neutral' }, `${formatJalaliNumeric(r.from)} تا ${formatJalaliNumeric(r.to)}`)
+      el('span', { class: 'badge badge--neutral' }, chartMode === 'recent' && points.length > CHART_WINDOW
+        ? '۱۴ روز اخیر از بازه'
+        : `${formatJalaliNumeric(r.from)} تا ${formatJalaliNumeric(r.to)}`)
     ),
-    el('div', { class: 'card__body' }, deferredChart(() => barChart({ points }), { reserveH: 170 })) /* E3: تعویق ساخت تا نزدیک دید */
+    el('div', { class: 'card__body' }, trendToggle, chartMount)
   );
 
   const attDonut = deferredChart(() => donut({

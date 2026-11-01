@@ -79,32 +79,39 @@ export async function renderStudentProfile(container, ctx) {
   let noteEvents = [];
   let staff = [];
   let timeline = { data: [], nextAction: null, meta: { hasMore: false } };
-  try {
-    const [schoolsRes, apptRes, tagsRes, allTagsRes, evRes, notesRes, staffRes, tlRes, focusKeysRes, focusLabelMap] = await Promise.all([
-      api.get('/api/schools').catch(() => ({ data: [] })),
-      api.get(`/api/students/${id}/appointments${qs({ limit: 50 })}`),
-      fetchStudentTags(id),
-      fetchTags(),
-      api.get(`/api/students/${id}/case-events${qs({ limit: 200 })}`).catch(() => ({ data: [] })),
-      api.get(`/api/students/${id}/timeline${qs({ kinds: 'session_note', limit: 200 })}`).catch(() => ({ data: [] })),
-      api.get('/api/staff').catch(() => ({ data: [] })),
-      api.get(`/api/students/${id}/timeline${qs({ limit: TIMELINE_PAGE })}`),
-      fetchStudentFocus(id), // 
-      focusLabels() // برچسب فارسی کلیدها از درخت واحد
-    ]);
-    schools = schoolsRes.data;
-    appointments = apptRes.data;
-    studentTags = tagsRes;
-    allTags = allTagsRes;
-    studentFocus = focusKeysRes.map((k) => ({ key: k, fa: focusLabelMap[k] ?? k })); // 
-    caseEvents = evRes.data;
-    noteEvents = notesRes.data;
-    staff = staffRes.data;
-    timeline = tlRes;
-  } catch (err) {
-    // پیش‌تر catch خالی بود: خطای واکشی مثل «پروندهٔ خالی» رندر می‌شد؛ حالا بازخورد دارد
-    toastError(err);
-  }
+  /* UX-ممیزی فاز ۳ (P1 «تا تکمیل ۹ درخواست موازی فقط اسکلت»): درخواست‌های موازی به پس‌زمینه
+     رفتند؛ کروم صفحه (کارت وضعیت + نوار تب‌ها) بلافاصله با دادهٔ خود دانش‌آموز رندر می‌شود و
+     وقتی پاسخ‌ها رسید، کارت و تب‌ها درجا تازه و تب درخواستی با دادهٔ کامل رندر می‌شود. */
+  let auxDone = false;
+  let pendingTab = null;
+  const auxPromise = (async () => {
+    try {
+      const [schoolsRes, apptRes, tagsRes, allTagsRes, evRes, notesRes, staffRes, tlRes, focusKeysRes, focusLabelMap] = await Promise.all([
+        api.get('/api/schools').catch(() => ({ data: [] })),
+        api.get(`/api/students/${id}/appointments${qs({ limit: 50 })}`),
+        fetchStudentTags(id),
+        fetchTags(),
+        api.get(`/api/students/${id}/case-events${qs({ limit: 200 })}`).catch(() => ({ data: [] })),
+        api.get(`/api/students/${id}/timeline${qs({ kinds: 'session_note', limit: 200 })}`).catch(() => ({ data: [] })),
+        api.get('/api/staff').catch(() => ({ data: [] })),
+        api.get(`/api/students/${id}/timeline${qs({ limit: TIMELINE_PAGE })}`),
+        fetchStudentFocus(id), //
+        focusLabels() // برچسب فارسی کلیدها از درخت واحد
+      ]);
+      schools = schoolsRes.data;
+      appointments = apptRes.data;
+      studentTags = tagsRes;
+      allTags = allTagsRes;
+      studentFocus = focusKeysRes.map((k) => ({ key: k, fa: focusLabelMap[k] ?? k })); //
+      caseEvents = evRes.data;
+      noteEvents = notesRes.data;
+      staff = staffRes.data;
+      timeline = tlRes;
+    } catch (err) {
+      // پیش‌تر catch خالی بود: خطای واکشی مثل «پروندهٔ خالی» رندر می‌شد؛ حالا بازخورد دارد
+      toastError(err);
+    }
+  })();
 
   const schoolName = (sid) => schools.find((s) => s.id === sid)?.name ?? null;
 
@@ -116,61 +123,69 @@ export async function renderStudentProfile(container, ctx) {
     (session.user.role === 'therapist' && Boolean(student.ownerStaffId) && student.ownerStaffId === session.user.staffId)
   );
 
-  const nextActionBlock = buildNextActionBlock(timeline.nextAction);
-
-  const statusCard = el('div', { class: 'card' },
-    el('div', { class: 'card__body' },
-      el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' } },
-        el('div', { class: 'avatar-lg' }, student.firstName.charAt(0)),
-        el('div', { style: { flex: 1, minWidth: 0 } },
-          el('h2', { style: { marginBottom: '6px' } }, `${student.firstName} ${student.lastName}`),
-          el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
-            statusBadge(student.active ? 'active' : 'inactive'),
-            student.gender ? statusBadge(student.gender) : null,
-            student.grade ? el('span', { class: 'badge badge--neutral' }, gradeLabel(student.grade)) : null,
-            pathwayChip(student.pathway),
-            canEditPathway(student)
-              ? el('button', {
-                  class: 'btn btn--ghost btn--sm',
-                  style: { padding: '2px 8px' },
-                  title: 'تغییر مسیر پرونده — تب تفسیر بالینی بر همین اساس شاخه می‌خورد',
-                  onclick: () => openPathwayModal(student, () => renderStudentProfile(container, ctx))
-                }, icon('edit', 13), 'مسیر')
-              : null,
-            student.ownerName
-              ? el('span', { class: 'badge badge--accent', title: 'مسئول پرونده — سپردن رسمی پرونده به درمانگر' }, `مسئول پرونده: ${student.ownerName}`)
-              : null,
-            student.specialNeedType
-              ? el('span', { class: `badge badge--${student.specialNeedSeverity === 'severe' ? 'error' : 'warning'}`, title: 'نیاز ویژهٔ شناسایی‌شده' },
-                  SPECIAL_NEED_TYPE_LABELS[student.specialNeedType] ?? student.specialNeedType)
-              : null,
-            el('span', { class: 'cell-sub' }, `مدرسه: ${schoolName(student.schoolId) ?? '—'}${student.className ? ` — ${student.className}` : ''}`)
-          )
-        )
-      ),
-      el('div', { class: 'profile-actions' },
-        nextActionBlock,
-        canCreateCaseEvents()
-          ? el('div', { class: 'profile-actions__row' },
-              el('button', {
-                class: 'btn btn--primary btn--sm',
-                onclick: () => openCaseEventForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
-              }, icon('plus', 15), 'ثبت رویداد پرونده'),
-              /* UX-ممیزی: دو دکمهٔ هم‌شکل که فقط در یک واژه فرق داشتند («ارسال چک‌لیست با بله» / «ارسال تمرین با بله»)
-                 در یک منوی «ارسال با بله» ادغام شدند */
-              baleSendMenu()
+  /* کارت وضعیت دو مرحله‌ای: در رندر فوری فقط هویت و بج‌های پایه (دادهٔ خود دانش‌آموز)؛
+     پس از رسیدن دادهٔ موازی، «اقدام بعدی» و ردیف اقدامات هم اضافه می‌شوند. */
+  function buildStatusCard() {
+    const nextActionBlock = auxDone ? buildNextActionBlock(timeline.nextAction) : null;
+    return el('div', { class: 'card' },
+      el('div', { class: 'card__body' },
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' } },
+          el('div', { class: 'avatar-lg' }, student.firstName.charAt(0)),
+          el('div', { style: { flex: 1, minWidth: 0 } },
+            el('h2', { style: { marginBottom: '6px' } }, `${student.firstName} ${student.lastName}`),
+            el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
+              statusBadge(student.active ? 'active' : 'inactive'),
+              student.gender ? statusBadge(student.gender) : null,
+              student.grade ? el('span', { class: 'badge badge--neutral' }, gradeLabel(student.grade)) : null,
+              pathwayChip(student.pathway),
+              canEditPathway(student)
+                ? el('button', {
+                    class: 'btn btn--ghost btn--sm',
+                    style: { padding: '2px 8px' },
+                    title: 'تغییر مسیر پرونده — تب تفسیر بالینی بر همین اساس شاخه می‌خورد',
+                    onclick: () => openPathwayModal(student, () => renderStudentProfile(container, ctx))
+                  }, icon('edit', 13), 'مسیر')
+                : null,
+              student.ownerName
+                ? el('span', { class: 'badge badge--accent', title: 'مسئول پرونده — سپردن رسمی پرونده به درمانگر' }, `مسئول پرونده: ${student.ownerName}`)
+                : null,
+              student.specialNeedType
+                ? el('span', { class: `badge badge--${student.specialNeedSeverity === 'severe' ? 'error' : 'warning'}`, title: 'نیاز ویژهٔ شناسایی‌شده' },
+                    SPECIAL_NEED_TYPE_LABELS[student.specialNeedType] ?? student.specialNeedType)
+                : null,
+              el('span', { class: 'cell-sub' }, `مدرسه: ${schoolName(student.schoolId) ?? '—'}${student.className ? ` — ${student.className}` : ''}`)
             )
-          : null,
-        canManageCase ? buildOwnerEditor(student, () => renderStudentProfile(container, ctx)) : null
+          )
+        ),
+        auxDone
+          ? el('div', { class: 'profile-actions' },
+              nextActionBlock,
+              canCreateCaseEvents()
+                ? el('div', { class: 'profile-actions__row' },
+                    el('button', {
+                      class: 'btn btn--primary btn--sm',
+                      onclick: () => openCaseEventForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
+                    }, icon('plus', 15), 'ثبت رویداد پرونده'),
+                    /* UX-ممیزی: دو دکمهٔ هم‌شکل که فقط در یک واژه فرق داشتند («ارسال چک‌لیست با بله» / «ارسال تمرین با بله»)
+                       در یک منوی «ارسال با بله» ادغام شدند */
+                    baleSendMenu()
+                  )
+                : null,
+              canManageCase ? buildOwnerEditor(student, () => renderStudentProfile(container, ctx)) : null
+            )
+          : null
       )
-    )
-  );
+    );
+  }
 
   const content = el('div', {});
+  let activeTabKey = 'info'; // تب فعال — برای بازسازی نوار پس از رسیدن داده
 
   function selectTab(key) {
+    activeTabKey = key;
     tabBar.setActive(key); // kit خودش کلیک را فعال نمی‌کند — صریح فعال می‌کنیم
     content.replaceChildren(skeletonState('list', 4));
+    if (!auxDone) { pendingTab = key; return; } // دادهٔ موازی هنوز نرسیده — بعد از رسیدن رندر می‌شود
     const renderer = {
       info: renderInfoTab,
       clinical: renderClinicalTabContent, //
@@ -211,20 +226,22 @@ export async function renderStudentProfile(container, ctx) {
     return root;
   }
 
-  const tabBar = tabs(
-    [
+  function tabItems() {
+    return [
       { key: 'info', label: 'اطلاعات پایه', icon: 'user', onSelect: selectTab },
       ...(canSeeClinical ? [{ key: 'clinical', label: 'تفسیر بالینی', icon: 'brain', onSelect: selectTab }] : []),
       { key: 'timeline', label: 'تاریخچه', icon: 'clock', onSelect: selectTab },
-      { key: 'sessions', label: `جلسات (${fa(appointments.length)})`, icon: 'calendar', onSelect: selectTab },
+      { key: 'sessions', label: auxDone ? `جلسات (${fa(appointments.length)})` : 'جلسات', icon: 'calendar', onSelect: selectTab },
       { key: 'exercises', label: 'تمرین‌ها', icon: 'file', onSelect: selectTab },
       { key: 'comms', label: 'ارتباطات', icon: 'bot', onSelect: selectTab }
-    ],
-    'info'
-  );
+    ];
+  }
+  let tabBar = tabs(tabItems(), 'info');
 
   const docsMount = el('div', { style: { marginTop: 'var(--sp-4)' } });
   renderDocsQuickCard(docsMount, student, { onChanged: () => renderStudentProfile(container, ctx) });
+
+  let statusCard = buildStatusCard();
 
   container.replaceChildren(
     el('div', { class: 'page-head' },
@@ -241,8 +258,22 @@ export async function renderStudentProfile(container, ctx) {
   const timelineDeepFilter = ctx.query?.filter ?? (requestedTab === 'followups' ? 'followups' : null);
   const knownTabs = ['info', 'timeline', 'sessions', 'comms', 'exercises'];
   if (canSeeClinical) knownTabs.splice(1, 0, 'clinical');
-  if (requestedTab === 'followups') selectTab('timeline');
-  else selectTab(knownTabs.includes(requestedTab) ? requestedTab : 'info');
+  selectTab(requestedTab === 'followups' ? 'timeline' : (knownTabs.includes(requestedTab) ? requestedTab : 'info'));
+
+  /* رسیدن دادهٔ پس‌زمینه: کارت وضعیت و نوار تب‌ها درجا تازه می‌شوند و تب در انتظار (یا تب فعال)
+     با دادهٔ کامل رندر می‌شود. */
+  auxPromise.then(() => {
+    auxDone = true;
+    const freshCard = buildStatusCard();
+    statusCard.replaceWith(freshCard);
+    statusCard = freshCard;
+    const freshBar = tabs(tabItems(), activeTabKey);
+    tabBar.root.replaceWith(freshBar.root);
+    tabBar = freshBar;
+    const target = pendingTab ?? activeTabKey;
+    pendingTab = null;
+    selectTab(target);
+  });
 
   function renderExercisesTabContent(box) {
     renderExercisesTab(box, { student, onChanged: () => renderStudentProfile(container, ctx) });
