@@ -63,7 +63,18 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(after).toMatch(/height:\s*100dvh/);
   });
 
-  test('نسخه: سو 1.10.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار + کلاژ آلبوم)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.10\.0'/);
+  test('نسخه: سو 1.10.1 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار + کلاژ آلبوم)', () => {
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.10\.1'/);
+  });
+
+  test('۱.۱۰.۱ — داشبورد مدیر: ردیف dash-duo هم‌قد (حفرهٔ خالی زیر خط زمانی ممنوع)', () => {
+    // دو کارت باید stretch شوند، نه start — وگرنه کارت کوتاهِ خط زمانی زیرش حفرهٔ خالی می‌گذارد
+    expect(views).toMatch(/\.dash-duo\s*\{[^}]*align-items:\s*stretch/);
+    // کارت‌های داخل duo ستونی و تمام‌قد؛ بدنه کش می‌آید
+    expect(views).toMatch(/\.dash-duo\s*>\s*\.card\s*\{[^}]*flex-direction:\s*column[^}]*height:\s*100%/);
+    expect(views).toMatch(/\.dash-duo\s+\.card__body\s*\{[^}]*flex:\s*1/);
+    // سقف فهرست کارها و نوار ساعت (جلوی رشد بی‌رویهٔ ردیف)
+    expect(views).toMatch(/\.dash-duo\s+\.todo-list\s*\{[^}]*max-height/);
+    expect(views).toMatch(/\.dash-duo\s+\.tl-card\s+\.tl-strip\s*\{[^}]*max-height/);
   });
 });
