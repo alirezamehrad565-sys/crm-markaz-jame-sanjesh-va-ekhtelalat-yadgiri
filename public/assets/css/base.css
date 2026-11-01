@@ -784,8 +784,13 @@ textarea {
 .nav__group-chev { display: inline-flex; color: var(--text-3); transition: transform var(--fast); flex-shrink: 0; }
 .nav__group[open] > summary.nav__label .nav__group-chev { transform: rotate(180deg); }
 
-/* UX-ممیزی گلایهٔ ۵: دکمهٔ ✕ دراور موبایل (در دسکتاپ پنهان) */
-.sidebar__close { display: none; }
+/* UX-ممیزی گلایهٔ ۵: دکمهٔ ✕ دراور موبایل (در دسکتاپ پنهان)
+   رفع باگ ۱.۰۷.۱: قاعدهٔ بدون scope «display:none» بعد از بلوک @media (max-width:920px)
+   می‌آمد و با هم‌ارزشی سرانتخابی، قاعدهٔ display:grid همان بلوک را خنثی می‌کرد —
+   نتیجه: ✕ در موبایل هم هرگز دیده نمی‌شد. اکنون پنهان‌سازی فقط به دسکتاپ محدود شد. */
+@media (min-width: 921px) {
+  .sidebar__close { display: none; }
+}
 
 /* F4: اتصال حروف فارسی را نشکن */
 html[lang='fa'] .nav__label { letter-spacing: 0; }
