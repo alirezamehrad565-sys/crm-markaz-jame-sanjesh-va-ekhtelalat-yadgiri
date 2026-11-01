@@ -3927,19 +3927,7 @@ tr.wl-row--urgent > td:first-child {
 .cb-plansmgr__main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cb-plansmgr__row .select { flex-shrink: 0; max-width: 132px; }
 .cb-plansmgr__ops { display: flex; gap: 4px; }
-.cb-print-menu { position: relative; }
-.cb-print-menu__pop {
-  position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 60;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); /* Tier B */
-  box-shadow: var(--shadow-lg, var(--shadow-3)); padding: 6px; display: grid; min-width: 250px;
-}
-.cb-print-menu__item {
-  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: none; background: none;
-  cursor: pointer; text-align: start; border-radius: var(--radius-xs); color: var(--text-1); /* */
-}
-.cb-print-menu__item:hover { background: var(--primary-soft); }
-.cb-print-menu__item span { display: grid; }
-.cb-print-menu__item small { color: var(--text-3); font-size: var(--fs-2xs); } /* S8-10 */
+/* منوی چاپ/ابزار کلر بوک با الگوی مشترک row-menu (components.css) جایگزین شد — UX-ممیزی فاز ۳ */
 
 /* ═════════ چاپ کلر بوک ═════════ */
 
