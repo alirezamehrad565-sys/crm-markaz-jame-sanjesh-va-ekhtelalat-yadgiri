@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { el, icon, toast, toastError, confirmModal, openModal, emptyState, loadingState, errorState, skeletonState } from '../ui.js';
+import { el, icon, toast, toastError, confirmModal, openModal, emptyState, loadingState, errorState, skeletonState, rowMenu } from '../ui.js';
 import {
   fa,
   tehranTodayYmd,
@@ -100,7 +100,6 @@ const filters = { year: null, tag: null, from: '', to: '', q: '' };
 const urlCache = new Map(); // `${entryId}/${fileId}` → objectURL
 let _shellBody = null;
 let _toolbar = null;
-let _docCtl = null; // شنیده‌های سطح سند نوار ابزار (چاپ/Escape) — با rebuild کنسل می‌شود
 
 async function fileObjectUrl(entryId, fileId) {
   const key = `${entryId}/${fileId}`;
@@ -264,25 +263,8 @@ function buildToolbar() {
     onclick: () => { filters.year = null; refreshAll(); }
   }, icon('filter', 14), 'اعمال بازه');
 
-  const printWrap = el('div', { class: 'cb-print-menu' });
-  const printBtn = el('button', { class: 'btn btn--soft btn--sm', onclick: togglePrintMenu }, icon('printer', 15), 'چاپ');
-  const menu = el('div', { class: 'cb-print-menu__pop', hidden: true },
-    el('button', { class: 'cb-print-menu__item', onclick: () => { togglePrintMenu(); printAlbum(); } },
-      icon('book', 16), el('span', {}, el('b', {}, 'آلبوم فعالیت‌ها'), el('small', {}, 'جلد + عکس‌ها با کپشن — خروجی کلر بوک'))),
-    el('button', { class: 'cb-print-menu__item', onclick: () => { togglePrintMenu(); printCalendar(); } },
-      icon('clipboard', 16), el('span', {}, el('b', {}, 'تقویم اجرایی'), el('small', {}, 'جدول رسمی فازها برای اداره')))
-  );
-  function togglePrintMenu() { menu.hidden = !menu.hidden; }
-  // شنیدهٔ سطح سند: با بازسازی نوار ابزار، شنیدهٔ قبلی با AbortController جمع می‌شود (نبود نشت)
-  _docCtl?.abort();
-  _docCtl = new AbortController();
-  document.addEventListener('click', (e) => {
-    if (!printWrap.contains(e.target)) menu.hidden = true;
-  }, { signal: _docCtl.signal });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') menu.hidden = true;
-  }, { signal: _docCtl.signal });
-  printWrap.append(printBtn, menu);
+  /* UX-ممیزی فاز ۳: پنج دکمهٔ سربرگ (تقویم/درون‌ریزی/فاز جدید/رویداد جدید/چاپ) →
+     یک CTA اصلی («رویداد جدید») + منوی «⋯»؛ دو خروجی چاپ هم در همین منو ادغام شدند */
 
   const filtersPanel = el('div', { class: 'cb-filters print-hide' },
     el('div', { class: 'cb-fgroup' },
@@ -314,11 +296,18 @@ function buildToolbar() {
           el('h2', { class: 'page-head__title' }, 'کلر بوک مرکز'),
           el('p', { class: 'page-head__desc' }, 'برنامهٔ سالانه و شواهد اجرا — هر فاز را با عکس و مستند زنده کنید')),
         el('div', { class: 'spacer' }),
-        el('button', { class: 'btn btn--soft btn--sm', onclick: openPlansManager }, icon('clipboard', 14), 'تقویم اجرایی'),
-        el('button', { class: 'btn btn--soft btn--sm', title: 'ورود دسته‌ای فازهای تقویم اجرایی از فایل اکسل', onclick: () => openExcelImport({ entity: 'clearbook-plans', onDone: () => refreshAll() }) }, icon('upload', 14), 'درون‌ریزی اکسل'),
-        el('button', { class: 'btn btn--soft btn--sm', onclick: () => openPlanModal() }, icon('target', 14), 'فاز جدید'),
         el('button', { class: 'btn btn--primary btn--sm', onclick: () => openEntryModal() }, icon('plus', 14), 'رویداد جدید'),
-        printWrap
+        rowMenu({
+          label: 'ابزارها و چاپ کلر بوک',
+          items: [
+            { icon: 'clipboard', label: 'تقویم اجرایی', onclick: () => openPlansManager() },
+            { icon: 'upload', label: 'درون‌ریزی اکسل فازها', onclick: () => openExcelImport({ entity: 'clearbook-plans', onDone: () => refreshAll() }) },
+            { icon: 'target', label: 'فاز جدید', onclick: () => openPlanModal() },
+            { sep: true },
+            { icon: 'book', label: 'چاپ آلبوم فعالیت‌ها', onclick: () => printAlbum() },
+            { icon: 'printer', label: 'چاپ تقویم اجرایی', onclick: () => printCalendar() }
+          ]
+        })
       )
     ),
     filtersPanel
