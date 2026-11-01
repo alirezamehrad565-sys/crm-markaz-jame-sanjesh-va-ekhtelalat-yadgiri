@@ -304,7 +304,7 @@ function buildToolbar() {
             { icon: 'upload', label: 'درون‌ریزی اکسل فازها', onclick: () => openExcelImport({ entity: 'clearbook-plans', onDone: () => refreshAll() }) },
             { icon: 'target', label: 'فاز جدید', onclick: () => openPlanModal() },
             { sep: true },
-            { icon: 'book', label: 'چاپ آلبوم فعالیت‌ها', onclick: () => printAlbum() },
+            { icon: 'book', label: 'چاپ آلبوم فعالیت‌ها', onclick: () => openAlbumLayoutModal() },
             { icon: 'printer', label: 'چاپ تقویم اجرایی', onclick: () => printCalendar() }
           ]
         })
@@ -1083,6 +1083,45 @@ function openPlansManager() {
 
 // ─── چاپ ───
 
+/* ۱.۱۰.۰ — انتخابگر چیدمان کلاژ آلبوم: هر صفحه چند عکس (۲ تا ۴)، بزرگ و وسط‌چین با کپشن */
+function openAlbumLayoutModal() {
+  let perPage = 2;
+  const opts = [
+    { n: 2, label: '۲ عکس در صفحه', hint: 'بزرگ‌ترین حالت — هر عکس نیم‌صفحه' },
+    { n: 3, label: '۳ عکس در صفحه', hint: 'متعادل — سه‌ردیفه' },
+    { n: 4, label: '۴ عکس در صفحه', hint: 'شبکهٔ ۲×۲' }
+  ];
+  const buttons = opts.map((o) => el('button', {
+    type: 'button',
+    class: `cb-album-opt${o.n === perPage ? ' is-active' : ''}`,
+    'aria-pressed': String(o.n === perPage),
+    onclick: () => {
+      perPage = o.n;
+      for (const b of buttons) {
+        const active = Number(b.dataset.n) === perPage;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-pressed', String(active));
+      }
+    },
+    dataset: { n: String(o.n) }
+  }, el('b', {}, o.label), el('span', {}, o.hint)));
+
+  const body = el('div', { class: 'cb-album-opts' },
+    el('p', { class: 'cb-album-opts__desc' },
+      'چیدمان عکس‌ها در صفحات آلبوم را انتخاب کنید — عکس‌ها بزرگ و وسط‌چین می‌افتند و کپشن زیر هر عکس چاپ می‌شود. متن رویدادها و فهرست مستندات همیشه پیش از صفحات عکس می‌آید.'),
+    ...buttons
+  );
+
+  openModal({
+    title: 'چاپ آلبوم فعالیت‌ها',
+    body,
+    actions: [
+      (close) => el('button', { class: 'btn btn--soft', type: 'button', onclick: close }, 'انصراف'),
+      (close) => el('button', { class: 'btn btn--primary', type: 'button', onclick: () => { close(); printAlbum(perPage); } }, icon('printer', 15), 'چاپ آلبوم')
+    ]
+  });
+}
+
 function printRootMount(content) {
   let root = document.getElementById('cb-print-root');
   if (!root) {
@@ -1129,7 +1168,7 @@ async function fetchAllEntriesForPrint() {
   return all;
 }
 
-async function printAlbum() {
+async function printAlbum(perPage = 2) {
   try {
     toast('در حال آماده‌سازی آلبوم چاپی…');
     const entriesList = await fetchAllEntriesForPrint();
@@ -1186,26 +1225,30 @@ async function printAlbum() {
         ),
         e.body ? el('p', { class: 'cbp-entry__body' }, e.body) : null
       );
+      content.appendChild(block);
       const imgs = e.attachments.filter((a) => a.kind === 'image');
       const docsList = e.attachments.filter((a) => a.kind === 'doc');
       if (imgs.length > 0) {
-        const grid = el('div', { class: 'cbp-grid' });
+        /* ۱.۱۰.۰ — کلاژ آلبوم: عکس‌ها در صفحه‌های Nتایی (۲/۳/۴) بزرگ و وسط‌چین با کپشن زیر عکس؛
+           هر گروه یک صفحهٔ مستقل با شکست چاپ اجباری */
+        const loaded = [];
         for (const img of imgs) {
           try {
-            const url = await fileObjectUrl(e.id, img.id);
-            grid.appendChild(el('figure', { class: 'cbp-fig' },
-              el('img', { src: url, alt: img.caption || img.filename }),
-              img.caption ? el('figcaption', {}, img.caption) : null
-            ));
+            loaded.push({ img, url: await fileObjectUrl(e.id, img.id) });
           } catch { /* عکس در دسترس نبود — رد می‌شود */ }
         }
-        block.appendChild(grid);
+        for (let i = 0; i < loaded.length; i += perPage) {
+          content.appendChild(el('div', { class: `cbp-page cbp-page--${perPage}` },
+            loaded.slice(i, i + perPage).map(({ img, url }) =>
+              el('figure', { class: 'cbp-fig' },
+                el('img', { src: url, alt: img.caption || img.filename }),
+                img.caption ? el('figcaption', {}, img.caption) : null))));
+        }
       }
       if (docsList.length > 0) {
         block.appendChild(el('p', { class: 'cbp-entry__docs' },
           `مستندات پیوست: ${docsList.map((d) => d.filename).join('، ')}`));
       }
-      content.appendChild(block);
     }
 
     const printDom = el('div', {},
