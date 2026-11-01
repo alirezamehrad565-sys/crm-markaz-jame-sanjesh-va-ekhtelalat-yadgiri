@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { el, icon, toast, toastError, confirmModal, openModal, emptyState, loadingState, errorState } from '../ui.js';
+import { el, icon, toast, toastError, confirmModal, openModal, emptyState, loadingState, errorState, skeletonState } from '../ui.js';
 import {
   fa,
   tehranTodayYmd,
@@ -173,10 +173,12 @@ async function uploadChunked(entryId, file, onPct) {
 // ─── نقطهٔ ورود ویو ───
 
 export async function renderClearbook(container) {
-  container.replaceChildren(loadingState());
+  /* UX-ممیزی P1 کلر بوک دسکتاپ: اسکلت به‌جای اسپینر تنها + سقف زمانی — دیگر «در حال بارگذاری» بی‌پایان نمی‌ماند */
+  container.replaceChildren(skeletonState('cards', 3));
+  const withTimeout = (p, ms, message) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(message)), ms))]);
   try {
     const [plansRes, tagsRes, yearsRes] = await Promise.all([
-      api.get('/api/clearbook/plans'),
+      withTimeout(api.get('/api/clearbook/plans'), 20000, 'خواندن داده‌های کلر بوک بیش از حد طول کشید — دوباره تلاش کنید.'),
       api.get('/api/clearbook/tags'),
       api.get('/api/clearbook/years')
     ]);

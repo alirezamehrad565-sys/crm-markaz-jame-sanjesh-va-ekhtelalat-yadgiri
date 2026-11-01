@@ -174,11 +174,13 @@ export async function renderArchive(container) {
   });
 
   const meta = result.meta ?? { page: 1, totalPages: 1, total: 0 };
-  const pager = el('div', { class: 'pager' },
-    el('span', {}, `صفحه ${fa(meta.page)} از ${fa(meta.totalPages)} · ${fa(meta.total)} پرونده`),
-    el('button', { class: 'btn btn--ghost btn--sm', disabled: meta.page <= 1, onclick: () => { local.page -= 1; renderArchive(container); } }, 'قبلی'),
-    el('button', { class: 'btn btn--ghost btn--sm', disabled: meta.page >= meta.totalPages, onclick: () => { local.page += 1; renderArchive(container); } }, 'بعدی')
-  );
+  /* UX-ممیزی P3: پیجر تک‌صفحه‌ای در لیست‌های کوتاه حذف شد */
+  const pager = meta.totalPages > 1
+    ? el('div', { class: 'pager' },
+        el('span', {}, `صفحه ${fa(meta.page)} از ${fa(meta.totalPages)} · ${fa(meta.total)} پرونده`),
+        el('button', { class: 'btn btn--ghost btn--sm', disabled: meta.page <= 1, onclick: () => { local.page -= 1; renderArchive(container); } }, 'قبلی'),
+        el('button', { class: 'btn btn--ghost btn--sm', disabled: meta.page >= meta.totalPages, onclick: () => { local.page += 1; renderArchive(container); } }, 'بعدی'))
+    : null;
 
   container.replaceChildren(
     el('div', { class: 'page-head' },

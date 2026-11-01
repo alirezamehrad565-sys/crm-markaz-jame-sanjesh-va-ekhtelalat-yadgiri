@@ -4172,3 +4172,108 @@ body.cb-printing #cb-print-root { display: block; }
 .pr-variant-list { margin: 6px 0 0; padding-inline-start: 20px; }
 .pr-variant-list li { margin: 6px 0; line-height: 1.9; }
 
+
+/* ═══════════ UX-ممیزی ۱.۰۶ — اصلاحات الگویی سراسری ═══════════ */
+
+/* ── داشبورد: «کارهای من» + «خط زمانی امروز» دوستونه (گلایهٔ ۴) ── */
+.dash-duo { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+.dash-duo > * { margin-bottom: 0 !important; }
+@media (min-width: 1080px) {
+  .dash-duo { grid-template-columns: minmax(340px, 5fr) minmax(0, 7fr); }
+}
+
+/* ── کارهای من: ردیف افزودنِ جمع‌شده پشت دکمهٔ + ── */
+.todo-quick__bar { display: flex; justify-content: flex-start; margin-bottom: var(--sp-3); }
+.todo-quick[hidden] { display: none; }
+
+/* ── آلرت: بدنه و ردیف اقدام (گلایهٔ ۱ — دکمه زیر متن) ── */
+.alert__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.alert__actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+
+/* ── نشانهٔ اسکرول افقی (الگوی ۶: محتوای پهن در قاب باریک) ── */
+.has-scroll-x { position: relative; }
+.has-scroll-x::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: 34px;
+  pointer-events: none;
+  background: linear-gradient(to left, color-mix(in srgb, var(--surface) 94%, transparent), transparent);
+  border-end-end-radius: var(--radius-sm);
+  transition: opacity var(--fast);
+}
+.has-scroll-x.at-scroll-end::after { opacity: 0; }
+/* نوار تب‌ها: فاصله برای دیده‌شدن گرادیان لبه */
+.tabs.has-scroll-x { padding-inline-end: 26px; }
+.chart__scroll.has-scroll-x { border-end-end-radius: var(--radius-sm); }
+
+/* ── گزارش پیشرفت: آکاردئون حیطه‌ها + سرستون چسبان (گلایهٔ ۲) ── */
+.pr-domain {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  margin-bottom: var(--sp-3);
+  overflow: hidden;
+}
+.pr-domain > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  background: var(--surface-2);
+}
+.pr-domain > summary::-webkit-details-marker { display: none; }
+.pr-domain > summary b { font-size: var(--fs-md); }
+.pr-domain[open] > summary { border-bottom: 1px solid var(--border); }
+.pr-domain__chev { display: inline-flex; color: var(--text-3); transition: transform var(--fast); flex-shrink: 0; }
+.pr-domain[open] > summary .pr-domain__chev { transform: rotate(180deg); }
+/* سرستون چسبان زیر تاپ‌بار هنگام اسکرول جدول‌های بلند */
+.pr-table thead th { position: sticky; top: 0; z-index: 2; }
+.pr-domain > .pr-scroll { max-height: 62vh; overflow-y: auto; }
+.pr-domain > .pr-scroll .pr-table thead th { top: 0; }
+/* موبایل: ردیف‌های چک‌لیست = کارت عمودی per-مهارت (بدون بریدگی ستون) */
+@media (max-width: 640px) {
+  .pr-table { display: block; }
+  .pr-table thead { display: none; }
+  .pr-table tbody { display: flex; flex-direction: column; gap: var(--sp-2); }
+  .pr-table tbody tr {
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    padding: var(--sp-2) 0;
+  }
+  .pr-table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    border: none;
+    border-bottom: 1px dashed color-mix(in srgb, var(--border) 60%, transparent);
+    padding: var(--sp-2) var(--sp-3);
+    text-align: start;
+  }
+  .pr-table td:last-child { border-bottom: none; }
+  .pr-table td::before {
+    content: attr(data-label);
+    flex: none;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--text-3);
+  }
+  .pr-table td.is-num { text-align: start; }
+}
+/* چاپ: همهٔ آکاردئون‌ها باز باشند حتی اگر در صفحه جمع شده‌اند */
+@media print {
+  .pr-domain > summary { background: none; }
+  .pr-domain:not([open]) > *:not(summary) { display: block !important; }
+  .pr-domain__chev { display: none; }
+  .pr-domain > .pr-scroll { max-height: none; overflow: visible; }
+  .pr-table thead th { position: static; }
+  .has-scroll-x::after { display: none; }
+}

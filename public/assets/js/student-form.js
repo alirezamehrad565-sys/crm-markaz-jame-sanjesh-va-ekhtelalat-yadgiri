@@ -45,7 +45,7 @@ export async function openStudentForm({ student = null, archived = false, onSave
           isPlaceholderNid(student.nationalId)
           ? { name: 'national_id', label: 'کد ملی (ثبت نشده — اختیاری)', ltr: true, hint: 'اگر کد ملی را از خانواده گرفتید این‌جا ثبت کنید — بعد از ثبت قابل تغییر نیست', placeholder: '0012345679' }
           : { name: '_nid', label: 'کد ملی (غیرقابل تغییر)', ltr: true, value: student.nationalId, hint: 'برای تغییر کد ملی با مدیر سامانه تماس بگیرید' }
-        : { name: 'national_id', label: 'کد ملی', required: true, ltr: true, hint: 'کد ۱۰ رقمی معتبر — checksum بررسی می‌شود', placeholder: '0012345679' },
+        : { name: 'national_id', label: 'کد ملی', required: true, ltr: true, hint: 'کد ۱۰ رقمی معتبر — اعتبار آن خودکار بررسی می‌شود', placeholder: '0012345679' },
       { name: 'first_name', label: 'نام', required: true, value: student?.firstName },
       { name: 'last_name', label: 'نام خانوادگی', required: true, value: student?.lastName },
       { name: 'birth_date', label: 'تاریخ تولد', type: 'jalali-date', value: student?.birthDate, hint: 'اختیاری — از تقویم انتخاب کنید' },

@@ -156,14 +156,9 @@ export async function renderStudentProfile(container, ctx) {
                 class: 'btn btn--primary btn--sm',
                 onclick: () => openCaseEventForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
               }, icon('plus', 15), 'ثبت رویداد پرونده'),
-              el('button', {
-                class: 'btn btn--soft btn--sm',
-                onclick: () => openChecklistSendModal({ student, onSent: () => renderStudentProfile(container, ctx) })
-              }, icon('checklist', 15), 'ارسال چک‌لیست با بله'),
-              el('button', {
-                class: 'btn btn--soft btn--sm',
-                onclick: () => openExerciseSendModal({ student, onSent: () => renderStudentProfile(container, ctx) })
-              }, icon('file', 15), 'ارسال تمرین با بله')
+              /* UX-ممیزی: دو دکمهٔ هم‌شکل که فقط در یک واژه فرق داشتند («ارسال چک‌لیست با بله» / «ارسال تمرین با بله»)
+                 در یک منوی «ارسال با بله» ادغام شدند */
+              baleSendMenu()
             )
           : null,
         canManageCase ? buildOwnerEditor(student, () => renderStudentProfile(container, ctx)) : null
@@ -185,6 +180,35 @@ export async function renderStudentProfile(container, ctx) {
       exercises: renderExercisesTabContent
     }[key];
     (renderer ?? renderInfoTab)(content);
+  }
+
+  /* UX-ممیزی: منوی «ارسال با بله» — جای دو دکمهٔ دوقلو */
+  function baleSendMenu() {
+    const panel = el('div', { class: 'dd__panel', style: { display: 'none' } });
+    const btn = el('button', { class: 'btn btn--soft btn--sm', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' },
+      icon('send', 14), 'ارسال با بله', icon('chevD', 12));
+    const root = el('div', { class: 'dd' }, btn, panel);
+    function close() {
+      panel.style.display = 'none';
+      btn.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('mousedown', outside, true);
+      document.removeEventListener('keydown', esc, true);
+    }
+    function outside(e) { if (!root.contains(e.target)) close(); }
+    function esc(e) { if (e.key === 'Escape') { close(); btn.focus(); } }
+    btn.addEventListener('click', () => {
+      const open = panel.style.display !== 'none';
+      if (open) { close(); return; }
+      panel.replaceChildren(
+        el('button', { class: 'dd__item', onclick: () => { close(); openChecklistSendModal({ student, onSent: () => renderStudentProfile(container, ctx) }); } }, icon('checklist', 14), el('span', {}, 'چک‌لیست جلسه')), 
+        el('button', { class: 'dd__item', onclick: () => { close(); openExerciseSendModal({ student, onSent: () => renderStudentProfile(container, ctx) }); } }, icon('file', 14), el('span', {}, 'تمرین‌های دانش‌آموز'))
+      );
+      panel.style.display = 'block';
+      btn.setAttribute('aria-expanded', 'true');
+      document.addEventListener('mousedown', outside, true);
+      document.addEventListener('keydown', esc, true);
+    });
+    return root;
   }
 
   const tabBar = tabs(
