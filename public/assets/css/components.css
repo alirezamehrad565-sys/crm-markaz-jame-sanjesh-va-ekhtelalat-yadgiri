@@ -35,6 +35,25 @@ html[dir='ltr'] .ico--flip svg { transform: none; }
   transform: none;
 }
 
+/* ۱.۱۲.۰ — قفل مشغولی دکمه: با lockBtn فعال می‌شود (disabled + aria-busy + چرخ‌ندهٔ کوچک
+   کنار برچسب) تا دوبارکلیک/اسپم هم در سطح UI و هم در سطح API مهار شود.
+   فقط transform/opacity — بدون جابه‌جایی layout (زبان حرکت سطح ۱–۲). */
+.btn.is-busy { cursor: progress; }
+.btn.is-busy::before {
+  content: '';
+  width: 0.95em;
+  height: 0.95em;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  animation: btn-spin 0.7s linear infinite;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .btn.is-busy::before { animation-duration: 2.4s; }
+}
+
 .btn--primary {
   background: var(--grad-primary, var(--primary));
   color: var(--on-primary);
