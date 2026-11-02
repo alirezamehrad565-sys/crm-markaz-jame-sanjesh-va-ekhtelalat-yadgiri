@@ -63,8 +63,8 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(after).toMatch(/height:\s*100dvh/);
   });
 
-  test('نسخه: سو 1.12.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.12\.0'/);
+  test('نسخه: سو 1.14.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.14\.0'/);
   });
 
   test('۱.۱۲.۰ — UX روانی ناوبری: گود اسکرول پایدار + ارتفاع ثابت اوتلت + قفل مشغولی دکمه', () => {

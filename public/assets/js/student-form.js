@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { el, formModal, toast, toastError } from './ui.js';
+import { el, formModal, openModalAsync, toast, toastError } from './ui.js';
 import { STUDENT_GRADES, isPlaceholderNid } from './format.js';
 import { STUDENT_PATHWAYS } from './session-type.js'; // — مسیر پرونده
 import { session } from './state.js';
@@ -24,13 +24,30 @@ function canAssignOwner() {
   return session.user?.role === 'manager' || session.user?.role === 'secretary';
 }
 
-export async function openStudentForm({ student = null, archived = false, onSaved } = {}) {
+export function openStudentForm(args = {}) {
+  /* ۱.۱۴.۰ — پوستهٔ لودینگ همان لحظه باز می‌شود؛ schools/classes/staff که آمدند همین overlay درجا
+     به فرم کامل تبدیل می‌شود — بدون سکوتِ چندثانیه‌ای و بدون مودالِ دیرهنگام روی صفحهٔ دیگر
+     (ریشهٔ گزارش «دکمه‌ها باز نمی‌شوند»). */
+  const shell = openModalAsync({
+    title: args.student ? 'ویرایش دانش‌آموز' : 'دانش‌آموز جدید',
+    wide: true,
+    loadingText: 'در حال آماده‌سازی فرم…',
+    load: async () => {
+      await openStudentFormInner({ ...args, into: shell });
+      return shell;
+    }
+  });
+  return shell;
+}
+
+async function openStudentFormInner({ student = null, archived = false, onSaved, into } = {}) {
   const meta = await ensureFormMeta();
   const isEdit = Boolean(student);
   const isOffice = canAssignOwner();
   const isTherapist = session.user?.role === 'therapist';
 
   formModal({
+    into,
     title: isEdit
       ? 'ویرایش دانش‌آموز'
       : archived

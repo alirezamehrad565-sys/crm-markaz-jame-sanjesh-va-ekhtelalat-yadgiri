@@ -651,22 +651,10 @@ textarea {
   to { opacity: 1; transform: none; }
 }
 .view-enter { animation: view-in var(--normal) both; }
-
-/* ۱.۱۳.۰ — تعویض نرم نماها با View Transitions (جفتِ router.js):
-   فقط #outlet نام‌گذاری می‌شود تا کراس‌فیدِ قدیم→جدید در ناحیهٔ محتوا انجام شود؛
-   snapshot ریشه بی‌انیمیشن می‌ماند → سایدبار/تاپ‌بار/بَج‌ها در گذار ذره‌ای نلقک نمی‌زنند.
-   در نمای قدیم محوشدگیِ کوتاه و نمای جدید ورودِ ملایم با ۶px اوج — بدون پرش. */
-#outlet { view-transition-name: outlet; }
-::view-transition-old(root),
-::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
-::view-transition-old(outlet) { animation: vt-out 180ms var(--ease) both; }
-::view-transition-new(outlet) { animation: vt-in 300ms var(--ease) both; }
-@keyframes vt-out { to { opacity: 0; } }
-@keyframes vt-in { from { opacity: 0; transform: translateY(6px); } }
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(outlet),
-  ::view-transition-new(outlet) { animation-duration: 0.01ms !important; }
-}
+/* ۱.۱۴.۰ — View Transitions تعویض نما حذف شد (به درخواست کاربر بازگشت به رفتار ۱.۱۲.۰):
+   در VT، تا آماده‌شدن نمای جدید، اسنپ‌شات روی صفحه می‌ماند و تعامل بلعیده می‌شد —
+   روی شبکهٔ کند هر تعویض تا ۱.۵ ثانیه «کلیک‌خور» نبود و دکمه‌ها «باز نمی‌شدند».
+   رفتار برگشته: تعویض فوری + view-enter (فید ملایم) — بدون هیچ پنجرهٔ بی‌پاسخی. */
 
 @media (hover: hover) {
   .card--lift { transition: transform var(--fast), box-shadow var(--fast); }
