@@ -1,11 +1,10 @@
 import { api, qs } from '../api.js';
 import { fa, gradeLabel, isPlaceholderNid } from '../format.js';
-import { el, icon, confirmModal, toast, toastError, dataTable, statusBadge, loadingState, skeletonState, emptyState, callBadge, rowMenu, openModalAsync, lockBtn } from '../ui.js';
+import { el, icon, confirmModal, toast, toastError, dataTable, statusBadge, skeletonState, emptyState, callBadge, lockBtn } from '../ui.js';
 import { fetchTags, tagChipsPreview, openTagEditor } from '../tagging.js';
 import { openFocusEditor } from '../student-focus.js'; // درخت هدف در پروفایل
 import { openStudentForm } from '../student-form.js';
 import { openStudentDelete } from '../student-delete.js'; // — جریان واحد حذف کامل پرونده (مشترک با کارت پروفایل)
-import { openEducationHistory } from '../archive-form.js'; // — تاریخچهٔ تحصیلی
 import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ درمانگر روی ردیف جدول/چیپ فیلتر/راهنما
 import { session } from '../state.js';
 
@@ -343,7 +342,7 @@ export async function renderStudents(container, ctx) {
         classInfo(s) ? el('div', { class: 'cell-sub' }, classInfo(s)) : null
       )
     },
-    { key: 'tags', label: 'برچسب‌ها', render: (s) => tagChipsPreview(s.tags, 3) },
+    { key: 'tags', label: 'برچسب‌ها', render: (s) => tagChipsPreview(s.tags, 2) }, /* ۱.۱۶.۰: پیش‌نمایش ۲ چیپ — جا برای دایره‌های اقدام بدون اسکرول افقی */
     {
       key: 'owner', label: 'مسئول پرونده',
       render: (s) => s.ownerStaffId
@@ -373,22 +372,27 @@ export async function renderStudents(container, ctx) {
   ];
 
   if (isOffice()) {
-    /* UX-ممیزی گلایهٔ ۷: ۶ دکمهٔ آیکون‌باز در هر ردیف (۲ تای مخرب کنار هم) —
-       اکنون «ویرایش» پیداست و بقیه در منوی ⋯ با تفکیک مخرب‌ها؛ ردیف هم کلیک‌پذیر است (پروفایل) */
+    /* ۱.۱۶.۰ — به درخواست کاربر: سیستم مودال‌محورِ منوی ⋯ حذف شد — دکمه‌ها مستقیم سرِ ردیف‌اند.
+       همان زبان دایره‌های کارت پروفایل (۱.۱۵.۰) در مقیاس ردیف: دایره‌های سادهٔ ۳۰px (لمس ۳۸px).
+       ترتیب: امن‌ها اول (ویرایش/برچسب/هدف/آرشیو)؛ حذفِ مخرب همیشه آخری با فاصلهٔ ایمن اضافه.
+       باز شدن پروفایل مثل قبل با کلیک روی خود ردیف (dataTable روی کلیکِ دکمه‌ها گارد دارد).
+       هر دکمه قفل مشغولی واحد lockBtn دارد (ضد اسپم/دوبارکلیک). دسترسی‌ها دست‌نخورده ماند. */
+    const rowCircle = (iconName, label, onclick, danger = false) =>
+      el('button', {
+        class: `icon-circle${danger ? ' icon-circle--danger' : ''}`,
+        type: 'button', title: label, 'aria-label': label,
+        onclick: (e) => lockBtn(e.currentTarget, onclick)
+      }, icon(iconName, 14));
     columns.push({
       key: 'actions', label: 'عملیات', align: 'end',
-      render: (s) => el('div', { class: 'cell-actions' },
-        el('button', { class: 'btn btn--ghost btn--sm', title: 'ویرایش', 'aria-label': 'ویرایش', onclick: () => openStudentForm({ student: s, onSaved: () => renderStudents(container) }) }, icon('edit', 15)),
-        rowMenu({ label: `اقدامات بیشتر برای ${s.firstName} ${s.lastName}`, items: [
-          { label: 'پروفایل', icon: 'user', onclick: () => { location.hash = `#/students/${s.id}`; } },
-          { label: 'برچسب‌ها', icon: 'tag', onclick: () => openRowTagEditor(s, container) },
-          { label: 'هدف‌های شناختی', icon: 'target', onclick: () => openRowFocusEditor(s, container) },
-          s.active
-            ? { label: 'انتقال به آرشیو', icon: 'archive', onclick: () => archiveStudent(s) }
-            : { label: 'بازگشت به چرخهٔ فعال', icon: 'check', onclick: () => activateStudent(s) },
-          { sep: true },
-          { label: 'حذف کامل پرونده', icon: 'trash', danger: true, onclick: () => openStudentDelete(s, { onDeleted: () => refreshTable() }) }
-        ] })
+      render: (s) => el('div', { class: 'cell-actions row-circles', role: 'group', 'aria-label': `اقدامات ${s.firstName} ${s.lastName}` },
+        rowCircle('edit', 'ویرایش', () => openStudentForm({ student: s, onSaved: () => renderStudents(container) })),
+        rowCircle('tag', 'برچسب‌ها', () => openRowTagEditor(s, container)),
+        rowCircle('target', 'هدف‌های شناختی', () => openRowFocusEditor(s, container)),
+        s.active
+          ? rowCircle('archive', 'انتقال به آرشیو — سابقهٔ پرونده حفظ می‌شود', () => archiveStudent(s))
+          : rowCircle('check', 'بازگشت به چرخهٔ فعال', () => activateStudent(s)),
+        rowCircle('trash', 'حذف کامل پرونده', () => openStudentDelete(s, { onDeleted: () => refreshTable() }), true)
       )
     });
   }
