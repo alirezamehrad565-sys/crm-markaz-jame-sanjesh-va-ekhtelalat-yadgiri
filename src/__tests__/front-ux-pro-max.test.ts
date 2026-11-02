@@ -63,8 +63,33 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(after).toMatch(/height:\s*100dvh/);
   });
 
-  test('نسخه: سو 1.15.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.15\.0'/);
+  test('نسخه: سو 1.16.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.16\.0'/);
+  });
+
+  test('۱.۱۶.۰ — فهرست دانش‌آموزان: منوی ⋯ مودال‌محور حذف، دایره‌های اقدام سرِ ردیف + جدایی حذف از CTA', () => {
+    const students = readFileSync(join(__dirname, '../../public/assets/js/views/students.js'), 'utf8');
+    // منوی سه‌نقطه در نمای دانش‌آموزان نیست — دکمه‌ها مستقیم روی ردیف‌اند (درخواست کاربر)
+    expect(students).not.toMatch(/rowMenu\(/);
+    expect(students).toMatch(/class: 'cell-actions row-circles'/);
+    expect(students).toMatch(/icon-circle--danger/);
+    // هر دکمه با قفل مشغولی واحد (ضد اسپم) باز می‌شود
+    expect(students).toMatch(/lockBtn\(e\.currentTarget, onclick\)/);
+    // همهٔ اقداماتِ منوی سابق، مستقیم روی ردیف در دسترس‌اند (پروفایل = کلیک روی ردیف)
+    expect(students).toMatch(/openStudentForm\(\{ student: s/);
+    expect(students).toMatch(/openRowTagEditor\(s, container\)/);
+    expect(students).toMatch(/openRowFocusEditor\(s, container\)/);
+    expect(students).toMatch(/openStudentDelete\(s, \{ onDeleted/);
+    // کارت پروفایل: خوشهٔ دایره‌ها هرگز از درون نمی‌شکند — دایرهٔ قرمز حذف کنار CTA «ثبت رویداد» نمی‌افتد
+    expect(views).toMatch(/\.card-circles\s*\{[^}]*flex-wrap:\s*nowrap/);
+    expect(views).toMatch(/\.card-circles\s*\{[^}]*flex:\s*none/);
+    // دایره‌های ردیف: مقیاس ۳۰px (لمس ۳۸px)، تک‌خطی روی جدول دسکتاپ، چیدمان از پایان ردیف
+    expect(views).toMatch(/\.row-circles\s*\{[^}]*flex-wrap:\s*nowrap/);
+    expect(views).toMatch(/\.row-circles\s*\{[^}]*justify-content:\s*flex-end/);
+    expect(views).toMatch(/\.row-circles\s+\.icon-circle\s*\{[^}]*width:\s*30px/);
+    expect(views).toMatch(/@media\s*\(pointer:\s*coarse\)\s*\{\s*\.row-circles\s+\.icon-circle\s*\{[^}]*width:\s*38px/);
+    // دکمهٔ مخرب همیشه با فاصلهٔ ایمن اضافه از دکمه‌های امن
+    expect(views).toMatch(/\.card-circles \.icon-circle--danger, \.row-circles \.icon-circle--danger\s*\{[^}]*margin-inline-start/);
   });
 
   test('۱.۱۵.۰ — پروفایل: دکمه‌های دایره‌ای اقدام روی کارت پرونده (جای مودال/منوی پنهان)', () => {
