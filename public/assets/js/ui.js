@@ -289,6 +289,19 @@ let modalSeq = 0; // — شمارندهٔ شناسهٔ یکتای عنوان م�
 let formFieldSeq = 0; // — شمارندهٔ شناسهٔ یکتای فیلدهای formModal (اتصال label به کنترل)
 let comboSeq = 0; // S11-01: شناسهٔ یکتای listbox هر combobox
 
+/* ۱.۱۴.۰ — ساخت محتوای درونی مودال (سربرگ/بدنه/پانوشت) جدا شد تا «پرکردن بی‌درنگِ پوستهٔ لودینگ»
+   بدون بازسازی گرهٔ مودال ممکن شود؛ aria-labelledby با همان id عنوان حفظ می‌ماند. */
+function modalInner({ titleId, title, body, actions, close }) {
+  return [
+    el('div', { class: 'modal__head' },
+      el('div', { class: 'modal__title', id: titleId }, title),
+      el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': 'بستن', onclick: close }, icon('x', 18))
+    ),
+    el('div', { class: 'modal__body' }, typeof body === 'function' ? body(close) : body),
+    actions.length > 0 ? el('div', { class: 'modal__foot' }, ...actions.map((a) => a(close))) : null
+  ];
+}
+
 export function openModal({ title, body, actions = [], wide = false, onClose }) {
   const prevFocus = document.activeElement; // — برای بازگرداندن فوکوس به فراخوان هنگام بستن
   const overlay = el('div', { class: 'modal-overlay' });
@@ -313,14 +326,7 @@ export function openModal({ title, body, actions = [], wide = false, onClose }) 
   const modal = el(
     'div',
     { class: `modal${wide ? ' modal--wide' : ''}`, role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId },
-    el(
-      'div',
-      { class: 'modal__head' },
-      el('div', { class: 'modal__title', id: titleId }, title),
-      el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': 'بستن', onclick: close }, icon('x', 18))
-    ),
-    el('div', { class: 'modal__body' }, typeof body === 'function' ? body(close) : body),
-    actions.length > 0 ? el('div', { class: 'modal__foot' }, ...actions.map((a) => a(close))) : null
+    modalInner({ titleId, title, body, actions, close })
   );
 
   // — تلهٔ فوکوس: فقط عناصر رندرشده (نه display:none مثل چک‌باکس switch)
@@ -357,6 +363,36 @@ export function openModal({ title, body, actions = [], wide = false, onClose }) 
   if (first) setTimeout(() => first.focus(), 60);
 
   return { close, root: modal };
+}
+
+/* ۱.۱۴.۰ — پرکردن بی‌درنگِ پوستهٔ مودال لودینگ با محتوای واقعی (همان گره، همان overlay):
+   ریشهٔ ریشهٔ کشف باگ «دکمه‌ها باز نمی‌شوند» — اکشن‌هایی که اول await داده می‌کردند و بعد مودال
+   می‌ساختند، در شبکهٔ کند چند ثانیه «سکوتِ مطلق» می‌گذاشتند و اگر کاربر در این فاصله جابه‌جا
+   می‌شد، مودال بی‌زمینه دیرهنگام بالای صفحهٔ دیگری می‌افتاد و همه‌چیز را غیرکلیک می‌کرد.
+   اکنون مودال همان لحظه با اسپینر باز می‌شود و داده که آمد در جا پر می‌شود. */
+export function populateModalShell(shell, { title, body, actions = [], wide }) {
+  if (!shell?.root || !shell.root.isConnected) return;
+  if (wide !== undefined) shell.root.classList.toggle('modal--wide', Boolean(wide));
+  const titleEl = shell.root.querySelector('.modal__title');
+  const titleId = titleEl?.id;
+  shell.root.replaceChildren(...modalInner({ titleId, title: title ?? titleEl?.textContent ?? '', body, actions, close: shell.close }));
+  const first = shell.root.querySelector('.modal__body input, .modal__body select, .modal__body textarea');
+  if (first) setTimeout(() => first.focus(), 60);
+}
+
+export function openModalAsync({ title, loadingText = 'در حال بارگذاری…', wide = false, load }) {
+  const shell = openModal({ title, wide, body: loadingState(loadingText), actions: [] });
+  void Promise.resolve()
+    .then(load)
+    .then((res) => {
+      if (!res || res === shell || !shell.root.isConnected) return;
+      populateModalShell(shell, res);
+    })
+    .catch((err) => {
+      if (shell.root.isConnected) shell.close();
+      toastError(err);
+    });
+  return shell;
 }
 
 export function confirmModal({ title = 'تأیید', message, confirmLabel = 'تأیید', danger = false }) {
@@ -476,7 +512,9 @@ function buildSearchableSelect(f, value, textId) {
   return { root, hiddenInput, text };
 }
 
-export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیره', wide = false, onSubmit, secondary }) {
+/* into (۱.۱۴.۰): پوستهٔ مودال لودینگ از openModalAsync — به‌جای مودال تازه، همین overlay درجا پر می‌شود
+   تا فرم‌هایی که متادیتا می‌خواهند (schools/classes/staff) سکوتِ چندثانیه‌ای نداشته باشند. */
+export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیره', wide = false, onSubmit, secondary, into }) {
   const form = el('form', { class: 'form-grid', novalidate: true });
   const inputs = {};
   const visibleCtl = {}; // — کنترل قابل‌مشاهدهٔ فیلدهای ترکیبی (searchable-select/jalali) برای aria-invalid
@@ -643,7 +681,7 @@ export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیر
         return btn;
       }
     : null;
-  openModal({
+  const modalArgs = {
     title,
     wide,
     body: [form, errBox],
@@ -697,7 +735,12 @@ export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیر
         return submitBtn;
       }
     ]
-  });
+  };
+  if (into) {
+    populateModalShell(into, modalArgs);
+    return { form, shell: into };
+  }
+  openModal(modalArgs);
 
   return { form };
 }
@@ -802,10 +845,19 @@ export function rowMenu({ label = 'اقدامات بیشتر', items }) {
     let top = r.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
     pop.style.top = `${top}px`;
-    let left = r.left;
-    if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
-    if (left < 8) left = 8;
-    pop.style.left = `${left}px`;
+    /* ۱.۱۴.۰ — لنگر افقی RTL-پایدار: قبلاً فقط با left موقعیت می‌داد؛ در موبایلِ RTL که دکمهٔ ⋯
+       نزدیک لبهٔ راست است، عرضِ واقعیِ منو (برچسب‌های بلند فارسی) از لبهٔ راست بیرون می‌زد و
+       آیکون آیتم‌ها بریده می‌شد. اکنون لنگر به نزدیک‌ترین لبه بسته می‌شود و هرگز از دید نمی‌زند. */
+    pop.style.left = '';
+    pop.style.right = '';
+    const vw = window.innerWidth;
+    const anchorRight = vw - r.right; // فاصلهٔ دکمه تا لبهٔ راست
+    if (anchorRight <= r.left || anchorRight < 180) {
+      // دکمه سمت راست صفحه است (رایج در RTL: ستون «عملیات») — از راست لنگر بزن
+      pop.style.right = `${Math.max(8, anchorRight)}px`;
+    } else {
+      pop.style.left = `${Math.max(8, r.left)}px`;
+    }
     activeRowMenuClose = close;
     setTimeout(() => {
       document.addEventListener('click', onDoc, true);
