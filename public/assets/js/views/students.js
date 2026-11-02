@@ -410,9 +410,43 @@ export async function renderStudents(container, ctx) {
   }
 
   async function deleteStudent(s) {
-    if (!(await confirmModal({ title: 'حذف کامل پرونده', message: `پروندهٔ «${s.firstName} ${s.lastName}» به‌کلی پاک می‌شود — فقط برای ثبت‌های اشتباه (مثلاً نام غلط که اجازهٔ ثبت مجدد با همان کد ملی نمی‌دهد). اگر سابقهٔ جلسه/پیگیری دارد حذف ممکن نیست و «انتقال به آرشیو» را استفاده کنید. برگشت ندارد.`, confirmLabel: 'حذف کن', danger: true }))) return;
+    /* ۱.۱۳.۰ — دسترسی حذف باز شد: پیش از مودال، «delete-check» سابقهٔ پرونده را می‌شمارد؛
+       · بدون سابقه → همان حذف کامل ساده
+       · سابقه + مدیر → «حذف با سابقه»: دقیقاً اعلام می‌شود چه چیزی پاک می‌شود (نوبت/رویداد/…) و
+         نوبت‌های یتیم هم از تقویم برداشته می‌شوند — DELETE ?force=true
+       · سابقه + منشی → راهنمای آرشیو/مدیر (بک‌اند هم ۴۰۹ می‌دهد)
+       · گزارش ارزیابی رسمی یا سابقهٔ مالی → سد سخت؛ حتی مدیر هم به «انتقال به آرشیو» هدایت می‌شود */
+    let check = null;
     try {
-      await api.del(`/api/students/${s.id}`);
+      check = (await api.get(`/api/students/${s.id}/delete-check`)).data;
+    } catch { check = null; }
+    const name = check?.fullName ?? `${s.firstName} ${s.lastName}`;
+
+    const hard = check?.hardBlocks ?? [];
+    if (hard.length > 0) {
+      toast(`${name}: ${hard.map((b) => `${fa(b.count)} ${b.label}`).join(' و ')} دارد — حذف کامل ممکن نیست؛ «انتقال به آرشیو» را استفاده کنید`, 'warning');
+      return;
+    }
+
+    const blocks = check?.blocks ?? [];
+    const isManager = session.user?.role === 'manager';
+    if (blocks.length > 0 && !isManager) {
+      toast(`${name}: سابقهٔ ${blocks.map((b) => b.label).join('، ')} دارد — حذف کامل فقط با تأیید مدیر مرکز؛ برای حفظ سابقه «انتقال به آرشیو» را استفاده کنید`, 'warning');
+      return;
+    }
+
+    const purgeLine = blocks.length > 0
+      ? ` سابقه‌ای که همراه پرونده پاک می‌شود: ${blocks.map((b) => `${fa(b.count)} ${b.label}`).join('، ')}؛ نوبت‌های یتیم‌شدهٔ همین پرونده هم از تقویم برداشته می‌شود.`
+      : '';
+    const message = `پروندهٔ «${name}» به‌کلی پاک می‌شود — فقط برای ثبت‌های اشتباه (مثلاً نام غلط که اجازهٔ ثبت مجدد با همان کد ملی نمی‌دهد).${purgeLine} اگر سابقهٔ پرونده ارزشمند است «انتقال به آرشیو» را انتخاب کنید. برگشت ندارد.`;
+    if (!(await confirmModal({
+      title: blocks.length > 0 ? 'حذف با سابقه — مدیر مرکز' : 'حذف کامل پرونده',
+      message,
+      confirmLabel: blocks.length > 0 ? 'با سابقه حذف کن' : 'حذف کن',
+      danger: true
+    }))) return;
+    try {
+      await api.del(`/api/students/${s.id}${blocks.length > 0 ? '?force=true' : ''}`);
       toast('پرونده حذف شد', 'success');
       refreshTable();
     } catch (err) { toastError(err); }
