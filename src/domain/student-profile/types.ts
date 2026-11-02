@@ -17,6 +17,22 @@ export interface School {
   active: boolean;
 }
 
+/* ۱.۱۳.۰ — پیش‌شمارش حذف پرونده: مودال حذف پیش از کلیک می‌داند چه سابقه‌ای پاک می‌شود؛
+   مدیر می‌تواند با «حذف با سابقه» ادامه دهد، منشی به آرشیو هدایت می‌شود */
+export interface StudentDeleteBlock {
+  key: string;        // کلید فنی (appointment / waitlist / …)
+  label: string;      // برچسب فارسی برای نمایش در مودال
+  count: number;
+}
+export interface StudentDeleteCheck {
+  studentId: string;
+  fullName: string;
+  blocks: StudentDeleteBlock[];   // فقط دسته‌هایی که count > 0 دارند
+  canDelete: boolean;             // بدون سابقه = حذف آزاد
+  canForce: boolean;              // فقط مدیر — سابقه را هم می‌تواند پاک کند
+  hardBlocks: StudentDeleteBlock[]; // حتی مدیر هم نمی‌تواند (گزارش ارزیابی/مالی) → آرشیو
+}
+
 export interface SchoolClass {
   id: string;
   schoolId: string;
@@ -221,7 +237,8 @@ export interface StudentProfileService {
   updateStudent(id: string, patch: UpdateStudentInput, actor: AuthContext): Promise<Student>;
   deactivateStudent(id: string, actor: AuthContext): Promise<Student>;
   activateStudent(id: string, actor: AuthContext): Promise<Student>;
-  deleteStudent(id: string, actor: AuthContext): Promise<void>;
+  deleteStudent(id: string, actor: AuthContext, opts?: { force?: boolean }): Promise<void>;
+  getStudentDeleteCheck(id: string, actor: AuthContext): Promise<StudentDeleteCheck>;
   changeCaseStatus(id: string, caseStatus: StudentCaseStatus, actor: AuthContext): Promise<Student>;
   changePathway(id: string, pathway: StudentPathway | null, actor: AuthContext): Promise<Student>;
   changeOwner(id: string, ownerStaffId: string | null, actor: AuthContext): Promise<Student>;
