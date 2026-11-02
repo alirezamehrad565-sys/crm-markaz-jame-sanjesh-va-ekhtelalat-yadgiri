@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { el, openModal, formModal, confirmModal, toast, toastError, loadingState, emptyState, icon } from './ui.js';
+import { el, openModal, formModal, confirmModal, toast, toastError, loadingState, emptyState, icon, openModalAsync } from './ui.js';
 import { STUDENT_GRADES, isPlaceholderNid, fa, formatStoredJalaliNumeric, tehranYmdOfIso } from './format.js'; // نمایش جلالی با مرز روز تهران
 import { session } from './state.js';
 import { ensureFormMeta, normalizePhone } from './student-form.js';
@@ -8,11 +8,26 @@ function isOffice() {
   return session.user?.role === 'manager' || session.user?.role === 'secretary';
 }
 
-export async function openArchiveStudentForm({ student = null, onSaved } = {}) {
+export function openArchiveStudentForm(args = {}) {
+  /* ۱.۱۴.۰ — همان پوستهٔ لودینگ فرم دانش‌آموز: متادیتا که آمد همین overlay پر می‌شود. */
+  const shell = openModalAsync({
+    title: args.student ? 'ویرایش پروندهٔ آرشیو' : 'دانش‌آموز جدید در آرشیو',
+    wide: true,
+    loadingText: 'در حال آماده‌سازی فرم…',
+    load: async () => {
+      await openArchiveStudentFormInner({ ...args, into: shell });
+      return shell;
+    }
+  });
+  return shell;
+}
+
+async function openArchiveStudentFormInner({ student = null, onSaved, into } = {}) {
   const meta = await ensureFormMeta();
   const isEdit = Boolean(student);
 
   formModal({
+    into,
     title: isEdit ? 'ویرایش پروندهٔ آرشیو' : 'دانش‌آموز جدید در آرشیو',
     wide: true,
     submitLabel: isEdit ? 'ذخیره' : 'ثبت در آرشیو',

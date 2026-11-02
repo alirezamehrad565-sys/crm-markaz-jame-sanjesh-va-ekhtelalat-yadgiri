@@ -1533,6 +1533,7 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   position: fixed;
   z-index: var(--z-row-menu); /* توکن ۹۰ (S11-04) */
   min-width: 172px;
+  max-width: calc(100vw - 16px); /* ۱.۱۴.۰: هرگز از لبه‌های دید بیرون نزند */
   padding: 6px;
   background: var(--surface); /* توکن‌شد (قبلاً --surface-1 ناموجود با fallback) */
   border: 1px solid var(--border);
