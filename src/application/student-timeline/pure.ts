@@ -53,12 +53,13 @@ export function jalaliLabelOf(ymd: string): string {
 
 export interface AppointmentStateInput {
   status: string; // مقادیر مجاز: scheduled | cancelled
-  opsStatus: string | null; // مقادیر مجاز: checked_in | delayed | in_session | completed | no_show | null
-  attendance: string; // مقادیر مجاز: pending | present | absent | cancelled
+  attendance: string; // مقادیر مجاز: pending | present | late | absent | cancelled
   startAt: string;
   endAt: string;
 }
 
+/* ۱.۱۸.۰ — سیستم موازی «وضعیت عملیاتی» (آمد/نیامد/شروع و اتمام جلسه) حذف شد؛
+   عنوان رویداد نوبت فقط از حضور و غیاب واقعی دانش‌آموز ساخته می‌شود. */
 export function appointmentEventState(a: AppointmentStateInput): { title: string; subtitle: string | null } {
   const durationMin = Math.max(0, Math.round((Date.parse(a.endAt) - Date.parse(a.startAt)) / 60000));
   const who = null; // staffName در service اضافه می‌شود
@@ -67,23 +68,14 @@ export function appointmentEventState(a: AppointmentStateInput): { title: string
   if (a.status === 'cancelled') {
     return { title: 'نوبت لغو شد', subtitle: subtitleWith(null, `${faDigits(durationMin)} دقیقه — لغو شده`) };
   }
-  if (a.opsStatus === 'no_show' || (a.opsStatus === null && a.attendance === 'absent')) {
+  if (a.attendance === 'absent') {
     return { title: 'جلسه — عدم حضور', subtitle: subtitleWith(null, `${faDigits(durationMin)} دقیقه`) };
   }
-  if (a.opsStatus === null && a.attendance === 'late') {
+  if (a.attendance === 'late') {
     return { title: 'جلسه — حضور با تأخیر', subtitle: subtitleWith(null, `${faDigits(durationMin)} دقیقه`) };
   }
-  if (a.opsStatus === 'completed') {
-    return { title: 'جلسه برگزار شد', subtitle: subtitleWith(null, `${faDigits(durationMin)} دقیقه — حاضر`) };
-  }
-  if (a.opsStatus === 'in_session') {
-    return { title: 'جلسه در جریان است', subtitle: subtitleWith(null, `${faDigits(durationMin)} دقیقه`) };
-  }
-  if (a.opsStatus === 'checked_in' || a.attendance === 'present') {
+  if (a.attendance === 'present') {
     return { title: 'جلسه — حضور ثبت شد', subtitle: subtitleWith(null, `${faDigits(durationMin)} دقیقه`) };
-  }
-  if (a.opsStatus === 'delayed') {
-    return { title: 'جلسه — تأخیر در شروع', subtitle: subtitleWith(null, `${faDigits(durationMin)} دقیقه`) };
   }
   return { title: 'نوبت جلسه', subtitle: subtitleWith(null, `${faDigits(durationMin)} دقیقه — در انتظار برگزاری`) };
 }

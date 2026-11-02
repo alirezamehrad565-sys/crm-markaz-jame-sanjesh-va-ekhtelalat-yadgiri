@@ -4,7 +4,6 @@ import {
   MoveAppointmentSchema,
   NewAppointmentSchema,
   ResizeAppointmentSchema,
-  SetOpsStatusSchema,
   UpdateAppointmentSchema
 } from '@core/shared';
 import type { AppHono, CopyWeekInput } from '@core/shared';
@@ -118,13 +117,6 @@ export function registerRoutes(app: AppHono, service: AppointmentService): void 
     const actor = getAuthContext(c);
     await service.remove(c.req.param('id'), actor);
     return c.body(null, 204);
-  });
-
-  app.post('/api/appointments/:id/ops-status', requireRole('manager', 'secretary', 'therapist'), async (c) => {
-    const actor = getAuthContext(c);
-    const body = SetOpsStatusSchema.parse(await c.req.json<unknown>());
-    const appointment = await service.setOpsStatus(c.req.param('id'), body.ops_status, actor);
-    return c.json({ data: appointment }, 200);
   });
 
   app.post('/api/appointments/:id/students', async (c) => {

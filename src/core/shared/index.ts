@@ -41,9 +41,7 @@ export {
   NewWorkingHourSchema,
   NotificationListQuerySchema,
   NewTagSchema,
-  OpsStatusSchema,
   SaveSessionNoteSchema,
-  SetOpsStatusSchema,
   ReplaceCenterHoursSchema,
   ReplaceStudentTagsSchema,
   ReplaceStudentFocusSchema,
@@ -114,7 +112,6 @@ export {
 
 export type {
   Appointment,
-  AppointmentOpsStatus,
   AppointmentStatus,
   AppointmentStudent,
   AppointmentUpdateInput,
@@ -194,8 +191,6 @@ export type {
   WorkingDayAppointment,
   WorkingDayStaffColumn,
   WorkingDaySessionStats,
-  WorkingDayOpsStats,
-  WorkingDayQueueItem,
   WorkingDayBoard,
   StudentGrade,
   WaitlistBadge,
@@ -216,9 +211,6 @@ export type {
 
 export {
   APPOINTMENT_STATUS,
-  APPOINTMENT_OPS_STATUSES,
-  OPS_TERMINAL_STATUSES,
-  OPS_QUEUE_WINDOW_MINUTES,
   NEXT_ACTION_VALUES,
   SESSION_NOTE_MAX,
   DAY_NOTE_KINDS,

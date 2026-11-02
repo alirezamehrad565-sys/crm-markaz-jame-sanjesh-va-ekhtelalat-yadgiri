@@ -1,6 +1,5 @@
 import type {
   APPOINTMENT_STATUS,
-  APPOINTMENT_OPS_STATUSES,
   ATTENDANCE_STATUS,
   DAY_NOTE_KINDS,
   FOLLOWUP_STATUSES,
@@ -26,7 +25,6 @@ export type { ScreeningTargetConfig };
 export type StaffRole = (typeof STAFF_ROLES)[number];
 export type StaffAttendanceStatus = (typeof STAFF_ATTENDANCE_STATUSES)[number];
 export type AppointmentStatus = (typeof APPOINTMENT_STATUS)[keyof typeof APPOINTMENT_STATUS];
-export type AppointmentOpsStatus = (typeof APPOINTMENT_OPS_STATUSES)[number];
 export type DayNoteKind = (typeof DAY_NOTE_KINDS)[number];
 export type NextAction = (typeof NEXT_ACTION_VALUES)[number];
 export type AttendanceStatus = (typeof ATTENDANCE_STATUS)[keyof typeof ATTENDANCE_STATUS];
@@ -65,7 +63,6 @@ export interface Appointment {
   startAt: string; // زمان ISO UTC از سرور
   endAt: string;   // زمان ISO UTC از سرور
   status: AppointmentStatus;
-  opsStatus?: AppointmentOpsStatus | null;
   sessionType?: import('./constants').SessionTypeKey | null;
   note: string | null;
   version: number;
@@ -771,7 +768,6 @@ export interface WorkingDayAppointment {
   startAt: string;
   endAt: string;
   status: AppointmentStatus;
-  opsStatus?: AppointmentOpsStatus | null;
   note: string | null;
   version: number;
   students: WorkingDayAppointmentStudent[];
@@ -794,35 +790,12 @@ export interface WorkingDaySessionStats {
   cancelledAppointments: number;
 }
 
-export interface WorkingDayOpsStats {
-  planned: number;
-  checkedIn: number;
-  delayed: number;
-  inSession: number;
-  completed: number;
-  noShow: number;
-  cancelled: number;
-  total: number;
-}
-
-export interface WorkingDayQueueItem {
-  appointmentId: string;
-  staffId: string;
-  staffName: string;
-  startAt: string;
-  endAt: string;
-  opsStatus: AppointmentOpsStatus | null;
-  studentNames: string[];
-}
-
 export interface WorkingDayBoard {
   date: string;
   weekday: number;
   isToday: boolean;
   summary: StaffAttendanceDaySummary;
   sessionStats: WorkingDaySessionStats;
-  opsStats: WorkingDayOpsStats;
-  queue: WorkingDayQueueItem[];
   assessmentsToday: number;
   staff: WorkingDayStaffColumn[];
   unassigned: WorkingDayAppointment[];

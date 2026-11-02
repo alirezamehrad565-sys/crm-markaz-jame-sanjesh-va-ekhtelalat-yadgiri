@@ -9,16 +9,14 @@ import type {
   WorkingDayStaffColumn,
   StaffAttendanceStatus
 } from '@core/shared';
-import { OPS_QUEUE_WINDOW_MINUTES, iranianWeekdayOfYmd, tehranDayRange, tehranTodayYmd } from '@core/shared';
+import { iranianWeekdayOfYmd, tehranDayRange, tehranTodayYmd } from '@core/shared';
 import { NotFoundError, ValidationError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
 import {
-  buildQueue,
   groupAppointmentsByStaff,
   normalizeDayNoteBody,
-  opsStatsFromAppointments,
   sessionStatsFromAppointments
 } from './pure';
 import type { StaffAttendanceService } from '@domain/attendance';
@@ -61,7 +59,6 @@ interface BoardApptRow {
   start_at: string;
   end_at: string;
   status: 'scheduled' | 'cancelled';
-  ops_status: string | null;
   note: string | null;
   version: number;
   student_id: string | null;
@@ -91,7 +88,6 @@ export function rowsToAppointments(rows: BoardApptRow[]): WorkingDayAppointment[
         startAt: r.start_at,
         endAt: r.end_at,
         status: r.status,
-        opsStatus: (r.ops_status ?? null) as WorkingDayAppointment['opsStatus'],
         note: r.note,
         version: r.version,
         students: []
@@ -133,7 +129,7 @@ export function createWorkingDayService(deps: WorkingDayDeps): WorkingDayService
           [weekday]
         ),
         db.query<BoardApptRow>(
-          `SELECT a.id, a.staff_id, a.start_at, a.end_at, a.status, a.ops_status, a.note, a.version,
+          `SELECT a.id, a.staff_id, a.start_at, a.end_at, a.status, a.note, a.version,
                   s.student_id, s.attendance AS student_attendance,
                   st.first_name || ' ' || st.last_name AS student_name,
                   st.guardian_phone AS student_phone
@@ -216,24 +212,12 @@ export function createWorkingDayService(deps: WorkingDayDeps): WorkingDayService
 
       const sessionStats: WorkingDaySessionStats = sessionStatsFromAppointments(appointments);
 
-      const opsStats = opsStatsFromAppointments(appointments);
-      const staffNameById = new Map(staffRows.map((s) => [s.id, s.full_name]));
-      const staffNameOf = (staffId: string): string => staffNameById.get(staffId) ?? '—';
-      const queue = isToday
-        ? buildQueue(appointments, new Date().toISOString(), {
-            windowMinutes: OPS_QUEUE_WINDOW_MINUTES,
-            staffNameOf
-          })
-        : [];
-
       return {
         date,
         weekday,
         isToday,
         summary,
         sessionStats,
-        opsStats,
-        queue,
         assessmentsToday: assessmentRows[0]?.n ?? 0,
         staff: columns,
         unassigned,

@@ -1063,10 +1063,8 @@ body.is-login { background: var(--bg); }
   transition: background var(--fast), border-color var(--fast);
 }
 .wd-tl__dot--planned { border-color: var(--text-3); }
-.wd-tl__dot--checked_in { border-color: var(--primary); background: var(--primary); }
+/* ۱.۱۸.۰ — وضعیت نقطهٔ تایم‌لاین از حضور و غیاب می‌آید: planned/completed/no_show/cancelled */
 /* تفکیک شکلی وضعیت‌ها برای کوررنگی: پُر / حلقهٔ توخالی / پُر با خط‌مورب (علاوه بر رنگ) */
-.wd-tl__dot--delayed { border-color: var(--warning); border-width: 2.5px; background: transparent; box-shadow: inset 0 0 0 1px var(--warning-soft); }
-.wd-tl__dot--in_session { border-color: var(--accent); background: var(--accent); }
 .wd-tl__dot--completed { border-color: var(--success); background: var(--success); }
 .wd-tl__dot--no_show { border-color: var(--error); background: linear-gradient(135deg, transparent 44%, var(--bg) 44% 56%, transparent 56%), var(--error); }
 .wd-tl__dot--cancelled { border-color: var(--border); background: var(--surface-2); }
@@ -1081,7 +1079,6 @@ body.is-login { background: var(--bg); }
 }
 .wd-tl__nowline::after { content: ''; flex: 1; height: 1px; background: var(--accent); opacity: 0.45; }
 
-.wd-appt__ops { display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; margin-top: 2px; }
 .wd-appt__time .spacer { flex: 1; }
 
 .wd-appt__del { color: var(--text-3); }
@@ -1223,7 +1220,7 @@ body.is-login { background: var(--bg); }
   .wd-flow .card__body { padding: var(--sp-3); }
   .wd-appts-card .wd-block { padding: var(--sp-2) 10px; }
   .wd-appt { padding: var(--sp-2) 10px; }
-  .wd-appt__time, .wd-appt__ops { row-gap: 4px; }
+  .wd-appt__time { row-gap: 4px; }
 }
 
 .nav__badge {
