@@ -1,7 +1,7 @@
 import type { AppHono, SchoolKind } from '@core/shared';
 import { ChangeCaseStatusSchema, ChangeOwnerSchema, ChangePathwaySchema, ChangeSpecialNeedSchema, NewClassSchema, NewEducationHistorySchema, NewSchoolSchema, NewStudentSchema, UpdateClassSchema, UpdateSchoolSchema, UpdateStudentSchema } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
-import { NotFoundError } from '@core/errors';
+import { ForbiddenError, NotFoundError } from '@core/errors';
 import { normalizeNationalId } from '@core/shared';
 import { pageParams } from '@app/http';
 import { z } from 'zod';
@@ -213,9 +213,20 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
     return c.json({ data: student }, 200);
   });
 
+  /* ۱.۱۳.۰ — پیش‌شمارش حذف: مودال حذف پیش از تأیید می‌داند چه سابقه‌ای پاک می‌شود */
+  app.get('/api/students/:id/delete-check', requireRole('manager', 'secretary'), async (c) => {
+    const actor = getAuthContext(c);
+    const check = await service.getStudentDeleteCheck(c.req.param('id'), actor);
+    return c.json({ data: check }, 200);
+  });
+
+  /* حذف پرونده — force=true فقط مدیر: «حذف با سابقه» (سابقهٔ نوبت/رویداد/… پاک می‌شود)؛
+     سدهای سخت (ارزیابی رسمی/مالی) در سرویس حتی برای مدیر بسته می‌مانند */
   app.delete('/api/students/:id', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
-    await service.deleteStudent(c.req.param('id'), actor);
+    const force = c.req.query('force') === 'true';
+    if (force && actor.role !== 'manager') throw new ForbiddenError('«حذف با سابقه» فقط برای مدیر مرکز مجاز است');
+    await service.deleteStudent(c.req.param('id'), actor, { force });
     return c.body(null, 204);
   });
 

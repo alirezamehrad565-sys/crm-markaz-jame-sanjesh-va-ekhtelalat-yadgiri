@@ -1,6 +1,6 @@
 import type { AuthContext, SchoolKind, SpecialNeedSeverity, SpecialNeedType, StudentCaseStatus, StudentPathway } from '@core/shared';
 import { faDigits, PLACEHOLDER_NATIONAL_ID_PREFIX } from '@core/shared';
-import { NotFoundError, ConflictError, ValidationError } from '@core/errors';
+import { ForbiddenError, NotFoundError, ConflictError, ValidationError } from '@core/errors';
 import type {
   EducationHistoryEntry,
   NewClassInput,
@@ -23,7 +23,33 @@ import type {
 } from './types';
 import { rowToClass, rowToEducationHistory, rowToSchool, rowToStudent, rowToStudentTeacher, studentSearchQuery, STUDENT_WAIT_PROJECTION, STUDENT_OWNER_PROJECTION, tagsForStudentsQuery, assessmentCountsForStudentsQuery, type EduHistoryRow, type StudentTeacherRow } from './repository';
 import type { ClassRow, SchoolRow, StudentRow, StudentTagJoinRow } from './repository';
+import type { StudentDeleteBlock, StudentDeleteCheck } from './types';
 import type { TagRef } from '@core/shared';
+
+/* ۱.۱۳.۰ — نقشهٔ سابقه‌های حذف پرونده:
+   · STUDENT_DELETE_REFS — دسته‌های سابقه‌ای که حذفِ آزاد را می‌بندند (ترتیب = ترتیب نمایش)
+   · STUDENT_DELETE_LABELS — برچسب فارسی برای پیام خطا و مودال (قبلاً نام جدول خام می‌آمد) */
+const STUDENT_DELETE_REFS: Record<string, string> = {
+  appointment: `SELECT COUNT(*) AS cnt FROM appointment_students WHERE student_id = ?`,
+  waitlist: `SELECT COUNT(*) AS cnt FROM waitlist WHERE (student_id = ? OR admitted_student_id = ?) AND deleted_at IS NULL`,
+  case_event: `SELECT COUNT(*) AS cnt FROM case_events WHERE student_id = ? AND deleted_at IS NULL`,
+  followup: `SELECT COUNT(*) AS cnt FROM followups WHERE student_id = ?`,
+  exercise: `SELECT COUNT(*) AS cnt FROM exercise_assignments WHERE student_id = ?`,
+  exercise_submission: `SELECT COUNT(*) AS cnt FROM exercise_submissions WHERE student_id = ?`,
+  committee: `SELECT COUNT(*) AS cnt FROM committee_items WHERE student_id = ? AND deleted_at IS NULL`
+};
+
+const STUDENT_DELETE_LABELS: Record<string, string> = {
+  appointment: 'نوبت',
+  waitlist: 'سابقهٔ لیست انتظار',
+  case_event: 'رویداد پرونده',
+  followup: 'پیگیری',
+  exercise: 'تمرین',
+  exercise_submission: 'تمرینِ ارسال‌شده',
+  committee: 'کمیتهٔ جایابی',
+  assessment: 'گزارش ارزیابی رسمی',
+  donation: 'سابقهٔ مالی (کمک)'
+};
 
 export function createStudentProfileService(deps: StudentProfileDeps): StudentProfileService {
   const { db, audit, logger } = deps;
@@ -877,7 +903,44 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       });
     },
 
-    async deleteStudent(id: string, actor: AuthContext): Promise<void> {
+    /* ۱.۱۳.۰ — پیش‌شمارش حذف: مودال حذف دقیقاً می‌داند چه سابقه‌ای پاک می‌شود؛
+       مدیر مسیر «حذف با سابقه» را می‌بیند، منشی به «انتقال به آرشیو» هدایت می‌شود */
+    async getStudentDeleteCheck(id: string, actor: AuthContext): Promise<StudentDeleteCheck> {
+      const row = await db.queryOne<{ id: string; first_name: string; last_name: string }>(
+        `SELECT id, first_name, last_name FROM students WHERE id = ?`,
+        [id]
+      );
+      if (!row) throw new NotFoundError('دانش‌آموز');
+      const fullName = `${row.first_name} ${row.last_name}`;
+      const blocks: StudentDeleteBlock[] = [];
+      const hardBlocks: StudentDeleteBlock[] = [];
+      for (const [key, sql] of Object.entries(STUDENT_DELETE_REFS)) {
+        const params = sql.includes('admitted_student_id') ? [id, id] : [id];
+        const hit = await db.queryOne<{ cnt: number }>(sql, params);
+        const count = hit?.cnt ?? 0;
+        if (count > 0) blocks.push({ key, label: STUDENT_DELETE_LABELS[key] ?? key, count });
+      }
+      /* سدهای سخت — حتی «حذف با سابقه»ی مدیر هم از آن‌ها عبور نمی‌کند:
+         رکورد رسمی ارزیابی و رکورد مالی باید بمانند؛ راه درست «انتقال به آرشیو» است */
+      const asm = await db.queryOne<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM assessments WHERE student_id = ?`, [id]);
+      if ((asm?.cnt ?? 0) > 0) hardBlocks.push({ key: 'assessment', label: STUDENT_DELETE_LABELS.assessment, count: asm!.cnt });
+      const don = await db.queryOne<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM finance_donations WHERE student_id = ?`, [id]);
+      if ((don?.cnt ?? 0) > 0) hardBlocks.push({ key: 'donation', label: STUDENT_DELETE_LABELS.donation, count: don!.cnt });
+      return {
+        studentId: id,
+        fullName,
+        blocks,
+        canDelete: blocks.length === 0 && hardBlocks.length === 0,
+        canForce: actor.role === 'manager',
+        hardBlocks
+      };
+    },
+
+    async deleteStudent(id: string, actor: AuthContext, opts?: { force?: boolean }): Promise<void> {
+      const force = opts?.force === true;
+      if (force && actor.role !== 'manager') {
+        throw new ForbiddenError('«حذف با سابقه» فقط برای مدیر مرکز مجاز است'); // لایهٔ دوم گارد — روت هم گارد دارد
+      }
       await db.transaction(async (tx) => {
         const row = await tx.queryOne<{ id: string; first_name: string; last_name: string }>(
           `SELECT id, first_name, last_name FROM students WHERE id = ?`,
@@ -886,23 +949,65 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         if (!row) throw new NotFoundError('دانش‌آموز');
         const fullName = `${row.first_name} ${row.last_name}`;
 
-        const refs: Array<[string, string]> = [
-          ['appointment_students', `SELECT COUNT(*) AS cnt FROM appointment_students WHERE student_id = ?`],
-          ['waitlist', `SELECT COUNT(*) AS cnt FROM waitlist WHERE (student_id = ? OR admitted_student_id = ?) AND deleted_at IS NULL`],
-          ['case_events', `SELECT COUNT(*) AS cnt FROM case_events WHERE student_id = ? AND deleted_at IS NULL`],
-          ['followups', `SELECT COUNT(*) AS cnt FROM followups WHERE student_id = ?`],
-          ['exercise_assignments', `SELECT COUNT(*) AS cnt FROM exercise_assignments WHERE student_id = ?`],
-          ['exercise_submissions', `SELECT COUNT(*) AS cnt FROM exercise_submissions WHERE student_id = ?`],
-          ['committee_items', `SELECT COUNT(*) AS cnt FROM committee_items WHERE student_id = ? AND deleted_at IS NULL`]
-        ];
-        for (const [label, sql] of refs) {
+        const counts: Record<string, number> = {};
+        for (const [key, sql] of Object.entries(STUDENT_DELETE_REFS)) {
           const params = sql.includes('admitted_student_id') ? [id, id] : [id];
           const hit = await tx.queryOne<{ cnt: number }>(sql, params);
-          if ((hit?.cnt ?? 0) > 0) {
-            throw new ConflictError(`پروندهٔ «${fullName}» سابقهٔ ${label} دارد و حذف نمی‌شود — از «انتقال به آرشیو» استفاده کنید`);
-          }
+          counts[key] = hit?.cnt ?? 0;
+        }
+        /* سدهای سخت (گزارش ارزیابی رسمی / مالی) حتی برای مدیر — حذف ممنوع، آرشیو راه درست است */
+        const asmCnt = (await tx.queryOne<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM assessments WHERE student_id = ?`, [id]))?.cnt ?? 0;
+        const donCnt = (await tx.queryOne<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM finance_donations WHERE student_id = ?`, [id]))?.cnt ?? 0;
+        if (asmCnt > 0 || donCnt > 0) {
+          const parts = [
+            asmCnt > 0 ? `${faDigits(asmCnt)} ${STUDENT_DELETE_LABELS.assessment}` : null,
+            donCnt > 0 ? `${faDigits(donCnt)} ${STUDENT_DELETE_LABELS.donation}` : null
+          ].filter(Boolean);
+          throw new ConflictError(`پروندهٔ «${fullName}» ${parts.join(' و ')} دارد و حذف کامل ممکن نیست — از «انتقال به آرشیو» استفاده کنید`);
         }
 
+        const firstRef = Object.entries(STUDENT_DELETE_REFS).find(([key]) => counts[key] > 0);
+        if (!force && firstRef) {
+          const [refKey] = firstRef;
+          const hint = actor.role === 'manager' ? ' یا با «حذف با سابقه» ادامه دهید' : '';
+          throw new ConflictError(`پروندهٔ «${fullName}» سابقهٔ ${STUDENT_DELETE_LABELS[refKey] ?? refKey} دارد و حذف نمی‌شود — از «انتقال به آرشیو» استفاده کنید${hint}`);
+        }
+
+        /* پاک‌سازی فرزندها — بدون سابقه: همان ستون‌های قبلی؛ با force: cascade کامل به ترتیب امن FK */
+        await tx.execute(`DELETE FROM case_event_files WHERE case_event_id IN (SELECT id FROM case_events WHERE student_id = ?)`, [id]);
+        if (force) {
+          await tx.execute(`DELETE FROM case_events WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM pathway_probes WHERE pathway_id IN (SELECT id FROM intervention_paths WHERE student_id = ?)`, [id]);
+          await tx.execute(`DELETE FROM pathway_sessions WHERE pathway_id IN (SELECT id FROM intervention_paths WHERE student_id = ?)`, [id]);
+          await tx.execute(`DELETE FROM intervention_paths WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM ot_progress WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM student_received_docs WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM document_requests WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM student_education_history WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM student_teachers WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM bot_links WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM case_audits WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM exercise_submissions WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM exercise_assignments WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM exercise_batches WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM followups WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM committee_items WHERE student_id = ?`, [id]);
+          /* ورودی لیست انتظارِ پیوسته، متقاضی است نه پرونده — پیوندش خنثی می‌شود نه حذف */
+          await tx.execute(`UPDATE waitlist SET student_id = NULL, admitted_student_id = NULL WHERE student_id = ? OR admitted_student_id = ?`, [id, id]);
+          /* نوبت یتیم: نوبتی که دیگر هیچ دانش‌آموزی ندارد و رویداد/حضور دیگری به آن گره نخورده — از تقویم پاک می‌شود */
+          const orphanAppts = await tx.query<{ id: string }>(
+            `SELECT DISTINCT aps.appointment_id AS id FROM appointment_students aps
+             WHERE aps.student_id = ?
+               AND NOT EXISTS (SELECT 1 FROM appointment_students x WHERE x.appointment_id = aps.appointment_id AND x.student_id <> ?)
+               AND NOT EXISTS (SELECT 1 FROM case_events ce WHERE ce.appointment_id = aps.appointment_id)
+               AND NOT EXISTS (SELECT 1 FROM ot_progress op WHERE op.appointment_id = aps.appointment_id AND op.student_id <> ?)`,
+            [id, id, id]
+          );
+          await tx.execute(`DELETE FROM appointment_students WHERE student_id = ?`, [id]);
+          for (const ap of orphanAppts) {
+            await tx.execute(`DELETE FROM appointments WHERE id = ?`, [ap.id]);
+          }
+        }
         await tx.execute(`DELETE FROM student_tags WHERE student_id = ?`, [id]);
         await tx.execute(`DELETE FROM student_focus_links WHERE student_id = ?`, [id]); // پیوندهای هدف پروفایل هم با پرونده پاک می‌شوند
         await tx.execute(`DELETE FROM case_events WHERE student_id = ?`, [id]);
@@ -910,13 +1015,15 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         await tx.execute(`DELETE FROM students WHERE id = ?`, [id]);
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
-          action: 'student.delete',
+          action: force ? 'student.delete.force' : 'student.delete',
           resourceType: 'student',
           resourceId: id,
-          changes: { full_name: { from: fullName, to: null } }
+          changes: force
+            ? { full_name: { from: fullName, to: null }, force: { from: null, to: 1 }, purged: { from: null, to: counts } }
+            : { full_name: { from: fullName, to: null } }
         });
       });
-      logger.child('student').info('student.deleted', { id });
+      logger.child('student').info(force ? 'student.force_deleted' : 'student.deleted', { id });
     },
 
     async getDirectoryStats(): Promise<StudentDirectoryStats> {

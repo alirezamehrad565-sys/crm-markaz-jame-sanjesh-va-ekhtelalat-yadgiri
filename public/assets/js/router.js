@@ -55,6 +55,47 @@ function parseHash() {
 let renderSeq = 0;
 let viewAbort = null;
 
+/* ۱.۱۳.۰ — تعویض نرم نماها (View Transitions API):
+   قبلاً نمای قدیمی همان لحظهٔ کلیک قطع می‌شد و اسکلت/نمای جدید «می‌پرید» — حس بریدگی.
+   اکنون اگر مرورگر پشتیبانی کند، کل تعویض داخل document.startViewTransition انجام می‌شود:
+   · نمای قدیمی تا آماده‌شدن نمای جدید روی صفحه می‌ماند (بدون چشمکِ خالی)
+   · فقط #outlet نام‌گذاری شده تا کراس‌فید شود؛ ریشه بی‌انیمیشن است → سایدبار/تاپ‌بار
+     هیچ‌گاه در گذار نرمِ تعویض نلقک نمی‌زنند (تکمیل کار تثبیت ۱.۱۲.۰)
+   · سقف VT_MAX_WAIT: در شبکهٔ کند تعویض رها می‌شود تا اسکلت به‌موقع دیده شود
+   · مرورگر بدون پشتیبانی یا prefers-reduced-motion → همان مسیر قبلی (اسکلت + view-enter) */
+const VT_MAX_WAIT = 1500;
+
+function prefersReducedMotion() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+}
+
+function sleepMs(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/* نمایش یک نما در اوتلت: mount داخل VT صفحهٔ قدیمی را نگه می‌دارد و DOM را عوض می‌کند.
+   خروجیِ mount هرگز خطا پرت نمی‌کند (خطا → errorState) تا updateCallbackDone نشکند. */
+function mountView(outlet, seq, viewFn, ctx) {
+  return async () => {
+    const host = document.createElement('div');
+    host.className = 'view-host';
+    outlet.replaceChildren(host);
+    const useVT = typeof document.startViewTransition === 'function' && !prefersReducedMotion();
+    const renderP = Promise.resolve()
+      .then(() => viewFn(host, ctx))
+      .catch((err) => {
+        if (seq !== renderSeq) return;
+        outlet.replaceChildren(errorState(err, () => render(outlet)));
+      })
+      .then(() => {
+        if (seq !== renderSeq) return;
+        // با VT ورود نرم را خودِ کراس‌فید انجام می‌دهد؛ view-enter فقط برای مسیر fallback
+        if (!useVT) host.classList.add('view-enter');
+      });
+    await Promise.race([renderP, sleepMs(VT_MAX_WAIT)]);
+  };
+}
+
 export async function render(outlet) {
   const seq = ++renderSeq;
   viewAbort?.abort();
@@ -69,21 +110,15 @@ export async function render(outlet) {
       route.keys.forEach((k, i) => {
         params[k] = decodeURIComponent(match[i + 1]);
       });
-      /* هر رندر host خودش را دارد؛ نمای مرده‌ای که دیر کامل شود در hostِ
-         جدا‌شدهٔ خودش می‌نشیند و هرگز نمای زنده را بازنویسی نمی‌کند */
-      const host = document.createElement('div');
-      host.className = 'view-host';
-      outlet.replaceChildren(host);
       const ctx = { params, query, path };
-      try {
-        await route.view.render(host, ctx);
-      } catch (err) {
-        if (seq !== renderSeq) return route.view;
-        outlet.replaceChildren(errorState(err, () => render(outlet)));
+      const mount = mountView(outlet, seq, route.view.render, ctx);
+      if (typeof document.startViewTransition === 'function' && !prefersReducedMotion()) {
+        const vt = document.startViewTransition(mount);
+        await vt.updateCallbackDone.catch(() => {}); // خطاها داخل mount مدیریت شده‌اند
+      } else {
+        await mount();
       }
       if (seq !== renderSeq) return route.view;
-      // A8 → : انیمیشن ورود روی پوستهٔ نمای جاری (همان زبان opacity+translateY)
-      host.classList.add('view-enter');
       document.dispatchEvent(new CustomEvent('routechange', { detail: { path, view: route.view } }));
       return route.view;
     }
@@ -94,24 +129,20 @@ export async function render(outlet) {
     return null;
   }
   // هیچ مسیری match نشد → ۴۰۴ (بدون تغییر hash؛ لینک خراب در نوار آدرس می‌ماند)
-  // همان چرخهٔ عمر نماها: replaceChildren → render → errorState → view-enter → routechange
+  // همان چرخهٔ عمر نماها: replaceChildren → render → errorState → routechange
   if (!notFoundRoute) {
     navigate('#/dashboard'); // محافظ: اگر پوسته نمای ۴۰۴ را ثبت نکرده باشد (رفتار قدیمی)
     return null;
   }
-  const host = document.createElement('div');
-  host.className = 'view-host';
-  outlet.replaceChildren(host);
   const ctx = { params: {}, query, path };
-  try {
-    await notFoundRoute.render(host, ctx);
-  } catch (err) {
-    if (seq !== renderSeq) return notFoundRoute;
-    outlet.replaceChildren(errorState(err, () => render(outlet)));
+  const mount = mountView(outlet, seq, notFoundRoute.render, ctx);
+  if (typeof document.startViewTransition === 'function' && !prefersReducedMotion()) {
+    const vt = document.startViewTransition(mount);
+    await vt.updateCallbackDone.catch(() => {});
+  } else {
+    await mount();
   }
   if (seq !== renderSeq) return notFoundRoute;
-  // A8 → 
-  host.classList.add('view-enter');
   document.dispatchEvent(new CustomEvent('routechange', { detail: { path, view: notFoundRoute, notFound: true } }));
   return notFoundRoute;
 }
