@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.12.0";
+var APP_VERSION = "1.13.0";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -11615,6 +11615,26 @@ function assessmentCountsForStudentsQuery(studentIds) {
 __name(assessmentCountsForStudentsQuery, "assessmentCountsForStudentsQuery");
 
 // src/domain/student-profile/service.ts
+var STUDENT_DELETE_REFS = {
+  appointment: `SELECT COUNT(*) AS cnt FROM appointment_students WHERE student_id = ?`,
+  waitlist: `SELECT COUNT(*) AS cnt FROM waitlist WHERE (student_id = ? OR admitted_student_id = ?) AND deleted_at IS NULL`,
+  case_event: `SELECT COUNT(*) AS cnt FROM case_events WHERE student_id = ? AND deleted_at IS NULL`,
+  followup: `SELECT COUNT(*) AS cnt FROM followups WHERE student_id = ?`,
+  exercise: `SELECT COUNT(*) AS cnt FROM exercise_assignments WHERE student_id = ?`,
+  exercise_submission: `SELECT COUNT(*) AS cnt FROM exercise_submissions WHERE student_id = ?`,
+  committee: `SELECT COUNT(*) AS cnt FROM committee_items WHERE student_id = ? AND deleted_at IS NULL`
+};
+var STUDENT_DELETE_LABELS = {
+  appointment: "\u0646\u0648\u0628\u062A",
+  waitlist: "\u0633\u0627\u0628\u0642\u0647\u0654 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631",
+  case_event: "\u0631\u0648\u06CC\u062F\u0627\u062F \u067E\u0631\u0648\u0646\u062F\u0647",
+  followup: "\u067E\u06CC\u06AF\u06CC\u0631\u06CC",
+  exercise: "\u062A\u0645\u0631\u06CC\u0646",
+  exercise_submission: "\u062A\u0645\u0631\u06CC\u0646\u0650 \u0627\u0631\u0633\u0627\u0644\u200C\u0634\u062F\u0647",
+  committee: "\u06A9\u0645\u06CC\u062A\u0647\u0654 \u062C\u0627\u06CC\u0627\u0628\u06CC",
+  assessment: "\u06AF\u0632\u0627\u0631\u0634 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0631\u0633\u0645\u06CC",
+  donation: "\u0633\u0627\u0628\u0642\u0647\u0654 \u0645\u0627\u0644\u06CC (\u06A9\u0645\u06A9)"
+};
 function createStudentProfileService(deps) {
   const { db, audit, logger } = deps;
   async function requireClassForStudent(classId, schoolId) {
@@ -12388,7 +12408,41 @@ function createStudentProfileService(deps) {
         return rowToStudent2({ ...row, active: 1 });
       });
     },
-    async deleteStudent(id, actor) {
+    /* ۱.۱۳.۰ — پیش‌شمارش حذف: مودال حذف دقیقاً می‌داند چه سابقه‌ای پاک می‌شود؛
+       مدیر مسیر «حذف با سابقه» را می‌بیند، منشی به «انتقال به آرشیو» هدایت می‌شود */
+    async getStudentDeleteCheck(id, actor) {
+      const row = await db.queryOne(
+        `SELECT id, first_name, last_name FROM students WHERE id = ?`,
+        [id]
+      );
+      if (!row) throw new NotFoundError("\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632");
+      const fullName = `${row.first_name} ${row.last_name}`;
+      const blocks = [];
+      const hardBlocks = [];
+      for (const [key, sql] of Object.entries(STUDENT_DELETE_REFS)) {
+        const params = sql.includes("admitted_student_id") ? [id, id] : [id];
+        const hit = await db.queryOne(sql, params);
+        const count = hit?.cnt ?? 0;
+        if (count > 0) blocks.push({ key, label: STUDENT_DELETE_LABELS[key] ?? key, count });
+      }
+      const asm = await db.queryOne(`SELECT COUNT(*) AS cnt FROM assessments WHERE student_id = ?`, [id]);
+      if ((asm?.cnt ?? 0) > 0) hardBlocks.push({ key: "assessment", label: STUDENT_DELETE_LABELS.assessment, count: asm.cnt });
+      const don = await db.queryOne(`SELECT COUNT(*) AS cnt FROM finance_donations WHERE student_id = ?`, [id]);
+      if ((don?.cnt ?? 0) > 0) hardBlocks.push({ key: "donation", label: STUDENT_DELETE_LABELS.donation, count: don.cnt });
+      return {
+        studentId: id,
+        fullName,
+        blocks,
+        canDelete: blocks.length === 0 && hardBlocks.length === 0,
+        canForce: actor.role === "manager",
+        hardBlocks
+      };
+    },
+    async deleteStudent(id, actor, opts) {
+      const force = opts?.force === true;
+      if (force && actor.role !== "manager") {
+        throw new ForbiddenError("\xAB\u062D\u0630\u0641 \u0628\u0627 \u0633\u0627\u0628\u0642\u0647\xBB \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0645\u062F\u06CC\u0631 \u0645\u0631\u06A9\u0632 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
+      }
       await db.transaction(async (tx) => {
         const row = await tx.queryOne(
           `SELECT id, first_name, last_name FROM students WHERE id = ?`,
@@ -12396,20 +12450,57 @@ function createStudentProfileService(deps) {
         );
         if (!row) throw new NotFoundError("\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632");
         const fullName = `${row.first_name} ${row.last_name}`;
-        const refs = [
-          ["appointment_students", `SELECT COUNT(*) AS cnt FROM appointment_students WHERE student_id = ?`],
-          ["waitlist", `SELECT COUNT(*) AS cnt FROM waitlist WHERE (student_id = ? OR admitted_student_id = ?) AND deleted_at IS NULL`],
-          ["case_events", `SELECT COUNT(*) AS cnt FROM case_events WHERE student_id = ? AND deleted_at IS NULL`],
-          ["followups", `SELECT COUNT(*) AS cnt FROM followups WHERE student_id = ?`],
-          ["exercise_assignments", `SELECT COUNT(*) AS cnt FROM exercise_assignments WHERE student_id = ?`],
-          ["exercise_submissions", `SELECT COUNT(*) AS cnt FROM exercise_submissions WHERE student_id = ?`],
-          ["committee_items", `SELECT COUNT(*) AS cnt FROM committee_items WHERE student_id = ? AND deleted_at IS NULL`]
-        ];
-        for (const [label, sql] of refs) {
+        const counts = {};
+        for (const [key, sql] of Object.entries(STUDENT_DELETE_REFS)) {
           const params = sql.includes("admitted_student_id") ? [id, id] : [id];
           const hit = await tx.queryOne(sql, params);
-          if ((hit?.cnt ?? 0) > 0) {
-            throw new ConflictError(`\u067E\u0631\u0648\u0646\u062F\u0647\u0654 \xAB${fullName}\xBB \u0633\u0627\u0628\u0642\u0647\u0654 ${label} \u062F\u0627\u0631\u062F \u0648 \u062D\u0630\u0641 \u0646\u0645\u06CC\u200C\u0634\u0648\u062F \u2014 \u0627\u0632 \xAB\u0627\u0646\u062A\u0642\u0627\u0644 \u0628\u0647 \u0622\u0631\u0634\u06CC\u0648\xBB \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F`);
+          counts[key] = hit?.cnt ?? 0;
+        }
+        const asmCnt = (await tx.queryOne(`SELECT COUNT(*) AS cnt FROM assessments WHERE student_id = ?`, [id]))?.cnt ?? 0;
+        const donCnt = (await tx.queryOne(`SELECT COUNT(*) AS cnt FROM finance_donations WHERE student_id = ?`, [id]))?.cnt ?? 0;
+        if (asmCnt > 0 || donCnt > 0) {
+          const parts = [
+            asmCnt > 0 ? `${faDigits(asmCnt)} ${STUDENT_DELETE_LABELS.assessment}` : null,
+            donCnt > 0 ? `${faDigits(donCnt)} ${STUDENT_DELETE_LABELS.donation}` : null
+          ].filter(Boolean);
+          throw new ConflictError(`\u067E\u0631\u0648\u0646\u062F\u0647\u0654 \xAB${fullName}\xBB ${parts.join(" \u0648 ")} \u062F\u0627\u0631\u062F \u0648 \u062D\u0630\u0641 \u06A9\u0627\u0645\u0644 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A \u2014 \u0627\u0632 \xAB\u0627\u0646\u062A\u0642\u0627\u0644 \u0628\u0647 \u0622\u0631\u0634\u06CC\u0648\xBB \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F`);
+        }
+        const firstRef = Object.entries(STUDENT_DELETE_REFS).find(([key]) => counts[key] > 0);
+        if (!force && firstRef) {
+          const [refKey] = firstRef;
+          const hint = actor.role === "manager" ? " \u06CC\u0627 \u0628\u0627 \xAB\u062D\u0630\u0641 \u0628\u0627 \u0633\u0627\u0628\u0642\u0647\xBB \u0627\u062F\u0627\u0645\u0647 \u062F\u0647\u06CC\u062F" : "";
+          throw new ConflictError(`\u067E\u0631\u0648\u0646\u062F\u0647\u0654 \xAB${fullName}\xBB \u0633\u0627\u0628\u0642\u0647\u0654 ${STUDENT_DELETE_LABELS[refKey] ?? refKey} \u062F\u0627\u0631\u062F \u0648 \u062D\u0630\u0641 \u0646\u0645\u06CC\u200C\u0634\u0648\u062F \u2014 \u0627\u0632 \xAB\u0627\u0646\u062A\u0642\u0627\u0644 \u0628\u0647 \u0622\u0631\u0634\u06CC\u0648\xBB \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F${hint}`);
+        }
+        await tx.execute(`DELETE FROM case_event_files WHERE case_event_id IN (SELECT id FROM case_events WHERE student_id = ?)`, [id]);
+        if (force) {
+          await tx.execute(`DELETE FROM case_events WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM pathway_probes WHERE pathway_id IN (SELECT id FROM intervention_paths WHERE student_id = ?)`, [id]);
+          await tx.execute(`DELETE FROM pathway_sessions WHERE pathway_id IN (SELECT id FROM intervention_paths WHERE student_id = ?)`, [id]);
+          await tx.execute(`DELETE FROM intervention_paths WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM ot_progress WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM student_received_docs WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM document_requests WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM student_education_history WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM student_teachers WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM bot_links WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM case_audits WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM exercise_submissions WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM exercise_assignments WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM exercise_batches WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM followups WHERE student_id = ?`, [id]);
+          await tx.execute(`DELETE FROM committee_items WHERE student_id = ?`, [id]);
+          await tx.execute(`UPDATE waitlist SET student_id = NULL, admitted_student_id = NULL WHERE student_id = ? OR admitted_student_id = ?`, [id, id]);
+          const orphanAppts = await tx.query(
+            `SELECT DISTINCT aps.appointment_id AS id FROM appointment_students aps
+             WHERE aps.student_id = ?
+               AND NOT EXISTS (SELECT 1 FROM appointment_students x WHERE x.appointment_id = aps.appointment_id AND x.student_id <> ?)
+               AND NOT EXISTS (SELECT 1 FROM case_events ce WHERE ce.appointment_id = aps.appointment_id)
+               AND NOT EXISTS (SELECT 1 FROM ot_progress op WHERE op.appointment_id = aps.appointment_id AND op.student_id <> ?)`,
+            [id, id, id]
+          );
+          await tx.execute(`DELETE FROM appointment_students WHERE student_id = ?`, [id]);
+          for (const ap of orphanAppts) {
+            await tx.execute(`DELETE FROM appointments WHERE id = ?`, [ap.id]);
           }
         }
         await tx.execute(`DELETE FROM student_tags WHERE student_id = ?`, [id]);
@@ -12419,13 +12510,13 @@ function createStudentProfileService(deps) {
         await tx.execute(`DELETE FROM students WHERE id = ?`, [id]);
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
-          action: "student.delete",
+          action: force ? "student.delete.force" : "student.delete",
           resourceType: "student",
           resourceId: id,
-          changes: { full_name: { from: fullName, to: null } }
+          changes: force ? { full_name: { from: fullName, to: null }, force: { from: null, to: 1 }, purged: { from: null, to: counts } } : { full_name: { from: fullName, to: null } }
         });
       });
-      logger.child("student").info("student.deleted", { id });
+      logger.child("student").info(force ? "student.force_deleted" : "student.deleted", { id });
     },
     async getDirectoryStats() {
       const students = await db.queryOne(`SELECT COUNT(*) AS cnt FROM students WHERE active = 1`, []);
@@ -12833,9 +12924,16 @@ function registerRoutes3(app, service) {
     const student = await service.activateStudent(c.req.param("id"), actor);
     return c.json({ data: student }, 200);
   });
+  app.get("/api/students/:id/delete-check", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const check = await service.getStudentDeleteCheck(c.req.param("id"), actor);
+    return c.json({ data: check }, 200);
+  });
   app.delete("/api/students/:id", requireRole("manager", "secretary"), async (c) => {
     const actor = getAuthContext(c);
-    await service.deleteStudent(c.req.param("id"), actor);
+    const force = c.req.query("force") === "true";
+    if (force && actor.role !== "manager") throw new ForbiddenError("\xAB\u062D\u0630\u0641 \u0628\u0627 \u0633\u0627\u0628\u0642\u0647\xBB \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0645\u062F\u06CC\u0631 \u0645\u0631\u06A9\u0632 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
+    await service.deleteStudent(c.req.param("id"), actor, { force });
     return c.body(null, 204);
   });
   app.patch("/api/students/:id/case-status", requireRole("manager", "secretary"), async (c) => {
