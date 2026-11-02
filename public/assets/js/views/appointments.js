@@ -102,10 +102,22 @@ const state = {
   centerHours: [] // [{weekday, startMinute, endMinute}]
 };
 
+/* ۱.۱۸.۰ — رنگ/تیک نوبت از حضور واقعی دانش‌آموزان می‌آید (سیستم وضعیت عملیاتی حذف شد):
+   همهٔ حاضر/تأخیر = برگزارشده (is-attended)؛ همه غایب = برگزارنشده (is-noshow). */
+function attStateOf(a) {
+  if (a.status === 'cancelled') return 'cancelled';
+  const rows = (a.students ?? []).filter((s) => s.attendance !== 'cancelled');
+  if (rows.length === 0) return 'none';
+  if (rows.every((s) => s.attendance === 'present' || s.attendance === 'late')) return 'completed';
+  if (rows.every((s) => s.attendance === 'absent')) return 'no_show';
+  return 'none';
+}
+
 function apptStatusClass(a) {
   if (a.status === 'cancelled') return ' is-cancelled';
-  if (a.opsStatus === 'completed') return ' is-attended';
-  if (a.opsStatus === 'no_show') return ' is-noshow';
+  const st = attStateOf(a);
+  if (st === 'completed') return ' is-attended';
+  if (st === 'no_show') return ' is-noshow';
   return '';
 }
 
@@ -526,7 +538,7 @@ function apptOnGrid(a, ymd, opts = {}) {
       'aria-label': titleLines.join(' — ')
     },
     el('span', { class: 'grid-appt__time' },
-      a.opsStatus === 'completed' && a.status !== 'cancelled' ? el('span', { class: 'appt-tick' }, icon('check', 10)) : null,
+      attStateOf(a) === 'completed' ? el('span', { class: 'appt-tick' }, icon('check', 10)) : null,
       a.note ? el('span', { class: 'grid-appt__noted', title: a.note }) : null,
       `${fa(tehranTimeOfIso(a.startAt))} – ${fa(tehranTimeOfIso(a.endAt))}`
     ),

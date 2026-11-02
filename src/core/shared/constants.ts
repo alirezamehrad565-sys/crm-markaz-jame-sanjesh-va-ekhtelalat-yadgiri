@@ -423,20 +423,6 @@ export const SEARCH_QUERY_MAX_LENGTH = 60;
 
 export const DAY_NOTE_BODY_MAX = 2000;
 
-export const APPOINTMENT_OPS_STATUSES = [
-  'checked_in',
-  'delayed',
-  'in_session',
-  'completed',
-  'no_show'
-] as const;
-
-export type AppointmentOpsStatus = (typeof APPOINTMENT_OPS_STATUSES)[number];
-
-export const OPS_TERMINAL_STATUSES = ['completed', 'no_show'] as const;
-
-export const OPS_QUEUE_WINDOW_MINUTES = 60;
-
 export const DAY_NOTE_KINDS = ['human', 'system'] as const;
 
 export const NEXT_ACTION_VALUES = ['none', 'follow_up', 'next_appointment', 'contact', 'referral'] as const;
