@@ -300,15 +300,6 @@ export function createServices(deps: AppDeps): Services {
     }
   });
 
-  appointments.setOpsObserver({
-    onOpsStatusChanged: async (appointment, students, _from, to) => {
-      if (to !== 'completed') return;
-      for (const s of students) {
-        await waitlist.onAttendanceMarked(appointment.id, s.studentId, 'present');
-      }
-    }
-  });
-
   todos.setNotifier((todo) => notify.notifyTodoAssigned(todo));
 
   exerciseBank.setGradeObserver(async (record) => {

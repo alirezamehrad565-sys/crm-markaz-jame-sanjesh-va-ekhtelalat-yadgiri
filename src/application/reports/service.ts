@@ -241,21 +241,21 @@ export function createReportService(deps: ReportDeps): ReportService {
     async getAdvancedReport(from, to) {
       const range = tehranRange(from, to);
 
-      const apptRows = await db.query<{ start_at: string; status: string; ops_status: string | null }>(
-        `SELECT start_at, status, ops_status FROM appointments
+      const apptRows = await db.query<{ start_at: string; status: string }>(
+        `SELECT start_at, status FROM appointments
           WHERE start_at >= ? AND start_at <= ?`,
         [range.start, range.end]
       );
-      const attRows = await db.query<{ start_at: string; attendance: string; appt_status: string }>(
-        `SELECT a.start_at, s.attendance, a.status AS appt_status
+      const attRows = await db.query<{ appointment_id: string; start_at: string; attendance: string; appt_status: string }>(
+        `SELECT a.id AS appointment_id, a.start_at, s.attendance, a.status AS appt_status
            FROM appointment_students s
            JOIN appointments a ON a.id = s.appointment_id
           WHERE a.start_at >= ? AND a.start_at <= ?`,
         [range.start, range.end]
       );
       const weeks = buildWeeklyTrend(
-        apptRows.map((a) => ({ startAt: a.start_at, status: a.status, opsStatus: a.ops_status })),
-        attRows.map((r) => ({ startAt: r.start_at, attendance: r.attendance, apptStatus: r.appt_status })),
+        apptRows.map((a) => ({ startAt: a.start_at, status: a.status })),
+        attRows.map((r) => ({ appointmentId: r.appointment_id, startAt: r.start_at, attendance: r.attendance, apptStatus: r.appt_status })),
         from,
         to
       );

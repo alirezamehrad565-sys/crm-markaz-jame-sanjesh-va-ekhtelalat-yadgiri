@@ -1,4 +1,4 @@
-import type { AppointmentOpsStatus, AppointmentStatus, AppointmentStudent, NextAction } from '@core/shared';
+import type { AppointmentStatus, AppointmentStudent, NextAction } from '@core/shared';
 
 export interface AppointmentRow {
   id: string;
@@ -6,7 +6,6 @@ export interface AppointmentRow {
   start_at: string;
   end_at: string;
   status: AppointmentStatus;
-  ops_status: AppointmentOpsStatus | null;
   session_type: string | null;
   note: string | null;
   version: number;
@@ -33,7 +32,6 @@ export function rowToAppointment(row: AppointmentRow, students: AppointmentStude
     startAt: row.start_at,
     endAt: row.end_at,
     status: row.status,
-    opsStatus: row.ops_status ?? null,
     sessionType: (row.session_type ?? null) as import('@core/shared').Appointment['sessionType'],
     note: row.note,
     version: row.version,
@@ -56,7 +54,7 @@ export function rowToStudent(row: AppointmentStudentRow): AppointmentStudent {
   };
 }
 
-const APPOINTMENT_COLS = 'id, staff_id, start_at, end_at, status, ops_status, session_type, note, version, batch_id, created_by, created_at, updated_at';
+const APPOINTMENT_COLS = 'id, staff_id, start_at, end_at, status, session_type, note, version, batch_id, created_by, created_at, updated_at';
 
 export function selectAppointmentById(id: string): { sql: string; params: unknown[] } {
   return {

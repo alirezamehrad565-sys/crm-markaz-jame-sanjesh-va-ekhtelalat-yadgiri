@@ -119,31 +119,25 @@ describe('deriveNextAction — قاعدهٔ قطعی §14', () => {
   });
 });
 
-describe('appointmentEventState — ماتریس عنوان وضعیت جلسه', () => {
+describe('appointmentEventState — ماتریس عنوان وضعیت جلسه (۱.۱۸.۰: فقط حضور و غیاب)', () => {
   const base = { startAt: '2025-01-01T10:00:00Z', endAt: '2025-01-01T10:45:00Z' };
 
   it('لغو شده', () => {
-    expect(appointmentEventState({ ...base, status: 'cancelled', opsStatus: null, attendance: 'cancelled' }).title).toBe('نوبت لغو شد');
+    expect(appointmentEventState({ ...base, status: 'cancelled', attendance: 'cancelled' }).title).toBe('نوبت لغو شد');
   });
-  it('no_show عملیاتی و غیبت قدیمی (بدون ops) هر دو عدم حضور', () => {
-    expect(appointmentEventState({ ...base, status: 'scheduled', opsStatus: 'no_show', attendance: 'pending' }).title).toBe('جلسه — عدم حضور');
-    expect(appointmentEventState({ ...base, status: 'scheduled', opsStatus: null, attendance: 'absent' }).title).toBe('جلسه — عدم حضور');
+  it('غایب → عدم حضور', () => {
+    expect(appointmentEventState({ ...base, status: 'scheduled', attendance: 'absent' }).title).toBe('جلسه — عدم حضور');
   });
-  it('completed → برگزار شد با مدت', () => {
-    const out = appointmentEventState({ ...base, status: 'scheduled', opsStatus: 'completed', attendance: 'present' });
-    expect(out.title).toBe('جلسه برگزار شد');
+  it('تأخیر → حضور با تأخیر', () => {
+    expect(appointmentEventState({ ...base, status: 'scheduled', attendance: 'late' }).title).toBe('جلسه — حضور با تأخیر');
+  });
+  it('حاضر → حضور ثبت شد با مدت', () => {
+    const out = appointmentEventState({ ...base, status: 'scheduled', attendance: 'present' });
+    expect(out.title).toBe('جلسه — حضور ثبت شد');
     expect(out.subtitle).toContain('۴۵ دقیقه');
   });
-  it('in_session / checked_in / delayed', () => {
-    expect(appointmentEventState({ ...base, status: 'scheduled', opsStatus: 'in_session', attendance: 'present' }).title).toBe('جلسه در جریان است');
-    expect(appointmentEventState({ ...base, status: 'scheduled', opsStatus: 'checked_in', attendance: 'present' }).title).toBe('جلسه — حضور ثبت شد');
-    expect(appointmentEventState({ ...base, status: 'scheduled', opsStatus: 'delayed', attendance: 'pending' }).title).toBe('جلسه — تأخیر در شروع');
-  });
-  it('حضور قدیمی بدون ops → حضور ثبت شد', () => {
-    expect(appointmentEventState({ ...base, status: 'scheduled', opsStatus: null, attendance: 'present' }).title).toBe('جلسه — حضور ثبت شد');
-  });
   it('پیش‌فرض → نوبت جلسه (در انتظار برگزاری)', () => {
-    const out = appointmentEventState({ ...base, status: 'scheduled', opsStatus: null, attendance: 'pending' });
+    const out = appointmentEventState({ ...base, status: 'scheduled', attendance: 'pending' });
     expect(out.title).toBe('نوبت جلسه');
     expect(out.subtitle).toContain('در انتظار برگزاری');
   });

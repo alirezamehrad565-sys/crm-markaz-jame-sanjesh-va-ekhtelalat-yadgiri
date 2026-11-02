@@ -18,7 +18,6 @@ import {
   KNOWLEDGE_CATEGORIES,
   KNOWLEDGE_TITLE_MAX,
   APPOINTMENT_STATUS,
-  APPOINTMENT_OPS_STATUSES,
   ATTENDANCE_STATUS,
   CLASS_NAME_MAX,
   DAY_NOTE_BODY_MAX,
@@ -158,12 +157,6 @@ export const ResizeAppointmentSchema = z.object({
 
 export const CancelAppointmentSchema = z.object({
   version: z.number().int().positive()
-});
-
-export const OpsStatusSchema = z.enum(APPOINTMENT_OPS_STATUSES);
-
-export const SetOpsStatusSchema = z.object({
-  ops_status: OpsStatusSchema
 });
 
 export const CopyWeekSchema = z.object({
