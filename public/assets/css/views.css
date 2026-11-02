@@ -1567,7 +1567,12 @@ tr.wl-row--urgent > td:first-child {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  /* ۱.۱۶.۰ — گزارش کاربر: «دکمهٔ حذف کنار دکمهٔ اضافه‌کردن رویداد قرار گرفته، خوبی نداره».
+     ریشه: خوشه با flex-wrap:wrap از درون می‌شکست و آخرین دایره (حذفِ قرمز) تنها به خط بعد
+     می‌افتاد و دقیقاً کنار CTA «ثبت رویداد پرونده» می‌نشست. اکنون خوشه یکپارچه است —
+     یا کامل گوشهٔ کارت می‌ماند یا «کلاً» زیر هویت می‌رود؛ هرگز فرگمنت نمی‌شود. */
+  flex-wrap: nowrap;
+  flex: none;
   margin-inline-start: auto; /* گوشهٔ پایان کارت (چپ در RTL) — در موبایل زیر هویت می‌آید */
 }
 .icon-circle {
@@ -1591,12 +1596,40 @@ tr.wl-row--urgent > td:first-child {
 .icon-circle--danger { color: var(--danger); }
 .icon-circle--danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
 .icon-circle.is-busy { opacity: .55; pointer-events: none; }
+
+/* ۱.۱۶.۰ — دایره‌های اقدام سرِ ردیف فهرست دانش‌آموزان (جایگزین منوی ⋯ مودال‌محور):
+   همان زبان دایره‌های کارت پروفایل در مقیاس ردیف — ۳۰px، روی لمس ۳۸px (کف هدف لمسی). */
+.row-circles {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  /* nowrap روی جدول دسکتاپ: ستون «عملیات» عرض کامل یک‌خط را رزرو می‌کند و دایره‌ها
+     هرگز داخل سلول به چند خط نمی‌شکنند (موبایل ≤640px با قاعدهٔ cell-actions می‌شکند). */
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+.row-circles .icon-circle { width: 30px; height: 30px; }
+/* سلول عملیات در جدول: لایی داخلی کمتر تا پنج دایره بدون اسکرول افقی جدول جا شوند */
+.table td[data-label="عملیات"] { padding-inline: 8px; }
+/* ستون‌های دادهٔ جدول دانش‌آموزان: لایی داخلی ۱۰px — جمع عرض جدول در دسکتاپ بدون اسکرول افقی جا می‌شود */
+.table td[data-label="کد ملی"], .table td[data-label="تلفن ولیّ"],
+.table td[data-label="مدرسه / کلاس"], .table td[data-label="برچسب‌ها"],
+.table td[data-label="رویداد"], .table td[data-label="وضعیت"] { padding-inline: 10px; }
+.row-circles .icon-circle--danger { margin-inline-start: var(--sp-2); }
+@media (pointer: coarse) {
+  .row-circles .icon-circle { width: 38px; height: 38px; }
+}
+
+/* ۱.۱۶.۰ — دکمهٔ مخرب (حذف) همیشه با فاصلهٔ ایمنِ اضافه از دکمه‌های امن نشسته است —
+   نه چسبیده به CTA «ثبت رویداد پرونده» (کارت پروفایل) و نه به دکمه‌های امن ردیف (فهرست). */
+.card-circles .icon-circle--danger, .row-circles .icon-circle--danger { margin-inline-start: var(--sp-3); }
+
 @media (pointer: coarse) {
   /* کف هدف لمسی استاندارد ۳۸px → روی لمس ۴۲px تا انگشت راحت بنشیند (الگوی S5-10) */
   .icon-circle { width: 42px; height: 42px; }
 }
 @media (max-width: 720px) {
-  .card-circles { margin-inline-start: 0; width: 100%; padding-top: var(--sp-2); border-top: 1px dashed var(--border); }
+  .card-circles { margin-inline-start: 0; width: 100%; padding-top: var(--sp-2); border-top: 1px dashed var(--border); flex-wrap: wrap; }
 }
 
 /* اهداف لمسی (S1-19، S2-22، S5-10، S6-13، S8-18، S10-13):
