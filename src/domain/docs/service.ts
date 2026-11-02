@@ -145,14 +145,16 @@ export function createDocsService(deps: DocsDeps): DocsService {
     const map = new Map<string, DocFileMeta[]>();
     if (docIds.length === 0) return map;
     const ph = docIds.map(() => '?').join(', ');
+    // ۱.۱۲.۰ — جدیدترین فایل بالا + زمان بارگذاری در متادیتا؛ ترتیب قدیمی (صعودی) کاربر را
+    // به ردیف کهنهٔ هم‌نام می‌رساند (گزارش «دانلود فایل دیگر» — ردیف‌های تکراری واقعی در تولید)
     const rows = await db.query<FileRow>(
       `SELECT id, doc_id, file_key, file_name, file_mime, file_size, created_at
-         FROM docs_files WHERE doc_id IN (${ph}) ORDER BY created_at, rowid`,
+         FROM docs_files WHERE doc_id IN (${ph}) ORDER BY created_at DESC, rowid DESC`,
       docIds
     );
     for (const r of rows) {
       const list = map.get(r.doc_id) ?? [];
-      list.push({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size });
+      list.push({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size, uploadedAt: r.created_at });
       map.set(r.doc_id, list);
     }
     return map;
@@ -451,6 +453,26 @@ export function createDocsService(deps: DocsDeps): DocsService {
       const expectedB64 = fullChunks * b64Len(MAX_EXERCISE_UPLOAD_CHUNK_BYTES) + (rest === 0 ? 0 : b64Len(rest));
       if (!stat || stat.n !== expectedRows || (stat.bl ?? 0) !== expectedB64) {
         throw new ConflictError('بارگذاری ناقص است — تکه‌ها با حجم اعلام‌شده هم‌خوان نیستند؛ دوباره تلاش کنید یا فایل را حذف کنید');
+      }
+      /* ۱.۱۲.۰ — باگ نهفتهٔ مسیر chunked در انبار R2: تکه‌ها در D1 می‌ماندند و هیچ‌گاه
+         آبجکت نهایی در storage نوشته نمی‌شد؛ getFile روی R2 «پیدا نشد» می‌داد.
+         (در انبار D1 خودِ تکه‌ها ذخیره‌اند و همین مسیر درست است — به‌همین دلیل تست‌ها سبز بود.) */
+      if (storage.name === 'r2' && storage.putSegments) {
+        const chunkRows = await db.query<{ seq: number; content: string }>(
+          `SELECT seq, content FROM exercise_file_chunks WHERE key = ? ORDER BY seq`,
+          [fileRow.file_key]
+        );
+        const segments = chunkRows
+          .sort((a, b) => a.seq - b.seq)
+          .map((r) => {
+            const bin = atob(r.content);
+            const out = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+            return out;
+          });
+        await storage.putSegments(fileRow.file_key, segments);
+        // تکه‌های میانی D1 بعد از نوشتن آبجکت نهایی دیگر لازم نیست
+        await db.execute(`DELETE FROM exercise_file_chunks WHERE key = ?`, [fileRow.file_key]);
       }
       await db.transaction(async (tx) => {
         await tx.execute(`UPDATE docs SET updated_at = datetime('now') WHERE id = ?`, [id]);
