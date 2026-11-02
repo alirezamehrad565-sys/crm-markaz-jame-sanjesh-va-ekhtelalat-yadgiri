@@ -1560,6 +1560,45 @@ tr.wl-row--urgent > td:first-child {
   .profile-actions .btn, .profile-actions .select { height: 38px; }
 }
 
+/* ۱.۱۵.۰ — دکمه‌های دایره‌ای سادهٔ اقدام روی کارت پروندهٔ دانش‌آموز:
+   حذف/ویرایش/معلم/… دیگر پشت منو و مودال پنهان نیستند — دایره‌های ۳۸px گوشهٔ کارت.
+   دایرهٔ کامل (--radius-full)، سطح آرام، هاور رنگی؛ خطرناک‌ها (حذف) با قرمز و هاور پُر. */
+.card-circles {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-inline-start: auto; /* گوشهٔ پایان کارت (چپ در RTL) — در موبایل زیر هویت می‌آید */
+}
+.icon-circle {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full); /* دایرهٔ کامل — برخلاف btn--icon چهارگوش */
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background .15s ease, color .15s ease, border-color .15s ease, transform .12s ease;
+}
+.icon-circle:hover { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
+.icon-circle:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.icon-circle:active { transform: scale(.93); }
+.icon-circle--danger { color: var(--danger); }
+.icon-circle--danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+.icon-circle.is-busy { opacity: .55; pointer-events: none; }
+@media (pointer: coarse) {
+  /* کف هدف لمسی استاندارد ۳۸px → روی لمس ۴۲px تا انگشت راحت بنشیند (الگوی S5-10) */
+  .icon-circle { width: 42px; height: 42px; }
+}
+@media (max-width: 720px) {
+  .card-circles { margin-inline-start: 0; width: 100%; padding-top: var(--sp-2); border-top: 1px dashed var(--border); }
+}
+
 /* اهداف لمسی (S1-19، S2-22، S5-10، S6-13، S8-18، S10-13):
    کنترل ریز آیکن‌دار زیر ۲۴px (کف WCAG 2.5.8) روی لمس به ۲۸–۳۰px می‌رسد؛ btn--sm به استاندارد لمسی ۳۸px (الگوی ) */
 @media (pointer: coarse) {

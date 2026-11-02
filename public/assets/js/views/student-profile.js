@@ -1,6 +1,8 @@
 import { api, qs } from '../api.js';
 import { fa, enDigits, formatJalaliDateTime, formatJalaliNumeric, formatStoredJalaliNumeric, STUDENT_GRADES, gradeLabel, isPlaceholderNid } from '../format.js';
-import { el, icon, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, tabs, callBadge } from '../ui.js';
+import { el, icon, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, tabs, callBadge, lockBtn } from '../ui.js';
+import { openStudentDelete } from '../student-delete.js'; // — حذف کامل پرونده (جریان واحد با فهرست دانش‌آموزان)
+import { openTeacherManager } from '../student-teachers.js'; // — مدیریت معلم‌ها: افزودن/حذف (APIهای POST/DELETE معلم)
 import { session } from '../state.js';
 import { fetchTags, fetchStudentTags, tagChip, openTagEditor } from '../tagging.js';
 import { fetchStudentFocus, focusLabels, openFocusEditor } from '../student-focus.js'; // درخت هدف در پروفایل
@@ -123,6 +125,49 @@ export async function renderStudentProfile(container, ctx) {
     (session.user.role === 'therapist' && Boolean(student.ownerStaffId) && student.ownerStaffId === session.user.staffId)
   );
 
+  /* ۱.۱۵.۰ — دکمه‌های دایره‌ای سادهٔ اقدام، روی خودِ کارت پرونده (به‌جای کاوش در تب‌ها و منوها):
+     ویرایش · برچسب‌ها · هدف‌ها · معلم · تاریخچهٔ تحصیلی · حذف — همیشه جلوی چشم.
+     هر دکمه با الگوی واحد قفل مشغولی (lockBtn) در برابر اسپم/دوبارکلیک محفوظ است و
+     هر کدام مستقیم API خودش را می‌کوبد: PATCH پرونده، PUT هدف‌ها، POST/DELETE معلم، DELETE پرونده. */
+  function buildCardCircles() {
+    const circle = (iconName, label, onclick, danger = false) =>
+      el('button', {
+        class: `icon-circle${danger ? ' icon-circle--danger' : ''}`,
+        type: 'button', title: label, 'aria-label': label,
+        onclick: (e) => lockBtn(e.currentTarget, onclick)
+      }, icon(iconName, 17));
+
+    return el('div', { class: 'card-circles', role: 'group', 'aria-label': 'اقدامات پرونده' },
+      circle('edit', 'ویرایش اطلاعات', () =>
+        openStudentForm({ student, onSaved: () => renderStudentProfile(container, ctx) })),
+      canManageTags
+        ? circle('tag', 'برچسب‌ها', async () => {
+            let tags = [];
+            try { tags = await fetchTags(); } catch { tags = []; }
+            openTagEditor({
+              student,
+              tags,
+              current: studentTags,
+              canCreateTag: session.user?.role === 'manager',
+              onSaved: () => renderStudentProfile(container, ctx)
+            });
+          })
+        : null,
+      canManageTags
+        ? circle('target', 'هدف‌های شناختی', () =>
+            openFocusEditor({ student, onSaved: () => renderStudentProfile(container, ctx) }))
+        : null,
+      circle('users', 'معلم‌های پرونده — افزودن و حذف', () =>
+        openTeacherManager(student, { onChanged: () => renderStudentProfile(container, ctx) })),
+      circle('school', 'تاریخچهٔ تحصیلی', () =>
+        openEducationHistory(student, { onChanged: () => renderStudentProfile(container, ctx) })),
+      canManageCase
+        ? circle('trash', 'حذف کامل پرونده', () =>
+            openStudentDelete(student, { onDeleted: () => { location.hash = '#/students'; } }), true)
+        : null
+    );
+  }
+
   /* کارت وضعیت دو مرحله‌ای: در رندر فوری فقط هویت و بج‌های پایه (دادهٔ خود دانش‌آموز)؛
      پس از رسیدن دادهٔ موازی، «اقدام بعدی» و ردیف اقدامات هم اضافه می‌شوند. */
   function buildStatusCard() {
@@ -155,7 +200,8 @@ export async function renderStudentProfile(container, ctx) {
                 : null,
               el('span', { class: 'cell-sub' }, `مدرسه: ${schoolName(student.schoolId) ?? '—'}${student.className ? ` — ${student.className}` : ''}`)
             )
-          )
+          ),
+          buildCardCircles() /* ۱.۱۵.۰ — دایره‌های اقدام گوشهٔ کارت؛ وابسته به دادهٔ موازی نیستند */
         ),
         auxDone
           ? el('div', { class: 'profile-actions' },

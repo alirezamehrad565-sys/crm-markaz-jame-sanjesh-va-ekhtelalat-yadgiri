@@ -63,8 +63,31 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(after).toMatch(/height:\s*100dvh/);
   });
 
-  test('نسخه: سو 1.14.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.14\.0'/);
+  test('نسخه: سو 1.15.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.15\.0'/);
+  });
+
+  test('۱.۱۵.۰ — پروفایل: دکمه‌های دایره‌ای اقدام روی کارت پرونده (جای مودال/منوی پنهان)', () => {
+    const profile = readFileSync(join(__dirname, '../../public/assets/js/views/student-profile.js'), 'utf8');
+    // نوار دایره‌ها روی خود کارت ساخته می‌شود و شش اقدام کلیدی را پوشش می‌دهد
+    expect(profile).toMatch(/buildCardCircles/);
+    expect(profile).toMatch(/class: 'card-circles'/);
+    expect(profile).toMatch(/icon-circle--danger/);
+    // هر دکمه با قفل مشغولی واحد (ضد اسپم) باز می‌شود
+    expect(profile).toMatch(/lockBtn\(e\.currentTarget, onclick\)/);
+    // API حذف و API معلم (POST/DELETE) مستقیماً سیم‌کشی شده‌اند
+    expect(profile).toMatch(/openStudentDelete\(student/);
+    expect(profile).toMatch(/openTeacherManager\(student/);
+    const sharedDelete = readFileSync(join(__dirname, '../../public/assets/js/student-delete.js'), 'utf8');
+    expect(sharedDelete).toMatch(/delete-check/);
+    expect(sharedDelete).toMatch(/force=true/);
+    const sharedTeachers = readFileSync(join(__dirname, '../../public/assets/js/student-teachers.js'), 'utf8');
+    expect(sharedTeachers).toMatch(/\/teachers`, \{/); // POST
+    expect(sharedTeachers).toMatch(/\/teachers\/\$\{t\.id\}/); // DELETE
+    // استایل دایره: گردی کامل + هدف لمسی ≥38px و 42px روی لمس
+    expect(views).toMatch(/\.icon-circle\s*\{[^}]*border-radius:\s*var\(--radius-full\)/);
+    expect(views).toMatch(/\.icon-circle\s*\{[^}]*width:\s*38px/);
+    expect(views).toMatch(/@media\s*\(pointer:\s*coarse\)\s*\{[^@]*\.icon-circle\s*\{\s*width:\s*42px/);
   });
 
   test('۱.۱۲.۰ — UX روانی ناوبری: گود اسکرول پایدار + ارتفاع ثابت اوتلت + قفل مشغولی دکمه', () => {
