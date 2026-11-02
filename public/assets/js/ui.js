@@ -261,6 +261,29 @@ export function toastError(err) {
   toast(detail && detail !== msg ? `${msg} — ${detail}` : msg, 'error', 5200);
 }
 
+/* ۱.۱۲.۰ — قفل مشغولی دکمه (ضدِ اسپم/دوبارکلیک).
+   الگوی واحد کل سایت: onclick: (e) => lockBtn(e.currentTarget, async () => { ... })
+   • تا پایان کار ناهمگام، دکمه disabled + aria-busy + چرخ‌نده (.btn.is-busy) می‌گیرد
+   • کلیک دوم در حین کار نادیده گرفته می‌شود (dataset.busy)
+   • restore در finally — حتی در خطا؛ حالت disabled قبلی حفظ می‌شود */
+export async function lockBtn(btn, fn) {
+  if (!btn) return fn();
+  if (btn.dataset.busy === '1') return undefined;
+  btn.dataset.busy = '1';
+  const wasDisabled = btn.disabled;
+  btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
+  btn.classList.add('is-busy');
+  try {
+    return await fn();
+  } finally {
+    btn.disabled = wasDisabled;
+    btn.classList.remove('is-busy');
+    btn.removeAttribute('aria-busy');
+    delete btn.dataset.busy;
+  }
+}
+
 const modalStack = [];
 let modalSeq = 0; // — شمارندهٔ شناسهٔ یکتای عنوان مودال (aria-labelledby)
 let formFieldSeq = 0; // — شمارندهٔ شناسهٔ یکتای فیلدهای formModal (اتصال label به کنترل)
