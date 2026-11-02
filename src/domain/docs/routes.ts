@@ -57,7 +57,9 @@ function fileHeaders(filename: string, mimeType: string, inline: boolean): Recor
   const type = mimeType.startsWith('text/') ? `${mimeType}; charset=utf-8` : mimeType;
   const headers: Record<string, string> = {
     'Content-Type': type,
-    'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+    'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    // صریح روی خود پاسخ فایل — هیچ کشِ میانی/مرورگری مجاز نیست پاسخ قبلی را برای فایل دیگری برگرداند
+    'Cache-Control': 'no-store'
   };
   if (inline) {
     // مثل /public/exercise-files — محتوای inline در کانتکست ایزوله رندر شود

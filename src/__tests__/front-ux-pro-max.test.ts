@@ -63,8 +63,8 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(after).toMatch(/height:\s*100dvh/);
   });
 
-  test('نسخه: سو 1.11.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.11\.0'/);
+  test('نسخه: سو 1.11.1 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.11\.1'/);
   });
 
   test('۱.۱۱.۰ — داشبورد مدیر: ردیف قهرمان «کارهای من» + «اطلاع‌رسانی» هم‌قد و هم‌تراز', () => {
