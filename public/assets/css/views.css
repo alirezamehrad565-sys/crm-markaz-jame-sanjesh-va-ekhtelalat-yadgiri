@@ -1574,6 +1574,11 @@ tr.wl-row--urgent > td:first-child {
   flex-wrap: nowrap;
   flex: none;
   margin-inline-start: auto; /* گوشهٔ پایان کارت (چپ در RTL) — در موبایل زیر هویت می‌آید */
+  /* ۱.۱۷.۰ — بازخورد کاربر: خوشهٔ دایره‌ها در دسکتاپ «شناور» بود — جدا از هویت، وسط فضای خالی.
+     اکنون ریل اقدام با خط‌چین از هویت جدا می‌شود تا یک ناحیهٔ عمدی دیده شود، نه debris؛
+     در موبایل (≤720px) ریل زیر هویت با خط‌چین بالایی می‌ماند و جداکنندهٔ کناری صفر می‌شود. */
+  border-inline-start: 1px dashed var(--border);
+  padding-inline-start: var(--sp-3);
 }
 .icon-circle {
   width: 38px;
@@ -1629,7 +1634,7 @@ tr.wl-row--urgent > td:first-child {
   .icon-circle { width: 42px; height: 42px; }
 }
 @media (max-width: 720px) {
-  .card-circles { margin-inline-start: 0; width: 100%; padding-top: var(--sp-2); border-top: 1px dashed var(--border); flex-wrap: wrap; }
+  .card-circles { margin-inline-start: 0; width: 100%; padding-top: var(--sp-2); border-top: 1px dashed var(--border); flex-wrap: wrap; border-inline-start: 0; padding-inline-start: 0; }
 }
 
 /* اهداف لمسی (S1-19، S2-22، S5-10، S6-13، S8-18، S10-13):
