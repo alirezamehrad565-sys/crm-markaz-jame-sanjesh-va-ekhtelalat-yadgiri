@@ -18,7 +18,7 @@ import {
   WEEKDAY_ABBRS,
   WEEKDAY_NAMES
 } from '../format.js';
-import { el, icon, toast, toastError, loadingState, skeletonState, errorState, emptyState, statusBadge, formModal, confirmModal, openModal } from '../ui.js';
+import { el, icon, toast, toastError, loadingState, skeletonState, errorState, emptyState, statusBadge, formModal, confirmModal } from '../ui.js';
 import { hueClass, staffHue } from '../staff-hue.js'; // — رنگ ثابت هر درمانگر روی کارت نوبت
 import { sessionTypeOf } from '../session-type.js'; // — نوع جلسه (جدول ۴)
 import { openCaseEventForm, canCreateCaseEvents } from '../case-events.js';
@@ -40,38 +40,23 @@ const STAFF_STATUS_BADGE = { present: 'success', absent: 'error', late: 'warning
 const SESSION_STATUS_CLS = { present: 'ok', late: 'warn', absent: 'err', pending: 'muted', cancelled: 'muted' };
 const SESSION_STATUS_LABEL = { present: 'حاضر', late: 'تأخیر', absent: 'غایب', pending: 'در انتظار', cancelled: 'لغو' };
 
-const OPS_LABEL = { checked_in: 'آمد', delayed: 'تأخیر', in_session: 'در جلسه', completed: 'انجام شد', no_show: 'نیامد' };
-const OPS_ACTIONS = {
-  none: [
-    { to: 'checked_in', label: 'آمد', cls: 'primary' },
-    { to: 'delayed', label: 'تأخیر', cls: 'ghost' },
-    { to: 'no_show', label: 'نیامد', cls: 'danger-ghost' }
-  ],
-  checked_in: [
-    { to: 'in_session', label: 'شروع جلسه', cls: 'primary' },
-    { to: 'no_show', label: 'نیامد', cls: 'danger-ghost' }
-  ],
-  delayed: [
-    { to: 'checked_in', label: 'آمد', cls: 'primary' },
-    { to: 'in_session', label: 'شروع جلسه', cls: 'ghost' },
-    { to: 'no_show', label: 'نیامد', cls: 'danger-ghost' }
-  ],
-  in_session: [
-    { to: 'completed', label: 'اتمام جلسه', cls: 'primary' }
-  ],
-  completed: [],
-  no_show: []
-};
+/* ۱.۱۸.۰ — سیستم موازی «وضعیت عملیاتی نوبت» (آمد/تأخیر/شروع جلسه/اتمام جلسه/نیامد) حذف شد.
+   تنها مرجعِ وضعیت، حضور و غیاب واقعی هر دانش‌آموز است: همهٔ حاضر/تأخیر = برگزارشده؛
+   همه غایب = برگزار نشده؛ بقیه = در انتظار. */
+function attStateOf(a) {
+  if (a.status === 'cancelled') return 'cancelled';
+  const rows = (a.students ?? []).filter((s) => s.attendance !== 'cancelled');
+  if (rows.length === 0) return 'none';
+  if (rows.every((s) => s.attendance === 'present' || s.attendance === 'late')) return 'completed';
+  if (rows.every((s) => s.attendance === 'absent')) return 'no_show';
+  return 'none';
+}
 
-const OPS_STAT_ORDER = ['none', 'checked_in', 'delayed', 'in_session', 'completed', 'no_show'];
-
-const OPS_DOT = {
+const ATT_DOT = {
   none: 'wd-tl__dot--planned',
-  checked_in: 'wd-tl__dot--checked_in',
-  delayed: 'wd-tl__dot--delayed',
-  in_session: 'wd-tl__dot--in_session',
   completed: 'wd-tl__dot--completed',
-  no_show: 'wd-tl__dot--no_show'
+  no_show: 'wd-tl__dot--no_show',
+  cancelled: 'wd-tl__dot--cancelled'
 };
 
 function canManage() {
@@ -82,15 +67,9 @@ function isTherapist() {
   return session.user?.role === 'therapist';
 }
 
-function canOperate() {
-  return canManage() || isTherapist();
-}
-
 function canDeleteNotes() {
   return session.user?.role === 'manager';
 }
-
-const absenceFollowUpDone = new Set();
 
 function rerender() {
   if (currentContainer) renderWorkingDay(currentContainer);
@@ -180,7 +159,7 @@ export async function renderWorkingDay(container, opts = {}) {
       el('div', { class: 'page-head__title' }, 'روز کاری'),
       el('div', { class: 'page-head__desc' },
         isTherapist()
-          ? 'تقویم و کارت جلسات خودتان — حضور و غیاب، وضعیت جلسه و گزارش، همه در یک نگاه'
+          ? 'تقویم و کارت جلسات خودتان — حضور و غیاب و گزارش، همه در یک نگاه'
           : 'تقویم، حضور و غیاب همکاران، نوبت‌ها و سنجش — همه در یک نگاه'
       )
     ),
@@ -459,7 +438,6 @@ function attRow(col, board, canMark) {
 
 function apptsCard(board) {
   const ss = board.sessionStats;
-  const ops = board.opsStats;
 
   const selfId = session.user?.staffId ?? null;
   const staffBlocks = (board.staff ?? [])
@@ -490,13 +468,6 @@ function apptsCard(board) {
         ss.pending > 0 ? chip(ss.pending, 'بدون ثبت', 'neutral', 'جلسات بدون ثبت حضور دانش‌آموز') : null,
         ss.present > 0 ? chip(ss.present, 'حاضر', 'success') : null,
         ss.absent > 0 ? chip(ss.absent, 'غایب', 'error') : null,
-        ops.planned > 0 ? chip(ops.planned, 'در انتظار عملیات', 'info', 'نوبت‌های بدون وضعیت عملیاتی') : null,
-        ops.checkedIn > 0 ? chip(ops.checkedIn, 'آمد', 'accent') : null,
-        ops.delayed > 0 ? chip(ops.delayed, 'تأخیر', 'warn') : null,
-        ops.inSession > 0 ? chip(ops.inSession, 'در جلسه', 'primary') : null,
-        ops.completed > 0 ? chip(ops.completed, 'انجام شد', 'success') : null,
-        ops.noShow > 0 ? chip(ops.noShow, 'نیامد', 'error') : null,
-        ops.cancelled > 0 ? chip(ops.cancelled, 'لغو', 'muted') : null,
         board.assessmentsToday > 0 ? chip(board.assessmentsToday, 'ارزیابی امروز', 'accent', 'گزارش‌های جلسهٔ ثبت‌شدهٔ امروز') : null
       )
     ),
@@ -513,18 +484,6 @@ function staffBlock(col, board) {
       )
     : el('span', { class: 'wd-hours wd-hours--off' }, 'بدون بازهٔ کاری');
 
-  const opsCounts = new Map();
-  for (const ap of col.appointments) {
-    if (ap.status === 'cancelled') continue;
-    const key = ap.opsStatus ?? 'none';
-    opsCounts.set(key, (opsCounts.get(key) ?? 0) + 1);
-  }
-  const statPills = OPS_STAT_ORDER
-    .filter((k) => (opsCounts.get(k) ?? 0) > 0)
-    .slice(0, 3)
-    .map((k) => el('span', { class: 'wd-mark wd-mark--muted', title: 'وضعیت عملیاتی نوبت‌های این درمانگر امروز' },
-      `${fa(opsCounts.get(k))} ${OPS_LABEL[k] ?? 'بدون ثبت'}`));
-
   return el('div', { class: `wd-block${st === 'absent' ? ' wd-block--absent' : ''}` },
     el('div', { class: 'wd-block__head' },
       el('div', { class: `staff-mini__avatar ${hueClass(col.staffId)}` }, col.fullName.trim().charAt(0)),
@@ -539,8 +498,7 @@ function staffBlock(col, board) {
         )
       ),
       el('div', { class: 'wd-block__stats' },
-        el('span', { class: 'badge badge--neutral' }, `${fa(col.appointments.length)} نوبت`),
-        ...statPills
+        el('span', { class: 'badge badge--neutral' }, `${fa(col.appointments.length)} نوبت`)
       )
     ),
     timeline(col.appointments, board)
@@ -581,14 +539,14 @@ function timeline(appointments, board) {
 
 function apptItem(a) {
   const cancelled = a.status === 'cancelled';
-  const dotKey = cancelled ? 'cancelled' : (a.opsStatus ?? 'none');
+  const dotKey = attStateOf(a);
   return el('div', { class: `wd-tl__item${cancelled ? ' wd-tl__item--cancelled' : ''}` },
     el('div', { class: 'wd-tl__time' },
       fa(tehranTimeOfIso(a.startAt)),
       el('span', {}, `تا ${fa(tehranTimeOfIso(a.endAt))}`)
     ),
     el('div', { class: 'wd-tl__rail' },
-      el('span', { class: `wd-tl__dot ${OPS_DOT[dotKey] ?? 'wd-tl__dot--planned'}${cancelled ? ' wd-tl__dot--cancelled' : ''}`, 'aria-hidden': 'true' })
+      el('span', { class: `wd-tl__dot ${ATT_DOT[dotKey] ?? 'wd-tl__dot--planned'}${cancelled ? ' wd-tl__dot--cancelled' : ''}`, 'aria-hidden': 'true' })
     ),
     el('div', { class: 'wd-tl__body' }, apptCard(a))
   );
@@ -605,20 +563,18 @@ function nowItem(nowLabel) {
 }
 
 function wdApptStatusClass(a) {
-  if (a.status === 'cancelled') return '';
-  if (a.opsStatus === 'completed') return ' is-attended';
-  if (a.opsStatus === 'no_show') return ' is-noshow';
+  const st = attStateOf(a);
+  if (st === 'completed') return ' is-attended';
+  if (st === 'no_show') return ' is-noshow';
   return '';
 }
 
 function apptCard(a) {
   const cancelled = a.status === 'cancelled';
-  const opsKey = a.opsStatus ?? 'none';
   const durMin = Math.round((Date.parse(a.endAt) - Date.parse(a.startAt)) / 60000);
   const stType = sessionTypeOf(a.sessionType);
 
   const head = el('div', { class: 'wd-appt__time' },
-    a.opsStatus ? statusBadge(a.opsStatus) : null,
     cancelled ? el('span', { class: 'badge badge--neutral' }, 'لغوشده') : null,
     stType ? el('span', { class: `st-chip st-chip--${stType.key}`, title: stType.hint }, stType.short) : null,
     el('span', { class: 'wd-hours', title: 'مدت این نوبت' }, `${fa(Math.max(0, durMin))} دقیقه`),
@@ -722,63 +678,11 @@ function apptCard(a) {
     );
   });
 
-  const acts = (!cancelled && canOperate()) ? (OPS_ACTIONS[opsKey] ?? []) : [];
-  const followUp = opsKey === 'no_show' && canManage() && !absenceFollowUpDone.has(a.id);
-  const opsRow = (acts.length > 0 || followUp)
-    ? el('div', { class: 'wd-appt__ops' },
-        acts.map((act) =>
-          el('button', {
-            class: `btn btn--${act.cls} btn--sm`,
-            type: 'button',
-            title: `ثبت وضعیت «${act.label}» — حضور دانش‌آموزانِ بدونِ ثبت هم خودکار ثبت می‌شود`,
-            onclick: () => setOps(a, act.to)
-          }, act.label)
-        ),
-        followUp
-          ? el('button', {
-              class: 'btn btn--ghost btn--sm',
-              type: 'button',
-              title: 'ساخت پیگیری برای این غیبت (مسئول: شما، مهلت: ۷ روز)',
-              onclick: () => createAbsenceFollowUp(a)
-            }, icon('bell', 13), 'ایجاد پیگیری غیبت')
-          : null
-      )
-    : null;
-
   return el('div', { class: `wd-appt${cancelled ? ' wd-appt--cancelled' : ''}${wdApptStatusClass(a)} ${hueClass(a.staffId)}` },
     head,
     notePreview,
-    studentRows.length > 0 ? el('div', { class: 'wd-appt__students' }, studentRows) : el('div', { class: 'wd-appt__student wd-appt__student--none' }, 'بدون دانش‌آموز'),
-    opsRow
+    studentRows.length > 0 ? el('div', { class: 'wd-appt__students' }, studentRows) : el('div', { class: 'wd-appt__student wd-appt__student--none' }, 'بدون دانش‌آموز')
   );
-}
-
-async function setOps(appt, to) {
-  try {
-    await api.post(`/api/appointments/${appt.id}/ops-status`, { ops_status: to });
-
-    let synced = 0;
-    if (to === 'checked_in' || to === 'no_show') {
-      const status = to === 'checked_in' ? 'present' : 'absent';
-      for (const s of appt.students ?? []) {
-        if (s.attendance !== 'present' && s.attendance !== 'late' && s.attendance !== 'absent' && s.attendance !== 'cancelled') {
-          try {
-            await api.patch(`/api/attendance/${appt.id}/${s.studentId}`, { status });
-            synced += 1;
-          } catch { /* ادامه با بقیه — وضعیت واقعی بعد از ری‌رندر دیده می‌شود */ }
-        }
-      }
-    }
-
-    if (synced > 0 && to === 'checked_in') toast(`آمد ثبت شد — حضور ${fa(synced)} دانش‌آموز حاضر شد`, 'success', 2600);
-    else if (synced > 0 && to === 'no_show') toast(`نیامد ثبت شد — ${fa(synced)} دانش‌آموز غایب ثبت شد`, 'success', 2600);
-    else toast(`«${OPS_LABEL[to]}» ثبت شد`, 'success', 2200);
-
-    if (to === 'completed') await promptSessionReport(appt.id);
-    rerender();
-  } catch (err) {
-    toastError(err);
-  }
 }
 
 async function openSessionReport(appt, s) {
@@ -793,64 +697,6 @@ async function openSessionReport(appt, s) {
         rerender();
       }
     });
-  } catch (err) {
-    toastError(err);
-  }
-}
-
-async function promptSessionReport(appointmentId) {
-  if (!canCreateCaseEvents()) return;
-  let students = [];
-  try {
-    const board = await api.get(`/api/working-day${qs({ date: local.date })}`).then((r) => r.data);
-    const cols = [...(board.staff ?? []), ...(board.unassigned ?? [])];
-    for (const col of cols) {
-      for (const a of col.appointments ?? []) {
-        if (a.id !== appointmentId) continue;
-        for (const s of a.students ?? []) if (s.attendance === 'present' || s.attendance === 'late') students.push(s); // — تأخیر هم حاضر است
-      }
-    }
-  } catch { /* بی‌خطر — پرامپت نمی‌آید */ }
-  if (students.length === 0) return;
-  openModal({
-    title: 'گزارش جلسه — یادتان نرود',
-    body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
-      el('p', { style: { margin: 0 } }, 'جلسه تمام شد. برای هر دانش‌آموز حاضر، گزارش جلسه (رویداد ساخت‌یافته) را روی پرونده ثبت کنید:'),
-      ...students.map((s) =>
-        el('button', {
-          class: 'btn btn--soft',
-          style: { justifyContent: 'space-between', display: 'flex', alignItems: 'center' },
-          onclick: async () => {
-            try {
-              const prof = await api.get(`/api/students/${s.studentId}`);
-              openCaseEventForm({ student: prof.data, appointmentId, onSaved: () => toast('گزارش روی خط زمانی ثبت شد', 'success') });
-            } catch (err) { toastError(err); }
-          }
-        }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, icon('clipboard', 13), s.name), icon('chevL', 15))
-      )
-    ),
-    actions: [(close) => el('button', { class: 'btn btn--ghost', onclick: close }, 'بعداً')]
-  });
-}
-
-async function createAbsenceFollowUp(appt) {
-  const single = appt.students.length === 1 ? appt.students[0] : null;
-  const timeLabel = fa(tehranTimeOfIso(appt.startAt));
-  const title = single
-    ? `پیگیری غیبت — ${single.name} (${timeLabel})`
-    : `پیگیری غیبت جلسه — ${timeLabel}`;
-  try {
-    await api.post('/api/followups', {
-      entity_type: 'appointment',
-      entity_id: appt.id,
-      student_id: single ? single.studentId : undefined,
-      title,
-      assignee_id: session.user.staffId,
-      due_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-    });
-    absenceFollowUpDone.add(appt.id);
-    toast('پیگیری غیبت ساخته شد — مسئول: خود شما، مهلت: ۷ روز بعد', 'success', 2600);
-    rerender();
   } catch (err) {
     toastError(err);
   }

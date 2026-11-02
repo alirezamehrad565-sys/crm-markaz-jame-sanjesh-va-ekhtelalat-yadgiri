@@ -63,8 +63,23 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(after).toMatch(/height:\s*100dvh/);
   });
 
-  test('نسخه: سو 1.17.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.17\.0'/);
+  test('نسخه: سو 1.18.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.18\.0'/);
+  });
+
+  test('۱.۱۸.۰ — حذف سیستم موازی «وضعیت عملیاتی» (آمد/نیامد/شروع و اتمام جلسه): فقط حضور و غیاب', () => {
+    const wd = readFileSync(join(__dirname, '../../public/assets/js/views/working-day.js'), 'utf8');
+    // دکمه‌ها/مودال‌محور وضعیت عملیاتی دیگر در بورد روز کاری نیست
+    expect(wd).not.toMatch(/OPS_ACTIONS|setOps\(|ops-status|absenceFollowUpDone|createAbsenceFollowUp|promptSessionReport/);
+    // وضعیت برگزاری از حضور واقعی دانش‌آموزان می‌آید
+    expect(wd).toMatch(/function attStateOf\(/);
+    expect(wd).toMatch(/ATT_DOT/);
+    const appts = readFileSync(join(__dirname, '../../public/assets/js/views/appointments.js'), 'utf8');
+    expect(appts).not.toMatch(/opsStatus/);
+    expect(appts).toMatch(/attStateOf\(/);
+    // endpoint حذف‌شده در بک‌اند
+    const routes = readFileSync(join(__dirname, '../../src/domain/appointment-core/routes.ts'), 'utf8');
+    expect(routes).not.toMatch(/ops-status|SetOpsStatusSchema/);
   });
 
   test('۱.۱۶.۰ — فهرست دانش‌آموزان: منوی ⋯ مودال‌محور حذف، دایره‌های اقدام سرِ ردیف + جدایی حذف از CTA', () => {

@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.17.0";
+var APP_VERSION = "1.18.0";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -6183,15 +6183,6 @@ var TEACHER_NAME_MAX = 120;
 var SEARCH_QUERY_MIN_LENGTH = 2;
 var SEARCH_QUERY_MAX_LENGTH = 60;
 var DAY_NOTE_BODY_MAX = 2e3;
-var APPOINTMENT_OPS_STATUSES = [
-  "checked_in",
-  "delayed",
-  "in_session",
-  "completed",
-  "no_show"
-];
-var OPS_TERMINAL_STATUSES = ["completed", "no_show"];
-var OPS_QUEUE_WINDOW_MINUTES = 60;
 var NEXT_ACTION_VALUES = ["none", "follow_up", "next_appointment", "contact", "referral"];
 var SESSION_NOTE_MAX = 2e3;
 var STUDENT_GRADES = ["\u067E\u06CC\u0634\u200C\u062F\u0628\u0633\u062A\u0627\u0646\u06CC", "\u0627\u0648\u0644", "\u062F\u0648\u0645", "\u0633\u0648\u0645", "\u0686\u0647\u0627\u0631\u0645", "\u067E\u0646\u062C\u0645", "\u0634\u0634\u0645"];
@@ -6554,10 +6545,6 @@ var ResizeAppointmentSchema = external_exports.object({
 });
 var CancelAppointmentSchema = external_exports.object({
   version: external_exports.number().int().positive()
-});
-var OpsStatusSchema = external_exports.enum(APPOINTMENT_OPS_STATUSES);
-var SetOpsStatusSchema = external_exports.object({
-  ops_status: OpsStatusSchema
 });
 var CopyWeekSchema = external_exports.object({
   source_monday: TehranYmdSchema,
@@ -9786,7 +9773,6 @@ function rowToAppointment(row, students) {
     startAt: row.start_at,
     endAt: row.end_at,
     status: row.status,
-    opsStatus: row.ops_status ?? null,
     sessionType: row.session_type ?? null,
     note: row.note,
     version: row.version,
@@ -9809,7 +9795,7 @@ function rowToStudent(row) {
   };
 }
 __name(rowToStudent, "rowToStudent");
-var APPOINTMENT_COLS = "id, staff_id, start_at, end_at, status, ops_status, session_type, note, version, batch_id, created_by, created_at, updated_at";
+var APPOINTMENT_COLS = "id, staff_id, start_at, end_at, status, session_type, note, version, batch_id, created_by, created_at, updated_at";
 function selectAppointmentById(id) {
   return {
     sql: `SELECT ${APPOINTMENT_COLS} FROM appointments WHERE id = ?`,
@@ -9855,40 +9841,6 @@ function selectStudentsOfAppointments(ids) {
   };
 }
 __name(selectStudentsOfAppointments, "selectStudentsOfAppointments");
-
-// src/domain/appointment-core/pure.ts
-var OPS_STATUS_TRANSITIONS = {
-  none: ["checked_in", "delayed", "no_show"],
-  checked_in: ["in_session", "no_show"],
-  delayed: ["checked_in", "in_session", "no_show"],
-  in_session: ["completed"],
-  completed: [],
-  no_show: []
-};
-function canTransitionOps(from, to) {
-  return OPS_STATUS_TRANSITIONS[from].includes(to);
-}
-__name(canTransitionOps, "canTransitionOps");
-function opsFromDb(value) {
-  return value ?? "none";
-}
-__name(opsFromDb, "opsFromDb");
-function opsTransitionMessage(from, to) {
-  const allowed = OPS_STATUS_TRANSITIONS[from];
-  if (allowed.length === 0) {
-    if (from === "completed") return "\u0627\u06CC\u0646 \u0646\u0648\u0628\u062A \xAB\u0627\u0646\u062C\u0627\u0645 \u0634\u062F\xBB \u062B\u0628\u062A \u0634\u062F\u0647 \u0648 \u0648\u0636\u0639\u06CC\u062A \u0639\u0645\u0644\u06CC\u0627\u062A\u06CC\u200C\u0627\u0634 \u062F\u06CC\u06AF\u0631 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F";
-    return "\u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u0646\u0648\u0628\u062A \xAB\u0646\u06CC\u0627\u0645\u062F\xBB \u062B\u0628\u062A \u0634\u062F\u0647 \u0648 \u0648\u0636\u0639\u06CC\u062A \u0639\u0645\u0644\u06CC\u0627\u062A\u06CC\u200C\u0627\u0634 \u062F\u06CC\u06AF\u0631 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F";
-  }
-  const labels = {
-    checked_in: "\u0622\u0645\u062F",
-    delayed: "\u062A\u0623\u062E\u06CC\u0631",
-    in_session: "\u0634\u0631\u0648\u0639 \u062C\u0644\u0633\u0647",
-    completed: "\u0627\u0646\u062C\u0627\u0645 \u0634\u062F",
-    no_show: "\u0646\u06CC\u0627\u0645\u062F"
-  };
-  return `\u0627\u06CC\u0646 \u062A\u063A\u06CC\u06CC\u0631 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u0648\u0636\u0639\u06CC\u062A \u0641\u0639\u0644\u06CC \u0641\u0642\u0637 \u0627\u06CC\u0646 \u0627\u0642\u062F\u0627\u0645\u200C\u0647\u0627 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A: ${allowed.map((s) => `\xAB${labels[s]}\xBB`).join("\u060C ")}`;
-}
-__name(opsTransitionMessage, "opsTransitionMessage");
 
 // src/domain/appointment-core/week-copy.ts
 var DAY_MS = 24 * 60 * 60 * 1e3;
@@ -10085,7 +10037,6 @@ function createAppointmentService(deps) {
   const { db, audit, logger } = deps;
   let conflictEngine = null;
   let lifecycleObserver = null;
-  let opsObserver = null;
   const logNotify = logger.child("appointment.notify");
   async function fireLifecycle(event, appointment, previous) {
     if (!lifecycleObserver) return;
@@ -10107,9 +10058,6 @@ function createAppointmentService(deps) {
     },
     setLifecycleObserver(observer) {
       lifecycleObserver = observer;
-    },
-    setOpsObserver(observer) {
-      opsObserver = observer;
     },
     async getById(id) {
       const q = selectAppointmentById(id);
@@ -10225,7 +10173,6 @@ function createAppointmentService(deps) {
         startAt: input.startAt,
         endAt: input.endAt,
         status: "scheduled",
-        opsStatus: null,
         sessionType: input.sessionType ?? null,
         note: input.note ?? null,
         version: 1,
@@ -10470,58 +10417,6 @@ function createAppointmentService(deps) {
       });
       logger.child("appointment.delete").info("appointment.deleted", { id });
     },
-    async setOpsStatus(id, opsStatus, actor) {
-      const { result, changed, studentIds, from } = await db.transaction(async (tx) => {
-        const q = selectAppointmentById(id);
-        const row = await tx.queryOne(q.sql, q.params);
-        if (!row) throw new NotFoundError("\u0646\u0648\u0628\u062A");
-        assertAppointmentScope(actor, row.staff_id);
-        if (row.status === "cancelled") {
-          throw new ConflictError("\u0646\u0648\u0628\u062A \u0644\u063A\u0648\u0634\u062F\u0647 \u0648\u0636\u0639\u06CC\u062A \u0639\u0645\u0644\u06CC\u0627\u062A\u06CC \u0646\u0645\u06CC\u200C\u06AF\u06CC\u0631\u062F");
-        }
-        const from2 = opsFromDb(row.ops_status);
-        if (from2 !== opsStatus && !canTransitionOps(from2, opsStatus)) {
-          throw new ConflictError(opsTransitionMessage(from2, opsStatus));
-        }
-        if (from2 !== opsStatus) {
-          await tx.execute(
-            `UPDATE appointments SET ops_status = ?, updated_at = datetime('now') WHERE id = ?`,
-            [opsStatus, id]
-          );
-          await audit.logInTransaction(tx, {
-            actorId: actor.staffId,
-            action: "appointment.ops_status.changed",
-            resourceType: "appointment",
-            resourceId: id,
-            changes: { ops_status: { from: row.ops_status, to: opsStatus } }
-          });
-        }
-        const students = await loadStudents(tx, id);
-        const merged = from2 !== opsStatus ? { ...row, ops_status: opsStatus } : row;
-        return {
-          result: rowToAppointment(merged, students.map(rowToStudent)),
-          changed: from2 !== opsStatus,
-          studentIds: students.map((s) => s.student_id),
-          from: from2
-        };
-      });
-      if (opsObserver && changed) {
-        try {
-          await opsObserver.onOpsStatusChanged(
-            result,
-            studentIds.map((studentId) => ({ studentId })),
-            from === "none" ? null : from,
-            opsStatus
-          );
-        } catch (err) {
-          logger.child("appointment.ops").warn("ops.observer.failed", {
-            appointmentId: id,
-            error: err instanceof Error ? err.message : String(err)
-          });
-        }
-      }
-      return result;
-    },
     async restore(id, version, actor) {
       const current = await service.getById(id);
       if (!current) throw new NotFoundError("\u0646\u0648\u0628\u062A");
@@ -10711,12 +10606,6 @@ function registerRoutes(app, service) {
     const actor = getAuthContext(c);
     await service.remove(c.req.param("id"), actor);
     return c.body(null, 204);
-  });
-  app.post("/api/appointments/:id/ops-status", requireRole("manager", "secretary", "therapist"), async (c) => {
-    const actor = getAuthContext(c);
-    const body = SetOpsStatusSchema.parse(await c.req.json());
-    const appointment = await service.setOpsStatus(c.req.param("id"), body.ops_status, actor);
-    return c.json({ data: appointment }, 200);
   });
   app.post("/api/appointments/:id/students", async (c) => {
     const actor = getAuthContext(c);
@@ -11151,70 +11040,6 @@ function normalizeDayNoteBody(raw2) {
   return raw2.replace(/\r\n/g, "\n").split("\n").map((line2) => line2.replace(/[ \t\u00a0]+/g, " ").trim()).join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 __name(normalizeDayNoteBody, "normalizeDayNoteBody");
-function isTerminalOps(ops) {
-  return ops !== null && ops !== void 0 && OPS_TERMINAL_STATUSES.includes(ops);
-}
-__name(isTerminalOps, "isTerminalOps");
-function opsStatsFromAppointments(appointments) {
-  const stats = {
-    planned: 0,
-    checkedIn: 0,
-    delayed: 0,
-    inSession: 0,
-    completed: 0,
-    noShow: 0,
-    cancelled: 0,
-    total: appointments.length
-  };
-  for (const a of appointments) {
-    if (a.status === "cancelled") {
-      stats.cancelled++;
-      continue;
-    }
-    switch (a.opsStatus) {
-      case "checked_in":
-        stats.checkedIn++;
-        break;
-      case "delayed":
-        stats.delayed++;
-        break;
-      case "in_session":
-        stats.inSession++;
-        break;
-      case "completed":
-        stats.completed++;
-        break;
-      case "no_show":
-        stats.noShow++;
-        break;
-      default:
-        stats.planned++;
-        break;
-    }
-  }
-  return stats;
-}
-__name(opsStatsFromAppointments, "opsStatsFromAppointments");
-function buildQueue(appointments, nowIso, options) {
-  const windowMs = (options.windowMinutes ?? OPS_QUEUE_WINDOW_MINUTES) * 6e4;
-  const deadline = Date.parse(nowIso) + windowMs;
-  const items = appointments.filter((a) => {
-    if (a.status === "cancelled") return false;
-    if (isTerminalOps(a.opsStatus)) return false;
-    if (a.opsStatus) return true;
-    return Date.parse(a.startAt) <= deadline;
-  }).sort((a, b) => a.startAt < b.startAt ? -1 : a.startAt > b.startAt ? 1 : 0).map((a) => ({
-    appointmentId: a.id,
-    staffId: a.staffId,
-    staffName: options.staffNameOf(a.staffId),
-    startAt: a.startAt,
-    endAt: a.endAt,
-    opsStatus: a.opsStatus ?? null,
-    studentNames: a.students.map((s) => s.name)
-  }));
-  return items;
-}
-__name(buildQueue, "buildQueue");
 
 // src/domain/working-day/service.ts
 function rowsToAppointments(rows) {
@@ -11228,7 +11053,6 @@ function rowsToAppointments(rows) {
         startAt: r.start_at,
         endAt: r.end_at,
         status: r.status,
-        opsStatus: r.ops_status ?? null,
         note: r.note,
         version: r.version,
         students: []
@@ -11268,7 +11092,7 @@ function createWorkingDayService(deps) {
           [weekday]
         ),
         db.query(
-          `SELECT a.id, a.staff_id, a.start_at, a.end_at, a.status, a.ops_status, a.note, a.version,
+          `SELECT a.id, a.staff_id, a.start_at, a.end_at, a.status, a.note, a.version,
                   s.student_id, s.attendance AS student_attendance,
                   st.first_name || ' ' || st.last_name AS student_name,
                   st.guardian_phone AS student_phone
@@ -11337,21 +11161,12 @@ function createWorkingDayService(deps) {
         createdAt: n.created_at
       }));
       const sessionStats = sessionStatsFromAppointments(appointments);
-      const opsStats = opsStatsFromAppointments(appointments);
-      const staffNameById = new Map(staffRows.map((s) => [s.id, s.full_name]));
-      const staffNameOf = /* @__PURE__ */ __name((staffId) => staffNameById.get(staffId) ?? "\u2014", "staffNameOf");
-      const queue = isToday ? buildQueue(appointments, (/* @__PURE__ */ new Date()).toISOString(), {
-        windowMinutes: OPS_QUEUE_WINDOW_MINUTES,
-        staffNameOf
-      }) : [];
       return {
         date,
         weekday,
         isToday,
         summary,
         sessionStats,
-        opsStats,
-        queue,
         assessmentsToday: assessmentRows[0]?.n ?? 0,
         staff: columns,
         unassigned,
@@ -13092,23 +12907,14 @@ function appointmentEventState(a) {
   if (a.status === "cancelled") {
     return { title: "\u0646\u0648\u0628\u062A \u0644\u063A\u0648 \u0634\u062F", subtitle: subtitleWith(null, `${faDigits(durationMin)} \u062F\u0642\u06CC\u0642\u0647 \u2014 \u0644\u063A\u0648 \u0634\u062F\u0647`) };
   }
-  if (a.opsStatus === "no_show" || a.opsStatus === null && a.attendance === "absent") {
+  if (a.attendance === "absent") {
     return { title: "\u062C\u0644\u0633\u0647 \u2014 \u0639\u062F\u0645 \u062D\u0636\u0648\u0631", subtitle: subtitleWith(null, `${faDigits(durationMin)} \u062F\u0642\u06CC\u0642\u0647`) };
   }
-  if (a.opsStatus === null && a.attendance === "late") {
+  if (a.attendance === "late") {
     return { title: "\u062C\u0644\u0633\u0647 \u2014 \u062D\u0636\u0648\u0631 \u0628\u0627 \u062A\u0623\u062E\u06CC\u0631", subtitle: subtitleWith(null, `${faDigits(durationMin)} \u062F\u0642\u06CC\u0642\u0647`) };
   }
-  if (a.opsStatus === "completed") {
-    return { title: "\u062C\u0644\u0633\u0647 \u0628\u0631\u06AF\u0632\u0627\u0631 \u0634\u062F", subtitle: subtitleWith(null, `${faDigits(durationMin)} \u062F\u0642\u06CC\u0642\u0647 \u2014 \u062D\u0627\u0636\u0631`) };
-  }
-  if (a.opsStatus === "in_session") {
-    return { title: "\u062C\u0644\u0633\u0647 \u062F\u0631 \u062C\u0631\u06CC\u0627\u0646 \u0627\u0633\u062A", subtitle: subtitleWith(null, `${faDigits(durationMin)} \u062F\u0642\u06CC\u0642\u0647`) };
-  }
-  if (a.opsStatus === "checked_in" || a.attendance === "present") {
+  if (a.attendance === "present") {
     return { title: "\u062C\u0644\u0633\u0647 \u2014 \u062D\u0636\u0648\u0631 \u062B\u0628\u062A \u0634\u062F", subtitle: subtitleWith(null, `${faDigits(durationMin)} \u062F\u0642\u06CC\u0642\u0647`) };
-  }
-  if (a.opsStatus === "delayed") {
-    return { title: "\u062C\u0644\u0633\u0647 \u2014 \u062A\u0623\u062E\u06CC\u0631 \u062F\u0631 \u0634\u0631\u0648\u0639", subtitle: subtitleWith(null, `${faDigits(durationMin)} \u062F\u0642\u06CC\u0642\u0647`) };
   }
   return { title: "\u0646\u0648\u0628\u062A \u062C\u0644\u0633\u0647", subtitle: subtitleWith(null, `${faDigits(durationMin)} \u062F\u0642\u06CC\u0642\u0647 \u2014 \u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u0628\u0631\u06AF\u0632\u0627\u0631\u06CC`) };
 }
@@ -13221,7 +13027,7 @@ function createStudentTimelineService(db) {
         [studentId]
       );
       const appts = await db.query(
-        `SELECT a.id, a.start_at, a.end_at, a.status, a.ops_status,
+        `SELECT a.id, a.start_at, a.end_at, a.status,
                 a_s.attendance, s.full_name AS staff_name
            FROM appointment_students a_s
            JOIN appointments a ON a.id = a_s.appointment_id
@@ -13381,7 +13187,6 @@ function createStudentTimelineService(db) {
       for (const a of appts) {
         const state = appointmentEventState({
           status: a.status,
-          opsStatus: a.ops_status,
           attendance: a.attendance,
           startAt: a.start_at,
           endAt: a.end_at
@@ -45448,7 +45253,20 @@ function buildWeeklyTrend(appointments, attendance, fromYmd, toYmd) {
     if (!b) continue;
     if (a.status === "cancelled") b.cancelled++;
     else b.sessions++;
-    if (a.opsStatus === "completed") b.completed++;
+  }
+  const byAppt = /* @__PURE__ */ new Map();
+  for (const r of attendance) {
+    if (r.apptStatus === "cancelled") continue;
+    const list = byAppt.get(r.appointmentId);
+    if (list) list.push(r);
+    else byAppt.set(r.appointmentId, [r]);
+  }
+  for (const rows of byAppt.values()) {
+    const counted = rows.filter((r) => r.attendance !== "cancelled");
+    if (counted.length === 0) continue;
+    if (!counted.every((r) => r.attendance === "present" || r.attendance === "late")) continue;
+    const b = bucketOf(rows[0].startAt);
+    if (b) b.completed++;
   }
   for (const r of attendance) {
     if (r.apptStatus === "cancelled") continue;
@@ -45673,20 +45491,20 @@ function createReportService(deps) {
     async getAdvancedReport(from, to) {
       const range = tehranRange(from, to);
       const apptRows = await db.query(
-        `SELECT start_at, status, ops_status FROM appointments
+        `SELECT start_at, status FROM appointments
           WHERE start_at >= ? AND start_at <= ?`,
         [range.start, range.end]
       );
       const attRows = await db.query(
-        `SELECT a.start_at, s.attendance, a.status AS appt_status
+        `SELECT a.id AS appointment_id, a.start_at, s.attendance, a.status AS appt_status
            FROM appointment_students s
            JOIN appointments a ON a.id = s.appointment_id
           WHERE a.start_at >= ? AND a.start_at <= ?`,
         [range.start, range.end]
       );
       const weeks = buildWeeklyTrend(
-        apptRows.map((a) => ({ startAt: a.start_at, status: a.status, opsStatus: a.ops_status })),
-        attRows.map((r) => ({ startAt: r.start_at, attendance: r.attendance, apptStatus: r.appt_status })),
+        apptRows.map((a) => ({ startAt: a.start_at, status: a.status })),
+        attRows.map((r) => ({ appointmentId: r.appointment_id, startAt: r.start_at, attendance: r.attendance, apptStatus: r.appt_status })),
         from,
         to
       );
@@ -46359,14 +46177,6 @@ function createServices(deps) {
       await notify.notifyAttendanceMarked(apptId, studentId, status);
       await waitlist.onAttendanceMarked(apptId, studentId, status);
     }, "onMarked")
-  });
-  appointments.setOpsObserver({
-    onOpsStatusChanged: /* @__PURE__ */ __name(async (appointment, students, _from, to) => {
-      if (to !== "completed") return;
-      for (const s of students) {
-        await waitlist.onAttendanceMarked(appointment.id, s.studentId, "present");
-      }
-    }, "onOpsStatusChanged")
   });
   todos.setNotifier((todo) => notify.notifyTodoAssigned(todo));
   exerciseBank.setGradeObserver(async (record) => {

@@ -35,7 +35,6 @@ interface ApptRow {
   start_at: string;
   end_at: string;
   status: string;
-  ops_status: string | null;
   attendance: string;
   staff_name: string | null;
 }
@@ -119,7 +118,7 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
       );
 
       const appts = await db.query<ApptRow>(
-        `SELECT a.id, a.start_at, a.end_at, a.status, a.ops_status,
+        `SELECT a.id, a.start_at, a.end_at, a.status,
                 a_s.attendance, s.full_name AS staff_name
            FROM appointment_students a_s
            JOIN appointments a ON a.id = a_s.appointment_id
@@ -301,7 +300,6 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
       for (const a of appts) {
         const state = appointmentEventState({
           status: a.status,
-          opsStatus: a.ops_status,
           attendance: a.attendance,
           startAt: a.start_at,
           endAt: a.end_at
