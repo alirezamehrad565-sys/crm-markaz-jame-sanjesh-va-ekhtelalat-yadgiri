@@ -153,6 +153,27 @@ async function downloadFile(docId, file) {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast(`«${filename || file.filename}» دانلود شد`, 'success'); // — تأیید نام واقعی فایل ذخیره‌شده
+  } catch (err) {
+    toastError(err);
+  }
+}
+
+/** پیش‌نمایش/پرینت — همان الگوی knowledge-admin: بایتِ احرازشده → objectURL → تب جدید.
+ *  window.open مستقیم روی /api/* توکن ندارد و ۴۰۱ می‌گیرد؛ محتوا همیشه از همان fileId می‌آید. */
+async function previewFile(docId, file) {
+  try {
+    const { blob } = await api.downloadBlob(`/api/docs/${docId}/files/${file.id}?inline=1`);
+    const objUrl = URL.createObjectURL(blob);
+    const w = window.open(objUrl, '_blank', 'noopener');
+    if (!w) {
+      // پاپ‌آپ‌بلاکر — بازِ جایگزین با کلیک لنگر (کلیک لنگر مسدود نمی‌شود)
+      const a = el('a', { href: objUrl, target: '_blank', rel: 'noopener' });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
   } catch (err) {
     toastError(err);
   }
@@ -625,7 +646,7 @@ export async function renderDocsDetail(container, ctx) {
     if (isPreviewable(file)) {
       actions.appendChild(el('button', {
         class: 'btn btn--soft btn--sm',
-        onclick: () => window.open(`/api/docs/${docId}/files/${file.id}?inline=1`, '_blank', 'noopener') /* S8-26 */
+        onclick: () => previewFile(docId, file)
       }, icon('printer', 14), 'پیش‌نمایش / پرینت'));
     }
     actions.appendChild(el('button', {

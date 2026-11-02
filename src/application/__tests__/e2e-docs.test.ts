@@ -239,13 +239,19 @@ describe('نمون‌برگ‌ها و اسناد خام — فایل‌ها', ()
     expect(pdf.size).toBe(PDF_BYTES.length);
     expect(img.mime).toBe('image/png');
 
-    // دانلود — بایت یکسان
+    // دانلود — بایت یکسان + هیچ کشی پاسخ فایل را نگه نمی‌دارد (no-store صریح)
     const headers = { authorization: `Bearer ${tokenOf(manager)}` };
     const dl = await A.app.request(`/api/docs/${doc.id}/files/${pdf.id}`, { headers }, A.env as never);
     expect(dl.status).toBe(200);
     expect(await dl.text()).toBe('%PDF-fake-docs-circular-letter');
     expect(dl.headers.get('content-type')).toBe('application/pdf');
     expect(dl.headers.get('content-disposition')).toContain('attachment');
+    expect(dl.headers.get('cache-control')).toContain('no-store');
+
+    // دانلود فایل دومِ همان سند — بایت خودش را می‌دهد نه فایل اول را (جدايی کلیدها)
+    const dlImg = await A.app.request(`/api/docs/${doc.id}/files/${img.id}`, { headers }, A.env as never);
+    expect(dlImg.status).toBe(200);
+    expect(await dlImg.text()).toBe('%PNG-fake-docs-form-scan');
 
     // جزئیات سند فایل‌ها را نشان می‌دهد
     const detail = dataOf<DocRecord>(await manager.get(`/api/docs/${doc.id}`));
