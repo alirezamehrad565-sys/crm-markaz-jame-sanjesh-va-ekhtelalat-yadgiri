@@ -63,8 +63,8 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(after).toMatch(/height:\s*100dvh/);
   });
 
-  test('نسخه: سو 1.16.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.16\.0'/);
+  test('نسخه: سو 1.17.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.17\.0'/);
   });
 
   test('۱.۱۶.۰ — فهرست دانش‌آموزان: منوی ⋯ مودال‌محور حذف، دایره‌های اقدام سرِ ردیف + جدایی حذف از CTA', () => {
@@ -90,6 +90,32 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(views).toMatch(/@media\s*\(pointer:\s*coarse\)\s*\{\s*\.row-circles\s+\.icon-circle\s*\{[^}]*width:\s*38px/);
     // دکمهٔ مخرب همیشه با فاصلهٔ ایمن اضافه از دکمه‌های امن
     expect(views).toMatch(/\.card-circles \.icon-circle--danger, \.row-circles \.icon-circle--danger\s*\{[^}]*margin-inline-start/);
+  });
+
+  test('۱.۱۷.۰ — مدارس: منوی ⋯ مودال‌محور حذف (مدرسه و کلاس)، دایره‌های اقدام سرِ ردیف + ریل دایره‌های کارت پرونده', () => {
+    const schools = readFileSync(join(__dirname, '../../public/assets/js/views/schools.js'), 'utf8');
+    // منوی سه‌نقطه در مدارس هم نیست — همان قرارداد فهرست دانش‌آموزان (درخواست کاربر)
+    expect(schools).not.toMatch(/rowMenu\(/);
+    expect((schools.match(/class: 'cell-actions row-circles', role: 'group'/g) ?? []).length).toBeGreaterThanOrEqual(2); // ردیف مدرسه + ردیف کلاس
+    // هر دکمه با قفل مشغولی واحد (ضد اسپم) باز می‌شود
+    expect(schools).toMatch(/lockBtn\(e\.currentTarget, onclick\)/);
+    // همهٔ اقدامات منوی سابق، مستقیم روی ردیف در دسترس‌اند
+    expect(schools).toMatch(/actionCircle\('student', 'کلاس‌ها و معلم‌ها'/);
+    expect(schools).toMatch(/actionCircle\('zap', 'وضعیت همکاری'/);
+    expect(schools).toMatch(/actionCircle\('edit', 'ویرایش'/);
+    expect(schools).toMatch(/actionCircle\('pause', 'غیرفعال‌سازی/);
+    expect(schools).toMatch(/actionCircle\('bot', 'کد اتصال معلم/);
+    // حذفِ مخرب = دایرهٔ قرمز آخری (با آرگومان danger)
+    expect((schools.match(/actionCircle\('trash'/g) ?? []).length).toBe(2); // مدرسه + کلاس
+    // تأیید مخرب‌ها با مودال تأیید شفاف باقی می‌ماند
+    expect(schools).toMatch(/confirmModal\(\{ title: 'غیرفعال‌سازی مدرسه'/);
+    expect(schools).toMatch(/confirmModal\(\{ title: 'حذف کامل مدرسه'/);
+    // ریل دایره‌های کارت پرونده: خط‌چین جداساز + لایی — دیگر شناور در فضای خالی نیست
+    expect(views).toMatch(/\.card-circles\s*\{[^}]*border-inline-start:\s*1px dashed var\(--border\)/);
+    expect(views).toMatch(/\.card-circles\s*\{[^}]*padding-inline-start:\s*var\(--sp-3\)/);
+    const mobileCircles = views.match(/@media \(max-width: 720px\) \{\s*\.card-circles \{[^}]*\}/);
+    expect(mobileCircles![0]).toMatch(/border-inline-start:\s*0/);
+    expect(mobileCircles![0]).toMatch(/padding-inline-start:\s*0/);
   });
 
   test('۱.۱۵.۰ — پروفایل: دکمه‌های دایره‌ای اقدام روی کارت پرونده (جای مودال/منوی پنهان)', () => {
