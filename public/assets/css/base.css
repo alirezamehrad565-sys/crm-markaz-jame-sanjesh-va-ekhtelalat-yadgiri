@@ -335,6 +335,12 @@ html {
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* UX روانی ناوبری (۱.۱۲.۰): نوار اسکرول بدنه با ورود/خروج صفحات کوتاه‌بلند ظاهر و
+     محو می‌شد → عرض viewport ۸px تغییر می‌کرد و کل پوسته (سایدبار) تکان می‌خورد.
+     overflow-y: scroll = گود نوار همیشه رزرو (مرورگرهای کلاسیک ویندوز)؛
+     scrollbar-gutter: stable = همان تضمین برای Chrome با اسکرول‌بار overlay. */
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -635,6 +641,9 @@ textarea {
   max-width: 1280px;
   width: 100%;
   margin: 0 auto;
+  /* UX روانی ناوبری (۱.۱۲.۰): در فاصلهٔ خالی‌شدن اوتلت تا رسیدن اسکلت/نمای بعد،
+     ارتفاع صفحه فرو نمی‌ریزد → نوار اسکرول و ارتفاع پوسته ثابت می‌ماند */
+  min-height: 58vh;
 }
 
 @keyframes view-in {

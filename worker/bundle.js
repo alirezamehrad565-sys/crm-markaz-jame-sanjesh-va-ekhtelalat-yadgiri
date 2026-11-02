@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.11.1";
+var APP_VERSION = "1.12.0";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -36401,12 +36401,12 @@ function createDocsService(deps) {
     const ph = docIds.map(() => "?").join(", ");
     const rows = await db.query(
       `SELECT id, doc_id, file_key, file_name, file_mime, file_size, created_at
-         FROM docs_files WHERE doc_id IN (${ph}) ORDER BY created_at, rowid`,
+         FROM docs_files WHERE doc_id IN (${ph}) ORDER BY created_at DESC, rowid DESC`,
       docIds
     );
     for (const r of rows) {
       const list = map.get(r.doc_id) ?? [];
-      list.push({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size });
+      list.push({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size, uploadedAt: r.created_at });
       map.set(r.doc_id, list);
     }
     return map;
@@ -36693,6 +36693,20 @@ function createDocsService(deps) {
       if (!stat || stat.n !== expectedRows || (stat.bl ?? 0) !== expectedB64) {
         throw new ConflictError("\u0628\u0627\u0631\u06AF\u0630\u0627\u0631\u06CC \u0646\u0627\u0642\u0635 \u0627\u0633\u062A \u2014 \u062A\u06A9\u0647\u200C\u0647\u0627 \u0628\u0627 \u062D\u062C\u0645 \u0627\u0639\u0644\u0627\u0645\u200C\u0634\u062F\u0647 \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A\u0646\u062F\u061B \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F \u06CC\u0627 \u0641\u0627\u06CC\u0644 \u0631\u0627 \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F");
       }
+      if (storage.name === "r2" && storage.putSegments) {
+        const chunkRows = await db.query(
+          `SELECT seq, content FROM exercise_file_chunks WHERE key = ? ORDER BY seq`,
+          [fileRow.file_key]
+        );
+        const segments = chunkRows.sort((a, b) => a.seq - b.seq).map((r) => {
+          const bin = atob(r.content);
+          const out = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+          return out;
+        });
+        await storage.putSegments(fileRow.file_key, segments);
+        await db.execute(`DELETE FROM exercise_file_chunks WHERE key = ?`, [fileRow.file_key]);
+      }
       await db.transaction(async (tx) => {
         await tx.execute(`UPDATE docs SET updated_at = datetime('now') WHERE id = ?`, [id]);
         await audit.logInTransaction(tx, {
@@ -36787,9 +36801,7 @@ function fileHeaders2(filename, mimeType, inline) {
   const type = mimeType.startsWith("text/") ? `${mimeType}; charset=utf-8` : mimeType;
   const headers = {
     "Content-Type": type,
-    "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-    // صریح روی خود پاسخ فایل — هیچ کشِ میانی/مرورگری مجاز نیست پاسخ قبلی را برای فایل دیگری برگرداند
-    "Cache-Control": "no-store"
+    "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`
   };
   if (inline) {
     headers["Content-Security-Policy"] = "sandbox";

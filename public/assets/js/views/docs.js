@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { el, icon, toast, toastError, confirmModal, openModal, emptyState, loadingState, errorState } from '../ui.js';
+import { el, icon, toast, toastError, confirmModal, openModal, emptyState, loadingState, errorState, lockBtn } from '../ui.js';
 import { fa, formatJalaliDateTime } from '../format.js';
 
 // ═══════════════════════════════════════════════════════════════
@@ -144,39 +144,45 @@ function isPreviewable(file) {
   return m === 'application/pdf' || m.startsWith('image/');
 }
 
-async function downloadFile(docId, file) {
-  try {
-    const { blob, filename } = await api.downloadBlob(`/api/docs/${docId}/files/${file.id}`);
-    const url = URL.createObjectURL(blob);
-    const a = el('a', { href: url, download: filename || file.filename });
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-    toast(`«${filename || file.filename}» دانلود شد`, 'success'); // — تأیید نام واقعی فایل ذخیره‌شده
-  } catch (err) {
-    toastError(err);
-  }
-}
-
-/** پیش‌نمایش/پرینت — همان الگوی knowledge-admin: بایتِ احرازشده → objectURL → تب جدید.
- *  window.open مستقیم روی /api/* توکن ندارد و ۴۰۱ می‌گیرد؛ محتوا همیشه از همان fileId می‌آید. */
-async function previewFile(docId, file) {
-  try {
-    const { blob } = await api.downloadBlob(`/api/docs/${docId}/files/${file.id}?inline=1`);
-    const objUrl = URL.createObjectURL(blob);
-    const w = window.open(objUrl, '_blank', 'noopener');
-    if (!w) {
-      // پاپ‌آپ‌بلاکر — بازِ جایگزین با کلیک لنگر (کلیک لنگر مسدود نمی‌شود)
-      const a = el('a', { href: objUrl, target: '_blank', rel: 'noopener' });
+async function downloadFile(docId, file, btn) {
+  // ۱.۱۲.۰ — قفل دکمهٔ دانلود (دوبارکلیک = دو دانلود) + نام فایل در toast تا «این فایل همین بود» شفاف شود
+  await lockBtn(btn, async () => {
+    try {
+      const { blob, filename } = await api.downloadBlob(`/api/docs/${docId}/files/${file.id}`);
+      const url = URL.createObjectURL(blob);
+      const a = el('a', { href: url, download: filename || file.filename });
       document.body.appendChild(a);
       a.click();
       a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      toast(`«${filename || file.filename}» دانلود شد`, 'success');
+    } catch (err) {
+      toastError(err);
     }
-    setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
-  } catch (err) {
-    toastError(err);
-  }
+  });
+}
+
+/** پیش‌نمایش/پرینت — همان الگوی knowledge-admin (۱.۱۱.۱): بایتِ احرازشده → objectURL → تب جدید.
+ *  window.open مستقیم روی /api/* توکن ندارد و ۴۰۱ می‌گیرد؛ محتوا همیشه از همان fileId می‌آید.
+ *  ۱.۱۲.۰ — با lockBtn قفل شد تا دوبارکلیک دو تب باز نکند. */
+async function previewFile(docId, file, btn) {
+  await lockBtn(btn, async () => {
+    try {
+      const { blob } = await api.downloadBlob(`/api/docs/${docId}/files/${file.id}?inline=1`);
+      const objUrl = URL.createObjectURL(blob);
+      const w = window.open(objUrl, '_blank', 'noopener');
+      if (!w) {
+        // پاپ‌آپ‌بلاکر — بازِ جایگزین با کلیک لنگر (کلیک لنگر مسدود نمی‌شود)
+        const a = el('a', { href: objUrl, target: '_blank', rel: 'noopener' });
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
+    } catch (err) {
+      toastError(err);
+    }
+  });
 }
 
 /** انتخاب فایل‌ها — فهرست قابل حذف زیر input */
@@ -262,45 +268,46 @@ function openCreateDocModal({ onDone }) {
       (close) => {
         const submitBtn = el('button', {
           class: 'btn btn--primary',
-          onclick: async () => {
+          onclick: async (e) => {
             const title = titleInput.value.trim();
             if (title.length < 2) { toast('عنوان سند حداقل ۲ نویسه است', 'error'); return; }
-            submitBtn.disabled = true; // دوبارکلیک = سند تکراری + آپلود دوباره
-            try {
-              const payload = {
-                title,
-                category: catSelect.value,
-                description: descInput.value.trim(),
-                tags: parseTagsInput(tagsInput.value)
-              };
-              let docId = null;
+            await lockBtn(e.currentTarget, async () => { // ۱.۱۲.۰ — قفل + چرخ‌نده (سند تکراری + آپلود دوباره)
               try {
-                const created = await api.post('/api/docs', payload);
-                docId = created?.data?.id ?? null;
-              } catch (err) {
-                toastError(err);
-                return;
-              }
-              const files = picker.files();
-              if (files.length > 0 && docId) {
+                const payload = {
+                  title,
+                  category: catSelect.value,
+                  description: descInput.value.trim(),
+                  tags: parseTagsInput(tagsInput.value)
+                };
+                let docId = null;
                 try {
-                  const form = new FormData();
-                  for (const f of files) form.append('files', f, f.name); // — فیلد فایل: files (مثل knowledge)
-                  await api.postForm(`/api/docs/${docId}/files`, form);
+                  const created = await api.post('/api/docs', payload);
+                  docId = created?.data?.id ?? null;
                 } catch (err) {
                   toastError(err);
-                  toast('سند ثبت شد ولی بارگذاری فایل‌ها ناموفق بود — از صفحهٔ خود سند دوباره تلاش کنید', 'warning', 6000);
-                  close();
-                  onDone?.(docId);
                   return;
                 }
+                const files = picker.files();
+                if (files.length > 0 && docId) {
+                  try {
+                    const form = new FormData();
+                    for (const f of files) form.append('files', f, f.name); // — فیلد فایل: files (مثل knowledge)
+                    await api.postForm(`/api/docs/${docId}/files`, form);
+                  } catch (err) {
+                    toastError(err);
+                    toast('سند ثبت شد ولی بارگذاری فایل‌ها ناموفق بود — از صفحهٔ خود سند دوباره تلاش کنید', 'warning', 6000);
+                    close();
+                    onDone?.(docId);
+                    return;
+                  }
+                }
+                toast('سند ثبت شد', 'success');
+                close();
+                onDone?.(docId);
+              } finally {
+                // بازکردن قفل با lockBtn در finally خودش انجام می‌شود
               }
-              toast('سند ثبت شد', 'success');
-              close();
-              onDone?.(docId);
-            } finally {
-              submitBtn.disabled = false;
-            }
+            });
           }
         }, icon('upload', 15), 'ثبت سند');
         return submitBtn;
@@ -336,20 +343,22 @@ function openEditDocModal(doc, { onDone }) {
       (close) => el('button', { class: 'btn btn--ghost', onclick: () => close() }, 'انصراف'),
       (close) => el('button', {
         class: 'btn btn--primary',
-        onclick: async () => {
+        onclick: async (e) => {
           const title = titleInput.value.trim();
           if (title.length < 2) { toast('عنوان سند حداقل ۲ نویسه است', 'error'); return; }
-          try {
-            await api.patch(`/api/docs/${doc.id}`, {
-              title,
-              category: catSelect.value,
-              description: descInput.value.trim(),
-              tags: parseTagsInput(tagsInput.value)
-            });
-            toast('مشخصات سند ذخیره شد', 'success');
-            close();
-            onDone?.();
-          } catch (err) { toastError(err); }
+          await lockBtn(e.currentTarget, async () => { // ۱.۱۲.۰ — قفل ذخیره
+            try {
+              await api.patch(`/api/docs/${doc.id}`, {
+                title,
+                category: catSelect.value,
+                description: descInput.value.trim(),
+                tags: parseTagsInput(tagsInput.value)
+              });
+              toast('مشخصات سند ذخیره شد', 'success');
+              close();
+              onDone?.();
+            } catch (err) { toastError(err); }
+          });
         }
       }, icon('save', 15), 'ذخیره تغییرات')
     ]
@@ -367,17 +376,31 @@ function openAddFilesModal(doc, { onDone }) {
       (close) => el('button', { class: 'btn btn--ghost', onclick: () => close() }, 'انصراف'),
       (close) => el('button', {
         class: 'btn btn--primary',
-        onclick: async () => {
+        onclick: async (e) => {
           const files = picker.files();
           if (files.length === 0) { toast('حداقل یک فایل انتخاب کنید', 'error'); return; }
-          try {
-            const form = new FormData();
-            for (const f of files) form.append('files', f, f.name); // — فیلد فایل: files (مثل knowledge)
-            await api.postForm(`/api/docs/${doc.id}/files`, form);
-            toast('فایل(ها) اضافه شد', 'success');
-            close();
-            onDone?.();
-          } catch (err) { toastError(err); }
+          await lockBtn(e.currentTarget, async () => { // ۱.۱۲.۰ — قفل بارگذاری (شاهد تولید: دو ردیف یکسان با ۱ ثانیه اختلاف)
+            // هشدار هم‌نامی: ریشهٔ گزارش «فایل بارگذاری می‌کنم، دانلود فایل دیگری است» —
+            // دو ردیف هم‌نام بدون زمان، کاربر را به ردیف کهنه می‌رساند
+            const existing = new Set((doc.files ?? []).map((f) => f.filename));
+            const dup = files.filter((f) => existing.has(f.name));
+            if (dup.length > 0) {
+              const ok = await confirmModal({
+                title: 'فایل هم‌نام از قبل روی این سند هست',
+                message: `«${dup.map((f) => f.name).join('، ')}» قبلاً بارگذاری شده. اگر این نسخهٔ تازهٔ همان فایل است، ادامه دهید — در فهرست، جدیدترین بالا می‌نشیند و زمان بارگذاری هر ردیف نشان داده می‌شود.`,
+                confirmLabel: 'بارگذاری نسخهٔ جدید'
+              });
+              if (!ok) return;
+            }
+            try {
+              const form = new FormData();
+              for (const f of files) form.append('files', f, f.name); // — فیلد فایل: files (مثل knowledge)
+              await api.postForm(`/api/docs/${doc.id}/files`, form);
+              toast('فایل(ها) اضافه شد', 'success');
+              close();
+              onDone?.();
+            } catch (err) { toastError(err); }
+          });
         }
       }, icon('upload', 15), 'بارگذاری')
     ]
@@ -588,7 +611,7 @@ export async function renderDocsList(container, ctx) {
 
 // ─── ویو: جزئیات سند ───
 
-export async function renderDocsDetail(container, ctx) {
+export async function renderDocsDetail(container, ctx, opts = {}) {
   ensureStyles();
   const docId = String(ctx?.params?.id ?? '');
 
@@ -646,12 +669,12 @@ export async function renderDocsDetail(container, ctx) {
     if (isPreviewable(file)) {
       actions.appendChild(el('button', {
         class: 'btn btn--soft btn--sm',
-        onclick: () => previewFile(docId, file)
+        onclick: (e) => previewFile(docId, file, e.currentTarget) /* ۱.۱۱.۱: احراز + ۱.۱۲.۰: قفل */
       }, icon('printer', 14), 'پیش‌نمایش / پرینت'));
     }
     actions.appendChild(el('button', {
       class: 'btn btn--ghost btn--sm',
-      onclick: () => downloadFile(docId, file)
+      onclick: (e) => downloadFile(docId, file, e.currentTarget) /* ۱.۱۲.۰: قفل دکمه */
     }, icon('download', 14), 'دانلود'));
     actions.appendChild(el('button', {
       class: 'btn btn--ghost btn--icon btn--sm',
@@ -664,7 +687,8 @@ export async function renderDocsDetail(container, ctx) {
     return el('div', { class: 'docs-file' },
       fmtBadge(file),
       el('span', { class: 'docs-file__name' }, file.filename),
-      el('span', { class: 'docs-meta' }, sizeLabel(file.size)),
+      // ۱.۱۲.۰ — زمان بارگذاری هر ردیف: تفکیک ردیف‌های هم‌نام (جدیدترین بالا — سرور)
+      el('span', { class: 'docs-meta' }, sizeLabel(file.size), file.uploadedAt ? ` · ${formatJalaliDateTime(file.uploadedAt)}` : ''),
       actions
     );
   }
@@ -684,14 +708,20 @@ export async function renderDocsDetail(container, ctx) {
   const root = el('div', { class: 'docs-root' },
     crumb,
     headCard,
-    el('h3', { class: 'docs-section-title' }, `فایل‌های سند (${fa((doc.files ?? []).length)})`),
+    el('h3', { class: 'docs-section-title' }, `فایل‌های سند (${fa((doc.files ?? []).length)})`, (doc.files ?? []).length > 1 ? el('span', { class: 'docs-meta', style: { fontWeight: 'normal' } }, ' — جدیدترین بالا') : null),
     fileArea
   );
   container.replaceChildren(root);
   drawFiles();
 
-  // — پس از هر تغییر (ویرایش/افزودن/حذف فایل) کل جزئیات تازه می‌شود
+  // — بازگرداندن اسکرول بعد از تازه‌سازی درجا (گلایهٔ «رفرش و برگشت منو»):
+  //    جای دید کاربر روی صفحه حفظ می‌شود، نه پرش به بالای صفحه
+  if (typeof opts.scrollTop === 'number') {
+    requestAnimationFrame(() => window.scrollTo({ top: opts.scrollTop }));
+  }
+
+  // — پس از هر تغییر (ویرایش/افزودن/حذف فایل) جزئیات تازه می‌شود — بدون پرش اسکرول
   function rerender() {
-    renderDocsDetail(container, ctx);
+    renderDocsDetail(container, ctx, { scrollTop: window.scrollY });
   }
 }

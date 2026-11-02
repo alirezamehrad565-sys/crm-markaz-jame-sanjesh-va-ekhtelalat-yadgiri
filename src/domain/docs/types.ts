@@ -17,6 +17,7 @@ export interface DocFileMeta {
   filename: string;
   mime: string;
   size: number;
+  uploadedAt: string; // ۱.۱۲.۰ — زمان بارگذاری هر فایل (تفکیک ردیف‌های هم‌نام؛ ریشهٔ «دانلود فایل اشتباه»)
 }
 
 export interface DocRecord {

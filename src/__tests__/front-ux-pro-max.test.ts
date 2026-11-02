@@ -63,8 +63,20 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(after).toMatch(/height:\s*100dvh/);
   });
 
-  test('نسخه: سو 1.11.1 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.11\.1'/);
+  test('نسخه: سو 1.12.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.12\.0'/);
+  });
+
+  test('۱.۱۲.۰ — UX روانی ناوبری: گود اسکرول پایدار + ارتفاع ثابت اوتلت + قفل مشغولی دکمه', () => {
+    // سایدبار دیگر با ظاهر/محو شدن نوار اسکرول بدنه تکان نمی‌خورد
+    const htmlRule = base.match(/html\s*\{[^}]*overflow-y:\s*scroll[^}]*\}/);
+    expect(htmlRule).toBeTruthy();
+    expect(htmlRule![0]).toMatch(/scrollbar-gutter:\s*stable/);
+    // اوتلت در فاصلهٔ تعویض نما فرو نمی‌ریزد (پرش ارتفاع صفحه = حس رفرش)
+    expect(base).toMatch(/\.content\s*\{[^}]*min-height:\s*58vh/);
+    // دکمهٔ مشغول: چرخ‌نده روی .btn.is-busy (ضدِ اسپم دکمه)
+    expect(components).toMatch(/\.btn\.is-busy[^{]*\{/);
+    expect(components).toMatch(/@keyframes btn-spin/);
   });
 
   test('۱.۱۱.۰ — داشبورد مدیر: ردیف قهرمان «کارهای من» + «اطلاع‌رسانی» هم‌قد و هم‌تراز', () => {
