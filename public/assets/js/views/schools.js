@@ -1,7 +1,7 @@
 import { api, qs } from '../api.js';
 import { session } from '../state.js';
 import { fa, enDigits } from '../format.js';
-import { el, icon, formModal, confirmModal, openModal, toast, toastError, dataTable, statusBadge, loadingState, skeletonState, emptyState, callBadge, rowMenu } from '../ui.js';
+import { el, icon, formModal, confirmModal, openModal, toast, toastError, dataTable, statusBadge, loadingState, skeletonState, emptyState, callBadge, lockBtn } from '../ui.js';
 import { invalidateStudentFormMeta } from '../student-form.js'; // — کش فرم دانش‌آموز بعد از هر تغییر مدارس/کلاس تازه شود
 import { openExcelImport } from '../excel-import.js'; // درون‌ریزی اکسل
 import { resolveBotUsername, buildBotLink, botLinkBox } from '../bot-link.js'; // — لینک احراز خودکار بات
@@ -10,6 +10,18 @@ let showInactive = false;
 
 function canDeactivate() {
   return session.user?.role === 'manager';
+}
+
+/* ۱.۱۷.۰ — زبان واحد دایره‌های اقدام (هم‌سان با فهرست/پروفایل دانش‌آموز ۱.۱۵–۱.۱۶):
+   به درخواست کاربر سیستم مودال‌محورِ منوی ⋯ در مدارس هم حذف شد — دکمه‌ها مستقیم سرِ ردیف‌اند،
+   امن‌ها اول و حذفِ مخرب همیشه آخری با فاصلهٔ ایمن؛ هر دکمه قفل مشغولی واحد (ضد اسپم) دارد
+   و تأیید مخرب‌ها با همان confirmModal شفاف می‌ماند. */
+function actionCircle(iconName, label, onclick, danger = false) {
+  return el('button', {
+    class: `icon-circle${danger ? ' icon-circle--danger' : ''}`,
+    type: 'button', title: label, 'aria-label': label,
+    onclick: (e) => lockBtn(e.currentTarget, onclick)
+  }, icon(iconName, 14));
 }
 
 function searchable(text) {
@@ -99,41 +111,33 @@ export async function renderSchools(container) {
       { key: 'active', label: 'وضعیت', render: (s) => statusBadge(s.active ? 'active' : 'inactive') },
       {
         key: 'actions', label: 'عملیات', align: 'end',
-        /* UX-ممیزی گلایهٔ ۷: ۵ دکمهٔ آیکون‌باز در ردیف مدرسه — «کلاس‌ها» پیداست (رایج‌ترین) و بقیه در منوی ⋯ با تفکیک مخرب‌ها */
-        render: (s) => el('div', { class: 'cell-actions' },
-          el('button', { class: 'btn btn--ghost btn--sm', title: 'کلاس‌ها و معلم‌ها', 'aria-label': 'کلاس‌ها و معلم‌ها', onclick: () => openClassManager(s, container) }, icon('student', 15)),
-          rowMenu({ label: `اقدامات بیشتر برای مدرسه ${s.name}`, items: [
-            { label: 'وضعیت همکاری', icon: 'zap', onclick: () => openSchoolOverview(s) },
-            { label: 'ویرایش', icon: 'edit', onclick: () => openForm(s, container) },
-            ...(s.active && canDeactivate()
-              ? [{
-                  label: 'غیرفعال‌سازی',
-                  onclick: async () => {
-                    if (!(await confirmModal({ title: 'غیرفعال‌سازی مدرسه', message: `«${s.name}» از انتخاب‌ها حذف می‌شود (اطلاعات حفظ می‌شود).`, confirmLabel: 'غیرفعال کن', danger: true }))) return;
-                    try {
-                      await api.post(`/api/schools/${s.id}/deactivate`);
-                      invalidateStudentFormMeta();
-                      toast('مدرسه غیرفعال شد', 'success');
-                      renderSchools(container);
-                    } catch (err) { toastError(err); }
-                  }
-                }]
-              : []),
-            ...(canDeactivate()
-              ? [{ sep: true }, {
-                  label: 'حذف کامل',
-                  danger: true,
-                  onclick: async () => {
-                    if (!(await confirmModal({ title: 'حذف کامل مدرسه', message: `«${s.name}» به‌کلی پاک می‌شود — برای ثبت‌های اشتباه یا تکراری. اگر دانش‌آموز یا کلاس دارد حذف ممکن نیست (پیام سرور راهنمایی می‌کند). برگشت ندارد.`, confirmLabel: 'حذف کن', danger: true }))) return;
-                    try {
-                      await api.del(`/api/schools/${s.id}`);
-                      toast('مدرسه حذف شد', 'success');
-                      renderSchools(container);
-                    } catch (err) { toastError(err); }
-                  }
-                }]
-              : [])
-          ] })
+        /* ۱.۱۷.۰ — دکمه‌ها مستقیم سرِ ردیف، همان زبان دایره‌های فهرست دانش‌آموزان (۱.۱۶.۰):
+           کلاس‌ها (رایج‌ترین) · وضعیت همکاری · ویرایش · غیرفعال‌سازی — و حذفِ مخرب آخری با فاصلهٔ ایمن */
+        render: (s) => el('div', { class: 'cell-actions row-circles', role: 'group', 'aria-label': `اقدامات مدرسه ${s.name}` },
+          actionCircle('student', 'کلاس‌ها و معلم‌ها', () => openClassManager(s, container)),
+          actionCircle('zap', 'وضعیت همکاری', () => openSchoolOverview(s)),
+          actionCircle('edit', 'ویرایش', () => openForm(s, container)),
+          ...(s.active && canDeactivate()
+            ? [actionCircle('pause', 'غیرفعال‌سازی', async () => {
+                if (!(await confirmModal({ title: 'غیرفعال‌سازی مدرسه', message: `«${s.name}» از انتخاب‌ها حذف می‌شود (اطلاعات حفظ می‌شود).`, confirmLabel: 'غیرفعال کن', danger: true }))) return;
+                try {
+                  await api.post(`/api/schools/${s.id}/deactivate`);
+                  invalidateStudentFormMeta();
+                  toast('مدرسه غیرفعال شد', 'success');
+                  renderSchools(container);
+                } catch (err) { toastError(err); }
+              })]
+            : []),
+          ...(canDeactivate()
+            ? [actionCircle('trash', 'حذف کامل', async () => {
+                if (!(await confirmModal({ title: 'حذف کامل مدرسه', message: `«${s.name}» به‌کلی پاک می‌شود — برای ثبت‌های اشتباه یا تکراری. اگر دانش‌آموز یا کلاس دارد حذف ممکن نیست (پیام سرور راهنمایی می‌کند). برگشت ندارد.`, confirmLabel: 'حذف کن', danger: true }))) return;
+                try {
+                  await api.del(`/api/schools/${s.id}`);
+                  toast('مدرسه حذف شد', 'success');
+                  renderSchools(container);
+                } catch (err) { toastError(err); }
+              }, true)]
+            : [])
         )
       }
     ];
@@ -371,49 +375,41 @@ function openClassManager(school, container) {
             : el('span', { class: 'cell-sub' }, '—') },
           {
             key: 'actions', label: 'عملیات', align: 'end',
-            /* UX-ممیزی: ردیف کلاس هم منوی ⋯ گرفت (گلایهٔ ۷) */
-            render: (c) => el('div', { class: 'cell-actions' },
-              c.active ? el('button', { class: 'btn btn--ghost btn--sm', title: 'ویرایش', 'aria-label': 'ویرایش', onclick: () => openClassForm(school, c, refresh) }, icon('edit', 15)) : null,
-              rowMenu({ label: `اقدامات بیشتر برای کلاس ${c.name}`, items: [
-                ...(c.active ? [{ label: 'کد اتصال معلم (بات)', icon: 'bot', onclick: () => openTeacherLink(c) }] : []),
-                ...(c.active ? [{ label: 'ویرایش', icon: 'edit', onclick: () => openClassForm(school, c, refresh) }] : []),
-                ...(c.active && canDeactivate()
-                  ? [{
-                      label: 'غیرفعال‌سازی کلاس',
-                      onclick: async () => {
-                        if (!(await confirmModal({
-                          title: 'غیرفعال‌سازی کلاس',
-                          message: `کلاس «${c.name}» غیرفعال می‌شود و دانش‌آموزانش از کلاس خارج می‌شوند (سابقه حفظ می‌شود).`,
-                          confirmLabel: 'غیرفعال کن', danger: true
-                        }))) return;
-                        try {
-                          await api.post(`/api/classes/${c.id}/deactivate`);
-                          invalidateStudentFormMeta();
-                          toast('کلاس غیرفعال شد', 'success');
-                          refresh();
-                        } catch (err) { toastError(err); }
-                      }
-                    }]
-                  : []),
-                ...(canDeactivate()
-                  ? [{ sep: true }, {
-                      label: 'حذف کامل کلاس',
-                      danger: true,
-                      onclick: async () => {
-                        if (!(await confirmModal({
-                          title: 'حذف کامل کلاس',
-                          message: `کلاس «${c.name}» به‌کلی پاک می‌شود — برای ثبت‌های اشتباه یا تکراری. اگر دانش‌آموز دارد حذف ممکن نیست (پیام سرور راهنمایی می‌کند). برگشت ندارد.`,
-                          confirmLabel: 'حذف کن', danger: true
-                        }))) return;
-                        try {
-                          await api.del(`/api/classes/${c.id}`);
-                          toast('کلاس حذف شد', 'success');
-                          refresh();
-                        } catch (err) { toastError(err); }
-                      }
-                    }]
-                  : [])
-              ] })
+            /* ۱.۱۷.۰ — دایره‌های اقدام سرِ ردیف کلاس؛ ویرایشِ تکراری (دکمه + منو) یکی شد */
+            render: (c) => el('div', { class: 'cell-actions row-circles', role: 'group', 'aria-label': `اقدامات کلاس ${c.name}` },
+              ...(c.active ? [
+                actionCircle('bot', 'کد اتصال معلم (بات)', () => openTeacherLink(c)),
+                actionCircle('edit', 'ویرایش', () => openClassForm(school, c, refresh))
+              ] : []),
+              ...(c.active && canDeactivate()
+                ? [actionCircle('pause', 'غیرفعال‌سازی کلاس', async () => {
+                    if (!(await confirmModal({
+                      title: 'غیرفعال‌سازی کلاس',
+                      message: `کلاس «${c.name}» غیرفعال می‌شود و دانش‌آموزانش از کلاس خارج می‌شوند (سابقه حفظ می‌شود).`,
+                      confirmLabel: 'غیرفعال کن', danger: true
+                    }))) return;
+                    try {
+                      await api.post(`/api/classes/${c.id}/deactivate`);
+                      invalidateStudentFormMeta();
+                      toast('کلاس غیرفعال شد', 'success');
+                      refresh();
+                    } catch (err) { toastError(err); }
+                  })]
+                : []),
+              ...(canDeactivate()
+                ? [actionCircle('trash', 'حذف کامل کلاس', async () => {
+                    if (!(await confirmModal({
+                      title: 'حذف کامل کلاس',
+                      message: `کلاس «${c.name}» به‌کلی پاک می‌شود — برای ثبت‌های اشتباه یا تکراری. اگر دانش‌آموز دارد حذف ممکن نیست (پیام سرور راهنمایی می‌کند). برگشت ندارد.`,
+                      confirmLabel: 'حذف کن', danger: true
+                    }))) return;
+                    try {
+                      await api.del(`/api/classes/${c.id}`);
+                      toast('کلاس حذف شد', 'success');
+                      refresh();
+                    } catch (err) { toastError(err); }
+                  }, true)]
+                : [])
             )
           }
         ],
