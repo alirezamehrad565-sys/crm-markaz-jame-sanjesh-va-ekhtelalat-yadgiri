@@ -139,7 +139,7 @@ export async function renderStudentProfile(container, ctx) {
 
     return el('div', { class: 'card-circles', role: 'group', 'aria-label': 'اقدامات پرونده' },
       circle('edit', 'ویرایش اطلاعات', () =>
-        openStudentForm({ student, onSaved: () => renderStudentProfile(container, ctx) })),
+        openStudentForm({ student, onSaved: onStudentSaved })),
       canManageTags
         ? circle('tag', 'برچسب‌ها', async () => {
             let tags = [];
@@ -149,18 +149,18 @@ export async function renderStudentProfile(container, ctx) {
               tags,
               current: studentTags,
               canCreateTag: session.user?.role === 'manager',
-              onSaved: () => renderStudentProfile(container, ctx)
+              onSaved: onTagsSaved
             });
           })
         : null,
       canManageTags
         ? circle('target', 'هدف‌های شناختی', () =>
-            openFocusEditor({ student, onSaved: () => renderStudentProfile(container, ctx) }))
+            openFocusEditor({ student, onSaved: onFocusSaved }))
         : null,
       circle('users', 'معلم‌های پرونده — افزودن و حذف', () =>
-        openTeacherManager(student, { onChanged: () => renderStudentProfile(container, ctx) })),
+        openTeacherManager(student, { onChanged: () => rerenderTabIf(['info']) })),
       circle('school', 'تاریخچهٔ تحصیلی', () =>
-        openEducationHistory(student, { onChanged: () => renderStudentProfile(container, ctx) })),
+        openEducationHistory(student)), // — ۱.۲۰.۰: تاریخچه چیزی از این نما را عوض نمی‌کند؛ بدون rebuild
       canManageCase
         ? circle('trash', 'حذف کامل پرونده', () =>
             openStudentDelete(student, { onDeleted: () => { location.hash = '#/students'; } }), true)
@@ -188,7 +188,7 @@ export async function renderStudentProfile(container, ctx) {
                     class: 'btn btn--ghost btn--sm',
                     style: { padding: '2px 8px' },
                     title: 'تغییر مسیر پرونده — تب تفسیر بالینی بر همین اساس شاخه می‌خورد',
-                    onclick: () => openPathwayModal(student, () => renderStudentProfile(container, ctx))
+                    onclick: () => openPathwayModal(student, onPathwaySaved)
                   }, icon('edit', 13), 'مسیر')
                 : null,
               student.ownerName
@@ -210,14 +210,14 @@ export async function renderStudentProfile(container, ctx) {
                 ? el('div', { class: 'profile-actions__row' },
                     el('button', {
                       class: 'btn btn--primary btn--sm',
-                      onclick: () => openCaseEventForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
+                      onclick: () => openCaseEventForm({ student, onSaved: onCaseEventSaved })
                     }, icon('plus', 15), 'ثبت رویداد پرونده'),
                     /* UX-ممیزی: دو دکمهٔ هم‌شکل که فقط در یک واژه فرق داشتند («ارسال چک‌لیست با بله» / «ارسال تمرین با بله»)
                        در یک منوی «ارسال با بله» ادغام شدند */
                     baleSendMenu()
                   )
                 : null,
-              canManageCase ? buildOwnerEditor(student, () => renderStudentProfile(container, ctx)) : null
+              canManageCase ? buildOwnerEditor(student, onOwnerSaved) : null
             )
           : null
       )
@@ -227,10 +227,10 @@ export async function renderStudentProfile(container, ctx) {
   const content = el('div', {});
   let activeTabKey = 'info'; // تب فعال — برای بازسازی نوار پس از رسیدن داده
 
-  function selectTab(key) {
+  function selectTab(key, { silent = false } = {}) {
     activeTabKey = key;
     tabBar.setActive(key); // kit خودش کلیک را فعال نمی‌کند — صریح فعال می‌کنیم
-    content.replaceChildren(skeletonState('list', 4));
+    if (!silent) content.replaceChildren(skeletonState('list', 4)); /* silent = بازسازی درجای تب فعال (جریان پیوستهٔ ۱.۲۰.۰) */
     if (!auxDone) { pendingTab = key; return; } // دادهٔ موازی هنوز نرسیده — بعد از رسیدن رندر می‌شود
     const renderer = {
       info: renderInfoTab,
@@ -261,8 +261,8 @@ export async function renderStudentProfile(container, ctx) {
       const open = panel.style.display !== 'none';
       if (open) { close(); return; }
       panel.replaceChildren(
-        el('button', { class: 'dd__item', onclick: () => { close(); openChecklistSendModal({ student, onSent: () => renderStudentProfile(container, ctx) }); } }, icon('checklist', 14), el('span', {}, 'چک‌لیست جلسه')), 
-        el('button', { class: 'dd__item', onclick: () => { close(); openExerciseSendModal({ student, onSent: () => renderStudentProfile(container, ctx) }); } }, icon('file', 14), el('span', {}, 'تمرین‌های دانش‌آموز'))
+        el('button', { class: 'dd__item', onclick: () => { close(); openChecklistSendModal({ student, onSent: onCaseEventSaved }); } }, icon('checklist', 14), el('span', {}, 'چک‌لیست جلسه')), 
+        el('button', { class: 'dd__item', onclick: () => { close(); openExerciseSendModal({ student, onSent: onBaleSent }); } }, icon('file', 14), el('span', {}, 'تمرین‌های دانش‌آموز'))
       );
       panel.style.display = 'block';
       btn.setAttribute('aria-expanded', 'true');
@@ -285,7 +285,7 @@ export async function renderStudentProfile(container, ctx) {
   let tabBar = tabs(tabItems(), 'info');
 
   const docsMount = el('div', { style: { marginTop: 'var(--sp-4)' } });
-  renderDocsQuickCard(docsMount, student, { onChanged: () => renderStudentProfile(container, ctx) });
+  renderDocsQuickCard(docsMount, student); // — ۱.۲۰.۰: کارت مدارک خودگردان است؛ نیازی به rebuild کل نما ندارد
 
   let statusCard = buildStatusCard();
 
@@ -310,19 +310,79 @@ export async function renderStudentProfile(container, ctx) {
      با دادهٔ کامل رندر می‌شود. */
   auxPromise.then(() => {
     auxDone = true;
+    repaintChrome();
+    const target = pendingTab ?? activeTabKey;
+    pendingTab = null;
+    selectTab(target);
+  });
+
+  /* — ۱.۲۰.۰ جریان پیوستهٔ پروفایل (الگوی ۱.۱۹.۰ روز کاری): هیچ اکشنی دیگر کل نما را re-render نمی‌کند.
+     هر mutation فقط دادهٔ خودش را بی‌صدا تازه می‌کند و کارت وضعیت/نوار تب‌ها درجا عوض می‌شوند؛
+     تب فعال فقط وقتی دوباره رندر می‌شود که دادهٔ آن واقعاً عوض شده — بدون اسکلت کل صفحه و پرش اسکرول. */
+  let refreshSeq = 0;
+  const seqGuard = () => { const s = ++refreshSeq; return () => s === refreshSeq; };
+
+  /* تعویض درجای کارت وضعیت + نوار تب‌ها (همان الگوی رسیدن دادهٔ پس‌زمینه) */
+  function repaintChrome() {
     const freshCard = buildStatusCard();
     statusCard.replaceWith(freshCard);
     statusCard = freshCard;
     const freshBar = tabs(tabItems(), activeTabKey);
     tabBar.root.replaceWith(freshBar.root);
     tabBar = freshBar;
-    const target = pendingTab ?? activeTabKey;
-    pendingTab = null;
-    selectTab(target);
-  });
+  }
+
+  /* تب فعال فقط وقتی دوباره رندر می‌شود که دادهٔ آن واقعاً عوض شده — صفحه‌بندی/فیلتر محلی بقیهٔ تب‌ها می‌ماند */
+  function rerenderTabIf(keys) {
+    if (keys.includes(activeTabKey)) selectTab(activeTabKey, { silent: true });
+  }
+
+  async function refreshCore() {
+    const isStale = seqGuard();
+    try { student = (await api.get(`/api/students/${id}`)).data; } catch (err) { toastError(err); return false; }
+    return isStale();
+  }
+
+  async function refreshTagsData() {
+    const isStale = seqGuard();
+    try { studentTags = await fetchStudentTags(id); allTags = await fetchTags(); } catch (err) { toastError(err); return false; }
+    return isStale();
+  }
+
+  async function refreshFocusData() {
+    const isStale = seqGuard();
+    try {
+      const [keys, map] = await Promise.all([fetchStudentFocus(id), focusLabels()]);
+      studentFocus = keys.map((k) => ({ key: k, fa: map[k] ?? k }));
+    } catch (err) { toastError(err); return false; }
+    return isStale();
+  }
+
+  /* رویدادها + صفحهٔ اول تایم‌لاین: nextAction کارت وضعیت هم از همین تایم‌لاین می‌آید */
+  async function refreshEventsData() {
+    const isStale = seqGuard();
+    try {
+      const [evRes, tlRes] = await Promise.all([
+        api.get(`/api/students/${id}/case-events${qs({ limit: 200 })}`).catch(() => ({ data: [] })),
+        api.get(`/api/students/${id}/timeline${qs({ limit: TIMELINE_PAGE })}`)
+      ]);
+      caseEvents = evRes.data;
+      timeline = tlRes;
+    } catch (err) { toastError(err); return false; }
+    return isStale();
+  }
+
+  const onStudentSaved = async () => { if (await refreshCore()) { repaintChrome(); rerenderTabIf(['info', 'comms']); } };
+  const onTagsSaved = async () => { if (await refreshTagsData()) { repaintChrome(); rerenderTabIf(['info']); } };
+  const onFocusSaved = async () => { if (await refreshFocusData()) { repaintChrome(); rerenderTabIf(['info']); } };
+  const onPathwaySaved = async () => { if (await refreshCore()) { repaintChrome(); rerenderTabIf(['info', 'clinical']); } };
+  const onOwnerSaved = async () => { if (await refreshCore()) repaintChrome(); };
+  const onSpecialNeedSaved = async () => { if (await refreshCore()) { repaintChrome(); rerenderTabIf(['info']); } };
+  const onCaseEventSaved = async () => { if (await refreshEventsData()) { repaintChrome(); rerenderTabIf(['timeline', 'sessions']); } };
+  const onBaleSent = async () => { if (await refreshEventsData()) { repaintChrome(); rerenderTabIf(['timeline', 'sessions', 'exercises']); } };
 
   function renderExercisesTabContent(box) {
-    renderExercisesTab(box, { student, onChanged: () => renderStudentProfile(container, ctx) });
+    renderExercisesTab(box, { student, onChanged: async () => { if (await refreshEventsData()) rerenderTabIf(['timeline', 'sessions']); } }); /* ۱.۲۰.۰ */
   }
 
   function renderClinicalTabContent(box) {
@@ -340,7 +400,7 @@ export async function renderStudentProfile(container, ctx) {
       canManageTags
         ? el('button', {
             class: 'btn btn--soft btn--sm',
-            onclick: () => openFocusEditor({ student, onSaved: () => renderStudentProfile(container, ctx) })
+            onclick: () => openFocusEditor({ student, onSaved: onFocusSaved })
           }, icon('target', 15), studentFocus.length === 0 ? 'افزودن هدف' : 'ویرایش هدف‌ها')
         : null
     );
@@ -359,7 +419,7 @@ export async function renderStudentProfile(container, ctx) {
               tags: allTags,
               current: studentTags,
               canCreateTag: session.user?.role === 'manager',
-              onSaved: () => renderStudentProfile(container, ctx)
+              onSaved: onTagsSaved
             })
           }, icon('tag', 15), studentTags.length === 0 ? 'افزودن برچسب' : 'ویرایش برچسب‌ها')
         : null
@@ -404,14 +464,14 @@ export async function renderStudentProfile(container, ctx) {
             ),
             el('button', {
               class: 'btn btn--soft btn--sm',
-              onclick: () => openEducationHistory(student, { onChanged: () => renderStudentProfile(container, ctx) })
+              onclick: () => openEducationHistory(student) // — ۱.۲۰.۰
             }, icon('eye', 15), 'مشاهده / مدیریت')
           ),
           renderTeachersCard(student, container, ctx),
           el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', marginTop: 'var(--sp-4)' } },
             el('button', {
               class: 'btn btn--soft btn--sm',
-              onclick: () => openStudentForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
+              onclick: () => openStudentForm({ student, onSaved: onStudentSaved })
             }, icon('edit', 15), 'ویرایش اطلاعات'),
             canSendReport
               ? el('button', {
@@ -496,7 +556,7 @@ export async function renderStudentProfile(container, ctx) {
         canCreateCaseEvents()
           ? el('button', {
               class: 'btn btn--soft btn--sm',
-              onclick: () => openCaseEventForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
+              onclick: () => openCaseEventForm({ student, onSaved: onCaseEventSaved })
             }, icon('plus', 15), 'ثبت رویداد پرونده')
           : null
       ),
@@ -526,7 +586,7 @@ export async function renderStudentProfile(container, ctx) {
       ? async () => {
           try {
             const res = await api.get(`/api/case-events/${e.ref.id}`);
-            openCaseEventDetail(res.data, { onChanged: () => renderStudentProfile(container, ctx) });
+            openCaseEventDetail(res.data, { onChanged: onCaseEventSaved });
           } catch (err) {
             toastError(err);
           }
@@ -592,7 +652,7 @@ export async function renderStudentProfile(container, ctx) {
           type: 'button',
           title: evs.length > 1 ? `نمایش رویدادها — آخرین از ${fa(evs.length)} رویداد این جلسه` : 'نمایش رویدادهای این جلسه',
           'aria-label': evs.length > 1 ? `رویدادهای جلسه (${fa(evs.length)} رویداد — گشودن آخرین)` : 'نمایش رویدادهای این جلسه', /* S4-24/S4-25 */
-          onclick: () => openCaseEventDetail(evs[0], { onChanged: () => renderStudentProfile(container, ctx) })
+          onclick: () => openCaseEventDetail(evs[0], { onChanged: onCaseEventSaved })
         }, `رویداد (${fa(evs.length)})`));
       }
       if (hasNote) parts.push(el('span', { class: 'badge badge--neutral' }, 'یادداشت'));
@@ -601,7 +661,7 @@ export async function renderStudentProfile(container, ctx) {
           ? el('button', {
               class: 'btn btn--soft btn--sm',
               title: 'ثبت گزارش برای این جلسه',
-              onclick: () => openCaseEventForm({ student, appointmentId: a.appointmentId, onSaved: () => renderStudentProfile(container, ctx) })
+              onclick: () => openCaseEventForm({ student, appointmentId: a.appointmentId, onSaved: onCaseEventSaved })
             }, icon('plus', 13), 'ثبت گزارش')
           : el('span', { class: 'cell-sub' }, '—');
       }
@@ -615,7 +675,7 @@ export async function renderStudentProfile(container, ctx) {
           canReport
             ? el('button', {
                 class: 'btn btn--soft btn--sm',
-                onclick: () => openCaseEventForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
+                onclick: () => openCaseEventForm({ student, onSaved: onCaseEventSaved })
               }, icon('plus', 15), 'ثبت رویداد پرونده')
             : null
         ),
@@ -782,7 +842,7 @@ function buildSpecialNeedBlock(student, canManage, container, ctx) {
   );
 
   const editBtn = canManage
-    ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openSpecialNeedForm(student, () => renderStudentProfile(container, ctx)) },
+    ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openSpecialNeedForm(student, onSpecialNeedSaved) },
         icon('edit', 15), hasNeed ? 'ویرایش نیاز ویژه' : 'ثبت نیاز ویژه')
     : null;
 
