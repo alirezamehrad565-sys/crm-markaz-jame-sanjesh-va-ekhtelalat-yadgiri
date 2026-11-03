@@ -36,7 +36,7 @@ function findIdWithHue(hue, salt = '') {
   throw new Error('no id');
 }
 
-const TODAY = '2026-11-03'; // سه‌شنبه — weekday = 3
+const TODAY = '2026-11-04'; // چهارشنبه — weekday = 4 (تاریخ جاری تهران در زمان تست)
 const MGR_ID = 'b0000000-0000-4000-8000-0000000000c1';
 
 const therapists = [
@@ -57,7 +57,7 @@ const students = [
 ].map(([id, f, l, ph]) => ({ id, name: `${f} ${l}`, phone: ph, guardian: `${f}‌ خانواده` }));
 
 // زمان تهران → ISO UTC (تهران = UTC+3:30)
-const iso = (h, m) => new Date(Date.UTC(2026, 10, 3, h - 3, m - 30)).toISOString().replace('.000Z', 'Z');
+const iso = (h, m) => new Date(Date.UTC(2026, 10, 4, h - 3, m - 30)).toISOString().replace('.000Z', 'Z');
 
 const appts = [
   // T1 — سارا محمدی (hue 2)
@@ -66,12 +66,12 @@ const appts = [
   { id: 'e0000000-0000-4000-8000-000000000002', staff: 0, start: [9, 0], dur: 60, ops: 'in_session', stype: 'group', note: null,
     students: [ ['d0000000-0000-4000-8000-000000000002', 'present'], ['d0000000-0000-4000-8000-000000000003', 'present'] ] },
   { id: 'e0000000-0000-4000-8000-000000000003', staff: 0, start: [10, 30], dur: 45, ops: null, stype: 'individual', note: null,
-    students: [ ['d0000000-0000-4000-8000-000000000004', 'pending'] ] },
+    students: [ ['d0000000-0000-4000-8000-000000000004', 'present'] ] },
   // T2 — نگار رستمی (hue 5)
   { id: 'e0000000-0000-4000-8000-000000000004', staff: 1, start: [8, 0], dur: 60, ops: 'checked_in', stype: 'family_ed', note: 'آموزش مادر — تقویت توجه شنیداری',
     students: [ ['d0000000-0000-4000-8000-000000000005', 'present'] ] },
   { id: 'e0000000-0000-4000-8000-000000000005', staff: 1, start: [9, 30], dur: 45, ops: null, stype: 'individual', note: null,
-    students: [ ['d0000000-0000-4000-8000-000000000006', 'pending'] ] },
+    students: [ ['d0000000-0000-4000-8000-000000000006', 'present'] ] },
   { id: 'e0000000-0000-4000-8000-000000000006', staff: 1, start: [11, 0], dur: 45, ops: 'no_show', stype: 'mental_ot', note: 'تماس گرفته شد — جلسهٔ جبرانی پیشنهاد شد',
     students: [ ['d0000000-0000-4000-8000-000000000007', 'absent'] ] },
   // T3 — امیر کریمی (hue 7)
@@ -101,7 +101,7 @@ lines.push(`INSERT INTO staff (id, email, full_name, role, active, created_at, n
 for (const t of therapists) {
   lines.push(`INSERT INTO staff (id, email, full_name, role, active, created_at, notify_enabled, phone) VALUES ('${t.id}', '${esc(t.name).replace(/ /g, '.')}@local.test', '${esc(t.name)}', '${t.role}', 1, datetime('now'), 0, '0912*${t.id.slice(-3)}');`);
   for (const [s, e] of t.hours) {
-    lines.push(`INSERT INTO working_hours (id, staff_id, weekday, start_minute, end_minute) VALUES ('wh-${t.id.slice(-4)}-${s}', '${t.id}', 3, ${s}, ${e});`);
+    lines.push(`INSERT INTO working_hours (id, staff_id, weekday, start_minute, end_minute) VALUES ('wh-${t.id.slice(-4)}-${s}', '${t.id}', 4, ${s}, ${e});`);
   }
   lines.push(`INSERT INTO staff_attendance (id, staff_id, date, status, note, created_at, updated_at) VALUES ('sa-${t.id.slice(-4)}', '${t.id}', '${TODAY}', '${t.att}', ${t.attNote ? `'${esc(t.attNote)}'` : 'NULL'}, datetime('now'), datetime('now'));`);
 }
