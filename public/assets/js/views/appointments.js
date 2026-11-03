@@ -20,7 +20,7 @@ import {
   WEEKDAY_NAMES,
   gradeLabel
 } from '../format.js';
-import { el, icon, openModal, confirmModal, formModal, toast, toastError, statusBadge, emptyState, skeletonState } from '../ui.js';
+import { el, icon, openModal, confirmModal, formModal, toast, toastError, statusBadge, emptyState, skeletonState, lockBtn } from '../ui.js';
 import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ ثابت هر درمانگر
 import { sessionTypeOf, sessionTypeChip, sessionTypeOptions } from '../session-type.js'; // — نوع جلسه (جدول ۴)
 import { openCaseEventForm, openCaseEventDetail, canCreateCaseEvents } from '../case-events.js';
@@ -130,6 +130,7 @@ function apptStatusClass(a) {
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function renderAppointments(container, ctx = {}) {
+  gridSeq++; /* F8: هر رندر تازه (مثلاً setMode → rerender) پاسخ در پروازِ refreshGrid نمونهٔ قبلی را کهنه می‌کند */
   if (ctx.query?.tab === 'waitlist') {
     location.replace('#/waitlist'); // — ماژول مستقل
     return;
@@ -306,9 +307,9 @@ export async function renderAppointments(container, ctx = {}) {
       el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': 'هفته بعد', onclick: () => shiftWeek(1) }, icon('chevL', 18)),
       weekTitle = el('div', { class: 'week-bar__title' }, weekLabel),
       el('div', { class: 'spacer' }),
-      undoBtn = el('button', { class: 'btn btn--ghost btn--sm', onclick: undoLastCopy, style: state.lastBatchId && !isSupervisor ? null : { display: 'none' } }, icon('undo', 16), 'برگردان آخرین کپی'), /* ۱.۲۰.۰ — همیشه ساخته می‌شود؛ نمایانی با syncUndoBtn */
+      undoBtn = el('button', { class: 'btn btn--ghost btn--sm', onclick: (e) => lockBtn(e.currentTarget, undoLastCopy) /* F7: قفل مشغولی — دوبارکلیک undo دوبار اجرا نمی‌کند */, style: state.lastBatchId && !isSupervisor ? null : { display: 'none' } }, icon('undo', 16), 'برگردان آخرین کپی'), /* ۱.۲۰.۰ — همیشه ساخته می‌شود؛ نمایانی با syncUndoBtn */
       !isSupervisor
-        ? el('button', { class: 'btn btn--ghost btn--sm', onclick: copyPrevWeek }, icon('copy', 16), 'کپی از هفته قبل')
+        ? el('button', { class: 'btn btn--ghost btn--sm', onclick: (e) => lockBtn(e.currentTarget, copyPrevWeek) /* F7: قفل مشغولی — دوبارکلیک کپی دوبار اجرا نمی‌کند */ }, icon('copy', 16), 'کپی از هفته قبل')
         : null
     ]),
     isDay ? el('div', { class: 'spacer' }) : null,
@@ -1088,11 +1089,14 @@ async function openDetailModal(appointmentId) {
                 style: { width: 'auto', padding: '4px 8px', fontSize: 'var(--fs-sm)' },
                 'aria-label': `وضعیت حضور ${state.studentNames.get(s.studentId) ?? ''}`, /* S2-08 */
                 onchange: async (e) => {
+                  const prev = s.attendance ?? 'pending'; /* F6: آخرین مقدار ذخیره‌شده برای برگرداندن انتخاب در خطا */
                   try {
                     await api.patch(`/api/attendance/${a.id}/${s.studentId}`, { status: e.target.value });
+                    s.attendance = e.target.value; /* F6: مدل محلی همگام بماند تا revert بعدی مقدار درست را دارد */
                     toast('وضعیت حضور ثبت شد', 'success');
                     syncGridCard(); /* ۱.۲۰.۰ — تیک/رنگ کارت همان لحظه */
                   } catch (err) {
+                    e.target.value = prev; /* F6: وضعیت ردشده روی select نماند */
                     toastError(err);
                   }
                 }
@@ -1325,6 +1329,7 @@ async function undoLastCopy() {
     const res = await api.post(`/api/appointments/copy-week/${state.lastBatchId}/undo`);
     toast(`${fa(res.data.removed)} نوبت برگردانده شد`, 'success');
     state.lastBatchId = null;
+    try { sessionStorage.removeItem('cs.lastBatchId'); } catch { /* خصوصی */ } /* F5: بعد از reload دکمهٔ برگردان برای دستهٔ انجام‌شده دوباره ظاهر نشود */
     await VIEW?.refreshGrid?.(); /* ۱.۲۰.۰ */
   } catch (err) {
     toastError(err);

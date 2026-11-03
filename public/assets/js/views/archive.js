@@ -221,17 +221,55 @@ export async function renderArchive(container) {
 
   function ensureNonEmptyPaint() {
     setTimeout(() => {
-      if (tbody.isConnected && !tbody.querySelector('tr[data-id]')) renderTbody(result);
+      if (!tbody.isConnected || tbody.querySelector('tr[data-id]')) return;
+      /* ۱.۲۲.۲ (F9) — اگر صفحهٔ کش‌شده خالی شده ولی پیجر هنوز «صفحه N از M» را نشان می‌دهد،
+         یک صفحه عقب برو و بی‌صدا همگام کن — نه نقاشی صفحهٔ خالیِ کهنه */
+      const meta = result?.meta ?? {};
+      if ((result?.data ?? []).length === 0 && (meta.page ?? 1) > 1) {
+        local.page -= 1;
+        ctl.quietSync();
+        return;
+      }
+      renderTbody(result);
     }, 320);
+  }
+
+  /* ۱.۲۲.۲ (F8) — بازتاب محلی فیلترهای سرور (service.ts: جستجو روی نام/کد ملی، school_id دقیق، tag_id عضویت).
+     فقط وقتی پاسخ ویرایش دادهٔ آن بخش را دارد قضاوت می‌شود تا ردیف اشتباهی جمع نشود */
+  function matchesLocal(s) {
+    if (local.schoolId && s.schoolId != null && String(s.schoolId) !== String(local.schoolId)) return false;
+    if (local.tagId && Array.isArray(s.tags) && !s.tags.some((t) => String(t?.id) === String(local.tagId))) return false;
+    const q = (local.query ?? '').trim().toLowerCase();
+    if (q) {
+      const hay = [s.firstName, s.lastName, s.nationalId]
+        .filter((x) => x != null)
+        .map((x) => String(x).toLowerCase());
+      if (hay.length > 0 && !hay.some((x) => x.includes(q))) return false;
+    }
+    return true;
   }
 
   const ctl = {
     /* پچ درجای یک پرونده از بدنهٔ پاسخ mutation — همسایه‌ها، اسکرول و فوکوس سرجایشان */
     patch(s) {
       if (!s?.id || !tbody.isConnected) { ctl.quietSync(); return; }
+      /* ۱.۲۲.۲ (F8) — کش با پاسخ ویرایش به‌روز می‌شود؛ ادغام به‌جای جایگزینی تا برچسب‌های همان ردیف
+         (که در پاسخ PATCH نیستند ولی tagChipsPreview به آن‌ها نیاز دارد) از کش نیفتند */
+      const list = result?.data ?? [];
+      const idx = list.findIndex((r) => String(r.id) === String(s.id));
+      const merged = idx >= 0 ? { ...list[idx], ...s } : s;
+      if (idx >= 0) list[idx] = merged;
       const old = tbody.querySelector(`tr[data-id="${CSS.escape(String(s.id))}"]`);
       if (!old) { ctl.quietSync(); return; }
-      const fresh = rowEl(s);
+      if (!matchesLocal(merged)) { /* از فیلتر جاری (جستجو/مدرسه/برچسب) خارج شد — جمع‌شدن نرم + کش همگام */
+        if (idx >= 0) list.splice(idx, 1);
+        if (result) result = { ...result, meta: { ...(result.meta ?? {}), total: Math.max(0, (result.meta?.total ?? 1) - 1) } };
+        collapseRemove(old);
+        ensureNonEmptyPaint();
+        ctl.quietSyncCount();
+        return;
+      }
+      const fresh = rowEl(merged);
       old.replaceWith(fresh);
       flashNode(fresh);
     },
@@ -254,8 +292,12 @@ export async function renderArchive(container) {
     quietSync: refreshRows,
     /* فقط شمارندهٔ سربرگ (پس از حذف؛ پیجر همان‌جا می‌ماند تا انیمیشن سالم بماند) */
     quietSyncCount() {
+      const myGen = gen; /* ۱.۲۲.۲ (F10) — گارد نسل refreshRows: پاسخ عقب‌افتاده از فیلتر قبلی شمارنده را خراب نمی‌کند */
       api.get(`/api/students${qs({ active: 'false', query: local.query || undefined, school_id: local.schoolId || undefined, tag_id: local.tagId || undefined, page: 1, page_size: 1 })}`)
-        .then((res) => { metaBar.textContent = `${fa(res.meta?.total ?? 0)} پرونده`; })
+        .then((res) => {
+          if (myGen !== gen) return;
+          metaBar.textContent = `${fa(res.meta?.total ?? 0)} پرونده`;
+        })
         .catch(() => {});
     }
   };

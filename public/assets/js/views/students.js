@@ -96,6 +96,22 @@ export async function renderStudents(container, ctx) {
   const ownerBadgeLabel = (id) => (id === session.user?.staffId ? 'خود شما' : ownerName(id) ?? 'همکار');
   const hasFilter = () => Boolean(local.query || local.schoolId || local.tagId || local.ownerId);
 
+  /* — بازسازی سمت کاربر همان فیلترهای سرور (service.searchStudents): query روی نام/کد ملی،
+     school_id/owner_id دقیق، tag_id روی برچسب‌های ردیف — برای پچ درجای ردیف‌هایی که با ویرایش از فیلتر خارج می‌شوند.
+     عمداً همیشه نه سخت‌گیرتر از سرور: عدم‌تطابق مرزی فقط ردیف را تا refresh بعدی نگه می‌دارد. */
+  function matchesListFilter(s) {
+    if (local.schoolId && String(s.schoolId ?? '') !== String(local.schoolId)) return false;
+    if (local.ownerId && String(s.ownerStaffId ?? '') !== String(local.ownerId)) return false;
+    if (local.tagId && !(s.tags ?? []).some((t) => String(t?.id ?? t) === String(local.tagId))) return false;
+    if (local.query) {
+      const q = local.query.toLowerCase();
+      const name = `${s.firstName ?? ''} ${s.lastName ?? ''}`.toLowerCase();
+      const nid = String(s.nationalId ?? '').toLowerCase();
+      if (!name.includes(q) && !nid.includes(q)) return false;
+    }
+    return true;
+  }
+
   const columns = [
     {
       key: 'name', label: 'نام',
@@ -295,7 +311,14 @@ export async function renderStudents(container, ctx) {
 
   function ensureNonEmptyPaint() {
     setTimeout(() => {
-      if (tbody.isConnected && !tbody.querySelector('tr[data-id]')) renderTbody(result);
+      if (!tbody.isConnected || tbody.querySelector('tr[data-id]')) return;
+      if ((result?.meta?.page ?? 1) > 1) {
+        // — آخرین ردیف یک صفحهٔ غیراول حذف شد: کش صفحهٔ خالی را رنگ نکن؛ یک صفحه عقب برو (آن‌جا ردیف هست)
+        local.page -= 1;
+        refreshRows();
+        return;
+      }
+      renderTbody(result);
     }, 320);
   }
 
@@ -303,11 +326,26 @@ export async function renderStudents(container, ctx) {
     /* پچ درجای یک ردیف — همسایه‌ها، اسکرول و فوکوس سرجایشان */
     patch(s) {
       if (!s?.id || !tbody.isConnected) { ctl.quietSync(); return; }
+      const stillMatches = matchesListFilter(s); // — با برچسب/مالکِ تازه هنوز در فیلتر جاری هست؟
       const list = result?.data ?? [];
       const idx = list.findIndex((r) => String(r.id) === String(s.id));
       if (idx >= 0) list[idx] = s;
       const old = tbody.querySelector(`tr[data-id="${CSS.escape(String(s.id))}"]`);
       if (!old) { ctl.quietSync(); return; }
+      if (!stillMatches) {
+        /* از فیلتر جاری خارج شد (مثلاً آخرین برچسب برداشته شد) — جمع‌شدن نرم + کش یکدست؛ الگوی waitlist */
+        if (result) {
+          result = {
+            ...result,
+            data: (result.data ?? []).filter((r) => String(r.id) !== String(s.id)),
+            meta: { ...(result.meta ?? {}), total: Math.max(0, (result.meta?.total ?? 1) - 1) }
+          };
+        }
+        collapseRemove(old);
+        ensureNonEmptyPaint();
+        ctl.quietSyncCount();
+        return;
+      }
       const fresh = rowEl(s);
       old.replaceWith(fresh);
       flashNode(fresh);
@@ -408,10 +446,11 @@ export async function renderStudents(container, ctx) {
   // فیلتر مسئول پرونده برای درمانگرهای زیاد: کشویی با همان الگوی برچسب‌ها؛ هرگز تولبار را نمی‌شکند
   function buildOwnerDropdown() {
     const panel = el('div', { class: 'dd__panel', style: { display: 'none' } });
-    const currentLabel = local.ownerId ? (ownerName(local.ownerId) ?? 'مسئول پرونده') : 'مسئول پرونده: همه';
+    const dotSlot = el('span', { style: { display: local.ownerId ? 'inline-flex' : 'none' } }, local.ownerId ? hueDot(local.ownerId, 10) : null); // — لنگر دات رنگ برای sync در pick
+    const btnLabel = el('span', {}, local.ownerId ? (ownerName(local.ownerId) ?? 'مسئول پرونده') : 'مسئول پرونده: همه'); // — لنگر برچسب برای sync در pick
     const btn = el('button', { class: `btn btn--soft btn--sm${local.ownerId ? ' is-active' : ''}`, type: 'button', 'aria-haspopup': 'listbox', 'aria-expanded': 'false', title: 'فیلتر مسئول پرونده', onclick: toggle }, /* S5-04 */
-      local.ownerId ? hueDot(local.ownerId, 10) : null,
-      el('span', {}, currentLabel),
+      dotSlot,
+      btnLabel,
       icon('chevL', 13)
     );
     const root = el('div', { class: 'dd' }, btn, panel);
@@ -459,6 +498,11 @@ export async function renderStudents(container, ctx) {
       document.removeEventListener('mousedown', outside, true);
       local.ownerId = id;
       local.page = 1;
+      /* — قرینهٔ دراپ‌داون برچسب‌ها: دکمهٔ خود فیلتر درجا sync می‌شود؛ فقط tbody عوض می‌شود */
+      btn.classList.toggle('is-active', Boolean(local.ownerId));
+      dotSlot.style.display = local.ownerId ? 'inline-flex' : 'none';
+      if (local.ownerId) dotSlot.replaceChildren(hueDot(local.ownerId, 10));
+      btnLabel.textContent = local.ownerId ? (ownerName(local.ownerId) ?? 'مسئول پرونده') : 'مسئول پرونده: همه';
       refreshRows();
     }
 

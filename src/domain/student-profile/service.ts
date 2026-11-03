@@ -219,6 +219,25 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       });
     },
 
+    /* ۱.۲۴.۰ — فعال‌سازی مجدد مدرسه (قبلاً deactivate یک‌طرفه بود و هیچ مسیر برگشتی UI/API نداشت) */
+    async activateSchool(id: string, actor: AuthContext): Promise<School> {
+      return db.transaction(async (tx) => {
+        const row = await tx.queryOne<SchoolRow>(`SELECT id, name, kind, gender_type, phone, address, principal_name, principal_phone, active FROM schools WHERE id = ?`, [id]);
+        if (!row) throw new NotFoundError('مدرسه');
+        if (row.active === 1) throw new ConflictError('مدرسه قبلاً فعال است');
+
+        await tx.execute(`UPDATE schools SET active = 1 WHERE id = ?`, [id]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'school.activate',
+          resourceType: 'school',
+          resourceId: id,
+          changes: { active: { from: 0, to: 1 } }
+        });
+        return rowToSchool({ ...row, active: 1 });
+      });
+    },
+
     async deleteSchool(id: string, actor: AuthContext): Promise<void> {
       await db.transaction(async (tx) => {
         const row = await tx.queryOne<{ id: string; name: string }>(`SELECT id, name FROM schools WHERE id = ?`, [id]);
@@ -363,6 +382,25 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
           changes: { active: { from: 1, to: 0 } }
         });
         return rowToClass({ ...row, active: 0 });
+      });
+    },
+
+    /* ۱.۲۴.۰ — فعال‌سازی مجدد کلاس (برگشت دانش‌آموزان خودکار نمی‌شود — صرفاً کلاس به انتخاب‌ها برمی‌گردد) */
+    async activateClass(id: string, actor: AuthContext): Promise<SchoolClass> {
+      return db.transaction(async (tx) => {
+        const row = await tx.queryOne<ClassRow>(`SELECT id, school_id, name, teacher_name, teacher_phone, active FROM classes WHERE id = ?`, [id]);
+        if (!row) throw new NotFoundError('کلاس');
+        if (row.active === 1) throw new ConflictError('کلاس قبلاً فعال است');
+
+        await tx.execute(`UPDATE classes SET active = 1 WHERE id = ?`, [id]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'class.activate',
+          resourceType: 'class',
+          resourceId: id,
+          changes: { active: { from: 0, to: 1 } }
+        });
+        return rowToClass({ ...row, active: 1 });
       });
     },
 

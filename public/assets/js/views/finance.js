@@ -2,6 +2,7 @@ import { api, qs } from '../api.js';
 import {
   el,
   icon,
+  lockBtn,
   toast,
   toastError,
   confirmModal,
@@ -127,14 +128,24 @@ const state = {
   qDon: ''
 };
 
+let loadGen = 0; /* F2: گارد نسل — پاسخ کندِ بازهٔ قبلی نباید state را بازنویسی کند (چاپ/CSV از همین state می‌خواند) */
+
 async function loadAll() {
+  const myGen = ++loadGen;
   const query = qs({ from: state.from, to: state.to });
-  const [s, i, d, b] = await Promise.all([
-    api.get(`/api/finance/summary${query}`),
-    api.get(`/api/finance/invoices${query}`),
-    api.get(`/api/finance/donations${query}`),
-    api.get('/api/finance/budgets')
-  ]);
+  let s, i, d, b;
+  try {
+    [s, i, d, b] = await Promise.all([
+      api.get(`/api/finance/summary${query}`),
+      api.get(`/api/finance/invoices${query}`),
+      api.get(`/api/finance/donations${query}`),
+      api.get('/api/finance/budgets')
+    ]);
+  } catch (err) {
+    if (myGen !== loadGen) return false; /* خطای درخواستِ کهنه — بی‌اثر */
+    throw err;
+  }
+  if (myGen !== loadGen) return false; /* بازه عوض شده — state با پاسخ کهنه بازنویسی نشود */
   state.summary = s?.data ?? state.summary;
   state.invoices = i?.data ?? [];
   state.donations = d?.data ?? [];
@@ -142,13 +153,15 @@ async function loadAll() {
   // نام مرکز برای سربرگ گزارش چاپی/CSV — بهترین تلاش (نبود تنظیمات هم خطا نیست)
   try {
     const st = await api.get('/api/settings');
-    if (st?.data?.clinicName) state.clinicName = st.data.clinicName;
+    if (myGen === loadGen && st?.data?.clinicName) state.clinicName = st.data.clinicName;
   } catch { /* نام پیش‌فرض می‌ماند */ }
+  return true;
 }
 
 async function refresh({ silent = false } = {}) {
   try {
-    await loadAll();
+    const fresh = await loadAll();
+    if (!fresh) return; /* پاسخ کهنه — repaint با state بازهٔ قدیمی ممنوع */
     repaint();
     if (!silent) toast('به‌روزرسانی شد', 'success', 1800);
   } catch (err) {
@@ -287,7 +300,7 @@ function invoicesPanel() {
         : '—'),
       el('td', { class: 'fin-actions', dataset: { label: 'عملیات' } },
         inv.attachment
-          ? el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': `پیش‌نمایش یا دانلود پیوست فاکتور ${inv.title}`, title: 'پیش‌نمایش / دانلود پیوست', onclick: () => openAttachment(inv) }, icon('eye', 16))
+          ? el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': `پیش‌نمایش یا دانلود پیوست فاکتور ${inv.title}`, title: 'پیش‌نمایش / دانلود پیوست', onclick: (e) => lockBtn(e.currentTarget, () => openAttachment(inv)) }, icon('eye', 16)) /* F3: قفل دوبارکلیک — دو تب/دو دانلود نشود */
           : null,
         el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': `ویرایش فاکتور ${inv.title}`, title: 'ویرایش', onclick: () => openInvoiceModal(inv) }, icon('edit', 16)),
         el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': `حذف فاکتور ${inv.title}`, title: 'حذف', onclick: () => removeInvoice(inv) }, icon('trash', 16))
@@ -396,11 +409,11 @@ function openInvoiceModal(existing = null) {
     ),
     actions: [
       (close) => el('button', { class: 'btn btn--ghost', onclick: () => close() }, 'انصراف'),
-      (close) => el('button', { class: 'btn btn--primary', onclick: () => submit(close) }, isEdit ? 'ذخیره' : 'ثبت فاکتور')
+      (close) => el('button', { class: 'btn btn--primary', onclick: (e) => submit(e.currentTarget, close) }, isEdit ? 'ذخیره' : 'ثبت فاکتور')
     ]
   });
 
-  async function submit(close) {
+  async function submit(btn, close) {
     if (!title.value.trim()) { toast('عنوان فاکتور را وارد کنید', 'warning'); return; }
     const amountVal = amountOf(amount);
     if (amountVal <= 0) { toast('مبلغ باید بزرگ‌تر از صفر باشد', 'warning'); return; }
@@ -413,23 +426,25 @@ function openInvoiceModal(existing = null) {
       category: category.value.trim(),
       description: description.value.trim()
     };
-    try {
-      const res = isEdit
-        ? await api.patch(`/api/finance/invoices/${existing.id}`, payload)
-        : await api.post('/api/finance/invoices', payload);
-      const invId = res?.data?.id ?? existing?.id;
-      const file = fileInput.files && fileInput.files[0];
-      if (file && invId) {
-        const fd = new FormData();
-        fd.append('file', file);
-        await api.postForm(`/api/finance/invoices/${invId}/attachment`, fd);
+    await lockBtn(btn, async () => { /* F1: قفل مشغولی — دوبارکلیک حین آپلود پیوست = فاکتور تکراری در دفتر */
+      try {
+        const res = isEdit
+          ? await api.patch(`/api/finance/invoices/${existing.id}`, payload)
+          : await api.post('/api/finance/invoices', payload);
+        const invId = res?.data?.id ?? existing?.id;
+        const file = fileInput.files && fileInput.files[0];
+        if (file && invId) {
+          const fd = new FormData();
+          fd.append('file', file);
+          await api.postForm(`/api/finance/invoices/${invId}/attachment`, fd);
+        }
+        close();
+        toast(isEdit ? 'فاکتور ویرایش شد' : 'فاکتور ثبت شد', 'success');
+        await refresh({ silent: true });
+      } catch (err) {
+        toastError(err);
       }
-      close();
-      toast(isEdit ? 'فاکتور ویرایش شد' : 'فاکتور ثبت شد', 'success');
-      await refresh({ silent: true });
-    } catch (err) {
-      toastError(err);
-    }
+    });
   }
   void modal;
 }
@@ -646,11 +661,11 @@ function openDonationModal(existing = null) {
     ),
     actions: [
       (close) => el('button', { class: 'btn btn--ghost', onclick: () => close() }, 'انصراف'),
-      (close) => el('button', { class: 'btn btn--primary', onclick: () => submit(close) }, isEdit ? 'ذخیره' : 'ثبت کمک')
+      (close) => el('button', { class: 'btn btn--primary', onclick: (e) => submit(e.currentTarget, close) }, isEdit ? 'ذخیره' : 'ثبت کمک')
     ]
   });
 
-  async function submit(close) {
+  async function submit(btn, close) {
     if (!donor.value.trim()) { toast('نام اهداکننده را وارد کنید', 'warning'); return; }
     const amountVal = amountOf(amount);
     if (amountVal <= 0) { toast('مبلغ باید بزرگ‌تر از صفر باشد', 'warning'); return; }
@@ -663,15 +678,17 @@ function openDonationModal(existing = null) {
       student_id: picker.studentId,
       note: note.value.trim()
     };
-    try {
-      if (isEdit) await api.patch(`/api/finance/donations/${existing.id}`, payload);
-      else await api.post('/api/finance/donations', payload);
-      close();
-      toast(isEdit ? 'کمک ویرایش شد' : 'کمک ثبت شد', 'success');
-      await refresh({ silent: true });
-    } catch (err) {
-      toastError(err);
-    }
+    await lockBtn(btn, async () => { /* F1: قفل مشغولی — دوبارکلیک = کمک تکراری در دفتر */
+      try {
+        if (isEdit) await api.patch(`/api/finance/donations/${existing.id}`, payload);
+        else await api.post('/api/finance/donations', payload);
+        close();
+        toast(isEdit ? 'کمک ویرایش شد' : 'کمک ثبت شد', 'success');
+        await refresh({ silent: true });
+      } catch (err) {
+        toastError(err);
+      }
+    });
   }
 }
 
@@ -762,11 +779,11 @@ function openBudgetModal(existing = null) {
     ),
     actions: [
       (close) => el('button', { class: 'btn btn--ghost', onclick: () => close() }, 'انصراف'),
-      (close) => el('button', { class: 'btn btn--primary', onclick: () => submit(close) }, isEdit ? 'ذخیره' : 'ثبت بودجه')
+      (close) => el('button', { class: 'btn btn--primary', onclick: (e) => submit(e.currentTarget, close) }, isEdit ? 'ذخیره' : 'ثبت بودجه')
     ]
   });
 
-  async function submit(close) {
+  async function submit(btn, close) {
     if (!title.value.trim()) { toast('عنوان بودجه را وارد کنید', 'warning'); return; }
     const amountVal = amountOf(amount);
     if (amountVal <= 0) { toast('مبلغ باید بزرگ‌تر از صفر باشد', 'warning'); return; }
@@ -783,15 +800,17 @@ function openBudgetModal(existing = null) {
       period_to: periodTo,
       notes: notes.value.trim()
     };
-    try {
-      if (isEdit) await api.patch(`/api/finance/budgets/${existing.id}`, payload);
-      else await api.post('/api/finance/budgets', payload);
-      close();
-      toast(isEdit ? 'بودجه ویرایش شد' : 'بودجه ثبت شد', 'success');
-      await refresh({ silent: true });
-    } catch (err) {
-      toastError(err);
-    }
+    await lockBtn(btn, async () => { /* F1: قفل مشغولی — دوبارکلیک = بودجه تکراری در دفتر */
+      try {
+        if (isEdit) await api.patch(`/api/finance/budgets/${existing.id}`, payload);
+        else await api.post('/api/finance/budgets', payload);
+        close();
+        toast(isEdit ? 'بودجه ویرایش شد' : 'بودجه ثبت شد', 'success');
+        await refresh({ silent: true });
+      } catch (err) {
+        toastError(err);
+      }
+    });
   }
 }
 
