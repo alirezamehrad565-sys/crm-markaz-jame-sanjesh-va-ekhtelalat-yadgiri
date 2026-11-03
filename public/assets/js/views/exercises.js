@@ -9,7 +9,10 @@ import {
   formModal,
   emptyState,
   skeletonState,
-  errorState
+  errorState,
+  collapseRemove, // — ۱.۲۲.۰ جریان پیوسته: جمع‌شدن نرم کارت
+  flashNode, // — فلش توجه روی کارت پچ‌شده
+  lockBtn // — قفل مشغولی دکمه‌های mutation
 } from '../ui.js';
 import { fa, formatJalaliNumeric, safeExternalHref } from '../format.js';
 import { session } from '../state.js';
@@ -339,6 +342,10 @@ function formSection(num, title, sub, fields) {
 // انتخابگر درختی هدف از در ماژول مشترک taxonomy.js است — buildFocusPicker حذف شد
 
 export function renderExercises(container) {
+  /* —— ۱.۲۲.۰ جریان پیوسته (زبان ۱.۱۹–۱.۲۱): شِل نما — سربرگ، نوار فیلتر (درخت/جستجو/انتشار)،
+     چیپ‌های نوع کارت و قاب ناحیهٔ داده — یک‌بار مونت می‌شود؛ هیچ اکشنی دیگر کل نما را rebuild
+     نمی‌کند. هر mutation فقط کارت خودش را پچ می‌کند (ctl.patch/remove) یا ناحیهٔ داده را بی‌صدا
+     همگام می‌کند (ctl.quietSync)؛ شمارنده‌های درخت با syncCounts درجا تازه می‌شوند. —— */
   const toolbar = el('div', { class: 'page-head' });
   const nav = el('div', { class: 'exb-nav' });
   const body = el('div', { class: 'exb-body' });
@@ -381,18 +388,22 @@ export function renderExercises(container) {
   const MULTIPART_MAX_BYTES = 3 * 1024 * 1024;
 
   async function uploadFiles(exerciseId, files, onProgress) {
+    let updated = null; // — ۱.۲۲.۰ آخرین رکورد تازهٔ سرور برای پچ درجای کارت برمی‌گردد
     for (let i = 0; i < files.length; i += 1) {
       const f = files[i];
       onProgress?.(i + 1, files.length, f.name, 0);
       if (f.size <= MULTIPART_MAX_BYTES) {
         const form = new FormData();
         form.append('files', f, f.name);
-        await api.postForm(`/api/exercises/${exerciseId}/files`, form);
+        const res = await api.postForm(`/api/exercises/${exerciseId}/files`, form);
+        updated = res?.data ?? updated;
         onProgress?.(i + 1, files.length, f.name, 100);
       } else {
-        await uploadChunked(exerciseId, f, (pct) => onProgress?.(i + 1, files.length, f.name, pct));
+        const rec = await uploadChunked(exerciseId, f, (pct) => onProgress?.(i + 1, files.length, f.name, pct));
+        updated = rec ?? updated;
       }
     }
+    return updated;
   }
 
   async function uploadChunked(exerciseId, file, onPct) {
@@ -411,34 +422,51 @@ export function renderExercises(container) {
       await api.putRaw(`/api/exercises/${exerciseId}/files/${fileId}/chunks/${seq}`, buf);
       onPct?.(Math.round(((seq + 1) / chunks) * 100));
     }
-    await api.post(`/api/exercises/${exerciseId}/files/${fileId}/complete`, {});
+    const done = await api.post(`/api/exercises/${exerciseId}/files/${fileId}/complete`, {});
+    return done?.data ?? null; // — ۱.۲۲.۰ رکورد تازه برای پچ درجای کارت
   }
 
-  async function refresh() {
+  let gen = 0; // — ۱.۲۲.۰ گارد نسل: پاسخ کهنهٔ درخواست قبلی نباید روی دادهٔ تازه بنشیند
+
+  async function fetchPage() {
+    const qs = new URLSearchParams({ page: String(state.page), page_size: String(PAGE_SIZE) });
+    if (state.format) qs.set('format', state.format); // فیلتر نوع کارت (سرویس از آماده است)
+    if (state.focus.length > 0) qs.set('focus', state.focus.join(',')); // فیلتر هدفمند
+    if (state.disorders.length > 0) qs.set('disorder', state.disorders.join(',')); // ستون اختلال‌ها
+    if (state.grades.length > 0) qs.set('grade', state.grades.join(',')); // ستون پایه تحصیلی
+    if (state.q) qs.set('q', state.q);
+    if (state.published !== 'all') qs.set('published', state.published);
+    return api.get(`/api/exercises?${qs.toString()}`);
+  }
+
+  /* ۱.۲۲.۰ — مونت اولیه فقط: اسکلت یک‌بار در عمر نما دیده می‌شود */
+  async function initialLoad() {
     body.replaceChildren(skeletonState('cards', 4));
+    await refreshZone();
+  }
+
+  /* ۱.۲۲.۰ — همگام‌سازی بی‌صدای ناحیهٔ داده: بدون اسکلت — نوار ابزار/چیپ‌ها/درخت دست‌نخورده */
+  async function refreshZone() {
+    const myGen = ++gen;
     try {
-      const qs = new URLSearchParams({ page: String(state.page), page_size: String(PAGE_SIZE) });
-      if (state.format) qs.set('format', state.format); // فیلتر نوع کارت (سرویس از آماده است)
-      if (state.focus.length > 0) qs.set('focus', state.focus.join(',')); // فیلتر هدفمند
-      if (state.disorders.length > 0) qs.set('disorder', state.disorders.join(',')); // ستون اختلال‌ها
-      if (state.grades.length > 0) qs.set('grade', state.grades.join(',')); // ستون پایه تحصیلی
-      if (state.q) qs.set('q', state.q);
-      if (state.published !== 'all') qs.set('published', state.published);
-      const res = await api.get(`/api/exercises?${qs.toString()}`);
+      const res = await fetchPage();
+      if (myGen !== gen || !body.isConnected) return;
       items = res.data?.items ?? [];
       total = res.data?.total ?? 0;
+      state.page = res.data?.page ?? state.page; // صفحهٔ clampشدهٔ سرور — برچسب pager راست بماند
       hasMore = res.data?.hasMore ?? false;
       drawList();
     } catch (err) {
-      body.replaceChildren(errorState(err, refresh));
+      if (myGen !== gen || !body.isConnected) return;
+      body.replaceChildren(errorState(err, refreshZone));
     }
   }
 
-  async function reloadAll() {
+  /* ۱.۲۲.۰ — تازه‌کردن بی‌صدای شمارنده‌های درخت (chrome) — بدون بازسازی نما */
+  async function syncCounts() {
     await loadMeta();
-    computeCounts(); // شمارنده‌های تازه — تب/حوزه/چیپ بازرسم می‌شوند
+    computeCounts();
     taxPicker?.refresh();
-    await refresh();
   }
 
   // ─── ناوبری کتابخانه با درخت واحد: همان کامپوننت taxonomy.js برای چهار ستون ───
@@ -488,7 +516,7 @@ export function renderExercises(container) {
         state.disorders = [...menuTagSel].filter((k) => TAX_KEY_PILLAR.get(k) === 'disorder');
         state.grades = [...menuTagSel].filter((k) => TAX_KEY_PILLAR.get(k) === 'grade');
         state.page = 1;
-        refresh();
+        refreshZone();
       }
     });
 
@@ -505,7 +533,7 @@ export function renderExercises(container) {
       debounce = setTimeout(() => {
         state.q = search.value.trim();
         state.page = 1;
-        refresh();
+        refreshZone();
       }, 350);
     });
 
@@ -519,10 +547,11 @@ export function renderExercises(container) {
     pubSel.addEventListener('change', () => {
       state.published = pubSel.value;
       state.page = 1;
-      refresh();
+      refreshZone();
     });
 
     // فیلتر «نوع کارت»: همین نگاشت، نوع کارت جلسه در طرح درمان را می‌سازد
+    // ۱.۲۲.۰ — چیپ‌ها یک‌بار مونت می‌مانند؛ کلیک فقط is-active را درجا عوض می‌کند و ناحیهٔ داده را quiet می‌کشد
     const typeChips = el('div', { class: 'exb-grades', role: 'group', 'aria-label': 'فیلتر نوع کارت' },
       el('span', { class: 'cell-sub' }, 'نوع کارت:'),
       el('button', {
@@ -530,7 +559,8 @@ export function renderExercises(container) {
         type: 'button',
         'aria-pressed': String(state.format === ''), /* S6-15 */
         style: { cursor: 'pointer' },
-        onclick: () => { state.format = ''; refresh(); }
+        dataset: { formatKey: '' },
+        onclick: () => pickFormat('')
       }, 'همه'),
       ...Object.entries(FORMAT_LABELS).map(([k, label]) =>
         el('button', {
@@ -539,10 +569,19 @@ export function renderExercises(container) {
           'aria-pressed': String(state.format === k), /* S6-15 */
           style: { cursor: 'pointer' },
           title: 'در طرح درمان به کارتِ «' + label + '» تبدیل می‌شود',
-          onclick: () => { state.format = k; refresh(); }
+          dataset: { formatKey: k },
+          onclick: () => pickFormat(k)
         }, label)
       )
     );
+    const syncTypeChips = () => {
+      for (const chip of typeChips.querySelectorAll('button.chip')) {
+        const on = (chip.dataset.formatKey ?? '') === state.format;
+        chip.classList.toggle('is-active', on);
+        chip.setAttribute('aria-pressed', String(on));
+      }
+    };
+    const pickFormat = (k) => { state.format = k; syncTypeChips(); refreshZone(); };
 
     nav.replaceChildren(
       taxPicker.el, // چهار ستون با یک زبان: تب + خلاصهٔ انتخاب‌ها + درخت
@@ -624,7 +663,7 @@ export function renderExercises(container) {
           : null,
         el('button', { class: 'exb-file-chip__btn', type: 'button', title: 'دانلود', 'aria-label': `دانلود ${f.name ?? 'فایل'}`, onclick: () => downloadFile(ex, f) } /* S6-13 */, icon('download', 12)),
         isStaff() && f.id
-          ? el('button', { class: 'exb-file-chip__btn exb-file-chip__btn--danger', type: 'button', title: 'حذف فایل', 'aria-label': `حذف ${f.name ?? 'فایل'}`, onclick: () => removeAttachment(ex, f) } /* S6-13 */, icon('trash', 12))
+          ? el('button', { class: 'exb-file-chip__btn exb-file-chip__btn--danger', type: 'button', title: 'حذف فایل', 'aria-label': `حذف ${f.name ?? 'فایل'}`, onclick: (e) => lockBtn(e.currentTarget, () => removeAttachment(ex, f)) } /* S6-13 — ۱.۲۲.۰ قفل مشغولی */, icon('trash', 12))
           : null
       );
     const wrap = el('div', { class: 'exb-files' });
@@ -647,6 +686,171 @@ export function renderExercises(container) {
     return wrap;
   }
 
+  /* ۱.۲۲.۰ — سازندهٔ کارت جدا شد تا ctl.patch همان شکلی را درجا بسازد؛ هر کارت data-id دارد */
+  function cardEl(ex) {
+    const files = Array.isArray(ex.files) && ex.files.length > 0
+      ? ex.files
+      : ex.file
+        ? [{ id: '', filename: ex.file.filename, mime: ex.file.mime, size: ex.file.size }]
+        : [];
+    const previewFiles = files.filter(previewable);
+    const actions = el(
+      'div',
+      { class: 'exb-card__actions' },
+      previewFiles.length > 0
+        ? el(
+            'button',
+            {
+              class: 'btn btn--ghost btn--sm',
+              type: 'button',
+              title: 'پیش‌نمایش',
+              'aria-label': `پیش‌نمایش «${ex.title ?? 'کارت'}»`, /* S6-13 */
+              onclick: () => openPreviewModal(ex, previewFiles)
+            },
+            icon('eye', 15)
+          )
+        : null,
+      files.length > 0
+        ? el(
+            'button',
+            {
+              class: 'btn btn--ghost btn--sm',
+              type: 'button',
+              title: 'دانلود فایل اصلی',
+              'aria-label': `دانلود فایل اصلی «${ex.title ?? 'کارت'}»`, /* S6-13 */
+              onclick: () => downloadFile(ex, files[0])
+            },
+            icon('download', 15)
+          )
+        : null,
+      isStaff()
+        ? el('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'ویرایش', 'aria-label': `ویرایش «${ex.title ?? 'کارت'}»`, onclick: () => openEditModal(ex) }, icon('edit', 15)) /* S6-13 */
+        : null,
+      isStaff()
+        ? el('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'فایل‌ها', 'aria-label': `فایل‌های «${ex.title ?? 'کارت'}»`, onclick: () => openFilesModal(ex) }, icon('file', 15))
+        : null,
+      isStaff()
+        ? el('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'حذف', 'aria-label': `حذف «${ex.title ?? 'کارت'}»`, onclick: (e) => lockBtn(e.currentTarget, () => removeExercise(ex)) }, icon('trash', 15)) /* ۱.۲۲.۰ قفل مشغولی */
+        : null
+    );
+    const fileChips = files.length === 0
+      ? el('span', { class: 'exb-file' }, 'بدون فایل')
+      : buildCardFiles(ex, files);
+    const thumb = files.length > 0 ? buildThumb(ex, files) : null;
+    return el(
+      'div',
+      { class: 'card exb-card', dataset: { id: String(ex.id) } }, // — ۱.۲۲.۰ data-id برای پچ/حذف درجا
+      thumb,
+      el(
+        'div',
+        { class: 'exb-card__head' },
+        el('b', { class: 'exb-card__title' }, ex.title),
+        el('div', { class: 'exb-card__badges' },
+          ownerChip(ex.createdBy),
+          coCreatorChip(ex.coCreatedBy),
+          formatBadge(ex.format),
+          publishedBadge(ex.published),
+          ex.visibility === 'private' ? privateBadge() : null)
+      ),
+      ex.description ? el('p', { class: 'exb-card__desc', title: ex.description }, ex.description) : null,
+      safeExternalHref(ex.externalUrl)
+        ? el('div', { style: { marginBottom: '6px' } },
+            el('a', { class: 'exb-file-chip exb-link-chip', href: safeExternalHref(ex.externalUrl), target: '_blank', rel: 'noopener', title: safeExternalHref(ex.externalUrl) },
+              icon('gamepad', 13),
+              el('span', { class: 'exb-file-chip__name' }, 'باز کردن بازی/تمرین آنلاین')))
+        : null,
+      // بج هدف‌های شناختی کارت (حداکثر ۳ + شمارندهٔ باقی‌مانده)
+      Array.isArray(ex.focus) && ex.focus.length > 0
+        ? el(
+            'div',
+            { class: 'exb-card__focus' },
+            ex.focus.slice(0, 3).map((k) =>
+              el('span', { class: 'badge badge--info exb-focus', title: TAX_LABELS.get(k) ?? 'برچسب آزاد' /* S6-14 */ },
+                icon(TAX_ICONS.get(k) ?? 'target', 12),
+                TAX_LABELS.get(k) ?? 'برچسب آزاد' /* S6-14 */)
+            ),
+            ex.focus.length > 3 ? el('span', { class: 'badge badge--neutral' }, `+${fa(ex.focus.length - 3)}`) : null
+          )
+        : null,
+      el(
+        'div',
+        { class: 'exb-card__tags' },
+        ex.tags.map((t) => el('span', { class: 'badge badge--neutral' }, t.name))
+      ),
+      el(
+        'div',
+        { class: 'exb-card__meta' },
+        fileChips,
+        el('span', { class: 'exb-date' }, formatJalaliNumeric((ex.createdAt || '').slice(0, 10))),
+        actions
+      )
+    );
+  }
+
+  /* ۱.۲۲.۰ — pager هم جزو ناحیهٔ داده است؛ دکمه‌ها فقط همان ناحیه را بی‌صدا می‌کشند */
+  function buildPager(totalPages) {
+    const pager = el('div', { class: 'exb-pager' });
+    if (state.page > 1) {
+      pager.append(el('button', {
+        class: 'btn btn--ghost btn--sm',
+        onclick: () => { state.page -= 1; refreshZone(); }
+      }, icon('chevR', 14), 'صفحهٔ قبل'));
+    }
+    pager.append(el('span', { class: 'exb-pager__label' }, `صفحهٔ ${fa(state.page)} از ${fa(totalPages)} — مجموع ${fa(total)} کارت`));
+    if (hasMore) {
+      pager.append(el('button', {
+        class: 'btn btn--ghost btn--sm',
+        onclick: () => { state.page += 1; refreshZone(); }
+      }, 'صفحهٔ بعد', icon('chevL', 14)));
+    }
+    return pager;
+  }
+
+  /* ۱.۲۲.۰ — آینهٔ فیلترهای ساده (نوع کارت/انتشار/جستجو) برای تصمیم پچ یا جمع‌شدن؛
+     فیلترهای درخت (هدف/اختلال/پایه) سمت سرور گسترش می‌یابند — در حضورشان ctl.patch به quietSync برمی‌گردد */
+  function matchesFilter(ex) {
+    if (state.format && ex.format !== state.format) return false;
+    if (state.published !== 'all' && Boolean(ex.published) !== (state.published === 'true')) return false;
+    if (state.q) {
+      const hay = `${ex.title ?? ''} ${ex.description ?? ''}`.toLowerCase();
+      if (!hay.includes(state.q.toLowerCase())) return false;
+    }
+    return true;
+  }
+
+  /* پس از جمع‌شدن نرمِ آخرین کارتِ ناحیه، حقیقت سرور بی‌صدا بنشیند (بدون اسکلت) */
+  function ensureNonEmptyPaint() {
+    setTimeout(() => {
+      if (body.isConnected && !body.querySelector('.exb-card[data-id]')) refreshZone();
+    }, 320);
+  }
+
+  /* ۱.۲۲.۰ — زبان مشترک mutationها: پچ درجای کارت / جمع‌شدن نرم / همگام‌سازی بی‌صدای ناحیهٔ داده */
+  const ctl = {
+    patch(entry) {
+      if (!entry?.id || !body.isConnected) { ctl.quietSync(); return; }
+      items = items.map((r) => (r.id === entry.id ? entry : r));
+      if (state.focus.length > 0 || state.disorders.length > 0 || state.grades.length > 0) { ctl.quietSync(); return; }
+      const old = body.querySelector(`.exb-card[data-id="${CSS.escape(String(entry.id))}"]`);
+      if (!old) { ctl.quietSync(); return; } // با فیلتر فعلی تازه وارد دید شده
+      if (!matchesFilter(entry)) { collapseRemove(old); ensureNonEmptyPaint(); return; } // از فیلتر خارج شد
+      const fresh = cardEl(entry);
+      old.replaceWith(fresh);
+      flashNode(fresh);
+    },
+    remove(id) {
+      items = items.filter((r) => r.id !== id);
+      total = Math.max(0, total - 1);
+      hasMore = state.page * PAGE_SIZE < total; // — آینهٔ pageWindow سرور برای برچسب pager
+      const old = body.querySelector(`.exb-card[data-id="${CSS.escape(String(id))}"]`);
+      if (old) collapseRemove(old);
+      const pager = body.querySelector('.exb-pager');
+      if (pager) pager.replaceWith(buildPager(Math.max(1, Math.ceil(total / PAGE_SIZE))));
+      ensureNonEmptyPaint();
+    },
+    quietSync: refreshZone
+  };
+
   function drawList() {
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -666,124 +870,9 @@ export function renderExercises(container) {
       return;
     }
 
-    const cards = items.map((ex) => {
-      const files = Array.isArray(ex.files) && ex.files.length > 0
-        ? ex.files
-        : ex.file
-          ? [{ id: '', filename: ex.file.filename, mime: ex.file.mime, size: ex.file.size }]
-          : [];
-      const previewFiles = files.filter(previewable);
-      const actions = el(
-        'div',
-        { class: 'exb-card__actions' },
-        previewFiles.length > 0
-          ? el(
-              'button',
-              {
-                class: 'btn btn--ghost btn--sm',
-                type: 'button',
-                title: 'پیش‌نمایش',
-                'aria-label': `پیش‌نمایش «${ex.title ?? 'کارت'}»`, /* S6-13 */
-                onclick: () => openPreviewModal(ex, previewFiles)
-              },
-              icon('eye', 15)
-            )
-          : null,
-        files.length > 0
-          ? el(
-              'button',
-              {
-                class: 'btn btn--ghost btn--sm',
-                type: 'button',
-                title: 'دانلود فایل اصلی',
-                'aria-label': `دانلود فایل اصلی «${ex.title ?? 'کارت'}»`, /* S6-13 */
-                onclick: () => downloadFile(ex, files[0])
-              },
-              icon('download', 15)
-            )
-          : null,
-        isStaff()
-          ? el('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'ویرایش', 'aria-label': `ویرایش «${ex.title ?? 'کارت'}»`, onclick: () => openEditModal(ex) }, icon('edit', 15)) /* S6-13 */
-          : null,
-        isStaff()
-          ? el('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'فایل‌ها', 'aria-label': `فایل‌های «${ex.title ?? 'کارت'}»`, onclick: () => openFilesModal(ex) }, icon('file', 15))
-          : null,
-        isStaff()
-          ? el('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'حذف', 'aria-label': `حذف «${ex.title ?? 'کارت'}»`, onclick: () => removeExercise(ex) }, icon('trash', 15))
-          : null
-      );
-      const fileChips = files.length === 0
-        ? el('span', { class: 'exb-file' }, 'بدون فایل')
-        : buildCardFiles(ex, files);
-      const thumb = files.length > 0 ? buildThumb(ex, files) : null;
-      return el(
-        'div',
-        { class: 'card exb-card' },
-        thumb,
-        el(
-          'div',
-          { class: 'exb-card__head' },
-          el('b', { class: 'exb-card__title' }, ex.title),
-          el('div', { class: 'exb-card__badges' },
-            ownerChip(ex.createdBy),
-            coCreatorChip(ex.coCreatedBy),
-            formatBadge(ex.format),
-            publishedBadge(ex.published),
-            ex.visibility === 'private' ? privateBadge() : null)
-        ),
-        ex.description ? el('p', { class: 'exb-card__desc', title: ex.description }, ex.description) : null,
-        safeExternalHref(ex.externalUrl)
-          ? el('div', { style: { marginBottom: '6px' } },
-              el('a', { class: 'exb-file-chip exb-link-chip', href: safeExternalHref(ex.externalUrl), target: '_blank', rel: 'noopener', title: safeExternalHref(ex.externalUrl) },
-                icon('gamepad', 13),
-                el('span', { class: 'exb-file-chip__name' }, 'باز کردن بازی/تمرین آنلاین')))
-          : null,
-        // بج هدف‌های شناختی کارت (حداکثر ۳ + شمارندهٔ باقی‌مانده)
-        Array.isArray(ex.focus) && ex.focus.length > 0
-          ? el(
-              'div',
-              { class: 'exb-card__focus' },
-              ex.focus.slice(0, 3).map((k) =>
-                el('span', { class: 'badge badge--info exb-focus', title: TAX_LABELS.get(k) ?? 'برچسب آزاد' /* S6-14 */ },
-                  icon(TAX_ICONS.get(k) ?? 'target', 12),
-                  TAX_LABELS.get(k) ?? 'برچسب آزاد' /* S6-14 */)
-              ),
-              ex.focus.length > 3 ? el('span', { class: 'badge badge--neutral' }, `+${fa(ex.focus.length - 3)}`) : null
-            )
-          : null,
-        el(
-          'div',
-          { class: 'exb-card__tags' },
-          ex.tags.map((t) => el('span', { class: 'badge badge--neutral' }, t.name))
-        ),
-        el(
-          'div',
-          { class: 'exb-card__meta' },
-          fileChips,
-          el('span', { class: 'exb-date' }, formatJalaliNumeric((ex.createdAt || '').slice(0, 10))),
-          actions
-        )
-      );
-    });
-
-    const pager = el('div', { class: 'exb-pager' });
-    if (state.page > 1) {
-      pager.append(el('button', {
-        class: 'btn btn--ghost btn--sm',
-        onclick: () => { state.page -= 1; refresh(); }
-      }, icon('chevR', 14), 'صفحهٔ قبل'));
-    }
-    pager.append(el('span', { class: 'exb-pager__label' }, `صفحهٔ ${fa(state.page)} از ${fa(totalPages)} — مجموع ${fa(total)} کارت`));
-    if (hasMore) {
-      pager.append(el('button', {
-        class: 'btn btn--ghost btn--sm',
-        onclick: () => { state.page += 1; refresh(); }
-      }, 'صفحهٔ بعد', icon('chevL', 14)));
-    }
-
     body.replaceChildren(
-      el('div', { class: 'exb-list' }, cards),
-      pager
+      el('div', { class: 'exb-list' }, items.map((ex) => cardEl(ex))),
+      buildPager(totalPages)
     );
   }
 
@@ -821,9 +910,9 @@ export function renderExercises(container) {
     });
     if (!ok) return;
     try {
-      await api.del(`/api/exercises/${ex.id}/files/${file.id}`);
+      const res = await api.del(`/api/exercises/${ex.id}/files/${file.id}`);
       toast('فایل حذف شد', 'success');
-      reloadAll();
+      ctl.patch(res.data); // — ۱.۲۲.۰ همان کارت درجا پچ می‌شود (پاسخ سرور رکورد تازه است)
     } catch (err) {
       toastError(err);
     }
@@ -1096,7 +1185,8 @@ export function renderExercises(container) {
         toast('کارت آماده ساخته شد', 'success');
         close();
         state.page = 1;
-        reloadAll();
+        syncCounts(); // — ۱.۲۲.۰ شمارنده‌های درخت درجا تازه می‌شوند
+        ctl.quietSync(); // — جای کارت تازه را ترتیب سرور تعیین می‌کند — بدون اسکلت
       } catch (err) {
         toastError(err);
       } finally {
@@ -1200,7 +1290,7 @@ export function renderExercises(container) {
           }
           toast(`مالکیت کارت به ${staffNames.get(reSel.value) ?? reSel.value} منتقل شد`, 'success');
           closeEdit?.();
-          reloadAll();
+          ctl.patch(res.data); // — ۱.۲۲.۰ بج سازندهٔ همان کارت درجا عوض می‌شود
         } catch (err) {
           toastError(err);
         } finally {
@@ -1312,10 +1402,11 @@ export function renderExercises(container) {
                   if (canOwn) {
                     patch.visibility = visSel.value;
                   }
-                  await api.patch(`/api/exercises/${ex.id}`, patch);
+                  const res = await api.patch(`/api/exercises/${ex.id}`, patch);
                   toast('کارت به‌روزرسانی شد', 'success');
                   close();
-                  reloadAll();
+                  ctl.patch(res.data); // — ۱.۲۲.۰ همان کارت درجا پچ می‌شود
+                  syncCounts(); // — برچسب/هدف شاید عوض شده؛ شمارنده‌های درخت درجا تازه شوند
                 } catch (err) {
                   toastError(err);
                 } finally {
@@ -1361,7 +1452,7 @@ export function renderExercises(container) {
                     ? el('button', {
                         class: 'exb-file-chip__btn exb-file-chip__btn--danger',
                         title: 'حذف فایل',
-                        onclick: async () => {
+                        onclick: (e) => lockBtn(e.currentTarget, async () => { // — ۱.۲۲.۰ قفل مشغولی
                           const ok = await confirmModal({
                             title: 'حذف فایل',
                             message: `فایل «${f.filename}» حذف شود؟`,
@@ -1370,15 +1461,15 @@ export function renderExercises(container) {
                           });
                           if (!ok) return;
                           try {
-                            await api.del(`/api/exercises/${ex.id}/files/${f.id}`);
+                            const res = await api.del(`/api/exercises/${ex.id}/files/${f.id}`);
                             currentFiles.splice(currentFiles.indexOf(f), 1);
                             drawList();
                             toast('فایل حذف شد', 'success');
-                            reloadAll();
+                            ctl.patch(res.data); // — ۱.۲۲.۰ کارت پشت مودال درجا پچ می‌شود
                           } catch (err) {
                             toastError(err);
                           }
-                        }
+                        })
                       }, icon('trash', 12))
                     : null
                 )
@@ -1425,23 +1516,24 @@ export function renderExercises(container) {
             'button',
             {
               class: 'btn btn--primary',
-              onclick: async () => {
+              onclick: (e) => lockBtn(e.currentTarget, async () => { // — ۱.۲۲.۰ قفل مشغولی
                 if (picked.length === 0) {
                   toast('اول فایل انتخاب کنید', 'warning');
                   return;
                 }
                 try {
                   progressLine.style.display = '';
-                  await uploadFiles(ex.id, picked, (i, tot, name, pct) => {
+                  const rec = await uploadFiles(ex.id, picked, (i, tot, name, pct) => {
                     progressLine.textContent = `در حال بارگذاری ${fa(i)} از ${fa(tot)} — ${name} (${fa(pct)}٪)`;
                   });
                   toast('فایل‌ها اضافه شد', 'success');
                   close();
-                  reloadAll();
+                  if (rec) ctl.patch(rec); // — ۱.۲۲.۰ همان کارت درجا پچ می‌شود
+                  else ctl.quietSync();
                 } catch (err) {
                   toastError(err);
                 }
-              }
+              })
             },
             'بارگذاری فایل‌ها'
           )
@@ -1460,7 +1552,8 @@ export function renderExercises(container) {
     try {
       await api.del(`/api/exercises/${ex.id}`);
       toast('کارت حذف شد', 'success');
-      reloadAll();
+      ctl.remove(ex.id); // — ۱.۲۲.۰ جمع‌شدن نرم همان کارت (پاسخ حذف رکورد ندارد)
+      syncCounts(); // — شمارنده‌های درخت/برچسب کم می‌شوند — درجا
     } catch (err) {
       toastError(err);
     }
@@ -1492,6 +1585,6 @@ export function renderExercises(container) {
     drawToolbar();
     computeCounts();
     buildNav();
-    refresh();
+    initialLoad(); // — ۱.۲۲.۰ اسکلت فقط در مونت اول؛ ادامهٔ عمر نما quiet است
   });
 }

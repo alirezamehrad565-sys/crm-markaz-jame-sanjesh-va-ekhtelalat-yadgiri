@@ -1,6 +1,6 @@
 import { api, qs } from '../api.js';
 import { fa, gradeLabel, isPlaceholderNid } from '../format.js';
-import { el, icon, confirmModal, toast, toastError, dataTable, skeletonState, emptyState, phoneCell } from '../ui.js';
+import { el, icon, confirmModal, toast, toastError, loadingState, emptyState, phoneCell, collapseRemove, flashNode, lockBtn } from '../ui.js';
 import { fetchTags, tagChipsPreview, openTagEditor } from '../tagging.js';
 import { openArchiveStudentForm, openEducationHistory } from '../archive-form.js';
 import { session } from '../state.js';
@@ -17,8 +17,7 @@ const local = {
 };
 
 export async function renderArchive(container) {
-  let searchRefocus = false; // فوکوس فقط پس از تایپ کاربر بازگردد (الگوی students.js)
-  container.replaceChildren(skeletonState('table', 6));
+  container.replaceChildren(loadingState('بارگذاری آرشیو…'));
 
   if (local.schools.length === 0 && local.tags.length === 0 && local.classes.length === 0) {
     try {
@@ -52,6 +51,11 @@ export async function renderArchive(container) {
     return;
   }
 
+  /* —— ۱.۲۲.۰ جریان پیوسته (زبان ۱.۱۹–۱.۲۱): شِل (جستجو/فیلترها/جدول) یک‌بار مونت می‌شود؛
+     برچسب‌ها، ویرایش، فعال‌سازی و حذف فقط ردیف خودشان را پچ یا جمع می‌کنند و
+     جستجو/فیلتر/صفحه‌بندی فقط tbody و پیجر را عوض می‌کند — هک بازگشت مکان‌نما
+     هم با همین کار بی‌معنا و حذف شد، چون input دیگر هرگز بازسازی نمی‌شود. —— */
+
   const schoolName = (id) => local.schools.find((s) => s.id === id)?.name ?? '—';
   const classInfo = (s) => {
     const cls = local.classes.find((c) => c.id === s.classId);
@@ -61,6 +65,201 @@ export async function renderArchive(container) {
     return teacher ? `${name} — ${teacher}` : name;
   };
 
+  const columns = [
+    {
+      key: 'name', label: 'نام',
+      render: (s) => el('div', {},
+        el('div', { class: 'cell-main' }, `${s.firstName} ${s.lastName}`),
+        s.grade ? el('div', { class: 'cell-sub' }, gradeLabel(s.grade)) : null
+      )
+    },
+    { key: 'nationalId', label: 'کد ملی', render: (s) => el('span', { dir: 'ltr' }, isPlaceholderNid(s.nationalId) ? '—' : fa(s.nationalId)) },
+    {
+      key: 'schoolId', label: 'مدرسه / کلاس',
+      render: (s) => el('div', {},
+        el('div', { class: 'cell-main' }, schoolName(s.schoolId)),
+        classInfo(s) ? el('div', { class: 'cell-sub' }, classInfo(s)) : null
+      )
+    },
+    { key: 'tags', label: 'برچسب‌ها', render: (s) => tagChipsPreview(s.tags, 3) },
+    { key: 'guardianPhone', label: 'تلفن ولی', render: (s) => s.guardianPhone
+      ? phoneCell(s.guardianPhone, `تماس با ولیّ ${s.firstName ?? ''} ${s.lastName ?? ''} — ${fa(s.guardianPhone)}`)
+      : el('span', { class: 'cell-sub' }, '—') },
+    {
+      key: 'actions', label: 'عملیات', align: 'end',
+      render: (s) => el('div', { class: 'cell-actions' },
+        el('button', { class: 'btn btn--ghost btn--sm', title: 'پروفایل', 'aria-label': 'پروفایل', onclick: () => { location.hash = `#/students/${s.id}`; } }, icon('user', 15)),
+        el('button', {
+          class: 'btn btn--ghost btn--sm', title: 'تاریخچهٔ تحصیلی', 'aria-label': 'تاریخچهٔ تحصیلی',
+          onclick: () => openEducationHistory(s)
+        }, icon('school', 15)),
+        el('button', { class: 'btn btn--ghost btn--sm', title: 'برچسب‌ها', 'aria-label': 'برچسب‌ها', onclick: () => openRowTagEditor(s, ctl) }, icon('tag', 15)),
+        el('button', { class: 'btn btn--ghost btn--sm', title: 'ویرایش', 'aria-label': 'ویرایش', onclick: () => openArchiveStudentForm({ student: s, onSaved: ({ student }) => ctl.patch(student) }) }, icon('edit', 15)),
+        el('button', {
+          class: 'btn btn--soft btn--sm', title: 'بازگشت به چرخهٔ مرکز',
+          onclick: async (e) => lockBtn(e.currentTarget, async () => {
+            if (!(await confirmModal({
+              title: 'بازگشت به چرخهٔ مرکز',
+              message: `«${s.firstName} ${s.lastName}» از آرشیو به «دانش‌آموزان» فعال منتقل می‌شود و در لیست دانش‌آموزهای مسئول پرونده‌اش دیده می‌شود.`,
+              confirmLabel: 'فعال کن'
+            }))) return;
+            try {
+              await api.post(`/api/students/${s.id}/activate`);
+              toast('به چرخهٔ مرکز بازگشت — در «دانش‌آموزان» دیده می‌شود', 'success');
+              ctl.remove(s.id); // — از آرشیو خارج شد؛ جمع‌شدن نرم همان ردیف
+            } catch (err) { toastError(err); }
+          })
+        }, icon('check', 15), 'فعال‌سازی'),
+        el('button', {
+          class: 'btn btn--danger btn--sm', title: 'حذف کامل پرونده — فقط اگر هیچ سابقه‌ای نداشته باشد', 'aria-label': 'حذف کامل پرونده — فقط اگر هیچ سابقه‌ای نداشته باشد',
+          onclick: async (e) => lockBtn(e.currentTarget, async () => {
+            if (!(await confirmModal({ title: 'حذف کامل پرونده', message: `پروندهٔ «${s.firstName} ${s.lastName}» به‌کلی از آرشیو پاک می‌شود — فقط برای ثبت‌های اشتباه. اگر سابقهٔ جلسه/پیگیری دارد حذف ممکن نیست (پیام سرور راهنمایی می‌کند). برگشت ندارد.`, confirmLabel: 'حذف کن', danger: true }))) return;
+            try {
+              await api.del(`/api/students/${s.id}`);
+              toast('پرونده حذف شد', 'success');
+              ctl.remove(s.id);
+            } catch (err) { toastError(err); }
+          })
+        }, icon('trash', 15))
+      )
+    }
+  ];
+  const colCount = columns.length;
+  const thead = el('thead', {}, el('tr', {}, columns.map((c) => el('th', { scope: 'col', style: c.align ? { textAlign: c.align } : null }, c.label))));
+  const tbody = el('tbody');
+  const table = el('div', { class: 'table-wrap' }, el('table', { class: 'table' }, thead, tbody));
+
+  function rowEl(s) {
+    return el(
+      'tr',
+      {
+        class: 'is-clickable',
+        dataset: { id: String(s.id) },
+        tabindex: '0',
+        // — ردیف کلیک‌پذیر با کیبورد (الگوی dataTable): Enter/Space روی خود ردیف
+        onkeydown: (e) => {
+          if (e.target !== e.currentTarget) return;
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          location.hash = `#/students/${s.id}`;
+        },
+        onclick: (e) => {
+          if (e.target.closest('button, a, input, select, textarea, label, [role="button"]')) return;
+          location.hash = `#/students/${s.id}`;
+        }
+      },
+      columns.map((c) =>
+        el('td', { style: c.align ? { textAlign: c.align } : null, dataset: { label: c.label } }, c.render ? c.render(s) : s[c.key] ?? '—')
+      )
+    );
+  }
+
+  function emptyRow() {
+    const hasFilter = Boolean(local.query || local.schoolId || local.tagId);
+    return el('tr', {}, el('td', { colspan: colCount, style: { padding: 'var(--sp-2)' } },
+      emptyState({
+        iconName: 'file',
+        title: hasFilter ? 'نتیجه‌ای در آرشیو پیدا نشد' : 'آرشیو خالی است',
+        hint: hasFilter
+          ? 'جستجو یا فیلتر را تغییر دهید.'
+          : 'دیتابیس دانش‌آموزان نیاز ویژهٔ شهر — پرونده‌های خارج‌شده از چرخه این‌جا نگه داشته می‌شوند و می‌توانید مستقیم هم دانش‌آموز تعریف کنید.',
+        actionLabel: hasFilter ? undefined : 'دانش‌آموز جدید در آرشیو',
+        onAction: hasFilter ? undefined : openNewArchiveStudent
+      })));
+  }
+
+  function openNewArchiveStudent() {
+    openArchiveStudentForm({
+      onSaved: ({ student }) => {
+        ctl.quietSync(); // جای پروندهٔ تازه را ترتیب سرور تعیین می‌کند
+        if (student) setTimeout(() => openEducationHistory(student, { onChanged: () => {} }), 150);
+      }
+    });
+  }
+
+  const metaBar = el('span', {});
+  const pagerZone = el('div', {});
+
+  function renderTbody(res) {
+    result = res;
+    const list = res.data ?? [];
+    tbody.replaceChildren(...(list.length ? list.map((s) => rowEl(s)) : [emptyRow()]));
+
+    const meta = res.meta ?? { page: 1, totalPages: 1, total: 0 };
+    metaBar.textContent = `${fa(meta.total)} پرونده`;
+    /* UX-ممیزی P3: پیجر تک‌صفحه‌ای در لیست‌های کوتاه حذف شد */
+    pagerZone.replaceChildren(
+      ...(meta.totalPages > 1
+        ? [el('div', { class: 'pager' },
+            el('span', {}, `صفحه ${fa(meta.page)} از ${fa(meta.totalPages)} · ${fa(meta.total)} پرونده`),
+            el('button', { class: 'btn btn--ghost btn--sm', disabled: meta.page <= 1, onclick: () => { local.page -= 1; refreshRows(); } }, 'قبلی'),
+            el('button', { class: 'btn btn--ghost btn--sm', disabled: meta.page >= meta.totalPages, onclick: () => { local.page += 1; refreshRows(); } }, 'بعدی'))]
+        : [])
+    );
+  }
+
+  let gen = 0; // — گارد نسل: پاسخ کهنه رندر نمی‌شود
+  async function refreshRows() {
+    const myGen = ++gen;
+    try {
+      const res = await api.get(`/api/students${qs({
+        active: 'false',
+        query: local.query || undefined,
+        school_id: local.schoolId || undefined,
+        tag_id: local.tagId || undefined,
+        page: local.page,
+        page_size: local.pageSize
+      })}`);
+      if (myGen !== gen || !tbody.isConnected) return;
+      renderTbody(res);
+    } catch (err) {
+      if (myGen !== gen || !tbody.isConnected) return;
+      tbody.replaceChildren(el('tr', {}, el('td', { colspan: colCount, style: { padding: 'var(--sp-2)' } },
+        emptyState({ iconName: 'alert', title: 'خطا در بارگذاری آرشیو', hint: String(err?.message ?? err) }))));
+    }
+  }
+
+  function ensureNonEmptyPaint() {
+    setTimeout(() => {
+      if (tbody.isConnected && !tbody.querySelector('tr[data-id]')) renderTbody(result);
+    }, 320);
+  }
+
+  const ctl = {
+    /* پچ درجای یک پرونده از بدنهٔ پاسخ mutation — همسایه‌ها، اسکرول و فوکوس سرجایشان */
+    patch(s) {
+      if (!s?.id || !tbody.isConnected) { ctl.quietSync(); return; }
+      const old = tbody.querySelector(`tr[data-id="${CSS.escape(String(s.id))}"]`);
+      if (!old) { ctl.quietSync(); return; }
+      const fresh = rowEl(s);
+      old.replaceWith(fresh);
+      flashNode(fresh);
+    },
+    /* حذف/خروج از آرشیو (پاسخ بدون بدنه یا خروج از فیلتر): جمع‌شدن نرم همان ردیف */
+    remove(id) {
+      /* ۱.۲۲.۰ (رفع شبح): کش صفحهٔ جاری هم باید به‌روز شود وگرنه ensureNonEmptyPaint
+         ردیفِ حذف‌شده را از کش کهنه دوباره می‌کشد */
+      if (result?.data) {
+        result = {
+          ...result,
+          data: (result.data ?? []).filter((s) => String(s.id) !== String(id)),
+          meta: { ...(result.meta ?? {}), total: Math.max(0, (result.meta?.total ?? 1) - 1) }
+        };
+      }
+      const old = tbody.querySelector(`tr[data-id="${CSS.escape(String(id))}"]`);
+      if (old) { collapseRemove(old); ensureNonEmptyPaint(); }
+      ctl.quietSyncCount();
+    },
+    /* همگام‌سازی بی‌صدای فهرست + پیجر — بدون اسکلت، بدون دست‌زدن به نوار ابزار */
+    quietSync: refreshRows,
+    /* فقط شمارندهٔ سربرگ (پس از حذف؛ پیجر همان‌جا می‌ماند تا انیمیشن سالم بماند) */
+    quietSyncCount() {
+      api.get(`/api/students${qs({ active: 'false', query: local.query || undefined, school_id: local.schoolId || undefined, tag_id: local.tagId || undefined, page: 1, page_size: 1 })}`)
+        .then((res) => { metaBar.textContent = `${fa(res.meta?.total ?? 0)} پرونده`; })
+        .catch(() => {});
+    }
+  };
+
   const searchInput = el('input', { class: 'input', type: 'search', placeholder: 'جستجو: نام یا کد ملی…', 'aria-label': 'جستجوی نام یا کد ملی', value: local.query }); /* S5-23 */
   let debounce;
   searchInput.addEventListener('input', () => {
@@ -68,141 +267,41 @@ export async function renderArchive(container) {
     debounce = setTimeout(() => {
       local.query = searchInput.value.trim();
       local.page = 1;
-      searchRefocus = true;
-      renderArchive(container);
+      refreshRows(); // — ۱.۲۲.۰: فقط tbody؛ مکان‌نما و فوکوس همین input حفظ می‌شود
     }, 350);
   });
 
-  const schoolSel = el('select', { class: 'select', onchange: (e) => { local.schoolId = e.target.value; local.page = 1; renderArchive(container); } },
+  const schoolSel = el('select', { class: 'select', onchange: (e) => { local.schoolId = e.target.value; local.page = 1; refreshRows(); } },
     el('option', { value: '' }, 'همه مدارس'),
     local.schools.map((s) => el('option', { value: s.id, selected: s.id === local.schoolId }, s.name))
   );
 
-  const tagFilter = local.tags.length > 0 ? buildTagDropdown(container) : null;
+  const tagFilter = local.tags.length > 0 ? buildTagDropdown(ctl) : null;
 
   const toolbar = el('div', { class: 'toolbar' },
     searchInput,
     schoolSel,
     tagFilter,
     el('div', { class: 'spacer' }),
-    el('button', { class: 'btn btn--primary btn--sm', onclick: () => openArchiveStudentForm({
-      onSaved: ({ student }) => {
-        renderArchive(container);
-        if (student) setTimeout(() => openEducationHistory(student, { onChanged: () => {} }), 150);
-      }
-    }) },
+    el('button', { class: 'btn btn--primary btn--sm', onclick: openNewArchiveStudent },
       icon('plus', 16), 'دانش‌آموز جدید در آرشیو')
   );
-
-  const hasFilter = Boolean(local.query || local.schoolId || local.tagId);
-  const table = dataTable({
-    columns: [
-      {
-        key: 'name', label: 'نام',
-        render: (s) => el('div', {},
-          el('div', { class: 'cell-main' }, `${s.firstName} ${s.lastName}`),
-          s.grade ? el('div', { class: 'cell-sub' }, gradeLabel(s.grade)) : null
-        )
-      },
-      { key: 'nationalId', label: 'کد ملی', render: (s) => el('span', { dir: 'ltr' }, isPlaceholderNid(s.nationalId) ? '—' : fa(s.nationalId)) },
-      {
-        key: 'schoolId', label: 'مدرسه / کلاس',
-        render: (s) => el('div', {},
-          el('div', { class: 'cell-main' }, schoolName(s.schoolId)),
-          classInfo(s) ? el('div', { class: 'cell-sub' }, classInfo(s)) : null
-        )
-      },
-      { key: 'tags', label: 'برچسب‌ها', render: (s) => tagChipsPreview(s.tags, 3) },
-      { key: 'guardianPhone', label: 'تلفن ولی', render: (s) => s.guardianPhone
-        ? phoneCell(s.guardianPhone, `تماس با ولیّ ${s.firstName ?? ''} ${s.lastName ?? ''} — ${fa(s.guardianPhone)}`)
-        : el('span', { class: 'cell-sub' }, '—') },
-      {
-        key: 'actions', label: 'عملیات', align: 'end',
-        render: (s) => el('div', { class: 'cell-actions' },
-          el('button', { class: 'btn btn--ghost btn--sm', title: 'پروفایل', 'aria-label': 'پروفایل', onclick: () => { location.hash = `#/students/${s.id}`; } }, icon('user', 15)),
-          el('button', {
-            class: 'btn btn--ghost btn--sm', title: 'تاریخچهٔ تحصیلی', 'aria-label': 'تاریخچهٔ تحصیلی',
-            onclick: () => openEducationHistory(s)
-          }, icon('school', 15)),
-          el('button', { class: 'btn btn--ghost btn--sm', title: 'برچسب‌ها', 'aria-label': 'برچسب‌ها', onclick: () => openRowTagEditor(s, container) }, icon('tag', 15)),
-          el('button', { class: 'btn btn--ghost btn--sm', title: 'ویرایش', 'aria-label': 'ویرایش', onclick: () => openArchiveStudentForm({ student: s, onSaved: () => renderArchive(container) }) }, icon('edit', 15)),
-          el('button', {
-            class: 'btn btn--soft btn--sm', title: 'بازگشت به چرخهٔ مرکز',
-            onclick: async () => {
-              if (!(await confirmModal({
-                title: 'بازگشت به چرخهٔ مرکز',
-                message: `«${s.firstName} ${s.lastName}» از آرشیو به «دانش‌آموزان» فعال منتقل می‌شود و در لیست دانش‌آموزهای مسئول پرونده‌اش دیده می‌شود.`,
-                confirmLabel: 'فعال کن'
-              }))) return;
-              try {
-                await api.post(`/api/students/${s.id}/activate`);
-                toast('به چرخهٔ مرکز بازگشت — در «دانش‌آموزان» دیده می‌شود', 'success');
-                renderArchive(container);
-              } catch (err) { toastError(err); }
-            }
-          }, icon('check', 15), 'فعال‌سازی'),
-          el('button', {
-            class: 'btn btn--danger btn--sm', title: 'حذف کامل پرونده — فقط اگر هیچ سابقه‌ای نداشته باشد', 'aria-label': 'حذف کامل پرونده — فقط اگر هیچ سابقه‌ای نداشته باشد',
-            onclick: async () => {
-              if (!(await confirmModal({ title: 'حذف کامل پرونده', message: `پروندهٔ «${s.firstName} ${s.lastName}» به‌کلی از آرشیو پاک می‌شود — فقط برای ثبت‌های اشتباه. اگر سابقهٔ جلسه/پیگیری دارد حذف ممکن نیست (پیام سرور راهنمایی می‌کند). برگشت ندارد.`, confirmLabel: 'حذف کن', danger: true }))) return;
-              try {
-                await api.del(`/api/students/${s.id}`);
-                toast('پرونده حذف شد', 'success');
-                renderArchive(container);
-              } catch (err) { toastError(err); }
-            }
-          }, icon('trash', 15))
-        )
-      }
-    ],
-    rows: result.data,
-    onRowClick: (s) => { location.hash = `#/students/${s.id}`; },
-    empty: {
-      iconName: 'file',
-      title: hasFilter ? 'نتیجه‌ای در آرشیو پیدا نشد' : 'آرشیو خالی است',
-      hint: hasFilter
-        ? 'جستجو یا فیلتر را تغییر دهید.'
-        : 'دیتابیس دانش‌آموزان نیاز ویژهٔ شهر — پرونده‌های خارج‌شده از چرخه این‌جا نگه داشته می‌شوند و می‌توانید مستقیم هم دانش‌آموز تعریف کنید.',
-      actionLabel: hasFilter ? undefined : 'دانش‌آموز جدید در آرشیو',
-      onAction: () => openArchiveStudentForm({
-        onSaved: ({ student }) => {
-          renderArchive(container);
-          if (student) setTimeout(() => openEducationHistory(student, { onChanged: () => {} }), 150);
-        }
-      })
-    }
-  });
-
-  const meta = result.meta ?? { page: 1, totalPages: 1, total: 0 };
-  /* UX-ممیزی P3: پیجر تک‌صفحه‌ای در لیست‌های کوتاه حذف شد */
-  const pager = meta.totalPages > 1
-    ? el('div', { class: 'pager' },
-        el('span', {}, `صفحه ${fa(meta.page)} از ${fa(meta.totalPages)} · ${fa(meta.total)} پرونده`),
-        el('button', { class: 'btn btn--ghost btn--sm', disabled: meta.page <= 1, onclick: () => { local.page -= 1; renderArchive(container); } }, 'قبلی'),
-        el('button', { class: 'btn btn--ghost btn--sm', disabled: meta.page >= meta.totalPages, onclick: () => { local.page += 1; renderArchive(container); } }, 'بعدی'))
-    : null;
 
   container.replaceChildren(
     el('div', { class: 'page-head' },
       el('div', { class: 'page-head__title' }, 'آرشیو'),
-      el('span', { class: 'badge badge--neutral' }, `${fa(meta.total)} پرونده`)
+      el('span', { class: 'badge badge--neutral' }, metaBar)
     ),
     el('div', { class: 'muted', style: { fontSize: 'var(--fs-xs)', margin: '0 2px var(--sp-3)' } }, /* 13px خام (S5-06) */
       'دیتابیس دانش‌آموزان نیاز ویژهٔ شهر — پرونده‌های خارج‌شده از چرخهٔ مرکز این‌جا حفظ می‌شوند؛ می‌توانید مستقیم هم دانش‌آموز با برچسب تعریف کنید و هر زمان به چرخه برگردانید.'),
     toolbar,
-    el('div', { class: 'card card__body--flush card--table cv-block' }, table, pager) /* E2 */
+    el('div', { class: 'card card__body--flush card--table cv-block' }, table, pagerZone) /* E2 */
   );
 
-  // پرش فوکوس در هر صفحه‌بندی/فیلتر (و کیبورد نرم موبایل) حذف شد
-  if (searchRefocus) {
-    searchRefocus = false;
-    searchInput.focus();
-    const end = searchInput.value.length;
-    searchInput.setSelectionRange(end, end);
-  }
+  renderTbody(result);
 }
 
-function openRowTagEditor(student, container) {
+function openRowTagEditor(student, ctl) {
   openTagEditor({
     student,
     tags: local.tags,
@@ -210,12 +309,12 @@ function openRowTagEditor(student, container) {
     canCreateTag: session.user?.role === 'manager',
     onSaved: (newTags) => {
       student.tags = newTags;
-      renderArchive(container);
+      ctl.patch(student); // — چیپ‌های برچسب همان ردیف درجا
     }
   });
 }
 
-function buildTagDropdown(container) {
+function buildTagDropdown(ctl) {
   const panel = el('div', { class: 'dd__panel', style: { display: 'none' } });
   const activeTag = local.tagId ? local.tags.find((t) => t.id === local.tagId) : null;
   const btnLabel = el('span', {}, activeTag ? activeTag.name : 'همه برچسب‌ها');
@@ -273,7 +372,9 @@ function buildTagDropdown(container) {
     local.page = 1;
     panel.style.display = 'none';
     document.removeEventListener('mousedown', outside, true);
-    renderArchive(container);
+    btn.classList.toggle('is-active', Boolean(local.tagId));
+    btnLabel.textContent = local.tagId ? (local.tags.find((t) => t.id === local.tagId)?.name ?? 'همه برچسب‌ها') : 'همه برچسب‌ها';
+    ctl.quietSync(); // — ۱.۲۲.۰: فقط tbody؛ خود دکمهٔ دراپ‌داون درجا به‌روز شد
   }
 
   return root;

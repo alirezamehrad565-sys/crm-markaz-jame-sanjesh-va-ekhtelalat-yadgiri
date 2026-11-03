@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { fa, formatJalaliNumeric, tehranYmdOfIso } from '../format.js';
-import { el, icon, formModal, confirmModal, openModal, toast, toastError, dataTable, statusBadge, loadingState, skeletonState, emptyState, phoneCell } from '../ui.js';
+import { el, icon, formModal, confirmModal, openModal, toast, toastError, statusBadge, loadingState, emptyState, phoneCell, collapseRemove, flashNode, lockBtn } from '../ui.js';
 import { renderProgressBoardCard } from './progress-board.js'; // — تابلوی پیشرفت (مدیر)
 import { invalidateStudentFormMeta } from '../student-form.js'; // — کش فرم دانش‌آموز بعد از هر تغییر کارکنان تازه شود
 import { openBotLinkModal } from '../bot-link.js'; // — لینک احراز خودکار بات
@@ -8,7 +8,7 @@ import { openBotLinkModal } from '../bot-link.js'; // — لینک احراز خ
 let filter = ''; // مقادیر مجاز: '' | 'true' | 'false'
 
 export async function renderStaff(container) {
-  container.replaceChildren(skeletonState('table', 5));
+  container.replaceChildren(loadingState('بارگذاری کارکنان…'));
 
   let rows;
   try {
@@ -19,105 +19,181 @@ export async function renderStaff(container) {
     return;
   }
 
+  /* —— ۱.۲۲.۰ جریان پیوسته (زبان ۱.۱۹–۱.۲۱): شِل یک‌بار مونت می‌شود؛
+     فعال/غیرفعال‌سازی، ویرایش و حذف فقط همان ردیف را پچ یا جمع می‌کنند و
+     فیلتر وضعیت فقط tbody را عوض می‌کند — دیگر هیچ مسیری کل نما (و تابلوی پیشرفت
+     پایین صفحه) را با اسکلت از صفر نمی‌سازد. —— */
+
+  const columns = [
+    {
+      key: 'fullName',
+      label: 'نام',
+      render: (s) => el('div', {},
+        el('div', { class: 'cell-main' }, s.fullName),
+        el('div', { class: 'cell-sub', dir: 'ltr', style: { textAlign: 'end' } }, `@${s.username ?? '—'}`)
+      )
+    },
+    {
+      key: 'contact',
+      label: 'تلفن / کد ملی',
+      render: (s) => el('div', { class: 'cell-sub' },
+        s.phone
+          ? el('div', { dir: 'ltr', style: { textAlign: 'end' } }, phoneCell(s.phone, `تماس با همکار ${s.fullName} — ${fa(s.phone)}`))
+          : el('div', { dir: 'ltr', style: { textAlign: 'end' } }, '—'),
+        el('div', { dir: 'ltr', style: { textAlign: 'end' } }, fa(s.nationalId ?? '—'))
+      )
+    },
+    { key: 'role', label: 'نقش', render: (s) => statusBadge(s.role) },
+    { key: 'notify', label: 'اعلان بله', render: (s) => el('span', { class: `badge ${s.notifyEnabled ? 'badge--success' : 'badge--neutral'}` }, s.notifyEnabled ? 'دریافت می‌کند' : 'دریافت نمی‌کند') },
+    { key: 'active', label: 'وضعیت', render: (s) => statusBadge(s.active ? 'active' : 'inactive') },
+    { key: 'createdAt', label: 'تاریخ ایجاد', render: (s) => (s.createdAt ? formatJalaliNumeric(tehranYmdOfIso(s.createdAt)) : '—') }, // مرز روز تهران (حساب‌های بعد ۲۰:۳۰ یک روز جابه‌جا نشان داده می‌شد)
+    {
+      key: 'actions',
+      label: 'عملیات',
+      align: 'end',
+      render: (s) =>
+        el('div', { class: 'cell-actions' },
+          el('button', { class: 'btn btn--ghost btn--sm', title: 'بازه‌های کاری', 'aria-label': 'بازه‌های کاری', onclick: () => { location.hash = `#/settings?tab=staff-hours&staff=${s.id}`; } }, icon('clock', 15)),
+          el('button', { class: 'btn btn--ghost btn--sm', title: 'کد اتصال بات', 'aria-label': 'کد اتصال بات', onclick: () => createBotLink(s) }, icon('link', 15)),
+          el('button', { class: 'btn btn--ghost btn--sm', title: 'ویرایش', 'aria-label': 'ویرایش', onclick: () => openStaffForm(s, ctl) }, icon('edit', 15)),
+          s.active
+            ? el('button', {
+                class: 'btn btn--danger btn--sm', title: 'غیرفعال‌سازی', 'aria-label': 'غیرفعال‌سازی',
+                onclick: async (e) => lockBtn(e.currentTarget, async () => {
+                  if (!(await confirmModal({ title: 'غیرفعال‌سازی کارمند', message: `«${s.fullName}» غیرفعال می‌شود و دیگر نمی‌تواند وارد شود.`, confirmLabel: 'غیرفعال کن', danger: true }))) return;
+                  try {
+                    const res = await api.post(`/api/staff/${s.id}/deactivate`);
+                    invalidateStudentFormMeta();
+                    toast('کارمند غیرفعال شد', 'success');
+                    ctl.patch(res.data); // — بج وضعیت همان ردیف درجا
+                  } catch (err) { toastError(err); }
+                })
+              }, icon('x', 15))
+            : el('button', {
+                class: 'btn btn--soft btn--sm', title: 'فعال‌سازی', 'aria-label': 'فعال‌سازی',
+                onclick: async (e) => lockBtn(e.currentTarget, async () => {
+                  try {
+                    const res = await api.post(`/api/staff/${s.id}/activate`);
+                    invalidateStudentFormMeta();
+                    toast('کارمند فعال شد', 'success');
+                    ctl.patch(res.data);
+                  } catch (err) { toastError(err); }
+                })
+              }, icon('check', 15)),
+          el('button', {
+            class: 'btn btn--danger btn--sm', title: 'حذف کامل — فقط اگر هیچ سابقه‌ای نداشته باشد', 'aria-label': 'حذف کامل — فقط اگر هیچ سابقه‌ای نداشته باشد',
+            onclick: async (e) => lockBtn(e.currentTarget, async () => {
+              if (!(await confirmModal({ title: 'حذف کامل همکار', message: `«${s.fullName}» به‌کلی پاک می‌شود و دیگر وارد نمی‌شود — برای ثبت‌های اشتباه یا تکراری. اگر نوبت/سابقهٔ کاری دارد حذف ممکن نیست (از «غیرفعال‌سازی» استفاده کنید). برگشت ندارد.`, confirmLabel: 'حذف کن', danger: true }))) return;
+              try {
+                await api.del(`/api/staff/${s.id}`);
+                toast('همکار حذف شد', 'success');
+                ctl.remove(s.id); // — جمع‌شدن نرم همان ردیف
+              } catch (err) { toastError(err); }
+            })
+          }, icon('trash', 15))
+        )
+    }
+  ];
+  const colCount = columns.length;
+  const thead = el('thead', {}, el('tr', {}, columns.map((c) => el('th', { scope: 'col', align: c.align ? c.align : null, style: c.align ? { textAlign: c.align } : null }, c.label))));
+  const tbody = el('tbody');
+  const table = el('div', { class: 'table-wrap' }, el('table', { class: 'table' }, thead, tbody));
+
+  function matchesFilter(s) {
+    if (filter === 'true') return Boolean(s.active);
+    if (filter === 'false') return !s.active;
+    return true;
+  }
+
+  function rowEl(s) {
+    return el(
+      'tr',
+      { dataset: { id: String(s.id) } },
+      columns.map((c) =>
+        el('td', { style: c.align ? { textAlign: c.align } : null, dataset: { label: c.label } }, c.render ? c.render(s) : s[c.key] ?? '—')
+      )
+    );
+  }
+
+  function emptyRow() {
+    return el('tr', {}, el('td', { colspan: colCount, style: { padding: 'var(--sp-2)' } },
+      emptyState({
+        iconName: 'users',
+        title: 'هنوز کارمندی ثبت نشده',
+        hint: 'اولین کارمند (مدیر، درمانگر یا منشی) را اضافه کنید.',
+        actionLabel: 'همکار جدید',
+        onAction: () => openStaffForm(null, ctl)
+      })));
+  }
+
+  function renderTbody(list) {
+    rows = list;
+    countBadge.textContent = `نتیجه: ${fa(list.length)} نفر`;
+    tbody.replaceChildren(...(list.length ? list.map((s) => rowEl(s)) : [emptyRow()]));
+  }
+
+  let gen = 0; // — گارد نسل: پاسخ کهنه رندر نمی‌شود
+  async function refreshRows() {
+    const myGen = ++gen;
+    try {
+      const res = await api.get(`/api/staff${filter ? `?active=${filter}` : ''}`);
+      if (myGen !== gen || !tbody.isConnected) return;
+      renderTbody(res.data ?? []);
+    } catch (err) {
+      if (myGen !== gen || !tbody.isConnected) return;
+      tbody.replaceChildren(el('tr', {}, el('td', { colspan: colCount, style: { padding: 'var(--sp-2)' } },
+        emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: String(err?.message ?? err) }))));
+    }
+  }
+
+  function ensureNonEmptyPaint() {
+    setTimeout(() => {
+      if (tbody.isConnected && !tbody.querySelector('tr[data-id]')) renderTbody(rows);
+    }, 320);
+  }
+
+  const ctl = {
+    /* پچ درجای یک ردیف از بدنهٔ پاسخ mutation — بدون GET، بدون اسکلت */
+    patch(s) {
+      if (!s?.id || !tbody.isConnected) { ctl.quietSync(); return; }
+      rows = rows.map((r) => (r.id === s.id ? s : r));
+      const old = tbody.querySelector(`tr[data-id="${CSS.escape(String(s.id))}"]`);
+      if (!old) { ctl.quietSync(); return; } // با فیلتر فعلی تازه وارد دید شده
+      if (!matchesFilter(s)) { collapseRemove(old); ensureNonEmptyPaint(); return; } // از فیلتر خارج شد
+      const fresh = rowEl(s);
+      old.replaceWith(fresh);
+      flashNode(fresh);
+    },
+    /* حذف کامل (۲۰۴ بی‌بدنه): جمع‌شدن نرم همان ردیف */
+    remove(id) {
+      rows = rows.filter((r) => r.id !== id);
+      const old = tbody.querySelector(`tr[data-id="${CSS.escape(String(id))}"]`);
+      if (old) { collapseRemove(old); ensureNonEmptyPaint(); }
+    },
+    /* همگام‌سازی بی‌صدا: GET با فیلتر فعلی — فقط tbody */
+    quietSync: refreshRows
+  };
+
+  const countBadge = el('span', { class: 'badge badge--neutral', title: 'شمار نتیجهٔ فیلتر فعلی' }); /* S9-05 */
+
   const toolbar = el(
     'div',
     { class: 'toolbar' },
-    el('select', { class: 'select', 'aria-label': 'فیلتر وضعیت کارکنان', onchange: (e) => { filter = e.target.value; renderStaff(container); } }, /* S9-07 */
+    el('select', { class: 'select', 'aria-label': 'فیلتر وضعیت کارکنان', onchange: (e) => { filter = e.target.value; refreshRows(); } }, /* S9-07 */
       el('option', { value: '', selected: filter === '' }, 'همه کارکنان'),
       el('option', { value: 'true', selected: filter === 'true' }, 'فقط فعال'),
       el('option', { value: 'false', selected: filter === 'false' }, 'فقط غیرفعال')
     ),
     el('div', { class: 'spacer' }),
-    el('button', { class: 'btn btn--primary btn--sm', onclick: () => openStaffForm(null, container) }, icon('plus', 16), 'همکار جدید')
+    el('button', { class: 'btn btn--primary btn--sm', onclick: () => openStaffForm(null, ctl) }, icon('plus', 16), 'همکار جدید')
   );
-
-  const table = dataTable({
-    columns: [
-      {
-        key: 'fullName',
-        label: 'نام',
-        render: (s) => el('div', {},
-          el('div', { class: 'cell-main' }, s.fullName),
-          el('div', { class: 'cell-sub', dir: 'ltr', style: { textAlign: 'end' } }, `@${s.username ?? '—'}`)
-        )
-      },
-      {
-        key: 'contact',
-        label: 'تلفن / کد ملی',
-        render: (s) => el('div', { class: 'cell-sub' },
-          s.phone
-            ? el('div', { dir: 'ltr', style: { textAlign: 'end' } }, phoneCell(s.phone, `تماس با همکار ${s.fullName} — ${fa(s.phone)}`))
-            : el('div', { dir: 'ltr', style: { textAlign: 'end' } }, '—'),
-          el('div', { dir: 'ltr', style: { textAlign: 'end' } }, fa(s.nationalId ?? '—'))
-        )
-      },
-      { key: 'role', label: 'نقش', render: (s) => statusBadge(s.role) },
-      { key: 'notify', label: 'اعلان بله', render: (s) => el('span', { class: `badge ${s.notifyEnabled ? 'badge--success' : 'badge--neutral'}` }, s.notifyEnabled ? 'دریافت می‌کند' : 'دریافت نمی‌کند') },
-      { key: 'active', label: 'وضعیت', render: (s) => statusBadge(s.active ? 'active' : 'inactive') },
-      { key: 'createdAt', label: 'تاریخ ایجاد', render: (s) => (s.createdAt ? formatJalaliNumeric(tehranYmdOfIso(s.createdAt)) : '—') }, // مرز روز تهران (حساب‌های بعد ۲۰:۳۰ یک روز جابه‌جا نشان داده می‌شد)
-      {
-        key: 'actions',
-        label: 'عملیات',
-        align: 'end',
-        render: (s) =>
-          el('div', { class: 'cell-actions' },
-            el('button', { class: 'btn btn--ghost btn--sm', title: 'بازه‌های کاری', 'aria-label': 'بازه‌های کاری', onclick: () => { location.hash = `#/settings?tab=staff-hours&staff=${s.id}`; } }, icon('clock', 15)),
-            el('button', { class: 'btn btn--ghost btn--sm', title: 'کد اتصال بات', 'aria-label': 'کد اتصال بات', onclick: () => createBotLink(s, container) }, icon('link', 15)),
-            el('button', { class: 'btn btn--ghost btn--sm', title: 'ویرایش', 'aria-label': 'ویرایش', onclick: () => openStaffForm(s, container) }, icon('edit', 15)),
-            s.active
-              ? el('button', {
-                  class: 'btn btn--danger btn--sm', title: 'غیرفعال‌سازی', 'aria-label': 'غیرفعال‌سازی',
-                  onclick: async () => {
-                    if (!(await confirmModal({ title: 'غیرفعال‌سازی کارمند', message: `«${s.fullName}» غیرفعال می‌شود و دیگر نمی‌تواند وارد شود.`, confirmLabel: 'غیرفعال کن', danger: true }))) return;
-                    try {
-                      await api.post(`/api/staff/${s.id}/deactivate`);
-                      invalidateStudentFormMeta();
-                      toast('کارمند غیرفعال شد', 'success');
-                      renderStaff(container);
-                    } catch (err) { toastError(err); }
-                  }
-                }, icon('x', 15))
-              : el('button', {
-                  class: 'btn btn--soft btn--sm', title: 'فعال‌سازی', 'aria-label': 'فعال‌سازی',
-                  onclick: async () => {
-                    try {
-                      await api.post(`/api/staff/${s.id}/activate`);
-                      invalidateStudentFormMeta();
-                      toast('کارمند فعال شد', 'success');
-                      renderStaff(container);
-                    } catch (err) { toastError(err); }
-                  }
-                }, icon('check', 15)),
-            el('button', {
-              class: 'btn btn--danger btn--sm', title: 'حذف کامل — فقط اگر هیچ سابقه‌ای نداشته باشد', 'aria-label': 'حذف کامل — فقط اگر هیچ سابقه‌ای نداشته باشد',
-              onclick: async () => {
-                if (!(await confirmModal({ title: 'حذف کامل همکار', message: `«${s.fullName}» به‌کلی پاک می‌شود و دیگر وارد نمی‌شود — برای ثبت‌های اشتباه یا تکراری. اگر نوبت/سابقهٔ کاری دارد حذف ممکن نیست (از «غیرفعال‌سازی» استفاده کنید). برگشت ندارد.`, confirmLabel: 'حذف کن', danger: true }))) return;
-                try {
-                  await api.del(`/api/staff/${s.id}`);
-                  toast('همکار حذف شد', 'success');
-                  renderStaff(container);
-                } catch (err) { toastError(err); }
-              }
-            }, icon('trash', 15))
-          )
-      }
-    ],
-    rows,
-    empty: {
-      iconName: 'users',
-      title: 'هنوز کارمندی ثبت نشده',
-      hint: 'اولین کارمند (مدیر، درمانگر یا منشی) را اضافه کنید.',
-      actionLabel: 'همکار جدید',
-      onAction: () => openStaffForm(null, container)
-    }
-  });
 
   const boardMount = el('div', {});
 
   container.replaceChildren(
     el('div', { class: 'page-head' },
       el('h2', { class: 'page-head__title' }, 'کارکنان') /* S9-04 */,
-      el('span', { class: 'badge badge--neutral', title: 'شمار نتیجهٔ فیلتر فعلی' }, `نتیجه: ${fa(rows.length)} نفر`) /* S9-05 */
+      countBadge
     ),
     toolbar,
     el('div', { class: 'card card__body--flush card--table' }, table),
@@ -127,9 +203,10 @@ export async function renderStaff(container) {
     boardMount
   );
   renderProgressBoardCard(boardMount);
+  renderTbody(rows);
 }
 
-function openStaffForm(member, container) {
+function openStaffForm(member, ctl) {
   // ناظر فقط نام کاربری + رمز: تلفن/کد ملی برای نقش ناظر اختیاری است و با تغییر نقش زنده عوض می‌شود
   const isSupervisorRole = (r) => r === 'supervisor';
   const phoneField = {
@@ -184,13 +261,14 @@ function openStaffForm(member, container) {
         role: values.role
       };
       if (member) {
-        await api.patch(`/api/staff/${member.id}`, {
+        const res = await api.patch(`/api/staff/${member.id}`, {
           ...base,
           notify_enabled: values.notify_enabled,
           password: values.password ? values.password : undefined
         });
         invalidateStudentFormMeta();
         toast('تغییرات ذخیره شد', 'success');
+        ctl.patch(res.data); // — همان ردیف درجا؛ بدون rebuild فهرست و تابلو
       } else {
         await api.post('/api/staff', {
           ...base,
@@ -198,14 +276,13 @@ function openStaffForm(member, container) {
         });
         invalidateStudentFormMeta();
         toast('کارمند اضافه شد', 'success');
+        ctl.quietSync(); // جای ردیف تازه را ترتیب سرور تعیین می‌کند — همگام‌سازی بی‌صدا
       }
-      renderStaff(container);
     }
   });
 }
 
-async function createBotLink(member, container) {
-  void container;
+async function createBotLink(member) {
   try {
     const res = await api.post('/api/notifications/staff-links', { staff_id: member.id });
     await openBotLinkModal(res.data.code, {
