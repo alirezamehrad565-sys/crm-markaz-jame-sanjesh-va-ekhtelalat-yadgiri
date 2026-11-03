@@ -61,6 +61,7 @@ interface BoardApptRow {
   status: 'scheduled' | 'cancelled';
   note: string | null;
   version: number;
+  session_type: string | null;
   student_id: string | null;
   student_attendance: string | null;
   student_name: string | null;
@@ -90,6 +91,7 @@ export function rowsToAppointments(rows: BoardApptRow[]): WorkingDayAppointment[
         status: r.status,
         note: r.note,
         version: r.version,
+        sessionType: r.session_type ?? null,
         students: []
       };
       byId.set(r.id, appt);
@@ -129,7 +131,7 @@ export function createWorkingDayService(deps: WorkingDayDeps): WorkingDayService
           [weekday]
         ),
         db.query<BoardApptRow>(
-          `SELECT a.id, a.staff_id, a.start_at, a.end_at, a.status, a.note, a.version,
+          `SELECT a.id, a.staff_id, a.start_at, a.end_at, a.status, a.note, a.version, a.session_type,
                   s.student_id, s.attendance AS student_attendance,
                   st.first_name || ' ' || st.last_name AS student_name,
                   st.guardian_phone AS student_phone

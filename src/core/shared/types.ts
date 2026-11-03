@@ -771,6 +771,7 @@ export interface WorkingDayAppointment {
   note: string | null;
   version: number;
   students: WorkingDayAppointmentStudent[];
+  sessionType?: string | null; /* ۱.۲۵.۰: نوع جلسه روی بورد روز کاری — قبلاً SELECT نمی‌شد و چیپ نوع هرگز رندر نمی‌شد */
 }
 
 export interface WorkingDayStaffColumn {
