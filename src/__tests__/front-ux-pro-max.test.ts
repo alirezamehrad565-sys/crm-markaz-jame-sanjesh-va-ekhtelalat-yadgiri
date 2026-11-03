@@ -117,8 +117,8 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(students).toMatch(/lockBtn\(e\.currentTarget, onclick\)/);
     // همهٔ اقداماتِ منوی سابق، مستقیم روی ردیف در دسترس‌اند (پروفایل = کلیک روی ردیف)
     expect(students).toMatch(/openStudentForm\(\{ student: s/);
-    expect(students).toMatch(/openRowTagEditor\(s, container\)/);
-    expect(students).toMatch(/openRowFocusEditor\(s, container\)/);
+    expect(students).toMatch(/openRowTagEditor\(s, ctl\)/); // — ۱.۲۳.۰: پچ درجای همان ردیف
+    expect(students).toMatch(/openRowFocusEditor\(s\)/);
     expect(students).toMatch(/openStudentDelete\(s, \{ onDeleted/);
     // کارت پروفایل: خوشهٔ دایره‌ها هرگز از درون نمی‌شکند — دایرهٔ قرمز حذف کنار CTA «ثبت رویداد» نمی‌افتد
     expect(views).toMatch(/\.card-circles\s*\{[^}]*flex-wrap:\s*nowrap/);
@@ -226,5 +226,31 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     const heroIdx = ther.indexOf('heroScore(');
     expect(infoIdx).toBeGreaterThan(-1);
     expect(heroIdx).toBeGreaterThan(infoIdx);
+  });
+
+  test('۱.۲۳.۰ — فاز ۴ جریان پیوسته: سنجش روزانه (ثبت زنجیره‌ای بدون شکستن فوکوس) + فهرست دانش‌آموزان (ترکیبی)', () => {
+    const screening = readFileSync(join(__dirname, '../../public/assets/js/views/screening.js'), 'utf8');
+    // ثبت روزانه: شِل یک‌بار؛ POST = درج بالای لیست از بدنهٔ پاسخ سرور (ORDER BY جدیدترین)
+    expect(screening).toMatch(/entries = \[res\.data, \.\.\.entries\]/);
+    // PATCH = پچ همان ردیف + فلش توجه؛ DELETE = جمع‌شدن نرم
+    expect(screening).toMatch(/old\.replaceWith\(fresh\);\s*\n\s*flashNode\(fresh\)/);
+    expect(screening).toMatch(/collapseRemove\(old\)/);
+    // ریتم ثبت زنجیره‌ای: بعد از هر ثبت/ویرایش فوکوس باکس حفظ می‌شود
+    expect(screening).toMatch(/input\.focus\(\)/);
+    // گزارش/KPI: کارت فیلتر یک‌بار مونت، فقط ناحیهٔ نتایج عوض می‌شود؛ هک refocus حذف شد
+    expect(screening).toMatch(/resultsZone\.replaceChildren\(kpis, chartCard, breakdownCard, followCard, listCard\)/);
+    expect(screening).not.toMatch(/searchRefocus/);
+
+    const students = readFileSync(join(__dirname, '../../public/assets/js/views/students.js'), 'utf8');
+    // فهرست دانش‌آموزان فعال+غیرفعال: آرشیو/فعال‌سازی = پچ بج وضعیت از پاسخ سرور، نه rebuild
+    expect(students).toMatch(/ctl\.patch\(res\.data\)/);
+    expect(students).toMatch(/ctl\.patch\(student\)/); // برچسب‌ها از آبجکت محلی
+    // حذف = جمع‌شدن نرم + کش صفحهٔ جاری به‌روز (رفع شبح ensureNonEmptyPaint)
+    expect(students).toMatch(/collapseRemove\(old\)/);
+    expect(students).toMatch(/meta: \{ \.\.\.\(result\.meta \?\? \{\}\), total/);
+    // ایجاد/ویرایش = همگام‌سازی بی‌صدای فقط-tbody — هیچ مسیری کل نما را از صفر نمی‌سازد
+    expect(students).toMatch(/quietSync: refreshRows/);
+    expect(students).not.toMatch(/renderStudents\(container\)/);
+    expect(students).not.toMatch(/skeletonState\('table', 4\)/); // اسکلت از مسیر post-mutation حذف شد
   });
 });

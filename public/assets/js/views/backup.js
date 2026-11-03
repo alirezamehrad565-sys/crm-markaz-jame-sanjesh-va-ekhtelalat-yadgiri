@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { fa, formatJalaliDateTime } from '../format.js';
-import { el, icon, toast, toastError, loadingState, errorState, skeletonState } from '../ui.js';
+import { el, icon, toast, toastError, loadingState, errorState, skeletonState, flashNode } from '../ui.js';
 
 // ─── پشتیبان‌گیری و بازیابی () + ارسال به آیدی بله () — فقط مدیر مرکز ───
 // مکانیک: گرفتن یک فایل JSON از کل داده‌ها + بازیابی جایگزینی‌کل با دو گارد امنیتی
@@ -311,14 +311,17 @@ export async function renderBackup(container) {
   ));
 
   // ─── وضعیت داده‌ها ───
+  // ۱.۲۳.۰: چیپ «آخرین دریافت پشتیبان» مرجع زنده شد — بعد از دانلود درجا به‌روز می‌شود
+  // (reload کل صفحه که فقط برای همین چیپ بود حذف شد)
   const lastAt = localStorage.getItem(LAST_BACKUP_KEY);
+  const lastChip = el('span', { class: 'chip' },
+    lastAt ? `آخرین دریافت پشتیبان در این مرورگر: ${formatJalaliDateTime(lastAt)}` : 'در این مرورگر هنوز پشتیبانی گرفته نشده');
   wrap.appendChild(section('وضعیت داده‌ها', 'dashboard', null,
     el('div', { class: 'chip-row' },
       el('span', { class: 'chip' }, `نسخهٔ سامانه: ${fa(status.version)}`),
       el('span', { class: 'chip' }, `${fa(status.tableCount)} جدول داده`),
       el('span', { class: 'chip' }, `${fmtNum(status.totalRows)} ردیف اطلاعات`),
-      el('span', { class: 'chip' },
-        lastAt ? `آخرین دریافت پشتیبان در این مرورگر: ${formatJalaliDateTime(lastAt)}` : 'در این مرورگر هنوز پشتیبانی گرفته نشده')
+      lastChip
     ),
     status.recent.length > 0
       ? el('div', { style: { marginTop: 'var(--sp-3)' } },
@@ -341,7 +344,10 @@ export async function renderBackup(container) {
     try {
       await downloadBackup(includeFiles);
       toast('فایل پشتیبان دانلود شد — جای امنی نگه‌اش دارید', 'success');
-      setTimeout(() => location.reload(), 700);
+      lastChip.textContent = `آخرین دریافت پشتیبان در این مرورگر: ${formatJalaliDateTime(localStorage.getItem(LAST_BACKUP_KEY))}`;
+      flashNode(lastChip); // — ۱.۲۳.۰: به‌جای reload کل صفحه، همان چیپ درجا با فلش توجه
+      downloadBtn.disabled = false;
+      downloadBtn.replaceChildren(icon('download', 18), ' دریافت فایل پشتیبان');
     } catch (err) {
       toastError(err);
       downloadBtn.disabled = false;
