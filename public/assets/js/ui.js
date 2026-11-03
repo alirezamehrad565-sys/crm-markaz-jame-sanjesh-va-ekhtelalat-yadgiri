@@ -284,6 +284,29 @@ export async function lockBtn(btn, fn) {
   }
 }
 
+/* ۱.۲۱.۰ — حذف نرم با جمع‌شدن ارتفاع (جعبه‌ابزار مشترک جریان پیوسته).
+   الگوی ۱.۱۹/۱.۲۰ (روز کاری/نوبت‌ها) عمومی شد: گره با ارتفاع فعلی جمع می‌شود،
+   کلاس is-resolving محو‌سازی می‌دهد و پس از ۲۶۰ms از DOM خارج می‌شود —
+   هیچ rebuild کل نما؛ همسایه‌ها سرجایشان می‌مانند. */
+export function collapseRemove(elm) {
+  if (!elm || !elm.isConnected) return false;
+  elm.style.height = `${Math.round(elm.getBoundingClientRect().height)}px`;
+  elm.style.overflow = 'hidden';
+  elm.style.pointerEvents = 'none';
+  requestAnimationFrame(() => {
+    elm.classList.add('is-resolving');
+    setTimeout(() => elm.remove(), 260);
+  });
+  return true;
+}
+
+/* ۱.۲۱.۰ — فلش کوتاه توجه روی گره به‌روزشده (پچ درجای ردیف/کارت) — بدون اسکلت، بدون پرش */
+export function flashNode(elm, cls = 'is-flashed', ms = 1200) {
+  if (!elm || !elm.isConnected) return;
+  elm.classList.add(cls);
+  setTimeout(() => elm.classList.remove(cls), ms);
+}
+
 const modalStack = [];
 let modalSeq = 0; // — شمارندهٔ شناسهٔ یکتای عنوان مودال (aria-labelledby)
 let formFieldSeq = 0; // — شمارندهٔ شناسهٔ یکتای فیلدهای formModal (اتصال label به کنترل)
