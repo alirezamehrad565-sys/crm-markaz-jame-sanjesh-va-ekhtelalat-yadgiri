@@ -1,6 +1,6 @@
 import { api, qs } from '../api.js';
 import { fa, gradeLabel, isPlaceholderNid } from '../format.js';
-import { el, icon, confirmModal, toast, toastError, dataTable, statusBadge, skeletonState, emptyState, callBadge, lockBtn } from '../ui.js';
+import { el, icon, confirmModal, toast, toastError, statusBadge, skeletonState, emptyState, callBadge, collapseRemove, flashNode, lockBtn } from '../ui.js';
 import { fetchTags, tagChipsPreview, openTagEditor } from '../tagging.js';
 import { openFocusEditor } from '../student-focus.js'; // درخت هدف در پروفایل
 import { openStudentForm } from '../student-form.js';
@@ -73,18 +73,16 @@ export async function renderStudents(container, ctx) {
 
   let result;
   try {
-    result = await api.get(`/api/students${qs({
-      query: local.query || undefined,
-      school_id: local.schoolId || undefined,
-      tag_id: local.tagId || undefined,
-      owner_id: local.ownerId || undefined,
-      page: local.page,
-      page_size: local.pageSize
-    })}`);
+    result = await fetchPage();
   } catch (err) {
     container.replaceChildren(emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: err.message }));
     return;
   }
+
+  /* —— ۱.۲۳.۰ جریان ترکیبی (زبان ۱.۱۹–۱.۲۲): شِل (جستجو/فیلترها/جدول/پیجر) یک‌بار مونت می‌شود؛
+     برچسب‌ها = پچ همان ردیف از آبجکت محلی، آرشیو/فعال‌سازی = پچ بج وضعیت از پاسخ سرور
+     (این لیست فعال‌ها و غیرفعال‌ها را با هم نشان می‌دهد)، حذف = جمع‌شدن نرم،
+     ایجاد/ویرایش = همگام‌سازی بی‌صدای فقط-tbody. فیلتر/جستجو/صفحه‌بندی هم فقط tbody. —— */
 
   const schoolName = (id) => local.schools.find((s) => s.id === id)?.name ?? '—';
   const classInfo = (s) => {
@@ -96,15 +94,102 @@ export async function renderStudents(container, ctx) {
   };
   const ownerName = (id) => local.staff.find((s) => s.id === id)?.fullName ?? null;
   const ownerBadgeLabel = (id) => (id === session.user?.staffId ? 'خود شما' : ownerName(id) ?? 'همکار');
+  const hasFilter = () => Boolean(local.query || local.schoolId || local.tagId || local.ownerId);
 
-  /* UX-ممیزی گلایهٔ ۳: هر تایپ کل نما را اسکلت می‌کرد و input بازسازی می‌شد (افت فوکوس + هک refocus)؛
-     اکنون فقط ناحیهٔ جدول ترسیم مجدد می‌شود — الگوی global-search.js: گارد پاسخ کهنه + حداقل ۲ نویسه + اسپینر درون‌پنلی */
-  const tableZone = el('div', {});
+  const columns = [
+    {
+      key: 'name', label: 'نام',
+      render: (s) => el('div', {},
+        el('div', { class: 'cell-main' }, `${s.firstName} ${s.lastName}`),
+        s.grade ? el('div', { class: 'cell-sub' }, gradeLabel(s.grade)) : null
+      )
+    },
+    { key: 'nationalId', label: 'کد ملی', render: (s) => el('span', { dir: 'ltr' }, isPlaceholderNid(s.nationalId) ? '—' : fa(s.nationalId)) },
+    {
+      key: 'schoolId', label: 'مدرسه / کلاس',
+      render: (s) => el('div', {},
+        el('div', { class: 'cell-main' }, schoolName(s.schoolId)),
+        classInfo(s) ? el('div', { class: 'cell-sub' }, classInfo(s)) : null
+      )
+    },
+    { key: 'tags', label: 'برچسب‌ها', render: (s) => tagChipsPreview(s.tags, 2) }, /* ۱.۱۶.۰: پیش‌نمایش ۲ چیپ — جا برای دایره‌های اقدام بدون اسکرول افقی */
+    {
+      key: 'owner', label: 'مسئول پرونده',
+      render: (s) => s.ownerStaffId
+        ? el('span', { class: 'cell-owner', title: 'پرونده به این همکار سپرده شده — در لیست دانش‌آموزهای او دیده می‌شود' },
+            hueDot(s.ownerStaffId, 8),
+            el('span', { class: 'badge badge--accent' }, ownerBadgeLabel(s.ownerStaffId)))
+        : el('span', { class: 'cell-sub', title: 'هنوز مسئولی تعیین نشده' }, '—')
+    },
+    { key: 'guardianPhone', label: 'تلفن ولیّ', render: (s) => s.guardianPhone
+      ? el('span', { class: 'cell-phone' },
+          el('span', { dir: 'ltr' }, fa(s.guardianPhone)),
+          callBadge(s.guardianPhone, `تماس با ولیّ ${s.firstName} ${s.lastName} — ${fa(s.guardianPhone)}`))
+      : el('span', { class: 'cell-sub' }, '—') },
+    {
+      key: 'assessmentCount', label: 'رویداد', align: 'center',
+      render: (s) => (s.assessmentCount ?? 0) > 0
+        ? el('span', {
+            class: 'badge badge--accent',
+            title: `${fa(s.assessmentCount)} رویداد/گزارش ثبت‌شده برای این دانش‌آموز`
+          }, fa(s.assessmentCount))
+        : el('span', { class: 'cell-sub', title: 'هنوز رویدادی ثبت نشده' }, '—')
+    },
+    {
+      key: 'active', label: 'وضعیت',
+      render: (s) => statusBadge(s.active ? 'active' : 'inactive')
+    }
+  ];
+
+  if (isOffice()) {
+    /* ۱.۱۶.۰ — به درخواست کاربر: سیستم مودال‌محورِ منوی ⋯ حذف شد — دکمه‌ها مستقیم سرِ ردیف‌اند.
+       ترتیب: امن‌ها اول (ویرایش/برچسب/هدف/آرشیو)؛ حذفِ مخرب همیشه آخری با فاصلهٔ ایمن اضافه.
+       هر دکمه قفل مشغولی واحد lockBtn دارد (ضد اسپم/دوبارکلیک). دسترسی‌ها دست‌نخورده ماند. */
+    const rowCircle = (iconName, label, onclick, danger = false) =>
+      el('button', {
+        class: `icon-circle${danger ? ' icon-circle--danger' : ''}`,
+        type: 'button', title: label, 'aria-label': label,
+        onclick: (e) => lockBtn(e.currentTarget, onclick)
+      }, icon(iconName, 14));
+    columns.push({
+      key: 'actions', label: 'عملیات', align: 'end',
+      render: (s) => el('div', { class: 'cell-actions row-circles', role: 'group', 'aria-label': `اقدامات ${s.firstName} ${s.lastName}` },
+        rowCircle('edit', 'ویرایش', () => openStudentForm({ student: s, onSaved: () => ctl.quietSync() })),
+        rowCircle('tag', 'برچسب‌ها', () => openRowTagEditor(s, ctl)),
+        rowCircle('target', 'هدف‌های شناختی', () => openRowFocusEditor(s)),
+        s.active
+          ? rowCircle('archive', 'انتقال به آرشیو — سابقهٔ پرونده حفظ می‌شود', () => archiveStudent(s))
+          : rowCircle('check', 'بازگشت به چرخهٔ فعال', () => activateStudent(s)),
+        rowCircle('trash', 'حذف کامل پرونده', () => openStudentDelete(s, { onDeleted: () => ctl.remove(s.id) }), true)
+      )
+    });
+  }
+
+  async function archiveStudent(s) {
+    if (!(await confirmModal({ title: 'انتقال به آرشیو', message: `«${s.firstName} ${s.lastName}» از چرخهٔ فعال خارج و به «آرشیو» (دیتابیس شهر) منتقل می‌شود. سابقهٔ پرونده حفظ می‌شود.`, confirmLabel: 'به آرشیو ببر', danger: true }))) return;
+    try {
+      const res = await api.post(`/api/students/${s.id}/deactivate`);
+      toast('به آرشیو منتقل شد — در ماژول «آرشیو» دیده می‌شود', 'success');
+      ctl.patch(res.data); // — این لیست غیرفعال‌ها را هم نشان می‌دهد؛ فقط بج وضعیت و دایرهٔ اقدام عوض می‌شود
+    } catch (err) { toastError(err); }
+  }
+
+  async function activateStudent(s) {
+    try {
+      const res = await api.post(`/api/students/${s.id}/activate`);
+      toast('دانش‌آموز دوباره فعال شد', 'success');
+      ctl.patch(res.data);
+    } catch (err) { toastError(err); }
+  }
+
+  const colCount = columns.length;
+  const thead = el('thead', {}, el('tr', {}, columns.map((c) => el('th', { scope: 'col', style: c.align ? { textAlign: c.align } : null }, c.label))));
+  const tbody = el('tbody');
+  const table = el('div', { class: 'table-wrap' }, el('table', { class: 'table' }, thead, tbody));
+  const legendZone = el('div', {});
+  const pagerZone = el('div', {});
+  const tableZone = el('div', {}, legendZone, el('div', { class: 'card card__body--flush card--table cv-block' }, table, pagerZone)); /* E2 */
   const countBadge = el('span', { class: 'badge badge--neutral' });
-
-  const searchInput = el('input', { class: 'input', type: 'search', placeholder: 'جستجو: نام یا کد ملی…', 'aria-label': 'جستجوی نام یا کد ملی', value: local.query }); /* S5-03 */
-  let searchSeq = 0;
-  let searchTimer = null;
 
   function fetchPage() {
     return api.get(`/api/students${qs({
@@ -117,18 +202,141 @@ export async function renderStudents(container, ctx) {
     })}`);
   }
 
-  async function refreshTable() {
-    const mySeq = ++searchSeq;
-    tableZone.replaceChildren(skeletonState('table', 4));
+  function rowEl(s) {
+    return el(
+      'tr',
+      {
+        class: ['is-clickable', s.ownerStaffId ? hueClass(s.ownerStaffId) : null].filter(Boolean).join(' ') || null,
+        dataset: { id: String(s.id) },
+        tabindex: '0',
+        // — ردیف کلیک‌پذیر با کیبورد (الگوی dataTable): Enter/Space روی خود ردیف
+        onkeydown: (e) => {
+          if (e.target !== e.currentTarget) return;
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          location.hash = `#/students/${s.id}`;
+        },
+        onclick: (e) => {
+          if (e.target.closest('button, a, input, select, textarea, label, [role="button"]')) return;
+          location.hash = `#/students/${s.id}`;
+        }
+      },
+      columns.map((c) =>
+        el('td', { style: c.align ? { textAlign: c.align } : null, dataset: { label: c.label } }, c.render ? c.render(s) : s[c.key] ?? '—')
+      )
+    );
+  }
+
+  function emptyRow() {
+    return el('tr', {}, el('td', { colspan: colCount, style: { padding: 'var(--sp-2)' } },
+      emptyState({
+        iconName: 'student',
+        title: hasFilter() ? 'نتیجه‌ای پیدا نشد' : (session.user?.role === 'therapist' ? 'هنوز دانش‌آموزی در لیست شما نیست' : 'هنوز دانش‌آموزی ثبت نشده'),
+        hint: hasFilter()
+          ? 'جستجو یا فیلتر را تغییر دهید.'
+          : (session.user?.role === 'therapist'
+            ? 'دانش‌آموزهای سپرده‌شده به شما یا دارای سابقهٔ جلسه این‌جا دیده می‌شوند — با «دانش‌آموز جدید برای من» پروندهٔ فعال بسازید.'
+            : 'اولین دانش‌آموز را با کد ملی معتبر اضافه کنید؛ پشت‌نوبتی‌ها در ماژول «لیست انتظار» ثبت می‌شوند.'),
+        actionLabel: hasFilter() || !canCreateStudent() ? undefined : 'دانش‌آموز جدید',
+        onAction: () => openStudentForm({ onSaved: () => ctl.quietSync() })
+      })));
+  }
+
+  function paintLegend(rows) {
+    let legend = null;
+    if (isOffice()) {
+      const ownerIds = [...new Set(rows.filter((s) => s.ownerStaffId).map((s) => s.ownerStaffId))];
+      const noOwner = rows.filter((s) => !s.ownerStaffId).length;
+      if (ownerIds.length >= 2) {
+        legend = el('div', { class: 'appt-legend' },
+          el('span', { class: 'appt-legend__name' }, 'رنگ ردیف = درمانگرِ مسئول پرونده'),
+          ownerIds.map((id) => el('span', { class: 'appt-legend__item' }, hueDot(id, 8), ownerName(id) ?? 'همکار')),
+          noOwner > 0
+            ? el('span', { class: 'appt-legend__item' }, el('span', { class: 'appt-legend__none', 'aria-hidden': 'true' }), 'بدون مسئول')
+            : null
+        );
+      }
+    }
+    legendZone.replaceChildren(...(legend ? [legend] : []));
+  }
+
+  function renderTbody(res) {
+    result = res;
+    const rows = res.data ?? [];
+    const meta = res.meta ?? { page: 1, totalPages: 1, total: rows.length };
+    countBadge.textContent = `${fa(meta.total)} نفر`;
+    tbody.replaceChildren(...(rows.length ? rows.map((s) => rowEl(s)) : [emptyRow()]));
+    paintLegend(rows);
+
+    /* UX-ممیزی P3: پیجر «صفحه ۱ از ۱» در لیست‌های تک‌صفحه‌ای حذف شد */
+    pagerZone.replaceChildren(
+      ...(meta.totalPages > 1
+        ? [el('div', { class: 'pager' },
+            el('span', {}, `صفحه ${fa(meta.page)} از ${fa(meta.totalPages)} · ${fa(meta.total)} نفر`),
+            el('button', { class: 'btn btn--ghost btn--sm', disabled: meta.page <= 1, onclick: () => { local.page -= 1; refreshRows(); } }, 'قبلی'),
+            el('button', { class: 'btn btn--ghost btn--sm', disabled: meta.page >= meta.totalPages, onclick: () => { local.page += 1; refreshRows(); } }, 'بعدی'))]
+        : [])
+    );
+  }
+
+  let gen = 0; // — گارد نسل: پاسخ کهنه رندر نمی‌شود (تایپ/فیلتر سریع)
+  async function refreshRows() {
+    const myGen = ++gen;
     try {
       const r = await fetchPage();
-      if (mySeq !== searchSeq) return; // پاسخ کهنه — کاربر ادامه تایپ/فیلتر زده
-      drawTable(r);
+      if (myGen !== gen || !tbody.isConnected) return; // پاسخ کهنه — کاربر ادامه تایپ/فیلتر زده
+      renderTbody(r);
     } catch (err) {
-      if (mySeq !== searchSeq) return;
-      tableZone.replaceChildren(emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: err.message }));
+      if (myGen !== gen || !tbody.isConnected) return;
+      tbody.replaceChildren(el('tr', {}, el('td', { colspan: colCount, style: { padding: 'var(--sp-2)' } },
+        emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: err.message }))));
     }
   }
+
+  function ensureNonEmptyPaint() {
+    setTimeout(() => {
+      if (tbody.isConnected && !tbody.querySelector('tr[data-id]')) renderTbody(result);
+    }, 320);
+  }
+
+  const ctl = {
+    /* پچ درجای یک ردیف — همسایه‌ها، اسکرول و فوکوس سرجایشان */
+    patch(s) {
+      if (!s?.id || !tbody.isConnected) { ctl.quietSync(); return; }
+      const list = result?.data ?? [];
+      const idx = list.findIndex((r) => String(r.id) === String(s.id));
+      if (idx >= 0) list[idx] = s;
+      const old = tbody.querySelector(`tr[data-id="${CSS.escape(String(s.id))}"]`);
+      if (!old) { ctl.quietSync(); return; }
+      const fresh = rowEl(s);
+      old.replaceWith(fresh);
+      flashNode(fresh);
+    },
+    /* حذف کامل (پاسخ بدون رکورد): جمع‌شدن نرم همان ردیف + کش صفحهٔ جاری به‌روز (رفع شبح ۱.۲۲) */
+    remove(id) {
+      if (result?.data) {
+        result = {
+          ...result,
+          data: (result.data ?? []).filter((s) => String(s.id) !== String(id)),
+          meta: { ...(result.meta ?? {}), total: Math.max(0, (result.meta?.total ?? 1) - 1) }
+        };
+      }
+      const old = tbody.querySelector(`tr[data-id="${CSS.escape(String(id))}"]`);
+      if (old) { collapseRemove(old); ensureNonEmptyPaint(); }
+      ctl.quietSyncCount();
+    },
+    /* همگام‌سازی بی‌صدای فهرست + پیجر — بدون اسکلت، بدون دست‌زدن به نوار ابزار */
+    quietSync: refreshRows,
+    /* فقط شمارندهٔ سربرگ (پس از حذف؛ پیجر همان‌جا می‌ماند تا انیمیشن سالم بماند) */
+    quietSyncCount() {
+      api.get(`/api/students${qs({ query: local.query || undefined, school_id: local.schoolId || undefined, tag_id: local.tagId || undefined, owner_id: local.ownerId || undefined, page: 1, page_size: 1 })}`)
+        .then((res) => { countBadge.textContent = `${fa(res.meta?.total ?? 0)} نفر`; })
+        .catch(() => {});
+    }
+  };
+
+  const searchInput = el('input', { class: 'input', type: 'search', placeholder: 'جستجو: نام یا کد ملی…', 'aria-label': 'جستجوی نام یا کد ملی', value: local.query }); /* S5-03 */
+  let searchTimer = null;
 
   function runSearch() {
     const v = searchInput.value.trim();
@@ -136,10 +344,12 @@ export async function renderStudents(container, ctx) {
     local.query = v;
     local.page = 1;
     if (v.length === 1) {
-      tableZone.replaceChildren(emptyState({ iconName: 'search', title: 'حداقل ۲ نویسه بنویسید…', hint: 'بخشی از نام خانوادگی یا کد ملی را وارد کنید.' }));
+      countBadge.textContent = '—';
+      tbody.replaceChildren(el('tr', {}, el('td', { colspan: colCount, style: { padding: 'var(--sp-2)' } },
+        emptyState({ iconName: 'search', title: 'حداقل ۲ نویسه بنویسید…', hint: 'بخشی از نام خانوادگی یا کد ملی را وارد کنید.' }))));
       return;
     }
-    refreshTable();
+    refreshRows();
   }
 
   searchInput.addEventListener('input', () => {
@@ -151,14 +361,14 @@ export async function renderStudents(container, ctx) {
     else if (e.key === 'Escape' && searchInput.value) { searchInput.value = ''; clearTimeout(searchTimer); runSearch(); }
   });
 
-  const schoolSel = el('select', { class: 'select', 'aria-label': 'فیلتر مدرسه', onchange: (e) => { local.schoolId = e.target.value; local.page = 1; refreshTable(); } }, /* S5-03 */
+  const schoolSel = el('select', { class: 'select', 'aria-label': 'فیلتر مدرسه', onchange: (e) => { local.schoolId = e.target.value; local.page = 1; refreshRows(); } }, /* S5-03 */
     el('option', { value: '' }, 'همه مدارس'),
     local.schools.map((s) => el('option', { value: s.id, selected: s.id === local.schoolId }, s.name))
   );
 
   let ownerChips = null;
   if (isOffice() && local.staff.length > 0) {
-    const pickOwner = (id) => { local.ownerId = id; local.page = 1; refreshTable(); };
+    const pickOwner = (id) => { local.ownerId = id; local.page = 1; refreshRows(); };
     if (local.staff.length > 5) {
       // درمانگرهای زیاد: فیلتر کشویی؛ نوار اسکرولی داخل تولبار با تعداد زیاد چیدمان را می‌شکست
       ownerChips = buildOwnerDropdown();
@@ -182,7 +392,7 @@ export async function renderStudents(container, ctx) {
   }
 
   const activeTag = local.tagId ? local.tags.find((t) => t.id === local.tagId) : null;
-  const tagFilter = local.tags.length > 0 ? buildTagDropdown(container) : null;
+  const tagFilter = local.tags.length > 0 ? buildTagDropdown() : null;
 
   const toolbar = el('div', { class: 'toolbar' },
     searchInput,
@@ -191,7 +401,7 @@ export async function renderStudents(container, ctx) {
     tagFilter,
     el('div', { class: 'spacer' }),
     canCreateStudent()
-      ? el('button', { class: 'btn btn--primary btn--sm', onclick: () => openStudentForm({ onSaved: () => renderStudents(container) }) }, icon('plus', 16), isOffice() ? 'دانش‌آموز جدید' : 'دانش‌آموز جدید برای من')
+      ? el('button', { class: 'btn btn--primary btn--sm', onclick: () => openStudentForm({ onSaved: () => ctl.quietSync() }) }, icon('plus', 16), isOffice() ? 'دانش‌آموز جدید' : 'دانش‌آموز جدید برای من')
       : null
   );
 
@@ -247,13 +457,15 @@ export async function renderStudents(container, ctx) {
     function pick(id) {
       panel.style.display = 'none';
       document.removeEventListener('mousedown', outside, true);
-      pickOwner(id);
+      local.ownerId = id;
+      local.page = 1;
+      refreshRows();
     }
 
     return root;
   }
 
-  function buildTagDropdown(container) {
+  function buildTagDropdown() {
     const panel = el('div', { class: 'dd__panel', style: { display: 'none' } });
     const btnLabel = el('span', {}, activeTag ? activeTag.name : 'همه برچسب‌ها');
     const btn = el('button', { class: `btn btn--soft btn--sm${activeTag ? ' is-active' : ''}`, type: 'button', 'aria-haspopup': 'listbox', 'aria-expanded': 'false', onclick: toggle }, /* S5-04 */
@@ -319,155 +531,12 @@ export async function renderStudents(container, ctx) {
       local.page = 1;
       panel.style.display = 'none';
       document.removeEventListener('mousedown', outside, true);
-      refreshTable();
+      btn.classList.toggle('is-active', Boolean(local.tagId));
+      btnLabel.textContent = local.tagId ? (local.tags.find((t) => t.id === local.tagId)?.name ?? 'همه برچسب‌ها') : 'همه برچسب‌ها';
+      refreshRows(); // — خود دکمهٔ دراپ‌داون درجا به‌روز شد؛ فقط tbody عوض می‌شود
     }
 
     return root;
-  }
-
-  const hasFilter = Boolean(local.query || local.schoolId || local.tagId || local.ownerId);
-  const columns = [
-    {
-      key: 'name', label: 'نام',
-      render: (s) => el('div', {},
-        el('div', { class: 'cell-main' }, `${s.firstName} ${s.lastName}`),
-        s.grade ? el('div', { class: 'cell-sub' }, gradeLabel(s.grade)) : null
-      )
-    },
-    { key: 'nationalId', label: 'کد ملی', render: (s) => el('span', { dir: 'ltr' }, isPlaceholderNid(s.nationalId) ? '—' : fa(s.nationalId)) },
-    {
-      key: 'schoolId', label: 'مدرسه / کلاس',
-      render: (s) => el('div', {},
-        el('div', { class: 'cell-main' }, schoolName(s.schoolId)),
-        classInfo(s) ? el('div', { class: 'cell-sub' }, classInfo(s)) : null
-      )
-    },
-    { key: 'tags', label: 'برچسب‌ها', render: (s) => tagChipsPreview(s.tags, 2) }, /* ۱.۱۶.۰: پیش‌نمایش ۲ چیپ — جا برای دایره‌های اقدام بدون اسکرول افقی */
-    {
-      key: 'owner', label: 'مسئول پرونده',
-      render: (s) => s.ownerStaffId
-        ? el('span', { class: 'cell-owner', title: 'پرونده به این همکار سپرده شده — در لیست دانش‌آموزهای او دیده می‌شود' },
-            hueDot(s.ownerStaffId, 8),
-            el('span', { class: 'badge badge--accent' }, ownerBadgeLabel(s.ownerStaffId)))
-        : el('span', { class: 'cell-sub', title: 'هنوز مسئولی تعیین نشده' }, '—')
-    },
-    { key: 'guardianPhone', label: 'تلفن ولیّ', render: (s) => s.guardianPhone
-      ? el('span', { class: 'cell-phone' },
-          el('span', { dir: 'ltr' }, fa(s.guardianPhone)),
-          callBadge(s.guardianPhone, `تماس با ولیّ ${s.firstName} ${s.lastName} — ${fa(s.guardianPhone)}`))
-      : el('span', { class: 'cell-sub' }, '—') },
-    {
-      key: 'assessmentCount', label: 'رویداد', align: 'center',
-      render: (s) => (s.assessmentCount ?? 0) > 0
-        ? el('span', {
-            class: 'badge badge--accent',
-            title: `${fa(s.assessmentCount)} رویداد/گزارش ثبت‌شده برای این دانش‌آموز`
-          }, fa(s.assessmentCount))
-        : el('span', { class: 'cell-sub', title: 'هنوز رویدادی ثبت نشده' }, '—')
-    },
-    {
-      key: 'active', label: 'وضعیت',
-      render: (s) => statusBadge(s.active ? 'active' : 'inactive')
-    }
-  ];
-
-  if (isOffice()) {
-    /* ۱.۱۶.۰ — به درخواست کاربر: سیستم مودال‌محورِ منوی ⋯ حذف شد — دکمه‌ها مستقیم سرِ ردیف‌اند.
-       همان زبان دایره‌های کارت پروفایل (۱.۱۵.۰) در مقیاس ردیف: دایره‌های سادهٔ ۳۰px (لمس ۳۸px).
-       ترتیب: امن‌ها اول (ویرایش/برچسب/هدف/آرشیو)؛ حذفِ مخرب همیشه آخری با فاصلهٔ ایمن اضافه.
-       باز شدن پروفایل مثل قبل با کلیک روی خود ردیف (dataTable روی کلیکِ دکمه‌ها گارد دارد).
-       هر دکمه قفل مشغولی واحد lockBtn دارد (ضد اسپم/دوبارکلیک). دسترسی‌ها دست‌نخورده ماند. */
-    const rowCircle = (iconName, label, onclick, danger = false) =>
-      el('button', {
-        class: `icon-circle${danger ? ' icon-circle--danger' : ''}`,
-        type: 'button', title: label, 'aria-label': label,
-        onclick: (e) => lockBtn(e.currentTarget, onclick)
-      }, icon(iconName, 14));
-    columns.push({
-      key: 'actions', label: 'عملیات', align: 'end',
-      render: (s) => el('div', { class: 'cell-actions row-circles', role: 'group', 'aria-label': `اقدامات ${s.firstName} ${s.lastName}` },
-        rowCircle('edit', 'ویرایش', () => openStudentForm({ student: s, onSaved: () => renderStudents(container) })),
-        rowCircle('tag', 'برچسب‌ها', () => openRowTagEditor(s, container)),
-        rowCircle('target', 'هدف‌های شناختی', () => openRowFocusEditor(s, container)),
-        s.active
-          ? rowCircle('archive', 'انتقال به آرشیو — سابقهٔ پرونده حفظ می‌شود', () => archiveStudent(s))
-          : rowCircle('check', 'بازگشت به چرخهٔ فعال', () => activateStudent(s)),
-        rowCircle('trash', 'حذف کامل پرونده', () => openStudentDelete(s, { onDeleted: () => refreshTable() }), true)
-      )
-    });
-  }
-
-  async function archiveStudent(s) {
-    if (!(await confirmModal({ title: 'انتقال به آرشیو', message: `«${s.firstName} ${s.lastName}» از چرخهٔ فعال خارج و به «آرشیو» (دیتابیس شهر) منتقل می‌شود. سابقهٔ پرونده حفظ می‌شود.`, confirmLabel: 'به آرشیو ببر', danger: true }))) return;
-    try {
-      await api.post(`/api/students/${s.id}/deactivate`);
-      toast('به آرشیو منتقل شد — در ماژول «آرشیو» دیده می‌شود', 'success');
-      refreshTable();
-    } catch (err) { toastError(err); }
-  }
-
-  async function activateStudent(s) {
-    try {
-      await api.post(`/api/students/${s.id}/activate`);
-      toast('دانش‌آموز دوباره فعال شد', 'success');
-      refreshTable();
-    } catch (err) { toastError(err); }
-  }
-
-  /* ۱.۱۵.۰ — جریان حذف به student-delete.js منتقل شد (مشترک با دکمهٔ دایره‌ای کارت پروفایل) */
-  function drawTable(result) {
-    const rows = result.data ?? [];
-    const meta = result.meta ?? { page: 1, totalPages: 1, total: rows.length };
-    countBadge.textContent = `${fa(meta.total)} نفر`;
-    const hasFilter = Boolean(local.query || local.schoolId || local.tagId || local.ownerId);
-
-    const table = dataTable({
-      columns,
-      rows,
-      onRowClick: (s) => { location.hash = `#/students/${s.id}`; },
-      rowClass: (s) => (s.ownerStaffId ? hueClass(s.ownerStaffId) : null),
-      empty: {
-        iconName: 'student',
-        title: hasFilter ? 'نتیجه‌ای پیدا نشد' : (session.user?.role === 'therapist' ? 'هنوز دانش‌آموزی در لیست شما نیست' : 'هنوز دانش‌آموزی ثبت نشده'),
-        hint: hasFilter
-          ? 'جستجو یا فیلتر را تغییر دهید.'
-          : (session.user?.role === 'therapist'
-            ? 'دانش‌آموزهای سپرده‌شده به شما یا دارای سابقهٔ جلسه این‌جا دیده می‌شوند — با «دانش‌آموز جدید برای من» پروندهٔ فعال بسازید.'
-            : 'اولین دانش‌آموز را با کد ملی معتبر اضافه کنید؛ پشت‌نوبتی‌ها در ماژول «لیست انتظار» ثبت می‌شوند.'),
-        actionLabel: hasFilter || !canCreateStudent() ? undefined : 'دانش‌آموز جدید',
-        onAction: () => openStudentForm({ onSaved: () => renderStudents(container) })
-      }
-    });
-
-    /* UX-ممیزی P3: پیجر «صفحه ۱ از ۱» در لیست‌های تک‌صفحه‌ای حذف شد */
-    const pager = meta.totalPages > 1
-      ? el('div', { class: 'pager' },
-          el('span', {}, `صفحه ${fa(meta.page)} از ${fa(meta.totalPages)} · ${fa(meta.total)} نفر`),
-          el('button', { class: 'btn btn--ghost btn--sm', disabled: meta.page <= 1, onclick: () => { local.page -= 1; refreshTable(); } }, 'قبلی'),
-          el('button', { class: 'btn btn--ghost btn--sm', disabled: meta.page >= meta.totalPages, onclick: () => { local.page += 1; refreshTable(); } }, 'بعدی'))
-      : null;
-
-    let legend = null;
-    if (isOffice()) {
-      const ownerIds = [...new Set(rows.filter((s) => s.ownerStaffId).map((s) => s.ownerStaffId))];
-      const noOwner = rows.filter((s) => !s.ownerStaffId).length;
-      if (ownerIds.length >= 2) {
-        legend = el('div', { class: 'appt-legend' },
-          el('span', { class: 'appt-legend__name' }, 'رنگ ردیف = درمانگرِ مسئول پرونده'),
-          ownerIds.map((id) => el('span', { class: 'appt-legend__item' }, hueDot(id, 8), ownerName(id) ?? 'همکار')),
-          noOwner > 0
-            ? el('span', { class: 'appt-legend__item' }, el('span', { class: 'appt-legend__none', 'aria-hidden': 'true' }), 'بدون مسئول')
-            : null
-        );
-      }
-    }
-
-    tableZone.replaceChildren(
-      ...[
-        legend,
-        el('div', { class: 'card card__body--flush card--table cv-block' }, table, pager) /* E2 */
-      ].filter(Boolean)
-    );
   }
 
   container.replaceChildren(
@@ -483,10 +552,10 @@ export async function renderStudents(container, ctx) {
     tableZone
   );
 
-  drawTable(result);
+  renderTbody(result);
 }
 
-function openRowTagEditor(student, container) {
+function openRowTagEditor(student, ctl) {
   openTagEditor({
     student,
     tags: local.tags,
@@ -494,12 +563,13 @@ function openRowTagEditor(student, container) {
     canCreateTag: session.user?.role === 'manager',
     onSaved: (newTags) => {
       student.tags = newTags;
-      renderStudents(container);
+      ctl.patch(student); // — چیپ‌های برچسب همان ردیف درجا؛ بدون GET
     }
   });
 }
 
-// ویرایش هدف‌های شناختی با همان درخت واحد؛ بعد از ذخیره چیپ‌های هدف روی ردیف تازه می‌شوند
-function openRowFocusEditor(student, container) {
-  openFocusEditor({ student, onSaved: () => renderStudents(container) });
+// ویرایش هدف‌های شناختی با همان درخت واحد؛ هیچ ستونی از این لیست هدف‌ها را نشان نمی‌دهد
+// بنابراین بعد از ذخیره هیچ بازترسیمی لازم نیست (بدون اسکلت، بدون GET)
+function openRowFocusEditor(student) {
+  openFocusEditor({ student, onSaved: () => {} });
 }
