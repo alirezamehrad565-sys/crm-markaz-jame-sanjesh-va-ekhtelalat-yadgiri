@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.24.0";
+var APP_VERSION = "1.25.0";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -11055,6 +11055,7 @@ function rowsToAppointments(rows) {
         status: r.status,
         note: r.note,
         version: r.version,
+        sessionType: r.session_type ?? null,
         students: []
       };
       byId.set(r.id, appt);
@@ -11092,7 +11093,7 @@ function createWorkingDayService(deps) {
           [weekday]
         ),
         db.query(
-          `SELECT a.id, a.staff_id, a.start_at, a.end_at, a.status, a.note, a.version,
+          `SELECT a.id, a.staff_id, a.start_at, a.end_at, a.status, a.note, a.version, a.session_type,
                   s.student_id, s.attendance AS student_attendance,
                   st.first_name || ' ' || st.last_name AS student_name,
                   st.guardian_phone AS student_phone
