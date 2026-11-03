@@ -8,7 +8,6 @@ import {
   confirmModal,
   formModal,
   emptyState,
-  loadingState,
   skeletonState,
   errorState,
   lockBtn,
@@ -74,7 +73,13 @@ export function renderMyTodosCard() {
      دیگر هیچ مسیری کل بدنهٔ کارت را با اسکلت rebuild نمی‌کند. —— */
   async function refresh({ silent = false } = {}) {
     const myGen = ++gen;
-    if (!silent) body.replaceChildren(skeletonState('list', 5));
+    if (!silent) {
+      // — بدنه با اسکلت عوض می‌شود؛ شِل باید در موفقیت بعدی دوباره مونت شود،
+      //   وگرنه renderList در listZone جداشده نقاشی می‌کند و کارت برای همیشه اسکلت می‌ماند
+      chromeBuilt = false;
+      listZone = null;
+      body.replaceChildren(skeletonState('list', 5));
+    }
     try {
       const [todosRes, staffRes] = await Promise.all([
         api.get(`/api/todos?box=${box}`),
@@ -98,15 +103,17 @@ export function renderMyTodosCard() {
     }
   }
 
-  /* همگام‌سازی بی‌صدای فهرست + بج پس از mutation — بدون اسکلت، ردیف افزودن و تب‌ها دست‌نخورده */
-  async function syncQuiet() {
+  /* همگام‌سازی بی‌صدای فهرست + بج پس از mutation — بدون اسکلت، ردیف افزودن و تب‌ها دست‌نخورده؛
+     با list:false فقط بج از همین GET سبک تازه می‌شود (پاسخ mutation بج ندارد) و
+     renderList رد نمی‌شود تا فلش تازهٔ آیتم پچ‌شده درجا زنده بماند */
+  async function syncQuiet({ list = true } = {}) {
     const myGen = ++gen;
     try {
       const res = await api.get(`/api/todos?box=${box}`);
       if (myGen !== gen) return;
       items = res.data ?? [];
       syncBadge(res.badge ?? { urgent: 0, overdue: 0, attention: 0 });
-      renderList();
+      if (list) renderList();
     } catch {
       /* بی‌صدا — پچ درجای قبلاً اعمال شده؛ سرور در همگام‌سازی بعدی حاکم می‌شود */
     }
@@ -450,7 +457,7 @@ export function renderMyTodosCard() {
       toast(`«${t.title}» انجام شد`, 'success');
       window.dispatchEvent(new Event('todos:changed'));
       upsertTodoItem(res.data ?? { ...t, status: 'done' });
-      syncQuiet();
+      syncQuiet({ list: false }); // — فلش تازهٔ آیتم نباید با رندر کامل فهرست نابود شود
     } catch (err) {
       toastError(err);
       if (cb) cb.checked = false; // — برگرداندن تیک در خطا
@@ -498,7 +505,7 @@ export function renderMyTodosCard() {
         toast('تغییرات ذخیره شد', 'success');
         window.dispatchEvent(new Event('todos:changed'));
         upsertTodoItem(res.data ?? t); // — همان آیتم درجا؛ بدون rebuild فهرست
-        syncQuiet();
+        syncQuiet({ list: false }); // — فلش تازهٔ آیتم نباید با رندر کامل فهرست نابود شود
       }
     });
   }

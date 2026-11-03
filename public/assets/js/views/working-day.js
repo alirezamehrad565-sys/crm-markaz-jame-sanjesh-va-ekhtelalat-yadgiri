@@ -18,7 +18,7 @@ import {
   WEEKDAY_ABBRS,
   WEEKDAY_NAMES
 } from '../format.js';
-import { el, icon, toast, toastError, loadingState, skeletonState, errorState, emptyState, statusBadge, formModal, confirmModal } from '../ui.js';
+import { el, icon, toast, toastError, skeletonState, errorState, emptyState, statusBadge, formModal, confirmModal } from '../ui.js';
 import { hueClass, staffHue } from '../staff-hue.js'; // — رنگ ثابت هر درمانگر روی کارت نوبت
 import { sessionTypeOf } from '../session-type.js'; // — نوع جلسه (جدول ۴)
 import { openCaseEventForm, canCreateCaseEvents } from '../case-events.js';
@@ -302,6 +302,8 @@ function rerender() {
   if (currentContainer) renderWorkingDay(currentContainer);
 }
 
+let renderSeq = 0; // — گارد نسل رندر (الگوی router.js): پاسخِ دیرِ تاریخ قبلی اجازه ندارد بورد تاریخ تازه را بازنویسی کند
+
 const REFRESH_MS = 30000;
 let refreshTimer = null;
 let lastBoardJson = null;
@@ -367,6 +369,7 @@ function shiftJalaliMonth(jy, jm, delta) {
 }
 
 export async function renderWorkingDay(container, opts = {}) {
+  const mySeq = ++renderSeq; // — هر ناوبری/به‌روزرسانی یک نسل تازه؛ دو کلیک سریع نباید بوردِ تاریخ کهنه را رنگ کند
   currentContainer = container;
   currentBoard = null;
   stopRefresh(); // جلوگیری از تایمرهای انباشته
@@ -378,9 +381,11 @@ export async function renderWorkingDay(container, opts = {}) {
   try {
     board = await api.get(`/api/working-day${qs({ date: local.date })}`).then((r) => r.data);
   } catch (err) {
+    if (mySeq !== renderSeq) return; // — ناوبری/رندر تازه‌تر در جریان است؛ خطای نسخهٔ مرده رنگ نگیرد
     container.replaceChildren(errorState(err, () => renderWorkingDay(container)));
     return;
   }
+  if (mySeq !== renderSeq) return; // — پاسخ بوردِ کهنه: تاریخ/رندر عوض شده — دور بریز
   lastBoardJson = JSON.stringify(board); // مرجع مقایسهٔ auto-refresh
   currentBoard = board; // مرجع وصله‌های جراحی (جریان پیوسته)
 
@@ -665,8 +670,12 @@ async function markStaffAttendance(col, board, status, btn, bits = {}) {
   if (inflight.has(key)) return;
   inflight.add(key);
   const { seg, segBtns, row } = bits;
-  const prev = col.attendance?.status ?? null;
-  const prevNote = col.attendance?.note ?? null;
+  const prevAtt = col.attendance ?? null; // — کل شکل قبلی؛ برای برگشت نرم خطا
+  const prevStatus = prevAtt?.status ?? null;
+  const prevNote = prevAtt?.note ?? null;
+  /* F12: دادهٔ بورد قبل از apply به‌روز شود — وگرنه refreshAttChips داخل apply چیپ‌ها را
+     با وضعیت «قبلی» می‌شمارد و چیپ‌ها تا پایان PUT یک جهش عقب می‌مانند */
+  col.attendance = { ...(prevAtt ?? {}), status, note: prevNote };
   const apply = (st) => {
     seg?.classList.toggle('wd-seg--unset', !st);
     if (segBtns) for (const [k, b] of segBtns) {
@@ -680,12 +689,11 @@ async function markStaffAttendance(col, board, status, btn, bits = {}) {
   apply(status);
   try {
     await api.put('/api/staff-attendance', { staff_id: col.staffId, date: board.date, status });
-    col.attendance = { ...(col.attendance ?? {}), status, note: col.attendance?.note ?? null };
     toast(`${col.fullName}: ${STAFF_STATUS_LABEL[status]}`, 'success', 2200);
     syncBoardJson();
   } catch (err) {
-    col.attendance = prev ? { status: prev, note: prevNote } : null;
-    apply(prev);
+    col.attendance = prevAtt; // — برگشت نرم به دادهٔ قبل؛ apply زیر چیپ‌ها و بج‌ها را هم برمی‌گرداند
+    apply(prevStatus);
     toastError(err);
   } finally {
     inflight.delete(key);
@@ -866,11 +874,13 @@ function apptCard(a) {
       danger: true
     });
     if (!ok) return;
-    const item = currentContainer?.querySelector?.(`.wd-tl__item[data-appt-id="${appt.id}"]`);
     try {
       await api.del(`/api/appointments/${appt.id}`);
       const col = removeApptFromBoard(appt.id);
       recomputeSessionStats(currentBoard);
+      /* F14: بورد ممکن است حین DELETE بازسازی شده باشد؛ گرهٔ کهنه جداافتاده و no-op می‌شد —
+         بعد از پاسخ، آیتم را از لنگر data-appt-id دوباره می‌گیریم */
+      const item = currentContainer?.querySelector?.(`.wd-tl__item[data-appt-id="${appt.id}"]`);
       collapseRemove(item); // جریان پیوسته: آیتم همان لحظه جمع می‌شود — نه رفرش کل نما
       if (col) {
         const badge = currentContainer?.querySelector?.(`.wd-block[data-staff-id="${col.staffId}"] .wd-block__stats .badge`);
@@ -1107,7 +1117,8 @@ function notesCard(board) {
               toast('توضیح ثبت شد', 'success');
             } catch (err) {
               toastError(err);
-              btn.disabled = false;
+            } finally {
+              btn.disabled = false; // — F11: بعد از موفقیت هم دکمه زنده بماند؛ ثبت توضیح زنجیره‌ای ممکن شود
             }
           }
         }, icon('plus', 15), 'افزودن توضیح')

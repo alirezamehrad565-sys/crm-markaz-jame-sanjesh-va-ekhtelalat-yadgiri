@@ -218,6 +218,7 @@ export interface StudentProfileService {
   getSchoolById(id: string): Promise<School | null>;
   updateSchool(id: string, patch: UpdateSchoolInput, actor: AuthContext): Promise<School>;
   deactivateSchool(id: string, actor: AuthContext): Promise<School>;
+  activateSchool(id: string, actor: AuthContext): Promise<School>;
   deleteSchool(id: string, actor: AuthContext): Promise<void>;
 
   createClass(input: NewClassInput, actor: AuthContext): Promise<SchoolClass>;
@@ -225,6 +226,7 @@ export interface StudentProfileService {
   getClassById(id: string): Promise<SchoolClass | null>;
   updateClass(id: string, patch: UpdateClassInput, actor: AuthContext): Promise<SchoolClass>;
   deactivateClass(id: string, actor: AuthContext): Promise<SchoolClass>;
+  activateClass(id: string, actor: AuthContext): Promise<SchoolClass>;
   deleteClass(id: string, actor: AuthContext): Promise<void>;
   listStudentIdsByClass(classId: string): Promise<string[]>;
   getClassesForStudents(studentIds: string[]): Promise<Map<string, { classId: string; className: string; teacherName: string | null }>>;

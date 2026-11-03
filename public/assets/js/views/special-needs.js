@@ -35,7 +35,10 @@ const METRICS = [
 
 let state = { schoolId: '', grade: '', severity: '', metric: 'count' };
 
+let snGen = 0; // F10: گارد نسل — پاسخ کهنهٔ فیلترهای سریع نباید جایگزین محتوا شود (الگوی waitlist/progress-board)
+
 export async function renderSpecialNeeds(container) {
+  const myGen = ++snGen;
   container.replaceChildren(skeletonState('table', 5));
 
   let grid;
@@ -52,9 +55,11 @@ export async function renderSpecialNeeds(container) {
     grid = gridRes.data;
     schools = schoolsRes.data;
   } catch (err) {
+    if (myGen !== snGen) return; // F10: پاسخ کهنه
     container.replaceChildren(errorState(err, () => renderSpecialNeeds(container)));
     return;
   }
+  if (myGen !== snGen) return; // F10: پاسخ کهنه — کاربر فیلتر دیگری زده
 
   const canEdit = session.user && ['manager', 'secretary'].includes(session.user.role);
 

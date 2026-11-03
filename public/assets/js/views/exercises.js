@@ -6,7 +6,6 @@ import {
   toastError,
   confirmModal,
   openModal,
-  formModal,
   emptyState,
   skeletonState,
   errorState,
@@ -123,6 +122,23 @@ function coCreatorChip(coId) {
     hueDot(coId, 9),
     `هم‌ساز: ${name}`
   );
+}
+
+// — F7: کش نشانی blob بندانگشتی تصویرها (الگوی urlCache کلر بوک) — کلید `${exId}/${fileId}`
+// کش جلسه است و با هر rebuild فهرست (فیلتر/صفحه‌بندی/silent sync) دوباره واکشی و revoke نمی‌شود؛ سقفش اندازهٔ بانک است
+const thumbUrlCache = new Map();
+
+async function exerciseThumbUrl(exId, file) {
+  const key = `${exId}/${file.id ?? ''}`; // فایل لگاسی بدون id هم با همان مسیر قدیمی کش می‌شود
+  if (thumbUrlCache.has(key)) return thumbUrlCache.get(key);
+  const url = file.id ? `/api/exercises/${exId}/files/${file.id}` : `/api/exercises/${exId}/file`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
+  });
+  if (!res.ok) throw new Error('بارگذاری پیش‌نمایش ناموفق بود');
+  const objUrl = URL.createObjectURL(await res.blob());
+  thumbUrlCache.set(key, objUrl);
+  return objUrl;
 }
 
 const PREVIEW_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'pdf'];
@@ -609,16 +625,18 @@ export function renderExercises(container) {
     const img = files.find(isImg);
     const pdf = files.find(isPdf);
     const previewFiles = files.filter(previewable);
-    const fileUrl = (f) => (f?.id ? `/api/exercises/${ex.id}/files/${f.id}` : `/api/exercises/${ex.id}/file`);
     const tile = (ic, label) => el('span', { class: 'exb-thumb__tile' }, icon(ic, 22), el('b', {}, label));
     const clickable = Boolean(img || pdf);
     const startIdxOf = (f) => Math.max(0, previewFiles.indexOf(f));
+    const openPreview = () => openPreviewModal(ex, previewFiles, startIdxOf(img ?? pdf));
     const stage = el('div', {
       class: `exb-thumb${clickable ? ' exb-thumb--click' : ''}`,
       role: clickable ? 'button' : undefined,
       'aria-label': clickable ? `پیش‌نمایش ${ex.title}` : undefined,
       title: clickable ? 'پیش‌نمایش' : undefined,
-      onclick: clickable ? () => openPreviewModal(ex, previewFiles, startIdxOf(img ?? pdf)) : undefined
+      tabindex: clickable ? '0' : undefined, /* F9: فوکوس‌پذیری کیبورد */
+      onclick: clickable ? openPreview : undefined,
+      onkeydown: clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPreview(); } } : undefined /* F9 */
     });
     if (img) {
       stage.append(tile('eye', 'پیش‌نمایش…'));
@@ -630,11 +648,7 @@ export function renderExercises(container) {
         started = true;
         (async () => {
           try {
-            const res = await fetch(fileUrl(img), {
-              headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
-            });
-            if (!res.ok) throw new Error('بارگذاری پیش‌نمایش ناموفق بود');
-            const objUrl = URL.createObjectURL(await res.blob());
+            const objUrl = await exerciseThumbUrl(ex.id, img); // — F7: از کش جلسه؛ دوباره‌واکشی و نشت blob با هر rebuild حذف شد
             stage.replaceChildren(el('img', { src: objUrl, alt: ex.title }));
           } catch {
             stage.replaceChildren(tile('file', 'پیش‌نمایش در دسترس نیست'));
@@ -839,6 +853,7 @@ export function renderExercises(container) {
       flashNode(fresh);
     },
     remove(id) {
+      const hadMore = hasMore; // — F8: مقدار پیش از آینه‌سازی — «آیا قبل از حذف دادهٔ بیشتری وجود داشت؟»
       items = items.filter((r) => r.id !== id);
       total = Math.max(0, total - 1);
       hasMore = state.page * PAGE_SIZE < total; // — آینهٔ pageWindow سرور برای برچسب pager
@@ -846,6 +861,12 @@ export function renderExercises(container) {
       if (old) collapseRemove(old);
       const pager = body.querySelector('.exb-pager');
       if (pager) pager.replaceWith(buildPager(Math.max(1, Math.ceil(total / PAGE_SIZE))));
+      /* F8: حذف یک جا خالی می‌کند (مثلاً ۱۹→۱۸ و صفحهٔ ۱ فقط ۱۷ کارت با هیچ دکمهٔ بعدی) —
+         پس از پایان انیمیشن جمع‌شدن، اگر صفحه پُر نشده و پیش از حذف دادهٔ بیشتر بود،
+         سینک بی‌صدای سرور جای خالی را پر می‌کند */
+      setTimeout(() => {
+        if (body.isConnected && hadMore && items.length > 0 && items.length < PAGE_SIZE) ctl.quietSync();
+      }, 320);
       ensureNonEmptyPaint();
     },
     quietSync: refreshZone

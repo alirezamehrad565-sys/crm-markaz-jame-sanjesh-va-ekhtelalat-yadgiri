@@ -7,6 +7,7 @@ import {
   formatJalaliShort,
   formatJalaliFull,
   iranianWeekdayOfYmd,
+  toJalali,
   WEEKDAY_NAMES
 } from '../format.js';
 import {
@@ -21,7 +22,8 @@ import {
   errorState,
   tabs,
   collapseRemove,
-  flashNode
+  flashNode,
+  lockBtn
 } from '../ui.js';
 import { jalaliDateInput } from '../jalali-picker.js';
 import { session } from '../state.js';
@@ -55,6 +57,8 @@ let state = {
   tagFilter: [],
   editingId: null
 };
+
+let tabGen = 0; // — گارد نسل تب (الگوی router.js): پاسخِ دیرِ تب کهنه اجازه ندارد بدنهٔ تب تازه را بازنویسی کند
 
 function normalizeTagToken(token) {
   return token.replace(/[_\-–]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -114,7 +118,7 @@ function normalBadge() {
    کارت ثبت‌کننده و کارت لیست یک‌بار مونت می‌شوند؛ ثبت جدید = درج ردیف در بالای
    لیست از بدنهٔ پاسخ (ORDER BY جدیدترین)، ویرایش = پچ همان ردیف، حذف = جمع‌شدن نرم —
    فوکوس input و ریتم تایپ زنجیره‌ای هرگز با اسکلت شکسته نمی‌شود. —— */
-async function renderDailyTab(box, container) {
+async function renderDailyTab(box, container, myGen) {
   box.replaceChildren(skeletonState('table', 5));
   const today = tehranTodayYmd();
 
@@ -127,9 +131,11 @@ async function renderDailyTab(box, container) {
     result = r.data;
     tagSummary = t.data;
   } catch (err) {
-    box.replaceChildren(errorState(err, () => renderDailyTab(box, container)));
+    if (myGen !== tabGen) return; // — تب عوض شده؛ خطای نسخهٔ مرده روی تب تازه نمی‌نشیند
+    box.replaceChildren(errorState(err, () => renderDailyTab(box, container, ++tabGen)));
     return;
   }
+  if (myGen !== tabGen) return; // — گارد نسل: کاربر حین دریافت، تب را عوض کرده — این مونت دور ریخته می‌شود
 
   let entries = [...(result.entries ?? [])]; // کش محلی — هر mutation همین‌جا هم به‌روز می‌شود
   const canEdit = session.user && ['manager', 'secretary'].includes(session.user.role);
@@ -158,7 +164,7 @@ async function renderDailyTab(box, container) {
 
   const drawPreview = () => {
     const parsed = parseEntryInput(input.value);
-    const finalTags = mergeFinalTags(parsed, composer);
+    const finalTags = mergeFinalTags(parsed, composer).slice(0, 12); // S3-06: پیش‌نمایش مثل قبل سقف ۱۲
     if (!parsed.name && finalTags.length === 0) {
       preview.style.display = 'none';
       preview.replaceChildren();
@@ -185,7 +191,7 @@ async function renderDailyTab(box, container) {
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      submit();
+      lockBtn(submitBtn, submit); // — همان قفل مشغولی دکمه ثبت؛ Enter با ضربه‌های پی‌سرپی کار مفتوح نمی‌سازد
     }
   });
 
@@ -236,15 +242,14 @@ async function renderDailyTab(box, container) {
     for (const t of [...comp.toggles, ...comp.custom]) {
       if (!out.includes(t)) out.push(t);
     }
-    if (out.length > 12) toast('بیش از ۱۲ برچسب انتخاب شده — فقط ۱۲ مورد نخست ثبت می‌شود', 'warning'); /* S3-06 */
-    return out.slice(0, 12);
+    return out; // — بدون برش؛ سقف ۱۲ و هشدارش فقط در submit اعمال می‌شود (نه با هر ضربهٔ کلید در drawPreview)
   };
 
   const submitBtn = el('button', {
     class: 'btn btn--primary btn--lg',
     type: 'button',
     style: { width: '100%' },
-    onclick: () => submit()
+    onclick: (e) => lockBtn(e.currentTarget, submit) // — قفل مشغولی واحد؛ تا پایان submit دکمه غیرفعال
   });
 
   const headTitle = el('div', { class: 'card__title' });
@@ -367,16 +372,19 @@ async function renderDailyTab(box, container) {
   const submit = async () => {
     if (!canEdit) return;
     const parsed = parseEntryInput(input.value);
-    const tags = mergeFinalTags(parsed, composer);
+    const merged = mergeFinalTags(parsed, composer);
     if (!parsed.name) {
       toast('نام و فامیل را در باکس بنویسید', 'warning');
       input.focus();
       return;
     }
+    if (merged.length > 12) toast('بیش از ۱۲ برچسب انتخاب شده — فقط ۱۲ مورد نخست ثبت می‌شود', 'warning'); /* S3-06 — یک‌بار در هر تلاش ثبت، نه با هر ضربهٔ کلید */
+    const tags = merged.slice(0, 12);
     try {
       if (state.editingId) {
         const res = await api.patch(`/api/screening/${state.editingId}`, { name: parsed.name, tags });
         entries = entries.map((x) => (x.id === res.data.id ? res.data : x));
+        paintCounts(); // — ویرایش می‌تواند عادی↔ارجاع را برعکس کند؛ شمارنده‌های سربرگ درجا
         const old = rowsZone.querySelector(`.sanj-row[data-id="${CSS.escape(String(res.data.id))}"]`);
         if (old) {
           const fresh = rowEl(res.data);
@@ -467,7 +475,7 @@ function quickRange(quick, from, to) {
 /* —— ۱.۲۳.۰ تب گزارش/KPI: کارت فیلتر یک‌بار مونت می‌شود (چیپ‌ها/جستجو/تاریخ‌ها درجا sync می‌شوند)
    و فقط «ناحیهٔ نتایج» (KPI/نمودار/تفکیک/پیگیری/لیست) با هر تغییر فیلتر از نو ساخته می‌شود.
    هک بازگشت مکان‌نمای جستجو حذف شد — input دیگر بازسازی نمی‌شود. —— */
-async function renderManagerTab(box, container) {
+async function renderManagerTab(box, container, myGen) {
   box.replaceChildren(skeletonState('table', 6));
 
   const quickBtns = QUICKS.map((q) =>
@@ -525,13 +533,19 @@ async function renderManagerTab(box, container) {
   } catch {
     tagSummary = [];
   }
+  if (myGen !== tabGen) return; // — گارد نسل تب: تب عوض شده؛ این مونت نباید بدنهٔ تازه را بازنویسی کند
 
   const customTags = tagSummary.filter((t) => !KIND_BY_LABEL.has(t.label)).slice(0, 12);
 
+  /* F4: چیپ «همهٔ ارجاع‌ها» حالت فعال = همهٔ ارجاع‌های تخصصی در فیلتر باشند
+     (همان معنای کلیک خودش: [] ↔ [...REFERRALS]) — تا syncTagUI بتواند sync کند */
+  const allReferralsSelected = () => state.tagFilter.length > 0 && REFERRALS.every((t) => state.tagFilter.includes(t));
+
   const filterChips = [el('button', {
     type: 'button',
-    class: `chip${state.tagFilter.length > 0 ? ' is-active' : ''}`, /* S3-05: حالت فعال بصری هم می‌گیرد */
-    'aria-pressed': state.tagFilter.length > 0 ? 'true' : 'false',
+    'data-tag': '__all_referrals__', /* F4: لنگر sync — بدون این، syncTagUI این چیپ را نمی‌شناخت و منجمد می‌ماند */
+    class: `chip${allReferralsSelected() ? ' is-active' : ''}`, /* S3-05: حالت فعال بصری هم می‌گیرد */
+    'aria-pressed': String(allReferralsSelected()),
     onclick: () => {
       state.tagFilter = state.tagFilter.length > 0 ? [] : [...REFERRALS]; /* S3-05: کلیک دوباره، خنثی */
       syncTagUI();
@@ -580,7 +594,7 @@ async function renderManagerTab(box, container) {
     for (const b of [...filterChips, clearChip]) {
       const label = b.getAttribute('data-tag');
       if (!label) continue;
-      const on = state.tagFilter.includes(label);
+      const on = label === '__all_referrals__' ? allReferralsSelected() : state.tagFilter.includes(label); /* F4: سنتی‌نل همهٔ ارجاع‌ها */
       b.classList.toggle('is-active', on);
       b.setAttribute('aria-pressed', String(on));
     }
@@ -608,7 +622,9 @@ async function renderManagerTab(box, container) {
 
   const resultsZone = el('div', {});
 
+  let resultsGen = 0; // — گارد نسل نتایج (الگوی students.js): پاسخ فیلتر کهنه نباید زیر چیپ‌های تازه رنگ بگیرد
   async function refreshResults() {
+    const myGen = ++resultsGen;
     const range = quickRange(state.quick, state.customFrom, state.customTo);
     filterSub.replaceChildren(range.from ? `${formatJalaliShort(range.from)} تا ${formatJalaliShort(range.to)}` : 'همهٔ روزها');
     if (range.from) filterSub.title = formatJalaliFull(range.from); else filterSub.removeAttribute('title');
@@ -623,9 +639,11 @@ async function renderManagerTab(box, container) {
         tag: state.tagFilter.length ? state.tagFilter.join(',') : undefined
       })}`)).data;
     } catch (err) {
+      if (myGen !== resultsGen) return; // — فیلتر عوض شده؛ خطای نسخهٔ مرده رنگ نگیرد
       resultsZone.replaceChildren(errorState(err, () => void refreshResults()));
       return;
     }
+    if (myGen !== resultsGen || !resultsZone.isConnected) return; // — پاسخ کهنه یا ناحیه از DOM خارج — دور بریز
     const { entries, stats } = result;
 
     const kpis = el('div', { style: { marginTop: 'var(--sp-4)' } },
@@ -754,7 +772,7 @@ function buildChartCard(byDay) {
             c.count === 0
               ? el('div', { class: 'sanj-chart__bar', style: { height: '3px', opacity: '.35' } })
               : el('div', { class: 'sanj-chart__bar', style: { height: `${Math.max(3, (c.count / max) * 72)}px` } }),
-            el('span', { class: 'sanj-chart__label' }, fa(Number(c.day.slice(8, 10))))
+            el('span', { class: 'sanj-chart__label' }, fa(toJalali(...c.day.split('-').map(Number)).jd)) // — روز شمسی، هم‌خوان با aria-label خود ستون
           )
         )
       )
@@ -845,8 +863,9 @@ export async function renderScreening(container) {
 
   function draw(key) {
     tabbar.setActive(key);
-    if (key === 'daily') void renderDailyTab(body, container);
-    else void renderManagerTab(body, container);
+    const myGen = ++tabGen; // — هر تعویض تب یک نسل تازه؛ رندر تب کهنه بعد از awaitهایش دور ریخته می‌شود
+    if (key === 'daily') void renderDailyTab(body, container, myGen);
+    else void renderManagerTab(body, container, myGen);
   }
 
   container.replaceChildren(head, tabbar.root, el('div', { style: { marginTop: 'var(--sp-4)' } }, body));

@@ -82,7 +82,8 @@ export async function renderCaseEventTypes(container) {
      دسته/مخاطب/جستجو فقط ناحیهٔ فهرست را عوض می‌کند و چیپ‌ها درجا فعال می‌شوند —
      ورودی جستجو دیگر هرگز بازسازی نمی‌شود، پس هک بازگرداندن مکان‌نما (searchRefocus)
      حذف شد. اسکلت فقط روی مونت اولیه و خطای مرگبار بارگذاری. —— */
-  let gen = 0; // — گارد نسل: پاسخ کهنهٔ درخواست قبلی نباید روی دادهٔ تازه بنشیند
+  let gen = 0; // — گارد نسل قالب‌ها: پاسخ کهنهٔ درخواست قبلی نباید روی دادهٔ تازه بنشیند
+  let pendingGen = 0; /* ۱.۲۲.۲ (F11) — گارد نسل مستقل صف انتظار؛ درخواست قالب‌ها و صف همدیگر را دور نمی‌ریزند */
 
   const head = el('div', { class: 'page-head' },
     el('div', {},
@@ -281,15 +282,15 @@ export async function renderCaseEventTypes(container) {
 
   /* ۱.۲۲.۰ — همگام‌سازی بی‌صدای دادهٔ صف (پاسخ «ارسال» فقط شمارنده دارد) — بدون اسکلت */
   async function refreshPending() {
-    const myGen = ++gen;
+    const myGen = ++pendingGen;
     try {
       const res = await api.get('/api/case-events/pending');
-      if (myGen !== gen) return;
+      if (myGen !== pendingGen) return;
       state.pending = res.data ?? [];
       updateCounts();
       if (pendingZone.isConnected) paintPendingZone();
     } catch (err) {
-      if (myGen === gen) toastError(err);
+      if (myGen === pendingGen) toastError(err);
     }
   }
 
@@ -562,7 +563,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     actions: [
       (closeModal) => el('button', {
         class: 'btn btn--primary',
-        onclick: () => save(closeModal)
+        onclick: (e) => lockBtn(e.currentTarget, () => save(closeModal)) /* ۱.۲۲.۲ (F12) — قفل مشغولی: دوبارکلیک قالب تکراری نمی‌سازد */
       }, icon('check', 16), isEdit ? 'ذخیره تغییرات' : 'ساخت قالب'),
       (closeModal) => el('button', { class: 'btn btn--ghost', onclick: closeModal }, 'انصراف')
     ]

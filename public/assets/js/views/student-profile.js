@@ -1,6 +1,6 @@
 import { api, qs } from '../api.js';
 import { fa, enDigits, formatJalaliDateTime, formatJalaliNumeric, formatStoredJalaliNumeric, STUDENT_GRADES, gradeLabel, isPlaceholderNid } from '../format.js';
-import { el, icon, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, tabs, callBadge, lockBtn } from '../ui.js';
+import { el, icon, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, errorState, tabs, callBadge, lockBtn } from '../ui.js';
 import { openStudentDelete } from '../student-delete.js'; // — حذف کامل پرونده (جریان واحد با فهرست دانش‌آموزان)
 import { openTeacherManager } from '../student-teachers.js'; // — مدیریت معلم‌ها: افزودن/حذف (APIهای POST/DELETE معلم)
 import { session } from '../state.js';
@@ -496,7 +496,7 @@ export async function renderStudentProfile(container, ctx) {
     };
 
     const list = el('div', { class: 'tl-list' });
-    const moreBtn = el('button', { class: 'btn btn--soft btn--sm', type: 'button', style: { marginTop: 'var(--sp-4)' }, onclick: (e) => { e.currentTarget.disabled = true; e.currentTarget.setAttribute('aria-busy', 'true'); loadMore().finally(() => { e.currentTarget.disabled = false; e.currentTarget.removeAttribute('aria-busy'); }); } /* S4-23 */ }, icon('refresh', 15), 'نمایش رویدادهای بیشتر');
+    const moreBtn = el('button', { class: 'btn btn--soft btn--sm', type: 'button', style: { marginTop: 'var(--sp-4)' }, onclick: (e) => { const btn = e.currentTarget; /* F1: currentTarget بعد از dispatch تهی می‌شود — پیش از کار ناهمگام گرفتارش کن */ btn.disabled = true; btn.setAttribute('aria-busy', 'true'); loadMore().finally(() => { btn.disabled = false; btn.removeAttribute('aria-busy'); }); } /* S4-23 */ }, icon('refresh', 15), 'نمایش رویدادهای بیشتر');
     const chips = el('div', { class: 'tl-filters' });
 
     for (const f of TIMELINE_FILTERS) {
@@ -517,24 +517,27 @@ export async function renderStudentProfile(container, ctx) {
       load(false);
     }
 
+    let gen = 0; // F2: گارد نسل — پاسخ کهنهٔ فیلتر عوض‌شده نباید زیر چیپ فعال بنشیند (الگوی waitlist/progress-board)
     async function load(append) {
-      if (state.loading) return;
+      const myGen = ++gen;
       state.loading = true;
       const f = TIMELINE_FILTERS.find((x) => x.key === state.filter);
       const query = { limit: TIMELINE_PAGE, offset: state.offset };
       if (f?.kinds) query.kinds = f.kinds;
       try {
         const res = await api.get(`/api/students/${id}/timeline${qs(query)}`);
+        if (myGen !== gen) return; // F2: پاسخ کهنه — فیلتر/صفحهٔ جدیدتری در پرواز است
         state.events = append ? [...state.events, ...res.data] : res.data;
         state.hasMore = Boolean(res.meta?.hasMore);
         paint();
       } catch (err) {
-        toastError(err);
+        if (myGen === gen) toastError(err);
       }
-      state.loading = false;
+      if (myGen === gen) state.loading = false;
     }
 
     function loadMore() {
+      if (state.loading) return; // بار در پرواز است — «بیشتر» تا پایانش صفحه می‌پرد
       state.offset += TIMELINE_PAGE;
       load(true);
     }
@@ -705,11 +708,15 @@ export async function renderStudentProfile(container, ctx) {
 
     let familyCard = null;
     let teacherCard = null;
+    let teacherMessageCard = null;
     try {
       familyCard = await buildFamilyInviteCard(student, { canManage: canManageNotify });
       teacherCard = await buildTeacherInviteCard(student, { canManage: canManageNotify });
+      // کارت «یادآوری و اعلان‌ها» (زمان‌بندی اعلان) حذف شد؛ جای آن پیام آزاد به معلم نشست
+      // F3: داخل try — رد شدنش تب ارتباطات را تا ابد روی اسکلت نمی‌گذارد
+      if (canManageNotify) teacherMessageCard = await buildTeacherMessageCard(student);
     } catch (err) {
-      box.replaceChildren(emptyState({ iconName: 'alert', title: 'بارگذاری بخش ارتباطات ناموفق بود', hint: err?.message ?? '' }));
+      box.replaceChildren(errorState(err, () => renderCommsTab(box)));
       return;
     }
 
@@ -724,8 +731,7 @@ export async function renderStudentProfile(container, ctx) {
       )
     );
 
-    // کارت «یادآوری و اعلان‌ها» (زمان‌بندی اعلان) حذف شد؛ جای آن پیام آزاد به معلم نشست
-    const teacherMessageCard = canManageNotify ? await buildTeacherMessageCard(student) : null;
+    // کارت «یادآوری و اعلان‌ها» حذف شد (بالا در try ساخته می‌شود)
 
     box.replaceChildren(
       el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' } },
@@ -966,7 +972,7 @@ function openTeacherReportModal(student) {
       (c) => el('button', { class: 'btn btn--ghost', onclick: c }, 'انصراف'),
       (c) => el('button', {
         class: 'btn btn--primary',
-        onclick: async () => {
+        onclick: (e) => lockBtn(e.currentTarget, async () => { /* F4: قفل مشغولی — دوبارکلیک ارسال تکراری نمی‌زند (هم‌الگوی دکمهٔ بله) */
           const text = textarea.value.trim();
           if (text.length < 2) {
             toast('متن گزارش را بنویسید', 'warning');
@@ -979,7 +985,7 @@ function openTeacherReportModal(student) {
           } catch (err) {
             toastError(err);
           }
-        }
+        })
       }, icon('bot', 16), 'ارسال')
     ]
   });

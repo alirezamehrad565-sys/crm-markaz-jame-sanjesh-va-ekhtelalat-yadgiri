@@ -5,6 +5,7 @@ import { drawAnnouncementsAdmin } from '../announcements-admin.js';
 import { drawKnowledgeAdmin } from '../knowledge-admin.js';
 import { session } from '../state.js';
 import { weeklyEditor, renderStaffHoursInto } from './working-hours.js';
+import { navigate } from '../router.js'; /* F4: هر بازنویسی تنظیمات از مسیر روتر — host و renderSeq هر رندر محفوظ بماند */
 
 const local = { tab: 'center' };
 
@@ -57,7 +58,18 @@ export async function renderSettings(container, ctx = {}) {
   const descEl = el('div', { class: 'page-head__desc' }, TAB_DESCS[local.tab] ?? '');
 
   const body = el('div', {});
-  const tabBar = tabs(tabDefs, local.tab);
+  /* ۱.۲۴.۰ (F-settings-tabs): tabs() خودش item.onSelect را صدا می‌زند — بدون onSelect هر کلیک
+     TypeError «l.onSelect is not a function» در کنسول می‌پاشاند (بایند دستی زیر هم کار می‌کرد
+     ولی خطا واقعی بود). onSelect رسمی + حذف بایند دستی querySelectorAll. */
+  const selectTab = (k) => {
+    local.tab = k;
+    const [hashPath, hashQuery] = location.hash.split('?');
+    const q = new URLSearchParams(hashQuery ?? '');
+    q.set('tab', local.tab);
+    history.replaceState(null, '', `${hashPath}?${q}`);
+    draw();
+  };
+  const tabBar = tabs(tabDefs.map((t) => ({ ...t, onSelect: selectTab })), local.tab);
 
   const draw = () => {
     tabBar.setActive(local.tab);
@@ -81,17 +93,6 @@ export async function renderSettings(container, ctx = {}) {
     else if (local.tab === 'keys' && API_KEYS_UI_ENABLED) drawKeys(body, settings);
     else drawNotify(body, settings);
   };
-
-  tabBar.root.querySelectorAll('.tab').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      local.tab = btn.dataset.tab;
-      const [hashPath, hashQuery] = location.hash.split('?');
-      const q = new URLSearchParams(hashQuery ?? '');
-      q.set('tab', local.tab);
-      history.replaceState(null, '', `${hashPath}?${q}`);
-      draw();
-    });
-  });
 
   draw();
   container.replaceChildren(
@@ -443,7 +444,7 @@ function drawNotify(body, settings) {
             const u = res?.data?.username;
             if (u) {
               toast(`نام کاربری بات تشخیص داده شد: @${u}`, 'success');
-              renderSettings(document.getElementById('outlet'));
+              navigate(location.hash); /* F4: از مسیر روتر — رندر تازه با host/renderSeq خودش، نه replaceChildren روی outlet */
             } else {
               toast('تشخیص ممکن نشد — از «ویرایش تنظیمات اعلان» دستی وارد کنید', 'warning', 5200);
               btn.disabled = false;
@@ -523,7 +524,7 @@ function openNotifyForm(settings) {
         notify_waitlist: values.notify_waitlist
       });
       toast('تنظیمات اعلان ذخیره شد', 'success');
-      renderSettings(document.getElementById('outlet'));
+      navigate(location.hash); /* F4: از مسیر روتر — host/renderSeq رندر جدید را کثیف نکن */
     }
   });
 }
