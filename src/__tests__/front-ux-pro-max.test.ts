@@ -64,7 +64,7 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('نسخه: سو 1.19.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.22\.0'/);
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.24\.0'/);
   });
 
   test('۱.۱۹.۰ — روز کاری: جریان پیوسته (هیچ اکشنی کل نما را re-render نمی‌کند)', () => {
@@ -252,5 +252,39 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(students).toMatch(/quietSync: refreshRows/);
     expect(students).not.toMatch(/renderStudents\(container\)/);
     expect(students).not.toMatch(/skeletonState\('table', 4\)/); // اسکلت از مسیر post-mutation حذف شد
+  });
+
+  test('۱.۲۴.۰ — بازخوانی سراسری: رفع‌های ممیزی رفتاری روی ۲۴ نما', () => {
+    /* settings: قرارداد tabs() رعایت شود — هر آیتم onSelect رسمی دارد؛ بایند دستی querySelectorAll
+       (که با هر کلیک TypeError «onSelect is not a function» در کنسول می‌پاشاند) ممنوع است */
+    const settings = readFileSync(join(__dirname, '../../public/assets/js/views/settings.js'), 'utf8');
+    expect(settings).toMatch(/onSelect: selectTab/);
+    expect(settings).not.toMatch(/tabBar\.root\.querySelectorAll\('\.tab'\)/);
+
+    /* staff: بازترسیم پس از حذف/پچ‌جمع‌شدن همیشه با فیلتر فعلی — ریشه‌کنی ردیف شبح */
+    const staff = readFileSync(join(__dirname, '../../public/assets/js/views/staff.js'), 'utf8');
+    expect(staff).toMatch(/renderTbody\(rows\.filter\(matchesFilter\)\)|list\.filter\(matchesFilter\)/);
+    expect(staff).toMatch(/function updateCountBadge\(/);
+
+    /* schools: برگشت از غیرفعال مسیر دارد — دایرهٔ فعال‌سازی + روت activate (قبلاً deactivate یک‌طرفه بود) */
+    const schools = readFileSync(join(__dirname, '../../public/assets/js/views/schools.js'), 'utf8');
+    expect(schools).toMatch(/actionCircle\('check', 'فعال‌سازی'/);
+    expect(schools).toMatch(/\/activate`/);
+
+    /* working-day: دکمهٔ «افزودن توضیح» بعد از موفقیت هم زنده می‌ماند (ثبت زنجیره‌ای) */
+    const wd = readFileSync(join(__dirname, '../../public/assets/js/views/working-day.js'), 'utf8');
+    expect(wd).toMatch(/finally \{\s*\n\s*btn\.disabled = false/);
+
+    /* finance: هر سه مودال پولی قفل دوبارکلیک دارند (فاکتور/کمک/بودجه تکراری ساخته نشود) */
+    const finance = readFileSync(join(__dirname, '../../public/assets/js/views/finance.js'), 'utf8');
+    expect((finance.match(/lockBtn\(btn/g) ?? []).length).toBeGreaterThanOrEqual(3);
+
+    /* student-profile: دکمهٔ «بیشتر» خط زمانی بعد از اولین کلیک نمی‌میرد — currentTarget قبل از async قفل می‌شود */
+    const profile = readFileSync(join(__dirname, '../../public/assets/js/views/student-profile.js'), 'utf8');
+    expect(profile).toMatch(/const btn = e\.currentTarget/);
+
+    /* screening: شمارنده‌های سربرگ بعد از ویرایش هم به‌روز می‌شوند */
+    const screening = readFileSync(join(__dirname, '../../public/assets/js/views/screening.js'), 'utf8');
+    expect(screening).toMatch(/paintCounts\(\)/);
   });
 });

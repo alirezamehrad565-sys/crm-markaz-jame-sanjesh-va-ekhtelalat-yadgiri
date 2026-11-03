@@ -1,0 +1,51 @@
+// ردگیری منبع TypeError: l.onSelect — کدام تعامل؟
+const { chromium } = require('playwright');
+const BASE = 'http://127.0.0.1:8787';
+(async () => {
+  const browser = await chromium.launch();
+  const ctx = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(6500);
+  let errStack = '';
+  page.on('pageerror', (e) => { errStack = String(e?.stack || e).slice(0, 500); });
+  await page.goto(BASE + '/#/', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1500);
+  await page.getByPlaceholder('مثلاً manager').fill('local-mgr2');
+  await page.getByPlaceholder('••••••').fill('Local-Test-1405!x');
+  await page.locator('form button[type="submit"], form .btn--primary, .btn--primary').first().click();
+  await page.waitForTimeout(4200);
+  const clickText = async (t) => {
+    errStack = '';
+    await page.evaluate((txt) => {
+      const el = [...document.querySelectorAll('#outlet button')].find((b) => (b.textContent || '').includes(txt));
+      if (el) el.click();
+    }, t);
+    await page.waitForTimeout(900);
+    if (errStack) console.log(`AFTER «${t}»: ${errStack.split('\n').slice(0, 3).join(' ⏎ ')}`);
+  };
+  await page.evaluate(() => { location.hash = '#/screening'; });
+  await page.waitForTimeout(2200);
+  await clickText('گزارش و KPI');
+  await clickText('ثبت روزانه');
+  await page.evaluate(() => { location.hash = '#/settings'; });
+  await page.waitForTimeout(2000);
+  await clickText('بازهٔ کاری کارکنان');
+  await clickText('بازهٔ کاری مرکز');
+  await clickText('اعلان‌ها و بات');
+  await page.evaluate(() => { location.hash = '#/students'; });
+  await page.waitForTimeout(2000);
+  await page.evaluate(() => document.querySelector('#outlet tbody tr td')?.click());
+  await page.waitForTimeout(2000);
+  await clickText('تمرین‌ها');
+  await clickText('ارتباطات');
+  await page.evaluate(() => { location.hash = '#/finance'; });
+  await page.waitForTimeout(2000);
+  await clickText('کمک‌ها');
+  await clickText('بودجه‌ها');
+  await page.evaluate(() => { location.hash = '#/case-event-types'; });
+  await page.waitForTimeout(2000);
+  await clickText('در انتظار پاسخ');
+  await clickText('کتابخانهٔ فرم‌ها');
+  console.log('done — خطاهای بالای این خط منبع دارند');
+  await browser.close();
+})();

@@ -94,29 +94,27 @@ export async function renderOutbox(outlet) {
   function sectionBodyRow(key, n) {
     if (key === 'drafts') {
       return recordRow(n,
-        el('button', { class: 'btn btn--primary btn--sm', onclick: () => release(n) }, icon('zap', 15), 'ارسال فوری'));
+        el('button', { class: 'btn btn--primary btn--sm', onclick: (e) => lockBtn(e.currentTarget, () => release(n)) }, icon('zap', 15), 'ارسال فوری'));
     }
     if (key === 'ready') {
       return recordRow(n,
-        el('button', { class: 'btn btn--soft btn--sm', onclick: () => release(n) }, icon('zap', 15), 'ارسال فوری'));
+        el('button', { class: 'btn btn--soft btn--sm', onclick: (e) => lockBtn(e.currentTarget, () => release(n)) }, icon('zap', 15), 'ارسال فوری'));
     }
     return recordRow(n,
-      el('button', { class: 'btn btn--soft btn--sm', onclick: () => release(n) }, icon('refresh', 15), 'تلاش دوباره'));
+      el('button', { class: 'btn btn--soft btn--sm', onclick: (e) => lockBtn(e.currentTarget, () => release(n)) }, icon('refresh', 15), 'تلاش دوباره'));
   }
 
   function renderSections() {
     for (const key of ['drafts', 'ready', 'failed']) {
       const arr = data[key] ?? [];
-      const { countBadge, bodyEl } = sections[key];
-      countBadge.textContent = fa(arr.length);
+      const { bodyEl } = sections[key];
       bodyEl.replaceChildren(
         ...(arr.length
           ? arr.map((n) => sectionBodyRow(key, n))
           : [el('div', { class: 'sanj-widget__empty', style: { padding: 'var(--sp-4)' } }, icon('check', 15), el('span', {}, 'موردی در این بخش نیست'))])
       );
     }
-    headBadge.textContent = `پیش‌نویس ${fa((data.drafts ?? []).length)} · آماده ${fa((data.ready ?? []).length)} · ناموفق ${fa((data.failed ?? []).length)}`;
-    syncRetryBtn();
+    updateBadges(); /* بج‌ها/هدر/دکمهٔ تلاش‌دوباره فقط از یک‌جا — منطق تکراری حذف شد */
   }
 
   /* فقط بج‌های شمارش و دکمهٔ تلاش‌دوباره — بدون دست‌زدن به بدنه‌ها (انیمیشن جمع‌شدن سالم می‌ماند) */

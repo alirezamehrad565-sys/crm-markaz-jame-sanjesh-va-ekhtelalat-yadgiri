@@ -11,6 +11,8 @@ import { fa, formatJalaliDateTime } from '../format.js';
 
 const DOCS_LIST_LIMIT = 100;
 
+let docsListGen = 0; /* F7: گارد نسل — پاسخ جستجو/صفحه‌بندی کهنه نباید listItems تازه را بازنویسی کند */
+
 // — دسته‌ها: کد + برچسب فارسی + کلاس رنگ (فقط توکن)
 const DOC_CATEGORIES = [
   { key: 'sanjesh', label: 'سنجش', tone: 'docs-cat--sanjesh' },
@@ -508,6 +510,7 @@ export async function renderDocsList(container, ctx) {
   container.replaceChildren(page);
 
   async function refreshList({ reset = true } = {}) {
+    const myGen = ++docsListGen; // F7
     // سقف خاموش ۱۰۰ حذف شد: meta.hasMore خوانده می‌شود و «نمایش بیشتر» دارد
     const params = new URLSearchParams();
     if (state.q) params.set('q', state.q);
@@ -518,9 +521,11 @@ export async function renderDocsList(container, ctx) {
     let hasMore = false;
     try {
       const res = await api.get(`/api/docs?${params.toString()}`);
+      if (myGen !== docsListGen) return; /* F7: پاسخ کهنه — نتایجِ شرط عوض‌شده را بازنویسی نکن */
       items = res?.data ?? [];
       hasMore = Boolean(res?.meta?.hasMore);
     } catch (err) {
+      if (myGen !== docsListGen) return; /* F7: خطای درخواستِ مرده — خطای نما که رفته را خراب نکن */
       listArea.replaceChildren(errorState(err, () => refreshList({ reset })));
       return;
     }

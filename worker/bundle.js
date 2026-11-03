@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.23.0";
+var APP_VERSION = "1.24.0";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -11607,6 +11607,23 @@ function createStudentProfileService(deps) {
         return rowToSchool({ ...row, active: 0 });
       });
     },
+    /* ۱.۲۴.۰ — فعال‌سازی مجدد مدرسه (قبلاً deactivate یک‌طرفه بود و هیچ مسیر برگشتی UI/API نداشت) */
+    async activateSchool(id, actor) {
+      return db.transaction(async (tx) => {
+        const row = await tx.queryOne(`SELECT id, name, kind, gender_type, phone, address, principal_name, principal_phone, active FROM schools WHERE id = ?`, [id]);
+        if (!row) throw new NotFoundError("\u0645\u062F\u0631\u0633\u0647");
+        if (row.active === 1) throw new ConflictError("\u0645\u062F\u0631\u0633\u0647 \u0642\u0628\u0644\u0627\u064B \u0641\u0639\u0627\u0644 \u0627\u0633\u062A");
+        await tx.execute(`UPDATE schools SET active = 1 WHERE id = ?`, [id]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "school.activate",
+          resourceType: "school",
+          resourceId: id,
+          changes: { active: { from: 0, to: 1 } }
+        });
+        return rowToSchool({ ...row, active: 1 });
+      });
+    },
     async deleteSchool(id, actor) {
       await db.transaction(async (tx) => {
         const row = await tx.queryOne(`SELECT id, name FROM schools WHERE id = ?`, [id]);
@@ -11737,6 +11754,23 @@ function createStudentProfileService(deps) {
           changes: { active: { from: 1, to: 0 } }
         });
         return rowToClass({ ...row, active: 0 });
+      });
+    },
+    /* ۱.۲۴.۰ — فعال‌سازی مجدد کلاس (برگشت دانش‌آموزان خودکار نمی‌شود — صرفاً کلاس به انتخاب‌ها برمی‌گردد) */
+    async activateClass(id, actor) {
+      return db.transaction(async (tx) => {
+        const row = await tx.queryOne(`SELECT id, school_id, name, teacher_name, teacher_phone, active FROM classes WHERE id = ?`, [id]);
+        if (!row) throw new NotFoundError("\u06A9\u0644\u0627\u0633");
+        if (row.active === 1) throw new ConflictError("\u06A9\u0644\u0627\u0633 \u0642\u0628\u0644\u0627\u064B \u0641\u0639\u0627\u0644 \u0627\u0633\u062A");
+        await tx.execute(`UPDATE classes SET active = 1 WHERE id = ?`, [id]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "class.activate",
+          resourceType: "class",
+          resourceId: id,
+          changes: { active: { from: 0, to: 1 } }
+        });
+        return rowToClass({ ...row, active: 1 });
       });
     },
     async deleteClass(id, actor) {
@@ -12598,6 +12632,11 @@ function registerRoutes3(app, service) {
     const school = await service.deactivateSchool(c.req.param("id"), actor);
     return c.json({ data: school }, 200);
   });
+  app.post("/api/schools/:id/activate", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const school = await service.activateSchool(c.req.param("id"), actor);
+    return c.json({ data: school }, 200);
+  });
   app.delete("/api/schools/:id", requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);
     await service.deleteSchool(c.req.param("id"), actor);
@@ -12638,6 +12677,11 @@ function registerRoutes3(app, service) {
   app.post("/api/classes/:id/deactivate", requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);
     const cls = await service.deactivateClass(c.req.param("id"), actor);
+    return c.json({ data: cls }, 200);
+  });
+  app.post("/api/classes/:id/activate", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const cls = await service.activateClass(c.req.param("id"), actor);
     return c.json({ data: cls }, 200);
   });
   app.delete("/api/classes/:id", requireRole("manager"), async (c) => {

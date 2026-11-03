@@ -10,7 +10,7 @@ import {
   WEEKDAY_NAMES,
   formatJalaliNumeric
 } from '../format.js';
-import { el, icon, loadingState, skeletonState, errorState, statusBadge, emptyState, openModal, progressRing, toast, toastError } from '../ui.js'; // toast/toastError گم‌شده بود: مسیر ذخیرهٔ حسابرسی بی‌بازخورد می‌افتد
+import { el, icon, skeletonState, errorState, emptyState, openModal, progressRing, toast, toastError } from '../ui.js'; // toast/toastError گم‌شده بود: مسیر ذخیرهٔ حسابرسی بی‌بازخورد می‌افتد
 import { illoNoAnnouncements, illoKnowledge } from '../illustrations.js'; // — وکتورها
 import { session } from '../state.js';
 import { canSeeTodos, renderMyTodosCard } from '../my-todos.js';
@@ -48,7 +48,8 @@ export async function renderDashboard(container) {
   const followups = kpis?.followups ?? null;
   const validation = kpis?.validation ?? null;
 
-  if (!isTherapist && !todayData) {
+  /* برای درمانگر، null بودن me یعنی شکست بارگذاری — به‌جای کارت‌های خالیِ بی‌صدا، خطا با تلاش مجدد */
+  if ((!isTherapist && !todayData) || (isTherapist && !myStats)) {
     container.replaceChildren(errorState(new Error('بارگذاری داشبورد ناموفق بود'), () => renderDashboard(container)));
     return;
   }
@@ -250,7 +251,7 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
      ① «کارهای من» کارت قهرمان صفحه است — بزرگ‌تر (دوسوم عرض) و در صدرِ داشبورد؛
      ② «اطلاع‌رسانی مرکز» بغل‌به‌بغلِ همان کارت (یک‌سوم باقی‌مانده)؛
      ③ «دانش‌افزایی» هم بیاید بالا — بلافاصله زیر ردیف قهرمان؛
-     ④ «خط زمانی امروز» حذف شد — مدیران راضی نبودند و ضرورت نداشت (تقویم نوبت‌ها مرجع کامل همان داده است)؛
+     ④ کارت رویدادهای روز حذف شد — مدیران راضی نبودند و ضرورت نداشت (تقویم نوبت‌ها مرجع کامل همان داده است)؛
      ⑤ بقیهٔ ماژول‌ها (شاخص‌ها، تابلو، پیگیری‌ها، روند و هدف) زیر این سه می‌نشینند. */
   const todosCard = canSeeTodos() ? renderMyTodosCard() : null;
   const anCard = announcementsCard(announcements);
@@ -399,17 +400,17 @@ function leaderboardCard(rows, title, meStaffId, since = null) {
   );
 }
 
-/* ۱.۱۱.۰ — کارت «خط زمانی امروز» از داشبورد مدیر حذف شد (بازخورد مدیران: ضرورتی نداشت؛
+/* ۱.۱۱.۰ — کارت رویدادهای روز از داشبورد مدیر حذف شد (بازخورد مدیران: ضرورتی نداشت؛
    تقویم نوبت‌ها #/appointments مرجع کامل همان داده است). تابع سازندهٔ آن و CSSهای tl-card
    همراهش نیز برداشته شدند. */
 
 function followupsDueCard(rows, todayYmd) {
   const open = (Array.isArray(rows) ? rows : (rows?.data ?? [])).filter((f) => (f.status === 'open' || f.status === 'in_progress') && f.dueAt);
-  const due = open
+  const dueAll = open
     .filter((f) => String(f.dueAt).slice(0, 10) <= todayYmd)
-    .sort((a, b) => String(a.dueAt).localeCompare(String(b.dueAt)))
-    .slice(0, 6);
-  if (due.length === 0) return null;
+    .sort((a, b) => String(a.dueAt).localeCompare(String(b.dueAt)));
+  const due = dueAll.slice(0, 6); // بج از کل آرایهٔ سررسیده شمرده می‌شود، نه سقف ۶
+  if (dueAll.length === 0) return null;
   return el(
     'div',
     { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
@@ -417,7 +418,7 @@ function followupsDueCard(rows, todayYmd) {
       'div',
       { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('bell', 16), 'پیگیری‌های سررسیده'),
-      el('span', { class: 'badge badge--error' }, `${fa(due.length)} مورد`)
+      el('span', { class: 'badge badge--error' }, `${fa(dueAll.length)} مورد`)
     ),
     el(
       'div',

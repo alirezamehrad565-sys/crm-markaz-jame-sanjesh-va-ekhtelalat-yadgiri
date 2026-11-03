@@ -8,6 +8,8 @@ const SHIFT_BREAK_MINUTE = 14 * 60; // — مرز نمایشی شیفت صبح/�
 const SLOT_MINUTES = 30;            // رزولوشن نقاشی (مضرب ۱۵ دقیقه‌ایِ اسکیما)
 const SLOT_COUNT = (GRID_END_MINUTE - GRID_START_MINUTE) / SLOT_MINUTES; // ۳۰ ردیف
 
+let activePaintAbort = null; /* F5: شنونده‌های pointerup/cancel سطح window فقط برای آخرین ویرایشگر زنده بمانند — نسخهٔ جدید، نسل قبلی را سقط می‌کند */
+
 export function weeklyEditor(opts) {
   let items = [...opts.items];
 
@@ -172,12 +174,17 @@ export function weeklyEditor(opts) {
     applyAt(e.clientX, e.clientY);
   });
 
+  // F5: هر ویرایشگر شنونده‌های سطح window خودش را با signal می‌بندد — هر مونت/تب/تغییر کارمند، گریدِ نسل قبلی را جمع نمی‌کند
+  const paintAbort = new AbortController();
+  if (activePaintAbort) activePaintAbort.abort();
+  activePaintAbort = paintAbort;
+
   window.addEventListener('pointerup', () => {
     if (!painting) return;
     painting = false;
     rebuildItems();
     notifyChanged();
-  });
+  }, { signal: paintAbort.signal });
 
   // وقتی مرورگر ژست را برای اسکرول عمودی می‌گیرد، جلسهٔ رنگ‌آمیزی تمام است
   window.addEventListener('pointercancel', () => {
@@ -185,7 +192,7 @@ export function weeklyEditor(opts) {
     painting = false;
     rebuildItems();
     notifyChanged();
-  });
+  }, { signal: paintAbort.signal });
 
   grid.addEventListener('pointerleave', () => {
     if (painting) {
@@ -301,13 +308,17 @@ const local = {
   items: []
 };
 
+let staffGen = 0; /* F6: گارد نسل — پاسخ کندِ کارمند قبلی نباید زیر نامِ آخرین انتخاب بنشیند */
+
 export async function renderStaffHoursInto(container, requestedStaff = '') {
+  const myGen = ++staffGen;
   let staffErr = null;
   try {
     local.staffList = (await api.get('/api/staff?active=true')).data;
   } catch (err) {
     staffErr = err; // خطای شبکه ≠ «کارمندی نیست»
   }
+  if (myGen !== staffGen) return; // F6: درخواست جدیدتری در راه است — نقاشی ممنوع
 
   if (staffErr) {
     // پیش‌تر خطا بی‌صدا به فهرست خالی تبدیل می‌شد و دکمهٔ ذخیره فعال می‌ماند
@@ -334,6 +345,7 @@ export async function renderStaffHoursInto(container, requestedStaff = '') {
   } catch (err) {
     itemsErr = err; // خطای واکشی برنامه ≠ برنامهٔ خالی (ریسک بازنویسی با خالی)
   }
+  if (myGen !== staffGen) return; // F6: پاسخ کهنه — برنامهٔ کارمند قبلی زیر نام جدید نقاشی نشود
 
   if (itemsErr) {
     container.replaceChildren(errorState(itemsErr, () => renderStaffHoursInto(container, requestedStaff)));
@@ -351,6 +363,7 @@ export async function renderStaffHoursInto(container, requestedStaff = '') {
       try {
         await api.put(`/api/working-hours/staff/${local.staffId}`, { items: editor.getItems() });
         toast('برنامه هفتگی ذخیره شد', 'success');
+        hasEdits = false; /* F6: ذخیره شد → دیگر کثیف نیست */
       } catch (err) {
         toastError(err);
       } finally {
@@ -359,14 +372,31 @@ export async function renderStaffHoursInto(container, requestedStaff = '') {
     }
   }, icon('check', 16), 'ذخیره تغییرات');
 
+  let hasEdits = false; // F6: هر ویرایش گرید این را روشن می‌کند — جابه‌جایی کارمند تأیید می‌خواهد
+
   const staffSel = el('select', {
     class: 'select',
-    onchange: (e) => renderStaffHoursInto(container, e.target.value)
+    onchange: async (e) => {
+      if (hasEdits) { /* F6: ویرایش ذخیره‌نشده را بی‌هشدار دور نریز */
+        const ok = await confirmModal({
+          title: 'جابه‌جایی بدون ذخیره',
+          message: 'برنامهٔ هفتگی این همکار تغییر کرده ولی ذخیره نشده است — با جابه‌جایی، تغییرها از دست می‌رود. ادامه می‌دهید؟',
+          confirmLabel: 'جابه‌جایی بدون ذخیره',
+          danger: true
+        });
+        if (!ok) { e.target.value = local.staffId; return; }
+      }
+      hasEdits = false;
+      renderStaffHoursInto(container, e.target.value);
+    }
   },
     local.staffList.map((s) => el('option', { value: s.id, selected: s.id === local.staffId }, s.fullName))
   );
 
-  const editor = weeklyEditor({ items: local.items });
+  const editor = weeklyEditor({
+    items: local.items,
+    onChanged: () => { hasEdits = true; } /* F6 */
+  });
 
   container.replaceChildren(
     el('div', { class: 'toolbar' },
