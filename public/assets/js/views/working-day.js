@@ -236,13 +236,17 @@ function applyStudentStatusInBoard(apptId, studentId, status) {
   recomputeSessionStats(currentBoard);
   const rowEl = currentContainer?.querySelector?.(`.wd-appt[data-appt-id="${apptId}"] .wd-appt__student[data-student-id="${studentId}"]`);
   if (rowEl) {
-    const markEl = rowEl.querySelector('.wd-mark');
+    const markEl = rowEl.querySelector('.wd-mark'); // ۱.۲۵.۰: نشان فقط روی ردیف لغوشده می‌ماند
     if (markEl) {
       markEl.className = `wd-mark wd-mark--${SESSION_STATUS_CLS[status] ?? 'muted'}`;
       markEl.textContent = SESSION_STATUS_LABEL[status] ?? status;
       pulse(markEl);
     }
-    rowEl.querySelectorAll('.wd-appt__sbtn').forEach((b) => b.classList.toggle('is-active', b.dataset.status === status));
+    rowEl.querySelectorAll('.wd-appt__sbtn').forEach((b) => {
+      const on = b.dataset.status === status;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
   }
   patchApptVisuals(apptId);
   refreshApptChips();
@@ -748,9 +752,11 @@ function staffBlock(col, board) {
       )
     : el('span', { class: 'wd-hours wd-hours--off' }, 'بدون بازهٔ کاری');
 
-  return el('div', { class: `wd-block${st === 'absent' ? ' wd-block--absent' : ''}`, dataset: { staffId: col.staffId } },
+  /* ۱.۲۵.۰ — رنگ درمانگر روی کل بلوک نشسته تا بج شمارش و حاشیهٔ کارت‌ها و آواتار سربرگ
+     همه از یک جفت متغیر hue تغذیه شوند (وحدت رنگی سربرگ ↔ کارت‌ها) */
+  return el('div', { class: `wd-block ${hueClass(col.staffId)}${st === 'absent' ? ' wd-block--absent' : ''}`, dataset: { staffId: col.staffId } },
     el('div', { class: 'wd-block__head' },
-      el('div', { class: `staff-mini__avatar ${hueClass(col.staffId)}` }, col.fullName.trim().charAt(0)),
+      el('div', { class: `staff-mini__avatar ${hueClass(col.staffId)}`, 'aria-hidden': 'true' }, col.fullName.trim().charAt(0)),
       el('div', { class: 'wd-block__title' },
         el('div', { class: 'wd-block__name' }, col.fullName),
         el('div', { class: 'wd-block__meta' },
@@ -764,7 +770,7 @@ function staffBlock(col, board) {
         )
       ),
       el('div', { class: 'wd-block__stats' },
-        el('span', { class: 'badge badge--neutral' }, `${fa(col.appointments.length)} نوبت`)
+        el('span', { class: 'wd-block__count', title: 'تعداد نوبت‌های این درمانگر امروز (شامل لغوشده)' }, `${fa(col.appointments.length)} نوبت`)
       )
     ),
     timeline(col.appointments, board)
@@ -808,7 +814,7 @@ function apptItem(a) {
   const dotKey = attStateOf(a);
   return el('div', { class: `wd-tl__item${cancelled ? ' wd-tl__item--cancelled' : ''}`, dataset: { apptId: a.id } },
     el('div', { class: 'wd-tl__time' },
-      fa(tehranTimeOfIso(a.startAt)),
+      el('b', {}, fa(tehranTimeOfIso(a.startAt))), // ۱.۲۵.۰ — شروع پررنگ‌تر از پایان
       el('span', {}, `تا ${fa(tehranTimeOfIso(a.endAt))}`)
     ),
     el('div', { class: 'wd-tl__rail' },
@@ -840,13 +846,17 @@ function apptCard(a) {
   const durMin = Math.round((Date.parse(a.endAt) - Date.parse(a.startAt)) / 60000);
   const stType = sessionTypeOf(a.sessionType);
 
-  const head = el('div', { class: 'wd-appt__time' },
+  /* ۱.۲۵.۰ — بازطراحی کارت نوبت (فقط پیکربندی DOM، بدون تغییر منطق):
+     ① نام دانش‌آموز خط اول و برجسته است؛ نوع خدمت/مدت/وضعیت در ردیف فرودی زیر آن
+     ② چیپ‌های «۴۵ دقیقه» و «۱ دانش‌آموز» حذف شدند — مدت در ستون تایم‌لاین (شروع–پایان) و
+        شمارش در خود ردیف‌ها دیده می‌شود؛ آواتار حرفی دانش‌آموز هم برداشته شد
+     ③ سه دکمهٔ حاضر/تأخیر/غایب به یک سگمنت یکپارچه با وضعیت فعال در زمان رندر تبدیل شد
+     ④ data-appt-id روی کارت نشست — وصله‌های جراحی جریان پیوسته (نشان حضور + پیش‌نمایش توضیح)
+        تا ۱.۲۴.۰ انتخابگر مرده داشتند و درجا اعمال نمی‌شدند (رفع باگ واقعی) */
+  const meta = el('div', { class: 'wd-appt__meta' },
     cancelled ? el('span', { class: 'badge badge--neutral' }, 'لغوشده') : null,
     stType ? el('span', { class: `st-chip st-chip--${stType.key}`, title: stType.hint }, stType.short) : null,
-    el('span', { class: 'wd-hours', title: 'مدت این نوبت' }, `${fa(Math.max(0, durMin))} دقیقه`),
-    a.students.length > 0
-      ? el('span', { class: 'wd-hours', title: 'تعداد دانش‌آموزان این نوبت' }, `${fa(a.students.length)} دانش‌آموز`)
-      : null,
+    el('span', { class: 'wd-appt__dur', title: 'مدت این نوبت' }, `${fa(Math.max(0, durMin))} دقیقه`),
     el('span', { class: 'spacer' }),
     el('button', {
       class: `btn btn--ghost btn--icon btn--sm${a.note ? ' has-note' : ''}`,
@@ -909,8 +919,16 @@ function apptCard(a) {
 
   const studentRows = a.students.map((s) => {
     const cls = SESSION_STATUS_CLS[s.attendance] ?? 'muted';
+    const segBtn = (status, sbtnCls, ic, label) => el('button', {
+      class: `wd-appt__sbtn ${sbtnCls}${!cancelled && s.attendance === status ? ' is-active' : ''}`,
+      type: 'button',
+      dataset: { status },
+      'aria-pressed': !cancelled && s.attendance === status ? 'true' : 'false',
+      'aria-label': `${label} — ${s.name}`,
+      title: `${label} — ${s.name}`,
+      onclick: (e) => markStudent(a, s, status, e.currentTarget)
+    }, icon(ic, 13));
     return el('div', { class: 'wd-appt__student', dataset: { studentId: s.studentId } },
-      el('span', { class: 'wd-appt__savatar', 'aria-hidden': 'true' }, String(s.name ?? '').trim().charAt(0)),
       el('a', {
         class: 'wd-appt__sname',
         title: `پروفایل ${s.name}`,
@@ -935,42 +953,20 @@ function apptCard(a) {
             onclick: () => openSessionReport(a, s)
           }, icon('file', 12))
         : null,
-      el('span', { class: `wd-mark wd-mark--${cls}` }, SESSION_STATUS_LABEL[s.attendance] ?? s.attendance),
-      !cancelled
-        ? el('span', { class: 'wd-appt__sactions' },
-            el('button', {
-              class: 'wd-appt__sbtn wd-appt__sbtn--ok',
-              type: 'button',
-              dataset: { status: 'present' },
-              'aria-label': `حاضر — ${s.name}`,
-              title: `حاضر — ${s.name}`,
-              onclick: (e) => markStudent(a, s, 'present', e.currentTarget)
-            }, icon('check', 13)),
-            el('button', {
-              class: 'wd-appt__sbtn wd-appt__sbtn--warn',
-              type: 'button',
-              dataset: { status: 'late' },
-              'aria-label': `تأخیر — ${s.name}`,
-              title: `تأخیر — ${s.name}`,
-              onclick: (e) => markStudent(a, s, 'late', e.currentTarget)
-            }, icon('clock', 13)),
-            el('button', {
-              class: 'wd-appt__sbtn wd-appt__sbtn--err',
-              type: 'button',
-              dataset: { status: 'absent' },
-              'aria-label': `غایب — ${s.name}`,
-              title: `غایب — ${s.name}`,
-              onclick: (e) => markStudent(a, s, 'absent', e.currentTarget)
-            }, icon('x', 13))
+      cancelled
+        ? el('span', { class: `wd-mark wd-mark--${cls}` }, SESSION_STATUS_LABEL[s.attendance] ?? s.attendance)
+        : el('span', { class: 'wd-appt__sactions', role: 'group', 'aria-label': `ثبت حضور ${s.name}` },
+            segBtn('present', 'wd-appt__sbtn--ok', 'check', 'حاضر'),
+            segBtn('late', 'wd-appt__sbtn--warn', 'clock', 'تأخیر'),
+            segBtn('absent', 'wd-appt__sbtn--err', 'x', 'غایب')
           )
-        : null
     );
   });
 
-  return el('div', { class: `wd-appt${cancelled ? ' wd-appt--cancelled' : ''}${wdApptStatusClass(a)} ${hueClass(a.staffId)}` },
-    head,
-    notePreview,
-    studentRows.length > 0 ? el('div', { class: 'wd-appt__students' }, studentRows) : el('div', { class: 'wd-appt__student wd-appt__student--none' }, 'بدون دانش‌آموز')
+  return el('div', { class: `wd-appt${cancelled ? ' wd-appt--cancelled' : ''}${wdApptStatusClass(a)} ${hueClass(a.staffId)}`, dataset: { apptId: a.id } },
+    studentRows.length > 0 ? el('div', { class: 'wd-appt__students' }, studentRows) : el('div', { class: 'wd-appt__student wd-appt__student--none' }, 'بدون دانش‌آموز'),
+    meta,
+    notePreview
   );
 }
 
@@ -1246,16 +1242,15 @@ function openAppointmentNoteModal(appt) {
       const fresh = res?.data;
       if (fresh?.version != null) appt.version = fresh.version; // برای ویرایش بعدی
       appt.note = values.note || '';
-      /* جریان پیوسته: فقط پیش‌نمایش توضیح همین کارت پچ می‌شود */
+      /* جریان پیوسته: فقط پیش‌نمایش توضیح همین کارت پچ می‌شود (لنگر data-appt-id — ۱.۲۵.۰ زنده شد) */
       const cardEl = currentContainer?.querySelector?.(`.wd-appt[data-appt-id="${appt.id}"]`);
       if (cardEl) {
         const preview = cardEl.querySelector('.wd-appt__note');
-        const editBtn = cardEl.querySelector('.wd-appt__time .btn--icon:not(.wd-appt__del)');
-        const studentsEl = cardEl.querySelector('.wd-appt__students, .wd-appt__student');
+        const editBtn = cardEl.querySelector('.wd-appt__meta .btn--icon:not(.wd-appt__del)');
         if (appt.note) {
           const text = appt.note.length > 90 ? `${appt.note.slice(0, 90)}…` : appt.note;
           if (preview) { preview.textContent = text; preview.title = appt.note; }
-          else cardEl.insertBefore(el('div', { class: 'wd-appt__note', title: appt.note }, text), studentsEl);
+          else cardEl.querySelector('.wd-appt__meta')?.insertAdjacentElement('afterend', el('div', { class: 'wd-appt__note', title: appt.note }, text));
           if (editBtn) { editBtn.classList.add('has-note'); editBtn.title = appt.note; }
           pulse(cardEl.querySelector('.wd-appt__note'));
         } else {

@@ -64,7 +64,7 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('نسخه: سو 1.19.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.24\.0'/);
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.25\.0'/);
   });
 
   test('۱.۱۹.۰ — روز کاری: جریان پیوسته (هیچ اکشنی کل نما را re-render نمی‌کند)', () => {
@@ -90,6 +90,27 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(views).toMatch(/\.wd-appt__sbtn--ok\.is-active/);
     expect(views).toMatch(/\.att-row\.is-busy/);
     expect(views).toMatch(/prefers-reduced-motion/);
+  });
+
+  test('۱.۲۵.۰ — بازطراحی کارت‌های نوبت روز کاری (فقط UI؛ بدون تغییر منطق)', () => {
+    const wd = readFileSync(join(__dirname, '../../public/assets/js/views/working-day.js'), 'utf8');
+    const views = readFileSync(join(__dirname, '../../public/assets/css/views.css'), 'utf8');
+    // رفع باگ واقعی: لنگر data-appt-id روی خود کارت نوبت — بدون آن دو وصلهٔ جراحی
+    // (نشان حضور دانش‌آموز + پیش‌نمایش توضیح) انتخابگر مرده داشتند و درجا اعمال نمی‌شدند
+    expect(wd).toMatch(/class: `wd-appt\$\{cancelled[\s\S]*?dataset: \{ apptId: a\.id \}/);
+    // کالبدشناسی تازهٔ کارت: دانش‌آموز خط اول، ردیف فرودی meta (جای wd-appt__time)
+    expect(wd).toMatch(/wd-appt__meta/);
+    expect(wd).not.toMatch(/wd-appt__time/);
+    expect(wd).not.toMatch(/wd-appt__savatar/); // آواتار حرفی دانش‌آموز حذف شد
+    expect(wd).toMatch(/el\('b', \{\}, fa\(tehranTimeOfIso\(a\.startAt\)\)\)/); // شروع برجسته در تایم‌لاین
+    expect(wd).toMatch(/wd-block__count/); // بج شمارش هم‌رنگ درمانگر
+    expect(wd).toMatch(/'aria-pressed': !cancelled && s\.attendance === status \? 'true' : 'false'/); // وضعیت فعال سگمنت در رندر
+    // CSS: سگمنت یکپارچه + ردیف فرودی + گرید واید + نبض «الان»
+    expect(views).toMatch(/\.wd-appt__sactions \{[\s\S]*?border-radius: var\(--radius-full\)/);
+    expect(views).toMatch(/\.wd-appt__meta \.btn--icon \{ width: 26px/);
+    expect(views).toMatch(/@media \(min-width: 1100px\) \{\n  \.wd-flow \{ display: grid/);
+    expect(views).toMatch(/@keyframes wdNowRing/);
+    expect(views).not.toMatch(/\.wd-appt__savatar/); // قانون CSS آواتار حرفی هم پاک شد
   });
 
   test('۱.۱۸.۰ — حذف سیستم موازی «وضعیت عملیاتی» (آمد/نیامد/شروع و اتمام جلسه): فقط حضور و غیاب', () => {
