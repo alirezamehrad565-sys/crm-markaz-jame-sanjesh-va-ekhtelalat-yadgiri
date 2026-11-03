@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { el, icon, toast, toastError, emptyState, skeletonState, statusBadge } from '../ui.js';
+import { el, icon, toast, toastError, emptyState, skeletonState, statusBadge, collapseRemove, lockBtn } from '../ui.js';
 import { fa, formatJalaliDateTime } from '../format.js';
 
 const TEMPLATE_LABELS = {
@@ -27,23 +27,7 @@ function templateLabel(t) {
   return TEMPLATE_LABELS[t] ?? t;
 }
 
-function sectionCard(title, hint, items, actionsBuilder) {
-  /* UX-ممیزی الگوی ۷: سه زبان متفاوت حالت خالی یکی شد — ردیف کوچک با آیکون به‌جای «— ردیفی نیست —» */
-  const rows = items.length
-    ? items.map(actionsBuilder)
-    : [el('div', { class: 'sanj-widget__empty', style: { padding: 'var(--sp-4)' } }, icon('check', 15), el('span', {}, 'موردی در این بخش نیست'))];
-
-  return el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
-    el('div', { style: { padding: 'var(--sp-3) var(--sp-4)', borderBottom: '1px solid var(--border)' } },
-      el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' } },
-        el('h3', { style: { margin: 0 } }, title),
-        el('span', { class: 'badge badge--neutral' }, fa(items.length))
-      ),
-      el('p', { class: 'hint-text', style: { margin: '4px 0 0' } }, hint)
-    ),
-    el('div', {}, ...rows)
-  );
-}
+/* sectionCard قدیمی با makeSection درجای renderOutbox یکی شد (۱.۲۱.۰) */
 
 function recordRow(n, actionButton) {
   const meta = [];
@@ -52,7 +36,7 @@ function recordRow(n, actionButton) {
   if (n.sentAt) meta.push(`فرستاده‌شده: ${formatJalaliDateTime(n.sentAt)}`);
   if (n.attempts > 0) meta.push(`تلاش: ${fa(n.attempts)}`);
 
-  return el('div', { style: {
+  return el('div', { dataset: { notifId: String(n.id) }, style: {
     display: 'flex', alignItems: 'center', gap: 'var(--sp-3)',
     padding: 'var(--sp-3) var(--sp-4)', borderBottom: '1px solid var(--border)'
   } },
@@ -82,15 +66,102 @@ export async function renderOutbox(outlet) {
     return;
   }
 
-  const { drafts, ready, failed } = data;
+  /* —— ۱.۲۱.۰ جریان پیوسته (زبان ۱.۱۹/۱.۲۰): شِل صفحه یک‌بار مونت می‌شود؛
+     «ارسال فوری» ردیف خودش را جمع‌وشون می‌کند و بج‌های شمارش را درجا به‌روز می‌کند؛
+     «تلاش دوبارهٔ همه» فقط بدنهٔ سه بخش را بی‌صدا همگام می‌کند.
+     دیگر هیچ اکشنی کل صندوق را با اسکلت rebuild نمی‌کند. —— */
 
-  const refresh = () => renderOutbox(outlet);
+  const headBadge = el('span', { class: 'badge badge--neutral' });
+  const sections = {};
+
+  function makeSection(key, title, hint) {
+    const countBadge = el('span', { class: 'badge badge--neutral' });
+    const bodyEl = el('div', {});
+    const card = el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
+      el('div', { style: { padding: 'var(--sp-3) var(--sp-4)', borderBottom: '1px solid var(--border)' } },
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' } },
+          el('h3', { style: { margin: 0 } }, title),
+          countBadge
+        ),
+        el('p', { class: 'hint-text', style: { margin: '4px 0 0' } }, hint)
+      ),
+      bodyEl
+    );
+    sections[key] = { countBadge, bodyEl };
+    return card;
+  }
+
+  function sectionBodyRow(key, n) {
+    if (key === 'drafts') {
+      return recordRow(n,
+        el('button', { class: 'btn btn--primary btn--sm', onclick: () => release(n) }, icon('zap', 15), 'ارسال فوری'));
+    }
+    if (key === 'ready') {
+      return recordRow(n,
+        el('button', { class: 'btn btn--soft btn--sm', onclick: () => release(n) }, icon('zap', 15), 'ارسال فوری'));
+    }
+    return recordRow(n,
+      el('button', { class: 'btn btn--soft btn--sm', onclick: () => release(n) }, icon('refresh', 15), 'تلاش دوباره'));
+  }
+
+  function renderSections() {
+    for (const key of ['drafts', 'ready', 'failed']) {
+      const arr = data[key] ?? [];
+      const { countBadge, bodyEl } = sections[key];
+      countBadge.textContent = fa(arr.length);
+      bodyEl.replaceChildren(
+        ...(arr.length
+          ? arr.map((n) => sectionBodyRow(key, n))
+          : [el('div', { class: 'sanj-widget__empty', style: { padding: 'var(--sp-4)' } }, icon('check', 15), el('span', {}, 'موردی در این بخش نیست'))])
+      );
+    }
+    headBadge.textContent = `پیش‌نویس ${fa((data.drafts ?? []).length)} · آماده ${fa((data.ready ?? []).length)} · ناموفق ${fa((data.failed ?? []).length)}`;
+    syncRetryBtn();
+  }
+
+  /* فقط بج‌های شمارش و دکمهٔ تلاش‌دوباره — بدون دست‌زدن به بدنه‌ها (انیمیشن جمع‌شدن سالم می‌ماند) */
+  function updateBadges() {
+    for (const key of ['drafts', 'ready', 'failed']) {
+      sections[key].countBadge.textContent = fa((data[key] ?? []).length);
+    }
+    headBadge.textContent = `پیش‌نویس ${fa((data.drafts ?? []).length)} · آماده ${fa((data.ready ?? []).length)} · ناموفق ${fa((data.failed ?? []).length)}`;
+    syncRetryBtn();
+  }
+
+  /* پس از پایان انیمیشن جمع‌شدن، حالت خالی هر بخشی که تخلیه شده بنشیند */
+  function paintEmptyIfDrained() {
+    if (!outlet.isConnected) return;
+    for (const key of ['drafts', 'ready', 'failed']) {
+      const { bodyEl } = sections[key];
+      if ((data[key] ?? []).length === 0 && !bodyEl.querySelector('[data-notif-id]')) {
+        bodyEl.replaceChildren(el('div', { class: 'sanj-widget__empty', style: { padding: 'var(--sp-4)' } }, icon('check', 15), el('span', {}, 'موردی در این بخش نیست')));
+      }
+    }
+  }
+
+  const retryAllBtn = el('button', { class: 'btn btn--soft btn--sm', onclick: (e) => lockBtn(e.currentTarget, retryAll) }, icon('refresh', 15), 'تلاش دوبارهٔ همه');
+  const retryRow = el('div', { style: { display: 'flex', justifyContent: 'flex-end' } }, retryAllBtn);
+
+  function syncRetryBtn() {
+    const show = (data.failed ?? []).length > 0;
+    if (show && !retryRow.isConnected) outlet.append(retryRow);
+    if (!show && retryRow.isConnected) retryRow.remove();
+  }
 
   async function release(n) {
     try {
       await api.post(`/api/notifications/${n.id}/release`);
       toast('اعلان ارسال شد', 'success');
-      refresh();
+      // — حذف محلی از بخش خودش + جمع‌شدن نرم همان ردیف؛ بج‌ها درجا
+      for (const key of ['drafts', 'ready', 'failed']) {
+        const arr = data[key] ?? [];
+        const i = arr.findIndex((x) => x.id === n.id);
+        if (i >= 0) { arr.splice(i, 1); break; }
+      }
+      const row = outlet.querySelector(`[data-notif-id="${CSS.escape(String(n.id))}"]`);
+      if (row) collapseRemove(row);
+      updateBadges(); // فقط بج‌ها درجا؛ بدنه‌ها و انیمیشن دست‌نخورده
+      setTimeout(paintEmptyIfDrained, 300);
     } catch (err) {
       toastError(err);
     }
@@ -101,47 +172,23 @@ export async function renderOutbox(outlet) {
       const res = await api.post('/api/notifications/failed/retry');
       const retried = res.data ?? 0;
       toast(`تلاش دوباره برای ${fa(retried)} اعلان ناموفق انجام شد`, 'success');
-      refresh();
+      data = (await api.get('/api/notifications/outbox')).data; // — همگام‌سازی بی‌صدا؛ بدون اسکلت
+      renderSections();
     } catch (err) {
       toastError(err);
     }
   }
 
-  const retryAllBtn = failed.length
-    ? el('button', { class: 'btn btn--soft btn--sm', onclick: retryAll }, icon('refresh', 15), 'تلاش دوبارهٔ همه')
-    : null;
-
   outlet.replaceChildren(
     el('div', { class: 'page-head' },
       el('h2', { class: 'page-head__title' }, 'صندوق اعلان‌ها') /* S9-04 */,
-      el('span', { class: 'badge badge--neutral' },
-        `پیش‌نویس ${fa(drafts.length)} · آماده ${fa(ready.length)} · ناموفق ${fa(failed.length)}`)
+      headBadge
     ),
     el('p', { class: 'hint-text', style: { marginTop: '0' } },
       'اعلان‌های ثبت نوبت تا «ساعت ارسال» (پیش‌فرض ۱۸:۰۰) پیش‌نویس می‌مانند و یک‌جا می‌روند؛ تغییر، لغو، تکلیف و غیبت فوری ارسال می‌شوند.'), /* UX-ممیزی گلایهٔ ۶: پاراگراف ۵ خطی خلاصه شد — جزئیات در hint هر بخش */
-    sectionCard(
-      'پیش‌نویس‌ها (در انتظار ساعت ارسال)',
-      'با «ارسال فوری» پیش از ساعت مقرر هم می‌توانید بفرستید.',
-      drafts,
-      (n) => recordRow(n,
-        el('button', { class: 'btn btn--primary btn--sm', onclick: () => release(n) }, icon('zap', 15), 'ارسال فوری'))
-    ),
-    sectionCard(
-      'آمادهٔ ارسال',
-      'اعلان‌های فوری که در چرخهٔ بعدی (چند دقیقه) ارسال می‌شوند.',
-      ready,
-      (n) => recordRow(n,
-        el('button', { class: 'btn btn--soft btn--sm', onclick: () => release(n) }, icon('zap', 15), 'ارسال فوری'))
-    ),
-    sectionCard(
-      'ناموفق‌ها',
-      'پس از ۵ تلاش رها شده‌اند — علت در ستون خطا؛ با «ارسال فوری» یا «تلاش دوبارهٔ همه» دوباره می‌روند.',
-      failed,
-      (n) => recordRow(n,
-        el('button', { class: 'btn btn--soft btn--sm', onclick: () => release(n) }, icon('refresh', 15), 'تلاش دوباره'))
-    ),
-    ...(retryAllBtn
-      ? [el('div', { style: { display: 'flex', justifyContent: 'flex-end' } }, retryAllBtn)]
-      : []) // replaceChildren آرگومان null را گرهٔ متنی «null» می‌کند
+    makeSection('drafts', 'پیش‌نویس‌ها (در انتظار ساعت ارسال)', 'با «ارسال فوری» پیش از ساعت مقرر هم می‌توانید بفرستید.'),
+    makeSection('ready', 'آمادهٔ ارسال', 'اعلان‌های فوری که در چرخهٔ بعدی (چند دقیقه) ارسال می‌شوند.'),
+    makeSection('failed', 'ناموفق‌ها', 'پس از ۵ تلاش رها شده‌اند — علت در ستون خطا؛ با «ارسال فوری» یا «تلاش دوبارهٔ همه» دوباره می‌روند.')
   );
+  renderSections();
 }
