@@ -1209,6 +1209,34 @@ body.is-login { background: var(--bg); }
   margin-bottom: 2px;
 }
 
+/* ── ۱.۱۹.۰ جریان پیوسته: بازخورد فوری دکمه‌ها بدون رفرش نما ── */
+.wd-mark { transition: background var(--fast), color var(--fast); }
+.wd-appt__sbtn.is-active { transform: scale(1.05); }
+.wd-appt__sbtn--ok.is-active { background: var(--success); border-color: var(--success); color: var(--on-success); }
+.wd-appt__sbtn--warn.is-active { background: var(--warning); border-color: var(--warning); color: var(--on-warning); }
+.wd-appt__sbtn--err.is-active { background: var(--error); border-color: var(--error); color: var(--on-error); }
+.wd-flash { animation: wdFlash .55s ease; }
+@keyframes wdFlash {
+  0% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  65% { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.is-resolving {
+  opacity: 0; height: 0 !important; margin-top: 0 !important; margin-bottom: 0 !important;
+  padding-top: 0 !important; padding-bottom: 0 !important; overflow: hidden;
+  transition: opacity .18s ease, height .22s ease, margin .22s ease, padding .22s ease;
+}
+.wd-note--fresh { animation: wdNoteIn .32s ease; }
+@keyframes wdNoteIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: none; }
+}
+.wd-att__row.is-busy, .att-row.is-busy { opacity: .6; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .wd-flash, .wd-note--fresh { animation: none; }
+  .is-resolving { transition: none; }
+}
+
 @media (max-width: 760px) {
   .wd-tl__item { grid-template-columns: 50px 16px minmax(0, 1fr); }
   .wd-tl__time { font-size: var(--fs-xs); }
