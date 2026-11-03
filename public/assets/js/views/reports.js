@@ -15,7 +15,10 @@ function defaultRange() {
   return { from: addDaysYmd(today, -29), to: today };
 }
 
+let renderGen = 0; // F9: گارد نسل — پاسخ کهنهٔ کلیک‌های سریع فیلتر/پریست نباید جایگزین محتوا شود (الگوی waitlist/progress-board)
+
 export async function renderReports(container) {
+  const myGen = ++renderGen;
   if (!local.from || !local.to) {
     const d = defaultRange();
     local.from = d.from;
@@ -32,9 +35,11 @@ export async function renderReports(container) {
     try {
       adv = (await api.get(`/api/reports/advanced${qs({ from: local.from, to: local.to })}`)).data;
     } catch (err) {
+      if (myGen !== renderGen) return; // F9: پاسخ کهنه
       container.replaceChildren(modeSeg, errorState(err, () => renderReports(container)));
       return;
     }
+    if (myGen !== renderGen) return; // F9: پاسخ کهنه — کلیک جدیدتری در پرواز است
     container.replaceChildren(modeSeg, buildAdvancedView(adv, container));
     return;
   }
@@ -43,10 +48,12 @@ export async function renderReports(container) {
   try {
     report = (await api.get(`/api/reports${qs({ from: local.from, to: local.to })}`)).data;
   } catch (err) {
+    if (myGen !== renderGen) return; // F9: پاسخ کهنه
     container.replaceChildren(modeSeg, errorState(err, () => renderReports(container)));
     return;
   }
 
+  if (myGen !== renderGen) return; // F9: پاسخ کهنه — کلیک جدیدتری در پرواز است
   container.replaceChildren(modeSeg, buildView(report, container));
 }
 

@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { fa, formatJalaliNumeric, tehranYmdOfIso } from '../format.js';
-import { el, icon, formModal, confirmModal, openModal, toast, toastError, statusBadge, loadingState, emptyState, phoneCell, collapseRemove, flashNode, lockBtn } from '../ui.js';
+import { el, icon, formModal, confirmModal, toast, toastError, statusBadge, loadingState, emptyState, phoneCell, collapseRemove, flashNode, lockBtn } from '../ui.js';
 import { renderProgressBoardCard } from './progress-board.js'; // — تابلوی پیشرفت (مدیر)
 import { invalidateStudentFormMeta } from '../student-form.js'; // — کش فرم دانش‌آموز بعد از هر تغییر کارکنان تازه شود
 import { openBotLinkModal } from '../bot-link.js'; // — لینک احراز خودکار بات
@@ -128,8 +128,14 @@ export async function renderStaff(container) {
 
   function renderTbody(list) {
     rows = list;
-    countBadge.textContent = `نتیجه: ${fa(list.length)} نفر`;
-    tbody.replaceChildren(...(list.length ? list.map((s) => rowEl(s)) : [emptyRow()]));
+    const visible = list.filter(matchesFilter); /* ۱.۲۲.۲ (F1) — همیشه با فیلتر فعلی نقاشی می‌شود؛ ضد شبحِ ردیف غیرفعال‌شده — بدون فیلتر ایدم‌پوتنت است */
+    countBadge.textContent = `نتیجه: ${fa(visible.length)} نفر`;
+    tbody.replaceChildren(...(visible.length ? visible.map((s) => rowEl(s)) : [emptyRow()]));
+  }
+
+  /* ۱.۲۲.۲ (F2) — بج شمارنده پس از حذف/خروج از فیلتر بی‌درنگ تازه می‌شود — بدون GET */
+  function updateCountBadge() {
+    countBadge.textContent = `نتیجه: ${fa(rows.filter(matchesFilter).length)} نفر`;
   }
 
   let gen = 0; // — گارد نسل: پاسخ کهنه رندر نمی‌شود
@@ -159,7 +165,7 @@ export async function renderStaff(container) {
       rows = rows.map((r) => (r.id === s.id ? s : r));
       const old = tbody.querySelector(`tr[data-id="${CSS.escape(String(s.id))}"]`);
       if (!old) { ctl.quietSync(); return; } // با فیلتر فعلی تازه وارد دید شده
-      if (!matchesFilter(s)) { collapseRemove(old); ensureNonEmptyPaint(); return; } // از فیلتر خارج شد
+      if (!matchesFilter(s)) { collapseRemove(old); updateCountBadge(); ensureNonEmptyPaint(); return; } // از فیلتر خارج شد
       const fresh = rowEl(s);
       old.replaceWith(fresh);
       flashNode(fresh);
@@ -168,7 +174,7 @@ export async function renderStaff(container) {
     remove(id) {
       rows = rows.filter((r) => r.id !== id);
       const old = tbody.querySelector(`tr[data-id="${CSS.escape(String(id))}"]`);
-      if (old) { collapseRemove(old); ensureNonEmptyPaint(); }
+      if (old) { collapseRemove(old); updateCountBadge(); ensureNonEmptyPaint(); }
     },
     /* همگام‌سازی بی‌صدا: GET با فیلتر فعلی — فقط tbody */
     quietSync: refreshRows

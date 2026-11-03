@@ -58,6 +58,13 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
     return c.json({ data: school }, 200);
   });
 
+  /* ۱.۲۴.۰ — فعال‌سازی مجدد مدرسه؛ قرینهٔ deactivate (رفع حفرهٔ برگشت‌ناپذیری) */
+  app.post('/api/schools/:id/activate', requireRole('manager'), async (c) => {
+    const actor = getAuthContext(c);
+    const school = await service.activateSchool(c.req.param('id'), actor);
+    return c.json({ data: school }, 200);
+  });
+
   app.delete('/api/schools/:id', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     await service.deleteSchool(c.req.param('id'), actor);
@@ -103,6 +110,13 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
   app.post('/api/classes/:id/deactivate', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     const cls = await service.deactivateClass(c.req.param('id'), actor);
+    return c.json({ data: cls }, 200);
+  });
+
+  /* ۱.۲۴.۰ — فعال‌سازی مجدد کلاس؛ قرینهٔ deactivate */
+  app.post('/api/classes/:id/activate', requireRole('manager'), async (c) => {
+    const actor = getAuthContext(c);
+    const cls = await service.activateClass(c.req.param('id'), actor);
     return c.json({ data: cls }, 200);
   });
 
