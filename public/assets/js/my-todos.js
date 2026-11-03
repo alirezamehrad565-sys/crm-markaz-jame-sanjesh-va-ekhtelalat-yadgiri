@@ -10,7 +10,10 @@ import {
   emptyState,
   loadingState,
   skeletonState,
-  errorState
+  errorState,
+  lockBtn,
+  collapseRemove,
+  flashNode
 } from './ui.js';
 import { fa, formatJalaliNumeric, tehranYmdOfIso } from './format.js';
 import { jalaliDateInput } from './jalali-picker.js';
@@ -58,52 +61,112 @@ export function renderMyTodosCard() {
 
   let box = 'inbox';
   let assignees = null; // کش سبک — کارکنان privileged غیر از خودم
+  let items = []; // — کش محلی برای پچ درجای آیتم‌ها
+  let gen = 0; // — گارد نسل: پاسخ کهنه رندر نمی‌شود
+  let chromeBuilt = false;
+  let listZone = null;
+  let tabApi = null;
 
-  async function refresh() {
-    body.replaceChildren(skeletonState('list', 5));
+  /* —— ۱.۲۱.۰ جریان پیوسته (زبان ۱.۱۹/۱.۲۰):
+     شِل کارت — ردیف افزودن + تب‌ها — یک‌بار ساخته می‌شود؛ اسکلت فقط در نخستین mount.
+     هر اکشن (انجام/ویرایش/حذف/افزودن/تیک چک‌لیست) آیتم خودش را درجا پچ می‌کند
+     (upsertTodoItem) و بج توجه را بی‌صدا همگام می‌کند (syncQuiet) —
+     دیگر هیچ مسیری کل بدنهٔ کارت را با اسکلت rebuild نمی‌کند. —— */
+  async function refresh({ silent = false } = {}) {
+    const myGen = ++gen;
+    if (!silent) body.replaceChildren(skeletonState('list', 5));
     try {
       const [todosRes, staffRes] = await Promise.all([
         api.get(`/api/todos?box=${box}`),
         assignees ? Promise.resolve(null) : api.get('/api/staff?active=true')
       ]);
+      if (myGen !== gen) return;
       if (staffRes) {
         assignees = staffRes.data.filter(
           (s) => (s.role === 'manager' || s.role === 'secretary') && s.id !== session.user?.staffId
         );
       }
-      draw(todosRes.data ?? [], todosRes.badge ?? { urgent: 0, overdue: 0, attention: 0 });
+      items = todosRes.data ?? [];
+      if (!chromeBuilt) buildChrome();
+      syncBadge(todosRes.badge ?? { urgent: 0, overdue: 0, attention: 0 });
+      renderList();
     } catch (err) {
-      body.replaceChildren(errorState(err, refresh));
+      if (myGen !== gen) return;
+      chromeBuilt = false; // — بدنه عوض شد؛ شِل در موفقیت بعدی از نو مونت شود
+      listZone = null;
+      body.replaceChildren(errorState(err, () => refresh()));
     }
   }
 
-  function draw(items, badge) {
+  /* همگام‌سازی بی‌صدای فهرست + بج پس از mutation — بدون اسکلت، ردیف افزودن و تب‌ها دست‌نخورده */
+  async function syncQuiet() {
+    const myGen = ++gen;
+    try {
+      const res = await api.get(`/api/todos?box=${box}`);
+      if (myGen !== gen) return;
+      items = res.data ?? [];
+      syncBadge(res.badge ?? { urgent: 0, overdue: 0, attention: 0 });
+      renderList();
+    } catch {
+      /* بی‌صدا — پچ درجای قبلاً اعمال شده؛ سرور در همگام‌سازی بعدی حاکم می‌شود */
+    }
+  }
+
+  function syncBadge(badge) {
     if (box === 'inbox' && badge.attention > 0) {
       countBadge.textContent = `نیازمند توجه: ${fa(badge.attention)}`;
       countBadge.hidden = false;
     } else {
       countBadge.hidden = true;
     }
+  }
 
-    const tb = tabs(
-      [
-        { key: 'inbox', label: 'دریافتی', icon: 'check' },
-        { key: 'outbox', label: 'واگذارشدهٔ من', icon: 'edit' }
-      ],
-      box
-    );
-
+  function buildChrome() {
+    chromeBuilt = true;
     /* UX-ممیزی گلایهٔ ۴: ردیف ۶ کنترلیِ افزودن، همیشه بالا بود و ناحیهٔ میانی را خالی نشان می‌داد؛
        اکنون پشت دکمهٔ «کار جدید» جمع می‌شود و با باز شدن فوکوس مستقیم روی عنوان می‌رود */
     if (!quickRow) quickRow = quickAddRow();
     addToggle.classList.toggle('is-active', !quickRow.hidden);
-
+    // — رفع باگ واقعی: tabs بدون onSelect ساخته می‌شد؛ کلیک تب TypeError می‌داد و جعبه هرگز عوض نمی‌شد
+    tabApi = tabs(
+      [
+        { key: 'inbox', label: 'دریافتی', icon: 'check', onSelect: switchBox },
+        { key: 'outbox', label: 'واگذارشدهٔ من', icon: 'edit', onSelect: switchBox }
+      ],
+      box
+    );
+    listZone = el('div', {});
     body.replaceChildren(
       el('div', { class: 'todo-quick__bar' }, addToggle),
       quickRow,
-      tb.root,
-      box === 'inbox' ? inboxList(items) : outboxList(items)
+      tabApi.root,
+      listZone
     );
+  }
+
+  function switchBox(key) {
+    if (key === box) return;
+    box = key;
+    tabApi?.setActive(key);
+    refresh({ silent: true }); // — تعویض جعبه: GET تازه فقط برای محلهٔ فهرست، بدون اسکلت کل کارت
+  }
+
+  function renderList() {
+    if (!listZone) return;
+    listZone.replaceChildren(box === 'inbox' ? inboxList(items) : outboxList(items));
+  }
+
+  /* به‌روزرسانی درجای یک آیتم از بدنهٔ پاسخ mutation — همسایه‌ها، اسکرول و فوکوس سرجایشان */
+  function upsertTodoItem(t) {
+    if (!t?.id) { syncQuiet(); return; }
+    const i = items.findIndex((x) => x.id === t.id);
+    if (i >= 0) items[i] = t;
+    else items.unshift(t);
+    const oldEl = listZone?.querySelector(`.todo-item[data-id="${CSS.escape(String(t.id))}"]`);
+    if (!listZone || !oldEl) { syncQuiet(); return; } // در جعبهٔ فعلی نیست (مثلاً واگذاری از دریافتی) — همگام آرام
+    const fresh = box === 'inbox' ? buildInboxItem(t) : buildOutboxItem(t);
+    oldEl.replaceWith(fresh);
+    flashNode(fresh);
   }
 
   let quickRow = null;
@@ -174,7 +237,7 @@ export function renderMyTodosCard() {
         return;
       }
       try {
-        await api.post('/api/todos', {
+        const res = await api.post('/api/todos', {
           title: t,
           assignee_id: sel.value === SELF_VALUE ? session.user.staffId : sel.value,
           priority: prio.value,
@@ -188,9 +251,13 @@ export function renderMyTodosCard() {
         checkArea.value = '';
         checkArea.hidden = true;
         window.dispatchEvent(new Event('todos:changed'));
-        box = 'outbox';
         quickRow.hidden = true; /* UX-ممیزی: پس از ثبت، ردیف افزودن دوباره جمع می‌شود */
-        refresh();
+        addToggle.setAttribute('aria-expanded', 'false');
+        addToggle.classList.remove('is-active');
+        /* ۱.۲۱.۰: پرش اجباری به تب «واگذارشده‌ها» حذف شد — کاربر روی همین تب می‌ماند؛
+           کار تازه اگر متعلق به جعبهٔ فعلی باشد همان‌جا با فلش ظاهر می‌شود */
+        await syncQuiet();
+        flashNode(listZone?.querySelector(`.todo-item[data-id="${CSS.escape(String(res.data?.id ?? ''))}"]`));
       } catch (err) {
         toastError(err);
       }
@@ -292,101 +359,102 @@ export function renderMyTodosCard() {
     return listEl;
   }
 
-  function inboxList(items) {
-    if (items.length === 0) {
+  function inboxList(list) {
+    if (list.length === 0) {
       return emptyState({
         iconName: 'check',
         title: 'کاری روی میز شما نیست',
         hint: 'کار شخصی بسازید یا از ردیف بالای کارت، کاری به خودتان یا همکار واگذار کنید.'
       });
     }
+    return el('div', { class: 'todo-list' }, list.map((t) => buildInboxItem(t)));
+  }
+
+  /* سازندهٔ تک‌آیتم (۱.۲۱.۰) — شناسه‌دار برای پچ درجای upsertTodoItem */
+  function buildInboxItem(t) {
+    const meta = [];
+    if (t.priority === 'urgent') meta.push(el('span', { class: 'badge badge--error' }, 'فوری'));
+    if (t.dueAt) {
+      meta.push(el('span', { class: `badge ${isOverdue(t) ? 'badge--error' : 'badge--neutral'}` }, dueLabel(t)));
+    }
+    meta.push(progressBadge(t));
+    if (t.note) meta.push(el('span', { class: 'todo-note', title: t.note }, t.note));
+    meta.push(
+      isPersonal(t)
+        ? el('span', { class: 'badge badge--neutral' }, 'شخصی')
+        : el('span', { class: 'todo-by' }, `ثبت‌کننده: ${t.assignerName ?? '—'}`)
+    );
+    const checkEl = el('div', { class: 'todo-checklist-zone' }, checklistBlock(t));
     return el(
       'div',
-      { class: 'todo-list' },
-      items.map((t) => {
-        const meta = [];
-        if (t.priority === 'urgent') meta.push(el('span', { class: 'badge badge--error' }, 'فوری'));
-        if (t.dueAt) {
-          meta.push(el('span', { class: `badge ${isOverdue(t) ? 'badge--error' : 'badge--neutral'}` }, dueLabel(t)));
-        }
-        meta.push(progressBadge(t));
-        if (t.note) meta.push(el('span', { class: 'todo-note', title: t.note }, t.note));
-        meta.push(
-          isPersonal(t)
-            ? el('span', { class: 'badge badge--neutral' }, 'شخصی')
-            : el('span', { class: 'todo-by' }, `ثبت‌کننده: ${t.assignerName ?? '—'}`)
-        );
-        const checkEl = el('div', { class: 'todo-checklist-zone' }, checklistBlock(t));
-        return el(
-          'div',
-          { class: `todo-item${isOverdue(t) ? ' is-overdue' : ''}${t.status === 'done' ? ' is-done' : ''}` },
-          t.status === 'done'
-            ? el('input', { type: 'checkbox', class: 'todo-check', checked: true, disabled: true, title: 'انجام شده' })
-            : el('input', { type: 'checkbox', class: 'todo-check', title: 'انجام شد', onchange: () => completeTodo(t) }),
-          el(
-            'div',
-            { class: 'todo-main' },
-            el('div', { class: 'todo-item__title' }, t.title),
-            el('div', { class: 'todo-item__meta' }, meta),
-            checkEl
-          )
-        );
-      })
+      { class: `todo-item${isOverdue(t) ? ' is-overdue' : ''}${t.status === 'done' ? ' is-done' : ''}`, dataset: { id: String(t.id) } },
+      t.status === 'done'
+        ? el('input', { type: 'checkbox', class: 'todo-check', checked: true, disabled: true, title: 'انجام شده' })
+        : el('input', { type: 'checkbox', class: 'todo-check', title: 'انجام شد', onchange: (e) => lockBtn(e.target, () => completeTodo(t, e.target)) }),
+      el(
+        'div',
+        { class: 'todo-main' },
+        el('div', { class: 'todo-item__title' }, t.title),
+        el('div', { class: 'todo-item__meta' }, meta),
+        checkEl
+      )
     );
   }
 
-  function outboxList(items) {
-    if (items.length === 0) {
+  function outboxList(list) {
+    if (list.length === 0) {
       return emptyState({
         iconName: 'edit',
         title: 'کاری واگذار نکرده‌اید',
         hint: 'از ردیف «کار جدید» بالای همین کارت، برای خودتان (شخصی) یا همکار مقابل ثبت کنید.'
       });
     }
+    return el('div', { class: 'todo-list' }, list.map((t) => buildOutboxItem(t)));
+  }
+
+  function buildOutboxItem(t) {
     return el(
       'div',
-      { class: 'todo-list' },
-      items.map((t) =>
+      { class: `todo-item${t.status === 'done' ? ' is-done' : ''}`, dataset: { id: String(t.id) } },
+      el(
+        'div',
+        { class: 'todo-main' },
+        el('div', { class: 'todo-item__title' }, t.title),
         el(
           'div',
-          { class: `todo-item${t.status === 'done' ? ' is-done' : ''}` },
-          el(
-            'div',
-            { class: 'todo-main' },
-            el('div', { class: 'todo-item__title' }, t.title),
-            el(
-              'div',
-              { class: 'todo-item__meta' },
-              t.priority === 'urgent' ? el('span', { class: 'badge badge--error' }, 'فوری') : null,
-              el('span', { class: `badge ${t.status === 'done' ? 'badge--success' : 'badge--neutral'}` }, t.status === 'done' ? 'انجام شد' : 'در انتظار'),
-              progressBadge(t),
-              isPersonal(t) ? el('span', { class: 'badge badge--neutral' }, 'شخصی') : el('span', { class: 'todo-by' }, `مسئول: ${t.assigneeName ?? '—'}`),
-              t.dueAt ? el('span', {}, dueLabel(t)) : null
-            ),
-            el('div', { class: 'todo-checklist-zone' }, checklistBlock(t))
-          ),
-          el(
-            'div',
-            { class: 'todo-item__actions' },
-            t.status === 'pending'
-              ? el('button', { class: 'btn btn--ghost btn--sm', title: 'ویرایش', onclick: () => editTodo(t) }, icon('edit', 16))
-              : null,
-            el('button', { class: 'btn btn--ghost btn--sm', title: 'حذف', onclick: () => deleteTodo(t) }, icon('trash', 16))
-          )
-        )
+          { class: 'todo-item__meta' },
+          t.priority === 'urgent' ? el('span', { class: 'badge badge--error' }, 'فوری') : null,
+          el('span', { class: `badge ${t.status === 'done' ? 'badge--success' : 'badge--neutral'}` }, t.status === 'done' ? 'انجام شد' : 'در انتظار'),
+          progressBadge(t),
+          isPersonal(t) ? el('span', { class: 'badge badge--neutral' }, 'شخصی') : el('span', { class: 'todo-by' }, `مسئول: ${t.assigneeName ?? '—'}`),
+          t.dueAt ? el('span', {}, dueLabel(t)) : null
+        ),
+        el('div', { class: 'todo-checklist-zone' }, checklistBlock(t))
+      ),
+      el(
+        'div',
+        { class: 'todo-item__actions' },
+        t.status === 'pending'
+          ? el('button', { class: 'btn btn--ghost btn--sm', title: 'ویرایش', onclick: () => editTodo(t) }, icon('edit', 16))
+          : null,
+        el('button', { class: 'btn btn--ghost btn--sm', title: 'حذف', onclick: () => deleteTodo(t) }, icon('trash', 16))
       )
     );
   }
 
-  async function completeTodo(t) {
+  /* ۱.۲۱.۰: تیک انجام — آیتم درجا is-done می‌شود (پاسخ سرور)، بج توجه بی‌صدا تازه می‌شود؛
+     دیگر اسکلت و rebuild کل کارت در کار نیست */
+  async function completeTodo(t, cb) {
     try {
-      await api.post(`/api/todos/${t.id}/complete`);
+      const res = await api.post(`/api/todos/${t.id}/complete`);
       toast(`«${t.title}» انجام شد`, 'success');
       window.dispatchEvent(new Event('todos:changed'));
+      upsertTodoItem(res.data ?? { ...t, status: 'done' });
+      syncQuiet();
     } catch (err) {
       toastError(err);
+      if (cb) cb.checked = false; // — برگرداندن تیک در خطا
     }
-    refresh();
   }
 
   function editTodo(t) {
@@ -420,7 +488,7 @@ export function renderMyTodosCard() {
         if (lines.length > CHECKLIST_MAX) throw new Error(`چک‌لیست بیش از ${fa(CHECKLIST_MAX)} مورد ندارد`);
         const prevMap = new Map((t.checklist ?? []).map((i) => [i.text, i.done]));
         const checklist = lines.map((text) => ({ text, done: prevMap.get(text) ?? false }));
-        await api.patch(`/api/todos/${t.id}`, {
+        const res = await api.patch(`/api/todos/${t.id}`, {
           title: v.title,
           note: v.note ? v.note : null,
           priority: v.priority,
@@ -429,7 +497,8 @@ export function renderMyTodosCard() {
         });
         toast('تغییرات ذخیره شد', 'success');
         window.dispatchEvent(new Event('todos:changed'));
-        refresh();
+        upsertTodoItem(res.data ?? t); // — همان آیتم درجا؛ بدون rebuild فهرست
+        syncQuiet();
       }
     });
   }
@@ -446,10 +515,16 @@ export function renderMyTodosCard() {
       await api.patch(`/api/todos/${t.id}`, { deleted: true });
       toast('کار حذف شد', 'success');
       window.dispatchEvent(new Event('todos:changed'));
+      items = items.filter((x) => x.id !== t.id);
+      const row = listZone?.querySelector(`.todo-item[data-id="${CSS.escape(String(t.id))}"]`);
+      if (row) collapseRemove(row); // — جمع‌شدن نرم همان آیتم
+      setTimeout(() => {
+        if (listZone?.isConnected && !listZone.querySelector('.todo-item')) renderList(); // حالت خالی بدون قطع انیمیشن
+      }, 300);
+      setTimeout(syncQuiet, 300); // بج توجه پس از پایان انیمیشن تازه می‌شود
     } catch (err) {
       toastError(err);
     }
-    refresh();
   }
 
   refresh();

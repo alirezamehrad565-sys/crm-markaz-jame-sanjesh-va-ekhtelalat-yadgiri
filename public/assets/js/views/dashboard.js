@@ -724,7 +724,7 @@ function validationCard(kpis, audits) {
     el('div', { class: 'pr-kpi__num' }, numv),
     el('div', { class: 'pr-kpi__label' }, label));
 
-  const card = el('div', { class: 'card' },
+  const card = el('div', { class: 'card', dataset: { validationCard: '1' } }, /* ۱.۲۱.۰: شناسه‌دار برای رفرش درجای فقط همین کارت */
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('compass', 16), 'اعتبارسنجی بیرونی — شاخص‌های اعتماد'),
       el('button', { class: 'btn btn--soft btn--sm', onclick: () => openCaseAuditModal() },
@@ -743,6 +743,22 @@ function validationCard(kpis, audits) {
             'حسابرسی موردی: مرور یک پرونده توسط دو ارزیاب و ثبت سادهٔ توافق — نتیجه‌ها همین‌جا آرشیو می‌شوند.'))
   );
   return card;
+}
+
+/* ۱.۲۱.۰ — پس از ثبت حسابرسی فقط همین کارت درجا تازه می‌شود (دو GET کوچک؛ بدون اسکلت،
+   بدون پرش اسکرول، بدون رقص دوبارهٔ بقیهٔ کارت‌های داشبورد) —
+   جایگزین renderDashboard(#view) که کل داشبورد را با اسکلت از صفر می‌ساخت */
+async function refreshValidationCard(cardEl) {
+  try {
+    const [kRes, aRes] = await Promise.all([
+      api.get('/api/validation-kpis'),
+      api.get('/api/case-audits')
+    ]);
+    if (!cardEl.isConnected || !kRes?.data) return;
+    cardEl.replaceWith(validationCard(kRes.data, aRes.data ?? []));
+  } catch {
+    /* بی‌صدا — ثبت حسابرسی موفق بوده؛ کارت با دادهٔ فعلی می‌ماند */
+  }
 }
 
 function openCaseAuditModal() {
@@ -768,7 +784,8 @@ function openCaseAuditModal() {
       });
       toast('حسابرسی موردی ثبت شد', 'success');
       if (closeFn) closeFn();
-      renderDashboard(document.querySelector('#view')); // بازخوانی کارت
+      const cardEl = document.querySelector('[data-validation-card]');
+      if (cardEl) refreshValidationCard(cardEl); // — فقط کارت اعتبارسنجی؛ کل داشبورد سرجایش
     } catch (err) { toastError(err); }
     finally { saveBtn.disabled = false; }
   });

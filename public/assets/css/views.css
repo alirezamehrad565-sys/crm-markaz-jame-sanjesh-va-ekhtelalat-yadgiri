@@ -1226,6 +1226,12 @@ body.is-login { background: var(--bg); }
   padding-top: 0 !important; padding-bottom: 0 !important; overflow: hidden;
   transition: opacity .18s ease, height .22s ease, margin .22s ease, padding .22s ease;
 }
+/* ── ۱.۲۱.۰ جریان پیوستهٔ همه‌سایته: فلش توجه روی ردیف/آیتم پچ‌شده (لیست انتظار، کارهای من، صندوق) ── */
+.is-flashed { animation: nodeFlash 1.1s ease; }
+@keyframes nodeFlash {
+  0% { background: var(--accent-soft); }
+  100% { background: transparent; }
+}
 .wd-note--fresh { animation: wdNoteIn .32s ease; }
 @keyframes wdNoteIn {
   from { opacity: 0; transform: translateY(-5px); }
@@ -1233,7 +1239,7 @@ body.is-login { background: var(--bg); }
 }
 .wd-att__row.is-busy, .att-row.is-busy { opacity: .6; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
-  .wd-flash, .wd-note--fresh { animation: none; }
+  .wd-flash, .wd-note--fresh, .is-flashed { animation: none; }
   .is-resolving { transition: none; }
 }
 
