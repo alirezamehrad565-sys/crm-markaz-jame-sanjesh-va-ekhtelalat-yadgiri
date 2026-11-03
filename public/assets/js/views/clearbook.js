@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { el, icon, toast, toastError, confirmModal, openModal, emptyState, loadingState, errorState, skeletonState, rowMenu } from '../ui.js';
+import { el, icon, toast, toastError, confirmModal, openModal, emptyState, loadingState, errorState, skeletonState, rowMenu, lockBtn } from '../ui.js';
 import {
   fa,
   tehranTodayYmd,
@@ -100,6 +100,7 @@ const filters = { year: null, tag: null, from: '', to: '', q: '' };
 const urlCache = new Map(); // `${entryId}/${fileId}` → objectURL
 let _shellBody = null;
 let _toolbar = null;
+let _els = { yearChips: null, tagChips: null }; // — ۱.۲۲.۰: ارجاع زون چیپ‌ها برای به‌روزرسانی درجا (نوار ابزار هرگز rebuild نمی‌شود)
 
 async function fileObjectUrl(entryId, fileId) {
   const key = `${entryId}/${fileId}`;
@@ -212,15 +213,17 @@ export async function renderClearbook(container) {
 
 // ─── نوار ابزار ───
 
-function buildToolbar() {
-  const yearChips = el('div', { class: 'cb-chips', role: 'group', 'aria-label': 'سال تحصیلی' });
+/* ۱.۲۲.۰ — چیپ‌های سال/برچسب به توابع سازندهٔ مستقل جدا شدند تا paintChips بتواند
+   فقط فرزندان همین دو زون را عوض کند — جستجو و تاریخ‌گیرها همان گره می‌مانند
+   و فوکوس/مکان‌نما هرگز نمی‌افتد (پایان _toolbar.replaceWith(buildToolbar())). */
+function yearChipButtons() {
   const allChip = el('button', {
     class: `chip cb-chip${filters.year === null ? ' is-active' : ''}`,
     onclick: () => { filters.year = null; filters.from = ''; filters.to = ''; refreshAll(); }
   }, 'همه سال‌ها');
-  yearChips.appendChild(allChip);
+  const out = [allChip];
   for (const y of yearList) {
-    yearChips.appendChild(el('button', {
+    out.push(el('button', {
       class: `chip cb-chip${filters.year === y ? ' is-active' : ''}`,
       onclick: () => {
         filters.year = y;
@@ -231,16 +234,27 @@ function buildToolbar() {
       }
     }, schoolYearLabel(y)));
   }
+  return out;
+}
 
-  const tagChips = el('div', { class: 'cb-chips', role: 'group', 'aria-label': 'برچسب‌ها' });
-  for (const t of tagList) {
-    tagChips.appendChild(el('button', {
-      class: `chip cb-chip cb-chip--tag${filters.tag === t.tag ? ' is-active' : ''}`,
-      title: `${fa(t.count)} رویداد`,
-      onclick: () => { filters.tag = filters.tag === t.tag ? null : t.tag; refreshAll(); }
-    }, icon('tag', 12), t.tag));
-  }
+function tagChipButtons() {
+  return tagList.map((t) => el('button', {
+    class: `chip cb-chip cb-chip--tag${filters.tag === t.tag ? ' is-active' : ''}`,
+    title: `${fa(t.count)} رویداد`,
+    onclick: () => { filters.tag = filters.tag === t.tag ? null : t.tag; refreshAll(); }
+  }, icon('tag', 12), t.tag));
+}
 
+function paintChips() {
+  _els.yearChips?.replaceChildren(...yearChipButtons());
+  _els.tagChips?.replaceChildren(...tagChipButtons());
+}
+
+function buildToolbar() {
+  const yearChips = el('div', { class: 'cb-chips', role: 'group', 'aria-label': 'سال تحصیلی' }, ...yearChipButtons());
+  const tagChips = el('div', { class: 'cb-chips', role: 'group', 'aria-label': 'برچسب‌ها' }, ...tagChipButtons());
+  _els.yearChips = yearChips;
+  _els.tagChips = tagChips;
   const fromPicker = jalaliDateInput({ value: filters.from, onChange: (v) => { filters.from = v; } });
   const toPicker = jalaliDateInput({ value: filters.to, onChange: (v) => { filters.to = v; } });
 
@@ -318,6 +332,8 @@ function buildToolbar() {
 // ─── بارگذاری و ترسیم خط زمانی ───
 
 async function refreshAll() {
+  /* ۱.۲۲.۰: دیگر نوار ابزار replaceWith نمی‌شود — فقط چیپ‌ها درجا رنگ می‌شوند و
+     خط زمانی بی‌صدا (بدون اسکلت) همگام می‌شود. */
   try {
     const [plansRes, tagsRes, yearsRes] = await Promise.all([
       api.get('/api/clearbook/plans'),
@@ -331,11 +347,28 @@ async function refreshAll() {
   } catch (err) {
     toastError(err);
   }
-  _toolbar.replaceWith(buildToolbar());
-  await refreshEntries({ reset: true });
+  paintChips();
+  await refreshEntries({ reset: true, silent: true });
 }
 
-async function refreshEntries({ reset = false, append = false } = {}) {
+/* همگام‌سازی سبک شمارنده‌ها (برچسب‌ها + شواهد فازها) پس از mutationهای رویداد —
+   فقط چیپ‌ها و خط زمانی از کش تازه می‌شوند؛ بدون GET خط زمانی و بدون اسکلت */
+async function syncMetaQuiet() {
+  try {
+    const [plansRes, tagsRes] = await Promise.all([
+      api.get('/api/clearbook/plans'),
+      api.get('/api/clearbook/tags')
+    ]);
+    plans = plansRes.data ?? [];
+    tagList = tagsRes.data ?? [];
+  } catch { /* بی‌صدا — کش قبلی می‌ماند */ }
+  paintChips();
+  drawTimeline();
+}
+
+async function refreshEntries({ reset = false, append = false, silent = false } = {}) {
+  /* ۱.۲۲.۰: گزینهٔ silent — بدون فلش «در حال بارگذاری»؛ محتوای فعلی می‌ماند تا پاسخ برسد
+     (جریان پیوسته: فیلتر/چیپ/return از مودال هیچ‌وقت خالی نمی‌بیند) */
   if (reset) entryOffset = 0;
   const params = {};
   if (filters.from) params.from = filters.from;
@@ -346,7 +379,7 @@ async function refreshEntries({ reset = false, append = false } = {}) {
   params.offset = append ? entryOffset : 0;
   const query = Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
 
-  if (!append) _shellBody?.replaceChildren(loadingState('در حال بارگذاری خط زمانی…'));
+  if (!append && !silent) _shellBody?.replaceChildren(loadingState('در حال بارگذاری خط زمانی…'));
   try {
     const res = await api.get(`/api/clearbook/entries?${query}`);
     const items = res.data ?? [];
@@ -531,19 +564,21 @@ function planCard(p, order, total, todayYmd) {
     el('button', {
       class: 'btn btn--ghost btn--icon btn--sm cb-danger',
       title: 'حذف فاز', 'aria-label': 'حذف فاز',
-      onclick: async () => {
+      onclick: async (e) => lockBtn(e.currentTarget, async () => {
         const ok = await confirmModal({ title: 'حذف فاز برنامه', message: `فاز «${p.title}» حذف شود؟ رویدادهای ثبت‌شده حذف نمی‌شوند و فقط اتصالشان باز می‌شود.`, confirmLabel: 'حذف', danger: true });
         if (!ok) return;
         try {
           await api.del(`/api/clearbook/plans/${p.id}`);
+          plans = plans.filter((x) => x.id !== p.id);
           toast('فاز حذف شد', 'success');
-          refreshAll();
+          drawTimeline(); // — کارت فاز همان لحظه جمع می‌شود؛ اتصال رویدادها درجا باز می‌شود
+          syncMetaQuiet();
         } catch (err) { toastError(err); }
-      }
+      })
     }, icon('trash', 14))
   );
 
-  return el('article', { class: `cb-card cb-card--plan is-${p.status}${hasEvidence ? ' has-evidence' : ''} cv-block` } /* E2: رندر کارت‌های زیر فولد تعویق می‌شود */,
+  return el('article', { class: `cb-card cb-card--plan is-${p.status}${hasEvidence ? ' has-evidence' : ''} cv-block`, dataset: { id: String(p.id) } } /* E2 + ۱.۲۲.۰: شناسه برای پچ درجای */,
     head,
     evidence,
     details,
@@ -620,19 +655,21 @@ function entryCard(e) {
     el('button', {
       class: 'btn btn--ghost btn--icon btn--sm cb-danger',
       title: 'حذف رویداد', 'aria-label': 'حذف رویداد',
-      onclick: async () => {
+      onclick: async (e) => lockBtn(e.currentTarget, async () => {
         const ok = await confirmModal({ title: 'حذف رویداد', message: `رویداد «${e.title}» و همهٔ عکس‌ها و مستنداتش حذف شود؟`, confirmLabel: 'حذف', danger: true });
         if (!ok) return;
         try {
           await api.del(`/api/clearbook/entries/${e.id}`);
+          entries = entries.filter((x) => x.id !== e.id);
           toast('رویداد حذف شد', 'success');
-          refreshAll();
+          drawTimeline(); // — کارت همان لحظه جمع می‌شود
+          syncMetaQuiet(); // شمارندهٔ برچسب‌ها و شواهد فازها بی‌صدا تازه می‌شود
         } catch (err) { toastError(err); }
-      }
+      })
     }, icon('trash', 14))
   );
 
-  return el('article', { class: 'cb-card cb-card--entry cv-block' } /* E2 */, head, tagRow, bodyText, media, actions);
+  return el('article', { class: 'cb-card cb-card--entry cv-block', dataset: { id: String(e.id) } } /* E2 + ۱.۲۲.۰ */, head, tagRow, bodyText, media, actions);
 }
 
 // ─── نمایشگر عکس (کپشن + حذف) ───
@@ -664,27 +701,35 @@ function openImageModal(entry, file) {
       (close) => el('button', { class: 'btn btn--soft', onclick: () => downloadAttachment(entry.id, file) }, icon('download', 15), 'دانلود'),
       (close) => el('button', {
         class: 'btn btn--danger',
-        onclick: async () => {
+        onclick: async (e) => lockBtn(e.currentTarget, async () => {
           const ok = await confirmModal({ title: 'حذف عکس', message: 'این عکس از رویداد حذف شود؟', confirmLabel: 'حذف', danger: true });
           if (!ok) return;
           try {
             await api.del(`/api/clearbook/entries/${entry.id}/files/${file.id}`);
+            const cached = entries.find((x) => x.id === entry.id);
+            if (cached) cached.attachments = cached.attachments.filter((a) => a.id !== file.id);
             toast('عکس حذف شد', 'success');
             close();
-            refreshEntries({ reset: true });
+            drawTimeline(); // — بندانگشتی همان کارت درجا می‌رود؛ بدون اسکلت
+            syncMetaQuiet();
           } catch (err) { toastError(err); }
-        }
+        })
       }, icon('trash', 15), 'حذف عکس'),
       (close) => el('button', {
         class: 'btn btn--primary',
-        onclick: async () => {
+        onclick: async (e) => lockBtn(e.currentTarget, async () => {
           try {
             await api.patch(`/api/clearbook/entries/${entry.id}/files/${file.id}`, { caption: captionInput.value.trim() || null });
+            const cached = entries.find((x) => x.id === entry.id);
+            if (cached) {
+              const att = cached.attachments.find((a) => a.id === file.id);
+              if (att) att.caption = captionInput.value.trim() || null;
+            }
             toast('کپشن ذخیره شد', 'success');
             close();
-            refreshEntries({ reset: true });
+            drawTimeline(); // — کپشن همان کارت درجا
           } catch (err) { toastError(err); }
-        }
+        })
       }, icon('check', 15), 'ذخیره کپشن')
     ]
   });
@@ -833,13 +878,18 @@ function openEntryModal({ entry = null, plan = null } = {}) {
           try {
             let entryId = entry?.id;
             if (isEdit) {
-              await api.patch(`/api/clearbook/entries/${entryId}`, {
+              const res = await api.patch(`/api/clearbook/entries/${entryId}`, {
                 title,
                 body: bodyInput.value.trim(),
                 event_date: eventDate,
                 plan_id: planSelect.value || null,
                 tags: editor.tags()
               });
+              /* ۱.۲۲.۰: ویرایش = پچ همان کارت از پاسخ سرور (فایل‌ها دست‌نخورده) —
+                 خط زمانی از کش درجا ترسیم می‌شود؛ همگام‌سازی بی‌صدا هم بعداً حاکم می‌شود */
+              const i = entries.findIndex((x) => x.id === entryId);
+              if (i >= 0 && res.data) entries[i] = { ...entries[i], ...res.data };
+              drawTimeline();
             } else {
               const created = await api.post('/api/clearbook/entries', {
                 title,
@@ -874,7 +924,10 @@ function openEntryModal({ entry = null, plan = null } = {}) {
 
             toast(isEdit ? 'رویداد به‌روزرسانی شد' : 'رویداد ثبت شد', 'success');
             close();
-            refreshAll();
+            /* ۱.۲۲.۰: پایان rebuild کل نما — فقط خط زمانی بی‌صدا + شمارنده‌ها؛
+               برای «ثبت جدید» به‌خاطر جایگاه سرور و پیوست‌ها، همان GET بی‌صدای خط زمانی */
+            await refreshEntries({ reset: true, silent: true });
+            syncMetaQuiet();
           } catch (err) {
             toastError(err);
           }
@@ -943,11 +996,17 @@ function openPlanModal({ plan = null } = {}) {
             tag: tag.length >= 2 ? tag : null
           };
           try {
-            if (isEdit) await api.patch(`/api/clearbook/plans/${plan.id}`, payload);
-            else await api.post('/api/clearbook/plans', payload);
+            if (isEdit) {
+              const res = await api.patch(`/api/clearbook/plans/${plan.id}`, payload);
+              const i = plans.findIndex((x) => x.id === plan.id);
+              if (i >= 0 && res.data) plans[i] = { ...plans[i], ...res.data }; // — ۱.۲۲.۰: پچ درجای کش
+            } else {
+              const res = await api.post('/api/clearbook/plans', payload);
+              if (res.data) plans.push(res.data);
+            }
             toast(isEdit ? 'فاز به‌روزرسانی شد' : 'فاز افزوده شد — روی خط زمانی خاکستری نمایش داده می‌شود', 'success');
             close();
-            refreshAll();
+            drawTimeline(); // — خط زمانی از کش درجا؛ بدون اسکلت و بدون rebuild نوار
           } catch (err) { toastError(err); }
         }
       }, icon('save', 15), isEdit ? 'ذخیره تغییرات' : 'افزودن فاز')
@@ -979,11 +1038,12 @@ function openPlansManager() {
         el('option', { value: 'done' }, STATUS_LABELS.done)
       );
       statusSel.value = p.status;
-      statusSel.addEventListener('change', async () => {
+      statusSel.addEventListener('change', async (e) => {
         try {
           await api.patch(`/api/clearbook/plans/${p.id}`, { status: statusSel.value });
           p.status = statusSel.value;
           toast('وضعیت فاز به‌روزرسانی شد', 'success');
+          drawTimeline(); // — ۱.۲۲.۰: کارت فاز روی خط زمانی هم درجا به‌روز شود
         } catch (err) { toastError(err); }
       });
 
@@ -996,6 +1056,7 @@ function openPlansManager() {
           await api.post('/api/clearbook/plans/reorder', { ids });
           await loadPlans();
           draw();
+          drawTimeline(); // — ۱.۲۲.۰: شمارهٔ فازها روی خط زمانی هم درجا
         } catch (err) { toastError(err); }
       };
 
@@ -1018,6 +1079,7 @@ function openPlansManager() {
                 await api.del(`/api/clearbook/plans/${p.id}`);
                 await loadPlans();
                 draw();
+                drawTimeline(); // — ۱.۲۲.۰: کارت فاز روی خط زمانی درجا جمع می‌شود
                 toast('فاز حذف شد', 'success');
               } catch (err) { toastError(err); }
             }
