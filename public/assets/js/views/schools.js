@@ -1,7 +1,7 @@
 import { api, qs } from '../api.js';
 import { session } from '../state.js';
 import { fa, enDigits } from '../format.js';
-import { el, icon, formModal, confirmModal, openModal, toast, toastError, dataTable, statusBadge, loadingState, skeletonState, emptyState, callBadge, lockBtn } from '../ui.js';
+import { el, icon, formModal, confirmModal, openModal, toast, toastError, dataTable, statusBadge, loadingState, emptyState, callBadge, lockBtn, collapseRemove, flashNode } from '../ui.js';
 import { invalidateStudentFormMeta } from '../student-form.js'; // — کش فرم دانش‌آموز بعد از هر تغییر مدارس/کلاس تازه شود
 import { openExcelImport } from '../excel-import.js'; // درون‌ریزی اکسل
 import { resolveBotUsername, buildBotLink, botLinkBox } from '../bot-link.js'; // — لینک احراز خودکار بات
@@ -38,7 +38,7 @@ function matchesQuery(rowFields, query) {
 }
 
 export async function renderSchools(container) {
-  container.replaceChildren(skeletonState('table', 5));
+  container.replaceChildren(loadingState('بارگذاری مدارس…'));
 
   let rows;
   try {
@@ -48,6 +48,10 @@ export async function renderSchools(container) {
     return;
   }
 
+  /* —— ۱.۲۲.۰ جریان پیوسته: شِل یک‌بار مونت می‌شود؛ فعال/غیرفعال‌سازی، حذف، ویرایش،
+     درون‌ریزی و فیلتر «نمایش غیرفعال‌ها» فقط tbody را عوض می‌کنند — ویرایش کلاس هم
+     دیگر کل نما را از نو نمی‌سازد (فقط فهرست مودال کلاس‌ها). —— */
+
   const searchInput = el('input', {
     class: 'input', type: 'search',
     placeholder: 'جستجو: نام، کد، مدیر یا تلفن…',
@@ -56,14 +60,14 @@ export async function renderSchools(container) {
   let searchTimer;
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(drawTable, 200);
+    searchTimer = setTimeout(drawTbody, 200);
   });
 
   const toolbar = el('div', { class: 'toolbar' },
     searchInput,
     el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: 'var(--fs-sm)', color: 'var(--text-2)', cursor: 'pointer' } },
       (() => {
-        const cb = el('input', { type: 'checkbox', onchange: (e) => { showInactive = e.target.checked; renderSchools(container); } });
+        const cb = el('input', { type: 'checkbox', onchange: (e) => { showInactive = e.target.checked; refreshRows(); } });
         cb.checked = showInactive;
         cb.style.accentColor = 'var(--primary)';
         return cb;
@@ -72,12 +76,12 @@ export async function renderSchools(container) {
     ),
     el('div', { class: 'spacer' }),
     canDeactivate()
-      ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openExcelImport({ entity: 'schools', onDone: () => renderSchools(container) }) }, icon('upload', 16), 'درون‌ریزی مدارس')
+      ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openExcelImport({ entity: 'schools', onDone: () => ctl.quietSync() }) }, icon('upload', 16), 'درون‌ریزی مدارس')
       : null,
     canDeactivate()
-      ? el('button', { class: 'btn btn--soft btn--sm', title: 'هر سطر: نام مدرسه + نام کلاس + معلم و تلفن او', onclick: () => openExcelImport({ entity: 'school-classes', onDone: () => renderSchools(container) }) }, icon('upload', 16), 'درون‌ریزی کلاس‌ها و معلمان')
+      ? el('button', { class: 'btn btn--soft btn--sm', title: 'هر سطر: نام مدرسه + نام کلاس + معلم و تلفن او', onclick: () => openExcelImport({ entity: 'school-classes', onDone: () => ctl.quietSync() }) }, icon('upload', 16), 'درون‌ریزی کلاس‌ها و معلمان')
       : null,
-    el('button', { class: 'btn btn--primary btn--sm', onclick: () => openForm(null, container) }, icon('plus', 16), 'مدرسه جدید')
+    el('button', { class: 'btn btn--primary btn--sm', onclick: () => openForm(null, ctl) }, icon('plus', 16), 'مدرسه جدید')
   );
 
   const schoolColumns = [
@@ -114,17 +118,17 @@ export async function renderSchools(container) {
         /* ۱.۱۷.۰ — دکمه‌ها مستقیم سرِ ردیف، همان زبان دایره‌های فهرست دانش‌آموزان (۱.۱۶.۰):
            کلاس‌ها (رایج‌ترین) · وضعیت همکاری · ویرایش · غیرفعال‌سازی — و حذفِ مخرب آخری با فاصلهٔ ایمن */
         render: (s) => el('div', { class: 'cell-actions row-circles', role: 'group', 'aria-label': `اقدامات مدرسه ${s.name}` },
-          actionCircle('student', 'کلاس‌ها و معلم‌ها', () => openClassManager(s, container)),
+          actionCircle('student', 'کلاس‌ها و معلم‌ها', () => openClassManager(s)),
           actionCircle('zap', 'وضعیت همکاری', () => openSchoolOverview(s)),
-          actionCircle('edit', 'ویرایش', () => openForm(s, container)),
+          actionCircle('edit', 'ویرایش', () => openForm(s, ctl)),
           ...(s.active && canDeactivate()
             ? [actionCircle('pause', 'غیرفعال‌سازی', async () => {
                 if (!(await confirmModal({ title: 'غیرفعال‌سازی مدرسه', message: `«${s.name}» از انتخاب‌ها حذف می‌شود (اطلاعات حفظ می‌شود).`, confirmLabel: 'غیرفعال کن', danger: true }))) return;
                 try {
-                  await api.post(`/api/schools/${s.id}/deactivate`);
+                  const res = await api.post(`/api/schools/${s.id}/deactivate`);
                   invalidateStudentFormMeta();
                   toast('مدرسه غیرفعال شد', 'success');
-                  renderSchools(container);
+                  ctl.patch(res.data); // — بج وضعیت همان ردیف درجا (یا با فیلتر فعال، جمع‌شدن نرم)
                 } catch (err) { toastError(err); }
               })]
             : []),
@@ -134,7 +138,7 @@ export async function renderSchools(container) {
                 try {
                   await api.del(`/api/schools/${s.id}`);
                   toast('مدرسه حذف شد', 'success');
-                  renderSchools(container);
+                  ctl.remove(s.id); // — جمع‌شدن نرم همان ردیف
                 } catch (err) { toastError(err); }
               }, true)]
             : [])
@@ -142,22 +146,30 @@ export async function renderSchools(container) {
       }
     ];
 
-  const tableWrap = el('div');
+  const colCount = schoolColumns.length;
+  const thead = el('thead', {}, el('tr', {}, schoolColumns.map((c) => el('th', { scope: 'col', style: c.align ? { textAlign: c.align } : null }, c.label))));
+  const tbody = el('tbody');
+  const tableWrap = el('div', { class: 'table-wrap' }, el('table', { class: 'table' }, thead, tbody));
   const countBadge = el('span', { class: 'badge badge--neutral' }, `${fa(rows.length)} مورد`);
 
-  function drawTable() {
+  function matchesVisibility(s) {
+    return showInactive || s.active;
+  }
+
+  function rowEl(s) {
+    return el(
+      'tr',
+      { dataset: { id: String(s.id) } },
+      schoolColumns.map((c) =>
+        el('td', { style: c.align ? { textAlign: c.align } : null, dataset: { label: c.label } }, c.render ? c.render(s) : s[c.key] ?? '—')
+      )
+    );
+  }
+
+  function emptyRow() {
     const q = searchInput.value.trim();
-    const filtered = rows.filter((s) => matchesQuery(
-      [s.name, s.code, s.principalName, s.principalPhone, s.phone, s.address, s.kind], q
-    ));
-    countBadge.textContent = q
-      ? `${fa(filtered.length)} از ${fa(rows.length)} مورد`
-      : `${fa(rows.length)} مورد`;
-    const hasQuery = q.length > 0;
-    tableWrap.replaceChildren(dataTable({
-      columns: schoolColumns,
-      rows: filtered,
-      empty: hasQuery
+    return el('tr', {}, el('td', { colspan: colCount, style: { padding: 'var(--sp-2)' } },
+      emptyState(q
         ? {
             iconName: 'search',
             title: 'موردی مطابق جستجو پیدا نشد',
@@ -168,11 +180,65 @@ export async function renderSchools(container) {
             title: 'هنوز مدرسه‌ای ثبت نشده',
             hint: 'مدارس و مهدکودک‌هایی را که با آن‌ها کار می‌کنید اضافه کنید.',
             actionLabel: 'مدرسه جدید',
-            onAction: () => openForm(null, container)
-          }
-    }));
+            onAction: () => openForm(null, ctl)
+          })));
   }
-  drawTable();
+
+  function drawTbody() {
+    const q = searchInput.value.trim();
+    const filtered = rows.filter((s) => matchesQuery(
+      [s.name, s.code, s.principalName, s.principalPhone, s.phone, s.address, s.kind], q
+    ));
+    countBadge.textContent = q
+      ? `${fa(filtered.length)} از ${fa(rows.length)} مورد`
+      : `${fa(rows.length)} مورد`;
+    tbody.replaceChildren(...(filtered.length ? filtered.map((s) => rowEl(s)) : [emptyRow()]));
+  }
+
+  let gen = 0; // — گارد نسل
+  async function refreshRows() {
+    const myGen = ++gen;
+    try {
+      const res = await api.get(`/api/schools${showInactive ? '' : '?active=true'}`);
+      if (myGen !== gen || !tbody.isConnected) return;
+      rows = res.data ?? [];
+      drawTbody();
+    } catch (err) {
+      if (myGen !== gen || !tbody.isConnected) return;
+      tbody.replaceChildren(el('tr', {}, el('td', { colspan: colCount, style: { padding: 'var(--sp-2)' } },
+        emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: String(err?.message ?? err) }))));
+    }
+  }
+
+  function ensureNonEmptyPaint() {
+    setTimeout(() => {
+      if (tbody.isConnected && !tbody.querySelector('tr[data-id]')) drawTbody();
+    }, 320);
+  }
+
+  const ctl = {
+    /* پچ درجای یک مدرسه از بدنهٔ پاسخ mutation — بدون GET، بدون اسکلت */
+    patch(s) {
+      if (!s?.id || !tbody.isConnected) { ctl.quietSync(); return; }
+      rows = rows.map((r) => (r.id === s.id ? s : r));
+      const old = tbody.querySelector(`tr[data-id="${CSS.escape(String(s.id))}"]`);
+      if (!old) { ctl.quietSync(); return; } // با فیلتر فعلی تازه وارد دید شده
+      if (!matchesVisibility(s)) { collapseRemove(old); ensureNonEmptyPaint(); return; } // از فیلتر خارج شد
+      const fresh = rowEl(s);
+      old.replaceWith(fresh);
+      flashNode(fresh);
+    },
+    /* حذف کامل (۲۰۴ بی‌بدنه): جمع‌شدن نرم همان ردیف */
+    remove(id) {
+      rows = rows.filter((r) => r.id !== id);
+      const old = tbody.querySelector(`tr[data-id="${CSS.escape(String(id))}"]`);
+      if (old) { collapseRemove(old); ensureNonEmptyPaint(); }
+    },
+    /* همگام‌سازی بی‌صدا: GET با فیلتر فعلی — فقط tbody و شمارنده */
+    quietSync: refreshRows
+  };
+
+  drawTbody();
 
   container.replaceChildren(
     el('div', { class: 'page-head' },
@@ -184,7 +250,7 @@ export async function renderSchools(container) {
   );
 }
 
-function openForm(school, container) {
+function openForm(school, ctl) {
   formModal({
     title: school ? 'ویرایش مدرسه' : 'مدرسه جدید',
     wide: true,
@@ -220,15 +286,16 @@ function openForm(school, container) {
         notes: values.notes || undefined
       };
       if (school) {
-        await api.patch(`/api/schools/${school.id}`, payload);
+        const res = await api.patch(`/api/schools/${school.id}`, payload);
         invalidateStudentFormMeta();
         toast('تغییرات ذخیره شد', 'success');
+        ctl.patch(res.data); // — همان ردیف درجا؛ بدون rebuild نما
       } else {
         await api.post('/api/schools', payload);
         invalidateStudentFormMeta();
         toast('مدرسه اضافه شد', 'success');
+        ctl.quietSync(); // جای ردیف تازه را ترتیب سرور تعیین می‌کند
       }
-      renderSchools(container);
     }
   });
 }
@@ -294,7 +361,7 @@ const REASON_LABELS = {
   no_recent_session: 'بیش از ۳۰ روز جلسه ندارد'
 };
 
-function openClassManager(school, container) {
+function openClassManager(school) {
   let classes = [];
   let classSearch = null; // — ورودی جستجو در body مودال ساخته می‌شود؛ در این اسکوپ نگه داشته می‌شود
   const listBox = el('div', { style: { minHeight: '120px' } }, loadingState('در حال بارگذاری کلاس‌ها…'));
@@ -449,7 +516,8 @@ function openClassManager(school, container) {
           toast('کلاس اضافه شد', 'success');
         }
         done();
-        renderSchools(container);
+        /* ۱.۲۲.۰: rebuild کل نما حذف شد — تغییر کلاس ردیف مدرسه را عوض نمی‌کند؛
+           فهرست مودال کلاس‌ها با done() همگام می‌شود و کش فرم دانش‌آموز تازه شده */
       }
     });
   }
