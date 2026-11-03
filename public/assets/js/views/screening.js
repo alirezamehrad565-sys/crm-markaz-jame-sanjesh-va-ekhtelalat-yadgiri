@@ -19,7 +19,9 @@ import {
   emptyState,
   skeletonState,
   errorState,
-  tabs
+  tabs,
+  collapseRemove,
+  flashNode
 } from '../ui.js';
 import { jalaliDateInput } from '../jalali-picker.js';
 import { session } from '../state.js';
@@ -108,6 +110,10 @@ function normalBadge() {
   return el('span', { class: 'badge badge--success' }, '✓ عادی');
 }
 
+/* —— ۱.۲۳.۰ جریان پیوستهٔ تب «ثبت روزانه» (زبان ۱.۱۹–۱.۲۲):
+   کارت ثبت‌کننده و کارت لیست یک‌بار مونت می‌شوند؛ ثبت جدید = درج ردیف در بالای
+   لیست از بدنهٔ پاسخ (ORDER BY جدیدترین)، ویرایش = پچ همان ردیف، حذف = جمع‌شدن نرم —
+   فوکوس input و ریتم تایپ زنجیره‌ای هرگز با اسکلت شکسته نمی‌شود. —— */
 async function renderDailyTab(box, container) {
   box.replaceChildren(skeletonState('table', 5));
   const today = tehranTodayYmd();
@@ -125,15 +131,13 @@ async function renderDailyTab(box, container) {
     return;
   }
 
-  const entries = result.entries;
+  let entries = [...(result.entries ?? [])]; // کش محلی — هر mutation همین‌جا هم به‌روز می‌شود
   const canEdit = session.user && ['manager', 'secretary'].includes(session.user.role);
-  const normalCount = entries.filter((e) => !hasPreTag(e.tags)).length;
 
-  const composer = { raw: '', toggles: new Set(), custom: new Set() };
+  const composer = { toggles: new Set(), custom: new Set() };
   if (state.editingId) {
     const cur = entries.find((e) => e.id === state.editingId);
     if (cur) {
-      composer.raw = cur.name;
       for (const t of cur.tags) {
         if (KIND_BY_LABEL.has(t)) composer.toggles.add(t);
         else composer.custom.add(t);
@@ -146,7 +150,7 @@ async function renderDailyTab(box, container) {
   const input = el('input', {
     class: 'input input--xl',
     placeholder: state.editingId ? 'نام و فامیل…' : 'نام و فامیل دانش‌آموز… مثلاً: آوا محمدی #مهدکودک_ستاره',
-    value: composer.raw,
+    value: state.editingId ? (entries.find((e) => e.id === state.editingId) ?? {}).name ?? '' : '',
     'aria-label': 'نام و فامیل دانش‌آموز و برچسب‌های هشتگ‌دار'
   });
 
@@ -241,17 +245,124 @@ async function renderDailyTab(box, container) {
     type: 'button',
     style: { width: '100%' },
     onclick: () => submit()
-  }, icon(state.editingId ? 'check' : 'plus', 16), state.editingId ? 'ذخیرهٔ تغییرات' : 'ثبت در روز سنجش');
+  });
 
-  const headTitle = el('div', { class: 'card__title' },
-    state.editingId ? `ویرایش: ${(entries.find((e) => e.id === state.editingId) || {}).name ?? ''}` : 'ثبت سریع روز سنجش');
+  const headTitle = el('div', { class: 'card__title' });
 
-  const cancelBtn = state.editingId
-    ? el('button', {
-        class: 'btn btn--ghost btn--sm',
-        onclick: () => { state.editingId = null; renderDailyTab(box, container); }
-      }, 'انصراف')
-    : null;
+  const cancelBtn = el('button', {
+    class: 'btn btn--ghost btn--sm',
+    onclick: () => { exitEdit(); }
+  }, 'انصراف');
+
+  const syncComposerMode = () => {
+    const editing = Boolean(state.editingId);
+    const cur = editing ? entries.find((e) => e.id === state.editingId) : null;
+    headTitle.textContent = editing ? `ویرایش: ${cur?.name ?? ''}` : 'ثبت سریع روز سنجش';
+    submitBtn.replaceChildren(icon(editing ? 'check' : 'plus', 16), editing ? 'ذخیرهٔ تغییرات' : 'ثبت در روز سنجش');
+    cancelBtn.style.display = editing ? '' : 'none';
+    input.placeholder = editing ? 'نام و فامیل…' : 'نام و فامیل دانش‌آموز… مثلاً: آوا محمدی #مهدکودک_ستاره';
+  };
+  syncComposerMode();
+
+  /* —— شِل لیست: سربرگ با شمارنده‌ها + ناحیهٔ ردیف‌ها؛ هر mutation همین‌جا درجا عوض می‌شود —— */
+  const listCount = el('span', { class: 'cell-sub' });
+  const rowsZone = el('div', { class: 'card__body' });
+
+  const paintCounts = () => {
+    const normalCount = entries.filter((e) => !hasPreTag(e.tags)).length;
+    listCount.textContent = `${fa(normalCount)} عادی • ${fa(entries.length - normalCount)} ارجاع/خاص — جمع ${fa(entries.length)}`;
+  };
+
+  function rowEl(e) {
+    return el('div', { class: 'sanj-row', dataset: { id: String(e.id) } },
+      el('div', { class: 'sanj-row__main' },
+        el('span', { class: 'cell-main' }, e.name),
+        el('span', { class: 'cell-sub' },
+          `${e.creatorName ?? '—'} • ${e.createdAt ? fa(tehranTimeOfIso(e.createdAt)) : ''}`) // ساعت تهران، نه برش UTC
+      ),
+      el('div', { class: 'sanj-row__tags' },
+        hasPreTag(e.tags)
+          ? e.tags.map((t) => tagBadge(t))
+          : [normalBadge(), ...e.tags.filter((t) => !KIND_BY_LABEL.has(t)).map((t) => tagBadge(t))]
+      ),
+      el('div', { class: 'sanj-row__actions' },
+        el('button', {
+          class: 'btn btn--ghost btn--icon',
+          'aria-label': `ویرایش ${e.name}`,
+          onclick: () => { enterEdit(e); }
+        }, icon('edit', 16)),
+        el('button', {
+          class: 'btn btn--ghost btn--icon',
+          'aria-label': `حذف ${e.name}`,
+          onclick: async () => {
+            const ok = await confirmModal({
+              title: 'حذف سنجش',
+              message: `«${e.name}» از لیست امروز حذف شود؟`,
+              danger: true,
+              confirmLabel: 'حذف'
+            });
+            if (!ok) return;
+            try {
+              await api.del(`/api/screening/${e.id}`);
+              toast('حذف شد', 'success');
+              entries = entries.filter((x) => x.id !== e.id);
+              if (state.editingId === e.id) exitEdit();
+              const old = rowsZone.querySelector(`.sanj-row[data-id="${CSS.escape(String(e.id))}"]`);
+              if (old) collapseRemove(old); else paintRows();
+              paintCounts();
+              /* الگوی ensureNonEmptyPaint: اگر لیست خالی شد، بعد از انیمیشن جمع‌شدن
+                 حالت خالی درجای همان ناحیه رنگ بگیرد (ظرف .sanj-rows خالی نماند) */
+              if (entries.length === 0) {
+                setTimeout(() => {
+                  if (rowsZone.isConnected && !rowsZone.querySelector('.sanj-row[data-id]')) paintRows();
+                }, 480); // — بعد از پایان کامل انیمیشن جمع‌شدن (260ms) + حاشیهٔ امن
+              }
+            } catch (err) {
+              toastError(err);
+            }
+          }
+        }, icon('trash', 16))
+      )
+    );
+  }
+
+  function paintRows() {
+    rowsZone.replaceChildren(
+      ...(entries.length === 0
+        ? [emptyState({
+            iconName: 'student',
+            title: 'امروز هنوز کسی ثبت نشده است',
+            hint: 'نام و فامیل را در باکس بالا بنویسید و برچسب بزنید — تمام.'
+          })]
+        : [el('div', { class: 'sanj-rows' }, ...entries.map((e) => rowEl(e)))])
+    );
+  }
+
+  const enterEdit = (e) => {
+    state.editingId = e.id;
+    input.value = e.name;
+    composer.toggles.clear();
+    composer.custom.clear();
+    for (const t of e.tags) {
+      if (KIND_BY_LABEL.has(t)) composer.toggles.add(t);
+      else composer.custom.add(t);
+    }
+    drawChips();
+    drawPreview();
+    syncComposerMode();
+    input.focus();
+  };
+
+  const exitEdit = () => {
+    state.editingId = null;
+    input.value = '';
+    composer.toggles.clear();
+    composer.custom.clear();
+    drawChips();
+    drawPreview();
+    syncComposerMode();
+    input.focus();
+  };
 
   const submit = async () => {
     if (!canEdit) return;
@@ -264,24 +375,46 @@ async function renderDailyTab(box, container) {
     }
     try {
       if (state.editingId) {
-        await api.patch(`/api/screening/${state.editingId}`, { name: parsed.name, tags });
+        const res = await api.patch(`/api/screening/${state.editingId}`, { name: parsed.name, tags });
+        entries = entries.map((x) => (x.id === res.data.id ? res.data : x));
+        const old = rowsZone.querySelector(`.sanj-row[data-id="${CSS.escape(String(res.data.id))}"]`);
+        if (old) {
+          const fresh = rowEl(res.data);
+          old.replaceWith(fresh);
+          flashNode(fresh);
+        } else {
+          paintRows();
+        }
         toast('تغییرات ذخیره شد', 'success');
-        state.editingId = null;
-        renderDailyTab(box, container);
+        exitEdit(); // — فوکوس برای ثبت بعدی سرجایش می‌ماند
         return;
       }
       if (entries.some((e) => e.name === parsed.name)) {
         toast(`«${parsed.name}» امروز قبلاً ثبت شده — برای تغییر برچسب‌ها از ویرایش استفاده کنید`, 'warning');
         return;
       }
-      await api.post('/api/screening', { name: parsed.name, tags, day: today });
+      const res = await api.post('/api/screening', { name: parsed.name, tags, day: today });
       toast(
         tags.filter((t) => KIND_BY_LABEL.has(t)).length > 0
           ? `${parsed.name} با برچسب ثبت شد`
           : `${parsed.name} به‌عنوان «عادی» ثبت شد`,
         'success'
       );
-      renderDailyTab(box, container);
+      entries = [res.data, ...entries]; // سرور جدیدترین را اول برمی‌گرداند (created_at DESC)
+      paintCounts();
+      if (rowsZone.querySelector('.sanj-rows')) {
+        const fresh = rowEl(res.data);
+        rowsZone.querySelector('.sanj-rows').prepend(fresh);
+        flashNode(fresh);
+      } else {
+        paintRows(); // اولین ثبت امروز — حالت خالی درجا لیست می‌شود
+      }
+      input.value = '';
+      composer.toggles.clear();
+      composer.custom.clear();
+      drawChips();
+      drawPreview();
+      input.focus(); // ریتم ثبت زنجیره‌ای: باکس آمادهٔ نام بعدی است
     } catch (err) {
       toastError(err);
     }
@@ -290,63 +423,9 @@ async function renderDailyTab(box, container) {
   const listCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, 'لیست روز سنجش امروز'),
-      el('span', { class: 'cell-sub' },
-        `${fa(normalCount)} عادی • ${fa(entries.length - normalCount)} ارجاع/خاص — جمع ${fa(entries.length)}`
-      )
+      listCount
     ),
-    el('div', { class: 'card__body' },
-      entries.length === 0
-        ? emptyState({
-            iconName: 'student',
-            title: 'امروز هنوز کسی ثبت نشده است',
-            hint: 'نام و فامیل را در باکس بالا بنویسید و برچسب بزنید — تمام.'
-          })
-        : el('div', { class: 'sanj-rows' },
-            ...entries.map((e) =>
-              el('div', { class: 'sanj-row' },
-                el('div', { class: 'sanj-row__main' },
-                  el('span', { class: 'cell-main' }, e.name),
-                  el('span', { class: 'cell-sub' },
-                    `${e.creatorName ?? '—'} • ${e.createdAt ? fa(tehranTimeOfIso(e.createdAt)) : ''}` // ساعت تهران، نه برش UTC
-                  )
-                ),
-                el('div', { class: 'sanj-row__tags' },
-                  hasPreTag(e.tags)
-                    ? e.tags.map((t) => tagBadge(t))
-                    : [normalBadge(), ...e.tags.filter((t) => !KIND_BY_LABEL.has(t)).map((t) => tagBadge(t))]
-                ),
-                el('div', { class: 'sanj-row__actions' },
-                  el('button', {
-                    class: 'btn btn--ghost btn--icon',
-                    'aria-label': `ویرایش ${e.name}`,
-                    onclick: () => { state.editingId = e.id; renderDailyTab(box, container); }
-                  }, icon('edit', 16)),
-                  el('button', {
-                    class: 'btn btn--ghost btn--icon',
-                    'aria-label': `حذف ${e.name}`,
-                    onclick: async () => {
-                      const ok = await confirmModal({
-                        title: 'حذف سنجش',
-                        message: `«${e.name}» از لیست امروز حذف شود؟`,
-                        danger: true,
-                        confirmLabel: 'حذف'
-                      });
-                      if (!ok) return;
-                      try {
-                        await api.del(`/api/screening/${e.id}`);
-                        toast('حذف شد', 'success');
-                        if (state.editingId === e.id) state.editingId = null;
-                        renderDailyTab(box, container);
-                      } catch (err) {
-                        toastError(err);
-                      }
-                    }
-                  }, icon('trash', 16))
-                )
-              )
-            )
-          )
-    )
+    rowsZone
   );
 
   const composerCard = el('div', { class: 'card' },
@@ -368,7 +447,10 @@ async function renderDailyTab(box, container) {
   );
 
   composerCard.classList.add('sanj-daily__composer');
+  paintCounts();
+  paintRows();
   box.replaceChildren(el('div', { class: 'sanj-daily' }, composerCard, listCard));
+  if (state.editingId) input.focus();
 }
 
 function quickRange(quick, from, to) {
@@ -382,52 +464,44 @@ function quickRange(quick, from, to) {
   }
 }
 
+/* —— ۱.۲۳.۰ تب گزارش/KPI: کارت فیلتر یک‌بار مونت می‌شود (چیپ‌ها/جستجو/تاریخ‌ها درجا sync می‌شوند)
+   و فقط «ناحیهٔ نتایج» (KPI/نمودار/تفکیک/پیگیری/لیست) با هر تغییر فیلتر از نو ساخته می‌شود.
+   هک بازگشت مکان‌نمای جستجو حذف شد — input دیگر بازسازی نمی‌شود. —— */
 async function renderManagerTab(box, container) {
   box.replaceChildren(skeletonState('table', 6));
-  let searchRefocus = false; // فوکوس فقط پس از تایپ کاربر بازگردد
 
-  const range = quickRange(state.quick, state.customFrom, state.customTo);
-  let result, tagSummary;
-  try {
-    const [r, t] = await Promise.all([
-      api.get(`/api/screening${qs({
-        from: range.from || undefined,
-        to: range.to || undefined,
-        q: state.search || undefined,
-        tag: state.tagFilter.length ? state.tagFilter.join(',') : undefined
-      })}`),
-      api.get('/api/screening/tags')
-    ]);
-    result = r.data;
-    tagSummary = t.data;
-  } catch (err) {
-    box.replaceChildren(errorState(err, () => renderManagerTab(box, container)));
-    return;
-  }
-
-  const { entries, stats } = result;
-
-  const quickChips = el('div', { class: 'sanj-chips', role: 'group', 'aria-label': 'بازهٔ سریع' },
-    ...QUICKS.map((q) =>
-      el('button', {
-        type: 'button',
-        class: `chip${state.quick === q.id ? ' is-active' : ''}`,
-        'aria-pressed': String(state.quick === q.id), /* S3-05 */
-        onclick: () => { state.quick = q.id; renderManagerTab(box, container); }
-      }, q.label)
-    )
+  const quickBtns = QUICKS.map((q) =>
+    el('button', {
+      type: 'button',
+      class: `chip${state.quick === q.id ? ' is-active' : ''}`,
+      'aria-pressed': String(state.quick === q.id), /* S3-05 */
+      onclick: () => {
+        if (state.quick === q.id) return;
+        state.quick = q.id;
+        syncQuickUI();
+        customDates.style.display = state.quick === 'custom' ? '' : 'none';
+        void refreshResults();
+      }
+    }, q.label)
   );
 
-  let customDates = null;
-  if (state.quick === 'custom') {
-    const fromInput = jalaliDateInput({ value: state.customFrom, onChange: (v) => { state.customFrom = v || ''; } });
-    const toInput = jalaliDateInput({ value: state.customTo, onChange: (v) => { state.customTo = v || ''; } });
-    customDates = el('div', { class: 'toolbar', style: { marginTop: 'var(--sp-3)', alignItems: 'flex-end' } },
-      el('label', { class: 'field' }, el('span', { class: 'cell-sub' }, 'از تاریخ'), fromInput.root),
-      el('label', { class: 'field' }, el('span', { class: 'cell-sub' }, 'تا تاریخ'), toInput.root),
-      el('button', { class: 'btn btn--primary btn--sm', onclick: () => renderManagerTab(box, container) }, icon('check', 15), 'اعمال')
-    );
-  }
+  const quickChips = el('div', { class: 'sanj-chips', role: 'group', 'aria-label': 'بازهٔ سریع' }, ...quickBtns);
+  const syncQuickUI = () => {
+    quickBtns.forEach((b, i) => {
+      const on = state.quick === QUICKS[i].id;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  };
+
+  // بازهٔ دلخواه: همیشه در شِل هست، فقط وقتی «دلخواه» است دیده می‌شود
+  const fromInput = jalaliDateInput({ value: state.customFrom, onChange: (v) => { state.customFrom = v || ''; } });
+  const toInput = jalaliDateInput({ value: state.customTo, onChange: (v) => { state.customTo = v || ''; } });
+  const customDates = el('div', { class: 'toolbar', style: { marginTop: 'var(--sp-3)', alignItems: 'flex-end', display: state.quick === 'custom' ? '' : 'none' } },
+    el('label', { class: 'field' }, el('span', { class: 'cell-sub' }, 'از تاریخ'), fromInput.root),
+    el('label', { class: 'field' }, el('span', { class: 'cell-sub' }, 'تا تاریخ'), toInput.root),
+    el('button', { class: 'btn btn--primary btn--sm', onclick: () => void refreshResults() }, icon('check', 15), 'اعمال')
+  );
 
   const searchInput = el('input', {
     class: 'input',
@@ -441,61 +515,85 @@ async function renderManagerTab(box, container) {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       state.search = searchInput.value.trim();
-      searchRefocus = true;
-      renderManagerTab(box, container);
+      void refreshResults(); // — فقط ناحیهٔ نتایج؛ فوکوس همین input حفظ می‌شود
     }, 350);
   });
 
+  let tagSummary;
+  try {
+    tagSummary = (await api.get('/api/screening/tags')).data;
+  } catch {
+    tagSummary = [];
+  }
+
   const customTags = tagSummary.filter((t) => !KIND_BY_LABEL.has(t.label)).slice(0, 12);
-  const tagFilterChips = el('div', { class: 'sanj-chips', role: 'group', 'aria-label': 'فیلتر پیگیری' },
+
+  const filterChips = [el('button', {
+    type: 'button',
+    class: `chip${state.tagFilter.length > 0 ? ' is-active' : ''}`, /* S3-05: حالت فعال بصری هم می‌گیرد */
+    'aria-pressed': state.tagFilter.length > 0 ? 'true' : 'false',
+    onclick: () => {
+      state.tagFilter = state.tagFilter.length > 0 ? [] : [...REFERRALS]; /* S3-05: کلیک دوباره، خنثی */
+      syncTagUI();
+      void refreshResults();
+    }
+  }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, icon('alert', 13), 'نیازمند پیگیری (همهٔ ارجاع‌ها)')),
+  ...PREDEFINED.map((t) =>
     el('button', {
       type: 'button',
-      class: `chip${state.tagFilter.length > 0 ? ' is-active' : ''}`, /* S3-05: حالت فعال بصری هم می‌گیرد */
-      'aria-pressed': state.tagFilter.length > 0 ? 'true' : 'false',
+      'data-tag': t.label,
+      class: `chip${state.tagFilter.includes(t.label) ? ' is-active' : ''}`,
+      'aria-pressed': state.tagFilter.includes(t.label) ? 'true' : 'false',
       onclick: () => {
-        state.tagFilter = state.tagFilter.length > 0 ? [] : [...REFERRALS]; /* S3-05: کلیک دوباره، خنثی */
-        renderManagerTab(box, container);
+        state.tagFilter.includes(t.label)
+          ? state.tagFilter = state.tagFilter.filter((x) => x !== t.label)
+          : state.tagFilter.push(t.label);
+        syncTagUI();
+        void refreshResults();
       }
-    }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, icon('alert', 13), 'نیازمند پیگیری (همهٔ ارجاع‌ها)')),
-    ...PREDEFINED.map((t) =>
-      el('button', {
-        type: 'button',
-        class: `chip${state.tagFilter.includes(t.label) ? ' is-active' : ''}`,
-        'aria-pressed': state.tagFilter.includes(t.label) ? 'true' : 'false',
-        onclick: () => {
-          state.tagFilter.includes(t.label)
-            ? state.tagFilter = state.tagFilter.filter((x) => x !== t.label)
-            : state.tagFilter.push(t.label);
-          renderManagerTab(box, container);
-        }
-      }, t.label)
-    ),
-    ...customTags.map((t) =>
-      el('button', {
-        type: 'button',
-        class: `chip${state.tagFilter.includes(t.label) ? ' is-active' : ''}`,
-        'aria-pressed': state.tagFilter.includes(t.label) ? 'true' : 'false', /* S3-05 */
-        onclick: () => {
-          state.tagFilter.includes(t.label)
-            ? state.tagFilter = state.tagFilter.filter((x) => x !== t.label)
-            : state.tagFilter.push(t.label);
-          renderManagerTab(box, container);
-        }
-      }, '# ', t.label)
-    ),
-    state.tagFilter.length > 0
-      ? el('button', {
-          type: 'button',
-          class: 'chip',
-          onclick: () => { state.tagFilter = []; renderManagerTab(box, container); }
-        }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, icon('x', 12), 'پاک‌کردن فیلتر برچسب‌ها'))
-      : null
-  );
+    }, t.label)
+  ),
+  ...customTags.map((t) =>
+    el('button', {
+      type: 'button',
+      'data-tag': t.label,
+      class: `chip${state.tagFilter.includes(t.label) ? ' is-active' : ''}`, /* S3-05 */
+      'aria-pressed': state.tagFilter.includes(t.label) ? 'true' : 'false',
+      onclick: () => {
+        state.tagFilter.includes(t.label)
+          ? state.tagFilter = state.tagFilter.filter((x) => x !== t.label)
+          : state.tagFilter.push(t.label);
+        syncTagUI();
+        void refreshResults();
+      }
+    }, '# ', t.label)
+  )];
 
+  const clearChip = el('button', {
+    type: 'button',
+    class: 'chip',
+    style: { display: state.tagFilter.length > 0 ? '' : 'none' },
+    onclick: () => { state.tagFilter = []; syncTagUI(); void refreshResults(); }
+  }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, icon('x', 12), 'پاک‌کردن فیلتر برچسب‌ها'));
+
+  const syncTagUI = () => {
+    for (const b of [...filterChips, clearChip]) {
+      const label = b.getAttribute('data-tag');
+      if (!label) continue;
+      const on = state.tagFilter.includes(label);
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', String(on));
+    }
+    clearChip.style.display = state.tagFilter.length > 0 ? '' : 'none';
+  };
+
+  const tagFilterChips = el('div', { class: 'sanj-chips', role: 'group', 'aria-label': 'فیلتر پیگیری' }, ...filterChips, clearChip);
+
+  const filterSub = el('span', { class: 'cell-sub' });
   const filterCard = el('div', { class: 'card' },
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, 'فیلتر گزارش'),
-      range.from ? el('span', { class: 'cell-sub', title: formatJalaliFull(range.from) }, `${formatJalaliShort(range.from)} تا ${formatJalaliShort(range.to)}`) : el('span', { class: 'cell-sub' }, 'همهٔ روزها')
+      filterSub
     ),
     el('div', { class: 'card__body sanj-composer' },
       quickChips,
@@ -508,102 +606,120 @@ async function renderManagerTab(box, container) {
     )
   );
 
-  const kpis = el('div', { style: { marginTop: 'var(--sp-4)' } },
-    el('div', { class: 'kpi-grid' },
-    sanjKpi('کل سنجش‌های بازه', fa(stats.total), stats.total ? `عادی ${fa(stats.normal)} از کل` : 'بدون داده', 'primary'),
-    sanjKpi('عادی (بدون ارجاع و خاص)', fa(stats.normal), stats.total ? `٪${fa(Math.round((stats.normal / stats.total) * 100))} از کل` : '—', 'success'),
-    sanjKpi('ارجاع تخصصی', fa(stats.referrals), stats.total ? `نرخ ارجاع ٪${fa(stats.referralRate)}` : '—', stats.referrals > 0 ? 'error' : 'neutral'),
-    sanjKpi('موارد خاص', fa(stats.noCoop + stats.noReg), `عدم همکاری ${fa(stats.noCoop)} • بی‌ثبت‌نام ${fa(stats.noReg)}`, 'accent')
-    ),
-    el('p', { class: 'sanj-hint', style: { margin: '8px 4px 0', lineHeight: 'var(--lh-relaxed)' } },
-      'تعریف «عادی»: بدون برچسب ارجاع تخصصی (بینایی، شنوایی، هوش، جسمی‌حرکتی) و بدون موارد خاص (عدم همکاری، نداشتن ثبت‌نام) — برچسب کارمند سنجش‌گر و مهدکودک مبدأ «عادی» را تغییر نمی‌دهد.'
-    )
-  );
+  const resultsZone = el('div', {});
 
-  const chartCard = buildChartCard(stats.byDay);
+  async function refreshResults() {
+    const range = quickRange(state.quick, state.customFrom, state.customTo);
+    filterSub.replaceChildren(range.from ? `${formatJalaliShort(range.from)} تا ${formatJalaliShort(range.to)}` : 'همهٔ روزها');
+    if (range.from) filterSub.title = formatJalaliFull(range.from); else filterSub.removeAttribute('title');
 
-  const breakdownCard = stats.perTag.length === 0 ? null : el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
-    el('div', { class: 'card__head' },
-      el('div', { class: 'card__title' }, 'تفکیک برچسب‌ها'),
-      el('span', { class: 'cell-sub' }, 'کارمند سنجش‌گر، مهدکودک مبدأ و وضعیت‌ها')
-    ),
-    el('div', { class: 'card__body', style: { display: 'grid', gap: '8px' } },
-      ...stats.perTag.slice(0, 12).map((t) => {
-        const max = Math.max(...stats.perTag.map((x) => x.count));
-        const color = t.kind === 'referral' ? 'var(--error)' : t.kind === 'status' ? 'var(--accent)' : 'var(--primary)';
-        return el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
-          el('span', { class: 'cell-main', style: { width: '150px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
-            t.kind === 'custom' ? '# ' : '', t.label
-          ),
-          el('div', { class: 'sanj-bar' },
-            el('span', { style: { width: `${Math.max(6, (t.count / max) * 100)}%`, background: color } })
-          ),
-          el('b', { style: { width: '28px', textAlign: 'left', fontSize: 'var(--fs-sm)' } }, fa(t.count))
-        );
-      })
-    )
-  );
+    resultsZone.replaceChildren(skeletonState('table', 6));
+    let result;
+    try {
+      result = (await api.get(`/api/screening${qs({
+        from: range.from || undefined,
+        to: range.to || undefined,
+        q: state.search || undefined,
+        tag: state.tagFilter.length ? state.tagFilter.join(',') : undefined
+      })}`)).data;
+    } catch (err) {
+      resultsZone.replaceChildren(errorState(err, () => void refreshResults()));
+      return;
+    }
+    const { entries, stats } = result;
 
-  const followUps = entries.filter((e) => e.tags.some((t) => REFERRALS.includes(t)));
-  const followCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
-    el('div', { class: 'card__head' },
-      el('div', { class: 'card__title' }, 'نیازمند پیگیری (ارجاع تخصصی)'),
-      el('span', { class: `badge ${followUps.length > 0 ? 'badge--error' : 'badge--success'}` }, fa(followUps.length))
-    ),
-    el('div', { class: 'card__body' },
-      followUps.length === 0
-        ? emptyState({ iconName: 'check', title: 'در این بازه مورد ارجاعی وجود ندارد', hint: 'موارد ارجاع‌شده به متخصص برای تماس با خانواده اینجا فهرست می‌شوند.' })
-        : el('div', { class: 'sanj-rows' },
-            ...followUps.map((e) =>
-              el('div', { class: 'sanj-row' },
-                el('div', { class: 'sanj-row__main' },
-                  el('span', { class: 'cell-main' }, e.name),
-                  el('span', { class: 'cell-sub' }, formatJalaliShort(e.day))
-                ),
-                el('div', { class: 'sanj-row__tags' },
-                  e.tags.filter((t) => REFERRALS.includes(t)).map((t) => tagBadge(t))
-                ),
-                el('div', { class: 'sanj-row__actions' },
-                  el('button', {
-                    class: 'btn btn--soft btn--sm',
-                    title: 'ثبت این نوآموز در لیست انتظار مرکز (نام خودکار پر می‌شود)',
-                    onclick: () => { location.hash = `#/waitlist?prefill=${encodeURIComponent(e.name)}`; } // — ماژول مستقل
-                  }, icon('plus', 13), 'ثبت در لیست انتظار')
+    const kpis = el('div', { style: { marginTop: 'var(--sp-4)' } },
+      el('div', { class: 'kpi-grid' },
+      sanjKpi('کل سنجش‌های بازه', fa(stats.total), stats.total ? `عادی ${fa(stats.normal)} از کل` : 'بدون داده', 'primary'),
+      sanjKpi('عادی (بدون ارجاع و خاص)', fa(stats.normal), stats.total ? `٪${fa(Math.round((stats.normal / stats.total) * 100))} از کل` : '—', 'success'),
+      sanjKpi('ارجاع تخصصی', fa(stats.referrals), stats.total ? `نرخ ارجاع ٪${fa(stats.referralRate)}` : '—', stats.referrals > 0 ? 'error' : 'neutral'),
+      sanjKpi('موارد خاص', fa(stats.noCoop + stats.noReg), `عدم همکاری ${fa(stats.noCoop)} • بی‌ثبت‌نام ${fa(stats.noReg)}`, 'accent')
+      ),
+      el('p', { class: 'sanj-hint', style: { margin: '8px 4px 0', lineHeight: 'var(--lh-relaxed)' } },
+        'تعریف «عادی»: بدون برچسب ارجاع تخصصی (بینایی، شنوایی، هوش، جسمی‌حرکتی) و بدون موارد خاص (عدم همکاری، نداشتن ثبت‌نام) — برچسب کارمند سنجش‌گر و مهدکودک مبدأ «عادی» را تغییر نمی‌دهد.'
+      )
+    );
+
+    const chartCard = buildChartCard(stats.byDay);
+
+    const breakdownCard = stats.perTag.length === 0 ? null : el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
+      el('div', { class: 'card__head' },
+        el('div', { class: 'card__title' }, 'تفکیک برچسب‌ها'),
+        el('span', { class: 'cell-sub' }, 'کارمند سنجش‌گر، مهدکودک مبدأ و وضعیت‌ها')
+      ),
+      el('div', { class: 'card__body', style: { display: 'grid', gap: '8px' } },
+        ...stats.perTag.slice(0, 12).map((t) => {
+          const max = Math.max(...stats.perTag.map((x) => x.count));
+          const color = t.kind === 'referral' ? 'var(--error)' : t.kind === 'status' ? 'var(--accent)' : 'var(--primary)';
+          return el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+            el('span', { class: 'cell-main', style: { width: '150px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+              t.kind === 'custom' ? '# ' : '', t.label
+            ),
+            el('div', { class: 'sanj-bar' },
+              el('span', { style: { width: `${Math.max(6, (t.count / max) * 100)}%`, background: color } })
+            ),
+            el('b', { style: { width: '28px', textAlign: 'left', fontSize: 'var(--fs-sm)' } }, fa(t.count))
+          );
+        })
+      )
+    );
+
+    const followUps = entries.filter((e) => e.tags.some((t) => REFERRALS.includes(t)));
+    const followCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
+      el('div', { class: 'card__head' },
+        el('div', { class: 'card__title' }, 'نیازمند پیگیری (ارجاع تخصصی)'),
+        el('span', { class: `badge ${followUps.length > 0 ? 'badge--error' : 'badge--success'}` }, fa(followUps.length))
+      ),
+      el('div', { class: 'card__body' },
+        followUps.length === 0
+          ? emptyState({ iconName: 'check', title: 'در این بازه مورد ارجاعی وجود ندارد', hint: 'موارد ارجاع‌شده به متخصص برای تماس با خانواده اینجا فهرست می‌شوند.' })
+          : el('div', { class: 'sanj-rows' },
+              ...followUps.map((e) =>
+                el('div', { class: 'sanj-row' },
+                  el('div', { class: 'sanj-row__main' },
+                    el('span', { class: 'cell-main' }, e.name),
+                    el('span', { class: 'cell-sub' }, formatJalaliShort(e.day))
+                  ),
+                  el('div', { class: 'sanj-row__tags' },
+                    e.tags.filter((t) => REFERRALS.includes(t)).map((t) => tagBadge(t))
+                  ),
+                  el('div', { class: 'sanj-row__actions' },
+                    el('button', {
+                      class: 'btn btn--soft btn--sm',
+                      title: 'ثبت این نوآموز در لیست انتظار مرکز (نام خودکار پر می‌شود)',
+                      onclick: () => { location.hash = `#/waitlist?prefill=${encodeURIComponent(e.name)}`; } // — ماژول مستقل
+                    }, icon('plus', 13), 'ثبت در لیست انتظار')
+                  )
                 )
               )
             )
-          )
-    )
-  );
-
-  const listCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
-    el('div', { class: 'card__head' },
-      el('div', { class: 'card__title' }, 'سنجش‌های بازه'),
-      el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
-        el('span', { class: 'badge badge--neutral' }, `${fa(entries.length)} ردیف`),
-        el('button', {
-          class: 'btn btn--soft btn--sm',
-          disabled: entries.length === 0 ? true : null,
-          onclick: () => exportCsv(entries, range)
-        }, icon('download', 15), 'خروجی CSV')
       )
-    ),
-    el('div', { class: 'card__body card__body--flush', style: { overflowX: 'auto' } },
-      entries.length === 0
-        ? el('div', { style: { padding: 'var(--sp-4)' } }, emptyState({ iconName: 'clip', title: 'برای این فیلترها موردی نیست' }))
-        : buildEntriesTable(entries)
-    )
-  );
+    );
 
-  box.replaceChildren(filterCard, kpis, chartCard, breakdownCard, followCard, listCard);
+    const listCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
+      el('div', { class: 'card__head' },
+        el('div', { class: 'card__title' }, 'سنجش‌های بازه'),
+        el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+          el('span', { class: 'badge badge--neutral' }, `${fa(entries.length)} ردیف`),
+          el('button', {
+            class: 'btn btn--soft btn--sm',
+            disabled: entries.length === 0 ? true : null,
+            onclick: () => exportCsv(entries, range)
+          }, icon('download', 15), 'خروجی CSV')
+        )
+      ),
+      el('div', { class: 'card__body card__body--flush', style: { overflowX: 'auto' } },
+        entries.length === 0
+          ? el('div', { style: { padding: 'var(--sp-4)' } }, emptyState({ iconName: 'clip', title: 'برای این فیلترها موردی نیست' }))
+          : buildEntriesTable(entries)
+      )
+    );
 
-  // بازسازی تب مکان‌نمای جستجو را نمی‌بَرد (الگوی students.js)
-  if (searchRefocus) {
-    searchRefocus = false;
-    searchInput.focus();
-    const end = searchInput.value.length;
-    searchInput.setSelectionRange(end, end);
+    resultsZone.replaceChildren(kpis, chartCard, breakdownCard, followCard, listCard);
   }
+
+  box.replaceChildren(filterCard, resultsZone);
+  await refreshResults();
 }
 
 function sanjKpi(label, value, hint, tone) {
