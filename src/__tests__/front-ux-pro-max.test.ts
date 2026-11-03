@@ -63,8 +63,33 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(after).toMatch(/height:\s*100dvh/);
   });
 
-  test('نسخه: سو 1.18.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.18\.0'/);
+  test('نسخه: سو 1.19.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.19\.0'/);
+  });
+
+  test('۱.۱۹.۰ — روز کاری: جریان پیوسته (هیچ اکشنی کل نما را re-render نمی‌کند)', () => {
+    const wd = readFileSync(join(__dirname, '../../public/assets/js/views/working-day.js'), 'utf8');
+    // هستهٔ جریان پیوسته: وصلهٔ جراحی به‌جای rerender
+    expect(wd).toMatch(/function applyStudentStatusInBoard\(/);
+    expect(wd).toMatch(/function collapseRemove\(/);
+    expect(wd).toMatch(/function refreshApptChips\(/);
+    expect(wd).toMatch(/function markStaffAttendance\(/);
+    expect(wd).toMatch(/function syncAssessmentsLight\(/);
+    // اکشن‌های پرتکرار دیگر rerender کامل ندارند — فقط ناوبری تاریخ اجازه دارد
+    const fn = (name: string) => wd.match(new RegExp(`(async )?function ${name}\\([\\s\\S]*?\\n\\}`))?.[0] ?? '';
+    expect(fn('markStudent')).not.toMatch(/rerender\(\)/);
+    expect(fn('markStaffAttendance')).not.toMatch(/rerender\(\)/);
+    expect(fn('markOverdue')).not.toMatch(/rerender\(\)/);
+    expect(fn('notesCard')).not.toMatch(/rerender\(\)/);
+    // لنگرهای DOM برای وصلهٔ جراحی (apptId/studentId)
+    expect(wd).toMatch(/dataset: \{ apptId/);
+    expect(wd).toMatch(/dataset: \{ studentId/);
+    // بازخورد فوری CSS + قفل مشغولی ردیف
+    expect(views).toMatch(/\.wd-flash/);
+    expect(views).toMatch(/\.is-resolving/);
+    expect(views).toMatch(/\.wd-appt__sbtn--ok\.is-active/);
+    expect(views).toMatch(/\.att-row\.is-busy/);
+    expect(views).toMatch(/prefers-reduced-motion/);
   });
 
   test('۱.۱۸.۰ — حذف سیستم موازی «وضعیت عملیاتی» (آمد/نیامد/شروع و اتمام جلسه): فقط حضور و غیاب', () => {
