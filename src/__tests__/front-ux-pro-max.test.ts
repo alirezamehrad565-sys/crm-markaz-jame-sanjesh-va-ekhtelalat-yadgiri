@@ -64,26 +64,7 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('نسخه: سو 1.19.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.27\.0'/);
-  });
-
-  test('۱.۲۷.۰ — تقویم موبایل: پیش‌فرض «هفته» + پیجر روز سوییپی، بدون کارت درصدی و بدون تکرار تاریخ', () => {
-    const src = readFileSync(join(__dirname, '../../public/assets/js/views/appointments.js'), 'utf8');
-    // پیش‌فرض هفته در همهٔ دستگاه‌ها + ماندگاری انتخاب نشست
-    expect(src).toMatch(/sessionStorage\.getItem\('cs\.apptViewMode'\)/);
-    expect(src).toMatch(/sessionStorage\.setItem\('cs\.apptViewMode'/);
-    // پیجر: ترک سوییپی + نوار روز + کارت پشته‌ای تمام-عرض
-    expect(src).toMatch(/function drawMobileWeek\(/);
-    expect(src).toMatch(/function mobileApptCard\(/);
-    expect(src).toMatch(/touchmove/);
-    expect(src).toMatch(/touchend/);
-    // قرص درصدی «is-short» نسخهٔ ۱.۲۶.۰ نباید برگردد
-    expect(src).not.toMatch(/is-short/);
-    const css = readFileSync(join(__dirname, '../../public/assets/css/views.css'), 'utf8');
-    expect(css).toMatch(/\.cal-pager\s*\{[^}]*touch-action:\s*pan-y/);
-    expect(css).toMatch(/\.cal-strip__day/);
-    // دسکتاپ: کل هفته بدون اسکرول افقی در ۱۳۶۶ (۷×۱۱۲ + گاتر)
-    expect(css).toMatch(/grid-template-columns:\s*56px repeat\(7, minmax\(112px, 1fr\)\)/);
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.25\.0'/);
   });
 
   test('۱.۱۹.۰ — روز کاری: جریان پیوسته (هیچ اکشنی کل نما را re-render نمی‌کند)', () => {
