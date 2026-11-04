@@ -17,49 +17,66 @@ function defaultRange() {
 
 let renderGen = 0; // F9: گارد نسل — پاسخ کهنهٔ کلیک‌های سریع فیلتر/پریست نباید جایگزین محتوا شود (الگوی waitlist/progress-board)
 
+/* ۱.۲۵.۰۳ جریان پیوسته (زبان ۱.۱۹–۱.۲۱): شِلِ نما — تب‌ها و نوار ابزار هر حالت — یک‌بار مونت می‌شود
+   و تغییر بازه/پریست/به‌روزرسانی فقط ناحیهٔ داده (content) را تازه می‌کند.
+   قبلاً هر تغییر تاریخ کل نما را با اسکلت بازسازی می‌کرد: پیکر جلالی بسته، فوکوس می‌پرید و
+   نوار ابزار هم دوباره ساخته می‌شد. اکنون پیکرها/پریست‌ها سرجایشان می‌مانند و فقط
+   KPIها و کارت‌ها با پالس نرم تعویض می‌شوند. تعویض تب همچنان اسکلت کامل دارد (ناوبری است). */
 export async function renderReports(container) {
-  const myGen = ++renderGen;
+  ++renderGen;
   if (!local.from || !local.to) {
     const d = defaultRange();
     local.from = d.from;
     local.to = d.to;
   }
+
   const modeSeg = el('div', { class: 'tabs', role: 'tablist', 'aria-label': 'نوع گزارش', style: { marginBottom: 'var(--sp-4)' } }, /* S7-04 */
-    el('button', { class: `tab${local.mode === 'periodic' ? ' is-active' : ''}`, type: 'button', role: 'tab', 'aria-selected': String(local.mode === 'periodic'), onclick: () => { local.mode = 'periodic'; renderReports(container); } }, 'گزارش دوره'),
-    el('button', { class: `tab${local.mode === 'advanced' ? ' is-active' : ''}`, type: 'button', role: 'tab', 'aria-selected': String(local.mode === 'advanced'), onclick: () => { local.mode = 'advanced'; renderReports(container); } }, 'تحلیل پیشرفته')
+    el('button', { class: 'tab', type: 'button', role: 'tab', 'data-mode': 'periodic', onclick: () => switchMode('periodic') }, 'گزارش دوره'),
+    el('button', { class: 'tab', type: 'button', role: 'tab', 'data-mode': 'advanced', onclick: () => switchMode('advanced') }, 'تحلیل پیشرفته')
   );
+  function syncTabs() {
+    modeSeg.querySelectorAll('.tab').forEach((t) => {
+      const on = t.dataset.mode === local.mode;
+      t.classList.toggle('is-active', on);
+      t.setAttribute('aria-selected', String(on));
+    });
+  }
 
-  container.replaceChildren(modeSeg, skeletonState('table', 6));
-  if (local.mode === 'advanced') {
-    let adv;
+  const zone = el('div', {});
+  container.replaceChildren(modeSeg, zone);
+
+  async function switchMode(mode) {
+    if (local.mode === mode && zone.querySelector('.report-content')) { syncTabs(); return; } // دوبارکلیک بی‌اثر
+    local.mode = mode;
+    syncTabs();
+    await mountMode();
+  }
+
+  async function mountMode() {
+    const myGen = ++renderGen;
+    syncTabs();
+    zone.replaceChildren(skeletonState('table', 6));
+    /* نمای هر حالت، شِل خودش (سربرگ + نوار ابزار) را یک‌بار می‌سازد و load() فقط بدنه را پر می‌کند */
+    const view = local.mode === 'advanced' ? buildAdvancedView(zone) : buildView(zone);
     try {
-      adv = (await api.get(`/api/reports/advanced${qs({ from: local.from, to: local.to })}`)).data;
+      zone.replaceChildren(view.root);
+      await view.load(myGen);
     } catch (err) {
-      if (myGen !== renderGen) return; // F9: پاسخ کهنه
-      container.replaceChildren(modeSeg, errorState(err, () => renderReports(container)));
-      return;
+      if (myGen !== renderGen || !zone.isConnected) return; // F9
+      zone.replaceChildren(errorState(err, () => mountMode()));
     }
-    if (myGen !== renderGen) return; // F9: پاسخ کهنه — کلیک جدیدتری در پرواز است
-    container.replaceChildren(modeSeg, buildAdvancedView(adv, container));
-    return;
   }
 
-  let report;
-  try {
-    report = (await api.get(`/api/reports${qs({ from: local.from, to: local.to })}`)).data;
-  } catch (err) {
-    if (myGen !== renderGen) return; // F9: پاسخ کهنه
-    container.replaceChildren(modeSeg, errorState(err, () => renderReports(container)));
-    return;
-  }
-
-  if (myGen !== renderGen) return; // F9: پاسخ کهنه — کلیک جدیدتری در پرواز است
-  container.replaceChildren(modeSeg, buildView(report, container));
+  await mountMode();
 }
 
-function buildView(r, container) {
-  const fromWidget = jalaliDateInput({ value: r.from, allowClear: false, onChange: applyRange });
-  const toWidget = jalaliDateInput({ value: r.to, allowClear: false, onChange: applyRange });
+/* ─── گزارش دوره (حالت پیش‌فرض) ─── */
+
+function buildView(zone) {
+  const content = el('div', { class: 'report-content' });
+
+  const fromWidget = jalaliDateInput({ value: local.from, allowClear: false, onChange: applyRange });
+  const toWidget = jalaliDateInput({ value: local.to, allowClear: false, onChange: applyRange });
 
   function applyRange() {
     const from = fromWidget.getYmd();
@@ -72,7 +89,7 @@ function buildView(r, container) {
     }
     local.from = from;
     local.to = to;
-    renderReports(container);
+    load();
   }
 
   const preset = (days, label) => el('button', {
@@ -81,7 +98,10 @@ function buildView(r, container) {
       const today = tehranTodayYmd();
       local.from = addDaysYmd(today, -(days - 1));
       local.to = today;
-      renderReports(container);
+      // پیکرهای تاریخ با بازهٔ تازه همگام می‌مانند (فقط مقدار — شِل دست‌نخورده)
+      fromWidget.setYmd?.(local.from);
+      toWidget.setYmd?.(local.to);
+      load();
     }
   }, label);
 
@@ -94,10 +114,45 @@ function buildView(r, container) {
     el('span', { style: { color: 'var(--text-3)', fontSize: 'var(--fs-sm)' } }, 'تا'),
     toWidget.root,
     el('div', { class: 'spacer' }),
-    el('button', { class: 'btn btn--soft btn--sm', onclick: () => renderReports(container) }, icon('refresh', 16), 'به‌روزرسانی'),
+    el('button', { class: 'btn btn--soft btn--sm', onclick: () => load() }, icon('refresh', 16), 'به‌روزرسانی'),
     el('button', { class: 'btn btn--primary btn--sm', onclick: () => window.print() }, icon('printer', 16), 'چاپ گزارش')
   );
 
+  const root = el('div', {},
+    el('div', { class: 'page-head' },
+      el('div', { class: 'page-head__title' }, 'گزارش دوره'),
+      el('span', { class: 'badge badge--neutral', dataset: { range: '1' } })
+    ),
+    bar,
+    content
+  );
+  const rangeBadge = root.querySelector('[data-range="1"]');
+
+  async function load(parentGen = null) {
+    const myGen = parentGen ?? ++renderGen;
+    content.setAttribute('aria-busy', 'true');
+    content.classList.add('is-loading');
+    let report;
+    try {
+      report = (await api.get(`/api/reports${qs({ from: local.from, to: local.to })}`)).data;
+    } catch (err) {
+      if (myGen !== renderGen || !content.isConnected) return; // F9: پاسخ کهنه
+      content.classList.remove('is-loading');
+      content.removeAttribute('aria-busy');
+      content.replaceChildren(errorState(err, () => load()));
+      return;
+    }
+    if (myGen !== renderGen || !content.isConnected) return; // F9: پاسخ کهنه — کلیک جدیدتری در پرواز است
+    content.classList.remove('is-loading');
+    content.removeAttribute('aria-busy');
+    rangeBadge.textContent = `${WEEKDAY_NAMES[iranianWeekdayOfYmd(local.from)]} ${formatJalaliNumeric(local.from)} — ${formatJalaliNumeric(local.to)}`;
+    content.replaceChildren(buildPeriodicBody(report));
+  }
+
+  return { root, load };
+}
+
+function buildPeriodicBody(r) {
   const pct = (v) => `${fa(Math.round((v ?? 0) * 100))}٪`;
   const ratePct = (rate, markedCount) => markedCount > 0 ? pct(rate) : '—';
   const fa1 = (v) => fa(Math.round((v ?? 0) * 10) / 10);
@@ -223,11 +278,6 @@ function buildView(r, container) {
     : null;
 
   return el('div', {},
-    el('div', { class: 'page-head' },
-      el('div', { class: 'page-head__title' }, 'گزارش دوره'),
-      el('span', { class: 'badge badge--neutral' }, `${WEEKDAY_NAMES[iranianWeekdayOfYmd(r.from)]} ${formatJalaliNumeric(r.from)} — ${formatJalaliNumeric(r.to)}`)
-    ),
-    bar,
     kpiGrid,
     el('div', { class: 'report-grid' }, trendCard, donutCard),
     el('div', { class: 'report-grid' }, staffCard, schoolsCard),
@@ -267,19 +317,28 @@ function jalaliTick(ymd) {
 
 const JALALI_MONTHS_SHORT = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
 
-function buildAdvancedView(adv, container) {
+/* ─── تحلیل پیشرفته ─── */
+
+function buildAdvancedView(zone) {
+  const content = el('div', { class: 'report-content' });
+  let currentAdv = null; // برای خروجی CSV — با هر load تازه می‌شود
+
   const pct = (v) => (v === null || v === undefined) ? '—' : `${fa(Math.round(v * 100))}٪`;
   const days = (v) => (v === null || v === undefined) ? '—' : `${fa(v)} روز`;
 
-  const fromWidget = jalaliDateInput({ value: adv.from, allowClear: false, onChange: applyRange });
-  const toWidget = jalaliDateInput({ value: adv.to, allowClear: false, onChange: applyRange });
+  const fromWidget = jalaliDateInput({ value: local.from, allowClear: false, onChange: applyRange });
+  const toWidget = jalaliDateInput({ value: local.to, allowClear: false, onChange: applyRange });
   function applyRange() {
     const from = fromWidget.getYmd();
     const to = toWidget.getYmd();
-    if (!from || !to || from > to) return;
+    if (!from || !to) return;
+    if (from > to) {
+      toast('بازهٔ نامعتبر: «از تاریخ» بعد از «تا تاریخ» است', 'warning');
+      return;
+    }
     local.from = from;
     local.to = to;
-    renderReports(container);
+    load();
   }
   const preset = (daysN, label) => el('button', {
     class: 'btn btn--ghost btn--sm',
@@ -287,7 +346,9 @@ function buildAdvancedView(adv, container) {
       const today = tehranTodayYmd();
       local.from = addDaysYmd(today, -(daysN - 1));
       local.to = today;
-      renderReports(container);
+      fromWidget.setYmd?.(local.from);
+      toWidget.setYmd?.(local.to);
+      load();
     }
   }, label);
 
@@ -300,9 +361,45 @@ function buildAdvancedView(adv, container) {
     el('span', { style: { color: 'var(--text-3)', fontSize: 'var(--fs-sm)' } }, 'تا'),
     toWidget.root,
     el('div', { class: 'spacer' }),
-    el('button', { class: 'btn btn--soft btn--sm', onclick: () => exportCsv(adv) }, icon('download', 16), 'خروجی CSV')
+    el('button', { class: 'btn btn--soft btn--sm', onclick: () => currentAdv ? exportCsv(currentAdv) : null }, icon('download', 16), 'خروجی CSV')
   );
 
+  const root = el('div', {},
+    el('div', { class: 'page-head' },
+      el('div', { class: 'page-head__title' }, 'تحلیل پیشرفته'),
+      el('span', { class: 'badge badge--neutral', dataset: { range: '1' } })
+    ),
+    bar,
+    content
+  );
+  const rangeBadge = root.querySelector('[data-range="1"]');
+
+  async function load(parentGen = null) {
+    const myGen = parentGen ?? ++renderGen;
+    content.setAttribute('aria-busy', 'true');
+    content.classList.add('is-loading');
+    let adv;
+    try {
+      adv = (await api.get(`/api/reports/advanced${qs({ from: local.from, to: local.to })}`)).data;
+    } catch (err) {
+      if (myGen !== renderGen || !content.isConnected) return; // F9
+      content.classList.remove('is-loading');
+      content.removeAttribute('aria-busy');
+      content.replaceChildren(errorState(err, () => load()));
+      return;
+    }
+    if (myGen !== renderGen || !content.isConnected) return; // F9
+    content.classList.remove('is-loading');
+    content.removeAttribute('aria-busy');
+    currentAdv = adv;
+    rangeBadge.textContent = `${formatJalaliNumeric(adv.from)} — ${formatJalaliNumeric(adv.to)}`;
+    content.replaceChildren(buildAdvancedBody(adv, pct, days));
+  }
+
+  return { root, load };
+}
+
+function buildAdvancedBody(adv, pct, days) {
   const kpiGrid = el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-5)' } },
     kpi('پوشش گزارش پرونده', pct(adv.assessments.coverageRate), `${fa(adv.assessments.withAny)} از ${fa(adv.assessments.activeStudents)} پروندهٔ فعال`, 'primary'),
     kpi('پوشش گزارش جلسه', pct(adv.sessionNotes.coverageRate), `${fa(adv.sessionNotes.withNote)} از ${fa(adv.sessionNotes.sessions)} جلسه`, 'accent'),
@@ -368,11 +465,6 @@ function buildAdvancedView(adv, container) {
   );
 
   return el('div', {},
-    el('div', { class: 'page-head' },
-      el('div', { class: 'page-head__title' }, 'تحلیل پیشرفته'),
-      el('span', { class: 'badge badge--neutral' }, `${formatJalaliNumeric(adv.from)} — ${formatJalaliNumeric(adv.to)}`)
-    ),
-    bar,
     kpiGrid,
     el('div', { class: 'report-grid' }, weeklyCard, funnelCard),
     weeksCard
