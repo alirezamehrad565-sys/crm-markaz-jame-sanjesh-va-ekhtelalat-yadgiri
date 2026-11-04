@@ -18,7 +18,6 @@ import {
   timeToMinute,
   gridTimes,
   WEEKDAY_NAMES,
-  WEEKDAY_ABBRS, /* ۱.۲۶.۰ — سربرگ فشردهٔ موبایل */
   gradeLabel
 } from '../format.js';
 import { el, icon, openModal, confirmModal, formModal, toast, toastError, statusBadge, emptyState, skeletonState, lockBtn } from '../ui.js';
@@ -139,11 +138,11 @@ export async function renderAppointments(container, ctx = {}) {
 
   if (!state.weekStart) state.weekStart = weekStartOf(tehranTodayYmd());
   if (!state.viewMode) {
-    /* ۱.۲۶.۰ — تصمیم کاربر: پیش‌فرض در همهٔ دستگاه‌ها «هفته» است (تجربهٔ GCal/Outlook).
-       گرید فشردهٔ موبایل کل هفته را در عرض صفحه می‌نشاند — دیگر انگیزه‌ای برای شروع با «روز» نیست.
-       انتخاب دستی کاربر (هفته/روز) تا پایان نشست حفظ می‌شود. */
-    try { state.viewMode = sessionStorage.getItem('cs.apptViewMode') === 'day' ? 'day' : 'week'; }
-    catch { state.viewMode = 'week'; }
+    /* UX-ممیزی: نمای هفتگی در موبایل = اسکرول افقی ~۳ برابر عرض صفحه؛
+       اولین ورود در دستگاه لمسی/باریک با «روز» شروع می‌شود (انتخاب کاربر در نشست حفظ می‌شود) */
+    const coarse = window.matchMedia?.('(pointer: coarse)')?.matches;
+    const narrow = window.matchMedia?.('(max-width: 640px)')?.matches;
+    state.viewMode = (coarse || narrow) ? 'day' : 'week';
   }
   if (!state.dayYmd) state.dayYmd = tehranTodayYmd();
   const isTherapist = session.user?.role === 'therapist';
@@ -293,7 +292,7 @@ export async function renderAppointments(container, ctx = {}) {
   const isSupervisor = session.user?.role === 'supervisor';
   const newBtn = isSupervisor
     ? null
-    : el('button', { class: 'btn btn--primary btn--sm appt-fab', onclick: () => openCreateModal(container), 'aria-label': 'نوبت جدید' }, icon('zap', 16), el('span', { class: 'btn__txt' }, 'نوبت جدید')); /* ۱.۲۶.۰ — در موبایل FAB شناور */
+    : el('button', { class: 'btn btn--primary btn--sm', onclick: () => openCreateModal(container) }, icon('zap', 16), 'نوبت جدید');
 
   const bar = el('div', { class: 'week-bar' },
     modeSeg,
@@ -308,9 +307,9 @@ export async function renderAppointments(container, ctx = {}) {
       el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': 'هفته بعد', onclick: () => shiftWeek(1) }, icon('chevL', 18)),
       weekTitle = el('div', { class: 'week-bar__title' }, weekLabel),
       el('div', { class: 'spacer' }),
-      undoBtn = el('button', { class: 'btn btn--ghost btn--sm', 'aria-label': 'برگردان آخرین کپی', title: 'برگردان آخرین کپی', onclick: (e) => lockBtn(e.currentTarget, undoLastCopy) /* F7: قفل مشغولی — دوبارکلیک undo دوبار اجرا نمی‌کند */, style: state.lastBatchId && !isSupervisor ? null : { display: 'none' } }, icon('undo', 16), el('span', { class: 'btn__txt' }, 'برگردان آخرین کپی')), /* ۱.۲۰.۰ — همیشه ساخته می‌شود؛ نمایانی با syncUndoBtn · ۱.۲۶.۰ در موبایل فقط آیکن */
+      undoBtn = el('button', { class: 'btn btn--ghost btn--sm', onclick: (e) => lockBtn(e.currentTarget, undoLastCopy) /* F7: قفل مشغولی — دوبارکلیک undo دوبار اجرا نمی‌کند */, style: state.lastBatchId && !isSupervisor ? null : { display: 'none' } }, icon('undo', 16), 'برگردان آخرین کپی'), /* ۱.۲۰.۰ — همیشه ساخته می‌شود؛ نمایانی با syncUndoBtn */
       !isSupervisor
-        ? el('button', { class: 'btn btn--ghost btn--sm', 'aria-label': 'کپی از هفته قبل', title: 'کپی از هفته قبل', onclick: (e) => lockBtn(e.currentTarget, copyPrevWeek) /* F7: قفل مشغولی — دوبارکلیک کپی دوبار اجرا نمی‌کند */ }, icon('copy', 16), el('span', { class: 'btn__txt' }, 'کپی از هفته قبل'))
+        ? el('button', { class: 'btn btn--ghost btn--sm', onclick: (e) => lockBtn(e.currentTarget, copyPrevWeek) /* F7: قفل مشغولی — دوبارکلیک کپی دوبار اجرا نمی‌کند */ }, icon('copy', 16), 'کپی از هفته قبل')
         : null
     ]),
     isDay ? el('div', { class: 'spacer' }) : null,
@@ -322,16 +321,15 @@ export async function renderAppointments(container, ctx = {}) {
      refreshGrid فقط همین دو را بازسازی می‌کند (بدون اسکلت، بدون تغییر نوار و اسکرول). */
   const legendEl = el('div', {});
   const gridInner = el('div', { class: 'grid-inner' });
-  const scrollEl = el('div', { class: 'grid-scroll' }, gridInner); /* ۱.۲۶.۰ — ارجاع برای گارد سرریز افقی */
 
-  VIEW = { container, legendEl, gridInner, scrollEl, countEls: new Map(), isDay, refreshGrid };
+  VIEW = { container, legendEl, gridInner, countEls: new Map(), isDay, refreshGrid };
 
   container.replaceChildren(
     ...[
       bar,
       legendEl,
-      !isDay ? el('div', { class: 'swipe-hint is-week' }, icon('chevL', 14), 'برای جزئیات هر روز، سربرگ آن روز را بزنید — جابه‌جایی نوبت روی لمس از «ویرایش زمان» داخل جزئیات') : null,
-      el('div', { class: 'grid-wrap' }, scrollEl)
+      !isDay ? el('div', { class: 'swipe-hint is-week' }, icon('chevL', 14), 'برای دیدن روزهای دیگر بکشید — جابه‌جایی نوبت روی لمس از «ویرایش زمان» داخل جزئیات') : null,
+      el('div', { class: 'grid-wrap' }, el('div', { class: 'grid-scroll' }, gridInner))
     ].filter(Boolean)
   );
 
@@ -400,22 +398,18 @@ export async function renderAppointments(container, ctx = {}) {
     const leftovers = dayItems.filter((a) => !staffIds.has(a.staffId));
 
     const cols = [...dayStaff, ...(leftovers.length > 0 ? [{ id: '_other', fullName: 'سایر' }] : [])];
-    const colMin = window.matchMedia?.('(max-width: 640px)')?.matches ? 148 : 170; /* ۱.۲۶.۰ — موبایل: ستون باریک‌تر، اسکرول کمتر */
     gridInner.style.gridTemplateColumns = cols.length === 1
-      ? '48px minmax(0, 1fr)'
-      : `48px repeat(${cols.length}, minmax(${colMin}px, 1fr))`;
-    gridInner.classList.add('is-day'); /* ۱.۲۶.۰ — نشانگر نما */
-    gridInner.classList.remove('is-week');
-    VIEW.scrollEl.classList.toggle('grid-scroll--scrollx', cols.length > 1);
+      ? '56px minmax(0, 1fr)'
+      : `56px repeat(${cols.length}, minmax(170px, 1fr))`;
 
-    const gutter = el('div', { class: 'grid-gutter', style: { height: `${SCALE.total}px`, gridRow: '2', gridColumn: '1' } });
+    const gutter = el('div', { style: { position: 'relative', height: `${SCALE.total}px`, gridRow: '2', gridColumn: '1' } });
     let lastLabelY = -100;
     for (let m = SCALE.start; m < SCALE.end; m += CELL_MINUTES) {
       if (m % 60 === 0) {
         const y = SCALE.yOf(m);
         if (y - lastLabelY >= 26) {
           gutter.appendChild(
-            el('div', { class: 'gutter', style: { position: 'absolute', top: `${y}px`, insetInline: '0' } }, fa(minuteToLabel(m)))
+            el('div', { class: 'gutter', style: { position: 'absolute', top: `${y}px`, insetInlineStart: '0', width: '52px' } }, fa(minuteToLabel(m)))
           );
           lastLabelY = y;
         }
@@ -433,7 +427,7 @@ export async function renderAppointments(container, ctx = {}) {
         )
       );
     }
-    gridInner.appendChild(el('div', { class: 'grid-corner', style: { gridRow: '1', gridColumn: '1' } }));
+    gridInner.appendChild(el('div', { style: { height: '8px', gridRow: '1', gridColumn: '1' } }));
     for (const s of cols) {
       const isOther = s.id === '_other';
       const items = isOther ? leftovers : dayItems.filter((a) => a.staffId === s.id);
@@ -441,19 +435,16 @@ export async function renderAppointments(container, ctx = {}) {
     }
   } else {
     gridInner.style.gridTemplateColumns = '';
-    gridInner.classList.add('is-week'); /* ۱.۲۶.۰ — نشانگر نما برای CSS قرص فشردهٔ موبایل */
-    gridInner.classList.remove('is-day');
-    VIEW.scrollEl.classList.remove('grid-scroll--scrollx'); /* ۱.۲۶.۰ — هفته هرگز اسکرول افقی نمی‌خواهد */
     const days = Array.from({ length: 7 }, (_, i) => addDaysYmd(state.weekStart, i));
 
-    const gutter = el('div', { class: 'grid-gutter', style: { height: `${SCALE.total}px`, gridRow: '2', gridColumn: '1' } });
+    const gutter = el('div', { style: { position: 'relative', height: `${SCALE.total}px`, gridRow: '2', gridColumn: '1' } });
     let lastLabelY = -100;
     for (let m = SCALE.start; m < SCALE.end; m += CELL_MINUTES) {
       if (m % 60 === 0) {
         const y = SCALE.yOf(m);
         if (y - lastLabelY >= 26) {
           gutter.appendChild(
-            el('div', { class: 'gutter', style: { position: 'absolute', top: `${y}px`, insetInline: '0' } }, fa(minuteToLabel(m)))
+            el('div', { class: 'gutter', style: { position: 'absolute', top: `${y}px`, insetInlineStart: '0', width: '52px' } }, fa(minuteToLabel(m)))
           );
           lastLabelY = y;
         }
@@ -464,34 +455,17 @@ export async function renderAppointments(container, ctx = {}) {
     for (const ymd of days) {
       const isToday = ymd === today;
       const items = byDay.get(ymd) ?? [];
-      const wd = iranianWeekdayOfYmd(ymd);
-      const rel = relativeDayLabel(ymd);
 
-      /* ۱.۲۶.۰ — سربرگ روز = دکمهٔ «رفتن به نمای روزِ همان روز» (تجربهٔ GCal/Outlook در همهٔ اندازه‌ها):
-         شمارهٔ روز در دایره (امروز توپُر) + نام روز (موبایل: حرف اختصاری) + شمارندهٔ زندهٔ نوبت‌ها */
       gridInner.appendChild(
-        el('button', {
-          class: `grid-head${isToday ? ' is-today' : ''}`,
-          type: 'button',
-          dataset: { headYmd: ymd },
-          'aria-label': `نمایش روز ${formatJalaliFull(ymd)} — ${fa(items.length)} نوبت`,
-          title: 'رفتن به نمای روز',
-          onclick: () => { state.dayYmd = ymd; setMode('day'); }
-        },
-          el('span', { class: 'gh-row' },
-            el('span', { class: 'gh-wd' },
-              el('span', { class: 'gh-wd__full' }, WEEKDAY_NAMES[wd]),
-              el('span', { class: 'gh-wd__abbr' }, WEEKDAY_ABBRS[wd])
-            ),
-            el('span', { class: `gh-num${isToday ? ' is-today' : ''}` }, formatJalaliShort(ymd).split(' ')[0])
-          ),
+        el('div', { class: `grid-head${isToday ? ' is-today' : ''}` },
+          WEEKDAY_NAMES[iranianWeekdayOfYmd(ymd)],
           el('span', { class: 'grid-head__date' },
-            el('span', { class: 'gh-rel' }, `${rel ? `${rel} · ` : ''}${formatJalaliShort(ymd)} · `),
-            countEl(ymd, `${fa(items.length)} نوبت`))
+            `${relativeDayLabel(ymd) ? relativeDayLabel(ymd) + ' · ' : ''}${formatJalaliShort(ymd)}`,
+            countEl(ymd, ` · ${fa(items.length)} نوبت`))
         )
       );
     }
-    gridInner.appendChild(el('div', { class: 'grid-corner', style: { gridRow: '1', gridColumn: '1' } }));
+    gridInner.appendChild(el('div', { style: { height: '8px', gridRow: '1', gridColumn: '1' } }));
     for (const ymd of days) {
       gridInner.appendChild(buildDayColumn(ymd, byDay.get(ymd) ?? [], ymd === today, { showStaffName: true }));
     }
@@ -521,13 +495,8 @@ export async function renderAppointments(container, ctx = {}) {
     const anchor = Math.max(SCALE.start, startMin - 30);
     const wrap = document.querySelector('.grid-wrap');
     if (!wrap) return;
-    /* ۱.۲۶.۰ — لنگر زیر باند چسبان سربرگ (topbar + سربرگ)، نه پشت آن — آفست از خود CSS خوانده می‌شود */
-    const headEl = VIEW?.gridInner?.querySelector('.grid-head');
-    const headTop = headEl ? (parseFloat(getComputedStyle(headEl).top) || 0) : 74;
-    const headH = headEl?.getBoundingClientRect().height ?? 56;
-    const bandH = headTop + headH + 8;
     const top = wrap.getBoundingClientRect().top + window.scrollY + SCALE.yOf(anchor);
-    window.scrollTo({ top: Math.max(0, top - bandH) });
+    window.scrollTo({ top: Math.max(0, top - 64) });
   }
 
   function shiftWeek(n) {
@@ -538,7 +507,6 @@ export async function renderAppointments(container, ctx = {}) {
   function setMode(m) {
     if (state.viewMode === m) return;
     state.viewMode = m;
-    try { sessionStorage.setItem('cs.apptViewMode', m); } catch { /* خصوصی */ } /* ۱.۲۶.۰ — انتخاب نشست */
     if (m === 'day') {
       const todayYmd = tehranTodayYmd();
       const weekEndYmd = addDaysYmd(state.weekStart, 6);
@@ -555,8 +523,7 @@ function buildDayColumn(ymd, items, isToday, opts = {}) {
   const showStaffName = opts.showStaffName !== false;
   const ds = { ymd }; // — ۱.۲۰.۰: ستون با ymd/staff شناس‌پذیر می‌شود تا پچ درجا بتواند پیدایش کند
   if (opts.staff) ds.staff = opts.staff;
-  const weekend = iranianWeekdayOfYmd(ymd) === 6; /* ۱.۲۶.۰ — جمعه، تعطیل رسمی: ته‌رنگ ستون */
-  const col = el('div', { class: `grid-day${isToday ? ' is-today' : ''}${weekend ? ' is-weekend' : ''}`, dataset: ds });
+  const col = el('div', { class: `grid-day${isToday ? ' is-today' : ''}`, dataset: ds });
 
   for (const off of offRanges(ymd)) {
     col.appendChild(el('div', { class: 'grid-off', style: { top: `${off.top}px`, height: `${off.height}px` } }));
@@ -623,7 +590,6 @@ function apptOnGrid(a, ymd, opts = {}) {
   const endMin = timeToMinute(tehranTimeOfIso(a.endAt)) + (isoToYmd(a.endAt) !== isoToYmd(a.startAt) ? 1440 : 0);
   const top = Math.max(0, SCALE.yOf(Math.max(startMin, SCALE.start)));
   const height = Math.max(28, SCALE.span(startMin, endMin) - 3);
-  const short = height < 40; /* ۱.۲۶.۰ — قرص فشردهٔ موبایل: فقط بلوک رنگی، بدون ساعت */
 
   const tall = height >= 56;
   const students = (a.students ?? []).map((s) => state.studentNames.get(s.studentId) ?? 'دانش‌آموز');
@@ -653,7 +619,7 @@ function apptOnGrid(a, ymd, opts = {}) {
   const card = el(
     'div',
     {
-      class: `grid-appt${apptStatusClass(a)} ${hueClass(a.staffId)}${short ? ' is-short' : ''}`,
+      class: `grid-appt${apptStatusClass(a)} ${hueClass(a.staffId)}`,
       style: { top: `${top}px`, height: `${height}px` },
       draggable: 'true',
       dataset: { id: a.id, version: String(a.version), ymd, start: a.startAt },
@@ -666,8 +632,7 @@ function apptOnGrid(a, ymd, opts = {}) {
     el('span', { class: 'grid-appt__time' },
       attStateOf(a) === 'completed' ? el('span', { class: 'appt-tick' }, icon('check', 10)) : null,
       a.note ? el('span', { class: 'grid-appt__noted', title: a.note }) : null,
-      fa(tehranTimeOfIso(a.startAt)),
-      el('span', { class: 'appt-end' }, ` – ${fa(tehranTimeOfIso(a.endAt))}`) /* ۱.۲۶.۰ — قرص فشردهٔ موبایل: فقط ساعت شروع */
+      `${fa(tehranTimeOfIso(a.startAt))} – ${fa(tehranTimeOfIso(a.endAt))}`
     ),
     tall ? sessionTypeChip(a.sessionType) : null,
     tall && showStaffName ? el('span', { class: 'grid-appt__title' }, staffName(a.staffId)) : null,
@@ -780,7 +745,7 @@ function updateColCount(col) {
   const elc = VIEW.countEls.get(key);
   if (!elc) return;
   const n = col.querySelectorAll(':scope > .grid-appt').length;
-  elc.textContent = `${fa(n)} نوبت`; /* ۱.۲۶.۰ — قالب واحد هر دو نما (سربرگ دکمه‌ای) */
+  elc.textContent = VIEW.isDay ? `${fa(n)} نوبت` : ` · ${fa(n)} نوبت`;
 }
 
 function insertApptSorted(col, card, a) {
