@@ -602,7 +602,7 @@ export async function renderStudentProfile(container, ctx) {
         const t = fillTargetOf({ category: ev.typeCategory, familyFillable: ev.typeFamilyFillable, audience: ev.typeAudience });
         return el('div', { style: { marginTop: '6px' } }, el('span', { class: `badge ${t.badgeClass}` }, t.badge));
       })() : null,
-      link ? el('div', { class: 'tl-item__actor', style: { color: 'var(--primary, #229ED9)' } }, `↖ ${link.label}` /* S4-06 */) : null
+      link ? el('div', { class: 'tl-item__actor', style: { color: 'var(--primary)' } }, `↖ ${link.label}` /* S4-06 */) : null
     );
     if (openAction) card.addEventListener('keydown', (e) => { /* S4-22 */
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAction(); }

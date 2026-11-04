@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { fetchAllStudents } from './student-fetch.js'; // حلقهٔ صفحه‌بندی مشترک (سقف خاموش ۱۰۰ حذف شد)
 import { el, icon, formModal, confirmModal, openModal, toast, toastError, emptyState, phoneCell, rowMenu, lockBtn, loadingState, collapseRemove, flashNode } from './ui.js';
+import { illoWaitlist } from './illustrations.js'; /* ۱.۲۵.۰۵ — نگارهٔ حالت خالی */
 import { fa, addDaysYmd, relativeDayLabel, tehranTodayYmd, tehranYmdMinuteToIso, tehranYmdOfIso, timeToMinute, gridTimes, toUtcIso } from './format.js';
 import { session } from './state.js'; // — دسترسی نقش‌محور (درمانگر: فقط افزودن)
 
@@ -586,6 +587,7 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
     const hasFilter = Boolean(state.status || state.priority || state.q);
     return stateRow(
       emptyState({
+        illo: hasFilter ? null : illoWaitlist, /* ۱.۲۵.۰۵ — نگاره فقط برای خالیِ واقعی */
         iconName: 'clock',
         title: 'لیست انتظار خالی است',
         hint: hasFilter ? 'موردی با این فیلترها نیست — فیلترها را باز کنید.' : 'متقاضیان نوبت که هنوز پرونده نشده‌اند اینجا نگه داشته می‌شوند.',

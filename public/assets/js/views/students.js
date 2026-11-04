@@ -1,6 +1,7 @@
 import { api, qs } from '../api.js';
 import { fa, gradeLabel, isPlaceholderNid } from '../format.js';
 import { el, icon, confirmModal, toast, toastError, statusBadge, skeletonState, emptyState, callBadge, collapseRemove, flashNode, lockBtn } from '../ui.js';
+import { illoStudents } from '../illustrations.js'; /* ۱.۲۵.۰۵ — نگارهٔ حالت خالی */
 import { fetchTags, tagChipsPreview, openTagEditor } from '../tagging.js';
 import { openFocusEditor } from '../student-focus.js'; // درخت هدف در پروفایل
 import { openStudentForm } from '../student-form.js';
@@ -246,6 +247,7 @@ export async function renderStudents(container, ctx) {
   function emptyRow() {
     return el('tr', {}, el('td', { colspan: colCount, style: { padding: 'var(--sp-2)' } },
       emptyState({
+        illo: hasFilter() ? null : illoStudents, /* ۱.۲۵.۰۵ — نگاره فقط برای خالیِ واقعی، نه «نتیجه‌ای پیدا نشد» */
         iconName: 'student',
         title: hasFilter() ? 'نتیجه‌ای پیدا نشد' : (session.user?.role === 'therapist' ? 'هنوز دانش‌آموزی در لیست شما نیست' : 'هنوز دانش‌آموزی ثبت نشده'),
         hint: hasFilter()

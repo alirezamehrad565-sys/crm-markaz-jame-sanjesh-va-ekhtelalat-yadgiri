@@ -25,6 +25,7 @@ import {
   flashNode,
   lockBtn
 } from '../ui.js';
+import { illoScreening } from '../illustrations.js'; /* ۱.۲۵.۰۵ — نگارهٔ حالت خالی */
 import { jalaliDateInput } from '../jalali-picker.js';
 import { session } from '../state.js';
 
@@ -335,6 +336,7 @@ async function renderDailyTab(box, container, myGen) {
     rowsZone.replaceChildren(
       ...(entries.length === 0
         ? [emptyState({
+            illo: illoScreening, /* ۱.۲۵.۰۵ */
             iconName: 'student',
             title: 'امروز هنوز کسی ثبت نشده است',
             hint: 'نام و فامیل را در باکس بالا بنویسید و برچسب بزنید — تمام.'

@@ -2,6 +2,32 @@ import { ERROR_TEXT } from './api.js';
 import { fa } from './format.js';
 import { jalaliDateInput } from './jalali-picker.js';
 
+/* ۱.۲۵.۰۵ — حرکت مشترک از charts.js به ui.js رفت: countUp برای kpi مشترک لازم بود و
+   ui.js نباید charts.js را import می‌کرد (چرخهٔ charts→ui). خود charts.js از اینجا import می‌کند. */
+export function prefersReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+export function countUp(el_, value, { duration = 700, formatter = (v) => String(v) } = {}) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    el_.textContent = formatter(value);
+    return;
+  }
+  if (prefersReducedMotion()) {
+    el_.textContent = formatter(value);
+    return;
+  }
+  const start = performance.now();
+  const from = 0;
+  function frame(t) {
+    const p = Math.min((t - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - p, 3); // منحنی حرکت easeOutCubic
+    el_.textContent = formatter(Math.round(from + (value - from) * eased));
+    if (p < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
 export function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs ?? {})) {
@@ -841,6 +867,32 @@ export function emptyState({ iconName = 'dots', title = 'چیزی اینجا ن�
     el('div', { class: 'empty__title' }, title),
     hint ? el('div', { class: 'empty__hint' }, hint) : null,
     actionLabel && onAction ? el('button', { class: 'btn btn--primary btn--sm', onclick: onAction }, icon('plus', 16), actionLabel) : null
+  );
+}
+
+/* ۱.۲۵.۰۵ — kpi تک‌منبع شد (قبلاً سه نسخهٔ واگرا در reports/dashboard/special-needs کپی شده بود):
+   • null/undefined → «—» (نسخهٔ reports)
+   • عدد → countUp با ارقام فارسی، مگر fmt (نسخهٔ reports)
+   • رشتهٔ آماده (fa(...) یا '—') → متن ثابت (نسخهٔ dashboard)
+   ترتیب DOM همه‌جا: برچسب، مقدار، زیرنویس (kpi__sub) — نسخهٔ special-needs که مقدار را
+   جلوتر می‌گذاشت و زیرنویسش با kpi__hint هیچ قاعدهٔ CSS نداشت، هم‌زمان اصلاح شد. */
+export const KPI_ALERT_RATE = 0.2; /* آستانهٔ بالینی ۲۰٪ نرخ لغو/غیبت — قبلاً در reports (0.2) و dashboard (20) دو واحد و دو عدد بود */
+
+export function kpi(label, value, sub, tone = 'primary', fmt) {
+  let valueEl;
+  if (value === null || value === undefined) {
+    valueEl = el('div', { class: 'kpi__value' }, '—');
+  } else if (typeof value === 'number') {
+    valueEl = el('div', { class: 'kpi__value' }, '۰');
+    if (fmt) valueEl.textContent = fmt(value);
+    else countUp(valueEl, value, { formatter: (v) => fa(v) });
+  } else {
+    valueEl = el('div', { class: 'kpi__value' }, value);
+  }
+  return el('div', { class: `kpi kpi--${tone}` },
+    el('div', { class: 'kpi__label' }, label),
+    valueEl,
+    sub ? el('div', { class: 'kpi__sub' }, sub) : null
   );
 }
 
