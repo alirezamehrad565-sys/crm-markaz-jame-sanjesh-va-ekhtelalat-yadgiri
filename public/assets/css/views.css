@@ -183,13 +183,13 @@
   color: var(--text-3);
 }
 .swipe-hint svg { flex: none; }
-@media (max-width: 859px), (pointer: coarse) and (max-width: 1024px) {
+@media (max-width: 720px) {
   .swipe-hint.is-week { display: inline-flex; }
 }
 
 .grid-inner {
   display: grid;
-  grid-template-columns: 56px repeat(7, minmax(112px, 1fr)); /* ۱.۲۷.۰ — ۱۱۲px: کل هفته در ~۸۴۰px؛ در ۱۳۶۶ بدون اسکرول افقی */
+  grid-template-columns: 56px repeat(7, minmax(150px, 1fr));
   position: relative;
 }
 
@@ -310,66 +310,6 @@
 }
 
 .grid-day.drop-target .grid-cell { background: var(--primary-soft); }
-
-/* — ۱.۲۷.۰ تقویم موبایل: نوار روز + پیجر سوییپی (یک روز در هر صفحه، کارت پشته‌ای تمام-عرض) — */
-.grid-inner.is-pager { display: block; }
-.cal-strip {
-  display: flex; gap: 4px; padding: 8px 8px;
-  border-bottom: 1px solid var(--border); background: var(--surface-2);
-}
-.cal-strip__day {
-  flex: 1 1 0; min-width: 0;
-  display: flex; flex-direction: column; align-items: center; gap: 1px;
-  padding: 6px 2px 5px; border: 0; border-radius: var(--radius);
-  background: transparent; font: inherit; color: var(--text-2); cursor: pointer;
-}
-.cal-strip__wd { font-size: var(--fs-xs); color: var(--text-3); }
-.cal-strip__num {
-  font-size: var(--fs-sm); font-weight: 700; font-variant-numeric: tabular-nums;
-  width: 27px; height: 27px; line-height: 27px; border-radius: 50%;
-}
-.cal-strip__day.is-today .cal-strip__num { box-shadow: inset 0 0 0 1.5px var(--primary); color: var(--primary); }
-.cal-strip__n { font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; line-height: 1.2; }
-.cal-strip__day.is-active { background: var(--primary-soft); color: var(--on-primary-soft); }
-.cal-strip__day.is-active .cal-strip__wd,
-.cal-strip__day.is-active .cal-strip__n { color: var(--on-primary-soft); }
-.cal-strip__day.is-active.is-today .cal-strip__num { background: var(--primary); color: var(--on-primary); box-shadow: none; }
-
-.cal-pager { overflow: hidden; touch-action: pan-y; background: var(--surface); }
-.cal-track { display: flex; will-change: transform; }
-.cal-page {
-  flex: 0 0 100%; min-width: 0;
-  padding: 10px 10px 18px; display: flex; flex-direction: column; gap: 8px;
-  min-height: 240px;
-}
-.cal-page__load {
-  margin: 24px auto; color: var(--text-3); font-size: var(--fs-sm);
-  animation: cal-pulse 1.2s ease-in-out infinite;
-}
-@keyframes cal-pulse { 50% { opacity: 0.45; } }
-@media (prefers-reduced-motion: reduce) { .cal-page__load { animation: none; } }
-
-.cal-appt {
-  display: flex; flex-direction: column; gap: 3px; text-align: start;
-  background: var(--appt-soft);
-  border: 1px solid color-mix(in srgb, var(--appt-strong) 42%, transparent);
-  border-inline-start: 4px solid var(--appt-strong);
-  border-radius: var(--radius);
-  padding: 9px 12px 10px;
-  font-size: var(--fs-sm);
-  cursor: pointer;
-  transition: box-shadow var(--fast), transform var(--fast);
-}
-.cal-appt:hover { box-shadow: var(--shadow-2); }
-.cal-appt:active { transform: scale(0.995); }
-.cal-appt__time { font-weight: 700; color: var(--appt-on); font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.cal-appt__dur { font-weight: 500; font-size: var(--fs-xs); color: var(--text-3); }
-.cal-appt__stu { color: var(--text); font-weight: 600; }
-.cal-appt__staff { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--text-2); font-size: var(--fs-xs); }
-.cal-empty {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  padding: 42px 12px; color: var(--text-3); font-size: var(--fs-sm);
-}
 
 .chip-row { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 .chip {
@@ -2407,7 +2347,7 @@ tr.wl-row--urgent > td:first-child {
   .hero-score__rank { margin-inline-start: 0; }
 }
 
-.grid-appt, .appt-card, .wd-appt, .cal-appt {
+.grid-appt, .appt-card, .wd-appt {
   --appt-soft: var(--surface-2);
   --appt-strong: var(--text-3);
   --appt-on: var(--text-2);
@@ -2428,7 +2368,7 @@ tr.wl-row--urgent > td:first-child {
 }
 .grid-appt__time { color: var(--appt-on); }
 
-.grid-appt.is-attended, .appt-card.is-attended, .wd-appt.is-attended, .cal-appt.is-attended {
+.grid-appt.is-attended, .appt-card.is-attended, .wd-appt.is-attended {
   background: color-mix(in srgb, var(--appt-strong) 16%, var(--appt-soft));
   border-color: color-mix(in srgb, var(--appt-strong) 55%, transparent);
 }
@@ -2438,7 +2378,7 @@ tr.wl-row--urgent > td:first-child {
   display: inline-grid; place-items: center;
 }
 
-.grid-appt.is-cancelled, .appt-card.is-cancelled, .wd-appt.is-cancelled, .cal-appt.is-cancelled,
+.grid-appt.is-cancelled, .appt-card.is-cancelled, .wd-appt.is-cancelled,
 .wd-appt--cancelled {
   background:
     repeating-linear-gradient(-45deg,
@@ -2450,9 +2390,9 @@ tr.wl-row--urgent > td:first-child {
   color: var(--text-3);
   opacity: 0.85;
 }
-.is-cancelled .grid-appt__time, .is-cancelled .appt-card__time, .is-cancelled .cal-appt__time { color: var(--text-3); text-decoration: line-through; }
+.is-cancelled .grid-appt__time, .is-cancelled .appt-card__time { color: var(--text-3); text-decoration: line-through; }
 
-.grid-appt.is-noshow, .appt-card.is-noshow, .wd-appt.is-noshow, .cal-appt.is-noshow {
+.grid-appt.is-noshow, .appt-card.is-noshow, .wd-appt.is-noshow {
   border-inline-start: 4px solid var(--error);
   border-color: color-mix(in srgb, var(--error) 40%, transparent);
   background: color-mix(in srgb, var(--error) 7%, var(--appt-soft));
