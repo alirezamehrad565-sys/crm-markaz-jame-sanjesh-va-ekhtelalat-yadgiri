@@ -725,11 +725,16 @@ function validationCard(kpis, audits) {
     el('div', { class: 'pr-kpi__num' }, numv),
     el('div', { class: 'pr-kpi__label' }, label));
 
+  /* ۱.۲۵.۰۱ — ناظر فقط-خواندن: ثبت حسابرسی (POST /api/case-audits) فقط دفتر مرکز — دکمه از اول پنهان شود */
+  const canAudit = ['manager', 'secretary'].includes(session.user?.role);
+
   const card = el('div', { class: 'card', dataset: { validationCard: '1' } }, /* ۱.۲۱.۰: شناسه‌دار برای رفرش درجای فقط همین کارت */
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('compass', 16), 'اعتبارسنجی بیرونی — شاخص‌های اعتماد'),
-      el('button', { class: 'btn btn--soft btn--sm', onclick: () => openCaseAuditModal() },
-        icon('clipboard', 14), 'حسابرسی موردی')),
+      canAudit
+        ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openCaseAuditModal() },
+            icon('clipboard', 14), 'حسابرسی موردی')
+        : null),
     el('div', { class: 'card__body' },
       el('div', { class: 'pr-kpis' },
         kpi(share(kpis.hypothesisConvergence), 'هم‌گرایی فرضیه با تصمیم', 'از مسیرهای تصمیم‌گرفته، سهمی که با اسنپ‌شات فرضیهٔ موتور تأیید شدند'),
