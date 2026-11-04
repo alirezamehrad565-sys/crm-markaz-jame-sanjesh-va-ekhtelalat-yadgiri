@@ -64,7 +64,48 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('نسخه: سو 1.19.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.25\.0'/);
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.26\.0'/);
+  });
+
+  test('۱.۲۶.۰ — تقویم نوبت‌ها: پیش‌فرض «هفته» در همهٔ دستگاه‌ها + گرید فشردهٔ موبایل GCal-وار + سربرگ روزِ لمس‌پذیر', () => {
+    const appts = readFileSync(join(__dirname, '../../public/assets/js/views/appointments.js'), 'utf8');
+    // تصمیم کاربر: دیگر روی دستگاه لمسی/باریک با «روز» شروع نمی‌شود — هفته همه‌جا پیش‌فرض است
+    expect(appts).not.toMatch(/pointer: coarse/);
+    expect(appts).toMatch(/sessionStorage\.getItem\('cs\.apptViewMode'\) === 'day' \? 'day' : 'week'/);
+    expect(appts).toMatch(/sessionStorage\.setItem\('cs\.apptViewMode', m\)/);
+    // سربرگ هر روز = دکمهٔ رفتن به نمای همان روز (هم دسکتاپ هم موبایل — تجربهٔ GCal/Outlook)
+    expect(appts).toMatch(/dataset: \{ headYmd: ymd \}/);
+    expect(appts).toMatch(/WEEKDAY_ABBRS/);
+    expect(appts).toMatch(/state\.dayYmd = ymd; setMode\('day'\)/);
+    // قرص فشردهٔ کارت‌های کوتاه + ته‌رنگ جمعه (تعطیل رسمی)
+    expect(appts).toMatch(/is-short/);
+    expect(appts).toMatch(/=== 6; \/\* ۱\.۲۶\.۰/);
+    // اسکرول افقی فقط با سرریز واقعی + گاتر زمان منجمد (الگوی Outlook)
+    expect(appts).toMatch(/grid-scroll--scrollx/);
+    expect(appts).toMatch(/grid-gutter/);
+    // FAB «نوبت جدید» در موبایل + کپی/برگردان فقط-آیکن
+    expect(appts).toMatch(/appt-fab/);
+    expect((appts.match(/btn__txt/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    const v = read('views.css');
+    // گرید فشردهٔ موبایل: کل هفته در عرض صفحه — صفر اسکرول افقی
+    expect(v).toMatch(/grid-template-columns:\s*30px repeat\(7, minmax\(0, 1fr\)\)/);
+    // کلیپ بدون اسکرول‌پورت → sticky سربرگ‌ها نسبت به ویوپورت کار می‌کند
+    expect(v).toMatch(/overflow:\s*clip/);
+    expect(v).toMatch(/\.grid-scroll--scrollx\s*\{ overflow-x: auto; overflow-y: hidden; \}/);
+    // سربرگ زیر topbar شناور می‌چسبد (دسکتاپ top:14+60) و در موبایل هم‌تراز topbar تخت (@920)
+    expect(v).toMatch(/top:\s*calc\(14px \+ var\(--topbar-h, 60px\)\)/);
+    expect(v).toMatch(/@media \(max-width: 920px\)\s*\{\s*\.grid-head, \.grid-corner \{ top: var\(--topbar-h, 60px\); \}/);
+    // شمارهٔ روز در دایره؛ امروز توپُر
+    expect(v).toMatch(/\.gh-num\.is-today\s*\{[^}]*background: var\(--primary\)/);
+    // قرص فشرده فقط در نمای هفته (is-week) — کارت روزِ موبایل اطلاعات کامل نگه می‌دارد
+    expect(appts).toMatch(/appt-end/);
+    expect(appts).toMatch(/classList\.add\('is-week'\)/);
+    expect(appts).toMatch(/classList\.add\('is-day'\)/);
+    expect(v).toMatch(/\.grid-inner\.is-week \.grid-appt \.grid-appt__title,\n\s*\.grid-inner\.is-week \.grid-appt \.grid-appt__stu,\n\s*\.grid-inner\.is-week \.grid-appt \.st-chip \{ display: none; \}/);
+    expect(v).toMatch(/\.grid-inner\.is-week \.grid-appt \.appt-end \{ display: none; \}/);
+    expect(v).toMatch(/\.grid-inner\.is-week \.grid-appt\.is-short \.grid-appt__time \{ display: none; \}/);
+    // FAB شناور موبایل
+    expect(v).toMatch(/\.week-bar \.appt-fab\s*\{[^}]*position: fixed/);
   });
 
   test('۱.۱۹.۰ — روز کاری: جریان پیوسته (هیچ اکشنی کل نما را re-render نمی‌کند)', () => {
