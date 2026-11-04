@@ -1,8 +1,8 @@
 import { api, qs } from '../api.js';
 import { fa, addDaysYmd, formatJalaliNumeric, iranianWeekdayOfYmd, tehranTodayYmd, toJalali, WEEKDAY_NAMES } from '../format.js';
-import { el, icon, skeletonState, errorState, dataTable, emptyState, toast } from '../ui.js';
+import { el, icon, skeletonState, errorState, dataTable, emptyState, toast, kpi, KPI_ALERT_RATE } from '../ui.js'; /* ۱.۲۵.۰۵ — kpi/آستانه تک‌منبع */
 import { jalaliDateInput } from '../jalali-picker.js';
-import { barChart, donut, hbars, countUp, deferredChart } from '../charts.js'; // E3
+import { barChart, donut, hbars, deferredChart } from '../charts.js'; // E3 · countUp به ui.js رفت (۱.۲۵.۰۵)
 
 const local = {
   from: null, // روز به شکل YYYY-MM-DD
@@ -159,8 +159,8 @@ function buildPeriodicBody(r) {
   const kpiGrid = el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-5)' } },
     kpi('نوبت‌های بازه', r.appointments.total, `روزانه ${fa(r.appointments.avgPerDay)}`, 'primary'),
     kpi('مجموع ساعت جلسات', r.appointments.hours, 'جلسات برنامه‌ریزی‌شده', 'accent'),
-    kpi('نرخ لغو', r.appointments.total > 0 ? pct(r.appointments.cancellationRate) : '—', `${fa(r.appointments.cancelled)} نوبت لغوشده`, r.appointments.cancellationRate >= 0.2 ? 'error' : 'neutral'),
-    kpi('نرخ غیبت دانش‌آموز', ratePct(r.attendance.absenceRate, r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent), `${fa(r.attendance.absent)} غیبت از ${fa(r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent)} جلسه`, (r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent) === 0 ? 'neutral' : r.attendance.absenceRate >= 0.2 ? 'error' : 'success') /* S7-08 */,
+    kpi('نرخ لغو', r.appointments.total > 0 ? pct(r.appointments.cancellationRate) : '—', `${fa(r.appointments.cancelled)} نوبت لغوشده`, r.appointments.cancellationRate >= KPI_ALERT_RATE ? 'error' : 'neutral'),
+    kpi('نرخ غیبت دانش‌آموز', ratePct(r.attendance.absenceRate, r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent), `${fa(r.attendance.absent)} غیبت از ${fa(r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent)} جلسه`, (r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent) === 0 ? 'neutral' : r.attendance.absenceRate >= KPI_ALERT_RATE ? 'error' : 'success') /* S7-08 */,
     kpi('میانگین انتظار تا نوبت', r.waitSchedule.avgDays, r.waitSchedule.scheduled > 0 ? `${fa(r.waitSchedule.scheduled)} نوبت‌دهی از لیست انتظار` : 'نوبت‌دهی از لیست انتظار در این بازه ثبت نشده', 'primary', (v) => `${fa1(v)} روز`),
     kpi('میانگین جلسات هر دانش‌آموز', r.perStudent.avgSessions, r.perStudent.students > 0 ? `${fa(r.perStudent.sessions)} جلسه · ${fa(r.perStudent.students)} دانش‌آموز` : 'جلسه‌ای در این بازه ثبت نشده', 'accent', (v) => fa1(v)),
     kpi('نمرهٔ تولید محتوای تیم', r.practical.score, `تولید ${fa(r.practical.exercises)} کارت · ${fa(r.practical.templates)} قالب · ${fa(r.practical.forms)} فرم`, 'success'),
@@ -284,27 +284,6 @@ function buildPeriodicBody(r) {
     el('div', { class: 'report-grid' }, topStudentsCard, tagsCard),
     el('div', { class: 'print-footer', style: { marginTop: 'var(--sp-5)', color: 'var(--text-3)', fontSize: 'var(--fs-xs)' } },
       `تاریخ تهیه: ${formatJalaliNumeric(tehranTodayYmd())} — سامانه مرکز جامع`)
-  );
-}
-
-function kpi(label, value, sub, tone = 'primary', fmt) {
-  if (value === null || value === undefined) {
-    return el('div', { class: `kpi kpi--${tone}` },
-      el('div', { class: 'kpi__label' }, label),
-      el('div', { class: 'kpi__value' }, '—'),
-      sub ? el('div', { class: 'kpi__sub' }, sub) : null
-    );
-  }
-  const valueEl = el('div', { class: 'kpi__value' }, '۰');
-  if (fmt) {
-    valueEl.textContent = fmt(value);
-  } else {
-    countUp(valueEl, value, { formatter: (v) => fa(v) });
-  }
-  return el('div', { class: `kpi kpi--${tone}` },
-    el('div', { class: 'kpi__label' }, label),
-    valueEl,
-    sub ? el('div', { class: 'kpi__sub' }, sub) : null
   );
 }
 

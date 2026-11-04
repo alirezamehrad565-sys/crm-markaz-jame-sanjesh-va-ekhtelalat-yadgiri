@@ -363,7 +363,7 @@ function renderFilesSection(event, canEdit, onChanged) {
       ...(files.length === 0
         ? [el('p', { class: 'cell-sub' }, 'پیوستی ثبت نشده است.')]
         : files.map((f) =>
-            el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid var(--line, #eee)' } },
+            el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid var(--line)' } },
               el('span', { style: { flex: '1', display: 'inline-flex', alignItems: 'center', gap: '6px', minWidth: '0' } }, icon('file', 14), el('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, f.filename)),
               el('span', { class: 'cell-sub' }, `${fa(Math.max(1, Math.round(f.sizeBytes / 1024)))} KB`),
               el('a', { class: 'btn btn--ghost btn--sm', href: `/api/case-events/${event.id}/files/${f.id}`, target: '_blank', rel: 'noopener' }, 'دانلود'),
@@ -871,7 +871,7 @@ export async function openChecklistBatchSendModal({ student, types, onDone }) {
 
   const rowOf = (t) => {
     const target = fillTargetOf(t);
-    const cb = el('input', { type: 'checkbox', checked: true, style: { width: '17px', height: '17px', accentColor: 'var(--brand, #229ED9)', flex: 'none' } });
+    const cb = el('input', { type: 'checkbox', checked: true, style: { width: '17px', height: '17px', accentColor: 'var(--brand)', flex: 'none' } });
     cb.addEventListener('change', () => {
       checked.set(t.id, cb.checked);
       syncTeacher();
@@ -880,7 +880,7 @@ export async function openChecklistBatchSendModal({ student, types, onDone }) {
     return el('label', {
       style: {
         display: 'flex', alignItems: 'flex-start', gap: '9px', padding: '9px 11px',
-        background: 'var(--surface-2, #f7f3ea)', borderRadius: 'var(--radius-sm)', cursor: 'pointer'
+        background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', cursor: 'pointer'
       }
     },
       cb,
@@ -901,7 +901,7 @@ export async function openChecklistBatchSendModal({ student, types, onDone }) {
     ...teacherOptions.map((o) => el('option', { value: o.value }, o.label)));
   const newName = el('input', { class: 'input', type: 'text', maxlength: 120, placeholder: 'نام و نام خانوادگی معلم' });
   const newClass = el('input', { class: 'input', type: 'text', maxlength: 120, placeholder: 'کلاس/درس (اختیاری)' });
-  const newContact = el('input', { class: 'input', type: 'text', maxlength: 60, dir: 'ltr', placeholder: 'راه ارتباطی (اختیاری)' });
+  const newContact = el('input', { class: 'input', type: 'text', maxlength: 60, dir: 'auto', placeholder: 'راه ارتباطی (اختیاری)' }); /* ۱.۲۵.۰۵: dir=auto — placeholder فارسی راست‌چین، شماره/شناسه لاتین چپ‌چین (قبلاً placeholder فارسی داخل ltr به‌هم می‌ریخت) */
   const newWrap = el('div', { style: { display: 'none', flexDirection: 'column', gap: '6px', marginTop: '6px' } }, newName, newClass, newContact);
   teacherSel.addEventListener('change', () => {
     newWrap.style.display = teacherSel.value === '__new__' ? 'flex' : 'none';
@@ -1043,7 +1043,7 @@ export async function openChecklistBatchSendModal({ student, types, onDone }) {
     }
     for (const f of failItems) toastError(new Error(`${f.type.title}: ${f.error}`));
 
-    const resultRows = results.map((r) => el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 0', borderBottom: '1px solid var(--line, #eee)' } },
+    const resultRows = results.map((r) => el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 0', borderBottom: '1px solid var(--line)' } },
       r.error
         ? icon('alert', 15)
         : (r.manual ? icon('copy', 15) : icon('check', 15)),

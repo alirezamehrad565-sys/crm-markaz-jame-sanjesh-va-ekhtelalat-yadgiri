@@ -10,7 +10,7 @@ import {
   WEEKDAY_NAMES,
   formatJalaliNumeric
 } from '../format.js';
-import { el, icon, skeletonState, errorState, emptyState, openModal, progressRing, toast, toastError } from '../ui.js'; // toast/toastError گم‌شده بود: مسیر ذخیرهٔ حسابرسی بی‌بازخورد می‌افتد
+import { el, icon, skeletonState, errorState, emptyState, openModal, progressRing, toast, toastError, kpi, KPI_ALERT_RATE } from '../ui.js'; // toast/toastError گم‌شده بود: مسیر ذخیرهٔ حسابرسی بی‌بازخورد می‌افتد · ۱.۲۵.۰۵: kpi/آستانه تک‌منبع
 import { illoNoAnnouncements, illoKnowledge } from '../illustrations.js'; // — وکتورها
 import { session } from '../state.js';
 import { canSeeTodos, renderMyTodosCard } from '../my-todos.js';
@@ -270,7 +270,7 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
       { class: `kpi-grid${document.body.dataset.kpiStaggered ? '' : ' stagger'}`, style: { marginBottom: 'var(--sp-5)' }, ...(document.body.dataset.kpiStaggered ? {} : { dataset: { staggerOnce: '1' } }) },
       kpi('نوبت‌های امروز', fa(todayData.appointments.total), `برنامه‌ریزی‌شده ${fa(todayData.appointments.scheduled)} · لغوشده ${fa(todayData.appointments.cancelled)}`, 'primary'),
       kpi('در انتظار حضور و غیاب', fa(todayData.pendingAttendance), 'نوبت‌های امروز بدون وضعیت', 'accent'),
-      kpi('نرخ غیبت', hasAttendanceData ? `${fa(absencePct)}٪` : '—', hasAttendanceData ? 'آمار حضور امروز' : 'هنوز حاضری امروز ثبت نشده', hasAttendanceData ? (absencePct >= 20 ? 'error' : 'success') : 'neutral'),
+      kpi('نرخ غیبت', hasAttendanceData ? `${fa(absencePct)}٪` : '—', hasAttendanceData ? 'آمار حضور امروز' : 'هنوز حاضری امروز ثبت نشده', hasAttendanceData ? ((todayData.absenceRate ?? 0) >= KPI_ALERT_RATE ? 'error' : 'success') : 'neutral') /* ۱.۲۵.۰۵: مقایسه با نرخ خام و آستانهٔ مشترک — قبلاً 20 روی درصد گردشده بود */,
       waitingCount !== null
         ? kpi('لیست انتظار', fa(waitingCount), 'متقاضیِ در صف (در انتظار/فراخوانده)', waitingCount > 0 ? 'accent' : 'neutral')
         : null,
@@ -572,16 +572,6 @@ function openKnowledgeReader(k) {
     ),
     actions: []
   });
-}
-
-function kpi(label, value, sub, tone = 'primary') {
-  return el(
-    'div',
-    { class: `kpi kpi--${tone}` },
-    el('div', { class: 'kpi__label' }, label),
-    el('div', { class: 'kpi__value' }, value),
-    sub ? el('div', { class: 'kpi__sub' }, sub) : null
-  );
 }
 
 function goalMini(value, label, tone) {

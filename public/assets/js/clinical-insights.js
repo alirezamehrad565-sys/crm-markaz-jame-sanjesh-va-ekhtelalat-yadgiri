@@ -260,7 +260,7 @@ function checklistPlanCard({ student, plan, typesById, canDecide, refresh }) {
     const pb = M.priorityBadge[it.priority] ?? M.priorityBadge.optional;
     const cb = el('input', {
       type: 'checkbox', checked: true,
-      style: { width: '16px', height: '16px', accentColor: 'var(--brand, #229ED9)', flex: 'none', marginTop: '3px' }
+      style: { width: '16px', height: '16px', accentColor: 'var(--brand)', flex: 'none', marginTop: '3px' }
     });
     cb.addEventListener('change', () => {
       checked.set(it.toolKey, cb.checked);
