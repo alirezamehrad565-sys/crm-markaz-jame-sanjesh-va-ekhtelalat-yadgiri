@@ -93,6 +93,12 @@ function canManage(appt) {
   return r === 'manager' || r === 'secretary' || (r === 'therapist' && session.user.staffId === appt.staffId);
 }
 
+/* ۱.۲۵.۰۱ — ناظر فقط-خواندن: سطح ماژول تا buildDayColumn/apptOnGrid/handleDrop هم بتوانند گارد بگیرند
+   (قبل فقط دکمه‌های نوار ابزار گارد داشتند؛ کلیک روی سلول مودال «نوبت تازه» و درگ کارت به ۴۰۳ سرور می‌افتاد) */
+function isSupervisorRole() {
+  return session.user?.role === 'supervisor';
+}
+
 const state = {
   weekStart: null, // YMD شنبه
   viewMode: null,  // 'week' | 'day' — پیش‌فرض همیشه هفتگی (تصمیم کاربر)؛ نمای روزانه با سوییچ دستی
@@ -536,7 +542,7 @@ function buildDayColumn(ymd, items, isToday, opts = {}) {
       dataset: { minute: String(m), ymd }
       /* S2-01: سلول عمداً فوکوس‌پذیر نیست — صدها تاب‌استاپ می‌ساخت؛ ساخت نوبت با کیبورد از دکمهٔ «نوبت تازه» نوار ابزار و کارت‌های فوکوس‌پذیر می‌گذرد */
     });
-    cell.addEventListener('click', () => openQuickCreate(ymd, m));
+    cell.addEventListener('click', () => { if (!isSupervisorRole()) openQuickCreate(ymd, m); }); /* ۱.۲۵.۰۱ — ناظر: ساخت نوبت ندارد */
     cell.addEventListener('dragover', (e) => { e.preventDefault(); cell.classList.add('drop-target'); });
     cell.addEventListener('dragleave', () => cell.classList.remove('drop-target'));
     cell.addEventListener('drop', (e) => {
@@ -621,7 +627,7 @@ function apptOnGrid(a, ymd, opts = {}) {
     {
       class: `grid-appt${apptStatusClass(a)} ${hueClass(a.staffId)}`,
       style: { top: `${top}px`, height: `${height}px` },
-      draggable: 'true',
+      draggable: isSupervisorRole() ? null : 'true', /* ۱.۲۵.۰۱ — ناظر: جابه‌جایی نوبت ندارد */
       dataset: { id: a.id, version: String(a.version), ymd, start: a.startAt },
       title: titleLines.join('\n'),
       /* S2-01: کارت تقویم با کیبورد باز می‌شود */
@@ -645,12 +651,14 @@ function apptOnGrid(a, ymd, opts = {}) {
   card.addEventListener('keydown', (e) => { /* S2-01 */
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetailModal(a.id); }
   });
-  card.addEventListener('dragstart', (e) => {
-    e.dataTransfer.setData('text/plain', JSON.stringify({ id: a.id, version: a.version, fromYmd: ymd }));
-    e.dataTransfer.effectAllowed = 'move';
-    card.classList.add('is-dragging');
-  });
-  card.addEventListener('dragend', () => card.classList.remove('is-dragging'));
+  if (!isSupervisorRole()) { /* ۱.۲۵.۰۱ — ناظر: شنونده‌های درگ کلاً سوار نمی‌شوند */
+    card.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', JSON.stringify({ id: a.id, version: a.version, fromYmd: ymd }));
+      e.dataTransfer.effectAllowed = 'move';
+      card.classList.add('is-dragging');
+    });
+    card.addEventListener('dragend', () => card.classList.remove('is-dragging'));
+  }
 
   return card;
 }

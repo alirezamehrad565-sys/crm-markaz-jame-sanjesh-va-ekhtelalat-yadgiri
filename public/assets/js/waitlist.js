@@ -467,6 +467,9 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
   const state = { status: '', priority: '', q: initialQuery, rows: [] };
   let gen = 0; // — گارد نسل: پاسخ کهنهٔ درخواست قبلی نباید روی دادهٔ تازه بنشیند
   const isOfficeUser = session.user?.role === 'manager' || session.user?.role === 'secretary';
+  /* ۱.۲۵.۰۱ — ناظر فقط-خواندن: ثبت متقاضی/تغییر وضعیت ندارد (بک‌اند POST را ۴۰۳ می‌کند — دکمه‌ها از اول پنهان شوند) */
+  const isSupervisor = session.user?.role === 'supervisor';
+  const canAddApplicant = !isSupervisor;
 
   /* —— ۱.۲۱.۰ جریان پیوسته (زبان ۱.۱۹/۱.۲۰): شِلِ نما — نوار ابزار، راهنما و جدول — یک‌بار
      مونت می‌شود؛ هیچ اکشنی دیگر کل container را rebuild نمی‌کند.
@@ -499,7 +502,9 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
       searchInput._t = setTimeout(refreshRows, 250);
     }
   });
-  const addBtn = el('button', { class: 'btn btn--primary btn--sm', onclick: () => openAddModal(ctl, prefillName) }, icon('plus', 16), 'متقاضی جدید');
+  const addBtn = canAddApplicant
+    ? el('button', { class: 'btn btn--primary btn--sm', onclick: () => openAddModal(ctl, prefillName) }, icon('plus', 16), 'متقاضی جدید')
+    : null; /* ۱.۲۵.۰۱ — ناظر: بدون ثبت */
   const autoBtn = isOfficeUser
     ? el('button', { class: 'btn btn--ghost btn--sm', onclick: (e) => lockBtn(e.currentTarget, () => resetOrder(ctl)) }, icon('refresh', 16), 'ترتیب خودکار')
     : null;
@@ -584,7 +589,7 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
         iconName: 'clock',
         title: 'لیست انتظار خالی است',
         hint: hasFilter ? 'موردی با این فیلترها نیست — فیلترها را باز کنید.' : 'متقاضیان نوبت که هنوز پرونده نشده‌اند اینجا نگه داشته می‌شوند.',
-        ...(hasFilter ? {} : { actionLabel: 'ثبت اولین متقاضی', onAction: () => openAddModal(ctl, prefillName) })
+        ...(hasFilter ? {} : (canAddApplicant ? { actionLabel: 'ثبت اولین متقاضی', onAction: () => openAddModal(ctl, prefillName) } : {}))
       })
     );
   }
@@ -655,13 +660,14 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
   const toolbar = el('div', { class: 'week-bar' },
     statusSel, prioritySel, searchInput,
     el('div', { class: 'spacer' }),
-    autoBtn, addBtn
+    ...(autoBtn ? [autoBtn] : []), /* ۱.۲۵.۰۱ — ناظر: addBtn null است؛ پخش شرطی تا گره خالی ساخته نشود */
+    ...(addBtn ? [addBtn] : [])
   );
   const roleNote = isOfficeUser
     ? null
     : el('div', { class: 'alert alert--info', style: { marginBottom: 'var(--sp-3)' } },
         icon('info', 17),
-        el('span', {}, 'دسترسی شما: فقط ثبت متقاضی جدید.'));
+        el('span', {}, isSupervisor ? 'دسترسی شما: فقط مشاهدهٔ لیست انتظار.' : 'دسترسی شما: فقط ثبت متقاضی جدید.')); /* ۱.۲۵.۰۱ — ناظر */
 
   container.replaceChildren(...[roleNote, toolbar, legend, table].filter(Boolean));
   tbody.replaceChildren(stateRow(loadingState('بارگذاری لیست انتظار…')));

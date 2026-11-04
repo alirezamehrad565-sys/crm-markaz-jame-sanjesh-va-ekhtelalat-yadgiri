@@ -57,6 +57,9 @@ export async function renderArchive(container) {
      هم با همین کار بی‌معنا و حذف شد، چون input دیگر هرگز بازسازی نمی‌شود. —— */
 
   const schoolName = (id) => local.schools.find((s) => s.id === id)?.name ?? '—';
+  /* ۱.۲۵.۰۱ — ناظر فقط-خواندن: اکشن‌های نوشتنی ردیف (برچسب/ویرایش/فعال‌سازی/حذف) و «دانش‌آموز جدید»
+     پنهان می‌شوند؛ فقط مشاهدهٔ پروفایل و تاریخچهٔ تحصیلی می‌ماند (بک‌اند POST/PATCH/DELETE را ۴۰۳ می‌کند) */
+  const isSupervisor = session.user?.role === 'supervisor';
   const classInfo = (s) => {
     const cls = local.classes.find((c) => c.id === s.classId);
     if (!cls && !s.className) return null;
@@ -93,6 +96,7 @@ export async function renderArchive(container) {
           class: 'btn btn--ghost btn--sm', title: 'تاریخچهٔ تحصیلی', 'aria-label': 'تاریخچهٔ تحصیلی',
           onclick: () => openEducationHistory(s)
         }, icon('school', 15)),
+        ...(isSupervisor ? [] : [ /* ۱.۲۵.۰۱ — ناظر: فقط مشاهده */
         el('button', { class: 'btn btn--ghost btn--sm', title: 'برچسب‌ها', 'aria-label': 'برچسب‌ها', onclick: () => openRowTagEditor(s, ctl) }, icon('tag', 15)),
         el('button', { class: 'btn btn--ghost btn--sm', title: 'ویرایش', 'aria-label': 'ویرایش', onclick: () => openArchiveStudentForm({ student: s, onSaved: ({ student }) => ctl.patch(student) }) }, icon('edit', 15)),
         el('button', {
@@ -121,6 +125,7 @@ export async function renderArchive(container) {
             } catch (err) { toastError(err); }
           })
         }, icon('trash', 15))
+        ]) /* — بستن spread ناظر ۱.۲۵.۰۱ */
       )
     }
   ];
@@ -163,8 +168,8 @@ export async function renderArchive(container) {
         hint: hasFilter
           ? 'جستجو یا فیلتر را تغییر دهید.'
           : 'دیتابیس دانش‌آموزان نیاز ویژهٔ شهر — پرونده‌های خارج‌شده از چرخه این‌جا نگه داشته می‌شوند و می‌توانید مستقیم هم دانش‌آموز تعریف کنید.',
-        actionLabel: hasFilter ? undefined : 'دانش‌آموز جدید در آرشیو',
-        onAction: hasFilter ? undefined : openNewArchiveStudent
+        actionLabel: hasFilter || isSupervisor ? undefined : 'دانش‌آموز جدید در آرشیو' /* ۱.۲۵.۰۱ — ناظر: بدون اکشن مرده */,
+        onAction: hasFilter || isSupervisor ? undefined : openNewArchiveStudent /* ۱.۲۵.۰۱ — ناظر */
       })));
   }
 
@@ -325,8 +330,8 @@ export async function renderArchive(container) {
     schoolSel,
     tagFilter,
     el('div', { class: 'spacer' }),
-    el('button', { class: 'btn btn--primary btn--sm', onclick: openNewArchiveStudent },
-      icon('plus', 16), 'دانش‌آموز جدید در آرشیو')
+    ...(isSupervisor ? [] : [el('button', { class: 'btn btn--primary btn--sm', onclick: openNewArchiveStudent },
+      icon('plus', 16), 'دانش‌آموز جدید در آرشیو')]) /* ۱.۲۵.۰۱ — ناظر: بدون ثبت */
   );
 
   container.replaceChildren(

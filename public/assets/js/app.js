@@ -371,7 +371,7 @@ register('#/dashboard', { title: 'داشبورد', render: renderDashboard });
 register('#/appointments', {
   title: 'تقویم نوبت‌ها',
   render: roleOnly(
-    ['manager', 'secretary', 'therapist'],
+    ['manager', 'secretary', 'therapist', 'supervisor'], /* ۱.۲۵.۰۱ — ناظر: منوی «مشاهدهٔ مرکز» تقویم را وعده می‌داد ولی گیت مسیر قدیمی بود — سگمنت فقط-خواندنی داخل نما خودش دکمه‌های نوشتنی را حذف می‌کند */
     lazyView(() => import('./views/appointments.js'), 'renderAppointments', '#/appointments'),
     'این بخش برای دفتر (کل مرکز) و درمانگر (فقط برنامهٔ خودش) فعال است.'
   )
@@ -407,8 +407,8 @@ register('#/schools', { title: 'مدارس', render: roleOnly(['manager', 'secre
 register('#/students', { title: 'دانش‌آموزان', render: lazyView(() => import('./views/students.js'), 'renderStudents', '#/students') });
 register('#/students/:id', { title: 'پروفایل دانش‌آموز', render: lazyView(() => import('./views/student-profile.js'), 'renderStudentProfile', '#/students/') });
 register('#/students/:id/progress-report', { title: 'گزارش پیشرفت', render: lazyView(() => import('./views/progress-report.js'), 'renderProgressReport', '#/students/') }); // نقش‌ها در سرور کنترل می‌شوند (مثل ot/progress)
-register('#/waitlist', { title: 'لیست انتظار', render: roleOnly(['manager', 'secretary', 'therapist'], lazyView(() => import('./waitlist.js'), 'renderWaitlistModule', '#/waitlist'), 'این بخش برای دفتر و ثبت متقاضی توسط درمانگر فعال است.') });
-register('#/archive', { title: 'آرشیو', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/archive.js'), 'renderArchive', '#/archive')) });
+register('#/waitlist', { title: 'لیست انتظار', render: roleOnly(['manager', 'secretary', 'therapist', 'supervisor'], lazyView(() => import('./waitlist.js'), 'renderWaitlistModule', '#/waitlist'), 'این بخش برای دفتر و ثبت متقاضی توسط درمانگر فعال است.') }); /* ۱.۲۵.۰۱ — ناظر: آیتم منو بدون گیت می‌افتاد روی «دسترسی مجاز نیست» */
+register('#/archive', { title: 'آرشیو', render: roleOnly(['manager', 'secretary', 'supervisor'], lazyView(() => import('./views/archive.js'), 'renderArchive', '#/archive')) }); /* ۱.۲۵.۰۱ — ناظر: فقط مشاهده؛ اکشن‌های ردیف در خود نما پنهان می‌شوند */
 register('#/exercises', { title: 'کارت‌های آماده', render: lazyView(() => import('./views/exercises.js'), 'renderExercises', '#/exercises') }); //
 register('#/treatment-plans', { title: 'طرح درمان', render: roleOnly(['manager', 'therapist'], lazyView(() => import('./views/treatment-plans.js'), 'renderTreatmentPlans', '#/treatment-plans'), 'این بخش برای مدیر و درمانگر (معلم LD) فعال است.') }); // 
 register('#/outbox', { title: 'صندوق اعلان‌ها', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/outbox.js'), 'renderOutbox', '#/outbox')) }); //
