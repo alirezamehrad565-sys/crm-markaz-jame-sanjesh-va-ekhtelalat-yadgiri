@@ -170,9 +170,12 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: clip; /* ۱.۲۶.۰ — کلیپ بدون ساخت اسکرول‌پورت: sticky سربرگ‌ها نسبت به ویوپورت کار می‌کند */
 }
-.grid-scroll { overflow-x: auto; }
+/* ۱.۲۶.۰ — اسکرول افقی فقط وقتی که واقعاً سرریز هست (نمای روز چنددرمانگره/تبلت باریک).
+   بقیهٔ حالت‌ها: سربرگ روزها نسبت به ویوپورت sticky می‌ماند (تجربهٔ GCal). */
+.grid-scroll { overflow: visible; }
+.grid-scroll--scrollx { overflow-x: auto; overflow-y: hidden; }
 
 .swipe-hint {
   display: none;
@@ -189,13 +192,13 @@
 
 .grid-inner {
   display: grid;
-  grid-template-columns: 56px repeat(7, minmax(150px, 1fr));
+  grid-template-columns: 48px repeat(7, minmax(118px, 1fr)); /* ۱.۲۶.۰ — در عرض محتوای دسکتاپ ~۹۸۶px کل هفته بدون اسکرول جا می‌شود */
   position: relative;
 }
 
 .grid-head {
   position: sticky;
-  top: 0;
+  top: calc(14px + var(--topbar-h, 60px)); /* ۱.۲۶.۰ — دقیقاً زیر topbar شناور (top:14 + height:60) */
   z-index: 3;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
@@ -204,6 +207,35 @@
   font-weight: 700;
   font-size: var(--fs-sm);
 }
+/* ۱.۲۶.۰ — سربرگ روز = دکمهٔ «رفتن به نمای روزِ همان روز» (GCal/Outlook، همهٔ اندازه‌ها) */
+button.grid-head {
+  appearance: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+button.grid-head:hover { background: var(--surface-3); }
+button.grid-head:focus-visible { box-shadow: var(--focus-ring); z-index: 5; }
+.gh-row { display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; }
+.gh-wd { display: inline-flex; align-items: center; min-width: 0; }
+.gh-wd__abbr { display: none; }
+.gh-num {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--radius-full, 999px);
+  font-weight: 700;
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+}
+.gh-num.is-today { background: var(--primary); color: var(--on-primary); }
+/* ۱.۲۶.۰ — گاتر زمان و گوشهٔ سربرگ: هنگام اسکرول افقی نمای روز منجمد می‌شوند (الگوی Outlook) */
+.grid-gutter { position: sticky; inset-inline-start: 0; z-index: 2; background: var(--surface); }
+.grid-corner { position: sticky; inset-inline-start: 0; top: calc(14px + var(--topbar-h, 60px)); z-index: 4; background: var(--surface-2); min-height: 8px; }
 .grid-head.is-today { background: var(--primary-soft); color: var(--on-primary-soft); }
 .grid-head__date { display: block; font-size: var(--fs-xs); color: var(--text-3); font-weight: 400; }
 .grid-head.is-today .grid-head__date { color: var(--on-primary-soft); }
@@ -409,7 +441,7 @@
 }
 
 .grid-inner--day {
-  grid-template-columns: 56px minmax(0, 1fr);
+  grid-template-columns: 48px minmax(0, 1fr);
 }
 
 .mode-seg { display: inline-flex; }
@@ -428,6 +460,65 @@
     inset-inline: 6px;
   }
   .grid-head { font-size: var(--fs-md); padding: var(--sp-3) var(--sp-2); }
+}
+
+/* ۱.۲۶.۰ — موبایل/تبلت: topbar تمام‌عرض تخت است و با top:0 می‌چسبد (base @920) — سربرگ‌ها هم‌ترازش */
+@media (max-width: 920px) {
+  .grid-head, .grid-corner { top: var(--topbar-h, 60px); }
+}
+
+/* ۱.۲۶.۰ — تبلت عمودی/پنجرهٔ میانی: ستون‌ها سیال می‌شوند تا کل هفته بدون اسکرول افقی جا شود (GCal) */
+@media (min-width: 641px) and (max-width: 900px) {
+  .grid-inner { grid-template-columns: 40px repeat(7, minmax(0, 1fr)); }
+}
+
+/* ۱.۲۶.۰ — موبایل: گرید فشردهٔ هفتگی به سبک GCal — کل هفته در عرض صفحه، صفر اسکرول افقی؛
+   کارت‌ها قرص رنگی می‌شوند (ساعت + نشان حضور)، جزئیات با تپ روی کارت/سربرگ روز */
+@media (max-width: 640px) {
+  .grid-inner { grid-template-columns: 30px repeat(7, minmax(0, 1fr)); }
+  .grid-head { padding: 6px 2px; font-size: var(--fs-xs); }
+  .gh-wd__full { display: none; }
+  .gh-wd__abbr { display: inline; font-weight: 700; }
+  .gh-row { gap: 3px; }
+  .gh-num { min-width: 22px; height: 22px; font-size: var(--fs-sm); padding: 0 4px; }
+  /* شمارندهٔ «ن نوبت» در ستون ~۴۸px می‌شکند — تراکم قرص‌ها خودش گویاست (الگوی GCal) */
+  .grid-head__date { display: none; }
+  .gh-rel { display: none; }
+  /* ارقام خالص ساعت — استثنای ثبت‌شده در گیت کف فونت (front-font-floor) */
+  .gutter { font-size: 10px; padding: 2px 3px 0 1px; }
+
+  /* قرص فشرده فقط در نمای هفته — کارت‌های نمای روز در موبایل اطلاعات کامل دارند */
+  .grid-inner.is-week .grid-appt {
+    inset-inline: 1px;
+    padding: 2px 4px;
+    gap: 1px;
+    border-inline-start-width: 2px;
+    border-radius: 8px;
+    font-size: var(--fs-2xs); /* ۱.۲۶.۰ — کف ۱۲px؛ متن فارسی کارت در موبایل پنهان است */
+    line-height: 1.5;
+  }
+  /* قرص فشرده: فقط ساعت شروع + نشان حضور/یادداشت — نام‌ها و چیپ نوع در جزئیات کارت زنده‌اند */
+  .grid-inner.is-week .grid-appt .grid-appt__title,
+  .grid-inner.is-week .grid-appt .grid-appt__stu,
+  .grid-inner.is-week .grid-appt .st-chip { display: none; }
+  .grid-inner.is-week .grid-appt .appt-end { display: none; } /* بازهٔ ساعت در ~۳۲px نمی‌گنجد — فقط شروع */
+  .grid-inner.is-week .grid-appt__time { font-size: 10px; font-weight: 700; } /* ارقام خالص — استثنای گیت کف فونت */
+  .grid-inner.is-week .grid-appt.is-short .grid-appt__time { display: none; }
+  .grid-inner.is-week .appt-tick { width: 12px; height: 12px; }
+  .grid-inner.is-week .grid-appt__noted { width: 5px; height: 5px; margin-inline-end: 3px; }
+
+  /* «نوبت جدید» = دکمهٔ شناور (FAB) — تجربهٔ GCal/Outlook؛ نوار فقط ناوبری و فیلتر */
+  .week-bar .appt-fab {
+    position: fixed;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    inset-inline-end: 16px;
+    z-index: 40;
+    border-radius: var(--radius-full, 999px);
+    padding: 12px 18px;
+    box-shadow: var(--shadow-3);
+  }
+  /* کپی/برگردان فقط آیکن — نوار موبایل نفس می‌کشد */
+  .week-bar .btn__txt { display: none; }
 }
 
 @media (max-width: 480px) {
