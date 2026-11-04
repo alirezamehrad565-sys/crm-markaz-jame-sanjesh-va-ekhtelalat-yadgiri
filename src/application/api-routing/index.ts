@@ -410,10 +410,17 @@ export function createServices(deps: AppDeps): Services {
   const docs = createDocsService({ db, audit, logger, storage: exerciseStorage });
   const finance = createFinanceService({ db, audit, logger, storage: exerciseStorage });
 
-  // اعتبارسنجی لینک کارت طرح درمان به بانک تمرین: تزریق تابع (نه وابستگی ماژولیِ domain→domain)
-  const clinicalEngine = createClinicalEngineService({ db, audit, logger, exerciseIdsExist: (ids) => exerciseBank.idsExist(ids) });
-
+  // ۱.۲۵.۰۵ — otEngine قبل از موتور بالینی ساخته می‌شود: زمینهٔ صورت‌بندی مورد (گیت‌ها + پروفایل OT)
+  // با تزریق تابع داده می‌شود (قرارداد «نه وابستگی ماژولی domain→domain»)، مثل اعتبارسنجی لینک کارت
   const otEngine = createOtEngineService({ db, audit, logger });
+  const clinicalEngine = createClinicalEngineService({
+    db, audit, logger,
+    exerciseIdsExist: (ids) => exerciseBank.idsExist(ids),
+    formulationOt: {
+      gatesOf: (studentId, actor) => otEngine.getGates(studentId, actor),
+      otProfileOf: (studentId, actor) => otEngine.getOtProfile(studentId, actor)
+    }
+  });
 
   // مکانیک پشتیبان‌گیری و بازیابی
   const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null }); // ارسال به آیدی بله

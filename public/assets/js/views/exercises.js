@@ -13,6 +13,7 @@ import {
   flashNode, // — فلش توجه روی کارت پچ‌شده
   lockBtn // — قفل مشغولی دکمه‌های mutation
 } from '../ui.js';
+import { illoExercises } from '../illustrations.js'; /* ۱.۲۵.۰۵ — نگارهٔ حالت خالی بانک کارت */
 import { fa, formatJalaliNumeric, safeExternalHref, sizeLabelEn } from '../format.js'; /* ۱.۲۵.۰۲ — یکسان‌سازی sizeLabel (واریانت لاتین بانک کارت‌ها) */
 import { session } from '../state.js';
 import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ ثابت سازندهٔ تمرین (همان پالت درمانگر)
@@ -871,6 +872,7 @@ export function renderExercises(container) {
       const filtered = state.format || state.q || state.focus.length || state.disorders.length || state.grades.length;
       body.replaceChildren(
         emptyState({
+          illo: filtered ? null : illoExercises, /* ۱.۲۵.۰۵ — نگاره فقط برای خالیِ واقعی */
           iconName: filtered ? 'search' : 'grid',
           title: filtered ? 'با این فیلترها کارتی پیدا نشد' : 'هنوز کارت آماده‌ای ثبت نشده',
           hint: filtered
