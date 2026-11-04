@@ -582,10 +582,10 @@ export async function renderAppointments(container, ctx = {}) {
       return page;
     }
 
-    /* چیدمان فیزیکی RTL: سه صفحه [prev، cur، next] — prev راست‌ترین، next چپ‌ترین.
-       نمایش cur = translateX(-W)؛ رفتن به بعدی = 0 (ترک به راست)؛ قبلی = -2W (ترک به چپ) */
+    /* چیدمان فیزیکی RTL: سه صفحه [prev، cur، next] — RTL یعنی prev راست‌ترین است و cur/next به ترتیب به چپ می‌روند:
+       بدون جابه‌جایی prev در دید است؛ نمایش cur = translateX(+W)؛ رفتن به بعدی = +2W (ترک به راست)، قبلی = 0 */
     let W = Math.max(pager.clientWidth || 0, 1);
-    let pos = -W;
+    let pos = W;
     let animating = false;
 
     function setPos(x, animate) {
@@ -608,7 +608,7 @@ export async function renderAppointments(container, ctx = {}) {
       nextYmd = addDaysYmd(center, 1);
       W = Math.max(pager.clientWidth || 0, 1);
       track.replaceChildren(pageFor(prevYmd), pageFor(center), pageFor(nextYmd));
-      pos = -W;
+      pos = W;
       setPos(pos, false);
       syncStrip();
     }
@@ -616,7 +616,7 @@ export async function renderAppointments(container, ctx = {}) {
     function go(next) {
       if (animating || !prevYmd) return;
       const target = next ? nextYmd : prevYmd;
-      const targetX = next ? 0 : -2 * W;
+      const targetX = next ? 2 * W : 0;
       animating = true;
       setPos(targetX, true);
       let done = false;
@@ -679,6 +679,12 @@ export async function renderAppointments(container, ctx = {}) {
     VIEW.pagerRelayout = () => { if (!animating && !drag) buildPages(state.dayYmd); };
 
     buildPages(state.dayYmd);
+    /* اندازهٔ نهایی پس از استراحت چیدمان (فونت/نوار اسکرول) — یک تصحیح نرم */
+    requestAnimationFrame(() => {
+      if (!VIEW || VIEW.pagerRelayout == null) return;
+      const w2 = Math.max(pager.clientWidth || 0, 1);
+      if (Math.abs(w2 - W) > 1 && !animating && !drag) { W = w2; pos = W; setPos(pos, false); }
+    });
   }
 
   function autoScrollToWorkingHours() {
