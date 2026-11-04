@@ -64,7 +64,7 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('نسخه: سو 1.19.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.25\.02'/);
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.25\.03'/);
   });
 
   test('۱.۱۹.۰ — روز کاری: جریان پیوسته (هیچ اکشنی کل نما را re-render نمی‌کند)', () => {
@@ -307,5 +307,25 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     /* screening: شمارنده‌های سربرگ بعد از ویرایش هم به‌روز می‌شوند */
     const screening = readFileSync(join(__dirname, '../../public/assets/js/views/screening.js'), 'utf8');
     expect(screening).toMatch(/paintCounts\(\)/);
+  });
+
+  test('۱.۲۵.۰۳ — گزارش‌ها: جریان پیوسته (تغییر بازه کل نما را با اسکلت بازسازی نمی‌کند)', () => {
+    const rp = readFileSync(join(__dirname, '../../public/assets/js/views/reports.js'), 'utf8');
+    // شِل: بدنهٔ داده ناحیهٔ مجزا با کلاس report-content — نوار ابزار بیرون آن است
+    expect(rp).toMatch(/class: 'report-content'/);
+    // پالس نرم به‌جای اسکلت برای تغییر بازه/پریست/به‌روزرسانی
+    expect(rp).toMatch(/content\.classList\.add\('is-loading'\)/);
+    expect(rp).toMatch(/content\.classList\.remove\('is-loading'\)/);
+    // اکشن‌های نوار ابزار دیگر کل نما را renderReports نمی‌کنند — load() ناحیهٔ داده را تازه می‌کند
+    expect(rp).not.toMatch(/onclick: \(\) => renderReports\(container\)/);
+    expect(rp).not.toMatch(/renderReports\(container\);\s*\n\s*\}/); // هیچ applyRange/preset داخلی بازگشت به رندر کامل ندارد
+    expect(rp).toMatch(/onclick: \(\) => load\(\)/);
+    // تعویض تب همچنان اسکلت کامل دارد (ناوبری) و گارد نسل F9 سرجایش است
+    expect(rp).toMatch(/skeletonState\('table', 6\)/);
+    expect((rp.match(/myGen !== renderGen/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    // CSS پالس نرم ثبت شده و زیر reduced-motion خاموش می‌شود
+    const css = readFileSync(join(__dirname, '../../public/assets/css/views.css'), 'utf8');
+    expect(css).toMatch(/\.report-content\.is-loading \{ opacity: \.55/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\n\s*\.report-content \{ transition: none; \}/);
   });
 });
