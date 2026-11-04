@@ -211,6 +211,15 @@ export function registerClinicalEngineRoutes(app: AppHono, service: ClinicalEngi
     return c.json({ data }, 200);
   });
 
+  /* ۱.۲۵.۰۵ — صورت‌بندی مورد: مسیری که فرانت‌اند (کارت «جمع‌بندی تشخیصی» در تحلیل بالینی)
+     از همیشه صدا می‌زد ولی تا امروز هیچ سرویس‌دهنده‌ای نداشت (۴۰۴ بی‌صدا). نقش‌ها عیناً
+     هم‌تراز clinical-insights است؛ ناظر (فقط-خواندن) مانند تفسیر بالینی مشمول نمی‌شود. */
+  app.get('/api/students/:id/case-formulation', requireRole('manager', 'secretary', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const data = await service.getCaseFormulation(c.req.param('id'), actor);
+    return c.json({ data }, 200);
+  });
+
   app.get('/api/clinical-targets', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const data = await service.listTargets();
     return c.json({ data }, 200);

@@ -22,12 +22,12 @@ function svgTitle(text) {
 const INDEX_FA = { VCI: 'درک کلامی', PRI: 'استدلال ادراکی', WMI: 'حافظهٔ فعال', PSI: 'سرعت پردازش', FSIQ: 'مقیاس کامل', GAI: 'هوشبهر عملی بدون سرعت' };
 
 const INDEX_COLOR = {
-  VCI: 'var(--info, #229ED9)',
-  PRI: 'var(--success, #3F8F68)',
-  WMI: 'var(--accent, #D89428)',
-  PSI: 'var(--hue-7-strong, #8A63C9)',
-  FSIQ: 'var(--text-2, #687078)',
-  GAI: 'var(--hue-2-strong, #1F9E85)'
+  VCI: 'var(--info)',
+  PRI: 'var(--success)',
+  WMI: 'var(--accent)',
+  PSI: 'var(--hue-7-strong)',
+  FSIQ: 'var(--text-2)',
+  GAI: 'var(--hue-2-strong)'
 };
 
 const SUBTEST_GROUPS = [
@@ -106,7 +106,7 @@ function panelIndicesSVG(data) {
     style: 'display:block;width:100%;height:auto;direction:ltr'
   });
 
-  s.appendChild(svg('rect', { x: p1X(85).toFixed(1), y: P1.top, width: (p1X(115) - p1X(85)).toFixed(1), height: P1.axisY - P1.top, fill: 'var(--info-soft, #E2F3FC)', opacity: '0.85' }));
+  s.appendChild(svg('rect', { x: p1X(85).toFixed(1), y: P1.top, width: (p1X(115) - p1X(85)).toFixed(1), height: P1.axisY - P1.top, fill: 'var(--info-soft)', opacity: '0.85' }));
   s.appendChild(svg('line', { x1: p1X(100), y1: P1.top, x2: p1X(100), y2: P1.axisY, stroke: 'var(--text-3)', 'stroke-width': '1.4', opacity: '0.75' }));
   s.appendChild(svg('line', { x1: p1X(85), y1: P1.top, x2: p1X(85), y2: P1.axisY, stroke: 'var(--danger)', 'stroke-width': '2' }));
 
@@ -121,14 +121,14 @@ function panelIndicesSVG(data) {
 
   rows.forEach((r, i) => {
     const cy = 38 + i * P1.rowH;
-    const color = INDEX_COLOR[r.key] ?? 'var(--text-2, #687078)';
+    const color = INDEX_COLOR[r.key] ?? 'var(--text-2)';
     const g = svg('g');
     g.appendChild(svgTitle(`${INDEX_FA[r.key] ?? r.key} — نمرهٔ استاندارد ${fa(r.value)}`));
     g.appendChild(svg('text', { x: 10, y: cy + 5.5, 'text-anchor': 'start', 'font-size': '22', 'font-weight': '700', fill: 'var(--text-1)' }, r.key));
     const cx = p1X(r.value);
     g.appendChild(svg('circle', {
       cx: cx.toFixed(1), cy: cy.toFixed(1), r: r.composite ? '5.5' : '6',
-      fill: r.composite ? color : 'var(--surface, #FFFFFF)',
+      fill: r.composite ? color : 'var(--surface)',
       stroke: color, 'stroke-width': r.composite ? '1.5' : '2.6'
     }));
     const nearRight = cx > P1.x1 - 70;
@@ -171,7 +171,7 @@ function panelSubtestsSVG(data) {
   }
 
   const bandTop = p2Y(13).toFixed(1);
-  s.appendChild(svg('rect', { x: P2.x0 - 14, y: bandTop, width: (P2.x1 - P2.x0 + 28).toFixed(1), height: (p2Y(7) - p2Y(13)).toFixed(1), fill: 'var(--info-soft, #E2F3FC)', opacity: '0.85' }));
+  s.appendChild(svg('rect', { x: P2.x0 - 14, y: bandTop, width: (P2.x1 - P2.x0 + 28).toFixed(1), height: (p2Y(7) - p2Y(13)).toFixed(1), fill: 'var(--info-soft)', opacity: '0.85' }));
 
   if (data.personalSubMean !== null && data.personalSubMean > 1 && data.personalSubMean < 19) {
     const my = p2Y(data.personalSubMean);
@@ -193,7 +193,7 @@ function panelSubtestsSVG(data) {
   }
 
   subs.forEach((sub, i) => {
-    const color = INDEX_COLOR[SUBTEST_GROUPS[sub.gi].key] ?? 'var(--text-2, #687078)';
+    const color = INDEX_COLOR[SUBTEST_GROUPS[sub.gi].key] ?? 'var(--text-2)';
     const cx = p2X(i);
     const cy = p2Y(sub.scaled);
     const g = svg('g');
@@ -201,7 +201,7 @@ function panelSubtestsSVG(data) {
     g.appendChild(svg('circle', { cx: cx.toFixed(1), cy: cy.toFixed(1), r: '13', fill: 'transparent' }));
     g.appendChild(svg('circle', {
       cx: cx.toFixed(1), cy: cy.toFixed(1), r: '5.5',
-      fill: sub.supplemental ? 'var(--surface, #FFFFFF)' : color,
+      fill: sub.supplemental ? 'var(--surface)' : color,
       stroke: color, 'stroke-width': sub.supplemental ? '2.4' : '1.2'
     }));
     g.appendChild(svg('text', { x: cx.toFixed(1), y: P2.bottom + 26, 'text-anchor': 'middle', 'font-size': '20', 'font-weight': '700', fill: color }, sub.code));

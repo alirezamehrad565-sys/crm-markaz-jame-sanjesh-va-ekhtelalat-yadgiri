@@ -241,12 +241,12 @@ function psychometricsSection(view) {
   }
   if ((ps.patterns ?? []).length) {
     blocks.push(el('div', { style: { marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' } },
-      ...ps.patterns.map((p) => el('div', { style: { fontSize: '12px', color: 'var(--ink-2, #555)' } }, icon('sparkles', 12), ' ', p.textFa))));
+      ...ps.patterns.map((p) => el('div', { style: { fontSize: '12px', color: 'var(--ink-2)' } }, icon('sparkles', 12), ' ', p.textFa))));
   }
   const LEVEL_BADGE = { 'قوت': 'badge--success', 'متوسط': 'badge--neutral', 'مرزی': 'badge--warning', 'ضعف': 'badge--error' };
   if ((ps.processing ?? []).length) {
     const rows = ps.processing.map((p) => el('div', {
-      style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', padding: '6px 0', borderTop: '1px solid var(--line, rgba(128,128,128,.15))' }
+      style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', padding: '6px 0', borderTop: '1px solid var(--line)' }
     },
       el('strong', { style: { fontSize: '12px', minWidth: '150px' } }, `${p.fa} — ${fa(p.scaled)}`),
       el('span', { class: `badge ${LEVEL_BADGE[p.level] ?? 'badge--neutral'}` }, `سطح هنجاری: ${p.level}`),
@@ -287,7 +287,7 @@ function weakBlock(view) {
 
 function flagsBlock(view) {
   const flags = (view.flagsFa ?? []).map((f) =>
-    el('div', { style: { display: 'flex', gap: '6px', alignItems: 'flex-start', fontSize: '12px', color: 'var(--warn, #a06a00)', lineHeight: 1.8 } },
+    el('div', { style: { display: 'flex', gap: '6px', alignItems: 'flex-start', fontSize: '12px', color: 'var(--warn)', lineHeight: 1.8 } },
       icon('alert', 12),
       el('span', {}, f)
     )
