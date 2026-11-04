@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { el, icon, toast, toastError, confirmModal, formModal, emptyState, loadingState, openModal } from './ui.js';
 import { session } from './state.js';
-import { fa, formatJalaliDateTime } from './format.js';
+import { fa, formatJalaliDateTime, sizeLabel } from './format.js'; /* ۱.۲۵.۰۲ — یکسان‌سازی sizeLabel */
 
 const CATEGORY_LABELS = { tip: 'نکتهٔ آموزشی', protocol: 'پروتکل درمانی', article: 'مقاله', news: 'خبر مرکز' };
 const CATEGORY_BADGE = { tip: 'badge--primary', protocol: 'badge--success', article: 'badge--accent', news: 'badge--neutral' };
@@ -28,15 +28,6 @@ function localMime(file) {
   if (t && t !== 'application/octet-stream') return t;
   const ext = (file.name || '').split('.').pop()?.toLowerCase() ?? '';
   return EXT_MIME_FALLBACK[ext] ?? t ?? 'application/octet-stream';
-}
-
-function sizeLabel(bytes) {
-  if (!bytes && bytes !== 0) return '';
-  if (bytes >= 1024 * 1024) {
-    const mb = bytes / (1024 * 1024);
-    return `${fa(mb >= 10 ? Math.round(mb) : Math.round(mb * 10) / 10)} مگابایت`;
-  }
-  return bytes >= 1024 ? `${fa(Math.round(bytes / 1024))} کیلوبایت` : `${fa(bytes)} بایت`;
 }
 
 function validateLocalFile(file) {

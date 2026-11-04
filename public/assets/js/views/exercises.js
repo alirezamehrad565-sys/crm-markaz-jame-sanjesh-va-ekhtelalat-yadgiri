@@ -13,7 +13,7 @@ import {
   flashNode, // — فلش توجه روی کارت پچ‌شده
   lockBtn // — قفل مشغولی دکمه‌های mutation
 } from '../ui.js';
-import { fa, formatJalaliNumeric, safeExternalHref } from '../format.js';
+import { fa, formatJalaliNumeric, safeExternalHref, sizeLabelEn } from '../format.js'; /* ۱.۲۵.۰۲ — یکسان‌سازی sizeLabel (واریانت لاتین بانک کارت‌ها) */
 import { session } from '../state.js';
 import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ ثابت سازندهٔ تمرین (همان پالت درمانگر)
 import { buildTaxonomyPicker } from '../taxonomy.js'; // درخت واحد طبقه‌بندی (یک کامپوننت برای منو/فرم/پیکر)
@@ -160,14 +160,6 @@ function publishedBadge(published) {
   return el('span', { class: `badge ${published ? 'badge--success' : 'badge--warning'}` }, published ? 'منتشرشده' : 'پیش‌نویس');
 }
 
-function sizeLabel(bytes) {
-  if (!bytes && bytes !== 0) return '';
-  if (bytes >= 1024 * 1024) {
-    const mb = bytes / (1024 * 1024);
-    return `${fa(mb >= 10 ? Math.round(mb) : Math.round(mb * 10) / 10)}MB`;
-  }
-  return bytes >= 1024 ? `${fa(Math.round(bytes / 1024))}KB` : `${fa(bytes)}B`;
-}
 
 function localMime(file) {
   const t = (file.type || '').toLowerCase();
@@ -183,7 +175,7 @@ function validateLocalFile(file) {
     throw new Error(`نوع فایل «${file.name}» شناخته نشد`);
   }
   if (file.size > LIMITS.maxFileBytes) {
-    throw new Error(`حجم «${file.name}» بیش از ${sizeLabel(LIMITS.maxFileBytes)} است`);
+    throw new Error(`حجم «${file.name}» بیش از ${sizeLabelEn(LIMITS.maxFileBytes)} است`);
   }
   if (file.size === 0) {
     throw new Error(`فایل «${file.name}» خالی است`);
@@ -201,7 +193,7 @@ function buildPickedChips(files, onChange) {
           { class: 'exb-picked__chip' },
           icon('file', 13),
           el('span', { class: 'exb-picked__name' }, f.name),
-          el('span', { class: 'exb-picked__size' }, sizeLabel(f.size)),
+          el('span', { class: 'exb-picked__size' }, sizeLabelEn(f.size)),
           el('button', {
             type: 'button',
             class: 'exb-picked__x',
@@ -671,7 +663,7 @@ export function renderExercises(container) {
         { class: 'exb-file-chip' },
         icon('file', 13),
         el('span', { class: 'exb-file-chip__name', title: f.filename }, f.filename),
-        el('span', { class: 'exb-file-chip__size' }, sizeLabel(f.size)),
+        el('span', { class: 'exb-file-chip__size' }, sizeLabelEn(f.size)),
         previewable(f)
           ? el('button', { class: 'exb-file-chip__btn', type: 'button', title: 'پیش‌نمایش', 'aria-label': `پیش‌نمایش ${f.name ?? 'فایل'}`, onclick: () => openPreviewModal(ex, [f]) } /* S6-13 */, icon('eye', 12))
           : null,
@@ -1464,7 +1456,7 @@ export function renderExercises(container) {
                   { class: 'exb-file-chip' },
                   icon('file', 13),
                   el('span', { class: 'exb-file-chip__name', title: f.filename }, f.filename),
-                  el('span', { class: 'exb-file-chip__size' }, sizeLabel(f.size)),
+                  el('span', { class: 'exb-file-chip__size' }, sizeLabelEn(f.size)),
                   previewable(f)
                     ? el('button', { class: 'exb-file-chip__btn', type: 'button', title: 'پیش‌نمایش', 'aria-label': `پیش‌نمایش ${f.name ?? 'فایل'}`, onclick: () => openPreviewModal(ex, [f]) } /* S6-13 */, icon('eye', 12))
                     : null,

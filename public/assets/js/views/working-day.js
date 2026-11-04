@@ -18,7 +18,7 @@ import {
   WEEKDAY_ABBRS,
   WEEKDAY_NAMES
 } from '../format.js';
-import { el, icon, toast, toastError, skeletonState, errorState, emptyState, statusBadge, formModal, confirmModal } from '../ui.js';
+import { el, icon, toast, toastError, skeletonState, errorState, emptyState, statusBadge, formModal, confirmModal, collapseRemove } from '../ui.js'; /* ۱.۲۵.۰۲ — نسخهٔ محلی با undo به جعبه‌ابزار مشترک منتقل شد (rm?.undo() با قرارداد جدید سازگار است) */
 import { hueClass, staffHue } from '../staff-hue.js'; // — رنگ ثابت هر درمانگر روی کارت نوبت
 import { sessionTypeOf } from '../session-type.js'; // — نوع جلسه (جدول ۴)
 import { openCaseEventForm, canCreateCaseEvents } from '../case-events.js';
@@ -119,27 +119,7 @@ function pulse(elm) {
   elm.addEventListener('animationend', () => elm.classList.remove('wd-flash'), { once: true });
 }
 
-/* برداشتن نرم یک عنصر: ارتفاع/شفافیت انیمیت می‌شود؛ در مسیر خطا undo عنصر را برمی‌گرداند */
-function collapseRemove(elm) {
-  if (!elm || !elm.isConnected) return null;
-  const parent = elm.parentElement;
-  const next = elm.nextSibling;
-  elm.style.height = `${Math.round(elm.getBoundingClientRect().height)}px`;
-  elm.style.overflow = 'hidden';
-  elm.style.pointerEvents = 'none';
-  requestAnimationFrame(() => {
-    elm.classList.add('is-resolving');
-    setTimeout(() => elm.remove(), 260);
-  });
-  return {
-    elm, parent, next,
-    undo() {
-      elm.classList.remove('is-resolving');
-      elm.style.cssText = '';
-      if (parent && !elm.isConnected) parent.insertBefore(elm, next);
-    }
-  };
-}
+/* برداشتن نرم یک عنصر — ۱.۲۵.۰۲: به ui.js منتقل شد (با ضبط parent/next + undo) */
 
 function refreshApptChips() {
   const box = currentContainer?.querySelector?.('.wd-appts-card .wd-att__chips');

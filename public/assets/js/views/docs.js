@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { el, icon, toast, toastError, confirmModal, openModal, emptyState, loadingState, errorState, lockBtn } from '../ui.js';
-import { fa, formatJalaliDateTime } from '../format.js';
+import { fa, formatJalaliDateTime, sizeLabel } from '../format.js'; /* ۱.۲۵.۰۲ — یکسان‌سازی sizeLabel */
 
 // ═══════════════════════════════════════════════════════════════
 // نمون‌برگ‌ها و اسناد خام
@@ -98,14 +98,6 @@ function ensureStyles() {
 
 // ─── کمک‌های محلی ───
 
-function sizeLabel(bytes) {
-  if (!bytes && bytes !== 0) return '';
-  if (bytes >= 1024 * 1024) {
-    const mb = bytes / (1024 * 1024);
-    return `${fa(mb >= 10 ? Math.round(mb) : Math.round(mb * 10) / 10)} مگابایت`;
-  }
-  return bytes >= 1024 ? `${fa(Math.round(bytes / 1024))} کیلوبایت` : `${fa(bytes)} بایت`;
-}
 
 /** بج فرمت فایل — PDF/IMG/DOC/XLS/CSV/TXT/… */
 function fmtOf(file) {
