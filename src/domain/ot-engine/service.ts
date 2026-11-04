@@ -1,5 +1,6 @@
 import type { AuthContext } from '@core/shared';
 import { NEED_PROTOCOL_SUGGESTIONS, STUDENT_PROTOCOL_LABELS, type StudentProtocol } from '@core/shared';
+import { SNAP_IV_CUTOFFS, SCARED_CUTOFFS } from '@domain/clinical-engine/instruments'; /* ۱.۲۵.۰۶ — تک‌منبع برش‌ها (کپی محلی حذف) */
 import type { DbClient } from '@core/db';
 import { ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
@@ -45,13 +46,11 @@ const SLD_CHECKLIST_EVENT_KEYS = ['ce-sld-read-v1', 'ce-sld-wri-v1', 'ce-sld-cal
 const REHAB_PATHWAY_ORDER = ['anamnesis', 'skills', 'needs'] as const;
 
 const SUSPICION_EVENT_KEY = 'ce-clinical-suspicion-v1';
-const SNAP_CUTOFFS = {
-  parent: { ia: { warn: 11, danger: 16 }, hi: { danger: 13 } },
-  teacher: { ia: { warn: 14, danger: 16 }, hi: { danger: 11 } }
-} as const;
-const SCARED_DANGER = 25;
-const SCARED_WARN_MIN = 20;
-const SCARED_STRONG = 30;
+/* ۱.۲۵.۰۶ — SNAP_CUTOFFS/SCARED_* محلی حذف شد؛ از instruments.ts می‌خواند (همان عددها، یک منبع) */
+const SNAP_CUTOFFS = SNAP_IV_CUTOFFS;
+const SCARED_DANGER = SCARED_CUTOFFS.danger;
+const SCARED_WARN_MIN = SCARED_CUTOFFS.warnMin;
+const SCARED_STRONG = SCARED_CUTOFFS.strong;
 const SUSPICION_LEVEL_LABELS: Record<string, string> = {
   watch: 'قابل پایش',
   high: 'محتمل — شواهد هم‌گرا'

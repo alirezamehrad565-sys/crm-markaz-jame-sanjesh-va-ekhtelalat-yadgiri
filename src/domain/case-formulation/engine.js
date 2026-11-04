@@ -1,13 +1,19 @@
 // engine.js — موتور صورت‌بندی مورد (Case Formulation) — استخراج‌شده از باندل (کامیت 365d103).
 //
-// بدنهٔ توابع، ثابت‌ها و متن‌های فارسی دست‌نخورده از باندل آمده‌اند؛ سه تفاوت:
+// بدنهٔ توابع، ثابت‌ها و متن‌های فارسی دست‌نخورده از باندل آمده‌اند؛ تفاوت‌ها:
 //   ۱. شیم‌های نام (__name/__name2) همین‌جا تعریف می‌شوند — فقط متادیتای name تابع را ست می‌کنند؛
 //   ۲. جدول‌های وابستگی مشترک با کامنتِ مبدأ کپی شده‌اند (در باندل متغیر سراسری بودند)؛
 //   ۳. بلاک export در انتهای فایل اضافه شده است.
+//   ۴. ۱.۲۵.۰۶ — پایان fork: قواعد DSM و برش‌های پرسشنامه از موتور بالینی زنده import می‌شوند
+//      (rules.ts/instruments.ts) تا هر اصلاح بالینی یک‌جا اعمال شود — نسخهٔ کپی‌شده حذف شد.
 //
 // API عمومی: formulateCase(evidence, options) → JSON صورت‌بندی
 //   evidence = { events, wechsler, ot, gates, child } — همان شیئی که سرویسِ مسیر
 //   case-formulation برای پرونده می‌سازد؛ options.now برای زمان‌گذاری قابل تزریق است.
+
+// ── ۱.۲۵.۰۶ — منبع یگانهٔ قواعد و برش‌ها (پایان نسخهٔ کپی‌شده) ──
+import { rulesOf, ODD_MIN_FULL_CRITERIA, ASD_B_FULL_CRITERIA } from '../clinical-engine/rules.ts';
+import { SNAP_IV_CUTOFFS, SCARED_CUTOFFS, DCDQ_WARN_CEILING, dcdqDangerCutoffFor } from '../clinical-engine/instruments.ts';
 
 // ── شیم‌های نام اس‌بیلد (فقط متادیتای name تابع) ──
 var __defProp = Object.defineProperty;
@@ -53,77 +59,7 @@ var DIGITS_2MIN_NORM = {
   "\u0647\u0634\u062A\u0645": 55
 };
 
-// ── وابستگی مشترک: بریدهٔ قواعد DSM — موتور فقط هدف‌های autism و odd را از طریق
-//    rulesOf() داخل criteriaMetFor() می‌خواند؛ وزن‌های EVIDENCE_WEIGHTS هم به
-//    مدخل همین دو هدف وصل‌اند ──
-var EVIDENCE_WEIGHTS = {
-  probeDanger: 2,
-  instrumentDanger: 2,
-  instrumentWarn: 1,
-  sdqDanger: 1,
-  anamnesisFlag: 1,
-  /** ضریب هم‌رأیی والد/معلم وقتی هر دو مرجع باند بالا دارند */
-  consensusMultiplier: 1.5
-};
-var RULES = [
-  // ─── اتیسم ───
-  {
-    targetKey: "autism",
-    batteryVersion: "battery-v1",
-    evidence: [
-      { kind: "instrument", toolKey: "ce-asd-criteria-v1", subscaleId: "crita", band: "danger", weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0645\u062D\u0648\u0631\u06CC \u0627\u0631\u062A\u0628\u0627\u0637 \u0627\u062C\u062A\u0645\u0627\u0639\u06CC \u0628\u0627\u0644\u0627 \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A." },
-      { kind: "instrument", toolKey: "ce-asd-criteria-v1", subscaleId: "critb", band: "danger", weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: "\u0627\u0644\u06AF\u0648\u0647\u0627\u06CC \u062A\u06A9\u0631\u0627\u0631\u06CC/\u062D\u0633\u06CC \u0628\u0627\u0644\u0627 \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A." },
-      { kind: "instrument", toolKey: "ce-asd-criteria-v1", subscaleId: "crita", band: "warn", weight: EVIDENCE_WEIGHTS.instrumentWarn, fa: "\u0686\u0646\u062F \u0646\u0634\u0627\u0646\u0647\u0654 \u0627\u062C\u062A\u0645\u0627\u0639\u06CC \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A." }
-    ],
-    consensus: { parent: "ce-asd-criteria-v1", teacher: "ce-asd-criteria-v1" },
-    criteriaMap: [
-      { criterionId: "autism.a1", toolKey: "ce-asd-criteria-v1", itemRefs: ["aA1", "aA2", "aA3"], passScore: 2 },
-      { criterionId: "autism.a2", toolKey: "ce-asd-criteria-v1", itemRefs: ["aA4", "aA5"], passScore: 2 },
-      { criterionId: "autism.a3", toolKey: "ce-asd-criteria-v1", itemRefs: ["aA6"], passScore: 2 },
-      { criterionId: "autism.b1", toolKey: "ce-asd-criteria-v1", itemRefs: ["aB1", "aB2"], passScore: 2 },
-      { criterionId: "autism.b2", toolKey: "ce-asd-criteria-v1", itemRefs: ["aB3", "aB4"], passScore: 2 },
-      { criterionId: "autism.b3", toolKey: "ce-asd-criteria-v1", itemRefs: ["aB5"], passScore: 2 },
-      { criterionId: "autism.b4", toolKey: "ce-asd-criteria-v1", itemRefs: ["aB6", "aB7"], passScore: 2 }
-    ],
-    differentials: [
-      { targetKey: "speech_language", fa: "\u0627\u06AF\u0631 \u0641\u0642\u0637 \u0641\u0647\u0645/\u0628\u06CC\u0627\u0646 \u0632\u0628\u0627\u0646 \u062F\u0634\u0648\u0627\u0631 \u0627\u0633\u062A \u0648 \u0627\u0644\u06AF\u0648\u06CC \u062A\u06A9\u0631\u0627\u0631\u06CC/\u062D\u0633\u06CC \u0646\u062F\u0627\u0631\u062F \u2192 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 \u0628\u06AF\u06CC\u0631\u06CC\u062F." },
-      { targetKey: "anxiety", fa: "\u0627\u06AF\u0631 \u0627\u062C\u062A\u0646\u0627\u0628 \u0627\u062C\u062A\u0645\u0627\u0639\u06CC \u0641\u0642\u0637 \u062F\u0631 \u062C\u0645\u0639\u200C\u0647\u0627\u06CC \u062C\u062F\u06CC\u062F \u0627\u0633\u062A \u0648 \u0631\u0627\u0628\u0637\u0647\u0654 \u0635\u0645\u06CC\u0645\u06CC \u0633\u0627\u0644\u0645 \u062F\u0627\u0631\u062F \u2192 \u0627\u0636\u0637\u0631\u0627\u0628 \u0627\u062C\u062A\u0645\u0627\u0639\u06CC \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F." }
-    ],
-    nextInstrument: ["ce-asd-criteria-v1"]
-  },
-  // ─── ODD ───
-  {
-    targetKey: "odd",
-    batteryVersion: "battery-v1",
-    evidence: [
-      { kind: "instrument", toolKey: "ce-odd-criteria-v1", subscaleId: "crita", band: "danger", weight: EVIDENCE_WEIGHTS.instrumentDanger, fa: "\u0627\u0644\u06AF\u0648\u06CC \u0645\u0642\u0627\u0628\u0644\u0647\u200C\u06AF\u0631\u06CC \u0628\u0627\u0644\u0627\u06CC \u0628\u0631\u0634 \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A." },
-      { kind: "instrument", toolKey: "ce-odd-criteria-v1", subscaleId: "crita", band: "warn", weight: EVIDENCE_WEIGHTS.instrumentWarn, fa: "\u0686\u0646\u062F \u0645\u0644\u0627\u06A9 \u0645\u0642\u0627\u0628\u0644\u0647\u200C\u06AF\u0631\u06CC \u0628\u0627 \u0646\u0645\u0631\u0647\u0654 \u06A9\u0627\u0645\u0644 \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A." },
-      { kind: "instrument", toolKey: "ce-snap-iv-p-v1", subscaleId: "odd", band: "danger", weight: EVIDENCE_WEIGHTS.instrumentWarn, fa: "\u0632\u06CC\u0631\u0645\u0642\u06CC\u0627\u0633 \u0646\u0627\u0641\u0631\u0645\u0627\u0646\u06CC SNAP-IV \u0648\u0627\u0644\u062F \u0628\u0627\u0644\u0627\u06CC \u0628\u0631\u0634 \u0627\u0633\u062A." },
-      { kind: "sdq", toolKey: "sdq-parent", subscaleId: "cond", band: "danger", weight: EVIDENCE_WEIGHTS.sdqDanger, fa: "\u0632\u06CC\u0631\u0645\u0642\u06CC\u0627\u0633 \u0631\u0641\u062A\u0627\u0631\u06CC SDQ \u0648\u0627\u0644\u062F \u0642\u0627\u0628\u0644 \u062A\u0648\u062C\u0647 \u0627\u0633\u062A." }
-    ],
-    consensus: { parent: "ce-odd-criteria-v1", teacher: "ce-odd-criteria-v1" },
-    criteriaMap: [
-      { criterionId: "odd.a1", toolKey: "ce-odd-criteria-v1", itemRefs: ["oA1", "oA6"], passScore: 2 },
-      { criterionId: "odd.a2", toolKey: "ce-odd-criteria-v1", itemRefs: ["oA2"], passScore: 2 },
-      { criterionId: "odd.a3", toolKey: "ce-odd-criteria-v1", itemRefs: ["oA3"], passScore: 2 },
-      { criterionId: "odd.a4", toolKey: "ce-odd-criteria-v1", itemRefs: ["oA4"], passScore: 2 },
-      { criterionId: "odd.a5", toolKey: "ce-odd-criteria-v1", itemRefs: ["oA5"], passScore: 2 },
-      { criterionId: "odd.a7", toolKey: "ce-odd-criteria-v1", itemRefs: ["oA7"], passScore: 2 },
-      { criterionId: "odd.a8", toolKey: "ce-odd-criteria-v1", itemRefs: ["oA8"], passScore: 2 },
-      { criterionId: "odd.b", toolKey: "ce-odd-criteria-v1", itemRefs: ["oB1"], passScore: 2 },
-      { criterionId: "odd.c", toolKey: "ce-odd-criteria-v1", itemRefs: ["oC1"], passScore: 2 },
-      { criterionId: "odd.d", toolKey: "ce-odd-criteria-v1", itemRefs: ["oD1"], passScore: 2 }
-    ],
-    differentials: [
-      { targetKey: "adhd", fa: "\u0627\u06AF\u0631 \u0628\u062F\u0631\u0641\u062A\u0627\u0631\u06CC \u0627\u0632 \u062A\u06A9\u0627\u0646\u0647 \u0627\u0633\u062A (\u0646\u0647 \u0645\u0642\u0627\u0628\u0644\u0647\u200C\u06AF\u0631\u06CC \u0647\u062F\u0641\u0645\u0646\u062F) \u2192 SNAP-IV \u0647\u0631 \u062F\u0648 \u0645\u0631\u062C\u0639." },
-      { targetKey: "family_stress", fa: "\u0627\u06AF\u0631 \u0634\u0631\u0648\u0639 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0628\u0627 \u0628\u062D\u0631\u0627\u0646 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u0627\u0633\u062A \u2192 \u0627\u0633\u062A\u0631\u0633 \u0645\u062D\u06CC\u0637\u06CC \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F." }
-    ],
-    nextInstrument: ["ce-odd-criteria-v1"]
-  },
-];
-function rulesOf(targetKey) {
-  return RULES.find((r) => r.targetKey === targetKey);
-}
+// ── قواعد DSM (autism/odd) و rulesOf از ../clinical-engine/rules.ts می‌آیند — fork حذف شد (۱.۲۵.۰۶) ──
 
 // ── ENGINE REGION (verbatim from worker/bundle.js lines 29109-30981) ──
 var CONSTRUCT_KEYS = [
@@ -172,21 +108,19 @@ var OT_MIN_SCORED = 4;
 var OT_AGE_DELAY_YEARS = 2;
 var REHAB_HIGH_MEAN = 2.5;
 var REHAB_WARN_MIN_MEAN = 1.5;
-var SNAP_CUTOFFS = {
-  parent: { ia: { warn: 11, danger: 16 }, hi: { danger: 13 }, odd: { warn: 10, danger: 14 } },
-  teacher: { ia: { warn: 14, danger: 16 }, hi: { danger: 11 }, odd: { warn: 12, danger: 16 } }
-};
-var SCARED_DANGER = 25;
-var SCARED_WARN_MIN = 20;
-var SCARED_STRONG = 30;
+/* ۱.۲۵.۰۶ — برش‌ها از منبع یگانه (instruments.ts)؛ نام‌های محلی برای دست‌نخوردگی بدنه حفظ شد */
+var SNAP_CUTOFFS = SNAP_IV_CUTOFFS;
+var SCARED_DANGER = SCARED_CUTOFFS.danger;
+var SCARED_WARN_MIN = SCARED_CUTOFFS.warnMin;
+var SCARED_STRONG = SCARED_CUTOFFS.strong;
 var CRITERIA_CUTOFFS = {
   sld: { danger: 13, warn: 10 },
   asd: { danger: 20, warn: 15 },
   speech: { danger: 16, warn: 11 },
   odd: { danger: 11, warn: 7 }
 };
-var ODD_MIN_FULL_CRITERIA2 = 4;
-var ASD_B_FULL_CRITERIA2 = 2;
+var ODD_MIN_FULL_CRITERIA2 = ODD_MIN_FULL_CRITERIA; /* ۱.۲۵.۰۶ — از rules.ts */
+var ASD_B_FULL_CRITERIA2 = ASD_B_FULL_CRITERIA;
 var SDQ_PROS_WEAK_MAX = 4;
 var TOOL_SOURCE = {
   "ce-snap-iv-p-v1": "parent",
@@ -360,7 +294,7 @@ __name2(criteriaMetFor, "criteriaMetFor");
 function oddRuleActive(event) {
   if (!event)
     return false;
-  const full = criteriaMetFor("ce-odd-criteria-v1", ["odd.a1", "odd.a2", "odd.a3", "odd.a4", "odd.a5", "odd.a7", "odd.a8"], event);
+  const full = criteriaMetFor("ce-odd-criteria-v1", ["odd.a1", "odd.a2", "odd.a3", "odd.a4", "odd.a5", "odd.a6", "odd.a7", "odd.a8"] /* ۱.۲۵.۰۶ — ملاک هشتم (oA6→odd.a6) بازگشت */, event);
   return full >= ODD_MIN_FULL_CRITERIA2;
 }
 __name(oddRuleActive, "oddRuleActive");
@@ -465,8 +399,15 @@ function mapScared(rows, event) {
 }
 __name(mapScared, "mapScared");
 __name2(mapScared, "mapScared");
-function mapDcdq(rows, event) {
-  const c = totalColor(event);
+function mapDcdq(rows, event, ageYears) {
+  /* ۱.۲۵.۰۶ — باند سنی: مرز خطر از dcdqDangerCutoffFor(سن) (m176: ۵-۷→۳۱ · ۸-۹→۴۰ · ۱۰-۱۵→۴۲)
+     وقتی سن و نمرهٔ کل هر دو موجودند؛ وگرنه مثل قبل باند نمایشی DB (totalColor). */
+  let c = totalColor(event);
+  const score = event.analysis?.score;
+  if (ageYears !== undefined && ageYears !== null && typeof score === "number") {
+    const cut = dcdqDangerCutoffFor(ageYears);
+    c = score <= cut ? "danger" : score <= DCDQ_WARN_CEILING ? "warn" : "ok";
+  }
   const source = TOOL_SOURCE[event.toolKey];
   if (c === "danger") {
     addRow(rows, { construct: "motor_coord", toolId: event.toolKey, signal: "dcdq_danger", weight: 2, danger: true, sourceType: source, textFa: `\u062F\u0631 \u067E\u0631\u0633\u0634\u0646\u0627\u0645\u0647\u0654 \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u062D\u0631\u06A9\u062A\u06CC\u060C \u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0632\u06CC\u0631 \u0628\u0631\u0634 \u0633\u0646\u06CC \u0627\u0633\u062A (${faNum5(event.analysis?.score ?? 0)}).` });
@@ -687,7 +628,7 @@ function anamnesisTextFor(construct) {
 }
 __name(anamnesisTextFor, "anamnesisTextFor");
 __name2(anamnesisTextFor, "anamnesisTextFor");
-function normalizeEvents(events) {
+function normalizeEvents(events, opts = {}) {
   const latest = latestPerTool2(events);
   const rows = [];
   const ctx = {
@@ -731,7 +672,7 @@ function normalizeEvents(events) {
         mapScared(rows, event);
         break;
       case "ce-dcdq-v1":
-        mapDcdq(rows, event);
+        mapDcdq(rows, event, opts.ageYears);
         break;
       case "teacher-classroom":
       case "home_behavior":
@@ -1685,7 +1626,7 @@ __name(suggestMonitoring, "suggestMonitoring");
 __name2(suggestMonitoring, "suggestMonitoring");
 function buildCaseFormulation(input, options = {}) {
   const now = options.now ?? (() => /* @__PURE__ */ new Date());
-  const norm = normalizeEvents(input.events);
+  const norm = normalizeEvents(input.events, { ageYears: input.child.ageYears }); /* ۱.۲۵.۰۶ */
   const wInj = injectWechsler(input.wechsler);
   const rows = [...norm.rows, ...wInj.rows];
   const otStatuses = otDomainStatuses(input.ot, input.child.ageYears);

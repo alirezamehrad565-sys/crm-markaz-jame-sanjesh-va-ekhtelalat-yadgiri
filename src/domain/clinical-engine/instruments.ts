@@ -40,3 +40,28 @@ export const ALPHA_15S_NORM: Record<string, number> = {
 export const DIGITS_2MIN_NORM: Record<string, number> = {
   'اول': 15, 'دوم': 25, 'سوم': 35, 'چهارم': 45, 'پنجم': 55, 'ششم': 55, 'هفتم': 55, 'هشتم': 55
 };
+
+/* ─── ۱.۲۵.۰۶ — تک‌منبع برش‌های پرسشنامه‌های گزارش‌دهنده ───
+   قبلاً دو کپی واگرا در کد وجود داشت: ot-engine/service.ts (بدون odd) و fork موتور صورت‌بندی
+   (case-formulation/engine.js)؛ باندهای نمایشی DB (m176) هم جدول جداگانهٔ خودش را دارد.
+   از این پس موتورها و گیت‌ها همه از همین جدول می‌خوانند. اعداد = ارزش‌های عملیاتیِ جاری
+   (خانوادهٔ Swanson 95th برای والد: IA ۱۶ · HI ۱۳ — همان‌هایی که گیت رفتاری از اول می‌شناخت).
+   تفاوت عمدی با باندهای نمایشی m176 (severity tiers) در CHANGELOG ۱.۲۵.۰۶ ثبت شده است. */
+export const SNAP_IV_CUTOFFS = {
+  parent: { ia: { warn: 11, danger: 16 }, hi: { danger: 13 }, odd: { warn: 10, danger: 14 } },
+  teacher: { ia: { warn: 14, danger: 16 }, hi: { danger: 11 }, odd: { warn: 12, danger: 16 } }
+} as const;
+
+export const SCARED_CUTOFFS = { danger: 25, warnMin: 20, strong: 30 } as const; // نمرهٔ کل — سه کپی قبلی هم‌عدد بودند
+
+/* DCDQ: مرزهای سنی مستند بازبینی بیرونی مرکز (m176 راهنمای باند «بسته به سن»):
+   ۵ تا ۷ سال → ۳۱ · ۸ تا ۹ سال → ۴۰ · ۱۰ تا ۱۵ سال → ۴۲؛ نمرهٔ کل ≤ مرزِ سن = خطر.
+   سن نامعلوم → ۳۱ (سخت‌گیرانه‌ترین = همان تیرِ همگانی «پایین‌تر از مرز همهٔ گروه‌های سنی» m176).
+   سقف تیرِ مرزی (warn) = ۴۲ — سقف مطلق مرز سنی؛ بالاتر از آن «در انتظار سن یا بالاتر» (m176). */
+export const DCDQ_WARN_CEILING = 42;
+export function dcdqDangerCutoffFor(ageYears: number | null | undefined): number {
+  if (ageYears === null || ageYears === undefined) return 31;
+  if (ageYears < 8) return 31;
+  if (ageYears < 10) return 40;
+  return 42;
+}
