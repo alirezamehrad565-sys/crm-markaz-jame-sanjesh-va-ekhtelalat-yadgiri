@@ -2,22 +2,12 @@ import { api, qs } from '../api.js';
 import { fa, STUDENT_GRADES, gradeLabel, tehranTimeOfIso } from '../format.js'; // ساعت تهران برای برچسب زمان محاسبه
 import { el, icon, toast, openModal, statusBadge, dataTable, loadingState, skeletonState, emptyState, errorState } from '../ui.js'; /* toast برای S9-24 */
 import { session } from '../state.js';
+import { SPECIAL_NEED_TYPE_LABELS, SPECIAL_NEED_SEVERITY_LABELS, SPECIAL_NEED_SEVERITY_TONES } from '../taxonomy.js'; /* ۱.۲۵.۰۲ */
 
-const TYPE_LABELS = {
-  dyslexia: 'نارساخوانی (دیس‌لکسی)',
-  dysgraphia: 'نارسانویسی (دیس‌گرافی)',
-  dyscalculia: 'نارساریاضی (دیس‌کالکولی)',
-  adhd: 'بیش‌فعالی و کم‌توجهی',
-  autism: 'طیف اتیسم',
-  speech_language: 'اختلال زبانی و بیان',
-  anxiety: 'اضطراب',
-  motor_coordination: 'اختلال هماهنگی حرکتی',
-  slow_learner: 'دیرآموز',
-  other: 'سایر'
-};
-
-const SEVERITY_LABELS = { mild: 'خفیف', moderate: 'متوسط', severe: 'شدید' };
-const SEVERITY_TONES = { mild: 'neutral', moderate: 'warning', severe: 'error' };
+/* ۱.۲۵.۰۲ — واژه‌نامهٔ نیاز ویژه از taxonomy.js (کپی محلی حذف شد — خطر واگرایی) */
+const TYPE_LABELS = SPECIAL_NEED_TYPE_LABELS;
+const SEVERITY_LABELS = SPECIAL_NEED_SEVERITY_LABELS;
+const SEVERITY_TONES = SPECIAL_NEED_SEVERITY_TONES;
 
 const REASON_LABELS = {
   overdue_followup: 'پیگیری سررسیدگذشته',

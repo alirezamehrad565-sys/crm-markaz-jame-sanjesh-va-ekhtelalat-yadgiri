@@ -20,7 +20,7 @@ import {
   WEEKDAY_NAMES,
   gradeLabel
 } from '../format.js';
-import { el, icon, openModal, confirmModal, formModal, toast, toastError, statusBadge, emptyState, skeletonState, lockBtn } from '../ui.js';
+import { el, icon, openModal, confirmModal, formModal, toast, toastError, statusBadge, emptyState, skeletonState, lockBtn, collapseRemove } from '../ui.js'; /* ۱.۲۵.۰۲ — collapseRemove از جعبه‌ابزار مشترک (نسخهٔ محلی با ui یکسان بود) */
 import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ ثابت هر درمانگر
 import { sessionTypeOf, sessionTypeChip, sessionTypeOptions } from '../session-type.js'; // — نوع جلسه (جدول ۴)
 import { openCaseEventForm, openCaseEventDetail, canCreateCaseEvents } from '../case-events.js';
@@ -717,18 +717,6 @@ function rerender(container) {
 }
 
 /* — ۱.۲۰.۰ جعبه‌ابزار پچ درجای گرید (همان زبان ۱.۱۹.۰ روز کاری) — */
-function collapseRemove(elm) {
-  if (!elm || !elm.isConnected) return null;
-  elm.style.height = `${Math.round(elm.getBoundingClientRect().height)}px`;
-  elm.style.overflow = 'hidden';
-  elm.style.pointerEvents = 'none';
-  requestAnimationFrame(() => {
-    elm.classList.add('is-resolving');
-    setTimeout(() => elm.remove(), 260);
-  });
-  return true;
-}
-
 function findGridCol(ymd, staffId) {
   if (!VIEW || !VIEW.container.isConnected) return null;
   const esc = CSS.escape;
