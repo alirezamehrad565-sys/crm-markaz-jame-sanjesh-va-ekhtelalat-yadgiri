@@ -41,18 +41,18 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('لمس: کنترل‌های فونت‌ریز scoped (sess-note/ot-skill) هم 16px روی لمس', () => {
-    const tail = views.slice(-1600); /* بلوک پایانی ممیزی ۱.۰۹.۰ */
+    const tail = views.slice(-6200); /* بلوک پایانی ممیزی ۱.۰۹.۰ — پنجره با پیوست fin-* (۱.۲۵.۰۴) عریض شد */
     expect(tail).toMatch(/\.sess-note__actions \.select[^}]*font-size:\s*16px/);
     expect(tail).toMatch(/\.ot-skill__prompt \.select[^}]*font-size:\s*16px/);
   });
 
   test('لمس: wgrid__cell ≥24px (WCAG 2.5.8 AA — موبایل قبلاً 14px بود)', () => {
-    const tail = views.slice(-1600);
+    const tail = views.slice(-6200);
     expect(tail).toMatch(/\.wgrid__cell\s*\{\s*height:\s*2[4-9]px/);
   });
 
   test('لمس: exb-dom__chev ≥24px (موبایل قبلاً 18px بود)', () => {
-    const tail = views.slice(-1600);
+    const tail = views.slice(-6200);
     expect(tail).toMatch(/\.exb-dom__chev\s*\{\s*width:\s*(2[4-9]|3\d)px[^}]*height:\s*(2[4-9]|3\d)px/);
   });
 
@@ -64,7 +64,7 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('نسخه: سو 1.19.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.25\.03'/);
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.25\.04'/);
   });
 
   test('۱.۱۹.۰ — روز کاری: جریان پیوسته (هیچ اکشنی کل نما را re-render نمی‌کند)', () => {
@@ -327,5 +327,57 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     const css = readFileSync(join(__dirname, '../../public/assets/css/views.css'), 'utf8');
     expect(css).toMatch(/\.report-content\.is-loading \{ opacity: \.55/);
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\n\s*\.report-content \{ transition: none; \}/);
+  });
+
+  test('۱.۲۵.۰۴ — نیازهای ویژه: جریان پیوسته (فیلتر کل نما را با اسکلت بازسازی نمی‌کند؛ سوییچ سنجه بدون درخواست)', () => {
+    const sn = readFileSync(join(__dirname, '../../public/assets/js/views/special-needs.js'), 'utf8');
+    // هیچ کنترل فیلتری/سنجه‌ای دیگر کل نما را renderSpecialNeeds نمی‌کند — فقط load()/repaintData()
+    expect(sn).not.toMatch(/renderSpecialNeeds\(container\);\s*\}\)/);
+    expect((sn.match(/state\.schoolId = v; load\(\)/g) ?? []).length).toBe(1);
+    expect((sn.match(/state\.grade = v; load\(\)/g) ?? []).length).toBe(1);
+    expect((sn.match(/state\.severity = v; load\(\)/g) ?? []).length).toBe(1);
+    // سوییچ سنجه: مسیر جدا بدون api — تجمیع سمت کلاینت از گرید کش‌شده
+    expect(sn).toMatch(/onclick: \(\) => setMetric\(m\.key\)/);
+    expect(sn).toMatch(/function setMetric\(key\) \{[\s\S]{0,500}repaintData\(\);/);
+    expect(sn).not.toMatch(/function setMetric\(key\) \{[\s\S]{0,500}api\./);
+    // ناحیهٔ داده مجزا + پالس نرم + گارد نسل F10 سرجایش
+    expect(sn).toMatch(/class: 'data-zone'/);
+    expect(sn).toMatch(/dataZone\.classList\.add\('is-loading'\)/);
+    expect(sn).toMatch(/dataZone\.classList\.remove\('is-loading'\)/);
+    expect((sn.match(/myGen !== snGen/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    // اسکلت فقط برای سوارشدن نما (ناوبری) — یک‌بار در کل فایل
+    expect((sn.match(/skeletonState\('table', 5\)/g) ?? []).length).toBe(1);
+  });
+
+  test('۱.۲۵.۰۴ — مالی: CSS تزریقی حذف شد و refresh پالس نرم دارد', () => {
+    const fin = readFileSync(join(__dirname, '../../public/assets/js/views/finance.js'), 'utf8');
+    // استایل ماژول دیگر در JS تزریق نمی‌شود — به views.css بازگشت
+    expect(fin).not.toMatch(/createElement\('style'\)/);
+    expect(fin).not.toMatch(/ensureFinStyles/);
+    // سه ناحیهٔ داده (KPI/نوار مصرف/پانل) data-zone دارند و refresh روی همه پالس می‌گذارد
+    expect((fin.match(/class: '[^']*data-zone'/g) ?? []).length).toBe(3);
+    expect(fin).toMatch(/n\.classList\.add\('is-loading'\)/);
+    expect(fin).toMatch(/finally \{/);
+    // CSS منتقل‌شده در views.css ساکن است — شامل قاعدهٔ چاپ اسکوپ‌شده
+    const css = readFileSync(join(__dirname, '../../public/assets/css/views.css'), 'utf8');
+    expect(css).toMatch(/\.fin-bar \{ width: 100%; max-width: 420px/);
+    expect(css).toMatch(/body\.fin-print-on > \*:not\(\.fin-report-host\) \{ display: none !important; \}/);
+    expect(css).toMatch(/\.data-zone\.is-loading \{ opacity: \.55/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\n\s*\.data-zone \{ transition: none; \}/);
+  });
+
+  test('۱.۲۵.۰۴ — طرح درمان: ذخیره/غیرفعال‌سازی فقط ناحیهٔ فهرست را تازه می‌کند', () => {
+    const tp = readFileSync(join(__dirname, '../../public/assets/js/views/treatment-plans.js'), 'utf8');
+    // refresh دیگر کل نما را renderTreatmentPlans نمی‌کند
+    expect(tp).not.toMatch(/refresh = \(\) => renderTreatmentPlans\(container\)/);
+    expect(tp).toMatch(/function refresh\(\) \{ load\(\); \}/);
+    // ناحیهٔ فهرست + پالس نرم؛ اسکلت فقط مونت اولیه
+    expect(tp).toMatch(/class: 'data-zone'/);
+    expect(tp).toMatch(/zone\.classList\.add\('is-loading'\)/);
+    expect(tp).toMatch(/zone\.classList\.remove\('is-loading'\)/);
+    expect((tp.match(/skeletonState\('cards', 3\)/g) ?? []).length).toBe(1);
+    // هدف‌های بالینی یک‌بار در مونت — refresh فقط قالب‌ها را می‌گیرد (یک api.get در مسیر load)
+    expect((tp.match(/api\.get\('\/api\/pathway-templates'\)/g) ?? []).length).toBe(1);
+    expect((tp.match(/api\.get\('\/api\/clinical-targets'\)/g) ?? []).length).toBe(1);
   });
 });
