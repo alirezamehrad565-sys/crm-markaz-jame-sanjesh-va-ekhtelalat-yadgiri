@@ -288,8 +288,14 @@ export async function lockBtn(btn, fn) {
    الگوی ۱.۱۹/۱.۲۰ (روز کاری/نوبت‌ها) عمومی شد: گره با ارتفاع فعلی جمع می‌شود،
    کلاس is-resolving محو‌سازی می‌دهد و پس از ۲۶۰ms از DOM خارج می‌شود —
    هیچ rebuild کل نما؛ همسایه‌ها سرجایشان می‌مانند. */
+/* جمع‌شدن نرم یک عنصر: ارتفاع قفل و با انیمیشن is-resolving برداشته می‌شود (هستهٔ جریان پیوسته).
+   ۱.۲۵.۰۲ — یکسان‌سازی سه نسخهٔ پراکنده (ui/appointments/working-day): جایگاه عنصر (parent/next)
+   پیش از جمع‌شدن ضبط می‌شود و undo() در مسیر خطا عنصر را سر جای قبلی‌اش برمی‌گرداند.
+   بازگشت: { undo } برای عنصر متصل (truthy — سازگار با همهٔ فراخوان‌های قبلی) / false برای عنصر جدا. */
 export function collapseRemove(elm) {
   if (!elm || !elm.isConnected) return false;
+  const parent = elm.parentElement;
+  const next = elm.nextSibling;
   elm.style.height = `${Math.round(elm.getBoundingClientRect().height)}px`;
   elm.style.overflow = 'hidden';
   elm.style.pointerEvents = 'none';
@@ -297,7 +303,13 @@ export function collapseRemove(elm) {
     elm.classList.add('is-resolving');
     setTimeout(() => elm.remove(), 260);
   });
-  return true;
+  return {
+    undo() {
+      elm.classList.remove('is-resolving');
+      elm.style.cssText = '';
+      if (parent && !elm.isConnected) parent.insertBefore(elm, next);
+    }
+  };
 }
 
 /* ۱.۲۱.۰ — فلش کوتاه توجه روی گره به‌روزشده (پچ درجای ردیف/کارت) — بدون اسکلت، بدون پرش */

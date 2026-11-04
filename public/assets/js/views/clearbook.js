@@ -6,7 +6,8 @@ import {
   toJalali,
   toGregorian,
   JALALI_MONTHS,
-  formatJalaliNumeric
+  formatJalaliNumeric,
+  sizeLabel /* ۱.۲۵.۰۲ — یکسان‌سازی sizeLabel */
 } from '../format.js';
 import { jalaliDateInput } from '../jalali-picker.js';
 import { openExcelImport } from '../excel-import.js'; // درون‌ریزی اکسل تقویم اجرایی
@@ -36,14 +37,6 @@ function localMime(file) {
   if (t && t !== 'application/octet-stream') return t;
   const ext = (file.name || '').split('.').pop()?.toLowerCase() ?? '';
   return EXT_MIME_FALLBACK[ext] ?? t ?? 'application/octet-stream';
-}
-function sizeLabel(bytes) {
-  if (!bytes && bytes !== 0) return '';
-  if (bytes >= 1024 * 1024) {
-    const mb = bytes / (1024 * 1024);
-    return `${fa(mb >= 10 ? Math.round(mb) : Math.round(mb * 10) / 10)} مگابایت`;
-  }
-  return bytes >= 1024 ? `${fa(Math.round(bytes / 1024))} کیلوبایت` : `${fa(bytes)} بایت`;
 }
 function isImageFile(file) { return String(localMime(file) ?? '').startsWith('image/'); }
 

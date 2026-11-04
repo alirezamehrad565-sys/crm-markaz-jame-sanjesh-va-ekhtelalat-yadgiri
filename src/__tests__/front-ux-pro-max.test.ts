@@ -64,14 +64,14 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('نسخه: سو 1.19.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.25\.01'/);
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1\.25\.02'/);
   });
 
   test('۱.۱۹.۰ — روز کاری: جریان پیوسته (هیچ اکشنی کل نما را re-render نمی‌کند)', () => {
     const wd = readFileSync(join(__dirname, '../../public/assets/js/views/working-day.js'), 'utf8');
     // هستهٔ جریان پیوسته: وصلهٔ جراحی به‌جای rerender
     expect(wd).toMatch(/function applyStudentStatusInBoard\(/);
-    expect(wd).toMatch(/function collapseRemove\(/);
+    expect(wd).toMatch(/import \{[^}]*collapseRemove[^}]*\} from '\.\.\/ui\.js'/); /* ۱.۲۵.۰۲ — تک‌منبع در ui.js */
     expect(wd).toMatch(/function refreshApptChips\(/);
     expect(wd).toMatch(/function markStaffAttendance\(/);
     expect(wd).toMatch(/function syncAssessmentsLight\(/);
