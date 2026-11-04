@@ -331,3 +331,24 @@ export function safeExternalHref(url) {
 export function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
+
+/* ۱.۲۵.۰۲ — برچسب خوانأ حجم فایل — یکسان‌سازی چهار نسخهٔ پراکندهٔ sizeLabel
+   (knowledge-admin/docs/clearbook فارسی؛ exercises لاتین). رفتار عیناً حفظ شد:
+   ورودی نامعتبر → رشتهٔ خالی؛ ≥۱MB با یک رقم اعشار (≥۱۰ گرد)؛ سپس KB گرد؛ وگرنه بایت. */
+export function sizeLabel(bytes) {
+  if (!bytes && bytes !== 0) return '';
+  if (bytes >= 1024 * 1024) {
+    const mb = bytes / (1024 * 1024);
+    return `${fa(mb >= 10 ? Math.round(mb) : Math.round(mb * 10) / 10)} مگابایت`;
+  }
+  return bytes >= 1024 ? `${fa(Math.round(bytes / 1024))} کیلوبایت` : `${fa(bytes)} بایت`;
+}
+
+export function sizeLabelEn(bytes) {
+  if (!bytes && bytes !== 0) return '';
+  if (bytes >= 1024 * 1024) {
+    const mb = bytes / (1024 * 1024);
+    return `${fa(mb >= 10 ? Math.round(mb) : Math.round(mb * 10) / 10)}MB`;
+  }
+  return bytes >= 1024 ? `${fa(Math.round(bytes / 1024))}KB` : `${fa(bytes)}B`;
+}

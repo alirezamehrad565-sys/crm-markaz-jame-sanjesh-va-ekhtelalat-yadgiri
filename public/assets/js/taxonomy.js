@@ -13,6 +13,25 @@
 import { el, icon, toast } from './ui.js';
 import { fa } from './format.js';
 
+/* ۱.۲۵.۰۲ — واژه‌نامهٔ نیاز ویژه — تک‌منبع مشترک (قبلاً عیناً در student-profile و special-needs
+   کپی شده بود و هر پراکندگی خطر واگرایی واژه‌ها بین پروفایل و صفحهٔ نیازهای ویژه بود).
+   کلیدها با enum سمت سرور (students.special_need_type/severity) هم‌بسته‌اند. */
+export const SPECIAL_NEED_TYPE_LABELS = {
+  dyslexia: 'نارساخوانی (دیس‌لکسی)',
+  dysgraphia: 'نارسانویسی (دیس‌گرافی)',
+  dyscalculia: 'نارساریاضی (دیس‌کالکولی)',
+  adhd: 'بیش‌فعالی و کم‌توجهی',
+  autism: 'طیف اتیسم',
+  speech_language: 'اختلال زبانی و بیان',
+  anxiety: 'اضطراب',
+  motor_coordination: 'اختلال هماهنگی حرکتی',
+  slow_learner: 'دیرآموز',
+  other: 'سایر'
+};
+
+export const SPECIAL_NEED_SEVERITY_LABELS = { mild: 'خفیف', moderate: 'متوسط', severe: 'شدید' };
+export const SPECIAL_NEED_SEVERITY_TONES = { mild: 'neutral', moderate: 'warning', severe: 'error' };
+
 /**
  * پیکر درختی واحد — خروجی زنده: focusSel/tagSel همان Setهای caller پر می‌شوند.
  * @param {Object} p

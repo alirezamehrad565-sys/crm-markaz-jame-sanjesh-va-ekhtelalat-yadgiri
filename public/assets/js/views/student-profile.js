@@ -2,6 +2,7 @@ import { api, qs } from '../api.js';
 import { fa, enDigits, formatJalaliDateTime, formatJalaliNumeric, formatStoredJalaliNumeric, STUDENT_GRADES, gradeLabel, isPlaceholderNid } from '../format.js';
 import { el, icon, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, errorState, tabs, callBadge, lockBtn } from '../ui.js';
 import { openStudentDelete } from '../student-delete.js'; // — حذف کامل پرونده (جریان واحد با فهرست دانش‌آموزان)
+import { SPECIAL_NEED_TYPE_LABELS, SPECIAL_NEED_SEVERITY_LABELS, SPECIAL_NEED_SEVERITY_TONES } from '../taxonomy.js'; /* ۱.۲۵.۰۲ — واژه‌نامهٔ مشترک نیاز ویژه */
 import { openTeacherManager } from '../student-teachers.js'; // — مدیریت معلم‌ها: افزودن/حذف (APIهای POST/DELETE معلم)
 import { session } from '../state.js';
 import { fetchTags, fetchStudentTags, tagChip, openTagEditor } from '../tagging.js';
@@ -42,21 +43,6 @@ const TIMELINE_FILTERS = [
   { key: 'messages', label: 'پیام‌ها', kinds: 'notification' },
   { key: 'profile', label: 'پرونده', kinds: 'student_created,case_status,special_need,tags,waitlist' }
 ];
-
-const SPECIAL_NEED_TYPE_LABELS = {
-  dyslexia: 'نارساخوانی (دیس‌لکسی)',
-  dysgraphia: 'نارسانویسی (دیس‌گرافی)',
-  dyscalculia: 'نارساریاضی (دیس‌کالکولی)',
-  adhd: 'بیش‌فعالی و کم‌توجهی',
-  autism: 'طیف اتیسم',
-  speech_language: 'اختلال زبانی و بیان',
-  anxiety: 'اضطراب',
-  motor_coordination: 'اختلال هماهنگی حرکتی',
-  slow_learner: 'دیرآموز',
-  other: 'سایر'
-};
-const SPECIAL_NEED_SEVERITY_LABELS = { mild: 'خفیف', moderate: 'متوسط', severe: 'شدید' };
-const SPECIAL_NEED_SEVERITY_TONES = { mild: 'neutral', moderate: 'warning', severe: 'error' };
 
 const TIMELINE_PAGE = 30;
 
