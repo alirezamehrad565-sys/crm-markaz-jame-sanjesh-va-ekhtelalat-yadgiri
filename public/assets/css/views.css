@@ -4509,3 +4509,11 @@ body.cb-printing #cb-print-root { display: block; }
   .sess-note__actions .select,
   .ot-skill__prompt .select { font-size: 16px; }
 }
+
+/* ─── ۱.۲۵.۰۳ — گزارش‌ها: جریان پیوسته — بدنهٔ داده هنگام تغییر بازه/پریست با پالس نرم محو می‌شود؛
+   نوار ابزار و پیکرهای جلالی دست‌نخورده می‌مانند (بدون اسکلت، بدون پرش، بدون بستن پیکر) ─── */
+.report-content { transition: opacity var(--fast) ease; }
+.report-content.is-loading { opacity: .55; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .report-content { transition: none; }
+}
