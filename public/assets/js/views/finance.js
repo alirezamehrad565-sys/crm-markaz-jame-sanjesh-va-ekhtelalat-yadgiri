@@ -20,74 +20,11 @@ import { session } from '../state.js';
 // بودجه و مالی مرکز (دولتی، تک‌بودجه)
 //  سه چیز و همین سه چیز: فاکتور هزینه، کمک/دونیشن خانواده‌ها، تراز بودجه
 //  دسترسی: فقط مدیر (روتر + سرور + گارد داخل ویو)
-//  هیچ فایل CSS جدیدی — استایل‌های fin-* همین‌جا تزریق می‌شود
+//  ۱.۲۵.۰۴ — استایل‌های fin-* به views.css بازگشت (توکن‌های طراحی، یک‌جای واحد)
 // ═══════════════════════════════════════════════════════════════
 
 const CATEGORIES = ['اجاره', 'حق‌الزحمه', 'ملزومات اداری', 'خدمات', 'تعمیرات', 'سایر'];
 const SEARCH_DEBOUNCE_MS = 280;
-
-// ─── استایل ماژول (یک‌بار در ابتدای ماژول تزریق می‌شود — شامل CSS چاپ اسکوپ‌شده) ───
-
-function ensureFinStyles() {
-  if (typeof document === 'undefined' || document.getElementById('fin-print-css')) return;
-  const style = document.createElement('style');
-  style.id = 'fin-print-css';
-  style.textContent = `
-/* ── نوار مصرف بودجه ── */
-.fin-bar { width: 100%; max-width: 420px; height: 10px; border-radius: var(--radius-full); background: var(--surface-3); overflow: hidden; }
-.fin-bar__fill { height: 100%; border-radius: var(--radius-full); background: var(--primary); transition: width .25s ease; }
-.fin-bar__meta { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; margin: var(--sp-2) 0 var(--sp-4); }
-.fin-bar__text { font-size: var(--fs-xs); color: var(--text-2); }
-
-/* ── چیدمان صفحه ── */
-.fin-headrow { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
-.fin-filters { display: flex; align-items: end; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-4); }
-.fin-filters .field { min-width: 150px; }
-.fin-panel-head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-3); }
-.fin-panel-head .input { max-width: 280px; }
-.fin-actions { display: flex; gap: var(--sp-1); justify-content: flex-end; white-space: nowrap; } /* 2px خام (S9-18) */
-.fin-empty-row td { text-align: center; color: var(--text-3); padding: var(--sp-5) var(--sp-3); }
-.fin-amount { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
-
-/* ── انتخابگر دانش‌آموز (دراپ‌داون کوچک) ── */
-.fin-sp { position: relative; }
-.fin-sp__dd { position: absolute; inset-inline: 0; top: calc(100% + var(--sp-1)); z-index: 30; background: var(--surface);
-  border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-2); max-height: 220px; overflow-y: auto; }
-.fin-sp__item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; text-align: start;
-  padding: 8px var(--sp-3); background: none; border: 0; border-bottom: 1px solid var(--border); cursor: pointer; font: inherit; color: var(--text); }
-.fin-sp__item:last-child { border-bottom: 0; }
-.fin-sp__item:hover { background: var(--surface-2); }
-.fin-sp__item small { color: var(--text-3); font-size: var(--fs-xs); }
-.fin-sp__empty { padding: 10px var(--sp-3); color: var(--text-3); font-size: var(--fs-sm); }
-.fin-sp__sel { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 4px 10px;
-  background: var(--primary-soft); color: var(--on-primary-soft); border-radius: var(--radius-full); font-size: var(--fs-sm); }
-.fin-sp__sel button { background: none; border: 0; color: inherit; cursor: pointer; font-size: var(--fs-md); line-height: 1; padding: 0 2px; } /* 15px خام */
-
-/* ── گزارش چاپی ── */
-.fin-report-host { display: none; }
-.fin-report { direction: rtl; font-family: inherit; color: var(--text, #111); background: #fff; padding: 4mm 6mm; }
-.fin-report__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 2px solid var(--text, #111); padding-bottom: 6px; margin-bottom: 10px; }
-.fin-report__title { font-size: 16pt; font-weight: 700; margin: 0; }
-.fin-report__meta { font-size: 9.5pt; color: #444; margin: 2px 0 14px; }
-.fin-report h3 { font-size: 11.5pt; margin: 14px 0 6px; }
-.fin-report table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
-.fin-report th, .fin-report td { border: 1px solid var(--border-strong); padding: 4px 7px; text-align: right; } /* #bbb به توکن مرز */
-.fin-report th { background: var(--surface-3); } /* هاردکد روشن در دارک‌تم جدول تیره را می‌شکست */
-.fin-report__sums { margin-top: 6px; }
-.fin-report__foot { margin-top: 16px; font-size: 8.5pt; color: #555; border-top: 1px solid #ccc; padding-top: 6px; }
-
-@media print {
-  @page { size: A4; margin: 14mm 12mm; }
-  body.fin-print-on > *:not(.fin-report-host) { display: none !important; }
-  body.fin-print-on .fin-report-host { display: block !important; }
-  .fin-report table { break-inside: auto; }
-  .fin-report tr { break-inside: avoid; }
-  .fin-report thead { display: table-header-group; }
-}
-`;
-  document.head.appendChild(style);
-}
-ensureFinStyles();
 
 // ─── قالب‌بندی ───
 
@@ -159,6 +96,10 @@ async function loadAll() {
 }
 
 async function refresh({ silent = false } = {}) {
+  /* ۱.۲۵.۰۴ — پالس نرم نواحی داده (هم‌زبان با report-content ۱.۲۵.۰۳): بدون اسکلت، بدون پرش؛
+     finally تضمین می‌کند حتی در خطا/بازگشت کهنه، پالس خاموش شود */
+  const busy = [_kpis, _barBlock, _panel].filter((n) => n && n.isConnected);
+  busy.forEach((n) => { n.classList.add('is-loading'); n.setAttribute('aria-busy', 'true'); });
   try {
     const fresh = await loadAll();
     if (!fresh) return; /* پاسخ کهنه — repaint با state بازهٔ قدیمی ممنوع */
@@ -166,6 +107,8 @@ async function refresh({ silent = false } = {}) {
     if (!silent) toast('به‌روزرسانی شد', 'success', 1800);
   } catch (err) {
     toastError(err);
+  } finally {
+    busy.forEach((n) => { n.classList.remove('is-loading'); n.removeAttribute('aria-busy'); });
   }
 }
 
@@ -982,9 +925,9 @@ export async function renderFinance(container, ctx) {
   });
 
   _tabCtl = buildTabs();
-  _kpis = el('div', { class: 'kpi-grid' });
-  _barBlock = el('div', {});
-  _panel = el('div', {});
+  _kpis = el('div', { class: 'kpi-grid data-zone' });
+  _barBlock = el('div', { class: 'data-zone' });
+  _panel = el('div', { class: 'data-zone' });
 
   const header = el('div', { class: 'page-head' },
     el('div', {},
