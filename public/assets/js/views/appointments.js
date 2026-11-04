@@ -18,6 +18,7 @@ import {
   timeToMinute,
   gridTimes,
   WEEKDAY_NAMES,
+  WEEKDAY_ABBRS, /* ۱.۲۷.۰ — نوار روز پیجر موبایل */
   gradeLabel
 } from '../format.js';
 import { el, icon, openModal, confirmModal, formModal, toast, toastError, statusBadge, emptyState, skeletonState, lockBtn } from '../ui.js';
@@ -37,6 +38,32 @@ const WORK_CAP = 21 * 60;    // — شیفت عصر فعال شد: بازهٔ ک
 let WORK_PPM = PPM_WORK_WEEK; // در ابتدای هر رندر بر اساس حالت تنظیم می‌شود
 
 let SCALE = null; // { start, end, workStart, workEnd, yOf(m), span(a, b), total }
+
+/* ۱.۲۷.۰ — آستانهٔ «پیجر روز» برای نمای هفته: گرید ۷ستونه به ۷×۱۱۲px + گاتر نیاز دارد؛
+   زیر ۸۶۰px (یا لمسی ≤۱۰۲۴) هفته له می‌شود یا اسکرول افقی می‌گیرد — به‌جای آن روزبه‌روز سوییپ می‌شود */
+function isMobileWeek() {
+  const mq = (q) => window.matchMedia?.(q)?.matches ?? false;
+  return mq('(max-width: 859px)') || (mq('(pointer: coarse)') && mq('(max-width: 1024px)'));
+}
+
+/* ۱.۲۷.۰ — عبور از آستانهٔ موبایل/دسکتاپ یا چرخش صفحه: بدنهٔ هفته دوباره رندر/تراز می‌شود
+   (یک شنوندهٔ ماندگار در سطح ماژول؛ گارد اتصال باعث می‌شود نمونه‌های کهنه بی‌اثر شوند) */
+let resizeTimer = null;
+let lastMobileWeek = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (!VIEW || !VIEW.container?.isConnected) return;
+    const mw = isMobileWeek();
+    if (state.viewMode !== 'week' || lastMobileWeek === null || lastMobileWeek === mw) {
+      if (state.viewMode === 'week' && mw) VIEW.pagerRelayout?.();
+      lastMobileWeek = mw;
+      return;
+    }
+    lastMobileWeek = mw;
+    VIEW.refreshGrid?.(); /* تبدیل گرید ↔ پیجر بدون اسکلت */
+  }, 160);
+});
 
 /* ۱.۲۰.۰ — جریان پیوستهٔ تقویم (الگوی ۱.۱۹.۰ روز کاری): هیچ اکشنی دیگر کل نما را re-render نمی‌کند.
    بعد از هر mutation فقط همان کارت روی گرید زنده پچ می‌شود (upsertApptCard/removeApptCard) و
@@ -138,11 +165,10 @@ export async function renderAppointments(container, ctx = {}) {
 
   if (!state.weekStart) state.weekStart = weekStartOf(tehranTodayYmd());
   if (!state.viewMode) {
-    /* UX-ممیزی: نمای هفتگی در موبایل = اسکرول افقی ~۳ برابر عرض صفحه؛
-       اولین ورود در دستگاه لمسی/باریک با «روز» شروع می‌شود (انتخاب کاربر در نشست حفظ می‌شود) */
-    const coarse = window.matchMedia?.('(pointer: coarse)')?.matches;
-    const narrow = window.matchMedia?.('(max-width: 640px)')?.matches;
-    state.viewMode = (coarse || narrow) ? 'day' : 'week';
+    /* ۱.۲۷.۰ — تصمیم کاربر: پیش‌فرض در همهٔ دستگاه‌ها «هفته» است؛ انتخاب دستی تا پایان نشست حفظ می‌شود.
+       موبایل هفته را به‌صورت «پیجر روز» می‌بیند (سوییپ چپ/راست، کارت‌های تمام-عرض) — نه هفت‌ستونِ له‌شده. */
+    try { state.viewMode = sessionStorage.getItem('cs.apptViewMode') === 'day' ? 'day' : 'week'; }
+    catch { state.viewMode = 'week'; }
   }
   if (!state.dayYmd) state.dayYmd = tehranTodayYmd();
   const isTherapist = session.user?.role === 'therapist';
@@ -171,7 +197,9 @@ export async function renderAppointments(container, ctx = {}) {
   }
 
   const weekEnd = addDaysYmd(state.weekStart, 6);
-  const range = { start: tehranDayRange(state.weekStart).start, end: tehranDayRange(weekEnd).end };
+  /* ۱.۲۷.۰ — پیجر موبایل همسایه‌ها را دارد: پنجرهٔ واکشی ±۱ روز تا سوییپ از مرز هفته همان‌جا بنشیند */
+  const padR = (state.viewMode === 'week' && isMobileWeek()) ? 1 : 0;
+  const range = { start: tehranDayRange(addDaysYmd(state.weekStart, -padR)).start, end: tehranDayRange(addDaysYmd(weekEnd, padR)).end };
   let appointments = [];
   try {
     const res = await api.get(`/api/appointments${qs({ from: range.start, to: range.end, staff_id: state.staffFilter || undefined })}`);
@@ -328,7 +356,7 @@ export async function renderAppointments(container, ctx = {}) {
     ...[
       bar,
       legendEl,
-      !isDay ? el('div', { class: 'swipe-hint is-week' }, icon('chevL', 14), 'برای دیدن روزهای دیگر بکشید — جابه‌جایی نوبت روی لمس از «ویرایش زمان» داخل جزئیات') : null,
+      !isDay ? el('div', { class: 'swipe-hint is-week' }, icon('chevL', 14), 'روز قبل/بعد را با کشیدن ببینید — جابه‌جایی نوبت از «ویرایش زمان» داخل جزئیات') : null,
       el('div', { class: 'grid-wrap' }, el('div', { class: 'grid-scroll' }, gridInner))
     ].filter(Boolean)
   );
@@ -340,7 +368,9 @@ export async function renderAppointments(container, ctx = {}) {
     const anchor = state.viewMode === 'day' ? state.dayYmd : state.weekStart;
     const ws = weekStartOf(anchor);
     const we = addDaysYmd(ws, 6);
-    return { ws, we, from: tehranDayRange(ws).start, to: tehranDayRange(we).end };
+    /* ۱.۲۷.۰ — پنجرهٔ واکشی ±۱ روز در حالت پیجر (سوییپ از مرز هفته) */
+    const pad = (state.viewMode === 'week' && isMobileWeek()) ? 1 : 0;
+    return { ws, we, from: tehranDayRange(addDaysYmd(ws, -pad)).start, to: tehranDayRange(addDaysYmd(we, pad)).end };
   }
 
   /* — تازه‌سازی بی‌صدای گرید: ناوبری روز/هفته/فیلتر و عملیات‌های انبوه فقط همین را صدا می‌زنند
@@ -370,15 +400,21 @@ export async function renderAppointments(container, ctx = {}) {
   /* بازسازی فقط بدنهٔ گرید + راهنمای رنگ (۱.۲۰.۰) */
   function drawGrid(appts) {
     const isDayNow = state.viewMode === 'day';
+    const usePager = !isDayNow && isMobileWeek(); /* ۱.۲۷.۰ — هفتهٔ موبایل = پیجر روز */
+    lastMobileWeek = usePager;
     VIEW.isDay = isDayNow;
+    VIEW.pagerRelayout = null;
     VIEW.countEls = new Map();
     const today = tehranTodayYmd();
     const byDay = groupByDay(appts);
+    const weekEndYmd0 = addDaysYmd(state.weekStart, 6);
 
     const visibleYmds = isDayNow
       ? [state.dayYmd]
       : Array.from({ length: 7 }, (_, i) => addDaysYmd(state.weekStart, i));
-    SCALE = buildScale(visibleYmds, isDayNow ? (byDay.get(state.dayYmd) ?? []) : appts);
+    /* ۱.۲۷.۰ — مقیاس عمودی فقط از نوبت‌های همین هفته (در حالت پیجر، واکشی ±۱ روز هم دارد) */
+    const weekItems = isDayNow ? appts : appts.filter((a) => { const y = isoToYmd(a.startAt); return y >= state.weekStart && y <= weekEndYmd0; });
+    SCALE = buildScale(visibleYmds, isDayNow ? (byDay.get(state.dayYmd) ?? []) : weekItems);
 
     /* شمارندهٔ زندهٔ هر سرستون — پچ‌های درجا فقط متن همین span را عوض می‌کنند */
     const countEl = (key, text) => {
@@ -433,6 +469,8 @@ export async function renderAppointments(container, ctx = {}) {
       const items = isOther ? leftovers : dayItems.filter((a) => a.staffId === s.id);
       gridInner.appendChild(buildDayColumn(state.dayYmd, items, state.dayYmd === today, { showStaffName: false, staff: s.id }));
     }
+  } else if (usePager) {
+    drawMobileWeek(byDay); /* ۱.۲۷.۰ — پیجر روز موبایل */
   } else {
     gridInner.style.gridTemplateColumns = '';
     const days = Array.from({ length: 7 }, (_, i) => addDaysYmd(state.weekStart, i));
@@ -471,7 +509,7 @@ export async function renderAppointments(container, ctx = {}) {
     }
   }
 
-  const visibleHues = new Set(appts.filter((a) => !state.staffFilter).map((a) => a.staffId));
+  const visibleHues = new Set(weekItems.filter((a) => !state.staffFilter).map((a) => a.staffId));
   const legend = !isTherapist && visibleHues.size > 1
     ? el(
         'div',
@@ -486,7 +524,165 @@ export async function renderAppointments(container, ctx = {}) {
   legendEl.replaceChildren(...(legend ? [legend] : []));
   }
 
+  /* ۱.۲۷.۰ — نمای هفتهٔ موبایل: پیجر روز (تجربهٔ GCal/Outlook موبایل)
+     • نوار روز: هفت دکمهٔ «حرف روز + شماره» — تاریخ فقط یک‌جا (رفع تکرار تاریخِ سربرگ)
+     • بدنه: یک روز در هر صفحه با کارت‌های تمام-عرض پشته‌ای زمانی — هیچ موقعیت‌دهی درصدی و هیچ هم‌پوشانی
+     • سوییپ راست = روز بعد، سوییپ چپ = روز قبل (آینهٔ RTL، هم‌جهت با فلش‌های نوار)؛ از مرز هفته هم می‌گذرد
+       (واکشی ±۱ روز؛ روز مرزیِ بیرون از پنجره اسکلت می‌گیرد و با فرود روی آن داده تازه می‌آید) */
+  function drawMobileWeek(byDay) {
+    const today = tehranTodayYmd();
+    const weekEndYmd2 = addDaysYmd(state.weekStart, 6);
+    if (!(state.dayYmd >= state.weekStart && state.dayYmd <= weekEndYmd2)) {
+      state.dayYmd = (today >= state.weekStart && today <= weekEndYmd2) ? today : state.weekStart;
+    }
+    const days7 = Array.from({ length: 7 }, (_, i) => addDaysYmd(state.weekStart, i));
+
+    /* — نوار روز: هفت دکمه (حرف روز + شمارهٔ روز در همان دکمه + شمارندهٔ کوچک) */
+    const strip = el('div', { class: 'cal-strip', role: 'tablist', 'aria-label': 'روزهای هفته' });
+    const stripBtns = new Map();
+    for (const ymd of days7) {
+      const wd = iranianWeekdayOfYmd(ymd);
+      const n = (byDay.get(ymd) ?? []).length;
+      const btn = el('button', {
+        class: `cal-strip__day${ymd === today ? ' is-today' : ''}`,
+        type: 'button', role: 'tab',
+        'aria-label': `${WEEKDAY_NAMES[wd]} ${formatJalaliShort(ymd)} — ${fa(n)} نوبت`,
+        dataset: { ymd },
+        onclick: () => goToDate(ymd)
+      },
+        el('span', { class: 'cal-strip__wd' }, WEEKDAY_ABBRS[wd]),
+        el('span', { class: 'cal-strip__num' }, formatJalaliShort(ymd).split(' ')[0]),
+        n > 0 ? el('span', { class: 'cal-strip__n' }, fa(n)) : null
+      );
+      stripBtns.set(ymd, btn);
+      strip.appendChild(btn);
+    }
+
+    const pager = el('div', { class: 'cal-pager' });
+    const track = el('div', { class: 'cal-track' });
+    pager.appendChild(track);
+    gridInner.style.gridTemplateColumns = '';
+    gridInner.classList.add('is-pager');
+    gridInner.replaceChildren(strip, pager);
+
+    const known = (ymd) => byDay.has(ymd) || (ymd >= state.weekStart && ymd <= weekEndYmd2);
+
+    function pageFor(ymd) {
+      const page = el('div', { class: 'cal-page', dataset: { ymd } });
+      if (!known(ymd)) {
+        page.appendChild(el('div', { class: 'cal-page__load' }, 'بارگذاری روز…'));
+        return page;
+      }
+      const items = byDay.get(ymd) ?? [];
+      if (items.length === 0) {
+        page.appendChild(el('div', { class: 'cal-empty' }, icon('calendar', 22), 'نوبتی در این روز ثبت نشده'));
+        return page;
+      }
+      for (const a of items) page.appendChild(mobileApptCard(a, ymd));
+      return page;
+    }
+
+    /* چیدمان فیزیکی RTL: سه صفحه [prev، cur، next] — prev راست‌ترین، next چپ‌ترین.
+       نمایش cur = translateX(-W)؛ رفتن به بعدی = 0 (ترک به راست)؛ قبلی = -2W (ترک به چپ) */
+    let W = Math.max(pager.clientWidth || 0, 1);
+    let pos = -W;
+    let animating = false;
+
+    function setPos(x, animate) {
+      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+      track.style.transition = animate && !reduce ? 'transform var(--normal)' : 'none';
+      track.style.transform = `translateX(${x}px)`;
+    }
+
+    function syncStrip() {
+      for (const [ymd, btn] of stripBtns) {
+        const on = ymd === state.dayYmd;
+        btn.classList.toggle('is-active', on);
+        btn.setAttribute('aria-selected', String(on));
+      }
+    }
+
+    let prevYmd = null, nextYmd = null;
+    function buildPages(center) {
+      prevYmd = addDaysYmd(center, -1);
+      nextYmd = addDaysYmd(center, 1);
+      W = Math.max(pager.clientWidth || 0, 1);
+      track.replaceChildren(pageFor(prevYmd), pageFor(center), pageFor(nextYmd));
+      pos = -W;
+      setPos(pos, false);
+      syncStrip();
+    }
+
+    function go(next) {
+      if (animating || !prevYmd) return;
+      const target = next ? nextYmd : prevYmd;
+      const targetX = next ? 0 : -2 * W;
+      animating = true;
+      setPos(targetX, true);
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        animating = false;
+        state.dayYmd = target;
+        const ws2 = weekStartOf(target);
+        if (ws2 !== state.weekStart) {
+          state.weekStart = ws2;
+          refreshGrid(); /* هفتهٔ تازه — پیجر روی روز جدید وسط می‌شود؛ برچسب هفته هم درجا عوض می‌شود */
+        } else {
+          buildPages(state.dayYmd);
+          if (!known(state.dayYmd)) refreshGrid(); /* فرود روی روز مرزیِ بیرون از پنجرهٔ داده */
+        }
+      };
+      track.addEventListener('transitionend', finish, { once: true });
+      setTimeout(finish, 400); /* بیمه: تب مخفی یا ترنزیشن اجرانشده */
+    }
+
+    function goToDate(ymd) {
+      if (animating || ymd === state.dayYmd) return;
+      if (ymd === nextYmd) return go(true);
+      if (ymd === prevYmd) return go(false);
+      state.dayYmd = ymd;
+      buildPages(ymd);
+      if (!known(ymd)) refreshGrid();
+    }
+
+    /* — سوییپ لمسی؛ اسکرول عمودی به مرورگر واگذار می‌شود (touch-action: pan-y روی .cal-pager) */
+    let drag = null;
+    pager.addEventListener('touchstart', (e) => {
+      if (animating || e.touches.length !== 1) return;
+      drag = { x: e.touches[0].clientX, y: e.touches[0].clientY, dx: 0, locked: false };
+    }, { passive: true });
+    pager.addEventListener('touchmove', (e) => {
+      if (!drag) return;
+      const dx = e.touches[0].clientX - drag.x;
+      const dy = e.touches[0].clientY - drag.y;
+      if (!drag.locked) {
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        drag.locked = true;
+        if (Math.abs(dy) > Math.abs(dx) * 1.2) { drag = null; return; } /* قصد عمودی — مداخله نمی‌کنیم */
+      }
+      drag.dx = dx;
+      track.style.transition = 'none';
+      track.style.transform = `translateX(${pos + dx}px)`;
+    }, { passive: true });
+    pager.addEventListener('touchend', () => {
+      if (!drag) return;
+      const { dx } = drag;
+      drag = null;
+      if (dx <= -56) go(false);       /* کشیدن به چپ = روز قبل */
+      else if (dx >= 56) go(true);    /* کشیدن به راست = روز بعد */
+      else setPos(pos, true);         /* برگشت فنری */
+    });
+    pager.addEventListener('touchcancel', () => { drag = null; if (!animating) setPos(pos, true); });
+
+    VIEW.pagerRelayout = () => { if (!animating && !drag) buildPages(state.dayYmd); };
+
+    buildPages(state.dayYmd);
+  }
+
   function autoScrollToWorkingHours() {
+    if (state.viewMode === 'week' && isMobileWeek()) return; /* ۱.۲۷.۰ — پیجر گاتر زمان ندارد */
     if (window.scrollY > 120) return; // بعد از عملیات‌های درون‌صفحه صفحه را نجاتک
     const today = tehranTodayYmd();
     const weekday = iranianWeekdayOfYmd(state.viewMode === 'day' ? state.dayYmd : today);
@@ -507,6 +703,7 @@ export async function renderAppointments(container, ctx = {}) {
   function setMode(m) {
     if (state.viewMode === m) return;
     state.viewMode = m;
+    try { sessionStorage.setItem('cs.apptViewMode', m); } catch { /* خصوصی */ } /* ۱.۲۷.۰ — انتخاب نشست */
     if (m === 'day') {
       const todayYmd = tehranTodayYmd();
       const weekEndYmd = addDaysYmd(state.weekStart, 6);
@@ -651,6 +848,49 @@ function apptOnGrid(a, ymd, opts = {}) {
     card.classList.add('is-dragging');
   });
   card.addEventListener('dragend', () => card.classList.remove('is-dragging'));
+
+  return card;
+}
+
+/* ۱.۲۷.۰ — کارت تمام-عرض پیجر موبایل: پشته‌ای زمانی، بدون موقعیت‌دهی درصدی — هم‌پوشانی از خودش درنمی‌آید.
+   همان زبان رنگ/وضعیت گرید (hueClass + apptStatusClass)؛ لمس بزرگ‌تر: زمان تا مدت، نام دانش‌آموزان، درمانگر + نوع جلسه */
+function mobileApptCard(a, ymd) {
+  const students = (a.students ?? []).map((s) => state.studentNames.get(s.studentId) ?? 'دانش‌آموز');
+  const stuLabel = students.length === 0
+    ? 'بدون دانش‌آموز'
+    : students.length <= 2 ? students.join('، ') : `${students[0]}، ${students[1]} +${fa(students.length - 2)}`;
+  const completed = attStateOf(a) === 'completed';
+  const dur = Math.max(0, Math.round((Date.parse(a.endAt) - Date.parse(a.startAt)) / 60000));
+  const titleLines = [
+    `${fa(tehranTimeOfIso(a.startAt))} تا ${fa(tehranTimeOfIso(a.endAt))}`,
+    staffName(a.staffId),
+    ...((a.students ?? []).length > 0
+      ? (a.students ?? []).map((s) => `${state.studentNames.get(s.studentId) ?? 'دانش‌آموز'} — ${STU_ATT_LABEL[s.attendance] ?? s.attendance ?? 'در انتظار'}`)
+      : ['بدون دانش‌آموز'])
+  ];
+
+  const card = el('div', {
+    class: `cal-appt${apptStatusClass(a)} ${hueClass(a.staffId)}`,
+    dataset: { id: a.id, version: String(a.version), ymd, start: a.startAt },
+    role: 'button',
+    tabindex: '0',
+    title: titleLines.join('\n'),
+    'aria-label': titleLines.join(' — ')
+  },
+    el('span', { class: 'cal-appt__time' },
+      completed ? el('span', { class: 'appt-tick' }, icon('check', 10)) : null,
+      a.note ? el('span', { class: 'grid-appt__noted', title: a.note }) : null,
+      `${fa(tehranTimeOfIso(a.startAt))} تا ${fa(tehranTimeOfIso(a.endAt))}`,
+      el('span', { class: 'cal-appt__dur' }, durationLabel(dur))
+    ),
+    el('span', { class: 'cal-appt__stu' }, stuLabel),
+    el('span', { class: 'cal-appt__staff' }, hueDot(a.staffId, 8), staffName(a.staffId), sessionTypeChip(a.sessionType))
+  );
+
+  card.addEventListener('click', () => openDetailModal(a.id));
+  card.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetailModal(a.id); }
+  });
 
   return card;
 }
