@@ -1,6 +1,6 @@
 import { api, qs } from '../api.js';
 import { fa, STUDENT_GRADES, gradeLabel, tehranTimeOfIso } from '../format.js'; // ساعت تهران برای برچسب زمان محاسبه
-import { el, icon, toast, openModal, statusBadge, dataTable, loadingState, skeletonState, emptyState, errorState } from '../ui.js'; /* toast برای S9-24 */
+import { el, icon, toast, openModal, statusBadge, dataTable, loadingState, skeletonState, emptyState, errorState } from '../ui.js';
 import { session } from '../state.js';
 import { SPECIAL_NEED_TYPE_LABELS, SPECIAL_NEED_SEVERITY_LABELS, SPECIAL_NEED_SEVERITY_TONES } from '../taxonomy.js'; /* ۱.۲۵.۰۲ */
 
@@ -23,43 +23,31 @@ const METRICS = [
   { key: 'attention', label: 'نیازمند توجه' }
 ];
 
-let state = { schoolId: '', grade: '', severity: '', metric: 'count' };
+const state = { schoolId: '', grade: '', severity: '', metric: 'count' };
 
-let snGen = 0; // F10: گارد نسل — پاسخ کهنهٔ فیلترهای سریع نباید جایگزین محتوا شود (الگوی waitlist/progress-board)
+let snGen = 0; // F10: گارد نسل — پاسخ کهنهٔ فیلترهای سریع نباید جایگزین محتوا شود (الگوی reports/waitlist)
 
+/* ۱.۲۵.۰۴ جریان پیوسته (زبان ۱.۲۵.۰۳ گزارش‌ها): شِل نما — سربرگ، فیلترها و چیپ‌های سنجه —
+   یک‌بار مونت می‌شود و تغییر فیلتر فقط ناحیهٔ داده (data-zone) را با پالس نرم تازه می‌کند.
+   سوییچ سنجهٔ heatmap کاملاً سمت کلاینت است (همان گرید، تجمیع دیگر) — بدون هیچ درخواستی، درجا.
+   قبلاً هر فیلتر/سنجه کل نما را با اسکلت بازسازی می‌کرد: سلکت بسته می‌شد، فوکوس می‌پرید
+   و فهرست مدارس هم با هر کلیک دوباره واکشی می‌شد. */
 export async function renderSpecialNeeds(container) {
   const myGen = ++snGen;
-  container.replaceChildren(skeletonState('table', 5));
+  container.replaceChildren(skeletonState('table', 5)); // اسکلت فقط برای سوارشدن نما (ناوبری)
 
-  let grid;
   let schools = [];
   try {
-    const [gridRes, schoolsRes] = await Promise.all([
-      api.get(`/api/special-needs/grid${qs({
-        school_id: state.schoolId || undefined,
-        grade: state.grade || undefined,
-        severity: state.severity || undefined
-      })}`),
-      api.get('/api/schools?active=true').catch(() => ({ data: [] }))
-    ]);
-    grid = gridRes.data;
-    schools = schoolsRes.data;
-  } catch (err) {
+    const schoolsRes = await api.get('/api/schools?active=true');
     if (myGen !== snGen) return; // F10: پاسخ کهنه
-    container.replaceChildren(errorState(err, () => renderSpecialNeeds(container)));
-    return;
-  }
-  if (myGen !== snGen) return; // F10: پاسخ کهنه — کاربر فیلتر دیگری زده
+    schools = schoolsRes.data ?? [];
+  } catch { /* فهرست مدرسه نیامد — فیلتر مدرسه خالی می‌ماند؛ گرید مستقل است */ }
 
-  const canEdit = session.user && ['manager', 'secretary'].includes(session.user.role);
+  const generatedAtBadge = el('span', { class: 'badge badge--neutral', title: 'زمان محاسبه' });
 
-  const sev = grid.overall.bySeverity ?? {};
-  const kpis = el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-5)' } },
-    kpi('شناسایی‌شده', fa(grid.overall.special), `از ${fa(grid.overall.total)} دانش‌آموز فعال`, 'primary'),
-    kpi('نیازمند توجه', fa(grid.overall.attention), 'بر اساس قواعد توجه', grid.overall.attention > 0 ? 'warning' : 'neutral'),
-    kpi('خفیف', fa(sev.mild ?? 0), 'شدت نیاز ویژه', 'neutral'),
-    kpi('متوسط', fa(sev.moderate ?? 0), 'شدت نیاز ویژه', 'accent'),
-    kpi('شدید', fa(sev.severe ?? 0), 'شدت نیاز ویژه', 'error')
+  const pageHead = el('div', { class: 'page-head' },
+    el('div', { class: 'page-head__title' }, 'نیازهای ویژه'),
+    generatedAtBadge
   );
 
   const select = (label, value, options, onchange) => {
@@ -69,52 +57,110 @@ export async function renderSpecialNeeds(container) {
     return el('label', { class: 'sn-filter' }, el('span', { class: 'cell-sub' }, label), sel);
   };
 
+  const metricGroup = el('div', { class: 'sn-metrics', role: 'group', 'aria-label': 'سنجهٔ heatmap' },
+    ...METRICS.map((m) => el('button', {
+      class: `chip${state.metric === m.key ? ' is-active' : ''}`,
+      type: 'button',
+      dataset: { metric: m.key },
+      'aria-pressed': String(state.metric === m.key), /* S9-26 */
+      onclick: () => setMetric(m.key)
+    }, m.label))
+  );
+
+  function setMetric(key) {
+    if (state.metric === key) return; // دوبارکلیک بی‌اثر
+    state.metric = key;
+    metricGroup.querySelectorAll('.chip').forEach((c) => {
+      const on = c.dataset.metric === key;
+      c.classList.toggle('is-active', on);
+      c.setAttribute('aria-pressed', String(on));
+    });
+    repaintData(); // سوییچ سنجه هیچ درخواستی ندارد — از گرید کش‌شده تجمیع می‌شود
+  }
+
   const toolbar = el('div', { class: 'toolbar' },
     select('مدرسه', state.schoolId, [
       { value: '', label: 'همه مدارس' },
       ...schools.map((s) => ({ value: s.id, label: s.name }))
-    ], (v) => { state.schoolId = v; renderSpecialNeeds(container); }),
+    ], (v) => { state.schoolId = v; load(); }),
     select('پایه', state.grade, [
       { value: '', label: 'همه پایه‌ها' },
       ...STUDENT_GRADES.map((g) => ({ value: g, label: g }))
-    ], (v) => { state.grade = v; renderSpecialNeeds(container); }),
+    ], (v) => { state.grade = v; load(); }),
     select('شدت', state.severity, [
       { value: '', label: 'همه شدت‌ها' },
       ...Object.entries(SEVERITY_LABELS).map(([v, l]) => ({ value: v, label: l }))
-    ], (v) => { state.severity = v; renderSpecialNeeds(container); }),
+    ], (v) => { state.severity = v; load(); }),
     el('div', { class: 'spacer' }),
-    el('div', { class: 'sn-metrics', role: 'group', 'aria-label': 'سنجهٔ heatmap' },
-      ...METRICS.map((m) => el('button', {
-        class: `chip${state.metric === m.key ? ' is-active' : ''}`,
-        type: 'button',
-        'aria-pressed': String(state.metric === m.key), /* S9-26 */
-        onclick: () => { state.metric = m.key; renderSpecialNeeds(container); }
-      }, m.label))
-    )
+    metricGroup
   );
 
-  const maxVal = maxCellMetric(grid);
-  const heatTable = buildHeatmap(grid, maxVal);
+  const dataZone = el('div', { class: 'data-zone', style: { marginTop: 'var(--sp-4)' } });
 
-  const attentionCard = buildAttentionCard(grid.attention, canEdit, container);
+  container.replaceChildren(pageHead, toolbar, dataZone);
 
-  container.replaceChildren(
-    el('div', { class: 'page-head' },
-      el('div', { class: 'page-head__title' }, 'نیازهای ویژه'),
-      grid.generatedAt
-        ? el('span', { class: 'badge badge--neutral', title: 'زمان محاسبه' }, `محاسبه: ${fa(tehranTimeOfIso(grid.generatedAt))}`) /* S9-23: ساعت با پیشوند؛ رکورد خالی بج رندر نمی‌کند */
-        : null,
-    ),
-    kpis,
-    toolbar,
-    el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
+  let grid = null; // گرید کش‌شده برای سوییچ بی‌درخواستِ سنجه
+
+  async function load(parentGen = null) {
+    const myGen = parentGen ?? ++snGen;
+    dataZone.setAttribute('aria-busy', 'true');
+    dataZone.classList.add('is-loading');
+    let fresh;
+    try {
+      fresh = (await api.get(`/api/special-needs/grid${qs({
+        school_id: state.schoolId || undefined,
+        grade: state.grade || undefined,
+        severity: state.severity || undefined
+      })}`)).data;
+    } catch (err) {
+      if (myGen !== snGen || !dataZone.isConnected) return; // F10: پاسخ کهنه
+      dataZone.classList.remove('is-loading');
+      dataZone.removeAttribute('aria-busy');
+      dataZone.replaceChildren(errorState(err, () => load()));
+      return;
+    }
+    if (myGen !== snGen || !dataZone.isConnected) return; // F10: پاسخ کهنه — فیلتر جدیدتری در پرواز است
+    dataZone.classList.remove('is-loading');
+    dataZone.removeAttribute('aria-busy');
+    grid = fresh;
+    generatedAtBadge.textContent = grid.generatedAt
+      ? `محاسبه: ${fa(tehranTimeOfIso(grid.generatedAt))}` /* S9-23: ساعت با پیشوند */
+      : '';
+    dataZone.replaceChildren(buildDataBody(grid));
+  }
+
+  function repaintData() {
+    if (!grid || !dataZone.isConnected) return;
+    dataZone.replaceChildren(buildDataBody(grid));
+  }
+
+  await load(myGen);
+}
+
+function buildDataBody(g) {
+  const maxVal = maxCellMetric(g);
+  const heatTable = buildHeatmap(g, maxVal);
+  return el('div', {},
+    buildKpis(g),
+    el('div', { class: 'card' },
       el('div', { class: 'card__head' },
         el('div', { class: 'card__title' }, 'گرید مدرسه × پایه'),
         el('span', { class: 'cell-sub' }, metricHint(state.metric))
       ),
       el('div', { class: 'card__body card__body--flush', style: { overflowX: 'auto' } }, heatTable)
     ),
-    attentionCard
+    buildAttentionCard(g.attention)
+  );
+}
+
+function buildKpis(g) {
+  const sev = g.overall.bySeverity ?? {};
+  return el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-5)' } },
+    kpi('شناسایی‌شده', fa(g.overall.special), `از ${fa(g.overall.total)} دانش‌آموز فعال`, 'primary'),
+    kpi('نیازمند توجه', fa(g.overall.attention), 'بر اساس قواعد توجه', g.overall.attention > 0 ? 'warning' : 'neutral'),
+    kpi('خفیف', fa(sev.mild ?? 0), 'شدت نیاز ویژه', 'neutral'),
+    kpi('متوسط', fa(sev.moderate ?? 0), 'شدت نیاز ویژه', 'accent'),
+    kpi('شدید', fa(sev.severe ?? 0), 'شدت نیاز ویژه', 'error')
   );
 }
 
@@ -267,7 +313,7 @@ async function loadStudents(listBox, schoolId, grade, close) {
   }
 }
 
-function buildAttentionCard(attention, canEdit, container) {
+function buildAttentionCard(attention) {
   const list = attention.length === 0
     ? emptyState({
         iconName: 'check',
