@@ -1,6 +1,6 @@
 import { api, qs } from '../api.js';
 import { fa, STUDENT_GRADES, gradeLabel, tehranTimeOfIso } from '../format.js'; // ساعت تهران برای برچسب زمان محاسبه
-import { el, icon, toast, openModal, statusBadge, dataTable, loadingState, skeletonState, emptyState, errorState } from '../ui.js';
+import { el, icon, toast, openModal, statusBadge, dataTable, loadingState, skeletonState, emptyState, errorState, kpi } from '../ui.js'; /* ۱.۲۵.۰۵ — kpi تک‌منبع */
 import { session } from '../state.js';
 import { SPECIAL_NEED_TYPE_LABELS, SPECIAL_NEED_SEVERITY_LABELS, SPECIAL_NEED_SEVERITY_TONES } from '../taxonomy.js'; /* ۱.۲۵.۰۲ */
 
@@ -161,14 +161,6 @@ function buildKpis(g) {
     kpi('خفیف', fa(sev.mild ?? 0), 'شدت نیاز ویژه', 'neutral'),
     kpi('متوسط', fa(sev.moderate ?? 0), 'شدت نیاز ویژه', 'accent'),
     kpi('شدید', fa(sev.severe ?? 0), 'شدت نیاز ویژه', 'error')
-  );
-}
-
-function kpi(label, value, hint, tone) {
-  return el('div', { class: `kpi kpi--${tone}` }, // data-tone قاعدهٔ CSS نداشت؛ الگوی finance.js
-    el('div', { class: 'kpi__value' }, value),
-    el('div', { class: 'kpi__label' }, label),
-    el('div', { class: 'kpi__hint' }, hint)
   );
 }
 

@@ -1,4 +1,4 @@
-import { el, markScrollable } from './ui.js';
+import { el, markScrollable, prefersReducedMotion } from './ui.js'; // ۱.۲۵.۰۵ — countUp/prefersReducedMotion به ui.js رفت (kpi مشترک؛ پرهیز از چرخهٔ import)
 import { fa } from './format.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -10,10 +10,6 @@ function svg(tag, attrs = {}) {
     node.setAttribute(k, String(v));
   }
   return node;
-}
-
-function prefersReducedMotion() {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 /* E3: ساخت نمودارهای زیرِ فولد تعویق می‌شود. wrap با ارتفاع رزروشده (minHeight) فوراً
@@ -313,26 +309,6 @@ export function hbars({ items, valueFormatter = (v) => fa(v) }) { // پیش‌ف
     });
   }
   return wrap;
-}
-
-export function countUp(el_, value, { duration = 700, formatter = (v) => String(v) } = {}) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    el_.textContent = formatter(value);
-    return;
-  }
-  if (prefersReducedMotion()) {
-    el_.textContent = formatter(value);
-    return;
-  }
-  const start = performance.now();
-  const from = 0;
-  function frame(t) {
-    const p = Math.min((t - start) / duration, 1);
-    const eased = 1 - Math.pow(1 - p, 3); // منحنی حرکت easeOutCubic
-    el_.textContent = formatter(Math.round(from + (value - from) * eased));
-    if (p < 1) requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
 }
 
 export function lineChart({ points, yMin = 0, yMax = null, height = 190, valueFormatter = (v) => fa(Math.round(v)), threshold = null, goalLine = null, ticks = null }) { // goalLine · ticks اختیاری (C21)

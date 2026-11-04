@@ -27,74 +27,6 @@ const DOC_CATEGORIES = [
 const CATEGORY_LABEL = Object.fromEntries(DOC_CATEGORIES.map((c) => [c.key, c.label]));
 const CATEGORY_TONE = Object.fromEntries(DOC_CATEGORIES.map((c) => [c.key, c.tone]));
 
-// ─── استایل اسکوپ‌شدهٔ ماژول — یک‌بار با id یکتا تزریق می‌شود ───
-
-const STYLE_ID = 'docs-view-styles';
-
-function ensureStyles() {
-  if (document.getElementById(STYLE_ID)) return;
-  const style = el('style', { id: STYLE_ID }, `
-.docs-root { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
-.docs-toolbar { display: flex; flex-direction: column; gap: var(--sp-3); }
-.docs-tools-row { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-width: 0; }
-.docs-search { max-width: 340px; width: 100%; }
-.docs-chips { display: flex; gap: var(--sp-1); flex-wrap: wrap; align-items: center; }
-.docs-chips__label { font-size: var(--fs-xs); color: var(--text-3); font-weight: 600; }
-.docs-list { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
-.docs-card { display: flex; flex-direction: column; gap: var(--sp-2); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--sp-4); cursor: pointer; text-align: start; width: 100%; font: inherit; color: inherit; transition: border-color var(--fast); }
-.docs-card:focus-visible, .docs-file:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.docs-card:hover { border-color: var(--primary); }
-.docs-card__head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-width: 0; }
-.docs-card__title { font-size: var(--fs-md); font-weight: 700; line-height: var(--lh-heading, 1.4); margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.docs-card__spacer { margin-inline-start: auto; }
-.docs-cat { display: inline-flex; align-items: center; font-size: var(--fs-xs); font-weight: 700; padding: 3px 10px; border-radius: var(--radius-full); white-space: nowrap; }
-.docs-cat--sanjesh { background: var(--primary-soft); color: var(--on-primary-soft); }
-.docs-cat--ekhtelalat { background: color-mix(in srgb, var(--sick, #9333EA) 13%, transparent); color: var(--sick, #9333EA); }
-.docs-cat--hesabdari { background: var(--warning-soft); color: var(--warning); }
-.docs-cat--bazdidha { background: var(--success-soft); color: var(--success); }
-.docs-cat--tablo-mohr-poster { background: var(--accent-soft); color: var(--on-accent-soft); }
-.docs-cat--ayinnameha { background: var(--error-soft); color: var(--error); }
-.docs-cat--other { background: var(--surface-3); color: var(--text-2); }
-.docs-tags { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
-.docs-tag { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-full); padding: 2px 9px; white-space: nowrap; }
-.docs-fmt { display: inline-flex; align-items: center; font-size: var(--fs-2xs); font-weight: 800; letter-spacing: 0; padding: 2px 7px; border-radius: var(--radius-xs); white-space: nowrap; } /* S8-20: کف ۱۲px؛ اتصال حروف برای برچسب فارسی */
-.docs-fmt--lat { letter-spacing: 0.3px; } /* S8-20: فاصلهٔ حروف فقط برای برچسب لاتین */
-.docs-fmt--pdf { background: var(--error-soft); color: var(--error); }
-.docs-fmt--img { background: var(--success-soft); color: var(--success); }
-.docs-fmt--doc { background: var(--primary-soft); color: var(--on-primary-soft); }
-.docs-fmt--xls { background: var(--success-soft); color: var(--success); }
-.docs-fmt--gen { background: var(--surface-3); color: var(--text-2); }
-.docs-meta { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; font-size: var(--fs-xs); color: var(--text-3); min-width: 0; }
-.docs-meta .docs-fmt { flex-shrink: 0; }
-.docs-desc { margin: 0; color: var(--text-2); font-size: var(--fs-sm); line-height: var(--lh-body, 1.8); overflow-wrap: anywhere; }
-.docs-filelist { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
-.docs-file { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); min-width: 0; }
-.docs-file:last-child { border-bottom: none; }
-.docs-file__name { font-weight: 600; font-size: var(--fs-sm); min-width: 0; overflow-wrap: anywhere; }
-.docs-file__actions { display: flex; gap: var(--sp-1); margin-inline-start: auto; flex-wrap: wrap; }
-.docs-file__spacer { margin-inline-start: auto; }
-.docs-detail { display: flex; flex-direction: column; gap: var(--sp-3); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--sp-5); min-width: 0; }
-.docs-detail__head { display: flex; align-items: flex-start; gap: var(--sp-2); flex-wrap: wrap; }
-.docs-detail__title { font-size: var(--fs-lg); font-weight: 700; margin: 0; line-height: var(--lh-heading, 1.4); min-width: 0; overflow-wrap: anywhere; }
-.docs-crumb { display: inline-flex; align-items: center; gap: 4px; background: none; border: none; color: var(--primary); font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; padding: var(--sp-1) 0; }
-.docs-crumb:hover { text-decoration: underline; }
-.docs-section-title { font-size: var(--fs-sm); font-weight: 700; color: var(--text-2); margin: var(--sp-2) 0 var(--sp-2); }
-.docs-uploadlist { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-2); }
-.docs-uploadlist__row { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; font-size: var(--fs-xs); color: var(--text-2); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3); min-width: 0; }
-.docs-uploadlist__name { min-width: 0; overflow-wrap: anywhere; font-weight: 600; color: var(--text); }
-.docs-empty-inline { padding: var(--sp-5); text-align: center; color: var(--text-3); font-size: var(--fs-sm); }
-@media (max-width: 640px) {
-  .docs-tools-row { align-items: stretch; flex-direction: column; }
-  .docs-search { max-width: none; }
-  .docs-card { padding: var(--sp-3); }
-  .docs-file { padding: var(--sp-3); }
-  .docs-file__actions { margin-inline-start: 0; width: 100%; }
-  .docs-detail { padding: var(--sp-4); }
-}
-`);
-
-  document.head.appendChild(style);
-}
 
 // ─── کمک‌های محلی ───
 
@@ -436,7 +368,6 @@ async function deleteFileWithConfirm(doc, file, onDone) {
 // ─── ویو: لیست نمون‌برگ‌ها ───
 
 export async function renderDocsList(container, ctx) {
-  ensureStyles();
   const state = {
     q: String(ctx?.query?.q ?? ''),
     category: String(ctx?.query?.category ?? 'all')
@@ -609,7 +540,6 @@ export async function renderDocsList(container, ctx) {
 // ─── ویو: جزئیات سند ───
 
 export async function renderDocsDetail(container, ctx, opts = {}) {
-  ensureStyles();
   const docId = String(ctx?.params?.id ?? '');
 
   // — crumb دستی بازگشت به لیست
