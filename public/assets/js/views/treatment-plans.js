@@ -59,6 +59,12 @@ function openEditor(tpl, targets, { onSaved }) {
           el('span', { class: 'tpl-session__num' }, ''),
           ttlPreview,
           el('span', { class: 'tpl-session__chev', 'aria-hidden': 'true' }, icon('chevL', 14))),
+        /* ۱.۲۵.۱۰ — دکمهٔ بالا/پایین: ترتیب جلسه‌ها روی لمسی هم قابل عوض‌کردن است
+           (درگ HTML5 روی صفحهٔ لمسی کار نمی‌کند)؛ همان ترتیب DOM/ذخیره را عوض می‌کنند. */
+        el('button', { class: 'btn btn--ghost btn--sm tpl-session__move', type: 'button', title: 'انتقال به بالا', 'aria-label': `انتقال جلسه «${titleInput.value.trim() || 'بدون عنوان'}» به بالا`,
+          onclick: () => { const p = block.previousElementSibling; if (p) { sessionBlocks.insertBefore(block, p); renumber(); } } }, icon('chevU', 13)),
+        el('button', { class: 'btn btn--ghost btn--sm tpl-session__move', type: 'button', title: 'انتقال به پایین', 'aria-label': `انتقال جلسه «${titleInput.value.trim() || 'بدون عنوان'}» به پایین`,
+          onclick: () => { const n = block.nextElementSibling; if (n) { sessionBlocks.insertBefore(n, block); renumber(); } } }, icon('chevD', 13)),
         el('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'حذف این جلسه از طرح', 'aria-label': `حذف جلسه «${titleInput.value.trim() || 'بدون عنوان'}» از طرح`,
           onclick: () => { block.remove(); renumber(); } }, icon('trash', 13))),
       el('div', { class: 'tpl-session__body' },
@@ -117,13 +123,11 @@ function openEditor(tpl, targets, { onSaved }) {
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'هدف پیش‌فرض'), targetSel)
     ),
     el('div', { class: 'clx-sub__title', style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' } },
-      'پروتکل جلسه به جلسه', 
-      el('span', { class: 'cell-sub' }, 'جلسه‌ها را با دستگیرهٔ ⠿ جابه‌جا کنید')),
+      'پروتکل جلسه به جلسه'),
     sessionBlocks,
     el('div', { class: 'tpl-sessions__add' },
       el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => addSessionBlock({}, { open: true }) },
-        icon('plus', 13), 'افزودن جلسه')),
-    el('div', { class: 'cell-sub' }, 'هر جلسه: هدف + معیار تسلط + کارت‌ها (تمرین/تکلیف/بازی/رویداد/دستورالعمل/پراپ/آموزش خانواده). کارت را از «کارت آماده» پیوسته بسازید یا از «کارت‌های قبلی» سریع بیفزایید — هنگام ساخت مسیر دانش‌آموز همهٔ این‌ها کپی می‌شود.')
+        icon('plus', 13), 'افزودن جلسه'))
   );
 
   let closeModal = null;
@@ -206,7 +210,7 @@ export async function renderTreatmentPlans(container) {
     el('div', {},
       el('div', { class: 'page-head__title' }, 'طرح درمان'),
       el('div', { class: 'page-head__desc' },
-        'نوشتن طرح جلسه‌به‌جلسه با هدف، معیار تسلط و کارت‌های جلسه — کارت‌ها از «کارت‌های آماده» یا کارت‌های قبلی تیم. طرح، شالودهٔ مداخلهٔ دانش‌آموز است: در تب تفسیر بالینی پرونده، مسیر از همین طرح‌ها ساخته می‌شود.'
+        'طرح جلسه‌به‌جلسه با هدف و معیار تسلط — پایهٔ ساخت مسیر دانش‌آموز.'
       )
     ),
     el('button', { class: 'btn btn--primary', onclick: () => openEditor(null, targets, { onSaved: refresh }) },

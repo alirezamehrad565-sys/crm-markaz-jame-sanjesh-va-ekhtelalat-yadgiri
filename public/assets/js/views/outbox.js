@@ -36,19 +36,20 @@ function recordRow(n, actionButton) {
   if (n.sentAt) meta.push(`فرستاده‌شده: ${formatJalaliDateTime(n.sentAt)}`);
   if (n.attempts > 0) meta.push(`تلاش: ${fa(n.attempts)}`);
 
-  return el('div', { dataset: { notifId: String(n.id) }, style: {
-    display: 'flex', alignItems: 'center', gap: 'var(--sp-3)',
-    padding: 'var(--sp-3) var(--sp-4)', borderBottom: '1px solid var(--border)'
-  } },
-    el('div', { style: { flex: 1, minWidth: 0 } },
+  /* ۱.۲۵.۱۰ — ساختار کلاس‌دار: در موبایل متن و کنش‌ها دو ردیف می‌شوند (بدون له‌شدن)؛
+     متای خالی دیگر «—» بیهوده رندر نمی‌شود. */
+  return el('div', { class: 'ob-row', dataset: { notifId: String(n.id) } },
+    el('div', { class: 'ob-row__main' },
       el('div', { class: 'cell-main' }, templateLabel(n.template)),
-      el('div', { class: 'cell-sub' }, meta.join(' · ') || '—'),
+      meta.length ? el('div', { class: 'cell-sub' }, meta.join(' · ')) : null,
       n.lastError
         ? el('div', { class: 'cell-sub', style: { color: 'var(--danger)' } }, `خطا: ${n.lastError}`) /* fallback متریال حذف (S9-11) */
         : null
     ),
-    statusBadge(n.status),
-    actionButton ?? null
+    el('div', { class: 'ob-row__side' },
+      statusBadge(n.status),
+      actionButton ?? null
+    )
   );
 }
 
@@ -74,16 +75,21 @@ export async function renderOutbox(outlet) {
   const headBadge = el('span', { class: 'badge badge--neutral' });
   const sections = {};
 
-  function makeSection(key, title, hint) {
+  /* ۱.۲۵.۱۰ — «تلاش دوبارهٔ همه» از پایین صفحه به سربرگِ همان بخش «ناموفق‌ها» رفت
+     (نزدیکی کنش به داده‌اش) — قبلاً دکمه‌ای رها در انتهای صفحه بود. */
+  const retryAllBtn = el('button', { class: 'btn btn--soft btn--sm', style: { marginInlineStart: 'auto' }, onclick: (e) => lockBtn(e.currentTarget, retryAll) }, icon('refresh', 15), 'تلاش دوبارهٔ همه');
+
+  function makeSection(key, title, hint, extraHead) {
     const countBadge = el('span', { class: 'badge badge--neutral' });
     const bodyEl = el('div', {});
     const card = el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
-      el('div', { style: { padding: 'var(--sp-3) var(--sp-4)', borderBottom: '1px solid var(--border)' } },
-        el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' } },
+      el('div', { class: 'ob-section__head' },
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
           el('h3', { style: { margin: 0 } }, title),
-          countBadge
+          countBadge,
+          extraHead ?? null
         ),
-        el('p', { class: 'hint-text', style: { margin: '4px 0 0' } }, hint)
+        hint ? el('p', { class: 'hint-text', style: { margin: '4px 0 0' } }, hint) : null
       ),
       bodyEl
     );
@@ -137,13 +143,9 @@ export async function renderOutbox(outlet) {
     }
   }
 
-  const retryAllBtn = el('button', { class: 'btn btn--soft btn--sm', onclick: (e) => lockBtn(e.currentTarget, retryAll) }, icon('refresh', 15), 'تلاش دوبارهٔ همه');
-  const retryRow = el('div', { style: { display: 'flex', justifyContent: 'flex-end' } }, retryAllBtn);
-
   function syncRetryBtn() {
     const show = (data.failed ?? []).length > 0;
-    if (show && !retryRow.isConnected) outlet.append(retryRow);
-    if (!show && retryRow.isConnected) retryRow.remove();
+    retryAllBtn.style.display = show ? '' : 'none';
   }
 
   async function release(n) {
@@ -183,10 +185,10 @@ export async function renderOutbox(outlet) {
       headBadge
     ),
     el('p', { class: 'hint-text', style: { marginTop: '0' } },
-      'اعلان‌های ثبت نوبت تا «ساعت ارسال» (پیش‌فرض ۱۸:۰۰) پیش‌نویس می‌مانند و یک‌جا می‌روند؛ تغییر، لغو، تکلیف و غیبت فوری ارسال می‌شوند.'), /* UX-ممیزی گلایهٔ ۶: پاراگراف ۵ خطی خلاصه شد — جزئیات در hint هر بخش */
-    makeSection('drafts', 'پیش‌نویس‌ها (در انتظار ساعت ارسال)', 'با «ارسال فوری» پیش از ساعت مقرر هم می‌توانید بفرستید.'),
-    makeSection('ready', 'آمادهٔ ارسال', 'اعلان‌های فوری که در چرخهٔ بعدی (چند دقیقه) ارسال می‌شوند.'),
-    makeSection('failed', 'ناموفق‌ها', 'پس از ۵ تلاش رها شده‌اند — علت در ستون خطا؛ با «ارسال فوری» یا «تلاش دوبارهٔ همه» دوباره می‌روند.')
+      'اعلان‌های ثبت نوبت تا «ساعت ارسال» (پیش‌فرض ۱۸:۰۰) پیش‌نویس می‌مانند؛ بقیه فوری می‌روند.'),
+    makeSection('drafts', 'پیش‌نویس‌ها (در انتظار ساعت ارسال)', 'ارسال پیش از موعد با «ارسال فوری».'),
+    makeSection('ready', 'آمادهٔ ارسال', 'در چرخهٔ بعدی (چند دقیقه) خودکار می‌رود.'),
+    makeSection('failed', 'ناموفق‌ها', 'پس از ۵ تلاش متوقف شده‌اند — علت در خطای ردیف.', retryAllBtn)
   );
   renderSections();
 }
