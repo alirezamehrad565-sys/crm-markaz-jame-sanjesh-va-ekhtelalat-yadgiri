@@ -39,6 +39,8 @@ import type { ExerciseBankService, ExerciseFileSender } from '@domain/exercise-b
 import { createDocumentRequestService, registerRoutes as documentRequestRoutes } from '@domain/document-requests';
 import type { DocumentRequestService } from '@domain/document-requests';
 import { createCaseEventsService, registerCaseEventsRoutes, registerCaseEventPublicRoutes } from '@domain/case-events';
+import { createGamesService, registerGamesRoutes, registerGamesPublicRoutes } from '@domain/games'; // بستر بک‌اند بازی (۱.۲۵.۰۷)
+import type { GamesService } from '@domain/games';
 import type { CaseEventsService } from '@domain/case-events';
 import { createClinicalEngineService, registerClinicalEngineRoutes } from '@domain/clinical-engine';
 import type { ClinicalEngineService } from '@domain/clinical-engine';
@@ -143,6 +145,7 @@ export interface Services {
   caseEvents: CaseEventsService;
   clinicalEngine: ClinicalEngineService;
   otEngine: OtEngineService;
+  games: GamesService; // ۱.۲۵.۰۷ — بستر بک‌اند بازی
   backup: BackupService;
   rum: RumService; // 
 }
@@ -422,13 +425,21 @@ export function createServices(deps: AppDeps): Services {
     }
   });
 
+  // ۱.۲۵.۰۷ — بستر بک‌اند بازی: پراپ بازی با تزریق تابع به مسیر مداخله می‌رود
+  // (قرارداد «نه وابستگی ماژولی domain→domain» — هم‌الگوی formulationOt)
+  const games = createGamesService({
+    db, audit, logger,
+    publicBaseUrl: deps.publicBaseUrl ?? null,
+    injectPathProbe: (pathId, input, actor) => clinicalEngine.addPathProbe(pathId, input, actor)
+  });
+
   // مکانیک پشتیبان‌گیری و بازیابی
   const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null }); // ارسال به آیدی بله
 
   // تله‌متری کارایی: ثبت بی‌نام + جمع‌بندی صدک (نرخ درون‌حافظه، بدون IP/UA)
   const rum = createRumService({ db, logger });
 
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, backup, rum };
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum };
 }
 
 export function createApp(deps: AppDeps): AppHono {
@@ -521,6 +532,10 @@ export function createApp(deps: AppDeps): AppHono {
     });
   });
 
+  // ۱.۲۵.۰۷ — زنجیرهٔ عمومی بازی (/m/:token و /api/m/:token/*): باید «پیش از» گیت authMiddleware
+  // ثبت شود تا توکنِ خودِ لینک جای احراز هویت بنشیند (قرارداد §۵ نقشهٔ راه؛ بدون هیچ اطلاعات بالینی در خطا)
+  registerGamesPublicRoutes(app, services.games);
+
   registerAuthRoutes(app, { audit: services.audit, logger: services.logger });
 
   app.use('/api/*', authMiddleware());
@@ -553,6 +568,8 @@ export function createApp(deps: AppDeps): AppHono {
   registerCaseEventsRoutes(app, services.caseEvents);
 
   registerClinicalEngineRoutes(app, services.clinicalEngine);
+
+  registerGamesRoutes(app, services.games); // ۱.۲۵.۰۷ — API پرسنلی بازی‌ها
 
   registerOtEngineRoutes(app, services.otEngine);
   registerCaseEventPublicRoutes(app, services.caseEvents, {
