@@ -107,6 +107,36 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
   };
 }
 
+// ─── برچسب فارسی محرک برای راهنمای شروع بازی کودک (M2) ───
+// کلیدهای انگلیسی بستهٔ محتوا به فارسی نمایشی می‌رسند؛ مقدار فارسی از خودش عبور می‌کند.
+
+const FA_COLOR_KEYS: Record<string, string> = {
+  yellow: 'زرد', blue: 'آبی', red: 'قرمز', green: 'سبز', orange: 'نارنجی', purple: 'بنفش',
+  زرد: 'زرد', آبی: 'آبی', قرمز: 'قرمز', سبز: 'سبز', نارنجی: 'نارنجی', بنفش: 'بنفش'
+};
+
+const FA_SHAPE_KEYS: Record<string, string> = {
+  star: 'ستاره', circle: 'دایره', square: 'مربع', fish: 'ماهی', crab: 'خرچنگ', boat: 'قایق',
+  balloon: 'بادکنک', heart: 'قلب', flower: 'گل', cat: 'گربه',
+  ستاره: 'ستاره', دایره: 'دایره', مربع: 'مربع', ماهی: 'ماهی'
+};
+
+function faKeyOf(map: Record<string, string>, raw: unknown): string {
+  if (typeof raw !== 'string' || raw.trim() === '') return '';
+  const v = raw.trim();
+  if (map[v]) return map[v];
+  return /[\u0600-\u06FF]/.test(v) ? v : ''; // کلید ناشناختهٔ لاتین نمایش داده نمی‌شود
+}
+
+/** برچسب نمایشی محرک («ستاره زرد») — فقط توصیف ظاهری، هیچ نشانی از درستی ندارد */
+export function stimLabelOf(stim: Record<string, unknown> | null | undefined): string {
+  if (!stim) return 'هدف';
+  const shape = faKeyOf(FA_SHAPE_KEYS, stim.shape);
+  const color = faKeyOf(FA_COLOR_KEYS, stim.color);
+  const label = [shape, color].filter(Boolean).join(' ').trim();
+  return label || 'هدف';
+}
+
 /** پاسخ درست به شکل نمایشی برای بازخورد آموزشی — هرگز در پروب استفاده نمی‌شود */
 export function answerDisplayOf(item: MissionItem): string | null {
   if (item.type === 'choice') {

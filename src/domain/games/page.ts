@@ -1,5 +1,6 @@
-// page.ts — صفحهٔ سه‌حالتهٔ لینک (M1: اسکلت سرویس‌شدهٔ سمت سرور)
-// M2 نمای کودک را با زمان‌اجرای بازی جایگزین می‌کند؛ این صفحه فقط گذارها را می‌راند و هیچ منبع بیرونی ندارد.
+// page.ts — صفحهٔ سه‌حالتهٔ لینک (M1: گذارها · M2: پخش‌کنندهٔ کودک در child_active)
+// این صفحه فقط گذارها را می‌راند و هیچ منبع بیرونی ندارد؛ دارایی‌های بازی از همان مبدأ با ?v= نسخه می‌آیند.
+import { APP_VERSION } from '@core/version';
 import type { PublicStateView } from './types';
 
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
@@ -56,7 +57,6 @@ function page(model: PublicStateView, token: string, body: string): string {
     if (el) el.addEventListener('click', function () { el.disabled = true; post(path, body); });
   };
   bind('btn-start', '/start');
-  bind('btn-finish', '/finish');
   bind('btn-gate-open', '/parent-gate', {});
   bind('btn-gate-solve', '/parent-gate', { solve: true });
   var c1 = document.getElementById('btn-confirm1');
@@ -84,10 +84,18 @@ export function renderGamesPage(model: PublicStateView, token: string): string {
   }
 
   if (model.state === 'child_active') {
-    return page(model, token, `<div class="card">${head}
-      <p class="muted">نمایش بازی در این بخش اجرا می‌شود (فاز بعد).</p>
-      <button id="btn-finish" type="button">امروز تمام شد!</button>
-      <div class="msg muted">پایان جلسه همیشه با تصمیم کودک است.</div></div>`);
+    // پخش‌کنندهٔ کودک (M2) — حالت فقط در سرور است؛ رفرش = بازسازی همین صفحه از آیتم بعدی
+    const hint = JSON.stringify(model.playHint ?? null);
+    return page(model, token, `<div id="play-root" class="play-root"
+      data-token="${esc(token)}"
+      data-kind="${esc(model.playGame ?? '')}"
+      data-hint="${esc(hint)}">
+      <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
+      <div class="play-stage" id="play-stage"></div>
+      <div class="play-bubble" id="play-bubble" hidden></div>
+    </div>
+    <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />
+    <script type="module" src="/assets/play/play.js?v=${APP_VERSION}"></script>`);
   }
 
   if (model.state === 'child_done') {
