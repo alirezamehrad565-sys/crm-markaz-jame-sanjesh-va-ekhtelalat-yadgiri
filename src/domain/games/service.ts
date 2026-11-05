@@ -12,6 +12,7 @@ import {
   runPublishGates,
   scoreAttempt,
   answerDisplayOf,
+  stimLabelOf,
   stripAnswerKeys,
   toItemView
 } from './pure';
@@ -39,7 +40,8 @@ import type {
 
 const LINK_URL_PATH = '/m/';
 const FEEDBACK_OK = 'گرفتی!';
-const FEEDBACK_RETRY = 'دوباره گوش کن';
+const FEEDBACK_WITHHOLD = 'عالی، صبر کردی!'; // بازداری درست گو/نوگو — سند محتوا بستهٔ ۳
+const FEEDBACK_RETRY = 'این یکی سخته؛ بیا با هم دوباره نگاهش کنیم.'; // متن پیش‌فرض خطا §۲ — هیچ سرزنشی
 const MAX_RT_MS = 120000; // بیش از ۲ دقیقه = زمان واکنش بی‌معنا
 
 interface LinkRow {
@@ -490,17 +492,34 @@ export function createGamesService(deps: GamesDeps): GamesService {
     return m;
   }
 
+  /**
+   * راهنمای شروع بازی کودک (M2) — فقط از آیتم‌های آموزشی touch_report ساخته می‌شود؛
+   * آیتم‌های پروب هرگز به این راهنما راه ندارند تا شناسهٔ هدف از پیش لو نرود.
+   */
+  function playHintOf(mission: MissionConfig): PublicStateView['playHint'] {
+    const train = (mission.items ?? []).filter((it) => it.phase === 'train' && it.type === 'touch_report');
+    const go = train.find((it) => it.correct_touch === true);
+    const nogo = train.find((it) => it.correct_touch === false);
+    if (!go && !nogo) return null;
+    return {
+      go: { label: stimLabelOf(go?.stim), stim: (go?.stim ?? {}) as Record<string, unknown> },
+      nogo: nogo ? { label: stimLabelOf(nogo.stim), stim: nogo.stim as Record<string, unknown> } : null
+    };
+  }
+
   async function stateViewOf(res: ResolvedLink): Promise<PublicStateView> {
     const m = missionConfigOf(res);
     const adherence = await db.queryOne<{ confirm2_at: string | null }>(`SELECT confirm2_at FROM game_adherence WHERE mission_id = ?`, [res.mission.id]);
+    const state = linkStateOf(res);
     return {
-      state: linkStateOf(res),
+      state,
       missionRef: m.id,
       missionTitle: m.title ?? m.id,
       packageTitle: res.pkg.titleFa,
       expiresAt: res.link.expires_at,
       validity: res.session ? (res.session.validity as PublicStateView['validity']) : undefined,
-      adherenceConfirmed: adherence?.confirm2_at != null
+      adherenceConfirmed: adherence?.confirm2_at != null,
+      ...(state === 'child_active' ? { playGame: m.game, playHint: playHintOf(m) } : {})
     };
   }
 
@@ -571,7 +590,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
       : null;
     const scored = scoreAttempt(item, mission, draft.response, rtMs);
     const existing = await db.queryOne<AttemptRow>(`SELECT * FROM game_attempts WHERE idem_key = ?`, [draft.idem_key]);
-    if (existing) return feedbackOf(item, existing.correct === 1); // تکرار ایمن: همان بازخورد اول
+    if (existing) return feedbackOf(item, existing.correct === 1, parseJson(existing.response_json, {})); // تکرار ایمن: همان بازخورد اول
     await db.execute(
       `INSERT INTO game_attempts (id, session_id, item_id, phase, response_json, correct, rt_ms, rt_valid, idem_key, created_at)
        VALUES (?,?,?,?,?,?,?,?,?,?)`,
@@ -579,19 +598,25 @@ export function createGamesService(deps: GamesDeps): GamesService {
         scored.rtMs, scored.rtValid ? 1 : 0, draft.idem_key, isoOf(now())]
     );
     await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf(now()), session.id]);
-    return feedbackOf(item, scored.correct);
+    return feedbackOf(item, scored.correct, draft.response);
   }
 
-  function feedbackOf(item: MissionItem, correct: boolean): AttemptFeedback {
+  function feedbackOf(item: MissionItem, correct: boolean, response: unknown): AttemptFeedback {
     if (item.phase === 'probe') {
       return { recorded: true, phase: 'probe' }; // پروب: هیچ بازخوردی (§۵)
     }
+    const touched = (response ?? {}) === Object(response)
+      ? (response as Record<string, unknown>).touched === true
+      : false;
+    const message = item.type === 'touch_report' && correct && !touched
+      ? FEEDBACK_WITHHOLD
+      : correct ? FEEDBACK_OK : FEEDBACK_RETRY;
     return {
       recorded: true,
       phase: 'train',
       correct,
       answer_display: correct ? null : answerDisplayOf(item),
-      message: correct ? FEEDBACK_OK : FEEDBACK_RETRY,
+      message,
       replay_audio: !correct
     };
   }

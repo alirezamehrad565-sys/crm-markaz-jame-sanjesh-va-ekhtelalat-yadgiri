@@ -16,6 +16,7 @@ import {
   omissionCountOf,
   runPublishGates,
   scoreAttempt,
+  stimLabelOf,
   stripAnswerKeys,
   toItemView
 } from '../pure';
@@ -279,5 +280,21 @@ describe('لینت لحن و پاک‌سازی کلید پاسخ', () => {
     expect(containsHomophonePair(Array.from('توطئه'))).toBe(true);  // ت/ط
     expect(containsHomophonePair(Array.from('سیب'))).toBe(false);   // س/ش هم‌آوا نیست
     expect(containsHomophonePair(Array.from('ظفر'))).toBe(false);   // تک‌عضوی
+  });
+});
+
+describe('برچسب فارسی محرک برای راهنمای بازی کودک (M2)', () => {
+  it('نمونه‌های طلایی: شکل + رنگ فارسی می‌شود و مقادیر فارسی عیناً عبور می‌کنند', () => {
+    expect(stimLabelOf({ shape: 'star', color: 'yellow' })).toBe('ستاره زرد');
+    expect(stimLabelOf({ shape: 'square', color: 'آبی' })).toBe('مربع آبی');
+    expect(stimLabelOf({ color: 'سبز' })).toBe('سبز');
+    expect(stimLabelOf({ shape: 'fish', color: 'قرمز' })).toBe('ماهی قرمز');
+  });
+
+  it('کلید ناشناختهٔ لاتین نمایش داده نمی‌شود و محرک تهی «هدف» می‌دهد', () => {
+    expect(stimLabelOf({ shape: 'ufo', color: 'crimson' })).toBe('هدف');
+    expect(stimLabelOf(null)).toBe('هدف');
+    expect(stimLabelOf(undefined)).toBe('هدف');
+    expect(stimLabelOf({})).toBe('هدف');
   });
 });
