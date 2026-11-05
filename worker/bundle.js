@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.06";
+var APP_VERSION = "1.25.07";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -9498,16 +9498,16 @@ function parseExbCallback(data, chatId) {
       return { kind: "exb_root", chatId };
     case "cats": {
       const cat = parts[2];
-      const page = toIndex(parts[3]);
-      if (!cat || !EXB_CATS.has(cat) || Number.isNaN(page)) return null;
-      return { kind: "exb_cats", chatId, cat, page };
+      const page2 = toIndex(parts[3]);
+      if (!cat || !EXB_CATS.has(cat) || Number.isNaN(page2)) return null;
+      return { kind: "exb_cats", chatId, cat, page: page2 };
     }
     case "lst": {
       const cat = parts[2];
       const tagIdx = toIndex(parts[3]);
-      const page = toIndex(parts[4]);
-      if (!cat || !EXB_CATS.has(cat) || Number.isNaN(tagIdx) || Number.isNaN(page)) return null;
-      return { kind: "exb_list", chatId, cat, tagIdx, page };
+      const page2 = toIndex(parts[4]);
+      if (!cat || !EXB_CATS.has(cat) || Number.isNaN(tagIdx) || Number.isNaN(page2)) return null;
+      return { kind: "exb_list", chatId, cat, tagIdx, page: page2 };
     }
     case "item": {
       const idx = toIndex(parts[2]);
@@ -12718,7 +12718,7 @@ function registerRoutes3(app, service) {
   });
   app.get("/api/students", async (c) => {
     const actor = getAuthContext(c);
-    const { page, pageSize } = pageParams(c.req.query());
+    const { page: page2, pageSize } = pageParams(c.req.query());
     const staffScope = actor.role === "therapist" ? actor.staffId : void 0;
     const ownerRaw = c.req.query("owner_id") || void 0;
     const ownerId = actor.role === "therapist" ? void 0 : ownerRaw && /^[0-9a-f-]{36}$/i.test(ownerRaw) ? ownerRaw : void 0;
@@ -12730,13 +12730,13 @@ function registerRoutes3(app, service) {
       active: c.req.query("active") === void 0 ? void 0 : c.req.query("active") === "true",
       ownerId,
       staffScope,
-      page,
+      page: page2,
       pageSize
     });
     return c.json(
       {
         data: result.items,
-        meta: { page, pageSize, total: result.total, totalPages: Math.max(1, Math.ceil(result.total / pageSize)) }
+        meta: { page: page2, pageSize, total: result.total, totalPages: Math.max(1, Math.ceil(result.total / pageSize)) }
       },
       200
     );
@@ -13007,8 +13007,8 @@ __name(filterTimelineEvents, "filterTimelineEvents");
 function paginateTimeline(events, limit, offset) {
   const lim = Math.min(Math.max(1, limit ?? 50), 200);
   const off = Math.max(0, offset ?? 0);
-  const page = events.slice(off, off + lim);
-  return { page, limit: lim, offset: off, hasMore: off + page.length < events.length };
+  const page2 = events.slice(off, off + lim);
+  return { page: page2, limit: lim, offset: off, hasMore: off + page2.length < events.length };
 }
 __name(paginateTimeline, "paginateTimeline");
 function deriveNextAction(nextAppointment, openFollowups) {
@@ -13448,13 +13448,13 @@ function createStudentTimelineService(db) {
       }
       const merged = mergeTimelineEvents(raw2);
       const filtered = filterTimelineEvents(merged, filters);
-      const { page, hasMore } = paginateTimeline(filtered, filters.limit, filters.offset);
+      const { page: page2, hasMore } = paginateTimeline(filtered, filters.limit, filters.offset);
       const nowIso = (/* @__PURE__ */ new Date()).toISOString();
       const nextApptRow = appts.filter((a) => a.status === "scheduled" && a.start_at > nowIso).sort((a, b) => a.start_at < b.start_at ? -1 : 1)[0] ?? null;
       const nextAppt = nextApptRow ? { id: nextApptRow.id, startAt: nextApptRow.start_at, staffName: nextApptRow.staff_name } : null;
       const openFus = followups.filter((f) => FOLLOWUP_OPEN_STATUSES.includes(f.status)).map((f) => ({ id: f.id, title: f.title, dueAt: f.due_at }));
       const nextAction = deriveNextAction(nextAppt, openFus);
-      return { events: page, nextAction, hasMore };
+      return { events: page2, nextAction, hasMore };
     }
   };
 }
@@ -15548,14 +15548,14 @@ function validateExerciseFileBytes(input, maxBytes) {
   return { ok: true };
 }
 __name(validateExerciseFileBytes, "validateExerciseFileBytes");
-function clampPage(page) {
-  const n = Number(page);
+function clampPage(page2) {
+  const n = Number(page2);
   return Number.isInteger(n) && n >= 1 ? n : 1;
 }
 __name(clampPage, "clampPage");
-function pageWindow(total, page, pageSize) {
+function pageWindow(total, page2, pageSize) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = Math.min(page, totalPages);
+  const safePage = Math.min(page2, totalPages);
   return {
     page: safePage,
     offset: (safePage - 1) * pageSize,
@@ -16316,7 +16316,7 @@ function createExerciseBankService(deps) {
     async list(filters, _actor) {
       const rawPageSize = filters.pageSize;
       const pageSize = Math.min(Math.max(Number.isFinite(rawPageSize) ? Number(rawPageSize) : 20, 1), 100);
-      const page = clampPage(filters.page);
+      const page2 = clampPage(filters.page);
       const conds = ["e.deleted_at IS NULL"];
       const params = [];
       if (filters.publishedOnly) conds.push("e.published = 1");
@@ -16370,7 +16370,7 @@ function createExerciseBankService(deps) {
         params
       );
       const total = totalRow?.total ?? 0;
-      const win = pageWindow(total, page, pageSize);
+      const win = pageWindow(total, page2, pageSize);
       const rows = await db.query(
         `SELECT e.id, e.title, e.description, e.format, e.published, e.external_url,
                 e.file_name, e.file_mime, e.file_size, e.file_key, e.assign_count,
@@ -16925,7 +16925,7 @@ function createExerciseBankService(deps) {
     async listPackages(filters, _actor) {
       const rawPageSize = filters.pageSize;
       const pageSize = Math.min(Math.max(Number.isFinite(rawPageSize) ? Number(rawPageSize) : 20, 1), 100);
-      const page = clampPage(filters.page);
+      const page2 = clampPage(filters.page);
       const conds = ["p.deleted_at IS NULL"];
       const params = [];
       if (filters.publishedOnly) conds.push("p.published = 1");
@@ -16944,7 +16944,7 @@ function createExerciseBankService(deps) {
         params
       );
       const total = totalRow?.total ?? 0;
-      const win = pageWindow(total, page, pageSize);
+      const win = pageWindow(total, page2, pageSize);
       const rows = await db.query(
         `SELECT p.* FROM exercise_packages p ${where}
           ORDER BY p.created_at DESC, p.id DESC
@@ -22813,7 +22813,7 @@ function faNum4(n) {
 __name(faNum4, "faNum");
 var SCALE_LABELS = ["\u06F0", "\u06F1", "\u06F2", "\u06F3", "\u06F4", "\u06F5", "\u06F6", "\u06F7", "\u06F8", "\u06F9", "\u06F1\u06F0"];
 function renderFillFormPage(model, token) {
-  const esc = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
+  const esc2 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
   let counter = 0;
   const total = model.sections.reduce((sum, s) => sum + s.items.length, 0);
   const isTeacherForm = model.audience === "teacher" || !!model.teacherLabel;
@@ -22825,8 +22825,8 @@ function renderFillFormPage(model, token) {
       let opts = [];
       if (f.scoredOptions && f.scoredOptions.length > 0) {
         opts = f.scoredOptions.map(
-          (o, idx) => `<label class="opt opt--wide"><input type="radio" name="${esc(f.key)}" value="${idx}" required />
-           <span>${esc(o.label)}</span></label>`
+          (o, idx) => `<label class="opt opt--wide"><input type="radio" name="${esc2(f.key)}" value="${idx}" required />
+           <span>${esc2(o.label)}</span></label>`
         );
       } else {
         const max = Math.min(Math.max(f.scaleMax ?? 3, 1), 10);
@@ -22834,16 +22834,16 @@ function renderFillFormPage(model, token) {
         for (let v = 0; v <= max; v++) {
           const lbl = labels ? labels[v] : SCALE_LABELS[v] ?? faNum4(v);
           opts.push(
-            `<label class="opt"><input type="radio" name="${esc(f.key)}" value="${v}" required />
-             <span>${esc(lbl)}</span></label>`
+            `<label class="opt"><input type="radio" name="${esc2(f.key)}" value="${v}" required />
+             <span>${esc2(lbl)}</span></label>`
           );
         }
       }
       const qLabel = isTeacherForm && f.teacherLabel ? f.teacherLabel : f.label;
       const qHint = isTeacherForm && f.teacherHint ? f.teacherHint : f.hint;
-      return `<div class="item" data-key="${esc(f.key)}"><div class="q">${faNum4(counter)}. ${esc(qLabel)}</div>${qHint ? `<div class="hint">${esc(qHint)}</div>` : ""}<div class="opts">${opts.join("")}</div></div>`;
+      return `<div class="item" data-key="${esc2(f.key)}"><div class="q">${faNum4(counter)}. ${esc2(qLabel)}</div>${qHint ? `<div class="hint">${esc2(qHint)}</div>` : ""}<div class="opts">${opts.join("")}</div></div>`;
     }).join("");
-    const head = sec.title ? `<div class="subscale"><span class="subscale__dot"></span>${esc(sec.title)}</div>` : "";
+    const head = sec.title ? `<div class="subscale"><span class="subscale__dot"></span>${esc2(sec.title)}</div>` : "";
     return `${head}<div class="card">${items}</div>`;
   }).join("");
   return `<!doctype html>
@@ -22852,7 +22852,7 @@ function renderFillFormPage(model, token) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
-<title>${esc(model.typeTitle)}</title>
+<title>${esc2(model.typeTitle)}</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -22901,10 +22901,10 @@ function renderFillFormPage(model, token) {
 <body>
 <div class="wrap">
   <div class="head">
-    <h1>${esc(model.typeTitle)}</h1>
-    ${headSub ? `<p>${esc(headSub)}</p>` : ""}
-    ${model.teacherLabel ? `<div class="who">${esc(model.teacherLabel)}</div>` : ""}
-    ${model.description ? `<div class="desc">${esc(model.description)}</div>` : ""}
+    <h1>${esc2(model.typeTitle)}</h1>
+    ${headSub ? `<p>${esc2(headSub)}</p>` : ""}
+    ${model.teacherLabel ? `<div class="who">${esc2(model.teacherLabel)}</div>` : ""}
+    ${model.description ? `<div class="desc">${esc2(model.description)}</div>` : ""}
   </div>
   <div class="progress" id="prog">
     <span id="progText">\u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0647\u200C\u0634\u062F\u0647: \u06F0 \u0627\u0632 ${faNum4(total)}</span>
@@ -23246,7 +23246,7 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
 }
 __name(registerCaseEventPublicRoutes, "registerCaseEventPublicRoutes");
 function fillErrorPage(message) {
-  const esc = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "esc");
+  const esc2 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "esc");
   return `<!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -23254,9 +23254,1288 @@ function fillErrorPage(message) {
 <title>\u0641\u0631\u0645 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A</title>
 <style>body{margin:0;background:#F7F3EA;color:#12384f;font-family:Tahoma,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center}
 .box{background:#fff;border-radius:16px;padding:28px;max-width:420px;text-align:center;box-shadow:0 1px 3px rgba(18,56,79,.08)}</style></head>
-<body><div class="box"><h1 style="font-size:18px">\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A</h1><p style="font-size:14px;line-height:1.9">${esc(message)}</p></div></body></html>`;
+<body><div class="box"><h1 style="font-size:18px">\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A</h1><p style="font-size:14px;line-height:1.9">${esc2(message)}</p></div></body></html>`;
 }
 __name(fillErrorPage, "fillErrorPage");
+
+// src/domain/games/pure.ts
+var TONE_RULES_BASE = ["no_timer", "no_rank", "no_streak", "no_fail_message"];
+var DEFAULT_RT_FLOOR_MS = {
+  touch_report: 150,
+  // گو/نوگو — زیر ۱۵۰ حدس است
+  numline: 0,
+  // خط عددی کف ندارد
+  choice: 200
+  // فلش‌کارت/انتخاب — لمس تصادفی حذف می‌شود
+};
+var IDLE_PARTIAL_MS = 5 * 60 * 1e3;
+var MIN_COMPLETION_RATIO = 0.6;
+var FORBIDDEN_TEXT_PATTERNS = [
+  "\u062F\u0631\u0645\u0627\u0646 \u0634\u062F",
+  "\u062F\u0631\u0645\u0627\u0646 \u0645\u06CC\u200C\u0634\u0648\u062F",
+  "\u0642\u0637\u0639\u0627\u064B \u0628\u0647\u062A\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F",
+  "\u062A\u0636\u0645\u06CC\u0646",
+  "ADHD \u062F\u0627\u0631\u06CC",
+  "\u0628\u06CC\u0634\u200C\u0641\u0639\u0627\u0644 \u0634\u062F\u0647\u200C\u0627\u06CC",
+  "\u0627\u0648\u062A\u06CC\u0633\u0645 \u062F\u0627\u0631\u06CC",
+  "\u0634\u06A9\u0633\u062A",
+  "\u0627\u0634\u062A\u0628\u0627\u0647 \u06A9\u0631\u062F\u06CC",
+  "\u0628\u0627\u06CC\u062F \u0628\u06CC\u0634\u062A\u0631 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC",
+  "\u0628\u0647\u062A\u0631 \u0627\u0632 \u062F\u06CC\u06AF\u0631\u0627\u0646",
+  "\u0631\u062A\u0628\u0647\u0654",
+  "\u0631\u062A\u0628\u0647 \u062F\u0631",
+  "\u0627\u0645\u062A\u06CC\u0627\u0632 \u0628\u0631\u062A\u0631",
+  "\u062A\u0646\u0628\u0644",
+  "\u06A9\u0645\u200C\u0647\u0648\u0634",
+  "\u0636\u0639\u06CC\u0641 \u0627\u0633\u062A",
+  "\u0633\u0631\u06CC\u0639\u200C\u062A\u0631",
+  "\u062A\u0627\u06CC\u0645\u0631",
+  "\u0632\u0645\u0627\u0646 \u062A\u0645\u0627\u0645"
+];
+var HOMOPHONE_SETS = [
+  ["\u0633", "\u0635", "\u062B"],
+  ["\u062A", "\u0637"],
+  ["\u062D", "\u0647"],
+  ["\u0632", "\u0630", "\u0636", "\u0638"],
+  ["\u063A", "\u0642"]
+];
+function rtFloorFor(item, mission) {
+  return typeof mission.rt_floor_ms === "number" ? mission.rt_floor_ms : DEFAULT_RT_FLOOR_MS[item.type] ?? 0;
+}
+__name(rtFloorFor, "rtFloorFor");
+function numlineErrorPct(chosen, target, range) {
+  const span = Math.abs(range[1] - range[0]);
+  if (span <= 0) return 0;
+  return Math.abs(chosen - target) / span * 100;
+}
+__name(numlineErrorPct, "numlineErrorPct");
+function scoreAttempt(item, mission, response, rtMs) {
+  const floor = rtFloorFor(item, mission);
+  const rt = typeof rtMs === "number" && Number.isFinite(rtMs) && rtMs >= 0 ? Math.round(rtMs) : null;
+  const rtValid = rt === null ? true : rt >= floor;
+  const res = response ?? {};
+  let correct = false;
+  let errorPct;
+  let commission = false;
+  let omission = false;
+  if (item.type === "choice") {
+    correct = typeof res.option === "number" && res.option === item.correct;
+  } else if (item.type === "numline") {
+    const chosen = typeof res.chosen === "number" ? res.chosen : null;
+    if (chosen !== null && typeof item.correct === "number" && item.range) {
+      correct = chosen === item.correct;
+      errorPct = numlineErrorPct(chosen, item.correct, item.range);
+    }
+  } else if (item.type === "touch_report") {
+    const touched = res.touched === true;
+    const want = item.correct_touch === true;
+    correct = touched === want;
+    commission = !want && touched;
+    omission = want && !touched;
+  }
+  return {
+    itemId: item.id,
+    phase: item.phase,
+    correct,
+    rtMs: rt,
+    rtValid,
+    ...errorPct !== void 0 ? { numlineErrorPct: errorPct } : {},
+    commission,
+    omission
+  };
+}
+__name(scoreAttempt, "scoreAttempt");
+function answerDisplayOf(item) {
+  if (item.type === "choice") {
+    return typeof item.correct === "number" ? item.options?.[item.correct]?.label ?? null : null;
+  }
+  if (item.type === "numline") return typeof item.correct === "number" ? String(item.correct) : null;
+  return null;
+}
+__name(answerDisplayOf, "answerDisplayOf");
+function accuracyOf(scored) {
+  if (scored.length === 0) return null;
+  return round2(scored.filter((s) => s.correct).length / scored.length * 100);
+}
+__name(accuracyOf, "accuracyOf");
+function meanNumlineErrorOf(scored) {
+  const errs = scored.map((s) => s.numlineErrorPct).filter((v) => typeof v === "number");
+  if (errs.length === 0) return null;
+  return round2(errs.reduce((a, b) => a + b, 0) / errs.length);
+}
+__name(meanNumlineErrorOf, "meanNumlineErrorOf");
+function medianRtOf(scored) {
+  const rts = scored.filter((s) => s.correct && s.rtValid && typeof s.rtMs === "number").map((s) => s.rtMs).sort((a, b) => a - b);
+  if (rts.length === 0) return null;
+  const mid = Math.floor(rts.length / 2);
+  return rts.length % 2 === 1 ? rts[mid] : Math.round((rts[mid - 1] + rts[mid]) / 2);
+}
+__name(medianRtOf, "medianRtOf");
+function commissionCountOf(scored) {
+  return scored.filter((s) => s.commission).length;
+}
+__name(commissionCountOf, "commissionCountOf");
+function omissionCountOf(scored) {
+  return scored.filter((s) => s.omission).length;
+}
+__name(omissionCountOf, "omissionCountOf");
+function computeMetricValue(formula, scored) {
+  switch (formula) {
+    case "accuracy":
+      return accuracyOf(scored);
+    case "numline_error":
+      return meanNumlineErrorOf(scored);
+    case "median_rt":
+      return medianRtOf(scored);
+    case "commission":
+      return commissionCountOf(scored);
+    case "omission":
+      return omissionCountOf(scored);
+    default:
+      return null;
+  }
+}
+__name(computeMetricValue, "computeMetricValue");
+function round2(v) {
+  return Math.round(v * 100) / 100;
+}
+__name(round2, "round2");
+function decideValidity(activityTimes, doneItems, totalItems) {
+  for (let i = 1; i < activityTimes.length; i++) {
+    if (activityTimes[i] - activityTimes[i - 1] > IDLE_PARTIAL_MS) return "partial";
+  }
+  if (totalItems > 0 && doneItems / totalItems < MIN_COMPLETION_RATIO) return "partial";
+  return "valid";
+}
+__name(decideValidity, "decideValidity");
+var MISSION_GOAL_ERROR = "goal";
+function runPublishGates(body, dose, evidenceLevel, ctx) {
+  const errors = [];
+  if (!Array.isArray(body.goals) || body.goals.length === 0) {
+    errors.push({ rule: MISSION_GOAL_ERROR, message: "\u0628\u0633\u062A\u0647 \u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0647\u062F\u0641 registered \u0644\u0627\u0632\u0645 \u062F\u0627\u0631\u062F" });
+  }
+  for (const g of body.goals ?? []) {
+    if (!ctx.goalIds.has(g)) errors.push({ rule: MISSION_GOAL_ERROR, message: `\u0647\u062F\u0641 \xAB${g}\xBB \u062F\u0631 \u0648\u0627\u0698\u0647\u200C\u0646\u0627\u0645\u0647 \u0646\u06CC\u0633\u062A` });
+  }
+  for (const m of body.missions ?? []) {
+    if (!ctx.metricIds.has(m.metric)) {
+      errors.push({ rule: "metric", message: `\u0633\u0646\u062C\u0647\u0654 \xAB${m.metric}\xBB \u062F\u0631 \u0645\u0623\u0645\u0648\u0631\u06CC\u062A ${m.id} \u062A\u0639\u0631\u06CC\u0641 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A` });
+    }
+    const th = m.mastery?.threshold !== void 0 ? m.mastery.threshold : body.mastery?.threshold;
+    if (th === null || th === void 0 || !Number.isFinite(Number(th))) {
+      errors.push({ rule: "threshold", message: `\u0622\u0633\u062A\u0627\u0646\u0647\u0654 \u062A\u0633\u0644\u0637 \u0645\u0623\u0645\u0648\u0631\u06CC\u062A ${m.id} \u062A\u0647\u06CC \u0627\u0633\u062A \u2014 \u0628\u0627\u0644\u06CC\u0646\u06CC\u200C\u0633\u0627\u0632 \u0628\u0627\u06CC\u062F \u067E\u06CC\u0634 \u0627\u0632 \u0627\u0646\u062A\u0634\u0627\u0631 \u062A\u0639\u06CC\u06CC\u0646 \u06A9\u0646\u062F` });
+    }
+    if (!Array.isArray(m.items) || m.items.length === 0) {
+      errors.push({ rule: "items", message: `\u0645\u0623\u0645\u0648\u0631\u06CC\u062A ${m.id} \u0622\u06CC\u062A\u0645 \u0646\u062F\u0627\u0631\u062F` });
+    } else if (!m.items.some((it) => it.phase === "probe")) {
+      errors.push({ rule: "probe", message: `\u0645\u0623\u0645\u0648\u0631\u06CC\u062A ${m.id} \u0622\u06CC\u062A\u0645 \u067E\u0631\u0648\u0628 \u0646\u062F\u0627\u0631\u062F \u2014 \u0633\u0646\u062C\u0647 \u0641\u0642\u0637 \u0627\u0632 \u067E\u0631\u0648\u0628 \u0633\u0627\u062E\u062A\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F` });
+    }
+  }
+  if (!["A", "B", "C"].includes(evidenceLevel)) {
+    errors.push({ rule: "evidence", message: "\u0628\u0631\u0686\u0633\u0628 \u0634\u0648\u0627\u0647\u062F A/B/C \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" });
+  }
+  if (!(dose.days_per_week > 0) || !(dose.minutes > 0) || !(dose.max_missions_per_day > 0) || !(dose.min_weeks > 0)) {
+    errors.push({ rule: "dose", message: "\u062F\u0648\u0632 \u0646\u0627\u0642\u0635 \u0627\u0633\u062A: \u062A\u0646\u0627\u0648\u0628\u060C \u0645\u062F\u062A\u060C \u0633\u0642\u0641 \u0631\u0648\u0632\u0627\u0646\u0647 \u0648 \u062F\u0648\u0631\u0647\u0654 \u062D\u062F\u0627\u0642\u0644\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" });
+  }
+  const tones = new Set(body.tone_rules ?? []);
+  for (const t of TONE_RULES_BASE) {
+    if (!tones.has(t)) errors.push({ rule: "tone", message: `\u0642\u0627\u0639\u062F\u0647\u0654 \u0644\u062D\u0646 \xAB${t}\xBB \u062F\u0631 \u0628\u0633\u062A\u0647 \u0646\u06CC\u0633\u062A` });
+  }
+  for (const v of lintTexts(body.parent_copy ?? {})) {
+    errors.push({ rule: "tone_lint", message: v });
+  }
+  if (body.pa_phonemic === true) {
+    for (const m of body.missions ?? []) {
+      for (const it of m.items ?? []) {
+        if (it.type === "touch_report") continue;
+        const letters = collectLetters(it);
+        if (letters.length > 0 && containsHomophonePair(letters)) {
+          errors.push({ rule: "homophone", message: `\u0622\u06CC\u062A\u0645 \xAB${it.id}\xBB \u062F\u0631 \u0645\u0623\u0645\u0648\u0631\u06CC\u062A ${m.id} \u062C\u0641\u062A \u0647\u0645\u200C\u0622\u0648\u0627 \u062F\u0627\u0631\u062F \u2014 \u062A\u0645\u0627\u06CC\u0632 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC \u0645\u0645\u0646\u0648\u0639 \u0627\u0633\u062A` });
+        }
+      }
+    }
+  }
+  return errors;
+}
+__name(runPublishGates, "runPublishGates");
+function lintTexts(obj, path = "parent_copy") {
+  const violations = [];
+  const walk = /* @__PURE__ */ __name((v, p) => {
+    if (typeof v === "string") {
+      for (const w of FORBIDDEN_TEXT_PATTERNS) {
+        if (v.includes(w)) violations.push(`${p}: \u0648\u0627\u0698\u0647\u0654 \u0645\u0645\u0646\u0648\u0639 \xAB${w}\xBB`);
+      }
+    } else if (Array.isArray(v)) {
+      v.forEach((x, i) => walk(x, `${p}[${i}]`));
+    } else if (v && typeof v === "object") {
+      for (const [k, x] of Object.entries(v)) walk(x, `${p}.${k}`);
+    }
+  }, "walk");
+  walk(obj, path);
+  return violations;
+}
+__name(lintTexts, "lintTexts");
+function collectLetters(item) {
+  const out = [];
+  const push = /* @__PURE__ */ __name((v) => {
+    if (typeof v === "string") out.push(...Array.from(v));
+    else if (v && typeof v === "object" && !Array.isArray(v)) {
+      for (const x of Object.values(v)) push(x);
+    } else if (Array.isArray(v)) for (const x of v) push(x);
+  }, "push");
+  push(item.prompt);
+  push(item.stim);
+  for (const o of item.options ?? []) push(o.label);
+  return out.filter((ch) => /[\u0600-\u06FF]/.test(ch));
+}
+__name(collectLetters, "collectLetters");
+function containsHomophonePair(letters) {
+  const set = new Set(letters);
+  return HOMOPHONE_SETS.some((pair) => {
+    const present = pair.filter((ch) => set.has(ch));
+    return present.length >= 2;
+  });
+}
+__name(containsHomophonePair, "containsHomophonePair");
+var ANSWER_KEYS = /* @__PURE__ */ new Set(["correct", "correct_touch", "answer", "answer_display"]);
+function stripAnswerKeys(value) {
+  if (Array.isArray(value)) return value.map((v) => stripAnswerKeys(v));
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (ANSWER_KEYS.has(k) || k.toLowerCase().includes("correct")) continue;
+      out[k] = stripAnswerKeys(v);
+    }
+    return out;
+  }
+  return value;
+}
+__name(stripAnswerKeys, "stripAnswerKeys");
+function toItemView(item) {
+  const stripped = stripAnswerKeys(item);
+  return {
+    id: item.id,
+    phase: item.phase,
+    type: item.type,
+    ...typeof stripped.prompt === "string" ? { prompt: stripped.prompt } : {},
+    ...Array.isArray(stripped.options) ? { options: stripped.options } : {},
+    ...Array.isArray(item.range) ? { range: item.range } : {},
+    ...stripped.stim !== void 0 ? { stim: stripped.stim } : {},
+    ...item.media ? { media: item.media } : {}
+  };
+}
+__name(toItemView, "toItemView");
+
+// src/domain/games/service.ts
+var LINK_URL_PATH = "/m/";
+var FEEDBACK_OK = "\u06AF\u0631\u0641\u062A\u06CC!";
+var FEEDBACK_RETRY = "\u062F\u0648\u0628\u0627\u0631\u0647 \u06AF\u0648\u0634 \u06A9\u0646";
+var MAX_RT_MS = 12e4;
+function isoOf2(d) {
+  return d.toISOString();
+}
+__name(isoOf2, "isoOf");
+async function sha256Hex(input) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+__name(sha256Hex, "sha256Hex");
+function randomSecret() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+__name(randomSecret, "randomSecret");
+function parseJson2(raw2, fallback) {
+  if (!raw2) return fallback;
+  try {
+    return JSON.parse(raw2);
+  } catch {
+    return fallback;
+  }
+}
+__name(parseJson2, "parseJson");
+function mergedDose(base, override) {
+  const ov = override ?? {};
+  return { ...base, ...Object.fromEntries(Object.entries(ov).filter(([, v]) => v !== null && v !== void 0)) };
+}
+__name(mergedDose, "mergedDose");
+function createGamesService(deps) {
+  const { db, audit, logger } = deps;
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const linkTtlHours = deps.linkTtlHours ?? 12;
+  async function upsertMetric(input, actor) {
+    const id = input.id.trim();
+    if (!/^[a-z][a-z0-9_]{2,63}$/.test(id)) throw new ValidationError("\u0634\u0646\u0627\u0633\u0647\u0654 \u0633\u0646\u062C\u0647 \u0628\u0627\u06CC\u062F \u0627\u0644\u06AF\u0648\u06CC \u0644\u0627\u062A\u06CC\u0646 snake_case \u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F");
+    await db.execute(
+      `INSERT INTO game_metrics (id, title_fa, unit, higher_is_better, source, formula) VALUES (?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET title_fa=excluded.title_fa, unit=excluded.unit,
+         higher_is_better=excluded.higher_is_better, source=excluded.source, formula=excluded.formula`,
+      [id, input.titleFa.trim(), input.unit, input.higherIsBetter ? 1 : 0, input.source, input.formula]
+    );
+    await audit.log({ actorId: actor.staffId, action: "game_metric_upsert", resourceType: "game_metric", resourceId: id });
+    return await db.queryOne(`SELECT id, title_fa, unit, higher_is_better != 0 AS higher_is_better, source, formula FROM game_metrics WHERE id = ?`, [id]);
+  }
+  __name(upsertMetric, "upsertMetric");
+  async function listMetrics() {
+    return db.query(
+      `SELECT id, title_fa, unit, higher_is_better != 0 AS higher_is_better, source, formula FROM game_metrics ORDER BY id`
+    );
+  }
+  __name(listMetrics, "listMetrics");
+  async function upsertGoal(input, actor) {
+    const id = input.id.trim();
+    if (!/^[a-z][a-z0-9_]{2,63}$/.test(id)) throw new ValidationError("\u0634\u0646\u0627\u0633\u0647\u0654 \u0647\u062F\u0641 \u0628\u0627\u06CC\u062F \u0627\u0644\u06AF\u0648\u06CC \u0644\u0627\u062A\u06CC\u0646 snake_case \u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F");
+    const metric = await db.queryOne(`SELECT id FROM game_metrics WHERE id = ?`, [input.metricId]);
+    if (!metric) throw new NotFoundError("\u0633\u0646\u062C\u0647");
+    await db.execute(
+      `INSERT INTO game_goals (id, title_fa, package_id, metric_id, age_min, age_max) VALUES (?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET title_fa=excluded.title_fa, package_id=excluded.package_id,
+         metric_id=excluded.metric_id, age_min=excluded.age_min, age_max=excluded.age_max`,
+      [id, input.titleFa.trim(), input.packageId.trim(), input.metricId, input.ageMin ?? null, input.ageMax ?? null]
+    );
+    await audit.log({ actorId: actor.staffId, action: "game_goal_upsert", resourceType: "game_goal", resourceId: id });
+    return await db.queryOne(`SELECT id, title_fa, package_id, metric_id, age_min, age_max FROM game_goals WHERE id = ?`, [id]);
+  }
+  __name(upsertGoal, "upsertGoal");
+  async function listGoals() {
+    return db.query(`SELECT id, title_fa, package_id, metric_id, age_min, age_max FROM game_goals ORDER BY id`);
+  }
+  __name(listGoals, "listGoals");
+  async function packageRowToRecord(row) {
+    return {
+      id: row.id,
+      version: row.version,
+      titleFa: row.title_fa,
+      evidenceLevel: row.evidence_level,
+      dose: parseJson2(row.dose_json, { days_per_week: 0, minutes: 0, max_missions_per_day: 0, min_weeks: 0 }),
+      status: row.status,
+      body: parseJson2(row.body_json, { package_id: row.id, goals: [], missions: [] }),
+      reviewedBy: row.reviewed_by,
+      reviewedAt: row.reviewed_at,
+      createdAt: row.created_at
+    };
+  }
+  __name(packageRowToRecord, "packageRowToRecord");
+  async function upsertPackage(input, actor) {
+    if (!/^\d+\.\d+\.\d+$/.test(input.version)) throw new ValidationError("\u0646\u0633\u062E\u0647 \u0628\u0627\u06CC\u062F \u0634\u06A9\u0644 semver \u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F (\u0645\u062B\u0644 1.0.0)");
+    if (input.body.package_id !== input.packageId) throw new ValidationError("package_id \u0628\u062F\u0646\u0647 \u0628\u0627 \u0634\u0646\u0627\u0633\u0647\u0654 \u0628\u0633\u062A\u0647 \u06CC\u06A9\u06CC \u0646\u06CC\u0633\u062A");
+    if (!Array.isArray(input.body.missions) || input.body.missions.length === 0) throw new ValidationError("\u0628\u0633\u062A\u0647 \u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0645\u0623\u0645\u0648\u0631\u06CC\u062A \u0644\u0627\u0632\u0645 \u062F\u0627\u0631\u062F");
+    const existing = await db.queryOne(
+      `SELECT status FROM game_packages WHERE id = ? AND version = ?`,
+      [input.packageId, input.version]
+    );
+    if (existing && existing.status !== "draft") {
+      throw new ConflictError("\u0646\u0633\u062E\u0647\u0654 \u0645\u0646\u062A\u0634\u0631\u0634\u062F\u0647 \u062A\u063A\u06CC\u06CC\u0631\u0646\u0627\u067E\u0630\u06CC\u0631 \u0627\u0633\u062A\u061B \u0646\u0633\u062E\u0647\u0654 \u062C\u062F\u06CC\u062F \u0628\u0633\u0627\u0632\u06CC\u062F");
+    }
+    await db.execute(
+      `INSERT INTO game_packages (id, version, title_fa, evidence_level, dose_json, status, body_json, updated_at)
+       VALUES (?,?,?,?,?,'draft',?, datetime('now'))
+       ON CONFLICT(id, version) DO UPDATE SET title_fa=excluded.title_fa, evidence_level=excluded.evidence_level,
+         dose_json=excluded.dose_json, body_json=excluded.body_json, updated_at=datetime('now')`,
+      [input.packageId, input.version, input.titleFa.trim(), input.evidenceLevel, JSON.stringify(input.dose), JSON.stringify(input.body)]
+    );
+    await audit.log({ actorId: actor.staffId, action: "game_package_upsert", resourceType: "game_package", resourceId: `${input.packageId}@${input.version}` });
+    return loadPackage(input.packageId, input.version);
+  }
+  __name(upsertPackage, "upsertPackage");
+  async function loadPackage(id, version) {
+    const row = await db.queryOne(
+      `SELECT id, version, title_fa, evidence_level, dose_json, status, body_json, reviewed_by, reviewed_at, created_at
+       FROM game_packages WHERE id = ? AND version = ?`,
+      [id, version]
+    );
+    if (!row) throw new NotFoundError("\u0628\u0633\u062A\u0647\u0654 \u0645\u062D\u062A\u0648\u0627");
+    return packageRowToRecord(row);
+  }
+  __name(loadPackage, "loadPackage");
+  async function listPackages(status) {
+    const rows = status ? await db.query(
+      `SELECT id, version, title_fa, evidence_level, dose_json, status, body_json, reviewed_by, reviewed_at, created_at
+           FROM game_packages WHERE status = ? ORDER BY id, version DESC`,
+      [status]
+    ) : await db.query(
+      `SELECT id, version, title_fa, evidence_level, dose_json, status, body_json, reviewed_by, reviewed_at, created_at
+           FROM game_packages ORDER BY id, version DESC`
+    );
+    return Promise.all(rows.map(packageRowToRecord));
+  }
+  __name(listPackages, "listPackages");
+  async function publishPackage(packageId, version, reviewedByStaffId, actor) {
+    const record = await loadPackage(packageId, version);
+    if (record.status === "published") return record;
+    if (record.status === "retired") throw new ConflictError("\u0628\u0633\u062A\u0647\u0654 \u0628\u0627\u0632\u0646\u0634\u0633\u062A\u0647 \u0645\u0646\u062A\u0634\u0631 \u0646\u0645\u06CC\u200C\u0634\u0648\u062F");
+    const [metrics, goals] = await Promise.all([listMetrics(), listGoals()]);
+    const errors = runPublishGates(
+      record.body,
+      record.dose,
+      record.evidenceLevel,
+      { metricIds: new Set(metrics.map((m) => m.id)), goalIds: new Set(goals.map((g) => g.id)) }
+    );
+    if (errors.length > 0) {
+      throw new ValidationError(`\u06AF\u06CC\u062A \u0627\u0646\u062A\u0634\u0627\u0631 \u0631\u062F \u0634\u062F: ${errors.map((e) => e.message).join(" \xB7 ")}`);
+    }
+    const reviewer = reviewedByStaffId ?? actor.staffId;
+    const reviewerRow = await db.queryOne(`SELECT id FROM staff WHERE id = ? AND active = 1`, [reviewer]);
+    if (!reviewerRow) throw new NotFoundError("\u0628\u0627\u0632\u0628\u06CC\u0646 \u0628\u0627\u0644\u06CC\u0646\u06CC");
+    await db.execute(
+      `UPDATE game_packages SET status = 'published', reviewed_by = ?, reviewed_at = ?, updated_at = datetime('now')
+       WHERE id = ? AND version = ?`,
+      [reviewer, isoOf2(now()), packageId, version]
+    );
+    await audit.log({
+      actorId: actor.staffId,
+      action: "game_package_publish",
+      resourceType: "game_package",
+      resourceId: `${packageId}@${version}`,
+      changes: { status: { from: record.status, to: "published" }, reviewed_by: { from: null, to: reviewer } }
+    });
+    logger.info("games.package.published", { packageId, version, reviewer });
+    return loadPackage(packageId, version);
+  }
+  __name(publishPackage, "publishPackage");
+  async function createPrescription(input, actor) {
+    const child = await db.queryOne(`SELECT id FROM students WHERE id = ? AND active = 1`, [input.childId]);
+    if (!child) throw new NotFoundError("\u06A9\u0648\u062F\u06A9");
+    let pkg;
+    try {
+      pkg = await loadPackage(input.packageId, input.packageVersion);
+    } catch {
+      throw new ValidationError("\u0628\u0633\u062A\u0647 \u06CC\u0627 \u0646\u0633\u062E\u0647\u0654 \u0622\u0646 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
+    }
+    if (pkg.status !== "published") throw new ValidationError("\u062A\u062C\u0648\u06CC\u0632 \u0641\u0642\u0637 \u0627\u0632 \u0628\u0633\u062A\u0647\u0654 \u0645\u0646\u062A\u0634\u0631\u0634\u062F\u0647 \u0645\u0645\u06A9\u0646 \u0627\u0633\u062A");
+    const goal = await db.queryOne(`SELECT id, package_id FROM game_goals WHERE id = ?`, [input.goalId]);
+    if (!goal) throw new NotFoundError("\u0647\u062F\u0641");
+    if (goal.package_id !== input.packageId) throw new ValidationError("\u0647\u062F\u0641 \u0628\u0647 \u0627\u06CC\u0646 \u0628\u0633\u062A\u0647 \u062A\u0639\u0644\u0642 \u0646\u062F\u0627\u0631\u062F");
+    if (input.pathwayId) {
+      const path = await db.queryOne(
+        `SELECT id, student_id, status FROM intervention_paths WHERE id = ? AND deleted_at IS NULL`,
+        [input.pathwayId]
+      );
+      if (!path) throw new NotFoundError("\u0645\u0633\u06CC\u0631 \u0645\u062F\u0627\u062E\u0644\u0647");
+      if (path.student_id !== input.childId) throw new ValidationError("\u0645\u0633\u06CC\u0631 \u0645\u062F\u0627\u062E\u0644\u0647 \u0628\u0647 \u0627\u06CC\u0646 \u06A9\u0648\u062F\u06A9 \u062A\u0639\u0644\u0642 \u0646\u062F\u0627\u0631\u062F");
+      if (path.status === "closed") throw new ConflictError("\u0645\u0633\u06CC\u0631 \u0628\u0633\u062A\u0647\u200C\u0634\u062F\u0647 \u062A\u062C\u0648\u06CC\u0632 \u0628\u0627\u0632\u06CC \u0646\u0645\u06CC\u200C\u067E\u0630\u06CC\u0631\u062F");
+    }
+    if (input.doseOverride) {
+      const keys = Object.keys(input.doseOverride);
+      const allowed = ["days_per_week", "minutes", "max_missions_per_day", "min_weeks"];
+      if (keys.some((k) => !allowed.includes(k))) throw new ValidationError("\u06A9\u0644\u06CC\u062F \u062F\u0648\u0632 \u0646\u0627\u0634\u0646\u0627\u062E\u062A\u0647 \u0627\u0633\u062A");
+      if (keys.some((k) => typeof input.doseOverride[k] !== "number")) {
+        throw new ValidationError("\u0645\u0642\u0627\u062F\u06CC\u0631 \u062F\u0648\u0632 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u0646\u062F");
+      }
+    }
+    const id = crypto.randomUUID();
+    const suggestedBy = input.suggestedBy ?? "therapist";
+    await db.execute(
+      `INSERT INTO game_prescriptions (id, child_id, package_id, package_version, goal_id, pathway_id, dose_override,
+        suggested_by, created_by, approved_by, approved_at, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,'active')`,
+      [
+        id,
+        input.childId,
+        input.packageId,
+        input.packageVersion,
+        input.goalId,
+        input.pathwayId ?? null,
+        input.doseOverride ? JSON.stringify(input.doseOverride) : null,
+        suggestedBy,
+        actor.staffId,
+        actor.staffId,
+        isoOf2(now())
+      ]
+    );
+    await audit.log({ actorId: actor.staffId, action: "game_prescription_create", resourceType: "game_prescription", resourceId: id });
+    return await loadPrescription(id);
+  }
+  __name(createPrescription, "createPrescription");
+  async function loadPrescription(id) {
+    const row = await db.queryOne(`SELECT * FROM game_prescriptions WHERE id = ?`, [id]);
+    if (!row) return null;
+    return prescriptionRowToRecord(row);
+  }
+  __name(loadPrescription, "loadPrescription");
+  function prescriptionRowToRecord(row) {
+    return {
+      id: row.id,
+      childId: row.child_id,
+      packageId: row.package_id,
+      packageVersion: row.package_version,
+      goalId: row.goal_id,
+      pathwayId: row.pathway_id,
+      doseOverride: parseJson2(row.dose_override, null),
+      suggestedBy: row.suggested_by,
+      approvedBy: row.approved_by,
+      status: row.status,
+      createdAt: row.created_at
+    };
+  }
+  __name(prescriptionRowToRecord, "prescriptionRowToRecord");
+  async function listPrescriptions(childId) {
+    const rows = childId ? await db.query(`SELECT * FROM game_prescriptions WHERE child_id = ? ORDER BY created_at DESC`, [childId]) : await db.query(`SELECT * FROM game_prescriptions ORDER BY created_at DESC`);
+    return rows.map(prescriptionRowToRecord);
+  }
+  __name(listPrescriptions, "listPrescriptions");
+  async function setPrescriptionStatus(id, action, actor) {
+    const row = await db.queryOne(`SELECT * FROM game_prescriptions WHERE id = ?`, [id]);
+    if (!row) throw new NotFoundError("\u062A\u062C\u0648\u06CC\u0632");
+    const to = { pause: "paused", resume: "active", stop: "stopped", complete: "completed" }[action];
+    await db.execute(`UPDATE game_prescriptions SET status = ?, updated_at = datetime('now') WHERE id = ?`, [to, id]);
+    await audit.log({
+      actorId: actor.staffId,
+      action: "game_prescription_status",
+      resourceType: "game_prescription",
+      resourceId: id,
+      changes: { status: { from: row.status, to } }
+    });
+    return await loadPrescription(id);
+  }
+  __name(setPrescriptionStatus, "setPrescriptionStatus");
+  function missionRowToRecord(row) {
+    return { id: row.id, prescriptionId: row.prescription_id, scheduledFor: row.scheduled_for, missionRef: row.mission_ref, status: row.status };
+  }
+  __name(missionRowToRecord, "missionRowToRecord");
+  async function missionsOnDateForChild(childId, scheduledFor, statuses) {
+    const row = await db.queryOne(
+      `SELECT COUNT(*) AS n FROM game_missions m JOIN game_prescriptions p ON p.id = m.prescription_id
+       WHERE p.child_id = ? AND m.scheduled_for = ? AND m.status IN (${statuses.map(() => "?").join(",")})`,
+      [childId, scheduledFor, ...statuses]
+    );
+    return row?.n ?? 0;
+  }
+  __name(missionsOnDateForChild, "missionsOnDateForChild");
+  async function scheduleMission(input, actor) {
+    const rx = await loadPrescription(input.prescriptionId);
+    if (!rx) throw new NotFoundError("\u062A\u062C\u0648\u06CC\u0632");
+    if (rx.status !== "active") throw new ConflictError("\u062A\u062C\u0648\u06CC\u0632 \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.scheduledFor)) throw new ValidationError("\u062A\u0627\u0631\u06CC\u062E \u0645\u0623\u0645\u0648\u0631\u06CC\u062A \u0628\u0627\u06CC\u062F YYYY-MM-DD \u0628\u0627\u0634\u062F");
+    const pkg = await loadPackage(rx.packageId, rx.packageVersion);
+    const mission = pkg.body.missions.find((m) => m.id === input.missionRef);
+    if (!mission) throw new ValidationError("\u0645\u0623\u0645\u0648\u0631\u06CC\u062A \u0628\u0627 \u0627\u06CC\u0646 \u0634\u0646\u0627\u0633\u0647 \u062F\u0631 \u0628\u0633\u062A\u0647 \u0646\u06CC\u0633\u062A");
+    const pkgDose = await loadPackageDose(rx.packageId, rx.packageVersion, rx.doseOverride);
+    const scheduled = await missionsOnDateForChild(rx.childId, input.scheduledFor, ["pending", "in_progress", "done"]);
+    if (scheduled >= pkgDose.max_missions_per_day) {
+      throw new ConflictError("\u0633\u0642\u0641 \u0645\u0623\u0645\u0648\u0631\u06CC\u062A\u200C\u0647\u0627\u06CC \u0627\u06CC\u0646 \u0631\u0648\u0632 \u067E\u0631 \u0627\u0633\u062A");
+    }
+    const id = crypto.randomUUID();
+    await db.execute(
+      `INSERT INTO game_missions (id, prescription_id, scheduled_for, mission_ref, status) VALUES (?,?,?,?, 'pending')`,
+      [id, input.prescriptionId, input.scheduledFor, input.missionRef]
+    );
+    await audit.log({ actorId: actor.staffId, action: "game_mission_schedule", resourceType: "game_mission", resourceId: id });
+    return missionRowToRecord(await db.queryOne(`SELECT * FROM game_missions WHERE id = ?`, [id]));
+  }
+  __name(scheduleMission, "scheduleMission");
+  async function loadPackageDose(packageId, packageVersion, override) {
+    const pkg = await loadPackage(packageId, packageVersion);
+    return mergedDose(pkg.dose, override);
+  }
+  __name(loadPackageDose, "loadPackageDose");
+  async function listMissions(prescriptionId) {
+    const rows = await db.query(`SELECT * FROM game_missions WHERE prescription_id = ? ORDER BY scheduled_for, created_at`, [prescriptionId]);
+    return rows.map(missionRowToRecord);
+  }
+  __name(listMissions, "listMissions");
+  async function issueLink(missionId, actor) {
+    const missionRow = await db.queryOne(`SELECT * FROM game_missions WHERE id = ?`, [missionId]);
+    if (!missionRow) throw new NotFoundError("\u0645\u0623\u0645\u0648\u0631\u06CC\u062A");
+    const rxRow = await db.queryOne(`SELECT * FROM game_prescriptions WHERE id = ?`, [missionRow.prescription_id]);
+    if (!rxRow) throw new NotFoundError("\u062A\u062C\u0648\u06CC\u0632");
+    if (rxRow.status !== "active") throw new ConflictError("\u062A\u062C\u0648\u06CC\u0632 \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A");
+    const today = tehranTodayYmd(now());
+    if (missionRow.scheduled_for < today) {
+      await db.execute(`UPDATE game_missions SET status = 'expired' WHERE id = ? AND status = 'pending'`, [missionId]);
+      throw new ConflictError("\u0645\u0623\u0645\u0648\u0631\u06CC\u062A \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A");
+    }
+    if (missionRow.status === "done" || missionRow.status === "expired") {
+      throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0623\u0645\u0648\u0631\u06CC\u062A \u0642\u0627\u0628\u0644 \u0635\u062F\u0648\u0631 \u0644\u06CC\u0646\u06A9 \u0646\u06CC\u0633\u062A");
+    }
+    const dose = await loadPackageDose(rxRow.package_id, rxRow.package_version, parseJson2(rxRow.dose_override, null));
+    const executed = await missionsOnDateForChild(rxRow.child_id, missionRow.scheduled_for, ["in_progress", "done"]);
+    if (executed >= dose.max_missions_per_day) {
+      throw new ConflictError("\u0633\u0642\u0641 \u0645\u0623\u0645\u0648\u0631\u06CC\u062A\u200C\u0647\u0627\u06CC \u0627\u0645\u0631\u0648\u0632 \u067E\u0631 \u0627\u0633\u062A\u061B \u067E\u06CC\u0627\u0645 \u067E\u0627\u06CC\u0627\u0646 \u0622\u0631\u0627\u0645 \u0646\u0634\u0627\u0646 \u062F\u0627\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F");
+    }
+    await db.execute(`UPDATE game_links SET revoked_at = ? WHERE mission_id = ? AND revoked_at IS NULL`, [isoOf2(now()), missionId]);
+    const jti = crypto.randomUUID();
+    const secret = randomSecret();
+    const token = `${jti}.${secret}`;
+    const issuedAt = now();
+    const endOfDay = tehranDayRange(missionRow.scheduled_for).end;
+    const ttlEnd = new Date(issuedAt.getTime() + linkTtlHours * 3600 * 1e3);
+    const expiresAt = new Date(Math.min(new Date(endOfDay).getTime(), ttlEnd.getTime()));
+    await db.execute(
+      `INSERT INTO game_links (jti, mission_id, token_hash, issued_by, expires_at) VALUES (?,?,?,?,?)`,
+      [jti, missionId, await sha256Hex(token), actor.staffId, isoOf2(expiresAt)]
+    );
+    await audit.log({ actorId: actor.staffId, action: "game_link_issue", resourceType: "game_link", resourceId: jti });
+    const base = deps.publicBaseUrl?.replace(/\/+$/, "") ?? "";
+    return { jti, token, url: `${base}${LINK_URL_PATH}${token}`, expiresAt: isoOf2(expiresAt) };
+  }
+  __name(issueLink, "issueLink");
+  async function revokeLink(jti, actor) {
+    const row = await db.queryOne(`SELECT * FROM game_links WHERE jti = ?`, [jti]);
+    if (!row) throw new NotFoundError("\u0644\u06CC\u0646\u06A9");
+    await db.execute(`UPDATE game_links SET revoked_at = ? WHERE jti = ? AND revoked_at IS NULL`, [isoOf2(now()), jti]);
+    await audit.log({ actorId: actor.staffId, action: "game_link_revoke", resourceType: "game_link", resourceId: jti });
+    return { ok: true };
+  }
+  __name(revokeLink, "revokeLink");
+  async function resolveLink(token) {
+    const dot = token.indexOf(".");
+    if (dot <= 0) return null;
+    const jti = token.slice(0, dot);
+    const link = await db.queryOne(`SELECT * FROM game_links WHERE jti = ?`, [jti]);
+    if (!link) return null;
+    const hash = await sha256Hex(token);
+    if (hash !== link.token_hash) return null;
+    const mission = await db.queryOne(`SELECT * FROM game_missions WHERE id = ?`, [link.mission_id]);
+    if (!mission) return null;
+    const rx = await db.queryOne(`SELECT * FROM game_prescriptions WHERE id = ?`, [mission.prescription_id]);
+    if (!rx) return null;
+    const pkg = await loadPackage(rx.package_id, rx.package_version);
+    const session = await db.queryOne(
+      `SELECT * FROM game_sessions WHERE mission_id = ? ORDER BY created_at DESC LIMIT 1`,
+      [mission.id]
+    );
+    return { link, mission, rx, pkg, session };
+  }
+  __name(resolveLink, "resolveLink");
+  function linkStateOf(res) {
+    if (res.link.revoked_at) return "revoked";
+    if (new Date(res.link.expires_at).getTime() < now().getTime()) return "expired";
+    if (!res.session) return "parent_pre";
+    return res.session.state;
+  }
+  __name(linkStateOf, "linkStateOf");
+  function missionConfigOf(res) {
+    const m = res.pkg.body.missions.find((x) => x.id === res.mission.mission_ref);
+    if (!m) throw new NotFoundError("\u0645\u0623\u0645\u0648\u0631\u06CC\u062A \u062F\u0631 \u0628\u0633\u062A\u0647");
+    return m;
+  }
+  __name(missionConfigOf, "missionConfigOf");
+  async function stateViewOf(res) {
+    const m = missionConfigOf(res);
+    const adherence = await db.queryOne(`SELECT confirm2_at FROM game_adherence WHERE mission_id = ?`, [res.mission.id]);
+    return {
+      state: linkStateOf(res),
+      missionRef: m.id,
+      missionTitle: m.title ?? m.id,
+      packageTitle: res.pkg.titleFa,
+      expiresAt: res.link.expires_at,
+      validity: res.session ? res.session.validity : void 0,
+      adherenceConfirmed: adherence?.confirm2_at != null
+    };
+  }
+  __name(stateViewOf, "stateViewOf");
+  async function requireActiveToken(token) {
+    const res = await resolveLink(token);
+    if (!res) throw new NotFoundError("\u0627\u06CC\u0646 \u067E\u06CC\u0648\u0646\u062F \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F");
+    const state = linkStateOf(res);
+    if (state === "revoked") throw new ConflictError("\u0627\u06CC\u0646 \u067E\u06CC\u0648\u0646\u062F \u0628\u0627\u0637\u0644 \u0634\u062F\u0647 \u0627\u0633\u062A");
+    if (state === "expired") throw new ConflictError("\u0627\u06CC\u0646 \u067E\u06CC\u0648\u0646\u062F \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A");
+    return res;
+  }
+  __name(requireActiveToken, "requireActiveToken");
+  function requireSessionIn(res, states) {
+    if (!res.session) throw new ConflictError("\u062C\u0644\u0633\u0647 \u0622\u063A\u0627\u0632 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
+    if (!states.includes(res.session.state)) throw new ConflictError("\u06AF\u0630\u0627\u0631 \u0648\u0636\u0639\u06CC\u062A \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A");
+    return res.session;
+  }
+  __name(requireSessionIn, "requireSessionIn");
+  async function getState(token) {
+    const res = await resolveLink(token);
+    if (!res) throw new NotFoundError("\u0627\u06CC\u0646 \u067E\u06CC\u0648\u0646\u062F \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F");
+    return stateViewOf(res);
+  }
+  __name(getState, "getState");
+  async function start(token) {
+    const res = await requireActiveToken(token);
+    if (res.session) {
+      if (res.session.state === "child_active") return stateViewOf(res);
+      if (res.session.state !== "parent_pre") throw new ConflictError("\u06AF\u0630\u0627\u0631 \u0648\u0636\u0639\u06CC\u062A \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A");
+    }
+    const rxStatusOk = res.rx.status === "active";
+    if (!rxStatusOk) throw new ConflictError("\u062A\u062C\u0648\u06CC\u0632 \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A");
+    if (!res.session) {
+      const id = crypto.randomUUID();
+      await db.execute(
+        `INSERT INTO game_sessions (id, mission_id, state, validity, started_at, last_activity_at) VALUES (?,?, 'child_active', 'valid', ?, ?)`,
+        [id, res.mission.id, isoOf2(now()), isoOf2(now())]
+      );
+    }
+    await db.execute(`UPDATE game_missions SET status = 'in_progress' WHERE id = ? AND status = 'pending'`, [res.mission.id]);
+    const fresh = await resolveLink(token);
+    return stateViewOf(fresh);
+  }
+  __name(start, "start");
+  async function nextItem(token) {
+    const res = await requireActiveToken(token);
+    const session = requireSessionIn(res, ["child_active"]);
+    const mission = missionConfigOf(res);
+    const attempts = await db.query(`SELECT * FROM game_attempts WHERE session_id = ?`, [session.id]);
+    const doneIds = new Set(attempts.map((a) => a.item_id));
+    const next = mission.items.find((it) => !doneIds.has(it.id)) ?? null;
+    await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf2(now()), session.id]);
+    return { item: next ? toItemView(next) : null, progress: { done: doneIds.size, total: mission.items.length } };
+  }
+  __name(nextItem, "nextItem");
+  async function submitAttempt(token, draft) {
+    const res = await requireActiveToken(token);
+    const session = requireSessionIn(res, ["child_active"]);
+    const mission = missionConfigOf(res);
+    const item = mission.items.find((it) => it.id === draft.item_id);
+    if (!item) throw new ValidationError("\u0622\u06CC\u062A\u0645 \u0628\u0647 \u0627\u06CC\u0646 \u0645\u0623\u0645\u0648\u0631\u06CC\u062A \u062A\u0639\u0644\u0642 \u0646\u062F\u0627\u0631\u062F");
+    if (!draft.idem_key || draft.idem_key.length > 100) throw new ValidationError("idem_key \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+    const rtMs = typeof draft.rt_ms === "number" && Number.isFinite(draft.rt_ms) ? draft.rt_ms < 0 ? null : draft.rt_ms > MAX_RT_MS ? null : Math.round(draft.rt_ms) : null;
+    const scored = scoreAttempt(item, mission, draft.response, rtMs);
+    const existing = await db.queryOne(`SELECT * FROM game_attempts WHERE idem_key = ?`, [draft.idem_key]);
+    if (existing) return feedbackOf(item, existing.correct === 1);
+    await db.execute(
+      `INSERT INTO game_attempts (id, session_id, item_id, phase, response_json, correct, rt_ms, rt_valid, idem_key, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [
+        crypto.randomUUID(),
+        session.id,
+        item.id,
+        item.phase,
+        JSON.stringify(draft.response ?? {}),
+        scored.correct ? 1 : 0,
+        scored.rtMs,
+        scored.rtValid ? 1 : 0,
+        draft.idem_key,
+        isoOf2(now())
+      ]
+    );
+    await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf2(now()), session.id]);
+    return feedbackOf(item, scored.correct);
+  }
+  __name(submitAttempt, "submitAttempt");
+  function feedbackOf(item, correct) {
+    if (item.phase === "probe") {
+      return { recorded: true, phase: "probe" };
+    }
+    return {
+      recorded: true,
+      phase: "train",
+      correct,
+      answer_display: correct ? null : answerDisplayOf(item),
+      message: correct ? FEEDBACK_OK : FEEDBACK_RETRY,
+      replay_audio: !correct
+    };
+  }
+  __name(feedbackOf, "feedbackOf");
+  async function finish(token) {
+    const res = await requireActiveToken(token);
+    if (res.session && res.session.state === "child_done") {
+      return { state: await stateViewOf(res), metrics: parseJson2(res.session.metrics_json, []) };
+    }
+    const session = requireSessionIn(res, ["child_active"]);
+    const mission = missionConfigOf(res);
+    const attempts = await db.query(`SELECT * FROM game_attempts WHERE session_id = ? ORDER BY created_at`, [session.id]);
+    const nowIso = isoOf2(now());
+    const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso].filter((v) => typeof v === "string").map((v) => new Date(v).getTime());
+    const validity = decideValidity(activity, attempts.length, mission.items.length);
+    const metricIds = mission.metrics && mission.metrics.length > 0 ? mission.metrics : [mission.metric];
+    const probeScored = attempts.filter((a) => a.phase === "probe").map((a) => scoreAttempt(
+      mission.items.find((it) => it.id === a.item_id) ?? { id: a.item_id, phase: "probe", type: "choice" },
+      mission,
+      parseJson2(a.response_json, {}),
+      a.rt_ms
+    ));
+    const metrics = [];
+    for (const metricId of metricIds) {
+      const metricRow = await db.queryOne(`SELECT * FROM game_metrics WHERE id = ?`, [metricId]);
+      if (!metricRow) continue;
+      const value = computeMetricValue(metricRow.formula, probeScored);
+      if (value !== null && Number.isFinite(value)) {
+        metrics.push({ metricId: metricRow.id, value, unit: metricRow.unit, probeCount: probeScored.length, injected: false });
+      }
+    }
+    if (metrics.length > 0 && res.rx.pathway_id && deps.injectPathProbe) {
+      const actor = await staffActorOf(res.rx.created_by);
+      if (actor) {
+        for (const outcome of metrics) {
+          try {
+            await deps.injectPathProbe(res.rx.pathway_id, {
+              metric: outcome.metricId,
+              value: outcome.value,
+              unit: unitFa(outcome.unit),
+              takenAt: nowIso,
+              note: `\u0628\u0627\u0632\u06CC \xAB${mission.title ?? mission.id}\xBB \u2014 \u062C\u0644\u0633\u0647\u0654 \u0628\u0627\u0632\u06CC ${session.id.slice(0, 8)}${validity === "partial" ? " (\u0646\u0627\u0642\u0635)" : ""} \u2014 \u062E\u0648\u062F\u06A9\u0627\u0631`
+            }, actor);
+            outcome.injected = true;
+          } catch (err) {
+            logger.warn("games.probe.inject_failed", { error: err instanceof Error ? err.message : String(err) });
+          }
+        }
+      }
+    }
+    await db.execute(
+      `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ? WHERE id = ?`,
+      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, session.id]
+    );
+    await db.execute(`UPDATE game_missions SET status = 'done' WHERE id = ?`, [res.mission.id]);
+    const fresh = await resolveLink(token);
+    return { state: await stateViewOf(fresh), metrics };
+  }
+  __name(finish, "finish");
+  function unitFa(unit) {
+    switch (unit) {
+      case "percent":
+        return "\u062F\u0631\u0635\u062F";
+      case "count":
+        return "\u062A\u0639\u062F\u0627\u062F";
+      case "ms":
+        return "\u0645\u06CC\u0644\u06CC\u200C\u062B\u0627\u0646\u06CC\u0647";
+      case "score":
+        return "\u0627\u0645\u062A\u06CC\u0627\u0632";
+      default:
+        return null;
+    }
+  }
+  __name(unitFa, "unitFa");
+  async function staffActorOf(staffId) {
+    const row = await db.queryOne(
+      `SELECT id, email, COALESCE(role_ext, role) AS role, full_name FROM staff WHERE id = ? AND active = 1`,
+      [staffId]
+    );
+    if (!row) return null;
+    return { staffId: row.id, email: row.email, role: row.role, displayName: row.full_name };
+  }
+  __name(staffActorOf, "staffActorOf");
+  async function parentGate(token, solve) {
+    const res = await requireActiveToken(token);
+    const session = requireSessionIn(res, solve ? ["parent_gate"] : ["child_done"]);
+    await db.execute(
+      `UPDATE game_sessions SET state = ?, last_activity_at = ? WHERE id = ?`,
+      [solve ? "parent_post" : "parent_gate", isoOf2(now()), session.id]
+    );
+    const fresh = await resolveLink(token);
+    return stateViewOf(fresh);
+  }
+  __name(parentGate, "parentGate");
+  async function confirm(token) {
+    const res = await requireActiveToken(token);
+    const session = requireSessionIn(res, ["parent_post"]);
+    const adherence = await db.queryOne(
+      `SELECT confirm1_at, confirm2_at FROM game_adherence WHERE mission_id = ?`,
+      [res.mission.id]
+    );
+    const nowIso = isoOf2(now());
+    if (!adherence || adherence.confirm1_at === null) {
+      await db.execute(
+        `INSERT INTO game_adherence (mission_id, confirm1_at) VALUES (?, ?)
+         ON CONFLICT(mission_id) DO UPDATE SET confirm1_at = COALESCE(game_adherence.confirm1_at, excluded.confirm1_at)`,
+        [res.mission.id, nowIso]
+      );
+    } else if (adherence.confirm2_at === null) {
+      await db.execute(`UPDATE game_adherence SET confirm2_at = ? WHERE mission_id = ?`, [nowIso, res.mission.id]);
+      await db.execute(`UPDATE game_sessions SET state = 'closed', last_activity_at = ? WHERE id = ?`, [nowIso, session.id]);
+    }
+    const fresh = await resolveLink(token);
+    return stateViewOf(fresh);
+  }
+  __name(confirm, "confirm");
+  async function getSessionDetail(missionId) {
+    const sessions = await db.query(`SELECT * FROM game_sessions WHERE mission_id = ? ORDER BY created_at DESC`, [missionId]);
+    const sessionIds = sessions.map((s) => s.id);
+    const attempts = sessionIds.length ? await db.query(
+      `SELECT * FROM game_attempts WHERE session_id IN (${sessionIds.map(() => "?").join(",")}) ORDER BY created_at`,
+      sessionIds
+    ) : [];
+    return {
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        state: s.state,
+        validity: s.validity,
+        startedAt: s.started_at,
+        endedAt: s.ended_at,
+        metrics: parseJson2(s.metrics_json, null)
+      })),
+      attempts: attempts.map((a) => ({
+        id: a.id,
+        sessionId: a.session_id,
+        itemId: a.item_id,
+        phase: a.phase,
+        response: stripAnswerKeys(parseJson2(a.response_json, {})),
+        correct: a.correct === null ? null : a.correct === 1,
+        rtMs: a.rt_ms,
+        rtValid: a.rt_valid === 1,
+        createdAt: a.created_at
+      }))
+    };
+  }
+  __name(getSessionDetail, "getSessionDetail");
+  return {
+    upsertMetric,
+    listMetrics,
+    upsertGoal,
+    listGoals,
+    upsertPackage,
+    listPackages,
+    publishPackage,
+    createPrescription,
+    listPrescriptions,
+    setPrescriptionStatus,
+    scheduleMission,
+    listMissions,
+    issueLink,
+    revokeLink,
+    getSessionDetail,
+    getState,
+    start,
+    nextItem,
+    submitAttempt,
+    finish,
+    parentGate,
+    confirm
+  };
+}
+__name(createGamesService, "createGamesService");
+
+// src/domain/games/page.ts
+var FA_DIGITS2 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
+function faNum5(n) {
+  return String(n).replace(/[0-9]/g, (d) => FA_DIGITS2[Number(d)]);
+}
+__name(faNum5, "faNum");
+function esc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+__name(esc, "esc");
+function page(model, token, body) {
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>${esc(model.missionTitle || "\u062C\u0644\u0633\u0647\u0654 \u0628\u0627\u0632\u06CC")}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #F7F3EA; color: #12384f; font-family: Tahoma, "Segoe UI", sans-serif;
+         line-height: 1.9; -webkit-tap-highlight-color: transparent; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 20px 14px 48px; }
+  .card { background: #fff; border-radius: 16px; padding: 22px 18px; margin-top: 14px;
+          box-shadow: 0 1px 3px rgba(18,56,79,.08); text-align: center; }
+  .pill { display: inline-block; font-size: 12px; color: #1c5d80; background: #D9EDF7;
+          border-radius: 999px; padding: 2px 12px; }
+  h1 { font-size: 18px; margin: 10px 0 4px; }
+  .muted { color: #8A8377; font-size: 13px; }
+  button { display: block; width: 100%; border: 0; background: #229ED9; color: #fff;
+           border-radius: 12px; padding: 15px; font-size: 16px; font-weight: 700; cursor: pointer;
+           font-family: inherit; margin-top: 12px; min-height: 52px; }
+  button:disabled { opacity: .6; }
+  .msg { margin-top: 10px; font-size: 13px; min-height: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">${body}</div>
+<script>
+(function () {
+  var TOKEN = ${JSON.stringify(token)};
+  function post(path, body) {
+    return fetch('/api/m/' + TOKEN + path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body || {})
+    }).then(function (r) { return r.json(); }).then(function () { location.reload(); })
+      .catch(function () { location.reload(); });
+  }
+  var bind = function (id, path, body) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', function () { el.disabled = true; post(path, body); });
+  };
+  bind('btn-start', '/start');
+  bind('btn-finish', '/finish');
+  bind('btn-gate-open', '/parent-gate', {});
+  bind('btn-gate-solve', '/parent-gate', { solve: true });
+  var c1 = document.getElementById('btn-confirm1');
+  if (c1) c1.addEventListener('click', function () { c1.disabled = true; post('/confirm'); });
+})();
+</script>
+</body>
+</html>`;
+}
+__name(page, "page");
+function renderGamesPage(model, token) {
+  const head = `<span class="pill">${esc(model.packageTitle || "\u062C\u0644\u0633\u0647\u0654 \u062F\u0631\u0645\u0627\u0646\u06CC")}</span>
+    <h1>${esc(model.missionTitle || "\u062C\u0644\u0633\u0647\u0654 \u0628\u0627\u0632\u06CC")}</h1>`;
+  if (model.state === "expired" || model.state === "revoked") {
+    return page(model, token, `<div class="card"><h1>\u0627\u06CC\u0646 \u067E\u06CC\u0648\u0646\u062F \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A</h1>
+      <p class="muted">\u0627\u0639\u062A\u0628\u0627\u0631 \u0627\u06CC\u0646 \u067E\u06CC\u0648\u0646\u062F \u0628\u0647 \u067E\u0627\u06CC\u0627\u0646 \u0631\u0633\u06CC\u062F\u0647 \u06CC\u0627 \u0628\u0627\u0637\u0644 \u0634\u062F\u0647 \u0627\u0633\u062A. \u0628\u0631\u0627\u06CC \u062C\u0644\u0633\u0647\u0654 \u0628\u0639\u062F\u060C \u067E\u06CC\u0627\u0645 \u062A\u0627\u0632\u0647 \u062F\u0631\u06CC\u0627\u0641\u062A \u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F.</p></div>`);
+  }
+  if (model.state === "parent_pre") {
+    return page(model, token, `<div class="card">${head}
+      <p class="muted">\u062F\u0631\u0633 \u06A9\u0648\u062A\u0627\u0647 \u0648\u0627\u0644\u062F \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0646\u0645\u0627\u06CC\u0634 \u062F\u0627\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F (\u0632\u06CC\u0631 \u06F2 \u062F\u0642\u06CC\u0642\u0647).</p>
+      <p class="muted">\u06AF\u0648\u0634\u06CC \u0631\u0627 \u0628\u0647 \u06A9\u0648\u062F\u06A9 \u0628\u062F\u0647\u06CC\u062F \u0648 \u06A9\u0646\u0627\u0631\u0634 \u0628\u0645\u0627\u0646\u06CC\u062F.</p>
+      <button id="btn-start" type="button">\u0622\u0645\u0627\u062F\u0647\u0654 \u0634\u0631\u0648\u0639 \u0647\u0633\u062A\u06CC\u0645</button></div>`);
+  }
+  if (model.state === "child_active") {
+    return page(model, token, `<div class="card">${head}
+      <p class="muted">\u0646\u0645\u0627\u06CC\u0634 \u0628\u0627\u0632\u06CC \u062F\u0631 \u0627\u06CC\u0646 \u0628\u062E\u0634 \u0627\u062C\u0631\u0627 \u0645\u06CC\u200C\u0634\u0648\u062F (\u0641\u0627\u0632 \u0628\u0639\u062F).</p>
+      <button id="btn-finish" type="button">\u0627\u0645\u0631\u0648\u0632 \u062A\u0645\u0627\u0645 \u0634\u062F!</button>
+      <div class="msg muted">\u067E\u0627\u06CC\u0627\u0646 \u062C\u0644\u0633\u0647 \u0647\u0645\u06CC\u0634\u0647 \u0628\u0627 \u062A\u0635\u0645\u06CC\u0645 \u06A9\u0648\u062F\u06A9 \u0627\u0633\u062A.</div></div>`);
+  }
+  if (model.state === "child_done") {
+    return page(model, token, `<div class="card"><h1>\u0627\u0645\u0631\u0648\u0632 \u062A\u0645\u0627\u0645 \u0634\u062F!</h1>
+      <p class="muted">\u06AF\u0648\u0634\u06CC \u0631\u0627 \u0628\u0647 \u0645\u0627\u0645\u0627\u0646 \u0628\u062F\u0647.</p>
+      <button id="btn-gate-open" type="button">\u0645\u0646 \u0645\u0627\u0645\u0627\u0646 \u0647\u0633\u062A\u0645</button></div>`);
+  }
+  if (model.state === "parent_gate") {
+    return page(model, token, `<div class="card"><h1>\u062A\u0623\u06CC\u06CC\u062F \u0648\u0627\u0644\u062F</h1>
+      <p class="muted">\u0628\u0631\u0627\u06CC \u0628\u0627\u0632\u06A9\u0631\u062F\u0646 \u0628\u0627\u0632\u062E\u0648\u0631\u062F\u060C \u062F\u06A9\u0645\u0647 \u0631\u0627 \u062A\u0623\u06CC\u06CC\u062F \u06A9\u0646\u06CC\u062F (\u0646\u0633\u062E\u0647\u0654 \u06A9\u0627\u0645\u0644: \u0646\u06AF\u0647\u200C\u062F\u0627\u0634\u062A\u0646 \u06F2 \u062B\u0627\u0646\u06CC\u0647).</p>
+      <button id="btn-gate-solve" type="button">\u062A\u0623\u06CC\u06CC\u062F</button></div>`);
+  }
+  if (model.state === "parent_post") {
+    const conf = model.adherenceConfirmed ? faNum5(2) : faNum5(1);
+    return page(model, token, `<div class="card">${head}
+      <p class="muted">\u0628\u0627\u0632\u062E\u0648\u0631\u062F \u062A\u0648\u0635\u06CC\u0641\u06CC \u0627\u06CC\u0646\u200C\u062C\u0627 \u0646\u0645\u0627\u06CC\u0634 \u062F\u0627\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F: \u0631\u0648\u0646\u062F \u0627\u06CC\u0646 \u0647\u0641\u062A\u0647 \u0648 \u06CC\u06A9 \u062C\u0645\u0644\u0647 \u0628\u0631\u0627\u06CC \u0641\u0631\u062F\u0627.</p>
+      <button id="btn-confirm1" type="button">\u062A\u0623\u06CC\u06CC\u062F \u0627\u0646\u062C\u0627\u0645 \u0634\u062F (${esc(conf)})</button>
+      <div class="msg muted">\u0628\u0627 \u062F\u0648\u0645\u06CC\u0646 \u062A\u0623\u06CC\u06CC\u062F\u060C \u067E\u0627\u06CC\u0628\u0646\u062F\u06CC \u0627\u0645\u0631\u0648\u0632 \u062B\u0628\u062A \u0645\u06CC\u200C\u0634\u0648\u062F.</div></div>`);
+  }
+  return page(model, token, `<div class="card"><h1>\u062B\u0628\u062A \u0634\u062F</h1>
+    <p class="muted">\u067E\u0627\u06CC\u0628\u0646\u062F\u06CC \u0627\u0645\u0631\u0648\u0632 \u062B\u0628\u062A \u0634\u062F. \u0633\u067E\u0627\u0633 \u0627\u0632 \u0647\u0645\u0631\u0627\u0647\u06CC \u0634\u0645\u0627.</p></div>`);
+}
+__name(renderGamesPage, "renderGamesPage");
+
+// src/domain/games/routes.ts
+var MetricSchema = external_exports.object({
+  id: external_exports.string().trim().min(3).max(64),
+  title_fa: external_exports.string().trim().min(1).max(120),
+  unit: external_exports.enum(["percent", "count", "ms", "score"]),
+  higher_is_better: external_exports.boolean(),
+  source: external_exports.enum(["auto", "human"]),
+  formula: external_exports.enum(["accuracy", "numline_error", "median_rt", "commission", "omission", "none"])
+});
+var GoalSchema = external_exports.object({
+  id: external_exports.string().trim().min(3).max(64),
+  title_fa: external_exports.string().trim().min(1).max(120),
+  package_id: external_exports.string().trim().min(2).max(64),
+  metric_id: external_exports.string().trim().min(3).max(64),
+  age_min: external_exports.number().int().min(2).max(25).nullable().optional(),
+  age_max: external_exports.number().int().min(2).max(25).nullable().optional()
+});
+var PackageSchema = external_exports.object({
+  package_id: external_exports.string().trim().min(2).max(64),
+  version: external_exports.string().trim().regex(/^\d+\.\d+\.\d+$/, "\u0646\u0633\u062E\u0647 semver"),
+  title_fa: external_exports.string().trim().min(1).max(160),
+  evidence_level: external_exports.enum(["A", "B", "C"]),
+  dose: external_exports.object({
+    days_per_week: external_exports.number().int().min(1).max(7),
+    minutes: external_exports.number().int().min(1).max(120),
+    max_missions_per_day: external_exports.number().int().min(1).max(10),
+    min_weeks: external_exports.number().int().min(1).max(52)
+  }),
+  body: external_exports.record(external_exports.unknown())
+});
+var PrescriptionSchema = external_exports.object({
+  child_id: external_exports.string().min(1),
+  package_id: external_exports.string().trim().min(2).max(64),
+  package_version: external_exports.string().trim().regex(/^\d+\.\d+\.\d+$/),
+  goal_id: external_exports.string().trim().min(3).max(64),
+  pathway_id: external_exports.string().nullable().optional(),
+  dose_override: external_exports.record(external_exports.unknown()).nullable().optional(),
+  suggested_by: external_exports.enum(["recommender", "therapist"]).optional()
+});
+var PrescriptionStatusSchema = external_exports.object({ action: external_exports.enum(["pause", "resume", "stop", "complete"]) });
+var MissionSchema = external_exports.object({
+  prescription_id: external_exports.string().min(1),
+  mission_ref: external_exports.string().trim().min(1).max(64),
+  scheduled_for: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E YYYY-MM-DD")
+});
+var PublishSchema = external_exports.object({ reviewed_by: external_exports.string().nullable().optional() });
+var AttemptSchema = external_exports.object({
+  item_id: external_exports.string().trim().min(1).max(64),
+  response: external_exports.unknown().optional(),
+  rt_ms: external_exports.number().min(0).max(12e4).nullable().optional(),
+  idem_key: external_exports.string().trim().min(8).max(100)
+});
+function registerGamesRoutes(app, service) {
+  app.get("/api/games/metrics", requireRole("manager", "therapist", "secretary"), async (c) => {
+    return c.json({ data: await service.listMetrics() }, 200);
+  });
+  app.post("/api/games/metrics", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = MetricSchema.parse(await c.req.json());
+    const created = await service.upsertMetric({
+      id: body.id,
+      titleFa: body.title_fa,
+      unit: body.unit,
+      higherIsBetter: body.higher_is_better,
+      source: body.source,
+      formula: body.formula
+    }, actor);
+    return c.json({ data: created }, 201);
+  });
+  app.get("/api/games/goals", requireRole("manager", "therapist", "secretary"), async (c) => {
+    return c.json({ data: await service.listGoals() }, 200);
+  });
+  app.post("/api/games/goals", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = GoalSchema.parse(await c.req.json());
+    const created = await service.upsertGoal({
+      id: body.id,
+      titleFa: body.title_fa,
+      packageId: body.package_id,
+      metricId: body.metric_id,
+      ageMin: body.age_min ?? null,
+      ageMax: body.age_max ?? null
+    }, actor);
+    return c.json({ data: created }, 201);
+  });
+  app.get("/api/games/packages", requireRole("manager", "therapist", "secretary"), async (c) => {
+    const status = c.req.query("status");
+    return c.json({ data: await service.listPackages(status || void 0) }, 200);
+  });
+  app.post("/api/games/packages", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = PackageSchema.parse(await c.req.json());
+    const created = await service.upsertPackage({
+      packageId: body.package_id,
+      version: body.version,
+      titleFa: body.title_fa,
+      evidenceLevel: body.evidence_level,
+      dose: body.dose,
+      body: body.body
+    }, actor);
+    return c.json({ data: { id: created.id, version: created.version, status: created.status } }, 201);
+  });
+  app.post("/api/games/packages/:id/:version/publish", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = PublishSchema.parse(await c.req.json().catch(() => ({})) ?? {});
+    const published = await service.publishPackage(c.req.param("id"), c.req.param("version"), body.reviewed_by ?? null, actor);
+    return c.json({ data: { id: published.id, version: published.version, status: published.status, reviewedBy: published.reviewedBy } }, 200);
+  });
+  app.post("/api/games/prescriptions", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = PrescriptionSchema.parse(await c.req.json());
+    const created = await service.createPrescription({
+      childId: body.child_id,
+      packageId: body.package_id,
+      packageVersion: body.package_version,
+      goalId: body.goal_id,
+      pathwayId: body.pathway_id ?? null,
+      doseOverride: body.dose_override ?? null,
+      suggestedBy: body.suggested_by
+    }, actor);
+    return c.json({ data: created }, 201);
+  });
+  app.get("/api/games/prescriptions", requireRole("manager", "therapist", "secretary"), async (c) => {
+    const childId = c.req.query("child_id");
+    return c.json({ data: await service.listPrescriptions(childId || void 0) }, 200);
+  });
+  app.post("/api/games/prescriptions/:id/status", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = PrescriptionStatusSchema.parse(await c.req.json());
+    return c.json({ data: await service.setPrescriptionStatus(c.req.param("id"), body.action, actor) }, 200);
+  });
+  app.post("/api/games/missions", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = MissionSchema.parse(await c.req.json());
+    const created = await service.scheduleMission({
+      prescriptionId: body.prescription_id,
+      missionRef: body.mission_ref,
+      scheduledFor: body.scheduled_for
+    }, actor);
+    return c.json({ data: created }, 201);
+  });
+  app.get("/api/games/missions", requireRole("manager", "therapist", "secretary"), async (c) => {
+    const prescriptionId = c.req.query("prescription_id");
+    if (!prescriptionId) return c.json({ error: { code: "VALIDATION", message: "prescription_id \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" } }, 400);
+    return c.json({ data: await service.listMissions(prescriptionId) }, 200);
+  });
+  app.post("/api/games/missions/:id/link", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    return c.json({ data: await service.issueLink(c.req.param("id"), actor) }, 201);
+  });
+  app.post("/api/games/links/:jti/revoke", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    return c.json({ data: await service.revokeLink(c.req.param("jti"), actor) }, 200);
+  });
+  app.get("/api/games/missions/:id/sessions", requireRole("manager", "therapist"), async (c) => {
+    return c.json({ data: await service.getSessionDetail(c.req.param("id")) }, 200);
+  });
+}
+__name(registerGamesRoutes, "registerGamesRoutes");
+function registerGamesPublicRoutes(app, service) {
+  app.get("/m/:token", async (c) => {
+    let model;
+    try {
+      model = await service.getState(c.req.param("token"));
+    } catch {
+      model = { state: "expired", missionRef: "", missionTitle: "", packageTitle: "", expiresAt: "" };
+    }
+    return new Response(renderGamesPage(model, c.req.param("token")), {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+      }
+    });
+  });
+  const jsonHeaders = { "Cache-Control": "no-store" };
+  app.get("/api/m/:token/state", async (c) => {
+    try {
+      return c.json({ data: await service.getState(c.req.param("token")) }, 200, jsonHeaders);
+    } catch (err) {
+      return publicError(c, err);
+    }
+  });
+  app.post("/api/m/:token/start", async (c) => {
+    try {
+      return c.json({ data: await service.start(c.req.param("token")) }, 200, jsonHeaders);
+    } catch (err) {
+      return publicError(c, err);
+    }
+  });
+  app.get("/api/m/:token/next-item", async (c) => {
+    try {
+      return c.json({ data: await service.nextItem(c.req.param("token")) }, 200, jsonHeaders);
+    } catch (err) {
+      return publicError(c, err);
+    }
+  });
+  app.post("/api/m/:token/attempts", async (c) => {
+    try {
+      const body = AttemptSchema.parse(await c.req.json());
+      return c.json({ data: await service.submitAttempt(c.req.param("token"), { ...body, response: body.response ?? {} }) }, 200, jsonHeaders);
+    } catch (err) {
+      return publicError(c, err);
+    }
+  });
+  app.post("/api/m/:token/finish", async (c) => {
+    try {
+      return c.json({ data: await service.finish(c.req.param("token")) }, 200, jsonHeaders);
+    } catch (err) {
+      return publicError(c, err);
+    }
+  });
+  app.post("/api/m/:token/parent-gate", async (c) => {
+    try {
+      const body = await c.req.json().catch(() => ({}));
+      return c.json({ data: await service.parentGate(c.req.param("token"), body?.solve === true) }, 200, jsonHeaders);
+    } catch (err) {
+      return publicError(c, err);
+    }
+  });
+  app.post("/api/m/:token/confirm", async (c) => {
+    try {
+      return c.json({ data: await service.confirm(c.req.param("token")) }, 200, jsonHeaders);
+    } catch (err) {
+      return publicError(c, err);
+    }
+  });
+}
+__name(registerGamesPublicRoutes, "registerGamesPublicRoutes");
+function publicError(c, err) {
+  if (err instanceof AppError) {
+    return c.json({ error: err.code, message: err.message }, err.status, { "Cache-Control": "no-store" });
+  }
+  const message = err instanceof Error ? err.message : "\u062E\u0637\u0627\u06CC \u063A\u06CC\u0631\u0645\u0646\u062A\u0638\u0631\u0647";
+  return c.json({ error: "VALIDATION_ERROR", message }, 400, { "Cache-Control": "no-store" });
+}
+__name(publicError, "publicError");
 
 // src/domain/clinical-engine/types.ts
 var BATTERY_VERSION = "battery-v1";
@@ -29464,10 +30743,10 @@ function completed(events) {
   return events.filter((e) => e.status === "completed");
 }
 __name(completed, "completed");
-function faNum5(n) {
+function faNum6(n) {
   return String(n).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
-__name(faNum5, "faNum");
+__name(faNum6, "faNum");
 function wechslerProfileFactsOf(event) {
   const profile = wechslerEngineOutputOf(event)?.profile ?? null;
   const idxNum = /* @__PURE__ */ __name((x) => typeof x?.scaled === "number" ? x.scaled : null, "idxNum");
@@ -29781,7 +31060,7 @@ function runInference(events, options = {}) {
       if (!idPathActive && wFacts.fsiq !== null && wFacts.fsiq >= FSIQ_BAND_BIF.min && wFacts.fsiq <= FSIQ_BAND_BIF.max && (adapt === "normal" || adapt === "unknown")) {
         cands.push({
           weight: 1,
-          fa: `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum5(wFacts.fsiq)} \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0645\u0631\u0632\u06CC/\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (\u06F7\u06F0\u2013\u06F8\u06F4) \u0627\u0633\u062A \u0648 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \u0639\u0627\u062F\u06CC \u06CC\u0627 \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0634\u0627\u0647\u062F \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (BIF).`
+          fa: `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum6(wFacts.fsiq)} \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0645\u0631\u0632\u06CC/\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (\u06F7\u06F0\u2013\u06F8\u06F4) \u0627\u0633\u062A \u0648 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \u0639\u0627\u062F\u06CC \u06CC\u0627 \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0634\u0627\u0647\u062F \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (BIF).`
         });
       }
       if (!idPathActive) {
@@ -29931,10 +31210,10 @@ function runInference(events, options = {}) {
 __name(runInference, "runInference");
 
 // src/domain/clinical-engine/narrative.ts
-function faNum6(s) {
+function faNum7(s) {
   return String(s).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
-__name(faNum6, "faNum");
+__name(faNum7, "faNum");
 var CERTAINTY_WORDS = ["\u0642\u0637\u0639\u0627\u064B", "\u0628\u0644\u0627\u0634\u06A9", "\u062D\u062A\u0645\u0627\u064B \u062A\u0634\u062E\u06CC\u0635", "\u0635\u062F \u062F\u0631 \u0635\u062F", "\u06F1\u06F0\u06F0\u066A"];
 function assertPlainTone(text) {
   for (const w of CERTAINTY_WORDS) {
@@ -29956,7 +31235,7 @@ function sawOf(h) {
   const counts = h.criteriaSummary;
   if (counts.met > 0 || counts.partial > 0) {
     parts.push(
-      shortLine(`\u062F\u0631 \u062C\u062F\u0648\u0644 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627: ${faNum6(counts.met)} \u0645\u0644\u0627\u06A9 \u0628\u0631\u0622\u0648\u0631\u062F\u0647\u060C ${faNum6(counts.partial)} \u0646\u0627\u0642\u0635 \u0627\u0632 \u0645\u062C\u0645\u0648\u0639 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC DSM.`)
+      shortLine(`\u062F\u0631 \u062C\u062F\u0648\u0644 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627: ${faNum7(counts.met)} \u0645\u0644\u0627\u06A9 \u0628\u0631\u0622\u0648\u0631\u062F\u0647\u060C ${faNum7(counts.partial)} \u0646\u0627\u0642\u0635 \u0627\u0632 \u0645\u062C\u0645\u0648\u0639 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC DSM.`)
     );
   }
   if (parts.length === 0) parts.push("\u0634\u0648\u0627\u0647\u062F \u06A9\u0645\u06CC \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u0642\u0648\u06CC\u200C\u0634\u062F\u0646 \u0641\u0631\u0636\u06CC\u0647 \u062F\u0627\u062F\u0647\u0654 \u0628\u06CC\u0634\u062A\u0631\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A.");
@@ -32638,10 +33917,10 @@ function numOf(value) {
   return Number.isFinite(n) ? n : null;
 }
 __name(numOf, "numOf");
-function faNum7(n) {
+function faNum8(n) {
   return String(n).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
-__name(faNum7, "faNum");
+__name(faNum8, "faNum");
 function subtestsOf(engine) {
   const map = /* @__PURE__ */ new Map();
   const snap = engine?.["snapshot"];
@@ -32810,14 +34089,14 @@ function recommendChecklistPlan(ctx) {
     return {
       planType: "\u062C\u0627\u0645\u0639",
       items: [],
-      basis: `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum7(fsiq ?? 0)} \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0633\u062A \u0648 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \xAB\u067E\u0627\u06CC\u06CC\u0646\xBB \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u2014 \u0637\u0628\u0642 \u0645\u0644\u0627\u06A9 \u062A\u0641\u06A9\u06CC\u06A9 \u0627\u0646\u0637\u0628\u0627\u0642\u06CC\u060C \u0645\u0633\u06CC\u0631 \u0627\u0631\u062C\u0627\u0639 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC (ID) \u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0633\u0627\u0645\u0627\u0646\u0647 \u067E\u0644\u0646 \u0627\u0628\u0632\u0627\u0631\u06CC \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F\u061B \u062A\u0635\u0645\u06CC\u0645 \u0648 \u0627\u0631\u062C\u0627\u0639 \u0628\u0627 \u0645\u062A\u062E\u0635\u0635 \u0627\u0633\u062A.`,
+      basis: `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum8(fsiq ?? 0)} \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0633\u062A \u0648 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \xAB\u067E\u0627\u06CC\u06CC\u0646\xBB \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u2014 \u0637\u0628\u0642 \u0645\u0644\u0627\u06A9 \u062A\u0641\u06A9\u06CC\u06A9 \u0627\u0646\u0637\u0628\u0627\u0642\u06CC\u060C \u0645\u0633\u06CC\u0631 \u0627\u0631\u062C\u0627\u0639 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC (ID) \u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0633\u0627\u0645\u0627\u0646\u0647 \u067E\u0644\u0646 \u0627\u0628\u0632\u0627\u0631\u06CC \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F\u061B \u062A\u0635\u0645\u06CC\u0645 \u0648 \u0627\u0631\u062C\u0627\u0639 \u0628\u0627 \u0645\u062A\u062E\u0635\u0635 \u0627\u0633\u062A.`,
       referralFa: "\u062E\u0637 \u0642\u0631\u0645\u0632 \u2014 \u0645\u0633\u06CC\u0631 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC (FSIQ \u2264 \u06F7\u06F0 \u0647\u0645\u0631\u0627\u0647 \u0627\u0646\u0637\u0628\u0627\u0642 \u067E\u0627\u06CC\u06CC\u0646): \u067E\u0644\u0646 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0631\u0641\u062A\u0627\u0631\u06CC \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0646\u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u067E\u0631\u0648\u0646\u062F\u0647 \u0628\u0631\u0627\u06CC \u0627\u0631\u062C\u0627\u0639 \u062A\u062E\u0635\u0635\u06CC (\u0631\u0648\u0627\u0646\u200C\u067E\u0632\u0634\u06A9/\u0645\u062F\u06CC\u0631 \u067E\u0631\u0648\u0646\u062F\u0647) \u0639\u0644\u0627\u0645\u062A \u062E\u0648\u0631\u062F."
     };
   }
   const bifCondition = band === "BIF" || band === "ID" && (adapt.level === "normal" || adapt.level === "border");
   if (bifCondition) {
     const bandFa = band === "BIF" ? "\u0628\u0627\u0632\u0647\u0654 \u0645\u0631\u0632\u06CC/\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (\u06F7\u06F0\u2013\u06F8\u06F4)" : "\u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0645\u0631\u0632 \u06F7\u06F0 \u0628\u0627 \u0627\u0646\u0637\u0628\u0627\u0642 \u062D\u0641\u0638\u200C\u0634\u062F\u0647";
-    const probeReason = `\u067E\u0644\u0646 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632 (FSIQ ${faNum7(fsiq ?? 0)} \u2014 ${bandFa}): \u0633\u0646\u062C\u0634 \u0639\u0645\u0644\u06A9\u0631\u062F \u0648\u0627\u0642\u0639\u06CC \u062F\u0631 \u0633\u0647 \u062D\u0648\u0632\u0647\u0654 \u067E\u0627\u06CC\u0647 \u0628\u0631\u0627\u06CC \u0647\u062F\u0641\u200C\u06AF\u0630\u0627\u0631\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC \u0648\u0627\u0642\u0639\u200C\u0628\u06CC\u0646\u0627\u0646\u0647 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F5).`;
+    const probeReason = `\u067E\u0644\u0646 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632 (FSIQ ${faNum8(fsiq ?? 0)} \u2014 ${bandFa}): \u0633\u0646\u062C\u0634 \u0639\u0645\u0644\u06A9\u0631\u062F \u0648\u0627\u0642\u0639\u06CC \u062F\u0631 \u0633\u0647 \u062D\u0648\u0632\u0647\u0654 \u067E\u0627\u06CC\u0647 \u0628\u0631\u0627\u06CC \u0647\u062F\u0641\u200C\u06AF\u0630\u0627\u0631\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC \u0648\u0627\u0642\u0639\u200C\u0628\u06CC\u0646\u0627\u0646\u0647 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F5).`;
     for (const key of [PLAN_TOOL_KEYS.probeRead, PLAN_TOOL_KEYS.probeWrite, PLAN_TOOL_KEYS.probeCalc]) {
       builder.add(key, "core", probeReason, "r5");
     }
@@ -32868,7 +34147,7 @@ function recommendChecklistPlan(ctx) {
       builder.add(
         PLAN_TOOL_KEYS.idAdapt,
         "core",
-        `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum7(fsiq ?? 0)} \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0645\u0631\u0632 \u06F7\u06F0 \u0627\u0633\u062A \u0648\u0644\u06CC \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u2014 \u0633\u0646\u062C\u0647\u0654 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 (\u0641\u0631\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u0647) \u0628\u0631\u0627\u06CC \u062A\u0641\u06A9\u06CC\u06A9 \u0645\u0633\u06CC\u0631 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0632 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A (\xA7\u06F3.\u06F1).`,
+        `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum8(fsiq ?? 0)} \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0645\u0631\u0632 \u06F7\u06F0 \u0627\u0633\u062A \u0648\u0644\u06CC \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u2014 \u0633\u0646\u062C\u0647\u0654 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 (\u0641\u0631\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u0647) \u0628\u0631\u0627\u06CC \u062A\u0641\u06A9\u06CC\u06A9 \u0645\u0633\u06CC\u0631 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0632 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A (\xA7\u06F3.\u06F1).`,
         "r6"
       );
       builder.notes.push("\u062A\u0627 \u062A\u06A9\u0645\u06CC\u0644 \u0633\u0646\u062C\u0647\u0654 \u0627\u0646\u0637\u0628\u0627\u0642\u060C \u0645\u0633\u06CC\u0631 ID \u0645\u0647\u0631 \u0646\u0645\u06CC\u200C\u0634\u0648\u062F \u2014 \u0645\u0644\u0627\u06A9 \u062A\u0641\u06A9\u06CC\u06A9 \u0627\u0646\u0637\u0628\u0627\u0642\u06CC \u062F\u0648 \u0645\u0633\u06CC\u0631 \u0631\u0627 \u062C\u062F\u0627\u06CC \u0647\u0645 \u0646\u06AF\u0647 \u0645\u06CC\u200C\u062F\u0627\u0631\u062F.");
@@ -32948,12 +34227,12 @@ function applyProfileRules(args) {
     builder.domains.add("attention");
   }
   if (facts.vci !== null && facts.vci <= T.LOW_INDEX && facts.vocabLow) {
-    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u0634\u0627\u062E\u0635 \u06A9\u0644\u0627\u0645\u06CC ${faNum7(facts.vci)} \u0628\u0627 \u0648\u0627\u0698\u06AF\u0627\u0646/\u062A\u0634\u0627\u0628\u0647\u0627\u062A \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 \u0648 \u06AF\u0641\u062A\u0627\u0631 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F3).`, "r3");
+    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u0634\u0627\u062E\u0635 \u06A9\u0644\u0627\u0645\u06CC ${faNum8(facts.vci)} \u0628\u0627 \u0648\u0627\u0698\u06AF\u0627\u0646/\u062A\u0634\u0627\u0628\u0647\u0627\u062A \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 \u0648 \u06AF\u0641\u062A\u0627\u0631 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F3).`, "r3");
     builder.add(PLAN_TOOL_KEYS.probeRead, "recommended", "\u067E\u0631\u0648\u0628 \u0631\u0648\u0627\u0646\u06CC\u200C\u062E\u0648\u0627\u0646\u062F\u0646 \u062F\u0631 \u0633\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u062A\u0641\u06A9\u06CC\u06A9 \u0632\u0628\u0627\u0646 \u0627\u0632 \u062E\u0648\u0627\u0646\u062F\u0646 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F3).", "r3");
     builder.domains.add("language");
   }
   if (facts.wmi !== null && facts.wmi <= T.LOW_INDEX && (facts.digitsSpanLow || facts.letterNumberLow)) {
-    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC ${faNum7(facts.wmi)} \u0628\u0627 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645/\u062A\u0648\u0627\u0644\u06CC \u062D\u0631\u0641-\u0639\u062F\u062F \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 + \u0628\u0631\u0631\u0633\u06CC \u067E\u0631\u062F\u0627\u0632\u0634 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F4).`, "r4");
+    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC ${faNum8(facts.wmi)} \u0628\u0627 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645/\u062A\u0648\u0627\u0644\u06CC \u062D\u0631\u0641-\u0639\u062F\u062F \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 + \u0628\u0631\u0631\u0633\u06CC \u067E\u0631\u062F\u0627\u0632\u0634 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F4).`, "r4");
     builder.notes.push("\u0627\u0644\u06AF\u0648\u06CC \u067E\u0631\u062F\u0627\u0632\u0634 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC \u2014 \u0627\u0631\u062C\u0627\u0639 \u0634\u0646\u0648\u0627\u06CC\u06CC\u200C\u0634\u0646\u0627\u0633\u06CC (APD) \u062F\u0631 \u0646\u0648\u0628\u062A\u200C\u06AF\u06CC\u0631\u06CC \u062F\u0631 \u0646\u0638\u0631 \u06AF\u0631\u0641\u062A\u0647 \u0634\u0648\u062F.");
     builder.domains.add("language");
   }
@@ -32989,7 +34268,7 @@ function applyProfileRules(args) {
   const execWeak = facts.wmi !== null && facts.wmi <= T.EXEC_WEAK || facts.psi !== null && facts.psi <= T.EXEC_WEAK;
   if (strongIdx.length > 0 && execWeak && facts.indexScatter !== null && facts.indexScatter >= T.SCATTER_TWO_E) {
     const weakDomain = anam.sldDomains.write ? [PLAN_TOOL_KEYS.sldWri, "\u0646\u0648\u0634\u062A\u0646"] : anam.sldDomains.calc ? [PLAN_TOOL_KEYS.sldCalc, "\u062D\u0633\u0627\u0628"] : [PLAN_TOOL_KEYS.sldRead, "\u062E\u0648\u0627\u0646\u062F\u0646"];
-    builder.add(weakDomain[0], "core", `\u0634\u0627\u062E\u0635 \u0642\u0648\u06CC ${faNum7(Math.max(...strongIdx))} \u0628\u0627 \u0636\u0639\u0641 \u0627\u062C\u0631\u0627\u06CC\u06CC \u0648 \u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC ${faNum7(facts.indexScatter)} \u2014 \u0628\u0633\u062A\u0647\u0654 SLD \u062D\u0648\u0632\u0647\u0654 \u0636\u0639\u0641 (${weakDomain[1]}) + \u062A\u06AF \u0627\u0633\u062A\u0639\u062F\u0627\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F1).`, "r11");
+    builder.add(weakDomain[0], "core", `\u0634\u0627\u062E\u0635 \u0642\u0648\u06CC ${faNum8(Math.max(...strongIdx))} \u0628\u0627 \u0636\u0639\u0641 \u0627\u062C\u0631\u0627\u06CC\u06CC \u0648 \u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC ${faNum8(facts.indexScatter)} \u2014 \u0628\u0633\u062A\u0647\u0654 SLD \u062D\u0648\u0632\u0647\u0654 \u0636\u0639\u0641 (${weakDomain[1]}) + \u062A\u06AF \u0627\u0633\u062A\u0639\u062F\u0627\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F1).`, "r11");
     builder.domains.add("academic");
   }
   if (facts.fsiq !== null && facts.fsiq >= 90 && facts.step5Weak.length > 0) {
@@ -33016,7 +34295,7 @@ function applyProfileRules(args) {
     builder.notes.push("\u0646\u06CC\u0645\u200C\u0631\u062E \u0647\u0645\u200C\u0646\u0648\u0627\u0632 \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0645\u062A\u0648\u0633\u0637 \u2014 \u0628\u0627\u062A\u0631\u06CC \u067E\u0627\u06CC\u0647\u0654 \u0633\u0628\u06A9 \u0648 \u067E\u0627\u06CC\u0627\u0646 \u0632\u0648\u062F\u0647\u0646\u06AF\u0627\u0645 \u0645\u0633\u06CC\u0631 \u0634\u0646\u0627\u0633\u0627\u06CC\u06CC (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F3).");
   }
   if ((facts.indexScatter ?? 0) >= T.SCATTER_SEVERE && !facts.acid && !facts.cad && builder.items.size === 0) {
-    builder.notes.push(`\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum7(facts.indexScatter ?? 0)} (\u2265\u06F2\u06F3) \u0628\u062F\u0648\u0646 \u0627\u0644\u06AF\u0648\u06CC \u0645\u0639\u0646\u0627\u062F\u0627\u0631 \u2014 \u0627\u0628\u062A\u062F\u0627 \u0627\u0639\u062A\u0628\u0627\u0631 \u0627\u062C\u0631\u0627\u06CC \u0622\u0632\u0645\u0648\u0646 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0634\u0648\u062F\u061B \u062A\u0641\u0633\u06CC\u0631 \u0628\u0647 \u0633\u0637\u062D \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u0645\u0646\u062A\u0642\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F4).`);
+    builder.notes.push(`\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum8(facts.indexScatter ?? 0)} (\u2265\u06F2\u06F3) \u0628\u062F\u0648\u0646 \u0627\u0644\u06AF\u0648\u06CC \u0645\u0639\u0646\u0627\u062F\u0627\u0631 \u2014 \u0627\u0628\u062A\u062F\u0627 \u0627\u0639\u062A\u0628\u0627\u0631 \u0627\u062C\u0631\u0627\u06CC \u0622\u0632\u0645\u0648\u0646 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0634\u0648\u062F\u061B \u062A\u0641\u0633\u06CC\u0631 \u0628\u0647 \u0633\u0637\u062D \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u0645\u0646\u062A\u0642\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F4).`);
   }
   void band;
 }
@@ -33038,8 +34317,8 @@ var ADAPT_FA = {
 function buildBasis(args) {
   const { facts, anam, adapt, domains, notes, planType } = args;
   const parts = [];
-  parts.push(facts.available && facts.fsiq !== null ? `\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: FSIQ ${faNum7(facts.fsiq)}${args.band ? ` \u2014 ${bandLabelFa(args.band)}` : ""}` : "\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
-  parts.push(anam.signals.size > 0 ? `\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647: ${faNum7(anam.signals.size)} \u0646\u0634\u0627\u0646\u0647\u0654 \u062B\u0628\u062A\u200C\u0634\u062F\u0647` : anam.text.length > 0 ? "\u0634\u0631\u062D\u200C\u062D\u0627\u0644: \u0646\u0633\u062E\u0647\u0654 \u0642\u062F\u06CC\u0645\u06CC (\u0628\u062F\u0648\u0646 \u0633\u06CC\u06AF\u0646\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647)" : "\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0646\u0633\u062E\u0647\u0654 \u06F3: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
+  parts.push(facts.available && facts.fsiq !== null ? `\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: FSIQ ${faNum8(facts.fsiq)}${args.band ? ` \u2014 ${bandLabelFa(args.band)}` : ""}` : "\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
+  parts.push(anam.signals.size > 0 ? `\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647: ${faNum8(anam.signals.size)} \u0646\u0634\u0627\u0646\u0647\u0654 \u062B\u0628\u062A\u200C\u0634\u062F\u0647` : anam.text.length > 0 ? "\u0634\u0631\u062D\u200C\u062D\u0627\u0644: \u0646\u0633\u062E\u0647\u0654 \u0642\u062F\u06CC\u0645\u06CC (\u0628\u062F\u0648\u0646 \u0633\u06CC\u06AF\u0646\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647)" : "\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0646\u0633\u062E\u0647\u0654 \u06F3: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
   parts.push(`\u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647: ${ADAPT_FA[adapt.level]}`);
   const domainFa = [...domains].map((d) => DOMAIN_FA[d] ?? d);
   parts.push(domainFa.length ? `\u062D\u0648\u0632\u0647\u200C\u0647\u0627\u06CC \u062F\u0631\u06AF\u06CC\u0631: ${domainFa.join("\u060C ")}` : "\u062D\u0648\u0632\u0647\u0654 \u062F\u0631\u06AF\u06CC\u0631 \u0645\u0634\u062E\u0635 \u0646\u0634\u062F\u0647");
@@ -33106,7 +34385,7 @@ var PATH_PROBE_UNIT_MAX = 20;
 var PATH_PROBE_NOTE_MAX = 300;
 var PATH_PROBE_VALUE_MAX = 1e4;
 var PATH_PROBES_PER_PATH_MAX = 600;
-function parseJson2(raw2, fallback) {
+function parseJson4(raw2, fallback) {
   if (!raw2) return fallback;
   try {
     return JSON.parse(raw2);
@@ -33114,7 +34393,7 @@ function parseJson2(raw2, fallback) {
     return fallback;
   }
 }
-__name(parseJson2, "parseJson");
+__name(parseJson4, "parseJson");
 function parseText(v, max) {
   const t = v?.trim();
   return t ? t.slice(0, max) : null;
@@ -33242,10 +34521,10 @@ function createClinicalEngineService(deps) {
       typeTitle: r.type_title,
       status: r.status,
       occurredAt: r.occurred_at,
-      payload: parseJson2(r.payload, null),
-      analysis: parseJson2(r.analysis, null),
-      bands: parseJson2(r.type_bands, null),
-      subscales: parseJson2(r.type_subscales, null)
+      payload: parseJson4(r.payload, null),
+      analysis: parseJson4(r.analysis, null),
+      bands: parseJson4(r.type_bands, null),
+      subscales: parseJson4(r.type_subscales, null)
     }));
   }
   __name(loadEvidenceEvents, "loadEvidenceEvents");
@@ -33267,7 +34546,7 @@ function createClinicalEngineService(deps) {
         [studentId, HYPOTHESIS_LOG_EVENT_KEY]
       );
       const fingerprint = hypothesisLogFingerprint(result.ranked);
-      const lastFingerprint = last?.payload ? parseJson2(last.payload, null)?.fingerprint ?? null : null;
+      const lastFingerprint = last?.payload ? parseJson4(last.payload, null)?.fingerprint ?? null : null;
       if (lastFingerprint === fingerprint) return;
       const id = crypto.randomUUID();
       const at = now().toISOString();
@@ -33332,7 +34611,7 @@ function createClinicalEngineService(deps) {
       )
     ]);
     let wechsler = null;
-    const payloadRaw = wechslerRow?.payload ? parseJson2(wechslerRow.payload, null) : null;
+    const payloadRaw = wechslerRow?.payload ? parseJson4(wechslerRow.payload, null) : null;
     const engineRaw = payloadRaw?.engine_output?.value?.trim();
     if (engineRaw) {
       try {
@@ -33368,11 +34647,11 @@ function createClinicalEngineService(deps) {
       plan: r.plan,
       criterion: r.criterion ?? null,
       outcome: r.outcome ?? null,
-      items: sanitizeSessionItems(parseJson2(r.items_json ?? "[]", [])),
+      items: sanitizeSessionItems(parseJson4(r.items_json ?? "[]", [])),
       status,
       doneAt: r.done_at,
       note: r.note,
-      fidelity: parseJson2(r.fidelity ?? null, null),
+      fidelity: parseJson4(r.fidelity ?? null, null),
       // 
       createdBy: r.created_by,
       createdAt: r.created_at,
@@ -33414,10 +34693,10 @@ function createClinicalEngineService(deps) {
       targetKey: r.target_key,
       targetTitle: targetOf(r.target_key)?.title ?? r.target_key,
       status: r.status,
-      engineHypothesis: parseJson2(r.engine_hypothesis, null),
-      decision: parseJson2(r.decision, null),
-      steps: parseJson2(r.steps, []),
-      exerciseIds: parseJson2(r.exercise_ids, []),
+      engineHypothesis: parseJson4(r.engine_hypothesis, null),
+      decision: parseJson4(r.decision, null),
+      steps: parseJson4(r.steps, []),
+      exerciseIds: parseJson4(r.exercise_ids, []),
       templateKey: r.template_key ?? null,
       templateTitle: r.template_title ?? null,
       sessions,
@@ -33425,7 +34704,7 @@ function createClinicalEngineService(deps) {
       // فقط listPaths بج را پر می‌کند؛ مسیرهای تکی null می‌مانند
       reassessAt: r.reassess_at,
       goal: r.goal ?? null,
-      goalBasis: parseJson2(r.goal_basis, null),
+      goalBasis: parseJson4(r.goal_basis, null),
       // 
       createdBy: r.created_by,
       createdAt: r.created_at,
@@ -33517,9 +34796,9 @@ function createClinicalEngineService(deps) {
       targetKey = targetKey ?? tpl.target_key;
       templateKey = tpl.key;
       templateTitle = tpl.title;
-      const tplSteps = parseJson2(tpl.steps, []);
+      const tplSteps = parseJson4(tpl.steps, []);
       steps = tplSteps.map((s) => ({ key: s.key, title: s.title, hint: s.hint, doneAt: null }));
-      tplSessions = sanitizeTemplateSessions(parseJson2(tpl.sessions_json ?? null, []));
+      tplSessions = sanitizeTemplateSessions(parseJson4(tpl.sessions_json ?? null, []));
     } else {
       steps = [];
     }
@@ -33577,7 +34856,7 @@ function createClinicalEngineService(deps) {
     }
     let newStatus;
     let targetKey = row.target_key;
-    let exerciseIds = parseJson2(row.exercise_ids, []);
+    let exerciseIds = parseJson4(row.exercise_ids, []);
     const changes = {};
     switch (input.action) {
       case "confirm":
@@ -33595,7 +34874,7 @@ function createClinicalEngineService(deps) {
         if (input.exerciseIds) {
           const ids = input.exerciseIds.filter((x) => typeof x === "string" && x.length > 0).slice(0, 20);
           exerciseIds = ids;
-          changes.exercise_ids = { from: parseJson2(row.exercise_ids, []), to: ids };
+          changes.exercise_ids = { from: parseJson4(row.exercise_ids, []), to: ids };
         }
         break;
       case "edit":
@@ -33652,7 +34931,7 @@ function createClinicalEngineService(deps) {
     if (status !== "active") {
       throw new ConflictError(`\u0639\u0644\u0627\u0645\u062A\u200C\u0632\u062F\u0646 \u06AF\u0627\u0645 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0645\u0633\u06CC\u0631 \u0641\u0639\u0627\u0644 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u0627\u06CC\u0646 \u0645\u0633\u06CC\u0631 \xAB${INTERVENTION_PATH_STATUS_LABELS[status]}\xBB \u0627\u0633\u062A`);
     }
-    const steps = parseJson2(row.steps, []);
+    const steps = parseJson4(row.steps, []);
     const step = steps.find((s) => s.key === stepKey);
     if (!step) throw new NotFoundError("\u06AF\u0627\u0645 \u0645\u0633\u06CC\u0631");
     step.doneAt = step.doneAt ? null : iso();
@@ -33691,8 +34970,8 @@ function createClinicalEngineService(deps) {
       description: r.description,
       protocol: r.protocol,
       targetKey: r.target_key,
-      steps: parseJson2(r.steps, []),
-      sessions: sanitizeTemplateSessions(parseJson2(r.sessions_json ?? null, [])),
+      steps: parseJson4(r.steps, []),
+      sessions: sanitizeTemplateSessions(parseJson4(r.sessions_json ?? null, [])),
       isSystem: r.is_system === 1,
       active: r.active === 1,
       createdBy: r.created_by ?? null
@@ -33725,8 +35004,8 @@ function createClinicalEngineService(deps) {
     if (targetKey && !targetOf(targetKey)) {
       throw new ValidationError("\u0647\u062F\u0641 \u067E\u06CC\u0634\u200C\u0641\u0631\u0636 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0634\u0646\u0627\u062E\u062A\u0647\u200C\u0634\u062F\u0647\u0654 \u0633\u0627\u0645\u0627\u0646\u0647 \u0646\u06CC\u0633\u062A");
     }
-    const steps = input.steps !== void 0 ? sanitizeTemplateSteps(input.steps) : parseJson2(existing?.steps ?? "[]", []);
-    const sessions = input.sessions !== void 0 ? sanitizeTemplateSessions(input.sessions) : sanitizeTemplateSessions(parseJson2(existing?.sessions_json ?? null, []));
+    const steps = input.steps !== void 0 ? sanitizeTemplateSteps(input.steps) : parseJson4(existing?.steps ?? "[]", []);
+    const sessions = input.sessions !== void 0 ? sanitizeTemplateSessions(input.sessions) : sanitizeTemplateSessions(parseJson4(existing?.sessions_json ?? null, []));
     await assertCardLinksExist(sessions.flatMap((s) => s.items));
     const active = input.active !== void 0 ? input.active ? 1 : 0 : existing?.active ?? 1;
     if (existing) {
@@ -33825,13 +35104,13 @@ function createClinicalEngineService(deps) {
     const nextCriterion = input.criterion !== void 0 ? parseText(input.criterion, PATHWAY_SESSION_CRITERION_MAX) : session.criterion ?? null;
     const nextOutcome = input.outcome !== void 0 ? parseText(input.outcome, PATHWAY_SESSION_CRITERION_MAX) : session.outcome ?? null;
     const nextNote = input.note !== void 0 ? parseText(input.note, PATHWAY_SESSION_NOTE_MAX) : session.note;
-    const nextItems = input.items !== void 0 ? sanitizeSessionItems(input.items) : sanitizeSessionItems(parseJson2(session.items_json ?? "[]", []));
+    const nextItems = input.items !== void 0 ? sanitizeSessionItems(input.items) : sanitizeSessionItems(parseJson4(session.items_json ?? "[]", []));
     if (input.items !== void 0) await assertCardLinksExist(nextItems);
     let nextFidelity;
     if (input.fidelity !== void 0) {
       nextFidelity = input.fidelity ? { protocol: Boolean(input.fidelity.protocol), homework: Boolean(input.fidelity.homework), parent: Boolean(input.fidelity.parent) } : null;
     } else {
-      nextFidelity = parseJson2(session.fidelity ?? null, null);
+      nextFidelity = parseJson4(session.fidelity ?? null, null);
     }
     let nextStatus = session.status;
     let nextDoneAt = session.done_at;
@@ -34155,11 +35434,11 @@ function createClinicalEngineService(deps) {
       }
     }, "absorb");
     for (const r of sesRows) {
-      absorb(sanitizeSessionItems(parseJson2(r.items_json ?? "[]", [])), r.updated_at ?? "");
+      absorb(sanitizeSessionItems(parseJson4(r.items_json ?? "[]", [])), r.updated_at ?? "");
     }
     for (const r of tplRows) {
       const usedAt = r.updated_at ?? "";
-      for (const s of sanitizeTemplateSessions(parseJson2(r.sessions_json ?? "[]", []))) {
+      for (const s of sanitizeTemplateSessions(parseJson4(r.sessions_json ?? "[]", []))) {
         absorb(s.items, usedAt);
       }
     }
@@ -34193,8 +35472,8 @@ function createClinicalEngineService(deps) {
     const paths = (await db.query(`SELECT id, student_id, engine_hypothesis, decision, reassess_at FROM intervention_paths WHERE deleted_at IS NULL`)).map((r) => ({
       id: r.id,
       studentId: r.student_id,
-      engineHypothesis: parseJson2(r.engine_hypothesis, null),
-      decision: parseJson2(r.decision, null),
+      engineHypothesis: parseJson4(r.engine_hypothesis, null),
+      decision: parseJson4(r.decision, null),
       reassessAt: r.reassess_at
     }));
     const sessions = (await db.query(
@@ -34737,11 +36016,11 @@ function parseJsonSafe(raw2) {
   }
 }
 __name(parseJsonSafe, "parseJsonSafe");
-function faNum8(value) {
+function faNum9(value) {
   const fa2 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
   return String(value).replace(/\d/g, (d) => fa2[Number(d)]);
 }
-__name(faNum8, "faNum");
+__name(faNum9, "faNum");
 function numOf2(value) {
   if (value === null || value === void 0 || value === "") return null;
   const n = Number(String(value).replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))));
@@ -34790,15 +36069,15 @@ function computeSuspicion(behavioralEvents, decisionEvent, isFreshIso) {
       const iaDanger = iaNum !== null ? iaNum >= cut.ia.danger : subscaleColorOf(event, "ia") === "danger";
       const iaWarn = !iaDanger && iaNum !== null ? iaNum >= cut.ia.warn : !iaDanger && subscaleColorOf(event, "ia") === "warn";
       if (iaDanger) {
-        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum8(iaNum)} \u0627\u0632 ${faNum8(27)})` : ""}` });
+        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum9(iaNum)} \u0627\u0632 ${faNum9(27)})` : ""}` });
       } else if (iaWarn) {
-        hits.push({ construct: "adhd", level: "watch", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum8(iaNum)})` : ""}` });
+        hits.push({ construct: "adhd", level: "watch", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum9(iaNum)})` : ""}` });
       }
       const hi = subscaleScoreOf2(event, "hi");
       const hiNum = hi ? hi.score : numOf2(event.payload?.["hi_total"]?.value);
       const hiDanger = hiNum !== null ? hiNum >= cut.hi.danger : subscaleColorOf(event, "hi") === "danger";
       if (hiDanger) {
-        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u0642\u0631\u0627\u0631\u06CC/\u062A\u06A9\u0627\u0646\u0634 \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${hiNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum8(hiNum)})` : ""}` });
+        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u0642\u0631\u0627\u0631\u06CC/\u062A\u06A9\u0627\u0646\u0634 \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${hiNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum9(hiNum)})` : ""}` });
       }
       continue;
     }
@@ -34816,11 +36095,11 @@ function computeSuspicion(behavioralEvents, decisionEvent, isFreshIso) {
       const total = event.analysis?.score ?? numOf2(event.payload?.["total"]?.value);
       if (total !== null) {
         if (total >= SCARED_STRONG2) {
-          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u062F\u0631 \u0628\u0627\u0646\u062F \u0627\u062E\u062A\u0635\u0627\u0635\u06CC \u0627\u0633\u062A (${faNum8(total)})` });
+          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u062F\u0631 \u0628\u0627\u0646\u062F \u0627\u062E\u062A\u0635\u0627\u0635\u06CC \u0627\u0633\u062A (${faNum9(total)})` });
         } else if (total >= SCARED_DANGER2) {
-          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (${faNum8(total)} \u0627\u0632 ${faNum8(82)})` });
+          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (${faNum9(total)} \u0627\u0632 ${faNum9(82)})` });
         } else if (total >= SCARED_WARN_MIN2) {
-          hits.push({ construct: "anxiety", level: "watch", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A (${faNum8(total)})` });
+          hits.push({ construct: "anxiety", level: "watch", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A (${faNum9(total)})` });
         }
       }
       continue;
@@ -37496,11 +38775,11 @@ function createClearbookService(deps) {
         params
       );
       const hasMore = rows.length > limit;
-      const page = rows.slice(0, limit);
-      const ids = page.map((r) => r.id);
+      const page2 = rows.slice(0, limit);
+      const ids = page2.map((r) => r.id);
       const [tagMap, attMap] = await Promise.all([tagsOfEntries(ids), attachmentsOfEntries(ids)]);
       return {
-        items: page.map((r) => rowToEntry3(r, tagMap.get(r.id) ?? [], attMap.get(r.id) ?? [])),
+        items: page2.map((r) => rowToEntry3(r, tagMap.get(r.id) ?? [], attMap.get(r.id) ?? [])),
         hasMore
       };
     },
@@ -38410,10 +39689,10 @@ function createDocsService(deps) {
         params
       );
       const hasMore = rows.length > limit;
-      const page = rows.slice(0, limit);
-      const fileMap = await filesOfDocs(page.map((r) => r.id));
+      const page2 = rows.slice(0, limit);
+      const fileMap = await filesOfDocs(page2.map((r) => r.id));
       return {
-        items: page.map((r) => rowToRecord4(r, fileMap.get(r.id) ?? [])),
+        items: page2.map((r) => rowToRecord4(r, fileMap.get(r.id) ?? [])),
         hasMore
       };
     },
@@ -42340,7 +43619,7 @@ function createExerciseBankBot(deps) {
     };
   }
   __name(renderRoot, "renderRoot");
-  async function renderCats(chatId, cat, page) {
+  async function renderCats(chatId, cat, page2) {
     const groups = await exerciseBank.categories();
     const list = cat === "d" ? groups.disorder : cat === "g" ? groups.grade : groups.other;
     if (list.length === 0) {
@@ -42351,7 +43630,7 @@ function createExerciseBankBot(deps) {
     }
     const total = list.length;
     const totalPages = Math.max(1, Math.ceil(total / EXB_PAGE_SIZE));
-    const safePage = Math.min(Math.max(page, 1), totalPages);
+    const safePage = Math.min(Math.max(page2, 1), totalPages);
     const slice = list.slice((safePage - 1) * EXB_PAGE_SIZE, safePage * EXB_PAGE_SIZE);
     const state = await readState(chatId);
     state.cats = list.map((t) => t.id);
@@ -42376,7 +43655,7 @@ function createExerciseBankBot(deps) {
     };
   }
   __name(renderCats, "renderCats");
-  async function renderList(chatId, cat, tagIdx, page) {
+  async function renderList(chatId, cat, tagIdx, page2) {
     let tagId;
     if (cat !== "a") {
       const state2 = await readState(chatId);
@@ -42384,7 +43663,7 @@ function createExerciseBankBot(deps) {
       if (!tagId) return STALE;
     }
     const result = await exerciseBank.list(
-      { tagId, publishedOnly: true, page, pageSize: EXB_PAGE_SIZE },
+      { tagId, publishedOnly: true, page: page2, pageSize: EXB_PAGE_SIZE },
       EXB_ACTOR
     );
     if (result.items.length === 0) {
@@ -43188,10 +44467,10 @@ function createAwarenessBot(deps) {
         ]
       };
     },
-    async section(section, page) {
+    async section(section, page2) {
       const items = sectionItems(section);
       const totalPages = Math.max(1, Math.ceil(items.length / AW_PAGE_SIZE));
-      const safePage = Math.min(Math.max(page, 1), totalPages);
+      const safePage = Math.min(Math.max(page2, 1), totalPages);
       const slice = items.slice((safePage - 1) * AW_PAGE_SIZE, safePage * AW_PAGE_SIZE);
       const rows = slice.map((it, i) => [
         { text: it.title, callbackData: `dis:${section}:${(safePage - 1) * AW_PAGE_SIZE + i}` }
@@ -46547,10 +47826,10 @@ function createBackupService(deps) {
           const count = await rowCount(t);
           yield `${i > 0 ? "," : ""}"${t}":{"row_count":${count},"rows":[`;
           let emitted = 0;
-          const page = t === FILES_TABLE ? FILES_PAGE_SIZE : PAGE_SIZE;
-          for (let offset = 0; ; offset += page) {
+          const page2 = t === FILES_TABLE ? FILES_PAGE_SIZE : PAGE_SIZE;
+          for (let offset = 0; ; offset += page2) {
             const rows = await db.query(
-              `SELECT * FROM "${t}" LIMIT ${page} OFFSET ${offset}`
+              `SELECT * FROM "${t}" LIMIT ${page2} OFFSET ${offset}`
             );
             if (rows.length === 0) break;
             for (const r of rows) {
@@ -46559,7 +47838,7 @@ function createBackupService(deps) {
               yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean)}`;
               emitted += 1;
             }
-            if (rows.length < page) break;
+            if (rows.length < page2) break;
           }
           yield "]}";
         }
@@ -48282,9 +49561,16 @@ function createServices(deps) {
       otProfileOf: /* @__PURE__ */ __name((studentId, actor) => otEngine.getOtProfile(studentId, actor), "otProfileOf")
     }
   });
+  const games = createGamesService({
+    db,
+    audit,
+    logger,
+    publicBaseUrl: deps.publicBaseUrl ?? null,
+    injectPathProbe: /* @__PURE__ */ __name((pathId, input, actor) => clinicalEngine.addPathProbe(pathId, input, actor), "injectPathProbe")
+  });
   const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null });
   const rum = createRumService({ db, logger });
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, backup, rum };
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum };
 }
 __name(createServices, "createServices");
 function createApp(deps) {
@@ -48364,6 +49650,7 @@ function createApp(deps) {
       }
     });
   });
+  registerGamesPublicRoutes(app, services.games);
   registerAuthRoutes(app, { audit: services.audit, logger: services.logger });
   app.use("/api/*", authMiddleware());
   app.use("/api/*", supervisorGate(services.audit));
@@ -48383,6 +49670,7 @@ function createApp(deps) {
   registerRoutes4(app, services.documentRequests);
   registerCaseEventsRoutes(app, services.caseEvents);
   registerClinicalEngineRoutes(app, services.clinicalEngine);
+  registerGamesRoutes(app, services.games);
   registerOtEngineRoutes(app, services.otEngine);
   registerCaseEventPublicRoutes(app, services.caseEvents, {
     studentNameOf: /* @__PURE__ */ __name(async (id) => {
