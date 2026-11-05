@@ -1,0 +1,48 @@
+// index.ts — ماژول بازی‌های درمانی (M1 / ۱.۲۵.۰۷)
+export { createGamesService } from './service';
+export { registerGamesRoutes, registerGamesPublicRoutes } from './routes';
+export {
+  TONE_RULES_BASE,
+  DEFAULT_RT_FLOOR_MS,
+  IDLE_PARTIAL_MS,
+  MIN_COMPLETION_RATIO,
+  FORBIDDEN_TEXT_PATTERNS,
+  HOMOPHONE_SETS,
+  scoreAttempt,
+  answerDisplayOf,
+  accuracyOf,
+  meanNumlineErrorOf,
+  medianRtOf,
+  commissionCountOf,
+  omissionCountOf,
+  computeMetricValue,
+  decideValidity,
+  masteryAchieved,
+  runPublishGates,
+  lintTexts,
+  lintSentence,
+  containsHomophonePair,
+  stripAnswerKeys,
+  toItemView
+} from './pure';
+export type {
+  GamesDeps,
+  GamesService,
+  PackageBody,
+  PackageRecord,
+  PackageUpsertInput,
+  MissionConfig,
+  MissionItem,
+  MissionRecord,
+  ItemView,
+  AttemptDraftInput,
+  AttemptFeedback,
+  PublicStateView,
+  LinkIssueOutcome,
+  PrescriptionCreateInput,
+  PrescriptionRecord,
+  RegistryGoal,
+  RegistryMetric,
+  SessionMetricOutcome,
+  PathProbeInjector
+} from './types';
