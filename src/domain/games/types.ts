@@ -172,6 +172,12 @@ export interface AttemptFeedback {
   replay_audio?: boolean;
 }
 
+/** راهنمای شروع بازی کودک — فقط از آیتم‌های آموزشی ساخته می‌شود و هیچ ردی از پروب ندارد (M2) */
+export interface PlayHint {
+  go: { label: string; stim: Record<string, unknown> };
+  nogo: { label: string; stim: Record<string, unknown> } | null;
+}
+
 export interface PublicStateView {
   state: LinkState | 'expired' | 'revoked';
   missionRef: string;
@@ -180,6 +186,10 @@ export interface PublicStateView {
   expiresAt: string;
   validity?: SessionValidity;
   adherenceConfirmed?: boolean;
+  /** فقط در child_active: نوع‌بازی برای بارگیری ماژول زمان‌اجرای کودک (M2) */
+  playGame?: string;
+  /** فقط در child_active: راهنمای «این هدف است / این نه» از آیتم‌های آموزشی (M2) */
+  playHint?: PlayHint | null;
 }
 
 export interface LinkIssueOutcome {

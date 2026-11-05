@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.07";
+var APP_VERSION = "1.25.08";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23345,6 +23345,51 @@ function scoreAttempt(item, mission, response, rtMs) {
   };
 }
 __name(scoreAttempt, "scoreAttempt");
+var FA_COLOR_KEYS = {
+  yellow: "\u0632\u0631\u062F",
+  blue: "\u0622\u0628\u06CC",
+  red: "\u0642\u0631\u0645\u0632",
+  green: "\u0633\u0628\u0632",
+  orange: "\u0646\u0627\u0631\u0646\u062C\u06CC",
+  purple: "\u0628\u0646\u0641\u0634",
+  \u0632\u0631\u062F: "\u0632\u0631\u062F",
+  \u0622\u0628\u06CC: "\u0622\u0628\u06CC",
+  \u0642\u0631\u0645\u0632: "\u0642\u0631\u0645\u0632",
+  \u0633\u0628\u0632: "\u0633\u0628\u0632",
+  \u0646\u0627\u0631\u0646\u062C\u06CC: "\u0646\u0627\u0631\u0646\u062C\u06CC",
+  \u0628\u0646\u0641\u0634: "\u0628\u0646\u0641\u0634"
+};
+var FA_SHAPE_KEYS = {
+  star: "\u0633\u062A\u0627\u0631\u0647",
+  circle: "\u062F\u0627\u06CC\u0631\u0647",
+  square: "\u0645\u0631\u0628\u0639",
+  fish: "\u0645\u0627\u0647\u06CC",
+  crab: "\u062E\u0631\u0686\u0646\u06AF",
+  boat: "\u0642\u0627\u06CC\u0642",
+  balloon: "\u0628\u0627\u062F\u06A9\u0646\u06A9",
+  heart: "\u0642\u0644\u0628",
+  flower: "\u06AF\u0644",
+  cat: "\u06AF\u0631\u0628\u0647",
+  \u0633\u062A\u0627\u0631\u0647: "\u0633\u062A\u0627\u0631\u0647",
+  \u062F\u0627\u06CC\u0631\u0647: "\u062F\u0627\u06CC\u0631\u0647",
+  \u0645\u0631\u0628\u0639: "\u0645\u0631\u0628\u0639",
+  \u0645\u0627\u0647\u06CC: "\u0645\u0627\u0647\u06CC"
+};
+function faKeyOf(map, raw2) {
+  if (typeof raw2 !== "string" || raw2.trim() === "") return "";
+  const v = raw2.trim();
+  if (map[v]) return map[v];
+  return /[\u0600-\u06FF]/.test(v) ? v : "";
+}
+__name(faKeyOf, "faKeyOf");
+function stimLabelOf(stim) {
+  if (!stim) return "\u0647\u062F\u0641";
+  const shape = faKeyOf(FA_SHAPE_KEYS, stim.shape);
+  const color = faKeyOf(FA_COLOR_KEYS, stim.color);
+  const label = [shape, color].filter(Boolean).join(" ").trim();
+  return label || "\u0647\u062F\u0641";
+}
+__name(stimLabelOf, "stimLabelOf");
 function answerDisplayOf(item) {
   if (item.type === "choice") {
     return typeof item.correct === "number" ? item.options?.[item.correct]?.label ?? null : null;
@@ -23529,7 +23574,8 @@ __name(toItemView, "toItemView");
 // src/domain/games/service.ts
 var LINK_URL_PATH = "/m/";
 var FEEDBACK_OK = "\u06AF\u0631\u0641\u062A\u06CC!";
-var FEEDBACK_RETRY = "\u062F\u0648\u0628\u0627\u0631\u0647 \u06AF\u0648\u0634 \u06A9\u0646";
+var FEEDBACK_WITHHOLD = "\u0639\u0627\u0644\u06CC\u060C \u0635\u0628\u0631 \u06A9\u0631\u062F\u06CC!";
+var FEEDBACK_RETRY = "\u0627\u06CC\u0646 \u06CC\u06A9\u06CC \u0633\u062E\u062A\u0647\u061B \u0628\u06CC\u0627 \u0628\u0627 \u0647\u0645 \u062F\u0648\u0628\u0627\u0631\u0647 \u0646\u06AF\u0627\u0647\u0634 \u06A9\u0646\u06CC\u0645.";
 var MAX_RT_MS = 12e4;
 function isoOf2(d) {
   return d.toISOString();
@@ -23911,17 +23957,30 @@ function createGamesService(deps) {
     return m;
   }
   __name(missionConfigOf, "missionConfigOf");
+  function playHintOf(mission) {
+    const train = (mission.items ?? []).filter((it) => it.phase === "train" && it.type === "touch_report");
+    const go = train.find((it) => it.correct_touch === true);
+    const nogo = train.find((it) => it.correct_touch === false);
+    if (!go && !nogo) return null;
+    return {
+      go: { label: stimLabelOf(go?.stim), stim: go?.stim ?? {} },
+      nogo: nogo ? { label: stimLabelOf(nogo.stim), stim: nogo.stim } : null
+    };
+  }
+  __name(playHintOf, "playHintOf");
   async function stateViewOf(res) {
     const m = missionConfigOf(res);
     const adherence = await db.queryOne(`SELECT confirm2_at FROM game_adherence WHERE mission_id = ?`, [res.mission.id]);
+    const state = linkStateOf(res);
     return {
-      state: linkStateOf(res),
+      state,
       missionRef: m.id,
       missionTitle: m.title ?? m.id,
       packageTitle: res.pkg.titleFa,
       expiresAt: res.link.expires_at,
       validity: res.session ? res.session.validity : void 0,
-      adherenceConfirmed: adherence?.confirm2_at != null
+      adherenceConfirmed: adherence?.confirm2_at != null,
+      ...state === "child_active" ? { playGame: m.game, playHint: playHintOf(m) } : {}
     };
   }
   __name(stateViewOf, "stateViewOf");
@@ -23987,7 +24046,7 @@ function createGamesService(deps) {
     const rtMs = typeof draft.rt_ms === "number" && Number.isFinite(draft.rt_ms) ? draft.rt_ms < 0 ? null : draft.rt_ms > MAX_RT_MS ? null : Math.round(draft.rt_ms) : null;
     const scored = scoreAttempt(item, mission, draft.response, rtMs);
     const existing = await db.queryOne(`SELECT * FROM game_attempts WHERE idem_key = ?`, [draft.idem_key]);
-    if (existing) return feedbackOf(item, existing.correct === 1);
+    if (existing) return feedbackOf(item, existing.correct === 1, parseJson2(existing.response_json, {}));
     await db.execute(
       `INSERT INTO game_attempts (id, session_id, item_id, phase, response_json, correct, rt_ms, rt_valid, idem_key, created_at)
        VALUES (?,?,?,?,?,?,?,?,?,?)`,
@@ -24005,19 +24064,21 @@ function createGamesService(deps) {
       ]
     );
     await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf2(now()), session.id]);
-    return feedbackOf(item, scored.correct);
+    return feedbackOf(item, scored.correct, draft.response);
   }
   __name(submitAttempt, "submitAttempt");
-  function feedbackOf(item, correct) {
+  function feedbackOf(item, correct, response) {
     if (item.phase === "probe") {
       return { recorded: true, phase: "probe" };
     }
+    const touched = (response ?? {}) === Object(response) ? response.touched === true : false;
+    const message = item.type === "touch_report" && correct && !touched ? FEEDBACK_WITHHOLD : correct ? FEEDBACK_OK : FEEDBACK_RETRY;
     return {
       recorded: true,
       phase: "train",
       correct,
       answer_display: correct ? null : answerDisplayOf(item),
-      message: correct ? FEEDBACK_OK : FEEDBACK_RETRY,
+      message,
       replay_audio: !correct
     };
   }
@@ -24245,7 +24306,6 @@ function page(model, token, body) {
     if (el) el.addEventListener('click', function () { el.disabled = true; post(path, body); });
   };
   bind('btn-start', '/start');
-  bind('btn-finish', '/finish');
   bind('btn-gate-open', '/parent-gate', {});
   bind('btn-gate-solve', '/parent-gate', { solve: true });
   var c1 = document.getElementById('btn-confirm1');
@@ -24270,10 +24330,17 @@ function renderGamesPage(model, token) {
       <button id="btn-start" type="button">\u0622\u0645\u0627\u062F\u0647\u0654 \u0634\u0631\u0648\u0639 \u0647\u0633\u062A\u06CC\u0645</button></div>`);
   }
   if (model.state === "child_active") {
-    return page(model, token, `<div class="card">${head}
-      <p class="muted">\u0646\u0645\u0627\u06CC\u0634 \u0628\u0627\u0632\u06CC \u062F\u0631 \u0627\u06CC\u0646 \u0628\u062E\u0634 \u0627\u062C\u0631\u0627 \u0645\u06CC\u200C\u0634\u0648\u062F (\u0641\u0627\u0632 \u0628\u0639\u062F).</p>
-      <button id="btn-finish" type="button">\u0627\u0645\u0631\u0648\u0632 \u062A\u0645\u0627\u0645 \u0634\u062F!</button>
-      <div class="msg muted">\u067E\u0627\u06CC\u0627\u0646 \u062C\u0644\u0633\u0647 \u0647\u0645\u06CC\u0634\u0647 \u0628\u0627 \u062A\u0635\u0645\u06CC\u0645 \u06A9\u0648\u062F\u06A9 \u0627\u0633\u062A.</div></div>`);
+    const hint = JSON.stringify(model.playHint ?? null);
+    return page(model, token, `<div id="play-root" class="play-root"
+      data-token="${esc(token)}"
+      data-kind="${esc(model.playGame ?? "")}"
+      data-hint="${esc(hint)}">
+      <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
+      <div class="play-stage" id="play-stage"></div>
+      <div class="play-bubble" id="play-bubble" hidden></div>
+    </div>
+    <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />
+    <script type="module" src="/assets/play/play.js?v=${APP_VERSION}"></script>`);
   }
   if (model.state === "child_done") {
     return page(model, token, `<div class="card"><h1>\u0627\u0645\u0631\u0648\u0632 \u062A\u0645\u0627\u0645 \u0634\u062F!</h1>
@@ -24470,7 +24537,7 @@ function registerGamesPublicRoutes(app, service) {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
         "X-Robots-Tag": "noindex, nofollow",
-        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        "Content-Security-Policy": "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
       }
     });
   });

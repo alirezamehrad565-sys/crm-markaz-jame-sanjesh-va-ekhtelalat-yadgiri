@@ -269,7 +269,7 @@ describe('بستر بک‌اند بازی — زنجیرهٔ کامل', () => {
     expect(fb.recorded).toBe(true);
     expect(fb.correct).toBe(false);
     expect(fb.answer_display).toBe('70');
-    expect(fb.message).toBe('دوباره گوش کن');
+    expect(fb.message).toBe('این یکی سخته؛ بیا با هم دوباره نگاهش کنیم.'); // متن پیش‌فرض خطا §۲ (M2)
   });
 
   it('تکرار idem_key همان بازخورد را می‌دهد و پاسخ تکراری ثبت نمی‌شود', async () => {
