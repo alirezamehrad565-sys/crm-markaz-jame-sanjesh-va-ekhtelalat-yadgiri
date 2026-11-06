@@ -16,6 +16,9 @@ import {
   stripAnswerKeys,
   toItemView
 } from './pure';
+import { protocolForAge, protocolSnapshotOf } from './protocol';
+import type { ProtocolMode } from './protocol';
+import { ENGINE_ONLY_FORMULAS, mergeEngineMetrics } from './registry-extra';
 import type {
   AttemptDraftInput,
   AttemptFeedback,
@@ -138,6 +141,9 @@ export function createGamesService(deps: GamesDeps): GamesService {
   async function upsertMetric(input: { id: string; titleFa: string; unit: RegistryMetric['unit']; higherIsBetter: boolean; source: RegistryMetric['source']; formula: RegistryMetric['formula'] }, actor: AuthContext): Promise<RegistryMetric> {
     const id = input.id.trim();
     if (!/^[a-z][a-z0-9_]{2,63}$/.test(id)) throw new ValidationError('شناسهٔ سنجه باید الگوی لاتین snake_case داشته باشد');
+    if (ENGINE_ONLY_FORMULAS.includes(input.formula)) {
+      throw new ValidationError('سنجه‌های درصدی گو/نوگو از موتور می‌آیند و دستی ثبت نمی‌شوند');
+    }
     await db.execute(
       `INSERT INTO game_metrics (id, title_fa, unit, higher_is_better, source, formula) VALUES (?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET title_fa=excluded.title_fa, unit=excluded.unit,
@@ -149,9 +155,10 @@ export function createGamesService(deps: GamesDeps): GamesService {
   }
 
   async function listMetrics(): Promise<RegistryMetric[]> {
-    return db.query<RegistryMetric>(
+    const rows = await db.query<RegistryMetric>(
       `SELECT id, title_fa, unit, higher_is_better != 0 AS higher_is_better, source, formula FROM game_metrics ORDER BY id`
     );
+    return mergeEngineMetrics(rows); // سنجه‌های درصدی موتورمحور هم در رجیستری دیده می‌شوند
   }
 
   async function upsertGoal(input: { id: string; titleFa: string; packageId: string; metricId: string; ageMin?: number | null; ageMax?: number | null }, actor: AuthContext): Promise<RegistryGoal> {
@@ -507,10 +514,29 @@ export function createGamesService(deps: GamesDeps): GamesService {
     };
   }
 
+  /** سن کودک از تاریخ تولد — برای انتخاب باند سنی پروتکل (فاز ۱ بازطراحی)؛ بی‌تاریخ تولد = null */
+  async function childAgeOf(childId: string): Promise<number | null> {
+    try {
+      const row = await db.queryOne<{ birth_date: string | null }>(
+        `SELECT birth_date FROM students WHERE id = ?`,
+        [childId]
+      );
+      if (!row?.birth_date) return null;
+      const bd = new Date(row.birth_date);
+      if (Number.isNaN(bd.getTime())) return null;
+      const age = Math.floor((now().getTime() - bd.getTime()) / (365.2425 * 24 * 3600 * 1000));
+      return age >= 0 && age <= 25 ? age : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function stateViewOf(res: ResolvedLink): Promise<PublicStateView> {
     const m = missionConfigOf(res);
     const adherence = await db.queryOne<{ confirm2_at: string | null }>(`SELECT confirm2_at FROM game_adherence WHERE mission_id = ?`, [res.mission.id]);
     const state = linkStateOf(res);
+    const mode: ProtocolMode = res.pkg.body.mode ?? 'training';
+    const childAge = state === 'child_active' ? await childAgeOf(res.rx.child_id) : null;
     return {
       state,
       missionRef: m.id,
@@ -519,7 +545,11 @@ export function createGamesService(deps: GamesDeps): GamesService {
       expiresAt: res.link.expires_at,
       validity: res.session ? (res.session.validity as PublicStateView['validity']) : undefined,
       adherenceConfirmed: adherence?.confirm2_at != null,
-      ...(state === 'child_active' ? { playGame: m.game, playHint: playHintOf(m) } : {})
+      ...(state === 'child_active' ? {
+        playGame: m.game,
+        playHint: playHintOf(m),
+        playProtocol: protocolSnapshotOf(protocolForAge(mode, childAge))
+      } : {})
     };
   }
 

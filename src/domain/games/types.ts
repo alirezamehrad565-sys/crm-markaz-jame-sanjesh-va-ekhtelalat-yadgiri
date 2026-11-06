@@ -3,8 +3,19 @@ import type { AuthContext } from '@core/shared';
 import type { DbClient } from '@core/db';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
+import type { ProtocolSnapshot } from './protocol';
 
-export type MetricFormula = 'accuracy' | 'numline_error' | 'median_rt' | 'commission' | 'omission' | 'none';
+export type MetricFormula =
+  | 'accuracy'
+  | 'numline_error'
+  | 'median_rt'
+  | 'commission'
+  | 'omission'
+  | 'correct_go_pct'
+  | 'correct_nogo_pct'
+  | 'commission_pct'
+  | 'omission_pct'
+  | 'none';
 export type MetricUnit = 'percent' | 'count' | 'ms' | 'score';
 export type MetricSource = 'auto' | 'human';
 export type EvidenceLevel = 'A' | 'B' | 'C';
@@ -18,6 +29,15 @@ export interface GameDose {
   minutes: number;
   max_missions_per_day: number;
   min_weeks: number;
+}
+
+/** دو حالت مستقل دفترچهٔ وظیفه — تمرین و ارزیابی هرگز تنظیمات/داده/گزارش مشترک ندارند */
+export type PackageMode = 'training' | 'assessment';
+
+/** ارجاع نسخه‌دار به پروتکل — ارزیابی بدون پروتکل نسخه‌دار انتشار نمی‌گیرد */
+export interface PackageProtocolRef {
+  id: string;
+  version: string;
 }
 
 /** آیتم مأموریت داخل JSON بسته — کلیدهای پاسخ فقط همین‌جا می‌مانند و هرگز به کلاینت نمی‌روند */
@@ -56,6 +76,10 @@ export interface MissionConfig {
 export interface PackageBody {
   package_id: string;
   goals: string[];
+  /** دو حالت مستقل (فاز ۱ بازطراحی) — ناموجود = training (سازگاری با بسته‌های قبلی) */
+  mode?: PackageMode;
+  /** ارجاع نسخه‌دار پروتکل — در ارزیابی اجباری است؛ در تمرین پیشنهادی */
+  protocol?: PackageProtocolRef;
   age?: { min: number; max: number };
   mastery?: { threshold: number | null; sessions?: number };
   tone_rules?: string[];
@@ -190,6 +214,8 @@ export interface PublicStateView {
   playGame?: string;
   /** فقط در child_active: راهنمای «این هدف است / این نه» از آیتم‌های آموزشی (M2) */
   playHint?: PlayHint | null;
+  /** فقط در child_active: اسنپ‌شات پروتکل (فاز ۱ بازطراحی) — کلاینت پارامتر را فقط از این می‌خواند، هاردکد ممنوع */
+  playProtocol?: ProtocolSnapshot;
 }
 
 export interface LinkIssueOutcome {
