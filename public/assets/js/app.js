@@ -107,6 +107,7 @@ const NAV = [
   { hash: '#/archive', label: 'آرشیو', icon: 'archive', group: 'دانش‌آموزان', roles: ['manager', 'secretary'] },
   { hash: '#/treatment-plans', label: 'طرح درمان', icon: 'clipboard', group: 'ارزیابی و درمان', roles: ['manager', 'therapist'] }, // 
   { hash: '#/exercises', label: 'کارت‌های آماده', icon: 'grid', group: 'ارزیابی و درمان' }, // ریبرند بانک تمرین
+  { hash: '#/games', label: 'بازی‌ها', icon: 'gamepad', group: 'ارزیابی و درمان', roles: ['manager', 'therapist'] }, // ۱.۲۵.۲۰ — پیش‌نمایش درمانگر
   { hash: '#/outbox', label: 'صندوق اعلان‌ها', icon: 'bell', group: 'مرکز', roles: ['manager', 'secretary'] },
   { hash: '#/clearbook', label: 'کلر بوک مرکز', icon: 'book', group: 'مرکز', roles: ['manager', 'secretary'] }, // 
   { hash: '#/docs', label: 'نمون‌برگ‌ها و اسناد خام', icon: 'file', group: 'مرکز', roles: ['manager', 'secretary'] }, // 
@@ -410,6 +411,7 @@ register('#/students/:id/progress-report', { title: 'گزارش پیشرفت', r
 register('#/waitlist', { title: 'لیست انتظار', render: roleOnly(['manager', 'secretary', 'therapist', 'supervisor'], lazyView(() => import('./waitlist.js'), 'renderWaitlistModule', '#/waitlist'), 'این بخش برای دفتر و ثبت متقاضی توسط درمانگر فعال است.') }); /* ۱.۲۵.۰۱ — ناظر: آیتم منو بدون گیت می‌افتاد روی «دسترسی مجاز نیست» */
 register('#/archive', { title: 'آرشیو', render: roleOnly(['manager', 'secretary', 'supervisor'], lazyView(() => import('./views/archive.js'), 'renderArchive', '#/archive')) }); /* ۱.۲۵.۰۱ — ناظر: فقط مشاهده؛ اکشن‌های ردیف در خود نما پنهان می‌شوند */
 register('#/exercises', { title: 'کارت‌های آماده', render: lazyView(() => import('./views/exercises.js'), 'renderExercises', '#/exercises') }); //
+register('#/games', { title: 'بازی‌ها', render: roleOnly(['manager', 'therapist'], lazyView(() => import('./views/games.js'), 'renderGames', '#/games'), 'بخش بازی‌ها برای مدیر و درمانگر فعال است.') }); // ۱.۲۵.۲۰ — نخستین گرهٔ UI حلقهٔ درمانگر بازی‌ها
 register('#/treatment-plans', { title: 'طرح درمان', render: roleOnly(['manager', 'therapist'], lazyView(() => import('./views/treatment-plans.js'), 'renderTreatmentPlans', '#/treatment-plans'), 'این بخش برای مدیر و درمانگر (معلم LD) فعال است.') }); // 
 register('#/outbox', { title: 'صندوق اعلان‌ها', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/outbox.js'), 'renderOutbox', '#/outbox')) }); //
 register('#/clearbook', { title: 'کلر بوک مرکز', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/clearbook.js'), 'renderClearbook', '#/clearbook'), 'کلر بوک فقط برای دفتر مرکز (مدیر و منشی) فعال است.') }); // 
