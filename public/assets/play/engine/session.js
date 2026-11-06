@@ -77,8 +77,9 @@ export async function runSession(ctx) {
   if (B.star_basket && !isAssessment && basketEl) root.dataset.basket = 'on';
   else if (basketEl) root.removeAttribute('data-basket');
 
-  /* ماشین حالت + ساعت‌ها + گیره‌های مکث آزمون در جریان */
+  /* ماشین حالت + ساعت‌ها + گیره‌های مکث آزمون در جریان + ردیابی مکث برگه (فاز ۷) */
   const trialHooks = { pause: null, resume: null };
+  const pauseTracker = { count: 0, total_ms: 0, since: null };
   const machine = createMachine((state, from) => {
     const inMain = state === STATES.FIXATION || state === STATES.STIMULUS ||
       state === STATES.RESPONSE_WINDOW || state === STATES.INTER_TRIAL_INTERVAL;
@@ -95,9 +96,15 @@ export async function runSession(ctx) {
         pausedFrom = s;
         sleeper.pause();
         if (trialHooks.pause) trialHooks.pause();
+        if (pauseTracker.since === null) pauseTracker.since = performance.now();
         machine.to(STATES.PAUSED, { from: s });
       }
     } else if (machine.state === STATES.PAUSED && pausedFrom) {
+      if (pauseTracker.since !== null) {
+        pauseTracker.count += 1;
+        pauseTracker.total_ms += performance.now() - pauseTracker.since;
+        pauseTracker.since = null;
+      }
       if (trialHooks.resume) trialHooks.resume();
       sleeper.resume();
       machine.resumeTo(pausedFrom, { resumed: true });
@@ -253,7 +260,7 @@ export async function runSession(ctx) {
   finishBtn.addEventListener('click', async () => {
     finishBtn.disabled = true;
     try {
-      await api.finish();
+      await api.finish({ session_evidence: { pause_count: pauseTracker.count, pause_total_ms: Math.round(pauseTracker.total_ms) } });
       location.reload(); // سرور حالت child_done را رندر می‌کند
     } catch (err) {
       onNetworkFail();

@@ -19,11 +19,13 @@ import {
 import { protocolForAge, protocolSnapshotOf } from './protocol';
 import type { ProtocolMode } from './protocol';
 import { summarizeAttempts } from './scoring';
+import { assessQuality, serializeQuality, type QualityInput } from './quality';
 import { decideAdaptive, applyAdaptiveLevel, serializeDecision, type AdaptiveSessionInput, type AdaptiveDecision } from './adaptive';
 import { generateSequence, serializeSequence, parseSequenceRecord } from './stimulus';
 import { ENGINE_ONLY_FORMULAS, mergeEngineMetrics } from './registry-extra';
 import type {
   AttemptDraftInput,
+  SessionEvidenceFromClient,
   AttemptFeedback,
   GamesDeps,
   GamesService,
@@ -94,6 +96,7 @@ interface SessionRow {
   metrics_json: string | null;
   summary_json?: string | null;
   adaptive_json?: string | null;
+  quality_json?: string | null;
 }
 
 interface AttemptRow {
@@ -781,7 +784,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
     };
   }
 
-  async function finish(token: string): Promise<{ state: PublicStateView; metrics: SessionMetricOutcome[] }> {
+  async function finish(token: string, sessionEvidence?: SessionEvidenceFromClient): Promise<{ state: PublicStateView; metrics: SessionMetricOutcome[] }> {
     const res = await requireActiveToken(token);
     if (res.session && res.session.state === 'child_done') {
       // تکرار ایمن finish (شبکهٔ ناپایدار): همان وضعیت و همان سنجه‌های ذخیره‌شده
@@ -860,9 +863,27 @@ export function createGamesService(deps: GamesDeps): GamesService {
       }
     }
 
+    // کیفیت جلسه (فاز ۷) — سه‌تایی با قواعد شفاف؛ هیچ نتیجه‌گیری شناختی
+    const idleGapMax = activity.length > 1
+      ? Math.max(...activity.slice(1).map((t, i) => t - activity[i]))
+      : null;
+    const quality = assessQuality({
+      validity,
+      total_items: mission.items.length,
+      done_items: attempts.length,
+      idle_gap_max_ms: idleGapMax,
+      pause_count: typeof sessionEvidence?.pause_count === 'number' && Number.isFinite(sessionEvidence.pause_count) ? Math.max(0, Math.round(sessionEvidence.pause_count)) : null,
+      pause_total_ms: typeof sessionEvidence?.pause_total_ms === 'number' && Number.isFinite(sessionEvidence.pause_total_ms) ? Math.max(0, Math.round(sessionEvidence.pause_total_ms)) : null,
+      out_of_surface_total: summary.behavior.out_of_surface_total,
+      premature_total: summary.behavior.premature_total,
+      frame_drops_total: summary.behavior.frame_drops_total,
+      max_frame_delta_ms: summary.behavior.max_frame_delta_ms,
+      evidence_coverage: summary.behavior.evidence_coverage,
+      rt_floor_violations: attempts.filter((a) => a.rt_valid === 0).length
+    });
     await db.execute(
-      `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ?, summary_json = ? WHERE id = ?`,
-      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summary), session.id]
+      `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ?, summary_json = ?, quality_json = ? WHERE id = ?`,
+      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summary), serializeQuality(quality), session.id]
     );
     // تصمیم سازگاری (فاز ۶) — فقط تمرین با پروتکل فعال و کلید خاموشی روشن؛
     // ورودی‌های تصمیم عیناً در adaptive_json می‌مانند (شفافیت برای درمانگر)
@@ -950,7 +971,8 @@ export function createGamesService(deps: GamesDeps): GamesService {
         startedAt: s.started_at, endedAt: s.ended_at,
         sequence: s.sequence_json ? parseJson<unknown>(s.sequence_json, null) : null,
         metrics: parseJson<unknown>(s.metrics_json, null),
-        summary: s.summary_json ? parseJson<unknown>(s.summary_json, null) : null
+        summary: s.summary_json ? parseJson<unknown>(s.summary_json, null) : null,
+        quality: s.quality_json ? parseJson<unknown>(s.quality_json, null) : null
       })),
       attempts: attempts.map((a) => ({
         id: a.id, sessionId: a.session_id, itemId: a.item_id, phase: a.phase,

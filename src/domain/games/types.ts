@@ -257,6 +257,12 @@ export interface GamesDeps {
   injectPathProbe?: PathProbeInjector;
 }
 
+/** شواهد جلسه از کلاینت (فاز ۷) — مکث برگه؛ هر چیز دیگر پذیرفته نمی‌شود */
+export interface SessionEvidenceFromClient {
+  pause_count?: number | null;
+  pause_total_ms?: number | null;
+}
+
 export interface GamesService {
   // رجیستری (پرسنلی)
   upsertMetric(input: { id: string; titleFa: string; unit: MetricUnit; higherIsBetter: boolean; source: MetricSource; formula: MetricFormula }, actor: AuthContext): Promise<RegistryMetric>;
@@ -282,7 +288,7 @@ export interface GamesService {
   start(token: string): Promise<PublicStateView>;
   nextItem(token: string): Promise<{ item: ItemView | null; progress: { done: number; total: number } }>;
   submitAttempt(token: string, draft: AttemptDraftInput): Promise<AttemptFeedback>;
-  finish(token: string): Promise<{ state: PublicStateView; metrics: SessionMetricOutcome[] }>;
+  finish(token: string, sessionEvidence?: SessionEvidenceFromClient): Promise<{ state: PublicStateView; metrics: SessionMetricOutcome[] }>;
   parentGate(token: string, solve: boolean): Promise<PublicStateView>;
   confirm(token: string): Promise<PublicStateView>;
 }
