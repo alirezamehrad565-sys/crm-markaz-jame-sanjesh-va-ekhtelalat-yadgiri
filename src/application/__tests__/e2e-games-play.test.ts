@@ -97,13 +97,14 @@ describe('پخش‌کنندهٔ کودک (M2) — صفحه، راهنمای بی
     expect(html).toContain('data-kind="gonogo"');
     expect(html).toContain(`/assets/play/play.js?v=${APP_VERSION}`);
     expect(html).toContain(`/assets/play/play.css?v=${APP_VERSION}`);
-    // راهنما فقط از آموزش: «ستاره سبز» و «مربع آبی»
-    expect(html).toContain('ستاره سبز');
-    expect(html).toContain('مربع آبی');
+    // راهنما فقط از آموزش — با امضای دیداری مرحلهٔ ۱ (۱.۲۵.۲۳): «ماهی نارنجی» و «خرچنگ آبی»
+    // (محرک authored «ستاره سبز» فقط نمایش است و جای امضای مرحله را می‌دهد)
+    expect(html).toContain('ماهی نارنجی');
+    expect(html).toContain('خرچنگ آبی');
     const st = dataOf<StateBody>(await anon.get(`/api/m/${link.token}/state`));
     expect(st.playGame).toBe('gonogo');
-    expect(st.playHint?.go.label).toBe('ستاره سبز');
-    expect(st.playHint?.nogo?.label).toBe('مربع آبی');
+    expect(st.playHint?.go.label).toBe('ماهی نارنجی');
+    expect(st.playHint?.nogo?.label).toBe('خرچنگ آبی');
   });
 
   it('شناسهٔ غیرهدف پروب به هیچ‌جای صفحه و state درز نمی‌کند', async () => {

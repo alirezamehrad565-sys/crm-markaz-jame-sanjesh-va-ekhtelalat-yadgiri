@@ -292,7 +292,8 @@ describe('برچسب فارسی محرک برای راهنمای بازی کود
   });
 
   it('کلید ناشناختهٔ لاتین نمایش داده نمی‌شود و محرک تهی «هدف» می‌دهد', () => {
-    expect(stimLabelOf({ shape: 'ufo', color: 'crimson' })).toBe('هدف');
+    // 'ufo' از ۱.۲۵.۲۳ شکل شناخته‌شدهٔ درون‌مایهٔ مرحله‌هاست — ناشناختهٔ واقعی: 'unicorn'
+    expect(stimLabelOf({ shape: 'unicorn', color: 'crimson' })).toBe('هدف');
     expect(stimLabelOf(null)).toBe('هدف');
     expect(stimLabelOf(undefined)).toBe('هدف');
     expect(stimLabelOf({})).toBe('هدف');
