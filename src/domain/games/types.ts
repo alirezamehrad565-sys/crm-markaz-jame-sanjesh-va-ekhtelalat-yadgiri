@@ -83,6 +83,8 @@ export interface PackageBody {
   protocol?: PackageProtocolRef;
   /** کلید خاموشی سازگاری (فاز ۶) — فقط تمرین اثر دارد؛ پیش‌فرض فعال */
   adaptive_enabled?: boolean;
+  /** کلید خاموشی نظام مرحله‌ها و ستاره‌ها (۱.۲۵.۲۲) — فقط تمرین اثر دارد؛ پیش‌فرض فعال */
+  stages_enabled?: boolean;
   age?: { min: number; max: number };
   mastery?: { threshold: number | null; sessions?: number };
   tone_rules?: string[];
@@ -205,6 +207,31 @@ export interface PlayHint {
   nogo: { label: string; stim: Record<string, unknown> } | null;
 }
 
+/** فرادادهٔ مرحلهٔ فعال برای کارت کودک (۱.۲۵.۲۲) — فقط تمرین؛ کلید پاسخ/آستانه‌ها هرگز این‌جا نیست */
+export interface PublicStageMeta {
+  id: string;
+  index: number;
+  total: number;
+  title_fa: string;
+  goal_fa: string;
+  difficulty: number;
+  /** بهترین ستارهٔ همین مرحله در جلسه‌های قبل — ۰ = نخستین رویارویی */
+  best_stars: number;
+}
+
+/** نتیجهٔ مرحلهٔ آخرین جلسه برای کارت پایان (۱.۲۵.۲۲) — فقط تمرین و جلسهٔ معتبر */
+export interface PublicStageResult {
+  id: string;
+  index: number;
+  title_fa: string;
+  stars: number;
+  passed: boolean;
+  /** عنوان مرحلهٔ بعدی برای دعوت آرام — ته مسیر = null */
+  next_title_fa: string | null;
+  /** مجموع ستاره‌های جمع‌شدهٔ مسیر تا امروز */
+  stars_total: number;
+}
+
 export interface PublicStateView {
   state: LinkState | 'expired' | 'revoked';
   missionRef: string;
@@ -219,6 +246,10 @@ export interface PublicStateView {
   playHint?: PlayHint | null;
   /** فقط در child_active: اسنپ‌شات پروتکل (فاز ۱ بازطراحی) — کلاینت پارامتر را فقط از این می‌خواند، هاردکد ممنوع */
   playProtocol?: ProtocolSnapshot;
+  /** فقط در child_active حالت تمرین: مرحلهٔ فعال مسیر پیشرفت (۱.۲۵.۲۲) — ارزیابی هرگز */
+  playStage?: PublicStageMeta;
+  /** فقط در child_done حالت تمرین: نتیجهٔ مرحلهٔ جلسهٔ آخر با ستاره‌ها (۱.۲۵.۲۲) — ارزیابی هرگز */
+  playStageResult?: PublicStageResult;
 }
 
 export interface LinkIssueOutcome {
