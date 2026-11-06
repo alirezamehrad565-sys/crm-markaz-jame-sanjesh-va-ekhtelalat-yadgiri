@@ -13,7 +13,10 @@ const MetricSchema = z.object({
   unit: z.enum(['percent', 'count', 'ms', 'score']),
   higher_is_better: z.boolean(),
   source: z.enum(['auto', 'human']),
-  formula: z.enum(['accuracy', 'numline_error', 'median_rt', 'commission', 'omission', 'none'])
+  formula: z.enum([
+    'accuracy', 'numline_error', 'median_rt', 'commission', 'omission',
+    'correct_go_pct', 'correct_nogo_pct', 'commission_pct', 'omission_pct', 'none'
+  ])
 });
 
 const GoalSchema = z.object({

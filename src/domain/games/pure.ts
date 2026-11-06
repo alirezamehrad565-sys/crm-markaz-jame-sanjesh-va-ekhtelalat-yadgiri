@@ -1,6 +1,7 @@
 // pure.ts — موتور نمره‌دهی، گیت‌های انتشار و لینت لحن — بدون وابستگی به DB و رابط (§۸)
 // همهٔ فرمول‌ها همین‌جاست تا با نمونهٔ طلایی آزمون شوند؛ سرویس فقط آن‌ها را صدا می‌زند.
 import type { ItemView, MissionConfig, MissionItem, PackageBody, SessionValidity } from './types';
+import { PROTOCOL_VERSION, isProtocolVersionSupported } from './protocol';
 
 // ─── ثابت‌های قاعده (بازبین بالینی فهرست‌ها را تأیید و در همین‌جا نگه می‌دارد) ───
 
@@ -53,6 +54,10 @@ export interface ScoredAttempt {
   commission?: boolean;
   /** برای فرمول omission: از دست‌دادن هدف */
   omission?: boolean;
+  /** آیتم گو بود؟ (فقط touch_report) — مبنای جمع‌های گو/نوگو و فرمول‌های درصدی (فاز ۱ بازطراحی) */
+  isGo?: boolean;
+  /** پاسخ زودتر از محرک (لمس حین ISI) — فاز ۳ موتور پر می‌کند؛ سرور فقط حامل است */
+  premature?: boolean;
 }
 
 function rtFloorFor(item: MissionItem, mission: MissionConfig): number {
@@ -77,6 +82,7 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
   let errorPct: number | undefined;
   let commission = false;
   let omission = false;
+  let isGo: boolean | undefined;
 
   if (item.type === 'choice') {
     correct = typeof res.option === 'number' && res.option === item.correct;
@@ -93,6 +99,7 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
     // commission = لمس غیرهدف؛ omission = نلمس‌کردن هدف
     commission = !want && touched;
     omission = want && !touched;
+    isGo = want;
   }
 
   return {
@@ -103,7 +110,8 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
     rtValid,
     ...(errorPct !== undefined ? { numlineErrorPct: errorPct } : {}),
     commission,
-    omission
+    omission,
+    ...(isGo !== undefined ? { isGo } : {})
   };
 }
 
@@ -177,6 +185,54 @@ export function omissionCountOf(scored: ScoredAttempt[]): number {
   return scored.filter((s) => s.omission).length;
 }
 
+// ─── فرمول‌های درصدی گو/نوگو (فاز ۱ بازطراحی) — قاعدهٔ دامنهٔ صفر: مخرج صفر = null، نه صفرِ ساختگی ───
+// دفترچهٔ وظیفه §۵: Commission% = CE/کل نوگو×۱۰۰ · Omission% = OE/کل گو×۱۰۰ ·
+// Correct Go% = گوهای درست/کل گو×۱۰۰ · Correct NoGo% (بازداری درست) = بازداری‌های درست/کل نوگو×۱۰۰
+// تعریف‌های شمارشیِ موجود دست نمی‌خورند — این‌ها افزوده‌اند.
+
+function goNogoDenoms(scored: ScoredAttempt[]): { totalGo: number; totalNogo: number } {
+  // آیتم‌های touch_report با isGo پر شده‌اند؛ آیتمِ غایبِ isGo به هیچ جمعی وارد نمی‌شود (صفرِ ساختگی ممنوع)
+  let totalGo = 0;
+  let totalNogo = 0;
+  for (const s of scored) {
+    if (s.isGo === true) totalGo++;
+    else if (s.isGo === false) totalNogo++;
+  }
+  return { totalGo, totalNogo };
+}
+
+/** درصد گوهای درست — بدون دامنهٔ گو: null (دفترچهٔ وظیفه §۵: قاعدهٔ دامنهٔ صفر) */
+export function correctGoPctOf(scored: ScoredAttempt[]): number | null {
+  const { totalGo } = goNogoDenoms(scored);
+  if (totalGo === 0) return null;
+  const ok = scored.filter((s) => s.isGo === true && s.correct).length;
+  return round2((ok / totalGo) * 100);
+}
+
+/** درصد بازداری درست (Correct NoGo%) — بدون دامنهٔ نوگو: null */
+export function correctNogoPctOf(scored: ScoredAttempt[]): number | null {
+  const { totalNogo } = goNogoDenoms(scored);
+  if (totalNogo === 0) return null;
+  const ok = scored.filter((s) => s.isGo === false && s.correct).length;
+  return round2((ok / totalNogo) * 100);
+}
+
+/** Commission% — بدون محرک نوگو: null (تقسیم بر صفر ممنوع) */
+export function commissionPctOf(scored: ScoredAttempt[]): number | null {
+  const { totalNogo } = goNogoDenoms(scored);
+  if (totalNogo === 0) return null;
+  const ce = scored.filter((s) => s.commission).length;
+  return round2((ce / totalNogo) * 100);
+}
+
+/** Omission% — بدون محرک گو: null */
+export function omissionPctOf(scored: ScoredAttempt[]): number | null {
+  const { totalGo } = goNogoDenoms(scored);
+  if (totalGo === 0) return null;
+  const oe = scored.filter((s) => s.omission).length;
+  return round2((oe / totalGo) * 100);
+}
+
 /** فرمول ثبت‌شدهٔ سنجه → مقدار جلسه (ورودی فقط Attemptهای پروب معتبر) */
 export function computeMetricValue(formula: string, scored: ScoredAttempt[]): number | null {
   switch (formula) {
@@ -185,6 +241,10 @@ export function computeMetricValue(formula: string, scored: ScoredAttempt[]): nu
     case 'median_rt': return medianRtOf(scored);
     case 'commission': return commissionCountOf(scored);
     case 'omission': return omissionCountOf(scored);
+    case 'correct_go_pct': return correctGoPctOf(scored);
+    case 'correct_nogo_pct': return correctNogoPctOf(scored);
+    case 'commission_pct': return commissionPctOf(scored);
+    case 'omission_pct': return omissionPctOf(scored);
     default: return null;
   }
 }
@@ -284,7 +344,22 @@ export function runPublishGates(
     errors.push({ rule: 'tone_lint', message: v });
   }
 
-  // ۶) گیت جفت هم‌آوا در بستهٔ واجی — هر آیتم انتخابی (هر فازی) بازرسی می‌شود
+  // ۶) حالت مستقل (فاز ۱ بازطراحی): ارزیابی بدون پروتکل نسخه‌دارِ هم‌نسخهٔ جاری انتشار نمی‌گیرد؛
+  //    mode ناشناخته هم رد می‌شود. بسته‌های قدیمی بدون mode = training و بی‌گیتِ تازه.
+  const mode = body.mode ?? 'training';
+  if (mode !== 'training' && mode !== 'assessment') {
+    errors.push({ rule: 'mode', message: `حالت «${String(mode)}» شناخته‌شده نیست — training یا assessment` });
+  }
+  if (mode === 'assessment') {
+    const ref = body.protocol;
+    if (!ref || typeof ref.id !== 'string' || ref.id.trim() === '') {
+      errors.push({ rule: 'protocol', message: 'بستهٔ ارزیابی بدون ارجاع پروتکل — سنجه‌های ارزیابی قابل استناد نیستند' });
+    } else if (typeof ref.version !== 'string' || !isProtocolVersionSupported(ref.version)) {
+      errors.push({ rule: 'protocol', message: `نسخهٔ پروتکل ارزیابی با پروتکل جاری (${PROTOCOL_VERSION}) هم‌خوان نیست — بازسنجی غیرقابل‌تفسیر می‌شود` });
+    }
+  }
+
+  // ۷) گیت جفت هم‌آوا در بستهٔ واجی — هر آیتم انتخابی (هر فازی) بازرسی می‌شود
   if (body.pa_phonemic === true) {
     for (const m of body.missions ?? []) {
       for (const it of m.items ?? []) {

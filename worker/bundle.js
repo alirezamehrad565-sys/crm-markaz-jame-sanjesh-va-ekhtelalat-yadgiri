@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.10";
+var APP_VERSION = "1.25.11";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23258,6 +23258,107 @@ function fillErrorPage(message) {
 }
 __name(fillErrorPage, "fillErrorPage");
 
+// src/domain/games/protocol.ts
+var PROTOCOL_VERSION = "1.0.0";
+var PROTOCOL_ID = "gonogo-standard";
+var PARAM = /* @__PURE__ */ __name((value, rationale, status) => ({ value, rationale, status }), "PARAM");
+function bandForAge2(age) {
+  if (typeof age !== "number" || !Number.isFinite(age)) return { band: "7-12", clamped: false };
+  if (age <= 6) return { band: "4-6", clamped: age < 4 };
+  return { band: "7-12", clamped: age > 12 };
+}
+__name(bandForAge2, "bandForAge");
+var TRAINING_PARAMS = {
+  "4-6": {
+    response_window_go_ms: PARAM(2e3, "\u06A9\u0648\u062F\u06A9 \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u067E\u0631\u062F\u0627\u0632\u0634 \u0648 \u062A\u0635\u0645\u06CC\u0645 \u06A9\u0646\u062F\u062A\u0631 \u062F\u0627\u0631\u062F\u061B \u067E\u0646\u062C\u0631\u0647\u0654 \u0645\u062A\u0639\u0627\u0631\u0641 \u06AF\u0648/\u0646\u0648\u06AF\u0648 \u06A9\u0648\u062F\u06A9\u200C\u0645\u062D\u0648\u0631 \u0628\u0644\u0646\u062F\u062A\u0631 \u0627\u0646\u062A\u062E\u0627\u0628 \u0634\u062F \u2014 \u0628\u0627 \u067E\u06CC\u0644\u0648\u062A \u0645\u0631\u06A9\u0632 \u062A\u0623\u06CC\u06CC\u062F \u0642\u0637\u0639\u06CC \u0645\u06CC\u200C\u06AF\u06CC\u0631\u062F", "pilot"),
+    response_window_nogo_ms: PARAM(2e3, "\u0647\u0645\u200C\u0637\u0648\u0644 \u06AF\u0648 \u0628\u0631\u0627\u06CC \u062E\u0648\u0627\u0646\u0627\u06CC\u06CC \u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646 \u062F\u0631 \u0627\u06CC\u0646 \u0633\u0646", "proposed"),
+    isi_min_ms: PARAM(1e3, "ISI \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0627\u0632 \u0627\u06CC\u0646 \u062F\u0631 \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u0646\u0631\u062E \u0627\u064F\u0645\u06CC\u0634\u0646 \u062A\u0635\u0627\u062F\u0641\u06CC \u0645\u06CC\u200C\u0633\u0627\u0632\u062F\u061B \u062D\u062F \u067E\u0627\u06CC\u06CC\u0646 \u0645\u062D\u0627\u0641\u0638\u0647\u200C\u06A9\u0627\u0631\u0627\u0646\u0647", "proposed"),
+    isi_max_ms: PARAM(1500, "\u0628\u0627\u0632\u0647\u0654 \u06F1\u2013\u06F1\u066B\u06F5 \u062B\u0627\u0646\u06CC\u0647 \u0633\u0646\u062F \u0645\u062D\u062A\u0648\u0627 \u0628\u0633\u062A\u0647\u0654 \u06F3 \u2014 \u062D\u0641\u0638 \u0634\u062F", "pilot"),
+    go_ratio: PARAM(0.75, "\u0646\u0633\u0628\u062A \u0645\u062A\u0639\u0627\u0631\u0641 \u06AF\u0648/\u0646\u0648\u06AF\u0648 ~\u06F3:\u06F1 \u062F\u0631 \u0627\u062F\u0628\u06CC\u0627\u062A \u06AF\u0648/\u0646\u0648\u06AF\u0648 \u06A9\u0648\u062F\u06A9\u0627\u0646\u061B \u0646\u0633\u0628\u062A \u0628\u0627\u0644\u0627\u062A\u0631 \u0628\u0631\u0627\u06CC \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u062A\u0627 \u0645\u0647\u0627\u0631 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u062E\u0633\u062A\u0647\u200C\u06A9\u0646\u0646\u062F\u0647 \u0646\u0634\u0648\u062F", "pilot"),
+    max_consecutive_same: PARAM(3, "\u0628\u06CC\u0634 \u0627\u0632 \u0633\u0647 \u067E\u06CC\u0627\u067E\u06CC\u060C \u0631\u06CC\u062A\u0645 \u0642\u0627\u0628\u0644 \u062D\u0641\u0638\u200C\u06A9\u0631\u062F\u0646 \u0645\u06CC\u200C\u0633\u0627\u0632\u062F (\u062D\u0641\u0638\u200C\u06A9\u0631\u062F\u0646 \u0628\u0647\u200C\u062C\u0627\u06CC \u0628\u0627\u0632\u062F\u0627\u0631\u06CC)", "proposed"),
+    block_size: PARAM(20, "\u0628\u0627\u0632\u0647\u0654 \u062A\u0648\u062C\u0647 \u0641\u0639\u0627\u0644 \u06F4\u2013\u06F6 \u0633\u0627\u0644\u061B \u0628\u0644\u0648\u06A9 \u06F2\u06F0 \u062A\u0627\u06CC\u06CC \u0628\u0627 \u0627\u0633\u062A\u0631\u0627\u062D\u062A\u060C \u062E\u0633\u062A\u06AF\u06CC \u0627\u0646\u062A\u0647\u0627\u06CC \u062C\u0644\u0633\u0647 \u0631\u0627 \u0645\u06CC\u200C\u0634\u06A9\u0646\u062F", "pilot"),
+    break_min_ms: PARAM(4e3, "\u0627\u0633\u062A\u0631\u0627\u062D\u062A \u06A9\u0648\u062A\u0627\u0647 \u0644\u0645\u0633\u200C\u0645\u062D\u0648\u0631\u061B \u06A9\u0627\u0641\u06CC \u0628\u0631\u0627\u06CC \u062A\u0646\u0638\u06CC\u0645\u060C \u06A9\u0648\u062A\u0627\u0647 \u0628\u0631\u0627\u06CC \u062D\u0641\u0638 \u062C\u0631\u06CC\u0627\u0646", "proposed"),
+    assessment_blocks: PARAM(2, "\u062D\u0627\u0644\u062A \u062A\u0645\u0631\u06CC\u0646 \u062F\u0648 \u0628\u0644\u0648\u06A9 \u06A9\u0648\u062A\u0627\u0647 \u2014 \u062A\u062C\u0631\u0628\u0647\u0654 \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0627\u0632 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC", "proposed"),
+    stimulus_scale_vmin: PARAM(38, "\u0645\u062D\u0631\u06A9 \u062F\u0631\u0634\u062A \u0628\u0631\u0627\u06CC \u06F4\u2013\u06F6 \u0633\u0627\u0644\u061B \u06F3\u06F8\u066A \u0642\u0637\u0631 \u06A9\u0648\u0686\u06A9 \u0648\u06CC\u0648\u067E\u0648\u0631\u062A \u2014 \u067E\u0627\u0633\u062E \u0628\u0627\u0632\u062E\u0648\u0631\u062F \u0645\u06CC\u062F\u0627\u0646\u06CC \xAB\u0622\u06CC\u06A9\u0648\u0646 \u0628\u0632\u0631\u06AF\xBB \u0628\u0627 \u0645\u0642\u06CC\u0627\u0633 \u0633\u0646\u200C\u0645\u062D\u0648\u0631 \u0646\u0647 \u0639\u062F\u062F \u062B\u0627\u0628\u062A", "pilot"),
+    feedback_ms: PARAM(1400, "\u062D\u0628\u0627\u0628 \u0628\u0627\u0632\u062E\u0648\u0631\u062F \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0627\u0632 \u06F1\u06F6\u06F0\u06F0ms \u0641\u0639\u0644\u06CC \u2014 \u0641\u0627\u0635\u0644\u0647\u0654 \u0628\u06CC\u0646\u200C\u0622\u0632\u0645\u0648\u0646\u0634\u06CC \u0637\u0648\u0644\u0627\u0646\u06CC\u060C \u06A9\u0648\u062F\u06A9 \u0628\u06CC\u200C\u062D\u0648\u0635\u0644\u0647 \u0631\u0627 \u062E\u0641\u0647 \u0645\u06CC\u200C\u06A9\u0646\u062F (C12 \u0645\u0645\u06CC\u0632\u06CC)", "proposed"),
+    preview_step_ms: PARAM(2200, "\u0647\u0631 \u06AF\u0627\u0645 \u0622\u0645\u0648\u0632\u0634 \u062F\u0648\u0636\u0627\u0646\u06CC\u0647\u200C\u0627\u06CC \u062A\u0627 \u0628\u06CC\u0634\u062A\u0631 \u0627\u0632 \u0627\u06CC\u0646 \u0631\u0648\u06CC \u0635\u0641\u062D\u0647 \u0646\u0645\u06CC\u200C\u0645\u0627\u0646\u062F", "proposed")
+  },
+  "7-12": {
+    response_window_go_ms: PARAM(1500, "\u067E\u0646\u062C\u0631\u0647\u0654 \u0645\u062A\u0639\u0627\u0631\u0641 \u06AF\u0648/\u0646\u0648\u06AF\u0648 \u0633\u0646\u06CC\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u067E\u0627\u0633\u062E\u200C\u0647\u0627\u06CC \u0632\u06CC\u0631 \u06A9\u0641 \u06F1\u06F5\u06F0ms \u062C\u062F\u0627\u06AF\u0627\u0646\u0647 \u0641\u06CC\u0644\u062A\u0631 \u0645\u06CC\u200C\u0634\u0648\u0646\u062F (\xA7\u06F8)", "pilot"),
+    response_window_nogo_ms: PARAM(1500, "\u0647\u0645\u200C\u0637\u0648\u0644 \u06AF\u0648 \u2014 \u0645\u0642\u0627\u06CC\u0633\u0647\u200C\u067E\u0630\u06CC\u0631\u06CC \u0628\u06CC\u0646\u200C\u0633\u0646\u06CC", "proposed"),
+    isi_min_ms: PARAM(800, "ISI \u06A9\u0645\u06CC \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0628\u0631\u0627\u06CC \u0633\u0646\u06CC\u0646 \u0628\u0627\u0644\u0627\u062A\u0631\u061B \u0641\u0634\u0627\u0631 \u0633\u0631\u0639\u062A \u0645\u062A\u0639\u0627\u062F\u0644", "proposed"),
+    isi_max_ms: PARAM(1200, "\u0628\u0627\u0632\u0647\u0654 \u06F0\u066B\u06F8\u2013\u06F1\u066B\u06F2 \u062B\u0627\u0646\u06CC\u0647 \u2014 \u062A\u0646\u0648\u0639 \u0628\u0631\u0627\u06CC \u0634\u06A9\u0633\u062A\u0646 \u0627\u0646\u062A\u0638\u0627\u0631 \u0632\u0645\u0627\u0646\u06CC \u062B\u0627\u0628\u062A", "proposed"),
+    go_ratio: PARAM(0.75, "\u0646\u0633\u0628\u062A ~\u06F3:\u06F1 \u0645\u062A\u0639\u0627\u0631\u0641\u061B \u0628\u0627 \u0646\u0633\u062E\u0647\u0654 \u067E\u0631\u0648\u062A\u06A9\u0644 \u062B\u0627\u0628\u062A \u0645\u06CC\u200C\u0645\u0627\u0646\u062F", "pilot"),
+    max_consecutive_same: PARAM(3, "\u0647\u0645\u0627\u0646 \u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u06F4\u2013\u06F6 \u0633\u0627\u0644", "proposed"),
+    block_size: PARAM(24, "\u0633\u0646\u06CC\u0646 \u0645\u062F\u0631\u0633\u0647 \u0628\u0627\u0632\u0647\u0654 \u062A\u0648\u062C\u0647 \u0628\u0644\u0646\u062F\u062A\u0631 \u2014 \u0628\u0644\u0648\u06A9 \u06F2\u06F4 \u062A\u0627\u06CC\u06CC", "proposed"),
+    break_min_ms: PARAM(3500, "\u0627\u0633\u062A\u0631\u0627\u062D\u062A \u0644\u0645\u0633\u200C\u0645\u062D\u0648\u0631", "proposed"),
+    assessment_blocks: PARAM(3, "\u067E\u0631\u0648\u062A\u06A9\u0644 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0627\u0633\u062A\u0627\u0646\u062F\u0627\u0631\u062F \u0633\u0647 \u0628\u0644\u0648\u06A9 (~\u06F7\u06F2 \u0622\u0632\u0645\u0648\u0646) \u2014 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u0628\u0644\u0646\u062F \u0628\u0631\u0627\u06CC \u0645\u06CC\u0627\u0646\u0647 \u0648 \u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u067E\u0627\u06CC\u062F\u0627\u0631", "proposed"),
+    stimulus_scale_vmin: PARAM(30, "\u0645\u062D\u0631\u06A9 \u06A9\u0648\u0686\u06A9\u200C\u062A\u0631 \u0628\u0631\u0627\u06CC \u0633\u0646\u06CC\u0646 \u0628\u0627\u0644\u0627\u062A\u0631 \u2014 \u0628\u0627\u0632\u0637\u0631\u0627\u062D\u06CC \u067E\u0627\u0633\u062E \u0628\u0647 \xAB\u0622\u06CC\u06A9\u0648\u0646\u200C\u0647\u0627 \u0628\u0632\u0631\u06AF \u0627\u0633\u062A\xBB \u0628\u0627 \u067E\u0627\u0631\u0627\u0645\u062A\u0631 \u0633\u0646\u200C\u0645\u062D\u0648\u0631", "pilot"),
+    feedback_ms: PARAM(1200, "\u0628\u0627\u0632\u062E\u0648\u0631\u062F \u0622\u0645\u0648\u0632\u0634\u06CC \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u2014 \u0627\u06CC\u0646 \u0633\u0646 \u062A\u062D\u0645\u0644 \u0641\u0627\u0635\u0644\u0647\u0654 \u0628\u0644\u0646\u062F \u0646\u062F\u0627\u0631\u062F", "proposed"),
+    preview_step_ms: PARAM(2e3, "\u06AF\u0627\u0645 \u0622\u0645\u0648\u0632\u0634 \u062F\u0648\u0636\u0627\u0646\u06CC\u0647\u200C\u0627\u06CC", "proposed")
+  }
+};
+var ASSESSMENT_PARAMS = {
+  "4-6": {
+    ...TRAINING_PARAMS["4-6"],
+    response_window_go_ms: PARAM(2e3, "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC: \u067E\u0646\u062C\u0631\u0647\u0654 \u062B\u0627\u0628\u062A \u0647\u0645\u0627\u0646 \u062A\u0645\u0631\u06CC\u0646 \u062A\u0627 \u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u0631\u0648\u0646\u062F\u061B \u062A\u063A\u06CC\u06CC\u0631\u0634 \u06CC\u0639\u0646\u06CC \u067E\u0631\u0648\u062A\u06A9\u0644 \u062C\u062F\u06CC\u062F \u0648 \u0628\u0627\u0645\u067E \u0646\u0633\u062E\u0647", "pilot"),
+    assessment_blocks: PARAM(2, "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u06F4\u2013\u06F6 \u0633\u0627\u0644: \u062F\u0648 \u0628\u0644\u0648\u06A9 \u06F2\u06F0 \u062A\u0627\u06CC\u06CC = \u06F4\u06F0 \u0622\u0632\u0645\u0648\u0646 \u2014 \u0628\u0644\u0646\u062F\u062A\u0631 \u0627\u0632 \u0638\u0631\u0641\u06CC\u062A \u062A\u0648\u062C\u0647 \u0627\u06CC\u0646 \u0633\u0646 \u0646\u06CC\u0633\u062A", "proposed")
+  },
+  "7-12": {
+    ...TRAINING_PARAMS["7-12"],
+    response_window_go_ms: PARAM(1500, "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC: \u067E\u0646\u062C\u0631\u0647\u0654 \u062B\u0627\u0628\u062A\u061B \u0633\u0627\u0632\u06AF\u0627\u0631\u06CC \u062F\u0631 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0645\u0645\u0646\u0648\u0639 \u0627\u0633\u062A (C1)", "pilot"),
+    assessment_blocks: PARAM(3, "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u06F7\u2013\u06F1\u06F2 \u0633\u0627\u0644: \u0633\u0647 \u0628\u0644\u0648\u06A9 \u06F2\u06F4 \u062A\u0627\u06CC\u06CC = \u06F7\u06F2 \u0622\u0632\u0645\u0648\u0646 \u0627\u0633\u062A\u0627\u0646\u062F\u0627\u0631\u062F", "proposed")
+  }
+};
+var ASSESSMENT_BEHAVIOR = {
+  feedback_in_main: false,
+  star_basket: false,
+  adaptive: false,
+  progress_visible: false,
+  instruction_style: "standard"
+};
+var TRAINING_BEHAVIOR = {
+  feedback_in_main: true,
+  star_basket: true,
+  adaptive: true,
+  progress_visible: true,
+  instruction_style: "playful"
+};
+function protocolFor(mode, band) {
+  const params = mode === "assessment" ? ASSESSMENT_PARAMS[band] : TRAINING_PARAMS[band];
+  return {
+    protocol_id: PROTOCOL_ID,
+    version: PROTOCOL_VERSION,
+    mode,
+    age_band: band,
+    params,
+    behavior: mode === "assessment" ? ASSESSMENT_BEHAVIOR : TRAINING_BEHAVIOR
+  };
+}
+__name(protocolFor, "protocolFor");
+function protocolForAge(mode, age) {
+  const { band, clamped } = bandForAge2(age);
+  return { ...protocolFor(mode, band), age_clamped: clamped };
+}
+__name(protocolForAge, "protocolForAge");
+function isProtocolVersionSupported(v) {
+  return typeof v === "string" && /^\d+\.\d+\.\d+$/.test(v) && v === PROTOCOL_VERSION;
+}
+__name(isProtocolVersionSupported, "isProtocolVersionSupported");
+function protocolSnapshotOf(p) {
+  const params = {};
+  for (const [k, v] of Object.entries(p.params)) params[k] = v.value;
+  return {
+    protocol_id: p.protocol_id,
+    version: p.version,
+    mode: p.mode,
+    age_band: p.age_band,
+    params,
+    behavior: { ...p.behavior }
+  };
+}
+__name(protocolSnapshotOf, "protocolSnapshotOf");
+
 // src/domain/games/pure.ts
 var TONE_RULES_BASE = ["no_timer", "no_rank", "no_streak", "no_fail_message"];
 var DEFAULT_RT_FLOOR_MS = {
@@ -23318,6 +23419,7 @@ function scoreAttempt(item, mission, response, rtMs) {
   let errorPct;
   let commission = false;
   let omission = false;
+  let isGo;
   if (item.type === "choice") {
     correct = typeof res.option === "number" && res.option === item.correct;
   } else if (item.type === "numline") {
@@ -23332,6 +23434,7 @@ function scoreAttempt(item, mission, response, rtMs) {
     correct = touched === want;
     commission = !want && touched;
     omission = want && !touched;
+    isGo = want;
   }
   return {
     itemId: item.id,
@@ -23341,7 +23444,8 @@ function scoreAttempt(item, mission, response, rtMs) {
     rtValid,
     ...errorPct !== void 0 ? { numlineErrorPct: errorPct } : {},
     commission,
-    omission
+    omission,
+    ...isGo !== void 0 ? { isGo } : {}
   };
 }
 __name(scoreAttempt, "scoreAttempt");
@@ -23424,6 +23528,44 @@ function omissionCountOf(scored) {
   return scored.filter((s) => s.omission).length;
 }
 __name(omissionCountOf, "omissionCountOf");
+function goNogoDenoms(scored) {
+  let totalGo = 0;
+  let totalNogo = 0;
+  for (const s of scored) {
+    if (s.isGo === true) totalGo++;
+    else if (s.isGo === false) totalNogo++;
+  }
+  return { totalGo, totalNogo };
+}
+__name(goNogoDenoms, "goNogoDenoms");
+function correctGoPctOf(scored) {
+  const { totalGo } = goNogoDenoms(scored);
+  if (totalGo === 0) return null;
+  const ok2 = scored.filter((s) => s.isGo === true && s.correct).length;
+  return round2(ok2 / totalGo * 100);
+}
+__name(correctGoPctOf, "correctGoPctOf");
+function correctNogoPctOf(scored) {
+  const { totalNogo } = goNogoDenoms(scored);
+  if (totalNogo === 0) return null;
+  const ok2 = scored.filter((s) => s.isGo === false && s.correct).length;
+  return round2(ok2 / totalNogo * 100);
+}
+__name(correctNogoPctOf, "correctNogoPctOf");
+function commissionPctOf(scored) {
+  const { totalNogo } = goNogoDenoms(scored);
+  if (totalNogo === 0) return null;
+  const ce = scored.filter((s) => s.commission).length;
+  return round2(ce / totalNogo * 100);
+}
+__name(commissionPctOf, "commissionPctOf");
+function omissionPctOf(scored) {
+  const { totalGo } = goNogoDenoms(scored);
+  if (totalGo === 0) return null;
+  const oe = scored.filter((s) => s.omission).length;
+  return round2(oe / totalGo * 100);
+}
+__name(omissionPctOf, "omissionPctOf");
 function computeMetricValue(formula, scored) {
   switch (formula) {
     case "accuracy":
@@ -23436,6 +23578,14 @@ function computeMetricValue(formula, scored) {
       return commissionCountOf(scored);
     case "omission":
       return omissionCountOf(scored);
+    case "correct_go_pct":
+      return correctGoPctOf(scored);
+    case "correct_nogo_pct":
+      return correctNogoPctOf(scored);
+    case "commission_pct":
+      return commissionPctOf(scored);
+    case "omission_pct":
+      return omissionPctOf(scored);
     default:
       return null;
   }
@@ -23488,6 +23638,18 @@ function runPublishGates(body, dose, evidenceLevel, ctx) {
   }
   for (const v of lintTexts(body.parent_copy ?? {})) {
     errors.push({ rule: "tone_lint", message: v });
+  }
+  const mode = body.mode ?? "training";
+  if (mode !== "training" && mode !== "assessment") {
+    errors.push({ rule: "mode", message: `\u062D\u0627\u0644\u062A \xAB${String(mode)}\xBB \u0634\u0646\u0627\u062E\u062A\u0647\u200C\u0634\u062F\u0647 \u0646\u06CC\u0633\u062A \u2014 training \u06CC\u0627 assessment` });
+  }
+  if (mode === "assessment") {
+    const ref = body.protocol;
+    if (!ref || typeof ref.id !== "string" || ref.id.trim() === "") {
+      errors.push({ rule: "protocol", message: "\u0628\u0633\u062A\u0647\u0654 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0628\u062F\u0648\u0646 \u0627\u0631\u062C\u0627\u0639 \u067E\u0631\u0648\u062A\u06A9\u0644 \u2014 \u0633\u0646\u062C\u0647\u200C\u0647\u0627\u06CC \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0642\u0627\u0628\u0644 \u0627\u0633\u062A\u0646\u0627\u062F \u0646\u06CC\u0633\u062A\u0646\u062F" });
+    } else if (typeof ref.version !== "string" || !isProtocolVersionSupported(ref.version)) {
+      errors.push({ rule: "protocol", message: `\u0646\u0633\u062E\u0647\u0654 \u067E\u0631\u0648\u062A\u06A9\u0644 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0628\u0627 \u067E\u0631\u0648\u062A\u06A9\u0644 \u062C\u0627\u0631\u06CC (${PROTOCOL_VERSION}) \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A \u2014 \u0628\u0627\u0632\u0633\u0646\u062C\u06CC \u063A\u06CC\u0631\u0642\u0627\u0628\u0644\u200C\u062A\u0641\u0633\u06CC\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F` });
+    }
   }
   if (body.pa_phonemic === true) {
     for (const m of body.missions ?? []) {
@@ -23571,6 +23733,26 @@ function toItemView(item) {
 }
 __name(toItemView, "toItemView");
 
+// src/domain/games/registry-extra.ts
+var ENGINE_ONLY_FORMULAS = [
+  "correct_go_pct",
+  "correct_nogo_pct",
+  "commission_pct",
+  "omission_pct"
+];
+var ENGINE_METRICS = [
+  { id: "correct_go_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u06AF\u0648\u0647\u0627\u06CC \u062F\u0631\u0633\u062A", unit: "percent", higher_is_better: true, source: "auto", formula: "correct_go_pct" },
+  { id: "correct_nogo_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u062F\u0631\u0633\u062A \u0646\u0648\u06AF\u0648", unit: "percent", higher_is_better: true, source: "auto", formula: "correct_nogo_pct" },
+  { id: "commission_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u062E\u0637\u0627\u06CC \u067E\u0627\u0633\u062E \u0628\u0647 \u063A\u06CC\u0631\u0647\u062F\u0641", unit: "percent", higher_is_better: false, source: "auto", formula: "commission_pct" },
+  { id: "omission_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u0627\u0632 \u062F\u0633\u062A\u200C\u062F\u0627\u062F\u0646 \u0647\u062F\u0641", unit: "percent", higher_is_better: false, source: "auto", formula: "omission_pct" }
+];
+function mergeEngineMetrics(dbRows) {
+  const ids = new Set(dbRows.map((m) => m.id));
+  const extra = ENGINE_METRICS.filter((m) => !ids.has(m.id));
+  return [...dbRows, ...extra].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}
+__name(mergeEngineMetrics, "mergeEngineMetrics");
+
 // src/domain/games/service.ts
 var LINK_URL_PATH = "/m/";
 var FEEDBACK_OK = "\u06AF\u0631\u0641\u062A\u06CC!";
@@ -23613,6 +23795,9 @@ function createGamesService(deps) {
   async function upsertMetric(input, actor) {
     const id = input.id.trim();
     if (!/^[a-z][a-z0-9_]{2,63}$/.test(id)) throw new ValidationError("\u0634\u0646\u0627\u0633\u0647\u0654 \u0633\u0646\u062C\u0647 \u0628\u0627\u06CC\u062F \u0627\u0644\u06AF\u0648\u06CC \u0644\u0627\u062A\u06CC\u0646 snake_case \u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F");
+    if (ENGINE_ONLY_FORMULAS.includes(input.formula)) {
+      throw new ValidationError("\u0633\u0646\u062C\u0647\u200C\u0647\u0627\u06CC \u062F\u0631\u0635\u062F\u06CC \u06AF\u0648/\u0646\u0648\u06AF\u0648 \u0627\u0632 \u0645\u0648\u062A\u0648\u0631 \u0645\u06CC\u200C\u0622\u06CC\u0646\u062F \u0648 \u062F\u0633\u062A\u06CC \u062B\u0628\u062A \u0646\u0645\u06CC\u200C\u0634\u0648\u0646\u062F");
+    }
     await db.execute(
       `INSERT INTO game_metrics (id, title_fa, unit, higher_is_better, source, formula) VALUES (?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET title_fa=excluded.title_fa, unit=excluded.unit,
@@ -23624,9 +23809,10 @@ function createGamesService(deps) {
   }
   __name(upsertMetric, "upsertMetric");
   async function listMetrics() {
-    return db.query(
+    const rows = await db.query(
       `SELECT id, title_fa, unit, higher_is_better != 0 AS higher_is_better, source, formula FROM game_metrics ORDER BY id`
     );
+    return mergeEngineMetrics(rows);
   }
   __name(listMetrics, "listMetrics");
   async function upsertGoal(input, actor) {
@@ -23968,10 +24154,28 @@ function createGamesService(deps) {
     };
   }
   __name(playHintOf, "playHintOf");
+  async function childAgeOf(childId) {
+    try {
+      const row = await db.queryOne(
+        `SELECT birth_date FROM students WHERE id = ?`,
+        [childId]
+      );
+      if (!row?.birth_date) return null;
+      const bd = new Date(row.birth_date);
+      if (Number.isNaN(bd.getTime())) return null;
+      const age = Math.floor((now().getTime() - bd.getTime()) / (365.2425 * 24 * 3600 * 1e3));
+      return age >= 0 && age <= 25 ? age : null;
+    } catch {
+      return null;
+    }
+  }
+  __name(childAgeOf, "childAgeOf");
   async function stateViewOf(res) {
     const m = missionConfigOf(res);
     const adherence = await db.queryOne(`SELECT confirm2_at FROM game_adherence WHERE mission_id = ?`, [res.mission.id]);
     const state = linkStateOf(res);
+    const mode = res.pkg.body.mode ?? "training";
+    const childAge = state === "child_active" ? await childAgeOf(res.rx.child_id) : null;
     return {
       state,
       missionRef: m.id,
@@ -23980,7 +24184,11 @@ function createGamesService(deps) {
       expiresAt: res.link.expires_at,
       validity: res.session ? res.session.validity : void 0,
       adherenceConfirmed: adherence?.confirm2_at != null,
-      ...state === "child_active" ? { playGame: m.game, playHint: playHintOf(m) } : {}
+      ...state === "child_active" ? {
+        playGame: m.game,
+        playHint: playHintOf(m),
+        playProtocol: protocolSnapshotOf(protocolForAge(mode, childAge))
+      } : {}
     };
   }
   __name(stateViewOf, "stateViewOf");
@@ -24371,7 +24579,18 @@ var MetricSchema = external_exports.object({
   unit: external_exports.enum(["percent", "count", "ms", "score"]),
   higher_is_better: external_exports.boolean(),
   source: external_exports.enum(["auto", "human"]),
-  formula: external_exports.enum(["accuracy", "numline_error", "median_rt", "commission", "omission", "none"])
+  formula: external_exports.enum([
+    "accuracy",
+    "numline_error",
+    "median_rt",
+    "commission",
+    "omission",
+    "correct_go_pct",
+    "correct_nogo_pct",
+    "commission_pct",
+    "omission_pct",
+    "none"
+  ])
 });
 var GoalSchema = external_exports.object({
   id: external_exports.string().trim().min(3).max(64),
