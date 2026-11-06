@@ -10,6 +10,7 @@
 import { STATES, windowMsFor } from './machine.js';
 import { afterPaint, createFrameMonitor, createPausableClock } from './timing.js';
 import { collectResponse } from './response.js';
+import * as fx from '../fx.js';
 
 const FIXATION_FALLBACK_MS = 400; /* فقط وقتی پروتکل فاقد fixation_ms باشد — پیش‌فرض امن */
 
@@ -46,6 +47,9 @@ export async function runTrial(ctx) {
   const paintAt = await afterPaint();
   const frameStats = monitor.stop();
   ev('stimulus_presented', { presented_at: Math.round(paintAt), frame_drops: frameStats.drops });
+  /* لایهٔ حسی ۱.۲۵.۲۱: پاپ فنری ورود — پس از مُهر نمایش؛ بدون fade تا محرک از نخستین
+     فریم با تپش کامل مرئی بماند و پنجرهٔ پاسخ هیچ تأخیر ادراکی نداشته باشد */
+  fx.popIn(stage.querySelector('.play-svg'), 240, false);
 
   /* ساعت واکنش از مبنای نمایشِ تأییدشده — گیره‌های مکث visibility */
   const clock = createPausableClock();
@@ -71,9 +75,18 @@ export async function runTrial(ctx) {
   sleeper.cancel(); // پاسخ آمد یا پنجره بسته شد — شمارندهٔ پنجره یتیم نمی‌ماند
   if (hooks) { hooks.pause = null; hooks.resume = null; }
 
-  /* INTER_TRIAL_INTERVAL — محرک از صحنه برداشته می‌شود (پنجرهٔ نمایش محدود است) */
+  /* INTER_TRIAL_INTERVAL — محرک از صحنه برداشته می‌شود (پنجرهٔ نمایش محدود است):
+     برداشت فوری از تعامل (pointer-events خاموش) + محو سریع ≈۱۶۰ms که همیشه
+     پیش از FIXATION بعدی تمام می‌شود (ISI ≥۸۰۰ms + FIX ≥۴۰۰ms)؛ با کاهش‌جنبش
+     برداشت بی‌درنگ است (fx گارد می‌کند) — همان قرارداد فاز ۹ */
   machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, touched: outcome.touched });
-  stage.innerHTML = '';
+  const stimEl = stage.firstElementChild;
+  if (stimEl) {
+    stimEl.style.pointerEvents = 'none';
+    fx.outThenRemove(stimEl, 160);
+  } else {
+    stage.innerHTML = '';
+  }
   ev('iti_start');
 
   const isi = rand(
