@@ -36,7 +36,8 @@ const STUDENT_DELETE_REFS: Record<string, string> = {
   followup: `SELECT COUNT(*) AS cnt FROM followups WHERE student_id = ?`,
   exercise: `SELECT COUNT(*) AS cnt FROM exercise_assignments WHERE student_id = ?`,
   exercise_submission: `SELECT COUNT(*) AS cnt FROM exercise_submissions WHERE student_id = ?`,
-  committee: `SELECT COUNT(*) AS cnt FROM committee_items WHERE student_id = ? AND deleted_at IS NULL`
+  committee: `SELECT COUNT(*) AS cnt FROM committee_items WHERE student_id = ? AND deleted_at IS NULL`,
+  game_rx: `SELECT COUNT(*) AS cnt FROM game_prescriptions WHERE child_id = ?`
 };
 
 const STUDENT_DELETE_LABELS: Record<string, string> = {
@@ -47,6 +48,7 @@ const STUDENT_DELETE_LABELS: Record<string, string> = {
   exercise: 'تمرین',
   exercise_submission: 'تمرینِ ارسال‌شده',
   committee: 'کمیتهٔ جایابی',
+  game_rx: 'تجویز بازی',
   assessment: 'گزارش ارزیابی رسمی',
   donation: 'سابقهٔ مالی (کمک)'
 };
@@ -1030,6 +1032,35 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
           await tx.execute(`DELETE FROM exercise_batches WHERE student_id = ?`, [id]);
           await tx.execute(`DELETE FROM followups WHERE student_id = ?`, [id]);
           await tx.execute(`DELETE FROM committee_items WHERE student_id = ?`, [id]);
+          /* دادهٔ بازی کودک هم با پرونده پاک می‌شود (۱.۲۵.۲۵ G4) — ترتیب امن FK:
+             attempts → adherence → links → sessions → missions → prescriptions؛
+             حذف صریح تا در هر بستر (D1/خود‌میزبان) آبشار تضمین باشد، نه وابسته به PRAGMA foreign_keys */
+          await tx.execute(
+            `DELETE FROM game_attempts WHERE session_id IN (
+               SELECT s.id FROM game_sessions s JOIN game_missions m ON m.id = s.mission_id
+               JOIN game_prescriptions p ON p.id = m.prescription_id WHERE p.child_id = ?)`,
+            [id]
+          );
+          await tx.execute(
+            `DELETE FROM game_adherence WHERE mission_id IN (
+               SELECT m.id FROM game_missions m JOIN game_prescriptions p ON p.id = m.prescription_id WHERE p.child_id = ?)`,
+            [id]
+          );
+          await tx.execute(
+            `DELETE FROM game_links WHERE mission_id IN (
+               SELECT m.id FROM game_missions m JOIN game_prescriptions p ON p.id = m.prescription_id WHERE p.child_id = ?)`,
+            [id]
+          );
+          await tx.execute(
+            `DELETE FROM game_sessions WHERE mission_id IN (
+               SELECT m.id FROM game_missions m JOIN game_prescriptions p ON p.id = m.prescription_id WHERE p.child_id = ?)`,
+            [id]
+          );
+          await tx.execute(
+            `DELETE FROM game_missions WHERE prescription_id IN (SELECT id FROM game_prescriptions WHERE child_id = ?)`,
+            [id]
+          );
+          await tx.execute(`DELETE FROM game_prescriptions WHERE child_id = ?`, [id]);
           /* ورودی لیست انتظارِ پیوسته، متقاضی است نه پرونده — پیوندش خنثی می‌شود نه حذف */
           await tx.execute(`UPDATE waitlist SET student_id = NULL, admitted_student_id = NULL WHERE student_id = ? OR admitted_student_id = ?`, [id, id]);
           /* نوبت یتیم: نوبتی که دیگر هیچ دانش‌آموزی ندارد و رویداد/حضور دیگری به آن گره نخورده — از تقویم پاک می‌شود */

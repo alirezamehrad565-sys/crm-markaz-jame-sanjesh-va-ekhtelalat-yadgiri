@@ -194,6 +194,30 @@ export interface PrescriptionListRecord extends PrescriptionRecord {
   missionLive: number; // pending + in_progress
 }
 
+/** کد دلیل «نیازمند پیگیری» — رفتار داده را توصیف می‌کند، هیچ تفسیر بالینی ندارد */
+export type FollowupReason = 'never_scheduled' | 'stalled' | 'pending_overdue' | 'today_unlinked';
+
+/** ردیف میز پیگیری تبعیت (۱.۲۵.۲۵) — تجویز فعال با حداقل یک دلیل پیگیری؛ شدیدترین اول */
+export interface FollowupRow {
+  prescriptionId: string;
+  childId: string;
+  childName: string | null;
+  packageId: string | null;
+  packageVersion: string | null;
+  packageTitleFa: string | null;
+  goalTitleFa: string | null;
+  status: string;
+  missionTotal: number;
+  missionDone: number;
+  /** مأموریت‌های pending با تاریخ گذشته — روزهای ازدست‌رفته */
+  pendingOverdue: number;
+  /** مأموریت‌های امروز بدون لینک زنده */
+  todayUnlinked: number;
+  /** روز بی‌جلسگی — از آخرین جلسه یا از ثبت تجویز اگر هیچ‌گاه جلسه نبوده */
+  idleDays: number | null;
+  reasons: FollowupReason[];
+}
+
 /** نمای آیتم برای کلاینت — بدون هیچ کلید پاسخ (§۵) */
 export interface ItemView {
   id: string;
@@ -351,11 +375,15 @@ export interface GamesService {
   // تجویز و مأموریت (پرسنلی)
   createPrescription(input: PrescriptionCreateInput, actor: AuthContext): Promise<PrescriptionRecord>;
   listPrescriptions(query?: string | PrescriptionListQuery): Promise<PrescriptionListRecord[]>;
+  /** میز پیگیری تبعیت (۱.۲۵.۲۵) — تجویزهای فعال با دلیل پیگیری؛ شدیدترین اول */
+  listFollowups(): Promise<FollowupRow[]>;
   setPrescriptionStatus(id: string, action: 'pause' | 'resume' | 'stop' | 'complete', actor: AuthContext): Promise<PrescriptionRecord>;
   scheduleMission(input: MissionScheduleInput, actor: AuthContext): Promise<MissionRecord>;
   listMissions(prescriptionId: string): Promise<MissionRecord[]>;
   issueLink(missionId: string, actor: AuthContext): Promise<LinkIssueOutcome>;
   revokeLink(jti: string, actor: AuthContext): Promise<{ ok: true }>;
+  /** ممیزی خروج دادهٔ کودک (۱.۲۵.۲۵) — هر گزارش JSON/HTML/CSV ثبت می‌شود */
+  auditReportExport(childId: string, format: string, actor: AuthContext): Promise<void>;
 
   // پیش‌نمایش فقط-پرسنلی (۱.۲۵.۲۰) — اجرای آزمایشی بی‌نوشت؛ کلید پاسخ هرگز صفحه را ترک نمی‌کند
   issuePreview(packageId: string, version: string, actor: AuthContext): Promise<PreviewIssueOutcome>;

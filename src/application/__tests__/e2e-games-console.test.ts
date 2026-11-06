@@ -40,6 +40,14 @@ function todayYmd(): string {
   return tehran.toISOString().slice(0, 10);
 }
 
+function yesterdayYmd(): string {
+  return new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+function todayIso(): string {
+  return new Date().toISOString();
+}
+
 interface RxRow { id: string; childId: string; childName: string | null; packageTitleFa: string | null; goalTitleFa: string | null; missionTotal: number; missionDone: number; missionLive: number; status: string }
 interface MissionRow { id: string; missionRef: string; title: string | null; status: string; link: { jti: string; expiresAt: string } | null }
 
@@ -241,5 +249,120 @@ describe('میز حلقهٔ درمانگر بازی‌ها (۱.۲۵.۲۴)', () =
     expect(cells2[15]).toBe('2'); // stars
     // ردیف اول: عنوان حاوی کاما باید نقل‌قول شود
     expect(lines[1]).toContain('"بازی, با کاما"');
+  });
+
+  // ─── میز پیگیری تبعیت + سوییپ + ممیزی خروج داده + بهداشت حذف (۱.۲۵.۲۵) ───
+
+  it('میز پیگیری: ناشناس ۴۰۱؛ تجویزِ بی‌مأموریت، رکود، تاریخ‌گذشته و امروزِ بی‌لینک با دلیل درست', async () => {
+    expect((await anon.get('/api/games/followups')).status).toBe(401);
+    expect((await secretary.get('/api/games/followups')).status).toBe(200);
+
+    // کودک الف — تجویز بدون هیچ مأموریت → never_scheduled
+    const stNever = await createStudent(mgr);
+    await mgr.post('/api/games/prescriptions', {
+      child_id: stNever.id, package_id: 'console-pkg2', package_version: '1.0.0', goal_id: 'inhibition_console_pkg2'
+    });
+
+    // کودک ب — مأموریت دیروز اجرانشده (pending_overdue) + مأموریت امروز بدون لینک (today_unlinked)
+    const stToday = await createStudent(mgr);
+    const rxBusy = dataOf<{ id: string }>(await mgr.post('/api/games/prescriptions', {
+      child_id: stToday.id, package_id: 'console-pkg2', package_version: '1.0.0', goal_id: 'inhibition_console_pkg2'
+    }));
+    await mgr.post('/api/games/missions', { prescription_id: rxBusy.id, mission_ref: 'mz_m1', scheduled_for: yesterdayYmd() });
+    await mgr.post('/api/games/missions', { prescription_id: rxBusy.id, mission_ref: 'mz_m1', scheduled_for: todayYmd() });
+
+    // کودک ج — جلسهٔ تمام‌شدهٔ ۱۰ روز پیش + مأموریت باقی‌مانده → stalled (≥۷ روز)
+    const stStall = await createStudent(mgr);
+    const rxStall = dataOf<{ id: string }>(await mgr.post('/api/games/prescriptions', {
+      child_id: stStall.id, package_id: 'console-pkg2', package_version: '1.0.0', goal_id: 'inhibition_console_pkg2'
+    }));
+    const mStall = dataOf<{ id: string }>(await mgr.post('/api/games/missions', {
+      prescription_id: rxStall.id, mission_ref: 'mz_m1', scheduled_for: yesterdayYmd()
+    }));
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString();
+    A.sql.prepare(`INSERT INTO game_sessions (id, mission_id, state, validity, started_at, ended_at, last_activity_at, created_at)
+      VALUES ('sess-stall', ?, 'child_done', 'valid', ?, ?, ?, ?)`).run(mStall.id, tenDaysAgo, tenDaysAgo, tenDaysAgo, tenDaysAgo);
+
+    const rows = dataOf<Array<{ prescriptionId: string; childName: string | null; reasons: string[]; idleDays: number | null; pendingOverdue: number; todayUnlinked: number }>>(
+      await mgr.get('/api/games/followups')
+    );
+    expect(rows.length).toBeGreaterThanOrEqual(3);
+    const never = rows.find((r) => r.reasons.includes('never_scheduled'));
+    expect(never).toBeTruthy();
+    const busy = rows.find((r) => r.pendingOverdue === 1 && r.todayUnlinked === 1);
+    expect(busy?.reasons).toContain('pending_overdue');
+    expect(busy?.reasons).toContain('today_unlinked');
+    const stall = rows.find((r) => r.reasons.includes('stalled'));
+    expect(stall?.idleDays ?? 0).toBeGreaterThanOrEqual(7);
+    // هیچ ردیفی بدون دلیل نیست — میز فقط نیازمندان توجه
+    for (const r of rows) expect(r.reasons.length).toBeGreaterThan(0);
+  });
+
+  it('سوییپ جلسهٔ رهاشده: in_progress با بی‌فعالیتی >۶ ساعت به pending برمی‌گردد؛ جلسهٔ تازه دست نمی‌خورد', async () => {
+    const st = await createStudent(mgr);
+    const rx = dataOf<{ id: string }>(await mgr.post('/api/games/prescriptions', {
+      child_id: st.id, package_id: 'console-pkg2', package_version: '1.0.0', goal_id: 'inhibition_console_pkg2'
+    }));
+    const mStale = dataOf<{ id: string }>(await mgr.post('/api/games/missions', {
+      prescription_id: rx.id, mission_ref: 'mz_m1', scheduled_for: todayYmd()
+    }));
+    const mFresh = dataOf<{ id: string }>(await mgr.post('/api/games/missions', {
+      prescription_id: rx.id, mission_ref: 'mz_m1', scheduled_for: todayYmd()
+    }));
+    // هر دو مأموریت in_progress با جلسهٔ child_active؛ یکی رهاشده (۷ ساعت پیش) یکی تازه
+    const staleAt = new Date(Date.now() - 7 * 3600 * 1000).toISOString();
+    A.sql.prepare(`UPDATE game_missions SET status = 'in_progress' WHERE id IN (?, ?)`).run(mStale.id, mFresh.id);
+    A.sql.prepare(`INSERT INTO game_sessions (id, mission_id, state, validity, started_at, last_activity_at, created_at)
+      VALUES ('sess-stale', ?, 'child_active', 'valid', ?, ?, ?)`).run(mStale.id, staleAt, staleAt, staleAt);
+    A.sql.prepare(`INSERT INTO game_sessions (id, mission_id, state, validity, started_at, last_activity_at, created_at)
+      VALUES ('sess-fresh', ?, 'child_active', 'valid', ?, ?, ?)`).run(mFresh.id, todayIso(), todayIso(), todayIso());
+
+    await mgr.get('/api/games/prescriptions'); // سوییپ تنبل در فهرست اجرا می‌شود
+
+    const staleStatus = (A.sql.prepare(`SELECT status FROM game_missions WHERE id = ?`).get(mStale.id) as { status: string }).status;
+    const freshStatus = (A.sql.prepare(`SELECT status FROM game_missions WHERE id = ?`).get(mFresh.id) as { status: string }).status;
+    expect(staleStatus).toBe('pending'); // رهاشده برگشت
+    expect(freshStatus).toBe('in_progress'); // جلسهٔ زنده دست نمی‌خورد
+  });
+
+  it('ممیزی خروج داده: گزارش JSON/CSV با game_report_export در دفترچهٔ حسابرسی می‌ماند', async () => {
+    const st = await createStudent(mgr);
+    await mgr.get(`/api/games/children/${st.id}/report`);
+    await mgr.get(`/api/games/children/${st.id}/report?format=csv`);
+    const logs = A.sql.prepare(
+      `SELECT action, resource_id, changes FROM audit_log WHERE action = 'game_report_export' AND resource_id = ? ORDER BY created_at`
+    ).all(st.id) as Array<{ action: string; resource_id: string; changes: string }>;
+    expect(logs.length).toBe(2);
+    expect(logs[0].changes).toContain('json');
+    expect(logs[1].changes).toContain('csv');
+  });
+
+  it('بهداشت حذف: تجویز بازی حذفِ آزاد را می‌بندد؛ حذف با سابقهٔ مدیر آبشار کامل دادهٔ بازی را پاک می‌کند', async () => {
+    const st = await createStudent(mgr);
+    const rx = dataOf<{ id: string }>(await mgr.post('/api/games/prescriptions', {
+      child_id: st.id, package_id: 'console-pkg2', package_version: '1.0.0', goal_id: 'inhibition_console_pkg2'
+    }));
+    const m = dataOf<{ id: string }>(await mgr.post('/api/games/missions', {
+      prescription_id: rx.id, mission_ref: 'mz_m1', scheduled_for: todayYmd()
+    }));
+    const link = dataOf<{ jti: string; token: string }>(await mgr.post(`/api/games/missions/${m.id}/link`, {}));
+
+    // سد نرم: بدون force، حذف رد می‌شود با برچسب «تجویز بازی»
+    const soft = await secretary.req('DELETE', `/api/students/${st.id}`);
+    expect(soft.status).toBe(409);
+    expect(JSON.stringify(soft.body)).toContain('تجویز بازی');
+
+    // حذف با سابقهٔ مدیر: آبشار کامل — links/adherence/sessions/missions/prescriptions
+    expect((await mgr.req('DELETE', `/api/students/${st.id}?force=true`)).status).toBe(204);
+    const rxLeft = (A.sql.prepare(`SELECT COUNT(*) AS n FROM game_prescriptions WHERE child_id = ?`).get(st.id) as { n: number }).n;
+    const mLeft = (A.sql.prepare(`SELECT COUNT(*) AS n FROM game_missions WHERE id = ?`).get(m.id) as { n: number }).n;
+    const linkLeft = (A.sql.prepare(`SELECT COUNT(*) AS n FROM game_links WHERE jti = ?`).get(link.jti) as { n: number }).n;
+    const adherenceLeft = (A.sql.prepare(`SELECT COUNT(*) AS n FROM game_adherence WHERE mission_id = ?`).get(m.id) as { n: number }).n;
+    expect(rxLeft).toBe(0);
+    expect(mLeft).toBe(0);
+    expect(linkLeft).toBe(0);
+    expect(adherenceLeft).toBe(0);
+    // لینک کودک بعد از حذف پرونده زنده نمی‌ماند
+    expect((await anon.get(`/api/m/${link.token}/state`)).status).toBe(404);
   });
 });
