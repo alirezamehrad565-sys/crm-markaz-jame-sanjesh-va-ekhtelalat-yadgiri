@@ -80,6 +80,8 @@ export interface PackageBody {
   mode?: PackageMode;
   /** ارجاع نسخه‌دار پروتکل — در ارزیابی اجباری است؛ در تمرین پیشنهادی */
   protocol?: PackageProtocolRef;
+  /** کلید خاموشی سازگاری (فاز ۶) — فقط تمرین اثر دارد؛ پیش‌فرض فعال */
+  adaptive_enabled?: boolean;
   age?: { min: number; max: number };
   mastery?: { threshold: number | null; sessions?: number };
   tone_rules?: string[];
