@@ -62,6 +62,13 @@ const MissionSchema = z.object({
 
 const PublishSchema = z.object({ reviewed_by: z.string().nullable().optional() });
 
+const FinishSchema = z.object({
+  session_evidence: z.object({
+    pause_count: z.number().min(0).max(1000).nullable().optional(),
+    pause_total_ms: z.number().min(0).max(3_600_000).nullable().optional()
+  }).nullable().optional()
+});
+
 const AttemptSchema = z.object({
   item_id: z.string().trim().min(1).max(64),
   response: z.unknown().optional(),
@@ -231,7 +238,8 @@ export function registerGamesPublicRoutes(app: AppHono, service: GamesService): 
 
   app.post('/api/m/:token/finish', async (c) => {
     try {
-      return c.json({ data: await service.finish(c.req.param('token')) }, 200, jsonHeaders);
+      const body = FinishSchema.parse((await c.req.json<unknown>().catch(() => ({}))) ?? {});
+      return c.json({ data: await service.finish(c.req.param('token'), body.session_evidence ?? undefined) }, 200, jsonHeaders);
     } catch (err) {
       return publicError(c, err);
     }
