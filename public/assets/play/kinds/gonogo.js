@@ -30,7 +30,6 @@ const SHAPES = {
 };
 
 const INK = '#153E50';  /* Navy دفترچهٔ وظیفه — خط جوهری محرک */
-const SOFT = '#6E7B76';
 
 function colorOf(stim) {
   const c = stim && typeof stim.color === 'string' ? stim.color.trim() : '';
@@ -51,17 +50,7 @@ export function stimSvg(stim) {
     'stroke-linecap="round"><path d="' + paths + '"/></g></svg>';
 }
 
-/** پنجرهٔ پاسخ آیتم (ms) — از خود محرک محتوا یا پیش‌فرض ۱۵۰۰ */
-export function windowMsOf(item) {
-  const w = item && item.stim && typeof item.stim.window_ms === 'number'
-    ? item.stim.window_ms : 1500;
-  return w > 300 && w < 8000 ? w : 1500;
-}
-
-/** پاسخ کودک برای touch_report — کل صفحه لمس است، بازداری = عدم لمس تا پایان پنجره */
-export function responseOf(item, touched) {
-  return { touched: touched === true };
-}
+/** پنجرهٔ پاسخ آیتم — در موتور مرکزی (engine/machine.js windowMsFor)؛ این ماژول فقط نمایش است */
 
 /** پیش‌نمایش شروع «این هدف است / این نه» — فقط از راهنمای آموزشی سرور (هیچ ردی از پروب) */
 export function previewSteps(hint) {
@@ -74,8 +63,3 @@ export function previewSteps(hint) {
   }
   return steps;
 }
-
-/** کارت آموزشِ یک‌خطی پیش از شروع */
-export const welcomeLine = 'وقتی شکل هدف آمد، صفحه را لمس کن؛ وقتیش نیامد، دست نزن.';
-export const restLine = 'یک نفس عمیق بکش؛ هر وقت آماده بودی لمس کن.';
-export const soft = { ink: INK, soft: SOFT };
