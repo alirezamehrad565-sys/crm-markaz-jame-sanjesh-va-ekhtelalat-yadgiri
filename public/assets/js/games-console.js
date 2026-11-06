@@ -537,7 +537,12 @@ function renderFollowupsCard(rows) {
     const open = el('button', {
       class: 'btn btn--ghost btn--sm', type: 'button',
       onclick: (e) => lockBtn(e.currentTarget, () => missionsModal(
-        { id: r.prescriptionId, childName: r.childName ?? '', packageTitleFa: r.packageTitleFa, packageId: r.packageId ?? '', packageVersion: r.packageVersion ?? '', doseOverride: null },
+        {
+          id: r.prescriptionId, childName: r.childName ?? '', packageTitleFa: r.packageTitleFa,
+          packageId: r.packageId ?? '', packageVersion: r.packageVersion ?? '',
+          goalId: r.goalId ?? null, goalTitleFa: r.goalTitleFa,
+          status: r.status, doseOverride: null
+        },
         { childName: r.childName ?? '' }
       ))
     }, icon('gamepad', 14), 'مأموریت‌ها و لینک');
