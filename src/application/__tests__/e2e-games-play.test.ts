@@ -123,9 +123,13 @@ describe('پخش‌کنندهٔ کودک (M2) — صفحه، راهنمای بی
     expect(withhold.correct).toBe(true);
     expect(withhold.message).toBe('عالی، صبر کردی!');
 
-    const touch = dataOf<{ message: string; correct: boolean }>(await anon.post(`/api/m/${tk}/attempts`, { item_id: 'tr-nogo', response: { touched: true }, rt_ms: 300, idem_key: 'm2-tr-nogo-x' }));
-    expect(touch.correct).toBe(false);
-    expect(touch.message).toBe('این یکی سخته؛ بیا با هم دوباره نگاهش کنیم.');
+    // سد سروری آیتم پاسخ‌داده‌شده (۱.۲۵.۲۵): ارسال دوبارهٔ همان آیتم با idem_key تازه
+    // پاسخ دوم نمی‌سازد — همان بازخورد نخست برمی‌گردد و دفترچه یک ردیف بیشتری ندارد
+    const again = dataOf<{ message: string; correct: boolean }>(await anon.post(`/api/m/${tk}/attempts`, { item_id: 'tr-nogo', response: { touched: true }, rt_ms: 300, idem_key: 'm2-tr-nogo-x' }));
+    expect(again.correct).toBe(true);
+    expect(again.message).toBe('عالی، صبر کردی!');
+    const trNogoRows = A.sql.prepare(`SELECT COUNT(*) AS n FROM game_attempts WHERE item_id = 'tr-nogo'`).get() as { n: number };
+    expect(trNogoRows.n).toBe(1); // حتی با کلید تکرار تازه، یک پاسخ برای هر آیتم
   });
 
   it('پروب همچنان هیچ بازخوردی ندارد و پایان جلسه صفحهٔ کودک را عوض می‌کند', async () => {
