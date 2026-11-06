@@ -861,6 +861,11 @@ html[lang='fa'] .nav__label { letter-spacing: 0; }
 .topbar__user { padding-inline: 8px 14px; }
 .topbar__user .badge { font-size: var(--fs-2xs); padding: 1px 8px; } /* S11-12: بج نقش کاربر، کف ۱۲px */
 
+@media (max-width: 520px) {
+  /* ۱.۲۵.۱۰ — خرده‌راه: crumb دیگر «طرح د…» بریده نمی‌شود — فشرده‌تر و با فونت کوچک‌تر */
+  .topbar__crumb { gap: 4px; font-size: var(--fs-xs); }
+}
+
 @media (max-width: 920px) {
   .sidebar { box-shadow: var(--shadow-sidebar); }
   /* موبایل: تاپ‌بار تمام‌عرضِ تخت (کپسول شناور فقط دسکتاپ) */
