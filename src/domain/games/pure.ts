@@ -357,6 +357,14 @@ export function runPublishGates(
     } else if (typeof ref.version !== 'string' || !isProtocolVersionSupported(ref.version)) {
       errors.push({ rule: 'protocol', message: `نسخهٔ پروتکل ارزیابی با پروتکل جاری (${PROTOCOL_VERSION}) هم‌خوان نیست — بازسنجی غیرقابل‌تفسیر می‌شود` });
     }
+    // ارزیابی = اجرای بی‌بازخورد: هیچ آیتم آموزشی حق ورود به بستهٔ ارزیابی ندارد (فاز ۳)
+    for (const m of body.missions ?? []) {
+      for (const it of m.items ?? []) {
+        if (it.phase !== 'probe') {
+          errors.push({ rule: 'assessment_items', message: `آیتم «${it.id}» در مأموریت ${m.id} فاز آموزشی دارد — بستهٔ ارزیابی فقط آیتم پروب می‌پذیرد` });
+        }
+      }
+    }
   }
 
   // ۷) گیت جفت هم‌آوا در بستهٔ واجی — هر آیتم انتخابی (هر فازی) بازرسی می‌شود

@@ -20,6 +20,6 @@
       "@app/*": ["./src/application/*"]
     }
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "public/assets/play/engine/**/*.d.ts"],
   "exclude": ["node_modules", "src/application/board-ui"]
 }
