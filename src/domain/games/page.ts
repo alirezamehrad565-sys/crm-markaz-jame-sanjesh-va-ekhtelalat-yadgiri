@@ -1,7 +1,7 @@
 // page.ts — صفحهٔ سه‌حالتهٔ لینک (M1: گذارها · M2: پخش‌کنندهٔ کودک · فاز ۲ بازطراحی: پنج‌شِمال)
 // این صفحه فقط گذارها را می‌راند و هیچ منبع بیرونی ندارد؛ دارایی‌های بازی از همان مبدأ با ?v= نسخه می‌آیند.
 import { APP_VERSION } from '@core/version';
-import type { PublicStateView } from './types';
+import type { PublicStateView, PreviewStateView } from './types';
 
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
 
@@ -128,4 +128,46 @@ export function renderGamesPage(model: PublicStateView, token: string): string {
   // closed — فقط خواندنی
   return page(model, token, `<div class="card"><h1>ثبت شد</h1>
     <p class="muted">پایبندی امروز ثبت شد. سپاس از همراهی شما.</p></div>`);
+}
+
+/**
+ * صفحهٔ پیش‌نمایش فقط-پرسنلی (۱.۲۵.۲۰) — همان پوسته و همان موتور پخش‌کنندهٔ کودک؛
+ * توکن کوتاه‌عمر جای احراز، بدون هیچ کلید پاسخی در DOM، صفر نوشتن.
+ * توکن خالی/نامعتبر = کارت محترمانهٔ «فعال نیست» — نه خطای خام.
+ */
+export function renderPreviewPage(state: PreviewStateView | null, token: string): string {
+  if (!state || !token) {
+    return page(
+      { state: 'expired', missionRef: '', missionTitle: 'پیش‌نمایش بازی', packageTitle: '', expiresAt: '' },
+      '',
+      `<div class="card"><h1>پیش‌نمایش فعال نیست</h1>
+      <p class="muted">پیوند پیش‌نمایش منقضی شده یا شناخته نشد. از پنل «بازی‌ها» پیش‌نمایش تازه بگیرید (۳۰ دقیقه اعتبار).</p></div>`
+    );
+  }
+  const hint = JSON.stringify(state.hint ?? null);
+  const protocol = JSON.stringify(state.protocol ?? null);
+  const body = `<span class="pill">پیش‌نمایش درمانگر · ${esc(state.packageTitle)}</span>
+    <h1>${esc(state.missionTitle)}</h1>
+    <p class="muted">اجرای آزمایشی برای آشنایی شما — هیچ داده‌ای ثبت نمی‌شود؛ با هر بازگشایی از نو اجرا می‌شود.</p>
+    <div id="play-root" class="play-root"
+      data-token="${esc(token)}"
+      data-kind="${esc(state.game)}"
+      data-hint="${esc(hint)}"
+      data-protocol="${esc(protocol)}">
+      <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
+      <div class="play-stage" id="play-stage"></div>
+      <div class="play-bubble" id="play-bubble" hidden></div>
+      <div class="play-basket" id="play-basket" aria-hidden="true">
+        <svg class="play-basket__star" viewBox="0 0 120 124" aria-hidden="true"><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z"/></svg>
+        <span id="play-basket-count">۰</span>
+      </div>
+    </div>
+    <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />
+    <script type="module" src="/assets/play/preview.js?v=${APP_VERSION}"></script>`;
+  // پوستهٔ مشترک صفحه — گذارهای لینک در پیش‌نمایش معنا ندارد و bindهایش بی‌اثر می‌مانند
+  return page(
+    { state: 'expired', missionRef: '', missionTitle: state.missionTitle, packageTitle: state.packageTitle, expiresAt: '' } as unknown as PublicStateView,
+    token,
+    body
+  );
 }

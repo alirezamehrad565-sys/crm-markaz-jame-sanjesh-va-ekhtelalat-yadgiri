@@ -228,6 +228,25 @@ export interface LinkIssueOutcome {
   expiresAt: string;
 }
 
+/** پیش‌نمایش فقط-پرسنلی (۱.۲۵.۲۰) — همان الگوی لینک؛ بدون مأموریت/تجویز/کودک */
+export interface PreviewIssueOutcome {
+  jti: string;
+  token: string;
+  url: string;
+  expiresAt: string;
+}
+
+/** مدل رندر صفحهٔ پیش‌نمایش — بدون هیچ کلید پاسخ؛ کلید فقط در سرویس می‌ماند */
+export interface PreviewStateView {
+  packageTitle: string;
+  missionTitle: string;
+  /** نوع‌بازی مأموریت نخست — بارگیری ماژول نمایش همان پخش‌کنندهٔ کودک */
+  game: string;
+  hint: PlayHint | null;
+  protocol: ProtocolSnapshot;
+  mode: PackageMode;
+}
+
 export interface SessionMetricOutcome {
   metricId: string;
   value: number;
@@ -282,6 +301,12 @@ export interface GamesService {
   listMissions(prescriptionId: string): Promise<MissionRecord[]>;
   issueLink(missionId: string, actor: AuthContext): Promise<LinkIssueOutcome>;
   revokeLink(jti: string, actor: AuthContext): Promise<{ ok: true }>;
+
+  // پیش‌نمایش فقط-پرسنلی (۱.۲۵.۲۰) — اجرای آزمایشی بی‌نوشت؛ کلید پاسخ هرگز صفحه را ترک نمی‌کند
+  issuePreview(packageId: string, version: string, actor: AuthContext): Promise<PreviewIssueOutcome>;
+  previewState(token: string): Promise<PreviewStateView | null>;
+  previewItem(token: string, position: number): Promise<{ item: ItemView | null; progress: { done: number; total: number } }>;
+  previewFeedback(token: string, itemId: string, response: unknown, rtMs: number | null): Promise<AttemptFeedback>;
   getSessionDetail(missionId: string): Promise<{ sessions: unknown[]; attempts: unknown[] }>;
   getChildReport(childId: string): Promise<ChildGameReport>;
 
