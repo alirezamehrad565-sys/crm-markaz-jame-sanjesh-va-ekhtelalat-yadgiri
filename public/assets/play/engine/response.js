@@ -54,7 +54,8 @@ export function collectResponse(stage, getState, clock, opts = {}) {
     if (kind !== 'primary' || answered || !canAnswer()) return;
     answered = true;
     clock.pause();
-    finish({ touched: true, rt_ms: Math.max(0, Math.round(clock.acc)), touch_count: touches.length, touches });
+    const rt = Math.round(clock.acc);
+    finish({ touched: true, rt_ms: Number.isFinite(rt) && rt >= 0 ? rt : null, touch_count: touches.length, touches });
   };
 
   const onTapStage = () => handlePointer(true);

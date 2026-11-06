@@ -139,6 +139,32 @@ describe('گیت فاز ۳ بازطراحی — موتور ۱۴-حالته (۱.�
   });
 });
 
+describe('گیت فاز ۹+۱۰ بازطراحی — پرهیز از نشت واریانت و QA (۱.۲۵.۱۹)', () => {
+  it('هیچ کد واریانت پیشرفته (cued/distractor/auditory/variable) در دارایی‌های پخش‌کننده نیست', () => {
+    // سند فاز ۹: واریانت‌ها ساخته نمی‌شوند — اگر این گیت شکست، یعنی بی‌صدایی §۹ یا قرارداد فاز ۹ نقض شده
+    expect(allPlaySrc.toLowerCase()).not.toMatch(/distractor|cued|auditory|variable_timing/);
+  });
+
+  it('دو حالت از موتور: data-protocol صفحه + behavior پروتکل + امنیت ارزیابی', () => {
+    expect(pageSrc).toContain('data-protocol=');
+    expect(engineJs).toMatch(/feedback_in_main/);
+    expect(engineJs).toMatch(/isAssessment/);
+    // ارزیابی: بی‌سبد ستاره حتی اگر کلید سبد فعال شد
+    expect(engineJs).toMatch(/star_basket && !isAssessment/);
+  });
+
+  it('شواهد نمایش فاز ۴ در کل زنجیره حاضرند (مُهر نمایش/افت فریم/لمس‌ها)', () => {
+    expect(engineJs).toMatch(/presented_at/);
+    expect(engineJs).toMatch(/frame_drops/);
+    expect(engineJs).toMatch(/pause_count|pause_total_ms/);
+  });
+
+  it('نظافت تک‌نقطهٔ شبکهٔ کل پخش‌کننده پس از موتور جدید', () => {
+    expect(allJsFetches(playJs, engineJs).length).toBe(1);
+    expect(engineJs).not.toMatch(/fetch\(/);
+  });
+});
+
 describe('گیت فاز ۲ بازطراحی — پالت/فونت/پنج‌شِمال (۱.۲۵.۱۲)', () => {
   it('پالت دفترچهٔ وظیفه §۲ در CSS و محرک‌ها حاضر است', () => {
     expect(playCss).toContain('#153E50'); // Navy

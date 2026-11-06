@@ -71,8 +71,9 @@ export async function runTrial(ctx) {
   sleeper.cancel(); // پاسخ آمد یا پنجره بسته شد — شمارندهٔ پنجره یتیم نمی‌ماند
   if (hooks) { hooks.pause = null; hooks.resume = null; }
 
-  /* INTER_TRIAL_INTERVAL */
+  /* INTER_TRIAL_INTERVAL — محرک از صحنه برداشته می‌شود (پنجرهٔ نمایش محدود است) */
   machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, touched: outcome.touched });
+  stage.innerHTML = '';
   ev('iti_start');
 
   const isi = rand(
