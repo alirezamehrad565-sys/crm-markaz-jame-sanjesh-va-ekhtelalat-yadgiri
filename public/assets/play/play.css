@@ -50,18 +50,19 @@
 /* ─── نوار پیشرفت — آرام و بی‌عدد؛ در ارزیابی مخفی (پروتکل behavior.progress_visible) ─── */
 
 .play-progress {
-  height: 8px;
+  height: 10px;
   border-radius: 999px;
   background: var(--p-line);
   overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(21, 62, 80, .08);
 }
 
 .play-progress__bar {
   height: 100%;
   width: 0;
   border-radius: 999px;
-  background: var(--p-teal);
-  transition: width .6s ease-out;
+  background: linear-gradient(to left, var(--p-teal), #2F6D6A);
+  transition: width .5s cubic-bezier(.22, .61, .36, 1);
 }
 
 .play-root[data-mode='assessment'] .play-progress { visibility: hidden; }
@@ -71,9 +72,9 @@
 .play-stage {
   flex: 1;
   min-height: 240px;
-  border-radius: 20px;
+  border-radius: 24px;
   background: var(--p-white);
-  box-shadow: 0 1px 3px rgba(21, 62, 80, .08);
+  box-shadow: 0 14px 34px rgba(21, 62, 80, .10), 0 2px 6px rgba(21, 62, 80, .06);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -87,11 +88,22 @@
 
 .play-stage--quiet { cursor: default; }
 
-/* شِمال اجرای اصلی: خنثی و متمرکز — هیچ نشانهٔ نمره/دکمه/بازخورد ندارد */
+/* شِمال اجرای اصلی: خنثی و متمرکز — هیچ نشانهٔ نمره/دکمه/بازخورد ندارد؛
+   هالهٔ گرم ملایم پشت محرک (ایستا، بی‌فلاش) حس صحنهٔ بازی می‌دهد */
 .play-stage--main {
+  position: relative;
+  overflow: hidden;
   background: var(--p-cream);
   box-shadow: none;
   border-radius: 24px;
+}
+
+.play-stage--main::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 46%, rgba(228, 170, 70, .16), rgba(67, 140, 137, .07) 45%, transparent 68%);
+  pointer-events: none;
 }
 
 /* شِمال آموزش: کارت راهنمای ملایم */
@@ -112,9 +124,10 @@
   display: block;
 }
 
-/* اجرای اصلی: محرک قلب صفحه است — کمی درشت‌تر */
+/* اجرای اصلی: محرک قلب صفحه است — کمی درشت‌تر + عمق نرم */
 .play-stage--main .play-svg {
   width: min(calc(calc(var(--stim-scale) + 4) * 1vmin), 240px);
+  filter: drop-shadow(0 8px 16px rgba(21, 62, 80, .16));
 }
 
 /* ─── متن‌ها ─── */
@@ -159,7 +172,10 @@
   font-family: inherit;
   cursor: pointer;
   touch-action: manipulation;
+  transition: transform .12s ease, filter .12s ease;
 }
+
+.play-btn:active { transform: scale(.97); filter: brightness(1.1); }
 
 .play-btn--ghost {
   background: var(--p-cream);
@@ -185,22 +201,92 @@
   font-family: inherit;
   cursor: pointer;
   touch-action: manipulation;
+  transition: transform .12s ease, border-color .12s ease;
 }
 
-/* ─── حباب بازخورد — فقط تمرین؛ ارزیابی هرگز حباب ندارد ─── */
+.play-option:active { transform: scale(.97); border-color: var(--p-teal); }
+
+/* ─── حباب بازخورد — شناور بالای صحنه، جایی که نگاه کودک است (۱.۲۵.۲۱):
+   دیگر در جریان صفحه و زیر صحنه نیست — ظاهرشدنش هیچ چیدمانی را نمی‌لرزاند؛
+   فقط تمرین؛ ارزیابی هرگز حباب ندارد. دو لحن با ورود فنری از fx.js ─── */
 
 .play-bubble {
-  min-height: 52px;
-  border-radius: 14px;
+  position: fixed;
+  top: max(13vh, 92px);
+  inset-inline: 0;
+  margin-inline: auto;
+  width: max-content;
+  max-width: min(86vw, 430px);
+  z-index: 30;
+  pointer-events: none;
+  border-radius: 18px;
+  padding: 14px 20px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.7;
+  text-align: center;
+  box-shadow: 0 12px 32px rgba(21, 62, 80, .16), 0 2px 8px rgba(21, 62, 80, .10);
+}
+
+.play-bubble--ok {
+  background: var(--p-white);
+  color: var(--p-navy);
+  border: 2px solid rgba(228, 170, 70, .45); /* هالهٔ Amber موفقیت */
+}
+
+.play-bubble--calm {
   background: var(--p-cream);
   color: var(--p-navy);
-  font-size: 15px;
-  line-height: 1.8;
-  padding: 12px 16px;
-  text-align: center;
+  border: 2px solid var(--p-line);
 }
 
 .play-bubble[hidden] { display: none; }
+
+/* ─── پیل استریک — نقاط عطف پشت‌سرهم؛ بی‌رقارت و آرام ─── */
+
+.play-pill {
+  position: fixed;
+  top: max(6vh, 44px);
+  left: 50%;
+  transform: translate(-50%, 0);
+  z-index: 31;
+  pointer-events: none;
+  background: var(--p-amber);
+  color: var(--p-navy);
+  font-size: 15px;
+  font-weight: 700;
+  padding: 10px 18px;
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(21, 62, 80, .18);
+}
+
+.play-pill[hidden] { display: none; }
+
+/* ─── ذرات و ستارهٔ پران — بی‌اثر برای لمس؛ با کاهش‌جنبش اصلاً ساخته نمی‌شوند ─── */
+
+.play-fx-bit {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  border-radius: 50%;
+}
+
+.play-fx-star {
+  position: fixed;
+  z-index: 41;
+  pointer-events: none;
+  width: 26px;
+  height: 26px;
+}
+
+.play-fx-star svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  fill: var(--p-amber);
+  stroke: var(--p-navy);
+  stroke-width: 6;
+}
 
 /* ─── سبد ستاره — فقط حالت تمرین (پروتکل behavior.star_basket) ───
    شمارش مثبت بی‌رقارت: هر ۵ ستاره یک تشویق آرام؛ در ارزیابی کلاً غایب است. */
@@ -242,4 +328,5 @@
 @media (prefers-reduced-motion: reduce) {
   .play-progress__bar { transition: none; }
   .play-stage, .play-btn, .play-option, .play-basket { transition: none; animation: none; }
+  .play-fx-bit, .play-fx-star { display: none; }
 }
