@@ -150,6 +150,9 @@ export async function runSession(ctx) {
   let practiceMode = true; // تا نخستین آیتم اصلی (فاز پروب/آیتم‌های جاری در ارزیابی)
   machine.practiceMode = practiceMode;
 
+  /* ساعت شروع آزمون انتخابی — RT از لحظهٔ نمایش گزینه‌ها */
+  const pickStart = performance.now();
+
   for (;;) {
     let next;
     try {
@@ -186,6 +189,78 @@ export async function runSession(ctx) {
 
     /* ورود به حلقهٔ آزمون — از READY/PRACTICE */
     await sleeper.sleep(rand(P.isi_min_ms, P.isi_max_ms));
+
+    /* آیتم انتخابی (choice) — بدون پنجرهٔ زمانی؛ کف ۲۰۰ms سروری (§۸)؛
+       همان کلاس‌های CSS پخش‌کننده؛ پاسخ از کلید گزینه، RT از نمایش */
+    if (item.type === 'choice' && Array.isArray(item.options) && item.options.length > 0) {
+      machine.to(STATES.STIMULUS, { item: item.id, choice: true });
+      stage.classList.remove('play-stage--quiet');
+      stage.innerHTML = (item.prompt ? '<p class="play-line">' + esc(item.prompt) + '</p>' : '') +
+        '<div class="play-options">' +
+        item.options.map((o, i) => '<button type="button" class="play-option" data-option="' + i + '">' + esc(o.label) + '</button>').join('') +
+        '</div>';
+      const pickAt = await new Promise((resolve) => {
+        const buttons = stage.querySelectorAll('.play-option');
+        const onTap = (ev) => {
+          const btn = ev.target.closest('.play-option');
+          if (!btn) return;
+          buttons.forEach((b) => b.removeEventListener('pointerdown', onTap));
+          resolve({ option: Number(btn.dataset.option), at: performance.now() });
+        };
+        buttons.forEach((b) => b.addEventListener('pointerdown', onTap));
+      });
+      machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, choice: true });
+      stage.innerHTML = '';
+      const recordChoice = {
+        item_id: item.id,
+        go: null,
+        touched: true,
+        rt_ms: Math.round(pickAt.at - pickStart),
+        touch_count: 1,
+        premature_count: 0,
+        multiple_count: 0,
+        out_of_surface_count: 0,
+        presented_at: pickStart,
+        frame_drops: 0,
+        window_ms: null,
+        isi_ms: 0,
+        events: [],
+        choice_response: { option: pickAt.option }
+      };
+      trials.push(recordChoice);
+      doneCount += 1;
+      let fbC = null;
+      try {
+        fbC = await api.submit({
+          item_id: item.id,
+          response: recordChoice.choice_response,
+          rt_ms: recordChoice.rt_ms,
+          idem_key: crypto.randomUUID()
+        });
+      } catch (err) {
+        machine.to(STATES.INTERRUPTED, { reason: 'network', item: item.id });
+        onNetworkFail();
+        return;
+      }
+      const canFeedbackC = !isAssessment && fbC && fbC.phase === 'train' && fbC.message && B.feedback_in_main;
+      if (canFeedbackC) {
+        bubbleShow(bubble, fbC.message, P.feedback_ms);
+        await sleeper.sleep(P.feedback_ms);
+      } else {
+        await sleeper.sleep(Math.max(400, recordChoice.isi_ms || 600));
+      }
+      if (machine.state === STATES.INTER_TRIAL_INTERVAL) {
+        machine.to(practiceMode ? STATES.PRACTICE : STATES.READY, { after_items: doneCount });
+      }
+      continue;
+    }
+
+    /* نوع‌های هنوز نساخته (خط عددی و…) — همان تمامِ آرام نسخهٔ قبل */
+    if (item.type !== 'touch_report') {
+      machine.to(STATES.COMPLETED, { reason: 'unsupported_kind', item: item.id });
+      break;
+    }
+
     const record = await runTrial({
       stage, machine, item, kind, protocol, sleeper, rand,
       hooks: trialHooks
