@@ -11,6 +11,7 @@ import { STATES, createMachine } from './machine.js';
 import { createSleeper } from './timing.js';
 import { runTrial } from './trials.js';
 import { summarizeSession } from './scoring.js';
+import * as fx from '../fx.js';
 
 const rand = (min, max) => Math.floor(min + Math.random() * (max - min + 1));
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
@@ -119,6 +120,7 @@ export async function runSession(ctx) {
   stage.innerHTML = isAssessment
     ? card('سلام! به دستورالعمل گوش کن.', 'برای شروع، صفحه را لمس کن')
     : card('سلام!', 'برای شروع، صفحه را لمس کن');
+  fx.revealStage(stage);
   await tapToContinue(stage);
   stage.className = 'play-stage';
 
@@ -137,6 +139,8 @@ export async function runSession(ctx) {
       stage.classList.add('play-stage--teach');
       stage.innerHTML = '<span class="play-step-badge">قدم ' + faNum(step) + ' از ' + faNum(steps.length) + '</span>' +
         s.svg + '<p class="play-line">' + esc(s.line) + '</p>';
+      fx.revealStage(stage);
+      fx.popIn(stage.querySelector('.play-svg'));
       await sleeper.sleep(P.preview_step_ms);
     }
   }
@@ -146,6 +150,7 @@ export async function runSession(ctx) {
   machine.to(isAssessment ? STATES.READY : STATES.PRACTICE);
   const trials = [];
   let starCount = 0;
+  let streak = 0;
   let doneCount = 0;
   let practiceMode = true; // تا نخستین آیتم اصلی (فاز پروب/آیتم‌های جاری در ارزیابی)
   machine.practiceMode = practiceMode;
@@ -181,6 +186,7 @@ export async function runSession(ctx) {
       stage.innerHTML = card('استراحت کوچولو', isAssessment
         ? 'هر وقت آماده بودی لمس کن.'
         : 'یک نفس عمیق بکش؛ هر وقت آماده بودی لمس کن.');
+      fx.revealStage(stage);
       await sleeper.sleep(Math.min(P.break_min_ms, 2000));
       await tapToContinue(stage);
       stage.className = 'play-stage';
@@ -244,7 +250,7 @@ export async function runSession(ctx) {
       }
       const canFeedbackC = !isAssessment && fbC && fbC.phase === 'train' && fbC.message && B.feedback_in_main;
       if (canFeedbackC) {
-        bubbleShow(bubble, fbC.message, P.feedback_ms);
+        fx.popBubble(bubble, fbC.message, fbC.correct === true ? 'ok' : 'calm', P.feedback_ms);
         await sleeper.sleep(P.feedback_ms);
       } else {
         await sleeper.sleep(Math.max(400, recordChoice.isi_ms || 600));
@@ -293,9 +299,13 @@ export async function runSession(ctx) {
     }
 
     /* بازخورد — فقط تمرین؛ ارزیابی هرگز (behavior.feedback_in_main=false و آیتم پروب سرور هم بی‌بازخورد است) */
+    /* لایهٔ حسی ۱.۲۵.۲۱: حباب شناور درست‌جای + انفجار ذره‌ای + ستارهٔ پران به سبد + پیل استریک؛
+       همهٔ جنبش در fx.js با گارد کاهش‌جنبش — ارزیابی هرگز از این لایه نمی‌بیند (شرطِ isAssessment پایین) */
     const canFeedback = !isAssessment && fb && fb.phase === 'train' && fb.message && B.feedback_in_main;
+    const trialOk = fb !== null && typeof fb === 'object' && fb.correct === true;
     if (canFeedback) {
-      bubbleShow(bubble, fb.message, P.feedback_ms);
+      fx.popBubble(bubble, fb.message, trialOk ? 'ok' : 'calm', P.feedback_ms);
+      if (trialOk) fx.burstCenter(stage);
       await sleeper.sleep(P.feedback_ms);
     } else {
       await sleeper.sleep(record.isi_ms);
@@ -305,11 +315,18 @@ export async function runSession(ctx) {
     if (!isAssessment && B.star_basket && fb && fb.phase === 'train' && fb.correct === true) {
       starCount += 1;
       if (countEl) countEl.textContent = faNum(starCount);
+      fx.flyStar(stage, basketEl);
+      window.setTimeout(() => fx.popCount(countEl), 560);
       if (starCount % 5 === 0) {
-        bubbleShow(bubble, faNum(starCount) + ' ستاره جمع شد!', P.feedback_ms);
+        fx.popBubble(bubble, faNum(starCount) + ' ستاره جمع شد!', 'ok', P.feedback_ms);
         await sleeper.sleep(P.feedback_ms);
       }
     }
+
+    /* استریک — تشویق پشت‌سرهم بی‌رقارت؛ هرگز سرزنش/فشار ندارد (لحن §۲) */
+    if (trialOk) streak += 1; else if (fb && fb.correct === false) streak = 0;
+    const streakMsg = streakLine(streak);
+    if (canFeedback && streakMsg) fx.pillShow(streakMsg);
 
     /* بازگشت به حالت انتظار — تمرین می‌ماند، اصلی به READY */
     if (machine.state === STATES.INTER_TRIAL_INTERVAL) {
@@ -328,6 +345,8 @@ export async function runSession(ctx) {
     : card('مأموریت امروز تمام شد. خسته نباشی!', 'فردا هم یک مأموریت تازه داری.') +
       (B.star_basket && starCount > 0
         ? '<p class="play-muted">' + faNum(starCount) + ' ستاره در سبد تو جمع شد.</p>' : '');
+  fx.revealStage(stage);
+  if (!isAssessment && starCount > 0) fx.burstCenter(stage, 10);
   const finishBtn = document.createElement('button');
   finishBtn.type = 'button';
   finishBtn.className = 'play-btn';
@@ -357,11 +376,13 @@ function tapToContinue(stage) {
   });
 }
 
-function bubbleShow(bubble, text, ms) {
-  if (!bubble) return;
-  bubble.textContent = text;
-  bubble.hidden = false;
-  window.setTimeout(() => { bubble.hidden = true; }, ms);
+/* خط استریک — فقط نقاط عطف؛ متن بی‌رقارت لحن §۲ */
+function streakLine(n) {
+  if (n === 3) return faNum(3) + ' تا پشت سر هم!';
+  if (n === 5) return faNum(5) + ' تا پشت سر هم! چه تمرکزی!';
+  if (n === 10) return faNum(10) + ' تا پشت سر هم! فوق‌العاده‌ای!';
+  if (n > 10 && n % 10 === 0) return faNum(n) + ' تا پشت سر هم! می‌درخشی!';
+  return null;
 }
 
 function setProgress(bar, done, total) {
