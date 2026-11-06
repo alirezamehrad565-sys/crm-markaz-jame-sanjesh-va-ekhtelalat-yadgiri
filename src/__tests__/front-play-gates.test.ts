@@ -16,23 +16,24 @@ const playJs = read(join(PLAY, 'play.js'));
 const previewJs = read(join(PLAY, 'preview.js')); // پیش‌نمایش فقط-پرسنلی (۱.۲۵.۲۰) — همان قواعد امنیتی پخش‌کننده
 const gonogoJs = read(join(PLAY, 'kinds/gonogo.js'));
 const playCss = read(join(PLAY, 'play.css'));
+const fxJs = read(join(PLAY, 'fx.js')); // لایهٔ حسی بازی (۱.۲۵.۲۱) — همهٔ جنبش تزئینی همین‌جاست
 const engineJs = ['machine.js', 'timing.js', 'response.js', 'trials.js', 'session.js', 'scoring.js']
   .map((f) => read(join(PLAY, 'engine', f))).join('\n');
 const pageSrc = read(join(__dirname, '../domain/games/page.ts'));
 const routesSrc = read(join(__dirname, '../domain/games/routes.ts'));
-const allPlaySrc = playJs + previewJs + gonogoJs + playCss + engineJs;
+const allPlaySrc = playJs + previewJs + gonogoJs + playCss + fxJs + engineJs;
 
 describe('گیت ۱.۲۵.۰۸ — لحن و امنیت متن کودک', () => {
-  it('متن‌های روبه‌کودک هیچ واژهٔ ممنوعی ندارند (لینت مشترک با بسته‌ها) — شامل موتور', () => {
-    for (const [name, src] of [['play.js', playJs], ['kinds/gonogo.js', gonogoJs], ['page.ts', pageSrc], ['engine/*', engineJs]] as const) {
+  it('متن‌های روبه‌کودک هیچ واژهٔ ممنوعی ندارند (لینت مشترک با بسته‌ها) — شامل موتور و fx', () => {
+    for (const [name, src] of [['play.js', playJs], ['kinds/gonogo.js', gonogoJs], ['fx.js', fxJs], ['page.ts', pageSrc], ['engine/*', engineJs]] as const) {
       for (const w of FORBIDDEN_TEXT_PATTERNS) {
         expect(src.includes(w), `${name} حاوی واژهٔ ممنوع «${w}» است`).toBe(false);
       }
     }
   });
 
-  it('پخش‌کننده هیچ منبع بیرونی و هیچ ارزیابی پویا ندارد (§۱۱) — شامل موتور engine/ و پیش‌نمایش', () => {
-    for (const [name, src] of [['play.js', playJs], ['preview.js', previewJs], ['kinds/gonogo.js', gonogoJs], ['engine/*', engineJs]] as const) {
+  it('پخش‌کننده هیچ منبع بیرونی و هیچ ارزیابی پویا ندارد (§۱۱) — شامل موتور engine/، fx و پیش‌نمایش', () => {
+    for (const [name, src] of [['play.js', playJs], ['preview.js', previewJs], ['kinds/gonogo.js', gonogoJs], ['fx.js', fxJs], ['engine/*', engineJs]] as const) {
       expect(src, `${name} نباید URL مطلق بیرونی داشته باشد`).not.toMatch(/https?:\/\//);
       expect(src, `${name} نباید eval داشته باشد`).not.toMatch(/\beval\s*\(|new\s+Function/);
     }
@@ -218,5 +219,34 @@ describe('گیت فاز ۲ بازطراحی — پالت/فونت/پنج‌شِ�
   it('مقیاس محرک سن‌محور با متغیر پروتکل — بدون عدد جادویی مستقل', () => {
     expect(playCss).toContain('--stim-scale');
     expect(playCss).toMatch(/\.play-svg\s*\{[^}]*var\(--stim-scale\)/);
+  });
+});
+
+describe('گیت لایهٔ حسی بازی — گیم‌فیل (۱.۲۵.۲۱)', () => {
+  it('همهٔ جنبش تزئینی فقط از fx.js است — با گارد کاهش‌جنبش و WAAPI، بدون ساعت اندازه‌گیری و بدون شبکه', () => {
+    expect(fxJs).toContain('prefers-reduced-motion');
+    expect(fxJs).toMatch(/\.animate\(/); // Web Animations API — موتور مرکب مرورگر
+    expect(fxJs).not.toMatch(/performance\.now|fetch\(|setInterval|Audio/);
+    // جنبش آزمون هرگز شفاف‌کنندهٔ محرک نیست — محرک از نخستین فریم کامل مرئی است (RT پاک می‌ماند)
+    expect(fxJs).toMatch(/fade === false/);
+  });
+
+  it('حباب بازخورد شناور بالای صحنه است — دیگر در جریان پایین صفحه نیست؛ دو لحن جدا دارد', () => {
+    expect(playCss).toMatch(/\.play-bubble\s*\{[^}]*position:\s*fixed/);
+    expect(playCss).toMatch(/\.play-bubble--ok/);
+    expect(playCss).toMatch(/\.play-bubble--calm/);
+    expect(playCss).toMatch(/\.play-pill/);
+    // ذرات/ستارهٔ پران: بی‌اثر برای لمس و با کاهش‌جنبش غایب
+    expect(playCss).toMatch(/\.play-fx-bit\s*\{[^}]*pointer-events:\s*none/);
+    expect(playCss).toMatch(/\.play-fx-star\s*\{[^}]*pointer-events:\s*none/);
+  });
+
+  it('سرشت آزمون دست‌نخورده ماند: برداشت ITI فوری و پنجرهٔ پاسخ بدون تأخیر ادراکی', () => {
+    // محرک در آغاز ITI از تعامل خارج می‌شود (قرارداد فاز ۹) و DOM پیش از FIXATION بعدی پاک می‌شود
+    expect(engineJs).toMatch(/pointerEvents = 'none'/);
+    expect(engineJs).toMatch(/outThenRemove/);
+    // ورود محرک پس از مُهر نمایش است — popIn بعد از stimulus_presented می‌آید
+    const trialsSrc = read(join(PLAY, 'engine/trials.js'));
+    expect(trialsSrc.indexOf('stimulus_presented')).toBeLessThan(trialsSrc.indexOf('fx.popIn'));
   });
 });
