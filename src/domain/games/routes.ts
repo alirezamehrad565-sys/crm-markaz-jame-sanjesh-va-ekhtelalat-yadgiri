@@ -93,12 +93,17 @@ function renderReportHtml(report: import('./report').ChildGameReport, childId: s
   const esc = (s: unknown): string =>
     String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const sessionRows = report.sessions.map((s) => {
-    const sum = (s.computed?.summary ?? {}) as { totals?: Record<string, number>; pct?: Record<string, number | null>; rt?: { median_rt?: number | null } };
+    const sum = (s.computed?.summary ?? {}) as { totals?: Record<string, number>; pct?: Record<string, number | null>; rt?: { median_rt?: number | null }; stage?: { title_fa?: string; stars?: number; passed?: boolean } };
     const attemptCount = s.raw.attempt_count;
+    const st = sum.stage;
+    const stageCell = st && typeof st.stars === 'number'
+      ? esc(st.title_fa ?? '') + (st.passed ? ' · ' + '★'.repeat(st.stars) : ' · ناتمام')
+      : '—';
     return `<tr><td>${esc(s.session_id.slice(0, 8))}</td><td>${esc(s.purpose)}</td><td>${esc(s.computed?.validity)}</td>` +
       `<td>${esc(s.computed?.quality_verdict)}</td><td>${esc(sum.totals?.total ?? '—')}</td>` +
       `<td>${esc(sum.pct?.correct_go ?? '—')}</td><td>${esc(sum.pct?.correct_nogo ?? '—')}</td>` +
-      `<td>${esc(sum.pct?.commission ?? '—')}</td><td>${esc(sum.pct?.omission ?? '—')}</td><td>${esc(attemptCount)}</td></tr>`;
+      `<td>${esc(sum.pct?.commission ?? '—')}</td><td>${esc(sum.pct?.omission ?? '—')}</td>` +
+      `<td>${stageCell}</td><td>${esc(attemptCount)}</td></tr>`;
   }).join('');
   const compareRows = report.comparison.by_metric.map((m) =>
     `<tr><td>${esc(m.metric_id)}</td><td>${esc(m.unit)}</td><td>${m.points.map((p) => esc(p.value)).join(' → ') || '—'}</td></tr>`
@@ -117,8 +122,8 @@ function renderReportHtml(report: import('./report').ChildGameReport, childId: s
 <h1>گزارش جلسه‌های بازی — کودک ${esc(childId.slice(0, 8))}</h1>
 <p class="muted">${esc(report.session_count)} جلسه · تولید ${esc(report.generated_at)} · این گزارش هیچ تفسیر بالینی تولید نمی‌کند — تفسیر با درمانگر است.</p>
 <h2>خلاصهٔ محاسبه‌شدهٔ جلسه‌ها</h2>
-<table><thead><tr><th>جلسه</th><th>حالت</th><th>اعتبار</th><th>کیفیت</th><th>آزمون</th><th>گو درست٪</th><th>نوگو درست٪</th><th>کمیسیون٪</th><th>اُمیشن٪</th><th>پاسخ خام</th></tr></thead>
-<tbody>${sessionRows || '<tr><td colspan="10">جلسه‌ای ثبت نشده</td></tr>'}</tbody></table>
+<table><thead><tr><th>جلسه</th><th>حالت</th><th>اعتبار</th><th>کیفیت</th><th>آزمون</th><th>گو درست٪</th><th>نوگو درست٪</th><th>کمیسیون٪</th><th>اُمیشن٪</th><th>مرحله</th><th>پاسخ خام</th></tr></thead>
+<tbody>${sessionRows || '<tr><td colspan="11">جلسه‌ای ثبت نشده</td></tr>'}</tbody></table>
 <h2>مقایسهٔ جلسه‌ها (قدیمی → جدید)</h2>
 <table><thead><tr><th>سنجه</th><th>واحد</th><th>سری زمانی</th></tr></thead>
 <tbody>${compareRows || '<tr><td colspan="3">سنجه‌ای ثبت نشده</td></tr>'}</tbody></table>

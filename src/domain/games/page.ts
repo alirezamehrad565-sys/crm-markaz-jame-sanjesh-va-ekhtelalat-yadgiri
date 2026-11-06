@@ -37,6 +37,19 @@ function page(model: PublicStateView, token: string, body: string): string {
            font-family: inherit; margin-top: 12px; min-height: 52px; }
   button:disabled { opacity: .6; }
   .msg { margin-top: 10px; font-size: 13px; min-height: 18px; }
+  .stage-done { margin-top: 12px; }
+  .stage-done__badge { display: inline-block; background: #F5F0E5; border: 1px solid #E4AA46;
+    color: #153E50; border-radius: 999px; padding: 3px 14px; font-size: 13px; font-weight: 700; }
+  .stage-done__stars { display: flex; gap: 10px; justify-content: center; margin: 14px 0 8px; }
+  .stage-done__stars svg { width: 44px; height: 46px; }
+  .stage-done__stars svg path { fill: #E9E2D0; stroke: #153E50; stroke-width: 2.5; stroke-linejoin: round; }
+  .stage-done__stars svg.star--lit path { fill: #E4AA46; }
+  @media (prefers-reduced-motion: no-preference) {
+    .stage-done__stars svg.star--lit { animation: star-pop .5s cubic-bezier(.34,1.56,.64,1) backwards; }
+    .stage-done__stars svg.star--lit:nth-child(2) { animation-delay: .14s; }
+    .stage-done__stars svg.star--lit:nth-child(3) { animation-delay: .28s; }
+  }
+  @keyframes star-pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 </style>
 </head>
 <body>
@@ -86,12 +99,16 @@ export function renderGamesPage(model: PublicStateView, token: string): string {
   if (model.state === 'child_active') {
     // پخش‌کنندهٔ کودک (فاز ۲ بازطراحی) — حالت فقط در سرور است؛ رفرش = بازسازی همین صفحه از آیتم بعدی
     // پروتکل فقط از سرور می‌آید؛ کلاینت پارامتر را فقط از data-protocol می‌خواند — هاردکد ممنوع
+    // فرادادهٔ مرحلهٔ فقط-تمرین (۱.۲۵.۲۲) — فقط وقتی مرحله واقعاً هست؛ ارزیابی هرگز این ویژگی را ندارد
     const hint = JSON.stringify(model.playHint ?? null);
     const protocol = JSON.stringify(model.playProtocol ?? null);
+    const stageAttr = model.playStage
+      ? ` data-stage="${esc(JSON.stringify(model.playStage))}"`
+      : '';
     return page(model, token, `<div id="play-root" class="play-root"
       data-token="${esc(token)}"
       data-kind="${esc(model.playGame ?? '')}"
-      data-hint="${esc(hint)}"
+      data-hint="${esc(hint)}"${stageAttr}
       data-protocol="${esc(protocol)}">
       <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
       <div class="play-stage" id="play-stage"></div>
@@ -106,7 +123,19 @@ export function renderGamesPage(model: PublicStateView, token: string): string {
   }
 
   if (model.state === 'child_done') {
-    return page(model, token, `<div class="card"><h1>امروز تمام شد!</h1>
+    // کارت پایان با ستاره‌های مرحله (۱.۲۵.۲۲) — فقط تمرین؛ لحن §۲: بی‌رقارت، بدون سرزنش، دعوت آرام
+    const r = model.playStageResult;
+    const STAR_PATH_D = 'M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z';
+    const stageCard = r ? `<div class="stage-done">
+      <div class="stage-done__badge">مرحلهٔ ${faNum(r.index)} — ${esc(r.title_fa)}</div>
+      <div class="stage-done__stars" role="img" aria-label="${faNum(r.stars)} ستاره از ${faNum(3)}">
+        ${[1, 2, 3].map((i) => `<svg class="star${i <= r.stars ? ' star--lit' : ''}" viewBox="0 0 120 124" aria-hidden="true"><path d="${STAR_PATH_D}"/></svg>`).join('')}
+      </div>
+      <p class="muted">${r.passed ? 'این مرحله را کامل کردی!' : 'تمرین خوبی بود؛ دوباره بهش می‌رسیم.'}</p>
+      ${r.passed && r.next_title_fa ? `<p class="muted">مرحلهٔ بعدی: ${esc(r.next_title_fa)} — فردا منتظرت است.</p>` : ''}
+      ${r.stars_total > 0 ? `<p class="muted">مجموع ستاره‌های تو: ${faNum(r.stars_total)}</p>` : ''}
+    </div>` : '';
+    return page(model, token, `<div class="card"><h1>امروز تمام شد!</h1>${stageCard}
       <p class="muted">گوشی را به مامان بده.</p>
       <button id="btn-gate-open" type="button">من مامان هستم</button></div>`);
   }

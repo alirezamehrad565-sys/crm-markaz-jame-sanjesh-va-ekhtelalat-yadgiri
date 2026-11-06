@@ -18,8 +18,22 @@ import {
   stripAnswerKeys,
   toItemView
 } from './pure';
-import { protocolForAge, protocolSnapshotOf } from './protocol';
+import { protocolForAge, protocolSnapshotOf, bandForAge } from './protocol';
 import type { ProtocolMode } from './protocol';
+import { WINDOW_MAX_MS, WINDOW_MIN_MS } from './adaptive';
+import {
+  applyStageOverrides,
+  currentStageOf,
+  stageById,
+  stageByIndex,
+  stageOutcomeOf,
+  stageProgressOf,
+  STAGE_RULES_VERSION,
+  STAGE_TOTAL,
+  type StageDef,
+  type StageHistoryRow,
+  type StageProgress
+} from './stages';
 import { summarizeAttempts } from './scoring';
 import { assessQuality, serializeQuality, type QualityInput } from './quality';
 import { buildComparison, type ChildGameReport, type ReportRawAttempt, type ReportSession } from './report';
@@ -105,6 +119,7 @@ interface SessionRow {
   summary_json?: string | null;
   adaptive_json?: string | null;
   quality_json?: string | null;
+  stage_id?: string | null;
 }
 
 interface AttemptRow {
@@ -669,16 +684,46 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const mode: ProtocolMode = res.pkg.body.mode ?? 'training';
     const childAge = state === 'child_active' ? await childAgeOf(res.rx.child_id) : null;
     let snap = protocolSnapshotOf(protocolForAge(mode, childAge));
+    // نظام مرحله‌ها و ستاره‌ها (۱.۲۵.۲۲) — فقط تمرین؛ پنجره/ISI/تثبیت بر پایهٔ مرحلهٔ فعال بازنویسی می‌شود؛
+    // ارزیابی هرگز مرحله نمی‌بیند (C1) و کلید خاموشی درمانگر همیشه محترم است
+    let stage: StageDef | null = null;
+    let progress: StageProgress | null = null;
+    if (state === 'child_active' && mode === 'training') {
+      const sctx = await stageContextOf(res.rx.id, childAge, res.pkg.body);
+      if (sctx) {
+        stage = sctx.stage;
+        progress = sctx.progress;
+        snap = { ...snap, params: applyStageOverrides(snap.params, stage) };
+      }
+    }
     // سازگاری فقط-تمرین (فاز ۶): آخرین تصمیم معتبر تجویز پنجرهٔ این جلسه را تنظیم می‌کند؛
+    // بر پایهٔ مرحله (۱.۲۵.۲۲): گام آخر سازگاری به‌صورت افست روی پنجرهٔ مرحله می‌نشیند —
     // ارزیابی هرگز، و کلید خاموشی بسته/درمانگر همیشه محترم است
     if (state === 'child_active' && mode === 'training' && res.pkg.body.protocol != null && res.pkg.body.adaptive_enabled !== false) {
       const { decision } = await latestAdaptiveDecisionOf(res.rx.id);
-      if (decision?.change?.param === 'response_window_go_ms') {
-        const level = applyAdaptiveLevel(
-          { response_window_go_ms: snap.params.response_window_go_ms, level: 0 },
-          decision
-        );
-        snap = { ...snap, params: { ...snap.params, response_window_go_ms: level.response_window_go_ms } };
+      if (decision?.change && decision.change.param === 'response_window_go_ms') {
+        const offset = decision.change.to - decision.change.from;
+        const w = Math.min(WINDOW_MAX_MS, Math.max(WINDOW_MIN_MS, Math.round(snap.params.response_window_go_ms + offset)));
+        snap = { ...snap, params: { ...snap.params, response_window_go_ms: w } };
+      }
+    }
+    // کارت پایان (۱.۲۵.۲۲): نتیجهٔ مرحلهٔ جلسهٔ آخر — فقط تمرین با ستارهٔ ثبت‌شده در summary
+    let stageResult: PublicStateView['playStageResult'] = undefined;
+    if (state === 'child_done' && mode === 'training' && res.session?.stage_id && res.pkg.body.stages_enabled !== false) {
+      const sum = parseJson<{ stage?: { id?: string; index?: number; title_fa?: string; passed?: boolean; stars?: number } } | null>(res.session.summary_json, null);
+      const st = sum?.stage;
+      if (st && typeof st.stars === 'number' && typeof st.index === 'number') {
+        const prog = stageProgressOf(await stageHistoryOf(res.rx.id));
+        const next = stageByIndex('7-12', st.index + 1);
+        stageResult = {
+          id: st.id ?? res.session.stage_id,
+          index: st.index,
+          title_fa: st.title_fa ?? 'مرحله',
+          stars: st.stars,
+          passed: st.passed === true,
+          next_title_fa: next ? next.title_fa : null,
+          stars_total: prog.stars_total
+        };
       }
     }
     return {
@@ -692,8 +737,16 @@ export function createGamesService(deps: GamesDeps): GamesService {
       ...(state === 'child_active' ? {
         playGame: m.game,
         playHint: playHintOf(m),
-        playProtocol: snap
-      } : {})
+        playProtocol: snap,
+        ...(stage && progress ? {
+          playStage: {
+            id: stage.id, index: stage.index, total: STAGE_TOTAL,
+            title_fa: stage.title_fa, goal_fa: stage.goal_fa, difficulty: stage.difficulty,
+            best_stars: progress.best[stage.id]?.stars ?? 0
+          }
+        } : {})
+      } : {}),
+      ...(stageResult ? { playStageResult: stageResult } : {})
     };
   }
 
@@ -758,6 +811,44 @@ export function createGamesService(deps: GamesDeps): GamesService {
     }
   }
 
+  /** تاریخچهٔ مرحلهٔ تجویز (۱.۲۵.۲۲) — جلسه‌های دارای stage_id با درصدی‌های خلاصه؛ قدیمی→جدید */
+  async function stageHistoryOf(prescriptionId: string): Promise<StageHistoryRow[]> {
+    try {
+      const rows = await db.query<{ stage_id: string | null; validity: string; summary_json: string | null }>(
+        `SELECT s.stage_id, s.validity, s.summary_json
+         FROM game_sessions s JOIN game_missions m ON m.id = s.mission_id
+         WHERE m.prescription_id = ? AND s.stage_id IS NOT NULL
+         ORDER BY s.created_at ASC`,
+        [prescriptionId]
+      );
+      return rows.map((r) => {
+        const sum = parseJson<{ pct?: { correct_go?: number | null; correct_nogo?: number | null } } | null>(r.summary_json, null);
+        return {
+          stage_id: r.stage_id,
+          validity: r.validity,
+          correct_go_pct: sum?.pct?.correct_go ?? null,
+          correct_nogo_pct: sum?.pct?.correct_nogo ?? null
+        };
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  /** زمینهٔ مرحلهٔ تمرین (۱.۲۵.۲۲) — پیشرفت + مرحلهٔ فعال؛ فقط تمرین با کلید خاموشی روشن */
+  async function stageContextOf(
+    prescriptionId: string,
+    childAge: number | null,
+    body: { stages_enabled?: boolean }
+  ): Promise<{ progress: StageProgress; stage: StageDef } | null> {
+    if (body.stages_enabled === false) return null;
+    const band = bandForAge(childAge).band;
+    const progress = stageProgressOf(await stageHistoryOf(prescriptionId));
+    const stage = currentStageOf(progress, band);
+    if (!stage) return null;
+    return { progress, stage };
+  }
+
   async function start(token: string): Promise<PublicStateView> {
     const res = await requireActiveToken(token);
     if (res.session) {
@@ -788,10 +879,16 @@ export function createGamesService(deps: GamesDeps): GamesService {
         });
         sequenceJson = serializeSequence(seq);
       }
+      // مرحلهٔ فعال مسیر پیشرفت (۱.۲۵.۲۲) — فقط تمرین؛ resolve از تاریخچهٔ تجویز و ماندگاری در جلسه
+      let stageId: string | null = null;
+      if (mode === 'training') {
+        const sctx = await stageContextOf(res.rx.id, await childAgeOf(res.rx.child_id), res.pkg.body);
+        stageId = sctx?.stage.id ?? null;
+      }
       await db.execute(
-        `INSERT INTO game_sessions (id, mission_id, state, validity, purpose, sequence_json, started_at, last_activity_at)
-         VALUES (?,?, 'child_active', 'valid', ?, ?, ?, ?)`,
-        [id, res.mission.id, mode, sequenceJson, isoOf(now()), isoOf(now())]
+        `INSERT INTO game_sessions (id, mission_id, state, validity, purpose, sequence_json, stage_id, started_at, last_activity_at)
+         VALUES (?,?, 'child_active', 'valid', ?, ?, ?, ?, ?)`,
+        [id, res.mission.id, mode, sequenceJson, stageId, isoOf(now()), isoOf(now())]
       );
     }
     await db.execute(`UPDATE game_missions SET status = 'in_progress' WHERE id = ? AND status = 'pending'`, [res.mission.id]);
@@ -996,19 +1093,48 @@ export function createGamesService(deps: GamesDeps): GamesService {
       evidence_coverage: summary.behavior.evidence_coverage,
       rt_floor_violations: attempts.filter((a) => a.rt_valid === 0).length
     });
+    // نتیجهٔ مرحله (۱.۲۵.۲۲) — فقط تمرین با جلسهٔ معتبر؛ گذار/ستاره در summary_json می‌ماند و
+    // پیشرفت (stageProgressOf) در جلسه‌های بعدی از همین رکوردها ساخته می‌شود
+    const sessionMode: ProtocolMode = res.pkg.body.mode ?? 'training';
+    const stagesOn = sessionMode === 'training' && res.pkg.body.stages_enabled !== false;
+    const ageFin = stagesOn ? await childAgeOf(res.rx.child_id) : null;
+    const sessionStage = stagesOn && session.stage_id
+      ? stageById(bandForAge(ageFin).band, session.stage_id)
+      : null;
+    let summaryBody: unknown = summary;
+    if (sessionStage && validity === 'valid') {
+      const outcome = stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo);
+      summaryBody = {
+        ...summary,
+        stage: {
+          id: sessionStage.id,
+          index: sessionStage.index,
+          title_fa: sessionStage.title_fa,
+          passed: outcome.passed,
+          stars: outcome.stars,
+          rules_version: STAGE_RULES_VERSION
+        }
+      };
+    }
     await db.execute(
       `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ?, summary_json = ?, quality_json = ? WHERE id = ?`,
-      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summary), serializeQuality(quality), session.id]
+      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summaryBody), serializeQuality(quality), session.id]
     );
     // تصمیم سازگاری (فاز ۶) — فقط تمرین با پروتکل فعال و کلید خاموشی روشن؛
+    // بر پایهٔ مرحله (۱.۲۵.۲۲): سطح جاری از پنجرهٔ مرحله شروع می‌شود نه پایهٔ پروتکل —
     // ورودی‌های تصمیم عیناً در adaptive_json می‌مانند (شفافیت برای درمانگر)
-    const sessionMode: ProtocolMode = res.pkg.body.mode ?? 'training';
     const adaptiveEnabled = sessionMode === 'training' && res.pkg.body.protocol != null && res.pkg.body.adaptive_enabled !== false;
     if (adaptiveEnabled) {
-      const prot = protocolForAge('training', await childAgeOf(res.rx.child_id));
+      const prot = protocolForAge('training', ageFin);
+      const stageBase = sessionStage
+        ? applyStageOverrides(
+            Object.fromEntries(Object.entries(prot.params).map(([k, v]) => [k, v.value])),
+            sessionStage
+          ).response_window_go_ms
+        : prot.params.response_window_go_ms.value;
       const { decision: priorDecision, history } = await latestAdaptiveDecisionOf(res.rx.id);
       const current = applyAdaptiveLevel(
-        { response_window_go_ms: prot.params.response_window_go_ms.value, level: 0 },
+        { response_window_go_ms: stageBase, level: 0 },
         priorDecision
       );
       const decision = decideAdaptive(history, current, { adaptiveEnabled: prot.behavior.adaptive });
