@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.13";
+var APP_VERSION = "1.25.14";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -24432,11 +24432,14 @@ function createGamesService(deps) {
     if (!draft.idem_key || draft.idem_key.length > 100) throw new ValidationError("idem_key \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
     const rtMs = typeof draft.rt_ms === "number" && Number.isFinite(draft.rt_ms) ? draft.rt_ms < 0 ? null : draft.rt_ms > MAX_RT_MS ? null : Math.round(draft.rt_ms) : null;
     const scored = scoreAttempt(item, mission, draft.response, rtMs);
+    const evidence = trialEvidenceOf(draft.response);
     const existing = await db.queryOne(`SELECT * FROM game_attempts WHERE idem_key = ?`, [draft.idem_key]);
     if (existing) return feedbackOf(item, existing.correct === 1, parseJson2(existing.response_json, {}));
     await db.execute(
-      `INSERT INTO game_attempts (id, session_id, item_id, phase, response_json, correct, rt_ms, rt_valid, idem_key, created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO game_attempts (id, session_id, item_id, phase, response_json, correct, rt_ms, rt_valid, idem_key,
+        presented_at_ms, frame_drops, max_frame_delta_ms, touch_count, premature_count, multiple_count,
+        out_of_surface_count, window_ms, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         crypto.randomUUID(),
         session.id,
@@ -24447,6 +24450,14 @@ function createGamesService(deps) {
         scored.rtMs,
         scored.rtValid ? 1 : 0,
         draft.idem_key,
+        evidence.presented_at_ms,
+        evidence.frame_drops,
+        evidence.max_frame_delta_ms,
+        evidence.touch_count,
+        evidence.premature_count,
+        evidence.multiple_count,
+        evidence.out_of_surface_count,
+        evidence.window_ms,
         isoOf2(now())
       ]
     );
@@ -24454,6 +24465,21 @@ function createGamesService(deps) {
     return feedbackOf(item, scored.correct, draft.response);
   }
   __name(submitAttempt, "submitAttempt");
+  function trialEvidenceOf(response) {
+    const res = response ?? {};
+    const intOf = /* @__PURE__ */ __name((v) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v < 1e9 ? Math.round(v) : null, "intOf");
+    return {
+      presented_at_ms: intOf(res.presented_at),
+      frame_drops: intOf(res.frame_drops),
+      max_frame_delta_ms: intOf(res.max_frame_delta),
+      touch_count: intOf(res.touch_count),
+      premature_count: intOf(res.premature_count),
+      multiple_count: intOf(res.multiple_count),
+      out_of_surface_count: intOf(res.out_of_surface_count),
+      window_ms: intOf(res.window_ms)
+    };
+  }
+  __name(trialEvidenceOf, "trialEvidenceOf");
   function feedbackOf(item, correct, response) {
     if (item.phase === "probe") {
       return { recorded: true, phase: "probe" };
@@ -24609,7 +24635,17 @@ function createGamesService(deps) {
         correct: a.correct === null ? null : a.correct === 1,
         rtMs: a.rt_ms,
         rtValid: a.rt_valid === 1,
-        createdAt: a.created_at
+        createdAt: a.created_at,
+        evidence: {
+          presented_at_ms: a.presented_at_ms ?? null,
+          frame_drops: a.frame_drops ?? null,
+          max_frame_delta_ms: a.max_frame_delta_ms ?? null,
+          touch_count: a.touch_count ?? null,
+          premature_count: a.premature_count ?? null,
+          multiple_count: a.multiple_count ?? null,
+          out_of_surface_count: a.out_of_surface_count ?? null,
+          window_ms: a.window_ms ?? null
+        }
       }))
     };
   }
