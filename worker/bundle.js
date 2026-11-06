@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.11";
+var APP_VERSION = "1.25.12";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -24480,16 +24480,16 @@ function page(model, token, body) {
 <title>${esc(model.missionTitle || "\u062C\u0644\u0633\u0647\u0654 \u0628\u0627\u0632\u06CC")}</title>
 <style>
   * { box-sizing: border-box; }
-  body { margin: 0; background: #F7F3EA; color: #12384f; font-family: Tahoma, "Segoe UI", sans-serif;
+  body { margin: 0; background: #F5F0E5; color: #153E50; font-family: 'Vazirmatn Play', 'Vazirmatn', Tahoma, sans-serif;
          line-height: 1.9; -webkit-tap-highlight-color: transparent; }
   .wrap { max-width: 560px; margin: 0 auto; padding: 20px 14px 48px; }
   .card { background: #fff; border-radius: 16px; padding: 22px 18px; margin-top: 14px;
-          box-shadow: 0 1px 3px rgba(18,56,79,.08); text-align: center; }
-  .pill { display: inline-block; font-size: 12px; color: #1c5d80; background: #D9EDF7;
-          border-radius: 999px; padding: 2px 12px; }
+          box-shadow: 0 1px 3px rgba(21,62,80,.08); text-align: center; }
+  .pill { display: inline-block; font-size: 12px; color: #438C89; background: #F5F0E5;
+          border: 1px solid #438C89; border-radius: 999px; padding: 2px 12px; }
   h1 { font-size: 18px; margin: 10px 0 4px; }
-  .muted { color: #8A8377; font-size: 13px; }
-  button { display: block; width: 100%; border: 0; background: #229ED9; color: #fff;
+  .muted { color: #6E7B76; font-size: 13px; }
+  button { display: block; width: 100%; border: 0; background: #153E50; color: #fff;
            border-radius: 12px; padding: 15px; font-size: 16px; font-weight: 700; cursor: pointer;
            font-family: inherit; margin-top: 12px; min-height: 52px; }
   button:disabled { opacity: .6; }
@@ -24539,13 +24539,19 @@ function renderGamesPage(model, token) {
   }
   if (model.state === "child_active") {
     const hint = JSON.stringify(model.playHint ?? null);
+    const protocol = JSON.stringify(model.playProtocol ?? null);
     return page(model, token, `<div id="play-root" class="play-root"
       data-token="${esc(token)}"
       data-kind="${esc(model.playGame ?? "")}"
-      data-hint="${esc(hint)}">
+      data-hint="${esc(hint)}"
+      data-protocol="${esc(protocol)}">
       <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
       <div class="play-stage" id="play-stage"></div>
       <div class="play-bubble" id="play-bubble" hidden></div>
+      <div class="play-basket" id="play-basket" aria-hidden="true">
+        <svg class="play-basket__star" viewBox="0 0 120 124" aria-hidden="true"><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z"/></svg>
+        <span id="play-basket-count">\u06F0</span>
+      </div>
     </div>
     <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />
     <script type="module" src="/assets/play/play.js?v=${APP_VERSION}"></script>`);
@@ -24756,7 +24762,7 @@ function registerGamesPublicRoutes(app, service) {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
         "X-Robots-Tag": "noindex, nofollow",
-        "Content-Security-Policy": "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        "Content-Security-Policy": "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
       }
     });
   });
