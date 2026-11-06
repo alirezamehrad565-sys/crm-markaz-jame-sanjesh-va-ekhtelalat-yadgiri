@@ -183,3 +183,38 @@ export function serializeSequence(seq: GeneratedSequence): string {
     kinds: seq.trials.map((t) => (t.kind === 'go' ? 'g' : 'n')).join('')
   });
 }
+
+/** رکورد ذخیره‌شدهٔ جلسه → گزینه‌های بازتولید + trials (ناموفق = null) */
+export function parseSequenceRecord(raw: string | null | undefined): {
+  options: SequenceOptions;
+  trials: GeneratedTrial[];
+  go_count: number;
+} | null {
+  if (!raw) return null;
+  try {
+    const r = JSON.parse(raw) as {
+      seed?: unknown; count?: unknown; go_ratio?: unknown;
+      max_consecutive_same?: unknown; block_size?: unknown; go_count?: unknown; kinds?: unknown;
+    };
+    if (typeof r.seed !== 'string' || typeof r.count !== 'number' ||
+        typeof r.go_ratio !== 'number' || typeof r.max_consecutive_same !== 'number' ||
+        typeof r.block_size !== 'number' || typeof r.kinds !== 'string') return null;
+    if (!/^[gn]+$/.test(r.kinds) || r.kinds.length !== r.count) return null;
+    const blockSize: number = r.block_size;
+    const trials: GeneratedTrial[] = Array.from(r.kinds, (ch, i) => ({
+      index: i + 1,
+      kind: (ch === 'g' ? 'go' : 'nogo') as TrialKind,
+      block: Math.floor(i / blockSize) + 1
+    }));
+    return {
+      options: {
+        seed: r.seed, count: r.count, goRatio: r.go_ratio,
+        maxConsecutiveSame: r.max_consecutive_same, blockSize: r.block_size
+      },
+      trials,
+      go_count: typeof r.go_count === 'number' ? r.go_count : trials.filter((t) => t.kind === 'go').length
+    };
+  } catch {
+    return null;
+  }
+}

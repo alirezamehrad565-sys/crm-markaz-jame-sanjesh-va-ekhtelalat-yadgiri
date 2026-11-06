@@ -15,28 +15,30 @@ const read = (p: string) => readFileSync(p, 'utf8');
 const playJs = read(join(PLAY, 'play.js'));
 const gonogoJs = read(join(PLAY, 'kinds/gonogo.js'));
 const playCss = read(join(PLAY, 'play.css'));
+const engineJs = ['machine.js', 'timing.js', 'response.js', 'trials.js', 'session.js', 'scoring.js']
+  .map((f) => read(join(PLAY, 'engine', f))).join('\n');
 const pageSrc = read(join(__dirname, '../domain/games/page.ts'));
 const routesSrc = read(join(__dirname, '../domain/games/routes.ts'));
-const allPlaySrc = playJs + gonogoJs + playCss;
+const allPlaySrc = playJs + gonogoJs + playCss + engineJs;
 
 describe('گیت ۱.۲۵.۰۸ — لحن و امنیت متن کودک', () => {
-  it('متن‌های روبه‌کودک هیچ واژهٔ ممنوعی ندارند (لینت مشترک با بسته‌ها)', () => {
-    for (const [name, src] of [['play.js', playJs], ['kinds/gonogo.js', gonogoJs], ['page.ts', pageSrc]] as const) {
+  it('متن‌های روبه‌کودک هیچ واژهٔ ممنوعی ندارند (لینت مشترک با بسته‌ها) — شامل موتور', () => {
+    for (const [name, src] of [['play.js', playJs], ['kinds/gonogo.js', gonogoJs], ['page.ts', pageSrc], ['engine/*', engineJs]] as const) {
       for (const w of FORBIDDEN_TEXT_PATTERNS) {
         expect(src.includes(w), `${name} حاوی واژهٔ ممنوع «${w}» است`).toBe(false);
       }
     }
   });
 
-  it('پخش‌کننده هیچ منبع بیرونی و هیچ ارزیابی پویا ندارد (§۱۱)', () => {
-    for (const [name, src] of [['play.js', playJs], ['kinds/gonogo.js', gonogoJs]] as const) {
+  it('پخش‌کننده هیچ منبع بیرونی و هیچ ارزیابی پویا ندارد (§۱۱) — شامل موتور engine/', () => {
+    for (const [name, src] of [['play.js', playJs], ['kinds/gonogo.js', gonogoJs], ['engine/*', engineJs]] as const) {
       expect(src, `${name} نباید URL مطلق بیرونی داشته باشد`).not.toMatch(/https?:\/\//);
       expect(src, `${name} نباید eval داشته باشد`).not.toMatch(/\beval\s*\(|new\s+Function/);
     }
   });
 
-  it('همهٔ درخواست‌های شبکه پخش‌کننده به زنجیرهٔ توکن‌دار /api/m/ می‌روند', () => {
-    const fetches = playJs.match(/fetch\([^;]*?\)/g) ?? [];
+  it('تک‌نقطهٔ شبکهٔ کل پخش‌کننده (ورودی + موتور): فقط requestJson در play.js', () => {
+    const fetches = allJsFetches(playJs, engineJs);
     expect(fetches.length).toBe(1); // تک‌نقطهٔ شبکه: requestJson
     expect(fetches[0]).toContain('API + path');
     expect(playJs).toContain("'/api/m/'");
@@ -44,9 +46,9 @@ describe('گیت ۱.۲۵.۰۸ — لحن و امنیت متن کودک', () => {
 });
 
 describe('گیت ۱.۲۵.۰۸ — قواعد حسی §۹', () => {
-  it('نسخهٔ کودک بی‌صداست — هیچ Audio یا صوتی در ماژول بازی نیست', () => {
+  it('نسخهٔ کودک بی‌صداست — هیچ Audio یا صوتی در ماژول بازی و موتور نیست', () => {
     expect(gonogoJs).not.toMatch(/\bAudio\b|new Audio|<audio|\.play\s*\(|replay_audio/);
-    expect(playJs).not.toMatch(/\bAudio\b|new Audio|<audio/);
+    expect(playJs + engineJs).not.toMatch(/\bAudio\b|new Audio|<audio/);
   });
 
   it('محرک‌ها وکتور درون‌کدند — بدون <img و بدون فایل دارایی', () => {
@@ -55,10 +57,10 @@ describe('گیت ۱.۲۵.۰۸ — قواعد حسی §۹', () => {
     expect(gonogoJs).not.toMatch(/\.png|\.jpg|\.webp|\.mp3|\.ogg/);
   });
 
-  it('بدون شمارش‌معکوس نمایشی؛ ساعت واکنش روی visibilitychange می‌ایستد', () => {
-    expect(playJs).not.toMatch(/setInterval\s*\(/);
-    expect(playJs).toContain('visibilitychange');
-    expect(playJs).toMatch(/performance\.now\(\)/);
+  it('بدون شمارش‌معکوس نمایشی؛ ساعت واکنش روی visibilitychange می‌ایستد — در کل موتور', () => {
+    expect(allPlaySrc).not.toMatch(/setInterval\s*\(/);
+    expect(allPlaySrc).toContain('visibilitychange');
+    expect(allPlaySrc).toMatch(/performance\.now\(\)/);
   });
 
   it('کاهش‌جنبش محترم است و هیچ انیمیشن تندی تعریف نشده', () => {
@@ -93,6 +95,47 @@ describe('گیت ۱.۲۵.۰۸ — اتصال صفحه به پخش‌کننده',
     expect(routesSrc).toContain("style-src 'self' 'unsafe-inline'");
     expect(routesSrc).toContain("default-src 'none'");
     expect(routesSrc).toContain("frame-ancestors 'none'");
+  });
+});
+
+/** همهٔ فراخوانی‌های fetch در ماژول‌های پخش‌کننده (ورودی + موتور) */
+function allJsFetches(...sources: string[]): string[] {
+  return sources.flatMap((src) => src.match(/fetch\([^;]*?\)/g) ?? []);
+}
+
+describe('گیت فاز ۳ بازطراحی — موتور ۱۴-حالته (۱.۲۵.۱۳)', () => {
+  it('ماشین ۱۴-حالته دفترچهٔ وظیفه در engine/machine.js حاضر است', () => {
+    for (const s of ['IDLE', 'INSTRUCTION', 'DEMONSTRATION', 'PRACTICE', 'READY', 'FIXATION',
+      'STIMULUS', 'RESPONSE_WINDOW', 'INTER_TRIAL_INTERVAL', 'BREAK', 'COMPLETED',
+      'PAUSED', 'INTERRUPTED', 'INVALID']) {
+      expect(engineJs).toContain(s);
+    }
+  });
+
+  it('پاسخ زودتر از محرک و لمس‌های چندگانه ثبت می‌شوند (C4/C5 ممیزی)', () => {
+    expect(engineJs).toContain('premature');
+    expect(engineJs).toContain('multiple');
+    expect(engineJs).toContain('out_of_surface');
+    expect(engineJs).toContain('classifyTouch');
+  });
+
+  it('دو حالت از یک موتور — behavior پروتکل تصمیم می‌گیرد نه if هاردکد', () => {
+    expect(engineJs).toMatch(/feedback_in_main/);
+    expect(engineJs).toMatch(/star_basket/);
+    expect(engineJs).toMatch(/data-protocol|dataset\.protocol/);
+  });
+
+  it('کلید پاسخ هرگز به کلاینت نمی‌رود — موتور گو بودن را نمی‌داند', () => {
+    expect(engineJs).not.toContain('correct_touch');
+    expect(engineJs).not.toContain("correct'");
+    expect(engineJs).not.toContain('correct"');
+    // بازخورد آموزشی فقط از سرور می‌آید (fb.correct) — کلید آیتم هرگز
+  });
+
+  it('مُهر نمایش واقعی و افت فریم ثبت می‌شوند (C7 ممیزی)', () => {
+    expect(engineJs).toMatch(/presented_at/);
+    expect(engineJs).toMatch(/frame_drops/);
+    expect(engineJs).toMatch(/requestAnimationFrame/);
   });
 });
 
