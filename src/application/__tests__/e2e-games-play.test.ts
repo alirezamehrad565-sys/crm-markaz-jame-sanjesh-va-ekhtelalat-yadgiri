@@ -251,7 +251,9 @@ describe('فاز ۳/۴ بازطراحی — ارزیابی مستقل با دن�
     expect(det.attempts.length).toBe(5);
     const withEvidence = det.attempts.find((a) => a.itemId === 'a-g1');
     expect(withEvidence).toBeTruthy();
-    expect(withEvidence!.evidence.presented_at_ms).toBe(1000);
+    // presented_at به جایگاه در دنبالهٔ seed-دار وابسته است (seed تصادفی هر جلسه) — فقط حضور و بازه را ادعا می‌کنیم
+    expect(typeof withEvidence!.evidence.presented_at_ms).toBe('number');
+    expect(withEvidence!.evidence.presented_at_ms as number).toBeGreaterThanOrEqual(1000);
     expect(withEvidence!.evidence.window_ms).toBe(1500);
     // پاسخ خام هم حفظ شده — تفکیک خام/محاسبه‌شده (فاز ۸ از همین می‌خواند)
     expect(withEvidence!.response.touched).toBe(true);
