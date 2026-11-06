@@ -488,7 +488,8 @@ export function renderRxPanel(container, { childId = null, childName = '', embed
   const toolbar = el('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '14px' } },
     childArea, statusSel, el('span', { style: { flex: '1' } }), prescribeBtn);
   listWrap = el('div', {});
-  container.replaceChildren(toolbar, listWrap);
+  const followupsWrap = el('div', { style: { marginBottom: '14px' } });
+  container.replaceChildren(toolbar, followupsWrap, listWrap);
   refresh();
 
   async function refresh() {
@@ -502,10 +503,68 @@ export function renderRxPanel(container, { childId = null, childName = '', embed
       rows = (await api.get(`/api/games/prescriptions?${params.toString()}`)).data ?? [];
     } catch (err) {
       listWrap.replaceChildren(errorState(err, refresh));
+      loadFollowups(); // فهرست شکست خورد — میز پیگیری همچنان تلاش می‌کند
       return;
     }
     listWrap.replaceChildren(renderRxTable(rows, { onOpenMissions: (rx) => missionsModal(rx, { childName: rx.childName ?? '', onChanged: refresh }), onChanged: refresh }));
+    if (!state.childId) loadFollowups(); // تریاژ سراسری — با فیلتر کودک خودِ جدول کافی است
+    else followupsWrap.replaceChildren();
   }
+
+  // میز پیگیری تبعیت (۱.۲۵.۲۵) — کارت «نیازمند پیگیری» بالای فهرست؛ اختیاری و بی‌سروصدا
+  async function loadFollowups() {
+    let rows;
+    try {
+      rows = (await api.get('/api/games/followups')).data ?? [];
+    } catch {
+      followupsWrap.replaceChildren(); // خطای میز پیگیری هرگز فهرست اصلی را نمی‌بندد
+      return;
+    }
+    followupsWrap.replaceChildren(rows.length > 0 ? renderFollowupsCard(rows) : document.createTextNode(''));
+  }
+}
+
+// کد دلیل پیگیری — فقط توصیف رفتار داده، بدون هیچ تفسیر بالینی
+const FOLLOWUP_REASON = {
+  never_scheduled: { text: () => 'مأموریتی برنامه‌ریزی نشده', cls: 'badge--warning' },
+  stalled: { text: (r) => `${fa(r.idleDays ?? 0)} روز بدون جلسه`, cls: 'badge--error' },
+  pending_overdue: { text: (r) => `${fa(r.pendingOverdue)} مأموریتِ تاریخ‌گذشته`, cls: 'badge--warning' },
+  today_unlinked: { text: (r) => `${fa(r.todayUnlinked)} مأموریتِ امروز بی‌لینک`, cls: 'badge--accent' }
+};
+
+function renderFollowupsCard(rows) {
+  const items = rows.map((r) => {
+    const open = el('button', {
+      class: 'btn btn--ghost btn--sm', type: 'button',
+      onclick: (e) => lockBtn(e.currentTarget, () => missionsModal(
+        { id: r.prescriptionId, childName: r.childName ?? '', packageTitleFa: r.packageTitleFa, packageId: r.packageId ?? '', packageVersion: r.packageVersion ?? '', doseOverride: null },
+        { childName: r.childName ?? '' }
+      ))
+    }, icon('gamepad', 14), 'مأموریت‌ها و لینک');
+    return el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', padding: '10px 0', borderTop: '1px solid var(--border)' } },
+      el('b', {}, r.childName ?? '—'),
+      el('span', { class: 'cell-sub' }, r.packageTitleFa ?? ''),
+      el('span', { class: 'cell-sub' }, `${fa(r.missionDone)}/${fa(r.missionTotal)} مأموریت`),
+      el('span', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
+        ...r.reasons.map((code) => {
+          const def = FOLLOWUP_REASON[code] ?? null;
+          return def ? badge(def.text(r), def.cls) : null;
+        }).filter(Boolean)),
+      el('span', { style: { flex: '1' } }),
+      open
+    );
+  });
+  return el('div', { class: 'card', style: { borderInlineStart: '3px solid var(--warning)' } },
+    el('div', { class: 'card-body' },
+      el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' } },
+        icon('bell', 15),
+        el('b', {}, 'نیازمند پیگیری'),
+        badge(fa(rows.length), 'badge--warning')),
+      el('p', { class: 'hint-text', style: { marginBottom: '8px' } },
+        'تجویزهای فعال که به توجه امروز نیاز دارند — فقط توصیف رفتار داده؛ تفسیر با درمانگر است.'),
+      ...items
+    )
+  );
 }
 
 function renderRxTable(rows, { onOpenMissions, onChanged }) {

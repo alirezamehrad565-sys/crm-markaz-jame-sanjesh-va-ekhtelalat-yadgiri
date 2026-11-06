@@ -101,6 +101,24 @@
 | 75 | `0073_finance.sql` | بودجه و مالی مرکز — فاکتور + کمک خانواده‌ها + تراز (`finance_*`، فقط مدیر)  | اعمال‌شده در پروداکشن |
 | 76 | `0074_docs_categories.sql` | دسته‌بندی ۷گانهٔ «نمون‌برگ‌ها و اسناد خام» — نگاشت ستون `category` | اعمال‌شده در پروداکشن |
 
+### ضمیمه — سری بازی‌های تعاملی (۰۰۸۷–۰۰۹۷)
+
+مایگریشن‌های ۰۰۷۵+ در واک‌های بعدی افزوده شدند؛ بلوک بازی‌های تعاملی (ماژول games، مایلستون‌های m251–m269):
+
+| # | نام فایل | خلاصهٔ یک‌خطی هدف |
+|---|---|---|
+| 87 | `0087_games_registry_m251.sql` | رجیستری بازی: سنجه (game_metrics) و هدف (game_goals) با گیت انتشار |
+| 88 | `0088_games_missions_m251.sql` | تجویز/مأموریت/جلسه/پاسخ (game_prescriptions, game_missions, game_sessions, game_attempts؛ idem_key یگانه) |
+| 89 | `0089_games_links_m251.sql` | لینک امضاشدهٔ کودک (game_links) + تبعیت والد (game_adherence) |
+| 90 | `0090_games_session_purpose_sequence_m262.sql` | دو حالت تمرین/ارزیابی + دنبالهٔ seed-دار جلسه |
+| 91 | `0091_games_trial_evidence_m263.sql` | شواهد نمایش واقعی روی game_attempts (مُهر نمایش/افت فریم/لمس‌ها) |
+| 92 | `0092_games_session_summary_m264.sql` | خلاصهٔ محاسبه‌شدهٔ جلسه (summary_json) |
+| 93 | `0093_games_adaptive_history_m265.sql` | تاریخچهٔ تصمیم سازگاری (adaptive_json) |
+| 94 | `0094_games_session_quality_m266.sql` | حکم کیفیت جلسه (quality_json — سه‌تایی قابل‌توضیح) |
+| 95 | `0095_games_preview_tokens_m267.sql` | توکن پیش‌نمایش فقط-پرسنلی ۳۰دقیقه‌ای (game_preview_tokens؛ فقط هش) |
+| 96 | `0096_games_session_stage_m268.sql` | مرحلهٔ منجمدشدهٔ جلسه (game_sessions.stage_id — نظام پنج‌مرحله‌ای تمرین) |
+| 97 | `0097_games_attempt_integrity_m269.sql` | اعتبار سطح DB جمع‌آوری داده: یگانگی (session_id,item_id) پس از پاک‌سازی تکرارهای تاریخی + ایندکس سوییپ جلسهٔ رهاشده |
+
 ## شماره‌های تکراری
 
 سه شماره در نام فایل‌ها تکرار شده است — **وضعیت فعلی با کوئری فقط-خواندنی روی `d1_migrations` پروداکشن تأیید شد:**
