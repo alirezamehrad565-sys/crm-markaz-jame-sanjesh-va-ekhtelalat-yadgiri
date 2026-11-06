@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.23";
+var APP_VERSION = "1.25.24";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -24262,6 +24262,57 @@ function buildComparison(sessions) {
   };
 }
 __name(buildComparison, "buildComparison");
+function reportToCsv(report) {
+  const esc2 = /* @__PURE__ */ __name((v) => {
+    const s = String(v ?? "");
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }, "esc");
+  const num4 = /* @__PURE__ */ __name((v) => typeof v === "number" ? String(v) : "", "num");
+  const header = [
+    "session_id",
+    "mission_ref",
+    "mission_title",
+    "purpose",
+    "validity",
+    "quality_verdict",
+    "started_at",
+    "ended_at",
+    "total",
+    "correct_go_pct",
+    "correct_nogo_pct",
+    "commission_pct",
+    "omission_pct",
+    "median_rt_ms",
+    "stage_title",
+    "stage_stars",
+    "attempt_count"
+  ];
+  const lines = [header.join(",")];
+  for (const s of report.sessions) {
+    const sum = s.computed?.summary ?? null;
+    lines.push([
+      s.session_id,
+      s.mission_ref,
+      s.mission_title ?? "",
+      s.purpose,
+      s.computed?.validity ?? "",
+      s.computed?.quality_verdict ?? "",
+      s.started_at ?? "",
+      s.computed?.ended_at ?? "",
+      num4(sum?.totals?.total),
+      num4(sum?.pct?.correct_go),
+      num4(sum?.pct?.correct_nogo),
+      num4(sum?.pct?.commission),
+      num4(sum?.pct?.omission),
+      num4(sum?.rt?.median),
+      sum?.stage?.title_fa ?? "",
+      typeof sum?.stage?.stars === "number" ? String(sum.stage.stars) : "",
+      String(s.raw.attempt_count)
+    ].map(esc2).join(","));
+  }
+  return "\uFEFF" + lines.join("\r\n") + "\r\n";
+}
+__name(reportToCsv, "reportToCsv");
 
 // src/domain/games/stimulus.ts
 function mulberry32(seedNum) {
@@ -24598,6 +24649,24 @@ function createGamesService(deps) {
     return loadPackage(packageId, version);
   }
   __name(publishPackage, "publishPackage");
+  async function retirePackage(packageId, version, actor) {
+    const record = await loadPackage(packageId, version);
+    if (record.status === "retired") return record;
+    await db.execute(
+      `UPDATE game_packages SET status = 'retired', updated_at = datetime('now') WHERE id = ? AND version = ?`,
+      [packageId, version]
+    );
+    await audit.log({
+      actorId: actor.staffId,
+      action: "game_package_retire",
+      resourceType: "game_package",
+      resourceId: `${packageId}@${version}`,
+      changes: { status: { from: record.status, to: "retired" } }
+    });
+    logger.info("games.package.retired", { packageId, version });
+    return loadPackage(packageId, version);
+  }
+  __name(retirePackage, "retirePackage");
   async function createPrescription(input, actor) {
     const child = await db.queryOne(`SELECT id FROM students WHERE id = ? AND active = 1`, [input.childId]);
     if (!child) throw new NotFoundError("\u06A9\u0648\u062F\u06A9");
@@ -24673,9 +24742,47 @@ function createGamesService(deps) {
     };
   }
   __name(prescriptionRowToRecord, "prescriptionRowToRecord");
-  async function listPrescriptions(childId) {
-    const rows = childId ? await db.query(`SELECT * FROM game_prescriptions WHERE child_id = ? ORDER BY created_at DESC`, [childId]) : await db.query(`SELECT * FROM game_prescriptions ORDER BY created_at DESC`);
-    return rows.map(prescriptionRowToRecord);
+  async function listPrescriptions(query) {
+    const q = typeof query === "string" ? { childId: query } : query ?? {};
+    const limit = Math.min(Math.max(Math.trunc(q.limit ?? 50), 1), 200);
+    const offset = Math.max(Math.trunc(q.offset ?? 0), 0);
+    const where = [];
+    const params = [];
+    if (q.childId) {
+      where.push("p.child_id = ?");
+      params.push(q.childId);
+    }
+    if (q.status) {
+      where.push("p.status = ?");
+      params.push(q.status);
+    }
+    const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+    const rows = await db.query(
+      `SELECT p.*,
+        (s.first_name || ' ' || s.last_name) AS child_name,
+        g.title_fa AS goal_title_fa,
+        pk.title_fa AS package_title_fa,
+        (SELECT COUNT(*) FROM game_missions m WHERE m.prescription_id = p.id) AS mission_total,
+        (SELECT COUNT(*) FROM game_missions m WHERE m.prescription_id = p.id AND m.status = 'done') AS mission_done,
+        (SELECT COUNT(*) FROM game_missions m WHERE m.prescription_id = p.id AND m.status IN ('pending','in_progress')) AS mission_live
+      FROM game_prescriptions p
+      LEFT JOIN students s ON s.id = p.child_id
+      LEFT JOIN game_goals g ON g.id = p.goal_id
+      LEFT JOIN game_packages pk ON pk.id = p.package_id AND pk.version = p.package_version
+      ${whereSql}
+      ORDER BY p.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}`,
+      params
+    );
+    return rows.map((row) => ({
+      ...prescriptionRowToRecord(row),
+      childName: row.child_name ?? null,
+      packageTitleFa: row.package_title_fa ?? null,
+      goalTitleFa: row.goal_title_fa ?? null,
+      missionTotal: row.mission_total,
+      missionDone: row.mission_done,
+      missionLive: row.mission_live
+    }));
   }
   __name(listPrescriptions, "listPrescriptions");
   async function setPrescriptionStatus(id, action, actor) {
@@ -24735,7 +24842,29 @@ function createGamesService(deps) {
   __name(loadPackageDose, "loadPackageDose");
   async function listMissions(prescriptionId) {
     const rows = await db.query(`SELECT * FROM game_missions WHERE prescription_id = ? ORDER BY scheduled_for, created_at`, [prescriptionId]);
-    return rows.map(missionRowToRecord);
+    let titles = /* @__PURE__ */ new Map();
+    const rx = await loadPrescription(prescriptionId);
+    if (rx) {
+      try {
+        const pkg = await loadPackage(rx.packageId, rx.packageVersion);
+        titles = new Map(pkg.body.missions.map((m) => [m.id, m.title ?? m.id]));
+      } catch {
+      }
+    }
+    const linkByMission = /* @__PURE__ */ new Map();
+    if (rows.length > 0) {
+      const liveLinks = await db.query(
+        `SELECT mission_id, jti, expires_at FROM game_links
+         WHERE mission_id IN (${rows.map(() => "?").join(",")}) AND revoked_at IS NULL AND expires_at > ?`,
+        [...rows.map((r) => r.id), isoOf2(now())]
+      );
+      for (const l of liveLinks) linkByMission.set(l.mission_id, { jti: l.jti, expiresAt: l.expires_at });
+    }
+    return rows.map((row) => ({
+      ...missionRowToRecord(row),
+      title: titles.get(row.mission_ref) ?? null,
+      link: linkByMission.get(row.id) ?? null
+    }));
   }
   __name(listMissions, "listMissions");
   async function issueLink(missionId, actor) {
@@ -25567,6 +25696,7 @@ function createGamesService(deps) {
     setPrescriptionStatus,
     scheduleMission,
     listMissions,
+    retirePackage,
     issueLink,
     revokeLink,
     getSessionDetail,
@@ -25935,6 +26065,11 @@ function registerGamesRoutes(app, service) {
     const published = await service.publishPackage(c.req.param("id"), c.req.param("version"), body.reviewed_by ?? null, actor);
     return c.json({ data: { id: published.id, version: published.version, status: published.status, reviewedBy: published.reviewedBy } }, 200);
   });
+  app.post("/api/games/packages/:id/:version/retire", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const retired = await service.retirePackage(c.req.param("id"), c.req.param("version"), actor);
+    return c.json({ data: { id: retired.id, version: retired.version, status: retired.status } }, 200);
+  });
   app.post("/api/games/prescriptions", requireRole("manager", "therapist"), async (c) => {
     const actor = getAuthContext(c);
     const body = PrescriptionSchema.parse(await c.req.json());
@@ -25951,7 +26086,12 @@ function registerGamesRoutes(app, service) {
   });
   app.get("/api/games/prescriptions", requireRole("manager", "therapist", "secretary"), async (c) => {
     const childId = c.req.query("child_id");
-    return c.json({ data: await service.listPrescriptions(childId || void 0) }, 200);
+    const status = c.req.query("status");
+    const limitRaw = c.req.query("limit");
+    const offsetRaw = c.req.query("offset");
+    const limit = limitRaw != null && /^\d+$/.test(limitRaw) ? Number(limitRaw) : void 0;
+    const offset = offsetRaw != null && /^\d+$/.test(offsetRaw) ? Number(offsetRaw) : void 0;
+    return c.json({ data: await service.listPrescriptions({ childId: childId || void 0, status: status || void 0, limit, offset }) }, 200);
   });
   app.post("/api/games/prescriptions/:id/status", requireRole("manager", "therapist"), async (c) => {
     const actor = getAuthContext(c);
@@ -25995,6 +26135,17 @@ function registerGamesRoutes(app, service) {
       return new Response(renderReportHtml(report, c.req.param("childId")), {
         status: 200,
         headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" }
+      });
+    }
+    if (c.req.query("format") === "csv") {
+      return new Response(reportToCsv(report), {
+        status: 200,
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="games-report-${c.req.param("childId").slice(0, 8)}.csv"`,
+          "Cache-Control": "no-store",
+          "X-Robots-Tag": "noindex, nofollow"
+        }
       });
     }
     return c.json({ data: report }, 200);

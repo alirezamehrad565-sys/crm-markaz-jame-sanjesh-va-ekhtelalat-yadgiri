@@ -170,6 +170,28 @@ export interface MissionRecord {
   scheduledFor: string;
   missionRef: string;
   status: MissionStatus;
+  /** عنوان مأموریت از بدنهٔ بسته (۱.۲۵.۲۴) — میز درمانگر؛ پیدا نشد = null */
+  title?: string | null;
+  /** لینک زندهٔ همین مأموریت (۱.۲۵.۲۴) — ابطال‌شده/منقضی = null؛ دست‌یاری پیگیری تبعیت */
+  link?: { jti: string; expiresAt: string } | null;
+}
+
+/** پرس‌وجوی فهرست تجویزها (۱.۲۵.۲۴) — رشتهٔ ساده = سازگاری قدیمی (childId) */
+export type PrescriptionListQuery = {
+  childId?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+};
+
+/** ردیف فهرست تجویزها برای میز درمانگر — هویت انسانی کودک/بسته/هدف + شمار مأموریت‌ها */
+export interface PrescriptionListRecord extends PrescriptionRecord {
+  childName: string | null;
+  packageTitleFa: string | null;
+  goalTitleFa: string | null;
+  missionTotal: number;
+  missionDone: number;
+  missionLive: number; // pending + in_progress
 }
 
 /** نمای آیتم برای کلاینت — بدون هیچ کلید پاسخ (§۵) */
@@ -323,10 +345,12 @@ export interface GamesService {
   upsertPackage(input: PackageUpsertInput, actor: AuthContext): Promise<PackageRecord>;
   listPackages(status?: PackageStatus): Promise<PackageRecord[]>;
   publishPackage(packageId: string, version: string, reviewedByStaffId: string | null, actor: AuthContext): Promise<PackageRecord>;
+  /** بازنشسته‌کردن نسخهٔ بسته (۱.۲۵.۲۴) — فقط مدیر؛ تجویز تازه را می‌بندد، تجویز موجود نسخه‌قفل می‌ماند (§۱۳) */
+  retirePackage(packageId: string, version: string, actor: AuthContext): Promise<PackageRecord>;
 
   // تجویز و مأموریت (پرسنلی)
   createPrescription(input: PrescriptionCreateInput, actor: AuthContext): Promise<PrescriptionRecord>;
-  listPrescriptions(childId?: string): Promise<PrescriptionRecord[]>;
+  listPrescriptions(query?: string | PrescriptionListQuery): Promise<PrescriptionListRecord[]>;
   setPrescriptionStatus(id: string, action: 'pause' | 'resume' | 'stop' | 'complete', actor: AuthContext): Promise<PrescriptionRecord>;
   scheduleMission(input: MissionScheduleInput, actor: AuthContext): Promise<MissionRecord>;
   listMissions(prescriptionId: string): Promise<MissionRecord[]>;
