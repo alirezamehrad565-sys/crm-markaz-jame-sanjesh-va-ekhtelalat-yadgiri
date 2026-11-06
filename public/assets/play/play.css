@@ -1,9 +1,41 @@
 /* ═══════════════════════════════════════════════════════════════
-   play.css — پخش‌کنندهٔ کودک (M2 / ۱.۲۵.۰۸)
-   فقط کلاس‌های play-*؛ صفحهٔ میزبان (page.ts) استایل خودش را دارد.
-   قواعد حسی §۹: هدف لمسی ≥۴۸px (دکمه‌ها ۶۴px)، بدون فلاش، جنبش کم،
-   همهٔ جنبش‌ها زیر prefers-reduced-motion خاموش.
+   play.css — پخش‌کنندهٔ کودک (فاز ۲ بازطراحی گو/نوگو / ۱.۲۵.۱۲)
+   پالت دفترچهٔ وظیفه §۲: Navy #153E50 · Teal #438C89 · Amber #E4AA46 ·
+   Cream #F5F0E5 · White — فونت Vazirmatn زیرمجموعهٔ خودی (CSP 'self').
+   مقیاس محرک سن‌محور: --stim-scale از پروتکل (protocol.stimulus_scale_vmin)
+   با data-protocol صفحه تنظیم می‌شود — هیچ عدد جادویی پیکسلی.
+   پنج‌شِمال: معرفی/آموزش/تمرین/اجرای اصلی/پایان — اجرای اصلی بی‌نمره،
+   بی‌دکمه، بی‌بازخورد (دفترچهٔ وظیفه §۲).
+   قواعد حسی §۹: هدف لمسی ≥۶۴px، بدون فلاش، همهٔ جنبش زیر prefers-reduced-motion خاموش.
    ═══════════════════════════════════════════════════════════════ */
+
+/* فونت خودی زیرمجموعه‌شده (فارسی+لاتین) — بدون هیچ منبع بیرونی */
+@font-face {
+  font-family: 'Vazirmatn Play';
+  src: url('/assets/fonts/vazirmatn-fa-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Vazirmatn Play';
+  src: url('/assets/fonts/vazirmatn-fa-bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root, .play-root {
+  --p-navy: #153E50;   /* مرکب متن/خط جوهری محرک */
+  --p-teal: #438C89;   /* محرک نوگو (مربع) — دفترچهٔ وظیفه §۲ */
+  --p-amber: #E4AA46;  /* محرک گو (ستاره) */
+  --p-cream: #F5F0E5;  /* پس‌زمینهٔ آرام */
+  --p-white: #ffffff;
+  --p-soft: #6E7B76;   /* متن کم‌رنگ خنثی */
+  --p-line: #E3DCC9;   /* خط جداکنندهٔ ملایم */
+  /* مقیاس محرک — پیش‌فرض میانه؛ از پروتکل بازنویسی می‌شود (٪ قطر کوچک ویوپورت) */
+  --stim-scale: 33;
+}
 
 .play-root {
   display: flex;
@@ -12,12 +44,15 @@
   min-height: 78vh;
   user-select: none;
   -webkit-user-select: none;
+  font-family: 'Vazirmatn Play', 'Vazirmatn', Tahoma, sans-serif;
 }
+
+/* ─── نوار پیشرفت — آرام و بی‌عدد؛ در ارزیابی مخفی (پروتکل behavior.progress_visible) ─── */
 
 .play-progress {
   height: 8px;
   border-radius: 999px;
-  background: #E5DECF;
+  background: var(--p-line);
   overflow: hidden;
 }
 
@@ -25,16 +60,20 @@
   height: 100%;
   width: 0;
   border-radius: 999px;
-  background: #229ED9;
+  background: var(--p-teal);
   transition: width .6s ease-out;
 }
+
+.play-root[data-mode='assessment'] .play-progress { visibility: hidden; }
+
+/* ─── صحنه — قلب پنج‌شِمال ─── */
 
 .play-stage {
   flex: 1;
   min-height: 240px;
   border-radius: 20px;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(18, 56, 79, .08);
+  background: var(--p-white);
+  box-shadow: 0 1px 3px rgba(21, 62, 80, .08);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -48,24 +87,64 @@
 
 .play-stage--quiet { cursor: default; }
 
+/* شِمال اجرای اصلی: خنثی و متمرکز — هیچ نشانهٔ نمره/دکمه/بازخورد ندارد */
+.play-stage--main {
+  background: var(--p-cream);
+  box-shadow: none;
+  border-radius: 24px;
+}
+
+/* شِمال آموزش: کارت راهنمای ملایم */
+.play-stage--teach {
+  background: var(--p-white);
+}
+
+/* شِمال پایان: بستن محترمانه */
+.play-stage--end {
+  background: var(--p-white);
+}
+
+/* ─── محرک — مقیاس سن‌محور از پروتکل (٪ قطر کوچک ویوپورت) ─── */
+
 .play-svg {
-  width: min(56vw, 220px);
+  width: min(calc(var(--stim-scale) * 1vmin), 220px);
   height: auto;
   display: block;
 }
 
+/* اجرای اصلی: محرک قلب صفحه است — کمی درشت‌تر */
+.play-stage--main .play-svg {
+  width: min(calc(calc(var(--stim-scale) + 4) * 1vmin), 240px);
+}
+
+/* ─── متن‌ها ─── */
+
 .play-line {
   font-size: 18px;
   font-weight: 700;
-  color: #12384f;
+  color: var(--p-navy);
   margin: 0;
 }
 
 .play-muted {
   font-size: 14px;
-  color: #8A8377;
+  color: var(--p-soft);
   margin: 0;
 }
+
+/* بج گام آموزش («قدم ۱ از ۳») — یادآور ملایم، نه شمارندهٔ فشار */
+.play-step-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--p-white);
+  background: var(--p-teal);
+  border-radius: 999px;
+  padding: 4px 14px;
+  margin-bottom: 4px;
+}
+
+/* ─── دکمه‌ها و گزینه‌ها — هدف لمسی سخاوتمند ─── */
 
 .play-btn {
   display: block;
@@ -73,8 +152,8 @@
   min-height: 64px; /* هدف لمسی سخاوتمند — کاردرمانگر §۹ */
   border: 0;
   border-radius: 14px;
-  background: #229ED9;
-  color: #fff;
+  background: var(--p-navy);
+  color: var(--p-white);
   font-size: 17px;
   font-weight: 700;
   font-family: inherit;
@@ -83,8 +162,8 @@
 }
 
 .play-btn--ghost {
-  background: #D9EDF7;
-  color: #1c5d80;
+  background: var(--p-cream);
+  color: var(--p-navy);
 }
 
 .play-options {
@@ -97,10 +176,10 @@
 
 .play-option {
   min-height: 64px;
-  border: 2px solid #D9EDF7;
+  border: 2px solid var(--p-line);
   border-radius: 14px;
-  background: #fff;
-  color: #12384f;
+  background: var(--p-white);
+  color: var(--p-navy);
   font-size: 17px;
   font-weight: 700;
   font-family: inherit;
@@ -108,11 +187,13 @@
   touch-action: manipulation;
 }
 
+/* ─── حباب بازخورد — فقط تمرین؛ ارزیابی هرگز حباب ندارد ─── */
+
 .play-bubble {
   min-height: 52px;
   border-radius: 14px;
-  background: #FDF6E3;
-  color: #12384f;
+  background: var(--p-cream);
+  color: var(--p-navy);
   font-size: 15px;
   line-height: 1.8;
   padding: 12px 16px;
@@ -121,8 +202,44 @@
 
 .play-bubble[hidden] { display: none; }
 
+/* ─── سبد ستاره — فقط حالت تمرین (پروتکل behavior.star_basket) ───
+   شمارش مثبت بی‌رقارت: هر ۵ ستاره یک تشویق آرام؛ در ارزیابی کلاً غایب است. */
+
+.play-basket {
+  position: fixed;
+  inset-inline-start: 14px;
+  bottom: 14px;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--p-white);
+  box-shadow: 0 1px 4px rgba(21, 62, 80, .14);
+  color: var(--p-navy);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.play-root[data-basket='on'] .play-basket { display: inline-flex; }
+
+.play-basket__star {
+  width: 22px;
+  height: 22px;
+  fill: var(--p-amber);
+  stroke: var(--p-navy);
+  stroke-width: 1.5;
+}
+
+/* ─── تبلت افقی: صحنه وسط می‌ماند و حاشیهٔ مرده روی محتوا اثر نمی‌گذارد ─── */
+@media (min-width: 700px) and (orientation: landscape) {
+  .play-root { max-width: 640px; margin: 0 auto; width: 100%; }
+  .play-stage { min-height: 320px; }
+}
+
 /* هیچ انیمیشنی تندتر از ۳ هرتز وجود ندارد؛ با کاهش‌جنبش همه‌چیز ایستا می‌شود */
 @media (prefers-reduced-motion: reduce) {
   .play-progress__bar { transition: none; }
-  .play-stage, .play-btn, .play-option { transition: none; animation: none; }
+  .play-stage, .play-btn, .play-option, .play-basket { transition: none; animation: none; }
 }
