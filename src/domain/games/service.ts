@@ -102,6 +102,14 @@ interface AttemptRow {
   rt_ms: number | null;
   rt_valid: number;
   idem_key: string;
+  presented_at_ms?: number | null;
+  frame_drops?: number | null;
+  max_frame_delta_ms?: number | null;
+  touch_count?: number | null;
+  premature_count?: number | null;
+  multiple_count?: number | null;
+  out_of_surface_count?: number | null;
+  window_ms?: number | null;
   created_at: string;
 }
 
@@ -659,16 +667,43 @@ export function createGamesService(deps: GamesDeps): GamesService {
       ? (draft.rt_ms < 0 ? null : draft.rt_ms > MAX_RT_MS ? null : Math.round(draft.rt_ms))
       : null;
     const scored = scoreAttempt(item, mission, draft.response, rtMs);
+    const evidence = trialEvidenceOf(draft.response);
     const existing = await db.queryOne<AttemptRow>(`SELECT * FROM game_attempts WHERE idem_key = ?`, [draft.idem_key]);
     if (existing) return feedbackOf(item, existing.correct === 1, parseJson(existing.response_json, {})); // تکرار ایمن: همان بازخورد اول
     await db.execute(
-      `INSERT INTO game_attempts (id, session_id, item_id, phase, response_json, correct, rt_ms, rt_valid, idem_key, created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO game_attempts (id, session_id, item_id, phase, response_json, correct, rt_ms, rt_valid, idem_key,
+        presented_at_ms, frame_drops, max_frame_delta_ms, touch_count, premature_count, multiple_count,
+        out_of_surface_count, window_ms, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [crypto.randomUUID(), session.id, item.id, item.phase, JSON.stringify(draft.response ?? {}), scored.correct ? 1 : 0,
-        scored.rtMs, scored.rtValid ? 1 : 0, draft.idem_key, isoOf(now())]
+        scored.rtMs, scored.rtValid ? 1 : 0, draft.idem_key,
+        evidence.presented_at_ms, evidence.frame_drops, evidence.max_frame_delta_ms, evidence.touch_count,
+        evidence.premature_count, evidence.multiple_count, evidence.out_of_surface_count, evidence.window_ms,
+        isoOf(now())]
     );
     await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf(now()), session.id]);
     return feedbackOf(item, scored.correct, draft.response);
+  }
+
+  /** شواهد نمایش واقعی کلاینت (فاز ۴) — فقط مقادیر عددی محدود؛ ادعای درستی هرگز از کلاینت پذیرفته نمی‌شود */
+  function trialEvidenceOf(response: unknown): {
+    presented_at_ms: number | null; frame_drops: number | null; max_frame_delta_ms: number | null;
+    touch_count: number | null; premature_count: number | null; multiple_count: number | null;
+    out_of_surface_count: number | null; window_ms: number | null;
+  } {
+    const res = (response ?? {}) as Record<string, unknown>;
+    const intOf = (v: unknown): number | null =>
+      typeof v === 'number' && Number.isFinite(v) && v >= 0 && v < 1e9 ? Math.round(v) : null;
+    return {
+      presented_at_ms: intOf(res.presented_at),
+      frame_drops: intOf(res.frame_drops),
+      max_frame_delta_ms: intOf(res.max_frame_delta),
+      touch_count: intOf(res.touch_count),
+      premature_count: intOf(res.premature_count),
+      multiple_count: intOf(res.multiple_count),
+      out_of_surface_count: intOf(res.out_of_surface_count),
+      window_ms: intOf(res.window_ms)
+    };
   }
 
   function feedbackOf(item: MissionItem, correct: boolean, response: unknown): AttemptFeedback {
@@ -830,7 +865,17 @@ export function createGamesService(deps: GamesDeps): GamesService {
         id: a.id, sessionId: a.session_id, itemId: a.item_id, phase: a.phase,
         response: stripAnswerKeys(parseJson(a.response_json, {})),
         correct: a.correct === null ? null : a.correct === 1,
-        rtMs: a.rt_ms, rtValid: a.rt_valid === 1, createdAt: a.created_at
+        rtMs: a.rt_ms, rtValid: a.rt_valid === 1, createdAt: a.created_at,
+        evidence: {
+          presented_at_ms: a.presented_at_ms ?? null,
+          frame_drops: a.frame_drops ?? null,
+          max_frame_delta_ms: a.max_frame_delta_ms ?? null,
+          touch_count: a.touch_count ?? null,
+          premature_count: a.premature_count ?? null,
+          multiple_count: a.multiple_count ?? null,
+          out_of_surface_count: a.out_of_surface_count ?? null,
+          window_ms: a.window_ms ?? null
+        }
       }))
     };
   }
