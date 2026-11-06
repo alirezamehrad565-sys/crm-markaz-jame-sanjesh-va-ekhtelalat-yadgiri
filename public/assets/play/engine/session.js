@@ -66,7 +66,7 @@ function safeProtocol(snap) {
  *   onNetworkFail(abort): پنل آرام شبکه
  */
 export async function runSession(ctx) {
-  const { root, stage, bubble, bar, basketEl, countEl, api, protocol: rawProtocol, kind, hint, onNetworkFail } = ctx;
+  const { root, stage, bubble, bar, basketEl, countEl, api, protocol: rawProtocol, kind, hint, stageMeta, onNetworkFail } = ctx;
   const protocol = safeProtocol(rawProtocol);
   const isAssessment = protocol.mode === 'assessment';
   const P = protocol.params;
@@ -145,6 +145,24 @@ export async function runSession(ctx) {
     }
   }
   stage.className = 'play-stage';
+
+  /* ─── ۲٫۵) کارت مرحله (۱.۲۵.۲۲) — فقط تمرین؛ فراداده فقط از سرور (data-stage) ───
+     مسیر پیشرفت پنج‌مرحله‌ای با بهترین ستارهٔ همین مرحله؛ لحن §۲ بی‌رقارت،
+     ارزیابی هرگز این کارت را نمی‌بیند (C1 — دستورالعمل ثابت) */
+  if (!isAssessment && stageMeta && typeof stageMeta.index === 'number' && stageMeta.title_fa) {
+    stage.className = 'play-stage';
+    stage.classList.add('play-stage--teach');
+    stage.innerHTML =
+      '<span class="play-step-badge">مرحلهٔ ' + faNum(stageMeta.index) + ' از ' + faNum(stageMeta.total || 5) + '</span>' +
+      '<p class="play-line">' + esc(stageMeta.title_fa) + '</p>' +
+      (stageMeta.goal_fa ? '<p class="play-muted">' + esc(stageMeta.goal_fa) + '</p>' : '') +
+      fx.starRow(stageMeta.best_stars);
+    fx.revealStage(stage);
+    fx.popStars(stage);
+    await tapToContinue(stage);
+    stage.className = 'play-stage';
+    stage.innerHTML = ''; // صحنه خالی پیش از ISI — ردیف ستاره حواس‌پرتی/کاشف محرک اشتباه نمی‌سازد
+  }
 
   /* ─── ۳) حلقهٔ مأموریت — تمرین/اجرای اصلی از یک موتور ─── */
   machine.to(isAssessment ? STATES.READY : STATES.PRACTICE);

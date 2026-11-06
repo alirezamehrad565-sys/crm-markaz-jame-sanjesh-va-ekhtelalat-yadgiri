@@ -34,6 +34,23 @@ tap; sleep 1
 echo "── مرحلهٔ ۲: پیش‌نمایش (هدف/غیرهدف) — انتظار ۴٫۵ ثانیه"
 sleep 4.5
 
+echo "── مرحلهٔ ۲٫۵: کارت مرحله (۱.۲۵.۲۲) — مسیر پیشرفت فقط-تمرین"
+STAGE_BADGE=""
+for i in $(seq 1 25); do
+  STAGE_BADGE=$(agent-browser eval "document.querySelector('#play-stage .play-step-badge')?.textContent || ''" 2>/dev/null | tail -1)
+  case "$STAGE_BADGE" in *"مرحلهٔ"*) break;; esac
+  sleep 0.3
+  STAGE_BADGE=""
+done
+if [ -n "$STAGE_BADGE" ]; then
+  echo "   ✓ کارت مرحله: $STAGE_BADGE"
+  STARS=$(agent-browser eval "document.querySelectorAll('#play-stage .play-stars__star').length + ' ستاره / ' + document.querySelectorAll('#play-stage .play-stars__lit').length + ' روشن'" 2>/dev/null | tail -1)
+  echo "   ✓ ردیف ستاره: $STARS"
+  tap; sleep 0.6
+else
+  echo "   • کارت مرحله‌ای نبود (ادامه)"
+fi
+
 echo "── مرحلهٔ ۳: حلقهٔ آیتم‌ها — توالی: go go NOGO go go NOGO go NOGO"
 for item in touch touch wait touch touch wait touch wait; do
   if wait_for_svg; then
@@ -65,7 +82,9 @@ echo "── مرحلهٔ ۵: دکمهٔ «امروز تمام شد!» (finish)"
 agent-browser eval "document.querySelector('#play-stage .play-btn').click()" >/dev/null 2>&1
 sleep 3
 
-echo "── مرحلهٔ ۶: حالت نهایی صفحه (انتظار: child_done — گوشی را به مامان بده)"
+echo "── مرحلهٔ ۶: حالت نهایی صفحه (انتظار: child_done — گوشی را به مامان بده + کارت ستارهٔ مرحله)"
 agent-browser eval "document.body.innerText.includes('گوشی را به مامان بده') ? 'CHILD_DONE_OK' : 'UNEXPECTED: ' + document.body.innerText.slice(0,120)" 2>/dev/null | tail -1
+agent-browser eval "document.querySelector('.stage-done__badge')?.textContent || 'بدون کارت مرحله'" 2>/dev/null | tail -1
+agent-browser eval "document.querySelectorAll('.stage-done__stars svg.star--lit').length + ' ستارهٔ روشن از ۳'" 2>/dev/null | tail -1
 echo "── خطاهای کنسول:"
 agent-browser errors

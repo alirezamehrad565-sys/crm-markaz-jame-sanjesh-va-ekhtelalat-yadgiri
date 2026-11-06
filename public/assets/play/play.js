@@ -91,6 +91,10 @@ async function loadKind() {
   let hint = null;
   try { hint = JSON.parse(root.dataset.hint || 'null'); } catch (err) { hint = null; }
 
+  /* فرادادهٔ مرحلهٔ فقط-تمرین (۱.۲۵.۲۲) — از سرور؛ ارزیابی هرگز ندارد */
+  let stageMeta = null;
+  try { stageMeta = JSON.parse(root.dataset.stage || 'null'); } catch (err) { stageMeta = null; }
+
   const kind = await loadKind();
   const { runSession } = await import('./engine/session.js');
 
@@ -99,6 +103,7 @@ async function loadKind() {
     protocol,
     kind,
     hint,
+    stageMeta,
     api: {
       nextItem: () => requestJson('/next-item'),
       submit: (body) => requestJson('/attempts', { method: 'POST', body }),
