@@ -18,6 +18,7 @@ import {
 } from './pure';
 import { protocolForAge, protocolSnapshotOf } from './protocol';
 import type { ProtocolMode } from './protocol';
+import { generateSequence, serializeSequence, parseSequenceRecord } from './stimulus';
 import { ENGINE_ONLY_FORMULAS, mergeEngineMetrics } from './registry-extra';
 import type {
   AttemptDraftInput,
@@ -83,6 +84,8 @@ interface SessionRow {
   mission_id: string;
   state: string;
   validity: string;
+  purpose?: string;
+  sequence_json?: string | null;
   started_at: string | null;
   ended_at: string | null;
   last_activity_at: string | null;
@@ -586,9 +589,30 @@ export function createGamesService(deps: GamesDeps): GamesService {
     if (!rxStatusOk) throw new ConflictError('تجویز فعال نیست');
     if (!res.session) {
       const id = crypto.randomUUID();
+      // دو حالت مستقل + دنبالهٔ seed-دار (فاز ۳ بازطراحی):
+      // بستهٔ دارای protocol/mode → دنبالهٔ قطعی با seed یگانهٔ جلسه، قابل‌بازتولید برای ممیزی
+      const mode: ProtocolMode = res.pkg.body.mode ?? 'training';
+      const mission = missionConfigOf(res);
+      const touchItems = (mission.items ?? []).filter((it) => it.type === 'touch_report');
+      const hasProtocol = mode === 'assessment' || res.pkg.body.protocol != null;
+      const poolGo = touchItems.filter((it) => it.correct_touch === true).length;
+      const poolRatio = touchItems.length > 0 ? poolGo / touchItems.length : null;
+      let sequenceJson: string | null = null;
+      if (hasProtocol && touchItems.length >= 4) {
+        const prot = protocolForAge(mode, await childAgeOf(res.rx.child_id));
+        const seq = generateSequence({
+          seed: id, // seed = شناسهٔ جلسه — یگانه، قابل‌ذخیره، بازتولیدپذیر
+          count: touchItems.length,
+          goRatio: poolRatio ?? prot.params.go_ratio.value,
+          maxConsecutiveSame: prot.params.max_consecutive_same.value,
+          blockSize: prot.params.block_size.value
+        });
+        sequenceJson = serializeSequence(seq);
+      }
       await db.execute(
-        `INSERT INTO game_sessions (id, mission_id, state, validity, started_at, last_activity_at) VALUES (?,?, 'child_active', 'valid', ?, ?)`,
-        [id, res.mission.id, isoOf(now()), isoOf(now())]
+        `INSERT INTO game_sessions (id, mission_id, state, validity, purpose, sequence_json, started_at, last_activity_at)
+         VALUES (?,?, 'child_active', 'valid', ?, ?, ?, ?)`,
+        [id, res.mission.id, mode, sequenceJson, isoOf(now()), isoOf(now())]
       );
     }
     await db.execute(`UPDATE game_missions SET status = 'in_progress' WHERE id = ? AND status = 'pending'`, [res.mission.id]);
@@ -602,9 +626,25 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const mission = missionConfigOf(res);
     const attempts = await db.query<AttemptRow>(`SELECT * FROM game_attempts WHERE session_id = ?`, [session.id]);
     const doneIds = new Set(attempts.map((a) => a.item_id));
-    const next = mission.items.find((it) => !doneIds.has(it.id)) ?? null;
+    const total = (mission.items ?? []).length;
+    const unansweredOf = (pred: (it: MissionItem) => boolean): MissionItem | undefined =>
+      (mission.items ?? []).find((it) => !doneIds.has(it.id) && pred(it));
+
+    // ترتیب seed-دار (فاز ۳): جایگاه = شمار پاسخ‌های ثبت‌شده؛ دستهٔ g/n تعیین‌کنندهٔ
+    // انتخاب آیتم است — کلید پاسخ هرگز به کلاینت نمی‌رود، فقط خودِ آیتمِ برگزیده.
+    const seq = parseSequenceRecord(session.sequence_json);
+    let next: MissionItem | undefined;
+    if (seq && doneIds.size < seq.trials.length) {
+      const kind = seq.trials[doneIds.size].kind;
+      next = unansweredOf((it) => (it.correct_touch === true) === (kind === 'go'))
+        ?? unansweredOf(() => true); // سهمیهٔ دسته خالی — نزدیک‌ترین سازگار
+    }
+    if (!next) {
+      next = (mission.items ?? []).find((it) => !doneIds.has(it.id));
+    }
+
     await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf(now()), session.id]);
-    return { item: next ? toItemView(next) : null, progress: { done: doneIds.size, total: mission.items.length } };
+    return { item: next ? toItemView(next) : null, progress: { done: doneIds.size, total } };
   }
 
   async function submitAttempt(token: string, draft: AttemptDraftInput): Promise<AttemptFeedback> {
@@ -781,8 +821,9 @@ export function createGamesService(deps: GamesDeps): GamesService {
       : [];
     return {
       sessions: sessions.map((s) => ({
-        id: s.id, state: s.state, validity: s.validity,
+        id: s.id, state: s.state, validity: s.validity, purpose: s.purpose ?? 'training',
         startedAt: s.started_at, endedAt: s.ended_at,
+        sequence: s.sequence_json ? parseJson<unknown>(s.sequence_json, null) : null,
         metrics: parseJson<unknown>(s.metrics_json, null)
       })),
       attempts: attempts.map((a) => ({

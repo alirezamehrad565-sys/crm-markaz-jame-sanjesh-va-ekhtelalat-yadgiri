@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.12";
+var APP_VERSION = "1.25.13";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23274,6 +23274,7 @@ var TRAINING_PARAMS = {
     response_window_nogo_ms: PARAM(2e3, "\u0647\u0645\u200C\u0637\u0648\u0644 \u06AF\u0648 \u0628\u0631\u0627\u06CC \u062E\u0648\u0627\u0646\u0627\u06CC\u06CC \u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646 \u062F\u0631 \u0627\u06CC\u0646 \u0633\u0646", "proposed"),
     isi_min_ms: PARAM(1e3, "ISI \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0627\u0632 \u0627\u06CC\u0646 \u062F\u0631 \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u0646\u0631\u062E \u0627\u064F\u0645\u06CC\u0634\u0646 \u062A\u0635\u0627\u062F\u0641\u06CC \u0645\u06CC\u200C\u0633\u0627\u0632\u062F\u061B \u062D\u062F \u067E\u0627\u06CC\u06CC\u0646 \u0645\u062D\u0627\u0641\u0638\u0647\u200C\u06A9\u0627\u0631\u0627\u0646\u0647", "proposed"),
     isi_max_ms: PARAM(1500, "\u0628\u0627\u0632\u0647\u0654 \u06F1\u2013\u06F1\u066B\u06F5 \u062B\u0627\u0646\u06CC\u0647 \u0633\u0646\u062F \u0645\u062D\u062A\u0648\u0627 \u0628\u0633\u062A\u0647\u0654 \u06F3 \u2014 \u062D\u0641\u0638 \u0634\u062F", "pilot"),
+    fixation_ms: PARAM(400, "\u0645\u06A9\u062B \u062E\u0646\u062B\u06CC \u06A9\u0648\u062A\u0627\u0647 \u067E\u06CC\u0634 \u0627\u0632 \u0646\u0645\u0627\u06CC\u0634 \u2014 \u062C\u062F\u0627\u06A9\u0646\u0646\u062F\u0647\u0654 ISI \u0627\u0632 \u0644\u062D\u0638\u0647\u0654 \u0645\u062D\u0631\u06A9\u061B \u0628\u062F\u0648\u0646 \u0641\u0644\u0627\u0634 \u0648 \u0634\u0645\u0627\u0631\u0634 (\xA7\u06F9)", "proposed"),
     go_ratio: PARAM(0.75, "\u0646\u0633\u0628\u062A \u0645\u062A\u0639\u0627\u0631\u0641 \u06AF\u0648/\u0646\u0648\u06AF\u0648 ~\u06F3:\u06F1 \u062F\u0631 \u0627\u062F\u0628\u06CC\u0627\u062A \u06AF\u0648/\u0646\u0648\u06AF\u0648 \u06A9\u0648\u062F\u06A9\u0627\u0646\u061B \u0646\u0633\u0628\u062A \u0628\u0627\u0644\u0627\u062A\u0631 \u0628\u0631\u0627\u06CC \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u062A\u0627 \u0645\u0647\u0627\u0631 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u062E\u0633\u062A\u0647\u200C\u06A9\u0646\u0646\u062F\u0647 \u0646\u0634\u0648\u062F", "pilot"),
     max_consecutive_same: PARAM(3, "\u0628\u06CC\u0634 \u0627\u0632 \u0633\u0647 \u067E\u06CC\u0627\u067E\u06CC\u060C \u0631\u06CC\u062A\u0645 \u0642\u0627\u0628\u0644 \u062D\u0641\u0638\u200C\u06A9\u0631\u062F\u0646 \u0645\u06CC\u200C\u0633\u0627\u0632\u062F (\u062D\u0641\u0638\u200C\u06A9\u0631\u062F\u0646 \u0628\u0647\u200C\u062C\u0627\u06CC \u0628\u0627\u0632\u062F\u0627\u0631\u06CC)", "proposed"),
     block_size: PARAM(20, "\u0628\u0627\u0632\u0647\u0654 \u062A\u0648\u062C\u0647 \u0641\u0639\u0627\u0644 \u06F4\u2013\u06F6 \u0633\u0627\u0644\u061B \u0628\u0644\u0648\u06A9 \u06F2\u06F0 \u062A\u0627\u06CC\u06CC \u0628\u0627 \u0627\u0633\u062A\u0631\u0627\u062D\u062A\u060C \u062E\u0633\u062A\u06AF\u06CC \u0627\u0646\u062A\u0647\u0627\u06CC \u062C\u0644\u0633\u0647 \u0631\u0627 \u0645\u06CC\u200C\u0634\u06A9\u0646\u062F", "pilot"),
@@ -23288,6 +23289,7 @@ var TRAINING_PARAMS = {
     response_window_nogo_ms: PARAM(1500, "\u0647\u0645\u200C\u0637\u0648\u0644 \u06AF\u0648 \u2014 \u0645\u0642\u0627\u06CC\u0633\u0647\u200C\u067E\u0630\u06CC\u0631\u06CC \u0628\u06CC\u0646\u200C\u0633\u0646\u06CC", "proposed"),
     isi_min_ms: PARAM(800, "ISI \u06A9\u0645\u06CC \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0628\u0631\u0627\u06CC \u0633\u0646\u06CC\u0646 \u0628\u0627\u0644\u0627\u062A\u0631\u061B \u0641\u0634\u0627\u0631 \u0633\u0631\u0639\u062A \u0645\u062A\u0639\u0627\u062F\u0644", "proposed"),
     isi_max_ms: PARAM(1200, "\u0628\u0627\u0632\u0647\u0654 \u06F0\u066B\u06F8\u2013\u06F1\u066B\u06F2 \u062B\u0627\u0646\u06CC\u0647 \u2014 \u062A\u0646\u0648\u0639 \u0628\u0631\u0627\u06CC \u0634\u06A9\u0633\u062A\u0646 \u0627\u0646\u062A\u0638\u0627\u0631 \u0632\u0645\u0627\u0646\u06CC \u062B\u0627\u0628\u062A", "proposed"),
+    fixation_ms: PARAM(400, "\u0645\u06A9\u062B \u062E\u0646\u062B\u06CC \u067E\u06CC\u0634 \u0627\u0632 \u0646\u0645\u0627\u06CC\u0634 \u2014 \u0647\u0645\u200C\u0637\u0648\u0644 \u062F\u0648 \u0628\u0627\u0646\u062F \u0628\u0631\u0627\u06CC \u0645\u0642\u0627\u06CC\u0633\u0647\u200C\u067E\u0630\u06CC\u0631\u06CC", "proposed"),
     go_ratio: PARAM(0.75, "\u0646\u0633\u0628\u062A ~\u06F3:\u06F1 \u0645\u062A\u0639\u0627\u0631\u0641\u061B \u0628\u0627 \u0646\u0633\u062E\u0647\u0654 \u067E\u0631\u0648\u062A\u06A9\u0644 \u062B\u0627\u0628\u062A \u0645\u06CC\u200C\u0645\u0627\u0646\u062F", "pilot"),
     max_consecutive_same: PARAM(3, "\u0647\u0645\u0627\u0646 \u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u06F4\u2013\u06F6 \u0633\u0627\u0644", "proposed"),
     block_size: PARAM(24, "\u0633\u0646\u06CC\u0646 \u0645\u062F\u0631\u0633\u0647 \u0628\u0627\u0632\u0647\u0654 \u062A\u0648\u062C\u0647 \u0628\u0644\u0646\u062F\u062A\u0631 \u2014 \u0628\u0644\u0648\u06A9 \u06F2\u06F4 \u062A\u0627\u06CC\u06CC", "proposed"),
@@ -23650,6 +23652,13 @@ function runPublishGates(body, dose, evidenceLevel, ctx) {
     } else if (typeof ref.version !== "string" || !isProtocolVersionSupported(ref.version)) {
       errors.push({ rule: "protocol", message: `\u0646\u0633\u062E\u0647\u0654 \u067E\u0631\u0648\u062A\u06A9\u0644 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0628\u0627 \u067E\u0631\u0648\u062A\u06A9\u0644 \u062C\u0627\u0631\u06CC (${PROTOCOL_VERSION}) \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A \u2014 \u0628\u0627\u0632\u0633\u0646\u062C\u06CC \u063A\u06CC\u0631\u0642\u0627\u0628\u0644\u200C\u062A\u0641\u0633\u06CC\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F` });
     }
+    for (const m of body.missions ?? []) {
+      for (const it of m.items ?? []) {
+        if (it.phase !== "probe") {
+          errors.push({ rule: "assessment_items", message: `\u0622\u06CC\u062A\u0645 \xAB${it.id}\xBB \u062F\u0631 \u0645\u0623\u0645\u0648\u0631\u06CC\u062A ${m.id} \u0641\u0627\u0632 \u0622\u0645\u0648\u0632\u0634\u06CC \u062F\u0627\u0631\u062F \u2014 \u0628\u0633\u062A\u0647\u0654 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0641\u0642\u0637 \u0622\u06CC\u062A\u0645 \u067E\u0631\u0648\u0628 \u0645\u06CC\u200C\u067E\u0630\u06CC\u0631\u062F` });
+        }
+      }
+    }
   }
   if (body.pa_phonemic === true) {
     for (const m of body.missions ?? []) {
@@ -23732,6 +23741,146 @@ function toItemView(item) {
   };
 }
 __name(toItemView, "toItemView");
+
+// src/domain/games/stimulus.ts
+function mulberry32(seedNum) {
+  let a = seedNum >>> 0;
+  return /* @__PURE__ */ __name(function next() {
+    a |= 0;
+    a = a + 1831565813 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }, "next");
+}
+__name(mulberry32, "mulberry32");
+function seedToNumber(seed) {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+__name(seedToNumber, "seedToNumber");
+function runBefore(kinds, i, kind) {
+  let n = 0;
+  for (let k = i - 1; k >= 0; k--) {
+    if (kinds[k] !== kind) break;
+    n++;
+  }
+  return n;
+}
+__name(runBefore, "runBefore");
+function canPlaceExact(g, n, goRun, nogoRun, maxRun, memo) {
+  if (goRun > maxRun || nogoRun > maxRun) return false;
+  if (g === 0 && n === 0) return true;
+  if (n === 0) return goRun + g <= maxRun;
+  if (g === 0) return nogoRun + n <= maxRun;
+  const key = g + ":" + n + ":" + goRun + ":" + nogoRun;
+  const hit = memo.get(key);
+  if (hit !== void 0) return hit;
+  let ok2 = false;
+  if (goRun + 1 <= maxRun && canPlaceExact(g - 1, n, goRun + 1, 0, maxRun, memo)) ok2 = true;
+  if (!ok2 && nogoRun + 1 <= maxRun && canPlaceExact(g, n - 1, 0, nogoRun + 1, maxRun, memo)) ok2 = true;
+  memo.set(key, ok2);
+  return ok2;
+}
+__name(canPlaceExact, "canPlaceExact");
+function generateSequence(opts) {
+  const count = Math.max(1, Math.floor(opts.count));
+  const goRatio = Math.min(1, Math.max(0, opts.goRatio));
+  const blockSize = Math.max(1, Math.floor(opts.blockSize));
+  let maxRun = Math.max(2, Math.floor(opts.maxConsecutiveSame));
+  let goTarget = Math.round(count * goRatio);
+  let nogoTarget = count - goTarget;
+  if (goTarget === 0 || nogoTarget === 0) maxRun = Math.max(maxRun, count);
+  else {
+    if (goTarget > (nogoTarget + 1) * maxRun) {
+      goTarget = (nogoTarget + 1) * maxRun;
+      nogoTarget = count - goTarget;
+    }
+    if (nogoTarget > (goTarget + 1) * maxRun) {
+      nogoTarget = (goTarget + 1) * maxRun;
+      goTarget = count - nogoTarget;
+    }
+  }
+  const rand = mulberry32(seedToNumber(opts.seed));
+  const kinds = new Array(count);
+  let goLeft = goTarget;
+  const memo = /* @__PURE__ */ new Map();
+  for (let i = 0; i < count; i++) {
+    const remaining = count - i;
+    const goRun = runBefore(kinds, i, "go");
+    const nogoRun = runBefore(kinds, i, "nogo");
+    const nogoLeft = remaining - goLeft;
+    const allowGo = goLeft > 0 && canPlaceExact(goLeft - 1, nogoLeft, goRun + 1, 0, maxRun, memo);
+    const allowNogo = nogoLeft > 0 && canPlaceExact(goLeft, nogoLeft - 1, 0, nogoRun + 1, maxRun, memo);
+    let kind;
+    if (allowGo && allowNogo) kind = rand() < goRatio ? "go" : "nogo";
+    else if (allowGo) kind = "go";
+    else if (allowNogo) kind = "nogo";
+    else kind = goLeft >= nogoLeft ? "go" : "nogo";
+    if (kind === "go") goLeft--;
+    kinds[i] = kind;
+  }
+  const trials = kinds.map((kind, i) => ({
+    index: i + 1,
+    kind,
+    block: Math.floor(i / blockSize) + 1
+  }));
+  const go_count = kinds.filter((k) => k === "go").length;
+  return {
+    seed: opts.seed,
+    count,
+    go_ratio: goRatio,
+    max_consecutive_same: maxRun,
+    block_size: blockSize,
+    go_count,
+    trials
+  };
+}
+__name(generateSequence, "generateSequence");
+function serializeSequence(seq) {
+  return JSON.stringify({
+    seed: seq.seed,
+    count: seq.count,
+    go_ratio: seq.go_ratio,
+    max_consecutive_same: seq.max_consecutive_same,
+    block_size: seq.block_size,
+    go_count: seq.go_count,
+    kinds: seq.trials.map((t) => t.kind === "go" ? "g" : "n").join("")
+  });
+}
+__name(serializeSequence, "serializeSequence");
+function parseSequenceRecord(raw2) {
+  if (!raw2) return null;
+  try {
+    const r = JSON.parse(raw2);
+    if (typeof r.seed !== "string" || typeof r.count !== "number" || typeof r.go_ratio !== "number" || typeof r.max_consecutive_same !== "number" || typeof r.block_size !== "number" || typeof r.kinds !== "string") return null;
+    if (!/^[gn]+$/.test(r.kinds) || r.kinds.length !== r.count) return null;
+    const blockSize = r.block_size;
+    const trials = Array.from(r.kinds, (ch, i) => ({
+      index: i + 1,
+      kind: ch === "g" ? "go" : "nogo",
+      block: Math.floor(i / blockSize) + 1
+    }));
+    return {
+      options: {
+        seed: r.seed,
+        count: r.count,
+        goRatio: r.go_ratio,
+        maxConsecutiveSame: r.max_consecutive_same,
+        blockSize: r.block_size
+      },
+      trials,
+      go_count: typeof r.go_count === "number" ? r.go_count : trials.filter((t) => t.kind === "go").length
+    };
+  } catch {
+    return null;
+  }
+}
+__name(parseSequenceRecord, "parseSequenceRecord");
 
 // src/domain/games/registry-extra.ts
 var ENGINE_ONLY_FORMULAS = [
@@ -24223,9 +24372,29 @@ function createGamesService(deps) {
     if (!rxStatusOk) throw new ConflictError("\u062A\u062C\u0648\u06CC\u0632 \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A");
     if (!res.session) {
       const id = crypto.randomUUID();
+      const mode = res.pkg.body.mode ?? "training";
+      const mission = missionConfigOf(res);
+      const touchItems = (mission.items ?? []).filter((it) => it.type === "touch_report");
+      const hasProtocol = mode === "assessment" || res.pkg.body.protocol != null;
+      const poolGo = touchItems.filter((it) => it.correct_touch === true).length;
+      const poolRatio = touchItems.length > 0 ? poolGo / touchItems.length : null;
+      let sequenceJson = null;
+      if (hasProtocol && touchItems.length >= 4) {
+        const prot = protocolForAge(mode, await childAgeOf(res.rx.child_id));
+        const seq = generateSequence({
+          seed: id,
+          // seed = شناسهٔ جلسه — یگانه، قابل‌ذخیره، بازتولیدپذیر
+          count: touchItems.length,
+          goRatio: poolRatio ?? prot.params.go_ratio.value,
+          maxConsecutiveSame: prot.params.max_consecutive_same.value,
+          blockSize: prot.params.block_size.value
+        });
+        sequenceJson = serializeSequence(seq);
+      }
       await db.execute(
-        `INSERT INTO game_sessions (id, mission_id, state, validity, started_at, last_activity_at) VALUES (?,?, 'child_active', 'valid', ?, ?)`,
-        [id, res.mission.id, isoOf2(now()), isoOf2(now())]
+        `INSERT INTO game_sessions (id, mission_id, state, validity, purpose, sequence_json, started_at, last_activity_at)
+         VALUES (?,?, 'child_active', 'valid', ?, ?, ?, ?)`,
+        [id, res.mission.id, mode, sequenceJson, isoOf2(now()), isoOf2(now())]
       );
     }
     await db.execute(`UPDATE game_missions SET status = 'in_progress' WHERE id = ? AND status = 'pending'`, [res.mission.id]);
@@ -24239,9 +24408,19 @@ function createGamesService(deps) {
     const mission = missionConfigOf(res);
     const attempts = await db.query(`SELECT * FROM game_attempts WHERE session_id = ?`, [session.id]);
     const doneIds = new Set(attempts.map((a) => a.item_id));
-    const next = mission.items.find((it) => !doneIds.has(it.id)) ?? null;
+    const total = (mission.items ?? []).length;
+    const unansweredOf = /* @__PURE__ */ __name((pred) => (mission.items ?? []).find((it) => !doneIds.has(it.id) && pred(it)), "unansweredOf");
+    const seq = parseSequenceRecord(session.sequence_json);
+    let next;
+    if (seq && doneIds.size < seq.trials.length) {
+      const kind = seq.trials[doneIds.size].kind;
+      next = unansweredOf((it) => it.correct_touch === true === (kind === "go")) ?? unansweredOf(() => true);
+    }
+    if (!next) {
+      next = (mission.items ?? []).find((it) => !doneIds.has(it.id));
+    }
     await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf2(now()), session.id]);
-    return { item: next ? toItemView(next) : null, progress: { done: doneIds.size, total: mission.items.length } };
+    return { item: next ? toItemView(next) : null, progress: { done: doneIds.size, total } };
   }
   __name(nextItem, "nextItem");
   async function submitAttempt(token, draft) {
@@ -24415,8 +24594,10 @@ function createGamesService(deps) {
         id: s.id,
         state: s.state,
         validity: s.validity,
+        purpose: s.purpose ?? "training",
         startedAt: s.started_at,
         endedAt: s.ended_at,
+        sequence: s.sequence_json ? parseJson2(s.sequence_json, null) : null,
         metrics: parseJson2(s.metrics_json, null)
       })),
       attempts: attempts.map((a) => ({
