@@ -330,3 +330,29 @@
   .play-stage, .play-btn, .play-option, .play-basket { transition: none; animation: none; }
   .play-fx-bit, .play-fx-star { display: none; }
 }
+
+/* ─── ردیف ستارهٔ مرحله (۱.۲۵.۲۲) — مسیر پیشرفت فقط-تمرین ───
+   نشانه‌گذاری از fx.starRow؛ جنبش روشن‌شدن هم از fx.popStars می‌آید —
+   این‌جا فقط شکل ایستا تعریف می‌شود (گیت لایهٔ حسی: جنبش فقط از fx). */
+.play-stars {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 10px 0 4px;
+}
+
+.play-stars__star {
+  width: 34px;
+  height: 35px;
+}
+
+.play-stars__star path {
+  fill: var(--p-line);
+  stroke: var(--p-navy);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+.play-stars__lit path {
+  fill: var(--p-amber);
+}
