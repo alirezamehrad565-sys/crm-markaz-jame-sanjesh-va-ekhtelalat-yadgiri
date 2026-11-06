@@ -18,6 +18,7 @@ import {
 } from './pure';
 import { protocolForAge, protocolSnapshotOf } from './protocol';
 import type { ProtocolMode } from './protocol';
+import { summarizeAttempts } from './scoring';
 import { generateSequence, serializeSequence, parseSequenceRecord } from './stimulus';
 import { ENGINE_ONLY_FORMULAS, mergeEngineMetrics } from './registry-extra';
 import type {
@@ -90,6 +91,7 @@ interface SessionRow {
   ended_at: string | null;
   last_activity_at: string | null;
   metrics_json: string | null;
+  summary_json?: string | null;
 }
 
 interface AttemptRow {
@@ -744,15 +746,34 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const validity = decideValidity(activity, attempts.length, mission.items.length);
 
     // سنجه فقط از Attemptهای معتبر پروب (§۸) — همهٔ سنجه‌های مأموریت (مثل چهار سنجهٔ گو/نوگو)
+    // + لایهٔ محاسبه‌شدهٔ scoring.ts (فاز ۵) برای گزارش درمانگر — جدا از سنجه‌های رجیستری
     const metricIds = mission.metrics && mission.metrics.length > 0 ? mission.metrics : [mission.metric];
-    const probeScored = attempts
-      .filter((a) => a.phase === 'probe')
-      .map((a) => scoreAttempt(
+    const scoredRows = attempts.map((a) => ({
+      a,
+      scored: scoreAttempt(
         mission.items.find((it) => it.id === a.item_id) ?? ({ id: a.item_id, phase: 'probe', type: 'choice' } as MissionItem),
         mission,
         parseJson(a.response_json, {}),
         a.rt_ms
-      ));
+      )
+    }));
+    const probeScored = scoredRows.filter((r) => r.a.phase === 'probe').map((r) => r.scored);
+    // خلاصهٔ محاسبه‌شده از آزمون‌های لمسی گو/نوگو جلسه (isGo از scoreAttempt) — سبدِ گزارش
+    const touchRows = scoredRows.filter((r) => r.scored.isGo !== undefined);
+    const summary = summarizeAttempts(
+      touchRows.map((r) => r.scored),
+      touchRows.map((r) => ({
+        presented_at_ms: r.a.presented_at_ms ?? null,
+        frame_drops: r.a.frame_drops ?? null,
+        max_frame_delta_ms: r.a.max_frame_delta_ms ?? null,
+        touch_count: r.a.touch_count ?? null,
+        premature_count: r.a.premature_count ?? null,
+        multiple_count: r.a.multiple_count ?? null,
+        out_of_surface_count: r.a.out_of_surface_count ?? null,
+        window_ms: r.a.window_ms ?? null
+      })),
+      protocolForAge(res.pkg.body.mode ?? 'training', null).params.block_size.value
+    );
     const metrics: SessionMetricOutcome[] = [];
     for (const metricId of metricIds) {
       const metricRow = await db.queryOne<RegistryMetric>(`SELECT * FROM game_metrics WHERE id = ?`, [metricId]);
@@ -787,8 +808,8 @@ export function createGamesService(deps: GamesDeps): GamesService {
     }
 
     await db.execute(
-      `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ? WHERE id = ?`,
-      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, session.id]
+      `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ?, summary_json = ? WHERE id = ?`,
+      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summary), session.id]
     );
     await db.execute(`UPDATE game_missions SET status = 'done' WHERE id = ?`, [res.mission.id]);
     const fresh = await resolveLink(token);
@@ -859,7 +880,8 @@ export function createGamesService(deps: GamesDeps): GamesService {
         id: s.id, state: s.state, validity: s.validity, purpose: s.purpose ?? 'training',
         startedAt: s.started_at, endedAt: s.ended_at,
         sequence: s.sequence_json ? parseJson<unknown>(s.sequence_json, null) : null,
-        metrics: parseJson<unknown>(s.metrics_json, null)
+        metrics: parseJson<unknown>(s.metrics_json, null),
+        summary: s.summary_json ? parseJson<unknown>(s.summary_json, null) : null
       })),
       attempts: attempts.map((a) => ({
         id: a.id, sessionId: a.session_id, itemId: a.item_id, phase: a.phase,
