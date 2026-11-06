@@ -213,6 +213,11 @@ export function registerGamesRoutes(app: AppHono, service: GamesService): void {
     return c.json({ data: await service.listPrescriptions({ childId: childId || undefined, status: status || undefined, limit, offset }) }, 200);
   });
 
+  // میز پیگیری تبعیت (۱.۲۵.۲۵) — تجویزهای فعال نیازمند توجه؛ تریاژ به‌جای جست‌وجوی فهرست
+  app.get('/api/games/followups', requireRole('manager', 'therapist', 'secretary'), async (c) => {
+    return c.json({ data: await service.listFollowups() }, 200);
+  });
+
   app.post('/api/games/prescriptions/:id/status', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = PrescriptionStatusSchema.parse(await c.req.json<unknown>());
@@ -256,7 +261,11 @@ export function registerGamesRoutes(app: AppHono, service: GamesService): void {
   });
 
   // گزارش درمانگر (فاز ۸) — JSON پیش‌فرض؛ ?format=html نمای چاپ‌پذیر؛ ?format=csv دفترچهٔ جلسه‌ها (۱.۲۵.۲۴)
+  // هر خروجی دادهٔ کودک در دفترچهٔ حسابرسی می‌ماند (۱.۲۵.۲۵ G5)
   app.get('/api/games/children/:childId/report', requireRole('manager', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const format = c.req.query('format') ?? 'json';
+    await service.auditReportExport(c.req.param('childId'), format, actor);
     const report = await service.getChildReport(c.req.param('childId'));
     if (c.req.query('format') === 'html') {
       return new Response(renderReportHtml(report, c.req.param('childId')), {

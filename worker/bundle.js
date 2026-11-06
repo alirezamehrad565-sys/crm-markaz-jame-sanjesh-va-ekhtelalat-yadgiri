@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.24";
+var APP_VERSION = "1.25.25";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -11438,7 +11438,8 @@ var STUDENT_DELETE_REFS = {
   followup: `SELECT COUNT(*) AS cnt FROM followups WHERE student_id = ?`,
   exercise: `SELECT COUNT(*) AS cnt FROM exercise_assignments WHERE student_id = ?`,
   exercise_submission: `SELECT COUNT(*) AS cnt FROM exercise_submissions WHERE student_id = ?`,
-  committee: `SELECT COUNT(*) AS cnt FROM committee_items WHERE student_id = ? AND deleted_at IS NULL`
+  committee: `SELECT COUNT(*) AS cnt FROM committee_items WHERE student_id = ? AND deleted_at IS NULL`,
+  game_rx: `SELECT COUNT(*) AS cnt FROM game_prescriptions WHERE child_id = ?`
 };
 var STUDENT_DELETE_LABELS = {
   appointment: "\u0646\u0648\u0628\u062A",
@@ -11448,6 +11449,7 @@ var STUDENT_DELETE_LABELS = {
   exercise: "\u062A\u0645\u0631\u06CC\u0646",
   exercise_submission: "\u062A\u0645\u0631\u06CC\u0646\u0650 \u0627\u0631\u0633\u0627\u0644\u200C\u0634\u062F\u0647",
   committee: "\u06A9\u0645\u06CC\u062A\u0647\u0654 \u062C\u0627\u06CC\u0627\u0628\u06CC",
+  game_rx: "\u062A\u062C\u0648\u06CC\u0632 \u0628\u0627\u0632\u06CC",
   assessment: "\u06AF\u0632\u0627\u0631\u0634 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0631\u0633\u0645\u06CC",
   donation: "\u0633\u0627\u0628\u0642\u0647\u0654 \u0645\u0627\u0644\u06CC (\u06A9\u0645\u06A9)"
 };
@@ -12339,6 +12341,32 @@ function createStudentProfileService(deps) {
           await tx.execute(`DELETE FROM exercise_batches WHERE student_id = ?`, [id]);
           await tx.execute(`DELETE FROM followups WHERE student_id = ?`, [id]);
           await tx.execute(`DELETE FROM committee_items WHERE student_id = ?`, [id]);
+          await tx.execute(
+            `DELETE FROM game_attempts WHERE session_id IN (
+               SELECT s.id FROM game_sessions s JOIN game_missions m ON m.id = s.mission_id
+               JOIN game_prescriptions p ON p.id = m.prescription_id WHERE p.child_id = ?)`,
+            [id]
+          );
+          await tx.execute(
+            `DELETE FROM game_adherence WHERE mission_id IN (
+               SELECT m.id FROM game_missions m JOIN game_prescriptions p ON p.id = m.prescription_id WHERE p.child_id = ?)`,
+            [id]
+          );
+          await tx.execute(
+            `DELETE FROM game_links WHERE mission_id IN (
+               SELECT m.id FROM game_missions m JOIN game_prescriptions p ON p.id = m.prescription_id WHERE p.child_id = ?)`,
+            [id]
+          );
+          await tx.execute(
+            `DELETE FROM game_sessions WHERE mission_id IN (
+               SELECT m.id FROM game_missions m JOIN game_prescriptions p ON p.id = m.prescription_id WHERE p.child_id = ?)`,
+            [id]
+          );
+          await tx.execute(
+            `DELETE FROM game_missions WHERE prescription_id IN (SELECT id FROM game_prescriptions WHERE child_id = ?)`,
+            [id]
+          );
+          await tx.execute(`DELETE FROM game_prescriptions WHERE child_id = ?`, [id]);
           await tx.execute(`UPDATE waitlist SET student_id = NULL, admitted_student_id = NULL WHERE student_id = ? OR admitted_student_id = ?`, [id, id]);
           const orphanAppts = await tx.query(
             `SELECT DISTINCT aps.appointment_id AS id FROM appointment_students aps
@@ -24482,6 +24510,8 @@ var FEEDBACK_OK = "\u06AF\u0631\u0641\u062A\u06CC!";
 var FEEDBACK_WITHHOLD = "\u0639\u0627\u0644\u06CC\u060C \u0635\u0628\u0631 \u06A9\u0631\u062F\u06CC!";
 var FEEDBACK_RETRY = "\u0627\u06CC\u0646 \u06CC\u06A9\u06CC \u0633\u062E\u062A\u0647\u061B \u0628\u06CC\u0627 \u0628\u0627 \u0647\u0645 \u062F\u0648\u0628\u0627\u0631\u0647 \u0646\u06AF\u0627\u0647\u0634 \u06A9\u0646\u06CC\u0645.";
 var MAX_RT_MS = 12e4;
+var STALE_SESSION_MS = 6 * 3600 * 1e3;
+var STALL_DAYS = 7;
 function isoOf2(d) {
   return d.toISOString();
 }
@@ -24742,7 +24772,24 @@ function createGamesService(deps) {
     };
   }
   __name(prescriptionRowToRecord, "prescriptionRowToRecord");
+  async function expireStaleMissions() {
+    try {
+      const cutoff = isoOf2(new Date(now().getTime() - STALE_SESSION_MS));
+      const res = await db.execute(
+        `UPDATE game_missions SET status = 'pending' WHERE status = 'in_progress' AND id IN
+          (SELECT m.id FROM game_missions m JOIN game_sessions s ON s.mission_id = m.id
+           WHERE s.state = 'child_active' AND s.last_activity_at < ?)`,
+        [cutoff]
+      );
+      const changed = typeof res?.meta?.changes === "number" ? res.meta.changes : 0;
+      if (changed > 0) logger.info("games.sweep.stale_missions", { restored: changed });
+    } catch (err) {
+      logger.warn("games.sweep.failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  __name(expireStaleMissions, "expireStaleMissions");
   async function listPrescriptions(query) {
+    await expireStaleMissions();
     const q = typeof query === "string" ? { childId: query } : query ?? {};
     const limit = Math.min(Math.max(Math.trunc(q.limit ?? 50), 1), 200);
     const offset = Math.max(Math.trunc(q.offset ?? 0), 0);
@@ -24785,6 +24832,64 @@ function createGamesService(deps) {
     }));
   }
   __name(listPrescriptions, "listPrescriptions");
+  async function listFollowups() {
+    await expireStaleMissions();
+    const today = tehranTodayYmd(now());
+    const rows = await db.query(
+      `SELECT p.id, p.child_id, p.package_id, p.package_version, p.status, p.created_at,
+        (s.first_name || ' ' || s.last_name) AS child_name,
+        pk.title_fa AS package_title_fa,
+        g.title_fa AS goal_title_fa,
+        (SELECT COUNT(*) FROM game_missions m WHERE m.prescription_id = p.id) AS mission_total,
+        (SELECT COUNT(*) FROM game_missions m WHERE m.prescription_id = p.id AND m.status = 'done') AS mission_done,
+        (SELECT COUNT(*) FROM game_missions m WHERE m.prescription_id = p.id AND m.status = 'pending' AND m.scheduled_for < ?) AS pending_overdue,
+        (SELECT COUNT(*) FROM game_missions m WHERE m.prescription_id = p.id AND m.status = 'pending' AND m.scheduled_for = ?
+           AND NOT EXISTS (SELECT 1 FROM game_links l WHERE l.mission_id = m.id AND l.revoked_at IS NULL AND l.expires_at > ?)) AS today_unlinked,
+        (SELECT MAX(x.started_at) FROM game_sessions x JOIN game_missions m2 ON m2.id = x.mission_id
+           WHERE m2.prescription_id = p.id AND x.state IN ('child_done','closed')) AS last_session_at
+      FROM game_prescriptions p
+      LEFT JOIN students s ON s.id = p.child_id
+      LEFT JOIN game_goals g ON g.id = p.goal_id
+      LEFT JOIN game_packages pk ON pk.id = p.package_id AND pk.version = p.package_version
+      WHERE p.status = 'active'
+      ORDER BY p.created_at ASC
+      LIMIT 200`,
+      [today, today, isoOf2(now())]
+    );
+    const nowT = now().getTime();
+    const out = [];
+    for (const r of rows) {
+      const reasons = [];
+      const anchor = r.last_session_at ?? r.created_at;
+      const idleDays = anchor ? Math.max(0, Math.floor((nowT - new Date(anchor).getTime()) / (24 * 3600 * 1e3))) : null;
+      if (r.mission_total === 0) reasons.push("never_scheduled");
+      if (r.mission_total > 0 && r.mission_done < r.mission_total && idleDays !== null && idleDays >= STALL_DAYS) reasons.push("stalled");
+      if (r.pending_overdue > 0) reasons.push("pending_overdue");
+      if (r.today_unlinked > 0) reasons.push("today_unlinked");
+      if (reasons.length === 0) continue;
+      out.push({
+        prescriptionId: r.id,
+        childId: r.child_id,
+        childName: r.child_name,
+        packageId: r.package_id,
+        packageVersion: r.package_version,
+        packageTitleFa: r.package_title_fa,
+        goalTitleFa: r.goal_title_fa,
+        status: r.status,
+        missionTotal: r.mission_total,
+        missionDone: r.mission_done,
+        pendingOverdue: r.pending_overdue,
+        todayUnlinked: r.today_unlinked,
+        idleDays,
+        reasons
+      });
+    }
+    out.sort(
+      (a, b) => (b.idleDays ?? -1) - (a.idleDays ?? -1) || b.pendingOverdue - a.pendingOverdue || b.todayUnlinked - a.todayUnlinked
+    );
+    return out;
+  }
+  __name(listFollowups, "listFollowups");
   async function setPrescriptionStatus(id, action, actor) {
     const row = await db.queryOne(`SELECT * FROM game_prescriptions WHERE id = ?`, [id]);
     if (!row) throw new NotFoundError("\u062A\u062C\u0648\u06CC\u0632");
@@ -25314,6 +25419,11 @@ function createGamesService(deps) {
     const evidence = trialEvidenceOf(draft.response);
     const existing = await db.queryOne(`SELECT * FROM game_attempts WHERE idem_key = ?`, [draft.idem_key]);
     if (existing) return feedbackOf(item, existing.correct === 1, parseJson2(existing.response_json, {}));
+    const answered = await db.queryOne(
+      `SELECT correct, response_json FROM game_attempts WHERE session_id = ? AND item_id = ?`,
+      [session.id, item.id]
+    );
+    if (answered) return feedbackOf(item, answered.correct === 1, parseJson2(answered.response_json, {}));
     await db.execute(
       `INSERT INTO game_attempts (id, session_id, item_id, phase, response_json, correct, rt_ms, rt_valid, idem_key,
         presented_at_ms, frame_drops, max_frame_delta_ms, touch_count, premature_count, multiple_count,
@@ -25683,6 +25793,16 @@ function createGamesService(deps) {
     };
   }
   __name(getChildReport, "getChildReport");
+  async function auditReportExport(childId, format, actor) {
+    await audit.log({
+      actorId: actor.staffId,
+      action: "game_report_export",
+      resourceType: "game_report",
+      resourceId: childId,
+      changes: { format: { from: null, to: format === "csv" || format === "html" ? format : "json" } }
+    });
+  }
+  __name(auditReportExport, "auditReportExport");
   return {
     upsertMetric,
     listMetrics,
@@ -25693,10 +25813,12 @@ function createGamesService(deps) {
     publishPackage,
     createPrescription,
     listPrescriptions,
+    listFollowups,
     setPrescriptionStatus,
     scheduleMission,
     listMissions,
     retirePackage,
+    auditReportExport,
     issueLink,
     revokeLink,
     getSessionDetail,
@@ -26093,6 +26215,9 @@ function registerGamesRoutes(app, service) {
     const offset = offsetRaw != null && /^\d+$/.test(offsetRaw) ? Number(offsetRaw) : void 0;
     return c.json({ data: await service.listPrescriptions({ childId: childId || void 0, status: status || void 0, limit, offset }) }, 200);
   });
+  app.get("/api/games/followups", requireRole("manager", "therapist", "secretary"), async (c) => {
+    return c.json({ data: await service.listFollowups() }, 200);
+  });
   app.post("/api/games/prescriptions/:id/status", requireRole("manager", "therapist"), async (c) => {
     const actor = getAuthContext(c);
     const body = PrescriptionStatusSchema.parse(await c.req.json());
@@ -26130,6 +26255,9 @@ function registerGamesRoutes(app, service) {
     return c.json({ data: await service.issuePreview(body.package_id, body.version, actor) }, 201);
   });
   app.get("/api/games/children/:childId/report", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const format = c.req.query("format") ?? "json";
+    await service.auditReportExport(c.req.param("childId"), format, actor);
     const report = await service.getChildReport(c.req.param("childId"));
     if (c.req.query("format") === "html") {
       return new Response(renderReportHtml(report, c.req.param("childId")), {

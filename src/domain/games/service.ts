@@ -60,6 +60,8 @@ import type {
   PrescriptionListQuery,
   PrescriptionListRecord,
   PrescriptionRecord,
+  FollowupRow,
+  FollowupReason,
   PublicStateView,
   PreviewIssueOutcome,
   PreviewStateView,
@@ -76,6 +78,8 @@ const FEEDBACK_OK = 'گرفتی!';
 const FEEDBACK_WITHHOLD = 'عالی، صبر کردی!'; // بازداری درست گو/نوگو — سند محتوا بستهٔ ۳
 const FEEDBACK_RETRY = 'این یکی سخته؛ بیا با هم دوباره نگاهش کنیم.'; // متن پیش‌فرض خطا §۲ — هیچ سرزنشی
 const MAX_RT_MS = 120000; // بیش از ۲ دقیقه = زمان واکنش بی‌معنا
+const STALE_SESSION_MS = 6 * 3600 * 1000; // جلسهٔ بی‌فعالیت >۶ ساعت = رهاشده (لینک هم ≤۱۲ ساعت عمر دارد)
+const STALL_DAYS = 7; // رکود تبعیت: ≥۷ روز بی‌جلسه در تجویز فعال
 
 interface LinkRow {
   jti: string;
@@ -416,8 +420,31 @@ export function createGamesService(deps: GamesDeps): GamesService {
     };
   }
 
+  /** سوییپ مأموریت رهاشده (۱.۲۵.۲۵ G3) — جلسهٔ child_active بی‌فعالیت >۶ ساعت
+   *  مأموریتش را به pending برمی‌گرداند تا شمارندهٔ «در جریان» صادق بماند.
+   *  بی‌خطر و idempotent؛ خود جلسه دست نمی‌خورد — با لینک تازه همان جلسه ادامه می‌یابد
+   *  و پاسخ‌های ثبت‌شدهٔ کودک حفظ می‌شود. UPDATE ایندکس‌شده و ارزان است؛
+   *  مسیر فراخوانی فقط فهرست‌های پنل درمانگر است (ترافیک کم). */
+  async function expireStaleMissions(): Promise<void> {
+    try {
+      const cutoff = isoOf(new Date(now().getTime() - STALE_SESSION_MS));
+      const res = await db.execute(
+        `UPDATE game_missions SET status = 'pending' WHERE status = 'in_progress' AND id IN
+          (SELECT m.id FROM game_missions m JOIN game_sessions s ON s.mission_id = m.id
+           WHERE s.state = 'child_active' AND s.last_activity_at < ?)`,
+        [cutoff]
+      );
+      const changed = typeof res?.meta?.changes === 'number' ? res.meta.changes : 0;
+      if (changed > 0) logger.info('games.sweep.stale_missions', { restored: changed });
+    } catch (err) {
+      // سوییپ هرگز مسیر فهرست/تجویز را نمی‌شکند
+      logger.warn('games.sweep.failed', { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
   /** فهرست تجویزها برای میز درمانگر (۱.۲۵.۲۴) — هویت انسانی + شمار مأموریت‌ها؛ فهرست محدود (رشد ناپذیر) */
   async function listPrescriptions(query?: string | PrescriptionListQuery): Promise<PrescriptionListRecord[]> {
+    await expireStaleMissions();
     const q: PrescriptionListQuery = typeof query === 'string' ? { childId: query } : (query ?? {});
     const limit = Math.min(Math.max(Math.trunc(q.limit ?? 50), 1), 200);
     const offset = Math.max(Math.trunc(q.offset ?? 0), 0);
@@ -452,6 +479,79 @@ export function createGamesService(deps: GamesDeps): GamesService {
       missionDone: row.mission_done,
       missionLive: row.mission_live
     }));
+  }
+
+  /** میز پیگیری تبعیت (۱.۲۵.۲۵ G2) — تجویزهای فعال با دلیل پیگیری؛ شدیدترین اول.
+   *  دلایل فقط رفتار داده را توصیف می‌کنند: بی‌برنامه‌سازی، رکود ≥۷ روز،
+   *  مأموریتِ تاریخ‌گذشتهٔ اجرانشده، مأموریتِ امروزِ بی‌لینک زنده. */
+  async function listFollowups(): Promise<FollowupRow[]> {
+    await expireStaleMissions();
+    const today = tehranTodayYmd(now());
+    const rows = await db.query<{
+      id: string; child_id: string; child_name: string | null; package_id: string; package_version: string;
+      package_title_fa: string | null;
+      goal_title_fa: string | null; status: string; created_at: string;
+      mission_total: number; mission_done: number;
+      pending_overdue: number; today_unlinked: number;
+      last_session_at: string | null;
+    }>(
+      `SELECT p.id, p.child_id, p.package_id, p.package_version, p.status, p.created_at,
+        (s.first_name || ' ' || s.last_name) AS child_name,
+        pk.title_fa AS package_title_fa,
+        g.title_fa AS goal_title_fa,
+        (SELECT COUNT(*) FROM game_missions m WHERE m.prescription_id = p.id) AS mission_total,
+        (SELECT COUNT(*) FROM game_missions m WHERE m.prescription_id = p.id AND m.status = 'done') AS mission_done,
+        (SELECT COUNT(*) FROM game_missions m WHERE m.prescription_id = p.id AND m.status = 'pending' AND m.scheduled_for < ?) AS pending_overdue,
+        (SELECT COUNT(*) FROM game_missions m WHERE m.prescription_id = p.id AND m.status = 'pending' AND m.scheduled_for = ?
+           AND NOT EXISTS (SELECT 1 FROM game_links l WHERE l.mission_id = m.id AND l.revoked_at IS NULL AND l.expires_at > ?)) AS today_unlinked,
+        (SELECT MAX(x.started_at) FROM game_sessions x JOIN game_missions m2 ON m2.id = x.mission_id
+           WHERE m2.prescription_id = p.id AND x.state IN ('child_done','closed')) AS last_session_at
+      FROM game_prescriptions p
+      LEFT JOIN students s ON s.id = p.child_id
+      LEFT JOIN game_goals g ON g.id = p.goal_id
+      LEFT JOIN game_packages pk ON pk.id = p.package_id AND pk.version = p.package_version
+      WHERE p.status = 'active'
+      ORDER BY p.created_at ASC
+      LIMIT 200`,
+      [today, today, isoOf(now())]
+    );
+    const nowT = now().getTime();
+    const out: FollowupRow[] = [];
+    for (const r of rows) {
+      const reasons: FollowupReason[] = [];
+      const anchor = r.last_session_at ?? r.created_at;
+      const idleDays = anchor
+        ? Math.max(0, Math.floor((nowT - new Date(anchor).getTime()) / (24 * 3600 * 1000)))
+        : null;
+      if (r.mission_total === 0) reasons.push('never_scheduled');
+      if (r.mission_total > 0 && r.mission_done < r.mission_total && idleDays !== null && idleDays >= STALL_DAYS) reasons.push('stalled');
+      if (r.pending_overdue > 0) reasons.push('pending_overdue');
+      if (r.today_unlinked > 0) reasons.push('today_unlinked');
+      if (reasons.length === 0) continue; // میز پیگیری فقط ردیف‌های نیازمند توجه
+      out.push({
+        prescriptionId: r.id,
+        childId: r.child_id,
+        childName: r.child_name,
+        packageId: r.package_id,
+        packageVersion: r.package_version,
+        packageTitleFa: r.package_title_fa,
+        goalTitleFa: r.goal_title_fa,
+        status: r.status,
+        missionTotal: r.mission_total,
+        missionDone: r.mission_done,
+        pendingOverdue: r.pending_overdue,
+        todayUnlinked: r.today_unlinked,
+        idleDays,
+        reasons
+      });
+    }
+    // شدیدترین اول: رکود بیشتر، بعد بی‌برنامه‌سازی، بعد امروزِ بی‌لینک
+    out.sort((a, b) =>
+      (b.idleDays ?? -1) - (a.idleDays ?? -1) ||
+      b.pendingOverdue - a.pendingOverdue ||
+      b.todayUnlinked - a.todayUnlinked
+    );
+    return out;
   }
 
   async function setPrescriptionStatus(id: string, action: 'pause' | 'resume' | 'stop' | 'complete', actor: AuthContext): Promise<PrescriptionRecord> {
@@ -1048,6 +1148,13 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const evidence = trialEvidenceOf(draft.response);
     const existing = await db.queryOne<AttemptRow>(`SELECT * FROM game_attempts WHERE idem_key = ?`, [draft.idem_key]);
     if (existing) return feedbackOf(item, existing.correct === 1, parseJson(existing.response_json, {})); // تکرار ایمن: همان بازخورد اول
+    // سد سروری آیتم پاسخ‌داده‌شده (۱.۲۵.۲۵ G1) — idem_key تازه برای همان آیتم پاسخ دوم نمی‌سازد؛
+    // این پاسخ در خلاصه/ستاره/سازگاری دوبرابر نمی‌شود (یگانگی (session,item) در مایگریشن ۰۰۹۷ هم تضمین است)
+    const answered = await db.queryOne<{ correct: number | null; response_json: string }>(
+      `SELECT correct, response_json FROM game_attempts WHERE session_id = ? AND item_id = ?`,
+      [session.id, item.id]
+    );
+    if (answered) return feedbackOf(item, answered.correct === 1, parseJson(answered.response_json, {}));
     await db.execute(
       `INSERT INTO game_attempts (id, session_id, item_id, phase, response_json, correct, rt_ms, rt_valid, idem_key,
         presented_at_ms, frame_drops, max_frame_delta_ms, touch_count, premature_count, multiple_count,
@@ -1430,10 +1537,22 @@ export function createGamesService(deps: GamesDeps): GamesService {
     };
   }
 
+  /** ممیزی خروج دادهٔ کودک (۱.۲۵.۲۵ G5) — هر گزارش JSON/HTML/CSV در دفترچهٔ حسابرسی می‌ماند:
+   *  چه کسی، برای کدام کودک، با چه قالبی — بدون خودِ دادهٔ بالینی */
+  async function auditReportExport(childId: string, format: string, actor: AuthContext): Promise<void> {
+    await audit.log({
+      actorId: actor.staffId,
+      action: 'game_report_export',
+      resourceType: 'game_report',
+      resourceId: childId,
+      changes: { format: { from: null, to: format === 'csv' || format === 'html' ? format : 'json' } }
+    });
+  }
+
   return {
     upsertMetric, listMetrics, upsertGoal, listGoals, upsertPackage, listPackages, publishPackage,
-    createPrescription, listPrescriptions, setPrescriptionStatus, scheduleMission, listMissions,
-    retirePackage,
+    createPrescription, listPrescriptions, listFollowups, setPrescriptionStatus, scheduleMission, listMissions,
+    retirePackage, auditReportExport,
     issueLink, revokeLink, getSessionDetail, getChildReport,
     issuePreview, previewState, previewItem, previewFeedback,
     getState, start, nextItem, submitAttempt, finish, parentGate, confirm
