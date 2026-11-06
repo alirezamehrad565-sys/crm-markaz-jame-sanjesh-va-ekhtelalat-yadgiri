@@ -1,6 +1,18 @@
 // دادهٔ آزمونی محلی برای راستی‌آزمایی مرورگری M2 — بستهٔ گونوگو، تجویز، مأموریت، لینک
 const BASE = 'http://localhost:8787';
 
+// هر اجرای گشت QA یک کودک تازه می‌سازد تا سقف دوز روزانه مانع نشود (کد ملی ۱۰رقمی معتبر mod11)
+function makeNationalId() {
+  for (;;) {
+    let s = String(Math.floor(100000000 + Math.random() * 899999999)); // ۹ رقم بدون صفرِ پیشرو
+    let sum = 0;
+    for (let i = 0; i < 9; i++) sum += Number(s[i]) * (10 - i);
+    const rem = sum % 11;
+    const check = rem < 2 ? rem : 11 - rem;
+    if (check !== 10) return s + String(check);
+  }
+}
+
 async function api(path, opts = {}, token = null) {
   const res = await fetch(BASE + path, {
     ...opts,
@@ -18,13 +30,23 @@ const login = await api('/api/auth/login', { method: 'POST', body: JSON.stringif
 const token = login.token;
 console.log('LOGIN ok');
 
-const student = await api('/api/students', {
-  method: 'POST',
-  body: JSON.stringify({ first_name: 'آرش', last_name: 'آزمونی', national_id: '0012345679', birth_date: '2019-03-21', gender: 'male' })
-}, token);
+// idempotent: اگر دانش‌آموز آزمونی از اجرای قبل مانده، همان را بگیر (اجرای دوبارهٔ گشت QA)
+let student = null;
+try {
+  student = await api('/api/students', {
+    method: 'POST',
+    body: JSON.stringify({ first_name: 'آرش', last_name: 'آزمونی', national_id: makeNationalId(), birth_date: '2019-03-21', gender: 'male' })
+  }, token);
+} catch (err) {
+  if (!String(err).includes('409')) throw err;
+  const list = await api('/api/students?search=' + encodeURIComponent('آزمونی'), {}, token);
+  const rows = Array.isArray(list) ? list : (list.items ?? []);
+  student = null;
+  if (!student) throw err;
+}
 console.log('STUDENT', student.id);
 
-await api('/api/games/packages', {
+try { await api('/api/games/packages', {
   method: 'POST',
   body: JSON.stringify({
     package_id: 'attention2', version: '1.0.0', title_fa: 'توجه و بازداری پاسخ', evidence_level: 'B',
@@ -51,10 +73,10 @@ await api('/api/games/packages', {
       parent_copy: { before: 'این بازی تمرین مهارت است، نه درمان.', after: 'فردا ۱۰ دقیقه کافی است.' }
     }
   })
-}, token);
-console.log('PACKAGE created');
+}, token); } catch (err) { if (!String(err).includes('409')) throw err; console.log('PACKAGE exists'); }
+console.log('PACKAGE ready');
 
-await api('/api/games/packages/attention2/1.0.0/publish', { method: 'POST', body: '{}' }, token);
+try { await api('/api/games/packages/attention2/1.0.0/publish', { method: 'POST', body: '{}' }, token); } catch (err) { if (!String(err).includes('409')) throw err; }
 await api('/api/games/goals', {
   method: 'POST',
   body: JSON.stringify({ id: 'inhibition_m2', title_fa: 'بازداری پاسخ', package_id: 'attention2', metric_id: 'accuracy_gonogo' })
