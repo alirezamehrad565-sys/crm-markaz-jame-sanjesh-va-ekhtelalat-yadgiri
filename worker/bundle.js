@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.17";
+var APP_VERSION = "1.25.18";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23932,6 +23932,23 @@ function serializeQuality(q) {
 }
 __name(serializeQuality, "serializeQuality");
 
+// src/domain/games/report.ts
+function buildComparison(sessions) {
+  const byMetric = /* @__PURE__ */ new Map();
+  for (const s of sessions) {
+    if (!s.metrics) continue;
+    for (const m of s.metrics) {
+      const rec = byMetric.get(m.metricId) ?? { unit: m.unit, points: [] };
+      rec.points.push({ session_id: s.session_id, value: m.value, at: s.started_at });
+      byMetric.set(m.metricId, rec);
+    }
+  }
+  return {
+    by_metric: Array.from(byMetric.entries()).map(([metric_id, rec]) => ({ metric_id, unit: rec.unit, points: rec.points })).sort((a, b) => a.metric_id < b.metric_id ? -1 : 1)
+  };
+}
+__name(buildComparison, "buildComparison");
+
 // src/domain/games/adaptive.ts
 var ADAPTIVE_MIN_SESSIONS = 2;
 var HARDER_NOGO_PCT = 85;
@@ -24872,7 +24889,7 @@ function createGamesService(deps) {
     );
     const metrics = [];
     for (const metricId of metricIds) {
-      const metricRow = await db.queryOne(`SELECT * FROM game_metrics WHERE id = ?`, [metricId]);
+      const metricRow = await db.queryOne(`SELECT * FROM game_metrics WHERE id = ?`, [metricId]) ?? ENGINE_METRICS.find((m) => m.id === metricId) ?? null;
       if (!metricRow) continue;
       const value = computeMetricValue(metricRow.formula, probeScored);
       if (value !== null && Number.isFinite(value)) {
@@ -25038,6 +25055,87 @@ function createGamesService(deps) {
     };
   }
   __name(getSessionDetail, "getSessionDetail");
+  async function getChildReport(childId) {
+    const sessions = await db.query(
+      `SELECT s.*, m.mission_ref, m.id AS mission_row_id
+       FROM game_sessions s
+       JOIN game_missions m ON m.id = s.mission_id
+       JOIN game_prescriptions p ON p.id = m.prescription_id
+       WHERE p.child_id = ? AND s.state IN ('child_done','closed')
+       ORDER BY s.created_at`,
+      [childId]
+    );
+    const missionRows = await db.query(
+      `SELECT id, mission_ref, prescription_id FROM game_missions WHERE prescription_id IN
+        (SELECT id FROM game_prescriptions WHERE child_id = ?)`,
+      [childId]
+    );
+    const missionRefOf = new Map(missionRows.map((m) => [m.id, m.mission_ref]));
+    const sessionIds = sessions.map((s) => s.id);
+    const attempts = sessionIds.length ? await db.query(
+      `SELECT * FROM game_attempts WHERE session_id IN (${sessionIds.map(() => "?").join(",")}) ORDER BY created_at`,
+      sessionIds
+    ) : [];
+    const reportSessions = [];
+    const comparisonInput = [];
+    for (const s of sessions) {
+      const sessAttempts = attempts.filter((a) => a.session_id === s.id);
+      const metrics = parseJson2(s.metrics_json, null);
+      comparisonInput.push({ session_id: s.id, started_at: s.started_at, metrics });
+      const raw2 = sessAttempts.map((a) => ({
+        item_id: a.item_id,
+        phase: a.phase ?? "train",
+        response: stripAnswerKeys(parseJson2(a.response_json, {})),
+        correct: a.correct === null ? null : a.correct === 1,
+        rt_ms: a.rt_ms,
+        rt_valid: a.rt_valid === 1,
+        created_at: a.created_at,
+        evidence: {
+          presented_at_ms: a.presented_at_ms ?? null,
+          frame_drops: a.frame_drops ?? null,
+          max_frame_delta_ms: a.max_frame_delta_ms ?? null,
+          touch_count: a.touch_count ?? null,
+          premature_count: a.premature_count ?? null,
+          multiple_count: a.multiple_count ?? null,
+          out_of_surface_count: a.out_of_surface_count ?? null,
+          window_ms: a.window_ms ?? null
+        }
+      }));
+      const quality = parseJson2(s.quality_json ?? null, null);
+      reportSessions.push({
+        session_id: s.id,
+        mission_ref: missionRefOf.get(s.mission_id) ?? "",
+        mission_title: "",
+        purpose: s.purpose ?? "training",
+        started_at: s.started_at,
+        computed: {
+          session_id: s.id,
+          purpose: s.purpose ?? "training",
+          validity: s.validity ?? "valid",
+          quality_verdict: quality?.verdict ?? "unknown",
+          started_at: s.started_at,
+          ended_at: s.ended_at,
+          summary: parseJson2(s.summary_json ?? null, null),
+          metrics
+        },
+        raw: {
+          attempt_count: raw2.length,
+          attempts: raw2,
+          sequence: s.sequence_json ? parseJson2(s.sequence_json, null) : null
+        },
+        adaptive: s.adaptive_json ? parseJson2(s.adaptive_json, null) : null
+      });
+    }
+    return {
+      child_id: childId,
+      generated_at: isoOf2(now()),
+      session_count: reportSessions.length,
+      sessions: reportSessions,
+      comparison: buildComparison(comparisonInput),
+      disclaimer: "no_clinical_conclusion"
+    };
+  }
+  __name(getChildReport, "getChildReport");
   return {
     upsertMetric,
     listMetrics,
@@ -25054,6 +25152,7 @@ function createGamesService(deps) {
     issueLink,
     revokeLink,
     getSessionDetail,
+    getChildReport,
     getState,
     start,
     nextItem,
@@ -25252,6 +25351,40 @@ var AttemptSchema = external_exports.object({
   rt_ms: external_exports.number().min(0).max(12e4).nullable().optional(),
   idem_key: external_exports.string().trim().min(8).max(100)
 });
+function renderReportHtml(report, childId) {
+  const esc2 = /* @__PURE__ */ __name((s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "esc");
+  const sessionRows = report.sessions.map((s) => {
+    const sum = s.computed?.summary ?? {};
+    const attemptCount = s.raw.attempt_count;
+    return `<tr><td>${esc2(s.session_id.slice(0, 8))}</td><td>${esc2(s.purpose)}</td><td>${esc2(s.computed?.validity)}</td><td>${esc2(s.computed?.quality_verdict)}</td><td>${esc2(sum.totals?.total ?? "\u2014")}</td><td>${esc2(sum.pct?.correct_go ?? "\u2014")}</td><td>${esc2(sum.pct?.correct_nogo ?? "\u2014")}</td><td>${esc2(sum.pct?.commission ?? "\u2014")}</td><td>${esc2(sum.pct?.omission ?? "\u2014")}</td><td>${esc2(attemptCount)}</td></tr>`;
+  }).join("");
+  const compareRows = report.comparison.by_metric.map(
+    (m) => `<tr><td>${esc2(m.metric_id)}</td><td>${esc2(m.unit)}</td><td>${m.points.map((p) => esc2(p.value)).join(" \u2192 ") || "\u2014"}</td></tr>`
+  ).join("");
+  return `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="robots" content="noindex, nofollow" />
+<title>\u06AF\u0632\u0627\u0631\u0634 \u0628\u0627\u0632\u06CC \u2014 \u06A9\u0648\u062F\u06A9 ${esc2(childId.slice(0, 8))}</title>
+<style>
+  body { font-family: Tahoma, sans-serif; background: #F5F0E5; color: #153E50; margin: 0; padding: 24px; }
+  h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 28px; }
+  table { border-collapse: collapse; width: 100%; background: #fff; border-radius: 10px; overflow: hidden; }
+  th, td { border: 1px solid #E3DCC9; padding: 8px 10px; font-size: 13px; text-align: center; }
+  th { background: #153E50; color: #fff; }
+  .muted { color: #6E7B76; font-size: 12px; }
+</style></head><body>
+<h1>\u06AF\u0632\u0627\u0631\u0634 \u062C\u0644\u0633\u0647\u200C\u0647\u0627\u06CC \u0628\u0627\u0632\u06CC \u2014 \u06A9\u0648\u062F\u06A9 ${esc2(childId.slice(0, 8))}</h1>
+<p class="muted">${esc2(report.session_count)} \u062C\u0644\u0633\u0647 \xB7 \u062A\u0648\u0644\u06CC\u062F ${esc2(report.generated_at)} \xB7 \u0627\u06CC\u0646 \u06AF\u0632\u0627\u0631\u0634 \u0647\u06CC\u0686 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627\u0644\u06CC\u0646\u06CC \u062A\u0648\u0644\u06CC\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F \u2014 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0627\u0633\u062A.</p>
+<h2>\u062E\u0644\u0627\u0635\u0647\u0654 \u0645\u062D\u0627\u0633\u0628\u0647\u200C\u0634\u062F\u0647\u0654 \u062C\u0644\u0633\u0647\u200C\u0647\u0627</h2>
+<table><thead><tr><th>\u062C\u0644\u0633\u0647</th><th>\u062D\u0627\u0644\u062A</th><th>\u0627\u0639\u062A\u0628\u0627\u0631</th><th>\u06A9\u06CC\u0641\u06CC\u062A</th><th>\u0622\u0632\u0645\u0648\u0646</th><th>\u06AF\u0648 \u062F\u0631\u0633\u062A\u066A</th><th>\u0646\u0648\u06AF\u0648 \u062F\u0631\u0633\u062A\u066A</th><th>\u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646\u066A</th><th>\u0627\u064F\u0645\u06CC\u0634\u0646\u066A</th><th>\u067E\u0627\u0633\u062E \u062E\u0627\u0645</th></tr></thead>
+<tbody>${sessionRows || '<tr><td colspan="10">\u062C\u0644\u0633\u0647\u200C\u0627\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647</td></tr>'}</tbody></table>
+<h2>\u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u062C\u0644\u0633\u0647\u200C\u0647\u0627 (\u0642\u062F\u06CC\u0645\u06CC \u2192 \u062C\u062F\u06CC\u062F)</h2>
+<table><thead><tr><th>\u0633\u0646\u062C\u0647</th><th>\u0648\u0627\u062D\u062F</th><th>\u0633\u0631\u06CC \u0632\u0645\u0627\u0646\u06CC</th></tr></thead>
+<tbody>${compareRows || '<tr><td colspan="3">\u0633\u0646\u062C\u0647\u200C\u0627\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647</td></tr>'}</tbody></table>
+<h2>\u0644\u0627\u06CC\u0647\u0654 \u062E\u0627\u0645</h2>
+<p class="muted">${esc2(report.sessions.reduce((a, s) => a + s.raw.attempts.length, 0))} \u067E\u0627\u0633\u062E \u062E\u0627\u0645 \u0628\u0627 \u0634\u0648\u0627\u0647\u062F \u0646\u0645\u0627\u06CC\u0634 (\u0645\u064F\u0647\u0631 \u0632\u0645\u0627\u0646/\u0627\u0641\u062A \u0641\u0631\u06CC\u0645/\u0644\u0645\u0633\u200C\u0647\u0627) \u062F\u0631 \u062E\u0631\u0648\u062C\u06CC JSON \u0647\u0645\u06CC\u0646 \u0645\u0633\u06CC\u0631 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0627\u0633\u062A \u2014 \u062A\u0641\u06A9\u06CC\u06A9 \u062E\u0627\u0645/\u0645\u062D\u0627\u0633\u0628\u0647\u200C\u0634\u062F\u0647 \u062D\u0641\u0638 \u0634\u062F\u0647.</p>
+</body></html>`;
+}
+__name(renderReportHtml, "renderReportHtml");
 function registerGamesRoutes(app, service) {
   app.get("/api/games/metrics", requireRole("manager", "therapist", "secretary"), async (c) => {
     return c.json({ data: await service.listMetrics() }, 200);
@@ -25356,6 +25489,16 @@ function registerGamesRoutes(app, service) {
   });
   app.get("/api/games/missions/:id/sessions", requireRole("manager", "therapist"), async (c) => {
     return c.json({ data: await service.getSessionDetail(c.req.param("id")) }, 200);
+  });
+  app.get("/api/games/children/:childId/report", requireRole("manager", "therapist"), async (c) => {
+    const report = await service.getChildReport(c.req.param("childId"));
+    if (c.req.query("format") === "html") {
+      return new Response(renderReportHtml(report, c.req.param("childId")), {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" }
+      });
+    }
+    return c.json({ data: report }, 200);
   });
 }
 __name(registerGamesRoutes, "registerGamesRoutes");
