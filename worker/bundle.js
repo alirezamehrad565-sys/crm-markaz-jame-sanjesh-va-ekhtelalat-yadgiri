@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.21";
+var APP_VERSION = "1.25.22";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23766,6 +23766,268 @@ function previewItemAt(mission, seq, position) {
 }
 __name(previewItemAt, "previewItemAt");
 
+// src/domain/games/adaptive.ts
+var ADAPTIVE_MIN_SESSIONS = 2;
+var HARDER_NOGO_PCT = 85;
+var HARDER_COMMISSION_PCT = 10;
+var HARDER_GO_PCT = 80;
+var EASIER_COMMISSION_PCT = 25;
+var EASIER_NOGO_PCT = 50;
+var HARDER_STEP_MS = -100;
+var EASIER_STEP_MS = 150;
+var WINDOW_MIN_MS = 800;
+var WINDOW_MAX_MS = 3e3;
+var STABLE_RT_DELTA_MS = 150;
+function clampWindow(ms) {
+  return Math.min(WINDOW_MAX_MS, Math.max(WINDOW_MIN_MS, Math.round(ms)));
+}
+__name(clampWindow, "clampWindow");
+function pctOk(v, threshold, direction) {
+  if (v === null || !Number.isFinite(v)) return false;
+  return direction === "below" ? v < threshold : v >= threshold;
+}
+__name(pctOk, "pctOk");
+function decideAdaptive(history, current, opts) {
+  const evidence = {
+    sessions_considered: history.filter((h) => h.validity === "valid").length,
+    latest: history.slice(-ADAPTIVE_MIN_SESSIONS),
+    enabled: opts.adaptiveEnabled
+  };
+  if (!opts.adaptiveEnabled) {
+    return { action: "hold", change: null, reason: "\u06A9\u0644\u06CC\u062F \u062E\u0627\u0645\u0648\u0634\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u2014 \u0633\u0627\u0632\u06AF\u0627\u0631\u06CC \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0627\u0633\u062A", evidence };
+  }
+  const valid = history.filter((h) => h.validity === "valid");
+  if (valid.length < ADAPTIVE_MIN_SESSIONS) {
+    return { action: "hold", change: null, reason: `\u062F\u0627\u062F\u0647\u0654 \u06A9\u0627\u0641\u06CC \u0646\u06CC\u0633\u062A \u2014 \u062D\u062F\u0627\u0642\u0644 ${ADAPTIVE_MIN_SESSIONS} \u062C\u0644\u0633\u0647\u0654 \u0645\u0639\u062A\u0628\u0631 \u067E\u06CC\u0627\u067E\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A`, evidence };
+  }
+  const recent = valid.slice(-ADAPTIVE_MIN_SESSIONS);
+  const struggling = recent.every(
+    (h) => pctOk(h.commission_pct, EASIER_COMMISSION_PCT, "above") || pctOk(h.correct_nogo_pct, EASIER_NOGO_PCT, "below")
+  );
+  if (struggling) {
+    const to = clampWindow(current.response_window_go_ms + EASIER_STEP_MS);
+    if (to === current.response_window_go_ms) {
+      return { action: "hold", change: null, reason: "\u0646\u06CC\u0627\u0632 \u0628\u0647 \u0622\u0633\u0627\u0646\u200C\u062A\u0631\u0634\u062F\u0646 \u0627\u0645\u0627 \u067E\u0646\u062C\u0631\u0647 \u062F\u0631 \u06A9\u0631\u0627\u0646 \u0627\u0633\u062A \u2014 \u0628\u0627\u0632\u0646\u06AF\u0631\u06CC \u0628\u0627\u0644\u06CC\u0646\u06CC \u0644\u0627\u0632\u0645", evidence };
+    }
+    return {
+      action: "easier",
+      change: { param: "response_window_go_ms", from: current.response_window_go_ms, to },
+      reason: `\u062F\u0648 \u062C\u0644\u0633\u0647\u0654 \u067E\u06CC\u0627\u067E\u06CC \u0628\u0627 \u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646 \u2265${EASIER_COMMISSION_PCT}% \u06CC\u0627 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC <${EASIER_NOGO_PCT}% \u2014 \u067E\u0646\u062C\u0631\u0647\u0654 \u067E\u0627\u0633\u062E \u06AF\u0634\u0627\u062F\u062A\u0631 \u0634\u062F`,
+      evidence
+    };
+  }
+  const rtStable = (() => {
+    const rts = recent.map((h) => h.median_rt).filter((v) => typeof v === "number");
+    if (rts.length < 2) return false;
+    return Math.abs(rts[1] - rts[0]) <= STABLE_RT_DELTA_MS;
+  })();
+  const mastering = recent.every(
+    (h) => pctOk(h.correct_nogo_pct, HARDER_NOGO_PCT, "above") && pctOk(h.commission_pct, HARDER_COMMISSION_PCT, "below") && pctOk(h.correct_go_pct, HARDER_GO_PCT, "above")
+  );
+  if (mastering && rtStable) {
+    const to = clampWindow(current.response_window_go_ms + HARDER_STEP_MS);
+    if (to === current.response_window_go_ms) {
+      return { action: "hold", change: null, reason: "\u062A\u0633\u0644\u0637 \u067E\u0627\u06CC\u062F\u0627\u0631 \u0627\u0645\u0627 \u067E\u0646\u062C\u0631\u0647 \u062F\u0631 \u06A9\u0631\u0627\u0646 \u0627\u0633\u062A \u2014 \u06AF\u0627\u0645 \u0628\u0639\u062F\u06CC \u0628\u0627 \u067E\u0631\u0648\u062A\u06A9\u0644 \u062C\u062F\u06CC\u062F", evidence };
+    }
+    return {
+      action: "harder",
+      change: { param: "response_window_go_ms", from: current.response_window_go_ms, to },
+      reason: `\u062F\u0648 \u062C\u0644\u0633\u0647\u0654 \u067E\u06CC\u0627\u067E\u06CC \u0628\u0627 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u2265${HARDER_NOGO_PCT}%\u060C \u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646 \u2264${HARDER_COMMISSION_PCT}% \u0648 RT \u067E\u0627\u06CC\u062F\u0627\u0631 (\xB1${STABLE_RT_DELTA_MS}ms) \u2014 \u067E\u0646\u062C\u0631\u0647 \u062A\u0646\u06AF\u200C\u062A\u0631 \u0634\u062F`,
+      evidence
+    };
+  }
+  return { action: "hold", change: null, reason: "\u0647\u06CC\u0686 \u0642\u0627\u0639\u062F\u0647\u0654 \u06AF\u0630\u0627\u0631 \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u06CC\u0633\u062A \u2014 \u0633\u0637\u062D \u062D\u0641\u0638 \u0645\u06CC\u200C\u0634\u0648\u062F", evidence };
+}
+__name(decideAdaptive, "decideAdaptive");
+function serializeDecision(d, sessionId, purpose) {
+  return JSON.stringify({
+    session_id: sessionId,
+    purpose,
+    action: d.action,
+    change: d.change,
+    reason: d.reason,
+    sessions_considered: d.evidence.sessions_considered,
+    latest: d.evidence.latest,
+    enabled: d.evidence.enabled,
+    rules: {
+      min_sessions: ADAPTIVE_MIN_SESSIONS,
+      harder: { nogo_pct: HARDER_NOGO_PCT, commission_pct: HARDER_COMMISSION_PCT, go_pct: HARDER_GO_PCT, rt_stable_ms: STABLE_RT_DELTA_MS },
+      easier: { commission_pct: EASIER_COMMISSION_PCT, nogo_pct: EASIER_NOGO_PCT },
+      steps_ms: { harder: HARDER_STEP_MS, easier: EASIER_STEP_MS },
+      window_clamp: [WINDOW_MIN_MS, WINDOW_MAX_MS]
+    }
+  });
+}
+__name(serializeDecision, "serializeDecision");
+function applyAdaptiveLevel(current, decision) {
+  if (!decision || !decision.change || decision.change.param !== "response_window_go_ms") return { ...current };
+  return { response_window_go_ms: clampWindow(decision.change.to), level: current.level + (decision.action === "harder" ? 1 : decision.action === "easier" ? -1 : 0) };
+}
+__name(applyAdaptiveLevel, "applyAdaptiveLevel");
+
+// src/domain/games/stages.ts
+var STAGE_RULES_VERSION = "1.0.0";
+var STAGE_TOTAL = 5;
+var STAGE_OVERRIDE_KEYS = [
+  "response_window_go_ms",
+  "response_window_nogo_ms",
+  "isi_min_ms",
+  "isi_max_ms",
+  "fixation_ms"
+];
+var STAGE_THRESHOLDS = {
+  pass: { go_pct: 70, nogo_pct: 60 },
+  star2: { go_pct: 80, nogo_pct: 75 },
+  star3: { go_pct: 90, nogo_pct: 85 }
+};
+var STAGES_4_6 = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u06AF\u0631\u0645\u200C\u06A9\u0631\u062F\u0646",
+    goal_fa: "\u0628\u0627 \u0633\u062A\u0627\u0631\u0647\u200C\u0647\u0627 \u062F\u0648\u0633\u062A \u0634\u0648\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
+    difficulty: 1,
+    overrides: { response_window_go_ms: 2400, response_window_nogo_ms: 2400, isi_min_ms: 1200, isi_max_ms: 1800, fixation_ms: 400 }
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u062A\u0645\u0631\u06CC\u0646",
+    goal_fa: "\u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC \u0627\u062F\u0627\u0645\u0647 \u0628\u062F\u0647.",
+    difficulty: 2,
+    overrides: {}
+    // پارامترهای پایهٔ پروتکل — بدون بازنویسی
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u062A\u0646\u062F\u062A\u0631",
+    goal_fa: "\u062D\u0627\u0644\u0627 \u06A9\u0645\u06CC \u062A\u0646\u062F\u062A\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u062D\u0648\u0627\u0633\u062A \u06A9\u0646\u0627\u0631 \u0646\u0628\u0627\u0634\u0647.",
+    difficulty: 3,
+    overrides: { response_window_go_ms: 1800, response_window_nogo_ms: 1800, isi_min_ms: 900, isi_max_ms: 1350, fixation_ms: 400 }
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u062F\u0642\u062A",
+    goal_fa: "\u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A\u061B \u0641\u0642\u0637 \u0648\u0642\u062A\u06CC \u0645\u0637\u0645\u0626\u0646\u06CC \u0644\u0645\u0633 \u06A9\u0646.",
+    difficulty: 4,
+    overrides: { response_window_go_ms: 1600, response_window_nogo_ms: 1600, isi_min_ms: 850, isi_max_ms: 1250, fixation_ms: 350 }
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646",
+    goal_fa: "\u0633\u0631\u06CC\u0639\u200C\u062A\u0631\u06CC\u0646 \u0645\u0631\u062D\u0644\u0647! \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC.",
+    difficulty: 5,
+    overrides: { response_window_go_ms: 1400, response_window_nogo_ms: 1400, isi_min_ms: 800, isi_max_ms: 1200, fixation_ms: 350 }
+  }
+];
+var STAGES_7_12 = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u06AF\u0631\u0645\u200C\u06A9\u0631\u062F\u0646",
+    goal_fa: "\u0628\u0627 \u0633\u062A\u0627\u0631\u0647\u200C\u0647\u0627 \u062F\u0648\u0633\u062A \u0634\u0648\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
+    difficulty: 1,
+    overrides: { response_window_go_ms: 1900, response_window_nogo_ms: 1900, isi_min_ms: 1e3, isi_max_ms: 1400, fixation_ms: 400 }
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u062A\u0645\u0631\u06CC\u0646",
+    goal_fa: "\u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC \u0627\u062F\u0627\u0645\u0647 \u0628\u062F\u0647.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u062A\u0646\u062F\u062A\u0631",
+    goal_fa: "\u062D\u0627\u0644\u0627 \u06A9\u0645\u06CC \u062A\u0646\u062F\u062A\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u062D\u0648\u0627\u0633\u062A \u06A9\u0646\u0627\u0631 \u0646\u0628\u0627\u0634\u0647.",
+    difficulty: 3,
+    overrides: { response_window_go_ms: 1300, response_window_nogo_ms: 1300, isi_min_ms: 700, isi_max_ms: 1050, fixation_ms: 400 }
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u062F\u0642\u062A",
+    goal_fa: "\u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A\u061B \u0641\u0642\u0637 \u0648\u0642\u062A\u06CC \u0645\u0637\u0645\u0626\u0646\u06CC \u0644\u0645\u0633 \u06A9\u0646.",
+    difficulty: 4,
+    overrides: { response_window_go_ms: 1150, response_window_nogo_ms: 1150, isi_min_ms: 650, isi_max_ms: 1e3, fixation_ms: 350 }
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646",
+    goal_fa: "\u0633\u0631\u06CC\u0639\u200C\u062A\u0631\u06CC\u0646 \u0645\u0631\u062D\u0644\u0647! \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC.",
+    difficulty: 5,
+    overrides: { response_window_go_ms: 1e3, response_window_nogo_ms: 1e3, isi_min_ms: 600, isi_max_ms: 900, fixation_ms: 350 }
+  }
+];
+var STAGES = { "4-6": STAGES_4_6, "7-12": STAGES_7_12 };
+function stageByIndex(band, index) {
+  const list = STAGES[band] ?? STAGES["7-12"];
+  return list.find((s) => s.index === index) ?? null;
+}
+__name(stageByIndex, "stageByIndex");
+function stageById(band, id) {
+  if (!id || typeof id !== "string") return null;
+  return STAGES[band]?.find((s) => s.id === id) ?? null;
+}
+__name(stageById, "stageById");
+function applyStageOverrides(params, stage) {
+  const out = { ...params };
+  if (!stage) return out;
+  for (const key of STAGE_OVERRIDE_KEYS) {
+    const v = stage.overrides[key];
+    if (typeof v === "number" && Number.isFinite(v) && v > 0) out[key] = v;
+  }
+  return out;
+}
+__name(applyStageOverrides, "applyStageOverrides");
+function pctOk2(v, min) {
+  return typeof v === "number" && Number.isFinite(v) && v >= min;
+}
+__name(pctOk2, "pctOk");
+function stageOutcomeOf(correctGoPct, correctNogoPct) {
+  const t = STAGE_THRESHOLDS;
+  if (!pctOk2(correctGoPct, t.pass.go_pct) || !pctOk2(correctNogoPct, t.pass.nogo_pct)) {
+    return { passed: false, stars: 0, thresholds: t };
+  }
+  const three = pctOk2(correctGoPct, t.star3.go_pct) && pctOk2(correctNogoPct, t.star3.nogo_pct);
+  const two = pctOk2(correctGoPct, t.star2.go_pct) && pctOk2(correctNogoPct, t.star2.nogo_pct);
+  return { passed: true, stars: three ? 3 : two ? 2 : 1, thresholds: t };
+}
+__name(stageOutcomeOf, "stageOutcomeOf");
+function stageProgressOf(history) {
+  const best = {};
+  let unlocked = 1;
+  for (const row of history) {
+    if (!row || row.validity !== "valid" || !row.stage_id) continue;
+    const stage = stageById("7-12", row.stage_id) ?? stageById("4-6", row.stage_id);
+    if (!stage) continue;
+    const outcome = stageOutcomeOf(row.correct_go_pct, row.correct_nogo_pct);
+    if (outcome.stars === 0) continue;
+    const prev = best[stage.id];
+    if (!prev || outcome.stars > prev.stars) {
+      best[stage.id] = { stars: outcome.stars, passed: prev?.passed || outcome.passed };
+    } else if (outcome.passed) {
+      best[stage.id] = { ...prev, passed: true };
+    }
+    if (outcome.passed && stage.index + 1 > unlocked && stage.index + 1 <= STAGE_TOTAL) {
+      unlocked = stage.index + 1;
+    }
+  }
+  const starsTotal = Object.values(best).reduce((sum, b) => sum + b.stars, 0);
+  return { unlocked_index: unlocked, best, stars_total: starsTotal };
+}
+__name(stageProgressOf, "stageProgressOf");
+function currentStageOf(progress, band) {
+  return stageByIndex(band, progress.unlocked_index);
+}
+__name(currentStageOf, "currentStageOf");
+
 // src/domain/games/scoring.ts
 var CV_MIN_RT_COUNT = 5;
 function summarizeAttempts(scored, evidence = [], blockSize = 24) {
@@ -23972,105 +24234,6 @@ function buildComparison(sessions) {
   };
 }
 __name(buildComparison, "buildComparison");
-
-// src/domain/games/adaptive.ts
-var ADAPTIVE_MIN_SESSIONS = 2;
-var HARDER_NOGO_PCT = 85;
-var HARDER_COMMISSION_PCT = 10;
-var HARDER_GO_PCT = 80;
-var EASIER_COMMISSION_PCT = 25;
-var EASIER_NOGO_PCT = 50;
-var HARDER_STEP_MS = -100;
-var EASIER_STEP_MS = 150;
-var WINDOW_MIN_MS = 800;
-var WINDOW_MAX_MS = 3e3;
-var STABLE_RT_DELTA_MS = 150;
-function clampWindow(ms) {
-  return Math.min(WINDOW_MAX_MS, Math.max(WINDOW_MIN_MS, Math.round(ms)));
-}
-__name(clampWindow, "clampWindow");
-function pctOk(v, threshold, direction) {
-  if (v === null || !Number.isFinite(v)) return false;
-  return direction === "below" ? v < threshold : v >= threshold;
-}
-__name(pctOk, "pctOk");
-function decideAdaptive(history, current, opts) {
-  const evidence = {
-    sessions_considered: history.filter((h) => h.validity === "valid").length,
-    latest: history.slice(-ADAPTIVE_MIN_SESSIONS),
-    enabled: opts.adaptiveEnabled
-  };
-  if (!opts.adaptiveEnabled) {
-    return { action: "hold", change: null, reason: "\u06A9\u0644\u06CC\u062F \u062E\u0627\u0645\u0648\u0634\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u2014 \u0633\u0627\u0632\u06AF\u0627\u0631\u06CC \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0627\u0633\u062A", evidence };
-  }
-  const valid = history.filter((h) => h.validity === "valid");
-  if (valid.length < ADAPTIVE_MIN_SESSIONS) {
-    return { action: "hold", change: null, reason: `\u062F\u0627\u062F\u0647\u0654 \u06A9\u0627\u0641\u06CC \u0646\u06CC\u0633\u062A \u2014 \u062D\u062F\u0627\u0642\u0644 ${ADAPTIVE_MIN_SESSIONS} \u062C\u0644\u0633\u0647\u0654 \u0645\u0639\u062A\u0628\u0631 \u067E\u06CC\u0627\u067E\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A`, evidence };
-  }
-  const recent = valid.slice(-ADAPTIVE_MIN_SESSIONS);
-  const struggling = recent.every(
-    (h) => pctOk(h.commission_pct, EASIER_COMMISSION_PCT, "above") || pctOk(h.correct_nogo_pct, EASIER_NOGO_PCT, "below")
-  );
-  if (struggling) {
-    const to = clampWindow(current.response_window_go_ms + EASIER_STEP_MS);
-    if (to === current.response_window_go_ms) {
-      return { action: "hold", change: null, reason: "\u0646\u06CC\u0627\u0632 \u0628\u0647 \u0622\u0633\u0627\u0646\u200C\u062A\u0631\u0634\u062F\u0646 \u0627\u0645\u0627 \u067E\u0646\u062C\u0631\u0647 \u062F\u0631 \u06A9\u0631\u0627\u0646 \u0627\u0633\u062A \u2014 \u0628\u0627\u0632\u0646\u06AF\u0631\u06CC \u0628\u0627\u0644\u06CC\u0646\u06CC \u0644\u0627\u0632\u0645", evidence };
-    }
-    return {
-      action: "easier",
-      change: { param: "response_window_go_ms", from: current.response_window_go_ms, to },
-      reason: `\u062F\u0648 \u062C\u0644\u0633\u0647\u0654 \u067E\u06CC\u0627\u067E\u06CC \u0628\u0627 \u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646 \u2265${EASIER_COMMISSION_PCT}% \u06CC\u0627 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC <${EASIER_NOGO_PCT}% \u2014 \u067E\u0646\u062C\u0631\u0647\u0654 \u067E\u0627\u0633\u062E \u06AF\u0634\u0627\u062F\u062A\u0631 \u0634\u062F`,
-      evidence
-    };
-  }
-  const rtStable = (() => {
-    const rts = recent.map((h) => h.median_rt).filter((v) => typeof v === "number");
-    if (rts.length < 2) return false;
-    return Math.abs(rts[1] - rts[0]) <= STABLE_RT_DELTA_MS;
-  })();
-  const mastering = recent.every(
-    (h) => pctOk(h.correct_nogo_pct, HARDER_NOGO_PCT, "above") && pctOk(h.commission_pct, HARDER_COMMISSION_PCT, "below") && pctOk(h.correct_go_pct, HARDER_GO_PCT, "above")
-  );
-  if (mastering && rtStable) {
-    const to = clampWindow(current.response_window_go_ms + HARDER_STEP_MS);
-    if (to === current.response_window_go_ms) {
-      return { action: "hold", change: null, reason: "\u062A\u0633\u0644\u0637 \u067E\u0627\u06CC\u062F\u0627\u0631 \u0627\u0645\u0627 \u067E\u0646\u062C\u0631\u0647 \u062F\u0631 \u06A9\u0631\u0627\u0646 \u0627\u0633\u062A \u2014 \u06AF\u0627\u0645 \u0628\u0639\u062F\u06CC \u0628\u0627 \u067E\u0631\u0648\u062A\u06A9\u0644 \u062C\u062F\u06CC\u062F", evidence };
-    }
-    return {
-      action: "harder",
-      change: { param: "response_window_go_ms", from: current.response_window_go_ms, to },
-      reason: `\u062F\u0648 \u062C\u0644\u0633\u0647\u0654 \u067E\u06CC\u0627\u067E\u06CC \u0628\u0627 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u2265${HARDER_NOGO_PCT}%\u060C \u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646 \u2264${HARDER_COMMISSION_PCT}% \u0648 RT \u067E\u0627\u06CC\u062F\u0627\u0631 (\xB1${STABLE_RT_DELTA_MS}ms) \u2014 \u067E\u0646\u062C\u0631\u0647 \u062A\u0646\u06AF\u200C\u062A\u0631 \u0634\u062F`,
-      evidence
-    };
-  }
-  return { action: "hold", change: null, reason: "\u0647\u06CC\u0686 \u0642\u0627\u0639\u062F\u0647\u0654 \u06AF\u0630\u0627\u0631 \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u06CC\u0633\u062A \u2014 \u0633\u0637\u062D \u062D\u0641\u0638 \u0645\u06CC\u200C\u0634\u0648\u062F", evidence };
-}
-__name(decideAdaptive, "decideAdaptive");
-function serializeDecision(d, sessionId, purpose) {
-  return JSON.stringify({
-    session_id: sessionId,
-    purpose,
-    action: d.action,
-    change: d.change,
-    reason: d.reason,
-    sessions_considered: d.evidence.sessions_considered,
-    latest: d.evidence.latest,
-    enabled: d.evidence.enabled,
-    rules: {
-      min_sessions: ADAPTIVE_MIN_SESSIONS,
-      harder: { nogo_pct: HARDER_NOGO_PCT, commission_pct: HARDER_COMMISSION_PCT, go_pct: HARDER_GO_PCT, rt_stable_ms: STABLE_RT_DELTA_MS },
-      easier: { commission_pct: EASIER_COMMISSION_PCT, nogo_pct: EASIER_NOGO_PCT },
-      steps_ms: { harder: HARDER_STEP_MS, easier: EASIER_STEP_MS },
-      window_clamp: [WINDOW_MIN_MS, WINDOW_MAX_MS]
-    }
-  });
-}
-__name(serializeDecision, "serializeDecision");
-function applyAdaptiveLevel(current, decision) {
-  if (!decision || !decision.change || decision.change.param !== "response_window_go_ms") return { ...current };
-  return { response_window_go_ms: clampWindow(decision.change.to), level: current.level + (decision.action === "harder" ? 1 : decision.action === "easier" ? -1 : 0) };
-}
-__name(applyAdaptiveLevel, "applyAdaptiveLevel");
 
 // src/domain/games/stimulus.ts
 function mulberry32(seedNum) {
@@ -24746,14 +24909,40 @@ function createGamesService(deps) {
     const mode = res.pkg.body.mode ?? "training";
     const childAge = state === "child_active" ? await childAgeOf(res.rx.child_id) : null;
     let snap = protocolSnapshotOf(protocolForAge(mode, childAge));
+    let stage = null;
+    let progress = null;
+    if (state === "child_active" && mode === "training") {
+      const sctx = await stageContextOf(res.rx.id, childAge, res.pkg.body);
+      if (sctx) {
+        stage = sctx.stage;
+        progress = sctx.progress;
+        snap = { ...snap, params: applyStageOverrides(snap.params, stage) };
+      }
+    }
     if (state === "child_active" && mode === "training" && res.pkg.body.protocol != null && res.pkg.body.adaptive_enabled !== false) {
       const { decision } = await latestAdaptiveDecisionOf(res.rx.id);
-      if (decision?.change?.param === "response_window_go_ms") {
-        const level = applyAdaptiveLevel(
-          { response_window_go_ms: snap.params.response_window_go_ms, level: 0 },
-          decision
-        );
-        snap = { ...snap, params: { ...snap.params, response_window_go_ms: level.response_window_go_ms } };
+      if (decision?.change && decision.change.param === "response_window_go_ms") {
+        const offset = decision.change.to - decision.change.from;
+        const w = Math.min(WINDOW_MAX_MS, Math.max(WINDOW_MIN_MS, Math.round(snap.params.response_window_go_ms + offset)));
+        snap = { ...snap, params: { ...snap.params, response_window_go_ms: w } };
+      }
+    }
+    let stageResult = void 0;
+    if (state === "child_done" && mode === "training" && res.session?.stage_id && res.pkg.body.stages_enabled !== false) {
+      const sum = parseJson2(res.session.summary_json, null);
+      const st = sum?.stage;
+      if (st && typeof st.stars === "number" && typeof st.index === "number") {
+        const prog = stageProgressOf(await stageHistoryOf(res.rx.id));
+        const next = stageByIndex("7-12", st.index + 1);
+        stageResult = {
+          id: st.id ?? res.session.stage_id,
+          index: st.index,
+          title_fa: st.title_fa ?? "\u0645\u0631\u062D\u0644\u0647",
+          stars: st.stars,
+          passed: st.passed === true,
+          next_title_fa: next ? next.title_fa : null,
+          stars_total: prog.stars_total
+        };
       }
     }
     return {
@@ -24767,8 +24956,20 @@ function createGamesService(deps) {
       ...state === "child_active" ? {
         playGame: m.game,
         playHint: playHintOf(m),
-        playProtocol: snap
-      } : {}
+        playProtocol: snap,
+        ...stage && progress ? {
+          playStage: {
+            id: stage.id,
+            index: stage.index,
+            total: STAGE_TOTAL,
+            title_fa: stage.title_fa,
+            goal_fa: stage.goal_fa,
+            difficulty: stage.difficulty,
+            best_stars: progress.best[stage.id]?.stars ?? 0
+          }
+        } : {}
+      } : {},
+      ...stageResult ? { playStageResult: stageResult } : {}
     };
   }
   __name(stateViewOf, "stateViewOf");
@@ -24830,6 +25031,38 @@ function createGamesService(deps) {
     }
   }
   __name(latestAdaptiveDecisionOf, "latestAdaptiveDecisionOf");
+  async function stageHistoryOf(prescriptionId) {
+    try {
+      const rows = await db.query(
+        `SELECT s.stage_id, s.validity, s.summary_json
+         FROM game_sessions s JOIN game_missions m ON m.id = s.mission_id
+         WHERE m.prescription_id = ? AND s.stage_id IS NOT NULL
+         ORDER BY s.created_at ASC`,
+        [prescriptionId]
+      );
+      return rows.map((r) => {
+        const sum = parseJson2(r.summary_json, null);
+        return {
+          stage_id: r.stage_id,
+          validity: r.validity,
+          correct_go_pct: sum?.pct?.correct_go ?? null,
+          correct_nogo_pct: sum?.pct?.correct_nogo ?? null
+        };
+      });
+    } catch {
+      return [];
+    }
+  }
+  __name(stageHistoryOf, "stageHistoryOf");
+  async function stageContextOf(prescriptionId, childAge, body) {
+    if (body.stages_enabled === false) return null;
+    const band = bandForAge2(childAge).band;
+    const progress = stageProgressOf(await stageHistoryOf(prescriptionId));
+    const stage = currentStageOf(progress, band);
+    if (!stage) return null;
+    return { progress, stage };
+  }
+  __name(stageContextOf, "stageContextOf");
   async function start(token) {
     const res = await requireActiveToken(token);
     if (res.session) {
@@ -24859,10 +25092,15 @@ function createGamesService(deps) {
         });
         sequenceJson = serializeSequence(seq);
       }
+      let stageId = null;
+      if (mode === "training") {
+        const sctx = await stageContextOf(res.rx.id, await childAgeOf(res.rx.child_id), res.pkg.body);
+        stageId = sctx?.stage.id ?? null;
+      }
       await db.execute(
-        `INSERT INTO game_sessions (id, mission_id, state, validity, purpose, sequence_json, started_at, last_activity_at)
-         VALUES (?,?, 'child_active', 'valid', ?, ?, ?, ?)`,
-        [id, res.mission.id, mode, sequenceJson, isoOf2(now()), isoOf2(now())]
+        `INSERT INTO game_sessions (id, mission_id, state, validity, purpose, sequence_json, stage_id, started_at, last_activity_at)
+         VALUES (?,?, 'child_active', 'valid', ?, ?, ?, ?, ?)`,
+        [id, res.mission.id, mode, sequenceJson, stageId, isoOf2(now()), isoOf2(now())]
       );
     }
     await db.execute(`UPDATE game_missions SET status = 'in_progress' WHERE id = ? AND status = 'pending'`, [res.mission.id]);
@@ -25044,17 +25282,39 @@ function createGamesService(deps) {
       evidence_coverage: summary.behavior.evidence_coverage,
       rt_floor_violations: attempts.filter((a) => a.rt_valid === 0).length
     });
+    const sessionMode = res.pkg.body.mode ?? "training";
+    const stagesOn = sessionMode === "training" && res.pkg.body.stages_enabled !== false;
+    const ageFin = stagesOn ? await childAgeOf(res.rx.child_id) : null;
+    const sessionStage = stagesOn && session.stage_id ? stageById(bandForAge2(ageFin).band, session.stage_id) : null;
+    let summaryBody = summary;
+    if (sessionStage && validity === "valid") {
+      const outcome = stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo);
+      summaryBody = {
+        ...summary,
+        stage: {
+          id: sessionStage.id,
+          index: sessionStage.index,
+          title_fa: sessionStage.title_fa,
+          passed: outcome.passed,
+          stars: outcome.stars,
+          rules_version: STAGE_RULES_VERSION
+        }
+      };
+    }
     await db.execute(
       `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ?, summary_json = ?, quality_json = ? WHERE id = ?`,
-      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summary), serializeQuality(quality), session.id]
+      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summaryBody), serializeQuality(quality), session.id]
     );
-    const sessionMode = res.pkg.body.mode ?? "training";
     const adaptiveEnabled = sessionMode === "training" && res.pkg.body.protocol != null && res.pkg.body.adaptive_enabled !== false;
     if (adaptiveEnabled) {
-      const prot = protocolForAge("training", await childAgeOf(res.rx.child_id));
+      const prot = protocolForAge("training", ageFin);
+      const stageBase = sessionStage ? applyStageOverrides(
+        Object.fromEntries(Object.entries(prot.params).map(([k, v]) => [k, v.value])),
+        sessionStage
+      ).response_window_go_ms : prot.params.response_window_go_ms.value;
       const { decision: priorDecision, history } = await latestAdaptiveDecisionOf(res.rx.id);
       const current = applyAdaptiveLevel(
-        { response_window_go_ms: prot.params.response_window_go_ms.value, level: 0 },
+        { response_window_go_ms: stageBase, level: 0 },
         priorDecision
       );
       const decision = decideAdaptive(history, current, { adaptiveEnabled: prot.behavior.adaptive });
@@ -25316,6 +25576,19 @@ function page(model, token, body) {
            font-family: inherit; margin-top: 12px; min-height: 52px; }
   button:disabled { opacity: .6; }
   .msg { margin-top: 10px; font-size: 13px; min-height: 18px; }
+  .stage-done { margin-top: 12px; }
+  .stage-done__badge { display: inline-block; background: #F5F0E5; border: 1px solid #E4AA46;
+    color: #153E50; border-radius: 999px; padding: 3px 14px; font-size: 13px; font-weight: 700; }
+  .stage-done__stars { display: flex; gap: 10px; justify-content: center; margin: 14px 0 8px; }
+  .stage-done__stars svg { width: 44px; height: 46px; }
+  .stage-done__stars svg path { fill: #E9E2D0; stroke: #153E50; stroke-width: 2.5; stroke-linejoin: round; }
+  .stage-done__stars svg.star--lit path { fill: #E4AA46; }
+  @media (prefers-reduced-motion: no-preference) {
+    .stage-done__stars svg.star--lit { animation: star-pop .5s cubic-bezier(.34,1.56,.64,1) backwards; }
+    .stage-done__stars svg.star--lit:nth-child(2) { animation-delay: .14s; }
+    .stage-done__stars svg.star--lit:nth-child(3) { animation-delay: .28s; }
+  }
+  @keyframes star-pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 </style>
 </head>
 <body>
@@ -25362,10 +25635,11 @@ function renderGamesPage(model, token) {
   if (model.state === "child_active") {
     const hint = JSON.stringify(model.playHint ?? null);
     const protocol = JSON.stringify(model.playProtocol ?? null);
+    const stageAttr = model.playStage ? ` data-stage="${esc(JSON.stringify(model.playStage))}"` : "";
     return page(model, token, `<div id="play-root" class="play-root"
       data-token="${esc(token)}"
       data-kind="${esc(model.playGame ?? "")}"
-      data-hint="${esc(hint)}"
+      data-hint="${esc(hint)}"${stageAttr}
       data-protocol="${esc(protocol)}">
       <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
       <div class="play-stage" id="play-stage"></div>
@@ -25379,7 +25653,18 @@ function renderGamesPage(model, token) {
     <script type="module" src="/assets/play/play.js?v=${APP_VERSION}"></script>`);
   }
   if (model.state === "child_done") {
-    return page(model, token, `<div class="card"><h1>\u0627\u0645\u0631\u0648\u0632 \u062A\u0645\u0627\u0645 \u0634\u062F!</h1>
+    const r = model.playStageResult;
+    const STAR_PATH_D = "M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z";
+    const stageCard = r ? `<div class="stage-done">
+      <div class="stage-done__badge">\u0645\u0631\u062D\u0644\u0647\u0654 ${faNum5(r.index)} \u2014 ${esc(r.title_fa)}</div>
+      <div class="stage-done__stars" role="img" aria-label="${faNum5(r.stars)} \u0633\u062A\u0627\u0631\u0647 \u0627\u0632 ${faNum5(3)}">
+        ${[1, 2, 3].map((i) => `<svg class="star${i <= r.stars ? " star--lit" : ""}" viewBox="0 0 120 124" aria-hidden="true"><path d="${STAR_PATH_D}"/></svg>`).join("")}
+      </div>
+      <p class="muted">${r.passed ? "\u0627\u06CC\u0646 \u0645\u0631\u062D\u0644\u0647 \u0631\u0627 \u06A9\u0627\u0645\u0644 \u06A9\u0631\u062F\u06CC!" : "\u062A\u0645\u0631\u06CC\u0646 \u062E\u0648\u0628\u06CC \u0628\u0648\u062F\u061B \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0647\u0634 \u0645\u06CC\u200C\u0631\u0633\u06CC\u0645."}</p>
+      ${r.passed && r.next_title_fa ? `<p class="muted">\u0645\u0631\u062D\u0644\u0647\u0654 \u0628\u0639\u062F\u06CC: ${esc(r.next_title_fa)} \u2014 \u0641\u0631\u062F\u0627 \u0645\u0646\u062A\u0638\u0631\u062A \u0627\u0633\u062A.</p>` : ""}
+      ${r.stars_total > 0 ? `<p class="muted">\u0645\u062C\u0645\u0648\u0639 \u0633\u062A\u0627\u0631\u0647\u200C\u0647\u0627\u06CC \u062A\u0648: ${faNum5(r.stars_total)}</p>` : ""}
+    </div>` : "";
+    return page(model, token, `<div class="card"><h1>\u0627\u0645\u0631\u0648\u0632 \u062A\u0645\u0627\u0645 \u0634\u062F!</h1>${stageCard}
       <p class="muted">\u06AF\u0648\u0634\u06CC \u0631\u0627 \u0628\u0647 \u0645\u0627\u0645\u0627\u0646 \u0628\u062F\u0647.</p>
       <button id="btn-gate-open" type="button">\u0645\u0646 \u0645\u0627\u0645\u0627\u0646 \u0647\u0633\u062A\u0645</button></div>`);
   }
@@ -25519,7 +25804,9 @@ function renderReportHtml(report, childId) {
   const sessionRows = report.sessions.map((s) => {
     const sum = s.computed?.summary ?? {};
     const attemptCount = s.raw.attempt_count;
-    return `<tr><td>${esc2(s.session_id.slice(0, 8))}</td><td>${esc2(s.purpose)}</td><td>${esc2(s.computed?.validity)}</td><td>${esc2(s.computed?.quality_verdict)}</td><td>${esc2(sum.totals?.total ?? "\u2014")}</td><td>${esc2(sum.pct?.correct_go ?? "\u2014")}</td><td>${esc2(sum.pct?.correct_nogo ?? "\u2014")}</td><td>${esc2(sum.pct?.commission ?? "\u2014")}</td><td>${esc2(sum.pct?.omission ?? "\u2014")}</td><td>${esc2(attemptCount)}</td></tr>`;
+    const st = sum.stage;
+    const stageCell = st && typeof st.stars === "number" ? esc2(st.title_fa ?? "") + (st.passed ? " \xB7 " + "\u2605".repeat(st.stars) : " \xB7 \u0646\u0627\u062A\u0645\u0627\u0645") : "\u2014";
+    return `<tr><td>${esc2(s.session_id.slice(0, 8))}</td><td>${esc2(s.purpose)}</td><td>${esc2(s.computed?.validity)}</td><td>${esc2(s.computed?.quality_verdict)}</td><td>${esc2(sum.totals?.total ?? "\u2014")}</td><td>${esc2(sum.pct?.correct_go ?? "\u2014")}</td><td>${esc2(sum.pct?.correct_nogo ?? "\u2014")}</td><td>${esc2(sum.pct?.commission ?? "\u2014")}</td><td>${esc2(sum.pct?.omission ?? "\u2014")}</td><td>${stageCell}</td><td>${esc2(attemptCount)}</td></tr>`;
   }).join("");
   const compareRows = report.comparison.by_metric.map(
     (m) => `<tr><td>${esc2(m.metric_id)}</td><td>${esc2(m.unit)}</td><td>${m.points.map((p) => esc2(p.value)).join(" \u2192 ") || "\u2014"}</td></tr>`
@@ -25538,8 +25825,8 @@ function renderReportHtml(report, childId) {
 <h1>\u06AF\u0632\u0627\u0631\u0634 \u062C\u0644\u0633\u0647\u200C\u0647\u0627\u06CC \u0628\u0627\u0632\u06CC \u2014 \u06A9\u0648\u062F\u06A9 ${esc2(childId.slice(0, 8))}</h1>
 <p class="muted">${esc2(report.session_count)} \u062C\u0644\u0633\u0647 \xB7 \u062A\u0648\u0644\u06CC\u062F ${esc2(report.generated_at)} \xB7 \u0627\u06CC\u0646 \u06AF\u0632\u0627\u0631\u0634 \u0647\u06CC\u0686 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627\u0644\u06CC\u0646\u06CC \u062A\u0648\u0644\u06CC\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F \u2014 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0627\u0633\u062A.</p>
 <h2>\u062E\u0644\u0627\u0635\u0647\u0654 \u0645\u062D\u0627\u0633\u0628\u0647\u200C\u0634\u062F\u0647\u0654 \u062C\u0644\u0633\u0647\u200C\u0647\u0627</h2>
-<table><thead><tr><th>\u062C\u0644\u0633\u0647</th><th>\u062D\u0627\u0644\u062A</th><th>\u0627\u0639\u062A\u0628\u0627\u0631</th><th>\u06A9\u06CC\u0641\u06CC\u062A</th><th>\u0622\u0632\u0645\u0648\u0646</th><th>\u06AF\u0648 \u062F\u0631\u0633\u062A\u066A</th><th>\u0646\u0648\u06AF\u0648 \u062F\u0631\u0633\u062A\u066A</th><th>\u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646\u066A</th><th>\u0627\u064F\u0645\u06CC\u0634\u0646\u066A</th><th>\u067E\u0627\u0633\u062E \u062E\u0627\u0645</th></tr></thead>
-<tbody>${sessionRows || '<tr><td colspan="10">\u062C\u0644\u0633\u0647\u200C\u0627\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647</td></tr>'}</tbody></table>
+<table><thead><tr><th>\u062C\u0644\u0633\u0647</th><th>\u062D\u0627\u0644\u062A</th><th>\u0627\u0639\u062A\u0628\u0627\u0631</th><th>\u06A9\u06CC\u0641\u06CC\u062A</th><th>\u0622\u0632\u0645\u0648\u0646</th><th>\u06AF\u0648 \u062F\u0631\u0633\u062A\u066A</th><th>\u0646\u0648\u06AF\u0648 \u062F\u0631\u0633\u062A\u066A</th><th>\u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646\u066A</th><th>\u0627\u064F\u0645\u06CC\u0634\u0646\u066A</th><th>\u0645\u0631\u062D\u0644\u0647</th><th>\u067E\u0627\u0633\u062E \u062E\u0627\u0645</th></tr></thead>
+<tbody>${sessionRows || '<tr><td colspan="11">\u062C\u0644\u0633\u0647\u200C\u0627\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647</td></tr>'}</tbody></table>
 <h2>\u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u062C\u0644\u0633\u0647\u200C\u0647\u0627 (\u0642\u062F\u06CC\u0645\u06CC \u2192 \u062C\u062F\u06CC\u062F)</h2>
 <table><thead><tr><th>\u0633\u0646\u062C\u0647</th><th>\u0648\u0627\u062D\u062F</th><th>\u0633\u0631\u06CC \u0632\u0645\u0627\u0646\u06CC</th></tr></thead>
 <tbody>${compareRows || '<tr><td colspan="3">\u0633\u0646\u062C\u0647\u200C\u0627\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647</td></tr>'}</tbody></table>

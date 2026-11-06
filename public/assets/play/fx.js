@@ -127,6 +127,29 @@ export function popCount(el, ms) {
     { duration: ms || 320, easing: EASE_SPRING });
 }
 
+/* ─── ردیف ستارهٔ مرحله (۱.۲۵.۲۲) — سه ستارهٔ مسیر پیشرفت؛ فقط تمرین ───
+   نشانه‌گذاری از همین‌جا (تک‌منبع شکل ستاره)؛ جنبش روشن‌شدن هم از fx است
+   تا گیت «همهٔ جنبش تزئینی فقط از fx» برقرار بماند. */
+
+export function starRow(lit) {
+  const n = Math.max(0, Math.min(3, Math.round(Number(lit) || 0)));
+  let out = '<div class="play-stars" aria-hidden="true">';
+  for (let i = 1; i <= 3; i++) {
+    out += '<svg class="play-stars__star' + (i <= n ? ' play-stars__lit' : '') + '" viewBox="0 0 120 124"><path d="' + STAR_PATH + '"/></svg>';
+  }
+  return out + '</div>';
+}
+
+export function popStars(container, ms) {
+  if (!motionOk() || !container) return;
+  const stars = container.querySelectorAll('.play-stars__lit');
+  stars.forEach((s, i) => {
+    animate(s,
+      [{ opacity: 0, transform: 'scale(.4)' }, { opacity: 1, transform: 'scale(1)' }],
+      { duration: ms || 420, easing: EASE_SPRING, delay: i * 130, fill: 'backwards' });
+  });
+}
+
 /* ─── حباب بازخورد شناور — بالای صحنه، جایی که نگاه کودک است؛ نه پایین صفحه ───
    متن در عنصر ثابت می‌ماند (ابزار QA می‌خواند)؛ دو لحن: ok / calm ─── */
 
