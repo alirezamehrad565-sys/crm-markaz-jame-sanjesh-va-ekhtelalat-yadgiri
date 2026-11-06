@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.16";
+var APP_VERSION = "1.25.17";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23830,6 +23830,108 @@ function summarizeAttempts(scored, evidence = [], blockSize = 24) {
 }
 __name(summarizeAttempts, "summarizeAttempts");
 
+// src/domain/games/quality.ts
+var QUALITY_RULES_VERSION = "1.0.0";
+var DEFAULT_QUALITY_THRESHOLDS = {
+  min_completion_ratio: 0.6,
+  pause_total_max_ms: 9e4,
+  idle_gap_max_ms: 5 * 6e4,
+  out_of_surface_max: 10,
+  premature_ratio_max: 0.3,
+  frame_drops_max: 20,
+  max_frame_delta_ms_max: 500,
+  min_evidence_coverage: 0.5,
+  rt_floor_violations_max: 3
+};
+function flag(rule, verdict, detail) {
+  return { rule, verdict, detail };
+}
+__name(flag, "flag");
+function assessQuality(input, thresholds = DEFAULT_QUALITY_THRESHOLDS) {
+  const flags = [];
+  const completionRatio = input.total_items > 0 ? input.done_items / input.total_items : null;
+  if (input.validity === "invalid" || input.validity === "partial") {
+    flags.push(flag(
+      "base_validity",
+      "incomplete_or_invalid",
+      `\u062D\u06A9\u0645 \u0627\u0639\u062A\u0628\u0627\u0631 \u067E\u0627\u06CC\u0647\u0654 \u062C\u0644\u0633\u0647 \xAB${input.validity}\xBB \u0627\u0633\u062A \u2014 \u062C\u0644\u0633\u0647\u0654 \u06A9\u0627\u0645\u0644 \u06CC\u06A9\u0646\u0648\u0627\u062E\u062A \u062B\u0628\u062A \u0646\u0634\u062F\u0647`
+    ));
+  }
+  if (completionRatio !== null && completionRatio < thresholds.min_completion_ratio) {
+    flags.push(flag(
+      "completion",
+      "incomplete_or_invalid",
+      `\u0641\u0642\u0637 ${Math.round(completionRatio * 100)}\u066A \u0622\u06CC\u062A\u0645\u200C\u0647\u0627 \u0627\u0646\u062C\u0627\u0645 \u0634\u062F \u2014 \u0632\u06CC\u0631 \u0622\u0633\u062A\u0627\u0646\u0647\u0654 ${Math.round(thresholds.min_completion_ratio * 100)}\u066A`
+    ));
+  }
+  if (input.pause_total_ms !== null && input.pause_total_ms > thresholds.pause_total_max_ms) {
+    flags.push(flag(
+      "pause_total",
+      "needs_caution",
+      `\u062C\u0645\u0639 \u0645\u06A9\u062B \u0628\u0631\u06AF\u0647 ${Math.round(input.pause_total_ms / 1e3)} \u062B\u0627\u0646\u06CC\u0647 \u0628\u0648\u062F \u2014 \u0632\u0645\u0627\u0646\u200C\u0628\u0646\u062F\u06CC \u062F\u0631 \u0645\u06A9\u062B\u200C\u0647\u0627 \u0645\u06A9\u062B \u06A9\u0631\u062F\u0647 \u0627\u0645\u0627 \u062C\u0631\u06CC\u0627\u0646 \u067E\u0631\u0627\u06A9\u0646\u062F\u0647 \u0634\u062F\u0647`
+    ));
+  }
+  if (input.idle_gap_max_ms !== null && input.idle_gap_max_ms > thresholds.idle_gap_max_ms) {
+    flags.push(flag(
+      "idle_gap",
+      "needs_caution",
+      `\u0634\u06A9\u0627\u0641 \u0628\u06CC\u200C\u0641\u0639\u0627\u0644\u06CC\u062A\u06CC \u062A\u0627 ${Math.round(input.idle_gap_max_ms / 1e3)} \u062B\u0627\u0646\u06CC\u0647 \u2014 \u0642\u0637\u0639/\u0627\u062F\u0627\u0645\u0647 \u062F\u0631 \u0645\u06CC\u0627\u0646\u0647\u0654 \u062C\u0644\u0633\u0647`
+    ));
+  }
+  if (input.out_of_surface_total > thresholds.out_of_surface_max) {
+    flags.push(flag(
+      "out_of_surface",
+      "needs_caution",
+      `${input.out_of_surface_total} \u0644\u0645\u0633 \u0628\u06CC\u0631\u0648\u0646 \u0633\u0637\u062D \u0628\u0627\u0632\u06CC \u062B\u0628\u062A \u0634\u062F \u2014 \u0627\u062D\u062A\u0645\u0627\u0644 \u0644\u0645\u0633 \u06A9\u0641\u200C\u062F\u0633\u062A \u06CC\u0627 \u0686\u0646\u062F\u0644\u0645\u0633\u06CC\u061B \u0628\u06CC\u200C\u0627\u062B\u0631 \u0628\u0631 \u067E\u0627\u0633\u062E`
+    ));
+  }
+  if (input.total_items > 0 && input.premature_total / input.total_items > thresholds.premature_ratio_max) {
+    flags.push(flag(
+      "premature_ratio",
+      "needs_caution",
+      `${input.premature_total} \u067E\u0627\u0633\u062E \u0632\u0648\u062F\u062A\u0631 \u0627\u0632 \u0645\u062D\u0631\u06A9 (\u0628\u06CC\u0634 \u0627\u0632 ${Math.round(thresholds.premature_ratio_max * 100)}\u066A \u0622\u0632\u0645\u0648\u0646\u200C\u0647\u0627) \u2014 \u0627\u0644\u06AF\u0648\u06CC \u0644\u0645\u0633 \u067E\u06CC\u0634 \u0627\u0632 \u062F\u06CC\u062F\u0646 \u0634\u06A9\u0644\u061B \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631`
+    ));
+  }
+  if (input.frame_drops_total > thresholds.frame_drops_max || input.max_frame_delta_ms !== null && input.max_frame_delta_ms > thresholds.max_frame_delta_ms_max) {
+    flags.push(flag(
+      "device_frame",
+      "needs_caution",
+      `${input.frame_drops_total} \u0641\u0631\u06CC\u0645 \u0627\u0641\u062A\u0627\u062F\u0647 (\u0628\u0644\u0646\u062F\u062A\u0631\u06CC\u0646 ${input.max_frame_delta_ms ?? "\u2014"}ms) \u2014 \u062F\u0633\u062A\u06AF\u0627\u0647 \u062F\u0631 \u0644\u062D\u0638\u0647\u200C\u0647\u0627\u06CC \u0646\u0645\u0627\u06CC\u0634 \u0641\u0634\u0627\u0631 \u062F\u0627\u0634\u062A\u0647\u061B \u062F\u0642\u062A \u0645\u06CC\u0644\u06CC\u200C\u062B\u0627\u0646\u06CC\u0647\u200C\u0627\u06CC \u0645\u062D\u062A\u0627\u0637 \u0628\u062E\u0648\u0627\u0646\u06CC\u062F`
+    ));
+  }
+  if (input.evidence_coverage !== null && input.evidence_coverage < thresholds.min_evidence_coverage) {
+    flags.push(flag(
+      "evidence_coverage",
+      "needs_caution",
+      `\u0641\u0642\u0637 ${Math.round(input.evidence_coverage * 100)}\u066A \u0622\u0632\u0645\u0648\u0646\u200C\u0647\u0627 \u0645\u064F\u0647\u0631 \u0646\u0645\u0627\u06CC\u0634 \u062F\u0627\u0631\u0646\u062F \u2014 \u0628\u062E\u0634\u06CC \u0627\u0632 \u0632\u0645\u0627\u0646\u200C\u0647\u0627 \u0642\u0627\u0628\u0644 \u0631\u0627\u0633\u062A\u06CC\u200C\u0622\u0632\u0645\u0627\u06CC\u06CC \u0646\u06CC\u0633\u062A`
+    ));
+  }
+  if (input.rt_floor_violations > thresholds.rt_floor_violations_max) {
+    flags.push(flag(
+      "rt_floor",
+      "needs_caution",
+      `${input.rt_floor_violations} \u067E\u0627\u0633\u062E \u0632\u06CC\u0631 \u06A9\u0641 \u0627\u0639\u062A\u0628\u0627\u0631 RT \u0628\u0648\u062F \u2014 \u0627\u0632 \u0633\u0646\u062C\u0647\u200C\u0647\u0627\u06CC \u0632\u0645\u0627\u0646\u06CC \u062D\u0630\u0641 \u0634\u062F\u0647\u200C\u0627\u0646\u062F`
+    ));
+  }
+  let verdict = "explainable";
+  for (const f of flags) {
+    if (f.verdict === "incomplete_or_invalid") {
+      verdict = "incomplete_or_invalid";
+      break;
+    }
+    if (f.verdict === "needs_caution") verdict = "needs_caution";
+  }
+  if (flags.length === 0) {
+    flags.push(flag("all_clear", "ok", "\u0647\u06CC\u0686 \u0646\u0634\u0627\u0646\u0647\u0654 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646\u06CC \u062F\u0631 \u062B\u0628\u062A/\u0632\u0645\u0627\u0646/\u0644\u0645\u0633 \u062F\u06CC\u062F\u0647 \u0646\u0634\u062F"));
+  }
+  return { verdict, flags, rules_version: QUALITY_RULES_VERSION, thresholds: { ...thresholds } };
+}
+__name(assessQuality, "assessQuality");
+function serializeQuality(q) {
+  return JSON.stringify(q);
+}
+__name(serializeQuality, "serializeQuality");
+
 // src/domain/games/adaptive.ts
 var ADAPTIVE_MIN_SESSIONS = 2;
 var HARDER_NOGO_PCT = 85;
@@ -24731,7 +24833,7 @@ function createGamesService(deps) {
     };
   }
   __name(feedbackOf, "feedbackOf");
-  async function finish(token) {
+  async function finish(token, sessionEvidence) {
     const res = await requireActiveToken(token);
     if (res.session && res.session.state === "child_done") {
       return { state: await stateViewOf(res), metrics: parseJson2(res.session.metrics_json, []) };
@@ -24796,9 +24898,24 @@ function createGamesService(deps) {
         }
       }
     }
+    const idleGapMax = activity.length > 1 ? Math.max(...activity.slice(1).map((t, i) => t - activity[i])) : null;
+    const quality = assessQuality({
+      validity,
+      total_items: mission.items.length,
+      done_items: attempts.length,
+      idle_gap_max_ms: idleGapMax,
+      pause_count: typeof sessionEvidence?.pause_count === "number" && Number.isFinite(sessionEvidence.pause_count) ? Math.max(0, Math.round(sessionEvidence.pause_count)) : null,
+      pause_total_ms: typeof sessionEvidence?.pause_total_ms === "number" && Number.isFinite(sessionEvidence.pause_total_ms) ? Math.max(0, Math.round(sessionEvidence.pause_total_ms)) : null,
+      out_of_surface_total: summary.behavior.out_of_surface_total,
+      premature_total: summary.behavior.premature_total,
+      frame_drops_total: summary.behavior.frame_drops_total,
+      max_frame_delta_ms: summary.behavior.max_frame_delta_ms,
+      evidence_coverage: summary.behavior.evidence_coverage,
+      rt_floor_violations: attempts.filter((a) => a.rt_valid === 0).length
+    });
     await db.execute(
-      `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ?, summary_json = ? WHERE id = ?`,
-      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summary), session.id]
+      `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ?, summary_json = ?, quality_json = ? WHERE id = ?`,
+      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summary), serializeQuality(quality), session.id]
     );
     const sessionMode = res.pkg.body.mode ?? "training";
     const adaptiveEnabled = sessionMode === "training" && res.pkg.body.protocol != null && res.pkg.body.adaptive_enabled !== false;
@@ -24894,7 +25011,8 @@ function createGamesService(deps) {
         endedAt: s.ended_at,
         sequence: s.sequence_json ? parseJson2(s.sequence_json, null) : null,
         metrics: parseJson2(s.metrics_json, null),
-        summary: s.summary_json ? parseJson2(s.summary_json, null) : null
+        summary: s.summary_json ? parseJson2(s.summary_json, null) : null,
+        quality: s.quality_json ? parseJson2(s.quality_json, null) : null
       })),
       attempts: attempts.map((a) => ({
         id: a.id,
@@ -25122,6 +25240,12 @@ var MissionSchema = external_exports.object({
   scheduled_for: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E YYYY-MM-DD")
 });
 var PublishSchema = external_exports.object({ reviewed_by: external_exports.string().nullable().optional() });
+var FinishSchema = external_exports.object({
+  session_evidence: external_exports.object({
+    pause_count: external_exports.number().min(0).max(1e3).nullable().optional(),
+    pause_total_ms: external_exports.number().min(0).max(36e5).nullable().optional()
+  }).nullable().optional()
+});
 var AttemptSchema = external_exports.object({
   item_id: external_exports.string().trim().min(1).max(64),
   response: external_exports.unknown().optional(),
@@ -25285,7 +25409,8 @@ function registerGamesPublicRoutes(app, service) {
   });
   app.post("/api/m/:token/finish", async (c) => {
     try {
-      return c.json({ data: await service.finish(c.req.param("token")) }, 200, jsonHeaders);
+      const body = FinishSchema.parse(await c.req.json().catch(() => ({})) ?? {});
+      return c.json({ data: await service.finish(c.req.param("token"), body.session_evidence ?? void 0) }, 200, jsonHeaders);
     } catch (err) {
       return publicError(c, err);
     }
@@ -31946,8 +32071,8 @@ function runInference(events, options = {}) {
     const consensusTools = [ruleSet.consensus?.parent, ruleSet.consensus?.teacher].filter(Boolean);
     for (const toolKey of /* @__PURE__ */ new Set([...consensusTools, ...ruleSet.evidence.filter((r) => r.kind === "instrument").map((r) => r.toolKey)])) {
       for (const e of perTool.get(toolKey) ?? []) {
-        for (const flag of e.analysis?.flags ?? []) {
-          referralFlags.push(`${e.typeTitle}: ${flag.label}`);
+        for (const flag2 of e.analysis?.flags ?? []) {
+          referralFlags.push(`${e.typeTitle}: ${flag2.label}`);
         }
       }
     }

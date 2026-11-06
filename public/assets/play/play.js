@@ -104,7 +104,7 @@ async function loadKind() {
     api: {
       nextItem: () => requestJson('/next-item'),
       submit: (body) => requestJson('/attempts', { method: 'POST', body }),
-      finish: () => requestJson('/finish', { method: 'POST', body: {} })
+      finish: (body) => requestJson('/finish', { method: 'POST', body: body ?? {} })
     },
     onNetworkFail: calmPanel
   });
