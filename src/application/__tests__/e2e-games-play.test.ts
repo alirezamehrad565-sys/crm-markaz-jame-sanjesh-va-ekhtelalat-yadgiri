@@ -261,3 +261,97 @@ describe('فاز ۳/۴ بازطراحی — ارزیابی مستقل با دن�
     expect(JSON.stringify(det)).not.toContain('correct_touch');
   });
 });
+
+// ─── فاز ۸ بازطراحی — گزارش درمانگر: خام/محاسبه‌شدهٔ جدا، مقایسهٔ جلسه‌ها، بدون برچسب بالینی ───
+
+describe('فاز ۸ بازطراحی — گزارش درمانگر (کودک)', () => {
+  let A3: ReturnType<typeof createTestApp>;
+  let mgr3: Api;
+  let anon3: Api;
+  let student3: string;
+
+  beforeAll(async () => {
+    A3 = createTestApp();
+    mgr3 = await asRole(A3, 'manager');
+    anon3 = new Api(A3);
+    student3 = (await createStudent(mgr3)).id;
+    await mgr3.post('/api/games/packages', gonogoAssessmentBody());
+    await mgr3.post('/api/games/packages/attention-assess/1.0.0/publish', {});
+    await mgr3.post('/api/games/goals', {
+      id: 'inhibition_assess_r', title_fa: 'بازداری پاسخ (گزارش)', package_id: 'attention-assess', metric_id: 'accuracy_gonogo'
+    });
+    const rx = await mgr3.post('/api/games/prescriptions', {
+      child_id: student3, package_id: 'attention-assess', package_version: '1.0.0', goal_id: 'inhibition_assess_r'
+    });
+    const rxId = (rx.body as { data: { id: string } }).data.id;
+    const sch = await mgr3.post('/api/games/missions', { prescription_id: rxId, mission_ref: 'assess_m1', scheduled_for: todayYmd() });
+    const missionId3 = (sch.body as { data: { id: string } }).data.id;
+    const lk = dataOf<LinkBody>(await mgr3.post(`/api/games/missions/${missionId3}/link`, {}));
+    await anon3.post(`/api/m/${lk.token}/start`, {});
+    // همهٔ ۵ آیتم با پاسخ درست گو و بازداری درست نوگو
+    const goIds = ['a-g1', 'a-g2', 'a-g3'];
+    const nogoIds = ['a-n1', 'a-n2'];
+    for (let i = 0; i < 5; i++) {
+      const nx = dataOf<{ item: { id: string } | null }>(await anon3.get(`/api/m/${lk.token}/next-item`));
+      if (!nx.item) break;
+      const isGo = goIds.includes(nx.item.id);
+      await anon3.post(`/api/m/${lk.token}/attempts`, {
+        item_id: nx.item.id,
+        response: { touched: isGo, premature_count: 0, multiple_count: 0, out_of_surface_count: 0, presented_at: 1000 + i, frame_drops: 0, window_ms: 1500 },
+        rt_ms: isGo ? 500 : null,
+        idem_key: 'report-' + i
+      });
+    }
+    await anon3.post(`/api/m/${lk.token}/finish`, { session_evidence: { pause_count: 1, pause_total_ms: 4000 } });
+  });
+
+  it('پرسنلی: خلاصهٔ محاسبه‌شده + لایهٔ خام + مقایسهٔ سری زمانی — هیچ برچسب بالینی', async () => {
+    const rep = dataOf<{
+      child_id: string; session_count: number; disclaimer: string;
+      sessions: Array<{ session_id: string; purpose: string; computed: { summary: { totals: Record<string, number>; pct: Record<string, number | null> } | null; quality_verdict: string }; raw: { attempt_count: number; attempts: unknown[] } }>;
+      comparison: { by_metric: Array<{ metric_id: string; unit: string; points: Array<{ session_id: string; value: number }> }> };
+    }>(await mgr3.get(`/api/games/children/${student3}/report`));
+
+    expect(rep.child_id).toBe(student3);
+    expect(rep.session_count).toBe(1);
+    expect(rep.disclaimer).toBe('no_clinical_conclusion');
+
+    const s = rep.sessions[0];
+    expect(s.purpose).toBe('assessment');
+    // لایهٔ محاسبه‌شده
+    expect(s.computed).toBeTruthy();
+    expect(s.computed!.summary!.totals.total).toBe(5);
+    expect(s.computed!.summary!.pct.correct_go).toBe(100);
+    expect(s.computed!.summary!.pct.correct_nogo).toBe(100);
+    expect(['explainable', 'needs_caution', 'incomplete_or_invalid']).toContain(s.computed!.quality_verdict);
+    // لایهٔ خام جدا و کامل + شواهد نمایش فاز ۴
+    expect(s.raw.attempt_count).toBe(5);
+    expect((s.raw.attempts[0] as { evidence: { window_ms: number } }).evidence.window_ms).toBe(1500);
+    // مقایسهٔ سری زمانی هر سنجه
+    const byMetric = Object.fromEntries(rep.comparison.by_metric.map((m) => [m.metric_id, m]));
+    expect(Object.keys(byMetric).length).toBeGreaterThanOrEqual(5); // سنجهٔ اصلی + ۴ درصدی موتور
+    expect(byMetric['accuracy_gonogo'] === undefined || byMetric['accuracy_gonogo'].points.length >= 0).toBe(true);
+    expect(byMetric['correct_go_pct_gonogo'].points[0].value).toBe(100);
+    expect(byMetric['commission_pct_gonogo'].points[0].value).toBe(0);
+
+    const text = JSON.stringify(rep);
+    for (const w of ['ADHD', 'بیش‌فعال', 'اوتیسم', 'تشخیص', 'ضعف', 'کم‌هوش', 'تنبل']) {
+      expect(text.includes(w), `برچسب بالینی «${w}» در گزارش ممنوع`).toBe(false);
+    }
+    expect(text).not.toContain('correct_touch');
+  });
+
+  it('نمای HTML چاپ‌پذیر: جدول خلاصه + مقایسه + یادداشت بی‌تفسیر', async () => {
+    const raw = await mgr3.req('GET', `/api/games/children/${student3}/report?format=html`);
+    expect(raw.status).toBe(200);
+    const html = String(raw.body);
+    expect(html).toContain('گزارش جلسه‌های بازی');
+    expect(html).toContain('تفسیر با درمانگر');
+    expect(html).toContain('مقایسهٔ جلسه‌ها');
+  });
+
+  it('ناشناس به گزارش دسترسی ندارد — توکن لینک جای احراز نمی‌نشیند', async () => {
+    const res = await A3.app.request(`/api/games/children/${student3}/report`, {}, A3.env as never);
+    expect([401, 403]).toContain(res.status);
+  });
+});

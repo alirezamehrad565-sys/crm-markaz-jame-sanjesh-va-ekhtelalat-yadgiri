@@ -20,9 +20,10 @@ import { protocolForAge, protocolSnapshotOf } from './protocol';
 import type { ProtocolMode } from './protocol';
 import { summarizeAttempts } from './scoring';
 import { assessQuality, serializeQuality, type QualityInput } from './quality';
+import { buildComparison, type ChildGameReport, type ReportRawAttempt, type ReportSession } from './report';
 import { decideAdaptive, applyAdaptiveLevel, serializeDecision, type AdaptiveSessionInput, type AdaptiveDecision } from './adaptive';
 import { generateSequence, serializeSequence, parseSequenceRecord } from './stimulus';
-import { ENGINE_ONLY_FORMULAS, mergeEngineMetrics } from './registry-extra';
+import { ENGINE_METRICS, ENGINE_ONLY_FORMULAS, mergeEngineMetrics } from './registry-extra';
 import type {
   AttemptDraftInput,
   SessionEvidenceFromClient,
@@ -43,7 +44,8 @@ import type {
   PublicStateView,
   RegistryGoal,
   RegistryMetric,
-  SessionMetricOutcome
+  SessionMetricOutcome,
+  SessionValidity
 } from './types';
 
 const LINK_URL_PATH = '/m/';
@@ -832,7 +834,9 @@ export function createGamesService(deps: GamesDeps): GamesService {
     );
     const metrics: SessionMetricOutcome[] = [];
     for (const metricId of metricIds) {
-      const metricRow = await db.queryOne<RegistryMetric>(`SELECT * FROM game_metrics WHERE id = ?`, [metricId]);
+      // رجیستری DB + سنجه‌های موتورمحور (فاز ۱) — درصدی‌ها هم در زنجیرهٔ سنجه و پراپ می‌آیند
+      const metricRow = (await db.queryOne<RegistryMetric>(`SELECT * FROM game_metrics WHERE id = ?`, [metricId]))
+        ?? ENGINE_METRICS.find((m) => m.id === metricId) ?? null;
       if (!metricRow) continue;
       const value = computeMetricValue(metricRow.formula, probeScored);
       if (value !== null && Number.isFinite(value)) {
@@ -993,10 +997,96 @@ export function createGamesService(deps: GamesDeps): GamesService {
     };
   }
 
+  /** گزارش درمانگر (فاز ۸) — خام/محاسبه‌شدهٔ جدا + مقایسهٔ جلسه‌ها؛ بدون هیچ برچسب بالینی */
+  async function getChildReport(childId: string): Promise<ChildGameReport> {
+    const sessions = await db.query<SessionRow & { mission_ref: string; mission_title: string | null }>(
+      `SELECT s.*, m.mission_ref, m.id AS mission_row_id
+       FROM game_sessions s
+       JOIN game_missions m ON m.id = s.mission_id
+       JOIN game_prescriptions p ON p.id = m.prescription_id
+       WHERE p.child_id = ? AND s.state IN ('child_done','closed')
+       ORDER BY s.created_at`,
+      [childId]
+    );
+    const missionRows = await db.query<{ id: string; mission_ref: string; prescription_id: string }>(
+      `SELECT id, mission_ref, prescription_id FROM game_missions WHERE prescription_id IN
+        (SELECT id FROM game_prescriptions WHERE child_id = ?)`,
+      [childId]
+    );
+    const missionRefOf = new Map(missionRows.map((m) => [m.id, m.mission_ref]));
+    const sessionIds = sessions.map((s) => s.id);
+    const attempts = sessionIds.length
+      ? await db.query<AttemptRow>(
+          `SELECT * FROM game_attempts WHERE session_id IN (${sessionIds.map(() => '?').join(',')}) ORDER BY created_at`,
+          sessionIds
+        )
+      : [];
+
+    const reportSessions: ReportSession[] = [];
+    const comparisonInput: Array<{ session_id: string; started_at: string | null; metrics: SessionMetricOutcome[] | null }> = [];
+    for (const s of sessions) {
+      const sessAttempts = attempts.filter((a) => a.session_id === s.id);
+      const metrics = parseJson<SessionMetricOutcome[] | null>(s.metrics_json, null);
+      comparisonInput.push({ session_id: s.id, started_at: s.started_at, metrics });
+      const raw: ReportRawAttempt[] = sessAttempts.map((a) => ({
+        item_id: a.item_id,
+        phase: (a.phase as 'train' | 'probe') ?? 'train',
+        response: stripAnswerKeys(parseJson(a.response_json, {})),
+        correct: a.correct === null ? null : a.correct === 1,
+        rt_ms: a.rt_ms,
+        rt_valid: a.rt_valid === 1,
+        created_at: a.created_at,
+        evidence: {
+          presented_at_ms: a.presented_at_ms ?? null,
+          frame_drops: a.frame_drops ?? null,
+          max_frame_delta_ms: a.max_frame_delta_ms ?? null,
+          touch_count: a.touch_count ?? null,
+          premature_count: a.premature_count ?? null,
+          multiple_count: a.multiple_count ?? null,
+          out_of_surface_count: a.out_of_surface_count ?? null,
+          window_ms: a.window_ms ?? null
+        }
+      }));
+      const quality = parseJson<{ verdict?: string } | null>(s.quality_json ?? null, null);
+      reportSessions.push({
+        session_id: s.id,
+        mission_ref: missionRefOf.get(s.mission_id) ?? '',
+        mission_title: '',
+        purpose: s.purpose ?? 'training',
+        started_at: s.started_at,
+        computed: {
+          session_id: s.id,
+          purpose: s.purpose ?? 'training',
+          validity: (s.validity as SessionValidity) ?? 'valid',
+          quality_verdict: quality?.verdict ?? 'unknown',
+          started_at: s.started_at,
+          ended_at: s.ended_at,
+          summary: parseJson<unknown>(s.summary_json ?? null, null),
+          metrics
+        },
+        raw: {
+          attempt_count: raw.length,
+          attempts: raw,
+          sequence: s.sequence_json ? parseJson<unknown>(s.sequence_json, null) : null
+        },
+        adaptive: s.adaptive_json ? parseJson<unknown>(s.adaptive_json, null) : null
+      });
+    }
+
+    return {
+      child_id: childId,
+      generated_at: isoOf(now()),
+      session_count: reportSessions.length,
+      sessions: reportSessions,
+      comparison: buildComparison(comparisonInput),
+      disclaimer: 'no_clinical_conclusion'
+    };
+  }
+
   return {
     upsertMetric, listMetrics, upsertGoal, listGoals, upsertPackage, listPackages, publishPackage,
     createPrescription, listPrescriptions, setPrescriptionStatus, scheduleMission, listMissions,
-    issueLink, revokeLink, getSessionDetail,
+    issueLink, revokeLink, getSessionDetail, getChildReport,
     getState, start, nextItem, submitAttempt, finish, parentGate, confirm
   };
 }
