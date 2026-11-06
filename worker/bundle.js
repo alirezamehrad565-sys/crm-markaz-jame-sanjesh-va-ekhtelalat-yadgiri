@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.15";
+var APP_VERSION = "1.25.16";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23830,6 +23830,105 @@ function summarizeAttempts(scored, evidence = [], blockSize = 24) {
 }
 __name(summarizeAttempts, "summarizeAttempts");
 
+// src/domain/games/adaptive.ts
+var ADAPTIVE_MIN_SESSIONS = 2;
+var HARDER_NOGO_PCT = 85;
+var HARDER_COMMISSION_PCT = 10;
+var HARDER_GO_PCT = 80;
+var EASIER_COMMISSION_PCT = 25;
+var EASIER_NOGO_PCT = 50;
+var HARDER_STEP_MS = -100;
+var EASIER_STEP_MS = 150;
+var WINDOW_MIN_MS = 800;
+var WINDOW_MAX_MS = 3e3;
+var STABLE_RT_DELTA_MS = 150;
+function clampWindow(ms) {
+  return Math.min(WINDOW_MAX_MS, Math.max(WINDOW_MIN_MS, Math.round(ms)));
+}
+__name(clampWindow, "clampWindow");
+function pctOk(v, threshold, direction) {
+  if (v === null || !Number.isFinite(v)) return false;
+  return direction === "below" ? v < threshold : v >= threshold;
+}
+__name(pctOk, "pctOk");
+function decideAdaptive(history, current, opts) {
+  const evidence = {
+    sessions_considered: history.filter((h) => h.validity === "valid").length,
+    latest: history.slice(-ADAPTIVE_MIN_SESSIONS),
+    enabled: opts.adaptiveEnabled
+  };
+  if (!opts.adaptiveEnabled) {
+    return { action: "hold", change: null, reason: "\u06A9\u0644\u06CC\u062F \u062E\u0627\u0645\u0648\u0634\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u2014 \u0633\u0627\u0632\u06AF\u0627\u0631\u06CC \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0627\u0633\u062A", evidence };
+  }
+  const valid = history.filter((h) => h.validity === "valid");
+  if (valid.length < ADAPTIVE_MIN_SESSIONS) {
+    return { action: "hold", change: null, reason: `\u062F\u0627\u062F\u0647\u0654 \u06A9\u0627\u0641\u06CC \u0646\u06CC\u0633\u062A \u2014 \u062D\u062F\u0627\u0642\u0644 ${ADAPTIVE_MIN_SESSIONS} \u062C\u0644\u0633\u0647\u0654 \u0645\u0639\u062A\u0628\u0631 \u067E\u06CC\u0627\u067E\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A`, evidence };
+  }
+  const recent = valid.slice(-ADAPTIVE_MIN_SESSIONS);
+  const struggling = recent.every(
+    (h) => pctOk(h.commission_pct, EASIER_COMMISSION_PCT, "above") || pctOk(h.correct_nogo_pct, EASIER_NOGO_PCT, "below")
+  );
+  if (struggling) {
+    const to = clampWindow(current.response_window_go_ms + EASIER_STEP_MS);
+    if (to === current.response_window_go_ms) {
+      return { action: "hold", change: null, reason: "\u0646\u06CC\u0627\u0632 \u0628\u0647 \u0622\u0633\u0627\u0646\u200C\u062A\u0631\u0634\u062F\u0646 \u0627\u0645\u0627 \u067E\u0646\u062C\u0631\u0647 \u062F\u0631 \u06A9\u0631\u0627\u0646 \u0627\u0633\u062A \u2014 \u0628\u0627\u0632\u0646\u06AF\u0631\u06CC \u0628\u0627\u0644\u06CC\u0646\u06CC \u0644\u0627\u0632\u0645", evidence };
+    }
+    return {
+      action: "easier",
+      change: { param: "response_window_go_ms", from: current.response_window_go_ms, to },
+      reason: `\u062F\u0648 \u062C\u0644\u0633\u0647\u0654 \u067E\u06CC\u0627\u067E\u06CC \u0628\u0627 \u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646 \u2265${EASIER_COMMISSION_PCT}% \u06CC\u0627 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC <${EASIER_NOGO_PCT}% \u2014 \u067E\u0646\u062C\u0631\u0647\u0654 \u067E\u0627\u0633\u062E \u06AF\u0634\u0627\u062F\u062A\u0631 \u0634\u062F`,
+      evidence
+    };
+  }
+  const rtStable = (() => {
+    const rts = recent.map((h) => h.median_rt).filter((v) => typeof v === "number");
+    if (rts.length < 2) return false;
+    return Math.abs(rts[1] - rts[0]) <= STABLE_RT_DELTA_MS;
+  })();
+  const mastering = recent.every(
+    (h) => pctOk(h.correct_nogo_pct, HARDER_NOGO_PCT, "above") && pctOk(h.commission_pct, HARDER_COMMISSION_PCT, "below") && pctOk(h.correct_go_pct, HARDER_GO_PCT, "above")
+  );
+  if (mastering && rtStable) {
+    const to = clampWindow(current.response_window_go_ms + HARDER_STEP_MS);
+    if (to === current.response_window_go_ms) {
+      return { action: "hold", change: null, reason: "\u062A\u0633\u0644\u0637 \u067E\u0627\u06CC\u062F\u0627\u0631 \u0627\u0645\u0627 \u067E\u0646\u062C\u0631\u0647 \u062F\u0631 \u06A9\u0631\u0627\u0646 \u0627\u0633\u062A \u2014 \u06AF\u0627\u0645 \u0628\u0639\u062F\u06CC \u0628\u0627 \u067E\u0631\u0648\u062A\u06A9\u0644 \u062C\u062F\u06CC\u062F", evidence };
+    }
+    return {
+      action: "harder",
+      change: { param: "response_window_go_ms", from: current.response_window_go_ms, to },
+      reason: `\u062F\u0648 \u062C\u0644\u0633\u0647\u0654 \u067E\u06CC\u0627\u067E\u06CC \u0628\u0627 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u2265${HARDER_NOGO_PCT}%\u060C \u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646 \u2264${HARDER_COMMISSION_PCT}% \u0648 RT \u067E\u0627\u06CC\u062F\u0627\u0631 (\xB1${STABLE_RT_DELTA_MS}ms) \u2014 \u067E\u0646\u062C\u0631\u0647 \u062A\u0646\u06AF\u200C\u062A\u0631 \u0634\u062F`,
+      evidence
+    };
+  }
+  return { action: "hold", change: null, reason: "\u0647\u06CC\u0686 \u0642\u0627\u0639\u062F\u0647\u0654 \u06AF\u0630\u0627\u0631 \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u06CC\u0633\u062A \u2014 \u0633\u0637\u062D \u062D\u0641\u0638 \u0645\u06CC\u200C\u0634\u0648\u062F", evidence };
+}
+__name(decideAdaptive, "decideAdaptive");
+function serializeDecision(d, sessionId, purpose) {
+  return JSON.stringify({
+    session_id: sessionId,
+    purpose,
+    action: d.action,
+    change: d.change,
+    reason: d.reason,
+    sessions_considered: d.evidence.sessions_considered,
+    latest: d.evidence.latest,
+    enabled: d.evidence.enabled,
+    rules: {
+      min_sessions: ADAPTIVE_MIN_SESSIONS,
+      harder: { nogo_pct: HARDER_NOGO_PCT, commission_pct: HARDER_COMMISSION_PCT, go_pct: HARDER_GO_PCT, rt_stable_ms: STABLE_RT_DELTA_MS },
+      easier: { commission_pct: EASIER_COMMISSION_PCT, nogo_pct: EASIER_NOGO_PCT },
+      steps_ms: { harder: HARDER_STEP_MS, easier: EASIER_STEP_MS },
+      window_clamp: [WINDOW_MIN_MS, WINDOW_MAX_MS]
+    }
+  });
+}
+__name(serializeDecision, "serializeDecision");
+function applyAdaptiveLevel(current, decision) {
+  if (!decision || !decision.change || decision.change.param !== "response_window_go_ms") return { ...current };
+  return { response_window_go_ms: clampWindow(decision.change.to), level: current.level + (decision.action === "harder" ? 1 : decision.action === "easier" ? -1 : 0) };
+}
+__name(applyAdaptiveLevel, "applyAdaptiveLevel");
+
 // src/domain/games/stimulus.ts
 function mulberry32(seedNum) {
   let a = seedNum >>> 0;
@@ -24413,6 +24512,17 @@ function createGamesService(deps) {
     const state = linkStateOf(res);
     const mode = res.pkg.body.mode ?? "training";
     const childAge = state === "child_active" ? await childAgeOf(res.rx.child_id) : null;
+    let snap = protocolSnapshotOf(protocolForAge(mode, childAge));
+    if (state === "child_active" && mode === "training" && res.pkg.body.protocol != null && res.pkg.body.adaptive_enabled !== false) {
+      const { decision } = await latestAdaptiveDecisionOf(res.rx.id);
+      if (decision?.change?.param === "response_window_go_ms") {
+        const level = applyAdaptiveLevel(
+          { response_window_go_ms: snap.params.response_window_go_ms, level: 0 },
+          decision
+        );
+        snap = { ...snap, params: { ...snap.params, response_window_go_ms: level.response_window_go_ms } };
+      }
+    }
     return {
       state,
       missionRef: m.id,
@@ -24424,7 +24534,7 @@ function createGamesService(deps) {
       ...state === "child_active" ? {
         playGame: m.game,
         playHint: playHintOf(m),
-        playProtocol: protocolSnapshotOf(protocolForAge(mode, childAge))
+        playProtocol: snap
       } : {}
     };
   }
@@ -24450,6 +24560,43 @@ function createGamesService(deps) {
     return stateViewOf(res);
   }
   __name(getState, "getState");
+  async function latestAdaptiveDecisionOf(prescriptionId) {
+    try {
+      const rows = await db.query(
+        `SELECT s.adaptive_json, s.summary_json, s.validity, s.id
+         FROM game_sessions s JOIN game_missions m ON m.id = s.mission_id
+         WHERE m.prescription_id = ?
+         ORDER BY s.created_at DESC LIMIT 10`,
+        [prescriptionId]
+      );
+      let decision = null;
+      const history = [];
+      for (const r of rows) {
+        if (r.adaptive_json) {
+          const d = parseJson2(r.adaptive_json, null);
+          if (d && typeof d.action === "string") decision = d;
+        }
+        const sum = parseJson2(r.summary_json, null);
+        if (sum && sum.totals && sum.pct) {
+          history.push({
+            session_id: r.id,
+            validity: r.validity ?? "valid",
+            correct_go_pct: sum.pct.correct_go ?? null,
+            correct_nogo_pct: sum.pct.correct_nogo ?? null,
+            commission_pct: sum.pct.commission ?? null,
+            omission_pct: sum.pct.omission ?? null,
+            median_rt: sum.rt?.median ?? null,
+            rt_cv: sum.rt?.cv ?? null,
+            premature_total: sum.behavior?.premature_total ?? 0
+          });
+        }
+      }
+      return { decision, history };
+    } catch {
+      return { decision: null, history: [] };
+    }
+  }
+  __name(latestAdaptiveDecisionOf, "latestAdaptiveDecisionOf");
   async function start(token) {
     const res = await requireActiveToken(token);
     if (res.session) {
@@ -24653,6 +24800,21 @@ function createGamesService(deps) {
       `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ?, summary_json = ? WHERE id = ?`,
       [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summary), session.id]
     );
+    const sessionMode = res.pkg.body.mode ?? "training";
+    const adaptiveEnabled = sessionMode === "training" && res.pkg.body.protocol != null && res.pkg.body.adaptive_enabled !== false;
+    if (adaptiveEnabled) {
+      const prot = protocolForAge("training", await childAgeOf(res.rx.child_id));
+      const { decision: priorDecision, history } = await latestAdaptiveDecisionOf(res.rx.id);
+      const current = applyAdaptiveLevel(
+        { response_window_go_ms: prot.params.response_window_go_ms.value, level: 0 },
+        priorDecision
+      );
+      const decision = decideAdaptive(history, current, { adaptiveEnabled: prot.behavior.adaptive });
+      await db.execute(`UPDATE game_sessions SET adaptive_json = ? WHERE id = ?`, [
+        serializeDecision(decision, session.id, "training"),
+        session.id
+      ]);
+    }
     await db.execute(`UPDATE game_missions SET status = 'done' WHERE id = ?`, [res.mission.id]);
     const fresh = await resolveLink(token);
     return { state: await stateViewOf(fresh), metrics };
