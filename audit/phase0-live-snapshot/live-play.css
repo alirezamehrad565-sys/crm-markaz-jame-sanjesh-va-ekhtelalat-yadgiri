@@ -1,0 +1,197 @@
+/* ═══════════════════════════════════════════════════════════════
+   play.css — پخش‌کنندهٔ کودک (M2/M3 / ۱.۲۵.۰۹)
+   فقط کلاس‌های play-*؛ صفحهٔ میزبان (page.ts) استایل خودش را دارد.
+   قواعد حسی §۹: هدف لمسی ≥۴۸px (دکمه‌ها ۶۴px)، بدون فلاش، جنبش کم،
+   همهٔ جنبش‌ها زیر prefers-reduced-motion خاموش.
+   ۱.۲۵.۰۹ — کالیبراسیون: محرک کوچک‌تر (مانند مقیاس آزمون)، سبک بازیِ
+   نرم با سبد ستاره، گوشه‌گرد کامل، بدون هیچ keyframes (فقط transition).
+   ═══════════════════════════════════════════════════════════════ */
+
+.play-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 78vh;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* سبد ستارهٔ کودک — شمارش مثبت؛ نه رتبه، نه «پیاپی» (قواعد لحن §۲) */
+.play-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.play-progress {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: #E5DECF;
+  overflow: hidden;
+}
+
+.play-progress__bar {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: #229ED9;
+  transition: width .6s ease-out;
+}
+
+.play-basket {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #fff;
+  border-radius: 999px;
+  padding: 7px 14px;
+  box-shadow: 0 1px 3px rgba(18, 56, 79, .08);
+  font-size: 15px;
+  font-weight: 700;
+  color: #12384f;
+  min-height: 44px;
+}
+
+.play-basket__star {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+.play-basket__count {
+  min-width: 20px;
+  text-align: center;
+  transition: transform .3s ease;
+}
+
+/* جشن کوچک — فقط transition؛ با کاهش‌جنبش خاموش می‌شود */
+.play-basket__count--pop { transform: scale(1.3); }
+
+.play-stage {
+  flex: 1;
+  min-height: 240px;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(18, 56, 79, .08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 18px;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.play-stage--quiet { cursor: default; }
+
+/* ۱.۲۵.۰۹ — محرک کوچک‌تر (کالیبراسیون بازداری پاسخ: مقیاس آزمون واقعی،
+   نه پوستر)؛ روی نمایشگر بزرگ سقف ۱۴۰px تا شکل فاصلهٔ دید را حفظ کند */
+.play-svg {
+  width: min(36vw, 140px);
+  height: auto;
+  display: block;
+}
+
+.play-line {
+  font-size: 18px;
+  font-weight: 700;
+  color: #12384f;
+  margin: 0;
+}
+
+.play-muted {
+  font-size: 14px;
+  color: #8A8377;
+  margin: 0;
+}
+
+/* نشان مرحلهٔ آموزش — کپسول نرم بالای محرک */
+.play-badge {
+  display: inline-block;
+  background: #D9EDF7;
+  color: #1c5d80;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 4px 14px;
+  margin: 0;
+}
+
+.play-btn {
+  display: block;
+  width: 100%;
+  min-height: 64px; /* هدف لمسی سخاوتمند — کاردرمانگر §۹ */
+  border: 0;
+  border-radius: 14px;
+  background: #229ED9;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.play-btn--ghost {
+  background: #D9EDF7;
+  color: #1c5d80;
+}
+
+.play-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 340px;
+}
+
+.play-option {
+  min-height: 64px;
+  border: 2px solid #D9EDF7;
+  border-radius: 14px;
+  background: #fff;
+  color: #12384f;
+  font-size: 17px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.play-bubble {
+  min-height: 52px;
+  border-radius: 14px;
+  background: #FDF6E3;
+  color: #12384f;
+  font-size: 15px;
+  line-height: 1.8;
+  padding: 12px 16px;
+  text-align: center;
+}
+
+.play-bubble[hidden] { display: none; }
+
+/* پایان مأموریت — ردیف ستاره‌های جمع‌شده (بدون رتبه و مقایسه) */
+.play-stars-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.play-stars-row .play-basket__star {
+  width: 26px;
+  height: 26px;
+}
+
+/* هیچ انیمیشنی تندتر از ۳ هرتز وجود ندارد؛ با کاهش‌جنبش همه‌چیز ایستا می‌شود */
+@media (prefers-reduced-motion: reduce) {
+  .play-progress__bar { transition: none; }
+  .play-basket__count { transition: none; }
+  .play-stage, .play-btn, .play-option { transition: none; animation: none; }
+}
