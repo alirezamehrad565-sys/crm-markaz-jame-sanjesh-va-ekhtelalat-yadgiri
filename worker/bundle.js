@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.14";
+var APP_VERSION = "1.25.15";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23742,6 +23742,94 @@ function toItemView(item) {
 }
 __name(toItemView, "toItemView");
 
+// src/domain/games/scoring.ts
+var CV_MIN_RT_COUNT = 5;
+function summarizeAttempts(scored, evidence = [], blockSize = 24) {
+  const t = Array.isArray(scored) ? scored : [];
+  const ev = Array.isArray(evidence) ? evidence : [];
+  const zeroDenominator = [];
+  const go = t.filter((s) => s.isGo === true);
+  const nogo = t.filter((s) => s.isGo === false);
+  const correctGo = go.filter((s) => s.correct);
+  const correctNogo = nogo.filter((s) => s.correct);
+  const commission = commissionCountOf(t);
+  const omission = omissionCountOf(t);
+  const accuracy = accuracyOf(t);
+  const correctGoPct = correctGoPctOf(t);
+  const correctNogoPct = correctNogoPctOf(t);
+  const commissionPct = commissionPctOf(t);
+  const omissionPct = omissionPctOf(t);
+  if (go.length === 0) zeroDenominator.push("go=0 \u2014 correct_go/omission \u062F\u0631\u0635\u062F\u0634\u0627\u0646 \u062A\u0639\u0631\u06CC\u0641\u200C\u0646\u0634\u062F\u0647");
+  if (nogo.length === 0) zeroDenominator.push("nogo=0 \u2014 correct_nogo/commission \u062F\u0631\u0635\u062F\u0634\u0627\u0646 \u062A\u0639\u0631\u06CC\u0641\u200C\u0646\u0634\u062F\u0647");
+  const rts = t.filter((s) => s.correct && s.rtValid && typeof s.rtMs === "number" && s.rtMs >= 0).map((s) => s.rtMs).sort((a, b) => a - b);
+  const median = medianRtOf(t);
+  const mean = rts.length > 0 ? Math.round(rts.reduce((a, b) => a + b, 0) / rts.length * 100) / 100 : null;
+  let sd = null;
+  let cv = null;
+  if (rts.length >= 2 && mean !== null) {
+    sd = Math.round(Math.sqrt(rts.reduce((a, b) => a + (b - mean) * (b - mean), 0) / (rts.length - 1)) * 100) / 100;
+    if (rts.length >= CV_MIN_RT_COUNT && mean > 0) cv = Math.round(sd / mean * 1e3) / 1e3;
+  }
+  const size = Math.max(1, Math.floor(blockSize));
+  const blockCount = Math.ceil(t.length / size);
+  const blocks = [];
+  for (let b = 1; b <= blockCount; b++) {
+    const slice = t.slice((b - 1) * size, b * size);
+    const correct = slice.filter((s) => s.correct).length;
+    blocks.push({
+      block: b,
+      total: slice.length,
+      correct,
+      correct_pct: slice.length > 0 ? Math.round(correct / slice.length * 1e4) / 100 : 0,
+      commission: slice.filter((s) => s.commission).length,
+      omission: slice.filter((s) => s.omission).length,
+      median_rt: medianRtOf(slice)
+    });
+  }
+  const frameDrops = ev.map((e) => e.frame_drops ?? 0);
+  const maxDelta = ev.map((e) => e.max_frame_delta_ms ?? 0).filter((v) => v > 0);
+  const evWithPresentation = ev.filter((e) => typeof e.presented_at_ms === "number").length;
+  return {
+    totals: {
+      total: t.length,
+      go: go.length,
+      nogo: nogo.length,
+      correct_go: correctGo.length,
+      correct_nogo: correctNogo.length,
+      commission,
+      omission
+    },
+    pct: {
+      accuracy,
+      correct_go: correctGoPct,
+      correct_nogo: correctNogoPct,
+      commission: commissionPct,
+      omission: omissionPct
+    },
+    rt: {
+      median,
+      mean,
+      sd,
+      cv,
+      min: rts.length > 0 ? rts[0] : null,
+      max: rts.length > 0 ? rts[rts.length - 1] : null,
+      count: rts.length
+    },
+    blocks,
+    behavior: {
+      premature_total: ev.reduce((a, e) => a + (e.premature_count ?? 0), 0),
+      multiple_total: ev.reduce((a, e) => a + (e.multiple_count ?? 0), 0),
+      out_of_surface_total: ev.reduce((a, e) => a + (e.out_of_surface_count ?? 0), 0),
+      frame_drops_total: frameDrops.reduce((a, b) => a + b, 0),
+      max_frame_delta_ms: maxDelta.length > 0 ? Math.max(...maxDelta) : null,
+      evidence_coverage: ev.length > 0 ? Math.round(evWithPresentation / ev.length * 100) / 100 : null
+    },
+    dprime: null,
+    zero_denominator: zeroDenominator
+  };
+}
+__name(summarizeAttempts, "summarizeAttempts");
+
 // src/domain/games/stimulus.ts
 function mulberry32(seedNum) {
   let a = seedNum >>> 0;
@@ -24508,12 +24596,31 @@ function createGamesService(deps) {
     const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso].filter((v) => typeof v === "string").map((v) => new Date(v).getTime());
     const validity = decideValidity(activity, attempts.length, mission.items.length);
     const metricIds = mission.metrics && mission.metrics.length > 0 ? mission.metrics : [mission.metric];
-    const probeScored = attempts.filter((a) => a.phase === "probe").map((a) => scoreAttempt(
-      mission.items.find((it) => it.id === a.item_id) ?? { id: a.item_id, phase: "probe", type: "choice" },
-      mission,
-      parseJson2(a.response_json, {}),
-      a.rt_ms
-    ));
+    const scoredRows = attempts.map((a) => ({
+      a,
+      scored: scoreAttempt(
+        mission.items.find((it) => it.id === a.item_id) ?? { id: a.item_id, phase: "probe", type: "choice" },
+        mission,
+        parseJson2(a.response_json, {}),
+        a.rt_ms
+      )
+    }));
+    const probeScored = scoredRows.filter((r) => r.a.phase === "probe").map((r) => r.scored);
+    const touchRows = scoredRows.filter((r) => r.scored.isGo !== void 0);
+    const summary = summarizeAttempts(
+      touchRows.map((r) => r.scored),
+      touchRows.map((r) => ({
+        presented_at_ms: r.a.presented_at_ms ?? null,
+        frame_drops: r.a.frame_drops ?? null,
+        max_frame_delta_ms: r.a.max_frame_delta_ms ?? null,
+        touch_count: r.a.touch_count ?? null,
+        premature_count: r.a.premature_count ?? null,
+        multiple_count: r.a.multiple_count ?? null,
+        out_of_surface_count: r.a.out_of_surface_count ?? null,
+        window_ms: r.a.window_ms ?? null
+      })),
+      protocolForAge(res.pkg.body.mode ?? "training", null).params.block_size.value
+    );
     const metrics = [];
     for (const metricId of metricIds) {
       const metricRow = await db.queryOne(`SELECT * FROM game_metrics WHERE id = ?`, [metricId]);
@@ -24543,8 +24650,8 @@ function createGamesService(deps) {
       }
     }
     await db.execute(
-      `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ? WHERE id = ?`,
-      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, session.id]
+      `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ?, summary_json = ? WHERE id = ?`,
+      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summary), session.id]
     );
     await db.execute(`UPDATE game_missions SET status = 'done' WHERE id = ?`, [res.mission.id]);
     const fresh = await resolveLink(token);
@@ -24624,7 +24731,8 @@ function createGamesService(deps) {
         startedAt: s.started_at,
         endedAt: s.ended_at,
         sequence: s.sequence_json ? parseJson2(s.sequence_json, null) : null,
-        metrics: parseJson2(s.metrics_json, null)
+        metrics: parseJson2(s.metrics_json, null),
+        summary: s.summary_json ? parseJson2(s.summary_json, null) : null
       })),
       attempts: attempts.map((a) => ({
         id: a.id,
