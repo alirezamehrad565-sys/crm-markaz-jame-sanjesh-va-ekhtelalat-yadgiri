@@ -13,13 +13,14 @@ const PLAY = join(__dirname, '../../public/assets/play');
 const read = (p: string) => readFileSync(p, 'utf8');
 
 const playJs = read(join(PLAY, 'play.js'));
+const previewJs = read(join(PLAY, 'preview.js')); // پیش‌نمایش فقط-پرسنلی (۱.۲۵.۲۰) — همان قواعد امنیتی پخش‌کننده
 const gonogoJs = read(join(PLAY, 'kinds/gonogo.js'));
 const playCss = read(join(PLAY, 'play.css'));
 const engineJs = ['machine.js', 'timing.js', 'response.js', 'trials.js', 'session.js', 'scoring.js']
   .map((f) => read(join(PLAY, 'engine', f))).join('\n');
 const pageSrc = read(join(__dirname, '../domain/games/page.ts'));
 const routesSrc = read(join(__dirname, '../domain/games/routes.ts'));
-const allPlaySrc = playJs + gonogoJs + playCss + engineJs;
+const allPlaySrc = playJs + previewJs + gonogoJs + playCss + engineJs;
 
 describe('گیت ۱.۲۵.۰۸ — لحن و امنیت متن کودک', () => {
   it('متن‌های روبه‌کودک هیچ واژهٔ ممنوعی ندارند (لینت مشترک با بسته‌ها) — شامل موتور', () => {
@@ -30,18 +31,22 @@ describe('گیت ۱.۲۵.۰۸ — لحن و امنیت متن کودک', () => {
     }
   });
 
-  it('پخش‌کننده هیچ منبع بیرونی و هیچ ارزیابی پویا ندارد (§۱۱) — شامل موتور engine/', () => {
-    for (const [name, src] of [['play.js', playJs], ['kinds/gonogo.js', gonogoJs], ['engine/*', engineJs]] as const) {
+  it('پخش‌کننده هیچ منبع بیرونی و هیچ ارزیابی پویا ندارد (§۱۱) — شامل موتور engine/ و پیش‌نمایش', () => {
+    for (const [name, src] of [['play.js', playJs], ['preview.js', previewJs], ['kinds/gonogo.js', gonogoJs], ['engine/*', engineJs]] as const) {
       expect(src, `${name} نباید URL مطلق بیرونی داشته باشد`).not.toMatch(/https?:\/\//);
       expect(src, `${name} نباید eval داشته باشد`).not.toMatch(/\beval\s*\(|new\s+Function/);
     }
   });
 
-  it('تک‌نقطهٔ شبکهٔ کل پخش‌کننده (ورودی + موتور): فقط requestJson در play.js', () => {
-    const fetches = allJsFetches(playJs, engineJs);
-    expect(fetches.length).toBe(1); // تک‌نقطهٔ شبکه: requestJson
-    expect(fetches[0]).toContain('API + path');
+  it('تک‌نقطهٔ شبکهٔ کل پخش‌کننده + پیش‌نمایش: فقط requestJson، هر مسیر با API خودش', () => {
+    const fetches = allJsFetches(playJs, engineJs, previewJs);
+    expect(fetches.length).toBe(2); // تک‌نقطهٔ هر مسیر: play.js (کودک) + preview.js (پرسنلی)
+    for (const f of fetches) expect(f).toContain('API + path');
     expect(playJs).toContain("'/api/m/'");
+    expect(previewJs).toContain("'/api/play/preview/'");
+    // پیش‌نمایش هرگز زنجیرهٔ کودک را صدا نمی‌زند و هیچ نوشتنی به زنجیرهٔ جلسهٔ واقعی ندارد
+    expect(previewJs).not.toContain('/api/m/');
+    expect(previewJs).not.toContain('/attempts');
   });
 });
 
@@ -77,9 +82,10 @@ describe('گیت ۱.۲۵.۰۸ — قواعد حسی §۹', () => {
 });
 
 describe('گیت ۱.۲۵.۰۸ — اتصال صفحه به پخش‌کننده', () => {
-  it('دارایی‌های بازی فقط در شاخهٔ child_active سرو می‌شوند (css + js با نسخه)', () => {
+  it('دارایی‌های بازی فقط در شاخهٔ child_active و شاخهٔ پیش‌نمایش فقط-پرسنلی سرو می‌شوند (css + js با نسخه)', () => {
     const occurrences = pageSrc.match(/assets\/play\//g) ?? [];
-    expect(occurrences.length).toBe(2); // یک link + یک script — فقط در حالت کودک
+    // هر شاخه یک link + یک script: کودک (play.js) + پیش‌نمایش (preview.js) — ۱.۲۵.۲۰
+    expect(occurrences.length).toBe(4);
     const childBranch = pageSrc.slice(
       pageSrc.indexOf("state === 'child_active'"),
       pageSrc.indexOf("state === 'child_done'")
@@ -88,6 +94,13 @@ describe('گیت ۱.۲۵.۰۸ — اتصال صفحه به پخش‌کننده',
     expect(childBranch).toContain('data-kind=');
     expect(childBranch).toContain('data-hint=');
     expect(childBranch).toContain('APP_VERSION');
+    // شاخهٔ پیش‌نمایش: توکن خودش + بدون کلید؛ ماژول جدا از پخش‌کنندهٔ کودک
+    const previewBranch = pageSrc.slice(pageSrc.indexOf('renderPreviewPage'));
+    expect(previewBranch).toContain('id="play-root"');
+    expect(previewBranch).toContain('data-protocol=');
+    expect(previewBranch).toContain('preview.js');
+    expect(previewBranch.indexOf('play.css')).toBeGreaterThan(-1);
+    expect(previewBranch).not.toContain('play.js?');
   });
 
   it('CSP صفحهٔ کودک مبدأ خودی را برای ماژول بازی اجازه می‌دهد و همچنان بسته است', () => {
@@ -129,6 +142,7 @@ describe('گیت فاز ۳ بازطراحی — موتور ۱۴-حالته (۱.�
     expect(engineJs).not.toContain('correct_touch');
     expect(engineJs).not.toContain("correct'");
     expect(engineJs).not.toContain('correct"');
+    expect(previewJs).not.toContain('correct_touch'); // پیش‌نمایش هم — کلید فقط در سرویس می‌ماند
     // بازخورد آموزشی فقط از سرور می‌آید (fb.correct) — کلید آیتم هرگز
   });
 

@@ -12,6 +12,8 @@ import {
   runPublishGates,
   scoreAttempt,
   answerDisplayOf,
+  previewMissionOf,
+  previewItemAt,
   stimLabelOf,
   stripAnswerKeys,
   toItemView
@@ -42,6 +44,8 @@ import type {
   PrescriptionCreateInput,
   PrescriptionRecord,
   PublicStateView,
+  PreviewIssueOutcome,
+  PreviewStateView,
   RegistryGoal,
   RegistryMetric,
   SessionMetricOutcome,
@@ -49,6 +53,8 @@ import type {
 } from './types';
 
 const LINK_URL_PATH = '/m/';
+const PREVIEW_URL_PATH = '/play/preview/';
+const PREVIEW_TTL_MINUTES = 30; // توکن کوتاه‌عمر — ممیزی فاز ۰ U4
 const FEEDBACK_OK = 'گرفتی!';
 const FEEDBACK_WITHHOLD = 'عالی، صبر کردی!'; // بازداری درست گو/نوگو — سند محتوا بستهٔ ۳
 const FEEDBACK_RETRY = 'این یکی سخته؛ بیا با هم دوباره نگاهش کنیم.'; // متن پیش‌فرض خطا §۲ — هیچ سرزنشی
@@ -475,6 +481,111 @@ export function createGamesService(deps: GamesDeps): GamesService {
     await db.execute(`UPDATE game_links SET revoked_at = ? WHERE jti = ? AND revoked_at IS NULL`, [isoOf(now()), jti]);
     await audit.log({ actorId: actor.staffId, action: 'game_link_revoke', resourceType: 'game_link', resourceId: jti });
     return { ok: true };
+  }
+
+  // ─── پیش‌نمایش فقط-پرسنلی (۱.۲۵.۲۰) — ممیزی فاز ۰ §۳.۱۰/U4: توکن کوتاه‌عمر، رندر بی‌کلید، صفر نوشتن ───
+
+  interface PreviewTokenRow {
+    jti: string;
+    package_id: string;
+    package_version: string;
+    token_hash: string;
+    issued_by: string;
+    expires_at: string;
+    revoked_at: string | null;
+  }
+
+  async function issuePreview(packageId: string, version: string, actor: AuthContext): Promise<PreviewIssueOutcome> {
+    const row = await db.queryOne<{ id: string; version: string; status: string }>(
+      `SELECT id, version, status FROM game_packages WHERE id = ? AND version = ?`, [packageId, version]
+    );
+    if (!row) throw new NotFoundError('بسته');
+    if (row.status !== 'published') throw new ConflictError('پیش‌نمایش فقط برای بستهٔ منتشرشده است');
+    const jti = crypto.randomUUID();
+    const token = `${jti}.${randomSecret()}`;
+    const expiresAt = new Date(now().getTime() + PREVIEW_TTL_MINUTES * 60 * 1000);
+    await db.execute(
+      `INSERT INTO game_preview_tokens (jti, package_id, package_version, token_hash, issued_by, expires_at, created_at) VALUES (?,?,?,?,?,?,?)`,
+      [jti, packageId, version, await sha256Hex(token), actor.staffId, isoOf(expiresAt), isoOf(now())]
+    );
+    await audit.log({ actorId: actor.staffId, action: 'game_preview_issue', resourceType: 'game_preview', resourceId: jti });
+    const base = deps.publicBaseUrl?.replace(/\/+$/, '') ?? '';
+    return { jti, token, url: `${base}${PREVIEW_URL_PATH}${token}`, expiresAt: isoOf(expiresAt) };
+  }
+
+  /** حل توکن پیش‌نمایش → بستهٔ منتشرشده؛ منقضی/باطل/ناشناس = null (هیچ پیام بالینی نمی‌دهد) */
+  async function resolvePreview(token: string): Promise<PackageRecord | null> {
+    const dot = token.indexOf('.');
+    if (dot <= 0) return null;
+    const row = await db.queryOne<PreviewTokenRow>(`SELECT * FROM game_preview_tokens WHERE jti = ?`, [token.slice(0, dot)]);
+    if (!row) return null;
+    if ((await sha256Hex(token)) !== row.token_hash) return null;
+    if (row.revoked_at) return null;
+    if (new Date(row.expires_at).getTime() <= now().getTime()) return null;
+    const pkgRow = await db.queryOne<{ id: string; version: string; title_fa: string; evidence_level: string; dose_json: string; status: string; body_json: string; reviewed_by: string | null; reviewed_at: string | null; created_at: string }>(
+      `SELECT * FROM game_packages WHERE id = ? AND version = ?`, [row.package_id, row.package_version]
+    );
+    if (!pkgRow || pkgRow.status !== 'published') return null;
+    return packageRowToRecord(pkgRow);
+  }
+
+  /** مدل رندر صفحهٔ پیش‌نمایش — مأموریت نخستِ آیتم‌لمسی + اسنپ‌شات پروتکل باند پیش‌فرض (بی‌سن) */
+  async function previewState(token: string): Promise<PreviewStateView | null> {
+    const pkg = await resolvePreview(token);
+    if (!pkg) return null;
+    const mission = previewMissionOf(pkg.body);
+    if (!mission) return null;
+    const mode: ProtocolMode = pkg.body.mode ?? 'training';
+    return {
+      packageTitle: pkg.titleFa,
+      missionTitle: mission.title ?? mission.id,
+      game: mission.game,
+      hint: playHintOf(mission) ?? null,
+      protocol: protocolSnapshotOf(protocolForAge(mode, null)),
+      mode
+    };
+  }
+
+  /** آیتم موقعیت n — بی‌حالت و بی‌نوشت؛ دنبالهٔ قطعی از seed ثابت بسته (همان منطق start) */
+  async function previewItem(token: string, position: number): Promise<{ item: ItemView | null; progress: { done: number; total: number } }> {
+    const pkg = await resolvePreview(token);
+    if (!pkg) throw new NotFoundError('پیش‌نمایش');
+    const mission = previewMissionOf(pkg.body);
+    if (!mission) throw new NotFoundError('مأموریت در بسته');
+    const mode: ProtocolMode = pkg.body.mode ?? 'training';
+    const touchItems = (mission.items ?? []).filter((it) => it.type === 'touch_report');
+    const hasProtocol = mode === 'assessment' || pkg.body.protocol != null;
+    let seq: ReturnType<typeof parseSequenceRecord> = null;
+    if (hasProtocol && touchItems.length >= 4) {
+      const prot = protocolForAge(mode, null); // پیش‌نمایش بی‌سن — باند پیش‌فرض پروتکل
+      const poolRatio = touchItems.length > 0
+        ? touchItems.filter((it) => it.correct_touch === true).length / touchItems.length
+        : null;
+      seq = parseSequenceRecord(serializeSequence(generateSequence({
+        seed: `preview:${pkg.id}@${pkg.version}`, // ثابت نسخهٔ بسته — هر پیش‌نمایشِ همان نسخه، همان ترتیب
+        count: touchItems.length,
+        goRatio: poolRatio ?? prot.params.go_ratio.value,
+        maxConsecutiveSame: prot.params.max_consecutive_same.value,
+        blockSize: prot.params.block_size.value
+      })));
+    }
+    const at = previewItemAt(mission, seq, position);
+    return { item: at.item ? toItemView(at.item) : null, progress: at.progress };
+  }
+
+  /** بازخورد آزمایشی — نمره‌دهی فقط سمت سرور از آیتم ذخیره‌شده؛ هیچ رکوردی نوشته نمی‌شود */
+  async function previewFeedback(token: string, itemId: string, response: unknown, rtMs: number | null): Promise<AttemptFeedback> {
+    const pkg = await resolvePreview(token);
+    if (!pkg) throw new NotFoundError('پیش‌نمایش');
+    const mission = previewMissionOf(pkg.body);
+    if (!mission) throw new NotFoundError('مأموریت در بسته');
+    const item = (mission.items ?? []).find((it) => it.id === itemId);
+    if (!item) throw new ValidationError('آیتم به این بسته تعلق ندارد');
+    const rt = typeof rtMs === 'number' && Number.isFinite(rtMs)
+      ? (rtMs < 0 ? null : rtMs > MAX_RT_MS ? null : Math.round(rtMs))
+      : null;
+    const scored = scoreAttempt(item, mission, response, rt);
+    return feedbackOf(item, scored.correct, response);
   }
 
   /** حل توکن خام → پیوند کامل؛ هرگز پیام خطای بالینی نمی‌دهد */
@@ -1087,6 +1198,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
     upsertMetric, listMetrics, upsertGoal, listGoals, upsertPackage, listPackages, publishPackage,
     createPrescription, listPrescriptions, setPrescriptionStatus, scheduleMission, listMissions,
     issueLink, revokeLink, getSessionDetail, getChildReport,
+    issuePreview, previewState, previewItem, previewFeedback,
     getState, start, nextItem, submitAttempt, finish, parentGate, confirm
   };
 }
