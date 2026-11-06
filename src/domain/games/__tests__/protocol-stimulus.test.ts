@@ -276,6 +276,13 @@ function bodyOf(over: Partial<PackageBody>): PackageBody {
   };
 }
 
+/** بدنهٔ ارزیابی — همهٔ آیتم‌ها پروب (گیت فاز ۳) */
+function assessmentBody(over: Partial<PackageBody>): PackageBody {
+  const b = bodyOf(over);
+  b.missions = b.missions.map((m) => ({ ...m, items: m.items.map((it) => ({ ...it, phase: 'probe' as const })) }));
+  return b;
+}
+
 const GATE_CTX = { metricIds: new Set(['accuracy_gonogo']), goalIds: new Set(['inhibition']) };
 const DOSE = { days_per_week: 3, minutes: 10, max_missions_per_day: 1, min_weeks: 4 };
 
@@ -297,12 +304,20 @@ describe('گیت انتشار دو حالت مستقل', () => {
     expect(errs.some((e) => e.rule === 'protocol')).toBe(true);
   });
 
-  it('ارزیابی با پروتکل هم‌نسخهٔ جاری سبز می‌گذرد', () => {
+  it('ارزیابی با پروتکل هم‌نسخهٔ جاری و آیتم‌های همه‌پروب سبز می‌گذرد', () => {
+    const errs = runPublishGates(
+      assessmentBody({ mode: 'assessment', protocol: { id: PROTOCOL_ID, version: PROTOCOL_VERSION } }),
+      DOSE, 'B', GATE_CTX
+    );
+    expect(errs).toEqual([]);
+  });
+
+  it('آیتم آموزشی در بستهٔ ارزیابی رد می‌شود — اجرای ارزیابی هرگز بازخورد ندارد', () => {
     const errs = runPublishGates(
       bodyOf({ mode: 'assessment', protocol: { id: PROTOCOL_ID, version: PROTOCOL_VERSION } }),
       DOSE, 'B', GATE_CTX
     );
-    expect(errs).toEqual([]);
+    expect(errs.some((e) => e.rule === 'assessment_items')).toBe(true);
   });
 
   it('mode ناشناخته رد می‌شود', () => {

@@ -55,6 +55,8 @@ export interface ProtocolSpec {
     isi_min_ms: ProtocolParam;
     /** فاصلهٔ بین‌آزمونشی ISI — حداکثر (ms) */
     isi_max_ms: ProtocolParam;
+    /** تثبیت پیش از محرک (ms) — مکث خنثی بی‌فلاش بین ISI و نمایش */
+    fixation_ms: ProtocolParam;
     /** نسبت محرک گو در دنبالهٔ تولیدی (۰..۱) */
     go_ratio: ProtocolParam;
     /** سقف تکرار پیاپی یک دسته (go یا nogo) — شکستن ریتم قابل حفظ‌کردن */
@@ -93,6 +95,7 @@ const TRAINING_PARAMS: Record<AgeBandId, ProtocolSpec['params']> = {
     response_window_nogo_ms: PARAM(2000, 'هم‌طول گو برای خوانایی مقایسهٔ کمیسیون در این سن', 'proposed'),
     isi_min_ms: PARAM(1000, 'ISI کوتاه‌تر از این در ۴–۶ سال نرخ اُمیشن تصادفی می‌سازد؛ حد پایین محافظه‌کارانه', 'proposed'),
     isi_max_ms: PARAM(1500, 'بازهٔ ۱–۱٫۵ ثانیه سند محتوا بستهٔ ۳ — حفظ شد', 'pilot'),
+    fixation_ms: PARAM(400, 'مکث خنثی کوتاه پیش از نمایش — جداکنندهٔ ISI از لحظهٔ محرک؛ بدون فلاش و شمارش (§۹)', 'proposed'),
     go_ratio: PARAM(0.75, 'نسبت متعارف گو/نوگو ~۳:۱ در ادبیات گو/نوگو کودکان؛ نسبت بالاتر برای ۴–۶ سال تا مهار بازداری خسته‌کننده نشود', 'pilot'),
     max_consecutive_same: PARAM(3, 'بیش از سه پیاپی، ریتم قابل حفظ‌کردن می‌سازد (حفظ‌کردن به‌جای بازداری)', 'proposed'),
     block_size: PARAM(20, 'بازهٔ توجه فعال ۴–۶ سال؛ بلوک ۲۰ تایی با استراحت، خستگی انتهای جلسه را می‌شکند', 'pilot'),
@@ -107,6 +110,7 @@ const TRAINING_PARAMS: Record<AgeBandId, ProtocolSpec['params']> = {
     response_window_nogo_ms: PARAM(1500, 'هم‌طول گو — مقایسه‌پذیری بین‌سنی', 'proposed'),
     isi_min_ms: PARAM(800, 'ISI کمی کوتاه‌تر برای سنین بالاتر؛ فشار سرعت متعادل', 'proposed'),
     isi_max_ms: PARAM(1200, 'بازهٔ ۰٫۸–۱٫۲ ثانیه — تنوع برای شکستن انتظار زمانی ثابت', 'proposed'),
+    fixation_ms: PARAM(400, 'مکث خنثی پیش از نمایش — هم‌طول دو باند برای مقایسه‌پذیری', 'proposed'),
     go_ratio: PARAM(0.75, 'نسبت ~۳:۱ متعارف؛ با نسخهٔ پروتکل ثابت می‌ماند', 'pilot'),
     max_consecutive_same: PARAM(3, 'همان استدلال ۴–۶ سال', 'proposed'),
     block_size: PARAM(24, 'سنین مدرسه بازهٔ توجه بلندتر — بلوک ۲۴ تایی', 'proposed'),
