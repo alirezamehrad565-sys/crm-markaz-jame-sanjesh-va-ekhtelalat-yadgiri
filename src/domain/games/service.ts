@@ -28,6 +28,7 @@ import {
   stageByIndex,
   stageOutcomeOf,
   stageProgressOf,
+  stageStimViewOf,
   STAGE_RULES_VERSION,
   STAGE_TOTAL,
   type StageDef,
@@ -551,11 +552,13 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const mission = previewMissionOf(pkg.body);
     if (!mission) return null;
     const mode: ProtocolMode = pkg.body.mode ?? 'training';
+    // پیش‌نمایش بی‌تاریخچه = دید کودکِ تازه — مرحلهٔ ۱ با امضای دیداری‌اش (۱.۲۵.۲۳)
+    const previewStageId = mode === 'training' && pkg.body.stages_enabled !== false ? 's1' : null;
     return {
       packageTitle: pkg.titleFa,
       missionTitle: mission.title ?? mission.id,
       game: mission.game,
-      hint: playHintOf(mission) ?? null,
+      hint: playHintOf(mission, previewStageId) ?? null,
       protocol: protocolSnapshotOf(protocolForAge(mode, null)),
       mode
     };
@@ -585,7 +588,13 @@ export function createGamesService(deps: GamesDeps): GamesService {
       })));
     }
     const at = previewItemAt(mission, seq, position);
-    return { item: at.item ? toItemView(at.item) : null, progress: at.progress };
+    // امضای دیداری مرحلهٔ ۱ در پیش‌نمایش (۱.۲۵.۲۳) — فقط نمایش؛ هیچ کلیدی در DOM نیست
+    let view = at.item ? toItemView(at.item) : null;
+    if (view && view.type === 'touch_report' && mode === 'training' && pkg.body.stages_enabled !== false) {
+      const authored = (mission.items ?? []).find((it) => it.id === view!.id);
+      view = { ...view, stim: stageStimViewOf(authored?.stim, authored?.correct_touch === true, 's1') };
+    }
+    return { item: view, progress: at.progress };
   }
 
   /** بازخورد آزمایشی — نمره‌دهی فقط سمت سرور از آیتم ذخیره‌شده؛ هیچ رکوردی نوشته نمی‌شود */
@@ -649,14 +658,18 @@ export function createGamesService(deps: GamesDeps): GamesService {
    * راهنمای شروع بازی کودک (M2) — فقط از آیتم‌های آموزشی touch_report ساخته می‌شود؛
    * آیتم‌های پروب هرگز به این راهنما راه ندارند تا شناسهٔ هدف از پیش لو نرود.
    */
-  function playHintOf(mission: MissionConfig): PublicStateView['playHint'] {
+  function playHintOf(mission: MissionConfig, stageId: string | null = null): PublicStateView['playHint'] {
     const train = (mission.items ?? []).filter((it) => it.phase === 'train' && it.type === 'touch_report');
     const go = train.find((it) => it.correct_touch === true);
     const nogo = train.find((it) => it.correct_touch === false);
     if (!go && !nogo) return null;
+    // درون‌مایهٔ دیداری مرحله (۱.۲۵.۲۳) — قدم آموزش دقیقاً همان چیزی را نشان می‌دهد
+    // که کودک در اجرای اصلی می‌بیند؛ کلید پاسخ در برچسب نیست (فقط توصیف ظاهری)
+    const goStim = stageStimViewOf(go?.stim, true, stageId);
+    const nogoStim = nogo ? stageStimViewOf(nogo.stim, false, stageId) : null;
     return {
-      go: { label: stimLabelOf(go?.stim), stim: (go?.stim ?? {}) as Record<string, unknown> },
-      nogo: nogo ? { label: stimLabelOf(nogo.stim), stim: nogo.stim as Record<string, unknown> } : null
+      go: { label: stimLabelOf(goStim), stim: goStim },
+      nogo: nogoStim ? { label: stimLabelOf(nogoStim), stim: nogoStim } : null
     };
   }
 
@@ -736,7 +749,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
       adherenceConfirmed: adherence?.confirm2_at != null,
       ...(state === 'child_active' ? {
         playGame: m.game,
-        playHint: playHintOf(m),
+        playHint: playHintOf(m, res.session?.stage_id ?? stage?.id ?? null),
         playProtocol: snap,
         ...(stage && progress ? {
           playStage: {
@@ -920,7 +933,19 @@ export function createGamesService(deps: GamesDeps): GamesService {
     }
 
     await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf(now()), session.id]);
-    return { item: next ? toItemView(next) : null, progress: { done: doneIds.size, total } };
+
+    // درون‌مایهٔ دیداری مرحله (۱.۲۵.۲۳) — فقط نمایش؛ نمره‌دهی روی آیتم authored می‌ماند
+    // و کلید پاسخ (correct_touch) هرگز در نمای کلاینت نیست (toItemView).
+    // شناسهٔ مرحله از خود جلسه می‌آید — همان که در start منجمد شده، برای همهٔ آیتم‌ها پایدار.
+    let view: ItemView | null = null;
+    if (next) {
+      let display = next;
+      if (next.type === 'touch_report' && (res.pkg.body.mode ?? 'training') === 'training' && res.pkg.body.stages_enabled !== false) {
+        display = { ...next, stim: stageStimViewOf(next.stim, next.correct_touch === true, session.stage_id) };
+      }
+      view = toItemView(display);
+    }
+    return { item: view, progress: { done: doneIds.size, total } };
   }
 
   async function submitAttempt(token: string, draft: AttemptDraftInput): Promise<AttemptFeedback> {

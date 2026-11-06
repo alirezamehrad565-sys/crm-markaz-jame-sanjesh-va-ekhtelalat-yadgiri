@@ -215,3 +215,55 @@ export function stageProgressOf(history: StageHistoryRow[]): StageProgress {
 export function currentStageOf(progress: StageProgress, band: AgeBandId): StageDef | null {
   return stageByIndex(band, progress.unlocked_index);
 }
+
+// ─── درون‌مایهٔ دیداری مرحله‌ها (۱.۲۵.۲۳) — فقط نمایش؛ هیچ کلیدی این‌جا نیست ───
+// نظام مرحله‌ها (۱.۲۵.۲۲) عمداً پارامتر زمان‌بندی را بازنویسی می‌کند و محرک را دست
+// نمی‌زند؛ نتیجه: همهٔ مرحله‌ها از نظر دیداری یکسان‌اند و «مرحلهٔ تازه» کودک دیده نمی‌شود.
+// این لایه همان خلأ را پر می‌کند: هر مرحله یک جفت امضای دیداری دارد — بدون هیچ
+// اثری بر نمره‌دهی (آیتم authored می‌ماند) و بدون افشای کلید (correct_touch هرگز
+// به کلاینت نمی‌رود). قاعدهٔ رنگ ثابت می‌ماند: گو گرم · نوگو سرد — یادگیری
+// بین‌مرحله‌ها به‌هم نمی‌ریزد؛ قدم آموزش («این را لمس کن: ماهی نارنجی») همیشه
+// با همین امضا هم‌خوان است.
+
+export interface StageVisualStim {
+  shape: string;
+  color: string;
+  /** نمای باز — امضا روی هر stim authored می‌نشیند و بقیهٔ فیلدهایش حفظ می‌شوند */
+  [k: string]: unknown;
+}
+
+export interface StageVisual {
+  go: StageVisualStim;
+  nogo: StageVisualStim;
+}
+
+/** امضای دیداری پنج مرحله — شناسه‌ها با StageDef.id هم‌خوان‌اند */
+export const STAGE_VISUALS: Record<string, StageVisual> = {
+  s1: { go: { shape: 'fish', color: 'orange' }, nogo: { shape: 'crab', color: 'blue' } },      // گرم‌کردن — دریا
+  s2: { go: { shape: 'flower', color: 'red' }, nogo: { shape: 'butterfly', color: 'purple' } }, // تمرین — باغ
+  s3: { go: { shape: 'balloon', color: 'yellow' }, nogo: { shape: 'cloud', color: 'blue' } },  // تندتر — آسمان
+  s4: { go: { shape: 'rocket', color: 'orange' }, nogo: { shape: 'ufo', color: 'purple' } },   // دقت — فضا
+  s5: { go: { shape: 'star', color: 'yellow' }, nogo: { shape: 'square', color: 'blue' } }     // قهرمان — جفت کلاسیک آموزش
+};
+
+/** امضای دیداری مرحله — شناسهٔ ناشناخته/بی‌مرحله = null (محرک authored عیناً) */
+export function stageVisualFor(stageId: string | null | undefined): StageVisual | null {
+  if (typeof stageId !== 'string' || stageId === '') return null;
+  return STAGE_VISUALS[stageId] ?? null;
+}
+
+/**
+ * نمای محرک آیتم لمسی با امضای مرحله — فقط نمایش؛ همیشه کلید stim authored را
+ * نگه می‌دارد و شکل/رنگ مرحله را رویش می‌نشیاند (بقیهٔ فیلدها دست‌نخورده).
+ * نمره‌دهی سرور روی آیتم authored است — این خروجی هرگز به scoreAttempt نمی‌رود.
+ */
+export function stageStimViewOf(
+  stim: Record<string, unknown> | null | undefined,
+  correctTouch: boolean,
+  stageId: string | null | undefined
+): Record<string, unknown> {
+  const v = stageVisualFor(stageId);
+  const base = (stim ?? {}) as Record<string, unknown>;
+  if (!v) return { ...base };
+  return { ...base, ...(correctTouch ? v.go : v.nogo) };
+}
