@@ -168,7 +168,12 @@ export function barChart({ points, height = 170, valueFormatter = (v) => fa(v) }
     }));
     node.appendChild(g);
 
-    if (points.length <= 16 || i % Math.ceil(points.length / 16) === 0) {
+    /* ۱.۲۵.۱۰ — تراکم برچسب: هر برچسب حداقل ۴۶px جای می‌خواهد؛ اگر slot کمتر بود
+       هر چندتا‌یکی نمایش داده می‌شود (قبلاً تا ۱۶ نقطه همه برچسب‌ها روی هم می‌افتادند).
+       آخرین (تازه‌ترین) برچسب اگر به‌اندازهٔ کافی از قبلی دور باشد همیشه می‌آید. */
+    const tickEvery = Math.max(1, Math.ceil((points.length * 46) / W));
+    const lastIdx = points.length - 1;
+    if (i % tickEvery === 0 || (i === lastIdx && ((lastIdx % tickEvery) * slot) >= 46)) {
       const t = svg('text', { x: slot * i + slot / 2, y: height - 6, class: 'chart__tick', 'text-anchor': 'middle' });
       // برچسب جلالی (حاوی فاصله) همان‌طور نمایش داده می‌شود؛ ISO فقط بخش روز
       t.textContent = typeof p.date === 'string' && p.date.includes(' ') ? p.date : String(p.date ?? '').slice(8, 10);
