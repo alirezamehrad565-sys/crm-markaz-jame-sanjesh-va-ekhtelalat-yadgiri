@@ -64,7 +64,7 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('نسخه: سو 1.19.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1.25.08'/);
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1.25.10'/);
   });
 
   test('۱.۱۹.۰ — روز کاری: جریان پیوسته (هیچ اکشنی کل نما را re-render نمی‌کند)', () => {
@@ -379,5 +379,67 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     // هدف‌های بالینی یک‌بار در مونت — refresh فقط قالب‌ها را می‌گیرد (یک api.get در مسیر load)
     expect((tp.match(/api\.get\('\/api\/pathway-templates'\)/g) ?? []).length).toBe(1);
     expect((tp.match(/api\.get\('\/api\/clinical-targets'\)/g) ?? []).length).toBe(1);
+  });
+});
+
+/* — گیت ۱.۲۵.۱۰ — گزارش‌ها/صندوق اعلان‌ها/طرح درمان: اصلاح موبایل نوار ابزار، گرید KPI بدون سلول یتیم،
+   کنش «تلاش دوبارهٔ همه» در سربرگ بخش ناموفق‌ها، ترتیب جلسه‌ها روی لمسی، و حذف متن راهنما از داخل ماژول‌ها — */
+describe('گیت ۱.۲۵.۱۰ — گزارش‌ها / صندوق اعلان‌ها / طرح درمان', () => {
+  const js = (f: string) => readFileSync(join(__dirname, '../../public/assets/js', f), 'utf8');
+
+  test('گزارش‌ها: برچسب از/تا در گروه چفت‌شده است — دیگر برچسبِ یتیم روی خط شکسته ساخته نمی‌شود', () => {
+    const rp = js('views/reports.js');
+    // هر دو حالت (دوره/پیشرفته) ساختار گروهی rpt-field دارند و span برچسبِ درزکردنی قدیمی حذف شده
+    expect((rp.match(/class: 'rpt-field'/g) ?? []).length).toBe(4); // ۲ گروه × ۲ حالت
+    expect((rp.match(/class: 'rpt-presets'/g) ?? []).length).toBe(2);
+    expect((rp.match(/class: 'rpt-actions'/g) ?? []).length).toBe(2);
+    expect(rp).not.toMatch(/marginInlineStart: 'var\(--sp-2\)'.*از/);
+    expect(rp).not.toMatch(/fontSize: 'var\(--fs-sm\)' \} \}, 'تا'\)/);
+    // CSS: شکستن فقط میان گروه‌ها؛ پیکر تاریخ هم‌عرض گروه می‌ماند
+    const css = readFileSync(join(__dirname, '../../public/assets/css/views.css'), 'utf8');
+    expect(css).toMatch(/\.rpt-field \{ display: flex; align-items: center; gap: 7px; min-width: 0; \}/);
+    expect(css).toMatch(/\.rpt-field \{ flex: 1 1 100%; \}/);
+    // گرید KPI گزارش‌ها کلاس اختصاصی دارد (۳ ستونه در دسکتاپ — بدون سلول یتیم)
+    expect((rp.match(/kpi-grid kpi-grid--rpt/g) ?? []).length).toBe(2);
+    expect(css).toMatch(/\.kpi-grid--rpt \{ grid-template-columns: repeat\(auto-fit, minmax\(280px, 1fr\)\); \}/);
+    // رکورد بی‌دانش‌آموز دکمهٔ پروفایل مرده ندارد
+    expect(rp).toMatch(/s\.studentId\s*\n\s*\?/);
+  });
+
+  test('نمودار ستونی: برچسب‌های محور با تراکم کنترل‌شده — هر برچسب ≥۴۶px جای دارد', () => {
+    const ch = js('charts.js');
+    expect(ch).toMatch(/tickEvery = Math\.max\(1, Math\.ceil\(\(points\.length \* 46\) \/ W\)\)/);
+    expect(ch).toMatch(/i % tickEvery === 0/);
+    // شرط قدیمی که تا ۱۶ نقطه همهٔ برچسب‌ها را می‌ریخت حذف شده
+    expect(ch).not.toMatch(/points\.length <= 16 \|\|/);
+  });
+
+  test('صندوق اعلان‌ها: «تلاش دوبارهٔ همه» در سربرگ بخش ناموفق‌هاست نه پایین صفحه؛ ردیف‌ها کلاس‌دار و بی‌متای خالی', () => {
+    const ob = js('views/outbox.js');
+    // دکمه با marginInlineStart:auto در سربرگِ makeSection نشسته — دیگر outlet.append(retryRow) وجود ندارد
+    expect(ob).toMatch(/marginInlineStart: 'auto' \}, onclick: \(e\) => lockBtn\(e\.currentTarget, retryAll\)/);
+    expect(ob).toMatch(/makeSection\('failed', 'ناموفق‌ها', 'پس از ۵ تلاش متوقف شده‌اند — علت در خطای ردیف\.', retryAllBtn\)/);
+    expect(ob).not.toMatch(/outlet\.append\(retryRow\)/);
+    expect(ob).toMatch(/class: 'ob-row'/);
+    expect(ob).toMatch(/meta\.length \? el\('div', \{ class: 'cell-sub' \}/);
+    expect(ob).not.toMatch(/meta\.join\(' · '\) \|\| '—'/);
+    // CSS موبایل: متن و کنش‌ها دو ردیف تمام‌عرض
+    const css = readFileSync(join(__dirname, '../../public/assets/css/views.css'), 'utf8');
+    expect(css).toMatch(/\.ob-row__main \{ flex: 1 1 100%; \}/);
+    expect(css).toMatch(/\.ob-row__side \{ flex: 1 1 100%; justify-content: space-between; \}/);
+  });
+
+  test('طرح درمان: جابه‌جایی جلسه روی لمسی (بالا/پایین) + بدون پاراگراف راهنمای استفاده', () => {
+    const tp = js('views/treatment-plans.js');
+    expect((tp.match(/tpl-session__move/g) ?? []).length).toBe(2);
+    expect(tp).toMatch(/insertBefore\(block, p\); renumber\(\)/);
+    expect(tp).toMatch(/insertBefore\(n, block\); renumber\(\)/);
+    // متن راهنمای استفاده از ماژول حذف شده — نه در سربرگ، نه در ویرایشگر
+    expect(tp).not.toMatch(/جلسه‌ها را با دستگیرهٔ ⠿ جابه‌جا کنید/);
+    expect(tp).not.toMatch(/هر جلسه: هدف \+ معیار تسلط \+ کارت‌ها/);
+    expect(tp).not.toMatch(/شالودهٔ مداخلهٔ دانش‌آموز است/);
+    // دسکتاپ: سه کنش کارت هم‌عرض
+    const css = readFileSync(join(__dirname, '../../public/assets/css/views.css'), 'utf8');
+    expect(css).toMatch(/\.tpl-card__actions \.btn \{ width: 100%; \}/);
   });
 });
