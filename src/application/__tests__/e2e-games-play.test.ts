@@ -144,3 +144,118 @@ describe('پخش‌کنندهٔ کودک (M2) — صفحه، راهنمای بی
     expect(html).not.toContain('play-root');
   });
 });
+
+// ─── فاز ۳/۴ بازطراحی — دنبالهٔ seed-دار سرور + شواهد نمایش واقعی (۱.۲۵.۱۳/۱۴) ───
+
+function gonogoAssessmentBody() {
+  return {
+    package_id: 'attention-assess',
+    version: '1.0.0',
+    title_fa: 'ارزیابی بازداری پاسخ',
+    evidence_level: 'B',
+    dose: { days_per_week: 1, minutes: 15, max_missions_per_day: 1, min_weeks: 2 },
+    body: {
+      package_id: 'attention-assess',
+      goals: ['inhibition'],
+      mode: 'assessment',
+      protocol: { id: 'gonogo-standard', version: '1.0.0' },
+      tone_rules: ['no_timer', 'no_rank', 'no_streak', 'no_fail_message'],
+      missions: [{
+        id: 'assess_m1', game: 'gonogo', goal: 'inhibition', metric: 'accuracy_gonogo',
+        metrics: ['correct_go_pct_gonogo', 'correct_nogo_pct_gonogo', 'commission_pct_gonogo', 'omission_pct_gonogo', 'median_rt_gonogo'],
+        title: 'ارزیابی استاندارد',
+        mastery: { threshold: 70, sessions: 1 },
+        items: [
+          { id: 'a-g1', phase: 'probe', type: 'touch_report', stim: { shape: 'star', color: 'زرد' }, correct_touch: true },
+          { id: 'a-g2', phase: 'probe', type: 'touch_report', stim: { shape: 'circle', color: 'زرد' }, correct_touch: true },
+          { id: 'a-g3', phase: 'probe', type: 'touch_report', stim: { shape: 'fish', color: 'زرد' }, correct_touch: true },
+          { id: 'a-n1', phase: 'probe', type: 'touch_report', stim: { shape: 'square', color: 'آبی' }, correct_touch: false },
+          { id: 'a-n2', phase: 'probe', type: 'touch_report', stim: { shape: 'square', color: 'آبی' }, correct_touch: false }
+        ]
+      }],
+      parent_copy: { before: 'امروز جلسهٔ ارزیابی است، نه بازی تمرینی.', after: 'جلسهٔ ارزیابی امروز ثبت شد.' }
+    }
+  };
+}
+
+describe('فاز ۳/۴ بازطراحی — ارزیابی مستقل با دنبالهٔ seed-دار و شواهد نمایش', () => {
+  let A2: ReturnType<typeof createTestApp>;
+  let mgr2: Api;
+  let anon2: Api;
+  let student2: string;
+  let link2: LinkBody;
+  let missionId2: string;
+
+  beforeAll(async () => {
+    A2 = createTestApp();
+    mgr2 = await asRole(A2, 'manager');
+    anon2 = new Api(A2);
+    student2 = (await createStudent(mgr2)).id;
+    await mgr2.post('/api/games/packages', gonogoAssessmentBody());
+    const pub = await mgr2.post('/api/games/packages/attention-assess/1.0.0/publish', {});
+    expect(pub.status).toBe(200); // همه‌پروب + پروتکل هم‌نسخه → گیت سبز
+    await mgr2.post('/api/games/goals', {
+      id: 'inhibition_assess', title_fa: 'بازداری پاسخ (ارزیابی)', package_id: 'attention-assess', metric_id: 'accuracy_gonogo'
+    });
+    const rx = await mgr2.post('/api/games/prescriptions', {
+      child_id: student2, package_id: 'attention-assess', package_version: '1.0.0', goal_id: 'inhibition_assess'
+    });
+    expect(rx.status).toBe(201);
+    const rxId = (rx.body as { data: { id: string } }).data.id;
+    const sch = await mgr2.post('/api/games/missions', {
+      prescription_id: rxId, mission_ref: 'assess_m1', scheduled_for: todayYmd()
+    });
+    expect(sch.status).toBe(201);
+    missionId2 = (sch.body as { data: { id: string } }).data.id;
+    const lk = await mgr2.post(`/api/games/missions/${missionId2}/link`, {});
+    link2 = dataOf<LinkBody>(lk);
+    await anon2.post(`/api/m/${link2.token}/start`, {});
+  });
+
+  it('جلسهٔ ارزیابی: purpose=assessment و دنبالهٔ seed-دار ذخیره می‌شود', async () => {
+    const sess = A2.sql.prepare(`SELECT purpose, sequence_json FROM game_sessions ORDER BY created_at DESC LIMIT 1`).get() as { purpose: string; sequence_json: string | null };
+    expect(sess.purpose).toBe('assessment');
+    expect(sess.sequence_json).toBeTruthy();
+    const seq = JSON.parse(sess.sequence_json!) as { seed: string; kinds: string; count: number; go_count: number };
+    expect(seq.kinds).toMatch(/^[gn]+$/);
+    expect(seq.count).toBe(5);
+    expect(seq.go_count).toBe(3); // نسبت بانک آیتم (۳ گو / ۵)
+  });
+
+  it('ترتیب nextItem از دنبالهٔ g/n می‌آید — بدون افشای کلید', async () => {
+    const sess = A2.sql.prepare(`SELECT sequence_json FROM game_sessions ORDER BY created_at DESC LIMIT 1`).get() as { sequence_json: string };
+    const kinds = (JSON.parse(sess.sequence_json) as { kinds: string }).kinds;
+    const goIds = ['a-g1', 'a-g2', 'a-g3'];
+    const nogoIds = ['a-n1', 'a-n2'];
+    for (let i = 0; i < kinds.length; i++) {
+      const nx = dataOf<{ item: { id: string } | null }>(await anon2.get(`/api/m/${link2.token}/next-item`));
+      if (!nx.item) break;
+      expect(kinds[i]).toMatch(/^[gn]$/);
+      if (kinds[i] === 'g') expect(goIds).toContain(nx.item.id);
+      else expect(nogoIds).toContain(nx.item.id);
+      // کلید پاسخ هرگز در آیتم نیست
+      expect(JSON.stringify(nx.item)).not.toContain('correct_touch');
+      await anon2.post(`/api/m/${link2.token}/attempts`, {
+        item_id: nx.item.id,
+        response: { touched: kinds[i] === 'g', premature_count: 0, multiple_count: 0, presented_at: 1000 + i, frame_drops: 0, window_ms: 1500 },
+        rt_ms: kinds[i] === 'g' ? 500 + i : null,
+        idem_key: 'assess-' + i
+      });
+    }
+  });
+
+  it('شواهد نمایش واقعی در game_attempts ذخیره و در جزئیات جلسه برمی‌گردد — خامِ پاسخ‌های کلاینت', async () => {
+    const det = dataOf<{ attempts: Array<{ itemId: string; evidence: Record<string, unknown>; response: Record<string, unknown> }> }>(
+      await mgr2.get(`/api/games/missions/${missionId2}/sessions`)
+    );
+    expect(det.attempts.length).toBe(5);
+    const withEvidence = det.attempts.find((a) => a.itemId === 'a-g1');
+    expect(withEvidence).toBeTruthy();
+    expect(withEvidence!.evidence.presented_at_ms).toBe(1000);
+    expect(withEvidence!.evidence.window_ms).toBe(1500);
+    // پاسخ خام هم حفظ شده — تفکیک خام/محاسبه‌شده (فاز ۸ از همین می‌خواند)
+    expect(withEvidence!.response.touched).toBe(true);
+    // و هیچ کلیدی نشت نکرده
+    expect(JSON.stringify(det)).not.toContain('correct_touch');
+  });
+});
