@@ -6,6 +6,7 @@ import { getAuthContext, requireRole } from '@core/auth';
 import { AppError, ValidationError } from '@core/errors';
 import type { GamesService } from './types';
 import { renderGamesPage, renderPreviewPage } from './page';
+import { reportToCsv } from './report';
 
 const MetricSchema = z.object({
   id: z.string().trim().min(3).max(64),
@@ -184,6 +185,13 @@ export function registerGamesRoutes(app: AppHono, service: GamesService): void {
     return c.json({ data: { id: published.id, version: published.version, status: published.status, reviewedBy: published.reviewedBy } }, 200);
   });
 
+  // بازنشسته‌کردن نسخه (۱.۲۵.۲۴) — فقط مدیر؛ تجویز تازه می‌بندد، تجویز موجود نسخه‌قفل می‌ماند
+  app.post('/api/games/packages/:id/:version/retire', requireRole('manager'), async (c) => {
+    const actor = getAuthContext(c);
+    const retired = await service.retirePackage(c.req.param('id'), c.req.param('version'), actor);
+    return c.json({ data: { id: retired.id, version: retired.version, status: retired.status } }, 200);
+  });
+
   app.post('/api/games/prescriptions', requireRole('manager', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = PrescriptionSchema.parse(await c.req.json<unknown>());
@@ -197,7 +205,12 @@ export function registerGamesRoutes(app: AppHono, service: GamesService): void {
 
   app.get('/api/games/prescriptions', requireRole('manager', 'therapist', 'secretary'), async (c) => {
     const childId = c.req.query('child_id');
-    return c.json({ data: await service.listPrescriptions(childId || undefined) }, 200);
+    const status = c.req.query('status');
+    const limitRaw = c.req.query('limit');
+    const offsetRaw = c.req.query('offset');
+    const limit = limitRaw != null && /^\d+$/.test(limitRaw) ? Number(limitRaw) : undefined;
+    const offset = offsetRaw != null && /^\d+$/.test(offsetRaw) ? Number(offsetRaw) : undefined;
+    return c.json({ data: await service.listPrescriptions({ childId: childId || undefined, status: status || undefined, limit, offset }) }, 200);
   });
 
   app.post('/api/games/prescriptions/:id/status', requireRole('manager', 'therapist'), async (c) => {
@@ -242,13 +255,24 @@ export function registerGamesRoutes(app: AppHono, service: GamesService): void {
     return c.json({ data: await service.issuePreview(body.package_id, body.version, actor) }, 201);
   });
 
-  // گزارش درمانگر (فاز ۸) — JSON پیش‌فرض؛ ?format=html نمای چاپ‌پذیر؛ بدون برچسب بالینی
+  // گزارش درمانگر (فاز ۸) — JSON پیش‌فرض؛ ?format=html نمای چاپ‌پذیر؛ ?format=csv دفترچهٔ جلسه‌ها (۱.۲۵.۲۴)
   app.get('/api/games/children/:childId/report', requireRole('manager', 'therapist'), async (c) => {
     const report = await service.getChildReport(c.req.param('childId'));
     if (c.req.query('format') === 'html') {
       return new Response(renderReportHtml(report, c.req.param('childId')), {
         status: 200,
         headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' }
+      });
+    }
+    if (c.req.query('format') === 'csv') {
+      return new Response(reportToCsv(report), {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="games-report-${c.req.param('childId').slice(0, 8)}.csv"`,
+          'Cache-Control': 'no-store',
+          'X-Robots-Tag': 'noindex, nofollow'
+        }
       });
     }
     return c.json({ data: report }, 200);
