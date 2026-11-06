@@ -1,4 +1,4 @@
-// page.ts — صفحهٔ سه‌حالتهٔ لینک (M1: گذارها · M2: پخش‌کنندهٔ کودک در child_active)
+// page.ts — صفحهٔ سه‌حالتهٔ لینک (M1: گذارها · M2: پخش‌کنندهٔ کودک · فاز ۲ بازطراحی: پنج‌شِمال)
 // این صفحه فقط گذارها را می‌راند و هیچ منبع بیرونی ندارد؛ دارایی‌های بازی از همان مبدأ با ?v= نسخه می‌آیند.
 import { APP_VERSION } from '@core/version';
 import type { PublicStateView } from './types';
@@ -23,16 +23,16 @@ function page(model: PublicStateView, token: string, body: string): string {
 <title>${esc(model.missionTitle || 'جلسهٔ بازی')}</title>
 <style>
   * { box-sizing: border-box; }
-  body { margin: 0; background: #F7F3EA; color: #12384f; font-family: Tahoma, "Segoe UI", sans-serif;
+  body { margin: 0; background: #F5F0E5; color: #153E50; font-family: 'Vazirmatn Play', 'Vazirmatn', Tahoma, sans-serif;
          line-height: 1.9; -webkit-tap-highlight-color: transparent; }
   .wrap { max-width: 560px; margin: 0 auto; padding: 20px 14px 48px; }
   .card { background: #fff; border-radius: 16px; padding: 22px 18px; margin-top: 14px;
-          box-shadow: 0 1px 3px rgba(18,56,79,.08); text-align: center; }
-  .pill { display: inline-block; font-size: 12px; color: #1c5d80; background: #D9EDF7;
-          border-radius: 999px; padding: 2px 12px; }
+          box-shadow: 0 1px 3px rgba(21,62,80,.08); text-align: center; }
+  .pill { display: inline-block; font-size: 12px; color: #438C89; background: #F5F0E5;
+          border: 1px solid #438C89; border-radius: 999px; padding: 2px 12px; }
   h1 { font-size: 18px; margin: 10px 0 4px; }
-  .muted { color: #8A8377; font-size: 13px; }
-  button { display: block; width: 100%; border: 0; background: #229ED9; color: #fff;
+  .muted { color: #6E7B76; font-size: 13px; }
+  button { display: block; width: 100%; border: 0; background: #153E50; color: #fff;
            border-radius: 12px; padding: 15px; font-size: 16px; font-weight: 700; cursor: pointer;
            font-family: inherit; margin-top: 12px; min-height: 52px; }
   button:disabled { opacity: .6; }
@@ -84,15 +84,22 @@ export function renderGamesPage(model: PublicStateView, token: string): string {
   }
 
   if (model.state === 'child_active') {
-    // پخش‌کنندهٔ کودک (M2) — حالت فقط در سرور است؛ رفرش = بازسازی همین صفحه از آیتم بعدی
+    // پخش‌کنندهٔ کودک (فاز ۲ بازطراحی) — حالت فقط در سرور است؛ رفرش = بازسازی همین صفحه از آیتم بعدی
+    // پروتکل فقط از سرور می‌آید؛ کلاینت پارامتر را فقط از data-protocol می‌خواند — هاردکد ممنوع
     const hint = JSON.stringify(model.playHint ?? null);
+    const protocol = JSON.stringify(model.playProtocol ?? null);
     return page(model, token, `<div id="play-root" class="play-root"
       data-token="${esc(token)}"
       data-kind="${esc(model.playGame ?? '')}"
-      data-hint="${esc(hint)}">
+      data-hint="${esc(hint)}"
+      data-protocol="${esc(protocol)}">
       <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
       <div class="play-stage" id="play-stage"></div>
       <div class="play-bubble" id="play-bubble" hidden></div>
+      <div class="play-basket" id="play-basket" aria-hidden="true">
+        <svg class="play-basket__star" viewBox="0 0 120 124" aria-hidden="true"><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z"/></svg>
+        <span id="play-basket-count">۰</span>
+      </div>
     </div>
     <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />
     <script type="module" src="/assets/play/play.js?v=${APP_VERSION}"></script>`);
