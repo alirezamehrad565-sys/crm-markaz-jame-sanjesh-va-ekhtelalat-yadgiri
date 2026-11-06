@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.19";
+var APP_VERSION = "1.25.20";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23741,6 +23741,30 @@ function toItemView(item) {
   };
 }
 __name(toItemView, "toItemView");
+function previewMissionOf(body) {
+  const ms = Array.isArray(body.missions) ? body.missions : [];
+  return ms.find((m) => (m.items ?? []).some((it) => it.type === "touch_report")) ?? ms[0] ?? null;
+}
+__name(previewMissionOf, "previewMissionOf");
+function previewItemAt(mission, seq, position) {
+  const items = mission.items ?? [];
+  const total = items.length;
+  if (!Number.isInteger(position) || position < 0 || position >= total) {
+    return { item: null, progress: { done: Math.max(0, position), total } };
+  }
+  if (seq && seq.trials.length > 0) {
+    const idx = Math.min(position, seq.trials.length - 1);
+    const kind = seq.trials[idx].kind;
+    const touch = items.filter((it) => it.type === "touch_report");
+    let k = 0;
+    for (let j = 0; j < idx; j++) if (seq.trials[j].kind === kind) k++;
+    const candidates = touch.filter((it) => it.correct_touch === true === (kind === "go"));
+    const item = candidates[k] ?? touch[k] ?? items[position];
+    return { item: item ?? null, progress: { done: position, total } };
+  }
+  return { item: items[position] ?? null, progress: { done: position, total } };
+}
+__name(previewItemAt, "previewItemAt");
 
 // src/domain/games/scoring.ts
 var CV_MIN_RT_COUNT = 5;
@@ -24210,6 +24234,8 @@ __name(mergeEngineMetrics, "mergeEngineMetrics");
 
 // src/domain/games/service.ts
 var LINK_URL_PATH = "/m/";
+var PREVIEW_URL_PATH = "/play/preview/";
+var PREVIEW_TTL_MINUTES = 30;
 var FEEDBACK_OK = "\u06AF\u0631\u0641\u062A\u06CC!";
 var FEEDBACK_WITHHOLD = "\u0639\u0627\u0644\u06CC\u060C \u0635\u0628\u0631 \u06A9\u0631\u062F\u06CC!";
 var FEEDBACK_RETRY = "\u0627\u06CC\u0646 \u06CC\u06A9\u06CC \u0633\u062E\u062A\u0647\u061B \u0628\u06CC\u0627 \u0628\u0627 \u0647\u0645 \u062F\u0648\u0628\u0627\u0631\u0647 \u0646\u06AF\u0627\u0647\u0634 \u06A9\u0646\u06CC\u0645.";
@@ -24565,6 +24591,94 @@ function createGamesService(deps) {
     return { ok: true };
   }
   __name(revokeLink, "revokeLink");
+  async function issuePreview(packageId, version, actor) {
+    const row = await db.queryOne(
+      `SELECT id, version, status FROM game_packages WHERE id = ? AND version = ?`,
+      [packageId, version]
+    );
+    if (!row) throw new NotFoundError("\u0628\u0633\u062A\u0647");
+    if (row.status !== "published") throw new ConflictError("\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0628\u0633\u062A\u0647\u0654 \u0645\u0646\u062A\u0634\u0631\u0634\u062F\u0647 \u0627\u0633\u062A");
+    const jti = crypto.randomUUID();
+    const token = `${jti}.${randomSecret()}`;
+    const expiresAt = new Date(now().getTime() + PREVIEW_TTL_MINUTES * 60 * 1e3);
+    await db.execute(
+      `INSERT INTO game_preview_tokens (jti, package_id, package_version, token_hash, issued_by, expires_at, created_at) VALUES (?,?,?,?,?,?,?)`,
+      [jti, packageId, version, await sha256Hex(token), actor.staffId, isoOf2(expiresAt), isoOf2(now())]
+    );
+    await audit.log({ actorId: actor.staffId, action: "game_preview_issue", resourceType: "game_preview", resourceId: jti });
+    const base = deps.publicBaseUrl?.replace(/\/+$/, "") ?? "";
+    return { jti, token, url: `${base}${PREVIEW_URL_PATH}${token}`, expiresAt: isoOf2(expiresAt) };
+  }
+  __name(issuePreview, "issuePreview");
+  async function resolvePreview(token) {
+    const dot = token.indexOf(".");
+    if (dot <= 0) return null;
+    const row = await db.queryOne(`SELECT * FROM game_preview_tokens WHERE jti = ?`, [token.slice(0, dot)]);
+    if (!row) return null;
+    if (await sha256Hex(token) !== row.token_hash) return null;
+    if (row.revoked_at) return null;
+    if (new Date(row.expires_at).getTime() <= now().getTime()) return null;
+    const pkgRow = await db.queryOne(
+      `SELECT * FROM game_packages WHERE id = ? AND version = ?`,
+      [row.package_id, row.package_version]
+    );
+    if (!pkgRow || pkgRow.status !== "published") return null;
+    return packageRowToRecord(pkgRow);
+  }
+  __name(resolvePreview, "resolvePreview");
+  async function previewState(token) {
+    const pkg = await resolvePreview(token);
+    if (!pkg) return null;
+    const mission = previewMissionOf(pkg.body);
+    if (!mission) return null;
+    const mode = pkg.body.mode ?? "training";
+    return {
+      packageTitle: pkg.titleFa,
+      missionTitle: mission.title ?? mission.id,
+      game: mission.game,
+      hint: playHintOf(mission) ?? null,
+      protocol: protocolSnapshotOf(protocolForAge(mode, null)),
+      mode
+    };
+  }
+  __name(previewState, "previewState");
+  async function previewItem(token, position) {
+    const pkg = await resolvePreview(token);
+    if (!pkg) throw new NotFoundError("\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634");
+    const mission = previewMissionOf(pkg.body);
+    if (!mission) throw new NotFoundError("\u0645\u0623\u0645\u0648\u0631\u06CC\u062A \u062F\u0631 \u0628\u0633\u062A\u0647");
+    const mode = pkg.body.mode ?? "training";
+    const touchItems = (mission.items ?? []).filter((it) => it.type === "touch_report");
+    const hasProtocol = mode === "assessment" || pkg.body.protocol != null;
+    let seq = null;
+    if (hasProtocol && touchItems.length >= 4) {
+      const prot = protocolForAge(mode, null);
+      const poolRatio = touchItems.length > 0 ? touchItems.filter((it) => it.correct_touch === true).length / touchItems.length : null;
+      seq = parseSequenceRecord(serializeSequence(generateSequence({
+        seed: `preview:${pkg.id}@${pkg.version}`,
+        // ثابت نسخهٔ بسته — هر پیش‌نمایشِ همان نسخه، همان ترتیب
+        count: touchItems.length,
+        goRatio: poolRatio ?? prot.params.go_ratio.value,
+        maxConsecutiveSame: prot.params.max_consecutive_same.value,
+        blockSize: prot.params.block_size.value
+      })));
+    }
+    const at = previewItemAt(mission, seq, position);
+    return { item: at.item ? toItemView(at.item) : null, progress: at.progress };
+  }
+  __name(previewItem, "previewItem");
+  async function previewFeedback(token, itemId, response, rtMs) {
+    const pkg = await resolvePreview(token);
+    if (!pkg) throw new NotFoundError("\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634");
+    const mission = previewMissionOf(pkg.body);
+    if (!mission) throw new NotFoundError("\u0645\u0623\u0645\u0648\u0631\u06CC\u062A \u062F\u0631 \u0628\u0633\u062A\u0647");
+    const item = (mission.items ?? []).find((it) => it.id === itemId);
+    if (!item) throw new ValidationError("\u0622\u06CC\u062A\u0645 \u0628\u0647 \u0627\u06CC\u0646 \u0628\u0633\u062A\u0647 \u062A\u0639\u0644\u0642 \u0646\u062F\u0627\u0631\u062F");
+    const rt = typeof rtMs === "number" && Number.isFinite(rtMs) ? rtMs < 0 ? null : rtMs > MAX_RT_MS ? null : Math.round(rtMs) : null;
+    const scored = scoreAttempt(item, mission, response, rt);
+    return feedbackOf(item, scored.correct, response);
+  }
+  __name(previewFeedback, "previewFeedback");
   async function resolveLink(token) {
     const dot = token.indexOf(".");
     if (dot <= 0) return null;
@@ -25153,6 +25267,10 @@ function createGamesService(deps) {
     revokeLink,
     getSessionDetail,
     getChildReport,
+    issuePreview,
+    previewState,
+    previewItem,
+    previewFeedback,
     getState,
     start,
     nextItem,
@@ -25281,6 +25399,42 @@ function renderGamesPage(model, token) {
     <p class="muted">\u067E\u0627\u06CC\u0628\u0646\u062F\u06CC \u0627\u0645\u0631\u0648\u0632 \u062B\u0628\u062A \u0634\u062F. \u0633\u067E\u0627\u0633 \u0627\u0632 \u0647\u0645\u0631\u0627\u0647\u06CC \u0634\u0645\u0627.</p></div>`);
 }
 __name(renderGamesPage, "renderGamesPage");
+function renderPreviewPage(state, token) {
+  if (!state || !token) {
+    return page(
+      { state: "expired", missionRef: "", missionTitle: "\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0628\u0627\u0632\u06CC", packageTitle: "", expiresAt: "" },
+      "",
+      `<div class="card"><h1>\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A</h1>
+      <p class="muted">\u067E\u06CC\u0648\u0646\u062F \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u06CC\u0627 \u0634\u0646\u0627\u062E\u062A\u0647 \u0646\u0634\u062F. \u0627\u0632 \u067E\u0646\u0644 \xAB\u0628\u0627\u0632\u06CC\u200C\u0647\u0627\xBB \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u062A\u0627\u0632\u0647 \u0628\u06AF\u06CC\u0631\u06CC\u062F (\u06F3\u06F0 \u062F\u0642\u06CC\u0642\u0647 \u0627\u0639\u062A\u0628\u0627\u0631).</p></div>`
+    );
+  }
+  const hint = JSON.stringify(state.hint ?? null);
+  const protocol = JSON.stringify(state.protocol ?? null);
+  const body = `<span class="pill">\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \xB7 ${esc(state.packageTitle)}</span>
+    <h1>${esc(state.missionTitle)}</h1>
+    <p class="muted">\u0627\u062C\u0631\u0627\u06CC \u0622\u0632\u0645\u0627\u06CC\u0634\u06CC \u0628\u0631\u0627\u06CC \u0622\u0634\u0646\u0627\u06CC\u06CC \u0634\u0645\u0627 \u2014 \u0647\u06CC\u0686 \u062F\u0627\u062F\u0647\u200C\u0627\u06CC \u062B\u0628\u062A \u0646\u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0628\u0627 \u0647\u0631 \u0628\u0627\u0632\u06AF\u0634\u0627\u06CC\u06CC \u0627\u0632 \u0646\u0648 \u0627\u062C\u0631\u0627 \u0645\u06CC\u200C\u0634\u0648\u062F.</p>
+    <div id="play-root" class="play-root"
+      data-token="${esc(token)}"
+      data-kind="${esc(state.game)}"
+      data-hint="${esc(hint)}"
+      data-protocol="${esc(protocol)}">
+      <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
+      <div class="play-stage" id="play-stage"></div>
+      <div class="play-bubble" id="play-bubble" hidden></div>
+      <div class="play-basket" id="play-basket" aria-hidden="true">
+        <svg class="play-basket__star" viewBox="0 0 120 124" aria-hidden="true"><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z"/></svg>
+        <span id="play-basket-count">\u06F0</span>
+      </div>
+    </div>
+    <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />
+    <script type="module" src="/assets/play/preview.js?v=${APP_VERSION}"></script>`;
+  return page(
+    { state: "expired", missionRef: "", missionTitle: state.missionTitle, packageTitle: state.packageTitle, expiresAt: "" },
+    token,
+    body
+  );
+}
+__name(renderPreviewPage, "renderPreviewPage");
 
 // src/domain/games/routes.ts
 var MetricSchema = external_exports.object({
@@ -25350,6 +25504,15 @@ var AttemptSchema = external_exports.object({
   response: external_exports.unknown().optional(),
   rt_ms: external_exports.number().min(0).max(12e4).nullable().optional(),
   idem_key: external_exports.string().trim().min(8).max(100)
+});
+var PreviewSchema = external_exports.object({
+  package_id: external_exports.string().trim().min(2).max(64),
+  version: external_exports.string().trim().min(1).max(40)
+});
+var PreviewFeedbackSchema = external_exports.object({
+  item_id: external_exports.string().trim().min(1).max(64),
+  response: external_exports.unknown().optional(),
+  rt_ms: external_exports.number().min(0).max(12e4).nullable().optional()
 });
 function renderReportHtml(report, childId) {
   const esc2 = /* @__PURE__ */ __name((s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "esc");
@@ -25490,6 +25653,11 @@ function registerGamesRoutes(app, service) {
   app.get("/api/games/missions/:id/sessions", requireRole("manager", "therapist"), async (c) => {
     return c.json({ data: await service.getSessionDetail(c.req.param("id")) }, 200);
   });
+  app.post("/api/games/preview", requireRole("manager", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = PreviewSchema.parse(await c.req.json());
+    return c.json({ data: await service.issuePreview(body.package_id, body.version, actor) }, 201);
+  });
   app.get("/api/games/children/:childId/report", requireRole("manager", "therapist"), async (c) => {
     const report = await service.getChildReport(c.req.param("childId"));
     if (c.req.query("format") === "html") {
@@ -25521,6 +25689,36 @@ function registerGamesPublicRoutes(app, service) {
     });
   });
   const jsonHeaders = { "Cache-Control": "no-store" };
+  app.get("/play/preview/:token", async (c) => {
+    const state = await service.previewState(c.req.param("token")).catch(() => null);
+    const html = renderPreviewPage(state, state ? c.req.param("token") : "");
+    return new Response(html, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Security-Policy": "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+      }
+    });
+  });
+  app.get("/api/play/preview/:token/item/:n", async (c) => {
+    try {
+      const n = Number(c.req.param("n"));
+      if (!Number.isInteger(n) || n < 0 || n > 1e3) throw new ValidationError("\u0645\u0648\u0642\u0639\u06CC\u062A \u0646\u0627\u0645\u0639\u062A\u0628\u0631");
+      return c.json({ data: await service.previewItem(c.req.param("token"), n) }, 200, jsonHeaders);
+    } catch (err) {
+      return publicError(c, err);
+    }
+  });
+  app.post("/api/play/preview/:token/feedback", async (c) => {
+    try {
+      const body = PreviewFeedbackSchema.parse(await c.req.json());
+      return c.json({ data: await service.previewFeedback(c.req.param("token"), body.item_id, body.response ?? {}, body.rt_ms ?? null) }, 200, jsonHeaders);
+    } catch (err) {
+      return publicError(c, err);
+    }
+  });
   app.get("/api/m/:token/state", async (c) => {
     try {
       return c.json({ data: await service.getState(c.req.param("token")) }, 200, jsonHeaders);

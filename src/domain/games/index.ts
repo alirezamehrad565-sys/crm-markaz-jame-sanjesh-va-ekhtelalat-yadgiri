@@ -23,7 +23,9 @@ export {
   lintSentence,
   containsHomophonePair,
   stripAnswerKeys,
-  toItemView
+  toItemView,
+  previewMissionOf,
+  previewItemAt
 } from './pure';
 export type {
   GamesDeps,
@@ -39,6 +41,8 @@ export type {
   AttemptFeedback,
   PublicStateView,
   LinkIssueOutcome,
+  PreviewIssueOutcome,
+  PreviewStateView,
   PrescriptionCreateInput,
   PrescriptionRecord,
   RegistryGoal,
