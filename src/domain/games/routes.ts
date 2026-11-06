@@ -3,9 +3,9 @@
 import { z } from 'zod';
 import type { AppHono } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
-import { AppError } from '@core/errors';
+import { AppError, ValidationError } from '@core/errors';
 import type { GamesService } from './types';
-import { renderGamesPage } from './page';
+import { renderGamesPage, renderPreviewPage } from './page';
 
 const MetricSchema = z.object({
   id: z.string().trim().min(3).max(64),
@@ -74,6 +74,18 @@ const AttemptSchema = z.object({
   response: z.unknown().optional(),
   rt_ms: z.number().min(0).max(120000).nullable().optional(),
   idem_key: z.string().trim().min(8).max(100)
+});
+
+// پیش‌نمایش فقط-پرسنلی (۱.۲۵.۲۰) — صدور با نقش درمانگر/مدیر؛ مصرف با توکن خودش
+const PreviewSchema = z.object({
+  package_id: z.string().trim().min(2).max(64),
+  version: z.string().trim().min(1).max(40)
+});
+
+const PreviewFeedbackSchema = z.object({
+  item_id: z.string().trim().min(1).max(64),
+  response: z.unknown().optional(),
+  rt_ms: z.number().min(0).max(120000).nullable().optional()
 });
 
 /** نمای HTML گزارش درمانگر — داده‌محور، بدون هیچ برچسب بالینی (فاز ۸) */
@@ -218,6 +230,13 @@ export function registerGamesRoutes(app: AppHono, service: GamesService): void {
     return c.json({ data: await service.getSessionDetail(c.req.param('id')) }, 200);
   });
 
+  // صدور توکن پیش‌نمایش فقط-پرسنلی (۱.۲۵.۲۰) — فقط بستهٔ منتشرشده؛ توکن ۳۰ دقیقه‌ای
+  app.post('/api/games/preview', requireRole('manager', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const body = PreviewSchema.parse(await c.req.json<unknown>());
+    return c.json({ data: await service.issuePreview(body.package_id, body.version, actor) }, 201);
+  });
+
   // گزارش درمانگر (فاز ۸) — JSON پیش‌فرض؛ ?format=html نمای چاپ‌پذیر؛ بدون برچسب بالینی
   app.get('/api/games/children/:childId/report', requireRole('manager', 'therapist'), async (c) => {
     const report = await service.getChildReport(c.req.param('childId'));
@@ -253,6 +272,43 @@ export function registerGamesPublicRoutes(app: AppHono, service: GamesService): 
   });
 
   const jsonHeaders = { 'Cache-Control': 'no-store' } as const;
+
+  // صفحهٔ پیش‌نمایش فقط-پرسنلی (۱.۲۵.۲۰) — توکن کوتاه‌عمر جای احراز؛ رندر بدون کلید پاسخ؛
+  // همان CSP سخت‌گیرانهٔ صفحهٔ کودک؛ منقضی/ناشناس = کارت محترمانه، نه خطای خام
+  app.get('/play/preview/:token', async (c) => {
+    const state = await service.previewState(c.req.param('token')).catch(() => null);
+    const html = renderPreviewPage(state, state ? c.req.param('token') : '');
+    return new Response(html, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Robots-Tag': 'noindex, nofollow',
+        'Content-Security-Policy': "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+      }
+    });
+  });
+
+  // آیتم موقعیت n پیش‌نمایش — بی‌نوشت؛ کلید پاسخ همین‌جا کنار گذاشته می‌شود (toItemView)
+  app.get('/api/play/preview/:token/item/:n', async (c) => {
+    try {
+      const n = Number(c.req.param('n'));
+      if (!Number.isInteger(n) || n < 0 || n > 1000) throw new ValidationError('موقعیت نامعتبر');
+      return c.json({ data: await service.previewItem(c.req.param('token'), n) }, 200, jsonHeaders);
+    } catch (err) {
+      return publicError(c, err);
+    }
+  });
+
+  // بازخورد آزمایشی پیش‌نمایش — نمره‌دهی سروری؛ هیچ رکوردی نوشته نمی‌شود
+  app.post('/api/play/preview/:token/feedback', async (c) => {
+    try {
+      const body = PreviewFeedbackSchema.parse(await c.req.json<unknown>());
+      return c.json({ data: await service.previewFeedback(c.req.param('token'), body.item_id, body.response ?? {}, body.rt_ms ?? null) }, 200, jsonHeaders);
+    } catch (err) {
+      return publicError(c, err);
+    }
+  });
 
   app.get('/api/m/:token/state', async (c) => {
     try {

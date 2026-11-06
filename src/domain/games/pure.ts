@@ -460,3 +460,40 @@ export function toItemView(item: MissionItem): ItemView {
     ...(item.media ? { media: item.media } : {})
   };
 }
+
+// ─── پیش‌نمایش فقط-پرسنلی (۱.۲۵.۲۰) — نگاشت بی‌حالتِ موقعیت به آیتم؛ هم‌تراز انتخاب جلسهٔ واقعی ───
+
+/** مأموریت پیش‌نمایش: نخستین مأموریت دارای آیتم لمسی، وگرنه نخستین مأموریت بسته */
+export function previewMissionOf(body: PackageBody): MissionConfig | null {
+  const ms = Array.isArray(body.missions) ? body.missions : [];
+  return ms.find((m) => (m.items ?? []).some((it) => it.type === 'touch_report')) ?? ms[0] ?? null;
+}
+
+/**
+ * موقعیت n از دنبالهٔ قطعی → آیتم همان جایگاه — بازتولید همان انتخاب جلسهٔ واقعی بدون هیچ حالت:
+ * با دنبالهٔ seed-دار، دستهٔ g/n جایگاه n تعیین‌کننده است و «k-مین آیتم هم‌دسته در ترتیب authored»
+ * برگزیده می‌شود — همان چیزی که «نخستین پاسخ‌ندادهٔ هم‌دسته» در جریان کودک می‌بُرد (بی‌حالت = قطعی).
+ * بدون دنباله (بستهٔ بی‌پروتکل) = ترتیب authored عیناً.
+ */
+export function previewItemAt(
+  mission: MissionConfig,
+  seq: { trials: ReadonlyArray<{ kind: 'go' | 'nogo' }> } | null,
+  position: number
+): { item: MissionItem | null; progress: { done: number; total: number } } {
+  const items = mission.items ?? [];
+  const total = items.length;
+  if (!Number.isInteger(position) || position < 0 || position >= total) {
+    return { item: null, progress: { done: Math.max(0, position), total } };
+  }
+  if (seq && seq.trials.length > 0) {
+    const idx = Math.min(position, seq.trials.length - 1);
+    const kind = seq.trials[idx].kind;
+    const touch = items.filter((it) => it.type === 'touch_report');
+    let k = 0;
+    for (let j = 0; j < idx; j++) if (seq.trials[j].kind === kind) k++;
+    const candidates = touch.filter((it) => (it.correct_touch === true) === (kind === 'go'));
+    const item = candidates[k] ?? touch[k] ?? items[position];
+    return { item: item ?? null, progress: { done: position, total } };
+  }
+  return { item: items[position] ?? null, progress: { done: position, total } };
+}

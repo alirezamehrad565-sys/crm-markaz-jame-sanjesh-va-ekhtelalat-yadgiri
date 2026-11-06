@@ -104,7 +104,7 @@
 | `index.html` | پوستهٔ اپ: منو، سایدبار، لودینگ ماژول‌ها با `?v=` نسخه |
 | `manifest.webmanifest` + `sw.js` | PWA: مانیفست و سرویس‌ورکر |
 | `_headers` | هدرهای امنیتی/کش Cloudflare Pages-استایل |
-| `assets/play/` | پخش‌کنندهٔ کودک (۱.۲۵.۰۸ — جدا از SPA پرسنلی): `play.js` (حلقهٔ آیتم←پاسخ←بازخورد، ساعت واکنش با توقف روی پنهان‌شدن برگه، تلاش دوبارهٔ شبکه)، `play.css` (قواعد حسی §۹) و `kinds/gonogo.js` (بازی گو/نوگو وکتوری بی‌صدا) — صفحهٔ میزبان `/m/:token` از page.ts سمت سرور رندر می‌شود |
+| `assets/play/` | پخش‌کنندهٔ کودک (۱.۲۵.۰۸ — جدا از SPA پرسنلی): `play.js` (حلقهٔ آیتم←پاسخ←بازخورد، ساعت واکنش با توقف روی پنهان‌شدن برگه، تلاش دوبارهٔ شبکه)، `play.css` (قواعد حسی §۹)، `kinds/gonogo.js` (بازی گو/نوگو وکتوری بی‌صدا)، `engine/` (موتور شش‌ماژولی فاز ۳: machine/timing/response/trials/session/scoring) و `preview.js` (پیش‌نمایش فقط-پرسنلی ۱.۲۵.۲۰ — تک‌نقطهٔ شبکهٔ خودش به `/api/play/preview/`، صفر نوشتن) — صفحات میزبان `/m/:token` و `/play/preview/:token` از page.ts سمت سرور رندر می‌شوند |
 | `assets/css/` | `tokens.css` (متغیرهای تم)، `base.css`، `components.css`، `views.css` (دارک‌مود و موبایل داخل همه) |
 | `assets/img/` | لوگو و آیکون‌های PWA |
 | `assets/js/ui.js` | کامپوننت‌های پایه: مودال، toast، tabs، فرم‌ساز |
@@ -134,7 +134,7 @@
 | `assets/js/session-type.js` | انواع جلسه |
 | `assets/js/student-form.js` | فرم افزودن/ویرایش دانش‌آموز |
 | `assets/js/illustrations.js` | تصاویر SVG داخلی (بدون فایل خارجی) |
-| `assets/js/views/` | ۲۴ نمای پنل: `dashboard`، `students`، `student-profile`، `appointments`، `working-day`، `working-hours`، `staff`، `reports`، `templates` (قالب‌ساز مسیر)، `exercises` (بانک تمرین)، `screening`، `special-needs`، `schools`، `settings`، `archive`، `outbox`، `case-event-types` (رویدادساز)، `progress-board`، `progress-report`، `clearbook` (کلر بوک)، `docs` (نمون‌برگ‌ها)، `finance` (مالی)، `backup` (پشتیبان‌گیری)، `not-found` (۴۰۴) |
+| `assets/js/views/` | ۲۵ نمای پنل: `dashboard`، `students`، `student-profile`، `appointments`، `working-day`، `working-hours`، `staff`، `reports`، `templates` (قالب‌ساز مسیر)، `exercises` (بانک تمرین)، `games` (بازی‌ها — پیش‌نمایش فقط-پرسنلی ۱.۲۵.۲۰)، `screening`، `special-needs`، `schools`، `settings`، `archive`، `outbox`، `case-event-types` (رویدادساز)، `progress-board`، `progress-report`، `clearbook` (کلر بوک)، `docs` (نمون‌برگ‌ها)، `finance` (مالی)، `backup` (پشتیبان‌گیری)، `not-found` (۴۰۴) |
 
 ## `migrations/` — اسکیمای D1
 
