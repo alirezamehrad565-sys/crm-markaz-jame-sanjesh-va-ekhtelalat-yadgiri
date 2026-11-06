@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.22";
+var APP_VERSION = "1.25.23";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23476,6 +23476,10 @@ var FA_SHAPE_KEYS = {
   heart: "\u0642\u0644\u0628",
   flower: "\u06AF\u0644",
   cat: "\u06AF\u0631\u0628\u0647",
+  butterfly: "\u067E\u0631\u0648\u0627\u0646\u0647",
+  cloud: "\u0627\u0628\u0631",
+  rocket: "\u0645\u0648\u0634\u06A9",
+  ufo: "\u0628\u0634\u0642\u0627\u0628\u200C\u067E\u0631\u0646\u062F\u0647",
   \u0633\u062A\u0627\u0631\u0647: "\u0633\u062A\u0627\u0631\u0647",
   \u062F\u0627\u06CC\u0631\u0647: "\u062F\u0627\u06CC\u0631\u0647",
   \u0645\u0631\u0628\u0639: "\u0645\u0631\u0628\u0639",
@@ -24027,6 +24031,30 @@ function currentStageOf(progress, band) {
   return stageByIndex(band, progress.unlocked_index);
 }
 __name(currentStageOf, "currentStageOf");
+var STAGE_VISUALS = {
+  s1: { go: { shape: "fish", color: "orange" }, nogo: { shape: "crab", color: "blue" } },
+  // گرم‌کردن — دریا
+  s2: { go: { shape: "flower", color: "red" }, nogo: { shape: "butterfly", color: "purple" } },
+  // تمرین — باغ
+  s3: { go: { shape: "balloon", color: "yellow" }, nogo: { shape: "cloud", color: "blue" } },
+  // تندتر — آسمان
+  s4: { go: { shape: "rocket", color: "orange" }, nogo: { shape: "ufo", color: "purple" } },
+  // دقت — فضا
+  s5: { go: { shape: "star", color: "yellow" }, nogo: { shape: "square", color: "blue" } }
+  // قهرمان — جفت کلاسیک آموزش
+};
+function stageVisualFor(stageId) {
+  if (typeof stageId !== "string" || stageId === "") return null;
+  return STAGE_VISUALS[stageId] ?? null;
+}
+__name(stageVisualFor, "stageVisualFor");
+function stageStimViewOf(stim, correctTouch, stageId) {
+  const v = stageVisualFor(stageId);
+  const base = stim ?? {};
+  if (!v) return { ...base };
+  return { ...base, ...correctTouch ? v.go : v.nogo };
+}
+__name(stageStimViewOf, "stageStimViewOf");
 
 // src/domain/games/scoring.ts
 var CV_MIN_RT_COUNT = 5;
@@ -24795,11 +24823,12 @@ function createGamesService(deps) {
     const mission = previewMissionOf(pkg.body);
     if (!mission) return null;
     const mode = pkg.body.mode ?? "training";
+    const previewStageId = mode === "training" && pkg.body.stages_enabled !== false ? "s1" : null;
     return {
       packageTitle: pkg.titleFa,
       missionTitle: mission.title ?? mission.id,
       game: mission.game,
-      hint: playHintOf(mission) ?? null,
+      hint: playHintOf(mission, previewStageId) ?? null,
       protocol: protocolSnapshotOf(protocolForAge(mode, null)),
       mode
     };
@@ -24827,7 +24856,12 @@ function createGamesService(deps) {
       })));
     }
     const at = previewItemAt(mission, seq, position);
-    return { item: at.item ? toItemView(at.item) : null, progress: at.progress };
+    let view = at.item ? toItemView(at.item) : null;
+    if (view && view.type === "touch_report" && mode === "training" && pkg.body.stages_enabled !== false) {
+      const authored = (mission.items ?? []).find((it) => it.id === view.id);
+      view = { ...view, stim: stageStimViewOf(authored?.stim, authored?.correct_touch === true, "s1") };
+    }
+    return { item: view, progress: at.progress };
   }
   __name(previewItem, "previewItem");
   async function previewFeedback(token, itemId, response, rtMs) {
@@ -24875,14 +24909,16 @@ function createGamesService(deps) {
     return m;
   }
   __name(missionConfigOf, "missionConfigOf");
-  function playHintOf(mission) {
+  function playHintOf(mission, stageId = null) {
     const train = (mission.items ?? []).filter((it) => it.phase === "train" && it.type === "touch_report");
     const go = train.find((it) => it.correct_touch === true);
     const nogo = train.find((it) => it.correct_touch === false);
     if (!go && !nogo) return null;
+    const goStim = stageStimViewOf(go?.stim, true, stageId);
+    const nogoStim = nogo ? stageStimViewOf(nogo.stim, false, stageId) : null;
     return {
-      go: { label: stimLabelOf(go?.stim), stim: go?.stim ?? {} },
-      nogo: nogo ? { label: stimLabelOf(nogo.stim), stim: nogo.stim } : null
+      go: { label: stimLabelOf(goStim), stim: goStim },
+      nogo: nogoStim ? { label: stimLabelOf(nogoStim), stim: nogoStim } : null
     };
   }
   __name(playHintOf, "playHintOf");
@@ -24955,7 +24991,7 @@ function createGamesService(deps) {
       adherenceConfirmed: adherence?.confirm2_at != null,
       ...state === "child_active" ? {
         playGame: m.game,
-        playHint: playHintOf(m),
+        playHint: playHintOf(m, res.session?.stage_id ?? stage?.id ?? null),
         playProtocol: snap,
         ...stage && progress ? {
           playStage: {
@@ -25126,7 +25162,15 @@ function createGamesService(deps) {
       next = (mission.items ?? []).find((it) => !doneIds.has(it.id));
     }
     await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf2(now()), session.id]);
-    return { item: next ? toItemView(next) : null, progress: { done: doneIds.size, total } };
+    let view = null;
+    if (next) {
+      let display = next;
+      if (next.type === "touch_report" && (res.pkg.body.mode ?? "training") === "training" && res.pkg.body.stages_enabled !== false) {
+        display = { ...next, stim: stageStimViewOf(next.stim, next.correct_touch === true, session.stage_id) };
+      }
+      view = toItemView(display);
+    }
+    return { item: view, progress: { done: doneIds.size, total } };
   }
   __name(nextItem, "nextItem");
   async function submitAttempt(token, draft) {

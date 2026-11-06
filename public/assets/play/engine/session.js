@@ -360,7 +360,9 @@ export async function runSession(ctx) {
   stage.classList.remove('play-stage--main');
   stage.innerHTML = isAssessment
     ? card('تمام شد. ممنون از توجهت!', 'فردا هم یک جلسهٔ تازه داری.')
-    : card('مأموریت امروز تمام شد. خسته نباشی!', 'فردا هم یک مأموریت تازه داری.') +
+    : (stageMeta && typeof stageMeta.title_fa === 'string'
+        ? card('مرحلهٔ «' + esc(stageMeta.title_fa) + '» تمام شد. آفرین!', 'فردا یک مأموریت تازه در راه است.')
+        : card('مأموریت امروز تمام شد. خسته نباشی!', 'فردا هم یک مأموریت تازه داری.')) +
       (B.star_basket && starCount > 0
         ? '<p class="play-muted">' + faNum(starCount) + ' ستاره در سبد تو جمع شد.</p>' : '');
   fx.revealStage(stage);

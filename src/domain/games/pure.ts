@@ -126,6 +126,7 @@ const FA_COLOR_KEYS: Record<string, string> = {
 const FA_SHAPE_KEYS: Record<string, string> = {
   star: 'ستاره', circle: 'دایره', square: 'مربع', fish: 'ماهی', crab: 'خرچنگ', boat: 'قایق',
   balloon: 'بادکنک', heart: 'قلب', flower: 'گل', cat: 'گربه',
+  butterfly: 'پروانه', cloud: 'ابر', rocket: 'موشک', ufo: 'بشقاب‌پرنده',
   ستاره: 'ستاره', دایره: 'دایره', مربع: 'مربع', ماهی: 'ماهی'
 };
 
