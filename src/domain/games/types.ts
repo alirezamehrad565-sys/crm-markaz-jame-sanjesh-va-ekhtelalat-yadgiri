@@ -4,6 +4,7 @@ import type { DbClient } from '@core/db';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { ProtocolSnapshot } from './protocol';
+import type { ChildGameReport } from './report';
 
 export type MetricFormula =
   | 'accuracy'
@@ -282,6 +283,7 @@ export interface GamesService {
   issueLink(missionId: string, actor: AuthContext): Promise<LinkIssueOutcome>;
   revokeLink(jti: string, actor: AuthContext): Promise<{ ok: true }>;
   getSessionDetail(missionId: string): Promise<{ sessions: unknown[]; attempts: unknown[] }>;
+  getChildReport(childId: string): Promise<ChildGameReport>;
 
   // زنجیرهٔ عمومی با توکن — بدون احراز هویت (§۵ و §۶)
   getState(token: string): Promise<PublicStateView>;
