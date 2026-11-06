@@ -110,6 +110,9 @@ export async function renderStudentProfile(container, ctx) {
     ['manager', 'secretary'].includes(session.user.role) ||
     (session.user.role === 'therapist' && Boolean(student.ownerStaffId) && student.ownerStaffId === session.user.staffId)
   );
+  /* ۱.۲۵.۲۴ — تب بازی‌ها: هم‌سطح دسترسی سرور (تجویز/گزارش فقط مدیر/درمانگر)؛
+     chunk مخصوص خودش دارد (import داینامیک در renderGamesTabContent) تا از بار پروفایل سبک بماند */
+  const canSeeGames = session.user && ['manager', 'therapist'].includes(session.user.role);
 
   /* ۱.۱۵.۰ — دکمه‌های دایره‌ای سادهٔ اقدام، روی خودِ کارت پرونده (به‌جای کاوش در تب‌ها و منوها):
      ویرایش · برچسب‌ها · هدف‌ها · معلم · تاریخچهٔ تحصیلی · حذف — همیشه جلوی چشم.
@@ -224,7 +227,8 @@ export async function renderStudentProfile(container, ctx) {
       timeline: renderTimelineTab,
       sessions: renderSessionsTab,
       comms: renderCommsTab,
-      exercises: renderExercisesTabContent
+      exercises: renderExercisesTabContent,
+      games: renderGamesTabContent // ۱.۲۵.۲۴ — میز تجویز بازی در خود پرونده
     }[key];
     (renderer ?? renderInfoTab)(content);
   }
@@ -265,6 +269,7 @@ export async function renderStudentProfile(container, ctx) {
       { key: 'timeline', label: 'تاریخچه', icon: 'clock', onSelect: selectTab },
       { key: 'sessions', label: auxDone ? `جلسات (${fa(appointments.length)})` : 'جلسات', icon: 'calendar', onSelect: selectTab },
       { key: 'exercises', label: 'تمرین‌ها', icon: 'file', onSelect: selectTab },
+      ...(canSeeGames ? [{ key: 'games', label: 'بازی‌ها', icon: 'gamepad', onSelect: selectTab }] : []), // ۱.۲۵.۲۴
       { key: 'comms', label: 'ارتباطات', icon: 'bot', onSelect: selectTab }
     ];
   }
@@ -369,6 +374,19 @@ export async function renderStudentProfile(container, ctx) {
 
   function renderExercisesTabContent(box) {
     renderExercisesTab(box, { student, onChanged: async () => { if (await refreshEventsData()) rerenderTabIf(['timeline', 'sessions']); } }); /* ۱.۲۰.۰ */
+  }
+
+  /* ۱.۲۵.۲۴ — تب بازی‌ها: میز تجویز/مأموریت/لینک در خود پرونده؛
+     chunk بازی‌ها فقط با ورود به این تب fetch می‌شود (خارج از بوت و خارج از chunk پروفایل) */
+  function renderGamesTabContent(box) {
+    box.replaceChildren(skeletonState('list', 3));
+    import('../games-console.js')
+      .then((m) => {
+        m.renderRxPanel(box, { childId: student.id, childName: `${student.firstName} ${student.lastName}`, embedded: true });
+      })
+      .catch((err) => {
+        box.replaceChildren(errorState(err, () => renderGamesTabContent(box)));
+      });
   }
 
   function renderClinicalTabContent(box) {
