@@ -488,14 +488,14 @@ export function createGamesService(deps: GamesDeps): GamesService {
     await expireStaleMissions();
     const today = tehranTodayYmd(now());
     const rows = await db.query<{
-      id: string; child_id: string; child_name: string | null; package_id: string; package_version: string;
+      id: string; child_id: string; child_name: string | null; package_id: string; package_version: string; goal_id: string;
       package_title_fa: string | null;
       goal_title_fa: string | null; status: string; created_at: string;
       mission_total: number; mission_done: number;
       pending_overdue: number; today_unlinked: number;
       last_session_at: string | null;
     }>(
-      `SELECT p.id, p.child_id, p.package_id, p.package_version, p.status, p.created_at,
+      `SELECT p.id, p.child_id, p.package_id, p.package_version, p.goal_id, p.status, p.created_at,
         (s.first_name || ' ' || s.last_name) AS child_name,
         pk.title_fa AS package_title_fa,
         g.title_fa AS goal_title_fa,
@@ -535,6 +535,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
         packageId: r.package_id,
         packageVersion: r.package_version,
         packageTitleFa: r.package_title_fa,
+        goalId: r.goal_id,
         goalTitleFa: r.goal_title_fa,
         status: r.status,
         missionTotal: r.mission_total,
