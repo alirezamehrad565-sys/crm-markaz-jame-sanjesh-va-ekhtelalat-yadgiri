@@ -17,6 +17,7 @@ const gonogoJs = read(join(PLAY, 'kinds/gonogo.js'));
 const playCss = read(join(PLAY, 'play.css'));
 const pageSrc = read(join(__dirname, '../domain/games/page.ts'));
 const routesSrc = read(join(__dirname, '../domain/games/routes.ts'));
+const allPlaySrc = playJs + gonogoJs + playCss;
 
 describe('گیت ۱.۲۵.۰۸ — لحن و امنیت متن کودک', () => {
   it('متن‌های روبه‌کودک هیچ واژهٔ ممنوعی ندارند (لینت مشترک با بسته‌ها)', () => {
@@ -92,5 +93,47 @@ describe('گیت ۱.۲۵.۰۸ — اتصال صفحه به پخش‌کننده',
     expect(routesSrc).toContain("style-src 'self' 'unsafe-inline'");
     expect(routesSrc).toContain("default-src 'none'");
     expect(routesSrc).toContain("frame-ancestors 'none'");
+  });
+});
+
+describe('گیت فاز ۲ بازطراحی — پالت/فونت/پنج‌شِمال (۱.۲۵.۱۲)', () => {
+  it('پالت دفترچهٔ وظیفه §۲ در CSS و محرک‌ها حاضر است', () => {
+    expect(playCss).toContain('#153E50'); // Navy
+    expect(playCss).toContain('#438C89'); // Teal — محرک نوگو
+    expect(playCss).toContain('#E4AA46'); // Amber — محرک گو
+    expect(playCss).toContain('#F5F0E5'); // Cream
+    expect(gonogoJs).toContain('#438C89');
+    expect(gonogoJs).toContain('#E4AA46');
+  });
+
+  it('آبی/زرد قدیمی محرک‌ها هیچ‌جا باقی نمانده (تعارض پالت ممیزی §۳.۴)', () => {
+    expect(allPlaySrc).not.toContain('#4E8DD4');
+    expect(allPlaySrc).not.toContain('#F2C14E');
+    expect(allPlaySrc).not.toContain('#229ED9');
+  });
+
+  it('فونت Vazirmatn فقط خودی است — بدون هیچ URL بیرونی', () => {
+    expect(playCss).toContain("font-family: 'Vazirmatn Play'");
+    expect(playCss).toContain('/assets/fonts/vazirmatn-fa-regular.woff2');
+    expect(playCss).toContain('/assets/fonts/vazirmatn-fa-bold.woff2');
+    expect(routesSrc).toContain("font-src 'self'");
+  });
+
+  it('پنج‌شِمال: شِمال‌های آموزش/اجرای اصلی/پایان جدا دارند؛ اجرای اصلی بی‌چرم است', () => {
+    expect(playCss).toMatch(/\.play-stage--teach/);
+    expect(playCss).toMatch(/\.play-stage--main/);
+    expect(playCss).toMatch(/\.play-stage--end/);
+  });
+
+  it('ارزیابی بی‌نوار پیشرفت و بی‌سبد ستاره — تمایز دو حالت در CSS', () => {
+    expect(playCss).toMatch(/data-mode='assessment'\] \.play-progress/);
+    expect(playCss).toMatch(/data-basket='on'\] \.play-basket/);
+    expect(pageSrc).toContain('data-protocol=');
+    expect(pageSrc).toContain('id="play-basket"');
+  });
+
+  it('مقیاس محرک سن‌محور با متغیر پروتکل — بدون عدد جادویی مستقل', () => {
+    expect(playCss).toContain('--stim-scale');
+    expect(playCss).toMatch(/\.play-svg\s*\{[^}]*var\(--stim-scale\)/);
   });
 });
