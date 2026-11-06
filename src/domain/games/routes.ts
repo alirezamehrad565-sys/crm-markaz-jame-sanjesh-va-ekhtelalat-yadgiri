@@ -76,6 +76,45 @@ const AttemptSchema = z.object({
   idem_key: z.string().trim().min(8).max(100)
 });
 
+/** نمای HTML گزارش درمانگر — داده‌محور، بدون هیچ برچسب بالینی (فاز ۸) */
+function renderReportHtml(report: import('./report').ChildGameReport, childId: string): string {
+  const esc = (s: unknown): string =>
+    String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const sessionRows = report.sessions.map((s) => {
+    const sum = (s.computed?.summary ?? {}) as { totals?: Record<string, number>; pct?: Record<string, number | null>; rt?: { median_rt?: number | null } };
+    const attemptCount = s.raw.attempt_count;
+    return `<tr><td>${esc(s.session_id.slice(0, 8))}</td><td>${esc(s.purpose)}</td><td>${esc(s.computed?.validity)}</td>` +
+      `<td>${esc(s.computed?.quality_verdict)}</td><td>${esc(sum.totals?.total ?? '—')}</td>` +
+      `<td>${esc(sum.pct?.correct_go ?? '—')}</td><td>${esc(sum.pct?.correct_nogo ?? '—')}</td>` +
+      `<td>${esc(sum.pct?.commission ?? '—')}</td><td>${esc(sum.pct?.omission ?? '—')}</td><td>${esc(attemptCount)}</td></tr>`;
+  }).join('');
+  const compareRows = report.comparison.by_metric.map((m) =>
+    `<tr><td>${esc(m.metric_id)}</td><td>${esc(m.unit)}</td><td>${m.points.map((p) => esc(p.value)).join(' → ') || '—'}</td></tr>`
+  ).join('');
+  return `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="robots" content="noindex, nofollow" />
+<title>گزارش بازی — کودک ${esc(childId.slice(0, 8))}</title>
+<style>
+  body { font-family: Tahoma, sans-serif; background: #F5F0E5; color: #153E50; margin: 0; padding: 24px; }
+  h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 28px; }
+  table { border-collapse: collapse; width: 100%; background: #fff; border-radius: 10px; overflow: hidden; }
+  th, td { border: 1px solid #E3DCC9; padding: 8px 10px; font-size: 13px; text-align: center; }
+  th { background: #153E50; color: #fff; }
+  .muted { color: #6E7B76; font-size: 12px; }
+</style></head><body>
+<h1>گزارش جلسه‌های بازی — کودک ${esc(childId.slice(0, 8))}</h1>
+<p class="muted">${esc(report.session_count)} جلسه · تولید ${esc(report.generated_at)} · این گزارش هیچ تفسیر بالینی تولید نمی‌کند — تفسیر با درمانگر است.</p>
+<h2>خلاصهٔ محاسبه‌شدهٔ جلسه‌ها</h2>
+<table><thead><tr><th>جلسه</th><th>حالت</th><th>اعتبار</th><th>کیفیت</th><th>آزمون</th><th>گو درست٪</th><th>نوگو درست٪</th><th>کمیسیون٪</th><th>اُمیشن٪</th><th>پاسخ خام</th></tr></thead>
+<tbody>${sessionRows || '<tr><td colspan="10">جلسه‌ای ثبت نشده</td></tr>'}</tbody></table>
+<h2>مقایسهٔ جلسه‌ها (قدیمی → جدید)</h2>
+<table><thead><tr><th>سنجه</th><th>واحد</th><th>سری زمانی</th></tr></thead>
+<tbody>${compareRows || '<tr><td colspan="3">سنجه‌ای ثبت نشده</td></tr>'}</tbody></table>
+<h2>لایهٔ خام</h2>
+<p class="muted">${esc(report.sessions.reduce((a, s) => a + s.raw.attempts.length, 0))} پاسخ خام با شواهد نمایش (مُهر زمان/افت فریم/لمس‌ها) در خروجی JSON همین مسیر در دسترس است — تفکیک خام/محاسبه‌شده حفظ شده.</p>
+</body></html>`;
+}
+
 /** ثبت مسیرهای پرسنلی — پشت authMiddleware (در api-routing بعد از گیت‌ها) */
 export function registerGamesRoutes(app: AppHono, service: GamesService): void {
   app.get('/api/games/metrics', requireRole('manager', 'therapist', 'secretary'), async (c) => {
@@ -177,6 +216,18 @@ export function registerGamesRoutes(app: AppHono, service: GamesService): void {
 
   app.get('/api/games/missions/:id/sessions', requireRole('manager', 'therapist'), async (c) => {
     return c.json({ data: await service.getSessionDetail(c.req.param('id')) }, 200);
+  });
+
+  // گزارش درمانگر (فاز ۸) — JSON پیش‌فرض؛ ?format=html نمای چاپ‌پذیر؛ بدون برچسب بالینی
+  app.get('/api/games/children/:childId/report', requireRole('manager', 'therapist'), async (c) => {
+    const report = await service.getChildReport(c.req.param('childId'));
+    if (c.req.query('format') === 'html') {
+      return new Response(renderReportHtml(report, c.req.param('childId')), {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' }
+      });
+    }
+    return c.json({ data: report }, 200);
   });
 }
 
