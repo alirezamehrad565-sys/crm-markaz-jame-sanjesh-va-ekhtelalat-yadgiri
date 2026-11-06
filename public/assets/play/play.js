@@ -61,8 +61,7 @@ function calmPanel() {
 /* ─── ماژول نوع‌بازی: بارگیری از kinds/ یا بازگشت به پخش‌کنندهٔ عام ─── */
 
 const GENERIC = {
-  responseOf: (item, touched) => ({ touched: touched === true }),
-  previewSteps: (hint) => [],
+  previewSteps: () => [],
   stimSvg: () => '<div class="play-svg"></div>'
 };
 
@@ -71,7 +70,6 @@ async function loadKind() {
   try {
     const mod = await import('./kinds/' + KIND + '.js');
     return {
-      responseOf: mod.responseOf || GENERIC.responseOf,
       previewSteps: mod.previewSteps || GENERIC.previewSteps,
       stimSvg: mod.stimSvg || GENERIC.stimSvg
     };
