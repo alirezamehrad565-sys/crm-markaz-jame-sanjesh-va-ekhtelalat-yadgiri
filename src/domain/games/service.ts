@@ -19,6 +19,7 @@ import {
 import { protocolForAge, protocolSnapshotOf } from './protocol';
 import type { ProtocolMode } from './protocol';
 import { summarizeAttempts } from './scoring';
+import { decideAdaptive, applyAdaptiveLevel, serializeDecision, type AdaptiveSessionInput, type AdaptiveDecision } from './adaptive';
 import { generateSequence, serializeSequence, parseSequenceRecord } from './stimulus';
 import { ENGINE_ONLY_FORMULAS, mergeEngineMetrics } from './registry-extra';
 import type {
@@ -92,6 +93,7 @@ interface SessionRow {
   last_activity_at: string | null;
   metrics_json: string | null;
   summary_json?: string | null;
+  adaptive_json?: string | null;
 }
 
 interface AttemptRow {
@@ -550,6 +552,19 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const state = linkStateOf(res);
     const mode: ProtocolMode = res.pkg.body.mode ?? 'training';
     const childAge = state === 'child_active' ? await childAgeOf(res.rx.child_id) : null;
+    let snap = protocolSnapshotOf(protocolForAge(mode, childAge));
+    // سازگاری فقط-تمرین (فاز ۶): آخرین تصمیم معتبر تجویز پنجرهٔ این جلسه را تنظیم می‌کند؛
+    // ارزیابی هرگز، و کلید خاموشی بسته/درمانگر همیشه محترم است
+    if (state === 'child_active' && mode === 'training' && res.pkg.body.protocol != null && res.pkg.body.adaptive_enabled !== false) {
+      const { decision } = await latestAdaptiveDecisionOf(res.rx.id);
+      if (decision?.change?.param === 'response_window_go_ms') {
+        const level = applyAdaptiveLevel(
+          { response_window_go_ms: snap.params.response_window_go_ms, level: 0 },
+          decision
+        );
+        snap = { ...snap, params: { ...snap.params, response_window_go_ms: level.response_window_go_ms } };
+      }
+    }
     return {
       state,
       missionRef: m.id,
@@ -561,7 +576,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
       ...(state === 'child_active' ? {
         playGame: m.game,
         playHint: playHintOf(m),
-        playProtocol: protocolSnapshotOf(protocolForAge(mode, childAge))
+        playProtocol: snap
       } : {})
     };
   }
@@ -587,6 +602,44 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const res = await resolveLink(token);
     if (!res) throw new NotFoundError('این پیوند پیدا نشد');
     return stateViewOf(res);
+  }
+
+  /** آخرین تصمیم سازگاری فعال تجویز (فاز ۶) — برای سطح فعلی جلسهٔ جدید */
+  async function latestAdaptiveDecisionOf(prescriptionId: string): Promise<{ decision: AdaptiveDecision | null; history: AdaptiveSessionInput[] }> {
+    try {
+      const rows = await db.query<{ adaptive_json: string | null; summary_json: string | null; validity: string; id: string }>(
+        `SELECT s.adaptive_json, s.summary_json, s.validity, s.id
+         FROM game_sessions s JOIN game_missions m ON m.id = s.mission_id
+         WHERE m.prescription_id = ?
+         ORDER BY s.created_at DESC LIMIT 10`,
+        [prescriptionId]
+      );
+      let decision: AdaptiveDecision | null = null;
+      const history: AdaptiveSessionInput[] = [];
+      for (const r of rows) {
+        if (r.adaptive_json) {
+          const d = parseJson<AdaptiveDecision>(r.adaptive_json, null as unknown as AdaptiveDecision);
+          if (d && typeof d.action === 'string') decision = d;
+        }
+        const sum = parseJson<{ totals?: Record<string, number>; pct?: Record<string, number | null>; rt?: { median: number | null; cv: number | null }; behavior?: { premature_total?: number } } | null>(r.summary_json, null);
+        if (sum && sum.totals && sum.pct) {
+          history.push({
+            session_id: r.id,
+            validity: (r.validity as 'valid' | 'partial' | 'invalid') ?? 'valid',
+            correct_go_pct: sum.pct.correct_go ?? null,
+            correct_nogo_pct: sum.pct.correct_nogo ?? null,
+            commission_pct: sum.pct.commission ?? null,
+            omission_pct: sum.pct.omission ?? null,
+            median_rt: sum.rt?.median ?? null,
+            rt_cv: sum.rt?.cv ?? null,
+            premature_total: sum.behavior?.premature_total ?? 0
+          });
+        }
+      }
+      return { decision, history };
+    } catch {
+      return { decision: null, history: [] };
+    }
   }
 
   async function start(token: string): Promise<PublicStateView> {
@@ -811,6 +864,22 @@ export function createGamesService(deps: GamesDeps): GamesService {
       `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ?, summary_json = ? WHERE id = ?`,
       [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summary), session.id]
     );
+    // تصمیم سازگاری (فاز ۶) — فقط تمرین با پروتکل فعال و کلید خاموشی روشن؛
+    // ورودی‌های تصمیم عیناً در adaptive_json می‌مانند (شفافیت برای درمانگر)
+    const sessionMode: ProtocolMode = res.pkg.body.mode ?? 'training';
+    const adaptiveEnabled = sessionMode === 'training' && res.pkg.body.protocol != null && res.pkg.body.adaptive_enabled !== false;
+    if (adaptiveEnabled) {
+      const prot = protocolForAge('training', await childAgeOf(res.rx.child_id));
+      const { decision: priorDecision, history } = await latestAdaptiveDecisionOf(res.rx.id);
+      const current = applyAdaptiveLevel(
+        { response_window_go_ms: prot.params.response_window_go_ms.value, level: 0 },
+        priorDecision
+      );
+      const decision = decideAdaptive(history, current, { adaptiveEnabled: prot.behavior.adaptive });
+      await db.execute(`UPDATE game_sessions SET adaptive_json = ? WHERE id = ?`, [
+        serializeDecision(decision, session.id, 'training'), session.id
+      ]);
+    }
     await db.execute(`UPDATE game_missions SET status = 'done' WHERE id = ?`, [res.mission.id]);
     const fresh = await resolveLink(token);
     return { state: await stateViewOf(fresh!), metrics };
