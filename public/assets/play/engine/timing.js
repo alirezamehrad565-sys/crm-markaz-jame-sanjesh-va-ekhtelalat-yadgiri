@@ -88,6 +88,8 @@ export function createPausableClock() {
     pause() { if (running) { acc += performance.now() - last; running = false; } },
     resume() { if (!running) { last = performance.now(); running = true; } },
     touch() { this.pause(); return Math.round(acc); },
+    /** زمان انباشتهٔ جاری (ms) — برای گردآورندهٔ پاسخ پس از pause */
+    get acc() { return acc; },
     get running() { return running; }
   };
 }
