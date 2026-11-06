@@ -205,6 +205,7 @@ export interface FollowupRow {
   packageId: string | null;
   packageVersion: string | null;
   packageTitleFa: string | null;
+  goalId: string | null;
   goalTitleFa: string | null;
   status: string;
   missionTotal: number;
