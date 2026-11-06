@@ -57,6 +57,8 @@ import type {
   PackageRecord,
   PackageUpsertInput,
   PrescriptionCreateInput,
+  PrescriptionListQuery,
+  PrescriptionListRecord,
   PrescriptionRecord,
   PublicStateView,
   PreviewIssueOutcome,
@@ -105,6 +107,16 @@ interface PrescriptionRow {
   status: string;
   created_at: string;
 }
+
+/** ردیف فهرست تجویزها با هم‌پیوند هویت انسانی (۱.۲۵.۲۴) — ترکیب p.* با ستون‌های join */
+type PrescriptionListRow = PrescriptionRow & {
+  child_name: string | null;
+  goal_title_fa: string | null;
+  package_title_fa: string | null;
+  mission_total: number;
+  mission_done: number;
+  mission_live: number;
+};
 
 interface SessionRow {
   id: string;
@@ -318,6 +330,26 @@ export function createGamesService(deps: GamesDeps): GamesService {
     return loadPackage(packageId, version);
   }
 
+  /** بازنشسته‌کردن نسخهٔ بسته (۱.۲۵.۲۴) — تجویز تازه می‌بندد (create فقط منتشرشده می‌پذیرد)؛
+   *  تجویز/مأموریت موجود نسخه‌قفل می‌ماند (§۱۳) — رفتار نسخه‌پین‌شده عمداً دست‌نخورده */
+  async function retirePackage(packageId: string, version: string, actor: AuthContext): Promise<PackageRecord> {
+    const record = await loadPackage(packageId, version);
+    if (record.status === 'retired') return record;
+    await db.execute(
+      `UPDATE game_packages SET status = 'retired', updated_at = datetime('now') WHERE id = ? AND version = ?`,
+      [packageId, version]
+    );
+    await audit.log({
+      actorId: actor.staffId,
+      action: 'game_package_retire',
+      resourceType: 'game_package',
+      resourceId: `${packageId}@${version}`,
+      changes: { status: { from: record.status, to: 'retired' } }
+    });
+    logger.info('games.package.retired', { packageId, version });
+    return loadPackage(packageId, version);
+  }
+
   // ─── تجویز ───
 
   async function createPrescription(input: PrescriptionCreateInput, actor: AuthContext): Promise<PrescriptionRecord> {
@@ -384,11 +416,42 @@ export function createGamesService(deps: GamesDeps): GamesService {
     };
   }
 
-  async function listPrescriptions(childId?: string): Promise<PrescriptionRecord[]> {
-    const rows = childId
-      ? await db.query<PrescriptionRow>(`SELECT * FROM game_prescriptions WHERE child_id = ? ORDER BY created_at DESC`, [childId])
-      : await db.query<PrescriptionRow>(`SELECT * FROM game_prescriptions ORDER BY created_at DESC`);
-    return rows.map(prescriptionRowToRecord);
+  /** فهرست تجویزها برای میز درمانگر (۱.۲۵.۲۴) — هویت انسانی + شمار مأموریت‌ها؛ فهرست محدود (رشد ناپذیر) */
+  async function listPrescriptions(query?: string | PrescriptionListQuery): Promise<PrescriptionListRecord[]> {
+    const q: PrescriptionListQuery = typeof query === 'string' ? { childId: query } : (query ?? {});
+    const limit = Math.min(Math.max(Math.trunc(q.limit ?? 50), 1), 200);
+    const offset = Math.max(Math.trunc(q.offset ?? 0), 0);
+    const where: string[] = [];
+    const params: unknown[] = [];
+    if (q.childId) { where.push('p.child_id = ?'); params.push(q.childId); }
+    if (q.status) { where.push('p.status = ?'); params.push(q.status); }
+    const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+    const rows = await db.query<PrescriptionListRow>(
+      `SELECT p.*,
+        (s.first_name || ' ' || s.last_name) AS child_name,
+        g.title_fa AS goal_title_fa,
+        pk.title_fa AS package_title_fa,
+        (SELECT COUNT(*) FROM game_missions m WHERE m.prescription_id = p.id) AS mission_total,
+        (SELECT COUNT(*) FROM game_missions m WHERE m.prescription_id = p.id AND m.status = 'done') AS mission_done,
+        (SELECT COUNT(*) FROM game_missions m WHERE m.prescription_id = p.id AND m.status IN ('pending','in_progress')) AS mission_live
+      FROM game_prescriptions p
+      LEFT JOIN students s ON s.id = p.child_id
+      LEFT JOIN game_goals g ON g.id = p.goal_id
+      LEFT JOIN game_packages pk ON pk.id = p.package_id AND pk.version = p.package_version
+      ${whereSql}
+      ORDER BY p.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}`,
+      params
+    );
+    return rows.map((row) => ({
+      ...prescriptionRowToRecord(row),
+      childName: row.child_name ?? null,
+      packageTitleFa: row.package_title_fa ?? null,
+      goalTitleFa: row.goal_title_fa ?? null,
+      missionTotal: row.mission_total,
+      missionDone: row.mission_done,
+      missionLive: row.mission_live
+    }));
   }
 
   async function setPrescriptionStatus(id: string, action: 'pause' | 'resume' | 'stop' | 'complete', actor: AuthContext): Promise<PrescriptionRecord> {
@@ -446,9 +509,31 @@ export function createGamesService(deps: GamesDeps): GamesService {
     return mergedDose(pkg.dose, override);
   }
 
+  /** فهرست مأموریت‌های تجویز (۱.۲۵.۲۴) — عنوان از بدنهٔ بسته + لینک زندهٔ هر مأموریت برای پیگیری تبعیت */
   async function listMissions(prescriptionId: string): Promise<MissionRecord[]> {
     const rows = await db.query<MissionRow>(`SELECT * FROM game_missions WHERE prescription_id = ? ORDER BY scheduled_for, created_at`, [prescriptionId]);
-    return rows.map(missionRowToRecord);
+    let titles = new Map<string, string>();
+    const rx = await loadPrescription(prescriptionId);
+    if (rx) {
+      try {
+        const pkg = await loadPackage(rx.packageId, rx.packageVersion);
+        titles = new Map(pkg.body.missions.map((m) => [m.id, m.title ?? m.id]));
+      } catch { /* بسته/نسخه در دسترس نیست — عنوان‌ها خالی می‌ماند */ }
+    }
+    const linkByMission = new Map<string, { jti: string; expiresAt: string }>();
+    if (rows.length > 0) {
+      const liveLinks = await db.query<{ mission_id: string; jti: string; expires_at: string }>(
+        `SELECT mission_id, jti, expires_at FROM game_links
+         WHERE mission_id IN (${rows.map(() => '?').join(',')}) AND revoked_at IS NULL AND expires_at > ?`,
+        [...rows.map((r) => r.id), isoOf(now())]
+      );
+      for (const l of liveLinks) linkByMission.set(l.mission_id, { jti: l.jti, expiresAt: l.expires_at });
+    }
+    return rows.map((row) => ({
+      ...missionRowToRecord(row),
+      title: titles.get(row.mission_ref) ?? null,
+      link: linkByMission.get(row.id) ?? null
+    }));
   }
 
   // ─── لینک امضاشده ───
@@ -1348,6 +1433,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
   return {
     upsertMetric, listMetrics, upsertGoal, listGoals, upsertPackage, listPackages, publishPackage,
     createPrescription, listPrescriptions, setPrescriptionStatus, scheduleMission, listMissions,
+    retirePackage,
     issueLink, revokeLink, getSessionDetail, getChildReport,
     issuePreview, previewState, previewItem, previewFeedback,
     getState, start, nextItem, submitAttempt, finish, parentGate, confirm
