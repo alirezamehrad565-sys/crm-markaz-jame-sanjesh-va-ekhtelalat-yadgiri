@@ -8,7 +8,7 @@
      • /api/*                           → هیچ‌گاه دخالت نمی‌شود (هرگز کش نمی‌شود)
    نسخه‌گذاری: با هر انتشار VERSION را bump کنید تا کش‌های کهنه در activate پاک شوند.
    ═══════════════════════════════════════════════════════════════ */
-const VERSION = 'v1.25.08';
+const VERSION = 'v1.25.10';
 const CACHE = `shell-${VERSION}`;
 const IMMUTABLE = ['/assets/img/', '/assets/fonts/', '/assets/help/', '/assets/dist/']; // dist نام‌دار
 
@@ -64,8 +64,8 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // ۳) JS/CSS و دارایی‌های پخش‌کنندهٔ کودک → شبکه-اول (پس از انتشار همیشه هماهنگ؛ کش فقط پشتیبان آفلاین)
-  if (url.pathname.startsWith('/assets/js/') || url.pathname.startsWith('/assets/css/') || url.pathname.startsWith('/assets/play/')) {
+  // ۳) JS/CSS → شبکه-اول (پس از انتشار همیشه هماهنگ؛ کش فقط پشتیبان آفلاین)
+  if (url.pathname.startsWith('/assets/js/') || url.pathname.startsWith('/assets/css/')) {
     e.respondWith(
       fetch(req)
         .then((res) => put(CACHE, req, res))

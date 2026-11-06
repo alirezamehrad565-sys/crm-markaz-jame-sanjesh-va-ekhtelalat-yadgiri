@@ -783,6 +783,45 @@
   margin-bottom: var(--sp-4);
 }
 
+/* — ۱.۲۵.۱۰ گزارش‌ها: نوار ابزار شکستنی «میان گروه‌ها» — برچسب از/تا هرگز از پیکرش جدا نمی‌شود — */
+.rpt-toolbar { row-gap: var(--sp-2); }
+.rpt-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.rpt-field { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.rpt-field__label { color: var(--text-3); font-size: var(--fs-sm); flex: none; }
+.rpt-field .jdate { flex: 1 1 auto; min-width: 0; }
+.rpt-field .jdate .input { width: 100%; min-width: 0; }
+.rpt-actions { display: flex; gap: var(--sp-2); flex: none; }
+@media (max-width: 640px) {
+  .rpt-field { flex: 1 1 100%; }
+  .rpt-actions { flex: 1 1 100%; }
+  .rpt-actions .btn { flex: 1; }
+}
+
+/* — ۱.۲۵.۱۰ گرید KPI گزارش‌ها: ۹ شاخص = ۳×۳، ۶ شاخص = ۳+۳ — پایان سلول یتیم ردیف آخر — */
+.kpi-grid--rpt { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+@media (min-width: 640px) {
+  .kpi-grid--rpt { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+}
+
+/* — ۱.۲۵.۱۰ صندوق اعلان‌ها: ردیف کلاس‌دار — در موبایل متن و کنش‌ها دو ردیف — */
+.ob-row {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+.ob-row:last-child { border-bottom: 0; }
+.ob-row__main { flex: 1; min-width: 0; }
+.ob-row__side { display: flex; align-items: center; gap: var(--sp-2); flex: none; }
+.ob-section__head {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+@media (max-width: 560px) {
+  .ob-row { flex-wrap: wrap; row-gap: var(--sp-2); }
+  .ob-row__main { flex: 1 1 100%; }
+  .ob-row__side { flex: 1 1 100%; justify-content: space-between; }
+}
+
 .sched--visual { display: flex; flex-direction: column; gap: var(--sp-3); }
 
 .sched-quick {
@@ -3188,6 +3227,8 @@ tr.wl-row--urgent > td:first-child {
   padding: 10px 12px; min-width: 0;
 }
 .tpl-session__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+/* ۱.۲۵.۱۰ — دکمه‌های بالا/پایین جابه‌جایی جلسه (جایگزین لمسیِ درگ) */
+.tpl-session__move { flex: none; padding: 4px 7px; }
 .tpl-session__num { font-weight: 700; font-size: var(--fs-sm); }
 .tpl-session .field { margin-bottom: 8px; }
 .tpl-session .field:last-child { margin-bottom: 0; }
@@ -3241,6 +3282,7 @@ tr.wl-row--urgent > td:first-child {
 .tpl-card__sessions { display: flex; flex-direction: column; gap: 4px; border-top: 1px dashed var(--line); padding-top: 7px; }
 .tpl-card__session { display: flex; flex-direction: column; gap: 3px; font-size: var(--fs-sm); }
 .tpl-card__actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.tpl-card__actions .btn { width: 100%; } /* ۱.۲۵.۱۰: سه کنش هم‌عرض — قبلاً پهنای ناهم‌سنجِ شناور می‌ساختند */
 
 .staff-score-card > summary {
   display: flex; align-items: center; gap: 8px; cursor: pointer;

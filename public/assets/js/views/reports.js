@@ -105,17 +105,24 @@ function buildView(zone) {
     }
   }, label);
 
-  const bar = el('div', { class: 'toolbar print-hide' },
-    preset(7, '۷ روز'),
-    preset(30, '۳۰ روز'),
-    preset(90, '۹۰ روز'),
-    el('span', { style: { marginInlineStart: 'var(--sp-2)', color: 'var(--text-3)', fontSize: 'var(--fs-sm)' } }, 'از'),
-    fromWidget.root,
-    el('span', { style: { color: 'var(--text-3)', fontSize: 'var(--fs-sm)' } }, 'تا'),
-    toWidget.root,
+  /* ۱.۲۵.۱۰ — برچسب «از/تا» دیگر از پیکرش جدا نمی‌شود: هر تاریخ یک گروه چفت‌شده است
+     و شکستن خط فقط «میان گروه‌ها» رخ می‌دهد (قبلاً در موبایل برچسبِ یتیم و جفت‌شدنِ
+     برچسب با پیکرِ اشتباه می‌ساخت). */
+  const bar = el('div', { class: 'toolbar rpt-toolbar print-hide' },
+    el('div', { class: 'rpt-presets' },
+      preset(7, '۷ روز'),
+      preset(30, '۳۰ روز'),
+      preset(90, '۹۰ روز')),
+    el('div', { class: 'rpt-field' },
+      el('span', { class: 'rpt-field__label' }, 'از'),
+      fromWidget.root),
+    el('div', { class: 'rpt-field' },
+      el('span', { class: 'rpt-field__label' }, 'تا'),
+      toWidget.root),
     el('div', { class: 'spacer' }),
-    el('button', { class: 'btn btn--soft btn--sm', onclick: () => load() }, icon('refresh', 16), 'به‌روزرسانی'),
-    el('button', { class: 'btn btn--primary btn--sm', onclick: () => window.print() }, icon('printer', 16), 'چاپ گزارش')
+    el('div', { class: 'rpt-actions' },
+      el('button', { class: 'btn btn--soft btn--sm', onclick: () => load() }, icon('refresh', 16), 'به‌روزرسانی'),
+      el('button', { class: 'btn btn--primary btn--sm', onclick: () => window.print() }, icon('printer', 16), 'چاپ گزارش'))
   );
 
   const root = el('div', {},
@@ -156,7 +163,8 @@ function buildPeriodicBody(r) {
   const pct = (v) => `${fa(Math.round((v ?? 0) * 100))}٪`;
   const ratePct = (rate, markedCount) => markedCount > 0 ? pct(rate) : '—';
   const fa1 = (v) => fa(Math.round((v ?? 0) * 10) / 10);
-  const kpiGrid = el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-5)' } },
+  /* ۱.۲۵.۱۰ — گرید سه‌ستونهٔ گزارش: ۹ شاخص = ۳×۳ و ۶ شاخص = ۳+۳ — سلول یتیم حذف */
+  const kpiGrid = el('div', { class: 'kpi-grid kpi-grid--rpt', style: { marginBottom: 'var(--sp-5)' } },
     kpi('نوبت‌های بازه', r.appointments.total, `روزانه ${fa(r.appointments.avgPerDay)}`, 'primary'),
     kpi('مجموع ساعت جلسات', r.appointments.hours, 'جلسات برنامه‌ریزی‌شده', 'accent'),
     kpi('نرخ لغو', r.appointments.total > 0 ? pct(r.appointments.cancellationRate) : '—', `${fa(r.appointments.cancelled)} نوبت لغوشده`, r.appointments.cancellationRate >= KPI_ALERT_RATE ? 'error' : 'neutral'),
@@ -261,7 +269,10 @@ function buildPeriodicBody(r) {
               { key: 'studentName', label: 'دانش‌آموز' },
               { key: 'sessions', label: 'جلسات', render: (s) => fa(s.sessions) },
               { key: 'absents', label: 'غیبت', render: (s) => s.absents > 0 ? el('span', { class: 'badge badge--error' }, fa(s.absents)) : fa(0) },
-              { key: 'go', label: 'پروفایل', align: 'end', render: (s) => el('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'پروفایل', 'aria-label': `پروفایل ${s.studentName ?? 'دانش‌آموز'}`, onclick: () => { location.hash = `#/students/${s.studentId}`; } }, icon('user', 15)) } /* S7-06 */
+              /* ۱.۲۵.۱۰ — رکورد بی‌دانش‌آموز (دانش‌آموز حذف‌شده) دیگر دکمهٔ پروفایل مرده ندارد */
+              { key: 'go', label: 'پروفایل', align: 'end', render: (s) => s.studentId
+                ? el('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'پروفایل', 'aria-label': `پروفایل ${s.studentName ?? 'دانش‌آموز'}`, onclick: () => { location.hash = `#/students/${s.studentId}`; } }, icon('user', 15))
+                : el('span', { class: 'cell-sub', title: 'دانش‌آموز این رکورد حذف شده است' }, '—') } /* S7-06 */
             ],
             rows: r.topStudents
           })
@@ -331,16 +342,20 @@ function buildAdvancedView(zone) {
     }
   }, label);
 
-  const bar = el('div', { class: 'toolbar print-hide' },
-    preset(30, '۳۰ روز'),
-    preset(90, '۹۰ روز'),
-    preset(180, '۶ ماه'),
-    el('span', { style: { marginInlineStart: 'var(--sp-2)', color: 'var(--text-3)', fontSize: 'var(--fs-sm)' } }, 'از'),
-    fromWidget.root,
-    el('span', { style: { color: 'var(--text-3)', fontSize: 'var(--fs-sm)' } }, 'تا'),
-    toWidget.root,
+  const bar = el('div', { class: 'toolbar rpt-toolbar print-hide' },
+    el('div', { class: 'rpt-presets' },
+      preset(30, '۳۰ روز'),
+      preset(90, '۹۰ روز'),
+      preset(180, '۶ ماه')),
+    el('div', { class: 'rpt-field' },
+      el('span', { class: 'rpt-field__label' }, 'از'),
+      fromWidget.root),
+    el('div', { class: 'rpt-field' },
+      el('span', { class: 'rpt-field__label' }, 'تا'),
+      toWidget.root),
     el('div', { class: 'spacer' }),
-    el('button', { class: 'btn btn--soft btn--sm', onclick: () => currentAdv ? exportCsv(currentAdv) : null }, icon('download', 16), 'خروجی CSV')
+    el('div', { class: 'rpt-actions' },
+      el('button', { class: 'btn btn--soft btn--sm', onclick: () => currentAdv ? exportCsv(currentAdv) : null }, icon('download', 16), 'خروجی CSV'))
   );
 
   const root = el('div', {},
@@ -379,7 +394,7 @@ function buildAdvancedView(zone) {
 }
 
 function buildAdvancedBody(adv, pct, days) {
-  const kpiGrid = el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-5)' } },
+  const kpiGrid = el('div', { class: 'kpi-grid kpi-grid--rpt', style: { marginBottom: 'var(--sp-5)' } },
     kpi('پوشش گزارش پرونده', pct(adv.assessments.coverageRate), `${fa(adv.assessments.withAny)} از ${fa(adv.assessments.activeStudents)} پروندهٔ فعال`, 'primary'),
     kpi('پوشش گزارش جلسه', pct(adv.sessionNotes.coverageRate), `${fa(adv.sessionNotes.withNote)} از ${fa(adv.sessionNotes.sessions)} جلسه`, 'accent'),
     kpi('نرخ تبدیل لیست انتظار', pct(adv.waitlist.conversionRate), `${fa(adv.waitlist.admitted)} پذیرش · ${fa(adv.waitlist.open)} در صف`, 'neutral'),
