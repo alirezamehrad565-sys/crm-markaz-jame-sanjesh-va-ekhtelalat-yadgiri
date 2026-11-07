@@ -312,6 +312,169 @@ export async function runSession(ctx) {
       continue;
     }
 
+    /* آیتم اسکن — «حملهٔ جاسوس‌ها» (۱.۲۵.۳۰): موج ربات‌ها؛ همهٔ جاسوس‌ها را بگیر و «گزارش بده!» را لمس کن.
+       حس عدی در صحنه است (پوستهٔ شب/آژیر) — هرگز در گفتار با کودک (§۲).
+       پاسخ {hits} سرور نمره می‌دهد؛ کلید («کدام خانه») هرگز به کلاینت نمی‌رود؛
+       RT از نمایش موج (نخستین لمس)؛ شواهد همان قرارداد فاز ۴؛
+       بازخورد آموزشی + نشان جاسوس‌های جامانده از answer_display سرور — ارزیابی بی‌بازخورد/بی‌ستاره */
+    if (item.type === 'scan' && item.stim && Array.isArray(item.stim.tiles) && typeof kind.scanMarkup === 'function') {
+      machine.to(STATES.FIXATION, { item: item.id, scan: true }); // مسیر اجباری ماشین: READY/PRACTICE → FIXATION → STIMULUS
+      stage.classList.remove('play-stage--quiet');
+      stage.classList.add('play-stage--scan'); // پوستهٔ عدی: شب، حاشیهٔ آژیر، اسکادران
+      await sleeper.sleep(400); // تثبیت کوتاه خنثی پیش از موج — بدون فلاش (§۹)
+      stage.innerHTML = kind.scanMarkup(item);
+      machine.to(STATES.STIMULUS, { item: item.id, scan: true });
+      const shownAt = performance.now(); // RT از لحظهٔ نمایش موج — نه از شروع حلقه
+      const stimRaw = item.stim || {};
+      const waveMs = typeof stimRaw.wave_ms === 'number' && Number.isFinite(stimRaw.wave_ms) && stimRaw.wave_ms >= 4000
+        ? Math.min(30000, Math.round(stimRaw.wave_ms))
+        : 15000;
+      const result = await new Promise((resolve) => {
+        const tiles = stage.querySelectorAll('.play-scan__tile');
+        const confirmBtn = stage.querySelector('.play-scan__confirm');
+        const timerBar = stage.querySelector('.play-scan__timer > span');
+        const hits = new Set();
+        let firstAt = null;
+        let tapCount = 0;
+        let settled = false;
+        // نوار زمان موج — نما با CSS transition؛ مکث برگه از trialHooks نما را هم منجمد می‌کند
+        let waveRemain = waveMs;
+        let wavePausedAt = null;
+        const freezeBar = () => {
+          if (!timerBar) return;
+          const w = window.getComputedStyle(timerBar).width;
+          timerBar.style.transition = 'none';
+          timerBar.style.width = w;
+        };
+        const unfreezeBar = (ms) => {
+          if (!timerBar) return;
+          window.requestAnimationFrame(() => {
+            timerBar.style.transition = 'width ' + Math.max(0, ms) + 'ms linear';
+            timerBar.style.width = '0%';
+          });
+        };
+        trialHooks.pause = () => {
+          wavePausedAt = performance.now();
+          freezeBar();
+        };
+        trialHooks.resume = () => {
+          if (wavePausedAt !== null) {
+            waveRemain = Math.max(0, waveRemain - (performance.now() - wavePausedAt));
+            wavePausedAt = null;
+            unfreezeBar(waveRemain);
+          }
+        };
+        const finishWave = () => {
+          if (settled) return;
+          settled = true;
+          trialHooks.pause = null;
+          trialHooks.resume = null;
+          tiles.forEach((b) => b.removeEventListener('pointerdown', onTile));
+          if (confirmBtn) confirmBtn.removeEventListener('pointerdown', onConfirm);
+          resolve({ hits: [...hits], firstAt, tapCount });
+        };
+        const onTile = (ev) => {
+          const btn = ev.target.closest('.play-scan__tile');
+          if (!btn) return;
+          ev.preventDefault(); // شبکهٔ لمسی — اسکرول اشتباه نمی‌سازد
+          tapCount += 1;
+          if (firstAt === null) firstAt = performance.now();
+          const idx = Number(btn.dataset.idx);
+          if (hits.has(idx)) { hits.delete(idx); btn.classList.remove('play-scan__tile--catch'); }
+          else { hits.add(idx); btn.classList.add('play-scan__tile--catch'); }
+        };
+        const onConfirm = (ev) => {
+          ev.preventDefault();
+          finishWave();
+        };
+        tiles.forEach((b) => b.addEventListener('pointerdown', onTile));
+        if (confirmBtn) confirmBtn.addEventListener('pointerdown', onConfirm);
+        unfreezeBar(waveMs);
+        sleeper.sleep(waveMs).then(finishWave);
+      });
+      machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, scan: true });
+      const sortedHits = result.hits.slice().sort((a, b) => a - b);
+      const usedMs = Math.round(performance.now() - shownAt);
+      const recordScan = {
+        item_id: item.id,
+        go: null,
+        touched: sortedHits.length > 0,
+        rt_ms: result.firstAt !== null ? Math.round(result.firstAt - shownAt) : null,
+        touch_count: result.tapCount,
+        premature_count: 0,
+        multiple_count: 0,
+        out_of_surface_count: 0,
+        presented_at: shownAt,
+        frame_drops: 0,
+        window_ms: null,
+        isi_ms: 0,
+        events: [],
+        scan_hits: sortedHits
+      };
+      trials.push(recordScan);
+      doneCount += 1;
+      let fbS = null;
+      try {
+        fbS = await api.submit({
+          item_id: item.id,
+          response: {
+            hits: sortedHits,
+            wave_used_ms: usedMs,
+            presented_at: Math.round(shownAt),
+            frame_drops: 0,
+            touch_count: result.tapCount,
+            premature_count: 0,
+            multiple_count: 0,
+            out_of_surface_count: 0
+          },
+          rt_ms: recordScan.rt_ms,
+          idem_key: crypto.randomUUID()
+        });
+      } catch (err) {
+        machine.to(STATES.INTERRUPTED, { reason: 'network', item: item.id });
+        onNetworkFail();
+        return;
+      }
+      const okS = fbS !== null && typeof fbS === 'object' && fbS.correct === true;
+      const canFeedbackS = !isAssessment && fbS && fbS.phase === 'train' && fbS.message && B.feedback_in_main;
+      if (canFeedbackS) {
+        fx.popBubble(bubble, fbS.message, okS ? 'ok' : 'calm', P.feedback_ms);
+        if (!okS && fbS.answer_display != null && typeof kind.scanRevealTruth === 'function') {
+          // نشان حقیقت — جاسوس‌های جامانده؛ فهرست از بازخورد سرور می‌آید، نه از کلاینت
+          kind.scanRevealTruth(item, stage, String(fbS.answer_display));
+          await sleeper.sleep(P.feedback_ms + 600); // وقت دیدن جاسوس‌های جامانده
+        } else {
+          if (okS) {
+            const pt = typeof kind.scanCatchPoint === 'function' ? kind.scanCatchPoint(stage) : null;
+            if (pt) fx.burstAt(pt.x, pt.y);
+          }
+          await sleeper.sleep(P.feedback_ms);
+        }
+      } else {
+        await sleeper.sleep(Math.max(400, 600));
+      }
+      stage.classList.remove('play-stage--scan');
+      stage.innerHTML = ''; // صحنه خالی پیش از ISI بعدی — موج جاسوس‌ها شبح نمی‌ماند
+      /* سبد ستاره و استریک — همان حلقهٔ گو/نوگو؛ ارزیابی هرگز */
+      if (!isAssessment && B.star_basket && fbS && fbS.phase === 'train' && okS) {
+        starCount += 1;
+        if (countEl) countEl.textContent = faNum(starCount);
+        fx.flyStar(stage, basketEl);
+        window.setTimeout(() => fx.popCount(countEl), 560);
+        if (starCount % 5 === 0) {
+          fx.popBubble(bubble, faNum(starCount) + ' ستاره جمع شد!', 'ok', P.feedback_ms);
+          await sleeper.sleep(P.feedback_ms);
+        }
+      }
+      if (okS) streak += 1; else if (fbS && fbS.correct === false) streak = 0;
+      const streakMsgS = streakLine(streak);
+      if (canFeedbackS && streakMsgS) fx.pillShow(streakMsgS);
+      if (machine.state === STATES.INTER_TRIAL_INTERVAL) {
+        machine.to(practiceMode ? STATES.PRACTICE : STATES.READY, { after_items: doneCount });
+      }
+      continue;
+    }
+
     /* آیتم انتخابی (choice) — بدون پنجرهٔ زمانی؛ کف ۲۰۰ms سروری (§۸)؛
        همان کلاس‌های CSS پخش‌کننده؛ پاسخ از کلید گزینه، RT از نمایش هر آیتم
        (۱.۲۵.۲۸ رفع: ساعت قبلاً یک‌بار بیرون حلقه گرفته می‌شد و RT آیتم‌های بعدی تورم داشت) */

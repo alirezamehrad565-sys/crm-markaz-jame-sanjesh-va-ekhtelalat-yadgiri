@@ -12,7 +12,8 @@ export const TONE_RULES_BASE = ['no_timer', 'no_rank', 'no_streak', 'no_fail_mes
 export const DEFAULT_RT_FLOOR_MS: Record<MissionItem['type'], number> = {
   touch_report: 150, // گو/نوگو — زیر ۱۵۰ حدس است
   numline: 0,        // خط عددی کف ندارد
-  choice: 200        // فلش‌کارت/انتخاب — لمس تصادفی حذف می‌شود
+  choice: 200,       // فلش‌کارت/انتخاب — لمس تصادفی حذف می‌شود
+  scan: 150          // حملهٔ جاسوس‌ها — کف نخستین لمس موج؛ زیر آن حدس است
 };
 
 /** آستانهٔ بیکاری برای جلسهٔ ناقص (§۶) */
@@ -58,6 +59,14 @@ export interface ScoredAttempt {
   isGo?: boolean;
   /** پاسخ زودتر از محرک (لمس حین ISI) — فاز ۳ موتور پر می‌کند؛ سرور فقط حامل است */
   premature?: boolean;
+  /** حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — گرفتن هم‌نوع (خطای کمسیون موج) */
+  scanFalse?: number;
+  /** جاسوس جامانده (اُمیشن موج) */
+  scanMissed?: number;
+  /** شمار هم‌نوع‌ها (مخرج fa_pct) */
+  scanDistractors?: number;
+  /** شمار جاسوس‌های موج (مخرج miss_pct) */
+  scanSpies?: number;
 }
 
 function rtFloorFor(item: MissionItem, mission: MissionConfig): number {
@@ -83,6 +92,10 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
   let commission = false;
   let omission = false;
   let isGo: boolean | undefined;
+  let scanFalse: number | undefined;
+  let scanMissed: number | undefined;
+  let scanDistractors: number | undefined;
+  let scanSpies: number | undefined;
 
   if (item.type === 'choice') {
     correct = typeof res.option === 'number' && res.option === item.correct;
@@ -105,6 +118,22 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
     commission = !want && touched;
     omission = want && !touched;
     isGo = want;
+  } else if (item.type === 'scan') {
+    // حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — دقیقاً همان مجموعهٔ جاسوس‌ها؛ ترتیب/تکرار لمس بی‌اثر،
+    // گرفتن هم‌نوع یا جاانداختن جاسوس = موج نادرست. کلید فقط سرور می‌داند.
+    const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0) : [];
+    const rawHits = Array.isArray(res.hits) ? res.hits : [];
+    const hits = [...new Set(rawHits.filter((n) => Number.isInteger(n) && n >= 0))];
+    const keySet = new Set(key);
+    const hitSet = new Set(hits);
+    correct = key.length === hits.length && hits.every((h) => keySet.has(h));
+    const falseHits = hits.filter((h) => !keySet.has(h)).length;
+    const missed = key.filter((k) => !hitSet.has(k)).length;
+    const tiles = tilesCountOf(item);
+    scanFalse = falseHits;
+    scanMissed = missed;
+    scanDistractors = Math.max(0, tiles - key.length);
+    scanSpies = key.length;
   }
 
   return {
@@ -116,8 +145,17 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
     ...(errorPct !== undefined ? { numlineErrorPct: errorPct } : {}),
     commission,
     omission,
-    ...(isGo !== undefined ? { isGo } : {})
+    ...(isGo !== undefined ? { isGo } : {}),
+    ...(scanFalse !== undefined ? { scanFalse, scanMissed: scanMissed, scanDistractors: scanDistractors, scanSpies: scanSpies } : {})
   };
+}
+
+/** شمار خانه‌های موج scan از خود stim — ستون×ردیف؛ ناسالم = صفر (مخرج بی‌دامنه می‌ماند) */
+export function tilesCountOf(item: MissionItem): number {
+  const s = (item.stim ?? {}) as Record<string, unknown>;
+  const cols = typeof s.cols === 'number' && Number.isInteger(s.cols) && s.cols > 0 ? s.cols : 0;
+  const rows = typeof s.rows === 'number' && Number.isInteger(s.rows) && s.rows > 0 ? s.rows : 0;
+  return cols * rows;
 }
 
 // ─── برچسب فارسی محرک برای راهنمای شروع بازی کودک (M2) ───
@@ -157,7 +195,7 @@ export function answerDisplayOf(item: MissionItem): string | null {
     return typeof item.correct === 'number' ? (item.options?.[item.correct]?.label ?? null) : null;
   }
   if (item.type === 'numline') return typeof item.correct === 'number' ? String(item.correct) : null;
-  return null; // touch_report: بازپخش محرک، نه نمایش پاسخ
+  return null; // touch_report: بازپخش محرک، نه نمایش پاسخ؛ scan: CSV جاسوس‌های جامانده در scanMissedCsv
 }
 
 // ─── بازخورد خط عددی (۱.۲۵.۲۸) — دو سطح موفقیت برای حس ادیکتو بدون رقارت:
@@ -180,6 +218,24 @@ export function numlineFeedbackOf(item: MissionItem, correct: boolean, response:
   return NUMLINE_FB_NEAR;
 }
 
+// ─── بازخورد حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — حس عدی در دشمن است، نه در گفتار با کودک (§۲):
+//   · موج کامل → تحسین دقیق بی‌رقارت
+//   · موج ناقص → متن آرام + نشان‌گذاری جاسوس‌های جامانده (آموزش پس از پاسخ)
+//   · هیچ سرزنش/فشاری — دشمن فقط قصهٔ صحنه است
+
+export const SCAN_FB_ALL = 'همهٔ جاسوس‌ها را گرفتی! چشم‌هایت تیز بود.';
+
+/** CSV جاسوس‌های جامانده برای نشان حقیقت کلاینت — فقط برای موج نادرست آموزشی؛ رقم‌های لاتین با کاما */
+export function scanMissedCsv(item: MissionItem, response: unknown): string | null {
+  if (item.type !== 'scan' || !Array.isArray(item.correct)) return null;
+  const rawHits = (response ?? {}) === Object(response)
+    ? (response as Record<string, unknown>).hits
+    : null;
+  const hits = new Set(Array.isArray(rawHits) ? rawHits.filter((n) => Number.isInteger(n) && n >= 0) : []);
+  const missed = item.correct.filter((k) => !hits.has(k));
+  return missed.length > 0 ? missed.join(',') : null;
+}
+
 // ─── فرمول‌های سنجه (§۸) — ورودی فقط پاسخ‌های معتبر پروب ───
 
 export function accuracyOf(scored: ScoredAttempt[]): number | null {
@@ -191,6 +247,22 @@ export function meanNumlineErrorOf(scored: ScoredAttempt[]): number | null {
   const errs = scored.map((s) => s.numlineErrorPct).filter((v): v is number => typeof v === 'number');
   if (errs.length === 0) return null;
   return round2(errs.reduce((a, b) => a + b, 0) / errs.length);
+}
+
+// ─── فرمول‌های حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — دامنه از خود موج: fa روی هم‌نوع‌ها، miss روی جاسوس‌ها ───
+
+export function scanFaPctOf(scored: ScoredAttempt[]): number | null {
+  const denom = scored.reduce((a, s) => a + (typeof s.scanDistractors === 'number' ? s.scanDistractors : 0), 0);
+  if (denom <= 0) return null;
+  const fa = scored.reduce((a, s) => a + (typeof s.scanFalse === 'number' ? s.scanFalse : 0), 0);
+  return round2((fa / denom) * 100);
+}
+
+export function scanMissPctOf(scored: ScoredAttempt[]): number | null {
+  const denom = scored.reduce((a, s) => a + (typeof s.scanSpies === 'number' ? s.scanSpies : 0), 0);
+  if (denom <= 0) return null;
+  const miss = scored.reduce((a, s) => a + (typeof s.scanMissed === 'number' ? s.scanMissed : 0), 0);
+  return round2((miss / denom) * 100);
 }
 
 export function medianRtOf(scored: ScoredAttempt[]): number | null {
@@ -271,6 +343,8 @@ export function computeMetricValue(formula: string, scored: ScoredAttempt[]): nu
     case 'correct_nogo_pct': return correctNogoPctOf(scored);
     case 'commission_pct': return commissionPctOf(scored);
     case 'omission_pct': return omissionPctOf(scored);
+    case 'scan_fa': return scanFaPctOf(scored);
+    case 'scan_miss': return scanMissPctOf(scored);
     default: return null;
   }
 }
