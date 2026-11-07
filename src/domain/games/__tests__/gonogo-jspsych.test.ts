@@ -12,6 +12,11 @@ import {
 import { stimulusHideMsFor, windowMsFor } from '../../../../public/assets/play/engine/machine.js';
 import { STAGE_VISUALS } from '../stages';
 import { FORBIDDEN_TEXT_PATTERNS } from '../pure';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+/** منبع ماژول گونوگو — برای گیت‌های تک‌منبع شخصیت (M2) */
+const gonogoSrc = readFileSync(join(__dirname, '../../../../public/assets/play/kinds/gonogo.js'), 'utf8');
 
 /** همهٔ متن‌های ممکن ماژول — برای لینت واژه‌های ممنوع */
 function allTextOutputs(): string[] {
@@ -124,12 +129,19 @@ describe('هویت ماهی و خرچنگ — محرک‌های وکتور مو�
     expect(STAGE_VISUALS.s1.nogo.color).toBe('blue');
   });
 
-  it('وکتور ماهی و خرچنگ همان مسیرهای درون‌کد قبلی‌اند — svg بدون دارایی خارجی', () => {
+  it('وکتور ماهی و خرچنگ = وکتور آرام تک‌منبع صحنه (M2) — svg بدون دارایی خارجی', () => {
     const fish = stimSvg({ shape: 'fish', color: 'orange' });
     const crab = stimSvg({ shape: 'crab', color: 'blue' });
     expect(fish).toContain('<svg');
     expect(crab).toContain('<svg');
-    expect(fish).toContain('M14 60'); // مسیر ماهی قدیمی
-    expect(crab).toContain('M28 52'); // مسیر خرچنگ قدیمی
+    // هویت M2: وکتور حالت idle از scene.js — ژست ثابت و آرام برای آزمون؛
+    // بدنهٔ ماهی از نقطهٔ ۱۴٫۶۲ و لاک خرچنگ از مرکز ۶۲٫۵۸ می‌آید
+    expect(fish).toContain('M14 62');
+    expect(fish).toContain('Q26 70 34 66'); // لبخند جوهری — شخصیت M2
+    expect(crab).toContain('M34 58 a28 22');
+    expect(crab).toContain('M52 48 a3.5 3.5'); // ساقه‌چشم جوهری
+    // تک‌منبع: محرک آزمون از HERO_VECTORS می‌آید نه کپی محلی
+    expect(gonogoSrc).toContain('SHAPES.fish = HERO_VECTORS.fish');
+    expect(gonogoSrc).toContain("from '../scene.js'");
   });
 });

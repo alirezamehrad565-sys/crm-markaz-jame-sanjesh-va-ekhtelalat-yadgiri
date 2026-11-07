@@ -13,10 +13,22 @@ import { runTrial } from './trials.js';
 import { createTouchLedger, attachTouchEvidence, observeDisplayFrames } from './observe.js';
 import { summarizeSession, medianOf } from './scoring.js';
 import * as fx from '../fx.js';
+import { sceneMarkup, fishPuppet, crabPuppet } from '../scene.js';
 
 const rand = (min, max) => Math.floor(min + Math.random() * (max - min + 1));
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
 const faNum = (n) => String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
+
+/* صحنهٔ دریایی برای لحظه‌های تشریفاتی (M2/۱.۲۵.۳۶ — راه A): فقط تمرین؛ ارزیابی هرگز
+   صحنهٔ هنر نمی‌بیند (C1 دستورالعمل ثابت، خنثی). جنبش همه از fx.sceneAmbient؛
+   شاخه‌های آزمون عیناً به‌صورت امروز می‌مانند — CSS صحنه در شِمال اجرای اصلی هم خاموش است */
+function decorateScene(stage, variant, hero) {
+  if (!stage) return;
+  stage.insertAdjacentHTML('afterbegin', sceneMarkup(variant, hero));
+  fx.sceneAmbient(stage);
+}
+
+const HERO_FISH_COLOR = '#E8925A'; /* نارنجی ماهی — امضای مرحلهٔ اول (s1) */
 
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -129,9 +141,11 @@ export async function runSession(ctx) {
   stage.innerHTML = isAssessment
     ? card('سلام! به دستورالعمل گوش کن.', 'برای شروع، صفحه را لمس کن')
     : card('سلام!', 'برای شروع، صفحه را لمس کن');
+  if (!isAssessment) decorateScene(stage, 'teach', { svg: fishPuppet('swim', HERO_FISH_COLOR) }); // صحنهٔ معرفی — فقط تمرین
   fx.revealStage(stage);
   await tapToContinue(stage);
   stage.className = 'play-stage';
+  stage.innerHTML = ''; // صحنهٔ معرفی هم جمع می‌شود — محرک اول در صحنهٔ خالی می‌آید
 
   /* ─── ۲) آموزش/دستورالعمل ─── */
   machine.to(STATES.DEMONSTRATION);
@@ -189,6 +203,7 @@ export async function runSession(ctx) {
       '<p class="play-line">' + esc(stageMeta.title_fa) + '</p>' +
       (stageMeta.goal_fa ? '<p class="play-muted">' + esc(stageMeta.goal_fa) + '</p>' : '') +
       fx.starRow(stageMeta.best_stars);
+    decorateScene(stage, 'teach'); // صحنهٔ آرام پشت کارت مرحله — بدون قهرمان؛ ستاره‌ها نقش اصلی‌اند
     fx.revealStage(stage);
     fx.popStars(stage);
     await tapToContinue(stage);
@@ -238,10 +253,12 @@ export async function runSession(ctx) {
       stage.innerHTML = card('استراحت کوچولو', isAssessment
         ? 'هر وقت آماده بودی لمس کن.'
         : 'یک نفس عمیق بکش؛ هر وقت آماده بودی لمس کن.');
+      if (!isAssessment) decorateScene(stage, 'teach', { svg: fishPuppet('idle', HERO_FISH_COLOR) }); // ماهی آرام در استراحت
       fx.revealStage(stage);
       await sleeper.sleep(Math.min(P.break_min_ms, 2000));
       await tapToContinue(stage);
       stage.className = 'play-stage';
+      stage.innerHTML = ''; // صحنهٔ استراحت جمع می‌شود — ISI بعدی در صحنهٔ خالی می‌آید
       machine.to(practiceMode ? STATES.PRACTICE : STATES.READY, { after_break: true });
     }
 
@@ -1080,6 +1097,8 @@ export async function runSession(ctx) {
         : card('مأموریت امروز تمام شد. خسته نباشی!', 'فردا هم یک مأموریت تازه داری.')) +
       (B.star_basket && starCount > 0
         ? '<p class="play-muted">' + faNum(starCount) + ' ستاره در سبد تو جمع شد.</p>' : '');
+  /* صحنهٔ پایان (M2) — ماهی خوشحال + خرچنگ آرام کنار هم؛ فقط تمرین؛ ارزیابی همان پایان آرام قبلی */
+  if (!isAssessment) decorateScene(stage, 'end', { svg: fishPuppet('happy', HERO_FISH_COLOR) + crabPuppet('idle', '#438C89', 'play-scene__hero-crab') });
   /* خلاصهٔ پایان — نگاشت debrief بستهٔ jsPsych (۱.۲۵.۳۴): فقط تمرین؛ ارزیابی هرگز عدد نمی‌بیند؛
      ورودی فقط دادهٔ مجاز کلاینت: نمره از بازخورد سرور (train)، میانهٔ RT از رکوردهای موتور؛
      قاعدهٔ دامنهٔ صفر داخل ماژول نوع‌بازی است — جلسهٔ بی‌آزمون نمره‌خورده هیچ کارتی نمی‌سازد */
