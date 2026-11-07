@@ -59,7 +59,7 @@ function pack(id, phase, band, salt) {
   for (const i of sides.slice(0, flips)) arrows[i] = opp;
   const same = arrows.filter((d) => d === center).length;
   const cond = same >= n - same ? 'congruent' : 'incongruent'; // برچسب عمومی محرک (پوشیده در خود arrows)
-  const stim = { arrows, window_ms: b.win, cond };
+  const stim = { arrows, window_ms: b.win, cond, band }; // band = گروه authored برای فیلتر مرحله‌ها
   if (b.jit) {
     stim.jitter = arrows.map((_, i) =>
       i === mid ? 0 : (rand() < 0.5 ? -1 : 1) * (2 + Math.round(rand() * 3))
