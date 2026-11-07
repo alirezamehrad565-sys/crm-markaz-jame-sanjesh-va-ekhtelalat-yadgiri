@@ -87,7 +87,7 @@ function safeProtocol(snap) {
  *   onNetworkFail(abort): پنل آرام شبکه
  */
 export async function runSession(ctx) {
-  const { root, stage, bubble, bar, basketEl, countEl, api, protocol: rawProtocol, kind, hint, stageMeta, onNetworkFail } = ctx;
+  const { root, stage, bubble, bar, basketEl, countEl, api, protocol: rawProtocol, kind, hint, stageMeta, resume, onNetworkFail } = ctx;
   const protocol = safeProtocol(rawProtocol);
   const isAssessment = protocol.mode === 'assessment';
   const P = protocol.params;
@@ -134,16 +134,47 @@ export async function runSession(ctx) {
     }
   });
 
-  /* ─── ۱) معرفی — شروع با نخستین لمس ─── */
+  /* ─── ۱) INTRO — بسته‌بندی معرفی بازی (G3/۱.۲۵.۳۷): نام/قانون/دکمهٔ بزرگ + ادامهٔ نرم (U7) ───
+     نام و قانون از ماژول نوع‌بازی (intro.rule از راهنمای سرور می‌آید — فقط آیتم‌های train)؛
+     ادامهٔ نرم جلسهٔ نیمه‌تمام: پیام خوش‌برگشتی بی‌سرزنش + «چند قدم مانده» به زبان کودک (U7).
+     ارزیابی عیناً دستورالعمل ثابت کوتاه قبلی — هیچ نام/صحنه/دکمهٔ بازی‌گوش نمی‌بیند (C1). */
   machine.to(STATES.INSTRUCTION);
   stage.className = 'play-stage';
   stage.classList.add(isAssessment ? 'play-stage--main' : 'play-stage--teach');
-  stage.innerHTML = isAssessment
-    ? card('سلام! به دستورالعمل گوش کن.', 'برای شروع، صفحه را لمس کن')
-    : card('سلام!', 'برای شروع، صفحه را لمس کن');
-  if (!isAssessment) decorateScene(stage, 'teach', { svg: fishPuppet('swim', HERO_FISH_COLOR) }); // صحنهٔ معرفی — فقط تمرین
-  fx.revealStage(stage);
-  await tapToContinue(stage);
+  const intro = kind && typeof kind.intro === 'object' && kind.intro && typeof kind.intro.name === 'string'
+    && kind.intro.name.trim() !== '' && typeof kind.intro.rule === 'function' ? kind.intro : null;
+  if (isAssessment) {
+    stage.innerHTML = card('سلام! به دستورالعمل گوش کن.', 'برای شروع، صفحه را لمس کن');
+    fx.revealStage(stage);
+    await tapToContinue(stage);
+  } else if (intro) {
+    const ruleLine = intro.rule(hint);
+    const remainN = resume && Number.isFinite(resume.total) && Number.isFinite(resume.done)
+      ? Math.max(0, resume.total - resume.done) : null;
+    stage.innerHTML =
+      '<span class="play-step-badge">مأموریت امروز</span>' +
+      '<p class="play-intro__name">' + esc(intro.name) + '</p>' +
+      (ruleLine ? '<p class="play-line">' + esc(ruleLine) + '</p>' : '') +
+      (resume && Number.isFinite(resume.done) && resume.done > 0
+        ? '<p class="play-muted">این مأموریت نیمه‌تمام مونده بود؛ از همین‌جا ادامه می‌دهیم.</p>' +
+          (remainN !== null
+            ? '<p class="play-intro__remain">' + (remainN > 0
+              ? faNum(remainN) + ' قدم مانده؛ بی‌عجله!'
+              : 'همین قدم‌های آخر باقی مانده؛ بی‌عجله!') + '</p>'
+            : '')
+        : '<p class="play-muted">دکمهٔ بزرگ را لمس کن تا شروع کنیم.</p>') +
+      '<button type="button" class="play-btn play-btn--intro">شروع!</button>';
+    decorateScene(stage, 'teach', { svg: fishPuppet('swim', HERO_FISH_COLOR) }); // صحنهٔ معرفی — فقط تمرین
+    fx.revealStage(stage);
+    fx.popIn(stage.querySelector('.play-intro__name'));
+    await bigButtonContinue(stage); // تنها راه ادامه: دکمهٔ بزرگ معرفی
+  } else {
+    /* مدار قدیمی — نوع‌بازی بدون intro (پخش‌کنندهٔ عام) */
+    stage.innerHTML = card('سلام!', 'برای شروع، صفحه را لمس کن');
+    decorateScene(stage, 'teach', { svg: fishPuppet('swim', HERO_FISH_COLOR) });
+    fx.revealStage(stage);
+    await tapToContinue(stage);
+  }
   stage.className = 'play-stage';
   stage.innerHTML = ''; // صحنهٔ معرفی هم جمع می‌شود — محرک اول در صحنهٔ خالی می‌آید
 
@@ -217,6 +248,7 @@ export async function runSession(ctx) {
   let starCount = 0;
   let streak = 0;
   let doneCount = 0;
+  let stepsLeftShown = false; // نشانهٔ «چند قدم مانده» یک‌بار در جلسه — نه فشار تکراری (U7)
   /* خلاصهٔ پایان فقط از دادهٔ مجاز کلاینت (۱.۲۵.۳۴): کلید پاسخ (گو بودن) هرگز به کلاینت
      نمی‌رسد — درستی فقط از بازخورد سرور می‌آید (فقط آیتم‌های train نمره برمی‌گردانند؛
      پروب‌ها بی‌نمره‌اند و در نسبت دقت کارت پایان نمی‌آیند — ملاک همیشه سرور است) */
@@ -237,6 +269,16 @@ export async function runSession(ctx) {
     const item = next.item;
     if (B.progress_visible && bar) setProgress(bar, next.progress.done, next.progress.total);
     if (!item) break;
+
+    /* نشانهٔ کودک‌زبان «چند قدم مانده» (U7/G3) — یک‌بار در جلسه، فقط تمرین؛
+       پیل آرام جای نوار خام؛ ارزیابی هرگز نشانهٔ جریان نمی‌بیند (C1) */
+    if (!isAssessment && !stepsLeftShown && next.progress && Number.isFinite(next.progress.total) && next.progress.total > 0) {
+      const remainN = Math.max(0, next.progress.total - next.progress.done);
+      if (remainN > 0 && remainN <= 3) {
+        stepsLeftShown = true;
+        fx.pillShow(remainN === 1 ? 'فقط یک قدم مانده!' : faNum(remainN) + ' قدم مانده؛ داریم به پایان می‌رسیم!');
+      }
+    }
 
     /* تمرین ↔ اجرای اصلی — از فاز آیتم سرور (ادعای کلاینت نیست) */
     const isPractice = item.phase === 'train';
@@ -1143,6 +1185,20 @@ function tapToContinue(stage) {
       resolve();
     };
     stage.addEventListener('pointerdown', onTap);
+  });
+}
+
+/** ادامه از INTRO با دکمهٔ بزرگ معرفی — تنها دکمهٔ صفحه؛ لمس و کلیک هر دو (G3/۱.۲۵.۳۷).
+ *  اگر دکمه نبود (مدار قدیمی)، ادامه بی‌درنگ — رفتار قبلی محفوظ می‌ماند. */
+function bigButtonContinue(stage) {
+  return new Promise((resolve) => {
+    const btn = stage.querySelector('.play-btn--intro');
+    if (!btn) { resolve(); return; }
+    const onGo = () => {
+      btn.removeEventListener('click', onGo);
+      resolve();
+    };
+    btn.addEventListener('click', onGo);
   });
 }
 

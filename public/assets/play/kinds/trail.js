@@ -10,7 +10,7 @@
      · jsPsych (هسته) — مجوز MIT.
    ایدهٔ پایه: Trail Making Test A/B (مفهوم عمومی آزمون عصب‌شناختی — بدون کد).
    تفاوت با نسخهٔ بالینی: خطا بی‌سرزنش است — لمس ترتیب اشتباه فقط رد را همان‌جا
-   قطع می‌کند (پایان موج)؛ هیچ فلاش/صدای خطا/متن شکست نیست (§۲ و §۹).
+   قطع می‌کند (پایان موج)؛ هیچ فلاش/صدای خطا/متن ناامیدکننده نیست (§۲ و §۹).
    حس عدی در صحنه است (شب، حاشیهٔ هشدار ایستا، دزد فراری) — هرگز در گفتار با کودک.
    نمره‌دهی فقط سمت سرور است؛ کلید پاسخ (ترتیب درست گره‌ها) هرگز به این ماژول
    نمی‌رسد؛ هیچ درخواست شبکه‌ای ندارد. بی‌صدا؛ جنبش فقط از fx.js (§۹).
@@ -19,6 +19,10 @@
 const INK = '#153E50';     /* Navy دفترچهٔ وظیفه — خط جوهری ردپا و برچسب */
 const STEP = '#E4AA46';    /* Amber — جوهر ردپای دزد (رد روی شب) */
 const MOON = '#F5F0E5';    /* Cream — ماه و وکتورهای پوسته */
+
+/* جنبش تزئینی و صحنهٔ آموزش — همهٔ جنبش از fx با گارد کاهش‌جنبش؛ این ماژول هرگز مستقیم animate نمی‌کند */
+import * as fx from '../fx.js';
+import { sceneMarkup } from '../scene.js';
 
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
 const faNum = (n) => String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
@@ -200,4 +204,140 @@ export function previewSteps(hint) {
     },
     { svg: trailSample('done'), line: 'رد کامل شد! اگر رد قطع شود، مهم نیست؛ دوباره قدم می‌زنیم.' }
   ];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   G3 / ۱.۲۵.۳۷ — کارت INTRO + تمرین تعاملی «تا موفقیت» (همان الگوی
+   حلقهٔ تمرین گونوگو، اقتباس jsPsych): یک رد کوتاه سه‌ردپایی با تکرار
+   بی‌سرزنش. ترتیب رد تمرین = برچسب‌های روبه‌کودک ۱→۲→۳ (دانش عمومی خود
+   بازی — همان قرارداد ترتیب برچسب‌ها در آزمون)، پس تمرین هیچ کلیدی
+   ندارد؛ نگاشت گره→جایگاه کلید سروری می‌ماند و هرگز این‌جا نیست.
+   ارزیابی هرگز تمرین تعاملی نمی‌بیند (C1). نوار رد در تمرین بی‌جنبش
+   می‌ماند (بدون شمارش‌معکوس نمایشی — §۹).
+   ═══════════════════════════════════════════════════════════════ */
+
+/** کارت INTRO — نام + قانون یک‌خطی از راهنمای سرور؛ ناسالم = قانون امن ایستا */
+export const intro = {
+  name: 'رد پای دزد',
+  rule: (hint) => {
+    const h = hint && hint.trail && typeof hint.trail.label === 'string' ? hint.trail.label.trim() : '';
+    return h !== '' ? h : DEFAULT_PROMPT;
+  }
+};
+
+const TRAIL_PRACTICE = {
+  stepLine: 'ردپاها را به ترتیب شماره لمس کن: ۱، بعد ۲، بعد ۳.',
+  success: 'آفرین! رد کامل شد.',
+  retry: 'رد قطع شد؛ مهم نیست — از ردپای ۱ دوباره قدم می‌زنیم.',
+  retryWait: 'هر وقت آماده بودی قدم بزن؛ دزد جای دیگری نمی‌رود.',
+  practiceDone: 'تمرین تمام شد! حالا رد واقعی شروع می‌شود.'
+};
+
+const PRACTICE_WINDOW_MS = 15000;
+
+/* صحنهٔ تمرین — همان سه‌ردپای آموزش با برچسب ۱..۳؛ جای گره‌ها ثابت و بی‌کلید */
+const PRACTICE_NODES = [
+  { x: 20, y: 64, n: 1 },
+  { x: 52, y: 28, n: 2 },
+  { x: 84, y: 60, n: 3 }
+];
+
+/** صحنهٔ تمرین — دکور پس‌زمینهٔ لایه‌های دریا؛ جنبش از fx؛ بی‌اثر برای پاسخ */
+function decoratePractice(stage) {
+  if (!stage) return;
+  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach'));
+  fx.sceneAmbient(stage);
+}
+
+/** دنبالهٔ لمس رد تمرین یا یک پنجرهٔ زمانی — موفقیت = کامل‌شدن رد به ترتیب ۱→۲→۳.
+ *  لمس ترتیب اشتباه رد را همان‌جا می‌بندد (همان حس بازی؛ پایان بی‌سرزنش)؛
+ *  خواب یدکی در هر مسیر cancel می‌شود — قاعدهٔ پنجرهٔ گو/نوگو. */
+function tapTrailWithin(stage, nodes, ms, sleeper) {
+  return new Promise((resolve) => {
+    const buttons = Array.from(stage.querySelectorAll('.play-trail__node'));
+    const order = [];
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      buttons.forEach((b) => b.removeEventListener('pointerdown', onNode));
+      sleeper.cancel(); // خواب یدکی یتیم نمی‌ماند — قاعدهٔ پنجرهٔ گو/نوگو
+      resolve(order.length >= nodes.length);
+    };
+    const onNode = (ev) => {
+      const btn = ev.target.closest('.play-trail__node');
+      if (!btn || btn.disabled) return;
+      ev.preventDefault();
+      const nd = nodes[Number(btn.dataset.idx)];
+      if (nd && String(nd.n) === String(order.length + 1)) {
+        order.push(Number(btn.dataset.idx));
+        btn.classList.add('play-trail__node--step');
+        if (order.length >= nodes.length) finish(); // رد کامل شد
+      } else {
+        finish(); // رد قطع شد — پایان بی‌سرزنش؛ تکرار با بازخورد آرام
+      }
+    };
+    buttons.forEach((b) => b.addEventListener('pointerdown', onNode));
+    sleeper.sleep(ms).then(finish);
+  });
+}
+
+function practiceCardHtml(badge, fakeItem, line) {
+  return (badge ? '<span class="play-step-badge">' + esc(badge) + '</span>' : '') +
+    trailMarkup(fakeItem) +
+    '<p class="play-line">' + esc(line) + '</p>';
+}
+
+/**
+ * تمرین تعاملی «رد پای دزد» — یک رد سه‌ردپایی با تکرار بی‌سرزنش تا موفقیت.
+ * پس از دو تلاشِ ناتمام، ترتیب درست رد تمرین با بج شمارهٔ قدم آرام نشان می‌شود
+ * (آموزش پس از پاسخ؛ ترتیب برچسب‌های رد تمرین دانش عمومی است، نه کلید).
+ * خروجی: { applied, retries } — applied=false یعنی صحنه/ساعت آماده نبود.
+ */
+export async function practiceInteractive(ctx) {
+  const { stage, sleeper } = ctx || {};
+  if (!stage || !sleeper) return { applied: false, retries: 0 };
+  const nodes = PRACTICE_NODES.map((nd) => ({ ...nd }));
+  const fakeItem = { stim: { nodes }, prompt: '' };
+  let retries = 0;
+  let misses = 0;
+
+  for (;;) {
+    stage.className = 'play-stage';
+    stage.classList.add('play-stage--teach');
+    stage.innerHTML = practiceCardHtml('قدم ۱ از ۱', fakeItem, TRAIL_PRACTICE.stepLine);
+    decoratePractice(stage);
+    fx.revealStage(stage);
+    fx.popIn(stage.querySelector('.play-trail__field'), 240, false);
+    const ok = await tapTrailWithin(stage, nodes, PRACTICE_WINDOW_MS, sleeper);
+    if (ok) {
+      stage.innerHTML = practiceCardHtml('قدم ۱ از ۱', fakeItem, TRAIL_PRACTICE.success);
+      decoratePractice(stage);
+      fx.revealStage(stage);
+      const el = stage.querySelector('.play-trail__node--step');
+      if (el) {
+        const r = el.getBoundingClientRect();
+        if (r.width) fx.burstAt(r.left + r.width / 2, r.top + r.height / 2);
+      }
+      await sleeper.sleep(1200);
+      break;
+    }
+    retries += 1;
+    misses += 1;
+    stage.innerHTML = practiceCardHtml('قدم ۱ از ۱', fakeItem, TRAIL_PRACTICE.retry);
+    decoratePractice(stage);
+    fx.revealStage(stage);
+    if (misses >= 2) trailRevealTruth(fakeItem, stage, '0,1,2'); // آموزش پس از پاسخ
+    await sleeper.sleep(1600);
+  }
+
+  stage.className = 'play-stage';
+  stage.classList.add('play-stage--teach');
+  stage.innerHTML = '<p class="play-line">' + esc(TRAIL_PRACTICE.practiceDone) + '</p>';
+  decoratePractice(stage);
+  fx.revealStage(stage);
+  await sleeper.sleep(1600);
+  stage.className = 'play-stage';
+  stage.innerHTML = '';
+  return { applied: true, retries };
 }

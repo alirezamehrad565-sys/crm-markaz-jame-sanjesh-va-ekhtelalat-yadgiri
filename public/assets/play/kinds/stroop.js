@@ -7,17 +7,21 @@
    نمره‌دهی فقط سمت سرور است؛ کلید پاسخ (اندیس رنگ جوهر) هرگز به این ماژول
    نمی‌رسد؛ هیچ درخواست شبکه‌ای ندارد. بی‌صدا؛ جنبش فقط از fx (§۹).
    منبع اقتباس — مجوز MIT:
-   · jspsych/jspsych-timelines — packages/stroop-task (@jspsych-timelines/stroop-task,
-     https://github.com/jspsych/jspsych-timelines) — مولد ضرب‌دکارتی واژه×جوهر،
+   · jspsych/jspsych-timelines روی GitHub — بستهٔ packages/stroop-task
+     (@jspsych-timelines/stroop-task) — مولد ضرب‌دکارتی واژه×جوهر،
      پرچم congruent، correct_response = اندیس رنگ جوهر در گزینه‌ها، پنجرهٔ
      زمانی پاسخ (trial_timeout) و بازخورد تمرین از همین تایم‌لاین اقتباس و به
      قرارداد این سامانه (timedchoice، stim.window_ms، پاسخ {option}) وفق شد.
-   · jsPsych هسته (https://github.com/jspsych/jsPsych) — مجوز MIT.
+   · jsPsych هسته — مخزن jspsych/jsPsych روی GitHub؛ مجوز MIT.
    گرافیک وکتوری و همهٔ متن فارسی اصیل‌اند (بدون هیچ دارایی بیرونی).
    ═══════════════════════════════════════════════════════════════ */
 
 const INK = '#153E50';     /* Navy دفترچهٔ وظیفه — خط جوهری لکه‌ها و حقه‌باز */
 const CREAM = '#F5F0E5';   /* پس‌زمینهٔ کارت واژه در آموزش */
+
+/* جنبش تزئینی و صحنهٔ آموزش — همهٔ جنبش از fx با گارد کاهش‌جنبش؛ این ماژول هرگز مستقیم animate نمی‌کند */
+import * as fx from '../fx.js';
+import { sceneMarkup } from '../scene.js';
 
 /* پالت ثابت ۶ رنگ — کلیدها قرارداد بانک‌اند؛ برچسب فارسی + رنگ جوهر (کودک‌پسند) */
 const PALETTE = {
@@ -216,4 +220,138 @@ export function previewSteps(hint) {
     { svg: sampleOptions([inkKey, otherKey], -1), line: 'رنگی را لمس کن که واژه با آن نوشته شده — نه چیزی که واژه می‌گوید.' },
     { svg: sampleOptions([inkKey, otherKey], 0), line: 'مثلاً «' + word + '» با جوهرِ ' + ink.fa + ' نوشته شده؛ ' + ink.fa + ' را لمس کن.' }
   ];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   G3 / ۱.۲۵.۳۷ — کارت INTRO + تمرین تعاملی «تا موفقیت» (همان الگوی
+   حلقهٔ تمرین گونوگو، اقتباس jsPsych): دو قدم — نخست هم‌آوا (آسان)،
+   بعد حقهٔ واقعی (واژه و جوهر دو رنگ). رنگ جوهرِ کارت تمرین روبه‌کودک
+   پیدا است — «رنگ را بخوان» خودِ قانون بازی است، پس تمرین هیچ کلیدی
+   ندارد؛ کلید آیتم‌های واقعی فقط سمت سرور می‌ماند. ارزیابی هرگز تمرین
+   تعاملی نمی‌بیند (C1). نوار پنجره در تمرین بی‌جنبش می‌ماند (§۹).
+   ═══════════════════════════════════════════════════════════════ */
+
+/** کارت INTRO — نام + قانون یک‌خطی از راهنمای سرور؛ ناسالم = قانون امن ایستا */
+export const intro = {
+  name: 'حقه‌باز رنگ‌ها',
+  rule: (hint) => {
+    const h = hint && hint.stroop && typeof hint.stroop.label === 'string' ? hint.stroop.label.trim() : '';
+    return h !== '' ? h : 'حقه‌باز رنگِ واژه را عوض می‌کند؛ تو رنگِ واقعی واژه را لمس کن.';
+  }
+};
+
+const STROOP_PRACTICE = {
+  step1: 'رنگی را لمس کن که واژه با آن نوشته شده.',
+  step2: 'حالا حقه‌باز بیدار شد! رنگِ خودِ واژه را نگاه کن، نه چیزی که واژه می‌گوید.',
+  success: 'آفرین! حقه‌باز را فریب ندادی.',
+  retry: 'واژه فریب می‌دهد؛ رنگِ خودِ واژه را نگاه کن.',
+  retryWait: 'هر وقت آماده بودی لمس کن؛ عجله‌ای نیست.',
+  practiceDone: 'تمرین تمام شد! حالا حقه‌باز واقعی شروع می‌شود.'
+};
+
+const PRACTICE_WINDOW_MS = 15000;
+
+/** صحنهٔ تمرین — دکور پس‌زمینهٔ لایه‌های دریا؛ جنبش از fx؛ بی‌اثر برای پاسخ */
+function decoratePractice(stage) {
+  if (!stage) return;
+  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach'));
+  fx.sceneAmbient(stage);
+}
+
+/** یک لمس روی گزینه‌ها یا یک پنجرهٔ زمانی — هر کدام زودتر؛ خواب یدکی در هر دو مسیر cancel می‌شود */
+function tapOptionWithin(stage, ms, sleeper) {
+  return new Promise((resolve) => {
+    const buttons = Array.from(stage.querySelectorAll('.play-option'));
+    let done = false;
+    const finish = (idx) => {
+      if (done) return;
+      done = true;
+      buttons.forEach((b) => b.removeEventListener('pointerdown', onTap));
+      sleeper.cancel(); // خواب یدکی یتیم نمی‌ماند — قاعدهٔ پنجرهٔ گو/نوگو
+      resolve(idx === null || idx === undefined ? null : idx);
+    };
+    const onTap = (ev) => {
+      const btn = ev.target.closest('.play-option');
+      if (!btn) return;
+      ev.preventDefault();
+      finish(Number(btn.dataset.option));
+    };
+    buttons.forEach((b) => b.addEventListener('pointerdown', onTap));
+    sleeper.sleep(ms).then(() => finish(null));
+  });
+}
+
+function practiceCardHtml(badge, fakeItem, line) {
+  return (badge ? '<span class="play-step-badge">' + esc(badge) + '</span>' : '') +
+    stroopMarkup(fakeItem) +
+    '<p class="play-line">' + esc(line) + '</p>';
+}
+
+/**
+ * تمرین تعاملی «حقه‌باز رنگ‌ها» — دو قدم با تکرار بی‌سرزنش تا موفقیت:
+ *   قدم ۱ هم‌آوا (واژه = جوهر) و قدم ۲ حقهٔ واقعی (واژه ≠ جوهر) — جوهرِ قدم ۲ از
+ *   راهنمای سرور می‌آید تا آموزش با محرک authored هم‌خوان بماند؛ واژهٔ ناهم‌آوا از
+ *   پالت ثابت انتخاب می‌شود. پس از دو تلاش، لکهٔ درست آرام نشان داده می‌شود.
+ * خروجی: { applied, retries } — applied=false یعنی صحنه/ساعت آماده نبود.
+ */
+export async function practiceInteractive(ctx) {
+  const { stage, sleeper, hint } = ctx || {};
+  if (!stage || !sleeper) return { applied: false, retries: 0 };
+  const h = hint && hint.stroop && typeof hint.stroop === 'object' ? hint.stroop : {};
+  const s = h.stim && typeof h.stim === 'object' ? h.stim : {};
+  const inkKey = typeof s.ink === 'string' && PALETTE[s.ink] ? s.ink : 'red';
+  const ink = PALETTE[inkKey];
+  /* واژهٔ ناهم‌آوا — نخستین رنگ پالت که نامش با جوهر یکی نیست (کارت تمرین، نه آیتم بانک) */
+  const trickWord = Object.keys(PALETTE).map((k) => PALETTE[k].fa).find((fa) => fa !== ink.fa) || 'آبی';
+  const otherKey = Object.keys(PALETTE).find((k) => k !== inkKey) || 'blue';
+  const steps = [
+    { badge: 'قدم ۱ از ۲', word: ink.fa, inkKey, line: STROOP_PRACTICE.step1 },
+    { badge: 'قدم ۲ از ۲', word: trickWord, inkKey, line: STROOP_PRACTICE.step2 }
+  ];
+  let retries = 0;
+
+  for (const step of steps) {
+    const fakeItem = { stim: { word: step.word, ink: step.inkKey }, options: [inkKey, otherKey], prompt: '' };
+    const opts = [inkKey, otherKey];
+    let misses = 0;
+    for (;;) {
+      stage.className = 'play-stage';
+      stage.classList.add('play-stage--teach');
+      stage.innerHTML = practiceCardHtml(step.badge, fakeItem, step.line);
+      decoratePractice(stage);
+      fx.revealStage(stage);
+      fx.popIn(stage.querySelector('.play-stroop__word'), 240, false);
+      const picked = await tapOptionWithin(stage, PRACTICE_WINDOW_MS, sleeper);
+      if (picked !== null && opts[picked] === step.inkKey) {
+        stage.innerHTML = practiceCardHtml(step.badge, fakeItem, STROOP_PRACTICE.success);
+        decoratePractice(stage);
+        fx.revealStage(stage);
+        const el = stage.querySelector('.play-stroop__opt');
+        if (el) {
+          const r = el.getBoundingClientRect();
+          if (r.width) fx.burstAt(r.left + r.width / 2, r.top + r.height / 2);
+        }
+        await sleeper.sleep(1200);
+        break;
+      }
+      retries += 1;
+      misses += 1;
+      const line = picked === null ? STROOP_PRACTICE.retryWait : STROOP_PRACTICE.retry;
+      stage.innerHTML = practiceCardHtml(step.badge, fakeItem, line);
+      decoratePractice(stage);
+      fx.revealStage(stage);
+      if (misses >= 2) stroopRevealTruth(fakeItem, stage, ink.fa); // آموزش پس از پاسخ
+      await sleeper.sleep(1600);
+    }
+  }
+
+  stage.className = 'play-stage';
+  stage.classList.add('play-stage--teach');
+  stage.innerHTML = '<p class="play-line">' + esc(STROOP_PRACTICE.practiceDone) + '</p>';
+  decoratePractice(stage);
+  fx.revealStage(stage);
+  await sleeper.sleep(1600);
+  stage.className = 'play-stage';
+  stage.innerHTML = '';
+  return { applied: true, retries };
 }

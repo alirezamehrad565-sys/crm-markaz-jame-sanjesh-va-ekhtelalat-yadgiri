@@ -316,6 +316,19 @@ export interface PublicStateView {
   playStage?: PublicStageMeta;
   /** فقط در child_done حالت تمرین: نتیجهٔ مرحلهٔ جلسهٔ آخر با ستاره‌ها (۱.۲۵.۲۲) — ارزیابی هرگز */
   playStageResult?: PublicStageResult;
+  /** فقط در child_active با جلسهٔ ادامه‌دار (حداقل یک پاسخ ثبت‌شده): فرادادهٔ «ادامهٔ نرم»
+   *  جلسهٔ نیمه‌تمام (U7/G3) — شمار پاسخ ثبت‌شده و کل آزمون‌های جریان؛ کلاینت فقط
+   *  «چند قدم مانده» به زبان کودک می‌سازد؛ هیچ کلید/محرکی در آن نیست. جلسهٔ تازه = null */
+  playResume?: { done: number; total: number } | null;
+  /** درس کوتاه والد پیش از شروع — از parent_copy بستهٔ نسخه‌دار (U8/G3)؛ نبود = متن پیش‌فرض ملایم */
+  parentCopyBefore?: string | null;
+  /** فقط در parent_post: پس‌گفت والد با محتوای واقعی توصیفی (U8/G3) — شمار جلسهٔ هفته و
+   *  پاسخ‌های امروز + جملهٔ فردا از parent_copy.after؛ توصیفی و بی‌هر ادعای بالینی */
+  parentPost?: {
+    sessions_week: number;
+    attempts_today: number;
+    tomorrow_fa: string;
+  };
 }
 
 export interface LinkIssueOutcome {

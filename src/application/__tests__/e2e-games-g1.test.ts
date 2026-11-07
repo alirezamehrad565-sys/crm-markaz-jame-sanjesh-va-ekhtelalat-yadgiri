@@ -9,6 +9,12 @@ import { createGamesService } from '@domain/games';
 
 interface LinkBody { jti: string; token: string; url: string; expiresAt: string }
 
+/** امروز تهران — مأموریت با تاریخ UTC، در مرز نیمه‌شب تهران (۲۰:۳۰ UTC) منقضی می‌شد */
+function todayYmd(): string {
+  const tehran = new Date(Date.now() + 3.5 * 3600 * 1000);
+  return tehran.toISOString().slice(0, 10);
+}
+
 function g1PackageBody() {
   return {
     package_id: 'attention-g1', version: '1.0.0', title_fa: 'توجه G1', evidence_level: 'B',
@@ -53,7 +59,7 @@ describe('G1/P2-3 — نگهداشت دوره‌ای بازی‌ها از cron',
     const m = await mgr.post('/api/games/missions', {
       prescription_id: (rx.body as { data: { id: string } }).data.id,
       mission_ref: 'g1_m',
-      scheduled_for: new Date().toISOString().slice(0, 10)
+      scheduled_for: todayYmd()
     });
     expect(m.status).toBe(201);
     missionId = (m.body as { data: { id: string } }).data.id;
@@ -134,7 +140,7 @@ describe('G1/P2-2 — پاکت خطای عمومی بی‌نشتی', () => {
     const m = await mgr.post('/api/games/missions', {
       prescription_id: (rx.body as { data: { id: string } }).data.id,
       mission_ref: 'g1_m',
-      scheduled_for: new Date().toISOString().slice(0, 10)
+      scheduled_for: todayYmd()
     });
     expect(m.status).toBe(201);
     // لینک از نقطهٔ رسمی link صادر می‌شود — توکن زندهٔ مأموریت

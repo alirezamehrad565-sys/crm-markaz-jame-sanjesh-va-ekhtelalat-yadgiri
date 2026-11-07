@@ -11,6 +11,10 @@ const INK = '#153E50';     /* Navy دفترچهٔ وظیفه — خط جوهری
 const BODY = '#E4AA46';    /* Amber — بدنهٔ ربات (جاسوس و هم‌نوع یکسان؛ فقط آنتن فرق دارد) */
 const ALARM = '#D96C6C';   /* Red — گوی آنتن و نشان جاسوس جامانده */
 
+/* جنبش تزئینی و صحنهٔ آموزش — همهٔ جنبش از fx با گارد کاهش‌جنبش؛ این ماژول هرگز مستقیم animate نمی‌کند */
+import * as fx from '../fx.js';
+import { sceneMarkup } from '../scene.js';
+
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -140,6 +144,144 @@ export function previewSteps(hint) {
     { svg: robotSample(sig === 2 ? 1 : sig + 1 > 4 ? 1 : sig + 1, false), line: 'این هم‌نوع است؛ دست نزن.' },
     { svg: robotSample(sig, true), line: 'همهٔ جاسوس‌ها را انتخاب کن و «گزارش بده!» را لمس کن.' }
   ];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   G3 / ۱.۲۵.۳۷ — کارت INTRO + تمرین تعاملی «تا موفقیت» (همان الگوی
+   حلقهٔ تمرین گونوگو، اقتباس jsPsych): یک موج کوچک آموزشی با تکرار
+   بی‌سرزنش. ترکیب موج تمرین را خود ماژول می‌سازد — «کدام خانه جاسوس است»
+   در تمرین دانش عمومی قاعده است (شمار آنتن روبه‌کودک)، پس هیچ کلیدی
+   لو نمی‌رود؛ کلید آیتم‌های واقعی فقط سمت سرور می‌ماند. ارزیابی هرگز
+   تمرین تعاملی نمی‌بیند (C1). نوار زمان موج در تمرین بی‌جنبش می‌ماند
+   (بدون شمارش‌معکوس نمایشی — §۹).
+   ═══════════════════════════════════════════════════════════════ */
+
+/** کارت INTRO — نام + قانون یک‌خطی از راهنمای سرور؛ ناسالم = قانون امن ایستا */
+export const intro = {
+  name: 'حملهٔ جاسوس‌ها',
+  rule: (hint) => {
+    const h = hint && hint.scan && typeof hint.scan.label === 'string' ? hint.scan.label.trim() : '';
+    return h !== '' ? h : 'جاسوس‌ها ربات‌هایی با آنتن‌های بیشترند؛ همه را بگیر، هم‌نوع‌ها را دست نزن.';
+  }
+};
+
+const SCAN_PRACTICE = {
+  stepLine: 'جاسوس‌ها را پیدا کن و همه را انتخاب کن؛ بعد «گزارش بده!» را لمس کن.',
+  success: 'آفرین! همهٔ جاسوس‌ها را گرفتی و گزارش دادی.',
+  retryConfirm: 'انتخاب‌ها خوب بود؛ حالا «گزارش بده!» را هم لمس کن.',
+  retryWait: 'هر وقت آماده بودی شروع کن؛ موج عجله ندارد.',
+  practiceDone: 'تمرین تمام شد! حالا موج واقعی شروع می‌شود.'
+};
+
+/* موج تمرین — چهار خانه در یک ردیف: جاسوس/هم‌نوع/جاسوس/هم‌نوع با امضای هدف */
+const PRACTICE_WINDOW_MS = 20000;
+
+function neighborOf(sig) {
+  return sig === 1 ? 2 : sig - 1;
+}
+
+/** صحنهٔ تمرین — دکور پس‌زمینهٔ لایه‌های دریا؛ جنبش از fx؛ بی‌اثر برای پاسخ */
+function decoratePractice(stage) {
+  if (!stage) return;
+  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach'));
+  fx.sceneAmbient(stage);
+}
+
+/** یک موج تمرین کامل یا پنجرهٔ زمانی — تیک هر خانه برمی‌گردد؛ گزارش یا پایان پنجره بسته می‌شود.
+ *  موفقیت = همهٔ جاسوس‌ها تیک‌خورده و همهٔ هم‌نوع‌ها تیک‌نخورده در لحظهٔ بستن موج. */
+function tapWaveWithin(stage, spyIdxs, ms, sleeper) {
+  return new Promise((resolve) => {
+    const tiles = Array.from(stage.querySelectorAll('.play-scan__tile'));
+    const confirmBtn = stage.querySelector('.play-scan__confirm');
+    const hits = new Set();
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      tiles.forEach((b) => b.removeEventListener('pointerdown', onTile));
+      if (confirmBtn) confirmBtn.removeEventListener('pointerdown', onConfirm);
+      sleeper.cancel(); // خواب یدکی یتیم نمی‌ماند — قاعدهٔ پنجرهٔ گو/نوگو
+      resolve(spyIdxs.every((i) => hits.has(i)) && hits.size === spyIdxs.length); // همهٔ جاسوس‌ها و فقط جاسوس‌ها
+    };
+    const onTile = (ev) => {
+      const btn = ev.target.closest('.play-scan__tile');
+      if (!btn) return;
+      ev.preventDefault();
+      const idx = Number(btn.dataset.idx);
+      if (hits.has(idx)) { hits.delete(idx); btn.classList.remove('play-scan__tile--catch'); }
+      else { hits.add(idx); btn.classList.add('play-scan__tile--catch'); }
+    };
+    const onConfirm = (ev) => { ev.preventDefault(); finish(); };
+    tiles.forEach((b) => b.addEventListener('pointerdown', onTile));
+    if (confirmBtn) confirmBtn.addEventListener('pointerdown', onConfirm);
+    sleeper.sleep(ms).then(finish);
+  });
+}
+
+function practiceCardHtml(badge, fakeItem, line) {
+  return (badge ? '<span class="play-step-badge">' + esc(badge) + '</span>' : '') +
+    scanMarkup(fakeItem) +
+    '<p class="play-line">' + esc(line) + '</p>';
+}
+
+/**
+ * تمرین تعاملی «حملهٔ جاسوس‌ها» — یک موج کوچک چهارخانه با تکرار بی‌سرزنش تا موفقیت.
+ * پس از دو تلاشِ بی‌موفقیت، جاسوس‌های موج تمرین آرام نشان داده می‌شوند (آموزش پس از پاسخ؛
+ * فهرست جاسوس‌های موج تمرین دانش عمومی قاعده است، نه کلید). خروجی: { applied, retries }.
+ */
+export async function practiceInteractive(ctx) {
+  const { stage, sleeper, hint } = ctx || {};
+  if (!stage || !sleeper) return { applied: false, retries: 0 };
+  const sig = hint && hint.scan && hint.scan.stim && typeof hint.scan.stim.signature === 'number'
+    ? Math.max(1, Math.min(4, hint.scan.stim.signature)) : 2;
+  const fakeItem = {
+    stim: { tiles: [sig, neighborOf(sig), sig, neighborOf(sig)], cols: 4, rows: 1, signature: sig },
+    prompt: SCAN_PRACTICE.stepLine
+  };
+  const spyIdxs = [0, 2];
+  let retries = 0;
+  let misses = 0;
+
+  for (;;) {
+    stage.className = 'play-stage';
+    stage.classList.add('play-stage--teach');
+    stage.innerHTML = practiceCardHtml('قدم ۱ از ۱', fakeItem, SCAN_PRACTICE.stepLine);
+    decoratePractice(stage);
+    fx.revealStage(stage);
+    fx.popIn(stage.querySelector('.play-scan__grid'), 240, false);
+    const ok = await tapWaveWithin(stage, spyIdxs, PRACTICE_WINDOW_MS, sleeper);
+    const tappedAny = stage.querySelectorAll('.play-scan__tile--catch').length > 0;
+    if (ok) {
+      stage.innerHTML = practiceCardHtml('قدم ۱ از ۱', fakeItem, SCAN_PRACTICE.success);
+      decoratePractice(stage);
+      fx.revealStage(stage);
+      const t = stage.querySelector('.play-scan__tile');
+      if (t) {
+        const r = t.getBoundingClientRect();
+        if (r.width) fx.burstAt(r.left + r.width / 2, r.top + r.height / 2);
+      }
+      await sleeper.sleep(1200);
+      break;
+    }
+    retries += 1;
+    misses += 1;
+    const line = tappedAny ? SCAN_PRACTICE.retryConfirm : SCAN_PRACTICE.retryWait;
+    stage.innerHTML = practiceCardHtml('قدم ۱ از ۱', fakeItem, line);
+    decoratePractice(stage);
+    fx.revealStage(stage);
+    if (misses >= 2) scanRevealTruth(fakeItem, stage, spyIdxs.join(',')); // آموزش پس از پاسخ
+    await sleeper.sleep(1600);
+  }
+
+  stage.className = 'play-stage';
+  stage.classList.add('play-stage--teach');
+  stage.innerHTML = '<p class="play-line">' + esc(SCAN_PRACTICE.practiceDone) + '</p>';
+  decoratePractice(stage);
+  fx.revealStage(stage);
+  await sleeper.sleep(1600);
+  stage.className = 'play-stage';
+  stage.innerHTML = '';
+  return { applied: true, retries };
 }
 
 function faSig(n) {

@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.36";
+var APP_VERSION = "1.25.37";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -25984,6 +25984,53 @@ function createGamesService(deps) {
         };
       }
     }
+    let resumeMeta = null;
+    if (state === "child_active" && res.session) {
+      try {
+        const doneRow = await db.queryOne(
+          `SELECT COUNT(*) AS n FROM game_attempts WHERE session_id = ?`,
+          [res.session.id]
+        );
+        const doneN = doneRow?.n ?? 0;
+        if (doneN > 0) {
+          const inStg = /* @__PURE__ */ __name((it) => {
+            if (kind === "numline") return numlineItemInStage(it, res.session.stage_id);
+            if (kind === "scan") return scanItemInStage(it, res.session.stage_id);
+            if (kind === "stroop") return stroopItemInStage(it, res.session.stage_id);
+            if (kind === "flanker") return flankerItemInStage(it, res.session.stage_id);
+            if (kind === "trail") return trailItemInStage(it, res.session.stage_id);
+            return true;
+          }, "inStg");
+          resumeMeta = { done: doneN, total: (m.items ?? []).filter(inStg).length };
+        }
+      } catch {
+        resumeMeta = null;
+      }
+    }
+    let parentPost = void 0;
+    if (state === "parent_post") {
+      try {
+        const weekAgoIso = isoOf2(new Date(now().getTime() - 7 * 24 * 60 * 60 * 1e3));
+        const weekRow = await db.queryOne(
+          `SELECT COUNT(*) AS n FROM game_sessions s JOIN game_missions mm ON mm.id = s.mission_id
+           WHERE mm.prescription_id = ? AND s.started_at >= ?`,
+          [res.rx.id, weekAgoIso]
+        );
+        const todayRow = res.session ? await db.queryOne(
+          `SELECT COUNT(*) AS n FROM game_attempts WHERE session_id = ?`,
+          [res.session.id]
+        ) : null;
+        const parentCopy = res.pkg.body.parent_copy ?? {};
+        const afterFa = typeof parentCopy.after === "string" && parentCopy.after.trim() !== "" ? parentCopy.after.trim() : "\u0641\u0631\u062F\u0627 \u06CC\u06A9 \u0645\u0623\u0645\u0648\u0631\u06CC\u062A \u062A\u0627\u0632\u0647 \u062F\u0631 \u0631\u0627\u0647 \u0627\u0633\u062A\u061B \u0647\u0631 \u0631\u0648\u0632 \u0686\u0646\u062F \u062F\u0642\u06CC\u0642\u0647 \u06A9\u0627\u0641\u06CC \u0627\u0633\u062A.";
+        parentPost = {
+          sessions_week: weekRow?.n ?? 0,
+          attempts_today: todayRow?.n ?? 0,
+          tomorrow_fa: afterFa
+        };
+      } catch {
+        parentPost = void 0;
+      }
+    }
     return {
       state,
       missionRef: m.id,
@@ -25992,10 +26039,12 @@ function createGamesService(deps) {
       expiresAt: res.link.expires_at,
       validity: res.session ? res.session.validity : void 0,
       adherenceConfirmed: adherence?.confirm2_at != null,
+      parentCopyBefore: typeof res.pkg.body.parent_copy?.before === "string" ? res.pkg.body.parent_copy.before : null,
       ...state === "child_active" ? {
         playGame: m.game,
         playHint: playHintOf(m, res.session?.stage_id ?? stage?.id ?? null),
         playProtocol: snap,
+        playResume: resumeMeta,
         ...stage && progress ? {
           playStage: {
             id: stage.id,
@@ -26008,7 +26057,8 @@ function createGamesService(deps) {
           }
         } : {}
       } : {},
-      ...stageResult ? { playStageResult: stageResult } : {}
+      ...stageResult ? { playStageResult: stageResult } : {},
+      ...parentPost ? { parentPost } : {}
     };
   }
   __name(stateViewOf, "stateViewOf");
@@ -26725,19 +26775,21 @@ function renderGamesPage(model, token) {
       <p class="muted">\u0627\u0639\u062A\u0628\u0627\u0631 \u0627\u06CC\u0646 \u067E\u06CC\u0648\u0646\u062F \u0628\u0647 \u067E\u0627\u06CC\u0627\u0646 \u0631\u0633\u06CC\u062F\u0647 \u06CC\u0627 \u0628\u0627\u0637\u0644 \u0634\u062F\u0647 \u0627\u0633\u062A. \u0628\u0631\u0627\u06CC \u062C\u0644\u0633\u0647\u0654 \u0628\u0639\u062F\u060C \u067E\u06CC\u0627\u0645 \u062A\u0627\u0632\u0647 \u062F\u0631\u06CC\u0627\u0641\u062A \u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F.</p></div>`);
   }
   if (model.state === "parent_pre") {
+    const beforeFa = typeof model.parentCopyBefore === "string" && model.parentCopyBefore.trim() !== "" ? model.parentCopyBefore.trim() : "\u0627\u06CC\u0646 \u0628\u0627\u0632\u06CC \u062A\u0645\u0631\u06CC\u0646 \u062A\u0645\u0631\u06A9\u0632 \u0648 \u0645\u0647\u0627\u0631 \u0627\u0633\u062A\u060C \u0646\u0647 \u062F\u0631\u0645\u0627\u0646\u061B \u0646\u0642\u0634 \u0634\u0645\u0627 \u06A9\u0646\u0627\u0631 \u0645\u0627\u0646\u062F\u0646 \u0648 \u062A\u0634\u0648\u06CC\u0642 \u0622\u0631\u0627\u0645 \u0627\u0633\u062A.";
     return page(model, token, `<div class="card">${head}
-      <p class="muted">\u062F\u0631\u0633 \u06A9\u0648\u062A\u0627\u0647 \u0648\u0627\u0644\u062F \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0646\u0645\u0627\u06CC\u0634 \u062F\u0627\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F (\u0632\u06CC\u0631 \u06F2 \u062F\u0642\u06CC\u0642\u0647).</p>
-      <p class="muted">\u06AF\u0648\u0634\u06CC \u0631\u0627 \u0628\u0647 \u06A9\u0648\u062F\u06A9 \u0628\u062F\u0647\u06CC\u062F \u0648 \u06A9\u0646\u0627\u0631\u0634 \u0628\u0645\u0627\u0646\u06CC\u062F.</p>
+      <p class="muted">${esc(beforeFa)}</p>
+      <p class="muted">\u06AF\u0648\u0634\u06CC \u0631\u0627 \u0628\u0647 \u06A9\u0648\u062F\u06A9 \u0628\u062F\u0647\u06CC\u062F \u0648 \u06A9\u0646\u0627\u0631\u0634 \u0628\u0645\u0627\u0646\u06CC\u062F\u061B \u0647\u0631 \u0631\u0648\u0632 \u0686\u0646\u062F \u062F\u0642\u06CC\u0642\u0647 \u06A9\u0627\u0641\u06CC \u0627\u0633\u062A.</p>
       <button id="btn-start" type="button">\u0622\u0645\u0627\u062F\u0647\u0654 \u0634\u0631\u0648\u0639 \u0647\u0633\u062A\u06CC\u0645</button></div>`);
   }
   if (model.state === "child_active") {
     const hint = JSON.stringify(model.playHint ?? null);
     const protocol = JSON.stringify(model.playProtocol ?? null);
+    const resume = JSON.stringify(model.playResume ?? null);
     const stageAttr = model.playStage ? ` data-stage="${esc(JSON.stringify(model.playStage))}"` : "";
     return page(model, token, `<div id="play-root" class="play-root"
       data-token="${esc(token)}"
       data-kind="${esc(model.playGame ?? "")}"
-      data-hint="${esc(hint)}"${stageAttr}
+      data-hint="${esc(hint)}" data-resume="${esc(resume)}"${stageAttr}
       data-protocol="${esc(protocol)}">
       <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
       <div class="play-stage" id="play-stage"></div>
@@ -26783,8 +26835,12 @@ function renderGamesPage(model, token) {
   }
   if (model.state === "parent_post") {
     const conf = model.adherenceConfirmed ? faNum5(2) : faNum5(1);
+    const pp = model.parentPost;
+    const postHtml = pp ? `<p class="muted">\u0627\u06CC\u0646 \u0647\u0641\u062A\u0647 ${faNum5(pp.sessions_week)} \u062C\u0644\u0633\u0647 \u0628\u0627\u0632\u06CC \u0622\u063A\u0627\u0632 \u0634\u062F\u0647 \u0627\u0633\u062A.</p>
+         <p class="muted">\u0627\u0645\u0631\u0648\u0632 ${faNum5(pp.attempts_today)} \u067E\u0627\u0633\u062E \u062B\u0628\u062A \u0634\u062F\u061B \u0647\u0645\u0647\u0654 \u0642\u062F\u0645\u200C\u0647\u0627\u06CC \u06A9\u0648\u062F\u06A9 \u0628\u0627 \u0647\u0645\u06CC\u0646 \u0644\u06CC\u0646\u06A9 \u0627\u062F\u0627\u0645\u0647 \u067E\u06CC\u062F\u0627 \u0645\u06CC\u200C\u06A9\u0646\u062F.</p>
+         <p class="muted">${esc(pp.tomorrow_fa)}</p>` : `<p class="muted">\u062C\u0644\u0633\u0647\u0654 \u0627\u0645\u0631\u0648\u0632 \u062B\u0628\u062A \u0634\u062F\u061B \u0633\u067E\u0627\u0633 \u0627\u0632 \u0647\u0645\u0631\u0627\u0647\u06CC \u0634\u0645\u0627.</p>`;
     return page(model, token, `<div class="card">${head}
-      <p class="muted">\u0628\u0627\u0632\u062E\u0648\u0631\u062F \u062A\u0648\u0635\u06CC\u0641\u06CC \u0627\u06CC\u0646\u200C\u062C\u0627 \u0646\u0645\u0627\u06CC\u0634 \u062F\u0627\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F: \u0631\u0648\u0646\u062F \u0627\u06CC\u0646 \u0647\u0641\u062A\u0647 \u0648 \u06CC\u06A9 \u062C\u0645\u0644\u0647 \u0628\u0631\u0627\u06CC \u0641\u0631\u062F\u0627.</p>
+      ${postHtml}
       <button id="btn-confirm1" type="button">\u062A\u0623\u06CC\u06CC\u062F \u0627\u0646\u062C\u0627\u0645 \u0634\u062F (${esc(conf)})</button>
       <div class="msg muted">\u0628\u0627 \u062F\u0648\u0645\u06CC\u0646 \u062A\u0623\u06CC\u06CC\u062F\u060C \u067E\u0627\u06CC\u0628\u0646\u062F\u06CC \u0627\u0645\u0631\u0648\u0632 \u062B\u0628\u062A \u0645\u06CC\u200C\u0634\u0648\u062F.</div></div>`);
   }

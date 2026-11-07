@@ -77,6 +77,11 @@ async function loadKind() {
       previewSteps: mod.previewSteps || GENERIC.previewSteps,
       stimSvg: mod.stimSvg || GENERIC.stimSvg,
       ...hooks,
+      // کارت INTRO + تمرین تعاملی + خلاصهٔ پایان — پیش‌نمایش همان موتور پخش‌کنندهٔ کودک را
+      // نشان می‌دهد (G3/۱.۲۵.۳۷)؛ هیچ داده‌ای ثبت نمی‌شود و هیچ کلیدی این‌جا نیست
+      intro: mod.intro || null,
+      practiceInteractive: mod.practiceInteractive || null,
+      debriefMarkup: mod.debriefMarkup || null,
       // جادهٔ عددها (۱.۲۵.۲۸) — توابع نمایش خط عددی (ماژول‌های دیگر این‌ها ندارند)
       numlineMarkup: mod.numlineMarkup || null,
       numlineValueFromTap: mod.numlineValueFromTap || null,
