@@ -365,7 +365,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
     } catch {
       throw new ValidationError('بسته یا نسخهٔ آن یافت نشد');
     }
-    if (pkg.status !== 'published') throw new ValidationError('تجویز فقط از بستهٔ منتشرشده ممکن است');
+    if (pkg.status !== 'published') throw new ValidationError('ارسال به دانش‌آموز فقط از بستهٔ منتشرشده ممکن است');
     const goal = await db.queryOne<{ id: string; package_id: string }>(`SELECT id, package_id FROM game_goals WHERE id = ?`, [input.goalId]);
     if (!goal) throw new NotFoundError('هدف');
     if (goal.package_id !== input.packageId) throw new ValidationError('هدف به این بسته تعلق ندارد');
@@ -557,7 +557,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
 
   async function setPrescriptionStatus(id: string, action: 'pause' | 'resume' | 'stop' | 'complete', actor: AuthContext): Promise<PrescriptionRecord> {
     const row = await db.queryOne<PrescriptionRow>(`SELECT * FROM game_prescriptions WHERE id = ?`, [id]);
-    if (!row) throw new NotFoundError('تجویز');
+    if (!row) throw new NotFoundError('ارسال');
     const to = { pause: 'paused', resume: 'active', stop: 'stopped', complete: 'completed' }[action];
     await db.execute(`UPDATE game_prescriptions SET status = ?, updated_at = datetime('now') WHERE id = ?`, [to, id]);
     await audit.log({
@@ -585,8 +585,8 @@ export function createGamesService(deps: GamesDeps): GamesService {
 
   async function scheduleMission(input: { prescriptionId: string; missionRef: string; scheduledFor: string }, actor: AuthContext): Promise<MissionRecord> {
     const rx = await loadPrescription(input.prescriptionId);
-    if (!rx) throw new NotFoundError('تجویز');
-    if (rx.status !== 'active') throw new ConflictError('تجویز فعال نیست');
+    if (!rx) throw new NotFoundError('ارسال');
+    if (rx.status !== 'active') throw new ConflictError('ارسال فعال نیست');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.scheduledFor)) throw new ValidationError('تاریخ مأموریت باید YYYY-MM-DD باشد');
     const pkg = await loadPackage(rx.packageId, rx.packageVersion);
     const mission = pkg.body.missions.find((m) => m.id === input.missionRef);
@@ -643,8 +643,8 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const missionRow = await db.queryOne<MissionRow>(`SELECT * FROM game_missions WHERE id = ?`, [missionId]);
     if (!missionRow) throw new NotFoundError('مأموریت');
     const rxRow = await db.queryOne<PrescriptionRow>(`SELECT * FROM game_prescriptions WHERE id = ?`, [missionRow.prescription_id]);
-    if (!rxRow) throw new NotFoundError('تجویز');
-    if (rxRow.status !== 'active') throw new ConflictError('تجویز فعال نیست');
+    if (!rxRow) throw new NotFoundError('ارسال');
+    if (rxRow.status !== 'active') throw new ConflictError('ارسال فعال نیست');
     const today = tehranTodayYmd(now());
     if (missionRow.scheduled_for < today) {
       await db.execute(`UPDATE game_missions SET status = 'expired' WHERE id = ? AND status = 'pending'`, [missionId]);
@@ -1055,7 +1055,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
       if (res.session.state !== 'parent_pre') throw new ConflictError('گذار وضعیت مجاز نیست');
     }
     const rxStatusOk = res.rx.status === 'active';
-    if (!rxStatusOk) throw new ConflictError('تجویز فعال نیست');
+    if (!rxStatusOk) throw new ConflictError('ارسال فعال نیست');
     if (!res.session) {
       const id = crypto.randomUUID();
       // دو حالت مستقل + دنبالهٔ seed-دار (فاز ۳ بازطراحی):

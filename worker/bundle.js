@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.25";
+var APP_VERSION = "1.25.26";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -24706,7 +24706,7 @@ function createGamesService(deps) {
     } catch {
       throw new ValidationError("\u0628\u0633\u062A\u0647 \u06CC\u0627 \u0646\u0633\u062E\u0647\u0654 \u0622\u0646 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
     }
-    if (pkg.status !== "published") throw new ValidationError("\u062A\u062C\u0648\u06CC\u0632 \u0641\u0642\u0637 \u0627\u0632 \u0628\u0633\u062A\u0647\u0654 \u0645\u0646\u062A\u0634\u0631\u0634\u062F\u0647 \u0645\u0645\u06A9\u0646 \u0627\u0633\u062A");
+    if (pkg.status !== "published") throw new ValidationError("\u0627\u0631\u0633\u0627\u0644 \u0628\u0647 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0641\u0642\u0637 \u0627\u0632 \u0628\u0633\u062A\u0647\u0654 \u0645\u0646\u062A\u0634\u0631\u0634\u062F\u0647 \u0645\u0645\u06A9\u0646 \u0627\u0633\u062A");
     const goal = await db.queryOne(`SELECT id, package_id FROM game_goals WHERE id = ?`, [input.goalId]);
     if (!goal) throw new NotFoundError("\u0647\u062F\u0641");
     if (goal.package_id !== input.packageId) throw new ValidationError("\u0647\u062F\u0641 \u0628\u0647 \u0627\u06CC\u0646 \u0628\u0633\u062A\u0647 \u062A\u0639\u0644\u0642 \u0646\u062F\u0627\u0631\u062F");
@@ -24893,7 +24893,7 @@ function createGamesService(deps) {
   __name(listFollowups, "listFollowups");
   async function setPrescriptionStatus(id, action, actor) {
     const row = await db.queryOne(`SELECT * FROM game_prescriptions WHERE id = ?`, [id]);
-    if (!row) throw new NotFoundError("\u062A\u062C\u0648\u06CC\u0632");
+    if (!row) throw new NotFoundError("\u0627\u0631\u0633\u0627\u0644");
     const to = { pause: "paused", resume: "active", stop: "stopped", complete: "completed" }[action];
     await db.execute(`UPDATE game_prescriptions SET status = ?, updated_at = datetime('now') WHERE id = ?`, [to, id]);
     await audit.log({
@@ -24921,8 +24921,8 @@ function createGamesService(deps) {
   __name(missionsOnDateForChild, "missionsOnDateForChild");
   async function scheduleMission(input, actor) {
     const rx = await loadPrescription(input.prescriptionId);
-    if (!rx) throw new NotFoundError("\u062A\u062C\u0648\u06CC\u0632");
-    if (rx.status !== "active") throw new ConflictError("\u062A\u062C\u0648\u06CC\u0632 \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A");
+    if (!rx) throw new NotFoundError("\u0627\u0631\u0633\u0627\u0644");
+    if (rx.status !== "active") throw new ConflictError("\u0627\u0631\u0633\u0627\u0644 \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.scheduledFor)) throw new ValidationError("\u062A\u0627\u0631\u06CC\u062E \u0645\u0623\u0645\u0648\u0631\u06CC\u062A \u0628\u0627\u06CC\u062F YYYY-MM-DD \u0628\u0627\u0634\u062F");
     const pkg = await loadPackage(rx.packageId, rx.packageVersion);
     const mission = pkg.body.missions.find((m) => m.id === input.missionRef);
@@ -24977,8 +24977,8 @@ function createGamesService(deps) {
     const missionRow = await db.queryOne(`SELECT * FROM game_missions WHERE id = ?`, [missionId]);
     if (!missionRow) throw new NotFoundError("\u0645\u0623\u0645\u0648\u0631\u06CC\u062A");
     const rxRow = await db.queryOne(`SELECT * FROM game_prescriptions WHERE id = ?`, [missionRow.prescription_id]);
-    if (!rxRow) throw new NotFoundError("\u062A\u062C\u0648\u06CC\u0632");
-    if (rxRow.status !== "active") throw new ConflictError("\u062A\u062C\u0648\u06CC\u0632 \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A");
+    if (!rxRow) throw new NotFoundError("\u0627\u0631\u0633\u0627\u0644");
+    if (rxRow.status !== "active") throw new ConflictError("\u0627\u0631\u0633\u0627\u0644 \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A");
     const today = tehranTodayYmd(now());
     if (missionRow.scheduled_for < today) {
       await db.execute(`UPDATE game_missions SET status = 'expired' WHERE id = ? AND status = 'pending'`, [missionId]);
@@ -25341,7 +25341,7 @@ function createGamesService(deps) {
       if (res.session.state !== "parent_pre") throw new ConflictError("\u06AF\u0630\u0627\u0631 \u0648\u0636\u0639\u06CC\u062A \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A");
     }
     const rxStatusOk = res.rx.status === "active";
-    if (!rxStatusOk) throw new ConflictError("\u062A\u062C\u0648\u06CC\u0632 \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A");
+    if (!rxStatusOk) throw new ConflictError("\u0627\u0631\u0633\u0627\u0644 \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A");
     if (!res.session) {
       const id = crypto.randomUUID();
       const mode = res.pkg.body.mode ?? "training";

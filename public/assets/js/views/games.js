@@ -6,11 +6,13 @@ import {
 import { renderRxPanel, renderGamesReportPanel } from '../games-console.js';
 import { session } from '../state.js';
 
-// ─── بازی‌ها (۱.۲۵.۲۴) — میز کامل حلقهٔ درمانگر: بسته‌ها | تجویزها | گزارش ───
+// ─── بازی‌ها (۱.۲۵.۲۶) — میز کامل حلقهٔ درمانگر: بسته‌ها | ارسال به دانش‌آموز | گزارش ───
 // بسته‌ها: فهرست + پیش‌نمایش + انتشار (پیش‌نویس) + بازنشستگی (مدیر)
-// تجویزها: میز حلقهٔ درمانگر (games-console.js) — تجویز/مأموریت/لینک/پیگیری
+// ارسال به دانش‌آموز: میز حلقهٔ درمانگر (games-console.js) — ارسال/مأموریت/لینک/پیگیری
 // گزارش: روند سنجه‌ها + کیفیت جلسه‌ها + چاپ/CSV
 // هویت کودک از پروفایل (#/games?child=…) هم می‌آید تا تفسیر هم‌زمینه بماند.
+// ۱.۲۵.۲۶ — واژه‌نامهٔ تازه به خواست کاربر: «تجویز» → «ارسال به دانش‌آموز»؛ توضیحات
+// اضافی بالای تب‌ها حذف شد؛ شناسهٔ لاتین بسته دیگر با fa() فارسی‌نما نمی‌شود (attention۲).
 
 const MODE_LABEL = { training: 'تمرین', assessment: 'ارزیابی' };
 const STATUS_LABEL = {
@@ -58,7 +60,7 @@ async function publishPkg(pkg, onDone) {
   if (!ok) return;
   try {
     await api.post(`/api/games/packages/${encodeURIComponent(pkg.id)}/${encodeURIComponent(pkg.version)}/publish`, {});
-    toast('بسته منتشر شد — از همین لحظه قابل تجویز است.', 'success');
+    toast('بسته منتشر شد — از همین لحظه قابل ارسال به دانش‌آموز است.', 'success');
     onDone?.();
   } catch (err) {
     toastError(err);
@@ -68,13 +70,13 @@ async function publishPkg(pkg, onDone) {
 async function retirePkg(pkg, onDone) {
   const ok = await confirmModal({
     title: 'بازنشسته‌کردن بسته',
-    message: `«${pkg.titleFa || pkg.id}» نسخهٔ ${fa(pkg.version)} دیگر قابل تجویز نیست. تجویزهای موجود به همان نسخه قفل می‌مانند و کارشان قطع نمی‌شود.`,
+    message: `«${pkg.titleFa || pkg.id}» نسخهٔ ${fa(pkg.version)} دیگر قابل ارسال نیست. ارسال‌های موجود به همان نسخه قفل می‌مانند و کارشان قطع نمی‌شود.`,
     confirmLabel: 'بازنشستگی', danger: true
   });
   if (!ok) return;
   try {
     await api.post(`/api/games/packages/${encodeURIComponent(pkg.id)}/${encodeURIComponent(pkg.version)}/retire`, {});
-    toast('بسته بازنشسته شد — تجویز تازه از این نسخه بسته شد.', 'success');
+    toast('بسته بازنشسته شد — ارسال تازه از این نسخه بسته شد.', 'success');
     onDone?.();
   } catch (err) {
     toastError(err);
@@ -92,17 +94,45 @@ function pkgCard(pkg, goalNames, onDone) {
   const goals = Array.isArray(pkg.body?.goals) ? pkg.body.goals : [];
   const missionsCount = Array.isArray(pkg.body?.missions) ? pkg.body.missions.length : 0;
   const age = pkg.body?.age;
+  // ۱.۲۵.۲۶ — چیدمان درست دکمه‌ها: بج وضعیت داخل سطر عنوان، دکمه‌ها یک ردیف افقی
+  // هم‌ترازِ وسط در انتهای خط (نه ستون شناور که با چیپ هدف‌ها تداخل می‌کرد)
+  const actions = el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end;align-self:center;' },
+    published
+      ? el('button', {
+          class: 'btn btn--primary btn--sm', type: 'button',
+          title: 'اجرای آزمایشی بازی در تب جدید — بدون ثبت داده (۳۰ دقیقه اعتبار)',
+          'aria-label': `پیش‌نمایش ${pkg.titleFa || pkg.id}`,
+          onclick: (e) => lockBtn(e.currentTarget, () => openPreview(pkg))
+        }, icon('eye', 14), 'پیش‌نمایش')
+      : null,
+    (pkg.status === 'draft' || pkg.status === 'review')
+      ? el('button', {
+          class: 'btn btn--soft btn--sm', type: 'button',
+          title: 'گیت انتشار سمت سرور اجرا می‌شود؛ پس از انتشار نسخه تغییرناپذیر است',
+          onclick: (e) => lockBtn(e.currentTarget, () => publishPkg(pkg, onDone))
+        }, icon('check', 14), 'انتشار')
+      : null,
+    published && isManager()
+      ? el('button', {
+          class: 'btn btn--ghost btn--sm', type: 'button',
+          title: 'بستن ارسال تازه از این نسخه — ارسال‌های موجود دست‌نخورده',
+          onclick: (e) => lockBtn(e.currentTarget, () => retirePkg(pkg, onDone))
+        }, icon('x', 14), 'بازنشستگی')
+      : null,
+    retired ? el('span', { class: 'muted', style: 'font-size:12px;' }, 'ارسال تازه بسته است') : null
+  );
   return el('div', { class: 'card', 'data-pkg': pkg.id },
-    el('div', { class: 'card-body', style: 'display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;' },
+    el('div', { class: 'card-body', style: 'display:flex;gap:14px;align-items:center;flex-wrap:wrap;' },
       el('span', { class: 'ico', 'aria-hidden': 'true' }, icon('gamepad', 20)),
-      el('div', { style: 'flex:1;min-width:220px;' },
+      el('div', { style: 'flex:1;min-width:240px;' },
         el('div', { style: 'font-weight:700;display:flex;gap:8px;align-items:center;flex-wrap:wrap;' },
           pkg.titleFa || pkg.id,
+          badge(STATUS_LABEL[pkg.status] ?? fa(pkg.status), STATUS_CLASS[pkg.status] ?? 'badge--neutral'),
           pkg.body?.mode ? badge(`حالت ${MODE_LABEL[pkg.body.mode] ?? fa(pkg.body.mode)}`, 'badge--accent') : null,
           age?.min != null && age?.max != null ? el('span', { class: 'cell-sub' }, `سن ${fa(age.min)} تا ${fa(age.max)}`) : null
         ),
-        el('div', { class: 'muted', style: 'font-size:12px;margin-top:2px;' },
-          `${fa(pkg.id)} · نسخهٔ ${fa(pkg.version)} · شواهد سطح ${fa(pkg.evidenceLevel ?? '—')} · ${fa(missionsCount)} مأموریت`),
+        el('div', { class: 'muted', style: 'font-size:12px;margin-top:2px;', dir: 'auto' },
+          `${pkg.id} · نسخهٔ ${fa(pkg.version)} · شواهد سطح ${fa(pkg.evidenceLevel ?? '—')} · ${fa(missionsCount)} مأموریت`),
         el('div', { class: 'muted', style: 'font-size:12px;margin-top:2px;' },
           doseText(pkg.dose) ?? 'دوز ثبت نشده'),
         goals.length
@@ -110,34 +140,7 @@ function pkgCard(pkg, goalNames, onDone) {
               goals.map((g) => el('span', { class: 'badge badge--neutral' }, goalNames?.[g] ?? g)))
           : null
       ),
-      el('div', { style: 'display:flex;flex-direction:column;gap:8px;align-items:flex-end;' },
-        badge(STATUS_LABEL[pkg.status] ?? fa(pkg.status), STATUS_CLASS[pkg.status] ?? 'badge--neutral'),
-        el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;' },
-          published
-            ? el('button', {
-                class: 'btn btn--primary btn--sm', type: 'button',
-                title: 'اجرای آزمایشی بازی در تب جدید — بدون ثبت داده (۳۰ دقیقه اعتبار)',
-                'aria-label': `پیش‌نمایش ${pkg.titleFa || pkg.id}`,
-                onclick: (e) => lockBtn(e.currentTarget, () => openPreview(pkg))
-              }, icon('eye', 14), 'پیش‌نمایش')
-            : null,
-          (pkg.status === 'draft' || pkg.status === 'review')
-            ? el('button', {
-                class: 'btn btn--soft btn--sm', type: 'button',
-                title: 'گیت انتشار سمت سرور اجرا می‌شود؛ پس از انتشار نسخه تغییرناپذیر است',
-                onclick: (e) => lockBtn(e.currentTarget, () => publishPkg(pkg, onDone))
-              }, icon('check', 14), 'انتشار')
-            : null,
-          published && isManager()
-            ? el('button', {
-                class: 'btn btn--ghost btn--sm', type: 'button',
-                title: 'بستن تجویز تازه از این نسخه — تجویزهای موجود دست‌نخورده',
-                onclick: (e) => lockBtn(e.currentTarget, () => retirePkg(pkg, onDone))
-              }, icon('x', 14), 'بازنشستگی')
-            : null,
-          retired ? el('span', { class: 'muted', style: 'font-size:12px;' }, 'تجویز تازه بسته است') : null
-        )
-      )
+      actions
     )
   );
 }
@@ -159,10 +162,7 @@ async function renderPackagesTab(container) {
     container.replaceChildren(errorState(err, () => renderPackagesTab(container)));
     return;
   }
-  const wrap = el('div', {},
-    el('p', { class: 'hint-text' },
-      'بسته‌های بازی درمانی مرکز. «پیش‌نمایش» بازی را با موتور کودک در تب جدید اجرا می‌کند (بدون ثبت داده)؛ «انتشار» نسخه را برای تجویز باز می‌کند؛ «بازنشستگی» فقط تجویز تازه را می‌بندد و جلسه‌های در جریان را نمی‌شکند.')
-  );
+  const wrap = el('div', {});
   if (!packages.length) {
     wrap.appendChild(emptyState({
       iconName: 'gamepad',
@@ -180,8 +180,6 @@ async function renderPackagesTab(container) {
 
 function renderPrescriptionsTab(container, childId) {
   const wrap = el('div', {},
-    el('p', { class: 'hint-text' },
-      'میز تجویز: بستهٔ منتشرشده را به کودک نسبت بدهید، مأموریت زمان‌بندی کنید و لینک کودک را با QR/کپی بسپارید؛ پیشرفت و وضعیت لینک همین‌جا دیده می‌شود.'),
     el('div', { 'data-rx-panel': '' })
   );
   container.replaceChildren(wrap);
@@ -195,7 +193,7 @@ function renderReportTab(container, childId) {
 }
 
 export async function renderGames(container) {
-  // دیپ‌لینک از پروفایل کودک: #/games?child=<id> — تب تجویزها با فیلتر همان کودک باز می‌شود
+  // دیپ‌لینک از پروفایل کودک: #/games?child=<id> — تب ارسال با فیلتر همان دانش‌آموز باز می‌شود
   const hashQuery = location.hash.split('?')[1] ?? '';
   const params = new URLSearchParams(hashQuery);
   const childId = params.get('child');
@@ -204,7 +202,7 @@ export async function renderGames(container) {
   const body = el('div', {});
   const tabBar = tabs([
     { key: 'packages', label: 'بسته‌ها', icon: 'gamepad', onSelect: (k) => select(k) },
-    { key: 'rx', label: 'تجویزها', icon: 'clipboard', onSelect: (k) => select(k) },
+    { key: 'rx', label: 'ارسال به دانش‌آموز', icon: 'clipboard', onSelect: (k) => select(k) },
     { key: 'report', label: 'گزارش', icon: 'trendingUp', onSelect: (k) => select(k) }
   ], initialTab);
 
