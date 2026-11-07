@@ -7,11 +7,11 @@
  * • تیک هر ۲۰ ثانیه؛ هر عبارت در هر دقیقه حداکثر یک بار و بدون هم‌پوشانی اجرا می‌شود.
  * • تریگر دستی /__scheduled فقط با CRON_MANUAL=1 (برای آزمون — در پروداکشن خاموش).
  */
-import { BATCH_CRON, DIGEST_CRON, REMINDER_CRONS } from '@core/shared';
+import { BATCH_CRON, DIGEST_CRON, REMINDER_CRONS, CP_SYNC_CRON } from '@core/shared';
 
 export type ScheduledHandler = (event: { cron: string; scheduledTime: number }) => Promise<void>;
 
-export const ALL_CRONS: readonly string[] = [...REMINDER_CRONS, BATCH_CRON, DIGEST_CRON];
+export const ALL_CRONS: readonly string[] = [...REMINDER_CRONS, BATCH_CRON, DIGEST_CRON, CP_SYNC_CRON];
 
 /** پارس یک فیلد cron: پشتیبانی از *، a، a-b، a/b، a-b/c و لیست کاما */
 export function parseCronField(spec: string, min: number, max: number): Set<number> {
