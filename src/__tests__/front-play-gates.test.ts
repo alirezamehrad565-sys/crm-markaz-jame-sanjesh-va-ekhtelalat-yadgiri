@@ -250,3 +250,29 @@ describe('گیت لایهٔ حسی بازی — گیم‌فیل (۱.۲۵.۲۱)',
     expect(trialsSrc.indexOf('stimulus_presented')).toBeLessThan(trialsSrc.indexOf('fx.popIn'));
   });
 });
+
+describe('گیت جادهٔ عددها — مسیر ماشین و نمایش خط عددی (۱.۲۵.۲۸)', () => {
+  const sessionJs = read(join(PLAY, 'engine/session.js'));
+  const numlineKindJs = read(join(PLAY, 'kinds/numline.js'));
+
+  it('شاخهٔ خط عددی و choice از مسیر اجباری ماشین می‌گذرند — FIXATION پیش از STIMULUS', () => {
+    // رگرسیون گشت مرورگری ۱.۲۵.۲۸: گذار مستقیم PRACTICE→STIMULUS با گیت ماشین رد می‌شد
+    const branches = sessionJs.split("if (item.type === '").slice(1);
+    for (const src of branches) {
+      const body = src.split('continue;')[0];
+      if (!body.includes('numline') && !body.includes('choice')) continue;
+      const fixAt = body.indexOf('STATES.FIXATION');
+      const stimAt = body.indexOf('STATES.STIMULUS');
+      expect(fixAt).toBeGreaterThan(-1);
+      expect(stimAt).toBeGreaterThan(fixAt);
+    }
+  });
+
+  it('نمایش خط عددی بی‌کلید است — tolerance/correct هرگز در ماژول نمایش نیست؛ جنبش فقط از fx', () => {
+    expect(numlineKindJs).not.toMatch(/tolerance|correct_touch|\bcorrect\b/);
+    expect(numlineKindJs).not.toMatch(/fetch\(|XMLHttpRequest|eval\(/);
+    expect(numlineKindJs).not.toMatch(/\.animate\(/); // جنبش از session.js با fx می‌آید
+    expect(playCss).toMatch(/\.play-numline__road\s*\{[^}]*touch-action:\s*none/);
+    expect(playCss).toMatch(/height:\s*78px/); // هدف لمسی ≥۶۴px
+  });
+});
