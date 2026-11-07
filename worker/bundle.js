@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.34";
+var APP_VERSION = "1.25.35";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -6061,6 +6061,7 @@ var DEFAULT_REMINDER_HOURS_BEFORE = 2;
 var BATCH_CRON = "30 14 * * *";
 var BATCH_MIN_LEAD_HOURS = 12;
 var DIGEST_CRON = "0 4 * * *";
+var CP_SYNC_CRON = "*/15 * * * *";
 var LINK_CODE_LENGTH = 6;
 var DEFAULT_CLINIC_NAME = "\u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639";
 var SETTING_KEYS = {
@@ -15179,15 +15180,15 @@ __name(m108NormalizeChecklistTexts, "m108NormalizeChecklistTexts");
 function m108NormalizeChecklistItems(items) {
   if (!items || items.length === 0) return null;
   const seen = /* @__PURE__ */ new Set();
-  const clean = [];
+  const clean2 = [];
   for (const it of items) {
     const text = it.text.trim();
     if (!text || seen.has(text)) continue;
     seen.add(text);
-    clean.push({ text, done: Boolean(it.done) });
-    if (clean.length >= TODO_CHECKLIST_MAX) break;
+    clean2.push({ text, done: Boolean(it.done) });
+    if (clean2.length >= TODO_CHECKLIST_MAX) break;
   }
-  return clean.length > 0 ? JSON.stringify(clean) : null;
+  return clean2.length > 0 ? JSON.stringify(clean2) : null;
 }
 __name(m108NormalizeChecklistItems, "m108NormalizeChecklistItems");
 function createTodosService(deps) {
@@ -15382,9 +15383,9 @@ function createTodosService(deps) {
       return rowToTodo(updated);
     },
     async addChecklistItem(id, text, actor) {
-      const clean = text.trim();
-      if (!clean) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
-      if (clean.length > 200) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+      const clean2 = text.trim();
+      if (!clean2) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
+      if (clean2.length > 200) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
       await db.transaction(async (tx) => {
         const row = await loadActiveRow(tx, id);
         if (row.assigner_id !== actor.staffId && row.assignee_id !== actor.staffId) {
@@ -15397,10 +15398,10 @@ function createTodosService(deps) {
         if (items.length >= TODO_CHECKLIST_MAX) {
           throw new ValidationError(`\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 ${TODO_CHECKLIST_MAX} \u0645\u0648\u0631\u062F \u0646\u062F\u0627\u0631\u062F`);
         }
-        if (items.some((it) => it.text === clean)) {
+        if (items.some((it) => it.text === clean2)) {
           throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0648\u0631\u062F \u0627\u0632 \u0642\u0628\u0644 \u062F\u0631 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0647\u0633\u062A");
         }
-        items.push({ text: clean, done: false });
+        items.push({ text: clean2, done: false });
         await tx.execute(`UPDATE todos SET checklist = ?, updated_at = datetime('now') WHERE id = ?`, [
           JSON.stringify(items),
           id
@@ -16333,11 +16334,11 @@ function createExerciseBankService(deps) {
     },
     // کدام شناسه‌ها واقعاً تمرینِ حذف‌نشدهٔ بانک‌اند (برای اعتبارسنجی لینک کارت طرح درمان)
     async idsExist(ids) {
-      const clean = [...new Set(ids.filter((x) => typeof x === "string" && x.length > 0))].slice(0, 50);
-      if (!clean.length) return /* @__PURE__ */ new Set();
+      const clean2 = [...new Set(ids.filter((x) => typeof x === "string" && x.length > 0))].slice(0, 50);
+      if (!clean2.length) return /* @__PURE__ */ new Set();
       const rows = await db.query(
-        `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${clean.map(() => "?").join(", ")})`,
-        clean
+        `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${clean2.map(() => "?").join(", ")})`,
+        clean2
       );
       return new Set(rows.map((r) => r.id));
     },
@@ -33853,8 +33854,8 @@ function assertPlainTone(text) {
 }
 __name(assertPlainTone, "assertPlainTone");
 function shortLine(text, max = 120) {
-  const clean = text.replace(/\s+/g, " ").trim();
-  return Array.from(clean).length <= max ? clean : `${Array.from(clean).slice(0, max - 1).join("").trim()}\u2026`;
+  const clean2 = text.replace(/\s+/g, " ").trim();
+  return Array.from(clean2).length <= max ? clean2 : `${Array.from(clean2).slice(0, max - 1).join("").trim()}\u2026`;
 }
 __name(shortLine, "shortLine");
 function sawOf(h) {
@@ -49224,8 +49225,8 @@ async function fetchBaleBotUsername(token, fetchImpl) {
     const body = await res.json().catch(() => ({}));
     const username = body?.result?.username;
     if (typeof username !== "string") return null;
-    const clean = username.trim().replace(/^@/, "");
-    return /^[A-Za-z0-9_]{2,64}$/.test(clean) ? clean : null;
+    const clean2 = username.trim().replace(/^@/, "");
+    return /^[A-Za-z0-9_]{2,64}$/.test(clean2) ? clean2 : null;
   } catch {
     return null;
   }
@@ -49885,20 +49886,20 @@ function createSettingsService(deps) {
       return typeof v === "string" ? v.trim().replace(/^@/, "") : "";
     },
     async setBotUsername(username, actor) {
-      const clean = username.trim().replace(/^@/, "");
-      if (clean.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean)) {
+      const clean2 = username.trim().replace(/^@/, "");
+      if (clean2.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean2)) {
         throw new ConflictError("\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u0628\u0627\u062A \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0644\u0627\u062A\u06CC\u0646\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637 \u0632\u06CC\u0631 \u0627\u0633\u062A (\u06F2 \u062A\u0627 \u06F6\u06F4 \u0646\u0648\u06CC\u0633\u0647)");
       }
       const before = await this.getBotUsername();
-      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean, actor);
+      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean2, actor);
       await audit.log({
         actorId: actor.staffId,
         action: "settings.bot_username.update",
         resourceType: "settings",
         resourceId: "bot_username",
-        changes: { bot_username: { from: before || null, to: clean || null } }
+        changes: { bot_username: { from: before || null, to: clean2 || null } }
       });
-      return clean;
+      return clean2;
     },
     async getNotifyFlags() {
       const stored = await readAll();
@@ -49953,10 +49954,10 @@ function createSettingsService(deps) {
     async updateScoringConfig(input, actor) {
       const before = await this.getScoringConfig();
       const epoch = epochUtcOfTehranYmd(input.epochYmd);
-      const clean = mergeScoringWeights(input.weights);
-      await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean }, actor);
-      const changed = Object.keys(clean).filter(
-        (k) => clean[k] !== before.weights[k]
+      const clean2 = mergeScoringWeights(input.weights);
+      await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean2 }, actor);
+      const changed = Object.keys(clean2).filter(
+        (k) => clean2[k] !== before.weights[k]
       ).length;
       await audit.log({
         actorId: actor.staffId,
@@ -50464,9 +50465,9 @@ function createBackupService(deps) {
             );
             if (rows.length === 0) break;
             for (const r of rows) {
-              const clean = {};
-              for (const [k, v] of Object.entries(r)) clean[k] = encodeValue(v);
-              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean)}`;
+              const clean2 = {};
+              for (const [k, v] of Object.entries(r)) clean2[k] = encodeValue(v);
+              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean2)}`;
               emitted += 1;
             }
             if (rows.length < page2) break;
@@ -52519,6 +52520,159 @@ function createLogger(scope) {
 }
 __name(createLogger, "createLogger");
 
+// src/application/cp-sync/announcements.ts
+var CP_SYNC_SETTINGS_KEY = "cp_sync.last_sync_at";
+var CP_ID_PREFIX = "cp-";
+var CP_SYNC_LOOKBACK_MS = 6e4;
+var CP_SYNC_TIMEOUT_MS = 15e3;
+function clean(v) {
+  const s = v?.trim();
+  return s ? s : null;
+}
+__name(clean, "clean");
+function buildCpSyncConfig(env) {
+  return {
+    cpSyncUrl: clean(env.CP_SYNC_URL),
+    cpNodeCode: clean(env.CP_NODE_CODE),
+    cpNodeKey: clean(env.CP_NODE_KEY),
+    cpSyncStaffId: clean(env.CP_SYNC_STAFF_ID)
+  };
+}
+__name(buildCpSyncConfig, "buildCpSyncConfig");
+var CpSyncItemSchema = external_exports.object({
+  id: external_exports.string().min(4).max(120),
+  title: external_exports.string().min(1).max(120),
+  body: external_exports.string().min(1).max(2e3),
+  show_login: external_exports.boolean(),
+  show_panel: external_exports.boolean(),
+  active: external_exports.boolean(),
+  created_at: external_exports.string().min(10).max(40),
+  updated_at: external_exports.string().min(10).max(40)
+});
+var CpSyncResponseSchema = external_exports.object({
+  data: external_exports.object({
+    server_time: external_exports.string().min(10).max(40),
+    items: external_exports.array(CpSyncItemSchema).max(100)
+  })
+});
+function boolToInt(b) {
+  return b ? 1 : 0;
+}
+__name(boolToInt, "boolToInt");
+function buildRequestUrl(baseUrl, sinceIso) {
+  if (!sinceIso) return baseUrl;
+  const sep = baseUrl.includes("?") ? "&" : "?";
+  return `${baseUrl}${sep}since=${encodeURIComponent(sinceIso)}`;
+}
+__name(buildRequestUrl, "buildRequestUrl");
+async function readLastSyncAt(db) {
+  const row = await db.queryOne(
+    "SELECT value FROM settings WHERE key = ?",
+    [CP_SYNC_SETTINGS_KEY]
+  );
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.value);
+    if (typeof parsed === "string" && parsed.length > 0) return parsed;
+  } catch {
+  }
+  return null;
+}
+__name(readLastSyncAt, "readLastSyncAt");
+async function writeLastSyncAt(db, iso) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, 'cp-sync', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-sync', updated_at = excluded.updated_at`,
+    [CP_SYNC_SETTINGS_KEY, JSON.stringify(iso), iso]
+  );
+}
+__name(writeLastSyncAt, "writeLastSyncAt");
+async function syncCpAnnouncements(deps) {
+  const { db, logger, config } = deps;
+  const log = logger.child("cp-sync");
+  if (!config.cpSyncUrl || !config.cpNodeCode || !config.cpNodeKey || !config.cpSyncStaffId) {
+    return { status: "disabled" };
+  }
+  try {
+    const lastIso = await readLastSyncAt(db);
+    let sinceIso = null;
+    if (lastIso) {
+      const t = Date.parse(lastIso);
+      if (!Number.isNaN(t)) sinceIso = new Date(t - CP_SYNC_LOOKBACK_MS).toISOString();
+    }
+    const res = await (deps.fetchFn ?? fetch)(buildRequestUrl(config.cpSyncUrl, sinceIso), {
+      method: "GET",
+      headers: {
+        "X-CP-Node-Code": config.cpNodeCode,
+        Authorization: `Bearer ${config.cpNodeKey}`,
+        "X-CP-Node-Version": APP_VERSION
+      },
+      signal: AbortSignal.timeout(CP_SYNC_TIMEOUT_MS)
+    });
+    if (!res.ok) {
+      log.warn("announcement.cp_sync_failed", { http: res.status, detail: "cp_http_error" });
+      return { status: "error", detail: `http_${res.status}` };
+    }
+    const payload = await res.json();
+    const parsed = CpSyncResponseSchema.safeParse(payload);
+    if (!parsed.success) {
+      log.warn("announcement.cp_sync_failed", { detail: "cp_payload_invalid" });
+      return { status: "error", detail: "payload_invalid" };
+    }
+    const items = parsed.data.data.items.filter((it) => it.id.startsWith(CP_ID_PREFIX)).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
+    if (items.length > 0) {
+      const staff = await db.queryOne(
+        "SELECT id FROM staff WHERE id = ? AND active = 1",
+        [config.cpSyncStaffId]
+      );
+      if (!staff) {
+        log.warn("announcement.cp_sync_failed", { detail: "cp_staff_missing" });
+        return { status: "error", detail: "staff_missing" };
+      }
+      const statements = items.map(
+        (it) => db.prepare(
+          `INSERT INTO announcements
+             (id, title, body, show_login, show_panel, bot_sent_staff, bot_sent_families,
+              active, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             title = excluded.title,
+             body = excluded.body,
+             show_login = excluded.show_login,
+             show_panel = excluded.show_panel,
+             active = excluded.active,
+             updated_at = excluded.updated_at
+           -- \u06AF\u0627\u0631\u062F \u0637\u0644\u0627\u06CC\u06CC: \u0647\u0631\u06AF\u0632 \u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627\u06CC \u0645\u062D\u0644\u06CC (\u0628\u062F\u0648\u0646 \u067E\u06CC\u0634\u0648\u0646\u062F cp-) \u0631\u0627 \u0628\u0627\u0632\u0646\u0648\u06CC\u0633\u06CC \u0646\u06A9\u0646 (\u0644\u0627\u06CC\u0647\u0654 \u062F\u0641\u0627\u0639 \u062F\u0648\u0645)
+           WHERE announcements.id LIKE 'cp-%'`,
+          [
+            it.id,
+            it.title,
+            it.body,
+            boolToInt(it.show_login),
+            boolToInt(it.show_panel),
+            boolToInt(it.active),
+            config.cpSyncStaffId,
+            it.created_at,
+            it.updated_at
+          ]
+        )
+      );
+      await db.batch(statements);
+    }
+    const serverTime = parsed.data.data.server_time;
+    await writeLastSyncAt(db, serverTime);
+    log.info("announcement.cp_sync", { n: items.length, received: parsed.data.data.items.length });
+    return { status: "ok", applied: items.length, received: parsed.data.data.items.length };
+  } catch (err) {
+    log.warn("announcement.cp_sync_failed", {
+      error: err instanceof Error ? err.message : String(err)
+    });
+    return { status: "error", detail: "network_or_unexpected" };
+  }
+}
+__name(syncCpAnnouncements, "syncCpAnnouncements");
+
 // src/index.ts
 function buildEnv(env) {
   return {
@@ -52604,6 +52758,17 @@ async function runBackupAutoSendCycle(env) {
   logger.info("backup.auto.cycle.done", { outcome });
 }
 __name(runBackupAutoSendCycle, "runBackupAutoSendCycle");
+async function runCpSyncCycle(env) {
+  const db = createDb(env.DB);
+  const logger = createLogger("sync");
+  const result = await syncCpAnnouncements({
+    db,
+    logger,
+    config: buildCpSyncConfig(env)
+  });
+  logger.info("cp_sync.cycle.done", { status: result.status, applied: result.applied ?? 0 });
+}
+__name(runCpSyncCycle, "runCpSyncCycle");
 var src_default = {
   async fetch(request, env, _ctx) {
     const db = createDb(env.DB);
@@ -52619,6 +52784,10 @@ var src_default = {
     return app.fetch(request, env, _ctx);
   },
   async scheduled(event, env, ctx) {
+    if (event.cron === CP_SYNC_CRON) {
+      ctx.waitUntil(runCpSyncCycle(env));
+      return;
+    }
     if (event.cron === DIGEST_CRON) {
       ctx.waitUntil(runDigestCycle(env));
       ctx.waitUntil(runBackupAutoSendCycle(env));

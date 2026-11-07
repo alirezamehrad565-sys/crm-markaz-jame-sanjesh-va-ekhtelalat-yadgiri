@@ -2,7 +2,8 @@ import { createApp, createServices } from '@app/api-routing';
 import { createDb } from '@core/db';
 import { createAuditWriter } from '@core/audit';
 import { createLogger } from '@core/logger';
-import { BATCH_CRON, DIGEST_CRON, REMINDER_HORIZON_HOURS } from '@core/shared';
+import { BATCH_CRON, DIGEST_CRON, REMINDER_HORIZON_HOURS, CP_SYNC_CRON } from '@core/shared';
+import { buildCpSyncConfig, syncCpAnnouncements } from '@app/cp-sync/announcements';
 
 export interface Env {
   DB: D1Database;
@@ -14,6 +15,11 @@ export interface Env {
   AUTH_SECRET?: string;
   EXERCISE_FILES?: unknown;
   PUBLIC_BASE_URL?: string;
+  // — سینک اعلان از کنترل‌پلین (m1.5)؛ هر چهار مقدار خالی = خاموش کامل —
+  CP_SYNC_URL?: string;
+  CP_NODE_CODE?: string;
+  CP_NODE_KEY?: string;
+  CP_SYNC_STAFF_ID?: string;
 }
 
 function buildEnv(env: Env) {
@@ -106,6 +112,18 @@ async function runBackupAutoSendCycle(env: Env): Promise<void> {
   logger.info('backup.auto.cycle.done', { outcome });
 }
 
+/** چرخهٔ سینک اعلان CP — هر ۱۵ دقیقه؛ هرگز throw نمی‌کند (قرارداد m1.5) */
+async function runCpSyncCycle(env: Env): Promise<void> {
+  const db = createDb(env.DB);
+  const logger = createLogger('sync');
+  const result = await syncCpAnnouncements({
+    db,
+    logger,
+    config: buildCpSyncConfig(env)
+  });
+  logger.info('cp_sync.cycle.done', { status: result.status, applied: result.applied ?? 0 });
+}
+
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const db = createDb(env.DB);
@@ -122,6 +140,10 @@ export default {
   },
 
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (event.cron === CP_SYNC_CRON) {
+      ctx.waitUntil(runCpSyncCycle(env)); // سینک اعلان از کنترل‌پلین — خاموش اگر env خالی باشد
+      return;
+    }
     if (event.cron === DIGEST_CRON) {
       ctx.waitUntil(runDigestCycle(env));
       ctx.waitUntil(runBackupAutoSendCycle(env)); // پشتیبان خودکار شبانه (اگر فعال باشد)
