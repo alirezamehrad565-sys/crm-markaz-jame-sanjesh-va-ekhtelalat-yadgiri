@@ -367,6 +367,7 @@ export async function runSession(ctx) {
         const finishWave = () => {
           if (settled) return;
           settled = true;
+          sleeper.cancel(); // موج با «گزارش بده!» تمام شد — خواب یدکی یدک نمی‌ماند تا خواب موج بعد را زودرس نبرد (همان قاعدهٔ پنجرهٔ گو/نوگو)
           trialHooks.pause = null;
           trialHooks.resume = null;
           tiles.forEach((b) => b.removeEventListener('pointerdown', onTile));
