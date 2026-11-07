@@ -24539,12 +24539,23 @@ var FLANKER_STAGE_MAX_DECOYS = {
   // گلهٔ فریبکار — همهٔ گله‌ها
   s5: null
 };
+var FLANKER_STAGE_BANDS = {
+  s1: ["a"],
+  s2: ["a", "b"],
+  s3: ["a", "b", "c"],
+  s4: ["a", "b", "c", "d"],
+  s5: null
+};
 function flankerItemInStage(item, stageId) {
+  const allowed = typeof stageId === "string" && stageId in FLANKER_STAGE_BANDS ? FLANKER_STAGE_BANDS[stageId] : null;
+  if (allowed === null) return true;
+  const s = item.stim ?? {};
+  const band = typeof s.band === "string" ? s.band : "";
+  if (band !== "") return allowed.includes(band);
   const max = typeof stageId === "string" && stageId in FLANKER_STAGE_MAX_DECOYS ? FLANKER_STAGE_MAX_DECOYS[stageId] : null;
   if (max === null) return true;
   const decoys = flankerIncongruentCountOf(item);
-  if (decoys === 0 && max >= 0) return true;
-  return decoys > 0 && decoys <= max;
+  return decoys === 0 || decoys <= max;
 }
 __name(flankerItemInStage, "flankerItemInStage");
 var TRAIL_STAGE_MAX_NODES = {
@@ -24554,10 +24565,21 @@ var TRAIL_STAGE_MAX_NODES = {
   s4: 7,
   s5: null
 };
+var TRAIL_STAGE_BANDS = {
+  s1: ["a"],
+  s2: ["a", "b"],
+  s3: ["a", "b", "c"],
+  s4: ["a", "b", "c", "d"],
+  s5: null
+};
 function trailItemInStage(item, stageId) {
+  const allowed = typeof stageId === "string" && stageId in TRAIL_STAGE_BANDS ? TRAIL_STAGE_BANDS[stageId] : null;
+  if (allowed === null) return true;
+  const s = item.stim ?? {};
+  const band = typeof s.band === "string" ? s.band : "";
+  if (band !== "") return allowed.includes(band);
   const max = typeof stageId === "string" && stageId in TRAIL_STAGE_MAX_NODES ? TRAIL_STAGE_MAX_NODES[stageId] : null;
   if (max === null) return true;
-  const s = item.stim ?? {};
   const nodes = Array.isArray(s.nodes) ? s.nodes.length : 0;
   return nodes > 0 && nodes <= max;
 }
