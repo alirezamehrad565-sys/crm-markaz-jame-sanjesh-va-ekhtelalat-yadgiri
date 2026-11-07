@@ -3,7 +3,12 @@ import { createDb } from '@core/db';
 import { createAuditWriter } from '@core/audit';
 import { createLogger } from '@core/logger';
 import { BATCH_CRON, DIGEST_CRON, REMINDER_HORIZON_HOURS, CP_SYNC_CRON } from '@core/shared';
-import { buildCpSyncConfig, syncCpAnnouncements } from '@app/cp-sync/announcements';
+import {
+  buildCpSyncConfig,
+  syncCpAnnouncements,
+  cpSyncOpportunistic,
+  stampCpSyncAttempt
+} from '@app/cp-sync/announcements';
 
 export interface Env {
   DB: D1Database;
@@ -112,10 +117,11 @@ async function runBackupAutoSendCycle(env: Env): Promise<void> {
   logger.info('backup.auto.cycle.done', { outcome });
 }
 
-/** چرخهٔ سینک اعلان CP — هر ۱۵ دقیقه؛ هرگز throw نمی‌کند (قرارداد m1.5) */
+/** چرخهٔ سینک اعلان CP — کرون اختصاصی یا سلف‌هاست؛ مُهر تلاش مشترک با دروازهٔ فرصت‌طلب */
 async function runCpSyncCycle(env: Env): Promise<void> {
   const db = createDb(env.DB);
   const logger = createLogger('sync');
+  await stampCpSyncAttempt(db).catch(() => undefined);
   const result = await syncCpAnnouncements({
     db,
     logger,
@@ -124,8 +130,29 @@ async function runCpSyncCycle(env: Env): Promise<void> {
   logger.info('cp_sync.cycle.done', { status: result.status, applied: result.applied ?? 0 });
 }
 
+/**
+ * دروازهٔ فرصت‌طلب سینک CP روی هر درخواست — چون پلن Free کلادفلر سقف ۵ کرون در حساب دارد
+ * و این حساب پر است، به‌جای کرون پنجم هر دورهٔ سینک روی خودِ ترافیک زنده سوار می‌شود:
+ * هر isolate حداکثر یک‌بار در دقیقه settings را می‌خواند و تلاش‌ها ۱۵ دقیقه فاصله دارند.
+ * env خالی = صفر بار اضافه (اولین گارد قبل از هر خواندنی برمی‌گردد).
+ */
+let cpSyncProbeAt = 0;
+function probeCpSync(env: Env, ctx: ExecutionContext): void {
+  const t = Date.now();
+  if (t - cpSyncProbeAt < 60_000) return;
+  cpSyncProbeAt = t;
+  ctx.waitUntil(
+    cpSyncOpportunistic({
+      db: createDb(env.DB),
+      logger: createLogger('sync'),
+      config: buildCpSyncConfig(env)
+    }).catch(() => undefined)
+  );
+}
+
 export default {
-  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    probeCpSync(env, ctx); // فرصت‌طلب؛ بدون env خالی است و فوراً برمی‌گردد
     const db = createDb(env.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger('worker');
@@ -136,7 +163,7 @@ export default {
       teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
       ...buildEnv(env)
     });
-    return app.fetch(request, env, _ctx);
+    return app.fetch(request, env, ctx);
   },
 
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {

@@ -52522,6 +52522,8 @@ __name(createLogger, "createLogger");
 
 // src/application/cp-sync/announcements.ts
 var CP_SYNC_SETTINGS_KEY = "cp_sync.last_sync_at";
+var CP_SYNC_ATTEMPT_KEY = "cp_sync.last_attempt_at";
+var CP_SYNC_MIN_INTERVAL_MS = 15 * 6e4;
 var CP_ID_PREFIX = "cp-";
 var CP_SYNC_LOOKBACK_MS = 6e4;
 var CP_SYNC_TIMEOUT_MS = 15e3;
@@ -52566,17 +52568,7 @@ function buildRequestUrl(baseUrl, sinceIso) {
 }
 __name(buildRequestUrl, "buildRequestUrl");
 async function readLastSyncAt(db) {
-  const row = await db.queryOne(
-    "SELECT value FROM settings WHERE key = ?",
-    [CP_SYNC_SETTINGS_KEY]
-  );
-  if (!row) return null;
-  try {
-    const parsed = JSON.parse(row.value);
-    if (typeof parsed === "string" && parsed.length > 0) return parsed;
-  } catch {
-  }
-  return null;
+  return readSettingsIso(db, CP_SYNC_SETTINGS_KEY);
 }
 __name(readLastSyncAt, "readLastSyncAt");
 async function writeLastSyncAt(db, iso) {
@@ -52588,6 +52580,53 @@ async function writeLastSyncAt(db, iso) {
   );
 }
 __name(writeLastSyncAt, "writeLastSyncAt");
+async function readSettingsIso(db, key) {
+  const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.value);
+    if (typeof parsed === "string" && parsed.length > 0) return parsed;
+  } catch {
+  }
+  return null;
+}
+__name(readSettingsIso, "readSettingsIso");
+async function stampCpSyncAttempt(db, at = /* @__PURE__ */ new Date()) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, 'cp-sync', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-sync', updated_at = excluded.updated_at`,
+    [CP_SYNC_ATTEMPT_KEY, JSON.stringify(at.toISOString()), at.toISOString()]
+  );
+}
+__name(stampCpSyncAttempt, "stampCpSyncAttempt");
+function shouldAttemptCpSync(lastAttemptIso, now, minIntervalMs = CP_SYNC_MIN_INTERVAL_MS) {
+  if (!lastAttemptIso) return true;
+  const t = Date.parse(lastAttemptIso);
+  if (Number.isNaN(t)) return true;
+  return now.getTime() - t >= minIntervalMs;
+}
+__name(shouldAttemptCpSync, "shouldAttemptCpSync");
+async function cpSyncOpportunistic(deps) {
+  const { db, logger, config } = deps;
+  if (!config.cpSyncUrl || !config.cpNodeCode || !config.cpNodeKey || !config.cpSyncStaffId) {
+    return { status: "skipped" };
+  }
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const last = await readSettingsIso(db, CP_SYNC_ATTEMPT_KEY);
+  if (!shouldAttemptCpSync(last, now(), deps.minIntervalMs ?? CP_SYNC_MIN_INTERVAL_MS)) {
+    return { status: "skipped" };
+  }
+  await stampCpSyncAttempt(db, now());
+  return syncCpAnnouncements({
+    db,
+    logger,
+    config,
+    fetchFn: deps.fetchFn,
+    now: deps.now
+  });
+}
+__name(cpSyncOpportunistic, "cpSyncOpportunistic");
 async function syncCpAnnouncements(deps) {
   const { db, logger, config } = deps;
   const log = logger.child("cp-sync");
@@ -52761,6 +52800,7 @@ __name(runBackupAutoSendCycle, "runBackupAutoSendCycle");
 async function runCpSyncCycle(env) {
   const db = createDb(env.DB);
   const logger = createLogger("sync");
+  await stampCpSyncAttempt(db).catch(() => void 0);
   const result = await syncCpAnnouncements({
     db,
     logger,
@@ -52769,8 +52809,23 @@ async function runCpSyncCycle(env) {
   logger.info("cp_sync.cycle.done", { status: result.status, applied: result.applied ?? 0 });
 }
 __name(runCpSyncCycle, "runCpSyncCycle");
+var cpSyncProbeAt = 0;
+function probeCpSync(env, ctx) {
+  const t = Date.now();
+  if (t - cpSyncProbeAt < 6e4) return;
+  cpSyncProbeAt = t;
+  ctx.waitUntil(
+    cpSyncOpportunistic({
+      db: createDb(env.DB),
+      logger: createLogger("sync"),
+      config: buildCpSyncConfig(env)
+    }).catch(() => void 0)
+  );
+}
+__name(probeCpSync, "probeCpSync");
 var src_default = {
-  async fetch(request, env, _ctx) {
+  async fetch(request, env, ctx) {
+    probeCpSync(env, ctx);
     const db = createDb(env.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger("worker");
@@ -52781,7 +52836,7 @@ var src_default = {
       teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
       ...buildEnv(env)
     });
-    return app.fetch(request, env, _ctx);
+    return app.fetch(request, env, ctx);
   },
   async scheduled(event, env, ctx) {
     if (event.cron === CP_SYNC_CRON) {
