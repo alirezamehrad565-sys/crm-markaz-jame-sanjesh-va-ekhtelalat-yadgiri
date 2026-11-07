@@ -28,3 +28,8 @@ PUBLIC_BASE_URL = "https://center-system.sanjeshm.workers.dev"
 
 [observability]
 enabled = true
+
+# Service Binding به ورکر کنترل‌پلین — مسیر سینک اعلان m1.5 (fetch عمومی هم‌زون 1042 می‌دهد)
+[[services]]
+binding = "CP"
+service = "network-control-plane"

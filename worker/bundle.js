@@ -52622,6 +52622,7 @@ async function cpSyncOpportunistic(deps) {
     db,
     logger,
     config,
+    binding: deps.binding,
     fetchFn: deps.fetchFn,
     now: deps.now
   });
@@ -52640,7 +52641,8 @@ async function syncCpAnnouncements(deps) {
       const t = Date.parse(lastIso);
       if (!Number.isNaN(t)) sinceIso = new Date(t - CP_SYNC_LOOKBACK_MS).toISOString();
     }
-    const res = await (deps.fetchFn ?? fetch)(buildRequestUrl(config.cpSyncUrl, sinceIso), {
+    const url = buildRequestUrl(config.cpSyncUrl, sinceIso);
+    const init = {
       method: "GET",
       headers: {
         "X-CP-Node-Code": config.cpNodeCode,
@@ -52648,9 +52650,22 @@ async function syncCpAnnouncements(deps) {
         "X-CP-Node-Version": APP_VERSION
       },
       signal: AbortSignal.timeout(CP_SYNC_TIMEOUT_MS)
-    });
+    };
+    const res = deps.binding ? await deps.binding.fetch(url, init) : await (deps.fetchFn ?? fetch)(url, init);
     if (!res.ok) {
-      log.warn("announcement.cp_sync_failed", { http: res.status, detail: "cp_http_error" });
+      let bodyHead = "";
+      try {
+        bodyHead = (await res.text()).slice(0, 180);
+      } catch {
+        bodyHead = "";
+      }
+      log.warn("announcement.cp_sync_failed", {
+        http: res.status,
+        detail: "cp_http_error",
+        url: config.cpSyncUrl,
+        // کل URL درخواست‌شده — راز ندارد (کلید در هدر است)
+        body_head: bodyHead
+      });
       return { status: "error", detail: `http_${res.status}` };
     }
     const payload = await res.json();
@@ -52804,7 +52819,8 @@ async function runCpSyncCycle(env) {
   const result = await syncCpAnnouncements({
     db,
     logger,
-    config: buildCpSyncConfig(env)
+    config: buildCpSyncConfig(env),
+    binding: env.CP ?? null
   });
   logger.info("cp_sync.cycle.done", { status: result.status, applied: result.applied ?? 0 });
 }
@@ -52818,7 +52834,8 @@ function probeCpSync(env, ctx) {
     cpSyncOpportunistic({
       db: createDb(env.DB),
       logger: createLogger("sync"),
-      config: buildCpSyncConfig(env)
+      config: buildCpSyncConfig(env),
+      binding: env.CP ?? null
     }).catch(() => void 0)
   );
 }
