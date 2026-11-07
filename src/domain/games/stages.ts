@@ -12,8 +12,9 @@
 
 import type { AgeBandId } from './protocol';
 
-/** نسخهٔ قواعد مرحله‌ها — هر تغییر عددی در این فایل باید این نسخه را بامپ کند */
-export const STAGE_RULES_VERSION = '1.0.0';
+/** نسخهٔ قواعد مرحله‌ها — هر تغییر عددی در این فایل باید این نسخه را بامپ کند.
+ *  ۱.۱.۰ (۱.۲۵.۲۸): قواعد خط عددی («جادهٔ عددها») افزوده شد — عددهای گو/نوگو دست‌نخورده. */
+export const STAGE_RULES_VERSION = '1.1.0';
 
 /** تعداد مرحله‌های مسیر تمرین */
 export const STAGE_TOTAL = 5;
@@ -106,16 +107,44 @@ const STAGES_7_12: StageDef[] = [
 
 const STAGES: Record<AgeBandId, StageDef[]> = { '4-6': STAGES_4_6, '7-12': STAGES_7_12 };
 
-/** مرحله از جایگاه یک‌مبنا — باند سنی جدی گرفته می‌شود */
-export function stageByIndex(band: AgeBandId, index: number): StageDef | null {
-  const list = STAGES[band] ?? STAGES['7-12'];
+// ─── پنج مرحلهٔ «جادهٔ عددها» (۱.۲۵.۲۸) — خط عددی؛ اهرم سختی = گسترهٔ جاده (NUMLINE_STAGE_MAX) ───
+// هر مرحله یک جادهٔ تازه است که کودک می‌بیند؛ بدون بازنویسی پارامتر زمان‌بندی —
+// اهرم فقط انتخاب آیتم از بانک authored است؛ کلید پاسخ هرگز این‌جا نیست.
+
+const NUMLINE_STAGES: StageDef[] = [
+  {
+    id: 's1', index: 1, title_fa: 'جادهٔ کوچک', goal_fa: 'عددهای ۰ تا ۱۰؛ آهسته و خوش‌حال.', difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: 's2', index: 2, title_fa: 'جادهٔ شهر', goal_fa: 'حالا تا ۲۰ ادامه دارد؛ همان‌طور که یاد گرفتی.', difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: 's3', index: 3, title_fa: 'جادهٔ بلند', goal_fa: 'جاده تا ۵۰ می‌رسد؛ چشم‌هایت تیز است.', difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: 's4', index: 4, title_fa: 'جادهٔ بزرگ', goal_fa: 'جاده تا ۱۰۰! تو خیلی راه رفته‌ای.', difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: 's5', index: 5, title_fa: 'جادهٔ قهرمان‌ها', goal_fa: 'همهٔ جاده‌ها با هم — تو آماده‌ای!', difficulty: 5,
+    overrides: {}
+  }
+];
+
+/** مرحله از جایگاه یک‌مبنا — باند سنی و نوع‌بازی جدی گرفته می‌شود */
+export function stageByIndex(band: AgeBandId, index: number, kind: GameKind = 'gonogo'): StageDef | null {
+  const list = kind === 'numline' ? NUMLINE_STAGES : (STAGES[band] ?? STAGES['7-12']);
   return list.find((s) => s.index === index) ?? null;
 }
 
 /** مرحله از شناسهٔ ذخیره‌شده در جلسه — شناسهٔ ناشناخته = null (جلسه بی‌مرحله می‌ماند) */
-export function stageById(band: AgeBandId, id: string | null | undefined): StageDef | null {
+export function stageById(band: AgeBandId, id: string | null | undefined, kind: GameKind = 'gonogo'): StageDef | null {
   if (!id || typeof id !== 'string') return null;
-  return STAGES[band]?.find((s) => s.id === id) ?? null;
+  const list = kind === 'numline' ? NUMLINE_STAGES : (STAGES[band] ?? STAGES['7-12']);
+  return list.find((s) => s.id === id) ?? null;
 }
 
 /** بازنویسی پارامترهای پروتکل با تنظیمات مرحله — فقط کلیدهای مجاز؛ بقیه دست‌نخورده */
@@ -162,6 +191,64 @@ export function stageOutcomeOf(
   return { passed: true, stars: three ? 3 : two ? 2 : 1, thresholds: t };
 }
 
+// ─── نوع‌بازی و مراحل خط عددی «جادهٔ عددها» (۱.۲۵.۲۸) ───
+// اهرم سختی خط عددی پارامتر زمان‌بندی نیست — «گسترهٔ جاده» است: مرحلهٔ بعد جادهٔ بلندتر
+// با آستانهٔ پذیرش سن‌محور خودش (tolerance authored روی آیتم‌ها). اهرم مرحله = انتخاب
+// آیتم از بانک authored با پیش‌ماندهٔ numlineItemInStage — محرک authored هرگز بازنویسی نمی‌شود.
+
+/** نوع‌بازی از فیلد mission.game — ناشناخته = گونوگو (سازگاری با بسته‌های قدیمی) */
+export type GameKind = 'gonogo' | 'numline';
+export function gameKindOf(v: string | null | undefined): GameKind {
+  return v === 'numline' ? 'numline' : 'gonogo';
+}
+
+/** آستانه‌های گذار و ستارهٔ خط عددی — بر دقت جای عدد (درصد)؛ وضعیت proposed تا پیلوت مرکز */
+export const NUMLINE_STAGE_THRESHOLDS = {
+  pass: 65,
+  star2: 78,
+  star3: 88
+} as const;
+
+/** نتیجهٔ مرحلهٔ خط عددی از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
+export function stageOutcomeNumline(accuracy: number | null | undefined): StageOutcome {
+  const t = NUMLINE_STAGE_THRESHOLDS;
+  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
+  const stars: 1 | 2 | 3 = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
+  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
+}
+
+/** نتیجهٔ مرحله از نوع‌بازی — هر نوع‌بازی ملاک خودش را دارد؛ قواعد هرگز مخلوط نمی‌شوند */
+export function stageOutcomeFor(
+  kind: GameKind,
+  summary: { pct: { correct_go: number | null; correct_nogo: number | null; accuracy: number | null } }
+): StageOutcome {
+  return kind === 'numline'
+    ? stageOutcomeNumline(summary.pct.accuracy)
+    : stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo);
+}
+
+/** سقف گسترهٔ جاده در هر مرحلهٔ خط عددی — null = همهٔ جاده‌ها (مرحلهٔ پایانی مرور بزرگ) */
+export const NUMLINE_STAGE_MAX: Record<string, number | null> = {
+  s1: 10,
+  s2: 20,
+  s3: 50,
+  s4: 100,
+  s5: null
+};
+
+/**
+ * پیش‌ماندهٔ آیتم خط عددی در مرحله — فقط نمایش/انتخاب از بانک authored؛ نمره‌دهی سرور روی
+ * آیتم authored است. بی‌مرحله/مرحلهٔ ناشناخته = همهٔ آیتم‌ها (سازگاری با جلسه‌های بی‌مرحله).
+ */
+export function numlineItemInStage(
+  item: { range?: [number, number] | undefined },
+  stageId: string | null | undefined
+): boolean {
+  const max = typeof stageId === 'string' && stageId in NUMLINE_STAGE_MAX ? NUMLINE_STAGE_MAX[stageId] : null;
+  if (max === null) return true;
+  return Array.isArray(item.range) && item.range[1] <= max;
+}
+
 // ─── پیشرفت مسیر از تاریخچهٔ جلسه‌ها ───
 
 /** سطر تاریخچهٔ مرحله — از جلسه‌های تجویز (قدیمی→جدید) */
@@ -170,6 +257,10 @@ export interface StageHistoryRow {
   validity: string | null;
   correct_go_pct: number | null;
   correct_nogo_pct: number | null;
+  /** دقت جلسه (۱.۲۵.۲۸) — ملاک خط عددی؛ گونوگو هم همیشه پر است (از خلاصهٔ محاسبه‌شده) */
+  accuracy?: number | null;
+  /** میانگین خطای جای عدد — فقط خط عددی معنا دارد */
+  numline_error_pct?: number | null;
 }
 
 export interface StageProgress {
@@ -182,19 +273,26 @@ export interface StageProgress {
 }
 
 /**
- * پیشرفت مسیر از تاریخچهٔ جلسه‌ها (قدیمی→جدید):
+ * پیشرفت مسیر از تاریخچهٔ جلسه‌ها (قدیمی→جدید) — مسیر نوع‌بازی‌آگاه:
  *   · فقط جلسه‌های valid گذار می‌سازند و ستاره ثبت می‌کنند
  *   · مرحلهٔ ۱ همیشه باز است؛ مرحلهٔ i وقتی باز می‌شود که i−1 گذار شده باشد
  *   · بهترین ستارهٔ هر مرحله حفظ می‌شود — تجربهٔ بدتر، ستارهٔ قبلی را نمی‌گیرد
+ *   · ملاک گذار از نوع‌بازی می‌آید — گونوگو: گو/نوگو؛ خط عددی: دقت جای عدد
  */
-export function stageProgressOf(history: StageHistoryRow[]): StageProgress {
+export function stageProgressOfKind(kind: GameKind, history: StageHistoryRow[]): StageProgress {
   const best: Record<string, { stars: number; passed: boolean }> = {};
   let unlocked = 1;
   for (const row of history) {
     if (!row || row.validity !== 'valid' || !row.stage_id) continue;
     const stage = stageById('7-12', row.stage_id) ?? stageById('4-6', row.stage_id);
     if (!stage) continue;
-    const outcome = stageOutcomeOf(row.correct_go_pct, row.correct_nogo_pct);
+    const outcome = stageOutcomeFor(kind, {
+      pct: {
+        correct_go: row.correct_go_pct,
+        correct_nogo: row.correct_nogo_pct,
+        accuracy: row.accuracy ?? null
+      }
+    });
     // جلسهٔ زیر آستانهٔ گذار (۰ ستاره) در «بهترین‌ها» ثبت نمی‌شود — best فقط دستاوردهاست
     if (outcome.stars === 0) continue;
     const prev = best[stage.id];
@@ -211,9 +309,14 @@ export function stageProgressOf(history: StageHistoryRow[]): StageProgress {
   return { unlocked_index: unlocked, best, stars_total: starsTotal };
 }
 
-/** مرحلهٔ فعال کودک — بالاترین مرحلهٔ قفل‌گشایی‌شده */
-export function currentStageOf(progress: StageProgress, band: AgeBandId): StageDef | null {
-  return stageByIndex(band, progress.unlocked_index);
+/** پیشرفت مسیر گونوگو — همان قرارداد قبلی (سازگاری کامل با فراخوانی‌های موجود) */
+export function stageProgressOf(history: StageHistoryRow[]): StageProgress {
+  return stageProgressOfKind('gonogo', history);
+}
+
+/** مرحلهٔ فعال کودک — بالاترین مرحلهٔ قفل‌گشایی‌شده؛ عنوان‌ها از نوع‌بازی می‌آیند */
+export function currentStageOf(progress: StageProgress, band: AgeBandId, kind: GameKind = 'gonogo'): StageDef | null {
+  return stageByIndex(band, progress.unlocked_index, kind);
 }
 
 // ─── درون‌مایهٔ دیداری مرحله‌ها (۱.۲۵.۲۳) — فقط نمایش؛ هیچ کلیدی این‌جا نیست ───

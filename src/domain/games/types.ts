@@ -50,6 +50,9 @@ export interface MissionItem {
   options?: { label: string }[];
   /** گزینهٔ درست (اندیس) برای choice یا جای درست روی خط عددی برای numline */
   correct?: number;
+  /** آستانهٔ پذیرش خط عددی (۱.۲۵.۲۸) — |انتخاب − درست| ≤ tolerance درست شمرده می‌شود؛
+   *  پیش‌فرض ۰٫۵ یعنی لمس صحیح همان عدد؛ گستره‌های بزرگ‌تر آستانهٔ سن‌محور خود را می‌برند */
+  tolerance?: number;
   /** پاسخ درست لمسی برای touch_report (go=true / nogo=false) */
   correct_touch?: boolean;
   /** گسترهٔ خط عددی [min,max] */

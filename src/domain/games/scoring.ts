@@ -6,7 +6,7 @@
 // «خام در برابر محاسبه‌شده»: خروجی این ماژول لایهٔ محاسبه‌شده است؛ دادهٔ خام
 // (response_json + شواهد فاز ۴) جدا در game_attempts می‌ماند.
 
-import { commissionCountOf, commissionPctOf, correctGoPctOf, correctNogoPctOf, medianRtOf, omissionCountOf, omissionPctOf, accuracyOf, type ScoredAttempt } from './pure';
+import { commissionCountOf, commissionPctOf, correctGoPctOf, correctNogoPctOf, meanNumlineErrorOf, medianRtOf, omissionCountOf, omissionPctOf, accuracyOf, type ScoredAttempt } from './pure';
 
 /** شواهد نمایش واقعی هر آزمون (فاز ۴) — همه nullable */
 export interface AttemptEvidence {
@@ -69,6 +69,8 @@ export interface SessionSummary {
   };
   /** رزرو — بدون پایهٔ نُرم هیچ مقداری تولید نمی‌شود (دفترچهٔ وظیفه §۵) */
   dprime: null;
+  /** خط عددی (۱.۲۵.۲۸) — میانگین خطای نرمال‌شدهٔ جای عدد (۰..۱۰۰)؛ بدون آیتم خط عددی = null */
+  numline: { mean_error_pct: number | null };
   /** ردیابی قاعدهٔ دامنهٔ صفر — گزارش شفاف می‌گوید کدام سنجه قابل محاسبه نبود و چرا */
   zero_denominator: string[];
 }
@@ -170,6 +172,7 @@ export function summarizeAttempts(
       evidence_coverage: ev.length > 0 ? Math.round((evWithPresentation / ev.length) * 100) / 100 : null
     },
     dprime: null,
+    numline: { mean_error_pct: meanNumlineErrorOf(t) },
     zero_denominator: zeroDenominator
   };
 }

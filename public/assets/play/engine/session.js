@@ -173,9 +173,6 @@ export async function runSession(ctx) {
   let practiceMode = true; // تا نخستین آیتم اصلی (فاز پروب/آیتم‌های جاری در ارزیابی)
   machine.practiceMode = practiceMode;
 
-  /* ساعت شروع آزمون انتخابی — RT از لحظهٔ نمایش گزینه‌ها */
-  const pickStart = performance.now();
-
   for (;;) {
     let next;
     try {
@@ -214,8 +211,109 @@ export async function runSession(ctx) {
     /* ورود به حلقهٔ آزمون — از READY/PRACTICE */
     await sleeper.sleep(rand(P.isi_min_ms, P.isi_max_ms));
 
+    /* آیتم خط عددی — «جادهٔ عددها» (۱.۲۵.۲۸): نمایش از kinds/numline.js؛ RT از نمایش جاده؛
+       پاسخ {chosen} سرور نمره می‌دهد (آستانهٔ authored)؛ شواهد همان قرارداد فاز ۴؛
+       بازخورد دو-سطحی + نشان حقیقت فقط در تمرین — ارزیابی بی‌بازخورد/بی‌ستاره/بی‌استریک */
+    if (item.type === 'numline' && Array.isArray(item.range) && typeof kind.numlineMarkup === 'function') {
+      machine.to(STATES.STIMULUS, { item: item.id, numline: true });
+      stage.classList.remove('play-stage--quiet');
+      stage.innerHTML = kind.numlineMarkup(item);
+      fx.popIn(stage.querySelector('.play-numline__chip'), 240, false);
+      const shownAt = performance.now(); // RT از همین لحظه — نه از شروع حلقه
+      const pick = await new Promise((resolve) => {
+        const road = stage.querySelector('.play-numline__road');
+        const onTap = (ev) => {
+          ev.preventDefault(); // جادهٔ لمسی — اسکرول اشتباه نمی‌سازد
+          road.removeEventListener('pointerdown', onTap);
+          resolve({ value: kind.numlineValueFromTap(item, stage, ev), at: performance.now() });
+        };
+        road.addEventListener('pointerdown', onTap);
+      });
+      if (pick.value !== null) {
+        const guessEl = kind.numlinePlaceGuess(item, stage, pick.value);
+        fx.popIn(guessEl, 240, false);
+      }
+      machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, numline: true });
+      const recordNum = {
+        item_id: item.id,
+        go: null,
+        touched: true,
+        rt_ms: Math.round(pick.at - shownAt),
+        touch_count: 1,
+        premature_count: 0,
+        multiple_count: 0,
+        out_of_surface_count: 0,
+        presented_at: shownAt,
+        frame_drops: 0,
+        window_ms: null,
+        isi_ms: 0,
+        events: []
+      };
+      trials.push(recordNum);
+      doneCount += 1;
+      let fbN = null;
+      try {
+        fbN = await api.submit({
+          item_id: item.id,
+          response: {
+            chosen: pick.value,
+            presented_at: Math.round(shownAt),
+            frame_drops: 0,
+            touch_count: 1,
+            premature_count: 0,
+            multiple_count: 0,
+            out_of_surface_count: 0
+          },
+          rt_ms: recordNum.rt_ms,
+          idem_key: crypto.randomUUID()
+        });
+      } catch (err) {
+        machine.to(STATES.INTERRUPTED, { reason: 'network', item: item.id });
+        onNetworkFail();
+        return;
+      }
+      const okN = fbN !== null && typeof fbN === 'object' && fbN.correct === true;
+      const canFeedbackN = !isAssessment && fbN && fbN.phase === 'train' && fbN.message && B.feedback_in_main;
+      if (canFeedbackN) {
+        fx.popBubble(bubble, fbN.message, okN ? 'ok' : 'calm', P.feedback_ms);
+        if (!okN && fbN.answer_display != null && typeof kind.numlineRevealTruth === 'function') {
+          // نشان حقیقت — آموزش پس از پاسخ؛ مقدار از بازخورد سرور می‌آید، نه از کلاینت
+          const truthEl = kind.numlineRevealTruth(item, stage, Number(fbN.answer_display));
+          fx.popIn(truthEl, 300);
+          await sleeper.sleep(P.feedback_ms + 600); // کمی وقت برای دیدن جای درست
+        } else {
+          const pt = okN && typeof kind.numlineGuessPoint === 'function'
+            ? kind.numlineGuessPoint(stage)
+            : null;
+          if (pt) fx.burstAt(pt.x, pt.y);
+          await sleeper.sleep(P.feedback_ms);
+        }
+      } else {
+        await sleeper.sleep(Math.max(400, recordNum.isi_ms || 600));
+      }
+      /* سبد ستاره و استریک — همان حلقهٔ گو/نوگو؛ ارزیابی هرگز */
+      if (!isAssessment && B.star_basket && fbN && fbN.phase === 'train' && okN) {
+        starCount += 1;
+        if (countEl) countEl.textContent = faNum(starCount);
+        fx.flyStar(stage, basketEl);
+        window.setTimeout(() => fx.popCount(countEl), 560);
+        if (starCount % 5 === 0) {
+          fx.popBubble(bubble, faNum(starCount) + ' ستاره جمع شد!', 'ok', P.feedback_ms);
+          await sleeper.sleep(P.feedback_ms);
+        }
+      }
+      if (okN) streak += 1; else if (fbN && fbN.correct === false) streak = 0;
+      const streakMsgN = streakLine(streak);
+      if (canFeedbackN && streakMsgN) fx.pillShow(streakMsgN);
+      if (machine.state === STATES.INTER_TRIAL_INTERVAL) {
+        machine.to(practiceMode ? STATES.PRACTICE : STATES.READY, { after_items: doneCount });
+      }
+      continue;
+    }
+
     /* آیتم انتخابی (choice) — بدون پنجرهٔ زمانی؛ کف ۲۰۰ms سروری (§۸)؛
-       همان کلاس‌های CSS پخش‌کننده؛ پاسخ از کلید گزینه، RT از نمایش */
+       همان کلاس‌های CSS پخش‌کننده؛ پاسخ از کلید گزینه، RT از نمایش هر آیتم
+       (۱.۲۵.۲۸ رفع: ساعت قبلاً یک‌بار بیرون حلقه گرفته می‌شد و RT آیتم‌های بعدی تورم داشت) */
     if (item.type === 'choice' && Array.isArray(item.options) && item.options.length > 0) {
       machine.to(STATES.STIMULUS, { item: item.id, choice: true });
       stage.classList.remove('play-stage--quiet');
@@ -223,6 +321,7 @@ export async function runSession(ctx) {
         '<div class="play-options">' +
         item.options.map((o, i) => '<button type="button" class="play-option" data-option="' + i + '">' + esc(o.label) + '</button>').join('') +
         '</div>';
+      const pickStart = performance.now(); // RT از لحظهٔ نمایش همین گزینه‌ها
       const pickAt = await new Promise((resolve) => {
         const buttons = stage.querySelectorAll('.play-option');
         const onTap = (ev) => {
