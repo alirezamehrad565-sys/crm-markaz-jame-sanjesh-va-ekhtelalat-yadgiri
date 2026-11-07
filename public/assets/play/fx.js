@@ -150,6 +150,32 @@ export function popStars(container, ms) {
   });
 }
 
+/* ─── جنبش محیطی صحنهٔ دریایی (M2 / ۱.۲۵.۳۶) — تاب جلبک، بالارفتن حباب،
+   شنای آرام قهرمان؛ همهٔ حلقه‌ها بی‌نهایتِ خیلی آرام و فقط-تزئینی؛ با
+   کاهش‌جنبش کل صحنه ایستا می‌ماند. عناصر با stage.innerHTML='' می‌میرند و
+   انیمیشن‌هایشان با خودشان — هیچ ردپایی روی ساعت اندازه‌گیری نیست ─── */
+
+export function sceneAmbient(stage) {
+  if (!motionOk() || !stage) return;
+  stage.querySelectorAll('.play-scene__bubble').forEach((b, i) => {
+    animate(b,
+      [{ transform: 'translate(0, 22px) scale(.88)', opacity: .3 },
+       { transform: 'translate(7px, -30px) scale(1.05)', opacity: .6 }],
+      { duration: 4200 + i * 900, easing: 'ease-in-out', delay: i * 720, iterations: Infinity, direction: 'alternate' });
+  });
+  stage.querySelectorAll('.play-scene__weed').forEach((w, i) => {
+    animate(w,
+      [{ transform: 'rotate(-2.6deg)' }, { transform: 'rotate(2.6deg)' }],
+      { duration: 5200 + i * 840, easing: 'ease-in-out', iterations: Infinity, direction: 'alternate' });
+  });
+  const hero = stage.querySelector('.play-scene__hero');
+  if (hero) {
+    animate(hero,
+      [{ transform: 'translateY(0) rotate(-1.6deg)' }, { transform: 'translateY(-7px) rotate(1.6deg)' }],
+      { duration: 3600, easing: 'ease-in-out', iterations: Infinity, direction: 'alternate' });
+  }
+}
+
 /* ─── حباب بازخورد شناور — بالای صحنه، جایی که نگاه کودک است؛ نه پایین صفحه ───
    متن در عنصر ثابت می‌ماند (ابزار QA می‌خواند)؛ دو لحن: ok / calm ─── */
 

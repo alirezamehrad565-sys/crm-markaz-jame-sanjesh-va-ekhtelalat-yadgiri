@@ -26,8 +26,10 @@ const SHAPES = {
   star: 'M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z',
   circle: 'M60 10 a50 50 0 1 0 0.001 0 Z',
   square: 'M18 18 h84 v84 h-84 Z',
-  fish: 'M14 60 C34 30 74 28 96 52 L110 40 L110 80 L96 68 C74 92 34 90 14 60 Z M100 54 a6 6 0 1 0 0.001 0',
-  crab: 'M28 52 a32 26 0 1 0 64 0 a32 26 0 1 0 -64 0 M22 46 a10 10 0 1 0 0.001 0 M98 46 a10 10 0 1 0 0.001 0 M34 80 l-10 14 M50 84 l-4 16 M70 84 l4 16 M86 80 l10 14',
+  /* ماهی/خرچنگ — تک‌منبع شخصیت از scene.js (M2/۱.۲۵.۳۶): وکتور حالت آرام (idle) —
+     ژست ثابت و آرام برای آزمون؛ حالت‌های دیگر روایت فقط در لحظه‌های تشریفاتی */
+  fish: null, /* پایین از HERO_VECTORS پر می‌شود */
+  crab: null,
   boat: 'M20 74 h80 l-12 22 h-56 Z M58 12 v56 M58 16 l30 40 h-30 Z',
   balloon: 'M60 14 a30 34 0 1 0 0.001 0 M60 82 q-6 10 0 18 q6 8 0 16',
   heart: 'M60 104 C20 76 10 52 24 34 C36 20 54 24 60 40 C66 24 84 20 96 34 C110 52 100 76 60 104 Z',
@@ -54,6 +56,11 @@ const SHAPES = {
     ink: 'M45 76 a3 3 0 1 0 0.01 0 M60 78 a3 3 0 1 0 0.01 0 M75 76 a3 3 0 1 0 0.01 0'
   }
 };
+
+/* تک‌منبع شخصیت دریایی — وکتور حالت آرام ماهی/خرچنگ از کتابخانهٔ صحنه (M2) */
+import { HERO_VECTORS, sceneMarkup } from '../scene.js';
+SHAPES.fish = HERO_VECTORS.fish;
+SHAPES.crab = HERO_VECTORS.crab;
 
 const INK = '#153E50';  /* Navy دفترچهٔ وظیفه — خط جوهری محرک */
 
@@ -98,19 +105,16 @@ export function previewSteps(hint) {
 
 /* ═══════════════════════════════════════════════════════════════
    لایهٔ اقتباس jsPsych-timelines/go-nogo (MIT) — ۱.۲۵.۳۴
-   ممیزی کامل در docs/research/gonogo-jspsych-integration.md:
-   بستهٔ @jspsych-timelines/go-nogo v0.5.0 به‌جای جایگزینی موتور، در سطح
-   «منطق مأموریت» اقتباس شده — همان سه بلوک تعاملی آن بسته:
-     ۱) تمرین گو با پنجرهٔ بلند و تکرار تا موفقیت (createGoPractice)
-     ۲) تمرین نوگو با بازداری کوتاه و تکرار تا موفقیت (createNoGoPractice)
-     ۳) خلاصهٔ پایان جلسه (createDebrief — دقت + زمان واکنش)
-   با سه تفاوت آگاهانه: لمس همه‌جای صحنه به‌جای دکمهٔ ثابت (کیفیت لمس
-   موبایل)، متن کامل فارسی روبه‌کودک (text_object فارسی‌شده)، و ماندن
-   کلید پاسخ روی سرور (در jsPsych شمارندهٔ is_go_trial کلاینت‌محور است —
-   این‌جا محرک فقط از راهنمای سرور می‌آید و هیچ کلیدی در کلاینت نیست).
    ═══════════════════════════════════════════════════════════════ */
 
 import * as fx from '../fx.js';
+
+/** صحنهٔ تمرین — دکور پس‌زمینهٔ لایه‌های دریا (M2)؛ جنبش از fx؛ بی‌اثر برای پاسخ */
+function decoratePractice(stage) {
+  if (!stage) return;
+  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach'));
+  fx.sceneAmbient(stage);
+}
 
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
 const faNum = (n) => String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
@@ -209,11 +213,13 @@ export async function practiceInteractive(ctx) {
     stage.classList.add('play-stage--teach');
     stage.innerHTML = stepCard('قدم ۱ از ۲', stimSvg(hint.go.stim),
       GO_NOGO_TEXT.goStepLine(hint.go.label), GO_NOGO_TEXT.goStepWait);
+    decoratePractice(stage);
     fx.revealStage(stage);
     fx.popIn(stage.querySelector('.play-svg'));
     const out = practiceOutcome('go', await tapWithin(stage, goMs, sleeper));
     if (out === 'success') {
       stage.innerHTML = stepCard('قدم ۱ از ۲', stimSvg(hint.go.stim), GO_NOGO_TEXT.goSuccess);
+      decoratePractice(stage);
       fx.revealStage(stage);
       await sleeper.sleep(1200);
       break;
@@ -221,6 +227,7 @@ export async function practiceInteractive(ctx) {
     goRetries += 1;
     stage.innerHTML = stepCard('قدم ۱ از ۲', stimSvg(hint.go.stim),
       goRetries >= 2 ? GO_NOGO_TEXT.goRetryCalm : GO_NOGO_TEXT.goRetry);
+    decoratePractice(stage);
     fx.revealStage(stage);
     await sleeper.sleep(1600);
   }
@@ -231,11 +238,13 @@ export async function practiceInteractive(ctx) {
     stage.classList.add('play-stage--teach');
     stage.innerHTML = stepCard('قدم ۲ از ۲', stimSvg(hint.nogo.stim),
       GO_NOGO_TEXT.nogoStepLine(hint.nogo.label), GO_NOGO_TEXT.nogoStepWait);
+    decoratePractice(stage);
     fx.revealStage(stage);
     fx.popIn(stage.querySelector('.play-svg'));
     const out = practiceOutcome('nogo', await tapWithin(stage, nogoMs, sleeper));
     if (out === 'success') {
       stage.innerHTML = stepCard('قدم ۲ از ۲', stimSvg(hint.nogo.stim), GO_NOGO_TEXT.nogoSuccess);
+      decoratePractice(stage);
       fx.revealStage(stage);
       await sleeper.sleep(1200);
       break;
@@ -243,6 +252,7 @@ export async function practiceInteractive(ctx) {
     nogoRetries += 1;
     stage.innerHTML = stepCard('قدم ۲ از ۲', stimSvg(hint.nogo.stim),
       nogoRetries >= 2 ? GO_NOGO_TEXT.nogoRetryCalm : GO_NOGO_TEXT.nogoRetry);
+    decoratePractice(stage);
     fx.revealStage(stage);
     await sleeper.sleep(1600);
   }
@@ -251,6 +261,7 @@ export async function practiceInteractive(ctx) {
   stage.className = 'play-stage';
   stage.classList.add('play-stage--teach');
   stage.innerHTML = stepCard(null, null, GO_NOGO_TEXT.practiceDone);
+  decoratePractice(stage);
   fx.revealStage(stage);
   await sleeper.sleep(1600);
   stage.className = 'play-stage';

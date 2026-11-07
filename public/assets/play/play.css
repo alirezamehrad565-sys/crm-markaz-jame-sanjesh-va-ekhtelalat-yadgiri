@@ -1155,3 +1155,90 @@ button.play-trail__node { appearance: none; font-family: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .play-debrief { transition: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   صحنهٔ دریایی (M2 مسترپرامپت / ۱.۲۵.۳۶ — راه A): سه لایهٔ عمق + حباب‌ها
+   فقط لحظه‌های تشریفاتی (معرفی/استراحت/کارت مرحله/پایان/تمرین)؛ در شِمال
+   اجرای اصلی هم display:none — آزمون هرگز صحنهٔ هنر نمی‌بیند (RT پاک).
+   صحنه ایستاست؛ همهٔ جنبش آرام محیطی از fx.sceneAmbient (WAAPI) می‌آید و
+   با کاهش‌جنبش خاموش می‌شود — این بلوک هیچ قالب کلیدی و هیچ انیمیشن CSS ندارد.
+   ترتیب رنگ‌آمیزی: صحنه z=0 زیر محتوا (z=1)؛ لایه‌ها بی‌متن و aria-hidden.
+   ═══════════════════════════════════════════════════════════════ */
+
+.play-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* محتوای شِمال‌های تشریفاتی همیشه یک لایه بالای صحنه می‌نشیند */
+.play-stage--teach > *, .play-stage--end > * { position: relative; z-index: 1; }
+.play-stage--teach > .play-scene, .play-stage--end > .play-scene { position: absolute; z-index: 0; }
+
+/* کمربند و بند — اجرای اصلی/ارزیابی هرگز صحنه نمی‌بیند حتی اگر نشست باقی مانده باشد */
+.play-stage--main .play-scene { display: none; }
+
+.play-scene svg { position: absolute; }
+/* لایه‌های عمق به بستر می‌چسبند — ترکیب دریایی واقعی، نه شناور */
+.play-scene__far, .play-scene__mid { width: 92%; }
+.play-scene__far { left: 4%; }
+.play-scene__mid { left: 4%; }
+
+.play-scene__far {
+  left: 4%; right: 4%; bottom: 17%; height: 34%; top: auto;
+  opacity: .5;
+}
+
+.play-scene__mid {
+  left: 2%; right: 2%; bottom: 3%; height: 27%; top: auto;
+  opacity: .6;
+}
+
+.play-scene__near {
+  left: -2%; right: -2%; bottom: -2%; height: 24%;
+  opacity: .95;
+}
+
+.play-scene__bubbles { position: absolute; inset: 0; }
+
+.play-scene__bubble { position: absolute; width: 20px; height: 20px; }
+.play-scene__bubble--0 { left: 12%; bottom: 12%; }
+.play-scene__bubble--1 { left: 78%; bottom: 30%; width: 14px; height: 14px; }
+.play-scene__bubble--2 { left: 62%; bottom: 8%; width: 24px; height: 24px; }
+
+/* قهرمان صحنه — ماهی (و در پایان خرچنگ) کنار گفتار؛ کوچک و گوشه‌نشین،
+   هرگز وسط توجه کودک در مسیر آزمون نمی‌نشیند چون در آزمون اصلاً حاضر نیست */
+.play-scene__hero {
+  position: absolute;
+  right: 8%;
+  bottom: 20%;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+.play-scene__hero > svg:first-child { width: 128px; height: 132px; }
+.play-scene__hero > svg + svg { width: 92px; height: 95px; opacity: .95; }
+
+.play-scene__weeds {
+  position: absolute;
+  left: 7%;
+  bottom: 20%;
+  display: inline-flex;
+  gap: 6px;
+}
+.play-scene__weed { width: 26px; height: 52px; transform-origin: 50% 100%; }
+
+/* موبایل باریک — قهرمان کوچک‌تر تا از گفتار بیرون نزند */
+@media (max-width: 380px) {
+  .play-scene__hero > svg:first-child { width: 104px; height: 108px; }
+  .play-scene__hero > svg + svg { width: 74px; height: 77px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* صحنه ایستاست به‌صورت پیش‌فرض؛ جنبش‌های WAAPI در fx گارد می‌شوند —
+     این‌جا فقط اطمینان: هیچ گذاری CSS روی عناصر صحنه نماند */
+  .play-scene, .play-scene svg { transition: none; }
+}
