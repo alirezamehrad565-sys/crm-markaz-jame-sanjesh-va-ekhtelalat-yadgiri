@@ -105,6 +105,10 @@ async function loadKind() {
       previewSteps: mod.previewSteps || GENERIC.previewSteps,
       stimSvg: mod.stimSvg || GENERIC.stimSvg,
       ...hooks,
+      // تمرین تعاملی «تا موفقیت» + خلاصهٔ پایان (۱.۲۵.۳۴ — اقتباس بستهٔ jsPsych go-nogo):
+      // فقط ماژول‌هایی که این‌ها را صادر کنند (گونوگو)؛ بقیه undefined → مدار قدیمی موتور
+      practiceInteractive: mod.practiceInteractive || null,
+      debriefMarkup: mod.debriefMarkup || null,
       // جادهٔ عددها (۱.۲۵.۲۸) — توابع نمایش خط عددی (ماژول‌های دیگر این‌ها ندارند)
       numlineMarkup: mod.numlineMarkup || null,
       numlineValueFromTap: mod.numlineValueFromTap || null,

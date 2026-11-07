@@ -10,7 +10,7 @@
 import { STATES, createMachine } from './machine.js';
 import { createSleeper } from './timing.js';
 import { runTrial } from './trials.js';
-import { summarizeSession } from './scoring.js';
+import { summarizeSession, medianOf } from './scoring.js';
 import * as fx from '../fx.js';
 
 const rand = (min, max) => Math.floor(min + Math.random() * (max - min + 1));
@@ -43,7 +43,11 @@ function safeProtocol(snap) {
       assessment_blocks: n(p.assessment_blocks, 3),
       stimulus_scale_vmin: n(p.stimulus_scale_vmin, 33),
       feedback_ms: n(p.feedback_ms, 1400),
-      preview_step_ms: n(p.preview_step_ms, 2000)
+      preview_step_ms: n(p.preview_step_ms, 2000),
+      /* مدت نمایش محرک — نگاشت stimulus_duration بستهٔ jsPsych (۱.۲۵.۳۴):
+         null = نمایش تا پاسخ/پایان پنجره (رفتار امروز)؛ سمت machine.stimulusHideMsFor بسته‌بندی می‌شود */
+      stimulus_duration_ms: typeof p.stimulus_duration_ms === 'number' && Number.isFinite(p.stimulus_duration_ms)
+        ? p.stimulus_duration_ms : null
     },
     behavior: {
       feedback_in_main: false,
@@ -126,12 +130,35 @@ export async function runSession(ctx) {
 
   /* ─── ۲) آموزش/دستورالعمل ─── */
   machine.to(STATES.DEMONSTRATION);
+  /* تمرین تعاملی «تا موفقیت» — اقتباس بستهٔ jsPsych-timelines/go-nogo (۱.۲۵.۳۴):
+     فقط اگر ماژول نوع‌بازی آن را دارد (گونوگو) و راهنمای آموزشی سرور آماده باشد؛
+     سایر بازی‌ها و ارزیابی همان مدار قبلی را می‌بینند — صفر تغییر رفتار برای آن‌ها */
+  let practiceRetries = null;
   if (isAssessment) {
     /* ارزیابی: دستورالعمل ثابت کوتاه — بدون شُشی، بدون پیش‌نمایش بازی‌گوش */
     stage.classList.add('play-stage--teach');
     stage.innerHTML = card('وقتی شکل آمد، صفحه را لمس کن؛ وقتیش نیامد، دست نزن.', 'قسمت‌های تمرینی کوتاه اول می‌آیند');
     await sleeper.sleep(P.preview_step_ms);
+  } else if (typeof kind.practiceInteractive === 'function') {
+    const practiced = await kind.practiceInteractive({ stage, sleeper, hint });
+    if (practiced && practiced.applied) {
+      practiceRetries = { go_retries: practiced.go_retries, nogo_retries: practiced.nogo_retries };
+    } else {
+      /* راهنمای سرور آماده نبود — مدار قدیمی گام‌نما برای سازگاری کامل */
+      const steps = typeof kind.previewSteps === 'function' ? kind.previewSteps(hint) : [];
+      let step = 0;
+      for (const s of steps) {
+        step++;
+        stage.classList.add('play-stage--teach');
+        stage.innerHTML = '<span class="play-step-badge">قدم ' + faNum(step) + ' از ' + faNum(steps.length) + '</span>' +
+          s.svg + '<p class="play-line">' + esc(s.line) + '</p>';
+        fx.revealStage(stage);
+        fx.popIn(stage.querySelector('.play-svg'));
+        await sleeper.sleep(P.preview_step_ms);
+      }
+    }
   } else {
+    /* مدار گام‌نمای قبلی — بازی‌های بدون تمرین تعاملی (خط عددی/اسکن/…) عیناً همین را می‌بینند */
     const steps = typeof kind.previewSteps === 'function' ? kind.previewSteps(hint) : [];
     let step = 0;
     for (const s of steps) {
@@ -170,6 +197,11 @@ export async function runSession(ctx) {
   let starCount = 0;
   let streak = 0;
   let doneCount = 0;
+  /* خلاصهٔ پایان فقط از دادهٔ مجاز کلاینت (۱.۲۵.۳۴): کلید پاسخ (گو بودن) هرگز به کلاینت
+     نمی‌رسد — درستی فقط از بازخورد سرور می‌آید (فقط آیتم‌های train نمره برمی‌گردانند؛
+     پروب‌ها بی‌نمره‌اند و در نسبت دقت کارت پایان نمی‌آیند — ملاک همیشه سرور است) */
+  let scoredTotal = 0;
+  let scoredCorrect = 0;
   let practiceMode = true; // تا نخستین آیتم اصلی (فاز پروب/آیتم‌های جاری در ارزیابی)
   machine.practiceMode = practiceMode;
 
@@ -901,6 +933,11 @@ export async function runSession(ctx) {
        همهٔ جنبش در fx.js با گارد کاهش‌جنبش — ارزیابی هرگز از این لایه نمی‌بیند (شرطِ isAssessment پایین) */
     const canFeedback = !isAssessment && fb && fb.phase === 'train' && fb.message && B.feedback_in_main;
     const trialOk = fb !== null && typeof fb === 'object' && fb.correct === true;
+    /* خلاصهٔ پایان — فقط آزمون نمره‌خوردهٔ سرور (بازخورد train با correct صریح)؛ پروب هرگز */
+    if (fb && typeof fb === 'object' && typeof fb.correct === 'boolean') {
+      scoredTotal += 1;
+      if (trialOk) scoredCorrect += 1;
+    }
     if (canFeedback) {
       fx.popBubble(bubble, fb.message, trialOk ? 'ok' : 'calm', P.feedback_ms);
       if (trialOk) fx.burstCenter(stage);
@@ -945,6 +982,22 @@ export async function runSession(ctx) {
         : card('مأموریت امروز تمام شد. خسته نباشی!', 'فردا هم یک مأموریت تازه داری.')) +
       (B.star_basket && starCount > 0
         ? '<p class="play-muted">' + faNum(starCount) + ' ستاره در سبد تو جمع شد.</p>' : '');
+  /* خلاصهٔ پایان — نگاشت debrief بستهٔ jsPsych (۱.۲۵.۳۴): فقط تمرین؛ ارزیابی هرگز عدد نمی‌بیند؛
+     ورودی فقط دادهٔ مجاز کلاینت: نمره از بازخورد سرور (train)، میانهٔ RT از رکوردهای موتور؛
+     قاعدهٔ دامنهٔ صفر داخل ماژول نوع‌بازی است — جلسهٔ بی‌آزمون نمره‌خورده هیچ کارتی نمی‌سازد */
+  if (!isAssessment && typeof kind.debriefMarkup === 'function') {
+    const touchedRts = trials.filter((x) => x.touched === true && Number.isFinite(x.rt_ms)).map((x) => x.rt_ms);
+    const debriefHtml = kind.debriefMarkup({
+      scored_total: scoredTotal,
+      scored_correct: scoredCorrect,
+      median_rt: medianOf(touchedRts)
+    }, practiceRetries);
+    if (debriefHtml) {
+      const debriefEl = document.createElement('div');
+      debriefEl.innerHTML = debriefHtml;
+      stage.appendChild(debriefEl.firstElementChild);
+    }
+  }
   fx.revealStage(stage);
   if (!isAssessment && starCount > 0) fx.burstCenter(stage, 10);
   const finishBtn = document.createElement('button');

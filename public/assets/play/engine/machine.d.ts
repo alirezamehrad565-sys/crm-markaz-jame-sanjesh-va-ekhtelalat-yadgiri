@@ -16,3 +16,4 @@ export function classifyTouch(
   opts?: { alreadyAnswered?: boolean; insideStage?: boolean }
 ): 'primary' | 'premature' | 'multiple' | 'out_of_surface';
 export function windowMsFor(item: { stim?: Record<string, unknown> } | null, protocol: { params?: Record<string, number> } | null): number;
+export function stimulusHideMsFor(item: { stim?: Record<string, unknown> } | null, protocol: { params?: Record<string, number> } | null): number | null;

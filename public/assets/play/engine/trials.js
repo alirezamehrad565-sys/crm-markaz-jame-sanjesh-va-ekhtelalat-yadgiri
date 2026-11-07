@@ -7,7 +7,7 @@
    سمت سرور) — موتور فقط نمایش و ثبت می‌کند؛ «درستی» را سرور می‌گوید.
    ═══════════════════════════════════════════════════════════════ */
 
-import { STATES, windowMsFor } from './machine.js';
+import { STATES, windowMsFor, stimulusHideMsFor } from './machine.js';
 import { afterPaint, createFrameMonitor, createPausableClock } from './timing.js';
 import { collectResponse } from './response.js';
 import * as fx from '../fx.js';
@@ -51,6 +51,25 @@ export async function runTrial(ctx) {
      فریم با تپش کامل مرئی بماند و پنجرهٔ پاسخ هیچ تأخیر ادراکی نداشته باشد */
   fx.popIn(stage.querySelector('.play-svg'), 240, false);
 
+  /* مدت نمایش محرک — نگاشت stimulus_duration بستهٔ jsPsych (۱.۲۵.۳۴): پیش‌فرض null =
+     نمایش تا پاسخ/پایان پنجره (رفتار امروز). عدد معتبر = پنهان‌سازی زودهنگام «نمایشی»؛
+     پنجرهٔ پاسخ باز می‌ماند (پاسخ پس از محو هم مجاز — مثل حالت null آن بسته).
+     شمارندهٔ خام setTimeout (شمارندهٔ پنجره در sleeper مشغول است)؛ حین مکث برگه پنهان
+     نمی‌کند و پس از ITI بی‌اثر می‌شود — فقط نمایش، بدون اثر بر شواهد. */
+  const hideMs = stimulusHideMsFor(item, protocol);
+  let hideTimer = 0;
+  if (hideMs !== null) {
+    hideTimer = window.setTimeout(() => {
+      hideTimer = 0;
+      if (machine.state !== STATES.STIMULUS && machine.state !== STATES.RESPONSE_WINDOW) return;
+      const stimElNow = stage.firstElementChild;
+      if (!stimElNow) return;
+      stimElNow.style.pointerEvents = 'none';
+      fx.outThenRemove(stimElNow, 160);
+      ev('stimulus_hidden', { at: Math.round(performance.now()), after_ms: hideMs });
+    }, hideMs);
+  }
+
   /* ساعت واکنش از مبنای نمایشِ تأییدشده — گیره‌های مکث visibility */
   const clock = createPausableClock();
   clock.start();
@@ -73,6 +92,7 @@ export async function runTrial(ctx) {
   sleeper.sleep(windowMs).then(() => collector.resolveNoResponse()).catch(() => undefined);
   const outcome = await collector.promise;
   sleeper.cancel(); // پاسخ آمد یا پنجره بسته شد — شمارندهٔ پنجره یتیم نمی‌ماند
+  if (hideTimer !== 0) { window.clearTimeout(hideTimer); hideTimer = 0; } // محو برنامه‌ریزی‌شده بی‌اثر
   if (hooks) { hooks.pause = null; hooks.resume = null; }
 
   /* INTER_TRIAL_INTERVAL — محرک از صحنه برداشته می‌شود (پنجرهٔ نمایش محدود است):
