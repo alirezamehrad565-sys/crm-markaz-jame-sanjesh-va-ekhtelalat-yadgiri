@@ -90,7 +90,11 @@ export function createPausableClock() {
     touch() { this.pause(); return Math.round(acc); },
     /** زمان انباشتهٔ جاری (ms) — برای گردآورندهٔ پاسخ پس از pause */
     get acc() { return acc; },
-    get running() { return running; }
+    get running() { return running; },
+    /** خواندن بدون توقف (G1 / ۱.۲۵.۳۵) — RT در نقطهٔ لمس بدون فریز ساعت؛
+     *  برای شاخه‌های چندلمسی (اسکن/رد) که RT را از نخستین لمس می‌خوانند ولی
+     *  ساعت برای مکث برگه باید تا پایان آزمون زنده بماند */
+    peek() { return Math.round(acc + (running ? performance.now() - last : 0)); }
   };
 }
 

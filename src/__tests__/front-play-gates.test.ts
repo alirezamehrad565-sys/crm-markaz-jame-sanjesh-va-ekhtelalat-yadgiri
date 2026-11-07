@@ -19,7 +19,7 @@ const scanKindJs = read(join(PLAY, 'kinds/scan.js')); // حملهٔ جاسوس�
 const numlineKindJs = read(join(PLAY, 'kinds/numline.js')); // جادهٔ عددها (۱.۲۵.۲۸)
 const playCss = read(join(PLAY, 'play.css'));
 const fxJs = read(join(PLAY, 'fx.js')); // لایهٔ حسی بازی (۱.۲۵.۲۱) — همهٔ جنبش تزئینی همین‌جاست
-const engineJs = ['machine.js', 'timing.js', 'response.js', 'trials.js', 'session.js', 'scoring.js']
+const engineJs = ['machine.js', 'timing.js', 'response.js', 'trials.js', 'session.js', 'scoring.js', 'observe.js']
   .map((f) => read(join(PLAY, 'engine', f))).join('\n');
 const pageSrc = read(join(__dirname, '../domain/games/page.ts'));
 const routesSrc = read(join(__dirname, '../domain/games/routes.ts'));
@@ -118,6 +118,53 @@ describe('گیت ۱.۲۵.۰۸ — اتصال صفحه به پخش‌کننده',
 function allJsFetches(...sources: string[]): string[] {
   return sources.flatMap((src) => src.match(/fetch\([^;]*?\)/g) ?? []);
 }
+
+describe('گیت G1 تثبیت موتور و صحت داده (۱.۲۵.۳۵) — رگرسیون‌های ممیزی M0', () => {
+  const sessionJs = read(join(PLAY, 'engine/session.js'));
+  const observeJs = read(join(PLAY, 'engine/observe.js'));
+
+  it('شواهد صفر هاردکد ممنوع در پنج شاخهٔ خاص (P1-2) — همه از observe.js می‌آیند', () => {
+    // پیش از G1، شاخه‌های خاص premature/multiple/out_of_surface/frame_drops را صفر هاردکد می‌گذاشتند
+    expect(sessionJs).not.toMatch(/premature_count:\s*0[,}]/);
+    expect(sessionJs).not.toMatch(/multiple_count:\s*0[,}]/);
+    expect(sessionJs).not.toMatch(/out_of_surface_count:\s*0[,}]/);
+    expect(sessionJs).not.toMatch(/frame_drops:\s*0[,}]/);
+    for (const marker of ['createTouchLedger', 'attachTouchEvidence', 'observeDisplayFrames']) {
+      expect(sessionJs, marker).toContain(marker);
+    }
+    expect(observeJs).toContain('classifyTouch'); // همان طبقه‌بندی ماشین — قرارداد فاز ۳
+  });
+
+  it('ساعت RT مکث‌پذیر در هر پنج شاخهٔ خاص (P1-1) — هر شاخه ساعت خودش را دارد', () => {
+    // ۵ شاخه + یک import از timing.js — شاخهٔ timedchoice شرط دوگانه استروپ/فلانکر دارد
+    expect(sessionJs.match(/createPausableClock/g)?.length).toBeGreaterThanOrEqual(6);
+    for (const clock of ['clockN', 'clockS', 'clockT', 'clockQ', 'clockC']) {
+      expect(sessionJs, clock).toMatch(new RegExp('const ' + clock + ' = createPausableClock()'));
+      expect(sessionJs, clock).toMatch(new RegExp(clock + '\\.start\\(\\)'));
+    }
+    // گیره‌های مکث در همهٔ شاخه‌ها نصب و پس از پایان آزمون تخریب می‌شوند
+    expect(sessionJs.match(/trialHooks\.pause = null/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(sessionJs.match(/trialHooks\.resume = null/g)?.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('پنجرهٔ پاسخ پروتکل‌محور برای خط عددی و choice (P2-1) — بی‌پاسخ = اُمیشن نه گیر بی‌نهایت', () => {
+    expect(sessionJs).toContain('response_window_extended_ms'); // پارامتر پروتکل با پیش‌فرض امن
+    const numlineBranch = sessionJs.split("item.type === 'numline'")[1]?.split('continue;')[0] ?? '';
+    const choiceBranch = sessionJs.split("item.type === 'choice'")[1]?.split('continue;')[0] ?? '';
+    for (const [name, body] of [['numline', numlineBranch], ['choice', choiceBranch]] as const) {
+      expect(body, name).toContain('sleeper.sleep('); // پنجره با خواب مکث‌پذیر — نه خام
+      expect(body, name).toContain('sleeper.cancel'); // قاعدهٔ خواب یتیم
+      expect(body, name).toContain('timedOut'); // بی‌پاسخ صریح
+    }
+    // سرور-آگاه: مقدار پنجره در response با window_ms ثبت می‌شود
+    expect(numlineBranch).toContain('window_ms: winN');
+    expect(choiceBranch).toContain('window_ms: winC');
+  });
+
+  it('max_frame_delta در همهٔ شاخه‌ها ثبت می‌شود — ستون مایگریشن ۰۰۹۱ دیگر همیشه null نیست', () => {
+    expect(sessionJs.match(/max_frame_delta:/g)?.length).toBeGreaterThanOrEqual(5);
+  });
+});
 
 describe('گیت فاز ۳ بازطراحی — موتور ۱۴-حالته (۱.۲۵.۱۳)', () => {
   it('ماشین ۱۴-حالته دفترچهٔ وظیفه در engine/machine.js حاضر است', () => {
