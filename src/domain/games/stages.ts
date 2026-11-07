@@ -13,8 +13,9 @@
 import type { AgeBandId } from './protocol';
 
 /** نسخهٔ قواعد مرحله‌ها — هر تغییر عددی در این فایل باید این نسخه را بامپ کند.
- *  ۱.۱.۰ (۱.۲۵.۲۸): قواعد خط عددی («جادهٔ عددها») افزوده شد — عددهای گو/نوگو دست‌نخورده. */
-export const STAGE_RULES_VERSION = '1.1.0';
+ *  ۱.۱.۰ (۱.۲۵.۲۸): قواعد خط عددی («جادهٔ عددها») افزوده شد — عددهای گو/نوگو دست‌نخورده.
+ *  ۱.۲.۰ (۱.۲۵.۳۰): قواعد «حملهٔ جاسوس‌ها» (scan) افزوده شد — دو قاعدهٔ قبلی عیناً. */
+export const STAGE_RULES_VERSION = '1.2.0';
 
 /** تعداد مرحله‌های مسیر تمرین */
 export const STAGE_TOTAL = 5;
@@ -134,16 +135,43 @@ const NUMLINE_STAGES: StageDef[] = [
   }
 ];
 
+// ─── پنج مرحلهٔ «حملهٔ جاسوس‌ها» (۱.۲۵.۳۰) — نوع scan؛ حس عدی در قصهٔ صحنه، نه در گفتار با کودک ───
+// اهرم سختی = اندازهٔ موج (شمار خانه‌ها) با پیش‌ماندهٔ scanItemInStage روی بانک authored؛
+// امضای هدف (شمار آنتن) هرگز بازنویسی نمی‌شود — قاعدهٔ d2: تمرکز روی همان بعد حواس‌پرتی.
+
+const SWARM_STAGES: StageDef[] = [
+  {
+    id: 's1', index: 1, title_fa: 'کاوش شب اول', goal_fa: 'جاسوس‌ها کم‌اند؛ آهسته و خوش‌حال بگیرشان.', difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: 's2', index: 2, title_fa: 'گشت دوم', goal_fa: 'موج بزرگ‌تر شده؛ همان قاعده، چشم‌های تیز.', difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: 's3', index: 3, title_fa: 'رگبار سوم', goal_fa: 'اسکادران کامل آمده؛ آرام باش و دقیق بگیر.', difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: 's4', index: 4, title_fa: 'حملهٔ بزرگ', goal_fa: 'همهٔ جاسوس‌های ۲ آنتن را بگیر؛ هم‌نوع‌ها را دست نزن.', difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: 's5', index: 5, title_fa: 'دفاع قهرمان‌ها', goal_fa: 'همهٔ موج‌ها با هم — تو نگهبان سیاره‌ای!', difficulty: 5,
+    overrides: {}
+  }
+];
+
 /** مرحله از جایگاه یک‌مبنا — باند سنی و نوع‌بازی جدی گرفته می‌شود */
 export function stageByIndex(band: AgeBandId, index: number, kind: GameKind = 'gonogo'): StageDef | null {
-  const list = kind === 'numline' ? NUMLINE_STAGES : (STAGES[band] ?? STAGES['7-12']);
+  const list = kind === 'numline' ? NUMLINE_STAGES : kind === 'scan' ? SWARM_STAGES : (STAGES[band] ?? STAGES['7-12']);
   return list.find((s) => s.index === index) ?? null;
 }
 
 /** مرحله از شناسهٔ ذخیره‌شده در جلسه — شناسهٔ ناشناخته = null (جلسه بی‌مرحله می‌ماند) */
 export function stageById(band: AgeBandId, id: string | null | undefined, kind: GameKind = 'gonogo'): StageDef | null {
   if (!id || typeof id !== 'string') return null;
-  const list = kind === 'numline' ? NUMLINE_STAGES : (STAGES[band] ?? STAGES['7-12']);
+  const list = kind === 'numline' ? NUMLINE_STAGES : kind === 'scan' ? SWARM_STAGES : (STAGES[band] ?? STAGES['7-12']);
   return list.find((s) => s.id === id) ?? null;
 }
 
@@ -197,9 +225,9 @@ export function stageOutcomeOf(
 // آیتم از بانک authored با پیش‌ماندهٔ numlineItemInStage — محرک authored هرگز بازنویسی نمی‌شود.
 
 /** نوع‌بازی از فیلد mission.game — ناشناخته = گونوگو (سازگاری با بسته‌های قدیمی) */
-export type GameKind = 'gonogo' | 'numline';
+export type GameKind = 'gonogo' | 'numline' | 'scan';
 export function gameKindOf(v: string | null | undefined): GameKind {
-  return v === 'numline' ? 'numline' : 'gonogo';
+  return v === 'numline' ? 'numline' : v === 'scan' ? 'scan' : 'gonogo';
 }
 
 /** آستانه‌های گذار و ستارهٔ خط عددی — بر دقت جای عدد (درصد)؛ وضعیت proposed تا پیلوت مرکز */
@@ -224,7 +252,9 @@ export function stageOutcomeFor(
 ): StageOutcome {
   return kind === 'numline'
     ? stageOutcomeNumline(summary.pct.accuracy)
-    : stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo);
+    : kind === 'scan'
+      ? stageOutcomeScan(summary.pct.accuracy)
+      : stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo);
 }
 
 /** سقف گسترهٔ جاده در هر مرحلهٔ خط عددی — null = همهٔ جاده‌ها (مرحلهٔ پایانی مرور بزرگ) */
@@ -247,6 +277,49 @@ export function numlineItemInStage(
   const max = typeof stageId === 'string' && stageId in NUMLINE_STAGE_MAX ? NUMLINE_STAGE_MAX[stageId] : null;
   if (max === null) return true;
   return Array.isArray(item.range) && item.range[1] <= max;
+}
+
+// ─── مراحل «حملهٔ جاسوس‌ها» (۱.۲۵.۳۰) ───
+
+/** آستانه‌های گذار و ستارهٔ اسکن — بر دقت موج‌ها (درصد)؛ وضعیت proposed تا پیلوت مرکز */
+export const SCAN_STAGE_THRESHOLDS = {
+  pass: 65,
+  star2: 78,
+  star3: 88
+} as const;
+
+/** نتیجهٔ مرحلهٔ اسکن از دقت موج‌های خلاصهٔ جلسه — همان قرارداد StageOutcome */
+export function stageOutcomeScan(accuracy: number | null | undefined): StageOutcome {
+  const t = SCAN_STAGE_THRESHOLDS;
+  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
+  const stars: 1 | 2 | 3 = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
+  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
+}
+
+/** سقف شمار خانه‌های موج در هر مرحلهٔ اسکن — null = همهٔ موج‌ها (مرحلهٔ پایانی مرور بزرگ) */
+export const SCAN_STAGE_MAX_TILES: Record<string, number | null> = {
+  s1: 6,
+  s2: 9,
+  s3: 12,
+  s4: 15,
+  s5: null
+};
+
+/**
+ * پیش‌ماندهٔ آیتم اسکن در مرحله — انتخاب از بانک authored؛ نمره‌دهی سرور روی آیتم authored است.
+ * بی‌مرحله/مرحلهٔ ناشناخته = همهٔ آیتم‌ها (سازگاری با جلسه‌های بی‌مرحله).
+ */
+export function scanItemInStage(
+  item: { stim?: Record<string, unknown> | null | undefined },
+  stageId: string | null | undefined
+): boolean {
+  const max = typeof stageId === 'string' && stageId in SCAN_STAGE_MAX_TILES ? SCAN_STAGE_MAX_TILES[stageId] : null;
+  if (max === null) return true;
+  const s = (item.stim ?? {}) as Record<string, unknown>;
+  const cols = typeof s.cols === 'number' && Number.isInteger(s.cols) && s.cols > 0 ? s.cols : 0;
+  const rows = typeof s.rows === 'number' && Number.isInteger(s.rows) && s.rows > 0 ? s.rows : 0;
+  const tiles = cols * rows;
+  return tiles > 0 && tiles <= max;
 }
 
 // ─── پیشرفت مسیر از تاریخچهٔ جلسه‌ها ───

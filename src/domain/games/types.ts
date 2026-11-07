@@ -16,6 +16,8 @@ export type MetricFormula =
   | 'correct_nogo_pct'
   | 'commission_pct'
   | 'omission_pct'
+  | 'scan_fa'
+  | 'scan_miss'
   | 'none';
 export type MetricUnit = 'percent' | 'count' | 'ms' | 'score';
 export type MetricSource = 'auto' | 'human';
@@ -45,11 +47,13 @@ export interface PackageProtocolRef {
 export interface MissionItem {
   id: string;
   phase: 'train' | 'probe';
-  type: 'choice' | 'numline' | 'touch_report';
+  /** scan (۱.۲۵.۳۰): موج جاسوس‌ها — شبکه‌ای از ربات‌ها؛ کودک همهٔ جاسوس‌ها را می‌گیرد */
+  type: 'choice' | 'numline' | 'touch_report' | 'scan';
   prompt?: string;
   options?: { label: string }[];
-  /** گزینهٔ درست (اندیس) برای choice یا جای درست روی خط عددی برای numline */
-  correct?: number;
+  /** گزینهٔ درست (اندیس) برای choice یا جای درست روی خط عددی برای numline؛
+   *  برای scan: اندیس‌های جاسوس روی شبکه (مرتب صعودی) — هرگز به کلاینت نمی‌رود (stripAnswerKeys) */
+  correct?: number | number[];
   /** آستانهٔ پذیرش خط عددی (۱.۲۵.۲۸) — |انتخاب − درست| ≤ tolerance درست شمرده می‌شود؛
    *  پیش‌فرض ۰٫۵ یعنی لمس صحیح همان عدد؛ گستره‌های بزرگ‌تر آستانهٔ سن‌محور خود را می‌برند */
   tolerance?: number;
@@ -255,6 +259,9 @@ export interface AttemptFeedback {
 export interface PlayHint {
   go: { label: string; stim: Record<string, unknown> };
   nogo: { label: string; stim: Record<string, unknown> } | null;
+  /** حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — قاعدهٔ موج از آیتم‌های آموزشی؛ امضای هدف عمومی است
+   *  (کودک باید قاعده را ببیند)، رازِ «کدام خانه» فقط سرور می‌داند */
+  scan?: { label: string; stim: Record<string, unknown> } | null;
 }
 
 /** فرادادهٔ مرحلهٔ فعال برای کارت کودک (۱.۲۵.۲۲) — فقط تمرین؛ کلید پاسخ/آستانه‌ها هرگز این‌جا نیست */

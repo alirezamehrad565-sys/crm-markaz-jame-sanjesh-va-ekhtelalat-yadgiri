@@ -15,7 +15,9 @@ export const ENGINE_ONLY_FORMULAS: readonly string[] = [
   'correct_go_pct',
   'correct_nogo_pct',
   'commission_pct',
-  'omission_pct'
+  'omission_pct',
+  'scan_fa',
+  'scan_miss'
 ];
 
 /** سنجه‌های درصدی موتورمحور — با listMetrics به رجیستری اضافه می‌شوند */
@@ -23,7 +25,10 @@ export const ENGINE_METRICS: readonly RegistryMetric[] = [
   { id: 'correct_go_pct_gonogo', title_fa: 'درصد گوهای درست', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'correct_go_pct' },
   { id: 'correct_nogo_pct_gonogo', title_fa: 'درصد بازداری درست نوگو', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'correct_nogo_pct' },
   { id: 'commission_pct_gonogo', title_fa: 'درصد خطای پاسخ به غیرهدف', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'commission_pct' },
-  { id: 'omission_pct_gonogo', title_fa: 'درصد از دست‌دادن هدف', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'omission_pct' }
+  { id: 'omission_pct_gonogo', title_fa: 'درصد از دست‌دادن هدف', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'omission_pct' },
+  // حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — دقت موج‌ها از فرمول 'accuracy' در DB می‌آید (accuracy_scan)
+  { id: 'scan_fa_pct', title_fa: 'درصد گرفتن هم‌نوع در موج', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'scan_fa' },
+  { id: 'scan_miss_pct', title_fa: 'درصد جاانداختن جاسوس', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'scan_miss' }
 ] as const;
 
 /** ادغام سنجه‌های موتور با رجیستری DB — سنجهٔ موتور همیشه حاضر است؛ تکرار ممکن نیست (ids متمایز) */
