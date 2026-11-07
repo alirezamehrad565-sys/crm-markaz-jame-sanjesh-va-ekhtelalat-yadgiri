@@ -280,11 +280,12 @@ describe('بستر بک‌اند بازی — زنجیرهٔ کامل', () => {
     expect(dataOf<{ progress: { done: number } }>(next).progress.done).toBe(1);
   });
 
-  it('پاسخ آموزشی درست: «گرفتی!» و آیتم بعدی پروب است', async () => {
+  it('پاسخ آموزشی درست خط عددی: تحسین دقیق و آیتم بعدی پروب است', async () => {
     const res = await anon.post(`/api/m/${link.token}/attempts`, { item_id: 't2', response: { chosen: 30 }, rt_ms: 800, idem_key: 'idem-t2-0001' });
     const fb = dataOf<{ correct: boolean; message: string; answer_display: string | null }>(res);
     expect(fb.correct).toBe(true);
-    expect(fb.message).toBe('گرفتی!');
+    // ۱.۲۵.۲۸: خط عددی دو سطح موفقیت دارد — لمسِ همان عدد = تحسین دقیق
+    expect(fb.message).toBe('دقیقاً همان‌جا! آفرین.');
     expect(fb.answer_display).toBeNull();
 
     const next = await anon.get(`/api/m/${link.token}/next-item`);

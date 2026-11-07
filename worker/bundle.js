@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.27";
+var APP_VERSION = "1.25.28";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23455,7 +23455,8 @@ function scoreAttempt(item, mission, response, rtMs) {
   } else if (item.type === "numline") {
     const chosen = typeof res.chosen === "number" ? res.chosen : null;
     if (chosen !== null && typeof item.correct === "number" && item.range) {
-      correct = chosen === item.correct;
+      const tol = typeof item.tolerance === "number" && Number.isFinite(item.tolerance) && item.tolerance >= 0 ? item.tolerance : 0.5;
+      correct = Math.abs(chosen - item.correct) <= tol;
       errorPct = numlineErrorPct(chosen, item.correct, item.range);
     }
   } else if (item.type === "touch_report") {
@@ -23536,6 +23537,17 @@ function answerDisplayOf(item) {
   return null;
 }
 __name(answerDisplayOf, "answerDisplayOf");
+var NUMLINE_FB_EXACT = "\u062F\u0642\u06CC\u0642\u0627\u064B \u0647\u0645\u0627\u0646\u200C\u062C\u0627! \u0622\u0641\u0631\u06CC\u0646.";
+var NUMLINE_FB_NEAR = "\u062E\u06CC\u0644\u06CC \u0646\u0632\u062F\u06CC\u06A9 \u0628\u0648\u062F! \u06AF\u0631\u0641\u062A\u06CC.";
+function numlineFeedbackOf(item, correct, response) {
+  if (item.type !== "numline" || !correct) return null;
+  const chosen = (response ?? {}) === Object(response) ? response.chosen : null;
+  if (typeof chosen === "number" && typeof item.correct === "number" && chosen === item.correct) {
+    return NUMLINE_FB_EXACT;
+  }
+  return NUMLINE_FB_NEAR;
+}
+__name(numlineFeedbackOf, "numlineFeedbackOf");
 function accuracyOf(scored) {
   if (scored.length === 0) return null;
   return round2(scored.filter((s) => s.correct).length / scored.length * 100);
@@ -23898,7 +23910,7 @@ function applyAdaptiveLevel(current, decision) {
 __name(applyAdaptiveLevel, "applyAdaptiveLevel");
 
 // src/domain/games/stages.ts
-var STAGE_RULES_VERSION = "1.0.0";
+var STAGE_RULES_VERSION = "1.1.0";
 var STAGE_TOTAL = 5;
 var STAGE_OVERRIDE_KEYS = [
   "response_window_go_ms",
@@ -23998,14 +24010,57 @@ var STAGES_7_12 = [
   }
 ];
 var STAGES = { "4-6": STAGES_4_6, "7-12": STAGES_7_12 };
-function stageByIndex(band, index) {
-  const list = STAGES[band] ?? STAGES["7-12"];
+var NUMLINE_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u06A9\u0648\u0686\u06A9",
+    goal_fa: "\u0639\u062F\u062F\u0647\u0627\u06CC \u06F0 \u062A\u0627 \u06F1\u06F0\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u0634\u0647\u0631",
+    goal_fa: "\u062D\u0627\u0644\u0627 \u062A\u0627 \u06F2\u06F0 \u0627\u062F\u0627\u0645\u0647 \u062F\u0627\u0631\u062F\u061B \u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u0628\u0644\u0646\u062F",
+    goal_fa: "\u062C\u0627\u062F\u0647 \u062A\u0627 \u06F5\u06F0 \u0645\u06CC\u200C\u0631\u0633\u062F\u061B \u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u0628\u0632\u0631\u06AF",
+    goal_fa: "\u062C\u0627\u062F\u0647 \u062A\u0627 \u06F1\u06F0\u06F0! \u062A\u0648 \u062E\u06CC\u0644\u06CC \u0631\u0627\u0647 \u0631\u0641\u062A\u0647\u200C\u0627\u06CC.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u0642\u0647\u0631\u0645\u0627\u0646\u200C\u0647\u0627",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u062C\u0627\u062F\u0647\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
+function stageByIndex(band, index, kind = "gonogo") {
+  const list = kind === "numline" ? NUMLINE_STAGES : STAGES[band] ?? STAGES["7-12"];
   return list.find((s) => s.index === index) ?? null;
 }
 __name(stageByIndex, "stageByIndex");
-function stageById(band, id) {
+function stageById(band, id, kind = "gonogo") {
   if (!id || typeof id !== "string") return null;
-  return STAGES[band]?.find((s) => s.id === id) ?? null;
+  const list = kind === "numline" ? NUMLINE_STAGES : STAGES[band] ?? STAGES["7-12"];
+  return list.find((s) => s.id === id) ?? null;
 }
 __name(stageById, "stageById");
 function applyStageOverrides(params, stage) {
@@ -24032,14 +24087,53 @@ function stageOutcomeOf(correctGoPct, correctNogoPct) {
   return { passed: true, stars: three ? 3 : two ? 2 : 1, thresholds: t };
 }
 __name(stageOutcomeOf, "stageOutcomeOf");
-function stageProgressOf(history) {
+function gameKindOf(v) {
+  return v === "numline" ? "numline" : "gonogo";
+}
+__name(gameKindOf, "gameKindOf");
+var NUMLINE_STAGE_THRESHOLDS = {
+  pass: 65,
+  star2: 78,
+  star3: 88
+};
+function stageOutcomeNumline(accuracy) {
+  const t = NUMLINE_STAGE_THRESHOLDS;
+  if (!pctOk2(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
+  const stars = pctOk2(accuracy, t.star3) ? 3 : pctOk2(accuracy, t.star2) ? 2 : 1;
+  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
+}
+__name(stageOutcomeNumline, "stageOutcomeNumline");
+function stageOutcomeFor(kind, summary) {
+  return kind === "numline" ? stageOutcomeNumline(summary.pct.accuracy) : stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo);
+}
+__name(stageOutcomeFor, "stageOutcomeFor");
+var NUMLINE_STAGE_MAX = {
+  s1: 10,
+  s2: 20,
+  s3: 50,
+  s4: 100,
+  s5: null
+};
+function numlineItemInStage(item, stageId) {
+  const max = typeof stageId === "string" && stageId in NUMLINE_STAGE_MAX ? NUMLINE_STAGE_MAX[stageId] : null;
+  if (max === null) return true;
+  return Array.isArray(item.range) && item.range[1] <= max;
+}
+__name(numlineItemInStage, "numlineItemInStage");
+function stageProgressOfKind(kind, history) {
   const best = {};
   let unlocked = 1;
   for (const row of history) {
     if (!row || row.validity !== "valid" || !row.stage_id) continue;
     const stage = stageById("7-12", row.stage_id) ?? stageById("4-6", row.stage_id);
     if (!stage) continue;
-    const outcome = stageOutcomeOf(row.correct_go_pct, row.correct_nogo_pct);
+    const outcome = stageOutcomeFor(kind, {
+      pct: {
+        correct_go: row.correct_go_pct,
+        correct_nogo: row.correct_nogo_pct,
+        accuracy: row.accuracy ?? null
+      }
+    });
     if (outcome.stars === 0) continue;
     const prev = best[stage.id];
     if (!prev || outcome.stars > prev.stars) {
@@ -24054,9 +24148,9 @@ function stageProgressOf(history) {
   const starsTotal = Object.values(best).reduce((sum, b) => sum + b.stars, 0);
   return { unlocked_index: unlocked, best, stars_total: starsTotal };
 }
-__name(stageProgressOf, "stageProgressOf");
-function currentStageOf(progress, band) {
-  return stageByIndex(band, progress.unlocked_index);
+__name(stageProgressOfKind, "stageProgressOfKind");
+function currentStageOf(progress, band, kind = "gonogo") {
+  return stageByIndex(band, progress.unlocked_index, kind);
 }
 __name(currentStageOf, "currentStageOf");
 var STAGE_VISUALS = {
@@ -24167,6 +24261,7 @@ function summarizeAttempts(scored, evidence = [], blockSize = 24) {
       evidence_coverage: ev.length > 0 ? Math.round(evWithPresentation / ev.length * 100) / 100 : null
     },
     dprime: null,
+    numline: { mean_error_pct: meanNumlineErrorOf(t) },
     zero_denominator: zeroDenominator
   };
 }
@@ -25175,6 +25270,7 @@ function createGamesService(deps) {
   __name(childAgeOf, "childAgeOf");
   async function stateViewOf(res) {
     const m = missionConfigOf(res);
+    const kind = gameKindOf(m.game);
     const adherence = await db.queryOne(`SELECT confirm2_at FROM game_adherence WHERE mission_id = ?`, [res.mission.id]);
     const state = linkStateOf(res);
     const mode = res.pkg.body.mode ?? "training";
@@ -25183,7 +25279,7 @@ function createGamesService(deps) {
     let stage = null;
     let progress = null;
     if (state === "child_active" && mode === "training") {
-      const sctx = await stageContextOf(res.rx.id, childAge, res.pkg.body);
+      const sctx = await stageContextOf(res.rx.id, childAge, res.pkg.body, kind);
       if (sctx) {
         stage = sctx.stage;
         progress = sctx.progress;
@@ -25203,8 +25299,8 @@ function createGamesService(deps) {
       const sum = parseJson2(res.session.summary_json, null);
       const st = sum?.stage;
       if (st && typeof st.stars === "number" && typeof st.index === "number") {
-        const prog = stageProgressOf(await stageHistoryOf(res.rx.id));
-        const next = stageByIndex("7-12", st.index + 1);
+        const prog = stageProgressOfKind(kind, await stageHistoryOf(res.rx.id));
+        const next = stageByIndex("7-12", st.index + 1, kind);
         stageResult = {
           id: st.id ?? res.session.stage_id,
           index: st.index,
@@ -25317,7 +25413,9 @@ function createGamesService(deps) {
           stage_id: r.stage_id,
           validity: r.validity,
           correct_go_pct: sum?.pct?.correct_go ?? null,
-          correct_nogo_pct: sum?.pct?.correct_nogo ?? null
+          correct_nogo_pct: sum?.pct?.correct_nogo ?? null,
+          accuracy: sum?.pct?.accuracy ?? null,
+          numline_error_pct: sum?.numline?.mean_error_pct ?? null
         };
       });
     } catch {
@@ -25325,11 +25423,11 @@ function createGamesService(deps) {
     }
   }
   __name(stageHistoryOf, "stageHistoryOf");
-  async function stageContextOf(prescriptionId, childAge, body) {
+  async function stageContextOf(prescriptionId, childAge, body, kind = "gonogo") {
     if (body.stages_enabled === false) return null;
     const band = bandForAge2(childAge).band;
-    const progress = stageProgressOf(await stageHistoryOf(prescriptionId));
-    const stage = currentStageOf(progress, band);
+    const progress = stageProgressOfKind(kind, await stageHistoryOf(prescriptionId));
+    const stage = currentStageOf(progress, band, kind);
     if (!stage) return null;
     return { progress, stage };
   }
@@ -25365,7 +25463,7 @@ function createGamesService(deps) {
       }
       let stageId = null;
       if (mode === "training") {
-        const sctx = await stageContextOf(res.rx.id, await childAgeOf(res.rx.child_id), res.pkg.body);
+        const sctx = await stageContextOf(res.rx.id, await childAgeOf(res.rx.child_id), res.pkg.body, gameKindOf(mission.game));
         stageId = sctx?.stage.id ?? null;
       }
       await db.execute(
@@ -25383,18 +25481,22 @@ function createGamesService(deps) {
     const res = await requireActiveToken(token);
     const session = requireSessionIn(res, ["child_active"]);
     const mission = missionConfigOf(res);
+    const kind = gameKindOf(mission.game);
     const attempts = await db.query(`SELECT * FROM game_attempts WHERE session_id = ?`, [session.id]);
     const doneIds = new Set(attempts.map((a) => a.item_id));
-    const total = (mission.items ?? []).length;
-    const unansweredOf = /* @__PURE__ */ __name((pred) => (mission.items ?? []).find((it) => !doneIds.has(it.id) && pred(it)), "unansweredOf");
+    const nlStageId = kind === "numline" ? session.stage_id : null;
+    const inStage = /* @__PURE__ */ __name((it) => kind !== "numline" || numlineItemInStage(it, nlStageId), "inStage");
+    const stageItems = (mission.items ?? []).filter(inStage);
+    const total = stageItems.length;
+    const unansweredOf = /* @__PURE__ */ __name((pred) => stageItems.find((it) => !doneIds.has(it.id) && pred(it)), "unansweredOf");
     const seq = parseSequenceRecord(session.sequence_json);
     let next;
     if (seq && doneIds.size < seq.trials.length) {
-      const kind = seq.trials[doneIds.size].kind;
-      next = unansweredOf((it) => it.correct_touch === true === (kind === "go")) ?? unansweredOf(() => true);
+      const kindTrial = seq.trials[doneIds.size].kind;
+      next = unansweredOf((it) => it.correct_touch === true === (kindTrial === "go")) ?? unansweredOf(() => true);
     }
     if (!next) {
-      next = (mission.items ?? []).find((it) => !doneIds.has(it.id));
+      next = stageItems.find((it) => !doneIds.has(it.id));
     }
     await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf2(now()), session.id]);
     let view = null;
@@ -25475,7 +25577,7 @@ function createGamesService(deps) {
       return { recorded: true, phase: "probe" };
     }
     const touched = (response ?? {}) === Object(response) ? response.touched === true : false;
-    const message = item.type === "touch_report" && correct && !touched ? FEEDBACK_WITHHOLD : correct ? FEEDBACK_OK : FEEDBACK_RETRY;
+    const message = item.type === "touch_report" && correct && !touched ? FEEDBACK_WITHHOLD : item.type === "numline" && correct ? numlineFeedbackOf(item, true, response) ?? FEEDBACK_OK : correct ? FEEDBACK_OK : FEEDBACK_RETRY;
     return {
       recorded: true,
       phase: "train",
@@ -25495,8 +25597,11 @@ function createGamesService(deps) {
     const mission = missionConfigOf(res);
     const attempts = await db.query(`SELECT * FROM game_attempts WHERE session_id = ? ORDER BY created_at`, [session.id]);
     const nowIso = isoOf2(now());
+    const finishKind = gameKindOf(mission.game);
+    const finishStage = finishKind === "numline" ? stageById("7-12", session.stage_id, "numline") : null;
+    const finishTotal = finishStage ? mission.items.filter((it) => numlineItemInStage(it, finishStage.id)).length : mission.items.length;
     const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso].filter((v) => typeof v === "string").map((v) => new Date(v).getTime());
-    const validity = decideValidity(activity, attempts.length, mission.items.length);
+    const validity = decideValidity(activity, attempts.length, finishTotal);
     const metricIds = mission.metrics && mission.metrics.length > 0 ? mission.metrics : [mission.metric];
     const scoredRows = attempts.map((a) => ({
       a,
@@ -25508,10 +25613,9 @@ function createGamesService(deps) {
       )
     }));
     const probeScored = scoredRows.filter((r) => r.a.phase === "probe").map((r) => r.scored);
-    const touchRows = scoredRows.filter((r) => r.scored.isGo !== void 0);
     const summary = summarizeAttempts(
-      touchRows.map((r) => r.scored),
-      touchRows.map((r) => ({
+      scoredRows.map((r) => r.scored),
+      scoredRows.map((r) => ({
         presented_at_ms: r.a.presented_at_ms ?? null,
         frame_drops: r.a.frame_drops ?? null,
         max_frame_delta_ms: r.a.max_frame_delta_ms ?? null,
@@ -25554,7 +25658,7 @@ function createGamesService(deps) {
     const idleGapMax = activity.length > 1 ? Math.max(...activity.slice(1).map((t, i) => t - activity[i])) : null;
     const quality = assessQuality({
       validity,
-      total_items: mission.items.length,
+      total_items: finishTotal,
       done_items: attempts.length,
       idle_gap_max_ms: idleGapMax,
       pause_count: typeof sessionEvidence?.pause_count === "number" && Number.isFinite(sessionEvidence.pause_count) ? Math.max(0, Math.round(sessionEvidence.pause_count)) : null,
@@ -25569,10 +25673,11 @@ function createGamesService(deps) {
     const sessionMode = res.pkg.body.mode ?? "training";
     const stagesOn = sessionMode === "training" && res.pkg.body.stages_enabled !== false;
     const ageFin = stagesOn ? await childAgeOf(res.rx.child_id) : null;
-    const sessionStage = stagesOn && session.stage_id ? stageById(bandForAge2(ageFin).band, session.stage_id) : null;
+    const sessionKind = gameKindOf(mission.game);
+    const sessionStage = stagesOn && session.stage_id ? stageById(bandForAge2(ageFin).band, session.stage_id, sessionKind) : null;
     let summaryBody = summary;
     if (sessionStage && validity === "valid") {
-      const outcome = stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo);
+      const outcome = stageOutcomeFor(sessionKind, summary);
       summaryBody = {
         ...summary,
         stage: {
