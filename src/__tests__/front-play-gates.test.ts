@@ -15,17 +15,19 @@ const read = (p: string) => readFileSync(p, 'utf8');
 const playJs = read(join(PLAY, 'play.js'));
 const previewJs = read(join(PLAY, 'preview.js')); // پیش‌نمایش فقط-پرسنلی (۱.۲۵.۲۰) — همان قواعد امنیتی پخش‌کننده
 const gonogoJs = read(join(PLAY, 'kinds/gonogo.js'));
+const scanKindJs = read(join(PLAY, 'kinds/scan.js')); // حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — ماژول نمایش موج اسکن
+const numlineKindJs = read(join(PLAY, 'kinds/numline.js')); // جادهٔ عددها (۱.۲۵.۲۸)
 const playCss = read(join(PLAY, 'play.css'));
 const fxJs = read(join(PLAY, 'fx.js')); // لایهٔ حسی بازی (۱.۲۵.۲۱) — همهٔ جنبش تزئینی همین‌جاست
 const engineJs = ['machine.js', 'timing.js', 'response.js', 'trials.js', 'session.js', 'scoring.js']
   .map((f) => read(join(PLAY, 'engine', f))).join('\n');
 const pageSrc = read(join(__dirname, '../domain/games/page.ts'));
 const routesSrc = read(join(__dirname, '../domain/games/routes.ts'));
-const allPlaySrc = playJs + previewJs + gonogoJs + playCss + fxJs + engineJs;
+const allPlaySrc = playJs + previewJs + gonogoJs + scanKindJs + numlineKindJs + playCss + fxJs + engineJs;
 
 describe('گیت ۱.۲۵.۰۸ — لحن و امنیت متن کودک', () => {
   it('متن‌های روبه‌کودک هیچ واژهٔ ممنوعی ندارند (لینت مشترک با بسته‌ها) — شامل موتور و fx', () => {
-    for (const [name, src] of [['play.js', playJs], ['kinds/gonogo.js', gonogoJs], ['fx.js', fxJs], ['page.ts', pageSrc], ['engine/*', engineJs]] as const) {
+    for (const [name, src] of [['play.js', playJs], ['kinds/gonogo.js', gonogoJs], ['kinds/scan.js', scanKindJs], ['kinds/numline.js', numlineKindJs], ['fx.js', fxJs], ['page.ts', pageSrc], ['engine/*', engineJs]] as const) {
       for (const w of FORBIDDEN_TEXT_PATTERNS) {
         expect(src.includes(w), `${name} حاوی واژهٔ ممنوع «${w}» است`).toBe(false);
       }
@@ -253,7 +255,6 @@ describe('گیت لایهٔ حسی بازی — گیم‌فیل (۱.۲۵.۲۱)',
 
 describe('گیت جادهٔ عددها — مسیر ماشین و نمایش خط عددی (۱.۲۵.۲۸)', () => {
   const sessionJs = read(join(PLAY, 'engine/session.js'));
-  const numlineKindJs = read(join(PLAY, 'kinds/numline.js'));
 
   it('شاخهٔ خط عددی و choice از مسیر اجباری ماشین می‌گذرند — FIXATION پیش از STIMULUS', () => {
     // رگرسیون گشت مرورگری ۱.۲۵.۲۸: گذار مستقیم PRACTICE→STIMULUS با گیت ماشین رد می‌شد
@@ -274,5 +275,30 @@ describe('گیت جادهٔ عددها — مسیر ماشین و نمایش خ�
     expect(numlineKindJs).not.toMatch(/\.animate\(/); // جنبش از session.js با fx می‌آید
     expect(playCss).toMatch(/\.play-numline__road\s*\{[^}]*touch-action:\s*none/);
     expect(playCss).toMatch(/height:\s*78px/); // هدف لمسی ≥۶۴px
+  });
+
+  it('نمایش موج جاسوس‌ها بی‌کلید است (۱.۲۵.۳۰) — correct/hits کلیدی در ماژول نمایش نیست؛ شبکه لمسی ثابت', () => {
+    const scanKindJs = read(join(PLAY, 'kinds/scan.js'));
+    expect(scanKindJs).toContain('<svg'); // ربات‌ها وکتور درون‌کد — بدون دارایی بیرونی
+    expect(scanKindJs).not.toMatch(/<img\b|\.png|\.jpg|\.webp|\.mp3|\.ogg/);
+    expect(scanKindJs).not.toMatch(/tolerance|correct_touch|answer_display/);
+    expect(scanKindJs).not.toMatch(/fetch\(|XMLHttpRequest|eval\(|\.animate\(/);
+    expect(scanKindJs).not.toMatch(/https?:\/\//);
+    // شاخهٔ scan هم از مسیر اجباری ماشین می‌گذرد — FIXATION پیش از STIMULUS
+    const scanBranch = sessionJs.split("if (item.type === '").slice(1)
+      .find((src) => src.startsWith('scan'));
+    expect(scanBranch).toBeDefined();
+    const body = scanBranch!.split('continue;')[0];
+    const fixAt = body.indexOf('STATES.FIXATION');
+    const stimAt = body.indexOf('STATES.STIMULUS');
+    expect(fixAt).toBeGreaterThan(-1);
+    expect(stimAt).toBeGreaterThan(fixAt);
+    // پاسخ موج فقط از تک‌نقطهٔ شبکه می‌رود — کلاینت خودش نمره نمی‌دهد
+    expect(body).toContain('api.submit');
+    expect(body).not.toMatch(/\.animate\(/); // جنبش فقط از fx
+    // پوستهٔ عدی: حاشیهٔ آژیر ایستا بدون فلاش — هدف لمسی خانه ≥۶۴px
+    expect(playCss).toMatch(/\.play-stage--scan/);
+    expect(playCss).toMatch(/\.play-scan__tile\s*\{[^}]*min-height:\s*76px/);
+    expect(playJs).toContain('scanMarkup'); // سیم‌کشی ماژول در بارگیر نوع‌بازی
   });
 });
