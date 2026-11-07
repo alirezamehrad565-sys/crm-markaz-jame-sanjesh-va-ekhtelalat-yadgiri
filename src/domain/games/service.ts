@@ -27,14 +27,18 @@ import { WINDOW_MAX_MS, WINDOW_MIN_MS } from './adaptive';
 import {
   applyStageOverrides,
   currentStageOf,
+  flankerItemInStage,
   gameKindOf,
   numlineItemInStage,
   scanItemInStage,
+  scanStageWaveMs,
   stageById,
   stageByIndex,
   stageOutcomeFor,
   stageProgressOfKind,
   stageStimViewOf,
+  stroopItemInStage,
+  trailItemInStage,
   STAGE_RULES_VERSION,
   STAGE_TOTAL,
   type GameKind,
@@ -42,6 +46,7 @@ import {
   type StageHistoryRow,
   type StageProgress
 } from './stages';
+import { buildEvidenceDossier } from './evidence';
 import { summarizeAttempts } from './scoring';
 import { assessQuality, serializeQuality, type QualityInput } from './quality';
 import { buildComparison, type ChildGameReport, type ReportRawAttempt, type ReportSession } from './report';
@@ -870,6 +875,20 @@ export function createGamesService(deps: GamesDeps): GamesService {
         scan: { label, stim: { signature: sig } }
       };
     }
+    // سه بازی تازه (۱.۲۵.۳۲) — قاعدهٔ بازی از پرامپت آیتم آموزشی؛ هیچ کلیدی این‌جا نیست؛
+    // محرک آموزش، عین همان چیزی است که کودک در اجرا می‌بیند
+    const newTrain = (mission.items ?? []).find((it) =>
+      it.phase === 'train' && (it.type === 'stroop' || it.type === 'flanker' || it.type === 'trail'));
+    if (newTrain && !go && !nogo) {
+      const kindKey = newTrain.type as 'stroop' | 'flanker' | 'trail';
+      const stim = (newTrain.stim ?? {}) as Record<string, unknown>;
+      const label = typeof newTrain.prompt === 'string' && newTrain.prompt.trim() !== '' ? newTrain.prompt : '';
+      return {
+        go: { label, stim },
+        nogo: null,
+        [kindKey]: { label, stim }
+      };
+    }
     if (!go && !nogo) return null;
     // درون‌مایهٔ دیداری مرحله (۱.۲۵.۲۳) — قدم آموزش دقیقاً همان چیزی را نشان می‌دهد
     // که کودک در اجرای اصلی می‌بیند؛ کلید پاسخ در برچسب نیست (فقط توصیف ظاهری)
@@ -1135,6 +1154,9 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const inStage = (it: MissionItem): boolean => {
       if (kind === 'numline') return numlineItemInStage(it, session.stage_id);
       if (kind === 'scan') return scanItemInStage(it, session.stage_id);
+      if (kind === 'stroop') return stroopItemInStage(it, session.stage_id);
+      if (kind === 'flanker') return flankerItemInStage(it, session.stage_id);
+      if (kind === 'trail') return trailItemInStage(it, session.stage_id);
       return true;
     };
     const stageItems = (mission.items ?? []).filter(inStage);
@@ -1165,6 +1187,13 @@ export function createGamesService(deps: GamesDeps): GamesService {
       let display = next;
       if (next.type === 'touch_report' && (res.pkg.body.mode ?? 'training') === 'training' && res.pkg.body.stages_enabled !== false) {
         display = { ...next, stim: stageStimViewOf(next.stim, next.correct_touch === true, session.stage_id) };
+      }
+      // اهرم تندشدن موج اسکن (۱.۲۵.۳۲) — فقط نمایش؛ کلید/محرک authored دست‌نخورده؛
+      // کمینهٔ زمان authored و سقف مرحله — کودک هرگز سریع‌تر از بانک نمی‌شود
+      if (next.type === 'scan' && (res.pkg.body.mode ?? 'training') === 'training' && res.pkg.body.stages_enabled !== false) {
+        const s = (next.stim ?? {}) as Record<string, unknown>;
+        const wave = scanStageWaveMs(typeof s.wave_ms === 'number' ? s.wave_ms : null, session.stage_id);
+        if (wave !== null) display = { ...next, stim: { ...s, wave_ms: wave } };
       }
       view = toItemView(display);
     }
@@ -1271,13 +1300,19 @@ export function createGamesService(deps: GamesDeps): GamesService {
     // اعتبار جلسه: شکاف بیکاری + نسبت تکمیل (§۶/§۸) — نسبت تکمیل خط عددی به «جادهٔ مرحلهٔ»
     // همان جلسه سنجیده می‌شود نه کل بانک (۱.۲۵.۲۸)؛ گونوگو/بی‌مرحله = کل مأموریت
     const finishKind = gameKindOf(mission.game);
-    const finishStage = finishKind === 'numline' || finishKind === 'scan'
+    const finishStage = finishKind !== 'gonogo'
       ? stageById('7-12', session.stage_id, finishKind)
       : null;
     const finishTotal = finishStage
       ? mission.items.filter((it) => finishKind === 'numline'
           ? numlineItemInStage(it, finishStage.id)
-          : scanItemInStage(it, finishStage.id)).length
+          : finishKind === 'scan'
+            ? scanItemInStage(it, finishStage.id)
+            : finishKind === 'stroop'
+              ? stroopItemInStage(it, finishStage.id)
+              : finishKind === 'flanker'
+                ? flankerItemInStage(it, finishStage.id)
+                : trailItemInStage(it, finishStage.id)).length
       : mission.items.length;
     const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso]
       .filter((v): v is string => typeof v === 'string')
@@ -1377,10 +1412,14 @@ export function createGamesService(deps: GamesDeps): GamesService {
       : null;
     let summaryBody: unknown = summary;
     if (sessionStage && validity === 'valid') {
-      // ملاک گذار نوع‌بازی‌آگاه (۱.۲۵.۲۸) — گونوگو: گو/نوگو؛ خط عددی: دقت جای عدد
+      // ملاک گذار نوع‌بازی‌آگاه (۱.۲۵.۲۸) — گونوگو: گو/نوگو؛ بقیه: دقت جای عدد/موج/پاسخ/رد
       const outcome = stageOutcomeFor(sessionKind, summary);
+      // موتور جمع‌کردن شواهد (۱.۲۵.۳۲) — نشانه‌ها + پرچم‌ها + توصیهٔ غیربالینی؛
+      // ملاک گذار همان قواعد مرحله است — شواهد فقط پیشنهاد می‌دهد و در گزارش می‌ماند
+      const evidence = buildEvidenceDossier(sessionKind, summary, outcome.passed);
       summaryBody = {
         ...summary,
+        evidence,
         stage: {
           id: sessionStage.id,
           index: sessionStage.index,
