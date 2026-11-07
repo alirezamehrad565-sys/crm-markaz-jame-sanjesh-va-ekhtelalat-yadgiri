@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.31";
+var APP_VERSION = "1.25.32";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23398,8 +23398,14 @@ var DEFAULT_RT_FLOOR_MS = {
   // خط عددی کف ندارد
   choice: 200,
   // فلش‌کارت/انتخاب — لمس تصادفی حذف می‌شود
-  scan: 150
+  scan: 150,
   // حملهٔ جاسوس‌ها — کف نخستین لمس موج؛ زیر آن حدس است
+  stroop: 200,
+  // حقه‌باز رنگ‌ها — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
+  flanker: 200,
+  // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
+  trail: 150
+  // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
 };
 var IDLE_PARTIAL_MS = 5 * 60 * 1e3;
 var MIN_COMPLETION_RATIO = 0.6;
@@ -23456,6 +23462,10 @@ function scoreAttempt(item, mission, response, rtMs) {
   let scanMissed;
   let scanDistractors;
   let scanSpies;
+  let timedOut;
+  let congruent;
+  let trailNodes;
+  let trailNodesTotal;
   if (item.type === "choice") {
     correct = typeof res.option === "number" && res.option === item.correct;
   } else if (item.type === "numline") {
@@ -23465,6 +23475,29 @@ function scoreAttempt(item, mission, response, rtMs) {
       correct = Math.abs(chosen - item.correct) <= tol;
       errorPct = numlineErrorPct(chosen, item.correct, item.range);
     }
+  } else if (item.type === "stroop" || item.type === "flanker") {
+    const opt = typeof res.option === "number" && Number.isInteger(res.option) ? res.option : null;
+    correct = opt !== null && opt === item.correct;
+    omission = opt === null;
+    timedOut = opt === null;
+    congruent = item.stim?.congruent === true || item.stim?.cond === "congruent";
+  } else if (item.type === "trail") {
+    const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0) : [];
+    const rawOrder = Array.isArray(res.order) ? res.order : [];
+    const seen = /* @__PURE__ */ new Set();
+    const orderSeq = [];
+    for (const v of rawOrder.filter((n) => Number.isInteger(n) && n >= 0)) {
+      const k = String(v);
+      if (!seen.has(k)) {
+        seen.add(k);
+        orderSeq.push(v);
+      }
+    }
+    let prefix = 0;
+    while (prefix < orderSeq.length && prefix < key.length && orderSeq[prefix] === key[prefix]) prefix++;
+    correct = key.length === orderSeq.length && orderSeq.every((v, i) => v === key[i]);
+    trailNodes = prefix;
+    trailNodesTotal = key.length;
   } else if (item.type === "touch_report") {
     const touched = res.touched === true;
     const want = item.correct_touch === true;
@@ -23497,7 +23530,10 @@ function scoreAttempt(item, mission, response, rtMs) {
     commission,
     omission,
     ...isGo !== void 0 ? { isGo } : {},
-    ...scanFalse !== void 0 ? { scanFalse, scanMissed, scanDistractors, scanSpies } : {}
+    ...scanFalse !== void 0 ? { scanFalse, scanMissed, scanDistractors, scanSpies } : {},
+    ...timedOut !== void 0 ? { timedOut } : {},
+    ...congruent !== void 0 ? { congruent } : {},
+    ...trailNodes !== void 0 ? { trailNodes, trailNodesTotal: trailNodesTotal ?? 0 } : {}
   };
 }
 __name(scoreAttempt, "scoreAttempt");
@@ -23559,12 +23595,33 @@ function stimLabelOf(stim) {
 __name(stimLabelOf, "stimLabelOf");
 function answerDisplayOf(item) {
   if (item.type === "choice") {
-    return typeof item.correct === "number" ? item.options?.[item.correct]?.label ?? null : null;
+    return typeof item.correct === "number" ? optionLabelAt(item.options, item.correct) ?? null : null;
   }
   if (item.type === "numline") return typeof item.correct === "number" ? String(item.correct) : null;
+  if (item.type === "stroop") {
+    if (typeof item.correct !== "number") return null;
+    const key = optionLabelAt(item.options, item.correct);
+    return key ? faKeyOf(FA_COLOR_KEYS, key) || String(key) : null;
+  }
+  if (item.type === "flanker") {
+    return item.correct === 0 ? "\u0686\u067E" : item.correct === 1 ? "\u0631\u0627\u0633\u062A" : null;
+  }
+  if (item.type === "trail") {
+    return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(",") : null;
+  }
   return null;
 }
 __name(answerDisplayOf, "answerDisplayOf");
+function optionLabelAt(options, i) {
+  if (!Array.isArray(options) || i < 0 || i >= options.length) return null;
+  const o = options[i];
+  if (typeof o === "string") return o;
+  if (o && typeof o === "object" && typeof o.label === "string") {
+    return o.label;
+  }
+  return null;
+}
+__name(optionLabelAt, "optionLabelAt");
 var NUMLINE_FB_EXACT = "\u062F\u0642\u06CC\u0642\u0627\u064B \u0647\u0645\u0627\u0646\u200C\u062C\u0627! \u0622\u0641\u0631\u06CC\u0646.";
 var NUMLINE_FB_NEAR = "\u062E\u06CC\u0644\u06CC \u0646\u0632\u062F\u06CC\u06A9 \u0628\u0648\u062F! \u06AF\u0631\u0641\u062A\u06CC.";
 function numlineFeedbackOf(item, correct, response) {
@@ -23610,6 +23667,42 @@ function scanMissPctOf(scored) {
   return round2(miss / denom * 100);
 }
 __name(scanMissPctOf, "scanMissPctOf");
+function congruentSubset(scored, congruent) {
+  return scored.filter((s) => s.congruent === congruent);
+}
+__name(congruentSubset, "congruentSubset");
+function congruentAccPctOf(scored) {
+  const sub = congruentSubset(scored, true);
+  if (sub.length === 0) return null;
+  return accuracyOf(sub);
+}
+__name(congruentAccPctOf, "congruentAccPctOf");
+function incongruentAccPctOf(scored) {
+  const sub = congruentSubset(scored, false);
+  if (sub.length === 0) return null;
+  return accuracyOf(sub);
+}
+__name(incongruentAccPctOf, "incongruentAccPctOf");
+function interferenceMsOf(scored) {
+  const okRt = /* @__PURE__ */ __name((list) => list.filter((s) => s.correct && s.rtValid && typeof s.rtMs === "number" && s.rtMs >= 0).map((s) => s.rtMs), "okRt");
+  const cong = okRt(congruentSubset(scored, true));
+  const inc = okRt(congruentSubset(scored, false));
+  if (cong.length < 2 || inc.length < 2) return null;
+  const congMed = medianRtOf(congruentSubset(scored, true));
+  const incMed = medianRtOf(congruentSubset(scored, false));
+  if (congMed === null || incMed === null) return null;
+  return round2(incMed - congMed);
+}
+__name(interferenceMsOf, "interferenceMsOf");
+function trailPrefixPctOf(scored) {
+  const rows = scored.filter((s) => typeof s.trailNodes === "number" && typeof s.trailNodesTotal === "number" && s.trailNodesTotal > 0);
+  if (rows.length === 0) return null;
+  const nodes = rows.reduce((a, s) => a + s.trailNodes, 0);
+  const total = rows.reduce((a, s) => a + s.trailNodesTotal, 0);
+  if (total <= 0) return null;
+  return round2(nodes / total * 100);
+}
+__name(trailPrefixPctOf, "trailPrefixPctOf");
 function medianRtOf(scored) {
   const rts = scored.filter((s) => s.correct && s.rtValid && typeof s.rtMs === "number").map((s) => s.rtMs).sort((a, b) => a - b);
   if (rts.length === 0) return null;
@@ -23687,6 +23780,14 @@ function computeMetricValue(formula, scored) {
       return scanFaPctOf(scored);
     case "scan_miss":
       return scanMissPctOf(scored);
+    case "congruent_acc":
+      return congruentAccPctOf(scored);
+    case "incongruent_acc":
+      return incongruentAccPctOf(scored);
+    case "interference_ms":
+      return interferenceMsOf(scored);
+    case "trail_prefix":
+      return trailPrefixPctOf(scored);
     default:
       return null;
   }
@@ -23965,7 +24066,7 @@ function applyAdaptiveLevel(current, decision) {
 __name(applyAdaptiveLevel, "applyAdaptiveLevel");
 
 // src/domain/games/stages.ts
-var STAGE_RULES_VERSION = "1.2.0";
+var STAGE_RULES_VERSION = "1.3.0";
 var STAGE_TOTAL = 5;
 var STAGE_OVERRIDE_KEYS = [
   "response_window_go_ms",
@@ -24149,17 +24250,160 @@ var SWARM_STAGES = [
     overrides: {}
   }
 ];
+var STROOP_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u063A\u0627\u0631 \u0622\u0631\u0627\u0645",
+    goal_fa: "\u0648\u0627\u0698\u0647\u200C\u0647\u0627 \u0647\u0646\u0648\u0632 \u0631\u0646\u06AF\u0650 \u062E\u0648\u062F\u0634\u0627\u0646 \u0631\u0627 \u062F\u0627\u0631\u0646\u062F\u061B \u0628\u0627 \u0637\u0645\u0623\u0646\u06CC\u0646\u0647 \u0644\u0645\u0633 \u06A9\u0646.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u0631\u0646\u06AF\u200C\u0647\u0627 \u0642\u0627\u0637\u06CC \u0645\u06CC\u200C\u0634\u0648\u0646\u062F",
+    goal_fa: "\u062D\u0642\u0647\u200C\u0628\u0627\u0632 \u0634\u0631\u0648\u0639 \u06A9\u0631\u062F\u0647\u061B \u0641\u0642\u0637 \u0628\u0647 \u0631\u0646\u06AF\u0650 \u062C\u0648\u0647\u0631 \u0646\u06AF\u0627\u0647 \u06A9\u0646.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u062D\u0642\u0647\u0654 \u062A\u0645\u0627\u0645\u200C\u0639\u06CC\u0627\u0631",
+    goal_fa: "\u0648\u0627\u0698\u0647\u200C\u0647\u0627 \u0647\u0645\u06CC\u0634\u0647 \u062F\u0631\u0648\u063A \u0645\u06CC\u200C\u06AF\u0648\u06CC\u0646\u062F\u061B \u0631\u0646\u06AF\u0650 \u0648\u0627\u0642\u0639\u06CC \u0631\u0627 \u0628\u06AF\u06CC\u0631.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u062A\u0644\u0647\u0654 \u0645\u0639\u0646\u06CC \u0648\u0627\u0698\u0647",
+    goal_fa: "\u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A\u061B \u0645\u0639\u0646\u06CC \u0648\u0627\u0698\u0647 \u0641\u0631\u06CC\u0628\u062A \u0646\u0645\u06CC\u200C\u062F\u0647\u062F.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0631\u0646\u06AF\u200C\u0647\u0627",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u062D\u0642\u0647\u200C\u0647\u0627\u06CC \u063A\u0627\u0631 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
+var FLANKER_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u06AF\u0644\u0647\u0654 \u0622\u0631\u0627\u0645",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u06AF\u0631\u06AF\u200C\u0647\u0627 \u06CC\u06A9\u200C\u0633\u0648 \u0646\u06AF\u0627\u0647 \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u06AF\u0631\u06AF\u200C\u0647\u0627\u06CC \u0627\u0636\u0627\u0641\u0647",
+    goal_fa: "\u06AF\u0644\u0647 \u0634\u0644\u0648\u063A\u200C\u062A\u0631 \u0634\u062F\u0647\u061B \u0641\u0642\u0637 \u0646\u06AF\u0627\u0647 \u06AF\u0631\u06AF\u0650 \u0648\u0633\u0637.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0646\u06AF\u0627\u0647\u200C\u0647\u0627\u06CC \u0641\u0631\u06CC\u0628\u06A9\u0627\u0631",
+    goal_fa: "\u0628\u0631\u062E\u06CC \u06AF\u0631\u06AF\u200C\u0647\u0627 \u0642\u0644\u0627\u0628\u06CC\u200C\u0627\u0646\u062F\u061B \u0633\u0631\u0634\u0627\u0646 \u0628\u0647 \u0622\u0646\u200C\u0633\u0648 \u0646\u06AF\u0627\u0647 \u0645\u06CC\u200C\u06A9\u0646\u062F.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u06AF\u0644\u0647\u0654 \u0641\u0631\u06CC\u0628\u06A9\u0627\u0631",
+    goal_fa: "\u0647\u0645\u0647 \u0628\u0647 \u06CC\u06A9\u200C\u0633\u0648 \u0646\u06AF\u0627\u0647 \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F \u062C\u0632 \u06AF\u0631\u06AF\u0650 \u0648\u0627\u0642\u0639\u06CC\u061B \u062D\u0648\u0627\u0633\u062A \u06A9\u0646\u0627\u0631 \u0646\u0631\u0647.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u062F\u0634\u062A",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u06AF\u0644\u0647\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0646\u06AF\u0647\u0628\u0627\u0646 \u062F\u0634\u062A\u06CC!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
+var TRAIL_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u0631\u062F \u06A9\u0648\u062A\u0627\u0647",
+    goal_fa: "\u0631\u062F\u067E\u0627\u0647\u0627 \u06A9\u0645\u200C\u0627\u0646\u062F\u061B \u0628\u0647 \u062A\u0631\u062A\u06CC\u0628 \u0634\u0645\u0627\u0631\u0647 \u0628\u0631\u0648.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u0631\u062F \u0628\u0644\u0646\u062F\u062A\u0631",
+    goal_fa: "\u06CC\u06A9 \u0642\u062F\u0645 \u0628\u06CC\u0634\u062A\u0631\u061B \u0631\u062F \u0631\u0627 \u06A9\u0627\u0645\u0644 \u06A9\u0646.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0631\u062F \u0628\u0644\u0646\u062F",
+    goal_fa: "\u0631\u062F\u067E\u0627\u0647\u0627 \u0628\u06CC\u0634\u062A\u0631 \u0634\u062F\u0647\u200C\u0627\u0646\u062F\u061B \u0631\u062F \u06AF\u0645 \u0646\u0634\u0648\u062F.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u0631\u062F \u06AF\u0645\u200C\u0634\u062F\u0647",
+    goal_fa: "\u0639\u062F\u062F \u0648 \u062D\u0631\u0641 \u06CC\u06A9\u200C\u062F\u0631\u0645\u06CC\u0627\u0646 \u0634\u062F\u0647\u061B \u0628\u0627 \u062F\u0642\u062A \u0642\u062F\u0645 \u0628\u0632\u0646.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0631\u062F",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u0631\u062F\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u062A\u0639\u0642\u06CC\u0628\u200C\u06A9\u0646\u0646\u062F\u0647\u200C\u0627\u06CC!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
 function stageByIndex(band, index, kind = "gonogo") {
-  const list = kind === "numline" ? NUMLINE_STAGES : kind === "scan" ? SWARM_STAGES : STAGES[band] ?? STAGES["7-12"];
+  const list = stageListOf(kind, band);
   return list.find((s) => s.index === index) ?? null;
 }
 __name(stageByIndex, "stageByIndex");
 function stageById(band, id, kind = "gonogo") {
   if (!id || typeof id !== "string") return null;
-  const list = kind === "numline" ? NUMLINE_STAGES : kind === "scan" ? SWARM_STAGES : STAGES[band] ?? STAGES["7-12"];
+  const list = stageListOf(kind, band);
   return list.find((s) => s.id === id) ?? null;
 }
 __name(stageById, "stageById");
+function stageListOf(kind, band) {
+  switch (kind) {
+    case "numline":
+      return NUMLINE_STAGES;
+    case "scan":
+      return SWARM_STAGES;
+    case "stroop":
+      return STROOP_STAGES;
+    case "flanker":
+      return FLANKER_STAGES;
+    case "trail":
+      return TRAIL_STAGES;
+    default:
+      return STAGES[band] ?? STAGES["7-12"];
+  }
+}
+__name(stageListOf, "stageListOf");
 function applyStageOverrides(params, stage) {
   const out = { ...params };
   if (!stage) return out;
@@ -24185,7 +24429,7 @@ function stageOutcomeOf(correctGoPct, correctNogoPct) {
 }
 __name(stageOutcomeOf, "stageOutcomeOf");
 function gameKindOf(v) {
-  return v === "numline" ? "numline" : v === "scan" ? "scan" : "gonogo";
+  return v === "numline" ? "numline" : v === "scan" ? "scan" : v === "stroop" ? "stroop" : v === "flanker" ? "flanker" : v === "trail" ? "trail" : "gonogo";
 }
 __name(gameKindOf, "gameKindOf");
 var NUMLINE_STAGE_THRESHOLDS = {
@@ -24201,7 +24445,7 @@ function stageOutcomeNumline(accuracy) {
 }
 __name(stageOutcomeNumline, "stageOutcomeNumline");
 function stageOutcomeFor(kind, summary) {
-  return kind === "numline" ? stageOutcomeNumline(summary.pct.accuracy) : kind === "scan" ? stageOutcomeScan(summary.pct.accuracy) : stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo);
+  return kind === "numline" ? stageOutcomeNumline(summary.pct.accuracy) : kind === "scan" ? stageOutcomeScan(summary.pct.accuracy) : kind === "stroop" || kind === "flanker" || kind === "trail" ? stageOutcomeAccuracyKind(summary.pct.accuracy) : stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo);
 }
 __name(stageOutcomeFor, "stageOutcomeFor");
 var NUMLINE_STAGE_MAX = {
@@ -24246,6 +24490,93 @@ function scanItemInStage(item, stageId) {
   return tiles > 0 && tiles <= max;
 }
 __name(scanItemInStage, "scanItemInStage");
+var ACCURACY_STAGE_THRESHOLDS = {
+  pass: 65,
+  star2: 78,
+  star3: 88
+};
+function stageOutcomeAccuracyKind(accuracy) {
+  const t = ACCURACY_STAGE_THRESHOLDS;
+  if (!pctOk2(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
+  const stars = pctOk2(accuracy, t.star3) ? 3 : pctOk2(accuracy, t.star2) ? 2 : 1;
+  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
+}
+__name(stageOutcomeAccuracyKind, "stageOutcomeAccuracyKind");
+var STROOP_STAGE_BANDS = {
+  s1: ["a"],
+  s2: ["a", "b"],
+  s3: ["a", "b", "c"],
+  s4: ["a", "b", "c", "d"],
+  s5: null
+  // همهٔ بانک — مرور بزرگ
+};
+function stroopItemInStage(item, stageId) {
+  const allowed = typeof stageId === "string" && stageId in STROOP_STAGE_BANDS ? STROOP_STAGE_BANDS[stageId] : null;
+  if (allowed === null) return true;
+  const s = item.stim ?? {};
+  const band = typeof s.band === "string" ? s.band : "";
+  if (band === "") return true;
+  return allowed.includes(band);
+}
+__name(stroopItemInStage, "stroopItemInStage");
+function flankerIncongruentCountOf(item) {
+  const s = item.stim ?? {};
+  const arrows = Array.isArray(s.arrows) ? s.arrows.filter((v) => v === "L" || v === "R") : [];
+  const mid = Math.floor(arrows.length / 2);
+  const center = arrows[mid];
+  if (center === void 0) return 0;
+  return arrows.filter((a) => a !== center).length;
+}
+__name(flankerIncongruentCountOf, "flankerIncongruentCountOf");
+var FLANKER_STAGE_MAX_DECOYS = {
+  s1: 0,
+  // گلهٔ آرام — هیچ قلابی
+  s2: 1,
+  // حداکثر یک قلابی
+  s3: 3,
+  // نگاه‌های فریبکار
+  s4: null,
+  // گلهٔ فریبکار — همهٔ گله‌ها
+  s5: null
+};
+function flankerItemInStage(item, stageId) {
+  const max = typeof stageId === "string" && stageId in FLANKER_STAGE_MAX_DECOYS ? FLANKER_STAGE_MAX_DECOYS[stageId] : null;
+  if (max === null) return true;
+  const decoys = flankerIncongruentCountOf(item);
+  if (decoys === 0 && max >= 0) return true;
+  return decoys > 0 && decoys <= max;
+}
+__name(flankerItemInStage, "flankerItemInStage");
+var TRAIL_STAGE_MAX_NODES = {
+  s1: 4,
+  s2: 5,
+  s3: 6,
+  s4: 7,
+  s5: null
+};
+function trailItemInStage(item, stageId) {
+  const max = typeof stageId === "string" && stageId in TRAIL_STAGE_MAX_NODES ? TRAIL_STAGE_MAX_NODES[stageId] : null;
+  if (max === null) return true;
+  const s = item.stim ?? {};
+  const nodes = Array.isArray(s.nodes) ? s.nodes.length : 0;
+  return nodes > 0 && nodes <= max;
+}
+__name(trailItemInStage, "trailItemInStage");
+var SCAN_STAGE_WAVE_MS = {
+  s1: 22e3,
+  s2: 19e3,
+  s3: 17e3,
+  s4: 15e3,
+  s5: 13e3
+};
+function scanStageWaveMs(itemWaveMs, stageId) {
+  if (typeof stageId !== "string" || !(stageId in SCAN_STAGE_WAVE_MS)) return null;
+  const cap = SCAN_STAGE_WAVE_MS[stageId];
+  if (typeof cap !== "number" || cap <= 0) return null;
+  if (typeof itemWaveMs !== "number" || !Number.isFinite(itemWaveMs) || itemWaveMs <= 0) return cap;
+  return Math.min(itemWaveMs, cap);
+}
+__name(scanStageWaveMs, "scanStageWaveMs");
 function stageProgressOfKind(kind, history) {
   const best = {};
   let unlocked = 1;
@@ -24303,6 +24634,114 @@ function stageStimViewOf(stim, correctTouch, stageId) {
   return { ...base, ...correctTouch ? v.go : v.nogo };
 }
 __name(stageStimViewOf, "stageStimViewOf");
+
+// src/domain/games/evidence.ts
+var EVIDENCE_RULES_VERSION = "1.0.0";
+var CV_OK = 0.35;
+var CV_WATCH = 0.5;
+var DRIFT_OK_PP = 5;
+var DRIFT_WATCH_PP = 20;
+var PREMATURE_OK_PCT = 10;
+var PREMATURE_WATCH_PCT = 25;
+var TIMEOUT_OK_PCT = 10;
+var TIMEOUT_WATCH_PCT = 25;
+var COVERAGE_OK = 0.9;
+var COVERAGE_WATCH = 0.7;
+var MIN_BLOCKS_FOR_DRIFT = 3;
+function flagOf(value, okMax, watchMax, lowerIsBetter = true) {
+  if (value === null || !Number.isFinite(value)) return null;
+  if (lowerIsBetter) return value <= okMax ? "ok" : value <= watchMax ? "watch" : "poor";
+  return value >= okMax ? "ok" : value >= watchMax ? "watch" : "poor";
+}
+__name(flagOf, "flagOf");
+function accuracyDriftPpOf(summary) {
+  const blocks = (summary.blocks ?? []).filter((b) => b.total > 0);
+  if (blocks.length < MIN_BLOCKS_FOR_DRIFT) return null;
+  const first = blocks[0];
+  const last = blocks[blocks.length - 1];
+  return Math.round((last.correct_pct - first.correct_pct) * 100) / 100;
+}
+__name(accuracyDriftPpOf, "accuracyDriftPpOf");
+function windowMissPctOf(summary, kind) {
+  if (kind !== "stroop" && kind !== "flanker") return null;
+  const total = summary.totals?.total ?? 0;
+  const omission = summary.totals?.omission ?? 0;
+  if (total <= 0) return null;
+  return Math.round(omission / total * 1e4) / 100;
+}
+__name(windowMissPctOf, "windowMissPctOf");
+function buildEvidenceDossier(kind, summary, passed) {
+  const signals = [];
+  const cv = summary.rt?.cv ?? null;
+  signals.push({
+    id: "rt_cv",
+    title_fa: "\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0646\u0633\u0628\u06CC \u0632\u0645\u0627\u0646 \u0648\u0627\u06A9\u0646\u0634",
+    value: cv,
+    unit: "ratio",
+    flag: flagOf(cv, CV_OK, CV_WATCH),
+    note_fa: cv === null ? "\u062F\u0627\u062F\u0647\u0654 \u06A9\u0627\u0641\u06CC \u0628\u0631\u0627\u06CC \u0633\u0646\u062C\u0634 \u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0646\u0628\u0648\u062F (\u062D\u062F\u0627\u0642\u0644 \u06F5 \u0632\u0645\u0627\u0646 \u0648\u0627\u06A9\u0646\u0634 \u062F\u0631\u0633\u062A \u0644\u0627\u0632\u0645 \u0627\u0633\u062A)." : null
+  });
+  const drift = accuracyDriftPpOf(summary);
+  signals.push({
+    id: "accuracy_drift_pp",
+    title_fa: "\u0627\u0641\u062A \u062F\u0642\u062A \u0627\u0646\u062A\u0647\u0627\u06CC \u062C\u0644\u0633\u0647 \u0646\u0633\u0628\u062A \u0628\u0647 \u0622\u063A\u0627\u0632",
+    value: drift,
+    unit: "pp",
+    flag: flagOf(drift, DRIFT_OK_PP, DRIFT_WATCH_PP),
+    note_fa: drift === null ? `\u0633\u0646\u062C\u0634 \u0627\u0641\u062A \u0641\u0642\u0637 \u0628\u0627 ${MIN_BLOCKS_FOR_DRIFT} \u0628\u0644\u0648\u06A9 \u06CC\u0627 \u0628\u06CC\u0634\u062A\u0631 \u0645\u0639\u0646\u0627 \u062F\u0627\u0631\u062F.` : null
+  });
+  const totalAll = summary.totals?.total ?? 0;
+  const prematurePct = totalAll > 0 && (summary.behavior?.premature_total ?? 0) >= 0 ? Math.round((summary.behavior?.premature_total ?? 0) / totalAll * 1e4) / 100 : null;
+  signals.push({
+    id: "premature_pct",
+    title_fa: "\u0646\u0633\u0628\u062A \u067E\u0627\u0633\u062E\u200C\u0647\u0627\u06CC \u067E\u06CC\u0634\u200C\u0636\u0631\u0628\u0647",
+    value: prematurePct,
+    unit: "percent",
+    flag: flagOf(prematurePct, PREMATURE_OK_PCT, PREMATURE_WATCH_PCT),
+    note_fa: prematurePct === null ? "\u0628\u062F\u0648\u0646 \u0622\u06CC\u062A\u0645 \u0644\u0645\u0633\u06CC/\u0634\u0648\u0627\u0647\u062F \u067E\u06CC\u0634\u200C\u0636\u0631\u0628\u0647\u060C \u0627\u06CC\u0646 \u0646\u0634\u0627\u0646\u0647 \u062A\u0639\u0631\u06CC\u0641\u200C\u0646\u0634\u062F\u0647 \u0627\u0633\u062A." : null
+  });
+  const windowMiss = windowMissPctOf(summary, kind);
+  signals.push({
+    id: "window_miss_pct",
+    title_fa: "\u0646\u0633\u0628\u062A \u067E\u0646\u062C\u0631\u0647\u200C\u0647\u0627\u06CC \u0628\u062F\u0648\u0646 \u067E\u0627\u0633\u062E",
+    value: windowMiss,
+    unit: "percent",
+    flag: flagOf(windowMiss, TIMEOUT_OK_PCT, TIMEOUT_WATCH_PCT),
+    note_fa: windowMiss === null ? "\u0627\u06CC\u0646 \u0646\u0634\u0627\u0646\u0647 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0627\u0646\u062A\u062E\u0627\u0628 \u0632\u0645\u0627\u0646\u200C\u062F\u0627\u0631 (\u0627\u0633\u062A\u0631\u0648\u067E/\u0641\u0644\u0627\u0646\u06A9\u0631) \u062A\u0639\u0631\u06CC\u0641 \u0645\u06CC\u200C\u0634\u0648\u062F." : null
+  });
+  const coverage = summary.behavior?.evidence_coverage ?? null;
+  const coveragePct = coverage === null ? null : Math.round(coverage * 100);
+  signals.push({
+    id: "evidence_coverage_pct",
+    title_fa: "\u067E\u0648\u0634\u0634 \u0634\u0648\u0627\u0647\u062F \u0646\u0645\u0627\u06CC\u0634 \u0622\u0632\u0645\u0648\u0646\u200C\u0647\u0627",
+    value: coveragePct,
+    unit: "percent",
+    flag: flagOf(coveragePct, COVERAGE_OK * 100, COVERAGE_WATCH * 100, false),
+    note_fa: coveragePct === null ? "\u0634\u0648\u0627\u0647\u062F \u0646\u0645\u0627\u06CC\u0634\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0628\u0648\u062F." : null
+  });
+  const flags = {
+    fatigue: drift !== null && drift <= -DRIFT_WATCH_PP,
+    instability: cv !== null && cv > CV_WATCH,
+    impulsivity: (summary.pct?.commission ?? null) !== null && summary.pct?.commission >= 30 || prematurePct !== null && prematurePct > PREMATURE_WATCH_PCT,
+    disengagement: coverage !== null && coverage < COVERAGE_WATCH || windowMiss !== null && windowMiss > TIMEOUT_WATCH_PCT
+  };
+  let action = passed ? "promote" : "review";
+  let reasonFa = passed ? "\u0645\u0644\u0627\u06A9 \u06AF\u0630\u0627\u0631 \u0627\u06CC\u0646 \u0645\u0631\u062D\u0644\u0647 \u06A9\u0627\u0645\u0644 \u0634\u062F\u061B \u0628\u0627 \u0634\u0648\u0627\u0647\u062F \u0622\u0631\u0627\u0645\u060C \u067E\u0644\u0647\u0654 \u0628\u0639\u062F \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0645\u06CC\u200C\u0634\u0648\u062F." : "\u0645\u0644\u0627\u06A9 \u06AF\u0630\u0627\u0631 \u0647\u0646\u0648\u0632 \u06A9\u0627\u0645\u0644 \u0646\u0634\u062F\u0647\u061B \u0647\u0645\u06CC\u0646 \u0645\u0631\u062D\u0644\u0647 \u0628\u0627 \u062A\u0646\u0638\u06CC\u0645 \u0622\u0631\u0627\u0645 \u0627\u062F\u0627\u0645\u0647 \u0645\u06CC\u200C\u06CC\u0627\u0628\u062F.";
+  if (passed && (flags.fatigue || flags.instability)) {
+    action = "hold";
+    reasonFa = "\u0645\u0644\u0627\u06A9 \u06AF\u0630\u0627\u0631 \u0631\u0648\u06CC \u06A9\u0627\u063A\u0630 \u06A9\u0627\u0645\u0644 \u0634\u062F \u0627\u0645\u0627 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0627\u0641\u062A \u062F\u0642\u062A \u0627\u0646\u062A\u0647\u0627\u06CC \u062C\u0644\u0633\u0647 \u06CC\u0627 \u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0648\u0627\u06A9\u0646\u0634 \u062F\u06CC\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u062A\u06A9\u0631\u0627\u0631 \u0622\u0631\u0627\u0645 \u0647\u0645\u06CC\u0646 \u0645\u0631\u062D\u0644\u0647 \u0628\u0647\u062A\u0631 \u0627\u0633\u062A.";
+  } else if (!passed && flags.disengagement) {
+    reasonFa = "\u0645\u0644\u0627\u06A9 \u06AF\u0630\u0627\u0631 \u06A9\u0627\u0645\u0644 \u0646\u0634\u062F\u0647 \u0648 \u067E\u0648\u0634\u0634 \u0634\u0648\u0627\u0647\u062F \u067E\u0627\u06CC\u06CC\u0646 \u0627\u0633\u062A\u061B \u062C\u0644\u0633\u0647\u0654 \u0628\u0639\u062F \u062F\u0631 \u062D\u0627\u0644\u062A \u0622\u0631\u0627\u0645\u200C\u062A\u0631 \u0648 \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0645\u06CC\u200C\u0634\u0648\u062F.";
+  }
+  return {
+    rules_version: EVIDENCE_RULES_VERSION,
+    kind,
+    signals,
+    flags,
+    recommendation: { action, reason_fa: reasonFa }
+  };
+}
+__name(buildEvidenceDossier, "buildEvidenceDossier");
 
 // src/domain/games/scoring.ts
 var CV_MIN_RT_COUNT = 5;
@@ -24401,12 +24840,15 @@ function scanSummaryOf(t, zeroDenominator) {
   const miss = scanMissPctOf(waves);
   if (fa2 === null) zeroDenominator.push("scan: \u0647\u0645\u200C\u0646\u0648\u0639=\u06F0 \u2014 fa_pct \u062A\u0639\u0631\u06CC\u0641\u200C\u0646\u0634\u062F\u0647");
   if (miss === null) zeroDenominator.push("scan: \u062C\u0627\u0633\u0648\u0633=\u06F0 \u2014 miss_pct \u062A\u0639\u0631\u06CC\u0641\u200C\u0646\u0634\u062F\u0647");
+  const firstTaps = waves.filter((s) => s.correct && s.rtValid && typeof s.rtMs === "number" && s.rtMs >= 0).map((s) => s.rtMs).sort((a, b) => a - b);
+  const medianFirstTap = firstTaps.length === 0 ? null : firstTaps.length % 2 === 1 ? firstTaps[Math.floor(firstTaps.length / 2)] : Math.round((firstTaps[firstTaps.length / 2 - 1] + firstTaps[firstTaps.length / 2]) / 2);
   return {
     waves: waves.length,
     correct_waves: correct,
     correct_waves_pct: Math.round(correct / waves.length * 1e4) / 100,
     fa_pct: fa2,
-    miss_pct: miss
+    miss_pct: miss,
+    median_first_tap_ms: medianFirstTap
   };
 }
 __name(scanSummaryOf, "scanSummaryOf");
@@ -24728,7 +25170,11 @@ var ENGINE_ONLY_FORMULAS = [
   "commission_pct",
   "omission_pct",
   "scan_fa",
-  "scan_miss"
+  "scan_miss",
+  "congruent_acc",
+  "incongruent_acc",
+  "interference_ms",
+  "trail_prefix"
 ];
 var ENGINE_METRICS = [
   { id: "correct_go_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u06AF\u0648\u0647\u0627\u06CC \u062F\u0631\u0633\u062A", unit: "percent", higher_is_better: true, source: "auto", formula: "correct_go_pct" },
@@ -24737,7 +25183,15 @@ var ENGINE_METRICS = [
   { id: "omission_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u0627\u0632 \u062F\u0633\u062A\u200C\u062F\u0627\u062F\u0646 \u0647\u062F\u0641", unit: "percent", higher_is_better: false, source: "auto", formula: "omission_pct" },
   // حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — دقت موج‌ها از فرمول 'accuracy' در DB می‌آید (accuracy_scan)
   { id: "scan_fa_pct", title_fa: "\u062F\u0631\u0635\u062F \u06AF\u0631\u0641\u062A\u0646 \u0647\u0645\u200C\u0646\u0648\u0639 \u062F\u0631 \u0645\u0648\u062C", unit: "percent", higher_is_better: false, source: "auto", formula: "scan_fa" },
-  { id: "scan_miss_pct", title_fa: "\u062F\u0631\u0635\u062F \u062C\u0627\u0627\u0646\u062F\u0627\u062E\u062A\u0646 \u062C\u0627\u0633\u0648\u0633", unit: "percent", higher_is_better: false, source: "auto", formula: "scan_miss" }
+  { id: "scan_miss_pct", title_fa: "\u062F\u0631\u0635\u062F \u062C\u0627\u0627\u0646\u062F\u0627\u062E\u062A\u0646 \u062C\u0627\u0633\u0648\u0633", unit: "percent", higher_is_better: false, source: "auto", formula: "scan_miss" },
+  // سه بازی تازه (۱.۲۵.۳۲) — دقت شرطی و هزینهٔ تداخل استروپ/فلانکر + درصد پیش‌ماند رد
+  { id: "stroop_congruent_acc_pct", title_fa: "\u062F\u0642\u062A \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0627\u0633\u062A\u0631\u0648\u067E (\u0648\u0627\u0698\u0647 \u0648 \u062C\u0648\u0647\u0631 \u06CC\u06A9\u06CC)", unit: "percent", higher_is_better: true, source: "auto", formula: "congruent_acc" },
+  { id: "stroop_incongruent_acc_pct", title_fa: "\u062F\u0642\u062A \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0627\u0633\u062A\u0631\u0648\u067E (\u062D\u0642\u0647\u0654 \u062C\u0648\u0647\u0631)", unit: "percent", higher_is_better: true, source: "auto", formula: "incongruent_acc" },
+  { id: "stroop_interference_ms", title_fa: "\u0647\u0632\u06CC\u0646\u0647\u0654 \u062A\u062F\u0627\u062E\u0644 \u0627\u0633\u062A\u0631\u0648\u067E (\u0645\u06CC\u0627\u0646\u0647\u0654 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u2212 \u0645\u06CC\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u062E\u0648\u0627\u0646)", unit: "ms", higher_is_better: false, source: "auto", formula: "interference_ms" },
+  { id: "flanker_congruent_acc_pct", title_fa: "\u062F\u0642\u062A \u06AF\u0644\u0647\u0654 \u0647\u0645\u200C\u0633\u0648 (\u0628\u062F\u0648\u0646 \u0641\u0631\u06CC\u0628)", unit: "percent", higher_is_better: true, source: "auto", formula: "congruent_acc" },
+  { id: "flanker_incongruent_acc_pct", title_fa: "\u062F\u0642\u062A \u06AF\u0644\u0647\u0654 \u0641\u0631\u06CC\u0628\u06A9\u0627\u0631 (\u0641\u0644\u0627\u0646\u06A9\u0631 \u0645\u062E\u0627\u0644\u0641)", unit: "percent", higher_is_better: true, source: "auto", formula: "incongruent_acc" },
+  { id: "flanker_interference_ms", title_fa: "\u0647\u0632\u06CC\u0646\u0647\u0654 \u062A\u062F\u0627\u062E\u0644 \u0641\u0644\u0627\u0646\u06A9\u0631 (\u0645\u06CC\u0627\u0646\u0647\u0654 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u2212 \u0645\u06CC\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u062E\u0648\u0627\u0646)", unit: "ms", higher_is_better: false, source: "auto", formula: "interference_ms" },
+  { id: "trail_prefix_pct", title_fa: "\u062F\u0631\u0635\u062F \u067E\u06CC\u0634\u200C\u0645\u0627\u0646\u062F \u0635\u062D\u06CC\u062D \u0631\u062F \u0631\u062F\u067E\u0627\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "trail_prefix" }
 ];
 function mergeEngineMetrics(dbRows) {
   const ids = new Set(dbRows.map((m) => m.id));
@@ -25403,6 +25857,17 @@ function createGamesService(deps) {
         scan: { label, stim: { signature: sig } }
       };
     }
+    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "trail"));
+    if (newTrain && !go && !nogo) {
+      const kindKey = newTrain.type;
+      const stim = newTrain.stim ?? {};
+      const label = typeof newTrain.prompt === "string" && newTrain.prompt.trim() !== "" ? newTrain.prompt : "";
+      return {
+        go: { label, stim },
+        nogo: null,
+        [kindKey]: { label, stim }
+      };
+    }
     if (!go && !nogo) return null;
     const goStim = stageStimViewOf(go?.stim, true, stageId);
     const nogoStim = nogo ? stageStimViewOf(nogo.stim, false, stageId) : null;
@@ -25647,6 +26112,9 @@ function createGamesService(deps) {
     const inStage = /* @__PURE__ */ __name((it) => {
       if (kind === "numline") return numlineItemInStage(it, session.stage_id);
       if (kind === "scan") return scanItemInStage(it, session.stage_id);
+      if (kind === "stroop") return stroopItemInStage(it, session.stage_id);
+      if (kind === "flanker") return flankerItemInStage(it, session.stage_id);
+      if (kind === "trail") return trailItemInStage(it, session.stage_id);
       return true;
     }, "inStage");
     const stageItems = (mission.items ?? []).filter(inStage);
@@ -25667,6 +26135,11 @@ function createGamesService(deps) {
       let display = next;
       if (next.type === "touch_report" && (res.pkg.body.mode ?? "training") === "training" && res.pkg.body.stages_enabled !== false) {
         display = { ...next, stim: stageStimViewOf(next.stim, next.correct_touch === true, session.stage_id) };
+      }
+      if (next.type === "scan" && (res.pkg.body.mode ?? "training") === "training" && res.pkg.body.stages_enabled !== false) {
+        const s = next.stim ?? {};
+        const wave = scanStageWaveMs(typeof s.wave_ms === "number" ? s.wave_ms : null, session.stage_id);
+        if (wave !== null) display = { ...next, stim: { ...s, wave_ms: wave } };
       }
       view = toItemView(display);
     }
@@ -25761,8 +26234,8 @@ function createGamesService(deps) {
     const attempts = await db.query(`SELECT * FROM game_attempts WHERE session_id = ? ORDER BY created_at`, [session.id]);
     const nowIso = isoOf2(now());
     const finishKind = gameKindOf(mission.game);
-    const finishStage = finishKind === "numline" || finishKind === "scan" ? stageById("7-12", session.stage_id, finishKind) : null;
-    const finishTotal = finishStage ? mission.items.filter((it) => finishKind === "numline" ? numlineItemInStage(it, finishStage.id) : scanItemInStage(it, finishStage.id)).length : mission.items.length;
+    const finishStage = finishKind !== "gonogo" ? stageById("7-12", session.stage_id, finishKind) : null;
+    const finishTotal = finishStage ? mission.items.filter((it) => finishKind === "numline" ? numlineItemInStage(it, finishStage.id) : finishKind === "scan" ? scanItemInStage(it, finishStage.id) : finishKind === "stroop" ? stroopItemInStage(it, finishStage.id) : finishKind === "flanker" ? flankerItemInStage(it, finishStage.id) : trailItemInStage(it, finishStage.id)).length : mission.items.length;
     const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso].filter((v) => typeof v === "string").map((v) => new Date(v).getTime());
     const validity = decideValidity(activity, attempts.length, finishTotal);
     const metricIds = mission.metrics && mission.metrics.length > 0 ? mission.metrics : [mission.metric];
@@ -25841,8 +26314,10 @@ function createGamesService(deps) {
     let summaryBody = summary;
     if (sessionStage && validity === "valid") {
       const outcome = stageOutcomeFor(sessionKind, summary);
+      const evidence = buildEvidenceDossier(sessionKind, summary, outcome.passed);
       summaryBody = {
         ...summary,
+        evidence,
         stage: {
           id: sessionStage.id,
           index: sessionStage.index,
@@ -26212,6 +26687,16 @@ function renderGamesPage(model, token) {
       <div class="play-basket" id="play-basket" aria-hidden="true">
         <svg class="play-basket__star" viewBox="0 0 120 124" aria-hidden="true"><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z"/></svg>
         <span id="play-basket-count">\u06F0</span>
+      </div>
+      <div class="play-rotate" id="play-rotate" hidden role="status" aria-live="polite">
+        <svg class="play-rotate__icon" viewBox="0 0 96 96" aria-hidden="true">
+          <rect x="30" y="8" width="36" height="80" rx="10" fill="none" stroke="currentColor" stroke-width="5"/>
+          <circle cx="48" cy="78" r="4" fill="currentColor"/>
+          <path d="M76 30 a26 26 0 0 1 -6 34" fill="none" stroke="#E4AA46" stroke-width="6" stroke-linecap="round"/>
+          <path d="M74 24 l0 14 -12 -4 Z" fill="#E4AA46"/>
+        </svg>
+        <p class="play-line">\u06AF\u0648\u0634\u06CC \u0631\u0627 \u0628\u0686\u0631\u062E\u0627\u0646</p>
+        <p class="play-muted">\u0627\u06CC\u0646 \u0628\u0627\u0632\u06CC \u0627\u0641\u0642\u06CC \u0627\u062C\u0631\u0627 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0647\u0631 \u0648\u0642\u062A \u0686\u0631\u062E\u0627\u0646\u062F\u06CC \u0627\u062F\u0627\u0645\u0647 \u0645\u06CC\u200C\u062F\u0647\u06CC\u0645.</p>
       </div>
     </div>
     <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />

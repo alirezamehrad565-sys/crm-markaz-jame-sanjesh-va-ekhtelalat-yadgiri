@@ -58,6 +58,23 @@ function calmPanel() {
   stage.appendChild(btn);
 }
 
+/* ─── گیت جهت (۱.۲۵.۳۲) — بازی‌ها افقی اجرا می‌شوند؛ پوشش «گوشی را بچرخان» فقط روی
+   صفحهٔ لمسی عمودی؛ دسکتاپ هرگز نمی‌بیندش. بازگشت از حالت عمودی = ادامهٔ خودکار */
+function orientationGate() {
+  const overlay = document.getElementById('play-rotate');
+  if (!overlay || typeof window.matchMedia !== 'function') return;
+  const portrait = window.matchMedia('(orientation: portrait)');
+  const coarse = window.matchMedia('(pointer: coarse)');
+  const update = () => { overlay.hidden = !(coarse.matches && portrait.matches); };
+  if (typeof portrait.addEventListener === 'function') {
+    portrait.addEventListener('change', update);
+    if (typeof coarse.addEventListener === 'function') coarse.addEventListener('change', update);
+  } else if (typeof portrait.addListener === 'function') {
+    portrait.addListener(update); coarse.addListener(update);
+  }
+  update();
+}
+
 /* ─── ماژول نوع‌بازی: بارگیری از kinds/ یا بازگشت به پخش‌کنندهٔ عام ─── */
 
 const GENERIC = {
@@ -65,13 +82,29 @@ const GENERIC = {
   stimSvg: () => '<div class="play-svg"></div>'
 };
 
+/* توابع نمایش عمومی — هر export که پسوند Markup/RevealTruth/ResponsePoint دارد
+   برای نوع‌بازی هم‌نامش ثبت می‌شود (استروپ/فلانکر/رد پای دزد بدون شاخهٔ اختصاصی این‌جا) */
+function collectKindHooks(mod) {
+  const out = { markupFor: {}, revealFor: {}, pointFor: {} };
+  for (const name of Object.keys(mod)) {
+    const fn = mod[name];
+    if (typeof fn !== 'function') continue;
+    if (name.endsWith('Markup')) out.markupFor[name.slice(0, -'Markup'.length)] = fn;
+    else if (name.endsWith('RevealTruth')) out.revealFor[name.slice(0, -'RevealTruth'.length)] = fn;
+    else if (name.endsWith('ResponsePoint')) out.pointFor[name.slice(0, -'ResponsePoint'.length)] = fn;
+  }
+  return out;
+}
+
 async function loadKind() {
   if (!KIND) return GENERIC;
   try {
     const mod = await import('./kinds/' + KIND + '.js');
+    const hooks = collectKindHooks(mod);
     return {
       previewSteps: mod.previewSteps || GENERIC.previewSteps,
       stimSvg: mod.stimSvg || GENERIC.stimSvg,
+      ...hooks,
       // جادهٔ عددها (۱.۲۵.۲۸) — توابع نمایش خط عددی (ماژول‌های دیگر این‌ها ندارند)
       numlineMarkup: mod.numlineMarkup || null,
       numlineValueFromTap: mod.numlineValueFromTap || null,
@@ -92,6 +125,9 @@ async function loadKind() {
 
 (async function run() {
   if (!root) return;
+
+  /* گیت جهت — پیش از هر چیز؛ پوشش فقط روی لمسیِ عمودی، بقیهٔ صفحه آزاد */
+  orientationGate();
 
   /* پروتکل — اسنپ‌شات سرور (data-protocol)؛ خرابی → null و موتور با پیش‌فرض‌های امن */
   let protocol = null;
