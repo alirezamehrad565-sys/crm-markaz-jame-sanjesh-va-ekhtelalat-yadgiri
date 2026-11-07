@@ -92,7 +92,7 @@ function trail(id, phase, band, salt) {
     id, phase, type: 'trail',
     prompt: b.alt ? PROMPT_ALT : PROMPT_NUM,
     correct,
-    stim: { nodes, window_ms: b.window_ms, alt: b.alt, seq: labels }
+    stim: { nodes, window_ms: b.window_ms, alt: b.alt, seq: labels, band } // band = گروه authored برای فیلتر مرحله‌ها
   };
 }
 

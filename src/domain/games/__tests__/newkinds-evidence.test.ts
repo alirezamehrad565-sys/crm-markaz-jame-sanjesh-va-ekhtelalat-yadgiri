@@ -218,11 +218,11 @@ describe('نوع‌بازی و ملاک گذار سه بازی تازه', () => 
     expect(stroopItemInStage({ stim: {} }, 's1')).toBe(true); // بی‌گروه = همیشه حاضر
   });
 
-  it('فیلتر فلانکر بر شمار گرگ قلابی (مخالف مرکز)', () => {
-    const calm = { stim: { arrows: ['L', 'L', 'L'] } };        // بدون قلابی
-    const one = { stim: { arrows: ['R', 'L', 'R', 'R', 'R'] } }; // یک قلابی
-    const three = { stim: { arrows: ['L', 'L', 'R', 'L', 'R'] } }; // سه قلابی (مرکز R)
-    const four = { stim: { arrows: ['L', 'L', 'R', 'L', 'L'] } }; // مرکز R — هر چهار مخالف
+  it('فیلتر فلانکر بر گروه stim.band + بازگشت ساختاری برای بانک بی‌گروه', () => {
+    const calm = { stim: { arrows: ['L', 'L', 'L'] } };        // بدون قلابی — بی‌گروه
+    const one = { stim: { arrows: ['R', 'L', 'R', 'R', 'R'] } }; // یک قلابی — بی‌گروه
+    const three = { stim: { arrows: ['L', 'L', 'R', 'L', 'R'] } }; // سه قلابی (مرکز R) — بی‌گروه
+    const four = { stim: { arrows: ['L', 'L', 'R', 'L', 'L'] } }; // مرکز R — هر چهار مخالف — بی‌گروه
     expect(flankerItemInStage(calm, 's1')).toBe(true);
     expect(flankerItemInStage(one, 's1')).toBe(false);
     expect(flankerItemInStage(one, 's2')).toBe(true);
@@ -230,13 +230,25 @@ describe('نوع‌بازی و ملاک گذار سه بازی تازه', () => 
     expect(flankerItemInStage(three, 's2')).toBe(false);
     expect(flankerItemInStage(four, 's4')).toBe(true);
     expect(flankerItemInStage(four, 's3')).toBe(false);
+    // بانک گروه‌دار — پروب هرگز به مرحله‌های اولیه درز نمی‌کند (رفع نشت ۱.۲۵.۳۲)
+    const bandA = { stim: { arrows: ['L', 'R', 'L'], band: 'a' } };
+    const bandP = { stim: { arrows: ['L', 'L', 'L'], band: 'p' } }; // کنگرنت ولی پروب
+    expect(flankerItemInStage(bandA, 's1')).toBe(true);
+    expect(flankerItemInStage(bandP, 's1')).toBe(false);
+    expect(flankerItemInStage(bandP, 's5')).toBe(true);
   });
 
-  it('فیلتر رد بر شمار ردپاها', () => {
+  it('فیلتر رد بر گروه stim.band + بازگشت ساختاری برای بانک بی‌گروه', () => {
     expect(trailItemInStage({ stim: { nodes: [1, 2, 3, 4] } }, 's1')).toBe(true);
     expect(trailItemInStage({ stim: { nodes: [1, 2, 3, 4, 5] } }, 's1')).toBe(false);
     expect(trailItemInStage({ stim: { nodes: [1, 2, 3, 4, 5, 6, 7] } }, 's4')).toBe(true);
     expect(trailItemInStage({ stim: { nodes: [] } }, 's1')).toBe(false);
+    // بانک گروه‌دار — پروب ۶ ردپایی به مرحلهٔ ۳ درز نمی‌کند (رفع نشت ۱.۲۵.۳۲)
+    const bandP6 = { stim: { nodes: [1, 2, 3, 4, 5, 6], band: 'p' } };
+    expect(trailItemInStage(bandP6, 's3')).toBe(false);
+    expect(trailItemInStage(bandP6, 's5')).toBe(true);
+    const bandC6 = { stim: { nodes: [1, 2, 3, 4, 5, 6], band: 'c' } };
+    expect(trailItemInStage(bandC6, 's3')).toBe(true);
   });
 });
 
