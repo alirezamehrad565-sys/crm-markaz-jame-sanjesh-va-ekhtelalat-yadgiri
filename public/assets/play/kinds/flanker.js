@@ -30,6 +30,10 @@ const ARROW_L = '<svg class="play-flanker__arrow" viewBox="0 0 48 48" aria-hidde
 const ARROW_R = '<svg class="play-flanker__arrow" viewBox="0 0 48 48" aria-hidden="true">' +
   '<path d="M18 10 L32 24 L18 38" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+/* جنبش تزئینی و صحنهٔ آموزش — همهٔ جنبش از fx با گارد کاهش‌جنبش؛ این ماژول هرگز مستقیم animate نمی‌کند */
+import * as fx from '../fx.js';
+import { sceneMarkup } from '../scene.js';
+
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -196,4 +200,130 @@ export function previewSteps(hint) {
     { svg: packSample(flipped), line: 'گرگ‌های کناری ممکن است به آن‌سو نگاه کنند؛ تو فریبشان را نمی‌خوری.' },
     { svg: packSample(arrows) + answers, line: 'فقط جهت گرگِ وسط را لمس کن — چپ یا راست.' }
   ];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   G3 / ۱.۲۵.۳۷ — کارت INTRO + تمرین تعاملی «تا موفقیت» (همان الگوی
+   حلقهٔ تمرین گونوگو، اقتباس jsPsych): دو قدم — نخست گلهٔ هم‌جهت (آسان)،
+   بعد گلهٔ ناهم‌جهت (درسِ اصلی: فقط گرگِ وسط). جهتِ گرگِ وسطِ کارت تمرین
+   روبه‌کودک پیدا است (قانون خود بازی)، پس تمرین هیچ کلیدی ندارد؛ کلید
+   آیتم‌های واقعی فقط سمت سرور می‌ماند. ارزیابی هرگز تمرین تعاملی نمی‌بیند
+   (C1). نوار پنجره در تمرین بی‌جنبش می‌ماند (§۹).
+   ═══════════════════════════════════════════════════════════════ */
+
+/** کارت INTRO — نام + قانون یک‌خطی از راهنمای سرور؛ ناسالم = قانون امن ایستا */
+export const intro = {
+  name: 'گلهٔ فریبکار',
+  rule: (hint) => {
+    const h = hint && hint.flanker && typeof hint.flanker.label === 'string' ? hint.flanker.label.trim() : '';
+    return h !== '' ? h : 'فقط نگاهِ گرگِ وسط را دنبال کن؛ گرگ‌های کناری داستان خودشان را دارند.';
+  }
+};
+
+const FLANKER_PRACTICE = {
+  step1: 'گرگِ وسط به کدام‌سو نگاه می‌کند؟ همان دکمه را لمس کن.',
+  step2: 'حالا گرگ‌های کناری به آن‌سو نگاه می‌کنند؛ تو فقط به گرگِ وسط نگاه کن.',
+  success: 'آفرین! گلهٔ فریبکار تو را فریب نداد.',
+  retry: 'فقط نگاهِ گرگِ وسط مهم است؛ گرگ‌های کناری را نادیده بگیر.',
+  retryWait: 'هر وقت آماده بودی لمس کن؛ عجله‌ای نیست.',
+  practiceDone: 'تمرین تمام شد! حالا گلهٔ واقعی شروع می‌شود.'
+};
+
+const PRACTICE_WINDOW_MS = 15000;
+
+/** صحنهٔ تمرین — دکور پس‌زمینهٔ لایه‌های دریا؛ جنبش از fx؛ بی‌اثر برای پاسخ */
+function decoratePractice(stage) {
+  if (!stage) return;
+  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach'));
+  fx.sceneAmbient(stage);
+}
+
+/** یک لمس روی دو دکمهٔ چپ/راست یا یک پنجرهٔ زمانی — هر کدام زودتر؛ خواب یدکی cancel می‌شود */
+function tapAnswerWithin(stage, ms, sleeper) {
+  return new Promise((resolve) => {
+    const buttons = Array.from(stage.querySelectorAll('.play-option'));
+    let done = false;
+    const finish = (idx) => {
+      if (done) return;
+      done = true;
+      buttons.forEach((b) => b.removeEventListener('pointerdown', onTap));
+      sleeper.cancel(); // خواب یدکی یتیم نمی‌ماند — قاعدهٔ پنجرهٔ گو/نوگو
+      resolve(idx === null || idx === undefined ? null : idx);
+    };
+    const onTap = (ev) => {
+      const btn = ev.target.closest('.play-option');
+      if (!btn) return;
+      ev.preventDefault();
+      finish(Number(btn.dataset.option));
+    };
+    buttons.forEach((b) => b.addEventListener('pointerdown', onTap));
+    sleeper.sleep(ms).then(() => finish(null));
+  });
+}
+
+function practiceCardHtml(badge, fakeItem, line) {
+  return (badge ? '<span class="play-step-badge">' + esc(badge) + '</span>' : '') +
+    flankerMarkup(fakeItem) +
+    '<p class="play-line">' + esc(line) + '</p>';
+}
+
+/**
+ * تمرین تعاملی «گلهٔ فریبکار» — دو قدم با تکرار بی‌سرزنش تا موفقیت:
+ * قدم ۱ گلهٔ هم‌جهت، قدم ۲ گلهٔ ناهم‌جهت (جهتِ گرگِ وسط عوض می‌شود، کناری‌ها برعکس).
+ * پس از دو تلاش، گرگِ وسط و دکمهٔ درست آرام نشان داده می‌شوند (آموزش پس از پاسخ؛
+ * جهت گرگِ وسطِ کارت تمرین دانش عمومی است، نه کلید). خروجی: { applied, retries }.
+ */
+export async function practiceInteractive(ctx) {
+  const { stage, sleeper } = ctx || {};
+  if (!stage || !sleeper) return { applied: false, retries: 0 };
+  const steps = [
+    { badge: 'قدم ۱ از ۲', arrows: ['L', 'L', 'L'], line: FLANKER_PRACTICE.step1 },
+    { badge: 'قدم ۲ از ۲', arrows: ['R', 'L', 'R'], line: FLANKER_PRACTICE.step2 }
+  ];
+  let retries = 0;
+
+  for (const step of steps) {
+    const fakeItem = { stim: { arrows: step.arrows.slice() }, prompt: '' };
+    const want = arrowsOf(fakeItem)[midOf(step.arrows.length)] === 'L' ? 0 : 1;
+    let misses = 0;
+    for (;;) {
+      stage.className = 'play-stage';
+      stage.classList.add('play-stage--teach');
+      stage.innerHTML = practiceCardHtml(step.badge, fakeItem, step.line);
+      decoratePractice(stage);
+      fx.revealStage(stage);
+      fx.popIn(stage.querySelector('.play-flanker__row'), 240, false);
+      const picked = await tapAnswerWithin(stage, PRACTICE_WINDOW_MS, sleeper);
+      if (picked !== null && picked === want) {
+        stage.innerHTML = practiceCardHtml(step.badge, fakeItem, FLANKER_PRACTICE.success);
+        decoratePractice(stage);
+        fx.revealStage(stage);
+        const el = stage.querySelector('.play-flanker__slot--real');
+        if (el) {
+          const r = el.getBoundingClientRect();
+          if (r.width) fx.burstAt(r.left + r.width / 2, r.top + r.height / 2);
+        }
+        await sleeper.sleep(1200);
+        break;
+      }
+      retries += 1;
+      misses += 1;
+      const line = picked === null ? FLANKER_PRACTICE.retryWait : FLANKER_PRACTICE.retry;
+      stage.innerHTML = practiceCardHtml(step.badge, fakeItem, line);
+      decoratePractice(stage);
+      fx.revealStage(stage);
+      if (misses >= 2) flankerRevealTruth(fakeItem, stage, want === 0 ? 'چپ' : 'راست'); // آموزش پس از پاسخ
+      await sleeper.sleep(1600);
+    }
+  }
+
+  stage.className = 'play-stage';
+  stage.classList.add('play-stage--teach');
+  stage.innerHTML = '<p class="play-line">' + esc(FLANKER_PRACTICE.practiceDone) + '</p>';
+  decoratePractice(stage);
+  fx.revealStage(stage);
+  await sleeper.sleep(1600);
+  stage.className = 'play-stage';
+  stage.innerHTML = '';
+  return { applied: true, retries };
 }

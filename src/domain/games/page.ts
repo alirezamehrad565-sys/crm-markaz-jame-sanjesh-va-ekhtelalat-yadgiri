@@ -90,9 +90,13 @@ export function renderGamesPage(model: PublicStateView, token: string): string {
   }
 
   if (model.state === 'parent_pre') {
+    // درس کوتاه والد (U8/G3): متن واقعی از parent_copy بستهٔ نسخه‌دار؛ نبود = متن پیش‌فرض ملایم
+    const beforeFa = typeof model.parentCopyBefore === 'string' && model.parentCopyBefore.trim() !== ''
+      ? model.parentCopyBefore.trim()
+      : 'این بازی تمرین تمرکز و مهار است، نه درمان؛ نقش شما کنار ماندن و تشویق آرام است.';
     return page(model, token, `<div class="card">${head}
-      <p class="muted">درس کوتاه والد همین‌جا نمایش داده می‌شود (زیر ۲ دقیقه).</p>
-      <p class="muted">گوشی را به کودک بدهید و کنارش بمانید.</p>
+      <p class="muted">${esc(beforeFa)}</p>
+      <p class="muted">گوشی را به کودک بدهید و کنارش بمانید؛ هر روز چند دقیقه کافی است.</p>
       <button id="btn-start" type="button">آمادهٔ شروع هستیم</button></div>`);
   }
 
@@ -102,13 +106,14 @@ export function renderGamesPage(model: PublicStateView, token: string): string {
     // فرادادهٔ مرحلهٔ فقط-تمرین (۱.۲۵.۲۲) — فقط وقتی مرحله واقعاً هست؛ ارزیابی هرگز این ویژگی را ندارد
     const hint = JSON.stringify(model.playHint ?? null);
     const protocol = JSON.stringify(model.playProtocol ?? null);
+    const resume = JSON.stringify(model.playResume ?? null);
     const stageAttr = model.playStage
       ? ` data-stage="${esc(JSON.stringify(model.playStage))}"`
       : '';
     return page(model, token, `<div id="play-root" class="play-root"
       data-token="${esc(token)}"
       data-kind="${esc(model.playGame ?? '')}"
-      data-hint="${esc(hint)}"${stageAttr}
+      data-hint="${esc(hint)}" data-resume="${esc(resume)}"${stageAttr}
       data-protocol="${esc(protocol)}">
       <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
       <div class="play-stage" id="play-stage"></div>
@@ -157,9 +162,17 @@ export function renderGamesPage(model: PublicStateView, token: string): string {
   }
 
   if (model.state === 'parent_post') {
+    // پس‌گفت والد با محتوای واقعی (U8/G3): خلاصهٔ توصیفی هفته/امروز + جملهٔ فردا از بسته؛
+    // توصیف رفتار است — هیچ عدد قضاوتی روبه‌والد نمی‌آید.
     const conf = model.adherenceConfirmed ? faNum(2) : faNum(1);
+    const pp = model.parentPost;
+    const postHtml = pp
+      ? `<p class="muted">این هفته ${faNum(pp.sessions_week)} جلسه بازی آغاز شده است.</p>
+         <p class="muted">امروز ${faNum(pp.attempts_today)} پاسخ ثبت شد؛ همهٔ قدم‌های کودک با همین لینک ادامه پیدا می‌کند.</p>
+         <p class="muted">${esc(pp.tomorrow_fa)}</p>`
+      : `<p class="muted">جلسهٔ امروز ثبت شد؛ سپاس از همراهی شما.</p>`;
     return page(model, token, `<div class="card">${head}
-      <p class="muted">بازخورد توصیفی این‌جا نمایش داده می‌شود: روند این هفته و یک جمله برای فردا.</p>
+      ${postHtml}
       <button id="btn-confirm1" type="button">تأیید انجام شد (${esc(conf)})</button>
       <div class="msg muted">با دومین تأیید، پایبندی امروز ثبت می‌شود.</div></div>`);
   }

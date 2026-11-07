@@ -89,6 +89,19 @@ export function stimSvg(stim) {
     '</svg>';
 }
 
+/** کارت INTRO — بسته‌بندی معرفی بازی (G3/۱.۲۵.۳۷): نام + قانون یک‌خطی از راهنمای سرور.
+ *  قانون از labelهای راهنمای آموزشی سرور می‌آید (فقط آیتم‌های train)؛ ناسالم = قانون امن ایستا.
+ *  ارزیابی هرگز INTRO نمی‌بیند — مسیر ارزیابی دستورالعمل ثابت کوتاه خودش را دارد (C1). */
+export const intro = {
+  name: 'ماهی و خرچنگ',
+  rule: (hint) => {
+    const go = hint && hint.go && typeof hint.go.label === 'string' ? hint.go.label.trim() : '';
+    const nogo = hint && hint.nogo && typeof hint.nogo.label === 'string' ? hint.nogo.label.trim() : '';
+    if (go !== '' && nogo !== '') return 'ماهی «' + go + '» را لمس کن؛ خرچنگ «' + nogo + '» را لمس نکن.';
+    return 'ماهی را لمس کن؛ خرچنگ را لمس نکن.';
+  }
+};
+
 /** پنجرهٔ پاسخ آیتم — در موتور مرکزی (engine/machine.js windowMsFor)؛ این ماژول فقط نمایش است */
 
 /** پیش‌نمایش شروع «این هدف است / این نه» — فقط از راهنمای آموزشی سرور (هیچ ردی از پروب) */

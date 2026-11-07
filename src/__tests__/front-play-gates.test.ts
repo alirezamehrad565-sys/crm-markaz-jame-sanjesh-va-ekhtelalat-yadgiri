@@ -17,25 +17,29 @@ const previewJs = read(join(PLAY, 'preview.js')); // پیش‌نمایش فقط-
 const gonogoJs = read(join(PLAY, 'kinds/gonogo.js'));
 const scanKindJs = read(join(PLAY, 'kinds/scan.js')); // حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — ماژول نمایش موج اسکن
 const numlineKindJs = read(join(PLAY, 'kinds/numline.js')); // جادهٔ عددها (۱.۲۵.۲۸)
+const stroopKindJs = read(join(PLAY, 'kinds/stroop.js')); // حقه‌باز رنگ‌ها (۱.۲۵.۳۲)
+const flankerKindJs = read(join(PLAY, 'kinds/flanker.js')); // گلهٔ فریبکار (۱.۲۵.۳۲)
+const trailKindJs = read(join(PLAY, 'kinds/trail.js')); // رد پای دزد (۱.۲۵.۳۲)
+const sceneJs = read(join(PLAY, 'scene.js')); // کتابخانهٔ صحنهٔ دریایی (M2/۱.۲۵.۳۶) — بی‌متن و بی‌کلید
 const playCss = read(join(PLAY, 'play.css'));
 const fxJs = read(join(PLAY, 'fx.js')); // لایهٔ حسی بازی (۱.۲۵.۲۱) — همهٔ جنبش تزئینی همین‌جاست
 const engineJs = ['machine.js', 'timing.js', 'response.js', 'trials.js', 'session.js', 'scoring.js', 'observe.js']
   .map((f) => read(join(PLAY, 'engine', f))).join('\n');
 const pageSrc = read(join(__dirname, '../domain/games/page.ts'));
 const routesSrc = read(join(__dirname, '../domain/games/routes.ts'));
-const allPlaySrc = playJs + previewJs + gonogoJs + scanKindJs + numlineKindJs + playCss + fxJs + engineJs;
+const allPlaySrc = playJs + previewJs + gonogoJs + scanKindJs + numlineKindJs + stroopKindJs + flankerKindJs + trailKindJs + sceneJs + playCss + fxJs + engineJs;
 
 describe('گیت ۱.۲۵.۰۸ — لحن و امنیت متن کودک', () => {
-  it('متن‌های روبه‌کودک هیچ واژهٔ ممنوعی ندارند (لینت مشترک با بسته‌ها) — شامل موتور و fx', () => {
-    for (const [name, src] of [['play.js', playJs], ['kinds/gonogo.js', gonogoJs], ['kinds/scan.js', scanKindJs], ['kinds/numline.js', numlineKindJs], ['fx.js', fxJs], ['page.ts', pageSrc], ['engine/*', engineJs]] as const) {
+  it('متن‌های روبه‌کودک هیچ واژهٔ ممنوعی ندارند (لینت مشترک با بسته‌ها) — شامل همهٔ نوع‌بازی‌ها، صحنه، موتور و fx (G3)', () => {
+    for (const [name, src] of [['play.js', playJs], ['kinds/gonogo.js', gonogoJs], ['kinds/scan.js', scanKindJs], ['kinds/numline.js', numlineKindJs], ['kinds/stroop.js', stroopKindJs], ['kinds/flanker.js', flankerKindJs], ['kinds/trail.js', trailKindJs], ['scene.js', sceneJs], ['fx.js', fxJs], ['page.ts', pageSrc], ['engine/*', engineJs]] as const) {
       for (const w of FORBIDDEN_TEXT_PATTERNS) {
         expect(src.includes(w), `${name} حاوی واژهٔ ممنوع «${w}» است`).toBe(false);
       }
     }
   });
 
-  it('پخش‌کننده هیچ منبع بیرونی و هیچ ارزیابی پویا ندارد (§۱۱) — شامل موتور engine/، fx و پیش‌نمایش', () => {
-    for (const [name, src] of [['play.js', playJs], ['preview.js', previewJs], ['kinds/gonogo.js', gonogoJs], ['fx.js', fxJs], ['engine/*', engineJs]] as const) {
+  it('پخش‌کننده هیچ منبع بیرونی و هیچ ارزیابی پویا ندارد (§۱۱) — شامل همهٔ نوع‌بازی‌ها، صحنه، موتور، fx و پیش‌نمایش', () => {
+    for (const [name, src] of [['play.js', playJs], ['preview.js', previewJs], ['kinds/gonogo.js', gonogoJs], ['kinds/scan.js', scanKindJs], ['kinds/numline.js', numlineKindJs], ['kinds/stroop.js', stroopKindJs], ['kinds/flanker.js', flankerKindJs], ['kinds/trail.js', trailKindJs], ['scene.js', sceneJs], ['fx.js', fxJs], ['engine/*', engineJs]] as const) {
       expect(src, `${name} نباید URL مطلق بیرونی داشته باشد`).not.toMatch(/https?:\/\//);
       expect(src, `${name} نباید eval داشته باشد`).not.toMatch(/\beval\s*\(|new\s+Function/);
     }

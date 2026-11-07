@@ -46,7 +46,8 @@ function calmPanel() {
   stage.className = 'play-stage play-stage--teach';
   stage.innerHTML =
     '<p class="play-line">اتصال قطع شد؛ نتیجهٔ این قسمت ثبت نشد.</p>' +
-    '<p class="play-muted">اشکالی نداره؛ هر وقت اینترنت آمد دوباره تلاش می‌کنیم.</p>';
+    '<p class="play-muted">اشکالی نداره؛ هر وقت اینترنت آمد دوباره تلاش می‌کنیم.</p>' +
+    '<p class="play-muted">مأموریت همین‌جا برایت مونده است؛ هر وقت برگردی از همین قدم ادامه پیدا می‌کند.</p>';
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'play-btn';
@@ -105,6 +106,8 @@ async function loadKind() {
       previewSteps: mod.previewSteps || GENERIC.previewSteps,
       stimSvg: mod.stimSvg || GENERIC.stimSvg,
       ...hooks,
+      // کارت INTRO — بسته‌بندی معرفی بازی (G3/۱.۲۵.۳۷): نام/قانون/دکمهٔ بزرگ؛ نبود = مدار قدیمی
+      intro: mod.intro || null,
       // تمرین تعاملی «تا موفقیت» + خلاصهٔ پایان (۱.۲۵.۳۴ — اقتباس بستهٔ jsPsych go-nogo):
       // فقط ماژول‌هایی که این‌ها را صادر کنند (گونوگو)؛ بقیه undefined → مدار قدیمی موتور
       practiceInteractive: mod.practiceInteractive || null,
@@ -145,6 +148,10 @@ async function loadKind() {
   let stageMeta = null;
   try { stageMeta = JSON.parse(root.dataset.stage || 'null'); } catch (err) { stageMeta = null; }
 
+  /* فرادادهٔ ادامهٔ نرم جلسهٔ نیمه‌تمام (U7/G3) — از سرور؛ جلسهٔ تازه = null */
+  let resume = null;
+  try { resume = JSON.parse(root.dataset.resume || 'null'); } catch (err) { resume = null; }
+
   const kind = await loadKind();
   const { runSession } = await import('./engine/session.js');
 
@@ -154,6 +161,7 @@ async function loadKind() {
     kind,
     hint,
     stageMeta,
+    resume,
     api: {
       nextItem: () => requestJson('/next-item'),
       submit: (body) => requestJson('/attempts', { method: 'POST', body }),

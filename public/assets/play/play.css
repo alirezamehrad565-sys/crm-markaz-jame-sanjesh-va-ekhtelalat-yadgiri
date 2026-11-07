@@ -157,6 +157,32 @@
   margin-bottom: 4px;
 }
 
+/* ─── کارت INTRO — بسته‌بندی معرفی بازی (G3/۱.۲۵.۳۷): نام درشت + قانون + دکمهٔ بزرگ ───
+   فقط شِمال آموزش؛ ارزیابی هرگز این کارت را نمی‌بیند (دستورالعمل ثابت کوتاه — C1).
+   ایستا؛ هیچ قالب کلیدی و هیچ انیمیشن CSS — ورود از fx.popIn با گارد کاهش‌جنبش. */
+
+.play-intro__name {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--p-navy);
+  margin: 2px 0 6px;
+  text-align: center;
+}
+
+.play-intro__remain {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--p-teal);
+  margin: 0;
+}
+
+.play-btn--intro {
+  max-width: 320px;
+  margin-top: 14px;
+  font-size: 19px;
+  box-shadow: 0 10px 24px rgba(21, 62, 80, .18);
+}
+
 /* ─── دکمه‌ها و گزینه‌ها — هدف لمسی سخاوتمند ─── */
 
 .play-btn {

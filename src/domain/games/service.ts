@@ -994,6 +994,53 @@ export function createGamesService(deps: GamesDeps): GamesService {
         };
       }
     }
+    // ادامهٔ نرم جلسهٔ نیمه‌تمام (U7/G3): فرادادهٔ «چند قدم مانده» برای کارت خوش‌برگشتی —
+    // فقط وقتی این جلسه حداقل یک پاسخ ثبت‌شده دارد؛ کل = آزمون‌های جریانِ مرحلهٔ منجمد
+    // (همان فیلتر nextItem)؛ کلاینت فقط پیام کودک‌زبان می‌سازد — هیچ کلید/محرکی نیست.
+    let resumeMeta: PublicStateView['playResume'] = null;
+    if (state === 'child_active' && res.session) {
+      try {
+        const doneRow = await db.queryOne<{ n: number }>(
+          `SELECT COUNT(*) AS n FROM game_attempts WHERE session_id = ?`, [res.session.id]);
+        const doneN = doneRow?.n ?? 0;
+        if (doneN > 0) {
+          const inStg = (it: MissionItem): boolean => {
+            if (kind === 'numline') return numlineItemInStage(it, res.session!.stage_id);
+            if (kind === 'scan') return scanItemInStage(it, res.session!.stage_id);
+            if (kind === 'stroop') return stroopItemInStage(it, res.session!.stage_id);
+            if (kind === 'flanker') return flankerItemInStage(it, res.session!.stage_id);
+            if (kind === 'trail') return trailItemInStage(it, res.session!.stage_id);
+            return true;
+          };
+          resumeMeta = { done: doneN, total: (m.items ?? []).filter(inStg).length };
+        }
+      } catch { resumeMeta = null; } // فرادادهٔ ادامه هرگز ورود را نمی‌شکند
+    }
+    // پس‌گفت والد (U8/G3): محتوای واقعی توصیفی — شمار جلسهٔ آغازشدهٔ هفته و پاسخ‌های همین
+    // جلسه + جملهٔ فردا از parent_copy.after بستهٔ نسخه‌دار (لینت واژهٔ ممنوع دارد).
+    // توصیف رفتار است، نه حکم بالینی — هیچ هنجار/درصدی/آستانه‌ای روبه‌والد نمی‌آید.
+    let parentPost: PublicStateView['parentPost'] = undefined;
+    if (state === 'parent_post') {
+      try {
+        const weekAgoIso = isoOf(new Date(now().getTime() - 7 * 24 * 60 * 60 * 1000));
+        const weekRow = await db.queryOne<{ n: number }>(
+          `SELECT COUNT(*) AS n FROM game_sessions s JOIN game_missions mm ON mm.id = s.mission_id
+           WHERE mm.prescription_id = ? AND s.started_at >= ?`, [res.rx.id, weekAgoIso]);
+        const todayRow = res.session
+          ? await db.queryOne<{ n: number }>(
+              `SELECT COUNT(*) AS n FROM game_attempts WHERE session_id = ?`, [res.session.id])
+          : null;
+        const parentCopy = (res.pkg.body.parent_copy ?? {}) as Record<string, unknown>;
+        const afterFa = typeof parentCopy.after === 'string' && parentCopy.after.trim() !== ''
+          ? parentCopy.after.trim()
+          : 'فردا یک مأموریت تازه در راه است؛ هر روز چند دقیقه کافی است.';
+        parentPost = {
+          sessions_week: weekRow?.n ?? 0,
+          attempts_today: todayRow?.n ?? 0,
+          tomorrow_fa: afterFa
+        };
+      } catch { parentPost = undefined; } // پس‌گفت هرگز ورود والد را نمی‌شکند
+    }
     return {
       state,
       missionRef: m.id,
@@ -1002,10 +1049,13 @@ export function createGamesService(deps: GamesDeps): GamesService {
       expiresAt: res.link.expires_at,
       validity: res.session ? (res.session.validity as PublicStateView['validity']) : undefined,
       adherenceConfirmed: adherence?.confirm2_at != null,
+      parentCopyBefore: typeof (res.pkg.body.parent_copy as Record<string, unknown> | undefined)?.before === 'string'
+        ? ((res.pkg.body.parent_copy as Record<string, unknown>).before as string) : null,
       ...(state === 'child_active' ? {
         playGame: m.game,
         playHint: playHintOf(m, res.session?.stage_id ?? stage?.id ?? null),
         playProtocol: snap,
+        playResume: resumeMeta,
         ...(stage && progress ? {
           playStage: {
             id: stage.id, index: stage.index, total: STAGE_TOTAL,
@@ -1014,7 +1064,8 @@ export function createGamesService(deps: GamesDeps): GamesService {
           }
         } : {})
       } : {}),
-      ...(stageResult ? { playStageResult: stageResult } : {})
+      ...(stageResult ? { playStageResult: stageResult } : {}),
+      ...(parentPost ? { parentPost } : {})
     };
   }
 
