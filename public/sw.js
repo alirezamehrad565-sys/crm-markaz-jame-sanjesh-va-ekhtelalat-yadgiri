@@ -2,15 +2,18 @@
    Service Worker (PWA)
    سیاست کش، هم‌راستا با _headers:
      • /assets/img/* و /assets/fonts/* و /assets/help/* → کش-اول (immutable؛ نام یا ?v= ثابت)
-     • /assets/dist/* (باندل نام‌دار boot/chunkها) → کش-اول (نام hashدار = immutable)
+     • /assets/dist/* (باندل نام‌دار boot/chunkها) → شبکه-اول با پشتیبان کش (۱.۲۵.۲۷)
+       چرا نه کش-اول؟ نام hashدار برای «محتوا» تغییرناپذیر است اما برای «موجودیت» نه —
+       بیلد هر انتشار dist را از نو می‌سازد و hashهای قبلی از سرور حذف می‌شوند؛ کش-اول
+       اینجا یعنی کلاینتِ عقب‌مانده به chunkهای 404 ارجاع می‌دهد (رگبار 404 پس از انتشار).
      • /assets/js/* و /assets/css/*     → شبکه-اول (منبع خام/dev؛ هماهنگی انتشار)
      • ناوبری‌ها                         → شبکه-اول با بازگشت به پوستهٔ کش‌شده
      • /api/*                           → هیچ‌گاه دخالت نمی‌شود (هرگز کش نمی‌شود)
    نسخه‌گذاری: با هر انتشار VERSION را bump کنید تا کش‌های کهنه در activate پاک شوند.
    ═══════════════════════════════════════════════════════════════ */
-const VERSION = 'v1.25.26';
+const VERSION = 'v1.25.27';
 const CACHE = `shell-${VERSION}`;
-const IMMUTABLE = ['/assets/img/', '/assets/fonts/', '/assets/help/', '/assets/dist/']; // dist نام‌دار
+const IMMUTABLE = ['/assets/img/', '/assets/fonts/', '/assets/help/'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -64,8 +67,9 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // ۳) JS/CSS → شبکه-اول (پس از انتشار همیشه هماهنگ؛ کش فقط پشتیبان آفلاین)
-  if (url.pathname.startsWith('/assets/js/') || url.pathname.startsWith('/assets/css/')) {
+  // ۳) JS/CSS و باندل نام‌دار dist → شبکه-اول (هم‌گامی تضمین‌شده با نسخهٔ زنده؛
+  //    کش فقط پشتیبان آفلاین — پس از انتشار هرگز chunk کهنه سرو نمی‌شود)
+  if (url.pathname.startsWith('/assets/js/') || url.pathname.startsWith('/assets/css/') || url.pathname.startsWith('/assets/dist/')) {
     e.respondWith(
       fetch(req)
         .then((res) => put(CACHE, req, res))
