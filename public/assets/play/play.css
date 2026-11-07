@@ -428,6 +428,70 @@
   .play-stage { min-height: 320px; }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   افقی‌خانواده (۱.۲۵.۳۲) — بازی‌ها افقی اجرا می‌شوند؛ دیگر هیچ بخش بزرگی از
+   صفحه خالی نمی‌ماند: کلاف پخش‌کننده کل ارتفاع صفحه را می‌گیرد، صحنه نفس می‌کشد،
+   محرک‌ها با کران حکیمانه بزرگ می‌شوند. قواعد §۹ دست‌نخورده: کف لمس، بدون فلاش.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* پوشش «گوشی را بچرخان» — فقط لمسیِ عمودی (JS کلاس مخفی/آشکار را می‌چرخاند)؛
+   ایستا و بی‌فلاش؛ پس‌زمینهٔ کرم آرام — هیچ سرزشتی ندارد */
+.play-rotate {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--p-cream);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+}
+
+.play-rotate__icon { width: 96px; height: 96px; color: var(--p-navy); }
+
+.play-rotate[hidden] { display: none; }
+
+/* عمودی — صحنه بلندتر و حاشیهٔ مرده کمتر (قبلاً ۷۸vh بود) */
+@media (orientation: portrait) {
+  .wrap:has(#play-root) { max-width: none; padding: 12px 10px 20px; }
+  .play-root { min-height: 88vh; }
+  .play-stage { min-height: 340px; }
+}
+
+/* افقی — کلاف تمام‌صفحه؛ صحنه قلب صفحه؛ حاشیهٔ مرده ممنوع */
+@media (orientation: landscape) {
+  .wrap:has(#play-root) { max-width: none; padding: 8px 12px 10px; }
+  .play-root {
+    max-width: 1060px;
+    margin: 0 auto;
+    width: 100%;
+    min-height: calc(100dvh - 18px);
+    gap: 8px;
+  }
+  .play-stage { min-height: 0; padding: 12px 16px; }
+  /* محرک عام — در افقی بزرگ‌تر ولی کران‌دار */
+  .play-stage--main .play-svg { width: min(calc(calc(var(--stim-scale) + 8) * 1vmin), 300px); }
+  /* گزینه‌ها — در افقی کنار هم؛ کف لمس بلندتر */
+  .play-options { max-width: min(94%, 760px); flex-direction: row; flex-wrap: wrap; }
+  .play-option { flex: 1 1 220px; min-height: 92px; }
+  .play-btn { min-height: 64px; }
+  /* خط عددی — جاده کشیده‌تر می‌شود */
+  .play-numline { max-width: min(94%, 780px); }
+  .play-numline__road { height: 92px; }
+  /* سبد و پیل و حباب — بیرون از میدان بازی می‌مانند */
+  .play-bubble { top: 8px; max-width: min(60vw, 520px); padding: 10px 16px; font-size: 15px; }
+  .play-pill { top: 6px; }
+  .play-basket { bottom: 8px; inset-inline-start: 10px; }
+}
+
+/* افقی و دسکتاپ هر دو: دکمهٔ تمام‌عرض از قانون بیرون می‌آید تا با گزینه‌ها هم‌سطر شود */
+@media (orientation: landscape) {
+  .play-scan__confirm { width: auto; align-self: center; }
+}
+
 /* هیچ انیمیشنی تندتر از ۳ هرتز وجود ندارد؛ با کاهش‌جنبش همه‌چیز ایستا می‌شود */
 @media (prefers-reduced-motion: reduce) {
   .play-progress__bar { transition: none; }
@@ -557,4 +621,509 @@
 @media (prefers-reduced-motion: reduce) {
   .play-scan__tile { transition: none; }
   .play-scan__tile:active { transform: none; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   css-fragment.css — «حقه‌باز رنگ‌ها» (نوع stroop) — ۱.۲۵.۳۲ — ۱۴۰۵/۰۸/۱۷
+   فقط کلاس‌های خودِ این بازی — الگوی .play-stage--scan در play.css.
+   پوستهٔ عدی: غار شبِ بنفش-نیلی + حاشیهٔ هشدار ایستا (بدون فلاش/پالس — §۹)؛
+   حس عدی فقط در صحنه است، گفتار روبه‌کودک آرام می‌ماند (§۲).
+   انیمیشن CSS ممنوع — جنبش فقط از fx.js؛ prefers-reduced-motion همه را خاموش می‌کند.
+   کف لمس گزینه‌ها ≥۶۴px (§۹)؛ هیچ دارایی بیرونی — همهٔ گرافیک SVG درون‌کد است.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── پوستهٔ عدی — غار حقه‌باز: شب بنفش-نیلی + حاشیهٔ هشدار ایستا ───
+   برنچ timedchoice این کلاس را روی صحنه می‌گذارد (همان الگوی play-stage--scan). */
+.play-stage--stroop {
+  background: linear-gradient(180deg, #171031 0%, #2A1B4A 62%, #38255E 100%);
+  box-shadow: inset 0 0 0 3px rgba(228, 170, 70, 0.55), inset 0 0 0 6px rgba(23, 16, 49, 0.9);
+}
+
+.play-stage--stroop .play-stroop__prompt { color: #F5F0E5; }
+
+.play-stroop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+/* نمونهٔ آموزش — کوچک‌تر و بی‌لمس */
+.play-stroop--sample { max-width: 300px; gap: 10px; }
+
+/* ─── قاعده + حقه‌باز ─── */
+
+.play-stroop__trickrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.play-stroop__prompt {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--p-navy);
+  text-align: start;
+  line-height: 1.7;
+  margin: 0;
+  max-width: 420px;
+}
+
+.play-stroop__trickster {
+  width: 54px;
+  height: auto;
+  flex: 0 0 auto;
+  display: block;
+}
+
+/* ─── واژهٔ محرک — جوهر از استایل درون‌خطی (color) می‌آید ───
+   درشت و پرکنندهٔ صحنه؛ سایهٔ آرام برای خوانایی روی شب بنفش (ایستا). */
+.play-stroop__word {
+  font-size: clamp(46px, 13vmin, 96px);
+  font-weight: 700;
+  line-height: 1.25;
+  padding: 4px 18px;
+  border-radius: 18px;
+  background: radial-gradient(circle at 50% 42%, rgba(245, 240, 229, 0.12), transparent 72%);
+  text-shadow: 0 3px 10px rgba(10, 6, 26, 0.45);
+}
+
+/* ─── گزینه‌ها — شبکهٔ لکه‌های رنگ ───
+   دکمه‌ها کلاس play-option را هم دارند (برنچ سشن روی همین کلاس کلیک می‌کند)؛
+   سلکتور دوتایی برای اولویتِ قطعی بر پایهٔ play.css. */
+.play-stroop__options {
+  display: grid;
+  grid-template-columns: repeat(var(--stroop-cols, 2), minmax(88px, 150px));
+  gap: 12px;
+  justify-content: center;
+  width: 100%;
+}
+
+.play-option.play-stroop__opt {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-height: 84px; /* هدف لمسی سخاوتمند ≥۶۴px — کاردرمانگر §۹ */
+  padding: 10px 8px 8px;
+  border: 3px solid rgba(245, 240, 229, 0.28);
+  border-radius: 16px;
+  background: rgba(245, 240, 229, 0.94);
+  color: var(--p-navy);
+  font-family: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.play-option.play-stroop__opt:active { transform: scale(0.96); }
+
+.play-stroop__blob {
+  width: min(12vmin, 52px);
+  height: auto;
+  display: block;
+}
+
+.play-stroop__optname {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--p-navy);
+}
+
+/* جواب درست نشان‌گذاری‌شده — فقط تمرین، پس از پاسخ؛ خط‌چین کهربایی آرام، ایستا */
+.play-option.play-stroop__opt.play-stroop__opt--truth {
+  border-color: var(--p-amber);
+  border-style: dashed;
+  background: #FDF6E7;
+  box-shadow: 0 0 0 3px rgba(228, 170, 70, 0.3);
+}
+
+/* جای لمس کودک — اگر برنچ timedchoice کلاس picked بگذارد، آرام و ایستا روشن می‌شود */
+.play-option.play-stroop__opt.play-stroop__opt--picked {
+  border-color: var(--p-teal);
+  background: #FDF6E7;
+}
+
+/* ─── نوار پنجرهٔ پاسخ — خط لبهٔ پایین ───
+   فقط عرض از JS inline تنظیم می‌شود (بدون keyframes — §۹)؛ الگوی play-scan__timer. */
+.play-stroop__timer {
+  width: min(72%, 320px);
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(245, 240, 229, 0.22);
+  overflow: hidden;
+}
+
+.play-stroop__timer > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--p-amber) 0%, #D96C6C 100%);
+}
+
+/* کارت واژهٔ آموزش — پیش‌نمایش ایستا */
+.play-stroop__card {
+  width: min(64vw, 230px);
+  height: auto;
+  display: block;
+}
+
+/* ─── تبلت افقی: صحنه پر می‌شود، حاشیهٔ مرده نمی‌ماند (§۲) ─── */
+@media (min-width: 700px) and (orientation: landscape) {
+  .play-stroop { gap: 16px; }
+  .play-stroop__word { font-size: clamp(56px, 15vmin, 118px); }
+  .play-stroop__options {
+    max-width: 560px;
+    grid-template-columns: repeat(var(--stroop-cols, 2), minmax(104px, 176px));
+  }
+  .play-stroop__blob { width: min(9vmin, 64px); }
+  .play-stroop__prompt { font-size: 17px; max-width: 520px; }
+  .play-stroop__trickster { width: 64px; }
+}
+
+/* کاهش‌جنبش: همهٔ انتقال‌ها و فشارهای لمسی این بازی ایستا می‌شوند (§۹) */
+@media (prefers-reduced-motion: reduce) {
+  .play-option.play-stroop__opt,
+  .play-stroop__blob,
+  .play-stroop__card,
+  .play-stroop__trickster { transition: none; animation: none; }
+  .play-option.play-stroop__opt:active { transform: none; }
+}
+
+
+/* ─── گلهٔ فریبکار (۱.۲۵.۳۲) — نوع flanker؛ حس عدی در صحنه، آرامش در گفتار (§۲) ───
+   پوستهٔ شب دشت خاکستری-نیلی + ماه کامل وکتوری + حاشیهٔ هشدار ایستا
+   (بدون فلاش و پالس — §۹). گرگ‌ها وکتور درون‌کدند (kinds/flanker.js)؛
+   چشم کهربایی روشن = گرگ واقعی، قرمزِ محو = قلابی — بدون ترسناک بودن.
+   هیچ انیمیشن CSS — جنبش فقط از fx.js کلاینت؛ translateY جابه‌جایی ایستای
+   مرحلهٔ «د» است، نه جنبش. ردیف گرگ‌ها و دکمه‌ها با direction:ltr می‌شینند
+   تا اندیس‌های stim با ترتیب دیداری چپ→راست یکی بماند (مطابق فلانکر کلاسیک). */
+
+.play-stage--flanker {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, #232B3A 0%, #3D4657 55%, #59637A 100%);
+  box-shadow: inset 0 0 0 3px rgba(196, 96, 95, 0.45), inset 0 0 0 6px rgba(21, 27, 38, 0.9);
+}
+
+.play-stage--flanker .play-flanker__prompt { color: #F5F0E5; }
+
+.play-flanker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+
+.play-flanker--sample { max-width: 380px; }
+
+.play-flanker__prompt {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--p-navy);
+  line-height: 1.7;
+  margin: 0;
+  padding: 0 8px;
+}
+
+/* آسمان شب — ماه کامل گوشهٔ صحنه؛ ایستا و بی‌اثر برای لمس */
+.play-flanker__sky {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.play-flanker__moon {
+  position: absolute;
+  top: -4px;
+  inset-inline-end: 5%;
+  width: clamp(48px, 9vmin, 84px);
+  height: auto;
+  opacity: 0.95;
+  pointer-events: none;
+}
+
+.play-flanker__row {
+  direction: ltr; /* گرگِ اندیس ۰ همیشه چپ‌ترین — هم‌تراز با stimSvg و فلانکر کلاسیک */
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(6px, 1.6vw, 16px);
+  padding: 10px 6px 0;
+}
+
+.play-flanker__slot {
+  flex: 0 1 clamp(56px, 14vw, 128px);
+  min-width: 52px;
+  transform: translateY(var(--jit, 0px)); /* ایستا — فقط مقدار inline از بانک (مرحلهٔ د) */
+}
+
+/* گرگ واقعی — هالهٔ کهربایی نرم و ایستا؛ بدون پالس (§۹) */
+.play-flanker__slot--real {
+  flex: 0 1 clamp(64px, 16vw, 148px);
+  filter: drop-shadow(0 0 14px rgba(255, 196, 107, 0.35));
+}
+
+.play-flanker__wolf { width: 100%; height: auto; display: block; }
+
+.play-flanker__pack { width: 100%; max-width: 380px; height: auto; display: block; }
+
+/* افق دشت — نوار ایستای تیره زیر پنجه‌ها */
+.play-flanker__ground {
+  width: 100%;
+  max-width: 520px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(21, 27, 38, 0), rgba(21, 27, 38, 0.55) 30%, rgba(21, 27, 38, 0.55) 70%, rgba(21, 27, 38, 0));
+}
+
+/* نوار پنجرهٔ پاسخ — فقط عرض از JS inline تنظیم می‌شود (بدون keyframes — §۹) */
+.play-flanker__timer {
+  width: min(72%, 320px);
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(21, 27, 38, 0.4);
+  overflow: hidden;
+}
+
+.play-flanker__timer > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--p-amber) 0%, #D96C6C 100%);
+}
+
+/* دو دکمهٔ درشت چپ/راست — کنار هم؛ «چپ» همیشه سمت چپ صفحه؛ کف لمس ≥۸۴px */
+.play-flanker__answers {
+  direction: ltr;
+  flex-direction: row;
+  max-width: 430px;
+}
+
+.play-flanker__btn {
+  flex: 1 1 0;
+  min-height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 22px;
+}
+
+.play-flanker__arrow { width: 30px; height: 30px; flex: 0 0 auto; }
+
+/* نشان حقیقت — فقط تمرین، پس از پاسخ؛ ایستا و آرام */
+.play-flanker__slot--truth {
+  filter: drop-shadow(0 0 18px rgba(255, 196, 107, 0.6));
+}
+
+.play-flanker__btn--truth {
+  border-color: var(--p-teal);
+  background: #EDF5F3;
+  box-shadow: 0 0 0 3px rgba(67, 140, 137, 0.3);
+}
+
+/* چیپ نمونهٔ آموزش — غیرلمسی؛ همان شکل دکمه‌ها */
+.play-flanker__demo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 64px;
+  min-width: 116px;
+  padding: 10px 18px;
+  border: 2px solid var(--p-line);
+  border-radius: 14px;
+  background: var(--p-white);
+  color: var(--p-navy);
+  font-size: 19px;
+  font-weight: 700;
+}
+
+/* تبلت افقی — محرک کل صحنه را پر می‌کند؛ حاشیهٔ مرده ممنوع (§۲) */
+@media (min-width: 700px) and (orientation: landscape) {
+  .play-flanker__slot { flex-basis: clamp(96px, 12vw, 150px); }
+  .play-flanker__slot--real { flex-basis: clamp(112px, 14vw, 170px); }
+  .play-flanker__answers { max-width: 520px; }
+  .play-flanker__btn { min-height: 96px; }
+  .play-flanker__prompt { font-size: 19px; }
+  .play-flanker__pack { max-width: 460px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-flanker__slot, .play-flanker__btn, .play-flanker__demo, .play-option { transition: none; animation: none; }
+  .play-flanker__btn:active { transform: none; }
+  .play-flanker__slot { transform: translateY(var(--jit, 0px)); }
+}
+
+
+/* ─── رد پای دزد (۱.۲۵.۳۲) — نوع trail؛ راه‌یابی نشانه‌ای سبک Trail Making ───
+   حس عدی در صحنه، آرامش در گفتار (§۲): پوستهٔ شب کوچه/پشت‌بام نیلی تیره +
+   حاشیهٔ هشدار ایستا (بدون فلاش/پالس — §۹) + ماه و دزد وکتوری گوشهٔ صحنه.
+   ردپای دزد با جوهر کهربایی روی بشقاب Cream — خوانا برای کوررنگ (نشان = شکل + عدد).
+   گره‌ها absolute با موقعیت درصدی از خود stim؛ کف لمس ≥۶۴px (اینجا ۷۶px).
+   هیچ keyframes وجود ندارد؛ جنبش فقط از fx.js و transition عرض نوار از JS. */
+
+.play-stage--trail {
+  background: linear-gradient(180deg, #0A1E33 0%, #123049 62%, #173B52 100%);
+  box-shadow: inset 0 0 0 3px rgba(228, 170, 70, 0.45), inset 0 0 0 6px rgba(7, 22, 37, 0.95);
+}
+
+.play-stage--trail .play-trail__prompt { color: #F5F0E5; }
+
+.play-trail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.play-trail--sample { max-width: 300px; }
+
+.play-trail__prompt {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--p-navy);
+  text-align: center;
+  line-height: 1.7;
+  margin: 0;
+  padding: 0 8px;
+}
+
+/* میدان ردپا — کل صحنه را پر می‌کند (width 100%)؛ حاشیهٔ مرده ممنوع (§۲) */
+.play-trail__field {
+  position: relative;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 280px;
+}
+
+/* پوستهٔ گوشهٔ صحنه — ماه و دزد فراری؛ بی‌اثر برای لمس، زیر گره‌ها */
+.play-trail__moon {
+  position: absolute;
+  top: 8px;
+  inset-inline-start: 10px;
+  width: 46px;
+  height: auto;
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.play-trail__thief {
+  position: absolute;
+  bottom: 6px;
+  inset-inline-end: 8px;
+  width: 72px;
+  height: auto;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+/* گرهٔ ردپا — دکمهٔ دایره‌ای ≥۶۴px؛ موقعیت absolute از خود stim */
+.play-trail__node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 76px;
+  height: 76px;
+  border: 3px solid rgba(21, 62, 80, 0.35);
+  border-radius: 50%;
+  background: rgba(245, 240, 229, 0.94);
+  padding: 4px 4px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  z-index: 2;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+button.play-trail__node { appearance: none; font-family: inherit; }
+.play-trail__node:active { transform: translate(-50%, -50%) scale(0.95); }
+
+.play-trail__foot { width: 26px; height: auto; display: block; }
+
+.play-trail__label {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--p-navy);
+}
+
+/* قدم درست — حلقهٔ کهربایی؛ جنبش پاپ از fx.popIn می‌آید (§۹) */
+.play-trail__node--step {
+  border-color: var(--p-amber);
+  background: #FDF6E7;
+  box-shadow: 0 0 0 3px rgba(228, 170, 70, 0.4), 0 4px 10px rgba(7, 22, 37, 0.35);
+}
+
+/* نشان حقیقت — ترتیب درست پس از پاسخ تمرین؛ خط‌چین کهربایی آرام، ایستا */
+.play-trail__node--truth {
+  border: 3px dashed var(--p-amber);
+  background: #FDF6E7;
+}
+
+.play-trail__order {
+  position: absolute;
+  top: -9px;
+  inset-inline-end: -6px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--p-teal);
+  color: var(--p-white);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(7, 22, 37, 0.3);
+}
+
+/* نوار رد (زمان پنجره) — خط لبهٔ پایین؛ فقط عرض از JS inline تنظیم می‌شود (بدون keyframes — §۹) */
+.play-trail__timer {
+  width: min(72%, 320px);
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(245, 240, 229, 0.22);
+  overflow: hidden;
+}
+
+.play-trail__timer > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--p-amber) 0%, #F5F0E5 100%);
+}
+
+/* نمونهٔ آموزش — گره‌ها div بی‌لمس؛ میدان کوچک */
+.play-trail--sample .play-trail__field { min-height: 170px; }
+.play-trail--sample .play-trail__node { width: 56px; height: 56px; cursor: default; }
+.play-trail--sample .play-trail__foot { width: 20px; }
+.play-trail--sample .play-trail__label { font-size: 13px; }
+.play-trail--sample .play-trail__thief { width: 52px; }
+
+/* تبلت افقی: میدان وسط می‌ماند و کل صحنه را پر می‌کند */
+@media (orientation: landscape) {
+  .play-trail { height: 100%; justify-content: space-between; }
+  .play-trail__field { min-height: 340px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-trail__node { transition: none; }
+  .play-trail__node:active { transform: translate(-50%, -50%); }
+  .play-trail__timer > span { transition: none !important; }
 }

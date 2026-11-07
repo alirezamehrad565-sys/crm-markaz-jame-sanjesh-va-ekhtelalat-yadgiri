@@ -71,13 +71,15 @@ export interface SessionSummary {
   dprime: null;
   /** خط عددی (۱.۲۵.۲۸) — میانگین خطای نرمال‌شدهٔ جای عدد (۰..۱۰۰)؛ بدون آیتم خط عددی = null */
   numline: { mean_error_pct: number | null };
-  /** حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — دقت موج‌ها + نرخ گرفتن هم‌نوع/جاانداختن جاسوس؛ بدون آیتم اسکن = null */
+  /** حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — دقت موج‌ها + نرخ گرفتن هم‌نوع/جاانداختن جاسوس؛ بدون آیتم اسکن = null
+   *  ۱.۲۵.۳۲: میانهٔ زمان نخستین لمس موج (سرعت ورود به شکار) هم افزوده شد */
   scan: {
     waves: number;
     correct_waves: number;
     correct_waves_pct: number | null;
     fa_pct: number | null;
     miss_pct: number | null;
+    median_first_tap_ms: number | null;
   } | null;
   /** ردیابی قاعدهٔ دامنهٔ صفر — گزارش شفاف می‌گوید کدام سنجه قابل محاسبه نبود و چرا */
   zero_denominator: string[];
@@ -195,11 +197,22 @@ function scanSummaryOf(t: ScoredAttempt[], zeroDenominator: string[]): SessionSu
   const miss = scanMissPctOf(waves);
   if (fa === null) zeroDenominator.push('scan: هم‌نوع=۰ — fa_pct تعریف‌نشده');
   if (miss === null) zeroDenominator.push('scan: جاسوس=۰ — miss_pct تعریف‌نشده');
+  // میانهٔ نخستین لمس موج (۱.۲۵.۳۲) — از RTهای معتبرِ موج‌های درست؛ بدون موج درست = null
+  const firstTaps = waves
+    .filter((s) => s.correct && s.rtValid && typeof s.rtMs === 'number' && (s.rtMs as number) >= 0)
+    .map((s) => s.rtMs as number)
+    .sort((a, b) => a - b);
+  const medianFirstTap = firstTaps.length === 0
+    ? null
+    : firstTaps.length % 2 === 1
+      ? firstTaps[Math.floor(firstTaps.length / 2)]
+      : Math.round((firstTaps[firstTaps.length / 2 - 1] + firstTaps[firstTaps.length / 2]) / 2);
   return {
     waves: waves.length,
     correct_waves: correct,
     correct_waves_pct: Math.round((correct / waves.length) * 10000) / 100,
     fa_pct: fa,
-    miss_pct: miss
+    miss_pct: miss,
+    median_first_tap_ms: medianFirstTap
   };
 }
