@@ -1,6 +1,7 @@
 // دادهٔ آزمونی محلی برای راستی‌آزمایی مرورگری «جادهٔ عددها» — بستهٔ خط عددی، تجویز، مأموریت، لینک
 // هم‌الگوی seed-m2-browser.mjs — هر اجرا کودک تازه می‌سازد تا سقف دوز مانع نشود
-const BASE = 'http://localhost:8787';
+// BASE با متغیر محیطی SEED_BASE قابل‌بازنویسی است (تولید: SEED_BASE=https://... seed...)
+const BASE = process.env.SEED_BASE || 'http://localhost:8787';
 
 function makeNationalId() {
   for (;;) {
