@@ -42,8 +42,9 @@ describe('آستانه‌های گذار خط عددی — وضعیت proposed �
     expect(stageOutcomeFor('numline', summaryGo).stars).toBe(3);
   });
 
-  it('بامپ نسخهٔ قواعد — قواعد خط عددی با نسخهٔ ۱.۱.۰ ثبت می‌شوند', () => {
-    expect(STAGE_RULES_VERSION).toBe('1.1.0');
+  it('بامپ نسخهٔ قواعد — قواعد اسکن با نسخهٔ ۱.۲.۰ ثبت می‌شوند؛ خط عددی از ۱.۱.۰ عیناً مانده', () => {
+    expect(STAGE_RULES_VERSION).toBe('1.2.0');
+    expect(NUMLINE_STAGE_THRESHOLDS).toEqual({ pass: 65, star2: 78, star3: 88 });
   });
 });
 

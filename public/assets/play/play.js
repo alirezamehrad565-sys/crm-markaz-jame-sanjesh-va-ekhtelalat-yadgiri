@@ -77,7 +77,11 @@ async function loadKind() {
       numlineValueFromTap: mod.numlineValueFromTap || null,
       numlinePlaceGuess: mod.numlinePlaceGuess || null,
       numlineRevealTruth: mod.numlineRevealTruth || null,
-      numlineGuessPoint: mod.numlineGuessPoint || null
+      numlineGuessPoint: mod.numlineGuessPoint || null,
+      // حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — توابع نمایش موج اسکن (ماژول‌های دیگر این‌ها ندارند)
+      scanMarkup: mod.scanMarkup || null,
+      scanRevealTruth: mod.scanRevealTruth || null,
+      scanCatchPoint: mod.scanCatchPoint || null
     };
   } catch (err) {
     return GENERIC;
