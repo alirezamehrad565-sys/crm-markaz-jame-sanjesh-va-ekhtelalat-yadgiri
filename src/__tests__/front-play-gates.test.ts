@@ -295,6 +295,9 @@ describe('گیت جادهٔ عددها — مسیر ماشین و نمایش خ�
     expect(stimAt).toBeGreaterThan(fixAt);
     // پاسخ موج فقط از تک‌نقطهٔ شبکه می‌رود — کلاینت خودش نمره نمی‌دهد
     expect(body).toContain('api.submit');
+    // رگرسیون گشت مرورگری ۱.۲۵.۳۰: پایان موج با «گزارش بده!» خواب یدکی را لغو می‌کند —
+    // وگرنه sleeper تک‌شکافهٔ ساعت یدکی، خواب موج بعدی را زودرس می‌برد (موج‌های خالی rt=null)
+    expect(body).toContain('sleeper.cancel');
     expect(body).not.toMatch(/\.animate\(/); // جنبش فقط از fx
     // پوستهٔ عدی: حاشیهٔ آژیر ایستا بدون فلاش — هدف لمسی خانه ≥۶۴px
     expect(playCss).toMatch(/\.play-stage--scan/);
