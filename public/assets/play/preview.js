@@ -54,19 +54,39 @@ const GENERIC = {
   stimSvg: () => '<div class="play-svg"></div>'
 };
 
+/* توابع نمایش عمومی — هر export با پسوند Markup/RevealTruth/ResponsePoint ثبت می‌شود
+   (۱.۲۵.۳۲ — همان قرارداد پخش‌کنندهٔ کودک؛ موج اسکن هم از همین مسیر پیش‌نمایش می‌گیرد) */
+function collectKindHooks(mod) {
+  const out = { markupFor: {}, revealFor: {}, pointFor: {} };
+  for (const name of Object.keys(mod)) {
+    const fn = mod[name];
+    if (typeof fn !== 'function') continue;
+    if (name.endsWith('Markup')) out.markupFor[name.slice(0, -'Markup'.length)] = fn;
+    else if (name.endsWith('RevealTruth')) out.revealFor[name.slice(0, -'RevealTruth'.length)] = fn;
+    else if (name.endsWith('ResponsePoint')) out.pointFor[name.slice(0, -'ResponsePoint'.length)] = fn;
+  }
+  return out;
+}
+
 async function loadKind() {
   if (!KIND) return GENERIC;
   try {
     const mod = await import('./kinds/' + KIND + '.js');
+    const hooks = collectKindHooks(mod);
     return {
       previewSteps: mod.previewSteps || GENERIC.previewSteps,
       stimSvg: mod.stimSvg || GENERIC.stimSvg,
+      ...hooks,
       // جادهٔ عددها (۱.۲۵.۲۸) — توابع نمایش خط عددی (ماژول‌های دیگر این‌ها ندارند)
       numlineMarkup: mod.numlineMarkup || null,
       numlineValueFromTap: mod.numlineValueFromTap || null,
       numlinePlaceGuess: mod.numlinePlaceGuess || null,
       numlineRevealTruth: mod.numlineRevealTruth || null,
-      numlineGuessPoint: mod.numlineGuessPoint || null
+      numlineGuessPoint: mod.numlineGuessPoint || null,
+      // حملهٔ جاسوس‌ها (۱.۲۵.۳۲ رفع: پیش‌نمایش اسکن هم از markup اصلی می‌گذرد)
+      scanMarkup: mod.scanMarkup || null,
+      scanRevealTruth: mod.scanRevealTruth || null,
+      scanCatchPoint: mod.scanCatchPoint || null
     };
   } catch (err) {
     return GENERIC;

@@ -18,6 +18,10 @@ export type MetricFormula =
   | 'omission_pct'
   | 'scan_fa'
   | 'scan_miss'
+  | 'congruent_acc'
+  | 'incongruent_acc'
+  | 'interference_ms'
+  | 'trail_prefix'
   | 'none';
 export type MetricUnit = 'percent' | 'count' | 'ms' | 'score';
 export type MetricSource = 'auto' | 'human';
@@ -47,8 +51,9 @@ export interface PackageProtocolRef {
 export interface MissionItem {
   id: string;
   phase: 'train' | 'probe';
-  /** scan (۱.۲۵.۳۰): موج جاسوس‌ها — شبکه‌ای از ربات‌ها؛ کودک همهٔ جاسوس‌ها را می‌گیرد */
-  type: 'choice' | 'numline' | 'touch_report' | 'scan';
+  /** scan (۱.۲۵.۳۰): موج جاسوس‌ها — شبکه‌ای از ربات‌ها؛ کودک همهٔ جاسوس‌ها را می‌گیرد
+   *  ۱.۲۵.۳۲: stroop (رنگ جوهر) · flanker (جهت گرگ وسط) · trail (ترتیب ردپاها) */
+  type: 'choice' | 'numline' | 'touch_report' | 'scan' | 'stroop' | 'flanker' | 'trail';
   prompt?: string;
   options?: { label: string }[];
   /** گزینهٔ درست (اندیس) برای choice یا جای درست روی خط عددی برای numline؛
@@ -262,6 +267,10 @@ export interface PlayHint {
   /** حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — قاعدهٔ موج از آیتم‌های آموزشی؛ امضای هدف عمومی است
    *  (کودک باید قاعده را ببیند)، رازِ «کدام خانه» فقط سرور می‌داند */
   scan?: { label: string; stim: Record<string, unknown> } | null;
+  /** سه بازی تازه (۱.۲۵.۳۲) — قاعدهٔ هر بازی از پرامپت آیتم آموزشی؛ هیچ کلیدی این‌جا نیست */
+  stroop?: { label: string; stim: Record<string, unknown> } | null;
+  flanker?: { label: string; stim: Record<string, unknown> } | null;
+  trail?: { label: string; stim: Record<string, unknown> } | null;
 }
 
 /** فرادادهٔ مرحلهٔ فعال برای کارت کودک (۱.۲۵.۲۲) — فقط تمرین؛ کلید پاسخ/آستانه‌ها هرگز این‌جا نیست */

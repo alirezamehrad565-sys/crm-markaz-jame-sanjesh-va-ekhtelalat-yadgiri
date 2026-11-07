@@ -17,7 +17,11 @@ export const ENGINE_ONLY_FORMULAS: readonly string[] = [
   'commission_pct',
   'omission_pct',
   'scan_fa',
-  'scan_miss'
+  'scan_miss',
+  'congruent_acc',
+  'incongruent_acc',
+  'interference_ms',
+  'trail_prefix'
 ];
 
 /** سنجه‌های درصدی موتورمحور — با listMetrics به رجیستری اضافه می‌شوند */
@@ -28,7 +32,15 @@ export const ENGINE_METRICS: readonly RegistryMetric[] = [
   { id: 'omission_pct_gonogo', title_fa: 'درصد از دست‌دادن هدف', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'omission_pct' },
   // حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — دقت موج‌ها از فرمول 'accuracy' در DB می‌آید (accuracy_scan)
   { id: 'scan_fa_pct', title_fa: 'درصد گرفتن هم‌نوع در موج', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'scan_fa' },
-  { id: 'scan_miss_pct', title_fa: 'درصد جاانداختن جاسوس', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'scan_miss' }
+  { id: 'scan_miss_pct', title_fa: 'درصد جاانداختن جاسوس', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'scan_miss' },
+  // سه بازی تازه (۱.۲۵.۳۲) — دقت شرطی و هزینهٔ تداخل استروپ/فلانکر + درصد پیش‌ماند رد
+  { id: 'stroop_congruent_acc_pct', title_fa: 'دقت هم‌خوان استروپ (واژه و جوهر یکی)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'congruent_acc' },
+  { id: 'stroop_incongruent_acc_pct', title_fa: 'دقت ناهم‌خوان استروپ (حقهٔ جوهر)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'incongruent_acc' },
+  { id: 'stroop_interference_ms', title_fa: 'هزینهٔ تداخل استروپ (میانهٔ ناهم‌خوان − میانهٔ هم‌خوان)', unit: 'ms', higher_is_better: false, source: 'auto', formula: 'interference_ms' },
+  { id: 'flanker_congruent_acc_pct', title_fa: 'دقت گلهٔ هم‌سو (بدون فریب)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'congruent_acc' },
+  { id: 'flanker_incongruent_acc_pct', title_fa: 'دقت گلهٔ فریبکار (فلانکر مخالف)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'incongruent_acc' },
+  { id: 'flanker_interference_ms', title_fa: 'هزینهٔ تداخل فلانکر (میانهٔ ناهم‌خوان − میانهٔ هم‌خوان)', unit: 'ms', higher_is_better: false, source: 'auto', formula: 'interference_ms' },
+  { id: 'trail_prefix_pct', title_fa: 'درصد پیش‌ماند صحیح رد ردپاها', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'trail_prefix' }
 ] as const;
 
 /** ادغام سنجه‌های موتور با رجیستری DB — سنجهٔ موتور همیشه حاضر است؛ تکرار ممکن نیست (ids متمایز) */
