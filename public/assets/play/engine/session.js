@@ -215,10 +215,11 @@ export async function runSession(ctx) {
        پاسخ {chosen} سرور نمره می‌دهد (آستانهٔ authored)؛ شواهد همان قرارداد فاز ۴؛
        بازخورد دو-سطحی + نشان حقیقت فقط در تمرین — ارزیابی بی‌بازخورد/بی‌ستاره/بی‌استریک */
     if (item.type === 'numline' && Array.isArray(item.range) && typeof kind.numlineMarkup === 'function') {
-      machine.to(STATES.STIMULUS, { item: item.id, numline: true });
+      machine.to(STATES.FIXATION, { item: item.id, numline: true }); // مسیر اجباری ماشین: READY/PRACTICE → FIXATION → STIMULUS
       stage.classList.remove('play-stage--quiet');
       stage.innerHTML = kind.numlineMarkup(item);
       fx.popIn(stage.querySelector('.play-numline__chip'), 240, false);
+      machine.to(STATES.STIMULUS, { item: item.id, numline: true });
       const shownAt = performance.now(); // RT از همین لحظه — نه از شروع حلقه
       const pick = await new Promise((resolve) => {
         const road = stage.querySelector('.play-numline__road');
@@ -315,12 +316,13 @@ export async function runSession(ctx) {
        همان کلاس‌های CSS پخش‌کننده؛ پاسخ از کلید گزینه، RT از نمایش هر آیتم
        (۱.۲۵.۲۸ رفع: ساعت قبلاً یک‌بار بیرون حلقه گرفته می‌شد و RT آیتم‌های بعدی تورم داشت) */
     if (item.type === 'choice' && Array.isArray(item.options) && item.options.length > 0) {
-      machine.to(STATES.STIMULUS, { item: item.id, choice: true });
+      machine.to(STATES.FIXATION, { item: item.id, choice: true }); // مسیر اجباری ماشین (رفع باگ خام)
       stage.classList.remove('play-stage--quiet');
       stage.innerHTML = (item.prompt ? '<p class="play-line">' + esc(item.prompt) + '</p>' : '') +
         '<div class="play-options">' +
         item.options.map((o, i) => '<button type="button" class="play-option" data-option="' + i + '">' + esc(o.label) + '</button>').join('') +
         '</div>';
+      machine.to(STATES.STIMULUS, { item: item.id, choice: true });
       const pickStart = performance.now(); // RT از لحظهٔ نمایش همین گزینه‌ها
       const pickAt = await new Promise((resolve) => {
         const buttons = stage.querySelectorAll('.play-option');
