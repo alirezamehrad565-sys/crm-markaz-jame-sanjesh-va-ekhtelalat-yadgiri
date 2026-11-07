@@ -52,43 +52,50 @@ function badge(label, cls) {
   return el('span', { class: `badge ${cls ?? 'badge--neutral'}` }, label);
 }
 
-// ─── جستجوی کودک (الگوی shared — یک ورودی، نتیجهٔ زنده) ───
-export function childSearchField({ onPick, placeholder = 'نام یا کد ملی کودک…', ariaLabel = 'جستجوی کودک' }) {
+// ─── جستجوی دانش‌آموز (الگوی shared — یک ورودی، نتیجهٔ زندهٔ فیلترشده) ───
+// ۱.۲۵.۲۶ — رفع: سرور پارامتر جستجو را «query» می‌خواند نه «q» — پیش‌تر هر ورودی
+// کل دانش‌آموزان را بی‌فیلتر برمی‌گرداند؛ ردیف‌ها هم فقط نام دارند (بدون کد شناسه).
+// حالت inline برای مودال‌ها — چون .modal__body برش overflow دارد، لایهٔ شناور داخل مودال
+// بریده می‌شد؛ در حالت inline نتیجه‌ها در جریان سند زیر ورودی می‌نشینند.
+export function childSearchField({ onPick, placeholder = 'نام دانش‌آموز یا کد ملی…', ariaLabel = 'جستجوی دانش‌آموز', inline = false }) {
   const input = el('input', { class: 'input', type: 'search', placeholder, 'aria-label': ariaLabel, autocomplete: 'off' });
   const results = el('div', {
-    style: { position: 'absolute', zIndex: '30', top: '100%', right: '0', left: '0', display: 'none' },
+    style: inline
+      ? { display: 'none', marginTop: '6px', overflow: 'hidden', borderRadius: '12px' }
+      : { position: 'absolute', zIndex: '30', top: '100%', right: '0', left: '0', display: 'none', overflow: 'hidden', borderRadius: '12px' },
     class: 'card'
   });
-  const wrap = el('div', { style: { position: 'relative', minWidth: '220px', flex: '1', maxWidth: '340px' } }, input, results);
+  const wrap = inline
+    ? el('div', { style: { width: '100%' } }, input, results)
+    : el('div', { style: { position: 'relative', minWidth: '220px', flex: '1', maxWidth: '340px' } }, input, results);
   let timer = null;
   let seq = 0;
   async function search(q) {
     const ticket = ++seq;
     results.style.display = 'block';
-    results.replaceChildren(el('p', { class: 'cell-sub', style: { padding: '8px 10px' } }, 'در حال جستجو…'));
+    results.replaceChildren(el('p', { class: 'cell-sub', style: { padding: '10px 12px' } }, 'در حال جستجو…'));
     try {
-      const res = await api.get(`/api/students?q=${encodeURIComponent(q)}&page=1&pageSize=8`);
+      const res = await api.get(`/api/students?query=${encodeURIComponent(q)}&page=1&pageSize=8`);
       if (ticket !== seq) return; // پاسخ کهنه — کاربر جلوتر رفته
       const items = res.data?.items ?? res.data ?? [];
       if (!items.length) {
-        results.replaceChildren(el('p', { class: 'cell-sub', style: { padding: '8px 10px' } }, 'چیزی پیدا نشد — با بخشی از نام یا کد ملی جستجو کنید.'));
+        results.replaceChildren(el('p', { class: 'cell-sub', style: { padding: '10px 12px' } }, 'دانش‌آموزی با این نام یا کد ملی پیدا نشد.'));
         return;
       }
       results.replaceChildren(...items.map((s) => {
         const name = [s.firstName, s.lastName].filter(Boolean).join(' ') || '—';
         return el('button', {
-          class: 'btn btn--soft btn--sm',
+          class: 'search-row',
           type: 'button',
-          style: { justifyContent: 'flex-start', width: '100%', border: 'none', boxShadow: 'none' },
           onclick: () => {
             results.style.display = 'none';
             input.value = name;
             onPick(s);
           }
-        }, name, el('span', { class: 'cell-sub' }, s.code ?? s.id?.slice(0, 8) ?? ''));
+        }, name);
       }));
     } catch (err) {
-      if (ticket === seq) results.replaceChildren(el('p', { class: 'cell-sub', style: { padding: '8px 10px' } }, err.message ?? 'خطا در جستجو'));
+      if (ticket === seq) results.replaceChildren(el('p', { class: 'cell-sub', style: { padding: '10px 12px' } }, err.message ?? 'خطا در جستجو'));
     }
   }
   input.addEventListener('input', () => {
@@ -124,12 +131,13 @@ function doseSummary(dose) {
 function openChildPickModal({ onPicked }) {
   let picked = null;
   let picker;
-  const hint = el('p', { class: 'hint-text' }, 'کودک موردنظر را جستجو و انتخاب کنید.');
+  const hint = el('p', { class: 'hint-text' }, 'دانش‌آموز موردنظر را جستجو و انتخاب کنید.');
   const body = el('div', {}, hint, (picker = childSearchField({
-    onPick: (s) => { picked = s; }
+    onPick: (s) => { picked = s; },
+    inline: true
   })).root);
   openModal({
-    title: 'تجویز تازه — انتخاب کودک',
+    title: 'ارسال به دانش‌آموز — انتخاب دانش‌آموز',
     body,
     actions: [
       (close) => el('button', { class: 'btn btn--ghost', type: 'button', onclick: close }, 'انصراف'),
@@ -172,15 +180,15 @@ export function prescribeModal({ childId, childName, onCreated }) {
     const goalOptionsOf = (pkgId) => goalsOf(pkgId).map((g) => ({ value: g.id, label: g.title_fa || g.id }));
 
     formModal({
-      title: `تجویز تازه — ${resolved.childName ?? 'کودک'}`,
+      title: `ارسال به دانش‌آموز — ${resolved.childName ?? ''}`,
       wide: true,
-      submitLabel: 'ثبت تجویز',
+      submitLabel: 'ثبت ارسال',
       fields: [
-        { type: 'heading', label: `کودک: ${resolved.childName ?? resolved.childId}` },
+        { type: 'heading', label: `دانش‌آموز: ${resolved.childName ?? resolved.childId}` },
         {
           name: 'package', label: 'بستهٔ بازی (فقط منتشرشده)', type: 'select', required: true,
           options: pkgOptions, value: pkgOptions[0]?.value,
-          hint: 'هر نسخهٔ بسته یک مدخل جداگانه است — تجویز به همان نسخه قفل می‌شود.',
+          hint: 'هر نسخهٔ بسته یک مدخل جداگانه است — ارسال به همان نسخه قفل می‌شود.',
           onChange: (val, inputs) => {
             const pkgId = String(val).split('@')[0];
             const goalSel = inputs?.goal;
@@ -219,7 +227,7 @@ export function prescribeModal({ childId, childName, onCreated }) {
           dose_override: Object.keys(override).length ? override : null,
           suggested_by: 'therapist'
         });
-        toast('تجویز ثبت شد — اکنون مأموریت اول را زمان‌بندی کنید.', 'success');
+        toast('ارسال ثبت شد — اکنون مأموریت اول را زمان‌بندی کنید.', 'success');
         const rx = res.data;
         if (onCreated) onCreated(rx);
         missionsModal(rx, { childName: resolved.childName ?? '', onChanged: onCreated ? () => onCreated(rx) : undefined });
@@ -278,7 +286,7 @@ function renderMissionsBody(rx, missions, { childName, onChanged }) {
           class: 'btn btn--primary btn--sm', type: 'button',
           onclick: (e) => lockBtn(e.currentTarget, () => openMissionForm(rx, onChanged))
         }, icon('plus', 14), 'مأموریت تازه')
-      : badge('تجویز فعال نیست — مأموریت تازه نمی‌گیرد', 'badge--warning')
+      : badge('ارسال فعال نیست — مأموریت تازه نمی‌گیرد', 'badge--warning')
   );
   const table = dataTable({
     columns: [
@@ -337,7 +345,7 @@ function openMissionForm(rx, onChanged) {
       return;
     }
     const missions = pkg?.body?.missions ?? [];
-    if (!missions.length) { toast('بستهٔ این تجویز مأموریتی ندارد.', 'warning'); return; }
+    if (!missions.length) { toast('بستهٔ این ارسال مأموریتی ندارد.', 'warning'); return; }
     formModal({
       title: 'مأموریت تازه',
       submitLabel: 'زمان‌بندی',
@@ -454,28 +462,28 @@ export function renderRxPanel(container, { childId = null, childName = '', embed
   statusSel.addEventListener('change', () => { state.status = statusSel.value; refresh(); });
 
   prescribeBtn = el('button', {
-    class: 'btn btn--primary btn--sm', type: 'button',
+    class: 'btn btn--primary', type: 'button',
     onclick: (e) => lockBtn(e.currentTarget, () => prescribeModal({
       childId: state.childId,
       childName: state.childName,
       onCreated: () => refresh()
     }))
-  }, icon('plus', 14), 'تجویز تازه');
+  }, icon('plus', 16), 'ارسال به دانش‌آموز');
 
   const childArea = embedded
-    ? el('span', { class: 'badge badge--accent' }, `کودک: ${childName || '—'}`)
+    ? el('span', { class: 'badge badge--accent' }, `دانش‌آموز: ${childName || '—'}`)
     : (() => {
         const picker = childSearchField({
           onPick: (s) => {
             state.childId = s.id;
             state.childName = [s.firstName, s.lastName].filter(Boolean).join(' ');
           },
-          placeholder: 'فیلتر کودک — نام یا کد ملی…',
-          ariaLabel: 'فیلتر کودک'
+          placeholder: 'فیلتر دانش‌آموز — نام یا کد ملی…',
+          ariaLabel: 'فیلتر دانش‌آموز'
         });
         picker.input.addEventListener('change', () => { if (!picker.input.value.trim()) { state.childId = null; state.childName = ''; refresh(); } });
         const clearBtn = el('button', {
-          class: 'btn btn--ghost btn--sm', type: 'button', title: 'همهٔ کودکان', 'aria-label': 'حذف فیلتر کودک',
+          class: 'btn btn--ghost', type: 'button', title: 'همهٔ دانش‌آموزان', 'aria-label': 'حذف فیلتر دانش‌آموز',
           onclick: () => {
             state.childId = null; state.childName = '';
             picker.input.value = '';
@@ -566,7 +574,7 @@ function renderFollowupsCard(rows) {
         el('b', {}, 'نیازمند پیگیری'),
         badge(fa(rows.length), 'badge--warning')),
       el('p', { class: 'hint-text', style: { marginBottom: '8px' } },
-        'تجویزهای فعال که به توجه امروز نیاز دارند — فقط توصیف رفتار داده؛ تفسیر با درمانگر است.'),
+        'ارسال‌های فعال که به توجه امروز نیاز دارند — فقط توصیف رفتار داده؛ تفسیر با درمانگر است.'),
       ...items
     )
   );
@@ -575,7 +583,7 @@ function renderFollowupsCard(rows) {
 function renderRxTable(rows, { onOpenMissions, onChanged }) {
   return dataTable({
     columns: [
-      { label: 'کودک', render: (r) => el('b', {}, r.childName ?? '—') },
+      { label: 'دانش‌آموز', render: (r) => el('b', {}, r.childName ?? '—') },
       { label: 'بسته', render: (r) => el('span', {}, `${r.packageTitleFa ?? r.packageId} `, el('span', { class: 'cell-sub' }, `نسخهٔ ${fa(r.packageVersion)}`)) },
       { label: 'هدف', render: (r) => r.goalTitleFa ?? r.goalId ?? '—' },
       { label: 'دوز', render: (r) => el('span', { class: 'cell-sub' }, doseSummary(r.doseOverride)) },
@@ -594,7 +602,7 @@ function renderRxTable(rows, { onOpenMissions, onChanged }) {
               ? { label: r.status === 'active' ? 'توقف موقت' : 'ادامه', icon: r.status === 'active' ? 'pause' : 'check', onclick: () => changeStatus(r, r.status === 'active' ? 'pause' : 'resume', onChanged) }
               : null,
             r.status === 'active' || r.status === 'paused'
-              ? { label: 'اتمام تجویز', icon: 'check', onclick: () => changeStatus(r, 'complete', onChanged) }
+              ? { label: 'اتمام ارسال', icon: 'check', onclick: () => changeStatus(r, 'complete', onChanged) }
               : null,
             r.status === 'active'
               ? { sep: true }
@@ -609,8 +617,8 @@ function renderRxTable(rows, { onOpenMissions, onChanged }) {
     rows,
     empty: {
       iconName: 'gamepad',
-      title: 'هنوز تجویزی ثبت نشده',
-      hint: 'با «تجویز تازه» یک بستهٔ منتشرشده را به یک کودک نسبت بدهید؛ سپس مأموریت و لینک کودک ساخته می‌شود.'
+      title: 'هنوز ارسالی ثبت نشده',
+      hint: 'با «ارسال به دانش‌آموز» یک بستهٔ منتشرشده را به یک دانش‌آموز نسبت بدهید؛ سپس مأموریت و لینک ساخته می‌شود.'
     }
   });
 }
@@ -618,15 +626,15 @@ function renderRxTable(rows, { onOpenMissions, onChanged }) {
 async function changeStatus(rx, action, onChanged) {
   const labels = { pause: 'توقف موقت', resume: 'ادامه', stop: 'توقف قطعی', complete: 'اتمام' };
   const ok = await confirmModal({
-    title: `${labels[action]} تجویز`,
-    message: `وضعیت تجویز «${rx.childName ?? rx.childId}» به «${labels[action]}» تغییر می‌کند.`,
+    title: `${labels[action]} ارسال`,
+    message: `وضعیت ارسال «${rx.childName ?? rx.childId}» به «${labels[action]}» تغییر می‌کند.`,
     confirmLabel: labels[action],
     danger: action === 'stop'
   });
   if (!ok) return;
   try {
     await api.post(`/api/games/prescriptions/${encodeURIComponent(rx.id)}/status`, { action });
-    toast(`تجویز ${labels[action]} شد.`, 'success');
+    toast(`ارسال ${labels[action]} شد.`, 'success');
     onChanged?.();
   } catch (err) { toastError(err); }
 }
@@ -732,7 +740,7 @@ export function renderGamesReportPanel(container, { childId = null, childName = 
     panel.replaceChildren(
       el('div', { class: 'card' },
         el('div', { class: 'card-body' },
-          el('p', { class: 'hint-text', style: { marginBottom: '8px' } }, 'کودک را انتخاب کنید تا گزارش جلسه‌های بازی او نمایش داده شود.'),
+          el('p', { class: 'hint-text', style: { marginBottom: '8px' } }, 'دانش‌آموز را انتخاب کنید تا گزارش جلسه‌های بازی او نمایش داده شود.'),
           (picker = childSearchField({ onPick: (s) => {
             const name = [s.firstName, s.lastName].filter(Boolean).join(' ');
             renderGamesReportPanel(container, { childId: s.id, childName: name });

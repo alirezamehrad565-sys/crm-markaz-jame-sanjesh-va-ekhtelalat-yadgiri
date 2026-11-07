@@ -96,6 +96,26 @@ html[dir='ltr'] .ico--flip svg { transform: none; }
 .btn--sm { padding: 5px var(--sp-3); font-size: var(--fs-sm); } /* قرصی مثل btn اصلی */
 /* سلکت هم‌اندازهٔ btn--sm (مثل ردیف «مسئول پرونده» در پروفایل دانش‌آموز) */
 .select--sm { padding-block: 5px; font-size: var(--fs-sm); border-radius: var(--radius-sm); }
+
+/* ۱.۲۵.۲۶ — ردیف نتایج جستجوی دانش‌آموز (دراپ‌داون): اندازهٔ درست لمسی، جای درست متن،
+   فقط نام دانش‌آموز — یک زبان با فهرست‌های منوی ردیفی */
+button.search-row {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-block-end: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-1);
+  font: inherit;
+  font-size: var(--fs-md);
+  text-align: start;
+  cursor: pointer;
+  min-height: 42px; /* کف لمسی */
+}
+button.search-row:last-child { border-block-end: none; }
+button.search-row:hover { background: var(--primary-soft); }
+button.search-row:active { background: color-mix(in srgb, var(--primary-soft) 70%, var(--primary) 12%); }
 .btn--icon {
   width: 40px;
   height: 40px;
