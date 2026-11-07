@@ -17,6 +17,8 @@ import {
   stimLabelOf,
   stripAnswerKeys,
   numlineFeedbackOf,
+  scanMissedCsv,
+  SCAN_FB_ALL,
   toItemView
 } from './pure';
 import { protocolForAge, protocolSnapshotOf, bandForAge } from './protocol';
@@ -27,6 +29,7 @@ import {
   currentStageOf,
   gameKindOf,
   numlineItemInStage,
+  scanItemInStage,
   stageById,
   stageByIndex,
   stageOutcomeFor,
@@ -852,6 +855,21 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const train = (mission.items ?? []).filter((it) => it.phase === 'train' && it.type === 'touch_report');
     const go = train.find((it) => it.correct_touch === true);
     const nogo = train.find((it) => it.correct_touch === false);
+    // حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — مأموریت اسکن: قاعدهٔ موج از نخستین آیتم آموزشی؛
+    // امضای هدف عمومی است (کودک باید قاعده را ببیند)؛ «کدام خانه» هرگز این‌جا نیست
+    const scanTrain = (mission.items ?? []).find((it) => it.phase === 'train' && it.type === 'scan');
+    if (scanTrain && !go && !nogo) {
+      const stim = (scanTrain.stim ?? {}) as Record<string, unknown>;
+      const sig = typeof stim.signature === 'number' && Number.isInteger(stim.signature) && stim.signature > 0 ? stim.signature : 2;
+      const label = typeof scanTrain.prompt === 'string' && scanTrain.prompt.trim() !== ''
+        ? scanTrain.prompt
+        : 'جاسوس‌ها ربات‌هایی با ' + sig + ' آنتن‌اند';
+      return {
+        go: { label: 'جاسوس — ربات ' + sig + ' آنتن', stim: { signature: sig } },
+        nogo: null,
+        scan: { label, stim: { signature: sig } }
+      };
+    }
     if (!go && !nogo) return null;
     // درون‌مایهٔ دیداری مرحله (۱.۲۵.۲۳) — قدم آموزش دقیقاً همان چیزی را نشان می‌دهد
     // که کودک در اجرای اصلی می‌بیند؛ کلید پاسخ در برچسب نیست (فقط توصیف ظاهری)
@@ -1112,11 +1130,13 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const kind = gameKindOf(mission.game);
     const attempts = await db.query<AttemptRow>(`SELECT * FROM game_attempts WHERE session_id = ?`, [session.id]);
     const doneIds = new Set(attempts.map((a) => a.item_id));
-    // جادهٔ مرحلهٔ خط عددی (۱.۲۵.۲۸) — انتخاب از بانک authored با سقف گسترهٔ مرحله؛
+    // موج مرحلهٔ خط عددی/اسکن — انتخاب از بانک authored با سقف مرحله؛
     // گونوگو و بی‌مرحله = همهٔ آیتم‌ها؛ نمره‌دهی همیشه روی آیتم authored می‌ماند
-    const nlStageId = kind === 'numline' ? session.stage_id : null;
-    const inStage = (it: MissionItem): boolean =>
-      kind !== 'numline' || numlineItemInStage(it, nlStageId);
+    const inStage = (it: MissionItem): boolean => {
+      if (kind === 'numline') return numlineItemInStage(it, session.stage_id);
+      if (kind === 'scan') return scanItemInStage(it, session.stage_id);
+      return true;
+    };
     const stageItems = (mission.items ?? []).filter(inStage);
     const total = stageItems.length;
     const unansweredOf = (pred: (it: MissionItem) => boolean): MissionItem | undefined =>
@@ -1217,18 +1237,21 @@ export function createGamesService(deps: GamesDeps): GamesService {
       ? (response as Record<string, unknown>).touched === true
       : false;
     // خط عددی (۱.۲۵.۲۸): دو سطح موفقیت — دقیق / نزدیک؛ نادرست = متن پیش‌فرض §۲ بی‌سرزنش
+    // حملهٔ جاسوس‌ها (۱.۲۵.۳۰): موج کامل = تحسین دقیق؛ ناقص = متن آرام + CSV جاسوس‌های جامانده
     const message = item.type === 'touch_report' && correct && !touched
       ? FEEDBACK_WITHHOLD
       : item.type === 'numline' && correct
         ? (numlineFeedbackOf(item, true, response) ?? FEEDBACK_OK)
-        : correct
-          ? FEEDBACK_OK
-          : FEEDBACK_RETRY;
+        : item.type === 'scan' && correct
+          ? SCAN_FB_ALL
+          : correct
+            ? FEEDBACK_OK
+            : FEEDBACK_RETRY;
     return {
       recorded: true,
       phase: 'train',
       correct,
-      answer_display: correct ? null : answerDisplayOf(item),
+      answer_display: correct ? null : (item.type === 'scan' ? scanMissedCsv(item, response) : answerDisplayOf(item)),
       message,
       replay_audio: !correct
     };
@@ -1248,11 +1271,13 @@ export function createGamesService(deps: GamesDeps): GamesService {
     // اعتبار جلسه: شکاف بیکاری + نسبت تکمیل (§۶/§۸) — نسبت تکمیل خط عددی به «جادهٔ مرحلهٔ»
     // همان جلسه سنجیده می‌شود نه کل بانک (۱.۲۵.۲۸)؛ گونوگو/بی‌مرحله = کل مأموریت
     const finishKind = gameKindOf(mission.game);
-    const finishStage = finishKind === 'numline'
-      ? stageById('7-12', session.stage_id, 'numline')
+    const finishStage = finishKind === 'numline' || finishKind === 'scan'
+      ? stageById('7-12', session.stage_id, finishKind)
       : null;
     const finishTotal = finishStage
-      ? mission.items.filter((it) => numlineItemInStage(it, finishStage.id)).length
+      ? mission.items.filter((it) => finishKind === 'numline'
+          ? numlineItemInStage(it, finishStage.id)
+          : scanItemInStage(it, finishStage.id)).length
       : mission.items.length;
     const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso]
       .filter((v): v is string => typeof v === 'string')

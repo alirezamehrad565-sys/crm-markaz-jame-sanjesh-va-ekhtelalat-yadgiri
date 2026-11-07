@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.29";
+var APP_VERSION = "1.25.30";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23396,8 +23396,10 @@ var DEFAULT_RT_FLOOR_MS = {
   // گو/نوگو — زیر ۱۵۰ حدس است
   numline: 0,
   // خط عددی کف ندارد
-  choice: 200
+  choice: 200,
   // فلش‌کارت/انتخاب — لمس تصادفی حذف می‌شود
+  scan: 150
+  // حملهٔ جاسوس‌ها — کف نخستین لمس موج؛ زیر آن حدس است
 };
 var IDLE_PARTIAL_MS = 5 * 60 * 1e3;
 var MIN_COMPLETION_RATIO = 0.6;
@@ -23450,6 +23452,10 @@ function scoreAttempt(item, mission, response, rtMs) {
   let commission = false;
   let omission = false;
   let isGo;
+  let scanFalse;
+  let scanMissed;
+  let scanDistractors;
+  let scanSpies;
   if (item.type === "choice") {
     correct = typeof res.option === "number" && res.option === item.correct;
   } else if (item.type === "numline") {
@@ -23466,6 +23472,20 @@ function scoreAttempt(item, mission, response, rtMs) {
     commission = !want && touched;
     omission = want && !touched;
     isGo = want;
+  } else if (item.type === "scan") {
+    const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0) : [];
+    const rawHits = Array.isArray(res.hits) ? res.hits : [];
+    const hits = [...new Set(rawHits.filter((n) => Number.isInteger(n) && n >= 0))];
+    const keySet = new Set(key);
+    const hitSet = new Set(hits);
+    correct = key.length === hits.length && hits.every((h) => keySet.has(h));
+    const falseHits = hits.filter((h) => !keySet.has(h)).length;
+    const missed = key.filter((k) => !hitSet.has(k)).length;
+    const tiles = tilesCountOf(item);
+    scanFalse = falseHits;
+    scanMissed = missed;
+    scanDistractors = Math.max(0, tiles - key.length);
+    scanSpies = key.length;
   }
   return {
     itemId: item.id,
@@ -23476,10 +23496,18 @@ function scoreAttempt(item, mission, response, rtMs) {
     ...errorPct !== void 0 ? { numlineErrorPct: errorPct } : {},
     commission,
     omission,
-    ...isGo !== void 0 ? { isGo } : {}
+    ...isGo !== void 0 ? { isGo } : {},
+    ...scanFalse !== void 0 ? { scanFalse, scanMissed, scanDistractors, scanSpies } : {}
   };
 }
 __name(scoreAttempt, "scoreAttempt");
+function tilesCountOf(item) {
+  const s = item.stim ?? {};
+  const cols = typeof s.cols === "number" && Number.isInteger(s.cols) && s.cols > 0 ? s.cols : 0;
+  const rows = typeof s.rows === "number" && Number.isInteger(s.rows) && s.rows > 0 ? s.rows : 0;
+  return cols * rows;
+}
+__name(tilesCountOf, "tilesCountOf");
 var FA_COLOR_KEYS = {
   yellow: "\u0632\u0631\u062F",
   blue: "\u0622\u0628\u06CC",
@@ -23548,6 +23576,15 @@ function numlineFeedbackOf(item, correct, response) {
   return NUMLINE_FB_NEAR;
 }
 __name(numlineFeedbackOf, "numlineFeedbackOf");
+var SCAN_FB_ALL = "\u0647\u0645\u0647\u0654 \u062C\u0627\u0633\u0648\u0633\u200C\u0647\u0627 \u0631\u0627 \u06AF\u0631\u0641\u062A\u06CC! \u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0628\u0648\u062F.";
+function scanMissedCsv(item, response) {
+  if (item.type !== "scan" || !Array.isArray(item.correct)) return null;
+  const rawHits = (response ?? {}) === Object(response) ? response.hits : null;
+  const hits = new Set(Array.isArray(rawHits) ? rawHits.filter((n) => Number.isInteger(n) && n >= 0) : []);
+  const missed = item.correct.filter((k) => !hits.has(k));
+  return missed.length > 0 ? missed.join(",") : null;
+}
+__name(scanMissedCsv, "scanMissedCsv");
 function accuracyOf(scored) {
   if (scored.length === 0) return null;
   return round2(scored.filter((s) => s.correct).length / scored.length * 100);
@@ -23559,6 +23596,20 @@ function meanNumlineErrorOf(scored) {
   return round2(errs.reduce((a, b) => a + b, 0) / errs.length);
 }
 __name(meanNumlineErrorOf, "meanNumlineErrorOf");
+function scanFaPctOf(scored) {
+  const denom = scored.reduce((a, s) => a + (typeof s.scanDistractors === "number" ? s.scanDistractors : 0), 0);
+  if (denom <= 0) return null;
+  const fa2 = scored.reduce((a, s) => a + (typeof s.scanFalse === "number" ? s.scanFalse : 0), 0);
+  return round2(fa2 / denom * 100);
+}
+__name(scanFaPctOf, "scanFaPctOf");
+function scanMissPctOf(scored) {
+  const denom = scored.reduce((a, s) => a + (typeof s.scanSpies === "number" ? s.scanSpies : 0), 0);
+  if (denom <= 0) return null;
+  const miss = scored.reduce((a, s) => a + (typeof s.scanMissed === "number" ? s.scanMissed : 0), 0);
+  return round2(miss / denom * 100);
+}
+__name(scanMissPctOf, "scanMissPctOf");
 function medianRtOf(scored) {
   const rts = scored.filter((s) => s.correct && s.rtValid && typeof s.rtMs === "number").map((s) => s.rtMs).sort((a, b) => a - b);
   if (rts.length === 0) return null;
@@ -23632,6 +23683,10 @@ function computeMetricValue(formula, scored) {
       return commissionPctOf(scored);
     case "omission_pct":
       return omissionPctOf(scored);
+    case "scan_fa":
+      return scanFaPctOf(scored);
+    case "scan_miss":
+      return scanMissPctOf(scored);
     default:
       return null;
   }
@@ -23910,7 +23965,7 @@ function applyAdaptiveLevel(current, decision) {
 __name(applyAdaptiveLevel, "applyAdaptiveLevel");
 
 // src/domain/games/stages.ts
-var STAGE_RULES_VERSION = "1.1.0";
+var STAGE_RULES_VERSION = "1.2.0";
 var STAGE_TOTAL = 5;
 var STAGE_OVERRIDE_KEYS = [
   "response_window_go_ms",
@@ -24052,14 +24107,56 @@ var NUMLINE_STAGES = [
     overrides: {}
   }
 ];
+var SWARM_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u06A9\u0627\u0648\u0634 \u0634\u0628 \u0627\u0648\u0644",
+    goal_fa: "\u062C\u0627\u0633\u0648\u0633\u200C\u0647\u0627 \u06A9\u0645\u200C\u0627\u0646\u062F\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644 \u0628\u06AF\u06CC\u0631\u0634\u0627\u0646.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u06AF\u0634\u062A \u062F\u0648\u0645",
+    goal_fa: "\u0645\u0648\u062C \u0628\u0632\u0631\u06AF\u200C\u062A\u0631 \u0634\u062F\u0647\u061B \u0647\u0645\u0627\u0646 \u0642\u0627\u0639\u062F\u0647\u060C \u0686\u0634\u0645\u200C\u0647\u0627\u06CC \u062A\u06CC\u0632.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0631\u06AF\u0628\u0627\u0631 \u0633\u0648\u0645",
+    goal_fa: "\u0627\u0633\u06A9\u0627\u062F\u0631\u0627\u0646 \u06A9\u0627\u0645\u0644 \u0622\u0645\u062F\u0647\u061B \u0622\u0631\u0627\u0645 \u0628\u0627\u0634 \u0648 \u062F\u0642\u06CC\u0642 \u0628\u06AF\u06CC\u0631.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u062D\u0645\u0644\u0647\u0654 \u0628\u0632\u0631\u06AF",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u062C\u0627\u0633\u0648\u0633\u200C\u0647\u0627\u06CC \u06F2 \u0622\u0646\u062A\u0646 \u0631\u0627 \u0628\u06AF\u06CC\u0631\u061B \u0647\u0645\u200C\u0646\u0648\u0639\u200C\u0647\u0627 \u0631\u0627 \u062F\u0633\u062A \u0646\u0632\u0646.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u062F\u0641\u0627\u0639 \u0642\u0647\u0631\u0645\u0627\u0646\u200C\u0647\u0627",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u0645\u0648\u062C\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0646\u06AF\u0647\u0628\u0627\u0646 \u0633\u06CC\u0627\u0631\u0647\u200C\u0627\u06CC!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
 function stageByIndex(band, index, kind = "gonogo") {
-  const list = kind === "numline" ? NUMLINE_STAGES : STAGES[band] ?? STAGES["7-12"];
+  const list = kind === "numline" ? NUMLINE_STAGES : kind === "scan" ? SWARM_STAGES : STAGES[band] ?? STAGES["7-12"];
   return list.find((s) => s.index === index) ?? null;
 }
 __name(stageByIndex, "stageByIndex");
 function stageById(band, id, kind = "gonogo") {
   if (!id || typeof id !== "string") return null;
-  const list = kind === "numline" ? NUMLINE_STAGES : STAGES[band] ?? STAGES["7-12"];
+  const list = kind === "numline" ? NUMLINE_STAGES : kind === "scan" ? SWARM_STAGES : STAGES[band] ?? STAGES["7-12"];
   return list.find((s) => s.id === id) ?? null;
 }
 __name(stageById, "stageById");
@@ -24088,7 +24185,7 @@ function stageOutcomeOf(correctGoPct, correctNogoPct) {
 }
 __name(stageOutcomeOf, "stageOutcomeOf");
 function gameKindOf(v) {
-  return v === "numline" ? "numline" : "gonogo";
+  return v === "numline" ? "numline" : v === "scan" ? "scan" : "gonogo";
 }
 __name(gameKindOf, "gameKindOf");
 var NUMLINE_STAGE_THRESHOLDS = {
@@ -24104,7 +24201,7 @@ function stageOutcomeNumline(accuracy) {
 }
 __name(stageOutcomeNumline, "stageOutcomeNumline");
 function stageOutcomeFor(kind, summary) {
-  return kind === "numline" ? stageOutcomeNumline(summary.pct.accuracy) : stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo);
+  return kind === "numline" ? stageOutcomeNumline(summary.pct.accuracy) : kind === "scan" ? stageOutcomeScan(summary.pct.accuracy) : stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo);
 }
 __name(stageOutcomeFor, "stageOutcomeFor");
 var NUMLINE_STAGE_MAX = {
@@ -24120,6 +24217,35 @@ function numlineItemInStage(item, stageId) {
   return Array.isArray(item.range) && item.range[1] <= max;
 }
 __name(numlineItemInStage, "numlineItemInStage");
+var SCAN_STAGE_THRESHOLDS = {
+  pass: 65,
+  star2: 78,
+  star3: 88
+};
+function stageOutcomeScan(accuracy) {
+  const t = SCAN_STAGE_THRESHOLDS;
+  if (!pctOk2(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
+  const stars = pctOk2(accuracy, t.star3) ? 3 : pctOk2(accuracy, t.star2) ? 2 : 1;
+  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
+}
+__name(stageOutcomeScan, "stageOutcomeScan");
+var SCAN_STAGE_MAX_TILES = {
+  s1: 6,
+  s2: 9,
+  s3: 12,
+  s4: 15,
+  s5: null
+};
+function scanItemInStage(item, stageId) {
+  const max = typeof stageId === "string" && stageId in SCAN_STAGE_MAX_TILES ? SCAN_STAGE_MAX_TILES[stageId] : null;
+  if (max === null) return true;
+  const s = item.stim ?? {};
+  const cols = typeof s.cols === "number" && Number.isInteger(s.cols) && s.cols > 0 ? s.cols : 0;
+  const rows = typeof s.rows === "number" && Number.isInteger(s.rows) && s.rows > 0 ? s.rows : 0;
+  const tiles = cols * rows;
+  return tiles > 0 && tiles <= max;
+}
+__name(scanItemInStage, "scanItemInStage");
 function stageProgressOfKind(kind, history) {
   const best = {};
   let unlocked = 1;
@@ -24262,10 +24388,28 @@ function summarizeAttempts(scored, evidence = [], blockSize = 24) {
     },
     dprime: null,
     numline: { mean_error_pct: meanNumlineErrorOf(t) },
+    scan: scanSummaryOf(t, zeroDenominator),
     zero_denominator: zeroDenominator
   };
 }
 __name(summarizeAttempts, "summarizeAttempts");
+function scanSummaryOf(t, zeroDenominator) {
+  const waves = t.filter((s) => typeof s.scanSpies === "number");
+  if (waves.length === 0) return null;
+  const correct = waves.filter((s) => s.correct).length;
+  const fa2 = scanFaPctOf(waves);
+  const miss = scanMissPctOf(waves);
+  if (fa2 === null) zeroDenominator.push("scan: \u0647\u0645\u200C\u0646\u0648\u0639=\u06F0 \u2014 fa_pct \u062A\u0639\u0631\u06CC\u0641\u200C\u0646\u0634\u062F\u0647");
+  if (miss === null) zeroDenominator.push("scan: \u062C\u0627\u0633\u0648\u0633=\u06F0 \u2014 miss_pct \u062A\u0639\u0631\u06CC\u0641\u200C\u0646\u0634\u062F\u0647");
+  return {
+    waves: waves.length,
+    correct_waves: correct,
+    correct_waves_pct: Math.round(correct / waves.length * 1e4) / 100,
+    fa_pct: fa2,
+    miss_pct: miss
+  };
+}
+__name(scanSummaryOf, "scanSummaryOf");
 
 // src/domain/games/quality.ts
 var QUALITY_RULES_VERSION = "1.0.0";
@@ -24582,13 +24726,18 @@ var ENGINE_ONLY_FORMULAS = [
   "correct_go_pct",
   "correct_nogo_pct",
   "commission_pct",
-  "omission_pct"
+  "omission_pct",
+  "scan_fa",
+  "scan_miss"
 ];
 var ENGINE_METRICS = [
   { id: "correct_go_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u06AF\u0648\u0647\u0627\u06CC \u062F\u0631\u0633\u062A", unit: "percent", higher_is_better: true, source: "auto", formula: "correct_go_pct" },
   { id: "correct_nogo_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u062F\u0631\u0633\u062A \u0646\u0648\u06AF\u0648", unit: "percent", higher_is_better: true, source: "auto", formula: "correct_nogo_pct" },
   { id: "commission_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u062E\u0637\u0627\u06CC \u067E\u0627\u0633\u062E \u0628\u0647 \u063A\u06CC\u0631\u0647\u062F\u0641", unit: "percent", higher_is_better: false, source: "auto", formula: "commission_pct" },
-  { id: "omission_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u0627\u0632 \u062F\u0633\u062A\u200C\u062F\u0627\u062F\u0646 \u0647\u062F\u0641", unit: "percent", higher_is_better: false, source: "auto", formula: "omission_pct" }
+  { id: "omission_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u0627\u0632 \u062F\u0633\u062A\u200C\u062F\u0627\u062F\u0646 \u0647\u062F\u0641", unit: "percent", higher_is_better: false, source: "auto", formula: "omission_pct" },
+  // حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — دقت موج‌ها از فرمول 'accuracy' در DB می‌آید (accuracy_scan)
+  { id: "scan_fa_pct", title_fa: "\u062F\u0631\u0635\u062F \u06AF\u0631\u0641\u062A\u0646 \u0647\u0645\u200C\u0646\u0648\u0639 \u062F\u0631 \u0645\u0648\u062C", unit: "percent", higher_is_better: false, source: "auto", formula: "scan_fa" },
+  { id: "scan_miss_pct", title_fa: "\u062F\u0631\u0635\u062F \u062C\u0627\u0627\u0646\u062F\u0627\u062E\u062A\u0646 \u062C\u0627\u0633\u0648\u0633", unit: "percent", higher_is_better: false, source: "auto", formula: "scan_miss" }
 ];
 function mergeEngineMetrics(dbRows) {
   const ids = new Set(dbRows.map((m) => m.id));
@@ -25243,6 +25392,17 @@ function createGamesService(deps) {
     const train = (mission.items ?? []).filter((it) => it.phase === "train" && it.type === "touch_report");
     const go = train.find((it) => it.correct_touch === true);
     const nogo = train.find((it) => it.correct_touch === false);
+    const scanTrain = (mission.items ?? []).find((it) => it.phase === "train" && it.type === "scan");
+    if (scanTrain && !go && !nogo) {
+      const stim = scanTrain.stim ?? {};
+      const sig = typeof stim.signature === "number" && Number.isInteger(stim.signature) && stim.signature > 0 ? stim.signature : 2;
+      const label = typeof scanTrain.prompt === "string" && scanTrain.prompt.trim() !== "" ? scanTrain.prompt : "\u062C\u0627\u0633\u0648\u0633\u200C\u0647\u0627 \u0631\u0628\u0627\u062A\u200C\u0647\u0627\u06CC\u06CC \u0628\u0627 " + sig + " \u0622\u0646\u062A\u0646\u200C\u0627\u0646\u062F";
+      return {
+        go: { label: "\u062C\u0627\u0633\u0648\u0633 \u2014 \u0631\u0628\u0627\u062A " + sig + " \u0622\u0646\u062A\u0646", stim: { signature: sig } },
+        nogo: null,
+        scan: { label, stim: { signature: sig } }
+      };
+    }
     if (!go && !nogo) return null;
     const goStim = stageStimViewOf(go?.stim, true, stageId);
     const nogoStim = nogo ? stageStimViewOf(nogo.stim, false, stageId) : null;
@@ -25484,8 +25644,11 @@ function createGamesService(deps) {
     const kind = gameKindOf(mission.game);
     const attempts = await db.query(`SELECT * FROM game_attempts WHERE session_id = ?`, [session.id]);
     const doneIds = new Set(attempts.map((a) => a.item_id));
-    const nlStageId = kind === "numline" ? session.stage_id : null;
-    const inStage = /* @__PURE__ */ __name((it) => kind !== "numline" || numlineItemInStage(it, nlStageId), "inStage");
+    const inStage = /* @__PURE__ */ __name((it) => {
+      if (kind === "numline") return numlineItemInStage(it, session.stage_id);
+      if (kind === "scan") return scanItemInStage(it, session.stage_id);
+      return true;
+    }, "inStage");
     const stageItems = (mission.items ?? []).filter(inStage);
     const total = stageItems.length;
     const unansweredOf = /* @__PURE__ */ __name((pred) => stageItems.find((it) => !doneIds.has(it.id) && pred(it)), "unansweredOf");
@@ -25577,12 +25740,12 @@ function createGamesService(deps) {
       return { recorded: true, phase: "probe" };
     }
     const touched = (response ?? {}) === Object(response) ? response.touched === true : false;
-    const message = item.type === "touch_report" && correct && !touched ? FEEDBACK_WITHHOLD : item.type === "numline" && correct ? numlineFeedbackOf(item, true, response) ?? FEEDBACK_OK : correct ? FEEDBACK_OK : FEEDBACK_RETRY;
+    const message = item.type === "touch_report" && correct && !touched ? FEEDBACK_WITHHOLD : item.type === "numline" && correct ? numlineFeedbackOf(item, true, response) ?? FEEDBACK_OK : item.type === "scan" && correct ? SCAN_FB_ALL : correct ? FEEDBACK_OK : FEEDBACK_RETRY;
     return {
       recorded: true,
       phase: "train",
       correct,
-      answer_display: correct ? null : answerDisplayOf(item),
+      answer_display: correct ? null : item.type === "scan" ? scanMissedCsv(item, response) : answerDisplayOf(item),
       message,
       replay_audio: !correct
     };
@@ -25598,8 +25761,8 @@ function createGamesService(deps) {
     const attempts = await db.query(`SELECT * FROM game_attempts WHERE session_id = ? ORDER BY created_at`, [session.id]);
     const nowIso = isoOf2(now());
     const finishKind = gameKindOf(mission.game);
-    const finishStage = finishKind === "numline" ? stageById("7-12", session.stage_id, "numline") : null;
-    const finishTotal = finishStage ? mission.items.filter((it) => numlineItemInStage(it, finishStage.id)).length : mission.items.length;
+    const finishStage = finishKind === "numline" || finishKind === "scan" ? stageById("7-12", session.stage_id, finishKind) : null;
+    const finishTotal = finishStage ? mission.items.filter((it) => finishKind === "numline" ? numlineItemInStage(it, finishStage.id) : scanItemInStage(it, finishStage.id)).length : mission.items.length;
     const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso].filter((v) => typeof v === "string").map((v) => new Date(v).getTime());
     const validity = decideValidity(activity, attempts.length, finishTotal);
     const metricIds = mission.metrics && mission.metrics.length > 0 ? mission.metrics : [mission.metric];

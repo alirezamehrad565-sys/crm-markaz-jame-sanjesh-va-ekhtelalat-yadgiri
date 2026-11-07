@@ -6,7 +6,7 @@
 // «خام در برابر محاسبه‌شده»: خروجی این ماژول لایهٔ محاسبه‌شده است؛ دادهٔ خام
 // (response_json + شواهد فاز ۴) جدا در game_attempts می‌ماند.
 
-import { commissionCountOf, commissionPctOf, correctGoPctOf, correctNogoPctOf, meanNumlineErrorOf, medianRtOf, omissionCountOf, omissionPctOf, accuracyOf, type ScoredAttempt } from './pure';
+import { commissionCountOf, commissionPctOf, correctGoPctOf, correctNogoPctOf, meanNumlineErrorOf, medianRtOf, omissionCountOf, omissionPctOf, accuracyOf, scanFaPctOf, scanMissPctOf, type ScoredAttempt } from './pure';
 
 /** شواهد نمایش واقعی هر آزمون (فاز ۴) — همه nullable */
 export interface AttemptEvidence {
@@ -71,6 +71,14 @@ export interface SessionSummary {
   dprime: null;
   /** خط عددی (۱.۲۵.۲۸) — میانگین خطای نرمال‌شدهٔ جای عدد (۰..۱۰۰)؛ بدون آیتم خط عددی = null */
   numline: { mean_error_pct: number | null };
+  /** حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — دقت موج‌ها + نرخ گرفتن هم‌نوع/جاانداختن جاسوس؛ بدون آیتم اسکن = null */
+  scan: {
+    waves: number;
+    correct_waves: number;
+    correct_waves_pct: number | null;
+    fa_pct: number | null;
+    miss_pct: number | null;
+  } | null;
   /** ردیابی قاعدهٔ دامنهٔ صفر — گزارش شفاف می‌گوید کدام سنجه قابل محاسبه نبود و چرا */
   zero_denominator: string[];
 }
@@ -173,6 +181,25 @@ export function summarizeAttempts(
     },
     dprime: null,
     numline: { mean_error_pct: meanNumlineErrorOf(t) },
+    scan: scanSummaryOf(t, zeroDenominator),
     zero_denominator: zeroDenominator
+  };
+}
+
+/** خلاصهٔ اسکن از آزمون‌های scan — بدون موج اسکن = null (قاعدهٔ دامنهٔ صفر) */
+function scanSummaryOf(t: ScoredAttempt[], zeroDenominator: string[]): SessionSummary['scan'] {
+  const waves = t.filter((s) => typeof s.scanSpies === 'number');
+  if (waves.length === 0) return null;
+  const correct = waves.filter((s) => s.correct).length;
+  const fa = scanFaPctOf(waves);
+  const miss = scanMissPctOf(waves);
+  if (fa === null) zeroDenominator.push('scan: هم‌نوع=۰ — fa_pct تعریف‌نشده');
+  if (miss === null) zeroDenominator.push('scan: جاسوس=۰ — miss_pct تعریف‌نشده');
+  return {
+    waves: waves.length,
+    correct_waves: correct,
+    correct_waves_pct: Math.round((correct / waves.length) * 10000) / 100,
+    fa_pct: fa,
+    miss_pct: miss
   };
 }
