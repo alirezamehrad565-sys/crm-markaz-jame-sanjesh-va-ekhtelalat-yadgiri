@@ -1,18 +1,17 @@
 import { api } from '../api.js';
-import { fa } from '../format.js';
+import { fa, formatJalaliDateTime } from '../format.js';
 import {
-  el, icon, toast, toastError, lockBtn, confirmModal, skeletonState, errorState, tabs, emptyState
+  el, icon, toast, toastError, lockBtn, confirmModal, skeletonState, errorState, tabs, emptyState, openModal, rowMenu
 } from '../ui.js';
-import { renderRxPanel, renderGamesReportPanel } from '../games-console.js';
+import { renderRxPanel, renderGamesReportPanel, prescribeModal } from '../games-console.js';
 import { session } from '../state.js';
 
-// ─── بازی‌ها (۱.۲۵.۲۶) — میز کامل حلقهٔ درمانگر: بسته‌ها | ارسال به دانش‌آموز | گزارش ───
-// بسته‌ها: فهرست + پیش‌نمایش + انتشار (پیش‌نویس) + بازنشستگی (مدیر)
-// ارسال به دانش‌آموز: میز حلقهٔ درمانگر (games-console.js) — ارسال/مأموریت/لینک/پیگیری
-// گزارش: روند سنجه‌ها + کیفیت جلسه‌ها + چاپ/CSV
+// ─── بازی‌ها (فاز ۱ بازطراحی UI) — میز درمانگر: بانک بازی‌ها | ارسال به دانش‌آموز | گزارش ───
+// بانک بازی‌ها: نوار ابزار (جست‌وجو + فیلتر حوزه/وضعیت) + دسته‌بندی حوزهٔ شناختی + کارت با
+// سلسله‌مراتب بصری (عنوان > حوزه/سن/دشواری > متادیتای فنی نرم > اکشن ثابت) + مودال جزئیات.
+// منطق، API و قابلیت‌ها دست‌نخورده — فقط ساختار نمایش. واژه‌نامهٔ ۱.۲۵.۲۶ حفظ می‌شود:
+// «تجویز» → «ارسال به دانش‌آموز»؛ بدون توضیح اضافه بالای تب‌ها؛ شناسهٔ لاتین با fa() فارسی‌نما نمی‌شود.
 // هویت کودک از پروفایل (#/games?child=…) هم می‌آید تا تفسیر هم‌زمینه بماند.
-// ۱.۲۵.۲۶ — واژه‌نامهٔ تازه به خواست کاربر: «تجویز» → «ارسال به دانش‌آموز»؛ توضیحات
-// اضافی بالای تب‌ها حذف شد؛ شناسهٔ لاتین بسته دیگر با fa() فارسی‌نما نمی‌شود (attention۲).
 
 const MODE_LABEL = { training: 'تمرین', assessment: 'ارزیابی' };
 const STATUS_LABEL = {
@@ -27,6 +26,65 @@ const STATUS_CLASS = {
   published: 'badge--success',
   retired: 'badge--neutral'
 };
+
+// حوزهٔ شناختی هدف — از شناسهٔ هدف (گیت‌شده با دادهٔ واقعی بسته‌های این مرکز)؛
+// ناشناخته = پیشوند عنوان هدف پیش از «—» یا «عمومی». رنگ از هشت‌گانهٔ دسته‌ای توکن‌محور.
+const DOMAIN_BY_GOAL = {
+  inhibition: { title: 'توجه و بازداری پاسخ', cls: 'gmk-chip--d1', icon: 'brain' },
+  scan_attention: { title: 'توجه و تمرکز', cls: 'gmk-chip--d2', icon: 'target' },
+  flanker_attention: { title: 'توجه و تمرکز', cls: 'gmk-chip--d2', icon: 'target' },
+  stroop_attention: { title: 'توجه و تمرکز', cls: 'gmk-chip--d2', icon: 'target' },
+  trail_attention: { title: 'جست‌وجوی دیداری و دنبال‌کردن', cls: 'gmk-chip--d8', icon: 'compass' },
+  numline: { title: 'عدد و حس عددی', cls: 'gmk-chip--d3', icon: 'grid' },
+  numline_road: { title: 'عدد و حس عددی', cls: 'gmk-chip--d3', icon: 'grid' },
+  numcompare: { title: 'عدد و حس عددی', cls: 'gmk-chip--d3', icon: 'grid' },
+  math_facts: { title: 'عدد و حس عددی', cls: 'gmk-chip--d3', icon: 'grid' },
+  pa: { title: 'خواندن و آگاهی واجی', cls: 'gmk-chip--d7', icon: 'book' },
+  letter_sound: { title: 'خواندن و آگاهی واجی', cls: 'gmk-chip--d7', icon: 'book' },
+  adherence: { title: 'خانواده و پایبندی', cls: 'gmk-chip--d4', icon: 'heart' }
+};
+const FALLBACK_DOMAIN = { title: 'عمومی', cls: '', icon: 'gamepad' };
+// ترتیب پایدار گروه‌ها؛ حوزهٔ ناشناخته بعد از این‌ها می‌نشیند
+const DOMAIN_ORDER = [
+  'توجه و بازداری پاسخ',
+  'توجه و تمرکز',
+  'جست‌وجوی دیداری و دنبال‌کردن',
+  'عدد و حس عددی',
+  'خواندن و آگاهی واجی',
+  'خانواده و پایبندی',
+  'عمومی'
+];
+
+function domainOf(pkg, goalNames) {
+  const goals = Array.isArray(pkg.body?.goals) ? pkg.body.goals : [];
+  for (const g of goals) {
+    if (DOMAIN_BY_GOAL[g]) return DOMAIN_BY_GOAL[g];
+    const title = goalNames?.[g] ?? '';
+    if (title.includes('—')) {
+      return { title: title.split('—')[0].trim(), cls: '', icon: 'gamepad' };
+    }
+  }
+  return FALLBACK_DOMAIN;
+}
+
+// سطح دشواری — توصیف ساختار بسته، نه قضاوت
+function difficultyOf(pkg) {
+  if ((pkg.body?.mode ?? 'training') === 'assessment') return 'پروتکل ثابت';
+  if (pkg.body?.stages_enabled === false) return 'تک‌مرحله‌ای';
+  return `${fa(5)} مرحلهٔ پیشرفتی`;
+}
+
+// گروه سنی — اولویت: body.age، سپس بازهٔ سنِ هدفِ ثبت‌شده
+function ageOf(pkg, goals) {
+  const age = pkg.body?.age;
+  if (age?.min != null && age?.max != null) return age;
+  const goalsArr = Array.isArray(pkg.body?.goals) ? pkg.body.goals : [];
+  for (const gid of goalsArr) {
+    const g = goals.find((x) => x.id === gid);
+    if (g?.age_min != null && g?.age_max != null) return { min: g.age_min, max: g.age_max };
+  }
+  return null;
+}
 
 function badge(label, cls) {
   return el('span', { class: `badge ${cls ?? 'badge--neutral'}` }, label);
@@ -88,15 +146,112 @@ function doseText(dose) {
   return `${fa(dose.days_per_week)} روز/هفته · ${fa(dose.minutes)} دقیقه · سقف ${fa(dose.max_missions_per_day)}/روز`;
 }
 
-function pkgCard(pkg, goalNames, onDone) {
+// ─── مودال جزئیات و تنظیمات بازی ───
+function openPkgDetails(pkg, goals, goalNames, onDone) {
+  const domain = domainOf(pkg, goalNames);
+  const missions = Array.isArray(pkg.body?.missions) ? pkg.body.missions : [];
+  const age = ageOf(pkg, goals ?? []);
+  const goalIds = Array.isArray(pkg.body?.goals) ? pkg.body.goals : [];
+  const published = pkg.status === 'published';
+  const canPublish = pkg.status === 'draft' || pkg.status === 'review';
+
+  const detail = (label, value) => [
+    el('div', { class: 'gmk-detail__dt' }, label),
+    el('div', { class: 'gmk-detail__dd' }, value)
+  ];
+
+  const body = el('div', {},
+    el('div', { class: 'gmk-detail__grid' },
+      ...detail('شناسه', el('span', { class: 'gmk-ltr' }, pkg.id)),
+      ...detail('نسخه', fa(pkg.version)),
+      ...detail('وضعیت', badge(STATUS_LABEL[pkg.status] ?? pkg.status, STATUS_CLASS[pkg.status])),
+      ...detail('حالت', MODE_LABEL[pkg.body?.mode] ?? 'تمرین'),
+      ...detail('سطح شواهد', fa(pkg.evidenceLevel ?? '—')),
+      ...detail('سطح دشواری', difficultyOf(pkg)),
+      ...detail('گروه سنی', age ? `${fa(age.min)} تا ${fa(age.max)} سال` : 'ثبت نشده'),
+      ...detail('دوز', doseText(pkg.dose) ?? 'ثبت نشده')
+    ),
+    el('div', { class: 'gmk-detail__sec' },
+      el('b', {}, 'هدف‌های درمانی'),
+      goalIds.length
+        ? el('div', { class: 'gmk-card__facts' },
+            goalIds.map((g) => el('span', { class: 'badge badge--neutral' }, goalNames?.[g] ?? g)))
+        : el('span', { class: 'gmk-fact' }, 'هدف مستقلی ثبت نشده')
+    ),
+    el('div', { class: 'gmk-detail__sec' },
+      el('b', {}, `مأموریت‌ها (${fa(missions.length)})`),
+      missions.length
+        ? el('div', { class: 'gmk-missions' },
+            missions.map((m, i) => el('div', { class: 'gmk-mission' },
+              el('span', { class: 'gmk-mission__n' }, fa(i + 1)),
+              el('b', {}, m.title ?? m.id),
+              el('span', { class: 'cell-sub' }, `${fa(m.items?.length ?? 0)} آزمون`)
+            )))
+        : el('span', { class: 'gmk-fact' }, 'مأموریتی تعریف نشده')
+    ),
+    pkg.reviewedAt
+      ? el('p', { class: 'cell-sub', style: { marginTop: '10px' } }, `آخرین بازبینی: ${formatJalaliDateTime(pkg.reviewedAt)}`)
+      : null
+  );
+
+  const actions = [];
+  if (published) {
+    actions.push((close) => el('button', {
+      class: 'btn btn--primary', type: 'button',
+      onclick: (e) => lockBtn(e.currentTarget, async () => { close(); await openPreview(pkg); })
+    }, icon('eye', 15), 'پیش‌نمایش'));
+    actions.push((close) => el('button', {
+      class: 'btn btn--soft', type: 'button',
+      onclick: (e) => lockBtn(e.currentTarget, () => {
+        close();
+        prescribeModal({ childId: null, childName: '', onCreated: onDone });
+      })
+    }, icon('send', 15), 'ارسال به دانش‌آموز'));
+  }
+  if (canPublish) {
+    actions.push((close) => el('button', {
+      class: 'btn btn--soft', type: 'button',
+      onclick: (e) => lockBtn(e.currentTarget, () => { close(); publishPkg(pkg, onDone); })
+    }, icon('check', 15), 'انتشار'));
+  }
+  if (published && isManager()) {
+    actions.push((close) => el('button', {
+      class: 'btn btn--ghost', type: 'button', style: { color: 'var(--error)' },
+      onclick: () => { close(); retirePkg(pkg, onDone); }
+    }, icon('x', 15), 'بازنشستگی'));
+  }
+  actions.push((close) => el('button', { class: 'btn btn--ghost', type: 'button', onclick: close }, 'بستن'));
+
+  openModal({
+    title: `${pkg.titleFa || pkg.id} — جزئیات بازی`,
+    body,
+    actions
+  });
+}
+
+// ─── کارت بازی — سلسله‌مراتب: عنوان > حوزه/سن/دشواری > فنی نرم > دوز > اکشن ثابت ───
+function pkgCard(pkg, goals, goalNames, onDone) {
   const published = pkg.status === 'published';
   const retired = pkg.status === 'retired';
-  const goals = Array.isArray(pkg.body?.goals) ? pkg.body.goals : [];
+  const domain = domainOf(pkg, goalNames);
+  const age = ageOf(pkg, goals ?? []);
   const missionsCount = Array.isArray(pkg.body?.missions) ? pkg.body.missions.length : 0;
-  const age = pkg.body?.age;
-  // ۱.۲۵.۲۶ — چیدمان درست دکمه‌ها: بج وضعیت داخل سطر عنوان، دکمه‌ها یک ردیف افقی
-  // هم‌ترازِ وسط در انتهای خط (نه ستون شناور که با چیپ هدف‌ها تداخل می‌کرد)
-  const actions = el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end;align-self:center;' },
+
+  const manageItems = [];
+  if (pkg.status === 'draft' || pkg.status === 'review') {
+    manageItems.push({
+      label: 'انتشار', icon: 'check',
+      onclick: () => publishPkg(pkg, onDone)
+    });
+  }
+  if (published && isManager()) {
+    manageItems.push({
+      label: 'بازنشستگی', icon: 'x', danger: true,
+      onclick: () => retirePkg(pkg, onDone)
+    });
+  }
+
+  const actions = el('div', { class: 'gmk-card__actions' },
     published
       ? el('button', {
           class: 'btn btn--primary btn--sm', type: 'button',
@@ -105,49 +260,121 @@ function pkgCard(pkg, goalNames, onDone) {
           onclick: (e) => lockBtn(e.currentTarget, () => openPreview(pkg))
         }, icon('eye', 14), 'پیش‌نمایش')
       : null,
-    (pkg.status === 'draft' || pkg.status === 'review')
-      ? el('button', {
-          class: 'btn btn--soft btn--sm', type: 'button',
-          title: 'گیت انتشار سمت سرور اجرا می‌شود؛ پس از انتشار نسخه تغییرناپذیر است',
-          onclick: (e) => lockBtn(e.currentTarget, () => publishPkg(pkg, onDone))
-        }, icon('check', 14), 'انتشار')
-      : null,
-    published && isManager()
-      ? el('button', {
-          class: 'btn btn--ghost btn--sm', type: 'button',
-          title: 'بستن ارسال تازه از این نسخه — ارسال‌های موجود دست‌نخورده',
-          onclick: (e) => lockBtn(e.currentTarget, () => retirePkg(pkg, onDone))
-        }, icon('x', 14), 'بازنشستگی')
-      : null,
-    retired ? el('span', { class: 'muted', style: 'font-size:12px;' }, 'ارسال تازه بسته است') : null
+    el('button', {
+      class: 'btn btn--soft btn--sm', type: 'button',
+      'aria-label': `جزئیات ${pkg.titleFa || pkg.id}`,
+      onclick: (e) => lockBtn(e.currentTarget, () => openPkgDetails(pkg, goals, goalNames, onDone))
+    }, icon('info', 14), 'جزئیات'),
+    retired ? el('span', { class: 'gmk-fact' }, 'ارسال تازه بسته است') : null,
+    manageItems.length ? el('span', { style: { flex: '1' } }) : null,
+    manageItems.length ? rowMenu({ label: 'مدیریت بازی', items: manageItems }) : null
   );
-  return el('div', { class: 'card', 'data-pkg': pkg.id },
-    el('div', { class: 'card-body', style: 'display:flex;gap:14px;align-items:center;flex-wrap:wrap;' },
-      el('span', { class: 'ico', 'aria-hidden': 'true' }, icon('gamepad', 20)),
-      el('div', { style: 'flex:1;min-width:240px;' },
-        el('div', { style: 'font-weight:700;display:flex;gap:8px;align-items:center;flex-wrap:wrap;' },
-          pkg.titleFa || pkg.id,
+
+  return el('div', { class: 'card gmk-card', 'data-pkg': pkg.id, 'data-domain': domain.title },
+    el('div', { class: 'gmk-card__head' },
+      el('span', { class: `gmk-card__icon ${domain.cls}`, 'aria-hidden': 'true' }, icon(domain.icon, 20)),
+      el('div', { class: 'gmk-card__titlewrap' },
+        el('div', { class: 'gmk-card__title' }, pkg.titleFa || pkg.id),
+        el('div', { class: 'gmk-card__badges' },
           badge(STATUS_LABEL[pkg.status] ?? fa(pkg.status), STATUS_CLASS[pkg.status] ?? 'badge--neutral'),
-          pkg.body?.mode ? badge(`حالت ${MODE_LABEL[pkg.body.mode] ?? fa(pkg.body.mode)}`, 'badge--accent') : null,
-          age?.min != null && age?.max != null ? el('span', { class: 'cell-sub' }, `سن ${fa(age.min)} تا ${fa(age.max)}`) : null
-        ),
-        el('div', { class: 'muted', style: 'font-size:12px;margin-top:2px;', dir: 'auto' },
-          `${pkg.id} · نسخهٔ ${fa(pkg.version)} · شواهد سطح ${fa(pkg.evidenceLevel ?? '—')} · ${fa(missionsCount)} مأموریت`),
-        el('div', { class: 'muted', style: 'font-size:12px;margin-top:2px;' },
-          doseText(pkg.dose) ?? 'دوز ثبت نشده'),
-        goals.length
-          ? el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;' },
-              goals.map((g) => el('span', { class: 'badge badge--neutral' }, goalNames?.[g] ?? g)))
-          : null
-      ),
-      actions
-    )
+          pkg.body?.mode ? badge(`حالت ${MODE_LABEL[pkg.body.mode] ?? fa(pkg.body.mode)}`, 'badge--accent') : null
+        )
+      )
+    ),
+    el('div', { class: 'gmk-card__facts' },
+      el('span', { class: `gmk-chip ${domain.cls}` },
+        el('span', { class: 'gmk-chip__dot', 'aria-hidden': 'true' }), domain.title),
+      age ? el('span', { class: 'gmk-fact' }, icon('student', 12), `سن ${fa(age.min)} تا ${fa(age.max)}`) : null,
+      el('span', { class: 'gmk-fact' }, icon('layers', 12), difficultyOf(pkg))
+    ),
+    el('div', { class: 'gmk-card__meta' },
+      el('span', { class: 'gmk-id' }, pkg.id),
+      el('span', {}, `نسخهٔ ${fa(pkg.version)}`),
+      el('span', {}, `شواهد ${fa(pkg.evidenceLevel ?? '—')}`),
+      el('span', {}, `${fa(missionsCount)} مأموریت`)
+    ),
+    doseText(pkg.dose) ? el('div', { class: 'gmk-card__dose' }, icon('clock', 12), doseText(pkg.dose)) : null,
+    actions
   );
 }
 
+// ─── نوار ابزار بانک: جست‌وجو + فیلتر حوزه/وضعیت + شمارنده ───
+function pkgToolbar(state, domains, onFilter) {
+  const search = el('input', {
+    class: 'input', type: 'search', placeholder: 'جست‌وجوی نام بازی…',
+    'aria-label': 'جست‌وجوی بازی', autocomplete: 'off'
+  });
+  search.addEventListener('input', () => { state.q = search.value.trim(); onFilter(); });
+
+  const domainSel = el('select', { class: 'select', 'aria-label': 'فیلتر حوزهٔ شناختی' },
+    el('option', { value: '' }, 'همهٔ حوزه‌ها'),
+    ...domains.map((d) => el('option', { value: d }, d)));
+  domainSel.addEventListener('change', () => { state.domain = domainSel.value; onFilter(); });
+
+  const statusSel = el('select', { class: 'select', 'aria-label': 'فیلتر وضعیت انتشار' },
+    el('option', { value: '' }, 'همهٔ وضعیت‌ها'),
+    ...Object.entries(STATUS_LABEL).map(([k, v]) => el('option', { value: k }, v)));
+  statusSel.addEventListener('change', () => { state.status = statusSel.value; onFilter(); });
+
+  const count = el('span', { class: 'gmk-toolbar__count', 'data-count': '' }, '');
+
+  return {
+    root: el('div', { class: 'gmk-toolbar' },
+      el('div', { class: 'gmk-toolbar__search' }, search),
+      el('div', { class: 'gmk-toolbar__filters' }, domainSel, statusSel, count)
+    ),
+    setCount: (shown, total) => {
+      count.textContent = shown === total ? `${fa(total)} بازی` : `${fa(shown)} از ${fa(total)} بازی`;
+    }
+  };
+}
+
+function matchesFilters(pkg, state, goalNames) {
+  if (state.status && pkg.status !== state.status) return false;
+  if (state.domain && domainOf(pkg, goalNames).title !== state.domain) return false;
+  if (state.q) {
+    const hay = `${pkg.titleFa ?? ''} ${pkg.id} ${(pkg.body?.goals ?? []).map((g) => goalNames?.[g] ?? '').join(' ')}`;
+    if (!hay.includes(state.q)) return false;
+  }
+  return true;
+}
+
+const STATUS_RANK = { published: 0, review: 1, draft: 2, retired: 3 };
+
+function groupedDeck(packages, goals, goalNames, onDone) {
+  const byDomain = new Map();
+  for (const p of packages) {
+    const d = domainOf(p, goalNames);
+    if (!byDomain.has(d.title)) byDomain.set(d.title, { cls: d.cls, icon: d.icon, pkgs: [] });
+    byDomain.get(d.title).pkgs.push(p);
+  }
+  const titles = [...byDomain.keys()].sort((a, b) => {
+    const ia = DOMAIN_ORDER.indexOf(a), ib = DOMAIN_ORDER.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+  const wrap = el('div', {});
+  for (const t of titles) {
+    const g = byDomain.get(t);
+    g.pkgs.sort((a, b) =>
+      (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9) ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    wrap.appendChild(el('section', { class: 'gmk-group' },
+      el('div', { class: 'gmk-group__head' },
+        el('span', { class: `gmk-chip ${g.cls}` }, el('span', { class: 'gmk-chip__dot', 'aria-hidden': 'true' }), t),
+        el('b', { class: 'gmk-group__title' }, `${fa(g.pkgs.length)} بازی`),
+        el('span', { class: 'gmk-group__line', 'aria-hidden': 'true' })
+      ),
+      el('div', { class: 'gmk-deck' },
+        g.pkgs.map((p) => pkgCard(p, goals, goalNames, onDone)))
+    ));
+  }
+  return wrap;
+}
+
 async function renderPackagesTab(container) {
-  container.replaceChildren(skeletonState('list', 4));
+  container.replaceChildren(skeletonState('cards', 6));
   let packages = [];
+  let goals = [];
   let goalNames = null;
   try {
     const [pkgsRes, goalsRes] = await Promise.all([
@@ -156,26 +383,53 @@ async function renderPackagesTab(container) {
     ]);
     packages = pkgsRes.data ?? [];
     if (goalsRes?.data) {
-      goalNames = Object.fromEntries(goalsRes.data.map((g) => [g.id, g.title_fa]));
+      goals = goalsRes.data;
+      goalNames = Object.fromEntries(goals.map((g) => [g.id, g.title_fa]));
     }
   } catch (err) {
     container.replaceChildren(errorState(err, () => renderPackagesTab(container)));
     return;
   }
-  const wrap = el('div', {});
-  if (!packages.length) {
-    wrap.appendChild(emptyState({
-      iconName: 'gamepad',
-      title: 'هنوز بسته‌ای ساخته نشده است',
-      hint: 'بسته‌های بازی از مسیر رجیستری (API بسته‌ها) ثبت و منتشر می‌شوند.'
-    }));
-  } else {
-    const publishedFirst = [...packages].sort((a, b) =>
-      (a.status === 'published' ? 0 : 1) - (b.status === 'published' ? 0 : 1) ||
-      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    for (const p of publishedFirst) wrap.appendChild(pkgCard(p, goalNames, () => renderPackagesTab(container)));
+
+  const state = { q: '', domain: '', status: '' };
+  const domains = [...new Set(packages.map((p) => domainOf(p, goalNames).title))]
+    .sort((a, b) => {
+      const ia = DOMAIN_ORDER.indexOf(a), ib = DOMAIN_ORDER.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+  const toolbar = pkgToolbar(state, domains, apply);
+  const listWrap = el('div', {});
+  const refreshBtn = el('button', {
+    class: 'btn btn--ghost btn--icon', type: 'button', title: 'به‌روزرسانی فهرست',
+    'aria-label': 'به‌روزرسانی فهرست بازی‌ها',
+    onclick: (e) => lockBtn(e.currentTarget, () => renderPackagesTab(container))
+  }, icon('refresh', 16));
+  toolbar.root.insertBefore(refreshBtn, toolbar.root.firstChild);
+
+  function apply() {
+    const filtered = packages.filter((p) => matchesFilters(p, state, goalNames));
+    toolbar.setCount(filtered.length, packages.length);
+    if (!packages.length) {
+      listWrap.replaceChildren(emptyState({
+        iconName: 'gamepad',
+        title: 'هنوز بسته‌ای ساخته نشده است',
+        hint: 'بسته‌های بازی از مسیر رجیستری (API بسته‌ها) ثبت و منتشر می‌شوند.'
+      }));
+      return;
+    }
+    if (!filtered.length) {
+      listWrap.replaceChildren(emptyState({
+        iconName: 'search',
+        title: 'با این فیلترها بازی‌ای پیدا نشد',
+        hint: 'جست‌وجو یا فیلترها را ساده‌تر کنید.'
+      }));
+      return;
+    }
+    listWrap.replaceChildren(groupedDeck(filtered, goals, goalNames, () => renderPackagesTab(container)));
   }
-  container.replaceChildren(wrap);
+
+  container.replaceChildren(toolbar.root, listWrap);
+  apply();
 }
 
 function renderPrescriptionsTab(container, childId) {
@@ -201,7 +455,7 @@ export async function renderGames(container) {
 
   const body = el('div', {});
   const tabBar = tabs([
-    { key: 'packages', label: 'بسته‌ها', icon: 'gamepad', onSelect: (k) => select(k) },
+    { key: 'packages', label: 'بانک بازی‌ها', icon: 'gamepad', onSelect: (k) => select(k) },
     { key: 'rx', label: 'ارسال به دانش‌آموز', icon: 'clipboard', onSelect: (k) => select(k) },
     { key: 'report', label: 'گزارش', icon: 'trendingUp', onSelect: (k) => select(k) }
   ], initialTab);

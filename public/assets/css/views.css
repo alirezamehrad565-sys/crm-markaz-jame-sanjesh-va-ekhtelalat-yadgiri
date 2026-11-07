@@ -4682,3 +4682,73 @@ body.cb-printing #cb-print-root { display: block; }
   .fin-report tr { break-inside: avoid; }
   .fin-report thead { display: table-header-group; }
 }
+
+/* ═══ میز بازی‌ها (gmk) — فاز ۱ بازطراحی UI بازی‌ها؛ رسپانسیو کامل موبایل ═══ */
+.gmk-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: var(--sp-3); margin-bottom: var(--sp-4); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.gmk-toolbar__search { flex: 1 1 230px; min-width: 200px; position: relative; }
+.gmk-toolbar__search .input { width: 100%; }
+.gmk-toolbar__filters { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
+.gmk-toolbar__filters .select { max-width: 190px; }
+.gmk-toolbar__count { align-self: center; color: var(--text-3); font-size: var(--fs-sm); white-space: nowrap; padding-inline: 4px; }
+.gmk-toolbar__actions { margin-inline-start: auto; display: flex; gap: var(--sp-2); align-items: center; }
+/* چیپ حوزهٔ شناختی — جفت نرم توکن‌محور (AA در هر دو تم) */
+.gmk-chip, .gmk-fact { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: var(--radius-full); font-size: var(--fs-xs); line-height: var(--lh-ui); white-space: nowrap; }
+.gmk-chip { --chip-bg: var(--surface-2); --chip-fg: var(--text-2); --chip-dot: var(--text-3); background: var(--chip-bg); color: var(--chip-fg); font-weight: 600; }
+.gmk-chip__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--chip-dot); flex: none; }
+.gmk-chip--d1 { --chip-bg: var(--hue-1-soft); --chip-fg: var(--hue-1-on); --chip-dot: var(--hue-1-strong); }
+.gmk-chip--d2 { --chip-bg: var(--hue-2-soft); --chip-fg: var(--hue-2-on); --chip-dot: var(--hue-2-strong); }
+.gmk-chip--d3 { --chip-bg: var(--hue-3-soft); --chip-fg: var(--hue-3-on); --chip-dot: var(--hue-3-strong); }
+.gmk-chip--d4 { --chip-bg: var(--hue-4-soft); --chip-fg: var(--hue-4-on); --chip-dot: var(--hue-4-strong); }
+.gmk-chip--d7 { --chip-bg: var(--hue-7-soft); --chip-fg: var(--hue-7-on); --chip-dot: var(--hue-7-strong); }
+.gmk-chip--d8 { --chip-bg: var(--hue-8-soft); --chip-fg: var(--hue-8-on); --chip-dot: var(--hue-8-strong); }
+.gmk-fact { background: var(--surface-2); color: var(--text-2); }
+.gmk-group { margin-bottom: var(--sp-5); }
+.gmk-group:last-child { margin-bottom: 0; }
+.gmk-group__head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-2); }
+.gmk-group__title { font-weight: 700; font-size: var(--fs-md); color: var(--text); }
+.gmk-group__line { flex: 1; height: 1px; background: var(--border); min-width: 24px; }
+.gmk-deck { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
+.gmk-card { display: flex; flex-direction: column; gap: 10px; padding: var(--sp-4); }
+.gmk-card__head { display: flex; gap: 10px; align-items: flex-start; }
+.gmk-card__icon { flex: none; width: 42px; height: 42px; border-radius: var(--radius-sm); display: grid; place-items: center; background: var(--chip-bg, var(--surface-2)); color: var(--chip-fg, var(--text-2)); }
+.gmk-card__titlewrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.gmk-card__title { font-weight: 700; font-size: var(--fs-lg); line-height: var(--lh-snug); color: var(--text); overflow-wrap: anywhere; }
+.gmk-card__badges, .gmk-card__facts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.gmk-card__meta { color: var(--text-3); font-size: var(--fs-xs); line-height: var(--lh-ui); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.gmk-card__meta .gmk-id, .gmk-ltr { direction: ltr; unicode-bidi: isolate; }
+.gmk-card__meta .gmk-id { font-weight: 600; }
+.gmk-card__dose { display: flex; gap: 6px; align-items: center; color: var(--text-2); font-size: var(--fs-xs); }
+.gmk-card__actions { margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--border); display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; }
+.gmk-detail__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; margin: 4px 0 12px; }
+.gmk-detail__dt { color: var(--text-3); font-size: var(--fs-xs); }
+.gmk-detail__dd { color: var(--text); font-size: var(--fs-md); font-weight: 600; }
+.gmk-detail__sec { margin-top: 12px; }
+.gmk-detail__sec > b { display: block; margin-bottom: 6px; }
+.gmk-missions { display: flex; flex-direction: column; }
+.gmk-mission { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--border); font-size: var(--fs-sm); }
+.gmk-mission:first-child { border-top: 0; }
+.gmk-mission__n { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--primary-soft); color: var(--on-primary-soft); display: grid; place-items: center; font-size: var(--fs-2xs); font-weight: 700; }
+.gmk-rxsummary { margin-bottom: var(--sp-4); }
+.gmk-followup__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--border); }
+.gmk-followup__row:first-of-type { border-top: 0; }
+.gmk-followup__name { font-weight: 700; }
+.gmk-followup__spacer { flex: 1; }
+.gmk-guides { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); margin-top: var(--sp-4); }
+.gmk-guide { display: flex; gap: 10px; align-items: flex-start; padding: var(--sp-4); }
+.gmk-guide__icon { flex: none; width: 36px; height: 36px; border-radius: var(--radius-sm); display: grid; place-items: center; background: var(--primary-soft); color: var(--on-primary-soft); }
+.gmk-guide__title { font-weight: 700; font-size: var(--fs-md); margin: 0 0 2px; }
+.gmk-guide__text { color: var(--text-2); font-size: var(--fs-sm); margin: 0; line-height: var(--lh-ui); }
+@media (max-width: 920px) { .gmk-deck { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); } }
+@media (max-width: 640px) {
+  .gmk-deck { grid-template-columns: 1fr; }
+  .gmk-toolbar__search { flex-basis: 100%; }
+  .gmk-toolbar__filters .select { max-width: none; flex: 1 1 40%; }
+  .gmk-toolbar__actions { margin-inline-start: 0; flex-basis: 100%; }
+  .gmk-toolbar__actions .btn { flex: 1; justify-content: center; }
+  .gmk-card { padding: var(--sp-3); gap: 8px; }
+  .gmk-card__icon { width: 36px; height: 36px; }
+  .gmk-card__actions { flex-wrap: nowrap; }
+  .gmk-card__actions .btn--sm { flex: 1; justify-content: center; min-height: 38px; }
+  .gmk-detail__grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) { .gmk-card__title { font-size: var(--fs-md); } .gmk-fact, .gmk-chip { max-width: 100%; } }
