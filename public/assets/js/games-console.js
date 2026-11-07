@@ -455,7 +455,7 @@ export function renderRxPanel(container, { childId = null, childName = '', embed
   const state = { childId, childName, status: '' };
   let listWrap;
   let prescribeBtn;
-  const statusSel = el('select', { class: 'select', style: { maxWidth: '170px' }, 'aria-label': 'فیلتر وضعیت' },
+  const statusSel = el('select', { class: 'select', 'aria-label': 'فیلتر وضعیت' },
     el('option', { value: '' }, 'همهٔ وضعیت‌ها'),
     ...Object.entries(RX_STATUS).map(([k, v]) => el('option', { value: k }, v.label))
   );
@@ -490,14 +490,26 @@ export function renderRxPanel(container, { childId = null, childName = '', embed
             refresh();
           }
         }, icon('x', 13));
-        return el('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flex: '1', maxWidth: '400px' } }, picker.root, clearBtn);
+        return el('div', { class: 'gmk-toolbar__search', style: { display: 'flex', gap: '6px', alignItems: 'center' } }, picker.root, clearBtn);
       })();
 
-  const toolbar = el('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '14px' } },
-    childArea, statusSel, el('span', { style: { flex: '1' } }), prescribeBtn);
+  // ردیف خلاصهٔ ارسال — سه سنجهٔ زنده با کیت kpi موجود (فاز ۱ بازطراحی UI)
+  const kpiActive = kpi('ارسال فعال', null, 'در جریان تمرین', 'success');
+  const kpiLive = kpi('مأموریت در جریان', null, 'لینک زندهٔ صادرشده', 'accent');
+  const kpiFollow = kpi('نیازمند پیگیری', null, 'میز پیگیری تبعیت', 'warning');
+  const setKpi = (node, v) => {
+    const val = node.querySelector('.kpi__value');
+    if (val) val.textContent = fa(v);
+  };
+  const summary = el('div', { class: 'kpi-grid gmk-rxsummary', 'data-rx-summary': '' }, kpiActive, kpiLive, kpiFollow);
+
+  const toolbar = el('div', { class: 'gmk-toolbar' },
+    childArea,
+    el('div', { class: 'gmk-toolbar__filters' }, statusSel),
+    el('div', { class: 'gmk-toolbar__actions' }, prescribeBtn));
   listWrap = el('div', {});
   const followupsWrap = el('div', { style: { marginBottom: '14px' } });
-  container.replaceChildren(toolbar, followupsWrap, listWrap);
+  container.replaceChildren(summary, toolbar, followupsWrap, listWrap);
   refresh();
 
   async function refresh() {
@@ -515,6 +527,8 @@ export function renderRxPanel(container, { childId = null, childName = '', embed
       return;
     }
     listWrap.replaceChildren(renderRxTable(rows, { onOpenMissions: (rx) => missionsModal(rx, { childName: rx.childName ?? '', onChanged: refresh }), onChanged: refresh }));
+    setKpi(kpiActive, rows.filter((r) => r.status === 'active').length);
+    setKpi(kpiLive, rows.reduce((acc, r) => acc + (r.missionLive ?? 0), 0));
     if (!state.childId) loadFollowups(); // تریاژ سراسری — با فیلتر کودک خودِ جدول کافی است
     else followupsWrap.replaceChildren();
   }
@@ -529,6 +543,7 @@ export function renderRxPanel(container, { childId = null, childName = '', embed
       return;
     }
     followupsWrap.replaceChildren(rows.length > 0 ? renderFollowupsCard(rows) : document.createTextNode(''));
+    setKpi(kpiFollow, rows.length);
   }
 }
 
@@ -554,16 +569,16 @@ function renderFollowupsCard(rows) {
         { childName: r.childName ?? '' }
       ))
     }, icon('gamepad', 14), 'مأموریت‌ها و لینک');
-    return el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', padding: '10px 0', borderTop: '1px solid var(--border)' } },
-      el('b', {}, r.childName ?? '—'),
+    return el('div', { class: 'gmk-followup__row' },
+      el('span', { class: 'gmk-followup__name' }, r.childName ?? '—'),
       el('span', { class: 'cell-sub' }, r.packageTitleFa ?? ''),
-      el('span', { class: 'cell-sub' }, `${fa(r.missionDone)}/${fa(r.missionTotal)} مأموریت`),
+      el('span', { class: 'gmk-fact' }, `${fa(r.missionDone)}/${fa(r.missionTotal)} مأموریت`),
       el('span', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
         ...r.reasons.map((code) => {
           const def = FOLLOWUP_REASON[code] ?? null;
           return def ? badge(def.text(r), def.cls) : null;
         }).filter(Boolean)),
-      el('span', { style: { flex: '1' } }),
+      el('span', { class: 'gmk-followup__spacer' }),
       open
     );
   });
@@ -736,6 +751,12 @@ export function renderGamesReportPanel(container, { childId = null, childName = 
   const panel = el('div', {});
   container.replaceChildren(panel);
   if (!childId) {
+    // فاز ۱ بازطراحی — وضعیت خالی آموزنده: انتخابگر + راهنمای خواندن گزارش تا فضا بی‌استفاده نماند
+    const guideCard = (iconName, title, text) => el('div', { class: 'card gmk-guide' },
+      el('span', { class: 'gmk-guide__icon', 'aria-hidden': 'true' }, icon(iconName, 17)),
+      el('div', {},
+        el('p', { class: 'gmk-guide__title' }, title),
+        el('p', { class: 'gmk-guide__text' }, text)));
     let picker;
     panel.replaceChildren(
       el('div', { class: 'card' },
@@ -746,7 +767,14 @@ export function renderGamesReportPanel(container, { childId = null, childName = 
             renderGamesReportPanel(container, { childId: s.id, childName: name });
           } })).root
         )
-      )
+      ),
+      el('div', { class: 'gmk-guides' },
+        guideCard('trendingUp', 'چه چیزی گزارش می‌شود',
+          'جلسه‌های بازی کودک با اعتبار، حکم کیفیت، سنجه‌های گو/نوگو و روند زمان واکنش — فقط داده و پرچم، بدون هیچ تفسیر بالینی خودکار.'),
+        guideCard('shield', 'سه سنجهٔ کیفیت جلسه',
+          'اعتبار جلسه (معتبر/ناقص/نامعتبر)، حکم کیفیت (قابل اتکا/نیازمند احتیاط/ناقص) و ستاره‌های مسیر پنج‌مرحله‌ای تمرین.'),
+        guideCard('printer', 'خروجی برای پرونده',
+          'نمای چاپی مرتب برای پیوست پرونده و CSV برای بررسی دقیق‌تر — هر دو از همین صفحه در دسترس است.'))
     );
     return;
   }
