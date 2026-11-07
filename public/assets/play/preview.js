@@ -60,7 +60,13 @@ async function loadKind() {
     const mod = await import('./kinds/' + KIND + '.js');
     return {
       previewSteps: mod.previewSteps || GENERIC.previewSteps,
-      stimSvg: mod.stimSvg || GENERIC.stimSvg
+      stimSvg: mod.stimSvg || GENERIC.stimSvg,
+      // جادهٔ عددها (۱.۲۵.۲۸) — توابع نمایش خط عددی (ماژول‌های دیگر این‌ها ندارند)
+      numlineMarkup: mod.numlineMarkup || null,
+      numlineValueFromTap: mod.numlineValueFromTap || null,
+      numlinePlaceGuess: mod.numlinePlaceGuess || null,
+      numlineRevealTruth: mod.numlineRevealTruth || null,
+      numlineGuessPoint: mod.numlineGuessPoint || null
     };
   } catch (err) {
     return GENERIC;

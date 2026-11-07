@@ -89,7 +89,12 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
   } else if (item.type === 'numline') {
     const chosen = typeof res.chosen === 'number' ? res.chosen : null;
     if (chosen !== null && typeof item.correct === 'number' && item.range) {
-      correct = chosen === item.correct;
+      // آستانهٔ پذیرش سن‌محور (۱.۲۵.۲۸) — پیش‌فرض ۰٫۵ = لمس صحیح همان عدد (سازگار با رفتار قبلی)؛
+      // گستره‌های بزرگ‌تر آستانهٔ خود را می‌برند تا دقت انگشت‌نگاری کودک جریمه نشود
+      const tol = typeof item.tolerance === 'number' && Number.isFinite(item.tolerance) && item.tolerance >= 0
+        ? item.tolerance
+        : 0.5;
+      correct = Math.abs(chosen - item.correct) <= tol;
       errorPct = numlineErrorPct(chosen, item.correct, item.range);
     }
   } else if (item.type === 'touch_report') {
@@ -153,6 +158,26 @@ export function answerDisplayOf(item: MissionItem): string | null {
   }
   if (item.type === 'numline') return typeof item.correct === 'number' ? String(item.correct) : null;
   return null; // touch_report: بازپخش محرک، نه نمایش پاسخ
+}
+
+// ─── بازخورد خط عددی (۱.۲۵.۲۸) — دو سطح موفقیت برای حس ادیکتو بدون رقارت:
+//   · لمس دقیقاً همان عدد → تحسین دقیق
+//   · درون آستانه ولی نه همان عدد → «خیلی نزدیک بود» — کنجکاوی بماند، سرزنش ممنوع
+//   · بیرون آستانه → متن پیش‌فرض §۲ (بی‌سرزنش)؛ جای درست با نشانگر آموزش داده می‌شود
+
+export const NUMLINE_FB_EXACT = 'دقیقاً همان‌جا! آفرین.';
+export const NUMLINE_FB_NEAR = 'خیلی نزدیک بود! گرفتی.';
+
+/** پیام بازخورد خط عددی — فقط برای پاسخ درست؛ نادرست = null (سرور متن پیش‌فرض §۲ می‌گذارد) */
+export function numlineFeedbackOf(item: MissionItem, correct: boolean, response: unknown): string | null {
+  if (item.type !== 'numline' || !correct) return null;
+  const chosen = (response ?? {}) === Object(response)
+    ? (response as Record<string, unknown>).chosen
+    : null;
+  if (typeof chosen === 'number' && typeof item.correct === 'number' && chosen === item.correct) {
+    return NUMLINE_FB_EXACT;
+  }
+  return NUMLINE_FB_NEAR;
 }
 
 // ─── فرمول‌های سنجه (§۸) — ورودی فقط پاسخ‌های معتبر پروب ───

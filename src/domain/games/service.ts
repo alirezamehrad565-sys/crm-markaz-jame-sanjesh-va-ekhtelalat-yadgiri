@@ -16,6 +16,7 @@ import {
   previewItemAt,
   stimLabelOf,
   stripAnswerKeys,
+  numlineFeedbackOf,
   toItemView
 } from './pure';
 import { protocolForAge, protocolSnapshotOf, bandForAge } from './protocol';
@@ -24,13 +25,16 @@ import { WINDOW_MAX_MS, WINDOW_MIN_MS } from './adaptive';
 import {
   applyStageOverrides,
   currentStageOf,
+  gameKindOf,
+  numlineItemInStage,
   stageById,
   stageByIndex,
-  stageOutcomeOf,
-  stageProgressOf,
+  stageOutcomeFor,
+  stageProgressOfKind,
   stageStimViewOf,
   STAGE_RULES_VERSION,
   STAGE_TOTAL,
+  type GameKind,
   type StageDef,
   type StageHistoryRow,
   type StageProgress
@@ -878,6 +882,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
 
   async function stateViewOf(res: ResolvedLink): Promise<PublicStateView> {
     const m = missionConfigOf(res);
+    const kind = gameKindOf(m.game);
     const adherence = await db.queryOne<{ confirm2_at: string | null }>(`SELECT confirm2_at FROM game_adherence WHERE mission_id = ?`, [res.mission.id]);
     const state = linkStateOf(res);
     const mode: ProtocolMode = res.pkg.body.mode ?? 'training';
@@ -888,7 +893,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
     let stage: StageDef | null = null;
     let progress: StageProgress | null = null;
     if (state === 'child_active' && mode === 'training') {
-      const sctx = await stageContextOf(res.rx.id, childAge, res.pkg.body);
+      const sctx = await stageContextOf(res.rx.id, childAge, res.pkg.body, kind);
       if (sctx) {
         stage = sctx.stage;
         progress = sctx.progress;
@@ -912,8 +917,8 @@ export function createGamesService(deps: GamesDeps): GamesService {
       const sum = parseJson<{ stage?: { id?: string; index?: number; title_fa?: string; passed?: boolean; stars?: number } } | null>(res.session.summary_json, null);
       const st = sum?.stage;
       if (st && typeof st.stars === 'number' && typeof st.index === 'number') {
-        const prog = stageProgressOf(await stageHistoryOf(res.rx.id));
-        const next = stageByIndex('7-12', st.index + 1);
+        const prog = stageProgressOfKind(kind, await stageHistoryOf(res.rx.id));
+        const next = stageByIndex('7-12', st.index + 1, kind);
         stageResult = {
           id: st.id ?? res.session.stage_id,
           index: st.index,
@@ -1021,12 +1026,14 @@ export function createGamesService(deps: GamesDeps): GamesService {
         [prescriptionId]
       );
       return rows.map((r) => {
-        const sum = parseJson<{ pct?: { correct_go?: number | null; correct_nogo?: number | null } } | null>(r.summary_json, null);
+        const sum = parseJson<{ pct?: { correct_go?: number | null; correct_nogo?: number | null; accuracy?: number | null }; numline?: { mean_error_pct?: number | null } } | null>(r.summary_json, null);
         return {
           stage_id: r.stage_id,
           validity: r.validity,
           correct_go_pct: sum?.pct?.correct_go ?? null,
-          correct_nogo_pct: sum?.pct?.correct_nogo ?? null
+          correct_nogo_pct: sum?.pct?.correct_nogo ?? null,
+          accuracy: sum?.pct?.accuracy ?? null,
+          numline_error_pct: sum?.numline?.mean_error_pct ?? null
         };
       });
     } catch {
@@ -1034,16 +1041,18 @@ export function createGamesService(deps: GamesDeps): GamesService {
     }
   }
 
-  /** زمینهٔ مرحلهٔ تمرین (۱.۲۵.۲۲) — پیشرفت + مرحلهٔ فعال؛ فقط تمرین با کلید خاموشی روشن */
+  /** زمینهٔ مرحلهٔ تمرین (۱.۲۵.۲۲) — پیشرفت + مرحلهٔ فعال؛ فقط تمرین با کلید خاموشی روشن؛
+   *  ملاک گذار و عنوان مرحله‌ها نوع‌بازی‌آگاه است (۱.۲۵.۲۸) */
   async function stageContextOf(
     prescriptionId: string,
     childAge: number | null,
-    body: { stages_enabled?: boolean }
+    body: { stages_enabled?: boolean },
+    kind: GameKind = 'gonogo'
   ): Promise<{ progress: StageProgress; stage: StageDef } | null> {
     if (body.stages_enabled === false) return null;
     const band = bandForAge(childAge).band;
-    const progress = stageProgressOf(await stageHistoryOf(prescriptionId));
-    const stage = currentStageOf(progress, band);
+    const progress = stageProgressOfKind(kind, await stageHistoryOf(prescriptionId));
+    const stage = currentStageOf(progress, band, kind);
     if (!stage) return null;
     return { progress, stage };
   }
@@ -1078,10 +1087,11 @@ export function createGamesService(deps: GamesDeps): GamesService {
         });
         sequenceJson = serializeSequence(seq);
       }
-      // مرحلهٔ فعال مسیر پیشرفت (۱.۲۵.۲۲) — فقط تمرین؛ resolve از تاریخچهٔ تجویز و ماندگاری در جلسه
+      // مرحلهٔ فعال مسیر پیشرفت (۱.۲۵.۲۲) — فقط تمرین؛ resolve از تاریخچهٔ تجویز و ماندگاری در جلسه؛
+      // عنوان/ملاک مرحله‌ها نوع‌بازی‌آگاه (۱.۲۵.۲۸)
       let stageId: string | null = null;
       if (mode === 'training') {
-        const sctx = await stageContextOf(res.rx.id, await childAgeOf(res.rx.child_id), res.pkg.body);
+        const sctx = await stageContextOf(res.rx.id, await childAgeOf(res.rx.child_id), res.pkg.body, gameKindOf(mission.game));
         stageId = sctx?.stage.id ?? null;
       }
       await db.execute(
@@ -1099,23 +1109,30 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const res = await requireActiveToken(token);
     const session = requireSessionIn(res, ['child_active']);
     const mission = missionConfigOf(res);
+    const kind = gameKindOf(mission.game);
     const attempts = await db.query<AttemptRow>(`SELECT * FROM game_attempts WHERE session_id = ?`, [session.id]);
     const doneIds = new Set(attempts.map((a) => a.item_id));
-    const total = (mission.items ?? []).length;
+    // جادهٔ مرحلهٔ خط عددی (۱.۲۵.۲۸) — انتخاب از بانک authored با سقف گسترهٔ مرحله؛
+    // گونوگو و بی‌مرحله = همهٔ آیتم‌ها؛ نمره‌دهی همیشه روی آیتم authored می‌ماند
+    const nlStageId = kind === 'numline' ? session.stage_id : null;
+    const inStage = (it: MissionItem): boolean =>
+      kind !== 'numline' || numlineItemInStage(it, nlStageId);
+    const stageItems = (mission.items ?? []).filter(inStage);
+    const total = stageItems.length;
     const unansweredOf = (pred: (it: MissionItem) => boolean): MissionItem | undefined =>
-      (mission.items ?? []).find((it) => !doneIds.has(it.id) && pred(it));
+      stageItems.find((it) => !doneIds.has(it.id) && pred(it));
 
     // ترتیب seed-دار (فاز ۳): جایگاه = شمار پاسخ‌های ثبت‌شده؛ دستهٔ g/n تعیین‌کنندهٔ
     // انتخاب آیتم است — کلید پاسخ هرگز به کلاینت نمی‌رود، فقط خودِ آیتمِ برگزیده.
     const seq = parseSequenceRecord(session.sequence_json);
     let next: MissionItem | undefined;
     if (seq && doneIds.size < seq.trials.length) {
-      const kind = seq.trials[doneIds.size].kind;
-      next = unansweredOf((it) => (it.correct_touch === true) === (kind === 'go'))
+      const kindTrial = seq.trials[doneIds.size].kind;
+      next = unansweredOf((it) => (it.correct_touch === true) === (kindTrial === 'go'))
         ?? unansweredOf(() => true); // سهمیهٔ دسته خالی — نزدیک‌ترین سازگار
     }
     if (!next) {
-      next = (mission.items ?? []).find((it) => !doneIds.has(it.id));
+      next = stageItems.find((it) => !doneIds.has(it.id));
     }
 
     await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf(now()), session.id]);
@@ -1199,9 +1216,14 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const touched = (response ?? {}) === Object(response)
       ? (response as Record<string, unknown>).touched === true
       : false;
+    // خط عددی (۱.۲۵.۲۸): دو سطح موفقیت — دقیق / نزدیک؛ نادرست = متن پیش‌فرض §۲ بی‌سرزنش
     const message = item.type === 'touch_report' && correct && !touched
       ? FEEDBACK_WITHHOLD
-      : correct ? FEEDBACK_OK : FEEDBACK_RETRY;
+      : item.type === 'numline' && correct
+        ? (numlineFeedbackOf(item, true, response) ?? FEEDBACK_OK)
+        : correct
+          ? FEEDBACK_OK
+          : FEEDBACK_RETRY;
     return {
       recorded: true,
       phase: 'train',
@@ -1223,11 +1245,19 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const attempts = await db.query<AttemptRow>(`SELECT * FROM game_attempts WHERE session_id = ? ORDER BY created_at`, [session.id]);
     const nowIso = isoOf(now());
 
-    // اعتبار جلسه: شکاف بیکاری + نسبت تکمیل (§۶/§۸)
+    // اعتبار جلسه: شکاف بیکاری + نسبت تکمیل (§۶/§۸) — نسبت تکمیل خط عددی به «جادهٔ مرحلهٔ»
+    // همان جلسه سنجیده می‌شود نه کل بانک (۱.۲۵.۲۸)؛ گونوگو/بی‌مرحله = کل مأموریت
+    const finishKind = gameKindOf(mission.game);
+    const finishStage = finishKind === 'numline'
+      ? stageById('7-12', session.stage_id, 'numline')
+      : null;
+    const finishTotal = finishStage
+      ? mission.items.filter((it) => numlineItemInStage(it, finishStage.id)).length
+      : mission.items.length;
     const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso]
       .filter((v): v is string => typeof v === 'string')
       .map((v) => new Date(v).getTime());
-    const validity = decideValidity(activity, attempts.length, mission.items.length);
+    const validity = decideValidity(activity, attempts.length, finishTotal);
 
     // سنجه فقط از Attemptهای معتبر پروب (§۸) — همهٔ سنجه‌های مأموریت (مثل چهار سنجهٔ گو/نوگو)
     // + لایهٔ محاسبه‌شدهٔ scoring.ts (فاز ۵) برای گزارش درمانگر — جدا از سنجه‌های رجیستری
@@ -1242,11 +1272,11 @@ export function createGamesService(deps: GamesDeps): GamesService {
       )
     }));
     const probeScored = scoredRows.filter((r) => r.a.phase === 'probe').map((r) => r.scored);
-    // خلاصهٔ محاسبه‌شده از آزمون‌های لمسی گو/نوگو جلسه (isGo از scoreAttempt) — سبدِ گزارش
-    const touchRows = scoredRows.filter((r) => r.scored.isGo !== undefined);
+    // خلاصهٔ محاسبه‌شده از همهٔ آزمون‌های جلسه (۱.۲۵.۲۸: خط عددی هم شامل است — رفتار/RT/پوشش
+    // شواهد برای هر نوع‌بازی ثبت می‌شود؛ برای گو/نوگو همان مجموعهٔ قبلی است چون همهٔ آیتم‌ها لمسی‌اند)
     const summary = summarizeAttempts(
-      touchRows.map((r) => r.scored),
-      touchRows.map((r) => ({
+      scoredRows.map((r) => r.scored),
+      scoredRows.map((r) => ({
         presented_at_ms: r.a.presented_at_ms ?? null,
         frame_drops: r.a.frame_drops ?? null,
         max_frame_delta_ms: r.a.max_frame_delta_ms ?? null,
@@ -1299,7 +1329,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
       : null;
     const quality = assessQuality({
       validity,
-      total_items: mission.items.length,
+      total_items: finishTotal,
       done_items: attempts.length,
       idle_gap_max_ms: idleGapMax,
       pause_count: typeof sessionEvidence?.pause_count === 'number' && Number.isFinite(sessionEvidence.pause_count) ? Math.max(0, Math.round(sessionEvidence.pause_count)) : null,
@@ -1316,12 +1346,14 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const sessionMode: ProtocolMode = res.pkg.body.mode ?? 'training';
     const stagesOn = sessionMode === 'training' && res.pkg.body.stages_enabled !== false;
     const ageFin = stagesOn ? await childAgeOf(res.rx.child_id) : null;
+    const sessionKind = gameKindOf(mission.game);
     const sessionStage = stagesOn && session.stage_id
-      ? stageById(bandForAge(ageFin).band, session.stage_id)
+      ? stageById(bandForAge(ageFin).band, session.stage_id, sessionKind)
       : null;
     let summaryBody: unknown = summary;
     if (sessionStage && validity === 'valid') {
-      const outcome = stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo);
+      // ملاک گذار نوع‌بازی‌آگاه (۱.۲۵.۲۸) — گونوگو: گو/نوگو؛ خط عددی: دقت جای عدد
+      const outcome = stageOutcomeFor(sessionKind, summary);
       summaryBody = {
         ...summary,
         stage: {
