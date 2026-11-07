@@ -318,6 +318,110 @@
   stroke-width: 1.5;
 }
 
+/* ─── جادهٔ عددها (۱.۲۵.۲۸) — بازی خط عددی ───
+   ریل Teal، چیپ عدد Amber با جوهر Navy، نشان حدس Amber و نشان حقیقت Teal —
+   هدف لمسی جاده ≥۷۶px (§۹)؛ هیچ انیمیشن CSS — جنبش نشان‌ها از fx.popIn می‌آید.
+   دو نشانهٔ رنگ + مکان برای کوررنگ؛ داخل جاده dir=ltr (۰ همیشه چپ، کتاب درسی). */
+.play-numline {
+  width: 100%;
+  max-width: 430px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.play-numline--sample { max-width: 320px; }
+
+.play-numline__prompt {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--p-soft);
+  margin: 0;
+}
+
+.play-numline__chip {
+  min-width: 84px;
+  padding: 8px 24px;
+  border-radius: 20px;
+  background: var(--p-amber);
+  color: var(--p-navy);
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.5;
+  box-shadow: 0 10px 22px rgba(21, 62, 80, .16), inset 0 -3px 0 rgba(21, 62, 80, .18);
+}
+
+.play-numline__road {
+  position: relative;
+  width: 100%;
+  height: 78px; /* هدف لمسی سخاوتمند ≥۶۴px — کل جاده لمس‌پذیر است */
+  touch-action: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.play-numline__rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 32px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--p-teal);
+  box-shadow: inset 0 1px 2px rgba(21, 62, 80, .25);
+}
+
+.play-numline__tick {
+  position: absolute;
+  top: 27px;
+  width: 2px;
+  height: 17px;
+  background: var(--p-line);
+}
+
+.play-numline__tick--lab {
+  top: 24px;
+  height: 23px;
+  background: var(--p-soft);
+}
+
+.play-numline__lab {
+  position: absolute;
+  top: 52px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--p-soft);
+}
+
+/* نشان‌ها — دایرهٔ حدس روی ریل می‌نشیند؛ حقیقت حلقهٔ Teal دور جای درست */
+.play-numline__mark {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.play-numline__mark--guess {
+  top: 24px;
+  background: var(--p-amber);
+  border: 3px solid var(--p-navy);
+  box-shadow: 0 4px 10px rgba(21, 62, 80, .22);
+}
+
+.play-numline__mark--truth {
+  top: 21px;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 3px solid var(--p-teal);
+}
+
+.play-numline__mark[hidden] { display: none; }
+
 /* ─── تبلت افقی: صحنه وسط می‌ماند و حاشیهٔ مرده روی محتوا اثر نمی‌گذارد ─── */
 @media (min-width: 700px) and (orientation: landscape) {
   .play-root { max-width: 640px; margin: 0 auto; width: 100%; }
