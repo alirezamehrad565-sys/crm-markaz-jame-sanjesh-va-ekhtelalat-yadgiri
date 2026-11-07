@@ -25,6 +25,8 @@ export interface Env {
   CP_NODE_CODE?: string;
   CP_NODE_KEY?: string;
   CP_SYNC_STAFF_ID?: string;
+  /** Service Binding به ورکر کنترل‌پلین (هم‌حساب) — fetch عمومیِ هم‌زون 1042 می‌دهد */
+  CP?: Fetcher;
 }
 
 function buildEnv(env: Env) {
@@ -125,7 +127,8 @@ async function runCpSyncCycle(env: Env): Promise<void> {
   const result = await syncCpAnnouncements({
     db,
     logger,
-    config: buildCpSyncConfig(env)
+    config: buildCpSyncConfig(env),
+    binding: env.CP ?? null
   });
   logger.info('cp_sync.cycle.done', { status: result.status, applied: result.applied ?? 0 });
 }
@@ -145,7 +148,8 @@ function probeCpSync(env: Env, ctx: ExecutionContext): void {
     cpSyncOpportunistic({
       db: createDb(env.DB),
       logger: createLogger('sync'),
-      config: buildCpSyncConfig(env)
+      config: buildCpSyncConfig(env),
+      binding: env.CP ?? null
     }).catch(() => undefined)
   );
 }

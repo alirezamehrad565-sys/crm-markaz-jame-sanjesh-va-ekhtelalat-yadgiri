@@ -166,6 +166,8 @@ export async function cpSyncOpportunistic(deps: {
   db: DbClient;
   logger: Logger;
   config: CpSyncConfig;
+  /** Service Binding «CP» — اگر موجود باشد به‌جای fetch عمومی */
+  binding?: Fetcher | null;
   fetchFn?: typeof fetch;
   now?: () => Date;
   minIntervalMs?: number;
@@ -185,6 +187,7 @@ export async function cpSyncOpportunistic(deps: {
     db,
     logger,
     config,
+    binding: deps.binding,
     fetchFn: deps.fetchFn,
     now: deps.now
   });
@@ -193,11 +196,17 @@ export async function cpSyncOpportunistic(deps: {
 /**
  * یک دورهٔ سینک اعلان CP — هر ۱۵ دقیقه از scheduled/selfhost-crons صدا زده می‌شود.
  * هرگز throw نمی‌کند؛ خطا = result با status:'error' و log.warn.
+ *
+ * مسیر اتصال: اگر deps.binding (Service Binding ورکر به ورکر — خطای 1042 کلادفلر
+ * fetch عمومیِ هم‌زون را می‌بندد) موجود بود از همان استفاده می‌شود؛ وگرنه fetch عمومی
+ * با CP_SYNC_URL — یعنی سلف‌هاست و نود بیرونی با همان قرارداد HTTPS کار می‌کنند.
  */
 export async function syncCpAnnouncements(deps: {
   db: DbClient;
   logger: Logger;
   config: CpSyncConfig;
+  /** Service Binding «CP» در ورکر (هم‌حساب) — null/undefined = fetch عمومی */
+  binding?: Fetcher | null;
   /** تزریق fetch برای تست */
   fetchFn?: typeof fetch;
   now?: () => Date;
@@ -219,8 +228,9 @@ export async function syncCpAnnouncements(deps: {
       if (!Number.isNaN(t)) sinceIso = new Date(t - CP_SYNC_LOOKBACK_MS).toISOString();
     }
 
-    // ۳) pull از CP با کلید نود m1.2
-    const res = await (deps.fetchFn ?? fetch)(buildRequestUrl(config.cpSyncUrl, sinceIso), {
+    // ۳) pull از CP با کلید نود m1.2 — service binding اگر هست، وگرنه HTTPS عمومی
+    const url = buildRequestUrl(config.cpSyncUrl, sinceIso);
+    const init: RequestInit = {
       method: 'GET',
       headers: {
         'X-CP-Node-Code': config.cpNodeCode,
@@ -228,10 +238,25 @@ export async function syncCpAnnouncements(deps: {
         'X-CP-Node-Version': APP_VERSION
       },
       signal: AbortSignal.timeout(CP_SYNC_TIMEOUT_MS)
-    });
+    };
+    const res = deps.binding
+      ? await deps.binding.fetch(url, init)
+      : await (deps.fetchFn ?? fetch)(url, init);
 
     if (!res.ok) {
-      log.warn('announcement.cp_sync_failed', { http: res.status, detail: 'cp_http_error' });
+      // تشخیص عملیاتی: URL و آغاز بدنهٔ پاسخ در لاگ می‌آید (بدنهٔ خطای CP راز ندارد)
+      let bodyHead = '';
+      try {
+        bodyHead = (await res.text()).slice(0, 180);
+      } catch {
+        bodyHead = '';
+      }
+      log.warn('announcement.cp_sync_failed', {
+        http: res.status,
+        detail: 'cp_http_error',
+        url: config.cpSyncUrl, // کل URL درخواست‌شده — راز ندارد (کلید در هدر است)
+        body_head: bodyHead
+      });
       return { status: 'error', detail: `http_${res.status}` };
     }
 

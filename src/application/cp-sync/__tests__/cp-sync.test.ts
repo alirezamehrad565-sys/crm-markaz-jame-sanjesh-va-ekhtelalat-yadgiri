@@ -368,6 +368,34 @@ describe('cp-sync: دروازهٔ فرصت‌طلب (جای کرون پنجم ر
     expect(JSON.parse(attempt!.value)).toBe('2026-11-07T15:00:00.000Z');
   });
 
+  it('Service Binding CP → همان قرارداد از طریق binding.fetch می‌گذرد (بدون fetch عمومی)', async () => {
+    const A = createTestApp();
+    const calls: Array<{ url: string; headers: Record<string, string> }> = [];
+    const binding = {
+      fetch: (async (url: string | URL, init?: RequestInit) => {
+        calls.push({ url: String(url), headers: (init?.headers ?? {}) as Record<string, string> });
+        return new Response(
+          JSON.stringify({ data: { server_time: '2026-11-07T14:30:00.000Z', items: [cpItem()] } }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }) as Fetcher['fetch']
+    } as Fetcher;
+    const res = await syncCpAnnouncements({
+      db: A.db,
+      logger: silentLogger('it'),
+      config: buildCpSyncConfig(FULL_ENV),
+      binding
+    });
+    expect(res.status).toBe('ok');
+    expect(res.applied).toBe(1);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].headers['X-CP-Node-Code']).toBe('demo-a');
+    expect(calls[0].headers['Authorization']).toBe('Bearer ck_live_test_key');
+    expect(calls[0].url).toContain('/api/node/announcements/sync');
+    const rows = await listAnnouncements(A);
+    expect(rows).toHaveLength(1);
+  });
+
   it('خطای شبکه در دروازهٔ فرصت‌طلب هم مُهر می‌خورد (تا سیل تلاش نشود) و error برمی‌گردد', async () => {
     const A = createTestApp();
     const boom = (async () => {
