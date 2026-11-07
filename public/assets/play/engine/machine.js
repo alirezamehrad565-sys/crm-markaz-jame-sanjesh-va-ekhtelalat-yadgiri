@@ -113,3 +113,17 @@ export function windowMsFor(item, protocol) {
   const w = override !== null ? override : go;
   return w > 300 && w < 8000 ? w : go;
 }
+
+/** مدت نمایش محرک — نگاشت stimulus_duration بستهٔ jsPsych-timelines/go-nogo (MIT):
+ *  null (پیش‌فرض jsPsych و ما) = نمایش تا پاسخ/پایان پنجره — رفتار امروز؛
+ *  عدد ۱۵۰…پنجره−۵۰ = پنهان‌سازی زودهنگام «نمایشی» — پنجرهٔ پاسخ و گیت پاسخ
+ *  تغییر نمی‌کنند (پاسخ پس از محو هم مجاز است، مثل حالت null آن بسته).
+ *  مقدار بیرون بازه = نمایش تا پایان پنجره (سقوط امن). خالص و آزمون‌پذیر. */
+export function stimulusHideMsFor(item, protocol) {
+  const p = protocol && protocol.params ? protocol.params : {};
+  const raw = typeof p.stimulus_duration_ms === 'number' && Number.isFinite(p.stimulus_duration_ms)
+    ? Math.round(p.stimulus_duration_ms) : null;
+  if (raw === null) return null;
+  const w = windowMsFor(item, protocol);
+  return raw >= 150 && raw <= w - 50 ? raw : null;
+}

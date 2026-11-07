@@ -95,3 +95,192 @@ export function previewSteps(hint) {
   }
   return steps;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   لایهٔ اقتباس jsPsych-timelines/go-nogo (MIT) — ۱.۲۵.۳۴
+   ممیزی کامل در docs/research/gonogo-jspsych-integration.md:
+   بستهٔ @jspsych-timelines/go-nogo v0.5.0 به‌جای جایگزینی موتور، در سطح
+   «منطق مأموریت» اقتباس شده — همان سه بلوک تعاملی آن بسته:
+     ۱) تمرین گو با پنجرهٔ بلند و تکرار تا موفقیت (createGoPractice)
+     ۲) تمرین نوگو با بازداری کوتاه و تکرار تا موفقیت (createNoGoPractice)
+     ۳) خلاصهٔ پایان جلسه (createDebrief — دقت + زمان واکنش)
+   با سه تفاوت آگاهانه: لمس همه‌جای صحنه به‌جای دکمهٔ ثابت (کیفیت لمس
+   موبایل)، متن کامل فارسی روبه‌کودک (text_object فارسی‌شده)، و ماندن
+   کلید پاسخ روی سرور (در jsPsych شمارندهٔ is_go_trial کلاینت‌محور است —
+   این‌جا محرک فقط از راهنمای سرور می‌آید و هیچ کلیدی در کلاینت نیست).
+   ═══════════════════════════════════════════════════════════════ */
+
+import * as fx from '../fx.js';
+
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+const faNum = (n) => String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
+const faDec = (x) => String(x).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]).replace('.', '٫');
+
+function esc(s) {
+  return s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* متن‌های بازی — الگوی text_object بستهٔ jsPsych؛ همه‌چیز فارسی و بی‌سرزنش (§۲).
+   هیچ واژهٔ فهرست ممنوع لینت — بازخورد تکرار توصیف وضعیت است، نه سرزنش کودک. */
+export const GO_NOGO_TEXT = {
+  goStepLine: (label) => 'این را لمس کن: ' + label,
+  goStepWait: 'هر وقت ماهی آمد، صفحه را لمس کن',
+  goSuccess: 'آفرین! ماهی را گرفتی.',
+  goRetry: 'ماهی زود رفت؛ دوباره امتحان می‌کنیم.',
+  goRetryCalm: 'یک نفس عمیق بکش؛ ماهی دوباره برمی‌گردد.',
+  nogoStepLine: (label) => 'این را لمس نکن: ' + label,
+  nogoStepWait: 'دستت را نگه دار تا خرچنگ آرام آرام برود',
+  nogoSuccess: 'چه دستِ آرامی! خرچنگ هم آرام رفت.',
+  nogoRetry: 'خرچنگ را نباید لمس کرد؛ یک‌بار دیگر تمرین می‌کنیم.',
+  nogoRetryCalm: 'دستت را روی زانو بگذار؛ خرچنگ دوباره می‌آید.',
+  practiceDone: 'تمرین تمام شد! حالا مأموریت واقعی شروع می‌شود.',
+  debriefAccuracy: (pct) => 'دقت امروز تو: ' + faNum(pct) + '٪',
+  debriefMedianRt: (sec) => 'میانهٔ زمان لمس‌های درست: ' + faDec(sec) + ' ثانیه',
+  debriefPractice: (n) => 'در تمرین شروع، ' + faNum(n) + ' بار دیگر تلاش کردی و موفق شدی.'
+};
+
+/** پارامترهای تمرین تعاملی — نگاشت go_practice_timeout/nogo_practice_timeout بستهٔ jsPsych
+ *  (پیش‌فرض همان ۱۰۰۰۰/۳۰۰۰ آن بسته)؛ سقف امن ۳۰ ثانیه تا جلسه گیر نکند */
+export const PRACTICE_LIMITS = { go_ms: 10000, nogo_ms: 3000, min_ms: 800, max_ms: 30000 };
+
+/** بسته‌بندی امن پنجرهٔ تمرین — خالص؛ بیرون بازه = پیش‌فرض نوع‌بازی */
+export function practiceLimitOf(type, rawMs) {
+  const d = type === 'nogo' ? PRACTICE_LIMITS.nogo_ms : PRACTICE_LIMITS.go_ms;
+  const v = typeof rawMs === 'number' && Number.isFinite(rawMs) ? Math.round(rawMs) : d;
+  if (v < PRACTICE_LIMITS.min_ms || v > PRACTICE_LIMITS.max_ms) return d;
+  return v;
+}
+
+/** دسته‌بندی خروجی تمرین — آینهٔ on_finish بستهٔ jsPsych:
+ *  گو: لمس = موفقیت، بی‌لمس تا پایان پنجره = تکرار؛ نوگو: برعکس.
+ *  خروجی 'success' | 'retry' — تکرار تا موفقیت همان قدم ادامه دارد. */
+export function practiceOutcome(type, touched) {
+  return type === 'nogo' ? (touched ? 'retry' : 'success') : (touched ? 'success' : 'retry');
+}
+
+/** یک لمس یا یک پنجرهٔ زمانی — هر کدام زودتر. یک لمس فیزیکی فقط یک‌بار ثبت می‌شود
+ *  (شنونده پس از نخستین رخداد برداشته می‌شود؛ pointerdown نه click — بدون تأخیر لمسی).
+ *  sleeper تک‌شکافه است — در هر دو مسیر cancel می‌شود تا شمارندهٔ یدکی هرگز
+ *  در میانهٔ خواب بعدی نترکد (همان قاعدهٔ پنجرهٔ گو/نوگو در موتور). */
+function tapWithin(stage, ms, sleeper) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (touched) => {
+      if (done) return;
+      done = true;
+      stage.removeEventListener('pointerdown', onTap);
+      sleeper.cancel(); // شمارندهٔ پنجره یتیم نمی‌ماند — لمس یا پایان، هر دو مسیر
+      resolve(touched);
+    };
+    const onTap = () => finish(true);
+    stage.addEventListener('pointerdown', onTap);
+    sleeper.sleep(ms).then(() => finish(false));
+  });
+}
+
+function stepCard(badge, svg, line, muted) {
+  return '<span class="play-step-badge">' + esc(badge) + '</span>' +
+    (svg || '') +
+    '<p class="play-line">' + esc(line) + '</p>' +
+    (muted ? '<p class="play-muted">' + esc(muted) + '</p>' : '');
+}
+
+/**
+ * تمرین تعاملی شروع — اقتباس حلقهٔ retry بی‌نهایت بستهٔ jsPsych با محرک راهنمای سرور
+ * (hint.go/hint.nogo از آیتم‌های train ساخته می‌شود؛ امضای ماهی/خرچنگ هر مرحله را
+ * سرور می‌فرستد — کلید پاسخ هرگز به کلاینت نمی‌رسد). گو = لمس همه‌جای صحنه؛
+ * نوگو = بازداری تا پایان پنجرهٔ کوتاه. ارزیابی هرگز این‌جا نمی‌آید (مصرف تمرین).
+ * خروجی: { applied, go_retries, nogo_retries } — applied=false یعنی راهنمای سرور نبود
+ * و مدار قدیمی previewSteps باید برقرار بماند.
+ */
+export async function practiceInteractive(ctx) {
+  const { stage, sleeper, hint } = ctx || {};
+  if (!stage || !sleeper || !hint || !hint.go || !hint.nogo) {
+    return { applied: false, go_retries: 0, nogo_retries: 0 };
+  }
+  const goMs = practiceLimitOf('go', hint.go.window_ms);
+  const nogoMs = practiceLimitOf('nogo', hint.nogo.window_ms);
+  let goRetries = 0;
+  let nogoRetries = 0;
+
+  /* قدم گو — ماهی: لمس در پنجرهٔ بلند؛ بی‌لمس = بازخورد آرام + همان قدم تکرار می‌شود */
+  for (;;) {
+    stage.className = 'play-stage';
+    stage.classList.add('play-stage--teach');
+    stage.innerHTML = stepCard('قدم ۱ از ۲', stimSvg(hint.go.stim),
+      GO_NOGO_TEXT.goStepLine(hint.go.label), GO_NOGO_TEXT.goStepWait);
+    fx.revealStage(stage);
+    fx.popIn(stage.querySelector('.play-svg'));
+    const out = practiceOutcome('go', await tapWithin(stage, goMs, sleeper));
+    if (out === 'success') {
+      stage.innerHTML = stepCard('قدم ۱ از ۲', stimSvg(hint.go.stim), GO_NOGO_TEXT.goSuccess);
+      fx.revealStage(stage);
+      await sleeper.sleep(1200);
+      break;
+    }
+    goRetries += 1;
+    stage.innerHTML = stepCard('قدم ۱ از ۲', stimSvg(hint.go.stim),
+      goRetries >= 2 ? GO_NOGO_TEXT.goRetryCalm : GO_NOGO_TEXT.goRetry);
+    fx.revealStage(stage);
+    await sleeper.sleep(1600);
+  }
+
+  /* قدم نوگو — خرچنگ: بازداری تا پایان پنجرهٔ کوتاه؛ لمس = بازخورد آرام + تکرار */
+  for (;;) {
+    stage.className = 'play-stage';
+    stage.classList.add('play-stage--teach');
+    stage.innerHTML = stepCard('قدم ۲ از ۲', stimSvg(hint.nogo.stim),
+      GO_NOGO_TEXT.nogoStepLine(hint.nogo.label), GO_NOGO_TEXT.nogoStepWait);
+    fx.revealStage(stage);
+    fx.popIn(stage.querySelector('.play-svg'));
+    const out = practiceOutcome('nogo', await tapWithin(stage, nogoMs, sleeper));
+    if (out === 'success') {
+      stage.innerHTML = stepCard('قدم ۲ از ۲', stimSvg(hint.nogo.stim), GO_NOGO_TEXT.nogoSuccess);
+      fx.revealStage(stage);
+      await sleeper.sleep(1200);
+      break;
+    }
+    nogoRetries += 1;
+    stage.innerHTML = stepCard('قدم ۲ از ۲', stimSvg(hint.nogo.stim),
+      nogoRetries >= 2 ? GO_NOGO_TEXT.nogoRetryCalm : GO_NOGO_TEXT.nogoRetry);
+    fx.revealStage(stage);
+    await sleeper.sleep(1600);
+  }
+
+  /* کارت پایان تمرین — الگوی createPracticeCompletion بستهٔ jsPsych؛ بدون دکمه، خودکار */
+  stage.className = 'play-stage';
+  stage.classList.add('play-stage--teach');
+  stage.innerHTML = stepCard(null, null, GO_NOGO_TEXT.practiceDone);
+  fx.revealStage(stage);
+  await sleeper.sleep(1600);
+  stage.className = 'play-stage';
+  stage.innerHTML = '';
+  return { applied: true, go_retries: goRetries, nogo_retries: nogoRetries };
+}
+
+/** خلاصهٔ پایان جلسه — نگاشت createDebrief بستهٔ jsPsych (دقت + زمان واکنش) با
+ *  قاعدهٔ دامنهٔ صفر: جلسهٔ خالی یا بی‌آزمون نمره‌خورده = '' (هیچ عدد ساختگی نمی‌آید)؛
+ *  فقط مسیر تمرین صدا می‌زند — ارزیابی هرگز عدد نمی‌بیند (C1 دستورالعمل ثابت).
+ *  ورودی از session.js ساخته می‌شود و فقط دادهٔ مجاز کلاینت را می‌بیند:
+ *    scored_total/scored_correct — شمار و درستی از بازخورد سرور (فقط آیتم‌های train
+ *    نمره برمی‌گردانند؛ پروب‌ها هرگز در نسبت دقت نمی‌آیند — ملاک سرور است)؛
+ *    median_rt — میانهٔ RT لمس‌ها از رکوردهای موتور. کلید پاسخ هرگز این‌جا نیست. */
+export function debriefMarkup(summary, extra) {
+  const s = summary && typeof summary === 'object' ? summary : {};
+  const total = s.scored_total ?? 0;
+  const correct = s.scored_correct ?? 0;
+  if (!Number.isFinite(total) || total <= 0) return '';
+  const pct = Math.round((correct / total) * 100);
+  let html = '<div class="play-debrief">' +
+    '<p class="play-debrief__line">' + esc(GO_NOGO_TEXT.debriefAccuracy(pct)) + '</p>';
+  if (Number.isFinite(s.median_rt) && s.median_rt > 0) {
+    html += '<p class="play-debrief__muted">' +
+      esc(GO_NOGO_TEXT.debriefMedianRt(Math.round(s.median_rt / 100) / 10)) + '</p>';
+  }
+  const retries = extra && Number.isFinite(extra.go_retries) && Number.isFinite(extra.nogo_retries)
+    ? extra.go_retries + extra.nogo_retries : 0;
+  if (retries > 0) {
+    html += '<p class="play-debrief__muted">' + esc(GO_NOGO_TEXT.debriefPractice(retries)) + '</p>';
+  }
+  return html + '</div>';
+}

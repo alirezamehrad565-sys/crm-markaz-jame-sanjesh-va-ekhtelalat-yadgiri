@@ -1127,3 +1127,31 @@ button.play-trail__node { appearance: none; font-family: inherit; }
   .play-trail__node:active { transform: translate(-50%, -50%); }
   .play-trail__timer > span { transition: none !important; }
 }
+
+/* ─── خلاصهٔ پایان جلسه (۱.۲۵.۳۴ — اقتباس debrief بستهٔ jsPsych) ───
+   فقط مسیر تمرین؛ اعداد فارسی؛ بی‌رقارت — بدون مقایسه و بدون سرزنش (§۲).
+   هیچ انیمیشن و هیچ شمارش‌معکوس نیست — کارت ایستا (§۹) */
+.play-debrief {
+  margin-top: 14px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: rgba(67, 140, 137, 0.14);
+  border: 1.5px solid rgba(67, 140, 137, 0.35);
+}
+
+.play-debrief__line {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--p-ink, #153E50);
+}
+
+.play-debrief__muted {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(21, 62, 80, 0.72);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-debrief { transition: none; }
+}
