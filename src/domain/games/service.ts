@@ -432,12 +432,11 @@ export function createGamesService(deps: GamesDeps): GamesService {
     };
   }
 
-  /** سوییپ مأموریت رهاشده (۱.۲۵.۲۵ G3) — جلسهٔ child_active بی‌فعالیت >۶ ساعت
-   *  مأموریتش را به pending برمی‌گرداند تا شمارندهٔ «در جریان» صادق بماند.
+  /** سوییپ مأموریت رهاشده (۱.۲۵.۲۵ G3؛ فراخوانی cron از G1/۱.۲۵.۳۵) — جلسهٔ child_active
+   *  بی‌فعالیت >۶ ساعت مأموریتش را به pending برمی‌گرداند تا شمارندهٔ «در جریان» صادق بماند.
    *  بی‌خطر و idempotent؛ خود جلسه دست نمی‌خورد — با لینک تازه همان جلسه ادامه می‌یابد
-   *  و پاسخ‌های ثبت‌شدهٔ کودک حفظ می‌شود. UPDATE ایندکس‌شده و ارزان است؛
-   *  مسیر فراخوانی فقط فهرست‌های پنل درمانگر است (ترافیک کم). */
-  async function expireStaleMissions(): Promise<void> {
+   *  و پاسخ‌های ثبت‌شدهٔ کودک حفظ می‌شود. خروجی: شمار ردیف‌های بازگردانده‌شده برای cron. */
+  async function expireStaleMissions(): Promise<number> {
     try {
       const cutoff = isoOf(new Date(now().getTime() - STALE_SESSION_MS));
       const res = await db.execute(
@@ -448,10 +447,38 @@ export function createGamesService(deps: GamesDeps): GamesService {
       );
       const changed = typeof res?.meta?.changes === 'number' ? res.meta.changes : 0;
       if (changed > 0) logger.info('games.sweep.stale_missions', { restored: changed });
+      return changed;
     } catch (err) {
       // سوییپ هرگز مسیر فهرست/تجویز را نمی‌شکند
       logger.warn('games.sweep.failed', { error: err instanceof Error ? err.message : String(err) });
+      return 0;
     }
+  }
+
+  /** نگهداشت دوره‌ای بازی‌ها (G1 / P2-3 — از cron شبانه؛ هرگز مسیر درخواست نیست):
+   *  مأموریت رهاشده + لینک منقضی + توکن پیش‌نمایش منقضی — تا امروز فقط lazy پاک می‌شدند.
+   *  همهٔ گام‌ها idempotent و بی‌خطر؛ خطای هر بخش بقیه را نمی‌شکند. */
+  async function maintenance(): Promise<{ swept_missions: number; removed_links: number; removed_preview_tokens: number }> {
+    const sweptMissions = await expireStaleMissions();
+    let removedLinks = 0;
+    let removedPreviews = 0;
+    const cutoff = isoOf(now());
+    try {
+      const links = await db.execute(`DELETE FROM game_links WHERE expires_at < ?`, [cutoff]);
+      removedLinks = typeof links?.meta?.changes === 'number' ? links.meta.changes : 0;
+    } catch (err) {
+      logger.warn('games.maintenance.links.failed', { error: err instanceof Error ? err.message : String(err) });
+    }
+    try {
+      const previews = await db.execute(`DELETE FROM game_preview_tokens WHERE expires_at < ?`, [cutoff]);
+      removedPreviews = typeof previews?.meta?.changes === 'number' ? previews.meta.changes : 0;
+    } catch (err) {
+      logger.warn('games.maintenance.previews.failed', { error: err instanceof Error ? err.message : String(err) });
+    }
+    if (removedLinks > 0 || removedPreviews > 0) {
+      logger.info('games.maintenance.done', { removed_links: removedLinks, removed_preview_tokens: removedPreviews });
+    }
+    return { swept_missions: sweptMissions, removed_links: removedLinks, removed_preview_tokens: removedPreviews };
   }
 
   /** فهرست تجویزها برای میز درمانگر (۱.۲۵.۲۴) — هویت انسانی + شمار مأموریت‌ها؛ فهرست محدود (رشد ناپذیر) */
@@ -1222,17 +1249,30 @@ export function createGamesService(deps: GamesDeps): GamesService {
       [session.id, item.id]
     );
     if (answered) return feedbackOf(item, answered.correct === 1, parseJson(answered.response_json, {}));
-    await db.execute(
-      `INSERT INTO game_attempts (id, session_id, item_id, phase, response_json, correct, rt_ms, rt_valid, idem_key,
-        presented_at_ms, frame_drops, max_frame_delta_ms, touch_count, premature_count, multiple_count,
-        out_of_surface_count, window_ms, created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [crypto.randomUUID(), session.id, item.id, item.phase, JSON.stringify(draft.response ?? {}), scored.correct ? 1 : 0,
-        scored.rtMs, scored.rtValid ? 1 : 0, draft.idem_key,
-        evidence.presented_at_ms, evidence.frame_drops, evidence.max_frame_delta_ms, evidence.touch_count,
-        evidence.premature_count, evidence.multiple_count, evidence.out_of_surface_count, evidence.window_ms,
-        isoOf(now())]
-    );
+    try {
+      await db.execute(
+        `INSERT INTO game_attempts (id, session_id, item_id, phase, response_json, correct, rt_ms, rt_valid, idem_key,
+          presented_at_ms, frame_drops, max_frame_delta_ms, touch_count, premature_count, multiple_count,
+          out_of_surface_count, window_ms, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [crypto.randomUUID(), session.id, item.id, item.phase, JSON.stringify(draft.response ?? {}), scored.correct ? 1 : 0,
+          scored.rtMs, scored.rtValid ? 1 : 0, draft.idem_key,
+          evidence.presented_at_ms, evidence.frame_drops, evidence.max_frame_delta_ms, evidence.touch_count,
+          evidence.premature_count, evidence.multiple_count, evidence.out_of_surface_count, evidence.window_ms,
+          isoOf(now())]
+      );
+    } catch (err) {
+      // سد رقابت هم‌زمانی (P2-2 ممیزی M0 / G1): دو ارسال هم‌زمان به یگانگی‌های DB
+      // (idem_key / session+item — مایگریشن ۰۰۹۷) می‌خورند؛ پاسخِ برنده همان بازخورد رسمی است —
+      // پیام خام درایور هرگز به کلاینت عمومی نمی‌رسد و پاسخ دوم دوباره شمرده نمی‌شود
+      const winner = await db.queryOne<AttemptRow>(
+        `SELECT * FROM game_attempts WHERE idem_key = ? OR (session_id = ? AND item_id = ?)
+         ORDER BY created_at LIMIT 1`,
+        [draft.idem_key, session.id, item.id]
+      );
+      if (!winner) throw err; // خطای واقعی — نه رقابت یگانگی
+      return feedbackOf(item, winner.correct === 1, parseJson(winner.response_json, {}));
+    }
     await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf(now()), session.id]);
     return feedbackOf(item, scored.correct, draft.response);
   }
@@ -1649,7 +1689,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
   return {
     upsertMetric, listMetrics, upsertGoal, listGoals, upsertPackage, listPackages, publishPackage,
     createPrescription, listPrescriptions, listFollowups, setPrescriptionStatus, scheduleMission, listMissions,
-    retirePackage, auditReportExport,
+    retirePackage, auditReportExport, maintenance,
     issueLink, revokeLink, getSessionDetail, getChildReport,
     issuePreview, previewState, previewItem, previewFeedback,
     getState, start, nextItem, submitAttempt, finish, parentGate, confirm

@@ -8,8 +8,9 @@
    ═══════════════════════════════════════════════════════════════ */
 
 import { STATES, createMachine } from './machine.js';
-import { createSleeper } from './timing.js';
+import { createSleeper, createPausableClock } from './timing.js';
 import { runTrial } from './trials.js';
+import { createTouchLedger, attachTouchEvidence, observeDisplayFrames } from './observe.js';
 import { summarizeSession, medianOf } from './scoring.js';
 import * as fx from '../fx.js';
 
@@ -47,7 +48,11 @@ function safeProtocol(snap) {
       /* مدت نمایش محرک — نگاشت stimulus_duration بستهٔ jsPsych (۱.۲۵.۳۴):
          null = نمایش تا پاسخ/پایان پنجره (رفتار امروز)؛ سمت machine.stimulusHideMsFor بسته‌بندی می‌شود */
       stimulus_duration_ms: typeof p.stimulus_duration_ms === 'number' && Number.isFinite(p.stimulus_duration_ms)
-        ? p.stimulus_duration_ms : null
+        ? p.stimulus_duration_ms : null,
+      /* پنجرهٔ پاسخ گسترده برای شاخه‌های بی‌پنجرهٔ شمارشی — خط عددی/انتخاب (G1 / ۱.۲۵.۳۵):
+         کودکِ بی‌پاسخ حلقه را تا بی‌نهایت نگه نمی‌دارد (P2-1 ممیزی M0)؛
+         پیش‌فرض ۳۰ ثانیه — سرور-آگاه: مقدار در response با window_ms ثبت می‌شود */
+      response_window_extended_ms: n(p.response_window_extended_ms, 30000)
     },
     behavior: {
       feedback_in_main: false,
@@ -248,20 +253,46 @@ export async function runSession(ctx) {
        بازخورد دو-سطحی + نشان حقیقت فقط در تمرین — ارزیابی بی‌بازخورد/بی‌ستاره/بی‌استریک */
     if (item.type === 'numline' && Array.isArray(item.range) && typeof kind.numlineMarkup === 'function') {
       machine.to(STATES.FIXATION, { item: item.id, numline: true }); // مسیر اجباری ماشین: READY/PRACTICE → FIXATION → STIMULUS
+      /* شواهد مشترک G1 — از همین‌جا (حتی پیش از محرک): premature لمس حین تثبیت،
+         out_of_surface لمس بیرون صحنه — همان قرارداد فاز ۴، به‌جای صفر هاردکد (P1-2) */
+      const ledgerN = createTouchLedger();
+      ledgerN.start();
+      let answeredN = false;
+      const stopTouchN = attachTouchEvidence(stage, ledgerN, () => machine.state, () => answeredN);
       stage.classList.remove('play-stage--quiet');
       stage.innerHTML = kind.numlineMarkup(item);
+      const stopFramesN = observeDisplayFrames();
       fx.popIn(stage.querySelector('.play-numline__chip'), 240, false);
       machine.to(STATES.STIMULUS, { item: item.id, numline: true });
       const shownAt = performance.now(); // RT از همین لحظه — نه از شروع حلقه
+      /* ساعت RT مکث‌پذیر (P1-1) — مکث برگه دیگر rt_ms را نمی‌ترکاند؛
+         گیره‌ها پیش از await نصب می‌شوند تا visibilitychange در میانهٔ آیتم ساعت را فریز کند */
+      const clockN = createPausableClock();
+      clockN.start();
+      trialHooks.pause = () => clockN.pause();
+      trialHooks.resume = () => { if (!clockN.running) clockN.resume(); };
+      /* پنجرهٔ پاسخ پروتکل‌محور (P2-1) — کودکِ بی‌پاسخ حلقه را تا بی‌نهایت نگه نمی‌دارد؛
+         بی‌پاسخ = اُمیشن سمت سرور (chosen=null)، همان قرارداد شاخهٔ انتخاب زمان‌دار */
+      const winN = Math.min(60000, Math.max(5000, P.response_window_extended_ms));
       const pick = await new Promise((resolve) => {
         const road = stage.querySelector('.play-numline__road');
         const onTap = (ev) => {
           ev.preventDefault(); // جادهٔ لمسی — اسکرول اشتباه نمی‌سازد
           road.removeEventListener('pointerdown', onTap);
-          resolve({ value: kind.numlineValueFromTap(item, stage, ev), at: performance.now() });
+          answeredN = true;
+          const rt = clockN.peek(); // RT در نقطهٔ لمس — بدون فریز ساعت (مکث برگه بعدی بی‌اثر)
+          clockN.pause();
+          resolve({ value: kind.numlineValueFromTap(item, stage, ev), at: performance.now(), rt, timedOut: false });
         };
         road.addEventListener('pointerdown', onTap);
+        sleeper.sleep(winN).then(() => resolve({ value: null, at: null, rt: null, timedOut: true }));
       });
+      const timedOutN = pick.timedOut === true;
+      sleeper.cancel(); // پاسخ آمد یا پنجره بست — خواب یدکی یتیم نمی‌ماند (قاعدهٔ پنجرهٔ گو/نوگو)
+      trialHooks.pause = null;
+      trialHooks.resume = null;
+      stopTouchN();
+      const framesN = stopFramesN();
       if (pick.value !== null) {
         const guessEl = kind.numlinePlaceGuess(item, stage, pick.value);
         fx.popIn(guessEl, 240, false);
@@ -270,17 +301,16 @@ export async function runSession(ctx) {
       const recordNum = {
         item_id: item.id,
         go: null,
-        touched: true,
-        rt_ms: Math.round(pick.at - shownAt),
-        touch_count: 1,
-        premature_count: 0,
-        multiple_count: 0,
-        out_of_surface_count: 0,
+        touched: !timedOutN,
+        rt_ms: timedOutN ? null : (pick.rt !== null && pick.rt >= 0 ? pick.rt : null),
+        touch_count: timedOutN ? 0 : 1,
+        ...ledgerN.evidenceCounts(),
         presented_at: shownAt,
-        frame_drops: 0,
-        window_ms: null,
+        frame_drops: framesN.drops,
+        max_frame_delta: framesN.maxDelta,
+        window_ms: winN,
         isi_ms: 0,
-        events: []
+        events: ledgerN.events()
       };
       trials.push(recordNum);
       doneCount += 1;
@@ -290,12 +320,13 @@ export async function runSession(ctx) {
           item_id: item.id,
           response: {
             chosen: pick.value,
+            timed_out: timedOutN,
             presented_at: Math.round(shownAt),
-            frame_drops: 0,
-            touch_count: 1,
-            premature_count: 0,
-            multiple_count: 0,
-            out_of_surface_count: 0
+            frame_drops: framesN.drops,
+            max_frame_delta: framesN.maxDelta,
+            touch_count: recordNum.touch_count,
+            ...ledgerN.evidenceCounts(),
+            window_ms: winN
           },
           rt_ms: recordNum.rt_ms,
           idem_key: crypto.randomUUID()
@@ -351,12 +382,22 @@ export async function runSession(ctx) {
        بازخورد آموزشی + نشان جاسوس‌های جامانده از answer_display سرور — ارزیابی بی‌بازخورد/بی‌ستاره */
     if (item.type === 'scan' && item.stim && Array.isArray(item.stim.tiles) && typeof kind.scanMarkup === 'function') {
       machine.to(STATES.FIXATION, { item: item.id, scan: true }); // مسیر اجباری ماشین: READY/PRACTICE → FIXATION → STIMULUS
+      /* شواهد مشترک G1 — از تثبیت خنثی پیش از موج؛ لمس حین تثبیت = premature (P1-2) */
+      const ledgerS = createTouchLedger();
+      ledgerS.start();
+      let scanAnswered = false;
+      const stopTouchS = attachTouchEvidence(stage, ledgerS, () => machine.state, () => scanAnswered);
       stage.classList.remove('play-stage--quiet');
       stage.classList.add('play-stage--scan'); // پوستهٔ عدی: شب، حاشیهٔ آژیر، اسکادران
       await sleeper.sleep(400); // تثبیت کوتاه خنثی پیش از موج — بدون فلاش (§۹)
       stage.innerHTML = kind.scanMarkup(item);
+      const stopFramesS = observeDisplayFrames();
       machine.to(STATES.STIMULUS, { item: item.id, scan: true });
       const shownAt = performance.now(); // RT از لحظهٔ نمایش موج — نه از شروع حلقه
+      /* ساعت RT مکث‌پذیر (P1-1) — چندلمسی: RT از نخستین لمس با peek بدون فریز؛
+         ساعت تا پایان موج زنده می‌ماند تا مکث برگه فقط به «مکث‌ها» اثر کند */
+      const clockS = createPausableClock();
+      clockS.start();
       const stimRaw = item.stim || {};
       const waveMs = typeof stimRaw.wave_ms === 'number' && Number.isFinite(stimRaw.wave_ms) && stimRaw.wave_ms >= 4000
         ? Math.min(30000, Math.round(stimRaw.wave_ms))
@@ -387,9 +428,11 @@ export async function runSession(ctx) {
         };
         trialHooks.pause = () => {
           wavePausedAt = performance.now();
+          clockS.pause(); // ساعت RT هم با مکث برگه فریز می‌شود (P1-1)
           freezeBar();
         };
         trialHooks.resume = () => {
+          if (!clockS.running) clockS.resume();
           if (wavePausedAt !== null) {
             waveRemain = Math.max(0, waveRemain - (performance.now() - wavePausedAt));
             wavePausedAt = null;
@@ -399,12 +442,13 @@ export async function runSession(ctx) {
         const finishWave = () => {
           if (settled) return;
           settled = true;
+          scanAnswered = true;
           sleeper.cancel(); // موج با «گزارش بده!» تمام شد — خواب یدکی یدک نمی‌ماند تا خواب موج بعد را زودرس نبرد (همان قاعدهٔ پنجرهٔ گو/نوگو)
           trialHooks.pause = null;
           trialHooks.resume = null;
           tiles.forEach((b) => b.removeEventListener('pointerdown', onTile));
           if (confirmBtn) confirmBtn.removeEventListener('pointerdown', onConfirm);
-          resolve({ hits: [...hits], firstAt, tapCount });
+          resolve({ hits: [...hits], firstRt: firstAt !== null ? clockS.peek() : null, tapCount, usedMs: clockS.peek() });
         };
         const onTile = (ev) => {
           const btn = ev.target.closest('.play-scan__tile');
@@ -426,22 +470,23 @@ export async function runSession(ctx) {
         sleeper.sleep(waveMs).then(finishWave);
       });
       machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, scan: true });
+      stopTouchS();
+      const framesS = stopFramesS();
       const sortedHits = result.hits.slice().sort((a, b) => a - b);
-      const usedMs = Math.round(performance.now() - shownAt);
+      const usedMs = result.usedMs; // ساعت مکث‌پذیر — مکث برگه در «مدت استفادهٔ موج» هم حساب نمی‌شود
       const recordScan = {
         item_id: item.id,
         go: null,
         touched: sortedHits.length > 0,
-        rt_ms: result.firstAt !== null ? Math.round(result.firstAt - shownAt) : null,
+        rt_ms: result.firstRt !== null && result.firstRt >= 0 ? result.firstRt : null,
         touch_count: result.tapCount,
-        premature_count: 0,
-        multiple_count: 0,
-        out_of_surface_count: 0,
+        ...ledgerS.evidenceCounts(),
         presented_at: shownAt,
-        frame_drops: 0,
+        frame_drops: framesS.drops,
+        max_frame_delta: framesS.maxDelta,
         window_ms: null,
         isi_ms: 0,
-        events: [],
+        events: ledgerS.events(),
         scan_hits: sortedHits
       };
       trials.push(recordScan);
@@ -454,11 +499,11 @@ export async function runSession(ctx) {
             hits: sortedHits,
             wave_used_ms: usedMs,
             presented_at: Math.round(shownAt),
-            frame_drops: 0,
+            frame_drops: framesS.drops,
+            max_frame_delta: framesS.maxDelta,
             touch_count: result.tapCount,
-            premature_count: 0,
-            multiple_count: 0,
-            out_of_surface_count: 0
+            ...ledgerS.evidenceCounts(),
+            window_ms: waveMs
           },
           rt_ms: recordScan.rt_ms,
           idem_key: crypto.randomUUID()
@@ -516,6 +561,11 @@ export async function runSession(ctx) {
     if ((item.type === 'stroop' || item.type === 'flanker') &&
         (typeof kind.markupFor?.[item.type] === 'function' || (Array.isArray(item.options) && item.options.length > 0))) {
       machine.to(STATES.FIXATION, { item: item.id, timedchoice: true }); // مسیر اجباری ماشین: READY/PRACTICE → FIXATION → STIMULUS
+      /* شواهد مشترک G1 — از تثبیت پوسته پیش از محرک (P1-2) */
+      const ledgerT = createTouchLedger();
+      ledgerT.start();
+      let answeredT = false;
+      const stopTouchT = attachTouchEvidence(stage, ledgerT, () => machine.state, () => answeredT);
       stage.classList.remove('play-stage--quiet');
       stage.classList.add('play-stage--' + item.type); // پوستهٔ عدی نوع‌بازی (شب/حاشیهٔ هشدار)
       await sleeper.sleep(250); // تثبیت کوتاه پوسته پیش از محرک — بدون فلاش (§۹)
@@ -527,6 +577,10 @@ export async function runSession(ctx) {
           '</div>';
       machine.to(STATES.STIMULUS, { item: item.id, timedchoice: true });
       const shownAtTc = performance.now(); // RT از لحظهٔ نمایش محرک — نه از شروع حلقه
+      /* ساعت RT مکث‌پذیر (P1-1) — گیره‌ها پیش از await نصب می‌شوند */
+      const clockT = createPausableClock();
+      clockT.start();
+      const stopFramesT = observeDisplayFrames();
       const stimTc = item.stim && typeof item.stim === 'object' ? item.stim : {};
       const winMs = typeof stimTc.window_ms === 'number' && Number.isFinite(stimTc.window_ms)
         ? Math.min(8000, Math.max(800, Math.round(stimTc.window_ms)))
@@ -550,8 +604,9 @@ export async function runSession(ctx) {
             timerBar.style.width = '0%';
           });
         };
-        trialHooks.pause = () => { winPausedAt = performance.now(); freezeBar(); };
+        trialHooks.pause = () => { winPausedAt = performance.now(); clockT.pause(); freezeBar(); }; // ساعت RT هم فریز (P1-1)
         trialHooks.resume = () => {
+          if (!clockT.running) clockT.resume();
           if (winPausedAt !== null) {
             winRemain = Math.max(0, winRemain - (performance.now() - winPausedAt));
             winPausedAt = null;
@@ -561,6 +616,7 @@ export async function runSession(ctx) {
         const finishWindow = (val) => {
           if (settled) return;
           settled = true;
+          answeredT = val && val.option !== null ? true : answeredT; // پاسخ اصلی ثبت شد (اُمیشن پاسخ نیست)
           sleeper.cancel(); // پنجره تمام شد — خواب یدکی یتیم نمی‌ماند (قاعدهٔ پنجرهٔ گو/نوگو)
           trialHooks.pause = null;
           trialHooks.resume = null;
@@ -571,28 +627,31 @@ export async function runSession(ctx) {
           const btn = ev.target.closest('.play-option');
           if (!btn) return;
           ev.preventDefault();
-          finishWindow({ option: Number(btn.dataset.option), at: performance.now() });
+          const rt = clockT.peek(); // RT در نقطهٔ لمس — بدون فریز ساعت (P1-1)
+          finishWindow({ option: Number(btn.dataset.option), at: performance.now(), rt });
         };
         buttons.forEach((b) => b.addEventListener('pointerdown', onTap));
         unfreezeBar(winMs);
-        sleeper.sleep(winMs).then(() => finishWindow({ option: null, at: null }));
+        sleeper.sleep(winMs).then(() => finishWindow({ option: null, at: null, rt: null }));
       });
+      const timedOutTc = pickTc.option === null;
       machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, timedchoice: true });
+      stopTouchT();
+      const framesTc = stopFramesT();
       const recordTc = {
         item_id: item.id,
         go: null,
-        touched: pickTc.option !== null,
-        rt_ms: pickTc.option !== null ? Math.round(pickTc.at - shownAtTc) : null,
+        touched: !timedOutTc,
+        rt_ms: !timedOutTc && pickTc.rt !== null && pickTc.rt >= 0 ? pickTc.rt : null,
         touch_count: pickTc.option !== null ? 1 : 0,
-        premature_count: 0,
-        multiple_count: 0,
-        out_of_surface_count: 0,
+        ...ledgerT.evidenceCounts(),
         presented_at: shownAtTc,
-        frame_drops: 0,
+        frame_drops: framesTc.drops,
+        max_frame_delta: framesTc.maxDelta,
         window_ms: winMs,
         isi_ms: 0,
-        events: [],
-        choice_response: { option: pickTc.option, timed_out: pickTc.option === null }
+        events: ledgerT.events(),
+        choice_response: { option: pickTc.option, timed_out: timedOutTc }
       };
       trials.push(recordTc);
       doneCount += 1;
@@ -602,13 +661,12 @@ export async function runSession(ctx) {
           item_id: item.id,
           response: {
             option: pickTc.option,
-            timed_out: pickTc.option === null,
+            timed_out: timedOutTc,
             presented_at: Math.round(shownAtTc),
-            frame_drops: 0,
+            frame_drops: framesTc.drops,
+            max_frame_delta: framesTc.maxDelta,
             touch_count: recordTc.touch_count,
-            premature_count: 0,
-            multiple_count: 0,
-            out_of_surface_count: 0,
+            ...ledgerT.evidenceCounts(),
             window_ms: winMs
           },
           rt_ms: recordTc.rt_ms,
@@ -666,12 +724,22 @@ export async function runSession(ctx) {
     if (item.type === 'trail' && typeof kind.markupFor?.[item.type] === 'function' &&
         item.stim && Array.isArray(item.stim.nodes)) {
       machine.to(STATES.FIXATION, { item: item.id, sequence: true }); // مسیر اجباری ماشین
+      /* شواهد مشترک G1 — از تثبیت پوسته پیش از محرک (P1-2) */
+      const ledgerQ = createTouchLedger();
+      ledgerQ.start();
+      let trailAnswered = false; // پایان رد (کامل/قطع/پنجره) — لمسِ بعد از آن ثبت نمی‌شود
+      const stopTouchQ = attachTouchEvidence(stage, ledgerQ, () => machine.state, () => trailAnswered);
       stage.classList.remove('play-stage--quiet');
       stage.classList.add('play-stage--' + item.type); // پوستهٔ عدی: شب کوچه، دزد فراری
       await sleeper.sleep(250);
       stage.innerHTML = kind.markupFor[item.type](item);
+      const stopFramesQ = observeDisplayFrames();
       machine.to(STATES.STIMULUS, { item: item.id, sequence: true });
       const shownAtSq = performance.now(); // RT از لحظهٔ نمایش رد
+      /* ساعت RT مکث‌پذیر (P1-1) — چندلمسی: RT و RT هر گره با peek بدون فریز ساعت؛
+         ساعت تا پایان رد زنده می‌ماند تا مکث برگه در همهٔ زمان‌ها منصفانه فریز شود */
+      const clockQ = createPausableClock();
+      clockQ.start();
       const stimSq = item.stim;
       const seqSq = Array.isArray(stimSq.seq) ? stimSq.seq.map((v) => String(v)) : null;
       const resultSq = await new Promise((resolve) => {
@@ -700,8 +768,9 @@ export async function runSession(ctx) {
             timerBar.style.width = '0%';
           });
         };
-        trialHooks.pause = () => { winPausedAt = performance.now(); freezeBar(); };
+        trialHooks.pause = () => { winPausedAt = performance.now(); clockQ.pause(); freezeBar(); }; // ساعت RT هم فریز (P1-1)
         trialHooks.resume = () => {
+          if (!clockQ.running) clockQ.resume();
           if (winPausedAt !== null) {
             winRemain = Math.max(0, winRemain - (performance.now() - winPausedAt));
             winPausedAt = null;
@@ -711,11 +780,12 @@ export async function runSession(ctx) {
         const finishTrail = (timedOut) => {
           if (settled) return;
           settled = true;
+          trailAnswered = true;
           sleeper.cancel(); // رد قطع/کامل شد — خواب یدکی یتیم نمی‌ماند (قاعدهٔ پنجره)
           trialHooks.pause = null;
           trialHooks.resume = null;
           nodes.forEach((b) => b.removeEventListener('pointerdown', onNode));
-          resolve({ order, nodeRts, firstAt, tapCount, timedOut, usedMs: Math.round(performance.now() - shownAtSq) });
+          resolve({ order, nodeRts, firstRt: firstAt !== null ? clockQ.peek() : null, tapCount, timedOut, usedMs: clockQ.peek() });
         };
         const onNode = (ev) => {
           const btn = ev.target.closest('.play-trail__node');
@@ -729,7 +799,7 @@ export async function runSession(ctx) {
           const okTap = seqSq === null || (expected !== undefined && nd && String(nd.n) === expected);
           if (okTap) {
             order.push(idx);
-            nodeRts.push(Math.round(performance.now() - shownAtSq));
+            nodeRts.push(clockQ.peek()); // RT هر گره — ساعت مکث‌پذیر (P1-1)
             btn.classList.add('play-trail__node--step');
             if (nodes.length > 0 && order.length >= nodes.length) finishTrail(false); // رد کامل شد
           } else {
@@ -741,20 +811,21 @@ export async function runSession(ctx) {
         sleeper.sleep(winSq).then(() => finishTrail(true));
       });
       machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, sequence: true });
+      stopTouchQ();
+      const framesQ = stopFramesQ();
       const recordSq = {
         item_id: item.id,
         go: null,
         touched: resultSq.order.length > 0,
-        rt_ms: resultSq.firstAt !== null ? Math.round(resultSq.firstAt - shownAtSq) : null,
+        rt_ms: resultSq.firstRt !== null && resultSq.firstRt >= 0 ? resultSq.firstRt : null,
         touch_count: resultSq.tapCount,
-        premature_count: 0,
-        multiple_count: 0,
-        out_of_surface_count: 0,
+        ...ledgerQ.evidenceCounts(),
         presented_at: shownAtSq,
-        frame_drops: 0,
+        frame_drops: framesQ.drops,
+        max_frame_delta: framesQ.maxDelta,
         window_ms: null,
         isi_ms: 0,
-        events: [],
+        events: ledgerQ.events(),
         trail_order: resultSq.order.slice()
       };
       trials.push(recordSq);
@@ -769,11 +840,10 @@ export async function runSession(ctx) {
             used_ms: resultSq.usedMs,
             timed_out: resultSq.timedOut,
             presented_at: Math.round(shownAtSq),
-            frame_drops: 0,
+            frame_drops: framesQ.drops,
+            max_frame_delta: framesQ.maxDelta,
             touch_count: resultSq.tapCount,
-            premature_count: 0,
-            multiple_count: 0,
-            out_of_surface_count: 0
+            ...ledgerQ.evidenceCounts()
           },
           rt_ms: recordSq.rt_ms,
           idem_key: crypto.randomUUID()
@@ -823,45 +893,64 @@ export async function runSession(ctx) {
       continue;
     }
 
-    /* آیتم انتخابی (choice) — بدون پنجرهٔ زمانی؛ کف ۲۰۰ms سروری (§۸)؛
-       همان کلاس‌های CSS پخش‌کننده؛ پاسخ از کلید گزینه، RT از نمایش هر آیتم
-       (۱.۲۵.۲۸ رفع: ساعت قبلاً یک‌بار بیرون حلقه گرفته می‌شد و RT آیتم‌های بعدی تورم داشت) */
+    /* آیتم انتخابی (choice) — پنجرهٔ پاسخ پروتکل‌محور (P2-1): بی‌پاسخ = اُمیشن؛
+       کف ۲۰۰ms سروری (§۸)؛ همان کلاس‌های CSS پخش‌کننده؛ RT از نمایش هر آیتم؛
+       ساعت مکث‌پذیر + شواهد مشترک G1 (P1-1/P1-2) */
     if (item.type === 'choice' && Array.isArray(item.options) && item.options.length > 0) {
       machine.to(STATES.FIXATION, { item: item.id, choice: true }); // مسیر اجباری ماشین (رفع باگ خام)
+      const ledgerC = createTouchLedger();
+      ledgerC.start();
+      let answeredC = false;
+      const stopTouchC = attachTouchEvidence(stage, ledgerC, () => machine.state, () => answeredC);
       stage.classList.remove('play-stage--quiet');
       stage.innerHTML = (item.prompt ? '<p class="play-line">' + esc(item.prompt) + '</p>' : '') +
         '<div class="play-options">' +
         item.options.map((o, i) => '<button type="button" class="play-option" data-option="' + i + '">' + esc(o.label) + '</button>').join('') +
         '</div>';
+      const stopFramesC = observeDisplayFrames();
       machine.to(STATES.STIMULUS, { item: item.id, choice: true });
       const pickStart = performance.now(); // RT از لحظهٔ نمایش همین گزینه‌ها
+      const clockC = createPausableClock();
+      clockC.start();
+      trialHooks.pause = () => clockC.pause();
+      trialHooks.resume = () => { if (!clockC.running) clockC.resume(); };
+      const winC = Math.min(60000, Math.max(5000, P.response_window_extended_ms));
       const pickAt = await new Promise((resolve) => {
         const buttons = stage.querySelectorAll('.play-option');
         const onTap = (ev) => {
           const btn = ev.target.closest('.play-option');
           if (!btn) return;
           buttons.forEach((b) => b.removeEventListener('pointerdown', onTap));
-          resolve({ option: Number(btn.dataset.option), at: performance.now() });
+          answeredC = true;
+          const rt = clockC.peek(); // RT در نقطهٔ لمس — بدون فریز ساعت (P1-1)
+          clockC.pause();
+          resolve({ option: Number(btn.dataset.option), at: performance.now(), rt, timedOut: false });
         };
         buttons.forEach((b) => b.addEventListener('pointerdown', onTap));
+        sleeper.sleep(winC).then(() => resolve({ option: null, at: null, rt: null, timedOut: true }));
       });
+      const timedOutC = pickAt.timedOut === true;
+      sleeper.cancel(); // پاسخ آمد یا پنجره بست — خواب یدکی یتیم نمی‌ماند
+      trialHooks.pause = null;
+      trialHooks.resume = null;
       machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, choice: true });
+      stopTouchC();
+      const framesC = stopFramesC();
       stage.innerHTML = '';
       const recordChoice = {
         item_id: item.id,
         go: null,
-        touched: true,
-        rt_ms: Math.round(pickAt.at - pickStart),
-        touch_count: 1,
-        premature_count: 0,
-        multiple_count: 0,
-        out_of_surface_count: 0,
+        touched: !timedOutC,
+        rt_ms: timedOutC ? null : (pickAt.rt !== null && pickAt.rt >= 0 ? pickAt.rt : null),
+        touch_count: timedOutC ? 0 : 1,
+        ...ledgerC.evidenceCounts(),
         presented_at: pickStart,
-        frame_drops: 0,
-        window_ms: null,
+        frame_drops: framesC.drops,
+        max_frame_delta: framesC.maxDelta,
+        window_ms: winC,
         isi_ms: 0,
-        events: [],
-        choice_response: { option: pickAt.option }
+        events: ledgerC.events(),
+        choice_response: { option: pickAt.option, timed_out: timedOutC }
       };
       trials.push(recordChoice);
       doneCount += 1;
@@ -869,7 +958,16 @@ export async function runSession(ctx) {
       try {
         fbC = await api.submit({
           item_id: item.id,
-          response: recordChoice.choice_response,
+          response: {
+            option: pickAt.option,
+            timed_out: timedOutC,
+            presented_at: Math.round(pickStart),
+            frame_drops: framesC.drops,
+            max_frame_delta: framesC.maxDelta,
+            touch_count: recordChoice.touch_count,
+            ...ledgerC.evidenceCounts(),
+            window_ms: winC
+          },
           rt_ms: recordChoice.rt_ms,
           idem_key: crypto.randomUUID()
         });

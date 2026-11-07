@@ -1,6 +1,6 @@
 // routes.ts — API پرسنلی /api/games/* و زنجیرهٔ عمومی /m/:token + /api/m/:token/*
 // زنجیرهٔ عمومی باید «پیش از» گیت authMiddleware در api-routing ثبت شود — قرارداد §۵ نقشهٔ راه.
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
 import type { AppHono } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
 import { AppError, ValidationError } from '@core/errors';
@@ -413,6 +413,18 @@ function publicError(c: { json: (body: unknown, status: number, headers?: Record
   if (err instanceof AppError) {
     return c.json({ error: err.code, message: err.message }, err.status as 400 | 404 | 409, { 'Cache-Control': 'no-store' });
   }
-  const message = err instanceof Error ? err.message : 'خطای غیرمنتظره';
-  return c.json({ error: 'VALIDATION_ERROR', message }, 400, { 'Cache-Control': 'no-store' });
+  if (err instanceof ZodError) {
+    // ورودی نامعتبر — همان شکل error-handler سامانه؛ پیام ثابت، جزئیات مسیر/قاعدهٔ zod
+    return c.json(
+      { error: 'VALIDATION_ERROR', message: 'ورودی نامعتبر است', details: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) },
+      400,
+      { 'Cache-Control': 'no-store' }
+    );
+  }
+  if (err instanceof SyntaxError) {
+    // بدنهٔ JSON خراب — هم‌سان با error-handler سامانه؛ بدون متن خام پارسر
+    return c.json({ error: 'INVALID_JSON', message: 'بدنهٔ درخواست JSON معتبر نیست' }, 400, { 'Cache-Control': 'no-store' });
+  }
+  // خطای غیرمنتظره — پیام خام درایور/سیستم هرگز به زنجیرهٔ عمومی نمی‌رسد (P2-2 ممیزی M0 / G1)
+  return c.json({ error: 'INTERNAL_ERROR', message: 'خطای غیرمنتظره؛ لطفاً کمی بعد دوباره تلاش کنید' }, 500, { 'Cache-Control': 'no-store' });
 }

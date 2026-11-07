@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.34";
+var APP_VERSION = "1.25.35";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -25503,11 +25503,36 @@ function createGamesService(deps) {
       );
       const changed = typeof res?.meta?.changes === "number" ? res.meta.changes : 0;
       if (changed > 0) logger.info("games.sweep.stale_missions", { restored: changed });
+      return changed;
     } catch (err) {
       logger.warn("games.sweep.failed", { error: err instanceof Error ? err.message : String(err) });
+      return 0;
     }
   }
   __name(expireStaleMissions, "expireStaleMissions");
+  async function maintenance() {
+    const sweptMissions = await expireStaleMissions();
+    let removedLinks = 0;
+    let removedPreviews = 0;
+    const cutoff = isoOf2(now());
+    try {
+      const links = await db.execute(`DELETE FROM game_links WHERE expires_at < ?`, [cutoff]);
+      removedLinks = typeof links?.meta?.changes === "number" ? links.meta.changes : 0;
+    } catch (err) {
+      logger.warn("games.maintenance.links.failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+    try {
+      const previews = await db.execute(`DELETE FROM game_preview_tokens WHERE expires_at < ?`, [cutoff]);
+      removedPreviews = typeof previews?.meta?.changes === "number" ? previews.meta.changes : 0;
+    } catch (err) {
+      logger.warn("games.maintenance.previews.failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+    if (removedLinks > 0 || removedPreviews > 0) {
+      logger.info("games.maintenance.done", { removed_links: removedLinks, removed_preview_tokens: removedPreviews });
+    }
+    return { swept_missions: sweptMissions, removed_links: removedLinks, removed_preview_tokens: removedPreviews };
+  }
+  __name(maintenance, "maintenance");
   async function listPrescriptions(query) {
     await expireStaleMissions();
     const q = typeof query === "string" ? { childId: query } : query ?? {};
@@ -26185,32 +26210,42 @@ function createGamesService(deps) {
       [session.id, item.id]
     );
     if (answered) return feedbackOf(item, answered.correct === 1, parseJson2(answered.response_json, {}));
-    await db.execute(
-      `INSERT INTO game_attempts (id, session_id, item_id, phase, response_json, correct, rt_ms, rt_valid, idem_key,
-        presented_at_ms, frame_drops, max_frame_delta_ms, touch_count, premature_count, multiple_count,
-        out_of_surface_count, window_ms, created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        crypto.randomUUID(),
-        session.id,
-        item.id,
-        item.phase,
-        JSON.stringify(draft.response ?? {}),
-        scored.correct ? 1 : 0,
-        scored.rtMs,
-        scored.rtValid ? 1 : 0,
-        draft.idem_key,
-        evidence.presented_at_ms,
-        evidence.frame_drops,
-        evidence.max_frame_delta_ms,
-        evidence.touch_count,
-        evidence.premature_count,
-        evidence.multiple_count,
-        evidence.out_of_surface_count,
-        evidence.window_ms,
-        isoOf2(now())
-      ]
-    );
+    try {
+      await db.execute(
+        `INSERT INTO game_attempts (id, session_id, item_id, phase, response_json, correct, rt_ms, rt_valid, idem_key,
+          presented_at_ms, frame_drops, max_frame_delta_ms, touch_count, premature_count, multiple_count,
+          out_of_surface_count, window_ms, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          crypto.randomUUID(),
+          session.id,
+          item.id,
+          item.phase,
+          JSON.stringify(draft.response ?? {}),
+          scored.correct ? 1 : 0,
+          scored.rtMs,
+          scored.rtValid ? 1 : 0,
+          draft.idem_key,
+          evidence.presented_at_ms,
+          evidence.frame_drops,
+          evidence.max_frame_delta_ms,
+          evidence.touch_count,
+          evidence.premature_count,
+          evidence.multiple_count,
+          evidence.out_of_surface_count,
+          evidence.window_ms,
+          isoOf2(now())
+        ]
+      );
+    } catch (err) {
+      const winner = await db.queryOne(
+        `SELECT * FROM game_attempts WHERE idem_key = ? OR (session_id = ? AND item_id = ?)
+         ORDER BY created_at LIMIT 1`,
+        [draft.idem_key, session.id, item.id]
+      );
+      if (!winner) throw err;
+      return feedbackOf(item, winner.correct === 1, parseJson2(winner.response_json, {}));
+    }
     await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf2(now()), session.id]);
     return feedbackOf(item, scored.correct, draft.response);
   }
@@ -26585,6 +26620,7 @@ function createGamesService(deps) {
     listMissions,
     retirePackage,
     auditReportExport,
+    maintenance,
     issueLink,
     revokeLink,
     getSessionDetail,
@@ -27163,8 +27199,17 @@ function publicError(c, err) {
   if (err instanceof AppError) {
     return c.json({ error: err.code, message: err.message }, err.status, { "Cache-Control": "no-store" });
   }
-  const message = err instanceof Error ? err.message : "\u062E\u0637\u0627\u06CC \u063A\u06CC\u0631\u0645\u0646\u062A\u0638\u0631\u0647";
-  return c.json({ error: "VALIDATION_ERROR", message }, 400, { "Cache-Control": "no-store" });
+  if (err instanceof ZodError) {
+    return c.json(
+      { error: "VALIDATION_ERROR", message: "\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A", details: err.issues.map((i) => ({ path: i.path.join("."), message: i.message })) },
+      400,
+      { "Cache-Control": "no-store" }
+    );
+  }
+  if (err instanceof SyntaxError) {
+    return c.json({ error: "INVALID_JSON", message: "\u0628\u062F\u0646\u0647\u0654 \u062F\u0631\u062E\u0648\u0627\u0633\u062A JSON \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A" }, 400, { "Cache-Control": "no-store" });
+  }
+  return c.json({ error: "INTERNAL_ERROR", message: "\u062E\u0637\u0627\u06CC \u063A\u06CC\u0631\u0645\u0646\u062A\u0638\u0631\u0647\u061B \u0644\u0637\u0641\u0627\u064B \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F" }, 500, { "Cache-Control": "no-store" });
 }
 __name(publicError, "publicError");
 
@@ -52568,7 +52613,11 @@ async function runDigestCycle(env) {
     return null;
   });
   const dispatch = await services.notify.dispatchPending(100);
-  logger.info("digest.cycle.done", { summary, dispatch });
+  const gamesMaintenance = await services.games.maintenance().catch((err) => {
+    logger.error("games.maintenance.failed", { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  });
+  logger.info("digest.cycle.done", { summary, dispatch, gamesMaintenance });
 }
 __name(runDigestCycle, "runDigestCycle");
 async function runBatchDispatchCycle(env) {

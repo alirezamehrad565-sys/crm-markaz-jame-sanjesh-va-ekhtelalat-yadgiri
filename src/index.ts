@@ -66,7 +66,13 @@ async function runDigestCycle(env: Env): Promise<void> {
     return null;
   });
   const dispatch = await services.notify.dispatchPending(100);
-  logger.info('digest.cycle.done', { summary, dispatch });
+  // نگهداشت دوره‌ای بازی‌ها (G1 / P2-3) — سوییپ مأموریت رهاشده + پاکسازی لینک/توکن منقضی؛
+  // تا امروز فقط lazy هنگام فهرست درمانگر پاک می‌شد و توکن‌های منقضی هرگز جمع نمی‌شدند
+  const gamesMaintenance = await services.games.maintenance().catch((err: unknown) => {
+    logger.error('games.maintenance.failed', { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  });
+  logger.info('digest.cycle.done', { summary, dispatch, gamesMaintenance });
 }
 
 async function runBatchDispatchCycle(env: Env): Promise<void> {

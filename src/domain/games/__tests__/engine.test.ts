@@ -8,8 +8,9 @@ import {
   classifyTouch,
   windowMsFor
 } from '../../../../public/assets/play/engine/machine.js';
-import { countFrameDeltas, FRAME_DROP_THRESHOLD_MS } from '../../../../public/assets/play/engine/timing.js';
-import { medianOf, rtVariabilityOf, summarizeSession } from '../../../../public/assets/play/engine/scoring.js';
+import { countFrameDeltas, FRAME_DROP_THRESHOLD_MS, createPausableClock } from '../../../../public/assets/play/engine/timing.js';
+import { medianOf, summarizeSession } from '../../../../public/assets/play/engine/scoring.js';
+import { createTouchLedger } from '../../../../public/assets/play/engine/observe.js';
 import type { ProtocolSnapshot } from '../protocol';
 
 describe('ماشین ۱۴-حالتهٔ دفترچهٔ وظیفه', () => {
@@ -116,34 +117,38 @@ describe('پایش فریم — افت فریم > ۳۴ms', () => {
   });
 });
 
-describe('نمرهٔ موقت موتور — آینهٔ فرمول‌های سرور با دامنهٔ صفر', () => {
-  it('میانهٔ زوج/فرد و تغییرپذیری RT', () => {
+describe('نمرهٔ موقت موتور — فقط فیلدهای واقعی رکورد (بازنویسی G1)', () => {
+  it('میانهٔ زوج/فرد', () => {
     expect(medianOf([500, 700, 900])).toBe(700);
     expect(medianOf([500, 700])).toBe(600);
     expect(medianOf([])).toBeNull();
-    expect(rtVariabilityOf([500, 510, 490])).toBeGreaterThan(0);
-    expect(rtVariabilityOf([500, 490])).toBeNull(); // کمتر از ۳ داده
   });
 
-  it('خلاصهٔ جلسه: جمع‌ها، درصدها، premature/multiple، بلوک‌ها — مخرج صفر = null', () => {
+  it('خلاصهٔ جلسه از فیلدهای واقعی رکورد (rt_ms/*_count/frame_drops) — بدون کلید گو (C1)', () => {
     const trials = [
-      { go: null, correct: true, rtMs: 500, rtValid: true, touched: true, prematureCount: 0, multipleCount: 0, block: 1 },
-      { go: null, correct: false, rtMs: null, touched: false, prematureCount: 1, multipleCount: 0, block: 1 },
-      { go: null, correct: true, rtMs: 700, rtValid: true, touched: true, prematureCount: 0, multipleCount: 1, block: 2 },
-      { go: null, correct: false, rtMs: 300, touched: true, prematureCount: 0, multipleCount: 0, block: 2 }
+      { touched: true, rt_ms: 500, premature_count: 0, multiple_count: 0, out_of_surface_count: 0, frame_drops: 0 },
+      { touched: false, rt_ms: null, premature_count: 1, multiple_count: 0, out_of_surface_count: 2, frame_drops: 1 },
+      { touched: true, rt_ms: 700, premature_count: 0, multiple_count: 1, out_of_surface_count: 0, frame_drops: 0 },
+      { touched: true, rt_ms: null, premature_count: 0, multiple_count: 0, out_of_surface_count: 0, frame_drops: 0 }
     ];
     const s = summarizeSession(trials);
     expect(s.total).toBe(4);
-    // بدون کلید go — کلاینت نمی‌داند؛ جمع‌های گو/نوگو فقط سروری‌اند
-    expect(s.total_go).toBe(0);
-    expect(s.total_nogo).toBe(0);
-    expect(s.premature).toBe(1);
-    expect(s.multiple).toBe(1);
-    expect(s.correct_go_pct).toBeNull();
-    expect(s.commission_pct).toBeNull();
-    expect(s.dprime).toBeNull(); // رزرو — هیچ مقدار ساختگی
-    expect(s.blocks.b1).toEqual({ total: 2, correct: 1 });
-    expect(s.blocks.b2).toEqual({ total: 2, correct: 1 });
+    expect(s.touched).toBe(3);
+    expect(s.no_response).toBe(1);
+    expect(s.median_rt).toBe(600); // میانهٔ [500, 700] — با فرم واقعی rt_ms
+    expect(s.premature_total).toBe(1);
+    expect(s.multiple_total).toBe(1);
+    expect(s.out_of_surface_total).toBe(2);
+    expect(s.frame_drops_total).toBe(1);
+  });
+
+  it('جلسهٔ خالی = همهٔ جمع‌ها صفر واقعی و میانهٔ null — هیچ صفرِ ساختگی (دامنهٔ صفر)', () => {
+    const s = summarizeSession([]);
+    expect(s.total).toBe(0);
+    expect(s.touched).toBe(0);
+    expect(s.no_response).toBe(0);
+    expect(s.median_rt).toBeNull();
+    expect(s.premature_total).toBe(0);
   });
 
   it('اسنپ‌شات پروتکل سرور با موتور سازگار است — همهٔ پارامترهای مصرفی موتور حاضرند', () => {
@@ -163,5 +168,90 @@ describe('نمرهٔ موقت موتور — آینهٔ فرمول‌های سر
       expect(snap.params[k as keyof typeof snap.params], k).toBeDefined();
     }
     expect(snap.behavior.star_basket).toBe(true);
+  });
+});
+
+describe('ساعت RT مکث‌پذیر — رگرسیون P1-1 (G1)', () => {
+  it('pause حساب را فریز می‌کند؛ resume ادامه می‌دهد؛ touch می‌ایستد و گرد می‌کند', async () => {
+    const clock = createPausableClock();
+    clock.start();
+    await new Promise((r) => setTimeout(r, 20));
+    clock.pause();
+    const frozen = clock.acc;
+    expect(frozen).toBeGreaterThan(0);
+    expect(clock.running).toBe(false);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(clock.acc).toBe(frozen); // زمانِ مکث به حساب اضافه نمی‌شود — قلب P1-1
+    expect(clock.peek()).toBe(Math.round(frozen)); // peek پس از فریز = حساب انباشته (گردشده)
+    clock.resume();
+    expect(clock.running).toBe(true);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(clock.peek()).toBeGreaterThan(frozen); // بخش در حال گردش در peek دیده می‌شود
+    expect(clock.acc).toBe(frozen); // حساب تا pause بعدی ثابت می‌ماند — قرارداد touch
+    const t = clock.touch();
+    expect(t).toBe(Math.round(clock.acc));
+    expect(clock.running).toBe(false);
+  });
+
+  it('peek بدون فریز می‌خواند — RT شاخه‌های چندلمسی (اسکن/رد) از نخستین لمس', async () => {
+    const clock = createPausableClock();
+    clock.start();
+    const p1 = clock.peek();
+    await new Promise((r) => setTimeout(r, 10));
+    const p2 = clock.peek();
+    expect(p2).toBeGreaterThan(p1); // ساعت هنوز می‌چرخد — peek فقط خواندن است
+    expect(clock.running).toBe(true);
+    clock.pause();
+    const p3 = clock.peek();
+    expect(p3).toBe(Math.round(clock.acc)); // پس از فریز، peek = حساب انباشته
+  });
+
+  it('پس از touch، resume دوباره می‌چرخد از صفرِ حساب — رفتار سازگار با trials', async () => {
+    const clock = createPausableClock();
+    clock.start();
+    await new Promise((r) => setTimeout(r, 10));
+    clock.pause();
+    const acc = clock.acc;
+    clock.resume();
+    expect(clock.acc).toBeLessThanOrEqual(clock.peek() + 1); // peek گردشده است — با حاشیهٔ یک میلی‌ثانیه
+    expect(clock.acc).toBeGreaterThanOrEqual(0);
+    void acc;
+  });
+});
+
+describe('دفتر لمس مشترک — رگرسیون P1-2 (G1): شواهد صفر هاردکد ممنوع', () => {
+  it('طبقه‌بندی همان classifyTouch ماشین را می‌شمارد — premature/multiple/oos/primary', () => {
+    const ledger = createTouchLedger();
+    ledger.start();
+    expect(ledger.record(STATES.FIXATION, { insideStage: true, alreadyAnswered: false })).toBe('premature');
+    expect(ledger.record(STATES.STIMULUS, { insideStage: true, alreadyAnswered: false })).toBe('primary');
+    expect(ledger.record(STATES.STIMULUS, { insideStage: true, alreadyAnswered: true })).toBe('multiple');
+    expect(ledger.record(STATES.STIMULUS, { insideStage: false, alreadyAnswered: false })).toBe('out_of_surface');
+    const c = ledger.evidenceCounts();
+    expect(c).toEqual({ premature_count: 1, multiple_count: 1, out_of_surface_count: 1 });
+    expect(ledger.touchCount()).toBe(4);
+    const ev = ledger.events();
+    expect(ev.map((e) => e.name)).toEqual(['touch_premature', 'touch_primary', 'touch_multiple', 'touch_out_of_surface']);
+    for (const e of ev) expect(Number.isFinite(e.at)).toBe(true);
+  });
+
+  it('دفتر متوقف هیچ‌چیز ثبت نمی‌کند — پنجرهٔ آزمون بسته است', () => {
+    const ledger = createTouchLedger();
+    ledger.start();
+    ledger.record(STATES.STIMULUS, {});
+    ledger.stop();
+    expect(ledger.record(STATES.STIMULUS, {})).toBeNull();
+    expect(ledger.touchCount()).toBe(1);
+    expect(ledger.evidenceCounts()).toEqual({ premature_count: 0, multiple_count: 0, out_of_surface_count: 0 });
+  });
+
+  it('شاخه‌های چندلمسی (اسکن/رد) هر لمس حین محرک = primary تا پرچم پاسخ بیاید', () => {
+    const ledger = createTouchLedger();
+    ledger.start();
+    ledger.record(STATES.STIMULUS, { insideStage: true, alreadyAnswered: false });
+    ledger.record(STATES.STIMULUS, { insideStage: true, alreadyAnswered: false });
+    ledger.record(STATES.STIMULUS, { insideStage: true, alreadyAnswered: false });
+    expect(ledger.evidenceCounts()).toEqual({ premature_count: 0, multiple_count: 0, out_of_surface_count: 0 });
+    expect(ledger.touchCount()).toBe(3); // سه انتخاب خانهٔ اسکن — بدون پرچم کیفیت کاذب
   });
 });

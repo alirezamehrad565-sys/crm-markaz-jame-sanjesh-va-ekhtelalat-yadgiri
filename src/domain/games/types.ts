@@ -405,6 +405,9 @@ export interface GamesService {
   /** ممیزی خروج دادهٔ کودک (۱.۲۵.۲۵) — هر گزارش JSON/HTML/CSV ثبت می‌شود */
   auditReportExport(childId: string, format: string, actor: AuthContext): Promise<void>;
 
+  /** نگهداشت دوره‌ای (G1 / P2-3) — سوییپ مأموریت رهاشده + پاکسازی لینک/توکن منقضی؛ از cron شبانه */
+  maintenance(): Promise<{ swept_missions: number; removed_links: number; removed_preview_tokens: number }>;
+
   // پیش‌نمایش فقط-پرسنلی (۱.۲۵.۲۰) — اجرای آزمایشی بی‌نوشت؛ کلید پاسخ هرگز صفحه را ترک نمی‌کند
   issuePreview(packageId: string, version: string, actor: AuthContext): Promise<PreviewIssueOutcome>;
   previewState(token: string): Promise<PreviewStateView | null>;

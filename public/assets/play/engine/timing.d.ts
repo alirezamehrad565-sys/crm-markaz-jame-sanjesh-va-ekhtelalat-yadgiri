@@ -13,6 +13,8 @@ export function createPausableClock(): {
   pause(): void;
   resume(): void;
   touch(): number;
+  /** خواندن بدون توقف (G1 / ۱.۲۵.۳۵) — RT شاخه‌های چندلمسی از نخستین لمس */
+  peek(): number;
   readonly running: boolean;
   readonly acc: number;
 };
