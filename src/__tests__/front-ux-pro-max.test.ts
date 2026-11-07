@@ -41,18 +41,18 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('لمس: کنترل‌های فونت‌ریز scoped (sess-note/ot-skill) هم 16px روی لمس', () => {
-    const tail = views.slice(-6200); /* بلوک پایانی ممیزی ۱.۰۹.۰ — پنجره با پیوست fin-* (۱.۲۵.۰۴) عریض شد */
+    const tail = views.slice(-14000); /* بلوک پایانی ممیزی ۱.۰۹.۰ — پنجره با پیوست fin-* (۱.۲۵.۰۴) و گمک gmk-* (فاز ۱ بازطراحی بازی‌ها) عریض شد */
     expect(tail).toMatch(/\.sess-note__actions \.select[^}]*font-size:\s*16px/);
     expect(tail).toMatch(/\.ot-skill__prompt \.select[^}]*font-size:\s*16px/);
   });
 
   test('لمس: wgrid__cell ≥24px (WCAG 2.5.8 AA — موبایل قبلاً 14px بود)', () => {
-    const tail = views.slice(-6200);
+    const tail = views.slice(-14000);
     expect(tail).toMatch(/\.wgrid__cell\s*\{\s*height:\s*2[4-9]px/);
   });
 
   test('لمس: exb-dom__chev ≥24px (موبایل قبلاً 18px بود)', () => {
-    const tail = views.slice(-6200);
+    const tail = views.slice(-14000);
     expect(tail).toMatch(/\.exb-dom__chev\s*\{\s*width:\s*(2[4-9]|3\d)px[^}]*height:\s*(2[4-9]|3\d)px/);
   });
 
@@ -64,7 +64,7 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('نسخه: سو 1.19.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1.25.32'/);
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1.25.33'/);
   });
 
   test('۱.۱۹.۰ — روز کاری: جریان پیوسته (هیچ اکشنی کل نما را re-render نمی‌کند)', () => {
