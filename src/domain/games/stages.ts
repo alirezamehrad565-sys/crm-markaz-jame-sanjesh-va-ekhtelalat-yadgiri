@@ -480,15 +480,29 @@ export const FLANKER_STAGE_MAX_DECOYS: Record<string, number | null> = {
   s5: null
 };
 
+/** بانک مجاز هر مرحلهٔ فلانکر — گروه‌های authored بانک؛ ناسالم = ساختاری (شمار قلابی‌ها) */
+export const FLANKER_STAGE_BANDS: Record<string, string[] | null> = {
+  s1: ['a'],
+  s2: ['a', 'b'],
+  s3: ['a', 'b', 'c'],
+  s4: ['a', 'b', 'c', 'd'],
+  s5: null
+};
+
 export function flankerItemInStage(
   item: { stim?: Record<string, unknown> | null | undefined },
   stageId: string | null | undefined
 ): boolean {
+  const allowed = typeof stageId === 'string' && stageId in FLANKER_STAGE_BANDS ? FLANKER_STAGE_BANDS[stageId] : null;
+  if (allowed === null) return true;
+  const s = (item.stim ?? {}) as Record<string, unknown>;
+  const band = typeof s.band === 'string' ? s.band : '';
+  if (band !== '') return allowed.includes(band);
+  // بانک بی‌گروه (سازگاری قدیمی) — قاعدهٔ ساختاری: شمار گرگ قلابی
   const max = typeof stageId === 'string' && stageId in FLANKER_STAGE_MAX_DECOYS ? FLANKER_STAGE_MAX_DECOYS[stageId] : null;
   if (max === null) return true;
   const decoys = flankerIncongruentCountOf(item);
-  if (decoys === 0 && max >= 0) return true; // گلهٔ بدون فریب در همهٔ مرحله‌ها مفید است
-  return decoys > 0 && decoys <= max;
+  return decoys === 0 || decoys <= max;
 }
 
 /** سقف شمار ردپاها در هر مرحلهٔ رد پای دزد — null = همهٔ ردها */
@@ -500,13 +514,27 @@ export const TRAIL_STAGE_MAX_NODES: Record<string, number | null> = {
   s5: null
 };
 
+/** بانک مجاز هر مرحلهٔ رد — گروه‌های authored بانک؛ ناسالم = ساختاری (شمار ردپاها) */
+export const TRAIL_STAGE_BANDS: Record<string, string[] | null> = {
+  s1: ['a'],
+  s2: ['a', 'b'],
+  s3: ['a', 'b', 'c'],
+  s4: ['a', 'b', 'c', 'd'],
+  s5: null
+};
+
 export function trailItemInStage(
   item: { stim?: Record<string, unknown> | null | undefined },
   stageId: string | null | undefined
 ): boolean {
+  const allowed = typeof stageId === 'string' && stageId in TRAIL_STAGE_BANDS ? TRAIL_STAGE_BANDS[stageId] : null;
+  if (allowed === null) return true;
+  const s = (item.stim ?? {}) as Record<string, unknown>;
+  const band = typeof s.band === 'string' ? s.band : '';
+  if (band !== '') return allowed.includes(band);
+  // بانک بی‌گروه (سازگاری قدیمی) — قاعدهٔ ساختاری: شمار ردپاها
   const max = typeof stageId === 'string' && stageId in TRAIL_STAGE_MAX_NODES ? TRAIL_STAGE_MAX_NODES[stageId] : null;
   if (max === null) return true;
-  const s = (item.stim ?? {}) as Record<string, unknown>;
   const nodes = Array.isArray(s.nodes) ? s.nodes.length : 0;
   return nodes > 0 && nodes <= max;
 }
