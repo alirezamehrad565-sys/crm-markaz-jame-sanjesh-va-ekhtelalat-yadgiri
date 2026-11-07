@@ -7,7 +7,7 @@
 ### افزوده شده
 
 - **ماژول `src/application/cp-sync/announcements.ts`** — سینک یک‌طرفهٔ اعلان‌ها از کنترل‌پلین (CP) طبق قرارداد m1.5 (`cp-node-announcement-sync.md`): pull با کلید نود m1.2، UPSERT فقط ردیف‌های `cp-` (فیلتر JS + گارد SQL — دو لایه دفاع)، ترتیب اعمال قدیمی→جدید، `active:false` = بایگانی، حفظ پرچم‌های ارسال بات محلی، ثبت «آخرین سینک موفق» در settings با دلتای `since` منفی ۶۰ ثانیه، لاگ `announcement.cp_sync` — و در هر خطا: `log.warn` و تلاش دورهٔ بعد، بدون کرش.
-- **کرون `*/15 * * * *`** هم در `wrangler.toml`/`wrangler.prod.toml` (Cron Triggers) و هم در `ALL_CRONS` سلف‌هاست — پاریتی کامل؛ dispatch در `scheduled` با `CP_SYNC_CRON` از `@core/shared`.
+- **ریتم ۱۵دقیقه‌ای سینک:** در سلف‌هاست `CP_SYNC_CRON` به `ALL_CRONS` اضافه شد و در ورکر، dispatch `scheduled` با `CP_SYNC_CRON` از `@core/shared` آماده است — اما چون پلن Free کلادفلر سقف ۵ کرون در کل حساب دارد و این حساب پر است، در ورکر سینک با **دروازهٔ فرصت‌طلب روی fetch** اجرا می‌شود (`probeCpSync` + مُهر مشترک `cp_sync.last_attempt_at` در settings؛ هر isolate حداکثر یک‌بار در دقیقه می‌خواند، تلاش‌ها ۱۵ دقیقه فاصله دارند، env خالی = صفر بار اضافه). با ارتقای پلن فقط `"*/15 * * * *"` به wrangler اضافه می‌شود.
 - **آیتم منوی «کنترل‌پلین شبکه»** (گروه مرکز، فقط مدیر) — پلهٔ صفر نردبان: لینک نمایشی بی‌منطق و بی‌راز به CP در تب جدید.
 - گیت قرارداد ۱۲تایی (`cp-sync/__tests__/cp-sync.test.ts`): kill switch چهارمتغیری، هدرهای قرارداد، since −۶۰s، قانون طلایی `cp-`، گارد SQL اعلان محلی، ترتیب، بایگانی، حفظ bot_sent، ۴۰۱/شبکه/payload نامعتبر/staff ناموجود، لاگ قراردادی.
 

@@ -20,6 +20,10 @@ import type { Logger } from '@core/logger';
 
 /** کلید settings برای «آخرین سینک موفق» (ISO UTC) */
 export const CP_SYNC_SETTINGS_KEY = 'cp_sync.last_sync_at';
+/** کلید settings برای «آخرین تلاش سینک» — رگولاتور مشترک cron و دروازهٔ فرصت‌طلب */
+export const CP_SYNC_ATTEMPT_KEY = 'cp_sync.last_attempt_at';
+/** حداقل فاصلهٔ دو تلاش سینک — ۱۵ دقیقه (هم‌ریتم قرارداد) */
+export const CP_SYNC_MIN_INTERVAL_MS = 15 * 60_000;
 /** پیشوند شناسهٔ اعلان‌های شبکه‌ای — مرزِ «متعلق به CP» */
 export const CP_ID_PREFIX = 'cp-';
 /** since را ۶۰ ثانیه عقب‌تر می‌فرستیم (توصیهٔ صریح قرارداد §۲) */
@@ -103,10 +107,20 @@ function buildRequestUrl(baseUrl: string, sinceIso: string | null): string {
 }
 
 async function readLastSyncAt(db: DbClient): Promise<string | null> {
-  const row = await db.queryOne<{ value: string }>(
-    'SELECT value FROM settings WHERE key = ?',
-    [CP_SYNC_SETTINGS_KEY]
+  return readSettingsIso(db, CP_SYNC_SETTINGS_KEY);
+}
+
+async function writeLastSyncAt(db: DbClient, iso: string): Promise<void> {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, 'cp-sync', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-sync', updated_at = excluded.updated_at`,
+    [CP_SYNC_SETTINGS_KEY, JSON.stringify(iso), iso]
   );
+}
+
+async function readSettingsIso(db: DbClient, key: string): Promise<string | null> {
+  const row = await db.queryOne<{ value: string }>('SELECT value FROM settings WHERE key = ?', [key]);
   if (!row) return null;
   try {
     const parsed: unknown = JSON.parse(row.value);
@@ -117,13 +131,63 @@ async function readLastSyncAt(db: DbClient): Promise<string | null> {
   return null;
 }
 
-async function writeLastSyncAt(db: DbClient, iso: string): Promise<void> {
+/** مُهر «آخرین تلاش» — مشترک بین کرون و دروازهٔ فرصت‌طلب تا کار دوباره نشود */
+export async function stampCpSyncAttempt(db: DbClient, at: Date = new Date()): Promise<void> {
   await db.execute(
     `INSERT INTO settings (key, value, updated_by, updated_at)
      VALUES (?, ?, 'cp-sync', ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-sync', updated_at = excluded.updated_at`,
-    [CP_SYNC_SETTINGS_KEY, JSON.stringify(iso), iso]
+    [CP_SYNC_ATTEMPT_KEY, JSON.stringify(at.toISOString()), at.toISOString()]
   );
+}
+
+/** آیا از آخرین تلاش به اندازهٔ کافی گذشته؟ (تازگی ناشناس/خراب = اجازهٔ تلاش) */
+export function shouldAttemptCpSync(
+  lastAttemptIso: string | null,
+  now: Date,
+  minIntervalMs: number = CP_SYNC_MIN_INTERVAL_MS
+): boolean {
+  if (!lastAttemptIso) return true;
+  const t = Date.parse(lastAttemptIso);
+  if (Number.isNaN(t)) return true;
+  return now.getTime() - t >= minIntervalMs;
+}
+
+export type CpSyncProbeResult = CpSyncResult | { status: 'skipped' };
+
+/**
+ * دروازهٔ فرصت‌طلب سینک CP روی مسیر fetch — جایگزین کرون پنجم
+ * (سقف پلن Free کلادفلر: ۵ کرون در کل حساب؛ این مسیر بدون کرون تازه کار می‌کند).
+ * هر درخواست فقط یک مقایسهٔ in-memory می‌پردازد؛ حداکثر یک‌بار در دقیقه
+ * settings خوانده می‌شود و هر تلاش با مُهر مشترک، ۱۵ دقیقه فاصله می‌گیرد.
+ * فعال‌سازی بعدی با کرون اختصاصی (پلن بالاتر) هم‌ساز است: مُهر مشترک است.
+ */
+export async function cpSyncOpportunistic(deps: {
+  db: DbClient;
+  logger: Logger;
+  config: CpSyncConfig;
+  fetchFn?: typeof fetch;
+  now?: () => Date;
+  minIntervalMs?: number;
+}): Promise<CpSyncProbeResult> {
+  const { db, logger, config } = deps;
+  // بدون env کامل: هیچ خواندنی هم ندارد — صفر بار اضافه روی مسیر درخواست
+  if (!config.cpSyncUrl || !config.cpNodeCode || !config.cpNodeKey || !config.cpSyncStaffId) {
+    return { status: 'skipped' };
+  }
+  const now = deps.now ?? (() => new Date());
+  const last = await readSettingsIso(db, CP_SYNC_ATTEMPT_KEY);
+  if (!shouldAttemptCpSync(last, now(), deps.minIntervalMs ?? CP_SYNC_MIN_INTERVAL_MS)) {
+    return { status: 'skipped' };
+  }
+  await stampCpSyncAttempt(db, now());
+  return syncCpAnnouncements({
+    db,
+    logger,
+    config,
+    fetchFn: deps.fetchFn,
+    now: deps.now
+  });
 }
 
 /**

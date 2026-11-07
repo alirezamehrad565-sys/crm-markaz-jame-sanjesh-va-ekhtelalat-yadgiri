@@ -13,7 +13,11 @@ import { createLogger } from '@core/logger';
 import {
   buildCpSyncConfig,
   syncCpAnnouncements,
+  cpSyncOpportunistic,
+  shouldAttemptCpSync,
+  stampCpSyncAttempt,
   CP_SYNC_SETTINGS_KEY,
+  CP_SYNC_ATTEMPT_KEY,
   CP_ID_PREFIX
 } from '../announcements';
 
@@ -314,6 +318,78 @@ describe('cp-sync: خطاها هرگز کرش نمی‌کنند', () => {
     expect(res.status).toBe('error');
     expect(res.detail).toBe('staff_missing');
     expect(await listAnnouncements(A)).toHaveLength(0);
+  });
+});
+
+describe('cp-sync: دروازهٔ فرصت‌طلب (جای کرون پنجم روی پلن Free)', () => {
+  it('env ناقص → skipped با صفر خواندنی (هیچ اثری در settings نمی‌گذارد)', async () => {
+    const A = createTestApp();
+    const res = await cpSyncOpportunistic({
+      db: A.db,
+      logger: silentLogger('it'),
+      config: buildCpSyncConfig({ CP_SYNC_URL: CP_URL }), // بقیه خالی
+      fetchFn: fetchReturning([])
+    });
+    expect(res.status).toBe('skipped');
+    expect(await A.db.queryOne('SELECT 1 FROM settings WHERE key = ?', [CP_SYNC_ATTEMPT_KEY])).toBeNull();
+  });
+
+  it('تلاش تازه (< ۱۵ دقیقه) → skipped و fetch زده نمی‌شود', async () => {
+    const A = createTestApp();
+    const now = new Date('2026-11-07T15:00:00.000Z');
+    await stampCpSyncAttempt(A.db, new Date('2026-11-07T14:50:00.000Z')); // فقط ۱۰ دقیقه قبل
+    const f = fetchReturning([cpItem()]);
+    const res = await cpSyncOpportunistic({
+      db: A.db,
+      logger: silentLogger('it'),
+      config: buildCpSyncConfig(FULL_ENV),
+      fetchFn: f,
+      now: () => now
+    });
+    expect(res.status).toBe('skipped');
+    expect(f.calls).toHaveLength(0);
+  });
+
+  it('گذشتهٔ ۱۵ دقیقه → مُهر تلاش می‌خورد و سینک اجرا می‌شود', async () => {
+    const A = createTestApp();
+    const now = new Date('2026-11-07T15:00:00.000Z');
+    await stampCpSyncAttempt(A.db, new Date('2026-11-07T14:44:00.000Z')); // ۱۶ دقیقه قبل
+    const f = fetchReturning([cpItem()]);
+    const res = await cpSyncOpportunistic({
+      db: A.db,
+      logger: silentLogger('it'),
+      config: buildCpSyncConfig(FULL_ENV),
+      fetchFn: f,
+      now: () => now
+    });
+    expect(res.status).toBe('ok');
+    expect(f.calls).toHaveLength(1);
+    const attempt = await A.db.queryOne<{ value: string }>('SELECT value FROM settings WHERE key = ?', [CP_SYNC_ATTEMPT_KEY]);
+    expect(JSON.parse(attempt!.value)).toBe('2026-11-07T15:00:00.000Z');
+  });
+
+  it('خطای شبکه در دروازهٔ فرصت‌طلب هم مُهر می‌خورد (تا سیل تلاش نشود) و error برمی‌گردد', async () => {
+    const A = createTestApp();
+    const boom = (async () => {
+      throw new TypeError('fetch failed');
+    }) as unknown as typeof fetch;
+    const res = await cpSyncOpportunistic({
+      db: A.db,
+      logger: silentLogger('it'),
+      config: buildCpSyncConfig(FULL_ENV),
+      fetchFn: boom
+    });
+    expect(res.status).toBe('error');
+    const attempt = await A.db.queryOne<{ value: string }>('SELECT value FROM settings WHERE key = ?', [CP_SYNC_ATTEMPT_KEY]);
+    expect(attempt).not.toBeNull();
+  });
+
+  it('shouldAttemptCpSync: مرز دقیق ۱۵ دقیقه و مقدار خراب', () => {
+    const now = new Date('2026-11-07T15:00:00.000Z');
+    expect(shouldAttemptCpSync(null, now)).toBe(true);
+    expect(shouldAttemptCpSync('garbage', now)).toBe(true);
+    expect(shouldAttemptCpSync('2026-11-07T14:45:00.000Z', now)).toBe(true); // دقیقاً ۱۵ دقیقه
+    expect(shouldAttemptCpSync('2026-11-07T14:45:00.500Z', now)).toBe(false); // ۵۰۰ms کمتر
   });
 });
 
