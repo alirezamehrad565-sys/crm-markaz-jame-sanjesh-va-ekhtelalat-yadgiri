@@ -332,23 +332,43 @@ function managerOnly(render) {
    • خطای شبکه: یک تلاش دوبارهٔ خودکار، سپس خطا به روتر می‌رود که errorState با «تلاش دوباره» دارد
    • پیش‌بارگذاری: pointerenter/focus/touchstart آیتم منو chunk را زودتر می‌گیرد (روانی جابه‌جایی) */
 const viewChunks = {}; /* hash مسیر → { preload } */
+
+/* ۱.۲۵.۲۷ — ترمیم خودکار «تبِ باز از قبل از انتشار».
+   بیلد هر انتشار پوشهٔ dist را از نو می‌سازد و hashهای قبلی از سرور حذف می‌شوند؛
+   بنابراین tabی که از قبل از دیپلوی باز مانده، با ورود به هر نمای جدید chunkِ نسخهٔ
+   قبل را می‌خواهد که دیگر وجود ندارد (رگبار 404 روی /assets/dist/*.js).
+   ترمیم: یک‌بار reload خودکار تا پوستهٔ تازه با گراف باندل نسخهٔ زنده هم‌گام شود.
+   گارد نشست جلوی حلقهٔ reload را می‌گیرد و پس از نخستین بارگذاری موفق chunk پاک
+   می‌شود تا انتشار بعدی هم دوباره کار کند؛ خطای واقعی شبکه/سرور بعد از همان یک
+   reload به errorStateِ روتر می‌رسد (دکمهٔ «تلاش دوباره» سر جایش است). */
+function reloadIfStaleChunk() {
+  const key = 'cs.stale-chunk-reload';
+  try {
+    if (sessionStorage.getItem(key) === '1') return;
+    sessionStorage.setItem(key, '1');
+  } catch { return; } /* بدون sessionStorage (حریم خصوصی سخت‌گیرانه) — رفتار قدیمی */
+  setTimeout(() => location.reload(), 50);
+}
+
 function lazyView(load, exportName, hash) {
   let cached = null;
   const ensure = () => (cached ? Promise.resolve(cached) : load().then((m) => (cached = m)));
   if (hash) viewChunks[hash] = { preload: () => { ensure().catch(() => {}); } };
   return async (container, ctx) => {
     const skel = setTimeout(() => { if (!cached) container.replaceChildren(skeletonState('table', 5)); }, 150);
+    let m;
     try {
-      let m;
       try { m = await ensure(); }
       catch { m = await ensure(); } /* retry یک‌باره: chunk در شبکهٔ ضعیف */
-      clearTimeout(skel);
-      return m[exportName](container, ctx);
     } catch (err) {
       clearTimeout(skel);
       cached = null; /* تلاش بعدی از صفر — کش منفی احتمالی دور زده شود */
+      reloadIfStaleChunk(); /* chunkِ نسخهٔ قبل دیگر روی سرور نیست → هم‌گام‌سازی یک‌باره */
       throw err; /* روتر: errorState + دکمهٔ «تلاش دوباره» */
     }
+    clearTimeout(skel);
+    try { sessionStorage.removeItem('cs.stale-chunk-reload'); } catch { /* بی‌اهمیت */ }
+    return m[exportName](container, ctx);
   };
 }
 
