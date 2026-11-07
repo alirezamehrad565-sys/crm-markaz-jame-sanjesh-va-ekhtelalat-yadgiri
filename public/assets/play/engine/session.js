@@ -476,6 +476,321 @@ export async function runSession(ctx) {
       continue;
     }
 
+    /* آیتم انتخاب زمان‌دار — «حقه‌باز رنگ‌ها» و «گلهٔ فریبکار» (۱.۲۵.۳۲):
+       استروپ/فلانکر با پنجرهٔ پاسخ از stim.window_ms؛ بی‌لمس تا پایان پنجره = بی‌پاسخ
+       (اُمیشن سمت سرور). نمایش از kinds/<kind>.js (markupFor) و در نبودش قالب عام؛
+       RT از لحظهٔ نمایش محرک؛ شواهد همان قرارداد فاز ۴؛ حس عدی در پوستهٔ صحنه —
+       گفتار روبه‌کودک آرام (§۲)؛ ارزیابی بی‌بازخورد/بی‌ستاره */
+    if ((item.type === 'stroop' || item.type === 'flanker') &&
+        (typeof kind.markupFor?.[item.type] === 'function' || (Array.isArray(item.options) && item.options.length > 0))) {
+      machine.to(STATES.FIXATION, { item: item.id, timedchoice: true }); // مسیر اجباری ماشین: READY/PRACTICE → FIXATION → STIMULUS
+      stage.classList.remove('play-stage--quiet');
+      stage.classList.add('play-stage--' + item.type); // پوستهٔ عدی نوع‌بازی (شب/حاشیهٔ هشدار)
+      await sleeper.sleep(250); // تثبیت کوتاه پوسته پیش از محرک — بدون فلاش (§۹)
+      stage.innerHTML = typeof kind.markupFor?.[item.type] === 'function'
+        ? kind.markupFor[item.type](item)
+        : (item.prompt ? '<p class="play-line">' + esc(item.prompt) + '</p>' : '') +
+          '<div class="play-options">' +
+          item.options.map((o, i) => '<button type="button" class="play-option" data-option="' + i + '">' + esc(o.label ?? o) + '</button>').join('') +
+          '</div>';
+      machine.to(STATES.STIMULUS, { item: item.id, timedchoice: true });
+      const shownAtTc = performance.now(); // RT از لحظهٔ نمایش محرک — نه از شروع حلقه
+      const stimTc = item.stim && typeof item.stim === 'object' ? item.stim : {};
+      const winMs = typeof stimTc.window_ms === 'number' && Number.isFinite(stimTc.window_ms)
+        ? Math.min(8000, Math.max(800, Math.round(stimTc.window_ms)))
+        : 3000;
+      const pickTc = await new Promise((resolve) => {
+        const buttons = stage.querySelectorAll('.play-option');
+        const timerBar = stage.querySelector('[class*="__timer"] > span');
+        let settled = false;
+        let winRemain = winMs;
+        let winPausedAt = null;
+        const freezeBar = () => {
+          if (!timerBar) return;
+          const w = window.getComputedStyle(timerBar).width;
+          timerBar.style.transition = 'none';
+          timerBar.style.width = w;
+        };
+        const unfreezeBar = (ms) => {
+          if (!timerBar) return;
+          window.requestAnimationFrame(() => {
+            timerBar.style.transition = 'width ' + Math.max(0, ms) + 'ms linear';
+            timerBar.style.width = '0%';
+          });
+        };
+        trialHooks.pause = () => { winPausedAt = performance.now(); freezeBar(); };
+        trialHooks.resume = () => {
+          if (winPausedAt !== null) {
+            winRemain = Math.max(0, winRemain - (performance.now() - winPausedAt));
+            winPausedAt = null;
+            unfreezeBar(winRemain);
+          }
+        };
+        const finishWindow = (val) => {
+          if (settled) return;
+          settled = true;
+          sleeper.cancel(); // پنجره تمام شد — خواب یدکی یتیم نمی‌ماند (قاعدهٔ پنجرهٔ گو/نوگو)
+          trialHooks.pause = null;
+          trialHooks.resume = null;
+          buttons.forEach((b) => b.removeEventListener('pointerdown', onTap));
+          resolve(val);
+        };
+        const onTap = (ev) => {
+          const btn = ev.target.closest('.play-option');
+          if (!btn) return;
+          ev.preventDefault();
+          finishWindow({ option: Number(btn.dataset.option), at: performance.now() });
+        };
+        buttons.forEach((b) => b.addEventListener('pointerdown', onTap));
+        unfreezeBar(winMs);
+        sleeper.sleep(winMs).then(() => finishWindow({ option: null, at: null }));
+      });
+      machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, timedchoice: true });
+      const recordTc = {
+        item_id: item.id,
+        go: null,
+        touched: pickTc.option !== null,
+        rt_ms: pickTc.option !== null ? Math.round(pickTc.at - shownAtTc) : null,
+        touch_count: pickTc.option !== null ? 1 : 0,
+        premature_count: 0,
+        multiple_count: 0,
+        out_of_surface_count: 0,
+        presented_at: shownAtTc,
+        frame_drops: 0,
+        window_ms: winMs,
+        isi_ms: 0,
+        events: [],
+        choice_response: { option: pickTc.option, timed_out: pickTc.option === null }
+      };
+      trials.push(recordTc);
+      doneCount += 1;
+      let fbT = null;
+      try {
+        fbT = await api.submit({
+          item_id: item.id,
+          response: {
+            option: pickTc.option,
+            timed_out: pickTc.option === null,
+            presented_at: Math.round(shownAtTc),
+            frame_drops: 0,
+            touch_count: recordTc.touch_count,
+            premature_count: 0,
+            multiple_count: 0,
+            out_of_surface_count: 0,
+            window_ms: winMs
+          },
+          rt_ms: recordTc.rt_ms,
+          idem_key: crypto.randomUUID()
+        });
+      } catch (err) {
+        machine.to(STATES.INTERRUPTED, { reason: 'network', item: item.id });
+        onNetworkFail();
+        return;
+      }
+      const okT = fbT !== null && typeof fbT === 'object' && fbT.correct === true;
+      const canFeedbackT = !isAssessment && fbT && fbT.phase === 'train' && fbT.message && B.feedback_in_main;
+      if (canFeedbackT) {
+        fx.popBubble(bubble, fbT.message, okT ? 'ok' : 'calm', P.feedback_ms);
+        if (!okT && fbT.answer_display != null && typeof kind.revealFor?.[item.type] === 'function') {
+          // نشان حقیقت — آموزش پس از پاسخ؛ برچسب درست از بازخورد سرور می‌آید، نه از کلاینت
+          kind.revealFor[item.type](item, stage, fbT.answer_display);
+          await sleeper.sleep(P.feedback_ms + 600);
+        } else {
+          if (okT && typeof kind.pointFor?.[item.type] === 'function') {
+            const ptT = kind.pointFor[item.type](stage);
+            if (ptT) fx.burstAt(ptT.x, ptT.y);
+          }
+          await sleeper.sleep(P.feedback_ms);
+        }
+      } else {
+        await sleeper.sleep(Math.max(400, 600));
+      }
+      stage.classList.remove('play-stage--' + item.type);
+      stage.innerHTML = ''; // صحنه خالی پیش از ISI بعدی — محرک شبح نمی‌ماند
+      /* سبد ستاره و استریک — همان حلقهٔ گو/نوگو؛ ارزیابی هرگز */
+      if (!isAssessment && B.star_basket && fbT && fbT.phase === 'train' && okT) {
+        starCount += 1;
+        if (countEl) countEl.textContent = faNum(starCount);
+        fx.flyStar(stage, basketEl);
+        window.setTimeout(() => fx.popCount(countEl), 560);
+        if (starCount % 5 === 0) {
+          fx.popBubble(bubble, faNum(starCount) + ' ستاره جمع شد!', 'ok', P.feedback_ms);
+          await sleeper.sleep(P.feedback_ms);
+        }
+      }
+      if (okT) streak += 1; else if (fbT && fbT.correct === false) streak = 0;
+      const streakMsgT = streakLine(streak);
+      if (canFeedbackT && streakMsgT) fx.pillShow(streakMsgT);
+      if (machine.state === STATES.INTER_TRIAL_INTERVAL) {
+        machine.to(practiceMode ? STATES.PRACTICE : STATES.READY, { after_items: doneCount });
+      }
+      continue;
+    }
+
+    /* آیتم دنباله‌ای — «رد پای دزد» (۱.۲۵.۳۲): ردپاهای شماره‌دار؛ لمس به ترتیب برچسب‌ها.
+       ترتیب برچسب‌ها (seq) دانش عمومی خود بازی است (عددهای روبه‌کودک)؛ نگاشت گره→جایگاه
+       کلید سروری است و هرگز به کلاینت نمی‌رسد. لمس ترتیب اشتباه = رد همان‌جا قطع می‌شود
+       (پایان بی‌سرزنش، §۲)؛ RT از نخستین لمس؛ RT هر گره هم در response می‌ماند */
+    if (item.type === 'trail' && typeof kind.markupFor?.[item.type] === 'function' &&
+        item.stim && Array.isArray(item.stim.nodes)) {
+      machine.to(STATES.FIXATION, { item: item.id, sequence: true }); // مسیر اجباری ماشین
+      stage.classList.remove('play-stage--quiet');
+      stage.classList.add('play-stage--' + item.type); // پوستهٔ عدی: شب کوچه، دزد فراری
+      await sleeper.sleep(250);
+      stage.innerHTML = kind.markupFor[item.type](item);
+      machine.to(STATES.STIMULUS, { item: item.id, sequence: true });
+      const shownAtSq = performance.now(); // RT از لحظهٔ نمایش رد
+      const stimSq = item.stim;
+      const seqSq = Array.isArray(stimSq.seq) ? stimSq.seq.map((v) => String(v)) : null;
+      const resultSq = await new Promise((resolve) => {
+        const nodes = stage.querySelectorAll('.play-trail__node');
+        const timerBar = stage.querySelector('[class*="__timer"] > span');
+        const winSq = typeof stimSq.window_ms === 'number' && Number.isFinite(stimSq.window_ms)
+          ? Math.min(30000, Math.max(2000, Math.round(stimSq.window_ms)))
+          : 15000;
+        const order = [];
+        const nodeRts = [];
+        let firstAt = null;
+        let tapCount = 0;
+        let settled = false;
+        let winRemain = winSq;
+        let winPausedAt = null;
+        const freezeBar = () => {
+          if (!timerBar) return;
+          const w = window.getComputedStyle(timerBar).width;
+          timerBar.style.transition = 'none';
+          timerBar.style.width = w;
+        };
+        const unfreezeBar = (ms) => {
+          if (!timerBar) return;
+          window.requestAnimationFrame(() => {
+            timerBar.style.transition = 'width ' + Math.max(0, ms) + 'ms linear';
+            timerBar.style.width = '0%';
+          });
+        };
+        trialHooks.pause = () => { winPausedAt = performance.now(); freezeBar(); };
+        trialHooks.resume = () => {
+          if (winPausedAt !== null) {
+            winRemain = Math.max(0, winRemain - (performance.now() - winPausedAt));
+            winPausedAt = null;
+            unfreezeBar(winRemain);
+          }
+        };
+        const finishTrail = (timedOut) => {
+          if (settled) return;
+          settled = true;
+          sleeper.cancel(); // رد قطع/کامل شد — خواب یدکی یتیم نمی‌ماند (قاعدهٔ پنجره)
+          trialHooks.pause = null;
+          trialHooks.resume = null;
+          nodes.forEach((b) => b.removeEventListener('pointerdown', onNode));
+          resolve({ order, nodeRts, firstAt, tapCount, timedOut, usedMs: Math.round(performance.now() - shownAtSq) });
+        };
+        const onNode = (ev) => {
+          const btn = ev.target.closest('.play-trail__node');
+          if (!btn || btn.disabled) return;
+          ev.preventDefault();
+          tapCount += 1;
+          if (firstAt === null) firstAt = performance.now();
+          const idx = Number(btn.dataset.idx);
+          const nd = stimSq.nodes[idx];
+          const expected = seqSq ? seqSq[order.length] : null;
+          const okTap = seqSq === null || (expected !== undefined && nd && String(nd.n) === expected);
+          if (okTap) {
+            order.push(idx);
+            nodeRts.push(Math.round(performance.now() - shownAtSq));
+            btn.classList.add('play-trail__node--step');
+            if (nodes.length > 0 && order.length >= nodes.length) finishTrail(false); // رد کامل شد
+          } else {
+            finishTrail(false); // رد قطع شد — پایان بی‌سرزنش؛ نمره سرور است
+          }
+        };
+        nodes.forEach((b) => b.addEventListener('pointerdown', onNode));
+        unfreezeBar(winSq);
+        sleeper.sleep(winSq).then(() => finishTrail(true));
+      });
+      machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, sequence: true });
+      const recordSq = {
+        item_id: item.id,
+        go: null,
+        touched: resultSq.order.length > 0,
+        rt_ms: resultSq.firstAt !== null ? Math.round(resultSq.firstAt - shownAtSq) : null,
+        touch_count: resultSq.tapCount,
+        premature_count: 0,
+        multiple_count: 0,
+        out_of_surface_count: 0,
+        presented_at: shownAtSq,
+        frame_drops: 0,
+        window_ms: null,
+        isi_ms: 0,
+        events: [],
+        trail_order: resultSq.order.slice()
+      };
+      trials.push(recordSq);
+      doneCount += 1;
+      let fbQ = null;
+      try {
+        fbQ = await api.submit({
+          item_id: item.id,
+          response: {
+            order: resultSq.order,
+            node_rts_ms: resultSq.nodeRts,
+            used_ms: resultSq.usedMs,
+            timed_out: resultSq.timedOut,
+            presented_at: Math.round(shownAtSq),
+            frame_drops: 0,
+            touch_count: resultSq.tapCount,
+            premature_count: 0,
+            multiple_count: 0,
+            out_of_surface_count: 0
+          },
+          rt_ms: recordSq.rt_ms,
+          idem_key: crypto.randomUUID()
+        });
+      } catch (err) {
+        machine.to(STATES.INTERRUPTED, { reason: 'network', item: item.id });
+        onNetworkFail();
+        return;
+      }
+      const okQ = fbQ !== null && typeof fbQ === 'object' && fbQ.correct === true;
+      const canFeedbackQ = !isAssessment && fbQ && fbQ.phase === 'train' && fbQ.message && B.feedback_in_main;
+      if (canFeedbackQ) {
+        fx.popBubble(bubble, fbQ.message, okQ ? 'ok' : 'calm', P.feedback_ms);
+        if (!okQ && fbQ.answer_display != null && typeof kind.revealFor?.[item.type] === 'function') {
+          // نشان حقیقت — ترتیب درست رد از CSV بازخورد سرور می‌آید؛ فقط تمرین
+          kind.revealFor[item.type](item, stage, String(fbQ.answer_display));
+          await sleeper.sleep(P.feedback_ms + 600);
+        } else {
+          if (okQ && typeof kind.pointFor?.[item.type] === 'function') {
+            const ptQ = kind.pointFor[item.type](stage);
+            if (ptQ) fx.burstAt(ptQ.x, ptQ.y);
+          }
+          await sleeper.sleep(P.feedback_ms);
+        }
+      } else {
+        await sleeper.sleep(Math.max(400, 600));
+      }
+      stage.classList.remove('play-stage--' + item.type);
+      stage.innerHTML = ''; // صحنه خالی پیش از ISI بعدی — رد شبح نمی‌ماند
+      /* سبد ستاره و استریک — همان حلقهٔ گو/نوگو؛ ارزیابی هرگز */
+      if (!isAssessment && B.star_basket && fbQ && fbQ.phase === 'train' && okQ) {
+        starCount += 1;
+        if (countEl) countEl.textContent = faNum(starCount);
+        fx.flyStar(stage, basketEl);
+        window.setTimeout(() => fx.popCount(countEl), 560);
+        if (starCount % 5 === 0) {
+          fx.popBubble(bubble, faNum(starCount) + ' ستاره جمع شد!', 'ok', P.feedback_ms);
+          await sleeper.sleep(P.feedback_ms);
+        }
+      }
+      if (okQ) streak += 1; else if (fbQ && fbQ.correct === false) streak = 0;
+      const streakMsgQ = streakLine(streak);
+      if (canFeedbackQ && streakMsgQ) fx.pillShow(streakMsgQ);
+      if (machine.state === STATES.INTER_TRIAL_INTERVAL) {
+        machine.to(practiceMode ? STATES.PRACTICE : STATES.READY, { after_items: doneCount });
+      }
+      continue;
+    }
+
     /* آیتم انتخابی (choice) — بدون پنجرهٔ زمانی؛ کف ۲۰۰ms سروری (§۸)؛
        همان کلاس‌های CSS پخش‌کننده؛ پاسخ از کلید گزینه، RT از نمایش هر آیتم
        (۱.۲۵.۲۸ رفع: ساعت قبلاً یک‌بار بیرون حلقه گرفته می‌شد و RT آیتم‌های بعدی تورم داشت) */

@@ -8,12 +8,15 @@ import { PROTOCOL_VERSION, isProtocolVersionSupported } from './protocol';
 /** چهار قاعدهٔ پایهٔ لحن که هر بسته باید داشته باشد (§۴) */
 export const TONE_RULES_BASE = ['no_timer', 'no_rank', 'no_streak', 'no_fail_message'] as const;
 
-/** کف اعتبار زمان واکنش بر اساس نوع بازی (§۸) */
+  /** کف اعتبار زمان واکنش بر اساس نوع بازی (§۸) */
 export const DEFAULT_RT_FLOOR_MS: Record<MissionItem['type'], number> = {
   touch_report: 150, // گو/نوگو — زیر ۱۵۰ حدس است
   numline: 0,        // خط عددی کف ندارد
   choice: 200,       // فلش‌کارت/انتخاب — لمس تصادفی حذف می‌شود
-  scan: 150          // حملهٔ جاسوس‌ها — کف نخستین لمس موج؛ زیر آن حدس است
+  scan: 150,         // حملهٔ جاسوس‌ها — کف نخستین لمس موج؛ زیر آن حدس است
+  stroop: 200,       // حقه‌باز رنگ‌ها — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
+  flanker: 200,      // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
+  trail: 150         // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
 };
 
 /** آستانهٔ بیکاری برای جلسهٔ ناقص (§۶) */
@@ -67,6 +70,13 @@ export interface ScoredAttempt {
   scanDistractors?: number;
   /** شمار جاسوس‌های موج (مخرج miss_pct) */
   scanSpies?: number;
+  /** پنجرهٔ پاسخ بدون لمس بسته شد — انتخاب زمان‌دار (استروپ/فلانکر ۱.۲۵.۳۲)؛ اُمیشن سمت سرور */
+  timedOut?: boolean;
+  /** محرک هم‌خوان (استروپ: واژه=جوهر · فلانکر: بدون فریب) — مبنای سنجهٔ تداخل */
+  congruent?: boolean;
+  /** رد پای دزد — طول پیش‌ماند صحیح و طول کل رد (۱.۲۵.۳۲) */
+  trailNodes?: number;
+  trailNodesTotal?: number;
 }
 
 function rtFloorFor(item: MissionItem, mission: MissionConfig): number {
@@ -96,6 +106,10 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
   let scanMissed: number | undefined;
   let scanDistractors: number | undefined;
   let scanSpies: number | undefined;
+  let timedOut: boolean | undefined;
+  let congruent: boolean | undefined;
+  let trailNodes: number | undefined;
+  let trailNodesTotal: number | undefined;
 
   if (item.type === 'choice') {
     correct = typeof res.option === 'number' && res.option === item.correct;
@@ -110,6 +124,30 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
       correct = Math.abs(chosen - item.correct) <= tol;
       errorPct = numlineErrorPct(chosen, item.correct, item.range);
     }
+  } else if (item.type === 'stroop' || item.type === 'flanker') {
+    // انتخاب زمان‌دار (۱.۲۵.۳۲) — استروپ/فلانکر: پنجرهٔ پاسخ از خود آیتم؛ بی‌لمس = اُمیشن،
+    // کمسیون نداریم (پاسخ به گزینهٔ نادرست در accuracy خلاصه می‌شود، مثل choice)
+    const opt = typeof res.option === 'number' && Number.isInteger(res.option) ? res.option : null;
+    correct = opt !== null && opt === item.correct;
+    omission = opt === null;
+    timedOut = opt === null;
+    congruent = item.stim?.congruent === true || item.stim?.cond === 'congruent';
+  } else if (item.type === 'trail') {
+    // رد پای دزد (۱.۲۵.۳۲) — ترتیب دقیق گره‌ها؛ طول پیش‌ماند صحیح برای سنجهٔ درصدی رد
+    const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0) : [];
+    const rawOrder = Array.isArray(res.order) ? res.order : [];
+    // تکرار گره بی‌معناست؛ ترتیب حفظ می‌شود (نخستین ورود هر اندیس)
+    const seen = new Set<string>();
+    const orderSeq: number[] = [];
+    for (const v of rawOrder.filter((n) => Number.isInteger(n) && n >= 0)) {
+      const k = String(v);
+      if (!seen.has(k)) { seen.add(k); orderSeq.push(v); }
+    }
+    let prefix = 0;
+    while (prefix < orderSeq.length && prefix < key.length && orderSeq[prefix] === key[prefix]) prefix++;
+    correct = key.length === orderSeq.length && orderSeq.every((v, i) => v === key[i]);
+    trailNodes = prefix;
+    trailNodesTotal = key.length;
   } else if (item.type === 'touch_report') {
     const touched = res.touched === true;
     const want = item.correct_touch === true; // هدف واقعی (go)
@@ -146,7 +184,10 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
     commission,
     omission,
     ...(isGo !== undefined ? { isGo } : {}),
-    ...(scanFalse !== undefined ? { scanFalse, scanMissed: scanMissed, scanDistractors: scanDistractors, scanSpies: scanSpies } : {})
+    ...(scanFalse !== undefined ? { scanFalse, scanMissed: scanMissed, scanDistractors: scanDistractors, scanSpies: scanSpies } : {}),
+    ...(timedOut !== undefined ? { timedOut } : {}),
+    ...(congruent !== undefined ? { congruent } : {}),
+    ...(trailNodes !== undefined ? { trailNodes, trailNodesTotal: trailNodesTotal ?? 0 } : {})
   };
 }
 
@@ -192,10 +233,34 @@ export function stimLabelOf(stim: Record<string, unknown> | null | undefined): s
 /** پاسخ درست به شکل نمایشی برای بازخورد آموزشی — هرگز در پروب استفاده نمی‌شود */
 export function answerDisplayOf(item: MissionItem): string | null {
   if (item.type === 'choice') {
-    return typeof item.correct === 'number' ? (item.options?.[item.correct]?.label ?? null) : null;
+    return typeof item.correct === 'number' ? (optionLabelAt(item.options, item.correct) ?? null) : null;
   }
   if (item.type === 'numline') return typeof item.correct === 'number' ? String(item.correct) : null;
+  if (item.type === 'stroop') {
+    // برچسب فارسی رنگ جوهر — گزینهٔ درست؛ بانک گزینه‌ها رشتهٔ رنگ لاتین است
+    if (typeof item.correct !== 'number') return null;
+    const key = optionLabelAt(item.options, item.correct);
+    return key ? (faKeyOf(FA_COLOR_KEYS, key) || String(key)) : null;
+  }
+  if (item.type === 'flanker') {
+    return item.correct === 0 ? 'چپ' : item.correct === 1 ? 'راست' : null;
+  }
+  if (item.type === 'trail') {
+    // CSV اندیس‌های ترتیب درست — مثل جاسوس‌های جاماندهٔ scan؛ فقط تمرین
+    return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(',') : null;
+  }
   return null; // touch_report: بازپخش محرک، نه نمایش پاسخ؛ scan: CSV جاسوس‌های جامانده در scanMissedCsv
+}
+
+/** برچسب گزینهٔ i — بانک گزینه یا رشته یا شئ label‌دار؛ ناسالم = null */
+function optionLabelAt(options: MissionItem['options'], i: number): string | null {
+  if (!Array.isArray(options) || i < 0 || i >= options.length) return null;
+  const o = options[i] as unknown;
+  if (typeof o === 'string') return o;
+  if (o && typeof o === 'object' && typeof (o as { label?: unknown }).label === 'string') {
+    return (o as { label: string }).label;
+  }
+  return null;
 }
 
 // ─── بازخورد خط عددی (۱.۲۵.۲۸) — دو سطح موفقیت برای حس ادیکتو بدون رقارت:
@@ -263,6 +328,48 @@ export function scanMissPctOf(scored: ScoredAttempt[]): number | null {
   if (denom <= 0) return null;
   const miss = scored.reduce((a, s) => a + (typeof s.scanMissed === 'number' ? s.scanMissed : 0), 0);
   return round2((miss / denom) * 100);
+}
+
+// ─── فرمول‌های انتخاب زمان‌دار و رد دنباله‌ای (۱.۲۵.۳۲) — قاعدهٔ دامنهٔ صفر عیناً ───
+// دقت شرطی هم‌خوان/ناهم‌خوان و هزینهٔ تداخل (میانهٔ ناهم‌خوان − میانهٔ هم‌خوان، ms)؛
+// هزینه فقط وقتی هر دو سمت ≥۲ RT معتبر دارند تعریف می‌شود — وگرنه null (صادقانه)
+
+function congruentSubset(scored: ScoredAttempt[], congruent: boolean): ScoredAttempt[] {
+  return scored.filter((s) => s.congruent === congruent);
+}
+
+export function congruentAccPctOf(scored: ScoredAttempt[]): number | null {
+  const sub = congruentSubset(scored, true);
+  if (sub.length === 0) return null;
+  return accuracyOf(sub);
+}
+
+export function incongruentAccPctOf(scored: ScoredAttempt[]): number | null {
+  const sub = congruentSubset(scored, false);
+  if (sub.length === 0) return null;
+  return accuracyOf(sub);
+}
+
+export function interferenceMsOf(scored: ScoredAttempt[]): number | null {
+  const okRt = (list: ScoredAttempt[]) => list
+    .filter((s) => s.correct && s.rtValid && typeof s.rtMs === 'number' && (s.rtMs as number) >= 0)
+    .map((s) => s.rtMs as number);
+  const cong = okRt(congruentSubset(scored, true));
+  const inc = okRt(congruentSubset(scored, false));
+  if (cong.length < 2 || inc.length < 2) return null;
+  const congMed = medianRtOf(congruentSubset(scored, true));
+  const incMed = medianRtOf(congruentSubset(scored, false));
+  if (congMed === null || incMed === null) return null;
+  return round2(incMed - congMed);
+}
+
+export function trailPrefixPctOf(scored: ScoredAttempt[]): number | null {
+  const rows = scored.filter((s) => typeof s.trailNodes === 'number' && typeof s.trailNodesTotal === 'number' && (s.trailNodesTotal as number) > 0);
+  if (rows.length === 0) return null;
+  const nodes = rows.reduce((a, s) => a + (s.trailNodes as number), 0);
+  const total = rows.reduce((a, s) => a + (s.trailNodesTotal as number), 0);
+  if (total <= 0) return null;
+  return round2((nodes / total) * 100);
 }
 
 export function medianRtOf(scored: ScoredAttempt[]): number | null {
@@ -345,6 +452,10 @@ export function computeMetricValue(formula: string, scored: ScoredAttempt[]): nu
     case 'omission_pct': return omissionPctOf(scored);
     case 'scan_fa': return scanFaPctOf(scored);
     case 'scan_miss': return scanMissPctOf(scored);
+    case 'congruent_acc': return congruentAccPctOf(scored);
+    case 'incongruent_acc': return incongruentAccPctOf(scored);
+    case 'interference_ms': return interferenceMsOf(scored);
+    case 'trail_prefix': return trailPrefixPctOf(scored);
     default: return null;
   }
 }
