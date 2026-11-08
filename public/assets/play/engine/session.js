@@ -13,7 +13,7 @@ import { runTrial } from './trials.js';
 import { createTouchLedger, attachTouchEvidence, observeDisplayFrames } from './observe.js';
 import { summarizeSession, medianOf } from './scoring.js';
 import * as fx from '../fx.js';
-import { sceneMarkup, fishPuppet, crabPuppet } from '../scene.js';
+import { sceneMarkup, kindHero } from '../scene.js';
 
 const rand = (min, max) => Math.floor(min + Math.random() * (max - min + 1));
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
@@ -29,6 +29,20 @@ function decorateScene(stage, variant, hero) {
 }
 
 const HERO_FISH_COLOR = '#E8925A'; /* نارنجی ماهی — امضای مرحلهٔ اول (s1) */
+
+/* نوع‌بازی از کلاف (data-kind) — کلید قهرمان صحنهٔ آموزش (پوستهٔ اختصاصی ۱.۲۵.۴۱) */
+function kindOf(root) {
+  return root && typeof root.dataset === 'object' && typeof root.dataset.kind === 'string'
+    ? root.dataset.kind.trim() : '';
+}
+
+/* نام بازی برای کارت INTRO — نام مأموریت از سرور (data-title مأموریت بسته)؛
+   نبود = نام ماژول نوع‌بازی (ممیزی ۱.۲۵.۴۱: کارت معرفی دیگر نام عام نمی‌بیند) */
+function missionTitleOf(root, fallback) {
+  const t = root && typeof root.dataset === 'object' && typeof root.dataset.title === 'string'
+    ? root.dataset.title.trim() : '';
+  return t !== '' ? t : fallback;
+}
 
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -179,11 +193,12 @@ export async function runSession(ctx) {
     await tapToContinue(stage);
   } else if (intro) {
     const ruleLine = intro.rule(hint);
+    const introName = missionTitleOf(root, intro.name);
     const remainN = resume && Number.isFinite(resume.total) && Number.isFinite(resume.done)
       ? Math.max(0, resume.total - resume.done) : null;
     stage.innerHTML =
       '<span class="play-step-badge">مأموریت امروز</span>' +
-      '<p class="play-intro__name">' + esc(intro.name) + '</p>' +
+      '<p class="play-intro__name">' + esc(introName) + '</p>' +
       (ruleLine ? '<p class="play-line">' + esc(ruleLine) + '</p>' : '') +
       (resume && Number.isFinite(resume.done) && resume.done > 0
         ? '<p class="play-muted">این مأموریت نیمه‌تمام مونده بود؛ از همین‌جا ادامه می‌دهیم.</p>' +
@@ -194,14 +209,14 @@ export async function runSession(ctx) {
             : '')
         : '<p class="play-muted">دکمهٔ بزرگ را لمس کن تا شروع کنیم.</p>') +
       '<button type="button" class="play-btn play-btn--intro">شروع!</button>';
-    decorateScene(stage, 'teach', { svg: fishPuppet('swim', HERO_FISH_COLOR) }); // صحنهٔ معرفی — فقط تمرین
+    decorateScene(stage, 'teach', { svg: kindHero(kindOf(root)) }); // قهرمان این بازی — پوستهٔ اختصاصی (۱.۲۵.۴۱)
     fx.revealStage(stage);
     fx.popIn(stage.querySelector('.play-intro__name'));
     await bigButtonContinue(stage); // تنها راه ادامه: دکمهٔ بزرگ معرفی
   } else {
     /* مدار قدیمی — نوع‌بازی بدون intro (پخش‌کنندهٔ عام) */
     stage.innerHTML = card('سلام!', 'برای شروع، صفحه را لمس کن');
-    decorateScene(stage, 'teach', { svg: fishPuppet('swim', HERO_FISH_COLOR) });
+    decorateScene(stage, 'teach', { svg: kindHero(kindOf(root)) });
     fx.revealStage(stage);
     await tapToContinue(stage);
   }
@@ -326,7 +341,7 @@ export async function runSession(ctx) {
       stage.innerHTML = card('استراحت کوچولو', isAssessment
         ? 'هر وقت آماده بودی لمس کن.'
         : 'یک نفس عمیق بکش؛ هر وقت آماده بودی لمس کن.');
-      if (!isAssessment) decorateScene(stage, 'teach', { svg: fishPuppet('idle', HERO_FISH_COLOR) }); // ماهی آرام در استراحت
+      if (!isAssessment) decorateScene(stage, 'teach', { svg: kindHero(kindOf(root)) }); // قهرمان این بازی در استراحت — پوستهٔ اختصاصی
       fx.revealStage(stage);
       await sleeper.sleep(Math.min(P.break_min_ms, 2000));
       await tapToContinue(stage);
@@ -1171,7 +1186,7 @@ export async function runSession(ctx) {
       (B.star_basket && starCount > 0
         ? '<p class="play-muted">' + faNum(starCount) + ' ستاره در سبد تو جمع شد.</p>' : '');
   /* صحنهٔ پایان (M2) — ماهی خوشحال + خرچنگ آرام کنار هم؛ فقط تمرین؛ ارزیابی همان پایان آرام قبلی */
-  if (!isAssessment) decorateScene(stage, 'end', { svg: fishPuppet('happy', HERO_FISH_COLOR) + crabPuppet('idle', '#438C89', 'play-scene__hero-crab') });
+  if (!isAssessment) decorateScene(stage, 'end', { svg: kindHero(kindOf(root)) }); // قهرمان این بازی در پایان — پوستهٔ اختصاصی
   /* خلاصهٔ پایان — نگاشت debrief بستهٔ jsPsych (۱.۲۵.۳۴): فقط تمرین؛ ارزیابی هرگز عدد نمی‌بیند؛
      ورودی فقط دادهٔ مجاز کلاینت: نمره از بازخورد سرور (train)، میانهٔ RT از رکوردهای موتور؛
      قاعدهٔ دامنهٔ صفر داخل ماژول نوع‌بازی است — جلسهٔ بی‌آزمون نمره‌خورده هیچ کارتی نمی‌سازد */

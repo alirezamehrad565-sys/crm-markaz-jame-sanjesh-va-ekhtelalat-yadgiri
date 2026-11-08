@@ -12,7 +12,7 @@ const faNum = (n) => String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
 
 /* جنبش تزئینی و صحنهٔ آموزش — همهٔ جنبش از fx با گارد کاهش‌جنبش؛ این ماژول هرگز مستقیم animate نمی‌کند */
 import * as fx from '../fx.js';
-import { sceneMarkup } from '../scene.js';
+import { sceneMarkup, kindHero } from '../scene.js';
 
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -176,7 +176,7 @@ const PRACTICE_WINDOW_MS = 15000;
 /** صحنهٔ تمرین — دکور پس‌زمینهٔ لایه‌های دریا؛ جنبش از fx؛ بی‌اثر برای پاسخ */
 function decoratePractice(stage) {
   if (!stage) return;
-  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach'));
+  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach', { svg: kindHero('numline') })); // قهرمان این بازی — پوستهٔ اختصاصی ۱.۲۵.۴۱
   fx.sceneAmbient(stage);
 }
 

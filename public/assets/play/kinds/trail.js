@@ -22,7 +22,7 @@ const MOON = '#F5F0E5';    /* Cream — ماه و وکتورهای پوسته */
 
 /* جنبش تزئینی و صحنهٔ آموزش — همهٔ جنبش از fx با گارد کاهش‌جنبش؛ این ماژول هرگز مستقیم animate نمی‌کند */
 import * as fx from '../fx.js';
-import { sceneMarkup } from '../scene.js';
+import { sceneMarkup, kindHero } from '../scene.js';
 
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
 const faNum = (n) => String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
@@ -245,7 +245,7 @@ const PRACTICE_NODES = [
 /** صحنهٔ تمرین — دکور پس‌زمینهٔ لایه‌های دریا؛ جنبش از fx؛ بی‌اثر برای پاسخ */
 function decoratePractice(stage) {
   if (!stage) return;
-  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach'));
+  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach', { svg: kindHero('trail') })); // قهرمان این بازی — پوستهٔ اختصاصی ۱.۲۵.۴۱
   fx.sceneAmbient(stage);
 }
 

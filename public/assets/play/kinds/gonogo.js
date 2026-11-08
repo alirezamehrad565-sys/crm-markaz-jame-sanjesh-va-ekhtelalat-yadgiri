@@ -58,7 +58,7 @@ const SHAPES = {
 };
 
 /* تک‌منبع شخصیت دریایی — وکتور حالت آرام ماهی/خرچنگ از کتابخانهٔ صحنه (M2) */
-import { HERO_VECTORS, sceneMarkup } from '../scene.js';
+import { HERO_VECTORS, sceneMarkup, kindHero } from '../scene.js';
 SHAPES.fish = HERO_VECTORS.fish;
 SHAPES.crab = HERO_VECTORS.crab;
 
@@ -90,6 +90,8 @@ export function stimSvg(stim) {
 }
 
 /** کارت INTRO — بسته‌بندی معرفی بازی (G3/۱.۲۵.۳۷): نام + قانون یک‌خطی از راهنمای سرور.
+ *  ۱.۲۵.۴۱ (ممیزی): الگوی قدیمی «ماهی «ماهی نارنجی»» دوباره‌گویی عجیب می‌ساخت؛
+ *  قانون تازه با فعل سادهٔ لمس‌کن/دست‌نزن — برچسب‌های سرور حکم توضیح رنگ‌ها را دارند.
  *  قانون از labelهای راهنمای آموزشی سرور می‌آید (فقط آیتم‌های train)؛ ناسالم = قانون امن ایستا.
  *  ارزیابی هرگز INTRO نمی‌بیند — مسیر ارزیابی دستورالعمل ثابت کوتاه خودش را دارد (C1). */
 export const intro = {
@@ -97,8 +99,10 @@ export const intro = {
   rule: (hint) => {
     const go = hint && hint.go && typeof hint.go.label === 'string' ? hint.go.label.trim() : '';
     const nogo = hint && hint.nogo && typeof hint.nogo.label === 'string' ? hint.nogo.label.trim() : '';
-    if (go !== '' && nogo !== '') return 'ماهی «' + go + '» را لمس کن؛ خرچنگ «' + nogo + '» را لمس نکن.';
-    return 'ماهی را لمس کن؛ خرچنگ را لمس نکن.';
+    if (go !== '' && nogo !== '') {
+      return 'هر وقت ' + go + ' آمد صفحه را لمس کن؛ وقتی ' + nogo + ' آمد دست نزن.';
+    }
+    return 'هر وقت ماهی آمد صفحه را لمس کن؛ وقتی خرچنگ آمد دست نزن.';
   }
 };
 
@@ -125,7 +129,7 @@ import * as fx from '../fx.js';
 /** صحنهٔ تمرین — دکور پس‌زمینهٔ لایه‌های دریا (M2)؛ جنبش از fx؛ بی‌اثر برای پاسخ */
 function decoratePractice(stage) {
   if (!stage) return;
-  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach'));
+  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach', { svg: kindHero('gonogo') })); // قهرمان این بازی — پوستهٔ اختصاصی ۱.۲۵.۴۱
   fx.sceneAmbient(stage);
 }
 

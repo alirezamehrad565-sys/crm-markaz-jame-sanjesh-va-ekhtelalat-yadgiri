@@ -47,19 +47,31 @@ describe('گیت هنری M2 — کتابخانهٔ صحنه (scene.js)', () => 
     }
   });
 
-  it('لایه‌های عمق سه‌گانه + حباب + قهرمان — markup ایستا با پالت §۲', () => {
-    for (const layer of ['play-scene__far', 'play-scene__mid', 'play-scene__near', 'play-scene__bubble', 'play-scene__hero']) {
+  it('دکور مینیمال (۱.۲۵.۴۱): حباب + قهرمان — مرجان/بستر شنی/جلبک‌های مرده بازنمی‌گردند', () => {
+    for (const layer of ['play-scene__bubble', 'play-scene__hero', 'play-scene__bubbles']) {
       expect(sceneJs, layer).toContain(layer);
     }
-    for (const c of ['#153E50', '#438C89', '#E4AA46', '#E8925A']) {
+    // دکور مردهٔ حذف‌شده — دیگر در منبع صحنه نیستند (ممیزی اسکرین‌شات ۱.۲۵.۴۱)
+    expect(sceneJs).not.toContain('play-scene__far');
+    expect(sceneJs).not.toContain('play-scene__mid');
+    expect(sceneJs).not.toContain('play-scene__near');
+    expect(sceneJs).not.toContain('play-scene__weed');
+    for (const c of ['#153E50', '#438C89', '#E4AA46', '#D97C4F']) {
       expect(sceneJs, c).toContain(c);
+    }
+  });
+
+  it('قهرمان هر نوع‌بازی — هویت صحنهٔ آموزش از بازی می‌آید (پوستهٔ اختصاصی)', () => {
+    expect(sceneJs).toContain('export function kindHero');
+    for (const k of ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail', 'nback']) {
+      expect(sceneJs, k).toContain(k + ':');
     }
   });
 });
 
 describe('گیت هنری M2 — تک‌منبع شخصیت و هویت محرک', () => {
   it('ماهی/خرچنگ آزمون از HERO_VECTORS می‌آیند — وکتور حالت آرام، هویت محرک دست‌نخورده', () => {
-    expect(gonogoJs).toContain("import { HERO_VECTORS, sceneMarkup } from '../scene.js'");
+    expect(gonogoJs).toContain("import { HERO_VECTORS, sceneMarkup, kindHero } from '../scene.js'");
     expect(gonogoJs).toContain('SHAPES.fish = HERO_VECTORS.fish');
     expect(gonogoJs).toContain('SHAPES.crab = HERO_VECTORS.crab');
     // وکتور آرامِ صحنه = محرک آزمون — یک هویت، دو مصرف
@@ -76,7 +88,7 @@ describe('گیت هنری M2 — تک‌منبع شخصیت و هویت محرک
 
 describe('گیت هنری M2 — مرز اندازه‌گیری (RT پاک)', () => {
   it('صحنه فقط در چهار لحظهٔ تشریفاتی session.js می‌آید — نه در هیچ شاخهٔ آزمون', () => {
-    expect(sessionJs).toContain("import { sceneMarkup, fishPuppet, crabPuppet } from '../scene.js'");
+    expect(sessionJs).toContain("import { sceneMarkup, kindHero } from '../scene.js'");
     expect(sessionJs).toContain('decorateScene');
     // شاخه‌های آزمون (پنج شاخهٔ خاص + touch_report) هیچ ردی از صحنه ندارند
     const trialBranches = sessionJs.split("item.type === ").slice(1);
@@ -101,7 +113,7 @@ describe('گیت هنری M2 — مرز اندازه‌گیری (RT پاک)', ()
     expect(fxJs).toContain('sceneAmbient');
     expect(fxJs).toMatch(/prefers-reduced-motion/);
     // بلوک صحنهٔ play.css بدون @keyframes و بدون animation:
-    const sceneBlock = playCss.slice(playCss.indexOf('صحنهٔ دریایی (M2'));
+    const sceneBlock = playCss.slice(playCss.indexOf('دکور مینیمال'));
     expect(sceneBlock).not.toMatch(/@keyframes/);
     expect(sceneBlock).not.toMatch(/animation:/);
   });
