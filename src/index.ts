@@ -9,6 +9,7 @@ import {
   cpSyncOpportunistic,
   stampCpSyncAttempt
 } from '@app/cp-sync/announcements';
+import { buildCpReportConfig, pushCpReport, cpReportOpportunistic } from '@app/cp-report/ingest';
 
 export interface Env {
   DB: D1Database;
@@ -160,9 +161,39 @@ function probeCpSync(env: Env, ctx: ExecutionContext): void {
   );
 }
 
+/** چرخهٔ گزارش‌دهی تجمیعی نود → CP (فاز غنی‌سازی) — گیت ۲۴ساعتهٔ درونی دارد؛ خاموش اگر env خالی باشد */
+async function runCpReportCycle(env: Env): Promise<void> {
+  const db = createDb(env.DB);
+  const logger = createLogger('sync');
+  const result = await pushCpReport({
+    db,
+    logger,
+    config: buildCpReportConfig(env),
+    binding: env.CP ?? null
+  });
+  logger.info('cp_report.cycle.done', { status: result.status, seq: result.seq ?? 0 });
+}
+
+/** دروازهٔ فرصت‌طلب گزارش‌دهی — همان الگوی cp-sync؛ گیت ۲۴ساعتهٔ مشترک دوباره‌کاری را می‌بندد */
+let cpReportProbeAt = 0;
+function probeCpReport(env: Env, ctx: ExecutionContext): void {
+  const t = Date.now();
+  if (t - cpReportProbeAt < 60_000) return;
+  cpReportProbeAt = t;
+  ctx.waitUntil(
+    cpReportOpportunistic({
+      db: createDb(env.DB),
+      logger: createLogger('sync'),
+      config: buildCpReportConfig(env),
+      binding: env.CP ?? null
+    }).catch(() => undefined)
+  );
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     probeCpSync(env, ctx); // فرصت‌طلب؛ بدون env خالی است و فوراً برمی‌گردد
+    probeCpReport(env, ctx); // گزارش‌دهی تجمیعی روزانه به CP — گیت ۲۴ساعتهٔ درونی
     const db = createDb(env.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger('worker');
@@ -179,6 +210,7 @@ export default {
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     if (event.cron === CP_SYNC_CRON) {
       ctx.waitUntil(runCpSyncCycle(env)); // سینک اعلان از کنترل‌پلین — خاموش اگر env خالی باشد
+      ctx.waitUntil(runCpReportCycle(env)); // گزارش‌دهی تجمیعی — گیت ۲۴ساعتهٔ مشترک، دوباره‌کاری صفر
       return;
     }
     if (event.cron === DIGEST_CRON) {
