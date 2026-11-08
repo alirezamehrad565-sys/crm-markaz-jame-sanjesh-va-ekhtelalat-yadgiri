@@ -87,14 +87,6 @@
 .play-skin--nback .play-bubble--ok, .play-skin--nback .play-bubble--calm { background: var(--nb-paper); }
 .play-skin--nback .play-basket { background: var(--nb-paper); box-shadow: 0 1px 4px rgba(21,62,80,.18), 0 0 0 1.5px rgba(228,170,70,.4); }
 
-/* پوشش بچرخان: همان دریا، متن روشن کنتراست‌دار */
-.play-skin--nback .play-rotate {
-  background: linear-gradient(180deg, var(--nb-deep), var(--nb-sea) 62%, var(--nb-lagoon));
-  box-shadow: inset 0 0 0 3px rgba(228,170,70,.45);
-}
-.play-skin--nback .play-rotate .play-line { color: var(--nb-paper); font-size: 17px; }
-.play-skin--nback .play-rotate .play-muted { color: #BFD9D4; font-size: 13px; }
-
 /* خلاصهٔ پایان: طلایی کاغذی */
 .play-skin--nback .play-debrief { background: rgba(228,170,70,.16); border-color: rgba(228,170,70,.5); }
 

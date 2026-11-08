@@ -57,10 +57,6 @@ body:has(.play-skin--scan){background:radial-gradient(130% 100% at 50% -8%,#1237
 .play-skin--scan .play-stars__star path{stroke:#F5F0E5D9}
 .play-skin--scan .play-debrief{background:#438C8938;border-color:#7FD9CF66}
 
-/* پوشش «بچرخان» — همان آسمان؛ متن‌ها کرم از گفتارِ بالا می‌آیند */
-.play-skin--scan .play-rotate{background:radial-gradient(#F5F0E580 1px,#0000 1.9px),linear-gradient(180deg,#0E2C3E,#081C2A);background-size:112px 86px,100% 100%;background-position:13px 15px,0 0}
-.play-skin--scan .play-rotate__icon{color:var(--sk-glow)}
-
 /* عمودی — بهبود؛ صحنه نفس می‌گیرد */
 @media (orientation:portrait){.play-skin--scan .play-stage{min-height:420px}}
 

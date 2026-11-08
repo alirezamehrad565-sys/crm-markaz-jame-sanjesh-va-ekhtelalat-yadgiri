@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.44";
+var APP_VERSION = "1.25.45";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -27175,16 +27175,6 @@ function renderGamesPage(model, token) {
         <svg class="play-basket__star" viewBox="0 0 120 124" aria-hidden="true"><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z"/></svg>
         <span id="play-basket-count">\u06F0</span>
       </div>
-      <div class="play-rotate" id="play-rotate" hidden role="status" aria-live="polite">
-        <svg class="play-rotate__icon" viewBox="0 0 96 96" aria-hidden="true">
-          <rect x="30" y="8" width="36" height="80" rx="10" fill="none" stroke="currentColor" stroke-width="5"/>
-          <circle cx="48" cy="78" r="4" fill="currentColor"/>
-          <path d="M76 30 a26 26 0 0 1 -6 34" fill="none" stroke="#E4AA46" stroke-width="6" stroke-linecap="round"/>
-          <path d="M74 24 l0 14 -12 -4 Z" fill="#E4AA46"/>
-        </svg>
-        <p class="play-line">\u06AF\u0648\u0634\u06CC \u0631\u0627 \u0628\u0686\u0631\u062E\u0627\u0646</p>
-        <p class="play-muted">\u0627\u06CC\u0646 \u0628\u0627\u0632\u06CC \u0627\u0641\u0642\u06CC \u0627\u062C\u0631\u0627 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0647\u0631 \u0648\u0642\u062A \u0686\u0631\u062E\u0627\u0646\u062F\u06CC \u0627\u062F\u0627\u0645\u0647 \u0645\u06CC\u200C\u062F\u0647\u06CC\u0645.</p>
-      </div>
     </div>
     <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />
     ${skinLink(model.playGame)}
@@ -27252,16 +27242,6 @@ function renderPreviewPage(state, token) {
       <div class="play-basket" id="play-basket" aria-hidden="true">
         <svg class="play-basket__star" viewBox="0 0 120 124" aria-hidden="true"><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z"/></svg>
         <span id="play-basket-count">\u06F0</span>
-      </div>
-      <div class="play-rotate" id="play-rotate" hidden role="status" aria-live="polite">
-        <svg class="play-rotate__icon" viewBox="0 0 96 96" aria-hidden="true">
-          <rect x="30" y="8" width="36" height="80" rx="10" fill="none" stroke="currentColor" stroke-width="5"/>
-          <circle cx="48" cy="78" r="4" fill="currentColor"/>
-          <path d="M76 30 a26 26 0 0 1 -6 34" fill="none" stroke="#E4AA46" stroke-width="6" stroke-linecap="round"/>
-          <path d="M74 24 l0 14 -12 -4 Z" fill="#E4AA46"/>
-        </svg>
-        <p class="play-line">\u0635\u0641\u062D\u0647 \u0631\u0627 \u0628\u0686\u0631\u062E\u0627\u0646\u06CC\u062F</p>
-        <p class="play-muted">\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0628\u0627\u0632\u06CC\u200C\u0647\u0627 \u062F\u0631 \u0646\u0645\u0627\u06CC \u0627\u0641\u0642\u06CC \u0627\u062C\u0631\u0627 \u0645\u06CC\u200C\u0634\u0648\u062F.</p>
       </div>
     </div>
     <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />

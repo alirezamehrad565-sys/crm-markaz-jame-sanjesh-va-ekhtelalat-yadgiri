@@ -51,12 +51,6 @@
 .play-skin--flanker .play-progress__bar{background:linear-gradient(to left,#6FA3AE,#C9D4E8)}
 .play-skin--flanker .play-bubble,.play-skin--flanker .play-basket{background:#232C3D;color:var(--f-moon);border:2px solid rgba(201,212,232,.4);box-shadow:0 10px 26px rgba(10,15,26,.45)}
 
-/* چرا؟ عمودی لمسی هم وارد دشت مهتاب شود */
-.play-skin--flanker .play-rotate{background:linear-gradient(180deg,#1B2436,#46536B)}
-.play-skin--flanker .play-rotate .play-line{color:var(--f-moon)}
-.play-skin--flanker .play-rotate .play-muted{color:#C9D4E8}
-.play-skin--flanker .play-rotate__icon{color:var(--f-moon)}
-
 /* چرا کاغذ مهتابی؟ معرفی/پایان خوانا بماند */
 .play-skin--flanker .play-stage--teach,.play-skin--flanker .play-stage--end{background:linear-gradient(180deg,#FBF8EF,#EEE8D6);box-shadow:0 14px 34px rgba(21,62,80,.12),inset 0 0 0 1px rgba(201,212,232,.65)}
 

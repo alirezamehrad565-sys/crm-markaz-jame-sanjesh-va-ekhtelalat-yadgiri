@@ -109,13 +109,10 @@
 .play-skin--numline .play-bubble--calm { background: var(--n-cream); border-color: rgba(21,62,80,.3); }
 .play-skin--numline .play-basket { background: rgba(245,240,229,.95); border: 2px solid rgba(228,170,70,.5); }
 
-/* پوشش چرخاندن = همان آسمان */
-.play-skin--numline .play-rotate { background: linear-gradient(180deg,#12384B,var(--n-dusk2)); color: var(--n-cream); }
-
 /* برگهٔ کرم پایان تا متن خوانا بماند */
 .play-skin--numline .play-debrief { background: rgba(245,240,229,.95); border-color: rgba(228,170,70,.45); }
 
-/* افقی فقط بهبود؛ عمودی قفل است */
+/* افقی فقط بهبود؛ عمودی هم اجرای واقعی است (۱.۲۵.۴۵ — بدون قفل) */
 @media (orientation: landscape) {
   .play-skin--numline .play-numline { max-width: min(94%,820px); }
   .play-skin--numline .play-numline__chip { font-size: 46px; }

@@ -20,6 +20,8 @@ const SKIN_CEILING_BYTES = 7000;
 
 const read = (p: string) => readFileSync(p, 'utf8');
 const sessionJs = read(join(ROOT, 'public/assets/play/engine/session.js'));
+const playJs = read(join(ROOT, 'public/assets/play/play.js'));
+const previewJs = read(join(ROOT, 'public/assets/play/preview.js'));
 const pageSrc = read(join(ROOT, 'src/domain/games/page.ts'));
 
 describe('گیت G7 — پوستهٔ اختصاصی هر نوع‌بازی', () => {
@@ -79,14 +81,21 @@ describe('گیت G7 — پوستهٔ اختصاصی هر نوع‌بازی', () 
     expect(sessionJs).toContain('unsupported_kind');
   });
 
-  it('قفل جهت — چرخش به عمودی همان مسیر مکث برگه را می‌رود، نه پنجرهٔ شانسی', () => {
-    // مکث گیت‌محور: پنهان‌شدن برگه و چرخش از یک مسیر gatePause/gateResume می‌گذرند
+  it('دو نما بدون قفل (۱.۲۵.۴۵) — عمودی هم اجرای واقعی است؛ هیچ پوشش/مکثِ جهتی وجود ندارد', () => {
+    // مکث برگه از همان مسیر gatePause/gateResume می‌گذرد — پنهان‌شدن برگه تنها مکث خودکار
     expect(sessionJs).toContain('const gatePause');
     expect(sessionJs).toContain('const gateResume');
-    expect(sessionJs).toContain("matchMedia('(orientation: portrait)')");
-    expect(sessionJs).toContain("matchMedia('(pointer: coarse)')");
-    // پوشش چرخش در هر دو صفحهٔ کودک و پیش‌نمایش هست — پیش‌نمایش هم دیگر بدون گیت نیست
-    const previewJs = read(join(ROOT, 'public/assets/play/preview.js'));
-    expect(previewJs).toContain('orientationGate()');
+    expect(sessionJs).toContain('visibilitychange');
+    // هیچ ردّی از گیت جهت در هیچ لایه‌ای نمانده باشد — رگرسیون قفل ممنوع
+    expect(sessionJs).not.toContain('rotateBlocked');
+    expect(sessionJs).not.toContain("matchMedia('(orientation: portrait)')");
+    expect(pageSrc).not.toContain('play-rotate');
+    expect(playJs).not.toContain('orientationGate');
+    expect(previewJs).not.toContain('orientationGate');
+    const playCss = read(join(ROOT, 'public/assets/play/play.css'));
+    expect(playCss).not.toContain('play-rotate');
+    for (const k of KINDS) {
+      expect(read(join(SKINS, `${k}.css`)), `${k}: پوسته بدون پوشش چرخش`).not.toContain('play-rotate');
+    }
   });
 });

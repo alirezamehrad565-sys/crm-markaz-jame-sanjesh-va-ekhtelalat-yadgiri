@@ -59,24 +59,9 @@ function calmPanel() {
   stage.appendChild(btn);
 }
 
-/* ─── گیت جهت (۱.۲۵.۳۲) — بازی‌ها افقی اجرا می‌شوند؛ پوشش «گوشی را بچرخان» فقط روی
-   صفحهٔ لمسی عمودی؛ دسکتاپ هرگز نمی‌بیندش. بازگشت از حالت عمودی = ادامهٔ خودکار */
-function orientationGate() {
-  const overlay = document.getElementById('play-rotate');
-  if (!overlay || typeof window.matchMedia !== 'function') return;
-  const portrait = window.matchMedia('(orientation: portrait)');
-  const coarse = window.matchMedia('(pointer: coarse)');
-  const update = () => { overlay.hidden = !(coarse.matches && portrait.matches); };
-  if (typeof portrait.addEventListener === 'function') {
-    portrait.addEventListener('change', update);
-    if (typeof coarse.addEventListener === 'function') coarse.addEventListener('change', update);
-  } else if (typeof portrait.addListener === 'function') {
-    portrait.addListener(update); coarse.addListener(update);
-  }
-  update();
-}
-
-/* ─── ماژول نوع‌بازی: بارگیری از kinds/ یا بازگشت به پخش‌کنندهٔ عام ─── */
+/* ─── ماژول نوع‌بازی: بارگیری از kinds/ یا بازگشت به پخش‌کنندهٔ عام ───
+   (۱.۲۵.۴۵) گیت جهت حذف شد — عمودی و افقی هر دو اجرای واقعی‌اند؛ هیچ پوششی
+   هیچ‌وقت بازی را نمی‌پوشاند. مکث فقط از پنهان‌شدن برگه (سمت session.js) */
 
 const GENERIC = {
   previewSteps: () => [],
@@ -132,9 +117,6 @@ async function loadKind() {
 
 (async function run() {
   if (!root) return;
-
-  /* گیت جهت — پیش از هر چیز؛ پوشش فقط روی لمسیِ عمودی، بقیهٔ صفحه آزاد */
-  orientationGate();
 
   /* پروتکل — اسنپ‌شات سرور (data-protocol)؛ خرابی → null و موتور با پیش‌فرض‌های امن */
   let protocol = null;
