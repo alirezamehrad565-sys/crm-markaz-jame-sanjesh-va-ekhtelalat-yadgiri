@@ -15,6 +15,8 @@ database_id = "cf6bae8d-d574-4b8e-8a99-3b7462ef3f9e"
 migrations_dir = "migrations"
 
 [triggers]
+# سینک CP کرون اختصاصی ندارد (سقف پلن Free: ۵ کرون در حساب) — سینک فرصت‌طلب روی fetch در src/index.ts است؛
+# با ارتقای پلن، "*/15 * * * *" به این فهرست افزوده شود (scheduled و مُهر تلاش مشترک از قبل آماده‌اند)
 crons = ["0 17 * * *", "30 6 * * *", "0 4 * * *", "30 14 * * *"]
 
 [vars]
@@ -26,3 +28,8 @@ PUBLIC_BASE_URL = "https://center-system.sanjeshm.workers.dev"
 
 [observability]
 enabled = true
+
+# Service Binding به ورکر کنترل‌پلین — مسیر سینک اعلان m1.5 (fetch عمومی هم‌زون 1042 می‌دهد)
+[[services]]
+binding = "CP"
+service = "network-control-plane"

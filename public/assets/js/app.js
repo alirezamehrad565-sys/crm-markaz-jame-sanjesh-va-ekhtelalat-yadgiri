@@ -115,7 +115,9 @@ const NAV = [
   { hash: '#/case-event-types', label: 'فرم‌ها و پرسش‌نامه‌ها', icon: 'timeline', group: 'ارزیابی و درمان', roles: ['manager', 'secretary', 'therapist'] }, // — نام روایی
   { hash: '#/special-needs', label: 'نیازهای ویژه', icon: 'clip', group: 'مرکز', roles: ['manager', 'secretary'] },
   { hash: '#/settings', label: 'تنظیمات', icon: 'settings', group: 'مرکز', roles: ['manager', 'secretary'] },
-  { hash: '#/backup', label: 'پشتیبان‌گیری', icon: 'save', group: 'مرکز', roles: ['manager'] }
+  { hash: '#/backup', label: 'پشتیبان‌گیری', icon: 'save', group: 'مرکز', roles: ['manager'] },
+  // پلهٔ صفر نردبان اتصال به کنترل‌پلین شبکه — لینک نمایشی بی‌منطق و بی‌راز (طرح سوارسازی §۳)
+  { hash: '#/cp', label: 'کنترل‌پلین شبکه', icon: 'zap', group: 'مرکز', roles: ['manager'], external: 'https://network-control-plane.sanjeshm.workers.dev' }
 ];
 
 const GROUP_ORDER = ['امروز', 'برنامه‌ریزی', 'دانش‌آموزان', 'ارزیابی و درمان', 'مرکز']; // — نام روایی
@@ -150,14 +152,16 @@ function buildSidebar() {
       const items = group.items.map((item) => {
         const btn = el(
           'button',
-          { class: 'nav__item', dataset: { nav: item.hash }, onclick: () => { location.hash = item.hash; closeSidebar(); } },
+          { class: 'nav__item', dataset: { nav: item.hash }, onclick: () => { if (item.external) { window.open(item.external, '_blank', 'noopener'); closeSidebar(); return; } location.hash = item.hash; } },
           icon(item.icon),
           el('span', {}, item.label)
         );
-        /* پیش‌بارگذاری chunk نما هنگام اشاره/فوکوس/لمس — کلیک بعدی فوری است */
-        btn.addEventListener('pointerenter', () => prefetchView(item.hash));
-        btn.addEventListener('focus', () => prefetchView(item.hash));
-        btn.addEventListener('touchstart', () => prefetchView(item.hash), { passive: true });
+        /* لینک بیرونی (کنترل‌پلین) چانک نمای محلی ندارد — پیش‌بارگذاری فقط برای ناوبری داخلی */
+        if (!item.external) {
+          btn.addEventListener('pointerenter', () => prefetchView(item.hash));
+          btn.addEventListener('focus', () => prefetchView(item.hash));
+          btn.addEventListener('touchstart', () => prefetchView(item.hash), { passive: true });
+        }
         if (item.hash === '#/waitlist') btn.appendChild(el('span', { class: 'nav__badge nav__badge--waitlist', hidden: true }));
         if (item.hash === '#/dashboard') btn.appendChild(el('span', { class: 'nav__badge nav__badge--todos', hidden: true }));
         return btn;
