@@ -31,7 +31,7 @@
   --p-amber: #E4AA46;  /* محرک گو (ستاره) */
   --p-cream: #F5F0E5;  /* پس‌زمینهٔ آرام */
   --p-white: #ffffff;
-  --p-soft: #6E7B76;   /* متن کم‌رنگ خنثی */
+  --p-soft: #5A6B74;   /* متن کم‌رنگ خنثی — کنتراست ≥۴.۵ روی سفید (ممیزی ۱.۲۵.۴۱) */
   --p-line: #E3DCC9;   /* خط جداکنندهٔ ملایم */
   /* مقیاس محرک — پیش‌فرض میانه؛ از پروتکل بازنویسی می‌شود (٪ قطر کوچک ویوپورت) */
   --stim-scale: 33;
@@ -47,14 +47,30 @@
   font-family: 'Vazirmatn Play', 'Vazirmatn', Tahoma, sans-serif;
 }
 
+/* ─── کارت والد (۱.۲۵.۴۱) — تصویر قهرمان بازی + وسط‌چین در ارتفاع کامل ─── */
+.play-kindfig {
+  width: 96px;
+  height: 100px;
+  margin: 2px auto 0;
+  display: block;
+}
+.wrap:has(.parent-gate) {
+  min-height: calc(100dvh - 40px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.wrap:has(.parent-gate) .card { margin-top: 0; }
+
 /* ─── نوار پیشرفت — آرام و بی‌عدد؛ در ارزیابی مخفی (پروتکل behavior.progress_visible) ─── */
 
 .play-progress {
-  height: 10px;
+  height: 12px;
+  flex: 0 0 auto;
   border-radius: 999px;
-  background: var(--p-line);
+  background: rgba(21, 62, 80, .26); /* ریل همیشه-دیده روی روشن و شب (ممیزی ۱.۲۵.۴۱) */
   overflow: hidden;
-  box-shadow: inset 0 1px 2px rgba(21, 62, 80, .08);
+  box-shadow: inset 0 1px 2px rgba(21, 62, 80, .12);
 }
 
 .play-progress__bar {
@@ -148,12 +164,12 @@
 /* بج گام آموزش («قدم ۱ از ۳») — یادآور ملایم، نه شمارندهٔ فشار */
 .play-step-badge {
   display: inline-block;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--p-white);
   background: var(--p-teal);
   border-radius: 999px;
-  padding: 4px 14px;
+  padding: 6px 16px;
   margin-bottom: 4px;
 }
 
@@ -324,13 +340,13 @@
   display: none;
   align-items: center;
   gap: 6px;
-  min-height: 44px;
-  padding: 6px 14px;
+  min-height: 48px;
+  padding: 6px 16px;
   border-radius: 999px;
   background: var(--p-white);
-  box-shadow: 0 1px 4px rgba(21, 62, 80, .14);
+  box-shadow: inset 0 0 0 2.5px rgba(21, 62, 80, .18), 0 4px 12px rgba(11, 34, 46, .16);
   color: var(--p-navy);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
 }
 
@@ -516,6 +532,62 @@
 /* افقی و دسکتاپ هر دو: دکمهٔ تمام‌عرض از قانون بیرون می‌آید تا با گزینه‌ها هم‌سطر شود */
 @media (orientation: landscape) {
   .play-scan__confirm { width: auto; align-self: center; }
+}
+
+/* افقیِ کوتاه — گوشی موبایل (ارتفاع ≤۵۰۰px): قواعد فشرده؛ هیچ محتوایی بریده نمی‌شود.
+   یافتهٔ ممیزی ۱.۲۵.۴۱: کارت‌های آموزش/تمرین از ارتفاع ۳۹۰ بیرون می‌زدند. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .play-root { gap: 6px; }
+  .play-stage { padding: 10px 14px; gap: 8px; overflow-y: auto; }
+  .play-step-badge { padding: 4px 14px; margin-bottom: 2px; }
+  .play-line { font-size: 16px; }
+  .play-muted { font-size: 13px; }
+  .play-intro__name { font-size: 22px; margin: 0 0 4px; }
+  .play-btn { min-height: 56px; }
+  .play-btn--intro { max-width: 300px; margin-top: 8px; font-size: 17px; }
+  .play-option { min-height: 76px; }
+  .play-svg { width: min(calc(var(--stim-scale) * 1vmin), 180px); }
+  .play-stage--main .play-svg { width: min(calc(calc(var(--stim-scale) + 6) * 1vmin), 220px); }
+  .play-numline__road { height: 78px; }
+  .play-scan { gap: 8px; }
+  .play-scan__prompt { font-size: 15px; }
+  .play-flanker { gap: 6px; }
+  .play-flanker__prompt { font-size: 14px; }
+  .play-flanker__answers { max-width: 340px; }
+  .play-flanker__btn { min-height: 56px; font-size: 18px; }
+  .play-trail { gap: 6px; }
+  .play-trail__field { min-height: 190px; }
+  .play-trail__node { width: 64px; height: 64px; }
+  .play-stroop { gap: 6px; }
+  .play-stroop__prompt { font-size: 14px; }
+  .play-nback { gap: 8px; }
+  .play-nback__card { width: min(26vmin, 170px); }
+  .play-nback__prompt { font-size: 14px; }
+  .play-bubble { top: 4px; padding: 8px 14px; font-size: 14px; }
+  .play-basket { min-height: 42px; padding: 4px 12px; bottom: 6px; }
+}
+
+/* افقیِ کوتاه روی پوسته‌های G7 — هم‌ارجاع با قاعدهٔ پوسته (.play-skin--kind) تا
+   اندازه‌های پوسته در ارتفاع ۳۹۰ هم فرو کاسته شوند و هیچ محتوایی زیر لبه نرود */
+@media (orientation: landscape) and (max-height: 500px) {
+  .play-root.play-skin--stroop .play-stroop__word { font-size: clamp(32px, 9vmin, 54px); padding: 4px 14px 8px; }
+  .play-root.play-skin--stroop .play-option.play-stroop__opt { min-height: 60px; }
+  .play-root.play-skin--stroop .play-stroop__blob { width: min(8vmin, 34px); }
+  .play-root.play-skin--stroop .play-stroop__prompt { font-size: 14px; }
+  .play-root.play-skin--trail .play-trail__field { min-height: 150px; }
+  .play-root.play-skin--trail .play-trail__node { width: 60px; height: 60px; }
+  .play-root.play-skin--trail .play-trail__prompt { font-size: 14px; }
+  .play-root.play-skin--nback .play-nback__photo .play-nback__card { width: min(22vmin, 150px); }
+  .play-root.play-skin--nback .play-option.play-nback__opt { min-height: 56px; font-size: 16px; }
+  .play-root.play-skin--nback .play-nback__prompt { font-size: 14px; }
+  .play-root.play-skin--flanker .play-flanker__btn { min-height: 56px; font-size: 18px; }
+  .play-root.play-skin--flanker .play-flanker__slot { flex-basis: clamp(44px, 8vw, 76px); }
+  .play-root.play-skin--flanker .play-flanker__slot--real { flex-basis: clamp(52px, 10vw, 88px); }
+  .play-root.play-skin--flanker .play-flanker__prompt { font-size: 14px; }
+  .play-root.play-skin--scan .play-scan__tile { min-height: 60px; }
+  .play-root.play-skin--scan .play-scan__prompt { font-size: 14px; }
+  .play-root.play-skin--numline .play-numline__road { height: 76px; }
+  .play-root.play-skin--numline .play-numline__chip { font-size: 32px; min-width: 76px; }
 }
 
 /* هیچ انیمیشنی تندتر از ۳ هرتز وجود ندارد؛ با کاهش‌جنبش همه‌چیز ایستا می‌شود */
@@ -904,6 +976,18 @@
 
 .play-flanker__pack { width: 100%; max-width: 380px; height: auto; display: block; }
 
+/* نشانگر هدف — سه‌گوش کهربایی بالای گرگ وسط؛ نشانهٔ دوم برای کوررنگ و توجه ضعیف (۱.۲۵.۴۱) */
+.play-flanker__slot--real { position: relative; }
+.play-flanker__slot--real::after {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-inline: 9px solid transparent;
+  border-bottom: 11px solid var(--p-amber);
+}
+
 /* افق دشت — نوار ایستای تیره زیر پنجه‌ها */
 .play-flanker__ground {
   width: 100%;
@@ -1207,60 +1291,44 @@ button.play-trail__node { appearance: none; font-family: inherit; }
 /* کمربند و بند — اجرای اصلی/ارزیابی هرگز صحنه نمی‌بیند حتی اگر نشست باقی مانده باشد */
 .play-stage--main .play-scene { display: none; }
 
-.play-scene svg { position: absolute; }
-/* لایه‌های عمق به بستر می‌چسبند — ترکیب دریایی واقعی، نه شناور */
-.play-scene__far, .play-scene__mid { width: 92%; }
-.play-scene__far { left: 4%; }
-.play-scene__mid { left: 4%; }
+/* دکور مینیمال (۱.۲۵.۴۱) — حباب‌های نرم + قهرمان گوشه‌نشین؛ مرجان/بستر شنی/جلبک
+   حذف شدند (ممیزی اسکرین‌شات: عامل حس «بهم‌ریخته») */
+.play-scene__bubbles { position: absolute; inset: 0; color: var(--p-teal); opacity: .5; }
 
-.play-scene__far {
-  left: 4%; right: 4%; bottom: 17%; height: 34%; top: auto;
-  opacity: .5;
-}
+.play-scene__bubble { position: absolute; }
+/* سه‌کوشهٔ امن — هیچ حبابی وسط کادر که جای متن و محرک است نمی‌نشیند */
+.play-scene__bubble--0 { left: 7%; bottom: 9%; }
+.play-scene__bubble--1 { left: 20%; bottom: 20%; }
+.play-scene__bubble--2 { right: 7%; bottom: 10%; }
 
-.play-scene__mid {
-  left: 2%; right: 2%; bottom: 3%; height: 27%; top: auto;
-  opacity: .6;
-}
-
-.play-scene__near {
-  left: -2%; right: -2%; bottom: -2%; height: 24%;
-  opacity: .95;
-}
-
-.play-scene__bubbles { position: absolute; inset: 0; }
-
-.play-scene__bubble { position: absolute; width: 20px; height: 20px; }
-.play-scene__bubble--0 { left: 12%; bottom: 12%; }
-.play-scene__bubble--1 { left: 78%; bottom: 30%; width: 14px; height: 14px; }
-.play-scene__bubble--2 { left: 62%; bottom: 8%; width: 24px; height: 24px; }
-
-/* قهرمان صحنه — ماهی (و در پایان خرچنگ) کنار گفتار؛ کوچک و گوشه‌نشین،
-   هرگز وسط توجه کودک در مسیر آزمون نمی‌نشیند چون در آزمون اصلاً حاضر نیست */
+/* قهرمان صحنه — گوشه‌نشین و کاملاً داخل کادر؛ سایهٔ زمین زیرش */
 .play-scene__hero {
   position: absolute;
-  right: 8%;
-  bottom: 20%;
+  right: 6%;
+  bottom: 12%;
   display: inline-flex;
   align-items: flex-end;
-  gap: 4px;
 }
-.play-scene__hero > svg:first-child { width: 128px; height: 132px; }
-.play-scene__hero > svg + svg { width: 92px; height: 95px; opacity: .95; }
-
-.play-scene__weeds {
+.play-scene__hero::after {
+  content: '';
   position: absolute;
-  left: 7%;
-  bottom: 20%;
-  display: inline-flex;
-  gap: 6px;
+  bottom: -7px;
+  left: 12%;
+  right: 12%;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(11, 34, 46, .16);
 }
-.play-scene__weed { width: 26px; height: 52px; transform-origin: 50% 100%; }
+.play-scene__hero > svg { width: 96px; height: 99px; }
 
-/* موبایل باریک — قهرمان کوچک‌تر تا از گفتار بیرون نزند */
-@media (max-width: 380px) {
-  .play-scene__hero > svg:first-child { width: 104px; height: 108px; }
-  .play-scene__hero > svg + svg { width: 74px; height: 77px; }
+/* رد پای دزد — میدان پر از گره است؛ قهرمان با گره‌ها برخورد می‌کند — حذف */
+.play-root[data-kind='trail'] .play-scene__hero,
+.play-root.play-skin--trail .play-scene__hero { display: none; }
+
+/* کارت باریک — قهرمان کوچک‌تر تا با متن برخورد نکند */
+@media (max-width: 700px) {
+  .play-scene__hero > svg { width: 72px; height: 74px; }
+  .play-scene__hero { right: 5%; bottom: 7%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

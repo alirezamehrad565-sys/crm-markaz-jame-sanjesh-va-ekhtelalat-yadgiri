@@ -1,47 +1,49 @@
 /* ═══════════════════════════════════════════════════════════════
-   kinds/nback.js — بازی «آلبوم خرچنگ» (ن‌پشت همسانی دیداری) — ۱.۲۵.۴۰
-   ماژول نمایش: صفحهٔ آلبوم عکس ماهی‌ها؛ خرچنگ آلبوم‌دار هر ماهی را در
-   کارت خود می‌چیند و کودک حکم می‌دهد «این ماهی n قدم عقب‌تر هم آمده
-   بود یا نه» — دو دکمهٔ ثابت «همان است / فرق دارد». نشانِ جواب درست
-   فقط تمرین و فقط از برچسب سرور. نمره‌دهی فقط سمت سرور است؛ کلید
-   همسانی (match) هرگز به این ماژول نمی‌رسد؛ هیچ درخواست شبکه‌ای ندارد.
-   بی‌صدا؛ جنبش فقط از fx (§۹).
-   منبع مفهومی — پارادایم کلاسیک n-back (Kirchner 1958؛ نسخهٔ دیداری
-   همسانی محرک در ادبیات حافظهٔ کاری). مکانیک از صفر با قرارداد این
-   سامانه (timedchoice، stim.window_ms، پاسخ {option}) بازنویسی شده —
-   گرافیک وکتوری و همهٔ متن فارسی اصیل‌اند (بدون هیچ دارایی بیرونی).
+   kinds/nback.js — بازی «آلبوم خرچنگ» (ن‌پشت هم‌سانی دیداری) — ۱.۲۵.۴۰
+   خرچنگ عکاس برای ماهی‌ها عکس می‌گیرد؛ کودک باید بگوید عکسِ تازه از
+   «همان ماهیِ قدم قبل» است یا ماهی دیگری. اهرم سختی = پرش n (۱→۲)
+   روی خود سرور (ریجستری/مرحله‌ها) — این ماژول فقط نمایش است.
+   ماژول نمایش: شاخهٔ انتخاب زمان‌دار (timedchoice) — دو گزینهٔ ثابت
+   «همان است»=۰ / «فرق دارد»=۱؛ پنجرهٔ پاسخ از stim.window_ms آیتم
+   سرور می‌آید و بی‌لمس تا پایان پنجره = بی‌پاسخ (اُمیشن سمت سرور).
+   نمره‌دهی فقط سمت سرور است؛ هم‌سانیِ هر محرک (stim.match) هرگز به
+   این ماژول نمی‌رسد؛ کلید پاسخ فقط در بازخورد تمرین از سرور می‌آید.
+   هیچ درخواست شبکه‌ای ندارد؛ بی‌صدا؛ جنبش فقط از fx (§۹).
+   پارادایم مرجع — N-back هم‌سانی (Kirchner 1958؛ Jaeggi و همکاران
+   ۲۰۰۳/۲۰۰۸) — پیاده‌سازی اصیل و هم‌خانوادهٔ قرارداد ماژول‌های نوع
+   این سامانه (الگوی «حقه‌باز رنگ‌ها» ۱.۲۵.۳۲)؛ هیچ کد بیرونی کپی
+   نشده است. گرافیک وکتوری و همهٔ متن فارسی اصیل‌اند (بدون هیچ
+   دارایی بیرونی).
    ═══════════════════════════════════════════════════════════════ */
 
-const INK = '#153E50';     /* Navy دفترچهٔ وظیفه — خط جوهری ماهی و قاب آلبوم */
-const CREAM = '#F5F0E5';   /* کاغذ آلبوم */
+const INK = '#153E50';     /* Navy دفترچهٔ وظیفه — خط جوهری کارت‌ها */
+const CREAM = '#F5F0E5';   /* پس‌زمینهٔ کارت عکس در آموزش */
 
 /* جنبش تزئینی و صحنهٔ آموزش — همهٔ جنبش از fx با گارد کاهش‌جنبش؛ این ماژول هرگز مستقیم animate نمی‌کند */
 import * as fx from '../fx.js';
-import { sceneMarkup } from '../scene.js';
+import { sceneMarkup, kindHero } from '../scene.js';
 
-/* پالت ثابت ۱۰ ماهی — کلیدها قرارداد بانک‌اند (stim.fish)؛ برچسب فارسی + رنگ بدنه (کودک‌پسند).
-   teal/pink/lime/indigo لنگرهای یگانهٔ بانک‌اند (هر کدام یک‌بار در کل جریان) — برچسبشان
-   فقط توصیف ظاهری است و هیچ راهی به حکم همسانی ندارد. */
-const PALETTE = {
-  red:    { fa: 'قرمز',     hex: '#D9534F' },
-  blue:   { fa: 'آبی',      hex: '#3E6FD9' },
-  green:  { fa: 'سبز',      hex: '#3E9B5F' },
-  yellow: { fa: 'زرد',      hex: '#E9C33C' },
-  orange: { fa: 'نارنجی',   hex: '#E0762F' },
-  purple: { fa: 'بنفش',     hex: '#8E5BB8' },
-  teal:   { fa: 'فیروزه‌ای', hex: '#438C89' },
-  pink:   { fa: 'صورتی',    hex: '#D96C9C' },
-  lime:   { fa: 'لیمویی',   hex: '#9CBF3B' },
-  indigo: { fa: 'نیلی',     hex: '#5B5EA6' }
+/* پالت ماهی — کلیدها قرارداد بانک authored اند؛ برچسب فارسی + رنگ بدنه (کودک‌پسند).
+   همان شش رنگ حقه‌باز رنگ‌ها تا درمانگر با یک زبان کار می‌کند */
+const FISH = {
+  red:    { fa: 'ماهی قرمز',   hex: '#D9534F' },
+  blue:   { fa: 'ماهی آبی',    hex: '#3E6FD9' },
+  green:  { fa: 'ماهی سبز',    hex: '#3E9B5F' },
+  yellow: { fa: 'ماهی زرد',    hex: '#E9C33C' },
+  orange: { fa: 'ماهی نارنجی', hex: '#E0762F' },
+  purple: { fa: 'ماهی بنفش',   hex: '#8E5BB8' }
 };
 
-/* کلید ناشناخته از سرور = ماهی خاکستری امن — هیچ راهی به کلید نیست */
+/* کلید ناشناخته از سرور = ماهی خاکستری بی‌نام — هیچ راهی به کلید نیست */
 const FALLBACK_FISH = { fa: 'ماهی', hex: '#8A93A6' };
 
-const DEFAULT_PROMPT = 'به ماهیِ آلبوم نگاه کن؛ اگر همین ماهی چند قدم عقب‌تر هم آمده بود، «همان است» را لمس کن.';
+const DEFAULT_PROMPT = 'خرچنگ عکاس عکس تازه گرفته؛ از همان ماهیِ عکسِ قبل است یا یکی دیگر؟';
 
-/* برچسب پلهٔ n — زبان کودک؛ ناسالم = پلهٔ یک (پیش‌فرض امن) */
-const LEVEL_LABELS = { 1: 'یک قدم به عقب', 2: 'دو قدم به عقب' };
+/* دو گزینهٔ ثابت ن‌پشت — اندیس‌ها قرارداد نمره‌دهی سرورند (۰=همان است، ۱=فرق دارد)؛ جابه‌جا نمی‌شوند */
+const OPTIONS = [
+  { label: 'همان است', cls: 'same' },
+  { label: 'فرق دارد', cls: 'diff' }
+];
 
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -52,8 +54,8 @@ function faNum(n) {
   return String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
 }
 
-function paletteOf(key) {
-  return key && PALETTE[key] ? PALETTE[key] : FALLBACK_FISH;
+function fishOf(key) {
+  return key && FISH[key] ? FISH[key] : FALLBACK_FISH;
 }
 
 /** stim آیتم — ناسالم = شیء خالی */
@@ -61,155 +63,136 @@ function stimOf(item) {
   return item && item.stim && typeof item.stim === 'object' ? item.stim : {};
 }
 
-/** کلید ماهی — ناسالم = خاکستری امن (هیچ راهی به کلید نیست) */
+/** ماهیِ محرک — ناسالم = خاکستری امن (هیچ راهی به کلید نیست) */
 function fishKeyOf(stim) {
-  return typeof stim.fish === 'string' && PALETTE[stim.fish] ? stim.fish : null;
+  return typeof stim.fish === 'string' && FISH[stim.fish] ? stim.fish : null;
 }
 
-/** پلهٔ n — فقط ۱ یا ۲؛ هر چیز دیگر = ۱ (پیش‌فرض امن) */
-function levelOf(stim) {
-  return stim.n === 2 ? 2 : 1;
+/** سطح n برای برچسب داستانی روی کارت — ناسالم/صفر = بدون برچسب؛ فقط نمایش است */
+function nLabelOf(stim) {
+  const n = typeof stim.n === 'number' && Number.isInteger(stim.n) && stim.n > 0 ? stim.n : 0;
+  return n === 1 ? 'یک قدم به عقب' : n === 2 ? 'دو قدم به عقب' : null;
 }
 
-/* ─── وکتور ماهی — {d,ink} درون‌کد؛ بدنه با رنگ پالت، خط Navy ─── */
-
-/** درون‌ساخت ماهی رو به چپ (مسیر آلبوم)؛ body رنگ پالت می‌گیرد */
-function fishInner(hex) {
-  return '<g stroke="' + INK + '" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">' +
-    '<path d="M92 30 L112 14 L110 40 L114 66 L92 50 C88 56 82 60 74 62 L74 18 C82 20 88 24 92 30 Z" fill="' + hex + '"/>' +
-    '<path d="M12 40 C22 18 48 8 66 14 C80 18 88 28 88 40 C88 52 80 62 66 66 C48 72 22 62 12 40 Z" fill="' + hex + '"/>' +
-    '<path d="M46 14 C52 6 62 6 66 12" fill="' + hex + '"/>' +
-    '<path d="M44 64 C50 72 60 72 64 66" fill="' + hex + '"/>' +
-    '<path d="M52 36 C56 30 64 30 68 36" fill="none"/>' +
+/** کارت عکس ماهی — قاب آلبوم با گوشهٔ نوار چسب و ماهی وکتوری؛ ایستا (جنبش از fx).
+ *  ۱.۲۵.۴۱ (ممیزی): ماهی قبلی سرِ کرم‌رنگ و دم بی‌پر داشت و نیمه‌کاره دیده می‌شد؛
+ *  ماهی تازه تک‌شکلِ پر است (بدنه + دم + دو باله همه با رنگ ماهی)، نوار چسب
+ *  گوشهٔ راست (RTL) — تفاوت ماهی‌ها فقط در رنگ و چشم می‌ماند و هرگز از
+ *  نیم‌پرِی گرافیک برداشت نمی‌شود. */
+export function fishCardSvg(key) {
+  const f = fishOf(key);
+  return '<svg class="play-nback__card" viewBox="0 0 150 110" role="img" aria-label="' + esc(f.fa) + '">' +
+    '<rect x="4" y="4" width="142" height="102" rx="14" fill="' + CREAM + '" stroke="' + INK + '" stroke-width="3"/>' +
+    '<path d="M106 4 h30 v10 q0 4 -4 4 h-22 q-4 0 -4 -4 Z" fill="#E4AA46" stroke="' + INK + '" stroke-width="2"/>' +
+    '<g stroke="' + INK + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">' +
+      '<path d="M42 55 L24 42 C27 50 27 60 24 68 Z" fill="' + f.hex + '"/>' +
+      '<path d="M42 55 C42 38 59 28 75 30 C91 32 101 44 105 55 C101 66 91 78 75 80 C59 82 42 72 42 55 Z" fill="' + f.hex + '"/>' +
+      '<path d="M60 31 Q68 16 84 23 Q72 23 66 32 Z" fill="' + f.hex + '"/>' +
+      '<path d="M64 79 Q73 91 84 81 Q75 81 70 76 Z" fill="' + f.hex + '"/>' +
+      '<path d="M84 41 Q88 55 84 69" fill="none"/>' +
+      '<path d="M103 60 q-4 4 -9 3" fill="none"/>' +
     '</g>' +
-    '<circle cx="32" cy="34" r="6" fill="' + CREAM + '"/>' +
-    '<circle cx="31" cy="34" r="3" fill="' + INK + '"/>' +
-    '<path d="M20 46 C26 50 34 50 40 47" fill="none" stroke="' + INK + '" stroke-width="2.4" stroke-linecap="round"/>';
+    '<circle cx="93" cy="50" r="5.5" fill="#FFFFFF" stroke="' + INK + '" stroke-width="2"/>' +
+    '<circle cx="94.5" cy="51.5" r="2.4" fill="' + INK + '"/>' +
+    '</svg>';
 }
 
-/** ماهی وکتور تکی — key کلید پالت؛ ناشناخته = خاکستری امن */
-export function fishSvg(key) {
-  const c = paletteOf(key);
-  return '<svg class="play-nback__fish" viewBox="0 0 124 80" role="img" aria-label="ماهی ' + esc(c.fa) + '">' +
-    fishInner(c.hex) + '</svg>';
+/** دکمهٔ گزینه — دو گزینهٔ ثابت با نشان خرچنگ کوچک؛ اندیس data-option قرارداد سرور است */
+function optionBtn(i) {
+  const o = OPTIONS[i];
+  return '<button type="button" class="play-option play-nback__opt play-nback__opt--' + o.cls + '" data-option="' + i +
+    '" aria-label="' + esc(o.label) + '">' + esc(o.label) + '</button>';
 }
 
-/** کارت آلبوم — عکس ماهی در قاب کرم + برچسب پلهٔ n زیر عکس */
-function albumCard(key, n, cls) {
-  const level = LEVEL_LABELS[levelOf({ n })] ?? LEVEL_LABELS[1];
-  return '<div class="play-nback__album' + (cls ? ' ' + cls : '') + '">' +
-    fishSvg(key) +
-    '<span class="play-nback__level">' + esc(level) + '</span>' +
-    '</div>';
-}
-
-/** جفت کارت تمرین — عکس «قدم عقب» کوچک کنار عکس امروزی؛ فقط صحنهٔ آموزش */
-function practicePairHtml(prevKey, curKey) {
-  const prev = paletteOf(prevKey);
-  const cur = paletteOf(curKey);
-  return '<div class="play-nback__memo">' +
-    '<div class="play-nback__memo-card"><span class="play-nback__memo-tag">قدم عقب</span>' +
-      '<svg class="play-nback__memo-fish" viewBox="0 0 124 80" role="img" aria-label="ماهی ' + esc(prev.fa) + '">' + fishInner(prev.hex) + '</svg>' +
-    '</div>' +
-    '<svg class="play-nback__memo-arrow" viewBox="0 0 40 24" aria-hidden="true">' +
-      '<path d="M4 12 H30 M22 4 L32 12 L22 20" fill="none" stroke="' + INK + '" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-    '<div class="play-nback__memo-card play-nback__memo-card--now"><span class="play-nback__memo-tag">امروز</span>' +
-      '<svg class="play-nback__memo-fish" viewBox="0 0 124 80" role="img" aria-label="ماهی ' + esc(cur.fa) + '">' + fishInner(cur.hex) + '</svg>' +
-    '</div>' +
-    '</div>';
-}
-
-function optionBtn(i, label) {
-  return '<button type="button" class="play-option play-nback__opt" data-option="' + i + '" aria-label="' + esc(label) + '">' +
-    '<span class="play-nback__optname">' + esc(label) + '</span>' +
-    '</button>';
-}
-
-/** دکمهٔ نمایشی قدم آموزش — بی‌لمس و ایستا (span، نه button) */
-function demoBtn(label) {
-  return '<span class="play-nback__demo">' + esc(label) + '</span>';
-}
-
-/* ─── موج آیتم ن‌پشت — قاعده + کارت آلبوم + دو دکمهٔ ثابت + نوار پنجرهٔ پاسخ ─── */
-
+/** کارت آزمون ن‌پشت — عکس تازه + پرسش + دو گزینه + نوار پنجرهٔ پاسخ */
 export function nbackMarkup(item) {
   const stim = stimOf(item);
+  const key = fishKeyOf(stim);
+  if (!key) return '<p class="play-muted">این کارت عکس ندارد.</p>';
   const prompt = item.prompt && String(item.prompt).trim() !== '' ? esc(item.prompt) : DEFAULT_PROMPT;
+  const nLabel = nLabelOf(stim);
   return '<div class="play-nback">' +
-    '<p class="play-nback__prompt">' + prompt + '</p>' +
-    albumCard(fishKeyOf(stim), levelOf(stim), '') +
-    '<div class="play-options play-nback__answers">' +
-      optionBtn(0, 'همان است') +
-      optionBtn(1, 'فرق دارد') +
+    '<div class="play-nback__photorew">' +
+      '<p class="play-nback__prompt">' + prompt + '</p>' +
+      (nLabel ? '<span class="play-nback__nlabel">' + esc(nLabel) + '</span>' : '') +
+    '</div>' +
+    '<div class="play-nback__photo">' + fishCardSvg(key) + '</div>' +
+    '<div class="play-nback__options" aria-label="' + faNum(OPTIONS.length) + ' گزینه">' +
+      OPTIONS.map((_, i) => optionBtn(i)).join('') +
     '</div>' +
     '<div class="play-nback__timer" aria-hidden="true"><span style="width:100%"></span></div>' +
     '</div>';
 }
 
-/* ─── نشان حقیقت — فقط تمرین، پس از پاسخ؛ برچسب درست از سرور می‌آید ───
-   برجسته‌سازی دکمهٔ هم‌نام با برچسب سرور — هیچ محاسبه‌ای از محرک نیست. */
-
+/** نشان حقیقت — برچسب گزینهٔ درست از سرور (فقط تمرین، پس از پاسخ)؛ دکمهٔ هم‌نام را آرام نشان می‌دهد */
 export function nbackRevealTruth(item, stage, answerDisplay) {
   if (typeof answerDisplay !== 'string' || answerDisplay.trim() === '') return null;
-  const said = answerDisplay.trim();
-  const idx = said.indexOf('همان') !== -1 ? 0 : said.indexOf('فرق') !== -1 ? 1 : null;
-  if (idx === null) return null;
-  const btn = stage && stage.querySelector ? stage.querySelector('.play-nback__opt[data-option="' + idx + '"]') : null;
-  if (btn && btn.classList) {
-    btn.classList.add('play-nback__opt--truth');
-    return btn;
+  const opts = stage && stage.querySelectorAll ? stage.querySelectorAll('.play-nback__opt') : null;
+  if (!opts || opts.length === 0) return null;
+  const want = answerDisplay.trim();
+  for (const b of opts) {
+    if (b.textContent && b.textContent.trim() === want && b.classList) {
+      b.classList.add('play-nback__opt--truth');
+      return b;
+    }
   }
   return null;
 }
 
-/**
- * مرکز نخستین پاسخ برای انفجار ذرات موفقیت (fx.burstAt) —
- * دکمهٔ نشان‌گذاری‌شدهٔ برنچ timedchoice اگر باشد، وگرنه مرکز کارت آلبوم.
- */
+/** مرکز اولین پاسخ برای انفجار ذرات موفقیت (fx.burstAt) — دکمهٔ انتخاب‌شده یا کارت عکس */
 export function nbackResponsePoint(stage) {
   if (!stage || !stage.querySelector) return null;
   const picked = stage.querySelector('.play-nback__opt--picked, .play-option--picked, .play-nback__opt--truth');
-  const el = picked || stage.querySelector('.play-nback__album');
+  const el = picked || stage.querySelector('.play-nback__card');
   if (!el || !el.getBoundingClientRect) return null;
   const r = el.getBoundingClientRect();
   if (!r.width) return null;
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
 
-/** SVG محرک برای پیش‌نمایش آموزش — ماهی تنها روی کاغذ آلبوم */
+/** SVG محرک برای پیش‌نمایش آموزش — کارت عکس ماهی */
 export function stimSvg(stim) {
   const s = stim && typeof stim === 'object' ? stim : {};
-  return albumCard(fishKeyOf(s), levelOf(s), 'play-nback__album--demo');
+  return fishCardSvg(typeof s.fish === 'string' ? s.fish : null);
 }
 
-/* ─── قدم‌های آموزش — ایستا؛ هیچ ردی از کلید همسانی یا آیتم پروب ─── */
+/* ─── قدم‌های آموزش — ایستا؛ هیچ ردی از کلید پاسخ یا آیتم پروب ─── */
 
-/** کارت‌های نمونهٔ آموزش از پالت ماژول‌اند — ماهی راهنمای سرور مهمانِ قدم اول است */
+function sampleCard(key) {
+  return '<div class="play-nback play-nback--sample">' + fishCardSvg(key) + '</div>';
+}
+
+function sampleOptions(truthIdx) {
+  const row = OPTIONS.map((o, i) => {
+    const truth = i === truthIdx ? ' play-nback__opt--truth' : '';
+    return '<div class="play-option play-nback__opt play-nback__opt--' + o.cls + truth + '" data-option="' + i + '">' + esc(o.label) + '</div>';
+  }).join('');
+  return '<div class="play-nback play-nback--sample">' +
+    '<div class="play-nback__options">' + row + '</div>' +
+    '</div>';
+}
+
+/** سه قدم آموزش روبه‌کودک — hint شکل سروری دارد (hint.nback.{label, stim:{fish}})؛ ناسالم = پیش‌فرض امن */
 export function previewSteps(hint) {
   const h = hint && hint.nback && typeof hint.nback === 'object' ? hint.nback : {};
   const s = h.stim && typeof h.stim === 'object' ? h.stim : {};
-  const guestKey = fishKeyOf(s) || 'orange';
+  const key = typeof s.fish === 'string' && FISH[s.fish] ? s.fish : 'orange';
+  const otherKey = key === 'blue' ? 'yellow' : 'blue';
   const rule = typeof h.label === 'string' && h.label.trim() !== '' ? h.label.trim() : DEFAULT_PROMPT;
-  /* جفت‌های نمونه از پالت ثابت ماژول — «همان» و «فرق» هر دو روبه‌کودک پیدااند (آموزش، نه آزمون) */
-  const pairA = practicePairHtml(guestKey, guestKey);
-  const pairB = practicePairHtml('green', 'yellow');
-  const demoAnswers = '<div class="play-options play-nback__answers play-nback__answers--demo">' +
-    demoBtn('همان است') + demoBtn('فرق دارد') +
-    '</div>';
   return [
-    { svg: albumCard(guestKey, 1, 'play-nback__album--demo'), line: rule },
-    { svg: pairA, line: 'گاهی ماهی امروزی، همان ماهیِ قدم عقب‌تر است — آن‌وقت «همان است» را لمس می‌کنی.' },
-    { svg: pairB + demoAnswers, line: 'گاهی فرق دارد — آن‌وقت «فرق دارد» را لمس کن. حواست فقط به ماهیِ قدم عقب‌تر باشد.' }
+    { svg: sampleCard(key), line: rule },
+    { svg: sampleOptions(-1), line: 'عکس تازه که آمد، به یادت بیاورد: عکسِ قبل چه ماهی‌ای بود؟' },
+    { svg: sampleOptions(0), line: 'ماهیِ تازه همانِ عکسِ قبل بود؟ «همان است» را لمس کن؛ ماهی دیگری بود؟ «فرق دارد».' }
   ];
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   G3 / ۱.۲۵.۴۰ — کارت INTRO + تمرین تعاملی «تا موفقیت» (همان الگوی
-   حلقهٔ تمرین گونوگو/استروپ): دو قدم — نخست دو عکس همسان («همان است»)،
-   بعد دو عکس ناهمسان («فرق دارد»). عکس‌های تمرین از پالت همین ماژول‌اند
-   و مقایسهٔ روبه‌کودک پیدا است — تمرین هیچ کلیدی ندارد؛ کلید آیتم‌های
-   واقعی (match) فقط سمت سرور می‌ماند. ارزیابی هرگز تمرین تعاملی
-   نمی‌بیند (C1). نوار پنجره در تمرین بی‌جنبش می‌ماند (§۹).
+   G3 / ۱.۲۵.۴۰ — کارت INTRO + تمرین تعاملی «تا موفقیت» (الگوی
+   حقه‌باز رنگ‌ها): دو قدم — نخست دو عکسِ همان ماهی (پاسخ: همان است)،
+   بعد دو عکسِ ماهیِ دیگر (پاسخ: فرق دارد). کارت‌های تمرین از پالت
+   ثابت ماژول‌اند و هیچ کلیدی ندارند؛ کلید آیتم‌های واقعی فقط سمت
+   سرور می‌ماند. ارزیابی هرگز تمرین تعاملی نمی‌بیند (C1). نوار پنجره
+   در تمرین بی‌جنبش می‌ماند (§۹).
    ═══════════════════════════════════════════════════════════════ */
 
 /** کارت INTRO — نام + قانون یک‌خطی از راهنمای سرور؛ ناسالم = قانون امن ایستا */
@@ -217,17 +200,17 @@ export const intro = {
   name: 'آلبوم خرچنگ',
   rule: (hint) => {
     const h = hint && hint.nback && typeof hint.nback.label === 'string' ? hint.nback.label.trim() : '';
-    return h !== '' ? h : 'به ماهی‌های آلبوم نگاه کن؛ اگر ماهیِ امروزی همانِ قدم عقب‌تر بود، «همان است» را لمس کن.';
+    return h !== '' ? h : 'عکس تازه از همان ماهیِ عکسِ قبل است؟ «همان است»؛ ماهی دیگری است؟ «فرق دارد».';
   }
 };
 
 const NBACK_PRACTICE = {
-  step1: 'ماهیِ «امروز» همان ماهیِ «قدم عقب» است؛ دکمهٔ «همان است» را لمس کن.',
-  step2: 'حالا ماهی «امروز» عوض شد؛ با «قدم عقب» یکی نیست — «فرق دارد» را لمس کن.',
-  success: 'آفرین! حکمت درست بود.',
-  retry: 'دوباره نگاه کن: ماهی «امروز» با ماهی «قدم عقب» یکی است یا نه؟',
+  step1: 'عکسِ قبل را خوب نگاه کن... حالا عکس تازه! همان ماهی است؟ «همان است» را لمس کن.',
+  step2: 'حالا دو ماهیِ متفاوت! این یکی همانِ عکسِ قبل نیست؛ «فرق دارد» را لمس کن.',
+  success: 'آفرین! حافظهٔ دریایی داری.',
+  retry: 'عکسِ قبل را دوباره در ذهنت نگاه کن؛ بعد انتخاب کن.',
   retryWait: 'هر وقت آماده بودی لمس کن؛ عجله‌ای نیست.',
-  practiceDone: 'تمرین تمام شد! حالا آلبوم واقعی شروع می‌شود.'
+  practiceDone: 'تمرین تمام شد! حالا آلبوم واقعی خرچنگ باز می‌شود.'
 };
 
 const PRACTICE_WINDOW_MS = 15000;
@@ -235,12 +218,12 @@ const PRACTICE_WINDOW_MS = 15000;
 /** صحنهٔ تمرین — دکور پس‌زمینهٔ لایه‌های دریا؛ جنبش از fx؛ بی‌اثر برای پاسخ */
 function decoratePractice(stage) {
   if (!stage) return;
-  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach'));
+  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach', { svg: kindHero('nback') })); // قهرمان این بازی — پوستهٔ اختصاصی ۱.۲۵.۴۱
   fx.sceneAmbient(stage);
 }
 
-/** یک لمس روی دو دکمهٔ حکم یا یک پنجرهٔ زمانی — هر کدام زودتر؛ خواب یدکی cancel می‌شود */
-function tapAnswerWithin(stage, ms, sleeper) {
+/** یک لمس روی دو گزینه یا یک پنجرهٔ زمانی — هر کدام زودتر؛ خواب یدکی در هر دو مسیر cancel می‌شود */
+function tapOptionWithin(stage, ms, sleeper) {
   return new Promise((resolve) => {
     const buttons = Array.from(stage.querySelectorAll('.play-option'));
     let done = false;
@@ -262,33 +245,37 @@ function tapAnswerWithin(stage, ms, sleeper) {
   });
 }
 
-/** کارت تمرین — جفت عکس پیدا + دو دکمهٔ حکم؛ مقایسه روبه‌کودک باز است (تمرین، نه آزمون) */
-function practiceCardHtml(badge, prevKey, curKey, line) {
+/** قدم تمرین — دو عکس پشت‌سرهم با فاصلهٔ آرام؛ پاسخ روی عکسِ دوم سنجیده می‌شود */
+function practicePairHtml(badge, firstKey, secondKey, line) {
   return (badge ? '<span class="play-step-badge">' + esc(badge) + '</span>' : '') +
-    '<div class="play-nback play-nback--practice">' +
-    practicePairHtml(prevKey, curKey) +
-    '<div class="play-options play-nback__answers">' +
-      optionBtn(0, 'همان است') +
-      optionBtn(1, 'فرق دارد') +
+    '<div class="play-nback play-nback--sample">' +
+      '<div class="play-nback__pair">' +
+        '<div class="play-nback__pair-item">' + fishCardSvg(firstKey) + '<span class="play-nback__pair-label">عکسِ قبل</span></div>' +
+        '<div class="play-nback__pair-item">' + fishCardSvg(secondKey) + '<span class="play-nback__pair-label">عکسِ تازه</span></div>' +
+      '</div>' +
     '</div>' +
-    '</div>' +
-    '<p class="play-line">' + esc(line) + '</p>';
+    '<p class="play-line">' + esc(line) + '</p>' +
+    sampleOptions(-1);
 }
 
 /**
  * تمرین تعاملی «آلبوم خرچنگ» — دو قدم با تکرار بی‌سرزنش تا موفقیت:
- * قدم ۱ جفت همسان (پاسخ «همان است»)، قدم ۲ جفت ناهمسان (پاسخ «فرق دارد»).
- * مقایسهٔ دو عکس در کارت تمرین روبه‌کودک پیدا است — قانون خود بازی، نه کلید بانک.
- * پس از دو تلاش، دکمهٔ درست آرام نشان داده می‌شود (آموزش پس از پاسخ).
- * خروجی: { applied, retries, go_retries: 0, nogo_retries: 0 } — applied=false یعنی صحنه/ساعت آماده نبود.
+ *   قدم ۱: دو عکسِ همان ماهی → «همان است»؛ قدم ۲: دو ماهیِ متفاوت → «فرق دارد».
+ *   هر دو عکس از پالت ثابت ماژول‌اند (کارت تمرین، نه آیتم بانک) — کلید سرور نمی‌بیند.
+ *   پس از دو تلاش، گزینهٔ درست آرام نشان داده می‌شود (آموزش پس از پاسخ).
+ * خروجی: { applied, retries, go_retries: 0, nogo_retries: 0 } — صفرهای نام‌دار فقط
+ *   برای سازگاری با قرارداد practiceRetries جلسه‌اند و تلاش واقعی در retries می‌آید.
  */
 export async function practiceInteractive(ctx) {
-  const { stage, sleeper } = ctx || {};
-  if (!stage || !sleeper) return { applied: false, retries: 0, go_retries: 0, nogo_retries: 0 };
-  /* جفت‌های تمرین از پالت ماژول — هیچ کلیدی از سرور نمی‌آید */
+  const { stage, sleeper, hint } = ctx || {};
+  if (!stage || !sleeper) return { applied: false, retries: 0 };
+  const h = hint && hint.nback && typeof hint.nback === 'object' ? hint.nback : {};
+  const s = h.stim && typeof h.stim === 'object' ? h.stim : {};
+  const key = typeof s.fish === 'string' && FISH[s.fish] ? s.fish : 'orange';
+  const otherKey = key === 'blue' ? 'yellow' : 'blue';
   const steps = [
-    { badge: 'قدم ۱ از ۲', prev: 'red', cur: 'red', want: 0, line: NBACK_PRACTICE.step1 },
-    { badge: 'قدم ۲ از ۲', prev: 'green', cur: 'yellow', want: 1, line: NBACK_PRACTICE.step2 }
+    { badge: 'قدم ۱ از ۲', first: key, second: key, want: 0, line: NBACK_PRACTICE.step1 },
+    { badge: 'قدم ۲ از ۲', first: key, second: otherKey, want: 1, line: NBACK_PRACTICE.step2 }
   ];
   let retries = 0;
 
@@ -297,16 +284,16 @@ export async function practiceInteractive(ctx) {
     for (;;) {
       stage.className = 'play-stage';
       stage.classList.add('play-stage--teach');
-      stage.innerHTML = practiceCardHtml(step.badge, step.prev, step.cur, step.line);
+      stage.innerHTML = practicePairHtml(step.badge, step.first, step.second, step.line);
       decoratePractice(stage);
       fx.revealStage(stage);
-      fx.popIn(stage.querySelector('.play-nback__memo-card--now'), 240, false);
-      const picked = await tapAnswerWithin(stage, PRACTICE_WINDOW_MS, sleeper);
+      fx.popIn(stage.querySelector('.play-nback__card'), 240, false);
+      const picked = await tapOptionWithin(stage, PRACTICE_WINDOW_MS, sleeper);
       if (picked !== null && picked === step.want) {
-        stage.innerHTML = practiceCardHtml(step.badge, step.prev, step.cur, NBACK_PRACTICE.success);
+        stage.innerHTML = practicePairHtml(step.badge, step.first, step.second, NBACK_PRACTICE.success);
         decoratePractice(stage);
         fx.revealStage(stage);
-        const el = stage.querySelector('.play-nback__memo-card--now');
+        const el = stage.querySelector('.play-nback__opt');
         if (el) {
           const r = el.getBoundingClientRect();
           if (r.width) fx.burstAt(r.left + r.width / 2, r.top + r.height / 2);
@@ -317,13 +304,12 @@ export async function practiceInteractive(ctx) {
       retries += 1;
       misses += 1;
       const line = picked === null ? NBACK_PRACTICE.retryWait : NBACK_PRACTICE.retry;
-      stage.innerHTML = practiceCardHtml(step.badge, step.prev, step.cur, line);
+      stage.innerHTML = practicePairHtml(step.badge, step.first, step.second, line);
       decoratePractice(stage);
       fx.revealStage(stage);
       if (misses >= 2) {
-        // آموزش پس از پاسخ — دکمهٔ درستِ قانونِ روبه‌کودک، نه کلید آیتم بانک
-        const btn = stage.querySelector('.play-nback__opt[data-option="' + step.want + '"]');
-        if (btn && btn.classList) btn.classList.add('play-nback__opt--truth');
+        const opts = stage.querySelectorAll('.play-nback__opt');
+        if (opts && opts[step.want] && opts[step.want].classList) opts[step.want].classList.add('play-nback__opt--truth');
       }
       await sleeper.sleep(1600);
     }
@@ -340,32 +326,28 @@ export async function practiceInteractive(ctx) {
   return { applied: true, retries, go_retries: 0, nogo_retries: 0 };
 }
 
-/* ─── خلاصهٔ پایان — نگاشت debrief (۱.۲۵.۳۴): فقط تمرین؛ ارزیابی هرگز عدد نمی‌بیند ───
-   قاعدهٔ دامنهٔ صفر: جلسهٔ بی‌نمره (هیچ آزمون نمره‌خوردهٔ سرور) = '' — هیچ کارتی نمی‌سازد. */
-
-const NBACK_DEBRIEF = {
-  accuracy: (pct) => 'دقت امروز تو: ' + faNum(pct) + '٪',
-  medianRt: (sec) => 'میانهٔ زمان حکم‌هایت: ' + faNum(sec) + ' ثانیه',
-  practice: (n) => 'در تمرین شروع، ' + faNum(n) + ' بار دیگر تلاش کردی و موفق شدی.'
-};
-
+/** خلاصهٔ پایان جلسه — الگوی createDebrief با قاعدهٔ دامنهٔ صفر: جلسهٔ بی‌آزمون
+ *  نمره‌خورده = '' (هیچ عدد ساختگی نمی‌آید)؛ فقط مسیر تمرین صدا می‌زند — ارزیابی
+ *  هرگز عدد نمی‌بیند (C1). ورودی از session.js ساخته می‌شود و فقط دادهٔ مجاز
+ *  کلاینت را می‌بیند: scored_total/scored_correct از بازخورد سرور (فقط آیتم‌های
+ *  train نمره برمی‌گردانند؛ پروب‌ها هرگز)، median_rt از رکورد موتور. */
 export function debriefMarkup(summary, extra) {
   const s = summary && typeof summary === 'object' ? summary : {};
   const total = s.scored_total ?? 0;
-  if (!Number.isFinite(total) || total <= 0) return '';
   const correct = s.scored_correct ?? 0;
+  if (!Number.isFinite(total) || total <= 0) return '';
   const pct = Math.round((correct / total) * 100);
   let html = '<div class="play-debrief">' +
-    '<p class="play-debrief__line">' + esc(NBACK_DEBRIEF.accuracy(pct)) + '</p>';
+    '<p class="play-debrief__line">دقت امروزت در آلبوم خرچنگ: ٪' + esc(faNum(pct)) + '</p>';
   if (Number.isFinite(s.median_rt) && s.median_rt > 0) {
-    html += '<p class="play-debrief__muted">' +
-      esc(NBACK_DEBRIEF.medianRt(Math.round(s.median_rt / 100) / 10)) + '</p>';
+    html += '<p class="play-debrief__muted">میانهٔ زمان پاسخ‌هایت: ' +
+      esc(faNum(Math.round(s.median_rt / 100) / 10)) + ' ثانیه</p>';
   }
   const retries = extra && Number.isFinite(extra.retries) ? extra.retries
-    : extra && Number.isFinite(extra.go_retries) && Number.isFinite(extra.nogo_retries)
-      ? extra.go_retries + extra.nogo_retries : 0;
+    : (extra && Number.isFinite(extra.go_retries) && Number.isFinite(extra.nogo_retries)
+      ? extra.go_retries + extra.nogo_retries : 0);
   if (retries > 0) {
-    html += '<p class="play-debrief__muted">' + esc(NBACK_DEBRIEF.practice(retries)) + '</p>';
+    html += '<p class="play-debrief__muted">' + esc(faNum(retries)) + ' بار در تمرین از نو شروع کردی — و حالا آماده‌ای.</p>';
   }
   return html + '</div>';
 }

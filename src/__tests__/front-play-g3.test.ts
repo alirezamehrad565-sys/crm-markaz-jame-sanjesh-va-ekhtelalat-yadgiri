@@ -60,7 +60,9 @@ describe('گیت G3 — تمرین تعاملی همهٔ نوع‌ها (الگو
     expect(kindSrc('flanker')).toContain("['R', 'L', 'R']");
     // تمرین صحنهٔ آموزش می‌گیرد و در شِمال --teach می‌ماند — هرگز --main
     for (const k of ['numline', 'scan', 'stroop', 'flanker', 'trail']) {
-      expect(kindSrc(k), `${k}: صحنهٔ تمرین`).toContain("sceneMarkup('teach')");
+      expect(kindSrc(k), `${k}: صحنهٔ تمرین`).toContain("sceneMarkup('teach'");
+      // پوستهٔ اختصاصی ۱.۲۵.۴۱ — قهرمان همان بازی، نه ماهی عام
+      expect(kindSrc(k), `${k}: قهرمان نوع‌محور`).toContain(`kindHero('${k}')`);
     }
   });
 
@@ -85,8 +87,9 @@ describe('گیت G3 — کارت INTRO (نام/قانون/دکمهٔ بزرگ) �
     expect(practiceBranch).toContain('play-intro__name');
     expect(practiceBranch).toContain('play-btn--intro');
     expect(practiceBranch).toContain('شروع!');
-    // صحنهٔ معرفی فقط با fishPuppet swim — همان هویت M2
-    expect(practiceBranch).toContain("fishPuppet('swim'");
+    // صحنهٔ معرفی با قهرمان همین بازی — پوستهٔ اختصاصی (۱.۲۵.۴۱)؛ نام INTRO از مأموریت سرور
+    expect(practiceBranch).toContain("kindHero(kindOf(root))");
+    expect(practiceBranch).toContain('missionTitleOf(root, intro.name)');
     // مدار قدیمی برای نوع‌بازی بدون intro محفوظ است
     expect(sessionJs).toContain('مدار قدیمی');
   });

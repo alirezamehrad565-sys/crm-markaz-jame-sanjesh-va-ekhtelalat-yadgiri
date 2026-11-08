@@ -1,14 +1,15 @@
 /* ═══════════════════════════════════════════════════════════════
-   scene.js — کتابخانهٔ هنری صحنهٔ دریایی (M2 مسترپرامپت / ۱.۲۵.۳۶ — راه A)
-   «Premium 2D Underwater» به‌روش سازگار با قواعد ثابت پروژه:
-     · صفر دارایی خارجی — همه‌چیز وکتور درون‌کد با الگوی {d, ink} (پُر + جوهر Navy)
-     · صفر شبکه و صفر کلید — این ماژول فقط نمایش است؛ هیچ نمره/پنجره/پروتکلی نمی‌داند
-     · صفر تماس با اندازه‌گیری — صحنه فقط در لحظه‌های تشریفاتی (معرفی/استراحت/کارت
-       مرحله/پایان/تمرین) می‌آید؛ شاخه‌های آزمون عیناً به‌صورت امروز می‌مانند و
-       CSS صحنه در شِمال اجرای اصلی هم display:none است (کمربند و بند)
-     · همهٔ جنبش از fx.sceneAmbient با گارد کاهش‌جنبش — این ماژول markup ایستا می‌دهد
-   پالت §۲ دفترچهٔ وظیفه: Navy/Teal/Amber/Cream — رنگ متن هرگز عوض نمی‌شود و
-   لایه‌های صحنه بی‌متن‌اند (aria-hidden) — کنتراست AA متنی دست‌نخورده می‌ماند.
+   scene.js — کتابخانهٔ هنری صحنه (بازطراحی پوستهٔ اختصاصی ۱.۲۵.۴۱)
+   قاعدهٔ تازهٔ پوسته: هر بازی هویت خودش را دارد (پالت/دکور از data-kind
+   در play.css می‌آید)؛ این ماژول فقط «دکور مینیمال مشترک» می‌دهد:
+     · دو سه حباب نرم — همیشه داخل کادر، هیچ‌جا با متن و دکمه برخورد ندارد
+     · یک قهرمان کوچک گوشه‌نشین (ماهی/خرچنگ) — در جریان عناصر، نه روی متن
+   حذف‌شده‌های مرده (یافتهٔ ممیزی اسکرین‌شات ۱.۲۵.۴۱): مرجان‌های Uمانند،
+   بستر شنی با لبهٔ ناگهانی، صدف/عروس‌نمای نیمه‌بریده، جلبک‌های پشت متن —
+   همه عامل حس «بهم‌ریخته و ناتمام» بودند و دیگر بازتولید نمی‌شوند.
+   صفر دارایی خارجی — همه‌چیز وکتور درون‌کد؛ صفر شبکه و صفر کلید —
+   این ماژول فقط نمایش است؛ هیچ نمره/پنجره/پروتکلی نمی‌داند.
+   همهٔ جنبش از fx.sceneAmbient با گارد کاهش‌جنبش — markup ایستا می‌دهد.
    ═══════════════════════════════════════════════════════════════ */
 
 const INK = '#153E50';
@@ -111,87 +112,52 @@ export function crabPuppet(state, color, cls) {
 /** وکتور حالت آرام برای مصرف محرک — gonogo.js از همین ثابت می‌خواند (تک‌منبع شخصیت) */
 export const HERO_VECTORS = { fish: FISH.idle, crab: CRAB.idle };
 
-/* ─── محیط دریا — عناصر تزئینی لایه‌های عمق ───────────────────────── */
+/* ─── دکور مینیمال صحنه — فقط حباب‌های نرم ──────────────────────────
+   حباب‌ها در سه‌کوشهٔ امن می‌نشینند (هیچ‌کدام وسط کادر که جای متن و
+   محرک است) و pointer-events: none دارند. جنبش آرامشان از fx.sceneAmbient. */
 
-const WEED_D = [
-  'M30 160 C22 130 34 110 26 80 C22 62 30 44 26 24 C36 46 40 70 38 92 C36 116 40 140 34 160 Z',
-  'M62 160 C56 128 68 106 60 76 C56 58 64 40 58 16 C70 40 76 66 72 92 C68 118 74 142 66 160 Z',
-  'M94 160 C88 136 98 118 92 92 C88 74 96 56 92 36 C102 58 106 84 102 108 C98 132 102 148 98 160 Z'
-];
-const CORAL_D = [
-  'M40 160 L40 120 C40 108 32 104 32 92 C32 82 40 76 40 66 C40 58 44 52 50 50 C46 60 48 68 48 76 C48 88 54 92 54 104 L54 160 Z',
-  'M70 160 L70 112 C70 100 78 96 78 84 C78 74 72 68 74 58 C80 64 84 74 84 84 C84 96 78 102 78 114 L78 160 Z'
-];
-const SAND_D = 'M0 30 C40 18 80 34 120 26 C160 18 200 34 240 26 C280 18 330 34 390 24 L390 60 L0 60 Z';
-const STARFISH_D = 'M60 22 L72 50 L104 52 L80 72 L88 104 L60 86 L32 104 L40 72 L16 52 L48 50 Z';
-const SHELL_D = 'M60 90 C36 90 22 74 22 56 C34 62 44 60 50 52 C54 60 60 64 60 64 C60 64 66 60 70 52 C76 60 86 62 98 56 C98 74 84 90 60 90 Z M60 64 L60 88 M50 54 L58 86 M70 54 L62 86';
-
-function svgWrap(cls, body, viewBox) {
-  return '<svg class="' + cls + '" viewBox="' + (viewBox || '0 0 390 200') + '" preserveAspectRatio="xMidYMax slice" aria-hidden="true">' + body + '</svg>';
-}
-
-function strokeGroup(d, color, w, opacity) {
-  return '<g fill="none" stroke="' + color + '" stroke-width="' + (w || 5) + '" stroke-linecap="round" stroke-linejoin="round"' +
-    (opacity ? ' opacity="' + opacity + '"' : '') + '><path d="' + d + '"/></g>';
-}
-
-/** لایهٔ دور — جلبک‌های محو دوردست (کم‌رنگ، پشت همه) */
-export function farLayer() {
-  return svgWrap('play-scene__far',
-    strokeGroup(WEED_D.join(' '), '#438C89', 7, 0.5));
-}
-
-/** لایهٔ میانی — مرجان‌های قلمی و ستارهٔ دریایی */
-export function midLayer() {
-  return svgWrap('play-scene__mid',
-    strokeGroup(CORAL_D.join(' '), '#E8925A', 6, 0.75) +
-    '<g fill="#E4AA46" stroke="' + INK + '" stroke-width="3" stroke-linejoin="round" opacity="0.85" transform="translate(300 96) scale(0.42)"><path d="' + STARFISH_D + '"/></g>');
-}
-
-/** لایهٔ نزدیک — بستر شنی + صدف */
-export function nearLayer() {
-  return svgWrap('play-scene__near',
-    '<g fill="#F0E7D2" stroke="#E3DCC9" stroke-width="3"><path d="' + SAND_D + '"/></g>' +
-    '<g fill="#F5F0E5" stroke="' + INK + '" stroke-width="2.5" stroke-linejoin="round" opacity="0.8" transform="translate(64 8) scale(0.34)"><path d="' + SHELL_D + '"/></g>',
-    '0 0 390 60');
-}
-
-/** خوشهٔ حباب — سه حباب تزئینی؛ جنبش آرامش از fx.sceneAmbient می‌آید */
-export function bubbleCluster() {
-  return '<span class="play-scene__bubbles" aria-hidden="true">' +
-    [0, 1, 2].map((i) =>
-      '<svg class="play-scene__bubble play-scene__bubble--' + i + '" viewBox="0 0 24 24">' +
-      '<circle cx="12" cy="12" r="9" fill="rgba(255,255,255,.55)" stroke="#438C89" stroke-width="2"/>' +
-      '<path d="M7.5 9.5 a5 5 0 0 1 4 -2.5" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>' +
-      '</svg>').join('') +
-    '</span>';
+function bubbleSvg(i, size) {
+  return '<svg class="play-scene__bubble play-scene__bubble--' + i + '" viewBox="0 0 24 24" width="' + size + '" height="' + size + '" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="9" fill="rgba(255,255,255,.4)" stroke="currentColor" stroke-width="2"/>' +
+    '<path d="M7.5 9.5 a5 5 0 0 1 4 -2.5" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.6" stroke-linecap="round"/>' +
+    '</svg>';
 }
 
 /**
- * صحنهٔ کامل — سه لایهٔ عمق + حباب‌ها (+ اختیاری: شخصیت قهرمان).
- *   variant: 'teach' (معرفی/استراحت/تمرین) | 'end' (پایان)
- *   hero: { svg, cls } — وکتور شخصیت روی صحنه (معرفی/پایان)
+ * دکور صحنه — فقط حباب‌های نرم (نسخهٔ ۱.۲۵.۴۱).
+ *   variant: 'teach' | 'end' — فقط برای هم‌امضای قدیمی؛ دکور هر دو یکسان است.
+ *   hero: { svg, cls } — قهرمان گوشه‌نشین؛ جای‌گذاری امن در CSS (کادرِ صحنه).
  * خروجی فقط markup ایستا؛ نصب جنبش با fx.sceneAmbient(stage) جدا صدا می‌شود.
  */
 export function sceneMarkup(variant, hero) {
   return '<div class="play-scene play-scene--' + (variant === 'end' ? 'end' : 'teach') + '" aria-hidden="true">' +
-    farLayer() + midLayer() + nearLayer() + bubbleCluster() +
+    '<span class="play-scene__bubbles">' + bubbleSvg(0, 20) + bubbleSvg(1, 13) + bubbleSvg(2, 24) + '</span>' +
     (hero && hero.svg ? '<span class="play-scene__hero' + (hero.cls ? ' ' + hero.cls : '') + '">' + hero.svg + '</span>' : '') +
     '</div>';
+}
+
+/* ─── قهرمان هر نوع‌بازی — هویت صحنهٔ آموزش از بازی می‌آید ─────────
+   ماهی/خرچنگ با رنگ پالت همان بازی؛ حالت swim/happy فقط در لحظه‌های
+   تشریفاتی معرفی — آزمون هرگز قهرمان نمی‌بیند. */
+
+const KIND_HEROES = {
+  gonogo: () => fishPuppet('swim', '#E4AA46'),
+  numline: () => crabPuppet('swim', '#D97C4F'),
+  scan: () => fishPuppet('idle', '#5E8FB8'),
+  stroop: () => fishPuppet('happy', '#9B7EDE'),
+  flanker: () => fishPuppet('swim', '#8FA6B8'),
+  trail: () => crabPuppet('idle', '#C4635F'),
+  nback: () => crabPuppet('happy', '#438C89')
+};
+
+/** قهرمان نوع‌بازی برای صحنهٔ آموزش — نوع ناشناخته = ماهی کهربایی */
+export function kindHero(kind) {
+  const make = KIND_HEROES[kind] || KIND_HEROES.gonogo;
+  return make();
 }
 
 /** تزریق صحنه به آغاز صحنهٔ صحنه (به‌عنوان نخستین فرزند — زیر محتوا می‌نشیند) */
 export function decorateStage(stage, variant, hero) {
   if (!stage) return;
   stage.insertAdjacentHTML('afterbegin', sceneMarkup(variant, hero));
-}
-
-/* جلبک‌ها برای جنبش تاب‌آرام fx — همان مسیرهای لایهٔ دور، به‌صورت تک-عنصر نزدیک */
-export function weedPair() {
-  return '<span class="play-scene__weeds" aria-hidden="true">' +
-    '<svg class="play-scene__weed play-scene__weed--a" viewBox="0 0 40 80">' +
-    '<path d="M20 78 C14 58 24 44 18 24 C16 14 20 8 18 2 C26 14 28 30 26 44 C24 60 26 70 22 78 Z" fill="#438C89" opacity="0.6"/></svg>' +
-    '<svg class="play-scene__weed play-scene__weed--b" viewBox="0 0 40 80">' +
-    '<path d="M22 78 C16 60 26 46 20 28 C18 18 22 10 20 4 C28 16 30 34 28 48 C26 62 28 70 24 78 Z" fill="#63B37F" opacity="0.55"/></svg>' +
-    '</span>';
 }

@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.43";
+var APP_VERSION = "1.25.44";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -27061,6 +27061,20 @@ function skinLink(kind) {
   return GAME_KIND_IDS.includes(k) ? `<link rel="stylesheet" href="/assets/play/skins/${k}.css?v=${APP_VERSION}" />` : "";
 }
 __name(skinLink, "skinLink");
+var KIND_FIGS = {
+  gonogo: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z M46 40 Q58 20 72 38 Q58 34 50 44 Z M54 84 Q62 94 72 88 Q64 88 58 82 Z" fill="#E4AA46" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0 M72 46 Q66 58 72 70 M20 64 Q26 70 34 66" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/>',
+  numline: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0 M22 42 a9 9 0 1 0 0.01 0 M102 42 a9 9 0 1 0 0.01 0 M14 36 Q22 30 28 36 M96 36 Q102 30 110 36" fill="#D97C4F" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M52 48 a3.5 3.5 0 1 0 0.01 0 M72 48 a3.5 3.5 0 1 0 0.01 0 M52 40 L50 32 M72 40 L74 32 M58 58 Q62 62 66 58 M40 78 L32 90 M50 80 L46 94 M74 80 L78 94 M84 78 L92 90" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/>',
+  scan: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#5E8FB8" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0 M72 46 Q66 58 72 70" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z" fill="#E4AA46" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/>',
+  stroop: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#9B7EDE" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M74 50 Q80 44 86 50 M20 60 Q28 72 40 66" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><circle cx="30" cy="18" r="8" fill="#D96C6C" stroke="#153E50" stroke-width="3"/><circle cx="92" cy="14" r="8" fill="#63B37F" stroke="#153E50" stroke-width="3"/>',
+  flanker: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#8FA6B8" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0" fill="none" stroke="#153E50" stroke-width="3"/><path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" transform="translate(-6 -38) scale(.62)" fill="#B9C6D2" stroke="#153E50" stroke-width="4" stroke-linejoin="round"/>',
+  trail: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0 M22 42 a9 9 0 1 0 0.01 0 M102 42 a9 9 0 1 0 0.01 0" fill="#C4635F" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M52 48 a3.5 3.5 0 1 0 0.01 0 M72 48 a3.5 3.5 0 1 0 0.01 0 M52 40 L50 32 M72 40 L74 32 M58 58 Q62 62 66 58" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><path d="M22 84 q4 -10 10 -2 q-2 -10 8 -8" fill="none" stroke="#153E50" stroke-width="2.5" stroke-linecap="round"/><path d="M96 86 q4 -10 10 -2 q-2 -10 8 -8" fill="none" stroke="#153E50" stroke-width="2.5" stroke-linecap="round"/>',
+  nback: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0" fill="#438C89" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M50 46 Q54 42 58 46 M66 46 Q70 42 74 46 M52 40 L50 32 M72 40 L74 32 M56 56 Q62 64 68 56" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><rect x="12" y="12" width="38" height="26" rx="4" fill="#E4AA46" stroke="#153E50" stroke-width="3"/><circle cx="31" cy="25" r="7" fill="#F5F0E5" stroke="#153E50" stroke-width="2.5"/>'
+};
+function kindFig(kind) {
+  const body = KIND_FIGS[String(kind ?? "")] ?? KIND_FIGS.gonogo;
+  return '<svg class="play-kindfig" viewBox="0 0 120 124" aria-hidden="true">' + body + "</svg>";
+}
+__name(kindFig, "kindFig");
 function page(model, token, body) {
   return `<!doctype html>
 <html lang="fa" dir="rtl">
@@ -27138,8 +27152,9 @@ function renderGamesPage(model, token) {
   if (model.state === "parent_pre") {
     const beforeFa = typeof model.parentCopyBefore === "string" && model.parentCopyBefore.trim() !== "" ? model.parentCopyBefore.trim() : "\u0627\u06CC\u0646 \u0628\u0627\u0632\u06CC \u062A\u0645\u0631\u06CC\u0646 \u062A\u0645\u0631\u06A9\u0632 \u0648 \u0645\u0647\u0627\u0631 \u0627\u0633\u062A\u060C \u0646\u0647 \u062F\u0631\u0645\u0627\u0646\u061B \u0646\u0642\u0634 \u0634\u0645\u0627 \u06A9\u0646\u0627\u0631 \u0645\u0627\u0646\u062F\u0646 \u0648 \u062A\u0634\u0648\u06CC\u0642 \u0622\u0631\u0627\u0645 \u0627\u0633\u062A.";
     return page(model, token, `<div class="card">${head}
+      ${kindFig(model.playGame)}
       <p class="muted">${esc(beforeFa)}</p>
-      <p class="muted">\u06AF\u0648\u0634\u06CC \u0631\u0627 \u0628\u0647 \u06A9\u0648\u062F\u06A9 \u0628\u062F\u0647\u06CC\u062F \u0648 \u06A9\u0646\u0627\u0631\u0634 \u0628\u0645\u0627\u0646\u06CC\u062F\u061B \u0647\u0631 \u0631\u0648\u0632 \u0686\u0646\u062F \u062F\u0642\u06CC\u0642\u0647 \u06A9\u0627\u0641\u06CC \u0627\u0633\u062A.</p>
+      <p class="muted">\u06AF\u0648\u0634\u06CC \u0631\u0627 \u0628\u0647 \u06A9\u0648\u062F\u06A9 \u0628\u062F\u0647\u06CC\u062F \u0648 \u06A9\u0646\u0627\u0631\u0634 \u0628\u0645\u0627\u0646\u06CC\u062F.</p>
       <button id="btn-start" type="button">\u0622\u0645\u0627\u062F\u0647\u0654 \u0634\u0631\u0648\u0639 \u0647\u0633\u062A\u06CC\u0645</button></div>`);
   }
   if (model.state === "child_active") {
@@ -27150,6 +27165,7 @@ function renderGamesPage(model, token) {
     return page(model, token, `<div id="play-root" class="play-root"
       data-token="${esc(token)}"
       data-kind="${esc(model.playGame ?? "")}"
+      data-title="${esc(model.missionTitle || "")}"
       data-hint="${esc(hint)}" data-resume="${esc(resume)}"${stageAttr}
       data-protocol="${esc(protocol)}">
       <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
@@ -27227,6 +27243,7 @@ function renderPreviewPage(state, token) {
     <div id="play-root" class="play-root"
       data-token="${esc(token)}"
       data-kind="${esc(state.game)}"
+      data-title="${esc(state.missionTitle)}"
       data-hint="${esc(hint)}"
       data-protocol="${esc(protocol)}">
       <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
