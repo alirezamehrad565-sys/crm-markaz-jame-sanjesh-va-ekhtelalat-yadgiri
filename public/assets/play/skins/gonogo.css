@@ -82,9 +82,6 @@
 /* چرا: خلاصهٔ پایان کارت آب کم‌عمق — خوانایی عدد از play.css می‌ماند */
 .play-skin--gonogo .play-debrief { background: rgba(67,140,137,.12); border: 2px solid rgba(67,140,137,.35); }
 
-/* چرا: پردهٔ چرخاندن هم ماسهٔ گرم — بدون پرش */
-.play-skin--gonogo .play-rotate { background: linear-gradient(180deg,#EAF4F0,var(--g-sand) 60%,var(--g-sand-deep)); color: var(--g-ink); }
-
 /* چرا: مبنا افقی است؛ این بلوک فقط بهبود می‌دهد */
 @media (orientation: landscape) {
   .play-skin--gonogo .play-stage { border-radius: 28px; }
@@ -92,7 +89,7 @@
   .play-skin--gonogo .play-btn { min-height: 68px; }
 }
 
-/* چرا: عمودی قفل است؛ فقط گوشه‌ها جمع‌تر */
+/* چرا: عمودی هم اجرای واقعی است؛ فقط گوشه‌ها جمع‌تر */
 @media (orientation: portrait) { .play-skin--gonogo .play-stage { border-radius: 22px; } }
 
 /* چرا: کاهش‌جنبش ترنزیشن‌های تزئینی را خنثی می‌کند */

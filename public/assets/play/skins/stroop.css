@@ -50,11 +50,6 @@
 /* چرا دهلیز روشن؟ معرفی/پایان روشن تا Navy خوانا بماند */
 .play-skin--stroop .play-stage--teach,.play-skin--stroop .play-stage--end{background:linear-gradient(180deg,#FBF5E7 0%,#F1E6CF 62%,#E7D9BC 100%);box-shadow:inset 0 0 46px rgba(142,91,184,.12),0 14px 30px rgba(21,62,80,.14);}
 
-/* چرا پوشش غاری؟ لحظهٔ بچرخان هم در داستان بماند */
-.play-skin--stroop .play-rotate{background:linear-gradient(180deg,#171031,var(--cv3));color:#F5F0E5;}
-.play-skin--stroop .play-rotate .play-line{color:#F5F0E5;}
-.play-skin--stroop .play-rotate .play-muted{color:#C9B7E6;}
-
 /* چرا جمع‌تر؟ موبایل افقی کوچک: گرید و سنگ جا شوند */
 @media (orientation:landscape) and (max-width:699px){
 .play-skin--stroop .play-stroop{gap:9px;}

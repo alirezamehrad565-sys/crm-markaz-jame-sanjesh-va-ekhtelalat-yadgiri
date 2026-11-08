@@ -129,9 +129,10 @@ export async function runSession(ctx) {
   });
   const sleeper = createSleeper();
 
-  /* ─── مکث گیت‌محور (G7/۱.۲۵.۴۳) — پنهان‌شدن برگه و چرخش به عمودی از یک مسیر می‌روند:
-     ماشین به PAUSED، خواب/ساعت/پنجرهٔ پاسخ فریز. چرخش گوشی نباید اُمیشن جعلی بسازد —
-     پنجرهٔ پاسخِ در حال اجرا پشت پوششِ «گوشی را بچرخان» نباید بچرخد (کیفیت داده) ─── */
+  /* ─── مکث برگه (فاز ۷) — پنهان‌شدن برگه = مکث کامل: ماشین به PAUSED،
+     خواب/ساعت/پنجرهٔ پاسخ فریز؛ برگشت به همان نقطه. (۱.۲۵.۴۵) قفل جهت حذف شد:
+     عمودی و افقی هر دو اجرای واقعی‌اند و جهت دیگر مکث نمی‌سازد — پوشش «بچرخان»
+     روی موبایل جواب نداد و از مدار خارج شد؛ کیفیت داده حالا فقط از مکث برگه پاس می‌شود ─── */
   let pausedFrom = null;
   const pausableStates = [STATES.FIXATION, STATES.STIMULUS, STATES.RESPONSE_WINDOW, STATES.INTER_TRIAL_INTERVAL, STATES.PRACTICE, STATES.READY];
   const gatePause = () => {
@@ -155,28 +156,10 @@ export async function runSession(ctx) {
     machine.resumeTo(pausedFrom, { resumed: true });
     pausedFrom = null;
   };
-  /* گیت جهت — همان قرارداد play.js: فقط لمسیِ عمودی قفل است؛ دسکتاپ/افقی هرگز نمی‌بیندش */
-  const portraitMq = typeof window.matchMedia === 'function' ? window.matchMedia('(orientation: portrait)') : null;
-  const coarseMq = typeof window.matchMedia === 'function' ? window.matchMedia('(pointer: coarse)') : null;
-  const rotateBlocked = () => !!(portraitMq && coarseMq && portraitMq.matches && coarseMq.matches);
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden || rotateBlocked()) gatePause();
+    if (document.hidden) gatePause();
     else gateResume();
   });
-  const onOrientationChange = () => {
-    if (rotateBlocked()) gatePause();
-    else if (!document.hidden) gateResume();
-  };
-  if (portraitMq) {
-    if (typeof portraitMq.addEventListener === 'function') {
-      portraitMq.addEventListener('change', onOrientationChange);
-      if (coarseMq && typeof coarseMq.addEventListener === 'function') coarseMq.addEventListener('change', onOrientationChange);
-    } else if (typeof portraitMq.addListener === 'function') {
-      portraitMq.addListener(onOrientationChange);
-      if (coarseMq && typeof coarseMq.addListener === 'function') coarseMq.addListener(onOrientationChange);
-    }
-    onOrientationChange(); // اگر صفحه از ابتدا عمودیِ لمسی باز شده، فوراً مکث — نه یک پنجرهٔ پاسخ شانسی
-  }
 
   /* ─── ۱) INTRO — بسته‌بندی معرفی بازی (G3/۱.۲۵.۳۷): نام/قانون/دکمهٔ بزرگ + ادامهٔ نرم (U7) ───
      نام و قانون از ماژول نوع‌بازی (intro.rule از راهنمای سرور می‌آید — فقط آیتم‌های train)؛
