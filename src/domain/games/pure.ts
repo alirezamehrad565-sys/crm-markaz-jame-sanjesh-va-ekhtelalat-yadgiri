@@ -2,22 +2,14 @@
 // همهٔ فرمول‌ها همین‌جاست تا با نمونهٔ طلایی آزمون شوند؛ سرویس فقط آن‌ها را صدا می‌زند.
 import type { ItemView, MissionConfig, MissionItem, PackageBody, SessionValidity } from './types';
 import { PROTOCOL_VERSION, isProtocolVersionSupported } from './protocol';
+// کف RT per-kind — تک‌منبعش رجیستری نوع-محور است (G4الف رفع P3-4)؛ این‌جا فقط با نام قدیمی صادر می‌شود
+import { ITEM_TYPE_RT_FLOOR_MS as DEFAULT_RT_FLOOR_MS } from './registry';
+export { DEFAULT_RT_FLOOR_MS };
 
 // ─── ثابت‌های قاعده (بازبین بالینی فهرست‌ها را تأیید و در همین‌جا نگه می‌دارد) ───
 
 /** چهار قاعدهٔ پایهٔ لحن که هر بسته باید داشته باشد (§۴) */
 export const TONE_RULES_BASE = ['no_timer', 'no_rank', 'no_streak', 'no_fail_message'] as const;
-
-  /** کف اعتبار زمان واکنش بر اساس نوع بازی (§۸) */
-export const DEFAULT_RT_FLOOR_MS: Record<MissionItem['type'], number> = {
-  touch_report: 150, // گو/نوگو — زیر ۱۵۰ حدس است
-  numline: 0,        // خط عددی کف ندارد
-  choice: 200,       // فلش‌کارت/انتخاب — لمس تصادفی حذف می‌شود
-  scan: 150,         // حملهٔ جاسوس‌ها — کف نخستین لمس موج؛ زیر آن حدس است
-  stroop: 200,       // حقه‌باز رنگ‌ها — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-  flanker: 200,      // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-  trail: 150         // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
-};
 
 /** آستانهٔ بیکاری برای جلسهٔ ناقص (§۶) */
 export const IDLE_PARTIAL_MS = 5 * 60 * 1000;
