@@ -192,7 +192,8 @@ export async function runSession(ctx) {
   } else if (typeof kind.practiceInteractive === 'function') {
     const practiced = await kind.practiceInteractive({ stage, sleeper, hint });
     if (practiced && practiced.applied) {
-      practiceRetries = { go_retries: practiced.go_retries, nogo_retries: practiced.nogo_retries };
+      /* retries جمع تلاش‌های تمرین نوع‌های بدون گو/نوگو (ن‌پشت ۱.۲۵.۴۰) — کلیدهای گو/نوگو برایشان صفر می‌ماند */
+      practiceRetries = { go_retries: practiced.go_retries, nogo_retries: practiced.nogo_retries, retries: practiced.retries };
     } else {
       /* راهنمای سرور آماده نبود — مدار قدیمی گام‌نما برای سازگاری کامل */
       const steps = typeof kind.previewSteps === 'function' ? kind.previewSteps(hint) : [];
@@ -612,12 +613,12 @@ export async function runSession(ctx) {
       continue;
     }
 
-    /* آیتم انتخاب زمان‌دار — «حقه‌باز رنگ‌ها» و «گلهٔ فریبکار» (۱.۲۵.۳۲):
-       استروپ/فلانکر با پنجرهٔ پاسخ از stim.window_ms؛ بی‌لمس تا پایان پنجره = بی‌پاسخ
+    /* آیتم انتخاب زمان‌دار — «حقه‌باز رنگ‌ها»، «گلهٔ فریبکار» (۱.۲۵.۳۲) و «آلبوم خرچنگ» (۱.۲۵.۴۰):
+       استروپ/فلانکر/ن‌پشت با پنجرهٔ پاسخ از stim.window_ms؛ بی‌لمس تا پایان پنجره = بی‌پاسخ
        (اُمیشن سمت سرور). نمایش از kinds/<kind>.js (markupFor) و در نبودش قالب عام؛
        RT از لحظهٔ نمایش محرک؛ شواهد همان قرارداد فاز ۴؛ حس عدی در پوستهٔ صحنه —
        گفتار روبه‌کودک آرام (§۲)؛ ارزیابی بی‌بازخورد/بی‌ستاره */
-    if ((item.type === 'stroop' || item.type === 'flanker') &&
+    if ((item.type === 'stroop' || item.type === 'flanker' || item.type === 'nback') &&
         (typeof kind.markupFor?.[item.type] === 'function' || (Array.isArray(item.options) && item.options.length > 0))) {
       machine.to(STATES.FIXATION, { item: item.id, timedchoice: true }); // مسیر اجباری ماشین: READY/PRACTICE → FIXATION → STIMULUS
       /* شواهد مشترک G1 — از تثبیت پوسته پیش از محرک (P1-2) */

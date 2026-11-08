@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.39";
+var APP_VERSION = "1.25.40";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23288,7 +23288,7 @@ function fillErrorPage(message) {
 __name(fillErrorPage, "fillErrorPage");
 
 // src/domain/games/registry.ts
-var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "trail"];
+var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "trail", "nback"];
 function gameKindOf(v) {
   return GAME_KIND_IDS.includes(v) ? v : "gonogo";
 }
@@ -23317,6 +23317,12 @@ var ACCURACY_STAGE_RULE = {
   shape: "accuracy",
   pass: P(65, "\u06AF\u0630\u0627\u0631 \u0628\u0627 \u062F\u0642\u062A \u2265\u06F6\u06F5\u066A \u2014 \u0628\u0627\u0644\u0627\u06CC \u0634\u0627\u0646\u0633 \u062D\u062F\u0633 \u0628\u0627\u0646\u06A9 \u0641\u0639\u0644\u06CC\u061B \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u06A9\u0627\u0631\u0634\u0646\u0627\u0633 \u06F1.\u06F2\u06F5.\u06F2\u06F8"),
   star2: P(78, "\u062F\u0648\u0633\u062A\u0627\u0631\u0647 \u2014 \u0641\u0627\u0635\u0644\u0647\u0654 \u0645\u062D\u0633\u0648\u0633 \u0627\u0632 \u06AF\u0630\u0627\u0631\u061B \u067E\u0644\u0647\u0654 \u0627\u0646\u06AF\u06CC\u0632\u0634\u06CC \u0645\u06CC\u0627\u0646\u06CC"),
+  star3: P(88, "\u0633\u0647\u200C\u0633\u062A\u0627\u0631\u0647 \u2014 \u062F\u0642\u062A \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0628\u06CC\u200C\u062E\u0637\u0627\u061B \u0627\u0631\u062A\u0642\u0627\u06CC \u0622\u0646 \u0628\u0627 \u062F\u0627\u062F\u0647\u0654 \u067E\u06CC\u0644\u0648\u062A \u0645\u0631\u06A9\u0632")
+};
+var NBACK_THRESHOLDS = {
+  shape: "accuracy",
+  pass: P(65, "\u06AF\u0630\u0627\u0631 \u0628\u0627 \u062F\u0642\u062A \u062F\u0648\u06AF\u0632\u06CC\u0646\u0647\u200C\u0627\u06CC \u2265\u06F6\u06F5\u066A \u2014 \u0628\u0627\u0644\u0627\u06CC \u0634\u0627\u0646\u0633 \u062D\u062F\u0633 \u06F5\u06F0\u066A \u062F\u0648\u062F\u0648\u06CC\u06CC\u061B \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u06A9\u0627\u0631\u0634\u0646\u0627\u0633 \u06F1.\u06F2\u06F5.\u06F4\u06F0"),
+  star2: P(78, "\u062F\u0648\u0633\u062A\u0627\u0631\u0647 \u2014 \u0647\u0645\u200C\u067E\u0644\u0647\u0654 \u062F\u0642\u062A\u200C\u0645\u062D\u0648\u0631\u0647\u0627\u06CC \u062F\u06CC\u06AF\u0631 \u062A\u0627 \u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u0628\u06CC\u0646\u200C\u0628\u0627\u0632\u06CC \u06AF\u0648\u0644\u200C\u0632\u0646\u0646\u062F\u0647 \u0646\u0634\u0648\u062F"),
   star3: P(88, "\u0633\u0647\u200C\u0633\u062A\u0627\u0631\u0647 \u2014 \u062F\u0642\u062A \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0628\u06CC\u200C\u062E\u0637\u0627\u061B \u0627\u0631\u062A\u0642\u0627\u06CC \u0622\u0646 \u0628\u0627 \u062F\u0627\u062F\u0647\u0654 \u067E\u06CC\u0644\u0648\u062A \u0645\u0631\u06A9\u0632")
 };
 var GONOGO_STAGES_4_6 = [
@@ -23573,6 +23579,101 @@ var FLANKER_STAGES = [
     overrides: {}
   }
 ];
+var NBACK_STAGES_4_6 = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u0622\u0644\u0628\u0648\u0645 \u06AF\u0631\u0645 \u0645\u06CC\u200C\u0634\u0648\u062F",
+    goal_fa: "\u062F\u0648\u062A\u0627 \u0639\u0642\u0628 \u0631\u0627 \u06CC\u0627\u062F \u0628\u06AF\u06CC\u0631\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
+    difficulty: 1,
+    overrides: { isi_min_ms: 2600, isi_max_ms: 3200, fixation_ms: 400 }
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u0622\u0644\u0628\u0648\u0645 \u062A\u0645\u0631\u06CC\u0646",
+    goal_fa: "\u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC \u0627\u062F\u0627\u0645\u0647 \u0628\u062F\u0647.",
+    difficulty: 2,
+    overrides: {}
+    // پارامترهای پایهٔ پروتکل — بدون بازنویسی
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0633\u0647 \u0642\u062F\u0645 \u0639\u0642\u0628\u200C\u062A\u0631",
+    goal_fa: "\u062D\u0627\u0644\u0627 \u0633\u0647\u200C\u062A\u0627 \u0639\u0642\u0628 \u0646\u06AF\u0627\u0647 \u06A9\u0646\u061B \u0648\u0642\u062A \u06A9\u0645 \u0646\u06CC\u0633\u062A\u060C \u0622\u0631\u0627\u0645 \u0628\u0627\u0634.",
+    difficulty: 3,
+    // فرود نرم پرش n — فاصلهٔ بین‌آزمونشی کمی بلندتر از پایه تا حافظهٔ تازه فشار زمانی تازه نگیرد
+    overrides: { isi_min_ms: 2400, isi_max_ms: 3e3, fixation_ms: 400 }
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u0622\u0644\u0628\u0648\u0645 \u0628\u0632\u0631\u06AF",
+    goal_fa: "\u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A\u061B \u062F\u0648\u062A\u0627 \u0639\u0642\u0628 \u0631\u0627 \u06AF\u0645 \u0646\u06A9\u0646.",
+    difficulty: 4,
+    overrides: { isi_min_ms: 2200, isi_max_ms: 2800, fixation_ms: 400 }
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0622\u0644\u0628\u0648\u0645",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u0622\u0644\u0628\u0648\u0645\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC!",
+    difficulty: 5,
+    overrides: { isi_min_ms: 2e3, isi_max_ms: 2600, fixation_ms: 350 }
+  }
+];
+var NBACK_STAGES_7_12 = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u0622\u0644\u0628\u0648\u0645 \u06AF\u0631\u0645 \u0645\u06CC\u200C\u0634\u0648\u062F",
+    goal_fa: "\u062F\u0648\u062A\u0627 \u0639\u0642\u0628 \u0631\u0627 \u06CC\u0627\u062F \u0628\u06AF\u06CC\u0631\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
+    difficulty: 1,
+    overrides: { isi_min_ms: 2200, isi_max_ms: 2800, fixation_ms: 400 }
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u0622\u0644\u0628\u0648\u0645 \u062A\u0645\u0631\u06CC\u0646",
+    goal_fa: "\u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC \u0627\u062F\u0627\u0645\u0647 \u0628\u062F\u0647.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0633\u0647 \u0642\u062F\u0645 \u0639\u0642\u0628\u200C\u062A\u0631",
+    goal_fa: "\u062D\u0627\u0644\u0627 \u0633\u0647\u200C\u062A\u0627 \u0639\u0642\u0628 \u0646\u06AF\u0627\u0647 \u06A9\u0646\u061B \u0648\u0642\u062A \u06A9\u0645 \u0646\u06CC\u0633\u062A\u060C \u0622\u0631\u0627\u0645 \u0628\u0627\u0634.",
+    difficulty: 3,
+    overrides: { isi_min_ms: 2e3, isi_max_ms: 2600, fixation_ms: 400 }
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u0622\u0644\u0628\u0648\u0645 \u0628\u0632\u0631\u06AF",
+    goal_fa: "\u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A\u061B \u062F\u0648\u062A\u0627 \u0639\u0642\u0628 \u0631\u0627 \u06AF\u0645 \u0646\u06A9\u0646.",
+    difficulty: 4,
+    overrides: { isi_min_ms: 1800, isi_max_ms: 2400, fixation_ms: 400 }
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0622\u0644\u0628\u0648\u0645",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u0622\u0644\u0628\u0648\u0645\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC!",
+    difficulty: 5,
+    overrides: { isi_min_ms: 1600, isi_max_ms: 2200, fixation_ms: 350 }
+  }
+];
+var NBACK_STAGES = { "4-6": NBACK_STAGES_4_6, "7-12": NBACK_STAGES_7_12 };
+var NBACK_STAGE_LEVELS = { s1: 1, s2: 1, s3: 2, s4: 2, s5: 2 };
+function nbackItemInStage(item, stageId) {
+  const level = typeof stageId === "string" ? NBACK_STAGE_LEVELS[stageId] : void 0;
+  if (!level) return true;
+  const s = item.stim ?? {};
+  return s.n === level;
+}
+__name(nbackItemInStage, "nbackItemInStage");
 var TRAIL_STAGES = [
   {
     id: "s1",
@@ -23695,7 +23796,11 @@ var ENGINE_ONLY_FORMULAS = [
   "congruent_acc",
   "incongruent_acc",
   "interference_ms",
-  "trail_prefix"
+  "trail_prefix",
+  "nback_match",
+  "nback_nonmatch",
+  "nback_fa",
+  "nback_miss"
 ];
 var GAME_KINDS = {
   gonogo: {
@@ -23819,6 +23924,23 @@ var GAME_KINDS = {
     engine_metrics: [
       { id: "trail_prefix_pct", title_fa: "\u062F\u0631\u0635\u062F \u067E\u06CC\u0634\u200C\u0645\u0627\u0646\u062F \u0635\u062D\u06CC\u062D \u0631\u062F \u0631\u062F\u067E\u0627\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "trail_prefix" }
     ]
+  },
+  nback: {
+    // ن‌پشت (آلبوم خرچنگ) — کف ۲۰۰ms: لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
+    rt_floor_ms: 200,
+    // انتخاب زمان‌دار — بی‌پاسخی پنجره سمت سرور اُمیشن است (عملیاتی روی stim.window_ms آیتم)
+    timed_choice: true,
+    stage_rule: NBACK_THRESHOLDS,
+    stageList: /* @__PURE__ */ __name((band) => NBACK_STAGES[band] ?? NBACK_STAGES["7-12"], "stageList"),
+    // اهرم سختی ن‌پشت فیلتر سطح n در خود itemInStage است — جدول سقف/گروه جدا ندارد
+    levers: {},
+    itemInStage: nbackItemInStage,
+    engine_metrics: [
+      { id: "nback_match_pct", title_fa: "\u062F\u0631\u0635\u062F \u067E\u0627\u0633\u062E \u062F\u0631\u0633\u062A \u0628\u0647 \u0647\u0645\u0633\u0627\u0646\u200C\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "nback_match" },
+      { id: "nback_nonmatch_pct", title_fa: "\u062F\u0631\u0635\u062F \u067E\u0627\u0633\u062E \u062F\u0631\u0633\u062A \u0628\u0647 \u0646\u0627\u0647\u0645\u0633\u0627\u0646\u200C\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "nback_nonmatch" },
+      { id: "nback_false_alarm_pct", title_fa: "\u062F\u0631\u0635\u062F \u0647\u0634\u062F\u0627\u0631 \u06A9\u0627\u0630\u0628 (\u06AF\u0641\u062A\u0646 \xAB\u0647\u0645\u0627\u0646 \u0627\u0633\u062A\xBB \u0628\u0631\u0627\u06CC \u0646\u0627\u0647\u0645\u0633\u0627\u0646)", unit: "percent", higher_is_better: false, source: "auto", formula: "nback_fa" },
+      { id: "nback_miss_pct", title_fa: "\u062F\u0631\u0635\u062F \u062C\u0627\u0627\u0646\u062F\u0627\u062E\u062A\u0646 \u0647\u0645\u0633\u0627\u0646", unit: "percent", higher_is_better: false, source: "auto", formula: "nback_miss" }
+    ]
   }
 };
 
@@ -23852,7 +23974,7 @@ var TRAINING_PARAMS = {
     response_window_go_ms: PARAM(1500, "\u067E\u0646\u062C\u0631\u0647\u0654 \u0645\u062A\u0639\u0627\u0631\u0641 \u06AF\u0648/\u0646\u0648\u06AF\u0648 \u0633\u0646\u06CC\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u067E\u0627\u0633\u062E\u200C\u0647\u0627\u06CC \u0632\u06CC\u0631 \u06A9\u0641 \u06F1\u06F5\u06F0ms \u062C\u062F\u0627\u06AF\u0627\u0646\u0647 \u0641\u06CC\u0644\u062A\u0631 \u0645\u06CC\u200C\u0634\u0648\u0646\u062F (\xA7\u06F8)", "pilot"),
     response_window_nogo_ms: PARAM(1500, "\u0647\u0645\u200C\u0637\u0648\u0644 \u06AF\u0648 \u2014 \u0645\u0642\u0627\u06CC\u0633\u0647\u200C\u067E\u0630\u06CC\u0631\u06CC \u0628\u06CC\u0646\u200C\u0633\u0646\u06CC", "proposed"),
     isi_min_ms: PARAM(800, "ISI \u06A9\u0645\u06CC \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0628\u0631\u0627\u06CC \u0633\u0646\u06CC\u0646 \u0628\u0627\u0644\u0627\u062A\u0631\u061B \u0641\u0634\u0627\u0631 \u0633\u0631\u0639\u062A \u0645\u062A\u0639\u0627\u062F\u0644", "proposed"),
-    isi_max_ms: PARAM(1200, "\u0628\u0627\u0632\u0647\u0654 \u06F0\u066B\u06F8\u2013\u06F1\u066B\u06F2 \u062B\u0627\u0646\u06CC\u0647 \u2014 \u062A\u0646\u0648\u0639 \u0628\u0631\u0627\u06CC \u0634\u06A9\u0633\u062A\u0646 \u0627\u0646\u062A\u0638\u0627\u0631 \u0632\u0645\u0627\u0646\u06CC \u062B\u0627\u0628\u062A", "proposed"),
+    isi_max_ms: PARAM(1200, "\u0628\u0627\u0632\u0647\u0654 \u06F0\u066B\u06F8\u2013\u06F1\u066B\u06F2 \u062B\u0627\u0646\u06CC\u0647 \u2014 \u062A\u0646\u0648\u0639 \u0628\u0631\u0627\u06CC \u06AF\u0633\u0633\u062A\u0646 \u0627\u0646\u062A\u0638\u0627\u0631 \u0632\u0645\u0627\u0646\u06CC \u062B\u0627\u0628\u062A", "proposed"),
     fixation_ms: PARAM(400, "\u0645\u06A9\u062B \u062E\u0646\u062B\u06CC \u067E\u06CC\u0634 \u0627\u0632 \u0646\u0645\u0627\u06CC\u0634 \u2014 \u0647\u0645\u200C\u0637\u0648\u0644 \u062F\u0648 \u0628\u0627\u0646\u062F \u0628\u0631\u0627\u06CC \u0645\u0642\u0627\u06CC\u0633\u0647\u200C\u067E\u0630\u06CC\u0631\u06CC", "proposed"),
     go_ratio: PARAM(0.75, "\u0646\u0633\u0628\u062A ~\u06F3:\u06F1 \u0645\u062A\u0639\u0627\u0631\u0641\u061B \u0628\u0627 \u0646\u0633\u062E\u0647\u0654 \u067E\u0631\u0648\u062A\u06A9\u0644 \u062B\u0627\u0628\u062A \u0645\u06CC\u200C\u0645\u0627\u0646\u062F", "pilot"),
     max_consecutive_same: PARAM(3, "\u0647\u0645\u0627\u0646 \u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u06F4\u2013\u06F6 \u0633\u0627\u0644", "proposed"),
@@ -23911,6 +24033,48 @@ function isProtocolVersionSupported(v) {
   return typeof v === "string" && /^\d+\.\d+\.\d+$/.test(v) && v === PROTOCOL_VERSION;
 }
 __name(isProtocolVersionSupported, "isProtocolVersionSupported");
+var NBACK_PROTOCOL_ID = "nback-standard";
+var NBACK_PROTOCOL_VERSION = "1.0.0";
+var NBACK_PARAM_KEYS = [
+  "isi_min_ms",
+  "isi_max_ms",
+  "fixation_ms",
+  "block_size",
+  "match_ratio",
+  "max_consecutive_match",
+  "response_window_ms"
+];
+var NBACK_PARAMS = {
+  "4-6": {
+    isi_min_ms: PARAM(2200, "ISI \u0628\u0644\u0646\u062F\u062A\u0631 \u0628\u0631\u0627\u06CC \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u2014 \u0628\u0627\u0631 \u0646\u06AF\u0647\u200C\u062F\u0627\u0634\u062A n \u0642\u062F\u0645 \u0639\u0642\u0628\u200C\u062A\u0631 \u062F\u0631 \u0627\u06CC\u0646 \u0633\u0646 \u0628\u06CC\u0634\u062A\u0631 \u0627\u0633\u062A\u061B \u062D\u062F \u067E\u0627\u06CC\u06CC\u0646 \u0645\u062D\u0627\u0641\u0638\u0647\u200C\u06A9\u0627\u0631\u0627\u0646\u0647", "proposed"),
+    isi_max_ms: PARAM(2800, "\u0628\u0627\u0632\u0647\u0654 \u06F2\u066B\u06F2\u2013\u06F2\u066B\u06F8 \u062B\u0627\u0646\u06CC\u0647 \u2014 \u062A\u0646\u0648\u0639 \u0628\u0631\u0627\u06CC \u06AF\u0633\u0633\u062A\u0646 \u0627\u0646\u062A\u0638\u0627\u0631 \u0632\u0645\u0627\u0646\u06CC \u062B\u0627\u0628\u062A", "proposed"),
+    fixation_ms: PARAM(400, "\u0645\u06A9\u062B \u062E\u0646\u062B\u06CC \u067E\u06CC\u0634 \u0627\u0632 \u0646\u0645\u0627\u06CC\u0634 \u2014 \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0628\u0627 \u062F\u06CC\u06AF\u0631 \u0646\u0648\u0639\u200C\u0628\u0627\u0632\u06CC\u200C\u0647\u0627", "proposed"),
+    block_size: PARAM(30, "\u062C\u0631\u06CC\u0627\u0646 \u0628\u06CC\u200C\u0627\u0633\u062A\u0631\u0627\u062D\u062A \u0628\u0644\u0648\u06A9\u06CC \u06F3\u06F0\u062A\u0627\u06CC\u06CC \u2014 \u0627\u0646\u0633\u062C\u0627\u0645 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 n-back \u0627\u0632 \u0627\u0633\u062A\u0631\u0627\u062D\u062A \u062F\u0631\u0648\u0646\u200C\u062F\u0646\u0628\u0627\u0644\u0647\u200C\u0627\u06CC \u0645\u06CC\u200C\u0634\u06A9\u0646\u062F", "proposed"),
+    match_ratio: PARAM(0.3, "\u0646\u0633\u0628\u062A \u0645\u062A\u0639\u0627\u0631\u0641 \u0647\u0645\u0633\u0627\u0646 \u062F\u0631 n-back ~\u06F3\u06F0\u066A \u2014 \u0628\u0627\u0644\u0627\u06CC \u062D\u062F\u0633 \u0648 \u0632\u06CC\u0631 \u0633\u0642\u0641 \u062A\u06A9\u0631\u0627\u0631 \u0642\u0627\u0628\u0644 \u062D\u0641\u0638\u200C\u06A9\u0631\u062F\u0646", "proposed"),
+    max_consecutive_match: PARAM(2, "\u0628\u06CC\u0634 \u0627\u0632 \u062F\u0648 \u0647\u0645\u0633\u0627\u0646\u0650 \u067E\u06CC\u0627\u067E\u06CC\u060C \u067E\u0627\u0633\u062E \u0628\u0647 \u0642\u0627\u0639\u062F\u0647 \u0631\u0627 \u0628\u0647 \u062D\u0641\u0638 \u06A9\u0648\u062A\u0627\u0647\u200C\u0645\u062F\u062A \u062A\u0628\u062F\u06CC\u0644 \u0645\u06CC\u200C\u06A9\u0646\u062F", "proposed"),
+    response_window_ms: PARAM(3800, "\u067E\u0646\u062C\u0631\u0647\u0654 \u0645\u0631\u062C\u0639 \u067E\u0627\u0633\u062E \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u2014 \u06A9\u0648\u062F\u06A9 \u0628\u0627\u06CC\u062F \u062D\u06A9\u0645 \xAB\u0647\u0645\u0627\u0646 \u0627\u0633\u062A/\u0641\u0631\u0642 \u062F\u0627\u0631\u062F\xBB \u0631\u0627 \u0628\u06CC\u200C\u0641\u0634\u0627\u0631 \u0628\u062F\u0647\u062F\u061B \u0639\u0645\u0644\u06CC\u0627\u062A\u06CC \u0631\u0648\u06CC stim.window_ms \u0622\u06CC\u062A\u0645", "proposed")
+  },
+  "7-12": {
+    isi_min_ms: PARAM(1800, "ISI \u06A9\u0645\u06CC \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0628\u0631\u0627\u06CC \u0633\u0646\u06CC\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u0641\u0634\u0627\u0631 \u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC \u0645\u062A\u0639\u0627\u062F\u0644", "proposed"),
+    isi_max_ms: PARAM(2400, "\u0628\u0627\u0632\u0647\u0654 \u06F1\u066B\u06F8\u2013\u06F2\u066B\u06F4 \u062B\u0627\u0646\u06CC\u0647 \u2014 \u062A\u0646\u0648\u0639 \u0628\u0631\u0627\u06CC \u06AF\u0633\u0633\u062A\u0646 \u0627\u0646\u062A\u0638\u0627\u0631 \u0632\u0645\u0627\u0646\u06CC \u062B\u0627\u0628\u062A", "proposed"),
+    fixation_ms: PARAM(400, "\u0645\u06A9\u062B \u062E\u0646\u062B\u06CC \u067E\u06CC\u0634 \u0627\u0632 \u0646\u0645\u0627\u06CC\u0634 \u2014 \u0647\u0645\u200C\u0637\u0648\u0644 \u062F\u0648 \u0628\u0627\u0646\u062F \u0628\u0631\u0627\u06CC \u0645\u0642\u0627\u06CC\u0633\u0647\u200C\u067E\u0630\u06CC\u0631\u06CC", "proposed"),
+    block_size: PARAM(30, "\u062C\u0631\u06CC\u0627\u0646 \u0628\u06CC\u200C\u0627\u0633\u062A\u0631\u0627\u062D\u062A \u0628\u0644\u0648\u06A9\u06CC \u06F3\u06F0\u062A\u0627\u06CC\u06CC \u2014 \u0647\u0645\u200C\u0634\u06A9\u0644 \u062F\u0648 \u0628\u0627\u0646\u062F \u0628\u0631\u0627\u06CC \u0645\u0642\u0627\u06CC\u0633\u0647", "proposed"),
+    match_ratio: PARAM(0.3, "\u0646\u0633\u0628\u062A \u0645\u062A\u0639\u0627\u0631\u0641 \u0647\u0645\u0633\u0627\u0646 ~\u06F3\u06F0\u066A \u2014 \u0628\u0627 \u0646\u0633\u062E\u0647\u0654 \u067E\u0631\u0648\u062A\u06A9\u0644 \u062B\u0627\u0628\u062A \u0645\u06CC\u200C\u0645\u0627\u0646\u062F", "proposed"),
+    max_consecutive_match: PARAM(2, "\u0647\u0645\u0627\u0646 \u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u06F4\u2013\u06F6 \u0633\u0627\u0644", "proposed"),
+    response_window_ms: PARAM(3400, "\u067E\u0646\u062C\u0631\u0647\u0654 \u0645\u0631\u062C\u0639 \u067E\u0627\u0633\u062E \u0633\u0646\u06CC\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u06A9\u0645\u06CC \u062A\u0646\u06AF\u200C\u062A\u0631 \u0627\u0632 \u06F4\u2013\u06F6 \u0633\u0627\u0644\u061B \u0639\u0645\u0644\u06CC\u0627\u062A\u06CC \u0631\u0648\u06CC stim.window_ms \u0622\u06CC\u062A\u0645", "proposed")
+  }
+};
+function nbackParamsOf(band) {
+  const table = NBACK_PARAMS[band];
+  const out = {};
+  for (const k of NBACK_PARAM_KEYS) out[k] = table[k].value;
+  return out;
+}
+__name(nbackParamsOf, "nbackParamsOf");
+function applyNbackProtocol(snap, band) {
+  return { ...snap, protocol_id: NBACK_PROTOCOL_ID, version: NBACK_PROTOCOL_VERSION, age_band: band, params: { ...snap.params, ...nbackParamsOf(band) } };
+}
+__name(applyNbackProtocol, "applyNbackProtocol");
 function protocolSnapshotOf(p) {
   const params = {};
   for (const [k, v] of Object.entries(p.params)) params[k] = v.value;
@@ -23940,8 +24104,10 @@ var DEFAULT_RT_FLOOR_MS = {
   // حقه‌باز رنگ‌ها — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
   flanker: GAME_KINDS.flanker.rt_floor_ms,
   // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-  trail: GAME_KINDS.trail.rt_floor_ms
+  trail: GAME_KINDS.trail.rt_floor_ms,
   // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
+  nback: GAME_KINDS.nback.rt_floor_ms
+  // ن‌پشت/آلبوم خرچنگ — لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
 };
 var IDLE_PARTIAL_MS = 5 * 60 * 1e3;
 var MIN_COMPLETION_RATIO = 0.6;
@@ -24000,6 +24166,9 @@ function scoreAttempt(item, mission, response, rtMs) {
   let scanSpies;
   let timedOut;
   let congruent;
+  let nbackMatch;
+  let nbackFa;
+  let nbackMissed;
   let trailNodes;
   let trailNodesTotal;
   if (item.type === "choice") {
@@ -24011,12 +24180,19 @@ function scoreAttempt(item, mission, response, rtMs) {
       correct = Math.abs(chosen - item.correct) <= tol;
       errorPct = numlineErrorPct(chosen, item.correct, item.range);
     }
-  } else if (item.type === "stroop" || item.type === "flanker") {
+  } else if (item.type === "stroop" || item.type === "flanker" || item.type === "nback") {
     const opt = typeof res.option === "number" && Number.isInteger(res.option) ? res.option : null;
     correct = opt !== null && opt === item.correct;
     omission = opt === null;
     timedOut = opt === null;
-    congruent = item.stim?.congruent === true || item.stim?.cond === "congruent";
+    if (item.type === "nback") {
+      const match2 = item.stim?.match === true;
+      nbackMatch = match2;
+      nbackFa = !match2 && opt === 0;
+      nbackMissed = match2 && opt === 1;
+    } else {
+      congruent = item.stim?.congruent === true || item.stim?.cond === "congruent";
+    }
   } else if (item.type === "trail") {
     const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0) : [];
     const rawOrder = Array.isArray(res.order) ? res.order : [];
@@ -24069,6 +24245,7 @@ function scoreAttempt(item, mission, response, rtMs) {
     ...scanFalse !== void 0 ? { scanFalse, scanMissed, scanDistractors, scanSpies } : {},
     ...timedOut !== void 0 ? { timedOut } : {},
     ...congruent !== void 0 ? { congruent } : {},
+    ...nbackMatch !== void 0 ? { match: nbackMatch, nbackFa: nbackFa === true, nbackMissed: nbackMissed === true } : {},
     ...trailNodes !== void 0 ? { trailNodes, trailNodesTotal: trailNodesTotal ?? 0 } : {}
   };
 }
@@ -24141,6 +24318,9 @@ function answerDisplayOf(item) {
   }
   if (item.type === "flanker") {
     return item.correct === 0 ? "\u0686\u067E" : item.correct === 1 ? "\u0631\u0627\u0633\u062A" : null;
+  }
+  if (item.type === "nback") {
+    return item.correct === 0 ? "\u0647\u0645\u0627\u0646 \u0627\u0633\u062A" : item.correct === 1 ? "\u0641\u0631\u0642 \u062F\u0627\u0631\u062F" : null;
   }
   if (item.type === "trail") {
     return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(",") : null;
@@ -24239,6 +24419,36 @@ function trailPrefixPctOf(scored) {
   return round2(nodes / total * 100);
 }
 __name(trailPrefixPctOf, "trailPrefixPctOf");
+function nbackMatchSubset(scored, match2) {
+  return scored.filter((s) => s.match === match2);
+}
+__name(nbackMatchSubset, "nbackMatchSubset");
+function nbackMatchPctOf(scored) {
+  const sub = nbackMatchSubset(scored, true);
+  if (sub.length === 0) return null;
+  return accuracyOf(sub);
+}
+__name(nbackMatchPctOf, "nbackMatchPctOf");
+function nbackNonmatchPctOf(scored) {
+  const sub = nbackMatchSubset(scored, false);
+  if (sub.length === 0) return null;
+  return accuracyOf(sub);
+}
+__name(nbackNonmatchPctOf, "nbackNonmatchPctOf");
+function nbackFaPctOf(scored) {
+  const sub = nbackMatchSubset(scored, false);
+  if (sub.length === 0) return null;
+  const fa2 = sub.filter((s) => s.nbackFa === true).length;
+  return round2(fa2 / sub.length * 100);
+}
+__name(nbackFaPctOf, "nbackFaPctOf");
+function nbackMissPctOf(scored) {
+  const sub = nbackMatchSubset(scored, true);
+  if (sub.length === 0) return null;
+  const miss = sub.filter((s) => s.nbackMissed === true).length;
+  return round2(miss / sub.length * 100);
+}
+__name(nbackMissPctOf, "nbackMissPctOf");
 function medianRtOf(scored) {
   const rts = scored.filter((s) => s.correct && s.rtValid && typeof s.rtMs === "number").map((s) => s.rtMs).sort((a, b) => a - b);
   if (rts.length === 0) return null;
@@ -24324,6 +24534,14 @@ function computeMetricValue(formula, scored) {
       return interferenceMsOf(scored);
     case "trail_prefix":
       return trailPrefixPctOf(scored);
+    case "nback_match":
+      return nbackMatchPctOf(scored);
+    case "nback_nonmatch":
+      return nbackNonmatchPctOf(scored);
+    case "nback_fa":
+      return nbackFaPctOf(scored);
+    case "nback_miss":
+      return nbackMissPctOf(scored);
     default:
       return null;
   }
@@ -24449,7 +24667,7 @@ function containsHomophonePair(letters) {
   });
 }
 __name(containsHomophonePair, "containsHomophonePair");
-var ANSWER_KEYS = /* @__PURE__ */ new Set(["correct", "correct_touch", "answer", "answer_display"]);
+var ANSWER_KEYS = /* @__PURE__ */ new Set(["correct", "correct_touch", "answer", "answer_display", "match"]);
 function stripAnswerKeys(value) {
   if (Array.isArray(value)) return value.map((v) => stripAnswerKeys(v));
   if (value && typeof value === "object") {
@@ -24602,7 +24820,7 @@ function applyAdaptiveLevel(current, decision) {
 __name(applyAdaptiveLevel, "applyAdaptiveLevel");
 
 // src/domain/games/stages.ts
-var STAGE_RULES_VERSION = "1.3.0";
+var STAGE_RULES_VERSION = "1.4.0";
 var STAGE_TOTAL = 5;
 var STAGE_OVERRIDE_KEYS = [
   "response_window_go_ms",
@@ -24824,7 +25042,7 @@ function buildEvidenceDossier(kind, summary, passed) {
     value: windowMiss,
     unit: "percent",
     flag: flagOf(windowMiss, TIMEOUT_OK_PCT, TIMEOUT_WATCH_PCT),
-    note_fa: windowMiss === null ? "\u0627\u06CC\u0646 \u0646\u0634\u0627\u0646\u0647 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0627\u0646\u062A\u062E\u0627\u0628 \u0632\u0645\u0627\u0646\u200C\u062F\u0627\u0631 (\u0627\u0633\u062A\u0631\u0648\u067E/\u0641\u0644\u0627\u0646\u06A9\u0631) \u062A\u0639\u0631\u06CC\u0641 \u0645\u06CC\u200C\u0634\u0648\u062F." : null
+    note_fa: windowMiss === null ? "\u0627\u06CC\u0646 \u0646\u0634\u0627\u0646\u0647 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0627\u0646\u062A\u062E\u0627\u0628 \u0632\u0645\u0627\u0646\u200C\u062F\u0627\u0631 (\u0627\u0633\u062A\u0631\u0648\u067E/\u0641\u0644\u0627\u0646\u06A9\u0631/\u0646\u200C\u067E\u0634\u062A) \u062A\u0639\u0631\u06CC\u0641 \u0645\u06CC\u200C\u0634\u0648\u062F." : null
   });
   const coverage = summary.behavior?.evidence_coverage ?? null;
   const coveragePct = coverage === null ? null : Math.round(coverage * 100);
@@ -24945,6 +25163,7 @@ function summarizeAttempts(scored, evidence = [], blockSize = 24) {
     dprime: null,
     numline: { mean_error_pct: meanNumlineErrorOf(t) },
     scan: scanSummaryOf(t, zeroDenominator),
+    nback: nbackSummaryOf(t, zeroDenominator),
     zero_denominator: zeroDenominator
   };
 }
@@ -24969,6 +25188,32 @@ function scanSummaryOf(t, zeroDenominator) {
   };
 }
 __name(scanSummaryOf, "scanSummaryOf");
+function nbackSummaryOf(t, zeroDenominator) {
+  const trials = t.filter((s) => typeof s.match === "boolean");
+  if (trials.length === 0) return null;
+  const matches = trials.filter((s) => s.match === true);
+  const nonmatches = trials.filter((s) => s.match === false);
+  const correctMatches = matches.filter((s) => s.correct).length;
+  const matchPct = nbackMatchPctOf(trials);
+  const nonmatchPct = nbackNonmatchPctOf(trials);
+  const faPct = nbackFaPctOf(trials);
+  const missPct = nbackMissPctOf(trials);
+  if (matchPct === null || missPct === null) zeroDenominator.push("nback: \u0647\u0645\u0633\u0627\u0646=\u06F0 \u2014 match/miss \u062F\u0631\u0635\u062F\u0634\u0627\u0646 \u062A\u0639\u0631\u06CC\u0641\u200C\u0646\u0634\u062F\u0647");
+  if (nonmatchPct === null || faPct === null) zeroDenominator.push("nback: \u0646\u0627\u0647\u0645\u0633\u0627\u0646=\u06F0 \u2014 nonmatch/fa \u062F\u0631\u0635\u062F\u0634\u0627\u0646 \u062A\u0639\u0631\u06CC\u0641\u200C\u0646\u0634\u062F\u0647");
+  const matchRts = matches.filter((s) => s.correct && s.rtValid && typeof s.rtMs === "number" && s.rtMs >= 0).map((s) => s.rtMs).sort((a, b) => a - b);
+  const medianMatch = matchRts.length === 0 ? null : matchRts.length % 2 === 1 ? matchRts[Math.floor(matchRts.length / 2)] : Math.round((matchRts[matchRts.length / 2 - 1] + matchRts[matchRts.length / 2]) / 2);
+  return {
+    trials: trials.length,
+    matches: matches.length,
+    correct_matches: correctMatches,
+    match_pct: matchPct,
+    nonmatch_pct: nonmatchPct,
+    false_alarm_pct: faPct,
+    miss_pct: missPct,
+    median_rt_match_ms: medianMatch
+  };
+}
+__name(nbackSummaryOf, "nbackSummaryOf");
 
 // src/domain/games/quality.ts
 var QUALITY_RULES_VERSION = "1.0.0";
@@ -25279,6 +25524,44 @@ function parseSequenceRecord(raw2) {
   }
 }
 __name(parseSequenceRecord, "parseSequenceRecord");
+function nbackRotationOffsetOf(seed, anchors) {
+  const valid = anchors.filter((a) => Number.isInteger(a) && a >= 0);
+  if (valid.length === 0) return 0;
+  const rand = mulberry32(seedToNumber(seed));
+  const idx = Math.floor(rand() * valid.length) % valid.length;
+  return valid[idx];
+}
+__name(nbackRotationOffsetOf, "nbackRotationOffsetOf");
+function nbackOrderedItems(items, opts) {
+  const list = Array.from(items);
+  const train = Number.isInteger(opts.train_count) && opts.train_count > 0 ? Math.min(opts.train_count, list.length) : 0;
+  const head = list.slice(0, train);
+  const suffix = list.slice(train);
+  const len = suffix.length;
+  if (len <= 1) return list;
+  const off = Number.isInteger(opts.offset) ? (opts.offset % len + len) % len : 0;
+  return [...head, ...suffix.slice(off), ...suffix.slice(0, off)];
+}
+__name(nbackOrderedItems, "nbackOrderedItems");
+function serializeNbackRotation(record) {
+  return JSON.stringify({ kind: "nback", v: 1, seed: record.seed, train_count: record.train_count, probe_count: record.probe_count, offset: record.offset });
+}
+__name(serializeNbackRotation, "serializeNbackRotation");
+function parseNbackRotation(raw2) {
+  if (!raw2) return null;
+  try {
+    const r = JSON.parse(raw2);
+    if (r.kind !== "nback" || r.v !== 1 || typeof r.seed !== "string") return null;
+    if (typeof r.train_count !== "number" || typeof r.probe_count !== "number" || typeof r.offset !== "number") return null;
+    if (!Number.isInteger(r.train_count) || r.train_count < 0) return null;
+    if (!Number.isInteger(r.probe_count) || r.probe_count < 0) return null;
+    if (!Number.isInteger(r.offset) || r.offset < 0 || r.offset > r.probe_count) return null;
+    return { kind: "nback", v: 1, seed: r.seed, train_count: r.train_count, probe_count: r.probe_count, offset: r.offset };
+  } catch {
+    return null;
+  }
+}
+__name(parseNbackRotation, "parseNbackRotation");
 
 // src/domain/games/registry-extra.ts
 var ENGINE_METRICS = GAME_KIND_IDS.flatMap(
@@ -25968,15 +26251,15 @@ function createGamesService(deps) {
       const sig = typeof stim.signature === "number" && Number.isInteger(stim.signature) && stim.signature > 0 ? stim.signature : 2;
       const label = typeof scanTrain.prompt === "string" && scanTrain.prompt.trim() !== "" ? scanTrain.prompt : "\u062C\u0627\u0633\u0648\u0633\u200C\u0647\u0627 \u0631\u0628\u0627\u062A\u200C\u0647\u0627\u06CC\u06CC \u0628\u0627 " + sig + " \u0622\u0646\u062A\u0646\u200C\u0627\u0646\u062F";
       return {
-        go: { label: "\u062C\u0627\u0633\u0648\u0633 \u2014 \u0631\u0628\u0627\u062A " + sig + " \u0622\u0646\u062A\u0646", stim: { signature: sig } },
+        go: { label: "\u062C\u0627\u0633\u0648\u0633 \u2014 \u0631\u0628\u0627\u062A " + sig + " \u0622\u0646\u062A\u0646", stim: stripAnswerKeys({ signature: sig }) },
         nogo: null,
-        scan: { label, stim: { signature: sig } }
+        scan: { label, stim: stripAnswerKeys({ signature: sig }) }
       };
     }
-    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "trail"));
+    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "trail" || it.type === "nback"));
     if (newTrain && !go && !nogo) {
       const kindKey = newTrain.type;
-      const stim = newTrain.stim ?? {};
+      const stim = stripAnswerKeys(newTrain.stim ?? {});
       const label = typeof newTrain.prompt === "string" && newTrain.prompt.trim() !== "" ? newTrain.prompt : "";
       return {
         go: { label, stim },
@@ -25985,8 +26268,8 @@ function createGamesService(deps) {
       };
     }
     if (!go && !nogo) return null;
-    const goStim = stageStimViewOf(go?.stim, true, stageId);
-    const nogoStim = nogo ? stageStimViewOf(nogo.stim, false, stageId) : null;
+    const goStim = stripAnswerKeys(stageStimViewOf(go?.stim, true, stageId));
+    const nogoStim = nogo ? stripAnswerKeys(stageStimViewOf(nogo.stim, false, stageId)) : null;
     return {
       go: { label: stimLabelOf(goStim), stim: goStim },
       nogo: nogoStim ? { label: stimLabelOf(nogoStim), stim: nogoStim } : null
@@ -26017,6 +26300,7 @@ function createGamesService(deps) {
     const mode = res.pkg.body.mode ?? "training";
     const childAge = state === "child_active" ? await childAgeOf(res.rx.child_id) : null;
     let snap = protocolSnapshotOf(protocolForAge(mode, childAge));
+    if (kind === "nback") snap = applyNbackProtocol(snap, bandForAge2(childAge).band);
     let stage = null;
     let progress = null;
     if (state === "child_active" && mode === "training") {
@@ -26232,8 +26516,28 @@ function createGamesService(deps) {
       const hasProtocol = mode === "assessment" || res.pkg.body.protocol != null;
       const poolGo = touchItems.filter((it) => it.correct_touch === true).length;
       const poolRatio = touchItems.length > 0 ? poolGo / touchItems.length : null;
+      let stageId = null;
+      if (mode === "training") {
+        const sctx = await stageContextOf(res.rx.id, await childAgeOf(res.rx.child_id), res.pkg.body, gameKindOf(mission.game));
+        stageId = sctx?.stage.id ?? null;
+      }
       let sequenceJson = null;
-      if (hasProtocol && touchItems.length >= 4) {
+      const missionKind = gameKindOf(mission.game);
+      if (missionKind === "nback") {
+        const flowItems = (mission.items ?? []).filter((it) => itemInStageFor(missionKind, it, stageId));
+        const trainCount = flowItems.filter((it) => it.phase === "train").length;
+        const probeSuffix = flowItems.slice(trainCount);
+        const anchors = probeSuffix.map((it, i) => (it.stim ?? {}).rot_start === true ? i : -1).filter((i) => i >= 0);
+        const offset = nbackRotationOffsetOf(id, anchors);
+        sequenceJson = serializeNbackRotation({
+          kind: "nback",
+          v: 1,
+          seed: id,
+          train_count: trainCount,
+          probe_count: probeSuffix.length,
+          offset
+        });
+      } else if (hasProtocol && touchItems.length >= 4) {
         const prot = protocolForAge(mode, await childAgeOf(res.rx.child_id));
         const seq = generateSequence({
           seed: id,
@@ -26244,11 +26548,6 @@ function createGamesService(deps) {
           blockSize: prot.params.block_size.value
         });
         sequenceJson = serializeSequence(seq);
-      }
-      let stageId = null;
-      if (mode === "training") {
-        const sctx = await stageContextOf(res.rx.id, await childAgeOf(res.rx.child_id), res.pkg.body, gameKindOf(mission.game));
-        stageId = sctx?.stage.id ?? null;
       }
       await db.execute(
         `INSERT INTO game_sessions (id, mission_id, state, validity, purpose, sequence_json, stage_id, started_at, last_activity_at)
@@ -26279,7 +26578,9 @@ function createGamesService(deps) {
       next = unansweredOf((it) => it.correct_touch === true === (kindTrial === "go")) ?? unansweredOf(() => true);
     }
     if (!next) {
-      next = stageItems.find((it) => !doneIds.has(it.id));
+      const rot = kind === "nback" ? parseNbackRotation(session.sequence_json) : null;
+      const flow = rot ? nbackOrderedItems(stageItems, { train_count: rot.train_count, offset: rot.offset }) : stageItems;
+      next = flow.find((it) => !doneIds.has(it.id));
     }
     await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf2(now()), session.id]);
     let view = null;
