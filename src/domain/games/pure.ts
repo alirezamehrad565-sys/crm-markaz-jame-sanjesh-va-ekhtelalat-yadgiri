@@ -21,7 +21,8 @@ export const DEFAULT_RT_FLOOR_MS: Record<MissionItem['type'], number> = {
   scan: GAME_KINDS.scan.rt_floor_ms,         // حملهٔ جاسوس‌ها — کف نخستین لمس موج؛ زیر آن حدس است
   stroop: GAME_KINDS.stroop.rt_floor_ms,       // حقه‌باز رنگ‌ها — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
   flanker: GAME_KINDS.flanker.rt_floor_ms,      // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-  trail: GAME_KINDS.trail.rt_floor_ms        // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
+  trail: GAME_KINDS.trail.rt_floor_ms,        // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
+  nback: GAME_KINDS.nback.rt_floor_ms         // ن‌پشت/آلبوم خرچنگ — لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
 };
 
 /** آستانهٔ بیکاری برای جلسهٔ ناقص (§۶) */
@@ -79,6 +80,12 @@ export interface ScoredAttempt {
   timedOut?: boolean;
   /** محرک هم‌خوان (استروپ: واژه=جوهر · فلانکر: بدون فریب) — مبنای سنجهٔ تداخل */
   congruent?: boolean;
+  /** ن‌پشت (۱.۲۵.۴۰) — آیتم همسان بود؟ (فقط سرور؛ از stim.match) — مبنای جمع‌های چهارگانه */
+  match?: boolean;
+  /** هشدار کاذب ن‌پشت — گفتن «همان است» برای ناهمسان */
+  nbackFa?: boolean;
+  /** جاانداختن همسان ن‌پشت — گفتن «فرق دارد» برای همسان */
+  nbackMissed?: boolean;
   /** رد پای دزد — طول پیش‌ماند صحیح و طول کل رد (۱.۲۵.۳۲) */
   trailNodes?: number;
   trailNodesTotal?: number;
@@ -113,6 +120,9 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
   let scanSpies: number | undefined;
   let timedOut: boolean | undefined;
   let congruent: boolean | undefined;
+  let nbackMatch: boolean | undefined;
+  let nbackFa: boolean | undefined;
+  let nbackMissed: boolean | undefined;
   let trailNodes: number | undefined;
   let trailNodesTotal: number | undefined;
 
@@ -129,14 +139,23 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
       correct = Math.abs(chosen - item.correct) <= tol;
       errorPct = numlineErrorPct(chosen, item.correct, item.range);
     }
-  } else if (item.type === 'stroop' || item.type === 'flanker') {
-    // انتخاب زمان‌دار (۱.۲۵.۳۲) — استروپ/فلانکر: پنجرهٔ پاسخ از خود آیتم؛ بی‌لمس = اُمیشن،
+  } else if (item.type === 'stroop' || item.type === 'flanker' || item.type === 'nback') {
+    // انتخاب زمان‌دار (۱.۲۵.۳۲/۱.۲۵.۴۰) — پنجرهٔ پاسخ از خود آیتم؛ بی‌لمس = اُمیشن،
     // کمسیون نداریم (پاسخ به گزینهٔ نادرست در accuracy خلاصه می‌شود، مثل choice)
     const opt = typeof res.option === 'number' && Number.isInteger(res.option) ? res.option : null;
     correct = opt !== null && opt === item.correct;
     omission = opt === null;
     timedOut = opt === null;
-    congruent = item.stim?.congruent === true || item.stim?.cond === 'congruent';
+    if (item.type === 'nback') {
+      // ن‌پشت — دوگزینه‌ای: ۰=«همان است» / ۱=«فرق دارد»؛ حکم همسانی فقط از stim
+      // سرور-خوانده می‌شود (match هرگز به کلاینت نمی‌رود)؛ FA/جاخوردن فقط روی پاسخِ داده‌شده تعریف است
+      const match = item.stim?.match === true;
+      nbackMatch = match;
+      nbackFa = !match && opt === 0;
+      nbackMissed = match && opt === 1;
+    } else {
+      congruent = item.stim?.congruent === true || item.stim?.cond === 'congruent';
+    }
   } else if (item.type === 'trail') {
     // رد پای دزد (۱.۲۵.۳۲) — ترتیب دقیق گره‌ها؛ طول پیش‌ماند صحیح برای سنجهٔ درصدی رد
     const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0) : [];
@@ -192,6 +211,7 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
     ...(scanFalse !== undefined ? { scanFalse, scanMissed: scanMissed, scanDistractors: scanDistractors, scanSpies: scanSpies } : {}),
     ...(timedOut !== undefined ? { timedOut } : {}),
     ...(congruent !== undefined ? { congruent } : {}),
+    ...(nbackMatch !== undefined ? { match: nbackMatch, nbackFa: nbackFa === true, nbackMissed: nbackMissed === true } : {}),
     ...(trailNodes !== undefined ? { trailNodes, trailNodesTotal: trailNodesTotal ?? 0 } : {})
   };
 }
@@ -249,6 +269,10 @@ export function answerDisplayOf(item: MissionItem): string | null {
   }
   if (item.type === 'flanker') {
     return item.correct === 0 ? 'چپ' : item.correct === 1 ? 'راست' : null;
+  }
+  if (item.type === 'nback') {
+    // دوگزینه‌ای ن‌پشت — گزینهٔ ۰ «همان است» و ۱ «فرق دارد»؛ فقط تمرین نمایش داده می‌شود
+    return item.correct === 0 ? 'همان است' : item.correct === 1 ? 'فرق دارد' : null;
   }
   if (item.type === 'trail') {
     // CSV اندیس‌های ترتیب درست — مثل جاسوس‌های جاماندهٔ scan؛ فقط تمرین
@@ -377,6 +401,44 @@ export function trailPrefixPctOf(scored: ScoredAttempt[]): number | null {
   return round2((nodes / total) * 100);
 }
 
+// ─── فرمول‌های ن‌پشت (۱.۲۵.۴۰) — قاعدهٔ دامنهٔ صفر عیناً: بدون آیتم همسان/ناهمسان = null،
+// نه صفرِ ساختگی. مخرج match = آیتم‌های همسان، مخرج nonmatch/fa = ناهمسان‌ها؛ ردیف‌های
+// بدون پرچم match (سایر نوع‌ها) به هیچ جمعی وارد نمی‌شوند.
+
+function nbackMatchSubset(scored: ScoredAttempt[], match: boolean): ScoredAttempt[] {
+  return scored.filter((s) => s.match === match);
+}
+
+/** درصد پاسخ درست به همسان‌ها (Hit%) — بدون آیتم همسان: null */
+export function nbackMatchPctOf(scored: ScoredAttempt[]): number | null {
+  const sub = nbackMatchSubset(scored, true);
+  if (sub.length === 0) return null;
+  return accuracyOf(sub);
+}
+
+/** درصد پاسخ درست به ناهمسان‌ها (Correct Rejection%) — بدون ناهمسان: null */
+export function nbackNonmatchPctOf(scored: ScoredAttempt[]): number | null {
+  const sub = nbackMatchSubset(scored, false);
+  if (sub.length === 0) return null;
+  return accuracyOf(sub);
+}
+
+/** درصد هشدار کاذب (FA%) — گفتن «همان است» برای ناهمسان؛ بدون ناهمسان: null */
+export function nbackFaPctOf(scored: ScoredAttempt[]): number | null {
+  const sub = nbackMatchSubset(scored, false);
+  if (sub.length === 0) return null;
+  const fa = sub.filter((s) => s.nbackFa === true).length;
+  return round2((fa / sub.length) * 100);
+}
+
+/** درصد جاانداختن همسان (Miss%) — گفتن «فرق دارد» برای همسان؛ بدون همسان: null */
+export function nbackMissPctOf(scored: ScoredAttempt[]): number | null {
+  const sub = nbackMatchSubset(scored, true);
+  if (sub.length === 0) return null;
+  const miss = sub.filter((s) => s.nbackMissed === true).length;
+  return round2((miss / sub.length) * 100);
+}
+
 export function medianRtOf(scored: ScoredAttempt[]): number | null {
   const rts = scored
     .filter((s) => s.correct && s.rtValid && typeof s.rtMs === 'number')
@@ -461,6 +523,10 @@ export function computeMetricValue(formula: string, scored: ScoredAttempt[]): nu
     case 'incongruent_acc': return incongruentAccPctOf(scored);
     case 'interference_ms': return interferenceMsOf(scored);
     case 'trail_prefix': return trailPrefixPctOf(scored);
+    case 'nback_match': return nbackMatchPctOf(scored);
+    case 'nback_nonmatch': return nbackNonmatchPctOf(scored);
+    case 'nback_fa': return nbackFaPctOf(scored);
+    case 'nback_miss': return nbackMissPctOf(scored);
     default: return null;
   }
 }
@@ -647,7 +713,7 @@ export function containsHomophonePair(letters: string[]): boolean {
 
 // ─── پاک‌سازی آیتم برای کلاینت (§۵: کلید پاسخ هرگز نمی‌رود) ───
 
-const ANSWER_KEYS = new Set(['correct', 'correct_touch', 'answer', 'answer_display']);
+const ANSWER_KEYS = new Set(['correct', 'correct_touch', 'answer', 'answer_display', 'match']);
 
 /** هر کلید حاوی «correct» یا پاسخ، از درخت حذف می‌شود */
 export function stripAnswerKeys<T>(value: T): T {

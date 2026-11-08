@@ -109,7 +109,7 @@ const TRAINING_PARAMS: Record<AgeBandId, ProtocolSpec['params']> = {
     response_window_go_ms: PARAM(1500, 'پنجرهٔ متعارف گو/نوگو سنین مدرسه — پاسخ‌های زیر کف ۱۵۰ms جداگانه فیلتر می‌شوند (§۸)', 'pilot'),
     response_window_nogo_ms: PARAM(1500, 'هم‌طول گو — مقایسه‌پذیری بین‌سنی', 'proposed'),
     isi_min_ms: PARAM(800, 'ISI کمی کوتاه‌تر برای سنین بالاتر؛ فشار سرعت متعادل', 'proposed'),
-    isi_max_ms: PARAM(1200, 'بازهٔ ۰٫۸–۱٫۲ ثانیه — تنوع برای شکستن انتظار زمانی ثابت', 'proposed'),
+    isi_max_ms: PARAM(1200, 'بازهٔ ۰٫۸–۱٫۲ ثانیه — تنوع برای گسستن انتظار زمانی ثابت', 'proposed'),
     fixation_ms: PARAM(400, 'مکث خنثی پیش از نمایش — هم‌طول دو باند برای مقایسه‌پذیری', 'proposed'),
     go_ratio: PARAM(0.75, 'نسبت ~۳:۱ متعارف؛ با نسخهٔ پروتکل ثابت می‌ماند', 'pilot'),
     max_consecutive_same: PARAM(3, 'همان استدلال ۴–۶ سال', 'proposed'),
@@ -173,6 +173,69 @@ export function protocolForAge(mode: ProtocolMode, age: number | null | undefine
 /** گارد سروری: نسخهٔ پروتکلِ بسته باید با نسخهٔ جاری هم‌خوان باشد، وگرنه انتشار رد می‌شود */
 export function isProtocolVersionSupported(v: string | undefined | null): boolean {
   return typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v) && v === PROTOCOL_VERSION;
+}
+
+// ─── پروتکل «ن‌پشت» / آلبوم خرچنگ (۱.۲۵.۴۰) ───
+// همان قرارداد پروتکل نسخه‌دار گو/نوگو، برای نوع‌بازی nback: پارامترهای زمان‌بندی
+// دنبالهٔ n-back با مبنا و وضعیت صادقانه. چیزی که پروتکل نمی‌گوید روی خود آیتم
+// authored می‌نشیند (پنجرهٔ پاسخ = stim.window_ms آیتم) — پارامتر این‌جا «پایهٔ مرجع»
+// است تا کلاینت و ممیزی یک مرجع مشترک داشته باشند.
+// هر تغییر عددی در این جدول = بامپ NBACK_PROTOCOL_VERSION تا مقایسهٔ بین‌پروتکلی ممنوع بماند.
+
+/** شناسهٔ پروتکل ن‌پشت در رجیستری بسته‌ها */
+export const NBACK_PROTOCOL_ID = 'nback-standard';
+
+/** نسخهٔ پروتکل ن‌پشت — مستقل از پروتکل گو/نوگو تا تغییر یکی دیگری را نپاشد */
+export const NBACK_PROTOCOL_VERSION = '1.0.0';
+
+/** کلیدهای پارامتر ن‌پشت — فقط این‌ها از پروتکل می‌آیند؛ بقیهٔ snapshot دست‌نخورده می‌ماند */
+const NBACK_PARAM_KEYS = [
+  'isi_min_ms',
+  'isi_max_ms',
+  'fixation_ms',
+  'block_size',
+  'match_ratio',
+  'max_consecutive_match',
+  'response_window_ms'
+] as const;
+
+/** جدول پارامترهای ن‌پشت برای هر باند سنی — همهٔ وضعیت‌ها proposed تا پیلوت مرکز (G6)؛
+ *  صادره‌شده برای بازبینی/آزمون — مقدار عملیاتی فقط از nbackParamsOf خوانده شود */
+export const NBACK_PARAMS: Record<AgeBandId, Record<(typeof NBACK_PARAM_KEYS)[number], ProtocolParam>> = {
+  '4-6': {
+    isi_min_ms: PARAM(2200, 'ISI بلندتر برای ۴–۶ سال — بار نگه‌داشت n قدم عقب‌تر در این سن بیشتر است؛ حد پایین محافظه‌کارانه', 'proposed'),
+    isi_max_ms: PARAM(2800, 'بازهٔ ۲٫۲–۲٫۸ ثانیه — تنوع برای گسستن انتظار زمانی ثابت', 'proposed'),
+    fixation_ms: PARAM(400, 'مکث خنثی پیش از نمایش — هم‌خوان با دیگر نوع‌بازی‌ها', 'proposed'),
+    block_size: PARAM(30, 'جریان بی‌استراحت بلوکی ۳۰تایی — انسجام دنبالهٔ n-back از استراحت درون‌دنباله‌ای می‌شکند', 'proposed'),
+    match_ratio: PARAM(0.3, 'نسبت متعارف همسان در n-back ~۳۰٪ — بالای حدس و زیر سقف تکرار قابل حفظ‌کردن', 'proposed'),
+    max_consecutive_match: PARAM(2, 'بیش از دو همسانِ پیاپی، پاسخ به قاعده را به حفظ کوتاه‌مدت تبدیل می‌کند', 'proposed'),
+    response_window_ms: PARAM(3800, 'پنجرهٔ مرجع پاسخ ۴–۶ سال — کودک باید حکم «همان است/فرق دارد» را بی‌فشار بدهد؛ عملیاتی روی stim.window_ms آیتم', 'proposed')
+  },
+  '7-12': {
+    isi_min_ms: PARAM(1800, 'ISI کمی کوتاه‌تر برای سنین مدرسه — فشار حافظهٔ کاری متعادل', 'proposed'),
+    isi_max_ms: PARAM(2400, 'بازهٔ ۱٫۸–۲٫۴ ثانیه — تنوع برای گسستن انتظار زمانی ثابت', 'proposed'),
+    fixation_ms: PARAM(400, 'مکث خنثی پیش از نمایش — هم‌طول دو باند برای مقایسه‌پذیری', 'proposed'),
+    block_size: PARAM(30, 'جریان بی‌استراحت بلوکی ۳۰تایی — هم‌شکل دو باند برای مقایسه', 'proposed'),
+    match_ratio: PARAM(0.3, 'نسبت متعارف همسان ~۳۰٪ — با نسخهٔ پروتکل ثابت می‌ماند', 'proposed'),
+    max_consecutive_match: PARAM(2, 'همان استدلال ۴–۶ سال', 'proposed'),
+    response_window_ms: PARAM(3400, 'پنجرهٔ مرجع پاسخ سنین مدرسه — کمی تنگ‌تر از ۴–۶ سال؛ عملیاتی روی stim.window_ms آیتم', 'proposed')
+  }
+};
+
+/** پارامترهای عملیاتی ن‌پشت برای یک باند سنی — اعداد خالص برای snapshot/کلاینت */
+export function nbackParamsOf(band: AgeBandId): Record<string, number> {
+  const table = NBACK_PARAMS[band];
+  const out: Record<string, number> = {};
+  for (const k of NBACK_PARAM_KEYS) out[k] = table[k].value;
+  return out;
+}
+
+/**
+ * بازنویسی snapshot پروتکل با پارامترهای ن‌پشت — شناسه/نسخهٔ پروتکل ن‌پشت و باند سنی
+ * صریح می‌شود؛ mode/behavior از snapshot مبدأ می‌ماند. برای هر نوع دیگری بی‌اثر است.
+ */
+export function applyNbackProtocol(snap: ProtocolSnapshot, band: AgeBandId): ProtocolSnapshot {
+  return { ...snap, protocol_id: NBACK_PROTOCOL_ID, version: NBACK_PROTOCOL_VERSION, age_band: band, params: { ...snap.params, ...nbackParamsOf(band) } };
 }
 
 /** پروفایل سریالی پروتکل برای ذخیره در جلسه — فقط اعداد عملیاتی، بدون متن مبنا (صرفهٔ ذخیره‌سازی) */
