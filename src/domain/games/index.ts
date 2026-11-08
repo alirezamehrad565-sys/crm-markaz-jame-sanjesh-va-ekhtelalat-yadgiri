@@ -1,6 +1,17 @@
 // index.ts — ماژول بازی‌های درمانی (M1 / ۱.۲۵.۰۷)
 export { createGamesService } from './service';
 export { registerGamesRoutes, registerGamesPublicRoutes } from './routes';
+// رجیستری نوع-محور (G4الف/رفع P3-4) — نقشهٔ تک‌منبع هر نوع‌بازی برای مصرف بیرون ماژول
+export {
+  GAME_KIND_IDS,
+  GAME_KINDS,
+  gameKindOf,
+  ENGINE_ONLY_FORMULAS,
+  type GameKind,
+  type GameKindSpec,
+  type StageRule,
+  type ThresholdParam
+} from './registry';
 export {
   TONE_RULES_BASE,
   DEFAULT_RT_FLOOR_MS,

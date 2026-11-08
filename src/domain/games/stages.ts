@@ -9,14 +9,25 @@
 //   · ستارهٔ هر مرحله = بهترین ستارهٔ تاریخچه (پسرفت ستاره را پاک نمی‌کند)
 //   · کلید خاموشی درمانگر (stages_enabled=false) همهٔ نظام را خاموش می‌کند
 //   · هیچ برچسب/نتیجهٔ بالینی — «مرحله» روایت بازی است، نه سنجهٔ تشخیصی
+//
+// G4الف (رفع P3-4): فهرست مرحله‌ها، آستانه‌ها، اهرم‌های بانک و سنجه‌های موتورمحور
+// هر نوع‌بازی به رجیستری نوع-محور (registry.ts) منتقل شد — این فایل رفتار مرحله‌ها
+// و ستاره‌ها را اجرا می‌کند و داده‌ها را با lookup یک‌خطی از نقشه می‌خواند؛
+// خروجی همهٔ توابع عیناً پیشین است (بامپ نسخه/عدد در این جابه‌جایی صفر بود).
 
+import { GAME_KINDS, type AccuracyStageRule, type GameKind } from './registry';
 import type { AgeBandId } from './protocol';
 
+// نام نوع و تجزیهٔ kind تک‌منبعشان رجیستری است — این‌جا برای سازگاری فراخوانی‌های موجود صادر می‌شود
+export { GAME_KIND_IDS, gameKindOf } from './registry';
+export type { GameKind } from './registry';
+
 /** نسخهٔ قواعد مرحله‌ها — هر تغییر عددی در این فایل باید این نسخه را بامپ کند.
- *  ۱.۱.۰ (۱.۲۵.۲۸): قواعد خط عددی («جادهٔ عددها») افزوده شد — عددهای گو/نوگو دست‌نخورده.
+ *  ۱.۱.۰ (۱.۲۵.۲۸): قواعد خط عددی («جادهٔ عددها») افزوده شد — عددهای گو/نوگو دست‌خورده.
  *  ۱.۲.۰ (۱.۲۵.۳۰): قواعد «حملهٔ جاسوس‌ها» (scan) افزوده شد — دو قاعدهٔ قبلی عیناً.
  *  ۱.۳.۰ (۱.۲۵.۳۲): قواعد سه بازی تازه (stroop/flanker/trail) افزوده شد + اهرم تندشدن موج
- *  اسکن (SCAN_STAGE_WAVE_MS — فقط نمایش، نه محرک) — سه قاعدهٔ قبلی عیناً. */
+ *  اسکن (SCAN_STAGE_WAVE_MS — فقط نمایش، نه محرک) — سه قاعدهٔ قبلی عیناً.
+ *  ۱.۲۵.۳۹ (G4الف): جابه‌جایی به رجیستری نوع-محور — صفر تغییر عددی؛ نسخه عیناً. */
 export const STAGE_RULES_VERSION = '1.3.0';
 
 /** تعداد مرحله‌های مسیر تمرین */
@@ -54,192 +65,19 @@ export interface StageThresholds {
   star3: { go_pct: number; nogo_pct: number };
 }
 
+// آستانه‌ها از رجیستری می‌آیند — مقدارها عیناً ۷۰/۶۰ · ۸۰/۷۵ · ۹۰/۸۵ (۱.۲۵.۲۲)
+const GONOGO_RULE = GAME_KINDS.gonogo.stage_rule;
+
 export const STAGE_THRESHOLDS: StageThresholds = {
-  pass: { go_pct: 70, nogo_pct: 60 },
-  star2: { go_pct: 80, nogo_pct: 75 },
-  star3: { go_pct: 90, nogo_pct: 85 }
+  pass: { go_pct: GONOGO_RULE.pass.go_pct.value, nogo_pct: GONOGO_RULE.pass.nogo_pct.value },
+  star2: { go_pct: GONOGO_RULE.star2.go_pct.value, nogo_pct: GONOGO_RULE.star2.nogo_pct.value },
+  star3: { go_pct: GONOGO_RULE.star3.go_pct.value, nogo_pct: GONOGO_RULE.star3.nogo_pct.value }
 };
 
-// ─── پنج مرحلهٔ مسیر تمرین — پارامترها بر پایهٔ باند سنی (۴–۶ نرم‌تر از ۷–۱۲) ───
-
-const STAGES_4_6: StageDef[] = [
-  {
-    id: 's1', index: 1, title_fa: 'گرم‌کردن', goal_fa: 'با ستاره‌ها دوست شو؛ آهسته و خوش‌حال.', difficulty: 1,
-    overrides: { response_window_go_ms: 2400, response_window_nogo_ms: 2400, isi_min_ms: 1200, isi_max_ms: 1800, fixation_ms: 400 }
-  },
-  {
-    id: 's2', index: 2, title_fa: 'تمرین', goal_fa: 'همان‌طور که یاد گرفتی ادامه بده.', difficulty: 2,
-    overrides: {} // پارامترهای پایهٔ پروتکل — بدون بازنویسی
-  },
-  {
-    id: 's3', index: 3, title_fa: 'تندتر', goal_fa: 'حالا کمی تندتر می‌شود؛ حواست کنار نباشه.', difficulty: 3,
-    overrides: { response_window_go_ms: 1800, response_window_nogo_ms: 1800, isi_min_ms: 900, isi_max_ms: 1350, fixation_ms: 400 }
-  },
-  {
-    id: 's4', index: 4, title_fa: 'دقت', goal_fa: 'چشم‌هایت تیز است؛ فقط وقتی مطمئنی لمس کن.', difficulty: 4,
-    overrides: { response_window_go_ms: 1600, response_window_nogo_ms: 1600, isi_min_ms: 850, isi_max_ms: 1250, fixation_ms: 350 }
-  },
-  {
-    id: 's5', index: 5, title_fa: 'قهرمان', goal_fa: 'سریع‌ترین مرحله! تو آماده‌ای.', difficulty: 5,
-    overrides: { response_window_go_ms: 1400, response_window_nogo_ms: 1400, isi_min_ms: 800, isi_max_ms: 1200, fixation_ms: 350 }
-  }
-];
-
-const STAGES_7_12: StageDef[] = [
-  {
-    id: 's1', index: 1, title_fa: 'گرم‌کردن', goal_fa: 'با ستاره‌ها دوست شو؛ آهسته و خوش‌حال.', difficulty: 1,
-    overrides: { response_window_go_ms: 1900, response_window_nogo_ms: 1900, isi_min_ms: 1000, isi_max_ms: 1400, fixation_ms: 400 }
-  },
-  {
-    id: 's2', index: 2, title_fa: 'تمرین', goal_fa: 'همان‌طور که یاد گرفتی ادامه بده.', difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: 's3', index: 3, title_fa: 'تندتر', goal_fa: 'حالا کمی تندتر می‌شود؛ حواست کنار نباشه.', difficulty: 3,
-    overrides: { response_window_go_ms: 1300, response_window_nogo_ms: 1300, isi_min_ms: 700, isi_max_ms: 1050, fixation_ms: 400 }
-  },
-  {
-    id: 's4', index: 4, title_fa: 'دقت', goal_fa: 'چشم‌هایت تیز است؛ فقط وقتی مطمئنی لمس کن.', difficulty: 4,
-    overrides: { response_window_go_ms: 1150, response_window_nogo_ms: 1150, isi_min_ms: 650, isi_max_ms: 1000, fixation_ms: 350 }
-  },
-  {
-    id: 's5', index: 5, title_fa: 'قهرمان', goal_fa: 'سریع‌ترین مرحله! تو آماده‌ای.', difficulty: 5,
-    overrides: { response_window_go_ms: 1000, response_window_nogo_ms: 1000, isi_min_ms: 600, isi_max_ms: 900, fixation_ms: 350 }
-  }
-];
-
-const STAGES: Record<AgeBandId, StageDef[]> = { '4-6': STAGES_4_6, '7-12': STAGES_7_12 };
-
-// ─── پنج مرحلهٔ «جادهٔ عددها» (۱.۲۵.۲۸) — خط عددی؛ اهرم سختی = گسترهٔ جاده (NUMLINE_STAGE_MAX) ───
-// هر مرحله یک جادهٔ تازه است که کودک می‌بیند؛ بدون بازنویسی پارامتر زمان‌بندی —
-// اهرم فقط انتخاب آیتم از بانک authored است؛ کلید پاسخ هرگز این‌جا نیست.
-
-const NUMLINE_STAGES: StageDef[] = [
-  {
-    id: 's1', index: 1, title_fa: 'جادهٔ کوچک', goal_fa: 'عددهای ۰ تا ۱۰؛ آهسته و خوش‌حال.', difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: 's2', index: 2, title_fa: 'جادهٔ شهر', goal_fa: 'حالا تا ۲۰ ادامه دارد؛ همان‌طور که یاد گرفتی.', difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: 's3', index: 3, title_fa: 'جادهٔ بلند', goal_fa: 'جاده تا ۵۰ می‌رسد؛ چشم‌هایت تیز است.', difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: 's4', index: 4, title_fa: 'جادهٔ بزرگ', goal_fa: 'جاده تا ۱۰۰! تو خیلی راه رفته‌ای.', difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: 's5', index: 5, title_fa: 'جادهٔ قهرمان‌ها', goal_fa: 'همهٔ جاده‌ها با هم — تو آماده‌ای!', difficulty: 5,
-    overrides: {}
-  }
-];
-
-// ─── پنج مرحلهٔ «حملهٔ جاسوس‌ها» (۱.۲۵.۳۰) — نوع scan؛ حس عدی در قصهٔ صحنه، نه در گفتار با کودک ───
-// اهرم سختی = اندازهٔ موج (شمار خانه‌ها) با پیش‌ماندهٔ scanItemInStage روی بانک authored؛
-// امضای هدف (شمار آنتن) هرگز بازنویسی نمی‌شود — قاعدهٔ d2: تمرکز روی همان بعد حواس‌پرتی.
-
-const SWARM_STAGES: StageDef[] = [
-  {
-    id: 's1', index: 1, title_fa: 'کاوش شب اول', goal_fa: 'جاسوس‌ها کم‌اند؛ آهسته و خوش‌حال بگیرشان.', difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: 's2', index: 2, title_fa: 'گشت دوم', goal_fa: 'موج بزرگ‌تر شده؛ همان قاعده، چشم‌های تیز.', difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: 's3', index: 3, title_fa: 'رگبار سوم', goal_fa: 'اسکادران کامل آمده؛ آرام باش و دقیق بگیر.', difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: 's4', index: 4, title_fa: 'حملهٔ بزرگ', goal_fa: 'همهٔ جاسوس‌های ۲ آنتن را بگیر؛ هم‌نوع‌ها را دست نزن.', difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: 's5', index: 5, title_fa: 'دفاع قهرمان‌ها', goal_fa: 'همهٔ موج‌ها با هم — تو نگهبان سیاره‌ای!', difficulty: 5,
-    overrides: {}
-  }
-];
-
-// ─── پنج مرحلهٔ «حقه‌باز رنگ‌ها» (۱.۲۵.۳۲) — نوع stroop؛ حس عدی در قصهٔ صحنه (حقه‌باز)، نه در گفتار ───
-// اهرم سختی = آمیختهٔ هم‌خوان/ناهم‌خوان و پنجرهٔ پاسخ، همه authored روی بانک (STROOP_STAGE_BANDS
-// فقط بانک هر مرحله را انتخاب می‌کند؛ محرک و کلید هرگز بازنویسی نمی‌شود).
-
-const STROOP_STAGES: StageDef[] = [
-  {
-    id: 's1', index: 1, title_fa: 'غار آرام', goal_fa: 'واژه‌ها هنوز رنگِ خودشان را دارند؛ با طمأنینه لمس کن.', difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: 's2', index: 2, title_fa: 'رنگ‌ها قاطی می‌شوند', goal_fa: 'حقه‌باز شروع کرده؛ فقط به رنگِ جوهر نگاه کن.', difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: 's3', index: 3, title_fa: 'حقهٔ تمام‌عیار', goal_fa: 'واژه‌ها همیشه دروغ می‌گویند؛ رنگِ واقعی را بگیر.', difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: 's4', index: 4, title_fa: 'تلهٔ معنی واژه', goal_fa: 'چشم‌هایت تیز است؛ معنی واژه فریبت نمی‌دهد.', difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: 's5', index: 5, title_fa: 'قهرمان رنگ‌ها', goal_fa: 'همهٔ حقه‌های غار با هم — تو آماده‌ای!', difficulty: 5,
-    overrides: {}
-  }
-];
-
-// ─── پنج مرحلهٔ «گلهٔ فریبکار» (۱.۲۵.۳۲) — نوع flanker؛ گرگ واقعی وسط گلهٔ قلابی ───
-
-const FLANKER_STAGES: StageDef[] = [
-  {
-    id: 's1', index: 1, title_fa: 'گلهٔ آرام', goal_fa: 'همهٔ گرگ‌ها یک‌سو نگاه می‌کنند؛ آهسته و خوش‌حال.', difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: 's2', index: 2, title_fa: 'گرگ‌های اضافه', goal_fa: 'گله شلوغ‌تر شده؛ فقط نگاه گرگِ وسط.', difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: 's3', index: 3, title_fa: 'نگاه‌های فریبکار', goal_fa: 'برخی گرگ‌ها قلابی‌اند؛ سرشان به آن‌سو نگاه می‌کند.', difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: 's4', index: 4, title_fa: 'گلهٔ فریبکار', goal_fa: 'همه به یک‌سو نگاه می‌کنند جز گرگِ واقعی؛ حواست کنار نره.', difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: 's5', index: 5, title_fa: 'قهرمان دشت', goal_fa: 'همهٔ گله‌ها با هم — تو نگهبان دشتی!', difficulty: 5,
-    overrides: {}
-  }
-];
-
-// ─── پنج مرحلهٔ «رد پای دزد» (۱.۲۵.۳۲) — نوع trail؛ اهرم = طول رد و آمیختهٔ عدد/حرف ───
-
-const TRAIL_STAGES: StageDef[] = [
-  {
-    id: 's1', index: 1, title_fa: 'رد کوتاه', goal_fa: 'ردپاها کم‌اند؛ به ترتیب شماره برو.', difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: 's2', index: 2, title_fa: 'رد بلندتر', goal_fa: 'یک قدم بیشتر؛ رد را کامل کن.', difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: 's3', index: 3, title_fa: 'رد بلند', goal_fa: 'ردپاها بیشتر شده‌اند؛ رد گم نشود.', difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: 's4', index: 4, title_fa: 'رد گم‌شده', goal_fa: 'عدد و حرف یک‌درمیان شده؛ با دقت قدم بزن.', difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: 's5', index: 5, title_fa: 'قهرمان رد', goal_fa: 'همهٔ ردها با هم — تو تعقیب‌کننده‌ای!', difficulty: 5,
-    overrides: {}
-  }
-];
+/** فهرست مرحله‌های هر نوع‌بازی — lookup از رجیستری؛ شناسه‌های s1..s5 در همهٔ نوع‌ها هم‌شکل‌اند */
+function stageListOf(kind: GameKind, band: AgeBandId) {
+  return GAME_KINDS[kind].stageList(band);
+}
 
 /** مرحله از جایگاه یک‌مبنا — باند سنی و نوع‌بازی جدی گرفته می‌شود */
 export function stageByIndex(band: AgeBandId, index: number, kind: GameKind = 'gonogo'): StageDef | null {
@@ -252,18 +90,6 @@ export function stageById(band: AgeBandId, id: string | null | undefined, kind: 
   if (!id || typeof id !== 'string') return null;
   const list = stageListOf(kind, band);
   return list.find((s) => s.id === id) ?? null;
-}
-
-/** فهرست مرحله‌های هر نوع‌بازی — شناسه‌های s1..s5 در همهٔ نوع‌ها هم‌شکل‌اند */
-function stageListOf(kind: GameKind, band: AgeBandId): StageDef[] {
-  switch (kind) {
-    case 'numline': return NUMLINE_STAGES;
-    case 'scan': return SWARM_STAGES;
-    case 'stroop': return STROOP_STAGES;
-    case 'flanker': return FLANKER_STAGES;
-    case 'trail': return TRAIL_STAGES;
-    default: return STAGES[band] ?? STAGES['7-12'];
-  }
 }
 
 /** بازنویسی پارامترهای پروتکل با تنظیمات مرحله — فقط کلیدهای مجاز؛ بقیه دست‌نخورده */
@@ -315,54 +141,42 @@ export function stageOutcomeOf(
 // با آستانهٔ پذیرش سن‌محور خودش (tolerance authored روی آیتم‌ها). اهرم مرحله = انتخاب
 // آیتم از بانک authored با پیش‌ماندهٔ numlineItemInStage — محرک authored هرگز بازنویسی نمی‌شود.
 
-/** نوع‌بازی از فیلد mission.game — ناشناخته = گونوگو (سازگاری با بسته‌های قدیمی) */
-export type GameKind = 'gonogo' | 'numline' | 'scan' | 'stroop' | 'flanker' | 'trail';
-export function gameKindOf(v: string | null | undefined): GameKind {
-  return v === 'numline' ? 'numline'
-    : v === 'scan' ? 'scan'
-    : v === 'stroop' ? 'stroop'
-    : v === 'flanker' ? 'flanker'
-    : v === 'trail' ? 'trail'
-    : 'gonogo';
+/** آستانه‌های گذار و ستارهٔ دقت‌محور از رجیستری — شکل تختِ مقدارها برای سازگاری فراخوانی */
+function accuracyThresholdsOf(rule: AccuracyStageRule): { pass: number; star2: number; star3: number } {
+  return { pass: rule.pass.value, star2: rule.star2.value, star3: rule.star3.value };
 }
 
 /** آستانه‌های گذار و ستارهٔ خط عددی — بر دقت جای عدد (درصد)؛ وضعیت proposed تا پیلوت مرکز */
-export const NUMLINE_STAGE_THRESHOLDS = {
-  pass: 65,
-  star2: 78,
-  star3: 88
-} as const;
+export const NUMLINE_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.numline.stage_rule);
 
-/** نتیجهٔ مرحلهٔ خط عددی از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
-export function stageOutcomeNumline(accuracy: number | null | undefined): StageOutcome {
-  const t = NUMLINE_STAGE_THRESHOLDS;
-  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars: 1 | 2 | 3 = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
+/** نتیجهٔ مرحلهٔ دقت‌محور از دقت خلاصهٔ جلسه — بدنهٔ مشترک هر سه تابع؛ thresholds
+ *  عیناً STAGE_THRESHOLDS می‌ماند (رفتار پیشین ۱.۲۵.۲۸ — هرگز تغییر نکرد). */
+function accuracyOutcomeOf(rule: AccuracyStageRule, accuracy: number | null | undefined): StageOutcome {
+  if (!pctOk(accuracy, rule.pass.value)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
+  const stars: 1 | 2 | 3 = pctOk(accuracy, rule.star3.value) ? 3 : pctOk(accuracy, rule.star2.value) ? 2 : 1;
   return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
 }
 
-/** نتیجهٔ مرحله از نوع‌بازی — هر نوع‌بازی ملاک خودش را دارد؛ قواعد هرگز مخلوط نمی‌شوند */
+/** نتیجهٔ مرحلهٔ خط عددی از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
+export function stageOutcomeNumline(accuracy: number | null | undefined): StageOutcome {
+  return accuracyOutcomeOf(GAME_KINDS.numline.stage_rule, accuracy);
+}
+
+/** نتیجهٔ مرحله از نوع‌بازی — ملاک از رجیستری می‌آید؛ قواعد هرگز مخلوط نمی‌شوند */
 export function stageOutcomeFor(
   kind: GameKind,
   summary: { pct: { correct_go: number | null; correct_nogo: number | null; accuracy: number | null } }
 ): StageOutcome {
-  return kind === 'numline'
-    ? stageOutcomeNumline(summary.pct.accuracy)
-    : kind === 'scan'
-      ? stageOutcomeScan(summary.pct.accuracy)
-      : kind === 'stroop' || kind === 'flanker' || kind === 'trail'
-        ? stageOutcomeAccuracyKind(summary.pct.accuracy)
-        : stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo);
+  const rule = GAME_KINDS[kind].stage_rule;
+  // دو شکل ملاک: جفت گو/نوگو (گونوگو) یا دقت خلاصهٔ جلسه (بقیه) — افزودن نوع تازه
+  // بدون دست‌زدن به این تابع ممکن است؛ فقط ورودی نقشه را قاعده‌دار می‌کند
+  return rule.shape === 'go_nogo'
+    ? stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo)
+    : accuracyOutcomeOf(rule, summary.pct.accuracy);
 }
 
 /** سقف گسترهٔ جاده در هر مرحلهٔ خط عددی — null = همهٔ جاده‌ها (مرحلهٔ پایانی مرور بزرگ) */
-export const NUMLINE_STAGE_MAX: Record<string, number | null> = {
-  s1: 10,
-  s2: 20,
-  s3: 50,
-  s4: 100,
-  s5: null
-};
+export const NUMLINE_STAGE_MAX: Record<string, number | null> = GAME_KINDS.numline.levers.bank_caps!;
 
 /**
  * پیش‌ماندهٔ آیتم خط عددی در مرحله — فقط نمایش/انتخاب از بانک authored؛ نمره‌دهی سرور روی
@@ -372,36 +186,21 @@ export function numlineItemInStage(
   item: { range?: [number, number] | undefined },
   stageId: string | null | undefined
 ): boolean {
-  const max = typeof stageId === 'string' && stageId in NUMLINE_STAGE_MAX ? NUMLINE_STAGE_MAX[stageId] : null;
-  if (max === null) return true;
-  return Array.isArray(item.range) && item.range[1] <= max;
+  return GAME_KINDS.numline.itemInStage(item, stageId);
 }
 
 // ─── مراحل «حملهٔ جاسوس‌ها» (۱.۲۵.۳۰) ───
 
 /** آستانه‌های گذار و ستارهٔ اسکن — بر دقت موج‌ها (درصد)؛ وضعیت proposed تا پیلوت مرکز */
-export const SCAN_STAGE_THRESHOLDS = {
-  pass: 65,
-  star2: 78,
-  star3: 88
-} as const;
+export const SCAN_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.scan.stage_rule);
 
 /** نتیجهٔ مرحلهٔ اسکن از دقت موج‌های خلاصهٔ جلسه — همان قرارداد StageOutcome */
 export function stageOutcomeScan(accuracy: number | null | undefined): StageOutcome {
-  const t = SCAN_STAGE_THRESHOLDS;
-  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars: 1 | 2 | 3 = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
-  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
+  return accuracyOutcomeOf(GAME_KINDS.scan.stage_rule, accuracy);
 }
 
 /** سقف شمار خانه‌های موج در هر مرحلهٔ اسکن — null = همهٔ موج‌ها (مرحلهٔ پایانی مرور بزرگ) */
-export const SCAN_STAGE_MAX_TILES: Record<string, number | null> = {
-  s1: 6,
-  s2: 9,
-  s3: 12,
-  s4: 15,
-  s5: null
-};
+export const SCAN_STAGE_MAX_TILES: Record<string, number | null> = GAME_KINDS.scan.levers.bank_caps!;
 
 /**
  * پیش‌ماندهٔ آیتم اسکن در مرحله — انتخاب از بانک authored؛ نمره‌دهی سرور روی آیتم authored است.
@@ -411,147 +210,79 @@ export function scanItemInStage(
   item: { stim?: Record<string, unknown> | null | undefined },
   stageId: string | null | undefined
 ): boolean {
-  const max = typeof stageId === 'string' && stageId in SCAN_STAGE_MAX_TILES ? SCAN_STAGE_MAX_TILES[stageId] : null;
-  if (max === null) return true;
-  const s = (item.stim ?? {}) as Record<string, unknown>;
-  const cols = typeof s.cols === 'number' && Number.isInteger(s.cols) && s.cols > 0 ? s.cols : 0;
-  const rows = typeof s.rows === 'number' && Number.isInteger(s.rows) && s.rows > 0 ? s.rows : 0;
-  const tiles = cols * rows;
-  return tiles > 0 && tiles <= max;
+  return GAME_KINDS.scan.itemInStage(item, stageId);
 }
 
 // ─── مراحل سه بازی تازه (۱.۲۵.۳۲) — استروپ/فلانکر/رد پای دزد ───
 // ملاک گذار هر سه = دقت خلاصهٔ جلسه (درصد) — همان قرارداد خط عددی/اسکن؛
 // آستانه‌ها مشترک و proposed تا پیلوت مرکز. اهرم سختی authored روی بانک است؛
-// این‌جا فقط «انتخاب بانک هر مرحله» تعریف می‌شود — محرک/کلید هرگز بازنویسی نمی‌شود.
+// «انتخاب بانک هر مرحله» در رجیستری است — محرک/کلید هرگز بازنویسی نمی‌شود.
 
 /** آستانهٔ گذار و ستارهٔ سه نوع تازه — بر دقت (درصد)؛ وضعیت proposed تا پیلوت مرکز */
-export const ACCURACY_STAGE_THRESHOLDS = {
-  pass: 65,
-  star2: 78,
-  star3: 88
-} as const;
+export const ACCURACY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.stroop.stage_rule);
 
 /** نتیجهٔ مرحلهٔ سه نوع تازه از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
 export function stageOutcomeAccuracyKind(accuracy: number | null | undefined): StageOutcome {
-  const t = ACCURACY_STAGE_THRESHOLDS;
-  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars: 1 | 2 | 3 = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
-  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
+  return accuracyOutcomeOf(GAME_KINDS.stroop.stage_rule, accuracy);
 }
 
 /** بانک مجاز هر مرحلهٔ استروپ — گروه‌های authored بانک (a=مرحلهٔ ۱ … d=مرحلهٔ ۴، p=پروب) */
-export const STROOP_STAGE_BANDS: Record<string, string[] | null> = {
-  s1: ['a'],
-  s2: ['a', 'b'],
-  s3: ['a', 'b', 'c'],
-  s4: ['a', 'b', 'c', 'd'],
-  s5: null // همهٔ بانک — مرور بزرگ
-};
+export const STROOP_STAGE_BANDS: Record<string, string[] | null> = GAME_KINDS.stroop.levers.bank_bands!;
 
 export function stroopItemInStage(
   item: { stim?: Record<string, unknown> | null | undefined },
   stageId: string | null | undefined
 ): boolean {
-  const allowed = typeof stageId === 'string' && stageId in STROOP_STAGE_BANDS ? STROOP_STAGE_BANDS[stageId] : null;
-  if (allowed === null) return true;
-  const s = (item.stim ?? {}) as Record<string, unknown>;
-  const band = typeof s.band === 'string' ? s.band : '';
-  if (band === '') return true; // آیتم بی‌گروه (بانک قدیمی) — همیشه حاضر
-  return allowed.includes(band);
-}
-
-/** شمار گرگ قلابی فلانکر — فلانکرهای مخالف مرکز؛ ناسالم = صفر */
-function flankerIncongruentCountOf(item: { stim?: Record<string, unknown> | null | undefined }): number {
-  const s = (item.stim ?? {}) as Record<string, unknown>;
-  const arrows = Array.isArray(s.arrows) ? s.arrows.filter((v) => v === 'L' || v === 'R') : [];
-  const mid = Math.floor(arrows.length / 2);
-  const center = arrows[mid];
-  if (center === undefined) return 0;
-  return arrows.filter((a) => a !== center).length;
+  return GAME_KINDS.stroop.itemInStage(item, stageId);
 }
 
 /** سقف شمار گرگ قلابی در هر مرحلهٔ فلانکر — null = همهٔ گله‌ها */
-export const FLANKER_STAGE_MAX_DECOYS: Record<string, number | null> = {
-  s1: 0,   // گلهٔ آرام — هیچ قلابی
-  s2: 1,   // حداکثر یک قلابی
-  s3: 3,   // نگاه‌های فریبکار
-  s4: null, // گلهٔ فریبکار — همهٔ گله‌ها
-  s5: null
-};
+export const FLANKER_STAGE_MAX_DECOYS: Record<string, number | null> = GAME_KINDS.flanker.levers.bank_caps!;
 
 /** بانک مجاز هر مرحلهٔ فلانکر — گروه‌های authored بانک؛ ناسالم = ساختاری (شمار قلابی‌ها) */
-export const FLANKER_STAGE_BANDS: Record<string, string[] | null> = {
-  s1: ['a'],
-  s2: ['a', 'b'],
-  s3: ['a', 'b', 'c'],
-  s4: ['a', 'b', 'c', 'd'],
-  s5: null
-};
+export const FLANKER_STAGE_BANDS: Record<string, string[] | null> = GAME_KINDS.flanker.levers.bank_bands!;
 
 export function flankerItemInStage(
   item: { stim?: Record<string, unknown> | null | undefined },
   stageId: string | null | undefined
 ): boolean {
-  const allowed = typeof stageId === 'string' && stageId in FLANKER_STAGE_BANDS ? FLANKER_STAGE_BANDS[stageId] : null;
-  if (allowed === null) return true;
-  const s = (item.stim ?? {}) as Record<string, unknown>;
-  const band = typeof s.band === 'string' ? s.band : '';
-  if (band !== '') return allowed.includes(band);
-  // بانک بی‌گروه (سازگاری قدیمی) — قاعدهٔ ساختاری: شمار گرگ قلابی
-  const max = typeof stageId === 'string' && stageId in FLANKER_STAGE_MAX_DECOYS ? FLANKER_STAGE_MAX_DECOYS[stageId] : null;
-  if (max === null) return true;
-  const decoys = flankerIncongruentCountOf(item);
-  return decoys === 0 || decoys <= max;
+  return GAME_KINDS.flanker.itemInStage(item, stageId);
 }
 
 /** سقف شمار ردپاها در هر مرحلهٔ رد پای دزد — null = همهٔ ردها */
-export const TRAIL_STAGE_MAX_NODES: Record<string, number | null> = {
-  s1: 4,
-  s2: 5,
-  s3: 6,
-  s4: 7,
-  s5: null
-};
+export const TRAIL_STAGE_MAX_NODES: Record<string, number | null> = GAME_KINDS.trail.levers.bank_caps!;
 
 /** بانک مجاز هر مرحلهٔ رد — گروه‌های authored بانک؛ ناسالم = ساختاری (شمار ردپاها) */
-export const TRAIL_STAGE_BANDS: Record<string, string[] | null> = {
-  s1: ['a'],
-  s2: ['a', 'b'],
-  s3: ['a', 'b', 'c'],
-  s4: ['a', 'b', 'c', 'd'],
-  s5: null
-};
+export const TRAIL_STAGE_BANDS: Record<string, string[] | null> = GAME_KINDS.trail.levers.bank_bands!;
 
 export function trailItemInStage(
   item: { stim?: Record<string, unknown> | null | undefined },
   stageId: string | null | undefined
 ): boolean {
-  const allowed = typeof stageId === 'string' && stageId in TRAIL_STAGE_BANDS ? TRAIL_STAGE_BANDS[stageId] : null;
-  if (allowed === null) return true;
-  const s = (item.stim ?? {}) as Record<string, unknown>;
-  const band = typeof s.band === 'string' ? s.band : '';
-  if (band !== '') return allowed.includes(band);
-  // بانک بی‌گروه (سازگاری قدیمی) — قاعدهٔ ساختاری: شمار ردپاها
-  const max = typeof stageId === 'string' && stageId in TRAIL_STAGE_MAX_NODES ? TRAIL_STAGE_MAX_NODES[stageId] : null;
-  if (max === null) return true;
-  const nodes = Array.isArray(s.nodes) ? s.nodes.length : 0;
-  return nodes > 0 && nodes <= max;
+  return GAME_KINDS.trail.itemInStage(item, stageId);
+}
+
+/**
+ * پیش‌ماندهٔ آیتم در مرحله به‌قولِ رجیستری —lookup یک‌خطی به‌جای زنجیرهٔ if per-kind؛
+ * مصرف‌کننده‌های service (nextItem/resume/finish) همه از همین می‌خوانند.
+ * بی‌مرحله/مرحلهٔ ناشناخته = قاعدهٔ خود نوع (همهٔ آیتم‌ها برای گونوگو و سقف‌های null).
+ */
+export function itemInStageFor(
+  kind: GameKind,
+  item: { range?: [number, number] | undefined; stim?: Record<string, unknown> | null | undefined },
+  stageId: string | null | undefined
+): boolean {
+  return GAME_KINDS[kind].itemInStage(item, stageId);
 }
 
 // ─── اهرم تندشدن موج اسکن (۱.۲۵.۳۲) — فقط نمایش؛ نه محرک و نه کلید ───
 // موج authored زمان خودش را دارد؛ مرحلهٔ فعال سقف آرام‌تری می‌گذارد تا پله‌ها واقعاً
-// «تندتر» حس شوند. قاعده: زمان مرحله فقط اگر از آیتم authored کوتاه‌تر یا برابر باشد —
-// هیچ‌گاه آیتم سریع‌تر از بانک نمی‌شود (کودک همیشه حداقلِ زمان authored را دارد).
+// «تندتر» حس شوند. جدول سقف‌ها اهرم نمایشی رجیستری است؛ قاعدهٔ ترکیب این‌جاست:
+// زمان مرحله فقط اگر از آیتم authored کوتاه‌تر یا برابر باشد — هیچ‌گاه آیتم سریع‌تر
+// از بانک نمی‌شود (کودک همیشه حداقلِ زمان authored را دارد).
 
 /** پنجرهٔ نمایش موج (ms) در هر مرحلهٔ اسکن — null = دست‌نخوردهٔ آیتم */
-export const SCAN_STAGE_WAVE_MS: Record<string, number | null> = {
-  s1: 22000,
-  s2: 19000,
-  s3: 17000,
-  s4: 15000,
-  s5: 13000
-};
+export const SCAN_STAGE_WAVE_MS: Record<string, number | null> = GAME_KINDS.scan.levers.display!;
 
 /**
  * پنجرهٔ موج مرحله برای نمای کلاینت — کمینهٔ زمان authored و سقف مرحله.
@@ -676,7 +407,7 @@ export function stageVisualFor(stageId: string | null | undefined): StageVisual 
 
 /**
  * نمای محرک آیتم لمسی با امضای مرحله — فقط نمایش؛ همیشه کلید stim authored را
- * نگه می‌دارد و شکل/رنگ مرحله را رویش می‌نشیاند (بقیهٔ فیلدها دست‌نخورده).
+ * نگه می‌دارد و شکل/رنگ مرحله را رویش می‌نشیاند (بقیهٔ فیلدها دست‌خورده).
  * نمره‌دهی سرور روی آیتم authored است — این خروجی هرگز به scoreAttempt نمی‌رود.
  */
 export function stageStimViewOf(

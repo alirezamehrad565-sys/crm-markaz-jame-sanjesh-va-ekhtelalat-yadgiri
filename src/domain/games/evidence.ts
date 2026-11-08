@@ -7,7 +7,7 @@
 //   · هر تغییر عددی = بامپ EVIDENCE_RULES_VERSION تا گزارش‌ها قابل‌استناد بمانند
 
 import type { SessionSummary } from './scoring';
-import type { GameKind } from './stages';
+import { GAME_KINDS, type GameKind } from './registry';
 
 /** نسخهٔ قواعد موتور شواهد — هر تغییر عددی این نسخه را بامپ می‌کند */
 export const EVIDENCE_RULES_VERSION = '1.0.0';
@@ -69,9 +69,10 @@ function accuracyDriftPpOf(summary: SessionSummary): number | null {
   return Math.round((last.correct_pct - first.correct_pct) * 100) / 100;
 }
 
-/** درصد بی‌پاسخی پنجره — از اُمیشن‌های «انتخاب زمان‌دار» (استروپ/فلانکر) */
+/** درصد بی‌پاسخی پنجره — از اُمیشن‌های «انتخاب زمان‌دار»؛ پرچم timed_choice هر نوع
+ *  تک‌منبعش رجیستری است (G4الف) — افزودن نوع زمان‌دار تازه بدون دست‌زدن به شواهد */
 function windowMissPctOf(summary: SessionSummary, kind: GameKind): number | null {
-  if (kind !== 'stroop' && kind !== 'flanker') return null;
+  if (!GAME_KINDS[kind].timed_choice) return null;
   const total = summary.totals?.total ?? 0;
   const omission = summary.totals?.omission ?? 0;
   if (total <= 0) return null;
