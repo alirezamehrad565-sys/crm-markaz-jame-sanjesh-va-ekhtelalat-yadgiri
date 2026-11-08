@@ -1268,3 +1268,220 @@ button.play-trail__node { appearance: none; font-family: inherit; }
      این‌جا فقط اطمینان: هیچ گذاری CSS روی عناصر صحنه نماند */
   .play-scene, .play-scene svg { transition: none; }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   «آلبوم خرچنگ» (ن‌پشت همسانی دیداری / نوع nback) — ۱.۲۵.۴۰ — ۱۴۰۵/۰۸/۱۷
+   فقط کلاس‌های خودِ این بازی — الگوی .play-stage--stroop/.play-stage--flanker.
+   پوستهٔ آلبوم دریایی: سبز-فیروزهٔ عمق دریا با قاب کرمِ دفترچه (ایستا) —
+   حس عدی فقط در صحنه است، گفتار روبه‌کودک آرام می‌ماند (§۲).
+   جنبش CSS ممنوع — همهٔ جنبش از fx.js با گارد کاهش‌جنبش می‌آید؛
+   بلوک کاهش‌جنبش این بازی فقط گذارها را خاموش می‌کند.
+   کف لمس دکمه‌های حکم ≥۶۴px (§۹)؛ هیچ دارایی بیرونی — ماهی‌ها SVG درون‌کد.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── پوستهٔ آلبوم دریایی — برنچ timedchoice کلاس 'play-stage--' + item.type می‌گذارد ─── */
+.play-stage--nback {
+  background: linear-gradient(180deg, #0C3A40 0%, #135157 58%, #1D6862 100%);
+  box-shadow: inset 0 0 0 3px rgba(245, 240, 229, 0.38), inset 0 0 0 8px rgba(9, 42, 47, 0.85);
+}
+
+.play-stage--nback .play-nback__prompt { color: #F5F0E5; }
+
+.play-nback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+
+/* نمونهٔ آموزش — کوچک‌تر و بی‌لمس */
+.play-nback--sample { max-width: 320px; gap: 10px; }
+.play-nback--practice { max-width: 420px; gap: 12px; }
+
+/* ─── قاعدهٔ بازی ─── */
+
+.play-nback__prompt {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--p-navy);
+  text-align: start;
+  line-height: 1.7;
+  margin: 0;
+  max-width: 420px;
+}
+
+/* ─── صفحهٔ آلبوم — قاب کرم + عکس ماهی + برچسب پلهٔ n ───
+   قاب دفترچه‌وار ایستاست تا کودک «عکس در آلبوم» را ببیند؛ هیچ حرکتی ندارد
+   تا RT از لحظهٔ نمایش پاک بماند (پاپ ورود از fx پس از مُهر نمایش می‌آید). */
+.play-nback__album {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 26px 12px;
+  border: 3px solid var(--p-navy);
+  border-radius: 16px;
+  background: var(--p-cream, #F5F0E5);
+  box-shadow: 0 8px 18px rgba(6, 30, 34, 0.4);
+}
+
+.play-nback__fish {
+  width: min(46vmin, 240px);
+  height: auto;
+  display: block;
+}
+
+.play-nback__level {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--p-navy);
+  background: rgba(228, 170, 70, 0.32);
+  border-radius: 999px;
+  padding: 3px 14px;
+}
+
+/* نسخهٔ نمایشی قدم آموزش — بی‌سایه و بی‌لمس */
+.play-nback__album--demo { box-shadow: none; }
+
+/* ─── نوار یادآوری تمرین — جفت عکس «قدم عقب ← امروز» روبه‌کودک پیدا ───
+   مقایسه در تمرین خودِ قانون آموزشی است، نه کلید بانک؛ به همین دلیل
+   این صحنه فقط در تمرین تعاملی می‌آید و هرگز در آزمون. */
+.play-nback__memo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.play-nback__memo-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px 8px;
+  border: 2.5px solid var(--p-navy);
+  border-radius: 14px;
+  background: var(--p-cream, #F5F0E5);
+}
+
+.play-nback__memo-card--now { border-width: 3.5px; }
+
+.play-nback__memo-tag {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--p-navy);
+  background: rgba(67, 140, 137, 0.22);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.play-nback__memo-fish { width: 108px; height: auto; display: block; }
+
+.play-nback__memo-arrow { width: 30px; height: auto; flex: 0 0 auto; }
+
+/* ─── دو دکمهٔ ثابت حکم — «همان است / فرق دارد» ───
+   دکمه‌ها کلاس play-option را هم دارند (برنچ سشن روی همین کلاس لمس می‌گیرد)؛
+   سلکتور دوتایی برای اولویتِ قطعی بر پایهٔ play.css. */
+.play-nback__answers {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  width: 100%;
+}
+
+.play-option.play-nback__opt {
+  min-width: 132px;
+  min-height: 84px; /* هدف لمسی سخاوتمند ≥۶۴px — کاردرمانگر §۹ */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border: 3px solid rgba(245, 240, 229, 0.34);
+  border-radius: 16px;
+  background: rgba(245, 240, 229, 0.95);
+  color: var(--p-navy);
+  font-family: inherit;
+  font-size: 19px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.play-option.play-nback__opt:active { transform: scale(0.96); }
+
+.play-nback__optname { font-weight: 700; }
+
+/* جواب درست نشان‌گذاری‌شده — فقط تمرین، پس از پاسخ؛ خط‌چین کهربایی آرام، ایستا */
+.play-option.play-nback__opt.play-nback__opt--truth {
+  border-color: var(--p-amber);
+  border-style: dashed;
+  background: #FDF6E7;
+  box-shadow: 0 0 0 3px rgba(228, 170, 70, 0.3);
+}
+
+/* جای لمس کودک — اگر برنچ timedchoice کلاس picked بگذارد، آرام و ایستا روشن می‌شود */
+.play-option.play-nback__opt.play-nback__opt--picked {
+  border-color: var(--p-teal);
+  background: #FDF6E7;
+}
+
+/* دکمهٔ نمایشی قدم آموزش — بی‌لمس و ایستا */
+.play-nback__demo {
+  min-width: 132px;
+  min-height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border: 2.5px dashed rgba(21, 62, 80, 0.4);
+  border-radius: 16px;
+  background: rgba(245, 240, 229, 0.8);
+  color: var(--p-navy);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+/* ─── نوار پنجرهٔ پاسخ — خط لبهٔ پایین ───
+   فقط عرض از JS inline تنظیم می‌شود (بدون keyframes — §۹)؛ الگوی play-stroop__timer. */
+.play-nback__timer {
+  width: min(72%, 320px);
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(245, 240, 229, 0.22);
+  overflow: hidden;
+}
+
+.play-nback__timer > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--p-amber) 0%, #D96C6C 100%);
+}
+
+/* ─── تبلت افقی: صحنه پر می‌شود، حاشیهٔ مرده نمی‌ماند (§۲) ─── */
+@media (min-width: 700px) and (orientation: landscape) {
+  .play-nback { gap: 18px; }
+  .play-nback__fish { width: min(40vmin, 300px); }
+  .play-nback__prompt { font-size: 17px; max-width: 520px; }
+  .play-nback__memo-fish { width: 132px; }
+  .play-option.play-nback__opt { min-height: 92px; min-width: 168px; font-size: 21px; }
+}
+
+/* موبایل باریک — کارت‌های یادآوری کوچک‌تر تا ردیف نشکند */
+@media (max-width: 380px) {
+  .play-nback__memo-fish { width: 88px; }
+  .play-nback__memo-arrow { width: 22px; }
+  .play-option.play-nback__opt { min-width: 112px; font-size: 17px; }
+}
+
+/* کاهش‌جنبش: گذارهای این بازی ایستا می‌شوند (§۹) — جنبش اصلی از پیش در fx گارد است */
+@media (prefers-reduced-motion: reduce) {
+  .play-option.play-nback__opt,
+  .play-nback__album,
+  .play-nback__memo-card,
+  .play-nback__demo { transition: none; }
+  .play-option.play-nback__opt:active { transform: none; }
+}
