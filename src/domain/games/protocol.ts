@@ -193,3 +193,65 @@ export function protocolSnapshotOf(p: ProtocolSpec): ProtocolSnapshot {
     params, behavior: { ...p.behavior }
   };
 }
+
+// ─── پروتکل «آلبوم خرچنگ» — ن‌پشت هم‌سانی دیداری (G4ب / ۱.۲۵.۴۰) ───
+// گو/نوگو پروتکل خودش را دارد؛ ن‌پشت پارامترهای زمان‌بندی متفاوت می‌خواهد (ISI بلندتر برای
+// رمزگذاری در حافظهٔ کاری) و پارامترهای محتوایی خودش (نرخ همسانی، سقف همسانِ پیاپی).
+// قرارداد همان §۱۰ COGNITIVE_SPEC است: هر پارامتر {value, rationale, status} با وضعیت صادقانه؛
+// نسخهٔ مستقل از گو/نوگو — مقایسهٔ جلسه‌های ن‌پشت فقط درون همین نسخه مجاز است.
+
+/** شناسهٔ پروتکل ن‌پشت — هویت مستقل در اسنپ‌شات جلسه‌های nback */
+export const NBACK_PROTOCOL_ID = 'nback-standard';
+
+/** نسخهٔ پارامترهای ن‌پشت — هر تغییر عددی در NBACK_PARAMS این نسخه را بامپ می‌کند */
+export const NBACK_PROTOCOL_VERSION = '1.0.0';
+
+export interface NbackParam {
+  value: number;
+  rationale: string;
+  status: ParamStatus;
+}
+
+/** پارامترهای پایهٔ ن‌پشت — پیش از بازنویسی مرحله (ISI مرحله روی همین می‌نشیند) */
+const NBACK_PARAMS: Record<AgeBandId, Record<string, NbackParam>> = {
+  '4-6': {
+    isi_min_ms: PARAM(2200, 'فاصلهٔ بین‌محركی ن‌پشت؛ رمزگذاری ماهیِ قدم قبل در حافظهٔ کاری کودکِ کوچک‌تر به فاصلهٔ آرام‌تر نیاز دارد — متعارف وظایف هم‌سانی کودکانه', 'proposed'),
+    isi_max_ms: PARAM(2800, 'بالای بازه ~۲٫۵ ثانیه — تنوع ملایم برای شکستن انتظار زمانی ثابت', 'proposed'),
+    fixation_ms: PARAM(400, 'مکث خنثی پیش از نمایش — هم‌طول گو/نوگو برای یکدستی تجربه', 'proposed'),
+    block_size: PARAM(30, 'جریان هم‌سانی نباید با استراحت بلوکی بشکند (مقایسهٔ قدم قبل از حافظه می‌گذرد) — جلسهٔ ~۲۶ محرکی بی‌استراحت', 'proposed'),
+    match_ratio: PARAM(0.3, 'نرخ همسانی ~۳۰٪ — تعادل متعارف سهمیهٔ همسان/ناهمسان در وظایف هم‌سانی؛ تصادفی‌نمای پاسخ به ~۵۰٪ نمی‌رسد', 'proposed'),
+    max_consecutive_match: PARAM(2, 'بیش از دو همسانِ پیاپی، پاسخ تکراریِ بی‌مقایسه می‌سازد', 'proposed'),
+    response_window_ms: PARAM(3800, 'پنجرهٔ پاسخ دوگزینه‌ای «همان است/فرق دارد» — پایهٔ مرجع؛ پنجرهٔ عملیاتی روی خود آیتم authored می‌نشیند', 'proposed')
+  },
+  '7-12': {
+    isi_min_ms: PARAM(1800, 'فاصلهٔ بین‌محركی ن‌پشت برای سنین مدرسه — کوتاه‌تر از ۴–۶ سال، بلندتر از گو/نوگو', 'proposed'),
+    isi_max_ms: PARAM(2400, 'بالای بازه ~۲٫۱ ثانیه — حول هدف ~۲٫۵ ثانیهٔ بین‌محركی', 'proposed'),
+    fixation_ms: PARAM(400, 'مکث خنثی پیش از نمایش — هم‌طول دو باند', 'proposed'),
+    block_size: PARAM(30, 'جریان هم‌سانی بی‌استراحت بلوکی — همان استدلال ۴–۶ سال', 'proposed'),
+    match_ratio: PARAM(0.3, 'نرخ همسانی ~۳۰٪ — یکسان دو باند برای مقایسه‌پذیری', 'proposed'),
+    max_consecutive_match: PARAM(2, 'سقف همسانِ پیاپی — یکسان دو باند', 'proposed'),
+    response_window_ms: PARAM(3400, 'پنجرهٔ پاسخ دوگزینه‌ای برای سنین بالاتر — پایهٔ مرجع؛ پنجرهٔ عملیاتی authored است', 'proposed')
+  }
+};
+
+/** پارامترهای عملیاتی ن‌پشت برای باند سنی — فقط اعداد، بدون متن مبنا (شکل اسنپ‌شات) */
+export function nbackParamsOf(band: AgeBandId): Record<string, number> {
+  const src = NBACK_PARAMS[band] ?? NBACK_PARAMS['7-12'];
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(src)) out[k] = v.value;
+  return out;
+}
+
+/**
+ * اسنپ‌شات پروتکل جلسهٔ ن‌پشت — هویت و پارامترهای ن‌پشت جایگزین پایهٔ گو/نوگو می‌شوند.
+ * بازنویسی مرحله (applyStageOverrides در سرویس) بعد از این اعمال می‌شود تا ISI مرحله
+ * روی پایهٔ ن‌پشت بنشیند — رفتار گو/نوگو و سایر نوع‌ها صفر تغییری نمی‌کند.
+ */
+export function applyNbackProtocol(snap: ProtocolSnapshot, band: AgeBandId): ProtocolSnapshot {
+  return {
+    ...snap,
+    protocol_id: NBACK_PROTOCOL_ID,
+    version: NBACK_PROTOCOL_VERSION,
+    params: { ...snap.params, ...nbackParamsOf(band) }
+  };
+}

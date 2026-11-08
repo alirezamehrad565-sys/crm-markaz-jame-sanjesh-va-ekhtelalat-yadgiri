@@ -15,13 +15,13 @@ import {
   previewMissionOf,
   previewItemAt,
   stimLabelOf,
-  stripAnswerKeys,
   numlineFeedbackOf,
   scanMissedCsv,
   SCAN_FB_ALL,
+  stripAnswerKeys,
   toItemView
 } from './pure';
-import { protocolForAge, protocolSnapshotOf, bandForAge } from './protocol';
+import { protocolForAge, protocolSnapshotOf, bandForAge, applyNbackProtocol } from './protocol';
 import type { ProtocolMode } from './protocol';
 import { WINDOW_MAX_MS, WINDOW_MIN_MS } from './adaptive';
 import {
@@ -45,7 +45,7 @@ import { summarizeAttempts } from './scoring';
 import { assessQuality, serializeQuality, type QualityInput } from './quality';
 import { buildComparison, type ChildGameReport, type ReportRawAttempt, type ReportSession } from './report';
 import { decideAdaptive, applyAdaptiveLevel, serializeDecision, type AdaptiveSessionInput, type AdaptiveDecision } from './adaptive';
-import { generateSequence, serializeSequence, parseSequenceRecord } from './stimulus';
+import { generateSequence, serializeSequence, parseSequenceRecord, nbackRotationOffsetOf, nbackOrderedItems, serializeNbackRotation, parseNbackRotation } from './stimulus';
 import { ENGINE_METRICS, ENGINE_ONLY_FORMULAS, mergeEngineMetrics } from './registry-extra';
 import type {
   AttemptDraftInput,
@@ -896,13 +896,15 @@ export function createGamesService(deps: GamesDeps): GamesService {
         scan: { label, stim: { signature: sig } }
       };
     }
-    // سه بازی تازه (۱.۲۵.۳۲) — قاعدهٔ بازی از پرامپت آیتم آموزشی؛ هیچ کلیدی این‌جا نیست؛
-    // محرک آموزش، عین همان چیزی است که کودک در اجرا می‌بیند
+    // سه بازی تازه (۱.۲۵.۳۲) + آلبوم خرچنگ (۱.۲۵.۴۰) — قاعدهٔ بازی از پرامپت آیتم آموزشی؛
+    // هیچ کلیدی این‌جا نیست؛ محرک آموزش، عین همان چیزی است که کودک در اجرا می‌بیند
     const newTrain = (mission.items ?? []).find((it) =>
-      it.phase === 'train' && (it.type === 'stroop' || it.type === 'flanker' || it.type === 'trail'));
+      it.phase === 'train' && (it.type === 'stroop' || it.type === 'flanker' || it.type === 'trail' || it.type === 'nback'));
     if (newTrain && !go && !nogo) {
-      const kindKey = newTrain.type as 'stroop' | 'flanker' | 'trail';
-      const stim = (newTrain.stim ?? {}) as Record<string, unknown>;
+      const kindKey = newTrain.type as 'stroop' | 'flanker' | 'trail' | 'nback';
+      // سد نشتی راهنما (۱.۲۵.۴۰) — stimِ آموزشی پیش از رفتن به data-hint از کلیدهای
+      // پاسخ پاک می‌شود (match ن‌پشت و…)؛ استروپ/فلانکر/رد کلید درون stim ندارند — بی‌اثر
+      const stim = stripAnswerKeys((newTrain.stim ?? {}) as Record<string, unknown>) as Record<string, unknown>;
       const label = typeof newTrain.prompt === 'string' && newTrain.prompt.trim() !== '' ? newTrain.prompt : '';
       return {
         go: { label, stim },
@@ -946,6 +948,10 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const mode: ProtocolMode = res.pkg.body.mode ?? 'training';
     const childAge = state === 'child_active' ? await childAgeOf(res.rx.child_id) : null;
     let snap = protocolSnapshotOf(protocolForAge(mode, childAge));
+    // پروتکل ن‌پشت (۱.۲۵.۴۰) — ISI بلندتر/بلوک بی‌استراحت/نرخ همسانی ن‌پشت روی اسنپ‌شات می‌نشیند
+    // و هویت پروتکل جلسه nback-standard می‌شود؛ بازنویسی مرحله بعد از آن اعمال می‌شود
+    // (ISI مرحله روی پایهٔ ن‌پشت می‌نشیند) — سایر نوع‌ها صفر تغییری نمی‌بینند
+    if (kind === 'nback') snap = applyNbackProtocol(snap, bandForAge(childAge).band);
     // نظام مرحله‌ها و ستاره‌ها (۱.۲۵.۲۲) — فقط تمرین؛ پنجره/ISI/تثبیت بر پایهٔ مرحلهٔ فعال بازنویسی می‌شود؛
     // ارزیابی هرگز مرحله نمی‌بیند (C1) و کلید خاموشی درمانگر همیشه محترم است
     let stage: StageDef | null = null;
@@ -1197,6 +1203,26 @@ export function createGamesService(deps: GamesDeps): GamesService {
         const sctx = await stageContextOf(res.rx.id, await childAgeOf(res.rx.child_id), res.pkg.body, gameKindOf(mission.game));
         stageId = sctx?.stage.id ?? null;
       }
+      // چرخش جریان ن‌پشت (۱.۲۵.۴۰) — seed جلسه نقطهٔ شروع پسوند پروب را قطعی می‌کند تا
+      // جایگاه پاسخ‌های همسان حفظ‌شدنی نباشد؛ جریان authored با لنگرهای یکتا چرخش‌ایمن است
+      // و نرخ همسانی/سقف اجرای پیاپی عیناً می‌ماند. پیشوند تمرین هرگز نمی‌چرخد.
+      if (gameKindOf(mission.game) === 'nback') {
+        const stream = (mission.items ?? []).filter((it) => itemInStageOf('nback')(it, stageId));
+        const trainCount = stream.filter((it) => it.phase === 'train').length;
+        const probeCount = stream.length - trainCount;
+        // گیت صحت چرخش — آفست فقط روی لنگرهای پسوند پروب می‌افتد (آیتم‌های anchor با
+        // ماهیِ یگانهٔ جریان؛ گیت طلایی بانک authored همین را تضمین می‌کند) تا پرچم
+        // همسانی ایستا پس از چرخش هم راست بماند؛ بانک بی‌لنگر = آفست صفر (ترتیب authored)
+        const probe = stream.slice(Math.min(trainCount, stream.length));
+        const anchors = probe
+          .map((it, i) => (((it.stim ?? {}) as Record<string, unknown>).anchor === true ? i : -1))
+          .filter((i) => i >= 0);
+        sequenceJson = serializeNbackRotation({
+          kind: 'nback', v: 1, seed: id,
+          train_count: trainCount, probe_count: probeCount,
+          offset: nbackRotationOffsetOf(id, anchors)
+        });
+      }
       await db.execute(
         `INSERT INTO game_sessions (id, mission_id, state, validity, purpose, sequence_json, stage_id, started_at, last_activity_at)
          VALUES (?,?, 'child_active', 'valid', ?, ?, ?, ?, ?)`,
@@ -1226,8 +1252,13 @@ export function createGamesService(deps: GamesDeps): GamesService {
     // ترتیب seed-دار (فاز ۳): جایگاه = شمار پاسخ‌های ثبت‌شده؛ دستهٔ g/n تعیین‌کنندهٔ
     // انتخاب آیتم است — کلید پاسخ هرگز به کلاینت نمی‌رود، فقط خودِ آیتمِ برگزیده.
     const seq = parseSequenceRecord(session.sequence_json);
+    // چرخش جریان ن‌پشت (۱.۲۵.۴۰) — ترتیب چرخشیِ هم‌بسته از رکورد جلسه؛
+    // رکورد ن‌پشت با دنبالهٔ g/n تفاوت دارد و هرگز با هم اشتباه نمی‌شوند
+    const rot = parseNbackRotation(session.sequence_json);
     let next: MissionItem | undefined;
-    if (seq && doneIds.size < seq.trials.length) {
+    if (rot) {
+      next = nbackOrderedItems(stageItems, rot).find((it) => !doneIds.has(it.id));
+    } else if (seq && doneIds.size < seq.trials.length) {
       const kindTrial = seq.trials[doneIds.size].kind;
       next = unansweredOf((it) => (it.correct_touch === true) === (kindTrial === 'go'))
         ?? unansweredOf(() => true); // سهمیهٔ دسته خالی — نزدیک‌ترین سازگار

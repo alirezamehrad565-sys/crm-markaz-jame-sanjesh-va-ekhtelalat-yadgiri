@@ -218,3 +218,67 @@ export function parseSequenceRecord(raw: string | null | undefined): {
     return null;
   }
 }
+
+// ─── چرخش جریان ن‌پشت (G4ب / ۱.۲۵.۴۰) ───
+// جریان authored ن‌پشت هم‌بسته است: هم‌سانیِ هر آیتم به ماهیِ قدم قبل از خودش ارجاع دارد.
+// چرخشِ پیمانه‌ایِ پسوند پروب با seed جلسه، هر جلسه نقطهٔ شروع تازه‌ای می‌دهد (ضد حفظ‌کردن
+// جایگاه پاسخ‌ها) بدون آن‌که هم‌بستگی، نرخ همسانی یا سقف اجرای پیاپی به‌هم بریزد — به این
+// شرط که سرِ هر پسوند «لنگر» باشد: ماهیِ یگانهٔ جریان که در هیچ جای دیگری تکرار نمی‌شود
+// و پس از چرخش هم عیناً «ناهمسان» می‌ماند — تضمین لنگرها در گیت طلایی بانک authored (آزمون ن‌پشت) است.
+// پیشوند تمرین هرگز نمی‌چرخد — فاز آموزش همیشه سرِ جلسه می‌ماند (الگوی فازهای authored).
+
+export interface NbackRotationRecord {
+  kind: 'nback';
+  v: 1;
+  seed: string;
+  train_count: number;
+  probe_count: number;
+  offset: number;
+}
+
+/**
+ * نقطهٔ شروع چرخش از seed — قطعی: همان seed و لنگرها → همان آفست (آزمون طلایی).
+ * گیت صحت: آفست فقط روی جایگاه‌های لنگر می‌افتد (آیتم‌های anchor با ماهیِ یگانهٔ
+ * جریان) تا پرچم همسانی ایستا پس از چرخش هم راست بماند — سر جریانِ چرخیده همیشه
+ * لنگر است و جفت‌های درون‌بخش دست‌نخورده می‌مانند. بانک بی‌لنگر = آفست صفر
+ * (ترتیب authored عیناً — رفتار امن پیش‌فرض).
+ */
+export function nbackRotationOffsetOf(seed: string, anchors: readonly number[]): number {
+  const list = (anchors ?? [])
+    .filter((n) => Number.isInteger(n) && n >= 0)
+    .sort((a, b) => a - b);
+  if (list.length === 0) return 0;
+  const rand = mulberry32(seedToNumber('nback:' + seed));
+  return list[Math.floor(rand() * list.length)] ?? list[0];
+}
+
+/** ترتیب چرخشی آیتم‌ها — پیشوند تمرین ثابت + پسوند پروب چرخان (پیمانه‌ای و برگشت‌پذیر) */
+export function nbackOrderedItems<T>(items: T[], rot: { train_count: number; offset: number }): T[] {
+  const trainEnd = Math.max(0, Math.min(Math.floor(rot.train_count), items.length));
+  const train = items.slice(0, trainEnd);
+  const probe = items.slice(trainEnd);
+  if (probe.length <= 1) return items.slice();
+  const off = ((Math.floor(rot.offset) % probe.length) + probe.length) % probe.length;
+  return [...train, ...probe.slice(off), ...probe.slice(0, off)];
+}
+
+/** سریالی‌سازی رکورد چرخش برای sequence_json جلسه — فشرده و خودتوصیف */
+export function serializeNbackRotation(rec: NbackRotationRecord): string {
+  return JSON.stringify(rec);
+}
+
+/** رکورد چرخش از session_json — ناسالم/بی‌رکورد = null (مدار authored عیناً) */
+export function parseNbackRotation(raw: string | null | undefined): NbackRotationRecord | null {
+  if (!raw) return null;
+  try {
+    const r = JSON.parse(raw) as Record<string, unknown>;
+    if (r.kind !== 'nback' || r.v !== 1 || typeof r.seed !== 'string') return null;
+    const train = typeof r.train_count === 'number' && Number.isInteger(r.train_count) && r.train_count >= 0 ? r.train_count : null;
+    const probe = typeof r.probe_count === 'number' && Number.isInteger(r.probe_count) && r.probe_count >= 0 ? r.probe_count : null;
+    const offset = typeof r.offset === 'number' && Number.isInteger(r.offset) && r.offset >= 0 ? r.offset : null;
+    if (train === null || probe === null || offset === null) return null;
+    return { kind: 'nback', v: 1, seed: r.seed, train_count: train, probe_count: probe, offset };
+  } catch {
+    return null;
+  }
+}

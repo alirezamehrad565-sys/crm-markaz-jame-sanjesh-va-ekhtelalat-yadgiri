@@ -90,11 +90,13 @@ export function reportToCsv(report: ChildGameReport): string {
     pct?: Record<string, number | null>;
     rt?: { median?: number | null };
     stage?: { title_fa?: string; stars?: number };
+    nback?: { match_pct?: number | null; false_alarm_pct?: number | null; miss_pct?: number | null };
   };
   const header = [
     'session_id', 'mission_ref', 'mission_title', 'purpose', 'validity', 'quality_verdict',
     'started_at', 'ended_at', 'total', 'correct_go_pct', 'correct_nogo_pct', 'commission_pct',
-    'omission_pct', 'median_rt_ms', 'stage_title', 'stage_stars', 'attempt_count'
+    'omission_pct', 'median_rt_ms', 'stage_title', 'stage_stars', 'attempt_count',
+    'nback_match_pct', 'nback_false_alarm_pct', 'nback_miss_pct'
   ];
   const lines = [header.join(',')];
   for (const s of report.sessions) {
@@ -116,7 +118,10 @@ export function reportToCsv(report: ChildGameReport): string {
       num(sum?.rt?.median),
       sum?.stage?.title_fa ?? '',
       typeof sum?.stage?.stars === 'number' ? String(sum.stage.stars) : '',
-      String(s.raw.attempt_count)
+      String(s.raw.attempt_count),
+      num(sum?.nback?.match_pct),
+      num(sum?.nback?.false_alarm_pct),
+      num(sum?.nback?.miss_pct)
     ].map(esc).join(','));
   }
   return '\uFEFF' + lines.join('\r\n') + '\r\n';

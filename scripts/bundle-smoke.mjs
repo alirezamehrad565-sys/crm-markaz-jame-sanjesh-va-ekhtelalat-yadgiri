@@ -96,6 +96,9 @@ async function probe(bundlePath) {
     let norm = text;
     try { norm = JSON.stringify(JSON.parse(text)); } catch { /* متن خام */ }
     norm = norm.replace(/"ts":"[^"]*"/g, '"ts":"<TS>"');
+    // ۱.۲۵.۴۰ — مُهرهای زمانی seed بین دو اجرا فرق می‌کنند؛ رفتار نیستند
+    norm = norm.replace(/"createdAt":"[^"]*"/g, '"createdAt":"<TS>"');
+    norm = norm.replace(/"started_at":"[^"]*"/g, '"started_at":"<TS>"');
     out.push(`${method} ${urlPath} → ${res.status} :: ${norm.slice(0, 4000)}`);
   }
   return out;
