@@ -21,7 +21,7 @@ import {
   SCAN_FB_ALL,
   toItemView
 } from './pure';
-import { protocolForAge, protocolSnapshotOf, bandForAge } from './protocol';
+import { protocolForAge, protocolSnapshotOf, bandForAge, applyNbackProtocol } from './protocol';
 import type { ProtocolMode } from './protocol';
 import { WINDOW_MAX_MS, WINDOW_MIN_MS } from './adaptive';
 import {
@@ -46,7 +46,7 @@ import { summarizeAttempts } from './scoring';
 import { assessQuality, serializeQuality, type QualityInput } from './quality';
 import { buildComparison, type ChildGameReport, type ReportRawAttempt, type ReportSession } from './report';
 import { decideAdaptive, applyAdaptiveLevel, serializeDecision, type AdaptiveSessionInput, type AdaptiveDecision } from './adaptive';
-import { generateSequence, serializeSequence, parseSequenceRecord } from './stimulus';
+import { generateSequence, serializeSequence, parseSequenceRecord, nbackRotationOffsetOf, nbackOrderedItems, serializeNbackRotation, parseNbackRotation } from './stimulus';
 import { ENGINE_METRICS, ENGINE_ONLY_FORMULAS, mergeEngineMetrics } from './registry-extra';
 // رجیستری نوع-محور (G4الف/رفع P3-4) — تجزیهٔ kind و پرچم‌های نوع تک‌منبعش همین نقشه است
 import { gameKindOf } from './registry';
@@ -894,18 +894,20 @@ export function createGamesService(deps: GamesDeps): GamesService {
         ? scanTrain.prompt
         : 'جاسوس‌ها ربات‌هایی با ' + sig + ' آنتن‌اند';
       return {
-        go: { label: 'جاسوس — ربات ' + sig + ' آنتن', stim: { signature: sig } },
+        go: { label: 'جاسوس — ربات ' + sig + ' آنتن', stim: stripAnswerKeys({ signature: sig }) },
         nogo: null,
-        scan: { label, stim: { signature: sig } }
+        scan: { label, stim: stripAnswerKeys({ signature: sig }) }
       };
     }
-    // سه بازی تازه (۱.۲۵.۳۲) — قاعدهٔ بازی از پرامپت آیتم آموزشی؛ هیچ کلیدی این‌جا نیست؛
+    // سه بازی تازه + ن‌پشت (۱.۲۵.۳۲/۱.۲۵.۴۰) — قاعدهٔ بازی از پرامپت آیتم آموزشی؛ هیچ کلیدی این‌جا نیست؛
     // محرک آموزش، عین همان چیزی است که کودک در اجرا می‌بیند
     const newTrain = (mission.items ?? []).find((it) =>
-      it.phase === 'train' && (it.type === 'stroop' || it.type === 'flanker' || it.type === 'trail'));
+      it.phase === 'train' && (it.type === 'stroop' || it.type === 'flanker' || it.type === 'trail' || it.type === 'nback'));
     if (newTrain && !go && !nogo) {
-      const kindKey = newTrain.type as 'stroop' | 'flanker' | 'trail';
-      const stim = (newTrain.stim ?? {}) as Record<string, unknown>;
+      const kindKey = newTrain.type as 'stroop' | 'flanker' | 'trail' | 'nback';
+      // سد نشتی data-hint — stim راهنما از stripAnswerKeys می‌گذرد (کلید همسانی match
+      // ن‌پشت و هر کلید پاسخی در هر عمق این‌جا می‌ماند؛ برای بانک‌های فعلی بی‌اثر)
+      const stim = stripAnswerKeys((newTrain.stim ?? {}) as Record<string, unknown>);
       const label = typeof newTrain.prompt === 'string' && newTrain.prompt.trim() !== '' ? newTrain.prompt : '';
       return {
         go: { label, stim },
@@ -916,8 +918,8 @@ export function createGamesService(deps: GamesDeps): GamesService {
     if (!go && !nogo) return null;
     // درون‌مایهٔ دیداری مرحله (۱.۲۵.۲۳) — قدم آموزش دقیقاً همان چیزی را نشان می‌دهد
     // که کودک در اجرای اصلی می‌بیند؛ کلید پاسخ در برچسب نیست (فقط توصیف ظاهری)
-    const goStim = stageStimViewOf(go?.stim, true, stageId);
-    const nogoStim = nogo ? stageStimViewOf(nogo.stim, false, stageId) : null;
+    const goStim = stripAnswerKeys(stageStimViewOf(go?.stim, true, stageId));
+    const nogoStim = nogo ? stripAnswerKeys(stageStimViewOf(nogo.stim, false, stageId)) : null;
     return {
       go: { label: stimLabelOf(goStim), stim: goStim },
       nogo: nogoStim ? { label: stimLabelOf(nogoStim), stim: nogoStim } : null
@@ -949,6 +951,9 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const mode: ProtocolMode = res.pkg.body.mode ?? 'training';
     const childAge = state === 'child_active' ? await childAgeOf(res.rx.child_id) : null;
     let snap = protocolSnapshotOf(protocolForAge(mode, childAge));
+    // ن‌پشت (۱.۲۵.۴۰) — snapshot با پارامترهای پروتکل نوع-محور بازنویسی می‌شود؛
+    // برای شش نوع دیگر بی‌اثر است و بازنویسی مرحله (ISI/تثبیت) روی همین می‌نشیند
+    if (kind === 'nback') snap = applyNbackProtocol(snap, bandForAge(childAge).band);
     // نظام مرحله‌ها و ستاره‌ها (۱.۲۵.۲۲) — فقط تمرین؛ پنجره/ISI/تثبیت بر پایهٔ مرحلهٔ فعال بازنویسی می‌شود؛
     // ارزیابی هرگز مرحله نمی‌بیند (C1) و کلید خاموشی درمانگر همیشه محترم است
     let stage: StageDef | null = null;
@@ -1181,8 +1186,32 @@ export function createGamesService(deps: GamesDeps): GamesService {
       const hasProtocol = mode === 'assessment' || res.pkg.body.protocol != null;
       const poolGo = touchItems.filter((it) => it.correct_touch === true).length;
       const poolRatio = touchItems.length > 0 ? poolGo / touchItems.length : null;
+      // مرحلهٔ فعال مسیر پیشرفت (۱.۲۵.۲۲) — فقط تمرین؛ resolve از تاریخچهٔ تجویز و ماندگاری در جلسه؛
+      // عنوان/ملاک مرحله‌ها نوع‌بازی‌آگاه (۱.۲۵.۲۸) — پیش از نوشتن جلسه منجمد می‌شود تا
+      // رکورد چرخش ن‌پشت هم روی جریانِ همان مرحله بسته شود
+      let stageId: string | null = null;
+      if (mode === 'training') {
+        const sctx = await stageContextOf(res.rx.id, await childAgeOf(res.rx.child_id), res.pkg.body, gameKindOf(mission.game));
+        stageId = sctx?.stage.id ?? null;
+      }
       let sequenceJson: string | null = null;
-      if (hasProtocol && touchItems.length >= 4) {
+      const missionKind = gameKindOf(mission.game);
+      if (missionKind === 'nback') {
+        // ن‌پشت (۱.۲۵.۴۰) — به‌جای دنبالهٔ g/n، رکورد چرخش لنگر-مقید در جلسه می‌نشیند:
+        // آفست قطعی از seed جلسه، فقط روی سرِ زنجیره‌های مجاز (rot_start) پسوند پروب —
+        // سرِ جریان چرخیده همیشه لنگر است و حکم‌های همسانی درون زنجیره‌ها سالم می‌مانند
+        const flowItems = (mission.items ?? []).filter((it) => itemInStageFor(missionKind, it, stageId));
+        const trainCount = flowItems.filter((it) => it.phase === 'train').length;
+        const probeSuffix = flowItems.slice(trainCount);
+        const anchors = probeSuffix
+          .map((it, i) => ((it.stim ?? {}) as Record<string, unknown>).rot_start === true ? i : -1)
+          .filter((i) => i >= 0);
+        const offset = nbackRotationOffsetOf(id, anchors);
+        sequenceJson = serializeNbackRotation({
+          kind: 'nback', v: 1, seed: id,
+          train_count: trainCount, probe_count: probeSuffix.length, offset
+        });
+      } else if (hasProtocol && touchItems.length >= 4) {
         const prot = protocolForAge(mode, await childAgeOf(res.rx.child_id));
         const seq = generateSequence({
           seed: id, // seed = شناسهٔ جلسه — یگانه، قابل‌ذخیره، بازتولیدپذیر
@@ -1192,13 +1221,6 @@ export function createGamesService(deps: GamesDeps): GamesService {
           blockSize: prot.params.block_size.value
         });
         sequenceJson = serializeSequence(seq);
-      }
-      // مرحلهٔ فعال مسیر پیشرفت (۱.۲۵.۲۲) — فقط تمرین؛ resolve از تاریخچهٔ تجویز و ماندگاری در جلسه؛
-      // عنوان/ملاک مرحله‌ها نوع‌بازی‌آگاه (۱.۲۵.۲۸)
-      let stageId: string | null = null;
-      if (mode === 'training') {
-        const sctx = await stageContextOf(res.rx.id, await childAgeOf(res.rx.child_id), res.pkg.body, gameKindOf(mission.game));
-        stageId = sctx?.stage.id ?? null;
       }
       await db.execute(
         `INSERT INTO game_sessions (id, mission_id, state, validity, purpose, sequence_json, stage_id, started_at, last_activity_at)
@@ -1236,7 +1258,13 @@ export function createGamesService(deps: GamesDeps): GamesService {
         ?? unansweredOf(() => true); // سهمیهٔ دسته خالی — نزدیک‌ترین سازگار
     }
     if (!next) {
-      next = stageItems.find((it) => !doneIds.has(it.id));
+      // ن‌پشت (۱.۲۵.۴۰) — ترتیب چرخشی از رکورد جلسه (ضدحفظ، لنگر-مقید)؛ رکورد خراب =
+      // جریان بی‌چرخش روی ترتیب authored — هرگز انتخاب آیتم نمی‌شکند
+      const rot = kind === 'nback' ? parseNbackRotation(session.sequence_json) : null;
+      const flow = rot
+        ? nbackOrderedItems(stageItems, { train_count: rot.train_count, offset: rot.offset })
+        : stageItems;
+      next = flow.find((it) => !doneIds.has(it.id));
     }
 
     await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf(now()), session.id]);

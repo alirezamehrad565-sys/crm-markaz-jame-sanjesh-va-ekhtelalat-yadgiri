@@ -218,3 +218,74 @@ export function parseSequenceRecord(raw: string | null | undefined): {
     return null;
   }
 }
+
+// ─── چرخش لنگر-مقید «ن‌پشت» (۱.۲۵.۴۰) — ضدحفظ ترتیب authored بین جلسه‌ها ───
+// بانک authored ترتیب ثابتی دارد؛ تکرار جلسه‌ها می‌تواند ترتیب را قابل حفظ‌کردن کند.
+// درمان: پسوند پروبِ هر جلسه با آفستی قطعی (از seed جلسه) چرخش می‌شود — اما چرخشِ کور
+// حکم همسانی (stim.match که به همسایهٔ n-قدم-عقب‌تر بسته است) را می‌شکند. راه‌حل:
+// آفست فقط روی «سرِ زنجیره‌ها» می‌نشیند — آیتم‌های لنگر (stim.rot_start=true) آغاز
+// زنجیره‌های مستقل n-back هستند و چرخش پیمانه‌ایِ پسوند با آفستِ لنگر، زنجیره‌ها را
+// سالم جابه‌جا می‌کند (درون هر زنجیره ترتیب و حکم‌ها عیناً می‌ماند).
+
+/** رکورد چرخش ن‌پشت در sequence_json جلسه — قطعی و بازتولیدپذیر برای ممیزی */
+export interface NbackRotationRecord {
+  kind: 'nback';
+  v: 1;
+  seed: string;
+  /** طول پیشوند تمرین — عیناً ثابت می‌ماند */
+  train_count: number;
+  /** شمار آیتم‌های پسوند پروب */
+  probe_count: number;
+  /** آفست پیمانه‌ای چرخش پسوند — فقط روی جایگاه لنگر (rot_start) می‌نشیند */
+  offset: number;
+}
+
+/**
+ * انتخاب قطعی آفست چرخش از میان سرِ زنجیره‌های مجاز (anchors؛ اندیس‌های درون پسوند) —
+ * همان seed → همان آفست، همیشه. فهرست خالی (بانک بی‌لنگر) = آفست صفر؛ یعنی بانکی که
+ * لنگر ندارد هرگز چرخیده نمی‌شود (ترتیب authored عیناً می‌ماند).
+ */
+export function nbackRotationOffsetOf(seed: string, anchors: number[]): number {
+  const valid = anchors.filter((a) => Number.isInteger(a) && a >= 0);
+  if (valid.length === 0) return 0;
+  const rand = mulberry32(seedToNumber(seed));
+  const idx = Math.floor(rand() * valid.length) % valid.length;
+  return valid[idx];
+}
+
+/**
+ * ترتیب آیتم‌های جریان ن‌پشت — چرخش پیمانه‌ای «فقط پسوند پروب»؛ پیشوند تمرین عیناً.
+ * آفستِ لنگر-مقید (خروجی nbackRotationOffsetOf) سرِ پسوند را به یک لنگر می‌برد و
+ * زنجیره‌های n-back دست‌نخورده می‌مانند. آفستِ بیرون از دامنه با پیمانه امن می‌شود.
+ */
+export function nbackOrderedItems<T>(items: readonly T[], opts: { train_count: number; offset: number }): T[] {
+  const list = Array.from(items);
+  const train = Number.isInteger(opts.train_count) && opts.train_count > 0 ? Math.min(opts.train_count, list.length) : 0;
+  const head = list.slice(0, train);
+  const suffix = list.slice(train);
+  const len = suffix.length;
+  if (len <= 1) return list;
+  const off = Number.isInteger(opts.offset) ? ((opts.offset % len) + len) % len : 0;
+  return [...head, ...suffix.slice(off), ...suffix.slice(0, off)];
+}
+
+/** سریالی‌سازی رکورد چرخش برای sequence_json جلسه */
+export function serializeNbackRotation(record: NbackRotationRecord): string {
+  return JSON.stringify({ kind: 'nback', v: 1, seed: record.seed, train_count: record.train_count, probe_count: record.probe_count, offset: record.offset });
+}
+
+/** رکورد چرخش ذخیره‌شده → بازخوانی سخت‌گیرانه؛ ناموفق/ناخوانا = null (جریان بی‌چرخش می‌ماند) */
+export function parseNbackRotation(raw: string | null | undefined): NbackRotationRecord | null {
+  if (!raw) return null;
+  try {
+    const r = JSON.parse(raw) as Partial<NbackRotationRecord>;
+    if (r.kind !== 'nback' || r.v !== 1 || typeof r.seed !== 'string') return null;
+    if (typeof r.train_count !== 'number' || typeof r.probe_count !== 'number' || typeof r.offset !== 'number') return null;
+    if (!Number.isInteger(r.train_count) || r.train_count < 0) return null;
+    if (!Number.isInteger(r.probe_count) || r.probe_count < 0) return null;
+    if (!Number.isInteger(r.offset) || r.offset < 0 || r.offset > r.probe_count) return null;
+    return { kind: 'nback', v: 1, seed: r.seed, train_count: r.train_count, probe_count: r.probe_count, offset: r.offset };
+  } catch {
+    return null;
+  }
+}

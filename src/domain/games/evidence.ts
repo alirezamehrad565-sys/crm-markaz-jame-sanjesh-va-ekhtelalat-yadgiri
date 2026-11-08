@@ -134,7 +134,7 @@ export function buildEvidenceDossier(
     value: windowMiss,
     unit: 'percent',
     flag: flagOf(windowMiss, TIMEOUT_OK_PCT, TIMEOUT_WATCH_PCT),
-    note_fa: windowMiss === null ? 'این نشانه فقط برای انتخاب زمان‌دار (استروپ/فلانکر) تعریف می‌شود.' : null
+    note_fa: windowMiss === null ? 'این نشانه فقط برای انتخاب زمان‌دار (استروپ/فلانکر/ن‌پشت) تعریف می‌شود.' : null
   });
 
   // ۵) پوشش شواهد نمایش — شفافیت کیفیت داده

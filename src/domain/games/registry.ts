@@ -20,8 +20,10 @@ import type { StageDef } from './stages';
 import type { RegistryMetric } from './types';
 
 // ─── شناسه‌های نوع — ترتیب قطعی؛ افزودن بازی تازه فقط این‌جا و یک ورودی نقشه ───
+// «ن‌پشت» (nback / ۱.۲۵.۴۰) در انتها نشسته — ترتیب پیشین شش نوع دست‌نخورده تا ترتیب
+// آرایهٔ سنجه‌های موتور (ENGINE_METRICS) و مقایسه‌های بین‌نسخه‌ای از هم نپاشد.
 
-export const GAME_KIND_IDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail'] as const;
+export const GAME_KIND_IDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail', 'nback'] as const;
 export type GameKind = (typeof GAME_KIND_IDS)[number];
 
 /** نوع‌بازی از فیلد mission.game — ناشناخته = گونوگو (سازگاری با بسته‌های قدیمی) */
@@ -131,6 +133,15 @@ const ACCURACY_STAGE_RULE: AccuracyStageRule = {
   shape: 'accuracy',
   pass: P(65, 'گذار با دقت ≥۶۵٪ — بالای شانس حدس بانک فعلی؛ پیشنهاد کارشناس ۱.۲۵.۲۸'),
   star2: P(78, 'دوستاره — فاصلهٔ محسوس از گذار؛ پلهٔ انگیزشی میانی'),
+  star3: P(88, 'سه‌ستاره — دقت تقریباً بی‌خطا؛ ارتقای آن با دادهٔ پیلوت مرکز')
+};
+
+/** آستانهٔ «ن‌پشت» (۱.۲۵.۴۰) — همان پلهٔ ۶۵/۷۸/۸۸ دقت‌محورها؛ خروجی جداگانه‌اش برای
+ *  این‌که آیندهٔ این نوع به پیلوت خودش وابسته بماند، نه به جدول مشترک */
+export const NBACK_THRESHOLDS: AccuracyStageRule = {
+  shape: 'accuracy',
+  pass: P(65, 'گذار با دقت دوگزینه‌ای ≥۶۵٪ — بالای شانس حدس ۵۰٪ دودویی؛ پیشنهاد کارشناس ۱.۲۵.۴۰'),
+  star2: P(78, 'دوستاره — هم‌پلهٔ دقت‌محورهای دیگر تا مقایسهٔ بین‌بازی گول‌زننده نشود'),
   star3: P(88, 'سه‌ستاره — دقت تقریباً بی‌خطا؛ ارتقای آن با دادهٔ پیلوت مرکز')
 };
 
@@ -281,6 +292,69 @@ const FLANKER_STAGES: StageDef[] = [
   }
 ];
 
+// «ن‌پشت» / آلبوم خرچنگ (۱.۲۵.۴۰) — اهرم سختی = پلهٔ n؛ s1/s2 با n=1 و s3 به بعد n=2؛
+// overrides فقط ISI/تثبیت — پرش n در s3 با فرود نرمِ فاصلهٔ بین‌آزمونشی جبران می‌شود،
+// پنجرهٔ پاسخ دست مرحله نیست (عملیاتی روی stim.window_ms آیتم)
+const NBACK_STAGES_4_6: StageDef[] = [
+  {
+    id: 's1', index: 1, title_fa: 'آلبوم گرم می‌شود', goal_fa: 'دوتا عقب را یاد بگیر؛ آهسته و خوش‌حال.', difficulty: 1,
+    overrides: { isi_min_ms: 2600, isi_max_ms: 3200, fixation_ms: 400 }
+  },
+  {
+    id: 's2', index: 2, title_fa: 'آلبوم تمرین', goal_fa: 'همان‌طور که یاد گرفتی ادامه بده.', difficulty: 2,
+    overrides: {} // پارامترهای پایهٔ پروتکل — بدون بازنویسی
+  },
+  {
+    id: 's3', index: 3, title_fa: 'سه قدم عقب‌تر', goal_fa: 'حالا سه‌تا عقب نگاه کن؛ وقت کم نیست، آرام باش.', difficulty: 3,
+    // فرود نرم پرش n — فاصلهٔ بین‌آزمونشی کمی بلندتر از پایه تا حافظهٔ تازه فشار زمانی تازه نگیرد
+    overrides: { isi_min_ms: 2400, isi_max_ms: 3000, fixation_ms: 400 }
+  },
+  {
+    id: 's4', index: 4, title_fa: 'آلبوم بزرگ', goal_fa: 'چشم‌هایت تیز است؛ دوتا عقب را گم نکن.', difficulty: 4,
+    overrides: { isi_min_ms: 2200, isi_max_ms: 2800, fixation_ms: 400 }
+  },
+  {
+    id: 's5', index: 5, title_fa: 'قهرمان آلبوم', goal_fa: 'همهٔ آلبوم‌ها با هم — تو آماده‌ای!', difficulty: 5,
+    overrides: { isi_min_ms: 2000, isi_max_ms: 2600, fixation_ms: 350 }
+  }
+];
+
+const NBACK_STAGES_7_12: StageDef[] = [
+  {
+    id: 's1', index: 1, title_fa: 'آلبوم گرم می‌شود', goal_fa: 'دوتا عقب را یاد بگیر؛ آهسته و خوش‌حال.', difficulty: 1,
+    overrides: { isi_min_ms: 2200, isi_max_ms: 2800, fixation_ms: 400 }
+  },
+  {
+    id: 's2', index: 2, title_fa: 'آلبوم تمرین', goal_fa: 'همان‌طور که یاد گرفتی ادامه بده.', difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: 's3', index: 3, title_fa: 'سه قدم عقب‌تر', goal_fa: 'حالا سه‌تا عقب نگاه کن؛ وقت کم نیست، آرام باش.', difficulty: 3,
+    overrides: { isi_min_ms: 2000, isi_max_ms: 2600, fixation_ms: 400 }
+  },
+  {
+    id: 's4', index: 4, title_fa: 'آلبوم بزرگ', goal_fa: 'چشم‌هایت تیز است؛ دوتا عقب را گم نکن.', difficulty: 4,
+    overrides: { isi_min_ms: 1800, isi_max_ms: 2400, fixation_ms: 400 }
+  },
+  {
+    id: 's5', index: 5, title_fa: 'قهرمان آلبوم', goal_fa: 'همهٔ آلبوم‌ها با هم — تو آماده‌ای!', difficulty: 5,
+    overrides: { isi_min_ms: 1600, isi_max_ms: 2200, fixation_ms: 350 }
+  }
+];
+
+const NBACK_STAGES: Record<AgeBandId, StageDef[]> = { '4-6': NBACK_STAGES_4_6, '7-12': NBACK_STAGES_7_12 };
+
+/** پلهٔ n هر مرحلهٔ ن‌پشت — سیکل بانک authored این را می‌خواند؛ کلید = s1..s5 */
+export const NBACK_STAGE_LEVELS: Record<string, 1 | 2> = { s1: 1, s2: 1, s3: 2, s4: 2, s5: 2 };
+
+/** پیش‌ماندٔ آیتم ن‌پشت در مرحله — فیلتر بر سطح n بانک authored؛ بی‌مرحله/ناشناخته = همهٔ آیتم‌ها */
+export function nbackItemInStage(item: StageItemLike, stageId: string | null | undefined): boolean {
+  const level = typeof stageId === 'string' ? NBACK_STAGE_LEVELS[stageId] : undefined;
+  if (!level) return true;
+  const s = (item.stim ?? {}) as Record<string, unknown>;
+  return s.n === level;
+}
+
 // رد پای دزد (۱.۲۵.۳۲) — اهرم = طول رد و آمیختهٔ عدد/حرف
 const TRAIL_STAGES: StageDef[] = [
   {
@@ -408,7 +482,11 @@ export const ENGINE_ONLY_FORMULAS: readonly string[] = [
   'congruent_acc',
   'incongruent_acc',
   'interference_ms',
-  'trail_prefix'
+  'trail_prefix',
+  'nback_match',
+  'nback_nonmatch',
+  'nback_fa',
+  'nback_miss'
 ];
 
 // ─── نقشهٔ نوع-محور — تک‌منبع؛ ترتیب کلیدها = ترتیب قطعی GAME_KIND_IDS ───
@@ -535,6 +613,23 @@ export const GAME_KINDS: { [K in GameKind]: GameKindSpec<K> } = {
     },
     engine_metrics: [
       { id: 'trail_prefix_pct', title_fa: 'درصد پیش‌ماند صحیح رد ردپاها', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'trail_prefix' }
+    ]
+  },
+  nback: {
+    // ن‌پشت (آلبوم خرچنگ) — کف ۲۰۰ms: لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
+    rt_floor_ms: 200,
+    // انتخاب زمان‌دار — بی‌پاسخی پنجره سمت سرور اُمیشن است (عملیاتی روی stim.window_ms آیتم)
+    timed_choice: true,
+    stage_rule: NBACK_THRESHOLDS,
+    stageList: (band) => NBACK_STAGES[band] ?? NBACK_STAGES['7-12'],
+    // اهرم سختی ن‌پشت فیلتر سطح n در خود itemInStage است — جدول سقف/گروه جدا ندارد
+    levers: {},
+    itemInStage: nbackItemInStage,
+    engine_metrics: [
+      { id: 'nback_match_pct', title_fa: 'درصد پاسخ درست به همسان‌ها', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'nback_match' },
+      { id: 'nback_nonmatch_pct', title_fa: 'درصد پاسخ درست به ناهمسان‌ها', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'nback_nonmatch' },
+      { id: 'nback_false_alarm_pct', title_fa: 'درصد هشدار کاذب (گفتن «همان است» برای ناهمسان)', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'nback_fa' },
+      { id: 'nback_miss_pct', title_fa: 'درصد جاانداختن همسان', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'nback_miss' }
     ]
   }
 };
