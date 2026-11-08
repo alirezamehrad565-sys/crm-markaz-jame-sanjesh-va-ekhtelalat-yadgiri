@@ -92,8 +92,9 @@ describe('گیت ۱.۲۵.۰۸ — قواعد حسی §۹', () => {
 describe('گیت ۱.۲۵.۰۸ — اتصال صفحه به پخش‌کننده', () => {
   it('دارایی‌های بازی فقط در شاخهٔ child_active و شاخهٔ پیش‌نمایش فقط-پرسنلی سرو می‌شوند (css + js با نسخه)', () => {
     const occurrences = pageSrc.match(/assets\/play\//g) ?? [];
-    // هر شاخه یک link + یک script: کودک (play.js) + پیش‌نمایش (preview.js) — ۱.۲۵.۲۰
-    expect(occurrences.length).toBe(4);
+    // هر شاخه یک link + یک script (کودک: play.js · پیش‌نمایش: preview.js — ۱.۲۵.۲۰)
+    // + یک رخداد الگوی پوستهٔ اختصاصی در helper مشترک skinLink (G7/۱.۲۵.۴۳)
+    expect(occurrences.length).toBe(5);
     const childBranch = pageSrc.slice(
       pageSrc.indexOf("state === 'child_active'"),
       pageSrc.indexOf("state === 'child_done'")
@@ -102,12 +103,15 @@ describe('گیت ۱.۲۵.۰۸ — اتصال صفحه به پخش‌کننده',
     expect(childBranch).toContain('data-kind=');
     expect(childBranch).toContain('data-hint=');
     expect(childBranch).toContain('APP_VERSION');
+    expect(childBranch).toContain('skinLink(model.playGame)'); // پوستهٔ اختصاصی هر نوع‌بازی (G7)
     // شاخهٔ پیش‌نمایش: توکن خودش + بدون کلید؛ ماژول جدا از پخش‌کنندهٔ کودک
     const previewBranch = pageSrc.slice(pageSrc.indexOf('renderPreviewPage'));
     expect(previewBranch).toContain('id="play-root"');
     expect(previewBranch).toContain('data-protocol=');
     expect(previewBranch).toContain('preview.js');
     expect(previewBranch.indexOf('play.css')).toBeGreaterThan(-1);
+    expect(previewBranch).toContain('skinLink(state.game)'); // پیش‌نمایش هم پوستهٔ اختصاصی می‌گیرد (G7)
+    expect(pageSrc).toContain('/assets/play/skins/');
     expect(previewBranch).not.toContain('play.js?');
   });
 

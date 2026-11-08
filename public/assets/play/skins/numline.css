@@ -1,0 +1,129 @@
+/* ═══════════════════════════════════════════════════════════════
+   skins/numline.css — پوستهٔ «جادهٔ فانوس» برای جادهٔ عددها (G7):
+   گرگ‌ومیشِ روشن‌خانواده (#153E50) + فانوس کهربایی (#E4AA46) در سواحل
+   جاده؛ جاده سوژهٔ اصلی است (کف روشن با خط‌کشی)؛ بدون keyframes/انیمیشن
+   (§۹)؛ بدون URL بیرونی؛ RTL؛ کف لمس پایه.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* پالت شب‌هنگام؛ فقط همین بازی می‌گیردش */
+.play-skin--numline {
+  --n-dusk1: #173F53;
+  --n-dusk2: #235872;
+  --n-road: #F1E8D2;
+  --n-road2: #D8C8A5;
+  --n-lamp: #E4AA46;
+  --n-glow: rgba(255,199,92,.45);
+  --n-cream: #F5F0E5;
+}
+
+/* آسمان گرگ‌ومیش همهٔ شِمال‌ها؛ گذار بی‌پرش */
+.play-skin--numline .play-stage {
+  background: linear-gradient(180deg,#12384B 0%,var(--n-dusk1) 36%,var(--n-dusk2) 72%,#2F667C 100%);
+}
+
+/* قاب فانوسی + هالهٔ افق؛ بالای صحنه، زیر گفتار؛ ایستا */
+.play-skin--numline .play-stage::before {
+  content: ''; position: absolute; inset: 0; z-index: 1; border-radius: inherit;
+  background: radial-gradient(130% 62% at 50% 90%,rgba(228,170,70,.26),rgba(228,170,70,.09) 46%,transparent 74%);
+  box-shadow: inset 0 0 0 3px rgba(228,170,70,.38), inset 0 0 0 6px rgba(10,30,42,.85);
+  pointer-events: none;
+}
+
+/* شانه‌های جاده روشن‌تر تا ناحیهٔ لمس دیده شود */
+.play-skin--numline .play-numline__road {
+  background: linear-gradient(180deg,rgba(245,240,229,.09),rgba(245,240,229,.03) 58%,rgba(9,26,38,.28));
+  border-radius: 18px;
+}
+
+/* ریل = آسفالت روشن با خط‌کشی؛ مرکز = مرکز پایه تا نشان‌ها نلغزند */
+.play-skin--numline .play-numline__rail {
+  top: 30px; height: 12px; border-radius: 999px;
+  background:
+    repeating-linear-gradient(90deg,rgba(21,62,80,.48) 0 12px,transparent 12px 30px) 50% 50%/auto 2px no-repeat,
+    linear-gradient(180deg,#F8F1DF 0%,var(--n-road) 46%,var(--n-road2) 100%);
+  box-shadow: 0 2px 5px rgba(9,26,38,.45), 0 0 16px rgba(228,170,70,.18);
+}
+
+/* فانوس آغاز/پایان جاده؛ هالهٔ ایستا بی‌پالس */
+.play-skin--numline .play-numline__rail::before,
+.play-skin--numline .play-numline__rail::after {
+  content: ''; position: absolute; top: -3px; width: 18px; height: 18px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%,#FFE3A6,var(--n-lamp) 60%,#B97F2A);
+  box-shadow: 0 0 14px 4px var(--n-glow);
+}
+.play-skin--numline .play-numline__rail::before { left: -9px; }
+.play-skin--numline .play-numline__rail::after { right: -9px; }
+
+/* تیک = پایهٔ فانوس؛ برچسب‌دارها سرِ روشن دارند */
+.play-skin--numline .play-numline__tick { background: linear-gradient(180deg,#CDBF9E,#9A8E72); }
+.play-skin--numline .play-numline__tick--lab { background: linear-gradient(180deg,var(--n-lamp),#B97F2A); box-shadow: 0 0 6px var(--n-glow); }
+.play-skin--numline .play-numline__tick--lab::before {
+  content: ''; position: absolute; top: -12px; left: 50%; width: 10px; height: 10px;
+  transform: translateX(-50%); border-radius: 50%;
+  background: radial-gradient(circle at 50% 36%,#FFE9B8,var(--n-lamp) 58%,#B97F2A);
+  box-shadow: 0 0 8px 2px var(--n-glow);
+}
+
+/* عدد زیر فانوس‌ها؛ کرم و خوانا */
+.play-skin--numline .play-numline__lab { top: 54px; font-size: 13px; color: var(--n-cream); }
+
+/* حدس = فانوس کودک؛ حقیقت = حلقهٔ Teal پایه (رنگ+مکان) */
+.play-skin--numline .play-numline__mark--guess {
+  top: 22px; width: 26px; height: 26px;
+  background: radial-gradient(circle at 50% 36%,#FFE3A6,var(--n-lamp) 58%,#B97F2A);
+  box-shadow: 0 0 12px 3px var(--n-glow);
+}
+
+/* چیپ عدد = تابلوی سر جاده؛ کروم کهربایی */
+.play-skin--numline .play-numline__chip {
+  min-width: 96px; border: 2px solid rgba(21,62,80,.55); color: #143240; font-size: 40px;
+  background: linear-gradient(180deg,#F3C469 0%,var(--n-lamp) 55%,#C88F2F 100%);
+  box-shadow: 0 10px 22px rgba(9,26,38,.45);
+}
+
+/* گفتار کرم روی گرگ‌ومیش تا کنتراست نریزد */
+.play-skin--numline :is(.play-numline__prompt,.play-line,.play-muted) { color: var(--n-cream); }
+.play-skin--numline .play-numline__prompt { font-size: 16px; }
+.play-skin--numline .play-step-badge { background: var(--n-lamp); color: #143240; box-shadow: 0 2px 8px rgba(9,26,38,.35); }
+
+/* نام معرفی کرم؛ شمارنده کهربایی */
+.play-skin--numline .play-intro__name { color: var(--n-cream); }
+.play-skin--numline .play-intro__remain { color: #F0D9A8; }
+
+/* دکمه‌ها کروم فانوسی؛ کف ۶۴px دست‌نخورده */
+.play-skin--numline .play-btn {
+  background: linear-gradient(180deg,#F3C469,var(--n-lamp) 58%,#C88F2F);
+  color: #143240;
+  box-shadow: 0 10px 24px rgba(9,26,38,.4), inset 0 2px 0 rgba(255,255,255,.45);
+}
+.play-skin--numline .play-option { border-color: rgba(245,240,229,.4); background: rgba(245,240,229,.94); }
+
+/* نوار پیشرفت؛ تایمر نمایشی ندارد (§۹) */
+.play-skin--numline .play-progress__bar {
+  background: linear-gradient(to left,#FFD98A,var(--n-lamp));
+  box-shadow: 0 0 10px var(--n-glow);
+}
+
+/* حباب و سبد؛ فقط تمرین می‌بیند */
+.play-skin--numline .play-bubble--ok { background: #FDF4DD; border-color: rgba(228,170,70,.6); }
+.play-skin--numline .play-bubble--calm { background: var(--n-cream); border-color: rgba(21,62,80,.3); }
+.play-skin--numline .play-basket { background: rgba(245,240,229,.95); border: 2px solid rgba(228,170,70,.5); }
+
+/* پوشش چرخاندن = همان آسمان */
+.play-skin--numline .play-rotate { background: linear-gradient(180deg,#12384B,var(--n-dusk2)); color: var(--n-cream); }
+
+/* برگهٔ کرم پایان تا متن خوانا بماند */
+.play-skin--numline .play-debrief { background: rgba(245,240,229,.95); border-color: rgba(228,170,70,.45); }
+
+/* افقی فقط بهبود؛ عمودی قفل است */
+@media (orientation: landscape) {
+  .play-skin--numline .play-numline { max-width: min(94%,820px); }
+  .play-skin--numline .play-numline__chip { font-size: 46px; }
+  .play-skin--numline .play-numline__lab { font-size: 14px; }
+}
+
+/* کاهش‌جنبش: ایستا (§۹) */
+@media (prefers-reduced-motion: reduce) {
+  .play-skin--numline :is(.play-numline__chip,.play-btn,.play-option,.play-progress__bar) { transition: none; animation: none; }
+  .play-skin--numline :is(.play-btn,.play-option):active { transform: none; filter: none; }
+}

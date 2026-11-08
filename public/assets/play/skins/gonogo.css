@@ -1,0 +1,103 @@
+/* ═══ پوستهٔ «آبسنگ مرجانی» — skins/gonogo.css (لایهٔ هنر گو/نوگو) ═══
+   چرا: ماهی و خرچنگ در آبسنگ کم‌عمق زندگی می‌کنند — ماسهٔ کرم گرم، آب
+   فیروزه‌ای روزِ دریا، مرجان کهربایی برای تشویق. فقط هنر روی play.css؛
+   بی‌انیمیشن و بی‌دارایی بیرونی — جنبش فقط ترنزیشن ملایم. */
+
+/* چرا: پالت پوسته و بستر ماسهٔ کرم — پایهٔ آبسنگ */
+.play-skin--gonogo {
+  --g-sand: #F5F0E5;
+  --g-sand-deep: #EDE3CC;
+  --g-shell: #F0E7D2;
+  --g-water: #438C89;
+  --g-water-deep: #2F6D6A;
+  --g-coral: #E4AA46;
+  --g-coral-soft: #F3CE8B;
+  --g-ink: #153E50;
+  background: linear-gradient(180deg,#EAF4F0 0%,var(--g-sand) 58%,var(--g-sand-deep) 100%);
+}
+
+/* چرا: آب روشن به ماسه می‌رسد؛ حباب‌های محو گرادیان شعاعی‌اند */
+.play-skin--gonogo .play-stage {
+  position: relative;
+  background:
+    radial-gradient(circle at 18% 20%, rgba(255,255,255,.55) 0 7%, transparent 28%),
+    radial-gradient(circle at 84% 12%, rgba(255,255,255,.4) 0 6%, transparent 24%),
+    radial-gradient(120% 90% at 50% 110%, var(--g-shell) 0 32%, rgba(240,231,210,0) 60%),
+    linear-gradient(180deg,#DFF0EC 0%,#BFE0DB 46%,#9ED2CC 80%,#C9E4DC 100%);
+}
+
+/* چرا: لبهٔ کف مرجانی و وینیت نرم — نگاه وسط صحنه می‌ماند */
+.play-skin--gonogo .play-stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(130% 120% at 50% 42%, transparent 62%, rgba(47,109,106,.16));
+  box-shadow: inset 0 0 0 3px rgba(255,255,255,.65), inset 0 -18px 34px rgba(67,140,137,.16);
+}
+
+/* چرا: آزمون آرام‌تر از جشن — آب صاف بی‌حباب، تمرکز فقط محرک */
+.play-skin--gonogo .play-stage--main { background: linear-gradient(180deg,#E7F3EF 0%,#C6E2DC 55%,#A9D6CF 100%); }
+
+/* چرا: هالهٔ گرم پشت محرک کمی پررنگ‌تر — بی‌فلاش */
+.play-skin--gonogo .play-stage--main::before { background: radial-gradient(circle at 50% 46%, rgba(228,170,70,.22), rgba(67,140,137,.1) 45%, transparent 70%); }
+
+/* چرا: ماهی و خرچنگ با رنگ خودشان بدرخشند — کف و سایهٔ عمق */
+.play-skin--gonogo .play-stage--main .play-svg { filter: drop-shadow(0 0 10px rgba(255,255,255,.85)) drop-shadow(0 10px 18px rgba(21,62,80,.22)); }
+
+/* چرا: کارت آموزش کف سفید روی آب روشن */
+.play-skin--gonogo .play-stage--teach { background: linear-gradient(180deg,#FFFFFF,#F3FAF7); }
+
+/* چرا: پایان آفتابی — نور مرجان از ته صحنه بالا می‌آید */
+.play-skin--gonogo .play-stage--end { background: radial-gradient(120% 90% at 50% 112%, rgba(228,170,70,.25), transparent 55%), linear-gradient(180deg,#FFFFFF,#F6FBF9); }
+
+/* چرا: دکمهٔ اصلی آب عمیق با متن کف — فشار فقط ترنزیشن ظریف */
+.play-skin--gonogo .play-btn { min-height: 64px; background: linear-gradient(180deg,#4E9B97,var(--g-water-deep)); color: #FFFFFF; box-shadow: 0 8px 18px rgba(47,109,106,.35), inset 0 -3px 0 rgba(21,62,80,.25); }
+
+/* چرا: دکمهٔ شروع سنگ مرجان — کف ۶۴px گیت */
+.play-skin--gonogo .play-btn--intro { background: linear-gradient(180deg,var(--g-coral-soft),var(--g-coral)); color: var(--g-ink); box-shadow: 0 10px 22px rgba(228,170,70,.4), inset 0 -3px 0 rgba(21,62,80,.18); }
+
+/* چرا: گزینه‌ها کارت صدفی با مرز آب — لمس همان ۶۴px */
+.play-skin--gonogo .play-option { min-height: 64px; background: linear-gradient(180deg,#FFFDF6,var(--g-shell)); border-color: rgba(67,140,137,.45); box-shadow: 0 6px 14px rgba(21,62,80,.1); }
+
+/* چرا: بج قدم مرجان کوچک — راهنما، نه شمارندهٔ فشار */
+.play-skin--gonogo .play-step-badge { font-size: 13px; background: linear-gradient(180deg,var(--g-coral-soft),var(--g-coral)); color: var(--g-ink); box-shadow: 0 3px 8px rgba(228,170,70,.35); }
+
+/* چرا: نوار پیشرفت روی ریل ماسه — پرشدن از مرجان به آب */
+.play-skin--gonogo .play-progress { height: 12px; background: linear-gradient(180deg,var(--g-sand-deep),var(--g-shell)); box-shadow: inset 0 1px 3px rgba(21,62,80,.15); }
+.play-skin--gonogo .play-progress__bar { background: linear-gradient(to left,var(--g-coral),#D98F63 45%,var(--g-water)); box-shadow: inset 0 2px 0 rgba(255,255,255,.4), inset 0 -2px 0 rgba(21,62,80,.15); }
+
+/* چرا: حباب بازخورد شفاف با برق گوشه */
+.play-skin--gonogo .play-bubble { background: radial-gradient(circle at 30% 25%, rgba(255,255,255,.95), rgba(255,255,255,.78) 55%, rgba(255,255,255,.62)); }
+.play-skin--gonogo .play-bubble--ok { color: var(--g-ink); border-color: rgba(228,170,70,.65); }
+.play-skin--gonogo .play-bubble--calm { color: var(--g-ink); border-color: rgba(67,140,137,.5); background: radial-gradient(circle at 30% 25%, rgba(255,255,255,.95), rgba(235,246,243,.85) 60%, rgba(214,236,231,.8)); }
+
+/* چرا: پیل تشویق صدف مرجانی کوچک بالای صحنه */
+.play-skin--gonogo .play-pill { background: linear-gradient(180deg,var(--g-coral-soft),var(--g-coral)); color: var(--g-ink); border: 2px solid rgba(255,255,255,.7); }
+
+/* چرا: سبد ستاره صدفی با مرز کهربایی */
+.play-skin--gonogo .play-basket { background: rgba(255,253,246,.92); border: 2px solid rgba(228,170,70,.4); color: var(--g-ink); }
+
+/* چرا: خلاصهٔ پایان کارت آب کم‌عمق — خوانایی عدد از play.css می‌ماند */
+.play-skin--gonogo .play-debrief { background: rgba(67,140,137,.12); border: 2px solid rgba(67,140,137,.35); }
+
+/* چرا: پردهٔ چرخاندن هم ماسهٔ گرم — بدون پرش */
+.play-skin--gonogo .play-rotate { background: linear-gradient(180deg,#EAF4F0,var(--g-sand) 60%,var(--g-sand-deep)); color: var(--g-ink); }
+
+/* چرا: مبنا افقی است؛ این بلوک فقط بهبود می‌دهد */
+@media (orientation: landscape) {
+  .play-skin--gonogo .play-stage { border-radius: 28px; }
+  .play-skin--gonogo .play-option { min-height: 92px; }
+  .play-skin--gonogo .play-btn { min-height: 68px; }
+}
+
+/* چرا: عمودی قفل است؛ فقط گوشه‌ها جمع‌تر */
+@media (orientation: portrait) { .play-skin--gonogo .play-stage { border-radius: 22px; } }
+
+/* چرا: کاهش‌جنبش ترنزیشن‌های تزئینی را خنثی می‌کند */
+@media (prefers-reduced-motion: reduce) {
+  .play-skin--gonogo .play-btn, .play-skin--gonogo .play-option,
+  .play-skin--gonogo .play-basket, .play-skin--gonogo .play-progress__bar { transition: none; }
+  .play-skin--gonogo .play-btn:active, .play-skin--gonogo .play-option:active { transform: none; }
+}

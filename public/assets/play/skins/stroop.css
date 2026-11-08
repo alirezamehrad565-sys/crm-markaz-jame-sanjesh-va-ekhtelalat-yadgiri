@@ -1,0 +1,78 @@
+/* skins/stroop.css — «غار رنگ‌ها» · پوستهٔ بازی حقه‌باز رنگ‌ها (G7)
+   لایهٔ هنری روی play.css؛ موتور کلاس ماندگار play-skin--stroop را روی
+   #play-root می‌گذارد و صفحه این فایل را بعد از play.css سرو می‌کند.
+   جوهر واژه inline است — این پوسته هرگز color واژه را عوض نمی‌کند؛ زمینِ زیر
+   واژه تیره می‌ماند تا هر شش جوهر پالت + جوهر یدکی خاکستری ≈۳٫۵:۱ بمانند.
+   §۹: هیچ قالب کلیدی و جنبش CSS نیست — فقط transition آرام؛ جنبش از fx.js؛
+   کف لمس ۶۴px دست‌نخورده؛ بی‌منبع بیرونی. */
+
+/* چرا متغیر؟ طیف غار یک‌جا؛ همهٔ بلوک‌ها هم‌خوان */
+.play-skin--stroop{--cv2:#2B1C4E;--cv3:#3B2866;--cv-stone:#F3ECDA;}
+
+/* چرا سه‌لایه؟ نور گرم دهانه، مه کف، بدنهٔ غار — عمق بی‌تصویر */
+.play-skin--stroop .play-stage--stroop{position:relative;overflow:hidden;background:radial-gradient(95vmax 55vmax at 86% -10%,rgba(255,199,110,.15),transparent 46%),radial-gradient(85vmax 50vmax at 8% 112%,rgba(140,94,196,.2),transparent 55%),linear-gradient(180deg,#171031 0%,var(--cv2) 46%,var(--cv3) 80%,#463370 100%);box-shadow:inset 0 0 0 3px rgba(228,170,70,.55),inset 0 0 0 7px rgba(14,9,32,.9),inset 0 0 64px 14px rgba(9,5,22,.55);}
+
+/* چرا مخروط؟ استالاکمیت محو سقف و ستوناکس کف، دو لایه */
+.play-skin--stroop .play-stage--stroop::before,.play-skin--stroop .play-stage--stroop::after{content:'';position:absolute;left:0;right:0;top:0;z-index:0;pointer-events:none;height:clamp(34px,7vmin,58px);background:conic-gradient(from 135deg at 50% 0,rgba(10,6,26,.7) 90deg,transparent 0) 0 0/52px 100%,conic-gradient(from 135deg at 50% 0,rgba(10,6,26,.4) 90deg,transparent 0) 26px 0/52px 100%;}
+.play-skin--stroop .play-stage--stroop::after{top:auto;bottom:0;transform:scaleY(-1);}
+
+/* چرا z؟ دندانه‌ها زیر محتوای بازی بمانند */
+.play-skin--stroop .play-stage--stroop .play-stroop{position:relative;z-index:1;}
+
+/* چرا سنگ تیره؟ کنتراست جوهرها؛ لبهٔ کهربایی دهانه */
+.play-skin--stroop .play-stroop__word{padding:10px 26px 14px;border:2px solid rgba(228,170,70,.28);border-radius:26px;background:radial-gradient(120% 135% at 50% 28%,#130B28 40%,#1E1339 76%,var(--cv2) 100%);box-shadow:0 16px 34px rgba(5,3,14,.66),inset 0 2px 0 rgba(245,240,229,.1),inset 0 -8px 18px rgba(0,0,0,.55);text-shadow:0 2px 6px rgba(0,0,0,.5),0 0 22px rgba(245,240,229,.22);}
+
+/* چرا سنگ کرم؟ نام Navy و لکه خوانا؛ هالهٔ نیمه‌درخشش */
+.play-skin--stroop .play-option.play-stroop__opt{min-height:88px;border:3px solid rgba(122,98,58,.38);border-radius:18px;background:linear-gradient(168deg,#FBF5E6 0%,var(--cv-stone) 48%,#E5D8BD 100%);box-shadow:0 0 0 3px rgba(228,170,70,.16),0 8px 18px rgba(8,5,20,.5),inset 0 2px 0 rgba(255,255,255,.75);transition:all 160ms ease;}
+.play-skin--stroop .play-option.play-stroop__opt:active{transform:scale(.96);box-shadow:0 0 0 3px rgba(228,170,70,.3),0 4px 10px rgba(8,5,20,.45);}
+.play-skin--stroop .play-stroop__blob{filter:drop-shadow(0 3px 5px rgba(8,5,20,.4));}
+.play-skin--stroop .play-stroop__optname{font-size:14px;}
+
+/* چرا خط‌چین؟ نشان حقیقت تمرین مثل نور فانوس — بی‌فلاش */
+.play-skin--stroop .play-option.play-stroop__opt.play-stroop__opt--truth{border-color:var(--p-amber);border-style:dashed;background:#FDF6E7;box-shadow:0 0 0 4px rgba(228,170,70,.35);}
+.play-skin--stroop .play-option.play-stroop__opt.play-stroop__opt--picked{border-color:var(--p-teal);box-shadow:0 0 0 4px rgba(67,140,137,.35);}
+
+/* چرا شیار؟ نوار پنجره شیار نور روی سنگ؛ عرضش از JS */
+.play-skin--stroop .play-stroop__timer{background:rgba(10,6,26,.55);box-shadow:inset 0 1px 3px rgba(0,0,0,.6);}
+.play-skin--stroop .play-stroop__timer>span{background:linear-gradient(90deg,#F0C469,#D96C6C);box-shadow:0 0 12px rgba(228,170,70,.45);}
+
+/* چرا سایهٔ متن؟ قانون و حقه‌باز روی مه غار خوانا بمانند */
+.play-skin--stroop .play-stage--stroop .play-stroop__prompt{text-shadow:0 2px 6px rgba(9,5,22,.6);}
+.play-skin--stroop .play-stroop__trickster{filter:drop-shadow(0 6px 12px rgba(9,5,22,.55));}
+
+/* چرا کروم تیره؟ نوار/سبد/حباب هم‌خوان غار تا چشم نپرد */
+.play-skin--stroop .play-progress{background:rgba(30,19,57,.28);box-shadow:inset 0 1px 3px rgba(9,5,22,.45);}
+.play-skin--stroop .play-progress__bar{background:linear-gradient(to left,var(--p-amber),#B8792E);}
+.play-skin--stroop .play-basket{background:rgba(23,16,49,.88);color:#F5F0E5;border:2px solid rgba(228,170,70,.35);}
+.play-skin--stroop .play-bubble{background:#251A40;color:#F5F0E5;border-color:rgba(228,170,70,.5);}
+.play-skin--stroop .play-bubble--calm{background:#232B3E;border-color:rgba(110,150,190,.45);}
+
+/* چرا دهلیز روشن؟ معرفی/پایان روشن تا Navy خوانا بماند */
+.play-skin--stroop .play-stage--teach,.play-skin--stroop .play-stage--end{background:linear-gradient(180deg,#FBF5E7 0%,#F1E6CF 62%,#E7D9BC 100%);box-shadow:inset 0 0 46px rgba(142,91,184,.12),0 14px 30px rgba(21,62,80,.14);}
+
+/* چرا پوشش غاری؟ لحظهٔ بچرخان هم در داستان بماند */
+.play-skin--stroop .play-rotate{background:linear-gradient(180deg,#171031,var(--cv3));color:#F5F0E5;}
+.play-skin--stroop .play-rotate .play-line{color:#F5F0E5;}
+.play-skin--stroop .play-rotate .play-muted{color:#C9B7E6;}
+
+/* چرا جمع‌تر؟ موبایل افقی کوچک: گرید و سنگ جا شوند */
+@media (orientation:landscape) and (max-width:699px){
+.play-skin--stroop .play-stroop{gap:9px;}
+.play-skin--stroop .play-stroop__word{font-size:clamp(40px,14vmin,72px);padding:6px 18px 10px;}
+.play-skin--stroop .play-stroop__blob{width:42px;}
+.play-skin--stroop .play-stage--stroop::before,.play-skin--stroop .play-stage--stroop::after{height:30px;}
+}
+
+/* چرا سنگین‌تر؟ تبلت افقی صحنه را پر کند؛ کف لمس بیشتر */
+@media (min-width:700px) and (orientation:landscape){
+.play-skin--stroop .play-stroop__word{padding:14px 34px 18px;}
+.play-skin--stroop .play-stroop__options{max-width:600px;}
+.play-skin--stroop .play-option.play-stroop__opt{min-height:96px;}
+.play-skin--stroop .play-stage--stroop::before,.play-skin--stroop .play-stage--stroop::after{height:clamp(44px,8vmin,64px);}
+}
+
+/* چرا؟ کاهش‌جنبش: transition پوسته خاموش؛ گارد اصلی در fx */
+@media (prefers-reduced-motion:reduce){
+.play-skin--stroop .play-option.play-stroop__opt{transition:none;}
+.play-skin--stroop .play-option.play-stroop__opt:active{transform:none;}
+}
