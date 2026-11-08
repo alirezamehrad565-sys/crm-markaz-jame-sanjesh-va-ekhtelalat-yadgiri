@@ -7,41 +7,20 @@
 // در game_sessions.metrics_json عیناً مثل بقیه ثبت می‌شوند. تعریف‌های شمارشیِ DB دست‌نخورده.
 // دفترچهٔ وظیفه §۵: Commission% = CE/کل نوگو×۱۰۰ · Omission% = OE/کل گو×۱۰۰ —
 // قاعدهٔ دامنهٔ صفر در فرمول‌ها (pure.ts): مخرج صفر = null، نه صفرِ ساختگی.
+//
+// G4الف (رفع P3-4): تعریف هر سنجه به ورودیِ نوع خودش در رجیستری (registry.ts) منتقل شد؛
+// این ماژول فقط ترکیب نقشه را می‌سازد — ترتیب آرایه عیناً پیشین است چون ترتیب
+// GAME_KIND_IDS قطعی و ترتیب درون هر نوع دست‌نخورده مانده.
 
+import { GAME_KIND_IDS, GAME_KINDS, type GameKind } from './registry';
 import type { RegistryMetric } from './types';
 
-/** فرمول‌هایی که فقط از موتور می‌آیند — upsert دستی ممنوع (CHECK دیتابیس می‌پذیرد اما کد اجازه نمی‌دهد) */
-export const ENGINE_ONLY_FORMULAS: readonly string[] = [
-  'correct_go_pct',
-  'correct_nogo_pct',
-  'commission_pct',
-  'omission_pct',
-  'scan_fa',
-  'scan_miss',
-  'congruent_acc',
-  'incongruent_acc',
-  'interference_ms',
-  'trail_prefix'
-];
+export { ENGINE_ONLY_FORMULAS } from './registry';
 
-/** سنجه‌های درصدی موتورمحور — با listMetrics به رجیستری اضافه می‌شوند */
-export const ENGINE_METRICS: readonly RegistryMetric[] = [
-  { id: 'correct_go_pct_gonogo', title_fa: 'درصد گوهای درست', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'correct_go_pct' },
-  { id: 'correct_nogo_pct_gonogo', title_fa: 'درصد بازداری درست نوگو', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'correct_nogo_pct' },
-  { id: 'commission_pct_gonogo', title_fa: 'درصد خطای پاسخ به غیرهدف', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'commission_pct' },
-  { id: 'omission_pct_gonogo', title_fa: 'درصد از دست‌دادن هدف', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'omission_pct' },
-  // حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — دقت موج‌ها از فرمول 'accuracy' در DB می‌آید (accuracy_scan)
-  { id: 'scan_fa_pct', title_fa: 'درصد گرفتن هم‌نوع در موج', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'scan_fa' },
-  { id: 'scan_miss_pct', title_fa: 'درصد جاانداختن جاسوس', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'scan_miss' },
-  // سه بازی تازه (۱.۲۵.۳۲) — دقت شرطی و هزینهٔ تداخل استروپ/فلانکر + درصد پیش‌ماند رد
-  { id: 'stroop_congruent_acc_pct', title_fa: 'دقت هم‌خوان استروپ (واژه و جوهر یکی)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'congruent_acc' },
-  { id: 'stroop_incongruent_acc_pct', title_fa: 'دقت ناهم‌خوان استروپ (حقهٔ جوهر)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'incongruent_acc' },
-  { id: 'stroop_interference_ms', title_fa: 'هزینهٔ تداخل استروپ (میانهٔ ناهم‌خوان − میانهٔ هم‌خوان)', unit: 'ms', higher_is_better: false, source: 'auto', formula: 'interference_ms' },
-  { id: 'flanker_congruent_acc_pct', title_fa: 'دقت گلهٔ هم‌سو (بدون فریب)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'congruent_acc' },
-  { id: 'flanker_incongruent_acc_pct', title_fa: 'دقت گلهٔ فریبکار (فلانکر مخالف)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'incongruent_acc' },
-  { id: 'flanker_interference_ms', title_fa: 'هزینهٔ تداخل فلانکر (میانهٔ ناهم‌خوان − میانهٔ هم‌خوان)', unit: 'ms', higher_is_better: false, source: 'auto', formula: 'interference_ms' },
-  { id: 'trail_prefix_pct', title_fa: 'درصد پیش‌ماند صحیح رد ردپاها', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'trail_prefix' }
-] as const;
+/** سنجه‌های موتورمحور — با listMetrics به رجیستری اضافه می‌شوند؛ ترتیب = ترتیب قطعی نوع‌ها */
+export const ENGINE_METRICS: readonly RegistryMetric[] = (GAME_KIND_IDS as readonly GameKind[]).flatMap(
+  (kind) => GAME_KINDS[kind].engine_metrics
+);
 
 /** ادغام سنجه‌های موتور با رجیستری DB — سنجهٔ موتور همیشه حاضر است؛ تکرار ممکن نیست (ids متمایز) */
 export function mergeEngineMetrics(dbRows: RegistryMetric[]): RegistryMetric[] {

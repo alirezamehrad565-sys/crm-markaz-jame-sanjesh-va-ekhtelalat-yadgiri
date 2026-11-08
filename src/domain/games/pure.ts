@@ -1,6 +1,7 @@
 // pure.ts — موتور نمره‌دهی، گیت‌های انتشار و لینت لحن — بدون وابستگی به DB و رابط (§۸)
 // همهٔ فرمول‌ها همین‌جاست تا با نمونهٔ طلایی آزمون شوند؛ سرویس فقط آن‌ها را صدا می‌زند.
 import type { ItemView, MissionConfig, MissionItem, PackageBody, SessionValidity } from './types';
+import { GAME_KINDS } from './registry';
 import { PROTOCOL_VERSION, isProtocolVersionSupported } from './protocol';
 
 // ─── ثابت‌های قاعده (بازبین بالینی فهرست‌ها را تأیید و در همین‌جا نگه می‌دارد) ───
@@ -8,15 +9,19 @@ import { PROTOCOL_VERSION, isProtocolVersionSupported } from './protocol';
 /** چهار قاعدهٔ پایهٔ لحن که هر بسته باید داشته باشد (§۴) */
 export const TONE_RULES_BASE = ['no_timer', 'no_rank', 'no_streak', 'no_fail_message'] as const;
 
-  /** کف اعتبار زمان واکنش بر اساس نوع بازی (§۸) */
+  /**
+   * کف اعتبار زمان واکنش بر اساس نوع بازی (§۸) — مقدار هر نوع تک‌منبعش رجیستری
+   * (G4الف/رفع P3-4) است؛ کلید این جدول نوع آیتم است نه kind، و «choice» (فلش‌کارت)
+   * خودش نوع‌بازی نیست — به همین دلیل این‌جا کنار نقشه می‌ماند.
+   */
 export const DEFAULT_RT_FLOOR_MS: Record<MissionItem['type'], number> = {
-  touch_report: 150, // گو/نوگو — زیر ۱۵۰ حدس است
-  numline: 0,        // خط عددی کف ندارد
+  touch_report: GAME_KINDS.gonogo.rt_floor_ms, // گو/نوگو — زیر ۱۵۰ حدس است
+  numline: GAME_KINDS.numline.rt_floor_ms,     // خط عددی کف ندارد
   choice: 200,       // فلش‌کارت/انتخاب — لمس تصادفی حذف می‌شود
-  scan: 150,         // حملهٔ جاسوس‌ها — کف نخستین لمس موج؛ زیر آن حدس است
-  stroop: 200,       // حقه‌باز رنگ‌ها — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-  flanker: 200,      // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-  trail: 150         // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
+  scan: GAME_KINDS.scan.rt_floor_ms,         // حملهٔ جاسوس‌ها — کف نخستین لمس موج؛ زیر آن حدس است
+  stroop: GAME_KINDS.stroop.rt_floor_ms,       // حقه‌باز رنگ‌ها — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
+  flanker: GAME_KINDS.flanker.rt_floor_ms,      // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
+  trail: GAME_KINDS.trail.rt_floor_ms        // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
 };
 
 /** آستانهٔ بیکاری برای جلسهٔ ناقص (§۶) */

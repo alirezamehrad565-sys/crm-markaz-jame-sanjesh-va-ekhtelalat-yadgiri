@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.38";
+var APP_VERSION = "1.25.39";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23287,6 +23287,541 @@ function fillErrorPage(message) {
 }
 __name(fillErrorPage, "fillErrorPage");
 
+// src/domain/games/registry.ts
+var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "trail"];
+function gameKindOf(v) {
+  return GAME_KIND_IDS.includes(v) ? v : "gonogo";
+}
+__name(gameKindOf, "gameKindOf");
+var P = /* @__PURE__ */ __name((value, rationale, status = "proposed") => ({
+  value,
+  rationale,
+  status
+}), "P");
+var GONOGO_STAGE_RULE = {
+  shape: "go_nogo",
+  pass: {
+    go_pct: P(70, "\u06AF\u0630\u0627\u0631 \u0628\u0627 \u06AF\u0648\u0650 \u062F\u0631\u0633\u062A \u2265\u06F7\u06F0\u066A \u2014 \u0628\u0627\u0644\u0627\u06CC \u0646\u0631\u062E \u062D\u062F\u0633 \u062F\u0631 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u06F7\u06F5\u066A \u06AF\u0648\u061B \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u06A9\u0627\u0631\u0634\u0646\u0627\u0633 \u06F1.\u06F2\u06F5.\u06F2\u06F2"),
+    nogo_pct: P(60, "\u06AF\u0630\u0627\u0631 \u0628\u0627 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u2265\u06F6\u06F0\u066A \u2014 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u062F\u0634\u0648\u0627\u0631\u062A\u0631\u06CC\u0646 \u062C\u0632\u0621 \u0627\u0633\u062A\u061B \u0622\u0633\u062A\u0627\u0646\u0647\u0654 \u067E\u0627\u0626\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u06AF\u0648 \u0639\u0645\u062F\u06CC \u0627\u0633\u062A")
+  },
+  star2: {
+    go_pct: P(80, "\u062F\u0648\u0633\u062A\u0627\u0631\u0647 \u2014 \u0641\u0627\u0635\u0644\u0647\u0654 \u0645\u062D\u0633\u0648\u0633 \u0627\u0632 \u06AF\u0630\u0627\u0631 \u062A\u0627 \u06A9\u0648\u062F\u06A9 \u067E\u06CC\u0634\u0631\u0641\u062A \u0631\u0627 \u062D\u0633 \u06A9\u0646\u062F"),
+    nogo_pct: P(75, "\u062F\u0648\u0633\u062A\u0627\u0631\u0647 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u2014 \u0647\u0645\u200C\u06AF\u0627\u0645 \u0628\u0627 \u067E\u0644\u0647\u0654 \u06AF\u0648")
+  },
+  star3: {
+    go_pct: P(90, "\u0633\u0647\u200C\u0633\u062A\u0627\u0631\u0647 \u2014 \u0627\u062C\u0631\u0627\u06CC \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0628\u06CC\u200C\u062E\u0637\u0627\u061B \u0633\u0642\u0641 \u0633\u0628\u062F \u0633\u062A\u0627\u0631\u0647"),
+    nogo_pct: P(85, "\u0633\u0647\u200C\u0633\u062A\u0627\u0631\u0647 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u2014 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u0639\u0627\u0644\u06CC \u0648\u0644\u06CC \u0628\u06CC\u200C\u06A9\u0645\u0627\u0644\u200C\u06AF\u0631\u0627\u06CC\u06CC\u0650 \u06A9\u0648\u062F\u06A9\u200C\u0641\u0631\u0633\u0627")
+  }
+};
+var ACCURACY_STAGE_RULE = {
+  shape: "accuracy",
+  pass: P(65, "\u06AF\u0630\u0627\u0631 \u0628\u0627 \u062F\u0642\u062A \u2265\u06F6\u06F5\u066A \u2014 \u0628\u0627\u0644\u0627\u06CC \u0634\u0627\u0646\u0633 \u062D\u062F\u0633 \u0628\u0627\u0646\u06A9 \u0641\u0639\u0644\u06CC\u061B \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u06A9\u0627\u0631\u0634\u0646\u0627\u0633 \u06F1.\u06F2\u06F5.\u06F2\u06F8"),
+  star2: P(78, "\u062F\u0648\u0633\u062A\u0627\u0631\u0647 \u2014 \u0641\u0627\u0635\u0644\u0647\u0654 \u0645\u062D\u0633\u0648\u0633 \u0627\u0632 \u06AF\u0630\u0627\u0631\u061B \u067E\u0644\u0647\u0654 \u0627\u0646\u06AF\u06CC\u0632\u0634\u06CC \u0645\u06CC\u0627\u0646\u06CC"),
+  star3: P(88, "\u0633\u0647\u200C\u0633\u062A\u0627\u0631\u0647 \u2014 \u062F\u0642\u062A \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0628\u06CC\u200C\u062E\u0637\u0627\u061B \u0627\u0631\u062A\u0642\u0627\u06CC \u0622\u0646 \u0628\u0627 \u062F\u0627\u062F\u0647\u0654 \u067E\u06CC\u0644\u0648\u062A \u0645\u0631\u06A9\u0632")
+};
+var GONOGO_STAGES_4_6 = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u06AF\u0631\u0645\u200C\u06A9\u0631\u062F\u0646",
+    goal_fa: "\u0628\u0627 \u0633\u062A\u0627\u0631\u0647\u200C\u0647\u0627 \u062F\u0648\u0633\u062A \u0634\u0648\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
+    difficulty: 1,
+    overrides: { response_window_go_ms: 2400, response_window_nogo_ms: 2400, isi_min_ms: 1200, isi_max_ms: 1800, fixation_ms: 400 }
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u062A\u0645\u0631\u06CC\u0646",
+    goal_fa: "\u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC \u0627\u062F\u0627\u0645\u0647 \u0628\u062F\u0647.",
+    difficulty: 2,
+    overrides: {}
+    // پارامترهای پایهٔ پروتکل — بدون بازنویسی
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u062A\u0646\u062F\u062A\u0631",
+    goal_fa: "\u062D\u0627\u0644\u0627 \u06A9\u0645\u06CC \u062A\u0646\u062F\u062A\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u062D\u0648\u0627\u0633\u062A \u06A9\u0646\u0627\u0631 \u0646\u0628\u0627\u0634\u0647.",
+    difficulty: 3,
+    overrides: { response_window_go_ms: 1800, response_window_nogo_ms: 1800, isi_min_ms: 900, isi_max_ms: 1350, fixation_ms: 400 }
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u062F\u0642\u062A",
+    goal_fa: "\u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A\u061B \u0641\u0642\u0637 \u0648\u0642\u062A\u06CC \u0645\u0637\u0645\u0626\u0646\u06CC \u0644\u0645\u0633 \u06A9\u0646.",
+    difficulty: 4,
+    overrides: { response_window_go_ms: 1600, response_window_nogo_ms: 1600, isi_min_ms: 850, isi_max_ms: 1250, fixation_ms: 350 }
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646",
+    goal_fa: "\u0633\u0631\u06CC\u0639\u200C\u062A\u0631\u06CC\u0646 \u0645\u0631\u062D\u0644\u0647! \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC.",
+    difficulty: 5,
+    overrides: { response_window_go_ms: 1400, response_window_nogo_ms: 1400, isi_min_ms: 800, isi_max_ms: 1200, fixation_ms: 350 }
+  }
+];
+var GONOGO_STAGES_7_12 = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u06AF\u0631\u0645\u200C\u06A9\u0631\u062F\u0646",
+    goal_fa: "\u0628\u0627 \u0633\u062A\u0627\u0631\u0647\u200C\u0647\u0627 \u062F\u0648\u0633\u062A \u0634\u0648\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
+    difficulty: 1,
+    overrides: { response_window_go_ms: 1900, response_window_nogo_ms: 1900, isi_min_ms: 1e3, isi_max_ms: 1400, fixation_ms: 400 }
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u062A\u0645\u0631\u06CC\u0646",
+    goal_fa: "\u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC \u0627\u062F\u0627\u0645\u0647 \u0628\u062F\u0647.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u062A\u0646\u062F\u062A\u0631",
+    goal_fa: "\u062D\u0627\u0644\u0627 \u06A9\u0645\u06CC \u062A\u0646\u062F\u062A\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u062D\u0648\u0627\u0633\u062A \u06A9\u0646\u0627\u0631 \u0646\u0628\u0627\u0634\u0647.",
+    difficulty: 3,
+    overrides: { response_window_go_ms: 1300, response_window_nogo_ms: 1300, isi_min_ms: 700, isi_max_ms: 1050, fixation_ms: 400 }
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u062F\u0642\u062A",
+    goal_fa: "\u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A\u061B \u0641\u0642\u0637 \u0648\u0642\u062A\u06CC \u0645\u0637\u0645\u0626\u0646\u06CC \u0644\u0645\u0633 \u06A9\u0646.",
+    difficulty: 4,
+    overrides: { response_window_go_ms: 1150, response_window_nogo_ms: 1150, isi_min_ms: 650, isi_max_ms: 1e3, fixation_ms: 350 }
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646",
+    goal_fa: "\u0633\u0631\u06CC\u0639\u200C\u062A\u0631\u06CC\u0646 \u0645\u0631\u062D\u0644\u0647! \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC.",
+    difficulty: 5,
+    overrides: { response_window_go_ms: 1e3, response_window_nogo_ms: 1e3, isi_min_ms: 600, isi_max_ms: 900, fixation_ms: 350 }
+  }
+];
+var GONOGO_STAGES = { "4-6": GONOGO_STAGES_4_6, "7-12": GONOGO_STAGES_7_12 };
+var NUMLINE_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u06A9\u0648\u0686\u06A9",
+    goal_fa: "\u0639\u062F\u062F\u0647\u0627\u06CC \u06F0 \u062A\u0627 \u06F1\u06F0\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u0634\u0647\u0631",
+    goal_fa: "\u062D\u0627\u0644\u0627 \u062A\u0627 \u06F2\u06F0 \u0627\u062F\u0627\u0645\u0647 \u062F\u0627\u0631\u062F\u061B \u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u0628\u0644\u0646\u062F",
+    goal_fa: "\u062C\u0627\u062F\u0647 \u062A\u0627 \u06F5\u06F0 \u0645\u06CC\u200C\u0631\u0633\u062F\u061B \u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u0628\u0632\u0631\u06AF",
+    goal_fa: "\u062C\u0627\u062F\u0647 \u062A\u0627 \u06F1\u06F0\u06F0! \u062A\u0648 \u062E\u06CC\u0644\u06CC \u0631\u0627\u0647 \u0631\u0641\u062A\u0647\u200C\u0627\u06CC.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u0642\u0647\u0631\u0645\u0627\u0646\u200C\u0647\u0627",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u062C\u0627\u062F\u0647\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
+var SWARM_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u06A9\u0627\u0648\u0634 \u0634\u0628 \u0627\u0648\u0644",
+    goal_fa: "\u062C\u0627\u0633\u0648\u0633\u200C\u0647\u0627 \u06A9\u0645\u200C\u0627\u0646\u062F\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644 \u0628\u06AF\u06CC\u0631\u0634\u0627\u0646.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u06AF\u0634\u062A \u062F\u0648\u0645",
+    goal_fa: "\u0645\u0648\u062C \u0628\u0632\u0631\u06AF\u200C\u062A\u0631 \u0634\u062F\u0647\u061B \u0647\u0645\u0627\u0646 \u0642\u0627\u0639\u062F\u0647\u060C \u0686\u0634\u0645\u200C\u0647\u0627\u06CC \u062A\u06CC\u0632.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0631\u06AF\u0628\u0627\u0631 \u0633\u0648\u0645",
+    goal_fa: "\u0627\u0633\u06A9\u0627\u062F\u0631\u0627\u0646 \u06A9\u0627\u0645\u0644 \u0622\u0645\u062F\u0647\u061B \u0622\u0631\u0627\u0645 \u0628\u0627\u0634 \u0648 \u062F\u0642\u06CC\u0642 \u0628\u06AF\u06CC\u0631.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u062D\u0645\u0644\u0647\u0654 \u0628\u0632\u0631\u06AF",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u062C\u0627\u0633\u0648\u0633\u200C\u0647\u0627\u06CC \u06F2 \u0622\u0646\u062A\u0646 \u0631\u0627 \u0628\u06AF\u06CC\u0631\u061B \u0647\u0645\u200C\u0646\u0648\u0639\u200C\u0647\u0627 \u0631\u0627 \u062F\u0633\u062A \u0646\u0632\u0646.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u062F\u0641\u0627\u0639 \u0642\u0647\u0631\u0645\u0627\u0646\u200C\u0647\u0627",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u0645\u0648\u062C\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0646\u06AF\u0647\u0628\u0627\u0646 \u0633\u06CC\u0627\u0631\u0647\u200C\u0627\u06CC!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
+var STROOP_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u063A\u0627\u0631 \u0622\u0631\u0627\u0645",
+    goal_fa: "\u0648\u0627\u0698\u0647\u200C\u0647\u0627 \u0647\u0646\u0648\u0632 \u0631\u0646\u06AF\u0650 \u062E\u0648\u062F\u0634\u0627\u0646 \u0631\u0627 \u062F\u0627\u0631\u0646\u062F\u061B \u0628\u0627 \u0637\u0645\u0623\u0646\u06CC\u0646\u0647 \u0644\u0645\u0633 \u06A9\u0646.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u0631\u0646\u06AF\u200C\u0647\u0627 \u0642\u0627\u0637\u06CC \u0645\u06CC\u200C\u0634\u0648\u0646\u062F",
+    goal_fa: "\u062D\u0642\u0647\u200C\u0628\u0627\u0632 \u0634\u0631\u0648\u0639 \u06A9\u0631\u062F\u0647\u061B \u0641\u0642\u0637 \u0628\u0647 \u0631\u0646\u06AF\u0650 \u062C\u0648\u0647\u0631 \u0646\u06AF\u0627\u0647 \u06A9\u0646.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u062D\u0642\u0647\u0654 \u062A\u0645\u0627\u0645\u200C\u0639\u06CC\u0627\u0631",
+    goal_fa: "\u0648\u0627\u0698\u0647\u200C\u0647\u0627 \u0647\u0645\u06CC\u0634\u0647 \u062F\u0631\u0648\u063A \u0645\u06CC\u200C\u06AF\u0648\u06CC\u0646\u062F\u061B \u0631\u0646\u06AF\u0650 \u0648\u0627\u0642\u0639\u06CC \u0631\u0627 \u0628\u06AF\u06CC\u0631.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u062A\u0644\u0647\u0654 \u0645\u0639\u0646\u06CC \u0648\u0627\u0698\u0647",
+    goal_fa: "\u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A\u061B \u0645\u0639\u0646\u06CC \u0648\u0627\u0698\u0647 \u0641\u0631\u06CC\u0628\u062A \u0646\u0645\u06CC\u200C\u062F\u0647\u062F.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0631\u0646\u06AF\u200C\u0647\u0627",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u062D\u0642\u0647\u200C\u0647\u0627\u06CC \u063A\u0627\u0631 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
+var FLANKER_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u06AF\u0644\u0647\u0654 \u0622\u0631\u0627\u0645",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u06AF\u0631\u06AF\u200C\u0647\u0627 \u06CC\u06A9\u200C\u0633\u0648 \u0646\u06AF\u0627\u0647 \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u06AF\u0631\u06AF\u200C\u0647\u0627\u06CC \u0627\u0636\u0627\u0641\u0647",
+    goal_fa: "\u06AF\u0644\u0647 \u0634\u0644\u0648\u063A\u200C\u062A\u0631 \u0634\u062F\u0647\u061B \u0641\u0642\u0637 \u0646\u06AF\u0627\u0647 \u06AF\u0631\u06AF\u0650 \u0648\u0633\u0637.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0646\u06AF\u0627\u0647\u200C\u0647\u0627\u06CC \u0641\u0631\u06CC\u0628\u06A9\u0627\u0631",
+    goal_fa: "\u0628\u0631\u062E\u06CC \u06AF\u0631\u06AF\u200C\u0647\u0627 \u0642\u0644\u0627\u0628\u06CC\u200C\u0627\u0646\u062F\u061B \u0633\u0631\u0634\u0627\u0646 \u0628\u0647 \u0622\u0646\u200C\u0633\u0648 \u0646\u06AF\u0627\u0647 \u0645\u06CC\u200C\u06A9\u0646\u062F.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u06AF\u0644\u0647\u0654 \u0641\u0631\u06CC\u0628\u06A9\u0627\u0631",
+    goal_fa: "\u0647\u0645\u0647 \u0628\u0647 \u06CC\u06A9\u200C\u0633\u0648 \u0646\u06AF\u0627\u0647 \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F \u062C\u0632 \u06AF\u0631\u06AF\u0650 \u0648\u0627\u0642\u0639\u06CC\u061B \u062D\u0648\u0627\u0633\u062A \u06A9\u0646\u0627\u0631 \u0646\u0631\u0647.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u062F\u0634\u062A",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u06AF\u0644\u0647\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0646\u06AF\u0647\u0628\u0627\u0646 \u062F\u0634\u062A\u06CC!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
+var TRAIL_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u0631\u062F \u06A9\u0648\u062A\u0627\u0647",
+    goal_fa: "\u0631\u062F\u067E\u0627\u0647\u0627 \u06A9\u0645\u200C\u0627\u0646\u062F\u061B \u0628\u0647 \u062A\u0631\u062A\u06CC\u0628 \u0634\u0645\u0627\u0631\u0647 \u0628\u0631\u0648.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u0631\u062F \u0628\u0644\u0646\u062F\u062A\u0631",
+    goal_fa: "\u06CC\u06A9 \u0642\u062F\u0645 \u0628\u06CC\u0634\u062A\u0631\u061B \u0631\u062F \u0631\u0627 \u06A9\u0627\u0645\u0644 \u06A9\u0646.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0631\u062F \u0628\u0644\u0646\u062F",
+    goal_fa: "\u0631\u062F\u067E\u0627\u0647\u0627 \u0628\u06CC\u0634\u062A\u0631 \u0634\u062F\u0647\u200C\u0627\u0646\u062F\u061B \u0631\u062F \u06AF\u0645 \u0646\u0634\u0648\u062F.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u0631\u062F \u06AF\u0645\u200C\u0634\u062F\u0647",
+    goal_fa: "\u0639\u062F\u062F \u0648 \u062D\u0631\u0641 \u06CC\u06A9\u200C\u062F\u0631\u0645\u06CC\u0627\u0646 \u0634\u062F\u0647\u061B \u0628\u0627 \u062F\u0642\u062A \u0642\u062F\u0645 \u0628\u0632\u0646.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0631\u062F",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u0631\u062F\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u062A\u0639\u0642\u06CC\u0628\u200C\u06A9\u0646\u0646\u062F\u0647\u200C\u0627\u06CC!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
+var NUMLINE_STAGE_MAX = {
+  s1: 10,
+  s2: 20,
+  s3: 50,
+  s4: 100,
+  s5: null
+};
+var SCAN_STAGE_MAX_TILES = {
+  s1: 6,
+  s2: 9,
+  s3: 12,
+  s4: 15,
+  s5: null
+};
+var SCAN_STAGE_WAVE_MS = {
+  s1: 22e3,
+  s2: 19e3,
+  s3: 17e3,
+  s4: 15e3,
+  s5: 13e3
+};
+var STROOP_STAGE_BANDS = {
+  s1: ["a"],
+  s2: ["a", "b"],
+  s3: ["a", "b", "c"],
+  s4: ["a", "b", "c", "d"],
+  s5: null
+  // همهٔ بانک — مرور بزرگ
+};
+var FLANKER_STAGE_MAX_DECOYS = {
+  s1: 0,
+  // گلهٔ آرام — هیچ قلابی
+  s2: 1,
+  // حداکثر یک قلابی
+  s3: 3,
+  // نگاه‌های فریبکار
+  s4: null,
+  // گلهٔ فریبکار — همهٔ گله‌ها
+  s5: null
+};
+var FLANKER_STAGE_BANDS = {
+  s1: ["a"],
+  s2: ["a", "b"],
+  s3: ["a", "b", "c"],
+  s4: ["a", "b", "c", "d"],
+  s5: null
+};
+var TRAIL_STAGE_MAX_NODES = {
+  s1: 4,
+  s2: 5,
+  s3: 6,
+  s4: 7,
+  s5: null
+};
+var TRAIL_STAGE_BANDS = {
+  s1: ["a"],
+  s2: ["a", "b"],
+  s3: ["a", "b", "c"],
+  s4: ["a", "b", "c", "d"],
+  s5: null
+};
+function flankerIncongruentCountOf(item) {
+  const s = item.stim ?? {};
+  const arrows = Array.isArray(s.arrows) ? s.arrows.filter((v) => v === "L" || v === "R") : [];
+  const mid = Math.floor(arrows.length / 2);
+  const center = arrows[mid];
+  if (center === void 0) return 0;
+  return arrows.filter((a) => a !== center).length;
+}
+__name(flankerIncongruentCountOf, "flankerIncongruentCountOf");
+var ENGINE_ONLY_FORMULAS = [
+  "correct_go_pct",
+  "correct_nogo_pct",
+  "commission_pct",
+  "omission_pct",
+  "scan_fa",
+  "scan_miss",
+  "congruent_acc",
+  "incongruent_acc",
+  "interference_ms",
+  "trail_prefix"
+];
+var GAME_KINDS = {
+  gonogo: {
+    // گو/نوگو — کف ۱۵۰ms: زیر آن حدس است (§۸)
+    rt_floor_ms: 150,
+    timed_choice: false,
+    // اُمیشن گونوگو از خودِ لمس تعریف می‌شود، نه از پایان پنجره
+    stage_rule: GONOGO_STAGE_RULE,
+    stageList: /* @__PURE__ */ __name((band) => GONOGO_STAGES[band] ?? GONOGO_STAGES["7-12"], "stageList"),
+    // اهرم سختی گونوگو بازنویسی پارامتر زمان‌بندی در خود StageDef است — فیلتر بانک ندارد
+    levers: {},
+    itemInStage: /* @__PURE__ */ __name(() => true, "itemInStage"),
+    engine_metrics: [
+      { id: "correct_go_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u06AF\u0648\u0647\u0627\u06CC \u062F\u0631\u0633\u062A", unit: "percent", higher_is_better: true, source: "auto", formula: "correct_go_pct" },
+      { id: "correct_nogo_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u062F\u0631\u0633\u062A \u0646\u0648\u06AF\u0648", unit: "percent", higher_is_better: true, source: "auto", formula: "correct_nogo_pct" },
+      { id: "commission_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u062E\u0637\u0627\u06CC \u067E\u0627\u0633\u062E \u0628\u0647 \u063A\u06CC\u0631\u0647\u062F\u0641", unit: "percent", higher_is_better: false, source: "auto", formula: "commission_pct" },
+      { id: "omission_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u0627\u0632 \u062F\u0633\u062A\u200C\u062F\u0627\u062F\u0646 \u0647\u062F\u0641", unit: "percent", higher_is_better: false, source: "auto", formula: "omission_pct" }
+    ]
+  },
+  numline: {
+    // خط عددی — کف صفر: اندازه‌گیری جای عدد است نه سرعت؛ RT ملاک نیست
+    rt_floor_ms: 0,
+    timed_choice: false,
+    stage_rule: ACCURACY_STAGE_RULE,
+    stageList: /* @__PURE__ */ __name(() => NUMLINE_STAGES, "stageList"),
+    levers: { bank_caps: NUMLINE_STAGE_MAX },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      const max = typeof stageId === "string" && stageId in NUMLINE_STAGE_MAX ? NUMLINE_STAGE_MAX[stageId] : null;
+      if (max === null) return true;
+      return Array.isArray(item.range) && item.range[1] <= max;
+    }, "itemInStage"),
+    // سنجهٔ خط عددی (numline_error) از فرمول DB می‌آید — سنجهٔ موتور-فقط ندارد
+    engine_metrics: []
+  },
+  scan: {
+    // اسکن — کف ۱۵۰ms روی نخستین لمس موج؛ زیر آن حدس است
+    rt_floor_ms: 150,
+    timed_choice: false,
+    stage_rule: ACCURACY_STAGE_RULE,
+    stageList: /* @__PURE__ */ __name(() => SWARM_STAGES, "stageList"),
+    levers: { bank_caps: SCAN_STAGE_MAX_TILES, display: SCAN_STAGE_WAVE_MS },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      const max = typeof stageId === "string" && stageId in SCAN_STAGE_MAX_TILES ? SCAN_STAGE_MAX_TILES[stageId] : null;
+      if (max === null) return true;
+      const s = item.stim ?? {};
+      const cols = typeof s.cols === "number" && Number.isInteger(s.cols) && s.cols > 0 ? s.cols : 0;
+      const rows = typeof s.rows === "number" && Number.isInteger(s.rows) && s.rows > 0 ? s.rows : 0;
+      const tiles = cols * rows;
+      return tiles > 0 && tiles <= max;
+    }, "itemInStage"),
+    // دقت موج‌ها از فرمول 'accuracy' در DB می‌آید (accuracy_scan) — دو سنجهٔ تبعی موتور-فقط‌اند
+    engine_metrics: [
+      { id: "scan_fa_pct", title_fa: "\u062F\u0631\u0635\u062F \u06AF\u0631\u0641\u062A\u0646 \u0647\u0645\u200C\u0646\u0648\u0639 \u062F\u0631 \u0645\u0648\u062C", unit: "percent", higher_is_better: false, source: "auto", formula: "scan_fa" },
+      { id: "scan_miss_pct", title_fa: "\u062F\u0631\u0635\u062F \u062C\u0627\u0627\u0646\u062F\u0627\u062E\u062A\u0646 \u062C\u0627\u0633\u0648\u0633", unit: "percent", higher_is_better: false, source: "auto", formula: "scan_miss" }
+    ]
+  },
+  stroop: {
+    // استروپ — کف ۲۰۰ms: لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
+    rt_floor_ms: 200,
+    // انتخاب زمان‌دار — بی‌پاسخی پنجره سمت سرور اُمیشن است
+    timed_choice: true,
+    stage_rule: ACCURACY_STAGE_RULE,
+    stageList: /* @__PURE__ */ __name(() => STROOP_STAGES, "stageList"),
+    levers: { bank_bands: STROOP_STAGE_BANDS },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      const allowed = typeof stageId === "string" && stageId in STROOP_STAGE_BANDS ? STROOP_STAGE_BANDS[stageId] : null;
+      if (allowed === null) return true;
+      const s = item.stim ?? {};
+      const band = typeof s.band === "string" ? s.band : "";
+      if (band === "") return true;
+      return allowed.includes(band);
+    }, "itemInStage"),
+    engine_metrics: [
+      { id: "stroop_congruent_acc_pct", title_fa: "\u062F\u0642\u062A \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0627\u0633\u062A\u0631\u0648\u067E (\u0648\u0627\u0698\u0647 \u0648 \u062C\u0648\u0647\u0631 \u06CC\u06A9\u06CC)", unit: "percent", higher_is_better: true, source: "auto", formula: "congruent_acc" },
+      { id: "stroop_incongruent_acc_pct", title_fa: "\u062F\u0642\u062A \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0627\u0633\u062A\u0631\u0648\u067E (\u062D\u0642\u0647\u0654 \u062C\u0648\u0647\u0631)", unit: "percent", higher_is_better: true, source: "auto", formula: "incongruent_acc" },
+      { id: "stroop_interference_ms", title_fa: "\u0647\u0632\u06CC\u0646\u0647\u0654 \u062A\u062F\u0627\u062E\u0644 \u0627\u0633\u062A\u0631\u0648\u067E (\u0645\u06CC\u0627\u0646\u0647\u0654 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u2212 \u0645\u06CC\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u062E\u0648\u0627\u0646)", unit: "ms", higher_is_better: false, source: "auto", formula: "interference_ms" }
+    ]
+  },
+  flanker: {
+    // فلانکر — کف ۲۰۰ms: لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
+    rt_floor_ms: 200,
+    timed_choice: true,
+    stage_rule: ACCURACY_STAGE_RULE,
+    stageList: /* @__PURE__ */ __name(() => FLANKER_STAGES, "stageList"),
+    levers: { bank_caps: FLANKER_STAGE_MAX_DECOYS, bank_bands: FLANKER_STAGE_BANDS },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      const allowed = typeof stageId === "string" && stageId in FLANKER_STAGE_BANDS ? FLANKER_STAGE_BANDS[stageId] : null;
+      if (allowed === null) return true;
+      const s = item.stim ?? {};
+      const band = typeof s.band === "string" ? s.band : "";
+      if (band !== "") return allowed.includes(band);
+      const max = typeof stageId === "string" && stageId in FLANKER_STAGE_MAX_DECOYS ? FLANKER_STAGE_MAX_DECOYS[stageId] : null;
+      if (max === null) return true;
+      const decoys = flankerIncongruentCountOf(item);
+      return decoys === 0 || decoys <= max;
+    }, "itemInStage"),
+    engine_metrics: [
+      { id: "flanker_congruent_acc_pct", title_fa: "\u062F\u0642\u062A \u06AF\u0644\u0647\u0654 \u0647\u0645\u200C\u0633\u0648 (\u0628\u062F\u0648\u0646 \u0641\u0631\u06CC\u0628)", unit: "percent", higher_is_better: true, source: "auto", formula: "congruent_acc" },
+      { id: "flanker_incongruent_acc_pct", title_fa: "\u062F\u0642\u062A \u06AF\u0644\u0647\u0654 \u0641\u0631\u06CC\u0628\u06A9\u0627\u0631 (\u0641\u0644\u0627\u0646\u06A9\u0631 \u0645\u062E\u0627\u0644\u0641)", unit: "percent", higher_is_better: true, source: "auto", formula: "incongruent_acc" },
+      { id: "flanker_interference_ms", title_fa: "\u0647\u0632\u06CC\u0646\u0647\u0654 \u062A\u062F\u0627\u062E\u0644 \u0641\u0644\u0627\u0646\u06A9\u0631 (\u0645\u06CC\u0627\u0646\u0647\u0654 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u2212 \u0645\u06CC\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u062E\u0648\u0627\u0646)", unit: "ms", higher_is_better: false, source: "auto", formula: "interference_ms" }
+    ]
+  },
+  trail: {
+    // رد پای دزد — کف ۱۵۰ms روی نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
+    rt_floor_ms: 150,
+    timed_choice: false,
+    stage_rule: ACCURACY_STAGE_RULE,
+    stageList: /* @__PURE__ */ __name(() => TRAIL_STAGES, "stageList"),
+    levers: { bank_caps: TRAIL_STAGE_MAX_NODES, bank_bands: TRAIL_STAGE_BANDS },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      const allowed = typeof stageId === "string" && stageId in TRAIL_STAGE_BANDS ? TRAIL_STAGE_BANDS[stageId] : null;
+      if (allowed === null) return true;
+      const s = item.stim ?? {};
+      const band = typeof s.band === "string" ? s.band : "";
+      if (band !== "") return allowed.includes(band);
+      const max = typeof stageId === "string" && stageId in TRAIL_STAGE_MAX_NODES ? TRAIL_STAGE_MAX_NODES[stageId] : null;
+      if (max === null) return true;
+      const nodes = Array.isArray(s.nodes) ? s.nodes.length : 0;
+      return nodes > 0 && nodes <= max;
+    }, "itemInStage"),
+    engine_metrics: [
+      { id: "trail_prefix_pct", title_fa: "\u062F\u0631\u0635\u062F \u067E\u06CC\u0634\u200C\u0645\u0627\u0646\u062F \u0635\u062D\u06CC\u062D \u0631\u062F \u0631\u062F\u067E\u0627\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "trail_prefix" }
+    ]
+  }
+};
+
 // src/domain/games/protocol.ts
 var PROTOCOL_VERSION = "1.0.0";
 var PROTOCOL_ID = "gonogo-standard";
@@ -23393,19 +23928,19 @@ __name(protocolSnapshotOf, "protocolSnapshotOf");
 // src/domain/games/pure.ts
 var TONE_RULES_BASE = ["no_timer", "no_rank", "no_streak", "no_fail_message"];
 var DEFAULT_RT_FLOOR_MS = {
-  touch_report: 150,
+  touch_report: GAME_KINDS.gonogo.rt_floor_ms,
   // گو/نوگو — زیر ۱۵۰ حدس است
-  numline: 0,
+  numline: GAME_KINDS.numline.rt_floor_ms,
   // خط عددی کف ندارد
   choice: 200,
   // فلش‌کارت/انتخاب — لمس تصادفی حذف می‌شود
-  scan: 150,
+  scan: GAME_KINDS.scan.rt_floor_ms,
   // حملهٔ جاسوس‌ها — کف نخستین لمس موج؛ زیر آن حدس است
-  stroop: 200,
+  stroop: GAME_KINDS.stroop.rt_floor_ms,
   // حقه‌باز رنگ‌ها — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-  flanker: 200,
+  flanker: GAME_KINDS.flanker.rt_floor_ms,
   // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-  trail: 150
+  trail: GAME_KINDS.trail.rt_floor_ms
   // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
 };
 var IDLE_PARTIAL_MS = 5 * 60 * 1e3;
@@ -24076,307 +24611,16 @@ var STAGE_OVERRIDE_KEYS = [
   "isi_max_ms",
   "fixation_ms"
 ];
+var GONOGO_RULE = GAME_KINDS.gonogo.stage_rule;
 var STAGE_THRESHOLDS = {
-  pass: { go_pct: 70, nogo_pct: 60 },
-  star2: { go_pct: 80, nogo_pct: 75 },
-  star3: { go_pct: 90, nogo_pct: 85 }
+  pass: { go_pct: GONOGO_RULE.pass.go_pct.value, nogo_pct: GONOGO_RULE.pass.nogo_pct.value },
+  star2: { go_pct: GONOGO_RULE.star2.go_pct.value, nogo_pct: GONOGO_RULE.star2.nogo_pct.value },
+  star3: { go_pct: GONOGO_RULE.star3.go_pct.value, nogo_pct: GONOGO_RULE.star3.nogo_pct.value }
 };
-var STAGES_4_6 = [
-  {
-    id: "s1",
-    index: 1,
-    title_fa: "\u06AF\u0631\u0645\u200C\u06A9\u0631\u062F\u0646",
-    goal_fa: "\u0628\u0627 \u0633\u062A\u0627\u0631\u0647\u200C\u0647\u0627 \u062F\u0648\u0633\u062A \u0634\u0648\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
-    difficulty: 1,
-    overrides: { response_window_go_ms: 2400, response_window_nogo_ms: 2400, isi_min_ms: 1200, isi_max_ms: 1800, fixation_ms: 400 }
-  },
-  {
-    id: "s2",
-    index: 2,
-    title_fa: "\u062A\u0645\u0631\u06CC\u0646",
-    goal_fa: "\u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC \u0627\u062F\u0627\u0645\u0647 \u0628\u062F\u0647.",
-    difficulty: 2,
-    overrides: {}
-    // پارامترهای پایهٔ پروتکل — بدون بازنویسی
-  },
-  {
-    id: "s3",
-    index: 3,
-    title_fa: "\u062A\u0646\u062F\u062A\u0631",
-    goal_fa: "\u062D\u0627\u0644\u0627 \u06A9\u0645\u06CC \u062A\u0646\u062F\u062A\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u062D\u0648\u0627\u0633\u062A \u06A9\u0646\u0627\u0631 \u0646\u0628\u0627\u0634\u0647.",
-    difficulty: 3,
-    overrides: { response_window_go_ms: 1800, response_window_nogo_ms: 1800, isi_min_ms: 900, isi_max_ms: 1350, fixation_ms: 400 }
-  },
-  {
-    id: "s4",
-    index: 4,
-    title_fa: "\u062F\u0642\u062A",
-    goal_fa: "\u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A\u061B \u0641\u0642\u0637 \u0648\u0642\u062A\u06CC \u0645\u0637\u0645\u0626\u0646\u06CC \u0644\u0645\u0633 \u06A9\u0646.",
-    difficulty: 4,
-    overrides: { response_window_go_ms: 1600, response_window_nogo_ms: 1600, isi_min_ms: 850, isi_max_ms: 1250, fixation_ms: 350 }
-  },
-  {
-    id: "s5",
-    index: 5,
-    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646",
-    goal_fa: "\u0633\u0631\u06CC\u0639\u200C\u062A\u0631\u06CC\u0646 \u0645\u0631\u062D\u0644\u0647! \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC.",
-    difficulty: 5,
-    overrides: { response_window_go_ms: 1400, response_window_nogo_ms: 1400, isi_min_ms: 800, isi_max_ms: 1200, fixation_ms: 350 }
-  }
-];
-var STAGES_7_12 = [
-  {
-    id: "s1",
-    index: 1,
-    title_fa: "\u06AF\u0631\u0645\u200C\u06A9\u0631\u062F\u0646",
-    goal_fa: "\u0628\u0627 \u0633\u062A\u0627\u0631\u0647\u200C\u0647\u0627 \u062F\u0648\u0633\u062A \u0634\u0648\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
-    difficulty: 1,
-    overrides: { response_window_go_ms: 1900, response_window_nogo_ms: 1900, isi_min_ms: 1e3, isi_max_ms: 1400, fixation_ms: 400 }
-  },
-  {
-    id: "s2",
-    index: 2,
-    title_fa: "\u062A\u0645\u0631\u06CC\u0646",
-    goal_fa: "\u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC \u0627\u062F\u0627\u0645\u0647 \u0628\u062F\u0647.",
-    difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: "s3",
-    index: 3,
-    title_fa: "\u062A\u0646\u062F\u062A\u0631",
-    goal_fa: "\u062D\u0627\u0644\u0627 \u06A9\u0645\u06CC \u062A\u0646\u062F\u062A\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u062D\u0648\u0627\u0633\u062A \u06A9\u0646\u0627\u0631 \u0646\u0628\u0627\u0634\u0647.",
-    difficulty: 3,
-    overrides: { response_window_go_ms: 1300, response_window_nogo_ms: 1300, isi_min_ms: 700, isi_max_ms: 1050, fixation_ms: 400 }
-  },
-  {
-    id: "s4",
-    index: 4,
-    title_fa: "\u062F\u0642\u062A",
-    goal_fa: "\u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A\u061B \u0641\u0642\u0637 \u0648\u0642\u062A\u06CC \u0645\u0637\u0645\u0626\u0646\u06CC \u0644\u0645\u0633 \u06A9\u0646.",
-    difficulty: 4,
-    overrides: { response_window_go_ms: 1150, response_window_nogo_ms: 1150, isi_min_ms: 650, isi_max_ms: 1e3, fixation_ms: 350 }
-  },
-  {
-    id: "s5",
-    index: 5,
-    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646",
-    goal_fa: "\u0633\u0631\u06CC\u0639\u200C\u062A\u0631\u06CC\u0646 \u0645\u0631\u062D\u0644\u0647! \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC.",
-    difficulty: 5,
-    overrides: { response_window_go_ms: 1e3, response_window_nogo_ms: 1e3, isi_min_ms: 600, isi_max_ms: 900, fixation_ms: 350 }
-  }
-];
-var STAGES = { "4-6": STAGES_4_6, "7-12": STAGES_7_12 };
-var NUMLINE_STAGES = [
-  {
-    id: "s1",
-    index: 1,
-    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u06A9\u0648\u0686\u06A9",
-    goal_fa: "\u0639\u062F\u062F\u0647\u0627\u06CC \u06F0 \u062A\u0627 \u06F1\u06F0\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
-    difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: "s2",
-    index: 2,
-    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u0634\u0647\u0631",
-    goal_fa: "\u062D\u0627\u0644\u0627 \u062A\u0627 \u06F2\u06F0 \u0627\u062F\u0627\u0645\u0647 \u062F\u0627\u0631\u062F\u061B \u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC.",
-    difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: "s3",
-    index: 3,
-    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u0628\u0644\u0646\u062F",
-    goal_fa: "\u062C\u0627\u062F\u0647 \u062A\u0627 \u06F5\u06F0 \u0645\u06CC\u200C\u0631\u0633\u062F\u061B \u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A.",
-    difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: "s4",
-    index: 4,
-    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u0628\u0632\u0631\u06AF",
-    goal_fa: "\u062C\u0627\u062F\u0647 \u062A\u0627 \u06F1\u06F0\u06F0! \u062A\u0648 \u062E\u06CC\u0644\u06CC \u0631\u0627\u0647 \u0631\u0641\u062A\u0647\u200C\u0627\u06CC.",
-    difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: "s5",
-    index: 5,
-    title_fa: "\u062C\u0627\u062F\u0647\u0654 \u0642\u0647\u0631\u0645\u0627\u0646\u200C\u0647\u0627",
-    goal_fa: "\u0647\u0645\u0647\u0654 \u062C\u0627\u062F\u0647\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC!",
-    difficulty: 5,
-    overrides: {}
-  }
-];
-var SWARM_STAGES = [
-  {
-    id: "s1",
-    index: 1,
-    title_fa: "\u06A9\u0627\u0648\u0634 \u0634\u0628 \u0627\u0648\u0644",
-    goal_fa: "\u062C\u0627\u0633\u0648\u0633\u200C\u0647\u0627 \u06A9\u0645\u200C\u0627\u0646\u062F\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644 \u0628\u06AF\u06CC\u0631\u0634\u0627\u0646.",
-    difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: "s2",
-    index: 2,
-    title_fa: "\u06AF\u0634\u062A \u062F\u0648\u0645",
-    goal_fa: "\u0645\u0648\u062C \u0628\u0632\u0631\u06AF\u200C\u062A\u0631 \u0634\u062F\u0647\u061B \u0647\u0645\u0627\u0646 \u0642\u0627\u0639\u062F\u0647\u060C \u0686\u0634\u0645\u200C\u0647\u0627\u06CC \u062A\u06CC\u0632.",
-    difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: "s3",
-    index: 3,
-    title_fa: "\u0631\u06AF\u0628\u0627\u0631 \u0633\u0648\u0645",
-    goal_fa: "\u0627\u0633\u06A9\u0627\u062F\u0631\u0627\u0646 \u06A9\u0627\u0645\u0644 \u0622\u0645\u062F\u0647\u061B \u0622\u0631\u0627\u0645 \u0628\u0627\u0634 \u0648 \u062F\u0642\u06CC\u0642 \u0628\u06AF\u06CC\u0631.",
-    difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: "s4",
-    index: 4,
-    title_fa: "\u062D\u0645\u0644\u0647\u0654 \u0628\u0632\u0631\u06AF",
-    goal_fa: "\u0647\u0645\u0647\u0654 \u062C\u0627\u0633\u0648\u0633\u200C\u0647\u0627\u06CC \u06F2 \u0622\u0646\u062A\u0646 \u0631\u0627 \u0628\u06AF\u06CC\u0631\u061B \u0647\u0645\u200C\u0646\u0648\u0639\u200C\u0647\u0627 \u0631\u0627 \u062F\u0633\u062A \u0646\u0632\u0646.",
-    difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: "s5",
-    index: 5,
-    title_fa: "\u062F\u0641\u0627\u0639 \u0642\u0647\u0631\u0645\u0627\u0646\u200C\u0647\u0627",
-    goal_fa: "\u0647\u0645\u0647\u0654 \u0645\u0648\u062C\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0646\u06AF\u0647\u0628\u0627\u0646 \u0633\u06CC\u0627\u0631\u0647\u200C\u0627\u06CC!",
-    difficulty: 5,
-    overrides: {}
-  }
-];
-var STROOP_STAGES = [
-  {
-    id: "s1",
-    index: 1,
-    title_fa: "\u063A\u0627\u0631 \u0622\u0631\u0627\u0645",
-    goal_fa: "\u0648\u0627\u0698\u0647\u200C\u0647\u0627 \u0647\u0646\u0648\u0632 \u0631\u0646\u06AF\u0650 \u062E\u0648\u062F\u0634\u0627\u0646 \u0631\u0627 \u062F\u0627\u0631\u0646\u062F\u061B \u0628\u0627 \u0637\u0645\u0623\u0646\u06CC\u0646\u0647 \u0644\u0645\u0633 \u06A9\u0646.",
-    difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: "s2",
-    index: 2,
-    title_fa: "\u0631\u0646\u06AF\u200C\u0647\u0627 \u0642\u0627\u0637\u06CC \u0645\u06CC\u200C\u0634\u0648\u0646\u062F",
-    goal_fa: "\u062D\u0642\u0647\u200C\u0628\u0627\u0632 \u0634\u0631\u0648\u0639 \u06A9\u0631\u062F\u0647\u061B \u0641\u0642\u0637 \u0628\u0647 \u0631\u0646\u06AF\u0650 \u062C\u0648\u0647\u0631 \u0646\u06AF\u0627\u0647 \u06A9\u0646.",
-    difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: "s3",
-    index: 3,
-    title_fa: "\u062D\u0642\u0647\u0654 \u062A\u0645\u0627\u0645\u200C\u0639\u06CC\u0627\u0631",
-    goal_fa: "\u0648\u0627\u0698\u0647\u200C\u0647\u0627 \u0647\u0645\u06CC\u0634\u0647 \u062F\u0631\u0648\u063A \u0645\u06CC\u200C\u06AF\u0648\u06CC\u0646\u062F\u061B \u0631\u0646\u06AF\u0650 \u0648\u0627\u0642\u0639\u06CC \u0631\u0627 \u0628\u06AF\u06CC\u0631.",
-    difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: "s4",
-    index: 4,
-    title_fa: "\u062A\u0644\u0647\u0654 \u0645\u0639\u0646\u06CC \u0648\u0627\u0698\u0647",
-    goal_fa: "\u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A\u061B \u0645\u0639\u0646\u06CC \u0648\u0627\u0698\u0647 \u0641\u0631\u06CC\u0628\u062A \u0646\u0645\u06CC\u200C\u062F\u0647\u062F.",
-    difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: "s5",
-    index: 5,
-    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0631\u0646\u06AF\u200C\u0647\u0627",
-    goal_fa: "\u0647\u0645\u0647\u0654 \u062D\u0642\u0647\u200C\u0647\u0627\u06CC \u063A\u0627\u0631 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC!",
-    difficulty: 5,
-    overrides: {}
-  }
-];
-var FLANKER_STAGES = [
-  {
-    id: "s1",
-    index: 1,
-    title_fa: "\u06AF\u0644\u0647\u0654 \u0622\u0631\u0627\u0645",
-    goal_fa: "\u0647\u0645\u0647\u0654 \u06AF\u0631\u06AF\u200C\u0647\u0627 \u06CC\u06A9\u200C\u0633\u0648 \u0646\u06AF\u0627\u0647 \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
-    difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: "s2",
-    index: 2,
-    title_fa: "\u06AF\u0631\u06AF\u200C\u0647\u0627\u06CC \u0627\u0636\u0627\u0641\u0647",
-    goal_fa: "\u06AF\u0644\u0647 \u0634\u0644\u0648\u063A\u200C\u062A\u0631 \u0634\u062F\u0647\u061B \u0641\u0642\u0637 \u0646\u06AF\u0627\u0647 \u06AF\u0631\u06AF\u0650 \u0648\u0633\u0637.",
-    difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: "s3",
-    index: 3,
-    title_fa: "\u0646\u06AF\u0627\u0647\u200C\u0647\u0627\u06CC \u0641\u0631\u06CC\u0628\u06A9\u0627\u0631",
-    goal_fa: "\u0628\u0631\u062E\u06CC \u06AF\u0631\u06AF\u200C\u0647\u0627 \u0642\u0644\u0627\u0628\u06CC\u200C\u0627\u0646\u062F\u061B \u0633\u0631\u0634\u0627\u0646 \u0628\u0647 \u0622\u0646\u200C\u0633\u0648 \u0646\u06AF\u0627\u0647 \u0645\u06CC\u200C\u06A9\u0646\u062F.",
-    difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: "s4",
-    index: 4,
-    title_fa: "\u06AF\u0644\u0647\u0654 \u0641\u0631\u06CC\u0628\u06A9\u0627\u0631",
-    goal_fa: "\u0647\u0645\u0647 \u0628\u0647 \u06CC\u06A9\u200C\u0633\u0648 \u0646\u06AF\u0627\u0647 \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F \u062C\u0632 \u06AF\u0631\u06AF\u0650 \u0648\u0627\u0642\u0639\u06CC\u061B \u062D\u0648\u0627\u0633\u062A \u06A9\u0646\u0627\u0631 \u0646\u0631\u0647.",
-    difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: "s5",
-    index: 5,
-    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u062F\u0634\u062A",
-    goal_fa: "\u0647\u0645\u0647\u0654 \u06AF\u0644\u0647\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0646\u06AF\u0647\u0628\u0627\u0646 \u062F\u0634\u062A\u06CC!",
-    difficulty: 5,
-    overrides: {}
-  }
-];
-var TRAIL_STAGES = [
-  {
-    id: "s1",
-    index: 1,
-    title_fa: "\u0631\u062F \u06A9\u0648\u062A\u0627\u0647",
-    goal_fa: "\u0631\u062F\u067E\u0627\u0647\u0627 \u06A9\u0645\u200C\u0627\u0646\u062F\u061B \u0628\u0647 \u062A\u0631\u062A\u06CC\u0628 \u0634\u0645\u0627\u0631\u0647 \u0628\u0631\u0648.",
-    difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: "s2",
-    index: 2,
-    title_fa: "\u0631\u062F \u0628\u0644\u0646\u062F\u062A\u0631",
-    goal_fa: "\u06CC\u06A9 \u0642\u062F\u0645 \u0628\u06CC\u0634\u062A\u0631\u061B \u0631\u062F \u0631\u0627 \u06A9\u0627\u0645\u0644 \u06A9\u0646.",
-    difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: "s3",
-    index: 3,
-    title_fa: "\u0631\u062F \u0628\u0644\u0646\u062F",
-    goal_fa: "\u0631\u062F\u067E\u0627\u0647\u0627 \u0628\u06CC\u0634\u062A\u0631 \u0634\u062F\u0647\u200C\u0627\u0646\u062F\u061B \u0631\u062F \u06AF\u0645 \u0646\u0634\u0648\u062F.",
-    difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: "s4",
-    index: 4,
-    title_fa: "\u0631\u062F \u06AF\u0645\u200C\u0634\u062F\u0647",
-    goal_fa: "\u0639\u062F\u062F \u0648 \u062D\u0631\u0641 \u06CC\u06A9\u200C\u062F\u0631\u0645\u06CC\u0627\u0646 \u0634\u062F\u0647\u061B \u0628\u0627 \u062F\u0642\u062A \u0642\u062F\u0645 \u0628\u0632\u0646.",
-    difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: "s5",
-    index: 5,
-    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0631\u062F",
-    goal_fa: "\u0647\u0645\u0647\u0654 \u0631\u062F\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u062A\u0639\u0642\u06CC\u0628\u200C\u06A9\u0646\u0646\u062F\u0647\u200C\u0627\u06CC!",
-    difficulty: 5,
-    overrides: {}
-  }
-];
+function stageListOf(kind, band) {
+  return GAME_KINDS[kind].stageList(band);
+}
+__name(stageListOf, "stageListOf");
 function stageByIndex(band, index, kind = "gonogo") {
   const list = stageListOf(kind, band);
   return list.find((s) => s.index === index) ?? null;
@@ -24388,23 +24632,6 @@ function stageById(band, id, kind = "gonogo") {
   return list.find((s) => s.id === id) ?? null;
 }
 __name(stageById, "stageById");
-function stageListOf(kind, band) {
-  switch (kind) {
-    case "numline":
-      return NUMLINE_STAGES;
-    case "scan":
-      return SWARM_STAGES;
-    case "stroop":
-      return STROOP_STAGES;
-    case "flanker":
-      return FLANKER_STAGES;
-    case "trail":
-      return TRAIL_STAGES;
-    default:
-      return STAGES[band] ?? STAGES["7-12"];
-  }
-}
-__name(stageListOf, "stageListOf");
 function applyStageOverrides(params, stage) {
   const out = { ...params };
   if (!stage) return out;
@@ -24429,172 +24656,39 @@ function stageOutcomeOf(correctGoPct, correctNogoPct) {
   return { passed: true, stars: three ? 3 : two ? 2 : 1, thresholds: t };
 }
 __name(stageOutcomeOf, "stageOutcomeOf");
-function gameKindOf(v) {
-  return v === "numline" ? "numline" : v === "scan" ? "scan" : v === "stroop" ? "stroop" : v === "flanker" ? "flanker" : v === "trail" ? "trail" : "gonogo";
+function accuracyThresholdsOf(rule) {
+  return { pass: rule.pass.value, star2: rule.star2.value, star3: rule.star3.value };
 }
-__name(gameKindOf, "gameKindOf");
-var NUMLINE_STAGE_THRESHOLDS = {
-  pass: 65,
-  star2: 78,
-  star3: 88
-};
-function stageOutcomeNumline(accuracy) {
-  const t = NUMLINE_STAGE_THRESHOLDS;
-  if (!pctOk2(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars = pctOk2(accuracy, t.star3) ? 3 : pctOk2(accuracy, t.star2) ? 2 : 1;
+__name(accuracyThresholdsOf, "accuracyThresholdsOf");
+var NUMLINE_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.numline.stage_rule);
+function accuracyOutcomeOf(rule, accuracy) {
+  if (!pctOk2(accuracy, rule.pass.value)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
+  const stars = pctOk2(accuracy, rule.star3.value) ? 3 : pctOk2(accuracy, rule.star2.value) ? 2 : 1;
   return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
 }
-__name(stageOutcomeNumline, "stageOutcomeNumline");
+__name(accuracyOutcomeOf, "accuracyOutcomeOf");
 function stageOutcomeFor(kind, summary) {
-  return kind === "numline" ? stageOutcomeNumline(summary.pct.accuracy) : kind === "scan" ? stageOutcomeScan(summary.pct.accuracy) : kind === "stroop" || kind === "flanker" || kind === "trail" ? stageOutcomeAccuracyKind(summary.pct.accuracy) : stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo);
+  const rule = GAME_KINDS[kind].stage_rule;
+  return rule.shape === "go_nogo" ? stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo) : accuracyOutcomeOf(rule, summary.pct.accuracy);
 }
 __name(stageOutcomeFor, "stageOutcomeFor");
-var NUMLINE_STAGE_MAX = {
-  s1: 10,
-  s2: 20,
-  s3: 50,
-  s4: 100,
-  s5: null
-};
-function numlineItemInStage(item, stageId) {
-  const max = typeof stageId === "string" && stageId in NUMLINE_STAGE_MAX ? NUMLINE_STAGE_MAX[stageId] : null;
-  if (max === null) return true;
-  return Array.isArray(item.range) && item.range[1] <= max;
+var NUMLINE_STAGE_MAX2 = GAME_KINDS.numline.levers.bank_caps;
+var SCAN_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.scan.stage_rule);
+var SCAN_STAGE_MAX_TILES2 = GAME_KINDS.scan.levers.bank_caps;
+var ACCURACY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.stroop.stage_rule);
+var STROOP_STAGE_BANDS2 = GAME_KINDS.stroop.levers.bank_bands;
+var FLANKER_STAGE_MAX_DECOYS2 = GAME_KINDS.flanker.levers.bank_caps;
+var FLANKER_STAGE_BANDS2 = GAME_KINDS.flanker.levers.bank_bands;
+var TRAIL_STAGE_MAX_NODES2 = GAME_KINDS.trail.levers.bank_caps;
+var TRAIL_STAGE_BANDS2 = GAME_KINDS.trail.levers.bank_bands;
+function itemInStageFor(kind, item, stageId) {
+  return GAME_KINDS[kind].itemInStage(item, stageId);
 }
-__name(numlineItemInStage, "numlineItemInStage");
-var SCAN_STAGE_THRESHOLDS = {
-  pass: 65,
-  star2: 78,
-  star3: 88
-};
-function stageOutcomeScan(accuracy) {
-  const t = SCAN_STAGE_THRESHOLDS;
-  if (!pctOk2(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars = pctOk2(accuracy, t.star3) ? 3 : pctOk2(accuracy, t.star2) ? 2 : 1;
-  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
-}
-__name(stageOutcomeScan, "stageOutcomeScan");
-var SCAN_STAGE_MAX_TILES = {
-  s1: 6,
-  s2: 9,
-  s3: 12,
-  s4: 15,
-  s5: null
-};
-function scanItemInStage(item, stageId) {
-  const max = typeof stageId === "string" && stageId in SCAN_STAGE_MAX_TILES ? SCAN_STAGE_MAX_TILES[stageId] : null;
-  if (max === null) return true;
-  const s = item.stim ?? {};
-  const cols = typeof s.cols === "number" && Number.isInteger(s.cols) && s.cols > 0 ? s.cols : 0;
-  const rows = typeof s.rows === "number" && Number.isInteger(s.rows) && s.rows > 0 ? s.rows : 0;
-  const tiles = cols * rows;
-  return tiles > 0 && tiles <= max;
-}
-__name(scanItemInStage, "scanItemInStage");
-var ACCURACY_STAGE_THRESHOLDS = {
-  pass: 65,
-  star2: 78,
-  star3: 88
-};
-function stageOutcomeAccuracyKind(accuracy) {
-  const t = ACCURACY_STAGE_THRESHOLDS;
-  if (!pctOk2(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars = pctOk2(accuracy, t.star3) ? 3 : pctOk2(accuracy, t.star2) ? 2 : 1;
-  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
-}
-__name(stageOutcomeAccuracyKind, "stageOutcomeAccuracyKind");
-var STROOP_STAGE_BANDS = {
-  s1: ["a"],
-  s2: ["a", "b"],
-  s3: ["a", "b", "c"],
-  s4: ["a", "b", "c", "d"],
-  s5: null
-  // همهٔ بانک — مرور بزرگ
-};
-function stroopItemInStage(item, stageId) {
-  const allowed = typeof stageId === "string" && stageId in STROOP_STAGE_BANDS ? STROOP_STAGE_BANDS[stageId] : null;
-  if (allowed === null) return true;
-  const s = item.stim ?? {};
-  const band = typeof s.band === "string" ? s.band : "";
-  if (band === "") return true;
-  return allowed.includes(band);
-}
-__name(stroopItemInStage, "stroopItemInStage");
-function flankerIncongruentCountOf(item) {
-  const s = item.stim ?? {};
-  const arrows = Array.isArray(s.arrows) ? s.arrows.filter((v) => v === "L" || v === "R") : [];
-  const mid = Math.floor(arrows.length / 2);
-  const center = arrows[mid];
-  if (center === void 0) return 0;
-  return arrows.filter((a) => a !== center).length;
-}
-__name(flankerIncongruentCountOf, "flankerIncongruentCountOf");
-var FLANKER_STAGE_MAX_DECOYS = {
-  s1: 0,
-  // گلهٔ آرام — هیچ قلابی
-  s2: 1,
-  // حداکثر یک قلابی
-  s3: 3,
-  // نگاه‌های فریبکار
-  s4: null,
-  // گلهٔ فریبکار — همهٔ گله‌ها
-  s5: null
-};
-var FLANKER_STAGE_BANDS = {
-  s1: ["a"],
-  s2: ["a", "b"],
-  s3: ["a", "b", "c"],
-  s4: ["a", "b", "c", "d"],
-  s5: null
-};
-function flankerItemInStage(item, stageId) {
-  const allowed = typeof stageId === "string" && stageId in FLANKER_STAGE_BANDS ? FLANKER_STAGE_BANDS[stageId] : null;
-  if (allowed === null) return true;
-  const s = item.stim ?? {};
-  const band = typeof s.band === "string" ? s.band : "";
-  if (band !== "") return allowed.includes(band);
-  const max = typeof stageId === "string" && stageId in FLANKER_STAGE_MAX_DECOYS ? FLANKER_STAGE_MAX_DECOYS[stageId] : null;
-  if (max === null) return true;
-  const decoys = flankerIncongruentCountOf(item);
-  return decoys === 0 || decoys <= max;
-}
-__name(flankerItemInStage, "flankerItemInStage");
-var TRAIL_STAGE_MAX_NODES = {
-  s1: 4,
-  s2: 5,
-  s3: 6,
-  s4: 7,
-  s5: null
-};
-var TRAIL_STAGE_BANDS = {
-  s1: ["a"],
-  s2: ["a", "b"],
-  s3: ["a", "b", "c"],
-  s4: ["a", "b", "c", "d"],
-  s5: null
-};
-function trailItemInStage(item, stageId) {
-  const allowed = typeof stageId === "string" && stageId in TRAIL_STAGE_BANDS ? TRAIL_STAGE_BANDS[stageId] : null;
-  if (allowed === null) return true;
-  const s = item.stim ?? {};
-  const band = typeof s.band === "string" ? s.band : "";
-  if (band !== "") return allowed.includes(band);
-  const max = typeof stageId === "string" && stageId in TRAIL_STAGE_MAX_NODES ? TRAIL_STAGE_MAX_NODES[stageId] : null;
-  if (max === null) return true;
-  const nodes = Array.isArray(s.nodes) ? s.nodes.length : 0;
-  return nodes > 0 && nodes <= max;
-}
-__name(trailItemInStage, "trailItemInStage");
-var SCAN_STAGE_WAVE_MS = {
-  s1: 22e3,
-  s2: 19e3,
-  s3: 17e3,
-  s4: 15e3,
-  s5: 13e3
-};
+__name(itemInStageFor, "itemInStageFor");
+var SCAN_STAGE_WAVE_MS2 = GAME_KINDS.scan.levers.display;
 function scanStageWaveMs(itemWaveMs, stageId) {
-  if (typeof stageId !== "string" || !(stageId in SCAN_STAGE_WAVE_MS)) return null;
-  const cap = SCAN_STAGE_WAVE_MS[stageId];
+  if (typeof stageId !== "string" || !(stageId in SCAN_STAGE_WAVE_MS2)) return null;
+  const cap = SCAN_STAGE_WAVE_MS2[stageId];
   if (typeof cap !== "number" || cap <= 0) return null;
   if (typeof itemWaveMs !== "number" || !Number.isFinite(itemWaveMs) || itemWaveMs <= 0) return cap;
   return Math.min(itemWaveMs, cap);
@@ -24686,7 +24780,7 @@ function accuracyDriftPpOf(summary) {
 }
 __name(accuracyDriftPpOf, "accuracyDriftPpOf");
 function windowMissPctOf(summary, kind) {
-  if (kind !== "stroop" && kind !== "flanker") return null;
+  if (!GAME_KINDS[kind].timed_choice) return null;
   const total = summary.totals?.total ?? 0;
   const omission = summary.totals?.omission ?? 0;
   if (total <= 0) return null;
@@ -25187,35 +25281,9 @@ function parseSequenceRecord(raw2) {
 __name(parseSequenceRecord, "parseSequenceRecord");
 
 // src/domain/games/registry-extra.ts
-var ENGINE_ONLY_FORMULAS = [
-  "correct_go_pct",
-  "correct_nogo_pct",
-  "commission_pct",
-  "omission_pct",
-  "scan_fa",
-  "scan_miss",
-  "congruent_acc",
-  "incongruent_acc",
-  "interference_ms",
-  "trail_prefix"
-];
-var ENGINE_METRICS = [
-  { id: "correct_go_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u06AF\u0648\u0647\u0627\u06CC \u062F\u0631\u0633\u062A", unit: "percent", higher_is_better: true, source: "auto", formula: "correct_go_pct" },
-  { id: "correct_nogo_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u062F\u0631\u0633\u062A \u0646\u0648\u06AF\u0648", unit: "percent", higher_is_better: true, source: "auto", formula: "correct_nogo_pct" },
-  { id: "commission_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u062E\u0637\u0627\u06CC \u067E\u0627\u0633\u062E \u0628\u0647 \u063A\u06CC\u0631\u0647\u062F\u0641", unit: "percent", higher_is_better: false, source: "auto", formula: "commission_pct" },
-  { id: "omission_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u0627\u0632 \u062F\u0633\u062A\u200C\u062F\u0627\u062F\u0646 \u0647\u062F\u0641", unit: "percent", higher_is_better: false, source: "auto", formula: "omission_pct" },
-  // حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — دقت موج‌ها از فرمول 'accuracy' در DB می‌آید (accuracy_scan)
-  { id: "scan_fa_pct", title_fa: "\u062F\u0631\u0635\u062F \u06AF\u0631\u0641\u062A\u0646 \u0647\u0645\u200C\u0646\u0648\u0639 \u062F\u0631 \u0645\u0648\u062C", unit: "percent", higher_is_better: false, source: "auto", formula: "scan_fa" },
-  { id: "scan_miss_pct", title_fa: "\u062F\u0631\u0635\u062F \u062C\u0627\u0627\u0646\u062F\u0627\u062E\u062A\u0646 \u062C\u0627\u0633\u0648\u0633", unit: "percent", higher_is_better: false, source: "auto", formula: "scan_miss" },
-  // سه بازی تازه (۱.۲۵.۳۲) — دقت شرطی و هزینهٔ تداخل استروپ/فلانکر + درصد پیش‌ماند رد
-  { id: "stroop_congruent_acc_pct", title_fa: "\u062F\u0642\u062A \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0627\u0633\u062A\u0631\u0648\u067E (\u0648\u0627\u0698\u0647 \u0648 \u062C\u0648\u0647\u0631 \u06CC\u06A9\u06CC)", unit: "percent", higher_is_better: true, source: "auto", formula: "congruent_acc" },
-  { id: "stroop_incongruent_acc_pct", title_fa: "\u062F\u0642\u062A \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0627\u0633\u062A\u0631\u0648\u067E (\u062D\u0642\u0647\u0654 \u062C\u0648\u0647\u0631)", unit: "percent", higher_is_better: true, source: "auto", formula: "incongruent_acc" },
-  { id: "stroop_interference_ms", title_fa: "\u0647\u0632\u06CC\u0646\u0647\u0654 \u062A\u062F\u0627\u062E\u0644 \u0627\u0633\u062A\u0631\u0648\u067E (\u0645\u06CC\u0627\u0646\u0647\u0654 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u2212 \u0645\u06CC\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u062E\u0648\u0627\u0646)", unit: "ms", higher_is_better: false, source: "auto", formula: "interference_ms" },
-  { id: "flanker_congruent_acc_pct", title_fa: "\u062F\u0642\u062A \u06AF\u0644\u0647\u0654 \u0647\u0645\u200C\u0633\u0648 (\u0628\u062F\u0648\u0646 \u0641\u0631\u06CC\u0628)", unit: "percent", higher_is_better: true, source: "auto", formula: "congruent_acc" },
-  { id: "flanker_incongruent_acc_pct", title_fa: "\u062F\u0642\u062A \u06AF\u0644\u0647\u0654 \u0641\u0631\u06CC\u0628\u06A9\u0627\u0631 (\u0641\u0644\u0627\u0646\u06A9\u0631 \u0645\u062E\u0627\u0644\u0641)", unit: "percent", higher_is_better: true, source: "auto", formula: "incongruent_acc" },
-  { id: "flanker_interference_ms", title_fa: "\u0647\u0632\u06CC\u0646\u0647\u0654 \u062A\u062F\u0627\u062E\u0644 \u0641\u0644\u0627\u0646\u06A9\u0631 (\u0645\u06CC\u0627\u0646\u0647\u0654 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u2212 \u0645\u06CC\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u062E\u0648\u0627\u0646)", unit: "ms", higher_is_better: false, source: "auto", formula: "interference_ms" },
-  { id: "trail_prefix_pct", title_fa: "\u062F\u0631\u0635\u062F \u067E\u06CC\u0634\u200C\u0645\u0627\u0646\u062F \u0635\u062D\u06CC\u062D \u0631\u062F \u0631\u062F\u067E\u0627\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "trail_prefix" }
-];
+var ENGINE_METRICS = GAME_KIND_IDS.flatMap(
+  (kind) => GAME_KINDS[kind].engine_metrics
+);
 function mergeEngineMetrics(dbRows) {
   const ids = new Set(dbRows.map((m) => m.id));
   const extra = ENGINE_METRICS.filter((m) => !ids.has(m.id));
@@ -25994,14 +26062,7 @@ function createGamesService(deps) {
         );
         const doneN = doneRow?.n ?? 0;
         if (doneN > 0) {
-          const inStg = /* @__PURE__ */ __name((it) => {
-            if (kind === "numline") return numlineItemInStage(it, res.session.stage_id);
-            if (kind === "scan") return scanItemInStage(it, res.session.stage_id);
-            if (kind === "stroop") return stroopItemInStage(it, res.session.stage_id);
-            if (kind === "flanker") return flankerItemInStage(it, res.session.stage_id);
-            if (kind === "trail") return trailItemInStage(it, res.session.stage_id);
-            return true;
-          }, "inStg");
+          const inStg = /* @__PURE__ */ __name((it) => itemInStageFor(kind, it, res.session.stage_id), "inStg");
           resumeMeta = { done: doneN, total: (m.items ?? []).filter(inStg).length };
         }
       } catch {
@@ -26207,14 +26268,7 @@ function createGamesService(deps) {
     const kind = gameKindOf(mission.game);
     const attempts = await db.query(`SELECT * FROM game_attempts WHERE session_id = ?`, [session.id]);
     const doneIds = new Set(attempts.map((a) => a.item_id));
-    const inStage = /* @__PURE__ */ __name((it) => {
-      if (kind === "numline") return numlineItemInStage(it, session.stage_id);
-      if (kind === "scan") return scanItemInStage(it, session.stage_id);
-      if (kind === "stroop") return stroopItemInStage(it, session.stage_id);
-      if (kind === "flanker") return flankerItemInStage(it, session.stage_id);
-      if (kind === "trail") return trailItemInStage(it, session.stage_id);
-      return true;
-    }, "inStage");
+    const inStage = /* @__PURE__ */ __name((it) => itemInStageFor(kind, it, session.stage_id), "inStage");
     const stageItems = (mission.items ?? []).filter(inStage);
     const total = stageItems.length;
     const unansweredOf = /* @__PURE__ */ __name((pred) => stageItems.find((it) => !doneIds.has(it.id) && pred(it)), "unansweredOf");
@@ -26343,7 +26397,7 @@ function createGamesService(deps) {
     const nowIso = isoOf2(now());
     const finishKind = gameKindOf(mission.game);
     const finishStage = finishKind !== "gonogo" ? stageById("7-12", session.stage_id, finishKind) : null;
-    const finishTotal = finishStage ? mission.items.filter((it) => finishKind === "numline" ? numlineItemInStage(it, finishStage.id) : finishKind === "scan" ? scanItemInStage(it, finishStage.id) : finishKind === "stroop" ? stroopItemInStage(it, finishStage.id) : finishKind === "flanker" ? flankerItemInStage(it, finishStage.id) : trailItemInStage(it, finishStage.id)).length : mission.items.length;
+    const finishTotal = finishStage ? mission.items.filter((it) => itemInStageFor(finishKind, it, finishStage.id)).length : mission.items.length;
     const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso].filter((v) => typeof v === "string").map((v) => new Date(v).getTime());
     const validity = decideValidity(activity, attempts.length, finishTotal);
     const metricIds = mission.metrics && mission.metrics.length > 0 ? mission.metrics : [mission.metric];
@@ -45762,10 +45816,10 @@ function periodSinceUtc(periodKey, periods = PERIODS, now = /* @__PURE__ */ new 
 }
 __name(periodSinceUtc, "periodSinceUtc");
 function boardSqlAndParams(sinceUtc, usageActions) {
-  const P = [];
+  const P2 = [];
   const since = /* @__PURE__ */ __name((col) => {
     if (!sinceUtc) return "";
-    P.push(sinceUtc);
+    P2.push(sinceUtc);
     return ` AND ${col} >= ?`;
   }, "since");
   const metrics = [
@@ -45834,7 +45888,7 @@ function boardSqlAndParams(sinceUtc, usageActions) {
            AND ce.staff_id IS NOT NULL AND ce.staff_id != f.created_by${since("ce.created_at")})`
     ]
   ];
-  P.push(...usageActions);
+  P2.push(...usageActions);
   const actionList = usageActions.map(() => "?").join(",");
   const usageJson = `(SELECT COALESCE(json_group_array(json_object('a', u.action, 'c', u.c)), '[]')
                         FROM (SELECT al.action AS action, COUNT(*) AS c
@@ -45849,7 +45903,7 @@ function boardSqlAndParams(sinceUtc, usageActions) {
          ${usageJson} AS usageJson
     FROM staff s
    ORDER BY s.full_name /* board:${nonce} */`;
-  return { sql, params: P };
+  return { sql, params: P2 };
 }
 __name(boardSqlAndParams, "boardSqlAndParams");
 async function computeBoard(d1, sinceUtc, cfg = {}) {
@@ -46051,11 +46105,11 @@ async function handleScoring(request, env) {
       return json({ error: "NOT_FOUND", message: "\u06A9\u0627\u0631\u0645\u0646\u062F \u06CC\u0627\u0641\u062A \u0646\u0634\u062F" }, 404);
     }
     const W = since ? " AND created_at >= ?" : "";
-    const P = since ? [since] : [];
-    const exerciseItems = await db.prepare(`SELECT id, title, team_created, co_created_by FROM exercises WHERE deleted_at IS NULL AND (created_by = ? OR co_created_by = ?)${W} ORDER BY created_at`).bind(staffId, staffId, ...P).all();
-    const packageItems = await db.prepare(`SELECT id, title FROM exercise_packages WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all();
-    const templateItems = await db.prepare(`SELECT key, title FROM pathway_templates WHERE active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all();
-    const formItems = await db.prepare(`SELECT id, title FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all();
+    const P2 = since ? [since] : [];
+    const exerciseItems = await db.prepare(`SELECT id, title, team_created, co_created_by FROM exercises WHERE deleted_at IS NULL AND (created_by = ? OR co_created_by = ?)${W} ORDER BY created_at`).bind(staffId, staffId, ...P2).all();
+    const packageItems = await db.prepare(`SELECT id, title FROM exercise_packages WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P2).all();
+    const templateItems = await db.prepare(`SELECT key, title FROM pathway_templates WHERE active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P2).all();
+    const formItems = await db.prepare(`SELECT id, title FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P2).all();
     const prodW = /* @__PURE__ */ __name((key) => contentFormula.production.find((x) => x.key === key)?.weight ?? 0, "prodW");
     const exWeight = prodW("exercises");
     const exerciseList = exerciseItems.results.map((r) => {

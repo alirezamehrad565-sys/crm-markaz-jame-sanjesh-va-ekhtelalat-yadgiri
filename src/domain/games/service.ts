@@ -27,18 +27,13 @@ import { WINDOW_MAX_MS, WINDOW_MIN_MS } from './adaptive';
 import {
   applyStageOverrides,
   currentStageOf,
-  flankerItemInStage,
-  gameKindOf,
-  numlineItemInStage,
-  scanItemInStage,
-  scanStageWaveMs,
+  itemInStageFor,
   stageById,
   stageByIndex,
   stageOutcomeFor,
   stageProgressOfKind,
   stageStimViewOf,
-  stroopItemInStage,
-  trailItemInStage,
+  scanStageWaveMs,
   STAGE_RULES_VERSION,
   STAGE_TOTAL,
   type GameKind,
@@ -53,6 +48,8 @@ import { buildComparison, type ChildGameReport, type ReportRawAttempt, type Repo
 import { decideAdaptive, applyAdaptiveLevel, serializeDecision, type AdaptiveSessionInput, type AdaptiveDecision } from './adaptive';
 import { generateSequence, serializeSequence, parseSequenceRecord } from './stimulus';
 import { ENGINE_METRICS, ENGINE_ONLY_FORMULAS, mergeEngineMetrics } from './registry-extra';
+// رجیستری نوع-محور (G4الف/رفع P3-4) — تجزیهٔ kind و پرچم‌های نوع تک‌منبعش همین نقشه است
+import { gameKindOf } from './registry';
 import type {
   AttemptDraftInput,
   SessionEvidenceFromClient,
@@ -1004,14 +1001,8 @@ export function createGamesService(deps: GamesDeps): GamesService {
           `SELECT COUNT(*) AS n FROM game_attempts WHERE session_id = ?`, [res.session.id]);
         const doneN = doneRow?.n ?? 0;
         if (doneN > 0) {
-          const inStg = (it: MissionItem): boolean => {
-            if (kind === 'numline') return numlineItemInStage(it, res.session!.stage_id);
-            if (kind === 'scan') return scanItemInStage(it, res.session!.stage_id);
-            if (kind === 'stroop') return stroopItemInStage(it, res.session!.stage_id);
-            if (kind === 'flanker') return flankerItemInStage(it, res.session!.stage_id);
-            if (kind === 'trail') return trailItemInStage(it, res.session!.stage_id);
-            return true;
-          };
+          // فیلتر جریان مرحله از رجیستری نوع-محور (G4الف) — جای زنجیرهٔ if per-kind
+          const inStg = (it: MissionItem): boolean => itemInStageFor(kind, it, res.session!.stage_id);
           resumeMeta = { done: doneN, total: (m.items ?? []).filter(inStg).length };
         }
       } catch { resumeMeta = null; } // فرادادهٔ ادامه هرگز ورود را نمی‌شکند
@@ -1227,16 +1218,9 @@ export function createGamesService(deps: GamesDeps): GamesService {
     const kind = gameKindOf(mission.game);
     const attempts = await db.query<AttemptRow>(`SELECT * FROM game_attempts WHERE session_id = ?`, [session.id]);
     const doneIds = new Set(attempts.map((a) => a.item_id));
-    // موج مرحلهٔ خط عددی/اسکن — انتخاب از بانک authored با سقف مرحله؛
+    // موج مرحلهٔ خط عددی/اسکن/استروپ/فلانکر/رد — فیلتر بانک هر نوع از رجیستری (G4الف)؛
     // گونوگو و بی‌مرحله = همهٔ آیتم‌ها؛ نمره‌دهی همیشه روی آیتم authored می‌ماند
-    const inStage = (it: MissionItem): boolean => {
-      if (kind === 'numline') return numlineItemInStage(it, session.stage_id);
-      if (kind === 'scan') return scanItemInStage(it, session.stage_id);
-      if (kind === 'stroop') return stroopItemInStage(it, session.stage_id);
-      if (kind === 'flanker') return flankerItemInStage(it, session.stage_id);
-      if (kind === 'trail') return trailItemInStage(it, session.stage_id);
-      return true;
-    };
+    const inStage = (it: MissionItem): boolean => itemInStageFor(kind, it, session.stage_id);
     const stageItems = (mission.items ?? []).filter(inStage);
     const total = stageItems.length;
     const unansweredOf = (pred: (it: MissionItem) => boolean): MissionItem | undefined =>
@@ -1395,15 +1379,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
       ? stageById('7-12', session.stage_id, finishKind)
       : null;
     const finishTotal = finishStage
-      ? mission.items.filter((it) => finishKind === 'numline'
-          ? numlineItemInStage(it, finishStage.id)
-          : finishKind === 'scan'
-            ? scanItemInStage(it, finishStage.id)
-            : finishKind === 'stroop'
-              ? stroopItemInStage(it, finishStage.id)
-              : finishKind === 'flanker'
-                ? flankerItemInStage(it, finishStage.id)
-                : trailItemInStage(it, finishStage.id)).length
+      ? mission.items.filter((it) => itemInStageFor(finishKind, it, finishStage.id)).length
       : mission.items.length;
     const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso]
       .filter((v): v is string => typeof v === 'string')
