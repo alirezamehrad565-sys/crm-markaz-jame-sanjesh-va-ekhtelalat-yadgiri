@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.41";
+var APP_VERSION = "1.25.42";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -15180,15 +15180,15 @@ __name(m108NormalizeChecklistTexts, "m108NormalizeChecklistTexts");
 function m108NormalizeChecklistItems(items) {
   if (!items || items.length === 0) return null;
   const seen = /* @__PURE__ */ new Set();
-  const clean2 = [];
+  const clean3 = [];
   for (const it of items) {
     const text = it.text.trim();
     if (!text || seen.has(text)) continue;
     seen.add(text);
-    clean2.push({ text, done: Boolean(it.done) });
-    if (clean2.length >= TODO_CHECKLIST_MAX) break;
+    clean3.push({ text, done: Boolean(it.done) });
+    if (clean3.length >= TODO_CHECKLIST_MAX) break;
   }
-  return clean2.length > 0 ? JSON.stringify(clean2) : null;
+  return clean3.length > 0 ? JSON.stringify(clean3) : null;
 }
 __name(m108NormalizeChecklistItems, "m108NormalizeChecklistItems");
 function createTodosService(deps) {
@@ -15383,9 +15383,9 @@ function createTodosService(deps) {
       return rowToTodo(updated);
     },
     async addChecklistItem(id, text, actor) {
-      const clean2 = text.trim();
-      if (!clean2) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
-      if (clean2.length > 200) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+      const clean3 = text.trim();
+      if (!clean3) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
+      if (clean3.length > 200) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
       await db.transaction(async (tx) => {
         const row = await loadActiveRow(tx, id);
         if (row.assigner_id !== actor.staffId && row.assignee_id !== actor.staffId) {
@@ -15398,10 +15398,10 @@ function createTodosService(deps) {
         if (items.length >= TODO_CHECKLIST_MAX) {
           throw new ValidationError(`\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 ${TODO_CHECKLIST_MAX} \u0645\u0648\u0631\u062F \u0646\u062F\u0627\u0631\u062F`);
         }
-        if (items.some((it) => it.text === clean2)) {
+        if (items.some((it) => it.text === clean3)) {
           throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0648\u0631\u062F \u0627\u0632 \u0642\u0628\u0644 \u062F\u0631 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0647\u0633\u062A");
         }
-        items.push({ text: clean2, done: false });
+        items.push({ text: clean3, done: false });
         await tx.execute(`UPDATE todos SET checklist = ?, updated_at = datetime('now') WHERE id = ?`, [
           JSON.stringify(items),
           id
@@ -16334,11 +16334,11 @@ function createExerciseBankService(deps) {
     },
     // کدام شناسه‌ها واقعاً تمرینِ حذف‌نشدهٔ بانک‌اند (برای اعتبارسنجی لینک کارت طرح درمان)
     async idsExist(ids) {
-      const clean2 = [...new Set(ids.filter((x) => typeof x === "string" && x.length > 0))].slice(0, 50);
-      if (!clean2.length) return /* @__PURE__ */ new Set();
+      const clean3 = [...new Set(ids.filter((x) => typeof x === "string" && x.length > 0))].slice(0, 50);
+      if (!clean3.length) return /* @__PURE__ */ new Set();
       const rows = await db.query(
-        `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${clean2.map(() => "?").join(", ")})`,
-        clean2
+        `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${clean3.map(() => "?").join(", ")})`,
+        clean3
       );
       return new Set(rows.map((r) => r.id));
     },
@@ -34310,8 +34310,8 @@ function assertPlainTone(text) {
 }
 __name(assertPlainTone, "assertPlainTone");
 function shortLine(text, max = 120) {
-  const clean2 = text.replace(/\s+/g, " ").trim();
-  return Array.from(clean2).length <= max ? clean2 : `${Array.from(clean2).slice(0, max - 1).join("").trim()}\u2026`;
+  const clean3 = text.replace(/\s+/g, " ").trim();
+  return Array.from(clean3).length <= max ? clean3 : `${Array.from(clean3).slice(0, max - 1).join("").trim()}\u2026`;
 }
 __name(shortLine, "shortLine");
 function sawOf(h) {
@@ -49681,8 +49681,8 @@ async function fetchBaleBotUsername(token, fetchImpl) {
     const body = await res.json().catch(() => ({}));
     const username = body?.result?.username;
     if (typeof username !== "string") return null;
-    const clean2 = username.trim().replace(/^@/, "");
-    return /^[A-Za-z0-9_]{2,64}$/.test(clean2) ? clean2 : null;
+    const clean3 = username.trim().replace(/^@/, "");
+    return /^[A-Za-z0-9_]{2,64}$/.test(clean3) ? clean3 : null;
   } catch {
     return null;
   }
@@ -50342,20 +50342,20 @@ function createSettingsService(deps) {
       return typeof v === "string" ? v.trim().replace(/^@/, "") : "";
     },
     async setBotUsername(username, actor) {
-      const clean2 = username.trim().replace(/^@/, "");
-      if (clean2.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean2)) {
+      const clean3 = username.trim().replace(/^@/, "");
+      if (clean3.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean3)) {
         throw new ConflictError("\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u0628\u0627\u062A \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0644\u0627\u062A\u06CC\u0646\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637 \u0632\u06CC\u0631 \u0627\u0633\u062A (\u06F2 \u062A\u0627 \u06F6\u06F4 \u0646\u0648\u06CC\u0633\u0647)");
       }
       const before = await this.getBotUsername();
-      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean2, actor);
+      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean3, actor);
       await audit.log({
         actorId: actor.staffId,
         action: "settings.bot_username.update",
         resourceType: "settings",
         resourceId: "bot_username",
-        changes: { bot_username: { from: before || null, to: clean2 || null } }
+        changes: { bot_username: { from: before || null, to: clean3 || null } }
       });
-      return clean2;
+      return clean3;
     },
     async getNotifyFlags() {
       const stored = await readAll();
@@ -50410,10 +50410,10 @@ function createSettingsService(deps) {
     async updateScoringConfig(input, actor) {
       const before = await this.getScoringConfig();
       const epoch = epochUtcOfTehranYmd(input.epochYmd);
-      const clean2 = mergeScoringWeights(input.weights);
-      await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean2 }, actor);
-      const changed = Object.keys(clean2).filter(
-        (k) => clean2[k] !== before.weights[k]
+      const clean3 = mergeScoringWeights(input.weights);
+      await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean3 }, actor);
+      const changed = Object.keys(clean3).filter(
+        (k) => clean3[k] !== before.weights[k]
       ).length;
       await audit.log({
         actorId: actor.staffId,
@@ -50921,9 +50921,9 @@ function createBackupService(deps) {
             );
             if (rows.length === 0) break;
             for (const r of rows) {
-              const clean2 = {};
-              for (const [k, v] of Object.entries(r)) clean2[k] = encodeValue(v);
-              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean2)}`;
+              const clean3 = {};
+              for (const [k, v] of Object.entries(r)) clean3[k] = encodeValue(v);
+              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean3)}`;
               emitted += 1;
             }
             if (rows.length < page2) break;
@@ -53183,6 +53183,247 @@ async function syncCpAnnouncements(deps) {
 }
 __name(syncCpAnnouncements, "syncCpAnnouncements");
 
+// src/application/cp-report/ingest.ts
+var CP_REPORT_PUSH_KEY = "cp_report.last_push_at";
+var CP_REPORT_ATTEMPT_KEY = "cp_report.last_attempt_at";
+var CP_REPORT_SEQ_KEY = "cp_report.last_seq";
+var CP_REPORT_MIN_INTERVAL_MS = 24 * 60 * 6e4;
+var RUM_SAMPLE_CAP = 5e3;
+var CP_REPORT_TIMEOUT_MS = 15e3;
+function clean2(v) {
+  const s = v?.trim();
+  return s ? s : null;
+}
+__name(clean2, "clean");
+function ingestUrlFrom(baseUrl) {
+  const s = clean2(baseUrl);
+  if (!s) return null;
+  try {
+    return new URL(s).origin + "/api/node/ingest";
+  } catch {
+    return null;
+  }
+}
+__name(ingestUrlFrom, "ingestUrlFrom");
+function buildCpReportConfig(env) {
+  return {
+    ingestUrl: ingestUrlFrom(env.CP_SYNC_URL),
+    cpNodeCode: clean2(env.CP_NODE_CODE),
+    cpNodeKey: clean2(env.CP_NODE_KEY)
+  };
+}
+__name(buildCpReportConfig, "buildCpReportConfig");
+async function readSettingsRaw(db, key) {
+  const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
+  return row?.value ?? null;
+}
+__name(readSettingsRaw, "readSettingsRaw");
+async function readSettingsIso2(db, key) {
+  const raw2 = await readSettingsRaw(db, key);
+  if (!raw2) return null;
+  try {
+    const parsed = JSON.parse(raw2);
+    if (typeof parsed === "string" && parsed.length > 0) return parsed;
+  } catch {
+  }
+  return null;
+}
+__name(readSettingsIso2, "readSettingsIso");
+async function readSettingsInt(db, key) {
+  const raw2 = await readSettingsRaw(db, key);
+  if (!raw2) return null;
+  try {
+    const parsed = JSON.parse(raw2);
+    if (typeof parsed === "number" && Number.isFinite(parsed)) return parsed;
+  } catch {
+  }
+  return null;
+}
+__name(readSettingsInt, "readSettingsInt");
+async function writeSettings(db, key, jsonValue, nowIso) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, 'cp-report', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-report', updated_at = excluded.updated_at`,
+    [key, jsonValue, nowIso]
+  );
+}
+__name(writeSettings, "writeSettings");
+function shouldPushCpReport(lastAttemptIso, now, minIntervalMs = CP_REPORT_MIN_INTERVAL_MS) {
+  if (!lastAttemptIso) return true;
+  const t = Date.parse(lastAttemptIso);
+  if (Number.isNaN(t)) return true;
+  return now.getTime() - t >= minIntervalMs;
+}
+__name(shouldPushCpReport, "shouldPushCpReport");
+async function stampCpReportAttempt(db, at = /* @__PURE__ */ new Date()) {
+  await writeSettings(db, CP_REPORT_ATTEMPT_KEY, JSON.stringify(at.toISOString()), at.toISOString());
+}
+__name(stampCpReportAttempt, "stampCpReportAttempt");
+function percentile75(sorted) {
+  if (sorted.length === 0) return null;
+  const idx = Math.ceil(0.75 * sorted.length) - 1;
+  return sorted[Math.min(Math.max(idx, 0), sorted.length - 1)] ?? null;
+}
+__name(percentile75, "percentile75");
+var RUM_SAMPLE_SQL = `SELECT metric, value FROM rum_events
+  WHERE ts >= ? AND metric IN ('LCP','CLS','INP') ORDER BY metric, value LIMIT ${RUM_SAMPLE_CAP}`;
+async function collectKpiBucket(db, now = /* @__PURE__ */ new Date()) {
+  const nowIso = now.toISOString();
+  const day = tehranDayRange(tehranTodayYmd(now));
+  const [students, appts, overdue, errs, rum] = await Promise.all([
+    db.queryOne(
+      `SELECT COALESCE(SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END), 0) AS a,
+              COALESCE(SUM(CASE WHEN active = 0 THEN 1 ELSE 0 END), 0) AS ar
+       FROM students`
+    ),
+    db.queryOne(
+      `SELECT COALESCE(SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END), 0) AS t,
+              COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) AS c
+       FROM appointments WHERE start_at >= ? AND start_at <= ?`,
+      [day.start, day.end]
+    ),
+    db.queryOne(
+      `SELECT COUNT(*) AS c
+       FROM appointment_students aps JOIN appointments a ON a.id = aps.appointment_id
+       WHERE aps.attendance = 'pending' AND a.end_at < ?`,
+      [nowIso]
+    ),
+    db.queryOne(
+      `SELECT COALESCE(SUM(CASE WHEN occurred_at >= datetime('now', '-1 hour') THEN 1 ELSE 0 END), 0) AS h1,
+              COALESCE(SUM(CASE WHEN occurred_at >= datetime('now', '-24 hours') THEN 1 ELSE 0 END), 0) AS h24
+       FROM client_errors WHERE occurred_at >= datetime('now', '-24 hours')`
+    ),
+    (async () => {
+      const sinceIso = new Date(now.getTime() - 24 * 60 * 6e4).toISOString();
+      const [rows, count] = await Promise.all([
+        db.query(RUM_SAMPLE_SQL, [sinceIso]),
+        db.queryOne("SELECT COUNT(*) AS c FROM rum_events WHERE ts >= ?", [sinceIso])
+      ]);
+      const byMetric = /* @__PURE__ */ new Map();
+      for (const r of rows) {
+        const arr = byMetric.get(r.metric) ?? [];
+        arr.push(Number(r.value));
+        byMetric.set(r.metric, arr);
+      }
+      return { byMetric, count: count?.c ?? 0 };
+    })()
+  ]);
+  const p75Of = /* @__PURE__ */ __name((m) => {
+    const arr = rum.byMetric.get(m);
+    if (!arr || arr.length === 0) return null;
+    const v = percentile75(arr);
+    return v === null ? null : m === "CLS" ? Math.round(v * 1e3) / 1e3 : Math.round(v);
+  }, "p75Of");
+  return {
+    students_active: students?.a ?? 0,
+    students_archived: students?.ar ?? 0,
+    appointments_today: appts?.t ?? 0,
+    appointments_cancelled_today: appts?.c ?? 0,
+    attendance_pending_overdue: overdue?.c ?? 0,
+    client_errors_1h: errs?.h1 ?? 0,
+    client_errors_24h: errs?.h24 ?? 0,
+    rum_events_24h: rum.count,
+    rum_lcp_p75: p75Of("LCP"),
+    rum_cls_p75: p75Of("CLS"),
+    rum_inp_p75: p75Of("INP")
+  };
+}
+__name(collectKpiBucket, "collectKpiBucket");
+async function cpReportOpportunistic(deps) {
+  const { db, logger, config } = deps;
+  if (!config.ingestUrl || !config.cpNodeCode || !config.cpNodeKey) {
+    return { status: "skipped" };
+  }
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const last = await readSettingsIso2(db, CP_REPORT_ATTEMPT_KEY);
+  if (!shouldPushCpReport(last, now(), deps.minIntervalMs ?? CP_REPORT_MIN_INTERVAL_MS)) {
+    return { status: "skipped" };
+  }
+  return pushCpReport({ db, logger, config, binding: deps.binding, fetchFn: deps.fetchFn, now: deps.now });
+}
+__name(cpReportOpportunistic, "cpReportOpportunistic");
+async function pushCpReport(deps) {
+  const { db, logger, config } = deps;
+  const log = logger.child("cp-report");
+  if (!config.ingestUrl || !config.cpNodeCode || !config.cpNodeKey) {
+    return { status: "disabled" };
+  }
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  try {
+    const lastIso = await readSettingsIso2(db, CP_REPORT_ATTEMPT_KEY);
+    if (!shouldPushCpReport(lastIso, now(), deps.minIntervalMs ?? CP_REPORT_MIN_INTERVAL_MS)) {
+      return { status: "skipped" };
+    }
+    await stampCpReportAttempt(db, now());
+    const at = now();
+    const atIso = at.toISOString();
+    const kpi = await collectKpiBucket(db, at);
+    const lastSeq = await readSettingsInt(db, CP_REPORT_SEQ_KEY) ?? 0;
+    const seq = lastSeq + 1;
+    const body = {
+      events: [
+        {
+          seq,
+          ts: atIso,
+          level: "info",
+          category: "data",
+          event: "cp_report.kpi_daily",
+          payload: kpi
+        }
+      ],
+      health: {
+        captured_at: atIso,
+        reported_version: APP_VERSION,
+        outbox_depth: null,
+        unsynced_ops: null,
+        error_rate_1h: null,
+        error_rate_24h: null,
+        sync_lag_s: null,
+        extras: null
+      }
+    };
+    const init = {
+      method: "POST",
+      headers: {
+        "X-CP-Node-Code": config.cpNodeCode,
+        Authorization: `Bearer ${config.cpNodeKey}`,
+        "X-CP-Node-Version": APP_VERSION,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(CP_REPORT_TIMEOUT_MS)
+    };
+    const res = deps.binding ? await deps.binding.fetch(config.ingestUrl, init) : await (deps.fetchFn ?? fetch)(config.ingestUrl, init);
+    if (!res.ok) {
+      let bodyHead = "";
+      try {
+        bodyHead = (await res.text()).slice(0, 180);
+      } catch {
+        bodyHead = "";
+      }
+      log.warn("cp_report.push_failed", {
+        http: res.status,
+        detail: "cp_http_error",
+        url: config.ingestUrl,
+        body_head: bodyHead
+      });
+      return { status: "error", detail: `http_${res.status}` };
+    }
+    await writeSettings(db, CP_REPORT_PUSH_KEY, JSON.stringify(atIso), atIso);
+    await writeSettings(db, CP_REPORT_SEQ_KEY, JSON.stringify(seq), atIso);
+    log.info("cp_report.push", { seq, students_active: kpi.students_active });
+    return { status: "ok", applied: 1, seq };
+  } catch (err) {
+    log.warn("cp_report.push_failed", {
+      detail: "exception",
+      error: err instanceof Error ? err.message : String(err)
+    });
+    return { status: "error", detail: "exception" };
+  }
+}
+__name(pushCpReport, "pushCpReport");
+
 // src/index.ts
 function buildEnv(env) {
   return {
@@ -53300,9 +53541,37 @@ function probeCpSync(env, ctx) {
   );
 }
 __name(probeCpSync, "probeCpSync");
+async function runCpReportCycle(env) {
+  const db = createDb(env.DB);
+  const logger = createLogger("sync");
+  const result = await pushCpReport({
+    db,
+    logger,
+    config: buildCpReportConfig(env),
+    binding: env.CP ?? null
+  });
+  logger.info("cp_report.cycle.done", { status: result.status, seq: result.seq ?? 0 });
+}
+__name(runCpReportCycle, "runCpReportCycle");
+var cpReportProbeAt = 0;
+function probeCpReport(env, ctx) {
+  const t = Date.now();
+  if (t - cpReportProbeAt < 6e4) return;
+  cpReportProbeAt = t;
+  ctx.waitUntil(
+    cpReportOpportunistic({
+      db: createDb(env.DB),
+      logger: createLogger("sync"),
+      config: buildCpReportConfig(env),
+      binding: env.CP ?? null
+    }).catch(() => void 0)
+  );
+}
+__name(probeCpReport, "probeCpReport");
 var src_default = {
   async fetch(request, env, ctx) {
     probeCpSync(env, ctx);
+    probeCpReport(env, ctx);
     const db = createDb(env.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger("worker");
@@ -53318,6 +53587,7 @@ var src_default = {
   async scheduled(event, env, ctx) {
     if (event.cron === CP_SYNC_CRON) {
       ctx.waitUntil(runCpSyncCycle(env));
+      ctx.waitUntil(runCpReportCycle(env));
       return;
     }
     if (event.cron === DIGEST_CRON) {
