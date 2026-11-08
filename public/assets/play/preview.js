@@ -98,10 +98,31 @@ async function loadKind() {
   }
 }
 
+/* ─── گیت جهت (G7/۱.۲۵.۴۳) — هم‌قرارداد play.js: پیش‌نمایش هم افقی اجرا می‌شود؛
+   پوشش «صفحه را بچرخانید» فقط روی لمسیِ عمودی؛ دسکتاپ هرگز نمی‌بیندش.
+   مکث موتور سمت session.js است — این‌جا فقط نمایش پوشش ─── */
+function orientationGate() {
+  const overlay = document.getElementById('play-rotate');
+  if (!overlay || typeof window.matchMedia !== 'function') return;
+  const portrait = window.matchMedia('(orientation: portrait)');
+  const coarse = window.matchMedia('(pointer: coarse)');
+  const update = () => { overlay.hidden = !(coarse.matches && portrait.matches); };
+  if (typeof portrait.addEventListener === 'function') {
+    portrait.addEventListener('change', update);
+    if (typeof coarse.addEventListener === 'function') coarse.addEventListener('change', update);
+  } else if (typeof portrait.addListener === 'function') {
+    portrait.addListener(update); coarse.addListener(update);
+  }
+  update();
+}
+
 /* ─── راه‌اندازی — پروتکل از data-protocol سرور؛ هاردکد ممنوع ─── */
 
 (async function run() {
   if (!root) return;
+
+  /* گیت جهت — پیش از هر چیز؛ پوشش فقط روی لمسیِ عمودی، بقیهٔ صفحه آزاد */
+  orientationGate();
 
   let protocol = null;
   try { protocol = JSON.parse(root.dataset.protocol || 'null'); } catch (err) { protocol = null; }

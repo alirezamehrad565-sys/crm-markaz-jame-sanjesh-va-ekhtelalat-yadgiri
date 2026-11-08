@@ -1,6 +1,7 @@
 // page.ts — صفحهٔ سه‌حالتهٔ لینک (M1: گذارها · M2: پخش‌کنندهٔ کودک · فاز ۲ بازطراحی: پنج‌شِمال)
 // این صفحه فقط گذارها را می‌راند و هیچ منبع بیرونی ندارد؛ دارایی‌های بازی از همان مبدأ با ?v= نسخه می‌آیند.
 import { APP_VERSION } from '@core/version';
+import { GAME_KIND_IDS } from './registry';
 import type { PublicStateView, PreviewStateView } from './types';
 
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
@@ -11,6 +12,15 @@ function faNum(n: number): string {
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* پوستهٔ اختصاصی نوع‌بازی (G7/۱.۲۵.۴۳) — هر بازی فایل CSS خودش را می‌گیرد؛
+   فقط برای نوع‌های شناخته‌شدهٔ رجیستری سرو می‌شود (نام مسیر از ورودی کاربر ساخته نمی‌شود) */
+function skinLink(kind: unknown): string {
+  const k = String(kind ?? '');
+  return (GAME_KIND_IDS as readonly string[]).includes(k)
+    ? `<link rel="stylesheet" href="/assets/play/skins/${k}.css?v=${APP_VERSION}" />`
+    : '';
 }
 
 function page(model: PublicStateView, token: string, body: string): string {
@@ -134,6 +144,7 @@ export function renderGamesPage(model: PublicStateView, token: string): string {
       </div>
     </div>
     <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />
+    ${skinLink(model.playGame)}
     <script type="module" src="/assets/play/play.js?v=${APP_VERSION}"></script>`);
   }
 
@@ -213,8 +224,19 @@ export function renderPreviewPage(state: PreviewStateView | null, token: string)
         <svg class="play-basket__star" viewBox="0 0 120 124" aria-hidden="true"><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z"/></svg>
         <span id="play-basket-count">۰</span>
       </div>
+      <div class="play-rotate" id="play-rotate" hidden role="status" aria-live="polite">
+        <svg class="play-rotate__icon" viewBox="0 0 96 96" aria-hidden="true">
+          <rect x="30" y="8" width="36" height="80" rx="10" fill="none" stroke="currentColor" stroke-width="5"/>
+          <circle cx="48" cy="78" r="4" fill="currentColor"/>
+          <path d="M76 30 a26 26 0 0 1 -6 34" fill="none" stroke="#E4AA46" stroke-width="6" stroke-linecap="round"/>
+          <path d="M74 24 l0 14 -12 -4 Z" fill="#E4AA46"/>
+        </svg>
+        <p class="play-line">صفحه را بچرخانید</p>
+        <p class="play-muted">پیش‌نمایش بازی‌ها در نمای افقی اجرا می‌شود.</p>
+      </div>
     </div>
     <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />
+    ${skinLink(state.game)}
     <script type="module" src="/assets/play/preview.js?v=${APP_VERSION}"></script>`;
   // پوستهٔ مشترک صفحه — گذارهای لینک در پیش‌نمایش معنا ندارد و bindهایش بی‌اثر می‌مانند
   return page(

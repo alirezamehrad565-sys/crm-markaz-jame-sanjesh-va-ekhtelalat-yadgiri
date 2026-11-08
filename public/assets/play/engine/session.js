@@ -99,6 +99,12 @@ export async function runSession(ctx) {
   if (B.star_basket && !isAssessment && basketEl) root.dataset.basket = 'on';
   else if (basketEl) root.removeAttribute('data-basket');
 
+  /* پوستهٔ اختصاصی نوع‌بازی (G7/۱.۲۵.۴۳) — کلاس ماندگار از INTRO تا پایان روی #play-root؛
+     برخلاف play-stage--<type> سطری که فقط در جریان آیتم می‌ماند. نام از data-kind سرور
+     می‌آید و صفحه skins/<kind>.css را سرو می‌کند — موتور نوع-آگنوست می‌ماند (بدون فهرست) */
+  const KIND_NAME = root.dataset.kind || '';
+  if (KIND_NAME && /^[a-z][a-z0-9]*$/.test(KIND_NAME)) root.classList.add('play-skin--' + KIND_NAME);
+
   /* ماشین حالت + ساعت‌ها + گیره‌های مکث آزمون در جریان + ردیابی مکث برگه (فاز ۷) */
   const trialHooks = { pause: null, resume: null };
   const pauseTracker = { count: 0, total_ms: 0, since: null };
@@ -109,30 +115,54 @@ export async function runSession(ctx) {
   });
   const sleeper = createSleeper();
 
-  /* ─── مکث بر پنهان‌شدن برگه — ماشین به PAUSED می‌رود و برمی‌گردد؛ ساعت آزمون هم مکث می‌کند ─── */
+  /* ─── مکث گیت‌محور (G7/۱.۲۵.۴۳) — پنهان‌شدن برگه و چرخش به عمودی از یک مسیر می‌روند:
+     ماشین به PAUSED، خواب/ساعت/پنجرهٔ پاسخ فریز. چرخش گوشی نباید اُمیشن جعلی بسازد —
+     پنجرهٔ پاسخِ در حال اجرا پشت پوششِ «گوشی را بچرخان» نباید بچرخد (کیفیت داده) ─── */
   let pausedFrom = null;
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      const s = machine.state;
-      if ([STATES.FIXATION, STATES.STIMULUS, STATES.RESPONSE_WINDOW, STATES.INTER_TRIAL_INTERVAL, STATES.PRACTICE, STATES.READY].includes(s)) {
-        pausedFrom = s;
-        sleeper.pause();
-        if (trialHooks.pause) trialHooks.pause();
-        if (pauseTracker.since === null) pauseTracker.since = performance.now();
-        machine.to(STATES.PAUSED, { from: s });
-      }
-    } else if (machine.state === STATES.PAUSED && pausedFrom) {
-      if (pauseTracker.since !== null) {
-        pauseTracker.count += 1;
-        pauseTracker.total_ms += performance.now() - pauseTracker.since;
-        pauseTracker.since = null;
-      }
-      if (trialHooks.resume) trialHooks.resume();
-      sleeper.resume();
-      machine.resumeTo(pausedFrom, { resumed: true });
-      pausedFrom = null;
+  const pausableStates = [STATES.FIXATION, STATES.STIMULUS, STATES.RESPONSE_WINDOW, STATES.INTER_TRIAL_INTERVAL, STATES.PRACTICE, STATES.READY];
+  const gatePause = () => {
+    const s = machine.state;
+    if (!pausableStates.includes(s) || pausedFrom !== null) return;
+    pausedFrom = s;
+    sleeper.pause();
+    if (trialHooks.pause) trialHooks.pause();
+    if (pauseTracker.since === null) pauseTracker.since = performance.now();
+    machine.to(STATES.PAUSED, { from: s });
+  };
+  const gateResume = () => {
+    if (machine.state !== STATES.PAUSED || pausedFrom === null) return;
+    if (pauseTracker.since !== null) {
+      pauseTracker.count += 1;
+      pauseTracker.total_ms += performance.now() - pauseTracker.since;
+      pauseTracker.since = null;
     }
+    if (trialHooks.resume) trialHooks.resume();
+    sleeper.resume();
+    machine.resumeTo(pausedFrom, { resumed: true });
+    pausedFrom = null;
+  };
+  /* گیت جهت — همان قرارداد play.js: فقط لمسیِ عمودی قفل است؛ دسکتاپ/افقی هرگز نمی‌بیندش */
+  const portraitMq = typeof window.matchMedia === 'function' ? window.matchMedia('(orientation: portrait)') : null;
+  const coarseMq = typeof window.matchMedia === 'function' ? window.matchMedia('(pointer: coarse)') : null;
+  const rotateBlocked = () => !!(portraitMq && coarseMq && portraitMq.matches && coarseMq.matches);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || rotateBlocked()) gatePause();
+    else gateResume();
   });
+  const onOrientationChange = () => {
+    if (rotateBlocked()) gatePause();
+    else if (!document.hidden) gateResume();
+  };
+  if (portraitMq) {
+    if (typeof portraitMq.addEventListener === 'function') {
+      portraitMq.addEventListener('change', onOrientationChange);
+      if (coarseMq && typeof coarseMq.addEventListener === 'function') coarseMq.addEventListener('change', onOrientationChange);
+    } else if (typeof portraitMq.addListener === 'function') {
+      portraitMq.addListener(onOrientationChange);
+      if (coarseMq && typeof coarseMq.addListener === 'function') coarseMq.addListener(onOrientationChange);
+    }
+    onOrientationChange(); // اگر صفحه از ابتدا عمودیِ لمسی باز شده، فوراً مکث — نه یک پنجرهٔ پاسخ شانسی
+  }
 
   /* ─── ۱) INTRO — بسته‌بندی معرفی بازی (G3/۱.۲۵.۳۷): نام/قانون/دکمهٔ بزرگ + ادامهٔ نرم (U7) ───
      نام و قانون از ماژول نوع‌بازی (intro.rule از راهنمای سرور می‌آید — فقط آیتم‌های train)؛

@@ -12,7 +12,7 @@ import { join } from 'node:path';
 const PLAY = join(__dirname, '../../public/assets/play');
 const read = (p: string) => readFileSync(p, 'utf8');
 
-const KINDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail'] as const;
+const KINDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail', 'nback'] as const;
 const kindSrc = (k: string) => read(join(PLAY, `kinds/${k}.js`));
 const sessionJs = read(join(PLAY, 'engine/session.js'));
 const playJs = read(join(PLAY, 'play.js'));

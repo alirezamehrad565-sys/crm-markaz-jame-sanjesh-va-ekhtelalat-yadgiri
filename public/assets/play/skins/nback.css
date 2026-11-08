@@ -1,0 +1,123 @@
+/* پوستهٔ «آلبوم دریایی» nback — بعد از play.css سرو می‌شود، هم‌سطحی می‌برد؛ حس ورق‌زدن آلبوم عکس دریایی.
+   گات §۹: بی‌قالب‌کلیدی/بی‌انیمیشن؛ فقط transition ملایم؛ صفر دارایی بیرونی؛ RTL و افقی مبنا. */
+
+/* رنگ‌های پوسته یک‌جا */
+.play-skin--nback {
+  --nb-deep: #0B2E38; --nb-sea: #14525F; --nb-lagoon: #1C6B74;
+  --nb-ink: #153E50; --nb-gold: #E4AA46; --nb-gold-2: #F0D9A8;
+  --nb-paper: #FBF7EC; --nb-paper-2: #F1E9D6;
+  --nb-aqua: #4E9B96; --nb-coral: #D96C6C;
+}
+
+/* صحنهٔ دریا + قاب طلایی جلد آلبوم */
+.play-skin--nback .play-stage--nback {
+  background:
+    radial-gradient(115% 90% at 50% 36%, rgba(11,46,56,0) 40%, rgba(6,26,33,.55) 100%),
+    linear-gradient(180deg, rgba(126,200,205,.16), rgba(126,200,205,0) 34%),
+    linear-gradient(180deg, var(--nb-deep), var(--nb-sea) 58%, var(--nb-lagoon));
+  box-shadow: inset 0 0 0 3px rgba(228,170,70,.6), inset 0 0 0 6px rgba(7,30,38,.9), inset 0 12px 30px rgba(6,26,33,.45);
+}
+
+/* تمرین/پایان: صفحهٔ کاغذی آلبوم؛ relative تا دریا داخل کارت بماند */
+.play-skin--nback .play-stage--teach,
+.play-skin--nback .play-stage--end {
+  position: relative;
+  background: linear-gradient(180deg, var(--nb-paper), var(--nb-paper-2));
+  box-shadow: inset 0 0 0 1.5px rgba(228,170,70,.4), inset 0 0 0 9px rgba(245,240,229,.65), 0 12px 26px rgba(21,62,80,.14);
+}
+
+/* بست کاغذی زیر عکس */
+.play-skin--nback .play-nback__photo {
+  position: relative;
+  padding: 12px 14px 16px;
+  background: linear-gradient(165deg, var(--nb-paper), var(--nb-paper-2));
+  border-radius: 6px;
+  box-shadow: 0 12px 26px rgba(4,24,30,.5), 0 2px 5px rgba(4,24,30,.35);
+}
+
+/* گوشهٔ جیبی طلایی دو قطری، سایهٔ کاغذی */
+.play-skin--nback .play-nback__photo::before,
+.play-skin--nback .play-nback__photo::after {
+  content: ''; position: absolute; width: 30px; height: 30px;
+  background: linear-gradient(135deg, var(--nb-gold-2), var(--nb-gold));
+  box-shadow: 0 2px 4px rgba(4,24,30,.35);
+}
+.play-skin--nback .play-nback__photo::before { top: -7px; inset-inline-start: -7px; clip-path: polygon(0 0, 100% 0, 0 100%); }
+.play-skin--nback .play-nback__photo::after { bottom: -7px; inset-inline-end: -7px; clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+
+/* کارت اصلی کمی درشت‌تر؛ جفت تمرین دست‌نخورده */
+.play-skin--nback .play-nback__photo .play-nback__card { width: min(56vw, 250px); }
+
+/* دو گزینه: قطب فیروزه‌ای/مرجانی؛ لمس ۷۶px */
+.play-skin--nback .play-option.play-nback__opt {
+  min-height: 76px; font-size: 18px;
+  background: linear-gradient(180deg, #FDF9EF, var(--nb-paper-2));
+  box-shadow: 0 6px 14px rgba(4,24,30,.35), inset 0 -3px 0 rgba(21,62,80,.14);
+  transition: border-color 160ms, box-shadow 160ms, transform 160ms;
+}
+.play-skin--nback .play-option.play-nback__opt--same { border-color: var(--nb-aqua); }
+.play-skin--nback .play-option.play-nback__opt--diff { border-color: var(--nb-coral); }
+
+/* نشان حقیقت تمرین: طلایی؛ پس از قطب‌ها تا در کاسکاد ببرد */
+.play-skin--nback .play-option.play-nback__opt--truth {
+  border-color: var(--nb-gold); background: #FDF6E7;
+  box-shadow: 0 0 0 4px rgba(228,170,70,.32), 0 6px 14px rgba(4,24,30,.3);
+}
+
+/* پرسش + برچسب‌های طلایی (سطح n و کپشن جفت) */
+.play-skin--nback .play-stage--nback .play-nback__prompt { color: var(--nb-paper); font-size: 16px; }
+.play-skin--nback .play-nback__nlabel,
+.play-skin--nback .play-nback__pair-label {
+  display: inline-block; font-size: 13px; color: var(--nb-ink);
+  background: linear-gradient(180deg, var(--nb-gold-2), var(--nb-gold));
+  border: 1.5px solid rgba(120,80,20,.35); box-shadow: 0 2px 4px rgba(4,24,30,.3);
+}
+.play-skin--nback .play-nback__pair-item:first-child .play-nback__pair-label { transform: rotate(2deg); }
+.play-skin--nback .play-nback__pair-item:last-child .play-nback__pair-label { transform: rotate(-2deg); }
+
+/* تایمر طلایی هم‌رنگ قاب؛ عرض از JS می‌آید */
+.play-skin--nback .play-nback__timer {
+  height: 12px; background: rgba(7,30,38,.55);
+  box-shadow: inset 0 1px 3px rgba(4,24,30,.6), 0 0 0 2px rgba(228,170,70,.3);
+}
+.play-skin--nback .play-nback__timer > span { background: linear-gradient(90deg, var(--nb-gold), var(--nb-gold-2)); }
+
+/* چرم بیرون: پیشرفت/حباب/سبد */
+.play-skin--nback .play-progress__bar { background: linear-gradient(to left, var(--nb-gold), #C98F2E); }
+.play-skin--nback .play-bubble--ok, .play-skin--nback .play-bubble--calm { background: var(--nb-paper); }
+.play-skin--nback .play-basket { background: var(--nb-paper); box-shadow: 0 1px 4px rgba(21,62,80,.18), 0 0 0 1.5px rgba(228,170,70,.4); }
+
+/* پوشش بچرخان: همان دریا، متن روشن کنتراست‌دار */
+.play-skin--nback .play-rotate {
+  background: linear-gradient(180deg, var(--nb-deep), var(--nb-sea) 62%, var(--nb-lagoon));
+  box-shadow: inset 0 0 0 3px rgba(228,170,70,.45);
+}
+.play-skin--nback .play-rotate .play-line { color: var(--nb-paper); font-size: 17px; }
+.play-skin--nback .play-rotate .play-muted { color: #BFD9D4; font-size: 13px; }
+
+/* خلاصهٔ پایان: طلایی کاغذی */
+.play-skin--nback .play-debrief { background: rgba(228,170,70,.16); border-color: rgba(228,170,70,.5); }
+
+/* افقی تبلت: کارت درشت‌تر، گزینهٔ بلندتر (فقط بهبود) */
+@media (min-width: 700px) and (orientation: landscape) {
+  .play-skin--nback .play-nback__photo .play-nback__card { width: min(36vmin, 320px); }
+  .play-skin--nback .play-stage--nback .play-nback__prompt { font-size: 18px; max-width: 560px; }
+  .play-skin--nback .play-nback__options { max-width: 620px; gap: 16px; }
+  .play-skin--nback .play-option.play-nback__opt { min-height: 88px; font-size: 19px; }
+}
+
+/* افقی کوتاه: کارت جمع‌تر تا تایمر بیرون نزند */
+@media (orientation: landscape) and (max-height: 500px) {
+  .play-skin--nback .play-nback__photo { padding: 9px 11px 12px; }
+  .play-skin--nback .play-nback__photo .play-nback__card { width: min(30vmin, 230px); }
+  .play-skin--nback .play-stage--nback .play-nback__prompt { font-size: 15px; }
+}
+
+/* کاهش‌جنبش: همهٔ گذارهای پوسته ایستا می‌شوند */
+@media (prefers-reduced-motion: reduce) {
+  .play-skin--nback .play-option.play-nback__opt,
+  .play-skin--nback .play-nback__card,
+  .play-skin--nback .play-progress__bar,
+  .play-skin--nback .play-nback__timer > span { transition: none; }
+  .play-skin--nback .play-option.play-nback__opt:active { transform: none; }
+}
