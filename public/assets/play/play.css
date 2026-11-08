@@ -1268,3 +1268,176 @@ button.play-trail__node { appearance: none; font-family: inherit; }
      این‌جا فقط اطمینان: هیچ گذاری CSS روی عناصر صحنه نماند */
   .play-scene, .play-scene svg { transition: none; }
 }
+
+
+/* ─── آلبوم خرچنگ (۱.۲۵.۴۰) — نوع nback؛ حس عدی در صحنه، آرامش در گفتار (§۲) ───
+   پوستهٔ آلبوم عکس دریایی: فیروزه‌ای عمیق + قاب طلایی ایستا (حس آلبوم عکس،
+   بی‌فلاش و بی‌پالس — §۹). ماهی و قاب وکتور درون‌کدند (kinds/nback.js)؛
+   هیچ انیمیشن CSS — جنبش فقط از fx.js کلاینت. برنچ timedchoice کلاس
+   play-stage--nback را خودش می‌گذارد (الگوی play-stage--stroop). */
+.play-stage--nback {
+  background: linear-gradient(180deg, #0E3742 0%, #14525F 62%, #1C6B74 100%);
+  box-shadow: inset 0 0 0 3px rgba(228, 170, 70, 0.55), inset 0 0 0 6px rgba(9, 38, 46, 0.9);
+}
+
+.play-stage--nback .play-nback__prompt { color: #F5F0E5; }
+.play-stage--nback .play-nback__nlabel { color: #F0D9A8; }
+
+.play-nback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+/* نمونهٔ آموزش — کوچک‌تر و بی‌لمس */
+.play-nback--sample { max-width: 340px; gap: 10px; }
+
+/* ─── پرسش + برچسب سطح n ─── */
+
+.play-nback__photorew {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.play-nback__prompt {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--p-navy);
+  text-align: center;
+  line-height: 1.7;
+  margin: 0;
+  max-width: 440px;
+}
+
+.play-nback__nlabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--p-navy);
+  background: rgba(245, 240, 229, 0.9);
+  border-radius: 999px;
+  padding: 2px 12px;
+}
+
+/* ─── عکس تازه — کارت قاب‌دار درشت، پرکنندهٔ صحنه ─── */
+.play-nback__photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.play-nback__card {
+  width: min(58vw, 240px);
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 4px 10px rgba(6, 30, 36, 0.45));
+}
+
+/* جفتِ آموزش — عکسِ قبل و عکسِ تازه کنار هم؛ فقط قدم‌های تمرین */
+.play-nback__pair {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.play-nback__pair-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.play-nback__pair-item .play-nback__card { width: min(30vw, 132px); }
+
+.play-nback__pair-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--p-navy);
+  background: rgba(245, 240, 229, 0.88);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+/* ─── دو گزینهٔ ثابت — «همان است» / «فرق دارد» ───
+   دکمه‌ها کلاس play-option را هم دارند (برنچ سشن روی همین کلاس کلیک می‌کند)؛
+   سلکتور دوتایی برای اولویتِ قطعی بر پایهٔ play.css. */
+.play-nback__options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 190px));
+  gap: 12px;
+  justify-content: center;
+  width: 100%;
+}
+
+.play-option.play-nback__opt {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 72px; /* هدف لمسی سخاوتمند ≥۶۴px — کاردرمانگر §۹ */
+  padding: 10px 12px;
+  border: 3px solid rgba(245, 240, 229, 0.28);
+  border-radius: 16px;
+  background: rgba(245, 240, 229, 0.94);
+  color: var(--p-navy);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.play-option.play-nback__opt:active { transform: scale(0.96); }
+
+/* جواب درست نشان‌گذاری‌شده — فقط تمرین، پس از پاسخ؛ خط‌چین کهربایی آرام، ایستا */
+.play-option.play-nback__opt.play-nback__opt--truth {
+  border-color: var(--p-amber);
+  border-style: dashed;
+  background: #FDF6E7;
+  box-shadow: 0 0 0 3px rgba(228, 170, 70, 0.3);
+}
+
+/* جای لمس کودک — اگر برنچ timedchoice کلاس picked بگذارد، آرام و ایستا روشن می‌شود */
+.play-option.play-nback__opt.play-nback__opt--picked {
+  border-color: var(--p-teal);
+  background: #FDF6E7;
+}
+
+/* ─── نوار پنجرهٔ پاسخ — خط لبهٔ پایین ───
+   فقط عرض از JS inline تنظیم می‌شود (بدون keyframes — §۹)؛ الگوی play-stroop__timer. */
+.play-nback__timer {
+  width: min(72%, 320px);
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(245, 240, 229, 0.22);
+  overflow: hidden;
+}
+
+.play-nback__timer > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--p-amber) 0%, #D96C6C 100%);
+}
+
+/* ─── تبلت افقی: صحنه پر می‌شود، حاشیهٔ مرده نمی‌ماند (§۲) ─── */
+@media (min-width: 700px) and (orientation: landscape) {
+  .play-nback { gap: 16px; }
+  .play-nback__card { width: min(34vmin, 300px); }
+  .play-nback__options { max-width: 560px; grid-template-columns: repeat(2, minmax(140px, 210px)); }
+  .play-nback__prompt { font-size: 17px; max-width: 540px; }
+}
+
+/* کاهش‌جنبش: همهٔ انتقال‌ها و فشارهای لمسی این بازی ایستا می‌شوند (§۹) */
+@media (prefers-reduced-motion: reduce) {
+  .play-option.play-nback__opt,
+  .play-nback__card { transition: none; }
+  .play-option.play-nback__opt:active { transform: none; }
+}

@@ -6,7 +6,7 @@
 // «خام در برابر محاسبه‌شده»: خروجی این ماژول لایهٔ محاسبه‌شده است؛ دادهٔ خام
 // (response_json + شواهد فاز ۴) جدا در game_attempts می‌ماند.
 
-import { commissionCountOf, commissionPctOf, correctGoPctOf, correctNogoPctOf, meanNumlineErrorOf, medianRtOf, omissionCountOf, omissionPctOf, accuracyOf, scanFaPctOf, scanMissPctOf, type ScoredAttempt } from './pure';
+import { commissionCountOf, commissionPctOf, correctGoPctOf, correctNogoPctOf, meanNumlineErrorOf, medianRtOf, nbackFalseAlarmPctOf, nbackMatchPctOf, nbackMissPctOf, nbackNonmatchPctOf, omissionCountOf, omissionPctOf, accuracyOf, scanFaPctOf, scanMissPctOf, type ScoredAttempt } from './pure';
 
 /** شواهد نمایش واقعی هر آزمون (فاز ۴) — همه nullable */
 export interface AttemptEvidence {
@@ -80,6 +80,18 @@ export interface SessionSummary {
     fa_pct: number | null;
     miss_pct: number | null;
     median_first_tap_ms: number | null;
+  } | null;
+  /** آلبوم خرچنگ (ن‌پشت — ۱.۲۵.۴۰) — دقت شرطی هم‌سانی/تفکیک + دو خطای مکمل؛
+   *  بدون آیتم ن‌پشت = null (قاعدهٔ دامنهٔ صفر) */
+  nback: {
+    trials: number;
+    matches: number;
+    correct_matches: number;
+    match_pct: number | null;
+    nonmatch_pct: number | null;
+    false_alarm_pct: number | null;
+    miss_pct: number | null;
+    median_rt_match_ms: number | null;
   } | null;
   /** ردیابی قاعدهٔ دامنهٔ صفر — گزارش شفاف می‌گوید کدام سنجه قابل محاسبه نبود و چرا */
   zero_denominator: string[];
@@ -184,6 +196,7 @@ export function summarizeAttempts(
     dprime: null,
     numline: { mean_error_pct: meanNumlineErrorOf(t) },
     scan: scanSummaryOf(t, zeroDenominator),
+    nback: nbackSummaryOf(t),
     zero_denominator: zeroDenominator
   };
 }
@@ -214,5 +227,32 @@ function scanSummaryOf(t: ScoredAttempt[], zeroDenominator: string[]): SessionSu
     fa_pct: fa,
     miss_pct: miss,
     median_first_tap_ms: medianFirstTap
+  };
+}
+
+/** خلاصهٔ ن‌پشت از آزمون‌های match-دار — بدون آیتم ن‌پشت = null (قاعدهٔ دامنهٔ صفر، مثل scan) */
+function nbackSummaryOf(t: ScoredAttempt[]): SessionSummary['nback'] {
+  const rows = t.filter((s) => typeof s.match === 'boolean');
+  if (rows.length === 0) return null;
+  const matches = rows.filter((s) => s.match === true);
+  const correctMatches = matches.filter((s) => s.correct).length;
+  const matchRts = matches
+    .filter((s) => s.correct && s.rtValid && typeof s.rtMs === 'number' && (s.rtMs as number) >= 0)
+    .map((s) => s.rtMs as number)
+    .sort((a, b) => a - b);
+  const medianMatch = matchRts.length === 0
+    ? null
+    : matchRts.length % 2 === 1
+      ? matchRts[Math.floor(matchRts.length / 2)]
+      : Math.round((matchRts[matchRts.length / 2 - 1] + matchRts[matchRts.length / 2]) / 2);
+  return {
+    trials: rows.length,
+    matches: matches.length,
+    correct_matches: correctMatches,
+    match_pct: nbackMatchPctOf(rows),
+    nonmatch_pct: nbackNonmatchPctOf(rows),
+    false_alarm_pct: nbackFalseAlarmPctOf(rows),
+    miss_pct: nbackMissPctOf(rows),
+    median_rt_match_ms: medianMatch
   };
 }

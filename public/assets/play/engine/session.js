@@ -192,7 +192,8 @@ export async function runSession(ctx) {
   } else if (typeof kind.practiceInteractive === 'function') {
     const practiced = await kind.practiceInteractive({ stage, sleeper, hint });
     if (practiced && practiced.applied) {
-      practiceRetries = { go_retries: practiced.go_retries, nogo_retries: practiced.nogo_retries };
+      /* retries تمرین نوع-بازی‌های سه‌گانهٔ تازه (۱.۲۵.۴۰) — افزایشی؛ سایر ماژول‌ها بی‌اثر */
+      practiceRetries = { go_retries: practiced.go_retries, nogo_retries: practiced.nogo_retries, retries: practiced.retries };
     } else {
       /* راهنمای سرور آماده نبود — مدار قدیمی گام‌نما برای سازگاری کامل */
       const steps = typeof kind.previewSteps === 'function' ? kind.previewSteps(hint) : [];

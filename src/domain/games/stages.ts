@@ -24,10 +24,12 @@ export {
   NUMLINE_STAGE_THRESHOLDS,
   SCAN_STAGE_THRESHOLDS,
   ACCURACY_STAGE_THRESHOLDS,
+  NBACK_STAGE_THRESHOLDS,
   stageOutcomeOf,
   stageOutcomeNumline,
   stageOutcomeScan,
   stageOutcomeAccuracyKind,
+  stageOutcomeNback,
   NUMLINE_STAGE_MAX,
   numlineItemInStage,
   SCAN_STAGE_MAX_TILES,
@@ -41,7 +43,9 @@ export {
   flankerItemInStage,
   TRAIL_STAGE_MAX_NODES,
   TRAIL_STAGE_BANDS,
-  trailItemInStage
+  trailItemInStage,
+  NBACK_STAGE_LEVELS,
+  nbackItemInStage
 } from './registry';
 export type { GameKind } from './registry';
 
@@ -49,8 +53,10 @@ export type { GameKind } from './registry';
  *  ۱.۱.۰ (۱.۲۵.۲۸): قواعد خط عددی («جادهٔ عددها») افزوده شد — عددهای گو/نوگو دست‌نخورده.
  *  ۱.۲.۰ (۱.۲۵.۳۰): قواعد «حملهٔ جاسوس‌ها» (scan) افزوده شد — دو قاعدهٔ قبلی عیناً.
  *  ۱.۳.۰ (۱.۲۵.۳۲): قواعد سه بازی تازه (stroop/flanker/trail) افزوده شد + اهرم تندشدن موج
- *  اسکن (SCAN_STAGE_WAVE_MS — فقط نمایش، نه محرک) — سه قاعدهٔ قبلی عیناً. */
-export const STAGE_RULES_VERSION = '1.3.0';
+ *  اسکن (SCAN_STAGE_WAVE_MS — فقط نمایش، نه محرک) — سه قاعدهٔ قبلی عیناً.
+ *  ۱.۴.۰ (۱.۲۵.۴۰): قواعد «آلبوم خرچنگ» (nback) افزوده شد — پرش n (۱→۲) + ISI مرحله؛
+ *  شش قاعدهٔ قبلی عیناً. */
+export const STAGE_RULES_VERSION = '1.4.0';
 
 /** تعداد مرحله‌های مسیر تمرین */
 export const STAGE_TOTAL = 5;

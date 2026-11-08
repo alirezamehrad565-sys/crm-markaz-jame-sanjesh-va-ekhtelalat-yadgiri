@@ -11,10 +11,11 @@ import type { StageDef, StageThresholds, StageOutcome } from './stages';
 import type { MissionItem, RegistryMetric } from './types';
 
 /** شناسهٔ نوع‌بازی — کلید رجیستری؛ افزودن بازی تازه از این اتحاد و یک ورودی نقشه آغاز می‌شود */
-export type GameKind = 'gonogo' | 'numline' | 'scan' | 'stroop' | 'flanker' | 'trail';
+export type GameKind = 'gonogo' | 'numline' | 'scan' | 'stroop' | 'flanker' | 'trail' | 'nback';
 
-/** ترتیب قطعی نوع‌ها — flatten سنجه‌های موتور از همین ترتیب می‌گذرد تا ترتیب آرایه‌ها عیناً بماند */
-export const GAME_KIND_IDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail'] as const satisfies readonly GameKind[];
+/** ترتیب قطعی نوع‌ها — flatten سنجه‌های موتور از همین ترتیب می‌گذرد تا ترتیب آرایه‌ها عیناً بماند؛
+ *  ن‌پشت (۱.۲۵.۴۰) در انتها افزوده شد تا ترتیب سنجه‌های شش نوع قبلی دست‌نخورده بماند */
+export const GAME_KIND_IDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail', 'nback'] as const satisfies readonly GameKind[];
 
 /** پارامتر آستانه با قرارداد انتشار — مقدار + مبنا + وضعیت اعتبارسنجی صادقانه */
 export interface KindThresholdParam {
@@ -107,6 +108,14 @@ const ACCURACY_THRESHOLDS: ScalarKindThresholds = {
   star3: THRESH(88, 'ستارهٔ سوم = پاسخ تقریباً بی‌خطا')
 };
 
+/** آستانهٔ ن‌پشت (۱.۲۵.۴۰) — بر دقت؛ همان قرارداد دقت شش نوع قبلی تا پیلوت مرکز.
+ *  دشواریِ پرش n=1→n=2 خودش را در نردبان مرحله‌ها نشان می‌دهد، نه در آستانهٔ جدا */
+const NBACK_THRESHOLDS: ScalarKindThresholds = {
+  pass: THRESH(65, 'آستانهٔ گذار بر دقت هم‌سانی/تفکیک — همان قرارداد دقت سایر نوع‌ها؛ سخت‌گیری اضافه برای n=2 با پیلوت سنجیده می‌شود'),
+  star2: THRESH(78, 'ستارهٔ دوم با دقت بالاتر'),
+  star3: THRESH(88, 'ستارهٔ سوم = هم‌سانی تقریباً همیشه درست')
+};
+
 // ─── عددیِ آستانه‌ها — رفتار نمره‌دهی فقط value را می‌خواند؛ شکل عددی عین قبلی است ───
 
 function pairNumeric(t: GoNogoKindThresholds): StageThresholds {
@@ -129,6 +138,8 @@ export const NUMLINE_STAGE_THRESHOLDS = scalarNumeric(NUMLINE_THRESHOLDS);
 export const SCAN_STAGE_THRESHOLDS = scalarNumeric(SCAN_THRESHOLDS);
 /** آستانهٔ مشترک استروپ/فلانکر/رد — بر دقت (درصد) */
 export const ACCURACY_STAGE_THRESHOLDS = scalarNumeric(ACCURACY_THRESHOLDS);
+/** آستانه‌های ن‌پشت — بر دقت (درصد)؛ جدای استروپ/فلانکر/رد تا مسیر تبدیل مستقل داشته باشد */
+export const NBACK_STAGE_THRESHOLDS = scalarNumeric(NBACK_THRESHOLDS);
 
 function pctOk(v: number | null | undefined, min: number): boolean {
   return typeof v === 'number' && Number.isFinite(v) && v >= min;
@@ -170,6 +181,14 @@ export function stageOutcomeScan(accuracy: number | null | undefined): StageOutc
 /** نتیجهٔ مرحلهٔ سه نوع تازه از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
 export function stageOutcomeAccuracyKind(accuracy: number | null | undefined): StageOutcome {
   const t = ACCURACY_STAGE_THRESHOLDS;
+  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
+  const stars: 1 | 2 | 3 = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
+  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
+}
+
+/** نتیجهٔ مرحلهٔ ن‌پشت از دقت خلاصهٔ جلسه — آستانهٔ خودش؛ شکل عین قرارداد StageOutcome */
+export function stageOutcomeNback(accuracy: number | null | undefined): StageOutcome {
+  const t = NBACK_STAGE_THRESHOLDS;
   if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
   const stars: 1 | 2 | 3 = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
   return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
@@ -347,6 +366,57 @@ const TRAIL_STAGES: StageDef[] = [
   }
 ];
 
+// پنج مرحلهٔ «آلبوم خرچنگ» (ن‌پشت — ۱.۲۵.۴۰) — اهرم سختی = پرش n (۱→۲) + ISI مرحله.
+// نردبان دو باند سنی دارد (الگوی گونوگو): باند ۴–۶ ISI بلندتر برای رمزگذاری آرام‌تر.
+// s1/s2 جریان n=1، s3/s4/s5 جریان n=2 — پرش n در s3 با ISI نرم‌تر فرود می‌آید.
+const NBACK_STAGES_4_6: StageDef[] = [
+  {
+    id: 's1', index: 1, title_fa: 'آلبوم گرم', goal_fa: 'ماهی‌ها آهسته می‌آیند؛ عکسِ قدم قبل را یادت نگه دار.', difficulty: 1,
+    overrides: { isi_min_ms: 2600, isi_max_ms: 3200, fixation_ms: 400 }
+  },
+  {
+    id: 's2', index: 2, title_fa: 'عکس‌های تازه', goal_fa: 'همان بازی با تمرین بیشتر؛ حواست به قدم قبل باشد.', difficulty: 2,
+    overrides: {} // پایهٔ پروتکل ن‌پشت — بدون بازنویسی
+  },
+  {
+    id: 's3', index: 3, title_fa: 'دو قدم به عقب', goal_fa: 'حالا دو قدم به عقب نگاه کن؛ آهسته و خوش‌حال.', difficulty: 3,
+    overrides: { isi_min_ms: 2800, isi_max_ms: 3400, fixation_ms: 400 } // فرود نرم پرش n=2
+  },
+  {
+    id: 's4', index: 4, title_fa: 'حافظهٔ عمیق', goal_fa: 'دو قدم به عقب، مثل قبل؛ تو خوب یاد گرفتی.', difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: 's5', index: 5, title_fa: 'قهرمان آلبوم', goal_fa: 'تندترین پلهٔ آلبوم! تو حافظهٔ دریایی.', difficulty: 5,
+    overrides: { isi_min_ms: 1800, isi_max_ms: 2400, fixation_ms: 350 }
+  }
+];
+
+const NBACK_STAGES_7_12: StageDef[] = [
+  {
+    id: 's1', index: 1, title_fa: 'آلبوم گرم', goal_fa: 'ماهی‌ها آهسته می‌آیند؛ عکسِ قدم قبل را یادت نگه دار.', difficulty: 1,
+    overrides: { isi_min_ms: 2200, isi_max_ms: 2800, fixation_ms: 400 }
+  },
+  {
+    id: 's2', index: 2, title_fa: 'عکس‌های تازه', goal_fa: 'همان بازی با تمرین بیشتر؛ حواست به قدم قبل باشد.', difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: 's3', index: 3, title_fa: 'دو قدم به عقب', goal_fa: 'حالا دو قدم به عقب نگاه کن؛ آهسته و خوش‌حال.', difficulty: 3,
+    overrides: { isi_min_ms: 2400, isi_max_ms: 3000, fixation_ms: 400 }
+  },
+  {
+    id: 's4', index: 4, title_fa: 'حافظهٔ عمیق', goal_fa: 'دو قدم به عقب، مثل قبل؛ تو خوب یاد گرفتی.', difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: 's5', index: 5, title_fa: 'قهرمان آلبوم', goal_fa: 'تندترین پلهٔ آلبوم! تو حافظهٔ دریایی.', difficulty: 5,
+    overrides: { isi_min_ms: 1500, isi_max_ms: 2100, fixation_ms: 350 }
+  }
+];
+
+const NBACK_STAGES_BY_BAND: Record<AgeBandId, StageDef[]> = { '4-6': NBACK_STAGES_4_6, '7-12': NBACK_STAGES_7_12 };
+
 // ─── اهرم‌های مرحله (stage-levers) — فقط انتخاب از بانک authored؛ نمره‌دهی سرور روی
 // آیتم authored می‌ماند. بی‌مرحله/مرحلهٔ ناشناخته = همهٔ آیتم‌ها (سازگاری با جلسه‌های بی‌مرحله) ───
 
@@ -516,6 +586,32 @@ export function trailItemInStage(
   return nodes > 0 && nodes <= max;
 }
 
+/** سطح n مجاز هر مرحلهٔ ن‌پشت — اهرم مرحله همان پرش n است؛ null معنا ندارد (همهٔ مراحل سطح مشخص دارند) */
+export const NBACK_STAGE_LEVELS: Record<string, number[]> = {
+  s1: [1],
+  s2: [1],
+  s3: [2], // پرش n — دو قدم به عقب
+  s4: [2],
+  s5: [2]
+};
+
+/**
+ * پیش‌ماندهٔ آیتم ن‌پشت در مرحله — انتخاب جریان authored بر سطح n آیتم.
+ * جریان ن‌پشت هم‌بسته است (هم‌سانی هر آیتم به قدم قبل از خودش ارجاع دارد)؛ بی‌مرحله/
+ * مرحلهٔ ناشناخته = همهٔ آیتم‌ها (قرارداد سازگاری سایر نوع‌ها) — بسته‌های ارزیابی ن‌پشت
+ * تک‌جریان‌اند و این گیت در آن‌ها بی‌اثر است.
+ */
+export function nbackItemInStage(
+  item: { stim?: Record<string, unknown> | null | undefined },
+  stageId: string | null | undefined
+): boolean {
+  const levels = typeof stageId === 'string' && stageId in NBACK_STAGE_LEVELS ? NBACK_STAGE_LEVELS[stageId] : null;
+  if (levels === null) return true;
+  const s = (item.stim ?? {}) as Record<string, unknown>;
+  const n = typeof s.n === 'number' && Number.isInteger(s.n) && s.n > 0 ? s.n : 0;
+  return n > 0 && levels.includes(n);
+}
+
 // ─── سنجه‌های موتورمحور هر نوع — تعریف‌ها عیناً از registry-extra آمده؛ ترتیب داخل هر
 // نوع همان ترتیب قبلی آرایهٔ ENGINE_METRICS است تا flatten هیچ چیزی را جابه‌جا نکند ───
 
@@ -547,6 +643,15 @@ const FLANKER_ENGINE_METRICS: readonly RegistryMetric[] = [
 
 const TRAIL_ENGINE_METRICS: readonly RegistryMetric[] = [
   { id: 'trail_prefix_pct', title_fa: 'درصد پیش‌ماند صحیح رد ردپاها', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'trail_prefix' }
+];
+
+// آلبوم خرچنگ (ن‌پشت — ۱.۲۵.۴۰) — دقت شرطی هم‌سانی/تفکیک + دو خطای مکمل؛
+// همه با قاعدهٔ دامنهٔ صفر (مخرج صفر = null) مثل scan_fa/scan_miss
+const NBACK_ENGINE_METRICS: readonly RegistryMetric[] = [
+  { id: 'nback_match_pct', title_fa: 'درصد تشخیص هم‌سانی (ماهیِ همانِ قدم قبل)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'nback_match' },
+  { id: 'nback_nonmatch_pct', title_fa: 'درصد تفکیک درست (ماهیِ متفاوت)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'nback_nonmatch' },
+  { id: 'nback_false_alarm_pct', title_fa: 'درصد «همان است» روی ماهیِ متفاوت', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'nback_false_alarm' },
+  { id: 'nback_miss_pct', title_fa: 'درصد جاانداختن هم‌سانی', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'nback_miss' }
 ];
 
 // ─── نقشهٔ نوع‌محور — تک‌منبع؛ افزودن بازی تازه فقط یک ورودی این‌جا می‌خواهد ───
@@ -611,6 +716,16 @@ export const GAME_KINDS: Record<GameKind, GameKindEntry> = {
     timedChoice: false,
     rtFloorMs: 150, // کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
     engineMetrics: TRAIL_ENGINE_METRICS
+  },
+  nback: {
+    thresholds: NBACK_THRESHOLDS,
+    stageOutcome: (summary) => stageOutcomeNback(summary.pct.accuracy),
+    stageList: (band) => NBACK_STAGES_BY_BAND[band] ?? NBACK_STAGES_BY_BAND['7-12'],
+    itemInStage: nbackItemInStage,
+    waveMsCapOf: null,
+    timedChoice: true, // انتخاب زمان‌دار دوگزینه‌ای — بی‌لمس = اُمیشن سمت سرور
+    rtFloorMs: 200, // لمس تصادفی حذف می‌شود — همان قرارداد انتخاب زمان‌دار
+    engineMetrics: NBACK_ENGINE_METRICS
   }
 };
 
@@ -641,5 +756,6 @@ export const ITEM_TYPE_RT_FLOOR_MS: Record<MissionItem['type'], number> = {
   scan: GAME_KINDS.scan.rtFloorMs,
   stroop: GAME_KINDS.stroop.rtFloorMs,
   flanker: GAME_KINDS.flanker.rtFloorMs,
-  trail: GAME_KINDS.trail.rtFloorMs
+  trail: GAME_KINDS.trail.rtFloorMs,
+  nback: GAME_KINDS.nback.rtFloorMs
 };

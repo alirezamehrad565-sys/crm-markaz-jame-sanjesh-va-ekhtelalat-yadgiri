@@ -43,7 +43,7 @@ describe('آستانه‌های گذار خط عددی — وضعیت proposed �
   });
 
   it('بامپ نسخهٔ قواعد — قواعد اسکن با نسخهٔ ۱.۲.۰ ثبت می‌شوند؛ خط عددی از ۱.۱.۰ عیناً مانده', () => {
-    expect(STAGE_RULES_VERSION).toBe('1.3.0'); // ۱.۲۵.۳۲ — سه بازی تازه + اهرم تندشدن موج
+    expect(STAGE_RULES_VERSION).toBe('1.4.0'); // ۱.۲۵.۴۰ — ن‌پشت افزوده شد؛ قواعد قبلی عیناً
     expect(NUMLINE_STAGE_THRESHOLDS).toEqual({ pass: 65, star2: 78, star3: 88 });
   });
 });
