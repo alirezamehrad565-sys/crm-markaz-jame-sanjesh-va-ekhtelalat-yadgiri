@@ -1,4 +1,5 @@
 import { api, qs } from '../api.js';
+import { session } from '../state.js';
 import { fa, formatJalaliNumeric } from '../format.js';
 import { el, icon, toast, toastError, emptyState, errorState, loadingState, tabs, dataTable, formModal, openModal, confirmModal } from '../ui.js';
 import { KIND_OPTIONS, STATUS_META } from './network-library-meta.js';
@@ -30,6 +31,47 @@ function kindFilterSel(onChange) {
     'aria-label': 'فیلتر نوع محتوا',
     onchange: (e) => onChange(e.target.value)
   }, el('option', { value: 'all' }, 'همهٔ انواع'), KIND_OPTIONS.map((k) => el('option', { value: k.value }, k.label)));
+}
+
+// m6 — امتیاز شناسنامه (مولدِ سامانهٔ کلاینت مبدأ؛ fallback CP برچسب می‌خورد)
+function scoreBadge(item) {
+  const sc = item.score;
+  if (!sc) return null;
+  const cls = sc.score >= 60 ? 'badge--success' : sc.score >= 25 ? 'badge--warning' : 'badge--neutral';
+  const src = sc.source === 'client' ? 'تولید سامانهٔ کلاینت مبدأ' : 'تخمین CP';
+  return el('span', {
+    class: `badge ${cls}`,
+    title: `امتیاز ${sc.score} از ۱۰۰ — ارجاع ${sc.refs} (${sc.refScore}) + استفاده ${sc.uses} (${sc.useScore}) — فرمول v${sc.formulaVersion} · ${src}`
+  }, `امتیاز ${fa(sc.score)}`);
+}
+
+function authorCell(item) {
+  if (!item.authorName) return el('span', { class: 'muted' }, '—');
+  return el('div', {},
+    el('span', {}, icon('user', 11), ` ${item.authorName}`),
+    item.coAuthorName ? el('div', { class: 'muted', style: { fontSize: 'var(--fs-2xs, 11px)' } }, `همکار: ${item.coAuthorName}`) : null
+  );
+}
+
+function subLabelOf(item) {
+  if (item.kind === 'clearbook') return item.subcategory === 'calendar' ? 'بستهٔ سال تحصیلی' : 'فاز کتاب فعالیت';
+  return '';
+}
+
+async function downloadFile(item) {
+  const res = await fetch(`/api/network-content/cp/${encodeURIComponent(item.id)}/file`);
+  if (!res.ok) {
+    let payload = null;
+    try { payload = await res.json(); } catch { payload = null; }
+    throw new Error(payload?.message || 'دریافت فایل از شبکه ناموفق بود');
+  }
+  const blob = await res.blob();
+  const a = el('a', { href: URL.createObjectURL(blob), download: item.fileName || `network-${item.id}` });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast('فایل دانلود شد', 'success');
 }
 
 function bodyPreview(text) {
@@ -199,21 +241,80 @@ export async function renderNetworkLibrary(container) {
     );
   }
 
+  async function installItem(item) {
+    const ok = await confirmModal({
+      title: 'افزودن به بانک کارت',
+      message: `کپی محلی «${item.title}» با نام طراح «${item.authorName ?? 'نامشخص'}» ساخته می‌شود (اثر طراح در توضیحات حفظ می‌شود).`,
+      confirmLabel: 'افزودن'
+    });
+    if (!ok) return;
+    try {
+      await api.post(`/api/network-content/cp/${encodeURIComponent(item.id)}/install`, {});
+      toast('به بانک کارت اضافه شد — کارت در «کارت‌های آماده» است', 'success');
+      loadNetwork();
+    } catch (err) {
+      toastError(err);
+    }
+  }
+
   function openNetworkDetail(item) {
+    const sc = item.score;
+    const scoreRow = sc
+      ? el('div', { class: 'toolbar', style: { marginTop: 'var(--sp-2)' } },
+          scoreBadge(item),
+          el('span', { class: 'muted', style: { fontSize: 'var(--fs-xs)' } },
+            `ارجاع ${fa(sc.refs)} (${fa(sc.refScore)}) + استفاده ${fa(sc.uses)} (${fa(sc.useScore)}) — ${sc.source === 'client' ? 'تولید سامانهٔ کلاینت مبدأ' : 'تخمین CP'}`))
+      : null;
+    const authorRow = item.authorName
+      ? el('p', { style: { margin: 'var(--sp-2) 0 0' } },
+          el('strong', {}, 'طراح تمرین: '),
+          item.authorName,
+          item.coAuthorName ? ` · همکار طراح: ${item.coAuthorName}` : '')
+      : null;
+    const fileRow = item.fileName
+      ? el('div', { class: 'toolbar', style: { marginTop: 'var(--sp-2)' } },
+          el('span', { dir: 'ltr', class: 'muted' }, item.fileName),
+          el('button', { class: 'btn btn--soft btn--sm', type: 'button', onclick: (e) => { e.currentTarget.disabled = true; downloadFile(item).catch(toastError).finally(() => { e.currentTarget.disabled = false; }); } }, icon('download', 13), 'دانلود فایل'))
+      : item.externalUrl
+        ? el('p', { style: { margin: 'var(--sp-2) 0 0' } }, el('strong', {}, 'لینک: '), el('a', { href: item.externalUrl, target: '_blank', rel: 'noopener' }, item.externalUrl))
+        : null;
+
+    // فازهای بستهٔ تقویم اجرایی (m6)
+    const phases = item.quality?.phases;
+    const phasesTable = item.kind === 'clearbook' && item.subcategory === 'calendar' && Array.isArray(phases) && phases.length > 0
+      ? el('div', { style: { marginTop: 'var(--sp-3)' } },
+          el('strong', {}, `فازهای بسته (${fa(phases.length)})`),
+          el('table', { class: 'table', style: { marginTop: 'var(--sp-1)' } },
+            el('thead', {}, el('tr', {}, el('th', {}, 'فاز'), el('th', {}, 'از'), el('th', {}, 'تا'), el('th', {}, 'وضعیت'))),
+            el('tbody', {}, ...phases.map((ph) =>
+              el('tr', {},
+                el('td', {}, ph.title ?? '—'),
+                el('td', {}, ph.fromDate ? fa(ph.fromDate) : '—'),
+                el('td', {}, ph.toDate ? fa(ph.toDate) : '—'),
+                el('td', {}, ph.status ?? '—'))))))
+      : null;
+
+    const canInstall = item.kind === 'exercise' && item.active && (session.user?.role === 'manager' || session.user?.role === 'therapist');
+
     openModal({
       title: item.title,
       wide: true,
       body: el('div', {},
         el('div', { class: 'toolbar', style: { marginBottom: 'var(--sp-3)' } },
           kindChip(item.kind),
+          subLabelOf(item) ? el('span', { class: 'badge badge--neutral' }, subLabelOf(item)) : null,
           item.sourceCenter ? el('span', { class: 'badge badge--neutral' }, `مرکز مبدأ: ${item.sourceCenter}`) : null,
           statusBadge(item.status)
         ),
         item.summary ? el('p', { style: { margin: '0 0 var(--sp-3)' } }, item.summary) : null,
+        authorRow,
+        scoreRow,
+        fileRow,
         el('pre', {
           class: 'code-view',
-          style: { whiteSpace: 'pre-wrap', background: 'var(--surface-3)', padding: 'var(--sp-3)', borderRadius: 'var(--r-md, 10px)', fontSize: 'var(--fs-sm)', lineHeight: '1.9' }
+          style: { whiteSpace: 'pre-wrap', background: 'var(--surface-3)', padding: 'var(--sp-3)', borderRadius: 'var(--r-md, 10px)', fontSize: 'var(--fs-sm)', lineHeight: '1.9', marginTop: 'var(--sp-3)' }
         }, String(item.body ?? '').trim() || '(محتوایی ثبت نشده)'),
+        phasesTable,
         Array.isArray(item.tags) && item.tags.length > 0
           ? el('div', { class: 'toolbar', style: { marginTop: 'var(--sp-3)' } }, item.tags.map((t) => el('span', { class: 'badge badge--neutral' }, t)))
           : null,
@@ -221,6 +322,7 @@ export async function renderNetworkLibrary(container) {
           `بروزرسانی شبکه: ${formatJalaliNumeric(item.updatedAt.slice(0, 10))}`)
       ),
       actions: [
+        canInstall ? { label: 'افزودن به بانک کارت', onclick: () => installItem(item) } : null,
         { label: 'بستن', onclick: 'close' }
       ]
     });
@@ -231,8 +333,21 @@ export async function renderNetworkLibrary(container) {
     const table = dataTable({
       columns: [
         { label: 'عنوان', render: (r) => el('div', {}, el('strong', {}, r.title), el('div', { class: 'muted', style: { fontSize: 'var(--fs-xs)' } }, bodyPreview(r.summary))) },
-        { label: 'نوع', render: (r) => kindChip(r.kind) },
+        { label: 'نوع', render: (r) => {
+          const chip = kindChip(r.kind);
+          const sub = subLabelOf(r);
+          return sub ? el('div', {}, chip, el('div', { style: { marginTop: '2px' } }, el('span', { class: 'badge badge--neutral' }, sub))) : chip;
+        } },
+        { label: 'طراح', render: (r) => authorCell(r) },
+        { label: 'امتیاز', render: (r) => scoreBadge(r) ?? el('span', { class: 'muted' }, '—') },
         { label: 'مرکز مبدأ', render: (r) => r.sourceCenter || '—' },
+        { label: 'فایل', render: (r) =>
+          r.fileName
+            ? el('button', { class: 'btn btn--soft btn--sm', type: 'button', onclick: (e) => { e.stopPropagation(); e.currentTarget.disabled = true; downloadFile(r).catch(toastError).finally(() => { e.currentTarget.disabled = false; }); } }, icon('download', 13), 'دانلود')
+            : r.externalUrl
+              ? el('a', { class: 'btn btn--soft btn--sm', href: r.externalUrl, target: '_blank', rel: 'noopener', onclick: (e) => e.stopPropagation() }, icon('link', 13), 'لینک')
+              : el('span', { class: 'muted' }, '—')
+        },
         { label: 'برچسب‌ها', render: (r) => (Array.isArray(r.tags) && r.tags.length ? el('div', { class: 'toolbar', style: { gap: 'var(--sp-1)' } }, r.tags.slice(0, 3).map((t) => el('span', { class: 'badge badge--neutral' }, t))) : '—') },
         { label: 'بروزرسانی', render: (r) => formatJalaliNumeric(r.updatedAt.slice(0, 10)) }
       ],
@@ -241,7 +356,7 @@ export async function renderNetworkLibrary(container) {
       empty: {
         iconName: 'star',
         title: 'هنوز برگزیده‌ای توزیع نشده',
-        hint: 'پس از فعال‌شدن درگاه کیوریشن کنترل‌پلین، بهترین محتوای شبکه اینجا نشان داده می‌شود.'
+        hint: 'برگزیده‌های تأییدشدهٔ کنترل‌پلین با سینک ۱۵ دقیقه‌ای می‌آیند — هر آیتم با نام طراح تمرین و مرکز مبدأ.'
       }
     });
 

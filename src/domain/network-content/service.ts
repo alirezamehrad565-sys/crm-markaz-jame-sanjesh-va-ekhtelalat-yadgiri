@@ -33,6 +33,13 @@ interface ContentRow {
   summary: string | null;
   body: string | null;
   tags: string | null;
+  subcategory?: string | null;
+  author_name?: string | null;
+  co_author_name?: string | null;
+  file_name?: string | null;
+  file_size?: number | null;
+  external_url?: string | null;
+  quality?: string | null;
   origin: string;
   status: string;
   source_center: string | null;
@@ -57,11 +64,41 @@ function isContentKind(v: unknown): v is ContentKind {
   return typeof v === 'string' && (CONTENT_KINDS as readonly string[]).includes(v);
 }
 
+function parseScore(qualityRaw: string | null): { quality: Record<string, unknown> | null; score: NetworkContentRecord['score'] } {
+  if (!qualityRaw) return { quality: null, score: null };
+  try {
+    const parsed: unknown = JSON.parse(qualityRaw);
+    if (!parsed || typeof parsed !== 'object') return { quality: null, score: null };
+    const q = parsed as Record<string, unknown>;
+    const raw = q.score;
+    if (raw && typeof raw === 'object' && typeof (raw as Record<string, unknown>).score === 'number') {
+      const s = raw as Record<string, unknown>;
+      return {
+        quality: q,
+        score: {
+          score: Number(s.score),
+          refs: Number(s.refs ?? 0),
+          uses: Number(s.uses ?? 0),
+          refScore: Number(s.refScore ?? 0),
+          useScore: Number(s.useScore ?? 0),
+          formulaVersion: Number(s.formulaVersion ?? 1),
+          source: String(s.source ?? 'client'),
+          generatedAt: (s.generatedAt as string | undefined) ?? null
+        }
+      };
+    }
+    return { quality: q, score: null };
+  } catch {
+    return { quality: null, score: null };
+  }
+}
+
 function mapRow(row: ContentRow): NetworkContentRecord {
   let tags: string[] = [];
   const parsed = row.tags ? (JSON.parse(row.tags) as unknown) : null;
   if (Array.isArray(parsed)) tags = parsed.filter((t): t is string => typeof t === 'string');
   const kind = isContentKind(row.kind) ? row.kind : 'exercise';
+  const { quality, score } = parseScore(row.quality ?? null);
   return {
     id: row.id,
     kind,
@@ -70,6 +107,14 @@ function mapRow(row: ContentRow): NetworkContentRecord {
     summary: row.summary ?? '',
     body: row.body ?? '',
     tags,
+    subcategory: row.subcategory ?? null,
+    authorName: row.author_name ?? null,
+    coAuthorName: row.co_author_name ?? null,
+    fileName: row.file_name ?? null,
+    fileSize: row.file_size == null ? null : Number(row.file_size),
+    externalUrl: row.external_url ?? null,
+    quality,
+    score,
     origin: row.origin === 'cp' ? 'cp' : 'local',
     status: row.status as ContentStatus,
     sourceCenter: row.source_center,
@@ -84,11 +129,17 @@ function mapRow(row: ContentRow): NetworkContentRecord {
   };
 }
 
-const SELECT_COLS = `nc.id, nc.kind, nc.title, nc.summary, nc.body, nc.tags, nc.origin, nc.status,
-  nc.source_center, nc.source_ref, nc.active, nc.submitted_at, nc.synced_at, nc.created_by,
-  s.full_name AS created_by_name, nc.created_at, nc.updated_at`;
+const SELECT_COLS = `nc.id, nc.kind, nc.title, nc.summary, nc.body, nc.tags, nc.subcategory,
+  nc.author_name, nc.co_author_name, nc.file_name, nc.file_size, nc.external_url, nc.quality,
+  nc.origin, nc.status, nc.source_center, nc.source_ref, nc.active, nc.submitted_at, nc.synced_at,
+  nc.created_by, s.full_name AS created_by_name, nc.created_at, nc.updated_at`;
 
-export function createNetworkContentService(deps: { db: DbClient; audit: AuditWriter }): NetworkContentService {
+export function createNetworkContentService(deps: {
+  db: DbClient;
+  audit: AuditWriter;
+  /** دانلود فقط-خواندنی فایل آیتم CP با کلید نود — تزریقی برای تست؛ خالی = سینک خاموش (m6) */
+  fetchCpFile?: (networkItemId: string) => Promise<{ bytes: ArrayBuffer; mime: string } | null>;
+}): NetworkContentService {
   const db = deps.db;
   const audit = deps.audit;
 
@@ -256,6 +307,57 @@ export function createNetworkContentService(deps: { db: DbClient; audit: AuditWr
       const next = await getById(id);
       if (!next) throw new NotFoundError('محتوای شبکه');
       return next;
+    },
+
+    async installFromNetwork(actor, id) {
+      const rec = await getById(id);
+      if (!rec) throw new NotFoundError('محتوای شبکه');
+      if (rec.origin !== 'cp') throw new ValidationError('فقط برگزیده‌های شبکه قابل افزودن هستند');
+      if (rec.kind !== 'exercise') throw new ValidationError('فقط کارت‌های آماده به بانک کارت اضافه می‌شوند');
+      if (!rec.active) throw new ValidationError('آیتم بایگانی‌شده قابل افزودن نیست');
+      const dup = await db.queryOne<{ id: string }>('SELECT id FROM exercises WHERE source_ref_network = ? AND deleted_at IS NULL LIMIT 1', [id]);
+      if (dup) throw new ConflictError('این کارت قبلاً به بانک کارت اضافه شده است');
+      const attribution = [
+        rec.authorName ? `طراح: ${rec.authorName}` : null,
+        rec.coAuthorName ? `همکار طراح: ${rec.coAuthorName}` : null,
+        rec.sourceCenter ? `منبع: کتابخانهٔ شبکه (${rec.sourceCenter})` : 'منبع: کتابخانهٔ شبکه'
+      ].filter(Boolean).join(' · ');
+      const description = [rec.summary, rec.body, `— ${attribution}`].filter(Boolean).join('\n\n');
+      const localId = `local-${crypto.randomUUID()}`;
+      // فرمت از تگ‌های مبدأ — همان نگاشت جمع‌آوری CP (اولین تگ معتبر)
+      const VALID = new Set(['worksheet', 'homework', 'game', 'instruction', 'family']);
+      const fmt = rec.tags.find((t) => VALID.has(t)) ?? 'worksheet';
+      await db.execute(
+        `INSERT INTO exercises (id, title, description, format, published, file_name, file_mime, file_size, file_key, created_by, created_at, updated_at, source_ref_network)
+         VALUES (?, ?, ?, ?, 1, NULL, NULL, NULL, NULL, ?, datetime('now'), datetime('now'), ?)`,
+        [localId, rec.title, description, fmt, actor.id, id]
+      );
+      await audit.log({
+        actorId: actor.id,
+        action: 'network_content.install',
+        resourceType: 'network_content',
+        resourceId: id,
+        changes: { local_exercise_id: { from: null, to: localId } }
+      });
+      return { localExerciseId: localId, title: rec.title };
+    },
+
+    async cpFile(id) {
+      const rec = await getById(id);
+      if (!rec) throw new NotFoundError('محتوای شبکه');
+      if (rec.origin !== 'cp' || !rec.active) throw new NotFoundError('فایل آیتم بایگانی‌شده قابل دریافت نیست');
+      if (!rec.fileName) throw new NotFoundError('این آیتم فایل پیوست ندارد');
+      if (!deps.fetchCpFile) throw new NotFoundError('سینک CP خاموش است — فایل در دسترس نیست');
+      const payload = await deps.fetchCpFile(id);
+      if (!payload) throw new NotFoundError('دریافت فایل از شبکه ناموفق بود');
+      await audit.log({
+        actorId: 'system:cp-content',
+        action: 'network_content.file_download',
+        resourceType: 'network_content',
+        resourceId: id,
+        changes: { file_name: { from: null, to: rec.fileName } }
+      });
+      return { bytes: payload.bytes, mime: payload.mime, fileName: rec.fileName };
     }
   };
 }

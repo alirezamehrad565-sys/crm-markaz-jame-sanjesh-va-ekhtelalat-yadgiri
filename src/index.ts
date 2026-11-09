@@ -11,6 +11,7 @@ import {
 } from '@app/cp-sync/announcements';
 import { buildCpReportConfig, pushCpReport, cpReportOpportunistic } from '@app/cp-report/ingest';
 import { buildCpContentConfig, runCpContentCycle, cpContentOpportunistic } from '@app/cp-content/sync';
+import { createContentScoreService } from '@domain/content-score'; // ۱.۲۵.۴۸ m6
 
 export interface Env {
   DB: D1Database;
@@ -210,6 +211,16 @@ async function runCpContentCycleWrap(env: Env): Promise<void> {
     pushed: result.pushed ?? 0,
     applied: result.applied ?? 0
   });
+  // 1.25.48 m6 — مولد امتیاز شناسنامهٔ آیتم: خودِ سامانهٔ کلاینت؛ در رکب همان چرخهٔ ۱۵ دقیقه‌ای
+  // (بدون env سینک هم کار می‌کند — امتیاز داخلی مرکز است)؛ خطا هرگز کرش نمی‌کند.
+  try {
+    const audit = createAuditWriter(db);
+    const contentScore = createContentScoreService(db, audit);
+    const score = await contentScore.refresh();
+    logger.info('content_score.cycle.done', { exercises: score.exercises, templates: score.templates, ms: score.durationMs });
+  } catch (err) {
+    logger.warn('content_score.cycle.failed', { error: err instanceof Error ? err.message : String(err) });
+  }
 }
 
 /** دروازهٔ فرصت‌طلب کتابخانهٔ شبکه — همان الگوی cp-sync/cp-report */
@@ -236,12 +247,16 @@ export default {
     const db = createDb(env.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger('worker');
+    const cpContentCfg = buildCpContentConfig(env);
     const app = createApp({
       db,
       audit,
       logger,
       teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-      ...buildEnv(env)
+      ...buildEnv(env),
+      cpSyncUrl: env.CP_SYNC_URL ?? null,
+      cpNodeCode: cpContentCfg.cpNodeCode,
+      cpNodeKey: cpContentCfg.cpNodeKey
     });
     return app.fetch(request, env, ctx);
   },

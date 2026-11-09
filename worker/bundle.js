@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.47";
+var APP_VERSION = "1.25.48";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -43495,11 +43495,14 @@ function registerCenterKpiRoutes(app, service) {
 __name(registerCenterKpiRoutes, "registerCenterKpiRoutes");
 
 // src/domain/network-content/types.ts
-var CONTENT_KINDS = ["exercise", "plan", "doc"];
+var CONTENT_KINDS = ["exercise", "card", "document", "plan", "doc", "clearbook"];
 var CONTENT_KIND_LABELS = {
   exercise: "\u062A\u0645\u0631\u06CC\u0646 / \u06A9\u0627\u0631\u062A \u0622\u0645\u0627\u062F\u0647",
+  card: "\u0628\u0627\u0632\u06CC \u0622\u0645\u0627\u062F\u0647",
+  document: "\u0633\u0646\u062F \u062E\u0627\u0645",
   plan: "\u0637\u0631\u062D \u062F\u0631\u0645\u0627\u0646",
-  doc: "\u0633\u0646\u062F \u062E\u0627\u0645"
+  doc: "\u0633\u0646\u062F \u062E\u0627\u0645",
+  clearbook: "\u06A9\u0644\u0631 \u0628\u0648\u06A9 \u0645\u0631\u06A9\u0632"
 };
 
 // src/domain/network-content/service.ts
@@ -43517,11 +43520,41 @@ function isContentKind(v) {
   return typeof v === "string" && CONTENT_KINDS.includes(v);
 }
 __name(isContentKind, "isContentKind");
+function parseScore(qualityRaw) {
+  if (!qualityRaw) return { quality: null, score: null };
+  try {
+    const parsed = JSON.parse(qualityRaw);
+    if (!parsed || typeof parsed !== "object") return { quality: null, score: null };
+    const q = parsed;
+    const raw2 = q.score;
+    if (raw2 && typeof raw2 === "object" && typeof raw2.score === "number") {
+      const s = raw2;
+      return {
+        quality: q,
+        score: {
+          score: Number(s.score),
+          refs: Number(s.refs ?? 0),
+          uses: Number(s.uses ?? 0),
+          refScore: Number(s.refScore ?? 0),
+          useScore: Number(s.useScore ?? 0),
+          formulaVersion: Number(s.formulaVersion ?? 1),
+          source: String(s.source ?? "client"),
+          generatedAt: s.generatedAt ?? null
+        }
+      };
+    }
+    return { quality: q, score: null };
+  } catch {
+    return { quality: null, score: null };
+  }
+}
+__name(parseScore, "parseScore");
 function mapRow(row) {
   let tags = [];
   const parsed = row.tags ? JSON.parse(row.tags) : null;
   if (Array.isArray(parsed)) tags = parsed.filter((t) => typeof t === "string");
   const kind = isContentKind(row.kind) ? row.kind : "exercise";
+  const { quality, score } = parseScore(row.quality ?? null);
   return {
     id: row.id,
     kind,
@@ -43530,6 +43563,14 @@ function mapRow(row) {
     summary: row.summary ?? "",
     body: row.body ?? "",
     tags,
+    subcategory: row.subcategory ?? null,
+    authorName: row.author_name ?? null,
+    coAuthorName: row.co_author_name ?? null,
+    fileName: row.file_name ?? null,
+    fileSize: row.file_size == null ? null : Number(row.file_size),
+    externalUrl: row.external_url ?? null,
+    quality,
+    score,
     origin: row.origin === "cp" ? "cp" : "local",
     status: row.status,
     sourceCenter: row.source_center,
@@ -43544,9 +43585,10 @@ function mapRow(row) {
   };
 }
 __name(mapRow, "mapRow");
-var SELECT_COLS3 = `nc.id, nc.kind, nc.title, nc.summary, nc.body, nc.tags, nc.origin, nc.status,
-  nc.source_center, nc.source_ref, nc.active, nc.submitted_at, nc.synced_at, nc.created_by,
-  s.full_name AS created_by_name, nc.created_at, nc.updated_at`;
+var SELECT_COLS3 = `nc.id, nc.kind, nc.title, nc.summary, nc.body, nc.tags, nc.subcategory,
+  nc.author_name, nc.co_author_name, nc.file_name, nc.file_size, nc.external_url, nc.quality,
+  nc.origin, nc.status, nc.source_center, nc.source_ref, nc.active, nc.submitted_at, nc.synced_at,
+  nc.created_by, s.full_name AS created_by_name, nc.created_at, nc.updated_at`;
 function createNetworkContentService(deps) {
   const db = deps.db;
   const audit = deps.audit;
@@ -43705,6 +43747,54 @@ function createNetworkContentService(deps) {
       const next = await getById(id);
       if (!next) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
       return next;
+    },
+    async installFromNetwork(actor, id) {
+      const rec = await getById(id);
+      if (!rec) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
+      if (rec.origin !== "cp") throw new ValidationError("\u0641\u0642\u0637 \u0628\u0631\u06AF\u0632\u06CC\u062F\u0647\u200C\u0647\u0627\u06CC \u0634\u0628\u06A9\u0647 \u0642\u0627\u0628\u0644 \u0627\u0641\u0632\u0648\u062F\u0646 \u0647\u0633\u062A\u0646\u062F");
+      if (rec.kind !== "exercise") throw new ValidationError("\u0641\u0642\u0637 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647 \u0628\u0647 \u0628\u0627\u0646\u06A9 \u06A9\u0627\u0631\u062A \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u200C\u0634\u0648\u0646\u062F");
+      if (!rec.active) throw new ValidationError("\u0622\u06CC\u062A\u0645 \u0628\u0627\u06CC\u06AF\u0627\u0646\u06CC\u200C\u0634\u062F\u0647 \u0642\u0627\u0628\u0644 \u0627\u0641\u0632\u0648\u062F\u0646 \u0646\u06CC\u0633\u062A");
+      const dup = await db.queryOne("SELECT id FROM exercises WHERE source_ref_network = ? AND deleted_at IS NULL LIMIT 1", [id]);
+      if (dup) throw new ConflictError("\u0627\u06CC\u0646 \u06A9\u0627\u0631\u062A \u0642\u0628\u0644\u0627\u064B \u0628\u0647 \u0628\u0627\u0646\u06A9 \u06A9\u0627\u0631\u062A \u0627\u0636\u0627\u0641\u0647 \u0634\u062F\u0647 \u0627\u0633\u062A");
+      const attribution = [
+        rec.authorName ? `\u0637\u0631\u0627\u062D: ${rec.authorName}` : null,
+        rec.coAuthorName ? `\u0647\u0645\u06A9\u0627\u0631 \u0637\u0631\u0627\u062D: ${rec.coAuthorName}` : null,
+        rec.sourceCenter ? `\u0645\u0646\u0628\u0639: \u06A9\u062A\u0627\u0628\u062E\u0627\u0646\u0647\u0654 \u0634\u0628\u06A9\u0647 (${rec.sourceCenter})` : "\u0645\u0646\u0628\u0639: \u06A9\u062A\u0627\u0628\u062E\u0627\u0646\u0647\u0654 \u0634\u0628\u06A9\u0647"
+      ].filter(Boolean).join(" \xB7 ");
+      const description = [rec.summary, rec.body, `\u2014 ${attribution}`].filter(Boolean).join("\n\n");
+      const localId = `local-${crypto.randomUUID()}`;
+      const VALID2 = /* @__PURE__ */ new Set(["worksheet", "homework", "game", "instruction", "family"]);
+      const fmt = rec.tags.find((t) => VALID2.has(t)) ?? "worksheet";
+      await db.execute(
+        `INSERT INTO exercises (id, title, description, format, published, file_name, file_mime, file_size, file_key, created_by, created_at, updated_at, source_ref_network)
+         VALUES (?, ?, ?, ?, 1, NULL, NULL, NULL, NULL, ?, datetime('now'), datetime('now'), ?)`,
+        [localId, rec.title, description, fmt, actor.id, id]
+      );
+      await audit.log({
+        actorId: actor.id,
+        action: "network_content.install",
+        resourceType: "network_content",
+        resourceId: id,
+        changes: { local_exercise_id: { from: null, to: localId } }
+      });
+      return { localExerciseId: localId, title: rec.title };
+    },
+    async cpFile(id) {
+      const rec = await getById(id);
+      if (!rec) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
+      if (rec.origin !== "cp" || !rec.active) throw new NotFoundError("\u0641\u0627\u06CC\u0644 \u0622\u06CC\u062A\u0645 \u0628\u0627\u06CC\u06AF\u0627\u0646\u06CC\u200C\u0634\u062F\u0647 \u0642\u0627\u0628\u0644 \u062F\u0631\u06CC\u0627\u0641\u062A \u0646\u06CC\u0633\u062A");
+      if (!rec.fileName) throw new NotFoundError("\u0627\u06CC\u0646 \u0622\u06CC\u062A\u0645 \u0641\u0627\u06CC\u0644 \u067E\u06CC\u0648\u0633\u062A \u0646\u062F\u0627\u0631\u062F");
+      if (!deps.fetchCpFile) throw new NotFoundError("\u0633\u06CC\u0646\u06A9 CP \u062E\u0627\u0645\u0648\u0634 \u0627\u0633\u062A \u2014 \u0641\u0627\u06CC\u0644 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A");
+      const payload = await deps.fetchCpFile(id);
+      if (!payload) throw new NotFoundError("\u062F\u0631\u06CC\u0627\u0641\u062A \u0641\u0627\u06CC\u0644 \u0627\u0632 \u0634\u0628\u06A9\u0647 \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F");
+      await audit.log({
+        actorId: "system:cp-content",
+        action: "network_content.file_download",
+        resourceType: "network_content",
+        resourceId: id,
+        changes: { file_name: { from: null, to: rec.fileName } }
+      });
+      return { bytes: payload.bytes, mime: payload.mime, fileName: rec.fileName };
     }
   };
 }
@@ -43733,6 +43823,28 @@ __name(parseOrigin, "parseOrigin");
 function registerNetworkContentRoutes(app, service) {
   const office = requireRole("manager", "secretary");
   const manager = requireRole("manager");
+  const staff = requireRole("manager", "therapist");
+  const CpIdSchema = external_exports.string().trim().min(8).max(140).refine((v) => v.startsWith("cp-content-"), "\u0634\u0646\u0627\u0633\u0647\u0654 \u0628\u0631\u06AF\u0632\u06CC\u062F\u0647\u0654 \u0634\u0628\u06A9\u0647 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+  app.get("/api/network-content/cp/:id/file", office, async (c) => {
+    const id = CpIdSchema.parse(c.req.param("id"));
+    const file = await service.cpFile(id);
+    if (!file) return c.json({ error: "NOT_FOUND", message: "\u0641\u0627\u06CC\u0644 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A" }, 404);
+    const asciiFallback = file.fileName.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
+    return new Response(file.bytes, {
+      status: 200,
+      headers: {
+        "Content-Type": file.mime,
+        "Content-Disposition": `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
+        "Cache-Control": "private, no-store"
+      }
+    });
+  });
+  app.post("/api/network-content/cp/:id/install", staff, async (c) => {
+    const actor = getAuthContext(c);
+    const id = CpIdSchema.parse(c.req.param("id"));
+    const result = await service.installFromNetwork({ id: actor.staffId }, id);
+    return c.json({ data: result }, 200);
+  });
   app.get("/api/network-content", office, async (c) => {
     const q = c.req.query();
     const result = await service.list({
@@ -43781,6 +43893,469 @@ function registerNetworkContentRoutes(app, service) {
   });
 }
 __name(registerNetworkContentRoutes, "registerNetworkContentRoutes");
+
+// src/domain/content-score/pure.ts
+var SCORE_FORMULA_VERSION = 1;
+var SCORE_SOURCES = ["exercises", "pathway_templates"];
+function refScoreOf(refs) {
+  return Math.min(50, Math.max(0, Math.floor(refs) || 0) * 5);
+}
+__name(refScoreOf, "refScoreOf");
+function useScoreOf(uses) {
+  return Math.min(50, Math.max(0, Math.floor(uses) || 0) * 2);
+}
+__name(useScoreOf, "useScoreOf");
+function computeItemScore(refs, uses, generatedAtIso) {
+  const r = Math.max(0, Math.floor(refs) || 0);
+  const u = Math.max(0, Math.floor(uses) || 0);
+  const refScore = refScoreOf(r);
+  const useScore = useScoreOf(u);
+  return {
+    score: Math.min(100, refScore + useScore),
+    refs: r,
+    uses: u,
+    refScore,
+    useScore,
+    formulaVersion: SCORE_FORMULA_VERSION,
+    generatedAt: generatedAtIso,
+    source: "client"
+  };
+}
+__name(computeItemScore, "computeItemScore");
+
+// src/domain/content-score/service.ts
+function createContentScoreService(db, audit) {
+  return {
+    async refresh() {
+      const startMs = Date.now();
+      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const exerciseRows = await db.query(
+        `SELECT e.id,
+                (SELECT COUNT(*) FROM pathway_sessions ps JOIN intervention_paths ip ON ip.id = ps.pathway_id
+                  WHERE ip.deleted_at IS NULL
+                    AND (ps.items_json LIKE '%' || e.id || '%' OR ip.exercise_ids LIKE '%' || e.id || '%')) AS refs,
+                (SELECT COUNT(*) FROM exercise_assignments a
+                  WHERE a.exercise_id = e.id AND a.status != 'cancelled') AS uses
+           FROM exercises e
+          WHERE e.deleted_at IS NULL`,
+        []
+      );
+      const templateRows = await db.query(
+        `SELECT t.id,
+                0 AS refs,
+                (SELECT COUNT(*) FROM intervention_paths ip
+                  WHERE ip.template_key = t.key AND ip.deleted_at IS NULL) AS uses
+           FROM pathway_templates t
+          WHERE t.active = 1`,
+        []
+      );
+      const upsert = /* @__PURE__ */ __name((table, id, refs, uses) => {
+        const s = computeItemScore(refs, uses, nowIso);
+        return db.prepare(
+          `INSERT INTO content_score_report (source_table, source_id, refs, uses, score, formula_version, generated_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(source_table, source_id) DO UPDATE SET
+             refs = excluded.refs, uses = excluded.uses, score = excluded.score,
+             formula_version = excluded.formula_version, updated_at = excluded.updated_at`,
+          [table, id, s.refs, s.uses, s.score, SCORE_FORMULA_VERSION, s.generatedAt, nowIso]
+        );
+      }, "upsert");
+      const statements = [
+        ...exerciseRows.map((r) => upsert("exercises", r.id, Number(r.refs ?? 0), Number(r.uses ?? 0))),
+        ...templateRows.map((r) => upsert("pathway_templates", r.id, Number(r.refs ?? 0), Number(r.uses ?? 0)))
+      ];
+      for (let i = 0; i < statements.length; i += 50) {
+        await db.batch(statements.slice(i, i + 50));
+      }
+      const result = {
+        exercises: exerciseRows.length,
+        templates: templateRows.length,
+        durationMs: Math.max(0, Date.now() - startMs)
+      };
+      await audit.log({
+        actorId: "system:score-engine",
+        action: "content_score.refresh",
+        resourceType: "content_score_report",
+        resourceId: "full",
+        changes: {
+          exercises: { from: null, to: result.exercises },
+          templates: { from: null, to: result.templates }
+        }
+      });
+      return result;
+    },
+    async get(sourceTable, sourceId) {
+      const row = await db.queryOne(
+        "SELECT refs, uses, score, formula_version FROM content_score_report WHERE source_table = ? AND source_id = ? LIMIT 1",
+        [sourceTable, sourceId]
+      );
+      if (!row) return null;
+      return {
+        refs: Number(row.refs ?? 0),
+        uses: Number(row.uses ?? 0),
+        score: Number(row.score ?? 0),
+        formulaVersion: Number(row.formula_version ?? SCORE_FORMULA_VERSION)
+      };
+    }
+  };
+}
+__name(createContentScoreService, "createContentScoreService");
+
+// src/domain/content-score/routes.ts
+var ZOD_ISSUES = /* @__PURE__ */ __name((err) => err.issues.map((i) => ({ path: i.path.join("."), message: i.message })), "ZOD_ISSUES");
+var TableParamSchema = external_exports.enum(SCORE_SOURCES);
+function registerContentScoreRoutes(app, deps) {
+  const manager = requireRole("manager");
+  app.post("/api/content-scores/refresh", manager, async (c) => {
+    const result = await deps.contentScore.refresh();
+    return c.json({ data: result }, 200);
+  });
+  app.get("/api/content-scores/:table/:id", async (c) => {
+    let table;
+    let id;
+    try {
+      table = TableParamSchema.parse(c.req.param("table"));
+      id = UuidSchema.parse(c.req.param("id"));
+    } catch (err) {
+      if (err instanceof ZodError) {
+        return c.json({ error: "VALIDATION_ERROR", message: "\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A", details: ZOD_ISSUES(err) }, 422);
+      }
+      throw err;
+    }
+    const score = await deps.contentScore.get(table, id);
+    return c.json({ data: { score } }, 200);
+  });
+}
+__name(registerContentScoreRoutes, "registerContentScoreRoutes");
+
+// src/application/cp-content/sync.ts
+var CP_CONTENT_ATTEMPT_KEY = "cp_content.last_attempt_at";
+var CP_CONTENT_SYNC_KEY = "cp_content.last_sync_at";
+var CP_CONTENT_PUSH_KEY = "cp_content.last_push_at";
+var CP_CONTENT_MIN_INTERVAL_MS = 15 * 6e4;
+var CP_CONTENT_ID_PREFIX = "cp-content-";
+var CP_CONTENT_LOOKBACK_MS = 6e4;
+var CP_CONTENT_TIMEOUT_MS = 15e3;
+var CP_CONTENT_BATCH_MAX = 20;
+function clean(v) {
+  const s = v?.trim();
+  return s ? s : null;
+}
+__name(clean, "clean");
+function cpOriginFrom(baseUrl) {
+  const s = clean(baseUrl);
+  if (!s) return null;
+  try {
+    return new URL(s).origin;
+  } catch {
+    return null;
+  }
+}
+__name(cpOriginFrom, "cpOriginFrom");
+function buildCpContentConfig(env) {
+  return {
+    cpOrigin: cpOriginFrom(env.CP_SYNC_URL),
+    cpNodeCode: clean(env.CP_NODE_CODE),
+    cpNodeKey: clean(env.CP_NODE_KEY),
+    cpSyncStaffId: clean(env.CP_SYNC_STAFF_ID)
+  };
+}
+__name(buildCpContentConfig, "buildCpContentConfig");
+var CpContentSyncItemSchema = external_exports.object({
+  // min(4) هم‌قرارداد اعلان‌ها: آیتم بی‌پیشوند باید از Zod رد شود تا فیلتر JS (لایهٔ دفاع اول) آن را ببیند و دور بریزد
+  // 1.25.48 m6 — هم‌قرارداد با شکل واقعی CP (docs/cp-content-sharing.md): پنج گونهٔ کتابخانه
+  // + شناسنامهٔ طراح/فایل/زیردسته/امتیاز؛ active از status CP مشتق می‌شود (retired = بایگانی).
+  id: external_exports.string().min(4).max(120),
+  kind: external_exports.enum(["exercise", "card", "document", "plan", "doc", "clearbook"]),
+  title: external_exports.string().min(1).max(300),
+  summary: external_exports.string().max(2e3).nullable().default(null),
+  body: external_exports.string().max(12e3).nullable().default(null),
+  tags: external_exports.array(external_exports.string().max(60)).max(12).default([]),
+  subcategory: external_exports.string().max(40).nullable().default(null),
+  author_name: external_exports.string().max(120).nullable().default(null),
+  co_author_name: external_exports.string().max(120).nullable().default(null),
+  file_name: external_exports.string().max(200).nullable().default(null),
+  file_size: external_exports.number().int().min(0).max(1e8).nullable().default(null),
+  external_url: external_exports.string().max(500).nullable().default(null),
+  quality: external_exports.record(external_exports.unknown()).nullable().default(null),
+  status: external_exports.enum(["collected", "approved", "rejected", "retired", "published"]),
+  source_center_code: external_exports.string().max(60).nullable().default(null),
+  source_center_name: external_exports.string().max(120).nullable().default(null),
+  created_at: external_exports.string().min(10).max(40),
+  updated_at: external_exports.string().min(10).max(40)
+});
+var CpContentSyncResponseSchema = external_exports.object({
+  data: external_exports.object({
+    server_time: external_exports.string().min(10).max(40),
+    items: external_exports.array(CpContentSyncItemSchema).max(CP_CONTENT_BATCH_MAX)
+  })
+});
+async function readSettingsIso(db, key) {
+  const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.value);
+    if (typeof parsed === "string" && parsed.length > 0) return parsed;
+  } catch {
+  }
+  return null;
+}
+__name(readSettingsIso, "readSettingsIso");
+async function writeSettings(db, key, iso, updatedBy, nowIso) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+    [key, JSON.stringify(iso), updatedBy, nowIso]
+  );
+}
+__name(writeSettings, "writeSettings");
+function shouldRunCpContent(lastAttemptIso, now, minIntervalMs = CP_CONTENT_MIN_INTERVAL_MS) {
+  if (!lastAttemptIso) return true;
+  const t = Date.parse(lastAttemptIso);
+  if (Number.isNaN(t)) return true;
+  return now.getTime() - t >= minIntervalMs;
+}
+__name(shouldRunCpContent, "shouldRunCpContent");
+async function stampCpContentAttempt(db, at = /* @__PURE__ */ new Date()) {
+  await writeSettings(db, CP_CONTENT_ATTEMPT_KEY, at.toISOString(), "cp-content", at.toISOString());
+}
+__name(stampCpContentAttempt, "stampCpContentAttempt");
+async function pushQueuedSubmissions(deps) {
+  const { db, log, config, nowIso } = deps;
+  const rows = await db.query(
+    `SELECT id, kind, title, summary, body, tags, submitted_at, source_ref
+     FROM network_content
+     WHERE origin = 'local' AND status = 'queued'
+     ORDER BY submitted_at ASC LIMIT ${CP_CONTENT_BATCH_MAX}`
+  );
+  if (rows.length === 0) return 0;
+  let tags = [];
+  const items = rows.map((r) => {
+    try {
+      const parsed = r.tags ? JSON.parse(r.tags) : null;
+      if (Array.isArray(parsed)) tags = parsed.filter((t) => typeof t === "string");
+    } catch {
+      tags = [];
+    }
+    return {
+      id: r.id,
+      kind: r.kind === "plan" || r.kind === "doc" ? r.kind : "exercise",
+      title: r.title,
+      summary: r.summary ?? "",
+      body: r.body ?? "",
+      tags,
+      submitted_at: r.submitted_at ?? nowIso,
+      source_ref: r.source_ref
+    };
+  });
+  const url = `${config.cpOrigin}/api/node/content/submit`;
+  const init = {
+    method: "POST",
+    headers: {
+      "X-CP-Node-Code": config.cpNodeCode ?? "",
+      Authorization: `Bearer ${config.cpNodeKey ?? ""}`,
+      "X-CP-Node-Version": APP_VERSION,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ items }),
+    signal: AbortSignal.timeout(CP_CONTENT_TIMEOUT_MS)
+  };
+  const res = deps.binding ? await deps.binding.fetch(url, init) : await (deps.fetchFn ?? fetch)(url, init);
+  if (!res.ok) {
+    let bodyHead = "";
+    try {
+      bodyHead = (await res.text()).slice(0, 180);
+    } catch {
+      bodyHead = "";
+    }
+    log.warn("cp_content.push_failed", { http: res.status, detail: "cp_http_error", url, body_head: bodyHead });
+    throw new Error(`http_${res.status}`);
+  }
+  await db.execute(
+    `UPDATE network_content SET status = 'submitted', updated_at = ?
+     WHERE origin = 'local' AND status = 'queued' AND id IN (${items.map(() => "?").join(", ")})`,
+    [nowIso, ...items.map((i) => i.id)]
+  );
+  log.info("cp_content.push", { n: items.length });
+  return items.length;
+}
+__name(pushQueuedSubmissions, "pushQueuedSubmissions");
+async function pullCuratedItems(deps) {
+  const { db, log, config, nowIso } = deps;
+  const lastIso = await readSettingsIso(db, CP_CONTENT_SYNC_KEY);
+  let sinceIso = null;
+  if (lastIso) {
+    const t = Date.parse(lastIso);
+    if (!Number.isNaN(t)) sinceIso = new Date(t - CP_CONTENT_LOOKBACK_MS).toISOString();
+  }
+  const url = `${config.cpOrigin}/api/node/content/sync${sinceIso ? `?since=${encodeURIComponent(sinceIso)}` : ""}`;
+  const init = {
+    method: "GET",
+    headers: {
+      "X-CP-Node-Code": config.cpNodeCode ?? "",
+      Authorization: `Bearer ${config.cpNodeKey ?? ""}`,
+      "X-CP-Node-Version": APP_VERSION
+    },
+    signal: AbortSignal.timeout(CP_CONTENT_TIMEOUT_MS)
+  };
+  const res = deps.binding ? await deps.binding.fetch(url, init) : await (deps.fetchFn ?? fetch)(url, init);
+  if (!res.ok) {
+    let bodyHead = "";
+    try {
+      bodyHead = (await res.text()).slice(0, 180);
+    } catch {
+      bodyHead = "";
+    }
+    log.warn("cp_content.pull_failed", { http: res.status, detail: "cp_http_error", url, body_head: bodyHead });
+    throw new Error(`http_${res.status}`);
+  }
+  const payload = await res.json();
+  const parsed = CpContentSyncResponseSchema.safeParse(payload);
+  if (!parsed.success) {
+    log.warn("cp_content.pull_failed", { detail: "cp_payload_invalid" });
+    throw new Error("payload_invalid");
+  }
+  const items = parsed.data.data.items.filter((it) => it.id.startsWith(CP_CONTENT_ID_PREFIX)).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
+  if (items.length > 0) {
+    const createdBy = config.cpSyncStaffId ?? "cp-content";
+    const statements = items.map(
+      (it) => db.prepare(
+        `INSERT INTO network_content
+           (id, kind, title, summary, body, tags, subcategory, author_name, co_author_name,
+            file_name, file_size, external_url, quality, origin, status, source_center,
+            active, synced_at, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'cp', 'published', ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           kind = excluded.kind,
+           title = excluded.title,
+           summary = excluded.summary,
+           body = excluded.body,
+           tags = excluded.tags,
+           subcategory = excluded.subcategory,
+           author_name = excluded.author_name,
+           co_author_name = excluded.co_author_name,
+           file_name = excluded.file_name,
+           file_size = excluded.file_size,
+           external_url = excluded.external_url,
+           quality = excluded.quality,
+           source_center = excluded.source_center,
+           active = excluded.active,
+           synced_at = excluded.synced_at,
+           updated_at = excluded.updated_at
+         -- \u06AF\u0627\u0631\u062F \u0637\u0644\u0627\u06CC\u06CC (\u0644\u0627\u06CC\u0647\u0654 \u062F\u0641\u0627\u0639 \u062F\u0648\u0645): \u0647\u0631\u06AF\u0632 \u0631\u062F\u06CC\u0641\u200C\u0647\u0627\u06CC \u0645\u062D\u0644\u06CC (\u0628\u062F\u0648\u0646 \u067E\u06CC\u0634\u0648\u0646\u062F cp-content-) \u0631\u0627 \u0628\u0627\u0632\u0646\u0648\u06CC\u0633\u06CC \u0646\u06A9\u0646
+         WHERE network_content.id LIKE 'cp-content-%'`,
+        [
+          it.id,
+          it.kind,
+          it.title,
+          it.summary,
+          it.body,
+          JSON.stringify(it.tags),
+          it.subcategory,
+          it.author_name,
+          it.co_author_name,
+          it.file_name,
+          it.file_size,
+          it.external_url,
+          JSON.stringify(it.quality ?? {}),
+          it.source_center_name ?? it.source_center_code,
+          it.status === "retired" ? 0 : 1,
+          nowIso,
+          createdBy,
+          it.created_at,
+          it.updated_at
+        ]
+      )
+    );
+    await db.batch(statements);
+  }
+  await writeSettings(db, CP_CONTENT_SYNC_KEY, parsed.data.data.server_time, "cp-content", nowIso);
+  log.info("cp_content.pull", { n: items.length, received: parsed.data.data.items.length });
+  return items.length;
+}
+__name(pullCuratedItems, "pullCuratedItems");
+async function cpContentOpportunistic(deps) {
+  const { db, logger, config } = deps;
+  if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) {
+    return { status: "skipped" };
+  }
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const last = await readSettingsIso(db, CP_CONTENT_ATTEMPT_KEY);
+  if (!shouldRunCpContent(last, now(), deps.minIntervalMs ?? CP_CONTENT_MIN_INTERVAL_MS)) {
+    return { status: "skipped" };
+  }
+  return runCpContentCycle({ db, logger, config, binding: deps.binding, fetchFn: deps.fetchFn, now: deps.now });
+}
+__name(cpContentOpportunistic, "cpContentOpportunistic");
+async function fetchCpContentFile(deps) {
+  const { config } = deps;
+  if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) return null;
+  const ccId = deps.networkItemId.startsWith(CP_CONTENT_ID_PREFIX) ? deps.networkItemId.slice(CP_CONTENT_ID_PREFIX.length) : deps.networkItemId;
+  try {
+    const url = `${config.cpOrigin}/api/node/content/items/${encodeURIComponent(ccId)}/file`;
+    const init = {
+      method: "GET",
+      headers: {
+        "X-CP-Node-Code": config.cpNodeCode,
+        Authorization: `Bearer ${config.cpNodeKey}`,
+        "X-CP-Node-Version": APP_VERSION
+      }
+    };
+    const res = deps.binding ? await deps.binding.fetch(url, init) : await (deps.fetchFn ?? fetch)(url, init);
+    if (!res.ok) return null;
+    return { bytes: await res.arrayBuffer(), mime: res.headers.get("content-type") ?? "application/octet-stream" };
+  } catch {
+    return null;
+  }
+}
+__name(fetchCpContentFile, "fetchCpContentFile");
+async function runCpContentCycle(deps) {
+  const { db, logger, config } = deps;
+  const log = logger.child("cp-content");
+  if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) {
+    return { status: "disabled" };
+  }
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const nowIso = now().toISOString();
+  let pushed = 0;
+  let applied = 0;
+  const errors = [];
+  try {
+    const lastIso = await readSettingsIso(db, CP_CONTENT_ATTEMPT_KEY);
+    if (!shouldRunCpContent(lastIso, now(), deps.minIntervalMs ?? CP_CONTENT_MIN_INTERVAL_MS)) {
+      return { status: "skipped" };
+    }
+    await stampCpContentAttempt(db, now());
+    try {
+      pushed = await pushQueuedSubmissions({ db, log, config, binding: deps.binding, fetchFn: deps.fetchFn, nowIso });
+      await writeSettings(db, CP_CONTENT_PUSH_KEY, nowIso, "cp-content", nowIso);
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+    try {
+      applied = await pullCuratedItems({ db, log, config, binding: deps.binding, fetchFn: deps.fetchFn, nowIso });
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+    if (errors.length === 2) {
+      return { status: "error", detail: errors.join("|") };
+    }
+    return {
+      status: errors.length === 0 ? "ok" : "error",
+      pushed,
+      applied,
+      detail: errors.length > 0 ? errors.join("|") : void 0
+    };
+  } catch (err) {
+    log.warn("cp_content.cycle_failed", {
+      detail: "exception",
+      error: err instanceof Error ? err.message : String(err)
+    });
+    return { status: "error", detail: "exception" };
+  }
+}
+__name(runCpContentCycle, "runCpContentCycle");
 
 // src/domain/finance/service.ts
 var LIST_LIMIT = 500;
@@ -53239,8 +53814,25 @@ function createServices(deps) {
   const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null });
   const rum = createRumService({ db, logger });
   const centerKpi = createCenterKpiService({ db });
-  const networkContent = createNetworkContentService({ db, audit });
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent };
+  const networkContent = createNetworkContentService({
+    db,
+    audit,
+    // m6 — دانلود فقط-خواندنی فایل برگزیده‌ها با کلید نود (خاموش اگر env سینک خالی است)
+    fetchCpFile: deps.cpSyncUrl ? (itemId) => {
+      let origin = null;
+      try {
+        origin = new URL(deps.cpSyncUrl).origin;
+      } catch {
+        origin = null;
+      }
+      return fetchCpContentFile({
+        config: { cpOrigin: origin, cpNodeCode: deps.cpNodeCode ?? null, cpNodeKey: deps.cpNodeKey ?? null, cpSyncStaffId: null },
+        networkItemId: itemId
+      }).catch(() => null);
+    } : void 0
+  });
+  const contentScore = createContentScoreService(db, audit);
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, contentScore };
 }
 __name(createServices, "createServices");
 function createApp(deps) {
@@ -53366,6 +53958,7 @@ function createApp(deps) {
   registerRumRoutes(app, services.rum);
   registerCenterKpiRoutes(app, services.centerKpi);
   registerNetworkContentRoutes(app, services.networkContent);
+  registerContentScoreRoutes(app, { contentScore: services.contentScore });
   if (FEATURES.apiKeys) registerKeysRoutes(app, services.keys);
   app.get("/api/conflicts", async (c) => {
     const staffId = c.req.query("staff_id") ?? "";
@@ -53567,17 +54160,17 @@ var CP_SYNC_MIN_INTERVAL_MS = 15 * 6e4;
 var CP_ID_PREFIX = "cp-";
 var CP_SYNC_LOOKBACK_MS = 6e4;
 var CP_SYNC_TIMEOUT_MS = 15e3;
-function clean(v) {
+function clean2(v) {
   const s = v?.trim();
   return s ? s : null;
 }
-__name(clean, "clean");
+__name(clean2, "clean");
 function buildCpSyncConfig(env) {
   return {
-    cpSyncUrl: clean(env.CP_SYNC_URL),
-    cpNodeCode: clean(env.CP_NODE_CODE),
-    cpNodeKey: clean(env.CP_NODE_KEY),
-    cpSyncStaffId: clean(env.CP_SYNC_STAFF_ID)
+    cpSyncUrl: clean2(env.CP_SYNC_URL),
+    cpNodeCode: clean2(env.CP_NODE_CODE),
+    cpNodeKey: clean2(env.CP_NODE_KEY),
+    cpSyncStaffId: clean2(env.CP_SYNC_STAFF_ID)
   };
 }
 __name(buildCpSyncConfig, "buildCpSyncConfig");
@@ -53608,7 +54201,7 @@ function buildRequestUrl(baseUrl, sinceIso) {
 }
 __name(buildRequestUrl, "buildRequestUrl");
 async function readLastSyncAt(db) {
-  return readSettingsIso(db, CP_SYNC_SETTINGS_KEY);
+  return readSettingsIso2(db, CP_SYNC_SETTINGS_KEY);
 }
 __name(readLastSyncAt, "readLastSyncAt");
 async function writeLastSyncAt(db, iso) {
@@ -53620,7 +54213,7 @@ async function writeLastSyncAt(db, iso) {
   );
 }
 __name(writeLastSyncAt, "writeLastSyncAt");
-async function readSettingsIso(db, key) {
+async function readSettingsIso2(db, key) {
   const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
   if (!row) return null;
   try {
@@ -53630,7 +54223,7 @@ async function readSettingsIso(db, key) {
   }
   return null;
 }
-__name(readSettingsIso, "readSettingsIso");
+__name(readSettingsIso2, "readSettingsIso");
 async function stampCpSyncAttempt(db, at = /* @__PURE__ */ new Date()) {
   await db.execute(
     `INSERT INTO settings (key, value, updated_by, updated_at)
@@ -53653,7 +54246,7 @@ async function cpSyncOpportunistic(deps) {
     return { status: "skipped" };
   }
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const last = await readSettingsIso(db, CP_SYNC_ATTEMPT_KEY);
+  const last = await readSettingsIso2(db, CP_SYNC_ATTEMPT_KEY);
   if (!shouldAttemptCpSync(last, now(), deps.minIntervalMs ?? CP_SYNC_MIN_INTERVAL_MS)) {
     return { status: "skipped" };
   }
@@ -53774,13 +54367,13 @@ var CP_REPORT_SEQ_KEY = "cp_report.last_seq";
 var CP_REPORT_MIN_INTERVAL_MS = 24 * 60 * 6e4;
 var RUM_SAMPLE_CAP = 5e3;
 var CP_REPORT_TIMEOUT_MS = 15e3;
-function clean2(v) {
+function clean3(v) {
   const s = v?.trim();
   return s ? s : null;
 }
-__name(clean2, "clean");
+__name(clean3, "clean");
 function ingestUrlFrom(baseUrl) {
-  const s = clean2(baseUrl);
+  const s = clean3(baseUrl);
   if (!s) return null;
   try {
     return new URL(s).origin + "/api/node/ingest";
@@ -53792,8 +54385,8 @@ __name(ingestUrlFrom, "ingestUrlFrom");
 function buildCpReportConfig(env) {
   return {
     ingestUrl: ingestUrlFrom(env.CP_SYNC_URL),
-    cpNodeCode: clean2(env.CP_NODE_CODE),
-    cpNodeKey: clean2(env.CP_NODE_KEY)
+    cpNodeCode: clean3(env.CP_NODE_CODE),
+    cpNodeKey: clean3(env.CP_NODE_KEY)
   };
 }
 __name(buildCpReportConfig, "buildCpReportConfig");
@@ -53802,7 +54395,7 @@ async function readSettingsRaw(db, key) {
   return row?.value ?? null;
 }
 __name(readSettingsRaw, "readSettingsRaw");
-async function readSettingsIso2(db, key) {
+async function readSettingsIso3(db, key) {
   const raw2 = await readSettingsRaw(db, key);
   if (!raw2) return null;
   try {
@@ -53812,7 +54405,7 @@ async function readSettingsIso2(db, key) {
   }
   return null;
 }
-__name(readSettingsIso2, "readSettingsIso");
+__name(readSettingsIso3, "readSettingsIso");
 async function readSettingsInt(db, key) {
   const raw2 = await readSettingsRaw(db, key);
   if (!raw2) return null;
@@ -53824,7 +54417,7 @@ async function readSettingsInt(db, key) {
   return null;
 }
 __name(readSettingsInt, "readSettingsInt");
-async function writeSettings(db, key, jsonValue, nowIso) {
+async function writeSettings2(db, key, jsonValue, nowIso) {
   await db.execute(
     `INSERT INTO settings (key, value, updated_by, updated_at)
      VALUES (?, ?, 'cp-report', ?)
@@ -53832,7 +54425,7 @@ async function writeSettings(db, key, jsonValue, nowIso) {
     [key, jsonValue, nowIso]
   );
 }
-__name(writeSettings, "writeSettings");
+__name(writeSettings2, "writeSettings");
 function shouldPushCpReport(lastAttemptIso, now, minIntervalMs = CP_REPORT_MIN_INTERVAL_MS) {
   if (!lastAttemptIso) return true;
   const t = Date.parse(lastAttemptIso);
@@ -53841,7 +54434,7 @@ function shouldPushCpReport(lastAttemptIso, now, minIntervalMs = CP_REPORT_MIN_I
 }
 __name(shouldPushCpReport, "shouldPushCpReport");
 async function stampCpReportAttempt(db, at = /* @__PURE__ */ new Date()) {
-  await writeSettings(db, CP_REPORT_ATTEMPT_KEY, JSON.stringify(at.toISOString()), at.toISOString());
+  await writeSettings2(db, CP_REPORT_ATTEMPT_KEY, JSON.stringify(at.toISOString()), at.toISOString());
 }
 __name(stampCpReportAttempt, "stampCpReportAttempt");
 function percentile75(sorted) {
@@ -53920,7 +54513,7 @@ async function cpReportOpportunistic(deps) {
     return { status: "skipped" };
   }
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const last = await readSettingsIso2(db, CP_REPORT_ATTEMPT_KEY);
+  const last = await readSettingsIso3(db, CP_REPORT_ATTEMPT_KEY);
   if (!shouldPushCpReport(last, now(), deps.minIntervalMs ?? CP_REPORT_MIN_INTERVAL_MS)) {
     return { status: "skipped" };
   }
@@ -53935,7 +54528,7 @@ async function pushCpReport(deps) {
   }
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   try {
-    const lastIso = await readSettingsIso2(db, CP_REPORT_ATTEMPT_KEY);
+    const lastIso = await readSettingsIso3(db, CP_REPORT_ATTEMPT_KEY);
     if (!shouldPushCpReport(lastIso, now(), deps.minIntervalMs ?? CP_REPORT_MIN_INTERVAL_MS)) {
       return { status: "skipped" };
     }
@@ -53994,8 +54587,8 @@ async function pushCpReport(deps) {
       });
       return { status: "error", detail: `http_${res.status}` };
     }
-    await writeSettings(db, CP_REPORT_PUSH_KEY, JSON.stringify(atIso), atIso);
-    await writeSettings(db, CP_REPORT_SEQ_KEY, JSON.stringify(seq), atIso);
+    await writeSettings2(db, CP_REPORT_PUSH_KEY, JSON.stringify(atIso), atIso);
+    await writeSettings2(db, CP_REPORT_SEQ_KEY, JSON.stringify(seq), atIso);
     log.info("cp_report.push", { seq, students_active: kpi.students_active });
     return { status: "ok", applied: 1, seq };
   } catch (err) {
@@ -54007,288 +54600,6 @@ async function pushCpReport(deps) {
   }
 }
 __name(pushCpReport, "pushCpReport");
-
-// src/application/cp-content/sync.ts
-var CP_CONTENT_ATTEMPT_KEY = "cp_content.last_attempt_at";
-var CP_CONTENT_SYNC_KEY = "cp_content.last_sync_at";
-var CP_CONTENT_PUSH_KEY = "cp_content.last_push_at";
-var CP_CONTENT_MIN_INTERVAL_MS = 15 * 6e4;
-var CP_CONTENT_ID_PREFIX = "cp-content-";
-var CP_CONTENT_LOOKBACK_MS = 6e4;
-var CP_CONTENT_TIMEOUT_MS = 15e3;
-var CP_CONTENT_BATCH_MAX = 20;
-function clean3(v) {
-  const s = v?.trim();
-  return s ? s : null;
-}
-__name(clean3, "clean");
-function cpOriginFrom(baseUrl) {
-  const s = clean3(baseUrl);
-  if (!s) return null;
-  try {
-    return new URL(s).origin;
-  } catch {
-    return null;
-  }
-}
-__name(cpOriginFrom, "cpOriginFrom");
-function buildCpContentConfig(env) {
-  return {
-    cpOrigin: cpOriginFrom(env.CP_SYNC_URL),
-    cpNodeCode: clean3(env.CP_NODE_CODE),
-    cpNodeKey: clean3(env.CP_NODE_KEY),
-    cpSyncStaffId: clean3(env.CP_SYNC_STAFF_ID)
-  };
-}
-__name(buildCpContentConfig, "buildCpContentConfig");
-var CpContentSyncItemSchema = external_exports.object({
-  // min(4) هم‌قرارداد اعلان‌ها: آیتم بی‌پیشوند باید از Zod رد شود تا فیلتر JS (لایهٔ دفاع اول) آن را ببیند و دور بریزد
-  id: external_exports.string().min(4).max(120),
-  kind: external_exports.enum(["exercise", "plan", "doc"]),
-  title: external_exports.string().min(1).max(150),
-  summary: external_exports.string().max(600).default(""),
-  body: external_exports.string().max(8e3).default(""),
-  tags: external_exports.array(external_exports.string().max(40)).max(8).default([]),
-  active: external_exports.boolean(),
-  source_center: external_exports.string().max(60).nullable().default(null),
-  created_at: external_exports.string().min(10).max(40),
-  updated_at: external_exports.string().min(10).max(40)
-});
-var CpContentSyncResponseSchema = external_exports.object({
-  data: external_exports.object({
-    server_time: external_exports.string().min(10).max(40),
-    items: external_exports.array(CpContentSyncItemSchema).max(CP_CONTENT_BATCH_MAX)
-  })
-});
-async function readSettingsIso3(db, key) {
-  const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
-  if (!row) return null;
-  try {
-    const parsed = JSON.parse(row.value);
-    if (typeof parsed === "string" && parsed.length > 0) return parsed;
-  } catch {
-  }
-  return null;
-}
-__name(readSettingsIso3, "readSettingsIso");
-async function writeSettings2(db, key, iso, updatedBy, nowIso) {
-  await db.execute(
-    `INSERT INTO settings (key, value, updated_by, updated_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
-    [key, JSON.stringify(iso), updatedBy, nowIso]
-  );
-}
-__name(writeSettings2, "writeSettings");
-function shouldRunCpContent(lastAttemptIso, now, minIntervalMs = CP_CONTENT_MIN_INTERVAL_MS) {
-  if (!lastAttemptIso) return true;
-  const t = Date.parse(lastAttemptIso);
-  if (Number.isNaN(t)) return true;
-  return now.getTime() - t >= minIntervalMs;
-}
-__name(shouldRunCpContent, "shouldRunCpContent");
-async function stampCpContentAttempt(db, at = /* @__PURE__ */ new Date()) {
-  await writeSettings2(db, CP_CONTENT_ATTEMPT_KEY, at.toISOString(), "cp-content", at.toISOString());
-}
-__name(stampCpContentAttempt, "stampCpContentAttempt");
-async function pushQueuedSubmissions(deps) {
-  const { db, log, config, nowIso } = deps;
-  const rows = await db.query(
-    `SELECT id, kind, title, summary, body, tags, submitted_at, source_ref
-     FROM network_content
-     WHERE origin = 'local' AND status = 'queued'
-     ORDER BY submitted_at ASC LIMIT ${CP_CONTENT_BATCH_MAX}`
-  );
-  if (rows.length === 0) return 0;
-  let tags = [];
-  const items = rows.map((r) => {
-    try {
-      const parsed = r.tags ? JSON.parse(r.tags) : null;
-      if (Array.isArray(parsed)) tags = parsed.filter((t) => typeof t === "string");
-    } catch {
-      tags = [];
-    }
-    return {
-      id: r.id,
-      kind: r.kind === "plan" || r.kind === "doc" ? r.kind : "exercise",
-      title: r.title,
-      summary: r.summary ?? "",
-      body: r.body ?? "",
-      tags,
-      submitted_at: r.submitted_at ?? nowIso,
-      source_ref: r.source_ref
-    };
-  });
-  const url = `${config.cpOrigin}/api/node/content/submit`;
-  const init = {
-    method: "POST",
-    headers: {
-      "X-CP-Node-Code": config.cpNodeCode ?? "",
-      Authorization: `Bearer ${config.cpNodeKey ?? ""}`,
-      "X-CP-Node-Version": APP_VERSION,
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({ items }),
-    signal: AbortSignal.timeout(CP_CONTENT_TIMEOUT_MS)
-  };
-  const res = deps.binding ? await deps.binding.fetch(url, init) : await (deps.fetchFn ?? fetch)(url, init);
-  if (!res.ok) {
-    let bodyHead = "";
-    try {
-      bodyHead = (await res.text()).slice(0, 180);
-    } catch {
-      bodyHead = "";
-    }
-    log.warn("cp_content.push_failed", { http: res.status, detail: "cp_http_error", url, body_head: bodyHead });
-    throw new Error(`http_${res.status}`);
-  }
-  await db.execute(
-    `UPDATE network_content SET status = 'submitted', updated_at = ?
-     WHERE origin = 'local' AND status = 'queued' AND id IN (${items.map(() => "?").join(", ")})`,
-    [nowIso, ...items.map((i) => i.id)]
-  );
-  log.info("cp_content.push", { n: items.length });
-  return items.length;
-}
-__name(pushQueuedSubmissions, "pushQueuedSubmissions");
-async function pullCuratedItems(deps) {
-  const { db, log, config, nowIso } = deps;
-  const lastIso = await readSettingsIso3(db, CP_CONTENT_SYNC_KEY);
-  let sinceIso = null;
-  if (lastIso) {
-    const t = Date.parse(lastIso);
-    if (!Number.isNaN(t)) sinceIso = new Date(t - CP_CONTENT_LOOKBACK_MS).toISOString();
-  }
-  const url = `${config.cpOrigin}/api/node/content/sync${sinceIso ? `?since=${encodeURIComponent(sinceIso)}` : ""}`;
-  const init = {
-    method: "GET",
-    headers: {
-      "X-CP-Node-Code": config.cpNodeCode ?? "",
-      Authorization: `Bearer ${config.cpNodeKey ?? ""}`,
-      "X-CP-Node-Version": APP_VERSION
-    },
-    signal: AbortSignal.timeout(CP_CONTENT_TIMEOUT_MS)
-  };
-  const res = deps.binding ? await deps.binding.fetch(url, init) : await (deps.fetchFn ?? fetch)(url, init);
-  if (!res.ok) {
-    let bodyHead = "";
-    try {
-      bodyHead = (await res.text()).slice(0, 180);
-    } catch {
-      bodyHead = "";
-    }
-    log.warn("cp_content.pull_failed", { http: res.status, detail: "cp_http_error", url, body_head: bodyHead });
-    throw new Error(`http_${res.status}`);
-  }
-  const payload = await res.json();
-  const parsed = CpContentSyncResponseSchema.safeParse(payload);
-  if (!parsed.success) {
-    log.warn("cp_content.pull_failed", { detail: "cp_payload_invalid" });
-    throw new Error("payload_invalid");
-  }
-  const items = parsed.data.data.items.filter((it) => it.id.startsWith(CP_CONTENT_ID_PREFIX)).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
-  if (items.length > 0) {
-    const createdBy = config.cpSyncStaffId ?? "cp-content";
-    const statements = items.map(
-      (it) => db.prepare(
-        `INSERT INTO network_content
-           (id, kind, title, summary, body, tags, origin, status, source_center,
-            active, synced_at, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'cp', 'published', ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           kind = excluded.kind,
-           title = excluded.title,
-           summary = excluded.summary,
-           body = excluded.body,
-           tags = excluded.tags,
-           source_center = excluded.source_center,
-           active = excluded.active,
-           synced_at = excluded.synced_at,
-           updated_at = excluded.updated_at
-         -- \u06AF\u0627\u0631\u062F \u0637\u0644\u0627\u06CC\u06CC (\u0644\u0627\u06CC\u0647\u0654 \u062F\u0641\u0627\u0639 \u062F\u0648\u0645): \u0647\u0631\u06AF\u0632 \u0631\u062F\u06CC\u0641\u200C\u0647\u0627\u06CC \u0645\u062D\u0644\u06CC (\u0628\u062F\u0648\u0646 \u067E\u06CC\u0634\u0648\u0646\u062F cp-content-) \u0631\u0627 \u0628\u0627\u0632\u0646\u0648\u06CC\u0633\u06CC \u0646\u06A9\u0646
-         WHERE network_content.id LIKE 'cp-content-%'`,
-        [
-          it.id,
-          it.kind,
-          it.title,
-          it.summary,
-          it.body,
-          JSON.stringify(it.tags),
-          it.source_center,
-          it.active ? 1 : 0,
-          nowIso,
-          createdBy,
-          it.created_at,
-          it.updated_at
-        ]
-      )
-    );
-    await db.batch(statements);
-  }
-  await writeSettings2(db, CP_CONTENT_SYNC_KEY, parsed.data.data.server_time, "cp-content", nowIso);
-  log.info("cp_content.pull", { n: items.length, received: parsed.data.data.items.length });
-  return items.length;
-}
-__name(pullCuratedItems, "pullCuratedItems");
-async function cpContentOpportunistic(deps) {
-  const { db, logger, config } = deps;
-  if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) {
-    return { status: "skipped" };
-  }
-  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const last = await readSettingsIso3(db, CP_CONTENT_ATTEMPT_KEY);
-  if (!shouldRunCpContent(last, now(), deps.minIntervalMs ?? CP_CONTENT_MIN_INTERVAL_MS)) {
-    return { status: "skipped" };
-  }
-  return runCpContentCycle({ db, logger, config, binding: deps.binding, fetchFn: deps.fetchFn, now: deps.now });
-}
-__name(cpContentOpportunistic, "cpContentOpportunistic");
-async function runCpContentCycle(deps) {
-  const { db, logger, config } = deps;
-  const log = logger.child("cp-content");
-  if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) {
-    return { status: "disabled" };
-  }
-  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const nowIso = now().toISOString();
-  let pushed = 0;
-  let applied = 0;
-  const errors = [];
-  try {
-    const lastIso = await readSettingsIso3(db, CP_CONTENT_ATTEMPT_KEY);
-    if (!shouldRunCpContent(lastIso, now(), deps.minIntervalMs ?? CP_CONTENT_MIN_INTERVAL_MS)) {
-      return { status: "skipped" };
-    }
-    await stampCpContentAttempt(db, now());
-    try {
-      pushed = await pushQueuedSubmissions({ db, log, config, binding: deps.binding, fetchFn: deps.fetchFn, nowIso });
-      await writeSettings2(db, CP_CONTENT_PUSH_KEY, nowIso, "cp-content", nowIso);
-    } catch (err) {
-      errors.push(err instanceof Error ? err.message : String(err));
-    }
-    try {
-      applied = await pullCuratedItems({ db, log, config, binding: deps.binding, fetchFn: deps.fetchFn, nowIso });
-    } catch (err) {
-      errors.push(err instanceof Error ? err.message : String(err));
-    }
-    if (errors.length === 2) {
-      return { status: "error", detail: errors.join("|") };
-    }
-    return {
-      status: errors.length === 0 ? "ok" : "error",
-      pushed,
-      applied,
-      detail: errors.length > 0 ? errors.join("|") : void 0
-    };
-  } catch (err) {
-    log.warn("cp_content.cycle_failed", {
-      detail: "exception",
-      error: err instanceof Error ? err.message : String(err)
-    });
-    return { status: "error", detail: "exception" };
-  }
-}
-__name(runCpContentCycle, "runCpContentCycle");
 
 // src/index.ts
 function buildEnv(env) {
@@ -54448,6 +54759,14 @@ async function runCpContentCycleWrap(env) {
     pushed: result.pushed ?? 0,
     applied: result.applied ?? 0
   });
+  try {
+    const audit = createAuditWriter(db);
+    const contentScore = createContentScoreService(db, audit);
+    const score = await contentScore.refresh();
+    logger.info("content_score.cycle.done", { exercises: score.exercises, templates: score.templates, ms: score.durationMs });
+  } catch (err) {
+    logger.warn("content_score.cycle.failed", { error: err instanceof Error ? err.message : String(err) });
+  }
 }
 __name(runCpContentCycleWrap, "runCpContentCycleWrap");
 var cpContentProbeAt = 0;
@@ -54473,12 +54792,16 @@ var src_default = {
     const db = createDb(env.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger("worker");
+    const cpContentCfg = buildCpContentConfig(env);
     const app = createApp({
       db,
       audit,
       logger,
       teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-      ...buildEnv(env)
+      ...buildEnv(env),
+      cpSyncUrl: env.CP_SYNC_URL ?? null,
+      cpNodeCode: cpContentCfg.cpNodeCode,
+      cpNodeKey: cpContentCfg.cpNodeKey
     });
     return app.fetch(request, env, ctx);
   },

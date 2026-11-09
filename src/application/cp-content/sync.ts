@@ -120,14 +120,24 @@ export interface CpContentSyncItem {
 
 const CpContentSyncItemSchema = z.object({
   // min(4) هم‌قرارداد اعلان‌ها: آیتم بی‌پیشوند باید از Zod رد شود تا فیلتر JS (لایهٔ دفاع اول) آن را ببیند و دور بریزد
+  // 1.25.48 m6 — هم‌قرارداد با شکل واقعی CP (docs/cp-content-sharing.md): پنج گونهٔ کتابخانه
+  // + شناسنامهٔ طراح/فایل/زیردسته/امتیاز؛ active از status CP مشتق می‌شود (retired = بایگانی).
   id: z.string().min(4).max(120),
-  kind: z.enum(['exercise', 'plan', 'doc']),
-  title: z.string().min(1).max(150),
-  summary: z.string().max(600).default(''),
-  body: z.string().max(8000).default(''),
-  tags: z.array(z.string().max(40)).max(8).default([]),
-  active: z.boolean(),
-  source_center: z.string().max(60).nullable().default(null),
+  kind: z.enum(['exercise', 'card', 'document', 'plan', 'doc', 'clearbook']),
+  title: z.string().min(1).max(300),
+  summary: z.string().max(2000).nullable().default(null),
+  body: z.string().max(12000).nullable().default(null),
+  tags: z.array(z.string().max(60)).max(12).default([]),
+  subcategory: z.string().max(40).nullable().default(null),
+  author_name: z.string().max(120).nullable().default(null),
+  co_author_name: z.string().max(120).nullable().default(null),
+  file_name: z.string().max(200).nullable().default(null),
+  file_size: z.number().int().min(0).max(100_000_000).nullable().default(null),
+  external_url: z.string().max(500).nullable().default(null),
+  quality: z.record(z.unknown()).nullable().default(null),
+  status: z.enum(['collected', 'approved', 'rejected', 'retired', 'published']),
+  source_center_code: z.string().max(60).nullable().default(null),
+  source_center_name: z.string().max(120).nullable().default(null),
   created_at: z.string().min(10).max(40),
   updated_at: z.string().min(10).max(40)
 });
@@ -332,15 +342,23 @@ async function pullCuratedItems(deps: {
     const statements = items.map((it) =>
       db.prepare(
         `INSERT INTO network_content
-           (id, kind, title, summary, body, tags, origin, status, source_center,
+           (id, kind, title, summary, body, tags, subcategory, author_name, co_author_name,
+            file_name, file_size, external_url, quality, origin, status, source_center,
             active, synced_at, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'cp', 'published', ?, ?, ?, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'cp', 'published', ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            kind = excluded.kind,
            title = excluded.title,
            summary = excluded.summary,
            body = excluded.body,
            tags = excluded.tags,
+           subcategory = excluded.subcategory,
+           author_name = excluded.author_name,
+           co_author_name = excluded.co_author_name,
+           file_name = excluded.file_name,
+           file_size = excluded.file_size,
+           external_url = excluded.external_url,
+           quality = excluded.quality,
            source_center = excluded.source_center,
            active = excluded.active,
            synced_at = excluded.synced_at,
@@ -354,8 +372,15 @@ async function pullCuratedItems(deps: {
           it.summary,
           it.body,
           JSON.stringify(it.tags),
-          it.source_center,
-          it.active ? 1 : 0,
+          it.subcategory,
+          it.author_name,
+          it.co_author_name,
+          it.file_name,
+          it.file_size,
+          it.external_url,
+          JSON.stringify(it.quality ?? {}),
+          it.source_center_name ?? it.source_center_code,
+          it.status === 'retired' ? 0 : 1,
           nowIso,
           createdBy,
           it.created_at,
@@ -403,6 +428,40 @@ export async function cpContentOpportunistic(deps: {
  * گیت ۱۵دقیقه‌ای مشترک دوباره‌کاری را می‌بندد. هرگز throw نمی‌کند.
  * ترتیب: اول push (صف مرکز زودتر می‌رود) بعد pull — خطای هر کدام خطای دیگری نیست.
  */
+/** دانلود فقط-خواندنی فایل آیتم از CP (1.25.48 m6) — در لحظهٔ نیاز؛ بایت در CP می‌ماند.
+ *  مسیر قراردادی: GET /api/node/content/items/:id/file با همان کلید نود؛ شناسهٔ ذخیره‌شدهٔ
+ *  نود «cp-content-cc-…» است و پیشوند این‌جا جدا می‌شود. */
+export async function fetchCpContentFile(deps: {
+  config: CpContentConfig;
+  networkItemId: string;
+  binding?: Fetcher | null;
+  fetchFn?: typeof fetch;
+}): Promise<{ bytes: ArrayBuffer; mime: string } | null> {
+  const { config } = deps;
+  if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) return null;
+  const ccId = deps.networkItemId.startsWith(CP_CONTENT_ID_PREFIX)
+    ? deps.networkItemId.slice(CP_CONTENT_ID_PREFIX.length)
+    : deps.networkItemId;
+  try {
+    const url = `${config.cpOrigin}/api/node/content/items/${encodeURIComponent(ccId)}/file`;
+    const init: RequestInit = {
+      method: 'GET',
+      headers: {
+        'X-CP-Node-Code': config.cpNodeCode,
+        Authorization: `Bearer ${config.cpNodeKey}`,
+        'X-CP-Node-Version': APP_VERSION
+      }
+    };
+    const res = deps.binding
+      ? await deps.binding.fetch(url, init)
+      : await (deps.fetchFn ?? fetch)(url, init);
+    if (!res.ok) return null;
+    return { bytes: await res.arrayBuffer(), mime: res.headers.get('content-type') ?? 'application/octet-stream' };
+  } catch {
+    return null;
+  }
+}
+
 export async function runCpContentCycle(deps: {
   db: DbClient;
   logger: Logger;
