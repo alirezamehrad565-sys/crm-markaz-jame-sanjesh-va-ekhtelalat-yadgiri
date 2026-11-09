@@ -10,6 +10,7 @@ import {
   stampCpSyncAttempt
 } from '@app/cp-sync/announcements';
 import { buildCpReportConfig, pushCpReport, cpReportOpportunistic } from '@app/cp-report/ingest';
+import { buildCpContentConfig, runCpContentCycle, cpContentOpportunistic } from '@app/cp-content/sync';
 
 export interface Env {
   DB: D1Database;
@@ -190,10 +191,48 @@ function probeCpReport(env: Env, ctx: ExecutionContext): void {
   );
 }
 
+/**
+ * چرخهٔ کتابخانهٔ شبکه (محور دوم غنی‌سازی): push همرسانی‌ها + pull برگزیده‌ها —
+ * قرارداد docs/cp-node-content-hub.md؛ بدون env تازه (همان کلید نود م۱.۲)؛
+ * گیت ۱۵دقیقه‌ای درونی دارد؛ CP بدون درگاه = فقط warn و تلاش دورهٔ بعد.
+ */
+async function runCpContentCycleWrap(env: Env): Promise<void> {
+  const db = createDb(env.DB);
+  const logger = createLogger('sync');
+  const result = await runCpContentCycle({
+    db,
+    logger,
+    config: buildCpContentConfig(env),
+    binding: env.CP ?? null
+  });
+  logger.info('cp_content.cycle.done', {
+    status: result.status,
+    pushed: result.pushed ?? 0,
+    applied: result.applied ?? 0
+  });
+}
+
+/** دروازهٔ فرصت‌طلب کتابخانهٔ شبکه — همان الگوی cp-sync/cp-report */
+let cpContentProbeAt = 0;
+function probeCpContent(env: Env, ctx: ExecutionContext): void {
+  const t = Date.now();
+  if (t - cpContentProbeAt < 60_000) return;
+  cpContentProbeAt = t;
+  ctx.waitUntil(
+    cpContentOpportunistic({
+      db: createDb(env.DB),
+      logger: createLogger('sync'),
+      config: buildCpContentConfig(env),
+      binding: env.CP ?? null
+    }).catch(() => undefined)
+  );
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     probeCpSync(env, ctx); // فرصت‌طلب؛ بدون env خالی است و فوراً برمی‌گردد
     probeCpReport(env, ctx); // گزارش‌دهی تجمیعی روزانه به CP — گیت ۲۴ساعتهٔ درونی
+    probeCpContent(env, ctx); // کتابخانهٔ شبکه — push همرسانی + pull برگزیده‌ها (گیت ۱۵دقیقه‌ای)
     const db = createDb(env.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger('worker');
@@ -211,6 +250,7 @@ export default {
     if (event.cron === CP_SYNC_CRON) {
       ctx.waitUntil(runCpSyncCycle(env)); // سینک اعلان از کنترل‌پلین — خاموش اگر env خالی باشد
       ctx.waitUntil(runCpReportCycle(env)); // گزارش‌دهی تجمیعی — گیت ۲۴ساعتهٔ مشترک، دوباره‌کاری صفر
+      ctx.waitUntil(runCpContentCycleWrap(env)); // کتابخانهٔ شبکه — گیت ۱۵دقیقه‌ای مشترک، دوباره‌کاری صفر
       return;
     }
     if (event.cron === DIGEST_CRON) {
