@@ -106,7 +106,16 @@ async function loadKind() {
       // حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — توابع نمایش موج اسکن (ماژول‌های دیگر این‌ها ندارند)
       scanMarkup: mod.scanMarkup || null,
       scanRevealTruth: mod.scanRevealTruth || null,
-      scanCatchPoint: mod.scanCatchPoint || null
+      scanCatchPoint: mod.scanCatchPoint || null,
+      // دو بازی حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۸) — صدف‌های جادویی (corsi) و حباب‌های عدد (span)
+      corsiMarkup: mod.corsiMarkup || null,
+      corsiBeginRecall: mod.corsiBeginRecall || null,
+      corsiRevealTruth: mod.corsiRevealTruth || null,
+      corsiResponsePoint: mod.corsiResponsePoint || null,
+      spanMarkup: mod.spanMarkup || null,
+      spanBeginInput: mod.spanBeginInput || null,
+      spanRevealTruth: mod.spanRevealTruth || null,
+      spanResponsePoint: mod.spanResponsePoint || null
     };
   } catch (err) {
     return GENERIC;

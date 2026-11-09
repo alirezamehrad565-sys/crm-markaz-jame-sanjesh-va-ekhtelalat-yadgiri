@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.48";
+var APP_VERSION = "1.25.49";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23288,7 +23288,7 @@ function fillErrorPage(message) {
 __name(fillErrorPage, "fillErrorPage");
 
 // src/domain/games/registry.ts
-var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "trail", "nback"];
+var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "trail", "nback", "corsi", "span"];
 function gameKindOf(v) {
   return GAME_KIND_IDS.includes(v) ? v : "gonogo";
 }
@@ -23324,6 +23324,12 @@ var NBACK_THRESHOLDS = {
   pass: P(65, "\u06AF\u0630\u0627\u0631 \u0628\u0627 \u062F\u0642\u062A \u062F\u0648\u06AF\u0632\u06CC\u0646\u0647\u200C\u0627\u06CC \u2265\u06F6\u06F5\u066A \u2014 \u0628\u0627\u0644\u0627\u06CC \u0634\u0627\u0646\u0633 \u062D\u062F\u0633 \u06F5\u06F0\u066A \u062F\u0648\u062F\u0648\u06CC\u06CC\u061B \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u06A9\u0627\u0631\u0634\u0646\u0627\u0633 \u06F1.\u06F2\u06F5.\u06F4\u06F0"),
   star2: P(78, "\u062F\u0648\u0633\u062A\u0627\u0631\u0647 \u2014 \u0647\u0645\u200C\u067E\u0644\u0647\u0654 \u062F\u0642\u062A\u200C\u0645\u062D\u0648\u0631\u0647\u0627\u06CC \u062F\u06CC\u06AF\u0631 \u062A\u0627 \u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u0628\u06CC\u0646\u200C\u0628\u0627\u0632\u06CC \u06AF\u0648\u0644\u200C\u0632\u0646\u0646\u062F\u0647 \u0646\u0634\u0648\u062F"),
   star3: P(88, "\u0633\u0647\u200C\u0633\u062A\u0627\u0631\u0647 \u2014 \u062F\u0642\u062A \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0628\u06CC\u200C\u062E\u0637\u0627\u061B \u0627\u0631\u062A\u0642\u0627\u06CC \u0622\u0646 \u0628\u0627 \u062F\u0627\u062F\u0647\u0654 \u067E\u06CC\u0644\u0648\u062A \u0645\u0631\u06A9\u0632")
+};
+var SEQ_MEMORY_THRESHOLDS = {
+  shape: "accuracy",
+  pass: P(65, "\u06AF\u0630\u0627\u0631 \u0628\u0627 \u062F\u0642\u062A \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u06A9\u0627\u0645\u0644 \u2265\u06F6\u06F5\u066A \u2014 \u0647\u0645\u0627\u0646 \u067E\u0644\u0647\u0654 \u062F\u0642\u062A\u200C\u0645\u062D\u0648\u0631\u0647\u0627\u061B \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u06A9\u0627\u0631\u0634\u0646\u0627\u0633 G8"),
+  star2: P(78, "\u062F\u0648\u0633\u062A\u0627\u0631\u0647 \u2014 \u0647\u0645\u200C\u067E\u0644\u0647\u0654 \u062F\u0642\u062A\u200C\u0645\u062D\u0648\u0631\u0647\u0627\u06CC \u062F\u06CC\u06AF\u0631 \u062A\u0627 \u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u0628\u06CC\u0646\u200C\u0628\u0627\u0632\u06CC \u06AF\u0648\u0644\u200C\u0632\u0646\u0646\u062F\u0647 \u0646\u0634\u0648\u062F"),
+  star3: P(88, "\u0633\u0647\u200C\u0633\u062A\u0627\u0631\u0647 \u2014 \u062F\u0646\u0628\u0627\u0644\u0647 \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0647\u0645\u06CC\u0634\u0647 \u06A9\u0627\u0645\u0644\u061B \u0627\u0631\u062A\u0642\u0627\u06CC \u0622\u0646 \u0628\u0627 \u062F\u0627\u062F\u0647\u0654 \u067E\u06CC\u0644\u0648\u062A \u0645\u0631\u06A9\u0632")
 };
 var GONOGO_STAGES_4_6 = [
   {
@@ -23777,6 +23783,104 @@ var TRAIL_STAGE_BANDS = {
   s4: ["a", "b", "c", "d", "p"],
   s5: null
 };
+var CORSI_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u062F\u0641\u062A\u0631\u0686\u0647\u0654 \u0635\u062F\u0641",
+    goal_fa: "\u062F\u0648 \u0635\u062F\u0641 \u0631\u0648\u0634\u0646 \u0645\u06CC\u200C\u0634\u0648\u0646\u062F\u061B \u0628\u0647 \u0647\u0645\u0627\u0646 \u062A\u0631\u062A\u06CC\u0628 \u0644\u0645\u0633 \u06A9\u0646.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u0633\u0647 \u0635\u062F\u0641",
+    goal_fa: "\u062D\u0627\u0644\u0627 \u0633\u0647 \u0635\u062F\u0641\u061B \u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u0628\u0627 \u0647\u0645 \u0628\u06CC\u0627\u06CC\u0646\u062F.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0686\u0647\u0627\u0631 \u0635\u062F\u0641",
+    goal_fa: "\u062F\u0646\u0628\u0627\u0644\u0647 \u0628\u0644\u0646\u062F\u062A\u0631 \u0634\u062F\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u0645\u0637\u0645\u0626\u0646.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u062E\u0644\u06CC\u062C \u0639\u0645\u06CC\u0642",
+    goal_fa: "\u067E\u0646\u062C \u0635\u062F\u0641 \u067E\u0634\u062A \u0647\u0645\u061B \u062D\u0648\u0627\u0633\u062A \u062F\u0631 \u062E\u0644\u06CC\u062C \u0628\u0645\u0627\u0646\u062F.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u062E\u0644\u06CC\u062C",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u062F\u0646\u0628\u0627\u0644\u0647\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u062D\u0627\u0641\u0638\u0647\u0654 \u062E\u0644\u06CC\u062C\u06CC!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
+var SPAN_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u062D\u0628\u0627\u0628\u200C\u0647\u0627\u06CC \u06A9\u0648\u0686\u06A9",
+    goal_fa: "\u0639\u062F\u062F\u0647\u0627 \u06CC\u06A9\u06CC\u200C\u06CC\u06A9\u06CC \u0645\u06CC\u200C\u0622\u06CC\u0646\u062F\u061B \u0647\u0645\u0627\u0646\u200C\u0647\u0627 \u0631\u0627 \u0628\u0647 \u062A\u0631\u062A\u06CC\u0628 \u0628\u06AF\u0648.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u062D\u0628\u0627\u0628\u200C\u0647\u0627\u06CC \u0628\u06CC\u0634\u062A\u0631",
+    goal_fa: "\u06CC\u06A9 \u062D\u0628\u0627\u0628 \u0628\u06CC\u0634\u062A\u0631 \u0634\u062F\u061B \u0647\u0645\u0627\u0646 \u0642\u0627\u0639\u062F\u0647\u060C \u062D\u0648\u0627\u0633\u062A \u06A9\u0646\u0627\u0631 \u0646\u0631\u0647.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0628\u0627\u0632\u0647\u0654 \u067E\u0646\u062C",
+    goal_fa: "\u062D\u0627\u0644\u0627 \u067E\u0646\u062C \u0639\u062F\u062F \u067E\u0634\u062A \u0647\u0645\u061B \u062F\u0631 \u0630\u0647\u0646\u062A \u062A\u06A9\u0631\u0627\u0631\u0634\u0627\u0646 \u06A9\u0646.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u0628\u0627\u0632\u0647\u0654 \u0634\u0634",
+    goal_fa: "\u0634\u0634 \u062D\u0628\u0627\u0628 \u067E\u0634\u062A \u0633\u0631 \u0647\u0645\u061B \u062A\u0648 \u062E\u06CC\u0644\u06CC \u0631\u0627\u0647 \u0631\u0641\u062A\u0647\u200C\u0627\u06CC.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0641\u0627\u0646\u0648\u0633",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u062F\u0646\u0628\u0627\u0644\u0647\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u062D\u0627\u0641\u0638\u0647\u0654 \u0639\u062F\u062F\u06CC!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
+var CORSI_STAGE_MAX_SPAN = {
+  s1: 2,
+  s2: 3,
+  s3: 4,
+  s4: 5,
+  s5: null
+};
+var SPAN_STAGE_MAX_DIGITS = {
+  s1: 3,
+  s2: 4,
+  s3: 5,
+  s4: 6,
+  s5: null
+};
 function flankerIncongruentCountOf(item) {
   const s = item.stim ?? {};
   const arrows = Array.isArray(s.arrows) ? s.arrows.filter((v) => v === "L" || v === "R") : [];
@@ -23800,7 +23904,9 @@ var ENGINE_ONLY_FORMULAS = [
   "nback_match",
   "nback_nonmatch",
   "nback_fa",
-  "nback_miss"
+  "nback_miss",
+  "span_max"
+  // G8/۱.۲۵.۴۹ — بلندترین دنبالهٔ کامل درست (صدف‌های جادویی / حباب‌های عدد)
 ];
 var GAME_KINDS = {
   gonogo: {
@@ -23941,6 +24047,47 @@ var GAME_KINDS = {
       { id: "nback_nonmatch_pct", title_fa: "\u062F\u0631\u0635\u062F \u067E\u0627\u0633\u062E \u062F\u0631\u0633\u062A \u0628\u0647 \u0646\u0627\u0647\u0645\u0633\u0627\u0646\u200C\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "nback_nonmatch" },
       { id: "nback_false_alarm_pct", title_fa: "\u062F\u0631\u0635\u062F \u0647\u0634\u062F\u0627\u0631 \u06A9\u0627\u0630\u0628 (\u06AF\u0641\u062A\u0646 \xAB\u0647\u0645\u0627\u0646 \u0627\u0633\u062A\xBB \u0628\u0631\u0627\u06CC \u0646\u0627\u0647\u0645\u0633\u0627\u0646)", unit: "percent", higher_is_better: false, source: "auto", formula: "nback_fa" },
       { id: "nback_miss_pct", title_fa: "\u062F\u0631\u0635\u062F \u062C\u0627\u0627\u0646\u062F\u0627\u062E\u062A\u0646 \u0647\u0645\u0633\u0627\u0646", unit: "percent", higher_is_better: false, source: "auto", formula: "nback_miss" }
+    ]
+  },
+  corsi: {
+    // صدف‌های جادویی (کرسی بلوک-تپینگ) — کف ۱۵۰ms روی نخستین لمس یادآوری؛ زیر آن حدس است
+    rt_floor_ms: 150,
+    timed_choice: false,
+    // دنباله‌ای چندلمسی — پایان با دنبالهٔ کامل یا پنجره (مثل رد)
+    stage_rule: SEQ_MEMORY_THRESHOLDS,
+    stageList: /* @__PURE__ */ __name(() => CORSI_STAGES, "stageList"),
+    levers: { bank_caps: CORSI_STAGE_MAX_SPAN },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      if (item.phase === "probe") return true;
+      const max = typeof stageId === "string" && stageId in CORSI_STAGE_MAX_SPAN ? CORSI_STAGE_MAX_SPAN[stageId] : null;
+      if (max === null) return true;
+      const s = item.stim ?? {};
+      const len = Array.isArray(s.seq) ? s.seq.length : 0;
+      return len > 0 && len <= max;
+    }, "itemInStage"),
+    // دقت دنباله از فرمول 'accuracy' در DB می‌آید؛ بازه (بلندترین دنبالهٔ کامل درست) موتور-فقط است
+    engine_metrics: [
+      { id: "corsi_span_max", title_fa: "\u0628\u0644\u0646\u062F\u062A\u0631\u06CC\u0646 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u0635\u062F\u0641 \u06A9\u0627\u0645\u0644 \u062F\u0631\u0633\u062A (\u0628\u0627\u0632\u0647\u0654 \u062F\u06CC\u062F\u0627\u0631\u06CC-\u0641\u0636\u0627\u06CC\u06CC)", unit: "score", higher_is_better: true, source: "auto", formula: "span_max" }
+    ]
+  },
+  span: {
+    // حباب‌های عدد (بازهٔ عدد) — کف صفر: ورود صفحه‌کلیدی زمان واکنش نیست (مثل خط عددی)
+    rt_floor_ms: 0,
+    timed_choice: false,
+    // ورود صفحه‌کلیدی — پایان با ✓ یا پنجره
+    stage_rule: SEQ_MEMORY_THRESHOLDS,
+    stageList: /* @__PURE__ */ __name(() => SPAN_STAGES, "stageList"),
+    levers: { bank_caps: SPAN_STAGE_MAX_DIGITS },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      if (item.phase === "probe") return true;
+      const max = typeof stageId === "string" && stageId in SPAN_STAGE_MAX_DIGITS ? SPAN_STAGE_MAX_DIGITS[stageId] : null;
+      if (max === null) return true;
+      const s = item.stim ?? {};
+      const len = Array.isArray(s.seq) ? s.seq.length : 0;
+      return len > 0 && len <= max;
+    }, "itemInStage"),
+    engine_metrics: [
+      { id: "digitspan_span_max", title_fa: "\u0628\u0644\u0646\u062F\u062A\u0631\u06CC\u0646 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u0639\u062F\u062F \u06A9\u0627\u0645\u0644 \u062F\u0631\u0633\u062A (\u0628\u0627\u0632\u0647\u0654 \u0639\u062F\u062F\u06CC)", unit: "score", higher_is_better: true, source: "auto", formula: "span_max" }
     ]
   }
 };
@@ -24107,8 +24254,12 @@ var DEFAULT_RT_FLOOR_MS = {
   // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
   trail: GAME_KINDS.trail.rt_floor_ms,
   // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
-  nback: GAME_KINDS.nback.rt_floor_ms
+  nback: GAME_KINDS.nback.rt_floor_ms,
   // ن‌پشت/آلبوم خرچنگ — لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
+  corsi: GAME_KINDS.corsi.rt_floor_ms,
+  // صدف‌های جادویی — کف نخستین لمس یادآوری؛ زیر آن حدس است (G8)
+  span: GAME_KINDS.span.rt_floor_ms
+  // حباب‌های عدد — ورود صفحه‌کلیدی، زمان واکنش نیست (G8)
 };
 var IDLE_PARTIAL_MS = 5 * 60 * 1e3;
 var MIN_COMPLETION_RATIO = 0.6;
@@ -24172,6 +24323,7 @@ function scoreAttempt(item, mission, response, rtMs) {
   let nbackMissed;
   let trailNodes;
   let trailNodesTotal;
+  let spanLenValue;
   if (item.type === "choice") {
     correct = typeof res.option === "number" && res.option === item.correct;
   } else if (item.type === "numline") {
@@ -24211,6 +24363,21 @@ function scoreAttempt(item, mission, response, rtMs) {
     correct = key.length === orderSeq.length && orderSeq.every((v, i) => v === key[i]);
     trailNodes = prefix;
     trailNodesTotal = key.length;
+  } else if (item.type === "corsi" || item.type === "span") {
+    const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n)) : [];
+    const rawSeq = item.type === "corsi" ? Array.isArray(res.order) ? res.order : [] : Array.isArray(res.digits) ? res.digits : [];
+    const seen = /* @__PURE__ */ new Set();
+    const seq = [];
+    for (const v of rawSeq.filter((n) => Number.isInteger(n) && n >= 0)) {
+      const k = String(v);
+      if (!seen.has(k)) {
+        seen.add(k);
+        seq.push(v);
+      }
+    }
+    correct = key.length > 0 && key.length === seq.length && seq.every((v, i) => v === key[i]);
+    omission = seq.length === 0;
+    if (correct) spanLenValue = key.length;
   } else if (item.type === "touch_report") {
     const touched = res.touched === true;
     const want = item.correct_touch === true;
@@ -24247,7 +24414,8 @@ function scoreAttempt(item, mission, response, rtMs) {
     ...timedOut !== void 0 ? { timedOut } : {},
     ...congruent !== void 0 ? { congruent } : {},
     ...nbackMatch !== void 0 ? { match: nbackMatch, nbackFa: nbackFa === true, nbackMissed: nbackMissed === true } : {},
-    ...trailNodes !== void 0 ? { trailNodes, trailNodesTotal: trailNodesTotal ?? 0 } : {}
+    ...trailNodes !== void 0 ? { trailNodes, trailNodesTotal: trailNodesTotal ?? 0 } : {},
+    ...spanLenValue !== void 0 ? { spanLen: spanLenValue } : {}
   };
 }
 __name(scoreAttempt, "scoreAttempt");
@@ -24324,6 +24492,9 @@ function answerDisplayOf(item) {
     return item.correct === 0 ? "\u0647\u0645\u0627\u0646 \u0627\u0633\u062A" : item.correct === 1 ? "\u0641\u0631\u0642 \u062F\u0627\u0631\u062F" : null;
   }
   if (item.type === "trail") {
+    return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(",") : null;
+  }
+  if (item.type === "corsi" || item.type === "span") {
     return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(",") : null;
   }
   return null;
@@ -24450,6 +24621,12 @@ function nbackMissPctOf(scored) {
   return round2(miss / sub.length * 100);
 }
 __name(nbackMissPctOf, "nbackMissPctOf");
+function spanMaxOf(scored) {
+  const lens = scored.filter((s) => s.correct === true && typeof s.spanLen === "number" && Number.isInteger(s.spanLen) && s.spanLen > 0).map((s) => s.spanLen);
+  if (lens.length === 0) return null;
+  return Math.max(...lens);
+}
+__name(spanMaxOf, "spanMaxOf");
 function medianRtOf(scored) {
   const rts = scored.filter((s) => s.correct && s.rtValid && typeof s.rtMs === "number").map((s) => s.rtMs).sort((a, b) => a - b);
   if (rts.length === 0) return null;
@@ -24543,6 +24720,8 @@ function computeMetricValue(formula, scored) {
       return nbackFaPctOf(scored);
     case "nback_miss":
       return nbackMissPctOf(scored);
+    case "span_max":
+      return spanMaxOf(scored);
     default:
       return null;
   }
@@ -24821,7 +25000,7 @@ function applyAdaptiveLevel(current, decision) {
 __name(applyAdaptiveLevel, "applyAdaptiveLevel");
 
 // src/domain/games/stages.ts
-var STAGE_RULES_VERSION = "1.4.0";
+var STAGE_RULES_VERSION = "1.5.0";
 var STAGE_TOTAL = 5;
 var STAGE_OVERRIDE_KEYS = [
   "response_window_go_ms",
@@ -24970,6 +25149,9 @@ function stageStimViewOf(stim, correctTouch, stageId) {
   return { ...base, ...correctTouch ? v.go : v.nogo };
 }
 __name(stageStimViewOf, "stageStimViewOf");
+var SEQ_MEMORY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.corsi.stage_rule);
+var CORSI_STAGE_MAX_SPAN2 = GAME_KINDS.corsi.levers.bank_caps;
+var SPAN_STAGE_MAX_DIGITS2 = GAME_KINDS.span.levers.bank_caps;
 
 // src/domain/games/evidence.ts
 var EVIDENCE_RULES_VERSION = "1.0.0";
@@ -26257,7 +26439,7 @@ function createGamesService(deps) {
         scan: { label, stim: stripAnswerKeys({ signature: sig }) }
       };
     }
-    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "trail" || it.type === "nback"));
+    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "trail" || it.type === "nback" || it.type === "corsi" || it.type === "span"));
     if (newTrain && !go && !nogo) {
       const kindKey = newTrain.type;
       const stim = stripAnswerKeys(newTrain.stim ?? {});

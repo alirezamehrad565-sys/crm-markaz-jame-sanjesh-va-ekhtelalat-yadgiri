@@ -91,7 +91,16 @@ async function loadKind() {
       // حملهٔ جاسوس‌ها (۱.۲۵.۳۲ رفع: پیش‌نمایش اسکن هم از markup اصلی می‌گذرد)
       scanMarkup: mod.scanMarkup || null,
       scanRevealTruth: mod.scanRevealTruth || null,
-      scanCatchPoint: mod.scanCatchPoint || null
+      scanCatchPoint: mod.scanCatchPoint || null,
+      // دو بازی حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۸) — پیش‌نمایش هم از همان توابع نمایش می‌گذرد
+      corsiMarkup: mod.corsiMarkup || null,
+      corsiBeginRecall: mod.corsiBeginRecall || null,
+      corsiRevealTruth: mod.corsiRevealTruth || null,
+      corsiResponsePoint: mod.corsiResponsePoint || null,
+      spanMarkup: mod.spanMarkup || null,
+      spanBeginInput: mod.spanBeginInput || null,
+      spanRevealTruth: mod.spanRevealTruth || null,
+      spanResponsePoint: mod.spanResponsePoint || null
     };
   } catch (err) {
     return GENERIC;
