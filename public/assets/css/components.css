@@ -1250,14 +1250,44 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   grid-template-columns: minmax(0, 1fr);
 }
 @media (min-width: 1080px) {
+  /* ۱.۲۵.۵۰ — دو پنجرهٔ ثبت روزانه در دسکتاپ هم‌اندازه‌اند (قبلاً ۵fr/۷fr نامتقارن بود) */
   .sanj-daily {
-    grid-template-columns: minmax(360px, 5fr) minmax(0, 7fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     align-items: start;
   }
   .sanj-daily__composer {
     position: sticky;
     top: calc(var(--topbar-h) + var(--sp-4));
   }
+}
+
+/* ۱.۲۵.۵۰ — دو فیلد اختیاری زیر ثبت سریع: تاریخ تولد + نمرهٔ آمادگی تحصیلی */
+.sanj-extra {
+  display: grid;
+  gap: var(--sp-3);
+  grid-template-columns: minmax(0, 1fr);
+  padding: var(--sp-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2, transparent);
+}
+@media (min-width: 720px) {
+  .sanj-extra {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.sanj-extra .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.sanj-extra .field > .cell-sub {
+  font-weight: 600;
+}
+.sanj-extra__opt {
+  font-weight: 400;
+  opacity: 0.75;
 }
 
 @media (max-width: 640px) {

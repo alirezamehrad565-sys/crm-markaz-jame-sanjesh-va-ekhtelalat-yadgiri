@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.49";
+var APP_VERSION = "1.25.50";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -7148,18 +7148,29 @@ var CreateExerciseBatchSchema = external_exports.object({
 });
 var SCREENING_NAME_MAX = 80;
 var SCREENING_TAGS_MAX = 12;
+var SCREENING_READINESS_MIN = 0;
+var SCREENING_READINESS_MAX = 100;
 var ScreeningTagSchema = external_exports.string().trim().min(1, "\u0628\u0631\u0686\u0633\u0628 \u062E\u0627\u0644\u06CC \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A").max(60, "\u0628\u0631\u0686\u0633\u0628 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F6\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+var ScreeningBirthDateSchema = external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u0628\u0627\u06CC\u062F \u0628\u0647 \u0642\u0627\u0644\u0628 YYYY-MM-DD \u0628\u0627\u0634\u062F");
+var ScreeningReadinessSchema = external_exports.number().int("\u0646\u0645\u0631\u0647\u0654 \u0622\u0645\u0627\u062F\u06AF\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0635\u062D\u06CC\u062D \u0628\u0627\u0634\u062F").min(SCREENING_READINESS_MIN, "\u0646\u0645\u0631\u0647\u0654 \u0622\u0645\u0627\u062F\u06AF\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0645\u0646\u0641\u06CC \u0628\u0627\u0634\u062F").max(SCREENING_READINESS_MAX, "\u0646\u0645\u0631\u0647\u0654 \u0622\u0645\u0627\u062F\u06AF\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F0\u06F0 \u0627\u0633\u062A");
 var ScreeningCreateSchema = external_exports.object({
   name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u0648 \u0641\u0627\u0645\u06CC\u0644 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(SCREENING_NAME_MAX, `\u0646\u0627\u0645 \u0648 \u0641\u0627\u0645\u06CC\u0644 \u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_NAME_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`),
   tags: external_exports.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_TAGS_MAX} \u0628\u0631\u0686\u0633\u0628`).default([]),
-  day: TehranYmdSchema.optional()
+  day: TehranYmdSchema.optional(),
+  birth_date: ScreeningBirthDateSchema.nullish(),
+  readiness_score: ScreeningReadinessSchema.nullish()
 });
 var ScreeningUpdateSchema = external_exports.object({
   name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u0648 \u0641\u0627\u0645\u06CC\u0644 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(SCREENING_NAME_MAX, `\u0646\u0627\u0645 \u0648 \u0641\u0627\u0645\u06CC\u0644 \u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_NAME_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`).optional(),
-  tags: external_exports.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_TAGS_MAX} \u0628\u0631\u0686\u0633\u0628`).optional()
-}).refine((v) => v.name !== void 0 || v.tags !== void 0, {
-  message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u06CC\u0644\u062F \u0628\u0631\u0627\u06CC \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"
-});
+  tags: external_exports.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_TAGS_MAX} \u0628\u0631\u0686\u0633\u0628`).optional(),
+  birth_date: ScreeningBirthDateSchema.nullish(),
+  readiness_score: ScreeningReadinessSchema.nullish()
+}).refine(
+  (v) => v.name !== void 0 || v.tags !== void 0 || v.birth_date !== void 0 || v.readiness_score !== void 0,
+  {
+    message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u06CC\u0644\u062F \u0628\u0631\u0627\u06CC \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"
+  }
+);
 var ScreeningQuerySchema = external_exports.object({
   from: TehranYmdSchema.optional(),
   to: TehranYmdSchema.optional(),
@@ -40677,6 +40688,8 @@ function rowToEntry2(r) {
     name: r.name,
     day: r.day,
     tags: parseTagsJson(r.tags),
+    birthDate: r.birth_date ?? null,
+    readinessScore: r.readiness_score ?? null,
     createdBy: r.created_by,
     creatorName: r.creator_name,
     createdAt: r.created_at,
@@ -40685,7 +40698,8 @@ function rowToEntry2(r) {
 }
 __name(rowToEntry2, "rowToEntry");
 var SELECT = `
-  SELECT e.id, e.name, e.day, e.tags, e.created_by, e.created_at, e.updated_at,
+  SELECT e.id, e.name, e.day, e.tags, e.birth_date, e.readiness_score,
+         e.created_by, e.created_at, e.updated_at,
          st.full_name AS creator_name
     FROM screening_entries e
     LEFT JOIN staff st ON st.id = e.created_by
@@ -40781,13 +40795,16 @@ function createScreeningService(deps) {
       }
       const tags = mergeTags(parsed, sanitizeTags(input.tags));
       const day = /^\d{4}-\d{2}-\d{2}$/.test(input.day ?? "") ? input.day : tehranTodayYmd();
+      const birthDate = /^\d{4}-\d{2}-\d{2}$/.test(input.birth_date ?? "") ? input.birth_date : null;
+      const readinessScore = typeof input.readiness_score === "number" && Number.isFinite(input.readiness_score) ? Math.trunc(input.readiness_score) : null;
       const id = crypto.randomUUID();
       const now = nowSql();
       await db.transaction(async (tx) => {
         await tx.execute(
-          `INSERT INTO screening_entries (id, name, day, tags, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [id, name, day, JSON.stringify(tags), actor.staffId, now, now]
+          `INSERT INTO screening_entries
+             (id, name, day, tags, birth_date, readiness_score, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, name, day, JSON.stringify(tags), birthDate, readinessScore, actor.staffId, now, now]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -40796,11 +40813,13 @@ function createScreeningService(deps) {
           resourceId: id,
           changes: {
             day: { from: null, to: day },
-            tags: { from: null, to: tags.join("|") }
+            tags: { from: null, to: tags.join("|") },
+            birth_date: { from: null, to: birthDate },
+            readiness_score: { from: null, to: readinessScore }
           }
         });
       });
-      log.info("screening.created", { day, tagged: tags.length > 0 });
+      log.info("screening.created", { day, tagged: tags.length > 0, hasBirth: birthDate !== null });
       return rowToEntry2(await getEntryRow(id));
     },
     async update(id, input, actor) {
@@ -40816,10 +40835,14 @@ function createScreeningService(deps) {
         }
       }
       const tags = input.tags !== void 0 || parsed.hashTags.length > 0 ? mergeTags(parsed, sanitizeTags(input.tags ?? [])) : prevTags;
+      const birthDate = input.birth_date === void 0 ? current.birth_date : /^\d{4}-\d{2}-\d{2}$/.test(input.birth_date ?? "") ? input.birth_date : null;
+      const readinessScore = input.readiness_score === void 0 ? current.readiness_score : typeof input.readiness_score === "number" && Number.isFinite(input.readiness_score) ? Math.trunc(input.readiness_score) : null;
       await db.transaction(async (tx) => {
         await tx.execute(
-          `UPDATE screening_entries SET name = ?, tags = ?, updated_at = ? WHERE id = ?`,
-          [name, JSON.stringify(tags), nowSql(), id]
+          `UPDATE screening_entries
+             SET name = ?, tags = ?, birth_date = ?, readiness_score = ?, updated_at = ?
+           WHERE id = ?`,
+          [name, JSON.stringify(tags), birthDate, readinessScore, nowSql(), id]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -40827,7 +40850,9 @@ function createScreeningService(deps) {
           resourceType: "screening_entry",
           resourceId: id,
           changes: {
-            tags: { from: prevTags.join("|"), to: tags.join("|") }
+            tags: { from: prevTags.join("|"), to: tags.join("|") },
+            birth_date: { from: current.birth_date, to: birthDate },
+            readiness_score: { from: current.readiness_score, to: readinessScore }
           }
         });
       });
@@ -40880,7 +40905,15 @@ function registerScreeningRoutes(app, service) {
     const actor = getAuthContext(c);
     const body = ScreeningCreateSchema.parse(await c.req.json());
     const created = await service.create(
-      { name: body.name, tags: body.tags, day: body.day },
+      {
+        name: body.name,
+        tags: body.tags,
+        day: body.day,
+        birth_date: body.birth_date ?? null,
+        /* ۱.۲۵.۵۰ */
+        readiness_score: body.readiness_score ?? null
+        /* ۱.۲۵.۵۰ */
+      },
       actor
     );
     return c.json({ data: created }, 201);
@@ -40890,7 +40923,13 @@ function registerScreeningRoutes(app, service) {
     const body = ScreeningUpdateSchema.parse(await c.req.json());
     const updated = await service.update(
       c.req.param("id"),
-      { name: body.name, tags: body.tags },
+      {
+        name: body.name,
+        tags: body.tags,
+        birth_date: body.birth_date,
+        /* ۱.۲۵.۵۰ — undefined = دست‌نخورده؛ null = پاک‌کردن */
+        readiness_score: body.readiness_score
+      },
       actor
     );
     return c.json({ data: updated }, 200);

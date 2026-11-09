@@ -6,6 +6,8 @@ interface ScreeningEntryResponse {
   name: string;
   day: string;
   tags: string[];
+  birthDate: string | null;
+  readinessScore: number | null;
   createdBy: string;
   creatorName: string | null;
 }
@@ -148,5 +150,70 @@ describe('ماژول سنجش روزانه', () => {
 
   it('حذف مورد ناموجود → ۴۰۴', async () => {
     expect((await mgr.delete('/api/screening/00000000-0000-4000-8000-0000000000ff')).status).toBe(404);
+  });
+
+  /* —— ۱.۲۵.۵۰ — دو فیلد اختیاری ثبت روزانه: تاریخ تولد + نمرهٔ آمادگی تحصیلی —— */
+
+  it('ثبت با تولد و آمادگی + گردش کامل در لیست', async () => {
+    const res = await sec.post('/api/screening', {
+      name: 'ننی نیک‌پور #مهدکودک_ستاره',
+      birth_date: '2020-03-15',
+      readiness_score: 85
+    });
+    expect(res.status).toBe(201);
+    const e = data<ScreeningEntryResponse>(res);
+    expect(e.birthDate).toBe('2020-03-15');
+    expect(e.readinessScore).toBe(85);
+
+    const list = await mgr.get(`/api/screening?q=${encodeURIComponent('ننی نیک‌پور')}`);
+    const found = data<{ entries: ScreeningEntryResponse[] }>(list).entries[0];
+    expect(found.birthDate).toBe('2020-03-15');
+    expect(found.readinessScore).toBe(85);
+  });
+
+  it('بدون فیلدهای اختیاری — null می‌نشیند نه رد شدن', async () => {
+    const res = await sec.post('/api/screening', { name: 'بی‌فیلد تستی' });
+    expect(res.status).toBe(201);
+    const e = data<ScreeningEntryResponse>(res);
+    expect(e.birthDate).toBeNull();
+    expect(e.readinessScore).toBeNull();
+  });
+
+  it('نمرهٔ بیرون از ۰..۱۰۰ و تاریخ بدقالب → ۴۰۰', async () => {
+    expect((await sec.post('/api/screening', { name: 'نمرهٔ ۱۰۱', readiness_score: 101 })).status).toBe(400);
+    expect((await sec.post('/api/screening', { name: 'نمرهٔ اعشاری', readiness_score: 12.5 })).status).toBe(400);
+    expect((await sec.post('/api/screening', { name: 'تاریخ بدقالب', birth_date: '۱۴۰۲/۰۵/۱۲' })).status).toBe(400);
+  });
+
+  it('ویرایش تولد/آمادگی + پاک‌کردن با null + ماندن فیلد وقتی undefined است', async () => {
+    const seed = await sec.post('/api/screening', {
+      name: 'ویرایش‌پذیر فیلدها',
+      birth_date: '2019-09-21',
+      readiness_score: 70
+    });
+    const id = data<ScreeningEntryResponse>(seed).id;
+
+    /* فقط برچسب را عوض می‌کنیم — تولد/آمادگی باید دست‌نخورده بماند */
+    const tagsOnly = await mgr.patch(`/api/screening/${id}`, { tags: ['عدم همکاری'] });
+    expect(data<ScreeningEntryResponse>(tagsOnly).birthDate).toBe('2019-09-21');
+    expect(data<ScreeningEntryResponse>(tagsOnly).readinessScore).toBe(70);
+
+    /* آمادگی را ویرایش می‌کنیم */
+    const rescored = await mgr.patch(`/api/screening/${id}`, { readiness_score: 92 });
+    expect(data<ScreeningEntryResponse>(rescored).readinessScore).toBe(92);
+    expect(data<ScreeningEntryResponse>(rescored).birthDate).toBe('2019-09-21');
+
+    /* پچ فقط-null — پاک‌کردن هر دو فیلد */
+    const cleared = await mgr.patch(`/api/screening/${id}`, { birth_date: null, readiness_score: null });
+    expect(data<ScreeningEntryResponse>(cleared).birthDate).toBeNull();
+    expect(data<ScreeningEntryResponse>(cleared).readinessScore).toBeNull();
+  });
+
+  it('پچ فقط با فیلدهای تازه (بدون نام/برچسب) مجاز است', async () => {
+    const seed = await sec.post('/api/screening', { name: 'فقط تولد' });
+    const id = data<ScreeningEntryResponse>(seed).id;
+    const res = await mgr.patch(`/api/screening/${id}`, { birth_date: '2021-01-02' });
+    expect(res.status).toBe(200);
+    expect(data<ScreeningEntryResponse>(res).birthDate).toBe('2021-01-02');
   });
 });
