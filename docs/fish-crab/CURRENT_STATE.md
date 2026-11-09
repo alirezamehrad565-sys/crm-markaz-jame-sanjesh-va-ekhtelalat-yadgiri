@@ -50,7 +50,7 @@
 | آزمون گو/نوگو | `engine/trials.js` | ۷,۴۰۵ | اجرای کامل یک آزمون touch_report با مُهر پینت |
 | ارکستراسیون | `engine/session.js` | ۵۲,۲۹۶ | گردش ۵فازی + شاخهٔ نمایش هر نوع‌بازی |
 | آینهٔ نمره | `engine/scoring.js` | ۳,۶۳۱ | median/CV/خلاصه (نیمه‌فعال — §۶ ممیزی فنی) |
-| ماژول‌های نوع | `kinds/{gonogo,numline,scan,stroop,flanker,trail}.js` | ۷۰,۷۴۷ | فقط نمایش — صفر کلید، صفر شبکه |
+| ماژول‌های نوع | `kinds/{gonogo,numline,scan,stroop,flanker,nback,corsi}.js` (trail حذف — ۱.۲۵.۴۱) | ۷۰,۷۴۷ | فقط نمایش — صفر کلید، صفر شبکه |
 
 ### ۴.۲ ماشین ۱۴-حالته
 
@@ -65,7 +65,8 @@
 | `scan` | حملهٔ جاسوس‌ها (الگوی d2) | go-nogo + escape-run (۱.۲۵.۳۰) |
 | `stroop` | حقه‌باز رنگ‌ها | `jspsych-timelines/stroop-task` (۱.۲۵.۳۲) |
 | `flanker` | گلهٔ فریبکار | `@jspsych-contrib/plugin-flanker` (۱.۲۵.۳۲) |
-| `trail` | رد پای دزد (TMT A/B) | `@jspsych-contrib/plugin-trail-making` (۱.۲۵.۳۲) |
+| `trail` | رد پای دزد (TMT A/B) | حذف شد — ۱.۲۵.۴۱ (نقد سه‌گانه؛ cognitive-games-critique.md) |
+| `corsi` | کولهٔ مرواریدها (کورسی — حافظهٔ فضایی) | `@jspsych-contrib/plugin-corsi-blocks` (MIT — ۱.۲۵.۴۱) |
 
 قرارداد ماژول نوع: صادرات `stimSvg` + `previewSteps` + هوک‌های اختیاری (`practiceInteractive`, `debriefMarkup`, `*Markup`, `*RevealTruth`, `*ResponsePoint`)؛ شنیده‌شدن خودکار با پسوند. **هیچ چرخهٔ عمر mount/start وجود ندارد** — کل listener/زمان‌بندی/ارسال با موتور است.
 
@@ -91,7 +92,7 @@
 
 ### ۵.۳ نمره‌دهی و سنجه‌ها
 
-`scoreAttempt` روی آیتم authored و **کف RT بر اساس نوع**: touch_report 150 · numline 0 · choice 200 · scan 150 · stroop/flanker 200 · trail 150 (بازنویسی با `mission.rt_floor_ms`). فرمول‌های رجیستری: accuracy, median_rt, commission, omission, correct_go/nogo_pct, numline_error, scan_fa/miss, congruent/incongruent_acc, interference_ms, trail_prefix — همگی با **قاعدهٔ دامنهٔ صفر** (صورت صفر → null، نه صفر قلابی). سنجه‌ها فقط از آزمون‌های **probe** معتبر جلسهٔ valid محاسبه و در `metrics_json` می‌نشینند.
+`scoreAttempt` روی آیتم authored و **کف RT بر اساس نوع**: touch_report 150 · numline 0 · choice 200 · scan 150 · stroop/flanker 200 · nback 200 · corsi 150 (بازنویسی با `mission.rt_floor_ms`). فرمول‌های رجیستری: accuracy, median_rt, commission, omission, correct_go/nogo_pct, numline_error, scan_fa/miss, congruent/incongruent_acc, interference_ms, nback_match/nonmatch/false_alarm/miss, corsi_seq/corsi_span (trail_prefix حذف — ۱.۲۵.۴۱) — همگی با **قاعدهٔ دامنهٔ صفر** (صورت صفر → null، نه صفر قلابی). سنجه‌ها فقط از آزمون‌های **probe** معتبر جلسهٔ valid محاسبه و در `metrics_json` می‌نشینند.
 
 ### ۵.۴ پروتکل، مرحله‌ها، تطبیقی، کیفیت، شواهد
 

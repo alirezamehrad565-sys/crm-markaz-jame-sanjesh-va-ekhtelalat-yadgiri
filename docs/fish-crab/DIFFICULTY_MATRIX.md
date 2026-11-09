@@ -59,7 +59,8 @@
 | `scan` | accuracy | 65 | 78 | 88 |
 | `stroop` | accuracy | 65 | 78 | 88 |
 | `flanker` | accuracy | 65 | 78 | 88 |
-| `trail` | accuracy | 65 | 78 | 88 |
+| `trail` (حذف — ۱.۲۵.۴۱) | — | — | — | — |
+| `corsi` | accuracy | 65 | 78 | 88 |
 
 - ملاک فقط از probe معتبر جلسهٔ `valid`؛ جلسهٔ partial/invalid هرگز گذار نمی‌سازد.
 - جلسهٔ زیر گذار = ۰ ستاره و بدون ثبت در best؛ ستارهٔ حفظ‌شده هرگز نزولی نمی‌شود.
@@ -75,8 +76,8 @@
 | stroop — بانک | a | a,b | a,b,c | a,b,c,d | همه |
 | flanker — بانک | a | a,b | a,b,c | a,b,c,d | همه |
 | flanker — سقف قلابی (بانک بی‌گروه) | 0 | 1 | 3 | همه | همه |
-| trail — بانک | a | a,b | a,b,c | a,b,c,d | همه |
-| trail — سقف ردپا (بانک بی‌گروه) | 4 | 5 | 6 | 7 | همه |
+| corsi — بانک | a | a,b | a,b,c | a,b,c,d | همه |
+| corsi — سقف طول دنباله (بانک بی‌گروه) | 2 | 3 | 4 | 5 | همه |
 
 قاعدهٔ محافظ کودک: اهرم زمان اسکن فقط **کوتاه‌کننده است** (`min(authored, cap)`) — هیچ‌گاه آیتم سریع‌تر از authored نمی‌شود.
 
@@ -101,7 +102,7 @@
 | choice / timedchoice | 200 |
 | scan | 150 |
 | stroop / flanker | 200 |
-| trail | 150 |
+| corsi | 150 |
 
 کف با `mission.rt_floor_ms` بازنویسی‌پذیر است؛ پاسخ زیر کف = `rt_valid=false` و بیرون از سنجه.
 

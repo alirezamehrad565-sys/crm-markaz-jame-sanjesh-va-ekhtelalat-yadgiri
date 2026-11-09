@@ -899,9 +899,9 @@ export function createGamesService(deps: GamesDeps): GamesService {
     // سه بازی تازه (۱.۲۵.۳۲) + آلبوم خرچنگ (۱.۲۵.۴۰) — قاعدهٔ بازی از پرامپت آیتم آموزشی؛
     // هیچ کلیدی این‌جا نیست؛ محرک آموزش، عین همان چیزی است که کودک در اجرا می‌بیند
     const newTrain = (mission.items ?? []).find((it) =>
-      it.phase === 'train' && (it.type === 'stroop' || it.type === 'flanker' || it.type === 'trail' || it.type === 'nback'));
+      it.phase === 'train' && (it.type === 'stroop' || it.type === 'flanker' || it.type === 'nback' || it.type === 'corsi'));
     if (newTrain && !go && !nogo) {
-      const kindKey = newTrain.type as 'stroop' | 'flanker' | 'trail' | 'nback';
+      const kindKey = newTrain.type as 'stroop' | 'flanker' | 'nback' | 'corsi';
       // سد نشتی راهنما (۱.۲۵.۴۰) — stimِ آموزشی پیش از رفتن به data-hint از کلیدهای
       // پاسخ پاک می‌شود (match ن‌پشت و…)؛ استروپ/فلانکر/رد کلید درون stim ندارند — بی‌اثر
       const stim = stripAnswerKeys((newTrain.stim ?? {}) as Record<string, unknown>) as Record<string, unknown>;

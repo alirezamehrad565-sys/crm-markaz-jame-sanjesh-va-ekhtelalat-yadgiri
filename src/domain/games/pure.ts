@@ -72,9 +72,9 @@ export interface ScoredAttempt {
   timedOut?: boolean;
   /** محرک هم‌خوان (استروپ: واژه=جوهر · فلانکر: بدون فریب) — مبنای سنجهٔ تداخل */
   congruent?: boolean;
-  /** رد پای دزد — طول پیش‌ماند صحیح و طول کل رد (۱.۲۵.۳۲) */
-  trailNodes?: number;
-  trailNodesTotal?: number;
+  /** کولهٔ مرواریدها — طول پیش‌ماند صحیح و طول کل دنباله (۱۴۰۵/۰۸/۱۹) */
+  corsiPrefix?: number;
+  corsiLen?: number;
 }
 
 function rtFloorFor(item: MissionItem, mission: MissionConfig): number {
@@ -109,8 +109,8 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
   let match: boolean | undefined;
   let nbackFa: boolean | undefined;
   let nbackMissed: boolean | undefined;
-  let trailNodes: number | undefined;
-  let trailNodesTotal: number | undefined;
+  let corsiPrefix: number | undefined;
+  let corsiLen: number | undefined;
 
   if (item.type === 'choice') {
     correct = typeof res.option === 'number' && res.option === item.correct;
@@ -140,11 +140,14 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
       nbackFa = !isMatch && opt === 0;
       nbackMissed = isMatch && opt === 1;
     }
-  } else if (item.type === 'trail') {
-    // رد پای دزد (۱.۲۵.۳۲) — ترتیب دقیق گره‌ها؛ طول پیش‌ماند صحیح برای سنجهٔ درصدی رد
-    const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0) : [];
+  } else if (item.type === 'corsi') {
+    // کولهٔ مرواریدها (۱۴۰۵/۰۸/۱۹ — اقتباس plugin-corsi-blocks) — بازتولید ترتیب صدف‌ها.
+    // کلید = خود دنبالهٔ نمایش‌داده‌شده (کودک آن را می‌بیند) — پاسخ مخفی ندارد؛
+    // پیش‌ماند صحیح برای سنجهٔ دامنه (بلندترین دنبالهٔ کامل درست این جلسه).
+    const stim = (item.stim ?? {}) as Record<string, unknown>;
+    const key = Array.isArray(stim.sequence) ? stim.sequence.filter((n) => Number.isInteger(n) && n >= 0) : [];
     const rawOrder = Array.isArray(res.order) ? res.order : [];
-    // تکرار گره بی‌معناست؛ ترتیب حفظ می‌شود (نخستین ورود هر اندیس)
+    // تکرار صدف بی‌معناست؛ ترتیب حفظ می‌شود (نخستین ورود هر اندیس)
     const seen = new Set<string>();
     const orderSeq: number[] = [];
     for (const v of rawOrder.filter((n) => Number.isInteger(n) && n >= 0)) {
@@ -154,8 +157,8 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
     let prefix = 0;
     while (prefix < orderSeq.length && prefix < key.length && orderSeq[prefix] === key[prefix]) prefix++;
     correct = key.length === orderSeq.length && orderSeq.every((v, i) => v === key[i]);
-    trailNodes = prefix;
-    trailNodesTotal = key.length;
+    corsiPrefix = prefix;
+    corsiLen = key.length;
   } else if (item.type === 'touch_report') {
     const touched = res.touched === true;
     const want = item.correct_touch === true; // هدف واقعی (go)
@@ -196,7 +199,7 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
     ...(timedOut !== undefined ? { timedOut } : {}),
     ...(congruent !== undefined ? { congruent } : {}),
     ...(match !== undefined ? { match, nbackFa, nbackMissed } : {}),
-    ...(trailNodes !== undefined ? { trailNodes, trailNodesTotal: trailNodesTotal ?? 0 } : {})
+    ...(corsiPrefix !== undefined ? { corsiPrefix, corsiLen: corsiLen ?? 0 } : {})
   };
 }
 
@@ -258,11 +261,7 @@ export function answerDisplayOf(item: MissionItem): string | null {
     // برچسب گزینهٔ درست — دو گزینهٔ ثابت «همان است»=۰ / «فرق دارد»=۱؛ فقط تمرین
     return item.correct === 0 ? 'همان است' : item.correct === 1 ? 'فرق دارد' : null;
   }
-  if (item.type === 'trail') {
-    // CSV اندیس‌های ترتیب درست — مثل جاسوس‌های جاماندهٔ scan؛ فقط تمرین
-    return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(',') : null;
-  }
-  return null; // touch_report: بازپخش محرک، نه نمایش پاسخ؛ scan: CSV جاسوس‌های جامانده در scanMissedCsv
+  return null; // touch_report: بازپخش محرک، نه نمایش پاسخ؛ scan: CSV جاسوس‌های جامانده در scanMissedCsv؛ corsi: بازپخش دنبالهٔ تمرین در خود ماژول
 }
 
 /** برچسب گزینهٔ i — بانک گزینه یا رشته یا شئ label‌دار؛ ناسالم = null */
@@ -376,13 +375,17 @@ export function interferenceMsOf(scored: ScoredAttempt[]): number | null {
   return round2(incMed - congMed);
 }
 
-export function trailPrefixPctOf(scored: ScoredAttempt[]): number | null {
-  const rows = scored.filter((s) => typeof s.trailNodes === 'number' && typeof s.trailNodesTotal === 'number' && (s.trailNodesTotal as number) > 0);
+export function corsiSeqAccPctOf(scored: ScoredAttempt[]): number | null {
+  const rows = scored.filter((s) => typeof s.corsiLen === 'number' && (s.corsiLen as number) > 0);
   if (rows.length === 0) return null;
-  const nodes = rows.reduce((a, s) => a + (s.trailNodes as number), 0);
-  const total = rows.reduce((a, s) => a + (s.trailNodesTotal as number), 0);
-  if (total <= 0) return null;
-  return round2((nodes / total) * 100);
+  return round2((rows.filter((s) => s.correct).length / rows.length) * 100);
+}
+
+/** بلندترین دنبالهٔ کاملِ درست این جلسه — دامنهٔ حافظهٔ فضایی؛ بدون دنبالهٔ سالم = null */
+export function corsiSpanMaxOf(scored: ScoredAttempt[]): number | null {
+  const rows = scored.filter((s) => typeof s.corsiLen === 'number' && (s.corsiLen as number) > 0 && s.correct);
+  if (rows.length === 0) return null;
+  return rows.reduce((a, s) => Math.max(a, s.corsiLen as number), 0);
 }
 
 // ─── فرمول‌های ن‌پشت (۱.۲۵.۴۰) — دقت شرطی هم‌سانی/تفکیک + دو خطای مکمل؛
@@ -506,7 +509,8 @@ export function computeMetricValue(formula: string, scored: ScoredAttempt[]): nu
     case 'congruent_acc': return congruentAccPctOf(scored);
     case 'incongruent_acc': return incongruentAccPctOf(scored);
     case 'interference_ms': return interferenceMsOf(scored);
-    case 'trail_prefix': return trailPrefixPctOf(scored);
+    case 'corsi_seq': return corsiSeqAccPctOf(scored);
+    case 'corsi_span': return corsiSpanMaxOf(scored);
     case 'nback_match': return nbackMatchPctOf(scored);
     case 'nback_nonmatch': return nbackNonmatchPctOf(scored);
     case 'nback_false_alarm': return nbackFalseAlarmPctOf(scored);

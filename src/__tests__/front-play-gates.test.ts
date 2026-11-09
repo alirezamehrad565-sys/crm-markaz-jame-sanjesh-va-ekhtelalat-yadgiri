@@ -19,7 +19,7 @@ const scanKindJs = read(join(PLAY, 'kinds/scan.js')); // حملهٔ جاسوس�
 const numlineKindJs = read(join(PLAY, 'kinds/numline.js')); // جادهٔ عددها (۱.۲۵.۲۸)
 const stroopKindJs = read(join(PLAY, 'kinds/stroop.js')); // حقه‌باز رنگ‌ها (۱.۲۵.۳۲)
 const flankerKindJs = read(join(PLAY, 'kinds/flanker.js')); // گلهٔ فریبکار (۱.۲۵.۳۲)
-const trailKindJs = read(join(PLAY, 'kinds/trail.js')); // رد پای دزد (۱.۲۵.۳۲)
+const corsiKindJs = read(join(PLAY, 'kinds/corsi.js')); // کولهٔ مرواریدها (۱۴۰۵/۰۸/۱۹ — اقتباس plugin-corsi-blocks)
 const nbackKindJs = read(join(PLAY, 'kinds/nback.js')); // آلبوم خرچنگ (۱.۲۵.۴۰)
 const sceneJs = read(join(PLAY, 'scene.js')); // کتابخانهٔ صحنهٔ دریایی (M2/۱.۲۵.۳۶) — بی‌متن و بی‌کلید
 const playCss = read(join(PLAY, 'play.css'));
@@ -28,11 +28,11 @@ const engineJs = ['machine.js', 'timing.js', 'response.js', 'trials.js', 'sessio
   .map((f) => read(join(PLAY, 'engine', f))).join('\n');
 const pageSrc = read(join(__dirname, '../domain/games/page.ts'));
 const routesSrc = read(join(__dirname, '../domain/games/routes.ts'));
-const allPlaySrc = playJs + previewJs + gonogoJs + scanKindJs + numlineKindJs + stroopKindJs + flankerKindJs + trailKindJs + sceneJs + playCss + fxJs + engineJs;
+const allPlaySrc = playJs + previewJs + gonogoJs + scanKindJs + numlineKindJs + stroopKindJs + flankerKindJs + corsiKindJs + sceneJs + playCss + fxJs + engineJs;
 
 describe('گیت ۱.۲۵.۰۸ — لحن و امنیت متن کودک', () => {
   it('متن‌های روبه‌کودک هیچ واژهٔ ممنوعی ندارند (لینت مشترک با بسته‌ها) — شامل همهٔ نوع‌بازی‌ها، صحنه، موتور و fx (G3)', () => {
-    for (const [name, src] of [['play.js', playJs], ['kinds/gonogo.js', gonogoJs], ['kinds/scan.js', scanKindJs], ['kinds/numline.js', numlineKindJs], ['kinds/stroop.js', stroopKindJs], ['kinds/flanker.js', flankerKindJs], ['kinds/trail.js', trailKindJs], ['kinds/nback.js', nbackKindJs], ['scene.js', sceneJs], ['fx.js', fxJs], ['page.ts', pageSrc], ['engine/*', engineJs]] as const) {
+    for (const [name, src] of [['play.js', playJs], ['kinds/gonogo.js', gonogoJs], ['kinds/scan.js', scanKindJs], ['kinds/numline.js', numlineKindJs], ['kinds/stroop.js', stroopKindJs], ['kinds/flanker.js', flankerKindJs], ['kinds/nback.js', nbackKindJs], ['kinds/corsi.js', corsiKindJs], ['scene.js', sceneJs], ['fx.js', fxJs], ['page.ts', pageSrc], ['engine/*', engineJs]] as const) {
       for (const w of FORBIDDEN_TEXT_PATTERNS) {
         expect(src.includes(w), `${name} حاوی واژهٔ ممنوع «${w}» است`).toBe(false);
       }
@@ -40,7 +40,7 @@ describe('گیت ۱.۲۵.۰۸ — لحن و امنیت متن کودک', () => {
   });
 
   it('پخش‌کننده هیچ منبع بیرونی و هیچ ارزیابی پویا ندارد (§۱۱) — شامل همهٔ نوع‌بازی‌ها، صحنه، موتور، fx و پیش‌نمایش', () => {
-    for (const [name, src] of [['play.js', playJs], ['preview.js', previewJs], ['kinds/gonogo.js', gonogoJs], ['kinds/scan.js', scanKindJs], ['kinds/numline.js', numlineKindJs], ['kinds/stroop.js', stroopKindJs], ['kinds/flanker.js', flankerKindJs], ['kinds/trail.js', trailKindJs], ['kinds/nback.js', nbackKindJs], ['scene.js', sceneJs], ['fx.js', fxJs], ['engine/*', engineJs]] as const) {
+    for (const [name, src] of [['play.js', playJs], ['preview.js', previewJs], ['kinds/gonogo.js', gonogoJs], ['kinds/scan.js', scanKindJs], ['kinds/numline.js', numlineKindJs], ['kinds/stroop.js', stroopKindJs], ['kinds/flanker.js', flankerKindJs], ['kinds/nback.js', nbackKindJs], ['kinds/corsi.js', corsiKindJs], ['scene.js', sceneJs], ['fx.js', fxJs], ['engine/*', engineJs]] as const) {
       expect(src, `${name} نباید URL مطلق بیرونی داشته باشد`).not.toMatch(/https?:\/\//);
       expect(src, `${name} نباید eval داشته باشد`).not.toMatch(/\beval\s*\(|new\s+Function/);
     }
@@ -140,10 +140,11 @@ describe('گیت G1 تثبیت موتور و صحت داده (۱.۲۵.۳۵) — 
     expect(observeJs).toContain('classifyTouch'); // همان طبقه‌بندی ماشین — قرارداد فاز ۳
   });
 
-  it('ساعت RT مکث‌پذیر در هر پنج شاخهٔ خاص (P1-1) — هر شاخه ساعت خودش را دارد', () => {
-    // ۵ شاخه + یک import از timing.js — شاخهٔ timedchoice شرط دوگانه استروپ/فلانکر دارد
+  it('ساعت RT مکث‌پذیر در هر شاخهٔ خاص (P1-1) — هر شاخه ساعت خودش را دارد', () => {
+    // شاخه‌های خاص + یک import از timing.js — شاخهٔ timedchoice شرط دوگانه استروپ/فلانکر دارد
+    // (رد حذف شد؛ کولهٔ مرواریدها با ساعت clockK آمده — ۱۴۰۵/۰۸/۱۹)
     expect(sessionJs.match(/createPausableClock/g)?.length).toBeGreaterThanOrEqual(6);
-    for (const clock of ['clockN', 'clockS', 'clockT', 'clockQ', 'clockC']) {
+    for (const clock of ['clockN', 'clockS', 'clockT', 'clockK', 'clockC']) {
       expect(sessionJs, clock).toMatch(new RegExp('const ' + clock + ' = createPausableClock()'));
       expect(sessionJs, clock).toMatch(new RegExp(clock + '\\.start\\(\\)'));
     }

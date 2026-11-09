@@ -21,11 +21,12 @@ export type MetricFormula =
   | 'congruent_acc'
   | 'incongruent_acc'
   | 'interference_ms'
-  | 'trail_prefix'
   | 'nback_match'
   | 'nback_nonmatch'
   | 'nback_false_alarm'
   | 'nback_miss'
+  | 'corsi_seq'
+  | 'corsi_span'
   | 'none';
 export type MetricUnit = 'percent' | 'count' | 'ms' | 'score';
 export type MetricSource = 'auto' | 'human';
@@ -56,10 +57,12 @@ export interface MissionItem {
   id: string;
   phase: 'train' | 'probe';
   /** scan (۱.۲۵.۳۰): موج جاسوس‌ها — شبکه‌ای از ربات‌ها؛ کودک همهٔ جاسوس‌ها را می‌گیرد
-   *  ۱.۲۵.۳۲: stroop (رنگ جوهر) · flanker (جهت گرگ وسط) · trail (ترتیب ردپاها)
+   *  ۱.۲۵.۳۲: stroop (رنگ جوهر) · flanker (جهت گرگ وسط)
    *  ۱.۲۵.۴۰: nback (هم‌سانی دیداری) — دو گزینهٔ ثابت «همان است»/«فرق دارد»؛ هم‌سانی
-   *  محرک (کدام ماهی مثل قدم قبل است) فقط در correct سرور می‌ماند، هرگز در stim نیست */
-  type: 'choice' | 'numline' | 'touch_report' | 'scan' | 'stroop' | 'flanker' | 'trail' | 'nback';
+   *  محرک (کدام ماهی مثل قدم قبل است) فقط در correct سرور می‌ماند، هرگز در stim نیست
+   *  ۱۴۰۵/۰۸/۱۹: corsi (بازتولید دنبالهٔ مرواریدها) — کلید = خود دنبالهٔ نمایش‌داده‌شده؛
+   *  پس پاسخ مخفی ندارد (trail حذف شد — نقد سه‌گانه در cognitive-games-critique.md) */
+  type: 'choice' | 'numline' | 'touch_report' | 'scan' | 'stroop' | 'flanker' | 'nback' | 'corsi';
   prompt?: string;
   options?: { label: string }[];
   /** گزینهٔ درست (اندیس) برای choice یا جای درست روی خط عددی برای numline؛
@@ -273,13 +276,15 @@ export interface PlayHint {
   /** حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — قاعدهٔ موج از آیتم‌های آموزشی؛ امضای هدف عمومی است
    *  (کودک باید قاعده را ببیند)، رازِ «کدام خانه» فقط سرور می‌داند */
   scan?: { label: string; stim: Record<string, unknown> } | null;
-  /** سه بازی تازه (۱.۲۵.۳۲) — قاعدهٔ هر بازی از پرامپت آیتم آموزشی؛ هیچ کلیدی این‌جا نیست */
+  /** دو بازی تازه (۱.۲۵.۳۲) — قاعدهٔ هر بازی از پرامپت آیتم آموزشی؛ هیچ کلیدی این‌جا نیست */
   stroop?: { label: string; stim: Record<string, unknown> } | null;
   flanker?: { label: string; stim: Record<string, unknown> } | null;
-  trail?: { label: string; stim: Record<string, unknown> } | null;
   /** آلبوم خرچنگ (nback — ۱.۲۵.۴۰) — قاعدهٔ هم‌سانی از پرامپت آیتم آموزشی؛
    *  n (چند قدم به عقب) پیکربندی عمومی بازیه، کلید هم‌سانی هرگز این‌جا نیست */
   nback?: { label: string; stim: Record<string, unknown> } | null;
+  /** کولهٔ مرواریدها (corsi — ۱۴۰۵/۰۸/۱۹) — قاعدهٔ بازتولید از پرامپت آیتم آموزشی؛
+   *  دنبالهٔ آموزش «دانش عمومی خود بازی» است (مثل تمرین رد سابق) — پاسخ مخفی ندارد */
+  corsi?: { label: string; stim: Record<string, unknown> } | null;
 }
 
 /** فرادادهٔ مرحلهٔ فعال برای کارت کودک (۱.۲۵.۲۲) — فقط تمرین؛ کلید پاسخ/آستانه‌ها هرگز این‌جا نیست */

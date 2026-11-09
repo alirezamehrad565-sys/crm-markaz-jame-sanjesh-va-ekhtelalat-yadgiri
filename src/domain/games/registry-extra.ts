@@ -24,15 +24,16 @@ export const ENGINE_ONLY_FORMULAS: readonly string[] = [
   'congruent_acc',
   'incongruent_acc',
   'interference_ms',
-  'trail_prefix',
   'nback_match',
   'nback_nonmatch',
   'nback_false_alarm',
-  'nback_miss'
+  'nback_miss',
+  'corsi_seq',
+  'corsi_span'
 ];
 
 /** سنجه‌های درصدی موتورمحور — flatten ورودی‌های per-kind رجیستری به ترتیب قطعی نوع‌ها؛
- *  ترتیب حاصل عین آرایهٔ قبلی است (گونوگو ۴ · اسکن ۲ · استروپ ۳ · فلانکر ۳ · رد ۱ · ن‌پشت ۴) */
+ *  ترتیب: گونوگو ۴ · اسکن ۲ · استروپ ۳ · فلانکر ۳ · ن‌پشت ۴ · کولهٔ مرواریدها ۲ */
 export const ENGINE_METRICS: readonly RegistryMetric[] = (GAME_KIND_IDS as readonly GameKind[])
   .flatMap((kind) => GAME_KINDS[kind].engineMetrics);
 

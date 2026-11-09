@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.40";
+var APP_VERSION = "1.25.41";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23429,7 +23429,7 @@ function applyNbackProtocol(snap, band) {
 __name(applyNbackProtocol, "applyNbackProtocol");
 
 // src/domain/games/registry.ts
-var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "trail", "nback"];
+var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "nback", "corsi"];
 var THRESH = /* @__PURE__ */ __name((value, rationale) => ({ value, rationale, status: "proposed" }), "THRESH");
 var GONOGO_THRESHOLDS = {
   pass: {
@@ -23465,6 +23465,11 @@ var NBACK_THRESHOLDS = {
   star2: THRESH(78, "\u0633\u062A\u0627\u0631\u0647\u0654 \u062F\u0648\u0645 \u0628\u0627 \u062F\u0642\u062A \u0628\u0627\u0644\u0627\u062A\u0631"),
   star3: THRESH(88, "\u0633\u062A\u0627\u0631\u0647\u0654 \u0633\u0648\u0645 = \u0647\u0645\u200C\u0633\u0627\u0646\u06CC \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0647\u0645\u06CC\u0634\u0647 \u062F\u0631\u0633\u062A")
 };
+var CORSI_THRESHOLDS = {
+  pass: THRESH(65, "\u0622\u0633\u062A\u0627\u0646\u0647\u0654 \u06AF\u0630\u0627\u0631 \u0628\u0631 \u062F\u0642\u062A \u0628\u0627\u0632\u062A\u0648\u0644\u06CC\u062F \u06A9\u0627\u0645\u0644 \u062F\u0646\u0628\u0627\u0644\u0647 \u2014 \u0647\u0645\u0627\u0646 \u0642\u0631\u0627\u0631\u062F\u0627\u062F \u062F\u0642\u062A \u0633\u0627\u06CC\u0631 \u0646\u0648\u0639\u200C\u0647\u0627"),
+  star2: THRESH(78, "\u0633\u062A\u0627\u0631\u0647\u0654 \u062F\u0648\u0645 \u0628\u0627 \u062F\u0642\u062A \u0628\u0627\u0644\u0627\u062A\u0631"),
+  star3: THRESH(88, "\u0633\u062A\u0627\u0631\u0647\u0654 \u0633\u0648\u0645 = \u0628\u0627\u0632\u062A\u0648\u0644\u06CC\u062F \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0647\u0645\u06CC\u0634\u0647 \u06A9\u0627\u0645\u0644")
+};
 function pairNumeric(t) {
   return {
     pass: { go_pct: t.pass.go_pct.value, nogo_pct: t.pass.nogo_pct.value },
@@ -23482,6 +23487,7 @@ var NUMLINE_STAGE_THRESHOLDS = scalarNumeric(NUMLINE_THRESHOLDS);
 var SCAN_STAGE_THRESHOLDS = scalarNumeric(SCAN_THRESHOLDS);
 var ACCURACY_STAGE_THRESHOLDS = scalarNumeric(ACCURACY_THRESHOLDS);
 var NBACK_STAGE_THRESHOLDS = scalarNumeric(NBACK_THRESHOLDS);
+var CORSI_STAGE_THRESHOLDS = scalarNumeric(CORSI_THRESHOLDS);
 function pctOk(v, min) {
   return typeof v === "number" && Number.isFinite(v) && v >= min;
 }
@@ -23524,6 +23530,13 @@ function stageOutcomeNback(accuracy) {
   return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
 }
 __name(stageOutcomeNback, "stageOutcomeNback");
+function stageOutcomeCorsi(accuracy) {
+  const t = CORSI_STAGE_THRESHOLDS;
+  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
+  const stars = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
+  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
+}
+__name(stageOutcomeCorsi, "stageOutcomeCorsi");
 var GONOGO_STAGES_4_6 = [
   {
     id: "s1",
@@ -23778,44 +23791,44 @@ var FLANKER_STAGES = [
     overrides: {}
   }
 ];
-var TRAIL_STAGES = [
+var CORSI_STAGES = [
   {
     id: "s1",
     index: 1,
-    title_fa: "\u0631\u062F \u06A9\u0648\u062A\u0627\u0647",
-    goal_fa: "\u0631\u062F\u067E\u0627\u0647\u0627 \u06A9\u0645\u200C\u0627\u0646\u062F\u061B \u0628\u0647 \u062A\u0631\u062A\u06CC\u0628 \u0634\u0645\u0627\u0631\u0647 \u0628\u0631\u0648.",
+    title_fa: "\u062F\u0648 \u0645\u0631\u0648\u0627\u0631\u06CC\u062F",
+    goal_fa: "\u062F\u0648 \u0635\u062F\u0641 \u0628\u0631\u0642 \u0645\u06CC\u200C\u0632\u0646\u062F\u061B \u0647\u0645\u0627\u0646 \u062A\u0631\u062A\u06CC\u0628 \u0631\u0627 \u0644\u0645\u0633 \u06A9\u0646.",
     difficulty: 1,
     overrides: {}
   },
   {
     id: "s2",
     index: 2,
-    title_fa: "\u0631\u062F \u0628\u0644\u0646\u062F\u062A\u0631",
-    goal_fa: "\u06CC\u06A9 \u0642\u062F\u0645 \u0628\u06CC\u0634\u062A\u0631\u061B \u0631\u062F \u0631\u0627 \u06A9\u0627\u0645\u0644 \u06A9\u0646.",
+    title_fa: "\u0633\u0647 \u0645\u0631\u0648\u0627\u0631\u06CC\u062F",
+    goal_fa: "\u06CC\u06A9 \u0645\u0631\u0648\u0627\u0631\u06CC\u062F \u0628\u06CC\u0634\u062A\u0631 \u0634\u062F\u061B \u062D\u0648\u0627\u0633\u062A \u0628\u0647 \u062A\u0631\u062A\u06CC\u0628 \u0628\u0627\u0634\u062F.",
     difficulty: 2,
     overrides: {}
   },
   {
     id: "s3",
     index: 3,
-    title_fa: "\u0631\u062F \u0628\u0644\u0646\u062F",
-    goal_fa: "\u0631\u062F\u067E\u0627\u0647\u0627 \u0628\u06CC\u0634\u062A\u0631 \u0634\u062F\u0647\u200C\u0627\u0646\u062F\u061B \u0631\u062F \u06AF\u0645 \u0646\u0634\u0648\u062F.",
+    title_fa: "\u0686\u0647\u0627\u0631 \u0645\u0631\u0648\u0627\u0631\u06CC\u062F",
+    goal_fa: "\u062F\u0646\u0628\u0627\u0644\u0647 \u0628\u0644\u0646\u062F\u062A\u0631 \u0634\u062F\u0647\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
     difficulty: 3,
     overrides: {}
   },
   {
     id: "s4",
     index: 4,
-    title_fa: "\u0631\u062F \u06AF\u0645\u200C\u0634\u062F\u0647",
-    goal_fa: "\u0639\u062F\u062F \u0648 \u062D\u0631\u0641 \u06CC\u06A9\u200C\u062F\u0631\u0645\u06CC\u0627\u0646 \u0634\u062F\u0647\u061B \u0628\u0627 \u062F\u0642\u062A \u0642\u062F\u0645 \u0628\u0632\u0646.",
+    title_fa: "\u067E\u0646\u062C \u0645\u0631\u0648\u0627\u0631\u06CC\u062F",
+    goal_fa: "\u062D\u0627\u0641\u0638\u0647\u200C\u0627\u062A \u0639\u0645\u06CC\u0642 \u0634\u062F\u061B \u0645\u062B\u0644 \u0642\u0628\u0644 \u0627\u062F\u0627\u0645\u0647 \u0628\u062F\u0647.",
     difficulty: 4,
     overrides: {}
   },
   {
     id: "s5",
     index: 5,
-    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0631\u062F",
-    goal_fa: "\u0647\u0645\u0647\u0654 \u0631\u062F\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u062A\u0639\u0642\u06CC\u0628\u200C\u06A9\u0646\u0646\u062F\u0647\u200C\u0627\u06CC!",
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u06A9\u0648\u0644\u0647",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u062F\u0646\u0628\u0627\u0644\u0647\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u062D\u0627\u0641\u0638\u0647\u0654 \u062F\u0631\u06CC\u0627\u06CC\u06CC!",
     difficulty: 5,
     overrides: {}
   }
@@ -24008,32 +24021,32 @@ function flankerItemInStage(item, stageId) {
   return decoys === 0 || decoys <= max;
 }
 __name(flankerItemInStage, "flankerItemInStage");
-var TRAIL_STAGE_MAX_NODES = {
-  s1: 4,
-  s2: 5,
-  s3: 6,
-  s4: 7,
+var CORSI_STAGE_MAX_LEN = {
+  s1: 2,
+  s2: 3,
+  s3: 4,
+  s4: 5,
   s5: null
 };
-var TRAIL_STAGE_BANDS = {
+var CORSI_STAGE_BANDS = {
   s1: ["a"],
   s2: ["a", "b"],
   s3: ["a", "b", "c"],
   s4: ["a", "b", "c", "d"],
   s5: null
 };
-function trailItemInStage(item, stageId) {
-  const allowed = typeof stageId === "string" && stageId in TRAIL_STAGE_BANDS ? TRAIL_STAGE_BANDS[stageId] : null;
+function corsiItemInStage(item, stageId) {
+  const allowed = typeof stageId === "string" && stageId in CORSI_STAGE_BANDS ? CORSI_STAGE_BANDS[stageId] : null;
   if (allowed === null) return true;
   const s = item.stim ?? {};
   const band = typeof s.band === "string" ? s.band : "";
   if (band !== "") return allowed.includes(band);
-  const max = typeof stageId === "string" && stageId in TRAIL_STAGE_MAX_NODES ? TRAIL_STAGE_MAX_NODES[stageId] : null;
+  const max = typeof stageId === "string" && stageId in CORSI_STAGE_MAX_LEN ? CORSI_STAGE_MAX_LEN[stageId] : null;
   if (max === null) return true;
-  const nodes = Array.isArray(s.nodes) ? s.nodes.length : 0;
-  return nodes > 0 && nodes <= max;
+  const len = Array.isArray(s.sequence) ? s.sequence.length : 0;
+  return len > 0 && len <= max;
 }
-__name(trailItemInStage, "trailItemInStage");
+__name(corsiItemInStage, "corsiItemInStage");
 var NBACK_STAGE_LEVELS = {
   s1: [1],
   s2: [1],
@@ -24070,8 +24083,9 @@ var FLANKER_ENGINE_METRICS = [
   { id: "flanker_incongruent_acc_pct", title_fa: "\u062F\u0642\u062A \u06AF\u0644\u0647\u0654 \u0641\u0631\u06CC\u0628\u06A9\u0627\u0631 (\u0641\u0644\u0627\u0646\u06A9\u0631 \u0645\u062E\u0627\u0644\u0641)", unit: "percent", higher_is_better: true, source: "auto", formula: "incongruent_acc" },
   { id: "flanker_interference_ms", title_fa: "\u0647\u0632\u06CC\u0646\u0647\u0654 \u062A\u062F\u0627\u062E\u0644 \u0641\u0644\u0627\u0646\u06A9\u0631 (\u0645\u06CC\u0627\u0646\u0647\u0654 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u2212 \u0645\u06CC\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u062E\u0648\u0627\u0646)", unit: "ms", higher_is_better: false, source: "auto", formula: "interference_ms" }
 ];
-var TRAIL_ENGINE_METRICS = [
-  { id: "trail_prefix_pct", title_fa: "\u062F\u0631\u0635\u062F \u067E\u06CC\u0634\u200C\u0645\u0627\u0646\u062F \u0635\u062D\u06CC\u062D \u0631\u062F \u0631\u062F\u067E\u0627\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "trail_prefix" }
+var CORSI_ENGINE_METRICS = [
+  { id: "corsi_seq_acc_pct", title_fa: "\u062F\u0631\u0635\u062F \u0628\u0627\u0632\u062A\u0648\u0644\u06CC\u062F \u06A9\u0627\u0645\u0644 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u0645\u0631\u0648\u0627\u0631\u06CC\u062F\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "corsi_seq" },
+  { id: "corsi_span_max", title_fa: "\u0628\u0644\u0646\u062F\u062A\u0631\u06CC\u0646 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u062F\u0631\u0633\u062A \u0627\u06CC\u0646 \u062C\u0644\u0633\u0647 (\u062F\u0627\u0645\u0646\u0647\u0654 \u062D\u0627\u0641\u0638\u0647\u0654 \u0641\u0636\u0627\u06CC\u06CC)", unit: "count", higher_is_better: true, source: "auto", formula: "corsi_span" }
 ];
 var NBACK_ENGINE_METRICS = [
   { id: "nback_match_pct", title_fa: "\u062F\u0631\u0635\u062F \u062A\u0634\u062E\u06CC\u0635 \u0647\u0645\u200C\u0633\u0627\u0646\u06CC (\u0645\u0627\u0647\u06CC\u0650 \u0647\u0645\u0627\u0646\u0650 \u0642\u062F\u0645 \u0642\u0628\u0644)", unit: "percent", higher_is_better: true, source: "auto", formula: "nback_match" },
@@ -24140,17 +24154,6 @@ var GAME_KINDS = {
     // لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
     engineMetrics: FLANKER_ENGINE_METRICS
   },
-  trail: {
-    thresholds: ACCURACY_THRESHOLDS,
-    stageOutcome: /* @__PURE__ */ __name((summary) => stageOutcomeAccuracyKind(summary.pct.accuracy), "stageOutcome"),
-    stageList: /* @__PURE__ */ __name(() => TRAIL_STAGES, "stageList"),
-    itemInStage: trailItemInStage,
-    waveMsCapOf: null,
-    timedChoice: false,
-    rtFloorMs: 150,
-    // کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
-    engineMetrics: TRAIL_ENGINE_METRICS
-  },
   nback: {
     thresholds: NBACK_THRESHOLDS,
     stageOutcome: /* @__PURE__ */ __name((summary) => stageOutcomeNback(summary.pct.accuracy), "stageOutcome"),
@@ -24162,6 +24165,18 @@ var GAME_KINDS = {
     rtFloorMs: 200,
     // لمس تصادفی حذف می‌شود — همان قرارداد انتخاب زمان‌دار
     engineMetrics: NBACK_ENGINE_METRICS
+  },
+  corsi: {
+    thresholds: CORSI_THRESHOLDS,
+    stageOutcome: /* @__PURE__ */ __name((summary) => stageOutcomeCorsi(summary.pct.accuracy), "stageOutcome"),
+    stageList: /* @__PURE__ */ __name(() => CORSI_STAGES, "stageList"),
+    itemInStage: corsiItemInStage,
+    waveMsCapOf: null,
+    timedChoice: false,
+    // بازتولید دنباله مثل رد: پنجرهٔ authored آیتم؛ پیش‌ماند/نیمه‌کاره نمره می‌گیرد
+    rtFloorMs: 150,
+    // کف نخستین لمس بازتولید؛ زیر آن حدس است
+    engineMetrics: CORSI_ENGINE_METRICS
   }
 };
 function gameKindOf(v) {
@@ -24184,8 +24199,8 @@ var ITEM_TYPE_RT_FLOOR_MS = {
   scan: GAME_KINDS.scan.rtFloorMs,
   stroop: GAME_KINDS.stroop.rtFloorMs,
   flanker: GAME_KINDS.flanker.rtFloorMs,
-  trail: GAME_KINDS.trail.rtFloorMs,
-  nback: GAME_KINDS.nback.rtFloorMs
+  nback: GAME_KINDS.nback.rtFloorMs,
+  corsi: GAME_KINDS.corsi.rtFloorMs
 };
 
 // src/domain/games/pure.ts
@@ -24250,8 +24265,8 @@ function scoreAttempt(item, mission, response, rtMs) {
   let match2;
   let nbackFa;
   let nbackMissed;
-  let trailNodes;
-  let trailNodesTotal;
+  let corsiPrefix;
+  let corsiLen;
   if (item.type === "choice") {
     correct = typeof res.option === "number" && res.option === item.correct;
   } else if (item.type === "numline") {
@@ -24273,8 +24288,9 @@ function scoreAttempt(item, mission, response, rtMs) {
       nbackFa = !isMatch && opt === 0;
       nbackMissed = isMatch && opt === 1;
     }
-  } else if (item.type === "trail") {
-    const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0) : [];
+  } else if (item.type === "corsi") {
+    const stim = item.stim ?? {};
+    const key = Array.isArray(stim.sequence) ? stim.sequence.filter((n) => Number.isInteger(n) && n >= 0) : [];
     const rawOrder = Array.isArray(res.order) ? res.order : [];
     const seen = /* @__PURE__ */ new Set();
     const orderSeq = [];
@@ -24288,8 +24304,8 @@ function scoreAttempt(item, mission, response, rtMs) {
     let prefix = 0;
     while (prefix < orderSeq.length && prefix < key.length && orderSeq[prefix] === key[prefix]) prefix++;
     correct = key.length === orderSeq.length && orderSeq.every((v, i) => v === key[i]);
-    trailNodes = prefix;
-    trailNodesTotal = key.length;
+    corsiPrefix = prefix;
+    corsiLen = key.length;
   } else if (item.type === "touch_report") {
     const touched = res.touched === true;
     const want = item.correct_touch === true;
@@ -24326,7 +24342,7 @@ function scoreAttempt(item, mission, response, rtMs) {
     ...timedOut !== void 0 ? { timedOut } : {},
     ...congruent !== void 0 ? { congruent } : {},
     ...match2 !== void 0 ? { match: match2, nbackFa, nbackMissed } : {},
-    ...trailNodes !== void 0 ? { trailNodes, trailNodesTotal: trailNodesTotal ?? 0 } : {}
+    ...corsiPrefix !== void 0 ? { corsiPrefix, corsiLen: corsiLen ?? 0 } : {}
   };
 }
 __name(scoreAttempt, "scoreAttempt");
@@ -24401,9 +24417,6 @@ function answerDisplayOf(item) {
   }
   if (item.type === "nback") {
     return item.correct === 0 ? "\u0647\u0645\u0627\u0646 \u0627\u0633\u062A" : item.correct === 1 ? "\u0641\u0631\u0642 \u062F\u0627\u0631\u062F" : null;
-  }
-  if (item.type === "trail") {
-    return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(",") : null;
   }
   return null;
 }
@@ -24490,15 +24503,18 @@ function interferenceMsOf(scored) {
   return round2(incMed - congMed);
 }
 __name(interferenceMsOf, "interferenceMsOf");
-function trailPrefixPctOf(scored) {
-  const rows = scored.filter((s) => typeof s.trailNodes === "number" && typeof s.trailNodesTotal === "number" && s.trailNodesTotal > 0);
+function corsiSeqAccPctOf(scored) {
+  const rows = scored.filter((s) => typeof s.corsiLen === "number" && s.corsiLen > 0);
   if (rows.length === 0) return null;
-  const nodes = rows.reduce((a, s) => a + s.trailNodes, 0);
-  const total = rows.reduce((a, s) => a + s.trailNodesTotal, 0);
-  if (total <= 0) return null;
-  return round2(nodes / total * 100);
+  return round2(rows.filter((s) => s.correct).length / rows.length * 100);
 }
-__name(trailPrefixPctOf, "trailPrefixPctOf");
+__name(corsiSeqAccPctOf, "corsiSeqAccPctOf");
+function corsiSpanMaxOf(scored) {
+  const rows = scored.filter((s) => typeof s.corsiLen === "number" && s.corsiLen > 0 && s.correct);
+  if (rows.length === 0) return null;
+  return rows.reduce((a, s) => Math.max(a, s.corsiLen), 0);
+}
+__name(corsiSpanMaxOf, "corsiSpanMaxOf");
 function nbackSubsets(scored) {
   return {
     matches: scored.filter((s) => s.match === true),
@@ -24613,8 +24629,10 @@ function computeMetricValue(formula, scored) {
       return incongruentAccPctOf(scored);
     case "interference_ms":
       return interferenceMsOf(scored);
-    case "trail_prefix":
-      return trailPrefixPctOf(scored);
+    case "corsi_seq":
+      return corsiSeqAccPctOf(scored);
+    case "corsi_span":
+      return corsiSpanMaxOf(scored);
     case "nback_match":
       return nbackMatchPctOf(scored);
     case "nback_nonmatch":
@@ -24901,7 +24919,7 @@ function applyAdaptiveLevel(current, decision) {
 __name(applyAdaptiveLevel, "applyAdaptiveLevel");
 
 // src/domain/games/stages.ts
-var STAGE_RULES_VERSION = "1.4.0";
+var STAGE_RULES_VERSION = "1.5.0";
 var STAGE_TOTAL = 5;
 var STAGE_OVERRIDE_KEYS = [
   "response_window_go_ms",
@@ -25597,11 +25615,12 @@ var ENGINE_ONLY_FORMULAS = [
   "congruent_acc",
   "incongruent_acc",
   "interference_ms",
-  "trail_prefix",
   "nback_match",
   "nback_nonmatch",
   "nback_false_alarm",
-  "nback_miss"
+  "nback_miss",
+  "corsi_seq",
+  "corsi_span"
 ];
 var ENGINE_METRICS = GAME_KIND_IDS.flatMap((kind) => GAME_KINDS[kind].engineMetrics);
 function mergeEngineMetrics(dbRows) {
@@ -26293,7 +26312,7 @@ function createGamesService(deps) {
         scan: { label, stim: { signature: sig } }
       };
     }
-    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "trail" || it.type === "nback"));
+    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "nback" || it.type === "corsi"));
     if (newTrain && !go && !nogo) {
       const kindKey = newTrain.type;
       const stim = stripAnswerKeys(newTrain.stim ?? {});
@@ -27192,16 +27211,6 @@ function renderGamesPage(model, token) {
       <div class="play-basket" id="play-basket" aria-hidden="true">
         <svg class="play-basket__star" viewBox="0 0 120 124" aria-hidden="true"><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z"/></svg>
         <span id="play-basket-count">\u06F0</span>
-      </div>
-      <div class="play-rotate" id="play-rotate" hidden role="status" aria-live="polite">
-        <svg class="play-rotate__icon" viewBox="0 0 96 96" aria-hidden="true">
-          <rect x="30" y="8" width="36" height="80" rx="10" fill="none" stroke="currentColor" stroke-width="5"/>
-          <circle cx="48" cy="78" r="4" fill="currentColor"/>
-          <path d="M76 30 a26 26 0 0 1 -6 34" fill="none" stroke="#E4AA46" stroke-width="6" stroke-linecap="round"/>
-          <path d="M74 24 l0 14 -12 -4 Z" fill="#E4AA46"/>
-        </svg>
-        <p class="play-line">\u06AF\u0648\u0634\u06CC \u0631\u0627 \u0628\u0686\u0631\u062E\u0627\u0646</p>
-        <p class="play-muted">\u0627\u06CC\u0646 \u0628\u0627\u0632\u06CC \u0627\u0641\u0642\u06CC \u0627\u062C\u0631\u0627 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0647\u0631 \u0648\u0642\u062A \u0686\u0631\u062E\u0627\u0646\u062F\u06CC \u0627\u062F\u0627\u0645\u0647 \u0645\u06CC\u200C\u062F\u0647\u06CC\u0645.</p>
       </div>
     </div>
     <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />
