@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # گشت مرورگری بازی‌های تازهٔ ۱.۲۵.۳۲ — افقی‌خانواده + برنچ‌های timedchoice/sequence
 # استفاده: KIND=stroop scripts/walk-newgame-browser.sh <TOKEN>
-#   stroop — لمس رنگ جوهر (از aria-label واژه) · trail — ردپاها به ترتیب عدد
+#   stroop — لمس رنگ جوهر (از aria-label واژه) · flanker — جهت گرگ وسط
+#   (رد پای دزد حذف شد — ۱۴۰۵/۰۸/۱۹؛ گیت جهت هم برداشته شد — آزادِ جهت)
 set -u
 KIND="${KIND:-stroop}"
 TOKEN="${1:?توکن لینک آزمونی را بدهید}"
@@ -14,15 +15,6 @@ echo "── بازکردن لینک (افقی ۸۴۴×۳۹۰)"
 agent-browser set viewport 844 390
 agent-browser open "$BASE/m/$TOKEN"
 sleep 2
-
-echo "── گیت جهت: شبیه‌سازی موبایل عمودی → پوشش «گوشی را بچرخان» باید آشکار شود"
-agent-browser set device "iPhone 14" >/dev/null 2>&1
-sleep 1.2
-echo "PORTRAIT_OVERLAY_VISIBLE: $(stage_eval "!document.getElementById('play-rotate').hidden")"
-echo "── بازگشت به افقی دسکتاپ → پوشش باید پنهان بماند"
-agent-browser set viewport 844 390
-sleep 0.8
-echo "LANDSCAPE_OVERLAY_HIDDEN: $(stage_eval "document.getElementById('play-rotate').hidden")"
 
 echo "── کارت والد → آمادهٔ شروع"
 agent-browser find text "آمادهٔ شروع هستیم" click >/dev/null 2>&1
@@ -65,34 +57,6 @@ if [ "$KIND" = "stroop" ]; then
         if(!target) return 'no-btn:'+ink;
         target.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
         return 'tapped:'+ink;
-      })()" | sed 's/^/   • /'
-    sleep 2.7
-  done
-fi
-
-if [ "$KIND" = "trail" ]; then
-  echo "── حلقهٔ رد پای دزد: ردپاها به ترتیب عدد (آیتم آمیخته: فقط اعداد، بعد قطع)"
-  for item in $(seq 1 34); do
-    FOUND=""
-    for i in $(seq 1 60); do
-      N=$(stage_eval "document.querySelectorAll('#play-stage .play-trail__node').length")
-      [ "$N" != "0" ] && [ -n "$N" ] && { FOUND=1; break; }
-      BR=$(stage_eval "document.getElementById('play-stage').textContent.includes('استراحت')")
-      [ "$BR" = "true" ] && { tap_stage; sleep 0.8; }
-      sleep 0.3
-    done
-    [ -z "$FOUND" ] && { echo "   • ردی نیامد — پایان حلقه"; break; }
-    stage_eval "
-      (function(){
-        var fa={'۰':0,'۱':1,'۲':2,'۳':3,'۴':4,'۵':5,'۶':6,'۷':7,'۸':8,'۹':9};
-        function num(s){var v='';for(var i=0;i<s.length;i++){if(fa[s[i]]!==undefined)v+=fa[s[i]];else return null;}return v===''?null:Number(v);}
-        var nodes=[].slice.call(document.querySelectorAll('#play-stage .play-trail__node'));
-        var rows=nodes.map(function(n){var t=(n.querySelector('.play-trail__label')||{}).textContent||'';return {el:n,n:num(t)};}).filter(function(r){return r.n!==null;});
-        rows.sort(function(a,b){return a.n-b.n;});
-        var i=0;
-        function step(){if(i>=rows.length)return;rows[i].el.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));i+=1;setTimeout(step,220);}
-        if(rows.length>0){step();return 'steps:'+rows.length;}
-        return 'no-numeric';
       })()" | sed 's/^/   • /'
     sleep 2.7
   done

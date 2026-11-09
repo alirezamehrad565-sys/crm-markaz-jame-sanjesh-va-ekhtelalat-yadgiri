@@ -1,9 +1,9 @@
 // دادهٔ آزمونی مرورگری برای بازی‌های تازهٔ ۱.۲۵.۳۲ — تجویز/مأموریت/لینک روی بستهٔ نشستهٔ D1
-// KIND=stroop|trail|flanker  SEED_BASE=https://center-system.sanjeshm.workers.dev node scripts/seed-newgame-browser.mjs
+// KIND=stroop|flanker|corsi  SEED_BASE=http://localhost:8787 node scripts/seed-newgame-browser.mjs
 const BASE = process.env.SEED_BASE || 'http://localhost:8787';
 const KIND = process.env.KIND || 'stroop';
-const PKG = { stroop: 'stroop1', trail: 'trail1', flanker: 'flanker1' }[KIND];
-const GOAL = { stroop: 'stroop_attention', trail: 'trail_attention', flanker: 'flanker_attention' }[KIND];
+const PKG = { stroop: 'stroop1', flanker: 'flanker1', corsi: 'corsi1' }[KIND];
+const GOAL = { stroop: 'stroop_attention', flanker: 'flanker_attention', corsi: 'corsi_spatial_memory' }[KIND];
 if (!PKG) throw new Error('KIND نامعتبر');
 
 function makeNationalId() {
@@ -33,7 +33,7 @@ const token = login.token;
 const student = await api('/api/students', {
   method: 'POST',
   body: JSON.stringify({
-    first_name: 'آزمون', last_name: KIND === 'stroop' ? 'رنگ‌گیر' : KIND === 'trail' ? 'ردیاب' : 'گرگ‌بان',
+    first_name: 'آزمون', last_name: KIND === 'stroop' ? 'رنگ‌گیر' : KIND === 'corsi' ? 'مرواریدبان' : 'گرگ‌بان',
     national_id: makeNationalId(), birth_date: '2018-05-10', gender: 'male'
   })
 }, token);

@@ -10,12 +10,14 @@ import type { AgeBandId, ParamStatus } from './protocol';
 import type { StageDef, StageThresholds, StageOutcome } from './stages';
 import type { MissionItem, RegistryMetric } from './types';
 
-/** شناسهٔ نوع‌بازی — کلید رجیستری؛ افزودن بازی تازه از این اتحاد و یک ورودی نقشه آغاز می‌شود */
-export type GameKind = 'gonogo' | 'numline' | 'scan' | 'stroop' | 'flanker' | 'trail' | 'nback';
+/** شناسهٔ نوع‌بازی — کلید رجیستری؛ افزودن بازی تازه از این اتحاد و یک ورودی نقشه آغاز می‌شود.
+ *  «رد پای دزد» (trail) ۱۴۰۵/۰۸/۱۹ حذف شد — نقد سه‌گانه (سقف ۷ گره/آموزش کم/کارکرد کم‌بار)
+ *  در docs/research/cognitive-games-critique.md؛ جایگاهش را «کولهٔ مرواریدها» (corsi) گرفت */
+export type GameKind = 'gonogo' | 'numline' | 'scan' | 'stroop' | 'flanker' | 'nback' | 'corsi';
 
 /** ترتیب قطعی نوع‌ها — flatten سنجه‌های موتور از همین ترتیب می‌گذرد تا ترتیب آرایه‌ها عیناً بماند؛
- *  ن‌پشت (۱.۲۵.۴۰) در انتها افزوده شد تا ترتیب سنجه‌های شش نوع قبلی دست‌نخورده بماند */
-export const GAME_KIND_IDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail', 'nback'] as const satisfies readonly GameKind[];
+ *  ن‌پشت (۱.۲۵.۴۰) و کولهٔ مرواریدها (corsi) در انتها افزوده شدند تا ترتیب سنجه‌های نوع‌های قبلی دست‌نخورده بماند */
+export const GAME_KIND_IDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'nback', 'corsi'] as const satisfies readonly GameKind[];
 
 /** پارامتر آستانه با قرارداد انتشار — مقدار + مبنا + وضعیت اعتبارسنجی صادقانه */
 export interface KindThresholdParam {
@@ -101,19 +103,28 @@ const SCAN_THRESHOLDS: ScalarKindThresholds = {
   star3: THRESH(88, 'ستارهٔ سوم = شکار تقریباً بی‌خطا')
 };
 
-/** آستانهٔ مشترک سه نوع تازهٔ ۱.۲۵.۳۲ — استروپ/فلانکر/رد؛ ملاک گذار هر سه بر دقت است */
+/** آستانهٔ مشترک دو نوع تازهٔ ۱.۲۵.۳۲ — استروپ/فلانکر؛ ملاک گذار هر دو بر دقت است.
+ *  (رد که در همین گروه بود ۱۴۰۵/۰۸/۱۹ حذف شد؛ کولهٔ مرواریدها آستانهٔ مستقل خودش را دارد) */
 const ACCURACY_THRESHOLDS: ScalarKindThresholds = {
   pass: THRESH(65, 'آستانهٔ گذار بر دقت — همان قرارداد خط عددی/اسکن'),
   star2: THRESH(78, 'ستارهٔ دوم با دقت بالاتر'),
   star3: THRESH(88, 'ستارهٔ سوم = پاسخ تقریباً بی‌خطا')
 };
 
-/** آستانهٔ ن‌پشت (۱.۲۵.۴۰) — بر دقت؛ همان قرارداد دقت شش نوع قبلی تا پیلوت مرکز.
+/** آستانهٔ ن‌پشت (۱.۲۵.۴۰) — بر دقت؛ همان قرارداد دقت سایر نوع‌ها تا پیلوت مرکز.
  *  دشواریِ پرش n=1→n=2 خودش را در نردبان مرحله‌ها نشان می‌دهد، نه در آستانهٔ جدا */
 const NBACK_THRESHOLDS: ScalarKindThresholds = {
   pass: THRESH(65, 'آستانهٔ گذار بر دقت هم‌سانی/تفکیک — همان قرارداد دقت سایر نوع‌ها؛ سخت‌گیری اضافه برای n=2 با پیلوت سنجیده می‌شود'),
   star2: THRESH(78, 'ستارهٔ دوم با دقت بالاتر'),
   star3: THRESH(88, 'ستارهٔ سوم = هم‌سانی تقریباً همیشه درست')
+};
+
+/** آستانهٔ کولهٔ مرواریدها (corsi — ۱۴۰۵/۰۸/۱۹) — بر دقت بازتولید کامل دنباله؛
+ *  سقف طول دنباله اهرم مرحله است و آستانهٔ جداگانه تا پیلوت مرکز proposed می‌ماند */
+const CORSI_THRESHOLDS: ScalarKindThresholds = {
+  pass: THRESH(65, 'آستانهٔ گذار بر دقت بازتولید کامل دنباله — همان قرارداد دقت سایر نوع‌ها'),
+  star2: THRESH(78, 'ستارهٔ دوم با دقت بالاتر'),
+  star3: THRESH(88, 'ستارهٔ سوم = بازتولید تقریباً همیشه کامل')
 };
 
 // ─── عددیِ آستانه‌ها — رفتار نمره‌دهی فقط value را می‌خواند؛ شکل عددی عین قبلی است ───
@@ -136,10 +147,12 @@ export const STAGE_THRESHOLDS: StageThresholds = pairNumeric(GONOGO_THRESHOLDS);
 export const NUMLINE_STAGE_THRESHOLDS = scalarNumeric(NUMLINE_THRESHOLDS);
 /** آستانه‌های اسکن — بر دقت موج‌ها (درصد) */
 export const SCAN_STAGE_THRESHOLDS = scalarNumeric(SCAN_THRESHOLDS);
-/** آستانهٔ مشترک استروپ/فلانکر/رد — بر دقت (درصد) */
+/** آستانهٔ مشترک استروپ/فلانکر — بر دقت (درصد) */
 export const ACCURACY_STAGE_THRESHOLDS = scalarNumeric(ACCURACY_THRESHOLDS);
-/** آستانه‌های ن‌پشت — بر دقت (درصد)؛ جدای استروپ/فلانکر/رد تا مسیر تبدیل مستقل داشته باشد */
+/** آستانه‌های ن‌پشت — بر دقت (درصد)؛ جدای استروپ/فلانکر تا مسیر تبدیل مستقل داشته باشد */
 export const NBACK_STAGE_THRESHOLDS = scalarNumeric(NBACK_THRESHOLDS);
+/** آستانه‌های کولهٔ مرواریدها — بر دقت بازتولید (درصد)؛ مستقل تا مسیر تبدیل خودش را داشته باشد */
+export const CORSI_STAGE_THRESHOLDS = scalarNumeric(CORSI_THRESHOLDS);
 
 function pctOk(v: number | null | undefined, min: number): boolean {
   return typeof v === 'number' && Number.isFinite(v) && v >= min;
@@ -178,7 +191,7 @@ export function stageOutcomeScan(accuracy: number | null | undefined): StageOutc
   return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
 }
 
-/** نتیجهٔ مرحلهٔ سه نوع تازه از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
+/** نتیجهٔ مرحلهٔ دو نوع تازه از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
 export function stageOutcomeAccuracyKind(accuracy: number | null | undefined): StageOutcome {
   const t = ACCURACY_STAGE_THRESHOLDS;
   if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
@@ -189,6 +202,14 @@ export function stageOutcomeAccuracyKind(accuracy: number | null | undefined): S
 /** نتیجهٔ مرحلهٔ ن‌پشت از دقت خلاصهٔ جلسه — آستانهٔ خودش؛ شکل عین قرارداد StageOutcome */
 export function stageOutcomeNback(accuracy: number | null | undefined): StageOutcome {
   const t = NBACK_STAGE_THRESHOLDS;
+  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
+  const stars: 1 | 2 | 3 = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
+  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
+}
+
+/** نتیجهٔ مرحلهٔ کولهٔ مرواریدها از دقت خلاصهٔ جلسه — آستانهٔ خودش؛ شکل عین قرارداد StageOutcome */
+export function stageOutcomeCorsi(accuracy: number | null | undefined): StageOutcome {
+  const t = CORSI_STAGE_THRESHOLDS;
   if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
   const stars: 1 | 2 | 3 = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
   return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
@@ -342,26 +363,27 @@ const FLANKER_STAGES: StageDef[] = [
   }
 ];
 
-// پنج مرحلهٔ «رد پای دزد» (۱.۲۵.۳۲) — اهرم = طول رد و آمیختهٔ عدد/حرف
-const TRAIL_STAGES: StageDef[] = [
+// پنج مرحلهٔ «کولهٔ مرواریدها» (corsi — ۱۴۰۵/۰۸/۱۹) — اهرم سختی = سقف طول دنباله
+// (الگوی CORSI_STAGE_MAX_LEN). تخت صدف ثابت است؛ فقط دنبالهٔ مرواریدها بلندتر می‌شود.
+const CORSI_STAGES: StageDef[] = [
   {
-    id: 's1', index: 1, title_fa: 'رد کوتاه', goal_fa: 'ردپاها کم‌اند؛ به ترتیب شماره برو.', difficulty: 1,
+    id: 's1', index: 1, title_fa: 'دو مروارید', goal_fa: 'دو صدف برق می‌زند؛ همان ترتیب را لمس کن.', difficulty: 1,
     overrides: {}
   },
   {
-    id: 's2', index: 2, title_fa: 'رد بلندتر', goal_fa: 'یک قدم بیشتر؛ رد را کامل کن.', difficulty: 2,
+    id: 's2', index: 2, title_fa: 'سه مروارید', goal_fa: 'یک مروارید بیشتر شد؛ حواست به ترتیب باشد.', difficulty: 2,
     overrides: {}
   },
   {
-    id: 's3', index: 3, title_fa: 'رد بلند', goal_fa: 'ردپاها بیشتر شده‌اند؛ رد گم نشود.', difficulty: 3,
+    id: 's3', index: 3, title_fa: 'چهار مروارید', goal_fa: 'دنباله بلندتر شده؛ آهسته و خوش‌حال.', difficulty: 3,
     overrides: {}
   },
   {
-    id: 's4', index: 4, title_fa: 'رد گم‌شده', goal_fa: 'عدد و حرف یک‌درمیان شده؛ با دقت قدم بزن.', difficulty: 4,
+    id: 's4', index: 4, title_fa: 'پنج مروارید', goal_fa: 'حافظه‌ات عمیق شد؛ مثل قبل ادامه بده.', difficulty: 4,
     overrides: {}
   },
   {
-    id: 's5', index: 5, title_fa: 'قهرمان رد', goal_fa: 'همهٔ ردها با هم — تو تعقیب‌کننده‌ای!', difficulty: 5,
+    id: 's5', index: 5, title_fa: 'قهرمان کوله', goal_fa: 'همهٔ دنباله‌ها با هم — تو حافظهٔ دریایی!', difficulty: 5,
     overrides: {}
   }
 ];
@@ -552,17 +574,17 @@ export function flankerItemInStage(
   return decoys === 0 || decoys <= max;
 }
 
-/** سقف شمار ردپاها در هر مرحلهٔ رد پای دزد — null = همهٔ ردها */
-export const TRAIL_STAGE_MAX_NODES: Record<string, number | null> = {
-  s1: 4,
-  s2: 5,
-  s3: 6,
-  s4: 7,
+/** سقف طول دنبالهٔ مروارید در هر مرحلهٔ کولهٔ مرواریدها — null = همهٔ دنباله‌ها */
+export const CORSI_STAGE_MAX_LEN: Record<string, number | null> = {
+  s1: 2,
+  s2: 3,
+  s3: 4,
+  s4: 5,
   s5: null
 };
 
-/** بانک مجاز هر مرحلهٔ رد — گروه‌های authored بانک؛ ناسالم = ساختاری (شمار ردپاها) */
-export const TRAIL_STAGE_BANDS: Record<string, string[] | null> = {
+/** بانک مجاز هر مرحلهٔ کولهٔ مرواریدها — گروه‌های authored بانک؛ ناسالم = ساختاری (طول دنباله) */
+export const CORSI_STAGE_BANDS: Record<string, string[] | null> = {
   s1: ['a'],
   s2: ['a', 'b'],
   s3: ['a', 'b', 'c'],
@@ -570,20 +592,25 @@ export const TRAIL_STAGE_BANDS: Record<string, string[] | null> = {
   s5: null
 };
 
-export function trailItemInStage(
+/**
+ * پیش‌ماندهٔ آیتم کولهٔ مرواریدها در مرحله — انتخاب از بانک بر طول دنبالهٔ authored.
+ * کلید بازتولید = دنبالهٔ نمایش‌داده‌شدهٔ خود آیتم است (کودک آن را می‌بیند)؛ بنابراین
+ * stim دنباله دارد و هیچ کلید مخفی‌ای در بانک نیست — ناسالم = قاعدهٔ ساختاری طول.
+ */
+export function corsiItemInStage(
   item: { stim?: Record<string, unknown> | null | undefined },
   stageId: string | null | undefined
 ): boolean {
-  const allowed = typeof stageId === 'string' && stageId in TRAIL_STAGE_BANDS ? TRAIL_STAGE_BANDS[stageId] : null;
+  const allowed = typeof stageId === 'string' && stageId in CORSI_STAGE_BANDS ? CORSI_STAGE_BANDS[stageId] : null;
   if (allowed === null) return true;
   const s = (item.stim ?? {}) as Record<string, unknown>;
   const band = typeof s.band === 'string' ? s.band : '';
   if (band !== '') return allowed.includes(band);
-  // بانک بی‌گروه (سازگاری قدیمی) — قاعدهٔ ساختاری: شمار ردپاها
-  const max = typeof stageId === 'string' && stageId in TRAIL_STAGE_MAX_NODES ? TRAIL_STAGE_MAX_NODES[stageId] : null;
+  // بانک بی‌گروه (سازگاری) — قاعدهٔ ساختاری: طول دنباله
+  const max = typeof stageId === 'string' && stageId in CORSI_STAGE_MAX_LEN ? CORSI_STAGE_MAX_LEN[stageId] : null;
   if (max === null) return true;
-  const nodes = Array.isArray(s.nodes) ? s.nodes.length : 0;
-  return nodes > 0 && nodes <= max;
+  const len = Array.isArray(s.sequence) ? s.sequence.length : 0;
+  return len > 0 && len <= max;
 }
 
 /** سطح n مجاز هر مرحلهٔ ن‌پشت — اهرم مرحله همان پرش n است؛ null معنا ندارد (همهٔ مراحل سطح مشخص دارند) */
@@ -641,8 +668,10 @@ const FLANKER_ENGINE_METRICS: readonly RegistryMetric[] = [
   { id: 'flanker_interference_ms', title_fa: 'هزینهٔ تداخل فلانکر (میانهٔ ناهم‌خوان − میانهٔ هم‌خوان)', unit: 'ms', higher_is_better: false, source: 'auto', formula: 'interference_ms' }
 ];
 
-const TRAIL_ENGINE_METRICS: readonly RegistryMetric[] = [
-  { id: 'trail_prefix_pct', title_fa: 'درصد پیش‌ماند صحیح رد ردپاها', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'trail_prefix' }
+// کولهٔ مرواریدها (corsi — ۱۴۰۵/۰۸/۱۹) — دقت بازتولید کامل + بلندترین دنبالهٔ درست (دامنه)
+const CORSI_ENGINE_METRICS: readonly RegistryMetric[] = [
+  { id: 'corsi_seq_acc_pct', title_fa: 'درصد بازتولید کامل دنبالهٔ مرواریدها', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'corsi_seq' },
+  { id: 'corsi_span_max', title_fa: 'بلندترین دنبالهٔ درست این جلسه (دامنهٔ حافظهٔ فضایی)', unit: 'count', higher_is_better: true, source: 'auto', formula: 'corsi_span' }
 ];
 
 // آلبوم خرچنگ (ن‌پشت — ۱.۲۵.۴۰) — دقت شرطی هم‌سانی/تفکیک + دو خطای مکمل؛
@@ -707,16 +736,6 @@ export const GAME_KINDS: Record<GameKind, GameKindEntry> = {
     rtFloorMs: 200, // لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
     engineMetrics: FLANKER_ENGINE_METRICS
   },
-  trail: {
-    thresholds: ACCURACY_THRESHOLDS,
-    stageOutcome: (summary) => stageOutcomeAccuracyKind(summary.pct.accuracy),
-    stageList: () => TRAIL_STAGES,
-    itemInStage: trailItemInStage,
-    waveMsCapOf: null,
-    timedChoice: false,
-    rtFloorMs: 150, // کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
-    engineMetrics: TRAIL_ENGINE_METRICS
-  },
   nback: {
     thresholds: NBACK_THRESHOLDS,
     stageOutcome: (summary) => stageOutcomeNback(summary.pct.accuracy),
@@ -726,6 +745,16 @@ export const GAME_KINDS: Record<GameKind, GameKindEntry> = {
     timedChoice: true, // انتخاب زمان‌دار دوگزینه‌ای — بی‌لمس = اُمیشن سمت سرور
     rtFloorMs: 200, // لمس تصادفی حذف می‌شود — همان قرارداد انتخاب زمان‌دار
     engineMetrics: NBACK_ENGINE_METRICS
+  },
+  corsi: {
+    thresholds: CORSI_THRESHOLDS,
+    stageOutcome: (summary) => stageOutcomeCorsi(summary.pct.accuracy),
+    stageList: () => CORSI_STAGES,
+    itemInStage: corsiItemInStage,
+    waveMsCapOf: null,
+    timedChoice: false, // بازتولید دنباله مثل رد: پنجرهٔ authored آیتم؛ پیش‌ماند/نیمه‌کاره نمره می‌گیرد
+    rtFloorMs: 150, // کف نخستین لمس بازتولید؛ زیر آن حدس است
+    engineMetrics: CORSI_ENGINE_METRICS
   }
 };
 
@@ -756,6 +785,6 @@ export const ITEM_TYPE_RT_FLOOR_MS: Record<MissionItem['type'], number> = {
   scan: GAME_KINDS.scan.rtFloorMs,
   stroop: GAME_KINDS.stroop.rtFloorMs,
   flanker: GAME_KINDS.flanker.rtFloorMs,
-  trail: GAME_KINDS.trail.rtFloorMs,
-  nback: GAME_KINDS.nback.rtFloorMs
+  nback: GAME_KINDS.nback.rtFloorMs,
+  corsi: GAME_KINDS.corsi.rtFloorMs
 };

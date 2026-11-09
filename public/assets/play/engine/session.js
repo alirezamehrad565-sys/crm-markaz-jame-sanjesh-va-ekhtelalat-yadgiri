@@ -777,135 +777,149 @@ export async function runSession(ctx) {
       continue;
     }
 
-    /* آیتم دنباله‌ای — «رد پای دزد» (۱.۲۵.۳۲): ردپاهای شماره‌دار؛ لمس به ترتیب برچسب‌ها.
-       ترتیب برچسب‌ها (seq) دانش عمومی خود بازی است (عددهای روبه‌کودک)؛ نگاشت گره→جایگاه
-       کلید سروری است و هرگز به کلاینت نمی‌رسد. لمس ترتیب اشتباه = رد همان‌جا قطع می‌شود
-       (پایان بی‌سرزنش، §۲)؛ RT از نخستین لمس؛ RT هر گره هم در response می‌ماند */
-    if (item.type === 'trail' && typeof kind.markupFor?.[item.type] === 'function' &&
-        item.stim && Array.isArray(item.stim.nodes)) {
-      machine.to(STATES.FIXATION, { item: item.id, sequence: true }); // مسیر اجباری ماشین
+    /* آیتم دنباله‌ای — «کولهٔ مرواریدها» (corsi — ۱۴۰۵/۰۸/۱۹، اقتباس مکانیک از
+       @jspsych-contrib/plugin-corsi-blocks — مخزن jspsych/jspsych-contrib، مجوز MIT):
+       دو فاز — ① نمایش: مرواریدها پشت‌سرهم برق می‌زنند (کدام صدف‌ها، به چه ترتیبی)؛
+       ② بازتولید: کودک همان ترتیب را لمس می‌کند. حین نمایش ماشین در FIXATION است و
+       هر لمسی premature ثبت می‌شود؛ پنجرهٔ بازتولید در STIMULUS باز می‌شود (لمس primary).
+       کلید = خود دنبالهٔ نمایش‌داده‌شده (کودک آن را می‌بیند) — پاسخ مخفی ندارد؛ نمره سرور.
+       لمس ترتیب اشتباه = پایان بی‌سرزنش همان‌جا (§۲)؛ RT از نخستین لمس بازتولید */
+    if (item.type === 'corsi' && typeof kind.markupFor?.[item.type] === 'function' &&
+        item.stim && Array.isArray(item.stim.sequence) && item.stim.sequence.length > 0) {
+      machine.to(STATES.FIXATION, { item: item.id, sequence: true }); // نمایش هم در «پیش از پنجره» — لمس حین نمایش premature است
+      const stimK = item.stim;
+      const seqK = stimK.sequence.filter((n) => Number.isInteger(n) && n >= 0);
+      const litMsK = typeof stimK.lit_ms === 'number' && Number.isFinite(stimK.lit_ms) ? Math.min(1500, Math.max(300, Math.round(stimK.lit_ms))) : 650;
+      const gapMsK = typeof stimK.gap_ms === 'number' && Number.isFinite(stimK.gap_ms) ? Math.min(800, Math.max(120, Math.round(stimK.gap_ms))) : 250;
+      const winK = typeof stimK.window_ms === 'number' && Number.isFinite(stimK.window_ms)
+        ? Math.min(30000, Math.max(4000, Math.round(stimK.window_ms)))
+        : 15000;
       /* شواهد مشترک G1 — از تثبیت پوسته پیش از محرک (P1-2) */
-      const ledgerQ = createTouchLedger();
-      ledgerQ.start();
-      let trailAnswered = false; // پایان رد (کامل/قطع/پنجره) — لمسِ بعد از آن ثبت نمی‌شود
-      const stopTouchQ = attachTouchEvidence(stage, ledgerQ, () => machine.state, () => trailAnswered);
+      const ledgerK = createTouchLedger();
+      ledgerK.start();
+      let corsiAnswered = false; // پایان بازتولید (کامل/قطع/پنجره) — لمسِ بعد از آن multiple است
+      const stopTouchK = attachTouchEvidence(stage, ledgerK, () => machine.state, () => corsiAnswered);
       stage.classList.remove('play-stage--quiet');
-      stage.classList.add('play-stage--' + item.type); // پوستهٔ عدی: شب کوچه، دزد فراری
+      stage.classList.add('play-stage--' + item.type); // پوستهٔ سپیدهٔ مروارید
       await sleeper.sleep(250);
       stage.innerHTML = kind.markupFor[item.type](item);
-      const stopFramesQ = observeDisplayFrames();
+      const stopFramesK = observeDisplayFrames();
+      const shownAtK = performance.now(); // مُهر نمایش تخت صدف
+      /* فاز نمایش — دنباله authored؛ ماشین هنوز FIXATION است (تا نخستین لمسِ مجاز premature بماند) */
+      const shellsK = stage.querySelectorAll('.play-corsi__shell');
+      const litClsK = 'play-corsi__shell--lit';
+      for (const idx of seqK) {
+        const el = shellsK[idx];
+        if (!el) continue;
+        el.classList.add(litClsK);
+        await sleeper.sleep(litMsK);
+        el.classList.remove(litClsK);
+        await sleeper.sleep(gapMsK);
+      }
+      await sleeper.sleep(300); // فرود آرام پیش از بازتولید — کودک نفس بگیرد
+      /* فاز بازتولید — پنجرهٔ پاسخ؛ ماشین → STIMULUS (لمس primary؛ الگوی شاخهٔ رد سابق) */
       machine.to(STATES.STIMULUS, { item: item.id, sequence: true });
-      const shownAtSq = performance.now(); // RT از لحظهٔ نمایش رد
-      /* ساعت RT مکث‌پذیر (P1-1) — چندلمسی: RT و RT هر گره با peek بدون فریز ساعت؛
-         ساعت تا پایان رد زنده می‌ماند تا مکث برگه در همهٔ زمان‌ها منصفانه فریز شود */
-      const clockQ = createPausableClock();
-      clockQ.start();
-      const stimSq = item.stim;
-      const seqSq = Array.isArray(stimSq.seq) ? stimSq.seq.map((v) => String(v)) : null;
-      const resultSq = await new Promise((resolve) => {
-        const nodes = stage.querySelectorAll('.play-trail__node');
-        const timerBar = stage.querySelector('[class*="__timer"] > span');
-        const winSq = typeof stimSq.window_ms === 'number' && Number.isFinite(stimSq.window_ms)
-          ? Math.min(30000, Math.max(2000, Math.round(stimSq.window_ms)))
-          : 15000;
+      const clockK = createPausableClock();
+      clockK.start();
+      const resultK = await new Promise((resolve) => {
+        const nodesK = stage.querySelectorAll('.play-corsi__shell');
+        const timerBarK = stage.querySelector('[class*="__timer"] > span');
         const order = [];
-        const nodeRts = [];
+        const shellRts = [];
         let firstAt = null;
         let tapCount = 0;
         let settled = false;
-        let winRemain = winSq;
+        let winRemain = winK;
         let winPausedAt = null;
         const freezeBar = () => {
-          if (!timerBar) return;
-          const w = window.getComputedStyle(timerBar).width;
-          timerBar.style.transition = 'none';
-          timerBar.style.width = w;
+          if (!timerBarK) return;
+          const w = window.getComputedStyle(timerBarK).width;
+          timerBarK.style.transition = 'none';
+          timerBarK.style.width = w;
         };
         const unfreezeBar = (ms) => {
-          if (!timerBar) return;
+          if (!timerBarK) return;
           window.requestAnimationFrame(() => {
-            timerBar.style.transition = 'width ' + Math.max(0, ms) + 'ms linear';
-            timerBar.style.width = '0%';
+            timerBarK.style.transition = 'width ' + Math.max(0, ms) + 'ms linear';
+            timerBarK.style.width = '0%';
           });
         };
-        trialHooks.pause = () => { winPausedAt = performance.now(); clockQ.pause(); freezeBar(); }; // ساعت RT هم فریز (P1-1)
+        trialHooks.pause = () => { winPausedAt = performance.now(); clockK.pause(); freezeBar(); }; // ساعت RT هم فریز (P1-1)
         trialHooks.resume = () => {
-          if (!clockQ.running) clockQ.resume();
+          if (!clockK.running) clockK.resume();
           if (winPausedAt !== null) {
             winRemain = Math.max(0, winRemain - (performance.now() - winPausedAt));
             winPausedAt = null;
             unfreezeBar(winRemain);
           }
         };
-        const finishTrail = (timedOut) => {
+        const finishCorsi = (timedOut) => {
           if (settled) return;
           settled = true;
-          trailAnswered = true;
-          sleeper.cancel(); // رد قطع/کامل شد — خواب یدکی یتیم نمی‌ماند (قاعدهٔ پنجره)
+          corsiAnswered = true;
+          sleeper.cancel(); // بازتولید قطع/کامل شد — خواب یدکی یتیم نمی‌ماند (قاعدهٔ پنجره)
           trialHooks.pause = null;
           trialHooks.resume = null;
-          nodes.forEach((b) => b.removeEventListener('pointerdown', onNode));
-          resolve({ order, nodeRts, firstRt: firstAt !== null ? clockQ.peek() : null, tapCount, timedOut, usedMs: clockQ.peek() });
+          nodesK.forEach((b) => b.removeEventListener('pointerdown', onNode));
+          resolve({ order, shellRts, firstRt: firstAt !== null ? clockK.peek() : null, tapCount, timedOut, usedMs: clockK.peek() });
         };
         const onNode = (ev) => {
-          const btn = ev.target.closest('.play-trail__node');
+          const btn = ev.target.closest('.play-corsi__shell');
           if (!btn || btn.disabled) return;
           ev.preventDefault();
           tapCount += 1;
           if (firstAt === null) firstAt = performance.now();
           const idx = Number(btn.dataset.idx);
-          const nd = stimSq.nodes[idx];
-          const expected = seqSq ? seqSq[order.length] : null;
-          const okTap = seqSq === null || (expected !== undefined && nd && String(nd.n) === expected);
-          if (okTap) {
+          const expected = seqK[order.length];
+          if (expected !== undefined && idx === expected) {
             order.push(idx);
-            nodeRts.push(clockQ.peek()); // RT هر گره — ساعت مکث‌پذیر (P1-1)
-            btn.classList.add('play-trail__node--step');
-            if (nodes.length > 0 && order.length >= nodes.length) finishTrail(false); // رد کامل شد
+            shellRts.push(clockK.peek()); // RT هر صدف — ساعت مکث‌پذیر (P1-1)
+            btn.classList.add('play-corsi__shell--step');
+            if (order.length >= seqK.length) finishCorsi(false); // دنباله کامل شد
           } else {
-            finishTrail(false); // رد قطع شد — پایان بی‌سرزنش؛ نمره سرور است
+            finishCorsi(false); // ترتیب قطع شد — پایان بی‌سرزنش؛ نمره سرور است
           }
         };
-        nodes.forEach((b) => b.addEventListener('pointerdown', onNode));
-        unfreezeBar(winSq);
-        sleeper.sleep(winSq).then(() => finishTrail(true));
+        nodesK.forEach((b) => b.addEventListener('pointerdown', onNode));
+        unfreezeBar(winK);
+        sleeper.sleep(winK).then(() => finishCorsi(true));
       });
       machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, sequence: true });
-      stopTouchQ();
-      const framesQ = stopFramesQ();
-      const recordSq = {
+      stopTouchK();
+      const framesK = stopFramesK();
+      const recordK = {
         item_id: item.id,
         go: null,
-        touched: resultSq.order.length > 0,
-        rt_ms: resultSq.firstRt !== null && resultSq.firstRt >= 0 ? resultSq.firstRt : null,
-        touch_count: resultSq.tapCount,
-        ...ledgerQ.evidenceCounts(),
-        presented_at: shownAtSq,
-        frame_drops: framesQ.drops,
-        max_frame_delta: framesQ.maxDelta,
-        window_ms: null,
+        touched: resultK.order.length > 0,
+        rt_ms: resultK.firstRt !== null && resultK.firstRt >= 0 ? resultK.firstRt : null,
+        touch_count: resultK.tapCount,
+        ...ledgerK.evidenceCounts(),
+        presented_at: Math.round(shownAtK),
+        frame_drops: framesK.drops,
+        max_frame_delta: framesK.maxDelta,
+        window_ms: winK,
         isi_ms: 0,
-        events: ledgerQ.events(),
-        trail_order: resultSq.order.slice()
+        events: ledgerK.events(),
+        corsi_order: resultK.order.slice()
       };
-      trials.push(recordSq);
+      trials.push(recordK);
       doneCount += 1;
-      let fbQ = null;
+      let fbK = null;
       try {
-        fbQ = await api.submit({
+        fbK = await api.submit({
           item_id: item.id,
           response: {
-            order: resultSq.order,
-            node_rts_ms: resultSq.nodeRts,
-            used_ms: resultSq.usedMs,
-            timed_out: resultSq.timedOut,
-            presented_at: Math.round(shownAtSq),
-            frame_drops: framesQ.drops,
-            max_frame_delta: framesQ.maxDelta,
-            touch_count: resultSq.tapCount,
-            ...ledgerQ.evidenceCounts()
+            order: resultK.order,
+            shell_rts_ms: resultK.shellRts,
+            used_ms: resultK.usedMs,
+            timed_out: resultK.timedOut,
+            presented_at: Math.round(shownAtK),
+            frame_drops: framesK.drops,
+            max_frame_delta: framesK.maxDelta,
+            touch_count: resultK.tapCount,
+            ...ledgerK.evidenceCounts()
           },
-          rt_ms: recordSq.rt_ms,
+          rt_ms: recordK.rt_ms,
           idem_key: crypto.randomUUID()
         });
       } catch (err) {
@@ -913,18 +927,18 @@ export async function runSession(ctx) {
         onNetworkFail();
         return;
       }
-      const okQ = fbQ !== null && typeof fbQ === 'object' && fbQ.correct === true;
-      const canFeedbackQ = !isAssessment && fbQ && fbQ.phase === 'train' && fbQ.message && B.feedback_in_main;
-      if (canFeedbackQ) {
-        fx.popBubble(bubble, fbQ.message, okQ ? 'ok' : 'calm', P.feedback_ms);
-        if (!okQ && fbQ.answer_display != null && typeof kind.revealFor?.[item.type] === 'function') {
-          // نشان حقیقت — ترتیب درست رد از CSV بازخورد سرور می‌آید؛ فقط تمرین
-          kind.revealFor[item.type](item, stage, String(fbQ.answer_display));
+      const okK = fbK !== null && typeof fbK === 'object' && fbK.correct === true;
+      const canFeedbackK = !isAssessment && fbK && fbK.phase === 'train' && fbK.message && B.feedback_in_main;
+      if (canFeedbackK) {
+        fx.popBubble(bubble, fbK.message, okK ? 'ok' : 'calm', P.feedback_ms);
+        if (!okK && typeof kind.revealFor?.[item.type] === 'function') {
+          // نشان حقیقت — بازپخش همان دنبالهٔ نمایش‌داده‌شده (کودک آن را دیده)؛ فقط تمرین
+          kind.revealFor[item.type](item, stage, null);
           await sleeper.sleep(P.feedback_ms + 600);
         } else {
-          if (okQ && typeof kind.pointFor?.[item.type] === 'function') {
-            const ptQ = kind.pointFor[item.type](stage);
-            if (ptQ) fx.burstAt(ptQ.x, ptQ.y);
+          if (okK && typeof kind.pointFor?.[item.type] === 'function') {
+            const ptK = kind.pointFor[item.type](stage);
+            if (ptK) fx.burstAt(ptK.x, ptK.y);
           }
           await sleeper.sleep(P.feedback_ms);
         }
@@ -932,9 +946,9 @@ export async function runSession(ctx) {
         await sleeper.sleep(Math.max(400, 600));
       }
       stage.classList.remove('play-stage--' + item.type);
-      stage.innerHTML = ''; // صحنه خالی پیش از ISI بعدی — رد شبح نمی‌ماند
+      stage.innerHTML = ''; // صحنه خالی پیش از ISI بعدی — صدف شبح نمی‌ماند
       /* سبد ستاره و استریک — همان حلقهٔ گو/نوگو؛ ارزیابی هرگز */
-      if (!isAssessment && B.star_basket && fbQ && fbQ.phase === 'train' && okQ) {
+      if (!isAssessment && B.star_basket && fbK && fbK.phase === 'train' && okK) {
         starCount += 1;
         if (countEl) countEl.textContent = faNum(starCount);
         fx.flyStar(stage, basketEl);
@@ -944,9 +958,9 @@ export async function runSession(ctx) {
           await sleeper.sleep(P.feedback_ms);
         }
       }
-      if (okQ) streak += 1; else if (fbQ && fbQ.correct === false) streak = 0;
-      const streakMsgQ = streakLine(streak);
-      if (canFeedbackQ && streakMsgQ) fx.pillShow(streakMsgQ);
+      if (okK) streak += 1; else if (fbK && fbK.correct === false) streak = 0;
+      const streakMsgK = streakLine(streak);
+      if (canFeedbackK && streakMsgK) fx.pillShow(streakMsgK);
       if (machine.state === STATES.INTER_TRIAL_INTERVAL) {
         machine.to(practiceMode ? STATES.PRACTICE : STATES.READY, { after_items: doneCount });
       }

@@ -25,11 +25,13 @@ export {
   SCAN_STAGE_THRESHOLDS,
   ACCURACY_STAGE_THRESHOLDS,
   NBACK_STAGE_THRESHOLDS,
+  CORSI_STAGE_THRESHOLDS,
   stageOutcomeOf,
   stageOutcomeNumline,
   stageOutcomeScan,
   stageOutcomeAccuracyKind,
   stageOutcomeNback,
+  stageOutcomeCorsi,
   NUMLINE_STAGE_MAX,
   numlineItemInStage,
   SCAN_STAGE_MAX_TILES,
@@ -41,11 +43,11 @@ export {
   FLANKER_STAGE_MAX_DECOYS,
   FLANKER_STAGE_BANDS,
   flankerItemInStage,
-  TRAIL_STAGE_MAX_NODES,
-  TRAIL_STAGE_BANDS,
-  trailItemInStage,
   NBACK_STAGE_LEVELS,
-  nbackItemInStage
+  nbackItemInStage,
+  CORSI_STAGE_MAX_LEN,
+  CORSI_STAGE_BANDS,
+  corsiItemInStage
 } from './registry';
 export type { GameKind } from './registry';
 
@@ -55,8 +57,10 @@ export type { GameKind } from './registry';
  *  ۱.۳.۰ (۱.۲۵.۳۲): قواعد سه بازی تازه (stroop/flanker/trail) افزوده شد + اهرم تندشدن موج
  *  اسکن (SCAN_STAGE_WAVE_MS — فقط نمایش، نه محرک) — سه قاعدهٔ قبلی عیناً.
  *  ۱.۴.۰ (۱.۲۵.۴۰): قواعد «آلبوم خرچنگ» (nback) افزوده شد — پرش n (۱→۲) + ISI مرحله؛
- *  شش قاعدهٔ قبلی عیناً. */
-export const STAGE_RULES_VERSION = '1.4.0';
+ *  شش قاعدهٔ قبلی عیناً.
+ *  ۱.۵.۰ (۱۴۰۵/۰۸/۱۹): قواعد «رد پای دزد» (trail) برداشته شد (نقد سه‌گانه) و قواعد
+ *  «کولهٔ مرواریدها» (corsi) افزوده شد — سقف طول دنباله؛ سایر قواعد عیناً. */
+export const STAGE_RULES_VERSION = '1.5.0';
 
 /** تعداد مرحله‌های مسیر تمرین */
 export const STAGE_TOTAL = 5;

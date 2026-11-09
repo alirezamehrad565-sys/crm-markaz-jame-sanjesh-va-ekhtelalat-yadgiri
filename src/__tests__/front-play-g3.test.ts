@@ -12,7 +12,7 @@ import { join } from 'node:path';
 const PLAY = join(__dirname, '../../public/assets/play');
 const read = (p: string) => readFileSync(p, 'utf8');
 
-const KINDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail'] as const;
+const KINDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'nback', 'corsi'] as const;
 const kindSrc = (k: string) => read(join(PLAY, `kinds/${k}.js`));
 const sessionJs = read(join(PLAY, 'engine/session.js'));
 const playJs = read(join(PLAY, 'play.js'));
@@ -48,7 +48,7 @@ describe('گیت G3 — تمرین تعاملی همهٔ نوع‌ها (الگو
       expect(src, `${k}: بدون کلید سروری`).not.toMatch(/correct_touch|answer_display/);
     }
     // کلید پاسخ در هیچ ماژول نمایشی نیست — نمره فقط سرور
-    for (const k of ['numline', 'scan', 'trail']) {
+    for (const k of ['numline', 'scan', 'corsi']) {
       expect(kindSrc(k), `${k}: بدون tolerance و کلید لمس`).not.toMatch(/tolerance|correct_touch/);
     }
   });
@@ -59,13 +59,13 @@ describe('گیت G3 — تمرین تعاملی همهٔ نوع‌ها (الگو
     expect(kindSrc('scan')).toContain('spyIdxs = [0, 2]');
     expect(kindSrc('flanker')).toContain("['R', 'L', 'R']");
     // تمرین صحنهٔ آموزش می‌گیرد و در شِمال --teach می‌ماند — هرگز --main
-    for (const k of ['numline', 'scan', 'stroop', 'flanker', 'trail']) {
+    for (const k of ['numline', 'scan', 'stroop', 'flanker', 'nback', 'corsi']) {
       expect(kindSrc(k), `${k}: صحنهٔ تمرین`).toContain("sceneMarkup('teach')");
     }
   });
 
   it('پس از دو تلاش بی‌موفقیت، آموزش پس از پاسخ نشان می‌آید — از بازخورد/قانون عمومی، نه کلید', () => {
-    for (const k of ['numline', 'scan', 'stroop', 'flanker', 'trail']) {
+    for (const k of ['numline', 'scan', 'stroop', 'flanker', 'nback', 'corsi']) {
       expect(kindSrc(k), `${k}: آموزش پس از دو تلاش`).toMatch(/misses >= 2\)?\s*\w+\(|misses >= 2/);
     }
   });
