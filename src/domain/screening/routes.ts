@@ -34,7 +34,13 @@ export function registerScreeningRoutes(app: AppHono, service: ScreeningService)
     const actor = getAuthContext(c);
     const body = ScreeningCreateSchema.parse(await c.req.json<unknown>());
     const created = await service.create(
-      { name: body.name, tags: body.tags, day: body.day },
+      {
+        name: body.name,
+        tags: body.tags,
+        day: body.day,
+        birth_date: body.birth_date ?? null,       /* ۱.۲۵.۵۰ */
+        readiness_score: body.readiness_score ?? null /* ۱.۲۵.۵۰ */
+      },
       actor
     );
     return c.json({ data: created }, 201);
@@ -45,7 +51,12 @@ export function registerScreeningRoutes(app: AppHono, service: ScreeningService)
     const body = ScreeningUpdateSchema.parse(await c.req.json<unknown>());
     const updated = await service.update(
       c.req.param('id'),
-      { name: body.name, tags: body.tags },
+      {
+        name: body.name,
+        tags: body.tags,
+        birth_date: body.birth_date,       /* ۱.۲۵.۵۰ — undefined = دست‌نخورده؛ null = پاک‌کردن */
+        readiness_score: body.readiness_score
+      },
       actor
     );
     return c.json({ data: updated }, 200);
