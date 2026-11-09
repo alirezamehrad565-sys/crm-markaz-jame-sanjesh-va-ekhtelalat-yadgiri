@@ -25,6 +25,8 @@
  */
 import { z } from 'zod';
 import { APP_VERSION } from '@core/version';
+import { createAuditWriter } from '@core/audit';
+import { createContentScoreService } from '@domain/content-score';
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 
@@ -507,6 +509,15 @@ export async function runCpContentCycle(deps: {
       applied = await pullCuratedItems({ db, log, config, binding: deps.binding, fetchFn: deps.fetchFn, nowIso });
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
+    }
+
+    // ۵) 1.25.48 m6 — مولد امتیاز شناسنامهٔ آیتم: خودِ سامانهٔ کلاینت؛ در همهٔ مسیرهای چرخه
+    // (کرون + فرصت‌طلب) اجرا می‌شود؛ خطایش مانع سینک نیست و هرگز کرش نمی‌کند.
+    try {
+      const score = await createContentScoreService(db, createAuditWriter(db)).refresh();
+      log.info('content_score.cycle', { exercises: score.exercises, templates: score.templates, ms: score.durationMs });
+    } catch (err) {
+      log.warn('content_score.cycle_failed', { error: err instanceof Error ? err.message : String(err) });
     }
 
     if (errors.length === 2) {

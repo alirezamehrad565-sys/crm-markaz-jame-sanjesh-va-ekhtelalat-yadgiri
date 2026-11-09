@@ -44028,6 +44028,36 @@ function registerContentScoreRoutes(app, deps) {
 }
 __name(registerContentScoreRoutes, "registerContentScoreRoutes");
 
+// src/core/audit/writer.ts
+function buildInsert(entry) {
+  return {
+    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    params: [
+      crypto.randomUUID(),
+      entry.actorId,
+      entry.action,
+      entry.resourceType,
+      entry.resourceId,
+      entry.changes ? JSON.stringify(entry.changes) : null
+    ]
+  };
+}
+__name(buildInsert, "buildInsert");
+function createAuditWriter(db) {
+  return {
+    async log(entry) {
+      const { sql, params } = buildInsert(entry);
+      await db.execute(sql, params);
+    },
+    async logInTransaction(tx, entry) {
+      const { sql, params } = buildInsert(entry);
+      await tx.execute(sql, params);
+    }
+  };
+}
+__name(createAuditWriter, "createAuditWriter");
+
 // src/application/cp-content/sync.ts
 var CP_CONTENT_ATTEMPT_KEY = "cp_content.last_attempt_at";
 var CP_CONTENT_SYNC_KEY = "cp_content.last_sync_at";
@@ -44337,6 +44367,12 @@ async function runCpContentCycle(deps) {
       applied = await pullCuratedItems({ db, log, config, binding: deps.binding, fetchFn: deps.fetchFn, nowIso });
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
+    }
+    try {
+      const score = await createContentScoreService(db, createAuditWriter(db)).refresh();
+      log.info("content_score.cycle", { exercises: score.exercises, templates: score.templates, ms: score.durationMs });
+    } catch (err) {
+      log.warn("content_score.cycle_failed", { error: err instanceof Error ? err.message : String(err) });
     }
     if (errors.length === 2) {
       return { status: "error", detail: errors.join("|") };
@@ -54093,36 +54129,6 @@ function createDb(d1, logger) {
 }
 __name(createDb, "createDb");
 
-// src/core/audit/writer.ts
-function buildInsert(entry) {
-  return {
-    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes)
-          VALUES (?, ?, ?, ?, ?, ?)`,
-    params: [
-      crypto.randomUUID(),
-      entry.actorId,
-      entry.action,
-      entry.resourceType,
-      entry.resourceId,
-      entry.changes ? JSON.stringify(entry.changes) : null
-    ]
-  };
-}
-__name(buildInsert, "buildInsert");
-function createAuditWriter(db) {
-  return {
-    async log(entry) {
-      const { sql, params } = buildInsert(entry);
-      await db.execute(sql, params);
-    },
-    async logInTransaction(tx, entry) {
-      const { sql, params } = buildInsert(entry);
-      await tx.execute(sql, params);
-    }
-  };
-}
-__name(createAuditWriter, "createAuditWriter");
-
 // src/core/logger/logger.ts
 var LEVEL_WEIGHT = { debug: 10, info: 20, warn: 30, error: 40 };
 function minLevel() {
@@ -54759,14 +54765,6 @@ async function runCpContentCycleWrap(env) {
     pushed: result.pushed ?? 0,
     applied: result.applied ?? 0
   });
-  try {
-    const audit = createAuditWriter(db);
-    const contentScore = createContentScoreService(db, audit);
-    const score = await contentScore.refresh();
-    logger.info("content_score.cycle.done", { exercises: score.exercises, templates: score.templates, ms: score.durationMs });
-  } catch (err) {
-    logger.warn("content_score.cycle.failed", { error: err instanceof Error ? err.message : String(err) });
-  }
 }
 __name(runCpContentCycleWrap, "runCpContentCycleWrap");
 var cpContentProbeAt = 0;
