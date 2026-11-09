@@ -113,6 +113,8 @@ const NAV = [
   { hash: '#/docs', label: 'نمون‌برگ‌ها و اسناد خام', icon: 'file', group: 'مرکز', roles: ['manager', 'secretary'] }, // 
   { hash: '#/finance', label: 'بودجه و مالی', icon: 'calculator', group: 'مرکز', roles: ['manager'] }, // 
   { hash: '#/case-event-types', label: 'فرم‌ها و پرسش‌نامه‌ها', icon: 'timeline', group: 'ارزیابی و درمان', roles: ['manager', 'secretary', 'therapist'] }, // — نام روایی
+  { hash: '#/center-kpi', label: 'شاخص‌های مرکز', icon: 'trendingUp', group: 'مرکز', roles: ['manager', 'secretary'] }, // ۱.۲۵.۴۶ — محور اول غنی‌سازی
+  { hash: '#/network-library', label: 'کتابخانهٔ شبکه', icon: 'star', group: 'مرکز', roles: ['manager'] }, // ۱.۲۵.۴۶ — محور دوم غنی‌سازی
   { hash: '#/special-needs', label: 'نیازهای ویژه', icon: 'clip', group: 'مرکز', roles: ['manager', 'secretary'] },
   { hash: '#/settings', label: 'تنظیمات', icon: 'settings', group: 'مرکز', roles: ['manager', 'secretary'] },
   { hash: '#/backup', label: 'پشتیبان‌گیری', icon: 'save', group: 'مرکز', roles: ['manager'] },
@@ -444,6 +446,8 @@ register('#/docs/:id', { title: 'سند', render: roleOnly(['manager', 'secretar
 register('#/finance', { title: 'بودجه و مالی', render: managerOnly(lazyView(() => import('./views/finance.js'), 'renderFinance', '#/finance')) }); // فقط مدیر
 register('#/case-event-types', { title: 'فرم‌ها و پرسش‌نامه‌ها', render: roleOnly(['manager', 'secretary', 'therapist'], lazyView(() => import('./views/case-event-types.js'), 'renderCaseEventTypes', '#/case-event-types'), 'این بخش برای همکاران مرکز فعال است.') }); // //
 register('#/special-needs', { title: 'نیازهای ویژه', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/special-needs.js'), 'renderSpecialNeeds', '#/special-needs')) }); // لایهٔ دوم RBAC
+register('#/center-kpi', { title: 'شاخص‌های مرکز', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/center-kpi.js'), 'renderCenterKpi', '#/center-kpi'), 'شاخص‌های مرکز فقط برای دفتر مرکز (مدیر و منشی) فعال است.') }); // ۱.۲۵.۴۶ — تابلوی کیفیت مداخله/پرونده/نوبت
+register('#/network-library', { title: 'کتابخانهٔ شبکه', render: managerOnly(lazyView(() => import('./views/network-library.js'), 'renderNetworkLibrary', '#/network-library')) }); // ۱.۲۵.۴۶ — همرسانی محتوا + برگزیده‌های CP
 
 // مسیر ناشناخته به‌جای ریدایرکت بی‌صدا، نمای ۴۰۴ را رندر می‌کند (hash دست‌نخورده می‌ماند)
 registerNotFound({ title: 'صفحه پیدا نشد', render: renderNotFound });

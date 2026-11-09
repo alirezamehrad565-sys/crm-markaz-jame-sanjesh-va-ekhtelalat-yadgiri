@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.45";
+var APP_VERSION = "1.25.46";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -15180,15 +15180,15 @@ __name(m108NormalizeChecklistTexts, "m108NormalizeChecklistTexts");
 function m108NormalizeChecklistItems(items) {
   if (!items || items.length === 0) return null;
   const seen = /* @__PURE__ */ new Set();
-  const clean3 = [];
+  const clean4 = [];
   for (const it of items) {
     const text = it.text.trim();
     if (!text || seen.has(text)) continue;
     seen.add(text);
-    clean3.push({ text, done: Boolean(it.done) });
-    if (clean3.length >= TODO_CHECKLIST_MAX) break;
+    clean4.push({ text, done: Boolean(it.done) });
+    if (clean4.length >= TODO_CHECKLIST_MAX) break;
   }
-  return clean3.length > 0 ? JSON.stringify(clean3) : null;
+  return clean4.length > 0 ? JSON.stringify(clean4) : null;
 }
 __name(m108NormalizeChecklistItems, "m108NormalizeChecklistItems");
 function createTodosService(deps) {
@@ -15383,9 +15383,9 @@ function createTodosService(deps) {
       return rowToTodo(updated);
     },
     async addChecklistItem(id, text, actor) {
-      const clean3 = text.trim();
-      if (!clean3) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
-      if (clean3.length > 200) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+      const clean4 = text.trim();
+      if (!clean4) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
+      if (clean4.length > 200) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
       await db.transaction(async (tx) => {
         const row = await loadActiveRow(tx, id);
         if (row.assigner_id !== actor.staffId && row.assignee_id !== actor.staffId) {
@@ -15398,10 +15398,10 @@ function createTodosService(deps) {
         if (items.length >= TODO_CHECKLIST_MAX) {
           throw new ValidationError(`\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 ${TODO_CHECKLIST_MAX} \u0645\u0648\u0631\u062F \u0646\u062F\u0627\u0631\u062F`);
         }
-        if (items.some((it) => it.text === clean3)) {
+        if (items.some((it) => it.text === clean4)) {
           throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0648\u0631\u062F \u0627\u0632 \u0642\u0628\u0644 \u062F\u0631 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0647\u0633\u062A");
         }
-        items.push({ text: clean3, done: false });
+        items.push({ text: clean4, done: false });
         await tx.execute(`UPDATE todos SET checklist = ?, updated_at = datetime('now') WHERE id = ?`, [
           JSON.stringify(items),
           id
@@ -16334,11 +16334,11 @@ function createExerciseBankService(deps) {
     },
     // کدام شناسه‌ها واقعاً تمرینِ حذف‌نشدهٔ بانک‌اند (برای اعتبارسنجی لینک کارت طرح درمان)
     async idsExist(ids) {
-      const clean3 = [...new Set(ids.filter((x) => typeof x === "string" && x.length > 0))].slice(0, 50);
-      if (!clean3.length) return /* @__PURE__ */ new Set();
+      const clean4 = [...new Set(ids.filter((x) => typeof x === "string" && x.length > 0))].slice(0, 50);
+      if (!clean4.length) return /* @__PURE__ */ new Set();
       const rows = await db.query(
-        `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${clean3.map(() => "?").join(", ")})`,
-        clean3
+        `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${clean4.map(() => "?").join(", ")})`,
+        clean4
       );
       return new Set(rows.map((r) => r.id));
     },
@@ -34324,8 +34324,8 @@ function assertPlainTone(text) {
 }
 __name(assertPlainTone, "assertPlainTone");
 function shortLine(text, max = 120) {
-  const clean3 = text.replace(/\s+/g, " ").trim();
-  return Array.from(clean3).length <= max ? clean3 : `${Array.from(clean3).slice(0, max - 1).join("").trim()}\u2026`;
+  const clean4 = text.replace(/\s+/g, " ").trim();
+  return Array.from(clean4).length <= max ? clean4 : `${Array.from(clean4).slice(0, max - 1).join("").trim()}\u2026`;
 }
 __name(shortLine, "shortLine");
 function sawOf(h) {
@@ -43216,6 +43216,569 @@ function registerDocsRoutes(app, service) {
 }
 __name(registerDocsRoutes, "registerDocsRoutes");
 
+// src/domain/center-kpi/service.ts
+function round4(v) {
+  return v === null ? null : Math.round(v * 1e4) / 1e4;
+}
+__name(round4, "round4");
+function rate(num4, den) {
+  if (den <= 0) return null;
+  return round4(num4 / den);
+}
+__name(rate, "rate");
+function parseJson5(raw2) {
+  if (!raw2) return null;
+  try {
+    return JSON.parse(raw2);
+  } catch {
+    return null;
+  }
+}
+__name(parseJson5, "parseJson");
+function durationMinutes(startIso, endIso) {
+  const s = Date.parse(startIso);
+  const e = Date.parse(endIso);
+  if (Number.isNaN(s) || Number.isNaN(e) || e <= s) return 0;
+  return Math.min(Math.round((e - s) / 6e4), 12 * 60);
+}
+__name(durationMinutes, "durationMinutes");
+function createCenterKpiService(deps) {
+  const db = deps.db;
+  async function summary(days, now = /* @__PURE__ */ new Date()) {
+    const todayYmd = tehranTodayYmd(now);
+    const fromYmd = addDaysYmd(todayYmd, -(days - 1));
+    const fromRange = tehranDayRange(fromYmd);
+    const toRange = tehranDayRange(todayYmd);
+    const fromIso = fromRange.start;
+    const toIso = toRange.end;
+    const nowIso = now.toISOString();
+    const window = {
+      days,
+      from_iso: fromIso,
+      to_iso: toIso,
+      from_ymd: fromYmd,
+      to_ymd: todayYmd
+    };
+    const [apptAgg, attendAgg, overdue, schedRows, whRows, served] = await Promise.all([
+      db.queryOne(
+        `SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END), 0) AS scheduled,
+                COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) AS cancelled
+         FROM appointments WHERE start_at >= ? AND start_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT
+           COALESCE(SUM(CASE WHEN aps.attendance = 'present' THEN 1 ELSE 0 END), 0) AS present,
+           COALESCE(SUM(CASE WHEN aps.attendance = 'absent' THEN 1 ELSE 0 END), 0) AS absent,
+           COALESCE(SUM(CASE WHEN aps.attendance = 'pending' THEN 1 ELSE 0 END), 0) AS pending,
+           COALESCE(SUM(CASE WHEN aps.attendance = 'cancelled' THEN 1 ELSE 0 END), 0) AS cancelled
+         FROM appointment_students aps
+         JOIN appointments a ON a.id = aps.appointment_id
+         WHERE a.start_at >= ? AND a.start_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT COUNT(*) AS c
+         FROM appointment_students aps
+         JOIN appointments a ON a.id = aps.appointment_id
+         WHERE aps.attendance = 'pending' AND a.end_at < ?`,
+        [nowIso]
+      ),
+      db.query(
+        `SELECT start_at, end_at FROM appointments
+         WHERE status = 'scheduled' AND start_at >= ? AND start_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.query(
+        `SELECT wh.weekday, wh.start_minute, wh.end_minute
+         FROM working_hours wh JOIN staff s ON s.id = wh.staff_id
+         WHERE s.active = 1`
+      ),
+      db.queryOne(
+        `SELECT COUNT(DISTINCT aps.student_id) AS c
+         FROM appointment_students aps
+         JOIN appointments a ON a.id = aps.appointment_id
+         WHERE a.start_at >= ? AND a.start_at <= ?`,
+        [fromIso, toIso]
+      )
+    ]);
+    const bookedByDay = /* @__PURE__ */ new Map();
+    for (const r of schedRows) {
+      const ymd = tehranTodayYmd(new Date(r.start_at));
+      bookedByDay.set(ymd, (bookedByDay.get(ymd) ?? 0) + durationMinutes(r.start_at, r.end_at));
+    }
+    const capacityByWeekday = /* @__PURE__ */ new Map();
+    for (const r of whRows) {
+      capacityByWeekday.set(r.weekday, (capacityByWeekday.get(r.weekday) ?? 0) + (r.end_minute - r.start_minute));
+    }
+    let bookedMinutes = 0;
+    let capacityMinutes = 0;
+    for (let i = 0; i < days; i++) {
+      const ymd = addDaysYmd(fromYmd, i);
+      if (ymd > todayYmd) break;
+      capacityMinutes += capacityByWeekday.get(iranianWeekdayOfYmd(ymd)) ?? 0;
+      bookedMinutes += bookedByDay.get(ymd) ?? 0;
+    }
+    const attendance = {
+      present: attendAgg?.present ?? 0,
+      absent: attendAgg?.absent ?? 0,
+      pending: attendAgg?.pending ?? 0,
+      cancelled: attendAgg?.cancelled ?? 0
+    };
+    const appointments = {
+      total: apptAgg?.total ?? 0,
+      scheduled: apptAgg?.scheduled ?? 0,
+      cancelled: apptAgg?.cancelled ?? 0,
+      cancel_rate: rate(apptAgg?.cancelled ?? 0, apptAgg?.total ?? 0),
+      attendance,
+      absent_rate: rate(attendance.absent, attendance.present + attendance.absent),
+      pending_overdue: overdue?.c ?? 0,
+      booked_minutes: bookedMinutes,
+      capacity_minutes: capacityMinutes,
+      fill_rate: rate(bookedMinutes, capacityMinutes),
+      students_served: served?.c ?? 0
+    };
+    const [pathAgg, fidelityRows, gameAgg, attemptAgg, assignAgg] = await Promise.all([
+      db.queryOne(
+        `SELECT
+           COALESCE(SUM(CASE WHEN status = 'done' AND done_at >= ? AND done_at <= ? THEN 1 ELSE 0 END), 0) AS done,
+           COALESCE(SUM(CASE WHEN status = 'skipped' AND updated_at >= ? AND updated_at <= ? THEN 1 ELSE 0 END), 0) AS skipped
+         FROM pathway_sessions`,
+        [fromIso, toIso, fromIso, toIso]
+      ),
+      db.query(
+        `SELECT fidelity FROM pathway_sessions
+         WHERE status = 'done' AND done_at >= ? AND done_at <= ? AND fidelity IS NOT NULL`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN validity = 'valid' THEN 1 ELSE 0 END), 0) AS valid,
+                COALESCE(SUM(CASE WHEN validity = 'partial' THEN 1 ELSE 0 END), 0) AS partial,
+                COALESCE(SUM(CASE WHEN validity = 'invalid' THEN 1 ELSE 0 END), 0) AS invalid
+         FROM game_sessions WHERE created_at >= ? AND created_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT COUNT(*) AS scored,
+                COALESCE(SUM(CASE WHEN correct = 1 THEN 1 ELSE 0 END), 0) AS correct
+         FROM game_attempts WHERE correct IS NOT NULL AND created_at >= ? AND created_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END), 0) AS done,
+                COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) AS cancelled
+         FROM exercise_assignments WHERE created_at >= ? AND created_at <= ?`,
+        [fromIso, toIso]
+      )
+    ]);
+    let fidelityChecked = 0;
+    let fidelityFull = 0;
+    for (const row of fidelityRows) {
+      const f = parseJson5(row.fidelity);
+      if (!f) continue;
+      fidelityChecked += 1;
+      if (f.protocol === true && f.homework === true && f.parent === true) fidelityFull += 1;
+    }
+    const gameTotal = gameAgg?.total ?? 0;
+    const attemptScored = attemptAgg?.scored ?? 0;
+    const intervention = {
+      pathway_sessions_done: pathAgg?.done ?? 0,
+      pathway_sessions_skipped: pathAgg?.skipped ?? 0,
+      session_completion_rate: rate(pathAgg?.done ?? 0, (pathAgg?.done ?? 0) + (pathAgg?.skipped ?? 0)),
+      fidelity_checked: fidelityChecked,
+      fidelity_full: fidelityFull,
+      game_sessions: gameTotal,
+      game_valid: gameAgg?.valid ?? 0,
+      game_partial: gameAgg?.partial ?? 0,
+      game_invalid: gameAgg?.invalid ?? 0,
+      game_valid_rate: rate(gameAgg?.valid ?? 0, gameTotal),
+      game_attempts_scored: attemptScored,
+      game_correct: attemptAgg?.correct ?? 0,
+      game_correct_rate: rate(attemptAgg?.correct ?? 0, attemptScored),
+      assignments_total: assignAgg?.total ?? 0,
+      assignments_done: assignAgg?.done ?? 0,
+      assignments_cancelled: assignAgg?.cancelled ?? 0,
+      assignment_done_rate: rate(assignAgg?.done ?? 0, (assignAgg?.done ?? 0) + (assignAgg?.cancelled ?? 0))
+    };
+    const [studentsAgg, caseAgg, docAgg, assessAgg, familyAgg, familyScoreRows] = await Promise.all([
+      db.queryOne(
+        `SELECT COALESCE(SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END), 0) AS active FROM students`
+      ),
+      db.queryOne(
+        `SELECT COUNT(*) AS total FROM case_events WHERE created_at >= ? AND created_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT COUNT(DISTINCT ce.student_id) AS students,
+                COALESCE(SUM(CASE WHEN cet.category = 'session' THEN 1 ELSE 0 END), 0) AS session_notes
+         FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
+         WHERE ce.created_at >= ? AND ce.created_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT COUNT(*) AS c FROM assessments WHERE active = 1 AND performed_at >= ? AND performed_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS filled
+         FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
+         WHERE cet.family_fillable = 1 AND ce.created_at >= ? AND ce.created_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.query(
+        `SELECT ce.analysis FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
+         WHERE cet.family_fillable = 1 AND ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL
+           AND ce.created_at >= ? AND ce.created_at <= ?`,
+        [fromIso, toIso]
+      )
+    ]);
+    let scoreSum = 0;
+    let scoreCount = 0;
+    for (const row of familyScoreRows) {
+      const a = parseJson5(row.analysis);
+      const s = Number(a?.score);
+      if (Number.isFinite(s)) {
+        scoreSum += s;
+        scoreCount += 1;
+      }
+    }
+    const studentsActive = studentsAgg?.active ?? 0;
+    const familyTotal = familyAgg?.total ?? 0;
+    const documentation = {
+      students_active: studentsActive,
+      case_events_total: caseAgg?.total ?? 0,
+      session_notes: docAgg?.session_notes ?? 0,
+      students_documented: docAgg?.students ?? 0,
+      documentation_coverage: rate(docAgg?.students ?? 0, studentsActive),
+      assessments_recorded: assessAgg?.c ?? 0,
+      family_requests: familyTotal,
+      family_filled: familyAgg?.filled ?? 0,
+      family_response_rate: rate(familyAgg?.filled ?? 0, familyTotal),
+      family_avg_score: scoreCount > 0 ? round4(scoreSum / scoreCount) : null
+    };
+    return {
+      window,
+      generated_at: nowIso,
+      appointments,
+      intervention,
+      documentation
+    };
+  }
+  __name(summary, "summary");
+  return { summary };
+}
+__name(createCenterKpiService, "createCenterKpiService");
+
+// src/domain/center-kpi/types.ts
+function isKpiDays(v) {
+  return v === 7 || v === 30 || v === 90;
+}
+__name(isKpiDays, "isKpiDays");
+
+// src/domain/center-kpi/routes.ts
+function registerCenterKpiRoutes(app, service) {
+  const office = requireRole("manager", "secretary");
+  app.get("/api/kpi/summary", office, async (c) => {
+    const rawDays = Number(c.req.query("days") ?? 30);
+    const days = isKpiDays(rawDays) ? rawDays : 30;
+    const data = await service.summary(days);
+    return c.json({ data }, 200);
+  });
+}
+__name(registerCenterKpiRoutes, "registerCenterKpiRoutes");
+
+// src/domain/network-content/types.ts
+var CONTENT_KINDS = ["exercise", "plan", "doc"];
+var CONTENT_KIND_LABELS = {
+  exercise: "\u062A\u0645\u0631\u06CC\u0646 / \u06A9\u0627\u0631\u062A \u0622\u0645\u0627\u062F\u0647",
+  plan: "\u0637\u0631\u062D \u062F\u0631\u0645\u0627\u0646",
+  doc: "\u0633\u0646\u062F \u062E\u0627\u0645"
+};
+
+// src/domain/network-content/service.ts
+var TITLE_MAX2 = 150;
+var SUMMARY_MAX = 600;
+var BODY_MAX = 8e3;
+var TAG_MAX = 40;
+var TAGS_MAX = 8;
+var LIST_PAGE_MAX = 100;
+function normalizeTag3(raw2) {
+  return String(raw2 ?? "").replace(/[\u200c\u200f\u200e]/g, "\u200C").replace(/\s+/g, " ").trim();
+}
+__name(normalizeTag3, "normalizeTag");
+function isContentKind(v) {
+  return typeof v === "string" && CONTENT_KINDS.includes(v);
+}
+__name(isContentKind, "isContentKind");
+function mapRow(row) {
+  let tags = [];
+  const parsed = row.tags ? JSON.parse(row.tags) : null;
+  if (Array.isArray(parsed)) tags = parsed.filter((t) => typeof t === "string");
+  const kind = isContentKind(row.kind) ? row.kind : "exercise";
+  return {
+    id: row.id,
+    kind,
+    kindLabel: CONTENT_KIND_LABELS[kind],
+    title: row.title,
+    summary: row.summary ?? "",
+    body: row.body ?? "",
+    tags,
+    origin: row.origin === "cp" ? "cp" : "local",
+    status: row.status,
+    sourceCenter: row.source_center,
+    sourceRef: row.source_ref,
+    active: row.active === 1,
+    submittedAt: row.submitted_at,
+    syncedAt: row.synced_at,
+    createdBy: row.created_by,
+    createdByName: row.created_by_name ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+__name(mapRow, "mapRow");
+var SELECT_COLS3 = `nc.id, nc.kind, nc.title, nc.summary, nc.body, nc.tags, nc.origin, nc.status,
+  nc.source_center, nc.source_ref, nc.active, nc.submitted_at, nc.synced_at, nc.created_by,
+  s.full_name AS created_by_name, nc.created_at, nc.updated_at`;
+function createNetworkContentService(deps) {
+  const db = deps.db;
+  const audit = deps.audit;
+  async function counts() {
+    const rows = await db.query(
+      `SELECT origin, COUNT(*) AS c FROM network_content
+       WHERE active = 1 AND status NOT IN ('withdrawn') GROUP BY origin`
+    );
+    let local = 0;
+    let network = 0;
+    for (const r of rows) {
+      if (r.origin === "cp") network += r.c;
+      else local += r.c;
+    }
+    return { local, network };
+  }
+  __name(counts, "counts");
+  async function getById(id) {
+    const row = await db.queryOne(
+      `SELECT ${SELECT_COLS3} FROM network_content nc
+       LEFT JOIN staff s ON s.id = nc.created_by WHERE nc.id = ?`,
+      [id]
+    );
+    return row ? mapRow(row) : null;
+  }
+  __name(getById, "getById");
+  async function requireEditable(id) {
+    const rec = await getById(id);
+    if (!rec) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
+    if (rec.origin !== "local") {
+      throw new ConflictError("\u0627\u06CC\u0646 \u0622\u06CC\u062A\u0645 \u0627\u0632 \u06A9\u0646\u062A\u0631\u0644\u200C\u067E\u0644\u06CC\u0646 \u0622\u0645\u062F\u0647 \u0648 \u062F\u0631 \u0645\u0631\u06A9\u0632 \u0642\u0627\u0628\u0644 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u06CC\u0633\u062A");
+    }
+    return rec;
+  }
+  __name(requireEditable, "requireEditable");
+  return {
+    async list(opts) {
+      const limit = Math.min(Math.max(1, Math.floor(opts.limit) || 20), LIST_PAGE_MAX);
+      const offset = Math.max(0, Math.floor(opts.offset) || 0);
+      const where = [];
+      const params = [];
+      if (opts.origin === "cp") where.push(`nc.origin = 'cp' AND nc.active = 1`);
+      else if (opts.origin === "local") where.push(`nc.origin = 'local' AND nc.status != 'withdrawn'`);
+      if (opts.kind && isContentKind(opts.kind)) {
+        where.push("nc.kind = ?");
+        params.push(opts.kind);
+      }
+      if (opts.q && opts.q.trim()) {
+        where.push("(nc.title LIKE ? OR nc.summary LIKE ?)");
+        const like = `%${opts.q.trim()}%`;
+        params.push(like, like);
+      }
+      const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+      const rows = await db.query(
+        `SELECT ${SELECT_COLS3} FROM network_content nc
+         LEFT JOIN staff s ON s.id = nc.created_by
+         ${whereSql}
+         ORDER BY nc.updated_at DESC, nc.created_at DESC
+         LIMIT ? OFFSET ?`,
+        [...params, limit + 1, offset]
+      );
+      const hasMore = rows.length > limit;
+      return {
+        items: rows.slice(0, limit).map(mapRow),
+        hasMore,
+        counts: await counts()
+      };
+    },
+    async get(id) {
+      return getById(id);
+    },
+    async create(actor, input) {
+      const title = String(input.title ?? "").trim();
+      if (title.length < 2 || title.length > TITLE_MAX2) {
+        throw new ValidationError(`\u0639\u0646\u0648\u0627\u0646 \u0628\u0627\u06CC\u062F \u0628\u06CC\u0646 \u06F2 \u062A\u0627 ${TITLE_MAX2} \u0646\u0648\u06CC\u0633\u0647 \u0628\u0627\u0634\u062F`);
+      }
+      const summary = String(input.summary ?? "").trim();
+      if (summary.length > SUMMARY_MAX) throw new ValidationError(`\u062E\u0644\u0627\u0635\u0647 \u062D\u062F\u0627\u06A9\u062B\u0631 ${SUMMARY_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`);
+      const body = String(input.body ?? "").trim();
+      if (body.length > BODY_MAX) throw new ValidationError(`\u0645\u062D\u062A\u0648\u0627 \u062D\u062F\u0627\u06A9\u062B\u0631 ${BODY_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`);
+      if (!isContentKind(input.kind)) throw new ValidationError("\u0646\u0648\u0639 \u0645\u062D\u062A\u0648\u0627 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+      const tags = (Array.isArray(input.tags) ? input.tags : []).map(normalizeTag3).filter((t) => t.length >= 2 && t.length <= TAG_MAX).slice(0, TAGS_MAX);
+      const uniqueTags = [...new Set(tags)];
+      const id = crypto.randomUUID();
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const status = input.queueNow ? "queued" : "draft";
+      await db.execute(
+        `INSERT INTO network_content
+           (id, kind, title, summary, body, tags, origin, status, source_ref, active,
+            submitted_at, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'local', ?, ?, 1, ?, ?, ?, ?)`,
+        [
+          id,
+          input.kind,
+          title,
+          summary,
+          body,
+          JSON.stringify(uniqueTags),
+          status,
+          input.sourceRef ?? null,
+          input.queueNow ? now : null,
+          actor.id,
+          now,
+          now
+        ]
+      );
+      await audit.log({
+        actorId: actor.id,
+        action: "network_content.create",
+        resourceType: "network_content",
+        resourceId: id,
+        changes: { kind: { from: null, to: input.kind }, status: { from: null, to: status } }
+      });
+      const rec = await getById(id);
+      if (!rec) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
+      return rec;
+    },
+    async queue(actor, id) {
+      const rec = await requireEditable(id);
+      if (rec.status !== "draft" && rec.status !== "withdrawn") {
+        throw new ConflictError("\u0641\u0642\u0637 \u067E\u06CC\u0634\u200C\u0646\u0648\u06CC\u0633 \u06CC\u0627 \u06A9\u0646\u0627\u0631\u06AF\u0630\u0627\u0634\u062A\u0647 \u0631\u0627 \u0645\u06CC\u200C\u062A\u0648\u0627\u0646 \u0628\u0647 \u0635\u0641 \u0647\u0645\u0631\u0633\u0627\u0646\u06CC \u0641\u0631\u0633\u062A\u0627\u062F");
+      }
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db.execute(
+        `UPDATE network_content SET status = 'queued', submitted_at = ?, updated_at = ? WHERE id = ?`,
+        [now, now, id]
+      );
+      await audit.log({
+        actorId: actor.id,
+        action: "network_content.queue",
+        resourceType: "network_content",
+        resourceId: id,
+        changes: { status: { from: rec.status, to: "queued" } }
+      });
+      const next = await getById(id);
+      if (!next) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
+      return next;
+    },
+    async withdraw(actor, id) {
+      const rec = await requireEditable(id);
+      if (rec.status !== "queued" && rec.status !== "submitted" && rec.status !== "draft") {
+        throw new ConflictError("\u0627\u06CC\u0646 \u0622\u06CC\u062A\u0645 \u0642\u0627\u0628\u0644 \u06A9\u0646\u0627\u0631\u06AF\u0630\u0627\u0631\u06CC \u0646\u06CC\u0633\u062A");
+      }
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db.execute(
+        `UPDATE network_content SET status = 'withdrawn', updated_at = ? WHERE id = ?`,
+        [now, id]
+      );
+      await audit.log({
+        actorId: actor.id,
+        action: "network_content.withdraw",
+        resourceType: "network_content",
+        resourceId: id,
+        changes: { status: { from: rec.status, to: "withdrawn" } }
+      });
+      const next = await getById(id);
+      if (!next) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
+      return next;
+    }
+  };
+}
+__name(createNetworkContentService, "createNetworkContentService");
+
+// src/domain/network-content/routes.ts
+var ContentCreateSchema = external_exports.object({
+  kind: external_exports.enum(CONTENT_KINDS),
+  title: external_exports.string().trim().min(2, "\u0639\u0646\u0648\u0627\u0646 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(150),
+  summary: external_exports.string().trim().max(600).default(""),
+  body: external_exports.string().trim().max(8e3).default(""),
+  tags: external_exports.array(external_exports.string().min(2).max(40)).max(8).default([]),
+  source_ref: external_exports.string().max(120).nullish(),
+  queue_now: external_exports.boolean().default(false)
+});
+function parseKind(v) {
+  if (!v || v === "all") return void 0;
+  return CONTENT_KINDS.includes(v) ? v : void 0;
+}
+__name(parseKind, "parseKind");
+function parseOrigin(v) {
+  if (v === "local" || v === "cp") return v;
+  return void 0;
+}
+__name(parseOrigin, "parseOrigin");
+function registerNetworkContentRoutes(app, service) {
+  const office = requireRole("manager", "secretary");
+  const manager = requireRole("manager");
+  app.get("/api/network-content", office, async (c) => {
+    const q = c.req.query();
+    const result = await service.list({
+      kind: parseKind(q.kind),
+      origin: parseOrigin(q.origin),
+      q: q.q?.trim() || void 0,
+      limit: Number(q.limit ?? 0) || 30,
+      offset: Math.max(0, Number(q.offset ?? 0) || 0)
+    });
+    return c.json({ data: result.items, meta: { hasMore: result.hasMore, counts: result.counts } }, 200);
+  });
+  app.get("/api/network-content/:id", office, async (c) => {
+    const id = UuidSchema.parse(c.req.param("id"));
+    const rec = await service.get(id);
+    if (!rec) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
+    return c.json({ data: rec }, 200);
+  });
+  app.post("/api/network-content", manager, async (c) => {
+    const actor = getAuthContext(c);
+    const body = ContentCreateSchema.parse(await c.req.json());
+    const rec = await service.create(
+      { id: actor.staffId },
+      {
+        kind: body.kind,
+        title: body.title,
+        summary: body.summary,
+        body: body.body,
+        tags: body.tags,
+        sourceRef: body.source_ref ?? null,
+        queueNow: body.queue_now
+      }
+    );
+    return c.json({ data: rec }, 201);
+  });
+  app.post("/api/network-content/:id/queue", manager, async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const rec = await service.queue({ id: actor.staffId }, id);
+    return c.json({ data: rec }, 200);
+  });
+  app.post("/api/network-content/:id/withdraw", manager, async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const rec = await service.withdraw({ id: actor.staffId }, id);
+    return c.json({ data: rec }, 200);
+  });
+}
+__name(registerNetworkContentRoutes, "registerNetworkContentRoutes");
+
 // src/domain/finance/service.ts
 var LIST_LIMIT = 500;
 var YMD_RE2 = /^\d{4}-\d{2}-\d{2}$/;
@@ -49695,8 +50258,8 @@ async function fetchBaleBotUsername(token, fetchImpl) {
     const body = await res.json().catch(() => ({}));
     const username = body?.result?.username;
     if (typeof username !== "string") return null;
-    const clean3 = username.trim().replace(/^@/, "");
-    return /^[A-Za-z0-9_]{2,64}$/.test(clean3) ? clean3 : null;
+    const clean4 = username.trim().replace(/^@/, "");
+    return /^[A-Za-z0-9_]{2,64}$/.test(clean4) ? clean4 : null;
   } catch {
     return null;
   }
@@ -50356,20 +50919,20 @@ function createSettingsService(deps) {
       return typeof v === "string" ? v.trim().replace(/^@/, "") : "";
     },
     async setBotUsername(username, actor) {
-      const clean3 = username.trim().replace(/^@/, "");
-      if (clean3.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean3)) {
+      const clean4 = username.trim().replace(/^@/, "");
+      if (clean4.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean4)) {
         throw new ConflictError("\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u0628\u0627\u062A \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0644\u0627\u062A\u06CC\u0646\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637 \u0632\u06CC\u0631 \u0627\u0633\u062A (\u06F2 \u062A\u0627 \u06F6\u06F4 \u0646\u0648\u06CC\u0633\u0647)");
       }
       const before = await this.getBotUsername();
-      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean3, actor);
+      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean4, actor);
       await audit.log({
         actorId: actor.staffId,
         action: "settings.bot_username.update",
         resourceType: "settings",
         resourceId: "bot_username",
-        changes: { bot_username: { from: before || null, to: clean3 || null } }
+        changes: { bot_username: { from: before || null, to: clean4 || null } }
       });
-      return clean3;
+      return clean4;
     },
     async getNotifyFlags() {
       const stored = await readAll();
@@ -50424,10 +50987,10 @@ function createSettingsService(deps) {
     async updateScoringConfig(input, actor) {
       const before = await this.getScoringConfig();
       const epoch = epochUtcOfTehranYmd(input.epochYmd);
-      const clean3 = mergeScoringWeights(input.weights);
-      await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean3 }, actor);
-      const changed = Object.keys(clean3).filter(
-        (k) => clean3[k] !== before.weights[k]
+      const clean4 = mergeScoringWeights(input.weights);
+      await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean4 }, actor);
+      const changed = Object.keys(clean4).filter(
+        (k) => clean4[k] !== before.weights[k]
       ).length;
       await audit.log({
         actorId: actor.staffId,
@@ -50935,9 +51498,9 @@ function createBackupService(deps) {
             );
             if (rows.length === 0) break;
             for (const r of rows) {
-              const clean3 = {};
-              for (const [k, v] of Object.entries(r)) clean3[k] = encodeValue(v);
-              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean3)}`;
+              const clean4 = {};
+              for (const [k, v] of Object.entries(r)) clean4[k] = encodeValue(v);
+              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean4)}`;
               emitted += 1;
             }
             if (rows.length < page2) break;
@@ -52672,7 +53235,9 @@ function createServices(deps) {
   });
   const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null });
   const rum = createRumService({ db, logger });
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum };
+  const centerKpi = createCenterKpiService({ db });
+  const networkContent = createNetworkContentService({ db, audit });
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent };
 }
 __name(createServices, "createServices");
 function createApp(deps) {
@@ -52796,6 +53361,8 @@ function createApp(deps) {
   registerSettingsRoutes(app, services.settings);
   registerBackupRoutes(app, services.backup);
   registerRumRoutes(app, services.rum);
+  registerCenterKpiRoutes(app, services.centerKpi);
+  registerNetworkContentRoutes(app, services.networkContent);
   if (FEATURES.apiKeys) registerKeysRoutes(app, services.keys);
   app.get("/api/conflicts", async (c) => {
     const staffId = c.req.query("staff_id") ?? "";
@@ -53438,6 +54005,288 @@ async function pushCpReport(deps) {
 }
 __name(pushCpReport, "pushCpReport");
 
+// src/application/cp-content/sync.ts
+var CP_CONTENT_ATTEMPT_KEY = "cp_content.last_attempt_at";
+var CP_CONTENT_SYNC_KEY = "cp_content.last_sync_at";
+var CP_CONTENT_PUSH_KEY = "cp_content.last_push_at";
+var CP_CONTENT_MIN_INTERVAL_MS = 15 * 6e4;
+var CP_CONTENT_ID_PREFIX = "cp-content-";
+var CP_CONTENT_LOOKBACK_MS = 6e4;
+var CP_CONTENT_TIMEOUT_MS = 15e3;
+var CP_CONTENT_BATCH_MAX = 20;
+function clean3(v) {
+  const s = v?.trim();
+  return s ? s : null;
+}
+__name(clean3, "clean");
+function cpOriginFrom(baseUrl) {
+  const s = clean3(baseUrl);
+  if (!s) return null;
+  try {
+    return new URL(s).origin;
+  } catch {
+    return null;
+  }
+}
+__name(cpOriginFrom, "cpOriginFrom");
+function buildCpContentConfig(env) {
+  return {
+    cpOrigin: cpOriginFrom(env.CP_SYNC_URL),
+    cpNodeCode: clean3(env.CP_NODE_CODE),
+    cpNodeKey: clean3(env.CP_NODE_KEY),
+    cpSyncStaffId: clean3(env.CP_SYNC_STAFF_ID)
+  };
+}
+__name(buildCpContentConfig, "buildCpContentConfig");
+var CpContentSyncItemSchema = external_exports.object({
+  // min(4) هم‌قرارداد اعلان‌ها: آیتم بی‌پیشوند باید از Zod رد شود تا فیلتر JS (لایهٔ دفاع اول) آن را ببیند و دور بریزد
+  id: external_exports.string().min(4).max(120),
+  kind: external_exports.enum(["exercise", "plan", "doc"]),
+  title: external_exports.string().min(1).max(150),
+  summary: external_exports.string().max(600).default(""),
+  body: external_exports.string().max(8e3).default(""),
+  tags: external_exports.array(external_exports.string().max(40)).max(8).default([]),
+  active: external_exports.boolean(),
+  source_center: external_exports.string().max(60).nullable().default(null),
+  created_at: external_exports.string().min(10).max(40),
+  updated_at: external_exports.string().min(10).max(40)
+});
+var CpContentSyncResponseSchema = external_exports.object({
+  data: external_exports.object({
+    server_time: external_exports.string().min(10).max(40),
+    items: external_exports.array(CpContentSyncItemSchema).max(CP_CONTENT_BATCH_MAX)
+  })
+});
+async function readSettingsIso3(db, key) {
+  const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.value);
+    if (typeof parsed === "string" && parsed.length > 0) return parsed;
+  } catch {
+  }
+  return null;
+}
+__name(readSettingsIso3, "readSettingsIso");
+async function writeSettings2(db, key, iso, updatedBy, nowIso) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+    [key, JSON.stringify(iso), updatedBy, nowIso]
+  );
+}
+__name(writeSettings2, "writeSettings");
+function shouldRunCpContent(lastAttemptIso, now, minIntervalMs = CP_CONTENT_MIN_INTERVAL_MS) {
+  if (!lastAttemptIso) return true;
+  const t = Date.parse(lastAttemptIso);
+  if (Number.isNaN(t)) return true;
+  return now.getTime() - t >= minIntervalMs;
+}
+__name(shouldRunCpContent, "shouldRunCpContent");
+async function stampCpContentAttempt(db, at = /* @__PURE__ */ new Date()) {
+  await writeSettings2(db, CP_CONTENT_ATTEMPT_KEY, at.toISOString(), "cp-content", at.toISOString());
+}
+__name(stampCpContentAttempt, "stampCpContentAttempt");
+async function pushQueuedSubmissions(deps) {
+  const { db, log, config, nowIso } = deps;
+  const rows = await db.query(
+    `SELECT id, kind, title, summary, body, tags, submitted_at, source_ref
+     FROM network_content
+     WHERE origin = 'local' AND status = 'queued'
+     ORDER BY submitted_at ASC LIMIT ${CP_CONTENT_BATCH_MAX}`
+  );
+  if (rows.length === 0) return 0;
+  let tags = [];
+  const items = rows.map((r) => {
+    try {
+      const parsed = r.tags ? JSON.parse(r.tags) : null;
+      if (Array.isArray(parsed)) tags = parsed.filter((t) => typeof t === "string");
+    } catch {
+      tags = [];
+    }
+    return {
+      id: r.id,
+      kind: r.kind === "plan" || r.kind === "doc" ? r.kind : "exercise",
+      title: r.title,
+      summary: r.summary ?? "",
+      body: r.body ?? "",
+      tags,
+      submitted_at: r.submitted_at ?? nowIso,
+      source_ref: r.source_ref
+    };
+  });
+  const url = `${config.cpOrigin}/api/node/content/submit`;
+  const init = {
+    method: "POST",
+    headers: {
+      "X-CP-Node-Code": config.cpNodeCode ?? "",
+      Authorization: `Bearer ${config.cpNodeKey ?? ""}`,
+      "X-CP-Node-Version": APP_VERSION,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ items }),
+    signal: AbortSignal.timeout(CP_CONTENT_TIMEOUT_MS)
+  };
+  const res = deps.binding ? await deps.binding.fetch(url, init) : await (deps.fetchFn ?? fetch)(url, init);
+  if (!res.ok) {
+    let bodyHead = "";
+    try {
+      bodyHead = (await res.text()).slice(0, 180);
+    } catch {
+      bodyHead = "";
+    }
+    log.warn("cp_content.push_failed", { http: res.status, detail: "cp_http_error", url, body_head: bodyHead });
+    throw new Error(`http_${res.status}`);
+  }
+  await db.execute(
+    `UPDATE network_content SET status = 'submitted', updated_at = ?
+     WHERE origin = 'local' AND status = 'queued' AND id IN (${items.map(() => "?").join(", ")})`,
+    [nowIso, ...items.map((i) => i.id)]
+  );
+  log.info("cp_content.push", { n: items.length });
+  return items.length;
+}
+__name(pushQueuedSubmissions, "pushQueuedSubmissions");
+async function pullCuratedItems(deps) {
+  const { db, log, config, nowIso } = deps;
+  const lastIso = await readSettingsIso3(db, CP_CONTENT_SYNC_KEY);
+  let sinceIso = null;
+  if (lastIso) {
+    const t = Date.parse(lastIso);
+    if (!Number.isNaN(t)) sinceIso = new Date(t - CP_CONTENT_LOOKBACK_MS).toISOString();
+  }
+  const url = `${config.cpOrigin}/api/node/content/sync${sinceIso ? `?since=${encodeURIComponent(sinceIso)}` : ""}`;
+  const init = {
+    method: "GET",
+    headers: {
+      "X-CP-Node-Code": config.cpNodeCode ?? "",
+      Authorization: `Bearer ${config.cpNodeKey ?? ""}`,
+      "X-CP-Node-Version": APP_VERSION
+    },
+    signal: AbortSignal.timeout(CP_CONTENT_TIMEOUT_MS)
+  };
+  const res = deps.binding ? await deps.binding.fetch(url, init) : await (deps.fetchFn ?? fetch)(url, init);
+  if (!res.ok) {
+    let bodyHead = "";
+    try {
+      bodyHead = (await res.text()).slice(0, 180);
+    } catch {
+      bodyHead = "";
+    }
+    log.warn("cp_content.pull_failed", { http: res.status, detail: "cp_http_error", url, body_head: bodyHead });
+    throw new Error(`http_${res.status}`);
+  }
+  const payload = await res.json();
+  const parsed = CpContentSyncResponseSchema.safeParse(payload);
+  if (!parsed.success) {
+    log.warn("cp_content.pull_failed", { detail: "cp_payload_invalid" });
+    throw new Error("payload_invalid");
+  }
+  const items = parsed.data.data.items.filter((it) => it.id.startsWith(CP_CONTENT_ID_PREFIX)).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
+  if (items.length > 0) {
+    const createdBy = config.cpSyncStaffId ?? "cp-content";
+    const statements = items.map(
+      (it) => db.prepare(
+        `INSERT INTO network_content
+           (id, kind, title, summary, body, tags, origin, status, source_center,
+            active, synced_at, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'cp', 'published', ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           kind = excluded.kind,
+           title = excluded.title,
+           summary = excluded.summary,
+           body = excluded.body,
+           tags = excluded.tags,
+           source_center = excluded.source_center,
+           active = excluded.active,
+           synced_at = excluded.synced_at,
+           updated_at = excluded.updated_at
+         -- \u06AF\u0627\u0631\u062F \u0637\u0644\u0627\u06CC\u06CC (\u0644\u0627\u06CC\u0647\u0654 \u062F\u0641\u0627\u0639 \u062F\u0648\u0645): \u0647\u0631\u06AF\u0632 \u0631\u062F\u06CC\u0641\u200C\u0647\u0627\u06CC \u0645\u062D\u0644\u06CC (\u0628\u062F\u0648\u0646 \u067E\u06CC\u0634\u0648\u0646\u062F cp-content-) \u0631\u0627 \u0628\u0627\u0632\u0646\u0648\u06CC\u0633\u06CC \u0646\u06A9\u0646
+         WHERE network_content.id LIKE 'cp-content-%'`,
+        [
+          it.id,
+          it.kind,
+          it.title,
+          it.summary,
+          it.body,
+          JSON.stringify(it.tags),
+          it.source_center,
+          it.active ? 1 : 0,
+          nowIso,
+          createdBy,
+          it.created_at,
+          it.updated_at
+        ]
+      )
+    );
+    await db.batch(statements);
+  }
+  await writeSettings2(db, CP_CONTENT_SYNC_KEY, parsed.data.data.server_time, "cp-content", nowIso);
+  log.info("cp_content.pull", { n: items.length, received: parsed.data.data.items.length });
+  return items.length;
+}
+__name(pullCuratedItems, "pullCuratedItems");
+async function cpContentOpportunistic(deps) {
+  const { db, logger, config } = deps;
+  if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) {
+    return { status: "skipped" };
+  }
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const last = await readSettingsIso3(db, CP_CONTENT_ATTEMPT_KEY);
+  if (!shouldRunCpContent(last, now(), deps.minIntervalMs ?? CP_CONTENT_MIN_INTERVAL_MS)) {
+    return { status: "skipped" };
+  }
+  return runCpContentCycle({ db, logger, config, binding: deps.binding, fetchFn: deps.fetchFn, now: deps.now });
+}
+__name(cpContentOpportunistic, "cpContentOpportunistic");
+async function runCpContentCycle(deps) {
+  const { db, logger, config } = deps;
+  const log = logger.child("cp-content");
+  if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) {
+    return { status: "disabled" };
+  }
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const nowIso = now().toISOString();
+  let pushed = 0;
+  let applied = 0;
+  const errors = [];
+  try {
+    const lastIso = await readSettingsIso3(db, CP_CONTENT_ATTEMPT_KEY);
+    if (!shouldRunCpContent(lastIso, now(), deps.minIntervalMs ?? CP_CONTENT_MIN_INTERVAL_MS)) {
+      return { status: "skipped" };
+    }
+    await stampCpContentAttempt(db, now());
+    try {
+      pushed = await pushQueuedSubmissions({ db, log, config, binding: deps.binding, fetchFn: deps.fetchFn, nowIso });
+      await writeSettings2(db, CP_CONTENT_PUSH_KEY, nowIso, "cp-content", nowIso);
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+    try {
+      applied = await pullCuratedItems({ db, log, config, binding: deps.binding, fetchFn: deps.fetchFn, nowIso });
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+    if (errors.length === 2) {
+      return { status: "error", detail: errors.join("|") };
+    }
+    return {
+      status: errors.length === 0 ? "ok" : "error",
+      pushed,
+      applied,
+      detail: errors.length > 0 ? errors.join("|") : void 0
+    };
+  } catch (err) {
+    log.warn("cp_content.cycle_failed", {
+      detail: "exception",
+      error: err instanceof Error ? err.message : String(err)
+    });
+    return { status: "error", detail: "exception" };
+  }
+}
+__name(runCpContentCycle, "runCpContentCycle");
+
 // src/index.ts
 function buildEnv(env) {
   return {
@@ -53582,10 +54431,42 @@ function probeCpReport(env, ctx) {
   );
 }
 __name(probeCpReport, "probeCpReport");
+async function runCpContentCycleWrap(env) {
+  const db = createDb(env.DB);
+  const logger = createLogger("sync");
+  const result = await runCpContentCycle({
+    db,
+    logger,
+    config: buildCpContentConfig(env),
+    binding: env.CP ?? null
+  });
+  logger.info("cp_content.cycle.done", {
+    status: result.status,
+    pushed: result.pushed ?? 0,
+    applied: result.applied ?? 0
+  });
+}
+__name(runCpContentCycleWrap, "runCpContentCycleWrap");
+var cpContentProbeAt = 0;
+function probeCpContent(env, ctx) {
+  const t = Date.now();
+  if (t - cpContentProbeAt < 6e4) return;
+  cpContentProbeAt = t;
+  ctx.waitUntil(
+    cpContentOpportunistic({
+      db: createDb(env.DB),
+      logger: createLogger("sync"),
+      config: buildCpContentConfig(env),
+      binding: env.CP ?? null
+    }).catch(() => void 0)
+  );
+}
+__name(probeCpContent, "probeCpContent");
 var src_default = {
   async fetch(request, env, ctx) {
     probeCpSync(env, ctx);
     probeCpReport(env, ctx);
+    probeCpContent(env, ctx);
     const db = createDb(env.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger("worker");
@@ -53602,6 +54483,7 @@ var src_default = {
     if (event.cron === CP_SYNC_CRON) {
       ctx.waitUntil(runCpSyncCycle(env));
       ctx.waitUntil(runCpReportCycle(env));
+      ctx.waitUntil(runCpContentCycleWrap(env));
       return;
     }
     if (event.cron === DIGEST_CRON) {
