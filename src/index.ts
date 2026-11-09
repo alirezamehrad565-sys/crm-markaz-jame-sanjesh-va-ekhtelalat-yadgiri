@@ -211,16 +211,7 @@ async function runCpContentCycleWrap(env: Env): Promise<void> {
     pushed: result.pushed ?? 0,
     applied: result.applied ?? 0
   });
-  // 1.25.48 m6 — مولد امتیاز شناسنامهٔ آیتم: خودِ سامانهٔ کلاینت؛ در رکب همان چرخهٔ ۱۵ دقیقه‌ای
-  // (بدون env سینک هم کار می‌کند — امتیاز داخلی مرکز است)؛ خطا هرگز کرش نمی‌کند.
-  try {
-    const audit = createAuditWriter(db);
-    const contentScore = createContentScoreService(db, audit);
-    const score = await contentScore.refresh();
-    logger.info('content_score.cycle.done', { exercises: score.exercises, templates: score.templates, ms: score.durationMs });
-  } catch (err) {
-    logger.warn('content_score.cycle.failed', { error: err instanceof Error ? err.message : String(err) });
-  }
+  // 1.25.48 m6 — مولد امتیاز داخل هستهٔ چرخه اجرا می‌شود (هم کرون و هم مسیر فرصت‌طلب را پوشش می‌دهد).
 }
 
 /** دروازهٔ فرصت‌طلب کتابخانهٔ شبکه — همان الگوی cp-sync/cp-report */
