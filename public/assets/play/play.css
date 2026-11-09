@@ -600,6 +600,12 @@
   stroke-linejoin: round;
 }
 
+/* ستارهٔ خاموش = حفرهٔ خالی — روی کارت کرم و شبِ پوسته‌ها هرگز «ستارهٔ گرفته‌شده» خوانده نمی‌شود
+  (رفع P2 ممیزی فازها: کودک تازه با بهترین ۰ نباید ۳ ستارهٔ پُر ببیند) */
+.play-stars__star:not(.play-stars__lit) path {
+  fill: transparent;
+}
+
 .play-stars__lit path {
   fill: var(--p-amber);
 }

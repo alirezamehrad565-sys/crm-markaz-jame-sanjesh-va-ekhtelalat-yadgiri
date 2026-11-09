@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.46";
+var APP_VERSION = "1.25.47";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23738,10 +23738,10 @@ var SCAN_STAGE_WAVE_MS = {
   s5: 13e3
 };
 var STROOP_STAGE_BANDS = {
-  s1: ["a"],
-  s2: ["a", "b"],
-  s3: ["a", "b", "c"],
-  s4: ["a", "b", "c", "d"],
+  s1: ["a", "p"],
+  s2: ["a", "b", "p"],
+  s3: ["a", "b", "c", "p"],
+  s4: ["a", "b", "c", "d", "p"],
   s5: null
   // همهٔ بانک — مرور بزرگ
 };
@@ -23757,10 +23757,10 @@ var FLANKER_STAGE_MAX_DECOYS = {
   s5: null
 };
 var FLANKER_STAGE_BANDS = {
-  s1: ["a"],
-  s2: ["a", "b"],
-  s3: ["a", "b", "c"],
-  s4: ["a", "b", "c", "d"],
+  s1: ["a", "p"],
+  s2: ["a", "b", "p"],
+  s3: ["a", "b", "c", "p"],
+  s4: ["a", "b", "c", "d", "p"],
   s5: null
 };
 var TRAIL_STAGE_MAX_NODES = {
@@ -23771,10 +23771,10 @@ var TRAIL_STAGE_MAX_NODES = {
   s5: null
 };
 var TRAIL_STAGE_BANDS = {
-  s1: ["a"],
-  s2: ["a", "b"],
-  s3: ["a", "b", "c"],
-  s4: ["a", "b", "c", "d"],
+  s1: ["a", "p"],
+  s2: ["a", "b", "p"],
+  s3: ["a", "b", "c", "p"],
+  s4: ["a", "b", "c", "d", "p"],
   s5: null
 };
 function flankerIncongruentCountOf(item) {
@@ -23843,6 +23843,7 @@ var GAME_KINDS = {
     stageList: /* @__PURE__ */ __name(() => SWARM_STAGES, "stageList"),
     levers: { bank_caps: SCAN_STAGE_MAX_TILES, display: SCAN_STAGE_WAVE_MS },
     itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      if (item.phase === "probe") return true;
       const max = typeof stageId === "string" && stageId in SCAN_STAGE_MAX_TILES ? SCAN_STAGE_MAX_TILES[stageId] : null;
       if (max === null) return true;
       const s = item.stim ?? {};
@@ -26382,12 +26383,14 @@ function createGamesService(deps) {
       missionRef: m.id,
       missionTitle: m.title ?? m.id,
       packageTitle: res.pkg.titleFa,
+      /* هویت نوع‌بازی برای هر دو شاخهٔ والد و کودک — کارت والدِ pre قهرمان خود بازی را می‌بیند
+         (رفع P0 ممیزی فازها: قبلاً فقط child_active پُر می‌شد و همهٔ کارت‌های والد ماهی گونوگو می‌گرفتند) */
+      playGame: m.game,
       expiresAt: res.link.expires_at,
       validity: res.session ? res.session.validity : void 0,
       adherenceConfirmed: adherence?.confirm2_at != null,
       parentCopyBefore: typeof res.pkg.body.parent_copy?.before === "string" ? res.pkg.body.parent_copy.before : null,
       ...state === "child_active" ? {
-        playGame: m.game,
         playHint: playHintOf(m, res.session?.stage_id ?? stage?.id ?? null),
         playProtocol: snap,
         playResume: resumeMeta,

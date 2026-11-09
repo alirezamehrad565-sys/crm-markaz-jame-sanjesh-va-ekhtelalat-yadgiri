@@ -1191,7 +1191,7 @@ export async function runSession(ctx) {
   const finishBtn = document.createElement('button');
   finishBtn.type = 'button';
   finishBtn.className = 'play-btn';
-  finishBtn.textContent = isAssessment ? 'اتمام جلسه' : 'امروز تمام شد!';
+  finishBtn.textContent = isAssessment ? 'اتمام جلسه' : 'اتمام مأموریت'; // بدون تکرار «تمام شد» با تیتر کارت (ممیزی فازها)
   finishBtn.addEventListener('click', async () => {
     finishBtn.disabled = true;
     try {

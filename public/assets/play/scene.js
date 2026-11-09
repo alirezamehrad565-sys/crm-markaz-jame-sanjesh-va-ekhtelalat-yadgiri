@@ -143,7 +143,7 @@ export function sceneMarkup(variant, hero) {
 const KIND_HEROES = {
   gonogo: () => fishPuppet('swim', '#E4AA46'),
   numline: () => crabPuppet('swim', '#D97C4F'),
-  scan: () => fishPuppet('idle', '#5E8FB8'),
+  scan: () => fishPuppet('idle', '#F5F0E5'), // ماهی ماه‌نورد کرم — روی شب جاسوس‌ها مرئی (رفع P1: قبلاً #5E8FB8 در شب گم می‌شد)
   stroop: () => fishPuppet('happy', '#9B7EDE'),
   flanker: () => fishPuppet('swim', '#8FA6B8'),
   trail: () => crabPuppet('idle', '#C4635F'),
