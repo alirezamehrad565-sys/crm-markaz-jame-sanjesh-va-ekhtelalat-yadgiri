@@ -22,7 +22,9 @@ export const DEFAULT_RT_FLOOR_MS: Record<MissionItem['type'], number> = {
   stroop: GAME_KINDS.stroop.rt_floor_ms,       // حقه‌باز رنگ‌ها — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
   flanker: GAME_KINDS.flanker.rt_floor_ms,      // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
   trail: GAME_KINDS.trail.rt_floor_ms,        // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
-  nback: GAME_KINDS.nback.rt_floor_ms         // ن‌پشت/آلبوم خرچنگ — لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
+  nback: GAME_KINDS.nback.rt_floor_ms,        // ن‌پشت/آلبوم خرچنگ — لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
+  corsi: GAME_KINDS.corsi.rt_floor_ms,        // صدف‌های جادویی — کف نخستین لمس یادآوری؛ زیر آن حدس است (G8)
+  span: GAME_KINDS.span.rt_floor_ms           // حباب‌های عدد — ورود صفحه‌کلیدی، زمان واکنش نیست (G8)
 };
 
 /** آستانهٔ بیکاری برای جلسهٔ ناقص (§۶) */
@@ -89,6 +91,9 @@ export interface ScoredAttempt {
   /** رد پای دزد — طول پیش‌ماند صحیح و طول کل رد (۱.۲۵.۳۲) */
   trailNodes?: number;
   trailNodesTotal?: number;
+  /** بازی‌های حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۹) — طول دنبالهٔ آیتم (برای فرمول span_max)؛
+   *  فقط روی پاسخ کاملِ درست به فرمول می‌رسد؛ سرور از آیتم authored می‌خواند */
+  spanLen?: number;
 }
 
 function rtFloorFor(item: MissionItem, mission: MissionConfig): number {
@@ -125,6 +130,7 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
   let nbackMissed: boolean | undefined;
   let trailNodes: number | undefined;
   let trailNodesTotal: number | undefined;
+  let spanLenValue: number | undefined;
 
   if (item.type === 'choice') {
     correct = typeof res.option === 'number' && res.option === item.correct;
@@ -172,6 +178,25 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
     correct = key.length === orderSeq.length && orderSeq.every((v, i) => v === key[i]);
     trailNodes = prefix;
     trailNodesTotal = key.length;
+  } else if (item.type === 'corsi' || item.type === 'span') {
+    // دو بازی حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۹) — پاسخ باید عین دنبالهٔ authored باشد.
+    //  · corsi: ترتیب لمس صدف‌ها (تکرار صدف بی‌معناست؛ نخستین ورود هر اندیس می‌ماند)
+    //  · span: عددهای واردشده با صفحه‌کلید (دقیقاً به همان ترتیب)
+    //  دنبالهٔ ناقص یا جابه‌جا = نادرست؛ طول دنباله فقط روی پاسخ کاملِ درست ثبت می‌شود
+    //  (قاعدهٔ span_max: بازهٔ واقعی کودک، نه حدس ناتمام)
+    const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n)) : [];
+    const rawSeq = item.type === 'corsi'
+      ? (Array.isArray(res.order) ? res.order : [])
+      : (Array.isArray(res.digits) ? res.digits : []);
+    const seen = new Set<string>();
+    const seq: number[] = [];
+    for (const v of rawSeq.filter((n) => Number.isInteger(n) && n >= 0)) {
+      const k = String(v);
+      if (!seen.has(k)) { seen.add(k); seq.push(v); }
+    }
+    correct = key.length > 0 && key.length === seq.length && seq.every((v, i) => v === key[i]);
+    omission = seq.length === 0;
+    if (correct) spanLenValue = key.length;
   } else if (item.type === 'touch_report') {
     const touched = res.touched === true;
     const want = item.correct_touch === true; // هدف واقعی (go)
@@ -212,7 +237,8 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
     ...(timedOut !== undefined ? { timedOut } : {}),
     ...(congruent !== undefined ? { congruent } : {}),
     ...(nbackMatch !== undefined ? { match: nbackMatch, nbackFa: nbackFa === true, nbackMissed: nbackMissed === true } : {}),
-    ...(trailNodes !== undefined ? { trailNodes, trailNodesTotal: trailNodesTotal ?? 0 } : {})
+    ...(trailNodes !== undefined ? { trailNodes, trailNodesTotal: trailNodesTotal ?? 0 } : {}),
+    ...(spanLenValue !== undefined ? { spanLen: spanLenValue } : {})
   };
 }
 
@@ -276,6 +302,10 @@ export function answerDisplayOf(item: MissionItem): string | null {
   }
   if (item.type === 'trail') {
     // CSV اندیس‌های ترتیب درست — مثل جاسوس‌های جاماندهٔ scan؛ فقط تمرین
+    return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(',') : null;
+  }
+  if (item.type === 'corsi' || item.type === 'span') {
+    // دنبالهٔ درست به شکل CSV — برای corsi اندیس صدف‌ها و برای span خود عددها؛ فقط تمرین
     return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(',') : null;
   }
   return null; // touch_report: بازپخش محرک، نه نمایش پاسخ؛ scan: CSV جاسوس‌های جامانده در scanMissedCsv
@@ -439,6 +469,16 @@ export function nbackMissPctOf(scored: ScoredAttempt[]): number | null {
   return round2((miss / sub.length) * 100);
 }
 
+// ─── فرمول بازی‌های حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۹) — قاعدهٔ دامنهٔ صفر عیناً:
+// بلندترین دنبالهٔ کاملِ درست؛ جلسهٔ بدون حتی یک دنبالهٔ درست = null (نه صفرِ ساختگی)
+export function spanMaxOf(scored: ScoredAttempt[]): number | null {
+  const lens = scored
+    .filter((s) => s.correct === true && typeof s.spanLen === 'number' && Number.isInteger(s.spanLen) && (s.spanLen as number) > 0)
+    .map((s) => s.spanLen as number);
+  if (lens.length === 0) return null;
+  return Math.max(...lens);
+}
+
 export function medianRtOf(scored: ScoredAttempt[]): number | null {
   const rts = scored
     .filter((s) => s.correct && s.rtValid && typeof s.rtMs === 'number')
@@ -527,6 +567,7 @@ export function computeMetricValue(formula: string, scored: ScoredAttempt[]): nu
     case 'nback_nonmatch': return nbackNonmatchPctOf(scored);
     case 'nback_fa': return nbackFaPctOf(scored);
     case 'nback_miss': return nbackMissPctOf(scored);
+    case 'span_max': return spanMaxOf(scored);
     default: return null;
   }
 }

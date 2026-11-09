@@ -283,6 +283,7 @@ export async function runSession(ctx) {
      پروب‌ها بی‌نمره‌اند و در نسبت دقت کارت پایان نمی‌آیند — ملاک همیشه سرور است) */
   let scoredTotal = 0;
   let scoredCorrect = 0;
+  let spanBest = 0; // بلندترین دنبالهٔ کاملِ درست (G8) — از طول محرک عمومی؛ کلید از سرور می‌آید
   let practiceMode = true; // تا نخستین آیتم اصلی (فاز پروب/آیتم‌های جاری در ارزیابی)
   machine.practiceMode = practiceMode;
 
@@ -635,6 +636,381 @@ export async function runSession(ctx) {
       if (okS) streak += 1; else if (fbS && fbS.correct === false) streak = 0;
       const streakMsgS = streakLine(streak);
       if (canFeedbackS && streakMsgS) fx.pillShow(streakMsgS);
+      if (machine.state === STATES.INTER_TRIAL_INTERVAL) {
+        machine.to(practiceMode ? STATES.PRACTICE : STATES.READY, { after_items: doneCount });
+      }
+      continue;
+    }
+
+    /* آیتم دنبالهٔ صدف‌ها — «صدف‌های جادویی» (G8/۱.۲۵.۴۸): کرسی بلوک-تپینگ.
+       صدف‌ها یکی‌یکی روشن می‌شوند (دنبالهٔ authored از stim.seq) و کودک همان ترتیب را
+       لمس می‌کند. دنباله محرک عمومی خود بازی است (کودک می‌بیند)؛ کلید نمره‌دهی
+       (item.correct) هرگز به کلاینت نمی‌رود و سرور پاسخ را مقایسه می‌کند.
+       فازها: تثبیت → پخش دنباله (لمس در این فاز premature می‌شود و بی‌اثر است) →
+       نوبت کودک (پنجره از stim.window_ms) → ثبت/بازخورد آموزشی.
+       RT از نخستین لمسِ فاز کودک (ساعت مکث‌پذیر بعد از پخش دنباله) — شواهد همان قرارداد فاز ۴ */
+    if (item.type === 'corsi' && item.stim && Array.isArray(item.stim.seq) && typeof kind.corsiMarkup === 'function') {
+      machine.to(STATES.FIXATION, { item: item.id, corsi: true }); // مسیر اجباری ماشین
+      const ledgerK = createTouchLedger();
+      ledgerK.start();
+      let corsiAnswered = false;
+      const stopTouchK = attachTouchEvidence(stage, ledgerK, () => machine.state, () => corsiAnswered);
+      stage.classList.remove('play-stage--quiet');
+      stage.classList.add('play-stage--corsi'); // پوستهٔ خلیج مروارید
+      await sleeper.sleep(250); // تثبیت کوتاه پیش از دنباله — بدون فلاش (§۹)
+      stage.innerHTML = kind.corsiMarkup(item);
+      machine.to(STATES.STIMULUS, { item: item.id, corsi: true });
+      const shownAtK = performance.now();
+      const stimK = item.stim;
+      const seqK = stimK.seq.map((v) => Number(v)).filter((v) => Number.isInteger(v) && v >= 0);
+      const flashMs = typeof stimK.flash_ms === 'number' && Number.isFinite(stimK.flash_ms)
+        ? Math.min(1200, Math.max(350, Math.round(stimK.flash_ms))) : 620;
+      const gapMs = typeof stimK.gap_ms === 'number' && Number.isFinite(stimK.gap_ms)
+        ? Math.min(600, Math.max(120, Math.round(stimK.gap_ms))) : 240;
+      /* فاز پخش دنباله — ساعت RT هنوز خاموش؛ هر لمس این‌جا premature دفتر لمس است */
+      for (const idx of seqK) {
+        const tileEl = stage.querySelector('.play-corsi__tile[data-idx="' + idx + '"]');
+        if (tileEl) tileEl.classList.add('play-corsi__tile--lit');
+        await sleeper.sleep(flashMs);
+        if (tileEl) tileEl.classList.remove('play-corsi__tile--lit');
+        await sleeper.sleep(gapMs);
+      }
+      if (typeof kind.corsiBeginRecall === 'function') kind.corsiBeginRecall(stage, seqK.length);
+      const clockK = createPausableClock();
+      clockK.start(); // RT فاز کودک از همین‌جا — پخش دنباله در RT نیست
+      const stopFramesK = observeDisplayFrames();
+      const winK = typeof stimK.window_ms === 'number' && Number.isFinite(stimK.window_ms)
+        ? Math.min(60000, Math.max(6000, Math.round(stimK.window_ms))) : 16000;
+      const resultK = await new Promise((resolve) => {
+        const tiles = stage.querySelectorAll('.play-corsi__tile');
+        const timerBar = stage.querySelector('[class*="__timer"] > span');
+        const order = [];
+        let firstAt = null;
+        let tapCount = 0;
+        let settled = false;
+        let winRemain = winK;
+        let winPausedAt = null;
+        const freezeBar = () => {
+          if (!timerBar) return;
+          const w = window.getComputedStyle(timerBar).width;
+          timerBar.style.transition = 'none';
+          timerBar.style.width = w;
+        };
+        const unfreezeBar = (ms) => {
+          if (!timerBar) return;
+          window.requestAnimationFrame(() => {
+            timerBar.style.transition = 'width ' + Math.max(0, ms) + 'ms linear';
+            timerBar.style.width = '0%';
+          });
+        };
+        trialHooks.pause = () => { winPausedAt = performance.now(); clockK.pause(); freezeBar(); };
+        trialHooks.resume = () => {
+          if (!clockK.running) clockK.resume();
+          if (winPausedAt !== null) {
+            winRemain = Math.max(0, winRemain - (performance.now() - winPausedAt));
+            winPausedAt = null;
+            unfreezeBar(winRemain);
+          }
+        };
+        const finishRecall = (timedOut) => {
+          if (settled) return;
+          settled = true;
+          corsiAnswered = true;
+          sleeper.cancel(); // دنباله کامل شد یا پنجره بست — خواب یدکی یتیم نمی‌ماند
+          trialHooks.pause = null;
+          trialHooks.resume = null;
+          tiles.forEach((b) => b.removeEventListener('pointerdown', onTile));
+          resolve({ order: order.slice(), firstRt: firstAt !== null ? clockK.peek() : null, tapCount, timedOut, usedMs: clockK.peek() });
+        };
+        const onTile = (ev) => {
+          const btn = ev.target.closest('.play-corsi__tile');
+          if (!btn || btn.classList.contains('play-corsi__tile--picked')) return;
+          ev.preventDefault(); // شبکهٔ لمسی — اسکرول اشتباه نمی‌سازد
+          tapCount += 1;
+          if (firstAt === null) firstAt = performance.now();
+          btn.classList.add('play-corsi__tile--picked');
+          order.push(Number(btn.dataset.idx));
+          if (seqK.length > 0 && order.length >= seqK.length) finishRecall(false); // دنبالهٔ کامل شد
+        };
+        tiles.forEach((b) => b.addEventListener('pointerdown', onTile));
+        unfreezeBar(winK);
+        sleeper.sleep(winK).then(() => finishRecall(true));
+      });
+      machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, corsi: true });
+      stopTouchK();
+      const framesK = stopFramesK();
+      const recordK = {
+        item_id: item.id,
+        go: null,
+        touched: resultK.order.length > 0,
+        rt_ms: resultK.firstRt !== null && resultK.firstRt >= 0 ? resultK.firstRt : null,
+        touch_count: resultK.tapCount,
+        ...ledgerK.evidenceCounts(),
+        presented_at: shownAtK,
+        frame_drops: framesK.drops,
+        max_frame_delta: framesK.maxDelta,
+        window_ms: winK,
+        isi_ms: 0,
+        events: ledgerK.events(),
+        corsi_order: resultK.order.slice()
+      };
+      trials.push(recordK);
+      doneCount += 1;
+      let fbK = null;
+      try {
+        fbK = await api.submit({
+          item_id: item.id,
+          response: {
+            order: resultK.order,
+            used_ms: resultK.usedMs,
+            timed_out: resultK.timedOut,
+            presented_at: Math.round(shownAtK),
+            frame_drops: framesK.drops,
+            max_frame_delta: framesK.maxDelta,
+            touch_count: resultK.tapCount,
+            ...ledgerK.evidenceCounts(),
+            window_ms: winK
+          },
+          rt_ms: recordK.rt_ms,
+          idem_key: crypto.randomUUID()
+        });
+      } catch (err) {
+        machine.to(STATES.INTERRUPTED, { reason: 'network', item: item.id });
+        onNetworkFail();
+        return;
+      }
+      const okK = fbK !== null && typeof fbK === 'object' && fbK.correct === true;
+      if (okK && seqK.length > spanBest) spanBest = seqK.length; // بازهٔ واقعی — فقط دنبالهٔ کاملِ درست
+      const canFeedbackK = !isAssessment && fbK && fbK.phase === 'train' && fbK.message && B.feedback_in_main;
+      if (canFeedbackK) {
+        fx.popBubble(bubble, fbK.message, okK ? 'ok' : 'calm', P.feedback_ms);
+        if (!okK && fbK.answer_display != null && typeof kind.corsiRevealTruth === 'function') {
+          // نشان حقیقت — دنبالهٔ درست صدف‌ها از بازخورد سرور می‌آید، نه از کلاینت
+          kind.corsiRevealTruth(item, stage, String(fbK.answer_display));
+          await sleeper.sleep(P.feedback_ms + 800); // وقت دیدن دنبالهٔ درست
+        } else {
+          if (okK && typeof kind.corsiResponsePoint === 'function') {
+            const ptK = kind.corsiResponsePoint(stage);
+            if (ptK) fx.burstAt(ptK.x, ptK.y);
+          }
+          await sleeper.sleep(P.feedback_ms);
+        }
+      } else {
+        await sleeper.sleep(Math.max(400, 600));
+      }
+      stage.classList.remove('play-stage--corsi');
+      stage.innerHTML = ''; // صحنه خالی پیش از ISI بعدی — دنباله شبح نمی‌ماند
+      /* سبد ستاره و استریک — همان حلقهٔ گو/نوگو؛ ارزیابی هرگز */
+      if (!isAssessment && B.star_basket && fbK && fbK.phase === 'train' && okK) {
+        starCount += 1;
+        if (countEl) countEl.textContent = faNum(starCount);
+        fx.flyStar(stage, basketEl);
+        window.setTimeout(() => fx.popCount(countEl), 560);
+        if (starCount % 5 === 0) {
+          fx.popBubble(bubble, faNum(starCount) + ' ستاره جمع شد!', 'ok', P.feedback_ms);
+          await sleeper.sleep(P.feedback_ms);
+        }
+      }
+      if (okK) streak += 1; else if (fbK && fbK.correct === false) streak = 0;
+      const streakMsgK = streakLine(streak);
+      if (canFeedbackK && streakMsgK) fx.pillShow(streakMsgK);
+      if (machine.state === STATES.INTER_TRIAL_INTERVAL) {
+        machine.to(practiceMode ? STATES.PRACTICE : STATES.READY, { after_items: doneCount });
+      }
+      continue;
+    }
+
+    /* آیتم بازهٔ عدد — «حباب‌های عدد» (G8/۱.۲۵.۴۸): بازهٔ عدد رو به جلو.
+       عددها یکی‌یکی در حباب بالا می‌آیند (دنبالهٔ authored از stim.seq) و کودک همان
+       عددها را با صفحه‌کلید بزرگ به ترتیب وارد می‌کند و ✓ می‌زند. عددها محرک عمومی
+       خود بازی‌اند؛ کلید نمره‌دهی (item.correct) هرگز به کلاینت نمی‌رود.
+       فازها: تثبیت → نمایش عددها (لمس premature می‌شود) → ورود با صفحه‌کلید
+       (پنجره از stim.window_ms؛ ✓ یا پایان پنجره) → ثبت/بازخورد آموزشی.
+       RT از نخستین لمس صفحه‌کلید (زمان واکنش نیست — فقط توصیفی) */
+    if (item.type === 'span' && item.stim && Array.isArray(item.stim.seq) && typeof kind.spanMarkup === 'function') {
+      machine.to(STATES.FIXATION, { item: item.id, span: true }); // مسیر اجباری ماشین
+      const ledgerD = createTouchLedger();
+      ledgerD.start();
+      let spanAnswered = false;
+      const stopTouchD = attachTouchEvidence(stage, ledgerD, () => machine.state, () => spanAnswered);
+      stage.classList.remove('play-stage--quiet');
+      stage.classList.add('play-stage--span'); // پوستهٔ شبِ فانوس
+      await sleeper.sleep(250);
+      stage.innerHTML = kind.spanMarkup(item);
+      machine.to(STATES.STIMULUS, { item: item.id, span: true });
+      const shownAtD = performance.now();
+      const stimD = item.stim;
+      const seqD = stimD.seq.map((v) => Number(v)).filter((v) => Number.isInteger(v) && v >= 0);
+      const paceMs = typeof stimD.pace_ms === 'number' && Number.isFinite(stimD.pace_ms)
+        ? Math.min(1400, Math.max(450, Math.round(stimD.pace_ms))) : 760;
+      const gapMsD = typeof stimD.gap_ms === 'number' && Number.isFinite(stimD.gap_ms)
+        ? Math.min(600, Math.max(150, Math.round(stimD.gap_ms))) : 340;
+      /* فاز نمایش عددها — ساعت RT هنوز خاموش؛ لمس در این فاز premature دفتر لمس است */
+      for (const d of seqD) {
+        const bubbleEl = stage.querySelector('.play-span__bubble');
+        if (bubbleEl) {
+          bubbleEl.textContent = faNum(d);
+          bubbleEl.classList.add('play-span__bubble--show');
+        }
+        await sleeper.sleep(paceMs);
+        if (bubbleEl) bubbleEl.classList.remove('play-span__bubble--show');
+        await sleeper.sleep(gapMsD);
+      }
+      if (typeof kind.spanBeginInput === 'function') kind.spanBeginInput(stage, seqD.length);
+      const clockD = createPausableClock();
+      clockD.start();
+      const stopFramesD = observeDisplayFrames();
+      const winD = typeof stimD.window_ms === 'number' && Number.isFinite(stimD.window_ms)
+        ? Math.min(60000, Math.max(8000, Math.round(stimD.window_ms))) : 24000;
+      const resultD = await new Promise((resolve) => {
+        const pad = stage.querySelector('.play-span__pad');
+        const timerBar = stage.querySelector('[class*="__timer"] > span');
+        const entryEl = stage.querySelector('.play-span__entry');
+        const digits = [];
+        let firstAt = null;
+        let tapCount = 0;
+        let settled = false;
+        let winRemain = winD;
+        let winPausedAt = null;
+        const freezeBar = () => {
+          if (!timerBar) return;
+          const w = window.getComputedStyle(timerBar).width;
+          timerBar.style.transition = 'none';
+          timerBar.style.width = w;
+        };
+        const unfreezeBar = (ms) => {
+          if (!timerBar) return;
+          window.requestAnimationFrame(() => {
+            timerBar.style.transition = 'width ' + Math.max(0, ms) + 'ms linear';
+            timerBar.style.width = '0%';
+          });
+        };
+        const renderEntry = () => {
+          if (!entryEl) return;
+          const slots = Math.max(seqD.length, digits.length);
+          let html = '';
+          for (let i = 0; i < slots; i++) {
+            html += '<span class="play-span__slot' + (digits[i] !== undefined ? ' play-span__slot--filled' : '') + '">' +
+              (digits[i] !== undefined ? faNum(digits[i]) : '') + '</span>';
+          }
+          entryEl.innerHTML = html;
+        };
+        trialHooks.pause = () => { winPausedAt = performance.now(); clockD.pause(); freezeBar(); };
+        trialHooks.resume = () => {
+          if (!clockD.running) clockD.resume();
+          if (winPausedAt !== null) {
+            winRemain = Math.max(0, winRemain - (performance.now() - winPausedAt));
+            winPausedAt = null;
+            unfreezeBar(winRemain);
+          }
+        };
+        const finishInput = (timedOut) => {
+          if (settled) return;
+          settled = true;
+          spanAnswered = true;
+          sleeper.cancel(); // ✓ آمد یا پنجره بست — خواب یدکی یتیم نمی‌ماند
+          trialHooks.pause = null;
+          trialHooks.resume = null;
+          if (pad) pad.removeEventListener('pointerdown', onPad);
+          resolve({ digits: digits.slice(), firstRt: firstAt !== null ? clockD.peek() : null, tapCount, timedOut, usedMs: clockD.peek() });
+        };
+        const onPad = (ev) => {
+          const key = ev.target.closest('[data-key]');
+          if (!key) return;
+          ev.preventDefault(); // صفحه‌کلید لمسی — اسکرول اشتباه نمی‌سازد
+          tapCount += 1;
+          if (firstAt === null) firstAt = performance.now();
+          const k = key.getAttribute('data-key');
+          if (k === 'back') { digits.pop(); renderEntry(); return; }
+          if (k === 'go') { finishInput(false); return; }
+          const d = Number(k);
+          if (!Number.isInteger(d) || digits.length >= Math.max(seqD.length, 3) + 2) return; // سقف ورود — خطای لمس بی‌نهایت نمی‌شود
+          digits.push(d);
+          renderEntry();
+        };
+        if (pad) pad.addEventListener('pointerdown', onPad);
+        renderEntry();
+        unfreezeBar(winD);
+        sleeper.sleep(winD).then(() => finishInput(true));
+      });
+      machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, span: true });
+      stopTouchD();
+      const framesD = stopFramesD();
+      const recordD = {
+        item_id: item.id,
+        go: null,
+        touched: resultD.digits.length > 0,
+        rt_ms: resultD.firstRt !== null && resultD.firstRt >= 0 ? resultD.firstRt : null,
+        touch_count: resultD.tapCount,
+        ...ledgerD.evidenceCounts(),
+        presented_at: shownAtD,
+        frame_drops: framesD.drops,
+        max_frame_delta: framesD.maxDelta,
+        window_ms: winD,
+        isi_ms: 0,
+        events: ledgerD.events(),
+        span_digits: resultD.digits.slice()
+      };
+      trials.push(recordD);
+      doneCount += 1;
+      let fbD = null;
+      try {
+        fbD = await api.submit({
+          item_id: item.id,
+          response: {
+            digits: resultD.digits,
+            used_ms: resultD.usedMs,
+            timed_out: resultD.timedOut,
+            presented_at: Math.round(shownAtD),
+            frame_drops: framesD.drops,
+            max_frame_delta: framesD.maxDelta,
+            touch_count: resultD.tapCount,
+            ...ledgerD.evidenceCounts(),
+            window_ms: winD
+          },
+          rt_ms: recordD.rt_ms,
+          idem_key: crypto.randomUUID()
+        });
+      } catch (err) {
+        machine.to(STATES.INTERRUPTED, { reason: 'network', item: item.id });
+        onNetworkFail();
+        return;
+      }
+      const okD = fbD !== null && typeof fbD === 'object' && fbD.correct === true;
+      if (okD && seqD.length > spanBest) spanBest = seqD.length; // بازهٔ واقعی — فقط دنبالهٔ کاملِ درست
+      const canFeedbackD = !isAssessment && fbD && fbD.phase === 'train' && fbD.message && B.feedback_in_main;
+      if (canFeedbackD) {
+        fx.popBubble(bubble, fbD.message, okD ? 'ok' : 'calm', P.feedback_ms);
+        if (!okD && fbD.answer_display != null && typeof kind.spanRevealTruth === 'function') {
+          // نشان حقیقت — دنبالهٔ عدد درست از بازخورد سرور می‌آید، نه از کلاینت
+          kind.spanRevealTruth(item, stage, String(fbD.answer_display));
+          await sleeper.sleep(P.feedback_ms + 800);
+        } else {
+          if (okD && typeof kind.spanResponsePoint === 'function') {
+            const ptD = kind.spanResponsePoint(stage);
+            if (ptD) fx.burstAt(ptD.x, ptD.y);
+          }
+          await sleeper.sleep(P.feedback_ms);
+        }
+      } else {
+        await sleeper.sleep(Math.max(400, 600));
+      }
+      stage.classList.remove('play-stage--span');
+      stage.innerHTML = ''; // صحنه خالی پیش از ISI بعدی — حباب‌ها شبح نمی‌مانند
+      /* سبد ستاره و استریک — همان حلقهٔ گو/نوگو؛ ارزیابی هرگز */
+      if (!isAssessment && B.star_basket && fbD && fbD.phase === 'train' && okD) {
+        starCount += 1;
+        if (countEl) countEl.textContent = faNum(starCount);
+        fx.flyStar(stage, basketEl);
+        window.setTimeout(() => fx.popCount(countEl), 560);
+        if (starCount % 5 === 0) {
+          fx.popBubble(bubble, faNum(starCount) + ' ستاره جمع شد!', 'ok', P.feedback_ms);
+          await sleeper.sleep(P.feedback_ms);
+        }
+      }
+      if (okD) streak += 1; else if (fbD && fbD.correct === false) streak = 0;
+      const streakMsgD = streakLine(streak);
+      if (canFeedbackD && streakMsgD) fx.pillShow(streakMsgD);
       if (machine.state === STATES.INTER_TRIAL_INTERVAL) {
         machine.to(practiceMode ? STATES.PRACTICE : STATES.READY, { after_items: doneCount });
       }
@@ -1178,7 +1554,8 @@ export async function runSession(ctx) {
     const debriefHtml = kind.debriefMarkup({
       scored_total: scoredTotal,
       scored_correct: scoredCorrect,
-      median_rt: medianOf(touchedRts)
+      median_rt: medianOf(touchedRts),
+      span_best: spanBest
     }, practiceRetries);
     if (debriefHtml) {
       const debriefEl = document.createElement('div');

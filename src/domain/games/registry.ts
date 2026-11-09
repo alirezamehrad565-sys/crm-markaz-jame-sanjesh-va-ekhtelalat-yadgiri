@@ -23,7 +23,9 @@ import type { RegistryMetric } from './types';
 // «ن‌پشت» (nback / ۱.۲۵.۴۰) در انتها نشسته — ترتیب پیشین شش نوع دست‌نخورده تا ترتیب
 // آرایهٔ سنجه‌های موتور (ENGINE_METRICS) و مقایسه‌های بین‌نسخه‌ای از هم نپاشد.
 
-export const GAME_KIND_IDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail', 'nback'] as const;
+// G8/۱.۲۵.۴۹: corsi (صدف‌های جادویی — حافظهٔ کاری دیداری-فضایی) و span (حباب‌های عدد —
+// بازهٔ عددی) در انتها نشسته‌اند تا ترتیب سنجه‌های موتور هفت نوع پیشین عیناً بماند.
+export const GAME_KIND_IDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail', 'nback', 'corsi', 'span'] as const;
 export type GameKind = (typeof GAME_KIND_IDS)[number];
 
 /** نوع‌بازی از فیلد mission.game — ناشناخته = گونوگو (سازگاری با بسته‌های قدیمی) */
@@ -146,6 +148,16 @@ export const NBACK_THRESHOLDS: AccuracyStageRule = {
   pass: P(65, 'گذار با دقت دوگزینه‌ای ≥۶۵٪ — بالای شانس حدس ۵۰٪ دودویی؛ پیشنهاد کارشناس ۱.۲۵.۴۰'),
   star2: P(78, 'دوستاره — هم‌پلهٔ دقت‌محورهای دیگر تا مقایسهٔ بین‌بازی گول‌زننده نشود'),
   star3: P(88, 'سه‌ستاره — دقت تقریباً بی‌خطا؛ ارتقای آن با دادهٔ پیلوت مرکز')
+};
+
+/** آستانهٔ مشترک دو بازی حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۹) — همان پلهٔ ۶۵/۷۸/۸۸ دقت‌محورها؛
+ *  دشواریِ بلندشدن بازه خودش را در نردبان مرحله‌ها نشان می‌دهد، نه در آستانهٔ جدا؛
+ *  خروجی جداگانه برای این‌که آیندهٔ این دو نوع به پیلوت خودشان وابسته بماند */
+export const SEQ_MEMORY_THRESHOLDS: AccuracyStageRule = {
+  shape: 'accuracy',
+  pass: P(65, 'گذار با دقت دنبالهٔ کامل ≥۶۵٪ — همان پلهٔ دقت‌محورها؛ پیشنهاد کارشناس G8'),
+  star2: P(78, 'دوستاره — هم‌پلهٔ دقت‌محورهای دیگر تا مقایسهٔ بین‌بازی گول‌زننده نشود'),
+  star3: P(88, 'سه‌ستاره — دنباله تقریباً همیشه کامل؛ ارتقای آن با دادهٔ پیلوت مرکز')
 };
 
 // ─── مرحله‌های مسیر تمرین — پارامترها و متن‌ها عیناً از stages.ts پیشین (۱.۲۵.۲۲..۳۲) ───
@@ -461,7 +473,75 @@ const TRAIL_STAGE_BANDS: Record<string, string[] | null> = {
   s5: null
 };
 
+// صدف‌های جادویی / کرسی بلوک-تپینگ (G8/۱.۲۵.۴۹) — اهرم سختی = طول دنبالهٔ صدف‌ها (۲→۵)؛
+// خلیج مروارید: صدف‌ها یکی‌یکی روشن می‌شوند و کودک همان ترتیب را لمس می‌کند
+const CORSI_STAGES: StageDef[] = [
+  {
+    id: 's1', index: 1, title_fa: 'دفترچهٔ صدف', goal_fa: 'دو صدف روشن می‌شوند؛ به همان ترتیب لمس کن.', difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: 's2', index: 2, title_fa: 'سه صدف', goal_fa: 'حالا سه صدف؛ چشم‌هایت با هم بیایند.', difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: 's3', index: 3, title_fa: 'چهار صدف', goal_fa: 'دنباله بلندتر شد؛ آهسته و مطمئن.', difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: 's4', index: 4, title_fa: 'خلیج عمیق', goal_fa: 'پنج صدف پشت هم؛ حواست در خلیج بماند.', difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: 's5', index: 5, title_fa: 'قهرمان خلیج', goal_fa: 'همهٔ دنباله‌ها با هم — تو حافظهٔ خلیجی!', difficulty: 5,
+    overrides: {}
+  }
+];
+
+// حباب‌های عدد / بازهٔ عدد رو به جلو (G8/۱.۲۵.۴۹) — اهرم سختی = شمار عددهای دنباله (۳→۶)؛
+// شبِ فانوس: عددها یکی‌یکی در حباب بالا می‌آیند و کودک همان‌ها را با صفحه‌کلید وارد می‌کند
+const SPAN_STAGES: StageDef[] = [
+  {
+    id: 's1', index: 1, title_fa: 'حباب‌های کوچک', goal_fa: 'عددها یکی‌یکی می‌آیند؛ همان‌ها را به ترتیب بگو.', difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: 's2', index: 2, title_fa: 'حباب‌های بیشتر', goal_fa: 'یک حباب بیشتر شد؛ همان قاعده، حواست کنار نره.', difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: 's3', index: 3, title_fa: 'بازهٔ پنج', goal_fa: 'حالا پنج عدد پشت هم؛ در ذهنت تکرارشان کن.', difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: 's4', index: 4, title_fa: 'بازهٔ شش', goal_fa: 'شش حباب پشت سر هم؛ تو خیلی راه رفته‌ای.', difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: 's5', index: 5, title_fa: 'قهرمان فانوس', goal_fa: 'همهٔ دنباله‌ها با هم — تو حافظهٔ عددی!', difficulty: 5,
+    overrides: {}
+  }
+];
+
 // ─── پیش‌ماندهٔ آیتم در مرحله — منطق هر نوع کنار جدول خودش نشسته تا با هم خوانده شوند ───
+
+/** سقف طول دنبالهٔ صدف‌ها در هر مرحلهٔ کرسی — null = همهٔ دنباله‌ها (مرحلهٔ پایانی مرور بزرگ) */
+const CORSI_STAGE_MAX_SPAN: Record<string, number | null> = {
+  s1: 2,
+  s2: 3,
+  s3: 4,
+  s4: 5,
+  s5: null
+};
+
+/** سقف شمار عددهای دنباله در هر مرحلهٔ بازهٔ عدد — null = همهٔ دنباله‌ها */
+const SPAN_STAGE_MAX_DIGITS: Record<string, number | null> = {
+  s1: 3,
+  s2: 4,
+  s3: 5,
+  s4: 6,
+  s5: null
+};
 
 /** شمار گرگ قلابی فلانکر — فلانکرهای مخالف مرکز؛ ناسالم = صفر */
 function flankerIncongruentCountOf(item: StageItemLike): number {
@@ -492,7 +572,8 @@ export const ENGINE_ONLY_FORMULAS: readonly string[] = [
   'nback_match',
   'nback_nonmatch',
   'nback_fa',
-  'nback_miss'
+  'nback_miss',
+  'span_max' // G8/۱.۲۵.۴۹ — بلندترین دنبالهٔ کامل درست (صدف‌های جادویی / حباب‌های عدد)
 ];
 
 // ─── نقشهٔ نوع-محور — تک‌منبع؛ ترتیب کلیدها = ترتیب قطعی GAME_KIND_IDS ───
@@ -638,6 +719,47 @@ export const GAME_KINDS: { [K in GameKind]: GameKindSpec<K> } = {
       { id: 'nback_nonmatch_pct', title_fa: 'درصد پاسخ درست به ناهمسان‌ها', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'nback_nonmatch' },
       { id: 'nback_false_alarm_pct', title_fa: 'درصد هشدار کاذب (گفتن «همان است» برای ناهمسان)', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'nback_fa' },
       { id: 'nback_miss_pct', title_fa: 'درصد جاانداختن همسان', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'nback_miss' }
+    ]
+  },
+  corsi: {
+    // صدف‌های جادویی (کرسی بلوک-تپینگ) — کف ۱۵۰ms روی نخستین لمس یادآوری؛ زیر آن حدس است
+    rt_floor_ms: 150,
+    timed_choice: false, // دنباله‌ای چندلمسی — پایان با دنبالهٔ کامل یا پنجره (مثل رد)
+    stage_rule: SEQ_MEMORY_THRESHOLDS,
+    stageList: () => CORSI_STAGES,
+    levers: { bank_caps: CORSI_STAGE_MAX_SPAN },
+    itemInStage: (item, stageId) => {
+      // پروب در هر مرحله — خط‌کش ثابت سنجش (همان رفع P0 ممیزی فازها)؛ سقف فقط برای تمرین
+      if (item.phase === 'probe') return true;
+      const max = typeof stageId === 'string' && stageId in CORSI_STAGE_MAX_SPAN ? CORSI_STAGE_MAX_SPAN[stageId] : null;
+      if (max === null) return true;
+      const s = (item.stim ?? {}) as Record<string, unknown>;
+      const len = Array.isArray(s.seq) ? s.seq.length : 0;
+      return len > 0 && len <= max;
+    },
+    // دقت دنباله از فرمول 'accuracy' در DB می‌آید؛ بازه (بلندترین دنبالهٔ کامل درست) موتور-فقط است
+    engine_metrics: [
+      { id: 'corsi_span_max', title_fa: 'بلندترین دنبالهٔ صدف کامل درست (بازهٔ دیداری-فضایی)', unit: 'score', higher_is_better: true, source: 'auto', formula: 'span_max' }
+    ]
+  },
+  span: {
+    // حباب‌های عدد (بازهٔ عدد) — کف صفر: ورود صفحه‌کلیدی زمان واکنش نیست (مثل خط عددی)
+    rt_floor_ms: 0,
+    timed_choice: false, // ورود صفحه‌کلیدی — پایان با ✓ یا پنجره
+    stage_rule: SEQ_MEMORY_THRESHOLDS,
+    stageList: () => SPAN_STAGES,
+    levers: { bank_caps: SPAN_STAGE_MAX_DIGITS },
+    itemInStage: (item, stageId) => {
+      // پروب در هر مرحله — خط‌کش ثابت سنجش (همان رفع P0 ممیزی فازها)؛ سقف فقط برای تمرین
+      if (item.phase === 'probe') return true;
+      const max = typeof stageId === 'string' && stageId in SPAN_STAGE_MAX_DIGITS ? SPAN_STAGE_MAX_DIGITS[stageId] : null;
+      if (max === null) return true;
+      const s = (item.stim ?? {}) as Record<string, unknown>;
+      const len = Array.isArray(s.seq) ? s.seq.length : 0;
+      return len > 0 && len <= max;
+    },
+    engine_metrics: [
+      { id: 'digitspan_span_max', title_fa: 'بلندترین دنبالهٔ عدد کامل درست (بازهٔ عددی)', unit: 'score', higher_is_better: true, source: 'auto', formula: 'span_max' }
     ]
   }
 };

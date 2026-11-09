@@ -43,7 +43,7 @@ describe('آستانه‌های گذار خط عددی — وضعیت proposed �
   });
 
   it('بامپ نسخهٔ قواعد — قواعد اسکن با نسخهٔ ۱.۲.۰ ثبت می‌شوند؛ خط عددی از ۱.۱.۰ عیناً مانده', () => {
-    expect(STAGE_RULES_VERSION).toBe('1.4.0'); // ۱.۲۵.۴۰ — آلبوم خرچنگ (nback) + قواعد شش نوع پیشین عیناً
+    expect(STAGE_RULES_VERSION).toBe('1.5.0'); // ۱.۲۵.۴۰ — آلبوم خرچنگ (nback) + قواعد شش نوع پیشین عیناً
     expect(NUMLINE_STAGE_THRESHOLDS).toEqual({ pass: 65, star2: 78, star3: 88 });
   });
 });

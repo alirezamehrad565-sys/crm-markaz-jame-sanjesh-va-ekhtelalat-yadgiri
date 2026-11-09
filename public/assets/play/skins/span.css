@@ -1,0 +1,81 @@
+/* ═══ پوستهٔ «شبِ فانوس» — skins/span.css (لایهٔ هنر حباب‌های عدد G8/۱.۲۵.۴۸) ═══
+   چرا: حباب‌های عدد در شبِ گرمِ فانوس‌ها بالا می‌آیند — شبِ بادمجانی‌گلیِ
+   آرام، فانوس رزگلمنت، درخشش کهربایی حباب. متمایز از غار استروپ (بنفش
+   روشن) و کوچهٔ رد (آبی تیره) — بادمجانی‌گلیِ گرم با فانوس رزی. فقط هنر
+   روی play.css؛ بی‌انیمیشن و بی‌دارایی بیرونی — جنبش فقط ترنزیشن ملایم. */
+
+/* چرا: پالت پوسته و بستر شبِ فانوس */
+.play-skin--span {
+  --span-night: #2A1E3F;
+  --span-night-deep: #1D1430;
+  --span-rose: #E86F9E;
+  --span-rose-deep: #B8537A;
+  --span-glow: #F0B23E;
+  --span-paper: #F5D9A8;
+  background: linear-gradient(180deg, var(--span-night) 0%, var(--span-night-deep) 100%);
+  color: #F5F0E5;
+}
+
+/* چرا: شبِ بادمجانی‌گلی با هالهٔ فانوس — نور رز از یک سو، ستاره‌های محو */
+.play-skin--span .play-stage {
+  position: relative;
+  background:
+    radial-gradient(circle at 82% 12%, rgba(240, 178, 62, .28) 0 9%, transparent 30%),
+    radial-gradient(circle at 14% 30%, rgba(232, 111, 158, .18) 0 8%, transparent 28%),
+    radial-gradient(120% 80% at 50% 108%, rgba(240, 178, 62, .14) 0 26%, rgba(240, 178, 62, 0) 58%),
+    linear-gradient(180deg, #3A2A55 0%, var(--span-night) 46%, var(--span-night-deep) 100%);
+}
+
+/* چرا: متن روی شب — کرمِ دفترچهٔ وظیفه (قرارداد شب‌های پوسته) */
+.play-skin--span .play-corsi__prompt,
+.play-skin--span .play-span__prompt,
+.play-skin--span .play-corsi__status,
+.play-skin--span .play-span__status,
+.play-skin--span .play-line { color: #F5F0E5; }
+.play-skin--span .play-muted { color: rgba(245, 240, 229, .78); }
+
+/* چرا: حباب نمایش عدد — شیشهٔ فانوس؛ درخشش کهربایی وقتی عدد می‌آید */
+.play-skin--span .play-span__bubble {
+  background: radial-gradient(circle at 32% 26%, rgba(245, 217, 168, .95), rgba(240, 178, 62, .55) 70%);
+  border-color: var(--span-paper);
+  color: var(--span-night);
+  box-shadow: 0 0 22px rgba(240, 178, 62, .4);
+}
+.play-skin--span .play-span__bubble--wait {
+  background: rgba(245, 217, 168, .1);
+  box-shadow: none;
+  color: rgba(245, 217, 168, .6);
+}
+
+/* چرا: اسلات‌های ورود — کاغذ روشن روی شب؛ پرشده = شیشه؛ درست = کهربا */
+.play-skin--span .play-span__slot { border-color: rgba(245, 217, 168, .55); color: #F5F0E5; }
+.play-skin--span .play-span__slot--filled { background: rgba(245, 217, 168, .92); color: var(--span-night); border-style: solid; }
+.play-skin--span .play-span__slot--truth { background: rgba(240, 178, 62, .95); color: var(--span-night); }
+
+/* چرا: صفحه‌کلید — کلیدهای شیشه‌ای تیره با عدد کرم؛ ✓ کهربایی؛ پاک‌کن رز */
+.play-skin--span .play-span__key {
+  background: rgba(245, 240, 229, .12);
+  border-color: rgba(245, 217, 168, .6);
+  color: #F5F0E5;
+}
+.play-skin--span .play-span__key:active { background: rgba(245, 217, 168, .3); }
+.play-skin--span .play-span__key--go { background: var(--span-glow); color: var(--span-night); border-color: var(--span-glow); }
+.play-skin--span .play-span__key--back { background: rgba(232, 111, 158, .32); border-color: var(--span-rose); }
+
+/* چرا: نوار پنجرهٔ ورود — رزِ فانوس روی شب */
+.play-skin--span .play-span__timer { background: rgba(245, 217, 168, .2); }
+.play-skin--span .play-span__timer > span { background: linear-gradient(to left, var(--span-rose), var(--span-rose-deep)); }
+
+/* چرا: فانوس در شب — سایهٔ گرم زیرش تا شناور نشود */
+.play-skin--span .play-span__lantern { filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .45)); }
+
+/* چرا: حباب/پیل/سبد روی شب — نوار تیرهٔ نیمه‌شفاف با متن کرم (قرارداد شب‌ها) */
+.play-skin--span .play-bubble { background: rgba(29, 20, 48, .94); color: #F5F0E5; }
+.play-skin--span .play-basket { background: rgba(29, 20, 48, .85); }
+.play-skin--span .play-basket__star path { fill: var(--span-glow); }
+
+/* افقیِ کوتاه — حباب و صفحه‌کلید فشرده اما کامل داخل کادر */
+@media (orientation: landscape) and (max-height: 500px) {
+  .play-skin--span .play-span__stage { min-height: 88px; }
+  .play-skin--span .play-span__bubble { width: 72px; height: 72px; font-size: 34px; }
+}

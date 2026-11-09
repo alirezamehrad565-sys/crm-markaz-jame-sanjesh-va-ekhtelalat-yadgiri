@@ -571,6 +571,177 @@
   .play-root.play-skin--numline .play-numline__chip { font-size: 32px; min-width: 76px; }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   G8/۱.۲۵.۴۸ — دو بازی حافظهٔ دنباله‌ای: صدف‌های جادویی (corsi) و
+   حباب‌های عدد (span) — ساختار پایهٔ مشترک؛ هنر پوسته در skins/.
+   هدف لمسی ≥۶۴px (§۹)؛ بی‌فلاش؛ جنبش فقط ترنزیشن ملایم.
+   ═══════════════════════════════════════════════════════════════ */
+.play-corsi, .play-span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 430px;
+}
+.play-corsi__prompt, .play-span__prompt {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--p-navy);
+  text-align: center;
+}
+.play-corsi__status, .play-span__status {
+  margin: 0;
+  min-height: 24px;
+  font-size: 15px;
+  color: var(--p-navy);
+  opacity: .82;
+  text-align: center;
+}
+
+/* ─── صدف‌های جادویی — شبکهٔ ۳×۳؛ همیشه کامل داخل کادر ─── */
+.play-corsi__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(6px, 2vmin, 14px);
+  width: 100%;
+  max-width: 340px;
+}
+.play-corsi__tile {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 4px;
+  cursor: pointer;
+  touch-action: manipulation;
+  aspect-ratio: 1;
+  border-radius: 18px;
+  min-width: 64px;
+  min-height: 64px;
+}
+.play-corsi__tile svg { width: 100%; height: 100%; display: block; }
+.play-corsi__shell-body {
+  fill: var(--corsi-shell, #EAF2F0);
+  stroke: var(--p-navy);
+  stroke-width: 3;
+  transition: fill .18s ease, transform .18s ease;
+}
+.play-corsi__pearl { fill: #FFFFFF; stroke: var(--p-navy); stroke-width: 2; opacity: .8; transition: opacity .18s ease; }
+.play-corsi__tile--lit .play-corsi__shell-body { fill: var(--corsi-glow, #FFD98A); transform: scale(1.06); }
+.play-corsi__tile--lit .play-corsi__pearl { opacity: 1; }
+.play-corsi__tile--picked .play-corsi__shell-body { fill: var(--corsi-picked, #BFE3D2); transform: scale(.96); }
+.play-corsi__tile--truth .play-corsi__shell-body { fill: var(--corsi-truth, #F3CE8B); }
+.play-corsi__tile--truth .play-corsi__pearl { fill: var(--p-amber); }
+/* در فاز پخش دنباله، صدف‌ها هنوز دکمهٔ فعال نیستند — نشانهٔ بصری آرام */
+.play-corsi__grid:not(.play-corsi__grid--recall) .play-corsi__tile { cursor: default; }
+
+/* ─── حباب‌های عدد — حباب نمایش + فانوس ─── */
+.play-span__stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  width: 100%;
+  min-height: 150px;
+}
+.play-span__lantern { width: clamp(52px, 14vmin, 84px); opacity: .95; }
+.play-span__lantern svg { width: 100%; height: auto; display: block; }
+.play-span__bubble {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(96px, 26vmin, 150px);
+  height: clamp(96px, 26vmin, 150px);
+  border-radius: 999px;
+  font-size: clamp(44px, 13vmin, 72px);
+  font-weight: 700;
+  color: var(--p-navy);
+  background: rgba(255, 255, 255, .28);
+  border: 3px solid var(--p-navy);
+  opacity: 0;
+  transform: scale(.82);
+  transition: opacity .18s ease, transform .18s ease;
+  direction: ltr; /* عددهای لاتین — مطابق جادهٔ عددها */
+}
+.play-span__bubble--show { opacity: 1; transform: scale(1); }
+.play-span__bubble--wait { opacity: .35; border-style: dashed; }
+
+/* نوار ورود — اسلات‌های خالی/پر */
+.play-span__entry {
+  display: flex;
+  gap: 8px;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.play-span__slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  border: 2.5px dashed rgba(21, 62, 80, .45);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--p-navy);
+  direction: ltr;
+}
+.play-span__slot--filled { border-style: solid; background: rgba(255, 255, 255, .55); }
+.play-span__slot--truth { border-style: solid; background: rgba(243, 206, 139, .8); }
+
+/* صفحه‌کلید بزرگ — ۴×۳؛ ورود ≥۶۴px (§۹)؛ تا فاز ورود پنهان */
+.play-span__pad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(72px, 96px));
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+}
+.play-span__pad--hidden { visibility: hidden; }
+.play-span__key {
+  appearance: none;
+  border: 2.5px solid var(--p-navy);
+  border-radius: 16px;
+  min-height: 64px;
+  font-size: 26px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--p-navy);
+  background: rgba(255, 255, 255, .6);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.play-span__key:active { transform: scale(.97); }
+.play-span__key--back { background: rgba(232, 111, 158, .22); }
+.play-span__key--go { background: var(--p-amber); color: var(--p-navy); border-color: var(--p-navy); }
+.play-span__key--truth { outline: 4px solid var(--p-amber); outline-offset: 2px; }
+.play-span__timer { width: 100%; max-width: 340px; height: 10px; border-radius: 999px; background: rgba(21, 62, 80, .18); overflow: hidden; }
+.play-span__timer > span, .play-corsi__timer > span { display: block; height: 100%; width: 100%; border-radius: 999px; background: var(--p-amber); }
+.play-corsi__timer { width: 100%; max-width: 340px; height: 10px; border-radius: 999px; background: rgba(21, 62, 80, .18); overflow: hidden; }
+
+/* نمونه‌های آموزش/پیش‌نمایش — نسخهٔ سبک بدون نوار پنجره */
+.play-corsi--sample .play-corsi__grid { max-width: 260px; }
+.play-span--sample .play-span__stage { min-height: 120px; }
+.play-span--sample .play-span__pad { display: none; }
+.play-span--sample .play-span__pad--hidden { display: none; }
+
+/* افقیِ کوتاه (ارتفاع ≤۵۰۰px) — فشرده بدون برش */
+@media (orientation: landscape) and (max-height: 500px) {
+  .play-corsi, .play-span { gap: 6px; }
+  .play-corsi__grid { max-width: 240px; }
+  .play-corsi__tile { min-width: 52px; min-height: 52px; padding: 2px; }
+  .play-corsi__prompt, .play-span__prompt { font-size: 15px; }
+  .play-span__stage { min-height: 96px; }
+  .play-span__bubble { width: 76px; height: 76px; font-size: 38px; }
+  .play-span__slot { width: 42px; height: 42px; font-size: 20px; }
+  .play-span__key { min-height: 50px; font-size: 20px; }
+  .play-span__pad { grid-template-columns: repeat(3, minmax(60px, 84px)); }
+}
+
 /* هیچ انیمیشنی تندتر از ۳ هرتز وجود ندارد؛ با کاهش‌جنبش همه‌چیز ایستا می‌شود */
 @media (prefers-reduced-motion: reduce) {
   .play-progress__bar { transition: none; }

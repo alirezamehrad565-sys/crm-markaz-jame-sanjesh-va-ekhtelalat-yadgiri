@@ -29,8 +29,11 @@ export type { GameKind } from './registry';
  *  اسکن (SCAN_STAGE_WAVE_MS — فقط نمایش، نه محرک) — سه قاعدهٔ قبلی عیناً.
  *  ۱.۲۵.۳۹ (G4الف): جابه‌جایی به رجیستری نوع-محور — صفر تغییر عددی؛ نسخه عیناً.
  *  ۱.۴.۰ (۱.۲۵.۴۰): قواعد «آلبوم خرچنگ» (nback) افزوده شد — نردبان دو باند با پلهٔ n
- *  (s1/s2 سطح ۱، s3..s5 سطح ۲؛ overrides فقط ISI/تثبیت) — قواعد شش نوع پیشین عیناً. */
-export const STAGE_RULES_VERSION = '1.4.0';
+ *  (s1/s2 سطح ۱، s3..s5 سطح ۲؛ overrides فقط ISI/تثبیت) — قواعد شش نوع پیشین عیناً.
+ *  ۱.۵.۰ (G8/۱.۲۵.۴۹): قواعد دو بازی حافظهٔ دنباله‌ای افزوده شد — «صدف‌های جادویی» (corsi،
+ *  اهرم = طول دنبالهٔ صدف‌ها) و «حباب‌های عدد» (span، اهرم = شمار عددها)؛
+ *  هفت قاعدهٔ پیشین عیناً. */
+export const STAGE_RULES_VERSION = '1.5.0';
 
 /** تعداد مرحله‌های مسیر تمرین */
 export const STAGE_TOTAL = 5;
@@ -421,4 +424,41 @@ export function stageStimViewOf(
   const base = (stim ?? {}) as Record<string, unknown>;
   if (!v) return { ...base };
   return { ...base, ...(correctTouch ? v.go : v.nogo) };
+}
+
+// ─── مراحل دو بازی حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۹) — صدف‌های جادویی / حباب‌های عدد ───
+// ملاک گذار هر دو = دقت دنبالهٔ کامل (درصد) — آستانهٔ مشترک خودشان (SEQ_MEMORY) تا
+// آیندهٔ این دو نوع به پیلوت خودشان وابسته بماند؛ اهرم سختی authored روی بانک است.
+
+/** آستانهٔ گذار و ستارهٔ دو بازی حافظهٔ دنباله‌ای — بر دقت (درصد)؛ وضعیت proposed تا پیلوت مرکز */
+export const SEQ_MEMORY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.corsi.stage_rule);
+
+/** نتیجهٔ مرحلهٔ دو بازی حافظهٔ دنباله‌ای از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
+export function stageOutcomeSeqMemory(accuracy: number | null | undefined): StageOutcome {
+  return accuracyOutcomeOf(GAME_KINDS.corsi.stage_rule, accuracy);
+}
+
+/** سقف طول دنبالهٔ صدف‌ها در هر مرحلهٔ کرسی — null = همهٔ دنباله‌ها (مرحلهٔ پایانی مرور بزرگ) */
+export const CORSI_STAGE_MAX_SPAN: Record<string, number | null> = GAME_KINDS.corsi.levers.bank_caps!;
+
+/**
+ * پیش‌ماندهٔ آیتم کرسی در مرحله — بانک authored با سقف مرحله؛ پروب در همهٔ مراحل
+ * (خط‌کش ثابت سنجش — همان رفع P0 ممیزی فازها)؛ بی‌مرحله/ناشناخته = همهٔ آیتم‌ها.
+ */
+export function corsiItemInStage(
+  item: { stim?: Record<string, unknown> | null | undefined; phase?: string },
+  stageId: string | null | undefined
+): boolean {
+  return GAME_KINDS.corsi.itemInStage(item, stageId);
+}
+
+/** سقف شمار عددهای دنباله در هر مرحلهٔ بازهٔ عدد — null = همهٔ دنباله‌ها */
+export const SPAN_STAGE_MAX_DIGITS: Record<string, number | null> = GAME_KINDS.span.levers.bank_caps!;
+
+/** پیش‌ماندهٔ آیتم بازهٔ عدد در مرحله — همان قرارداد کرسی؛ پروب در همهٔ مراحل */
+export function spanItemInStage(
+  item: { stim?: Record<string, unknown> | null | undefined; phase?: string },
+  stageId: string | null | undefined
+): boolean {
+  return GAME_KINDS.span.itemInStage(item, stageId);
 }

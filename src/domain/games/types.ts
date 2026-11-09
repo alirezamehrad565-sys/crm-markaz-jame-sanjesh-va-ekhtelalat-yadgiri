@@ -26,6 +26,9 @@ export type MetricFormula =
   | 'nback_nonmatch'
   | 'nback_fa'
   | 'nback_miss'
+  /** G8/۱.۲۵.۴۹ — بازی‌های حافظهٔ دنباله‌ای: بلندترین دنبالهٔ کاملِ درست‌پاسخ‌خورده
+   *  (صدف‌های جادویی corsi / حباب‌های عدد span) — فقط از موتور */
+  | 'span_max'
   | 'none';
 export type MetricUnit = 'percent' | 'count' | 'ms' | 'score';
 export type MetricSource = 'auto' | 'human';
@@ -58,7 +61,8 @@ export interface MissionItem {
   /** scan (۱.۲۵.۳۰): موج جاسوس‌ها — شبکه‌ای از ربات‌ها؛ کودک همهٔ جاسوس‌ها را می‌گیرد
    *  ۱.۲۵.۳۲: stroop (رنگ جوهر) · flanker (جهت گرگ وسط) · trail (ترتیب ردپاها)
    *  ۱.۲۵.۴۰: nback (ن‌پشت — حکم «همان است/فرق دارد» نسبت به n قدم عقب‌تر) */
-  type: 'choice' | 'numline' | 'touch_report' | 'scan' | 'stroop' | 'flanker' | 'trail' | 'nback';
+  type: 'choice' | 'numline' | 'touch_report' | 'scan' | 'stroop' | 'flanker' | 'trail' | 'nback'
+    | 'corsi' | 'span';
   prompt?: string;
   options?: { label: string }[];
   /** گزینهٔ درست (اندیس) برای choice یا جای درست روی خط عددی برای numline؛
@@ -279,6 +283,11 @@ export interface PlayHint {
   /** ن‌پشت (۱.۲۵.۴۰) — قاعدهٔ «n قدم عقب‌تر» از پرامپت آیتم آموزشی؛ کلید همسانی
    *  (match) از stim راهنما سد می‌شود (stripAnswerKeys) و هرگز این‌جا نمی‌آید */
   nback?: { label: string; stim: Record<string, unknown> } | null;
+  /** صدف‌های جادویی (corsi — G8/۱.۲۵.۴۹) — قاعدهٔ دنباله از پرامپت آیتم آموزشی؛
+   *  دنبالهٔ تمرین دانش عمومی خود بازیه؛ کلید بانک هرگز این‌جا نیست */
+  corsi?: { label: string; stim: Record<string, unknown> } | null;
+  /** حباب‌های عدد (span — G8/۱.۲۵.۴۹) — قاعدهٔ بازهٔ عدد از پرامپت آیتم آموزشی */
+  span?: { label: string; stim: Record<string, unknown> } | null;
 }
 
 /** فرادادهٔ مرحلهٔ فعال برای کارت کودک (۱.۲۵.۲۲) — فقط تمرین؛ کلید پاسخ/آستانه‌ها هرگز این‌جا نیست */
