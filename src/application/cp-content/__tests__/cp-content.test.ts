@@ -48,13 +48,22 @@ function okJson(body: unknown): Response {
 }
 
 const CP_ITEM_BASE = {
-  kind: 'exercise' as 'exercise' | 'plan' | 'doc',
+  // 1.25.48 m6 — شکل قرارداد واقعی CP (docs/cp-content-sharing.md)
+  kind: 'exercise' as 'exercise' | 'card' | 'document' | 'plan' | 'doc' | 'clearbook',
   title: 'بستهٔ برگزیدهٔ دقت دیداری',
   summary: 'خلاصهٔ برگزیده',
   body: 'متن کامل برگزیده',
   tags: ['دقت دیداری'],
-  active: true,
-  source_center: 'sanjesh-center' as string | null,
+  subcategory: null as string | null,
+  author_name: 'سمیرا محمدی' as string | null,
+  co_author_name: null as string | null,
+  file_name: 'dokat.pdf' as string | null,
+  file_size: 2048 as number | null,
+  external_url: null as string | null,
+  quality: { score: { score: 39, refs: 3, uses: 12, refScore: 15, useScore: 24, formulaVersion: 1, source: 'client', generatedAt: '2026-11-01T10:00:00Z' } } as Record<string, unknown> | null,
+  status: 'approved' as 'collected' | 'approved' | 'rejected' | 'retired' | 'published',
+  source_center_code: 'sanjesh-center' as string | null,
+  source_center_name: 'مرکز سنجش' as string | null,
   created_at: '2026-11-01T10:00:00.000Z'
 };
 
@@ -142,8 +151,8 @@ describe('قرارداد pull برگزیده‌ها', () => {
     expect(pullUrl.startsWith('https://network-control-plane.sanjeshm.workers.dev/api/node/content/sync')).toBe(true);
     expect(pullUrl).not.toContain('since='); // اولین دوره بدون سینک موفق قبلی
 
-    const rows = await db.query<{ id: string; origin: string; status: string; source_center: string | null }>(
-      `SELECT id, origin, status, source_center FROM network_content ORDER BY id`
+    const rows = await db.query<{ id: string; origin: string; status: string; source_center: string | null; author_name: string | null; quality: string | null }>(
+      `SELECT id, origin, status, source_center, author_name, quality FROM network_content ORDER BY id`
     );
     expect(rows.map((r) => r.id)).toEqual([
       'cp-content-aaaa1111-1111-4111-8111-111111111111',
@@ -166,7 +175,7 @@ describe('قرارداد pull برگزیده‌ها', () => {
       return okJson({
         data: {
           server_time: '2026-11-06T12:00:00.000Z',
-          items: [cpItem({ id, updated_at: '2026-11-06T09:00:00.000Z', title: 'عنوان ویرایش‌شدهٔ شبکه', active: false })]
+          items: [cpItem({ id, updated_at: '2026-11-06T09:00:00.000Z', title: 'عنوان ویرایش‌شدهٔ شبکه', status: 'retired' as const })]
         }
       });
     });

@@ -1,10 +1,14 @@
 // ─── کتابخانهٔ شبکه: فرادادهٔ نمایشی مشترک (۱.۲۵.۴۶) ───
 // این مقادیر با قید CHECK جدول network_content و اسکیمای سینک cp-content هم‌قراردادند.
 
+// 1.25.48 m6 — گونه‌های کامل کتابخانه هم‌قرارداد با CP
 export const KIND_OPTIONS = [
   { value: 'exercise', label: 'تمرین / کارت آماده' },
+  { value: 'card', label: 'بازی آماده' },
   { value: 'plan', label: 'طرح درمان' },
-  { value: 'doc', label: 'سند خام' }
+  { value: 'clearbook', label: 'کلر بوک مرکز' },
+  { value: 'document', label: 'سند خام' },
+  { value: 'doc', label: 'سند خام (محلی)' }
 ];
 
 export const STATUS_META = {

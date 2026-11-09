@@ -32,6 +32,34 @@ function parseOrigin(v: string | undefined): 'local' | 'cp' | undefined {
 export function registerNetworkContentRoutes(app: AppHono, service: NetworkContentService): void {
   const office = requireRole('manager', 'secretary');
   const manager = requireRole('manager');
+  const staff = requireRole('manager', 'therapist');
+
+  // شناسهٔ ردیف CP — «cp-content-…» (قانون طلایی سینک)؛ UuidSchema نیست
+  const CpIdSchema = z.string().trim().min(8).max(140).refine((v) => v.startsWith('cp-content-'), 'شناسهٔ برگزیدهٔ شبکه نامعتبر است');
+
+  // m6 — دانلود فایل آیتم برگزیده (فقط-خواندنی از CP با کلید نود)
+  app.get('/api/network-content/cp/:id/file', office, async (c) => {
+    const id = CpIdSchema.parse(c.req.param('id'));
+    const file = await service.cpFile(id);
+    if (!file) return c.json({ error: 'NOT_FOUND', message: 'فایل در دسترس نیست' }, 404);
+    const asciiFallback = file.fileName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_');
+    return new Response(file.bytes, {
+      status: 200,
+      headers: {
+        'Content-Type': file.mime,
+        'Content-Disposition': `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
+        'Cache-Control': 'private, no-store'
+      }
+    });
+  });
+
+  // m6 — افزودن برگزیدهٔ شبکه به بانک کارت محلی (کارت آماده؛ حفظ اثر طراح)
+  app.post('/api/network-content/cp/:id/install', staff, async (c) => {
+    const actor = getAuthContext(c);
+    const id = CpIdSchema.parse(c.req.param('id'));
+    const result = await service.installFromNetwork({ id: actor.staffId }, id);
+    return c.json({ data: result }, 200);
+  });
 
   app.get('/api/network-content', office, async (c) => {
     const q = c.req.query();

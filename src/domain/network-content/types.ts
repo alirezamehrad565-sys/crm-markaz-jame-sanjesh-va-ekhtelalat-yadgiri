@@ -3,14 +3,31 @@
 // + برگزیده‌های توزیع‌شده از کنترل‌پلین (origin='cp'، فقط با پیشوند cp-content-).
 // قرارداد CP: docs/cp-node-content-hub.md
 
-export const CONTENT_KINDS = ['exercise', 'plan', 'doc'] as const;
+// 1.25.48 m6 — گونه‌های کامل کتابخانه هم‌قرارداد با CP: card=document/clearbook هم می‌آیند
+// (doc محلی سر جایش است) — بازسازی CHECK در مایگریشن 0099 انجام شده است.
+export const CONTENT_KINDS = ['exercise', 'card', 'document', 'plan', 'doc', 'clearbook'] as const;
 export type ContentKind = (typeof CONTENT_KINDS)[number];
 
 export const CONTENT_KIND_LABELS: Record<ContentKind, string> = {
   exercise: 'تمرین / کارت آماده',
+  card: 'بازی آماده',
+  document: 'سند خام',
   plan: 'طرح درمان',
-  doc: 'سند خام'
+  doc: 'سند خام',
+  clearbook: 'کلر بوک مرکز'
 };
+
+/** امتیاز شناسنامه — مولدِ سامانهٔ کلاینت مبدأ (فرمول v1)؛ fallback CP برچسب می‌خورد */
+export interface NetworkScore {
+  score: number;
+  refs: number;
+  uses: number;
+  refScore: number;
+  useScore: number;
+  formulaVersion: number;
+  source: string;
+  generatedAt?: string | null;
+}
 
 /** وضعیت ردیف‌های محلی: پیش‌نویس → صف همرسانی → همرسانده‌شده؛ withdrawn = کنارگذاری */
 export type ContentStatus = 'draft' | 'queued' | 'submitted' | 'withdrawn' | 'published';
@@ -24,6 +41,18 @@ export interface NetworkContentRecord {
   /** JSON ساختارمند محتوا — رشتهٔ خام برای نمایش فرمت‌شده در کلاینت */
   body: string;
   tags: string[];
+  /** زیردستهٔ واقعی ماژول مبدأ — calendar/phase برای کلربوک (m6) */
+  subcategory: string | null;
+  /** طراح تمرین — پایان‌بندی اعتبار اثر در زیرمجموعه (m6) */
+  authorName: string | null;
+  coAuthorName: string | null;
+  fileName: string | null;
+  fileSize: number | null;
+  externalUrl: string | null;
+  /** شناسنامهٔ JSON مبدأ (امتیاز/فازها/سنجه‌ها) */
+  quality: Record<string, unknown> | null;
+  /** امتیاز استخراج‌شدهٔ شناسنامه — null یعنی مبدأ امتیاز نفرستاده */
+  score: NetworkScore | null;
   origin: 'local' | 'cp';
   status: ContentStatus;
   sourceCenter: string | null;
@@ -76,4 +105,8 @@ export interface NetworkContentService {
   queue(actor: { id: string }, id: string): Promise<NetworkContentRecord>;
   /** queued/submitted → withdrawn (کنارگذاری محلی؛ ردیف cp هرگز) */
   withdraw(actor: { id: string }, id: string): Promise<NetworkContentRecord>;
+  /** m6 — افزودن برگزیدهٔ شبکه (کارت آماده) به بانک کارت محلی با حفظ اثر طراح */
+  installFromNetwork(actor: { id: string }, id: string): Promise<{ localExerciseId: string; title: string }>;
+  /** m6 — فایل آیتم CP (فقط-خواندنی با کلید نود)؛ undefined = در دسترس نیست */
+  cpFile(id: string): Promise<{ bytes: ArrayBuffer; mime: string; fileName: string } | undefined>;
 }
