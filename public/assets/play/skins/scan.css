@@ -28,6 +28,8 @@ body:has(.play-skin--scan){background:radial-gradient(130% 100% at 50% -8%,#1237
 /* دریای آموزش زیر شب — رنگ‌ها عوض نمی‌شوند، فقط تیره می‌شوند */
 .play-skin--scan .play-scene{opacity:.8}
 .play-skin--scan .play-scene::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,#081C2A26,#081C2ACC)}
+/* قهرمان بالای پوشش شب — ماهی کرم هرگز زیر گرادیان گم نمی‌شود (رفع P1 ممیزی فازها) */
+.play-skin--scan .play-scene__hero{z-index:1;filter:drop-shadow(0 4px 10px rgba(3,10,16,.55))}
 
 /* پنجرهٔ گنبدی — طاق بالا، هالهٔ Teal؛ ابعاد لمسی پایه دست نمی‌خورد */
 .play-skin--scan .play-scan__tile{border-color:var(--sk-halo);border-radius:24px 24px 13px 13px;background:radial-gradient(130% 80% at 50% -4%,#7FD9CF38,#0000 58%),linear-gradient(180deg,#FCF8EE,#DCE7E2);box-shadow:0 0 0 1px #7FD9CF4D,0 6px 16px #030C1480,inset 0 0 14px #7FD9CF24;transition:border-color .16s,background .16s,box-shadow .16s,transform .16s}

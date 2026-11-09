@@ -37,6 +37,9 @@ export function gameKindOf(v: string | null | undefined): GameKind {
 export interface StageItemLike {
   range?: [number, number] | undefined;
   stim?: Record<string, unknown> | null | undefined;
+  /** فاز آیتم (۱.۲۵.۴۷) — پروب = خط‌کش سنجش است و باید در «هر» مرحله حاضر باشد؛
+   *  سابقاً سقف/گروه مراحل پروب‌ها را می‌انداخت و جلسه‌های s1..s4 صفر سنجه می‌ساختند (P0 ممیزی فازها) */
+  phase?: 'train' | 'probe' | string | undefined;
 }
 
 /** آستانه با وضعیت صادقانه — قرارداد §۴ نقشهٔ راه: هر عدد فقط با مبنا و وضعیت ثبت می‌شود */
@@ -410,12 +413,13 @@ const SCAN_STAGE_WAVE_MS: Record<string, number | null> = {
   s5: 13000
 };
 
-/** بانک مجاز هر مرحلهٔ استروپ — گروه‌های authored بانک (a=مرحلهٔ ۱ … d=مرحلهٔ ۴، p=پروب) */
+/** بانک مجاز هر مرحلهٔ استروپ — گروه‌های authored بانک (a=مرحلهٔ ۱ … d=مرحلهٔ ۴، p=پروب).
+ *  پروب ('p') در «همهٔ» مراحل حاضر است — خط‌کش ثابت سنجش؛ رفع P0: سابقاً فقط s5 پروب داشت. */
 const STROOP_STAGE_BANDS: Record<string, string[] | null> = {
-  s1: ['a'],
-  s2: ['a', 'b'],
-  s3: ['a', 'b', 'c'],
-  s4: ['a', 'b', 'c', 'd'],
+  s1: ['a', 'p'],
+  s2: ['a', 'b', 'p'],
+  s3: ['a', 'b', 'c', 'p'],
+  s4: ['a', 'b', 'c', 'd', 'p'],
   s5: null // همهٔ بانک — مرور بزرگ
 };
 
@@ -428,12 +432,13 @@ const FLANKER_STAGE_MAX_DECOYS: Record<string, number | null> = {
   s5: null
 };
 
-/** بانک مجاز هر مرحلهٔ فلانکر — ناسالم بودن گروه = بازگشت ساختاری (شمار قلابی‌ها) */
+/** بانک مجاز هر مرحلهٔ فلانکر — ناسالم بودن گروه = بازگشت ساختاری (شمار قلابی‌ها).
+ *  پروب ('p') در همهٔ مراحل — خط‌کش ثابت سنجش (رفع P0 ممیزی فازها). */
 const FLANKER_STAGE_BANDS: Record<string, string[] | null> = {
-  s1: ['a'],
-  s2: ['a', 'b'],
-  s3: ['a', 'b', 'c'],
-  s4: ['a', 'b', 'c', 'd'],
+  s1: ['a', 'p'],
+  s2: ['a', 'b', 'p'],
+  s3: ['a', 'b', 'c', 'p'],
+  s4: ['a', 'b', 'c', 'd', 'p'],
   s5: null
 };
 
@@ -446,12 +451,13 @@ const TRAIL_STAGE_MAX_NODES: Record<string, number | null> = {
   s5: null
 };
 
-/** بانک مجاز هر مرحلهٔ رد — ناسالم بودن گروه = بازگشت ساختاری (شمار ردپاها) */
+/** بانک مجاز هر مرحلهٔ رد — ناسالم بودن گروه = بازگشت ساختاری (شمار ردپاها).
+ *  پروب ('p') در همهٔ مراحل — خط‌کش ثابت سنجش (رفع P0 ممیزی فازها). */
 const TRAIL_STAGE_BANDS: Record<string, string[] | null> = {
-  s1: ['a'],
-  s2: ['a', 'b'],
-  s3: ['a', 'b', 'c'],
-  s4: ['a', 'b', 'c', 'd'],
+  s1: ['a', 'p'],
+  s2: ['a', 'b', 'p'],
+  s3: ['a', 'b', 'c', 'p'],
+  s4: ['a', 'b', 'c', 'd', 'p'],
   s5: null
 };
 
@@ -531,6 +537,8 @@ export const GAME_KINDS: { [K in GameKind]: GameKindSpec<K> } = {
     stageList: () => SWARM_STAGES,
     levers: { bank_caps: SCAN_STAGE_MAX_TILES, display: SCAN_STAGE_WAVE_MS },
     itemInStage: (item, stageId) => {
+      // پروب در هر مرحله — خط‌کش ثابت سنجش؛ سقف خانه‌ها فقط برای تمرین است (رفع P0 ممیزی فازها)
+      if (item.phase === 'probe') return true;
       const max = typeof stageId === 'string' && stageId in SCAN_STAGE_MAX_TILES ? SCAN_STAGE_MAX_TILES[stageId] : null;
       if (max === null) return true;
       const s = (item.stim ?? {}) as Record<string, unknown>;

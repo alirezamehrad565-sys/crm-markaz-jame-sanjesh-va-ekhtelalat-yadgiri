@@ -230,11 +230,13 @@ describe('نوع‌بازی و ملاک گذار سه بازی تازه', () => 
     expect(flankerItemInStage(three, 's2')).toBe(false);
     expect(flankerItemInStage(four, 's4')).toBe(true);
     expect(flankerItemInStage(four, 's3')).toBe(false);
-    // بانک گروه‌دار — پروب هرگز به مرحله‌های اولیه درز نمی‌کند (رفع نشت ۱.۲۵.۳۲)
+    // بانک گروه‌دار — پروب ('p') خط‌کش ثابت سنجش است و در «همهٔ» مراحل حاضر (رفع P0 ۱.۲۵.۴۷:
+    // سابقاً با پین ۱.۲۵.۳۲ فقط s5 پروب داشت و جلسه‌های s1..s4 صفر سنجه می‌ساختند)
     const bandA = { stim: { arrows: ['L', 'R', 'L'], band: 'a' } };
     const bandP = { stim: { arrows: ['L', 'L', 'L'], band: 'p' } }; // کنگرنت ولی پروب
     expect(flankerItemInStage(bandA, 's1')).toBe(true);
-    expect(flankerItemInStage(bandP, 's1')).toBe(false);
+    expect(flankerItemInStage(bandP, 's1')).toBe(true);
+    expect(flankerItemInStage(bandP, 's3')).toBe(true);
     expect(flankerItemInStage(bandP, 's5')).toBe(true);
   });
 
@@ -243,12 +245,14 @@ describe('نوع‌بازی و ملاک گذار سه بازی تازه', () => 
     expect(trailItemInStage({ stim: { nodes: [1, 2, 3, 4, 5] } }, 's1')).toBe(false);
     expect(trailItemInStage({ stim: { nodes: [1, 2, 3, 4, 5, 6, 7] } }, 's4')).toBe(true);
     expect(trailItemInStage({ stim: { nodes: [] } }, 's1')).toBe(false);
-    // بانک گروه‌دار — پروب ۶ ردپایی به مرحلهٔ ۳ درز نمی‌کند (رفع نشت ۱.۲۵.۳۲)
+    // بانک گروه‌دار — پروب ۶ ردپایی خط‌کش ثابت سنجش؛ در همهٔ مراحل حاضر (رفع P0 ۱.۲۵.۴۷)
     const bandP6 = { stim: { nodes: [1, 2, 3, 4, 5, 6], band: 'p' } };
-    expect(trailItemInStage(bandP6, 's3')).toBe(false);
+    expect(trailItemInStage(bandP6, 's1')).toBe(true);
+    expect(trailItemInStage(bandP6, 's3')).toBe(true);
     expect(trailItemInStage(bandP6, 's5')).toBe(true);
     const bandC6 = { stim: { nodes: [1, 2, 3, 4, 5, 6], band: 'c' } };
     expect(trailItemInStage(bandC6, 's3')).toBe(true);
+    expect(trailItemInStage(bandC6, 's1')).toBe(false); // تمرین گروه c فقط از s3
   });
 });
 

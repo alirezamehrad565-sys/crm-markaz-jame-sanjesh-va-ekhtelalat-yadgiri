@@ -1042,13 +1042,15 @@ export function createGamesService(deps: GamesDeps): GamesService {
       missionRef: m.id,
       missionTitle: m.title ?? m.id,
       packageTitle: res.pkg.titleFa,
+      /* هویت نوع‌بازی برای هر دو شاخهٔ والد و کودک — کارت والدِ pre قهرمان خود بازی را می‌بیند
+         (رفع P0 ممیزی فازها: قبلاً فقط child_active پُر می‌شد و همهٔ کارت‌های والد ماهی گونوگو می‌گرفتند) */
+      playGame: m.game,
       expiresAt: res.link.expires_at,
       validity: res.session ? (res.session.validity as PublicStateView['validity']) : undefined,
       adherenceConfirmed: adherence?.confirm2_at != null,
       parentCopyBefore: typeof (res.pkg.body.parent_copy as Record<string, unknown> | undefined)?.before === 'string'
         ? ((res.pkg.body.parent_copy as Record<string, unknown>).before as string) : null,
       ...(state === 'child_active' ? {
-        playGame: m.game,
         playHint: playHintOf(m, res.session?.stage_id ?? stage?.id ?? null),
         playProtocol: snap,
         playResume: resumeMeta,

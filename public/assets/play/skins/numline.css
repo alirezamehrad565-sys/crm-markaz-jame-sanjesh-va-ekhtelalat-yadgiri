@@ -124,3 +124,6 @@
   .play-skin--numline :is(.play-numline__chip,.play-btn,.play-option,.play-progress__bar) { transition: none; animation: none; }
   .play-skin--numline :is(.play-btn,.play-option):active { transform: none; filter: none; }
 }
+
+/* ستاره‌ها — خط کرم روی شب (۱.۲۵.۴۷) */
+.play-skin--numline .play-stars__star path{stroke:var(--n-cream)}
