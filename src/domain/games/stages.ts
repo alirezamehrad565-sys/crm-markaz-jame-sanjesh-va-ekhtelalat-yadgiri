@@ -32,8 +32,10 @@ export type { GameKind } from './registry';
  *  (s1/s2 سطح ۱، s3..s5 سطح ۲؛ overrides فقط ISI/تثبیت) — قواعد شش نوع پیشین عیناً.
  *  ۱.۵.۰ (G8/۱.۲۵.۴۹): قواعد دو بازی حافظهٔ دنباله‌ای افزوده شد — «صدف‌های جادویی» (corsi،
  *  اهرم = طول دنبالهٔ صدف‌ها) و «حباب‌های عدد» (span، اهرم = شمار عددها)؛
- *  هفت قاعدهٔ پیشین عیناً. */
-export const STAGE_RULES_VERSION = '1.5.0';
+ *  هفت قاعدهٔ پیشین عیناً.
+ *  ۱.۶.۰ (۱.۲۵.۵۱): «رد پای دزد» (trail) پس از نقد سه‌گانه حذف شد — قاعدهٔ آن از رجیستری
+ *  برداشته شد؛ بستهٔ trail1 در DB بازنشسته می‌شود (migration 0101)؛ هفت قاعدهٔ مانده عیناً. */
+export const STAGE_RULES_VERSION = '1.6.0';
 
 /** تعداد مرحله‌های مسیر تمرین */
 export const STAGE_TOTAL = 5;
@@ -252,19 +254,6 @@ export function flankerItemInStage(
   stageId: string | null | undefined
 ): boolean {
   return GAME_KINDS.flanker.itemInStage(item, stageId);
-}
-
-/** سقف شمار ردپاها در هر مرحلهٔ رد پای دزد — null = همهٔ ردها */
-export const TRAIL_STAGE_MAX_NODES: Record<string, number | null> = GAME_KINDS.trail.levers.bank_caps!;
-
-/** بانک مجاز هر مرحلهٔ رد — گروه‌های authored بانک؛ ناسالم = ساختاری (شمار ردپاها) */
-export const TRAIL_STAGE_BANDS: Record<string, string[] | null> = GAME_KINDS.trail.levers.bank_bands!;
-
-export function trailItemInStage(
-  item: { stim?: Record<string, unknown> | null | undefined },
-  stageId: string | null | undefined
-): boolean {
-  return GAME_KINDS.trail.itemInStage(item, stageId);
 }
 
 /**

@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.50";
+var APP_VERSION = "1.25.51";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23299,7 +23299,7 @@ function fillErrorPage(message) {
 __name(fillErrorPage, "fillErrorPage");
 
 // src/domain/games/registry.ts
-var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "trail", "nback", "corsi", "span"];
+var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "nback", "corsi", "span"];
 function gameKindOf(v) {
   return GAME_KIND_IDS.includes(v) ? v : "gonogo";
 }
@@ -23516,16 +23516,16 @@ var STROOP_STAGES = [
   {
     id: "s1",
     index: 1,
-    title_fa: "\u063A\u0627\u0631 \u0622\u0631\u0627\u0645",
-    goal_fa: "\u0648\u0627\u0698\u0647\u200C\u0647\u0627 \u0647\u0646\u0648\u0632 \u0631\u0646\u06AF\u0650 \u062E\u0648\u062F\u0634\u0627\u0646 \u0631\u0627 \u062F\u0627\u0631\u0646\u062F\u061B \u0628\u0627 \u0637\u0645\u0623\u0646\u06CC\u0646\u0647 \u0644\u0645\u0633 \u06A9\u0646.",
+    title_fa: "\u0627\u0648\u0644\u06CC\u0646 \u062D\u0642\u0647",
+    goal_fa: "\u062D\u0642\u0647\u200C\u0628\u0627\u0632 \u0628\u06CC\u062F\u0627\u0631 \u0634\u062F\u0647\u061B \u0648\u0627\u0698\u0647 \u062F\u0631\u0648\u063A \u0645\u06CC\u200C\u06AF\u0648\u06CC\u062F \u2014 \u0631\u0646\u06AF\u0650 \u0648\u0627\u0642\u0639\u06CC \u0631\u0627 \u0644\u0645\u0633 \u06A9\u0646.",
     difficulty: 1,
     overrides: {}
   },
   {
     id: "s2",
     index: 2,
-    title_fa: "\u0631\u0646\u06AF\u200C\u0647\u0627 \u0642\u0627\u0637\u06CC \u0645\u06CC\u200C\u0634\u0648\u0646\u062F",
-    goal_fa: "\u062D\u0642\u0647\u200C\u0628\u0627\u0632 \u0634\u0631\u0648\u0639 \u06A9\u0631\u062F\u0647\u061B \u0641\u0642\u0637 \u0628\u0647 \u0631\u0646\u06AF\u0650 \u062C\u0648\u0647\u0631 \u0646\u06AF\u0627\u0647 \u06A9\u0646.",
+    title_fa: "\u062D\u0642\u0647\u200C\u0647\u0627\u06CC \u0628\u06CC\u0634\u062A\u0631",
+    goal_fa: "\u062D\u0642\u0647\u200C\u0628\u0627\u0632 \u062A\u0646\u062F\u062A\u0631 \u0634\u062F\u0647\u061B \u0641\u0642\u0637 \u0628\u0647 \u0631\u0646\u06AF\u0650 \u062C\u0648\u0647\u0631 \u0646\u06AF\u0627\u0647 \u06A9\u0646.",
     difficulty: 2,
     overrides: {}
   },
@@ -23691,48 +23691,6 @@ function nbackItemInStage(item, stageId) {
   return s.n === level;
 }
 __name(nbackItemInStage, "nbackItemInStage");
-var TRAIL_STAGES = [
-  {
-    id: "s1",
-    index: 1,
-    title_fa: "\u0631\u062F \u06A9\u0648\u062A\u0627\u0647",
-    goal_fa: "\u0631\u062F\u067E\u0627\u0647\u0627 \u06A9\u0645\u200C\u0627\u0646\u062F\u061B \u0628\u0647 \u062A\u0631\u062A\u06CC\u0628 \u0634\u0645\u0627\u0631\u0647 \u0628\u0631\u0648.",
-    difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: "s2",
-    index: 2,
-    title_fa: "\u0631\u062F \u0628\u0644\u0646\u062F\u062A\u0631",
-    goal_fa: "\u06CC\u06A9 \u0642\u062F\u0645 \u0628\u06CC\u0634\u062A\u0631\u061B \u0631\u062F \u0631\u0627 \u06A9\u0627\u0645\u0644 \u06A9\u0646.",
-    difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: "s3",
-    index: 3,
-    title_fa: "\u0631\u062F \u0628\u0644\u0646\u062F",
-    goal_fa: "\u0631\u062F\u067E\u0627\u0647\u0627 \u0628\u06CC\u0634\u062A\u0631 \u0634\u062F\u0647\u200C\u0627\u0646\u062F\u061B \u0631\u062F \u06AF\u0645 \u0646\u0634\u0648\u062F.",
-    difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: "s4",
-    index: 4,
-    title_fa: "\u0631\u062F \u06AF\u0645\u200C\u0634\u062F\u0647",
-    goal_fa: "\u0639\u062F\u062F \u0648 \u062D\u0631\u0641 \u06CC\u06A9\u200C\u062F\u0631\u0645\u06CC\u0627\u0646 \u0634\u062F\u0647\u061B \u0628\u0627 \u062F\u0642\u062A \u0642\u062F\u0645 \u0628\u0632\u0646.",
-    difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: "s5",
-    index: 5,
-    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0631\u062F",
-    goal_fa: "\u0647\u0645\u0647\u0654 \u0631\u062F\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u062A\u0639\u0642\u06CC\u0628\u200C\u06A9\u0646\u0646\u062F\u0647\u200C\u0627\u06CC!",
-    difficulty: 5,
-    overrides: {}
-  }
-];
 var NUMLINE_STAGE_MAX = {
   s1: 10,
   s2: 20,
@@ -23774,20 +23732,6 @@ var FLANKER_STAGE_MAX_DECOYS = {
   s5: null
 };
 var FLANKER_STAGE_BANDS = {
-  s1: ["a", "p"],
-  s2: ["a", "b", "p"],
-  s3: ["a", "b", "c", "p"],
-  s4: ["a", "b", "c", "d", "p"],
-  s5: null
-};
-var TRAIL_STAGE_MAX_NODES = {
-  s1: 4,
-  s2: 5,
-  s3: 6,
-  s4: 7,
-  s5: null
-};
-var TRAIL_STAGE_BANDS = {
   s1: ["a", "p"],
   s2: ["a", "b", "p"],
   s3: ["a", "b", "c", "p"],
@@ -23911,7 +23855,6 @@ var ENGINE_ONLY_FORMULAS = [
   "congruent_acc",
   "incongruent_acc",
   "interference_ms",
-  "trail_prefix",
   "nback_match",
   "nback_nonmatch",
   "nback_fa",
@@ -24019,28 +23962,6 @@ var GAME_KINDS = {
       { id: "flanker_congruent_acc_pct", title_fa: "\u062F\u0642\u062A \u06AF\u0644\u0647\u0654 \u0647\u0645\u200C\u0633\u0648 (\u0628\u062F\u0648\u0646 \u0641\u0631\u06CC\u0628)", unit: "percent", higher_is_better: true, source: "auto", formula: "congruent_acc" },
       { id: "flanker_incongruent_acc_pct", title_fa: "\u062F\u0642\u062A \u06AF\u0644\u0647\u0654 \u0641\u0631\u06CC\u0628\u06A9\u0627\u0631 (\u0641\u0644\u0627\u0646\u06A9\u0631 \u0645\u062E\u0627\u0644\u0641)", unit: "percent", higher_is_better: true, source: "auto", formula: "incongruent_acc" },
       { id: "flanker_interference_ms", title_fa: "\u0647\u0632\u06CC\u0646\u0647\u0654 \u062A\u062F\u0627\u062E\u0644 \u0641\u0644\u0627\u0646\u06A9\u0631 (\u0645\u06CC\u0627\u0646\u0647\u0654 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u2212 \u0645\u06CC\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u062E\u0648\u0627\u0646)", unit: "ms", higher_is_better: false, source: "auto", formula: "interference_ms" }
-    ]
-  },
-  trail: {
-    // رد پای دزد — کف ۱۵۰ms روی نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
-    rt_floor_ms: 150,
-    timed_choice: false,
-    stage_rule: ACCURACY_STAGE_RULE,
-    stageList: /* @__PURE__ */ __name(() => TRAIL_STAGES, "stageList"),
-    levers: { bank_caps: TRAIL_STAGE_MAX_NODES, bank_bands: TRAIL_STAGE_BANDS },
-    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
-      const allowed = typeof stageId === "string" && stageId in TRAIL_STAGE_BANDS ? TRAIL_STAGE_BANDS[stageId] : null;
-      if (allowed === null) return true;
-      const s = item.stim ?? {};
-      const band = typeof s.band === "string" ? s.band : "";
-      if (band !== "") return allowed.includes(band);
-      const max = typeof stageId === "string" && stageId in TRAIL_STAGE_MAX_NODES ? TRAIL_STAGE_MAX_NODES[stageId] : null;
-      if (max === null) return true;
-      const nodes = Array.isArray(s.nodes) ? s.nodes.length : 0;
-      return nodes > 0 && nodes <= max;
-    }, "itemInStage"),
-    engine_metrics: [
-      { id: "trail_prefix_pct", title_fa: "\u062F\u0631\u0635\u062F \u067E\u06CC\u0634\u200C\u0645\u0627\u0646\u062F \u0635\u062D\u06CC\u062D \u0631\u062F \u0631\u062F\u067E\u0627\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "trail_prefix" }
     ]
   },
   nback: {
@@ -24263,8 +24184,6 @@ var DEFAULT_RT_FLOOR_MS = {
   // حقه‌باز رنگ‌ها — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
   flanker: GAME_KINDS.flanker.rt_floor_ms,
   // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-  trail: GAME_KINDS.trail.rt_floor_ms,
-  // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
   nback: GAME_KINDS.nback.rt_floor_ms,
   // ن‌پشت/آلبوم خرچنگ — لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
   corsi: GAME_KINDS.corsi.rt_floor_ms,
@@ -24332,8 +24251,6 @@ function scoreAttempt(item, mission, response, rtMs) {
   let nbackMatch;
   let nbackFa;
   let nbackMissed;
-  let trailNodes;
-  let trailNodesTotal;
   let spanLenValue;
   if (item.type === "choice") {
     correct = typeof res.option === "number" && res.option === item.correct;
@@ -24357,23 +24274,6 @@ function scoreAttempt(item, mission, response, rtMs) {
     } else {
       congruent = item.stim?.congruent === true || item.stim?.cond === "congruent";
     }
-  } else if (item.type === "trail") {
-    const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0) : [];
-    const rawOrder = Array.isArray(res.order) ? res.order : [];
-    const seen = /* @__PURE__ */ new Set();
-    const orderSeq = [];
-    for (const v of rawOrder.filter((n) => Number.isInteger(n) && n >= 0)) {
-      const k = String(v);
-      if (!seen.has(k)) {
-        seen.add(k);
-        orderSeq.push(v);
-      }
-    }
-    let prefix = 0;
-    while (prefix < orderSeq.length && prefix < key.length && orderSeq[prefix] === key[prefix]) prefix++;
-    correct = key.length === orderSeq.length && orderSeq.every((v, i) => v === key[i]);
-    trailNodes = prefix;
-    trailNodesTotal = key.length;
   } else if (item.type === "corsi" || item.type === "span") {
     const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n)) : [];
     const rawSeq = item.type === "corsi" ? Array.isArray(res.order) ? res.order : [] : Array.isArray(res.digits) ? res.digits : [];
@@ -24425,7 +24325,6 @@ function scoreAttempt(item, mission, response, rtMs) {
     ...timedOut !== void 0 ? { timedOut } : {},
     ...congruent !== void 0 ? { congruent } : {},
     ...nbackMatch !== void 0 ? { match: nbackMatch, nbackFa: nbackFa === true, nbackMissed: nbackMissed === true } : {},
-    ...trailNodes !== void 0 ? { trailNodes, trailNodesTotal: trailNodesTotal ?? 0 } : {},
     ...spanLenValue !== void 0 ? { spanLen: spanLenValue } : {}
   };
 }
@@ -24501,9 +24400,6 @@ function answerDisplayOf(item) {
   }
   if (item.type === "nback") {
     return item.correct === 0 ? "\u0647\u0645\u0627\u0646 \u0627\u0633\u062A" : item.correct === 1 ? "\u0641\u0631\u0642 \u062F\u0627\u0631\u062F" : null;
-  }
-  if (item.type === "trail") {
-    return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(",") : null;
   }
   if (item.type === "corsi" || item.type === "span") {
     return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(",") : null;
@@ -24593,15 +24489,6 @@ function interferenceMsOf(scored) {
   return round2(incMed - congMed);
 }
 __name(interferenceMsOf, "interferenceMsOf");
-function trailPrefixPctOf(scored) {
-  const rows = scored.filter((s) => typeof s.trailNodes === "number" && typeof s.trailNodesTotal === "number" && s.trailNodesTotal > 0);
-  if (rows.length === 0) return null;
-  const nodes = rows.reduce((a, s) => a + s.trailNodes, 0);
-  const total = rows.reduce((a, s) => a + s.trailNodesTotal, 0);
-  if (total <= 0) return null;
-  return round2(nodes / total * 100);
-}
-__name(trailPrefixPctOf, "trailPrefixPctOf");
 function nbackMatchSubset(scored, match2) {
   return scored.filter((s) => s.match === match2);
 }
@@ -24721,8 +24608,6 @@ function computeMetricValue(formula, scored) {
       return incongruentAccPctOf(scored);
     case "interference_ms":
       return interferenceMsOf(scored);
-    case "trail_prefix":
-      return trailPrefixPctOf(scored);
     case "nback_match":
       return nbackMatchPctOf(scored);
     case "nback_nonmatch":
@@ -25011,7 +24896,7 @@ function applyAdaptiveLevel(current, decision) {
 __name(applyAdaptiveLevel, "applyAdaptiveLevel");
 
 // src/domain/games/stages.ts
-var STAGE_RULES_VERSION = "1.5.0";
+var STAGE_RULES_VERSION = "1.6.0";
 var STAGE_TOTAL = 5;
 var STAGE_OVERRIDE_KEYS = [
   "response_window_go_ms",
@@ -25088,8 +24973,6 @@ var ACCURACY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.stroop.stage_rul
 var STROOP_STAGE_BANDS2 = GAME_KINDS.stroop.levers.bank_bands;
 var FLANKER_STAGE_MAX_DECOYS2 = GAME_KINDS.flanker.levers.bank_caps;
 var FLANKER_STAGE_BANDS2 = GAME_KINDS.flanker.levers.bank_bands;
-var TRAIL_STAGE_MAX_NODES2 = GAME_KINDS.trail.levers.bank_caps;
-var TRAIL_STAGE_BANDS2 = GAME_KINDS.trail.levers.bank_bands;
 function itemInStageFor(kind, item, stageId) {
   return GAME_KINDS[kind].itemInStage(item, stageId);
 }
@@ -25550,7 +25433,10 @@ function reportToCsv(report) {
     "median_rt_ms",
     "stage_title",
     "stage_stars",
-    "attempt_count"
+    "attempt_count",
+    "nback_match_pct",
+    "nback_false_alarm_pct",
+    "nback_miss_pct"
   ];
   const lines = [header.join(",")];
   for (const s of report.sessions) {
@@ -25572,7 +25458,10 @@ function reportToCsv(report) {
       num4(sum?.rt?.median),
       sum?.stage?.title_fa ?? "",
       typeof sum?.stage?.stars === "number" ? String(sum.stage.stars) : "",
-      String(s.raw.attempt_count)
+      String(s.raw.attempt_count),
+      num4(sum?.nback?.match_pct),
+      num4(sum?.nback?.false_alarm_pct),
+      num4(sum?.nback?.miss_pct)
     ].map(esc2).join(","));
   }
   return "\uFEFF" + lines.join("\r\n") + "\r\n";
@@ -26450,7 +26339,7 @@ function createGamesService(deps) {
         scan: { label, stim: stripAnswerKeys({ signature: sig }) }
       };
     }
-    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "trail" || it.type === "nback" || it.type === "corsi" || it.type === "span"));
+    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "nback" || it.type === "corsi" || it.type === "span"));
     if (newTrain && !go && !nogo) {
       const kindKey = newTrain.type;
       const stim = stripAnswerKeys(newTrain.stim ?? {});
@@ -27263,7 +27152,6 @@ var KIND_FIGS = {
   scan: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#5E8FB8" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0 M72 46 Q66 58 72 70" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z" fill="#E4AA46" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/>',
   stroop: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#9B7EDE" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M74 50 Q80 44 86 50 M20 60 Q28 72 40 66" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><circle cx="30" cy="18" r="8" fill="#D96C6C" stroke="#153E50" stroke-width="3"/><circle cx="92" cy="14" r="8" fill="#63B37F" stroke="#153E50" stroke-width="3"/>',
   flanker: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#8FA6B8" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0" fill="none" stroke="#153E50" stroke-width="3"/><path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" transform="translate(-6 -38) scale(.62)" fill="#B9C6D2" stroke="#153E50" stroke-width="4" stroke-linejoin="round"/>',
-  trail: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0 M22 42 a9 9 0 1 0 0.01 0 M102 42 a9 9 0 1 0 0.01 0" fill="#C4635F" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M52 48 a3.5 3.5 0 1 0 0.01 0 M72 48 a3.5 3.5 0 1 0 0.01 0 M52 40 L50 32 M72 40 L74 32 M58 58 Q62 62 66 58" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><path d="M22 84 q4 -10 10 -2 q-2 -10 8 -8" fill="none" stroke="#153E50" stroke-width="2.5" stroke-linecap="round"/><path d="M96 86 q4 -10 10 -2 q-2 -10 8 -8" fill="none" stroke="#153E50" stroke-width="2.5" stroke-linecap="round"/>',
   nback: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0" fill="#438C89" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M50 46 Q54 42 58 46 M66 46 Q70 42 74 46 M52 40 L50 32 M72 40 L74 32 M56 56 Q62 64 68 56" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><rect x="12" y="12" width="38" height="26" rx="4" fill="#E4AA46" stroke="#153E50" stroke-width="3"/><circle cx="31" cy="25" r="7" fill="#F5F0E5" stroke="#153E50" stroke-width="2.5"/>'
 };
 function kindFig(kind) {

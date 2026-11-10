@@ -1,13 +1,12 @@
-// دادهٔ آزمونی برای اسکرین‌شات حسابرسی پوستهٔ همهٔ ۷ نوع‌بازی (محلی 8787)
+// دادهٔ آزمونی برای اسکرین‌شات حسابرسی پوستهٔ همهٔ نوع‌بازی‌ها (محلی 8787)
 // خروجی: برای هر نوع یک کودک تازه + تجویز + مأموریت + لینک → «kind|url»
 const BASE = process.env.SEED_BASE || 'http://localhost:8787';
 const KINDS = [
   { kind: 'gonogo',  pkg: 'attention2', goal: 'inhibition_m2',        mission: 'gonogo_m2' },
   { kind: 'numline', pkg: 'numline1',   goal: 'numline_road',         mission: 'numline_v1' },
   { kind: 'scan',    pkg: 'swarm1',     goal: 'scan_attention',       mission: 'scan_v1' },
-  { kind: 'stroop',  pkg: 'stroop1',    goal: 'stroop_attention',     mission: 'stroop_v1' },
+  { kind: 'stroop',  pkg: 'stroop1',    goal: 'stroop_attention',     mission: 'stroop_v1', ver: '1.1.0' },
   { kind: 'flanker', pkg: 'flanker1',   goal: 'flanker_attention',    mission: 'flanker_v1' },
-  { kind: 'trail',   pkg: 'trail1',     goal: 'trail_attention',      mission: 'trail_v1' },
   { kind: 'nback',   pkg: 'nback1',     goal: 'nback_working_memory', mission: 'nback_v1' }
 ];
 
@@ -40,7 +39,7 @@ const token = login.token;
 const today = new Date(Date.now() + 3.5 * 3600 * 1000).toISOString().slice(0, 10);
 
 for (const m of KINDS) {
-  const { kind, pkg, goal } = m;
+  const { kind, pkg, goal, ver } = m;
   try {
     const student = await api('/api/students', {
       method: 'POST',
@@ -48,7 +47,7 @@ for (const m of KINDS) {
     }, token);
     const rx = await api('/api/games/prescriptions', {
       method: 'POST',
-      body: JSON.stringify({ child_id: student.id, package_id: pkg, package_version: '1.0.0', goal_id: goal })
+      body: JSON.stringify({ child_id: student.id, package_id: pkg, package_version: ver || '1.0.0', goal_id: goal })
     }, token);
     const mission = await api('/api/games/missions', {
       method: 'POST',

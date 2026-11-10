@@ -15,7 +15,7 @@
 | ۳ | حملهٔ جاسوس‌ها | `scan` | توجه انتخابی/سرکشی | d2-R | هستهٔ d2 + الگوی گیم‌فیل escape-run (MIT) |
 | ۴ | حقه‌باز رنگ‌ها | `stroop` | بازداری تداخل واژه-رنگ | Stroop | jspsych-timelines/stroop-task (MIT) |
 | ۵ | گلهٔ فریبکار | `flanker` | توجه گزینشی، کنترل تداخل | Eriksen Flanker / ANT | @jspsych-contrib/plugin-flanker (MIT) |
-| ۶ | رد پای دزد | `trail` | جستجوی دیداری، دنبال‌کردن، انعطاف | Trail Making A/B | @jspsych-contrib/plugin-trail-making (MIT) |
+| ۶ | ~~رد پای دزد~~ | ~~`trail`~~ | — | — | **حذف در ۱.۲۵.۵۱ — نقد سه‌گانه (سختی/آموزش/کارکرد) را نگذراند؛ بستهٔ trail1 بازنشسته شد** |
 
 زیرساخت مشترک از ۱.۲۵.۳۲: موتور جلسهٔ ۱۴-حالته با برنچ‌های عام
 `timedchoice` (استروپ/فلانکر) و `sequence` (رد) — هر بازی تازه فقط
@@ -53,10 +53,10 @@
 | حوزه | الان | بعد از فاز ۲ |
 |---|---|---|
 | بازداری پاسخ | gonogo · stroop | + stopsignal |
-| توجه انتخابی/سرکشی | scan · flanker | (رد پای دزد حذف شد — ۱.۲۵.۴۱) + taskswitch |
+| توجه انتخابی/سرکشی | scan · flanker | (رد پای دزد حذف شد — نقد سه‌گانهٔ ۱.۲۵.۵۱) + taskswitch |
 | حافظه کاری | nback · corsi | + simon |
 | یادگیری/حافظه متوالی | — | + simon |
-| انعطاف شناختی | (خالی — trail حذف شد) | + taskswitch |
+| انعطاف شناختی | (خالی — trail حذف شد، نقد سه‌گانهٔ ۱.۲۵.۵۱) | + taskswitch |
 | حس عددی | numline | + numcompare |
 | واجی | — | + pa_discrim |
 
