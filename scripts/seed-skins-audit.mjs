@@ -7,7 +7,8 @@ const KINDS = [
   { kind: 'scan',    pkg: 'swarm1',     goal: 'scan_attention',       mission: 'scan_v1' },
   { kind: 'stroop',  pkg: 'stroop1',    goal: 'stroop_attention',     mission: 'stroop_v1', ver: '1.1.0' },
   { kind: 'flanker', pkg: 'flanker1',   goal: 'flanker_attention',    mission: 'flanker_v1' },
-  { kind: 'nback',   pkg: 'nback1',     goal: 'nback_working_memory', mission: 'nback_v1' }
+  { kind: 'nback',   pkg: 'nback1',     goal: 'nback_working_memory', mission: 'nback_v1' },
+  { kind: 'simon',   pkg: 'simon1',     goal: 'simon_seq_memory',     mission: 'simon_v1' }
 ];
 
 function makeNationalId() {

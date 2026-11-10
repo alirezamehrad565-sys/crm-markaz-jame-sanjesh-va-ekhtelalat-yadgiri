@@ -43,7 +43,7 @@ describe('آستانه‌های گذار خط عددی — وضعیت proposed �
   });
 
   it('بامپ نسخهٔ قواعد — قواعد اسکن با نسخهٔ ۱.۲.۰ ثبت می‌شوند؛ خط عددی از ۱.۱.۰ عیناً مانده', () => {
-    expect(STAGE_RULES_VERSION).toBe('1.6.0'); // ۱.۲۵.۵۱ — حذف trail (نقد سه‌گانه) + قواعد هفت نوع مانده عیناً
+    expect(STAGE_RULES_VERSION).toBe('1.7.0'); // ۱.۲۵.۵۲ — قواعد هم‌صداها (simon) افزوده شد؛ قواعد هفت نوع مانده عیناً
     expect(NUMLINE_STAGE_THRESHOLDS).toEqual({ pass: 65, star2: 78, star3: 88 });
   });
 });

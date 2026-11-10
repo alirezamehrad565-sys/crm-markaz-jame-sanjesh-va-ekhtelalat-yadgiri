@@ -23,7 +23,8 @@ export const DEFAULT_RT_FLOOR_MS: Record<MissionItem['type'], number> = {
   flanker: GAME_KINDS.flanker.rt_floor_ms,      // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
   nback: GAME_KINDS.nback.rt_floor_ms,        // ن‌پشت/آلبوم خرچنگ — لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
   corsi: GAME_KINDS.corsi.rt_floor_ms,        // صدف‌های جادویی — کف نخستین لمس یادآوری؛ زیر آن حدس است (G8)
-  span: GAME_KINDS.span.rt_floor_ms           // حباب‌های عدد — ورود صفحه‌کلیدی، زمان واکنش نیست (G8)
+  span: GAME_KINDS.span.rt_floor_ms,          // حباب‌های عدد — ورود صفحه‌کلیدی، زمان واکنش نیست (G8)
+  simon: GAME_KINDS.simon.rt_floor_ms         // هم‌صداها — کف نخستین لمس یادآوری؛ زیر آن حدس است (۱.۲۵.۵۲)
 };
 
 /** آستانهٔ بیکاری برای جلسهٔ ناقص (§۶) */
@@ -156,6 +157,16 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
     } else {
       congruent = item.stim?.congruent === true || item.stim?.cond === 'congruent';
     }
+  } else if (item.type === 'simon') {
+    // هم‌صداها (۱.۲۵.۵۲) — تقلید متوالی با تکرارِ غیرمجاور مجاز: برخلاف کرسی، دنباله
+    // می‌تواند یک دوست را دو بار بخواند؛ پس پاسخ عیناً و بدون حذف تکرار با کلید
+    // مقایسه می‌شود (حذف تکرار این‌جا معنای بازی را می‌شکند). دنبالهٔ ناقص یا
+    // جابه‌جا = نادرست؛ طول فقط روی پاسخ کاملِ درست ثبت می‌شود (قاعدهٔ span_max).
+    const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0) : [];
+    const rawSeq = Array.isArray(res.order) ? res.order.filter((n) => Number.isInteger(n) && n >= 0) : [];
+    correct = key.length > 0 && key.length === rawSeq.length && rawSeq.every((v, i) => v === key[i]);
+    omission = rawSeq.length === 0;
+    if (correct) spanLenValue = key.length;
   } else if (item.type === 'corsi' || item.type === 'span') {
     // دو بازی حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۹) — پاسخ باید عین دنبالهٔ authored باشد.
     //  · corsi: ترتیب لمس صدف‌ها (تکرار صدف بی‌معناست؛ نخستین ورود هر اندیس می‌ماند)
@@ -277,8 +288,8 @@ export function answerDisplayOf(item: MissionItem): string | null {
     // دوگزینه‌ای ن‌پشت — گزینهٔ ۰ «همان است» و ۱ «فرق دارد»؛ فقط تمرین نمایش داده می‌شود
     return item.correct === 0 ? 'همان است' : item.correct === 1 ? 'فرق دارد' : null;
   }
-  if (item.type === 'corsi' || item.type === 'span') {
-    // دنبالهٔ درست به شکل CSV — برای corsi اندیس صدف‌ها و برای span خود عددها؛ فقط تمرین
+  if (item.type === 'corsi' || item.type === 'span' || item.type === 'simon') {
+    // دنبالهٔ درست به شکل CSV — برای corsi اندیس صدف‌ها، برای simon اندیس دوستان و برای span خود عددها؛ فقط تمرین
     return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(',') : null;
   }
   return null; // touch_report: بازپخش محرک، نه نمایش پاسخ؛ scan: CSV جاسوس‌های جامانده در scanMissedCsv
