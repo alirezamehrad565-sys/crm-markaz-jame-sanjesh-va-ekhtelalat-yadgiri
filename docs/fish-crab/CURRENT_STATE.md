@@ -50,26 +50,23 @@
 | آزمون گو/نوگو | `engine/trials.js` | ۷,۴۰۵ | اجرای کامل یک آزمون touch_report با مُهر پینت |
 | ارکستراسیون | `engine/session.js` | ۵۲,۲۹۶ | گردش ۵فازی + شاخهٔ نمایش هر نوع‌بازی |
 | آینهٔ نمره | `engine/scoring.js` | ۳,۶۳۱ | median/CV/خلاصه (نیمه‌فعال — §۶ ممیزی فنی) |
-| ماژول‌های نوع | `kinds/{gonogo,numline,scan,stroop,flanker,nback,corsi,span}.js` (trail حذف — نقد سه‌گانهٔ ۱.۲۵.۵۱) | — | فقط نمایش — صفر کلید، صفر شبکه |
+| ماژول‌های نوع | `kinds/{gonogo,numline,scan,stroop,flanker,nback,corsi}.js` (trail حذف — ۱.۲۵.۴۱) | ۷۰,۷۴۷ | فقط نمایش — صفر کلید، صفر شبکه |
 
 ### ۴.۲ ماشین ۱۴-حالته
 
 `IDLE → INSTRUCTION → (DEMONSTRATION | PRACTICE | READY) → FIXATION → STIMULUS → RESPONSE_WINDOW → INTER_TRIAL_INTERVAL → READY/PRACTICE/BREAK → COMPLETED` + `PAUSED / INTERRUPTED / INVALID` (ترمینال: COMPLETED/INVALID). گذار با جدول بسته (گذار غیرمجاز = استثنا) و تاریخ‌دار (`performance.now()-t0`). مکث برگه از `visibilitychange`: FIXATION/STIMULUS/RESPONSE_WINDOW/ITI/PRACTICE/READY → `PAUSED{from}` با انجماد sleeper + ساعت RT + تایمرهای موج، و برگشت با `resumeTo`.
 
-### ۴.۳ نوع‌بازی‌های فعال (نُه)
+### ۴.۳ شش نوع‌بازی فعال
 
 | نوع | حس بازی | ارجاع متن‌باز (همگی MIT، فقط الهام/اقتباس منطق) |
 | --- | --- | --- |
 | `gonogo` | ماهی=GO / خرچنگ=NO-GO + تمرین تعاملی «تا موفقیت» | `@jspsych-timelines/go-nogo` v0.5.0 (۱.۲۵.۳۴) |
 | `numline` | جادهٔ عددها | تمرین حس عدد (۱.۲۵.۲۸) |
 | `scan` | حملهٔ جاسوس‌ها (الگوی d2) | go-nogo + escape-run (۱.۲۵.۳۰) |
-| `stroop` | حقه‌باز رنگ‌ها — بانک ۱.۱.۰ حیله‌دار (۱.۲۵.۵۱) | `jspsych-timelines/stroop-task` (۱.۲۵.۳۲) |
+| `stroop` | حقه‌باز رنگ‌ها | `jspsych-timelines/stroop-task` (۱.۲۵.۳۲) |
 | `flanker` | گلهٔ فریبکار | `@jspsych-contrib/plugin-flanker` (۱.۲۵.۳۲) |
-| `nback` | آلبوم خرچنگ (ن‌پشت — ۱.۲۵.۴۰) | jsPsych core (MIT) |
-| `corsi` | صدف‌های جادویی (کورسی — حافظهٔ فضایی، G8/۱.۲۵.۴۹) | `@jspsych-contrib/plugin-corsi-blocks` (MIT) |
-| `span` | حباب‌های عدد (بازهٔ عددی، G8/۱.۲۵.۴۹) | jsPsych digit-span (MIT) |
-| `simon` | هم‌صداها (تقلید متوالی — چهار دوست ساحل، ۱.۲۵.۵۲) | الگوی corsi + مکانیک سیمون/MIMM (تکرار غیرمجاور) |
-| ~~`trail`~~ | رد پای دزد (TMT A/B) | **حذف شد — نقد سه‌گانهٔ ۱.۲۵.۵۱ (cognitive-games-critique.md)** |
+| `trail` | رد پای دزد (TMT A/B) | حذف شد — ۱.۲۵.۴۱ (نقد سه‌گانه؛ cognitive-games-critique.md) |
+| `corsi` | کولهٔ مرواریدها (کورسی — حافظهٔ فضایی) | `@jspsych-contrib/plugin-corsi-blocks` (MIT — ۱.۲۵.۴۱) |
 
 قرارداد ماژول نوع: صادرات `stimSvg` + `previewSteps` + هوک‌های اختیاری (`practiceInteractive`, `debriefMarkup`, `*Markup`, `*RevealTruth`, `*ResponsePoint`)؛ شنیده‌شدن خودکار با پسوند. **هیچ چرخهٔ عمر mount/start وجود ندارد** — کل listener/زمان‌بندی/ارسال با موتور است.
 

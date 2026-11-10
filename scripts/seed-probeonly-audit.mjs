@@ -22,7 +22,7 @@ const sqlLines = [];
 const qaMap = []; // { kind, pkg, goal, mission }
 
 for (const r of rows) {
-  if (!['attention2', 'numline1', 'swarm1', 'stroop1', 'flanker1', 'nback1'].includes(r.id)) continue;
+  if (!['attention2', 'numline1', 'swarm1', 'stroop1', 'flanker1', 'trail1', 'nback1'].includes(r.id)) continue;
   const pkg = r.id + 'qa';
   const body = JSON.parse(r.body_json);
   body.package_id = pkg;
@@ -67,7 +67,7 @@ const login = await api('/api/auth/login', { method: 'POST', body: JSON.stringif
 const token = login.token;
 const today = new Date(Date.now() + 3.5 * 3600 * 1000).toISOString().slice(0, 10);
 
-const KIND_OF = { attention2: 'gonogo', numline1: 'numline', swarm1: 'scan', stroop1: 'stroop', flanker1: 'flanker', nback1: 'nback' };
+const KIND_OF = { attention2: 'gonogo', numline1: 'numline', swarm1: 'scan', stroop1: 'stroop', flanker1: 'flanker', trail1: 'trail', nback1: 'nback' };
 const lines = [];
 for (const q of qaMap) {
   const kind = KIND_OF[q.pkg.replace('qa', '')];

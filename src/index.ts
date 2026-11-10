@@ -11,7 +11,6 @@ import {
 } from '@app/cp-sync/announcements';
 import { buildCpReportConfig, pushCpReport, cpReportOpportunistic } from '@app/cp-report/ingest';
 import { buildCpContentConfig, runCpContentCycle, cpContentOpportunistic } from '@app/cp-content/sync';
-import { buildBugReportConfig, runBugReportForward } from '@app/bug-report-forward'; // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP
 import { createContentScoreService } from '@domain/content-score'; // ۱.۲۵.۴۸ m6
 
 export interface Env {
@@ -231,46 +230,11 @@ function probeCpContent(env: Env, ctx: ExecutionContext): void {
   );
 }
 
-/** چرخهٔ ارسال گزارش باگ به پشتیبانی CP (بازاعمال ۱.۲۵.۵۱) — گیت ۵دقیقه‌ای درونی، خاموش بدون env */
-async function runBugReportForwardWrap(env: Env): Promise<void> {
-  const db = createDb(env.DB);
-  const logger = createLogger('sync');
-  const result = await runBugReportForward({
-    db,
-    logger,
-    config: buildBugReportConfig(env),
-    binding: env.CP ?? null,
-    force: true
-  });
-  logger.info('bug_report.cycle.done', {
-    status: result.status,
-    sent: result.status === 'done' ? result.sent : 0,
-    failed: result.status === 'done' ? result.failed : 0
-  });
-}
-
-/** دروازهٔ فرصت‌طلب ارسال گزارش باگ — همان الگوی cp-sync/cp-report/cp-content */
-let bugReportProbeAt = 0;
-function probeBugReportForward(env: Env, ctx: ExecutionContext): void {
-  const t = Date.now();
-  if (t - bugReportProbeAt < 60_000) return;
-  bugReportProbeAt = t;
-  ctx.waitUntil(
-    runBugReportForward({
-      db: createDb(env.DB),
-      logger: createLogger('sync'),
-      config: buildBugReportConfig(env),
-      binding: env.CP ?? null
-    }).catch(() => undefined)
-  );
-}
-
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     probeCpSync(env, ctx); // فرصت‌طلب؛ بدون env خالی است و فوراً برمی‌گردد
     probeCpReport(env, ctx); // گزارش‌دهی تجمیعی روزانه به CP — گیت ۲۴ساعتهٔ درونی
     probeCpContent(env, ctx); // کتابخانهٔ شبکه — push همرسانی + pull برگزیده‌ها (گیت ۱۵دقیقه‌ای)
-    probeBugReportForward(env, ctx); // گزارش باگ → پشتیبانی CP — گیت ۵دقیقه‌ای درونی (بازاعمال ۱.۲۵.۵۱)
     const db = createDb(env.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger('worker');
@@ -293,7 +257,6 @@ export default {
       ctx.waitUntil(runCpSyncCycle(env)); // سینک اعلان از کنترل‌پلین — خاموش اگر env خالی باشد
       ctx.waitUntil(runCpReportCycle(env)); // گزارش‌دهی تجمیعی — گیت ۲۴ساعتهٔ مشترک، دوباره‌کاری صفر
       ctx.waitUntil(runCpContentCycleWrap(env)); // کتابخانهٔ شبکه — گیت ۱۵دقیقه‌ای مشترک، دوباره‌کاری صفر
-      ctx.waitUntil(runBugReportForwardWrap(env)); // گزارش باگ → پشتیبانی CP — گیت ۵دقیقه‌ای مشترک (بازاعمال ۱.۲۵.۵۱)
       return;
     }
     if (event.cron === DIGEST_CRON) {

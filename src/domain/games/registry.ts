@@ -24,11 +24,8 @@ import type { RegistryMetric } from './types';
 // آرایهٔ سنجه‌های موتور (ENGINE_METRICS) و مقایسه‌های بین‌نسخه‌ای از هم نپاشد.
 
 // G8/۱.۲۵.۴۹: corsi (صدف‌های جادویی — حافظهٔ کاری دیداری-فضایی) و span (حباب‌های عدد —
-// بازهٔ عددی) در انتها نشسته‌اند تا ترتیب سنجه‌های موتور بازی‌های پیشین عیناً بماند.
-// نقد سه‌گانهٔ ۱.۲۵.۵۱: «رد پای دزد» (trail) از رجیستری حذف شد — سقف سختی ۷ گره در برابر
-// TMT واقعی ۲۵ گره، آموزش کم‌بار، بار شناختی ناکافی؛ بستهٔ trail1 در DB بازنشسته شد
-// (migration 0101) و gameKindOf('trail') به‌طور خودکار به گونوگو برمی‌گردد.
-export const GAME_KIND_IDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'nback', 'corsi', 'span', 'simon'] as const;
+// بازهٔ عددی) در انتها نشسته‌اند تا ترتیب سنجه‌های موتور هفت نوع پیشین عیناً بماند.
+export const GAME_KIND_IDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail', 'nback', 'corsi', 'span'] as const;
 export type GameKind = (typeof GAME_KIND_IDS)[number];
 
 /** نوع‌بازی از فیلد mission.game — ناشناخته = گونوگو (سازگاری با بسته‌های قدیمی) */
@@ -263,15 +260,13 @@ const SWARM_STAGES: StageDef[] = [
 ];
 
 // استروپ «حقه‌باز رنگ‌ها» (۱.۲۵.۳۲) — اهرم = آمیختهٔ هم‌خوان/ناهم‌خوان و پنجرهٔ پاسخ
-// ۱.۲۵.۵۱ — روایت مراحل با بانک ۱.۱.۰ هم‌راستا شد: حیله از س۱ در کار است؛ کارتِ گرم‌کردنِ
-// بی‌حیلهٔ بانک ۱.۰.۰ (ساکن‌دل) حذف شد — متن کارت مرحله فقط نمایش است و ارزیابی را دست نمی‌زند
 const STROOP_STAGES: StageDef[] = [
   {
-    id: 's1', index: 1, title_fa: 'اولین حقه', goal_fa: 'حقه‌باز بیدار شده؛ واژه دروغ می‌گوید — رنگِ واقعی را لمس کن.', difficulty: 1,
+    id: 's1', index: 1, title_fa: 'غار آرام', goal_fa: 'واژه‌ها هنوز رنگِ خودشان را دارند؛ با طمأنینه لمس کن.', difficulty: 1,
     overrides: {}
   },
   {
-    id: 's2', index: 2, title_fa: 'حقه‌های بیشتر', goal_fa: 'حقه‌باز تندتر شده؛ فقط به رنگِ جوهر نگاه کن.', difficulty: 2,
+    id: 's2', index: 2, title_fa: 'رنگ‌ها قاطی می‌شوند', goal_fa: 'حقه‌باز شروع کرده؛ فقط به رنگِ جوهر نگاه کن.', difficulty: 2,
     overrides: {}
   },
   {
@@ -375,6 +370,30 @@ export function nbackItemInStage(item: StageItemLike, stageId: string | null | u
   return s.n === level;
 }
 
+// رد پای دزد (۱.۲۵.۳۲) — اهرم = طول رد و آمیختهٔ عدد/حرف
+const TRAIL_STAGES: StageDef[] = [
+  {
+    id: 's1', index: 1, title_fa: 'رد کوتاه', goal_fa: 'ردپاها کم‌اند؛ به ترتیب شماره برو.', difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: 's2', index: 2, title_fa: 'رد بلندتر', goal_fa: 'یک قدم بیشتر؛ رد را کامل کن.', difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: 's3', index: 3, title_fa: 'رد بلند', goal_fa: 'ردپاها بیشتر شده‌اند؛ رد گم نشود.', difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: 's4', index: 4, title_fa: 'رد گم‌شده', goal_fa: 'عدد و حرف یک‌درمیان شده؛ با دقت قدم بزن.', difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: 's5', index: 5, title_fa: 'قهرمان رد', goal_fa: 'همهٔ ردها با هم — تو تعقیب‌کننده‌ای!', difficulty: 5,
+    overrides: {}
+  }
+];
+
 // ─── اهرم‌های مرحله — جدول‌های سقف بانک authored و اهرم نمایشی (کلید = s1..s5) ───
 
 /** سقف گسترهٔ جاده در هر مرحلهٔ خط عددی — null = همهٔ جاده‌ها (مرحلهٔ پایانی مرور بزرگ) */
@@ -428,6 +447,25 @@ const FLANKER_STAGE_MAX_DECOYS: Record<string, number | null> = {
 /** بانک مجاز هر مرحلهٔ فلانکر — ناسالم بودن گروه = بازگشت ساختاری (شمار قلابی‌ها).
  *  پروب ('p') در همهٔ مراحل — خط‌کش ثابت سنجش (رفع P0 ممیزی فازها). */
 const FLANKER_STAGE_BANDS: Record<string, string[] | null> = {
+  s1: ['a', 'p'],
+  s2: ['a', 'b', 'p'],
+  s3: ['a', 'b', 'c', 'p'],
+  s4: ['a', 'b', 'c', 'd', 'p'],
+  s5: null
+};
+
+/** سقف شمار ردپاها در هر مرحلهٔ رد — null = همهٔ ردها */
+const TRAIL_STAGE_MAX_NODES: Record<string, number | null> = {
+  s1: 4,
+  s2: 5,
+  s3: 6,
+  s4: 7,
+  s5: null
+};
+
+/** بانک مجاز هر مرحلهٔ رد — ناسالم بودن گروه = بازگشت ساختاری (شمار ردپاها).
+ *  پروب ('p') در همهٔ مراحل — خط‌کش ثابت سنجش (رفع P0 ممیزی فازها). */
+const TRAIL_STAGE_BANDS: Record<string, string[] | null> = {
   s1: ['a', 'p'],
   s2: ['a', 'b', 'p'],
   s3: ['a', 'b', 'c', 'p'],
@@ -505,40 +543,6 @@ const SPAN_STAGE_MAX_DIGITS: Record<string, number | null> = {
   s5: null
 };
 
-// هم‌صداها / تقلید متوالی (۱.۲۵.۵۲) — اهرم سختی = طول دنبالهٔ دوستان (۲→۶) + سرعت پخش
-// (authored در بانک؛ تندشونده با طول)؛ ساحل غروب: دوستان یکی‌یکی نور می‌گیرند و کودک همان ترتیب را لمس می‌کند
-const SIMON_STAGES: StageDef[] = [
-  {
-    id: 's1', index: 1, title_fa: 'دو هم‌صدا', goal_fa: 'دو دوست نور می‌گیرند؛ به همان ترتیب لمس کن.', difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: 's2', index: 2, title_fa: 'سه هم‌صدا', goal_fa: 'سه دوست پشت هم؛ چشم‌هایت با هم بیایند.', difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: 's3', index: 3, title_fa: 'چهار هم‌صدا', goal_fa: 'آواز بلندتر شد؛ بعضی دوست‌ها دو بار می‌خوانند — حواست باشد.', difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: 's4', index: 4, title_fa: 'ساحل تند', goal_fa: 'پنج دوست با ریتم تندتر؛ تو سریع‌ترین گوشِ ساحل هستی.', difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: 's5', index: 5, title_fa: 'قهرمان هم‌نوا', goal_fa: 'همهٔ آوازها با هم — تو هم‌صدای قهرمان!', difficulty: 5,
-    overrides: {}
-  }
-];
-
-/** سقف طول دنبالهٔ دوستان در هر مرحلهٔ هم‌صداها — null = همهٔ دنباله‌ها (تا ۶) */
-const SIMON_STAGE_MAX_SPAN: Record<string, number | null> = {
-  s1: 2,
-  s2: 3,
-  s3: 4,
-  s4: 5,
-  s5: null
-};
-
 /** شمار گرگ قلابی فلانکر — فلانکرهای مخالف مرکز؛ ناسالم = صفر */
 function flankerIncongruentCountOf(item: StageItemLike): number {
   const s = (item.stim ?? {}) as Record<string, unknown>;
@@ -564,6 +568,7 @@ export const ENGINE_ONLY_FORMULAS: readonly string[] = [
   'congruent_acc',
   'incongruent_acc',
   'interference_ms',
+  'trail_prefix',
   'nback_match',
   'nback_nonmatch',
   'nback_fa',
@@ -676,6 +681,29 @@ export const GAME_KINDS: { [K in GameKind]: GameKindSpec<K> } = {
       { id: 'flanker_interference_ms', title_fa: 'هزینهٔ تداخل فلانکر (میانهٔ ناهم‌خوان − میانهٔ هم‌خوان)', unit: 'ms', higher_is_better: false, source: 'auto', formula: 'interference_ms' }
     ]
   },
+  trail: {
+    // رد پای دزد — کف ۱۵۰ms روی نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
+    rt_floor_ms: 150,
+    timed_choice: false,
+    stage_rule: ACCURACY_STAGE_RULE,
+    stageList: () => TRAIL_STAGES,
+    levers: { bank_caps: TRAIL_STAGE_MAX_NODES, bank_bands: TRAIL_STAGE_BANDS },
+    itemInStage: (item, stageId) => {
+      const allowed = typeof stageId === 'string' && stageId in TRAIL_STAGE_BANDS ? TRAIL_STAGE_BANDS[stageId] : null;
+      if (allowed === null) return true;
+      const s = (item.stim ?? {}) as Record<string, unknown>;
+      const band = typeof s.band === 'string' ? s.band : '';
+      if (band !== '') return allowed.includes(band);
+      // بانک بی‌گروه (سازگاری قدیمی) — قاعدهٔ ساختاری: شمار ردپاها
+      const max = typeof stageId === 'string' && stageId in TRAIL_STAGE_MAX_NODES ? TRAIL_STAGE_MAX_NODES[stageId] : null;
+      if (max === null) return true;
+      const nodes = Array.isArray(s.nodes) ? s.nodes.length : 0;
+      return nodes > 0 && nodes <= max;
+    },
+    engine_metrics: [
+      { id: 'trail_prefix_pct', title_fa: 'درصد پیش‌ماند صحیح رد ردپاها', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'trail_prefix' }
+    ]
+  },
   nback: {
     // ن‌پشت (آلبوم خرچنگ) — کف ۲۰۰ms: لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
     rt_floor_ms: 200,
@@ -732,27 +760,6 @@ export const GAME_KINDS: { [K in GameKind]: GameKindSpec<K> } = {
     },
     engine_metrics: [
       { id: 'digitspan_span_max', title_fa: 'بلندترین دنبالهٔ عدد کامل درست (بازهٔ عددی)', unit: 'score', higher_is_better: true, source: 'auto', formula: 'span_max' }
-    ]
-  },
-  simon: {
-    // هم‌صداها (تقلید متوالی) — کف ۱۵۰ms روی نخستین لمس یادآوری؛ زیر آن حدس است (مثل کرسی)
-    rt_floor_ms: 150,
-    timed_choice: false, // دنباله‌ای چندلمسی — پایان با دنبالهٔ کامل یا پنجره
-    stage_rule: SEQ_MEMORY_THRESHOLDS,
-    stageList: () => SIMON_STAGES,
-    levers: { bank_caps: SIMON_STAGE_MAX_SPAN },
-    itemInStage: (item, stageId) => {
-      // پروب در هر مرحله — خط‌کش ثابت سنجش (همان رفع P0 ممیزی فازها)؛ سقف فقط برای تمرین
-      if (item.phase === 'probe') return true;
-      const max = typeof stageId === 'string' && stageId in SIMON_STAGE_MAX_SPAN ? SIMON_STAGE_MAX_SPAN[stageId] : null;
-      if (max === null) return true;
-      const s = (item.stim ?? {}) as Record<string, unknown>;
-      const len = Array.isArray(s.seq) ? s.seq.length : 0;
-      return len > 0 && len <= max;
-    },
-    // دقت دنباله از فرمول 'accuracy' در DB می‌آید؛ بازه (بلندترین آواز کامل درست) موتور-فقط است
-    engine_metrics: [
-      { id: 'simon_span_max', title_fa: 'بلندترین آواز کامل درست (بازهٔ تقلید متوالی)', unit: 'score', higher_is_better: true, source: 'auto', formula: 'span_max' }
     ]
   }
 };

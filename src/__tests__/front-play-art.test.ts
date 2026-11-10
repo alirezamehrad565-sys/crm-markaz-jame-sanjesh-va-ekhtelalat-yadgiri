@@ -63,7 +63,7 @@ describe('گیت هنری M2 — کتابخانهٔ صحنه (scene.js)', () => 
 
   it('قهرمان هر نوع‌بازی — هویت صحنهٔ آموزش از بازی می‌آید (پوستهٔ اختصاصی)', () => {
     expect(sceneJs).toContain('export function kindHero');
-    for (const k of ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'nback']) {
+    for (const k of ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail', 'nback']) {
       expect(sceneJs, k).toContain(k + ':');
     }
   });

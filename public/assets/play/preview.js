@@ -100,12 +100,7 @@ async function loadKind() {
       spanMarkup: mod.spanMarkup || null,
       spanBeginInput: mod.spanBeginInput || null,
       spanRevealTruth: mod.spanRevealTruth || null,
-      spanResponsePoint: mod.spanResponsePoint || null,
-      // هم‌صداها (۱.۲۵.۵۲) — پیش‌نمایش هم از همان توابع نمایش می‌گذرد
-      simonMarkup: mod.simonMarkup || null,
-      simonBeginRecall: mod.simonBeginRecall || null,
-      simonRevealTruth: mod.simonRevealTruth || null,
-      simonResponsePoint: mod.simonResponsePoint || null
+      spanResponsePoint: mod.spanResponsePoint || null
     };
   } catch (err) {
     return GENERIC;

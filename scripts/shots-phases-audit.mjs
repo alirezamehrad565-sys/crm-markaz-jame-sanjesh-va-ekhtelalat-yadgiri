@@ -172,6 +172,19 @@ async function kindPractice(page, kind, ph) {
     }
     return false;
   }
+  if (kind === 'trail') {
+    // ردپاها به ترتیب ۰ → ۱ → ۲
+    const nodes = page.locator('.play-trail__node');
+    const n = await nodes.count().catch(() => 0);
+    if (n >= 3) {
+      for (const idx of [0, 1, 2]) {
+        await nodes.nth(idx).click({ timeout: 500 }).catch(() => {});
+        await page.waitForTimeout(170);
+      }
+      return true;
+    }
+    return false;
+  }
   if (kind === 'nback') {
     // قدم ۱ → «همان است» (اندیس ۰)؛ قدم ۲ → «فرق دارد» (اندیس ۱)
     const opts = page.locator('.play-nback__opt');

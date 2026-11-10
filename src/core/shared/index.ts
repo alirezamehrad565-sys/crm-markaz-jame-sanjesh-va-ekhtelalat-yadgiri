@@ -336,17 +336,6 @@ export {
   CLEARBOOK_ENTRY_PAGE_MAX,
   CLEARBOOK_PLAN_STATUSES,
   CLEARBOOK_PLAN_STATUS_LABELS,
-  BUG_REPORT_AREA_ID_MAX,
-  BUG_REPORT_AREAS_MAX,
-  BUG_REPORT_DESCRIPTION_MAX,
-  BUG_REPORT_PAGE_MAX,
-  BUG_REPORT_VERSION_MAX,
-  BUG_REPORT_REPORTER_MAX,
-  BUG_REPORT_NODE_ID_MAX,
-  BUG_REPORT_SEVERITIES,
-  BUG_REPORT_AREAS,
-  BUG_REPORT_AREA_IDS,
-  BUG_REPORT_SEVERITY_LABELS,
 } from './constants';
 
 export {
@@ -378,8 +367,6 @@ export type { KnowledgeCategory } from './constants';
 export type { SpecialNeedType, SpecialNeedSeverity } from './constants';
 
 export type { ClearbookPlanStatus } from './constants';
-
-export type { BugReportSeverity, BugReportAreaId } from './constants';
 
 export {
   SESSION_TYPES,
