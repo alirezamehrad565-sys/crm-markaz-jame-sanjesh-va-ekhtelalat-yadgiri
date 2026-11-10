@@ -64,6 +64,8 @@ import type { DocsService } from '@domain/docs';
 import { createCenterKpiService, registerCenterKpiRoutes } from '@domain/center-kpi'; // ۱.۲۵.۴۶ — شاخص‌های مرکز
 import type { CenterKpiService } from '@domain/center-kpi';
 import { createNetworkContentService, registerNetworkContentRoutes } from '@domain/network-content'; // ۱.۲۵.۴۶ — کتابخانهٔ شبکه
+import { createBugReportService, registerBugReportRoutes } from '@domain/bug-reports'; // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP
+import type { BugReportService } from '@domain/bug-reports';
 import { createContentScoreService, registerContentScoreRoutes } from '@domain/content-score'; // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
 import type { ContentScoreService } from '@domain/content-score';
 import { fetchCpContentFile } from '@app/cp-content/sync';
@@ -161,6 +163,7 @@ export interface Services {
   rum: RumService; // 
   centerKpi: CenterKpiService; // ۱.۲۵.۴۶ — تابلوی شاخص‌های مرکز
   networkContent: NetworkContentService; // ۱.۲۵.۴۶ — کتابخانهٔ شبکه
+  bugReports: BugReportService; // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP
   contentScore: ContentScoreService; // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
 }
 
@@ -474,7 +477,10 @@ export function createServices(deps: AppDeps): Services {
   // m6 — مولد امتیاز شناسنامهٔ آیتم: خودِ سامانهٔ کلاینت (refs/uses از دادهٔ واقعی مرکز)
   const contentScore = createContentScoreService(db, audit);
 
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, contentScore };
+  // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP (صف محلی؛ ارسال در @app/bug-report-forward)
+  const bugReports = createBugReportService(db, audit);
+
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, contentScore };
 }
 
 export function createApp(deps: AppDeps): AppHono {
@@ -645,6 +651,8 @@ export function createApp(deps: AppDeps): AppHono {
 
   registerCenterKpiRoutes(app, services.centerKpi); // ۱.۲۵.۴۶ — شاخص‌های مرکز (مدیر/منشی)
   registerNetworkContentRoutes(app, services.networkContent); // ۱.۲۵.۴۶ — کتابخانهٔ شبکه
+
+  registerBugReportRoutes(app, services.bugReports); // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP
 
   registerContentScoreRoutes(app, { contentScore: services.contentScore }); // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
 
