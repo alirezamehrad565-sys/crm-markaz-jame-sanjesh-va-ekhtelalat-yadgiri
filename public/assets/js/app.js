@@ -114,12 +114,11 @@ const NAV = [
   { hash: '#/finance', label: 'بودجه و مالی', icon: 'calculator', group: 'مرکز', roles: ['manager'] }, // 
   { hash: '#/case-event-types', label: 'فرم‌ها و پرسش‌نامه‌ها', icon: 'timeline', group: 'ارزیابی و درمان', roles: ['manager', 'secretary', 'therapist'] }, // — نام روایی
   { hash: '#/center-kpi', label: 'شاخص‌های مرکز', icon: 'trendingUp', group: 'مرکز', roles: ['manager', 'secretary'] }, // ۱.۲۵.۴۶ — محور اول غنی‌سازی
-  { hash: '#/network-library', label: 'کتابخانهٔ شبکه', icon: 'star', group: 'مرکز', roles: ['manager'] }, // ۱.۲۵.۴۶ — محور دوم غنی‌سازی
+  // ۱.۲۵.۵۳ — «کتابخانهٔ شبکه» از منو قطع شد؛ شارژ محتوا CP↔سامانه کاملاً نامرئی و خودکار سمت سرور می‌ماند (خواست کارفرما)
   { hash: '#/special-needs', label: 'نیازهای ویژه', icon: 'clip', group: 'مرکز', roles: ['manager', 'secretary'] },
   { hash: '#/settings', label: 'تنظیمات', icon: 'settings', group: 'مرکز', roles: ['manager', 'secretary'] },
-  { hash: '#/backup', label: 'پشتیبان‌گیری', icon: 'save', group: 'مرکز', roles: ['manager'] },
-  // پلهٔ صفر نردبان اتصال به کنترل‌پلین شبکه — لینک نمایشی بی‌منطق و بی‌راز (طرح سوارسازی §۳)
-  { hash: '#/cp', label: 'کنترل‌پلین شبکه', icon: 'zap', group: 'مرکز', roles: ['manager'], external: 'https://network-control-plane.sanjeshm.workers.dev' }
+  { hash: '#/backup', label: 'پشتیبان‌گیری', icon: 'save', group: 'مرکز', roles: ['manager'] }
+  // ۱.۲۵.۵۳ — لینک بیرونی «کنترل‌پلین شبکه» از منو قطع شد (خواست کارفرما)؛ سمت CP بی‌تغییر می‌ماند
 ];
 
 const GROUP_ORDER = ['امروز', 'برنامه‌ریزی', 'دانش‌آموزان', 'ارزیابی و درمان', 'مرکز']; // — نام روایی
@@ -447,7 +446,7 @@ register('#/finance', { title: 'بودجه و مالی', render: managerOnly(laz
 register('#/case-event-types', { title: 'فرم‌ها و پرسش‌نامه‌ها', render: roleOnly(['manager', 'secretary', 'therapist'], lazyView(() => import('./views/case-event-types.js'), 'renderCaseEventTypes', '#/case-event-types'), 'این بخش برای همکاران مرکز فعال است.') }); // //
 register('#/special-needs', { title: 'نیازهای ویژه', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/special-needs.js'), 'renderSpecialNeeds', '#/special-needs')) }); // لایهٔ دوم RBAC
 register('#/center-kpi', { title: 'شاخص‌های مرکز', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/center-kpi.js'), 'renderCenterKpi', '#/center-kpi'), 'شاخص‌های مرکز فقط برای دفتر مرکز (مدیر و منشی) فعال است.') }); // ۱.۲۵.۴۶ — تابلوی کیفیت مداخله/پرونده/نوبت
-register('#/network-library', { title: 'کتابخانهٔ شبکه', render: managerOnly(lazyView(() => import('./views/network-library.js'), 'renderNetworkLibrary', '#/network-library')) }); // ۱.۲۵.۴۶ — همرسانی محتوا + برگزیده‌های CP
+// ۱.۲۵.۵۳ — روت «#/network-library» حذف شد؛ درخواست مستقیم این هش به نمای ۴۰۴ می‌رود
 
 // مسیر ناشناخته به‌جای ریدایرکت بی‌صدا، نمای ۴۰۴ را رندر می‌کند (hash دست‌نخورده می‌ماند)
 registerNotFound({ title: 'صفحه پیدا نشد', render: renderNotFound });
