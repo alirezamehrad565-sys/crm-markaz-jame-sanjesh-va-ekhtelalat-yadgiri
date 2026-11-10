@@ -35,7 +35,10 @@ function sectionTitle(iconName, text) {
     el('div', { class: 'card__title' }, icon(iconName, 16), text));
 }
 
-export async function renderCenterKpi(container) {
+export async function renderCenterKpi(container, opts = {}) {
+  /* ۱.۲۵.۵۶ — حالت جاسازی‌شده: در انتهای تب «گزارش دوره» (#/reports) رندر می‌شود؛
+     دکمهٔ چاپ تکراری حذف (گزارش خودش «چاپ گزارش» دارد) — نمای مستقل #/center-kpi حذف شد. */
+  const showPrint = opts.embedded !== true;
   container.replaceChildren(loadingState('در حال محاسبهٔ شاخص‌ها…'));
 
   let days = 30;
@@ -53,7 +56,7 @@ export async function renderCenterKpi(container) {
         windowSel,
         el('span', { class: 'muted', style: { fontSize: 'var(--fs-sm)' } }, 'بازهٔ تهران‌محور'),
         el('div', { class: 'spacer' }),
-        el('button', { class: 'btn btn--soft btn--sm', type: 'button', onclick: () => window.print() }, icon('printer', 15), 'چاپ')
+        showPrint ? el('button', { class: 'btn btn--soft btn--sm', type: 'button', onclick: () => window.print() }, icon('printer', 15), 'چاپ') : null
       ),
       loadingState('در حال محاسبهٔ شاخص‌ها…')
     );
@@ -82,7 +85,7 @@ export async function renderCenterKpi(container) {
         windowSel,
         el('span', { class: 'muted', style: { fontSize: 'var(--fs-sm)' } }, range || 'بازهٔ تهران‌محور'),
         el('div', { class: 'spacer' }),
-        el('button', { class: 'btn btn--soft btn--sm', type: 'button', onclick: () => window.print() }, icon('printer', 15), 'چاپ')
+        showPrint ? el('button', { class: 'btn btn--soft btn--sm', type: 'button', onclick: () => window.print() }, icon('printer', 15), 'چاپ') : null
       ),
 
       // ─── نوبت‌ها و حضور: خالی نبودن نوبت‌ها و جا نیفتادن‌ها ───

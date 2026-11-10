@@ -1,10 +1,19 @@
-// مولد SQL نشاندن بستهٔ «حقه‌باز رنگ‌ها» (نوع stroop) روی D1 عملیاتی — INSERT امن (idempotent) — ۱.۲۵.۳۲ — ۱۴۰۵/۰۸/۱۷
+// مولد SQL نشاندن بستهٔ «حقه‌باز رنگ‌ها» (نوع stroop) روی D1 عملیاتی — INSERT امن (idempotent) — ۱.۲۵.۵۱ — نسخهٔ بانک ۱.۱.۰
 // بانک authored قطعی: seed ثابت → همان کارت‌ها در هر بازتولید.
 // اقتباس مکانیک — مجوز MIT: jspsych/jspsych-timelines — packages/stroop-task
 // (مولد ضرب‌دکارتی واژه×جوهر، پرچم congruent، correct = اندیس رنگ جوهر در گزینه‌ها،
 // پنجرهٔ زمانی پاسخ) — وفق‌داده‌شده به قرارداد timedchoice این سامانه (پاسخ {option}).
 // اهرم سختی مرحله‌ها = نسبت کنگرنت/ناهمخوان + شمار گزینه‌ها + پنجرهٔ پاسخ (stim.window_ms).
 // در ناهمخوان‌ها رنگِ خودِ واژه هم میان گزینه‌ها هست (تلهٔ معنی واژه — قلب استروپ).
+//
+// ۱.۲۵.۵۱ — سخت‌سازی بر پایهٔ بازخورد میدانی مدیر مرکز («حیله در کار نیست؛ زمان زیاده است»):
+//   · گروه a (س ۱) دیگر گرم‌کردنِ بی‌حیله نیست — کنگرنتِ همه‌جا (۸/۸) حذف شد؛ با بانک 'rare'
+//     تنها ۱ آیتم از ۸ هم‌خوان است؛ از همان قدم اول حقهٔ واقعی جوهر/واژه در کار است.
+//   · پنجره‌ها ۲۰..۳۵٪ تندتر شدند (۴۵۰۰/۴۰۰۰/۴۰۰۰/۳۴۰۰/۳۶۰۰ → ۳۰۰۰/۲۸۰۰/۲۶۰۰/۲۴۰۰/۲۸۰۰ms).
+//   · نردبان گزینه‌ها ۲→۳→۴→۵→۶ — جستجوی دیداری هم از س ۳ به بعد بار می‌گیرد.
+//   · پروب (خط‌کش ثابت سنجش در همهٔ مراحل) ترکیب خودش را نگه داشت (۳ هم‌خوان از ۸ —
+//     سالم برای سنجهٔ interference_ms) و فقط پنجره‌اش تندتر شد.
+//   · نسخهٔ بسته ۱.۰.۰ → ۱.۱.۰ — تغییرناپذیری نسخهٔ منتشرشده؛ تجویزهای قدیمی روی ۱.۰.۰ می‌مانند.
 import { writeFileSync } from 'node:fs';
 
 /* PRNG قطعی mulberry32 — همان الگوی make-scan-seed-sql.mjs؛ بانک authored قابل بازتولید است */
@@ -34,13 +43,14 @@ const FA_OF = Object.fromEntries(PALETTE.map((c) => [c.key, c.fa]));
 /* متن روبه‌کودک — آرام، بی‌سرزنش، بی‌فشار (§۲)؛ markup هم همین را دارد */
 const PROMPT = 'حقه‌باز رنگِ واژه را عوض می‌کند؛ تو رنگِ واقعی را لمس کن.';
 
-/* پیکربندی گروه‌ها — a=مرحلهٔ ۱ … d=مرحلهٔ ۴، p=پروب؛ اهرم سختی متفاوت در هر گروه */
+/* پیکربندی گروه‌ها — a=مرحلهٔ ۱ … d=مرحلهٔ ۴، p=پروب؛ اهرم سختی متفاوت در هر گروه.
+ * ۱.۲۵.۵۱ — حیله از همان مرحلهٔ ۱: کنگرنت اقلیت؛ پنجرهٔ تند؛ نردبان گزینه‌ها */
 const BANDS = {
-  a: { window: 4500, opts: 2, cong: 'all', count: 8, phase: 'train' },    // کنگرنت خالص — گرم‌کردن
-  b: { window: 4000, opts: 4, cong: 'half', count: 6, phase: 'train' },   // آمیختهٔ متوازن
-  c: { window: 4000, opts: 4, cong: 'rare', count: 6, phase: 'train' },   // اکثراً ناهمخوان
-  d: { window: 3400, opts: 4, cong: 'none', count: 6, phase: 'train' },   // تمام ناهمخوان
-  p: { window: 3600, opts: 'mixed46', cong: 'some', count: 8, phase: 'probe' } // پروب آمیختهٔ متنوع
+  a: { window: 3000, opts: 3, cong: 'rare', count: 8, phase: 'train' },    // حقهٔ واقعی از قدم اول — فقط ۱ هم‌خوان از ۸
+  b: { window: 2800, opts: 4, cong: 'rare', count: 6, phase: 'train' },   // حیلهٔ کامل + چهار لکه
+  c: { window: 2600, opts: 5, cong: 'none', count: 6, phase: 'train' },   // تمام ناهم‌خوان — پنج لکه
+  d: { window: 2400, opts: 6, cong: 'none', count: 6, phase: 'train' },   // تمام ناهم‌خوان + هر شش لکه — اوج
+  p: { window: 2800, opts: 'mixed46', cong: 'some', count: 8, phase: 'probe' } // خط‌کش ثابت — همان ترکیب، پنجرهٔ تندتر
 };
 
 /* الگوی کنگرنتی هر گروه بر جایگاه آیتم — متوازن و قطعی */
@@ -129,14 +139,14 @@ const dose = { days_per_week: 3, minutes: 10, max_missions_per_day: 2, min_weeks
 const now = new Date().toISOString();
 
 const esc = (s) => s.replace(/'/g, "''");
-const sql = `-- seed stroop1 ۱.۰.۰ «توجه و تمرکز — حقه‌باز رنگ‌ها» (idempotent) — ۱.۲۵.۳۲
+const sql = `-- seed stroop1 ۱.۱.۰ «توجه و تمرکز — حقه‌باز رنگ‌ها» (idempotent) — ۱.۲۵.۵۱ سخت‌سازی میدانی
 INSERT OR IGNORE INTO game_metrics (id, title_fa, unit, higher_is_better, source, formula) VALUES
   ('accuracy_stroop', 'دقت لمس رنگ جوهر', 'percent', 1, 'auto', 'accuracy'),
   ('median_rt_stroop', 'میانهٔ زمان نخستین لمس', 'ms', 0, 'auto', 'median_rt');
 INSERT OR REPLACE INTO game_goals (id, title_fa, package_id, metric_id, age_min, age_max) VALUES
   ('stroop_attention', 'توجه و تمرکز — رنگ جوهر را بگیر', 'stroop1', 'accuracy_stroop', 4, 12);
 INSERT OR REPLACE INTO game_packages (id, version, title_fa, evidence_level, dose_json, status, body_json, reviewed_by, reviewed_at, created_at) VALUES
-  ('stroop1', '1.0.0', 'توجه و تمرکز — حقه‌باز رنگ‌ها', 'B', '${esc(JSON.stringify(dose))}', 'published', '${esc(JSON.stringify(body))}', NULL, '${now}', '${now}');
+  ('stroop1', '1.1.0', 'توجه و تمرکز — حقه‌باز رنگ‌ها', 'B', '${esc(JSON.stringify(dose))}', 'published', '${esc(JSON.stringify(body))}', NULL, '${now}', '${now}');
 `;
 writeFileSync('/tmp/seed-stroop.sql', sql, 'utf8');
 const bandSummary = Object.keys(BANDS).map((k) => {
