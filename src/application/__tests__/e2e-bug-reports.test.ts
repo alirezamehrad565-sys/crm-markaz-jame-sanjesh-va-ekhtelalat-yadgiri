@@ -291,4 +291,30 @@ describe('چرخهٔ ارسال به CP — runBugReportForward', () => {
     ).find((x) => x.id === replied!.id);
     expect(after?.reply_text).toBe('بررسی شد — در نسخهٔ بعد رفع می‌شود'); // متن تازه سرِ جایش
   });
+
+  it('۱.۲۵.۵۸ — Service Binding اولویت دارد: pull/push از binding.fetch می‌رود نه fetch عمومی (خطای ۱۰۴۲ هم‌زون)', async () => {
+    await api.post('/api/bug-reports', { areas: ['appointments'], severity: 'minor', description: 'برای مسیر binding' });
+    const calls: string[] = [];
+    const bindingFetch = vi.fn(async (url: string | URL) => {
+      calls.push(String(url));
+      if (String(url).includes('/api/node/feedback/replies')) {
+        return new Response(JSON.stringify({ ok: true, data: { server_time: '2026-11-10T20:00:00Z', items: [] } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true, data: { id: 'fb-x', duplicate: false } }), { status: 201 });
+    });
+    const publicFetch = vi.fn(async () => new Response('blocked 1042', { status: 500 }));
+
+    const res = await runBugReportForward({
+      db: app.db,
+      logger: createLogger('test'),
+      config: configWith(envOf(app), { CP_SYNC_URL: 'https://cp.example', CP_NODE_CODE: 'a', CP_NODE_KEY: 'b' }),
+      binding: { fetch: bindingFetch as unknown as Fetcher['fetch'] } as unknown as Fetcher,
+      fetchFn: publicFetch as unknown as typeof fetch,
+      now: () => new Date('2026-11-10T20:00:00Z')
+    });
+    expect(res).toMatchObject({ status: 'done', sent: 1, failed: 0 });
+    expect(calls.length).toBe(2); // ۱ pull + ۱ push — همه از binding
+    expect(calls[0].startsWith('https://cp.example/api/node/feedback/replies')).toBe(true); // since از دورهٔ قبل همراه است
+    expect(publicFetch).not.toHaveBeenCalled(); // fetch عمومی هرگز مصرف نشد
+  });
 });

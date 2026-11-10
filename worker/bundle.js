@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.57";
+var APP_VERSION = "1.25.58";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -55134,6 +55134,12 @@ function nodeHeaders(config) {
   };
 }
 __name(nodeHeaders, "nodeHeaders");
+function cpFetchOf(deps) {
+  if (deps.binding) return (url, init) => deps.binding.fetch(url, init);
+  const doFetch = deps.fetchFn ?? fetch;
+  return (url, init) => doFetch(url, init);
+}
+__name(cpFetchOf, "cpFetchOf");
 function feedbackBodyOf(rec) {
   return {
     id: rec.id,
@@ -55171,7 +55177,7 @@ async function runBugReportForward(deps) {
   const { db, logger, config } = deps;
   if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) return { status: "skipped" };
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const doFetch = deps.fetchFn ?? fetch;
+  const doCpFetch = cpFetchOf(deps);
   const service = createBugReportService(db, silentAudit());
   const lastIso = await readSettingsIso4(db, BUG_REPORT_ATTEMPT_KEY);
   const last = lastIso ? Date.parse(lastIso) : 0;
@@ -55183,7 +55189,7 @@ async function runBugReportForward(deps) {
   try {
     const since = await readSettingsIso4(db, BUG_REPORT_REPLY_SINCE_KEY);
     const repliesUrl = `${config.cpOrigin}/api/node/feedback/replies${since ? `?since=${encodeURIComponent(since)}` : ""}`;
-    const res = await doFetch(repliesUrl, {
+    const res = await doCpFetch(repliesUrl, {
       method: "GET",
       headers: nodeHeaders(config),
       signal: AbortSignal.timeout(BUG_REPORT_TIMEOUT_MS)
@@ -55208,7 +55214,7 @@ async function runBugReportForward(deps) {
   let failed = 0;
   for (const rec of open) {
     try {
-      const res = await doFetch(url, {
+      const res = await doCpFetch(url, {
         method: "POST",
         headers: nodeHeaders(config),
         body: JSON.stringify(feedbackBodyOf(rec)),

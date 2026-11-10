@@ -74,6 +74,17 @@ function nodeHeaders(config: BugReportForwardConfig): Record<string, string> {
   };
 }
 
+/** مسیر اتصال: Service Binding اگر هست (۱.۲۵.۵۸ — fetch عمومیِ هم‌زونِ ورکر به ورکر
+ *  روی workers.dev با خطای ۱۰۴۲ کلادفلر بسته می‌شود — همان درس ۱.۲۵.۳۵c سینک اعلان؛
+ *  چرخهٔ گزارش باگ هم از همان الگو پیروی می‌کند)؛ وگرنه fetch عمومی/تزریق‌شده برای سلف‌هاست و تست */
+function cpFetchOf(
+  deps: { binding?: Fetcher | null; fetchFn?: typeof fetch }
+): (url: string, init: RequestInit) => Promise<Response> {
+  if (deps.binding) return (url, init) => deps.binding!.fetch(url, init);
+  const doFetch = deps.fetchFn ?? fetch;
+  return (url, init) => doFetch(url, init);
+}
+
 /** بدنهٔ هم‌قرارداد NodeFeedbackSubmitSchema — محدوده‌ها سمت سرویس/مسیر گرفته شده‌اند */
 function feedbackBodyOf(rec: BugReportRecord): Record<string, unknown> {
   return {
@@ -126,7 +137,7 @@ export async function runBugReportForward(deps: {
   const { db, logger, config } = deps;
   if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) return { status: 'skipped' };
   const now = deps.now ?? (() => new Date());
-  const doFetch = deps.fetchFn ?? fetch;
+  const doCpFetch = cpFetchOf(deps);
   const service = createBugReportService(db, silentAudit());
 
   // مُهر تلاش — کرون و فرصت‌طلب دوباره‌کاری نکنند (force = کرون)
@@ -142,7 +153,7 @@ export async function runBugReportForward(deps: {
   try {
     const since = await readSettingsIso(db, BUG_REPORT_REPLY_SINCE_KEY);
     const repliesUrl = `${config.cpOrigin}/api/node/feedback/replies${since ? `?since=${encodeURIComponent(since)}` : ''}`;
-    const res = await doFetch(repliesUrl, {
+    const res = await doCpFetch(repliesUrl, {
       method: 'GET',
       headers: nodeHeaders(config),
       signal: AbortSignal.timeout(BUG_REPORT_TIMEOUT_MS)
@@ -170,7 +181,7 @@ export async function runBugReportForward(deps: {
   let failed = 0;
   for (const rec of open) {
     try {
-      const res = await doFetch(url, {
+      const res = await doCpFetch(url, {
         method: 'POST',
         headers: nodeHeaders(config),
         body: JSON.stringify(feedbackBodyOf(rec)),
