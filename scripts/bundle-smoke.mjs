@@ -102,6 +102,8 @@ async function probe(bundlePath) {
     // ۱.۲۵.۵۷ — نسخهٔ /health و فیلد تازهٔ botAbout در تنظیمات، محصولِ bumpاند نه تغییر رفتار
     norm = norm.replace(/"version":"[0-9][0-9.]*"/g, '"version":"<V>"');
     norm = norm.replace(/"botAbout":"[^"]*",?/g, ''); // فیلد در باندل کهنه اصلاً نیست — حضور/غیاب مقایسه‌نشود
+    // ۱.۲۵.۵۹ — iat/exp توکن لاگین بین دو پروب فرق می‌کنند (مرز ثانیه) — رفتار نیستند
+    norm = norm.replace(/"iat":[0-9]+/g, '"iat":<IAT>').replace(/"exp":[0-9]+/g, '"exp":<EXP>');
     out.push(`${method} ${urlPath} → ${res.status} :: ${norm.slice(0, 4000)}`);
   }
   return out;

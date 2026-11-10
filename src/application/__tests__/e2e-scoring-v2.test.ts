@@ -25,25 +25,31 @@ interface Analysis {
   interpretation?: string | null;
 }
 
-describe('seedهای ارتقایافته (روان‌سنجی v2)', () => {
-  it('SDQ پنج زیرمقیاس + آیتم معکوس + باند رنگی با توصیه دارد', async () => {
+describe('seedهای ارتقایافته (روان‌سنجی v2) — ۱.۲۵.۵۹: مهاجرت به کلیدهای فعال', () => {
+  it('SDQ والد (ce-sdq-p-v1) پنج زیرمقیاس + آیتم معکوس + باند رنگی با توصیه دارد — قدیم (sdq-parent) بازنشسته', async () => {
     const A = createTestApp();
     const m = await asRole(A, 'manager');
+    const all = dataOf<TypeRow[]>(await m.get('/api/case-events/types'));
+    const old = all.find((t) => t.key === 'sdq-parent')!;
+    expect(old).toBeTruthy();
+    expect(old.active).toBe(false); // ۱.۲۵.۵۹ — نسخهٔ قدیمی از رجیستری خارج شد (رویدادهای قبلی سالم می‌مانند)
     const types = dataOf<TypeRow[]>(await m.get('/api/case-events/types?active=true'));
-    const sdq = types.find((t) => t.key === 'sdq-parent')!;
+    const sdq = types.find((t) => t.key === 'ce-sdq-p-v1')!;
+    expect(sdq).toBeTruthy();
     expect(sdq.subscales?.length).toBe(5);
-    expect(sdq.subscales?.find((s) => s.id === 'prosocial')?.excludeFromTotal).toBe(true);
+    expect(sdq.subscales?.find((s) => s.id === 'pros')?.excludeFromTotal).toBe(true);
     const reversed = sdq.fields.filter((f) => f.reverse).map((f) => f.key);
-    expect(reversed.sort()).toEqual(['i07', 'i11', 'i14', 'i23', 'i24'].sort());
+    expect(reversed.sort()).toEqual(['i07', 'i11', 'i14', 'i21', 'i25'].sort());
     expect(sdq.bands?.every((b) => b.color && b.advice)).toBe(true);
   });
 
-  it('قالب جدید غربال چندگزینه‌ای با نمرهٔ هر گزینه + آیتم بحرانی seed شده است', async () => {
+  it('غربال چندگزینه‌ای قدیمی (quick-multi-v1) بازنشسته شده — رکوردش با ملاک‌هایش می‌ماند (جانشین: بستهٔ کامل خانواده)', async () => {
     const A = createTestApp();
     const m = await asRole(A, 'manager');
-    const types = dataOf<TypeRow[]>(await m.get('/api/case-events/types?active=true'));
-    const q = types.find((t) => t.key === 'quick-multi-v1')!;
+    const all = dataOf<TypeRow[]>(await m.get('/api/case-events/types'));
+    const q = all.find((t) => t.key === 'quick-multi-v1')!;
     expect(q).toBeTruthy();
+    expect(q.active).toBe(false); // ۱.۲۵.۵۹
     const single = q.fields.filter((f) => f.type === 'single');
     expect(single.length).toBe(4);
     expect(single.every((f) => (f.scoredOptions ?? []).length >= 2)).toBe(true);
@@ -141,9 +147,9 @@ describe('موتور نمره‌گذاری: پر کردن چک‌لیست v2', (
   let A: ReturnType<typeof createTestApp>;
   let manager: Awaited<ReturnType<typeof asRole>>;
   let studentId = '';
-  let quickId = '';
+  let multiId = '';
   let sdqId = '';
-  let quickEventId = '';
+  let multiEventId = '';
   let sdqEventId = '';
 
   beforeAll(async () => {
@@ -151,13 +157,41 @@ describe('موتور نمره‌گذاری: پر کردن چک‌لیست v2', (
     manager = await asRole(A, 'manager');
     const s = await createStudent(manager, { first_name: 'عرشیا', last_name: 'نمره‌آزمون' });
     studentId = s.id;
+    /* ۱.۲۵.۵۹ — غربال چندگزینه‌ای قدیمی بازنشسته شد؛ مکانیک گزینهٔ نمره‌دار + آیتم بحرانی با قالب دستی هم‌ساختار گیت می‌شود */
+    const multi = await manager.post('/api/case-events/types', {
+      title: 'غربال آزمونی نمره‌دار',
+      category: 'checklist',
+      familyFillable: true,
+      audience: 'family',
+      fields: [
+        { key: 'q1', label: 'گویهٔ ۱', type: 'scale', scaleMax: 3, required: true },
+        { key: 'q2', label: 'گویهٔ ۲', type: 'scale', scaleMax: 3, required: true },
+        { key: 'q3', label: 'گویهٔ ۳', type: 'scale', scaleMax: 3, required: true },
+        { key: 'q4', label: 'گویهٔ ۴', type: 'scale', scaleMax: 3, required: true },
+        { key: 'q5', label: 'گویهٔ ۵', type: 'scale', scaleMax: 3, required: true },
+        {
+          key: 'q6', label: 'آسیب جسمی', type: 'single', required: true, critical: true, criticalMin: 2,
+          scoredOptions: [
+            { label: 'ندارد', score: 0 },
+            { label: 'کم', score: 1 },
+            { label: 'شدید', score: 2 }
+          ]
+        }
+      ],
+      bands: [
+        { max: 4, label: 'مطلوب', color: 'ok', advice: 'ادامه بده' },
+        { max: 9, label: 'مرزی — نیاز به توجه', color: 'warn', advice: 'پایش شود' },
+        { max: 9999, label: 'قابل توجه', color: 'danger', advice: 'بررسی بیشتر' }
+      ]
+    });
+    expect(multi.status).toBe(201);
+    multiId = (multi.body as { data: { id: string } }).data.id;
     const types = dataOf<TypeRow[]>(await manager.get('/api/case-events/types?active=true'));
-    quickId = types.find((t) => t.key === 'quick-multi-v1')!.id;
-    sdqId = types.find((t) => t.key === 'sdq-parent')!.id;
+    sdqId = types.find((t) => t.key === 'ce-sdq-p-v1')!.id;
 
-    const ev1 = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: quickId, values: {} });
+    const ev1 = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: multiId, values: {} });
     expect(ev1.status).toBe(201);
-    quickEventId = dataOf<{ id: string }>(ev1).id;
+    multiEventId = dataOf<{ id: string }>(ev1).id;
 
     const ev2 = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: sdqId, values: {} });
     expect(ev2.status).toBe(201);
@@ -169,34 +203,35 @@ describe('موتور نمره‌گذاری: پر کردن چک‌لیست v2', (
     return row.fill_token;
   }
 
-  it('غربال چندگزینه‌ای: نمرهٔ گزینه + معکوس + پرچم بحرانی + تفسیر خودکار', async () => {
-    const answers = { q1: 2, q2: 1, q3: 3, q4: 1, q5: 0, q6: 3 };
-    const res = await A.app.request(`/public/case-events/${quickEventId}/fill`, {
+  it('غربال نمره‌دار دستی: نمرهٔ گزینه + پرچم بحرانی + تفسیر خودکار', async () => {
+    const answers = { q1: 2, q2: 1, q3: 3, q4: 1, q5: 0, q6: 2 };
+    const res = await A.app.request(`/public/case-events/${multiEventId}/fill`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ token: tokenOf(quickEventId), answers })
+      body: JSON.stringify({ token: tokenOf(multiEventId), answers })
     });
     expect(res.status).toBe(200);
 
     const ev = dataOf<{ analysis: Analysis; payload: Record<string, { value: string }> }>(
-      await manager.get(`/api/case-events/${quickEventId}`)
+      await manager.get(`/api/case-events/${multiEventId}`)
     );
     const a = ev.analysis;
-    expect(a.score).toBe(12);
+    expect(a.score).toBe(9); // ۲+۱+۳+۱+۰ + گزینهٔ «شدید» (۲)
     expect(a.maxScore).toBe(17);
     expect(a.band).toBe('مرزی — نیاز به توجه');
     expect(a.flags?.map((f) => f.key)).toEqual(['q6']);
     expect(a.interpretation).toContain('آیتم بحرانی');
-    expect(a.interpretation).toContain('نمرهٔ کل: ۱۲ از ۱۷');
-    expect(ev.payload.q6.value).toBe('جسمی — به خود یا دیگری');
+    expect(a.interpretation).toContain('نمرهٔ کل: ۹ از ۱۷');
+    expect(ev.payload.q6.value).toBe('شدید');
   });
 
-  it('SDQ: زیرمقیاس نقاط قوت از نمرهٔ کل خارج است و باند معکوس‌جهت می‌گیرد', async () => {
+  it('SDQ (ce-sdq-p-v1): زیرمقیاس نقاط قوت خارج از کل + معکوس‌جهت + باند دقیق', async () => {
     const answers: Record<string, number> = {};
     const keys = Array.from({ length: 25 }, (_, i) => `i${String(i + 1).padStart(2, '0')}`);
     for (const k of keys) answers[k] = 0;
-    for (const k of ['i03', 'i08', 'i13', 'i16']) answers[k] = 2;
-    for (const k of ['i07', 'i11', 'i14', 'i23', 'i24']) answers[k] = 2;
+    for (const k of ['i03', 'i08', 'i13', 'i16', 'i24']) answers[k] = 2; // هیجانی
+    answers['i19'] = 2; // هم‌سالان (نمعکوس)
+    // معکوس‌ها (i07/i11/i14/i21/i25) روی ۰ می‌مانند — نمرهٔ مؤثر ۲ می‌گیرند
     const res = await A.app.request(`/public/case-events/${sdqEventId}/fill`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -206,15 +241,16 @@ describe('موتور نمره‌گذاری: پر کردن چک‌لیست v2', (
 
     const ev = dataOf<{ analysis: Analysis }>(await manager.get(`/api/case-events/${sdqEventId}`));
     const a = ev.analysis;
-    expect(a.score).toBe(8); // فقط هیجانی؛ prosocial (همه ۰) خارج از کل
-    expect(a.maxScore).toBe(38); // ۱۹ آیتم داخل جمع × ۲
-    const emo = a.subscaleScores?.find((s) => s.id === 'emotional')!;
-    expect(emo.score).toBe(8);
-    expect(emo.band).toBe('قابل توجه — نیاز به بررسی بیشتر'); // — برچسب سادهٔ باند
-    const pros = a.subscaleScores?.find((s) => s.id === 'prosocial')!;
+    expect(a.score).toBe(22); // هیجانی ۱۰ + هم‌سالان ۶ (۱۹=۲، معکوس‌های ۱۱/۱۴=۲) + بیش‌فعالی ۴ (معکوس‌های ۲۱/۲۵) + رفتاری ۲ (معکوس ۰۷)
+    expect(a.maxScore).toBe(40); // ۲۰ آیتم داخل جمع × ۲ (پنج‌گانهٔ pros خارج)
+    const emo = a.subscaleScores?.find((s) => s.id === 'emo')!;
+    expect(emo.score).toBe(10);
+    expect(emo.band).toBe('قابل توجه — نیاز به بررسی بیشتر');
+    const pros = a.subscaleScores?.find((s) => s.id === 'pros')!;
     expect(pros.score).toBe(0);
     expect(pros.band).toBe('نیازمند تقویت — قابل توجه'); // باند جهت معکوس نقاط قوت
-    expect(a.interpretation).toContain('هیجانی و اضطرابی');
+    expect(a.band).toBe('قابل توجه — سطح شدید'); // باند کل ۰۰۶۱
+    expect(a.interpretation).toContain('حال و احساسات');
   });
 });
 

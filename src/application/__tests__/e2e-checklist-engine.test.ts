@@ -25,16 +25,17 @@ interface PendingRow {
 }
 
 describe('کتابخانهٔ سنجش آماده (seed مهاجرت)', () => {
-  it('قالب‌های استاندارد با مخاطب و برچسب seed شده‌اند — کانرز، اخنباخ کاربردی و چک‌لیست کلاس از غیرفعال (جایگزین: SNAP-IV و SDQ)', async () => {
+  it('قالب‌های استاندارد با مخاطب و برچسب seed شده‌اند — کانرز، اخنباخ کاربردی و چک‌لیست کلاس از غیرفعال (جایگزین: SNAP-IV و SDQ) — ۱.۲۵.۵۹: SDQ والد هم به کلید تازه مهاجرت شد', async () => {
     const A = createTestApp();
     const m = await asRole(A, 'manager');
     const types = dataOf<Array<{ key: string; title: string; audience: string; tags: string[]; category: string }>>(
       await m.get('/api/case-events/types?active=true')
     );
     const byKey = Object.fromEntries(types.map((t) => [t.key, t]));
-    expect(byKey['sdq-parent']).toBeTruthy();
-    expect(byKey['sdq-parent'].audience).toBe('family');
-    expect(byKey['sdq-parent'].category).toBe('checklist');
+    expect(byKey['ce-sdq-p-v1']).toBeTruthy();
+    expect(byKey['ce-sdq-p-v1'].audience).toBe('family');
+    expect(byKey['ce-sdq-p-v1'].category).toBe('checklist');
+    expect(byKey['sdq-parent']).toBeUndefined(); // ۱.۲۵.۵۹ — بازنشسته؛ جانشین ce-sdq-p-v1
     expect(byKey['conners-short']).toBeUndefined();
     expect(byKey['ce-snap-iv-p-v1']).toBeTruthy();
     expect(byKey['ce-snap-iv-p-v1'].audience).toBe('family');

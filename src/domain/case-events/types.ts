@@ -124,6 +124,7 @@ export interface CaseEventFileMeta {
 export interface CaseEventRecord {
   id: string;
   eventTypeId: string;
+  typeKey: string; // ۱.۲۵.۵۹ — کلید رجیستری برای قاعده‌گذاری نمای جزئیات (مثلاً پایش خانهٔ v2)
   typeTitle: string;
   typeCategory: CaseEventCategory;
   typeIcon: string | null;
@@ -190,6 +191,48 @@ export interface CaseEventDeps {
   now?: () => Date;
 }
 
+/* ۱.۲۵.۵۹ — کانون‌های پایش: اسنپ‌شات سازه‌های درگیرِ آخرین جمع‌بندی تشخیصی؛
+   هنگام ارسال «پایش در خانه نسخهٔ ۲» در payload رویداد می‌نشیند و فرم عمومی با تقدم همان کانون‌ها رندر می‌شود. */
+export interface MonitorFocusEntry {
+  key: string;
+  titleFa: string;
+  level: string;
+  score: number;
+}
+
+export interface MonitorFocusSnapshot {
+  generatedAt: string;
+  coherence: string;
+  items: MonitorFocusEntry[];
+}
+
+/** تزریق‌شده از موتور بالینی در روت مرکزی — وابستگی مستقیم بین دو ماژول دامنه ممنوع است */
+export type MonitorFocusProvider = (studentId: string, actor: AuthContext) => Promise<MonitorFocusSnapshot | null>;
+
+/* ۱.۲۵.۵۹ — نظرسنجی رضایت مرکز/درمانگر: ساخت گروهی رویداد در انتظار خانواده + فهرست مدیر */
+export interface SurveyCreateInput {
+  studentIds: string[];
+  therapistId?: string | null;
+}
+
+export interface SurveyEventItem {
+  id: string;
+  studentId: string;
+  studentName: string;
+  therapistId: string | null;
+  therapistName: string | null;
+  status: CaseEventStatus;
+  occurredAt: string;
+  createdAt: string;
+  fillExpiresAt: string | null;
+  sentAt: string | null;
+  link: string | null;
+  centerScore: number | null;   // درصد ۰-۱۰۰ زیرمقیاس «مرکز»
+  therapistScore: number | null; // درصد ۰-۱۰۰ زیرمقیاس «درمانگر»
+  nps: number | null;           // توصیه ۰-۱۰
+  note: string | null;          // متن آزاد خانواده
+}
+
 export interface CaseEventsService {
   listTypes(filters: { activeOnly?: boolean; category?: CaseEventCategory }): Promise<CaseEventTypeRecord[]>;
   getTypeById(id: string): Promise<CaseEventTypeRecord | null>;
@@ -226,6 +269,9 @@ export interface CaseEventsService {
   issueTeacherFillLink(eventId: string, input: { teacherName?: string | null; teacherId?: string | null }, actor: AuthContext): Promise<{ link: string; teacherName: string }>;
   setSendObserver(fn: SendObserver | null): void;
   setFillObserver(fn: FillObserver | null): void;
+  setMonitorFocusProvider(fn: MonitorFocusProvider | null): void; // ۱.۲۵.۵۹ — تزریق از موتور بالینی
+  createSurveyEvents(input: SurveyCreateInput, actor: AuthContext): Promise<{ created: SurveyEventItem[] }>; // ۱.۲۵.۵۹
+  listSurveys(): Promise<SurveyEventItem[]>; // ۱.۲۵.۵۹
   assertFamilyChat(studentId: string, chatId: string): Promise<boolean>;
   verifyFillToken(id: string, token: string): Promise<boolean>;
   mintFillLink(id: string, publicBaseUrl: string): Promise<string | null>;

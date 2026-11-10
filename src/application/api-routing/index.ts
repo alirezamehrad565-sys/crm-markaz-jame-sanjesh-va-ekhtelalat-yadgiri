@@ -442,6 +442,11 @@ export function createServices(deps: AppDeps): Services {
     }
   });
 
+  /* ۱.۲۵.۵۹ — کانون‌های پایش خانه: موتور بالینی به case-events تزریق می‌شود تا هنگام ارسال
+     «پایش در خانه نسخهٔ ۲»، سازه‌های درگیرِ آخرین جمع‌بندی تشخیصی در رویداد اسنپ‌شات شود
+     (قرارداد «نه وابستگی ماژولی domain→domain» — هم‌الگوی formulationOt) */
+  caseEvents.setMonitorFocusProvider((studentId, actor) => clinicalEngine.homeMonitorFocusOf(studentId, actor));
+
   // ۱.۲۵.۰۷ — بستر بک‌اند بازی: پراپ بازی با تزریق تابع به مسیر مداخله می‌رود
   // (قرارداد «نه وابستگی ماژولی domain→domain» — هم‌الگوی formulationOt)
   const games = createGamesService({

@@ -161,6 +161,12 @@ export const CaseEventTypeInputSchema = z.object({
 
 export const CaseEventTypeUpdateSchema = CaseEventTypeInputSchema.partial();
 
+/* ۱.۲۵.۵۹ — ساخت گروهی نظرسنجی رضایت: خانواده‌های انتخابی + درمانگر اختیاری مورد ارزیابی */
+export const SurveyCreateSchema = z.object({
+  student_ids: z.array(z.string().min(1).max(64)).min(1, 'حداقل یک دانش‌آموز انتخاب کنید').max(200, 'حداکثر ۲۰۰ خانواده در هر بار'),
+  therapist_id: z.string().min(1).max(64).nullish()
+});
+
 function faNum(s: string | number): string {
   return String(s).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
 }

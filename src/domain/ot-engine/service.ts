@@ -35,7 +35,8 @@ export const NEEDS_TEXT_MAX = 4000;
 export const NEEDS_PLAN_MAX = 300;
 
 const ANAMNESIS_KEYS = ['ce-anamnesis-v3', 'ce-anamnesis-v2', 'anamnesis'];
-const BEHAVIORAL_KEYS = ['sdq-parent', 'ce-sdq-t-v1', 'ce-snap-iv-p-v1', 'ce-snap-iv-t-v1', 'ce-scared-p-v1', 'ce-dcdq-v1'];
+/* ۱.۲۵.۵۹ — ce-sdq-p-v1 جانشین sdq-parent است (قدیمی غیرفعال شد؛ رویدادهایش می‌مانند) */
+const BEHAVIORAL_KEYS = ['sdq-parent', 'ce-sdq-p-v1', 'ce-sdq-t-v1', 'ce-snap-iv-p-v1', 'ce-snap-iv-t-v1', 'ce-scared-p-v1', 'ce-dcdq-v1'];
 const WECHSLER_KEYS = ['ce-wechsler-w4-v1', 'wechsler'];
 
 const NEEDS_EVENT_KEY = 'ce-needs-v1';
@@ -233,7 +234,7 @@ function computeSuspicion(behavioralEvents: StageEventRow[], decisionEvent: Stag
       }
       continue;
     }
-    if (toolKey === 'sdq-parent' || toolKey === 'ce-sdq-t-v1') {
+    if (toolKey === 'sdq-parent' || toolKey === 'ce-sdq-p-v1' || toolKey === 'ce-sdq-t-v1') {
       const src = sourceFa(toolKey);
       if (subscaleColorOf(event, 'hyper') === 'danger') {
         hits.push({ construct: 'adhd', level: 'high', source: sourceOf(toolKey), text: `بیش‌فعالی در SDQ ${src} پرخطر گزارش شده است` });

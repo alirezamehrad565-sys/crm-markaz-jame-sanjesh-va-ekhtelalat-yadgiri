@@ -69,10 +69,19 @@ describe('فرم‌ساز انواع رویداد (پنل مدیر)', () => {
     expect(v3.active).toBe(true);
     expect(v3.familyFillable).toBe(false);
     expect(v3.fields).toHaveLength(44);
-    const behavior = types.data.find((t) => t.key === 'home_behavior')!;
-    expect(behavior.fields).toHaveLength(8);
-    expect(behavior.fields.every((f) => (f as { scaleMax?: number }).scaleMax === 3)).toBe(true);
-    expect(behavior.familyFillable).toBe(true);
+    /* ۱.۲۵.۵۹ — ضدتکرار رجیستری: چهار فرم کم‌ارزش بازنشسته شدند؛ جانشین پایش خانه‌ی v2 فعال است */
+    expect(keys).not.toContain('home_behavior');
+    expect(keys).not.toContain('sdq-parent');
+    expect(keys).not.toContain('quick-multi-v1');
+    expect(keys).not.toContain('legacy_assessment');
+    const monitor = types.data.find((t) => t.key === 'ce-home-monitor-v2')!;
+    expect(monitor.familyFillable).toBe(true);
+    expect(monitor.fields.filter((f) => (f as { type: string }).type === 'scale')).toHaveLength(24);
+    expect(monitor.fields.some((f) => (f as { type: string }).type === 'longtext')).toBe(true);
+    expect((monitor as unknown as { subscales: { id: string }[] }).subscales.map((s) => s.id)).toEqual([
+      'attention_exec', 'externalizing', 'internalizing', 'language_comm',
+      'academic_learning', 'motor_coord', 'general_cog', 'social_adl'
+    ]);
   });
 
   it('ساخت نوع: سه نقش مرکز مجازند (فرم‌ساز همگانی — دستور کاربر) + اعتبارسنجی معنایی', async () => {
@@ -255,11 +264,11 @@ describe('چک‌لیست خانواده (clf) + وب‌فرم (: ویزارد t
     expect((await bot(A, tx(parentNid, CHAT_PARENT))).reply).toContain('اتصال انجام شد');
   });
 
-  it('ثبت چک‌لیست از پنل (: فلو بات همکار حذف شد) → وضعیت در انتظار خانواده + «چک‌لیست‌های من» والد', async () => {
-    const types = (await manager.get('/api/case-events/types?active=true')).body as { data: { id: string; title: string }[] };
-    const homeBehavior = types.data.find((x) => x.title.includes('پایش رفتار در خانه')); // عنوان روایی — migration 0055
-    expect(homeBehavior).toBeTruthy();
-    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: homeBehavior!.id, values: {} });
+  it('ثبت چک‌لیست از پنل (: فلو بات همکار حذف شد) → وضعیت در انتظار خانواده + «چک‌لیست‌های من» والد — پایش v2 با لینک وب', async () => {
+    const types = (await manager.get('/api/case-events/types?active=true')).body as { data: { id: string; title: string; key: string }[] };
+    const monitor = types.data.find((x) => x.key === 'ce-home-monitor-v2'); // ۱.۲۵.۵۹ — جانشین پایش رفتار در خانه
+    expect(monitor).toBeTruthy();
+    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: monitor!.id, values: {} });
     expect(created.status).toBe(201);
 
     const rows = A.sql.prepare(`SELECT id, status FROM case_events WHERE student_id = ? AND status = 'pending_family'`).all(studentId) as { id: string; status: string }[];
@@ -277,8 +286,33 @@ describe('چک‌لیست خانواده (clf) + وب‌فرم (: ویزارد t
     expect(denied.reply).toContain('متصل');
   });
 
-  it('پر کردن کامل هشت آیتمی در بات → تحلیل امتیاز/باند + اعلان به درمانگر + تایم‌لاین', async () => {
-    const start = await bot(A, cb(`clf:fill:${checklistEventId}`, CHAT_PARENT));
+  it('فرم بلند در بات به وب حواله می‌شود (سقف هشت آیتم)؛ چرخهٔ هشت‌آیتمی با قالب کوتاه گیت می‌شود', async () => {
+    /* ۱.۲۵.۵۹ — پایش خانه‌ی v2 بیست‌وپنج فیلد دارد؛ بات باید لینک امن بدهد، نه ویزارد ۲۴تایی */
+    const longStart = await bot(A, cb(`clf:fill:${checklistEventId}`, CHAT_PARENT));
+    expect(longStart.reply).toContain('مرورگر');
+    expect(longStart.reply).not.toContain('آیتم ۱ از');
+
+    /* چرخهٔ کامل ویزارد (تحلیل/اعلان/تایم‌لاین) با چک‌لیست هشت‌آیتمی دستی */
+    const shortType = await manager.post('/api/case-events/types', {
+      title: 'پایش کوتاه هشت‌آیتمی',
+      category: 'checklist',
+      familyFillable: true,
+      audience: 'family',
+      fields: Array.from({ length: 8 }, (_, i) => ({ key: `i${i + 1}`, label: `آیتم ${i + 1}`, type: 'scale', scaleMax: 3, required: true })),
+      bands: [
+        { max: 8, label: 'در محدودهٔ عادی', color: 'ok', advice: 'ادامه بده' },
+        { max: 16, label: 'نیاز به توجه و پیگیری', color: 'warn' },
+        { max: 9999, label: 'پررنگ', color: 'danger' }
+      ]
+    });
+    expect(shortType.status).toBe(201);
+    const shortTypeId = (shortType.body as { data: { id: string } }).data.id;
+    const shortCreated = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: shortTypeId, values: {} });
+    expect(shortCreated.status).toBe(201);
+    const shortId = (A.sql.prepare(`SELECT id FROM case_events WHERE student_id = ? AND status = 'pending_family' ORDER BY created_at DESC LIMIT 1`).get(studentId) as { id: string }).id;
+    expect(shortId).not.toBe(checklistEventId);
+
+    const start = await bot(A, cb(`clf:fill:${shortId}`, CHAT_PARENT));
     expect(start.reply).toContain('آیتم ۱ از ۸');
     const answers = [3, 2, 1, 0, 3, 2, 1, 0];
     let last: BotResponse = start;
@@ -292,7 +326,7 @@ describe('چک‌لیست خانواده (clf) + وب‌فرم (: ویزارد t
     const done = await bot(A, cb('clf:do', CHAT_PARENT));
     expect(done.reply).toContain('ثبت شد');
 
-    const row = A.sql.prepare(`SELECT status, analysis FROM case_events WHERE id = ?`).get(checklistEventId) as { status: string; analysis: string };
+    const row = A.sql.prepare(`SELECT status, analysis FROM case_events WHERE id = ?`).get(shortId) as { status: string; analysis: string };
     expect(row.status).toBe('completed');
     const analysis = JSON.parse(row.analysis) as { score: number; band: string; answered: number; total: number };
     expect(analysis.score).toBe(12);
@@ -311,8 +345,8 @@ describe('چک‌لیست خانواده (clf) + وب‌فرم (: ویزارد t
     expect(filled!.actor).toBe('خانواده');
 
     const mine = await bot(A, tx('چک‌لیست‌های من', CHAT_PARENT));
-    expect(mine.reply).toContain('در انتظاری');
-    const again = await bot(A, cb(`clf:fill:${checklistEventId}`, CHAT_PARENT));
+    expect(mine.reply).toContain('در انتظار پاسخ (۱)'); // پایش v2 هنوز در انتظار است (کوتاهه ثبت شد)
+    const again = await bot(A, cb(`clf:fill:${shortId}`, CHAT_PARENT));
     expect(again.reply).toContain('قبلاً');
   });
 

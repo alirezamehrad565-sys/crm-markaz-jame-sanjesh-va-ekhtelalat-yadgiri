@@ -589,3 +589,7 @@ export const BUG_REPORT_SEVERITY_LABELS: Record<BugReportSeverity, string> = {
   major: 'مهم',
   critical: 'بحرانی'
 };
+
+// ─── ۱.۲۵.۵۹ — کلید فرم‌های سیستمی تازهٔ رجیستری (migration 0104) ───
+export const HOME_MONITOR_EVENT_KEY = 'ce-home-monitor-v2'; // پایش در خانه — هشت زیرمقیاس = هشت سازهٔ صورت‌بندی
+export const CENTER_SURVEY_EVENT_KEY = 'ce-center-survey-v1'; // نظرسنجی رضایت مرکز و درمانگر
