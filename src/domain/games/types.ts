@@ -21,7 +21,6 @@ export type MetricFormula =
   | 'congruent_acc'
   | 'incongruent_acc'
   | 'interference_ms'
-  | 'trail_prefix'
   | 'nback_match'
   | 'nback_nonmatch'
   | 'nback_fa'
@@ -59,9 +58,10 @@ export interface MissionItem {
   id: string;
   phase: 'train' | 'probe';
   /** scan (۱.۲۵.۳۰): موج جاسوس‌ها — شبکه‌ای از ربات‌ها؛ کودک همهٔ جاسوس‌ها را می‌گیرد
-   *  ۱.۲۵.۳۲: stroop (رنگ جوهر) · flanker (جهت گرگ وسط) · trail (ترتیب ردپاها)
-   *  ۱.۲۵.۴۰: nback (ن‌پشت — حکم «همان است/فرق دارد» نسبت به n قدم عقب‌تر) */
-  type: 'choice' | 'numline' | 'touch_report' | 'scan' | 'stroop' | 'flanker' | 'trail' | 'nback'
+   *  ۱.۲۵.۳۲: stroop (رنگ جوهر) · flanker (جهت گرگ وسط)
+   *  ۱.۲۵.۴۰: nback (ن‌پشت — حکم «همان است/فرق دارد» نسبت به n قدم عقب‌تر)
+   *  ۱.۲۵.۵۱: trail (رد پای دزد) پس از نقد سه‌گانه حذف شد — آیتم‌های قدیمی DB خوانده نمی‌شوند */
+  type: 'choice' | 'numline' | 'touch_report' | 'scan' | 'stroop' | 'flanker' | 'nback'
     | 'corsi' | 'span';
   prompt?: string;
   options?: { label: string }[];
@@ -279,7 +279,6 @@ export interface PlayHint {
   /** سه بازی تازه (۱.۲۵.۳۲) — قاعدهٔ هر بازی از پرامپت آیتم آموزشی؛ هیچ کلیدی این‌جا نیست */
   stroop?: { label: string; stim: Record<string, unknown> } | null;
   flanker?: { label: string; stim: Record<string, unknown> } | null;
-  trail?: { label: string; stim: Record<string, unknown> } | null;
   /** ن‌پشت (۱.۲۵.۴۰) — قاعدهٔ «n قدم عقب‌تر» از پرامپت آیتم آموزشی؛ کلید همسانی
    *  (match) از stim راهنما سد می‌شود (stripAnswerKeys) و هرگز این‌جا نمی‌آید */
   nback?: { label: string; stim: Record<string, unknown> } | null;

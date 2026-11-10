@@ -536,9 +536,6 @@
   .play-flanker__prompt { font-size: 14px; }
   .play-flanker__answers { max-width: 340px; }
   .play-flanker__btn { min-height: 56px; font-size: 18px; }
-  .play-trail { gap: 6px; }
-  .play-trail__field { min-height: 190px; }
-  .play-trail__node { width: 64px; height: 64px; }
   .play-stroop { gap: 6px; }
   .play-stroop__prompt { font-size: 14px; }
   .play-nback { gap: 8px; }
@@ -555,9 +552,6 @@
   .play-root.play-skin--stroop .play-option.play-stroop__opt { min-height: 60px; }
   .play-root.play-skin--stroop .play-stroop__blob { width: min(8vmin, 34px); }
   .play-root.play-skin--stroop .play-stroop__prompt { font-size: 14px; }
-  .play-root.play-skin--trail .play-trail__field { min-height: 150px; }
-  .play-root.play-skin--trail .play-trail__node { width: 60px; height: 60px; }
-  .play-root.play-skin--trail .play-trail__prompt { font-size: 14px; }
   .play-root.play-skin--nback .play-nback__photo .play-nback__card { width: min(22vmin, 150px); }
   .play-root.play-skin--nback .play-option.play-nback__opt { min-height: 56px; font-size: 16px; }
   .play-root.play-skin--nback .play-nback__prompt { font-size: 14px; }
@@ -1235,167 +1229,6 @@
 }
 
 
-/* ─── رد پای دزد (۱.۲۵.۳۲) — نوع trail؛ راه‌یابی نشانه‌ای سبک Trail Making ───
-   حس عدی در صحنه، آرامش در گفتار (§۲): پوستهٔ شب کوچه/پشت‌بام نیلی تیره +
-   حاشیهٔ هشدار ایستا (بدون فلاش/پالس — §۹) + ماه و دزد وکتوری گوشهٔ صحنه.
-   ردپای دزد با جوهر کهربایی روی بشقاب Cream — خوانا برای کوررنگ (نشان = شکل + عدد).
-   گره‌ها absolute با موقعیت درصدی از خود stim؛ کف لمس ≥۶۴px (اینجا ۷۶px).
-   هیچ keyframes وجود ندارد؛ جنبش فقط از fx.js و transition عرض نوار از JS. */
-
-.play-stage--trail {
-  background: linear-gradient(180deg, #0A1E33 0%, #123049 62%, #173B52 100%);
-  box-shadow: inset 0 0 0 3px rgba(228, 170, 70, 0.45), inset 0 0 0 6px rgba(7, 22, 37, 0.95);
-}
-
-.play-stage--trail .play-trail__prompt { color: #F5F0E5; }
-
-.play-trail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-}
-
-.play-trail--sample { max-width: 300px; }
-
-.play-trail__prompt {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--p-navy);
-  text-align: center;
-  line-height: 1.7;
-  margin: 0;
-  padding: 0 8px;
-}
-
-/* میدان ردپا — کل صحنه را پر می‌کند (width 100%)؛ حاشیهٔ مرده ممنوع (§۲) */
-.play-trail__field {
-  position: relative;
-  width: 100%;
-  flex: 1 1 auto;
-  min-height: 280px;
-}
-
-/* پوستهٔ گوشهٔ صحنه — ماه و دزد فراری؛ بی‌اثر برای لمس، زیر گره‌ها */
-.play-trail__moon {
-  position: absolute;
-  top: 8px;
-  inset-inline-start: 10px;
-  width: 46px;
-  height: auto;
-  pointer-events: none;
-  opacity: 0.8;
-}
-
-.play-trail__thief {
-  position: absolute;
-  bottom: 6px;
-  inset-inline-end: 8px;
-  width: 72px;
-  height: auto;
-  pointer-events: none;
-  opacity: 0.9;
-}
-
-/* گرهٔ ردپا — دکمهٔ دایره‌ای ≥۶۴px؛ موقعیت absolute از خود stim */
-.play-trail__node {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  width: 76px;
-  height: 76px;
-  border: 3px solid rgba(21, 62, 80, 0.35);
-  border-radius: 50%;
-  background: rgba(245, 240, 229, 0.94);
-  padding: 4px 4px 2px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  touch-action: manipulation;
-  z-index: 2;
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-}
-
-button.play-trail__node { appearance: none; font-family: inherit; }
-.play-trail__node:active { transform: translate(-50%, -50%) scale(0.95); }
-
-.play-trail__foot { width: 26px; height: auto; display: block; }
-
-.play-trail__label {
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.4;
-  color: var(--p-navy);
-}
-
-/* قدم درست — حلقهٔ کهربایی؛ جنبش پاپ از fx.popIn می‌آید (§۹) */
-.play-trail__node--step {
-  border-color: var(--p-amber);
-  background: #FDF6E7;
-  box-shadow: 0 0 0 3px rgba(228, 170, 70, 0.4), 0 4px 10px rgba(7, 22, 37, 0.35);
-}
-
-/* نشان حقیقت — ترتیب درست پس از پاسخ تمرین؛ خط‌چین کهربایی آرام، ایستا */
-.play-trail__node--truth {
-  border: 3px dashed var(--p-amber);
-  background: #FDF6E7;
-}
-
-.play-trail__order {
-  position: absolute;
-  top: -9px;
-  inset-inline-end: -6px;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--p-teal);
-  color: var(--p-white);
-  font-size: 12px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 6px rgba(7, 22, 37, 0.3);
-}
-
-/* نوار رد (زمان پنجره) — خط لبهٔ پایین؛ فقط عرض از JS inline تنظیم می‌شود (بدون keyframes — §۹) */
-.play-trail__timer {
-  width: min(72%, 320px);
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(245, 240, 229, 0.22);
-  overflow: hidden;
-}
-
-.play-trail__timer > span {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--p-amber) 0%, #F5F0E5 100%);
-}
-
-/* نمونهٔ آموزش — گره‌ها div بی‌لمس؛ میدان کوچک */
-.play-trail--sample .play-trail__field { min-height: 170px; }
-.play-trail--sample .play-trail__node { width: 56px; height: 56px; cursor: default; }
-.play-trail--sample .play-trail__foot { width: 20px; }
-.play-trail--sample .play-trail__label { font-size: 13px; }
-.play-trail--sample .play-trail__thief { width: 52px; }
-
-/* تبلت افقی: میدان وسط می‌ماند و کل صحنه را پر می‌کند */
-@media (orientation: landscape) {
-  .play-trail { height: 100%; justify-content: space-between; }
-  .play-trail__field { min-height: 340px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .play-trail__node { transition: none; }
-  .play-trail__node:active { transform: translate(-50%, -50%); }
-  .play-trail__timer > span { transition: none !important; }
-}
-
 /* ─── خلاصهٔ پایان جلسه (۱.۲۵.۳۴ — اقتباس debrief بستهٔ jsPsych) ───
    فقط مسیر تمرین؛ اعداد فارسی؛ بی‌رقارت — بدون مقایسه و بدون سرزنش (§۲).
    هیچ انیمیشن و هیچ شمارش‌معکوس نیست — کارت ایستا (§۹) */
@@ -1480,8 +1313,6 @@ button.play-trail__node { appearance: none; font-family: inherit; }
 .play-scene__hero > svg { width: 96px; height: 99px; }
 
 /* رد پای دزد — میدان پر از گره است؛ قهرمان با گره‌ها برخورد می‌کند — حذف */
-.play-root[data-kind='trail'] .play-scene__hero,
-.play-root.play-skin--trail .play-scene__hero { display: none; }
 
 /* کارت باریک — قهرمان کوچک‌تر تا با متن برخورد نکند */
 @media (max-width: 700px) {

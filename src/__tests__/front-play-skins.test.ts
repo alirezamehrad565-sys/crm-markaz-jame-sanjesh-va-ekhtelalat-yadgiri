@@ -15,7 +15,7 @@ import { join } from 'node:path';
 
 const ROOT = join(__dirname, '../..');
 const SKINS = join(ROOT, 'public/assets/play/skins');
-const KINDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail', 'nback'] as const;
+const KINDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'nback'] as const;
 const SKIN_CEILING_BYTES = 7000;
 
 const read = (p: string) => readFileSync(p, 'utf8');
