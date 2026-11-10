@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.60";
+var APP_VERSION = "1.25.61";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -19957,6 +19957,237 @@ function extractFollowUpAction(fields, payload) {
 }
 __name(extractFollowUpAction, "extractFollowUpAction");
 
+// src/domain/case-events/survey-insights.ts
+var SURVEY_NOTE_THEMES = [
+  { id: "scheduling", label: "\u0646\u0648\u0628\u062A\u200C\u062F\u0647\u06CC \u0648 \u0632\u0645\u0627\u0646", words: ["\u0646\u0648\u0628\u062A", "\u0633\u0627\u0639\u062A", "\u0648\u0642\u062A", "\u0627\u0646\u062A\u0638\u0627\u0631", "\u062A\u0623\u062E\u06CC\u0631", "\u062A\u0627\u062E\u06CC\u0631", "\u0628\u0631\u0646\u0627\u0645\u0647"] },
+  { id: "therapist", label: "\u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0648 \u0628\u0631\u062E\u0648\u0631\u062F", words: ["\u062F\u0631\u0645\u0627\u0646\u06AF\u0631", "\u062A\u0631\u0627\u067E\u06CC\u0633\u062A", "\u0631\u0648\u0627\u0646\u0634\u0646\u0627\u0633", "\u0628\u0631\u062E\u0648\u0631\u062F", "\u0645\u0647\u0631\u0628\u0627\u0646", "\u0635\u0628\u0648\u0631"] },
+  { id: "communication", label: "\u0627\u0637\u0644\u0627\u0639\u200C\u0631\u0633\u0627\u0646\u06CC \u0648 \u067E\u0627\u0633\u062E\u200C\u06AF\u0648\u06CC\u06CC", words: ["\u0627\u0637\u0644\u0627\u0639", "\u067E\u06CC\u0627\u0645", "\u067E\u0627\u0633\u062E", "\u062A\u0645\u0627\u0633", "\u067E\u06CC\u06AF\u06CC\u0631\u06CC", "\u06AF\u0632\u0627\u0631\u0634", "\u0645\u0637\u0644\u0639"] },
+  { id: "progress", label: "\u067E\u06CC\u0634\u0631\u0641\u062A \u0648 \u0646\u062A\u06CC\u062C\u0647", words: ["\u067E\u06CC\u0634\u0631\u0641\u062A", "\u0628\u0647\u0628\u0648\u062F", "\u0646\u062A\u06CC\u062C\u0647", "\u062A\u063A\u06CC\u06CC\u0631", "\u062A\u0641\u0627\u0648\u062A"] },
+  { id: "facilities", label: "\u0641\u0636\u0627 \u0648 \u0645\u062D\u06CC\u0637", words: ["\u0641\u0636\u0627", "\u0646\u0638\u0627\u0641\u062A", "\u0633\u0627\u062E\u062A\u0645\u0627\u0646", "\u0645\u062D\u06CC\u0637", "\u062A\u062C\u0647\u06CC\u0632"] },
+  { id: "finance", label: "\u0647\u0632\u06CC\u0646\u0647 \u0648 \u0634\u0647\u0631\u06CC\u0647", words: ["\u0647\u0632\u06CC\u0646\u0647", "\u0642\u06CC\u0645\u062A", "\u067E\u0648\u0644", "\u062A\u0639\u0631\u0641\u0647", "\u0634\u0647\u0631\u06CC\u0647", "\u0645\u0628\u0644\u063A"] }
+];
+var NEGATIVE_CUES = [
+  "\u0636\u0639\u06CC\u0641",
+  "\u0628\u062F\u062A\u0631",
+  "\u0646\u0627\u0631\u0627\u0636\u06CC",
+  "\u0646\u0627\u0627\u0645\u06CC\u062F",
+  "\u0645\u0634\u06A9\u0644",
+  "\u062A\u0623\u062E\u06CC\u0631",
+  "\u062A\u0627\u062E\u06CC\u0631",
+  "\u06AF\u0644\u0647",
+  "\u0634\u06A9\u0627\u06CC\u062A",
+  "\u0645\u062A\u0623\u0633\u0641\u0627\u0646\u0647",
+  "\u0645\u062A\u0627\u0633\u0641\u0627\u0646\u0647",
+  "\u0628\u06CC\u200C\u062A\u0648\u062C\u0647",
+  "\u0633\u0631\u062F",
+  "\u062F\u06CC\u0631",
+  "\u0646\u0627\u062A\u0645\u0627\u0645",
+  "\u0644\u063A\u0648",
+  "\u0646\u06CC\u0633\u062A",
+  "\u06A9\u0645 \u0628\u0648\u062F"
+];
+function classifySurveyNote(raw2) {
+  const text = (raw2 ?? "").trim();
+  if (!text) return { themes: [], negative: false };
+  const themes = [];
+  for (const t of SURVEY_NOTE_THEMES) {
+    if (t.words.some((w) => text.includes(w))) themes.push(t.id);
+  }
+  const negative = NEGATIVE_CUES.some((w) => text.includes(w));
+  return { themes, negative };
+}
+__name(classifySurveyNote, "classifySurveyNote");
+function round2(v) {
+  return Math.round(v * 100) / 100;
+}
+__name(round2, "round2");
+function round4(v) {
+  return Math.round(v * 1e4) / 1e4;
+}
+__name(round4, "round4");
+function rateOf(num4, den) {
+  if (den <= 0) return null;
+  return round4(num4 / den);
+}
+__name(rateOf, "rateOf");
+function avgOf(values) {
+  if (values.length === 0) return null;
+  return round2(values.reduce((a, b) => a + b, 0) / values.length);
+}
+__name(avgOf, "avgOf");
+function inWindow(iso, fromIso, toIso) {
+  return iso >= fromIso && iso <= toIso;
+}
+__name(inWindow, "inWindow");
+function statsOf(rows, fromIso, toIso) {
+  const win = rows.filter((r) => inWindow(r.createdAt, fromIso, toIso));
+  const filled = win.filter((r) => r.answered);
+  const npsVals = filled.map((r) => r.nps).filter((v) => v !== null);
+  const promoters = npsVals.filter((v) => v >= 9).length;
+  const detractors = npsVals.filter((v) => v <= 6).length;
+  return {
+    sent: win.length,
+    filled: filled.length,
+    response_rate: rateOf(filled.length, win.length),
+    center_avg: avgOf(filled.map((r) => r.center).filter((v) => v !== null)),
+    therapist_avg: avgOf(filled.map((r) => r.therapist).filter((v) => v !== null)),
+    progress_avg: avgOf(filled.map((r) => r.progress).filter((v) => v !== null)),
+    nps_avg: avgOf(npsVals),
+    nps_index: npsVals.length > 0 ? round2(100 * (promoters - detractors) / npsVals.length) : null
+  };
+}
+__name(statsOf, "statsOf");
+function kindStatOf(rows, fromIso, toIso, kind) {
+  const win = rows.filter((r) => r.kind === kind && inWindow(r.createdAt, fromIso, toIso));
+  const filled = win.filter((r) => r.answered);
+  return {
+    sent: win.length,
+    filled: filled.length,
+    response_rate: rateOf(filled.length, win.length),
+    center_avg: avgOf(filled.map((r) => r.center).filter((v) => v !== null)),
+    therapist_avg: avgOf(filled.map((r) => r.therapist).filter((v) => v !== null)),
+    progress_avg: avgOf(filled.map((r) => r.progress).filter((v) => v !== null))
+  };
+}
+__name(kindStatOf, "kindStatOf");
+function surveyTrendSlices(days) {
+  const bucketDays = days <= 7 ? 1 : days <= 30 ? 5 : 15;
+  return { bucketDays, count: Math.ceil(days / bucketDays) };
+}
+__name(surveyTrendSlices, "surveyTrendSlices");
+function trendOf(rows, days, todayYmd) {
+  const { bucketDays, count } = surveyTrendSlices(days);
+  const firstYmd = addDaysYmd(todayYmd, -(days - 1));
+  const buckets = [];
+  for (let i = 0; i < count; i++) {
+    const fromYmd = addDaysYmd(firstYmd, i * bucketDays);
+    const rawTo = addDaysYmd(fromYmd, bucketDays - 1);
+    const toYmd = rawTo > todayYmd ? todayYmd : rawTo;
+    const fromIso = tehranDayRange(fromYmd).start;
+    const toIso = tehranDayRange(toYmd).end;
+    const win = rows.filter((r) => inWindow(r.createdAt, fromIso, toIso));
+    const filled = win.filter((r) => r.answered);
+    buckets.push({
+      from_ymd: fromYmd,
+      to_ymd: toYmd,
+      sent: win.length,
+      filled: filled.length,
+      center_avg: avgOf(filled.map((r) => r.center).filter((v) => v !== null)),
+      therapist_avg: avgOf(filled.map((r) => r.therapist).filter((v) => v !== null)),
+      progress_avg: avgOf(filled.map((r) => r.progress).filter((v) => v !== null))
+    });
+  }
+  return buckets;
+}
+__name(trendOf, "trendOf");
+function therapistsOf(rows, fromIso, toIso) {
+  const win = rows.filter((r) => inWindow(r.createdAt, fromIso, toIso));
+  const byStaff = /* @__PURE__ */ new Map();
+  for (const r of win) {
+    const key = r.staffId ?? "__none";
+    const entry = byStaff.get(key) ?? { name: r.staffName, rows: [] };
+    if (!entry.name && r.staffName) entry.name = r.staffName;
+    entry.rows.push(r);
+    byStaff.set(key, entry);
+  }
+  const cards = [];
+  for (const [key, entry] of byStaff) {
+    if (entry.rows.length === 0) continue;
+    const filled = entry.rows.filter((r) => r.answered);
+    const npsVals = filled.map((r) => r.nps).filter((v) => v !== null);
+    const lastFilledAt = filled.map((r) => r.createdAt).sort().at(-1) ?? null;
+    cards.push({
+      therapist_id: key === "__none" ? null : key,
+      therapist_name: entry.name,
+      sent: entry.rows.length,
+      filled: filled.length,
+      response_rate: rateOf(filled.length, entry.rows.length),
+      therapist_avg: avgOf(filled.map((r) => r.therapist).filter((v) => v !== null)),
+      progress_avg: avgOf(filled.map((r) => r.progress).filter((v) => v !== null)),
+      nps_avg: avgOf(npsVals),
+      last_filled_at: lastFilledAt
+    });
+  }
+  cards.sort((a, b) => {
+    if (a.therapist_id === null && b.therapist_id !== null) return 1;
+    if (b.therapist_id === null && a.therapist_id !== null) return -1;
+    if (b.filled !== a.filled) return b.filled - a.filled;
+    return (b.therapist_avg ?? -1) - (a.therapist_avg ?? -1);
+  });
+  return cards;
+}
+__name(therapistsOf, "therapistsOf");
+function themesOf(notes) {
+  const stat = /* @__PURE__ */ new Map();
+  let negativeCount = 0;
+  for (const n of notes) {
+    if (n.negative) negativeCount += 1;
+    for (const id of n.themes) {
+      const s = stat.get(id) ?? { count: 0, negative: 0 };
+      s.count += 1;
+      if (n.negative) s.negative += 1;
+      stat.set(id, s);
+    }
+  }
+  const themes = SURVEY_NOTE_THEMES.map((t) => {
+    const s = stat.get(t.id);
+    return { id: t.id, label: t.label, count: s?.count ?? 0, negative_count: s?.negative ?? 0 };
+  }).filter((t) => t.count > 0).sort((a, b) => b.count - a.count);
+  return { themes, negativeCount };
+}
+__name(themesOf, "themesOf");
+function buildSurveyInsights(rows, opts) {
+  const days = opts.days;
+  const todayYmd = tehranTodayYmd(opts.now);
+  const firstYmd = addDaysYmd(todayYmd, -(days - 1));
+  const prevFirstYmd = addDaysYmd(firstYmd, -days);
+  const curFrom = tehranDayRange(firstYmd).start;
+  const curTo = tehranDayRange(todayYmd).end;
+  const prevFrom = tehranDayRange(prevFirstYmd).start;
+  const prevTo = tehranDayRange(firstYmd).end;
+  const curRows = rows.filter((r) => inWindow(r.createdAt, curFrom, curTo));
+  const notes = curRows.filter((r) => (r.note ?? "").trim() !== "").sort((a, b) => a.createdAt < b.createdAt ? 1 : -1).slice(0, 100).map((r) => {
+    const c = classifySurveyNote(r.note);
+    return {
+      id: r.id,
+      kind: r.kind,
+      created_at: r.createdAt,
+      student_name: r.studentName,
+      staff_name: r.staffName,
+      note: (r.note ?? "").trim(),
+      themes: c.themes,
+      negative: c.negative
+    };
+  });
+  const { themes, negativeCount } = themesOf(notes);
+  const pendingRows = curRows.filter((r) => !r.answered);
+  return {
+    window: { days, from_ymd: firstYmd, to_ymd: todayYmd, from_iso: curFrom, to_iso: curTo },
+    generated_at: opts.now.toISOString(),
+    current: statsOf(rows, curFrom, curTo),
+    previous: statsOf(rows, prevFrom, prevTo),
+    trend: trendOf(rows, days, todayYmd),
+    by_kind: {
+      discharge: kindStatOf(rows, curFrom, curTo, "discharge"),
+      progress: kindStatOf(rows, curFrom, curTo, "progress"),
+      general: kindStatOf(rows, curFrom, curTo, "general")
+    },
+    therapists: therapistsOf(rows, curFrom, curTo),
+    themes,
+    notes,
+    notes_negative_count: negativeCount,
+    pending_open: pendingRows.filter((r) => !r.expired).length,
+    pending_expired: pendingRows.filter((r) => r.expired).length
+  };
+}
+__name(buildSurveyInsights, "buildSurveyInsights");
+function surveyKindOfEventKey(key) {
+  if (key === SURVEY_KIND_EVENT_KEYS.discharge) return "discharge";
+  if (key === SURVEY_KIND_EVENT_KEYS.progress) return "progress";
+  return "general";
+}
+__name(surveyKindOfEventKey, "surveyKindOfEventKey");
+
 // src/domain/wechsler-engine/engine.js
 var __name2 = /* @__PURE__ */ __name((target, value) => target, "__name");
 var __name22 = /* @__PURE__ */ __name((target, value) => target, "__name2");
@@ -21823,6 +22054,39 @@ function surveyItemOf(r, publicBaseUrl) {
   };
 }
 __name(surveyItemOf, "surveyItemOf");
+function insightRowOf(r, nowMs) {
+  const a = parseJson(r.analysis, null);
+  const sub = /* @__PURE__ */ __name((id) => a?.subscaleScores?.find((s) => s.id === id) ?? null, "sub");
+  const pctOf = /* @__PURE__ */ __name((id) => {
+    const s = sub(id);
+    const score = Number(s?.score);
+    const max = Number(s?.max);
+    if (!Number.isFinite(score) || !Number.isFinite(max) || max <= 0) return null;
+    return Math.round(score / max * 100);
+  }, "pctOf");
+  const nps = sub("nps");
+  const npsVal = Number(nps?.score);
+  const payload = parseJson(r.payload, null);
+  const noteRaw = payload?.["sv_note"]?.value ?? null;
+  const answered = r.status === "completed" && Boolean(r.filled_by_chat_id);
+  const expireMs = r.fill_expires_at ? Date.parse(r.fill_expires_at) : NaN;
+  return {
+    id: r.id,
+    kind: surveyKindOfEventKey(r.type_key),
+    answered,
+    expired: !answered && r.status === "pending_family" && Number.isFinite(expireMs) && expireMs < nowMs,
+    createdAt: r.created_at,
+    staffId: r.staff_id,
+    staffName: r.staff_name,
+    studentName: r.student_name,
+    center: answered ? pctOf("center") : null,
+    therapist: answered ? pctOf("therapist") : null,
+    progress: answered ? pctOf("progress") : null,
+    nps: answered && Number.isFinite(npsVal) ? npsVal : null,
+    note: answered ? noteRaw : null
+  };
+}
+__name(insightRowOf, "insightRowOf");
 async function applyWechslerHook(db, typeKey, payload, studentId, occurredAtIso) {
   if (typeKey !== WISC4_EVENT_KEY) return payload;
   const birthDate = await studentBirthDate(db, studentId);
@@ -23070,6 +23334,29 @@ function createCaseEventsService(deps) {
       );
       const base = deps.publicBaseUrl?.trim() || null;
       return rows.map((r) => surveyItemOf(r, base));
+    },
+    /* ۱.۲۵.۶۱ — تابلوی شاخص‌های نظرسنجی: پنجرهٔ جاری/قبلی + روند + تفکیک فرم +
+       کارنامهٔ درمانگران + تم‌های متن آزاد — فقط-عددی، بدون توکن لینک */
+    async surveyInsights(days) {
+      const nowMs = now().getTime();
+      const todayYmd = tehranTodayYmd(now());
+      const firstYmd = addDaysYmd(todayYmd, -(days - 1));
+      const earliestYmd = addDaysYmd(firstYmd, -days);
+      const fromIso = tehranDayRange(earliestYmd).start;
+      const toIso = tehranDayRange(todayYmd).end;
+      const placeholders = FAMILY_SURVEY_EVENT_KEYS.map(() => "?").join(", ");
+      const rows = await db.query(
+        `SELECT e.id, st.first_name || ' ' || st.last_name AS student_name, e.staff_id, s.full_name AS staff_name, e.status, e.filled_by_chat_id, e.fill_expires_at,
+                e.created_at, e.analysis, e.payload, t.key AS type_key
+           FROM case_events e
+           JOIN case_event_types t ON t.id = e.event_type_id
+           JOIN students st ON st.id = e.student_id
+           LEFT JOIN staff s ON s.id = e.staff_id
+          WHERE t.key IN (${placeholders}) AND e.deleted_at IS NULL AND e.created_at >= ? AND e.created_at <= ?
+          ORDER BY e.created_at DESC LIMIT 2000`,
+        [...FAMILY_SURVEY_EVENT_KEYS, fromIso, toIso]
+      );
+      return buildSurveyInsights(rows.map((r) => insightRowOf(r, nowMs)), { days, now: now() });
     }
   };
 }
@@ -23328,6 +23615,12 @@ function registerCaseEventsRoutes(app, service) {
   app.get("/api/case-events/surveys", requireRole("manager"), async (c) => {
     const items = await service.listSurveys();
     return c.json({ data: items }, 200);
+  });
+  app.get("/api/case-events/surveys/insights", requireRole("manager"), async (c) => {
+    const raw2 = Number(c.req.query("days") ?? 30);
+    const days = raw2 === 7 || raw2 === 90 ? raw2 : 30;
+    const data = await service.surveyInsights(days);
+    return c.json({ data }, 200);
   });
   app.post("/api/case-events/:id/send", requireRole("manager", "secretary", "therapist"), async (c) => {
     const actor = getAuthContext(c);
@@ -24799,27 +25092,27 @@ function scanMissedCsv(item, response) {
 __name(scanMissedCsv, "scanMissedCsv");
 function accuracyOf(scored) {
   if (scored.length === 0) return null;
-  return round2(scored.filter((s) => s.correct).length / scored.length * 100);
+  return round22(scored.filter((s) => s.correct).length / scored.length * 100);
 }
 __name(accuracyOf, "accuracyOf");
 function meanNumlineErrorOf(scored) {
   const errs = scored.map((s) => s.numlineErrorPct).filter((v) => typeof v === "number");
   if (errs.length === 0) return null;
-  return round2(errs.reduce((a, b) => a + b, 0) / errs.length);
+  return round22(errs.reduce((a, b) => a + b, 0) / errs.length);
 }
 __name(meanNumlineErrorOf, "meanNumlineErrorOf");
 function scanFaPctOf(scored) {
   const denom = scored.reduce((a, s) => a + (typeof s.scanDistractors === "number" ? s.scanDistractors : 0), 0);
   if (denom <= 0) return null;
   const fa2 = scored.reduce((a, s) => a + (typeof s.scanFalse === "number" ? s.scanFalse : 0), 0);
-  return round2(fa2 / denom * 100);
+  return round22(fa2 / denom * 100);
 }
 __name(scanFaPctOf, "scanFaPctOf");
 function scanMissPctOf(scored) {
   const denom = scored.reduce((a, s) => a + (typeof s.scanSpies === "number" ? s.scanSpies : 0), 0);
   if (denom <= 0) return null;
   const miss = scored.reduce((a, s) => a + (typeof s.scanMissed === "number" ? s.scanMissed : 0), 0);
-  return round2(miss / denom * 100);
+  return round22(miss / denom * 100);
 }
 __name(scanMissPctOf, "scanMissPctOf");
 function congruentSubset(scored, congruent) {
@@ -24846,7 +25139,7 @@ function interferenceMsOf(scored) {
   const congMed = medianRtOf(congruentSubset(scored, true));
   const incMed = medianRtOf(congruentSubset(scored, false));
   if (congMed === null || incMed === null) return null;
-  return round2(incMed - congMed);
+  return round22(incMed - congMed);
 }
 __name(interferenceMsOf, "interferenceMsOf");
 function nbackMatchSubset(scored, match2) {
@@ -24869,14 +25162,14 @@ function nbackFaPctOf(scored) {
   const sub = nbackMatchSubset(scored, false);
   if (sub.length === 0) return null;
   const fa2 = sub.filter((s) => s.nbackFa === true).length;
-  return round2(fa2 / sub.length * 100);
+  return round22(fa2 / sub.length * 100);
 }
 __name(nbackFaPctOf, "nbackFaPctOf");
 function nbackMissPctOf(scored) {
   const sub = nbackMatchSubset(scored, true);
   if (sub.length === 0) return null;
   const miss = sub.filter((s) => s.nbackMissed === true).length;
-  return round2(miss / sub.length * 100);
+  return round22(miss / sub.length * 100);
 }
 __name(nbackMissPctOf, "nbackMissPctOf");
 function spanMaxOf(scored) {
@@ -24914,28 +25207,28 @@ function correctGoPctOf(scored) {
   const { totalGo } = goNogoDenoms(scored);
   if (totalGo === 0) return null;
   const ok2 = scored.filter((s) => s.isGo === true && s.correct).length;
-  return round2(ok2 / totalGo * 100);
+  return round22(ok2 / totalGo * 100);
 }
 __name(correctGoPctOf, "correctGoPctOf");
 function correctNogoPctOf(scored) {
   const { totalNogo } = goNogoDenoms(scored);
   if (totalNogo === 0) return null;
   const ok2 = scored.filter((s) => s.isGo === false && s.correct).length;
-  return round2(ok2 / totalNogo * 100);
+  return round22(ok2 / totalNogo * 100);
 }
 __name(correctNogoPctOf, "correctNogoPctOf");
 function commissionPctOf(scored) {
   const { totalNogo } = goNogoDenoms(scored);
   if (totalNogo === 0) return null;
   const ce = scored.filter((s) => s.commission).length;
-  return round2(ce / totalNogo * 100);
+  return round22(ce / totalNogo * 100);
 }
 __name(commissionPctOf, "commissionPctOf");
 function omissionPctOf(scored) {
   const { totalGo } = goNogoDenoms(scored);
   if (totalGo === 0) return null;
   const oe = scored.filter((s) => s.omission).length;
-  return round2(oe / totalGo * 100);
+  return round22(oe / totalGo * 100);
 }
 __name(omissionPctOf, "omissionPctOf");
 function computeMetricValue(formula, scored) {
@@ -24983,10 +25276,10 @@ function computeMetricValue(formula, scored) {
   }
 }
 __name(computeMetricValue, "computeMetricValue");
-function round2(v) {
+function round22(v) {
   return Math.round(v * 100) / 100;
 }
-__name(round2, "round2");
+__name(round22, "round2");
 function decideValidity(activityTimes, doneItems, totalItems) {
   for (let i = 1; i < activityTimes.length; i++) {
     if (activityTimes[i] - activityTimes[i - 1] > IDLE_PARTIAL_MS) return "partial";
@@ -43864,13 +44157,13 @@ function registerDocsRoutes(app, service) {
 __name(registerDocsRoutes, "registerDocsRoutes");
 
 // src/domain/center-kpi/service.ts
-function round4(v) {
+function round42(v) {
   return v === null ? null : Math.round(v * 1e4) / 1e4;
 }
-__name(round4, "round4");
+__name(round42, "round4");
 function rate(num4, den) {
   if (den <= 0) return null;
-  return round4(num4 / den);
+  return round42(num4 / den);
 }
 __name(rate, "rate");
 function parseJson5(raw2) {
@@ -44105,7 +44398,7 @@ function createCenterKpiService(deps) {
       family_requests: familyTotal,
       family_filled: familyAgg?.filled ?? 0,
       family_response_rate: rate(familyAgg?.filled ?? 0, familyTotal),
-      family_avg_score: scoreCount > 0 ? round4(scoreSum / scoreCount) : null
+      family_avg_score: scoreCount > 0 ? round42(scoreSum / scoreCount) : null
     };
     const surveyPlaceholders = FAMILY_SURVEY_EVENT_KEYS.map(() => "?").join(", ");
     const surveyRows = await db.query(
@@ -44156,10 +44449,10 @@ function createCenterKpiService(deps) {
       surveys_sent: surveysSent,
       surveys_filled: surveysFilled,
       response_rate: rate(surveysFilled, surveysSent),
-      center_avg: centerCount > 0 ? round4(centerSum / centerCount) : null,
-      therapist_avg: therapistCount > 0 ? round4(therapistSum / therapistCount) : null,
-      progress_avg: progressCount > 0 ? round4(progressSum / progressCount) : null,
-      nps_avg: npsCount > 0 ? round4(npsSum / npsCount) : null,
+      center_avg: centerCount > 0 ? round42(centerSum / centerCount) : null,
+      therapist_avg: therapistCount > 0 ? round42(therapistSum / therapistCount) : null,
+      progress_avg: progressCount > 0 ? round42(progressSum / progressCount) : null,
+      nps_avg: npsCount > 0 ? round42(npsSum / npsCount) : null,
       by_kind: kindAgg
     };
     return {

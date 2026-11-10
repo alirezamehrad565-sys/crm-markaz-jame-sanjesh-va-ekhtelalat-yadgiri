@@ -68,6 +68,14 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: items }, 200);
   });
 
+  /* ۱.۲۵.۶۱ — تابلوی شاخص‌های نظرسنجی: پنجرهٔ جاری/قبل + روند + تفکیک فرم + کارنامهٔ درمانگران + تم‌ها — فقط مدیر */
+  app.get('/api/case-events/surveys/insights', requireRole('manager'), async (c) => {
+    const raw = Number(c.req.query('days') ?? 30);
+    const days = raw === 7 || raw === 90 ? raw : 30;
+    const data = await service.surveyInsights(days);
+    return c.json({ data }, 200);
+  });
+
   app.post('/api/case-events/:id/send', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = await c.req.json<{ audience?: string; note?: string; teacher_name?: string; teacher_id?: string }>().catch(() => null);

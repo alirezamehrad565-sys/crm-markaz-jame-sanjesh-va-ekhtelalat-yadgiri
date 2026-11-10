@@ -1,6 +1,18 @@
 import type { AuthContext } from '@core/shared';
 import type { DbClient } from '@core/db';
 
+/* ۱.۲۵.۶۱ — تابلوی تحلیل نظرسنجی‌ها: انواع موتور خالص باز-صادر می‌شوند */
+export type {
+  SurveyInsights,
+  SurveyInsightRow,
+  SurveyWindowStats,
+  SurveyTrendBucket,
+  SurveyKindStat,
+  SurveyTherapistCard,
+  SurveyThemeStat,
+  SurveyNoteItem
+} from './survey-insights';
+
 export const CASE_EVENT_CATEGORIES = ['session', 'checklist', 'note'] as const;
 export type CaseEventCategory = (typeof CASE_EVENT_CATEGORIES)[number];
 
@@ -280,6 +292,7 @@ export interface CaseEventsService {
   setMonitorFocusProvider(fn: MonitorFocusProvider | null): void; // ۱.۲۵.۵۹ — تزریق از موتور بالینی
   createSurveyEvents(input: SurveyCreateInput, actor: AuthContext): Promise<{ created: SurveyEventItem[] }>; // ۱.۲۵.۵۹
   listSurveys(): Promise<SurveyEventItem[]>; // ۱.۲۵.۵۹
+  surveyInsights(days: 7 | 30 | 90): Promise<import('./survey-insights').SurveyInsights>; // ۱.۲۵.۶۱ — تابلوی شاخص‌ها
   assertFamilyChat(studentId: string, chatId: string): Promise<boolean>;
   verifyFillToken(id: string, token: string): Promise<boolean>;
   mintFillLink(id: string, publicBaseUrl: string): Promise<string | null>;
