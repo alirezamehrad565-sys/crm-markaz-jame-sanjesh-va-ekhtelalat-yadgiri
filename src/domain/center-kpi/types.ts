@@ -89,7 +89,15 @@ export interface DocumentationKpi {
   family_avg_score: number | null;
 }
 
-/* ۱.۲۵.۵۹ — رضایت خانواده‌ها: نظرسنجی ce-center-survey-v1 — تجمیع فقط-عددی (هم‌قانون طلایی) */
+/* ۱.۲۵.۵۹ — رضایت خانواده‌ها: نظرسنجی ce-center-survey-v1 — تجمیع فقط-عددی (هم‌قانون طلایی)
+   ۱.۲۵.۶۰ — خانوادهٔ کامل نظرسنجی‌ها (تاریخی + پایان دوره + حین درمان) + میانگین پیشرفت + تفکیک نوع فرم */
+export type FamilySurveyKind = 'general' | 'discharge' | 'progress';
+
+export interface FamilySurveyKindCounts {
+  sent: number;
+  filled: number;
+}
+
 export interface FamilySurveyKpi {
   /** نظرسنجی‌های ارسالی در پنجره */
   surveys_sent: number;
@@ -101,8 +109,12 @@ export interface FamilySurveyKpi {
   center_avg: number | null;
   /** میانگین درصد رضایت از درمانگر (زیرمقیاس therapist) — null اگر پاسخی نیست */
   therapist_avg: number | null;
+  /** ۱.۲۵.۶۰ — میانگین درصد «پیشرفت مشاهده‌شده» از نگاه خانواده — null اگر پاسخی نیست */
+  progress_avg: number | null;
   /** میانگین احتمال توصیه (۰-۱۰) — null اگر پاسخی نیست */
   nps_avg: number | null;
+  /** ۱.۲۵.۶۰ — تفکیک ارسال/پاسخ به تفکیک نوع فرم نظرسنجی */
+  by_kind: Record<FamilySurveyKind, FamilySurveyKindCounts>;
 }
 
 export interface KpiSummary {

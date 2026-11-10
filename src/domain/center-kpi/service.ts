@@ -1,10 +1,11 @@
-import { addDaysYmd, CENTER_SURVEY_EVENT_KEY, iranianWeekdayOfYmd, tehranDayRange, tehranTodayYmd } from '@core/shared';
+import { addDaysYmd, FAMILY_SURVEY_EVENT_KEYS, iranianWeekdayOfYmd, SURVEY_KIND_EVENT_KEYS, tehranDayRange, tehranTodayYmd } from '@core/shared';
 import type { DbClient } from '@core/db';
 import type {
   AppointmentKpi,
   CenterKpiService,
   DocumentationKpi,
   FamilySurveyKpi,
+  FamilySurveyKind,
   InterventionKpi,
   KpiDays,
   KpiSummary,
@@ -53,6 +54,7 @@ interface SurveyRow {
   status: string;
   filled_by_chat_id: string | null;
   analysis: string | null;
+  type_key: string;
 }
 
 export function createCenterKpiService(deps: { db: DbClient }): CenterKpiService {
@@ -254,14 +256,14 @@ export function createCenterKpiService(deps: { db: DbClient }): CenterKpiService
         `SELECT COUNT(*) AS total,
                 COALESCE(SUM(CASE WHEN ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS filled
          FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
-         WHERE cet.family_fillable = 1 AND cet.key != ? AND ce.created_at >= ? AND ce.created_at <= ?`,
-        [CENTER_SURVEY_EVENT_KEY, fromIso, toIso]
+         WHERE cet.family_fillable = 1 AND cet.key NOT IN (${FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', ')}) AND ce.created_at >= ? AND ce.created_at <= ?`,
+        [...FAMILY_SURVEY_EVENT_KEYS, fromIso, toIso]
       ),
       db.query<FamilyScoreRow>(
         `SELECT ce.analysis FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
-         WHERE cet.family_fillable = 1 AND cet.key != ? AND ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL
+         WHERE cet.family_fillable = 1 AND cet.key NOT IN (${FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', ')}) AND ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL
            AND ce.created_at >= ? AND ce.created_at <= ?`,
-        [CENTER_SURVEY_EVENT_KEY, fromIso, toIso]
+        [...FAMILY_SURVEY_EVENT_KEYS, fromIso, toIso]
       )
     ]);
 
@@ -292,23 +294,32 @@ export function createCenterKpiService(deps: { db: DbClient }): CenterKpiService
       family_avg_score: scoreCount > 0 ? round4(scoreSum / scoreCount) : null
     };
 
-    /* ─── ۱.۲۵.۵۹ — رضایت خانواده‌ها (نظرسنجی ce-center-survey-v1): فقط-عددی ─── */
+    /* ─── ۱.۲۵.۵۹ — رضایت خانواده‌ها (نظرسنجی ce-center-survey-v1): فقط-عددی
+         ۱.۲۵.۶۰ — کل خانوادهٔ نظرسنجی‌ها (تاریخی + پایان دوره + حین درمان) + میانگین پیشرفت + تفکیک نوع فرم ─── */
+    const surveyPlaceholders = FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', ');
     const surveyRows = await db.query<SurveyRow>(
-      `SELECT ce.status, ce.filled_by_chat_id, ce.analysis
+      `SELECT ce.status, ce.filled_by_chat_id, ce.analysis, cet.key AS type_key
          FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
-        WHERE cet.key = ? AND ce.deleted_at IS NULL AND ce.created_at >= ? AND ce.created_at <= ?`,
-      [CENTER_SURVEY_EVENT_KEY, fromIso, toIso]
+        WHERE cet.key IN (${surveyPlaceholders}) AND ce.deleted_at IS NULL AND ce.created_at >= ? AND ce.created_at <= ?`,
+      [...FAMILY_SURVEY_EVENT_KEYS, fromIso, toIso]
     );
     let surveysFilled = 0;
     let centerSum = 0;
     let centerCount = 0;
     let therapistSum = 0;
     let therapistCount = 0;
+    let progressSum = 0;
+    let progressCount = 0;
     let npsSum = 0;
     let npsCount = 0;
+    const kindAgg = { general: { sent: 0, filled: 0 }, discharge: { sent: 0, filled: 0 }, progress: { sent: 0, filled: 0 } } as Record<FamilySurveyKind, { sent: number; filled: number }>;
+    const kindOfKey = (key: string): FamilySurveyKind => (key === SURVEY_KIND_EVENT_KEYS.discharge ? 'discharge' : key === SURVEY_KIND_EVENT_KEYS.progress ? 'progress' : 'general');
     for (const row of surveyRows) {
+      const kind = kindOfKey(row.type_key);
+      kindAgg[kind].sent += 1;
       if (row.status !== 'completed' || !row.filled_by_chat_id) continue;
       surveysFilled += 1;
+      kindAgg[kind].filled += 1;
       const a = parseJson<{ subscaleScores?: { id?: unknown; score?: unknown; max?: unknown }[] }>(row.analysis);
       for (const s of a?.subscaleScores ?? []) {
         const score = Number(s.score);
@@ -320,6 +331,9 @@ export function createCenterKpiService(deps: { db: DbClient }): CenterKpiService
         } else if (s.id === 'therapist') {
           therapistSum += (score / max) * 100;
           therapistCount += 1;
+        } else if (s.id === 'progress') {
+          progressSum += (score / max) * 100; // ۱.۲۵.۶۰ — پیشرفت مشاهده‌شده از نگاه خانواده
+          progressCount += 1;
         } else if (s.id === 'nps') {
           npsSum += score; // خود مقدار ۰-۱۰
           npsCount += 1;
@@ -333,7 +347,9 @@ export function createCenterKpiService(deps: { db: DbClient }): CenterKpiService
       response_rate: rate(surveysFilled, surveysSent),
       center_avg: centerCount > 0 ? round4(centerSum / centerCount) : null,
       therapist_avg: therapistCount > 0 ? round4(therapistSum / therapistCount) : null,
-      nps_avg: npsCount > 0 ? round4(npsSum / npsCount) : null
+      progress_avg: progressCount > 0 ? round4(progressSum / progressCount) : null,
+      nps_avg: npsCount > 0 ? round4(npsSum / npsCount) : null,
+      by_kind: kindAgg
     };
 
     return {

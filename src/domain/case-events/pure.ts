@@ -161,10 +161,13 @@ export const CaseEventTypeInputSchema = z.object({
 
 export const CaseEventTypeUpdateSchema = CaseEventTypeInputSchema.partial();
 
-/* ۱.۲۵.۵۹ — ساخت گروهی نظرسنجی رضایت: خانواده‌های انتخابی + درمانگر اختیاری مورد ارزیابی */
+/* ۱.۲۵.۵۹ — ساخت گروهی نظرسنجی رضایت: خانواده‌های انتخابی + درمانگر اختیاری مورد ارزیابی
+   ۱.۲۵.۶۰ — kind: انتخاب فرم ساخت‌یافته («discharge» پایان دوره/ترخیص، «progress» حین درمان)؛
+   پیش‌فرض «discharge» برای سازگاری کلاینت‌های کهنه (تا سرویس‌ورکر تازه نشیند). */
 export const SurveyCreateSchema = z.object({
   student_ids: z.array(z.string().min(1).max(64)).min(1, 'حداقل یک دانش‌آموز انتخاب کنید').max(200, 'حداکثر ۲۰۰ خانواده در هر بار'),
-  therapist_id: z.string().min(1).max(64).nullish()
+  therapist_id: z.string().min(1).max(64).nullish(),
+  kind: z.enum(['discharge', 'progress']).nullish()
 });
 
 function faNum(s: string | number): string {

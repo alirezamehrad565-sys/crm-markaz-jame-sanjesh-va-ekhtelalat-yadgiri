@@ -592,4 +592,18 @@ export const BUG_REPORT_SEVERITY_LABELS: Record<BugReportSeverity, string> = {
 
 // ─── ۱.۲۵.۵۹ — کلید فرم‌های سیستمی تازهٔ رجیستری (migration 0104) ───
 export const HOME_MONITOR_EVENT_KEY = 'ce-home-monitor-v2'; // پایش در خانه — هشت زیرمقیاس = هشت سازهٔ صورت‌بندی
-export const CENTER_SURVEY_EVENT_KEY = 'ce-center-survey-v1'; // نظرسنجی رضایت مرکز و درمانگر
+export const CENTER_SURVEY_EVENT_KEY = 'ce-center-survey-v1'; // نظرسنجی عمومی (۱.۲۵.۵۹ — از ۱.۲۵.۶۰ فقط تاریخی؛ ساخت تازه بازنشسته)
+
+// ─── ۱.۲۵.۶۰ — خانوادهٔ نظرسنجی‌های خانواده (ماژول مستقل فقط-مدیر) ───
+/** دو فرم سیستمی ساخت‌یافتهٔ تازه — پایان دوره (ترخیص/اتمام جلسه‌ها) و حین درمان */
+export const SURVEY_DISCHARGE_EVENT_KEY = 'ce-survey-discharge-v1';
+export const SURVEY_PROGRESS_EVENT_KEY = 'ce-survey-progress-v1';
+/** کلیدهای سازندهٔ خانوادهٔ نظرسنجی — فهرست، صف عمومی و KPI همه با همین مجموعه کار می‌کنند */
+export const FAMILY_SURVEY_EVENT_KEYS = [CENTER_SURVEY_EVENT_KEY, SURVEY_DISCHARGE_EVENT_KEY, SURVEY_PROGRESS_EVENT_KEY] as const;
+/** نوع نظرسنجی ← کلید رجیستری؛ «general» فقط برای رویدادهای تاریخی ce-center-survey-v1 */
+export const SURVEY_KIND_EVENT_KEYS = {
+  general: CENTER_SURVEY_EVENT_KEY,
+  discharge: SURVEY_DISCHARGE_EVENT_KEY,
+  progress: SURVEY_PROGRESS_EVENT_KEY
+} as const;
+export type SurveyKind = keyof typeof SURVEY_KIND_EVENT_KEYS;

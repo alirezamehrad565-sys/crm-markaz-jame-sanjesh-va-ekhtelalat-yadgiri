@@ -50,15 +50,20 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
     return c.json({ data: items }, 200);
   });
 
-  /* ۱.۲۵.۵۹ — نظرسنجی رضایت مرکز/درمانگر: ساخت گروهی فقط مدیر؛ فهرست برای مدیر/منشی */
+  /* ۱.۲۵.۵۹ — نظرسنجی رضایت مرکز/درمانگر: ساخت گروهی فقط مدیر
+     ۱.۲۵.۶۰ — فهرست هم فقط مدیر (ماژول مستقل «نظرسنجی خانواده‌ها») */
   app.post('/api/case-events/surveys', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     const body = SurveyCreateSchema.parse(await c.req.json<unknown>());
-    const result = await service.createSurveyEvents({ studentIds: body.student_ids, therapistId: body.therapist_id ?? null }, actor);
+    const result = await service.createSurveyEvents({
+      studentIds: body.student_ids,
+      therapistId: body.therapist_id ?? null,
+      kind: body.kind ?? 'discharge'
+    }, actor);
     return c.json({ data: result }, 201);
   });
 
-  app.get('/api/case-events/surveys', requireRole('manager', 'secretary'), async (c) => {
+  app.get('/api/case-events/surveys', requireRole('manager'), async (c) => {
     const items = await service.listSurveys();
     return c.json({ data: items }, 200);
   });

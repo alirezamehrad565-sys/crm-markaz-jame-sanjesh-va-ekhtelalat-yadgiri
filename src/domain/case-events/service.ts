@@ -1,6 +1,6 @@
 import { NotFoundError, ForbiddenError, ConflictError, ValidationError } from '@core/errors';
+import { FAMILY_SURVEY_EVENT_KEYS, FOLLOWUP_DEFAULT_DUE_DAYS, HOME_MONITOR_EVENT_KEY, SURVEY_KIND_EVENT_KEYS } from '@core/shared';
 import type { AuthContext } from '@core/shared';
-import { CENTER_SURVEY_EVENT_KEY, FOLLOWUP_DEFAULT_DUE_DAYS, HOME_MONITOR_EVENT_KEY } from '@core/shared';
 import type { DbClient } from '@core/db';
 import type {
   CaseEventAnalysis, CaseEventAudience, CaseEventBand, CaseEventDeps, CaseEventField, CaseEventFileMeta,
@@ -36,7 +36,8 @@ function summarySafePayload(payload: PayloadMap): PayloadMap {
   return rest;
 }
 
-/* ۱.۲۵.۵۹ — ردیف فهرست نظرسنجی + نگاشت به آیتم خروجی (درصد زیرمقیاس‌ها از analysis) */
+/* ۱.۲۵.۵۹ — ردیف فهرست نظرسنجی + نگاشت به آیتم خروجی (درصد زیرمقیاس‌ها از analysis)
+   ۱.۲۵.۶۰ — کلید/عنوان فرم هم می‌آید تا kind هر ردیف مشخص باشد */
 interface SurveyListRow {
   id: string;
   student_id: string;
@@ -51,6 +52,20 @@ interface SurveyListRow {
   fill_token: string | null;
   analysis: string | null;
   payload: string | null;
+  type_key: string;
+  type_title: string;
+}
+
+/* ۱.۲۵.۶۰ — کلید فرم ← نوع نظرسنجی؛ «general» فقط برای رویدادهای تاریخی ce-center-survey-v1 */
+function surveyKindOfKey(key: string): SurveyEventItem['kind'] {
+  if (key === SURVEY_KIND_EVENT_KEYS.progress) return 'progress';
+  if (key === SURVEY_KIND_EVENT_KEYS.discharge) return 'discharge';
+  return 'general';
+}
+
+/* ۱.۲۵.۶۰ — این رویداد جزو خانوادهٔ نظرسنجی‌های خانواده است؟ (صف عمومی و گاردهای نقش) */
+function isFamilySurveyKey(key: string): boolean {
+  return (FAMILY_SURVEY_EVENT_KEYS as readonly string[]).includes(key);
 }
 
 function surveyItemOf(r: SurveyListRow, publicBaseUrl: string | null): SurveyEventItem {
@@ -78,8 +93,12 @@ function surveyItemOf(r: SurveyListRow, publicBaseUrl: string | null): SurveyEve
     fillExpiresAt: r.fill_expires_at,
     sentAt: r.sent_at,
     link,
+    kind: surveyKindOfKey(r.type_key),
+    typeKey: r.type_key,
+    typeTitle: r.type_title,
     centerScore: pct('center'),
     therapistScore: pct('therapist'),
+    progressScore: pct('progress'),
     nps: nps && Number.isFinite(Number(nps.score)) ? Number(nps.score) : null,
     note: payload?.['sv_note']?.value ?? null
   };
@@ -880,6 +899,10 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
 
     async cancelEvent(id, actor) {
       const row = await getEventRow(id);
+      /* ۱.۲۵.۶۰ — لغو نظرسنجی خانواده فقط مدیر */
+      if (isFamilySurveyKey(row.type_key) && actor.role !== 'manager') {
+        throw new ForbiddenError('لغو نظرسنجی خانواده فقط از دسترسی مدیر مجاز است');
+      }
       assertEditor(actor, row.staff_id ?? row.created_by);
       if (!canTransitionStatus(row.status, 'cancelled')) {
         throw new ConflictError('این رویداد در وضعیت فعلی قابل لغو نیست');
@@ -1096,8 +1119,10 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
            JOIN students st ON st.id = e.student_id
           WHERE e.status = 'pending_family'
             AND t.category = 'checklist'
+            AND t.key NOT IN (${FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', ')})
             AND e.deleted_at IS NULL
-          ORDER BY e.occurred_at DESC LIMIT 100`
+          ORDER BY e.occurred_at DESC LIMIT 100`,
+      [...FAMILY_SURVEY_EVENT_KEYS]
       );
       const nowMs = now().getTime();
       return rows.map((r) => {
@@ -1123,6 +1148,10 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       if (!sendFn) throw new ConflictError('سرویس اعلان در دسترس نیست');
       const row = await getEventRow(eventId);
       const type = typeRowToRecord(await loadTypeRow(row.event_type_id));
+      /* ۱.۲۵.۶۰ — نظرسنجی خانواده فقط از ماژول مدیر ارسال/یادآوری می‌شود (دفاع در عمق — حتی اگر کلاینت قدیمی تلاش کند) */
+      if (isFamilySurveyKey(row.type_key) && actor.role !== 'manager') {
+        throw new ForbiddenError('ارسال نظرسنجی خانواده فقط از دسترسی مدیر مجاز است');
+      }
       if (row.type_category !== 'checklist') throw new ValidationError('این رویداد چک‌لیست نیست');
       if (row.status !== 'pending_family') throw new ConflictError('این چک‌لیست در انتظار پاسخ نیست (قبلاً پر یا لغو شده)');
       if (!type.familyFillable) throw new ValidationError('این فرم برای پر کردن از سمت گیرنده طراحی نشده است');
@@ -1353,10 +1382,12 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     },
 
     /* ۱.۲۵.۵۹ — نظرسنجی رضایت: ساخت گروهی رویداد در انتظار خانواده (مدیر) —
-       هر خانواده لینک امن ۷روزهٔ خودش را می‌گیرد؛ درمانگر مورد ارزیابی در staff_id می‌نشیند */
+       هر خانواده لینک امن ۷روزهٔ خودش را می‌گیرد؛ درمانگر مورد ارزیابی در staff_id می‌نشیند
+       ۱.۲۵.۶۰ — kind: فرم ساخت‌یافتهٔ «discharge» (پایان دوره) یا «progress» (حین درمان) */
     async createSurveyEvents(input, actor) {
-      const typeRow = await loadTypeRowByKey(CENTER_SURVEY_EVENT_KEY);
-      if (!typeRow || !typeRow.active) throw new ConflictError('نوع نظرسنجی در کتابخانه فعال نیست (migration 0104)');
+      const typeKey = SURVEY_KIND_EVENT_KEYS[input.kind];
+      const typeRow = await loadTypeRowByKey(typeKey);
+      if (!typeRow || !typeRow.active) throw new ConflictError('نوع نظرسنجی در کتابخانه فعال نیست (migration 0105)');
       const type = typeRowToRecord(typeRow);
       const ids = [...new Set(input.studentIds.map((x) => String(x).trim()).filter(Boolean))];
       if (ids.length === 0) throw new ValidationError('هیچ دانش‌آموزی انتخاب نشده است');
@@ -1395,7 +1426,8 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
             changes: {
               studentId: { from: null, to: studentId },
               therapistId: { from: null, to: therapistId ?? actor.staffId },
-              typeKey: { from: null, to: type.key }
+              typeKey: { from: null, to: type.key },
+              surveyKind: { from: null, to: input.kind }
             }
           });
         });
@@ -1411,8 +1443,12 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
           fillExpiresAt: fillExpires,
           sentAt: null,
           link: base ? `${base.replace(/\/+$/, '')}/public/case-events/${id}/fill?token=${token}` : null,
+          kind: input.kind,
+          typeKey: type.key,
+          typeTitle: type.title,
           centerScore: null,
           therapistScore: null,
+          progressScore: null,
           nps: null,
           note: null
         });
@@ -1422,16 +1458,18 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     },
 
     async listSurveys() {
+      const placeholders = FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', ');
       const rows = await db.query<SurveyListRow>(
         `SELECT e.id, e.student_id, e.staff_id, st.first_name || ' ' || st.last_name AS student_name, s.full_name AS staff_name,
-                e.status, e.occurred_at, e.created_at, e.fill_expires_at, e.sent_at, e.fill_token, e.analysis, e.payload
+                e.status, e.occurred_at, e.created_at, e.fill_expires_at, e.sent_at, e.fill_token, e.analysis, e.payload,
+                t.key AS type_key, t.title AS type_title
            FROM case_events e
            JOIN case_event_types t ON t.id = e.event_type_id
            JOIN students st ON st.id = e.student_id
            LEFT JOIN staff s ON s.id = e.staff_id
-          WHERE t.key = ? AND e.deleted_at IS NULL
+          WHERE t.key IN (${placeholders}) AND e.deleted_at IS NULL
           ORDER BY e.created_at DESC LIMIT 500`,
-        [CENTER_SURVEY_EVENT_KEY]
+        [...FAMILY_SURVEY_EVENT_KEYS]
       );
       const base = deps.publicBaseUrl?.trim() || null;
       return rows.map((r) => surveyItemOf(r, base));
