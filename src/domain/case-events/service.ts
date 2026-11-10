@@ -1,5 +1,5 @@
 import { NotFoundError, ForbiddenError, ConflictError, ValidationError } from '@core/errors';
-import { FAMILY_SURVEY_EVENT_KEYS, FOLLOWUP_DEFAULT_DUE_DAYS, HOME_MONITOR_EVENT_KEY, SURVEY_KIND_EVENT_KEYS } from '@core/shared';
+import { addDaysYmd, FAMILY_SURVEY_EVENT_KEYS, FOLLOWUP_DEFAULT_DUE_DAYS, HOME_MONITOR_EVENT_KEY, SURVEY_KIND_EVENT_KEYS, tehranDayRange, tehranTodayYmd } from '@core/shared';
 import type { AuthContext } from '@core/shared';
 import type { DbClient } from '@core/db';
 import type {
@@ -19,6 +19,8 @@ import {
   validateFileInput, validateProbeValues, validateReadCoreLevels, validateRehabFxValues, validateSensoryChipLevels, validateTypeDefinition, withTeacherName
 } from './pure';
 import type { ProbeArea } from './pure';
+import { buildSurveyInsights, surveyKindOfEventKey } from './survey-insights';
+import type { SurveyInsightRow } from './survey-insights';
 import { applyWechslerEngineToPayload, WISC4_EVENT_KEY } from '../wechsler-engine';
 
 type PayloadMap = Record<string, { value: string; label: string }>;
@@ -101,6 +103,54 @@ function surveyItemOf(r: SurveyListRow, publicBaseUrl: string | null): SurveyEve
     progressScore: pct('progress'),
     nps: nps && Number.isFinite(Number(nps.score)) ? Number(nps.score) : null,
     note: payload?.['sv_note']?.value ?? null
+  };
+}
+
+/* ۱.۲۵.۶۱ — ردیف تابلوی تحلیل: بدون توکن لینک (قانون طلایی) */
+interface SurveyInsightDbRow {
+  id: string;
+  student_name: string | null;
+  staff_id: string | null;
+  staff_name: string | null;
+  status: string;
+  filled_by_chat_id: string | null;
+  fill_expires_at: string | null;
+  created_at: string;
+  analysis: string | null;
+  payload: string | null;
+  type_key: string;
+}
+
+function insightRowOf(r: SurveyInsightDbRow, nowMs: number): SurveyInsightRow {
+  const a = parseJson<{ subscaleScores?: { id?: unknown; score?: unknown; max?: unknown }[] } | null>(r.analysis, null);
+  const sub = (id: string): { score?: unknown; max?: unknown } | null => a?.subscaleScores?.find((s) => s.id === id) ?? null;
+  const pctOf = (id: string): number | null => {
+    const s = sub(id);
+    const score = Number(s?.score);
+    const max = Number(s?.max);
+    if (!Number.isFinite(score) || !Number.isFinite(max) || max <= 0) return null;
+    return Math.round((score / max) * 100);
+  };
+  const nps = sub('nps');
+  const npsVal = Number(nps?.score);
+  const payload = parseJson<Record<string, { value?: string } | null> | null>(r.payload, null);
+  const noteRaw = payload?.['sv_note']?.value ?? null;
+  const answered = r.status === 'completed' && Boolean(r.filled_by_chat_id);
+  const expireMs = r.fill_expires_at ? Date.parse(r.fill_expires_at) : NaN;
+  return {
+    id: r.id,
+    kind: surveyKindOfEventKey(r.type_key),
+    answered,
+    expired: !answered && r.status === 'pending_family' && Number.isFinite(expireMs) && expireMs < nowMs,
+    createdAt: r.created_at,
+    staffId: r.staff_id,
+    staffName: r.staff_name,
+    studentName: r.student_name,
+    center: answered ? pctOf('center') : null,
+    therapist: answered ? pctOf('therapist') : null,
+    progress: answered ? pctOf('progress') : null,
+    nps: answered && Number.isFinite(npsVal) ? npsVal : null,
+    note: answered ? noteRaw : null
   };
 }
 
@@ -1473,6 +1523,30 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       );
       const base = deps.publicBaseUrl?.trim() || null;
       return rows.map((r) => surveyItemOf(r, base));
+    },
+
+    /* ۱.۲۵.۶۱ — تابلوی شاخص‌های نظرسنجی: پنجرهٔ جاری/قبلی + روند + تفکیک فرم +
+       کارنامهٔ درمانگران + تم‌های متن آزاد — فقط-عددی، بدون توکن لینک */
+    async surveyInsights(days) {
+      const nowMs = now().getTime();
+      const todayYmd = tehranTodayYmd(now());
+      const firstYmd = addDaysYmd(todayYmd, -(days - 1));
+      const earliestYmd = addDaysYmd(firstYmd, -days); // پنجرهٔ قبلی هم لازم است
+      const fromIso = tehranDayRange(earliestYmd).start;
+      const toIso = tehranDayRange(todayYmd).end;
+      const placeholders = FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', ');
+      const rows = await db.query<SurveyInsightDbRow>(
+        `SELECT e.id, st.first_name || ' ' || st.last_name AS student_name, e.staff_id, s.full_name AS staff_name, e.status, e.filled_by_chat_id, e.fill_expires_at,
+                e.created_at, e.analysis, e.payload, t.key AS type_key
+           FROM case_events e
+           JOIN case_event_types t ON t.id = e.event_type_id
+           JOIN students st ON st.id = e.student_id
+           LEFT JOIN staff s ON s.id = e.staff_id
+          WHERE t.key IN (${placeholders}) AND e.deleted_at IS NULL AND e.created_at >= ? AND e.created_at <= ?
+          ORDER BY e.created_at DESC LIMIT 2000`,
+        [...FAMILY_SURVEY_EVENT_KEYS, fromIso, toIso]
+      );
+      return buildSurveyInsights(rows.map((r) => insightRowOf(r, nowMs)), { days, now: now() });
     }
   };
 }
