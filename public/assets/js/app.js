@@ -113,6 +113,7 @@ const NAV = [
   { hash: '#/docs', label: 'نمون‌برگ‌ها و اسناد خام', icon: 'file', group: 'مرکز', roles: ['manager', 'secretary'] }, // 
   { hash: '#/finance', label: 'بودجه و مالی', icon: 'calculator', group: 'مرکز', roles: ['manager'] }, // 
   { hash: '#/case-event-types', label: 'فرم‌ها و پرسش‌نامه‌ها', icon: 'timeline', group: 'ارزیابی و درمان', roles: ['manager', 'secretary', 'therapist'] }, // — نام روایی
+  { hash: '#/family-surveys', label: 'نظرسنجی خانواده‌ها', icon: 'heart', group: 'مرکز', roles: ['manager'] }, // ۱.۲۵.۶۰ — ماژول مستقل فقط-مدیر + دو فرم ساخت‌یافته (پایان دوره/حین درمان)
   // ۱.۲۵.۵۶ — «شاخص‌های مرکز» از منو قطع و در تب «گزارش دوره» همین نمای #/reports تلفیق شد (خواست کارفرما)
   // ۱.۲۵.۵۳ — «کتابخانهٔ شبکه» از منو قطع شد؛ شارژ محتوا CP↔سامانه کاملاً نامرئی و خودکار سمت سرور می‌ماند (خواست کارفرما)
   { hash: '#/special-needs', label: 'نیازهای ویژه', icon: 'clip', group: 'مرکز', roles: ['manager', 'secretary'] },
@@ -446,6 +447,7 @@ register('#/docs', { title: 'نمون‌برگ‌ها و اسناد خام', ren
 register('#/docs/:id', { title: 'سند', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/docs.js'), 'renderDocsDetail', '#/docs/'), 'اسناد خام فقط برای دفتر مرکز (مدیر و منشی) فعال است.') }); // RBAC دوم در بک‌اند
 register('#/finance', { title: 'بودجه و مالی', render: managerOnly(lazyView(() => import('./views/finance.js'), 'renderFinance', '#/finance')) }); // فقط مدیر
 register('#/case-event-types', { title: 'فرم‌ها و پرسش‌نامه‌ها', render: roleOnly(['manager', 'secretary', 'therapist'], lazyView(() => import('./views/case-event-types.js'), 'renderCaseEventTypes', '#/case-event-types'), 'این بخش برای همکاران مرکز فعال است.') }); // //
+register('#/family-surveys', { title: 'نظرسنجی خانواده‌ها', render: managerOnly(lazyView(() => import('./views/family-surveys.js'), 'renderFamilySurveys', '#/family-surveys')) }); // ۱.۲۵.۶۰ — ماژول مستقل فقط-مدیر
 register('#/special-needs', { title: 'نیازهای ویژه', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/special-needs.js'), 'renderSpecialNeeds', '#/special-needs')) }); // لایهٔ دوم RBAC
 // ۱.۲۵.۵۶ — روت مستقل «#/center-kpi» حذف شد؛ همان بلوک در انتهای تب «گزارش دوره» (#/reports) رندر می‌شود
 // ۱.۲۵.۵۳ — روت «#/network-library» حذف شد؛ درخواست مستقیم این هش به نمای ۴۰۴ می‌رود

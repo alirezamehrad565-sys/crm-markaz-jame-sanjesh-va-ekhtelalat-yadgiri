@@ -209,10 +209,14 @@ export interface MonitorFocusSnapshot {
 /** تزریق‌شده از موتور بالینی در روت مرکزی — وابستگی مستقیم بین دو ماژول دامنه ممنوع است */
 export type MonitorFocusProvider = (studentId: string, actor: AuthContext) => Promise<MonitorFocusSnapshot | null>;
 
-/* ۱.۲۵.۵۹ — نظرسنجی رضایت مرکز/درمانگر: ساخت گروهی رویداد در انتظار خانواده + فهرست مدیر */
+/* ۱.۲۵.۵۹ — نظرسنجی رضایت مرکز/درمانگر: ساخت گروهی رویداد در انتظار خانواده + فهرست مدیر
+   ۱.۲۵.۶۰ — kind: فرم ساخت‌یافتهٔ نظرسنجی (پایان دوره/حین درمان؛ «general» فقط تاریخی) */
+export type SurveyEventKind = 'general' | 'discharge' | 'progress';
+
 export interface SurveyCreateInput {
   studentIds: string[];
   therapistId?: string | null;
+  kind: 'discharge' | 'progress';
 }
 
 export interface SurveyEventItem {
@@ -227,8 +231,12 @@ export interface SurveyEventItem {
   fillExpiresAt: string | null;
   sentAt: string | null;
   link: string | null;
+  kind: SurveyEventKind;        // ۱.۲۵.۶۰ — فرم نظرسنجی (پایان دوره/حین درمان/تاریخی)
+  typeKey: string;              // ۱.۲۵.۶۰ — کلید رجیستری فرم
+  typeTitle: string;            // ۱.۲۵.۶۰ — عنوان روایی فرم
   centerScore: number | null;   // درصد ۰-۱۰۰ زیرمقیاس «مرکز»
   therapistScore: number | null; // درصد ۰-۱۰۰ زیرمقیاس «درمانگر»
+  progressScore: number | null; // ۱.۲۵.۶۰ — درصد ۰-۱۰۰ زیرمقیاس «پیشرفت مشاهده‌شده»
   nps: number | null;           // توصیه ۰-۱۰
   note: string | null;          // متن آزاد خانواده
 }

@@ -11,6 +11,7 @@ interface TypeRow {
   id: string;
   key: string;
   category: string;
+  active: number; // ۱.۲۵.۵۹ — آزمون بازنشستگی نرم رجیستری به active نیاز دارد
   fields: CaseEventField[];
   bands: { max: number; label: string; color?: string; advice?: string }[] | null;
   subscales: CaseEventSubscale[] | null;

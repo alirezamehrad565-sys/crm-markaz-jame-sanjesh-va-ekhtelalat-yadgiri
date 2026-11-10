@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.59";
+var APP_VERSION = "1.25.60";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -6293,6 +6293,14 @@ var BUG_REPORT_AREAS = [
 var BUG_REPORT_AREA_IDS = BUG_REPORT_AREAS.map((a) => a.id);
 var HOME_MONITOR_EVENT_KEY = "ce-home-monitor-v2";
 var CENTER_SURVEY_EVENT_KEY = "ce-center-survey-v1";
+var SURVEY_DISCHARGE_EVENT_KEY = "ce-survey-discharge-v1";
+var SURVEY_PROGRESS_EVENT_KEY = "ce-survey-progress-v1";
+var FAMILY_SURVEY_EVENT_KEYS = [CENTER_SURVEY_EVENT_KEY, SURVEY_DISCHARGE_EVENT_KEY, SURVEY_PROGRESS_EVENT_KEY];
+var SURVEY_KIND_EVENT_KEYS = {
+  general: CENTER_SURVEY_EVENT_KEY,
+  discharge: SURVEY_DISCHARGE_EVENT_KEY,
+  progress: SURVEY_PROGRESS_EVENT_KEY
+};
 
 // src/core/shared/national-id.ts
 var PERSIAN_DIGITS = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
@@ -18983,7 +18991,8 @@ var CaseEventTypeInputSchema = external_exports.object({
 var CaseEventTypeUpdateSchema = CaseEventTypeInputSchema.partial();
 var SurveyCreateSchema = external_exports.object({
   student_ids: external_exports.array(external_exports.string().min(1).max(64)).min(1, "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F").max(200, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u062F\u0631 \u0647\u0631 \u0628\u0627\u0631"),
-  therapist_id: external_exports.string().min(1).max(64).nullish()
+  therapist_id: external_exports.string().min(1).max(64).nullish(),
+  kind: external_exports.enum(["discharge", "progress"]).nullish()
 });
 function faNum2(s) {
   return String(s).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
@@ -21770,6 +21779,16 @@ function summarySafePayload2(payload) {
   return rest;
 }
 __name(summarySafePayload2, "summarySafePayload");
+function surveyKindOfKey(key) {
+  if (key === SURVEY_KIND_EVENT_KEYS.progress) return "progress";
+  if (key === SURVEY_KIND_EVENT_KEYS.discharge) return "discharge";
+  return "general";
+}
+__name(surveyKindOfKey, "surveyKindOfKey");
+function isFamilySurveyKey(key) {
+  return FAMILY_SURVEY_EVENT_KEYS.includes(key);
+}
+__name(isFamilySurveyKey, "isFamilySurveyKey");
 function surveyItemOf(r, publicBaseUrl) {
   const a = parseJson(r.analysis, null);
   const sub = /* @__PURE__ */ __name((id) => a?.subscaleScores?.find((s) => s.id === id) ?? null, "sub");
@@ -21793,8 +21812,12 @@ function surveyItemOf(r, publicBaseUrl) {
     fillExpiresAt: r.fill_expires_at,
     sentAt: r.sent_at,
     link,
+    kind: surveyKindOfKey(r.type_key),
+    typeKey: r.type_key,
+    typeTitle: r.type_title,
     centerScore: pct("center"),
     therapistScore: pct("therapist"),
+    progressScore: pct("progress"),
     nps: nps && Number.isFinite(Number(nps.score)) ? Number(nps.score) : null,
     note: payload?.["sv_note"]?.value ?? null
   };
@@ -22528,6 +22551,9 @@ function createCaseEventsService(deps) {
     },
     async cancelEvent(id, actor) {
       const row = await getEventRow(id);
+      if (isFamilySurveyKey(row.type_key) && actor.role !== "manager") {
+        throw new ForbiddenError("\u0644\u063A\u0648 \u0646\u0638\u0631\u0633\u0646\u062C\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0641\u0642\u0637 \u0627\u0632 \u062F\u0633\u062A\u0631\u0633\u06CC \u0645\u062F\u06CC\u0631 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
+      }
       assertEditor(actor, row.staff_id ?? row.created_by);
       if (!canTransitionStatus(row.status, "cancelled")) {
         throw new ConflictError("\u0627\u06CC\u0646 \u0631\u0648\u06CC\u062F\u0627\u062F \u062F\u0631 \u0648\u0636\u0639\u06CC\u062A \u0641\u0639\u0644\u06CC \u0642\u0627\u0628\u0644 \u0644\u063A\u0648 \u0646\u06CC\u0633\u062A");
@@ -22723,8 +22749,10 @@ function createCaseEventsService(deps) {
            JOIN students st ON st.id = e.student_id
           WHERE e.status = 'pending_family'
             AND t.category = 'checklist'
+            AND t.key NOT IN (${FAMILY_SURVEY_EVENT_KEYS.map(() => "?").join(", ")})
             AND e.deleted_at IS NULL
-          ORDER BY e.occurred_at DESC LIMIT 100`
+          ORDER BY e.occurred_at DESC LIMIT 100`,
+        [...FAMILY_SURVEY_EVENT_KEYS]
       );
       const nowMs = now().getTime();
       return rows.map((r) => {
@@ -22749,6 +22777,9 @@ function createCaseEventsService(deps) {
       if (!sendFn) throw new ConflictError("\u0633\u0631\u0648\u06CC\u0633 \u0627\u0639\u0644\u0627\u0646 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A");
       const row = await getEventRow(eventId);
       const type = typeRowToRecord(await loadTypeRow(row.event_type_id));
+      if (isFamilySurveyKey(row.type_key) && actor.role !== "manager") {
+        throw new ForbiddenError("\u0627\u0631\u0633\u0627\u0644 \u0646\u0638\u0631\u0633\u0646\u062C\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0641\u0642\u0637 \u0627\u0632 \u062F\u0633\u062A\u0631\u0633\u06CC \u0645\u062F\u06CC\u0631 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
+      }
       if (row.type_category !== "checklist") throw new ValidationError("\u0627\u06CC\u0646 \u0631\u0648\u06CC\u062F\u0627\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0646\u06CC\u0633\u062A");
       if (row.status !== "pending_family") throw new ConflictError("\u0627\u06CC\u0646 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u067E\u0627\u0633\u062E \u0646\u06CC\u0633\u062A (\u0642\u0628\u0644\u0627\u064B \u067E\u0631 \u06CC\u0627 \u0644\u063A\u0648 \u0634\u062F\u0647)");
       if (!type.familyFillable) throw new ValidationError("\u0627\u06CC\u0646 \u0641\u0631\u0645 \u0628\u0631\u0627\u06CC \u067E\u0631 \u06A9\u0631\u062F\u0646 \u0627\u0632 \u0633\u0645\u062A \u06AF\u06CC\u0631\u0646\u062F\u0647 \u0637\u0631\u0627\u062D\u06CC \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
@@ -22952,10 +22983,12 @@ function createCaseEventsService(deps) {
       return eventRowToRecord(await getEventRow(id));
     },
     /* ۱.۲۵.۵۹ — نظرسنجی رضایت: ساخت گروهی رویداد در انتظار خانواده (مدیر) —
-       هر خانواده لینک امن ۷روزهٔ خودش را می‌گیرد؛ درمانگر مورد ارزیابی در staff_id می‌نشیند */
+       هر خانواده لینک امن ۷روزهٔ خودش را می‌گیرد؛ درمانگر مورد ارزیابی در staff_id می‌نشیند
+       ۱.۲۵.۶۰ — kind: فرم ساخت‌یافتهٔ «discharge» (پایان دوره) یا «progress» (حین درمان) */
     async createSurveyEvents(input, actor) {
-      const typeRow = await loadTypeRowByKey(CENTER_SURVEY_EVENT_KEY);
-      if (!typeRow || !typeRow.active) throw new ConflictError("\u0646\u0648\u0639 \u0646\u0638\u0631\u0633\u0646\u062C\u06CC \u062F\u0631 \u06A9\u062A\u0627\u0628\u062E\u0627\u0646\u0647 \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A (migration 0104)");
+      const typeKey = SURVEY_KIND_EVENT_KEYS[input.kind];
+      const typeRow = await loadTypeRowByKey(typeKey);
+      if (!typeRow || !typeRow.active) throw new ConflictError("\u0646\u0648\u0639 \u0646\u0638\u0631\u0633\u0646\u062C\u06CC \u062F\u0631 \u06A9\u062A\u0627\u0628\u062E\u0627\u0646\u0647 \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A (migration 0105)");
       const type = typeRowToRecord(typeRow);
       const ids = [...new Set(input.studentIds.map((x) => String(x).trim()).filter(Boolean))];
       if (ids.length === 0) throw new ValidationError("\u0647\u06CC\u0686 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u06CC \u0627\u0646\u062A\u062E\u0627\u0628 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
@@ -22991,7 +23024,8 @@ function createCaseEventsService(deps) {
             changes: {
               studentId: { from: null, to: studentId },
               therapistId: { from: null, to: therapistId ?? actor.staffId },
-              typeKey: { from: null, to: type.key }
+              typeKey: { from: null, to: type.key },
+              surveyKind: { from: null, to: input.kind }
             }
           });
         });
@@ -23007,8 +23041,12 @@ function createCaseEventsService(deps) {
           fillExpiresAt: fillExpires,
           sentAt: null,
           link: base ? `${base.replace(/\/+$/, "")}/public/case-events/${id}/fill?token=${token}` : null,
+          kind: input.kind,
+          typeKey: type.key,
+          typeTitle: type.title,
           centerScore: null,
           therapistScore: null,
+          progressScore: null,
           nps: null,
           note: null
         });
@@ -23017,16 +23055,18 @@ function createCaseEventsService(deps) {
       return { created };
     },
     async listSurveys() {
+      const placeholders = FAMILY_SURVEY_EVENT_KEYS.map(() => "?").join(", ");
       const rows = await db.query(
         `SELECT e.id, e.student_id, e.staff_id, st.first_name || ' ' || st.last_name AS student_name, s.full_name AS staff_name,
-                e.status, e.occurred_at, e.created_at, e.fill_expires_at, e.sent_at, e.fill_token, e.analysis, e.payload
+                e.status, e.occurred_at, e.created_at, e.fill_expires_at, e.sent_at, e.fill_token, e.analysis, e.payload,
+                t.key AS type_key, t.title AS type_title
            FROM case_events e
            JOIN case_event_types t ON t.id = e.event_type_id
            JOIN students st ON st.id = e.student_id
            LEFT JOIN staff s ON s.id = e.staff_id
-          WHERE t.key = ? AND e.deleted_at IS NULL
+          WHERE t.key IN (${placeholders}) AND e.deleted_at IS NULL
           ORDER BY e.created_at DESC LIMIT 500`,
-        [CENTER_SURVEY_EVENT_KEY]
+        [...FAMILY_SURVEY_EVENT_KEYS]
       );
       const base = deps.publicBaseUrl?.trim() || null;
       return rows.map((r) => surveyItemOf(r, base));
@@ -23278,10 +23318,14 @@ function registerCaseEventsRoutes(app, service) {
   app.post("/api/case-events/surveys", requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);
     const body = SurveyCreateSchema.parse(await c.req.json());
-    const result = await service.createSurveyEvents({ studentIds: body.student_ids, therapistId: body.therapist_id ?? null }, actor);
+    const result = await service.createSurveyEvents({
+      studentIds: body.student_ids,
+      therapistId: body.therapist_id ?? null,
+      kind: body.kind ?? "discharge"
+    }, actor);
     return c.json({ data: result }, 201);
   });
-  app.get("/api/case-events/surveys", requireRole("manager", "secretary"), async (c) => {
+  app.get("/api/case-events/surveys", requireRole("manager"), async (c) => {
     const items = await service.listSurveys();
     return c.json({ data: items }, 200);
   });
@@ -44029,14 +44073,14 @@ function createCenterKpiService(deps) {
         `SELECT COUNT(*) AS total,
                 COALESCE(SUM(CASE WHEN ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS filled
          FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
-         WHERE cet.family_fillable = 1 AND cet.key != ? AND ce.created_at >= ? AND ce.created_at <= ?`,
-        [CENTER_SURVEY_EVENT_KEY, fromIso, toIso]
+         WHERE cet.family_fillable = 1 AND cet.key NOT IN (${FAMILY_SURVEY_EVENT_KEYS.map(() => "?").join(", ")}) AND ce.created_at >= ? AND ce.created_at <= ?`,
+        [...FAMILY_SURVEY_EVENT_KEYS, fromIso, toIso]
       ),
       db.query(
         `SELECT ce.analysis FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
-         WHERE cet.family_fillable = 1 AND cet.key != ? AND ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL
+         WHERE cet.family_fillable = 1 AND cet.key NOT IN (${FAMILY_SURVEY_EVENT_KEYS.map(() => "?").join(", ")}) AND ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL
            AND ce.created_at >= ? AND ce.created_at <= ?`,
-        [CENTER_SURVEY_EVENT_KEY, fromIso, toIso]
+        [...FAMILY_SURVEY_EVENT_KEYS, fromIso, toIso]
       )
     ]);
     let scoreSum = 0;
@@ -44063,22 +44107,30 @@ function createCenterKpiService(deps) {
       family_response_rate: rate(familyAgg?.filled ?? 0, familyTotal),
       family_avg_score: scoreCount > 0 ? round4(scoreSum / scoreCount) : null
     };
+    const surveyPlaceholders = FAMILY_SURVEY_EVENT_KEYS.map(() => "?").join(", ");
     const surveyRows = await db.query(
-      `SELECT ce.status, ce.filled_by_chat_id, ce.analysis
+      `SELECT ce.status, ce.filled_by_chat_id, ce.analysis, cet.key AS type_key
          FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
-        WHERE cet.key = ? AND ce.deleted_at IS NULL AND ce.created_at >= ? AND ce.created_at <= ?`,
-      [CENTER_SURVEY_EVENT_KEY, fromIso, toIso]
+        WHERE cet.key IN (${surveyPlaceholders}) AND ce.deleted_at IS NULL AND ce.created_at >= ? AND ce.created_at <= ?`,
+      [...FAMILY_SURVEY_EVENT_KEYS, fromIso, toIso]
     );
     let surveysFilled = 0;
     let centerSum = 0;
     let centerCount = 0;
     let therapistSum = 0;
     let therapistCount = 0;
+    let progressSum = 0;
+    let progressCount = 0;
     let npsSum = 0;
     let npsCount = 0;
+    const kindAgg = { general: { sent: 0, filled: 0 }, discharge: { sent: 0, filled: 0 }, progress: { sent: 0, filled: 0 } };
+    const kindOfKey = /* @__PURE__ */ __name((key) => key === SURVEY_KIND_EVENT_KEYS.discharge ? "discharge" : key === SURVEY_KIND_EVENT_KEYS.progress ? "progress" : "general", "kindOfKey");
     for (const row of surveyRows) {
+      const kind = kindOfKey(row.type_key);
+      kindAgg[kind].sent += 1;
       if (row.status !== "completed" || !row.filled_by_chat_id) continue;
       surveysFilled += 1;
+      kindAgg[kind].filled += 1;
       const a = parseJson5(row.analysis);
       for (const s of a?.subscaleScores ?? []) {
         const score = Number(s.score);
@@ -44090,6 +44142,9 @@ function createCenterKpiService(deps) {
         } else if (s.id === "therapist") {
           therapistSum += score / max * 100;
           therapistCount += 1;
+        } else if (s.id === "progress") {
+          progressSum += score / max * 100;
+          progressCount += 1;
         } else if (s.id === "nps") {
           npsSum += score;
           npsCount += 1;
@@ -44103,7 +44158,9 @@ function createCenterKpiService(deps) {
       response_rate: rate(surveysFilled, surveysSent),
       center_avg: centerCount > 0 ? round4(centerSum / centerCount) : null,
       therapist_avg: therapistCount > 0 ? round4(therapistSum / therapistCount) : null,
-      nps_avg: npsCount > 0 ? round4(npsSum / npsCount) : null
+      progress_avg: progressCount > 0 ? round4(progressSum / progressCount) : null,
+      nps_avg: npsCount > 0 ? round4(npsSum / npsCount) : null,
+      by_kind: kindAgg
     };
     return {
       window,
