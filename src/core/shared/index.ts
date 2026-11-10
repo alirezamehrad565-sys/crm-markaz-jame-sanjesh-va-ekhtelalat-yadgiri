@@ -107,7 +107,11 @@ export {
   UpdateExercisePackageSchema,
   CreateExerciseBatchSchema,
   ScoringWeightsSchema,
-  ScoringConfigSchema
+  ScoringConfigSchema,
+  BotTokenUpdateSchema, // ۱.۲۵.۵۷ — ثبت/پاک‌کردن توکن بات مستقیم از کاربر
+  SCREENING_READINESS_MAX, // ۱.۲۵.۵۷ — سقف ۳۴ نمای فرمت کلاینت هم است
+  SCREENING_NOTE_MAX,
+  BOT_ABOUT_MAX
 } from './schemas';
 
 export type {

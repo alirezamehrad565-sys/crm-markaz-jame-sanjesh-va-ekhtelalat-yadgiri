@@ -259,6 +259,8 @@ export const SETTING_KEYS = {
   NOTIFY_BATCH_HOUR: 'notify_batch_hour',
   SCORING_CONFIG: 'scoring_config',
   BOT_USERNAME: 'bot_username',
+  BOT_ABOUT: 'bot_about', // ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات، قابل ویرایش توسط کاربر
+  BALE_BOT_TOKEN: 'bale_bot_token', // ۱.۲۵.۵۷ — توکن بات وقتی env نیست، از DB؛ هرگز در پاسخ GET نمی‌رود
   BACKUP_DESTINATIONS: 'backup_destinations', // مقصدهای ارسال پشتیبان به بله (JSON)
   BACKUP_AUTO_SEND: 'backup_auto_send' // پشتیبان خودکار شبانه (JSON)
 } as const;
@@ -280,7 +282,8 @@ export const DEFAULT_SETTINGS = {
   [SETTING_KEYS.SCREENING_TARGETS]: [],
   [SETTING_KEYS.CLINIC_PHONE]: '',
   [SETTING_KEYS.NOTIFY_BATCH_HOUR]: 18,
-  [SETTING_KEYS.BOT_USERNAME]: ''
+  [SETTING_KEYS.BOT_USERNAME]: '',
+  [SETTING_KEYS.BOT_ABOUT]: '' // خالی = متن پیش‌فرض خودِ سامانه در templates
 } as const;
 
 export interface ScreeningTargetConfig {

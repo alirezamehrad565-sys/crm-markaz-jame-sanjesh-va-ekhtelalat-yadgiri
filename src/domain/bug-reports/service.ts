@@ -20,6 +20,9 @@ interface BugReportRow {
   forward_error: string | null;
   created_at: string;
   forwarded_at: string | null;
+  reply_text: string | null;  /* ۱.۲۵.۵۷ */
+  reply_by: string | null;    /* ۱.۲۵.۵۷ */
+  reply_at: string | null;    /* ۱.۲۵.۵۷ */
 }
 
 function recordOf(row: BugReportRow): BugReportRecord {
@@ -42,7 +45,10 @@ function recordOf(row: BugReportRow): BugReportRecord {
     status: row.status === 'sent' ? 'sent' : 'open',
     forwardError: row.forward_error,
     createdAt: row.created_at,
-    forwardedAt: row.forwarded_at
+    forwardedAt: row.forwarded_at,
+    replyText: row.reply_text ?? null,
+    replyBy: row.reply_by ?? null,
+    replyAt: row.reply_at ?? null
   };
 }
 
@@ -116,6 +122,28 @@ export function createBugReportService(db: DbClient, audit: AuditWriter): BugRep
 
     async markForwardError(id, error) {
       await db.execute('UPDATE bug_reports SET forward_error = ? WHERE id = ?', [error.slice(0, 300), id]);
+    },
+
+    /* ۱.۲۵.۵۷ — UPSERT پاسخ پشتیبانی با کلید خودِ گزارش (id سمت نود = node_report_id سمت CP).
+       گارد تازگی: اگر ردیف از قبل reply_at تازه‌تر دارد، پاسخ قدیمی‌تر بازنویسی نمی‌شود —
+       ترتیب آیتم‌های pull تضمین‌شده نیست و دوباره‌کاری pull هم بی‌اثر می‌ماند. */
+    async applyReplies(items): Promise<number> {
+      let updated = 0;
+      for (const item of items) {
+        if (!item || typeof item.id !== 'string' || item.id.length === 0) continue;
+        const text = typeof item.reply_text === 'string' && item.reply_text.trim() ? item.reply_text.trim() : null;
+        const by = typeof item.reply_by === 'string' && item.reply_by.trim() ? item.reply_by.trim() : null;
+        const at = typeof item.reply_at === 'string' && item.reply_at.trim() ? item.reply_at.trim() : null;
+        const res = await db.execute(
+          `UPDATE bug_reports
+              SET reply_text = ?, reply_by = ?, reply_at = ?
+            WHERE id = ?
+              AND (reply_at IS NULL OR ? > reply_at)`,
+          [text, by, at, item.id, at ?? '']
+        );
+        updated += res.meta?.changes ?? 0;
+      }
+      return updated;
     }
   };
 }

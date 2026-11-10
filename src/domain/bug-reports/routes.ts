@@ -70,6 +70,9 @@ function shape(rec: {
   forwardError: string | null;
   createdAt: string;
   forwardedAt: string | null;
+  replyText: string | null;
+  replyBy: string | null;
+  replyAt: string | null;
 }) {
   return {
     id: rec.id,
@@ -82,6 +85,9 @@ function shape(rec: {
     status: rec.status,
     forward_error: rec.forwardError,
     created_at: rec.createdAt,
-    forwarded_at: rec.forwardedAt
+    forwarded_at: rec.forwardedAt,
+    reply_text: rec.replyText,
+    reply_by: rec.replyBy,
+    reply_at: rec.replyAt
   };
 }

@@ -1261,7 +1261,7 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   }
 }
 
-/* ۱.۲۵.۵۰ — دو فیلد اختیاری زیر ثبت سریع: تاریخ تولد + نمرهٔ آمادگی تحصیلی */
+/* ۱.۲۵.۵۰/۵۷ — فیلدهای اختیاری زیر ثبت سریع: تاریخ تولد + نمرهٔ آمادگی تحصیلی (از ۳۴) + توضیحات */
 .sanj-extra {
   display: grid;
   gap: var(--sp-3);
@@ -1288,6 +1288,94 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .sanj-extra__opt {
   font-weight: 400;
   opacity: 0.75;
+}
+
+/* ۱.۲۵.۵۷ — کشوی توضیح بسیار کم‌رنگ (الگوی «کلی ①»: توضیح بلند جمع شود، در دسترس بماند) */
+.hint-collapse {
+  margin: 0 0 var(--sp-3);
+  border: 0;
+}
+.hint-collapse > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  opacity: 0.72;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+.hint-collapse > summary::-webkit-details-marker { display: none; }
+.hint-collapse > summary::after {
+  content: '';
+  width: 0;
+  height: 0;
+  border-inline-start: 4px solid currentColor;
+  border-block: 3.5px solid transparent;
+  transform: rotate(-90deg); /* RTL: فلش رو به پایین در حالت بسته */
+  transition: transform 0.15s ease;
+}
+.hint-collapse[open] > summary::after { transform: rotate(90deg); }
+.hint-collapse > summary:hover { opacity: 1; }
+.hint-collapse > .hint-text {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+/* ۱.۲۵.۵۷ — دفتر روزبه‌روز تک‌نفرهٔ حضور همکاران (فقط روزهای کاری هر همکار) */
+.att-ledger {
+  display: grid;
+  gap: var(--sp-3);
+}
+.att-ledger__row {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: start;
+  padding-block: var(--sp-2);
+}
+.att-ledger__row + .att-ledger__row {
+  border-top: 1px dashed var(--border);
+}
+.att-ledger__person {
+  display: grid;
+  gap: 2px;
+  padding-top: 2px;
+}
+.att-ledger__person b {
+  font-size: var(--fs-sm);
+}
+.att-ledger__strip {
+  display: flex;
+  gap: var(--sp-2);
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.att-ledger__cell {
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  min-width: 34px;
+  padding: 4px 6px;
+  border-radius: var(--radius-2, 8px);
+  background: var(--surface-2, transparent);
+}
+.att-ledger__day {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .att-ledger__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .att-ledger__person {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-2);
+  }
 }
 
 @media (max-width: 640px) {

@@ -7,5 +7,6 @@ export type {
   BugReportService,
   BugReportSeverity,
   BugReportStatus,
-  BugReportCreateInput
+  BugReportCreateInput,
+  BugReportReplyItem
 } from './types';

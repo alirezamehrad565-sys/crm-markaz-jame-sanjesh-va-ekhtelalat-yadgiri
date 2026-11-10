@@ -4,7 +4,7 @@ import { el, icon, toast, toastError, emptyState, errorState, confirmModal } fro
 
 const GRID_START_MINUTE = 6 * 60;   // ۰۶:۰۰
 const GRID_END_MINUTE = 21 * 60;    // ۲۱:۰۰
-const SHIFT_BREAK_MINUTE = 14 * 60; // — مرز نمایشی شیفت صبح/عصر
+const SHIFT_BREAK_MINUTE = 13 * 60; // — مرز نمایشی شیفت صبح/عصر (۱.۲۵.۵۷: از ۱۳:۰۰، به خواست کارفرما)
 const SLOT_MINUTES = 30;            // رزولوشن نقاشی (مضرب ۱۵ دقیقه‌ایِ اسکیما)
 const SLOT_COUNT = (GRID_END_MINUTE - GRID_START_MINUTE) / SLOT_MINUTES; // ۳۰ ردیف
 

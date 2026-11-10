@@ -54,6 +54,7 @@ interface Row {
   tags: string;
   birth_date: string | null;      /* ۱.۲۵.۵۰ */
   readiness_score: number | null; /* ۱.۲۵.۵۰ */
+  note: string | null;            /* ۱.۲۵.۵۷ */
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -68,6 +69,7 @@ function rowToEntry(r: Row): ScreeningEntry {
     tags: parseTagsJson(r.tags),
     birthDate: r.birth_date ?? null,
     readinessScore: r.readiness_score ?? null,
+    note: r.note ?? null,
     createdBy: r.created_by,
     creatorName: r.creator_name,
     createdAt: r.created_at,
@@ -76,7 +78,7 @@ function rowToEntry(r: Row): ScreeningEntry {
 }
 
 const SELECT = `
-  SELECT e.id, e.name, e.day, e.tags, e.birth_date, e.readiness_score,
+  SELECT e.id, e.name, e.day, e.tags, e.birth_date, e.readiness_score, e.note,
          e.created_by, e.created_at, e.updated_at,
          st.full_name AS creator_name
     FROM screening_entries e
@@ -192,15 +194,18 @@ export function createScreeningService(deps: ScreeningDeps) {
         typeof input.readiness_score === 'number' && Number.isFinite(input.readiness_score)
           ? Math.trunc(input.readiness_score)
           : null;
+      /* ۱.۲۵.۵۷ — توضیحات اختیاری؛ خالی/undefined = null */
+      const note =
+        typeof input.note === 'string' && input.note.trim().length > 0 ? input.note.trim() : null;
       const id = crypto.randomUUID();
       const now = nowSql();
 
       await db.transaction(async (tx) => {
         await tx.execute(
           `INSERT INTO screening_entries
-             (id, name, day, tags, birth_date, readiness_score, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, name, day, JSON.stringify(tags), birthDate, readinessScore, actor.staffId, now, now]
+             (id, name, day, tags, birth_date, readiness_score, note, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, name, day, JSON.stringify(tags), birthDate, readinessScore, note, actor.staffId, now, now]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -211,7 +216,8 @@ export function createScreeningService(deps: ScreeningDeps) {
             day: { from: null, to: day },
             tags: { from: null, to: tags.join('|') },
             birth_date: { from: null, to: birthDate },
-            readiness_score: { from: null, to: readinessScore }
+            readiness_score: { from: null, to: readinessScore },
+            note: { from: null, to: note }
           }
         });
       });
@@ -254,13 +260,20 @@ export function createScreeningService(deps: ScreeningDeps) {
           : typeof input.readiness_score === 'number' && Number.isFinite(input.readiness_score)
             ? Math.trunc(input.readiness_score)
             : null;
+      /* ۱.۲۵.۵۷ — توضیحات: undefined = دست‌نخورده؛ خالی/null = پاک‌کردن */
+      const note =
+        input.note === undefined
+          ? current.note
+          : typeof input.note === 'string' && input.note.trim().length > 0
+            ? input.note.trim()
+            : null;
 
       await db.transaction(async (tx) => {
         await tx.execute(
           `UPDATE screening_entries
-             SET name = ?, tags = ?, birth_date = ?, readiness_score = ?, updated_at = ?
+             SET name = ?, tags = ?, birth_date = ?, readiness_score = ?, note = ?, updated_at = ?
            WHERE id = ?`,
-          [name, JSON.stringify(tags), birthDate, readinessScore, nowSql(), id]
+          [name, JSON.stringify(tags), birthDate, readinessScore, note, nowSql(), id]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -270,7 +283,8 @@ export function createScreeningService(deps: ScreeningDeps) {
           changes: {
             tags: { from: prevTags.join('|'), to: tags.join('|') },
             birth_date: { from: current.birth_date, to: birthDate },
-            readiness_score: { from: current.readiness_score, to: readinessScore }
+            readiness_score: { from: current.readiness_score, to: readinessScore },
+            note: { from: current.note, to: note }
           }
         });
       });

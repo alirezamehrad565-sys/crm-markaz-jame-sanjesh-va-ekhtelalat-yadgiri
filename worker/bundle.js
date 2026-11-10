@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.56";
+var APP_VERSION = "1.25.57";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -6079,6 +6079,10 @@ var SETTING_KEYS = {
   NOTIFY_BATCH_HOUR: "notify_batch_hour",
   SCORING_CONFIG: "scoring_config",
   BOT_USERNAME: "bot_username",
+  BOT_ABOUT: "bot_about",
+  // ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات، قابل ویرایش توسط کاربر
+  BALE_BOT_TOKEN: "bale_bot_token",
+  // ۱.۲۵.۵۷ — توکن بات وقتی env نیست، از DB؛ هرگز در پاسخ GET نمی‌رود
   BACKUP_DESTINATIONS: "backup_destinations",
   // مقصدهای ارسال پشتیبان به بله (JSON)
   BACKUP_AUTO_SEND: "backup_auto_send"
@@ -6099,7 +6103,9 @@ var DEFAULT_SETTINGS = {
   [SETTING_KEYS.SCREENING_TARGETS]: [],
   [SETTING_KEYS.CLINIC_PHONE]: "",
   [SETTING_KEYS.NOTIFY_BATCH_HOUR]: 18,
-  [SETTING_KEYS.BOT_USERNAME]: ""
+  [SETTING_KEYS.BOT_USERNAME]: "",
+  [SETTING_KEYS.BOT_ABOUT]: ""
+  // خالی = متن پیش‌فرض خودِ سامانه در templates
 };
 var SCREENING_TARGETS_MAX = 60;
 var DEFAULT_CENTER_HOURS = [
@@ -6771,6 +6777,13 @@ var TestMessageSchema = external_exports.object({
 var ReplaceCenterHoursSchema = external_exports.object({
   items: external_exports.array(WorkingHourRangeSchema).max(70, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F7\u06F0 \u0628\u0627\u0632\u0647 \u062F\u0631 \u0647\u0641\u062A\u0647 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A")
 });
+var BOT_ABOUT_MAX = 1500;
+var BotTokenUpdateSchema = external_exports.union([
+  external_exports.object({
+    token: external_exports.string().trim().min(20, "\u062A\u0648\u06A9\u0646 \u0628\u0627\u062A \u062E\u06CC\u0644\u06CC \u06A9\u0648\u062A\u0627\u0647 \u0627\u0633\u062A \u2014 \u062A\u0648\u06A9\u0646 \u06A9\u0627\u0645\u0644 \u0631\u0627 \u0627\u0632 BotFather \u0628\u0644\u0647 \u0628\u06AF\u06CC\u0631\u06CC\u062F").max(200, "\u062A\u0648\u06A9\u0646 \u0628\u0627\u062A \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").regex(/^[A-Za-z0-9:_-]+$/, "\u062A\u0648\u06A9\u0646 \u0641\u0642\u0637 \u062D\u0631\u0648\u0641\u060C \u0631\u0642\u0645 \u0648 :_- \u0627\u0633\u062A")
+  }),
+  external_exports.object({ clear: external_exports.literal(true) })
+]);
 var UpdateSettingsSchema = external_exports.object({
   clinic_name: external_exports.string().min(2, "\u0646\u0627\u0645 \u0645\u0631\u06A9\u0632 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(120).optional(),
   default_reminder_hours: external_exports.number().int().min(1).max(48).optional(),
@@ -6781,6 +6794,8 @@ var UpdateSettingsSchema = external_exports.object({
   notify_waitlist: external_exports.boolean().optional(),
   clinic_phone: external_exports.string().max(30, "\u0634\u0645\u0627\u0631\u0647 \u062A\u0645\u0627\u0633 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F3\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional(),
   bot_username: external_exports.string().max(65, "\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u0628\u0627\u062A \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F6\u06F4 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").regex(/^@?[A-Za-z0-9_]*$/, "\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u0628\u0627\u062A \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0644\u0627\u062A\u06CC\u0646\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637 \u0632\u06CC\u0631 \u0627\u0633\u062A").optional(),
+  /* ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات؛ رشتهٔ خالی = بازگشت به متن پیش‌فرض سامانه */
+  bot_about: external_exports.string().max(BOT_ABOUT_MAX, `\u0645\u062A\u0646 \xAB\u062F\u0631\u0628\u0627\u0631\u0647\u0654 \u0645\u0631\u06A9\u0632\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 ${BOT_ABOUT_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`).optional(),
   notify_batch_hour: external_exports.number().int().min(0, "\u0633\u0627\u0639\u062A \u0627\u0631\u0633\u0627\u0644 \u0628\u0627\u06CC\u062F \u0628\u06CC\u0646 \u06F0 \u062A\u0627 \u06F2\u06F3 \u0628\u0627\u0634\u062F").max(23, "\u0633\u0627\u0639\u062A \u0627\u0631\u0633\u0627\u0644 \u0628\u0627\u06CC\u062F \u0628\u06CC\u0646 \u06F0 \u062A\u0627 \u06F2\u06F3 \u0628\u0627\u0634\u062F").optional(),
   screening_targets: external_exports.array(
     external_exports.object({
@@ -7170,24 +7185,28 @@ var CreateExerciseBatchSchema = external_exports.object({
 var SCREENING_NAME_MAX = 80;
 var SCREENING_TAGS_MAX = 12;
 var SCREENING_READINESS_MIN = 0;
-var SCREENING_READINESS_MAX = 100;
+var SCREENING_READINESS_MAX = 34;
+var SCREENING_NOTE_MAX = 500;
 var ScreeningTagSchema = external_exports.string().trim().min(1, "\u0628\u0631\u0686\u0633\u0628 \u062E\u0627\u0644\u06CC \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A").max(60, "\u0628\u0631\u0686\u0633\u0628 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F6\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
 var ScreeningBirthDateSchema = external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u0628\u0627\u06CC\u062F \u0628\u0647 \u0642\u0627\u0644\u0628 YYYY-MM-DD \u0628\u0627\u0634\u062F");
-var ScreeningReadinessSchema = external_exports.number().int("\u0646\u0645\u0631\u0647\u0654 \u0622\u0645\u0627\u062F\u06AF\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0635\u062D\u06CC\u062D \u0628\u0627\u0634\u062F").min(SCREENING_READINESS_MIN, "\u0646\u0645\u0631\u0647\u0654 \u0622\u0645\u0627\u062F\u06AF\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0645\u0646\u0641\u06CC \u0628\u0627\u0634\u062F").max(SCREENING_READINESS_MAX, "\u0646\u0645\u0631\u0647\u0654 \u0622\u0645\u0627\u062F\u06AF\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F0\u06F0 \u0627\u0633\u062A");
+var ScreeningReadinessSchema = external_exports.number().int("\u0646\u0645\u0631\u0647\u0654 \u0622\u0645\u0627\u062F\u06AF\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0635\u062D\u06CC\u062D \u0628\u0627\u0634\u062F").min(SCREENING_READINESS_MIN, "\u0646\u0645\u0631\u0647\u0654 \u0622\u0645\u0627\u062F\u06AF\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0645\u0646\u0641\u06CC \u0628\u0627\u0634\u062F").max(SCREENING_READINESS_MAX, "\u0646\u0645\u0631\u0647\u0654 \u0622\u0645\u0627\u062F\u06AF\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F3\u06F4 \u0627\u0633\u062A");
+var ScreeningNoteSchema = external_exports.string().trim().max(SCREENING_NOTE_MAX, `\u062A\u0648\u0636\u06CC\u062D\u0627\u062A \u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_NOTE_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`).nullish();
 var ScreeningCreateSchema = external_exports.object({
   name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u0648 \u0641\u0627\u0645\u06CC\u0644 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(SCREENING_NAME_MAX, `\u0646\u0627\u0645 \u0648 \u0641\u0627\u0645\u06CC\u0644 \u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_NAME_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`),
   tags: external_exports.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_TAGS_MAX} \u0628\u0631\u0686\u0633\u0628`).default([]),
   day: TehranYmdSchema.optional(),
   birth_date: ScreeningBirthDateSchema.nullish(),
-  readiness_score: ScreeningReadinessSchema.nullish()
+  readiness_score: ScreeningReadinessSchema.nullish(),
+  note: ScreeningNoteSchema
 });
 var ScreeningUpdateSchema = external_exports.object({
   name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u0648 \u0641\u0627\u0645\u06CC\u0644 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(SCREENING_NAME_MAX, `\u0646\u0627\u0645 \u0648 \u0641\u0627\u0645\u06CC\u0644 \u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_NAME_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`).optional(),
   tags: external_exports.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_TAGS_MAX} \u0628\u0631\u0686\u0633\u0628`).optional(),
   birth_date: ScreeningBirthDateSchema.nullish(),
-  readiness_score: ScreeningReadinessSchema.nullish()
+  readiness_score: ScreeningReadinessSchema.nullish(),
+  note: ScreeningNoteSchema
 }).refine(
-  (v) => v.name !== void 0 || v.tags !== void 0 || v.birth_date !== void 0 || v.readiness_score !== void 0,
+  (v) => v.name !== void 0 || v.tags !== void 0 || v.birth_date !== void 0 || v.readiness_score !== void 0 || v.note !== void 0,
   {
     message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u06CC\u0644\u062F \u0628\u0631\u0627\u06CC \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"
   }
@@ -8191,7 +8210,11 @@ ${vars.extra}` : void 0
         "",
         "\u0627\u06AF\u0631 \u0645\u0639\u0644\u0645 \u0647\u0633\u062A\u06CC\u062F\u060C \u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u06A9\u0644\u0627\u0633 \u0631\u0627 \u0627\u0632 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u0628\u06AF\u06CC\u0631\u06CC\u062F \u0648 /link CODE \u0628\u0641\u0631\u0633\u062A\u06CC\u062F."
       ].join("\n");
-    case "bot_about":
+    case "bot_about": {
+      const about = vars.aboutText?.trim();
+      if (about) {
+        return [`\u{1F3E5} ${clinic}`, "\u062F\u0631\u0628\u0627\u0631\u0647\u0654 \u0645\u0631\u06A9\u0632", "", about].join("\n");
+      }
       return [
         `\u{1F3E5} ${clinic}`,
         "\u062F\u0631\u0628\u0627\u0631\u0647\u0654 \u0645\u0631\u06A9\u0632",
@@ -8207,6 +8230,7 @@ ${vars.extra}` : void 0
         "\u{1F4C5} \u0646\u0648\u0628\u062A \u0648 \u067E\u06CC\u06AF\u06CC\u0631\u06CC: \u0628\u0627 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F \u06CC\u0627 \u06A9\u062F \u0645\u0644\u06CC/\u062A\u0644\u0641\u0646 \u062E\u0648\u062F \u0631\u0627 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u062A\u0627 \u06AF\u0641\u062A\u06AF\u0648 \u0645\u062A\u0635\u0644 \u0634\u0648\u062F.",
         "/help \u2014 \u062F\u06CC\u062F\u0646 \u0627\u0645\u06A9\u0627\u0646\u0627\u062A \u0627\u06CC\u0646 \u0628\u0627\u062A \u0628\u0631 \u0627\u0633\u0627\u0633 \u0646\u0642\u0634 \u0634\u0645\u0627"
       ].join("\n");
+    }
     case "waitlist_slot_freed":
       return [
         "\u{1FA91} \u06CC\u06A9 \u0646\u0648\u0628\u062A \u062E\u0627\u0644\u06CC \u0634\u062F:",
@@ -40681,6 +40705,7 @@ function rowToEntry2(r) {
     tags: parseTagsJson(r.tags),
     birthDate: r.birth_date ?? null,
     readinessScore: r.readiness_score ?? null,
+    note: r.note ?? null,
     createdBy: r.created_by,
     creatorName: r.creator_name,
     createdAt: r.created_at,
@@ -40689,7 +40714,7 @@ function rowToEntry2(r) {
 }
 __name(rowToEntry2, "rowToEntry");
 var SELECT = `
-  SELECT e.id, e.name, e.day, e.tags, e.birth_date, e.readiness_score,
+  SELECT e.id, e.name, e.day, e.tags, e.birth_date, e.readiness_score, e.note,
          e.created_by, e.created_at, e.updated_at,
          st.full_name AS creator_name
     FROM screening_entries e
@@ -40788,14 +40813,15 @@ function createScreeningService(deps) {
       const day = /^\d{4}-\d{2}-\d{2}$/.test(input.day ?? "") ? input.day : tehranTodayYmd();
       const birthDate = /^\d{4}-\d{2}-\d{2}$/.test(input.birth_date ?? "") ? input.birth_date : null;
       const readinessScore = typeof input.readiness_score === "number" && Number.isFinite(input.readiness_score) ? Math.trunc(input.readiness_score) : null;
+      const note = typeof input.note === "string" && input.note.trim().length > 0 ? input.note.trim() : null;
       const id = crypto.randomUUID();
       const now = nowSql();
       await db.transaction(async (tx) => {
         await tx.execute(
           `INSERT INTO screening_entries
-             (id, name, day, tags, birth_date, readiness_score, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, name, day, JSON.stringify(tags), birthDate, readinessScore, actor.staffId, now, now]
+             (id, name, day, tags, birth_date, readiness_score, note, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, name, day, JSON.stringify(tags), birthDate, readinessScore, note, actor.staffId, now, now]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -40806,7 +40832,8 @@ function createScreeningService(deps) {
             day: { from: null, to: day },
             tags: { from: null, to: tags.join("|") },
             birth_date: { from: null, to: birthDate },
-            readiness_score: { from: null, to: readinessScore }
+            readiness_score: { from: null, to: readinessScore },
+            note: { from: null, to: note }
           }
         });
       });
@@ -40828,12 +40855,13 @@ function createScreeningService(deps) {
       const tags = input.tags !== void 0 || parsed.hashTags.length > 0 ? mergeTags(parsed, sanitizeTags(input.tags ?? [])) : prevTags;
       const birthDate = input.birth_date === void 0 ? current.birth_date : /^\d{4}-\d{2}-\d{2}$/.test(input.birth_date ?? "") ? input.birth_date : null;
       const readinessScore = input.readiness_score === void 0 ? current.readiness_score : typeof input.readiness_score === "number" && Number.isFinite(input.readiness_score) ? Math.trunc(input.readiness_score) : null;
+      const note = input.note === void 0 ? current.note : typeof input.note === "string" && input.note.trim().length > 0 ? input.note.trim() : null;
       await db.transaction(async (tx) => {
         await tx.execute(
           `UPDATE screening_entries
-             SET name = ?, tags = ?, birth_date = ?, readiness_score = ?, updated_at = ?
+             SET name = ?, tags = ?, birth_date = ?, readiness_score = ?, note = ?, updated_at = ?
            WHERE id = ?`,
-          [name, JSON.stringify(tags), birthDate, readinessScore, nowSql(), id]
+          [name, JSON.stringify(tags), birthDate, readinessScore, note, nowSql(), id]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -40843,7 +40871,8 @@ function createScreeningService(deps) {
           changes: {
             tags: { from: prevTags.join("|"), to: tags.join("|") },
             birth_date: { from: current.birth_date, to: birthDate },
-            readiness_score: { from: current.readiness_score, to: readinessScore }
+            readiness_score: { from: current.readiness_score, to: readinessScore },
+            note: { from: current.note, to: note }
           }
         });
       });
@@ -40902,8 +40931,10 @@ function registerScreeningRoutes(app, service) {
         day: body.day,
         birth_date: body.birth_date ?? null,
         /* ۱.۲۵.۵۰ */
-        readiness_score: body.readiness_score ?? null
+        readiness_score: body.readiness_score ?? null,
         /* ۱.۲۵.۵۰ */
+        note: body.note ?? null
+        /* ۱.۲۵.۵۷ */
       },
       actor
     );
@@ -40919,7 +40950,9 @@ function registerScreeningRoutes(app, service) {
         tags: body.tags,
         birth_date: body.birth_date,
         /* ۱.۲۵.۵۰ — undefined = دست‌نخورده؛ null = پاک‌کردن */
-        readiness_score: body.readiness_score
+        readiness_score: body.readiness_score,
+        note: body.note
+        /* ۱.۲۵.۵۷ — undefined = دست‌نخورده؛ null = پاک‌کردن */
       },
       actor
     );
@@ -44127,7 +44160,10 @@ function recordOf(row) {
     status: row.status === "sent" ? "sent" : "open",
     forwardError: row.forward_error,
     createdAt: row.created_at,
-    forwardedAt: row.forwarded_at
+    forwardedAt: row.forwarded_at,
+    replyText: row.reply_text ?? null,
+    replyBy: row.reply_by ?? null,
+    replyAt: row.reply_at ?? null
   };
 }
 __name(recordOf, "recordOf");
@@ -44196,6 +44232,27 @@ function createBugReportService(db, audit) {
     },
     async markForwardError(id, error) {
       await db.execute("UPDATE bug_reports SET forward_error = ? WHERE id = ?", [error.slice(0, 300), id]);
+    },
+    /* ۱.۲۵.۵۷ — UPSERT پاسخ پشتیبانی با کلید خودِ گزارش (id سمت نود = node_report_id سمت CP).
+       گارد تازگی: اگر ردیف از قبل reply_at تازه‌تر دارد، پاسخ قدیمی‌تر بازنویسی نمی‌شود —
+       ترتیب آیتم‌های pull تضمین‌شده نیست و دوباره‌کاری pull هم بی‌اثر می‌ماند. */
+    async applyReplies(items) {
+      let updated = 0;
+      for (const item of items) {
+        if (!item || typeof item.id !== "string" || item.id.length === 0) continue;
+        const text = typeof item.reply_text === "string" && item.reply_text.trim() ? item.reply_text.trim() : null;
+        const by = typeof item.reply_by === "string" && item.reply_by.trim() ? item.reply_by.trim() : null;
+        const at = typeof item.reply_at === "string" && item.reply_at.trim() ? item.reply_at.trim() : null;
+        const res = await db.execute(
+          `UPDATE bug_reports
+              SET reply_text = ?, reply_by = ?, reply_at = ?
+            WHERE id = ?
+              AND (reply_at IS NULL OR ? > reply_at)`,
+          [text, by, at, item.id, at ?? ""]
+        );
+        updated += res.meta?.changes ?? 0;
+      }
+      return updated;
     }
   };
 }
@@ -44247,7 +44304,10 @@ function shape(rec) {
     status: rec.status,
     forward_error: rec.forwardError,
     created_at: rec.createdAt,
-    forwarded_at: rec.forwardedAt
+    forwarded_at: rec.forwardedAt,
+    reply_text: rec.replyText,
+    reply_by: rec.replyBy,
+    reply_at: rec.replyAt
   };
 }
 __name(shape, "shape");
@@ -49812,7 +49872,14 @@ function createBotCommandsSection(ctx) {
         }
         case "about": {
           const ownerAbout = await this.resolveOwner(cmd.chatId);
-          return { handled: true, reply: renderTemplate("bot_about", { clinicName: await deps.settings.getClinicName() }), keyboard: buildBotKeyboard(ownerAbout) };
+          return {
+            handled: true,
+            reply: renderTemplate("bot_about", {
+              clinicName: await deps.settings.getClinicName(),
+              aboutText: await deps.settings.getBotAbout()
+            }),
+            keyboard: buildBotKeyboard(ownerAbout)
+          };
         }
         case "myid":
           return { handled: true, reply: renderTemplate("bot_myid", { chatId: cmd.chatId }) };
@@ -51728,6 +51795,8 @@ function createSettingsService(deps) {
       const storedPhone = stored.get(SETTING_KEYS.CLINIC_PHONE);
       const storedBatch = stored.get(SETTING_KEYS.NOTIFY_BATCH_HOUR);
       const storedBotUsername = stored.get(SETTING_KEYS.BOT_USERNAME);
+      const storedBotAbout = stored.get(SETTING_KEYS.BOT_ABOUT);
+      const dbBaleToken = await this.getBaleBotToken();
       return {
         centerHours: Array.isArray(hours) ? hours : [...DEFAULT_CENTER_HOURS],
         clinicName,
@@ -51741,8 +51810,10 @@ function createSettingsService(deps) {
         clinicPhone: typeof storedPhone === "string" ? storedPhone : DEFAULT_SETTINGS[SETTING_KEYS.CLINIC_PHONE],
         notifyBatchHour: typeof storedBatch === "number" ? storedBatch : DEFAULT_SETTINGS[SETTING_KEYS.NOTIFY_BATCH_HOUR],
         botUsername: typeof storedBotUsername === "string" ? storedBotUsername : DEFAULT_SETTINGS[SETTING_KEYS.BOT_USERNAME],
+        botAbout: typeof storedBotAbout === "string" ? storedBotAbout : DEFAULT_SETTINGS[SETTING_KEYS.BOT_ABOUT],
         meta: {
-          baleConfigured: deps.baleConfigured,
+          baleConfigured: deps.baleConfigured || dbBaleToken !== null,
+          // ۱.۲۵.۵۷ — env یا DB
           webhookEnabled: deps.webhookEnabled
         }
       };
@@ -51779,6 +51850,9 @@ function createSettingsService(deps) {
       if (input.botUsername !== void 0) {
         await upsertSetting(SETTING_KEYS.BOT_USERNAME, input.botUsername.trim().replace(/^@/, ""), actor);
       }
+      if (input.botAbout !== void 0) {
+        await upsertSetting(SETTING_KEYS.BOT_ABOUT, input.botAbout.trim(), actor);
+      }
       if (input.screeningTargets !== void 0) {
         await upsertSetting(SETTING_KEYS.SCREENING_TARGETS, input.screeningTargets, actor);
       }
@@ -51801,6 +51875,7 @@ function createSettingsService(deps) {
           clinic_phone: { from: before.clinicPhone, to: input.clinicPhone ?? before.clinicPhone },
           notify_batch_hour: { from: before.notifyBatchHour, to: input.notifyBatchHour ?? before.notifyBatchHour },
           bot_username: { from: before.botUsername || null, to: input.botUsername ?? before.botUsername },
+          bot_about: { from: before.botAbout || null, to: input.botAbout ?? before.botAbout },
           screening_targets: {
             from: before.screeningTargets.length,
             to: input.screeningTargets?.length ?? before.screeningTargets.length
@@ -51906,6 +51981,48 @@ function createSettingsService(deps) {
       });
       return clean5;
     },
+    /* ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات؛ خالی = پیش‌فرض سامانه */
+    async getBotAbout() {
+      const stored = await readAll();
+      const v = stored.get(SETTING_KEYS.BOT_ABOUT);
+      return typeof v === "string" ? v : "";
+    },
+    /* ۱.۲۵.۵۷ — توکن بات از DB؛ فقط برای ساخت کلاینت بات مصرف می‌شود و
+       هرگز در پاسخ GET /api/settings نمی‌رود (meta.baleConfigured فقط بول است). */
+    async getBaleBotToken() {
+      const row = await db.queryOne(
+        `SELECT value FROM settings WHERE key = ? LIMIT 1`,
+        [SETTING_KEYS.BALE_BOT_TOKEN]
+      );
+      if (!row) return null;
+      try {
+        const parsed = JSON.parse(row.value);
+        if (typeof parsed === "string" && parsed.trim().length > 0) return parsed.trim();
+      } catch {
+      }
+      return null;
+    },
+    /* ۱.۲۵.۵۷ — ثبت/پاک‌کردن توکن؛ audit فقط وضعیت «تنظیم‌شده» را می‌بیند، نه خود توکن را */
+    async setBaleBotToken(token, actor) {
+      const before = await this.getBaleBotToken();
+      if (token === null) {
+        await db.execute(`DELETE FROM settings WHERE key = ?`, [SETTING_KEYS.BALE_BOT_TOKEN]);
+      } else {
+        await upsertSetting(SETTING_KEYS.BALE_BOT_TOKEN, token.trim(), actor);
+      }
+      const after = await this.getBaleBotToken();
+      await audit.log({
+        actorId: actor.staffId,
+        action: "settings.bot_token.update",
+        resourceType: "settings",
+        resourceId: "bale_bot_token",
+        changes: {
+          configured: { from: before !== null, to: after !== null }
+          // فقط بول — خود توکن هرگز لاگ نمی‌شود
+        }
+      });
+      log.info("bot_token.updated", { configured: after !== null });
+    },
     async getNotifyFlags() {
       const stored = await readAll();
       const readBool = /* @__PURE__ */ __name((key, fallback) => {
@@ -52002,11 +52119,23 @@ function registerSettingsRoutes(app, service) {
         clinicPhone: body.clinic_phone,
         notifyBatchHour: body.notify_batch_hour,
         botUsername: body.bot_username,
+        botAbout: body.bot_about,
+        // ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات
         screeningTargets: body.screening_targets
       },
       actor
     );
     return c.json({ data }, 200);
+  });
+  app.put("/api/settings/bot-token", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = BotTokenUpdateSchema.parse(await c.req.json());
+    if ("clear" in body) {
+      await service.setBaleBotToken(null, actor);
+      return c.json({ data: { configured: false, cleared: true } }, 200);
+    }
+    await service.setBaleBotToken(body.token, actor);
+    return c.json({ data: { configured: true, cleared: false } }, 200);
   });
   app.get("/api/settings/center-hours", async (c) => {
     const data = await service.getCenterHours();
@@ -54969,6 +55098,7 @@ __name(pushCpReport, "pushCpReport");
 
 // src/application/bug-report-forward/index.ts
 var BUG_REPORT_ATTEMPT_KEY = "bug_report.forward_attempt_at";
+var BUG_REPORT_REPLY_SINCE_KEY = "bug_report.reply_since_at";
 var BUG_REPORT_MIN_INTERVAL_MS = 5 * 6e4;
 var BUG_REPORT_TIMEOUT_MS = 15e3;
 var BUG_REPORT_BATCH_MAX = 20;
@@ -54995,6 +55125,15 @@ function buildBugReportConfig(env) {
   };
 }
 __name(buildBugReportConfig, "buildBugReportConfig");
+function nodeHeaders(config) {
+  return {
+    "X-CP-Node-Code": config.cpNodeCode,
+    Authorization: `Bearer ${config.cpNodeKey}`,
+    "X-CP-Node-Version": APP_VERSION,
+    "content-type": "application/json"
+  };
+}
+__name(nodeHeaders, "nodeHeaders");
 function feedbackBodyOf(rec) {
   return {
     id: rec.id,
@@ -55034,14 +55173,36 @@ async function runBugReportForward(deps) {
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   const doFetch = deps.fetchFn ?? fetch;
   const service = createBugReportService(db, silentAudit());
-  const open = await service.listOpen(BUG_REPORT_BATCH_MAX);
-  if (open.length === 0) return { status: "done", sent: 0, failed: 0, remaining: 0 };
   const lastIso = await readSettingsIso4(db, BUG_REPORT_ATTEMPT_KEY);
   const last = lastIso ? Date.parse(lastIso) : 0;
   if (!deps.force && Number.isFinite(last) && now().getTime() - last < BUG_REPORT_MIN_INTERVAL_MS) {
     return { status: "skipped" };
   }
   await writeSettingsIso(db, BUG_REPORT_ATTEMPT_KEY, now().toISOString());
+  let pulled = 0;
+  try {
+    const since = await readSettingsIso4(db, BUG_REPORT_REPLY_SINCE_KEY);
+    const repliesUrl = `${config.cpOrigin}/api/node/feedback/replies${since ? `?since=${encodeURIComponent(since)}` : ""}`;
+    const res = await doFetch(repliesUrl, {
+      method: "GET",
+      headers: nodeHeaders(config),
+      signal: AbortSignal.timeout(BUG_REPORT_TIMEOUT_MS)
+    });
+    if (res.ok) {
+      const body = await res.json().catch(() => null);
+      const items = Array.isArray(body?.data?.items) ? body?.data?.items : [];
+      if (items.length > 0) {
+        pulled = await service.applyReplies(items);
+        logger.info("bug_report.replies.applied", { pulled });
+      }
+      await writeSettingsIso(db, BUG_REPORT_REPLY_SINCE_KEY, body?.data?.server_time ?? now().toISOString());
+    } else {
+      logger.warn("bug_report.replies.pull_failed", { status: res.status });
+    }
+  } catch (err) {
+    logger.warn("bug_report.replies.pull_error", { error: err instanceof Error ? err.message : String(err) });
+  }
+  const open = await service.listOpen(BUG_REPORT_BATCH_MAX);
   const url = `${config.cpOrigin}/api/node/feedback`;
   let sent = 0;
   let failed = 0;
@@ -55049,12 +55210,7 @@ async function runBugReportForward(deps) {
     try {
       const res = await doFetch(url, {
         method: "POST",
-        headers: {
-          "X-CP-Node-Code": config.cpNodeCode,
-          Authorization: `Bearer ${config.cpNodeKey}`,
-          "X-CP-Node-Version": APP_VERSION,
-          "content-type": "application/json"
-        },
+        headers: nodeHeaders(config),
         body: JSON.stringify(feedbackBodyOf(rec)),
         signal: AbortSignal.timeout(BUG_REPORT_TIMEOUT_MS)
       });
@@ -55072,8 +55228,8 @@ async function runBugReportForward(deps) {
     }
   }
   const remaining = (await service.listOpen(1)).length;
-  logger.info("bug_report.forward.done", { sent, failed, remaining });
-  return { status: "done", sent, failed, remaining };
+  logger.info("bug_report.forward.done", { sent, failed, remaining, pulled });
+  return { status: "done", sent, failed, remaining, pulled };
 }
 __name(runBugReportForward, "runBugReportForward");
 function silentAudit() {
@@ -55085,9 +55241,32 @@ function silentAudit() {
 __name(silentAudit, "silentAudit");
 
 // src/index.ts
-function buildEnv(env) {
+var BALE_TOKEN_CACHE_TTL_MS = 6e4;
+var baleTokenCache = null;
+async function resolveBaleToken(db, envToken) {
+  const envClean = envToken?.trim() ?? "";
+  if (envClean) return envClean;
+  const now = Date.now();
+  if (baleTokenCache && now - baleTokenCache.at < BALE_TOKEN_CACHE_TTL_MS) return baleTokenCache.token;
+  let token = null;
+  try {
+    const row = await db.queryOne(
+      `SELECT value FROM settings WHERE key = 'bale_bot_token' LIMIT 1`,
+      []
+    );
+    if (row) {
+      const parsed = JSON.parse(row.value);
+      if (typeof parsed === "string" && parsed.trim().length > 0) token = parsed.trim();
+    }
+  } catch {
+  }
+  baleTokenCache = { token, at: now };
+  return token;
+}
+__name(resolveBaleToken, "resolveBaleToken");
+async function buildRuntimeEnv(env, db) {
   return {
-    baleToken: env.BALE_BOT_TOKEN ?? null,
+    baleToken: await resolveBaleToken(db, env.BALE_BOT_TOKEN),
     webhookSecret: env.BALE_WEBHOOK_SECRET ?? null,
     clinicName: env.CLINIC_NAME ?? void 0,
     exerciseBucket: env.EXERCISE_FILES ?? null,
@@ -55096,7 +55275,7 @@ function buildEnv(env) {
     publicBaseUrl: env.PUBLIC_BASE_URL?.trim() || null
   };
 }
-__name(buildEnv, "buildEnv");
+__name(buildRuntimeEnv, "buildRuntimeEnv");
 async function runNotificationCycle(env) {
   const db = createDb(env.DB);
   const audit = createAuditWriter(db);
@@ -55106,7 +55285,7 @@ async function runNotificationCycle(env) {
     audit,
     logger,
     teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-    ...buildEnv(env)
+    ...await buildRuntimeEnv(env, db)
   });
   const summary = await services.notify.enqueueUpcomingReminders(
     /* @__PURE__ */ new Date(),
@@ -55126,7 +55305,7 @@ async function runDigestCycle(env) {
     audit,
     logger,
     teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-    ...buildEnv(env)
+    ...await buildRuntimeEnv(env, db)
   });
   const summary = await services.notify.sendDailyDigest(/* @__PURE__ */ new Date()).catch((err) => {
     logger.error("digest.failed", { error: err instanceof Error ? err.message : String(err) });
@@ -55149,7 +55328,7 @@ async function runBatchDispatchCycle(env) {
     audit,
     logger,
     teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-    ...buildEnv(env)
+    ...await buildRuntimeEnv(env, db)
   });
   const dispatch = await services.notify.dispatchPending(100);
   logger.info("batch.cycle.done", { dispatch });
@@ -55164,7 +55343,7 @@ async function runBackupAutoSendCycle(env) {
     audit,
     logger,
     teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-    ...buildEnv(env)
+    ...await buildRuntimeEnv(env, db)
   });
   const outcome = await services.backup.runScheduledAutoSend().catch((err) => {
     logger.error("backup.auto.failed", { error: err instanceof Error ? err.message : String(err) });
@@ -55272,7 +55451,8 @@ async function runBugReportForwardWrap(env) {
   logger.info("bug_report.cycle.done", {
     status: result.status,
     sent: result.status === "done" ? result.sent : 0,
-    failed: result.status === "done" ? result.failed : 0
+    failed: result.status === "done" ? result.failed : 0,
+    pulled: result.status === "done" ? result.pulled : 0
   });
 }
 __name(runBugReportForwardWrap, "runBugReportForwardWrap");
@@ -55306,7 +55486,7 @@ var src_default = {
       audit,
       logger,
       teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-      ...buildEnv(env),
+      ...await buildRuntimeEnv(env, db),
       cpSyncUrl: env.CP_SYNC_URL ?? null,
       cpNodeCode: cpContentCfg.cpNodeCode,
       cpNodeKey: cpContentCfg.cpNodeKey

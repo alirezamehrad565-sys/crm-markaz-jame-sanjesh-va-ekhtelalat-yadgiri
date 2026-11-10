@@ -18,6 +18,7 @@ const entry = (id: string, day: string, tags: string[]): ScreeningEntry => ({
   tags,
   birthDate: null,
   readinessScore: null,
+  note: null,
   createdBy: 'staff',
   creatorName: 'مدیر',
   createdAt: '2026-01-01 08:00:00',

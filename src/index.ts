@@ -29,13 +29,42 @@ export interface Env {
   CP_NODE_CODE?: string;
   CP_NODE_KEY?: string;
   CP_SYNC_STAFF_ID?: string;
-  /** Service Binding به ورکر کنترل‌پلین (هم‌حساب) — fetch عمومیِ هم‌زون 1042 می‌دهد */
+  /** Service Binding به ورکر کنترل‌پلین (هم‌حساب) — fetch عمومیِ هم‌زون ۱۰۴۲ می‌دهد */
   CP?: Fetcher;
 }
 
-function buildEnv(env: Env) {
+/* ۱.۲۵.۵۷ — توکن بات دو منبع دارد: env اولویت، سپس settings.bale_bot_token (ثبت کاربر).
+   کش ۶۰ثانیه‌ایِ isolate تا هر درخواست یک خواندن DB اضافه نکند؛ ثبت توکن تازه حداکثر
+   یک دقیقه بعد روی همان isolate هم می‌نشیند. هرگز در پاسخ GET نمی‌رود. */
+const BALE_TOKEN_CACHE_TTL_MS = 60_000;
+let baleTokenCache: { token: string | null; at: number } | null = null;
+
+async function resolveBaleToken(db: ReturnType<typeof createDb>, envToken: string | null | undefined): Promise<string | null> {
+  const envClean = envToken?.trim() ?? '';
+  if (envClean) return envClean; // env همیشه برنده است و کش نمی‌خواهد
+  const now = Date.now();
+  if (baleTokenCache && now - baleTokenCache.at < BALE_TOKEN_CACHE_TTL_MS) return baleTokenCache.token;
+  let token: string | null = null;
+  try {
+    const row = await db.queryOne<{ value: string }>(
+      `SELECT value FROM settings WHERE key = 'bale_bot_token' LIMIT 1`,
+      []
+    );
+    if (row) {
+      const parsed: unknown = JSON.parse(row.value);
+      if (typeof parsed === 'string' && parsed.trim().length > 0) token = parsed.trim();
+    }
+  } catch {
+    // DB خوانده نشد = بدون توکن؛ دورهٔ بعد دوباره
+  }
+  baleTokenCache = { token, at: now };
+  return token;
+}
+
+/** هم‌قرارداد buildEnv قبلی — فقط baleToken حالا ناهمگام و دو-منبعی است */
+async function buildRuntimeEnv(env: Env, db: ReturnType<typeof createDb>) {
   return {
-    baleToken: env.BALE_BOT_TOKEN ?? null,
+    baleToken: await resolveBaleToken(db, env.BALE_BOT_TOKEN),
     webhookSecret: env.BALE_WEBHOOK_SECRET ?? null,
     clinicName: env.CLINIC_NAME ?? undefined,
     exerciseBucket: env.EXERCISE_FILES ?? null,
@@ -54,7 +83,7 @@ async function runNotificationCycle(env: Env): Promise<void> {
     audit,
     logger,
     teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-    ...buildEnv(env)
+    ...(await buildRuntimeEnv(env, db))
   });
 
   const summary = await services.notify.enqueueUpcomingReminders(
@@ -75,7 +104,7 @@ async function runDigestCycle(env: Env): Promise<void> {
     audit,
     logger,
     teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-    ...buildEnv(env)
+    ...(await buildRuntimeEnv(env, db))
   });
 
   const summary = await services.notify.sendDailyDigest(new Date()).catch((err: unknown) => {
@@ -101,7 +130,7 @@ async function runBatchDispatchCycle(env: Env): Promise<void> {
     audit,
     logger,
     teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-    ...buildEnv(env)
+    ...(await buildRuntimeEnv(env, db))
   });
 
   const dispatch = await services.notify.dispatchPending(100);
@@ -119,7 +148,7 @@ async function runBackupAutoSendCycle(env: Env): Promise<void> {
     audit,
     logger,
     teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-    ...buildEnv(env)
+    ...(await buildRuntimeEnv(env, db))
   });
 
   const outcome = await services.backup.runScheduledAutoSend().catch((err: unknown) => {
@@ -245,7 +274,8 @@ async function runBugReportForwardWrap(env: Env): Promise<void> {
   logger.info('bug_report.cycle.done', {
     status: result.status,
     sent: result.status === 'done' ? result.sent : 0,
-    failed: result.status === 'done' ? result.failed : 0
+    failed: result.status === 'done' ? result.failed : 0,
+    pulled: result.status === 'done' ? result.pulled : 0
   });
 }
 
@@ -280,7 +310,7 @@ export default {
       audit,
       logger,
       teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-      ...buildEnv(env),
+      ...(await buildRuntimeEnv(env, db)),
       cpSyncUrl: env.CP_SYNC_URL ?? null,
       cpNodeCode: cpContentCfg.cpNodeCode,
       cpNodeKey: cpContentCfg.cpNodeKey

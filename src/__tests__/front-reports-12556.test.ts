@@ -58,7 +58,8 @@ describe('گیت فرانت ۱.۲۵.۵۶ — خواسته‌های چهارگا�
 
   test('جای «کنترل‌پلین» → «گزارش باگ»: لینک #/cp حذف، #/bug-report برای همهٔ همکاران', () => {
     expect(app).not.toMatch(/\{ hash: '#\/cp'/);
-    expect(app).toMatch(/\{ hash: '#\/bug-report', label: 'گزارش باگ', icon: 'send', group: 'مرکز' \}/);
+    /* ۱.۲۵.۵۷ — نام روایی «گزارش به پشتیبانی» + آیکن عنکبوت (خواست کارفرما) */
+    expect(app).toMatch(/\{ hash: '#\/bug-report', label: 'گزارش به پشتیبانی', icon: 'spider', group: 'مرکز' \}/);
     expect(app).toMatch(/register\('#\/bug-report'/);
     expect(existsSync(join(JS, 'views/bug-report.js'))).toBe(true);
   });

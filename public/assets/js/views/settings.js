@@ -421,11 +421,58 @@ function drawNotify(body, settings) {
     icon('bot', 22),
     el('b', {}, 'بات بله'),
     el('span', { class: `badge ${settings.meta.baleConfigured ? 'badge--success' : 'badge--neutral'}` },
-      settings.meta.baleConfigured ? 'توکن تنظیم شده' : 'بدون توکن — اعلان‌ها فعلاً به کانال داخلی سامانه می‌رود'),
+      settings.meta.baleConfigured ? 'توکن تنظیم شده' : 'بدون توکن'),
     el('span', { class: `badge ${settings.meta.webhookEnabled ? 'badge--success' : 'badge--neutral'}` },
-      settings.meta.webhookEnabled ? 'webhook فعال' : 'webhook غیرفعال'),
-    el('span', { style: { color: 'var(--text-3)', fontSize: 'var(--fs-xs)' } },
-      'دستورهای بات: «نوبت‌های من» · «پیگیری‌های من» · «حضور فرزند» · «وضعیت مرکز» · /today · /week · /link CODE · /myid')
+      settings.meta.webhookEnabled ? 'webhook فعال' : 'webhook غیرفعال')
+  );
+
+  /* ۱.۲۵.۵۷ — ثبت توکن بات مستقیم توسط مدیر؛ توکن هرگز در پاسخ GET نمی‌آید،
+     پس فقط وضعیت «تنظیم‌شده» نشان داده می‌شود. */
+  const tokenRow = el('div', { class: 'info-list__row' },
+    el('span', { class: 'info-list__key' }, 'توکن بات (BotFather بله)'),
+    el('span', { class: 'info-list__val', style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
+      settings.meta.baleConfigured
+        ? el('span', { class: 'badge badge--success' }, 'ثبت‌شده')
+        : el('span', { class: 'badge badge--neutral' }, 'ثبت‌نشده'),
+      el('button', {
+        class: 'btn btn--soft btn--sm',
+        onclick: () => openBotTokenForm()
+      }, icon('link', 14), 'ثبت توکن'),
+      settings.meta.baleConfigured
+        ? el('button', {
+            class: 'btn btn--ghost btn--sm',
+            onclick: async () => {
+              const ok = await confirmModal({
+                title: 'حذف توکن بات',
+                message: 'توکن فعلی حذف شود؟ اعلان‌های بله تا ثبت توکن تازه متوقف می‌مانند.',
+                danger: true,
+                confirmLabel: 'حذف'
+              });
+              if (!ok) return;
+              try {
+                await api.put('/api/settings/bot-token', { clear: true });
+                toast('توکن بات حذف شد', 'success');
+                navigate(location.hash);
+              } catch (err) { toastError(err); }
+            }
+          }, 'حذف')
+        : null
+    )
+  );
+
+  /* ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» که بات در پاسخ «درباره مرکز» می‌فرستد؛ قابل ویرایش */
+  const aboutPreview = (settings.botAbout ?? '').trim();
+  const aboutRow = el('div', { class: 'info-list__row' },
+    el('span', { class: 'info-list__key' }, 'دربارهٔ مرکز (متن بات)'),
+    el('span', { class: 'info-list__val', style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
+      aboutPreview
+        ? el('span', { style: { color: 'var(--text-2)' } }, aboutPreview.length > 60 ? `${aboutPreview.slice(0, 60)}…` : aboutPreview)
+        : el('span', { class: 'badge badge--neutral' }, 'متن پیش‌فرض سامانه'),
+      el('button', {
+        class: 'btn btn--soft btn--sm',
+        onclick: () => openBotAboutForm(settings)
+      }, icon('edit', 14), 'ویرایش')
+    )
   );
 
   const botUserRow = el('div', { class: 'info-list__row' },
@@ -466,13 +513,19 @@ function drawNotify(body, settings) {
   body.appendChild(
     el('div', { class: 'settings-section' },
       el('h3', {}, 'اعلان‌ها و بات'),
-      el('p', { class: 'hint-text' },
-        'با ثبت/جابه‌جایی/لغو هر نوبت، اعلان خودکار برای معلم و ولیّ دانش‌آموزانِ متصل صف می‌شود. یادآوری قبل از نوبت هم طبق تنظیمات هر دانش‌آموز ارسال می‌شود. هر صبح ۰۷:۳۰ «خلاصهٔ روز» به‌صورت خودکار برای همکاران، خانواده‌های دارای نوبتِ امروز و معلمان کلاس ارسال می‌شود — روزِ خالی پوش نمی‌گیرد. والدین و همکاران می‌توانند خودشان در بات، با فرستادن کد ملی یا شماره همراه، متصل شوند. راهنمای بات برای هر نقش جداگانه است: همکاران از «پیگیری‌های من» و «/search» استفاده می‌کنند؛ مدیر/منشی «وضعیت مرکز» و «برنامه مرکز» را هم دارند؛ والدین «حضور فرزند» را می‌بینند. با لغو هر نوبت، اگر متقاضیِ بازی در لیست انتظار باشد، دفتر در بات مطلع می‌شود.'),
+      /* ۱.۲۵.۵۷ — توضیح بلند به یک کشو بسیار کم‌رنگ تبدیل شد (کلیک برای بازشدن) */
+      el('details', { class: 'hint-collapse' },
+        el('summary', {}, 'توضیح اعلان‌ها'),
+        el('p', { class: 'hint-text' },
+          'با ثبت/جابه‌جایی/لغو هر نوبت، اعلان خودکار برای معلم و ولیّ دانش‌آموزانِ متصل صف می‌شود. یادآوری قبل از نوبت هم طبق تنظیمات هر دانش‌آموز ارسال می‌شود. هر صبح ۰۷:۳۰ «خلاصهٔ روز» به‌صورت خودکار برای همکاران، خانواده‌های دارای نوبتِ امروز و معلمان کلاس ارسال می‌شود — روزِ خالی پوش نمی‌گیرد. والدین و همکاران می‌توانند خودشان در بات، با فرستادن کد ملی یا شماره همراه، متصل شوند؛ دستورهای بات: «نوبت‌های من» · «پیگیری‌های من» · «حضور فرزند» · «وضعیت مرکز» · /today · /week · /link CODE · /myid.')
+      ),
       botStatus,
       el('div', { class: 'info-list' },
         row('نام مرکز در پیام‌ها', settings.clinicName),
         row('شماره تماس مرکز', settings.clinicPhone ? el('span', { dir: 'ltr' }, settings.clinicPhone) : 'ثبت‌نشده'),
         botUserRow,
+        tokenRow,
+        aboutRow,
         row('یادآوری پیش‌فرض', `${fa(settings.defaultReminderHours)} ساعت قبل`),
         row('اعلان ثبت نوبت جدید', toggleText(settings.notifyOnCreate)),
         row('اعلان جابه‌جایی نوبت', toggleText(settings.notifyOnMove)),
@@ -484,6 +537,59 @@ function drawNotify(body, settings) {
       el('div', { style: { marginTop: 'var(--sp-4)', display: 'flex', justifyContent: 'flex-end' } }, editBtn)
     )
   );
+}
+
+/* ۱.۲۵.۵۷ — فرم ثبت توکن بات؛ توکن type=password می‌ماند و هرگز بازنمایی نمی‌شود */
+function openBotTokenForm() {
+  formModal({
+    title: 'ثبت توکن بات بله',
+    submitLabel: 'ذخیره توکن',
+    fields: [
+      {
+        name: 'token',
+        label: 'توکن بات (از BotFather بله)',
+        type: 'text',
+        required: true,
+        minLength: 20,
+        maxLength: 200,
+        hint: 'توکن کامل را از BotFather بله بگیرید (شکل 123456:AA…). توکن فقط برای خود سامانه ذخیره می‌شود و هیچ‌جا نمایش داده نمی‌شود.',
+        ltr: true
+      }
+    ],
+    onSubmit: async (values) => {
+      const token = (values.token ?? '').trim();
+      if (!token) return;
+      await api.put('/api/settings/bot-token', { token });
+      toast('توکن بات ذخیره شد — اعلان‌ها از همین حالا به بله می‌روند', 'success');
+      navigate(location.hash);
+    }
+  });
+}
+
+/* ۱.۲۵.۵۷ — ویرایش متن «دربارهٔ مرکز» بات؛ خالی = بازگشت به متن پیش‌فرض سامانه */
+function openBotAboutForm(settings) {
+  formModal({
+    title: 'ویرایش «دربارهٔ مرکز»',
+    submitLabel: 'ذخیره',
+    wide: true,
+    fields: [
+      {
+        name: 'bot_about',
+        label: 'متن «دربارهٔ مرکز» در بات',
+        type: 'textarea',
+        rows: 7,
+        required: false,
+        maxLength: 1500,
+        value: settings.botAbout ?? '',
+        hint: 'این متن در پاسخ بات به دکمهٔ «درباره مرکز» می‌رود. خالی = متن پیش‌فرض سامانه. حداکثر ۱۵۰۰ نویسه.'
+      }
+    ],
+    onSubmit: async (values) => {
+      await api.put('/api/settings', { bot_about: (values.bot_about ?? '').trim() });
+      toast('متن «دربارهٔ مرکز» ذخیره شد', 'success');
+      navigate(location.hash);
+    }
+  });
 }
 
 function toggleText(v) {
@@ -500,7 +606,7 @@ function openNotifyForm(settings) {
     submitLabel: 'ذخیره',
     fields: [
       { name: 'clinic_name', label: 'نام مرکز (در متن پیام‌ها)', required: true, value: settings.clinicName },
-      { name: 'clinic_phone', label: 'شمارهٔ تماس عمومی مرکز', required: false, value: settings.clinicPhone ?? '', hint: 'در دکمهٔ «شماره تماس» بات به عموم مردم نشان داده می‌شود — خالی = پیام «ثبت‌نشده»', ltr: true },
+      { name: 'clinic_phone', label: 'شمارهٔ تماس عمومی مرکز', required: false, value: settings.clinicPhone ?? '', hint: 'در دکمهٔ «شماره تماس» بات نشان داده می‌شود — خالی = پیام «ثبت‌نشده»', ltr: true },
       { name: 'bot_username', label: 'نام کاربری بات (بدون @ — برای لینک احراز خودکار)', required: false, value: settings.botUsername ?? '', hint: 'مثلاً MyCenterBot — لینک‌های ble.ir/<bot>?start=<کد> با همین نام ساخته می‌شوند. خالی = تشخیص خودکار با دکمهٔ «تشخیص خودکار»', ltr: true },
       { name: 'default_reminder_hours', label: 'یادآوری پیش‌فرض (ساعت قبل)', type: 'number', required: true, min: 1, max: 48, value: String(settings.defaultReminderHours), hint: 'برای دانش‌آموزانی که تنظیمات شخصی ندارند' },
       { name: 'notify_batch_hour', label: 'ساعت ارسال صف نوبت‌های جدید (۰ تا ۲۳)', type: 'number', required: true, min: 0, max: 23, value: String(settings.notifyBatchHour), hint: 'اعلان «ثبت نوبت جدید» به‌جای ارسال فوری، تا این ساعت تهران پیش‌نویس می‌ماند و یک‌جا برای خانواده و معلم می‌رود؛ تغییر و لغو همیشه فوری است' },

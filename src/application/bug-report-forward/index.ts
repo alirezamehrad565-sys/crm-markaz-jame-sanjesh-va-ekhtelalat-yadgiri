@@ -1,13 +1,17 @@
-// ─── ارسال گزارش باگ به پشتیبانی CP (بازاعمال ۱.۲۵.۵۱ — هم‌قرارداد گیرندهٔ m7) ───
+// ─── چرخهٔ دوطرفهٔ گزارش باگ ↔ پشتیبانی CP (۱.۲۵.۵۷ — هم‌قرارداد CP m8) ───
 //
-// قرارداد گیرنده (استخراج از ورکر زندهٔ CP ۱.۱۱.۰/m7):
-//   POST {cpOrigin}/api/node/feedback
-//   هدرها: X-CP-Node-Code · Authorization: Bearer <کلید نود> · X-CP-Node-Version
-//   بدنه:  { id, areas[], severity, description?, page?, app_version?, reporter_name?, created_at }
-//   پاسخ:  201 {ok,data:{id,duplicate}} — 200 با duplicate:true یعنی تکراری (باز هم تحویل‌شده)
+// قرارداد CP ۱.۱۲.۰/m7+m8 (بازخوانی از مخزن CP):
+//   POST {cpOrigin}/api/node/feedback — تحویل گزارش (idempotent با id خود گزارش)
+//     هدرها: X-CP-Node-Code · Authorization: Bearer <کلید نود> · X-CP-Node-Version
+//     بدنه:  { id, areas[], severity, description?, page?, app_version?, reporter_name?, created_at }
+//     پاسخ:  201 {ok,data:{id,duplicate}} — 200 با duplicate:true یعنی تکراری (باز هم تحویل‌شده)
+//   GET {cpOrigin}/api/node/feedback/replies?since= — pull پاسخ‌های پشتیبانی (m8)
+//     پاسخ: {ok,data:{server_time, items:[{id,status,reply_text,reply_by,reply_at,updated_at}]}}
+//     آیتم‌ها با شناسهٔ خودِ گزارش (node_report_id سمت CP) برمی‌گردند — UPSERT مستقیم.
 //
 // همان الگوی cp-report/cp-content: بدون env کامل (CP_SYNC_URL/CP_NODE_CODE/CP_NODE_KEY) =
-// خاموشی کامل (kill switch بدون دیپلوی). گیت ۵دقیقه‌ای مشترک کرون/فرصت‌طلب با مُهر settings.
+// خاموشی کامل (kill switch بدون دیپلوی). گیت ۵دقیقه‌ای مشترک کرون/فرصت‌طلب با مُهر settings —
+// pull و push هر دو زیر همان گیت‌اند تا دوباره‌کاری صفر باشد.
 // هرگز throw نمی‌کند — خطا فقط لاگ و forward_error روی ردیف است؛ تلاش دورهٔ بعد.
 import { APP_VERSION } from '@core/version';
 import type { DbClient } from '@core/db';
@@ -16,6 +20,7 @@ import { createBugReportService } from '@domain/bug-reports';
 import type { BugReportRecord } from '@domain/bug-reports';
 
 export const BUG_REPORT_ATTEMPT_KEY = 'bug_report.forward_attempt_at';
+export const BUG_REPORT_REPLY_SINCE_KEY = 'bug_report.reply_since_at'; // ۱.۲۵.۵۷ — مُهر since مکالمه
 export const BUG_REPORT_MIN_INTERVAL_MS = 5 * 60_000;
 export const BUG_REPORT_TIMEOUT_MS = 15_000;
 export const BUG_REPORT_BATCH_MAX = 20;
@@ -58,7 +63,16 @@ export function buildBugReportConfig(env: {
 
 export type BugReportForwardResult =
   | { status: 'skipped' }
-  | { status: 'done'; sent: number; failed: number; remaining: number };
+  | { status: 'done'; sent: number; failed: number; remaining: number; pulled: number };
+
+function nodeHeaders(config: BugReportForwardConfig): Record<string, string> {
+  return {
+    'X-CP-Node-Code': config.cpNodeCode as string,
+    Authorization: `Bearer ${config.cpNodeKey}`,
+    'X-CP-Node-Version': APP_VERSION,
+    'content-type': 'application/json'
+  };
+}
 
 /** بدنهٔ هم‌قرارداد NodeFeedbackSubmitSchema — محدوده‌ها سمت سرویس/مسیر گرفته شده‌اند */
 function feedbackBodyOf(rec: BugReportRecord): Record<string, unknown> {
@@ -96,8 +110,9 @@ async function writeSettingsIso(db: DbClient, key: string, iso: string): Promise
 }
 
 /**
- * یک دورهٔ کامل ارسال — از کرون و دروازهٔ فرصت‌طلب صدا زده می‌شود؛ گیت ۵دقیقه‌ای مشترک.
- * ترتیب قدیمی‌ترین اول؛ سقف ۲۰ ردیف در هر دوره تا انبار صف نشود.
+ * یک دورهٔ کامل دوطرفه — از کرون و دروازهٔ فرصت‌طلب صدا زده می‌شود؛ گیت ۵دقیقه‌ای مشترک.
+ * ۱) pull پاسخ‌های پشتیبانی با مُهر since — مُهر فقط روی موفقیت پیش می‌رود تا هیچ پاسخی گم نشود؛
+ * ۲) push صف گزارش‌های باز، ترتیب قدیمی‌ترین اول؛ سقف ۲۰ ردیف در هر دوره تا انبار صف نشود.
  */
 export async function runBugReportForward(deps: {
   db: DbClient;
@@ -112,11 +127,7 @@ export async function runBugReportForward(deps: {
   if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) return { status: 'skipped' };
   const now = deps.now ?? (() => new Date());
   const doFetch = deps.fetchFn ?? fetch;
-
-  // گشت بی‌کار: اگر صف خالی است بدون مُهر و بدون نوشتن برمی‌گردیم (صدها دروازهٔ بی‌دلیل ممنوع)
   const service = createBugReportService(db, silentAudit());
-  const open = await service.listOpen(BUG_REPORT_BATCH_MAX);
-  if (open.length === 0) return { status: 'done', sent: 0, failed: 0, remaining: 0 };
 
   // مُهر تلاش — کرون و فرصت‌طلب دوباره‌کاری نکنند (force = کرون)
   const lastIso = await readSettingsIso(db, BUG_REPORT_ATTEMPT_KEY);
@@ -126,6 +137,34 @@ export async function runBugReportForward(deps: {
   }
   await writeSettingsIso(db, BUG_REPORT_ATTEMPT_KEY, now().toISOString());
 
+  // ── ۱) pull پاسخ‌های پشتیبانی (m8) — گم‌نشدنِ پاسخ مهم‌تر از سرعت است ──
+  let pulled = 0;
+  try {
+    const since = await readSettingsIso(db, BUG_REPORT_REPLY_SINCE_KEY);
+    const repliesUrl = `${config.cpOrigin}/api/node/feedback/replies${since ? `?since=${encodeURIComponent(since)}` : ''}`;
+    const res = await doFetch(repliesUrl, {
+      method: 'GET',
+      headers: nodeHeaders(config),
+      signal: AbortSignal.timeout(BUG_REPORT_TIMEOUT_MS)
+    });
+    if (res.ok) {
+      const body = (await res.json().catch(() => null)) as { data?: { server_time?: string; items?: unknown[] } } | null;
+      const items = Array.isArray(body?.data?.items) ? (body?.data?.items as never[]) : [];
+      if (items.length > 0) {
+        pulled = await service.applyReplies(items);
+        logger.info('bug_report.replies.applied', { pulled });
+      }
+      // مُهر since فقط روی موفقیت پیش می‌رود — خطای UPSERT = دورهٔ بعد دوباره (idempotent)
+      await writeSettingsIso(db, BUG_REPORT_REPLY_SINCE_KEY, body?.data?.server_time ?? now().toISOString());
+    } else {
+      logger.warn('bug_report.replies.pull_failed', { status: res.status });
+    }
+  } catch (err) {
+    logger.warn('bug_report.replies.pull_error', { error: err instanceof Error ? err.message : String(err) });
+  }
+
+  // ── ۲) push صف گزارش‌های باز ──
+  const open = await service.listOpen(BUG_REPORT_BATCH_MAX);
   const url = `${config.cpOrigin}/api/node/feedback`;
   let sent = 0;
   let failed = 0;
@@ -133,12 +172,7 @@ export async function runBugReportForward(deps: {
     try {
       const res = await doFetch(url, {
         method: 'POST',
-        headers: {
-          'X-CP-Node-Code': config.cpNodeCode,
-          Authorization: `Bearer ${config.cpNodeKey}`,
-          'X-CP-Node-Version': APP_VERSION,
-          'content-type': 'application/json'
-        },
+        headers: nodeHeaders(config),
         body: JSON.stringify(feedbackBodyOf(rec)),
         signal: AbortSignal.timeout(BUG_REPORT_TIMEOUT_MS)
       });
@@ -157,8 +191,8 @@ export async function runBugReportForward(deps: {
     }
   }
   const remaining = (await service.listOpen(1)).length;
-  logger.info('bug_report.forward.done', { sent, failed, remaining });
-  return { status: 'done', sent, failed, remaining };
+  logger.info('bug_report.forward.done', { sent, failed, remaining, pulled });
+  return { status: 'done', sent, failed, remaining, pulled };
 }
 
 /** دروازهٔ فرصت‌طلب روی ترافیک زنده — بدون env کامل = صفر بار اضافه */

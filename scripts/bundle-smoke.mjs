@@ -99,6 +99,9 @@ async function probe(bundlePath) {
     // ۱.۲۵.۴۰ — مُهرهای زمانی seed بین دو اجرا فرق می‌کنند؛ رفتار نیستند
     norm = norm.replace(/"createdAt":"[^"]*"/g, '"createdAt":"<TS>"');
     norm = norm.replace(/"started_at":"[^"]*"/g, '"started_at":"<TS>"');
+    // ۱.۲۵.۵۷ — نسخهٔ /health و فیلد تازهٔ botAbout در تنظیمات، محصولِ bumpاند نه تغییر رفتار
+    norm = norm.replace(/"version":"[0-9][0-9.]*"/g, '"version":"<V>"');
+    norm = norm.replace(/"botAbout":"[^"]*",?/g, ''); // فیلد در باندل کهنه اصلاً نیست — حضور/غیاب مقایسه‌نشود
     out.push(`${method} ${urlPath} → ${res.status} :: ${norm.slice(0, 4000)}`);
   }
   return out;

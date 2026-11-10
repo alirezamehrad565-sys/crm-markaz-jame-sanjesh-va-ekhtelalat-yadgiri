@@ -156,6 +156,7 @@ export interface TemplateVars {
   exerciseTitle?: string; // عنوان تمرین
   dueYmd?: string;        // تاریخ بازسنجی (YYYY-MM-DD)
   phone?: string;         // شمارهٔ تماس مرکز (bot_contact)
+  aboutText?: string;     // ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» از تنظیمات (bot_about)
   list?: string;          // فهرست چندخطی آماده (bot_public_files/bot_class_activity)
   count?: string;         // شمارش فارسی (bot_pending_homework)
   title?: string;         // عنوان فایل/گزارش (bot_doc_received)
@@ -283,6 +284,7 @@ export interface CenterSettings {
   clinicPhone: string;
   notifyBatchHour: number;
   botUsername: string;
+  botAbout: string; // ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات؛ خالی = متن پیش‌فرض سامانه
   meta: {
     baleConfigured: boolean;
     webhookEnabled: boolean;
