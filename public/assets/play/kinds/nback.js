@@ -21,7 +21,7 @@ const CREAM = '#F5F0E5';   /* پس‌زمینهٔ کارت عکس در آموز�
 
 /* جنبش تزئینی و صحنهٔ آموزش — همهٔ جنبش از fx با گارد کاهش‌جنبش؛ این ماژول هرگز مستقیم animate نمی‌کند */
 import * as fx from '../fx.js';
-import { sceneMarkup } from '../scene.js';
+import { sceneMarkup, kindHero } from '../scene.js';
 
 /* پالت ماهی — کلیدها قرارداد بانک authored اند؛ برچسب فارسی + رنگ بدنه (کودک‌پسند).
    همان شش رنگ حقه‌باز رنگ‌ها تا درمانگر با یک زبان کار می‌کند */
@@ -31,7 +31,13 @@ const FISH = {
   green:  { fa: 'ماهی سبز',    hex: '#3E9B5F' },
   yellow: { fa: 'ماهی زرد',    hex: '#E9C33C' },
   orange: { fa: 'ماهی نارنجی', hex: '#E0762F' },
-  purple: { fa: 'ماهی بنفش',   hex: '#8E5BB8' }
+  purple: { fa: 'ماهی بنفش',   hex: '#8E5BB8' },
+  /* چهار کلید بانک authored (nb-a/nb-b/nb-c از ده‌رنگ بانک) — سابقاً در پالت کلاینت نبودند و
+     کارتِ اجرای اصلی به پلاسهولدر «این کارت عکس ندارد» می‌افتاد: P0 ممیزی فازها ۱.۲۵.۴۷ */
+  teal:   { fa: 'ماهی فیروزه‌ای', hex: '#2E9E9A' },
+  pink:   { fa: 'ماهی صورتی',  hex: '#D96C9E' },
+  lime:   { fa: 'ماهی لیمویی', hex: '#8FB33C' },
+  indigo: { fa: 'ماهی نیلی',   hex: '#4A5BB8' }
 };
 
 /* کلید ناشناخته از سرور = ماهی خاکستری بی‌نام — هیچ راهی به کلید نیست */
@@ -74,21 +80,26 @@ function nLabelOf(stim) {
   return n === 1 ? 'یک قدم به عقب' : n === 2 ? 'دو قدم به عقب' : null;
 }
 
-/** کارت عکس ماهی — قاب آلبوم با گوشهٔ نوار چسب و ماهی وکتوری؛ ایستا (جنبش از fx) */
+/** کارت عکس ماهی — قاب آلبوم با گوشهٔ نوار چسب و ماهی وکتوری؛ ایستا (جنبش از fx).
+ *  ۱.۲۵.۴۱ (ممیزی): ماهی قبلی سرِ کرم‌رنگ و دم بی‌پر داشت و نیمه‌کاره دیده می‌شد؛
+ *  ماهی تازه تک‌شکلِ پر است (بدنه + دم + دو باله همه با رنگ ماهی)، نوار چسب
+ *  گوشهٔ راست (RTL) — تفاوت ماهی‌ها فقط در رنگ و چشم می‌ماند و هرگز از
+ *  نیم‌پرِی گرافیک برداشت نمی‌شود. */
 export function fishCardSvg(key) {
   const f = fishOf(key);
   return '<svg class="play-nback__card" viewBox="0 0 150 110" role="img" aria-label="' + esc(f.fa) + '">' +
     '<rect x="4" y="4" width="142" height="102" rx="14" fill="' + CREAM + '" stroke="' + INK + '" stroke-width="3"/>' +
-    '<path d="M14 4 h30 v10 q0 4 -4 4 h-22 q-4 0 -4 -4 Z" fill="#E4AA46" stroke="' + INK + '" stroke-width="2"/>' +
+    '<path d="M106 4 h30 v10 q0 4 -4 4 h-22 q-4 0 -4 -4 Z" fill="#E4AA46" stroke="' + INK + '" stroke-width="2"/>' +
     '<g stroke="' + INK + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">' +
-      '<path d="M45 55 C45 38 62 28 78 30 C94 32 104 44 108 55 C104 66 94 78 78 80 C62 82 45 72 45 55 Z" fill="' + f.hex + '"/>' +
-      '<path d="M108 55 L126 42 C123 50 123 60 126 68 Z" fill="' + f.hex + '"/>' +
-      '<path d="M70 31 C72 40 72 70 70 79" fill="none"/>' +
-      '<path d="M52 44 C58 41 66 41 72 44" fill="none"/>' +
-      '<path d="M52 66 C58 69 66 69 72 66" fill="none"/>' +
+      '<path d="M42 55 L24 42 C27 50 27 60 24 68 Z" fill="' + f.hex + '"/>' +
+      '<path d="M42 55 C42 38 59 28 75 30 C91 32 101 44 105 55 C101 66 91 78 75 80 C59 82 42 72 42 55 Z" fill="' + f.hex + '"/>' +
+      '<path d="M60 31 Q68 16 84 23 Q72 23 66 32 Z" fill="' + f.hex + '"/>' +
+      '<path d="M64 79 Q73 91 84 81 Q75 81 70 76 Z" fill="' + f.hex + '"/>' +
+      '<path d="M84 41 Q88 55 84 69" fill="none"/>' +
+      '<path d="M103 60 q-4 4 -9 3" fill="none"/>' +
     '</g>' +
-    '<circle cx="62" cy="50" r="4" fill="' + INK + '"/>' +
-    '<circle cx="63.5" cy="48.5" r="1.4" fill="' + CREAM + '"/>' +
+    '<circle cx="93" cy="50" r="5.5" fill="#FFFFFF" stroke="' + INK + '" stroke-width="2"/>' +
+    '<circle cx="94.5" cy="51.5" r="2.4" fill="' + INK + '"/>' +
     '</svg>';
 }
 
@@ -213,7 +224,7 @@ const PRACTICE_WINDOW_MS = 15000;
 /** صحنهٔ تمرین — دکور پس‌زمینهٔ لایه‌های دریا؛ جنبش از fx؛ بی‌اثر برای پاسخ */
 function decoratePractice(stage) {
   if (!stage) return;
-  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach'));
+  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach', { svg: kindHero('nback') })); // قهرمان این بازی — پوستهٔ اختصاصی ۱.۲۵.۴۱
   fx.sceneAmbient(stage);
 }
 

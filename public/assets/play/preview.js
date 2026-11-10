@@ -91,12 +91,24 @@ async function loadKind() {
       // حملهٔ جاسوس‌ها (۱.۲۵.۳۲ رفع: پیش‌نمایش اسکن هم از markup اصلی می‌گذرد)
       scanMarkup: mod.scanMarkup || null,
       scanRevealTruth: mod.scanRevealTruth || null,
-      scanCatchPoint: mod.scanCatchPoint || null
+      scanCatchPoint: mod.scanCatchPoint || null,
+      // دو بازی حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۸) — پیش‌نمایش هم از همان توابع نمایش می‌گذرد
+      corsiMarkup: mod.corsiMarkup || null,
+      corsiBeginRecall: mod.corsiBeginRecall || null,
+      corsiRevealTruth: mod.corsiRevealTruth || null,
+      corsiResponsePoint: mod.corsiResponsePoint || null,
+      spanMarkup: mod.spanMarkup || null,
+      spanBeginInput: mod.spanBeginInput || null,
+      spanRevealTruth: mod.spanRevealTruth || null,
+      spanResponsePoint: mod.spanResponsePoint || null
     };
   } catch (err) {
     return GENERIC;
   }
 }
+
+/* (۱.۲۵.۴۵) گیت جهت حذف شد — پیش‌نمایش هم مثل بازی اصلی دو نما است:
+   عمودی و افقی هر دو اجرای واقعی‌اند؛ هیچ پوششی بازی را نمی‌پوشاند */
 
 /* ─── راه‌اندازی — پروتکل از data-protocol سرور؛ هاردکد ممنوع ─── */
 

@@ -9,6 +9,9 @@ import {
   cpSyncOpportunistic,
   stampCpSyncAttempt
 } from '@app/cp-sync/announcements';
+import { buildCpReportConfig, pushCpReport, cpReportOpportunistic } from '@app/cp-report/ingest';
+import { buildCpContentConfig, runCpContentCycle, cpContentOpportunistic } from '@app/cp-content/sync';
+import { createContentScoreService } from '@domain/content-score'; // ۱.۲۵.۴۸ m6
 
 export interface Env {
   DB: D1Database;
@@ -160,18 +163,91 @@ function probeCpSync(env: Env, ctx: ExecutionContext): void {
   );
 }
 
+/** چرخهٔ گزارش‌دهی تجمیعی نود → CP (فاز غنی‌سازی) — گیت ۲۴ساعتهٔ درونی دارد؛ خاموش اگر env خالی باشد */
+async function runCpReportCycle(env: Env): Promise<void> {
+  const db = createDb(env.DB);
+  const logger = createLogger('sync');
+  const result = await pushCpReport({
+    db,
+    logger,
+    config: buildCpReportConfig(env),
+    binding: env.CP ?? null
+  });
+  logger.info('cp_report.cycle.done', { status: result.status, seq: result.seq ?? 0 });
+}
+
+/** دروازهٔ فرصت‌طلب گزارش‌دهی — همان الگوی cp-sync؛ گیت ۲۴ساعتهٔ مشترک دوباره‌کاری را می‌بندد */
+let cpReportProbeAt = 0;
+function probeCpReport(env: Env, ctx: ExecutionContext): void {
+  const t = Date.now();
+  if (t - cpReportProbeAt < 60_000) return;
+  cpReportProbeAt = t;
+  ctx.waitUntil(
+    cpReportOpportunistic({
+      db: createDb(env.DB),
+      logger: createLogger('sync'),
+      config: buildCpReportConfig(env),
+      binding: env.CP ?? null
+    }).catch(() => undefined)
+  );
+}
+
+/**
+ * چرخهٔ کتابخانهٔ شبکه (محور دوم غنی‌سازی): push همرسانی‌ها + pull برگزیده‌ها —
+ * قرارداد docs/cp-node-content-hub.md؛ بدون env تازه (همان کلید نود م۱.۲)؛
+ * گیت ۱۵دقیقه‌ای درونی دارد؛ CP بدون درگاه = فقط warn و تلاش دورهٔ بعد.
+ */
+async function runCpContentCycleWrap(env: Env): Promise<void> {
+  const db = createDb(env.DB);
+  const logger = createLogger('sync');
+  const result = await runCpContentCycle({
+    db,
+    logger,
+    config: buildCpContentConfig(env),
+    binding: env.CP ?? null
+  });
+  logger.info('cp_content.cycle.done', {
+    status: result.status,
+    pushed: result.pushed ?? 0,
+    applied: result.applied ?? 0
+  });
+  // 1.25.48 m6 — مولد امتیاز داخل هستهٔ چرخه اجرا می‌شود (هم کرون و هم مسیر فرصت‌طلب را پوشش می‌دهد).
+}
+
+/** دروازهٔ فرصت‌طلب کتابخانهٔ شبکه — همان الگوی cp-sync/cp-report */
+let cpContentProbeAt = 0;
+function probeCpContent(env: Env, ctx: ExecutionContext): void {
+  const t = Date.now();
+  if (t - cpContentProbeAt < 60_000) return;
+  cpContentProbeAt = t;
+  ctx.waitUntil(
+    cpContentOpportunistic({
+      db: createDb(env.DB),
+      logger: createLogger('sync'),
+      config: buildCpContentConfig(env),
+      binding: env.CP ?? null
+    }).catch(() => undefined)
+  );
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     probeCpSync(env, ctx); // فرصت‌طلب؛ بدون env خالی است و فوراً برمی‌گردد
+    probeCpReport(env, ctx); // گزارش‌دهی تجمیعی روزانه به CP — گیت ۲۴ساعتهٔ درونی
+    probeCpContent(env, ctx); // کتابخانهٔ شبکه — push همرسانی + pull برگزیده‌ها (گیت ۱۵دقیقه‌ای)
     const db = createDb(env.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger('worker');
+    const cpContentCfg = buildCpContentConfig(env);
     const app = createApp({
       db,
       audit,
       logger,
       teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-      ...buildEnv(env)
+      ...buildEnv(env),
+      cpSyncUrl: env.CP_SYNC_URL ?? null,
+      cpNodeCode: cpContentCfg.cpNodeCode,
+      cpNodeKey: cpContentCfg.cpNodeKey
     });
     return app.fetch(request, env, ctx);
   },
@@ -179,6 +255,8 @@ export default {
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     if (event.cron === CP_SYNC_CRON) {
       ctx.waitUntil(runCpSyncCycle(env)); // سینک اعلان از کنترل‌پلین — خاموش اگر env خالی باشد
+      ctx.waitUntil(runCpReportCycle(env)); // گزارش‌دهی تجمیعی — گیت ۲۴ساعتهٔ مشترک، دوباره‌کاری صفر
+      ctx.waitUntil(runCpContentCycleWrap(env)); // کتابخانهٔ شبکه — گیت ۱۵دقیقه‌ای مشترک، دوباره‌کاری صفر
       return;
     }
     if (event.cron === DIGEST_CRON) {

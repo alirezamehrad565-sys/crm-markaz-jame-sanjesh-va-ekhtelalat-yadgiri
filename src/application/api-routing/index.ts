@@ -61,6 +61,13 @@ import { createClearbookService, registerClearbookRoutes } from '@domain/clearbo
 import type { ClearbookService } from '@domain/clearbook';
 import { createDocsService, registerDocsRoutes } from '@domain/docs'; // نمون‌برگ‌ها و اسناد خام
 import type { DocsService } from '@domain/docs';
+import { createCenterKpiService, registerCenterKpiRoutes } from '@domain/center-kpi'; // ۱.۲۵.۴۶ — شاخص‌های مرکز
+import type { CenterKpiService } from '@domain/center-kpi';
+import { createNetworkContentService, registerNetworkContentRoutes } from '@domain/network-content'; // ۱.۲۵.۴۶ — کتابخانهٔ شبکه
+import { createContentScoreService, registerContentScoreRoutes } from '@domain/content-score'; // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
+import type { ContentScoreService } from '@domain/content-score';
+import { fetchCpContentFile } from '@app/cp-content/sync';
+import type { NetworkContentService } from '@domain/network-content';
 import { createFinanceService, registerFinanceRoutes } from '@domain/finance'; // بودجه و مالی مرکز
 import type { FinanceService } from '@domain/finance';
 import { registerImportRoutes } from '@app/excel-import'; // درون‌ریزی اکسل
@@ -108,6 +115,10 @@ export interface AppDeps {
   publicBaseUrl?: string | null;
   backupDocumentSender?: BackupDocumentSender | null; // تزریق ارسال‌کنندهٔ آزمایشی
   exerciseFileSender?: ExerciseFileSender | null; // تزریق ارسال‌کنندهٔ فایل تمرین (تست/سلف‌هاست)
+  // 1.25.48 m6 — اتصال CP برای دانلود فایل برگزیده‌ها (خاموش اگر env سینک خالی است)
+  cpSyncUrl?: string | null;
+  cpNodeCode?: string | null;
+  cpNodeKey?: string | null;
 }
 
 export interface Services {
@@ -148,6 +159,9 @@ export interface Services {
   games: GamesService; // ۱.۲۵.۰۷ — بستر بک‌اند بازی
   backup: BackupService;
   rum: RumService; // 
+  centerKpi: CenterKpiService; // ۱.۲۵.۴۶ — تابلوی شاخص‌های مرکز
+  networkContent: NetworkContentService; // ۱.۲۵.۴۶ — کتابخانهٔ شبکه
+  contentScore: ContentScoreService; // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
 }
 
 export function createServices(deps: AppDeps): Services {
@@ -439,7 +453,28 @@ export function createServices(deps: AppDeps): Services {
   // تله‌متری کارایی: ثبت بی‌نام + جمع‌بندی صدک (نرخ درون‌حافظه، بدون IP/UA)
   const rum = createRumService({ db, logger });
 
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum };
+  // ۱.۲۵.۴۶ — تابلوی شاخص‌های مرکز + کتابخانهٔ شبکه (محورهای کیفیِ غنی‌سازی CP)
+  const centerKpi = createCenterKpiService({ db });
+  const networkContent = createNetworkContentService({
+    db,
+    audit,
+    // m6 — دانلود فقط-خواندنی فایل برگزیده‌ها با کلید نود (خاموش اگر env سینک خالی است)
+    fetchCpFile: deps.cpSyncUrl
+      ? (itemId) => {
+          let origin: string | null = null;
+          try { origin = new URL(deps.cpSyncUrl as string).origin; } catch { origin = null; }
+          return fetchCpContentFile({
+            config: { cpOrigin: origin, cpNodeCode: deps.cpNodeCode ?? null, cpNodeKey: deps.cpNodeKey ?? null, cpSyncStaffId: null },
+            networkItemId: itemId
+          }).catch(() => null);
+        }
+      : undefined
+  });
+
+  // m6 — مولد امتیاز شناسنامهٔ آیتم: خودِ سامانهٔ کلاینت (refs/uses از دادهٔ واقعی مرکز)
+  const contentScore = createContentScoreService(db, audit);
+
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, contentScore };
 }
 
 export function createApp(deps: AppDeps): AppHono {
@@ -607,6 +642,11 @@ export function createApp(deps: AppDeps): AppHono {
   registerBackupRoutes(app, services.backup); // پشتیبان‌گیری و بازیابی
 
   registerRumRoutes(app, services.rum); // تله‌متری کارایی (نوشتن عمومی /public/rum، جمع‌بندی فقط‌مدیر)
+
+  registerCenterKpiRoutes(app, services.centerKpi); // ۱.۲۵.۴۶ — شاخص‌های مرکز (مدیر/منشی)
+  registerNetworkContentRoutes(app, services.networkContent); // ۱.۲۵.۴۶ — کتابخانهٔ شبکه
+
+  registerContentScoreRoutes(app, { contentScore: services.contentScore }); // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
 
   if (FEATURES.apiKeys) registerKeysRoutes(app, services.keys);
 

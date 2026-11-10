@@ -6,6 +6,7 @@ import {
   addDaysYmd,
   formatJalaliShort,
   formatJalaliFull,
+  formatJalaliNumeric, /* ۱.۲۵.۵۰ — نمایش عددی تاریخ تولد */
   iranianWeekdayOfYmd,
   toJalali,
   WEEKDAY_NAMES
@@ -161,6 +162,41 @@ async function renderDailyTab(box, container, myGen) {
     'aria-label': 'نام و فامیل دانش‌آموز و برچسب‌های هشتگ‌دار'
   });
 
+  /* —— ۱.۲۵.۵۰ — دو فیلد اختیاری زیر ثبت سریع:
+     تاریخ تولد (تقویم جلالی — کلیک روی آیکن تقویم پاپ‌آور انتخاب تاریخ را باز می‌کند)
+     و نمرهٔ آمادگی تحصیلی (عدد ۰..۱۰۰). هر دو خالی = ثبت‌نشده. —— */
+  const birthInput = jalaliDateInput({ value: '' });
+  const birthField = birthInput.root.querySelector('input.jdate__field');
+  if (birthField) birthField.setAttribute('aria-label', 'تاریخ تولد — اختیاری، می‌توانید تایپ کنید یا از تقویم انتخاب کنید');
+
+  const readinessInput = el('input', {
+    class: 'input',
+    type: 'number',
+    min: '0',
+    max: '100',
+    step: '1',
+    inputmode: 'numeric',
+    placeholder: 'مثلاً ۸۵',
+    'aria-label': 'نمرهٔ آمادگی تحصیلی — اختیاری، از ۱۰۰'
+  });
+
+  const setExtraValues = (e) => {
+    birthInput.setYmd(e?.birthDate ?? '');
+    readinessInput.value = e?.readinessScore === null || e?.readinessScore === undefined ? '' : String(e.readinessScore);
+  };
+  setExtraValues(state.editingId ? entries.find((x) => x.id === state.editingId) : null);
+
+  const extraFields = el('div', { class: 'sanj-extra', role: 'group', 'aria-label': 'فیلدهای اختیاری ثبت سریع' },
+    el('label', { class: 'field' },
+      el('span', { class: 'cell-sub' }, 'تاریخ تولد ', el('span', { class: 'sanj-extra__opt' }, '(اختیاری)')),
+      birthInput.root
+    ),
+    el('label', { class: 'field' },
+      el('span', { class: 'cell-sub' }, 'نمرهٔ آمادگی تحصیلی ', el('span', { class: 'sanj-extra__opt' }, '(اختیاری)')),
+      readinessInput
+    )
+  );
+
   const preview = el('div', { class: 'sanj-preview', style: { display: 'none' } });
 
   const drawPreview = () => {
@@ -284,7 +320,10 @@ async function renderDailyTab(box, container, myGen) {
       el('div', { class: 'sanj-row__main' },
         el('span', { class: 'cell-main' }, e.name),
         el('span', { class: 'cell-sub' },
-          `${e.creatorName ?? '—'} • ${e.createdAt ? fa(tehranTimeOfIso(e.createdAt)) : ''}`) // ساعت تهران، نه برش UTC
+          `${e.creatorName ?? '—'} • ${e.createdAt ? fa(tehranTimeOfIso(e.createdAt)) : ''}`, // ساعت تهران، نه برش UTC
+          /* ۱.۲۵.۵۰ — فیلدهای اختیاری در ردیف، فقط وقتی ثبت‌شده باشند */
+          e.birthDate ? ` • تولد ${formatJalaliNumeric(e.birthDate)}` : '',
+          e.readinessScore !== null && e.readinessScore !== undefined ? ` • آمادگی ${fa(e.readinessScore)}` : '')
       ),
       el('div', { class: 'sanj-row__tags' },
         hasPreTag(e.tags)
@@ -354,6 +393,7 @@ async function renderDailyTab(box, container, myGen) {
       if (KIND_BY_LABEL.has(t)) composer.toggles.add(t);
       else composer.custom.add(t);
     }
+    setExtraValues(e); /* ۱.۲۵.۵۰ — تولد/آمادگی فعلی در فرم ویرایش */
     drawChips();
     drawPreview();
     syncComposerMode();
@@ -365,10 +405,23 @@ async function renderDailyTab(box, container, myGen) {
     input.value = '';
     composer.toggles.clear();
     composer.custom.clear();
+    setExtraValues(null); /* ۱.۲۵.۵۰ — خالی‌شدن فیلدهای اختیاری */
     drawChips();
     drawPreview();
     syncComposerMode();
     input.focus();
+  };
+
+  const readExtraInputs = () => {
+    /* ۱.۲۵.۵۰ — خواندن دو فیلد اختیاری؛ خروجی آمادهٔ بدنهٔ API (null = ثبت‌نشده/پاک‌شده) */
+    const birthYmd = (birthInput.getYmd() ?? '').trim();
+    const raw = readinessInput.value.trim();
+    if (raw === '') return { birthDate: birthYmd || null, readinessScore: null };
+    const score = Number(raw);
+    if (!Number.isFinite(score) || !Number.isInteger(score) || score < 0 || score > 100) {
+      return { invalid: true };
+    }
+    return { birthDate: birthYmd || null, readinessScore: score };
   };
 
   const submit = async () => {
@@ -380,11 +433,22 @@ async function renderDailyTab(box, container, myGen) {
       input.focus();
       return;
     }
+    const extra = readExtraInputs(); /* ۱.۲۵.۵۰ */
+    if (extra.invalid) {
+      toast('نمرهٔ آمادگی تحصیلی باید عددی بین ۰ تا ۱۰۰ باشد', 'warning');
+      readinessInput.focus();
+      return;
+    }
     if (merged.length > 12) toast('بیش از ۱۲ برچسب انتخاب شده — فقط ۱۲ مورد نخست ثبت می‌شود', 'warning'); /* S3-06 — یک‌بار در هر تلاش ثبت، نه با هر ضربهٔ کلید */
     const tags = merged.slice(0, 12);
     try {
       if (state.editingId) {
-        const res = await api.patch(`/api/screening/${state.editingId}`, { name: parsed.name, tags });
+        const res = await api.patch(`/api/screening/${state.editingId}`, {
+          name: parsed.name,
+          tags,
+          birth_date: extra.birthDate,
+          readiness_score: extra.readinessScore
+        });
         entries = entries.map((x) => (x.id === res.data.id ? res.data : x));
         paintCounts(); // — ویرایش می‌تواند عادی↔ارجاع را برعکس کند؛ شمارنده‌های سربرگ درجا
         const old = rowsZone.querySelector(`.sanj-row[data-id="${CSS.escape(String(res.data.id))}"]`);
@@ -403,7 +467,13 @@ async function renderDailyTab(box, container, myGen) {
         toast(`«${parsed.name}» امروز قبلاً ثبت شده — برای تغییر برچسب‌ها از ویرایش استفاده کنید`, 'warning');
         return;
       }
-      const res = await api.post('/api/screening', { name: parsed.name, tags, day: today });
+      const res = await api.post('/api/screening', {
+        name: parsed.name,
+        tags,
+        day: today,
+        birth_date: extra.birthDate,
+        readiness_score: extra.readinessScore
+      });
       toast(
         tags.filter((t) => KIND_BY_LABEL.has(t)).length > 0
           ? `${parsed.name} با برچسب ثبت شد`
@@ -422,6 +492,7 @@ async function renderDailyTab(box, container, myGen) {
       input.value = '';
       composer.toggles.clear();
       composer.custom.clear();
+      setExtraValues(null); /* ۱.۲۵.۵۰ — آمادهٔ ثبت بعدی */
       drawChips();
       drawPreview();
       input.focus(); // ریتم ثبت زنجیره‌ای: باکس آمادهٔ نام بعدی است
@@ -443,6 +514,7 @@ async function renderDailyTab(box, container, myGen) {
     el('div', { class: 'card__body sanj-composer' },
       input,
       preview,
+      extraFields, /* ۱.۲۵.۵۰ — زیر ثبت سریع */
       el('div', {},
         el('div', { class: 'sanj-hint', style: { marginBottom: '6px' } }, 'برچسب وضعیت (لمس کنید تا روشن شود)'),
         preChips
@@ -824,14 +896,43 @@ function buildEntriesTable(entries) {
   });
 }
 
+/* —— ۱.۲۵.۵۰ — خروجی CSV گزارش مدیر: هر برچسب یک ستون مستقل (جدول محوری).
+   ترتیب ستون‌های برچسب: شش برچسب ثابت به ترتیب canonical (فقط آن‌هایی که در بازه حضور دارند)،
+   سپس برچسب‌های آزاد به ترتیب بیشترین تکرار. خانهٔ هر ستون برچسب: «✓» اگر ردیف آن برچسب را دارد، وگرنه خالی.
+   ستون‌های تاریخ تولد و نمرهٔ آمادگی تحصیلی هم (در صورت ثبت) کنار ردیف می‌نشینند. —— */
 function exportCsv(entries, range) {
-  const header = ['نام و فامیل', 'روز سنجش (میلادی)', 'روز سنجش (شمسی)', 'برچسب‌ها', 'ثبت‌کننده'];
+  const present = new Set();
+  const counts = new Map();
+  for (const e of entries) {
+    for (const t of e.tags) {
+      present.add(t);
+      counts.set(t, (counts.get(t) ?? 0) + 1);
+    }
+  }
+  const tagColumns = [
+    ...PREDEFINED.filter((t) => present.has(t.label)).map((t) => t.label),
+    ...[...present]
+      .filter((t) => !KIND_BY_LABEL.has(t))
+      .sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0) || a.localeCompare(b, 'fa'))
+  ];
+
+  const header = [
+    'نام و فامیل',
+    'روز سنجش (میلادی)',
+    'روز سنجش (شمسی)',
+    'ثبت‌کننده',
+    'تاریخ تولد',
+    'نمره آمادگی تحصیلی',
+    ...tagColumns
+  ];
   const rows = entries.map((e) => [
     e.name,
     e.day,
     formatJalaliShort(e.day),
-    e.tags.join(' | '),
-    e.creatorName ?? ''
+    e.creatorName ?? '',
+    e.birthDate ? formatJalaliNumeric(e.birthDate) : '',
+    e.readinessScore === null || e.readinessScore === undefined ? '' : e.readinessScore,
+    ...tagColumns.map((t) => (e.tags.includes(t) ? '✓' : ''))
   ]);
   const csv = '\uFEFF' + [header, ...rows]
     .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))

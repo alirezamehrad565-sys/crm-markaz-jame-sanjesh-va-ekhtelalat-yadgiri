@@ -1,6 +1,7 @@
 // page.ts — صفحهٔ سه‌حالتهٔ لینک (M1: گذارها · M2: پخش‌کنندهٔ کودک · فاز ۲ بازطراحی: پنج‌شِمال)
 // این صفحه فقط گذارها را می‌راند و هیچ منبع بیرونی ندارد؛ دارایی‌های بازی از همان مبدأ با ?v= نسخه می‌آیند.
 import { APP_VERSION } from '@core/version';
+import { GAME_KIND_IDS } from './registry';
 import type { PublicStateView, PreviewStateView } from './types';
 
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
@@ -11,6 +12,32 @@ function faNum(n: number): string {
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* پوستهٔ اختصاصی نوع‌بازی (G7/۱.۲۵.۴۳) — هر بازی فایل CSS خودش را می‌گیرد؛
+   فقط برای نوع‌های شناخته‌شدهٔ رجیستری سرو می‌شود (نام مسیر از ورودی کاربر ساخته نمی‌شود) */
+function skinLink(kind: unknown): string {
+  const k = String(kind ?? '');
+  return (GAME_KIND_IDS as readonly string[]).includes(k)
+    ? `<link rel="stylesheet" href="/assets/play/skins/${k}.css?v=${APP_VERSION}" />`
+    : '';
+}
+
+/* قهرمان کوچک هر نوع‌بازی برای کارت والد (۱.۲۵.۴۱) — همان وکتورهای درون‌کد پخش‌کننده؛
+   هیچ دارایی بیرونی؛ نوع ناشناخته = ماهی کهربایی */
+const KIND_FIGS: Record<string, string> = {
+  gonogo: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z M46 40 Q58 20 72 38 Q58 34 50 44 Z M54 84 Q62 94 72 88 Q64 88 58 82 Z" fill="#E4AA46" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0 M72 46 Q66 58 72 70 M20 64 Q26 70 34 66" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/>',
+  numline: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0 M22 42 a9 9 0 1 0 0.01 0 M102 42 a9 9 0 1 0 0.01 0 M14 36 Q22 30 28 36 M96 36 Q102 30 110 36" fill="#D97C4F" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M52 48 a3.5 3.5 0 1 0 0.01 0 M72 48 a3.5 3.5 0 1 0 0.01 0 M52 40 L50 32 M72 40 L74 32 M58 58 Q62 62 66 58 M40 78 L32 90 M50 80 L46 94 M74 80 L78 94 M84 78 L92 90" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/>',
+  scan: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#5E8FB8" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0 M72 46 Q66 58 72 70" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z" fill="#E4AA46" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/>',
+  stroop: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#9B7EDE" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M74 50 Q80 44 86 50 M20 60 Q28 72 40 66" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><circle cx="30" cy="18" r="8" fill="#D96C6C" stroke="#153E50" stroke-width="3"/><circle cx="92" cy="14" r="8" fill="#63B37F" stroke="#153E50" stroke-width="3"/>',
+  flanker: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#8FA6B8" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0" fill="none" stroke="#153E50" stroke-width="3"/><path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" transform="translate(-6 -38) scale(.62)" fill="#B9C6D2" stroke="#153E50" stroke-width="4" stroke-linejoin="round"/>',
+  trail: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0 M22 42 a9 9 0 1 0 0.01 0 M102 42 a9 9 0 1 0 0.01 0" fill="#C4635F" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M52 48 a3.5 3.5 0 1 0 0.01 0 M72 48 a3.5 3.5 0 1 0 0.01 0 M52 40 L50 32 M72 40 L74 32 M58 58 Q62 62 66 58" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><path d="M22 84 q4 -10 10 -2 q-2 -10 8 -8" fill="none" stroke="#153E50" stroke-width="2.5" stroke-linecap="round"/><path d="M96 86 q4 -10 10 -2 q-2 -10 8 -8" fill="none" stroke="#153E50" stroke-width="2.5" stroke-linecap="round"/>',
+  nback: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0" fill="#438C89" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M50 46 Q54 42 58 46 M66 46 Q70 42 74 46 M52 40 L50 32 M72 40 L74 32 M56 56 Q62 64 68 56" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><rect x="12" y="12" width="38" height="26" rx="4" fill="#E4AA46" stroke="#153E50" stroke-width="3"/><circle cx="31" cy="25" r="7" fill="#F5F0E5" stroke="#153E50" stroke-width="2.5"/>'
+};
+
+function kindFig(kind: unknown): string {
+  const body = KIND_FIGS[String(kind ?? '')] ?? KIND_FIGS.gonogo;
+  return '<svg class="play-kindfig" viewBox="0 0 120 124" aria-hidden="true">' + body + '</svg>';
 }
 
 function page(model: PublicStateView, token: string, body: string): string {
@@ -95,8 +122,9 @@ export function renderGamesPage(model: PublicStateView, token: string): string {
       ? model.parentCopyBefore.trim()
       : 'این بازی تمرین تمرکز و مهار است، نه درمان؛ نقش شما کنار ماندن و تشویق آرام است.';
     return page(model, token, `<div class="card">${head}
+      ${kindFig(model.playGame)}
       <p class="muted">${esc(beforeFa)}</p>
-      <p class="muted">گوشی را به کودک بدهید و کنارش بمانید؛ هر روز چند دقیقه کافی است.</p>
+      <p class="muted">گوشی را به کودک بدهید و کنارش بمانید.</p>
       <button id="btn-start" type="button">آمادهٔ شروع هستیم</button></div>`);
   }
 
@@ -113,6 +141,7 @@ export function renderGamesPage(model: PublicStateView, token: string): string {
     return page(model, token, `<div id="play-root" class="play-root"
       data-token="${esc(token)}"
       data-kind="${esc(model.playGame ?? '')}"
+      data-title="${esc(model.missionTitle || '')}"
       data-hint="${esc(hint)}" data-resume="${esc(resume)}"${stageAttr}
       data-protocol="${esc(protocol)}">
       <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
@@ -124,6 +153,7 @@ export function renderGamesPage(model: PublicStateView, token: string): string {
       </div>
     </div>
     <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />
+    ${skinLink(model.playGame)}
     <script type="module" src="/assets/play/play.js?v=${APP_VERSION}"></script>`);
   }
 
@@ -194,6 +224,7 @@ export function renderPreviewPage(state: PreviewStateView | null, token: string)
     <div id="play-root" class="play-root"
       data-token="${esc(token)}"
       data-kind="${esc(state.game)}"
+      data-title="${esc(state.missionTitle)}"
       data-hint="${esc(hint)}"
       data-protocol="${esc(protocol)}">
       <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
@@ -205,6 +236,7 @@ export function renderPreviewPage(state: PreviewStateView | null, token: string)
       </div>
     </div>
     <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />
+    ${skinLink(state.game)}
     <script type="module" src="/assets/play/preview.js?v=${APP_VERSION}"></script>`;
   // پوستهٔ مشترک صفحه — گذارهای لینک در پیش‌نمایش معنا ندارد و bindهایش بی‌اثر می‌مانند
   return page(

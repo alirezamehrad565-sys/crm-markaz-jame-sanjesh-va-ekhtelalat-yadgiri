@@ -60,8 +60,8 @@ function calmPanel() {
 }
 
 /* ─── ماژول نوع‌بازی: بارگیری از kinds/ یا بازگشت به پخش‌کنندهٔ عام ───
-   قفل جهت باز شده (۱۴۰۵/۰۸/۱۹): گیت «گوشی را بچرخان» برداشته شد — بازی در هر دو
-   جهت آزادانه اجرا می‌شود؛ چیدمان عمودی اولویت دارد و قواعد فشردهٔ افقی فرود دوم‌اند. */
+   (۱.۲۵.۴۵) گیت جهت حذف شد — عمودی و افقی هر دو اجرای واقعی‌اند؛ هیچ پوششی
+   هیچ‌وقت بازی را نمی‌پوشاند. مکث فقط از پنهان‌شدن برگه (سمت session.js) */
 
 const GENERIC = {
   previewSteps: () => [],
@@ -106,7 +106,16 @@ async function loadKind() {
       // حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — توابع نمایش موج اسکن (ماژول‌های دیگر این‌ها ندارند)
       scanMarkup: mod.scanMarkup || null,
       scanRevealTruth: mod.scanRevealTruth || null,
-      scanCatchPoint: mod.scanCatchPoint || null
+      scanCatchPoint: mod.scanCatchPoint || null,
+      // دو بازی حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۸) — صدف‌های جادویی (corsi) و حباب‌های عدد (span)
+      corsiMarkup: mod.corsiMarkup || null,
+      corsiBeginRecall: mod.corsiBeginRecall || null,
+      corsiRevealTruth: mod.corsiRevealTruth || null,
+      corsiResponsePoint: mod.corsiResponsePoint || null,
+      spanMarkup: mod.spanMarkup || null,
+      spanBeginInput: mod.spanBeginInput || null,
+      spanRevealTruth: mod.spanRevealTruth || null,
+      spanResponsePoint: mod.spanResponsePoint || null
     };
   } catch (err) {
     return GENERIC;

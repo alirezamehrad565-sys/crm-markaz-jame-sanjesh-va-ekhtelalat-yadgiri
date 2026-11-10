@@ -1,224 +1,168 @@
-// registry.ts — رجیستری نوع-محور بازی‌ها (G4الف / ۱.۲۵.۳۹ — رفع P3-4 ممیزی M0)
-// تک‌منبع هر مقدار per-kind: ملاک نمره‌دهی مرحله، آستانه‌های گذار/ستاره، اهرم‌های مرحله،
-// کف RT و سنجه‌های موتورمحور. پیش از این این‌ها در switch/if زنجیره‌ایِ stages/service/evidence
-// پراکنده بودند و افزودن هر بازی ≥۷ ماژول را لمس می‌کرد؛ حالا بازی تازه = یک ورودی همین نقشه +
-// ماژول نمایش (KPI نقشهٔ راه: هر بازی ≤۱ روز پس از رجیستری). آستانه‌ها قرارداد {value, rationale, status}
-// نقشهٔ مهاجرت §۴ را دارند و وضعیتشان صادقانه است — تا پیلوت مرکز همه proposed می‌مانند.
-// این فایل خالص است و هیچ runtime-importی از همسایه‌ها ندارد (فقط type) تا وابستگی
-// stages/pure/registry-extra → registry یک‌طرفه بماند و چرخهٔ ماژول ساخته نشود.
+// registry.ts — رجیستری نوع-محور بازی‌ها (G4الف / رفع P3-4 / ۱.۲۵.۳۹)
+// پیش از این، «چیستیِ هر نوع‌بازی» بین ≥۷ ماژول پخش شده بود (types/pure/scoring/stages/
+// service/registry-extra/kind) و افزودن یک بازی یعنی لمس همهٔ آن‌ها — همان fan-out ممیزی M0.
+// این فایل تک‌منبع نقشه است: برای هر kind قواعد گذار مرحله، آستانه‌ها، اهرم‌های مرحله،
+// کف RT، سنجه‌های موتورمحور و پرچم‌های رفتاری در یک ورودی نشسته‌اند؛ بازی تازه فقط
+// یک ورودی به GAME_KINDS اضافه می‌کند و مصرف‌کننده‌ها lookup یک‌خطی می‌خوانند.
+//
+// قواعد ثابت این بازآرایی:
+//   · رفتار عیناً حفظ شده — هیچ عدد/ترتیب/پیامی عوض نشده؛ فقط محلِ تعریف تک‌منبع شد
+//     (bundle-smoke و ۲۰۰۵ آزمون طلایی، محافظ برابری رفتار).
+//   · ترتیب GAME_KIND_IDS قطعی است (ترتیب تولد نوع‌ها: ۱.۲۵.۰۷/۲۸/۳۰/۳۲) — ترتیب
+//     آرایهٔ سنجه‌های موتور از همین ترتیب می‌آید و هرگز جابه‌جا نمی‌شود.
+//   · همهٔ آستانه‌ها وضعیت صادقانهٔ «proposed» دارند تا پیلوت مرکز (G6) آن‌ها را
+//     به validated برساند — هیچ عددی برچسب تأییدِ بی‌پیلوت نمی‌گیرد.
+//   · سمت کلاینت دست نخورده — loadKind آن‌جا قابلیت‌محور است و سود رجیستری صفر،
+//     ریسک گیت‌های ایستا.
+
 import type { AgeBandId, ParamStatus } from './protocol';
-import type { StageDef, StageThresholds, StageOutcome } from './stages';
-import type { MissionItem, RegistryMetric } from './types';
+import type { StageDef } from './stages';
+import type { RegistryMetric } from './types';
 
-/** شناسهٔ نوع‌بازی — کلید رجیستری؛ افزودن بازی تازه از این اتحاد و یک ورودی نقشه آغاز می‌شود.
- *  «رد پای دزد» (trail) ۱۴۰۵/۰۸/۱۹ حذف شد — نقد سه‌گانه (سقف ۷ گره/آموزش کم/کارکرد کم‌بار)
- *  در docs/research/cognitive-games-critique.md؛ جایگاهش را «کولهٔ مرواریدها» (corsi) گرفت */
-export type GameKind = 'gonogo' | 'numline' | 'scan' | 'stroop' | 'flanker' | 'nback' | 'corsi';
+// ─── شناسه‌های نوع — ترتیب قطعی؛ افزودن بازی تازه فقط این‌جا و یک ورودی نقشه ───
+// «ن‌پشت» (nback / ۱.۲۵.۴۰) در انتها نشسته — ترتیب پیشین شش نوع دست‌نخورده تا ترتیب
+// آرایهٔ سنجه‌های موتور (ENGINE_METRICS) و مقایسه‌های بین‌نسخه‌ای از هم نپاشد.
 
-/** ترتیب قطعی نوع‌ها — flatten سنجه‌های موتور از همین ترتیب می‌گذرد تا ترتیب آرایه‌ها عیناً بماند؛
- *  ن‌پشت (۱.۲۵.۴۰) و کولهٔ مرواریدها (corsi) در انتها افزوده شدند تا ترتیب سنجه‌های نوع‌های قبلی دست‌نخورده بماند */
-export const GAME_KIND_IDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'nback', 'corsi'] as const satisfies readonly GameKind[];
+// G8/۱.۲۵.۴۹: corsi (صدف‌های جادویی — حافظهٔ کاری دیداری-فضایی) و span (حباب‌های عدد —
+// بازهٔ عددی) در انتها نشسته‌اند تا ترتیب سنجه‌های موتور هفت نوع پیشین عیناً بماند.
+export const GAME_KIND_IDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail', 'nback', 'corsi', 'span'] as const;
+export type GameKind = (typeof GAME_KIND_IDS)[number];
 
-/** پارامتر آستانه با قرارداد انتشار — مقدار + مبنا + وضعیت اعتبارسنجی صادقانه */
-export interface KindThresholdParam {
+/** نوع‌بازی از فیلد mission.game — ناشناخته = گونوگو (سازگاری با بسته‌های قدیمی) */
+export function gameKindOf(v: string | null | undefined): GameKind {
+  return (GAME_KIND_IDS as readonly string[]).includes(v as string) ? (v as GameKind) : 'gonogo';
+}
+
+// ─── شکل‌های قرارداد رجیستری ───
+
+/** ساختار آیتم که پیش‌ماندهٔ مرحله می‌خواند — آیتم کامل مأموریت ساختاری با آن سازگار است */
+export interface StageItemLike {
+  range?: [number, number] | undefined;
+  stim?: Record<string, unknown> | null | undefined;
+  /** فاز آیتم (۱.۲۵.۴۷) — پروب = خط‌کش سنجش است و باید در «هر» مرحله حاضر باشد؛
+   *  سابقاً سقف/گروه مراحل پروب‌ها را می‌انداخت و جلسه‌های s1..s4 صفر سنجه می‌ساختند (P0 ممیزی فازها) */
+  phase?: 'train' | 'probe' | string | undefined;
+}
+
+/** آستانه با وضعیت صادقانه — قرارداد §۴ نقشهٔ راه: هر عدد فقط با مبنا و وضعیت ثبت می‌شود */
+export interface ThresholdParam {
   value: number;
+  /** مبنا: چرا این مقدار؟ (ادعای علمی بی‌منبع ممنوع) */
   rationale: string;
+  /** validated = پیلوت‌شدهٔ خود مرکز · pilot = در پیلوت · proposed = پیشنهاد کارشناس */
   status: ParamStatus;
 }
 
-/** آستانهٔ اسکالر (بر دقت) — خط عددی/اسکن/استروپ/فلانکر/رد */
-export interface ScalarKindThresholds {
-  pass: KindThresholdParam;
-  star2: KindThresholdParam;
-  star3: KindThresholdParam;
+/** قاعدهٔ گذار گونوگو — دو ملاک مستقل گو/نوگو (قواعد هرگز با دقت کلی مخلوط نمی‌شوند) */
+export interface GoNogoStageRule {
+  shape: 'go_nogo';
+  pass: { go_pct: ThresholdParam; nogo_pct: ThresholdParam };
+  star2: { go_pct: ThresholdParam; nogo_pct: ThresholdParam };
+  star3: { go_pct: ThresholdParam; nogo_pct: ThresholdParam };
 }
 
-/** آستانهٔ دوپایهٔ گو/نوگو — گذار و ستاره هر کدام روی هر دو دسته سنجیده می‌شود */
-export interface GoNogoKindThresholds {
-  pass: { go_pct: KindThresholdParam; nogo_pct: KindThresholdParam };
-  star2: { go_pct: KindThresholdParam; nogo_pct: KindThresholdParam };
-  star3: { go_pct: KindThresholdParam; nogo_pct: KindThresholdParam };
+/** قاعدهٔ گذار دقت‌محور — بقیهٔ نوع‌ها بر دقت خلاصهٔ جلسه (درصد) */
+export interface AccuracyStageRule {
+  shape: 'accuracy';
+  pass: ThresholdParam;
+  star2: ThresholdParam;
+  star3: ThresholdParam;
 }
 
-/** برش خلاصهٔ جلسه که ملاک گذار می‌خواند — همان قرارداد قبلی stageOutcomeFor */
-export interface StageOutcomeSummary {
-  pct: { correct_go: number | null; correct_nogo: number | null; accuracy: number | null };
+export type StageRule = GoNogoStageRule | AccuracyStageRule;
+
+/** اهرم‌های مرحله — کلید جدول‌ها شناسهٔ مرحلهٔ s1..s5 است؛ null = همهٔ بانک (مرور بزرگ).
+ *  اهرم فقط «انتخاب از بانک authored» یا «نمایش» است — محرک/کلید هرگز بازنویسی نمی‌شود. */
+export interface KindLevers {
+  /** سقف عددی بانک هر مرحله — مثل گسترهٔ جادهٔ خط عددی یا شمار خانه‌های موج اسکن */
+  bank_caps?: Record<string, number | null>;
+  /** گروه‌های مجاز بانک هر مرحله — بانک authored گروه‌دار (stim.band) */
+  bank_bands?: Record<string, string[] | null>;
+  /** اهرم فقط-نمایش — مثل پنجرهٔ موج اسکن؛ هرگز محرک آزمون و نه کلید */
+  display?: Record<string, number | null>;
 }
 
-/** ساختار آیتم که اهرم مرحله می‌خواند — فقط نمایش/انتخاب از بانک؛ نمره‌دهی روی آیتم authored است */
-export interface StageItemProbe {
-  range?: [number, number] | undefined;
-  stim?: Record<string, unknown> | null | undefined;
+/** بدنهٔ مشترک ورودی نقشه برای هر نوع — بازی تازه فقط یک GameKindSpec تازه می‌سازد */
+export interface GameKindSpecBase {
+  /** کف اعتبار RT این نوع (ms) — زیر آن حدس است و از سنجه‌های زمانی حذف می‌شود (§۸) */
+  rt_floor_ms: number;
+  /** انتخاب زمان‌دار — بی‌پاسخی پنجره سمت سرور اُمیشن ثبت می‌شود و نشانهٔ «بی‌پاسخی
+   *  پنجره» در شواهد فقط برای این گروه تعریف است؛ بقیهٔ نوع‌ها false */
+  timed_choice: boolean;
+  /** مرحله‌های مسیر تمرین — گونوگو باندسنی است (۴–۶ نرم‌تر از ۷–۱۲)؛ بقیه فهرست واحد */
+  stageList: (band: AgeBandId) => StageDef[];
+  /** اهرم‌های مرحله — گونوگو اهرمش بازنویسی پارامتر زمان‌بندی در خود StageDef است (جدول ندارد) */
+  levers: KindLevers;
+  /** پیش‌ماندهٔ آیتم در مرحله — بانک authored با سقف/گروهِ مرحله؛ بی‌مرحله/ناشناخته = همهٔ آیتم‌ها
+   *  (سازگاری با جلسه‌های بی‌مرحله). نمره‌دهی سرور همیشه روی آیتم authored است. */
+  itemInStage: (item: StageItemLike, stageId: string | null | undefined) => boolean;
+  /** سنجه‌های موتورمحور این نوع — دستی upsert نمی‌شوند؛ ترتیب درون نوع عیناً حفظ است */
+  engine_metrics: readonly RegistryMetric[];
 }
 
-/** یک ورودی رجیستری = هرچیزی که یک نوع‌بازی به سرور تحمیل می‌کند */
-export interface GameKindEntry {
-  /** آستانه‌های گذار/ستاره — قرارداد {value, rationale, status} */
-  thresholds: ScalarKindThresholds | GoNogoKindThresholds;
-  /** ملاک نمره‌دهی مرحله — گذار/ستاره از خلاصهٔ جلسه؛ قواعد نوع‌ها هرگز مخلوط نمی‌شوند */
-  stageOutcome(summary: StageOutcomeSummary): StageOutcome;
-  /** فهرست مرحله‌های مسیر — باند سنی فقط برای گونوگو دوگانه است؛ بقیه باند را نادیده می‌گیرند */
-  stageList(band: AgeBandId): StageDef[];
-  /** اهرم مرحله: کدام آیتم بانک authored در این مرحله مجاز است — گونوگو همهٔ آیتم‌ها */
-  itemInStage(item: StageItemProbe, stageId: string | null | undefined): boolean;
-  /** اهرم تندشدن موج (۱.۲۵.۳۲) — فقط اسکن دارد؛ فقط-نمایش، نه محرک و نه کلید */
-  waveMsCapOf: ((itemWaveMs: number | null | undefined, stageId: string | null | undefined) => number | null) | null;
-  /** «انتخاب زمان‌دار با اُمیشن سروری» — موتور شواهد فقط برای این نوع‌ها نشانهٔ بی‌پاسخی پنجره می‌سازد */
-  timedChoice: boolean;
-  /** کف اعتبار زمان واکنش (ms) §۸ — زیر این، RT از سنجه‌های زمانی حذف می‌شود */
-  rtFloorMs: number;
-  /** سنجه‌های موتورمحور این نوع — با نسخهٔ موتور می‌آیند و دستی upsert نمی‌شوند (CHECK دیتابیس می‌پذیرد اما کد اجازه نمی‌دهد) */
-  engineMetrics: readonly RegistryMetric[];
-}
+/** ورودی نقشه با قاعدهٔ گذار نوع‌دقیق — گونوگو ملاک جفت گو/نوگو، بقیه دقت */
+export type GameKindSpec<K extends GameKind = GameKind> = GameKindSpecBase & {
+  /** قاعدهٔ گذار مرحله — شکل ملاک + آستانه‌های {value, rationale, status} */
+  stage_rule: K extends 'gonogo' ? GoNogoStageRule : AccuracyStageRule;
+};
 
-const THRESH = (value: number, rationale: string): KindThresholdParam => ({ value, rationale, status: 'proposed' });
+const P = (value: number, rationale: string, status: ParamStatus = 'proposed'): ThresholdParam => ({
+  value,
+  rationale,
+  status
+});
 
-// ─── آستانه‌های گذار و ستاره — وضعیت proposed تا پیلوت مرکز (ممیزی §۵) ───
+// ─── آستانه‌های گذار و ستاره — وضعیت proposed تا پیلوت مرکز (G6) ───
 
-/** گونوگو — دوپایه: هم گو و هم نوگو باید آستانه را بگیرند */
-const GONOGO_THRESHOLDS: GoNogoKindThresholds = {
+/** گونوگو — درصدی‌های گو/نوگو (۱.۲۵.۲۲)؛ برای هر دو باند سنی مشترک */
+const GONOGO_STAGE_RULE: GoNogoStageRule = {
+  shape: 'go_nogo',
   pass: {
-    go_pct: THRESH(70, 'حداقل گوهای درست برای گذار — پیشنهاد کارشناس، تا پیلوت مرکز proposed'),
-    nogo_pct: THRESH(60, 'بازداری سخت‌تر از رفتن است؛ کف پایین‌تر برای نوگو در گذار')
+    go_pct: P(70, 'گذار با گوِ درست ≥۷۰٪ — بالای نرخ حدس در دنبالهٔ ۷۵٪ گو؛ پیشنهاد کارشناس ۱.۲۵.۲۲'),
+    nogo_pct: P(60, 'گذار با بازداری ≥۶۰٪ — بازداری دشوارترین جزء است؛ آستانهٔ پائین‌تر از گو عمدی است')
   },
   star2: {
-    go_pct: THRESH(80, 'ستارهٔ دوم با گوِ مطمئن‌تر'),
-    nogo_pct: THRESH(75, 'ستارهٔ دوم با بازداری مطمئن‌تر')
+    go_pct: P(80, 'دوستاره — فاصلهٔ محسوس از گذار تا کودک پیشرفت را حس کند'),
+    nogo_pct: P(75, 'دوستاره بازداری — هم‌گام با پلهٔ گو')
   },
   star3: {
-    go_pct: THRESH(90, 'ستارهٔ سوم = تسلط تقریباً کامل روی گو'),
-    nogo_pct: THRESH(85, 'ستارهٔ سوم = تسلط تقریباً کامل روی بازداری')
+    go_pct: P(90, 'سه‌ستاره — اجرای تقریباً بی‌خطا؛ سقف سبد ستاره'),
+    nogo_pct: P(85, 'سه‌ستاره بازداری — بازداری عالی ولی بی‌کمال‌گراییِ کودک‌فرسا')
   }
 };
 
-const NUMLINE_THRESHOLDS: ScalarKindThresholds = {
-  pass: THRESH(65, 'آستانهٔ گذار بر دقت جای عدد — آستانهٔ پذیرش سن‌محور خود آیتم‌هاست (tolerance authored)'),
-  star2: THRESH(78, 'ستارهٔ دوم با دقت بالاتر'),
-  star3: THRESH(88, 'ستارهٔ سوم = جای عدد تقریباً همیشه درست')
+/** آستانهٔ مشترک دقت — ۶۵/۷۸/۸۸ (۱.۲۵.۲۸ برای خط عددی؛ ۱.۲۵.۳۰ اسکن؛ ۱.۲۵.۳۲ سه‌تای تازه)
+ *  عیناً همان عدد برای همهٔ دقت‌محورها تا مقایسهٔ بین‌بازی گول‌زننده نشود؛ جداسازی آینده
+ *  نیازمند پیلوت است و با پیلوت تصمیم می‌گیرد، نه با کپی عدد. */
+const ACCURACY_STAGE_RULE: AccuracyStageRule = {
+  shape: 'accuracy',
+  pass: P(65, 'گذار با دقت ≥۶۵٪ — بالای شانس حدس بانک فعلی؛ پیشنهاد کارشناس ۱.۲۵.۲۸'),
+  star2: P(78, 'دوستاره — فاصلهٔ محسوس از گذار؛ پلهٔ انگیزشی میانی'),
+  star3: P(88, 'سه‌ستاره — دقت تقریباً بی‌خطا؛ ارتقای آن با دادهٔ پیلوت مرکز')
 };
 
-const SCAN_THRESHOLDS: ScalarKindThresholds = {
-  pass: THRESH(65, 'آستانهٔ گذار بر دقت موج‌ها — موج کامل یعنی همهٔ جاسوس‌ها و فقط آن‌ها'),
-  star2: THRESH(78, 'ستارهٔ دوم با موج‌های مطمئن‌تر'),
-  star3: THRESH(88, 'ستارهٔ سوم = شکار تقریباً بی‌خطا')
+/** آستانهٔ «ن‌پشت» (۱.۲۵.۴۰) — همان پلهٔ ۶۵/۷۸/۸۸ دقت‌محورها؛ خروجی جداگانه‌اش برای
+ *  این‌که آیندهٔ این نوع به پیلوت خودش وابسته بماند، نه به جدول مشترک */
+export const NBACK_THRESHOLDS: AccuracyStageRule = {
+  shape: 'accuracy',
+  pass: P(65, 'گذار با دقت دوگزینه‌ای ≥۶۵٪ — بالای شانس حدس ۵۰٪ دودویی؛ پیشنهاد کارشناس ۱.۲۵.۴۰'),
+  star2: P(78, 'دوستاره — هم‌پلهٔ دقت‌محورهای دیگر تا مقایسهٔ بین‌بازی گول‌زننده نشود'),
+  star3: P(88, 'سه‌ستاره — دقت تقریباً بی‌خطا؛ ارتقای آن با دادهٔ پیلوت مرکز')
 };
 
-/** آستانهٔ مشترک دو نوع تازهٔ ۱.۲۵.۳۲ — استروپ/فلانکر؛ ملاک گذار هر دو بر دقت است.
- *  (رد که در همین گروه بود ۱۴۰۵/۰۸/۱۹ حذف شد؛ کولهٔ مرواریدها آستانهٔ مستقل خودش را دارد) */
-const ACCURACY_THRESHOLDS: ScalarKindThresholds = {
-  pass: THRESH(65, 'آستانهٔ گذار بر دقت — همان قرارداد خط عددی/اسکن'),
-  star2: THRESH(78, 'ستارهٔ دوم با دقت بالاتر'),
-  star3: THRESH(88, 'ستارهٔ سوم = پاسخ تقریباً بی‌خطا')
+/** آستانهٔ مشترک دو بازی حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۹) — همان پلهٔ ۶۵/۷۸/۸۸ دقت‌محورها؛
+ *  دشواریِ بلندشدن بازه خودش را در نردبان مرحله‌ها نشان می‌دهد، نه در آستانهٔ جدا؛
+ *  خروجی جداگانه برای این‌که آیندهٔ این دو نوع به پیلوت خودشان وابسته بماند */
+export const SEQ_MEMORY_THRESHOLDS: AccuracyStageRule = {
+  shape: 'accuracy',
+  pass: P(65, 'گذار با دقت دنبالهٔ کامل ≥۶۵٪ — همان پلهٔ دقت‌محورها؛ پیشنهاد کارشناس G8'),
+  star2: P(78, 'دوستاره — هم‌پلهٔ دقت‌محورهای دیگر تا مقایسهٔ بین‌بازی گول‌زننده نشود'),
+  star3: P(88, 'سه‌ستاره — دنباله تقریباً همیشه کامل؛ ارتقای آن با دادهٔ پیلوت مرکز')
 };
 
-/** آستانهٔ ن‌پشت (۱.۲۵.۴۰) — بر دقت؛ همان قرارداد دقت سایر نوع‌ها تا پیلوت مرکز.
- *  دشواریِ پرش n=1→n=2 خودش را در نردبان مرحله‌ها نشان می‌دهد، نه در آستانهٔ جدا */
-const NBACK_THRESHOLDS: ScalarKindThresholds = {
-  pass: THRESH(65, 'آستانهٔ گذار بر دقت هم‌سانی/تفکیک — همان قرارداد دقت سایر نوع‌ها؛ سخت‌گیری اضافه برای n=2 با پیلوت سنجیده می‌شود'),
-  star2: THRESH(78, 'ستارهٔ دوم با دقت بالاتر'),
-  star3: THRESH(88, 'ستارهٔ سوم = هم‌سانی تقریباً همیشه درست')
-};
+// ─── مرحله‌های مسیر تمرین — پارامترها و متن‌ها عیناً از stages.ts پیشین (۱.۲۵.۲۲..۳۲) ───
 
-/** آستانهٔ کولهٔ مرواریدها (corsi — ۱۴۰۵/۰۸/۱۹) — بر دقت بازتولید کامل دنباله؛
- *  سقف طول دنباله اهرم مرحله است و آستانهٔ جداگانه تا پیلوت مرکز proposed می‌ماند */
-const CORSI_THRESHOLDS: ScalarKindThresholds = {
-  pass: THRESH(65, 'آستانهٔ گذار بر دقت بازتولید کامل دنباله — همان قرارداد دقت سایر نوع‌ها'),
-  star2: THRESH(78, 'ستارهٔ دوم با دقت بالاتر'),
-  star3: THRESH(88, 'ستارهٔ سوم = بازتولید تقریباً همیشه کامل')
-};
-
-// ─── عددیِ آستانه‌ها — رفتار نمره‌دهی فقط value را می‌خواند؛ شکل عددی عین قبلی است ───
-
-function pairNumeric(t: GoNogoKindThresholds): StageThresholds {
-  return {
-    pass: { go_pct: t.pass.go_pct.value, nogo_pct: t.pass.nogo_pct.value },
-    star2: { go_pct: t.star2.go_pct.value, nogo_pct: t.star2.nogo_pct.value },
-    star3: { go_pct: t.star3.go_pct.value, nogo_pct: t.star3.nogo_pct.value }
-  };
-}
-
-function scalarNumeric(t: ScalarKindThresholds): { pass: number; star2: number; star3: number } {
-  return { pass: t.pass.value, star2: t.star2.value, star3: t.star3.value };
-}
-
-/** آستانه‌های گونوگو — شکل عددی همان قرارداد قبلی StageThresholds */
-export const STAGE_THRESHOLDS: StageThresholds = pairNumeric(GONOGO_THRESHOLDS);
-/** آستانه‌های خط عددی — بر دقت جای عدد (درصد) */
-export const NUMLINE_STAGE_THRESHOLDS = scalarNumeric(NUMLINE_THRESHOLDS);
-/** آستانه‌های اسکن — بر دقت موج‌ها (درصد) */
-export const SCAN_STAGE_THRESHOLDS = scalarNumeric(SCAN_THRESHOLDS);
-/** آستانهٔ مشترک استروپ/فلانکر — بر دقت (درصد) */
-export const ACCURACY_STAGE_THRESHOLDS = scalarNumeric(ACCURACY_THRESHOLDS);
-/** آستانه‌های ن‌پشت — بر دقت (درصد)؛ جدای استروپ/فلانکر تا مسیر تبدیل مستقل داشته باشد */
-export const NBACK_STAGE_THRESHOLDS = scalarNumeric(NBACK_THRESHOLDS);
-/** آستانه‌های کولهٔ مرواریدها — بر دقت بازتولید (درصد)؛ مستقل تا مسیر تبدیل خودش را داشته باشد */
-export const CORSI_STAGE_THRESHOLDS = scalarNumeric(CORSI_THRESHOLDS);
-
-function pctOk(v: number | null | undefined, min: number): boolean {
-  return typeof v === 'number' && Number.isFinite(v) && v >= min;
-}
-
-// ─── قواعد نمره‌دهی مرحله — هر نوع ملاک خودش را دارد؛ خروجی هر پنج تابع عین قبلی است
-// (خدشهٔ رفتار ممنوع: ستاره ۳ بالاترین، جلسهٔ بی‌دادهٔ کامل = ۰ ستاره و عدم گذار) ───
-
-/** نتیجهٔ مرحلهٔ گونوگو از درصدی‌های گو/نوگو */
-export function stageOutcomeOf(
-  correctGoPct: number | null | undefined,
-  correctNogoPct: number | null | undefined
-): StageOutcome {
-  const t = STAGE_THRESHOLDS;
-  if (!pctOk(correctGoPct, t.pass.go_pct) || !pctOk(correctNogoPct, t.pass.nogo_pct)) {
-    return { passed: false, stars: 0, thresholds: t };
-  }
-  const three = pctOk(correctGoPct, t.star3.go_pct) && pctOk(correctNogoPct, t.star3.nogo_pct);
-  const two = pctOk(correctGoPct, t.star2.go_pct) && pctOk(correctNogoPct, t.star2.nogo_pct);
-  return { passed: true, stars: three ? 3 : two ? 2 : 1, thresholds: t };
-}
-
-/** نتیجهٔ مرحلهٔ خط عددی از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
-export function stageOutcomeNumline(accuracy: number | null | undefined): StageOutcome {
-  const t = NUMLINE_STAGE_THRESHOLDS;
-  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars: 1 | 2 | 3 = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
-  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
-}
-
-/** نتیجهٔ مرحلهٔ اسکن از دقت موج‌های خلاصهٔ جلسه — همان قرارداد StageOutcome */
-export function stageOutcomeScan(accuracy: number | null | undefined): StageOutcome {
-  const t = SCAN_STAGE_THRESHOLDS;
-  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars: 1 | 2 | 3 = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
-  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
-}
-
-/** نتیجهٔ مرحلهٔ دو نوع تازه از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
-export function stageOutcomeAccuracyKind(accuracy: number | null | undefined): StageOutcome {
-  const t = ACCURACY_STAGE_THRESHOLDS;
-  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars: 1 | 2 | 3 = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
-  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
-}
-
-/** نتیجهٔ مرحلهٔ ن‌پشت از دقت خلاصهٔ جلسه — آستانهٔ خودش؛ شکل عین قرارداد StageOutcome */
-export function stageOutcomeNback(accuracy: number | null | undefined): StageOutcome {
-  const t = NBACK_STAGE_THRESHOLDS;
-  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars: 1 | 2 | 3 = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
-  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
-}
-
-/** نتیجهٔ مرحلهٔ کولهٔ مرواریدها از دقت خلاصهٔ جلسه — آستانهٔ خودش؛ شکل عین قرارداد StageOutcome */
-export function stageOutcomeCorsi(accuracy: number | null | undefined): StageOutcome {
-  const t = CORSI_STAGE_THRESHOLDS;
-  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars: 1 | 2 | 3 = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
-  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
-}
-
-// ─── مرحله‌های مسیر تمرین ───
-// گونوگو پارامتر زمان‌بندی را بازنویسی می‌کند (تنها نوعی که اهرمش زمان است)؛ بقیه
-// اهرمشان «انتخاب آیتم از بانک authored» است — محرک و کلید هرگز بازنویسی نمی‌شود.
-
+// گونوگو: پنج مرحله با اهرم زمان‌بندی — باند سنی جدی گرفته می‌شود (۴–۶ نرم‌تر از ۷–۱۲)
 const GONOGO_STAGES_4_6: StageDef[] = [
   {
     id: 's1', index: 1, title_fa: 'گرم‌کردن', goal_fa: 'با ستاره‌ها دوست شو؛ آهسته و خوش‌حال.', difficulty: 1,
@@ -265,9 +209,9 @@ const GONOGO_STAGES_7_12: StageDef[] = [
   }
 ];
 
-const GONOGO_STAGES_BY_BAND: Record<AgeBandId, StageDef[]> = { '4-6': GONOGO_STAGES_4_6, '7-12': GONOGO_STAGES_7_12 };
+const GONOGO_STAGES: Record<AgeBandId, StageDef[]> = { '4-6': GONOGO_STAGES_4_6, '7-12': GONOGO_STAGES_7_12 };
 
-// پنج مرحلهٔ «جادهٔ عددها» (۱.۲۵.۲۸) — اهرم سختی = گسترهٔ جاده (NUMLINE_STAGE_MAX)
+// خط عددی «جادهٔ عددها» (۱.۲۵.۲۸) — اهرم سختی = گسترهٔ جاده؛ بدون بازنویسی پارامتر زمان‌بندی
 const NUMLINE_STAGES: StageDef[] = [
   {
     id: 's1', index: 1, title_fa: 'جادهٔ کوچک', goal_fa: 'عددهای ۰ تا ۱۰؛ آهسته و خوش‌حال.', difficulty: 1,
@@ -291,7 +235,7 @@ const NUMLINE_STAGES: StageDef[] = [
   }
 ];
 
-// پنج مرحلهٔ «حملهٔ جاسوس‌ها» (۱.۲۵.۳۰) — اهرم سختی = اندازهٔ موج (SCAN_STAGE_MAX_TILES)
+// اسکن «حملهٔ جاسوس‌ها» (۱.۲۵.۳۰) — اهرم = اندازهٔ موج؛ امضای هدف هرگز بازنویسی نمی‌شود
 const SWARM_STAGES: StageDef[] = [
   {
     id: 's1', index: 1, title_fa: 'کاوش شب اول', goal_fa: 'جاسوس‌ها کم‌اند؛ آهسته و خوش‌حال بگیرشان.', difficulty: 1,
@@ -315,7 +259,7 @@ const SWARM_STAGES: StageDef[] = [
   }
 ];
 
-// پنج مرحلهٔ «حقه‌باز رنگ‌ها» (۱.۲۵.۳۲) — اهرم سختی = آمیختهٔ هم‌خوان/ناهم‌خوان روی بانک
+// استروپ «حقه‌باز رنگ‌ها» (۱.۲۵.۳۲) — اهرم = آمیختهٔ هم‌خوان/ناهم‌خوان و پنجرهٔ پاسخ
 const STROOP_STAGES: StageDef[] = [
   {
     id: 's1', index: 1, title_fa: 'غار آرام', goal_fa: 'واژه‌ها هنوز رنگِ خودشان را دارند؛ با طمأنینه لمس کن.', difficulty: 1,
@@ -339,7 +283,7 @@ const STROOP_STAGES: StageDef[] = [
   }
 ];
 
-// پنج مرحلهٔ «گلهٔ فریبکار» (۱.۲۵.۳۲) — گرگ واقعی وسط گلهٔ قلابی
+// فلانکر «گلهٔ فریبکار» (۱.۲۵.۳۲) — گرگ واقعی وسط گلهٔ قلابی
 const FLANKER_STAGES: StageDef[] = [
   {
     id: 's1', index: 1, title_fa: 'گلهٔ آرام', goal_fa: 'همهٔ گرگ‌ها یک‌سو نگاه می‌کنند؛ آهسته و خوش‌حال.', difficulty: 1,
@@ -363,87 +307,97 @@ const FLANKER_STAGES: StageDef[] = [
   }
 ];
 
-// پنج مرحلهٔ «کولهٔ مرواریدها» (corsi — ۱۴۰۵/۰۸/۱۹) — اهرم سختی = سقف طول دنباله
-// (الگوی CORSI_STAGE_MAX_LEN). تخت صدف ثابت است؛ فقط دنبالهٔ مرواریدها بلندتر می‌شود.
-const CORSI_STAGES: StageDef[] = [
-  {
-    id: 's1', index: 1, title_fa: 'دو مروارید', goal_fa: 'دو صدف برق می‌زند؛ همان ترتیب را لمس کن.', difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: 's2', index: 2, title_fa: 'سه مروارید', goal_fa: 'یک مروارید بیشتر شد؛ حواست به ترتیب باشد.', difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: 's3', index: 3, title_fa: 'چهار مروارید', goal_fa: 'دنباله بلندتر شده؛ آهسته و خوش‌حال.', difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: 's4', index: 4, title_fa: 'پنج مروارید', goal_fa: 'حافظه‌ات عمیق شد؛ مثل قبل ادامه بده.', difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: 's5', index: 5, title_fa: 'قهرمان کوله', goal_fa: 'همهٔ دنباله‌ها با هم — تو حافظهٔ دریایی!', difficulty: 5,
-    overrides: {}
-  }
-];
-
-// پنج مرحلهٔ «آلبوم خرچنگ» (ن‌پشت — ۱.۲۵.۴۰) — اهرم سختی = پرش n (۱→۲) + ISI مرحله.
-// نردبان دو باند سنی دارد (الگوی گونوگو): باند ۴–۶ ISI بلندتر برای رمزگذاری آرام‌تر.
-// s1/s2 جریان n=1، s3/s4/s5 جریان n=2 — پرش n در s3 با ISI نرم‌تر فرود می‌آید.
+// «ن‌پشت» / آلبوم خرچنگ (۱.۲۵.۴۰) — اهرم سختی = پلهٔ n؛ s1/s2 با n=1 و s3 به بعد n=2؛
+// overrides فقط ISI/تثبیت — پرش n در s3 با فرود نرمِ فاصلهٔ بین‌آزمونشی جبران می‌شود،
+// پنجرهٔ پاسخ دست مرحله نیست (عملیاتی روی stim.window_ms آیتم)
 const NBACK_STAGES_4_6: StageDef[] = [
   {
-    id: 's1', index: 1, title_fa: 'آلبوم گرم', goal_fa: 'ماهی‌ها آهسته می‌آیند؛ عکسِ قدم قبل را یادت نگه دار.', difficulty: 1,
+    id: 's1', index: 1, title_fa: 'آلبوم گرم می‌شود', goal_fa: 'دوتا عقب را یاد بگیر؛ آهسته و خوش‌حال.', difficulty: 1,
     overrides: { isi_min_ms: 2600, isi_max_ms: 3200, fixation_ms: 400 }
   },
   {
-    id: 's2', index: 2, title_fa: 'عکس‌های تازه', goal_fa: 'همان بازی با تمرین بیشتر؛ حواست به قدم قبل باشد.', difficulty: 2,
-    overrides: {} // پایهٔ پروتکل ن‌پشت — بدون بازنویسی
+    id: 's2', index: 2, title_fa: 'آلبوم تمرین', goal_fa: 'همان‌طور که یاد گرفتی ادامه بده.', difficulty: 2,
+    overrides: {} // پارامترهای پایهٔ پروتکل — بدون بازنویسی
   },
   {
-    id: 's3', index: 3, title_fa: 'دو قدم به عقب', goal_fa: 'حالا دو قدم به عقب نگاه کن؛ آهسته و خوش‌حال.', difficulty: 3,
-    overrides: { isi_min_ms: 2800, isi_max_ms: 3400, fixation_ms: 400 } // فرود نرم پرش n=2
+    id: 's3', index: 3, title_fa: 'سه قدم عقب‌تر', goal_fa: 'حالا سه‌تا عقب نگاه کن؛ وقت کم نیست، آرام باش.', difficulty: 3,
+    // فرود نرم پرش n — فاصلهٔ بین‌آزمونشی کمی بلندتر از پایه تا حافظهٔ تازه فشار زمانی تازه نگیرد
+    overrides: { isi_min_ms: 2400, isi_max_ms: 3000, fixation_ms: 400 }
   },
   {
-    id: 's4', index: 4, title_fa: 'حافظهٔ عمیق', goal_fa: 'دو قدم به عقب، مثل قبل؛ تو خوب یاد گرفتی.', difficulty: 4,
-    overrides: {}
+    id: 's4', index: 4, title_fa: 'آلبوم بزرگ', goal_fa: 'چشم‌هایت تیز است؛ دوتا عقب را گم نکن.', difficulty: 4,
+    overrides: { isi_min_ms: 2200, isi_max_ms: 2800, fixation_ms: 400 }
   },
   {
-    id: 's5', index: 5, title_fa: 'قهرمان آلبوم', goal_fa: 'تندترین پلهٔ آلبوم! تو حافظهٔ دریایی.', difficulty: 5,
-    overrides: { isi_min_ms: 1800, isi_max_ms: 2400, fixation_ms: 350 }
+    id: 's5', index: 5, title_fa: 'قهرمان آلبوم', goal_fa: 'همهٔ آلبوم‌ها با هم — تو آماده‌ای!', difficulty: 5,
+    overrides: { isi_min_ms: 2000, isi_max_ms: 2600, fixation_ms: 350 }
   }
 ];
 
 const NBACK_STAGES_7_12: StageDef[] = [
   {
-    id: 's1', index: 1, title_fa: 'آلبوم گرم', goal_fa: 'ماهی‌ها آهسته می‌آیند؛ عکسِ قدم قبل را یادت نگه دار.', difficulty: 1,
+    id: 's1', index: 1, title_fa: 'آلبوم گرم می‌شود', goal_fa: 'دوتا عقب را یاد بگیر؛ آهسته و خوش‌حال.', difficulty: 1,
     overrides: { isi_min_ms: 2200, isi_max_ms: 2800, fixation_ms: 400 }
   },
   {
-    id: 's2', index: 2, title_fa: 'عکس‌های تازه', goal_fa: 'همان بازی با تمرین بیشتر؛ حواست به قدم قبل باشد.', difficulty: 2,
+    id: 's2', index: 2, title_fa: 'آلبوم تمرین', goal_fa: 'همان‌طور که یاد گرفتی ادامه بده.', difficulty: 2,
     overrides: {}
   },
   {
-    id: 's3', index: 3, title_fa: 'دو قدم به عقب', goal_fa: 'حالا دو قدم به عقب نگاه کن؛ آهسته و خوش‌حال.', difficulty: 3,
-    overrides: { isi_min_ms: 2400, isi_max_ms: 3000, fixation_ms: 400 }
+    id: 's3', index: 3, title_fa: 'سه قدم عقب‌تر', goal_fa: 'حالا سه‌تا عقب نگاه کن؛ وقت کم نیست، آرام باش.', difficulty: 3,
+    overrides: { isi_min_ms: 2000, isi_max_ms: 2600, fixation_ms: 400 }
   },
   {
-    id: 's4', index: 4, title_fa: 'حافظهٔ عمیق', goal_fa: 'دو قدم به عقب، مثل قبل؛ تو خوب یاد گرفتی.', difficulty: 4,
-    overrides: {}
+    id: 's4', index: 4, title_fa: 'آلبوم بزرگ', goal_fa: 'چشم‌هایت تیز است؛ دوتا عقب را گم نکن.', difficulty: 4,
+    overrides: { isi_min_ms: 1800, isi_max_ms: 2400, fixation_ms: 400 }
   },
   {
-    id: 's5', index: 5, title_fa: 'قهرمان آلبوم', goal_fa: 'تندترین پلهٔ آلبوم! تو حافظهٔ دریایی.', difficulty: 5,
-    overrides: { isi_min_ms: 1500, isi_max_ms: 2100, fixation_ms: 350 }
+    id: 's5', index: 5, title_fa: 'قهرمان آلبوم', goal_fa: 'همهٔ آلبوم‌ها با هم — تو آماده‌ای!', difficulty: 5,
+    overrides: { isi_min_ms: 1600, isi_max_ms: 2200, fixation_ms: 350 }
   }
 ];
 
-const NBACK_STAGES_BY_BAND: Record<AgeBandId, StageDef[]> = { '4-6': NBACK_STAGES_4_6, '7-12': NBACK_STAGES_7_12 };
+const NBACK_STAGES: Record<AgeBandId, StageDef[]> = { '4-6': NBACK_STAGES_4_6, '7-12': NBACK_STAGES_7_12 };
 
-// ─── اهرم‌های مرحله (stage-levers) — فقط انتخاب از بانک authored؛ نمره‌دهی سرور روی
-// آیتم authored می‌ماند. بی‌مرحله/مرحلهٔ ناشناخته = همهٔ آیتم‌ها (سازگاری با جلسه‌های بی‌مرحله) ───
+/** پلهٔ n هر مرحلهٔ ن‌پشت — سیکل بانک authored این را می‌خواند؛ کلید = s1..s5 */
+export const NBACK_STAGE_LEVELS: Record<string, 1 | 2> = { s1: 1, s2: 1, s3: 2, s4: 2, s5: 2 };
+
+/** پیش‌ماندٔ آیتم ن‌پشت در مرحله — فیلتر بر سطح n بانک authored؛ بی‌مرحله/ناشناخته = همهٔ آیتم‌ها */
+export function nbackItemInStage(item: StageItemLike, stageId: string | null | undefined): boolean {
+  const level = typeof stageId === 'string' ? NBACK_STAGE_LEVELS[stageId] : undefined;
+  if (!level) return true;
+  const s = (item.stim ?? {}) as Record<string, unknown>;
+  return s.n === level;
+}
+
+// رد پای دزد (۱.۲۵.۳۲) — اهرم = طول رد و آمیختهٔ عدد/حرف
+const TRAIL_STAGES: StageDef[] = [
+  {
+    id: 's1', index: 1, title_fa: 'رد کوتاه', goal_fa: 'ردپاها کم‌اند؛ به ترتیب شماره برو.', difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: 's2', index: 2, title_fa: 'رد بلندتر', goal_fa: 'یک قدم بیشتر؛ رد را کامل کن.', difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: 's3', index: 3, title_fa: 'رد بلند', goal_fa: 'ردپاها بیشتر شده‌اند؛ رد گم نشود.', difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: 's4', index: 4, title_fa: 'رد گم‌شده', goal_fa: 'عدد و حرف یک‌درمیان شده؛ با دقت قدم بزن.', difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: 's5', index: 5, title_fa: 'قهرمان رد', goal_fa: 'همهٔ ردها با هم — تو تعقیب‌کننده‌ای!', difficulty: 5,
+    overrides: {}
+  }
+];
+
+// ─── اهرم‌های مرحله — جدول‌های سقف بانک authored و اهرم نمایشی (کلید = s1..s5) ───
 
 /** سقف گسترهٔ جاده در هر مرحلهٔ خط عددی — null = همهٔ جاده‌ها (مرحلهٔ پایانی مرور بزرگ) */
-export const NUMLINE_STAGE_MAX: Record<string, number | null> = {
+const NUMLINE_STAGE_MAX: Record<string, number | null> = {
   s1: 10,
   s2: 20,
   s3: 50,
@@ -451,18 +405,8 @@ export const NUMLINE_STAGE_MAX: Record<string, number | null> = {
   s5: null
 };
 
-/** پیش‌ماندهٔ آیتم خط عددی در مرحله — محرک authored هرگز بازنویسی نمی‌شود */
-export function numlineItemInStage(
-  item: { range?: [number, number] | undefined },
-  stageId: string | null | undefined
-): boolean {
-  const max = typeof stageId === 'string' && stageId in NUMLINE_STAGE_MAX ? NUMLINE_STAGE_MAX[stageId] : null;
-  if (max === null) return true;
-  return Array.isArray(item.range) && item.range[1] <= max;
-}
-
-/** سقف شمار خانه‌های موج در هر مرحلهٔ اسکن — null = همهٔ موج‌ها (مرحلهٔ پایانی مرور بزرگ) */
-export const SCAN_STAGE_MAX_TILES: Record<string, number | null> = {
+/** سقف شمار خانه‌های موج در هر مرحلهٔ اسکن — null = همهٔ موج‌ها */
+const SCAN_STAGE_MAX_TILES: Record<string, number | null> = {
   s1: 6,
   s2: 9,
   s3: 12,
@@ -470,22 +414,10 @@ export const SCAN_STAGE_MAX_TILES: Record<string, number | null> = {
   s5: null
 };
 
-/** پیش‌ماندهٔ آیتم اسکن در مرحله — امضای هدف (شمار آنتن) هرگز بازنویسی نمی‌شود (قاعدهٔ d2) */
-export function scanItemInStage(
-  item: { stim?: Record<string, unknown> | null | undefined },
-  stageId: string | null | undefined
-): boolean {
-  const max = typeof stageId === 'string' && stageId in SCAN_STAGE_MAX_TILES ? SCAN_STAGE_MAX_TILES[stageId] : null;
-  if (max === null) return true;
-  const s = (item.stim ?? {}) as Record<string, unknown>;
-  const cols = typeof s.cols === 'number' && Number.isInteger(s.cols) && s.cols > 0 ? s.cols : 0;
-  const rows = typeof s.rows === 'number' && Number.isInteger(s.rows) && s.rows > 0 ? s.rows : 0;
-  const tiles = cols * rows;
-  return tiles > 0 && tiles <= max;
-}
-
-/** پنجرهٔ نمایش موج (ms) در هر مرحلهٔ اسکن — null = دست‌نخوردهٔ آیتم؛ فقط-نمایش، نه محرک و نه کلید */
-export const SCAN_STAGE_WAVE_MS: Record<string, number | null> = {
+/** پنجرهٔ نمایش موج (ms) در هر مرحلهٔ اسکن — اهرم فقط-نمایش؛ null = دست‌نخوردهٔ آیتم.
+ *  قاعده: زمان مرحله فقط اگر از آیتم authored کوتاه‌تر یا برابر باشد — کودک همیشه
+ *  حداقلِ زمان authored را دارد. */
+const SCAN_STAGE_WAVE_MS: Record<string, number | null> = {
   s1: 22000,
   s2: 19000,
   s3: 17000,
@@ -493,45 +425,126 @@ export const SCAN_STAGE_WAVE_MS: Record<string, number | null> = {
   s5: 13000
 };
 
-/**
- * پنجرهٔ موج مرحله برای نمای کلاینت — کمینهٔ زمان authored و سقف مرحله.
- * بی‌مرحله/مرحلهٔ ناشناخته = null (عیناً آیتم authored). قاعده: زمان مرحله فقط اگر از
- * آیتم authored کوتاه‌تر یا برابر باشد — کودک همیشه حداقلِ زمان authored را دارد.
- */
-export function scanStageWaveMs(
-  itemWaveMs: number | null | undefined,
-  stageId: string | null | undefined
-): number | null {
-  if (typeof stageId !== 'string' || !(stageId in SCAN_STAGE_WAVE_MS)) return null;
-  const cap = SCAN_STAGE_WAVE_MS[stageId];
-  if (typeof cap !== 'number' || cap <= 0) return null;
-  if (typeof itemWaveMs !== 'number' || !Number.isFinite(itemWaveMs) || itemWaveMs <= 0) return cap;
-  return Math.min(itemWaveMs, cap);
-}
-
-/** بانک مجاز هر مرحلهٔ استروپ — گروه‌های authored بانک (a=مرحلهٔ ۱ … d=مرحلهٔ ۴، p=پروب) */
-export const STROOP_STAGE_BANDS: Record<string, string[] | null> = {
-  s1: ['a'],
-  s2: ['a', 'b'],
-  s3: ['a', 'b', 'c'],
-  s4: ['a', 'b', 'c', 'd'],
+/** بانک مجاز هر مرحلهٔ استروپ — گروه‌های authored بانک (a=مرحلهٔ ۱ … d=مرحلهٔ ۴، p=پروب).
+ *  پروب ('p') در «همهٔ» مراحل حاضر است — خط‌کش ثابت سنجش؛ رفع P0: سابقاً فقط s5 پروب داشت. */
+const STROOP_STAGE_BANDS: Record<string, string[] | null> = {
+  s1: ['a', 'p'],
+  s2: ['a', 'b', 'p'],
+  s3: ['a', 'b', 'c', 'p'],
+  s4: ['a', 'b', 'c', 'd', 'p'],
   s5: null // همهٔ بانک — مرور بزرگ
 };
 
-export function stroopItemInStage(
-  item: { stim?: Record<string, unknown> | null | undefined },
-  stageId: string | null | undefined
-): boolean {
-  const allowed = typeof stageId === 'string' && stageId in STROOP_STAGE_BANDS ? STROOP_STAGE_BANDS[stageId] : null;
-  if (allowed === null) return true;
-  const s = (item.stim ?? {}) as Record<string, unknown>;
-  const band = typeof s.band === 'string' ? s.band : '';
-  if (band === '') return true; // آیتم بی‌گروه (بانک قدیمی) — همیشه حاضر
-  return allowed.includes(band);
-}
+/** سقف شمار گرگ قلابی در هر مرحلهٔ فلانکر — null = همهٔ گله‌ها */
+const FLANKER_STAGE_MAX_DECOYS: Record<string, number | null> = {
+  s1: 0,   // گلهٔ آرام — هیچ قلابی
+  s2: 1,   // حداکثر یک قلابی
+  s3: 3,   // نگاه‌های فریبکار
+  s4: null, // گلهٔ فریبکار — همهٔ گله‌ها
+  s5: null
+};
+
+/** بانک مجاز هر مرحلهٔ فلانکر — ناسالم بودن گروه = بازگشت ساختاری (شمار قلابی‌ها).
+ *  پروب ('p') در همهٔ مراحل — خط‌کش ثابت سنجش (رفع P0 ممیزی فازها). */
+const FLANKER_STAGE_BANDS: Record<string, string[] | null> = {
+  s1: ['a', 'p'],
+  s2: ['a', 'b', 'p'],
+  s3: ['a', 'b', 'c', 'p'],
+  s4: ['a', 'b', 'c', 'd', 'p'],
+  s5: null
+};
+
+/** سقف شمار ردپاها در هر مرحلهٔ رد — null = همهٔ ردها */
+const TRAIL_STAGE_MAX_NODES: Record<string, number | null> = {
+  s1: 4,
+  s2: 5,
+  s3: 6,
+  s4: 7,
+  s5: null
+};
+
+/** بانک مجاز هر مرحلهٔ رد — ناسالم بودن گروه = بازگشت ساختاری (شمار ردپاها).
+ *  پروب ('p') در همهٔ مراحل — خط‌کش ثابت سنجش (رفع P0 ممیزی فازها). */
+const TRAIL_STAGE_BANDS: Record<string, string[] | null> = {
+  s1: ['a', 'p'],
+  s2: ['a', 'b', 'p'],
+  s3: ['a', 'b', 'c', 'p'],
+  s4: ['a', 'b', 'c', 'd', 'p'],
+  s5: null
+};
+
+// صدف‌های جادویی / کرسی بلوک-تپینگ (G8/۱.۲۵.۴۹) — اهرم سختی = طول دنبالهٔ صدف‌ها (۲→۵)؛
+// خلیج مروارید: صدف‌ها یکی‌یکی روشن می‌شوند و کودک همان ترتیب را لمس می‌کند
+const CORSI_STAGES: StageDef[] = [
+  {
+    id: 's1', index: 1, title_fa: 'دفترچهٔ صدف', goal_fa: 'دو صدف روشن می‌شوند؛ به همان ترتیب لمس کن.', difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: 's2', index: 2, title_fa: 'سه صدف', goal_fa: 'حالا سه صدف؛ چشم‌هایت با هم بیایند.', difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: 's3', index: 3, title_fa: 'چهار صدف', goal_fa: 'دنباله بلندتر شد؛ آهسته و مطمئن.', difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: 's4', index: 4, title_fa: 'خلیج عمیق', goal_fa: 'پنج صدف پشت هم؛ حواست در خلیج بماند.', difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: 's5', index: 5, title_fa: 'قهرمان خلیج', goal_fa: 'همهٔ دنباله‌ها با هم — تو حافظهٔ خلیجی!', difficulty: 5,
+    overrides: {}
+  }
+];
+
+// حباب‌های عدد / بازهٔ عدد رو به جلو (G8/۱.۲۵.۴۹) — اهرم سختی = شمار عددهای دنباله (۳→۶)؛
+// شبِ فانوس: عددها یکی‌یکی در حباب بالا می‌آیند و کودک همان‌ها را با صفحه‌کلید وارد می‌کند
+const SPAN_STAGES: StageDef[] = [
+  {
+    id: 's1', index: 1, title_fa: 'حباب‌های کوچک', goal_fa: 'عددها یکی‌یکی می‌آیند؛ همان‌ها را به ترتیب بگو.', difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: 's2', index: 2, title_fa: 'حباب‌های بیشتر', goal_fa: 'یک حباب بیشتر شد؛ همان قاعده، حواست کنار نره.', difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: 's3', index: 3, title_fa: 'بازهٔ پنج', goal_fa: 'حالا پنج عدد پشت هم؛ در ذهنت تکرارشان کن.', difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: 's4', index: 4, title_fa: 'بازهٔ شش', goal_fa: 'شش حباب پشت سر هم؛ تو خیلی راه رفته‌ای.', difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: 's5', index: 5, title_fa: 'قهرمان فانوس', goal_fa: 'همهٔ دنباله‌ها با هم — تو حافظهٔ عددی!', difficulty: 5,
+    overrides: {}
+  }
+];
+
+// ─── پیش‌ماندهٔ آیتم در مرحله — منطق هر نوع کنار جدول خودش نشسته تا با هم خوانده شوند ───
+
+/** سقف طول دنبالهٔ صدف‌ها در هر مرحلهٔ کرسی — null = همهٔ دنباله‌ها (مرحلهٔ پایانی مرور بزرگ) */
+const CORSI_STAGE_MAX_SPAN: Record<string, number | null> = {
+  s1: 2,
+  s2: 3,
+  s3: 4,
+  s4: 5,
+  s5: null
+};
+
+/** سقف شمار عددهای دنباله در هر مرحلهٔ بازهٔ عدد — null = همهٔ دنباله‌ها */
+const SPAN_STAGE_MAX_DIGITS: Record<string, number | null> = {
+  s1: 3,
+  s2: 4,
+  s3: 5,
+  s4: 6,
+  s5: null
+};
 
 /** شمار گرگ قلابی فلانکر — فلانکرهای مخالف مرکز؛ ناسالم = صفر */
-function flankerIncongruentCountOf(item: { stim?: Record<string, unknown> | null | undefined }): number {
+function flankerIncongruentCountOf(item: StageItemLike): number {
   const s = (item.stim ?? {}) as Record<string, unknown>;
   const arrows = Array.isArray(s.arrows) ? s.arrows.filter((v) => v === 'L' || v === 'R') : [];
   const mid = Math.floor(arrows.length / 2);
@@ -540,251 +553,213 @@ function flankerIncongruentCountOf(item: { stim?: Record<string, unknown> | null
   return arrows.filter((a) => a !== center).length;
 }
 
-/** سقف شمار گرگ قلابی در هر مرحلهٔ فلانکر — null = همهٔ گله‌ها */
-export const FLANKER_STAGE_MAX_DECOYS: Record<string, number | null> = {
-  s1: 0,   // گلهٔ آرام — هیچ قلابی
-  s2: 1,   // حداکثر یک قلابی
-  s3: 3,   // نگاه‌های فریبکار
-  s4: null, // گلهٔ فریبکار — همهٔ گله‌ها
-  s5: null
-};
+// ─── سنجه‌های موتورمحور هر نوع — عیناً از registry-extra.ts پیشین؛ ترتیب قطعی ───
+// این سنجه‌ها با نسخهٔ موتور می‌آیند، دستی upsert نمی‌شوند و در metrics_json عیناً
+// مثل بقیه ثبت می‌شوند؛ تعریف‌های شمارشی DB دست‌نخورده (تصمیم فاز ۱ بازطراحی).
 
-/** بانک مجاز هر مرحلهٔ فلانکر — گروه‌های authored بانک؛ ناسالم = ساختاری (شمار قلابی‌ها) */
-export const FLANKER_STAGE_BANDS: Record<string, string[] | null> = {
-  s1: ['a'],
-  s2: ['a', 'b'],
-  s3: ['a', 'b', 'c'],
-  s4: ['a', 'b', 'c', 'd'],
-  s5: null
-};
-
-export function flankerItemInStage(
-  item: { stim?: Record<string, unknown> | null | undefined },
-  stageId: string | null | undefined
-): boolean {
-  const allowed = typeof stageId === 'string' && stageId in FLANKER_STAGE_BANDS ? FLANKER_STAGE_BANDS[stageId] : null;
-  if (allowed === null) return true;
-  const s = (item.stim ?? {}) as Record<string, unknown>;
-  const band = typeof s.band === 'string' ? s.band : '';
-  if (band !== '') return allowed.includes(band);
-  // بانک بی‌گروه (سازگاری قدیمی) — قاعدهٔ ساختاری: شمار گرگ قلابی
-  const max = typeof stageId === 'string' && stageId in FLANKER_STAGE_MAX_DECOYS ? FLANKER_STAGE_MAX_DECOYS[stageId] : null;
-  if (max === null) return true;
-  const decoys = flankerIncongruentCountOf(item);
-  return decoys === 0 || decoys <= max;
-}
-
-/** سقف طول دنبالهٔ مروارید در هر مرحلهٔ کولهٔ مرواریدها — null = همهٔ دنباله‌ها */
-export const CORSI_STAGE_MAX_LEN: Record<string, number | null> = {
-  s1: 2,
-  s2: 3,
-  s3: 4,
-  s4: 5,
-  s5: null
-};
-
-/** بانک مجاز هر مرحلهٔ کولهٔ مرواریدها — گروه‌های authored بانک؛ ناسالم = ساختاری (طول دنباله) */
-export const CORSI_STAGE_BANDS: Record<string, string[] | null> = {
-  s1: ['a'],
-  s2: ['a', 'b'],
-  s3: ['a', 'b', 'c'],
-  s4: ['a', 'b', 'c', 'd'],
-  s5: null
-};
-
-/**
- * پیش‌ماندهٔ آیتم کولهٔ مرواریدها در مرحله — انتخاب از بانک بر طول دنبالهٔ authored.
- * کلید بازتولید = دنبالهٔ نمایش‌داده‌شدهٔ خود آیتم است (کودک آن را می‌بیند)؛ بنابراین
- * stim دنباله دارد و هیچ کلید مخفی‌ای در بانک نیست — ناسالم = قاعدهٔ ساختاری طول.
- */
-export function corsiItemInStage(
-  item: { stim?: Record<string, unknown> | null | undefined },
-  stageId: string | null | undefined
-): boolean {
-  const allowed = typeof stageId === 'string' && stageId in CORSI_STAGE_BANDS ? CORSI_STAGE_BANDS[stageId] : null;
-  if (allowed === null) return true;
-  const s = (item.stim ?? {}) as Record<string, unknown>;
-  const band = typeof s.band === 'string' ? s.band : '';
-  if (band !== '') return allowed.includes(band);
-  // بانک بی‌گروه (سازگاری) — قاعدهٔ ساختاری: طول دنباله
-  const max = typeof stageId === 'string' && stageId in CORSI_STAGE_MAX_LEN ? CORSI_STAGE_MAX_LEN[stageId] : null;
-  if (max === null) return true;
-  const len = Array.isArray(s.sequence) ? s.sequence.length : 0;
-  return len > 0 && len <= max;
-}
-
-/** سطح n مجاز هر مرحلهٔ ن‌پشت — اهرم مرحله همان پرش n است؛ null معنا ندارد (همهٔ مراحل سطح مشخص دارند) */
-export const NBACK_STAGE_LEVELS: Record<string, number[]> = {
-  s1: [1],
-  s2: [1],
-  s3: [2], // پرش n — دو قدم به عقب
-  s4: [2],
-  s5: [2]
-};
-
-/**
- * پیش‌ماندهٔ آیتم ن‌پشت در مرحله — انتخاب جریان authored بر سطح n آیتم.
- * جریان ن‌پشت هم‌بسته است (هم‌سانی هر آیتم به قدم قبل از خودش ارجاع دارد)؛ بی‌مرحله/
- * مرحلهٔ ناشناخته = همهٔ آیتم‌ها (قرارداد سازگاری سایر نوع‌ها) — بسته‌های ارزیابی ن‌پشت
- * تک‌جریان‌اند و این گیت در آن‌ها بی‌اثر است.
- */
-export function nbackItemInStage(
-  item: { stim?: Record<string, unknown> | null | undefined },
-  stageId: string | null | undefined
-): boolean {
-  const levels = typeof stageId === 'string' && stageId in NBACK_STAGE_LEVELS ? NBACK_STAGE_LEVELS[stageId] : null;
-  if (levels === null) return true;
-  const s = (item.stim ?? {}) as Record<string, unknown>;
-  const n = typeof s.n === 'number' && Number.isInteger(s.n) && s.n > 0 ? s.n : 0;
-  return n > 0 && levels.includes(n);
-}
-
-// ─── سنجه‌های موتورمحور هر نوع — تعریف‌ها عیناً از registry-extra آمده؛ ترتیب داخل هر
-// نوع همان ترتیب قبلی آرایهٔ ENGINE_METRICS است تا flatten هیچ چیزی را جابه‌جا نکند ───
-
-const GONOGO_ENGINE_METRICS: readonly RegistryMetric[] = [
-  { id: 'correct_go_pct_gonogo', title_fa: 'درصد گوهای درست', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'correct_go_pct' },
-  { id: 'correct_nogo_pct_gonogo', title_fa: 'درصد بازداری درست نوگو', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'correct_nogo_pct' },
-  { id: 'commission_pct_gonogo', title_fa: 'درصد خطای پاسخ به غیرهدف', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'commission_pct' },
-  { id: 'omission_pct_gonogo', title_fa: 'درصد از دست‌دادن هدف', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'omission_pct' }
+/** فرمول‌هایی که فقط از موتور می‌آیند — upsert دستی ممنوع (CHECK دیتابیس می‌پذیرد اما کد اجازه نمی‌دهد) */
+export const ENGINE_ONLY_FORMULAS: readonly string[] = [
+  'correct_go_pct',
+  'correct_nogo_pct',
+  'commission_pct',
+  'omission_pct',
+  'scan_fa',
+  'scan_miss',
+  'congruent_acc',
+  'incongruent_acc',
+  'interference_ms',
+  'trail_prefix',
+  'nback_match',
+  'nback_nonmatch',
+  'nback_fa',
+  'nback_miss',
+  'span_max' // G8/۱.۲۵.۴۹ — بلندترین دنبالهٔ کامل درست (صدف‌های جادویی / حباب‌های عدد)
 ];
 
-// حملهٔ جاسوس‌ها (۱.۲۵.۳۰) — دقت موج‌ها از فرمول 'accuracy' در DB می‌آید (accuracy_scan)
-const SCAN_ENGINE_METRICS: readonly RegistryMetric[] = [
-  { id: 'scan_fa_pct', title_fa: 'درصد گرفتن هم‌نوع در موج', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'scan_fa' },
-  { id: 'scan_miss_pct', title_fa: 'درصد جاانداختن جاسوس', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'scan_miss' }
-];
+// ─── نقشهٔ نوع-محور — تک‌منبع؛ ترتیب کلیدها = ترتیب قطعی GAME_KIND_IDS ───
 
-// سه بازی تازه (۱.۲۵.۳۲) — دقت شرطی و هزینهٔ تداخل استروپ/فلانکر + درصد پیش‌ماند رد
-const STROOP_ENGINE_METRICS: readonly RegistryMetric[] = [
-  { id: 'stroop_congruent_acc_pct', title_fa: 'دقت هم‌خوان استروپ (واژه و جوهر یکی)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'congruent_acc' },
-  { id: 'stroop_incongruent_acc_pct', title_fa: 'دقت ناهم‌خوان استروپ (حقهٔ جوهر)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'incongruent_acc' },
-  { id: 'stroop_interference_ms', title_fa: 'هزینهٔ تداخل استروپ (میانهٔ ناهم‌خوان − میانهٔ هم‌خوان)', unit: 'ms', higher_is_better: false, source: 'auto', formula: 'interference_ms' }
-];
-
-const FLANKER_ENGINE_METRICS: readonly RegistryMetric[] = [
-  { id: 'flanker_congruent_acc_pct', title_fa: 'دقت گلهٔ هم‌سو (بدون فریب)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'congruent_acc' },
-  { id: 'flanker_incongruent_acc_pct', title_fa: 'دقت گلهٔ فریبکار (فلانکر مخالف)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'incongruent_acc' },
-  { id: 'flanker_interference_ms', title_fa: 'هزینهٔ تداخل فلانکر (میانهٔ ناهم‌خوان − میانهٔ هم‌خوان)', unit: 'ms', higher_is_better: false, source: 'auto', formula: 'interference_ms' }
-];
-
-// کولهٔ مرواریدها (corsi — ۱۴۰۵/۰۸/۱۹) — دقت بازتولید کامل + بلندترین دنبالهٔ درست (دامنه)
-const CORSI_ENGINE_METRICS: readonly RegistryMetric[] = [
-  { id: 'corsi_seq_acc_pct', title_fa: 'درصد بازتولید کامل دنبالهٔ مرواریدها', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'corsi_seq' },
-  { id: 'corsi_span_max', title_fa: 'بلندترین دنبالهٔ درست این جلسه (دامنهٔ حافظهٔ فضایی)', unit: 'count', higher_is_better: true, source: 'auto', formula: 'corsi_span' }
-];
-
-// آلبوم خرچنگ (ن‌پشت — ۱.۲۵.۴۰) — دقت شرطی هم‌سانی/تفکیک + دو خطای مکمل؛
-// همه با قاعدهٔ دامنهٔ صفر (مخرج صفر = null) مثل scan_fa/scan_miss
-const NBACK_ENGINE_METRICS: readonly RegistryMetric[] = [
-  { id: 'nback_match_pct', title_fa: 'درصد تشخیص هم‌سانی (ماهیِ همانِ قدم قبل)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'nback_match' },
-  { id: 'nback_nonmatch_pct', title_fa: 'درصد تفکیک درست (ماهیِ متفاوت)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'nback_nonmatch' },
-  { id: 'nback_false_alarm_pct', title_fa: 'درصد «همان است» روی ماهیِ متفاوت', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'nback_false_alarm' },
-  { id: 'nback_miss_pct', title_fa: 'درصد جاانداختن هم‌سانی', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'nback_miss' }
-];
-
-// ─── نقشهٔ نوع‌محور — تک‌منبع؛ افزودن بازی تازه فقط یک ورودی این‌جا می‌خواهد ───
-
-export const GAME_KINDS: Record<GameKind, GameKindEntry> = {
+export const GAME_KINDS: { [K in GameKind]: GameKindSpec<K> } = {
   gonogo: {
-    thresholds: GONOGO_THRESHOLDS,
-    stageOutcome: (summary) => stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo),
-    stageList: (band) => GONOGO_STAGES_BY_BAND[band] ?? GONOGO_STAGES_BY_BAND['7-12'],
-    itemInStage: () => true, // گونوگو و بی‌مرحله = همهٔ آیتم‌ها — اهرم مرحله‌اش زمان است نه بانک
-    waveMsCapOf: null,
-    timedChoice: false,
-    rtFloorMs: 150, // گو/نوگو — زیر ۱۵۰ حدس است
-    engineMetrics: GONOGO_ENGINE_METRICS
+    // گو/نوگو — کف ۱۵۰ms: زیر آن حدس است (§۸)
+    rt_floor_ms: 150,
+    timed_choice: false, // اُمیشن گونوگو از خودِ لمس تعریف می‌شود، نه از پایان پنجره
+    stage_rule: GONOGO_STAGE_RULE,
+    stageList: (band) => GONOGO_STAGES[band] ?? GONOGO_STAGES['7-12'],
+    // اهرم سختی گونوگو بازنویسی پارامتر زمان‌بندی در خود StageDef است — فیلتر بانک ندارد
+    levers: {},
+    itemInStage: () => true,
+    engine_metrics: [
+      { id: 'correct_go_pct_gonogo', title_fa: 'درصد گوهای درست', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'correct_go_pct' },
+      { id: 'correct_nogo_pct_gonogo', title_fa: 'درصد بازداری درست نوگو', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'correct_nogo_pct' },
+      { id: 'commission_pct_gonogo', title_fa: 'درصد خطای پاسخ به غیرهدف', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'commission_pct' },
+      { id: 'omission_pct_gonogo', title_fa: 'درصد از دست‌دادن هدف', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'omission_pct' }
+    ]
   },
   numline: {
-    thresholds: NUMLINE_THRESHOLDS,
-    stageOutcome: (summary) => stageOutcomeNumline(summary.pct.accuracy),
+    // خط عددی — کف صفر: اندازه‌گیری جای عدد است نه سرعت؛ RT ملاک نیست
+    rt_floor_ms: 0,
+    timed_choice: false,
+    stage_rule: ACCURACY_STAGE_RULE,
     stageList: () => NUMLINE_STAGES,
-    itemInStage: numlineItemInStage,
-    waveMsCapOf: null,
-    timedChoice: false,
-    rtFloorMs: 0, // خط عددی کف ندارد
-    engineMetrics: [] // دقت جای عدد از فرمول 'accuracy' در DB می‌آید
+    levers: { bank_caps: NUMLINE_STAGE_MAX },
+    itemInStage: (item, stageId) => {
+      const max = typeof stageId === 'string' && stageId in NUMLINE_STAGE_MAX ? NUMLINE_STAGE_MAX[stageId] : null;
+      if (max === null) return true;
+      return Array.isArray(item.range) && item.range[1] <= max;
+    },
+    // سنجهٔ خط عددی (numline_error) از فرمول DB می‌آید — سنجهٔ موتور-فقط ندارد
+    engine_metrics: []
   },
   scan: {
-    thresholds: SCAN_THRESHOLDS,
-    stageOutcome: (summary) => stageOutcomeScan(summary.pct.accuracy),
+    // اسکن — کف ۱۵۰ms روی نخستین لمس موج؛ زیر آن حدس است
+    rt_floor_ms: 150,
+    timed_choice: false,
+    stage_rule: ACCURACY_STAGE_RULE,
     stageList: () => SWARM_STAGES,
-    itemInStage: scanItemInStage,
-    waveMsCapOf: scanStageWaveMs, // اهرم تندشدن موج — فقط-نمایش (۱.۲۵.۳۲)
-    timedChoice: false,
-    rtFloorMs: 150, // کف نخستین لمس موج؛ زیر آن حدس است
-    engineMetrics: SCAN_ENGINE_METRICS
+    levers: { bank_caps: SCAN_STAGE_MAX_TILES, display: SCAN_STAGE_WAVE_MS },
+    itemInStage: (item, stageId) => {
+      // پروب در هر مرحله — خط‌کش ثابت سنجش؛ سقف خانه‌ها فقط برای تمرین است (رفع P0 ممیزی فازها)
+      if (item.phase === 'probe') return true;
+      const max = typeof stageId === 'string' && stageId in SCAN_STAGE_MAX_TILES ? SCAN_STAGE_MAX_TILES[stageId] : null;
+      if (max === null) return true;
+      const s = (item.stim ?? {}) as Record<string, unknown>;
+      const cols = typeof s.cols === 'number' && Number.isInteger(s.cols) && s.cols > 0 ? s.cols : 0;
+      const rows = typeof s.rows === 'number' && Number.isInteger(s.rows) && s.rows > 0 ? s.rows : 0;
+      const tiles = cols * rows;
+      return tiles > 0 && tiles <= max;
+    },
+    // دقت موج‌ها از فرمول 'accuracy' در DB می‌آید (accuracy_scan) — دو سنجهٔ تبعی موتور-فقط‌اند
+    engine_metrics: [
+      { id: 'scan_fa_pct', title_fa: 'درصد گرفتن هم‌نوع در موج', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'scan_fa' },
+      { id: 'scan_miss_pct', title_fa: 'درصد جاانداختن جاسوس', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'scan_miss' }
+    ]
   },
   stroop: {
-    thresholds: ACCURACY_THRESHOLDS,
-    stageOutcome: (summary) => stageOutcomeAccuracyKind(summary.pct.accuracy),
+    // استروپ — کف ۲۰۰ms: لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
+    rt_floor_ms: 200,
+    // انتخاب زمان‌دار — بی‌پاسخی پنجره سمت سرور اُمیشن است
+    timed_choice: true,
+    stage_rule: ACCURACY_STAGE_RULE,
     stageList: () => STROOP_STAGES,
-    itemInStage: stroopItemInStage,
-    waveMsCapOf: null,
-    timedChoice: true, // انتخاب زمان‌دار — بی‌لمس = اُمیشن سمت سرور
-    rtFloorMs: 200, // لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-    engineMetrics: STROOP_ENGINE_METRICS
+    levers: { bank_bands: STROOP_STAGE_BANDS },
+    itemInStage: (item, stageId) => {
+      const allowed = typeof stageId === 'string' && stageId in STROOP_STAGE_BANDS ? STROOP_STAGE_BANDS[stageId] : null;
+      if (allowed === null) return true;
+      const s = (item.stim ?? {}) as Record<string, unknown>;
+      const band = typeof s.band === 'string' ? s.band : '';
+      if (band === '') return true; // آیتم بی‌گروه (بانک قدیمی) — همیشه حاضر
+      return allowed.includes(band);
+    },
+    engine_metrics: [
+      { id: 'stroop_congruent_acc_pct', title_fa: 'دقت هم‌خوان استروپ (واژه و جوهر یکی)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'congruent_acc' },
+      { id: 'stroop_incongruent_acc_pct', title_fa: 'دقت ناهم‌خوان استروپ (حقهٔ جوهر)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'incongruent_acc' },
+      { id: 'stroop_interference_ms', title_fa: 'هزینهٔ تداخل استروپ (میانهٔ ناهم‌خوان − میانهٔ هم‌خوان)', unit: 'ms', higher_is_better: false, source: 'auto', formula: 'interference_ms' }
+    ]
   },
   flanker: {
-    thresholds: ACCURACY_THRESHOLDS,
-    stageOutcome: (summary) => stageOutcomeAccuracyKind(summary.pct.accuracy),
+    // فلانکر — کف ۲۰۰ms: لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
+    rt_floor_ms: 200,
+    timed_choice: true,
+    stage_rule: ACCURACY_STAGE_RULE,
     stageList: () => FLANKER_STAGES,
-    itemInStage: flankerItemInStage,
-    waveMsCapOf: null,
-    timedChoice: true, // انتخاب زمان‌دار — بی‌لمس = اُمیشن سمت سرور
-    rtFloorMs: 200, // لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-    engineMetrics: FLANKER_ENGINE_METRICS
+    levers: { bank_caps: FLANKER_STAGE_MAX_DECOYS, bank_bands: FLANKER_STAGE_BANDS },
+    itemInStage: (item, stageId) => {
+      const allowed = typeof stageId === 'string' && stageId in FLANKER_STAGE_BANDS ? FLANKER_STAGE_BANDS[stageId] : null;
+      if (allowed === null) return true;
+      const s = (item.stim ?? {}) as Record<string, unknown>;
+      const band = typeof s.band === 'string' ? s.band : '';
+      if (band !== '') return allowed.includes(band);
+      // بانک بی‌گروه (سازگاری قدیمی) — قاعدهٔ ساختاری: شمار گرگ قلابی
+      const max = typeof stageId === 'string' && stageId in FLANKER_STAGE_MAX_DECOYS ? FLANKER_STAGE_MAX_DECOYS[stageId] : null;
+      if (max === null) return true;
+      const decoys = flankerIncongruentCountOf(item);
+      return decoys === 0 || decoys <= max;
+    },
+    engine_metrics: [
+      { id: 'flanker_congruent_acc_pct', title_fa: 'دقت گلهٔ هم‌سو (بدون فریب)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'congruent_acc' },
+      { id: 'flanker_incongruent_acc_pct', title_fa: 'دقت گلهٔ فریبکار (فلانکر مخالف)', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'incongruent_acc' },
+      { id: 'flanker_interference_ms', title_fa: 'هزینهٔ تداخل فلانکر (میانهٔ ناهم‌خوان − میانهٔ هم‌خوان)', unit: 'ms', higher_is_better: false, source: 'auto', formula: 'interference_ms' }
+    ]
+  },
+  trail: {
+    // رد پای دزد — کف ۱۵۰ms روی نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
+    rt_floor_ms: 150,
+    timed_choice: false,
+    stage_rule: ACCURACY_STAGE_RULE,
+    stageList: () => TRAIL_STAGES,
+    levers: { bank_caps: TRAIL_STAGE_MAX_NODES, bank_bands: TRAIL_STAGE_BANDS },
+    itemInStage: (item, stageId) => {
+      const allowed = typeof stageId === 'string' && stageId in TRAIL_STAGE_BANDS ? TRAIL_STAGE_BANDS[stageId] : null;
+      if (allowed === null) return true;
+      const s = (item.stim ?? {}) as Record<string, unknown>;
+      const band = typeof s.band === 'string' ? s.band : '';
+      if (band !== '') return allowed.includes(band);
+      // بانک بی‌گروه (سازگاری قدیمی) — قاعدهٔ ساختاری: شمار ردپاها
+      const max = typeof stageId === 'string' && stageId in TRAIL_STAGE_MAX_NODES ? TRAIL_STAGE_MAX_NODES[stageId] : null;
+      if (max === null) return true;
+      const nodes = Array.isArray(s.nodes) ? s.nodes.length : 0;
+      return nodes > 0 && nodes <= max;
+    },
+    engine_metrics: [
+      { id: 'trail_prefix_pct', title_fa: 'درصد پیش‌ماند صحیح رد ردپاها', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'trail_prefix' }
+    ]
   },
   nback: {
-    thresholds: NBACK_THRESHOLDS,
-    stageOutcome: (summary) => stageOutcomeNback(summary.pct.accuracy),
-    stageList: (band) => NBACK_STAGES_BY_BAND[band] ?? NBACK_STAGES_BY_BAND['7-12'],
+    // ن‌پشت (آلبوم خرچنگ) — کف ۲۰۰ms: لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
+    rt_floor_ms: 200,
+    // انتخاب زمان‌دار — بی‌پاسخی پنجره سمت سرور اُمیشن است (عملیاتی روی stim.window_ms آیتم)
+    timed_choice: true,
+    stage_rule: NBACK_THRESHOLDS,
+    stageList: (band) => NBACK_STAGES[band] ?? NBACK_STAGES['7-12'],
+    // اهرم سختی ن‌پشت فیلتر سطح n در خود itemInStage است — جدول سقف/گروه جدا ندارد
+    levers: {},
     itemInStage: nbackItemInStage,
-    waveMsCapOf: null,
-    timedChoice: true, // انتخاب زمان‌دار دوگزینه‌ای — بی‌لمس = اُمیشن سمت سرور
-    rtFloorMs: 200, // لمس تصادفی حذف می‌شود — همان قرارداد انتخاب زمان‌دار
-    engineMetrics: NBACK_ENGINE_METRICS
+    engine_metrics: [
+      { id: 'nback_match_pct', title_fa: 'درصد پاسخ درست به همسان‌ها', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'nback_match' },
+      { id: 'nback_nonmatch_pct', title_fa: 'درصد پاسخ درست به ناهمسان‌ها', unit: 'percent', higher_is_better: true, source: 'auto', formula: 'nback_nonmatch' },
+      { id: 'nback_false_alarm_pct', title_fa: 'درصد هشدار کاذب (گفتن «همان است» برای ناهمسان)', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'nback_fa' },
+      { id: 'nback_miss_pct', title_fa: 'درصد جاانداختن همسان', unit: 'percent', higher_is_better: false, source: 'auto', formula: 'nback_miss' }
+    ]
   },
   corsi: {
-    thresholds: CORSI_THRESHOLDS,
-    stageOutcome: (summary) => stageOutcomeCorsi(summary.pct.accuracy),
+    // صدف‌های جادویی (کرسی بلوک-تپینگ) — کف ۱۵۰ms روی نخستین لمس یادآوری؛ زیر آن حدس است
+    rt_floor_ms: 150,
+    timed_choice: false, // دنباله‌ای چندلمسی — پایان با دنبالهٔ کامل یا پنجره (مثل رد)
+    stage_rule: SEQ_MEMORY_THRESHOLDS,
     stageList: () => CORSI_STAGES,
-    itemInStage: corsiItemInStage,
-    waveMsCapOf: null,
-    timedChoice: false, // بازتولید دنباله مثل رد: پنجرهٔ authored آیتم؛ پیش‌ماند/نیمه‌کاره نمره می‌گیرد
-    rtFloorMs: 150, // کف نخستین لمس بازتولید؛ زیر آن حدس است
-    engineMetrics: CORSI_ENGINE_METRICS
+    levers: { bank_caps: CORSI_STAGE_MAX_SPAN },
+    itemInStage: (item, stageId) => {
+      // پروب در هر مرحله — خط‌کش ثابت سنجش (همان رفع P0 ممیزی فازها)؛ سقف فقط برای تمرین
+      if (item.phase === 'probe') return true;
+      const max = typeof stageId === 'string' && stageId in CORSI_STAGE_MAX_SPAN ? CORSI_STAGE_MAX_SPAN[stageId] : null;
+      if (max === null) return true;
+      const s = (item.stim ?? {}) as Record<string, unknown>;
+      const len = Array.isArray(s.seq) ? s.seq.length : 0;
+      return len > 0 && len <= max;
+    },
+    // دقت دنباله از فرمول 'accuracy' در DB می‌آید؛ بازه (بلندترین دنبالهٔ کامل درست) موتور-فقط است
+    engine_metrics: [
+      { id: 'corsi_span_max', title_fa: 'بلندترین دنبالهٔ صدف کامل درست (بازهٔ دیداری-فضایی)', unit: 'score', higher_is_better: true, source: 'auto', formula: 'span_max' }
+    ]
+  },
+  span: {
+    // حباب‌های عدد (بازهٔ عدد) — کف صفر: ورود صفحه‌کلیدی زمان واکنش نیست (مثل خط عددی)
+    rt_floor_ms: 0,
+    timed_choice: false, // ورود صفحه‌کلیدی — پایان با ✓ یا پنجره
+    stage_rule: SEQ_MEMORY_THRESHOLDS,
+    stageList: () => SPAN_STAGES,
+    levers: { bank_caps: SPAN_STAGE_MAX_DIGITS },
+    itemInStage: (item, stageId) => {
+      // پروب در هر مرحله — خط‌کش ثابت سنجش (همان رفع P0 ممیزی فازها)؛ سقف فقط برای تمرین
+      if (item.phase === 'probe') return true;
+      const max = typeof stageId === 'string' && stageId in SPAN_STAGE_MAX_DIGITS ? SPAN_STAGE_MAX_DIGITS[stageId] : null;
+      if (max === null) return true;
+      const s = (item.stim ?? {}) as Record<string, unknown>;
+      const len = Array.isArray(s.seq) ? s.seq.length : 0;
+      return len > 0 && len <= max;
+    },
+    engine_metrics: [
+      { id: 'digitspan_span_max', title_fa: 'بلندترین دنبالهٔ عدد کامل درست (بازهٔ عددی)', unit: 'score', higher_is_better: true, source: 'auto', formula: 'span_max' }
+    ]
   }
-};
-
-/**
- * نوع‌بازی از فیلد mission.game — ناشناخته/تهی = گونوگو (سازگاری با بسته‌های قدیمی).
- * رفتار عین زنجیرهٔ سه‌تایی قبلی است: فقط شش شناسهٔ شناخته‌شده عبور می‌کنند.
- */
-export function gameKindOf(v: string | null | undefined): GameKind {
-  return typeof v === 'string' && (GAME_KIND_IDS as readonly string[]).includes(v) ? (v as GameKind) : 'gonogo';
-}
-
-/** ورودی رجیستری از شناسه — مقدار بیرون اتحاد (نمی‌رسد، ولی گارد دفاعی) = گونوگو؛
- *  همان معنای defaultِ switchهای قبلی تا هیچ مسیری با ورود غیرمنتظره نسوزد */
-export function kindEntryOf(kind: GameKind): GameKindEntry {
-  return GAME_KINDS[kind] ?? GAME_KINDS.gonogo;
-}
-
-/** اهرم انتخاب آیتم هر مرحله برای نوع‌بازی — جایگزین زنجیره‌های if per-kind در سرویس */
-export function itemInStageOf(kind: GameKind): (item: StageItemProbe, stageId: string | null | undefined) => boolean {
-  return kindEntryOf(kind).itemInStage;
-}
-
-/** کف RT بر نوع آیتم — کف سمت سرور §۸؛ «choice» نوع قدیمی فلش‌کارت است و نوع‌بازی امروزی ندارد */
-export const ITEM_TYPE_RT_FLOOR_MS: Record<MissionItem['type'], number> = {
-  touch_report: GAME_KINDS.gonogo.rtFloorMs,
-  numline: GAME_KINDS.numline.rtFloorMs,
-  choice: 200, // فلش‌کارت/انتخاب — لمس تصادفی حذف می‌شود
-  scan: GAME_KINDS.scan.rtFloorMs,
-  stroop: GAME_KINDS.stroop.rtFloorMs,
-  flanker: GAME_KINDS.flanker.rtFloorMs,
-  nback: GAME_KINDS.nback.rtFloorMs,
-  corsi: GAME_KINDS.corsi.rtFloorMs
 };

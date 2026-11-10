@@ -13,7 +13,7 @@ const ALARM = '#D96C6C';   /* Red — گوی آنتن و نشان جاسوس ج�
 
 /* جنبش تزئینی و صحنهٔ آموزش — همهٔ جنبش از fx با گارد کاهش‌جنبش؛ این ماژول هرگز مستقیم animate نمی‌کند */
 import * as fx from '../fx.js';
-import { sceneMarkup } from '../scene.js';
+import { sceneMarkup, kindHero } from '../scene.js';
 
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -80,13 +80,18 @@ export function stimSvg(stim) {
 }
 
 /** موج آیتم اسکن — قاعده + شبکهٔ ربات‌ها + نوار زمان موج + دکمهٔ «گزارش بده!» */
-export function scanMarkup(item) {
+export function scanMarkup(item, promptOverride) {
   const tiles = tilesOf(item);
   const { cols } = gridOf(item);
   if (tiles.length === 0) return '<p class="play-muted">این موج ربات ندارد.</p>';
   const sig = signatureOf(item);
-  const prompt = item.prompt && String(item.prompt).trim() !== ''
-    ? esc(item.prompt)
+  /* ۱.۲۵.۴۱ (ممیزی): پیام تکراری زیر دکمه از دو-بار درجِ همین قاعده می‌آمد؛
+     حالا صدا زننده می‌تواند پیام کارت آموزشی را بی‌تکرار رد کند (promptOverride='') */
+  const raw = promptOverride !== undefined
+    ? promptOverride
+    : (item.prompt && String(item.prompt).trim() !== '' ? item.prompt : null);
+  const prompt = raw && String(raw).trim() !== ''
+    ? esc(String(raw))
     : 'جاسوس‌ها ربات‌هایی با ' + faSig(sig) + ' آنتن‌اند — همه را بگیر، هم‌نوع‌ها را دست نزن.';
   const cells = tiles.map((n, i) =>
     '<button type="button" class="play-scan__tile" data-idx="' + i + '" aria-label="ربات">' +
@@ -183,7 +188,7 @@ function neighborOf(sig) {
 /** صحنهٔ تمرین — دکور پس‌زمینهٔ لایه‌های دریا؛ جنبش از fx؛ بی‌اثر برای پاسخ */
 function decoratePractice(stage) {
   if (!stage) return;
-  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach'));
+  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach', { svg: kindHero('scan') })); // قهرمان این بازی — پوستهٔ اختصاصی ۱.۲۵.۴۱
   fx.sceneAmbient(stage);
 }
 
@@ -219,9 +224,12 @@ function tapWaveWithin(stage, spyIdxs, ms, sleeper) {
 }
 
 function practiceCardHtml(badge, fakeItem, line) {
+  /* ۱.۲۵.۴۱ (ممیزی): قاعده فقط یک‌بار — بالای شبکه؛ جملهٔ آموزشی زیر دکمه
+     فقط وقتی می‌آید که پیامِ تازه‌ای دارد (موفقیت/تکرار) — دیگر جملهٔ دوم
+     زیر لبهٔ صفحه بریده نمی‌شود و تکراری نیست. */
   return (badge ? '<span class="play-step-badge">' + esc(badge) + '</span>' : '') +
-    scanMarkup(fakeItem) +
-    '<p class="play-line">' + esc(line) + '</p>';
+    scanMarkup(fakeItem, '') +
+    (line ? '<p class="play-line">' + esc(line) + '</p>' : '');
 }
 
 /**
@@ -245,7 +253,7 @@ export async function practiceInteractive(ctx) {
   for (;;) {
     stage.className = 'play-stage';
     stage.classList.add('play-stage--teach');
-    stage.innerHTML = practiceCardHtml('قدم ۱ از ۱', fakeItem, SCAN_PRACTICE.stepLine);
+    stage.innerHTML = practiceCardHtml('قدم ۱ از ۱', fakeItem, ''); // قاعده در scanMarkup است — بدون تکرار
     decoratePractice(stage);
     fx.revealStage(stage);
     fx.popIn(stage.querySelector('.play-scan__grid'), 240, false);

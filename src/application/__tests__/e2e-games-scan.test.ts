@@ -122,12 +122,12 @@ describe('حملهٔ جاسوس‌ها — زنجیرهٔ کامل کودک', ()
     expect(html).toContain('data-kind="scan"');
   });
 
-  it('nextItem: فقط موج‌های سقف مرحلهٔ ۱ (۶ خانه) — بدون correct؛ tiles عمومی است', async () => {
+  it('nextItem: موج‌های سقف مرحلهٔ ۱ + هر چهار پروب — پروب خط‌کش ثابت در همهٔ مراحل (۱.۲۵.۴۷)', async () => {
     const first = dataOf<{ item: Record<string, unknown>; progress: { done: number; total: number } }>(
       await anon.get(`/api/m/${link.token}/next-item`));
     expect(first.item?.id).toBe('wa1');
     expect(first.item?.type).toBe('scan');
-    expect(first.progress.total).toBe(6); // چهار موج تمرین + دو پروب ۶ خانه‌ای
+    expect(first.progress.total).toBe(8); // چهار موج تمرین + چهار پروب (حتی ۱۲ خانه‌ای‌ها — خط‌کش ثابت)
     const s = JSON.stringify(first);
     expect(s).not.toContain('correct'); // کلید پاسخ هرگز
     expect(s).not.toContain('"signature":3');
@@ -200,7 +200,7 @@ describe('حملهٔ جاسوس‌ها — زنجیرهٔ کامل کودک', ()
     const first = dataOf<{ item: { id: string }; progress: { done: number; total: number } }>(
       await anon.get(`/api/m/${link2.token}/next-item`));
     expect(first.item?.id).toBe('wa1'); // بانک authored از سر — سقف جدید موج‌های ≤۹ را می‌گیرد
-    expect(first.progress.total).toBe(8); // چهار موج ۶ خانه‌ای + دو موج ۹ خانه‌ای + دو پروب ۶ خانه‌ای
+    expect(first.progress.total).toBe(10); // چهار ۶ خانه‌ای + دو ۹ خانه‌ای + چهار پروب (خط‌کش ثابت ۱.۲۵.۴۷)
   });
 
   it('پیش‌نمایش درمانگر: موج authored بدون کلید + بازخورد بی‌نوشت', async () => {

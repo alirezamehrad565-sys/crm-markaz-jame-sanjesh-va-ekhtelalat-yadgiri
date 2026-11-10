@@ -31,7 +31,7 @@
   --p-amber: #E4AA46;  /* محرک گو (ستاره) */
   --p-cream: #F5F0E5;  /* پس‌زمینهٔ آرام */
   --p-white: #ffffff;
-  --p-soft: #6E7B76;   /* متن کم‌رنگ خنثی */
+  --p-soft: #5A6B74;   /* متن کم‌رنگ خنثی — کنتراست ≥۴.۵ روی سفید (ممیزی ۱.۲۵.۴۱) */
   --p-line: #E3DCC9;   /* خط جداکنندهٔ ملایم */
   /* مقیاس محرک — پیش‌فرض میانه؛ از پروتکل بازنویسی می‌شود (٪ قطر کوچک ویوپورت) */
   --stim-scale: 33;
@@ -47,14 +47,30 @@
   font-family: 'Vazirmatn Play', 'Vazirmatn', Tahoma, sans-serif;
 }
 
+/* ─── کارت والد (۱.۲۵.۴۱) — تصویر قهرمان بازی + وسط‌چین در ارتفاع کامل ─── */
+.play-kindfig {
+  width: 96px;
+  height: 100px;
+  margin: 2px auto 0;
+  display: block;
+}
+.wrap:has(.parent-gate) {
+  min-height: calc(100dvh - 40px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.wrap:has(.parent-gate) .card { margin-top: 0; }
+
 /* ─── نوار پیشرفت — آرام و بی‌عدد؛ در ارزیابی مخفی (پروتکل behavior.progress_visible) ─── */
 
 .play-progress {
-  height: 10px;
+  height: 12px;
+  flex: 0 0 auto;
   border-radius: 999px;
-  background: var(--p-line);
+  background: rgba(21, 62, 80, .26); /* ریل همیشه-دیده روی روشن و شب (ممیزی ۱.۲۵.۴۱) */
   overflow: hidden;
-  box-shadow: inset 0 1px 2px rgba(21, 62, 80, .08);
+  box-shadow: inset 0 1px 2px rgba(21, 62, 80, .12);
 }
 
 .play-progress__bar {
@@ -148,12 +164,12 @@
 /* بج گام آموزش («قدم ۱ از ۳») — یادآور ملایم، نه شمارندهٔ فشار */
 .play-step-badge {
   display: inline-block;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--p-white);
   background: var(--p-teal);
   border-radius: 999px;
-  padding: 4px 14px;
+  padding: 6px 16px;
   margin-bottom: 4px;
 }
 
@@ -324,13 +340,13 @@
   display: none;
   align-items: center;
   gap: 6px;
-  min-height: 44px;
-  padding: 6px 14px;
+  min-height: 48px;
+  padding: 6px 16px;
   border-radius: 999px;
   background: var(--p-white);
-  box-shadow: 0 1px 4px rgba(21, 62, 80, .14);
+  box-shadow: inset 0 0 0 2.5px rgba(21, 62, 80, .18), 0 4px 12px rgba(11, 34, 46, .16);
   color: var(--p-navy);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
 }
 
@@ -455,9 +471,10 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   آزادِ جهت (۱۴۰۵/۰۸/۱۹) — گیت «گوشی را بچرخان» برداشته شد؛ بازی در هر دو جهت
-   اجرا می‌شود: عمودی چیدمان اول (صحنه بلند)، افقی فرود دوم (کلاف کشیده). قواعد §۹
-   دست‌نخورده: کف لمس، بدون فلاش.
+   دو نما (۱.۲۵.۴۵) — قفل جهت حذف شد؛ عمودی و افقی هر دو اجرای واقعی‌اند.
+   پوشش «گوشی را بچرخان» و گیت آن کامل برداشته شد — روی موبایل جواب نداد.
+   مکث فقط از پنهان‌شدن برگه می‌آید (سمت session.js). قواعد §۹ دست‌نخورده:
+   کف لمس، بدون فلاش.
    ═══════════════════════════════════════════════════════════════ */
 
 /* عمودی — صحنه بلندتر و حاشیهٔ مرده کمتر (قبلاً ۷۸vh بود) */
@@ -498,6 +515,233 @@
   .play-scan__confirm { width: auto; align-self: center; }
 }
 
+/* افقیِ کوتاه — گوشی موبایل (ارتفاع ≤۵۰۰px): قواعد فشرده؛ هیچ محتوایی بریده نمی‌شود.
+   یافتهٔ ممیزی ۱.۲۵.۴۱: کارت‌های آموزش/تمرین از ارتفاع ۳۹۰ بیرون می‌زدند. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .play-root { gap: 6px; }
+  .play-stage { padding: 10px 14px; gap: 8px; overflow-y: auto; }
+  .play-step-badge { padding: 4px 14px; margin-bottom: 2px; }
+  .play-line { font-size: 16px; }
+  .play-muted { font-size: 13px; }
+  .play-intro__name { font-size: 22px; margin: 0 0 4px; }
+  .play-btn { min-height: 56px; }
+  .play-btn--intro { max-width: 300px; margin-top: 8px; font-size: 17px; }
+  .play-option { min-height: 76px; }
+  .play-svg { width: min(calc(var(--stim-scale) * 1vmin), 180px); }
+  .play-stage--main .play-svg { width: min(calc(calc(var(--stim-scale) + 6) * 1vmin), 220px); }
+  .play-numline__road { height: 78px; }
+  .play-scan { gap: 8px; }
+  .play-scan__prompt { font-size: 15px; }
+  .play-flanker { gap: 6px; }
+  .play-flanker__prompt { font-size: 14px; }
+  .play-flanker__answers { max-width: 340px; }
+  .play-flanker__btn { min-height: 56px; font-size: 18px; }
+  .play-trail { gap: 6px; }
+  .play-trail__field { min-height: 190px; }
+  .play-trail__node { width: 64px; height: 64px; }
+  .play-stroop { gap: 6px; }
+  .play-stroop__prompt { font-size: 14px; }
+  .play-nback { gap: 8px; }
+  .play-nback__card { width: min(26vmin, 170px); }
+  .play-nback__prompt { font-size: 14px; }
+  .play-bubble { top: 4px; padding: 8px 14px; font-size: 14px; }
+  .play-basket { min-height: 42px; padding: 4px 12px; bottom: 6px; }
+}
+
+/* افقیِ کوتاه روی پوسته‌های G7 — هم‌ارجاع با قاعدهٔ پوسته (.play-skin--kind) تا
+   اندازه‌های پوسته در ارتفاع ۳۹۰ هم فرو کاسته شوند و هیچ محتوایی زیر لبه نرود */
+@media (orientation: landscape) and (max-height: 500px) {
+  .play-root.play-skin--stroop .play-stroop__word { font-size: clamp(32px, 9vmin, 54px); padding: 4px 14px 8px; }
+  .play-root.play-skin--stroop .play-option.play-stroop__opt { min-height: 60px; }
+  .play-root.play-skin--stroop .play-stroop__blob { width: min(8vmin, 34px); }
+  .play-root.play-skin--stroop .play-stroop__prompt { font-size: 14px; }
+  .play-root.play-skin--trail .play-trail__field { min-height: 150px; }
+  .play-root.play-skin--trail .play-trail__node { width: 60px; height: 60px; }
+  .play-root.play-skin--trail .play-trail__prompt { font-size: 14px; }
+  .play-root.play-skin--nback .play-nback__photo .play-nback__card { width: min(22vmin, 150px); }
+  .play-root.play-skin--nback .play-option.play-nback__opt { min-height: 56px; font-size: 16px; }
+  .play-root.play-skin--nback .play-nback__prompt { font-size: 14px; }
+  .play-root.play-skin--flanker .play-flanker__btn { min-height: 56px; font-size: 18px; }
+  .play-root.play-skin--flanker .play-flanker__slot { flex-basis: clamp(44px, 8vw, 76px); }
+  .play-root.play-skin--flanker .play-flanker__slot--real { flex-basis: clamp(52px, 10vw, 88px); }
+  .play-root.play-skin--flanker .play-flanker__prompt { font-size: 14px; }
+  .play-root.play-skin--scan .play-scan__tile { min-height: 60px; }
+  .play-root.play-skin--scan .play-scan__prompt { font-size: 14px; }
+  .play-root.play-skin--numline .play-numline__road { height: 76px; }
+  .play-root.play-skin--numline .play-numline__chip { font-size: 32px; min-width: 76px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   G8/۱.۲۵.۴۸ — دو بازی حافظهٔ دنباله‌ای: صدف‌های جادویی (corsi) و
+   حباب‌های عدد (span) — ساختار پایهٔ مشترک؛ هنر پوسته در skins/.
+   هدف لمسی ≥۶۴px (§۹)؛ بی‌فلاش؛ جنبش فقط ترنزیشن ملایم.
+   ═══════════════════════════════════════════════════════════════ */
+.play-corsi, .play-span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 430px;
+}
+.play-corsi__prompt, .play-span__prompt {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--p-navy);
+  text-align: center;
+}
+.play-corsi__status, .play-span__status {
+  margin: 0;
+  min-height: 24px;
+  font-size: 15px;
+  color: var(--p-navy);
+  opacity: .82;
+  text-align: center;
+}
+
+/* ─── صدف‌های جادویی — شبکهٔ ۳×۳؛ همیشه کامل داخل کادر ─── */
+.play-corsi__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(6px, 2vmin, 14px);
+  width: 100%;
+  max-width: 340px;
+}
+.play-corsi__tile {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 4px;
+  cursor: pointer;
+  touch-action: manipulation;
+  aspect-ratio: 1;
+  border-radius: 18px;
+  min-width: 64px;
+  min-height: 64px;
+}
+.play-corsi__tile svg { width: 100%; height: 100%; display: block; }
+.play-corsi__shell-body {
+  fill: var(--corsi-shell, #EAF2F0);
+  stroke: var(--p-navy);
+  stroke-width: 3;
+  transition: fill .18s ease, transform .18s ease;
+}
+.play-corsi__pearl { fill: #FFFFFF; stroke: var(--p-navy); stroke-width: 2; opacity: .8; transition: opacity .18s ease; }
+.play-corsi__tile--lit .play-corsi__shell-body { fill: var(--corsi-glow, #FFD98A); transform: scale(1.06); }
+.play-corsi__tile--lit .play-corsi__pearl { opacity: 1; }
+.play-corsi__tile--picked .play-corsi__shell-body { fill: var(--corsi-picked, #BFE3D2); transform: scale(.96); }
+.play-corsi__tile--truth .play-corsi__shell-body { fill: var(--corsi-truth, #F3CE8B); }
+.play-corsi__tile--truth .play-corsi__pearl { fill: var(--p-amber); }
+/* در فاز پخش دنباله، صدف‌ها هنوز دکمهٔ فعال نیستند — نشانهٔ بصری آرام */
+.play-corsi__grid:not(.play-corsi__grid--recall) .play-corsi__tile { cursor: default; }
+
+/* ─── حباب‌های عدد — حباب نمایش + فانوس ─── */
+.play-span__stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  width: 100%;
+  min-height: 150px;
+}
+.play-span__lantern { width: clamp(52px, 14vmin, 84px); opacity: .95; }
+.play-span__lantern svg { width: 100%; height: auto; display: block; }
+.play-span__bubble {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(96px, 26vmin, 150px);
+  height: clamp(96px, 26vmin, 150px);
+  border-radius: 999px;
+  font-size: clamp(44px, 13vmin, 72px);
+  font-weight: 700;
+  color: var(--p-navy);
+  background: rgba(255, 255, 255, .28);
+  border: 3px solid var(--p-navy);
+  opacity: 0;
+  transform: scale(.82);
+  transition: opacity .18s ease, transform .18s ease;
+  direction: ltr; /* عددهای لاتین — مطابق جادهٔ عددها */
+}
+.play-span__bubble--show { opacity: 1; transform: scale(1); }
+.play-span__bubble--wait { opacity: .35; border-style: dashed; }
+
+/* نوار ورود — اسلات‌های خالی/پر */
+.play-span__entry {
+  display: flex;
+  gap: 8px;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.play-span__slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  border: 2.5px dashed rgba(21, 62, 80, .45);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--p-navy);
+  direction: ltr;
+}
+.play-span__slot--filled { border-style: solid; background: rgba(255, 255, 255, .55); }
+.play-span__slot--truth { border-style: solid; background: rgba(243, 206, 139, .8); }
+
+/* صفحه‌کلید بزرگ — ۴×۳؛ ورود ≥۶۴px (§۹)؛ تا فاز ورود پنهان */
+.play-span__pad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(72px, 96px));
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+}
+.play-span__pad--hidden { visibility: hidden; }
+.play-span__key {
+  appearance: none;
+  border: 2.5px solid var(--p-navy);
+  border-radius: 16px;
+  min-height: 64px;
+  font-size: 26px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--p-navy);
+  background: rgba(255, 255, 255, .6);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.play-span__key:active { transform: scale(.97); }
+.play-span__key--back { background: rgba(232, 111, 158, .22); }
+.play-span__key--go { background: var(--p-amber); color: var(--p-navy); border-color: var(--p-navy); }
+.play-span__key--truth { outline: 4px solid var(--p-amber); outline-offset: 2px; }
+.play-span__timer { width: 100%; max-width: 340px; height: 10px; border-radius: 999px; background: rgba(21, 62, 80, .18); overflow: hidden; }
+.play-span__timer > span, .play-corsi__timer > span { display: block; height: 100%; width: 100%; border-radius: 999px; background: var(--p-amber); }
+.play-corsi__timer { width: 100%; max-width: 340px; height: 10px; border-radius: 999px; background: rgba(21, 62, 80, .18); overflow: hidden; }
+
+/* نمونه‌های آموزش/پیش‌نمایش — نسخهٔ سبک بدون نوار پنجره */
+.play-corsi--sample .play-corsi__grid { max-width: 260px; }
+.play-span--sample .play-span__stage { min-height: 120px; }
+.play-span--sample .play-span__pad { display: none; }
+.play-span--sample .play-span__pad--hidden { display: none; }
+
+/* افقیِ کوتاه (ارتفاع ≤۵۰۰px) — فشرده بدون برش */
+@media (orientation: landscape) and (max-height: 500px) {
+  .play-corsi, .play-span { gap: 6px; }
+  .play-corsi__grid { max-width: 240px; }
+  .play-corsi__tile { min-width: 52px; min-height: 52px; padding: 2px; }
+  .play-corsi__prompt, .play-span__prompt { font-size: 15px; }
+  .play-span__stage { min-height: 96px; }
+  .play-span__bubble { width: 76px; height: 76px; font-size: 38px; }
+  .play-span__slot { width: 42px; height: 42px; font-size: 20px; }
+  .play-span__key { min-height: 50px; font-size: 20px; }
+  .play-span__pad { grid-template-columns: repeat(3, minmax(60px, 84px)); }
+}
+
 /* هیچ انیمیشنی تندتر از ۳ هرتز وجود ندارد؛ با کاهش‌جنبش همه‌چیز ایستا می‌شود */
 @media (prefers-reduced-motion: reduce) {
   .play-progress__bar { transition: none; }
@@ -525,6 +769,12 @@
   stroke: var(--p-navy);
   stroke-width: 2.5;
   stroke-linejoin: round;
+}
+
+/* ستارهٔ خاموش = حفرهٔ خالی — روی کارت کرم و شبِ پوسته‌ها هرگز «ستارهٔ گرفته‌شده» خوانده نمی‌شود
+  (رفع P2 ممیزی فازها: کودک تازه با بهترین ۰ نباید ۳ ستارهٔ پُر ببیند) */
+.play-stars__star:not(.play-stars__lit) path {
+  fill: transparent;
 }
 
 .play-stars__lit path {
@@ -884,6 +1134,18 @@
 
 .play-flanker__pack { width: 100%; max-width: 380px; height: auto; display: block; }
 
+/* نشانگر هدف — سه‌گوش کهربایی بالای گرگ وسط؛ نشانهٔ دوم برای کوررنگ و توجه ضعیف (۱.۲۵.۴۱) */
+.play-flanker__slot--real { position: relative; }
+.play-flanker__slot--real::after {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-inline: 9px solid transparent;
+  border-bottom: 11px solid var(--p-amber);
+}
+
 /* افق دشت — نوار ایستای تیره زیر پنجه‌ها */
 .play-flanker__ground {
   width: 100%;
@@ -973,21 +1235,21 @@
 }
 
 
-/* ─── کولهٔ مرواریدها (۱۴۰۵/۰۸/۱۹) — نوع corsi؛ حافظهٔ کاری فضایی (کورسی) ───
-   پوستهٔ «سپیدهٔ مروارید»: روشن، رز-کرم آرام + حاشیهٔ رز-طلایی ایستا (بدون فلاش — §۹).
-   تخت صدف ثابت از خود stim (جایگاه درصدی)؛ مروارید با کلاس --lit برق می‌زند (فاز نمایش)
-   و با --step گرفته‌شده می‌ماند (فاز بازتولید)؛ نشان حقیقت خط‌چین رز آرام است.
-   کف لمس صدف ≥۶۴px (اینجا ۷۸px). هیچ keyframes وجود ندارد؛ جنبش فقط از fx.js
-   و transition عرض نوار از JS. (رد پای دزد حذف شد — نقد سه‌گانه؛ cognitive-games-critique.md) */
+/* ─── رد پای دزد (۱.۲۵.۳۲) — نوع trail؛ راه‌یابی نشانه‌ای سبک Trail Making ───
+   حس عدی در صحنه، آرامش در گفتار (§۲): پوستهٔ شب کوچه/پشت‌بام نیلی تیره +
+   حاشیهٔ هشدار ایستا (بدون فلاش/پالس — §۹) + ماه و دزد وکتوری گوشهٔ صحنه.
+   ردپای دزد با جوهر کهربایی روی بشقاب Cream — خوانا برای کوررنگ (نشان = شکل + عدد).
+   گره‌ها absolute با موقعیت درصدی از خود stim؛ کف لمس ≥۶۴px (اینجا ۷۶px).
+   هیچ keyframes وجود ندارد؛ جنبش فقط از fx.js و transition عرض نوار از JS. */
 
-.play-stage--corsi {
-  background: linear-gradient(180deg, #FBEFF2 0%, #F8E3EA 62%, #F4DCE6 100%);
-  box-shadow: inset 0 0 0 3px rgba(201, 123, 160, 0.45), inset 0 0 0 6px rgba(255, 247, 249, 0.9);
+.play-stage--trail {
+  background: linear-gradient(180deg, #0A1E33 0%, #123049 62%, #173B52 100%);
+  box-shadow: inset 0 0 0 3px rgba(228, 170, 70, 0.45), inset 0 0 0 6px rgba(7, 22, 37, 0.95);
 }
 
-.play-stage--corsi .play-corsi__prompt { color: #4A2438; }
+.play-stage--trail .play-trail__prompt { color: #F5F0E5; }
 
-.play-corsi {
+.play-trail {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -995,48 +1257,59 @@
   width: 100%;
 }
 
-.play-corsi--sample { max-width: 320px; }
+.play-trail--sample { max-width: 300px; }
 
-.play-corsi__prompt {
+.play-trail__prompt {
   font-size: 17px;
   font-weight: 700;
-  color: #4A2438;
+  color: var(--p-navy);
   text-align: center;
   line-height: 1.7;
   margin: 0;
   padding: 0 8px;
 }
 
-/* تخت صدف — کل صحنه را پر می‌کند؛ حاشیهٔ مرده ممنوع (§۲) */
-.play-corsi__field {
+/* میدان ردپا — کل صحنه را پر می‌کند (width 100%)؛ حاشیهٔ مرده ممنوع (§۲) */
+.play-trail__field {
   position: relative;
   width: 100%;
   flex: 1 1 auto;
   min-height: 280px;
 }
 
-/* خرچنگ کلکتور گوشهٔ صحنه — بی‌اثر برای لمس، زیر صدف‌ها */
-.play-corsi__crab {
+/* پوستهٔ گوشهٔ صحنه — ماه و دزد فراری؛ بی‌اثر برای لمس، زیر گره‌ها */
+.play-trail__moon {
   position: absolute;
-  bottom: 4px;
-  inset-inline-end: 6px;
-  width: 66px;
+  top: 8px;
+  inset-inline-start: 10px;
+  width: 46px;
   height: auto;
   pointer-events: none;
-  opacity: 0.85;
+  opacity: 0.8;
 }
 
-/* صدف — دکمهٔ ≥۶۴px؛ موقعیت absolute از خود stim؛ مروارید درونش برق می‌زند */
-.play-corsi__shell {
+.play-trail__thief {
+  position: absolute;
+  bottom: 6px;
+  inset-inline-end: 8px;
+  width: 72px;
+  height: auto;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+/* گرهٔ ردپا — دکمهٔ دایره‌ای ≥۶۴px؛ موقعیت absolute از خود stim */
+.play-trail__node {
   position: absolute;
   transform: translate(-50%, -50%);
-  width: 78px;
-  height: 72px;
-  border: 3px solid rgba(74, 36, 56, 0.22);
-  border-radius: 18px;
-  background: rgba(255, 247, 249, 0.9);
-  padding: 4px;
+  width: 76px;
+  height: 76px;
+  border: 3px solid rgba(21, 62, 80, 0.35);
+  border-radius: 50%;
+  background: rgba(245, 240, 229, 0.94);
+  padding: 4px 4px 2px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -1045,39 +1318,32 @@
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
-button.play-corsi__shell { appearance: none; font-family: inherit; }
-.play-corsi__shell:active { transform: translate(-50%, -50%) scale(0.95); }
+button.play-trail__node { appearance: none; font-family: inherit; }
+.play-trail__node:active { transform: translate(-50%, -50%) scale(0.95); }
 
-.play-corsi__shell-svg { width: 100%; height: auto; display: block; }
+.play-trail__foot { width: 26px; height: auto; display: block; }
 
-/* مروارید — خاموش و آرام پیش از برق‌زدن؛ برق با کلاس --lit (فاز نمایش) */
-.play-corsi__pearl { opacity: 0.5; transition: opacity 180ms ease; }
-.play-corsi__pearl-shine { opacity: 0.25; transition: opacity 180ms ease; }
-
-.play-corsi__shell--lit {
-  border-color: #C97BA0;
-  background: #FFF3F7;
-  box-shadow: 0 0 0 4px rgba(201, 123, 160, 0.35), 0 6px 14px rgba(74, 36, 56, 0.18);
-}
-.play-corsi__shell--lit .play-corsi__pearl { opacity: 1; }
-.play-corsi__shell--lit .play-corsi__pearl-shine { opacity: 1; }
-
-/* قدم درست — مروارید گرفته‌شده؛ حلقهٔ رز پایدار؛ پاپ از fx.popIn می‌آید (§۹) */
-.play-corsi__shell--step {
-  border-color: #C97BA0;
-  background: #FFF3F7;
-  box-shadow: 0 0 0 3px rgba(201, 123, 160, 0.4), 0 4px 10px rgba(74, 36, 56, 0.16);
-}
-.play-corsi__shell--step .play-corsi__pearl { opacity: 1; }
-.play-corsi__shell--step .play-corsi__pearl-shine { opacity: 1; }
-
-/* نشان حقیقت — دنبالهٔ درست پس از پاسخ تمرین؛ خط‌چین رز آرام، ایستا */
-.play-corsi__shell--truth {
-  border: 3px dashed #C97BA0;
-  background: #FFF3F7;
+.play-trail__label {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--p-navy);
 }
 
-.play-corsi__order {
+/* قدم درست — حلقهٔ کهربایی؛ جنبش پاپ از fx.popIn می‌آید (§۹) */
+.play-trail__node--step {
+  border-color: var(--p-amber);
+  background: #FDF6E7;
+  box-shadow: 0 0 0 3px rgba(228, 170, 70, 0.4), 0 4px 10px rgba(7, 22, 37, 0.35);
+}
+
+/* نشان حقیقت — ترتیب درست پس از پاسخ تمرین؛ خط‌چین کهربایی آرام، ایستا */
+.play-trail__node--truth {
+  border: 3px dashed var(--p-amber);
+  background: #FDF6E7;
+}
+
+.play-trail__order {
   position: absolute;
   top: -9px;
   inset-inline-end: -6px;
@@ -1085,48 +1351,49 @@ button.play-corsi__shell { appearance: none; font-family: inherit; }
   height: 22px;
   padding: 0 6px;
   border-radius: 999px;
-  background: #438C89;
-  color: #FFFFFF;
+  background: var(--p-teal);
+  color: var(--p-white);
   font-size: 12px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 6px rgba(74, 36, 56, 0.25);
+  box-shadow: 0 2px 6px rgba(7, 22, 37, 0.3);
 }
 
-/* نوار پنجرهٔ بازتولید — خط لبهٔ پایین؛ فقط عرض از JS inline تنظیم می‌شود (بدون keyframes — §۹) */
-.play-corsi__timer {
+/* نوار رد (زمان پنجره) — خط لبهٔ پایین؛ فقط عرض از JS inline تنظیم می‌شود (بدون keyframes — §۹) */
+.play-trail__timer {
   width: min(72%, 320px);
   height: 10px;
   border-radius: 999px;
-  background: rgba(201, 123, 160, 0.18);
+  background: rgba(245, 240, 229, 0.22);
   overflow: hidden;
 }
 
-.play-corsi__timer > span {
+.play-trail__timer > span {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #C97BA0 0%, #F5F0E5 100%);
+  background: linear-gradient(90deg, var(--p-amber) 0%, #F5F0E5 100%);
 }
 
-/* نمونهٔ آموزش — صدف‌ها div بی‌لمس؛ تخت کوچک */
-.play-corsi--sample .play-corsi__field { min-height: 180px; }
-.play-corsi--sample .play-corsi__shell { width: 58px; height: 54px; cursor: default; }
-.play-corsi--sample .play-corsi__order { top: -8px; }
+/* نمونهٔ آموزش — گره‌ها div بی‌لمس؛ میدان کوچک */
+.play-trail--sample .play-trail__field { min-height: 170px; }
+.play-trail--sample .play-trail__node { width: 56px; height: 56px; cursor: default; }
+.play-trail--sample .play-trail__foot { width: 20px; }
+.play-trail--sample .play-trail__label { font-size: 13px; }
+.play-trail--sample .play-trail__thief { width: 52px; }
 
-/* تبلت افقی: تخت وسط می‌ماند و کل صحنه را پر می‌کند */
+/* تبلت افقی: میدان وسط می‌ماند و کل صحنه را پر می‌کند */
 @media (orientation: landscape) {
-  .play-corsi { height: 100%; justify-content: space-between; }
-  .play-corsi__field { min-height: 340px; }
+  .play-trail { height: 100%; justify-content: space-between; }
+  .play-trail__field { min-height: 340px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .play-corsi__shell { transition: none; }
-  .play-corsi__shell:active { transform: translate(-50%, -50%); }
-  .play-corsi__pearl, .play-corsi__pearl-shine { transition: none; }
-  .play-corsi__timer > span { transition: none !important; }
+  .play-trail__node { transition: none; }
+  .play-trail__node:active { transform: translate(-50%, -50%); }
+  .play-trail__timer > span { transition: none !important; }
 }
 
 /* ─── خلاصهٔ پایان جلسه (۱.۲۵.۳۴ — اقتباس debrief بستهٔ jsPsych) ───
@@ -1182,60 +1449,44 @@ button.play-corsi__shell { appearance: none; font-family: inherit; }
 /* کمربند و بند — اجرای اصلی/ارزیابی هرگز صحنه نمی‌بیند حتی اگر نشست باقی مانده باشد */
 .play-stage--main .play-scene { display: none; }
 
-.play-scene svg { position: absolute; }
-/* لایه‌های عمق به بستر می‌چسبند — ترکیب دریایی واقعی، نه شناور */
-.play-scene__far, .play-scene__mid { width: 92%; }
-.play-scene__far { left: 4%; }
-.play-scene__mid { left: 4%; }
+/* دکور مینیمال (۱.۲۵.۴۱) — حباب‌های نرم + قهرمان گوشه‌نشین؛ مرجان/بستر شنی/جلبک
+   حذف شدند (ممیزی اسکرین‌شات: عامل حس «بهم‌ریخته») */
+.play-scene__bubbles { position: absolute; inset: 0; color: var(--p-teal); opacity: .5; }
 
-.play-scene__far {
-  left: 4%; right: 4%; bottom: 17%; height: 34%; top: auto;
-  opacity: .5;
-}
+.play-scene__bubble { position: absolute; }
+/* سه‌کوشهٔ امن — هیچ حبابی وسط کادر که جای متن و محرک است نمی‌نشیند */
+.play-scene__bubble--0 { left: 7%; bottom: 9%; }
+.play-scene__bubble--1 { left: 20%; bottom: 20%; }
+.play-scene__bubble--2 { right: 7%; bottom: 10%; }
 
-.play-scene__mid {
-  left: 2%; right: 2%; bottom: 3%; height: 27%; top: auto;
-  opacity: .6;
-}
-
-.play-scene__near {
-  left: -2%; right: -2%; bottom: -2%; height: 24%;
-  opacity: .95;
-}
-
-.play-scene__bubbles { position: absolute; inset: 0; }
-
-.play-scene__bubble { position: absolute; width: 20px; height: 20px; }
-.play-scene__bubble--0 { left: 12%; bottom: 12%; }
-.play-scene__bubble--1 { left: 78%; bottom: 30%; width: 14px; height: 14px; }
-.play-scene__bubble--2 { left: 62%; bottom: 8%; width: 24px; height: 24px; }
-
-/* قهرمان صحنه — ماهی (و در پایان خرچنگ) کنار گفتار؛ کوچک و گوشه‌نشین،
-   هرگز وسط توجه کودک در مسیر آزمون نمی‌نشیند چون در آزمون اصلاً حاضر نیست */
+/* قهرمان صحنه — گوشه‌نشین و کاملاً داخل کادر؛ سایهٔ زمین زیرش */
 .play-scene__hero {
   position: absolute;
-  right: 8%;
-  bottom: 20%;
+  right: 6%;
+  bottom: 12%;
   display: inline-flex;
   align-items: flex-end;
-  gap: 4px;
 }
-.play-scene__hero > svg:first-child { width: 128px; height: 132px; }
-.play-scene__hero > svg + svg { width: 92px; height: 95px; opacity: .95; }
-
-.play-scene__weeds {
+.play-scene__hero::after {
+  content: '';
   position: absolute;
-  left: 7%;
-  bottom: 20%;
-  display: inline-flex;
-  gap: 6px;
+  bottom: -7px;
+  left: 12%;
+  right: 12%;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(11, 34, 46, .16);
 }
-.play-scene__weed { width: 26px; height: 52px; transform-origin: 50% 100%; }
+.play-scene__hero > svg { width: 96px; height: 99px; }
 
-/* موبایل باریک — قهرمان کوچک‌تر تا از گفتار بیرون نزند */
-@media (max-width: 380px) {
-  .play-scene__hero > svg:first-child { width: 104px; height: 108px; }
-  .play-scene__hero > svg + svg { width: 74px; height: 77px; }
+/* رد پای دزد — میدان پر از گره است؛ قهرمان با گره‌ها برخورد می‌کند — حذف */
+.play-root[data-kind='trail'] .play-scene__hero,
+.play-root.play-skin--trail .play-scene__hero { display: none; }
+
+/* کارت باریک — قهرمان کوچک‌تر تا با متن برخورد نکند */
+@media (max-width: 700px) {
+  .play-scene__hero > svg { width: 72px; height: 74px; }
+  .play-scene__hero { right: 5%; bottom: 7%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1245,131 +1496,149 @@ button.play-corsi__shell { appearance: none; font-family: inherit; }
 }
 
 
-/* ─── آلبوم خرچنگ (۱.۲۵.۴۰) — نوع nback؛ حس عدی در صحنه، آرامش در گفتار (§۲) ───
-   پوستهٔ آلبوم عکس دریایی: فیروزه‌ای عمیق + قاب طلایی ایستا (حس آلبوم عکس،
-   بی‌فلاش و بی‌پالس — §۹). ماهی و قاب وکتور درون‌کدند (kinds/nback.js)؛
-   هیچ انیمیشن CSS — جنبش فقط از fx.js کلاینت. برنچ timedchoice کلاس
-   play-stage--nback را خودش می‌گذارد (الگوی play-stage--stroop). */
+/* ═══════════════════════════════════════════════════════════════
+   «آلبوم خرچنگ» (ن‌پشت همسانی دیداری / نوع nback) — ۱.۲۵.۴۰ — ۱۴۰۵/۰۸/۱۷
+   فقط کلاس‌های خودِ این بازی — الگوی .play-stage--stroop/.play-stage--flanker.
+   پوستهٔ آلبوم دریایی: سبز-فیروزهٔ عمق دریا با قاب کرمِ دفترچه (ایستا) —
+   حس عدی فقط در صحنه است، گفتار روبه‌کودک آرام می‌ماند (§۲).
+   جنبش CSS ممنوع — همهٔ جنبش از fx.js با گارد کاهش‌جنبش می‌آید؛
+   بلوک کاهش‌جنبش این بازی فقط گذارها را خاموش می‌کند.
+   کف لمس دکمه‌های حکم ≥۶۴px (§۹)؛ هیچ دارایی بیرونی — ماهی‌ها SVG درون‌کد.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── پوستهٔ آلبوم دریایی — برنچ timedchoice کلاس 'play-stage--' + item.type می‌گذارد ─── */
 .play-stage--nback {
-  background: linear-gradient(180deg, #0E3742 0%, #14525F 62%, #1C6B74 100%);
-  box-shadow: inset 0 0 0 3px rgba(228, 170, 70, 0.55), inset 0 0 0 6px rgba(9, 38, 46, 0.9);
+  background: linear-gradient(180deg, #0C3A40 0%, #135157 58%, #1D6862 100%);
+  box-shadow: inset 0 0 0 3px rgba(245, 240, 229, 0.38), inset 0 0 0 8px rgba(9, 42, 47, 0.85);
 }
 
 .play-stage--nback .play-nback__prompt { color: #F5F0E5; }
-.play-stage--nback .play-nback__nlabel { color: #F0D9A8; }
 
 .play-nback {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
 }
 
 /* نمونهٔ آموزش — کوچک‌تر و بی‌لمس */
-.play-nback--sample { max-width: 340px; gap: 10px; }
+.play-nback--sample { max-width: 320px; gap: 10px; }
+.play-nback--practice { max-width: 420px; gap: 12px; }
 
-/* ─── پرسش + برچسب سطح n ─── */
-
-.play-nback__photorew {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  width: 100%;
-}
+/* ─── قاعدهٔ بازی ─── */
 
 .play-nback__prompt {
   font-size: 15px;
   font-weight: 700;
   color: var(--p-navy);
-  text-align: center;
+  text-align: start;
   line-height: 1.7;
   margin: 0;
-  max-width: 440px;
+  max-width: 420px;
 }
 
-.play-nback__nlabel {
-  font-size: 13px;
+/* ─── صفحهٔ آلبوم — قاب کرم + عکس ماهی + برچسب پلهٔ n ───
+   قاب دفترچه‌وار ایستاست تا کودک «عکس در آلبوم» را ببیند؛ هیچ حرکتی ندارد
+   تا RT از لحظهٔ نمایش پاک بماند (پاپ ورود از fx پس از مُهر نمایش می‌آید). */
+.play-nback__album {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 26px 12px;
+  border: 3px solid var(--p-navy);
+  border-radius: 16px;
+  background: var(--p-cream, #F5F0E5);
+  box-shadow: 0 8px 18px rgba(6, 30, 34, 0.4);
+}
+
+.play-nback__fish {
+  width: min(46vmin, 240px);
+  height: auto;
+  display: block;
+}
+
+.play-nback__level {
+  font-size: 14px;
   font-weight: 700;
   color: var(--p-navy);
-  background: rgba(245, 240, 229, 0.9);
+  background: rgba(228, 170, 70, 0.32);
   border-radius: 999px;
-  padding: 2px 12px;
+  padding: 3px 14px;
 }
 
-/* ─── عکس تازه — کارت قاب‌دار درشت، پرکنندهٔ صحنه ─── */
-.play-nback__photo {
+/* نسخهٔ نمایشی قدم آموزش — بی‌سایه و بی‌لمس */
+.play-nback__album--demo { box-shadow: none; }
+
+/* ─── نوار یادآوری تمرین — جفت عکس «قدم عقب ← امروز» روبه‌کودک پیدا ───
+   مقایسه در تمرین خودِ قانون آموزشی است، نه کلید بانک؛ به همین دلیل
+   این صحنه فقط در تمرین تعاملی می‌آید و هرگز در آزمون. */
+.play-nback__memo {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   width: 100%;
 }
 
-.play-nback__card {
-  width: min(58vw, 240px);
-  height: auto;
-  display: block;
-  filter: drop-shadow(0 4px 10px rgba(6, 30, 36, 0.45));
-}
-
-/* جفتِ آموزش — عکسِ قبل و عکسِ تازه کنار هم؛ فقط قدم‌های تمرین */
-.play-nback__pair {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-}
-
-.play-nback__pair-item {
+.play-nback__memo-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  padding: 10px 14px 8px;
+  border: 2.5px solid var(--p-navy);
+  border-radius: 14px;
+  background: var(--p-cream, #F5F0E5);
 }
 
-.play-nback__pair-item .play-nback__card { width: min(30vw, 132px); }
+.play-nback__memo-card--now { border-width: 3.5px; }
 
-.play-nback__pair-label {
+.play-nback__memo-tag {
   font-size: 12px;
   font-weight: 700;
   color: var(--p-navy);
-  background: rgba(245, 240, 229, 0.88);
+  background: rgba(67, 140, 137, 0.22);
   border-radius: 999px;
   padding: 2px 10px;
 }
 
-/* ─── دو گزینهٔ ثابت — «همان است» / «فرق دارد» ───
-   دکمه‌ها کلاس play-option را هم دارند (برنچ سشن روی همین کلاس کلیک می‌کند)؛
+.play-nback__memo-fish { width: 108px; height: auto; display: block; }
+
+.play-nback__memo-arrow { width: 30px; height: auto; flex: 0 0 auto; }
+
+/* ─── دو دکمهٔ ثابت حکم — «همان است / فرق دارد» ───
+   دکمه‌ها کلاس play-option را هم دارند (برنچ سشن روی همین کلاس لمس می‌گیرد)؛
    سلکتور دوتایی برای اولویتِ قطعی بر پایهٔ play.css. */
-.play-nback__options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(120px, 190px));
+.play-nback__answers {
+  display: flex;
   gap: 12px;
   justify-content: center;
   width: 100%;
 }
 
 .play-option.play-nback__opt {
-  appearance: none;
+  min-width: 132px;
+  min-height: 84px; /* هدف لمسی سخاوتمند ≥۶۴px — کاردرمانگر §۹ */
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 72px; /* هدف لمسی سخاوتمند ≥۶۴px — کاردرمانگر §۹ */
-  padding: 10px 12px;
-  border: 3px solid rgba(245, 240, 229, 0.28);
+  padding: 10px 18px;
+  border: 3px solid rgba(245, 240, 229, 0.34);
   border-radius: 16px;
-  background: rgba(245, 240, 229, 0.94);
+  background: rgba(245, 240, 229, 0.95);
   color: var(--p-navy);
   font-family: inherit;
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 19px;
   cursor: pointer;
   touch-action: manipulation;
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
 .play-option.play-nback__opt:active { transform: scale(0.96); }
+
+.play-nback__optname { font-weight: 700; }
 
 /* جواب درست نشان‌گذاری‌شده — فقط تمرین، پس از پاسخ؛ خط‌چین کهربایی آرام، ایستا */
 .play-option.play-nback__opt.play-nback__opt--truth {
@@ -1383,6 +1652,22 @@ button.play-corsi__shell { appearance: none; font-family: inherit; }
 .play-option.play-nback__opt.play-nback__opt--picked {
   border-color: var(--p-teal);
   background: #FDF6E7;
+}
+
+/* دکمهٔ نمایشی قدم آموزش — بی‌لمس و ایستا */
+.play-nback__demo {
+  min-width: 132px;
+  min-height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border: 2.5px dashed rgba(21, 62, 80, 0.4);
+  border-radius: 16px;
+  background: rgba(245, 240, 229, 0.8);
+  color: var(--p-navy);
+  font-size: 17px;
+  font-weight: 700;
 }
 
 /* ─── نوار پنجرهٔ پاسخ — خط لبهٔ پایین ───
@@ -1404,15 +1689,25 @@ button.play-corsi__shell { appearance: none; font-family: inherit; }
 
 /* ─── تبلت افقی: صحنه پر می‌شود، حاشیهٔ مرده نمی‌ماند (§۲) ─── */
 @media (min-width: 700px) and (orientation: landscape) {
-  .play-nback { gap: 16px; }
-  .play-nback__card { width: min(34vmin, 300px); }
-  .play-nback__options { max-width: 560px; grid-template-columns: repeat(2, minmax(140px, 210px)); }
-  .play-nback__prompt { font-size: 17px; max-width: 540px; }
+  .play-nback { gap: 18px; }
+  .play-nback__fish { width: min(40vmin, 300px); }
+  .play-nback__prompt { font-size: 17px; max-width: 520px; }
+  .play-nback__memo-fish { width: 132px; }
+  .play-option.play-nback__opt { min-height: 92px; min-width: 168px; font-size: 21px; }
 }
 
-/* کاهش‌جنبش: همهٔ انتقال‌ها و فشارهای لمسی این بازی ایستا می‌شوند (§۹) */
+/* موبایل باریک — کارت‌های یادآوری کوچک‌تر تا ردیف نشکند */
+@media (max-width: 380px) {
+  .play-nback__memo-fish { width: 88px; }
+  .play-nback__memo-arrow { width: 22px; }
+  .play-option.play-nback__opt { min-width: 112px; font-size: 17px; }
+}
+
+/* کاهش‌جنبش: گذارهای این بازی ایستا می‌شوند (§۹) — جنبش اصلی از پیش در fx گارد است */
 @media (prefers-reduced-motion: reduce) {
   .play-option.play-nback__opt,
-  .play-nback__card { transition: none; }
+  .play-nback__album,
+  .play-nback__memo-card,
+  .play-nback__demo { transition: none; }
   .play-option.play-nback__opt:active { transform: none; }
 }

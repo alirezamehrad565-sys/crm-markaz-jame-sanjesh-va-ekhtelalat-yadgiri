@@ -1,0 +1,122 @@
+/* skins/trail.css — پوستهٔ «کوچهٔ ردپا» (G7/۱.۲۵.۴۳)
+   لایهٔ هنری روی play.css؛ .play-skin--trail ماندگار روی #play-root؛ سرو پس از play.css.
+   فقط گرادیان/سایه/بورد · بی‌قالب‌کلیدی · transition ملایم · کف گره ۷۶px · مبنا افقی */
+
+/* چرا متغیر: رنگ کوچه یک‌جا؛ پالت §۲ نمی‌شکند */
+.play-skin--trail{--al-night:#0B1E31;--al-night2:#123049;--al-wall:#4A3428;--al-wall-lit:#7A5539;--al-amber:#E4AA46;--al-stone:#F5F0E5;--al-ink:#153E50}
+
+/* چرا لایه‌لایه: چراغ بالا، سنگ‌فرش، پردهٔ شب بالا؛ قاب و ویگنت */
+.play-skin--trail .play-stage--trail {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(52% 34% at 50% 0%,rgba(228,170,70,.3),rgba(228,170,70,0) 72%),
+    linear-gradient(180deg,var(--al-night) 0%,rgba(11,30,49,.86) 30%,rgba(11,30,49,0) 64%),
+    radial-gradient(circle at 50% 50%,rgba(245,240,229,.12) 0 8px,rgba(245,240,229,0) 11px),
+    linear-gradient(180deg,var(--al-night) 0%,var(--al-night2) 58%,#173B52 100%);
+  background-size: auto,auto,36px 30px,auto;
+  box-shadow: inset 0 0 0 3px rgba(228,170,70,.5),inset 0 0 0 7px rgba(7,22,37,.94),inset 0 0 44px rgba(7,22,37,.4);
+}
+
+/* چرا شبه‌عنصر: آجر فقط دو سو؛ کوچه متقارن، فیزیکی امن */
+.play-skin--trail .play-stage--trail::before,
+.play-skin--trail .play-stage--trail::after {
+  content: '';
+  inset: 0 auto;
+  width: 16%;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(180deg,rgba(7,22,37,0) 0 15px,rgba(7,22,37,.4) 15px 18px),
+    linear-gradient(90deg,var(--al-wall-lit) 0%,var(--al-wall) 60%,rgba(74,52,40,0) 100%);
+}
+.play-skin--trail .play-stage--trail::before { position: absolute; left: 0; }
+.play-skin--trail .play-stage--trail::after { position: absolute; right: 0; transform: scaleX(-1); }
+
+/* چرا ترتیب: ماه/دزد جلوی دیوار؛ گره‌ها z:2 پایه */
+.play-skin--trail .play-trail__moon,
+.play-skin--trail .play-trail__thief { z-index: 1; }
+
+/* چرا سنگ روشن: حلقهٔ کهربایی و بستر Cream خوانا */
+.play-skin--trail .play-trail__node {
+  width: 76px;
+  height: 76px;
+  border: 3px solid rgba(21,62,80,.55);
+  background: linear-gradient(180deg,#FFFDF6 0%,var(--al-stone) 58%,#E9E0C9 100%);
+  box-shadow: 0 0 0 3px rgba(228,170,70,.3),inset 0 2px 0 rgba(255,255,255,.85);
+}
+.play-skin--trail .play-trail__label { font-size: 16px; color: var(--al-ink); }
+
+/* چرا فانوسی: درخشش ملایم مسیر موفقیت از transition پایه */
+.play-skin--trail .play-trail__node--step {
+  border-color: var(--al-amber);
+  background: linear-gradient(180deg,#FFF9EA,#FDF3DC);
+  box-shadow: 0 0 0 4px rgba(228,170,70,.45),0 0 18px rgba(228,170,70,.55);
+}
+
+/* چرا ایستا: خط‌چین کهربایی کم‌هاله، آموزش پس از پاسخ */
+.play-skin--trail .play-trail__node--truth {
+  border: 3px dashed var(--al-amber);
+  background: #FDF6E7;
+  box-shadow: 0 0 14px rgba(228,170,70,.4);
+}
+
+/* چرا بج فانوسی: کهربایی با جوهر Navy */
+.play-skin--trail .play-trail__order{top:-10px;inset-inline-end:-8px;min-width:24px;height:24px;background:var(--al-amber);color:var(--al-ink);border:2px solid rgba(21,62,80,.6);font-size:13px}
+
+/* چرا ۶۴: نمونهٔ بی‌لمس هم از کف §۹ بگذرد */
+.play-skin--trail .play-trail--sample .play-trail__node{width:64px;height:64px}
+
+/* چرا تابلو: Cream روی شیشهٔ شب، همیشه خوانا */
+.play-skin--trail .play-trail__prompt {
+  position: relative;
+  color: var(--al-stone);
+  background: rgba(7,22,37,.62);
+  border: 1.5px solid rgba(228,170,70,.38);
+  border-radius: 14px;
+  padding: 7px 14px;
+}
+
+/* چرا نوار فانوسی: ریل شب، پر کهربایی؛ عرض از JS */
+.play-skin--trail .play-trail__timer{height:12px;background:rgba(7,22,37,.6);box-shadow:inset 0 1px 3px rgba(0,0,0,.5),0 0 0 1.5px rgba(228,170,70,.25)}
+.play-skin--trail .play-trail__timer > span{background:linear-gradient(90deg,var(--al-amber),var(--al-stone));box-shadow:0 0 10px rgba(228,170,70,.5)}
+
+/* چرا هم‌آوا: نوار پیشرفت هم‌رنگ نوار رد */
+.play-skin--trail .play-progress{background:rgba(21,62,80,.16);box-shadow:inset 0 1px 2px rgba(21,62,80,.22)}
+.play-skin--trail .play-progress__bar{background:linear-gradient(to left,var(--al-amber),#D19430)}
+
+/* چرا لبهٔ گرم: حباب پررنگ‌تر؛ سبد هم‌رنگ کوچه */
+.play-skin--trail .play-bubble--ok{border-color:rgba(228,170,70,.65)}
+.play-skin--trail .play-bubble--calm{border-color:rgba(21,62,80,.3)}
+.play-skin--trail .play-basket{background:rgba(11,30,49,.92);color:var(--al-stone);border:1.5px solid rgba(228,170,70,.4)}
+.play-skin--trail .play-basket__star{stroke:var(--al-stone)}
+
+/* چرا کارت روشن: معرفی/آموزش/پایان با قاب کهربایی */
+.play-skin--trail .play-stage--teach,
+.play-skin--trail .play-stage--end{background:linear-gradient(180deg,#FFFDF7,var(--al-stone));box-shadow:0 14px 34px rgba(21,62,80,.12),inset 0 0 0 3px rgba(228,170,70,.3)}
+
+/* چرا سنگی: گزینه سنگ‌فرشی؛ معرفی حلقه‌دار */
+.play-skin--trail .play-option{background:linear-gradient(180deg,#FFFDF7,#F1EADB);border-color:rgba(21,62,80,.3)}
+.play-skin--trail .play-btn--intro{box-shadow:0 10px 24px rgba(21,62,80,.24),0 0 0 3px rgba(228,170,70,.35)}
+
+/* چرا افقی: دیوار باریک‌تر، میدان بازتر */
+@media (orientation: landscape) {
+  .play-skin--trail .play-stage--trail::before,
+  .play-skin--trail .play-stage--trail::after { width: 12%; }
+}
+
+/* چرا کوتاه: ظرف جمع‌تر؛ گره‌ها همان ۷۶px */
+@media (orientation: landscape) and (max-height: 460px) {
+  .play-skin--trail .play-trail{gap:6px}
+  .play-skin--trail .play-trail__prompt{padding:5px 12px;font-size:15px}
+  .play-skin--trail .play-trail__field{min-height:260px}
+  .play-skin--trail .play-trail__timer{height:9px}
+}
+
+/* چرا گارد §۹: transition هم خاموش، active بی‌اسکیل */
+@media (prefers-reduced-motion: reduce) {
+  .play-skin--trail .play-trail__node,
+  .play-skin--trail .play-trail__timer > span,
+  .play-skin--trail .play-btn,
+  .play-skin--trail .play-option{transition:none}
+  .play-skin--trail .play-trail__node:active{transform:translate(-50%,-50%)}
+}

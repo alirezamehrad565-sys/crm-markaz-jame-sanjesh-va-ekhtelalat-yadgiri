@@ -7,6 +7,8 @@ import type { Logger } from '@core/logger';
 import type {
   ScreeningDayCount,
   ScreeningEntry,
+  ScreeningEntryInput,
+  ScreeningEntryPatch,
   ScreeningListFilters,
   ScreeningListResult,
   ScreeningRangeSummary,
@@ -50,6 +52,8 @@ interface Row {
   name: string;
   day: string;
   tags: string;
+  birth_date: string | null;      /* ۱.۲۵.۵۰ */
+  readiness_score: number | null; /* ۱.۲۵.۵۰ */
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -62,6 +66,8 @@ function rowToEntry(r: Row): ScreeningEntry {
     name: r.name,
     day: r.day,
     tags: parseTagsJson(r.tags),
+    birthDate: r.birth_date ?? null,
+    readinessScore: r.readiness_score ?? null,
     createdBy: r.created_by,
     creatorName: r.creator_name,
     createdAt: r.created_at,
@@ -70,7 +76,8 @@ function rowToEntry(r: Row): ScreeningEntry {
 }
 
 const SELECT = `
-  SELECT e.id, e.name, e.day, e.tags, e.created_by, e.created_at, e.updated_at,
+  SELECT e.id, e.name, e.day, e.tags, e.birth_date, e.readiness_score,
+         e.created_by, e.created_at, e.updated_at,
          st.full_name AS creator_name
     FROM screening_entries e
     LEFT JOIN staff st ON st.id = e.created_by
@@ -169,7 +176,7 @@ export function createScreeningService(deps: ScreeningDeps) {
     },
 
     async create(
-      input: { name: string; tags: string[]; day?: string },
+      input: ScreeningEntryInput,
       actor: AuthContext
     ): Promise<ScreeningEntry> {
       const parsed = parseEntryInput(input.name);
@@ -179,14 +186,21 @@ export function createScreeningService(deps: ScreeningDeps) {
       }
       const tags = mergeTags(parsed, sanitizeTags(input.tags));
       const day = /^\d{4}-\d{2}-\d{2}$/.test(input.day ?? '') ? (input.day as string) : tehranTodayYmd();
+      /* ۱.۲۵.۵۰ — فیلدهای اختیاری؛ الگوی تاریخ مثل day (فقط قالب معتبر می‌نشیند) */
+      const birthDate = /^\d{4}-\d{2}-\d{2}$/.test(input.birth_date ?? '') ? (input.birth_date as string) : null;
+      const readinessScore =
+        typeof input.readiness_score === 'number' && Number.isFinite(input.readiness_score)
+          ? Math.trunc(input.readiness_score)
+          : null;
       const id = crypto.randomUUID();
       const now = nowSql();
 
       await db.transaction(async (tx) => {
         await tx.execute(
-          `INSERT INTO screening_entries (id, name, day, tags, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [id, name, day, JSON.stringify(tags), actor.staffId, now, now]
+          `INSERT INTO screening_entries
+             (id, name, day, tags, birth_date, readiness_score, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, name, day, JSON.stringify(tags), birthDate, readinessScore, actor.staffId, now, now]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -195,18 +209,20 @@ export function createScreeningService(deps: ScreeningDeps) {
           resourceId: id,
           changes: {
             day: { from: null, to: day },
-            tags: { from: null, to: tags.join('|') }
+            tags: { from: null, to: tags.join('|') },
+            birth_date: { from: null, to: birthDate },
+            readiness_score: { from: null, to: readinessScore }
           }
         });
       });
 
-      log.info('screening.created', { day, tagged: tags.length > 0 });
+      log.info('screening.created', { day, tagged: tags.length > 0, hasBirth: birthDate !== null });
       return rowToEntry(await getEntryRow(id));
     },
 
     async update(
       id: string,
-      input: { name?: string; tags?: string[] },
+      input: ScreeningEntryPatch,
       actor: AuthContext
     ): Promise<ScreeningEntry> {
       const current = await getEntryRow(id);
@@ -225,11 +241,26 @@ export function createScreeningService(deps: ScreeningDeps) {
         input.tags !== undefined || parsed.hashTags.length > 0
           ? mergeTags(parsed, sanitizeTags(input.tags ?? []))
           : prevTags;
+      /* ۱.۲۵.۵۰ — فیلدهای اختیاری: undefined = دست‌نخورده؛ null = پاک‌کردن */
+      const birthDate =
+        input.birth_date === undefined
+          ? current.birth_date
+          : /^\d{4}-\d{2}-\d{2}$/.test(input.birth_date ?? '')
+            ? (input.birth_date as string)
+            : null;
+      const readinessScore =
+        input.readiness_score === undefined
+          ? current.readiness_score
+          : typeof input.readiness_score === 'number' && Number.isFinite(input.readiness_score)
+            ? Math.trunc(input.readiness_score)
+            : null;
 
       await db.transaction(async (tx) => {
         await tx.execute(
-          `UPDATE screening_entries SET name = ?, tags = ?, updated_at = ? WHERE id = ?`,
-          [name, JSON.stringify(tags), nowSql(), id]
+          `UPDATE screening_entries
+             SET name = ?, tags = ?, birth_date = ?, readiness_score = ?, updated_at = ?
+           WHERE id = ?`,
+          [name, JSON.stringify(tags), birthDate, readinessScore, nowSql(), id]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -237,7 +268,9 @@ export function createScreeningService(deps: ScreeningDeps) {
           resourceType: 'screening_entry',
           resourceId: id,
           changes: {
-            tags: { from: prevTags.join('|'), to: tags.join('|') }
+            tags: { from: prevTags.join('|'), to: tags.join('|') },
+            birth_date: { from: current.birth_date, to: birthDate },
+            readiness_score: { from: current.readiness_score, to: readinessScore }
           }
         });
       });

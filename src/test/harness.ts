@@ -52,10 +52,13 @@ export function createTestDb(seed = true): DatabaseSyncInstance {
 }
 
 function silentLogger(scope = 'test'): Logger {
+  const dbg = (level: string) => (msg: string, meta?: unknown) => {
+    if (process.env.DEBUG_ERRORS) console.error(`[${level.toUpperCase()}:${scope}]`, msg, meta);
+  };
   const base: Logger = {
     debug: () => undefined,
     info: () => undefined,
-    warn: () => undefined,
+    warn: dbg('warn'),
     // eslint-disable-next-line no-console -- دیباگ موقت
     error: ((msg: string, meta?: unknown) => { if (process.env.DEBUG_ERRORS) console.error(`[ERR:${scope}]`, msg, meta); }) as Logger['error'],
     child: (sub) => silentLogger(`${scope}.${sub}`)

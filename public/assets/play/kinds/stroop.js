@@ -21,7 +21,7 @@ const CREAM = '#F5F0E5';   /* پس‌زمینهٔ کارت واژه در آمو�
 
 /* جنبش تزئینی و صحنهٔ آموزش — همهٔ جنبش از fx با گارد کاهش‌جنبش؛ این ماژول هرگز مستقیم animate نمی‌کند */
 import * as fx from '../fx.js';
-import { sceneMarkup } from '../scene.js';
+import { sceneMarkup, kindHero } from '../scene.js';
 
 /* پالت ثابت ۶ رنگ — کلیدها قرارداد بانک‌اند؛ برچسب فارسی + رنگ جوهر (کودک‌پسند) */
 const PALETTE = {
@@ -254,7 +254,7 @@ const PRACTICE_WINDOW_MS = 15000;
 /** صحنهٔ تمرین — دکور پس‌زمینهٔ لایه‌های دریا؛ جنبش از fx؛ بی‌اثر برای پاسخ */
 function decoratePractice(stage) {
   if (!stage) return;
-  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach'));
+  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach', { svg: kindHero('stroop') })); // قهرمان این بازی — پوستهٔ اختصاصی ۱.۲۵.۴۱
   fx.sceneAmbient(stage);
 }
 

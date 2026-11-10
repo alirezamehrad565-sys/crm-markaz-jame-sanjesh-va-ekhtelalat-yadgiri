@@ -1074,12 +1074,27 @@ export const CreateExerciseBatchSchema = z
 
 export const SCREENING_NAME_MAX = 80;
 export const SCREENING_TAGS_MAX = 12;
+/* ۱.۲۵.۵۰ — نمرهٔ آمادگی تحصیلی: عدد صحیح ۰..۱۰۰، اختیاری */
+export const SCREENING_READINESS_MIN = 0;
+export const SCREENING_READINESS_MAX = 100;
 
 const ScreeningTagSchema = z
   .string()
   .trim()
   .min(1, 'برچسب خالی مجاز نیست')
   .max(60, 'برچسب حداکثر ۶۰ نویسه است');
+
+/* ۱.۲۵.۵۰ — دو فیلد اختیاری ثبت روزانه: تاریخ تولد (میلادی YYYY-MM-DD، نمایش شمسی سمت کلاینت)
+   و نمرهٔ آمادگی تحصیلی (۰..۱۰۰) — هر دو null-پذیر؛ خالی = ثبت‌نشده */
+const ScreeningBirthDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ تولد باید به قالب YYYY-MM-DD باشد');
+
+const ScreeningReadinessSchema = z
+  .number()
+  .int('نمرهٔ آمادگی تحصیلی باید عدد صحیح باشد')
+  .min(SCREENING_READINESS_MIN, 'نمرهٔ آمادگی تحصیلی نمی‌تواند منفی باشد')
+  .max(SCREENING_READINESS_MAX, 'نمرهٔ آمادگی تحصیلی حداکثر ۱۰۰ است');
 
 export const ScreeningCreateSchema = z.object({
   name: z
@@ -1088,7 +1103,9 @@ export const ScreeningCreateSchema = z.object({
     .min(2, 'نام و فامیل حداقل ۲ نویسه است')
     .max(SCREENING_NAME_MAX, `نام و فامیل حداکثر ${SCREENING_NAME_MAX} نویسه است`),
   tags: z.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `حداکثر ${SCREENING_TAGS_MAX} برچسب`).default([]),
-  day: TehranYmdSchema.optional()
+  day: TehranYmdSchema.optional(),
+  birth_date: ScreeningBirthDateSchema.nullish(),
+  readiness_score: ScreeningReadinessSchema.nullish()
 });
 
 export const ScreeningUpdateSchema = z
@@ -1099,11 +1116,16 @@ export const ScreeningUpdateSchema = z
       .min(2, 'نام و فامیل حداقل ۲ نویسه است')
       .max(SCREENING_NAME_MAX, `نام و فامیل حداکثر ${SCREENING_NAME_MAX} نویسه است`)
       .optional(),
-    tags: z.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `حداکثر ${SCREENING_TAGS_MAX} برچسب`).optional()
+    tags: z.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `حداکثر ${SCREENING_TAGS_MAX} برچسب`).optional(),
+    birth_date: ScreeningBirthDateSchema.nullish(),
+    readiness_score: ScreeningReadinessSchema.nullish()
   })
-  .refine((v) => v.name !== undefined || v.tags !== undefined, {
-    message: 'حداقل یک فیلد برای ویرایش لازم است'
-  });
+  .refine(
+    (v) => v.name !== undefined || v.tags !== undefined || v.birth_date !== undefined || v.readiness_score !== undefined,
+    {
+      message: 'حداقل یک فیلد برای ویرایش لازم است'
+    }
+  );
 
 export const ScreeningQuerySchema = z.object({
   from: TehranYmdSchema.optional(),
