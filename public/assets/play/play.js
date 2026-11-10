@@ -115,7 +115,12 @@ async function loadKind() {
       spanMarkup: mod.spanMarkup || null,
       spanBeginInput: mod.spanBeginInput || null,
       spanRevealTruth: mod.spanRevealTruth || null,
-      spanResponsePoint: mod.spanResponsePoint || null
+      spanResponsePoint: mod.spanResponsePoint || null,
+      // هم‌صداها (۱.۲۵.۵۲) — توابع نمایش تقلید متوالی (الگوی corsi)
+      simonMarkup: mod.simonMarkup || null,
+      simonBeginRecall: mod.simonBeginRecall || null,
+      simonRevealTruth: mod.simonRevealTruth || null,
+      simonResponsePoint: mod.simonResponsePoint || null
     };
   } catch (err) {
     return GENERIC;

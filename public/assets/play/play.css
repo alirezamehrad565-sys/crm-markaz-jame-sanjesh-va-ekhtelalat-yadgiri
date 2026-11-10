@@ -630,6 +630,84 @@
 /* در فاز پخش دنباله، صدف‌ها هنوز دکمهٔ فعال نیستند — نشانهٔ بصری آرام */
 .play-corsi__grid:not(.play-corsi__grid--recall) .play-corsi__tile { cursor: default; }
 
+/* ─── هم‌صداها (۱.۲۵.۵۲) — شبکهٔ ۲×۲ دوستان؛ ساختار پایه؛ هنر پوسته در skins/ ─── */
+.play-simon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 430px;
+}
+.play-simon__prompt {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--p-navy);
+  text-align: center;
+}
+.play-simon__status {
+  margin: 0;
+  min-height: 24px;
+  font-size: 15px;
+  color: var(--p-navy);
+  opacity: .82;
+  text-align: center;
+}
+.play-simon__count {
+  margin: 0;
+  font-size: 13px;
+  color: var(--p-navy);
+  opacity: .6;
+}
+.play-simon__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(8px, 2.4vmin, 16px);
+  width: 100%;
+  max-width: 300px;
+}
+.play-simon__pad {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+  aspect-ratio: 1;
+  border-radius: 22px;
+  min-width: 64px;
+  min-height: 64px;
+}
+.play-simon__pad svg { width: 100%; height: 100%; display: block; }
+.play-simon__body {
+  stroke: var(--p-navy);
+  stroke-width: 3;
+  transition: fill .18s ease, transform .18s ease, filter .18s ease;
+}
+.play-simon__limbs path, .play-simon__limbs circle {
+  stroke: var(--p-navy);
+  transition: stroke .18s ease;
+}
+/* رنگ هر دوست از پوسته می‌آید (—buddy-0..3)؛ پیش‌فرض‌های امن خنثی‌اند */
+.play-simon__pad--0 .play-simon__body { fill: var(--simon-buddy-0, #E0605E); }
+.play-simon__pad--1 .play-simon__body { fill: var(--simon-buddy-1, #3E9C93); }
+.play-simon__pad--2 .play-simon__body { fill: var(--simon-buddy-2, #8A6FD1); }
+.play-simon__pad--3 .play-simon__body { fill: var(--simon-buddy-3, #E9A13B); }
+/* نور گرفتن — دوست «آواز» می‌خواند: روشن و کمی بزرگ */
+.play-simon__pad--lit .play-simon__body { filter: brightness(1.35) drop-shadow(0 0 12px var(--simon-glow, #FFE2A8)); transform: scale(1.07); }
+/* انتخاب کودک — کمی جمع‌تر؛ بازخورد لمسی آرام */
+.play-simon__pad--picked .play-simon__body { filter: brightness(.88); transform: scale(.95); }
+/* نشان حقیقت — حلقهٔ طلایی آموزش */
+.play-simon__pad--truth .play-simon__body { filter: brightness(1.12) drop-shadow(0 0 8px var(--simon-truth, #F3CE8B)); }
+.play-simon__pad--truth {
+  outline: 3px solid var(--simon-truth, #F3CE8B);
+  outline-offset: 2px;
+  border-radius: 22px;
+}
+/* در فاز پخش دنباله، دوستان هنوز دکمهٔ فعال نیستند — نشانهٔ بصری آرام */
+.play-simon__grid:not(.play-simon__grid--recall) .play-simon__pad { cursor: default; }
+
 /* ─── حباب‌های عدد — حباب نمایش + فانوس ─── */
 .play-span__stage {
   position: relative;

@@ -56,7 +56,7 @@
 
 `IDLE → INSTRUCTION → (DEMONSTRATION | PRACTICE | READY) → FIXATION → STIMULUS → RESPONSE_WINDOW → INTER_TRIAL_INTERVAL → READY/PRACTICE/BREAK → COMPLETED` + `PAUSED / INTERRUPTED / INVALID` (ترمینال: COMPLETED/INVALID). گذار با جدول بسته (گذار غیرمجاز = استثنا) و تاریخ‌دار (`performance.now()-t0`). مکث برگه از `visibilitychange`: FIXATION/STIMULUS/RESPONSE_WINDOW/ITI/PRACTICE/READY → `PAUSED{from}` با انجماد sleeper + ساعت RT + تایمرهای موج، و برگشت با `resumeTo`.
 
-### ۴.۳ نوع‌بازی‌های فعال (هشت)
+### ۴.۳ نوع‌بازی‌های فعال (نُه)
 
 | نوع | حس بازی | ارجاع متن‌باز (همگی MIT، فقط الهام/اقتباس منطق) |
 | --- | --- | --- |
@@ -68,6 +68,7 @@
 | `nback` | آلبوم خرچنگ (ن‌پشت — ۱.۲۵.۴۰) | jsPsych core (MIT) |
 | `corsi` | صدف‌های جادویی (کورسی — حافظهٔ فضایی، G8/۱.۲۵.۴۹) | `@jspsych-contrib/plugin-corsi-blocks` (MIT) |
 | `span` | حباب‌های عدد (بازهٔ عددی، G8/۱.۲۵.۴۹) | jsPsych digit-span (MIT) |
+| `simon` | هم‌صداها (تقلید متوالی — چهار دوست ساحل، ۱.۲۵.۵۲) | الگوی corsi + مکانیک سیمون/MIMM (تکرار غیرمجاور) |
 | ~~`trail`~~ | رد پای دزد (TMT A/B) | **حذف شد — نقد سه‌گانهٔ ۱.۲۵.۵۱ (cognitive-games-critique.md)** |
 
 قرارداد ماژول نوع: صادرات `stimSvg` + `previewSteps` + هوک‌های اختیاری (`practiceInteractive`, `debriefMarkup`, `*Markup`, `*RevealTruth`, `*ResponsePoint`)؛ شنیده‌شدن خودکار با پسوند. **هیچ چرخهٔ عمر mount/start وجود ندارد** — کل listener/زمان‌بندی/ارسال با موتور است.

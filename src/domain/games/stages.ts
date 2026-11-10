@@ -34,8 +34,10 @@ export type { GameKind } from './registry';
  *  اهرم = طول دنبالهٔ صدف‌ها) و «حباب‌های عدد» (span، اهرم = شمار عددها)؛
  *  هفت قاعدهٔ پیشین عیناً.
  *  ۱.۶.۰ (۱.۲۵.۵۱): «رد پای دزد» (trail) پس از نقد سه‌گانه حذف شد — قاعدهٔ آن از رجیستری
- *  برداشته شد؛ بستهٔ trail1 در DB بازنشسته می‌شود (migration 0101)؛ هفت قاعدهٔ مانده عیناً. */
-export const STAGE_RULES_VERSION = '1.6.0';
+ *  برداشته شد؛ بستهٔ trail1 در DB بازنشسته می‌شود (migration 0101)؛ هفت قاعدهٔ مانده عیناً.
+ *  ۱.۷.۰ (۱.۲۵.۵۲): قواعد «هم‌صداها» (simon — تقلید متوالی) افزوده شد — اهرم = طول دنبالهٔ
+ *  دوستان (۲→۶) + سرعت پخش authored؛ آستانهٔ مشترک SEQ_MEMORY؛ هفت قاعدهٔ پیشین عیناً. */
+export const STAGE_RULES_VERSION = '1.7.0';
 
 /** تعداد مرحله‌های مسیر تمرین */
 export const STAGE_TOTAL = 5;
@@ -450,4 +452,18 @@ export function spanItemInStage(
   stageId: string | null | undefined
 ): boolean {
   return GAME_KINDS.span.itemInStage(item, stageId);
+}
+
+/** سقف طول دنبالهٔ دوستان در هر مرحلهٔ هم‌صداها — null = همهٔ دنباله‌ها (مرحلهٔ پایانی مرور بزرگ) */
+export const SIMON_STAGE_MAX_SPAN: Record<string, number | null> = GAME_KINDS.simon.levers.bank_caps!;
+
+/**
+ * پیش‌ماندهٔ آیتم هم‌صداها در مرحله — بانک authored با سقف مرحله؛ پروب در همهٔ مراحل
+ * (خط‌کش ثابت سنجش — همان رفع P0 ممیزی فازها)؛ بی‌مرحله/ناشناخته = همهٔ آیتم‌ها.
+ */
+export function simonItemInStage(
+  item: { stim?: Record<string, unknown> | null | undefined; phase?: string },
+  stageId: string | null | undefined
+): boolean {
+  return GAME_KINDS.simon.itemInStage(item, stageId);
 }

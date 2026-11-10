@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.51";
+var APP_VERSION = "1.25.52";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23299,7 +23299,7 @@ function fillErrorPage(message) {
 __name(fillErrorPage, "fillErrorPage");
 
 // src/domain/games/registry.ts
-var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "nback", "corsi", "span"];
+var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "nback", "corsi", "span", "simon"];
 function gameKindOf(v) {
   return GAME_KIND_IDS.includes(v) ? v : "gonogo";
 }
@@ -23836,6 +23836,55 @@ var SPAN_STAGE_MAX_DIGITS = {
   s4: 6,
   s5: null
 };
+var SIMON_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u062F\u0648 \u0647\u0645\u200C\u0635\u062F\u0627",
+    goal_fa: "\u062F\u0648 \u062F\u0648\u0633\u062A \u0646\u0648\u0631 \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0646\u062F\u061B \u0628\u0647 \u0647\u0645\u0627\u0646 \u062A\u0631\u062A\u06CC\u0628 \u0644\u0645\u0633 \u06A9\u0646.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u0633\u0647 \u0647\u0645\u200C\u0635\u062F\u0627",
+    goal_fa: "\u0633\u0647 \u062F\u0648\u0633\u062A \u067E\u0634\u062A \u0647\u0645\u061B \u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u0628\u0627 \u0647\u0645 \u0628\u06CC\u0627\u06CC\u0646\u062F.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0686\u0647\u0627\u0631 \u0647\u0645\u200C\u0635\u062F\u0627",
+    goal_fa: "\u0622\u0648\u0627\u0632 \u0628\u0644\u0646\u062F\u062A\u0631 \u0634\u062F\u061B \u0628\u0639\u0636\u06CC \u062F\u0648\u0633\u062A\u200C\u0647\u0627 \u062F\u0648 \u0628\u0627\u0631 \u0645\u06CC\u200C\u062E\u0648\u0627\u0646\u0646\u062F \u2014 \u062D\u0648\u0627\u0633\u062A \u0628\u0627\u0634\u062F.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u0633\u0627\u062D\u0644 \u062A\u0646\u062F",
+    goal_fa: "\u067E\u0646\u062C \u062F\u0648\u0633\u062A \u0628\u0627 \u0631\u06CC\u062A\u0645 \u062A\u0646\u062F\u062A\u0631\u061B \u062A\u0648 \u0633\u0631\u06CC\u0639\u200C\u062A\u0631\u06CC\u0646 \u06AF\u0648\u0634\u0650 \u0633\u0627\u062D\u0644 \u0647\u0633\u062A\u06CC.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0647\u0645\u200C\u0646\u0648\u0627",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u0622\u0648\u0627\u0632\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0647\u0645\u200C\u0635\u062F\u0627\u06CC \u0642\u0647\u0631\u0645\u0627\u0646!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
+var SIMON_STAGE_MAX_SPAN = {
+  s1: 2,
+  s2: 3,
+  s3: 4,
+  s4: 5,
+  s5: null
+};
 function flankerIncongruentCountOf(item) {
   const s = item.stim ?? {};
   const arrows = Array.isArray(s.arrows) ? s.arrows.filter((v) => v === "L" || v === "R") : [];
@@ -24021,6 +24070,27 @@ var GAME_KINDS = {
     engine_metrics: [
       { id: "digitspan_span_max", title_fa: "\u0628\u0644\u0646\u062F\u062A\u0631\u06CC\u0646 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u0639\u062F\u062F \u06A9\u0627\u0645\u0644 \u062F\u0631\u0633\u062A (\u0628\u0627\u0632\u0647\u0654 \u0639\u062F\u062F\u06CC)", unit: "score", higher_is_better: true, source: "auto", formula: "span_max" }
     ]
+  },
+  simon: {
+    // هم‌صداها (تقلید متوالی) — کف ۱۵۰ms روی نخستین لمس یادآوری؛ زیر آن حدس است (مثل کرسی)
+    rt_floor_ms: 150,
+    timed_choice: false,
+    // دنباله‌ای چندلمسی — پایان با دنبالهٔ کامل یا پنجره
+    stage_rule: SEQ_MEMORY_THRESHOLDS,
+    stageList: /* @__PURE__ */ __name(() => SIMON_STAGES, "stageList"),
+    levers: { bank_caps: SIMON_STAGE_MAX_SPAN },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      if (item.phase === "probe") return true;
+      const max = typeof stageId === "string" && stageId in SIMON_STAGE_MAX_SPAN ? SIMON_STAGE_MAX_SPAN[stageId] : null;
+      if (max === null) return true;
+      const s = item.stim ?? {};
+      const len = Array.isArray(s.seq) ? s.seq.length : 0;
+      return len > 0 && len <= max;
+    }, "itemInStage"),
+    // دقت دنباله از فرمول 'accuracy' در DB می‌آید؛ بازه (بلندترین آواز کامل درست) موتور-فقط است
+    engine_metrics: [
+      { id: "simon_span_max", title_fa: "\u0628\u0644\u0646\u062F\u062A\u0631\u06CC\u0646 \u0622\u0648\u0627\u0632 \u06A9\u0627\u0645\u0644 \u062F\u0631\u0633\u062A (\u0628\u0627\u0632\u0647\u0654 \u062A\u0642\u0644\u06CC\u062F \u0645\u062A\u0648\u0627\u0644\u06CC)", unit: "score", higher_is_better: true, source: "auto", formula: "span_max" }
+    ]
   }
 };
 
@@ -24188,8 +24258,10 @@ var DEFAULT_RT_FLOOR_MS = {
   // ن‌پشت/آلبوم خرچنگ — لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
   corsi: GAME_KINDS.corsi.rt_floor_ms,
   // صدف‌های جادویی — کف نخستین لمس یادآوری؛ زیر آن حدس است (G8)
-  span: GAME_KINDS.span.rt_floor_ms
+  span: GAME_KINDS.span.rt_floor_ms,
   // حباب‌های عدد — ورود صفحه‌کلیدی، زمان واکنش نیست (G8)
+  simon: GAME_KINDS.simon.rt_floor_ms
+  // هم‌صداها — کف نخستین لمس یادآوری؛ زیر آن حدس است (۱.۲۵.۵۲)
 };
 var IDLE_PARTIAL_MS = 5 * 60 * 1e3;
 var MIN_COMPLETION_RATIO = 0.6;
@@ -24274,6 +24346,12 @@ function scoreAttempt(item, mission, response, rtMs) {
     } else {
       congruent = item.stim?.congruent === true || item.stim?.cond === "congruent";
     }
+  } else if (item.type === "simon") {
+    const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0) : [];
+    const rawSeq = Array.isArray(res.order) ? res.order.filter((n) => Number.isInteger(n) && n >= 0) : [];
+    correct = key.length > 0 && key.length === rawSeq.length && rawSeq.every((v, i) => v === key[i]);
+    omission = rawSeq.length === 0;
+    if (correct) spanLenValue = key.length;
   } else if (item.type === "corsi" || item.type === "span") {
     const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n)) : [];
     const rawSeq = item.type === "corsi" ? Array.isArray(res.order) ? res.order : [] : Array.isArray(res.digits) ? res.digits : [];
@@ -24401,7 +24479,7 @@ function answerDisplayOf(item) {
   if (item.type === "nback") {
     return item.correct === 0 ? "\u0647\u0645\u0627\u0646 \u0627\u0633\u062A" : item.correct === 1 ? "\u0641\u0631\u0642 \u062F\u0627\u0631\u062F" : null;
   }
-  if (item.type === "corsi" || item.type === "span") {
+  if (item.type === "corsi" || item.type === "span" || item.type === "simon") {
     return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(",") : null;
   }
   return null;
@@ -24896,7 +24974,7 @@ function applyAdaptiveLevel(current, decision) {
 __name(applyAdaptiveLevel, "applyAdaptiveLevel");
 
 // src/domain/games/stages.ts
-var STAGE_RULES_VERSION = "1.6.0";
+var STAGE_RULES_VERSION = "1.7.0";
 var STAGE_TOTAL = 5;
 var STAGE_OVERRIDE_KEYS = [
   "response_window_go_ms",
@@ -25046,6 +25124,7 @@ __name(stageStimViewOf, "stageStimViewOf");
 var SEQ_MEMORY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.corsi.stage_rule);
 var CORSI_STAGE_MAX_SPAN2 = GAME_KINDS.corsi.levers.bank_caps;
 var SPAN_STAGE_MAX_DIGITS2 = GAME_KINDS.span.levers.bank_caps;
+var SIMON_STAGE_MAX_SPAN2 = GAME_KINDS.simon.levers.bank_caps;
 
 // src/domain/games/evidence.ts
 var EVIDENCE_RULES_VERSION = "1.0.0";
@@ -26339,7 +26418,7 @@ function createGamesService(deps) {
         scan: { label, stim: stripAnswerKeys({ signature: sig }) }
       };
     }
-    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "nback" || it.type === "corsi" || it.type === "span"));
+    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "nback" || it.type === "corsi" || it.type === "span" || it.type === "simon"));
     if (newTrain && !go && !nogo) {
       const kindKey = newTrain.type;
       const stim = stripAnswerKeys(newTrain.stim ?? {});
@@ -27152,7 +27231,10 @@ var KIND_FIGS = {
   scan: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#5E8FB8" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0 M72 46 Q66 58 72 70" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z" fill="#E4AA46" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/>',
   stroop: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#9B7EDE" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M74 50 Q80 44 86 50 M20 60 Q28 72 40 66" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><circle cx="30" cy="18" r="8" fill="#D96C6C" stroke="#153E50" stroke-width="3"/><circle cx="92" cy="14" r="8" fill="#63B37F" stroke="#153E50" stroke-width="3"/>',
   flanker: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#8FA6B8" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0" fill="none" stroke="#153E50" stroke-width="3"/><path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" transform="translate(-6 -38) scale(.62)" fill="#B9C6D2" stroke="#153E50" stroke-width="4" stroke-linejoin="round"/>',
-  nback: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0" fill="#438C89" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M50 46 Q54 42 58 46 M66 46 Q70 42 74 46 M52 40 L50 32 M72 40 L74 32 M56 56 Q62 64 68 56" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><rect x="12" y="12" width="38" height="26" rx="4" fill="#E4AA46" stroke="#153E50" stroke-width="3"/><circle cx="31" cy="25" r="7" fill="#F5F0E5" stroke="#153E50" stroke-width="2.5"/>'
+  nback: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0" fill="#438C89" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M50 46 Q54 42 58 46 M66 46 Q70 42 74 46 M52 40 L50 32 M72 40 L74 32 M56 56 Q62 64 68 56" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><rect x="12" y="12" width="38" height="26" rx="4" fill="#E4AA46" stroke="#153E50" stroke-width="3"/><circle cx="31" cy="25" r="7" fill="#F5F0E5" stroke="#153E50" stroke-width="2.5"/>',
+  corsi: '<path d="M50 88 C28 88 12 72 12 52 C12 34 24 20 42 14 L46 12 C48 11 52 11 54 12 L58 14 C76 20 88 34 88 52 C88 72 72 88 50 88 Z" fill="#2F9E6E" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><g fill="none" stroke="#153E50" stroke-width="2.6" stroke-linecap="round"><path d="M50 84 L50 18"/><path d="M38 82 C34 62 32 42 38 20"/><path d="M62 82 C66 62 68 42 62 20"/></g><circle cx="50" cy="66" r="7" fill="#FFFFFF" stroke="#153E50" stroke-width="2.5"/>',
+  span: '<circle cx="60" cy="56" r="34" fill="#F9B8CE" stroke="#153E50" stroke-width="3"/><circle cx="60" cy="56" r="34" fill="none" stroke="#E86F9E" stroke-width="2" stroke-dasharray="4 6"/><text x="60" y="68" text-anchor="middle" font-size="30" font-weight="bold" fill="#153E50">\u06F7</text><path d="M22 30 Q30 20 40 26" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/>',
+  simon: '<rect x="14" y="18" width="42" height="42" rx="10" fill="#E0605E" stroke="#153E50" stroke-width="3"/><rect x="64" y="18" width="42" height="42" rx="10" fill="#3E9C93" stroke="#153E50" stroke-width="3"/><rect x="14" y="66" width="42" height="42" rx="10" fill="#8A6FD1" stroke="#153E50" stroke-width="3"/><rect x="64" y="66" width="42" height="42" rx="10" fill="#E9A13B" stroke="#153E50" stroke-width="3"/><path d="M35 39 C40 32 52 30 58 36 L64 33 L62 40 L64 47 L58 44 C52 50 40 48 35 39 Z" fill="#F5F0E5" stroke="#153E50" stroke-width="2.4" stroke-linejoin="round"/><circle cx="85" cy="39" r="4" fill="#F5F0E5" stroke="#153E50" stroke-width="2.4"/><path d="M30 92 L35 80 L40 92 L52 92 L42 100 L46 112 L35 105 L24 112 L28 100 L18 92 Z" fill="#F5F0E5" stroke="#153E50" stroke-width="2.4" stroke-linejoin="round" transform="scale(.52) translate(30 80)"/>'
 };
 function kindFig(kind) {
   const body = KIND_FIGS[String(kind ?? "")] ?? KIND_FIGS.gonogo;

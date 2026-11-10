@@ -28,7 +28,7 @@ import type { RegistryMetric } from './types';
 // نقد سه‌گانهٔ ۱.۲۵.۵۱: «رد پای دزد» (trail) از رجیستری حذف شد — سقف سختی ۷ گره در برابر
 // TMT واقعی ۲۵ گره، آموزش کم‌بار، بار شناختی ناکافی؛ بستهٔ trail1 در DB بازنشسته شد
 // (migration 0101) و gameKindOf('trail') به‌طور خودکار به گونوگو برمی‌گردد.
-export const GAME_KIND_IDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'nback', 'corsi', 'span'] as const;
+export const GAME_KIND_IDS = ['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'nback', 'corsi', 'span', 'simon'] as const;
 export type GameKind = (typeof GAME_KIND_IDS)[number];
 
 /** نوع‌بازی از فیلد mission.game — ناشناخته = گونوگو (سازگاری با بسته‌های قدیمی) */
@@ -505,6 +505,40 @@ const SPAN_STAGE_MAX_DIGITS: Record<string, number | null> = {
   s5: null
 };
 
+// هم‌صداها / تقلید متوالی (۱.۲۵.۵۲) — اهرم سختی = طول دنبالهٔ دوستان (۲→۶) + سرعت پخش
+// (authored در بانک؛ تندشونده با طول)؛ ساحل غروب: دوستان یکی‌یکی نور می‌گیرند و کودک همان ترتیب را لمس می‌کند
+const SIMON_STAGES: StageDef[] = [
+  {
+    id: 's1', index: 1, title_fa: 'دو هم‌صدا', goal_fa: 'دو دوست نور می‌گیرند؛ به همان ترتیب لمس کن.', difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: 's2', index: 2, title_fa: 'سه هم‌صدا', goal_fa: 'سه دوست پشت هم؛ چشم‌هایت با هم بیایند.', difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: 's3', index: 3, title_fa: 'چهار هم‌صدا', goal_fa: 'آواز بلندتر شد؛ بعضی دوست‌ها دو بار می‌خوانند — حواست باشد.', difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: 's4', index: 4, title_fa: 'ساحل تند', goal_fa: 'پنج دوست با ریتم تندتر؛ تو سریع‌ترین گوشِ ساحل هستی.', difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: 's5', index: 5, title_fa: 'قهرمان هم‌نوا', goal_fa: 'همهٔ آوازها با هم — تو هم‌صدای قهرمان!', difficulty: 5,
+    overrides: {}
+  }
+];
+
+/** سقف طول دنبالهٔ دوستان در هر مرحلهٔ هم‌صداها — null = همهٔ دنباله‌ها (تا ۶) */
+const SIMON_STAGE_MAX_SPAN: Record<string, number | null> = {
+  s1: 2,
+  s2: 3,
+  s3: 4,
+  s4: 5,
+  s5: null
+};
+
 /** شمار گرگ قلابی فلانکر — فلانکرهای مخالف مرکز؛ ناسالم = صفر */
 function flankerIncongruentCountOf(item: StageItemLike): number {
   const s = (item.stim ?? {}) as Record<string, unknown>;
@@ -698,6 +732,27 @@ export const GAME_KINDS: { [K in GameKind]: GameKindSpec<K> } = {
     },
     engine_metrics: [
       { id: 'digitspan_span_max', title_fa: 'بلندترین دنبالهٔ عدد کامل درست (بازهٔ عددی)', unit: 'score', higher_is_better: true, source: 'auto', formula: 'span_max' }
+    ]
+  },
+  simon: {
+    // هم‌صداها (تقلید متوالی) — کف ۱۵۰ms روی نخستین لمس یادآوری؛ زیر آن حدس است (مثل کرسی)
+    rt_floor_ms: 150,
+    timed_choice: false, // دنباله‌ای چندلمسی — پایان با دنبالهٔ کامل یا پنجره
+    stage_rule: SEQ_MEMORY_THRESHOLDS,
+    stageList: () => SIMON_STAGES,
+    levers: { bank_caps: SIMON_STAGE_MAX_SPAN },
+    itemInStage: (item, stageId) => {
+      // پروب در هر مرحله — خط‌کش ثابت سنجش (همان رفع P0 ممیزی فازها)؛ سقف فقط برای تمرین
+      if (item.phase === 'probe') return true;
+      const max = typeof stageId === 'string' && stageId in SIMON_STAGE_MAX_SPAN ? SIMON_STAGE_MAX_SPAN[stageId] : null;
+      if (max === null) return true;
+      const s = (item.stim ?? {}) as Record<string, unknown>;
+      const len = Array.isArray(s.seq) ? s.seq.length : 0;
+      return len > 0 && len <= max;
+    },
+    // دقت دنباله از فرمول 'accuracy' در DB می‌آید؛ بازه (بلندترین آواز کامل درست) موتور-فقط است
+    engine_metrics: [
+      { id: 'simon_span_max', title_fa: 'بلندترین آواز کامل درست (بازهٔ تقلید متوالی)', unit: 'score', higher_is_better: true, source: 'auto', formula: 'span_max' }
     ]
   }
 };

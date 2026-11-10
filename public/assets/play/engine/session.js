@@ -820,6 +820,185 @@ export async function runSession(ctx) {
       continue;
     }
 
+    /* آیتم «هم‌صداها» (simon — ۱.۲۵.۵۲): تقلید متوالی با چهار دوستِ ساحل.
+       دنباله authored از stim.seq یکی‌یکی نور می‌گیرد (پخش با سرعت authored —
+       اهرم تندشونده) و کودک همان ترتیب را لمس می‌کند؛ تکرارِ غیرمجاور در
+       دنباله مجاز است و پاسخ {order} عیناً با کلید سرور مقایسه می‌شود.
+       کلید نمره‌دهی (item.correct) هرگز به کلاینت نمی‌رود.
+       فازها: تثبیت → پخش دنباله (لمس premature می‌شود) → یادآوری
+       (پنجره از stim.window_ms) → ثبت/بازخورد آموزشی. RT از نخستین لمس یادآوری.
+       ساختار = همان شاخهٔ صدف‌های جادویی (corsi) — نه نوشتن از صفر. */
+    if (item.type === 'simon' && item.stim && Array.isArray(item.stim.seq) && typeof kind.simonMarkup === 'function') {
+      machine.to(STATES.FIXATION, { item: item.id, simon: true }); // مسیر اجباری ماشین
+      const ledgerM = createTouchLedger();
+      ledgerM.start();
+      let simonAnswered = false;
+      const stopTouchM = attachTouchEvidence(stage, ledgerM, () => machine.state, () => simonAnswered);
+      stage.classList.remove('play-stage--quiet');
+      stage.classList.add('play-stage--simon'); // پوستهٔ غروب هم‌نوا
+      await sleeper.sleep(250); // تثبیت کوتاه پیش از دنباله — بدون فلاش (§۹)
+      stage.innerHTML = kind.simonMarkup(item);
+      machine.to(STATES.STIMULUS, { item: item.id, simon: true });
+      const shownAtM = performance.now();
+      const stimM = item.stim;
+      const seqM = stimM.seq.map((v) => Number(v)).filter((v) => Number.isInteger(v) && v >= 0);
+      const flashMsM = typeof stimM.flash_ms === 'number' && Number.isFinite(stimM.flash_ms)
+        ? Math.min(1200, Math.max(220, Math.round(stimM.flash_ms))) : 620;
+      const gapMsM = typeof stimM.gap_ms === 'number' && Number.isFinite(stimM.gap_ms)
+        ? Math.min(600, Math.max(90, Math.round(stimM.gap_ms))) : 240;
+      /* فاز پخش دنباله — ساعت RT هنوز خاموش؛ هر لمس این‌جا premature دفتر لمس است */
+      for (const idx of seqM) {
+        const padEl = stage.querySelector('.play-simon__pad[data-idx="' + idx + '"]');
+        if (padEl) padEl.classList.add('play-simon__pad--lit');
+        await sleeper.sleep(flashMsM);
+        if (padEl) padEl.classList.remove('play-simon__pad--lit');
+        await sleeper.sleep(gapMsM);
+      }
+      if (typeof kind.simonBeginRecall === 'function') kind.simonBeginRecall(stage, seqM.length);
+      const clockM = createPausableClock();
+      clockM.start(); // RT فاز کودک از همین‌جا — پخش دنباله در RT نیست
+      const stopFramesM = observeDisplayFrames();
+      const winM = typeof stimM.window_ms === 'number' && Number.isFinite(stimM.window_ms)
+        ? Math.min(60000, Math.max(6000, Math.round(stimM.window_ms))) : 16000;
+      const resultM = await new Promise((resolve) => {
+        const pads = stage.querySelectorAll('.play-simon__pad');
+        const timerBar = stage.querySelector('[class*="__timer"] > span');
+        const order = [];
+        let firstAt = null;
+        let tapCount = 0;
+        let settled = false;
+        let winRemain = winM;
+        let winPausedAt = null;
+        const freezeBar = () => {
+          if (!timerBar) return;
+          const w = window.getComputedStyle(timerBar).width;
+          timerBar.style.transition = 'none';
+          timerBar.style.width = w;
+        };
+        const unfreezeBar = (ms) => {
+          if (!timerBar) return;
+          window.requestAnimationFrame(() => {
+            timerBar.style.transition = 'width ' + Math.max(0, ms) + 'ms linear';
+            timerBar.style.width = '0%';
+          });
+        };
+        trialHooks.pause = () => { winPausedAt = performance.now(); clockM.pause(); freezeBar(); };
+        trialHooks.resume = () => {
+          if (!clockM.running) clockM.resume();
+          if (winPausedAt !== null) {
+            winRemain = Math.max(0, winRemain - (performance.now() - winPausedAt));
+            winPausedAt = null;
+            unfreezeBar(winRemain);
+          }
+        };
+        const finishRecall = (timedOut) => {
+          if (settled) return;
+          settled = true;
+          simonAnswered = true;
+          sleeper.cancel(); // دنباله کامل شد یا پنجره بست — خواب یدکی یتیم نمی‌ماند
+          trialHooks.pause = null;
+          trialHooks.resume = null;
+          pads.forEach((b) => b.removeEventListener('pointerdown', onPad));
+          resolve({ order: order.slice(), firstRt: firstAt !== null ? clockM.peek() : null, tapCount, timedOut, usedMs: clockM.peek() });
+        };
+        const onPad = (ev) => {
+          const btn = ev.target.closest('.play-simon__pad');
+          if (!btn || btn.classList.contains('play-simon__pad--picked')) return;
+          ev.preventDefault(); // شبکهٔ لمسی — اسکرول اشتباه نمی‌سازد
+          tapCount += 1;
+          if (firstAt === null) firstAt = performance.now();
+          btn.classList.add('play-simon__pad--picked');
+          order.push(Number(btn.dataset.idx));
+          if (seqM.length > 0 && order.length >= seqM.length) finishRecall(false); // دنبالهٔ کامل شد
+        };
+        pads.forEach((b) => b.addEventListener('pointerdown', onPad));
+        unfreezeBar(winM);
+        sleeper.sleep(winM).then(() => finishRecall(true));
+      });
+      machine.to(STATES.INTER_TRIAL_INTERVAL, { item: item.id, simon: true });
+      stopTouchM();
+      const framesM = stopFramesM();
+      const recordM = {
+        item_id: item.id,
+        go: null,
+        touched: resultM.order.length > 0,
+        rt_ms: resultM.firstRt !== null && resultM.firstRt >= 0 ? resultM.firstRt : null,
+        touch_count: resultM.tapCount,
+        ...ledgerM.evidenceCounts(),
+        presented_at: shownAtM,
+        frame_drops: framesM.drops,
+        max_frame_delta: framesM.maxDelta,
+        window_ms: winM,
+        isi_ms: 0,
+        events: ledgerM.events(),
+        simon_order: resultM.order.slice()
+      };
+      trials.push(recordM);
+      doneCount += 1;
+      let fbM = null;
+      try {
+        fbM = await api.submit({
+          item_id: item.id,
+          response: {
+            order: resultM.order,
+            used_ms: resultM.usedMs,
+            timed_out: resultM.timedOut,
+            presented_at: Math.round(shownAtM),
+            frame_drops: framesM.drops,
+            max_frame_delta: framesM.maxDelta,
+            touch_count: resultM.tapCount,
+            ...ledgerM.evidenceCounts(),
+            window_ms: winM
+          },
+          rt_ms: recordM.rt_ms,
+          idem_key: crypto.randomUUID()
+        });
+      } catch (err) {
+        machine.to(STATES.INTERRUPTED, { reason: 'network', item: item.id });
+        onNetworkFail();
+        return;
+      }
+      const okM = fbM !== null && typeof fbM === 'object' && fbM.correct === true;
+      if (okM && seqM.length > spanBest) spanBest = seqM.length; // بازهٔ واقعی — فقط دنبالهٔ کاملِ درست
+      const canFeedbackM = !isAssessment && fbM && fbM.phase === 'train' && fbM.message && B.feedback_in_main;
+      if (canFeedbackM) {
+        fx.popBubble(bubble, fbM.message, okM ? 'ok' : 'calm', P.feedback_ms);
+        if (!okM && fbM.answer_display != null && typeof kind.simonRevealTruth === 'function') {
+          // نشان حقیقت — دنبالهٔ درست هم‌صداها از بازخورد سرور می‌آید، نه از کلاینت
+          kind.simonRevealTruth(item, stage, String(fbM.answer_display));
+          await sleeper.sleep(P.feedback_ms + 800); // وقت دیدن دنبالهٔ درست
+        } else {
+          if (okM && typeof kind.simonResponsePoint === 'function') {
+            const ptM = kind.simonResponsePoint(stage);
+            if (ptM) fx.burstAt(ptM.x, ptM.y);
+          }
+          await sleeper.sleep(P.feedback_ms);
+        }
+      } else {
+        await sleeper.sleep(Math.max(400, 600));
+      }
+      stage.classList.remove('play-stage--simon');
+      stage.innerHTML = ''; // صحنه خالی پیش از ISI بعدی — دنباله شبح نمی‌ماند
+      /* سبد ستاره و استریک — همان حلقهٔ گو/نوگو؛ ارزیابی هرگز */
+      if (!isAssessment && B.star_basket && fbM && fbM.phase === 'train' && okM) {
+        starCount += 1;
+        if (countEl) countEl.textContent = faNum(starCount);
+        fx.flyStar(stage, basketEl);
+        window.setTimeout(() => fx.popCount(countEl), 560);
+        if (starCount % 5 === 0) {
+          fx.popBubble(bubble, faNum(starCount) + ' ستاره جمع شد!', 'ok', P.feedback_ms);
+          await sleeper.sleep(P.feedback_ms);
+        }
+      }
+      if (okM) streak += 1; else if (fbM && fbM.correct === false) streak = 0;
+      const streakMsgM = streakLine(streak);
+      if (canFeedbackM && streakMsgM) fx.pillShow(streakMsgM);
+      if (machine.state === STATES.INTER_TRIAL_INTERVAL) {
+        machine.to(practiceMode ? STATES.PRACTICE : STATES.READY, { after_items: doneCount });
+      }
+      continue;
+    }
+
     /* آیتم بازهٔ عدد — «حباب‌های عدد» (G8/۱.۲۵.۴۸): بازهٔ عدد رو به جلو.
        عددها یکی‌یکی در حباب بالا می‌آیند (دنبالهٔ authored از stim.seq) و کودک همان
        عددها را با صفحه‌کلید بزرگ به ترتیب وارد می‌کند و ✓ می‌زند. عددها محرک عمومی
