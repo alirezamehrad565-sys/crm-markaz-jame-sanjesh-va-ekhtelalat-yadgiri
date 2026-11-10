@@ -20,7 +20,8 @@ export interface ScreeningEntry {
   tags: string[];
   /* ۱.۲۵.۵۰ — دو فیلد اختیاری ثبت روزانه */
   birthDate: string | null;      // میلادی YYYY-MM-DD؛ نمایش شمسی سمت کلاینت
-  readinessScore: number | null; // ۰..۱۰۰
+  readinessScore: number | null; // ۰..۳۴ (۱.۲۵.۵۷)
+  note: string | null;           // ۱.۲۵.۵۷ — توضیحات اختیاری (سقف ۵۰۰ نویسه)
   createdBy: string;
   creatorName: string | null;
   createdAt: string;
@@ -75,6 +76,7 @@ export interface ScreeningEntryInput {
   day?: string;
   birth_date?: string | null;      // ۱.۲۵.۵۰ — اختیاری
   readiness_score?: number | null; // ۱.۲۵.۵۰ — اختیاری
+  note?: string | null;            // ۱.۲۵.۵۷ — اختیاری
 }
 
 export interface ScreeningEntryPatch {
@@ -82,6 +84,7 @@ export interface ScreeningEntryPatch {
   tags?: string[];
   birth_date?: string | null;      // ۱.۲۵.۵۰ — اختیاری؛ null = پاک‌کردن
   readiness_score?: number | null; // ۱.۲۵.۵۰ — اختیاری؛ null = پاک‌کردن
+  note?: string | null;            // ۱.۲۵.۵۷ — اختیاری؛ null = پاک‌کردن
 }
 
 export interface ScreeningService {

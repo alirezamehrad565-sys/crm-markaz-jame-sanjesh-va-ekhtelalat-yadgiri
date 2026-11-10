@@ -510,7 +510,13 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         'اگر معلم هستید، کد اتصال کلاس را از دفتر مرکز بگیرید و /link CODE بفرستید.'
       ].join('\n');
 
-    case 'bot_about':
+    case 'bot_about': {
+      /* ۱.۲۵.۵۷ — متن قابل ویرایش مدیر (settings.bot_about) اولویت دارد؛
+         خالی = متن پیش‌فرض سامانه. متن کاربر با سربرگ نام مرکز می‌نشیند. */
+      const about = vars.aboutText?.trim();
+      if (about) {
+        return [`🏥 ${clinic}`, 'دربارهٔ مرکز', '', about].join('\n');
+      }
       return [
         `🏥 ${clinic}`,
         'دربارهٔ مرکز',
@@ -526,6 +532,7 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
         '📅 نوبت و پیگیری: با دفتر مرکز تماس بگیرید یا کد ملی/تلفن خود را همین‌جا بفرستید تا گفتگو متصل شود.',
         '/help — دیدن امکانات این بات بر اساس نقش شما'
       ].join('\n');
+    }
 
     case 'waitlist_slot_freed':
       return [

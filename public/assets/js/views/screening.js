@@ -162,9 +162,9 @@ async function renderDailyTab(box, container, myGen) {
     'aria-label': 'نام و فامیل دانش‌آموز و برچسب‌های هشتگ‌دار'
   });
 
-  /* —— ۱.۲۵.۵۰ — دو فیلد اختیاری زیر ثبت سریع:
-     تاریخ تولد (تقویم جلالی — کلیک روی آیکن تقویم پاپ‌آور انتخاب تاریخ را باز می‌کند)
-     و نمرهٔ آمادگی تحصیلی (عدد ۰..۱۰۰). هر دو خالی = ثبت‌نشده. —— */
+  /* —— ۱.۲۵.۵۰/۵۷ — فیلدهای اختیاری زیر ثبت سریع:
+     تاریخ تولد (تقویم جلالی)، نمرهٔ آمادگی تحصیلی (عدد ۰..۳۴) و توضیحات (۵۰۰ نویسه).
+     همهٔ خالی = ثبت‌نشده. —— */
   const birthInput = jalaliDateInput({ value: '' });
   const birthField = birthInput.root.querySelector('input.jdate__field');
   if (birthField) birthField.setAttribute('aria-label', 'تاریخ تولد — اختیاری، می‌توانید تایپ کنید یا از تقویم انتخاب کنید');
@@ -173,16 +173,27 @@ async function renderDailyTab(box, container, myGen) {
     class: 'input',
     type: 'number',
     min: '0',
-    max: '100',
+    max: '34',
     step: '1',
     inputmode: 'numeric',
-    placeholder: 'مثلاً ۸۵',
-    'aria-label': 'نمرهٔ آمادگی تحصیلی — اختیاری، از ۱۰۰'
+    placeholder: 'مثلاً ۲۸',
+    'aria-label': 'نمرهٔ آمادگی تحصیلی — اختیاری، از ۳۴'
+  });
+
+  /* ۱.۲۵.۵۷ — توضیحات اختیاری سنجش (سقف ۵۰۰ نویسه در اسکیما) */
+  const noteInput = el('textarea', {
+    class: 'input',
+    rows: 2,
+    maxlength: 500,
+    style: { width: '100%', resize: 'vertical' },
+    placeholder: 'توضیح کوتاه دربارهٔ این سنجش (اختیاری)',
+    'aria-label': 'توضیحات سنجش — اختیاری'
   });
 
   const setExtraValues = (e) => {
     birthInput.setYmd(e?.birthDate ?? '');
     readinessInput.value = e?.readinessScore === null || e?.readinessScore === undefined ? '' : String(e.readinessScore);
+    noteInput.value = e?.note ?? '';
   };
   setExtraValues(state.editingId ? entries.find((x) => x.id === state.editingId) : null);
 
@@ -192,8 +203,12 @@ async function renderDailyTab(box, container, myGen) {
       birthInput.root
     ),
     el('label', { class: 'field' },
-      el('span', { class: 'cell-sub' }, 'نمرهٔ آمادگی تحصیلی ', el('span', { class: 'sanj-extra__opt' }, '(اختیاری)')),
+      el('span', { class: 'cell-sub' }, 'نمرهٔ آمادگی تحصیلی ', el('span', { class: 'sanj-extra__opt' }, '(از ۳۴)')),
       readinessInput
+    ),
+    el('label', { class: 'field', style: { gridColumn: '1 / -1' } },
+      el('span', { class: 'cell-sub' }, 'توضیحات ', el('span', { class: 'sanj-extra__opt' }, '(اختیاری)')),
+      noteInput
     )
   );
 
@@ -323,8 +338,9 @@ async function renderDailyTab(box, container, myGen) {
           `${e.creatorName ?? '—'} • ${e.createdAt ? fa(tehranTimeOfIso(e.createdAt)) : ''}`, // ساعت تهران، نه برش UTC
           /* ۱.۲۵.۵۰ — فیلدهای اختیاری در ردیف، فقط وقتی ثبت‌شده باشند */
           e.birthDate ? ` • تولد ${formatJalaliNumeric(e.birthDate)}` : '',
-          e.readinessScore !== null && e.readinessScore !== undefined ? ` • آمادگی ${fa(e.readinessScore)}` : '')
+          e.readinessScore !== null && e.readinessScore !== undefined ? ` • آمادگی ${fa(e.readinessScore)}/۳۴` : '')
       ),
+      e.note ? el('div', { class: 'cell-sub', style: { whiteSpace: 'pre-wrap' } }, e.note) : null,
       el('div', { class: 'sanj-row__tags' },
         hasPreTag(e.tags)
           ? e.tags.map((t) => tagBadge(t))
@@ -413,15 +429,16 @@ async function renderDailyTab(box, container, myGen) {
   };
 
   const readExtraInputs = () => {
-    /* ۱.۲۵.۵۰ — خواندن دو فیلد اختیاری؛ خروجی آمادهٔ بدنهٔ API (null = ثبت‌نشده/پاک‌شده) */
+    /* ۱.۲۵.۵۰/۵۷ — خواندن فیلدهای اختیاری؛ خروجی آمادهٔ بدنهٔ API (null = ثبت‌نشده/پاک‌شده) */
     const birthYmd = (birthInput.getYmd() ?? '').trim();
     const raw = readinessInput.value.trim();
-    if (raw === '') return { birthDate: birthYmd || null, readinessScore: null };
+    const note = noteInput.value.trim() || null;
+    if (raw === '') return { birthDate: birthYmd || null, readinessScore: null, note };
     const score = Number(raw);
-    if (!Number.isFinite(score) || !Number.isInteger(score) || score < 0 || score > 100) {
+    if (!Number.isFinite(score) || !Number.isInteger(score) || score < 0 || score > 34) {
       return { invalid: true };
     }
-    return { birthDate: birthYmd || null, readinessScore: score };
+    return { birthDate: birthYmd || null, readinessScore: score, note };
   };
 
   const submit = async () => {
@@ -433,9 +450,9 @@ async function renderDailyTab(box, container, myGen) {
       input.focus();
       return;
     }
-    const extra = readExtraInputs(); /* ۱.۲۵.۵۰ */
+    const extra = readExtraInputs(); /* ۱.۲۵.۵۰/۵۷ */
     if (extra.invalid) {
-      toast('نمرهٔ آمادگی تحصیلی باید عددی بین ۰ تا ۱۰۰ باشد', 'warning');
+      toast('نمرهٔ آمادگی تحصیلی باید عددی بین ۰ تا ۳۴ باشد', 'warning');
       readinessInput.focus();
       return;
     }
@@ -447,7 +464,8 @@ async function renderDailyTab(box, container, myGen) {
           name: parsed.name,
           tags,
           birth_date: extra.birthDate,
-          readiness_score: extra.readinessScore
+          readiness_score: extra.readinessScore,
+          note: extra.note
         });
         entries = entries.map((x) => (x.id === res.data.id ? res.data : x));
         paintCounts(); // — ویرایش می‌تواند عادی↔ارجاع را برعکس کند؛ شمارنده‌های سربرگ درجا
@@ -472,7 +490,8 @@ async function renderDailyTab(box, container, myGen) {
         tags,
         day: today,
         birth_date: extra.birthDate,
-        readiness_score: extra.readinessScore
+        readiness_score: extra.readinessScore,
+        note: extra.note
       });
       toast(
         tags.filter((t) => KIND_BY_LABEL.has(t)).length > 0

@@ -39,7 +39,8 @@ export function registerScreeningRoutes(app: AppHono, service: ScreeningService)
         tags: body.tags,
         day: body.day,
         birth_date: body.birth_date ?? null,       /* ۱.۲۵.۵۰ */
-        readiness_score: body.readiness_score ?? null /* ۱.۲۵.۵۰ */
+        readiness_score: body.readiness_score ?? null, /* ۱.۲۵.۵۰ */
+        note: body.note ?? null                    /* ۱.۲۵.۵۷ */
       },
       actor
     );
@@ -55,7 +56,8 @@ export function registerScreeningRoutes(app: AppHono, service: ScreeningService)
         name: body.name,
         tags: body.tags,
         birth_date: body.birth_date,       /* ۱.۲۵.۵۰ — undefined = دست‌نخورده؛ null = پاک‌کردن */
-        readiness_score: body.readiness_score
+        readiness_score: body.readiness_score,
+        note: body.note                    /* ۱.۲۵.۵۷ — undefined = دست‌نخورده؛ null = پاک‌کردن */
       },
       actor
     );

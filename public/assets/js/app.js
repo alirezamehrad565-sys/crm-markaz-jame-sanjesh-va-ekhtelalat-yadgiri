@@ -120,7 +120,7 @@ const NAV = [
   { hash: '#/backup', label: 'پشتیبان‌گیری', icon: 'save', group: 'مرکز', roles: ['manager'] },
   // ۱.۲۵.۵۳ — لینک بیرونی «کنترل‌پلین شبکه» از منو قطع شد (خواست کارفرما)؛ سمت CP بی‌تغییر می‌ماند
   // بازاعمال ۱.۲۵.۵۱ — جای کنترل‌پلین: گزارش باگ سامانه به پشتیبانی CP (همهٔ همکاران)
-  { hash: '#/bug-report', label: 'گزارش باگ', icon: 'send', group: 'مرکز' }
+  { hash: '#/bug-report', label: 'گزارش به پشتیبانی', icon: 'spider', group: 'مرکز' } // ۱.۲۵.۵۷ — عنکبوت + نام روایی به خواست کارفرما
 ];
 
 const GROUP_ORDER = ['امروز', 'برنامه‌ریزی', 'دانش‌آموزان', 'ارزیابی و درمان', 'مرکز']; // — نام روایی
@@ -449,7 +449,7 @@ register('#/case-event-types', { title: 'فرم‌ها و پرسش‌نامه‌
 register('#/special-needs', { title: 'نیازهای ویژه', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/special-needs.js'), 'renderSpecialNeeds', '#/special-needs')) }); // لایهٔ دوم RBAC
 // ۱.۲۵.۵۶ — روت مستقل «#/center-kpi» حذف شد؛ همان بلوک در انتهای تب «گزارش دوره» (#/reports) رندر می‌شود
 // ۱.۲۵.۵۳ — روت «#/network-library» حذف شد؛ درخواست مستقیم این هش به نمای ۴۰۴ می‌رود
-register('#/bug-report', { title: 'گزارش باگ', render: lazyView(() => import('./views/bug-report.js'), 'renderBugReport', '#/bug-report') }); // بازاعمال ۱.۲۵.۵۱ — همهٔ همکاران می‌توانند باگ بفرستند
+register('#/bug-report', { title: 'گزارش به پشتیبانی', render: lazyView(() => import('./views/bug-report.js'), 'renderBugReport', '#/bug-report') }); // ۱.۲۵.۵۷ — همهٔ همکاران؛ نام تازه
 
 // مسیر ناشناخته به‌جای ریدایرکت بی‌صدا، نمای ۴۰۴ را رندر می‌کند (hash دست‌نخورده می‌ماند)
 registerNotFound({ title: 'صفحه پیدا نشد', render: renderNotFound });

@@ -126,7 +126,9 @@ const PATHS = {
   /* I1: سه آیکون مصرف‌شده که تعریف نشده بودند و SVG خالی رندر می‌کردند */
   pause: '<rect x="7" y="5" width="3.5" height="14" rx="1.2"/><rect x="13.5" y="5" width="3.5" height="14" rx="1.2"/>',
   bookmark: '<path d="M6.5 4.5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16l-5.5-4-5.5 4v-16Z"/>',
-  layers: '<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m4.5 13.5 7.5 4.2 7.5-4.2"/><path d="m4.5 17.5 7.5 4.2 7.5-4.2"/>'
+  layers: '<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m4.5 13.5 7.5 4.2 7.5-4.2"/><path d="m4.5 17.5 7.5 4.2 7.5-4.2"/>',
+  /* ۱.۲۵.۵۷ — عنکبوت (گزارش به پشتیبانی — تاریکِ درونِ شبکهٔ گزارش‌رسانی) */
+  spider: '<circle cx="12" cy="11" r="3.2"/><path d="M10.5 13.8 9 21M13.5 13.8 15 21"/><path d="M9.2 9.2 4 5.5M9.2 11.5l-6 .5M9.4 13.5 3.5 16M14.8 9.2 20 5.5M14.8 11.5l6 .5M14.6 13.5l5.9 2.5"/><path d="M10.8 8.2 9.5 4.5M13.2 8.2 14.5 4.5"/>'
 };
 
 /* I4: آیکون‌های جهت‌دار که در RTL باید آینه شوند (فلش برگشت/ارسال LTR-قفل نباشند) */
@@ -912,8 +914,16 @@ export function rowMenu({ label = 'اقدامات بیشتر', items }) {
   );
   const root = el('div', { class: 'row-menu' }, btn, pop);
 
+  /* ۱.۲۵.۵۷ — پورتال به document.body: هر جدّی با transform/content-visibility/fixed
+     می‌شود containing-blockِ position:fixed و منو با موقعیتِ viewport جابه‌جا می‌افتد
+     (جهش و بریدن منوی ⋯ در بازی‌ها و جداول). منو هنگام بازشدن به body منتقل و
+     هنگام بستن به خانه‌اش برگردانده می‌شود؛ عمودش هم به‌جا کِلَمپ می‌شود. */
   function close() {
     pop.hidden = true;
+    if (pop.parentElement !== root) root.appendChild(pop); // بازگشت به خانه — دست‌نخوردگی DOM در حالت بسته
+    pop.style.top = '';
+    pop.style.left = '';
+    pop.style.right = '';
     btn.classList.remove('is-open');
     btn.setAttribute('aria-expanded', 'false');
     document.removeEventListener('click', onDoc, true);
@@ -923,6 +933,7 @@ export function rowMenu({ label = 'اقدامات بیشتر', items }) {
   }
   function open() {
     if (activeRowMenuClose) activeRowMenuClose(); // فقط یک منو در آن واحد
+    document.body.appendChild(pop); // پورتال — بی‌اثرشدن جدّ تغییرشدهٔ fixed
     pop.hidden = false;
     btn.classList.add('is-open');
     btn.setAttribute('aria-expanded', 'true');
@@ -931,6 +942,7 @@ export function rowMenu({ label = 'اقدامات بیشتر', items }) {
     const h = pop.offsetHeight;
     let top = r.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    if (top + h > window.innerHeight - 8) top = Math.max(8, window.innerHeight - h - 8); // کِلَمپ دوم برای منوی بلندتر از فضا
     pop.style.top = `${top}px`;
     /* ۱.۱۴.۰ — لنگر افقی RTL-پایدار: قبلاً فقط با left موقعیت می‌داد؛ در موبایلِ RTL که دکمهٔ ⋯
        نزدیک لبهٔ راست است، عرضِ واقعیِ منو (برچسب‌های بلند فارسی) از لبهٔ راست بیرون می‌زد و
@@ -952,7 +964,7 @@ export function rowMenu({ label = 'اقدامات بیشتر', items }) {
       document.addEventListener('scroll', onScroll, true);
     }, 0);
   }
-  function onDoc(e) { if (!root.contains(e.target)) close(); }
+  function onDoc(e) { if (!root.contains(e.target) && !pop.contains(e.target)) close(); }
   function onKey(e) { if (e.key === 'Escape') close(); }
   function onScroll() { close(); } // با اسکرول مختصر منوی fixed از دکمه جدا می‌شود — بستن تمیزتر است
 

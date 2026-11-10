@@ -27,14 +27,14 @@ describe('گیت ۱.۲۵.۵۰ — دو فیلد اختیاری زیر ثبت س�
     expect(screening).toMatch(/birthInput\.root/);
   });
 
-  it('نمرهٔ آمادگی تحصیلی — عددی با سقف ۱۰۰ و کف صفر', () => {
+  it('نمرهٔ آمادگی تحصیلی — عددی با سقف ۳۴ و کف صفر (۱.۲۵.۵۷)', () => {
     expect(screening).toMatch(/نمرهٔ آمادگی تحصیلی/);
-    expect(screening).toMatch(/const readinessInput = el\('input', \{[^}]*type: 'number'[^}]*min: '0'[^}]*max: '100'/s);
+    expect(screening).toMatch(/const readinessInput = el\('input', \{[^}]*type: 'number'[^}]*min: '0'[^}]*max: '34'/s);
   });
 
-  it('اعتبارسنجی سمت کلاینت: عدد صحیح ۰..۱۰۰ — خارج از رنج ثبت نمی‌شود', () => {
-    expect(screening).toMatch(/Number\.isInteger\(score\) \|\| score < 0 \|\| score > 100/);
-    expect(screening).toMatch(/نمرهٔ آمادگی تحصیلی باید عددی بین ۰ تا ۱۰۰ باشد/);
+  it('اعتبارسنجی سمت کلاینت: عدد صحیح ۰..۳۴ — خارج از رنج ثبت نمی‌شود (۱.۲۵.۵۷)', () => {
+    expect(screening).toMatch(/Number\.isInteger\(score\) \|\| score < 0 \|\| score > 34/);
+    expect(screening).toMatch(/نمرهٔ آمادگی تحصیلی باید عددی بین ۰ تا ۳۴ باشد/);
   });
 
   it('بدنهٔ POST/PATCH هر دو فیلد را با قرارداد snake_case می‌فرستد', () => {
@@ -50,7 +50,14 @@ describe('گیت ۱.۲۵.۵۰ — دو فیلد اختیاری زیر ثبت س�
 
   it('فیلدها در ردیف لیست فقط وقتی ثبت‌شده‌اند نمایش داده می‌شوند', () => {
     expect(screening).toMatch(/e\.birthDate \? ` • تولد \$\{formatJalaliNumeric\(e\.birthDate\)\}` : ''/);
-    expect(screening).toMatch(/` • آمادگی \$\{fa\(e\.readinessScore\)\}`/);
+    expect(screening).toMatch(/` • آمادگی \$\{fa\(e\.readinessScore\)\}/);
+  });
+
+  it('۱.۲۵.۵۷ — فیلد اختیاری «توضیحات»: textarea در فرم، بدنهٔ API و ردیف', () => {
+    expect(screening).toMatch(/const noteInput = el\('textarea'/);
+    expect(screening).toMatch(/maxlength: 500/);
+    expect(screening).toMatch(/note: extra\.note/);
+    expect(screening).toMatch(/e\.note \? el\('div'/);
   });
 });
 

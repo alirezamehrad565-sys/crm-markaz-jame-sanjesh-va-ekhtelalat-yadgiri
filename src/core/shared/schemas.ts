@@ -434,6 +434,24 @@ export const ReplaceCenterHoursSchema = z.object({
   items: z.array(WorkingHourRangeSchema).max(70, 'حداکثر ۷۰ بازه در هفته مجاز است')
 });
 
+/* ۱.۲۵.۵۷ — سقف متن «دربارهٔ مرکز» بات؛ رشتهٔ خالی = بازگشت به متن پیش‌فرض */
+export const BOT_ABOUT_MAX = 1500;
+
+/* ۱.۲۵.۵۷ — توکن بات بله مستقیم از کاربر: یا ثبت توکن تازه یا پاک‌کردن.
+   توکن بله شکل «123456:AA...» دارد — حداقل طول ۲۰ و فقط نویسه‌های امن.
+   پاسخ GET هرگز توکن را برنمی‌گرداند؛ audit فقط «configured» را ثبت می‌کند. */
+export const BotTokenUpdateSchema = z.union([
+  z.object({
+    token: z
+      .string()
+      .trim()
+      .min(20, 'توکن بات خیلی کوتاه است — توکن کامل را از BotFather بله بگیرید')
+      .max(200, 'توکن بات حداکثر ۲۰۰ نویسه است')
+      .regex(/^[A-Za-z0-9:_-]+$/, 'توکن فقط حروف، رقم و :_- است')
+  }),
+  z.object({ clear: z.literal(true) })
+]);
+
 export const UpdateSettingsSchema = z.object({
   clinic_name: z.string().min(2, 'نام مرکز حداقل ۲ نویسه است').max(120).optional(),
   default_reminder_hours: z.number().int().min(1).max(48).optional(),
@@ -447,6 +465,11 @@ export const UpdateSettingsSchema = z.object({
     .string()
     .max(65, 'نام کاربری بات حداکثر ۶۴ نویسه است')
     .regex(/^@?[A-Za-z0-9_]*$/, 'نام کاربری بات فقط حروف لاتین، رقم و خط زیر است')
+    .optional(),
+  /* ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات؛ رشتهٔ خالی = بازگشت به متن پیش‌فرض سامانه */
+  bot_about: z
+    .string()
+    .max(BOT_ABOUT_MAX, `متن «دربارهٔ مرکز» حداکثر ${BOT_ABOUT_MAX} نویسه است`)
     .optional(),
   notify_batch_hour: z
     .number()
@@ -1074,9 +1097,11 @@ export const CreateExerciseBatchSchema = z
 
 export const SCREENING_NAME_MAX = 80;
 export const SCREENING_TAGS_MAX = 12;
-/* ۱.۲۵.۵۰ — نمرهٔ آمادگی تحصیلی: عدد صحیح ۰..۱۰۰، اختیاری */
+/* ۱.۲۵.۵۷ — نمرهٔ آمادگی تحصیلی از ۳۴ است (خواست کارفرما: فرم اصلی ۳۴ آیتمی است) */
 export const SCREENING_READINESS_MIN = 0;
-export const SCREENING_READINESS_MAX = 100;
+export const SCREENING_READINESS_MAX = 34;
+/* ۱.۲۵.۵۷ — فیلد اختیاری «توضیحات» سنجش روزانه */
+export const SCREENING_NOTE_MAX = 500;
 
 const ScreeningTagSchema = z
   .string()
@@ -1094,7 +1119,13 @@ const ScreeningReadinessSchema = z
   .number()
   .int('نمرهٔ آمادگی تحصیلی باید عدد صحیح باشد')
   .min(SCREENING_READINESS_MIN, 'نمرهٔ آمادگی تحصیلی نمی‌تواند منفی باشد')
-  .max(SCREENING_READINESS_MAX, 'نمرهٔ آمادگی تحصیلی حداکثر ۱۰۰ است');
+  .max(SCREENING_READINESS_MAX, 'نمرهٔ آمادگی تحصیلی حداکثر ۳۴ است');
+
+const ScreeningNoteSchema = z
+  .string()
+  .trim()
+  .max(SCREENING_NOTE_MAX, `توضیحات حداکثر ${SCREENING_NOTE_MAX} نویسه است`)
+  .nullish();
 
 export const ScreeningCreateSchema = z.object({
   name: z
@@ -1105,7 +1136,8 @@ export const ScreeningCreateSchema = z.object({
   tags: z.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `حداکثر ${SCREENING_TAGS_MAX} برچسب`).default([]),
   day: TehranYmdSchema.optional(),
   birth_date: ScreeningBirthDateSchema.nullish(),
-  readiness_score: ScreeningReadinessSchema.nullish()
+  readiness_score: ScreeningReadinessSchema.nullish(),
+  note: ScreeningNoteSchema
 });
 
 export const ScreeningUpdateSchema = z
@@ -1118,10 +1150,11 @@ export const ScreeningUpdateSchema = z
       .optional(),
     tags: z.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `حداکثر ${SCREENING_TAGS_MAX} برچسب`).optional(),
     birth_date: ScreeningBirthDateSchema.nullish(),
-    readiness_score: ScreeningReadinessSchema.nullish()
+    readiness_score: ScreeningReadinessSchema.nullish(),
+    note: ScreeningNoteSchema
   })
   .refine(
-    (v) => v.name !== undefined || v.tags !== undefined || v.birth_date !== undefined || v.readiness_score !== undefined,
+    (v) => v.name !== undefined || v.tags !== undefined || v.birth_date !== undefined || v.readiness_score !== undefined || v.note !== undefined,
     {
       message: 'حداقل یک فیلد برای ویرایش لازم است'
     }

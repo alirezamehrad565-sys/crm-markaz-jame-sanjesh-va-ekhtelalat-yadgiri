@@ -523,21 +523,37 @@ function attCell(st) {
   return el('span', { class: `badge badge--${STAFF_ATT_TONE[st] ?? 'neutral'}`, title: STAFF_ATT_LABEL[st] ?? st }, STAFF_ATT_SYM[st] ?? '—');
 }
 
-function buildAttendanceModel(from, to, activeStaff, records) {
+/* ۱.۲۵.۵۷ — نقشهٔ روزهای کاری هر همکار از GET /api/working-hours:
+   staffId → Set(weekday ۰=شنبه … ۶=جمعه). همکاری بدون بازهٔ تعریف‌شده = همهٔ روزها
+   (تا دفترش خالی نماند — رفتار قدیمی برای او حفظ می‌شود). */
+function buildStaffWorkdaysMap(workHours) {
+  const map = new Map();
+  for (const wh of workHours ?? []) {
+    if (!wh?.staffId || typeof wh.weekday !== 'number') continue;
+    if (!map.has(wh.staffId)) map.set(wh.staffId, new Set());
+    map.get(wh.staffId).add(wh.weekday);
+  }
+  return map;
+}
+
+function buildAttendanceModel(from, to, activeStaff, records, workdaysMap) {
   const days = [];
   let cur = from;
   while (cur <= to && days.length < 400) { days.push(cur); cur = addDaysYmd(cur, 1); } /* سقف گارد: بیش از یک‌سال در یک دفتر معنا ندارد */
   const cell = new Map();
   for (const r of records) cell.set(`${r.staffId}|${r.date}`, r.status);
   const people = activeStaff.map((s) => {
+    /* ۱.۲۵.۵۷ — فقط روزهای کاریِ خودِ همکار: روزِ تعطِلیِ او حتی اگر رکورد داشته باشد در دفترش نمی‌آید */
+    const wd = workdaysMap?.get(s.id);
+    const scopedDays = wd && wd.size > 0 ? days.filter((d) => wd.has(iranianWeekdayOfYmd(d))) : days;
     const counts = { present: 0, absent: 0, late: 0, leave: 0, sick: 0, unmarked: 0 };
-    const marks = days.map((d) => {
+    const marks = scopedDays.map((d) => {
       const st = cell.get(`${s.id}|${d}`);
       if (!st) { counts.unmarked++; return null; }
       counts[st] = (counts[st] ?? 0) + 1;
       return st;
     });
-    return { id: s.id, name: s.fullName ?? '', role: s.role ?? '', marks, counts };
+    return { id: s.id, name: s.fullName ?? '', role: s.role ?? '', days: scopedDays, marks, counts };
   });
   return { from, to, days, people };
 }
@@ -604,11 +620,18 @@ function buildAttendanceView(zone) {
     content.classList.add('is-loading');
     let model;
     try {
-      const [staffRes, recRes] = await Promise.all([
+      const [staffRes, recRes, whRes] = await Promise.all([
         api.get('/api/staff'),
-        api.get(`/api/staff-attendance${qs({ from: local.from, to: local.to })}`)
+        api.get(`/api/staff-attendance${qs({ from: local.from, to: local.to })}`),
+        api.get('/api/working-hours') /* ۱.۲۵.۵۷ — روزهای کاری هر همکار */
       ]);
-      model = buildAttendanceModel(local.from, local.to, (staffRes.data ?? []).filter((s) => s.active), recRes.data ?? []);
+      model = buildAttendanceModel(
+        local.from,
+        local.to,
+        (staffRes.data ?? []).filter((s) => s.active),
+        recRes.data ?? [],
+        buildStaffWorkdaysMap(whRes.data ?? [])
+      );
     } catch (err) {
       if (myGen !== renderGen || !content.isConnected) return; // F9: پاسخ کهنه
       content.classList.remove('is-loading');
@@ -635,6 +658,8 @@ function buildAttendanceBody(model) {
     columns: [
       { key: 'name', label: 'همکار' },
       { key: 'role', label: 'نقش', render: (p) => statusBadge(p.role) },
+      /* ۱.۲۵.۵۷ — تعداد روزهای کاری خودِ همکار در بازه (ستون تازه) */
+      { key: 'workdays', label: 'روزهای کاری', render: (p) => fa(p.days.length), align: 'end' },
       { key: 'present', label: 'حاضر', render: (p) => fa(p.counts.present), align: 'end' },
       { key: 'late', label: 'تأخیر', render: (p) => fa(p.counts.late), align: 'end' },
       { key: 'absent', label: 'غایب', render: (p) => p.counts.absent > 0 ? el('span', { class: 'badge badge--error' }, fa(p.counts.absent)) : fa(0), align: 'end' },
@@ -645,18 +670,26 @@ function buildAttendanceBody(model) {
     rows: model.people
   });
 
-  /* دفتر روزبه‌روز: ردیف = همکار، ستون = روز بازه — در قاب اسکرول افقی */
-  const matrixTable = dataTable({
-    columns: [
-      { key: 'name', label: 'همکار', render: (p) => el('span', { style: { whiteSpace: 'nowrap' } }, p.name) },
-      ...model.days.map((d, i) => ({
-        key: `d${i}`,
-        label: jalaliTick(d),
-        render: (p) => attCell(p.marks[i])
-      }))
-    ],
-    rows: model.people
-  });
+  /* ۱.۲۵.۵۷ — دفتر روزبه‌روز تک‌نفره: هر همکار یک ردیف مستقل با فقطِ روزهای کاریِ خودش؛
+     ستون مشترک روزها دیگر بی‌معنا نیست چون روزهای کاری همکاران متفاوت است. */
+  const ledger = el('div', { class: 'att-ledger' },
+    ...model.people.map((p) =>
+      el('div', { class: 'att-ledger__row' },
+        el('div', { class: 'att-ledger__person' },
+          el('b', {}, p.name),
+          el('span', { class: 'cell-sub' }, STAFF_ROLE_FA[p.role] ?? p.role)
+        ),
+        el('div', { class: 'att-ledger__strip' },
+          ...p.days.map((d, i) =>
+            el('div', { class: 'att-ledger__cell' },
+              el('span', { class: 'att-ledger__day' }, jalaliTick(d)),
+              attCell(p.marks[i])
+            )
+          )
+        )
+      )
+    )
+  );
 
   return el('div', {},
     el('div', { class: 'card' },
@@ -666,12 +699,12 @@ function buildAttendanceBody(model) {
       el('div', { class: 'card__body' }, summaryTable)),
     el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
       el('div', { class: 'card__head' },
-        el('div', { class: 'card__title' }, 'دفتر روزبه‌روز'),
+        el('div', { class: 'card__title' }, 'دفتر روزبه‌روز — فقط روزهای کاری هر همکار'),
         el('span', { class: 'badge badge--neutral' }, 'اسکرول افقی')),
-      el('div', { class: 'card__body', style: { overflowX: 'auto' } }, matrixTable)),
+      el('div', { class: 'card__body' }, ledger)),
     el('div', { class: 'wgrid__hint', style: { marginTop: 'var(--sp-3)' } },
       icon('info', 14),
-      'راهنما: ✓ حاضر · ت تأخیر · غ غایب · م مرخصی · ب بیماری · — ثبت‌نشده. خروجی CSV همین دفتر روزبه‌روز را با سرستون تاریخ شمسی می‌دهد.'),
+      'راهنما: ✓ حاضر · ت تأخیر · غ غایب · م مرخصی · ب بیماری · — ثبت‌نشده. خروجی CSV همهٔ روزهای بازه را دارد؛ روزهای غیرِکاریِ هر همکار خالی می‌ماند.'),
     el('div', { class: 'print-footer', style: { marginTop: 'var(--sp-5)', color: 'var(--text-3)', fontSize: 'var(--fs-xs)' } },
       `تاریخ تهیه: ${formatJalaliNumeric(tehranTodayYmd())} — سامانه مرکز جامع`)
   );
@@ -684,17 +717,24 @@ function exportAttendanceCsv(model) {
   };
   const lines = [];
   lines.push(`# دفتر حضور و غیاب همکاران — از ${formatJalaliNumeric(model.from)} تا ${formatJalaliNumeric(model.to)}`);
-  lines.push(['همکار', 'نقش', ...model.days.map((d) => jalaliTick(d)), 'حاضر', 'تأخیر', 'غایب', 'مرخصی', 'بیماری', 'ثبت‌نشده'].map(esc).join(','));
+  lines.push(['همکار', 'نقش', 'روزهای کاری', ...model.days.map((d) => jalaliTick(d)), 'حاضر', 'تأخیر', 'غایب', 'مرخصی', 'بیماری', 'ثبت‌نشده'].map(esc).join(','));
   for (const p of model.people) {
+    /* ۱.۲۵.۵۷ — ستون روزها: فقط روزهای کاریِ خودِ همکار مقدار دارد؛ روزِ غیرِکاری خالی می‌ماند */
+    const dayMark = new Map(p.days.map((d, i) => [d, p.marks[i]]));
     lines.push([
       p.name,
       STAFF_ROLE_FA[p.role] ?? p.role,
-      ...p.marks.map((st) => (st ? (STAFF_ATT_SYM[st] ?? st) : '—')),
+      p.days.length,
+      ...model.days.map((d) => {
+        if (!dayMark.has(d)) return ''; // غیرِکاری — خالی
+        const st = dayMark.get(d);
+        return st ? (STAFF_ATT_SYM[st] ?? st) : '—';
+      }),
       p.counts.present, p.counts.late, p.counts.absent, p.counts.leave, p.counts.sick, p.counts.unmarked
     ].map(esc).join(','));
   }
   lines.push('');
-  lines.push('# راهنما: ✓ حاضر · ت تأخیر · غ غایب · م مرخصی · ب بیماری · — ثبت‌نشده');
+  lines.push('# راهنما: ✓ حاضر · ت تأخیر · غ غایب · م مرخصی · ب بیماری · — ثبت‌نشده · سلول خالی = روزِ غیرِکاریِ آن همکار');
 
   const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);

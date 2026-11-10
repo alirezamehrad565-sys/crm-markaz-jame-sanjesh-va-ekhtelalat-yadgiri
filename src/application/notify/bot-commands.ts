@@ -131,7 +131,15 @@ export function createBotCommandsSection(ctx: NotifyCtx): Pick<NotifyAppService,
 
         case 'about': {
           const ownerAbout = await this.resolveOwner(cmd.chatId);
-          return { handled: true, reply: renderTemplate('bot_about', { clinicName: await deps.settings.getClinicName() }), keyboard: buildBotKeyboard(ownerAbout) };
+          /* ۱.۲۵.۵۷ — «دربارهٔ مرکز» از تنظیمات (متن قابل ویرایش مدیر) می‌آید */
+          return {
+            handled: true,
+            reply: renderTemplate('bot_about', {
+              clinicName: await deps.settings.getClinicName(),
+              aboutText: await deps.settings.getBotAbout()
+            }),
+            keyboard: buildBotKeyboard(ownerAbout)
+          };
         }
 
         case 'myid':

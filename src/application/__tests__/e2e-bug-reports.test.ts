@@ -1,12 +1,13 @@
 /**
- * e2e گزارش باگ به پشتیبانی CP (بازاعمال ۱.۲۵.۵۱ روی درخت ۱.۲۵.۵۳)
- * مسیرهای /api/bug-reports + چرخهٔ ارسال @app/bug-report-forward با fetch ساختگی.
- * قرارداد گیرندهٔ CP (m7): POST /api/node/feedback — 201 تازه / 200 تکراری.
+ * e2e گزارش باگ به پشتیبانی CP (بازاعمال ۱.۲۵.۵۱؛ ۱.۲۵.۵۷ — چرخهٔ دوطرفه m8)
+ * مسیرهای /api/bug-reports + چرخهٔ ارسال/دریافت @app/bug-report-forward با fetch ساختگی.
+ * قرارداد CP m7+m8: POST /api/node/feedback — 201 تازه / 200 تکراری؛
+ * GET /api/node/feedback/replies?since= — pull پاسخ پشتیبانی با کلید خود گزارش.
  */
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { createTestApp, asRole, type TestApp } from '../../test/harness';
 import type { Api } from '../../test/harness';
-import { runBugReportForward, buildBugReportConfig, BUG_REPORT_ATTEMPT_KEY } from '@app/bug-report-forward';
+import { runBugReportForward, buildBugReportConfig, BUG_REPORT_ATTEMPT_KEY, BUG_REPORT_REPLY_SINCE_KEY } from '@app/bug-report-forward';
 import { createDb } from '@core/db';
 import { createLogger } from '@core/logger';
 
@@ -100,6 +101,10 @@ describe('چرخهٔ ارسال به CP — runBugReportForward', () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
       calls.push({ url: String(url), init: init ?? {} });
+      if (String(url).includes('/api/node/feedback/replies')) {
+        /* pull پاسخ‌ها — در این آزمون پاسخی نیست */
+        return new Response(JSON.stringify({ ok: true, data: { server_time: '2026-11-10T08:00:01Z', items: [] } }), { status: 200 });
+      }
       return new Response(JSON.stringify({ ok: true, data: { id: 'fb-x', duplicate: false } }), { status: 201 });
     });
 
@@ -116,15 +121,18 @@ describe('چرخهٔ ارسال به CP — runBugReportForward', () => {
       fetchFn: fetchMock as unknown as typeof fetch,
       now
     });
-    // سه ردیف در صف است (آزمون‌های قبل + این یکی) — همه در همین دوره می‌روند
-    expect(res).toMatchObject({ status: 'done', sent: 3, failed: 0 });
-    expect(calls.length).toBe(3);
-    expect(calls[0].url).toBe('https://network-control-plane.sanjeshm.workers.dev/api/node/feedback');
+    // چرخهٔ دوطرفه ۱.۲۵.۵۷: اول pull پاسخ‌ها، بعد سه POST — همه در همین دوره
+    expect(res).toMatchObject({ status: 'done', sent: 3, failed: 0, pulled: 0 });
+    expect(calls.length).toBe(4);
+    expect(calls[0].url).toBe('https://network-control-plane.sanjeshm.workers.dev/api/node/feedback/replies');
+    expect(calls[0].init.method).toBe('GET');
+    const postCalls = calls.slice(1);
+    expect(postCalls.every((c) => c.url === 'https://network-control-plane.sanjeshm.workers.dev/api/node/feedback')).toBe(true);
     /* ترتیب هم‌ثانیه‌ها با id تصادفی است — گزارش بحرانی games را از میان سه بدنه پیدا کن */
-    const bodies = calls.map((c) => JSON.parse(String(c.init.body)) as { areas: string[]; severity: string; created_at: string; page: string | null });
+    const bodies = postCalls.map((c) => JSON.parse(String(c.init.body)) as { areas: string[]; severity: string; created_at: string; page: string | null });
     const gamesIdx = bodies.findIndex((b) => b.severity === 'critical');
     expect(gamesIdx).toBeGreaterThanOrEqual(0);
-    const headers = calls[gamesIdx].init.headers as Record<string, string>;
+    const headers = postCalls[gamesIdx].init.headers as Record<string, string>;
     expect(headers['X-CP-Node-Code']).toBe('demo-a');
     expect(headers.Authorization).toBe('Bearer demo-key');
     expect(headers['X-CP-Node-Version']).toBeTruthy();
@@ -141,6 +149,10 @@ describe('چرخهٔ ارسال به CP — runBugReportForward', () => {
     const stamp = app.db
       .queryOne<{ value: string }>('SELECT value FROM settings WHERE key = ?', [BUG_REPORT_ATTEMPT_KEY]);
     expect(stamp).toBeTruthy();
+    /* مُهر since هم پیش رفته (pull موفق با server_time) */
+    const since = await app.db
+      .queryOne<{ value: string }>('SELECT value FROM settings WHERE key = ?', [BUG_REPORT_REPLY_SINCE_KEY]);
+    expect(JSON.parse(since!.value)).toBe('2026-11-10T08:00:01Z');
   });
 
   it('پاسخ 500 → ردیف open می‌ماند با forward_error', async () => {
@@ -180,5 +192,103 @@ describe('چرخهٔ ارسال به CP — runBugReportForward', () => {
     });
     expect(second).toEqual({ status: 'skipped' });
     expect(fetchMock.mock.calls.length).toBe(callsAfterFirst); // fetch تازه‌ای نشده
+  });
+
+  it('۱.۲۵.۵۷ — pull پاسخ پشتیبانی: آیتم‌ها با کلید خودِ گزارش UPSERT می‌شوند و مُهر since پیش می‌رود', async () => {
+    const list = dataOf<Array<{ id: string; reply_text: string | null }>>(
+      await api.get('/api/bug-reports')
+    );
+    const target = list.find((i) => i.reply_text === null) ?? list[0];
+    expect(target).toBeTruthy();
+
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      if (String(url).includes('/api/node/feedback/replies')) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              server_time: '2026-11-10T12:00:00Z',
+              items: [
+                {
+                  id: target.id,
+                  status: 'read',
+                  reply_text: 'بررسی شد — در نسخهٔ بعد رفع می‌شود',
+                  reply_by: 'پشتیبانی شبکه',
+                  reply_at: '2026-11-10T11:30:00Z',
+                  updated_at: '2026-11-10T11:30:00Z'
+                }
+              ]
+            }
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ ok: true, data: { id: 'fb-x', duplicate: false } }), { status: 201 });
+    });
+
+    const res = await runBugReportForward({
+      db: app.db,
+      logger: createLogger('test'),
+      config: configWith(envOf(app), { CP_SYNC_URL: 'https://cp.example', CP_NODE_CODE: 'a', CP_NODE_KEY: 'b' }),
+      fetchFn: fetchMock as unknown as typeof fetch,
+      now: () => new Date('2026-11-10T12:00:00Z')
+    });
+    expect(res).toMatchObject({ status: 'done', pulled: 1 });
+
+    const after = dataOf<Array<{ id: string; reply_text: string | null; reply_by: string | null; reply_at: string | null }>>(
+      await api.get('/api/bug-reports')
+    ).find((x) => x.id === target.id);
+    expect(after?.reply_text).toBe('بررسی شد — در نسخهٔ بعد رفع می‌شود');
+    expect(after?.reply_by).toBe('پشتیبانی شبکه');
+    expect(after?.reply_at).toBe('2026-11-10T11:30:00Z');
+
+    /* مُهر since = server_time — دورهٔ بعد فقط تازه‌ترها را می‌گیرد */
+    const since = await app.db.queryOne<{ value: string }>('SELECT value FROM settings WHERE key = ?', [BUG_REPORT_REPLY_SINCE_KEY]);
+    expect(JSON.parse(since!.value)).toBe('2026-11-10T12:00:00Z');
+    /* درگاه pull همان مسیر رسمی CP است (since ممکن است از دورهٔ قبل همراه بیاید) */
+    expect(String(fetchMock.mock.calls[0][0]).startsWith('https://cp.example/api/node/feedback/replies')).toBe(true);
+  });
+
+  it('۱.۲۵.۵۷ — گارد تازگی: پاسخ قدیمی‌تر از reply_at فعلی بازنویسی نمی‌شود و since پارامتر دورهٔ بعد است', async () => {
+    const list = dataOf<Array<{ id: string; reply_at: string | null }>>(await api.get('/api/bug-reports'));
+    const replied = list.find((i) => i.reply_at === '2026-11-10T11:30:00Z');
+    expect(replied).toBeTruthy();
+
+    let seenSince: string | null = null;
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      const u = String(url);
+      if (u.includes('/api/node/feedback/replies')) {
+        seenSince = new URL(u).searchParams.get('since');
+        /* پاسخ قدیمی‌تر (۱۰:۰۰ < ۱۱:۳۰ فعلی) — گارد تازگی نباید ردیف را عوض کند */
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              server_time: '2026-11-10T18:00:00Z',
+              items: [
+                { id: replied!.id, status: 'read', reply_text: 'متن قدیمی', reply_by: 'قدیمی', reply_at: '2026-11-10T10:00:00Z', updated_at: '2026-11-10T10:00:00Z' }
+              ]
+            }
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ ok: true, data: { id: 'fb-x', duplicate: false } }), { status: 201 });
+    });
+
+    const res = await runBugReportForward({
+      db: app.db,
+      logger: createLogger('test'),
+      config: configWith(envOf(app), { CP_SYNC_URL: 'https://cp.example', CP_NODE_CODE: 'a', CP_NODE_KEY: 'b' }),
+      fetchFn: fetchMock as unknown as typeof fetch,
+      now: () => new Date('2026-11-10T18:00:00Z')
+    });
+    expect(res).toMatchObject({ status: 'done' });
+    expect(seenSince).toBe('2026-11-10T12:00:00Z'); // مُهر دورهٔ قبل
+
+    const after = dataOf<Array<{ id: string; reply_text: string | null }>>(
+      await api.get('/api/bug-reports')
+    ).find((x) => x.id === replied!.id);
+    expect(after?.reply_text).toBe('بررسی شد — در نسخهٔ بعد رفع می‌شود'); // متن تازه سرِ جایش
   });
 });
