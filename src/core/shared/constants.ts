@@ -546,3 +546,43 @@ export const CLEARBOOK_PLAN_STATUS_LABELS: Record<ClearbookPlanStatus, string> =
   active: 'در جریان',
   done: 'تکمیل'
 };
+
+// ─── گزارش باگ سامانه به پشتیبانی CP (بازاعمال ۱.۲۵.۵۱ — مایگریشن 0101) ───
+// قرارداد گیرندهٔ CP (m7): POST /api/node/feedback — NodeFeedbackSubmitSchema.
+// محدوده‌ها عیناً هم‌قرارداد CP است تا گزارش هرگز در سمت CP رد نشود.
+export const BUG_REPORT_AREA_ID_MAX = 60;
+export const BUG_REPORT_AREAS_MAX = 24;
+export const BUG_REPORT_DESCRIPTION_MAX = 2000;
+export const BUG_REPORT_PAGE_MAX = 300;
+export const BUG_REPORT_VERSION_MAX = 40;
+export const BUG_REPORT_REPORTER_MAX = 120;
+export const BUG_REPORT_NODE_ID_MAX = 64;
+export const BUG_REPORT_SEVERITIES = ['minor', 'major', 'critical'] as const;
+
+export type BugReportSeverity = (typeof BUG_REPORT_SEVERITIES)[number];
+
+/** شناسهٔ ماژول‌های گزارش‌پذیر — هم‌قرارداد نقشهٔ برچسب CP («گزارش باگ» پنل شبکه) */
+export const BUG_REPORT_AREAS = [
+  { id: 'appointments', label: 'نوبت‌دهی و تقویم' },
+  { id: 'working-day', label: 'روز کاری' },
+  { id: 'screening', label: 'سنجش روزانه' },
+  { id: 'students', label: 'دانش‌آموزان و پرونده' },
+  { id: 'treatment-plans', label: 'طرح درمان' },
+  { id: 'exercises', label: 'کارت‌های آماده' },
+  { id: 'games', label: 'بازی‌ها' },
+  { id: 'reports', label: 'گزارش‌ها و شاخص‌ها' },
+  { id: 'announcements', label: 'اعلان‌ها' },
+  { id: 'finance', label: 'بودجه و مالی' },
+  { id: 'staff', label: 'کارکنان و دسترسی‌ها' },
+  { id: 'other', label: 'بخش دیگر / کلی' }
+] as const;
+
+export type BugReportAreaId = (typeof BUG_REPORT_AREAS)[number]['id'];
+
+export const BUG_REPORT_AREA_IDS: readonly string[] = BUG_REPORT_AREAS.map((a) => a.id);
+
+export const BUG_REPORT_SEVERITY_LABELS: Record<BugReportSeverity, string> = {
+  minor: 'کم‌اهمیت',
+  major: 'مهم',
+  critical: 'بحرانی'
+};

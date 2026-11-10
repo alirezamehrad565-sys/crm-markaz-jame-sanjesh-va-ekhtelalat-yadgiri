@@ -214,17 +214,19 @@ describe('چرخش لنگر-مقید (۱.۲۵.۴۰)', () => {
 // ─── ورودی رجیستری، نردبان مراحل و اهرم n ───
 
 describe('رجیستری و نردبان ن‌پشت (۱.۲۵.۴۰)', () => {
-  it('nback در انتهای GAME_KIND_IDS — ترتیب سنجه‌های شش نوع پیشین دست‌نخورده', () => {
+  it('nback در انتهای GAME_KIND_IDS — ترتیب سنجه‌های بازی‌های پیشین دست‌نخورده؛ trail حذف شد', () => {
     expect(gameKindOf('nback')).toBe('nback');
-    expect(GAME_KIND_IDS.slice(0, 6)).toEqual(['gonogo', 'numline', 'scan', 'stroop', 'flanker', 'trail']);
-    expect(GAME_KIND_IDS[6]).toBe('nback'); // هفت‌تای پیشین دست‌نخورده؛ G8 (corsi/span) در انتها نشست
+    expect(GAME_KIND_IDS.slice(0, 5)).toEqual(['gonogo', 'numline', 'scan', 'stroop', 'flanker']);
+    expect(GAME_KIND_IDS[5]).toBe('nback'); // trail (رد پای دزد) پس از نقد سه‌گانهٔ ۱.۲۵.۵۱ حذف شد؛ G8 و simon در انتها نشستند
+    expect((GAME_KIND_IDS as readonly string[]).includes('trail')).toBe(false);
     expect(GAME_KINDS.nback.rt_floor_ms).toBe(200);
     expect(GAME_KINDS.nback.timed_choice).toBe(true);
     const ids = ENGINE_METRICS.map((m) => m.id);
-    expect(ids.length).toBe(19); // G8 — +corsi_span_max +digitspan_span_max
-    expect(ids.slice(13, 17)).toEqual(['nback_match_pct', 'nback_nonmatch_pct', 'nback_false_alarm_pct', 'nback_miss_pct']); // ن‌پشت در جایگاه خودش
-    expect(ids.slice(0, 13).some((id) => id.includes('nback'))).toBe(false);
-    expect(ids.slice(-2)).toEqual(['corsi_span_max', 'digitspan_span_max']); // G8 در انتها
+    expect(ids.length).toBe(19); // G8 — +corsi_span_max +digitspan_span_max − trail_prefix_pct؛ ۱.۲۵.۵۲ +simon_span_max
+    expect(ids.slice(12, 16)).toEqual(['nback_match_pct', 'nback_nonmatch_pct', 'nback_false_alarm_pct', 'nback_miss_pct']); // ن‌پشت در جایگاه خودش
+    expect(ids.slice(0, 12).some((id) => id.includes('nback'))).toBe(false);
+    expect(ids.some((id) => id.includes('trail'))).toBe(false);
+    expect(ids.slice(-3)).toEqual(['corsi_span_max', 'digitspan_span_max', 'simon_span_max']); // G8 + simon در انتها
     // آستانه‌ها ۶۵/۷۸/۸۸ — همه proposed
     expect(NBACK_THRESHOLDS.pass.value).toBe(65);
     expect(NBACK_THRESHOLDS.star2.value).toBe(78);

@@ -88,7 +88,7 @@ FIXATION (پروتکل؛ مکث خنثی بی‌فلاش)
   - `premature` — پیش از محرک
   - `multiple` — پس از پاسخ
   - `out_of_surface` — بیرون صحنه (P3-9: نوار پیشرفت/بدنه هم می‌شمارند — فقط پرچم)
-- **کف RT سمت سرور بر اساس نوع** (`scoreAttempt`، بازنویسی‌پذیر با `mission.rt_floor_ms`): touch_report/gonogo 150 · numline 0 · choice 200 · scan 150 · stroop/flanker 200 · trail 150 → ستون `rt_valid`.
+- **کف RT سمت سرور بر اساس نوع** (`scoreAttempt`، بازنویسی‌پذیر با `mission.rt_floor_ms`): touch_report/gonogo 150 · numline 0 · choice 200 · scan 150 · stroop/flanker 200 · nback 200 · corsi 150 · span 0 → ستون `rt_valid` (trail حذف — ۱.۲۵.۵۱).
 - **رفع‌شده در G1 (۱.۲۵.۳۵)**: ساعت مکث‌پذیر اکنون در هر پنج شاخهٔ خاص برقرار است (متد `peek` برای RT چندلمسی — P1-1) و شواهد با لایهٔ مشترک `engine/observe.js` واقعی ثبت می‌شوند (P1-2)؛ رکورد موتور همهٔ شاخه‌ها اکنون هم‌شکل touch_report است (rt_ms مکث‌پذیر + شواهد هشت‌ستونه واقعی).
 
 ## ۶. تولید توالی و نسخه‌بندی
@@ -111,7 +111,7 @@ FIXATION (پروتکل؛ مکث خنثی بی‌فلاش)
 
 ## ۸. سنجه‌ها، کیفیت و شواهد
 
-- **فرمول‌های رجیستری** (`pure.ts` + `registry-extra.ts`): accuracy, median_rt, commission_pct, omission_pct, correct_go_pct, correct_nogo_pct, numline_error, scan_fa/miss, congruent_acc, incongruent_acc, interference_ms, trail_prefix — همگی با **قاعدهٔ دامنهٔ صفر** (صورت صفر → null، نه صفر قلابی). سنجه فقط از probe معتبر جلسهٔ valid، در `metrics_json`.
+- **فرمول‌های رجیستری** (`pure.ts` + رجیستری): accuracy, median_rt, commission_pct, omission_pct, correct_go_pct, correct_nogo_pct, numline_error, scan_fa/miss, congruent_acc, incongruent_acc, interference_ms, nback_match/nonmatch/fa/miss, corsi_span_max/digitspan_span_max (trail_prefix حذف — نقد سه‌گانهٔ ۱.۲۵.۵۱) — همگی با **قاعدهٔ دامنهٔ صفر** (صورت صفر → null، نه صفر قلابی). سنجه فقط از probe معتبر جلسهٔ valid، در `metrics_json`.
 - **کیفیت** (`quality.ts` v1.0.0) — ۹ قاعدهٔ نام‌دار با حکم سه‌تایی `explainable | needs_caution | incomplete_or_invalid`: base_validity · completion · pause_total (>۹۰s) · idle_gap · out_of_surface (>۱۰) · premature_ratio · device_frame · evidence_coverage · rt_floor.
 - **شواهد** (`evidence.ts` v1.0.0) — ۵ نشانهٔ کمی (rt_cv، drift دقت، premature_pct، window_miss_pct، coverage) + ۴ پرچم رفتاری (خستگی/ناپایداری/تکانش/بی‌تفاوتی) + توصیهٔ **غیر-بالینی** promote/hold/review. توصیه هرگز مرحله/ستاره/بازخورد نمی‌بیند و به کودک نمایش داده نمی‌شود.
 - **ثبت خام**: هر پاسخ = `response_json` کامل (همهٔ رویدادها: fixation_start, stimulus_presented, response_window_open, touch_*, iti_start, stimulus_hidden) + ۸ ستون شواهد نمایش در `game_attempts` (presented_at_ms, frame_drops, max_frame_delta_ms, touch_count, premature/multiple/out_of_surface_count, window_ms) — «دادهٔ خام هرگز دور ریخته نمی‌شود» گیت‌دار. idempotency سه‌لایه (idem_key UNIQUE + گیت سرور + یکتایی `(session_id,item_id)`).

@@ -902,10 +902,10 @@ export function createGamesService(deps: GamesDeps): GamesService {
     // سه بازی تازه + ن‌پشت (۱.۲۵.۳۲/۱.۲۵.۴۰) — قاعدهٔ بازی از پرامپت آیتم آموزشی؛ هیچ کلیدی این‌جا نیست؛
     // محرک آموزش، عین همان چیزی است که کودک در اجرا می‌بیند
     const newTrain = (mission.items ?? []).find((it) =>
-      it.phase === 'train' && (it.type === 'stroop' || it.type === 'flanker' || it.type === 'trail' || it.type === 'nback'
-        || it.type === 'corsi' || it.type === 'span'));
+      it.phase === 'train' && (it.type === 'stroop' || it.type === 'flanker' || it.type === 'nback'
+        || it.type === 'corsi' || it.type === 'span' || it.type === 'simon'));
     if (newTrain && !go && !nogo) {
-      const kindKey = newTrain.type as 'stroop' | 'flanker' | 'trail' | 'nback' | 'corsi' | 'span';
+      const kindKey = newTrain.type as 'stroop' | 'flanker' | 'nback' | 'corsi' | 'span' | 'simon';
       // سد نشتی data-hint — stim راهنما از stripAnswerKeys می‌گذرد (کلید همسانی match
       // ن‌پشت و هر کلید پاسخی در هر عمق این‌جا می‌ماند؛ برای بانک‌های فعلی بی‌اثر)
       const stim = stripAnswerKeys((newTrain.stim ?? {}) as Record<string, unknown>);

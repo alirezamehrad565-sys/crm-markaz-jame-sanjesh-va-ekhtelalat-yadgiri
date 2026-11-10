@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.55";
+var APP_VERSION = "1.25.56";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -4272,9 +4272,9 @@ var ZodObject = class _ZodObject extends ZodType {
   _getCached() {
     if (this._cached !== null)
       return this._cached;
-    const shape = this._def.shape();
-    const keys = util.objectKeys(shape);
-    this._cached = { shape, keys };
+    const shape2 = this._def.shape();
+    const keys = util.objectKeys(shape2);
+    this._cached = { shape: shape2, keys };
     return this._cached;
   }
   _parse(input) {
@@ -4289,7 +4289,7 @@ var ZodObject = class _ZodObject extends ZodType {
       return INVALID;
     }
     const { status, ctx } = this._processInputParams(input);
-    const { shape, keys: shapeKeys } = this._getCached();
+    const { shape: shape2, keys: shapeKeys } = this._getCached();
     const extraKeys = [];
     if (!(this._def.catchall instanceof ZodNever && this._def.unknownKeys === "strip")) {
       for (const key in ctx.data) {
@@ -4300,7 +4300,7 @@ var ZodObject = class _ZodObject extends ZodType {
     }
     const pairs = [];
     for (const key of shapeKeys) {
-      const keyValidator = shape[key];
+      const keyValidator = shape2[key];
       const value = ctx.data[key];
       pairs.push({
         key: { status: "valid", value: key },
@@ -4506,27 +4506,27 @@ var ZodObject = class _ZodObject extends ZodType {
     });
   }
   pick(mask) {
-    const shape = {};
+    const shape2 = {};
     for (const key of util.objectKeys(mask)) {
       if (mask[key] && this.shape[key]) {
-        shape[key] = this.shape[key];
+        shape2[key] = this.shape[key];
       }
     }
     return new _ZodObject({
       ...this._def,
-      shape: /* @__PURE__ */ __name(() => shape, "shape")
+      shape: /* @__PURE__ */ __name(() => shape2, "shape")
     });
   }
   omit(mask) {
-    const shape = {};
+    const shape2 = {};
     for (const key of util.objectKeys(this.shape)) {
       if (!mask[key]) {
-        shape[key] = this.shape[key];
+        shape2[key] = this.shape[key];
       }
     }
     return new _ZodObject({
       ...this._def,
-      shape: /* @__PURE__ */ __name(() => shape, "shape")
+      shape: /* @__PURE__ */ __name(() => shape2, "shape")
     });
   }
   /**
@@ -4573,27 +4573,27 @@ var ZodObject = class _ZodObject extends ZodType {
     return createZodEnum(util.objectKeys(this.shape));
   }
 };
-ZodObject.create = (shape, params) => {
+ZodObject.create = (shape2, params) => {
   return new ZodObject({
-    shape: /* @__PURE__ */ __name(() => shape, "shape"),
+    shape: /* @__PURE__ */ __name(() => shape2, "shape"),
     unknownKeys: "strip",
     catchall: ZodNever.create(),
     typeName: ZodFirstPartyTypeKind.ZodObject,
     ...processCreateParams(params)
   });
 };
-ZodObject.strictCreate = (shape, params) => {
+ZodObject.strictCreate = (shape2, params) => {
   return new ZodObject({
-    shape: /* @__PURE__ */ __name(() => shape, "shape"),
+    shape: /* @__PURE__ */ __name(() => shape2, "shape"),
     unknownKeys: "strict",
     catchall: ZodNever.create(),
     typeName: ZodFirstPartyTypeKind.ZodObject,
     ...processCreateParams(params)
   });
 };
-ZodObject.lazycreate = (shape, params) => {
+ZodObject.lazycreate = (shape2, params) => {
   return new ZodObject({
-    shape,
+    shape: shape2,
     unknownKeys: "strip",
     catchall: ZodNever.create(),
     typeName: ZodFirstPartyTypeKind.ZodObject,
@@ -6264,6 +6264,27 @@ var CLEARBOOK_PLAN_STATUS_LABELS = {
   active: "\u062F\u0631 \u062C\u0631\u06CC\u0627\u0646",
   done: "\u062A\u06A9\u0645\u06CC\u0644"
 };
+var BUG_REPORT_AREA_ID_MAX = 60;
+var BUG_REPORT_AREAS_MAX = 24;
+var BUG_REPORT_DESCRIPTION_MAX = 2e3;
+var BUG_REPORT_PAGE_MAX = 300;
+var BUG_REPORT_VERSION_MAX = 40;
+var BUG_REPORT_SEVERITIES = ["minor", "major", "critical"];
+var BUG_REPORT_AREAS = [
+  { id: "appointments", label: "\u0646\u0648\u0628\u062A\u200C\u062F\u0647\u06CC \u0648 \u062A\u0642\u0648\u06CC\u0645" },
+  { id: "working-day", label: "\u0631\u0648\u0632 \u06A9\u0627\u0631\u06CC" },
+  { id: "screening", label: "\u0633\u0646\u062C\u0634 \u0631\u0648\u0632\u0627\u0646\u0647" },
+  { id: "students", label: "\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u0648 \u067E\u0631\u0648\u0646\u062F\u0647" },
+  { id: "treatment-plans", label: "\u0637\u0631\u062D \u062F\u0631\u0645\u0627\u0646" },
+  { id: "exercises", label: "\u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647" },
+  { id: "games", label: "\u0628\u0627\u0632\u06CC\u200C\u0647\u0627" },
+  { id: "reports", label: "\u06AF\u0632\u0627\u0631\u0634\u200C\u0647\u0627 \u0648 \u0634\u0627\u062E\u0635\u200C\u0647\u0627" },
+  { id: "announcements", label: "\u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627" },
+  { id: "finance", label: "\u0628\u0648\u062F\u062C\u0647 \u0648 \u0645\u0627\u0644\u06CC" },
+  { id: "staff", label: "\u06A9\u0627\u0631\u06A9\u0646\u0627\u0646 \u0648 \u062F\u0633\u062A\u0631\u0633\u06CC\u200C\u0647\u0627" },
+  { id: "other", label: "\u0628\u062E\u0634 \u062F\u06CC\u06AF\u0631 / \u06A9\u0644\u06CC" }
+];
+var BUG_REPORT_AREA_IDS = BUG_REPORT_AREAS.map((a) => a.id);
 
 // src/core/shared/national-id.ts
 var PERSIAN_DIGITS = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
@@ -15191,15 +15212,15 @@ __name(m108NormalizeChecklistTexts, "m108NormalizeChecklistTexts");
 function m108NormalizeChecklistItems(items) {
   if (!items || items.length === 0) return null;
   const seen = /* @__PURE__ */ new Set();
-  const clean4 = [];
+  const clean5 = [];
   for (const it of items) {
     const text = it.text.trim();
     if (!text || seen.has(text)) continue;
     seen.add(text);
-    clean4.push({ text, done: Boolean(it.done) });
-    if (clean4.length >= TODO_CHECKLIST_MAX) break;
+    clean5.push({ text, done: Boolean(it.done) });
+    if (clean5.length >= TODO_CHECKLIST_MAX) break;
   }
-  return clean4.length > 0 ? JSON.stringify(clean4) : null;
+  return clean5.length > 0 ? JSON.stringify(clean5) : null;
 }
 __name(m108NormalizeChecklistItems, "m108NormalizeChecklistItems");
 function createTodosService(deps) {
@@ -15394,9 +15415,9 @@ function createTodosService(deps) {
       return rowToTodo(updated);
     },
     async addChecklistItem(id, text, actor) {
-      const clean4 = text.trim();
-      if (!clean4) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
-      if (clean4.length > 200) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+      const clean5 = text.trim();
+      if (!clean5) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
+      if (clean5.length > 200) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
       await db.transaction(async (tx) => {
         const row = await loadActiveRow(tx, id);
         if (row.assigner_id !== actor.staffId && row.assignee_id !== actor.staffId) {
@@ -15409,10 +15430,10 @@ function createTodosService(deps) {
         if (items.length >= TODO_CHECKLIST_MAX) {
           throw new ValidationError(`\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 ${TODO_CHECKLIST_MAX} \u0645\u0648\u0631\u062F \u0646\u062F\u0627\u0631\u062F`);
         }
-        if (items.some((it) => it.text === clean4)) {
+        if (items.some((it) => it.text === clean5)) {
           throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0648\u0631\u062F \u0627\u0632 \u0642\u0628\u0644 \u062F\u0631 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0647\u0633\u062A");
         }
-        items.push({ text: clean4, done: false });
+        items.push({ text: clean5, done: false });
         await tx.execute(`UPDATE todos SET checklist = ?, updated_at = datetime('now') WHERE id = ?`, [
           JSON.stringify(items),
           id
@@ -16345,11 +16366,11 @@ function createExerciseBankService(deps) {
     },
     // کدام شناسه‌ها واقعاً تمرینِ حذف‌نشدهٔ بانک‌اند (برای اعتبارسنجی لینک کارت طرح درمان)
     async idsExist(ids) {
-      const clean4 = [...new Set(ids.filter((x) => typeof x === "string" && x.length > 0))].slice(0, 50);
-      if (!clean4.length) return /* @__PURE__ */ new Set();
+      const clean5 = [...new Set(ids.filter((x) => typeof x === "string" && x.length > 0))].slice(0, 50);
+      if (!clean5.length) return /* @__PURE__ */ new Set();
       const rows = await db.query(
-        `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${clean4.map(() => "?").join(", ")})`,
-        clean4
+        `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${clean5.map(() => "?").join(", ")})`,
+        clean5
       );
       return new Set(rows.map((r) => r.id));
     },
@@ -23299,7 +23320,7 @@ function fillErrorPage(message) {
 __name(fillErrorPage, "fillErrorPage");
 
 // src/domain/games/registry.ts
-var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "trail", "nback", "corsi", "span"];
+var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "nback", "corsi", "span", "simon"];
 function gameKindOf(v) {
   return GAME_KIND_IDS.includes(v) ? v : "gonogo";
 }
@@ -23516,16 +23537,16 @@ var STROOP_STAGES = [
   {
     id: "s1",
     index: 1,
-    title_fa: "\u063A\u0627\u0631 \u0622\u0631\u0627\u0645",
-    goal_fa: "\u0648\u0627\u0698\u0647\u200C\u0647\u0627 \u0647\u0646\u0648\u0632 \u0631\u0646\u06AF\u0650 \u062E\u0648\u062F\u0634\u0627\u0646 \u0631\u0627 \u062F\u0627\u0631\u0646\u062F\u061B \u0628\u0627 \u0637\u0645\u0623\u0646\u06CC\u0646\u0647 \u0644\u0645\u0633 \u06A9\u0646.",
+    title_fa: "\u0627\u0648\u0644\u06CC\u0646 \u062D\u0642\u0647",
+    goal_fa: "\u062D\u0642\u0647\u200C\u0628\u0627\u0632 \u0628\u06CC\u062F\u0627\u0631 \u0634\u062F\u0647\u061B \u0648\u0627\u0698\u0647 \u062F\u0631\u0648\u063A \u0645\u06CC\u200C\u06AF\u0648\u06CC\u062F \u2014 \u0631\u0646\u06AF\u0650 \u0648\u0627\u0642\u0639\u06CC \u0631\u0627 \u0644\u0645\u0633 \u06A9\u0646.",
     difficulty: 1,
     overrides: {}
   },
   {
     id: "s2",
     index: 2,
-    title_fa: "\u0631\u0646\u06AF\u200C\u0647\u0627 \u0642\u0627\u0637\u06CC \u0645\u06CC\u200C\u0634\u0648\u0646\u062F",
-    goal_fa: "\u062D\u0642\u0647\u200C\u0628\u0627\u0632 \u0634\u0631\u0648\u0639 \u06A9\u0631\u062F\u0647\u061B \u0641\u0642\u0637 \u0628\u0647 \u0631\u0646\u06AF\u0650 \u062C\u0648\u0647\u0631 \u0646\u06AF\u0627\u0647 \u06A9\u0646.",
+    title_fa: "\u062D\u0642\u0647\u200C\u0647\u0627\u06CC \u0628\u06CC\u0634\u062A\u0631",
+    goal_fa: "\u062D\u0642\u0647\u200C\u0628\u0627\u0632 \u062A\u0646\u062F\u062A\u0631 \u0634\u062F\u0647\u061B \u0641\u0642\u0637 \u0628\u0647 \u0631\u0646\u06AF\u0650 \u062C\u0648\u0647\u0631 \u0646\u06AF\u0627\u0647 \u06A9\u0646.",
     difficulty: 2,
     overrides: {}
   },
@@ -23691,48 +23712,6 @@ function nbackItemInStage(item, stageId) {
   return s.n === level;
 }
 __name(nbackItemInStage, "nbackItemInStage");
-var TRAIL_STAGES = [
-  {
-    id: "s1",
-    index: 1,
-    title_fa: "\u0631\u062F \u06A9\u0648\u062A\u0627\u0647",
-    goal_fa: "\u0631\u062F\u067E\u0627\u0647\u0627 \u06A9\u0645\u200C\u0627\u0646\u062F\u061B \u0628\u0647 \u062A\u0631\u062A\u06CC\u0628 \u0634\u0645\u0627\u0631\u0647 \u0628\u0631\u0648.",
-    difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: "s2",
-    index: 2,
-    title_fa: "\u0631\u062F \u0628\u0644\u0646\u062F\u062A\u0631",
-    goal_fa: "\u06CC\u06A9 \u0642\u062F\u0645 \u0628\u06CC\u0634\u062A\u0631\u061B \u0631\u062F \u0631\u0627 \u06A9\u0627\u0645\u0644 \u06A9\u0646.",
-    difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: "s3",
-    index: 3,
-    title_fa: "\u0631\u062F \u0628\u0644\u0646\u062F",
-    goal_fa: "\u0631\u062F\u067E\u0627\u0647\u0627 \u0628\u06CC\u0634\u062A\u0631 \u0634\u062F\u0647\u200C\u0627\u0646\u062F\u061B \u0631\u062F \u06AF\u0645 \u0646\u0634\u0648\u062F.",
-    difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: "s4",
-    index: 4,
-    title_fa: "\u0631\u062F \u06AF\u0645\u200C\u0634\u062F\u0647",
-    goal_fa: "\u0639\u062F\u062F \u0648 \u062D\u0631\u0641 \u06CC\u06A9\u200C\u062F\u0631\u0645\u06CC\u0627\u0646 \u0634\u062F\u0647\u061B \u0628\u0627 \u062F\u0642\u062A \u0642\u062F\u0645 \u0628\u0632\u0646.",
-    difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: "s5",
-    index: 5,
-    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0631\u062F",
-    goal_fa: "\u0647\u0645\u0647\u0654 \u0631\u062F\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u062A\u0639\u0642\u06CC\u0628\u200C\u06A9\u0646\u0646\u062F\u0647\u200C\u0627\u06CC!",
-    difficulty: 5,
-    overrides: {}
-  }
-];
 var NUMLINE_STAGE_MAX = {
   s1: 10,
   s2: 20,
@@ -23774,20 +23753,6 @@ var FLANKER_STAGE_MAX_DECOYS = {
   s5: null
 };
 var FLANKER_STAGE_BANDS = {
-  s1: ["a", "p"],
-  s2: ["a", "b", "p"],
-  s3: ["a", "b", "c", "p"],
-  s4: ["a", "b", "c", "d", "p"],
-  s5: null
-};
-var TRAIL_STAGE_MAX_NODES = {
-  s1: 4,
-  s2: 5,
-  s3: 6,
-  s4: 7,
-  s5: null
-};
-var TRAIL_STAGE_BANDS = {
   s1: ["a", "p"],
   s2: ["a", "b", "p"],
   s3: ["a", "b", "c", "p"],
@@ -23892,6 +23857,55 @@ var SPAN_STAGE_MAX_DIGITS = {
   s4: 6,
   s5: null
 };
+var SIMON_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u062F\u0648 \u0647\u0645\u200C\u0635\u062F\u0627",
+    goal_fa: "\u062F\u0648 \u062F\u0648\u0633\u062A \u0646\u0648\u0631 \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0646\u062F\u061B \u0628\u0647 \u0647\u0645\u0627\u0646 \u062A\u0631\u062A\u06CC\u0628 \u0644\u0645\u0633 \u06A9\u0646.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u0633\u0647 \u0647\u0645\u200C\u0635\u062F\u0627",
+    goal_fa: "\u0633\u0647 \u062F\u0648\u0633\u062A \u067E\u0634\u062A \u0647\u0645\u061B \u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u0628\u0627 \u0647\u0645 \u0628\u06CC\u0627\u06CC\u0646\u062F.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0686\u0647\u0627\u0631 \u0647\u0645\u200C\u0635\u062F\u0627",
+    goal_fa: "\u0622\u0648\u0627\u0632 \u0628\u0644\u0646\u062F\u062A\u0631 \u0634\u062F\u061B \u0628\u0639\u0636\u06CC \u062F\u0648\u0633\u062A\u200C\u0647\u0627 \u062F\u0648 \u0628\u0627\u0631 \u0645\u06CC\u200C\u062E\u0648\u0627\u0646\u0646\u062F \u2014 \u062D\u0648\u0627\u0633\u062A \u0628\u0627\u0634\u062F.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u0633\u0627\u062D\u0644 \u062A\u0646\u062F",
+    goal_fa: "\u067E\u0646\u062C \u062F\u0648\u0633\u062A \u0628\u0627 \u0631\u06CC\u062A\u0645 \u062A\u0646\u062F\u062A\u0631\u061B \u062A\u0648 \u0633\u0631\u06CC\u0639\u200C\u062A\u0631\u06CC\u0646 \u06AF\u0648\u0634\u0650 \u0633\u0627\u062D\u0644 \u0647\u0633\u062A\u06CC.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0647\u0645\u200C\u0646\u0648\u0627",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u0622\u0648\u0627\u0632\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0647\u0645\u200C\u0635\u062F\u0627\u06CC \u0642\u0647\u0631\u0645\u0627\u0646!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
+var SIMON_STAGE_MAX_SPAN = {
+  s1: 2,
+  s2: 3,
+  s3: 4,
+  s4: 5,
+  s5: null
+};
 function flankerIncongruentCountOf(item) {
   const s = item.stim ?? {};
   const arrows = Array.isArray(s.arrows) ? s.arrows.filter((v) => v === "L" || v === "R") : [];
@@ -23911,7 +23925,6 @@ var ENGINE_ONLY_FORMULAS = [
   "congruent_acc",
   "incongruent_acc",
   "interference_ms",
-  "trail_prefix",
   "nback_match",
   "nback_nonmatch",
   "nback_fa",
@@ -24021,28 +24034,6 @@ var GAME_KINDS = {
       { id: "flanker_interference_ms", title_fa: "\u0647\u0632\u06CC\u0646\u0647\u0654 \u062A\u062F\u0627\u062E\u0644 \u0641\u0644\u0627\u0646\u06A9\u0631 (\u0645\u06CC\u0627\u0646\u0647\u0654 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u2212 \u0645\u06CC\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u062E\u0648\u0627\u0646)", unit: "ms", higher_is_better: false, source: "auto", formula: "interference_ms" }
     ]
   },
-  trail: {
-    // رد پای دزد — کف ۱۵۰ms روی نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
-    rt_floor_ms: 150,
-    timed_choice: false,
-    stage_rule: ACCURACY_STAGE_RULE,
-    stageList: /* @__PURE__ */ __name(() => TRAIL_STAGES, "stageList"),
-    levers: { bank_caps: TRAIL_STAGE_MAX_NODES, bank_bands: TRAIL_STAGE_BANDS },
-    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
-      const allowed = typeof stageId === "string" && stageId in TRAIL_STAGE_BANDS ? TRAIL_STAGE_BANDS[stageId] : null;
-      if (allowed === null) return true;
-      const s = item.stim ?? {};
-      const band = typeof s.band === "string" ? s.band : "";
-      if (band !== "") return allowed.includes(band);
-      const max = typeof stageId === "string" && stageId in TRAIL_STAGE_MAX_NODES ? TRAIL_STAGE_MAX_NODES[stageId] : null;
-      if (max === null) return true;
-      const nodes = Array.isArray(s.nodes) ? s.nodes.length : 0;
-      return nodes > 0 && nodes <= max;
-    }, "itemInStage"),
-    engine_metrics: [
-      { id: "trail_prefix_pct", title_fa: "\u062F\u0631\u0635\u062F \u067E\u06CC\u0634\u200C\u0645\u0627\u0646\u062F \u0635\u062D\u06CC\u062D \u0631\u062F \u0631\u062F\u067E\u0627\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "trail_prefix" }
-    ]
-  },
   nback: {
     // ن‌پشت (آلبوم خرچنگ) — کف ۲۰۰ms: لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
     rt_floor_ms: 200,
@@ -24099,6 +24090,27 @@ var GAME_KINDS = {
     }, "itemInStage"),
     engine_metrics: [
       { id: "digitspan_span_max", title_fa: "\u0628\u0644\u0646\u062F\u062A\u0631\u06CC\u0646 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u0639\u062F\u062F \u06A9\u0627\u0645\u0644 \u062F\u0631\u0633\u062A (\u0628\u0627\u0632\u0647\u0654 \u0639\u062F\u062F\u06CC)", unit: "score", higher_is_better: true, source: "auto", formula: "span_max" }
+    ]
+  },
+  simon: {
+    // هم‌صداها (تقلید متوالی) — کف ۱۵۰ms روی نخستین لمس یادآوری؛ زیر آن حدس است (مثل کرسی)
+    rt_floor_ms: 150,
+    timed_choice: false,
+    // دنباله‌ای چندلمسی — پایان با دنبالهٔ کامل یا پنجره
+    stage_rule: SEQ_MEMORY_THRESHOLDS,
+    stageList: /* @__PURE__ */ __name(() => SIMON_STAGES, "stageList"),
+    levers: { bank_caps: SIMON_STAGE_MAX_SPAN },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      if (item.phase === "probe") return true;
+      const max = typeof stageId === "string" && stageId in SIMON_STAGE_MAX_SPAN ? SIMON_STAGE_MAX_SPAN[stageId] : null;
+      if (max === null) return true;
+      const s = item.stim ?? {};
+      const len = Array.isArray(s.seq) ? s.seq.length : 0;
+      return len > 0 && len <= max;
+    }, "itemInStage"),
+    // دقت دنباله از فرمول 'accuracy' در DB می‌آید؛ بازه (بلندترین آواز کامل درست) موتور-فقط است
+    engine_metrics: [
+      { id: "simon_span_max", title_fa: "\u0628\u0644\u0646\u062F\u062A\u0631\u06CC\u0646 \u0622\u0648\u0627\u0632 \u06A9\u0627\u0645\u0644 \u062F\u0631\u0633\u062A (\u0628\u0627\u0632\u0647\u0654 \u062A\u0642\u0644\u06CC\u062F \u0645\u062A\u0648\u0627\u0644\u06CC)", unit: "score", higher_is_better: true, source: "auto", formula: "span_max" }
     ]
   }
 };
@@ -24263,14 +24275,14 @@ var DEFAULT_RT_FLOOR_MS = {
   // حقه‌باز رنگ‌ها — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
   flanker: GAME_KINDS.flanker.rt_floor_ms,
   // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-  trail: GAME_KINDS.trail.rt_floor_ms,
-  // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
   nback: GAME_KINDS.nback.rt_floor_ms,
   // ن‌پشت/آلبوم خرچنگ — لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
   corsi: GAME_KINDS.corsi.rt_floor_ms,
   // صدف‌های جادویی — کف نخستین لمس یادآوری؛ زیر آن حدس است (G8)
-  span: GAME_KINDS.span.rt_floor_ms
+  span: GAME_KINDS.span.rt_floor_ms,
   // حباب‌های عدد — ورود صفحه‌کلیدی، زمان واکنش نیست (G8)
+  simon: GAME_KINDS.simon.rt_floor_ms
+  // هم‌صداها — کف نخستین لمس یادآوری؛ زیر آن حدس است (۱.۲۵.۵۲)
 };
 var IDLE_PARTIAL_MS = 5 * 60 * 1e3;
 var MIN_COMPLETION_RATIO = 0.6;
@@ -24332,8 +24344,6 @@ function scoreAttempt(item, mission, response, rtMs) {
   let nbackMatch;
   let nbackFa;
   let nbackMissed;
-  let trailNodes;
-  let trailNodesTotal;
   let spanLenValue;
   if (item.type === "choice") {
     correct = typeof res.option === "number" && res.option === item.correct;
@@ -24357,23 +24367,12 @@ function scoreAttempt(item, mission, response, rtMs) {
     } else {
       congruent = item.stim?.congruent === true || item.stim?.cond === "congruent";
     }
-  } else if (item.type === "trail") {
+  } else if (item.type === "simon") {
     const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0) : [];
-    const rawOrder = Array.isArray(res.order) ? res.order : [];
-    const seen = /* @__PURE__ */ new Set();
-    const orderSeq = [];
-    for (const v of rawOrder.filter((n) => Number.isInteger(n) && n >= 0)) {
-      const k = String(v);
-      if (!seen.has(k)) {
-        seen.add(k);
-        orderSeq.push(v);
-      }
-    }
-    let prefix = 0;
-    while (prefix < orderSeq.length && prefix < key.length && orderSeq[prefix] === key[prefix]) prefix++;
-    correct = key.length === orderSeq.length && orderSeq.every((v, i) => v === key[i]);
-    trailNodes = prefix;
-    trailNodesTotal = key.length;
+    const rawSeq = Array.isArray(res.order) ? res.order.filter((n) => Number.isInteger(n) && n >= 0) : [];
+    correct = key.length > 0 && key.length === rawSeq.length && rawSeq.every((v, i) => v === key[i]);
+    omission = rawSeq.length === 0;
+    if (correct) spanLenValue = key.length;
   } else if (item.type === "corsi" || item.type === "span") {
     const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n)) : [];
     const rawSeq = item.type === "corsi" ? Array.isArray(res.order) ? res.order : [] : Array.isArray(res.digits) ? res.digits : [];
@@ -24425,7 +24424,6 @@ function scoreAttempt(item, mission, response, rtMs) {
     ...timedOut !== void 0 ? { timedOut } : {},
     ...congruent !== void 0 ? { congruent } : {},
     ...nbackMatch !== void 0 ? { match: nbackMatch, nbackFa: nbackFa === true, nbackMissed: nbackMissed === true } : {},
-    ...trailNodes !== void 0 ? { trailNodes, trailNodesTotal: trailNodesTotal ?? 0 } : {},
     ...spanLenValue !== void 0 ? { spanLen: spanLenValue } : {}
   };
 }
@@ -24480,9 +24478,9 @@ function faKeyOf(map, raw2) {
 __name(faKeyOf, "faKeyOf");
 function stimLabelOf(stim) {
   if (!stim) return "\u0647\u062F\u0641";
-  const shape = faKeyOf(FA_SHAPE_KEYS, stim.shape);
+  const shape2 = faKeyOf(FA_SHAPE_KEYS, stim.shape);
   const color = faKeyOf(FA_COLOR_KEYS, stim.color);
-  const label = [shape, color].filter(Boolean).join(" ").trim();
+  const label = [shape2, color].filter(Boolean).join(" ").trim();
   return label || "\u0647\u062F\u0641";
 }
 __name(stimLabelOf, "stimLabelOf");
@@ -24502,10 +24500,7 @@ function answerDisplayOf(item) {
   if (item.type === "nback") {
     return item.correct === 0 ? "\u0647\u0645\u0627\u0646 \u0627\u0633\u062A" : item.correct === 1 ? "\u0641\u0631\u0642 \u062F\u0627\u0631\u062F" : null;
   }
-  if (item.type === "trail") {
-    return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(",") : null;
-  }
-  if (item.type === "corsi" || item.type === "span") {
+  if (item.type === "corsi" || item.type === "span" || item.type === "simon") {
     return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(",") : null;
   }
   return null;
@@ -24593,15 +24588,6 @@ function interferenceMsOf(scored) {
   return round2(incMed - congMed);
 }
 __name(interferenceMsOf, "interferenceMsOf");
-function trailPrefixPctOf(scored) {
-  const rows = scored.filter((s) => typeof s.trailNodes === "number" && typeof s.trailNodesTotal === "number" && s.trailNodesTotal > 0);
-  if (rows.length === 0) return null;
-  const nodes = rows.reduce((a, s) => a + s.trailNodes, 0);
-  const total = rows.reduce((a, s) => a + s.trailNodesTotal, 0);
-  if (total <= 0) return null;
-  return round2(nodes / total * 100);
-}
-__name(trailPrefixPctOf, "trailPrefixPctOf");
 function nbackMatchSubset(scored, match2) {
   return scored.filter((s) => s.match === match2);
 }
@@ -24721,8 +24707,6 @@ function computeMetricValue(formula, scored) {
       return incongruentAccPctOf(scored);
     case "interference_ms":
       return interferenceMsOf(scored);
-    case "trail_prefix":
-      return trailPrefixPctOf(scored);
     case "nback_match":
       return nbackMatchPctOf(scored);
     case "nback_nonmatch":
@@ -25011,7 +24995,7 @@ function applyAdaptiveLevel(current, decision) {
 __name(applyAdaptiveLevel, "applyAdaptiveLevel");
 
 // src/domain/games/stages.ts
-var STAGE_RULES_VERSION = "1.5.0";
+var STAGE_RULES_VERSION = "1.7.0";
 var STAGE_TOTAL = 5;
 var STAGE_OVERRIDE_KEYS = [
   "response_window_go_ms",
@@ -25088,8 +25072,6 @@ var ACCURACY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.stroop.stage_rul
 var STROOP_STAGE_BANDS2 = GAME_KINDS.stroop.levers.bank_bands;
 var FLANKER_STAGE_MAX_DECOYS2 = GAME_KINDS.flanker.levers.bank_caps;
 var FLANKER_STAGE_BANDS2 = GAME_KINDS.flanker.levers.bank_bands;
-var TRAIL_STAGE_MAX_NODES2 = GAME_KINDS.trail.levers.bank_caps;
-var TRAIL_STAGE_BANDS2 = GAME_KINDS.trail.levers.bank_bands;
 function itemInStageFor(kind, item, stageId) {
   return GAME_KINDS[kind].itemInStage(item, stageId);
 }
@@ -25163,6 +25145,7 @@ __name(stageStimViewOf, "stageStimViewOf");
 var SEQ_MEMORY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.corsi.stage_rule);
 var CORSI_STAGE_MAX_SPAN2 = GAME_KINDS.corsi.levers.bank_caps;
 var SPAN_STAGE_MAX_DIGITS2 = GAME_KINDS.span.levers.bank_caps;
+var SIMON_STAGE_MAX_SPAN2 = GAME_KINDS.simon.levers.bank_caps;
 
 // src/domain/games/evidence.ts
 var EVIDENCE_RULES_VERSION = "1.0.0";
@@ -26456,7 +26439,7 @@ function createGamesService(deps) {
         scan: { label, stim: stripAnswerKeys({ signature: sig }) }
       };
     }
-    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "trail" || it.type === "nback" || it.type === "corsi" || it.type === "span"));
+    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "nback" || it.type === "corsi" || it.type === "span" || it.type === "simon"));
     if (newTrain && !go && !nogo) {
       const kindKey = newTrain.type;
       const stim = stripAnswerKeys(newTrain.stim ?? {});
@@ -27269,8 +27252,10 @@ var KIND_FIGS = {
   scan: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#5E8FB8" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0 M72 46 Q66 58 72 70" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z" fill="#E4AA46" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/>',
   stroop: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#9B7EDE" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M74 50 Q80 44 86 50 M20 60 Q28 72 40 66" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><circle cx="30" cy="18" r="8" fill="#D96C6C" stroke="#153E50" stroke-width="3"/><circle cx="92" cy="14" r="8" fill="#63B37F" stroke="#153E50" stroke-width="3"/>',
   flanker: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#8FA6B8" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0" fill="none" stroke="#153E50" stroke-width="3"/><path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" transform="translate(-6 -38) scale(.62)" fill="#B9C6D2" stroke="#153E50" stroke-width="4" stroke-linejoin="round"/>',
-  trail: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0 M22 42 a9 9 0 1 0 0.01 0 M102 42 a9 9 0 1 0 0.01 0" fill="#C4635F" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M52 48 a3.5 3.5 0 1 0 0.01 0 M72 48 a3.5 3.5 0 1 0 0.01 0 M52 40 L50 32 M72 40 L74 32 M58 58 Q62 62 66 58" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><path d="M22 84 q4 -10 10 -2 q-2 -10 8 -8" fill="none" stroke="#153E50" stroke-width="2.5" stroke-linecap="round"/><path d="M96 86 q4 -10 10 -2 q-2 -10 8 -8" fill="none" stroke="#153E50" stroke-width="2.5" stroke-linecap="round"/>',
-  nback: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0" fill="#438C89" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M50 46 Q54 42 58 46 M66 46 Q70 42 74 46 M52 40 L50 32 M72 40 L74 32 M56 56 Q62 64 68 56" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><rect x="12" y="12" width="38" height="26" rx="4" fill="#E4AA46" stroke="#153E50" stroke-width="3"/><circle cx="31" cy="25" r="7" fill="#F5F0E5" stroke="#153E50" stroke-width="2.5"/>'
+  nback: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0" fill="#438C89" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M50 46 Q54 42 58 46 M66 46 Q70 42 74 46 M52 40 L50 32 M72 40 L74 32 M56 56 Q62 64 68 56" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><rect x="12" y="12" width="38" height="26" rx="4" fill="#E4AA46" stroke="#153E50" stroke-width="3"/><circle cx="31" cy="25" r="7" fill="#F5F0E5" stroke="#153E50" stroke-width="2.5"/>',
+  corsi: '<path d="M50 88 C28 88 12 72 12 52 C12 34 24 20 42 14 L46 12 C48 11 52 11 54 12 L58 14 C76 20 88 34 88 52 C88 72 72 88 50 88 Z" fill="#2F9E6E" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><g fill="none" stroke="#153E50" stroke-width="2.6" stroke-linecap="round"><path d="M50 84 L50 18"/><path d="M38 82 C34 62 32 42 38 20"/><path d="M62 82 C66 62 68 42 62 20"/></g><circle cx="50" cy="66" r="7" fill="#FFFFFF" stroke="#153E50" stroke-width="2.5"/>',
+  span: '<circle cx="60" cy="56" r="34" fill="#F9B8CE" stroke="#153E50" stroke-width="3"/><circle cx="60" cy="56" r="34" fill="none" stroke="#E86F9E" stroke-width="2" stroke-dasharray="4 6"/><text x="60" y="68" text-anchor="middle" font-size="30" font-weight="bold" fill="#153E50">\u06F7</text><path d="M22 30 Q30 20 40 26" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/>',
+  simon: '<rect x="14" y="18" width="42" height="42" rx="10" fill="#E0605E" stroke="#153E50" stroke-width="3"/><rect x="64" y="18" width="42" height="42" rx="10" fill="#3E9C93" stroke="#153E50" stroke-width="3"/><rect x="14" y="66" width="42" height="42" rx="10" fill="#8A6FD1" stroke="#153E50" stroke-width="3"/><rect x="64" y="66" width="42" height="42" rx="10" fill="#E9A13B" stroke="#153E50" stroke-width="3"/><path d="M35 39 C40 32 52 30 58 36 L64 33 L62 40 L64 47 L58 44 C52 50 40 48 35 39 Z" fill="#F5F0E5" stroke="#153E50" stroke-width="2.4" stroke-linejoin="round"/><circle cx="85" cy="39" r="4" fill="#F5F0E5" stroke="#153E50" stroke-width="2.4"/><path d="M30 92 L35 80 L40 92 L52 92 L42 100 L46 112 L35 105 L24 112 L28 100 L18 92 Z" fill="#F5F0E5" stroke="#153E50" stroke-width="2.4" stroke-linejoin="round" transform="scale(.52) translate(30 80)"/>'
 };
 function kindFig(kind) {
   const body = KIND_FIGS[String(kind ?? "")] ?? KIND_FIGS.gonogo;
@@ -34526,8 +34511,8 @@ function assertPlainTone(text) {
 }
 __name(assertPlainTone, "assertPlainTone");
 function shortLine(text, max = 120) {
-  const clean4 = text.replace(/\s+/g, " ").trim();
-  return Array.from(clean4).length <= max ? clean4 : `${Array.from(clean4).slice(0, max - 1).join("").trim()}\u2026`;
+  const clean5 = text.replace(/\s+/g, " ").trim();
+  return Array.from(clean5).length <= max ? clean5 : `${Array.from(clean5).slice(0, max - 1).join("").trim()}\u2026`;
 }
 __name(shortLine, "shortLine");
 function sawOf(h) {
@@ -44121,6 +44106,152 @@ function registerNetworkContentRoutes(app, service) {
 }
 __name(registerNetworkContentRoutes, "registerNetworkContentRoutes");
 
+// src/domain/bug-reports/service.ts
+function recordOf(row) {
+  let areas = [];
+  try {
+    const parsed = JSON.parse(row.areas);
+    if (Array.isArray(parsed)) areas = parsed.filter((a) => typeof a === "string");
+  } catch {
+    areas = [];
+  }
+  return {
+    id: row.id,
+    staffId: row.staff_id,
+    staffName: row.staff_name,
+    areas,
+    severity: row.severity,
+    description: row.description,
+    page: row.page,
+    appVersion: row.app_version,
+    status: row.status === "sent" ? "sent" : "open",
+    forwardError: row.forward_error,
+    createdAt: row.created_at,
+    forwardedAt: row.forwarded_at
+  };
+}
+__name(recordOf, "recordOf");
+function sanitizeAreas(areas) {
+  const seen = /* @__PURE__ */ new Set();
+  for (const a of areas) {
+    if (BUG_REPORT_AREA_IDS.includes(a)) seen.add(a);
+  }
+  return [...seen];
+}
+__name(sanitizeAreas, "sanitizeAreas");
+function createBugReportService(db, audit) {
+  return {
+    async create(actor, input, opts) {
+      const id = crypto.randomUUID();
+      const now = opts?.now ?? (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").slice(0, 19);
+      const areas = sanitizeAreas(input.areas);
+      await db.execute(
+        `INSERT INTO bug_reports
+           (id, staff_id, staff_name, areas, severity, description, page, app_version, status, forward_error, created_at, forwarded_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, ?, NULL)`,
+        [
+          id,
+          actor.id,
+          actor.name ?? null,
+          JSON.stringify(areas),
+          input.severity,
+          input.description ?? null,
+          input.page ?? null,
+          input.appVersion ?? null,
+          now
+        ]
+      );
+      await audit.log({
+        actorId: actor.id,
+        action: "bug_report.create",
+        resourceType: "bug_report",
+        resourceId: id,
+        changes: {
+          severity: { from: null, to: input.severity },
+          areas: { from: null, to: areas.join(",") },
+          status: { from: null, to: "open" }
+        }
+      });
+      const row = await db.queryOne("SELECT * FROM bug_reports WHERE id = ? LIMIT 1", [id]);
+      return recordOf(row);
+    },
+    async list(opts) {
+      const limit = Math.min(Math.max(opts?.limit ?? 100, 1), 200);
+      const rows = await db.query(
+        `SELECT * FROM bug_reports ORDER BY created_at DESC, id DESC LIMIT ${limit}`
+      );
+      return rows.map(recordOf);
+    },
+    async listOpen(limit) {
+      const rows = await db.query(
+        `SELECT * FROM bug_reports WHERE status = 'open' ORDER BY created_at ASC, id ASC LIMIT ${Math.min(Math.max(limit, 1), 50)}`
+      );
+      return rows.map(recordOf);
+    },
+    async markSent(id, forwardedAt) {
+      await db.execute(
+        "UPDATE bug_reports SET status = 'sent', forwarded_at = ?, forward_error = NULL WHERE id = ?",
+        [forwardedAt, id]
+      );
+    },
+    async markForwardError(id, error) {
+      await db.execute("UPDATE bug_reports SET forward_error = ? WHERE id = ?", [error.slice(0, 300), id]);
+    }
+  };
+}
+__name(createBugReportService, "createBugReportService");
+
+// src/domain/bug-reports/routes.ts
+var BugReportCreateSchema = external_exports.object({
+  /* بخش‌های ناشناخته رد نمی‌شوند — پاک‌سازی می‌شوند (CP هر رشته‌ای را با برچسب خام می‌پذیرد) */
+  areas: external_exports.array(external_exports.string().trim().min(1).max(BUG_REPORT_AREA_ID_MAX)).max(BUG_REPORT_AREAS_MAX).default([]).transform((list) => list.filter((a) => BUG_REPORT_AREA_IDS.includes(a))),
+  severity: external_exports.enum(BUG_REPORT_SEVERITIES).default("major"),
+  description: external_exports.string().trim().max(BUG_REPORT_DESCRIPTION_MAX).optional().nullable(),
+  page: external_exports.string().trim().max(BUG_REPORT_PAGE_MAX).optional().nullable(),
+  app_version: external_exports.string().trim().max(BUG_REPORT_VERSION_MAX).optional().nullable()
+}).superRefine((v, ctx) => {
+  if (v.areas.length === 0 && !(v.description != null && v.description.length > 0)) {
+    ctx.addIssue({ code: external_exports.ZodIssueCode.custom, path: ["areas"], message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0628\u062E\u0634 \u06CC\u0627 \u062A\u0648\u0636\u06CC\u062D \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" });
+  }
+});
+function registerBugReportRoutes(app, service) {
+  const colleague = requireRole("manager", "secretary", "therapist");
+  app.post("/api/bug-reports", colleague, async (c) => {
+    const ctx = getAuthContext(c);
+    const actor = { id: ctx.staffId, name: ctx.displayName };
+    const input = BugReportCreateSchema.parse(await c.req.json());
+    const rec = await service.create(actor, {
+      areas: input.areas,
+      severity: input.severity,
+      description: input.description ?? null,
+      page: input.page ?? null,
+      appVersion: input.app_version ?? null
+    });
+    return c.json({ data: shape(rec) }, 201);
+  });
+  app.get("/api/bug-reports", colleague, async (c) => {
+    const items = await service.list({ limit: 100 });
+    return c.json({ data: items.map(shape) }, 200);
+  });
+}
+__name(registerBugReportRoutes, "registerBugReportRoutes");
+function shape(rec) {
+  return {
+    id: rec.id,
+    staff_name: rec.staffName,
+    areas: rec.areas,
+    severity: rec.severity,
+    description: rec.description,
+    page: rec.page,
+    app_version: rec.appVersion,
+    status: rec.status,
+    forward_error: rec.forwardError,
+    created_at: rec.createdAt,
+    forwarded_at: rec.forwardedAt
+  };
+}
+__name(shape, "shape");
+
 // src/domain/content-score/pure.ts
 var SCORE_FORMULA_VERSION = 1;
 var SCORE_SOURCES = ["exercises", "pathway_templates"];
@@ -51099,8 +51230,8 @@ async function fetchBaleBotUsername(token, fetchImpl) {
     const body = await res.json().catch(() => ({}));
     const username = body?.result?.username;
     if (typeof username !== "string") return null;
-    const clean4 = username.trim().replace(/^@/, "");
-    return /^[A-Za-z0-9_]{2,64}$/.test(clean4) ? clean4 : null;
+    const clean5 = username.trim().replace(/^@/, "");
+    return /^[A-Za-z0-9_]{2,64}$/.test(clean5) ? clean5 : null;
   } catch {
     return null;
   }
@@ -51760,20 +51891,20 @@ function createSettingsService(deps) {
       return typeof v === "string" ? v.trim().replace(/^@/, "") : "";
     },
     async setBotUsername(username, actor) {
-      const clean4 = username.trim().replace(/^@/, "");
-      if (clean4.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean4)) {
+      const clean5 = username.trim().replace(/^@/, "");
+      if (clean5.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean5)) {
         throw new ConflictError("\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u0628\u0627\u062A \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0644\u0627\u062A\u06CC\u0646\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637 \u0632\u06CC\u0631 \u0627\u0633\u062A (\u06F2 \u062A\u0627 \u06F6\u06F4 \u0646\u0648\u06CC\u0633\u0647)");
       }
       const before = await this.getBotUsername();
-      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean4, actor);
+      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean5, actor);
       await audit.log({
         actorId: actor.staffId,
         action: "settings.bot_username.update",
         resourceType: "settings",
         resourceId: "bot_username",
-        changes: { bot_username: { from: before || null, to: clean4 || null } }
+        changes: { bot_username: { from: before || null, to: clean5 || null } }
       });
-      return clean4;
+      return clean5;
     },
     async getNotifyFlags() {
       const stored = await readAll();
@@ -51828,10 +51959,10 @@ function createSettingsService(deps) {
     async updateScoringConfig(input, actor) {
       const before = await this.getScoringConfig();
       const epoch = epochUtcOfTehranYmd(input.epochYmd);
-      const clean4 = mergeScoringWeights(input.weights);
-      await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean4 }, actor);
-      const changed = Object.keys(clean4).filter(
-        (k) => clean4[k] !== before.weights[k]
+      const clean5 = mergeScoringWeights(input.weights);
+      await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean5 }, actor);
+      const changed = Object.keys(clean5).filter(
+        (k) => clean5[k] !== before.weights[k]
       ).length;
       await audit.log({
         actorId: actor.staffId,
@@ -52339,9 +52470,9 @@ function createBackupService(deps) {
             );
             if (rows.length === 0) break;
             for (const r of rows) {
-              const clean4 = {};
-              for (const [k, v] of Object.entries(r)) clean4[k] = encodeValue(v);
-              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean4)}`;
+              const clean5 = {};
+              for (const [k, v] of Object.entries(r)) clean5[k] = encodeValue(v);
+              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean5)}`;
               emitted += 1;
             }
             if (rows.length < page2) break;
@@ -54095,7 +54226,8 @@ function createServices(deps) {
     } : void 0
   });
   const contentScore = createContentScoreService(db, audit);
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, contentScore };
+  const bugReports = createBugReportService(db, audit);
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, contentScore };
 }
 __name(createServices, "createServices");
 function createApp(deps) {
@@ -54221,6 +54353,7 @@ function createApp(deps) {
   registerRumRoutes(app, services.rum);
   registerCenterKpiRoutes(app, services.centerKpi);
   registerNetworkContentRoutes(app, services.networkContent);
+  registerBugReportRoutes(app, services.bugReports);
   registerContentScoreRoutes(app, { contentScore: services.contentScore });
   if (FEATURES.apiKeys) registerKeysRoutes(app, services.keys);
   app.get("/api/conflicts", async (c) => {
@@ -54834,6 +54967,123 @@ async function pushCpReport(deps) {
 }
 __name(pushCpReport, "pushCpReport");
 
+// src/application/bug-report-forward/index.ts
+var BUG_REPORT_ATTEMPT_KEY = "bug_report.forward_attempt_at";
+var BUG_REPORT_MIN_INTERVAL_MS = 5 * 6e4;
+var BUG_REPORT_TIMEOUT_MS = 15e3;
+var BUG_REPORT_BATCH_MAX = 20;
+function clean4(v) {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s ? s : null;
+}
+__name(clean4, "clean");
+function cpOriginFrom2(v) {
+  const raw2 = clean4(v);
+  if (!raw2) return null;
+  try {
+    return new URL(raw2).origin;
+  } catch {
+    return null;
+  }
+}
+__name(cpOriginFrom2, "cpOriginFrom");
+function buildBugReportConfig(env) {
+  return {
+    cpOrigin: cpOriginFrom2(env.CP_SYNC_URL),
+    cpNodeCode: clean4(env.CP_NODE_CODE),
+    cpNodeKey: clean4(env.CP_NODE_KEY)
+  };
+}
+__name(buildBugReportConfig, "buildBugReportConfig");
+function feedbackBodyOf(rec) {
+  return {
+    id: rec.id,
+    areas: rec.areas,
+    severity: rec.severity,
+    description: rec.description,
+    page: rec.page,
+    app_version: rec.appVersion,
+    reporter_name: rec.staffName,
+    created_at: rec.createdAt
+  };
+}
+__name(feedbackBodyOf, "feedbackBodyOf");
+async function readSettingsIso4(db, key) {
+  const row = await db.queryOne("SELECT value FROM settings WHERE key = ? LIMIT 1", [key]);
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.value);
+    if (typeof parsed === "string" && parsed.length > 0) return parsed;
+  } catch {
+  }
+  return null;
+}
+__name(readSettingsIso4, "readSettingsIso");
+async function writeSettingsIso(db, key, iso) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+    [key, JSON.stringify(iso), "bug-report-forward", (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").slice(0, 19)]
+  );
+}
+__name(writeSettingsIso, "writeSettingsIso");
+async function runBugReportForward(deps) {
+  const { db, logger, config } = deps;
+  if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) return { status: "skipped" };
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const doFetch = deps.fetchFn ?? fetch;
+  const service = createBugReportService(db, silentAudit());
+  const open = await service.listOpen(BUG_REPORT_BATCH_MAX);
+  if (open.length === 0) return { status: "done", sent: 0, failed: 0, remaining: 0 };
+  const lastIso = await readSettingsIso4(db, BUG_REPORT_ATTEMPT_KEY);
+  const last = lastIso ? Date.parse(lastIso) : 0;
+  if (!deps.force && Number.isFinite(last) && now().getTime() - last < BUG_REPORT_MIN_INTERVAL_MS) {
+    return { status: "skipped" };
+  }
+  await writeSettingsIso(db, BUG_REPORT_ATTEMPT_KEY, now().toISOString());
+  const url = `${config.cpOrigin}/api/node/feedback`;
+  let sent = 0;
+  let failed = 0;
+  for (const rec of open) {
+    try {
+      const res = await doFetch(url, {
+        method: "POST",
+        headers: {
+          "X-CP-Node-Code": config.cpNodeCode,
+          Authorization: `Bearer ${config.cpNodeKey}`,
+          "X-CP-Node-Version": APP_VERSION,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(feedbackBodyOf(rec)),
+        signal: AbortSignal.timeout(BUG_REPORT_TIMEOUT_MS)
+      });
+      if (res.ok) {
+        await service.markSent(rec.id, now().toISOString().replace("T", " ").slice(0, 19));
+        sent += 1;
+      } else {
+        const text = (await res.text().catch(() => "")).slice(0, 200);
+        await service.markForwardError(rec.id, `HTTP ${res.status} ${text}`);
+        failed += 1;
+      }
+    } catch (err) {
+      await service.markForwardError(rec.id, err instanceof Error ? err.message : String(err));
+      failed += 1;
+    }
+  }
+  const remaining = (await service.listOpen(1)).length;
+  logger.info("bug_report.forward.done", { sent, failed, remaining });
+  return { status: "done", sent, failed, remaining };
+}
+__name(runBugReportForward, "runBugReportForward");
+function silentAudit() {
+  return {
+    log: /* @__PURE__ */ __name(async () => void 0, "log"),
+    logInTransaction: /* @__PURE__ */ __name(async () => void 0, "logInTransaction")
+  };
+}
+__name(silentAudit, "silentAudit");
+
 // src/index.ts
 function buildEnv(env) {
   return {
@@ -55009,11 +55259,44 @@ function probeCpContent(env, ctx) {
   );
 }
 __name(probeCpContent, "probeCpContent");
+async function runBugReportForwardWrap(env) {
+  const db = createDb(env.DB);
+  const logger = createLogger("sync");
+  const result = await runBugReportForward({
+    db,
+    logger,
+    config: buildBugReportConfig(env),
+    binding: env.CP ?? null,
+    force: true
+  });
+  logger.info("bug_report.cycle.done", {
+    status: result.status,
+    sent: result.status === "done" ? result.sent : 0,
+    failed: result.status === "done" ? result.failed : 0
+  });
+}
+__name(runBugReportForwardWrap, "runBugReportForwardWrap");
+var bugReportProbeAt = 0;
+function probeBugReportForward(env, ctx) {
+  const t = Date.now();
+  if (t - bugReportProbeAt < 6e4) return;
+  bugReportProbeAt = t;
+  ctx.waitUntil(
+    runBugReportForward({
+      db: createDb(env.DB),
+      logger: createLogger("sync"),
+      config: buildBugReportConfig(env),
+      binding: env.CP ?? null
+    }).catch(() => void 0)
+  );
+}
+__name(probeBugReportForward, "probeBugReportForward");
 var src_default = {
   async fetch(request, env, ctx) {
     probeCpSync(env, ctx);
     probeCpReport(env, ctx);
     probeCpContent(env, ctx);
+    probeBugReportForward(env, ctx);
     const db = createDb(env.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger("worker");
@@ -55035,6 +55318,7 @@ var src_default = {
       ctx.waitUntil(runCpSyncCycle(env));
       ctx.waitUntil(runCpReportCycle(env));
       ctx.waitUntil(runCpContentCycleWrap(env));
+      ctx.waitUntil(runBugReportForwardWrap(env));
       return;
     }
     if (event.cron === DIGEST_CRON) {

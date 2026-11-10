@@ -64,7 +64,7 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('نسخه: سو 1.19.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1.25.55'/);
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1.25.56'/);
   });
 
   test('۱.۱۹.۰ — روز کاری: جریان پیوسته (هیچ اکشنی کل نما را re-render نمی‌کند)', () => {
@@ -389,10 +389,10 @@ describe('گیت ۱.۲۵.۱۰ — گزارش‌ها / صندوق اعلان‌ه
 
   test('گزارش‌ها: برچسب از/تا در گروه چفت‌شده است — دیگر برچسبِ یتیم روی خط شکسته ساخته نمی‌شود', () => {
     const rp = js('views/reports.js');
-    // هر دو حالت (دوره/پیشرفته) ساختار گروهی rpt-field دارند و span برچسبِ درزکردنی قدیمی حذف شده
-    expect((rp.match(/class: 'rpt-field'/g) ?? []).length).toBe(4); // ۲ گروه × ۲ حالت
-    expect((rp.match(/class: 'rpt-presets'/g) ?? []).length).toBe(2);
-    expect((rp.match(/class: 'rpt-actions'/g) ?? []).length).toBe(2);
+    // هر سه حالت (دوره/پیشرفته/حضور-۱.۲۵.۵۶) ساختار گروهی rpt-field دارند و span برچسبِ درزکردنی قدیمی حذف شده
+    expect((rp.match(/class: 'rpt-field'/g) ?? []).length).toBe(6); // ۲ گروه × ۳ حالت (۱.۲۵.۵۶: +تب حضور و غیاب همکاران)
+    expect((rp.match(/class: 'rpt-presets'/g) ?? []).length).toBe(3);
+    expect((rp.match(/class: 'rpt-actions'/g) ?? []).length).toBe(3);
     expect(rp).not.toMatch(/marginInlineStart: 'var\(--sp-2\)'.*از/);
     expect(rp).not.toMatch(/fontSize: 'var\(--fs-sm\)' \} \}, 'تا'\)/);
     // CSS: شکستن فقط میان گروه‌ها؛ پیکر تاریخ هم‌عرض گروه می‌ماند

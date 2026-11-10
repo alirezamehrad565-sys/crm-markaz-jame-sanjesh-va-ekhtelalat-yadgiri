@@ -21,10 +21,10 @@ export const DEFAULT_RT_FLOOR_MS: Record<MissionItem['type'], number> = {
   scan: GAME_KINDS.scan.rt_floor_ms,         // حملهٔ جاسوس‌ها — کف نخستین لمس موج؛ زیر آن حدس است
   stroop: GAME_KINDS.stroop.rt_floor_ms,       // حقه‌باز رنگ‌ها — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
   flanker: GAME_KINDS.flanker.rt_floor_ms,      // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-  trail: GAME_KINDS.trail.rt_floor_ms,        // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
   nback: GAME_KINDS.nback.rt_floor_ms,        // ن‌پشت/آلبوم خرچنگ — لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
   corsi: GAME_KINDS.corsi.rt_floor_ms,        // صدف‌های جادویی — کف نخستین لمس یادآوری؛ زیر آن حدس است (G8)
-  span: GAME_KINDS.span.rt_floor_ms           // حباب‌های عدد — ورود صفحه‌کلیدی، زمان واکنش نیست (G8)
+  span: GAME_KINDS.span.rt_floor_ms,          // حباب‌های عدد — ورود صفحه‌کلیدی، زمان واکنش نیست (G8)
+  simon: GAME_KINDS.simon.rt_floor_ms         // هم‌صداها — کف نخستین لمس یادآوری؛ زیر آن حدس است (۱.۲۵.۵۲)
 };
 
 /** آستانهٔ بیکاری برای جلسهٔ ناقص (§۶) */
@@ -88,9 +88,6 @@ export interface ScoredAttempt {
   nbackFa?: boolean;
   /** جاانداختن همسان ن‌پشت — گفتن «فرق دارد» برای همسان */
   nbackMissed?: boolean;
-  /** رد پای دزد — طول پیش‌ماند صحیح و طول کل رد (۱.۲۵.۳۲) */
-  trailNodes?: number;
-  trailNodesTotal?: number;
   /** بازی‌های حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۹) — طول دنبالهٔ آیتم (برای فرمول span_max)؛
    *  فقط روی پاسخ کاملِ درست به فرمول می‌رسد؛ سرور از آیتم authored می‌خواند */
   spanLen?: number;
@@ -128,8 +125,6 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
   let nbackMatch: boolean | undefined;
   let nbackFa: boolean | undefined;
   let nbackMissed: boolean | undefined;
-  let trailNodes: number | undefined;
-  let trailNodesTotal: number | undefined;
   let spanLenValue: number | undefined;
 
   if (item.type === 'choice') {
@@ -162,22 +157,16 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
     } else {
       congruent = item.stim?.congruent === true || item.stim?.cond === 'congruent';
     }
-  } else if (item.type === 'trail') {
-    // رد پای دزد (۱.۲۵.۳۲) — ترتیب دقیق گره‌ها؛ طول پیش‌ماند صحیح برای سنجهٔ درصدی رد
+  } else if (item.type === 'simon') {
+    // هم‌صداها (۱.۲۵.۵۲) — تقلید متوالی با تکرارِ غیرمجاور مجاز: برخلاف کرسی، دنباله
+    // می‌تواند یک دوست را دو بار بخواند؛ پس پاسخ عیناً و بدون حذف تکرار با کلید
+    // مقایسه می‌شود (حذف تکرار این‌جا معنای بازی را می‌شکند). دنبالهٔ ناقص یا
+    // جابه‌جا = نادرست؛ طول فقط روی پاسخ کاملِ درست ثبت می‌شود (قاعدهٔ span_max).
     const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0) : [];
-    const rawOrder = Array.isArray(res.order) ? res.order : [];
-    // تکرار گره بی‌معناست؛ ترتیب حفظ می‌شود (نخستین ورود هر اندیس)
-    const seen = new Set<string>();
-    const orderSeq: number[] = [];
-    for (const v of rawOrder.filter((n) => Number.isInteger(n) && n >= 0)) {
-      const k = String(v);
-      if (!seen.has(k)) { seen.add(k); orderSeq.push(v); }
-    }
-    let prefix = 0;
-    while (prefix < orderSeq.length && prefix < key.length && orderSeq[prefix] === key[prefix]) prefix++;
-    correct = key.length === orderSeq.length && orderSeq.every((v, i) => v === key[i]);
-    trailNodes = prefix;
-    trailNodesTotal = key.length;
+    const rawSeq = Array.isArray(res.order) ? res.order.filter((n) => Number.isInteger(n) && n >= 0) : [];
+    correct = key.length > 0 && key.length === rawSeq.length && rawSeq.every((v, i) => v === key[i]);
+    omission = rawSeq.length === 0;
+    if (correct) spanLenValue = key.length;
   } else if (item.type === 'corsi' || item.type === 'span') {
     // دو بازی حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۹) — پاسخ باید عین دنبالهٔ authored باشد.
     //  · corsi: ترتیب لمس صدف‌ها (تکرار صدف بی‌معناست؛ نخستین ورود هر اندیس می‌ماند)
@@ -237,7 +226,6 @@ export function scoreAttempt(item: MissionItem, mission: MissionConfig, response
     ...(timedOut !== undefined ? { timedOut } : {}),
     ...(congruent !== undefined ? { congruent } : {}),
     ...(nbackMatch !== undefined ? { match: nbackMatch, nbackFa: nbackFa === true, nbackMissed: nbackMissed === true } : {}),
-    ...(trailNodes !== undefined ? { trailNodes, trailNodesTotal: trailNodesTotal ?? 0 } : {}),
     ...(spanLenValue !== undefined ? { spanLen: spanLenValue } : {})
   };
 }
@@ -300,12 +288,8 @@ export function answerDisplayOf(item: MissionItem): string | null {
     // دوگزینه‌ای ن‌پشت — گزینهٔ ۰ «همان است» و ۱ «فرق دارد»؛ فقط تمرین نمایش داده می‌شود
     return item.correct === 0 ? 'همان است' : item.correct === 1 ? 'فرق دارد' : null;
   }
-  if (item.type === 'trail') {
-    // CSV اندیس‌های ترتیب درست — مثل جاسوس‌های جاماندهٔ scan؛ فقط تمرین
-    return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(',') : null;
-  }
-  if (item.type === 'corsi' || item.type === 'span') {
-    // دنبالهٔ درست به شکل CSV — برای corsi اندیس صدف‌ها و برای span خود عددها؛ فقط تمرین
+  if (item.type === 'corsi' || item.type === 'span' || item.type === 'simon') {
+    // دنبالهٔ درست به شکل CSV — برای corsi اندیس صدف‌ها، برای simon اندیس دوستان و برای span خود عددها؛ فقط تمرین
     return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(',') : null;
   }
   return null; // touch_report: بازپخش محرک، نه نمایش پاسخ؛ scan: CSV جاسوس‌های جامانده در scanMissedCsv
@@ -420,15 +404,6 @@ export function interferenceMsOf(scored: ScoredAttempt[]): number | null {
   const incMed = medianRtOf(congruentSubset(scored, false));
   if (congMed === null || incMed === null) return null;
   return round2(incMed - congMed);
-}
-
-export function trailPrefixPctOf(scored: ScoredAttempt[]): number | null {
-  const rows = scored.filter((s) => typeof s.trailNodes === 'number' && typeof s.trailNodesTotal === 'number' && (s.trailNodesTotal as number) > 0);
-  if (rows.length === 0) return null;
-  const nodes = rows.reduce((a, s) => a + (s.trailNodes as number), 0);
-  const total = rows.reduce((a, s) => a + (s.trailNodesTotal as number), 0);
-  if (total <= 0) return null;
-  return round2((nodes / total) * 100);
 }
 
 // ─── فرمول‌های ن‌پشت (۱.۲۵.۴۰) — قاعدهٔ دامنهٔ صفر عیناً: بدون آیتم همسان/ناهمسان = null،
@@ -562,7 +537,6 @@ export function computeMetricValue(formula: string, scored: ScoredAttempt[]): nu
     case 'congruent_acc': return congruentAccPctOf(scored);
     case 'incongruent_acc': return incongruentAccPctOf(scored);
     case 'interference_ms': return interferenceMsOf(scored);
-    case 'trail_prefix': return trailPrefixPctOf(scored);
     case 'nback_match': return nbackMatchPctOf(scored);
     case 'nback_nonmatch': return nbackNonmatchPctOf(scored);
     case 'nback_fa': return nbackFaPctOf(scored);
