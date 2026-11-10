@@ -2,9 +2,6 @@
 // ادامهٔ دفترچهٔ وظیفه: «سازگاری» فاز ۶ پنجرهٔ پاسخ را می‌تنانید؛ این لایه
 // «مسیر پیشرفت» را می‌سازد — پنج مرحلهٔ تمرین با سختی پله‌ای، ستارهٔ ۱–۳
 // برای هر مرحله و گذار قفل‌گشایی‌شده بر پایهٔ جلسه‌های معتبر.
-// مقادیر per-kind (فهرست مرحله‌ها/آستانه‌ها/اهرم‌ها/ملاک گذار) تک‌منبعشان رجیستری
-// نوع-محور registry.ts است (G4الف — رفع P3-4)؛ این فایل ماشین عمومی مرحله‌هاست و
-// نمادهای نوع‌محور را برای سازگاری فراخوانی‌های موجود دوباره صادر می‌کند.
 //
 // قواعد ثابت (مثل فاز ۶ — هر تغییر عددی = بامپ STAGE_RULES_VERSION):
 //   · فقط حالت تمرین — ارزیابی هرگز مرحله نمی‌بیند (C1: دستورالعمل ثابت)
@@ -12,54 +9,30 @@
 //   · ستارهٔ هر مرحله = بهترین ستارهٔ تاریخچه (پسرفت ستاره را پاک نمی‌کند)
 //   · کلید خاموشی درمانگر (stages_enabled=false) همهٔ نظام را خاموش می‌کند
 //   · هیچ برچسب/نتیجهٔ بالینی — «مرحله» روایت بازی است، نه سنجهٔ تشخیصی
+//
+// G4الف (رفع P3-4): فهرست مرحله‌ها، آستانه‌ها، اهرم‌های بانک و سنجه‌های موتورمحور
+// هر نوع‌بازی به رجیستری نوع-محور (registry.ts) منتقل شد — این فایل رفتار مرحله‌ها
+// و ستاره‌ها را اجرا می‌کند و داده‌ها را با lookup یک‌خطی از نقشه می‌خواند؛
+// خروجی همهٔ توابع عیناً پیشین است (بامپ نسخه/عدد در این جابه‌جایی صفر بود).
 
+import { GAME_KINDS, type AccuracyStageRule, type GameKind } from './registry';
 import type { AgeBandId } from './protocol';
-import { kindEntryOf } from './registry';
-import type { GameKind, StageOutcomeSummary } from './registry';
 
-// نمادهای نوع‌محور — تک‌منبعشان رجیستری است؛ این‌جا فقط دوباره صادر می‌شوند
-export { gameKindOf } from './registry';
-export {
-  STAGE_THRESHOLDS,
-  NUMLINE_STAGE_THRESHOLDS,
-  SCAN_STAGE_THRESHOLDS,
-  ACCURACY_STAGE_THRESHOLDS,
-  NBACK_STAGE_THRESHOLDS,
-  CORSI_STAGE_THRESHOLDS,
-  stageOutcomeOf,
-  stageOutcomeNumline,
-  stageOutcomeScan,
-  stageOutcomeAccuracyKind,
-  stageOutcomeNback,
-  stageOutcomeCorsi,
-  NUMLINE_STAGE_MAX,
-  numlineItemInStage,
-  SCAN_STAGE_MAX_TILES,
-  scanItemInStage,
-  SCAN_STAGE_WAVE_MS,
-  scanStageWaveMs,
-  STROOP_STAGE_BANDS,
-  stroopItemInStage,
-  FLANKER_STAGE_MAX_DECOYS,
-  FLANKER_STAGE_BANDS,
-  flankerItemInStage,
-  NBACK_STAGE_LEVELS,
-  nbackItemInStage,
-  CORSI_STAGE_MAX_LEN,
-  CORSI_STAGE_BANDS,
-  corsiItemInStage
-} from './registry';
+// نام نوع و تجزیهٔ kind تک‌منبعشان رجیستری است — این‌جا برای سازگاری فراخوانی‌های موجود صادر می‌شود
+export { GAME_KIND_IDS, gameKindOf } from './registry';
 export type { GameKind } from './registry';
 
 /** نسخهٔ قواعد مرحله‌ها — هر تغییر عددی در این فایل باید این نسخه را بامپ کند.
- *  ۱.۱.۰ (۱.۲۵.۲۸): قواعد خط عددی («جادهٔ عددها») افزوده شد — عددهای گو/نوگو دست‌نخورده.
+ *  ۱.۱.۰ (۱.۲۵.۲۸): قواعد خط عددی («جادهٔ عددها») افزوده شد — عددهای گو/نوگو دست‌خورده.
  *  ۱.۲.۰ (۱.۲۵.۳۰): قواعد «حملهٔ جاسوس‌ها» (scan) افزوده شد — دو قاعدهٔ قبلی عیناً.
  *  ۱.۳.۰ (۱.۲۵.۳۲): قواعد سه بازی تازه (stroop/flanker/trail) افزوده شد + اهرم تندشدن موج
  *  اسکن (SCAN_STAGE_WAVE_MS — فقط نمایش، نه محرک) — سه قاعدهٔ قبلی عیناً.
- *  ۱.۴.۰ (۱.۲۵.۴۰): قواعد «آلبوم خرچنگ» (nback) افزوده شد — پرش n (۱→۲) + ISI مرحله؛
- *  شش قاعدهٔ قبلی عیناً.
- *  ۱.۵.۰ (۱۴۰۵/۰۸/۱۹): قواعد «رد پای دزد» (trail) برداشته شد (نقد سه‌گانه) و قواعد
- *  «کولهٔ مرواریدها» (corsi) افزوده شد — سقف طول دنباله؛ سایر قواعد عیناً. */
+ *  ۱.۲۵.۳۹ (G4الف): جابه‌جایی به رجیستری نوع-محور — صفر تغییر عددی؛ نسخه عیناً.
+ *  ۱.۴.۰ (۱.۲۵.۴۰): قواعد «آلبوم خرچنگ» (nback) افزوده شد — نردبان دو باند با پلهٔ n
+ *  (s1/s2 سطح ۱، s3..s5 سطح ۲؛ overrides فقط ISI/تثبیت) — قواعد شش نوع پیشین عیناً.
+ *  ۱.۵.۰ (G8/۱.۲۵.۴۹): قواعد دو بازی حافظهٔ دنباله‌ای افزوده شد — «صدف‌های جادویی» (corsi،
+ *  اهرم = طول دنبالهٔ صدف‌ها) و «حباب‌های عدد» (span، اهرم = شمار عددها)؛
+ *  هفت قاعدهٔ پیشین عیناً. */
 export const STAGE_RULES_VERSION = '1.5.0';
 
 /** تعداد مرحله‌های مسیر تمرین */
@@ -97,15 +70,18 @@ export interface StageThresholds {
   star3: { go_pct: number; nogo_pct: number };
 }
 
-export interface StageOutcome {
-  passed: boolean;
-  stars: 0 | 1 | 2 | 3;
-  thresholds: StageThresholds;
-}
+// آستانه‌ها از رجیستری می‌آیند — مقدارها عیناً ۷۰/۶۰ · ۸۰/۷۵ · ۹۰/۸۵ (۱.۲۵.۲۲)
+const GONOGO_RULE = GAME_KINDS.gonogo.stage_rule;
 
-/** فهرست مرحله‌های هر نوع‌بازی — از رجیستری نوع-محور؛ شناسه‌های s1..s5 در همهٔ نوع‌ها هم‌شکل‌اند */
-function stageListOf(kind: GameKind, band: AgeBandId): StageDef[] {
-  return kindEntryOf(kind).stageList(band);
+export const STAGE_THRESHOLDS: StageThresholds = {
+  pass: { go_pct: GONOGO_RULE.pass.go_pct.value, nogo_pct: GONOGO_RULE.pass.nogo_pct.value },
+  star2: { go_pct: GONOGO_RULE.star2.go_pct.value, nogo_pct: GONOGO_RULE.star2.nogo_pct.value },
+  star3: { go_pct: GONOGO_RULE.star3.go_pct.value, nogo_pct: GONOGO_RULE.star3.nogo_pct.value }
+};
+
+/** فهرست مرحله‌های هر نوع‌بازی — lookup از رجیستری؛ شناسه‌های s1..s5 در همهٔ نوع‌ها هم‌شکل‌اند */
+function stageListOf(kind: GameKind, band: AgeBandId) {
+  return GAME_KINDS[kind].stageList(band);
 }
 
 /** مرحله از جایگاه یک‌مبنا — باند سنی و نوع‌بازی جدی گرفته می‌شود */
@@ -135,13 +111,197 @@ export function applyStageOverrides(
   return out;
 }
 
-/** نتیجهٔ مرحله از نوع‌بازی — lookup یک‌خطی از رجیستری؛ هر نوع‌بازی ملاک خودش را دارد
- *  و قواعد هرگز مخلوط نمی‌شوند (رفتار عین زنجیرهٔ سه‌تایی قبلی است) */
+// ─── نتیجهٔ مرحله و ستاره‌ها ───
+
+export interface StageOutcome {
+  passed: boolean;
+  stars: 0 | 1 | 2 | 3;
+  thresholds: StageThresholds;
+}
+
+function pctOk(v: number | null | undefined, min: number): boolean {
+  return typeof v === 'number' && Number.isFinite(v) && v >= min;
+}
+
+/**
+ * نتیجهٔ مرحله از درصدی‌های خلاصهٔ جلسه — ستاره ۳ بالاترین؛ هرگز نزولی نمی‌شود
+ * (بهترین ستاره در progress نگه داشته می‌شود، این تابع فقط جلسهٔ جاری است).
+ * جلسهٔ بدون دادهٔ کامل (pct تهی) = ۰ ستاره و عدم گذار.
+ */
+export function stageOutcomeOf(
+  correctGoPct: number | null | undefined,
+  correctNogoPct: number | null | undefined
+): StageOutcome {
+  const t = STAGE_THRESHOLDS;
+  if (!pctOk(correctGoPct, t.pass.go_pct) || !pctOk(correctNogoPct, t.pass.nogo_pct)) {
+    return { passed: false, stars: 0, thresholds: t };
+  }
+  const three = pctOk(correctGoPct, t.star3.go_pct) && pctOk(correctNogoPct, t.star3.nogo_pct);
+  const two = pctOk(correctGoPct, t.star2.go_pct) && pctOk(correctNogoPct, t.star2.nogo_pct);
+  return { passed: true, stars: three ? 3 : two ? 2 : 1, thresholds: t };
+}
+
+// ─── نوع‌بازی و مراحل خط عددی «جادهٔ عددها» (۱.۲۵.۲۸) ───
+// اهرم سختی خط عددی پارامتر زمان‌بندی نیست — «گسترهٔ جاده» است: مرحلهٔ بعد جادهٔ بلندتر
+// با آستانهٔ پذیرش سن‌محور خودش (tolerance authored روی آیتم‌ها). اهرم مرحله = انتخاب
+// آیتم از بانک authored با پیش‌ماندهٔ numlineItemInStage — محرک authored هرگز بازنویسی نمی‌شود.
+
+/** آستانه‌های گذار و ستارهٔ دقت‌محور از رجیستری — شکل تختِ مقدارها برای سازگاری فراخوانی */
+function accuracyThresholdsOf(rule: AccuracyStageRule): { pass: number; star2: number; star3: number } {
+  return { pass: rule.pass.value, star2: rule.star2.value, star3: rule.star3.value };
+}
+
+/** آستانه‌های گذار و ستارهٔ خط عددی — بر دقت جای عدد (درصد)؛ وضعیت proposed تا پیلوت مرکز */
+export const NUMLINE_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.numline.stage_rule);
+
+/** نتیجهٔ مرحلهٔ دقت‌محور از دقت خلاصهٔ جلسه — بدنهٔ مشترک هر سه تابع؛ thresholds
+ *  عیناً STAGE_THRESHOLDS می‌ماند (رفتار پیشین ۱.۲۵.۲۸ — هرگز تغییر نکرد). */
+function accuracyOutcomeOf(rule: AccuracyStageRule, accuracy: number | null | undefined): StageOutcome {
+  if (!pctOk(accuracy, rule.pass.value)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
+  const stars: 1 | 2 | 3 = pctOk(accuracy, rule.star3.value) ? 3 : pctOk(accuracy, rule.star2.value) ? 2 : 1;
+  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
+}
+
+/** نتیجهٔ مرحلهٔ خط عددی از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
+export function stageOutcomeNumline(accuracy: number | null | undefined): StageOutcome {
+  return accuracyOutcomeOf(GAME_KINDS.numline.stage_rule, accuracy);
+}
+
+/** نتیجهٔ مرحله از نوع‌بازی — ملاک از رجیستری می‌آید؛ قواعد هرگز مخلوط نمی‌شوند */
 export function stageOutcomeFor(
   kind: GameKind,
-  summary: StageOutcomeSummary
+  summary: { pct: { correct_go: number | null; correct_nogo: number | null; accuracy: number | null } }
 ): StageOutcome {
-  return kindEntryOf(kind).stageOutcome(summary);
+  const rule = GAME_KINDS[kind].stage_rule;
+  // دو شکل ملاک: جفت گو/نوگو (گونوگو) یا دقت خلاصهٔ جلسه (بقیه) — افزودن نوع تازه
+  // بدون دست‌زدن به این تابع ممکن است؛ فقط ورودی نقشه را قاعده‌دار می‌کند
+  return rule.shape === 'go_nogo'
+    ? stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo)
+    : accuracyOutcomeOf(rule, summary.pct.accuracy);
+}
+
+/** سقف گسترهٔ جاده در هر مرحلهٔ خط عددی — null = همهٔ جاده‌ها (مرحلهٔ پایانی مرور بزرگ) */
+export const NUMLINE_STAGE_MAX: Record<string, number | null> = GAME_KINDS.numline.levers.bank_caps!;
+
+/**
+ * پیش‌ماندهٔ آیتم خط عددی در مرحله — فقط نمایش/انتخاب از بانک authored؛ نمره‌دهی سرور روی
+ * آیتم authored است. بی‌مرحله/مرحلهٔ ناشناخته = همهٔ آیتم‌ها (سازگاری با جلسه‌های بی‌مرحله).
+ */
+export function numlineItemInStage(
+  item: { range?: [number, number] | undefined },
+  stageId: string | null | undefined
+): boolean {
+  return GAME_KINDS.numline.itemInStage(item, stageId);
+}
+
+// ─── مراحل «حملهٔ جاسوس‌ها» (۱.۲۵.۳۰) ───
+
+/** آستانه‌های گذار و ستارهٔ اسکن — بر دقت موج‌ها (درصد)؛ وضعیت proposed تا پیلوت مرکز */
+export const SCAN_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.scan.stage_rule);
+
+/** نتیجهٔ مرحلهٔ اسکن از دقت موج‌های خلاصهٔ جلسه — همان قرارداد StageOutcome */
+export function stageOutcomeScan(accuracy: number | null | undefined): StageOutcome {
+  return accuracyOutcomeOf(GAME_KINDS.scan.stage_rule, accuracy);
+}
+
+/** سقف شمار خانه‌های موج در هر مرحلهٔ اسکن — null = همهٔ موج‌ها (مرحلهٔ پایانی مرور بزرگ) */
+export const SCAN_STAGE_MAX_TILES: Record<string, number | null> = GAME_KINDS.scan.levers.bank_caps!;
+
+/**
+ * پیش‌ماندهٔ آیتم اسکن در مرحله — انتخاب از بانک authored؛ نمره‌دهی سرور روی آیتم authored است.
+ * بی‌مرحله/مرحلهٔ ناشناخته = همهٔ آیتم‌ها (سازگاری با جلسه‌های بی‌مرحله).
+ */
+export function scanItemInStage(
+  item: { stim?: Record<string, unknown> | null | undefined },
+  stageId: string | null | undefined
+): boolean {
+  return GAME_KINDS.scan.itemInStage(item, stageId);
+}
+
+// ─── مراحل سه بازی تازه (۱.۲۵.۳۲) — استروپ/فلانکر/رد پای دزد ───
+// ملاک گذار هر سه = دقت خلاصهٔ جلسه (درصد) — همان قرارداد خط عددی/اسکن؛
+// آستانه‌ها مشترک و proposed تا پیلوت مرکز. اهرم سختی authored روی بانک است؛
+// «انتخاب بانک هر مرحله» در رجیستری است — محرک/کلید هرگز بازنویسی نمی‌شود.
+
+/** آستانهٔ گذار و ستارهٔ سه نوع تازه — بر دقت (درصد)؛ وضعیت proposed تا پیلوت مرکز */
+export const ACCURACY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.stroop.stage_rule);
+
+/** نتیجهٔ مرحلهٔ سه نوع تازه از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
+export function stageOutcomeAccuracyKind(accuracy: number | null | undefined): StageOutcome {
+  return accuracyOutcomeOf(GAME_KINDS.stroop.stage_rule, accuracy);
+}
+
+/** بانک مجاز هر مرحلهٔ استروپ — گروه‌های authored بانک (a=مرحلهٔ ۱ … d=مرحلهٔ ۴، p=پروب) */
+export const STROOP_STAGE_BANDS: Record<string, string[] | null> = GAME_KINDS.stroop.levers.bank_bands!;
+
+export function stroopItemInStage(
+  item: { stim?: Record<string, unknown> | null | undefined },
+  stageId: string | null | undefined
+): boolean {
+  return GAME_KINDS.stroop.itemInStage(item, stageId);
+}
+
+/** سقف شمار گرگ قلابی در هر مرحلهٔ فلانکر — null = همهٔ گله‌ها */
+export const FLANKER_STAGE_MAX_DECOYS: Record<string, number | null> = GAME_KINDS.flanker.levers.bank_caps!;
+
+/** بانک مجاز هر مرحلهٔ فلانکر — گروه‌های authored بانک؛ ناسالم = ساختاری (شمار قلابی‌ها) */
+export const FLANKER_STAGE_BANDS: Record<string, string[] | null> = GAME_KINDS.flanker.levers.bank_bands!;
+
+export function flankerItemInStage(
+  item: { stim?: Record<string, unknown> | null | undefined },
+  stageId: string | null | undefined
+): boolean {
+  return GAME_KINDS.flanker.itemInStage(item, stageId);
+}
+
+/** سقف شمار ردپاها در هر مرحلهٔ رد پای دزد — null = همهٔ ردها */
+export const TRAIL_STAGE_MAX_NODES: Record<string, number | null> = GAME_KINDS.trail.levers.bank_caps!;
+
+/** بانک مجاز هر مرحلهٔ رد — گروه‌های authored بانک؛ ناسالم = ساختاری (شمار ردپاها) */
+export const TRAIL_STAGE_BANDS: Record<string, string[] | null> = GAME_KINDS.trail.levers.bank_bands!;
+
+export function trailItemInStage(
+  item: { stim?: Record<string, unknown> | null | undefined },
+  stageId: string | null | undefined
+): boolean {
+  return GAME_KINDS.trail.itemInStage(item, stageId);
+}
+
+/**
+ * پیش‌ماندهٔ آیتم در مرحله به‌قولِ رجیستری —lookup یک‌خطی به‌جای زنجیرهٔ if per-kind؛
+ * مصرف‌کننده‌های service (nextItem/resume/finish) همه از همین می‌خوانند.
+ * بی‌مرحله/مرحلهٔ ناشناخته = قاعدهٔ خود نوع (همهٔ آیتم‌ها برای گونوگو و سقف‌های null).
+ */
+export function itemInStageFor(
+  kind: GameKind,
+  item: { range?: [number, number] | undefined; stim?: Record<string, unknown> | null | undefined },
+  stageId: string | null | undefined
+): boolean {
+  return GAME_KINDS[kind].itemInStage(item, stageId);
+}
+
+// ─── اهرم تندشدن موج اسکن (۱.۲۵.۳۲) — فقط نمایش؛ نه محرک و نه کلید ───
+// موج authored زمان خودش را دارد؛ مرحلهٔ فعال سقف آرام‌تری می‌گذارد تا پله‌ها واقعاً
+// «تندتر» حس شوند. جدول سقف‌ها اهرم نمایشی رجیستری است؛ قاعدهٔ ترکیب این‌جاست:
+// زمان مرحله فقط اگر از آیتم authored کوتاه‌تر یا برابر باشد — هیچ‌گاه آیتم سریع‌تر
+// از بانک نمی‌شود (کودک همیشه حداقلِ زمان authored را دارد).
+
+/** پنجرهٔ نمایش موج (ms) در هر مرحلهٔ اسکن — null = دست‌نخوردهٔ آیتم */
+export const SCAN_STAGE_WAVE_MS: Record<string, number | null> = GAME_KINDS.scan.levers.display!;
+
+/**
+ * پنجرهٔ موج مرحله برای نمای کلاینت — کمینهٔ زمان authored و سقف مرحله.
+ * بی‌مرحله/مرحلهٔ ناشناخته = null (عیناً آیتم authored).
+ */
+export function scanStageWaveMs(
+  itemWaveMs: number | null | undefined,
+  stageId: string | null | undefined
+): number | null {
+  if (typeof stageId !== 'string' || !(stageId in SCAN_STAGE_WAVE_MS)) return null;
+  const cap = SCAN_STAGE_WAVE_MS[stageId];
+  if (typeof cap !== 'number' || cap <= 0) return null;
+  if (typeof itemWaveMs !== 'number' || !Number.isFinite(itemWaveMs) || itemWaveMs <= 0) return cap;
+  return Math.min(itemWaveMs, cap);
 }
 
 // ─── پیشرفت مسیر از تاریخچهٔ جلسه‌ها ───
@@ -252,7 +412,7 @@ export function stageVisualFor(stageId: string | null | undefined): StageVisual 
 
 /**
  * نمای محرک آیتم لمسی با امضای مرحله — فقط نمایش؛ همیشه کلید stim authored را
- * نگه می‌دارد و شکل/رنگ مرحله را رویش می‌نشیاند (بقیهٔ فیلدها دست‌نخورده).
+ * نگه می‌دارد و شکل/رنگ مرحله را رویش می‌نشیاند (بقیهٔ فیلدها دست‌خورده).
  * نمره‌دهی سرور روی آیتم authored است — این خروجی هرگز به scoreAttempt نمی‌رود.
  */
 export function stageStimViewOf(
@@ -264,4 +424,41 @@ export function stageStimViewOf(
   const base = (stim ?? {}) as Record<string, unknown>;
   if (!v) return { ...base };
   return { ...base, ...(correctTouch ? v.go : v.nogo) };
+}
+
+// ─── مراحل دو بازی حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۹) — صدف‌های جادویی / حباب‌های عدد ───
+// ملاک گذار هر دو = دقت دنبالهٔ کامل (درصد) — آستانهٔ مشترک خودشان (SEQ_MEMORY) تا
+// آیندهٔ این دو نوع به پیلوت خودشان وابسته بماند؛ اهرم سختی authored روی بانک است.
+
+/** آستانهٔ گذار و ستارهٔ دو بازی حافظهٔ دنباله‌ای — بر دقت (درصد)؛ وضعیت proposed تا پیلوت مرکز */
+export const SEQ_MEMORY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.corsi.stage_rule);
+
+/** نتیجهٔ مرحلهٔ دو بازی حافظهٔ دنباله‌ای از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
+export function stageOutcomeSeqMemory(accuracy: number | null | undefined): StageOutcome {
+  return accuracyOutcomeOf(GAME_KINDS.corsi.stage_rule, accuracy);
+}
+
+/** سقف طول دنبالهٔ صدف‌ها در هر مرحلهٔ کرسی — null = همهٔ دنباله‌ها (مرحلهٔ پایانی مرور بزرگ) */
+export const CORSI_STAGE_MAX_SPAN: Record<string, number | null> = GAME_KINDS.corsi.levers.bank_caps!;
+
+/**
+ * پیش‌ماندهٔ آیتم کرسی در مرحله — بانک authored با سقف مرحله؛ پروب در همهٔ مراحل
+ * (خط‌کش ثابت سنجش — همان رفع P0 ممیزی فازها)؛ بی‌مرحله/ناشناخته = همهٔ آیتم‌ها.
+ */
+export function corsiItemInStage(
+  item: { stim?: Record<string, unknown> | null | undefined; phase?: string },
+  stageId: string | null | undefined
+): boolean {
+  return GAME_KINDS.corsi.itemInStage(item, stageId);
+}
+
+/** سقف شمار عددهای دنباله در هر مرحلهٔ بازهٔ عدد — null = همهٔ دنباله‌ها */
+export const SPAN_STAGE_MAX_DIGITS: Record<string, number | null> = GAME_KINDS.span.levers.bank_caps!;
+
+/** پیش‌ماندهٔ آیتم بازهٔ عدد در مرحله — همان قرارداد کرسی؛ پروب در همهٔ مراحل */
+export function spanItemInStage(
+  item: { stim?: Record<string, unknown> | null | undefined; phase?: string },
+  stageId: string | null | undefined
+): boolean {
+  return GAME_KINDS.span.itemInStage(item, stageId);
 }

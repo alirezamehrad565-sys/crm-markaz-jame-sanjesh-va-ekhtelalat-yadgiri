@@ -1,0 +1,56 @@
+/* ═══ پوستهٔ «خلیج مروارید» — skins/corsi.css (لایهٔ هنر صدف‌های جادویی G8/۱.۲۵.۴۸) ═══
+   چرا: صدف‌های کرسی در خلیجی زمردی و روزِ آرام زندگی می‌کنند — آب سبز-فیروزه‌ای
+   روشن، ماسهٔ صدفی روشن، درخشش کهرباییِ صدفِ روشن‌شده. متمایز از آبسنگ گو/نوگو
+   (کرم-مرجانی) و آلبوم خرچنگ (فیروزهٔ شب) — زمردیِ روزِ خلیج. فقط هنر روی
+   play.css؛ بی‌انیمیشن و بی‌دارایی بیرونی — جنبش فقط ترنزیشن ملایم. */
+
+/* چرا: پالت پوسته و بستر زمردیِ روز */
+.play-skin--corsi {
+  --corsi-water: #2F9E6E;
+  --corsi-water-deep: #20745A;
+  --corsi-foam: #EAF6EE;
+  --corsi-sand: #F2EEDD;
+  --corsi-shell: #FDFBF4;
+  --corsi-glow: #FFD98A;
+  --corsi-picked: #BFE3D2;
+  --corsi-truth: #F3CE8B;
+  background: linear-gradient(180deg, var(--corsi-foam) 0%, #D9F0E2 52%, var(--corsi-sand) 100%);
+}
+
+/* چرا: آب زمردی روشن به ماسهٔ صدفی می‌رسد؛ بازتاب‌های نرم گرادیان شعاعی‌اند */
+.play-skin--corsi .play-stage {
+  position: relative;
+  background:
+    radial-gradient(circle at 16% 16%, rgba(255, 255, 255, .6) 0 7%, transparent 26%),
+    radial-gradient(circle at 86% 10%, rgba(255, 255, 255, .42) 0 6%, transparent 24%),
+    radial-gradient(120% 90% at 50% 112%, #FFF7E0 0 30%, rgba(255, 247, 224, 0) 60%),
+    linear-gradient(180deg, #CDEBDD 0%, #9BDCC0 44%, #6FC9A4 78%, #A8E3C8 100%);
+}
+
+/* چرا: صدف‌ها روی لبهٔ مرجانی سبز می‌نشینند — سایهٔ نرم برای عمق بدون شلوغی */
+.play-skin--corsi .play-corsi__tile {
+  background: radial-gradient(circle at 30% 24%, rgba(255, 255, 255, .65), rgba(255, 255, 255, 0) 58%);
+  box-shadow: 0 3px 10px rgba(32, 116, 90, .22);
+}
+.play-skin--corsi .play-corsi__shell-body { fill: var(--corsi-shell); }
+.play-skin--corsi .play-corsi__tile--lit .play-corsi__shell-body {
+  fill: var(--corsi-glow);
+  filter: drop-shadow(0 0 10px rgba(255, 217, 138, .85));
+}
+.play-skin--corsi .play-corsi__tile--picked .play-corsi__shell-body { fill: var(--corsi-picked); }
+.play-skin--corsi .play-corsi__tile--truth .play-corsi__shell-body { fill: var(--corsi-truth); }
+
+/* چرا: نوار پنجرهٔ یادآوری — زمردی روی ماسه؛ آرام و بی‌فشار */
+.play-skin--corsi .play-corsi__timer { background: rgba(32, 116, 90, .22); }
+.play-skin--corsi .play-corsi__timer > span { background: linear-gradient(to left, var(--corsi-water), var(--corsi-water-deep)); }
+
+/* چرا: کارت پایان — همان زمردی؛ ستاره‌ها کهربایی می‌مانند (پالت §۲) */
+.play-skin--corsi .play-debrief { color: var(--p-navy); }
+
+/* چرا: حباب/پیل روی زمردی — نوار کرم روشن‌تر برای کنتراست AA */
+.play-skin--corsi .play-bubble { background: rgba(255, 251, 240, .96); }
+
+/* افقیِ کوتاه — صدف‌ها کوچک‌تر اما کامل داخل کادر */
+@media (orientation: landscape) and (max-height: 500px) {
+  .play-skin--corsi .play-corsi__grid { max-width: 230px; }
+}

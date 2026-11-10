@@ -1,24 +1,22 @@
-// golden tests ۱.۲۵.۳۲ — سه بازی تازه (stroop/flanker/ردِ حذف‌شده) + موتور شواهد + اهرم موج اسکن
-// + کولهٔ مرواریدها (corsi — ۱۴۰۵/۰۸/۱۹؛ رد پای دزد پس از نقد سه‌گانه حذف شد)
+// golden tests ۱.۲۵.۳۲ — سه بازی تازه (stroop/flanker/trail) + موتور شواهد + اهرم موج اسکن
 // همهٔ فرمول‌ها خالص‌اند — این آزمون‌ها قرارداد §۸ را قفل می‌کنند: کلید پاسخ هرگز به کلاینت نمی‌رود؛
 // قاعدهٔ دامنهٔ صفر (مخرج صفر = null) و بی‌تفاوتی به ترتیب/تکرار مثل scan عیناً برقرار است.
 import { describe, expect, it } from 'vitest';
 import {
   answerDisplayOf,
   computeMetricValue,
-  corsiSeqAccPctOf,
-  corsiSpanMaxOf,
   interferenceMsOf,
   scoreAttempt,
+  trailPrefixPctOf,
   type ScoredAttempt
 } from '../pure';
 import {
-  corsiItemInStage,
   flankerItemInStage,
   gameKindOf,
   scanStageWaveMs,
   stageOutcomeFor,
   stroopItemInStage,
+  trailItemInStage,
   type GameKind
 } from '../stages';
 import { buildEvidenceDossier, EVIDENCE_RULES_VERSION } from '../evidence';
@@ -94,53 +92,44 @@ describe('نمره‌دهی فلانکر (۱.۲۵.۳۲)', () => {
   });
 });
 
-// ─── کولهٔ مرواریدها — بازتولید دنبالهٔ مرواریدها؛ کلید = خود دنبالهٔ نمایش‌داده‌شده ───
+// ─── رد پای دزد — ترتیب دقیق گره‌ها؛ پیش‌ماند صحیح ───
 
-const corsiItem: MissionItem = {
-  id: 'co1', phase: 'probe', type: 'corsi',
-  prompt: 'مرواریدها پشت‌سرهم برق می‌زنند؛ همان ترتیب را لمس کن.',
+const trailItem: MissionItem = {
+  id: 'tr1', phase: 'probe', type: 'trail',
+  prompt: 'رد را به ترتیب شماره کامل کن.',
+  correct: [2, 0, 3, 1],
   stim: {
-    shells: [
-      { x: 20, y: 26 }, { x: 50, y: 18 }, { x: 80, y: 30 },
-      { x: 32, y: 48 }, { x: 66, y: 46 }, { x: 18, y: 68 },
-      { x: 48, y: 70 }, { x: 82, y: 72 }, { x: 50, y: 86 }
-    ],
-    sequence: [2, 0, 3, 1], lit_ms: 650, gap_ms: 280, window_ms: 16000, band: 'c'
+    nodes: [{ x: 20, y: 30, n: 3 }, { x: 70, y: 60, n: 4 }, { x: 40, y: 70, n: 1 }, { x: 80, y: 20, n: 2 }],
+    window_ms: 18000, alt: false, seq: [1, 2, 3, 4]
   }
 };
 
-describe('نمره‌دهی کولهٔ مرواریدها (۱۴۰۵/۰۸/۱۹)', () => {
-  it('بازتولید کامل درست — کلید از stim.sequence می‌آید (آیتم correct ندارد)', () => {
-    const s = scoreAttempt(corsiItem, MISSION, { order: [2, 0, 3, 1], shell_rts_ms: [700, 1400, 2100, 2800] }, 700);
+describe('نمره‌دهی رد پای دزد (۱.۲۵.۳۲)', () => {
+  it('ترتیب کامل درست', () => {
+    const s = scoreAttempt(trailItem, MISSION, { order: [2, 0, 3, 1], node_rts_ms: [700, 1400, 2100, 2800] }, 700);
     expect(s.correct).toBe(true);
-    expect(s.corsiPrefix).toBe(4);
-    expect(s.corsiLen).toBe(4);
+    expect(s.trailNodes).toBe(4);
+    expect(s.trailNodesTotal).toBe(4);
   });
 
-  it('قطع دنباله در مروارید سوم — نادرست؛ پیش‌ماند صحیح = ۲', () => {
-    const s = scoreAttempt(corsiItem, MISSION, { order: [2, 0, 1] }, 700);
+  it('قطع رد در گرهٔ سوم — نادرست؛ پیش‌ماند صحیح = ۲', () => {
+    const s = scoreAttempt(trailItem, MISSION, { order: [2, 0, 1] }, 700);
     expect(s.correct).toBe(false);
-    expect(s.corsiPrefix).toBe(2);
-    expect(s.corsiLen).toBe(4);
+    expect(s.trailNodes).toBe(2);
+    expect(s.trailNodesTotal).toBe(4);
   });
 
-  it('تکرار صدف — نخستین ورود حفظ می‌شود؛ ترتیب کج = پیش‌ماند صفر', () => {
-    const dup = scoreAttempt(corsiItem, MISSION, { order: [2, 2, 0, 3, 1] }, 700);
+  it('تکرار گره — نخستین ورود حفظ می‌شود؛ ترتیب کج = پیش‌ماند صفر', () => {
+    const dup = scoreAttempt(trailItem, MISSION, { order: [2, 2, 0, 3, 1] }, 700);
     expect(dup.correct).toBe(true); // تکرار بی‌اثر — مثل scan
-    const broken = scoreAttempt(corsiItem, MISSION, { order: [0, 2, 3, 1] }, 700);
+    const broken = scoreAttempt(trailItem, MISSION, { order: [0, 2, 3, 1] }, 700);
     expect(broken.correct).toBe(false);
-    expect(broken.corsiPrefix).toBe(0);
+    expect(broken.trailNodes).toBe(0);
   });
 
-  it('پاسخ تهی/کج — ناسالم امن؛ بی‌پاسخ پنجره = دنبالهٔ ناقص، نه اُمیشن سخت', () => {
-    expect(scoreAttempt(corsiItem, MISSION, {}, 700).correct).toBe(false);
-    expect(scoreAttempt(corsiItem, MISSION, { order: 'x' }, 700).corsiLen).toBe(4);
-  });
-
-  it('کف ۱۵۰ms سرور — زیر کف = RT نامعتبر اما نمرهٔ درستی برجا می‌ماند', () => {
-    const s = scoreAttempt(corsiItem, MISSION, { order: [2, 0, 3, 1] }, 90);
-    expect(s.correct).toBe(true);
-    expect(s.rtValid).toBe(false);
+  it('پاسخ تهی/کج — ناسالم امن', () => {
+    expect(scoreAttempt(trailItem, MISSION, {}, 700).correct).toBe(false);
+    expect(scoreAttempt(trailItem, MISSION, { order: 'x' }, 700).trailNodesTotal).toBe(4);
   });
 });
 
@@ -175,27 +164,20 @@ describe('سنجه‌های تداخل استروپ/فلانکر و پیش‌م�
     expect(computeMetricValue('interference_ms', scored)).toBe(500);
   });
 
-  it('corsi_seq = درصد بازتولید کامل · corsi_span = بلندترین دنبالهٔ کامل درست', () => {
+  it('trail_prefix = مجموع پیش‌ماند / مجموع طول رد', () => {
     const rows: ScoredAttempt[] = [
-      { itemId: 'c1', phase: 'probe', correct: true, rtMs: 700, rtValid: true, corsiPrefix: 3, corsiLen: 3 },
-      { itemId: 'c2', phase: 'probe', correct: false, rtMs: 600, rtValid: true, corsiPrefix: 2, corsiLen: 4 },
-      { itemId: 'c3', phase: 'probe', correct: true, rtMs: 800, rtValid: true, corsiPrefix: 4, corsiLen: 4 }
+      { itemId: 't1', phase: 'probe', correct: true, rtMs: 700, rtValid: true, trailNodes: 4, trailNodesTotal: 4 },
+      { itemId: 't2', phase: 'probe', correct: false, rtMs: 600, rtValid: true, trailNodes: 2, trailNodesTotal: 6 }
     ];
-    expect(corsiSeqAccPctOf(rows)).toBe(66.67);
-    expect(corsiSpanMaxOf(rows)).toBe(4);
-    expect(computeMetricValue('corsi_seq', rows)).toBe(66.67);
-    expect(computeMetricValue('corsi_span', rows)).toBe(4);
-    // قاعدهٔ دامنهٔ صفر — بدون دنبالهٔ سالم = null
-    expect(computeMetricValue('corsi_seq', [])).toBeNull();
-    expect(computeMetricValue('corsi_span', [
-      { itemId: 'c4', phase: 'probe', correct: false, rtMs: 600, rtValid: true, corsiPrefix: 1, corsiLen: 3 }
-    ])).toBeNull();
+    expect(trailPrefixPctOf(rows)).toBe(60); // (۴+۲)/(۴+۶)
+    expect(computeMetricValue('trail_prefix', rows)).toBe(60);
+    expect(computeMetricValue('trail_prefix', [])).toBeNull();
   });
 });
 
 // ─── برچسب نمایشی پاسخ درست — فقط تمرین ───
 
-describe('answerDisplayOf بازی‌های تازه', () => {
+describe('answerDisplayOf سه بازی تازه', () => {
   it('استروپ: برچسب فارسی رنگ جوهر', () => {
     expect(answerDisplayOf(stroopItem)).toBe('آبی');
   });
@@ -203,30 +185,27 @@ describe('answerDisplayOf بازی‌های تازه', () => {
     expect(answerDisplayOf(flankerItem)).toBe('راست');
     expect(answerDisplayOf({ ...flankerItem, correct: 0 })).toBe('چپ');
   });
-  it('کولهٔ مرواریدها: null — بازپخش دنبالهٔ تمرین در خود ماژول است؛ پاسخ مخفی ندارد', () => {
-    expect(answerDisplayOf(corsiItem)).toBeNull();
+  it('رد: CSV اندیس‌های ترتیب درست — کلید برای نشان حقیقت تمرین', () => {
+    expect(answerDisplayOf(trailItem)).toBe('2,0,3,1');
   });
 });
 
 // ─── نوع‌بازی و مراحل ───
 
-describe('نوع‌بازی و ملاک گذار بازی‌های تازه', () => {
-  it('gameKindOf انواع تازه را می‌شناسد؛ trail حذف‌شده = گونوگو (سازگاری بسته‌های قدیمی)', () => {
+describe('نوع‌بازی و ملاک گذار سه بازی تازه', () => {
+  it('gameKindOf سه نوع تازه را می‌شناسد', () => {
     expect(gameKindOf('stroop')).toBe('stroop');
     expect(gameKindOf('flanker')).toBe('flanker');
-    expect(gameKindOf('nback')).toBe('nback');
-    expect(gameKindOf('corsi')).toBe('corsi');
-    expect(gameKindOf('trail')).toBe('gonogo'); // بازنشسته — ناشناخته به گونوگو می‌نشیند
+    expect(gameKindOf('trail')).toBe('trail');
     expect(gameKindOf('maghrur')).toBe('gonogo');
   });
 
-  it('ملاک گذار بر دقت — ۶۵/۷۸/۸۸؛ کولهٔ مرواریدها آستانهٔ مستقل خودش را دارد', () => {
+  it('ملاک گذار سه نوع تازه بر دقت — ۶۵/۷۸/۸۸', () => {
     const pct = (a: number | null) => ({ correct_go: null, correct_nogo: null, accuracy: a });
     expect(stageOutcomeFor('stroop', { pct: pct(64) }).passed).toBe(false);
     expect(stageOutcomeFor('flanker', { pct: pct(65) }).passed).toBe(true);
-    expect(stageOutcomeFor('corsi', { pct: pct(78) }).stars).toBe(2);
-    expect(stageOutcomeFor('corsi', { pct: pct(88) }).stars).toBe(3);
-    expect(stageOutcomeFor('corsi', { pct: pct(64) }).passed).toBe(false);
+    expect(stageOutcomeFor('trail', { pct: pct(78) }).stars).toBe(2);
+    expect(stageOutcomeFor('trail', { pct: pct(88) }).stars).toBe(3);
   });
 
   it('فیلتر بانک استروپ بر گروه stim.band', () => {
@@ -251,26 +230,29 @@ describe('نوع‌بازی و ملاک گذار بازی‌های تازه', ()
     expect(flankerItemInStage(three, 's2')).toBe(false);
     expect(flankerItemInStage(four, 's4')).toBe(true);
     expect(flankerItemInStage(four, 's3')).toBe(false);
-    // بانک گروه‌دار — پروب هرگز به مرحله‌های اولیه درز نمی‌کند (رفع نشت ۱.۲۵.۳۲)
+    // بانک گروه‌دار — پروب ('p') خط‌کش ثابت سنجش است و در «همهٔ» مراحل حاضر (رفع P0 ۱.۲۵.۴۷:
+    // سابقاً با پین ۱.۲۵.۳۲ فقط s5 پروب داشت و جلسه‌های s1..s4 صفر سنجه می‌ساختند)
     const bandA = { stim: { arrows: ['L', 'R', 'L'], band: 'a' } };
     const bandP = { stim: { arrows: ['L', 'L', 'L'], band: 'p' } }; // کنگرنت ولی پروب
     expect(flankerItemInStage(bandA, 's1')).toBe(true);
-    expect(flankerItemInStage(bandP, 's1')).toBe(false);
+    expect(flankerItemInStage(bandP, 's1')).toBe(true);
+    expect(flankerItemInStage(bandP, 's3')).toBe(true);
     expect(flankerItemInStage(bandP, 's5')).toBe(true);
   });
 
-  it('فیلتر کولهٔ مرواریدها بر گروه stim.band + بازگشت ساختاری برای بانک بی‌گروه', () => {
-    // بانک بی‌گروه — قاعدهٔ ساختاری: طول دنباله
-    expect(corsiItemInStage({ stim: { sequence: [1, 2] } }, 's1')).toBe(true);
-    expect(corsiItemInStage({ stim: { sequence: [1, 2, 3] } }, 's1')).toBe(false);
-    expect(corsiItemInStage({ stim: { sequence: [1, 2, 3, 4, 5] } }, 's4')).toBe(true);
-    expect(corsiItemInStage({ stim: { sequence: [] } }, 's1')).toBe(false);
-    // بانک گروه‌دار — پروب هرگز به مرحله‌های اولیه درز نمی‌کند
-    const bandA2 = { stim: { sequence: [1, 2], band: 'a' } };
-    const bandP4 = { stim: { sequence: [1, 2, 3, 4], band: 'p' } };
-    expect(corsiItemInStage(bandA2, 's1')).toBe(true);
-    expect(corsiItemInStage(bandP4, 's2')).toBe(false);
-    expect(corsiItemInStage(bandP4, 's5')).toBe(true);
+  it('فیلتر رد بر گروه stim.band + بازگشت ساختاری برای بانک بی‌گروه', () => {
+    expect(trailItemInStage({ stim: { nodes: [1, 2, 3, 4] } }, 's1')).toBe(true);
+    expect(trailItemInStage({ stim: { nodes: [1, 2, 3, 4, 5] } }, 's1')).toBe(false);
+    expect(trailItemInStage({ stim: { nodes: [1, 2, 3, 4, 5, 6, 7] } }, 's4')).toBe(true);
+    expect(trailItemInStage({ stim: { nodes: [] } }, 's1')).toBe(false);
+    // بانک گروه‌دار — پروب ۶ ردپایی خط‌کش ثابت سنجش؛ در همهٔ مراحل حاضر (رفع P0 ۱.۲۵.۴۷)
+    const bandP6 = { stim: { nodes: [1, 2, 3, 4, 5, 6], band: 'p' } };
+    expect(trailItemInStage(bandP6, 's1')).toBe(true);
+    expect(trailItemInStage(bandP6, 's3')).toBe(true);
+    expect(trailItemInStage(bandP6, 's5')).toBe(true);
+    const bandC6 = { stim: { nodes: [1, 2, 3, 4, 5, 6], band: 'c' } };
+    expect(trailItemInStage(bandC6, 's3')).toBe(true);
+    expect(trailItemInStage(bandC6, 's1')).toBe(false); // تمرین گروه c فقط از s3
   });
 });
 

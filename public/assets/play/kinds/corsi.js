@@ -1,334 +1,346 @@
 /* ═══════════════════════════════════════════════════════════════
-   kinds/corsi.js — بازی «کولهٔ مرواریدها» (حافظهٔ کاری فضایی — کورسی) — ۱۴۰۵/۰۸/۱۹
-   ماژول نمایش: تخت صدف ثابت و نامنظم (۹ صدف — تختِ کلاسیک کورسی)، مرواریدها که
-   پشت‌سرهم برق می‌زنند، فاز بازتولید لمسی، نشان حقیقت پس از پاسخ تمرین.
-   اقتباس مکانیک (فقط الگو، بدون کپی کد):
-     · @jspsych-contrib/plugin-corsi-blocks — مخزن jspsych/jspsych-contrib روی GitHub؛
-       مجوز MIT (فیلد license در packages/plugin-corsi-blocks/package.json) —
-       حالت نمایش (روشن‌شدن پیاپی بلوک‌ها) + حالت ورود (بازتپ همان ترتیب) +
-       بازخورد پس از پاسخ؛ بازنویسی کامل روی قرارداد سامانهٔ ما — بدون دارایی بیرونی.
-     · jsPsych (هسته) — مجوز MIT.
-   ایدهٔ پایه: Corsi Block-Tapping Task (مفهوم عمومی آزمون حافظهٔ فضایی — بدون کد).
-   تفاوت با نسخهٔ بالینی: خطا بی‌سرزنش است — لمس ترتیب اشتباه فقط دنباله را همان‌جا
-   می‌بندد (پایان بی‌سرزنش)؛ هیچ فلاش/صدای خطا/متن ناامیدکننده نیست (§۲ و §۹).
-   بی‌صدا؛ جنبش فقط از fx.js (§۹). کلید بازی = خود دنبالهٔ نمایش‌داده‌شده —
-   کودک آن را می‌بیند؛ پاسخ مخفی ندارد و نمره‌دهی فقط سمت سرور است.
+   kinds/corsi.js — بازی «صدف‌های جادویی» (کرسی بلوک-تپینگ) — G8/۱.۲۵.۴۸
+   صدف‌های خلیج مروارید یکی‌یکی روشن می‌شوند؛ کودک همان ترتیب را لمس
+   می‌کند. اهرم سختی = طول دنباله (۲→۵) روی خود سرور (رجیستری/مرحله‌ها) —
+   این ماژول فقط نمایش است.
+   ماژول نمایش: شبکهٔ ۳×۳ صدف + پخش دنباله در session.js (فاز lit) +
+   فاز یادآوری کودک؛ پایان دنباله با پرشدن شمار صدف‌ها یا پنجرهٔ پاسخ
+   از stim.window_ms. نمره‌دهی فقط سمت سرور است؛ پاسخ {order} سرور
+   مقایسه می‌کند و کلید (item.correct) هرگز به این ماژول نمی‌رسد.
+   هیچ درخواست شبکه‌ای ندارد؛ بی‌صدا؛ جنبش فقط از fx (§۹).
+   پارادایم مرجع — Corsi Block-Tapping (Corsi 1972؛ Kessels و همکاران
+   ۲۰۰۰ — مرور استاندارد) — پیاده‌سازی اصیل و هم‌خانوادهٔ قرارداد
+   ماژول‌های نوع این سامانه؛ هیچ کد بیرونی کپی نشده است. گرافیک
+   وکتوری و همهٔ متن فارسی اصیل‌اند (بدون هیچ دارایی بیرونی).
    ═══════════════════════════════════════════════════════════════ */
+
+const INK = '#153E50';   /* Navy دفترچهٔ وظیفه — خط جوهری صدف‌ها */
 
 /* جنبش تزئینی و صحنهٔ آموزش — همهٔ جنبش از fx با گارد کاهش‌جنبش؛ این ماژول هرگز مستقیم animate نمی‌کند */
 import * as fx from '../fx.js';
-import { sceneMarkup } from '../scene.js';
+import { sceneMarkup, kindHero } from '../scene.js';
 
-const SHELL_INK = '#4A2438';   /* رز تیرهٔ کتابی — خط صدف و برچسب */
-const PEARL = '#C97BA0';       /* رز مرواریدی — جوهر برقِ مروارید */
-const CREAM = '#FFF7F9';       /* بدنهٔ صدف */
+const DEFAULT_PROMPT = 'صدف‌ها یکی‌یکی روشن می‌شوند؛ همان ترتیب را لمس کن.';
 
 function esc(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/* تخت صدف ثابت — ۹ جایگاه نامنظم (تختِ کلاسیک کورسی؛ ضد دسته‌بندی کلامی جایگاه‌ها).
-   هویت بانک: مولد seed هم همین جاها را می‌نویسد — هرگز بازنویسی آیتمی نمی‌شود. */
-const SHELL_SPOTS = [
-  { x: 20, y: 26 }, { x: 50, y: 18 }, { x: 80, y: 30 },
-  { x: 32, y: 48 }, { x: 66, y: 46 },
-  { x: 18, y: 68 }, { x: 48, y: 70 }, { x: 82, y: 72 },
-  { x: 50, y: 86 }
-];
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+function faNum(n) {
+  return String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
+}
 
-const DEFAULT_PROMPT = 'مرواریدها پشت‌سرهم برق می‌زنند؛ همان ترتیب را لمس کن.';
+/** stim آیتم — ناسالم = شیء خالی */
+function stimOf(item) {
+  return item && item.stim && typeof item.stim === 'object' ? item.stim : {};
+}
 
-/** صدف موج‌دار — صدپای اسکالوپ؛ مروارید درونی به‌صورت circle جدا (قابل برق‌زدن با CSS) */
-export function shellSvg() {
-  return '<svg class="play-corsi__shell-svg" viewBox="0 0 72 64" role="img" aria-hidden="true">' +
-    '<g stroke="' + SHELL_INK + '" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round">' +
-    /* بدنهٔ بادبزنی صدف — ترک‌های موج‌دار */
-    '<path d="M36 58 C 18 58 8 44 10 28 C 11 20 16 14 24 12 L 36 56" fill="' + CREAM + '"/>' +
-    '<path d="M36 58 C 54 58 64 44 62 28 C 61 20 56 14 48 12 L 36 56" fill="' + CREAM + '"/>' +
-    '<path d="M24 12 L 36 58" fill="none"/>' +
-    '<path d="M48 12 L 36 58" fill="none"/>' +
-    '<path d="M15 22 L 34 54" fill="none"/>' +
-    '<path d="M57 22 L 38 54" fill="none"/>' +
-    /* مروارید — برقش با کلاس --lit روشن می‌شود */
-    '<circle class="play-corsi__pearl" cx="36" cy="34" r="8.5" fill="' + PEARL + '"/>' +
+/** دنبالهٔ صدف‌ها از stim — محرک عمومی بازی؛ ناسالم = خالی (markup امن می‌سازد) */
+export function seqOf(item) {
+  const stim = stimOf(item);
+  if (!Array.isArray(stim.seq)) return [];
+  return stim.seq.map((v) => Number(v)).filter((v) => Number.isInteger(v) && v >= 0);
+}
+
+/** یک صدف وکتوری — کاسهٔ بستهٔ صدف با شیارهای شعاعی؛ حالت‌ها با کلاس CSS روشن می‌شوند */
+function shellSvg(idx) {
+  return '<svg viewBox="0 0 100 100" aria-hidden="true">' +
+    /* بدنهٔ بادبزنی صدف */
+    '<path class="play-corsi__shell-body" d="M50 88 C28 88 12 72 12 52 C12 34 24 20 42 14 L46 12 C48 11 52 11 54 12 L58 14 C76 20 88 34 88 52 C88 72 72 88 50 88 Z"/>' +
+    /* شیارهای شعاعی — جوهر ناویر */
+    '<g class="play-corsi__shell-ribs" fill="none" stroke="' + INK + '" stroke-width="2.5" stroke-linecap="round">' +
+      '<path d="M50 84 L50 18"/>' +
+      '<path d="M38 82 C34 62 32 42 38 20"/>' +
+      '<path d="M62 82 C66 62 68 42 62 20"/>' +
+      '<path d="M26 74 C24 56 26 38 34 22"/>' +
+      '<path d="M74 74 C76 56 74 38 66 22"/>' +
     '</g>' +
-    '<circle class="play-corsi__pearl-shine" cx="33.5" cy="31" r="2.4" fill="#FFE4EF"/>' +
+    /* مروارید کوچک گوشهٔ صدف — فقط برای جلوهٔ صحنه */
+    '<circle class="play-corsi__pearl" cx="50" cy="66" r="7"/>' +
     '</svg>';
 }
 
-/** خرچنگ کلکتور کوچک — گوشهٔ صحنه؛ کولهٔ مروارید بر دوشش؛ ایستا و بی‌ترس */
-function crabCollectorSvg() {
-  return '<svg class="play-corsi__crab" viewBox="0 0 110 92" role="img" aria-hidden="true">' +
-    '<g fill="#F5F0E5" stroke="' + SHELL_INK + '" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round">' +
-    '<path d="M30 58 C 26 46 34 38 46 40 L 66 40 C 78 38 86 46 82 58 C 76 70 36 70 30 58 Z"/>' + /* بدن */
-    '<circle cx="46" cy="52" r="3.4" fill="' + SHELL_INK + '"/>' +                              /* چشم */
-    '<circle cx="66" cy="52" r="3.4" fill="' + SHELL_INK + '"/>' +
-    '<path d="M42 44 L 34 34 L 44 36 Z"/>' +                                                    /* پنجهٔ چپ */
-    '<path d="M70 44 L 78 34 L 68 36 Z"/>' +                                                    /* پنجهٔ راست */
-    '<path d="M38 70 L 32 82"/><path d="M56 72 L 56 84"/><path d="M74 70 L 80 82"/>' +          /* پاها */
-    '</g>' +
-    /* کولهٔ مرواریدها */
-    '<g stroke="' + SHELL_INK + '" stroke-width="2.6" stroke-linejoin="round">' +
-    '<path d="M84 40 L 100 34 L 102 52 L 86 54 Z" fill="' + PEARL + '"/>' +
-    '<circle cx="93" cy="44" r="3.4" fill="#FFE4EF"/>' +
-    '</g>' +
-    '</svg>';
+/** شبکهٔ ۳×۳ صدف‌ها — data-idx قرارداد session.js است (اندیس ۰..۸) */
+function gridHtml() {
+  let html = '<div class="play-corsi__grid" aria-label="' + faNum(9) + ' صدف خلیج">';
+  for (let i = 0; i < 9; i++) {
+    html += '<button type="button" class="play-corsi__tile" data-idx="' + i + '" aria-label="صدف ' + faNum(i + 1) + '">' +
+      shellSvg(i) + '</button>';
+  }
+  return html + '</div>';
 }
 
-/** وکتور محرک برای پیش‌نمایش آموزش — دو صدف با مروارید برق‌زده */
-export function stimSvg() {
-  return '<svg class="play-svg" viewBox="0 0 120 84" role="img" aria-hidden="true">' +
-    '<g transform="translate(4 12) scale(0.78)">' + shellSvg() + '</g>' +
-    '<g transform="translate(56 6) scale(0.78)">' +
-      shellSvg().replace('<circle class="play-corsi__pearl"', '<circle opacity="0.55"') +
-    '</g>' +
-    '</svg>';
-}
-
-/** جایگاه‌های صدف آیتم — آیتم authored همیشه همین تخت ثابت را می‌فرستد؛ ناسالم = تخت پیش‌فرض */
-function spotsOf(item) {
-  const s = item && item.stim && typeof item.stim === 'object' ? item.stim : {};
-  if (!Array.isArray(s.shells) || s.shells.length === 0) return SHELL_SPOTS;
-  const ok = s.shells.filter((p) => p && typeof p === 'object' &&
-    typeof p.x === 'number' && Number.isFinite(p.x) &&
-    typeof p.y === 'number' && Number.isFinite(p.y));
-  return ok.length === 9 ? ok : SHELL_SPOTS;
-}
-
-/** صحنهٔ آیتم corsi — پرامپت + تخت صدف (۹ دکمهٔ لمسی) + نوار پنجرهٔ بازتولید */
+/** کارت آزمون صدف‌ها — پرسش + شبکهٔ صدف + نوار پنجرهٔ پاسخ (فاز یادآوری روشن می‌شود) */
 export function corsiMarkup(item) {
-  const spots = spotsOf(item);
-  const prompt = item.prompt && String(item.prompt).trim() !== ''
-    ? esc(item.prompt)
-    : DEFAULT_PROMPT;
-  const dots = spots.map((p, i) =>
-    '<button type="button" class="play-corsi__shell" data-idx="' + i + '" ' +
-      'style="left:' + p.x + '%;top:' + p.y + '%" aria-label="صدف ' + (i + 1) + '">' +
-      shellSvg() +
-    '</button>'
-  ).join('');
+  const stim = stimOf(item);
+  const prompt = item.prompt && String(item.prompt).trim() !== '' ? esc(item.prompt) : DEFAULT_PROMPT;
+  const spanLen = Array.isArray(stim.seq) ? stim.seq.length : 0;
   return '<div class="play-corsi">' +
     '<p class="play-corsi__prompt">' + prompt + '</p>' +
-    '<div class="play-corsi__field">' + crabCollectorSvg() + dots + '</div>' +
+    '<p class="play-corsi__status" aria-live="polite">با دقت نگاه کن...</p>' +
+    gridHtml() +
     '<div class="play-corsi__timer" aria-hidden="true"><span style="width:100%"></span></div>' +
     '</div>';
 }
 
-/** نشان حقیقت — بازپخش دنبالهٔ نمایش‌داده‌شده با بج شمارهٔ قدم؛ فقط تمرین، پس از پاسخ.
- *  دنباله از خود stim آیتم می‌آید (کودک آن را در فاز نمایش دیده)؛ csv آرگومان عام
- *  قرارداد سایر ماژول‌هاست و این‌جا بی‌استفاده می‌ماند. بازگشت: عناصر نشان‌شده یا null */
-export function corsiRevealTruth(item, stage, _csv) {
-  const s = item && item.stim && typeof item.stim === 'object' ? item.stim : {};
-  if (!Array.isArray(s.sequence)) return null;
-  const seq = s.sequence.filter((n) => Number.isInteger(n) && n >= 0);
-  if (seq.length === 0) return null;
-  const shells = stage ? stage.querySelectorAll('.play-corsi__shell') : null;
-  if (!shells || shells.length === 0) return null;
-  const marked = [];
-  let pos = 0;
-  for (const i of seq) {
-    const t = shells[i];
-    if (!t || !t.classList) continue;
-    pos += 1;
-    t.classList.add('play-corsi__shell--truth');
-    const badge = document.createElement('span');
-    badge.className = 'play-corsi__order';
-    badge.textContent = faNum(pos);
-    t.appendChild(badge);
-    marked.push(t);
-  }
-  return marked.length > 0 ? marked : null;
+/** آغاز فاز یادآوری — بعد از پخش دنباله؛ پیام «نوبت توست» + نوار پنجره زنده می‌شود */
+export function corsiBeginRecall(stage, spanLen) {
+  if (!stage) return;
+  const status = stage.querySelector('.play-corsi__status');
+  if (status) status.textContent = 'نوبت توست! ' + faNum(spanLen) + ' صدف را به همان ترتیب لمس کن.';
+  const grid = stage.querySelector('.play-corsi__grid');
+  if (grid) grid.classList.add('play-corsi__grid--recall');
 }
 
-const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
-const faNum = (n) => String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
+/** نشان حقیقت — دنبالهٔ درست از بازخورد سرور (CSV اندیس‌ها)؛ صدف‌ها به ترتیب درست نشان‌گذاری می‌شوند */
+export function corsiRevealTruth(item, stage, answerDisplay) {
+  if (typeof answerDisplay !== 'string' || answerDisplay.trim() === '') return null;
+  const idxs = answerDisplay.split(',').map((v) => Number(v.trim())).filter((v) => Number.isInteger(v) && v >= 0);
+  const status = stage && stage.querySelector ? stage.querySelector('.play-corsi__status') : null;
+  if (status) status.textContent = 'ترتیب درست این بود:';
+  const tiles = stage && stage.querySelectorAll ? stage.querySelectorAll('.play-corsi__tile') : null;
+  if (!tiles || tiles.length === 0) return null;
+  idxs.forEach((i, order) => {
+    const el = stage.querySelector('.play-corsi__tile[data-idx="' + i + '"]');
+    if (el && el.classList) {
+      el.classList.add('play-corsi__tile--truth');
+      el.setAttribute('data-truth-order', String(order + 1)); // ترتیب نمایش برای دسترس‌پذیری/آموزش
+    }
+  });
+  return tiles[0];
+}
 
-/** مرکز نخستین صدف گرفته‌شده در همین پاسخ — هدف انفجار ذرات موفقیت (fx.burstAt) */
+/** مرکز شبکه برای انفجار ذرات موفقیت (fx.burstAt) */
 export function corsiResponsePoint(stage) {
-  const t = stage ? stage.querySelector('.play-corsi__shell--step') : null;
-  if (!t) return null;
-  const r = t.getBoundingClientRect();
+  if (!stage || !stage.querySelector) return null;
+  const el = stage.querySelector('.play-corsi__grid');
+  if (!el || !el.getBoundingClientRect) return null;
+  const r = el.getBoundingClientRect();
   if (!r.width) return null;
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
 
-/* ─── قدم‌های آموزش — ایستا؛ هیچ ردی از آیتم پروب ─── */
-
-/** نمونهٔ آموزش با سه صدف — شکل کار را نشان می‌دهد؛ بی‌لمس (div، نه button) */
-function corsiSample(state) {
-  const spots = [SHELL_SPOTS[0], SHELL_SPOTS[1], SHELL_SPOTS[3]];
-  const litIdx = state === 'first' ? [0] : state === 'second' ? [0, 1] : [];
-  const done = state === 'done';
-  let dots = '';
-  for (let i = 0; i < 3; i++) {
-    const lit = litIdx.includes(i) ? ' play-corsi__shell--lit' : '';
-    const step = done ? ' play-corsi__shell--step' : '';
-    dots += '<div class="play-corsi__shell' + lit + step + '" style="left:' + spots[i].x + '%;top:' + spots[i].y + '%">' +
-      shellSvg() +
-      (done ? '<span class="play-corsi__order">' + faNum(i + 1) + '</span>' : '') +
-      '</div>';
-  }
-  return '<div class="play-corsi play-corsi--sample"><div class="play-corsi__field">' + dots + '</div></div>';
+/** SVG محرک برای پیش‌نمایش آموزش — دو صدف روشن (مهرهٔ قاعده) */
+export function stimSvg(stim) {
+  const s = stim && typeof stim === 'object' ? stim : {};
+  const a = Number.isInteger(s.a) && s.a >= 0 && s.a <= 8 ? s.a : 1;
+  const b = Number.isInteger(s.b) && s.b >= 0 && s.b <= 8 ? s.b : 5;
+  return '<div class="play-corsi play-corsi--sample"><div class="play-corsi__grid">' +
+    '<button type="button" class="play-corsi__tile play-corsi__tile--lit" data-idx="' + a + '">' + shellSvg(a) + '</button>' +
+    '<button type="button" class="play-corsi__tile" data-idx="' + (a === 0 ? 1 : 0) + '">' + shellSvg(0) + '</button>' +
+    '<button type="button" class="play-corsi__tile" data-idx="' + (a === 8 ? 7 : 8) + '">' + shellSvg(0) + '</button>' +
+    '<button type="button" class="play-corsi__tile" data-idx="3">' + shellSvg(0) + '</button>' +
+    '<button type="button" class="play-corsi__tile play-corsi__tile--lit" data-idx="' + b + '">' + shellSvg(0) + '</button>' +
+    '<button type="button" class="play-corsi__tile" data-idx="5">' + shellSvg(0) + '</button>' +
+    '<button type="button" class="play-corsi__tile" data-idx="6">' + shellSvg(0) + '</button>' +
+    '<button type="button" class="play-corsi__tile" data-idx="7">' + shellSvg(0) + '</button>' +
+    '<button type="button" class="play-corsi__tile" data-idx="8">' + shellSvg(0) + '</button>' +
+    '</div></div>';
 }
 
-/** سه قدم آموزش «کولهٔ مرواریدها» — hint شکل سروری دارد؛ ناسالم = پیش‌فرض امن */
+/* ─── قدم‌های آموزش — ایستا؛ هیچ ردی از کلید بانک یا آیتم پروب ─── */
+
+/** سه قدم آموزش روبه‌کودک — hint شکل سروری دارد (hint.corsi.{label, stim:{a,b}})؛ ناسالم = پیش‌فرض امن */
 export function previewSteps(hint) {
-  const rule = hint && hint.corsi && typeof hint.corsi.label === 'string' && hint.corsi.label.trim() !== ''
-    ? hint.corsi.label
-    : DEFAULT_PROMPT;
+  const h = hint && hint.corsi && typeof hint.corsi === 'object' ? hint.corsi : {};
+  const rule = typeof h.label === 'string' && h.label.trim() !== '' ? h.label.trim() : DEFAULT_PROMPT;
+  const s = h.stim && typeof h.stim === 'object' ? h.stim : {};
+  const a = Number.isInteger(s.a) && s.a >= 0 && s.a <= 8 ? s.a : 1;
+  const b = Number.isInteger(s.b) && s.b >= 0 && s.b <= 8 ? s.b : 5;
   return [
-    { svg: corsiSample('first'), line: rule },
-    { svg: corsiSample('second'), line: 'خوب شد! مروارید بعدی هم برق می‌زند؛ ترتیب را یادت نگه دار.' },
-    { svg: corsiSample('done'), line: 'دنباله کامل شد! اگر یادت رفت، مهم نیست؛ دوباره با هم نگاه می‌کنیم.' }
+    { svg: stimSvg({ a, b }), line: rule },
+    { svg: stimSvg({ a, b }), line: 'صدف‌ها یکی‌یکی روشن می‌شوند؛ جای هر کدام را در ذهنت نگه دار.' },
+    { svg: stimSvg({ a, b }), line: 'بعد از چشمک، همان ترتیب را لمس کن — اول روشن‌شدن اول، بعد دومی.' }
   ];
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   کارت INTRO + تمرین تعاملی «تا موفقیت» (الگوی حلقهٔ تمرین گونوگو/رد سابق):
-   یک دنبالهٔ دومردپایی ثابت با تکرار بی‌سرزنش. دنبالهٔ تمرین «دانش عمومی خود
-   بازی» است (دو صدف روشن، ترتیب مشهود) — پاسخ مخفی ندارد. پس از دو تلاشِ
-   ناتمام، دنبالهٔ درست با بج قدم نشان می‌شود (آموزش پس از پاسخ).
-   ارزیابی هرگز تمرین تعاملی نمی‌بیند (C1). نوار پنجره در تمرین بی‌جنبش می‌ماند (§۹).
+   G8/۱.۲۵.۴۸ — کارت INTRO + تمرین تعاملی «تا موفقیت» (الگوی ن‌پشت):
+   دو قدم — نخست دنبالهٔ دو صدفی با نمایش هم‌زمان (قدم‌آموز)، بعد
+   دنبالهٔ دو صدفی با پخش واقعی یکی‌یکی. کارت‌های تمرین از پالت ثابت
+   ماژول‌اند و هیچ کلیدی ندارند؛ کلید آیتم‌های واقعی فقط سمت سرور
+   می‌ماند. ارزیابی هرگز تمرین تعاملی نمی‌بیند (C1).
    ═══════════════════════════════════════════════════════════════ */
 
 /** کارت INTRO — نام + قانون یک‌خطی از راهنمای سرور؛ ناسالم = قانون امن ایستا */
 export const intro = {
-  name: 'کولهٔ مرواریدها',
+  name: 'صدف‌های جادویی',
   rule: (hint) => {
     const h = hint && hint.corsi && typeof hint.corsi.label === 'string' ? hint.corsi.label.trim() : '';
-    return h !== '' ? h : DEFAULT_PROMPT;
+    return h !== '' ? h : 'صدف‌ها یکی‌یکی روشن می‌شوند؛ همان ترتیب را لمس کن.';
   }
 };
 
 const CORSI_PRACTICE = {
-  watchLine: 'حواست باشد: مرواریدها به ترتیب برق می‌زنند؛ بعد تو همان ترتیب را لمس کن.',
-  tapLine: 'حالا نوبت توست — همان ترتیبی که برق زد را لمس کن.',
-  success: 'آفرین! دنباله کامل شد.',
-  retry: 'یادت رفت؛ مهم نیست — دوباره با هم نگاه می‌کنیم.',
-  practiceDone: 'تمرین تمام شد! حالا مرواریدهای واقعی می‌آیند.'
+  step1: 'دو صدف روشن شدند؛ حالا تو همین دو تا را لمس کن.',
+  step2: 'حالا دنباله یکی‌یکی چشمک می‌زند؛ به ترتیب لمسش کن.',
+  success: 'آفرین! حافظهٔ خلیج داری.',
+  retry: 'دوباره نگاه کن؛ اول صدفِ اول، بعد صدفِ دوم.',
+  retryWait: 'هر وقت آماده بودی لمس کن؛ عجله‌ای نیست.',
+  practiceDone: 'تمرین تمام شد! حالا خلیج واقعی صدف‌ها باز می‌شود.'
 };
 
-const PRACTICE_LIT_MS = 650;
-const PRACTICE_GAP_MS = 250;
+const PRACTICE_WINDOW_MS = 20000;
 
-/* صحنهٔ تمرین — دو صدف ثابت با دنبالهٔ مشهود ۰→۱؛ جای صدف‌ها بی‌کلید */
-const PRACTICE_SPOTS = [
-  { x: 34, y: 44 },
-  { x: 66, y: 58 }
-];
-
-function practiceCardHtml(badge, line) {
-  let dots = '';
-  for (let i = 0; i < PRACTICE_SPOTS.length; i++) {
-    dots += '<button type="button" class="play-corsi__shell" ' +
-      'data-idx="' + i + '" style="left:' + PRACTICE_SPOTS[i].x + '%;top:' + PRACTICE_SPOTS[i].y + '%" aria-label="صدف تمرین">' +
-      shellSvg() + '</button>';
-  }
-  return (badge ? '<span class="play-step-badge">' + esc(badge) + '</span>' : '') +
-    '<div class="play-corsi play-corsi--sample"><div class="play-corsi__field">' + dots + '</div></div>' +
-    '<p class="play-line">' + esc(line) + '</p>';
-}
-
-/** صحنهٔ تمرین — دکور پس‌زمینهٔ لایه‌های دریا؛ جنبش از fx؛ بی‌اثر برای پاسخ */
+/** صحنهٔ تمرین — دکور پس‌زمینهٔ خلیج؛ جنبش از fx؛ بی‌اثر برای پاسخ */
 function decoratePractice(stage) {
   if (!stage) return;
-  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach'));
+  stage.insertAdjacentHTML('afterbegin', sceneMarkup('teach', { svg: kindHero('corsi') })); // قهرمان این بازی — پوستهٔ اختصاصی G8
   fx.sceneAmbient(stage);
 }
 
-/** حلقهٔ یک تلاش تمرین: نمایش دوضانیه‌ای دنبالهٔ ۰→۱ + پنجرهٔ بازتپ.
- *  شنونده‌ها فقط پس از پایان نمایش نصب می‌شوند (الگوی موتور) — لمس حین نمایش
- *  هیچ اثری ندارد. خروجی: true فقط اگر ترتیب کامل درست لمس شد؛ خواب یدکی در هر
- *  مسیر cancel می‌شود. */
-function practiceRound(stage, sleeper) {
+/** لمس دو صدف مشخص به ترتیب — یا پنجرهٔ زمانی؛ خواب یدکی در هر دو مسیر cancel می‌شود */
+function tapTwoWithin(stage, wantA, wantB, ms, sleeper) {
   return new Promise((resolve) => {
-    const buttons = Array.from(stage.querySelectorAll('.play-corsi__shell'));
-    const order = [];
-    let settled = false;
+    const tiles = Array.from(stage.querySelectorAll('.play-corsi__tile'));
+    const picked = [];
+    let done = false;
     const finish = (ok) => {
-      if (settled) return;
-      settled = true;
-      buttons.forEach((b) => b.removeEventListener('pointerdown', onNode));
+      if (done) return;
+      done = true;
+      tiles.forEach((b) => b.removeEventListener('pointerdown', onTap));
       sleeper.cancel(); // خواب یدکی یتیم نمی‌ماند — قاعدهٔ پنجرهٔ گو/نوگو
-      resolve(ok);
+      resolve(ok === true);
     };
-    const onNode = (ev) => {
-      const btn = ev.target.closest('.play-corsi__shell');
-      if (!btn || btn.disabled) return;
+    const onTap = (ev) => {
+      const btn = ev.target.closest('.play-corsi__tile');
+      if (!btn || btn.classList.contains('play-corsi__tile--picked')) return;
       ev.preventDefault();
-      if (Number(btn.dataset.idx) === order.length) {
-        order.push(Number(btn.dataset.idx));
-        btn.classList.add('play-corsi__shell--step');
-        if (order.length >= buttons.length) finish(true); // دنبالهٔ تمرین کامل شد
-      } else {
-        finish(false); // ترتیب قطع شد — پایان بی‌سرزنش
+      btn.classList.add('play-corsi__tile--picked');
+      picked.push(Number(btn.dataset.idx));
+      if (picked.length >= 2) {
+        finish(picked[0] === wantA && picked[1] === wantB);
       }
     };
-    /* فاز نمایش — برق‌زدن دو صدف به ترتیب ۰→۱؛ دکمه‌ها بی‌اثر تا پایان نمایش */
-    const displaySeq = async () => {
-      for (let i = 0; i < buttons.length; i++) {
-        buttons[i].classList.add('play-corsi__shell--lit');
-        await sleeper.sleep(PRACTICE_LIT_MS);
-        buttons[i].classList.remove('play-corsi__shell--lit');
-        await sleeper.sleep(PRACTICE_GAP_MS);
-      }
-    };
-    displaySeq().then(() => {
-      if (settled) return;
-      buttons.forEach((b) => b.addEventListener('pointerdown', onNode));
-      sleeper.sleep(9000).then(() => finish(false));
-    });
+    tiles.forEach((b) => b.addEventListener('pointerdown', onTap));
+    sleeper.sleep(ms).then(() => finish(false));
   });
 }
 
+/** کارت تمرین — شبکهٔ صدف + پیام؛ حالت‌های روشن/انتخاب با کلاس */
+function practiceCardHtml(badge, line) {
+  return (badge ? '<span class="play-step-badge">' + esc(badge) + '</span>' : '') +
+    '<div class="play-corsi play-corsi--sample">' +
+      '<p class="play-corsi__status">' + esc(line) + '</p>' +
+      gridHtml() +
+    '</div>';
+}
+
+/** چشمک دو صدف پشت‌سرهم — پخش واقعی دنباله در تمرین؛ همهٔ صدف‌ها خاموش شروع می‌شوند */
+async function flashTwo(stage, a, b, sleeper) {
+  for (const idx of [a, b]) {
+    const tileEl = stage.querySelector('.play-corsi__tile[data-idx="' + idx + '"]');
+    if (tileEl) tileEl.classList.add('play-corsi__tile--lit');
+    await sleeper.sleep(620);
+    if (tileEl) tileEl.classList.remove('play-corsi__tile--lit');
+    await sleeper.sleep(240);
+  }
+}
+
+/** پاک‌کردن انتخاب‌ها برای تلاش دوباره */
+function resetPicks(stage) {
+  if (!stage || !stage.querySelectorAll) return;
+  stage.querySelectorAll('.play-corsi__tile--picked').forEach((el) => el.classList.remove('play-corsi__tile--picked'));
+}
+
 /**
- * تمرین تعاملی «کولهٔ مرواریدها» — یک دنبالهٔ دومردپایی با تکرار بی‌سرزنش تا موفقیت.
- * پس از دو تلاشِ ناتمام، ترتیب درست با بج شمارهٔ قدم آرام نشان می‌شود (آموزش پس از پاسخ).
- * خروجی: { applied, retries } — applied=false یعنی صحنه/ساعت آماده نبود.
+ * تمرین تعاملی «صدف‌های جادویی» — دو قدم با تکرار بی‌سرزنش تا موفقیت:
+ *   قدم ۱: دو صدف هم‌زمان روشن (نشان‌گذاری آرام) → همان دو را لمس کن.
+ *   قدم ۲: پخش واقعی یکی‌یکی → همان ترتیب را لمس کن.
+ *   کارت‌های تمرین از پالت ثابت ماژول‌اند — کلید آیتم‌های بانک سرور نمی‌بیند.
+ *   پس از دو تلاش، صدف‌های درست آرام نشان‌گذاری می‌شوند (آموزش پس از پاسخ).
+ * خروجی: { applied, retries, go_retries: 0, nogo_retries: 0 } — صفرهای نام‌دار فقط
+ *   برای سازگاری با قرارداد practiceRetries جلسه‌اند و تلاش واقعی در retries می‌آید.
  */
 export async function practiceInteractive(ctx) {
-  const { stage, sleeper } = ctx || {};
+  const { stage, sleeper, hint } = ctx || {};
   if (!stage || !sleeper) return { applied: false, retries: 0 };
+  const h = hint && hint.corsi && typeof hint.corsi === 'object' ? hint.corsi : {};
+  const s = h.stim && typeof h.stim === 'object' ? h.stim : {};
+  const a = Number.isInteger(s.a) && s.a >= 0 && s.a <= 8 ? s.a : 1;
+  const b = Number.isInteger(s.b) && s.b >= 0 && s.b <= 8 ? s.b : 5;
   let retries = 0;
-  let misses = 0;
 
-  for (;;) {
-    stage.className = 'play-stage';
-    stage.classList.add('play-stage--teach');
-    stage.innerHTML = practiceCardHtml('قدم ۱ از ۱', CORSI_PRACTICE.watchLine);
-    decoratePractice(stage);
-    fx.revealStage(stage);
-    fx.popIn(stage.querySelector('.play-corsi__field'), 240, false);
-    const ok = await practiceRound(stage, sleeper);
-    if (ok) {
-      stage.innerHTML = practiceCardHtml('قدم ۱ از ۱', CORSI_PRACTICE.success);
+  /* قدم ۱ — دو صدف هم‌زمان روشن (مهرهٔ قاعده؛ آسان) */
+  {
+    let misses = 0;
+    for (;;) {
+      stage.className = 'play-stage';
+      stage.classList.add('play-stage--teach');
+      stage.innerHTML = practiceCardHtml('قدم ۱ از ۲', CORSI_PRACTICE.step1);
       decoratePractice(stage);
       fx.revealStage(stage);
-      const el = stage.querySelector('.play-corsi__shell--step');
-      if (el) {
-        const r = el.getBoundingClientRect();
-        if (r.width) fx.burstAt(r.left + r.width / 2, r.top + r.height / 2);
+      const ta = stage.querySelector('.play-corsi__tile[data-idx="' + a + '"]');
+      const tb = stage.querySelector('.play-corsi__tile[data-idx="' + b + '"]');
+      if (ta) ta.classList.add('play-corsi__tile--lit');
+      if (tb) tb.classList.add('play-corsi__tile--lit');
+      const ok = await tapTwoWithin(stage, a, b, PRACTICE_WINDOW_MS, sleeper);
+      if (ok) {
+        const status = stage.querySelector('.play-corsi__status');
+        if (status) status.textContent = CORSI_PRACTICE.success;
+        if (ta) ta.classList.remove('play-corsi__tile--lit');
+        if (tb) tb.classList.remove('play-corsi__tile--lit');
+        if (ta) ta.classList.add('play-corsi__tile--picked');
+        if (tb) tb.classList.add('play-corsi__tile--picked');
+        const el = stage.querySelector('.play-corsi__grid');
+        if (el) {
+          const r = el.getBoundingClientRect();
+          if (r.width) fx.burstAt(r.left + r.width / 2, r.top + r.height / 2);
+        }
+        await sleeper.sleep(1200);
+        break;
       }
-      await sleeper.sleep(1200);
-      break;
+      retries += 1;
+      misses += 1;
+      resetPicks(stage);
+      const status = stage.querySelector('.play-corsi__status');
+      if (status) status.textContent = misses >= 2 ? CORSI_PRACTICE.retryWait : CORSI_PRACTICE.retry;
+      if (misses >= 2) {
+        if (ta) { ta.classList.add('play-corsi__tile--truth'); ta.setAttribute('data-truth-order', '1'); }
+        if (tb) { tb.classList.add('play-corsi__tile--truth'); tb.setAttribute('data-truth-order', '2'); }
+      }
+      await sleeper.sleep(1600);
     }
-    retries += 1;
-    misses += 1;
-    stage.innerHTML = practiceCardHtml('قدم ۱ از ۱', CORSI_PRACTICE.retry);
-    decoratePractice(stage);
-    fx.revealStage(stage);
-    if (misses >= 2) {
-      // آموزش پس از پاسخ — دنبالهٔ تمرین دانش عمومی است: صدف‌ها با بج قدم نشان می‌شوند
-      const shells = stage.querySelectorAll('.play-corsi__shell');
-      shells.forEach((t, i) => {
-        t.classList.add('play-corsi__shell--truth');
-        const badge = document.createElement('span');
-        badge.className = 'play-corsi__order';
-        badge.textContent = faNum(i + 1);
-        t.appendChild(badge);
-      });
+  }
+
+  /* قدم ۲ — پخش واقعی یکی‌یکی و یادآوری */
+  {
+    let misses = 0;
+    for (;;) {
+      stage.className = 'play-stage';
+      stage.classList.add('play-stage--teach');
+      stage.innerHTML = practiceCardHtml('قدم ۲ از ۲', CORSI_PRACTICE.step2);
+      decoratePractice(stage);
+      fx.revealStage(stage);
+      await flashTwo(stage, a, b, sleeper);
+      const status = stage.querySelector('.play-corsi__status');
+      if (status) status.textContent = 'نوبت توست! دو صدف را به همان ترتیب لمس کن.';
+      const ok = await tapTwoWithin(stage, a, b, PRACTICE_WINDOW_MS, sleeper);
+      if (ok) {
+        const done = stage.querySelector('.play-corsi__status');
+        if (done) done.textContent = CORSI_PRACTICE.success;
+        const el = stage.querySelector('.play-corsi__grid');
+        if (el) {
+          const r = el.getBoundingClientRect();
+          if (r.width) fx.burstAt(r.left + r.width / 2, r.top + r.height / 2);
+        }
+        await sleeper.sleep(1200);
+        break;
+      }
+      retries += 1;
+      misses += 1;
+      resetPicks(stage);
+      const again = stage.querySelector('.play-corsi__status');
+      if (again) again.textContent = misses >= 2 ? CORSI_PRACTICE.retryWait : CORSI_PRACTICE.retry;
+      if (misses >= 2) {
+        const ta = stage.querySelector('.play-corsi__tile[data-idx="' + a + '"]');
+        const tb = stage.querySelector('.play-corsi__tile[data-idx="' + b + '"]');
+        if (ta) { ta.classList.add('play-corsi__tile--truth'); ta.setAttribute('data-truth-order', '1'); }
+        if (tb) { tb.classList.add('play-corsi__tile--truth'); tb.setAttribute('data-truth-order', '2'); }
+      }
+      await sleeper.sleep(1600);
     }
-    await sleeper.sleep(1600);
   }
 
   stage.className = 'play-stage';
@@ -339,5 +351,34 @@ export async function practiceInteractive(ctx) {
   await sleeper.sleep(1600);
   stage.className = 'play-stage';
   stage.innerHTML = '';
-  return { applied: true, retries };
+  return { applied: true, retries, go_retries: 0, nogo_retries: 0 };
+}
+
+/** خلاصهٔ پایان جلسه — الگوی ن‌پشت با قاعدهٔ دامنهٔ صفر: جلسهٔ بی‌آزمون
+ *  نمره‌خورده = '' (هیچ عدد ساختگی نمی‌آید)؛ فقط مسیر تمرین صدا می‌زند — ارزیابی
+ *  هرگز عدد نمی‌بیند (C1). ورودی از session.js ساخته می‌شود و فقط دادهٔ مجاز
+ *  کلاینت را می‌بیند: scored_total/scored_correct از بازخورد سرور، median_rt از رکورد موتور؛
+ *  span_best (بازهٔ امروز) از دنباله‌های کاملِ درستِ رکوردهای موتور می‌آید. */
+export function debriefMarkup(summary, extra) {
+  const s = summary && typeof summary === 'object' ? summary : {};
+  const total = s.scored_total ?? 0;
+  const correct = s.scored_correct ?? 0;
+  if (!Number.isFinite(total) || total <= 0) return '';
+  const pct = Math.round((correct / total) * 100);
+  let html = '<div class="play-debrief">' +
+    '<p class="play-debrief__line">دقت امروزت در خلیج صدف‌ها: ٪' + esc(faNum(pct)) + '</p>';
+  if (Number.isFinite(s.span_best) && s.span_best > 0) {
+    html += '<p class="play-debrief__line">بلندترین دنبالهٔ کامل امروزت: ' + esc(faNum(s.span_best)) + ' صدف</p>';
+  }
+  if (Number.isFinite(s.median_rt) && s.median_rt > 0) {
+    html += '<p class="play-debrief__muted">میانهٔ زمان نخستین لمس‌هایت: ' +
+      esc(faNum(Math.round(s.median_rt / 100) / 10)) + ' ثانیه</p>';
+  }
+  const retries = extra && Number.isFinite(extra.retries) ? extra.retries
+    : (extra && Number.isFinite(extra.go_retries) && Number.isFinite(extra.nogo_retries)
+      ? extra.go_retries + extra.nogo_retries : 0);
+  if (retries > 0) {
+    html += '<p class="play-debrief__muted">' + esc(faNum(retries)) + ' بار در تمرین از نو شروع کردی — و حالا آماده‌ای.</p>';
+  }
+  return html + '</div>';
 }

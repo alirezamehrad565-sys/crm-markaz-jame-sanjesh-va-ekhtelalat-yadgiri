@@ -18,6 +18,9 @@ export interface ScreeningEntry {
   name: string;
   day: string;
   tags: string[];
+  /* ۱.۲۵.۵۰ — دو فیلد اختیاری ثبت روزانه */
+  birthDate: string | null;      // میلادی YYYY-MM-DD؛ نمایش شمسی سمت کلاینت
+  readinessScore: number | null; // ۰..۱۰۰
   createdBy: string;
   creatorName: string | null;
   createdAt: string;
@@ -66,13 +69,28 @@ export interface ScreeningRangeSummary {
   noReg: number;
 }
 
+export interface ScreeningEntryInput {
+  name: string;
+  tags: string[];
+  day?: string;
+  birth_date?: string | null;      // ۱.۲۵.۵۰ — اختیاری
+  readiness_score?: number | null; // ۱.۲۵.۵۰ — اختیاری
+}
+
+export interface ScreeningEntryPatch {
+  name?: string;
+  tags?: string[];
+  birth_date?: string | null;      // ۱.۲۵.۵۰ — اختیاری؛ null = پاک‌کردن
+  readiness_score?: number | null; // ۱.۲۵.۵۰ — اختیاری؛ null = پاک‌کردن
+}
+
 export interface ScreeningService {
   list(filters: ScreeningListFilters): Promise<ScreeningListResult>;
   tagsSummary(): Promise<ScreeningTagCount[]>;
   dayCounts(from: string, to: string): Promise<ScreeningDayCount[]>;
   rangeSummary(from: string, to: string): Promise<ScreeningRangeSummary>;
-  create(input: { name: string; tags: string[]; day?: string }, actor: ScreeningActor): Promise<ScreeningEntry>;
-  update(id: string, input: { name?: string; tags?: string[] }, actor: ScreeningActor): Promise<ScreeningEntry>;
+  create(input: ScreeningEntryInput, actor: ScreeningActor): Promise<ScreeningEntry>;
+  update(id: string, input: ScreeningEntryPatch, actor: ScreeningActor): Promise<ScreeningEntry>;
   remove(id: string, actor: ScreeningActor): Promise<void>;
 }
 

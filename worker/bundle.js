@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.41";
+var APP_VERSION = "1.25.50";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -7148,18 +7148,29 @@ var CreateExerciseBatchSchema = external_exports.object({
 });
 var SCREENING_NAME_MAX = 80;
 var SCREENING_TAGS_MAX = 12;
+var SCREENING_READINESS_MIN = 0;
+var SCREENING_READINESS_MAX = 100;
 var ScreeningTagSchema = external_exports.string().trim().min(1, "\u0628\u0631\u0686\u0633\u0628 \u062E\u0627\u0644\u06CC \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A").max(60, "\u0628\u0631\u0686\u0633\u0628 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F6\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+var ScreeningBirthDateSchema = external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u0628\u0627\u06CC\u062F \u0628\u0647 \u0642\u0627\u0644\u0628 YYYY-MM-DD \u0628\u0627\u0634\u062F");
+var ScreeningReadinessSchema = external_exports.number().int("\u0646\u0645\u0631\u0647\u0654 \u0622\u0645\u0627\u062F\u06AF\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0635\u062D\u06CC\u062D \u0628\u0627\u0634\u062F").min(SCREENING_READINESS_MIN, "\u0646\u0645\u0631\u0647\u0654 \u0622\u0645\u0627\u062F\u06AF\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0645\u0646\u0641\u06CC \u0628\u0627\u0634\u062F").max(SCREENING_READINESS_MAX, "\u0646\u0645\u0631\u0647\u0654 \u0622\u0645\u0627\u062F\u06AF\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F0\u06F0 \u0627\u0633\u062A");
 var ScreeningCreateSchema = external_exports.object({
   name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u0648 \u0641\u0627\u0645\u06CC\u0644 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(SCREENING_NAME_MAX, `\u0646\u0627\u0645 \u0648 \u0641\u0627\u0645\u06CC\u0644 \u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_NAME_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`),
   tags: external_exports.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_TAGS_MAX} \u0628\u0631\u0686\u0633\u0628`).default([]),
-  day: TehranYmdSchema.optional()
+  day: TehranYmdSchema.optional(),
+  birth_date: ScreeningBirthDateSchema.nullish(),
+  readiness_score: ScreeningReadinessSchema.nullish()
 });
 var ScreeningUpdateSchema = external_exports.object({
   name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u0648 \u0641\u0627\u0645\u06CC\u0644 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(SCREENING_NAME_MAX, `\u0646\u0627\u0645 \u0648 \u0641\u0627\u0645\u06CC\u0644 \u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_NAME_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`).optional(),
-  tags: external_exports.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_TAGS_MAX} \u0628\u0631\u0686\u0633\u0628`).optional()
-}).refine((v) => v.name !== void 0 || v.tags !== void 0, {
-  message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u06CC\u0644\u062F \u0628\u0631\u0627\u06CC \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"
-});
+  tags: external_exports.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${SCREENING_TAGS_MAX} \u0628\u0631\u0686\u0633\u0628`).optional(),
+  birth_date: ScreeningBirthDateSchema.nullish(),
+  readiness_score: ScreeningReadinessSchema.nullish()
+}).refine(
+  (v) => v.name !== void 0 || v.tags !== void 0 || v.birth_date !== void 0 || v.readiness_score !== void 0,
+  {
+    message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u06CC\u0644\u062F \u0628\u0631\u0627\u06CC \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"
+  }
+);
 var ScreeningQuerySchema = external_exports.object({
   from: TehranYmdSchema.optional(),
   to: TehranYmdSchema.optional(),
@@ -15180,15 +15191,15 @@ __name(m108NormalizeChecklistTexts, "m108NormalizeChecklistTexts");
 function m108NormalizeChecklistItems(items) {
   if (!items || items.length === 0) return null;
   const seen = /* @__PURE__ */ new Set();
-  const clean2 = [];
+  const clean4 = [];
   for (const it of items) {
     const text = it.text.trim();
     if (!text || seen.has(text)) continue;
     seen.add(text);
-    clean2.push({ text, done: Boolean(it.done) });
-    if (clean2.length >= TODO_CHECKLIST_MAX) break;
+    clean4.push({ text, done: Boolean(it.done) });
+    if (clean4.length >= TODO_CHECKLIST_MAX) break;
   }
-  return clean2.length > 0 ? JSON.stringify(clean2) : null;
+  return clean4.length > 0 ? JSON.stringify(clean4) : null;
 }
 __name(m108NormalizeChecklistItems, "m108NormalizeChecklistItems");
 function createTodosService(deps) {
@@ -15383,9 +15394,9 @@ function createTodosService(deps) {
       return rowToTodo(updated);
     },
     async addChecklistItem(id, text, actor) {
-      const clean2 = text.trim();
-      if (!clean2) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
-      if (clean2.length > 200) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+      const clean4 = text.trim();
+      if (!clean4) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
+      if (clean4.length > 200) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
       await db.transaction(async (tx) => {
         const row = await loadActiveRow(tx, id);
         if (row.assigner_id !== actor.staffId && row.assignee_id !== actor.staffId) {
@@ -15398,10 +15409,10 @@ function createTodosService(deps) {
         if (items.length >= TODO_CHECKLIST_MAX) {
           throw new ValidationError(`\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 ${TODO_CHECKLIST_MAX} \u0645\u0648\u0631\u062F \u0646\u062F\u0627\u0631\u062F`);
         }
-        if (items.some((it) => it.text === clean2)) {
+        if (items.some((it) => it.text === clean4)) {
           throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0648\u0631\u062F \u0627\u0632 \u0642\u0628\u0644 \u062F\u0631 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0647\u0633\u062A");
         }
-        items.push({ text: clean2, done: false });
+        items.push({ text: clean4, done: false });
         await tx.execute(`UPDATE todos SET checklist = ?, updated_at = datetime('now') WHERE id = ?`, [
           JSON.stringify(items),
           id
@@ -16334,11 +16345,11 @@ function createExerciseBankService(deps) {
     },
     // کدام شناسه‌ها واقعاً تمرینِ حذف‌نشدهٔ بانک‌اند (برای اعتبارسنجی لینک کارت طرح درمان)
     async idsExist(ids) {
-      const clean2 = [...new Set(ids.filter((x) => typeof x === "string" && x.length > 0))].slice(0, 50);
-      if (!clean2.length) return /* @__PURE__ */ new Set();
+      const clean4 = [...new Set(ids.filter((x) => typeof x === "string" && x.length > 0))].slice(0, 50);
+      if (!clean4.length) return /* @__PURE__ */ new Set();
       const rows = await db.query(
-        `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${clean2.map(() => "?").join(", ")})`,
-        clean2
+        `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${clean4.map(() => "?").join(", ")})`,
+        clean4
       );
       return new Set(rows.map((r) => r.id));
     },
@@ -23287,256 +23298,50 @@ function fillErrorPage(message) {
 }
 __name(fillErrorPage, "fillErrorPage");
 
-// src/domain/games/protocol.ts
-var PROTOCOL_VERSION = "1.0.0";
-var PROTOCOL_ID = "gonogo-standard";
-var PARAM = /* @__PURE__ */ __name((value, rationale, status) => ({ value, rationale, status }), "PARAM");
-function bandForAge2(age) {
-  if (typeof age !== "number" || !Number.isFinite(age)) return { band: "7-12", clamped: false };
-  if (age <= 6) return { band: "4-6", clamped: age < 4 };
-  return { band: "7-12", clamped: age > 12 };
-}
-__name(bandForAge2, "bandForAge");
-var TRAINING_PARAMS = {
-  "4-6": {
-    response_window_go_ms: PARAM(2e3, "\u06A9\u0648\u062F\u06A9 \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u067E\u0631\u062F\u0627\u0632\u0634 \u0648 \u062A\u0635\u0645\u06CC\u0645 \u06A9\u0646\u062F\u062A\u0631 \u062F\u0627\u0631\u062F\u061B \u067E\u0646\u062C\u0631\u0647\u0654 \u0645\u062A\u0639\u0627\u0631\u0641 \u06AF\u0648/\u0646\u0648\u06AF\u0648 \u06A9\u0648\u062F\u06A9\u200C\u0645\u062D\u0648\u0631 \u0628\u0644\u0646\u062F\u062A\u0631 \u0627\u0646\u062A\u062E\u0627\u0628 \u0634\u062F \u2014 \u0628\u0627 \u067E\u06CC\u0644\u0648\u062A \u0645\u0631\u06A9\u0632 \u062A\u0623\u06CC\u06CC\u062F \u0642\u0637\u0639\u06CC \u0645\u06CC\u200C\u06AF\u06CC\u0631\u062F", "pilot"),
-    response_window_nogo_ms: PARAM(2e3, "\u0647\u0645\u200C\u0637\u0648\u0644 \u06AF\u0648 \u0628\u0631\u0627\u06CC \u062E\u0648\u0627\u0646\u0627\u06CC\u06CC \u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646 \u062F\u0631 \u0627\u06CC\u0646 \u0633\u0646", "proposed"),
-    isi_min_ms: PARAM(1e3, "ISI \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0627\u0632 \u0627\u06CC\u0646 \u062F\u0631 \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u0646\u0631\u062E \u0627\u064F\u0645\u06CC\u0634\u0646 \u062A\u0635\u0627\u062F\u0641\u06CC \u0645\u06CC\u200C\u0633\u0627\u0632\u062F\u061B \u062D\u062F \u067E\u0627\u06CC\u06CC\u0646 \u0645\u062D\u0627\u0641\u0638\u0647\u200C\u06A9\u0627\u0631\u0627\u0646\u0647", "proposed"),
-    isi_max_ms: PARAM(1500, "\u0628\u0627\u0632\u0647\u0654 \u06F1\u2013\u06F1\u066B\u06F5 \u062B\u0627\u0646\u06CC\u0647 \u0633\u0646\u062F \u0645\u062D\u062A\u0648\u0627 \u0628\u0633\u062A\u0647\u0654 \u06F3 \u2014 \u062D\u0641\u0638 \u0634\u062F", "pilot"),
-    fixation_ms: PARAM(400, "\u0645\u06A9\u062B \u062E\u0646\u062B\u06CC \u06A9\u0648\u062A\u0627\u0647 \u067E\u06CC\u0634 \u0627\u0632 \u0646\u0645\u0627\u06CC\u0634 \u2014 \u062C\u062F\u0627\u06A9\u0646\u0646\u062F\u0647\u0654 ISI \u0627\u0632 \u0644\u062D\u0638\u0647\u0654 \u0645\u062D\u0631\u06A9\u061B \u0628\u062F\u0648\u0646 \u0641\u0644\u0627\u0634 \u0648 \u0634\u0645\u0627\u0631\u0634 (\xA7\u06F9)", "proposed"),
-    go_ratio: PARAM(0.75, "\u0646\u0633\u0628\u062A \u0645\u062A\u0639\u0627\u0631\u0641 \u06AF\u0648/\u0646\u0648\u06AF\u0648 ~\u06F3:\u06F1 \u062F\u0631 \u0627\u062F\u0628\u06CC\u0627\u062A \u06AF\u0648/\u0646\u0648\u06AF\u0648 \u06A9\u0648\u062F\u06A9\u0627\u0646\u061B \u0646\u0633\u0628\u062A \u0628\u0627\u0644\u0627\u062A\u0631 \u0628\u0631\u0627\u06CC \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u062A\u0627 \u0645\u0647\u0627\u0631 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u062E\u0633\u062A\u0647\u200C\u06A9\u0646\u0646\u062F\u0647 \u0646\u0634\u0648\u062F", "pilot"),
-    max_consecutive_same: PARAM(3, "\u0628\u06CC\u0634 \u0627\u0632 \u0633\u0647 \u067E\u06CC\u0627\u067E\u06CC\u060C \u0631\u06CC\u062A\u0645 \u0642\u0627\u0628\u0644 \u062D\u0641\u0638\u200C\u06A9\u0631\u062F\u0646 \u0645\u06CC\u200C\u0633\u0627\u0632\u062F (\u062D\u0641\u0638\u200C\u06A9\u0631\u062F\u0646 \u0628\u0647\u200C\u062C\u0627\u06CC \u0628\u0627\u0632\u062F\u0627\u0631\u06CC)", "proposed"),
-    block_size: PARAM(20, "\u0628\u0627\u0632\u0647\u0654 \u062A\u0648\u062C\u0647 \u0641\u0639\u0627\u0644 \u06F4\u2013\u06F6 \u0633\u0627\u0644\u061B \u0628\u0644\u0648\u06A9 \u06F2\u06F0 \u062A\u0627\u06CC\u06CC \u0628\u0627 \u0627\u0633\u062A\u0631\u0627\u062D\u062A\u060C \u062E\u0633\u062A\u06AF\u06CC \u0627\u0646\u062A\u0647\u0627\u06CC \u062C\u0644\u0633\u0647 \u0631\u0627 \u0645\u06CC\u200C\u0634\u06A9\u0646\u062F", "pilot"),
-    break_min_ms: PARAM(4e3, "\u0627\u0633\u062A\u0631\u0627\u062D\u062A \u06A9\u0648\u062A\u0627\u0647 \u0644\u0645\u0633\u200C\u0645\u062D\u0648\u0631\u061B \u06A9\u0627\u0641\u06CC \u0628\u0631\u0627\u06CC \u062A\u0646\u0638\u06CC\u0645\u060C \u06A9\u0648\u062A\u0627\u0647 \u0628\u0631\u0627\u06CC \u062D\u0641\u0638 \u062C\u0631\u06CC\u0627\u0646", "proposed"),
-    assessment_blocks: PARAM(2, "\u062D\u0627\u0644\u062A \u062A\u0645\u0631\u06CC\u0646 \u062F\u0648 \u0628\u0644\u0648\u06A9 \u06A9\u0648\u062A\u0627\u0647 \u2014 \u062A\u062C\u0631\u0628\u0647\u0654 \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0627\u0632 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC", "proposed"),
-    stimulus_scale_vmin: PARAM(38, "\u0645\u062D\u0631\u06A9 \u062F\u0631\u0634\u062A \u0628\u0631\u0627\u06CC \u06F4\u2013\u06F6 \u0633\u0627\u0644\u061B \u06F3\u06F8\u066A \u0642\u0637\u0631 \u06A9\u0648\u0686\u06A9 \u0648\u06CC\u0648\u067E\u0648\u0631\u062A \u2014 \u067E\u0627\u0633\u062E \u0628\u0627\u0632\u062E\u0648\u0631\u062F \u0645\u06CC\u062F\u0627\u0646\u06CC \xAB\u0622\u06CC\u06A9\u0648\u0646 \u0628\u0632\u0631\u06AF\xBB \u0628\u0627 \u0645\u0642\u06CC\u0627\u0633 \u0633\u0646\u200C\u0645\u062D\u0648\u0631 \u0646\u0647 \u0639\u062F\u062F \u062B\u0627\u0628\u062A", "pilot"),
-    feedback_ms: PARAM(1400, "\u062D\u0628\u0627\u0628 \u0628\u0627\u0632\u062E\u0648\u0631\u062F \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0627\u0632 \u06F1\u06F6\u06F0\u06F0ms \u0641\u0639\u0644\u06CC \u2014 \u0641\u0627\u0635\u0644\u0647\u0654 \u0628\u06CC\u0646\u200C\u0622\u0632\u0645\u0648\u0646\u0634\u06CC \u0637\u0648\u0644\u0627\u0646\u06CC\u060C \u06A9\u0648\u062F\u06A9 \u0628\u06CC\u200C\u062D\u0648\u0635\u0644\u0647 \u0631\u0627 \u062E\u0641\u0647 \u0645\u06CC\u200C\u06A9\u0646\u062F (C12 \u0645\u0645\u06CC\u0632\u06CC)", "proposed"),
-    preview_step_ms: PARAM(2200, "\u0647\u0631 \u06AF\u0627\u0645 \u0622\u0645\u0648\u0632\u0634 \u062F\u0648\u0636\u0627\u0646\u06CC\u0647\u200C\u0627\u06CC \u062A\u0627 \u0628\u06CC\u0634\u062A\u0631 \u0627\u0632 \u0627\u06CC\u0646 \u0631\u0648\u06CC \u0635\u0641\u062D\u0647 \u0646\u0645\u06CC\u200C\u0645\u0627\u0646\u062F", "proposed")
-  },
-  "7-12": {
-    response_window_go_ms: PARAM(1500, "\u067E\u0646\u062C\u0631\u0647\u0654 \u0645\u062A\u0639\u0627\u0631\u0641 \u06AF\u0648/\u0646\u0648\u06AF\u0648 \u0633\u0646\u06CC\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u067E\u0627\u0633\u062E\u200C\u0647\u0627\u06CC \u0632\u06CC\u0631 \u06A9\u0641 \u06F1\u06F5\u06F0ms \u062C\u062F\u0627\u06AF\u0627\u0646\u0647 \u0641\u06CC\u0644\u062A\u0631 \u0645\u06CC\u200C\u0634\u0648\u0646\u062F (\xA7\u06F8)", "pilot"),
-    response_window_nogo_ms: PARAM(1500, "\u0647\u0645\u200C\u0637\u0648\u0644 \u06AF\u0648 \u2014 \u0645\u0642\u0627\u06CC\u0633\u0647\u200C\u067E\u0630\u06CC\u0631\u06CC \u0628\u06CC\u0646\u200C\u0633\u0646\u06CC", "proposed"),
-    isi_min_ms: PARAM(800, "ISI \u06A9\u0645\u06CC \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0628\u0631\u0627\u06CC \u0633\u0646\u06CC\u0646 \u0628\u0627\u0644\u0627\u062A\u0631\u061B \u0641\u0634\u0627\u0631 \u0633\u0631\u0639\u062A \u0645\u062A\u0639\u0627\u062F\u0644", "proposed"),
-    isi_max_ms: PARAM(1200, "\u0628\u0627\u0632\u0647\u0654 \u06F0\u066B\u06F8\u2013\u06F1\u066B\u06F2 \u062B\u0627\u0646\u06CC\u0647 \u2014 \u062A\u0646\u0648\u0639 \u0628\u0631\u0627\u06CC \u0634\u06A9\u0633\u062A\u0646 \u0627\u0646\u062A\u0638\u0627\u0631 \u0632\u0645\u0627\u0646\u06CC \u062B\u0627\u0628\u062A", "proposed"),
-    fixation_ms: PARAM(400, "\u0645\u06A9\u062B \u062E\u0646\u062B\u06CC \u067E\u06CC\u0634 \u0627\u0632 \u0646\u0645\u0627\u06CC\u0634 \u2014 \u0647\u0645\u200C\u0637\u0648\u0644 \u062F\u0648 \u0628\u0627\u0646\u062F \u0628\u0631\u0627\u06CC \u0645\u0642\u0627\u06CC\u0633\u0647\u200C\u067E\u0630\u06CC\u0631\u06CC", "proposed"),
-    go_ratio: PARAM(0.75, "\u0646\u0633\u0628\u062A ~\u06F3:\u06F1 \u0645\u062A\u0639\u0627\u0631\u0641\u061B \u0628\u0627 \u0646\u0633\u062E\u0647\u0654 \u067E\u0631\u0648\u062A\u06A9\u0644 \u062B\u0627\u0628\u062A \u0645\u06CC\u200C\u0645\u0627\u0646\u062F", "pilot"),
-    max_consecutive_same: PARAM(3, "\u0647\u0645\u0627\u0646 \u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u06F4\u2013\u06F6 \u0633\u0627\u0644", "proposed"),
-    block_size: PARAM(24, "\u0633\u0646\u06CC\u0646 \u0645\u062F\u0631\u0633\u0647 \u0628\u0627\u0632\u0647\u0654 \u062A\u0648\u062C\u0647 \u0628\u0644\u0646\u062F\u062A\u0631 \u2014 \u0628\u0644\u0648\u06A9 \u06F2\u06F4 \u062A\u0627\u06CC\u06CC", "proposed"),
-    break_min_ms: PARAM(3500, "\u0627\u0633\u062A\u0631\u0627\u062D\u062A \u0644\u0645\u0633\u200C\u0645\u062D\u0648\u0631", "proposed"),
-    assessment_blocks: PARAM(3, "\u067E\u0631\u0648\u062A\u06A9\u0644 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0627\u0633\u062A\u0627\u0646\u062F\u0627\u0631\u062F \u0633\u0647 \u0628\u0644\u0648\u06A9 (~\u06F7\u06F2 \u0622\u0632\u0645\u0648\u0646) \u2014 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u0628\u0644\u0646\u062F \u0628\u0631\u0627\u06CC \u0645\u06CC\u0627\u0646\u0647 \u0648 \u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u067E\u0627\u06CC\u062F\u0627\u0631", "proposed"),
-    stimulus_scale_vmin: PARAM(30, "\u0645\u062D\u0631\u06A9 \u06A9\u0648\u0686\u06A9\u200C\u062A\u0631 \u0628\u0631\u0627\u06CC \u0633\u0646\u06CC\u0646 \u0628\u0627\u0644\u0627\u062A\u0631 \u2014 \u0628\u0627\u0632\u0637\u0631\u0627\u062D\u06CC \u067E\u0627\u0633\u062E \u0628\u0647 \xAB\u0622\u06CC\u06A9\u0648\u0646\u200C\u0647\u0627 \u0628\u0632\u0631\u06AF \u0627\u0633\u062A\xBB \u0628\u0627 \u067E\u0627\u0631\u0627\u0645\u062A\u0631 \u0633\u0646\u200C\u0645\u062D\u0648\u0631", "pilot"),
-    feedback_ms: PARAM(1200, "\u0628\u0627\u0632\u062E\u0648\u0631\u062F \u0622\u0645\u0648\u0632\u0634\u06CC \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u2014 \u0627\u06CC\u0646 \u0633\u0646 \u062A\u062D\u0645\u0644 \u0641\u0627\u0635\u0644\u0647\u0654 \u0628\u0644\u0646\u062F \u0646\u062F\u0627\u0631\u062F", "proposed"),
-    preview_step_ms: PARAM(2e3, "\u06AF\u0627\u0645 \u0622\u0645\u0648\u0632\u0634 \u062F\u0648\u0636\u0627\u0646\u06CC\u0647\u200C\u0627\u06CC", "proposed")
-  }
-};
-var ASSESSMENT_PARAMS = {
-  "4-6": {
-    ...TRAINING_PARAMS["4-6"],
-    response_window_go_ms: PARAM(2e3, "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC: \u067E\u0646\u062C\u0631\u0647\u0654 \u062B\u0627\u0628\u062A \u0647\u0645\u0627\u0646 \u062A\u0645\u0631\u06CC\u0646 \u062A\u0627 \u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u0631\u0648\u0646\u062F\u061B \u062A\u063A\u06CC\u06CC\u0631\u0634 \u06CC\u0639\u0646\u06CC \u067E\u0631\u0648\u062A\u06A9\u0644 \u062C\u062F\u06CC\u062F \u0648 \u0628\u0627\u0645\u067E \u0646\u0633\u062E\u0647", "pilot"),
-    assessment_blocks: PARAM(2, "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u06F4\u2013\u06F6 \u0633\u0627\u0644: \u062F\u0648 \u0628\u0644\u0648\u06A9 \u06F2\u06F0 \u062A\u0627\u06CC\u06CC = \u06F4\u06F0 \u0622\u0632\u0645\u0648\u0646 \u2014 \u0628\u0644\u0646\u062F\u062A\u0631 \u0627\u0632 \u0638\u0631\u0641\u06CC\u062A \u062A\u0648\u062C\u0647 \u0627\u06CC\u0646 \u0633\u0646 \u0646\u06CC\u0633\u062A", "proposed")
-  },
-  "7-12": {
-    ...TRAINING_PARAMS["7-12"],
-    response_window_go_ms: PARAM(1500, "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC: \u067E\u0646\u062C\u0631\u0647\u0654 \u062B\u0627\u0628\u062A\u061B \u0633\u0627\u0632\u06AF\u0627\u0631\u06CC \u062F\u0631 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0645\u0645\u0646\u0648\u0639 \u0627\u0633\u062A (C1)", "pilot"),
-    assessment_blocks: PARAM(3, "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u06F7\u2013\u06F1\u06F2 \u0633\u0627\u0644: \u0633\u0647 \u0628\u0644\u0648\u06A9 \u06F2\u06F4 \u062A\u0627\u06CC\u06CC = \u06F7\u06F2 \u0622\u0632\u0645\u0648\u0646 \u0627\u0633\u062A\u0627\u0646\u062F\u0627\u0631\u062F", "proposed")
-  }
-};
-var ASSESSMENT_BEHAVIOR = {
-  feedback_in_main: false,
-  star_basket: false,
-  adaptive: false,
-  progress_visible: false,
-  instruction_style: "standard"
-};
-var TRAINING_BEHAVIOR = {
-  feedback_in_main: true,
-  star_basket: true,
-  adaptive: true,
-  progress_visible: true,
-  instruction_style: "playful"
-};
-function protocolFor(mode, band) {
-  const params = mode === "assessment" ? ASSESSMENT_PARAMS[band] : TRAINING_PARAMS[band];
-  return {
-    protocol_id: PROTOCOL_ID,
-    version: PROTOCOL_VERSION,
-    mode,
-    age_band: band,
-    params,
-    behavior: mode === "assessment" ? ASSESSMENT_BEHAVIOR : TRAINING_BEHAVIOR
-  };
-}
-__name(protocolFor, "protocolFor");
-function protocolForAge(mode, age) {
-  const { band, clamped } = bandForAge2(age);
-  return { ...protocolFor(mode, band), age_clamped: clamped };
-}
-__name(protocolForAge, "protocolForAge");
-function isProtocolVersionSupported(v) {
-  return typeof v === "string" && /^\d+\.\d+\.\d+$/.test(v) && v === PROTOCOL_VERSION;
-}
-__name(isProtocolVersionSupported, "isProtocolVersionSupported");
-function protocolSnapshotOf(p) {
-  const params = {};
-  for (const [k, v] of Object.entries(p.params)) params[k] = v.value;
-  return {
-    protocol_id: p.protocol_id,
-    version: p.version,
-    mode: p.mode,
-    age_band: p.age_band,
-    params,
-    behavior: { ...p.behavior }
-  };
-}
-__name(protocolSnapshotOf, "protocolSnapshotOf");
-var NBACK_PROTOCOL_ID = "nback-standard";
-var NBACK_PROTOCOL_VERSION = "1.0.0";
-var NBACK_PARAMS = {
-  "4-6": {
-    isi_min_ms: PARAM(2200, "\u0641\u0627\u0635\u0644\u0647\u0654 \u0628\u06CC\u0646\u200C\u0645\u062D\u0631\u0643\u06CC \u0646\u200C\u067E\u0634\u062A\u061B \u0631\u0645\u0632\u06AF\u0630\u0627\u0631\u06CC \u0645\u0627\u0647\u06CC\u0650 \u0642\u062F\u0645 \u0642\u0628\u0644 \u062F\u0631 \u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC \u06A9\u0648\u062F\u06A9\u0650 \u06A9\u0648\u0686\u06A9\u200C\u062A\u0631 \u0628\u0647 \u0641\u0627\u0635\u0644\u0647\u0654 \u0622\u0631\u0627\u0645\u200C\u062A\u0631 \u0646\u06CC\u0627\u0632 \u062F\u0627\u0631\u062F \u2014 \u0645\u062A\u0639\u0627\u0631\u0641 \u0648\u0638\u0627\u06CC\u0641 \u0647\u0645\u200C\u0633\u0627\u0646\u06CC \u06A9\u0648\u062F\u06A9\u0627\u0646\u0647", "proposed"),
-    isi_max_ms: PARAM(2800, "\u0628\u0627\u0644\u0627\u06CC \u0628\u0627\u0632\u0647 ~\u06F2\u066B\u06F5 \u062B\u0627\u0646\u06CC\u0647 \u2014 \u062A\u0646\u0648\u0639 \u0645\u0644\u0627\u06CC\u0645 \u0628\u0631\u0627\u06CC \u0634\u06A9\u0633\u062A\u0646 \u0627\u0646\u062A\u0638\u0627\u0631 \u0632\u0645\u0627\u0646\u06CC \u062B\u0627\u0628\u062A", "proposed"),
-    fixation_ms: PARAM(400, "\u0645\u06A9\u062B \u062E\u0646\u062B\u06CC \u067E\u06CC\u0634 \u0627\u0632 \u0646\u0645\u0627\u06CC\u0634 \u2014 \u0647\u0645\u200C\u0637\u0648\u0644 \u06AF\u0648/\u0646\u0648\u06AF\u0648 \u0628\u0631\u0627\u06CC \u06CC\u06A9\u062F\u0633\u062A\u06CC \u062A\u062C\u0631\u0628\u0647", "proposed"),
-    block_size: PARAM(30, "\u062C\u0631\u06CC\u0627\u0646 \u0647\u0645\u200C\u0633\u0627\u0646\u06CC \u0646\u0628\u0627\u06CC\u062F \u0628\u0627 \u0627\u0633\u062A\u0631\u0627\u062D\u062A \u0628\u0644\u0648\u06A9\u06CC \u0628\u0634\u06A9\u0646\u062F (\u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u0642\u062F\u0645 \u0642\u0628\u0644 \u0627\u0632 \u062D\u0627\u0641\u0638\u0647 \u0645\u06CC\u200C\u06AF\u0630\u0631\u062F) \u2014 \u062C\u0644\u0633\u0647\u0654 ~\u06F2\u06F6 \u0645\u062D\u0631\u06A9\u06CC \u0628\u06CC\u200C\u0627\u0633\u062A\u0631\u0627\u062D\u062A", "proposed"),
-    match_ratio: PARAM(0.3, "\u0646\u0631\u062E \u0647\u0645\u0633\u0627\u0646\u06CC ~\u06F3\u06F0\u066A \u2014 \u062A\u0639\u0627\u062F\u0644 \u0645\u062A\u0639\u0627\u0631\u0641 \u0633\u0647\u0645\u06CC\u0647\u0654 \u0647\u0645\u0633\u0627\u0646/\u0646\u0627\u0647\u0645\u0633\u0627\u0646 \u062F\u0631 \u0648\u0638\u0627\u06CC\u0641 \u0647\u0645\u200C\u0633\u0627\u0646\u06CC\u061B \u062A\u0635\u0627\u062F\u0641\u06CC\u200C\u0646\u0645\u0627\u06CC \u067E\u0627\u0633\u062E \u0628\u0647 ~\u06F5\u06F0\u066A \u0646\u0645\u06CC\u200C\u0631\u0633\u062F", "proposed"),
-    max_consecutive_match: PARAM(2, "\u0628\u06CC\u0634 \u0627\u0632 \u062F\u0648 \u0647\u0645\u0633\u0627\u0646\u0650 \u067E\u06CC\u0627\u067E\u06CC\u060C \u067E\u0627\u0633\u062E \u062A\u06A9\u0631\u0627\u0631\u06CC\u0650 \u0628\u06CC\u200C\u0645\u0642\u0627\u06CC\u0633\u0647 \u0645\u06CC\u200C\u0633\u0627\u0632\u062F", "proposed"),
-    response_window_ms: PARAM(3800, "\u067E\u0646\u062C\u0631\u0647\u0654 \u067E\u0627\u0633\u062E \u062F\u0648\u06AF\u0632\u06CC\u0646\u0647\u200C\u0627\u06CC \xAB\u0647\u0645\u0627\u0646 \u0627\u0633\u062A/\u0641\u0631\u0642 \u062F\u0627\u0631\u062F\xBB \u2014 \u067E\u0627\u06CC\u0647\u0654 \u0645\u0631\u062C\u0639\u061B \u067E\u0646\u062C\u0631\u0647\u0654 \u0639\u0645\u0644\u06CC\u0627\u062A\u06CC \u0631\u0648\u06CC \u062E\u0648\u062F \u0622\u06CC\u062A\u0645 authored \u0645\u06CC\u200C\u0646\u0634\u06CC\u0646\u062F", "proposed")
-  },
-  "7-12": {
-    isi_min_ms: PARAM(1800, "\u0641\u0627\u0635\u0644\u0647\u0654 \u0628\u06CC\u0646\u200C\u0645\u062D\u0631\u0643\u06CC \u0646\u200C\u067E\u0634\u062A \u0628\u0631\u0627\u06CC \u0633\u0646\u06CC\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0627\u0632 \u06F4\u2013\u06F6 \u0633\u0627\u0644\u060C \u0628\u0644\u0646\u062F\u062A\u0631 \u0627\u0632 \u06AF\u0648/\u0646\u0648\u06AF\u0648", "proposed"),
-    isi_max_ms: PARAM(2400, "\u0628\u0627\u0644\u0627\u06CC \u0628\u0627\u0632\u0647 ~\u06F2\u066B\u06F1 \u062B\u0627\u0646\u06CC\u0647 \u2014 \u062D\u0648\u0644 \u0647\u062F\u0641 ~\u06F2\u066B\u06F5 \u062B\u0627\u0646\u06CC\u0647\u0654 \u0628\u06CC\u0646\u200C\u0645\u062D\u0631\u0643\u06CC", "proposed"),
-    fixation_ms: PARAM(400, "\u0645\u06A9\u062B \u062E\u0646\u062B\u06CC \u067E\u06CC\u0634 \u0627\u0632 \u0646\u0645\u0627\u06CC\u0634 \u2014 \u0647\u0645\u200C\u0637\u0648\u0644 \u062F\u0648 \u0628\u0627\u0646\u062F", "proposed"),
-    block_size: PARAM(30, "\u062C\u0631\u06CC\u0627\u0646 \u0647\u0645\u200C\u0633\u0627\u0646\u06CC \u0628\u06CC\u200C\u0627\u0633\u062A\u0631\u0627\u062D\u062A \u0628\u0644\u0648\u06A9\u06CC \u2014 \u0647\u0645\u0627\u0646 \u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u06F4\u2013\u06F6 \u0633\u0627\u0644", "proposed"),
-    match_ratio: PARAM(0.3, "\u0646\u0631\u062E \u0647\u0645\u0633\u0627\u0646\u06CC ~\u06F3\u06F0\u066A \u2014 \u06CC\u06A9\u0633\u0627\u0646 \u062F\u0648 \u0628\u0627\u0646\u062F \u0628\u0631\u0627\u06CC \u0645\u0642\u0627\u06CC\u0633\u0647\u200C\u067E\u0630\u06CC\u0631\u06CC", "proposed"),
-    max_consecutive_match: PARAM(2, "\u0633\u0642\u0641 \u0647\u0645\u0633\u0627\u0646\u0650 \u067E\u06CC\u0627\u067E\u06CC \u2014 \u06CC\u06A9\u0633\u0627\u0646 \u062F\u0648 \u0628\u0627\u0646\u062F", "proposed"),
-    response_window_ms: PARAM(3400, "\u067E\u0646\u062C\u0631\u0647\u0654 \u067E\u0627\u0633\u062E \u062F\u0648\u06AF\u0632\u06CC\u0646\u0647\u200C\u0627\u06CC \u0628\u0631\u0627\u06CC \u0633\u0646\u06CC\u0646 \u0628\u0627\u0644\u0627\u062A\u0631 \u2014 \u067E\u0627\u06CC\u0647\u0654 \u0645\u0631\u062C\u0639\u061B \u067E\u0646\u062C\u0631\u0647\u0654 \u0639\u0645\u0644\u06CC\u0627\u062A\u06CC authored \u0627\u0633\u062A", "proposed")
-  }
-};
-function nbackParamsOf(band) {
-  const src = NBACK_PARAMS[band] ?? NBACK_PARAMS["7-12"];
-  const out = {};
-  for (const [k, v] of Object.entries(src)) out[k] = v.value;
-  return out;
-}
-__name(nbackParamsOf, "nbackParamsOf");
-function applyNbackProtocol(snap, band) {
-  return {
-    ...snap,
-    protocol_id: NBACK_PROTOCOL_ID,
-    version: NBACK_PROTOCOL_VERSION,
-    params: { ...snap.params, ...nbackParamsOf(band) }
-  };
-}
-__name(applyNbackProtocol, "applyNbackProtocol");
-
 // src/domain/games/registry.ts
-var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "nback", "corsi"];
-var THRESH = /* @__PURE__ */ __name((value, rationale) => ({ value, rationale, status: "proposed" }), "THRESH");
-var GONOGO_THRESHOLDS = {
+var GAME_KIND_IDS = ["gonogo", "numline", "scan", "stroop", "flanker", "trail", "nback", "corsi", "span"];
+function gameKindOf(v) {
+  return GAME_KIND_IDS.includes(v) ? v : "gonogo";
+}
+__name(gameKindOf, "gameKindOf");
+var P = /* @__PURE__ */ __name((value, rationale, status = "proposed") => ({
+  value,
+  rationale,
+  status
+}), "P");
+var GONOGO_STAGE_RULE = {
+  shape: "go_nogo",
   pass: {
-    go_pct: THRESH(70, "\u062D\u062F\u0627\u0642\u0644 \u06AF\u0648\u0647\u0627\u06CC \u062F\u0631\u0633\u062A \u0628\u0631\u0627\u06CC \u06AF\u0630\u0627\u0631 \u2014 \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u06A9\u0627\u0631\u0634\u0646\u0627\u0633\u060C \u062A\u0627 \u067E\u06CC\u0644\u0648\u062A \u0645\u0631\u06A9\u0632 proposed"),
-    nogo_pct: THRESH(60, "\u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u0633\u062E\u062A\u200C\u062A\u0631 \u0627\u0632 \u0631\u0641\u062A\u0646 \u0627\u0633\u062A\u061B \u06A9\u0641 \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0628\u0631\u0627\u06CC \u0646\u0648\u06AF\u0648 \u062F\u0631 \u06AF\u0630\u0627\u0631")
+    go_pct: P(70, "\u06AF\u0630\u0627\u0631 \u0628\u0627 \u06AF\u0648\u0650 \u062F\u0631\u0633\u062A \u2265\u06F7\u06F0\u066A \u2014 \u0628\u0627\u0644\u0627\u06CC \u0646\u0631\u062E \u062D\u062F\u0633 \u062F\u0631 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u06F7\u06F5\u066A \u06AF\u0648\u061B \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u06A9\u0627\u0631\u0634\u0646\u0627\u0633 \u06F1.\u06F2\u06F5.\u06F2\u06F2"),
+    nogo_pct: P(60, "\u06AF\u0630\u0627\u0631 \u0628\u0627 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u2265\u06F6\u06F0\u066A \u2014 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u062F\u0634\u0648\u0627\u0631\u062A\u0631\u06CC\u0646 \u062C\u0632\u0621 \u0627\u0633\u062A\u061B \u0622\u0633\u062A\u0627\u0646\u0647\u0654 \u067E\u0627\u0626\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u06AF\u0648 \u0639\u0645\u062F\u06CC \u0627\u0633\u062A")
   },
   star2: {
-    go_pct: THRESH(80, "\u0633\u062A\u0627\u0631\u0647\u0654 \u062F\u0648\u0645 \u0628\u0627 \u06AF\u0648\u0650 \u0645\u0637\u0645\u0626\u0646\u200C\u062A\u0631"),
-    nogo_pct: THRESH(75, "\u0633\u062A\u0627\u0631\u0647\u0654 \u062F\u0648\u0645 \u0628\u0627 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u0645\u0637\u0645\u0626\u0646\u200C\u062A\u0631")
+    go_pct: P(80, "\u062F\u0648\u0633\u062A\u0627\u0631\u0647 \u2014 \u0641\u0627\u0635\u0644\u0647\u0654 \u0645\u062D\u0633\u0648\u0633 \u0627\u0632 \u06AF\u0630\u0627\u0631 \u062A\u0627 \u06A9\u0648\u062F\u06A9 \u067E\u06CC\u0634\u0631\u0641\u062A \u0631\u0627 \u062D\u0633 \u06A9\u0646\u062F"),
+    nogo_pct: P(75, "\u062F\u0648\u0633\u062A\u0627\u0631\u0647 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u2014 \u0647\u0645\u200C\u06AF\u0627\u0645 \u0628\u0627 \u067E\u0644\u0647\u0654 \u06AF\u0648")
   },
   star3: {
-    go_pct: THRESH(90, "\u0633\u062A\u0627\u0631\u0647\u0654 \u0633\u0648\u0645 = \u062A\u0633\u0644\u0637 \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u06A9\u0627\u0645\u0644 \u0631\u0648\u06CC \u06AF\u0648"),
-    nogo_pct: THRESH(85, "\u0633\u062A\u0627\u0631\u0647\u0654 \u0633\u0648\u0645 = \u062A\u0633\u0644\u0637 \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u06A9\u0627\u0645\u0644 \u0631\u0648\u06CC \u0628\u0627\u0632\u062F\u0627\u0631\u06CC")
+    go_pct: P(90, "\u0633\u0647\u200C\u0633\u062A\u0627\u0631\u0647 \u2014 \u0627\u062C\u0631\u0627\u06CC \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0628\u06CC\u200C\u062E\u0637\u0627\u061B \u0633\u0642\u0641 \u0633\u0628\u062F \u0633\u062A\u0627\u0631\u0647"),
+    nogo_pct: P(85, "\u0633\u0647\u200C\u0633\u062A\u0627\u0631\u0647 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u2014 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u0639\u0627\u0644\u06CC \u0648\u0644\u06CC \u0628\u06CC\u200C\u06A9\u0645\u0627\u0644\u200C\u06AF\u0631\u0627\u06CC\u06CC\u0650 \u06A9\u0648\u062F\u06A9\u200C\u0641\u0631\u0633\u0627")
   }
 };
-var NUMLINE_THRESHOLDS = {
-  pass: THRESH(65, "\u0622\u0633\u062A\u0627\u0646\u0647\u0654 \u06AF\u0630\u0627\u0631 \u0628\u0631 \u062F\u0642\u062A \u062C\u0627\u06CC \u0639\u062F\u062F \u2014 \u0622\u0633\u062A\u0627\u0646\u0647\u0654 \u067E\u0630\u06CC\u0631\u0634 \u0633\u0646\u200C\u0645\u062D\u0648\u0631 \u062E\u0648\u062F \u0622\u06CC\u062A\u0645\u200C\u0647\u0627\u0633\u062A (tolerance authored)"),
-  star2: THRESH(78, "\u0633\u062A\u0627\u0631\u0647\u0654 \u062F\u0648\u0645 \u0628\u0627 \u062F\u0642\u062A \u0628\u0627\u0644\u0627\u062A\u0631"),
-  star3: THRESH(88, "\u0633\u062A\u0627\u0631\u0647\u0654 \u0633\u0648\u0645 = \u062C\u0627\u06CC \u0639\u062F\u062F \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0647\u0645\u06CC\u0634\u0647 \u062F\u0631\u0633\u062A")
-};
-var SCAN_THRESHOLDS = {
-  pass: THRESH(65, "\u0622\u0633\u062A\u0627\u0646\u0647\u0654 \u06AF\u0630\u0627\u0631 \u0628\u0631 \u062F\u0642\u062A \u0645\u0648\u062C\u200C\u0647\u0627 \u2014 \u0645\u0648\u062C \u06A9\u0627\u0645\u0644 \u06CC\u0639\u0646\u06CC \u0647\u0645\u0647\u0654 \u062C\u0627\u0633\u0648\u0633\u200C\u0647\u0627 \u0648 \u0641\u0642\u0637 \u0622\u0646\u200C\u0647\u0627"),
-  star2: THRESH(78, "\u0633\u062A\u0627\u0631\u0647\u0654 \u062F\u0648\u0645 \u0628\u0627 \u0645\u0648\u062C\u200C\u0647\u0627\u06CC \u0645\u0637\u0645\u0626\u0646\u200C\u062A\u0631"),
-  star3: THRESH(88, "\u0633\u062A\u0627\u0631\u0647\u0654 \u0633\u0648\u0645 = \u0634\u06A9\u0627\u0631 \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0628\u06CC\u200C\u062E\u0637\u0627")
-};
-var ACCURACY_THRESHOLDS = {
-  pass: THRESH(65, "\u0622\u0633\u062A\u0627\u0646\u0647\u0654 \u06AF\u0630\u0627\u0631 \u0628\u0631 \u062F\u0642\u062A \u2014 \u0647\u0645\u0627\u0646 \u0642\u0631\u0627\u0631\u062F\u0627\u062F \u062E\u0637 \u0639\u062F\u062F\u06CC/\u0627\u0633\u06A9\u0646"),
-  star2: THRESH(78, "\u0633\u062A\u0627\u0631\u0647\u0654 \u062F\u0648\u0645 \u0628\u0627 \u062F\u0642\u062A \u0628\u0627\u0644\u0627\u062A\u0631"),
-  star3: THRESH(88, "\u0633\u062A\u0627\u0631\u0647\u0654 \u0633\u0648\u0645 = \u067E\u0627\u0633\u062E \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0628\u06CC\u200C\u062E\u0637\u0627")
+var ACCURACY_STAGE_RULE = {
+  shape: "accuracy",
+  pass: P(65, "\u06AF\u0630\u0627\u0631 \u0628\u0627 \u062F\u0642\u062A \u2265\u06F6\u06F5\u066A \u2014 \u0628\u0627\u0644\u0627\u06CC \u0634\u0627\u0646\u0633 \u062D\u062F\u0633 \u0628\u0627\u0646\u06A9 \u0641\u0639\u0644\u06CC\u061B \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u06A9\u0627\u0631\u0634\u0646\u0627\u0633 \u06F1.\u06F2\u06F5.\u06F2\u06F8"),
+  star2: P(78, "\u062F\u0648\u0633\u062A\u0627\u0631\u0647 \u2014 \u0641\u0627\u0635\u0644\u0647\u0654 \u0645\u062D\u0633\u0648\u0633 \u0627\u0632 \u06AF\u0630\u0627\u0631\u061B \u067E\u0644\u0647\u0654 \u0627\u0646\u06AF\u06CC\u0632\u0634\u06CC \u0645\u06CC\u0627\u0646\u06CC"),
+  star3: P(88, "\u0633\u0647\u200C\u0633\u062A\u0627\u0631\u0647 \u2014 \u062F\u0642\u062A \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0628\u06CC\u200C\u062E\u0637\u0627\u061B \u0627\u0631\u062A\u0642\u0627\u06CC \u0622\u0646 \u0628\u0627 \u062F\u0627\u062F\u0647\u0654 \u067E\u06CC\u0644\u0648\u062A \u0645\u0631\u06A9\u0632")
 };
 var NBACK_THRESHOLDS = {
-  pass: THRESH(65, "\u0622\u0633\u062A\u0627\u0646\u0647\u0654 \u06AF\u0630\u0627\u0631 \u0628\u0631 \u062F\u0642\u062A \u0647\u0645\u200C\u0633\u0627\u0646\u06CC/\u062A\u0641\u06A9\u06CC\u06A9 \u2014 \u0647\u0645\u0627\u0646 \u0642\u0631\u0627\u0631\u062F\u0627\u062F \u062F\u0642\u062A \u0633\u0627\u06CC\u0631 \u0646\u0648\u0639\u200C\u0647\u0627\u061B \u0633\u062E\u062A\u200C\u06AF\u06CC\u0631\u06CC \u0627\u0636\u0627\u0641\u0647 \u0628\u0631\u0627\u06CC n=2 \u0628\u0627 \u067E\u06CC\u0644\u0648\u062A \u0633\u0646\u062C\u06CC\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F"),
-  star2: THRESH(78, "\u0633\u062A\u0627\u0631\u0647\u0654 \u062F\u0648\u0645 \u0628\u0627 \u062F\u0642\u062A \u0628\u0627\u0644\u0627\u062A\u0631"),
-  star3: THRESH(88, "\u0633\u062A\u0627\u0631\u0647\u0654 \u0633\u0648\u0645 = \u0647\u0645\u200C\u0633\u0627\u0646\u06CC \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0647\u0645\u06CC\u0634\u0647 \u062F\u0631\u0633\u062A")
+  shape: "accuracy",
+  pass: P(65, "\u06AF\u0630\u0627\u0631 \u0628\u0627 \u062F\u0642\u062A \u062F\u0648\u06AF\u0632\u06CC\u0646\u0647\u200C\u0627\u06CC \u2265\u06F6\u06F5\u066A \u2014 \u0628\u0627\u0644\u0627\u06CC \u0634\u0627\u0646\u0633 \u062D\u062F\u0633 \u06F5\u06F0\u066A \u062F\u0648\u062F\u0648\u06CC\u06CC\u061B \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u06A9\u0627\u0631\u0634\u0646\u0627\u0633 \u06F1.\u06F2\u06F5.\u06F4\u06F0"),
+  star2: P(78, "\u062F\u0648\u0633\u062A\u0627\u0631\u0647 \u2014 \u0647\u0645\u200C\u067E\u0644\u0647\u0654 \u062F\u0642\u062A\u200C\u0645\u062D\u0648\u0631\u0647\u0627\u06CC \u062F\u06CC\u06AF\u0631 \u062A\u0627 \u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u0628\u06CC\u0646\u200C\u0628\u0627\u0632\u06CC \u06AF\u0648\u0644\u200C\u0632\u0646\u0646\u062F\u0647 \u0646\u0634\u0648\u062F"),
+  star3: P(88, "\u0633\u0647\u200C\u0633\u062A\u0627\u0631\u0647 \u2014 \u062F\u0642\u062A \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0628\u06CC\u200C\u062E\u0637\u0627\u061B \u0627\u0631\u062A\u0642\u0627\u06CC \u0622\u0646 \u0628\u0627 \u062F\u0627\u062F\u0647\u0654 \u067E\u06CC\u0644\u0648\u062A \u0645\u0631\u06A9\u0632")
 };
-var CORSI_THRESHOLDS = {
-  pass: THRESH(65, "\u0622\u0633\u062A\u0627\u0646\u0647\u0654 \u06AF\u0630\u0627\u0631 \u0628\u0631 \u062F\u0642\u062A \u0628\u0627\u0632\u062A\u0648\u0644\u06CC\u062F \u06A9\u0627\u0645\u0644 \u062F\u0646\u0628\u0627\u0644\u0647 \u2014 \u0647\u0645\u0627\u0646 \u0642\u0631\u0627\u0631\u062F\u0627\u062F \u062F\u0642\u062A \u0633\u0627\u06CC\u0631 \u0646\u0648\u0639\u200C\u0647\u0627"),
-  star2: THRESH(78, "\u0633\u062A\u0627\u0631\u0647\u0654 \u062F\u0648\u0645 \u0628\u0627 \u062F\u0642\u062A \u0628\u0627\u0644\u0627\u062A\u0631"),
-  star3: THRESH(88, "\u0633\u062A\u0627\u0631\u0647\u0654 \u0633\u0648\u0645 = \u0628\u0627\u0632\u062A\u0648\u0644\u06CC\u062F \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0647\u0645\u06CC\u0634\u0647 \u06A9\u0627\u0645\u0644")
+var SEQ_MEMORY_THRESHOLDS = {
+  shape: "accuracy",
+  pass: P(65, "\u06AF\u0630\u0627\u0631 \u0628\u0627 \u062F\u0642\u062A \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u06A9\u0627\u0645\u0644 \u2265\u06F6\u06F5\u066A \u2014 \u0647\u0645\u0627\u0646 \u067E\u0644\u0647\u0654 \u062F\u0642\u062A\u200C\u0645\u062D\u0648\u0631\u0647\u0627\u061B \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u06A9\u0627\u0631\u0634\u0646\u0627\u0633 G8"),
+  star2: P(78, "\u062F\u0648\u0633\u062A\u0627\u0631\u0647 \u2014 \u0647\u0645\u200C\u067E\u0644\u0647\u0654 \u062F\u0642\u062A\u200C\u0645\u062D\u0648\u0631\u0647\u0627\u06CC \u062F\u06CC\u06AF\u0631 \u062A\u0627 \u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u0628\u06CC\u0646\u200C\u0628\u0627\u0632\u06CC \u06AF\u0648\u0644\u200C\u0632\u0646\u0646\u062F\u0647 \u0646\u0634\u0648\u062F"),
+  star3: P(88, "\u0633\u0647\u200C\u0633\u062A\u0627\u0631\u0647 \u2014 \u062F\u0646\u0628\u0627\u0644\u0647 \u062A\u0642\u0631\u06CC\u0628\u0627\u064B \u0647\u0645\u06CC\u0634\u0647 \u06A9\u0627\u0645\u0644\u061B \u0627\u0631\u062A\u0642\u0627\u06CC \u0622\u0646 \u0628\u0627 \u062F\u0627\u062F\u0647\u0654 \u067E\u06CC\u0644\u0648\u062A \u0645\u0631\u06A9\u0632")
 };
-function pairNumeric(t) {
-  return {
-    pass: { go_pct: t.pass.go_pct.value, nogo_pct: t.pass.nogo_pct.value },
-    star2: { go_pct: t.star2.go_pct.value, nogo_pct: t.star2.nogo_pct.value },
-    star3: { go_pct: t.star3.go_pct.value, nogo_pct: t.star3.nogo_pct.value }
-  };
-}
-__name(pairNumeric, "pairNumeric");
-function scalarNumeric(t) {
-  return { pass: t.pass.value, star2: t.star2.value, star3: t.star3.value };
-}
-__name(scalarNumeric, "scalarNumeric");
-var STAGE_THRESHOLDS = pairNumeric(GONOGO_THRESHOLDS);
-var NUMLINE_STAGE_THRESHOLDS = scalarNumeric(NUMLINE_THRESHOLDS);
-var SCAN_STAGE_THRESHOLDS = scalarNumeric(SCAN_THRESHOLDS);
-var ACCURACY_STAGE_THRESHOLDS = scalarNumeric(ACCURACY_THRESHOLDS);
-var NBACK_STAGE_THRESHOLDS = scalarNumeric(NBACK_THRESHOLDS);
-var CORSI_STAGE_THRESHOLDS = scalarNumeric(CORSI_THRESHOLDS);
-function pctOk(v, min) {
-  return typeof v === "number" && Number.isFinite(v) && v >= min;
-}
-__name(pctOk, "pctOk");
-function stageOutcomeOf(correctGoPct, correctNogoPct) {
-  const t = STAGE_THRESHOLDS;
-  if (!pctOk(correctGoPct, t.pass.go_pct) || !pctOk(correctNogoPct, t.pass.nogo_pct)) {
-    return { passed: false, stars: 0, thresholds: t };
-  }
-  const three = pctOk(correctGoPct, t.star3.go_pct) && pctOk(correctNogoPct, t.star3.nogo_pct);
-  const two = pctOk(correctGoPct, t.star2.go_pct) && pctOk(correctNogoPct, t.star2.nogo_pct);
-  return { passed: true, stars: three ? 3 : two ? 2 : 1, thresholds: t };
-}
-__name(stageOutcomeOf, "stageOutcomeOf");
-function stageOutcomeNumline(accuracy) {
-  const t = NUMLINE_STAGE_THRESHOLDS;
-  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
-  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
-}
-__name(stageOutcomeNumline, "stageOutcomeNumline");
-function stageOutcomeScan(accuracy) {
-  const t = SCAN_STAGE_THRESHOLDS;
-  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
-  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
-}
-__name(stageOutcomeScan, "stageOutcomeScan");
-function stageOutcomeAccuracyKind(accuracy) {
-  const t = ACCURACY_STAGE_THRESHOLDS;
-  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
-  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
-}
-__name(stageOutcomeAccuracyKind, "stageOutcomeAccuracyKind");
-function stageOutcomeNback(accuracy) {
-  const t = NBACK_STAGE_THRESHOLDS;
-  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
-  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
-}
-__name(stageOutcomeNback, "stageOutcomeNback");
-function stageOutcomeCorsi(accuracy) {
-  const t = CORSI_STAGE_THRESHOLDS;
-  if (!pctOk(accuracy, t.pass)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
-  const stars = pctOk(accuracy, t.star3) ? 3 : pctOk(accuracy, t.star2) ? 2 : 1;
-  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
-}
-__name(stageOutcomeCorsi, "stageOutcomeCorsi");
 var GONOGO_STAGES_4_6 = [
   {
     id: "s1",
@@ -23622,7 +23427,7 @@ var GONOGO_STAGES_7_12 = [
     overrides: { response_window_go_ms: 1e3, response_window_nogo_ms: 1e3, isi_min_ms: 600, isi_max_ms: 900, fixation_ms: 350 }
   }
 ];
-var GONOGO_STAGES_BY_BAND = { "4-6": GONOGO_STAGES_4_6, "7-12": GONOGO_STAGES_7_12 };
+var GONOGO_STAGES = { "4-6": GONOGO_STAGES_4_6, "7-12": GONOGO_STAGES_7_12 };
 var NUMLINE_STAGES = [
   {
     id: "s1",
@@ -23791,135 +23596,143 @@ var FLANKER_STAGES = [
     overrides: {}
   }
 ];
-var CORSI_STAGES = [
-  {
-    id: "s1",
-    index: 1,
-    title_fa: "\u062F\u0648 \u0645\u0631\u0648\u0627\u0631\u06CC\u062F",
-    goal_fa: "\u062F\u0648 \u0635\u062F\u0641 \u0628\u0631\u0642 \u0645\u06CC\u200C\u0632\u0646\u062F\u061B \u0647\u0645\u0627\u0646 \u062A\u0631\u062A\u06CC\u0628 \u0631\u0627 \u0644\u0645\u0633 \u06A9\u0646.",
-    difficulty: 1,
-    overrides: {}
-  },
-  {
-    id: "s2",
-    index: 2,
-    title_fa: "\u0633\u0647 \u0645\u0631\u0648\u0627\u0631\u06CC\u062F",
-    goal_fa: "\u06CC\u06A9 \u0645\u0631\u0648\u0627\u0631\u06CC\u062F \u0628\u06CC\u0634\u062A\u0631 \u0634\u062F\u061B \u062D\u0648\u0627\u0633\u062A \u0628\u0647 \u062A\u0631\u062A\u06CC\u0628 \u0628\u0627\u0634\u062F.",
-    difficulty: 2,
-    overrides: {}
-  },
-  {
-    id: "s3",
-    index: 3,
-    title_fa: "\u0686\u0647\u0627\u0631 \u0645\u0631\u0648\u0627\u0631\u06CC\u062F",
-    goal_fa: "\u062F\u0646\u0628\u0627\u0644\u0647 \u0628\u0644\u0646\u062F\u062A\u0631 \u0634\u062F\u0647\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
-    difficulty: 3,
-    overrides: {}
-  },
-  {
-    id: "s4",
-    index: 4,
-    title_fa: "\u067E\u0646\u062C \u0645\u0631\u0648\u0627\u0631\u06CC\u062F",
-    goal_fa: "\u062D\u0627\u0641\u0638\u0647\u200C\u0627\u062A \u0639\u0645\u06CC\u0642 \u0634\u062F\u061B \u0645\u062B\u0644 \u0642\u0628\u0644 \u0627\u062F\u0627\u0645\u0647 \u0628\u062F\u0647.",
-    difficulty: 4,
-    overrides: {}
-  },
-  {
-    id: "s5",
-    index: 5,
-    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u06A9\u0648\u0644\u0647",
-    goal_fa: "\u0647\u0645\u0647\u0654 \u062F\u0646\u0628\u0627\u0644\u0647\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u062D\u0627\u0641\u0638\u0647\u0654 \u062F\u0631\u06CC\u0627\u06CC\u06CC!",
-    difficulty: 5,
-    overrides: {}
-  }
-];
 var NBACK_STAGES_4_6 = [
   {
     id: "s1",
     index: 1,
-    title_fa: "\u0622\u0644\u0628\u0648\u0645 \u06AF\u0631\u0645",
-    goal_fa: "\u0645\u0627\u0647\u06CC\u200C\u0647\u0627 \u0622\u0647\u0633\u062A\u0647 \u0645\u06CC\u200C\u0622\u06CC\u0646\u062F\u061B \u0639\u06A9\u0633\u0650 \u0642\u062F\u0645 \u0642\u0628\u0644 \u0631\u0627 \u06CC\u0627\u062F\u062A \u0646\u06AF\u0647 \u062F\u0627\u0631.",
+    title_fa: "\u0622\u0644\u0628\u0648\u0645 \u06AF\u0631\u0645 \u0645\u06CC\u200C\u0634\u0648\u062F",
+    goal_fa: "\u062F\u0648\u062A\u0627 \u0639\u0642\u0628 \u0631\u0627 \u06CC\u0627\u062F \u0628\u06AF\u06CC\u0631\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
     difficulty: 1,
     overrides: { isi_min_ms: 2600, isi_max_ms: 3200, fixation_ms: 400 }
   },
   {
     id: "s2",
     index: 2,
-    title_fa: "\u0639\u06A9\u0633\u200C\u0647\u0627\u06CC \u062A\u0627\u0632\u0647",
-    goal_fa: "\u0647\u0645\u0627\u0646 \u0628\u0627\u0632\u06CC \u0628\u0627 \u062A\u0645\u0631\u06CC\u0646 \u0628\u06CC\u0634\u062A\u0631\u061B \u062D\u0648\u0627\u0633\u062A \u0628\u0647 \u0642\u062F\u0645 \u0642\u0628\u0644 \u0628\u0627\u0634\u062F.",
+    title_fa: "\u0622\u0644\u0628\u0648\u0645 \u062A\u0645\u0631\u06CC\u0646",
+    goal_fa: "\u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC \u0627\u062F\u0627\u0645\u0647 \u0628\u062F\u0647.",
     difficulty: 2,
     overrides: {}
-    // پایهٔ پروتکل ن‌پشت — بدون بازنویسی
+    // پارامترهای پایهٔ پروتکل — بدون بازنویسی
   },
   {
     id: "s3",
     index: 3,
-    title_fa: "\u062F\u0648 \u0642\u062F\u0645 \u0628\u0647 \u0639\u0642\u0628",
-    goal_fa: "\u062D\u0627\u0644\u0627 \u062F\u0648 \u0642\u062F\u0645 \u0628\u0647 \u0639\u0642\u0628 \u0646\u06AF\u0627\u0647 \u06A9\u0646\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
+    title_fa: "\u0633\u0647 \u0642\u062F\u0645 \u0639\u0642\u0628\u200C\u062A\u0631",
+    goal_fa: "\u062D\u0627\u0644\u0627 \u0633\u0647\u200C\u062A\u0627 \u0639\u0642\u0628 \u0646\u06AF\u0627\u0647 \u06A9\u0646\u061B \u0648\u0642\u062A \u06A9\u0645 \u0646\u06CC\u0633\u062A\u060C \u0622\u0631\u0627\u0645 \u0628\u0627\u0634.",
     difficulty: 3,
-    overrides: { isi_min_ms: 2800, isi_max_ms: 3400, fixation_ms: 400 }
-    // فرود نرم پرش n=2
+    // فرود نرم پرش n — فاصلهٔ بین‌آزمونشی کمی بلندتر از پایه تا حافظهٔ تازه فشار زمانی تازه نگیرد
+    overrides: { isi_min_ms: 2400, isi_max_ms: 3e3, fixation_ms: 400 }
   },
   {
     id: "s4",
     index: 4,
-    title_fa: "\u062D\u0627\u0641\u0638\u0647\u0654 \u0639\u0645\u06CC\u0642",
-    goal_fa: "\u062F\u0648 \u0642\u062F\u0645 \u0628\u0647 \u0639\u0642\u0628\u060C \u0645\u062B\u0644 \u0642\u0628\u0644\u061B \u062A\u0648 \u062E\u0648\u0628 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC.",
+    title_fa: "\u0622\u0644\u0628\u0648\u0645 \u0628\u0632\u0631\u06AF",
+    goal_fa: "\u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A\u061B \u062F\u0648\u062A\u0627 \u0639\u0642\u0628 \u0631\u0627 \u06AF\u0645 \u0646\u06A9\u0646.",
     difficulty: 4,
-    overrides: {}
+    overrides: { isi_min_ms: 2200, isi_max_ms: 2800, fixation_ms: 400 }
   },
   {
     id: "s5",
     index: 5,
     title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0622\u0644\u0628\u0648\u0645",
-    goal_fa: "\u062A\u0646\u062F\u062A\u0631\u06CC\u0646 \u067E\u0644\u0647\u0654 \u0622\u0644\u0628\u0648\u0645! \u062A\u0648 \u062D\u0627\u0641\u0638\u0647\u0654 \u062F\u0631\u06CC\u0627\u06CC\u06CC.",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u0622\u0644\u0628\u0648\u0645\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC!",
     difficulty: 5,
-    overrides: { isi_min_ms: 1800, isi_max_ms: 2400, fixation_ms: 350 }
+    overrides: { isi_min_ms: 2e3, isi_max_ms: 2600, fixation_ms: 350 }
   }
 ];
 var NBACK_STAGES_7_12 = [
   {
     id: "s1",
     index: 1,
-    title_fa: "\u0622\u0644\u0628\u0648\u0645 \u06AF\u0631\u0645",
-    goal_fa: "\u0645\u0627\u0647\u06CC\u200C\u0647\u0627 \u0622\u0647\u0633\u062A\u0647 \u0645\u06CC\u200C\u0622\u06CC\u0646\u062F\u061B \u0639\u06A9\u0633\u0650 \u0642\u062F\u0645 \u0642\u0628\u0644 \u0631\u0627 \u06CC\u0627\u062F\u062A \u0646\u06AF\u0647 \u062F\u0627\u0631.",
+    title_fa: "\u0622\u0644\u0628\u0648\u0645 \u06AF\u0631\u0645 \u0645\u06CC\u200C\u0634\u0648\u062F",
+    goal_fa: "\u062F\u0648\u062A\u0627 \u0639\u0642\u0628 \u0631\u0627 \u06CC\u0627\u062F \u0628\u06AF\u06CC\u0631\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
     difficulty: 1,
     overrides: { isi_min_ms: 2200, isi_max_ms: 2800, fixation_ms: 400 }
   },
   {
     id: "s2",
     index: 2,
-    title_fa: "\u0639\u06A9\u0633\u200C\u0647\u0627\u06CC \u062A\u0627\u0632\u0647",
-    goal_fa: "\u0647\u0645\u0627\u0646 \u0628\u0627\u0632\u06CC \u0628\u0627 \u062A\u0645\u0631\u06CC\u0646 \u0628\u06CC\u0634\u062A\u0631\u061B \u062D\u0648\u0627\u0633\u062A \u0628\u0647 \u0642\u062F\u0645 \u0642\u0628\u0644 \u0628\u0627\u0634\u062F.",
+    title_fa: "\u0622\u0644\u0628\u0648\u0645 \u062A\u0645\u0631\u06CC\u0646",
+    goal_fa: "\u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC \u0627\u062F\u0627\u0645\u0647 \u0628\u062F\u0647.",
     difficulty: 2,
     overrides: {}
   },
   {
     id: "s3",
     index: 3,
-    title_fa: "\u062F\u0648 \u0642\u062F\u0645 \u0628\u0647 \u0639\u0642\u0628",
-    goal_fa: "\u062D\u0627\u0644\u0627 \u062F\u0648 \u0642\u062F\u0645 \u0628\u0647 \u0639\u0642\u0628 \u0646\u06AF\u0627\u0647 \u06A9\u0646\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u062E\u0648\u0634\u200C\u062D\u0627\u0644.",
+    title_fa: "\u0633\u0647 \u0642\u062F\u0645 \u0639\u0642\u0628\u200C\u062A\u0631",
+    goal_fa: "\u062D\u0627\u0644\u0627 \u0633\u0647\u200C\u062A\u0627 \u0639\u0642\u0628 \u0646\u06AF\u0627\u0647 \u06A9\u0646\u061B \u0648\u0642\u062A \u06A9\u0645 \u0646\u06CC\u0633\u062A\u060C \u0622\u0631\u0627\u0645 \u0628\u0627\u0634.",
     difficulty: 3,
-    overrides: { isi_min_ms: 2400, isi_max_ms: 3e3, fixation_ms: 400 }
+    overrides: { isi_min_ms: 2e3, isi_max_ms: 2600, fixation_ms: 400 }
   },
   {
     id: "s4",
     index: 4,
-    title_fa: "\u062D\u0627\u0641\u0638\u0647\u0654 \u0639\u0645\u06CC\u0642",
-    goal_fa: "\u062F\u0648 \u0642\u062F\u0645 \u0628\u0647 \u0639\u0642\u0628\u060C \u0645\u062B\u0644 \u0642\u0628\u0644\u061B \u062A\u0648 \u062E\u0648\u0628 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u06CC.",
+    title_fa: "\u0622\u0644\u0628\u0648\u0645 \u0628\u0632\u0631\u06AF",
+    goal_fa: "\u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u062A\u06CC\u0632 \u0627\u0633\u062A\u061B \u062F\u0648\u062A\u0627 \u0639\u0642\u0628 \u0631\u0627 \u06AF\u0645 \u0646\u06A9\u0646.",
+    difficulty: 4,
+    overrides: { isi_min_ms: 1800, isi_max_ms: 2400, fixation_ms: 400 }
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0622\u0644\u0628\u0648\u0645",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u0622\u0644\u0628\u0648\u0645\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u0622\u0645\u0627\u062F\u0647\u200C\u0627\u06CC!",
+    difficulty: 5,
+    overrides: { isi_min_ms: 1600, isi_max_ms: 2200, fixation_ms: 350 }
+  }
+];
+var NBACK_STAGES = { "4-6": NBACK_STAGES_4_6, "7-12": NBACK_STAGES_7_12 };
+var NBACK_STAGE_LEVELS = { s1: 1, s2: 1, s3: 2, s4: 2, s5: 2 };
+function nbackItemInStage(item, stageId) {
+  const level = typeof stageId === "string" ? NBACK_STAGE_LEVELS[stageId] : void 0;
+  if (!level) return true;
+  const s = item.stim ?? {};
+  return s.n === level;
+}
+__name(nbackItemInStage, "nbackItemInStage");
+var TRAIL_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u0631\u062F \u06A9\u0648\u062A\u0627\u0647",
+    goal_fa: "\u0631\u062F\u067E\u0627\u0647\u0627 \u06A9\u0645\u200C\u0627\u0646\u062F\u061B \u0628\u0647 \u062A\u0631\u062A\u06CC\u0628 \u0634\u0645\u0627\u0631\u0647 \u0628\u0631\u0648.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u0631\u062F \u0628\u0644\u0646\u062F\u062A\u0631",
+    goal_fa: "\u06CC\u06A9 \u0642\u062F\u0645 \u0628\u06CC\u0634\u062A\u0631\u061B \u0631\u062F \u0631\u0627 \u06A9\u0627\u0645\u0644 \u06A9\u0646.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0631\u062F \u0628\u0644\u0646\u062F",
+    goal_fa: "\u0631\u062F\u067E\u0627\u0647\u0627 \u0628\u06CC\u0634\u062A\u0631 \u0634\u062F\u0647\u200C\u0627\u0646\u062F\u061B \u0631\u062F \u06AF\u0645 \u0646\u0634\u0648\u062F.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u0631\u062F \u06AF\u0645\u200C\u0634\u062F\u0647",
+    goal_fa: "\u0639\u062F\u062F \u0648 \u062D\u0631\u0641 \u06CC\u06A9\u200C\u062F\u0631\u0645\u06CC\u0627\u0646 \u0634\u062F\u0647\u061B \u0628\u0627 \u062F\u0642\u062A \u0642\u062F\u0645 \u0628\u0632\u0646.",
     difficulty: 4,
     overrides: {}
   },
   {
     id: "s5",
     index: 5,
-    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0622\u0644\u0628\u0648\u0645",
-    goal_fa: "\u062A\u0646\u062F\u062A\u0631\u06CC\u0646 \u067E\u0644\u0647\u0654 \u0622\u0644\u0628\u0648\u0645! \u062A\u0648 \u062D\u0627\u0641\u0638\u0647\u0654 \u062F\u0631\u06CC\u0627\u06CC\u06CC.",
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0631\u062F",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u0631\u062F\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u062A\u0639\u0642\u06CC\u0628\u200C\u06A9\u0646\u0646\u062F\u0647\u200C\u0627\u06CC!",
     difficulty: 5,
-    overrides: { isi_min_ms: 1500, isi_max_ms: 2100, fixation_ms: 350 }
+    overrides: {}
   }
 ];
-var NBACK_STAGES_BY_BAND = { "4-6": NBACK_STAGES_4_6, "7-12": NBACK_STAGES_7_12 };
 var NUMLINE_STAGE_MAX = {
   s1: 10,
   s2: 20,
@@ -23927,12 +23740,6 @@ var NUMLINE_STAGE_MAX = {
   s4: 100,
   s5: null
 };
-function numlineItemInStage(item, stageId) {
-  const max = typeof stageId === "string" && stageId in NUMLINE_STAGE_MAX ? NUMLINE_STAGE_MAX[stageId] : null;
-  if (max === null) return true;
-  return Array.isArray(item.range) && item.range[1] <= max;
-}
-__name(numlineItemInStage, "numlineItemInStage");
 var SCAN_STAGE_MAX_TILES = {
   s1: 6,
   s2: 9,
@@ -23940,16 +23747,6 @@ var SCAN_STAGE_MAX_TILES = {
   s4: 15,
   s5: null
 };
-function scanItemInStage(item, stageId) {
-  const max = typeof stageId === "string" && stageId in SCAN_STAGE_MAX_TILES ? SCAN_STAGE_MAX_TILES[stageId] : null;
-  if (max === null) return true;
-  const s = item.stim ?? {};
-  const cols = typeof s.cols === "number" && Number.isInteger(s.cols) && s.cols > 0 ? s.cols : 0;
-  const rows = typeof s.rows === "number" && Number.isInteger(s.rows) && s.rows > 0 ? s.rows : 0;
-  const tiles = cols * rows;
-  return tiles > 0 && tiles <= max;
-}
-__name(scanItemInStage, "scanItemInStage");
 var SCAN_STAGE_WAVE_MS = {
   s1: 22e3,
   s2: 19e3,
@@ -23957,40 +23754,14 @@ var SCAN_STAGE_WAVE_MS = {
   s4: 15e3,
   s5: 13e3
 };
-function scanStageWaveMs(itemWaveMs, stageId) {
-  if (typeof stageId !== "string" || !(stageId in SCAN_STAGE_WAVE_MS)) return null;
-  const cap = SCAN_STAGE_WAVE_MS[stageId];
-  if (typeof cap !== "number" || cap <= 0) return null;
-  if (typeof itemWaveMs !== "number" || !Number.isFinite(itemWaveMs) || itemWaveMs <= 0) return cap;
-  return Math.min(itemWaveMs, cap);
-}
-__name(scanStageWaveMs, "scanStageWaveMs");
 var STROOP_STAGE_BANDS = {
-  s1: ["a"],
-  s2: ["a", "b"],
-  s3: ["a", "b", "c"],
-  s4: ["a", "b", "c", "d"],
+  s1: ["a", "p"],
+  s2: ["a", "b", "p"],
+  s3: ["a", "b", "c", "p"],
+  s4: ["a", "b", "c", "d", "p"],
   s5: null
   // همهٔ بانک — مرور بزرگ
 };
-function stroopItemInStage(item, stageId) {
-  const allowed = typeof stageId === "string" && stageId in STROOP_STAGE_BANDS ? STROOP_STAGE_BANDS[stageId] : null;
-  if (allowed === null) return true;
-  const s = item.stim ?? {};
-  const band = typeof s.band === "string" ? s.band : "";
-  if (band === "") return true;
-  return allowed.includes(band);
-}
-__name(stroopItemInStage, "stroopItemInStage");
-function flankerIncongruentCountOf(item) {
-  const s = item.stim ?? {};
-  const arrows = Array.isArray(s.arrows) ? s.arrows.filter((v) => v === "L" || v === "R") : [];
-  const mid = Math.floor(arrows.length / 2);
-  const center = arrows[mid];
-  if (center === void 0) return 0;
-  return arrows.filter((a) => a !== center).length;
-}
-__name(flankerIncongruentCountOf, "flankerIncongruentCountOf");
 var FLANKER_STAGE_MAX_DECOYS = {
   s1: 0,
   // گلهٔ آرام — هیچ قلابی
@@ -24003,208 +23774,504 @@ var FLANKER_STAGE_MAX_DECOYS = {
   s5: null
 };
 var FLANKER_STAGE_BANDS = {
-  s1: ["a"],
-  s2: ["a", "b"],
-  s3: ["a", "b", "c"],
-  s4: ["a", "b", "c", "d"],
+  s1: ["a", "p"],
+  s2: ["a", "b", "p"],
+  s3: ["a", "b", "c", "p"],
+  s4: ["a", "b", "c", "d", "p"],
   s5: null
 };
-function flankerItemInStage(item, stageId) {
-  const allowed = typeof stageId === "string" && stageId in FLANKER_STAGE_BANDS ? FLANKER_STAGE_BANDS[stageId] : null;
-  if (allowed === null) return true;
-  const s = item.stim ?? {};
-  const band = typeof s.band === "string" ? s.band : "";
-  if (band !== "") return allowed.includes(band);
-  const max = typeof stageId === "string" && stageId in FLANKER_STAGE_MAX_DECOYS ? FLANKER_STAGE_MAX_DECOYS[stageId] : null;
-  if (max === null) return true;
-  const decoys = flankerIncongruentCountOf(item);
-  return decoys === 0 || decoys <= max;
-}
-__name(flankerItemInStage, "flankerItemInStage");
-var CORSI_STAGE_MAX_LEN = {
+var TRAIL_STAGE_MAX_NODES = {
+  s1: 4,
+  s2: 5,
+  s3: 6,
+  s4: 7,
+  s5: null
+};
+var TRAIL_STAGE_BANDS = {
+  s1: ["a", "p"],
+  s2: ["a", "b", "p"],
+  s3: ["a", "b", "c", "p"],
+  s4: ["a", "b", "c", "d", "p"],
+  s5: null
+};
+var CORSI_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u062F\u0641\u062A\u0631\u0686\u0647\u0654 \u0635\u062F\u0641",
+    goal_fa: "\u062F\u0648 \u0635\u062F\u0641 \u0631\u0648\u0634\u0646 \u0645\u06CC\u200C\u0634\u0648\u0646\u062F\u061B \u0628\u0647 \u0647\u0645\u0627\u0646 \u062A\u0631\u062A\u06CC\u0628 \u0644\u0645\u0633 \u06A9\u0646.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u0633\u0647 \u0635\u062F\u0641",
+    goal_fa: "\u062D\u0627\u0644\u0627 \u0633\u0647 \u0635\u062F\u0641\u061B \u0686\u0634\u0645\u200C\u0647\u0627\u06CC\u062A \u0628\u0627 \u0647\u0645 \u0628\u06CC\u0627\u06CC\u0646\u062F.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0686\u0647\u0627\u0631 \u0635\u062F\u0641",
+    goal_fa: "\u062F\u0646\u0628\u0627\u0644\u0647 \u0628\u0644\u0646\u062F\u062A\u0631 \u0634\u062F\u061B \u0622\u0647\u0633\u062A\u0647 \u0648 \u0645\u0637\u0645\u0626\u0646.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u062E\u0644\u06CC\u062C \u0639\u0645\u06CC\u0642",
+    goal_fa: "\u067E\u0646\u062C \u0635\u062F\u0641 \u067E\u0634\u062A \u0647\u0645\u061B \u062D\u0648\u0627\u0633\u062A \u062F\u0631 \u062E\u0644\u06CC\u062C \u0628\u0645\u0627\u0646\u062F.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u062E\u0644\u06CC\u062C",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u062F\u0646\u0628\u0627\u0644\u0647\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u062D\u0627\u0641\u0638\u0647\u0654 \u062E\u0644\u06CC\u062C\u06CC!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
+var SPAN_STAGES = [
+  {
+    id: "s1",
+    index: 1,
+    title_fa: "\u062D\u0628\u0627\u0628\u200C\u0647\u0627\u06CC \u06A9\u0648\u0686\u06A9",
+    goal_fa: "\u0639\u062F\u062F\u0647\u0627 \u06CC\u06A9\u06CC\u200C\u06CC\u06A9\u06CC \u0645\u06CC\u200C\u0622\u06CC\u0646\u062F\u061B \u0647\u0645\u0627\u0646\u200C\u0647\u0627 \u0631\u0627 \u0628\u0647 \u062A\u0631\u062A\u06CC\u0628 \u0628\u06AF\u0648.",
+    difficulty: 1,
+    overrides: {}
+  },
+  {
+    id: "s2",
+    index: 2,
+    title_fa: "\u062D\u0628\u0627\u0628\u200C\u0647\u0627\u06CC \u0628\u06CC\u0634\u062A\u0631",
+    goal_fa: "\u06CC\u06A9 \u062D\u0628\u0627\u0628 \u0628\u06CC\u0634\u062A\u0631 \u0634\u062F\u061B \u0647\u0645\u0627\u0646 \u0642\u0627\u0639\u062F\u0647\u060C \u062D\u0648\u0627\u0633\u062A \u06A9\u0646\u0627\u0631 \u0646\u0631\u0647.",
+    difficulty: 2,
+    overrides: {}
+  },
+  {
+    id: "s3",
+    index: 3,
+    title_fa: "\u0628\u0627\u0632\u0647\u0654 \u067E\u0646\u062C",
+    goal_fa: "\u062D\u0627\u0644\u0627 \u067E\u0646\u062C \u0639\u062F\u062F \u067E\u0634\u062A \u0647\u0645\u061B \u062F\u0631 \u0630\u0647\u0646\u062A \u062A\u06A9\u0631\u0627\u0631\u0634\u0627\u0646 \u06A9\u0646.",
+    difficulty: 3,
+    overrides: {}
+  },
+  {
+    id: "s4",
+    index: 4,
+    title_fa: "\u0628\u0627\u0632\u0647\u0654 \u0634\u0634",
+    goal_fa: "\u0634\u0634 \u062D\u0628\u0627\u0628 \u067E\u0634\u062A \u0633\u0631 \u0647\u0645\u061B \u062A\u0648 \u062E\u06CC\u0644\u06CC \u0631\u0627\u0647 \u0631\u0641\u062A\u0647\u200C\u0627\u06CC.",
+    difficulty: 4,
+    overrides: {}
+  },
+  {
+    id: "s5",
+    index: 5,
+    title_fa: "\u0642\u0647\u0631\u0645\u0627\u0646 \u0641\u0627\u0646\u0648\u0633",
+    goal_fa: "\u0647\u0645\u0647\u0654 \u062F\u0646\u0628\u0627\u0644\u0647\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u2014 \u062A\u0648 \u062D\u0627\u0641\u0638\u0647\u0654 \u0639\u062F\u062F\u06CC!",
+    difficulty: 5,
+    overrides: {}
+  }
+];
+var CORSI_STAGE_MAX_SPAN = {
   s1: 2,
   s2: 3,
   s3: 4,
   s4: 5,
   s5: null
 };
-var CORSI_STAGE_BANDS = {
-  s1: ["a"],
-  s2: ["a", "b"],
-  s3: ["a", "b", "c"],
-  s4: ["a", "b", "c", "d"],
+var SPAN_STAGE_MAX_DIGITS = {
+  s1: 3,
+  s2: 4,
+  s3: 5,
+  s4: 6,
   s5: null
 };
-function corsiItemInStage(item, stageId) {
-  const allowed = typeof stageId === "string" && stageId in CORSI_STAGE_BANDS ? CORSI_STAGE_BANDS[stageId] : null;
-  if (allowed === null) return true;
+function flankerIncongruentCountOf(item) {
   const s = item.stim ?? {};
-  const band = typeof s.band === "string" ? s.band : "";
-  if (band !== "") return allowed.includes(band);
-  const max = typeof stageId === "string" && stageId in CORSI_STAGE_MAX_LEN ? CORSI_STAGE_MAX_LEN[stageId] : null;
-  if (max === null) return true;
-  const len = Array.isArray(s.sequence) ? s.sequence.length : 0;
-  return len > 0 && len <= max;
+  const arrows = Array.isArray(s.arrows) ? s.arrows.filter((v) => v === "L" || v === "R") : [];
+  const mid = Math.floor(arrows.length / 2);
+  const center = arrows[mid];
+  if (center === void 0) return 0;
+  return arrows.filter((a) => a !== center).length;
 }
-__name(corsiItemInStage, "corsiItemInStage");
-var NBACK_STAGE_LEVELS = {
-  s1: [1],
-  s2: [1],
-  s3: [2],
-  // پرش n — دو قدم به عقب
-  s4: [2],
-  s5: [2]
-};
-function nbackItemInStage(item, stageId) {
-  const levels = typeof stageId === "string" && stageId in NBACK_STAGE_LEVELS ? NBACK_STAGE_LEVELS[stageId] : null;
-  if (levels === null) return true;
-  const s = item.stim ?? {};
-  const n = typeof s.n === "number" && Number.isInteger(s.n) && s.n > 0 ? s.n : 0;
-  return n > 0 && levels.includes(n);
-}
-__name(nbackItemInStage, "nbackItemInStage");
-var GONOGO_ENGINE_METRICS = [
-  { id: "correct_go_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u06AF\u0648\u0647\u0627\u06CC \u062F\u0631\u0633\u062A", unit: "percent", higher_is_better: true, source: "auto", formula: "correct_go_pct" },
-  { id: "correct_nogo_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u062F\u0631\u0633\u062A \u0646\u0648\u06AF\u0648", unit: "percent", higher_is_better: true, source: "auto", formula: "correct_nogo_pct" },
-  { id: "commission_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u062E\u0637\u0627\u06CC \u067E\u0627\u0633\u062E \u0628\u0647 \u063A\u06CC\u0631\u0647\u062F\u0641", unit: "percent", higher_is_better: false, source: "auto", formula: "commission_pct" },
-  { id: "omission_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u0627\u0632 \u062F\u0633\u062A\u200C\u062F\u0627\u062F\u0646 \u0647\u062F\u0641", unit: "percent", higher_is_better: false, source: "auto", formula: "omission_pct" }
-];
-var SCAN_ENGINE_METRICS = [
-  { id: "scan_fa_pct", title_fa: "\u062F\u0631\u0635\u062F \u06AF\u0631\u0641\u062A\u0646 \u0647\u0645\u200C\u0646\u0648\u0639 \u062F\u0631 \u0645\u0648\u062C", unit: "percent", higher_is_better: false, source: "auto", formula: "scan_fa" },
-  { id: "scan_miss_pct", title_fa: "\u062F\u0631\u0635\u062F \u062C\u0627\u0627\u0646\u062F\u0627\u062E\u062A\u0646 \u062C\u0627\u0633\u0648\u0633", unit: "percent", higher_is_better: false, source: "auto", formula: "scan_miss" }
-];
-var STROOP_ENGINE_METRICS = [
-  { id: "stroop_congruent_acc_pct", title_fa: "\u062F\u0642\u062A \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0627\u0633\u062A\u0631\u0648\u067E (\u0648\u0627\u0698\u0647 \u0648 \u062C\u0648\u0647\u0631 \u06CC\u06A9\u06CC)", unit: "percent", higher_is_better: true, source: "auto", formula: "congruent_acc" },
-  { id: "stroop_incongruent_acc_pct", title_fa: "\u062F\u0642\u062A \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0627\u0633\u062A\u0631\u0648\u067E (\u062D\u0642\u0647\u0654 \u062C\u0648\u0647\u0631)", unit: "percent", higher_is_better: true, source: "auto", formula: "incongruent_acc" },
-  { id: "stroop_interference_ms", title_fa: "\u0647\u0632\u06CC\u0646\u0647\u0654 \u062A\u062F\u0627\u062E\u0644 \u0627\u0633\u062A\u0631\u0648\u067E (\u0645\u06CC\u0627\u0646\u0647\u0654 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u2212 \u0645\u06CC\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u062E\u0648\u0627\u0646)", unit: "ms", higher_is_better: false, source: "auto", formula: "interference_ms" }
-];
-var FLANKER_ENGINE_METRICS = [
-  { id: "flanker_congruent_acc_pct", title_fa: "\u062F\u0642\u062A \u06AF\u0644\u0647\u0654 \u0647\u0645\u200C\u0633\u0648 (\u0628\u062F\u0648\u0646 \u0641\u0631\u06CC\u0628)", unit: "percent", higher_is_better: true, source: "auto", formula: "congruent_acc" },
-  { id: "flanker_incongruent_acc_pct", title_fa: "\u062F\u0642\u062A \u06AF\u0644\u0647\u0654 \u0641\u0631\u06CC\u0628\u06A9\u0627\u0631 (\u0641\u0644\u0627\u0646\u06A9\u0631 \u0645\u062E\u0627\u0644\u0641)", unit: "percent", higher_is_better: true, source: "auto", formula: "incongruent_acc" },
-  { id: "flanker_interference_ms", title_fa: "\u0647\u0632\u06CC\u0646\u0647\u0654 \u062A\u062F\u0627\u062E\u0644 \u0641\u0644\u0627\u0646\u06A9\u0631 (\u0645\u06CC\u0627\u0646\u0647\u0654 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u2212 \u0645\u06CC\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u062E\u0648\u0627\u0646)", unit: "ms", higher_is_better: false, source: "auto", formula: "interference_ms" }
-];
-var CORSI_ENGINE_METRICS = [
-  { id: "corsi_seq_acc_pct", title_fa: "\u062F\u0631\u0635\u062F \u0628\u0627\u0632\u062A\u0648\u0644\u06CC\u062F \u06A9\u0627\u0645\u0644 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u0645\u0631\u0648\u0627\u0631\u06CC\u062F\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "corsi_seq" },
-  { id: "corsi_span_max", title_fa: "\u0628\u0644\u0646\u062F\u062A\u0631\u06CC\u0646 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u062F\u0631\u0633\u062A \u0627\u06CC\u0646 \u062C\u0644\u0633\u0647 (\u062F\u0627\u0645\u0646\u0647\u0654 \u062D\u0627\u0641\u0638\u0647\u0654 \u0641\u0636\u0627\u06CC\u06CC)", unit: "count", higher_is_better: true, source: "auto", formula: "corsi_span" }
-];
-var NBACK_ENGINE_METRICS = [
-  { id: "nback_match_pct", title_fa: "\u062F\u0631\u0635\u062F \u062A\u0634\u062E\u06CC\u0635 \u0647\u0645\u200C\u0633\u0627\u0646\u06CC (\u0645\u0627\u0647\u06CC\u0650 \u0647\u0645\u0627\u0646\u0650 \u0642\u062F\u0645 \u0642\u0628\u0644)", unit: "percent", higher_is_better: true, source: "auto", formula: "nback_match" },
-  { id: "nback_nonmatch_pct", title_fa: "\u062F\u0631\u0635\u062F \u062A\u0641\u06A9\u06CC\u06A9 \u062F\u0631\u0633\u062A (\u0645\u0627\u0647\u06CC\u0650 \u0645\u062A\u0641\u0627\u0648\u062A)", unit: "percent", higher_is_better: true, source: "auto", formula: "nback_nonmatch" },
-  { id: "nback_false_alarm_pct", title_fa: "\u062F\u0631\u0635\u062F \xAB\u0647\u0645\u0627\u0646 \u0627\u0633\u062A\xBB \u0631\u0648\u06CC \u0645\u0627\u0647\u06CC\u0650 \u0645\u062A\u0641\u0627\u0648\u062A", unit: "percent", higher_is_better: false, source: "auto", formula: "nback_false_alarm" },
-  { id: "nback_miss_pct", title_fa: "\u062F\u0631\u0635\u062F \u062C\u0627\u0627\u0646\u062F\u0627\u062E\u062A\u0646 \u0647\u0645\u200C\u0633\u0627\u0646\u06CC", unit: "percent", higher_is_better: false, source: "auto", formula: "nback_miss" }
+__name(flankerIncongruentCountOf, "flankerIncongruentCountOf");
+var ENGINE_ONLY_FORMULAS = [
+  "correct_go_pct",
+  "correct_nogo_pct",
+  "commission_pct",
+  "omission_pct",
+  "scan_fa",
+  "scan_miss",
+  "congruent_acc",
+  "incongruent_acc",
+  "interference_ms",
+  "trail_prefix",
+  "nback_match",
+  "nback_nonmatch",
+  "nback_fa",
+  "nback_miss",
+  "span_max"
+  // G8/۱.۲۵.۴۹ — بلندترین دنبالهٔ کامل درست (صدف‌های جادویی / حباب‌های عدد)
 ];
 var GAME_KINDS = {
   gonogo: {
-    thresholds: GONOGO_THRESHOLDS,
-    stageOutcome: /* @__PURE__ */ __name((summary) => stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo), "stageOutcome"),
-    stageList: /* @__PURE__ */ __name((band) => GONOGO_STAGES_BY_BAND[band] ?? GONOGO_STAGES_BY_BAND["7-12"], "stageList"),
+    // گو/نوگو — کف ۱۵۰ms: زیر آن حدس است (§۸)
+    rt_floor_ms: 150,
+    timed_choice: false,
+    // اُمیشن گونوگو از خودِ لمس تعریف می‌شود، نه از پایان پنجره
+    stage_rule: GONOGO_STAGE_RULE,
+    stageList: /* @__PURE__ */ __name((band) => GONOGO_STAGES[band] ?? GONOGO_STAGES["7-12"], "stageList"),
+    // اهرم سختی گونوگو بازنویسی پارامتر زمان‌بندی در خود StageDef است — فیلتر بانک ندارد
+    levers: {},
     itemInStage: /* @__PURE__ */ __name(() => true, "itemInStage"),
-    // گونوگو و بی‌مرحله = همهٔ آیتم‌ها — اهرم مرحله‌اش زمان است نه بانک
-    waveMsCapOf: null,
-    timedChoice: false,
-    rtFloorMs: 150,
-    // گو/نوگو — زیر ۱۵۰ حدس است
-    engineMetrics: GONOGO_ENGINE_METRICS
+    engine_metrics: [
+      { id: "correct_go_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u06AF\u0648\u0647\u0627\u06CC \u062F\u0631\u0633\u062A", unit: "percent", higher_is_better: true, source: "auto", formula: "correct_go_pct" },
+      { id: "correct_nogo_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u062F\u0631\u0633\u062A \u0646\u0648\u06AF\u0648", unit: "percent", higher_is_better: true, source: "auto", formula: "correct_nogo_pct" },
+      { id: "commission_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u062E\u0637\u0627\u06CC \u067E\u0627\u0633\u062E \u0628\u0647 \u063A\u06CC\u0631\u0647\u062F\u0641", unit: "percent", higher_is_better: false, source: "auto", formula: "commission_pct" },
+      { id: "omission_pct_gonogo", title_fa: "\u062F\u0631\u0635\u062F \u0627\u0632 \u062F\u0633\u062A\u200C\u062F\u0627\u062F\u0646 \u0647\u062F\u0641", unit: "percent", higher_is_better: false, source: "auto", formula: "omission_pct" }
+    ]
   },
   numline: {
-    thresholds: NUMLINE_THRESHOLDS,
-    stageOutcome: /* @__PURE__ */ __name((summary) => stageOutcomeNumline(summary.pct.accuracy), "stageOutcome"),
+    // خط عددی — کف صفر: اندازه‌گیری جای عدد است نه سرعت؛ RT ملاک نیست
+    rt_floor_ms: 0,
+    timed_choice: false,
+    stage_rule: ACCURACY_STAGE_RULE,
     stageList: /* @__PURE__ */ __name(() => NUMLINE_STAGES, "stageList"),
-    itemInStage: numlineItemInStage,
-    waveMsCapOf: null,
-    timedChoice: false,
-    rtFloorMs: 0,
-    // خط عددی کف ندارد
-    engineMetrics: []
-    // دقت جای عدد از فرمول 'accuracy' در DB می‌آید
+    levers: { bank_caps: NUMLINE_STAGE_MAX },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      const max = typeof stageId === "string" && stageId in NUMLINE_STAGE_MAX ? NUMLINE_STAGE_MAX[stageId] : null;
+      if (max === null) return true;
+      return Array.isArray(item.range) && item.range[1] <= max;
+    }, "itemInStage"),
+    // سنجهٔ خط عددی (numline_error) از فرمول DB می‌آید — سنجهٔ موتور-فقط ندارد
+    engine_metrics: []
   },
   scan: {
-    thresholds: SCAN_THRESHOLDS,
-    stageOutcome: /* @__PURE__ */ __name((summary) => stageOutcomeScan(summary.pct.accuracy), "stageOutcome"),
+    // اسکن — کف ۱۵۰ms روی نخستین لمس موج؛ زیر آن حدس است
+    rt_floor_ms: 150,
+    timed_choice: false,
+    stage_rule: ACCURACY_STAGE_RULE,
     stageList: /* @__PURE__ */ __name(() => SWARM_STAGES, "stageList"),
-    itemInStage: scanItemInStage,
-    waveMsCapOf: scanStageWaveMs,
-    // اهرم تندشدن موج — فقط-نمایش (۱.۲۵.۳۲)
-    timedChoice: false,
-    rtFloorMs: 150,
-    // کف نخستین لمس موج؛ زیر آن حدس است
-    engineMetrics: SCAN_ENGINE_METRICS
+    levers: { bank_caps: SCAN_STAGE_MAX_TILES, display: SCAN_STAGE_WAVE_MS },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      if (item.phase === "probe") return true;
+      const max = typeof stageId === "string" && stageId in SCAN_STAGE_MAX_TILES ? SCAN_STAGE_MAX_TILES[stageId] : null;
+      if (max === null) return true;
+      const s = item.stim ?? {};
+      const cols = typeof s.cols === "number" && Number.isInteger(s.cols) && s.cols > 0 ? s.cols : 0;
+      const rows = typeof s.rows === "number" && Number.isInteger(s.rows) && s.rows > 0 ? s.rows : 0;
+      const tiles = cols * rows;
+      return tiles > 0 && tiles <= max;
+    }, "itemInStage"),
+    // دقت موج‌ها از فرمول 'accuracy' در DB می‌آید (accuracy_scan) — دو سنجهٔ تبعی موتور-فقط‌اند
+    engine_metrics: [
+      { id: "scan_fa_pct", title_fa: "\u062F\u0631\u0635\u062F \u06AF\u0631\u0641\u062A\u0646 \u0647\u0645\u200C\u0646\u0648\u0639 \u062F\u0631 \u0645\u0648\u062C", unit: "percent", higher_is_better: false, source: "auto", formula: "scan_fa" },
+      { id: "scan_miss_pct", title_fa: "\u062F\u0631\u0635\u062F \u062C\u0627\u0627\u0646\u062F\u0627\u062E\u062A\u0646 \u062C\u0627\u0633\u0648\u0633", unit: "percent", higher_is_better: false, source: "auto", formula: "scan_miss" }
+    ]
   },
   stroop: {
-    thresholds: ACCURACY_THRESHOLDS,
-    stageOutcome: /* @__PURE__ */ __name((summary) => stageOutcomeAccuracyKind(summary.pct.accuracy), "stageOutcome"),
+    // استروپ — کف ۲۰۰ms: لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
+    rt_floor_ms: 200,
+    // انتخاب زمان‌دار — بی‌پاسخی پنجره سمت سرور اُمیشن است
+    timed_choice: true,
+    stage_rule: ACCURACY_STAGE_RULE,
     stageList: /* @__PURE__ */ __name(() => STROOP_STAGES, "stageList"),
-    itemInStage: stroopItemInStage,
-    waveMsCapOf: null,
-    timedChoice: true,
-    // انتخاب زمان‌دار — بی‌لمس = اُمیشن سمت سرور
-    rtFloorMs: 200,
-    // لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-    engineMetrics: STROOP_ENGINE_METRICS
+    levers: { bank_bands: STROOP_STAGE_BANDS },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      const allowed = typeof stageId === "string" && stageId in STROOP_STAGE_BANDS ? STROOP_STAGE_BANDS[stageId] : null;
+      if (allowed === null) return true;
+      const s = item.stim ?? {};
+      const band = typeof s.band === "string" ? s.band : "";
+      if (band === "") return true;
+      return allowed.includes(band);
+    }, "itemInStage"),
+    engine_metrics: [
+      { id: "stroop_congruent_acc_pct", title_fa: "\u062F\u0642\u062A \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0627\u0633\u062A\u0631\u0648\u067E (\u0648\u0627\u0698\u0647 \u0648 \u062C\u0648\u0647\u0631 \u06CC\u06A9\u06CC)", unit: "percent", higher_is_better: true, source: "auto", formula: "congruent_acc" },
+      { id: "stroop_incongruent_acc_pct", title_fa: "\u062F\u0642\u062A \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0627\u0633\u062A\u0631\u0648\u067E (\u062D\u0642\u0647\u0654 \u062C\u0648\u0647\u0631)", unit: "percent", higher_is_better: true, source: "auto", formula: "incongruent_acc" },
+      { id: "stroop_interference_ms", title_fa: "\u0647\u0632\u06CC\u0646\u0647\u0654 \u062A\u062F\u0627\u062E\u0644 \u0627\u0633\u062A\u0631\u0648\u067E (\u0645\u06CC\u0627\u0646\u0647\u0654 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u2212 \u0645\u06CC\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u062E\u0648\u0627\u0646)", unit: "ms", higher_is_better: false, source: "auto", formula: "interference_ms" }
+    ]
   },
   flanker: {
-    thresholds: ACCURACY_THRESHOLDS,
-    stageOutcome: /* @__PURE__ */ __name((summary) => stageOutcomeAccuracyKind(summary.pct.accuracy), "stageOutcome"),
+    // فلانکر — کف ۲۰۰ms: لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
+    rt_floor_ms: 200,
+    timed_choice: true,
+    stage_rule: ACCURACY_STAGE_RULE,
     stageList: /* @__PURE__ */ __name(() => FLANKER_STAGES, "stageList"),
-    itemInStage: flankerItemInStage,
-    waveMsCapOf: null,
-    timedChoice: true,
-    // انتخاب زمان‌دار — بی‌لمس = اُمیشن سمت سرور
-    rtFloorMs: 200,
-    // لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
-    engineMetrics: FLANKER_ENGINE_METRICS
+    levers: { bank_caps: FLANKER_STAGE_MAX_DECOYS, bank_bands: FLANKER_STAGE_BANDS },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      const allowed = typeof stageId === "string" && stageId in FLANKER_STAGE_BANDS ? FLANKER_STAGE_BANDS[stageId] : null;
+      if (allowed === null) return true;
+      const s = item.stim ?? {};
+      const band = typeof s.band === "string" ? s.band : "";
+      if (band !== "") return allowed.includes(band);
+      const max = typeof stageId === "string" && stageId in FLANKER_STAGE_MAX_DECOYS ? FLANKER_STAGE_MAX_DECOYS[stageId] : null;
+      if (max === null) return true;
+      const decoys = flankerIncongruentCountOf(item);
+      return decoys === 0 || decoys <= max;
+    }, "itemInStage"),
+    engine_metrics: [
+      { id: "flanker_congruent_acc_pct", title_fa: "\u062F\u0642\u062A \u06AF\u0644\u0647\u0654 \u0647\u0645\u200C\u0633\u0648 (\u0628\u062F\u0648\u0646 \u0641\u0631\u06CC\u0628)", unit: "percent", higher_is_better: true, source: "auto", formula: "congruent_acc" },
+      { id: "flanker_incongruent_acc_pct", title_fa: "\u062F\u0642\u062A \u06AF\u0644\u0647\u0654 \u0641\u0631\u06CC\u0628\u06A9\u0627\u0631 (\u0641\u0644\u0627\u0646\u06A9\u0631 \u0645\u062E\u0627\u0644\u0641)", unit: "percent", higher_is_better: true, source: "auto", formula: "incongruent_acc" },
+      { id: "flanker_interference_ms", title_fa: "\u0647\u0632\u06CC\u0646\u0647\u0654 \u062A\u062F\u0627\u062E\u0644 \u0641\u0644\u0627\u0646\u06A9\u0631 (\u0645\u06CC\u0627\u0646\u0647\u0654 \u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u2212 \u0645\u06CC\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u062E\u0648\u0627\u0646)", unit: "ms", higher_is_better: false, source: "auto", formula: "interference_ms" }
+    ]
+  },
+  trail: {
+    // رد پای دزد — کف ۱۵۰ms روی نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
+    rt_floor_ms: 150,
+    timed_choice: false,
+    stage_rule: ACCURACY_STAGE_RULE,
+    stageList: /* @__PURE__ */ __name(() => TRAIL_STAGES, "stageList"),
+    levers: { bank_caps: TRAIL_STAGE_MAX_NODES, bank_bands: TRAIL_STAGE_BANDS },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      const allowed = typeof stageId === "string" && stageId in TRAIL_STAGE_BANDS ? TRAIL_STAGE_BANDS[stageId] : null;
+      if (allowed === null) return true;
+      const s = item.stim ?? {};
+      const band = typeof s.band === "string" ? s.band : "";
+      if (band !== "") return allowed.includes(band);
+      const max = typeof stageId === "string" && stageId in TRAIL_STAGE_MAX_NODES ? TRAIL_STAGE_MAX_NODES[stageId] : null;
+      if (max === null) return true;
+      const nodes = Array.isArray(s.nodes) ? s.nodes.length : 0;
+      return nodes > 0 && nodes <= max;
+    }, "itemInStage"),
+    engine_metrics: [
+      { id: "trail_prefix_pct", title_fa: "\u062F\u0631\u0635\u062F \u067E\u06CC\u0634\u200C\u0645\u0627\u0646\u062F \u0635\u062D\u06CC\u062D \u0631\u062F \u0631\u062F\u067E\u0627\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "trail_prefix" }
+    ]
   },
   nback: {
-    thresholds: NBACK_THRESHOLDS,
-    stageOutcome: /* @__PURE__ */ __name((summary) => stageOutcomeNback(summary.pct.accuracy), "stageOutcome"),
-    stageList: /* @__PURE__ */ __name((band) => NBACK_STAGES_BY_BAND[band] ?? NBACK_STAGES_BY_BAND["7-12"], "stageList"),
+    // ن‌پشت (آلبوم خرچنگ) — کف ۲۰۰ms: لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
+    rt_floor_ms: 200,
+    // انتخاب زمان‌دار — بی‌پاسخی پنجره سمت سرور اُمیشن است (عملیاتی روی stim.window_ms آیتم)
+    timed_choice: true,
+    stage_rule: NBACK_THRESHOLDS,
+    stageList: /* @__PURE__ */ __name((band) => NBACK_STAGES[band] ?? NBACK_STAGES["7-12"], "stageList"),
+    // اهرم سختی ن‌پشت فیلتر سطح n در خود itemInStage است — جدول سقف/گروه جدا ندارد
+    levers: {},
     itemInStage: nbackItemInStage,
-    waveMsCapOf: null,
-    timedChoice: true,
-    // انتخاب زمان‌دار دوگزینه‌ای — بی‌لمس = اُمیشن سمت سرور
-    rtFloorMs: 200,
-    // لمس تصادفی حذف می‌شود — همان قرارداد انتخاب زمان‌دار
-    engineMetrics: NBACK_ENGINE_METRICS
+    engine_metrics: [
+      { id: "nback_match_pct", title_fa: "\u062F\u0631\u0635\u062F \u067E\u0627\u0633\u062E \u062F\u0631\u0633\u062A \u0628\u0647 \u0647\u0645\u0633\u0627\u0646\u200C\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "nback_match" },
+      { id: "nback_nonmatch_pct", title_fa: "\u062F\u0631\u0635\u062F \u067E\u0627\u0633\u062E \u062F\u0631\u0633\u062A \u0628\u0647 \u0646\u0627\u0647\u0645\u0633\u0627\u0646\u200C\u0647\u0627", unit: "percent", higher_is_better: true, source: "auto", formula: "nback_nonmatch" },
+      { id: "nback_false_alarm_pct", title_fa: "\u062F\u0631\u0635\u062F \u0647\u0634\u062F\u0627\u0631 \u06A9\u0627\u0630\u0628 (\u06AF\u0641\u062A\u0646 \xAB\u0647\u0645\u0627\u0646 \u0627\u0633\u062A\xBB \u0628\u0631\u0627\u06CC \u0646\u0627\u0647\u0645\u0633\u0627\u0646)", unit: "percent", higher_is_better: false, source: "auto", formula: "nback_fa" },
+      { id: "nback_miss_pct", title_fa: "\u062F\u0631\u0635\u062F \u062C\u0627\u0627\u0646\u062F\u0627\u062E\u062A\u0646 \u0647\u0645\u0633\u0627\u0646", unit: "percent", higher_is_better: false, source: "auto", formula: "nback_miss" }
+    ]
   },
   corsi: {
-    thresholds: CORSI_THRESHOLDS,
-    stageOutcome: /* @__PURE__ */ __name((summary) => stageOutcomeCorsi(summary.pct.accuracy), "stageOutcome"),
+    // صدف‌های جادویی (کرسی بلوک-تپینگ) — کف ۱۵۰ms روی نخستین لمس یادآوری؛ زیر آن حدس است
+    rt_floor_ms: 150,
+    timed_choice: false,
+    // دنباله‌ای چندلمسی — پایان با دنبالهٔ کامل یا پنجره (مثل رد)
+    stage_rule: SEQ_MEMORY_THRESHOLDS,
     stageList: /* @__PURE__ */ __name(() => CORSI_STAGES, "stageList"),
-    itemInStage: corsiItemInStage,
-    waveMsCapOf: null,
-    timedChoice: false,
-    // بازتولید دنباله مثل رد: پنجرهٔ authored آیتم؛ پیش‌ماند/نیمه‌کاره نمره می‌گیرد
-    rtFloorMs: 150,
-    // کف نخستین لمس بازتولید؛ زیر آن حدس است
-    engineMetrics: CORSI_ENGINE_METRICS
+    levers: { bank_caps: CORSI_STAGE_MAX_SPAN },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      if (item.phase === "probe") return true;
+      const max = typeof stageId === "string" && stageId in CORSI_STAGE_MAX_SPAN ? CORSI_STAGE_MAX_SPAN[stageId] : null;
+      if (max === null) return true;
+      const s = item.stim ?? {};
+      const len = Array.isArray(s.seq) ? s.seq.length : 0;
+      return len > 0 && len <= max;
+    }, "itemInStage"),
+    // دقت دنباله از فرمول 'accuracy' در DB می‌آید؛ بازه (بلندترین دنبالهٔ کامل درست) موتور-فقط است
+    engine_metrics: [
+      { id: "corsi_span_max", title_fa: "\u0628\u0644\u0646\u062F\u062A\u0631\u06CC\u0646 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u0635\u062F\u0641 \u06A9\u0627\u0645\u0644 \u062F\u0631\u0633\u062A (\u0628\u0627\u0632\u0647\u0654 \u062F\u06CC\u062F\u0627\u0631\u06CC-\u0641\u0636\u0627\u06CC\u06CC)", unit: "score", higher_is_better: true, source: "auto", formula: "span_max" }
+    ]
+  },
+  span: {
+    // حباب‌های عدد (بازهٔ عدد) — کف صفر: ورود صفحه‌کلیدی زمان واکنش نیست (مثل خط عددی)
+    rt_floor_ms: 0,
+    timed_choice: false,
+    // ورود صفحه‌کلیدی — پایان با ✓ یا پنجره
+    stage_rule: SEQ_MEMORY_THRESHOLDS,
+    stageList: /* @__PURE__ */ __name(() => SPAN_STAGES, "stageList"),
+    levers: { bank_caps: SPAN_STAGE_MAX_DIGITS },
+    itemInStage: /* @__PURE__ */ __name((item, stageId) => {
+      if (item.phase === "probe") return true;
+      const max = typeof stageId === "string" && stageId in SPAN_STAGE_MAX_DIGITS ? SPAN_STAGE_MAX_DIGITS[stageId] : null;
+      if (max === null) return true;
+      const s = item.stim ?? {};
+      const len = Array.isArray(s.seq) ? s.seq.length : 0;
+      return len > 0 && len <= max;
+    }, "itemInStage"),
+    engine_metrics: [
+      { id: "digitspan_span_max", title_fa: "\u0628\u0644\u0646\u062F\u062A\u0631\u06CC\u0646 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u0639\u062F\u062F \u06A9\u0627\u0645\u0644 \u062F\u0631\u0633\u062A (\u0628\u0627\u0632\u0647\u0654 \u0639\u062F\u062F\u06CC)", unit: "score", higher_is_better: true, source: "auto", formula: "span_max" }
+    ]
   }
 };
-function gameKindOf(v) {
-  return typeof v === "string" && GAME_KIND_IDS.includes(v) ? v : "gonogo";
+
+// src/domain/games/protocol.ts
+var PROTOCOL_VERSION = "1.0.0";
+var PROTOCOL_ID = "gonogo-standard";
+var PARAM = /* @__PURE__ */ __name((value, rationale, status) => ({ value, rationale, status }), "PARAM");
+function bandForAge2(age) {
+  if (typeof age !== "number" || !Number.isFinite(age)) return { band: "7-12", clamped: false };
+  if (age <= 6) return { band: "4-6", clamped: age < 4 };
+  return { band: "7-12", clamped: age > 12 };
 }
-__name(gameKindOf, "gameKindOf");
-function kindEntryOf(kind) {
-  return GAME_KINDS[kind] ?? GAME_KINDS.gonogo;
-}
-__name(kindEntryOf, "kindEntryOf");
-function itemInStageOf(kind) {
-  return kindEntryOf(kind).itemInStage;
-}
-__name(itemInStageOf, "itemInStageOf");
-var ITEM_TYPE_RT_FLOOR_MS = {
-  touch_report: GAME_KINDS.gonogo.rtFloorMs,
-  numline: GAME_KINDS.numline.rtFloorMs,
-  choice: 200,
-  // فلش‌کارت/انتخاب — لمس تصادفی حذف می‌شود
-  scan: GAME_KINDS.scan.rtFloorMs,
-  stroop: GAME_KINDS.stroop.rtFloorMs,
-  flanker: GAME_KINDS.flanker.rtFloorMs,
-  nback: GAME_KINDS.nback.rtFloorMs,
-  corsi: GAME_KINDS.corsi.rtFloorMs
+__name(bandForAge2, "bandForAge");
+var TRAINING_PARAMS = {
+  "4-6": {
+    response_window_go_ms: PARAM(2e3, "\u06A9\u0648\u062F\u06A9 \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u067E\u0631\u062F\u0627\u0632\u0634 \u0648 \u062A\u0635\u0645\u06CC\u0645 \u06A9\u0646\u062F\u062A\u0631 \u062F\u0627\u0631\u062F\u061B \u067E\u0646\u062C\u0631\u0647\u0654 \u0645\u062A\u0639\u0627\u0631\u0641 \u06AF\u0648/\u0646\u0648\u06AF\u0648 \u06A9\u0648\u062F\u06A9\u200C\u0645\u062D\u0648\u0631 \u0628\u0644\u0646\u062F\u062A\u0631 \u0627\u0646\u062A\u062E\u0627\u0628 \u0634\u062F \u2014 \u0628\u0627 \u067E\u06CC\u0644\u0648\u062A \u0645\u0631\u06A9\u0632 \u062A\u0623\u06CC\u06CC\u062F \u0642\u0637\u0639\u06CC \u0645\u06CC\u200C\u06AF\u06CC\u0631\u062F", "pilot"),
+    response_window_nogo_ms: PARAM(2e3, "\u0647\u0645\u200C\u0637\u0648\u0644 \u06AF\u0648 \u0628\u0631\u0627\u06CC \u062E\u0648\u0627\u0646\u0627\u06CC\u06CC \u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646 \u062F\u0631 \u0627\u06CC\u0646 \u0633\u0646", "proposed"),
+    isi_min_ms: PARAM(1e3, "ISI \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0627\u0632 \u0627\u06CC\u0646 \u062F\u0631 \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u0646\u0631\u062E \u0627\u064F\u0645\u06CC\u0634\u0646 \u062A\u0635\u0627\u062F\u0641\u06CC \u0645\u06CC\u200C\u0633\u0627\u0632\u062F\u061B \u062D\u062F \u067E\u0627\u06CC\u06CC\u0646 \u0645\u062D\u0627\u0641\u0638\u0647\u200C\u06A9\u0627\u0631\u0627\u0646\u0647", "proposed"),
+    isi_max_ms: PARAM(1500, "\u0628\u0627\u0632\u0647\u0654 \u06F1\u2013\u06F1\u066B\u06F5 \u062B\u0627\u0646\u06CC\u0647 \u0633\u0646\u062F \u0645\u062D\u062A\u0648\u0627 \u0628\u0633\u062A\u0647\u0654 \u06F3 \u2014 \u062D\u0641\u0638 \u0634\u062F", "pilot"),
+    fixation_ms: PARAM(400, "\u0645\u06A9\u062B \u062E\u0646\u062B\u06CC \u06A9\u0648\u062A\u0627\u0647 \u067E\u06CC\u0634 \u0627\u0632 \u0646\u0645\u0627\u06CC\u0634 \u2014 \u062C\u062F\u0627\u06A9\u0646\u0646\u062F\u0647\u0654 ISI \u0627\u0632 \u0644\u062D\u0638\u0647\u0654 \u0645\u062D\u0631\u06A9\u061B \u0628\u062F\u0648\u0646 \u0641\u0644\u0627\u0634 \u0648 \u0634\u0645\u0627\u0631\u0634 (\xA7\u06F9)", "proposed"),
+    go_ratio: PARAM(0.75, "\u0646\u0633\u0628\u062A \u0645\u062A\u0639\u0627\u0631\u0641 \u06AF\u0648/\u0646\u0648\u06AF\u0648 ~\u06F3:\u06F1 \u062F\u0631 \u0627\u062F\u0628\u06CC\u0627\u062A \u06AF\u0648/\u0646\u0648\u06AF\u0648 \u06A9\u0648\u062F\u06A9\u0627\u0646\u061B \u0646\u0633\u0628\u062A \u0628\u0627\u0644\u0627\u062A\u0631 \u0628\u0631\u0627\u06CC \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u062A\u0627 \u0645\u0647\u0627\u0631 \u0628\u0627\u0632\u062F\u0627\u0631\u06CC \u062E\u0633\u062A\u0647\u200C\u06A9\u0646\u0646\u062F\u0647 \u0646\u0634\u0648\u062F", "pilot"),
+    max_consecutive_same: PARAM(3, "\u0628\u06CC\u0634 \u0627\u0632 \u0633\u0647 \u067E\u06CC\u0627\u067E\u06CC\u060C \u0631\u06CC\u062A\u0645 \u0642\u0627\u0628\u0644 \u062D\u0641\u0638\u200C\u06A9\u0631\u062F\u0646 \u0645\u06CC\u200C\u0633\u0627\u0632\u062F (\u062D\u0641\u0638\u200C\u06A9\u0631\u062F\u0646 \u0628\u0647\u200C\u062C\u0627\u06CC \u0628\u0627\u0632\u062F\u0627\u0631\u06CC)", "proposed"),
+    block_size: PARAM(20, "\u0628\u0627\u0632\u0647\u0654 \u062A\u0648\u062C\u0647 \u0641\u0639\u0627\u0644 \u06F4\u2013\u06F6 \u0633\u0627\u0644\u061B \u0628\u0644\u0648\u06A9 \u06F2\u06F0 \u062A\u0627\u06CC\u06CC \u0628\u0627 \u0627\u0633\u062A\u0631\u0627\u062D\u062A\u060C \u062E\u0633\u062A\u06AF\u06CC \u0627\u0646\u062A\u0647\u0627\u06CC \u062C\u0644\u0633\u0647 \u0631\u0627 \u0645\u06CC\u200C\u0634\u06A9\u0646\u062F", "pilot"),
+    break_min_ms: PARAM(4e3, "\u0627\u0633\u062A\u0631\u0627\u062D\u062A \u06A9\u0648\u062A\u0627\u0647 \u0644\u0645\u0633\u200C\u0645\u062D\u0648\u0631\u061B \u06A9\u0627\u0641\u06CC \u0628\u0631\u0627\u06CC \u062A\u0646\u0638\u06CC\u0645\u060C \u06A9\u0648\u062A\u0627\u0647 \u0628\u0631\u0627\u06CC \u062D\u0641\u0638 \u062C\u0631\u06CC\u0627\u0646", "proposed"),
+    assessment_blocks: PARAM(2, "\u062D\u0627\u0644\u062A \u062A\u0645\u0631\u06CC\u0646 \u062F\u0648 \u0628\u0644\u0648\u06A9 \u06A9\u0648\u062A\u0627\u0647 \u2014 \u062A\u062C\u0631\u0628\u0647\u0654 \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0627\u0632 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC", "proposed"),
+    stimulus_scale_vmin: PARAM(38, "\u0645\u062D\u0631\u06A9 \u062F\u0631\u0634\u062A \u0628\u0631\u0627\u06CC \u06F4\u2013\u06F6 \u0633\u0627\u0644\u061B \u06F3\u06F8\u066A \u0642\u0637\u0631 \u06A9\u0648\u0686\u06A9 \u0648\u06CC\u0648\u067E\u0648\u0631\u062A \u2014 \u067E\u0627\u0633\u062E \u0628\u0627\u0632\u062E\u0648\u0631\u062F \u0645\u06CC\u062F\u0627\u0646\u06CC \xAB\u0622\u06CC\u06A9\u0648\u0646 \u0628\u0632\u0631\u06AF\xBB \u0628\u0627 \u0645\u0642\u06CC\u0627\u0633 \u0633\u0646\u200C\u0645\u062D\u0648\u0631 \u0646\u0647 \u0639\u062F\u062F \u062B\u0627\u0628\u062A", "pilot"),
+    feedback_ms: PARAM(1400, "\u062D\u0628\u0627\u0628 \u0628\u0627\u0632\u062E\u0648\u0631\u062F \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0627\u0632 \u06F1\u06F6\u06F0\u06F0ms \u0641\u0639\u0644\u06CC \u2014 \u0641\u0627\u0635\u0644\u0647\u0654 \u0628\u06CC\u0646\u200C\u0622\u0632\u0645\u0648\u0646\u0634\u06CC \u0637\u0648\u0644\u0627\u0646\u06CC\u060C \u06A9\u0648\u062F\u06A9 \u0628\u06CC\u200C\u062D\u0648\u0635\u0644\u0647 \u0631\u0627 \u062E\u0641\u0647 \u0645\u06CC\u200C\u06A9\u0646\u062F (C12 \u0645\u0645\u06CC\u0632\u06CC)", "proposed"),
+    preview_step_ms: PARAM(2200, "\u0647\u0631 \u06AF\u0627\u0645 \u0622\u0645\u0648\u0632\u0634 \u062F\u0648\u0636\u0627\u0646\u06CC\u0647\u200C\u0627\u06CC \u062A\u0627 \u0628\u06CC\u0634\u062A\u0631 \u0627\u0632 \u0627\u06CC\u0646 \u0631\u0648\u06CC \u0635\u0641\u062D\u0647 \u0646\u0645\u06CC\u200C\u0645\u0627\u0646\u062F", "proposed")
+  },
+  "7-12": {
+    response_window_go_ms: PARAM(1500, "\u067E\u0646\u062C\u0631\u0647\u0654 \u0645\u062A\u0639\u0627\u0631\u0641 \u06AF\u0648/\u0646\u0648\u06AF\u0648 \u0633\u0646\u06CC\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u067E\u0627\u0633\u062E\u200C\u0647\u0627\u06CC \u0632\u06CC\u0631 \u06A9\u0641 \u06F1\u06F5\u06F0ms \u062C\u062F\u0627\u06AF\u0627\u0646\u0647 \u0641\u06CC\u0644\u062A\u0631 \u0645\u06CC\u200C\u0634\u0648\u0646\u062F (\xA7\u06F8)", "pilot"),
+    response_window_nogo_ms: PARAM(1500, "\u0647\u0645\u200C\u0637\u0648\u0644 \u06AF\u0648 \u2014 \u0645\u0642\u0627\u06CC\u0633\u0647\u200C\u067E\u0630\u06CC\u0631\u06CC \u0628\u06CC\u0646\u200C\u0633\u0646\u06CC", "proposed"),
+    isi_min_ms: PARAM(800, "ISI \u06A9\u0645\u06CC \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0628\u0631\u0627\u06CC \u0633\u0646\u06CC\u0646 \u0628\u0627\u0644\u0627\u062A\u0631\u061B \u0641\u0634\u0627\u0631 \u0633\u0631\u0639\u062A \u0645\u062A\u0639\u0627\u062F\u0644", "proposed"),
+    isi_max_ms: PARAM(1200, "\u0628\u0627\u0632\u0647\u0654 \u06F0\u066B\u06F8\u2013\u06F1\u066B\u06F2 \u062B\u0627\u0646\u06CC\u0647 \u2014 \u062A\u0646\u0648\u0639 \u0628\u0631\u0627\u06CC \u06AF\u0633\u0633\u062A\u0646 \u0627\u0646\u062A\u0638\u0627\u0631 \u0632\u0645\u0627\u0646\u06CC \u062B\u0627\u0628\u062A", "proposed"),
+    fixation_ms: PARAM(400, "\u0645\u06A9\u062B \u062E\u0646\u062B\u06CC \u067E\u06CC\u0634 \u0627\u0632 \u0646\u0645\u0627\u06CC\u0634 \u2014 \u0647\u0645\u200C\u0637\u0648\u0644 \u062F\u0648 \u0628\u0627\u0646\u062F \u0628\u0631\u0627\u06CC \u0645\u0642\u0627\u06CC\u0633\u0647\u200C\u067E\u0630\u06CC\u0631\u06CC", "proposed"),
+    go_ratio: PARAM(0.75, "\u0646\u0633\u0628\u062A ~\u06F3:\u06F1 \u0645\u062A\u0639\u0627\u0631\u0641\u061B \u0628\u0627 \u0646\u0633\u062E\u0647\u0654 \u067E\u0631\u0648\u062A\u06A9\u0644 \u062B\u0627\u0628\u062A \u0645\u06CC\u200C\u0645\u0627\u0646\u062F", "pilot"),
+    max_consecutive_same: PARAM(3, "\u0647\u0645\u0627\u0646 \u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u06F4\u2013\u06F6 \u0633\u0627\u0644", "proposed"),
+    block_size: PARAM(24, "\u0633\u0646\u06CC\u0646 \u0645\u062F\u0631\u0633\u0647 \u0628\u0627\u0632\u0647\u0654 \u062A\u0648\u062C\u0647 \u0628\u0644\u0646\u062F\u062A\u0631 \u2014 \u0628\u0644\u0648\u06A9 \u06F2\u06F4 \u062A\u0627\u06CC\u06CC", "proposed"),
+    break_min_ms: PARAM(3500, "\u0627\u0633\u062A\u0631\u0627\u062D\u062A \u0644\u0645\u0633\u200C\u0645\u062D\u0648\u0631", "proposed"),
+    assessment_blocks: PARAM(3, "\u067E\u0631\u0648\u062A\u06A9\u0644 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0627\u0633\u062A\u0627\u0646\u062F\u0627\u0631\u062F \u0633\u0647 \u0628\u0644\u0648\u06A9 (~\u06F7\u06F2 \u0622\u0632\u0645\u0648\u0646) \u2014 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 \u0628\u0644\u0646\u062F \u0628\u0631\u0627\u06CC \u0645\u06CC\u0627\u0646\u0647 \u0648 \u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u067E\u0627\u06CC\u062F\u0627\u0631", "proposed"),
+    stimulus_scale_vmin: PARAM(30, "\u0645\u062D\u0631\u06A9 \u06A9\u0648\u0686\u06A9\u200C\u062A\u0631 \u0628\u0631\u0627\u06CC \u0633\u0646\u06CC\u0646 \u0628\u0627\u0644\u0627\u062A\u0631 \u2014 \u0628\u0627\u0632\u0637\u0631\u0627\u062D\u06CC \u067E\u0627\u0633\u062E \u0628\u0647 \xAB\u0622\u06CC\u06A9\u0648\u0646\u200C\u0647\u0627 \u0628\u0632\u0631\u06AF \u0627\u0633\u062A\xBB \u0628\u0627 \u067E\u0627\u0631\u0627\u0645\u062A\u0631 \u0633\u0646\u200C\u0645\u062D\u0648\u0631", "pilot"),
+    feedback_ms: PARAM(1200, "\u0628\u0627\u0632\u062E\u0648\u0631\u062F \u0622\u0645\u0648\u0632\u0634\u06CC \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u2014 \u0627\u06CC\u0646 \u0633\u0646 \u062A\u062D\u0645\u0644 \u0641\u0627\u0635\u0644\u0647\u0654 \u0628\u0644\u0646\u062F \u0646\u062F\u0627\u0631\u062F", "proposed"),
+    preview_step_ms: PARAM(2e3, "\u06AF\u0627\u0645 \u0622\u0645\u0648\u0632\u0634 \u062F\u0648\u0636\u0627\u0646\u06CC\u0647\u200C\u0627\u06CC", "proposed")
+  }
 };
+var ASSESSMENT_PARAMS = {
+  "4-6": {
+    ...TRAINING_PARAMS["4-6"],
+    response_window_go_ms: PARAM(2e3, "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC: \u067E\u0646\u062C\u0631\u0647\u0654 \u062B\u0627\u0628\u062A \u0647\u0645\u0627\u0646 \u062A\u0645\u0631\u06CC\u0646 \u062A\u0627 \u0645\u0642\u0627\u06CC\u0633\u0647\u0654 \u0631\u0648\u0646\u062F\u061B \u062A\u063A\u06CC\u06CC\u0631\u0634 \u06CC\u0639\u0646\u06CC \u067E\u0631\u0648\u062A\u06A9\u0644 \u062C\u062F\u06CC\u062F \u0648 \u0628\u0627\u0645\u067E \u0646\u0633\u062E\u0647", "pilot"),
+    assessment_blocks: PARAM(2, "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u06F4\u2013\u06F6 \u0633\u0627\u0644: \u062F\u0648 \u0628\u0644\u0648\u06A9 \u06F2\u06F0 \u062A\u0627\u06CC\u06CC = \u06F4\u06F0 \u0622\u0632\u0645\u0648\u0646 \u2014 \u0628\u0644\u0646\u062F\u062A\u0631 \u0627\u0632 \u0638\u0631\u0641\u06CC\u062A \u062A\u0648\u062C\u0647 \u0627\u06CC\u0646 \u0633\u0646 \u0646\u06CC\u0633\u062A", "proposed")
+  },
+  "7-12": {
+    ...TRAINING_PARAMS["7-12"],
+    response_window_go_ms: PARAM(1500, "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC: \u067E\u0646\u062C\u0631\u0647\u0654 \u062B\u0627\u0628\u062A\u061B \u0633\u0627\u0632\u06AF\u0627\u0631\u06CC \u062F\u0631 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0645\u0645\u0646\u0648\u0639 \u0627\u0633\u062A (C1)", "pilot"),
+    assessment_blocks: PARAM(3, "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u06F7\u2013\u06F1\u06F2 \u0633\u0627\u0644: \u0633\u0647 \u0628\u0644\u0648\u06A9 \u06F2\u06F4 \u062A\u0627\u06CC\u06CC = \u06F7\u06F2 \u0622\u0632\u0645\u0648\u0646 \u0627\u0633\u062A\u0627\u0646\u062F\u0627\u0631\u062F", "proposed")
+  }
+};
+var ASSESSMENT_BEHAVIOR = {
+  feedback_in_main: false,
+  star_basket: false,
+  adaptive: false,
+  progress_visible: false,
+  instruction_style: "standard"
+};
+var TRAINING_BEHAVIOR = {
+  feedback_in_main: true,
+  star_basket: true,
+  adaptive: true,
+  progress_visible: true,
+  instruction_style: "playful"
+};
+function protocolFor(mode, band) {
+  const params = mode === "assessment" ? ASSESSMENT_PARAMS[band] : TRAINING_PARAMS[band];
+  return {
+    protocol_id: PROTOCOL_ID,
+    version: PROTOCOL_VERSION,
+    mode,
+    age_band: band,
+    params,
+    behavior: mode === "assessment" ? ASSESSMENT_BEHAVIOR : TRAINING_BEHAVIOR
+  };
+}
+__name(protocolFor, "protocolFor");
+function protocolForAge(mode, age) {
+  const { band, clamped } = bandForAge2(age);
+  return { ...protocolFor(mode, band), age_clamped: clamped };
+}
+__name(protocolForAge, "protocolForAge");
+function isProtocolVersionSupported(v) {
+  return typeof v === "string" && /^\d+\.\d+\.\d+$/.test(v) && v === PROTOCOL_VERSION;
+}
+__name(isProtocolVersionSupported, "isProtocolVersionSupported");
+var NBACK_PROTOCOL_ID = "nback-standard";
+var NBACK_PROTOCOL_VERSION = "1.0.0";
+var NBACK_PARAM_KEYS = [
+  "isi_min_ms",
+  "isi_max_ms",
+  "fixation_ms",
+  "block_size",
+  "match_ratio",
+  "max_consecutive_match",
+  "response_window_ms"
+];
+var NBACK_PARAMS = {
+  "4-6": {
+    isi_min_ms: PARAM(2200, "ISI \u0628\u0644\u0646\u062F\u062A\u0631 \u0628\u0631\u0627\u06CC \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u2014 \u0628\u0627\u0631 \u0646\u06AF\u0647\u200C\u062F\u0627\u0634\u062A n \u0642\u062F\u0645 \u0639\u0642\u0628\u200C\u062A\u0631 \u062F\u0631 \u0627\u06CC\u0646 \u0633\u0646 \u0628\u06CC\u0634\u062A\u0631 \u0627\u0633\u062A\u061B \u062D\u062F \u067E\u0627\u06CC\u06CC\u0646 \u0645\u062D\u0627\u0641\u0638\u0647\u200C\u06A9\u0627\u0631\u0627\u0646\u0647", "proposed"),
+    isi_max_ms: PARAM(2800, "\u0628\u0627\u0632\u0647\u0654 \u06F2\u066B\u06F2\u2013\u06F2\u066B\u06F8 \u062B\u0627\u0646\u06CC\u0647 \u2014 \u062A\u0646\u0648\u0639 \u0628\u0631\u0627\u06CC \u06AF\u0633\u0633\u062A\u0646 \u0627\u0646\u062A\u0638\u0627\u0631 \u0632\u0645\u0627\u0646\u06CC \u062B\u0627\u0628\u062A", "proposed"),
+    fixation_ms: PARAM(400, "\u0645\u06A9\u062B \u062E\u0646\u062B\u06CC \u067E\u06CC\u0634 \u0627\u0632 \u0646\u0645\u0627\u06CC\u0634 \u2014 \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0628\u0627 \u062F\u06CC\u06AF\u0631 \u0646\u0648\u0639\u200C\u0628\u0627\u0632\u06CC\u200C\u0647\u0627", "proposed"),
+    block_size: PARAM(30, "\u062C\u0631\u06CC\u0627\u0646 \u0628\u06CC\u200C\u0627\u0633\u062A\u0631\u0627\u062D\u062A \u0628\u0644\u0648\u06A9\u06CC \u06F3\u06F0\u062A\u0627\u06CC\u06CC \u2014 \u0627\u0646\u0633\u062C\u0627\u0645 \u062F\u0646\u0628\u0627\u0644\u0647\u0654 n-back \u0627\u0632 \u0627\u0633\u062A\u0631\u0627\u062D\u062A \u062F\u0631\u0648\u0646\u200C\u062F\u0646\u0628\u0627\u0644\u0647\u200C\u0627\u06CC \u0645\u06CC\u200C\u0634\u06A9\u0646\u062F", "proposed"),
+    match_ratio: PARAM(0.3, "\u0646\u0633\u0628\u062A \u0645\u062A\u0639\u0627\u0631\u0641 \u0647\u0645\u0633\u0627\u0646 \u062F\u0631 n-back ~\u06F3\u06F0\u066A \u2014 \u0628\u0627\u0644\u0627\u06CC \u062D\u062F\u0633 \u0648 \u0632\u06CC\u0631 \u0633\u0642\u0641 \u062A\u06A9\u0631\u0627\u0631 \u0642\u0627\u0628\u0644 \u062D\u0641\u0638\u200C\u06A9\u0631\u062F\u0646", "proposed"),
+    max_consecutive_match: PARAM(2, "\u0628\u06CC\u0634 \u0627\u0632 \u062F\u0648 \u0647\u0645\u0633\u0627\u0646\u0650 \u067E\u06CC\u0627\u067E\u06CC\u060C \u067E\u0627\u0633\u062E \u0628\u0647 \u0642\u0627\u0639\u062F\u0647 \u0631\u0627 \u0628\u0647 \u062D\u0641\u0638 \u06A9\u0648\u062A\u0627\u0647\u200C\u0645\u062F\u062A \u062A\u0628\u062F\u06CC\u0644 \u0645\u06CC\u200C\u06A9\u0646\u062F", "proposed"),
+    response_window_ms: PARAM(3800, "\u067E\u0646\u062C\u0631\u0647\u0654 \u0645\u0631\u062C\u0639 \u067E\u0627\u0633\u062E \u06F4\u2013\u06F6 \u0633\u0627\u0644 \u2014 \u06A9\u0648\u062F\u06A9 \u0628\u0627\u06CC\u062F \u062D\u06A9\u0645 \xAB\u0647\u0645\u0627\u0646 \u0627\u0633\u062A/\u0641\u0631\u0642 \u062F\u0627\u0631\u062F\xBB \u0631\u0627 \u0628\u06CC\u200C\u0641\u0634\u0627\u0631 \u0628\u062F\u0647\u062F\u061B \u0639\u0645\u0644\u06CC\u0627\u062A\u06CC \u0631\u0648\u06CC stim.window_ms \u0622\u06CC\u062A\u0645", "proposed")
+  },
+  "7-12": {
+    isi_min_ms: PARAM(1800, "ISI \u06A9\u0645\u06CC \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0628\u0631\u0627\u06CC \u0633\u0646\u06CC\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u0641\u0634\u0627\u0631 \u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC \u0645\u062A\u0639\u0627\u062F\u0644", "proposed"),
+    isi_max_ms: PARAM(2400, "\u0628\u0627\u0632\u0647\u0654 \u06F1\u066B\u06F8\u2013\u06F2\u066B\u06F4 \u062B\u0627\u0646\u06CC\u0647 \u2014 \u062A\u0646\u0648\u0639 \u0628\u0631\u0627\u06CC \u06AF\u0633\u0633\u062A\u0646 \u0627\u0646\u062A\u0638\u0627\u0631 \u0632\u0645\u0627\u0646\u06CC \u062B\u0627\u0628\u062A", "proposed"),
+    fixation_ms: PARAM(400, "\u0645\u06A9\u062B \u062E\u0646\u062B\u06CC \u067E\u06CC\u0634 \u0627\u0632 \u0646\u0645\u0627\u06CC\u0634 \u2014 \u0647\u0645\u200C\u0637\u0648\u0644 \u062F\u0648 \u0628\u0627\u0646\u062F \u0628\u0631\u0627\u06CC \u0645\u0642\u0627\u06CC\u0633\u0647\u200C\u067E\u0630\u06CC\u0631\u06CC", "proposed"),
+    block_size: PARAM(30, "\u062C\u0631\u06CC\u0627\u0646 \u0628\u06CC\u200C\u0627\u0633\u062A\u0631\u0627\u062D\u062A \u0628\u0644\u0648\u06A9\u06CC \u06F3\u06F0\u062A\u0627\u06CC\u06CC \u2014 \u0647\u0645\u200C\u0634\u06A9\u0644 \u062F\u0648 \u0628\u0627\u0646\u062F \u0628\u0631\u0627\u06CC \u0645\u0642\u0627\u06CC\u0633\u0647", "proposed"),
+    match_ratio: PARAM(0.3, "\u0646\u0633\u0628\u062A \u0645\u062A\u0639\u0627\u0631\u0641 \u0647\u0645\u0633\u0627\u0646 ~\u06F3\u06F0\u066A \u2014 \u0628\u0627 \u0646\u0633\u062E\u0647\u0654 \u067E\u0631\u0648\u062A\u06A9\u0644 \u062B\u0627\u0628\u062A \u0645\u06CC\u200C\u0645\u0627\u0646\u062F", "proposed"),
+    max_consecutive_match: PARAM(2, "\u0647\u0645\u0627\u0646 \u0627\u0633\u062A\u062F\u0644\u0627\u0644 \u06F4\u2013\u06F6 \u0633\u0627\u0644", "proposed"),
+    response_window_ms: PARAM(3400, "\u067E\u0646\u062C\u0631\u0647\u0654 \u0645\u0631\u062C\u0639 \u067E\u0627\u0633\u062E \u0633\u0646\u06CC\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u06A9\u0645\u06CC \u062A\u0646\u06AF\u200C\u062A\u0631 \u0627\u0632 \u06F4\u2013\u06F6 \u0633\u0627\u0644\u061B \u0639\u0645\u0644\u06CC\u0627\u062A\u06CC \u0631\u0648\u06CC stim.window_ms \u0622\u06CC\u062A\u0645", "proposed")
+  }
+};
+function nbackParamsOf(band) {
+  const table = NBACK_PARAMS[band];
+  const out = {};
+  for (const k of NBACK_PARAM_KEYS) out[k] = table[k].value;
+  return out;
+}
+__name(nbackParamsOf, "nbackParamsOf");
+function applyNbackProtocol(snap, band) {
+  return { ...snap, protocol_id: NBACK_PROTOCOL_ID, version: NBACK_PROTOCOL_VERSION, age_band: band, params: { ...snap.params, ...nbackParamsOf(band) } };
+}
+__name(applyNbackProtocol, "applyNbackProtocol");
+function protocolSnapshotOf(p) {
+  const params = {};
+  for (const [k, v] of Object.entries(p.params)) params[k] = v.value;
+  return {
+    protocol_id: p.protocol_id,
+    version: p.version,
+    mode: p.mode,
+    age_band: p.age_band,
+    params,
+    behavior: { ...p.behavior }
+  };
+}
+__name(protocolSnapshotOf, "protocolSnapshotOf");
 
 // src/domain/games/pure.ts
 var TONE_RULES_BASE = ["no_timer", "no_rank", "no_streak", "no_fail_message"];
+var DEFAULT_RT_FLOOR_MS = {
+  touch_report: GAME_KINDS.gonogo.rt_floor_ms,
+  // گو/نوگو — زیر ۱۵۰ حدس است
+  numline: GAME_KINDS.numline.rt_floor_ms,
+  // خط عددی کف ندارد
+  choice: 200,
+  // فلش‌کارت/انتخاب — لمس تصادفی حذف می‌شود
+  scan: GAME_KINDS.scan.rt_floor_ms,
+  // حملهٔ جاسوس‌ها — کف نخستین لمس موج؛ زیر آن حدس است
+  stroop: GAME_KINDS.stroop.rt_floor_ms,
+  // حقه‌باز رنگ‌ها — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
+  flanker: GAME_KINDS.flanker.rt_floor_ms,
+  // گلهٔ فریبکار — لمس تصادفی حذف می‌شود (۱.۲۵.۳۲)
+  trail: GAME_KINDS.trail.rt_floor_ms,
+  // رد پای دزد — کف نخستین لمس رد؛ زیر آن حدس است (۱.۲۵.۳۲)
+  nback: GAME_KINDS.nback.rt_floor_ms,
+  // ن‌پشت/آلبوم خرچنگ — لمس تصادفی حذف می‌شود (۱.۲۵.۴۰)
+  corsi: GAME_KINDS.corsi.rt_floor_ms,
+  // صدف‌های جادویی — کف نخستین لمس یادآوری؛ زیر آن حدس است (G8)
+  span: GAME_KINDS.span.rt_floor_ms
+  // حباب‌های عدد — ورود صفحه‌کلیدی، زمان واکنش نیست (G8)
+};
 var IDLE_PARTIAL_MS = 5 * 60 * 1e3;
 var MIN_COMPLETION_RATIO = 0.6;
 var FORBIDDEN_TEXT_PATTERNS = [
@@ -24237,7 +24304,7 @@ var HOMOPHONE_SETS = [
   ["\u063A", "\u0642"]
 ];
 function rtFloorFor(item, mission) {
-  return typeof mission.rt_floor_ms === "number" ? mission.rt_floor_ms : ITEM_TYPE_RT_FLOOR_MS[item.type] ?? 0;
+  return typeof mission.rt_floor_ms === "number" ? mission.rt_floor_ms : DEFAULT_RT_FLOOR_MS[item.type] ?? 0;
 }
 __name(rtFloorFor, "rtFloorFor");
 function numlineErrorPct(chosen, target, range) {
@@ -24262,11 +24329,12 @@ function scoreAttempt(item, mission, response, rtMs) {
   let scanSpies;
   let timedOut;
   let congruent;
-  let match2;
+  let nbackMatch;
   let nbackFa;
   let nbackMissed;
-  let corsiPrefix;
-  let corsiLen;
+  let trailNodes;
+  let trailNodesTotal;
+  let spanLenValue;
   if (item.type === "choice") {
     correct = typeof res.option === "number" && res.option === item.correct;
   } else if (item.type === "numline") {
@@ -24281,16 +24349,16 @@ function scoreAttempt(item, mission, response, rtMs) {
     correct = opt !== null && opt === item.correct;
     omission = opt === null;
     timedOut = opt === null;
-    congruent = item.stim?.congruent === true || item.stim?.cond === "congruent";
     if (item.type === "nback") {
-      const isMatch = item.stim?.match === true;
-      match2 = isMatch;
-      nbackFa = !isMatch && opt === 0;
-      nbackMissed = isMatch && opt === 1;
+      const match2 = item.stim?.match === true;
+      nbackMatch = match2;
+      nbackFa = !match2 && opt === 0;
+      nbackMissed = match2 && opt === 1;
+    } else {
+      congruent = item.stim?.congruent === true || item.stim?.cond === "congruent";
     }
-  } else if (item.type === "corsi") {
-    const stim = item.stim ?? {};
-    const key = Array.isArray(stim.sequence) ? stim.sequence.filter((n) => Number.isInteger(n) && n >= 0) : [];
+  } else if (item.type === "trail") {
+    const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0) : [];
     const rawOrder = Array.isArray(res.order) ? res.order : [];
     const seen = /* @__PURE__ */ new Set();
     const orderSeq = [];
@@ -24304,8 +24372,23 @@ function scoreAttempt(item, mission, response, rtMs) {
     let prefix = 0;
     while (prefix < orderSeq.length && prefix < key.length && orderSeq[prefix] === key[prefix]) prefix++;
     correct = key.length === orderSeq.length && orderSeq.every((v, i) => v === key[i]);
-    corsiPrefix = prefix;
-    corsiLen = key.length;
+    trailNodes = prefix;
+    trailNodesTotal = key.length;
+  } else if (item.type === "corsi" || item.type === "span") {
+    const key = Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n)) : [];
+    const rawSeq = item.type === "corsi" ? Array.isArray(res.order) ? res.order : [] : Array.isArray(res.digits) ? res.digits : [];
+    const seen = /* @__PURE__ */ new Set();
+    const seq = [];
+    for (const v of rawSeq.filter((n) => Number.isInteger(n) && n >= 0)) {
+      const k = String(v);
+      if (!seen.has(k)) {
+        seen.add(k);
+        seq.push(v);
+      }
+    }
+    correct = key.length > 0 && key.length === seq.length && seq.every((v, i) => v === key[i]);
+    omission = seq.length === 0;
+    if (correct) spanLenValue = key.length;
   } else if (item.type === "touch_report") {
     const touched = res.touched === true;
     const want = item.correct_touch === true;
@@ -24341,8 +24424,9 @@ function scoreAttempt(item, mission, response, rtMs) {
     ...scanFalse !== void 0 ? { scanFalse, scanMissed, scanDistractors, scanSpies } : {},
     ...timedOut !== void 0 ? { timedOut } : {},
     ...congruent !== void 0 ? { congruent } : {},
-    ...match2 !== void 0 ? { match: match2, nbackFa, nbackMissed } : {},
-    ...corsiPrefix !== void 0 ? { corsiPrefix, corsiLen: corsiLen ?? 0 } : {}
+    ...nbackMatch !== void 0 ? { match: nbackMatch, nbackFa: nbackFa === true, nbackMissed: nbackMissed === true } : {},
+    ...trailNodes !== void 0 ? { trailNodes, trailNodesTotal: trailNodesTotal ?? 0 } : {},
+    ...spanLenValue !== void 0 ? { spanLen: spanLenValue } : {}
   };
 }
 __name(scoreAttempt, "scoreAttempt");
@@ -24417,6 +24501,12 @@ function answerDisplayOf(item) {
   }
   if (item.type === "nback") {
     return item.correct === 0 ? "\u0647\u0645\u0627\u0646 \u0627\u0633\u062A" : item.correct === 1 ? "\u0641\u0631\u0642 \u062F\u0627\u0631\u062F" : null;
+  }
+  if (item.type === "trail") {
+    return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(",") : null;
+  }
+  if (item.type === "corsi" || item.type === "span") {
+    return Array.isArray(item.correct) ? item.correct.filter((n) => Number.isInteger(n) && n >= 0).join(",") : null;
   }
   return null;
 }
@@ -24503,49 +24593,51 @@ function interferenceMsOf(scored) {
   return round2(incMed - congMed);
 }
 __name(interferenceMsOf, "interferenceMsOf");
-function corsiSeqAccPctOf(scored) {
-  const rows = scored.filter((s) => typeof s.corsiLen === "number" && s.corsiLen > 0);
+function trailPrefixPctOf(scored) {
+  const rows = scored.filter((s) => typeof s.trailNodes === "number" && typeof s.trailNodesTotal === "number" && s.trailNodesTotal > 0);
   if (rows.length === 0) return null;
-  return round2(rows.filter((s) => s.correct).length / rows.length * 100);
+  const nodes = rows.reduce((a, s) => a + s.trailNodes, 0);
+  const total = rows.reduce((a, s) => a + s.trailNodesTotal, 0);
+  if (total <= 0) return null;
+  return round2(nodes / total * 100);
 }
-__name(corsiSeqAccPctOf, "corsiSeqAccPctOf");
-function corsiSpanMaxOf(scored) {
-  const rows = scored.filter((s) => typeof s.corsiLen === "number" && s.corsiLen > 0 && s.correct);
-  if (rows.length === 0) return null;
-  return rows.reduce((a, s) => Math.max(a, s.corsiLen), 0);
+__name(trailPrefixPctOf, "trailPrefixPctOf");
+function nbackMatchSubset(scored, match2) {
+  return scored.filter((s) => s.match === match2);
 }
-__name(corsiSpanMaxOf, "corsiSpanMaxOf");
-function nbackSubsets(scored) {
-  return {
-    matches: scored.filter((s) => s.match === true),
-    nonmatches: scored.filter((s) => s.match === false)
-  };
-}
-__name(nbackSubsets, "nbackSubsets");
+__name(nbackMatchSubset, "nbackMatchSubset");
 function nbackMatchPctOf(scored) {
-  const { matches } = nbackSubsets(scored);
-  if (matches.length === 0) return null;
-  return round2(matches.filter((s) => s.correct).length / matches.length * 100);
+  const sub = nbackMatchSubset(scored, true);
+  if (sub.length === 0) return null;
+  return accuracyOf(sub);
 }
 __name(nbackMatchPctOf, "nbackMatchPctOf");
 function nbackNonmatchPctOf(scored) {
-  const { nonmatches } = nbackSubsets(scored);
-  if (nonmatches.length === 0) return null;
-  return round2(nonmatches.filter((s) => s.correct).length / nonmatches.length * 100);
+  const sub = nbackMatchSubset(scored, false);
+  if (sub.length === 0) return null;
+  return accuracyOf(sub);
 }
 __name(nbackNonmatchPctOf, "nbackNonmatchPctOf");
-function nbackFalseAlarmPctOf(scored) {
-  const { nonmatches } = nbackSubsets(scored);
-  if (nonmatches.length === 0) return null;
-  return round2(nonmatches.filter((s) => s.nbackFa === true).length / nonmatches.length * 100);
+function nbackFaPctOf(scored) {
+  const sub = nbackMatchSubset(scored, false);
+  if (sub.length === 0) return null;
+  const fa2 = sub.filter((s) => s.nbackFa === true).length;
+  return round2(fa2 / sub.length * 100);
 }
-__name(nbackFalseAlarmPctOf, "nbackFalseAlarmPctOf");
+__name(nbackFaPctOf, "nbackFaPctOf");
 function nbackMissPctOf(scored) {
-  const { matches } = nbackSubsets(scored);
-  if (matches.length === 0) return null;
-  return round2(matches.filter((s) => s.nbackMissed === true).length / matches.length * 100);
+  const sub = nbackMatchSubset(scored, true);
+  if (sub.length === 0) return null;
+  const miss = sub.filter((s) => s.nbackMissed === true).length;
+  return round2(miss / sub.length * 100);
 }
 __name(nbackMissPctOf, "nbackMissPctOf");
+function spanMaxOf(scored) {
+  const lens = scored.filter((s) => s.correct === true && typeof s.spanLen === "number" && Number.isInteger(s.spanLen) && s.spanLen > 0).map((s) => s.spanLen);
+  if (lens.length === 0) return null;
+  return Math.max(...lens);
+}
+__name(spanMaxOf, "spanMaxOf");
 function medianRtOf(scored) {
   const rts = scored.filter((s) => s.correct && s.rtValid && typeof s.rtMs === "number").map((s) => s.rtMs).sort((a, b) => a - b);
   if (rts.length === 0) return null;
@@ -24629,18 +24721,18 @@ function computeMetricValue(formula, scored) {
       return incongruentAccPctOf(scored);
     case "interference_ms":
       return interferenceMsOf(scored);
-    case "corsi_seq":
-      return corsiSeqAccPctOf(scored);
-    case "corsi_span":
-      return corsiSpanMaxOf(scored);
+    case "trail_prefix":
+      return trailPrefixPctOf(scored);
     case "nback_match":
       return nbackMatchPctOf(scored);
     case "nback_nonmatch":
       return nbackNonmatchPctOf(scored);
-    case "nback_false_alarm":
-      return nbackFalseAlarmPctOf(scored);
+    case "nback_fa":
+      return nbackFaPctOf(scored);
     case "nback_miss":
       return nbackMissPctOf(scored);
+    case "span_max":
+      return spanMaxOf(scored);
     default:
       return null;
   }
@@ -24835,11 +24927,11 @@ function clampWindow(ms) {
   return Math.min(WINDOW_MAX_MS, Math.max(WINDOW_MIN_MS, Math.round(ms)));
 }
 __name(clampWindow, "clampWindow");
-function pctOk2(v, threshold, direction) {
+function pctOk(v, threshold, direction) {
   if (v === null || !Number.isFinite(v)) return false;
   return direction === "below" ? v < threshold : v >= threshold;
 }
-__name(pctOk2, "pctOk");
+__name(pctOk, "pctOk");
 function decideAdaptive(history, current, opts) {
   const evidence = {
     sessions_considered: history.filter((h) => h.validity === "valid").length,
@@ -24855,7 +24947,7 @@ function decideAdaptive(history, current, opts) {
   }
   const recent = valid.slice(-ADAPTIVE_MIN_SESSIONS);
   const struggling = recent.every(
-    (h) => pctOk2(h.commission_pct, EASIER_COMMISSION_PCT, "above") || pctOk2(h.correct_nogo_pct, EASIER_NOGO_PCT, "below")
+    (h) => pctOk(h.commission_pct, EASIER_COMMISSION_PCT, "above") || pctOk(h.correct_nogo_pct, EASIER_NOGO_PCT, "below")
   );
   if (struggling) {
     const to = clampWindow(current.response_window_go_ms + EASIER_STEP_MS);
@@ -24875,7 +24967,7 @@ function decideAdaptive(history, current, opts) {
     return Math.abs(rts[1] - rts[0]) <= STABLE_RT_DELTA_MS;
   })();
   const mastering = recent.every(
-    (h) => pctOk2(h.correct_nogo_pct, HARDER_NOGO_PCT, "above") && pctOk2(h.commission_pct, HARDER_COMMISSION_PCT, "below") && pctOk2(h.correct_go_pct, HARDER_GO_PCT, "above")
+    (h) => pctOk(h.correct_nogo_pct, HARDER_NOGO_PCT, "above") && pctOk(h.commission_pct, HARDER_COMMISSION_PCT, "below") && pctOk(h.correct_go_pct, HARDER_GO_PCT, "above")
   );
   if (mastering && rtStable) {
     const to = clampWindow(current.response_window_go_ms + HARDER_STEP_MS);
@@ -24928,8 +25020,14 @@ var STAGE_OVERRIDE_KEYS = [
   "isi_max_ms",
   "fixation_ms"
 ];
+var GONOGO_RULE = GAME_KINDS.gonogo.stage_rule;
+var STAGE_THRESHOLDS = {
+  pass: { go_pct: GONOGO_RULE.pass.go_pct.value, nogo_pct: GONOGO_RULE.pass.nogo_pct.value },
+  star2: { go_pct: GONOGO_RULE.star2.go_pct.value, nogo_pct: GONOGO_RULE.star2.nogo_pct.value },
+  star3: { go_pct: GONOGO_RULE.star3.go_pct.value, nogo_pct: GONOGO_RULE.star3.nogo_pct.value }
+};
 function stageListOf(kind, band) {
-  return kindEntryOf(kind).stageList(band);
+  return GAME_KINDS[kind].stageList(band);
 }
 __name(stageListOf, "stageListOf");
 function stageByIndex(band, index, kind = "gonogo") {
@@ -24953,10 +25051,58 @@ function applyStageOverrides(params, stage) {
   return out;
 }
 __name(applyStageOverrides, "applyStageOverrides");
+function pctOk2(v, min) {
+  return typeof v === "number" && Number.isFinite(v) && v >= min;
+}
+__name(pctOk2, "pctOk");
+function stageOutcomeOf(correctGoPct, correctNogoPct) {
+  const t = STAGE_THRESHOLDS;
+  if (!pctOk2(correctGoPct, t.pass.go_pct) || !pctOk2(correctNogoPct, t.pass.nogo_pct)) {
+    return { passed: false, stars: 0, thresholds: t };
+  }
+  const three = pctOk2(correctGoPct, t.star3.go_pct) && pctOk2(correctNogoPct, t.star3.nogo_pct);
+  const two = pctOk2(correctGoPct, t.star2.go_pct) && pctOk2(correctNogoPct, t.star2.nogo_pct);
+  return { passed: true, stars: three ? 3 : two ? 2 : 1, thresholds: t };
+}
+__name(stageOutcomeOf, "stageOutcomeOf");
+function accuracyThresholdsOf(rule) {
+  return { pass: rule.pass.value, star2: rule.star2.value, star3: rule.star3.value };
+}
+__name(accuracyThresholdsOf, "accuracyThresholdsOf");
+var NUMLINE_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.numline.stage_rule);
+function accuracyOutcomeOf(rule, accuracy) {
+  if (!pctOk2(accuracy, rule.pass.value)) return { passed: false, stars: 0, thresholds: STAGE_THRESHOLDS };
+  const stars = pctOk2(accuracy, rule.star3.value) ? 3 : pctOk2(accuracy, rule.star2.value) ? 2 : 1;
+  return { passed: true, stars, thresholds: STAGE_THRESHOLDS };
+}
+__name(accuracyOutcomeOf, "accuracyOutcomeOf");
 function stageOutcomeFor(kind, summary) {
-  return kindEntryOf(kind).stageOutcome(summary);
+  const rule = GAME_KINDS[kind].stage_rule;
+  return rule.shape === "go_nogo" ? stageOutcomeOf(summary.pct.correct_go, summary.pct.correct_nogo) : accuracyOutcomeOf(rule, summary.pct.accuracy);
 }
 __name(stageOutcomeFor, "stageOutcomeFor");
+var NUMLINE_STAGE_MAX2 = GAME_KINDS.numline.levers.bank_caps;
+var SCAN_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.scan.stage_rule);
+var SCAN_STAGE_MAX_TILES2 = GAME_KINDS.scan.levers.bank_caps;
+var ACCURACY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.stroop.stage_rule);
+var STROOP_STAGE_BANDS2 = GAME_KINDS.stroop.levers.bank_bands;
+var FLANKER_STAGE_MAX_DECOYS2 = GAME_KINDS.flanker.levers.bank_caps;
+var FLANKER_STAGE_BANDS2 = GAME_KINDS.flanker.levers.bank_bands;
+var TRAIL_STAGE_MAX_NODES2 = GAME_KINDS.trail.levers.bank_caps;
+var TRAIL_STAGE_BANDS2 = GAME_KINDS.trail.levers.bank_bands;
+function itemInStageFor(kind, item, stageId) {
+  return GAME_KINDS[kind].itemInStage(item, stageId);
+}
+__name(itemInStageFor, "itemInStageFor");
+var SCAN_STAGE_WAVE_MS2 = GAME_KINDS.scan.levers.display;
+function scanStageWaveMs(itemWaveMs, stageId) {
+  if (typeof stageId !== "string" || !(stageId in SCAN_STAGE_WAVE_MS2)) return null;
+  const cap = SCAN_STAGE_WAVE_MS2[stageId];
+  if (typeof cap !== "number" || cap <= 0) return null;
+  if (typeof itemWaveMs !== "number" || !Number.isFinite(itemWaveMs) || itemWaveMs <= 0) return cap;
+  return Math.min(itemWaveMs, cap);
+}
+__name(scanStageWaveMs, "scanStageWaveMs");
 function stageProgressOfKind(kind, history) {
   const best = {};
   let unlocked = 1;
@@ -25014,6 +25160,9 @@ function stageStimViewOf(stim, correctTouch, stageId) {
   return { ...base, ...correctTouch ? v.go : v.nogo };
 }
 __name(stageStimViewOf, "stageStimViewOf");
+var SEQ_MEMORY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.corsi.stage_rule);
+var CORSI_STAGE_MAX_SPAN2 = GAME_KINDS.corsi.levers.bank_caps;
+var SPAN_STAGE_MAX_DIGITS2 = GAME_KINDS.span.levers.bank_caps;
 
 // src/domain/games/evidence.ts
 var EVIDENCE_RULES_VERSION = "1.0.0";
@@ -25043,7 +25192,7 @@ function accuracyDriftPpOf(summary) {
 }
 __name(accuracyDriftPpOf, "accuracyDriftPpOf");
 function windowMissPctOf(summary, kind) {
-  if (!kindEntryOf(kind).timedChoice) return null;
+  if (!GAME_KINDS[kind].timed_choice) return null;
   const total = summary.totals?.total ?? 0;
   const omission = summary.totals?.omission ?? 0;
   if (total <= 0) return null;
@@ -25208,7 +25357,7 @@ function summarizeAttempts(scored, evidence = [], blockSize = 24) {
     dprime: null,
     numline: { mean_error_pct: meanNumlineErrorOf(t) },
     scan: scanSummaryOf(t, zeroDenominator),
-    nback: nbackSummaryOf(t),
+    nback: nbackSummaryOf(t, zeroDenominator),
     zero_denominator: zeroDenominator
   };
 }
@@ -25233,21 +25382,28 @@ function scanSummaryOf(t, zeroDenominator) {
   };
 }
 __name(scanSummaryOf, "scanSummaryOf");
-function nbackSummaryOf(t) {
-  const rows = t.filter((s) => typeof s.match === "boolean");
-  if (rows.length === 0) return null;
-  const matches = rows.filter((s) => s.match === true);
+function nbackSummaryOf(t, zeroDenominator) {
+  const trials = t.filter((s) => typeof s.match === "boolean");
+  if (trials.length === 0) return null;
+  const matches = trials.filter((s) => s.match === true);
+  const nonmatches = trials.filter((s) => s.match === false);
   const correctMatches = matches.filter((s) => s.correct).length;
+  const matchPct = nbackMatchPctOf(trials);
+  const nonmatchPct = nbackNonmatchPctOf(trials);
+  const faPct = nbackFaPctOf(trials);
+  const missPct = nbackMissPctOf(trials);
+  if (matchPct === null || missPct === null) zeroDenominator.push("nback: \u0647\u0645\u0633\u0627\u0646=\u06F0 \u2014 match/miss \u062F\u0631\u0635\u062F\u0634\u0627\u0646 \u062A\u0639\u0631\u06CC\u0641\u200C\u0646\u0634\u062F\u0647");
+  if (nonmatchPct === null || faPct === null) zeroDenominator.push("nback: \u0646\u0627\u0647\u0645\u0633\u0627\u0646=\u06F0 \u2014 nonmatch/fa \u062F\u0631\u0635\u062F\u0634\u0627\u0646 \u062A\u0639\u0631\u06CC\u0641\u200C\u0646\u0634\u062F\u0647");
   const matchRts = matches.filter((s) => s.correct && s.rtValid && typeof s.rtMs === "number" && s.rtMs >= 0).map((s) => s.rtMs).sort((a, b) => a - b);
   const medianMatch = matchRts.length === 0 ? null : matchRts.length % 2 === 1 ? matchRts[Math.floor(matchRts.length / 2)] : Math.round((matchRts[matchRts.length / 2 - 1] + matchRts[matchRts.length / 2]) / 2);
   return {
-    trials: rows.length,
+    trials: trials.length,
     matches: matches.length,
     correct_matches: correctMatches,
-    match_pct: nbackMatchPctOf(rows),
-    nonmatch_pct: nbackNonmatchPctOf(rows),
-    false_alarm_pct: nbackFalseAlarmPctOf(rows),
-    miss_pct: nbackMissPctOf(rows),
+    match_pct: matchPct,
+    nonmatch_pct: nonmatchPct,
+    false_alarm_pct: faPct,
+    miss_pct: missPct,
     median_rt_match_ms: medianMatch
   };
 }
@@ -25394,10 +25550,7 @@ function reportToCsv(report) {
     "median_rt_ms",
     "stage_title",
     "stage_stars",
-    "attempt_count",
-    "nback_match_pct",
-    "nback_false_alarm_pct",
-    "nback_miss_pct"
+    "attempt_count"
   ];
   const lines = [header.join(",")];
   for (const s of report.sessions) {
@@ -25419,10 +25572,7 @@ function reportToCsv(report) {
       num4(sum?.rt?.median),
       sum?.stage?.title_fa ?? "",
       typeof sum?.stage?.stars === "number" ? String(sum.stage.stars) : "",
-      String(s.raw.attempt_count),
-      num4(sum?.nback?.match_pct),
-      num4(sum?.nback?.false_alarm_pct),
-      num4(sum?.nback?.miss_pct)
+      String(s.raw.attempt_count)
     ].map(esc2).join(","));
   }
   return "\uFEFF" + lines.join("\r\n") + "\r\n";
@@ -25569,23 +25719,26 @@ function parseSequenceRecord(raw2) {
 }
 __name(parseSequenceRecord, "parseSequenceRecord");
 function nbackRotationOffsetOf(seed, anchors) {
-  const list = (anchors ?? []).filter((n) => Number.isInteger(n) && n >= 0).sort((a, b) => a - b);
-  if (list.length === 0) return 0;
-  const rand = mulberry32(seedToNumber("nback:" + seed));
-  return list[Math.floor(rand() * list.length)] ?? list[0];
+  const valid = anchors.filter((a) => Number.isInteger(a) && a >= 0);
+  if (valid.length === 0) return 0;
+  const rand = mulberry32(seedToNumber(seed));
+  const idx = Math.floor(rand() * valid.length) % valid.length;
+  return valid[idx];
 }
 __name(nbackRotationOffsetOf, "nbackRotationOffsetOf");
-function nbackOrderedItems(items, rot) {
-  const trainEnd = Math.max(0, Math.min(Math.floor(rot.train_count), items.length));
-  const train = items.slice(0, trainEnd);
-  const probe = items.slice(trainEnd);
-  if (probe.length <= 1) return items.slice();
-  const off = (Math.floor(rot.offset) % probe.length + probe.length) % probe.length;
-  return [...train, ...probe.slice(off), ...probe.slice(0, off)];
+function nbackOrderedItems(items, opts) {
+  const list = Array.from(items);
+  const train = Number.isInteger(opts.train_count) && opts.train_count > 0 ? Math.min(opts.train_count, list.length) : 0;
+  const head = list.slice(0, train);
+  const suffix = list.slice(train);
+  const len = suffix.length;
+  if (len <= 1) return list;
+  const off = Number.isInteger(opts.offset) ? (opts.offset % len + len) % len : 0;
+  return [...head, ...suffix.slice(off), ...suffix.slice(0, off)];
 }
 __name(nbackOrderedItems, "nbackOrderedItems");
-function serializeNbackRotation(rec) {
-  return JSON.stringify(rec);
+function serializeNbackRotation(record) {
+  return JSON.stringify({ kind: "nback", v: 1, seed: record.seed, train_count: record.train_count, probe_count: record.probe_count, offset: record.offset });
 }
 __name(serializeNbackRotation, "serializeNbackRotation");
 function parseNbackRotation(raw2) {
@@ -25593,11 +25746,11 @@ function parseNbackRotation(raw2) {
   try {
     const r = JSON.parse(raw2);
     if (r.kind !== "nback" || r.v !== 1 || typeof r.seed !== "string") return null;
-    const train = typeof r.train_count === "number" && Number.isInteger(r.train_count) && r.train_count >= 0 ? r.train_count : null;
-    const probe = typeof r.probe_count === "number" && Number.isInteger(r.probe_count) && r.probe_count >= 0 ? r.probe_count : null;
-    const offset = typeof r.offset === "number" && Number.isInteger(r.offset) && r.offset >= 0 ? r.offset : null;
-    if (train === null || probe === null || offset === null) return null;
-    return { kind: "nback", v: 1, seed: r.seed, train_count: train, probe_count: probe, offset };
+    if (typeof r.train_count !== "number" || typeof r.probe_count !== "number" || typeof r.offset !== "number") return null;
+    if (!Number.isInteger(r.train_count) || r.train_count < 0) return null;
+    if (!Number.isInteger(r.probe_count) || r.probe_count < 0) return null;
+    if (!Number.isInteger(r.offset) || r.offset < 0 || r.offset > r.probe_count) return null;
+    return { kind: "nback", v: 1, seed: r.seed, train_count: r.train_count, probe_count: r.probe_count, offset: r.offset };
   } catch {
     return null;
   }
@@ -25605,24 +25758,9 @@ function parseNbackRotation(raw2) {
 __name(parseNbackRotation, "parseNbackRotation");
 
 // src/domain/games/registry-extra.ts
-var ENGINE_ONLY_FORMULAS = [
-  "correct_go_pct",
-  "correct_nogo_pct",
-  "commission_pct",
-  "omission_pct",
-  "scan_fa",
-  "scan_miss",
-  "congruent_acc",
-  "incongruent_acc",
-  "interference_ms",
-  "nback_match",
-  "nback_nonmatch",
-  "nback_false_alarm",
-  "nback_miss",
-  "corsi_seq",
-  "corsi_span"
-];
-var ENGINE_METRICS = GAME_KIND_IDS.flatMap((kind) => GAME_KINDS[kind].engineMetrics);
+var ENGINE_METRICS = GAME_KIND_IDS.flatMap(
+  (kind) => GAME_KINDS[kind].engine_metrics
+);
 function mergeEngineMetrics(dbRows) {
   const ids = new Set(dbRows.map((m) => m.id));
   const extra = ENGINE_METRICS.filter((m) => !ids.has(m.id));
@@ -26307,12 +26445,12 @@ function createGamesService(deps) {
       const sig = typeof stim.signature === "number" && Number.isInteger(stim.signature) && stim.signature > 0 ? stim.signature : 2;
       const label = typeof scanTrain.prompt === "string" && scanTrain.prompt.trim() !== "" ? scanTrain.prompt : "\u062C\u0627\u0633\u0648\u0633\u200C\u0647\u0627 \u0631\u0628\u0627\u062A\u200C\u0647\u0627\u06CC\u06CC \u0628\u0627 " + sig + " \u0622\u0646\u062A\u0646\u200C\u0627\u0646\u062F";
       return {
-        go: { label: "\u062C\u0627\u0633\u0648\u0633 \u2014 \u0631\u0628\u0627\u062A " + sig + " \u0622\u0646\u062A\u0646", stim: { signature: sig } },
+        go: { label: "\u062C\u0627\u0633\u0648\u0633 \u2014 \u0631\u0628\u0627\u062A " + sig + " \u0622\u0646\u062A\u0646", stim: stripAnswerKeys({ signature: sig }) },
         nogo: null,
-        scan: { label, stim: { signature: sig } }
+        scan: { label, stim: stripAnswerKeys({ signature: sig }) }
       };
     }
-    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "nback" || it.type === "corsi"));
+    const newTrain = (mission.items ?? []).find((it) => it.phase === "train" && (it.type === "stroop" || it.type === "flanker" || it.type === "trail" || it.type === "nback" || it.type === "corsi" || it.type === "span"));
     if (newTrain && !go && !nogo) {
       const kindKey = newTrain.type;
       const stim = stripAnswerKeys(newTrain.stim ?? {});
@@ -26324,8 +26462,8 @@ function createGamesService(deps) {
       };
     }
     if (!go && !nogo) return null;
-    const goStim = stageStimViewOf(go?.stim, true, stageId);
-    const nogoStim = nogo ? stageStimViewOf(nogo.stim, false, stageId) : null;
+    const goStim = stripAnswerKeys(stageStimViewOf(go?.stim, true, stageId));
+    const nogoStim = nogo ? stripAnswerKeys(stageStimViewOf(nogo.stim, false, stageId)) : null;
     return {
       go: { label: stimLabelOf(goStim), stim: goStim },
       nogo: nogoStim ? { label: stimLabelOf(nogoStim), stim: nogoStim } : null
@@ -26402,7 +26540,7 @@ function createGamesService(deps) {
         );
         const doneN = doneRow?.n ?? 0;
         if (doneN > 0) {
-          const inStg = /* @__PURE__ */ __name((it) => itemInStageOf(kind)(it, res.session.stage_id), "inStg");
+          const inStg = /* @__PURE__ */ __name((it) => itemInStageFor(kind, it, res.session.stage_id), "inStg");
           resumeMeta = { done: doneN, total: (m.items ?? []).filter(inStg).length };
         }
       } catch {
@@ -26438,12 +26576,14 @@ function createGamesService(deps) {
       missionRef: m.id,
       missionTitle: m.title ?? m.id,
       packageTitle: res.pkg.titleFa,
+      /* هویت نوع‌بازی برای هر دو شاخهٔ والد و کودک — کارت والدِ pre قهرمان خود بازی را می‌بیند
+         (رفع P0 ممیزی فازها: قبلاً فقط child_active پُر می‌شد و همهٔ کارت‌های والد ماهی گونوگو می‌گرفتند) */
+      playGame: m.game,
       expiresAt: res.link.expires_at,
       validity: res.session ? res.session.validity : void 0,
       adherenceConfirmed: adherence?.confirm2_at != null,
       parentCopyBefore: typeof res.pkg.body.parent_copy?.before === "string" ? res.pkg.body.parent_copy.before : null,
       ...state === "child_active" ? {
-        playGame: m.game,
         playHint: playHintOf(m, res.session?.stage_id ?? stage?.id ?? null),
         playProtocol: snap,
         playResume: resumeMeta,
@@ -26572,8 +26712,28 @@ function createGamesService(deps) {
       const hasProtocol = mode === "assessment" || res.pkg.body.protocol != null;
       const poolGo = touchItems.filter((it) => it.correct_touch === true).length;
       const poolRatio = touchItems.length > 0 ? poolGo / touchItems.length : null;
+      let stageId = null;
+      if (mode === "training") {
+        const sctx = await stageContextOf(res.rx.id, await childAgeOf(res.rx.child_id), res.pkg.body, gameKindOf(mission.game));
+        stageId = sctx?.stage.id ?? null;
+      }
       let sequenceJson = null;
-      if (hasProtocol && touchItems.length >= 4) {
+      const missionKind = gameKindOf(mission.game);
+      if (missionKind === "nback") {
+        const flowItems = (mission.items ?? []).filter((it) => itemInStageFor(missionKind, it, stageId));
+        const trainCount = flowItems.filter((it) => it.phase === "train").length;
+        const probeSuffix = flowItems.slice(trainCount);
+        const anchors = probeSuffix.map((it, i) => (it.stim ?? {}).rot_start === true ? i : -1).filter((i) => i >= 0);
+        const offset = nbackRotationOffsetOf(id, anchors);
+        sequenceJson = serializeNbackRotation({
+          kind: "nback",
+          v: 1,
+          seed: id,
+          train_count: trainCount,
+          probe_count: probeSuffix.length,
+          offset
+        });
+      } else if (hasProtocol && touchItems.length >= 4) {
         const prot = protocolForAge(mode, await childAgeOf(res.rx.child_id));
         const seq = generateSequence({
           seed: id,
@@ -26584,26 +26744,6 @@ function createGamesService(deps) {
           blockSize: prot.params.block_size.value
         });
         sequenceJson = serializeSequence(seq);
-      }
-      let stageId = null;
-      if (mode === "training") {
-        const sctx = await stageContextOf(res.rx.id, await childAgeOf(res.rx.child_id), res.pkg.body, gameKindOf(mission.game));
-        stageId = sctx?.stage.id ?? null;
-      }
-      if (gameKindOf(mission.game) === "nback") {
-        const stream = (mission.items ?? []).filter((it) => itemInStageOf("nback")(it, stageId));
-        const trainCount = stream.filter((it) => it.phase === "train").length;
-        const probeCount = stream.length - trainCount;
-        const probe = stream.slice(Math.min(trainCount, stream.length));
-        const anchors = probe.map((it, i) => (it.stim ?? {}).anchor === true ? i : -1).filter((i) => i >= 0);
-        sequenceJson = serializeNbackRotation({
-          kind: "nback",
-          v: 1,
-          seed: id,
-          train_count: trainCount,
-          probe_count: probeCount,
-          offset: nbackRotationOffsetOf(id, anchors)
-        });
       }
       await db.execute(
         `INSERT INTO game_sessions (id, mission_id, state, validity, purpose, sequence_json, stage_id, started_at, last_activity_at)
@@ -26623,21 +26763,20 @@ function createGamesService(deps) {
     const kind = gameKindOf(mission.game);
     const attempts = await db.query(`SELECT * FROM game_attempts WHERE session_id = ?`, [session.id]);
     const doneIds = new Set(attempts.map((a) => a.item_id));
-    const inStage = /* @__PURE__ */ __name((it) => itemInStageOf(kind)(it, session.stage_id), "inStage");
+    const inStage = /* @__PURE__ */ __name((it) => itemInStageFor(kind, it, session.stage_id), "inStage");
     const stageItems = (mission.items ?? []).filter(inStage);
     const total = stageItems.length;
     const unansweredOf = /* @__PURE__ */ __name((pred) => stageItems.find((it) => !doneIds.has(it.id) && pred(it)), "unansweredOf");
     const seq = parseSequenceRecord(session.sequence_json);
-    const rot = parseNbackRotation(session.sequence_json);
     let next;
-    if (rot) {
-      next = nbackOrderedItems(stageItems, rot).find((it) => !doneIds.has(it.id));
-    } else if (seq && doneIds.size < seq.trials.length) {
+    if (seq && doneIds.size < seq.trials.length) {
       const kindTrial = seq.trials[doneIds.size].kind;
       next = unansweredOf((it) => it.correct_touch === true === (kindTrial === "go")) ?? unansweredOf(() => true);
     }
     if (!next) {
-      next = stageItems.find((it) => !doneIds.has(it.id));
+      const rot = kind === "nback" ? parseNbackRotation(session.sequence_json) : null;
+      const flow = rot ? nbackOrderedItems(stageItems, { train_count: rot.train_count, offset: rot.offset }) : stageItems;
+      next = flow.find((it) => !doneIds.has(it.id));
     }
     await db.execute(`UPDATE game_sessions SET last_activity_at = ? WHERE id = ?`, [isoOf2(now()), session.id]);
     let view = null;
@@ -26755,8 +26894,7 @@ function createGamesService(deps) {
     const nowIso = isoOf2(now());
     const finishKind = gameKindOf(mission.game);
     const finishStage = finishKind !== "gonogo" ? stageById("7-12", session.stage_id, finishKind) : null;
-    const finishFilter = itemInStageOf(finishKind);
-    const finishTotal = finishStage ? mission.items.filter((it) => finishFilter(it, finishStage.id)).length : mission.items.length;
+    const finishTotal = finishStage ? mission.items.filter((it) => itemInStageFor(finishKind, it, finishStage.id)).length : mission.items.length;
     const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso].filter((v) => typeof v === "string").map((v) => new Date(v).getTime());
     const validity = decideValidity(activity, attempts.length, finishTotal);
     const metricIds = mission.metrics && mission.metrics.length > 0 ? mission.metrics : [mission.metric];
@@ -27114,6 +27252,25 @@ function esc(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 __name(esc, "esc");
+function skinLink(kind) {
+  const k = String(kind ?? "");
+  return GAME_KIND_IDS.includes(k) ? `<link rel="stylesheet" href="/assets/play/skins/${k}.css?v=${APP_VERSION}" />` : "";
+}
+__name(skinLink, "skinLink");
+var KIND_FIGS = {
+  gonogo: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z M46 40 Q58 20 72 38 Q58 34 50 44 Z M54 84 Q62 94 72 88 Q64 88 58 82 Z" fill="#E4AA46" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0 M72 46 Q66 58 72 70 M20 64 Q26 70 34 66" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/>',
+  numline: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0 M22 42 a9 9 0 1 0 0.01 0 M102 42 a9 9 0 1 0 0.01 0 M14 36 Q22 30 28 36 M96 36 Q102 30 110 36" fill="#D97C4F" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M52 48 a3.5 3.5 0 1 0 0.01 0 M72 48 a3.5 3.5 0 1 0 0.01 0 M52 40 L50 32 M72 40 L74 32 M58 58 Q62 62 66 58 M40 78 L32 90 M50 80 L46 94 M74 80 L78 94 M84 78 L92 90" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/>',
+  scan: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#5E8FB8" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0 M72 46 Q66 58 72 70" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><path d="M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z" fill="#E4AA46" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/>',
+  stroop: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#9B7EDE" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M74 50 Q80 44 86 50 M20 60 Q28 72 40 66" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><circle cx="30" cy="18" r="8" fill="#D96C6C" stroke="#153E50" stroke-width="3"/><circle cx="92" cy="14" r="8" fill="#63B37F" stroke="#153E50" stroke-width="3"/>',
+  flanker: '<path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" fill="#8FA6B8" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M80 52 a4.5 4.5 0 1 0 0.01 0" fill="none" stroke="#153E50" stroke-width="3"/><path d="M14 62 C26 40 52 30 76 40 L84 44 L102 32 L104 44 L98 60 L104 76 L102 88 L84 76 L76 80 C52 90 26 84 14 62 Z" transform="translate(-6 -38) scale(.62)" fill="#B9C6D2" stroke="#153E50" stroke-width="4" stroke-linejoin="round"/>',
+  trail: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0 M22 42 a9 9 0 1 0 0.01 0 M102 42 a9 9 0 1 0 0.01 0" fill="#C4635F" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M52 48 a3.5 3.5 0 1 0 0.01 0 M72 48 a3.5 3.5 0 1 0 0.01 0 M52 40 L50 32 M72 40 L74 32 M58 58 Q62 62 66 58" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><path d="M22 84 q4 -10 10 -2 q-2 -10 8 -8" fill="none" stroke="#153E50" stroke-width="2.5" stroke-linecap="round"/><path d="M96 86 q4 -10 10 -2 q-2 -10 8 -8" fill="none" stroke="#153E50" stroke-width="2.5" stroke-linecap="round"/>',
+  nback: '<path d="M34 58 a28 22 0 1 0 56 0 a28 22 0 1 0 -56 0" fill="#438C89" stroke="#153E50" stroke-width="3" stroke-linejoin="round"/><path d="M50 46 Q54 42 58 46 M66 46 Q70 42 74 46 M52 40 L50 32 M72 40 L74 32 M56 56 Q62 64 68 56" fill="none" stroke="#153E50" stroke-width="3" stroke-linecap="round"/><rect x="12" y="12" width="38" height="26" rx="4" fill="#E4AA46" stroke="#153E50" stroke-width="3"/><circle cx="31" cy="25" r="7" fill="#F5F0E5" stroke="#153E50" stroke-width="2.5"/>'
+};
+function kindFig(kind) {
+  const body = KIND_FIGS[String(kind ?? "")] ?? KIND_FIGS.gonogo;
+  return '<svg class="play-kindfig" viewBox="0 0 120 124" aria-hidden="true">' + body + "</svg>";
+}
+__name(kindFig, "kindFig");
 function page(model, token, body) {
   return `<!doctype html>
 <html lang="fa" dir="rtl">
@@ -27191,8 +27348,9 @@ function renderGamesPage(model, token) {
   if (model.state === "parent_pre") {
     const beforeFa = typeof model.parentCopyBefore === "string" && model.parentCopyBefore.trim() !== "" ? model.parentCopyBefore.trim() : "\u0627\u06CC\u0646 \u0628\u0627\u0632\u06CC \u062A\u0645\u0631\u06CC\u0646 \u062A\u0645\u0631\u06A9\u0632 \u0648 \u0645\u0647\u0627\u0631 \u0627\u0633\u062A\u060C \u0646\u0647 \u062F\u0631\u0645\u0627\u0646\u061B \u0646\u0642\u0634 \u0634\u0645\u0627 \u06A9\u0646\u0627\u0631 \u0645\u0627\u0646\u062F\u0646 \u0648 \u062A\u0634\u0648\u06CC\u0642 \u0622\u0631\u0627\u0645 \u0627\u0633\u062A.";
     return page(model, token, `<div class="card">${head}
+      ${kindFig(model.playGame)}
       <p class="muted">${esc(beforeFa)}</p>
-      <p class="muted">\u06AF\u0648\u0634\u06CC \u0631\u0627 \u0628\u0647 \u06A9\u0648\u062F\u06A9 \u0628\u062F\u0647\u06CC\u062F \u0648 \u06A9\u0646\u0627\u0631\u0634 \u0628\u0645\u0627\u0646\u06CC\u062F\u061B \u0647\u0631 \u0631\u0648\u0632 \u0686\u0646\u062F \u062F\u0642\u06CC\u0642\u0647 \u06A9\u0627\u0641\u06CC \u0627\u0633\u062A.</p>
+      <p class="muted">\u06AF\u0648\u0634\u06CC \u0631\u0627 \u0628\u0647 \u06A9\u0648\u062F\u06A9 \u0628\u062F\u0647\u06CC\u062F \u0648 \u06A9\u0646\u0627\u0631\u0634 \u0628\u0645\u0627\u0646\u06CC\u062F.</p>
       <button id="btn-start" type="button">\u0622\u0645\u0627\u062F\u0647\u0654 \u0634\u0631\u0648\u0639 \u0647\u0633\u062A\u06CC\u0645</button></div>`);
   }
   if (model.state === "child_active") {
@@ -27203,6 +27361,7 @@ function renderGamesPage(model, token) {
     return page(model, token, `<div id="play-root" class="play-root"
       data-token="${esc(token)}"
       data-kind="${esc(model.playGame ?? "")}"
+      data-title="${esc(model.missionTitle || "")}"
       data-hint="${esc(hint)}" data-resume="${esc(resume)}"${stageAttr}
       data-protocol="${esc(protocol)}">
       <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
@@ -27214,6 +27373,7 @@ function renderGamesPage(model, token) {
       </div>
     </div>
     <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />
+    ${skinLink(model.playGame)}
     <script type="module" src="/assets/play/play.js?v=${APP_VERSION}"></script>`);
   }
   if (model.state === "child_done") {
@@ -27269,6 +27429,7 @@ function renderPreviewPage(state, token) {
     <div id="play-root" class="play-root"
       data-token="${esc(token)}"
       data-kind="${esc(state.game)}"
+      data-title="${esc(state.missionTitle)}"
       data-hint="${esc(hint)}"
       data-protocol="${esc(protocol)}">
       <div class="play-progress" aria-hidden="true"><div class="play-progress__bar" id="play-bar"></div></div>
@@ -27280,6 +27441,7 @@ function renderPreviewPage(state, token) {
       </div>
     </div>
     <link rel="stylesheet" href="/assets/play/play.css?v=${APP_VERSION}" />
+    ${skinLink(state.game)}
     <script type="module" src="/assets/play/preview.js?v=${APP_VERSION}"></script>`;
   return page(
     { state: "expired", missionRef: "", missionTitle: state.missionTitle, packageTitle: state.packageTitle, expiresAt: "" },
@@ -34358,8 +34520,8 @@ function assertPlainTone(text) {
 }
 __name(assertPlainTone, "assertPlainTone");
 function shortLine(text, max = 120) {
-  const clean2 = text.replace(/\s+/g, " ").trim();
-  return Array.from(clean2).length <= max ? clean2 : `${Array.from(clean2).slice(0, max - 1).join("").trim()}\u2026`;
+  const clean4 = text.replace(/\s+/g, " ").trim();
+  return Array.from(clean4).length <= max ? clean4 : `${Array.from(clean4).slice(0, max - 1).join("").trim()}\u2026`;
 }
 __name(shortLine, "shortLine");
 function sawOf(h) {
@@ -40526,6 +40688,8 @@ function rowToEntry2(r) {
     name: r.name,
     day: r.day,
     tags: parseTagsJson(r.tags),
+    birthDate: r.birth_date ?? null,
+    readinessScore: r.readiness_score ?? null,
     createdBy: r.created_by,
     creatorName: r.creator_name,
     createdAt: r.created_at,
@@ -40534,7 +40698,8 @@ function rowToEntry2(r) {
 }
 __name(rowToEntry2, "rowToEntry");
 var SELECT = `
-  SELECT e.id, e.name, e.day, e.tags, e.created_by, e.created_at, e.updated_at,
+  SELECT e.id, e.name, e.day, e.tags, e.birth_date, e.readiness_score,
+         e.created_by, e.created_at, e.updated_at,
          st.full_name AS creator_name
     FROM screening_entries e
     LEFT JOIN staff st ON st.id = e.created_by
@@ -40630,13 +40795,16 @@ function createScreeningService(deps) {
       }
       const tags = mergeTags(parsed, sanitizeTags(input.tags));
       const day = /^\d{4}-\d{2}-\d{2}$/.test(input.day ?? "") ? input.day : tehranTodayYmd();
+      const birthDate = /^\d{4}-\d{2}-\d{2}$/.test(input.birth_date ?? "") ? input.birth_date : null;
+      const readinessScore = typeof input.readiness_score === "number" && Number.isFinite(input.readiness_score) ? Math.trunc(input.readiness_score) : null;
       const id = crypto.randomUUID();
       const now = nowSql();
       await db.transaction(async (tx) => {
         await tx.execute(
-          `INSERT INTO screening_entries (id, name, day, tags, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [id, name, day, JSON.stringify(tags), actor.staffId, now, now]
+          `INSERT INTO screening_entries
+             (id, name, day, tags, birth_date, readiness_score, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, name, day, JSON.stringify(tags), birthDate, readinessScore, actor.staffId, now, now]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -40645,11 +40813,13 @@ function createScreeningService(deps) {
           resourceId: id,
           changes: {
             day: { from: null, to: day },
-            tags: { from: null, to: tags.join("|") }
+            tags: { from: null, to: tags.join("|") },
+            birth_date: { from: null, to: birthDate },
+            readiness_score: { from: null, to: readinessScore }
           }
         });
       });
-      log.info("screening.created", { day, tagged: tags.length > 0 });
+      log.info("screening.created", { day, tagged: tags.length > 0, hasBirth: birthDate !== null });
       return rowToEntry2(await getEntryRow(id));
     },
     async update(id, input, actor) {
@@ -40665,10 +40835,14 @@ function createScreeningService(deps) {
         }
       }
       const tags = input.tags !== void 0 || parsed.hashTags.length > 0 ? mergeTags(parsed, sanitizeTags(input.tags ?? [])) : prevTags;
+      const birthDate = input.birth_date === void 0 ? current.birth_date : /^\d{4}-\d{2}-\d{2}$/.test(input.birth_date ?? "") ? input.birth_date : null;
+      const readinessScore = input.readiness_score === void 0 ? current.readiness_score : typeof input.readiness_score === "number" && Number.isFinite(input.readiness_score) ? Math.trunc(input.readiness_score) : null;
       await db.transaction(async (tx) => {
         await tx.execute(
-          `UPDATE screening_entries SET name = ?, tags = ?, updated_at = ? WHERE id = ?`,
-          [name, JSON.stringify(tags), nowSql(), id]
+          `UPDATE screening_entries
+             SET name = ?, tags = ?, birth_date = ?, readiness_score = ?, updated_at = ?
+           WHERE id = ?`,
+          [name, JSON.stringify(tags), birthDate, readinessScore, nowSql(), id]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -40676,7 +40850,9 @@ function createScreeningService(deps) {
           resourceType: "screening_entry",
           resourceId: id,
           changes: {
-            tags: { from: prevTags.join("|"), to: tags.join("|") }
+            tags: { from: prevTags.join("|"), to: tags.join("|") },
+            birth_date: { from: current.birth_date, to: birthDate },
+            readiness_score: { from: current.readiness_score, to: readinessScore }
           }
         });
       });
@@ -40729,7 +40905,15 @@ function registerScreeningRoutes(app, service) {
     const actor = getAuthContext(c);
     const body = ScreeningCreateSchema.parse(await c.req.json());
     const created = await service.create(
-      { name: body.name, tags: body.tags, day: body.day },
+      {
+        name: body.name,
+        tags: body.tags,
+        day: body.day,
+        birth_date: body.birth_date ?? null,
+        /* ۱.۲۵.۵۰ */
+        readiness_score: body.readiness_score ?? null
+        /* ۱.۲۵.۵۰ */
+      },
       actor
     );
     return c.json({ data: created }, 201);
@@ -40739,7 +40923,13 @@ function registerScreeningRoutes(app, service) {
     const body = ScreeningUpdateSchema.parse(await c.req.json());
     const updated = await service.update(
       c.req.param("id"),
-      { name: body.name, tags: body.tags },
+      {
+        name: body.name,
+        tags: body.tags,
+        birth_date: body.birth_date,
+        /* ۱.۲۵.۵۰ — undefined = دست‌نخورده؛ null = پاک‌کردن */
+        readiness_score: body.readiness_score
+      },
       actor
     );
     return c.json({ data: updated }, 200);
@@ -43249,6 +43439,1180 @@ function registerDocsRoutes(app, service) {
   });
 }
 __name(registerDocsRoutes, "registerDocsRoutes");
+
+// src/domain/center-kpi/service.ts
+function round4(v) {
+  return v === null ? null : Math.round(v * 1e4) / 1e4;
+}
+__name(round4, "round4");
+function rate(num4, den) {
+  if (den <= 0) return null;
+  return round4(num4 / den);
+}
+__name(rate, "rate");
+function parseJson5(raw2) {
+  if (!raw2) return null;
+  try {
+    return JSON.parse(raw2);
+  } catch {
+    return null;
+  }
+}
+__name(parseJson5, "parseJson");
+function durationMinutes(startIso, endIso) {
+  const s = Date.parse(startIso);
+  const e = Date.parse(endIso);
+  if (Number.isNaN(s) || Number.isNaN(e) || e <= s) return 0;
+  return Math.min(Math.round((e - s) / 6e4), 12 * 60);
+}
+__name(durationMinutes, "durationMinutes");
+function createCenterKpiService(deps) {
+  const db = deps.db;
+  async function summary(days, now = /* @__PURE__ */ new Date()) {
+    const todayYmd = tehranTodayYmd(now);
+    const fromYmd = addDaysYmd(todayYmd, -(days - 1));
+    const fromRange = tehranDayRange(fromYmd);
+    const toRange = tehranDayRange(todayYmd);
+    const fromIso = fromRange.start;
+    const toIso = toRange.end;
+    const nowIso = now.toISOString();
+    const window = {
+      days,
+      from_iso: fromIso,
+      to_iso: toIso,
+      from_ymd: fromYmd,
+      to_ymd: todayYmd
+    };
+    const [apptAgg, attendAgg, overdue, schedRows, whRows, served] = await Promise.all([
+      db.queryOne(
+        `SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END), 0) AS scheduled,
+                COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) AS cancelled
+         FROM appointments WHERE start_at >= ? AND start_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT
+           COALESCE(SUM(CASE WHEN aps.attendance = 'present' THEN 1 ELSE 0 END), 0) AS present,
+           COALESCE(SUM(CASE WHEN aps.attendance = 'absent' THEN 1 ELSE 0 END), 0) AS absent,
+           COALESCE(SUM(CASE WHEN aps.attendance = 'pending' THEN 1 ELSE 0 END), 0) AS pending,
+           COALESCE(SUM(CASE WHEN aps.attendance = 'cancelled' THEN 1 ELSE 0 END), 0) AS cancelled
+         FROM appointment_students aps
+         JOIN appointments a ON a.id = aps.appointment_id
+         WHERE a.start_at >= ? AND a.start_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT COUNT(*) AS c
+         FROM appointment_students aps
+         JOIN appointments a ON a.id = aps.appointment_id
+         WHERE aps.attendance = 'pending' AND a.end_at < ?`,
+        [nowIso]
+      ),
+      db.query(
+        `SELECT start_at, end_at FROM appointments
+         WHERE status = 'scheduled' AND start_at >= ? AND start_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.query(
+        `SELECT wh.weekday, wh.start_minute, wh.end_minute
+         FROM working_hours wh JOIN staff s ON s.id = wh.staff_id
+         WHERE s.active = 1`
+      ),
+      db.queryOne(
+        `SELECT COUNT(DISTINCT aps.student_id) AS c
+         FROM appointment_students aps
+         JOIN appointments a ON a.id = aps.appointment_id
+         WHERE a.start_at >= ? AND a.start_at <= ?`,
+        [fromIso, toIso]
+      )
+    ]);
+    const bookedByDay = /* @__PURE__ */ new Map();
+    for (const r of schedRows) {
+      const ymd = tehranTodayYmd(new Date(r.start_at));
+      bookedByDay.set(ymd, (bookedByDay.get(ymd) ?? 0) + durationMinutes(r.start_at, r.end_at));
+    }
+    const capacityByWeekday = /* @__PURE__ */ new Map();
+    for (const r of whRows) {
+      capacityByWeekday.set(r.weekday, (capacityByWeekday.get(r.weekday) ?? 0) + (r.end_minute - r.start_minute));
+    }
+    let bookedMinutes = 0;
+    let capacityMinutes = 0;
+    for (let i = 0; i < days; i++) {
+      const ymd = addDaysYmd(fromYmd, i);
+      if (ymd > todayYmd) break;
+      capacityMinutes += capacityByWeekday.get(iranianWeekdayOfYmd(ymd)) ?? 0;
+      bookedMinutes += bookedByDay.get(ymd) ?? 0;
+    }
+    const attendance = {
+      present: attendAgg?.present ?? 0,
+      absent: attendAgg?.absent ?? 0,
+      pending: attendAgg?.pending ?? 0,
+      cancelled: attendAgg?.cancelled ?? 0
+    };
+    const appointments = {
+      total: apptAgg?.total ?? 0,
+      scheduled: apptAgg?.scheduled ?? 0,
+      cancelled: apptAgg?.cancelled ?? 0,
+      cancel_rate: rate(apptAgg?.cancelled ?? 0, apptAgg?.total ?? 0),
+      attendance,
+      absent_rate: rate(attendance.absent, attendance.present + attendance.absent),
+      pending_overdue: overdue?.c ?? 0,
+      booked_minutes: bookedMinutes,
+      capacity_minutes: capacityMinutes,
+      fill_rate: rate(bookedMinutes, capacityMinutes),
+      students_served: served?.c ?? 0
+    };
+    const [pathAgg, fidelityRows, gameAgg, attemptAgg, assignAgg] = await Promise.all([
+      db.queryOne(
+        `SELECT
+           COALESCE(SUM(CASE WHEN status = 'done' AND done_at >= ? AND done_at <= ? THEN 1 ELSE 0 END), 0) AS done,
+           COALESCE(SUM(CASE WHEN status = 'skipped' AND updated_at >= ? AND updated_at <= ? THEN 1 ELSE 0 END), 0) AS skipped
+         FROM pathway_sessions`,
+        [fromIso, toIso, fromIso, toIso]
+      ),
+      db.query(
+        `SELECT fidelity FROM pathway_sessions
+         WHERE status = 'done' AND done_at >= ? AND done_at <= ? AND fidelity IS NOT NULL`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN validity = 'valid' THEN 1 ELSE 0 END), 0) AS valid,
+                COALESCE(SUM(CASE WHEN validity = 'partial' THEN 1 ELSE 0 END), 0) AS partial,
+                COALESCE(SUM(CASE WHEN validity = 'invalid' THEN 1 ELSE 0 END), 0) AS invalid
+         FROM game_sessions WHERE created_at >= ? AND created_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT COUNT(*) AS scored,
+                COALESCE(SUM(CASE WHEN correct = 1 THEN 1 ELSE 0 END), 0) AS correct
+         FROM game_attempts WHERE correct IS NOT NULL AND created_at >= ? AND created_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END), 0) AS done,
+                COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) AS cancelled
+         FROM exercise_assignments WHERE created_at >= ? AND created_at <= ?`,
+        [fromIso, toIso]
+      )
+    ]);
+    let fidelityChecked = 0;
+    let fidelityFull = 0;
+    for (const row of fidelityRows) {
+      const f = parseJson5(row.fidelity);
+      if (!f) continue;
+      fidelityChecked += 1;
+      if (f.protocol === true && f.homework === true && f.parent === true) fidelityFull += 1;
+    }
+    const gameTotal = gameAgg?.total ?? 0;
+    const attemptScored = attemptAgg?.scored ?? 0;
+    const intervention = {
+      pathway_sessions_done: pathAgg?.done ?? 0,
+      pathway_sessions_skipped: pathAgg?.skipped ?? 0,
+      session_completion_rate: rate(pathAgg?.done ?? 0, (pathAgg?.done ?? 0) + (pathAgg?.skipped ?? 0)),
+      fidelity_checked: fidelityChecked,
+      fidelity_full: fidelityFull,
+      game_sessions: gameTotal,
+      game_valid: gameAgg?.valid ?? 0,
+      game_partial: gameAgg?.partial ?? 0,
+      game_invalid: gameAgg?.invalid ?? 0,
+      game_valid_rate: rate(gameAgg?.valid ?? 0, gameTotal),
+      game_attempts_scored: attemptScored,
+      game_correct: attemptAgg?.correct ?? 0,
+      game_correct_rate: rate(attemptAgg?.correct ?? 0, attemptScored),
+      assignments_total: assignAgg?.total ?? 0,
+      assignments_done: assignAgg?.done ?? 0,
+      assignments_cancelled: assignAgg?.cancelled ?? 0,
+      assignment_done_rate: rate(assignAgg?.done ?? 0, (assignAgg?.done ?? 0) + (assignAgg?.cancelled ?? 0))
+    };
+    const [studentsAgg, caseAgg, docAgg, assessAgg, familyAgg, familyScoreRows] = await Promise.all([
+      db.queryOne(
+        `SELECT COALESCE(SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END), 0) AS active FROM students`
+      ),
+      db.queryOne(
+        `SELECT COUNT(*) AS total FROM case_events WHERE created_at >= ? AND created_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT COUNT(DISTINCT ce.student_id) AS students,
+                COALESCE(SUM(CASE WHEN cet.category = 'session' THEN 1 ELSE 0 END), 0) AS session_notes
+         FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
+         WHERE ce.created_at >= ? AND ce.created_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT COUNT(*) AS c FROM assessments WHERE active = 1 AND performed_at >= ? AND performed_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.queryOne(
+        `SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS filled
+         FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
+         WHERE cet.family_fillable = 1 AND ce.created_at >= ? AND ce.created_at <= ?`,
+        [fromIso, toIso]
+      ),
+      db.query(
+        `SELECT ce.analysis FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
+         WHERE cet.family_fillable = 1 AND ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL
+           AND ce.created_at >= ? AND ce.created_at <= ?`,
+        [fromIso, toIso]
+      )
+    ]);
+    let scoreSum = 0;
+    let scoreCount = 0;
+    for (const row of familyScoreRows) {
+      const a = parseJson5(row.analysis);
+      const s = Number(a?.score);
+      if (Number.isFinite(s)) {
+        scoreSum += s;
+        scoreCount += 1;
+      }
+    }
+    const studentsActive = studentsAgg?.active ?? 0;
+    const familyTotal = familyAgg?.total ?? 0;
+    const documentation = {
+      students_active: studentsActive,
+      case_events_total: caseAgg?.total ?? 0,
+      session_notes: docAgg?.session_notes ?? 0,
+      students_documented: docAgg?.students ?? 0,
+      documentation_coverage: rate(docAgg?.students ?? 0, studentsActive),
+      assessments_recorded: assessAgg?.c ?? 0,
+      family_requests: familyTotal,
+      family_filled: familyAgg?.filled ?? 0,
+      family_response_rate: rate(familyAgg?.filled ?? 0, familyTotal),
+      family_avg_score: scoreCount > 0 ? round4(scoreSum / scoreCount) : null
+    };
+    return {
+      window,
+      generated_at: nowIso,
+      appointments,
+      intervention,
+      documentation
+    };
+  }
+  __name(summary, "summary");
+  return { summary };
+}
+__name(createCenterKpiService, "createCenterKpiService");
+
+// src/domain/center-kpi/types.ts
+function isKpiDays(v) {
+  return v === 7 || v === 30 || v === 90;
+}
+__name(isKpiDays, "isKpiDays");
+
+// src/domain/center-kpi/routes.ts
+function registerCenterKpiRoutes(app, service) {
+  const office = requireRole("manager", "secretary");
+  app.get("/api/kpi/summary", office, async (c) => {
+    const rawDays = Number(c.req.query("days") ?? 30);
+    const days = isKpiDays(rawDays) ? rawDays : 30;
+    const data = await service.summary(days);
+    return c.json({ data }, 200);
+  });
+}
+__name(registerCenterKpiRoutes, "registerCenterKpiRoutes");
+
+// src/domain/network-content/types.ts
+var CONTENT_KINDS = ["exercise", "card", "document", "plan", "doc", "clearbook"];
+var CONTENT_KIND_LABELS = {
+  exercise: "\u062A\u0645\u0631\u06CC\u0646 / \u06A9\u0627\u0631\u062A \u0622\u0645\u0627\u062F\u0647",
+  card: "\u0628\u0627\u0632\u06CC \u0622\u0645\u0627\u062F\u0647",
+  document: "\u0633\u0646\u062F \u062E\u0627\u0645",
+  plan: "\u0637\u0631\u062D \u062F\u0631\u0645\u0627\u0646",
+  doc: "\u0633\u0646\u062F \u062E\u0627\u0645",
+  clearbook: "\u06A9\u0644\u0631 \u0628\u0648\u06A9 \u0645\u0631\u06A9\u0632"
+};
+
+// src/domain/network-content/service.ts
+var TITLE_MAX2 = 150;
+var SUMMARY_MAX = 600;
+var BODY_MAX = 8e3;
+var TAG_MAX = 40;
+var TAGS_MAX = 8;
+var LIST_PAGE_MAX = 100;
+function normalizeTag3(raw2) {
+  return String(raw2 ?? "").replace(/[\u200c\u200f\u200e]/g, "\u200C").replace(/\s+/g, " ").trim();
+}
+__name(normalizeTag3, "normalizeTag");
+function isContentKind(v) {
+  return typeof v === "string" && CONTENT_KINDS.includes(v);
+}
+__name(isContentKind, "isContentKind");
+function parseScore(qualityRaw) {
+  if (!qualityRaw) return { quality: null, score: null };
+  try {
+    const parsed = JSON.parse(qualityRaw);
+    if (!parsed || typeof parsed !== "object") return { quality: null, score: null };
+    const q = parsed;
+    const raw2 = q.score;
+    if (raw2 && typeof raw2 === "object" && typeof raw2.score === "number") {
+      const s = raw2;
+      return {
+        quality: q,
+        score: {
+          score: Number(s.score),
+          refs: Number(s.refs ?? 0),
+          uses: Number(s.uses ?? 0),
+          refScore: Number(s.refScore ?? 0),
+          useScore: Number(s.useScore ?? 0),
+          formulaVersion: Number(s.formulaVersion ?? 1),
+          source: String(s.source ?? "client"),
+          generatedAt: s.generatedAt ?? null
+        }
+      };
+    }
+    return { quality: q, score: null };
+  } catch {
+    return { quality: null, score: null };
+  }
+}
+__name(parseScore, "parseScore");
+function mapRow(row) {
+  let tags = [];
+  const parsed = row.tags ? JSON.parse(row.tags) : null;
+  if (Array.isArray(parsed)) tags = parsed.filter((t) => typeof t === "string");
+  const kind = isContentKind(row.kind) ? row.kind : "exercise";
+  const { quality, score } = parseScore(row.quality ?? null);
+  return {
+    id: row.id,
+    kind,
+    kindLabel: CONTENT_KIND_LABELS[kind],
+    title: row.title,
+    summary: row.summary ?? "",
+    body: row.body ?? "",
+    tags,
+    subcategory: row.subcategory ?? null,
+    authorName: row.author_name ?? null,
+    coAuthorName: row.co_author_name ?? null,
+    fileName: row.file_name ?? null,
+    fileSize: row.file_size == null ? null : Number(row.file_size),
+    externalUrl: row.external_url ?? null,
+    quality,
+    score,
+    origin: row.origin === "cp" ? "cp" : "local",
+    status: row.status,
+    sourceCenter: row.source_center,
+    sourceRef: row.source_ref,
+    active: row.active === 1,
+    submittedAt: row.submitted_at,
+    syncedAt: row.synced_at,
+    createdBy: row.created_by,
+    createdByName: row.created_by_name ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+__name(mapRow, "mapRow");
+var SELECT_COLS3 = `nc.id, nc.kind, nc.title, nc.summary, nc.body, nc.tags, nc.subcategory,
+  nc.author_name, nc.co_author_name, nc.file_name, nc.file_size, nc.external_url, nc.quality,
+  nc.origin, nc.status, nc.source_center, nc.source_ref, nc.active, nc.submitted_at, nc.synced_at,
+  nc.created_by, s.full_name AS created_by_name, nc.created_at, nc.updated_at`;
+function createNetworkContentService(deps) {
+  const db = deps.db;
+  const audit = deps.audit;
+  async function counts() {
+    const rows = await db.query(
+      `SELECT origin, COUNT(*) AS c FROM network_content
+       WHERE active = 1 AND status NOT IN ('withdrawn') GROUP BY origin`
+    );
+    let local = 0;
+    let network = 0;
+    for (const r of rows) {
+      if (r.origin === "cp") network += r.c;
+      else local += r.c;
+    }
+    return { local, network };
+  }
+  __name(counts, "counts");
+  async function getById(id) {
+    const row = await db.queryOne(
+      `SELECT ${SELECT_COLS3} FROM network_content nc
+       LEFT JOIN staff s ON s.id = nc.created_by WHERE nc.id = ?`,
+      [id]
+    );
+    return row ? mapRow(row) : null;
+  }
+  __name(getById, "getById");
+  async function requireEditable(id) {
+    const rec = await getById(id);
+    if (!rec) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
+    if (rec.origin !== "local") {
+      throw new ConflictError("\u0627\u06CC\u0646 \u0622\u06CC\u062A\u0645 \u0627\u0632 \u06A9\u0646\u062A\u0631\u0644\u200C\u067E\u0644\u06CC\u0646 \u0622\u0645\u062F\u0647 \u0648 \u062F\u0631 \u0645\u0631\u06A9\u0632 \u0642\u0627\u0628\u0644 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u06CC\u0633\u062A");
+    }
+    return rec;
+  }
+  __name(requireEditable, "requireEditable");
+  return {
+    async list(opts) {
+      const limit = Math.min(Math.max(1, Math.floor(opts.limit) || 20), LIST_PAGE_MAX);
+      const offset = Math.max(0, Math.floor(opts.offset) || 0);
+      const where = [];
+      const params = [];
+      if (opts.origin === "cp") where.push(`nc.origin = 'cp' AND nc.active = 1`);
+      else if (opts.origin === "local") where.push(`nc.origin = 'local' AND nc.status != 'withdrawn'`);
+      if (opts.kind && isContentKind(opts.kind)) {
+        where.push("nc.kind = ?");
+        params.push(opts.kind);
+      }
+      if (opts.q && opts.q.trim()) {
+        where.push("(nc.title LIKE ? OR nc.summary LIKE ?)");
+        const like = `%${opts.q.trim()}%`;
+        params.push(like, like);
+      }
+      const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+      const rows = await db.query(
+        `SELECT ${SELECT_COLS3} FROM network_content nc
+         LEFT JOIN staff s ON s.id = nc.created_by
+         ${whereSql}
+         ORDER BY nc.updated_at DESC, nc.created_at DESC
+         LIMIT ? OFFSET ?`,
+        [...params, limit + 1, offset]
+      );
+      const hasMore = rows.length > limit;
+      return {
+        items: rows.slice(0, limit).map(mapRow),
+        hasMore,
+        counts: await counts()
+      };
+    },
+    async get(id) {
+      return getById(id);
+    },
+    async create(actor, input) {
+      const title = String(input.title ?? "").trim();
+      if (title.length < 2 || title.length > TITLE_MAX2) {
+        throw new ValidationError(`\u0639\u0646\u0648\u0627\u0646 \u0628\u0627\u06CC\u062F \u0628\u06CC\u0646 \u06F2 \u062A\u0627 ${TITLE_MAX2} \u0646\u0648\u06CC\u0633\u0647 \u0628\u0627\u0634\u062F`);
+      }
+      const summary = String(input.summary ?? "").trim();
+      if (summary.length > SUMMARY_MAX) throw new ValidationError(`\u062E\u0644\u0627\u0635\u0647 \u062D\u062F\u0627\u06A9\u062B\u0631 ${SUMMARY_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`);
+      const body = String(input.body ?? "").trim();
+      if (body.length > BODY_MAX) throw new ValidationError(`\u0645\u062D\u062A\u0648\u0627 \u062D\u062F\u0627\u06A9\u062B\u0631 ${BODY_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`);
+      if (!isContentKind(input.kind)) throw new ValidationError("\u0646\u0648\u0639 \u0645\u062D\u062A\u0648\u0627 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+      const tags = (Array.isArray(input.tags) ? input.tags : []).map(normalizeTag3).filter((t) => t.length >= 2 && t.length <= TAG_MAX).slice(0, TAGS_MAX);
+      const uniqueTags = [...new Set(tags)];
+      const id = crypto.randomUUID();
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const status = input.queueNow ? "queued" : "draft";
+      await db.execute(
+        `INSERT INTO network_content
+           (id, kind, title, summary, body, tags, origin, status, source_ref, active,
+            submitted_at, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'local', ?, ?, 1, ?, ?, ?, ?)`,
+        [
+          id,
+          input.kind,
+          title,
+          summary,
+          body,
+          JSON.stringify(uniqueTags),
+          status,
+          input.sourceRef ?? null,
+          input.queueNow ? now : null,
+          actor.id,
+          now,
+          now
+        ]
+      );
+      await audit.log({
+        actorId: actor.id,
+        action: "network_content.create",
+        resourceType: "network_content",
+        resourceId: id,
+        changes: { kind: { from: null, to: input.kind }, status: { from: null, to: status } }
+      });
+      const rec = await getById(id);
+      if (!rec) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
+      return rec;
+    },
+    async queue(actor, id) {
+      const rec = await requireEditable(id);
+      if (rec.status !== "draft" && rec.status !== "withdrawn") {
+        throw new ConflictError("\u0641\u0642\u0637 \u067E\u06CC\u0634\u200C\u0646\u0648\u06CC\u0633 \u06CC\u0627 \u06A9\u0646\u0627\u0631\u06AF\u0630\u0627\u0634\u062A\u0647 \u0631\u0627 \u0645\u06CC\u200C\u062A\u0648\u0627\u0646 \u0628\u0647 \u0635\u0641 \u0647\u0645\u0631\u0633\u0627\u0646\u06CC \u0641\u0631\u0633\u062A\u0627\u062F");
+      }
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db.execute(
+        `UPDATE network_content SET status = 'queued', submitted_at = ?, updated_at = ? WHERE id = ?`,
+        [now, now, id]
+      );
+      await audit.log({
+        actorId: actor.id,
+        action: "network_content.queue",
+        resourceType: "network_content",
+        resourceId: id,
+        changes: { status: { from: rec.status, to: "queued" } }
+      });
+      const next = await getById(id);
+      if (!next) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
+      return next;
+    },
+    async withdraw(actor, id) {
+      const rec = await requireEditable(id);
+      if (rec.status !== "queued" && rec.status !== "submitted" && rec.status !== "draft") {
+        throw new ConflictError("\u0627\u06CC\u0646 \u0622\u06CC\u062A\u0645 \u0642\u0627\u0628\u0644 \u06A9\u0646\u0627\u0631\u06AF\u0630\u0627\u0631\u06CC \u0646\u06CC\u0633\u062A");
+      }
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db.execute(
+        `UPDATE network_content SET status = 'withdrawn', updated_at = ? WHERE id = ?`,
+        [now, id]
+      );
+      await audit.log({
+        actorId: actor.id,
+        action: "network_content.withdraw",
+        resourceType: "network_content",
+        resourceId: id,
+        changes: { status: { from: rec.status, to: "withdrawn" } }
+      });
+      const next = await getById(id);
+      if (!next) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
+      return next;
+    },
+    async installFromNetwork(actor, id) {
+      const rec = await getById(id);
+      if (!rec) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
+      if (rec.origin !== "cp") throw new ValidationError("\u0641\u0642\u0637 \u0628\u0631\u06AF\u0632\u06CC\u062F\u0647\u200C\u0647\u0627\u06CC \u0634\u0628\u06A9\u0647 \u0642\u0627\u0628\u0644 \u0627\u0641\u0632\u0648\u062F\u0646 \u0647\u0633\u062A\u0646\u062F");
+      if (rec.kind !== "exercise") throw new ValidationError("\u0641\u0642\u0637 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647 \u0628\u0647 \u0628\u0627\u0646\u06A9 \u06A9\u0627\u0631\u062A \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u200C\u0634\u0648\u0646\u062F");
+      if (!rec.active) throw new ValidationError("\u0622\u06CC\u062A\u0645 \u0628\u0627\u06CC\u06AF\u0627\u0646\u06CC\u200C\u0634\u062F\u0647 \u0642\u0627\u0628\u0644 \u0627\u0641\u0632\u0648\u062F\u0646 \u0646\u06CC\u0633\u062A");
+      const dup = await db.queryOne("SELECT id FROM exercises WHERE source_ref_network = ? AND deleted_at IS NULL LIMIT 1", [id]);
+      if (dup) throw new ConflictError("\u0627\u06CC\u0646 \u06A9\u0627\u0631\u062A \u0642\u0628\u0644\u0627\u064B \u0628\u0647 \u0628\u0627\u0646\u06A9 \u06A9\u0627\u0631\u062A \u0627\u0636\u0627\u0641\u0647 \u0634\u062F\u0647 \u0627\u0633\u062A");
+      const attribution = [
+        rec.authorName ? `\u0637\u0631\u0627\u062D: ${rec.authorName}` : null,
+        rec.coAuthorName ? `\u0647\u0645\u06A9\u0627\u0631 \u0637\u0631\u0627\u062D: ${rec.coAuthorName}` : null,
+        rec.sourceCenter ? `\u0645\u0646\u0628\u0639: \u06A9\u062A\u0627\u0628\u062E\u0627\u0646\u0647\u0654 \u0634\u0628\u06A9\u0647 (${rec.sourceCenter})` : "\u0645\u0646\u0628\u0639: \u06A9\u062A\u0627\u0628\u062E\u0627\u0646\u0647\u0654 \u0634\u0628\u06A9\u0647"
+      ].filter(Boolean).join(" \xB7 ");
+      const description = [rec.summary, rec.body, `\u2014 ${attribution}`].filter(Boolean).join("\n\n");
+      const localId = `local-${crypto.randomUUID()}`;
+      const VALID2 = /* @__PURE__ */ new Set(["worksheet", "homework", "game", "instruction", "family"]);
+      const fmt = rec.tags.find((t) => VALID2.has(t)) ?? "worksheet";
+      await db.execute(
+        `INSERT INTO exercises (id, title, description, format, published, file_name, file_mime, file_size, file_key, created_by, created_at, updated_at, source_ref_network)
+         VALUES (?, ?, ?, ?, 1, NULL, NULL, NULL, NULL, ?, datetime('now'), datetime('now'), ?)`,
+        [localId, rec.title, description, fmt, actor.id, id]
+      );
+      await audit.log({
+        actorId: actor.id,
+        action: "network_content.install",
+        resourceType: "network_content",
+        resourceId: id,
+        changes: { local_exercise_id: { from: null, to: localId } }
+      });
+      return { localExerciseId: localId, title: rec.title };
+    },
+    async cpFile(id) {
+      const rec = await getById(id);
+      if (!rec) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
+      if (rec.origin !== "cp" || !rec.active) throw new NotFoundError("\u0641\u0627\u06CC\u0644 \u0622\u06CC\u062A\u0645 \u0628\u0627\u06CC\u06AF\u0627\u0646\u06CC\u200C\u0634\u062F\u0647 \u0642\u0627\u0628\u0644 \u062F\u0631\u06CC\u0627\u0641\u062A \u0646\u06CC\u0633\u062A");
+      if (!rec.fileName) throw new NotFoundError("\u0627\u06CC\u0646 \u0622\u06CC\u062A\u0645 \u0641\u0627\u06CC\u0644 \u067E\u06CC\u0648\u0633\u062A \u0646\u062F\u0627\u0631\u062F");
+      if (!deps.fetchCpFile) throw new NotFoundError("\u0633\u06CC\u0646\u06A9 CP \u062E\u0627\u0645\u0648\u0634 \u0627\u0633\u062A \u2014 \u0641\u0627\u06CC\u0644 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A");
+      const payload = await deps.fetchCpFile(id);
+      if (!payload) throw new NotFoundError("\u062F\u0631\u06CC\u0627\u0641\u062A \u0641\u0627\u06CC\u0644 \u0627\u0632 \u0634\u0628\u06A9\u0647 \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F");
+      await audit.log({
+        actorId: "system:cp-content",
+        action: "network_content.file_download",
+        resourceType: "network_content",
+        resourceId: id,
+        changes: { file_name: { from: null, to: rec.fileName } }
+      });
+      return { bytes: payload.bytes, mime: payload.mime, fileName: rec.fileName };
+    }
+  };
+}
+__name(createNetworkContentService, "createNetworkContentService");
+
+// src/domain/network-content/routes.ts
+var ContentCreateSchema = external_exports.object({
+  kind: external_exports.enum(CONTENT_KINDS),
+  title: external_exports.string().trim().min(2, "\u0639\u0646\u0648\u0627\u0646 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(150),
+  summary: external_exports.string().trim().max(600).default(""),
+  body: external_exports.string().trim().max(8e3).default(""),
+  tags: external_exports.array(external_exports.string().min(2).max(40)).max(8).default([]),
+  source_ref: external_exports.string().max(120).nullish(),
+  queue_now: external_exports.boolean().default(false)
+});
+function parseKind(v) {
+  if (!v || v === "all") return void 0;
+  return CONTENT_KINDS.includes(v) ? v : void 0;
+}
+__name(parseKind, "parseKind");
+function parseOrigin(v) {
+  if (v === "local" || v === "cp") return v;
+  return void 0;
+}
+__name(parseOrigin, "parseOrigin");
+function registerNetworkContentRoutes(app, service) {
+  const office = requireRole("manager", "secretary");
+  const manager = requireRole("manager");
+  const staff = requireRole("manager", "therapist");
+  const CpIdSchema = external_exports.string().trim().min(8).max(140).refine((v) => v.startsWith("cp-content-"), "\u0634\u0646\u0627\u0633\u0647\u0654 \u0628\u0631\u06AF\u0632\u06CC\u062F\u0647\u0654 \u0634\u0628\u06A9\u0647 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+  app.get("/api/network-content/cp/:id/file", office, async (c) => {
+    const id = CpIdSchema.parse(c.req.param("id"));
+    const file = await service.cpFile(id);
+    if (!file) return c.json({ error: "NOT_FOUND", message: "\u0641\u0627\u06CC\u0644 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A" }, 404);
+    const asciiFallback = file.fileName.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
+    return new Response(file.bytes, {
+      status: 200,
+      headers: {
+        "Content-Type": file.mime,
+        "Content-Disposition": `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
+        "Cache-Control": "private, no-store"
+      }
+    });
+  });
+  app.post("/api/network-content/cp/:id/install", staff, async (c) => {
+    const actor = getAuthContext(c);
+    const id = CpIdSchema.parse(c.req.param("id"));
+    const result = await service.installFromNetwork({ id: actor.staffId }, id);
+    return c.json({ data: result }, 200);
+  });
+  app.get("/api/network-content", office, async (c) => {
+    const q = c.req.query();
+    const result = await service.list({
+      kind: parseKind(q.kind),
+      origin: parseOrigin(q.origin),
+      q: q.q?.trim() || void 0,
+      limit: Number(q.limit ?? 0) || 30,
+      offset: Math.max(0, Number(q.offset ?? 0) || 0)
+    });
+    return c.json({ data: result.items, meta: { hasMore: result.hasMore, counts: result.counts } }, 200);
+  });
+  app.get("/api/network-content/:id", office, async (c) => {
+    const id = UuidSchema.parse(c.req.param("id"));
+    const rec = await service.get(id);
+    if (!rec) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
+    return c.json({ data: rec }, 200);
+  });
+  app.post("/api/network-content", manager, async (c) => {
+    const actor = getAuthContext(c);
+    const body = ContentCreateSchema.parse(await c.req.json());
+    const rec = await service.create(
+      { id: actor.staffId },
+      {
+        kind: body.kind,
+        title: body.title,
+        summary: body.summary,
+        body: body.body,
+        tags: body.tags,
+        sourceRef: body.source_ref ?? null,
+        queueNow: body.queue_now
+      }
+    );
+    return c.json({ data: rec }, 201);
+  });
+  app.post("/api/network-content/:id/queue", manager, async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const rec = await service.queue({ id: actor.staffId }, id);
+    return c.json({ data: rec }, 200);
+  });
+  app.post("/api/network-content/:id/withdraw", manager, async (c) => {
+    const actor = getAuthContext(c);
+    const id = UuidSchema.parse(c.req.param("id"));
+    const rec = await service.withdraw({ id: actor.staffId }, id);
+    return c.json({ data: rec }, 200);
+  });
+}
+__name(registerNetworkContentRoutes, "registerNetworkContentRoutes");
+
+// src/domain/content-score/pure.ts
+var SCORE_FORMULA_VERSION = 1;
+var SCORE_SOURCES = ["exercises", "pathway_templates"];
+function refScoreOf(refs) {
+  return Math.min(50, Math.max(0, Math.floor(refs) || 0) * 5);
+}
+__name(refScoreOf, "refScoreOf");
+function useScoreOf(uses) {
+  return Math.min(50, Math.max(0, Math.floor(uses) || 0) * 2);
+}
+__name(useScoreOf, "useScoreOf");
+function computeItemScore(refs, uses, generatedAtIso) {
+  const r = Math.max(0, Math.floor(refs) || 0);
+  const u = Math.max(0, Math.floor(uses) || 0);
+  const refScore = refScoreOf(r);
+  const useScore = useScoreOf(u);
+  return {
+    score: Math.min(100, refScore + useScore),
+    refs: r,
+    uses: u,
+    refScore,
+    useScore,
+    formulaVersion: SCORE_FORMULA_VERSION,
+    generatedAt: generatedAtIso,
+    source: "client"
+  };
+}
+__name(computeItemScore, "computeItemScore");
+
+// src/domain/content-score/service.ts
+function createContentScoreService(db, audit) {
+  return {
+    async refresh() {
+      const startMs = Date.now();
+      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const exerciseRows = await db.query(
+        `SELECT e.id,
+                (SELECT COUNT(*) FROM pathway_sessions ps JOIN intervention_paths ip ON ip.id = ps.pathway_id
+                  WHERE ip.deleted_at IS NULL
+                    AND (ps.items_json LIKE '%' || e.id || '%' OR ip.exercise_ids LIKE '%' || e.id || '%')) AS refs,
+                (SELECT COUNT(*) FROM exercise_assignments a
+                  WHERE a.exercise_id = e.id AND a.status != 'cancelled') AS uses
+           FROM exercises e
+          WHERE e.deleted_at IS NULL`,
+        []
+      );
+      const templateRows = await db.query(
+        `SELECT t.id,
+                0 AS refs,
+                (SELECT COUNT(*) FROM intervention_paths ip
+                  WHERE ip.template_key = t.key AND ip.deleted_at IS NULL) AS uses
+           FROM pathway_templates t
+          WHERE t.active = 1`,
+        []
+      );
+      const upsert = /* @__PURE__ */ __name((table, id, refs, uses) => {
+        const s = computeItemScore(refs, uses, nowIso);
+        return db.prepare(
+          `INSERT INTO content_score_report (source_table, source_id, refs, uses, score, formula_version, generated_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(source_table, source_id) DO UPDATE SET
+             refs = excluded.refs, uses = excluded.uses, score = excluded.score,
+             formula_version = excluded.formula_version, updated_at = excluded.updated_at`,
+          [table, id, s.refs, s.uses, s.score, SCORE_FORMULA_VERSION, s.generatedAt, nowIso]
+        );
+      }, "upsert");
+      const statements = [
+        ...exerciseRows.map((r) => upsert("exercises", r.id, Number(r.refs ?? 0), Number(r.uses ?? 0))),
+        ...templateRows.map((r) => upsert("pathway_templates", r.id, Number(r.refs ?? 0), Number(r.uses ?? 0)))
+      ];
+      for (let i = 0; i < statements.length; i += 50) {
+        await db.batch(statements.slice(i, i + 50));
+      }
+      const result = {
+        exercises: exerciseRows.length,
+        templates: templateRows.length,
+        durationMs: Math.max(0, Date.now() - startMs)
+      };
+      await audit.log({
+        actorId: "system:score-engine",
+        action: "content_score.refresh",
+        resourceType: "content_score_report",
+        resourceId: "full",
+        changes: {
+          exercises: { from: null, to: result.exercises },
+          templates: { from: null, to: result.templates }
+        }
+      });
+      return result;
+    },
+    async get(sourceTable, sourceId) {
+      const row = await db.queryOne(
+        "SELECT refs, uses, score, formula_version FROM content_score_report WHERE source_table = ? AND source_id = ? LIMIT 1",
+        [sourceTable, sourceId]
+      );
+      if (!row) return null;
+      return {
+        refs: Number(row.refs ?? 0),
+        uses: Number(row.uses ?? 0),
+        score: Number(row.score ?? 0),
+        formulaVersion: Number(row.formula_version ?? SCORE_FORMULA_VERSION)
+      };
+    }
+  };
+}
+__name(createContentScoreService, "createContentScoreService");
+
+// src/domain/content-score/routes.ts
+var ZOD_ISSUES = /* @__PURE__ */ __name((err) => err.issues.map((i) => ({ path: i.path.join("."), message: i.message })), "ZOD_ISSUES");
+var TableParamSchema = external_exports.enum(SCORE_SOURCES);
+function registerContentScoreRoutes(app, deps) {
+  const manager = requireRole("manager");
+  app.post("/api/content-scores/refresh", manager, async (c) => {
+    const result = await deps.contentScore.refresh();
+    return c.json({ data: result }, 200);
+  });
+  app.get("/api/content-scores/:table/:id", async (c) => {
+    let table;
+    let id;
+    try {
+      table = TableParamSchema.parse(c.req.param("table"));
+      id = UuidSchema.parse(c.req.param("id"));
+    } catch (err) {
+      if (err instanceof ZodError) {
+        return c.json({ error: "VALIDATION_ERROR", message: "\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A", details: ZOD_ISSUES(err) }, 422);
+      }
+      throw err;
+    }
+    const score = await deps.contentScore.get(table, id);
+    return c.json({ data: { score } }, 200);
+  });
+}
+__name(registerContentScoreRoutes, "registerContentScoreRoutes");
+
+// src/core/audit/writer.ts
+function buildInsert(entry) {
+  return {
+    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    params: [
+      crypto.randomUUID(),
+      entry.actorId,
+      entry.action,
+      entry.resourceType,
+      entry.resourceId,
+      entry.changes ? JSON.stringify(entry.changes) : null
+    ]
+  };
+}
+__name(buildInsert, "buildInsert");
+function createAuditWriter(db) {
+  return {
+    async log(entry) {
+      const { sql, params } = buildInsert(entry);
+      await db.execute(sql, params);
+    },
+    async logInTransaction(tx, entry) {
+      const { sql, params } = buildInsert(entry);
+      await tx.execute(sql, params);
+    }
+  };
+}
+__name(createAuditWriter, "createAuditWriter");
+
+// src/application/cp-content/sync.ts
+var CP_CONTENT_ATTEMPT_KEY = "cp_content.last_attempt_at";
+var CP_CONTENT_SYNC_KEY = "cp_content.last_sync_at";
+var CP_CONTENT_PUSH_KEY = "cp_content.last_push_at";
+var CP_CONTENT_MIN_INTERVAL_MS = 15 * 6e4;
+var CP_CONTENT_ID_PREFIX = "cp-content-";
+var CP_CONTENT_LOOKBACK_MS = 6e4;
+var CP_CONTENT_TIMEOUT_MS = 15e3;
+var CP_CONTENT_BATCH_MAX = 20;
+function clean(v) {
+  const s = v?.trim();
+  return s ? s : null;
+}
+__name(clean, "clean");
+function cpOriginFrom(baseUrl) {
+  const s = clean(baseUrl);
+  if (!s) return null;
+  try {
+    return new URL(s).origin;
+  } catch {
+    return null;
+  }
+}
+__name(cpOriginFrom, "cpOriginFrom");
+function buildCpContentConfig(env) {
+  return {
+    cpOrigin: cpOriginFrom(env.CP_SYNC_URL),
+    cpNodeCode: clean(env.CP_NODE_CODE),
+    cpNodeKey: clean(env.CP_NODE_KEY),
+    cpSyncStaffId: clean(env.CP_SYNC_STAFF_ID)
+  };
+}
+__name(buildCpContentConfig, "buildCpContentConfig");
+var CpContentSyncItemSchema = external_exports.object({
+  // min(4) هم‌قرارداد اعلان‌ها: آیتم بی‌پیشوند باید از Zod رد شود تا فیلتر JS (لایهٔ دفاع اول) آن را ببیند و دور بریزد
+  // 1.25.48 m6 — هم‌قرارداد با شکل واقعی CP (docs/cp-content-sharing.md): پنج گونهٔ کتابخانه
+  // + شناسنامهٔ طراح/فایل/زیردسته/امتیاز؛ active از status CP مشتق می‌شود (retired = بایگانی).
+  id: external_exports.string().min(4).max(120),
+  kind: external_exports.enum(["exercise", "card", "document", "plan", "doc", "clearbook"]),
+  title: external_exports.string().min(1).max(300),
+  summary: external_exports.string().max(2e3).nullable().default(null),
+  body: external_exports.string().max(12e3).nullable().default(null),
+  tags: external_exports.array(external_exports.string().max(60)).max(12).default([]),
+  subcategory: external_exports.string().max(40).nullable().default(null),
+  author_name: external_exports.string().max(120).nullable().default(null),
+  co_author_name: external_exports.string().max(120).nullable().default(null),
+  file_name: external_exports.string().max(200).nullable().default(null),
+  file_size: external_exports.number().int().min(0).max(1e8).nullable().default(null),
+  external_url: external_exports.string().max(500).nullable().default(null),
+  quality: external_exports.record(external_exports.unknown()).nullable().default(null),
+  status: external_exports.enum(["collected", "approved", "rejected", "retired", "published"]),
+  source_center_code: external_exports.string().max(60).nullable().default(null),
+  source_center_name: external_exports.string().max(120).nullable().default(null),
+  created_at: external_exports.string().min(10).max(40),
+  updated_at: external_exports.string().min(10).max(40)
+});
+var CpContentSyncResponseSchema = external_exports.object({
+  data: external_exports.object({
+    server_time: external_exports.string().min(10).max(40),
+    items: external_exports.array(CpContentSyncItemSchema).max(CP_CONTENT_BATCH_MAX)
+  })
+});
+async function readSettingsIso(db, key) {
+  const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.value);
+    if (typeof parsed === "string" && parsed.length > 0) return parsed;
+  } catch {
+  }
+  return null;
+}
+__name(readSettingsIso, "readSettingsIso");
+async function writeSettings(db, key, iso, updatedBy, nowIso) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+    [key, JSON.stringify(iso), updatedBy, nowIso]
+  );
+}
+__name(writeSettings, "writeSettings");
+function shouldRunCpContent(lastAttemptIso, now, minIntervalMs = CP_CONTENT_MIN_INTERVAL_MS) {
+  if (!lastAttemptIso) return true;
+  const t = Date.parse(lastAttemptIso);
+  if (Number.isNaN(t)) return true;
+  return now.getTime() - t >= minIntervalMs;
+}
+__name(shouldRunCpContent, "shouldRunCpContent");
+async function stampCpContentAttempt(db, at = /* @__PURE__ */ new Date()) {
+  await writeSettings(db, CP_CONTENT_ATTEMPT_KEY, at.toISOString(), "cp-content", at.toISOString());
+}
+__name(stampCpContentAttempt, "stampCpContentAttempt");
+async function pushQueuedSubmissions(deps) {
+  const { db, log, config, nowIso } = deps;
+  const rows = await db.query(
+    `SELECT id, kind, title, summary, body, tags, submitted_at, source_ref
+     FROM network_content
+     WHERE origin = 'local' AND status = 'queued'
+     ORDER BY submitted_at ASC LIMIT ${CP_CONTENT_BATCH_MAX}`
+  );
+  if (rows.length === 0) return 0;
+  let tags = [];
+  const items = rows.map((r) => {
+    try {
+      const parsed = r.tags ? JSON.parse(r.tags) : null;
+      if (Array.isArray(parsed)) tags = parsed.filter((t) => typeof t === "string");
+    } catch {
+      tags = [];
+    }
+    return {
+      id: r.id,
+      kind: r.kind === "plan" || r.kind === "doc" ? r.kind : "exercise",
+      title: r.title,
+      summary: r.summary ?? "",
+      body: r.body ?? "",
+      tags,
+      submitted_at: r.submitted_at ?? nowIso,
+      source_ref: r.source_ref
+    };
+  });
+  const url = `${config.cpOrigin}/api/node/content/submit`;
+  const init = {
+    method: "POST",
+    headers: {
+      "X-CP-Node-Code": config.cpNodeCode ?? "",
+      Authorization: `Bearer ${config.cpNodeKey ?? ""}`,
+      "X-CP-Node-Version": APP_VERSION,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ items }),
+    signal: AbortSignal.timeout(CP_CONTENT_TIMEOUT_MS)
+  };
+  const res = deps.binding ? await deps.binding.fetch(url, init) : await (deps.fetchFn ?? fetch)(url, init);
+  if (!res.ok) {
+    let bodyHead = "";
+    try {
+      bodyHead = (await res.text()).slice(0, 180);
+    } catch {
+      bodyHead = "";
+    }
+    log.warn("cp_content.push_failed", { http: res.status, detail: "cp_http_error", url, body_head: bodyHead });
+    throw new Error(`http_${res.status}`);
+  }
+  await db.execute(
+    `UPDATE network_content SET status = 'submitted', updated_at = ?
+     WHERE origin = 'local' AND status = 'queued' AND id IN (${items.map(() => "?").join(", ")})`,
+    [nowIso, ...items.map((i) => i.id)]
+  );
+  log.info("cp_content.push", { n: items.length });
+  return items.length;
+}
+__name(pushQueuedSubmissions, "pushQueuedSubmissions");
+async function pullCuratedItems(deps) {
+  const { db, log, config, nowIso } = deps;
+  const lastIso = await readSettingsIso(db, CP_CONTENT_SYNC_KEY);
+  let sinceIso = null;
+  if (lastIso) {
+    const t = Date.parse(lastIso);
+    if (!Number.isNaN(t)) sinceIso = new Date(t - CP_CONTENT_LOOKBACK_MS).toISOString();
+  }
+  const url = `${config.cpOrigin}/api/node/content/sync${sinceIso ? `?since=${encodeURIComponent(sinceIso)}` : ""}`;
+  const init = {
+    method: "GET",
+    headers: {
+      "X-CP-Node-Code": config.cpNodeCode ?? "",
+      Authorization: `Bearer ${config.cpNodeKey ?? ""}`,
+      "X-CP-Node-Version": APP_VERSION
+    },
+    signal: AbortSignal.timeout(CP_CONTENT_TIMEOUT_MS)
+  };
+  const res = deps.binding ? await deps.binding.fetch(url, init) : await (deps.fetchFn ?? fetch)(url, init);
+  if (!res.ok) {
+    let bodyHead = "";
+    try {
+      bodyHead = (await res.text()).slice(0, 180);
+    } catch {
+      bodyHead = "";
+    }
+    log.warn("cp_content.pull_failed", { http: res.status, detail: "cp_http_error", url, body_head: bodyHead });
+    throw new Error(`http_${res.status}`);
+  }
+  const payload = await res.json();
+  const parsed = CpContentSyncResponseSchema.safeParse(payload);
+  if (!parsed.success) {
+    log.warn("cp_content.pull_failed", { detail: "cp_payload_invalid" });
+    throw new Error("payload_invalid");
+  }
+  const items = parsed.data.data.items.filter((it) => it.id.startsWith(CP_CONTENT_ID_PREFIX)).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
+  if (items.length > 0) {
+    const createdBy = config.cpSyncStaffId ?? "cp-content";
+    const statements = items.map(
+      (it) => db.prepare(
+        `INSERT INTO network_content
+           (id, kind, title, summary, body, tags, subcategory, author_name, co_author_name,
+            file_name, file_size, external_url, quality, origin, status, source_center,
+            active, synced_at, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'cp', 'published', ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           kind = excluded.kind,
+           title = excluded.title,
+           summary = excluded.summary,
+           body = excluded.body,
+           tags = excluded.tags,
+           subcategory = excluded.subcategory,
+           author_name = excluded.author_name,
+           co_author_name = excluded.co_author_name,
+           file_name = excluded.file_name,
+           file_size = excluded.file_size,
+           external_url = excluded.external_url,
+           quality = excluded.quality,
+           source_center = excluded.source_center,
+           active = excluded.active,
+           synced_at = excluded.synced_at,
+           updated_at = excluded.updated_at
+         -- \u06AF\u0627\u0631\u062F \u0637\u0644\u0627\u06CC\u06CC (\u0644\u0627\u06CC\u0647\u0654 \u062F\u0641\u0627\u0639 \u062F\u0648\u0645): \u0647\u0631\u06AF\u0632 \u0631\u062F\u06CC\u0641\u200C\u0647\u0627\u06CC \u0645\u062D\u0644\u06CC (\u0628\u062F\u0648\u0646 \u067E\u06CC\u0634\u0648\u0646\u062F cp-content-) \u0631\u0627 \u0628\u0627\u0632\u0646\u0648\u06CC\u0633\u06CC \u0646\u06A9\u0646
+         WHERE network_content.id LIKE 'cp-content-%'`,
+        [
+          it.id,
+          it.kind,
+          it.title,
+          it.summary,
+          it.body,
+          JSON.stringify(it.tags),
+          it.subcategory,
+          it.author_name,
+          it.co_author_name,
+          it.file_name,
+          it.file_size,
+          it.external_url,
+          JSON.stringify(it.quality ?? {}),
+          it.source_center_name ?? it.source_center_code,
+          it.status === "retired" ? 0 : 1,
+          nowIso,
+          createdBy,
+          it.created_at,
+          it.updated_at
+        ]
+      )
+    );
+    await db.batch(statements);
+  }
+  await writeSettings(db, CP_CONTENT_SYNC_KEY, parsed.data.data.server_time, "cp-content", nowIso);
+  log.info("cp_content.pull", { n: items.length, received: parsed.data.data.items.length });
+  return items.length;
+}
+__name(pullCuratedItems, "pullCuratedItems");
+async function cpContentOpportunistic(deps) {
+  const { db, logger, config } = deps;
+  if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) {
+    return { status: "skipped" };
+  }
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const last = await readSettingsIso(db, CP_CONTENT_ATTEMPT_KEY);
+  if (!shouldRunCpContent(last, now(), deps.minIntervalMs ?? CP_CONTENT_MIN_INTERVAL_MS)) {
+    return { status: "skipped" };
+  }
+  return runCpContentCycle({ db, logger, config, binding: deps.binding, fetchFn: deps.fetchFn, now: deps.now });
+}
+__name(cpContentOpportunistic, "cpContentOpportunistic");
+async function fetchCpContentFile(deps) {
+  const { config } = deps;
+  if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) return null;
+  const ccId = deps.networkItemId.startsWith(CP_CONTENT_ID_PREFIX) ? deps.networkItemId.slice(CP_CONTENT_ID_PREFIX.length) : deps.networkItemId;
+  try {
+    const url = `${config.cpOrigin}/api/node/content/items/${encodeURIComponent(ccId)}/file`;
+    const init = {
+      method: "GET",
+      headers: {
+        "X-CP-Node-Code": config.cpNodeCode,
+        Authorization: `Bearer ${config.cpNodeKey}`,
+        "X-CP-Node-Version": APP_VERSION
+      }
+    };
+    const res = deps.binding ? await deps.binding.fetch(url, init) : await (deps.fetchFn ?? fetch)(url, init);
+    if (!res.ok) return null;
+    return { bytes: await res.arrayBuffer(), mime: res.headers.get("content-type") ?? "application/octet-stream" };
+  } catch {
+    return null;
+  }
+}
+__name(fetchCpContentFile, "fetchCpContentFile");
+async function runCpContentCycle(deps) {
+  const { db, logger, config } = deps;
+  const log = logger.child("cp-content");
+  if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) {
+    return { status: "disabled" };
+  }
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const nowIso = now().toISOString();
+  let pushed = 0;
+  let applied = 0;
+  const errors = [];
+  try {
+    const lastIso = await readSettingsIso(db, CP_CONTENT_ATTEMPT_KEY);
+    if (!shouldRunCpContent(lastIso, now(), deps.minIntervalMs ?? CP_CONTENT_MIN_INTERVAL_MS)) {
+      return { status: "skipped" };
+    }
+    await stampCpContentAttempt(db, now());
+    try {
+      pushed = await pushQueuedSubmissions({ db, log, config, binding: deps.binding, fetchFn: deps.fetchFn, nowIso });
+      await writeSettings(db, CP_CONTENT_PUSH_KEY, nowIso, "cp-content", nowIso);
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+    try {
+      applied = await pullCuratedItems({ db, log, config, binding: deps.binding, fetchFn: deps.fetchFn, nowIso });
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+    try {
+      const score = await createContentScoreService(db, createAuditWriter(db)).refresh();
+      log.info("content_score.cycle", { exercises: score.exercises, templates: score.templates, ms: score.durationMs });
+    } catch (err) {
+      log.warn("content_score.cycle_failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+    if (errors.length === 2) {
+      return { status: "error", detail: errors.join("|") };
+    }
+    return {
+      status: errors.length === 0 ? "ok" : "error",
+      pushed,
+      applied,
+      detail: errors.length > 0 ? errors.join("|") : void 0
+    };
+  } catch (err) {
+    log.warn("cp_content.cycle_failed", {
+      detail: "exception",
+      error: err instanceof Error ? err.message : String(err)
+    });
+    return { status: "error", detail: "exception" };
+  }
+}
+__name(runCpContentCycle, "runCpContentCycle");
 
 // src/domain/finance/service.ts
 var LIST_LIMIT = 500;
@@ -46165,10 +47529,10 @@ function periodSinceUtc(periodKey, periods = PERIODS, now = /* @__PURE__ */ new 
 }
 __name(periodSinceUtc, "periodSinceUtc");
 function boardSqlAndParams(sinceUtc, usageActions) {
-  const P = [];
+  const P2 = [];
   const since = /* @__PURE__ */ __name((col) => {
     if (!sinceUtc) return "";
-    P.push(sinceUtc);
+    P2.push(sinceUtc);
     return ` AND ${col} >= ?`;
   }, "since");
   const metrics = [
@@ -46237,7 +47601,7 @@ function boardSqlAndParams(sinceUtc, usageActions) {
            AND ce.staff_id IS NOT NULL AND ce.staff_id != f.created_by${since("ce.created_at")})`
     ]
   ];
-  P.push(...usageActions);
+  P2.push(...usageActions);
   const actionList = usageActions.map(() => "?").join(",");
   const usageJson = `(SELECT COALESCE(json_group_array(json_object('a', u.action, 'c', u.c)), '[]')
                         FROM (SELECT al.action AS action, COUNT(*) AS c
@@ -46252,7 +47616,7 @@ function boardSqlAndParams(sinceUtc, usageActions) {
          ${usageJson} AS usageJson
     FROM staff s
    ORDER BY s.full_name /* board:${nonce} */`;
-  return { sql, params: P };
+  return { sql, params: P2 };
 }
 __name(boardSqlAndParams, "boardSqlAndParams");
 async function computeBoard(d1, sinceUtc, cfg = {}) {
@@ -46454,11 +47818,11 @@ async function handleScoring(request, env) {
       return json({ error: "NOT_FOUND", message: "\u06A9\u0627\u0631\u0645\u0646\u062F \u06CC\u0627\u0641\u062A \u0646\u0634\u062F" }, 404);
     }
     const W = since ? " AND created_at >= ?" : "";
-    const P = since ? [since] : [];
-    const exerciseItems = await db.prepare(`SELECT id, title, team_created, co_created_by FROM exercises WHERE deleted_at IS NULL AND (created_by = ? OR co_created_by = ?)${W} ORDER BY created_at`).bind(staffId, staffId, ...P).all();
-    const packageItems = await db.prepare(`SELECT id, title FROM exercise_packages WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all();
-    const templateItems = await db.prepare(`SELECT key, title FROM pathway_templates WHERE active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all();
-    const formItems = await db.prepare(`SELECT id, title FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P).all();
+    const P2 = since ? [since] : [];
+    const exerciseItems = await db.prepare(`SELECT id, title, team_created, co_created_by FROM exercises WHERE deleted_at IS NULL AND (created_by = ? OR co_created_by = ?)${W} ORDER BY created_at`).bind(staffId, staffId, ...P2).all();
+    const packageItems = await db.prepare(`SELECT id, title FROM exercise_packages WHERE deleted_at IS NULL AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P2).all();
+    const templateItems = await db.prepare(`SELECT key, title FROM pathway_templates WHERE active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P2).all();
+    const formItems = await db.prepare(`SELECT id, title FROM case_event_types WHERE is_system = 0 AND active = 1 AND created_by = ?${W} ORDER BY created_at`).bind(staffId, ...P2).all();
     const prodW = /* @__PURE__ */ __name((key) => contentFormula.production.find((x) => x.key === key)?.weight ?? 0, "prodW");
     const exWeight = prodW("exercises");
     const exerciseList = exerciseItems.results.map((r) => {
@@ -49729,8 +51093,8 @@ async function fetchBaleBotUsername(token, fetchImpl) {
     const body = await res.json().catch(() => ({}));
     const username = body?.result?.username;
     if (typeof username !== "string") return null;
-    const clean2 = username.trim().replace(/^@/, "");
-    return /^[A-Za-z0-9_]{2,64}$/.test(clean2) ? clean2 : null;
+    const clean4 = username.trim().replace(/^@/, "");
+    return /^[A-Za-z0-9_]{2,64}$/.test(clean4) ? clean4 : null;
   } catch {
     return null;
   }
@@ -50390,20 +51754,20 @@ function createSettingsService(deps) {
       return typeof v === "string" ? v.trim().replace(/^@/, "") : "";
     },
     async setBotUsername(username, actor) {
-      const clean2 = username.trim().replace(/^@/, "");
-      if (clean2.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean2)) {
+      const clean4 = username.trim().replace(/^@/, "");
+      if (clean4.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean4)) {
         throw new ConflictError("\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u0628\u0627\u062A \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0644\u0627\u062A\u06CC\u0646\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637 \u0632\u06CC\u0631 \u0627\u0633\u062A (\u06F2 \u062A\u0627 \u06F6\u06F4 \u0646\u0648\u06CC\u0633\u0647)");
       }
       const before = await this.getBotUsername();
-      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean2, actor);
+      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean4, actor);
       await audit.log({
         actorId: actor.staffId,
         action: "settings.bot_username.update",
         resourceType: "settings",
         resourceId: "bot_username",
-        changes: { bot_username: { from: before || null, to: clean2 || null } }
+        changes: { bot_username: { from: before || null, to: clean4 || null } }
       });
-      return clean2;
+      return clean4;
     },
     async getNotifyFlags() {
       const stored = await readAll();
@@ -50458,10 +51822,10 @@ function createSettingsService(deps) {
     async updateScoringConfig(input, actor) {
       const before = await this.getScoringConfig();
       const epoch = epochUtcOfTehranYmd(input.epochYmd);
-      const clean2 = mergeScoringWeights(input.weights);
-      await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean2 }, actor);
-      const changed = Object.keys(clean2).filter(
-        (k) => clean2[k] !== before.weights[k]
+      const clean4 = mergeScoringWeights(input.weights);
+      await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean4 }, actor);
+      const changed = Object.keys(clean4).filter(
+        (k) => clean4[k] !== before.weights[k]
       ).length;
       await audit.log({
         actorId: actor.staffId,
@@ -50969,9 +52333,9 @@ function createBackupService(deps) {
             );
             if (rows.length === 0) break;
             for (const r of rows) {
-              const clean2 = {};
-              for (const [k, v] of Object.entries(r)) clean2[k] = encodeValue(v);
-              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean2)}`;
+              const clean4 = {};
+              for (const [k, v] of Object.entries(r)) clean4[k] = encodeValue(v);
+              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean4)}`;
               emitted += 1;
             }
             if (rows.length < page2) break;
@@ -52706,7 +54070,26 @@ function createServices(deps) {
   });
   const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null });
   const rum = createRumService({ db, logger });
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum };
+  const centerKpi = createCenterKpiService({ db });
+  const networkContent = createNetworkContentService({
+    db,
+    audit,
+    // m6 — دانلود فقط-خواندنی فایل برگزیده‌ها با کلید نود (خاموش اگر env سینک خالی است)
+    fetchCpFile: deps.cpSyncUrl ? (itemId) => {
+      let origin = null;
+      try {
+        origin = new URL(deps.cpSyncUrl).origin;
+      } catch {
+        origin = null;
+      }
+      return fetchCpContentFile({
+        config: { cpOrigin: origin, cpNodeCode: deps.cpNodeCode ?? null, cpNodeKey: deps.cpNodeKey ?? null, cpSyncStaffId: null },
+        networkItemId: itemId
+      }).catch(() => null);
+    } : void 0
+  });
+  const contentScore = createContentScoreService(db, audit);
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, contentScore };
 }
 __name(createServices, "createServices");
 function createApp(deps) {
@@ -52830,6 +54213,9 @@ function createApp(deps) {
   registerSettingsRoutes(app, services.settings);
   registerBackupRoutes(app, services.backup);
   registerRumRoutes(app, services.rum);
+  registerCenterKpiRoutes(app, services.centerKpi);
+  registerNetworkContentRoutes(app, services.networkContent);
+  registerContentScoreRoutes(app, { contentScore: services.contentScore });
   if (FEATURES.apiKeys) registerKeysRoutes(app, services.keys);
   app.get("/api/conflicts", async (c) => {
     const staffId = c.req.query("staff_id") ?? "";
@@ -52964,36 +54350,6 @@ function createDb(d1, logger) {
 }
 __name(createDb, "createDb");
 
-// src/core/audit/writer.ts
-function buildInsert(entry) {
-  return {
-    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes)
-          VALUES (?, ?, ?, ?, ?, ?)`,
-    params: [
-      crypto.randomUUID(),
-      entry.actorId,
-      entry.action,
-      entry.resourceType,
-      entry.resourceId,
-      entry.changes ? JSON.stringify(entry.changes) : null
-    ]
-  };
-}
-__name(buildInsert, "buildInsert");
-function createAuditWriter(db) {
-  return {
-    async log(entry) {
-      const { sql, params } = buildInsert(entry);
-      await db.execute(sql, params);
-    },
-    async logInTransaction(tx, entry) {
-      const { sql, params } = buildInsert(entry);
-      await tx.execute(sql, params);
-    }
-  };
-}
-__name(createAuditWriter, "createAuditWriter");
-
 // src/core/logger/logger.ts
 var LEVEL_WEIGHT = { debug: 10, info: 20, warn: 30, error: 40 };
 function minLevel() {
@@ -53031,17 +54387,17 @@ var CP_SYNC_MIN_INTERVAL_MS = 15 * 6e4;
 var CP_ID_PREFIX = "cp-";
 var CP_SYNC_LOOKBACK_MS = 6e4;
 var CP_SYNC_TIMEOUT_MS = 15e3;
-function clean(v) {
+function clean2(v) {
   const s = v?.trim();
   return s ? s : null;
 }
-__name(clean, "clean");
+__name(clean2, "clean");
 function buildCpSyncConfig(env) {
   return {
-    cpSyncUrl: clean(env.CP_SYNC_URL),
-    cpNodeCode: clean(env.CP_NODE_CODE),
-    cpNodeKey: clean(env.CP_NODE_KEY),
-    cpSyncStaffId: clean(env.CP_SYNC_STAFF_ID)
+    cpSyncUrl: clean2(env.CP_SYNC_URL),
+    cpNodeCode: clean2(env.CP_NODE_CODE),
+    cpNodeKey: clean2(env.CP_NODE_KEY),
+    cpSyncStaffId: clean2(env.CP_SYNC_STAFF_ID)
   };
 }
 __name(buildCpSyncConfig, "buildCpSyncConfig");
@@ -53072,7 +54428,7 @@ function buildRequestUrl(baseUrl, sinceIso) {
 }
 __name(buildRequestUrl, "buildRequestUrl");
 async function readLastSyncAt(db) {
-  return readSettingsIso(db, CP_SYNC_SETTINGS_KEY);
+  return readSettingsIso2(db, CP_SYNC_SETTINGS_KEY);
 }
 __name(readLastSyncAt, "readLastSyncAt");
 async function writeLastSyncAt(db, iso) {
@@ -53084,7 +54440,7 @@ async function writeLastSyncAt(db, iso) {
   );
 }
 __name(writeLastSyncAt, "writeLastSyncAt");
-async function readSettingsIso(db, key) {
+async function readSettingsIso2(db, key) {
   const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
   if (!row) return null;
   try {
@@ -53094,7 +54450,7 @@ async function readSettingsIso(db, key) {
   }
   return null;
 }
-__name(readSettingsIso, "readSettingsIso");
+__name(readSettingsIso2, "readSettingsIso");
 async function stampCpSyncAttempt(db, at = /* @__PURE__ */ new Date()) {
   await db.execute(
     `INSERT INTO settings (key, value, updated_by, updated_at)
@@ -53117,7 +54473,7 @@ async function cpSyncOpportunistic(deps) {
     return { status: "skipped" };
   }
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const last = await readSettingsIso(db, CP_SYNC_ATTEMPT_KEY);
+  const last = await readSettingsIso2(db, CP_SYNC_ATTEMPT_KEY);
   if (!shouldAttemptCpSync(last, now(), deps.minIntervalMs ?? CP_SYNC_MIN_INTERVAL_MS)) {
     return { status: "skipped" };
   }
@@ -53230,6 +54586,247 @@ async function syncCpAnnouncements(deps) {
   }
 }
 __name(syncCpAnnouncements, "syncCpAnnouncements");
+
+// src/application/cp-report/ingest.ts
+var CP_REPORT_PUSH_KEY = "cp_report.last_push_at";
+var CP_REPORT_ATTEMPT_KEY = "cp_report.last_attempt_at";
+var CP_REPORT_SEQ_KEY = "cp_report.last_seq";
+var CP_REPORT_MIN_INTERVAL_MS = 24 * 60 * 6e4;
+var RUM_SAMPLE_CAP = 5e3;
+var CP_REPORT_TIMEOUT_MS = 15e3;
+function clean3(v) {
+  const s = v?.trim();
+  return s ? s : null;
+}
+__name(clean3, "clean");
+function ingestUrlFrom(baseUrl) {
+  const s = clean3(baseUrl);
+  if (!s) return null;
+  try {
+    return new URL(s).origin + "/api/node/ingest";
+  } catch {
+    return null;
+  }
+}
+__name(ingestUrlFrom, "ingestUrlFrom");
+function buildCpReportConfig(env) {
+  return {
+    ingestUrl: ingestUrlFrom(env.CP_SYNC_URL),
+    cpNodeCode: clean3(env.CP_NODE_CODE),
+    cpNodeKey: clean3(env.CP_NODE_KEY)
+  };
+}
+__name(buildCpReportConfig, "buildCpReportConfig");
+async function readSettingsRaw(db, key) {
+  const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
+  return row?.value ?? null;
+}
+__name(readSettingsRaw, "readSettingsRaw");
+async function readSettingsIso3(db, key) {
+  const raw2 = await readSettingsRaw(db, key);
+  if (!raw2) return null;
+  try {
+    const parsed = JSON.parse(raw2);
+    if (typeof parsed === "string" && parsed.length > 0) return parsed;
+  } catch {
+  }
+  return null;
+}
+__name(readSettingsIso3, "readSettingsIso");
+async function readSettingsInt(db, key) {
+  const raw2 = await readSettingsRaw(db, key);
+  if (!raw2) return null;
+  try {
+    const parsed = JSON.parse(raw2);
+    if (typeof parsed === "number" && Number.isFinite(parsed)) return parsed;
+  } catch {
+  }
+  return null;
+}
+__name(readSettingsInt, "readSettingsInt");
+async function writeSettings2(db, key, jsonValue, nowIso) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, 'cp-report', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-report', updated_at = excluded.updated_at`,
+    [key, jsonValue, nowIso]
+  );
+}
+__name(writeSettings2, "writeSettings");
+function shouldPushCpReport(lastAttemptIso, now, minIntervalMs = CP_REPORT_MIN_INTERVAL_MS) {
+  if (!lastAttemptIso) return true;
+  const t = Date.parse(lastAttemptIso);
+  if (Number.isNaN(t)) return true;
+  return now.getTime() - t >= minIntervalMs;
+}
+__name(shouldPushCpReport, "shouldPushCpReport");
+async function stampCpReportAttempt(db, at = /* @__PURE__ */ new Date()) {
+  await writeSettings2(db, CP_REPORT_ATTEMPT_KEY, JSON.stringify(at.toISOString()), at.toISOString());
+}
+__name(stampCpReportAttempt, "stampCpReportAttempt");
+function percentile75(sorted) {
+  if (sorted.length === 0) return null;
+  const idx = Math.ceil(0.75 * sorted.length) - 1;
+  return sorted[Math.min(Math.max(idx, 0), sorted.length - 1)] ?? null;
+}
+__name(percentile75, "percentile75");
+var RUM_SAMPLE_SQL = `SELECT metric, value FROM rum_events
+  WHERE ts >= ? AND metric IN ('LCP','CLS','INP') ORDER BY metric, value LIMIT ${RUM_SAMPLE_CAP}`;
+async function collectKpiBucket(db, now = /* @__PURE__ */ new Date()) {
+  const nowIso = now.toISOString();
+  const day = tehranDayRange(tehranTodayYmd(now));
+  const [students, appts, overdue, errs, rum] = await Promise.all([
+    db.queryOne(
+      `SELECT COALESCE(SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END), 0) AS a,
+              COALESCE(SUM(CASE WHEN active = 0 THEN 1 ELSE 0 END), 0) AS ar
+       FROM students`
+    ),
+    db.queryOne(
+      `SELECT COALESCE(SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END), 0) AS t,
+              COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) AS c
+       FROM appointments WHERE start_at >= ? AND start_at <= ?`,
+      [day.start, day.end]
+    ),
+    db.queryOne(
+      `SELECT COUNT(*) AS c
+       FROM appointment_students aps JOIN appointments a ON a.id = aps.appointment_id
+       WHERE aps.attendance = 'pending' AND a.end_at < ?`,
+      [nowIso]
+    ),
+    db.queryOne(
+      `SELECT COALESCE(SUM(CASE WHEN occurred_at >= datetime('now', '-1 hour') THEN 1 ELSE 0 END), 0) AS h1,
+              COALESCE(SUM(CASE WHEN occurred_at >= datetime('now', '-24 hours') THEN 1 ELSE 0 END), 0) AS h24
+       FROM client_errors WHERE occurred_at >= datetime('now', '-24 hours')`
+    ),
+    (async () => {
+      const sinceIso = new Date(now.getTime() - 24 * 60 * 6e4).toISOString();
+      const [rows, count] = await Promise.all([
+        db.query(RUM_SAMPLE_SQL, [sinceIso]),
+        db.queryOne("SELECT COUNT(*) AS c FROM rum_events WHERE ts >= ?", [sinceIso])
+      ]);
+      const byMetric = /* @__PURE__ */ new Map();
+      for (const r of rows) {
+        const arr = byMetric.get(r.metric) ?? [];
+        arr.push(Number(r.value));
+        byMetric.set(r.metric, arr);
+      }
+      return { byMetric, count: count?.c ?? 0 };
+    })()
+  ]);
+  const p75Of = /* @__PURE__ */ __name((m) => {
+    const arr = rum.byMetric.get(m);
+    if (!arr || arr.length === 0) return null;
+    const v = percentile75(arr);
+    return v === null ? null : m === "CLS" ? Math.round(v * 1e3) / 1e3 : Math.round(v);
+  }, "p75Of");
+  return {
+    students_active: students?.a ?? 0,
+    students_archived: students?.ar ?? 0,
+    appointments_today: appts?.t ?? 0,
+    appointments_cancelled_today: appts?.c ?? 0,
+    attendance_pending_overdue: overdue?.c ?? 0,
+    client_errors_1h: errs?.h1 ?? 0,
+    client_errors_24h: errs?.h24 ?? 0,
+    rum_events_24h: rum.count,
+    rum_lcp_p75: p75Of("LCP"),
+    rum_cls_p75: p75Of("CLS"),
+    rum_inp_p75: p75Of("INP")
+  };
+}
+__name(collectKpiBucket, "collectKpiBucket");
+async function cpReportOpportunistic(deps) {
+  const { db, logger, config } = deps;
+  if (!config.ingestUrl || !config.cpNodeCode || !config.cpNodeKey) {
+    return { status: "skipped" };
+  }
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const last = await readSettingsIso3(db, CP_REPORT_ATTEMPT_KEY);
+  if (!shouldPushCpReport(last, now(), deps.minIntervalMs ?? CP_REPORT_MIN_INTERVAL_MS)) {
+    return { status: "skipped" };
+  }
+  return pushCpReport({ db, logger, config, binding: deps.binding, fetchFn: deps.fetchFn, now: deps.now });
+}
+__name(cpReportOpportunistic, "cpReportOpportunistic");
+async function pushCpReport(deps) {
+  const { db, logger, config } = deps;
+  const log = logger.child("cp-report");
+  if (!config.ingestUrl || !config.cpNodeCode || !config.cpNodeKey) {
+    return { status: "disabled" };
+  }
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  try {
+    const lastIso = await readSettingsIso3(db, CP_REPORT_ATTEMPT_KEY);
+    if (!shouldPushCpReport(lastIso, now(), deps.minIntervalMs ?? CP_REPORT_MIN_INTERVAL_MS)) {
+      return { status: "skipped" };
+    }
+    await stampCpReportAttempt(db, now());
+    const at = now();
+    const atIso = at.toISOString();
+    const kpi = await collectKpiBucket(db, at);
+    const lastSeq = await readSettingsInt(db, CP_REPORT_SEQ_KEY) ?? 0;
+    const seq = lastSeq + 1;
+    const body = {
+      events: [
+        {
+          seq,
+          ts: atIso,
+          level: "info",
+          category: "data",
+          event: "cp_report.kpi_daily",
+          payload: kpi
+        }
+      ],
+      health: {
+        captured_at: atIso,
+        reported_version: APP_VERSION,
+        outbox_depth: null,
+        unsynced_ops: null,
+        error_rate_1h: null,
+        error_rate_24h: null,
+        sync_lag_s: null,
+        extras: null
+      }
+    };
+    const init = {
+      method: "POST",
+      headers: {
+        "X-CP-Node-Code": config.cpNodeCode,
+        Authorization: `Bearer ${config.cpNodeKey}`,
+        "X-CP-Node-Version": APP_VERSION,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(CP_REPORT_TIMEOUT_MS)
+    };
+    const res = deps.binding ? await deps.binding.fetch(config.ingestUrl, init) : await (deps.fetchFn ?? fetch)(config.ingestUrl, init);
+    if (!res.ok) {
+      let bodyHead = "";
+      try {
+        bodyHead = (await res.text()).slice(0, 180);
+      } catch {
+        bodyHead = "";
+      }
+      log.warn("cp_report.push_failed", {
+        http: res.status,
+        detail: "cp_http_error",
+        url: config.ingestUrl,
+        body_head: bodyHead
+      });
+      return { status: "error", detail: `http_${res.status}` };
+    }
+    await writeSettings2(db, CP_REPORT_PUSH_KEY, JSON.stringify(atIso), atIso);
+    await writeSettings2(db, CP_REPORT_SEQ_KEY, JSON.stringify(seq), atIso);
+    log.info("cp_report.push", { seq, students_active: kpi.students_active });
+    return { status: "ok", applied: 1, seq };
+  } catch (err) {
+    log.warn("cp_report.push_failed", {
+      detail: "exception",
+      error: err instanceof Error ? err.message : String(err)
+    });
+    return { status: "error", detail: "exception" };
+  }
+}
+__name(pushCpReport, "pushCpReport");
 
 // src/index.ts
 function buildEnv(env) {
@@ -53348,24 +54945,90 @@ function probeCpSync(env, ctx) {
   );
 }
 __name(probeCpSync, "probeCpSync");
+async function runCpReportCycle(env) {
+  const db = createDb(env.DB);
+  const logger = createLogger("sync");
+  const result = await pushCpReport({
+    db,
+    logger,
+    config: buildCpReportConfig(env),
+    binding: env.CP ?? null
+  });
+  logger.info("cp_report.cycle.done", { status: result.status, seq: result.seq ?? 0 });
+}
+__name(runCpReportCycle, "runCpReportCycle");
+var cpReportProbeAt = 0;
+function probeCpReport(env, ctx) {
+  const t = Date.now();
+  if (t - cpReportProbeAt < 6e4) return;
+  cpReportProbeAt = t;
+  ctx.waitUntil(
+    cpReportOpportunistic({
+      db: createDb(env.DB),
+      logger: createLogger("sync"),
+      config: buildCpReportConfig(env),
+      binding: env.CP ?? null
+    }).catch(() => void 0)
+  );
+}
+__name(probeCpReport, "probeCpReport");
+async function runCpContentCycleWrap(env) {
+  const db = createDb(env.DB);
+  const logger = createLogger("sync");
+  const result = await runCpContentCycle({
+    db,
+    logger,
+    config: buildCpContentConfig(env),
+    binding: env.CP ?? null
+  });
+  logger.info("cp_content.cycle.done", {
+    status: result.status,
+    pushed: result.pushed ?? 0,
+    applied: result.applied ?? 0
+  });
+}
+__name(runCpContentCycleWrap, "runCpContentCycleWrap");
+var cpContentProbeAt = 0;
+function probeCpContent(env, ctx) {
+  const t = Date.now();
+  if (t - cpContentProbeAt < 6e4) return;
+  cpContentProbeAt = t;
+  ctx.waitUntil(
+    cpContentOpportunistic({
+      db: createDb(env.DB),
+      logger: createLogger("sync"),
+      config: buildCpContentConfig(env),
+      binding: env.CP ?? null
+    }).catch(() => void 0)
+  );
+}
+__name(probeCpContent, "probeCpContent");
 var src_default = {
   async fetch(request, env, ctx) {
     probeCpSync(env, ctx);
+    probeCpReport(env, ctx);
+    probeCpContent(env, ctx);
     const db = createDb(env.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger("worker");
+    const cpContentCfg = buildCpContentConfig(env);
     const app = createApp({
       db,
       audit,
       logger,
       teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-      ...buildEnv(env)
+      ...buildEnv(env),
+      cpSyncUrl: env.CP_SYNC_URL ?? null,
+      cpNodeCode: cpContentCfg.cpNodeCode,
+      cpNodeKey: cpContentCfg.cpNodeKey
     });
     return app.fetch(request, env, ctx);
   },
   async scheduled(event, env, ctx) {
     if (event.cron === CP_SYNC_CRON) {
       ctx.waitUntil(runCpSyncCycle(env));
+      ctx.waitUntil(runCpReportCycle(env));
+      ctx.waitUntil(runCpContentCycleWrap(env));
       return;
     }
     if (event.cron === DIGEST_CRON) {

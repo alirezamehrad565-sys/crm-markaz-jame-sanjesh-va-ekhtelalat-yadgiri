@@ -1,0 +1,72 @@
+/* ═══ skins/scan.css — پوستهٔ «رصدخانهٔ شب» برای حملهٔ جاسوس‌ها (G7) ═══
+   لایهٔ هنری روی play.css: آسمان شب و ستارهٔ نقطه‌ای، رادار تیک‌دار،
+   تایلِ پنجرهٔ گنبدی با هالهٔ Teal، گزارشِ کهربایی. فقط گرادیان/سایه/
+   بورد؛ هیچ keyframes و انیمیشنی — جنبش فقط از fx (§۹)؛ کف لمس ۶۴px؛
+   فونت ≥۱۲px؛ RTL؛ مبنا افقی. همهٔ خانه‌ها هم‌شکل‌اند — کروم نشانه‌ای
+   از «کدام جاسوس» ندارد. */
+
+/* شبِ بدنه — قاب کرم بیرون نزند */
+body:has(.play-skin--scan){background:radial-gradient(130% 100% at 50% -8%,#12374A,#081C2A 60%,#05141F)}
+
+/* متغیرهای محلی */
+.play-skin--scan{--sk-night:#081C2A;--sk-glow:#7FD9CF;--sk-halo:#7FD9CF59;--sk-pale:#F5F0E5}
+
+/* آسمان هر سه شِمال — ستاره دو لایهٔ تایل با گام متفاوت تا تصادفی دیده شود */
+.play-skin--scan .play-stage{position:relative;overflow:hidden;background-color:var(--sk-night);background-image:radial-gradient(#F5F0E5CC 1px,#0000 1.9px),radial-gradient(#7FD9CF73 1px,#0000 1.9px),radial-gradient(95% 70% at 50% 0%,#18465E80,#0000 70%);background-size:118px 92px,71px 57px,100% 100%;background-position:11px 7px,43px 31px,0 0}
+
+/* رادار تیک‌دار ایستا — تیک conic، حلقهٔ radial تکرارشونده؛ RT پاک می‌ماند */
+.play-skin--scan .play-stage--scan::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 54%,#7FD9CF21,#0000 44%),repeating-radial-gradient(circle at 50% 54%,#0000 0 46px,#7FD9CF1F 46px 49px),repeating-conic-gradient(at 50% 54%,#7FD9CF1A 0 1deg,#0000 1deg 15deg);pointer-events:none}
+
+/* قاب گنبد — کهربای آژیر نرم‌تر + ویگنت درونی */
+.play-skin--scan .play-stage--scan{box-shadow:inset 0 0 0 3px #E4AA4661,inset 0 0 0 6px #081C2AEB,inset 0 0 46px #040E169E,0 16px 40px #030A1080}
+
+/* گفتار روی شب کرم می‌ماند (§۲) */
+.play-skin--scan :is(.play-line,.play-intro__name,.play-scan__prompt,.play-debrief__line){color:var(--sk-pale)}
+.play-skin--scan :is(.play-muted,.play-debrief__muted){color:#F5F0E5BF}
+.play-skin--scan .play-intro__remain{color:var(--sk-glow)}
+
+/* دریای آموزش زیر شب — رنگ‌ها عوض نمی‌شوند، فقط تیره می‌شوند */
+.play-skin--scan .play-scene{opacity:.8}
+.play-skin--scan .play-scene::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,#081C2A26,#081C2ACC)}
+/* قهرمان بالای پوشش شب — ماهی کرم هرگز زیر گرادیان گم نمی‌شود (رفع P1 ممیزی فازها) */
+.play-skin--scan .play-scene__hero{z-index:1;filter:drop-shadow(0 4px 10px rgba(3,10,16,.55))}
+
+/* پنجرهٔ گنبدی — طاق بالا، هالهٔ Teal؛ ابعاد لمسی پایه دست نمی‌خورد */
+.play-skin--scan .play-scan__tile{border-color:var(--sk-halo);border-radius:24px 24px 13px 13px;background:radial-gradient(130% 80% at 50% -4%,#7FD9CF38,#0000 58%),linear-gradient(180deg,#FCF8EE,#DCE7E2);box-shadow:0 0 0 1px #7FD9CF4D,0 6px 16px #030C1480,inset 0 0 14px #7FD9CF24;transition:border-color .16s,background .16s,box-shadow .16s,transform .16s}
+
+/* گرفته‌شده — حلقهٔ کهربا روشن‌تر تا روی شب بخواند */
+.play-skin--scan .play-scan__tile--catch{border-color:var(--p-amber);background:radial-gradient(130% 80% at 50% -4%,#E4AA4652,#0000 60%),#FDF3DC;box-shadow:0 0 0 3px #E4AA4680,0 0 22px #E4AA4654}
+
+/* «گزارش بده!» — گیرِ کهربایی با تیزهٔ چراغ اضطراری گنبد */
+.play-skin--scan .play-scan__confirm{background:linear-gradient(180deg,#F3C25E,#E4AA46 56%,#C88E2C);color:#10222C;border:2px solid #FFF0CD8C;box-shadow:0 8px 22px #E4AA464D,inset 0 -3px 0 #7A540E61}
+
+/* شیار زمان موج — عرض را فقط JS inline می‌گذارد */
+.play-skin--scan .play-scan__timer{background:#7FD9CF29;box-shadow:inset 0 1px 3px #040E1699}
+.play-skin--scan .play-scan__timer>span{background:linear-gradient(90deg,#7FD9CF,#E4AA46 80%,#D96C6C);box-shadow:0 0 10px #7FD9CF59}
+
+/* کروم روی شیشهٔ شب */
+.play-skin--scan .play-progress{background:#7FD9CF26;box-shadow:inset 0 1px 3px #040E168C}
+.play-skin--scan .play-progress__bar{background:linear-gradient(to left,#7FD9CF,#438C89)}
+.play-skin--scan .play-bubble{background:#0A202EF2;color:var(--sk-pale);border-color:var(--sk-halo)}
+.play-skin--scan .play-bubble--ok{border-color:#E4AA468C}
+.play-skin--scan .play-bubble--calm{background:#0E2C3EF2}
+.play-skin--scan .play-basket{background:#0A202EEB;color:var(--sk-pale);box-shadow:0 2px 10px #030A1080,inset 0 0 0 1.5px var(--sk-halo)}
+
+/* شروع مأموریت — کهربا؛ کار بعدی کودک رنگ «گزارش» را می‌خواند */
+.play-skin--scan .play-btn--intro{background:linear-gradient(180deg,#F3C25E,#E4AA46 60%,#C88E2C);color:#10222C;box-shadow:0 10px 26px #E4AA4647}
+
+/* پایان — ستاره‌ها و خلاصه روی شب کرم می‌شوند */
+.play-skin--scan .play-stars__star path{stroke:#F5F0E5D9}
+.play-skin--scan .play-debrief{background:#438C8938;border-color:#7FD9CF66}
+
+/* عمودی — بهبود؛ صحنه نفس می‌گیرد */
+@media (orientation:portrait){.play-skin--scan .play-stage{min-height:420px}}
+
+/* تبلت افقی — سقف ۶۴۰px پایه برای موج پهن‌تر اسکن باز می‌شود */
+@media (min-width:700px) and (orientation:landscape){.play-skin--scan .play-root{max-width:800px}.play-skin--scan .play-scan__tile{min-height:88px}}
+
+/* لنداسکیپ باریک موبایل (زیر سقف ۷۰۰px پایه) — سقف تایل کم می‌شود تا گرید سرریز نکند؛ کف ۶۴px لمس می‌ماند */
+@media (orientation:landscape) and (max-width:699px){.play-skin--scan .play-stage{padding:8px 10px}.play-skin--scan .play-scan{gap:8px}.play-skin--scan .play-scan__grid{gap:8px;grid-template-columns:repeat(var(--scan-cols,4),minmax(64px,80px))}.play-skin--scan .play-scan__prompt{font-size:15px}.play-skin--scan .play-scan__timer{width:min(58%,250px)}}
+
+/* کاهش‌جنبش — گذارهای پوسته هم خاموش می‌شوند */
+@media (prefers-reduced-motion:reduce){.play-skin--scan :is(.play-scan__tile,.play-scan__confirm,.play-btn--intro,.play-progress__bar,.play-bubble){transition:none}.play-skin--scan .play-scan__tile:active{transform:none}}
