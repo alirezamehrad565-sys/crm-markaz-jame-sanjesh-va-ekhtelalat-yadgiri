@@ -117,8 +117,10 @@ const NAV = [
   // ۱.۲۵.۵۳ — «کتابخانهٔ شبکه» از منو قطع شد؛ شارژ محتوا CP↔سامانه کاملاً نامرئی و خودکار سمت سرور می‌ماند (خواست کارفرما)
   { hash: '#/special-needs', label: 'نیازهای ویژه', icon: 'clip', group: 'مرکز', roles: ['manager', 'secretary'] },
   { hash: '#/settings', label: 'تنظیمات', icon: 'settings', group: 'مرکز', roles: ['manager', 'secretary'] },
-  { hash: '#/backup', label: 'پشتیبان‌گیری', icon: 'save', group: 'مرکز', roles: ['manager'] }
+  { hash: '#/backup', label: 'پشتیبان‌گیری', icon: 'save', group: 'مرکز', roles: ['manager'] },
   // ۱.۲۵.۵۳ — لینک بیرونی «کنترل‌پلین شبکه» از منو قطع شد (خواست کارفرما)؛ سمت CP بی‌تغییر می‌ماند
+  // بازاعمال ۱.۲۵.۵۱ — جای کنترل‌پلین: گزارش باگ سامانه به پشتیبانی CP (همهٔ همکاران)
+  { hash: '#/bug-report', label: 'گزارش باگ', icon: 'send', group: 'مرکز' }
 ];
 
 const GROUP_ORDER = ['امروز', 'برنامه‌ریزی', 'دانش‌آموزان', 'ارزیابی و درمان', 'مرکز']; // — نام روایی
@@ -447,6 +449,7 @@ register('#/case-event-types', { title: 'فرم‌ها و پرسش‌نامه‌
 register('#/special-needs', { title: 'نیازهای ویژه', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/special-needs.js'), 'renderSpecialNeeds', '#/special-needs')) }); // لایهٔ دوم RBAC
 register('#/center-kpi', { title: 'شاخص‌های مرکز', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/center-kpi.js'), 'renderCenterKpi', '#/center-kpi'), 'شاخص‌های مرکز فقط برای دفتر مرکز (مدیر و منشی) فعال است.') }); // ۱.۲۵.۴۶ — تابلوی کیفیت مداخله/پرونده/نوبت
 // ۱.۲۵.۵۳ — روت «#/network-library» حذف شد؛ درخواست مستقیم این هش به نمای ۴۰۴ می‌رود
+register('#/bug-report', { title: 'گزارش باگ', render: lazyView(() => import('./views/bug-report.js'), 'renderBugReport', '#/bug-report') }); // بازاعمال ۱.۲۵.۵۱ — همهٔ همکاران می‌توانند باگ بفرستند
 
 // مسیر ناشناخته به‌جای ریدایرکت بی‌صدا، نمای ۴۰۴ را رندر می‌کند (hash دست‌نخورده می‌ماند)
 registerNotFound({ title: 'صفحه پیدا نشد', render: renderNotFound });
