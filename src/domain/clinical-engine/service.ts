@@ -545,6 +545,19 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     return result;
   }
 
+  /* ۱.۲۵.۵۹ — کانون‌های پایش خانه: سازه‌های درگیرِ آخرین جمع‌بندی تشخیصی (قابل‌توجه/هم‌گرا-بالا)
+     مرتب‌شده برمی‌گردد تا هنگام ارسال «پایش در خانه نسخهٔ ۲» در رویداد اسنپ‌شات شود و
+     فرم خانواده با تقدم همان کانون‌ها رندر شود (تزریق از روت مرکزی به case-events). */
+  async function homeMonitorFocusOf(studentId: string, actor: AuthContext) {
+    const result = await getCaseFormulation(studentId, actor);
+    const items = result.constructs
+      .filter((c) => c.level === 'قابل‌توجه' || c.level === 'هم‌گرا-بالا')
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 4)
+      .map((c) => ({ key: c.key, titleFa: c.titleFa, level: c.level, score: c.score }));
+    return { generatedAt: result.generatedAt, coherence: result.coherence, items };
+  }
+
   function sessionRowToRecord(r: PathSessionRow): PathSessionRecord {
     const status: PathwaySessionStatus = PATHWAY_SESSION_STATUSES.includes(r.status as PathwaySessionStatus)
       ? (r.status as PathwaySessionStatus)
@@ -1548,7 +1561,7 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     };
   }
 
-  return { getInsights, getCaseFormulation, getChecklistPlan, listPaths, createPath, decidePath, getPath, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits }; // پراپ‌های پیشروی · هدف مسیر · اعتبارسنجی · صورت‌بندی مورد (۱.۲۵.۰۵)
+  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits }; // پراپ‌های پیشروی · هدف مسیر · اعتبارسنجی · صورت‌بندی مورد (۱.۲۵.۰۵)
 }
 
 export type ClinicalEngineService = ReturnType<typeof createClinicalEngineService>;

@@ -1,6 +1,7 @@
 export interface FillFormItem {
   key: string;
   label: string;
+  kind?: 'scale' | 'single' | 'longtext'; // ۱.۲۵.۵۹ — longtext به‌صورت textarea اختیاری رندر می‌شود
   scaleMax?: number;
   scoredOptions?: { label: string }[];
   scaleLabels?: string[];
@@ -21,6 +22,7 @@ export interface FillFormModel {
   audience?: 'family' | 'teacher' | 'both' | null;
   description?: string | null;
   teacherLabel?: string | null;
+  focusNote?: string | null; // ۱.۲۵.۵۹ — کانون‌های درگیر جمع‌بندی؛ در بنر بالای فرم
 }
 
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
@@ -34,7 +36,8 @@ const SCALE_LABELS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'
 export function renderFillFormPage(model: FillFormModel, token: string): string {
   const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   let counter = 0;
-  const total = model.sections.reduce((sum, s) => sum + s.items.length, 0);
+  /* ۱.۲۵.۵۹ — فقط گویه‌های نمره‌دار در شمارندهٔ پیشرفت؛ فیلد آزاد اختیاری نمی‌آید */
+  const total = model.sections.reduce((sum, s) => sum + s.items.filter((f) => f.kind !== 'longtext').length, 0);
   const isTeacherForm = model.audience === 'teacher' || !!model.teacherLabel;
   const headTitle = isTeacherForm ? 'پرسش‌نامهٔ دانش‌آموز شما — فرم معلم' : 'پرسش‌نامهٔ فرزند شما';
   const headSub = model.studentName
@@ -43,6 +46,13 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
   const sections = model.sections.map((sec) => {
     const items = sec.items.map((f) => {
       counter += 1;
+      const qLabel = isTeacherForm && f.teacherLabel ? f.teacherLabel : f.label;
+      const qHint = isTeacherForm && f.teacherHint ? f.teacherHint : f.hint;
+      if (f.kind === 'longtext') {
+        /* ۱.۲۵.۵۹ — فیلد آزاد اختیاری؛ از شمارندهٔ پیشرفت خارج و خالی ماندنش خطا نیست */
+        counter -= 1;
+        return `<div class="item item--free"><div class="q">${esc(qLabel)}</div>${qHint ? `<div class="hint">${esc(qHint)}</div>` : ''}<textarea class="free" name="${esc(f.key)}" maxlength="1500" rows="3" placeholder="اختیاری — اگر چیزی برای گفتن دارید بنویسید"></textarea></div>`;
+      }
       let opts: string[] = [];
       if (f.scoredOptions && f.scoredOptions.length > 0) {
         opts = f.scoredOptions.map((o, idx) =>
@@ -62,8 +72,6 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
           );
         }
       }
-      const qLabel = isTeacherForm && f.teacherLabel ? f.teacherLabel : f.label;
-      const qHint = isTeacherForm && f.teacherHint ? f.teacherHint : f.hint;
       return `<div class="item" data-key="${esc(f.key)}"><div class="q">${faNum(counter)}. ${esc(qLabel)}</div>${qHint ? `<div class="hint">${esc(qHint)}</div>` : ''}<div class="opts">${opts.join('')}</div></div>`;
     }).join('');
     const head = sec.title
@@ -113,6 +121,12 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
          border: 1px solid #E5DCCB; border-radius: 10px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
   .opt--wide { width: 100%; align-items: flex-start; }
   .opt:has(input:checked) { background: #D9EDF7; border-color: #229ED9; }
+  .item--free .q { font-size: 13.5px; }
+  textarea.free { width: 100%; border: 1px solid #E5DCCB; border-radius: 10px; padding: 10px 12px;
+                  font-family: inherit; font-size: 13.5px; line-height: 1.9; resize: vertical; background: #FDFCF9; }
+  textarea.free:focus { outline: 2px solid #229ED9; outline-offset: -1px; }
+  .focus { background: #FFF7E0; border: 1px solid #E8D48B; color: #6B5416; border-radius: 12px;
+           padding: 11px 14px; margin-bottom: 14px; font-size: 13px; line-height: 1.9; }
   .btn { display: block; width: 100%; border: 0; background: #229ED9; color: #fff;
          border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 700; cursor: pointer;
          font-family: inherit; margin-top: 6px; }
@@ -137,6 +151,7 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
     <div class="progress__bar"><div class="progress__fill" id="progFill"></div></div>
   </div>
   <div class="notice">این فرم تشخیص نیست؛ فقط به تصمیم‌گیری درمانگر کمک می‌کند.</div>
+  ${model.focusNote ? `<div class="focus">🎯 کانون‌های این دوره از آخرین جمع‌بندی پرونده: <b>${esc(model.focusNote)}</b> — همین بخش‌ها در ابتدای فرم آمده‌اند.</div>` : ''}
   <form id="f" novalidate>
     ${sections}
     <button class="btn" type="submit">ارسال پاسخ‌ها</button>
@@ -171,8 +186,13 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
       var name = radio.name;
       if (data.get(name)) answers[name] = Number(data.get(name));
     });
+    document.querySelectorAll('#f textarea.free').forEach(function (ta) {
+      var v = (ta.value || '').trim();
+      if (v) answers[ta.name] = v;
+    });
     var missing = 0;
     document.querySelectorAll('#f .item').forEach(function (item) {
+      if (item.classList.contains('item--free')) return; /* ۱.۲۵.۵۹ — فیلد آزاد اختیاری است */
       var has = item.querySelector('input[type=radio]:checked');
       item.classList.toggle('is-missing', !has);
       if (!has) missing += 1;

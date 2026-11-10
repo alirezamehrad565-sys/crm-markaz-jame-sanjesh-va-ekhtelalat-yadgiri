@@ -489,6 +489,40 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
       body.appendChild(el('div', { class: 'badge badge--error', style: { fontSize: 'var(--fs-2xs)', padding: '7px 10px', marginBottom: '12px', whiteSpace: 'normal', textAlign: 'right', lineHeight: 'var(--lh-body)' } },
         `آیتم بحرانی (${fa(a.flags.length)}): ${a.flags.map((fl) => fl.label).join('، ')}`));
     }
+
+    /* ۱.۲۵.۵۹ — پایش در خانهٔ نسخهٔ ۲: «هم‌سویی با جمع‌بندی تشخیصی» — سازه‌های درگیرِ
+       آخرین جمع‌بندی (اسنپ‌شاتِ لحظهٔ ارسال) کنار نمرهٔ همان کانون در همین پایش می‌نشینند */
+    if (event.typeKey === 'ce-home-monitor-v2') {
+      let focus = null;
+      try {
+        const raw = event.payload?.['_monitor_focus']?.value;
+        if (raw) focus = JSON.parse(String(raw));
+      } catch { /* اسنپ‌شات معیوب = بدون بلوک هم‌سویی */ }
+      if (focus && Array.isArray(focus.items) && focus.items.length > 0) {
+        const subById = new Map((a.subscaleScores ?? []).map((s) => [s.id, s]));
+        const rows = focus.items.map((f) => {
+          const sub = subById.get(f.key);
+          const verdict = !sub
+            ? { label: 'در این دوره پاسخ نیامده', cls: 'badge--neutral' }
+            : sub.color === 'danger'
+              ? { label: 'هم‌سو — خانه هم پررنگ گزارش کرده', cls: 'badge--error' }
+              : sub.color === 'warn'
+                ? { label: 'در حد گزارش — قابل قبول', cls: 'badge--warning' }
+                : { label: 'خانه آرام‌تر گزارش می‌کند — بازبینی جمع‌بندی', cls: 'badge--success' };
+          return el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', padding: '7px 0', borderBottom: '1px solid var(--line)' } },
+            el('b', { style: { flex: '1', minWidth: '0', fontSize: 'var(--fs-xs)' } }, f.titleFa ?? f.key),
+            el('span', { class: 'badge badge--neutral' }, `جمع‌بندی: ${f.level}`),
+            sub ? el('span', { class: 'cell-sub' }, `${fa(sub.score)} از ${fa(sub.max)}${sub.band ? ` — ${sub.band}` : ''}`) : null,
+            el('span', { class: `badge ${verdict.cls}` }, verdict.label)
+          );
+        });
+        body.appendChild(el('div', { style: { background: 'var(--surface-2)', borderRadius: 'var(--radius-md)', padding: '12px 14px', marginBottom: '12px' } },
+          el('b', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' } }, icon('target', 14), 'هم‌سویی با جمع‌بندی تشخیصی'),
+          el('div', { class: 'cell-sub', style: { marginBottom: '6px' } }, focus.coherence ? `انسجام آخرین جمع‌بندی: ${focus.coherence}` : null),
+          ...rows
+        ));
+      }
+    }
   }
 
   if (event.status === 'pending_family') {
@@ -507,7 +541,7 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
       if (c && c.ok) wEng = c;
     } catch {}
   }
-  const keys = Object.keys(payload).filter((k) => k !== 'engine_output' && payload[k] && String(payload[k].value ?? '').length > 0);
+  const keys = Object.keys(payload).filter((k) => k !== 'engine_output' && !k.startsWith('_') && payload[k] && String(payload[k].value ?? '').length > 0); /* ۱.۲۵.۵۹: کلیدهای رزرو (_) نمایشی نیستند */
   if (wEng) {
     const wSection = wechslerEventAnalysisSection(wEng);
     if (wSection) body.appendChild(wSection);

@@ -125,11 +125,14 @@ var SDQ_PROS_WEAK_MAX = 4;
 var TOOL_SOURCE = {
   "ce-snap-iv-p-v1": "parent",
   "sdq-parent": "parent",
+  "ce-sdq-p-v1": "parent",
   "ce-scared-p-v1": "parent",
   "ce-dcdq-v1": "parent",
   "achenbach-practical": "parent",
   "home_behavior": "parent",
+  "ce-home-monitor-v2": "parent",
   "ce-anamnesis-v2": "parent",
+  "ce-anamnesis-v3": "parent",
   "ce-snap-iv-t-v1": "teacher",
   "ce-sdq-t-v1": "teacher",
   "teacher-classroom": "teacher",
@@ -143,6 +146,7 @@ var TOOL_SOURCE = {
   "ce-rehab-cog-v1": "examiner",
   "ce-rehab-motor-v1": "examiner",
   "ce-rehab-adl-v1": "examiner",
+  "ce-rehab-fx-v1": "examiner",
   "ce-probe-read-v1": "performance",
   "ce-probe-write-v1": "performance",
   "ce-probe-calc-v1": "performance"
@@ -152,12 +156,12 @@ var OT_PROFILE_TOOL = "OtProfile";
 var CONSTRUCT_MIN_COVERAGE = {
   attention_exec: ["ce-snap-iv-p-v1", "ce-snap-iv-t-v1", WECHSLER_TOOL, "ce-rehab-cog-v1"],
   externalizing: ["ce-snap-iv-p-v1", "ce-snap-iv-t-v1", "ce-odd-criteria-v1"],
-  internalizing: ["ce-scared-p-v1", "sdq-parent", "ce-sdq-t-v1"],
+  internalizing: ["ce-scared-p-v1", "sdq-parent", "ce-sdq-p-v1", "ce-sdq-t-v1"],
   language_comm: ["ce-speech-criteria-v1", WECHSLER_TOOL, `${OT_PROFILE_TOOL}(auditory)`],
   academic_learning: ["ce-probe-read-v1", "ce-probe-write-v1", "ce-probe-calc-v1", "ce-sld-read-v1", "ce-sld-wri-v1", "ce-sld-calc-v1"],
   motor_coord: ["ce-dcdq-v1", `${OT_PROFILE_TOOL}(gross/fine)`],
   general_cog: [WECHSLER_TOOL],
-  social_adl: ["ce-asd-criteria-v1", "sdq-parent", "ce-sdq-t-v1", `${OT_PROFILE_TOOL}(social/adl)`]
+  social_adl: ["ce-asd-criteria-v1", "sdq-parent", "ce-sdq-p-v1", "ce-sdq-t-v1", `${OT_PROFILE_TOOL}(social/adl)`]
 };
 var GATE_DEPENDENT_CONSTRUCTS = {
   behavioral: ["attention_exec", "externalizing", "internalizing"],
@@ -628,8 +632,128 @@ function anamnesisTextFor(construct) {
 }
 __name(anamnesisTextFor, "anamnesisTextFor");
 __name2(anamnesisTextFor, "anamnesisTextFor");
+/* 1.25.59 — هم‌قراردادسازی ورودی‌های تازه با صورت‌بندی: شرح‌حال نسخهٔ ۳ (ساخت‌یافته)،
+   ارزیابی عملکردی FX (ثبت درمانگر) و پایش خانهٔ نسخهٔ ۲ (هشت زیرمقیاس = هشت سازهٔ همین موتور).
+   تا پیش از این، سه ورودی اصلی پرونده در جمع‌بندی تشخیصی هیچ نقشی نداشتند. */
+var ANAM3_CONCERN_FIELDS = [
+  { key: "attention_concern", construct: "attention_exec", fa: "توجه و تمرکز" },
+  { key: "hyper_concern", construct: "externalizing", fa: "بی‌قراری و شتاب‌زدگی" },
+  { key: "sld_read_concern", construct: "academic_learning", fa: "خواندن", subtype: "read" },
+  { key: "sld_write_concern", construct: "academic_learning", fa: "نوشتن", subtype: "write" },
+  { key: "sld_calc_concern", construct: "academic_learning", fa: "حساب", subtype: "calc" },
+  { key: "exam_anxiety", construct: "internalizing", fa: "اضطراب امتحان" },
+  { key: "morning_somatic", construct: "internalizing", fa: "ناراحتی جسمی صبح‌ها" },
+  { key: "sensory_concern", construct: "social_adl", fa: "حساسیت حسی" }
+];
+var HOME_MONITOR_FA = {
+  attention_exec: "توجه و کارکرد اجرایی",
+  externalizing: "رفتارهای برون‌ریزی",
+  internalizing: "حال و هیجان",
+  language_comm: "زبان و ارتباط",
+  academic_learning: "یادگیری درسی",
+  motor_coord: "هماهنگی حرکتی",
+  general_cog: "شناخت عمومی",
+  social_adl: "اجتماعی و خودیاری"
+};
+var FX_DOMAIN_FA = {
+  att_sus: ["attention_exec", "توجه پایدار"],
+  att_sel: ["attention_exec", "توجه انتخابی"],
+  wm: ["attention_exec", "حافظهٔ کاری"],
+  inh: ["attention_exec", "بازداری"],
+  flex: ["attention_exec", "انعطاف ذهنی"],
+  ps: ["general_cog", "حل مسئله"]
+};
+function anamnesis3SeverityOf(value) {
+  if (!value) return null;
+  if (value.includes("زیاد") || value.includes("بیشتر روزها")) return "high";
+  if (value.includes("متوسط")) return "mid";
+  return null; // «کم/گاهی» برای جمع‌بندی بی‌سروصدا رد می‌شود — نویز نمی‌سازد
+}
+function mapAnamnesisV3(rows, event, ctx) {
+  /* گویه‌های نگرانی ساخت‌یافته — مستقیم به سازهٔ هم‌نام می‌نشیند */
+  for (const f of ANAM3_CONCERN_FIELDS) {
+    const sev = anamnesis3SeverityOf(payloadField(event, f.key));
+    if (!sev) continue;
+    addRow(rows, {
+      construct: f.construct, toolId: event.toolKey, subtype: f.subtype,
+      signal: `anamnesis3_${f.key}_${sev}`, weight: sev === "high" ? 2 : 1, danger: sev === "high",
+      sourceType: TOOL_SOURCE[event.toolKey],
+      textFa: `در شرح‌حال، نگرانی خانواده از ${f.fa} ${sev === "high" ? "زیاد گزارش شده است." : "متوسط گزارش شده است."}`
+    });
+  }
+  /* همان چرخهٔ کلیدواژهٔ متن آزاد نسخهٔ ۲ — کلیدهای مشترک (chief_complaint/weak_subjects/development) */
+  for (const [constructKey, keywords] of Object.entries(ANAMNESIS_KEYWORDS)) {
+    const fields = ANAM_FIELD_MAP[constructKey] ?? ["chief_complaint"];
+    const text = payloadText2(event, fields);
+    if (!text) continue;
+    if (keywords.some((k) => text.includes(k))) {
+      addRow(rows, { construct: constructKey, toolId: event.toolKey, signal: "anamnesis_kw", weight: 1, danger: false, sourceType: TOOL_SOURCE[event.toolKey], textFa: anamnesisTextFor(constructKey) });
+    }
+  }
+  /* پرچم‌های قرمز و زمینه — از فیلدهای ساخت‌یافتهٔ همان نسخهٔ ۳ */
+  const medical = payloadField(event, "medical");
+  const dev = payloadField(event, "development");
+  const cc = payloadField(event, "chief_complaint");
+  if (REDFLAG_KEYWORDS.tbi.some((k) => medical.includes(k))) ctx.tbi = true;
+  if (REDFLAG_KEYWORDS.selfharm.some((k) => medical.includes(k) || cc.includes(k))) ctx.selfHarm = true;
+  if (REDFLAG_KEYWORDS.regression.some((k) => dev.includes(k))) ctx.regression = true;
+  const familyStress = payloadField(event, "family_stress");
+  const crisis = payloadField(event, "crisis_event");
+  ctx.familyStress = ctx.familyStress || (familyStress.trim() !== "" && familyStress !== "ندارد") || crisis.startsWith("بله");
+  ctx.schoolChanges = Boolean(payloadField(event, "school_change").trim().startsWith("یک") || payloadField(event, "school_change").includes("بار") || payloadField(event, "prev_intervention").trim() !== "" && payloadField(event, "prev_intervention") !== "نداشته" || payloadField(event, "school_changes").trim() || payloadField(event, "prior_intervention").trim());
+  const homeLang = payloadField(event, "home_language").trim();
+  if (homeLang && homeLang !== "فارسی") {
+    ctx.homeLanguageNote = "زبان خانه با زبان مدرسه متفاوت است؛ در تفسیر آزمون‌های کلامی باید احتیاط کرد.";
+  }
+}
+__name(mapAnamnesisV3, "mapAnamnesisV3");
+__name2(mapAnamnesisV3, "mapAnamnesisV3");
+function mapRehabFx(rows, event) {
+  const source = TOOL_SOURCE[event.toolKey] ?? "examiner";
+  const flags = event.analysis?.flags ?? [];
+  let weak = 0;
+  for (const f of flags) {
+    const spec = FX_DOMAIN_FA[f.key];
+    if (!spec) continue; // پرچم توالی داستان و غیره بدون سازهٔ مستقیم
+    const isWeak = String(f.label ?? "").includes("ضعف");
+    if (isWeak) weak += 1;
+    addRow(rows, {
+      construct: spec[0], toolId: event.toolKey, signal: `fx_${f.key}_${isWeak ? "weak" : "warn"}`,
+      weight: 1, danger: isWeak, sourceType: source,
+      textFa: `در ارزیابی عملکردی درمانگر، حیطهٔ «${spec[1]}» ${isWeak ? "ضعف آشکار" : "مرزی"} گزارش شده است.`
+    });
+  }
+  if (weak >= 3) {
+    addRow(rows, { construct: "attention_exec", toolId: event.toolKey, signal: "fx_multi_weak", weight: 2, danger: true, sourceType: source, textFa: `در ارزیابی عملکردی، ${faNum5(weak)} حیطهٔ شناختی پایه هم‌زمان ضعیف است — الگوی نیاز به مداخلهٔ همه‌جانبهٔ ذهنی.` });
+  }
+}
+__name(mapRehabFx, "mapRehabFx");
+__name2(mapRehabFx, "mapRehabFx");
+function mapHomeMonitor(rows, event) {
+  const source = TOOL_SOURCE[event.toolKey] ?? "parent";
+  for (const s of event.analysis?.subscaleScores ?? []) {
+    const fa = HOME_MONITOR_FA[s.id];
+    if (!fa) continue; // زیرمقیاس ناشناخته (مثلاً فرم دستی) — بی‌سروصدا رد می‌شود
+    const c = subscaleColor(event, s.id);
+    if (c === "danger") {
+      addRow(rows, { construct: s.id, toolId: event.toolKey, signal: `home_mon_${s.id}_danger`, weight: 1, danger: true, sourceType: source, textFa: `در پایش خانه، کانون «${fa}» پررنگ گزارش شده است.` });
+    } else if (c === "warn") {
+      addRow(rows, { construct: s.id, toolId: event.toolKey, signal: `home_mon_${s.id}_warn`, weight: 1, danger: false, sourceType: source, textFa: `در پایش خانه، کانون «${fa}» نیازمند توجه گزارش شده است.` });
+    }
+  }
+}
+__name(mapHomeMonitor, "mapHomeMonitor");
+__name2(mapHomeMonitor, "mapHomeMonitor");
 function normalizeEvents(events, opts = {}) {
   const latest = latestPerTool2(events);
+  /* ۱.۲۵.۵۹ — دو کلید SDQ والد (قدیم/جدید) هرگز با هم نمره نمی‌خورند — تازه‌تر برنده است
+     تا جابه‌جایی از sdq-parent به ce-sdq-p-v1 دوبار‌شماری نسازد */
+  const sdqNew = latest.get("ce-sdq-p-v1");
+  const sdqOld = latest.get("sdq-parent");
+  if (sdqNew && sdqOld) {
+    const newerWins = String(sdqNew.occurredAt ?? "") >= String(sdqOld.occurredAt ?? "");
+    latest.delete(newerWins ? "sdq-parent" : "ce-sdq-p-v1");
+  }
   const rows = [];
   const ctx = {
     schPositive: false,
@@ -663,6 +787,9 @@ function normalizeEvents(events, opts = {}) {
         mapSnap(rows, "teacher", event);
         break;
       case "sdq-parent":
+        mapSdq(rows, "parent", event);
+        break;
+      case "ce-sdq-p-v1":
         mapSdq(rows, "parent", event);
         break;
       case "ce-sdq-t-v1":
@@ -713,6 +840,15 @@ function normalizeEvents(events, opts = {}) {
         break;
       case "ce-anamnesis-v2":
         mapAnamnesis(rows, event, ctx);
+        break;
+      case "ce-anamnesis-v3":
+        mapAnamnesisV3(rows, event, ctx);
+        break;
+      case "ce-rehab-fx-v1":
+        mapRehabFx(rows, event);
+        break;
+      case "ce-home-monitor-v2":
+        mapHomeMonitor(rows, event);
         break;
       default:
         break;
@@ -1066,8 +1202,8 @@ function detectDivergences(norm, wInj, otStatuses) {
     });
   }
   const snapAttentionDanger = norm.rows.some((r) => r.construct === "attention_exec" && r.toolId.startsWith("ce-snap") && r.danger);
-  const sdqPresent = norm.rows.some((r) => r.toolId.startsWith("sdq-") || r.toolId === "ce-sdq-t-v1");
-  const sdqAttentionDanger = norm.rows.some((r) => r.construct === "attention_exec" && (r.toolId === "sdq-parent" || r.toolId === "ce-sdq-t-v1") && r.danger);
+  const sdqPresent = norm.rows.some((r) => r.toolId.startsWith("sdq-") || r.toolId === "ce-sdq-p-v1" || r.toolId === "ce-sdq-t-v1");
+  const sdqAttentionDanger = norm.rows.some((r) => r.construct === "attention_exec" && (r.toolId === "sdq-parent" || r.toolId === "ce-sdq-p-v1" || r.toolId === "ce-sdq-t-v1") && r.danger);
   if (snapAttentionDanger && sdqPresent && !sdqAttentionDanger) {
     out.push({
       code: "D5",
@@ -1548,13 +1684,20 @@ function pickNextActions(input, norm, levels, redFlags, wInj, divergences) {
       add({ priority: 2, actionFa: `\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC ${t.fa} \u0628\u0631\u0627\u06CC \u0627\u062A\u0635\u0627\u0644 \u0628\u0647 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC \u0631\u0633\u0645\u06CC \u062B\u0628\u062A \u0634\u0648\u062F.`, toolId: t.sld, reasonFa: "\u067E\u0631\u0648\u0628 \u067E\u0631\u062E\u0637\u0631 \u2014 \u0645\u0644\u0627\u06A9\u200C\u0633\u0627\u0632\u06CC \u0644\u0627\u0632\u0645." });
     }
   }
-  if (norm.rows.some((r) => r.construct === "motor_coord" && (r.toolId === "ce-anamnesis-v2" || r.toolId === "ce-rehab-motor-v1")) && !present.has("ce-dcdq-v1")) {
+  if (norm.rows.some((r) => r.construct === "motor_coord" && (r.toolId === "ce-anamnesis-v2" || r.toolId === "ce-anamnesis-v3" || r.toolId === "ce-rehab-motor-v1")) && !present.has("ce-dcdq-v1")) {
     add({ priority: 2, actionFa: "\u067E\u0631\u0633\u0634\u0646\u0627\u0645\u0647\u0654 \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u062D\u0631\u06A9\u062A\u06CC DCDQ \u0628\u0631\u0627\u06CC \u063A\u0631\u0628\u0627\u0644\u06AF\u0631\u06CC \u0627\u0633\u062A\u0627\u0646\u062F\u0627\u0631\u062F \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F.", toolId: "ce-dcdq-v1", reasonFa: "\u0633\u06CC\u06AF\u0646\u0627\u0644 \u062D\u0631\u06A9\u062A\u06CC \u0628\u062F\u0648\u0646 DCDQ." });
   }
   if (input.gates && !input.gates.gates.find((g) => g.key === "skills")?.done) {
     add({ priority: 2, actionFa: "\u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u0645\u0647\u0627\u0631\u062A\u06CC \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC \u062A\u0627 \u062D\u062F\u0627\u0642\u0644 \u06F3 \u0645\u0647\u0627\u0631\u062A \u062F\u0631 \u0647\u0631 \u06F7 \u062D\u06CC\u0637\u0647 \u062A\u06A9\u0645\u06CC\u0644 \u0634\u0648\u062F.", toolId: OT_PROFILE_TOOL, reasonFa: "\u067E\u06CC\u0634\u200C\u0646\u06CC\u0627\u0632 \u0642\u0627\u0639\u062F\u0647\u0654 \u062D\u06CC\u0637\u0647\u0654 \u0639\u0642\u0628\u200C\u0645\u0627\u0646\u062F\u0647." });
   }
-  if (norm.rows.some((r) => r.construct === "internalizing" && (r.toolId === "sdq-parent" || r.toolId === "ce-sdq-t-v1")) && !present.has("ce-scared-p-v1")) {
+  /* ۱.۲۵.۵۹ — حلقهٔ بازگشت جمع‌بندی: کانون درگیر → پیشنهاد پایش خانهٔ نسخهٔ ۲ و ارزیابی عملکردی FX */
+  if (atLeastLevel(levels, "attention_exec", "\u0645\u0631\u0632\u06CC") && !present.has("ce-home-monitor-v2")) {
+    add({ priority: 2, actionFa: "\u0641\u0631\u0645 \u067E\u0627\u06CC\u0634 \u062F\u0631 \u062E\u0627\u0646\u0647 (\u0646\u0633\u062E\u0647\u0654 \u06F2) \u0628\u0631\u0627\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F \u2014 \u06A9\u0627\u0646\u0648\u0646\u200C\u0647\u0627\u06CC \u062F\u0631\u06AF\u06CC\u0631 \u067E\u0631\u0648\u0646\u062F\u0647\u060C \u062F\u0631 \u0627\u0628\u062A\u062F\u0627\u06CC \u0641\u0631\u0645 \u0639\u0644\u0627\u0645\u062A \u0645\u06CC\u200C\u062E\u0648\u0631\u0646\u062F.", toolId: "ce-home-monitor-v2", reasonFa: "\u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u06A9\u0627\u0646\u0648\u0646 \u062F\u0631\u06AF\u06CC\u0631 \u062F\u0627\u0631\u062F\u061B \u067E\u0627\u06CC\u0634 \u062E\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u0633\u0627\u0632\u0647 \u0631\u0648\u0634\u0646\u0627\u06CC\u06CC \u0645\u06CC\u200C\u062F\u0647\u062F." });
+  }
+  if (atLeastLevel(levels, "attention_exec", "\u0645\u0631\u0632\u06CC") && !present.has("ce-rehab-fx-v1")) {
+    add({ priority: 2, actionFa: "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0639\u0645\u0644\u06A9\u0631\u062F\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 (FX) \u062F\u0631 \u062C\u0644\u0633\u0647\u0654 \u0628\u0639\u062F \u062B\u0628\u062A \u0634\u0648\u062F.", toolId: "ce-rehab-fx-v1", reasonFa: "\u0633\u0627\u0632\u0647\u0654 \u062A\u0648\u062C\u0647 \u062F\u0631 \u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u0641\u0639\u0627\u0644 \u0627\u0633\u062A\u061B \u0633\u0646\u062C\u0647\u0654 \u0639\u0645\u0644\u06A9\u0631\u062F\u06CC \u0645\u0633\u062A\u0642\u06CC\u0645 \u062A\u06A9\u0645\u06CC\u0644\u0634 \u0645\u06CC\u200C\u06A9\u0646\u062F." });
+  }
+  if (norm.rows.some((r) => r.construct === "internalizing" && (r.toolId === "sdq-parent" || r.toolId === "ce-sdq-p-v1" || r.toolId === "ce-sdq-t-v1")) && !present.has("ce-scared-p-v1")) {
     add({ priority: 2, actionFa: "\u067E\u0631\u0633\u0634\u0646\u0627\u0645\u0647\u0654 \u0627\u0636\u0637\u0631\u0627\u0628 \u06A9\u0648\u062F\u06A9 SCARED \u0628\u0631\u0627\u06CC \u0646\u0648\u0639\u200C\u0634\u0646\u0627\u0633\u06CC \u0646\u06AF\u0631\u0627\u0646\u06CC \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F.", toolId: "ce-scared-p-v1", reasonFa: "\u0633\u06CC\u06AF\u0646\u0627\u0644 \u062F\u0631\u0648\u0646\u06CC\u200C\u0633\u0627\u0632\u06CC \u0641\u0642\u0637 \u0627\u0632 SDQ \u0622\u0645\u062F\u0647 \u0627\u0633\u062A." });
   }
   if (atLeastLevel(levels, "social_adl", "\u0645\u0631\u0632\u06CC") && !present.has("ce-asd-criteria-v1")) {

@@ -1,9 +1,10 @@
-import { addDaysYmd, iranianWeekdayOfYmd, tehranDayRange, tehranTodayYmd } from '@core/shared';
+import { addDaysYmd, CENTER_SURVEY_EVENT_KEY, iranianWeekdayOfYmd, tehranDayRange, tehranTodayYmd } from '@core/shared';
 import type { DbClient } from '@core/db';
 import type {
   AppointmentKpi,
   CenterKpiService,
   DocumentationKpi,
+  FamilySurveyKpi,
   InterventionKpi,
   KpiDays,
   KpiSummary,
@@ -45,6 +46,12 @@ interface FidelityRow {
 }
 
 interface FamilyScoreRow {
+  analysis: string | null;
+}
+
+interface SurveyRow {
+  status: string;
+  filled_by_chat_id: string | null;
   analysis: string | null;
 }
 
@@ -223,7 +230,7 @@ export function createCenterKpiService(deps: { db: DbClient }): CenterKpiService
       assignment_done_rate: rate(assignAgg?.done ?? 0, (assignAgg?.done ?? 0) + (assignAgg?.cancelled ?? 0))
     };
 
-    // ─── ثبت پرونده + بازخورد خانواده ───
+    // ─── ثبت پرونده + بازخورد خانواده (۱.۲۵.۵۹: نظرسنجی رضایت از متریک چک‌لیست بیرون است — بلوک خودش را دارد) ───
     const [studentsAgg, caseAgg, docAgg, assessAgg, familyAgg, familyScoreRows] = await Promise.all([
       db.queryOne<{ active: number }>(
         `SELECT COALESCE(SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END), 0) AS active FROM students`
@@ -247,14 +254,14 @@ export function createCenterKpiService(deps: { db: DbClient }): CenterKpiService
         `SELECT COUNT(*) AS total,
                 COALESCE(SUM(CASE WHEN ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS filled
          FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
-         WHERE cet.family_fillable = 1 AND ce.created_at >= ? AND ce.created_at <= ?`,
-        [fromIso, toIso]
+         WHERE cet.family_fillable = 1 AND cet.key != ? AND ce.created_at >= ? AND ce.created_at <= ?`,
+        [CENTER_SURVEY_EVENT_KEY, fromIso, toIso]
       ),
       db.query<FamilyScoreRow>(
         `SELECT ce.analysis FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
-         WHERE cet.family_fillable = 1 AND ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL
+         WHERE cet.family_fillable = 1 AND cet.key != ? AND ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL
            AND ce.created_at >= ? AND ce.created_at <= ?`,
-        [fromIso, toIso]
+        [CENTER_SURVEY_EVENT_KEY, fromIso, toIso]
       )
     ]);
 
@@ -285,12 +292,57 @@ export function createCenterKpiService(deps: { db: DbClient }): CenterKpiService
       family_avg_score: scoreCount > 0 ? round4(scoreSum / scoreCount) : null
     };
 
+    /* ─── ۱.۲۵.۵۹ — رضایت خانواده‌ها (نظرسنجی ce-center-survey-v1): فقط-عددی ─── */
+    const surveyRows = await db.query<SurveyRow>(
+      `SELECT ce.status, ce.filled_by_chat_id, ce.analysis
+         FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
+        WHERE cet.key = ? AND ce.deleted_at IS NULL AND ce.created_at >= ? AND ce.created_at <= ?`,
+      [CENTER_SURVEY_EVENT_KEY, fromIso, toIso]
+    );
+    let surveysFilled = 0;
+    let centerSum = 0;
+    let centerCount = 0;
+    let therapistSum = 0;
+    let therapistCount = 0;
+    let npsSum = 0;
+    let npsCount = 0;
+    for (const row of surveyRows) {
+      if (row.status !== 'completed' || !row.filled_by_chat_id) continue;
+      surveysFilled += 1;
+      const a = parseJson<{ subscaleScores?: { id?: unknown; score?: unknown; max?: unknown }[] }>(row.analysis);
+      for (const s of a?.subscaleScores ?? []) {
+        const score = Number(s.score);
+        const max = Number(s.max);
+        if (!Number.isFinite(score) || !Number.isFinite(max) || max <= 0) continue;
+        if (s.id === 'center') {
+          centerSum += (score / max) * 100;
+          centerCount += 1;
+        } else if (s.id === 'therapist') {
+          therapistSum += (score / max) * 100;
+          therapistCount += 1;
+        } else if (s.id === 'nps') {
+          npsSum += score; // خود مقدار ۰-۱۰
+          npsCount += 1;
+        }
+      }
+    }
+    const surveysSent = surveyRows.length;
+    const familySurvey: FamilySurveyKpi = {
+      surveys_sent: surveysSent,
+      surveys_filled: surveysFilled,
+      response_rate: rate(surveysFilled, surveysSent),
+      center_avg: centerCount > 0 ? round4(centerSum / centerCount) : null,
+      therapist_avg: therapistCount > 0 ? round4(therapistSum / therapistCount) : null,
+      nps_avg: npsCount > 0 ? round4(npsSum / npsCount) : null
+    };
+
     return {
       window,
       generated_at: nowIso,
       appointments,
       intervention,
-      documentation
+      documentation,
+      family_survey: familySurvey
     };
   }
 

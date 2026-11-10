@@ -1,11 +1,12 @@
 import { NotFoundError, ForbiddenError, ConflictError, ValidationError } from '@core/errors';
 import type { AuthContext } from '@core/shared';
-import { FOLLOWUP_DEFAULT_DUE_DAYS } from '@core/shared';
+import { CENTER_SURVEY_EVENT_KEY, FOLLOWUP_DEFAULT_DUE_DAYS, HOME_MONITOR_EVENT_KEY } from '@core/shared';
 import type { DbClient } from '@core/db';
 import type {
   CaseEventAnalysis, CaseEventAudience, CaseEventBand, CaseEventDeps, CaseEventField, CaseEventFileMeta,
   CaseEventInput, CaseEventRecord, CaseEventStatus, CaseEventSubscale, CaseEventTypeInput, CaseEventTypeRecord,
-  CaseEventsService, ChecklistSuggestion, FillObserver, FillObserverInput, NewCaseEventFileInput, PendingChecklist, SendObserver
+  CaseEventsService, ChecklistSuggestion, FillObserver, FillObserverInput, MonitorFocusProvider, NewCaseEventFileInput, PendingChecklist, SendObserver,
+  SurveyCreateInput, SurveyEventItem
 } from './types';
 import { CASE_EVENT_STATUSES } from './types';
 import {
@@ -33,6 +34,55 @@ async function studentBirthDate(db: DbClient, studentId: string): Promise<string
 function summarySafePayload(payload: PayloadMap): PayloadMap {
   const { engine_output: _engineOutput, ...rest } = payload;
   return rest;
+}
+
+/* ۱.۲۵.۵۹ — ردیف فهرست نظرسنجی + نگاشت به آیتم خروجی (درصد زیرمقیاس‌ها از analysis) */
+interface SurveyListRow {
+  id: string;
+  student_id: string;
+  staff_id: string | null;
+  student_name: string | null;
+  staff_name: string | null;
+  status: string;
+  occurred_at: string;
+  created_at: string;
+  fill_expires_at: string | null;
+  sent_at: string | null;
+  fill_token: string | null;
+  analysis: string | null;
+  payload: string | null;
+}
+
+function surveyItemOf(r: SurveyListRow, publicBaseUrl: string | null): SurveyEventItem {
+  const a = parseJson<{ subscaleScores?: { id: string; score?: number; max?: number }[] } | null>(r.analysis, null);
+  const sub = (id: string) => a?.subscaleScores?.find((s) => s.id === id) ?? null;
+  const pct = (id: string): number | null => {
+    const s = sub(id);
+    if (!s || !Number.isFinite(Number(s.score)) || !s.max || s.max <= 0) return null;
+    return Math.round((Number(s.score) / s.max) * 100);
+  };
+  const nps = sub('nps');
+  const payload = parseJson<Record<string, { value?: string; label?: string } | null> | null>(r.payload, null);
+  const link = publicBaseUrl && r.status === 'pending_family' && r.fill_token
+    ? `${publicBaseUrl.replace(/\/+$/, '')}/public/case-events/${r.id}/fill?token=${r.fill_token}`
+    : null;
+  return {
+    id: r.id,
+    studentId: r.student_id,
+    studentName: r.student_name ?? '',
+    therapistId: r.staff_id,
+    therapistName: r.staff_name,
+    status: (CASE_EVENT_STATUSES.includes(r.status as CaseEventStatus) ? r.status : 'pending_family') as CaseEventStatus,
+    occurredAt: r.occurred_at,
+    createdAt: r.created_at,
+    fillExpiresAt: r.fill_expires_at,
+    sentAt: r.sent_at,
+    link,
+    centerScore: pct('center'),
+    therapistScore: pct('therapist'),
+    nps: nps && Number.isFinite(Number(nps.score)) ? Number(nps.score) : null,
+    note: payload?.['sv_note']?.value ?? null
+  };
 }
 
 async function applyWechslerHook(
@@ -91,6 +141,7 @@ interface EventRow {
   created_by: string;
   created_at: string;
   type_title: string;
+  type_key: string;
   type_category: string;
   type_icon: string | null;
   type_bands: string | null;
@@ -156,6 +207,7 @@ function eventRowToRecord(r: EventRow): CaseEventRecord {
   return {
     id: r.id,
     eventTypeId: r.event_type_id,
+    typeKey: r.type_key,
     typeTitle: r.type_title,
     typeCategory: r.type_category as CaseEventRecord['typeCategory'],
     typeIcon: r.type_icon,
@@ -197,12 +249,13 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
   const fillExpiryHours = deps.fillExpiryHours ?? 168;
   let sendFn: SendObserver | null = null;
   let fillFn: FillObserver | null = null; // — : اعلان نتیجه به درمانگر برای پر کردن خانواده/معلم (وب و بات)
+  let focusFn: MonitorFocusProvider | null = null; // ۱.۲۵.۵۹ — تزریق از موتور بالینی؛ برای اسنپ‌شات کانون‌های پایش
 
   const EVENT_SELECT = `
     SELECT e.id, e.event_type_id, e.student_id, e.staff_id, s.full_name AS staff_name,
            e.appointment_id, e.occurred_at, e.status, e.payload, e.analysis, e.summary,
            e.fill_expires_at, e.sent_at, e.sent_count, e.filled_by_chat_id, e.created_by, e.created_at,
-           t.title AS type_title, t.category AS type_category, t.icon AS type_icon, t.bands AS type_bands,
+           t.title AS type_title, t.key AS type_key, t.category AS type_category, t.icon AS type_icon, t.bands AS type_bands,
            t.audience AS type_audience, t.family_fillable AS type_family_fillable
       FROM case_events e
       JOIN case_event_types t ON t.id = e.event_type_id
@@ -1098,6 +1151,20 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       const link = await this.mintFillLink(eventId, base);
       if (!link) throw new ConflictError('ساخت لینک فرم ممکن نیست');
 
+      /* ۱.۲۵.۵۹ — پایش خانهٔ نسخهٔ ۲: کانون‌های درگیرِ آخرین جمع‌بندی تشخیصی در لحظهٔ ارسال
+         اسنپ‌شات می‌شود تا فرم خانواده با تقدم همان کانون‌ها رندر شود؛ شکست موتور ارسال را نمی‌شکند */
+      if (type.key === HOME_MONITOR_EVENT_KEY && focusFn) {
+        try {
+          const focus = await focusFn(row.student_id, actor);
+          if (focus) {
+            const focusPayload = JSON.stringify({ _monitor_focus: { value: JSON.stringify(focus), label: 'کانون‌های پایش' } });
+            await db.execute(`UPDATE case_events SET payload = ?, updated_at = ? WHERE id = ?`, [focusPayload, now().toISOString(), eventId]);
+          }
+        } catch (err) {
+          log.warn('event.monitor_focus_failed', { eventId, err: err instanceof Error ? err.message : 'خطای نامشخص' });
+        }
+      }
+
       const studentName = (await deps.studentNameOf?.(row.student_id)) ?? 'دانش‌آموز';
       const note = input.note?.trim() ? input.note.trim() : null;
       const kindLabel = 'چک‌لیست';
@@ -1171,6 +1238,10 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       fillFn = fn;
     },
 
+    setMonitorFocusProvider(fn) {
+      focusFn = fn; // ۱.۲۵.۵۹ — از روت مرکزی سیم‌کشی می‌شود (موتور بالینی)
+    },
+
     async verifyFillToken(id, token) {
       if (!token || token.length < 8) return false;
       const row = await db.queryOne<{ fill_token: string | null }>(
@@ -1208,13 +1279,24 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       const bands = type.bands;
       const subscales = type.subscales;
       const values = input.values;
+      /* ۱.۲۵.۵۹ — فیلد متنی آزاد (longtext/text) اختیاری است مگر required صریح؛
+         گویه‌های نمره‌دار مانند قبل اجباری‌اند — نظرسنجی بدون متن آزاد هم کامل است */
+      const scoredKeys = new Set(type.fields.filter((f) => f.type === 'scale' || f.type === 'single').map((f) => f.key));
       for (const f of type.fields) {
-        if (values[f.key] === undefined) {
+        if (f.type === 'longtext' || f.type === 'text') {
+          if (f.required && String(values[f.key] ?? '').trim() === '') {
+            throw new ValidationError(`آیتم «${f.label}» بی‌پاسخ مانده است`);
+          }
+          continue;
+        }
+        if (values[f.key] === undefined || values[f.key] === null) {
           throw new ValidationError(`آیتم «${f.label}» بی‌پاسخ مانده است`);
         }
       }
       const numericValues: Record<string, number> = Object.fromEntries(
-        Object.entries(values).map(([k, v]) => [k, Number(v)])
+        Object.entries(values)
+          .filter(([k]) => scoredKeys.has(k))
+          .map(([k, v]) => [k, Number(v)])
       );
       const analysis = analyzeChecklist(type.fields, bands, numericValues, subscales);
       const teacher = teacherBindingOfPayload(parseJson<unknown>(row.payload, null));
@@ -1222,6 +1304,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         const p: Record<string, { value: string; label: string }> = {};
         for (const f of type.fields) {
           const raw = values[f.key];
+          if (raw === undefined || raw === null || String(raw).trim() === '') continue; // اختیاری خالی ثبت نمی‌شود
           const display = f.type === 'single'
             ? (f.scoredOptions?.[Number(raw)]?.label ?? String(raw))
             : String(raw);
@@ -1229,6 +1312,11 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         }
         return p;
       })(), teacher);
+      /* کلیدهای رزرو (_) پیش از پر شدن حفظ می‌شوند — _monitor_focus پر کردن را زنده نمی‌سوزاند */
+      const previous = parseJson<Record<string, { value: string; label: string }> | null>(row.payload, null) ?? {};
+      for (const [k, v] of Object.entries(previous)) {
+        if (k.startsWith('_') && v && !payload[k]) payload[k] = v;
+      }
       const summary = buildSummary(payload, analysis);
       const sourceTag = input.viaWeb ? `web:${now().toISOString()}` : (input.sourceChatId ?? 'unknown');
 
@@ -1262,6 +1350,91 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         via: input.viaWeb ? 'web' : 'bot'
       });
       return eventRowToRecord(await getEventRow(id));
+    },
+
+    /* ۱.۲۵.۵۹ — نظرسنجی رضایت: ساخت گروهی رویداد در انتظار خانواده (مدیر) —
+       هر خانواده لینک امن ۷روزهٔ خودش را می‌گیرد؛ درمانگر مورد ارزیابی در staff_id می‌نشیند */
+    async createSurveyEvents(input, actor) {
+      const typeRow = await loadTypeRowByKey(CENTER_SURVEY_EVENT_KEY);
+      if (!typeRow || !typeRow.active) throw new ConflictError('نوع نظرسنجی در کتابخانه فعال نیست (migration 0104)');
+      const type = typeRowToRecord(typeRow);
+      const ids = [...new Set(input.studentIds.map((x) => String(x).trim()).filter(Boolean))];
+      if (ids.length === 0) throw new ValidationError('هیچ دانش‌آموزی انتخاب نشده است');
+
+      let therapistId: string | null = null;
+      if (input.therapistId && String(input.therapistId).trim() !== '') {
+        const t = await db.queryOne<{ id: string; active: number }>(
+          `SELECT id, active FROM staff WHERE id = ?`,
+          [String(input.therapistId).trim()]
+        );
+        if (!t) throw new NotFoundError('درمانگر');
+        therapistId = t.id;
+      }
+
+      const base = deps.publicBaseUrl?.trim() || null;
+      const created: SurveyEventItem[] = [];
+      const nowIso = now().toISOString();
+      const fillExpires = new Date(now().getTime() + fillExpiryHours * 3600_000).toISOString();
+
+      for (const studentId of ids) {
+        await assertStudent(studentId);
+        const id = crypto.randomUUID();
+        const token = crypto.randomUUID();
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
+                                      status, payload, analysis, summary, fill_token, fill_expires_at, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, NULL, ?, 'pending_family', NULL, NULL, NULL, ?, ?, ?, ?, ?)`,
+            [id, type.id, studentId, therapistId ?? actor.staffId, nowIso, token, fillExpires, actor.staffId, nowIso, nowIso]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: 'case_event.survey_created',
+            resourceType: 'case_event',
+            resourceId: id,
+            changes: {
+              studentId: { from: null, to: studentId },
+              therapistId: { from: null, to: therapistId ?? actor.staffId },
+              typeKey: { from: null, to: type.key }
+            }
+          });
+        });
+        created.push({
+          id,
+          studentId,
+          studentName: (await deps.studentNameOf?.(studentId)) ?? '',
+          therapistId: therapistId ?? actor.staffId,
+          therapistName: null,
+          status: 'pending_family',
+          occurredAt: nowIso,
+          createdAt: nowIso,
+          fillExpiresAt: fillExpires,
+          sentAt: null,
+          link: base ? `${base.replace(/\/+$/, '')}/public/case-events/${id}/fill?token=${token}` : null,
+          centerScore: null,
+          therapistScore: null,
+          nps: null,
+          note: null
+        });
+      }
+      log.info('event.surveys_created', { count: created.length, therapistId });
+      return { created };
+    },
+
+    async listSurveys() {
+      const rows = await db.query<SurveyListRow>(
+        `SELECT e.id, e.student_id, e.staff_id, st.first_name || ' ' || st.last_name AS student_name, s.full_name AS staff_name,
+                e.status, e.occurred_at, e.created_at, e.fill_expires_at, e.sent_at, e.fill_token, e.analysis, e.payload
+           FROM case_events e
+           JOIN case_event_types t ON t.id = e.event_type_id
+           JOIN students st ON st.id = e.student_id
+           LEFT JOIN staff s ON s.id = e.staff_id
+          WHERE t.key = ? AND e.deleted_at IS NULL
+          ORDER BY e.created_at DESC LIMIT 500`,
+        [CENTER_SURVEY_EVENT_KEY]
+      );
+      const base = deps.publicBaseUrl?.trim() || null;
+      return rows.map((r) => surveyItemOf(r, base));
     }
   };
 }

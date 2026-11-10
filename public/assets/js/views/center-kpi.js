@@ -74,6 +74,7 @@ export async function renderCenterKpi(container, opts = {}) {
     const a = data.appointments ?? {};
     const iv = data.intervention ?? {};
     const dc = data.documentation ?? {};
+    const fs = data.family_survey ?? {}; /* ۱.۲۵.۵۹ — رضایت خانواده‌ها (نظرسنجی) */
     const win = data.window ?? {};
 
     const range = win.from_ymd && win.to_ymd
@@ -121,9 +122,19 @@ export async function renderCenterKpi(container, opts = {}) {
         kpi('میانگین نمرهٔ خانواده', dc.family_avg_score === null || dc.family_avg_score === undefined ? '—' : fa(Math.round(dc.family_avg_score * 10) / 10), 'از چک‌لیست‌های پرشدهٔ پنجره', dc.family_avg_score === null || dc.family_avg_score === undefined ? 'neutral' : 'accent')
       ),
 
+      // ─── رضایت خانواده‌ها (نظرسنجی مرکز و درمانگر — ۱.۲۵.۵۹) ───
+      sectionTitle('heart', 'رضایت خانواده‌ها (نظرسنجی)'),
+      el('div', { class: 'kpi-grid' },
+        kpi('نظرسنجی‌های ارسالی', num(fs.surveys_sent), `پاسخ‌گرفته ${num(fs.surveys_filled)}`, 'primary'),
+        rateKpi('نرخ پاسخ‌دهی نظرسنجی', fs.response_rate, 'پاسخ‌گرفته از ارسالی پنجره'),
+        kpi('میانگین رضایت از مرکز', fs.center_avg === null || fs.center_avg === undefined ? '—' : `${fa(fs.center_avg)}٪`, 'زیرمقیاس «عملکرد مرکز»', fs.center_avg === null || fs.center_avg === undefined ? 'neutral' : fs.center_avg >= 70 ? 'success' : 'warning'),
+        kpi('میانگین رضایت از درمانگر', fs.therapist_avg === null || fs.therapist_avg === undefined ? '—' : `${fa(fs.therapist_avg)}٪`, 'زیرمقیاس «عملکرد درمانگر»', fs.therapist_avg === null || fs.therapist_avg === undefined ? 'neutral' : fs.therapist_avg >= 70 ? 'success' : 'warning'),
+        kpi('احتمال توصیه به آشنایان', fs.nps_avg === null || fs.nps_avg === undefined ? '—' : `${fa(Math.round(fs.nps_avg * 10) / 10)} از ۱۰`, 'میانگین پرسش توصیه (۰-۱۰)', fs.nps_avg === null || fs.nps_avg === undefined ? 'neutral' : fs.nps_avg >= 8 ? 'success' : 'warning')
+      ),
+
       el('div', { class: 'wgrid__hint', style: { marginTop: 'var(--sp-4)' } },
         icon('info', 14),
-        'این اعداد تجمیعِ فقط-عددی از دادهٔ خود مرکز است و همان دسته‌های شاخص شبکه (کیفیت مداخله، ثبت پرونده، بازخورد خانواده و عملکرد نوبت‌ها) را نشان می‌دهد — بدون هیچ دادهٔ خام دانش‌آموز.'
+        'این اعداد تجمیعِ فقط-عددی از دادهٔ خود مرکز است و همان دسته‌های شاخص شبکه (کیفیت مداخله، ثبت پرونده، بازخورد خانواده و عملکرد نوبت‌ها) را نشان می‌دهد — بدون هیچ دادهٔ خام دانش‌آموز. نظرسنجی رضایت از فرم‌های بالینی جدا شمرده می‌شود.'
       )
     );
   }

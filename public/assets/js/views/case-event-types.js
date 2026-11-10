@@ -4,6 +4,7 @@ import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyS
 import { TOOL_GUIDES } from '../clinical-content.js';
 import { session } from '../state.js';
 import { openChecklistSendModal, fillTargetOf } from '../case-events.js';
+import { fetchAllStudents } from '../student-fetch.js'; /* ۱.۲۵.۵۹ — picker نظرسنجی */
 import { CATEGORY_ICONS, TYPE_ICON_CHOICES, typeIconNode } from '../case-event-icons.js';
 
 const CATEGORY_LABELS = { session: 'جلسه', checklist: 'چک‌لیست', note: 'یادداشت' };
@@ -36,6 +37,10 @@ function canUse() {
 }
 function isManager() {
   return Boolean(session.user && session.user.role === 'manager');
+}
+/* ۱.۲۵.۵۹ — نظرسنجی خانواده‌ها: دیدن فهرست برای مدیر/منشی؛ ساخت فقط مدیر (سمت سرور هم گارد است) */
+function canSurvey() {
+  return Boolean(session.user && ['manager', 'secretary'].includes(session.user.role));
 }
 
 function itemMax(f) {
@@ -98,10 +103,11 @@ export async function renderCaseEventTypes(container) {
 
   const tabBtns = { /* ۱.۲۲.۰ — ارجاع تب‌ها برای تازه‌سازی شمارنده‌ها بدون rebuild */
     library: tabBtn('library', `کتابخانهٔ فرم‌ها (${fa(types.filter((t) => t.active).length)})`),
-    pending: tabBtn('pending', `در انتظار پاسخ (${fa(pending.length)})`)
+    pending: tabBtn('pending', `در انتظار پاسخ (${fa(pending.length)})`),
+    ...(canSurvey() ? { survey: tabBtn('survey', 'نظرسنجی خانواده‌ها') } : {}) /* ۱.۲۵.۵۹ — شمارنده در paintSurveyZone می‌نشیند */
   };
   const tabs = el('div', { style: { display: 'flex', gap: '8px', margin: '0 0 var(--sp-4)', flexWrap: 'wrap' } },
-    tabBtns.library, tabBtns.pending
+    tabBtns.library, tabBtns.pending, tabBtns.survey ?? null
   );
   function tabBtn(key, label) {
     return el('button', {
@@ -114,7 +120,8 @@ export async function renderCaseEventTypes(container) {
       b.classList.remove('btn--primary');
       b.classList.add('btn--soft');
     }
-    const activeBtn = tabs.querySelectorAll('button')[state.tab === 'library' ? 0 : 1];
+    const idx = state.tab === 'library' ? 0 : state.tab === 'pending' ? 1 : 2;
+    const activeBtn = tabs.querySelectorAll('button')[idx];
     activeBtn.classList.remove('btn--soft');
     activeBtn.classList.add('btn--primary');
     renderBodyZone(); /* ۱.۲۲.۰ — تعویض تب فقط ناحیهٔ بدنه را جابه‌جا می‌کند؛ شِل دست‌نخورده */
@@ -124,6 +131,8 @@ export async function renderCaseEventTypes(container) {
   const libraryFilters = buildLibraryFilters();
   const listZone = el('div', {});
   const pendingZone = el('div', {});
+  const surveyZone = el('div', {}); /* ۱.۲۵.۵۹ — نظرسنجی خانواده‌ها (تنبل: فقط با باز شدن تب) */
+  let surveyLoaded = false; /* ۱.۲۵.۵۹ — جلوگیری از دوبار GET هنگام رفت‌وبرگشت تب‌ها */
   const body = el('div', {});
   container.replaceChildren(head, tabs, body);
   renderBodyZone();
@@ -132,6 +141,12 @@ export async function renderCaseEventTypes(container) {
     if (state.tab === 'library') {
       body.replaceChildren(libraryFilters, listZone);
       paintTypeZone();
+    } else if (state.tab === 'survey' && surveyZone) {
+      body.replaceChildren(surveyZone);
+      if (!surveyLoaded) {
+        surveyLoaded = true;
+        paintSurveyZone();
+      }
     } else {
       body.replaceChildren(pendingZone);
       paintPendingZone();
@@ -292,6 +307,242 @@ export async function renderCaseEventTypes(container) {
     } catch (err) {
       if (myGen === pendingGen) toastError(err);
     }
+  }
+
+  /* ═══ ۱.۲۵.۵۹ — نظرسنجی خانواده‌ها (رضایت کیفی مرکز و درمانگر) ═══
+     ساخت گروهی با لینک امن ۷روزهٔ هر خانواده + پیگیری وضعیت پاسخ؛
+     نتایج در همین تب می‌نشیند و در «شاخص‌های مرکز» (KPI) تجمیع می‌شود. */
+  const SURVEY_STATUS = {
+    pending_family: { label: 'در انتظار پاسخ', cls: 'badge--warning' },
+    completed: { label: 'پاسخ داده شد', cls: 'badge--success' },
+    cancelled: { label: 'لغو شده', cls: 'badge--neutral' },
+    draft: { label: 'پیش‌نویس', cls: 'badge--neutral' }
+  };
+  let surveyGen = 0;
+
+  async function paintSurveyZone() {
+    if (!surveyZone.isConnected) return;
+    surveyZone.replaceChildren(skeletonState('table', 4));
+    let surveys, staff;
+    try {
+      [surveys, staff] = await Promise.all([
+        api.get('/api/case-events/surveys').then((r) => r.data ?? []),
+        api.get('/api/staff').then((r) => r.data ?? []).catch(() => [])
+      ]);
+    } catch (err) {
+      surveyZone.replaceChildren(errorState(err, () => paintSurveyZone()));
+      return;
+    }
+    state.surveys = surveys;
+    state.staff = staff;
+    surveyPaint();
+  }
+
+  async function refreshSurveys() {
+    const myGen = ++surveyGen;
+    try {
+      const res = await api.get('/api/case-events/surveys');
+      if (myGen !== surveyGen) return;
+      state.surveys = res.data ?? [];
+      if (surveyZone.isConnected) surveyPaint();
+    } catch (err) {
+      if (myGen === surveyGen) toastError(err);
+    }
+  }
+
+  function surveyPaint() {
+    if (!surveyZone.isConnected) return;
+    const surveys = state.surveys ?? [];
+    const pendingN = surveys.filter((s) => s.status === 'pending_family').length;
+    const filledN = surveys.filter((s) => s.status === 'completed').length;
+    const filled = surveys.filter((s) => s.status === 'completed');
+    const avg = (arr) => (arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null);
+    const centerAvg = avg(filled.map((s) => s.centerScore).filter((x) => x !== null && x !== undefined));
+    const therapistAvg = avg(filled.map((s) => s.therapistScore).filter((x) => x !== null && x !== undefined));
+    const npsAvg = filled.map((s) => s.nps).filter((x) => x !== null && x !== undefined).length
+      ? (filled.map((s) => s.nps).filter((x) => x !== null && x !== undefined).reduce((a, b) => a + b, 0)
+        / filled.map((s) => s.nps).filter((x) => x !== null && x !== undefined).length)
+      : null;
+
+    const summary = el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '0 0 var(--sp-4)', alignItems: 'center' } },
+      el('span', { class: 'badge badge--accent' }, `ارسال‌شده: ${fa(surveys.length)}`),
+      el('span', { class: 'badge badge--warning' }, `در انتظار: ${fa(pendingN)}`),
+      el('span', { class: 'badge badge--success' }, `پاسخ‌گرفته: ${fa(filledN)}`),
+      filledN > 0 && centerAvg !== null ? el('span', { class: 'badge badge--info' }, `میانگین مرکز: ${fa(centerAvg)}٪`) : null,
+      filledN > 0 && therapistAvg !== null ? el('span', { class: 'badge badge--info' }, `میانگین درمانگر: ${fa(therapistAvg)}٪`) : null,
+      npsAvg !== null ? el('span', { class: 'badge badge--neutral' }, `توصیه به آشنایان: ${fa(Math.round(npsAvg * 10) / 10)} از ۱۰`) : null
+    );
+
+    const rows = surveys.length === 0
+      ? [emptyState({
+          iconName: 'clipboard',
+          title: 'هنوز نظرسنجی‌ای ارسال نشده',
+          hint: isManager()
+            ? 'با «ارسال نظرسنجی جدید» از خانواده‌های فعال دعوت کنید — هر خانواده لینک امن ۷روزهٔ خودش را می‌گیرد و نتیجه در شاخص‌های مرکز می‌نشیند.'
+            : 'فقط مدیر می‌تواند نظرسنجی جدید بسازد؛ نتایج همین‌جا نمایش داده می‌شود.'
+        })]
+      : surveys.map((s) => surveyCard(s));
+
+    surveyZone.replaceChildren(
+      el('div', { class: 'page-head', style: { margin: '0 0 var(--sp-3)' } },
+        el('div', {},
+          el('div', { class: 'page-head__title', style: { fontSize: 'var(--fs-md)' } }, 'نظرسنجی رضایت — مرکز و درمانگر'),
+          el('div', { class: 'page-head__desc' }, 'هر خانواده لینک امن اختصاصی می‌گیرد؛ پاسخ‌ها بی‌نام در شاخص‌های عملکردی مرکز تجمیع می‌شوند و متن پیشنهاد با نام خانواده می‌آید.')
+        ),
+        isManager()
+          ? el('button', { class: 'btn btn--primary', onclick: openSurveyCreateModal }, icon('send', 15), 'ارسال نظرسنجی جدید')
+          : null
+      ),
+      summary,
+      el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--sp-4)' } }, ...rows.filter(Boolean))
+    );
+  }
+
+  function surveyCard(s) {
+    const st = SURVEY_STATUS[s.status] ?? { label: s.status, cls: 'badge--neutral' };
+    const expired = s.status === 'pending_family' && s.fillExpiresAt && new Date(s.fillExpiresAt).getTime() < Date.now();
+    const scores = s.status === 'completed'
+      ? el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '6px 0 0' } },
+          s.centerScore !== null && s.centerScore !== undefined ? el('span', { class: 'badge badge--neutral' }, `مرکز: ${fa(s.centerScore)}٪`) : null,
+          s.therapistScore !== null && s.therapistScore !== undefined ? el('span', { class: 'badge badge--neutral' }, `درمانگر: ${fa(s.therapistScore)}٪`) : null,
+          s.nps !== null && s.nps !== undefined ? el('span', { class: 'badge badge--neutral' }, `توصیه: ${fa(s.nps)}/۱۰`) : null)
+      : null;
+    const note = s.note
+      ? el('div', { class: 'cell-sub', style: { marginTop: '6px', whiteSpace: 'pre-wrap' } }, `«${s.note}»`)
+      : null;
+    return el('div', { class: 'card', dataset: { id: s.id }, style: { padding: 'var(--sp-3)', display: 'flex', flexDirection: 'column', gap: '6px' } },
+      el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } },
+        el('b', { style: { flex: '1', minWidth: '0' } }, s.studentName || 'دانش‌آموز'),
+        el('span', { class: `badge ${expired ? 'badge--error' : st.cls}` }, expired ? 'مهلت تمام شده' : st.label)
+      ),
+      el('div', { class: 'cell-sub' },
+        s.therapistName ? `درمانگر مورد ارزیابی: ${s.therapistName}` : 'درمانگر مورد ارزیابی: ثبت نشده',
+        ` · ساخت: ${formatJalaliDateTime(s.createdAt)}`
+      ),
+      scores,
+      note,
+      el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: 'auto' } },
+        s.status === 'pending_family' && s.link
+          ? el('button', { class: 'btn btn--sm btn--soft', onclick: async () => {
+              try { await navigator.clipboard.writeText(s.link); toast('لینک فرم کپی شد — برای خانواده بفرستید'); }
+              catch { toastError(new Error('کپی لینک ممکن نشد — مرورگر اجازه نداد')); }
+            } }, icon('copy', 14), 'کپی لینک')
+          : null,
+        s.status === 'pending_family'
+          ? el('button', { class: 'btn btn--sm btn--soft', onclick: async (ev) => {
+              const btn = ev.currentTarget;
+              btn.disabled = true;
+              try {
+                const res = await api.post(`/api/case-events/${s.id}/send`, { audience: 'family' });
+                toast(`برای ${fa(res.data?.sent ?? 0)} چت بله ارسال شد`);
+                refreshSurveys();
+              } catch (err) {
+                toastError(err);
+                btn.disabled = false;
+              }
+            } }, icon('send', 14), 'ارسال با بله')
+          : null,
+        s.status === 'pending_family' && isManager()
+          ? el('button', { class: 'btn btn--sm btn--soft', onclick: async () => {
+              const ok = await confirmModal({ title: 'لغو نظرسنجی', message: `نظرسنجی «${s.studentName}» لغو شود؟ خانواده دیگر نمی‌تواند پاسخ دهد.`, confirmLabel: 'لغو نظرسنجی', danger: true });
+              if (!ok) return;
+              try {
+                await api.post(`/api/case-events/${s.id}/cancel`, {});
+                toast('نظرسنجی لغو شد');
+                refreshSurveys();
+              } catch (err) { toastError(err); }
+            } }, icon('x', 14), 'لغو')
+          : null
+      )
+    );
+  }
+
+  async function openSurveyCreateModal() {
+    let students = [];
+    let staffList = state.staff ?? [];
+    surveyZone.replaceChildren(skeletonState('table', 3));
+    try {
+      [students, staffList] = await Promise.all([
+        fetchAllStudents(),
+        state.staff?.length ? Promise.resolve(state.staff) : api.get('/api/staff').then((r) => r.data ?? []).catch(() => [])
+      ]);
+    } catch (err) {
+      toastError(err);
+      paintSurveyZone();
+      return;
+    }
+    state.staff = staffList;
+    if (students.length === 0) {
+      toast('دانش‌آموز فعالی برای نظرسنجی نیست');
+      paintSurveyZone();
+      return;
+    }
+
+    const checked = new Map(students.map((s) => [s.id, false]));
+    const searchInput = el('input', { class: 'input', type: 'search', placeholder: 'جستجوی نام دانش‌آموز…', style: { margin: '0 0 var(--sp-2)' } });
+    const listWrap = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '300px', overflowY: 'auto', padding: '4px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' } });
+    const footNote = el('div', { class: 'cell-sub', style: { marginTop: '6px' } });
+    const therapists = staffList.filter((s) => !s.role || s.role === 'therapist');
+    const therapistSel = el('select', { class: 'input' },
+      el('option', { value: '' }, '— درمانگر مورد ارزیابی (اختیاری) —'),
+      ...therapists.map((t) => el('option', { value: t.id }, t.full_name ?? t.name ?? t.id))
+    );
+
+    const rowOf = (s) => {
+      const cb = el('input', { type: 'checkbox', checked: checked.get(s.id), style: { width: '17px', height: '17px', accentColor: 'var(--brand)', flex: 'none' } });
+      cb.addEventListener('change', () => { checked.set(s.id, cb.checked); syncFooter(); });
+      return el('label', { dataset: { sid: s.id }, style: { display: 'flex', alignItems: 'center', gap: '9px', padding: '7px 10px', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' } },
+        cb,
+        el('span', { style: { flex: '1', minWidth: '0', fontSize: '13px' } }, s.first_name ? `${s.first_name} ${s.last_name ?? ''}` : (s.full_name ?? s.name ?? s.id))
+      );
+    };
+    const paintList = (q) => {
+      const query = (q ?? '').trim();
+      listWrap.replaceChildren(...students
+        .filter((s) => !query || String(s.first_name ?? '').concat(' ', String(s.last_name ?? '')).includes(query) || String(s.full_name ?? '').includes(query))
+        .map(rowOf));
+    };
+    searchInput.addEventListener('input', () => paintList(searchInput.value));
+    const syncFooter = () => {
+      const n = [...checked.values()].filter(Boolean).length;
+      footNote.textContent = n === 0 ? 'حداقل یک خانواده را انتخاب کنید' : `${fa(n)} خانواده انتخاب شده — هرکدام لینک امن ۷روزهٔ خودش را می‌گیرد.`;
+      submitBtn.disabled = n === 0;
+    };
+    const submitBtn = el('button', { class: 'btn btn--primary', disabled: true, onclick: async () => {
+      const ids = [...checked.entries()].filter(([, v]) => v).map(([k]) => k);
+      submitBtn.disabled = true;
+      try {
+        const res = await api.post('/api/case-events/surveys', {
+          student_ids: ids,
+          therapist_id: therapistSel.value || null
+        });
+        toast(`نظرسنجی برای ${fa(res.data?.created?.length ?? 0)} خانواده ساخته شد — لینک‌ها در فهرست آمادهٔ کپی/ارسال‌اند`);
+        modalShell.close();
+        refreshSurveys();
+      } catch (err) {
+        toastError(err);
+        submitBtn.disabled = false;
+      }
+    } }, icon('send', 15), 'ساخت و صدور لینک‌ها');
+
+    const modalShell = openModal({
+      title: 'ارسال نظرسنجی رضایت — مرکز و درمانگر',
+      wide: true,
+      onClose: () => { if (surveyZone.isConnected && !surveyZone.querySelector('[data-id]')) paintSurveyZone(); },
+      body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } },
+        el('div', { class: 'field' },
+          el('label', { class: 'field__label' }, 'درمانگر مورد ارزیابی — اگر نظرسنجی دربارهٔ یک درمانگر خاص است انتخاب کنید'),
+          therapistSel
+        ),
+        el('div', { class: 'field' },
+          el('label', { class: 'field__label' }, `خانواده‌های هدف (${fa(students.length)} دانش‌آموز فعال) — هر خانواده یک نظرسنجی مستقل با لینک خودش می‌گیرد`),
+          searchInput, listWrap, footNote
+        )
+      ),
+      actions: [submitBtn]
+    });
+    paintList('');
+    syncFooter();
   }
 
   const ctl = {

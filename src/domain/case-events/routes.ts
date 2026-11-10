@@ -1,6 +1,6 @@
 import type { AppHono } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
-import { CaseEventTypeInputSchema, CaseEventTypeUpdateSchema, teacherBindingOfPayload } from './pure';
+import { CaseEventTypeInputSchema, CaseEventTypeUpdateSchema, SurveyCreateSchema, teacherBindingOfPayload } from './pure';
 import type { CaseEventsService, CaseEventTypeInput } from './types';
 import { renderFillFormPage } from './public-form';
 
@@ -47,6 +47,19 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
 
   app.get('/api/case-events/pending', async (c) => {
     const items = await service.listPendingChecklists();
+    return c.json({ data: items }, 200);
+  });
+
+  /* ۱.۲۵.۵۹ — نظرسنجی رضایت مرکز/درمانگر: ساخت گروهی فقط مدیر؛ فهرست برای مدیر/منشی */
+  app.post('/api/case-events/surveys', requireRole('manager'), async (c) => {
+    const actor = getAuthContext(c);
+    const body = SurveyCreateSchema.parse(await c.req.json<unknown>());
+    const result = await service.createSurveyEvents({ studentIds: body.student_ids, therapistId: body.therapist_id ?? null }, actor);
+    return c.json({ data: result }, 201);
+  });
+
+  app.get('/api/case-events/surveys', requireRole('manager', 'secretary'), async (c) => {
+    const items = await service.listSurveys();
     return c.json({ data: items }, 200);
   });
 
@@ -229,13 +242,31 @@ export function registerCaseEventPublicRoutes(
     const type = await service.getTypeById(event.eventTypeId);
     const teacherName = teacherBindingOfPayload(event.payload)?.name ?? null;
 
+    /* ۱.۲۵.۵۹ — کانون‌های پایش: اسنپ‌شات _monitor_focus (نوشته‌شده هنگام ارسال) بنر فرم را می‌سازد
+       و زیرمقیاس‌های درگیر به ابتدای فرم می‌آیند؛ رویدادهای بدون اسنپ‌شات مثل قبل می‌مانند */
+    let focusNote: string | null = null;
+    const focusKeys = new Set<string>();
+    const focusPayloadRaw = (event.payload as Record<string, { value?: unknown } | undefined> | null)?.['_monitor_focus']?.value;
+    if (typeof focusPayloadRaw === 'string' && focusPayloadRaw.trim() !== '') {
+      try {
+        const focus = JSON.parse(focusPayloadRaw) as { items?: { key?: string; titleFa?: string }[] | null };
+        const items = (focus.items ?? []).filter((i) => i.key);
+        if (items.length > 0) {
+          focusNote = items.map((i) => i.titleFa ?? i.key).join('، ');
+          for (const i of items) focusKeys.add(i.key as string);
+        }
+      } catch { /* اسنپ‌شات معیوب = بدون بنر؛ فرم کامل عادی رندر می‌شود */ }
+    }
+
     const subscaleName = new Map((type?.subscales ?? []).map((s) => [s.id, s.name] as const));
-    const sections: { title: string | null; items: { key: string; label: string; scaleMax?: number; scoredOptions?: { label: string }[]; scaleLabels?: string[]; hint?: string | null; teacherLabel?: string | null; teacherHint?: string | null }[] }[] = [];
+    const sections: { title: string | null; items: { key: string; label: string; kind?: 'scale' | 'single' | 'longtext'; scaleMax?: number; scoredOptions?: { label: string }[]; scaleLabels?: string[]; hint?: string | null; teacherLabel?: string | null; teacherHint?: string | null }[] }[] = [];
     for (const f of type?.fields ?? []) {
-      if (f.type !== 'scale' && f.type !== 'single') continue; // — فقط آیتم نمره‌دار به گیرنده می‌رسد
+      if (f.type !== 'scale' && f.type !== 'single' && f.type !== 'longtext') continue; // — آیتم نمره‌دار + متن آزاد به گیرنده می‌رسد
       const title = f.subscaleId ? subscaleName.get(f.subscaleId) ?? null : null;
       const item = {
-        key: f.key, label: f.label, scaleMax: f.scaleMax,
+        key: f.key, label: f.label,
+        kind: (f.type === 'longtext' ? 'longtext' : f.type) as 'scale' | 'single' | 'longtext',
+        scaleMax: f.scaleMax,
         scoredOptions: f.scoredOptions?.map((o) => ({ label: o.label })),
         scaleLabels: f.scaleLabels,
         hint: f.hint ?? null,
@@ -249,13 +280,21 @@ export function registerCaseEventPublicRoutes(
         sections.push({ title, items: [item] });
       }
     }
+    /* ترتیب کانون‌محور: بخش‌های درگیر اول — بقیه به ترتیب کتابخانه */
+    sections.sort((a, b) => {
+      const keyOf = (s: { title: string | null }) => [...subscaleName.entries()].find(([, n]) => n === s.title)?.[0] ?? null;
+      const ai = focusKeys.has(keyOf(a) ?? '') ? 0 : 1;
+      const bi = focusKeys.has(keyOf(b) ?? '') ? 0 : 1;
+      return ai - bi;
+    });
     const model = {
       typeTitle: `${event.typeIcon ?? ''} ${event.typeTitle}`.trim(),
       studentName: studentName ?? '',
       sections,
       audience: event.typeAudience ?? type?.audience ?? 'family',
       description: type?.description ?? null,
-      teacherLabel: teacherName ? `فرم شما — ${teacherName}` : null
+      teacherLabel: teacherName ? `فرم شما — ${teacherName}` : null,
+      focusNote
     };
     return new Response(renderFillFormPage(model, token), {
       status: 200,

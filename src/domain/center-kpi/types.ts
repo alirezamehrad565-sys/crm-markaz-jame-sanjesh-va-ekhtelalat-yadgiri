@@ -89,12 +89,29 @@ export interface DocumentationKpi {
   family_avg_score: number | null;
 }
 
+/* ۱.۲۵.۵۹ — رضایت خانواده‌ها: نظرسنجی ce-center-survey-v1 — تجمیع فقط-عددی (هم‌قانون طلایی) */
+export interface FamilySurveyKpi {
+  /** نظرسنجی‌های ارسالی در پنجره */
+  surveys_sent: number;
+  /** پاسخ‌داده‌شده (completed) */
+  surveys_filled: number;
+  /** filled / sent — null وقتی نظرسنجی‌ای نیست */
+  response_rate: number | null;
+  /** میانگین درصد رضایت از مرکز (زیرمقیاس center) — null اگر پاسخی نیست */
+  center_avg: number | null;
+  /** میانگین درصد رضایت از درمانگر (زیرمقیاس therapist) — null اگر پاسخی نیست */
+  therapist_avg: number | null;
+  /** میانگین احتمال توصیه (۰-۱۰) — null اگر پاسخی نیست */
+  nps_avg: number | null;
+}
+
 export interface KpiSummary {
   window: KpiWindow;
   generated_at: string;
   appointments: AppointmentKpi;
   intervention: InterventionKpi;
   documentation: DocumentationKpi;
+  family_survey: FamilySurveyKpi; // ۱.۲۵.۵۹
 }
 
 export interface CenterKpiDeps {

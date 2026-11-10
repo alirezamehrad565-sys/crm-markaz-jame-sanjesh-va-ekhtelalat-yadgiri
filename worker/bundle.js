@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.58";
+var APP_VERSION = "1.25.59";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -6291,6 +6291,8 @@ var BUG_REPORT_AREAS = [
   { id: "other", label: "\u0628\u062E\u0634 \u062F\u06CC\u06AF\u0631 / \u06A9\u0644\u06CC" }
 ];
 var BUG_REPORT_AREA_IDS = BUG_REPORT_AREAS.map((a) => a.id);
+var HOME_MONITOR_EVENT_KEY = "ce-home-monitor-v2";
+var CENTER_SURVEY_EVENT_KEY = "ce-center-survey-v1";
 
 // src/core/shared/national-id.ts
 var PERSIAN_DIGITS = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
@@ -18842,6 +18844,7 @@ __name(registerRoutes4, "registerRoutes");
 // src/domain/case-events/types.ts
 var CASE_EVENT_CATEGORIES = ["session", "checklist", "note"];
 var CASE_EVENT_FIELD_TYPES = ["text", "longtext", "number", "select", "scale", "single", "heading"];
+var CASE_EVENT_STATUSES = ["draft", "completed", "pending_family", "cancelled"];
 
 // src/domain/case-events/pure.ts
 var TYPE_TITLE_MAX = 120;
@@ -18978,6 +18981,10 @@ var CaseEventTypeInputSchema = external_exports.object({
   audience: external_exports.enum(["family", "teacher", "both"]).nullish()
 });
 var CaseEventTypeUpdateSchema = CaseEventTypeInputSchema.partial();
+var SurveyCreateSchema = external_exports.object({
+  student_ids: external_exports.array(external_exports.string().min(1).max(64)).min(1, "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F").max(200, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u062F\u0631 \u0647\u0631 \u0628\u0627\u0631"),
+  therapist_id: external_exports.string().min(1).max(64).nullish()
+});
 function faNum2(s) {
   return String(s).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
@@ -21763,6 +21770,36 @@ function summarySafePayload2(payload) {
   return rest;
 }
 __name(summarySafePayload2, "summarySafePayload");
+function surveyItemOf(r, publicBaseUrl) {
+  const a = parseJson(r.analysis, null);
+  const sub = /* @__PURE__ */ __name((id) => a?.subscaleScores?.find((s) => s.id === id) ?? null, "sub");
+  const pct = /* @__PURE__ */ __name((id) => {
+    const s = sub(id);
+    if (!s || !Number.isFinite(Number(s.score)) || !s.max || s.max <= 0) return null;
+    return Math.round(Number(s.score) / s.max * 100);
+  }, "pct");
+  const nps = sub("nps");
+  const payload = parseJson(r.payload, null);
+  const link = publicBaseUrl && r.status === "pending_family" && r.fill_token ? `${publicBaseUrl.replace(/\/+$/, "")}/public/case-events/${r.id}/fill?token=${r.fill_token}` : null;
+  return {
+    id: r.id,
+    studentId: r.student_id,
+    studentName: r.student_name ?? "",
+    therapistId: r.staff_id,
+    therapistName: r.staff_name,
+    status: CASE_EVENT_STATUSES.includes(r.status) ? r.status : "pending_family",
+    occurredAt: r.occurred_at,
+    createdAt: r.created_at,
+    fillExpiresAt: r.fill_expires_at,
+    sentAt: r.sent_at,
+    link,
+    centerScore: pct("center"),
+    therapistScore: pct("therapist"),
+    nps: nps && Number.isFinite(Number(nps.score)) ? Number(nps.score) : null,
+    note: payload?.["sv_note"]?.value ?? null
+  };
+}
+__name(surveyItemOf, "surveyItemOf");
 async function applyWechslerHook(db, typeKey, payload, studentId, occurredAtIso) {
   if (typeKey !== WISC4_EVENT_KEY) return payload;
   const birthDate = await studentBirthDate(db, studentId);
@@ -21821,6 +21858,7 @@ function eventRowToRecord(r) {
   return {
     id: r.id,
     eventTypeId: r.event_type_id,
+    typeKey: r.type_key,
     typeTitle: r.type_title,
     typeCategory: r.type_category,
     typeIcon: r.type_icon,
@@ -21862,11 +21900,12 @@ function createCaseEventsService(deps) {
   const fillExpiryHours = deps.fillExpiryHours ?? 168;
   let sendFn = null;
   let fillFn = null;
+  let focusFn = null;
   const EVENT_SELECT = `
     SELECT e.id, e.event_type_id, e.student_id, e.staff_id, s.full_name AS staff_name,
            e.appointment_id, e.occurred_at, e.status, e.payload, e.analysis, e.summary,
            e.fill_expires_at, e.sent_at, e.sent_count, e.filled_by_chat_id, e.created_by, e.created_at,
-           t.title AS type_title, t.category AS type_category, t.icon AS type_icon, t.bands AS type_bands,
+           t.title AS type_title, t.key AS type_key, t.category AS type_category, t.icon AS type_icon, t.bands AS type_bands,
            t.audience AS type_audience, t.family_fillable AS type_family_fillable
       FROM case_events e
       JOIN case_event_types t ON t.id = e.event_type_id
@@ -22732,6 +22771,17 @@ function createCaseEventsService(deps) {
       if (!base) throw new ConflictError("\u0622\u062F\u0631\u0633 \u0639\u0645\u0648\u0645\u06CC \u0633\u0627\u06CC\u062A \u062A\u0646\u0638\u06CC\u0645 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0633\u0627\u062E\u062A \u0644\u06CC\u0646\u06A9 \u0641\u0631\u0645 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A");
       const link = await this.mintFillLink(eventId, base);
       if (!link) throw new ConflictError("\u0633\u0627\u062E\u062A \u0644\u06CC\u0646\u06A9 \u0641\u0631\u0645 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A");
+      if (type.key === HOME_MONITOR_EVENT_KEY && focusFn) {
+        try {
+          const focus = await focusFn(row.student_id, actor);
+          if (focus) {
+            const focusPayload = JSON.stringify({ _monitor_focus: { value: JSON.stringify(focus), label: "\u06A9\u0627\u0646\u0648\u0646\u200C\u0647\u0627\u06CC \u067E\u0627\u06CC\u0634" } });
+            await db.execute(`UPDATE case_events SET payload = ?, updated_at = ? WHERE id = ?`, [focusPayload, now().toISOString(), eventId]);
+          }
+        } catch (err) {
+          log.warn("event.monitor_focus_failed", { eventId, err: err instanceof Error ? err.message : "\u062E\u0637\u0627\u06CC \u0646\u0627\u0645\u0634\u062E\u0635" });
+        }
+      }
       const studentName = await deps.studentNameOf?.(row.student_id) ?? "\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632";
       const note = input.note?.trim() ? input.note.trim() : null;
       const kindLabel = "\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A";
@@ -22799,6 +22849,9 @@ function createCaseEventsService(deps) {
     setFillObserver(fn) {
       fillFn = fn;
     },
+    setMonitorFocusProvider(fn) {
+      focusFn = fn;
+    },
     async verifyFillToken(id, token) {
       if (!token || token.length < 8) return false;
       const row = await db.queryOne(
@@ -22833,13 +22886,20 @@ function createCaseEventsService(deps) {
       const bands = type.bands;
       const subscales = type.subscales;
       const values = input.values;
+      const scoredKeys = new Set(type.fields.filter((f) => f.type === "scale" || f.type === "single").map((f) => f.key));
       for (const f of type.fields) {
-        if (values[f.key] === void 0) {
+        if (f.type === "longtext" || f.type === "text") {
+          if (f.required && String(values[f.key] ?? "").trim() === "") {
+            throw new ValidationError(`\u0622\u06CC\u062A\u0645 \xAB${f.label}\xBB \u0628\u06CC\u200C\u067E\u0627\u0633\u062E \u0645\u0627\u0646\u062F\u0647 \u0627\u0633\u062A`);
+          }
+          continue;
+        }
+        if (values[f.key] === void 0 || values[f.key] === null) {
           throw new ValidationError(`\u0622\u06CC\u062A\u0645 \xAB${f.label}\xBB \u0628\u06CC\u200C\u067E\u0627\u0633\u062E \u0645\u0627\u0646\u062F\u0647 \u0627\u0633\u062A`);
         }
       }
       const numericValues = Object.fromEntries(
-        Object.entries(values).map(([k, v]) => [k, Number(v)])
+        Object.entries(values).filter(([k]) => scoredKeys.has(k)).map(([k, v]) => [k, Number(v)])
       );
       const analysis = analyzeChecklist(type.fields, bands, numericValues, subscales);
       const teacher = teacherBindingOfPayload(parseJson(row.payload, null));
@@ -22847,11 +22907,16 @@ function createCaseEventsService(deps) {
         const p = {};
         for (const f of type.fields) {
           const raw2 = values[f.key];
+          if (raw2 === void 0 || raw2 === null || String(raw2).trim() === "") continue;
           const display = f.type === "single" ? f.scoredOptions?.[Number(raw2)]?.label ?? String(raw2) : String(raw2);
           p[f.key] = { value: display, label: f.label };
         }
         return p;
       })(), teacher);
+      const previous = parseJson(row.payload, null) ?? {};
+      for (const [k, v] of Object.entries(previous)) {
+        if (k.startsWith("_") && v && !payload[k]) payload[k] = v;
+      }
       const summary = buildSummary(payload, analysis);
       const sourceTag = input.viaWeb ? `web:${now().toISOString()}` : input.sourceChatId ?? "unknown";
       await db.execute(
@@ -22885,6 +22950,86 @@ function createCaseEventsService(deps) {
         via: input.viaWeb ? "web" : "bot"
       });
       return eventRowToRecord(await getEventRow(id));
+    },
+    /* ۱.۲۵.۵۹ — نظرسنجی رضایت: ساخت گروهی رویداد در انتظار خانواده (مدیر) —
+       هر خانواده لینک امن ۷روزهٔ خودش را می‌گیرد؛ درمانگر مورد ارزیابی در staff_id می‌نشیند */
+    async createSurveyEvents(input, actor) {
+      const typeRow = await loadTypeRowByKey(CENTER_SURVEY_EVENT_KEY);
+      if (!typeRow || !typeRow.active) throw new ConflictError("\u0646\u0648\u0639 \u0646\u0638\u0631\u0633\u0646\u062C\u06CC \u062F\u0631 \u06A9\u062A\u0627\u0628\u062E\u0627\u0646\u0647 \u0641\u0639\u0627\u0644 \u0646\u06CC\u0633\u062A (migration 0104)");
+      const type = typeRowToRecord(typeRow);
+      const ids = [...new Set(input.studentIds.map((x) => String(x).trim()).filter(Boolean))];
+      if (ids.length === 0) throw new ValidationError("\u0647\u06CC\u0686 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u06CC \u0627\u0646\u062A\u062E\u0627\u0628 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
+      let therapistId = null;
+      if (input.therapistId && String(input.therapistId).trim() !== "") {
+        const t = await db.queryOne(
+          `SELECT id, active FROM staff WHERE id = ?`,
+          [String(input.therapistId).trim()]
+        );
+        if (!t) throw new NotFoundError("\u062F\u0631\u0645\u0627\u0646\u06AF\u0631");
+        therapistId = t.id;
+      }
+      const base = deps.publicBaseUrl?.trim() || null;
+      const created = [];
+      const nowIso = now().toISOString();
+      const fillExpires = new Date(now().getTime() + fillExpiryHours * 36e5).toISOString();
+      for (const studentId of ids) {
+        await assertStudent(studentId);
+        const id = crypto.randomUUID();
+        const token = crypto.randomUUID();
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
+                                      status, payload, analysis, summary, fill_token, fill_expires_at, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, NULL, ?, 'pending_family', NULL, NULL, NULL, ?, ?, ?, ?, ?)`,
+            [id, type.id, studentId, therapistId ?? actor.staffId, nowIso, token, fillExpires, actor.staffId, nowIso, nowIso]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: "case_event.survey_created",
+            resourceType: "case_event",
+            resourceId: id,
+            changes: {
+              studentId: { from: null, to: studentId },
+              therapistId: { from: null, to: therapistId ?? actor.staffId },
+              typeKey: { from: null, to: type.key }
+            }
+          });
+        });
+        created.push({
+          id,
+          studentId,
+          studentName: await deps.studentNameOf?.(studentId) ?? "",
+          therapistId: therapistId ?? actor.staffId,
+          therapistName: null,
+          status: "pending_family",
+          occurredAt: nowIso,
+          createdAt: nowIso,
+          fillExpiresAt: fillExpires,
+          sentAt: null,
+          link: base ? `${base.replace(/\/+$/, "")}/public/case-events/${id}/fill?token=${token}` : null,
+          centerScore: null,
+          therapistScore: null,
+          nps: null,
+          note: null
+        });
+      }
+      log.info("event.surveys_created", { count: created.length, therapistId });
+      return { created };
+    },
+    async listSurveys() {
+      const rows = await db.query(
+        `SELECT e.id, e.student_id, e.staff_id, st.first_name || ' ' || st.last_name AS student_name, s.full_name AS staff_name,
+                e.status, e.occurred_at, e.created_at, e.fill_expires_at, e.sent_at, e.fill_token, e.analysis, e.payload
+           FROM case_events e
+           JOIN case_event_types t ON t.id = e.event_type_id
+           JOIN students st ON st.id = e.student_id
+           LEFT JOIN staff s ON s.id = e.staff_id
+          WHERE t.key = ? AND e.deleted_at IS NULL
+          ORDER BY e.created_at DESC LIMIT 500`,
+        [CENTER_SURVEY_EVENT_KEY]
+      );
+      const base = deps.publicBaseUrl?.trim() || null;
+      return rows.map((r) => surveyItemOf(r, base));
     }
   };
 }
@@ -22900,13 +23045,19 @@ var SCALE_LABELS = ["\u06F0", "\u06F1", "\u06F2", "\u06F3", "\u06F4", "\u06F5", 
 function renderFillFormPage(model, token) {
   const esc2 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
   let counter = 0;
-  const total = model.sections.reduce((sum, s) => sum + s.items.length, 0);
+  const total = model.sections.reduce((sum, s) => sum + s.items.filter((f) => f.kind !== "longtext").length, 0);
   const isTeacherForm = model.audience === "teacher" || !!model.teacherLabel;
   const headTitle = isTeacherForm ? "\u067E\u0631\u0633\u0634\u200C\u0646\u0627\u0645\u0647\u0654 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0634\u0645\u0627 \u2014 \u0641\u0631\u0645 \u0645\u0639\u0644\u0645" : "\u067E\u0631\u0633\u0634\u200C\u0646\u0627\u0645\u0647\u0654 \u0641\u0631\u0632\u0646\u062F \u0634\u0645\u0627";
   const headSub = model.studentName ? isTeacherForm ? `\u062F\u0631\u0628\u0627\u0631\u0647\u0654 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632: ${model.studentName}` : `\u062F\u0631\u0628\u0627\u0631\u0647\u0654 ${model.studentName}` : "";
   const sections = model.sections.map((sec) => {
     const items = sec.items.map((f) => {
       counter += 1;
+      const qLabel = isTeacherForm && f.teacherLabel ? f.teacherLabel : f.label;
+      const qHint = isTeacherForm && f.teacherHint ? f.teacherHint : f.hint;
+      if (f.kind === "longtext") {
+        counter -= 1;
+        return `<div class="item item--free"><div class="q">${esc2(qLabel)}</div>${qHint ? `<div class="hint">${esc2(qHint)}</div>` : ""}<textarea class="free" name="${esc2(f.key)}" maxlength="1500" rows="3" placeholder="\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u2014 \u0627\u06AF\u0631 \u0686\u06CC\u0632\u06CC \u0628\u0631\u0627\u06CC \u06AF\u0641\u062A\u0646 \u062F\u0627\u0631\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F"></textarea></div>`;
+      }
       let opts = [];
       if (f.scoredOptions && f.scoredOptions.length > 0) {
         opts = f.scoredOptions.map(
@@ -22924,8 +23075,6 @@ function renderFillFormPage(model, token) {
           );
         }
       }
-      const qLabel = isTeacherForm && f.teacherLabel ? f.teacherLabel : f.label;
-      const qHint = isTeacherForm && f.teacherHint ? f.teacherHint : f.hint;
       return `<div class="item" data-key="${esc2(f.key)}"><div class="q">${faNum4(counter)}. ${esc2(qLabel)}</div>${qHint ? `<div class="hint">${esc2(qHint)}</div>` : ""}<div class="opts">${opts.join("")}</div></div>`;
     }).join("");
     const head = sec.title ? `<div class="subscale"><span class="subscale__dot"></span>${esc2(sec.title)}</div>` : "";
@@ -22972,6 +23121,12 @@ function renderFillFormPage(model, token) {
          border: 1px solid #E5DCCB; border-radius: 10px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
   .opt--wide { width: 100%; align-items: flex-start; }
   .opt:has(input:checked) { background: #D9EDF7; border-color: #229ED9; }
+  .item--free .q { font-size: 13.5px; }
+  textarea.free { width: 100%; border: 1px solid #E5DCCB; border-radius: 10px; padding: 10px 12px;
+                  font-family: inherit; font-size: 13.5px; line-height: 1.9; resize: vertical; background: #FDFCF9; }
+  textarea.free:focus { outline: 2px solid #229ED9; outline-offset: -1px; }
+  .focus { background: #FFF7E0; border: 1px solid #E8D48B; color: #6B5416; border-radius: 12px;
+           padding: 11px 14px; margin-bottom: 14px; font-size: 13px; line-height: 1.9; }
   .btn { display: block; width: 100%; border: 0; background: #229ED9; color: #fff;
          border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 700; cursor: pointer;
          font-family: inherit; margin-top: 6px; }
@@ -22996,6 +23151,7 @@ function renderFillFormPage(model, token) {
     <div class="progress__bar"><div class="progress__fill" id="progFill"></div></div>
   </div>
   <div class="notice">\u0627\u06CC\u0646 \u0641\u0631\u0645 \u062A\u0634\u062E\u06CC\u0635 \u0646\u06CC\u0633\u062A\u061B \u0641\u0642\u0637 \u0628\u0647 \u062A\u0635\u0645\u06CC\u0645\u200C\u06AF\u06CC\u0631\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u06A9\u0645\u06A9 \u0645\u06CC\u200C\u06A9\u0646\u062F.</div>
+  ${model.focusNote ? `<div class="focus">\u{1F3AF} \u06A9\u0627\u0646\u0648\u0646\u200C\u0647\u0627\u06CC \u0627\u06CC\u0646 \u062F\u0648\u0631\u0647 \u0627\u0632 \u0622\u062E\u0631\u06CC\u0646 \u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u067E\u0631\u0648\u0646\u062F\u0647: <b>${esc2(model.focusNote)}</b> \u2014 \u0647\u0645\u06CC\u0646 \u0628\u062E\u0634\u200C\u0647\u0627 \u062F\u0631 \u0627\u0628\u062A\u062F\u0627\u06CC \u0641\u0631\u0645 \u0622\u0645\u062F\u0647\u200C\u0627\u0646\u062F.</div>` : ""}
   <form id="f" novalidate>
     ${sections}
     <button class="btn" type="submit">\u0627\u0631\u0633\u0627\u0644 \u067E\u0627\u0633\u062E\u200C\u0647\u0627</button>
@@ -23030,8 +23186,13 @@ function renderFillFormPage(model, token) {
       var name = radio.name;
       if (data.get(name)) answers[name] = Number(data.get(name));
     });
+    document.querySelectorAll('#f textarea.free').forEach(function (ta) {
+      var v = (ta.value || '').trim();
+      if (v) answers[ta.name] = v;
+    });
     var missing = 0;
     document.querySelectorAll('#f .item').forEach(function (item) {
+      if (item.classList.contains('item--free')) return; /* \u06F1.\u06F2\u06F5.\u06F5\u06F9 \u2014 \u0641\u06CC\u0644\u062F \u0622\u0632\u0627\u062F \u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u0627\u0633\u062A */
       var has = item.querySelector('input[type=radio]:checked');
       item.classList.toggle('is-missing', !has);
       if (!has) missing += 1;
@@ -23112,6 +23273,16 @@ function registerCaseEventsRoutes(app, service) {
   });
   app.get("/api/case-events/pending", async (c) => {
     const items = await service.listPendingChecklists();
+    return c.json({ data: items }, 200);
+  });
+  app.post("/api/case-events/surveys", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = SurveyCreateSchema.parse(await c.req.json());
+    const result = await service.createSurveyEvents({ studentIds: body.student_ids, therapistId: body.therapist_id ?? null }, actor);
+    return c.json({ data: result }, 201);
+  });
+  app.get("/api/case-events/surveys", requireRole("manager", "secretary"), async (c) => {
+    const items = await service.listSurveys();
     return c.json({ data: items }, 200);
   });
   app.post("/api/case-events/:id/send", requireRole("manager", "secretary", "therapist"), async (c) => {
@@ -23269,14 +23440,29 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
     const studentName = await helpers.studentNameOf(event.studentId);
     const type = await service.getTypeById(event.eventTypeId);
     const teacherName = teacherBindingOfPayload(event.payload)?.name ?? null;
+    let focusNote = null;
+    const focusKeys = /* @__PURE__ */ new Set();
+    const focusPayloadRaw = event.payload?.["_monitor_focus"]?.value;
+    if (typeof focusPayloadRaw === "string" && focusPayloadRaw.trim() !== "") {
+      try {
+        const focus = JSON.parse(focusPayloadRaw);
+        const items = (focus.items ?? []).filter((i) => i.key);
+        if (items.length > 0) {
+          focusNote = items.map((i) => i.titleFa ?? i.key).join("\u060C ");
+          for (const i of items) focusKeys.add(i.key);
+        }
+      } catch {
+      }
+    }
     const subscaleName = new Map((type?.subscales ?? []).map((s) => [s.id, s.name]));
     const sections = [];
     for (const f of type?.fields ?? []) {
-      if (f.type !== "scale" && f.type !== "single") continue;
+      if (f.type !== "scale" && f.type !== "single" && f.type !== "longtext") continue;
       const title = f.subscaleId ? subscaleName.get(f.subscaleId) ?? null : null;
       const item = {
         key: f.key,
         label: f.label,
+        kind: f.type === "longtext" ? "longtext" : f.type,
         scaleMax: f.scaleMax,
         scoredOptions: f.scoredOptions?.map((o) => ({ label: o.label })),
         scaleLabels: f.scaleLabels,
@@ -23291,13 +23477,20 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
         sections.push({ title, items: [item] });
       }
     }
+    sections.sort((a, b) => {
+      const keyOf = /* @__PURE__ */ __name((s) => [...subscaleName.entries()].find(([, n]) => n === s.title)?.[0] ?? null, "keyOf");
+      const ai = focusKeys.has(keyOf(a) ?? "") ? 0 : 1;
+      const bi = focusKeys.has(keyOf(b) ?? "") ? 0 : 1;
+      return ai - bi;
+    });
     const model = {
       typeTitle: `${event.typeIcon ?? ""} ${event.typeTitle}`.trim(),
       studentName: studentName ?? "",
       sections,
       audience: event.typeAudience ?? type?.audience ?? "family",
       description: type?.description ?? null,
-      teacherLabel: teacherName ? `\u0641\u0631\u0645 \u0634\u0645\u0627 \u2014 ${teacherName}` : null
+      teacherLabel: teacherName ? `\u0641\u0631\u0645 \u0634\u0645\u0627 \u2014 ${teacherName}` : null,
+      focusNote
     };
     return new Response(renderFillFormPage(model, token), {
       status: 200,
@@ -34251,8 +34444,18 @@ function consensusOf(ruleSet, perTool) {
   return { bonus: 0, oneSided: false };
 }
 __name(consensusOf, "consensusOf");
+function normalizeSdqParentKeys(done) {
+  const both = done.filter((e) => e.toolKey === "sdq-parent" || e.toolKey === "ce-sdq-p-v1");
+  if (both.length === 0) return done;
+  const newest = [...both].sort(
+    (a, b) => String(b.occurredAt ?? "").localeCompare(String(a.occurredAt ?? ""))
+  )[0];
+  const winner = newest.toolKey === "sdq-parent" ? newest : { ...newest, toolKey: "sdq-parent" };
+  return done.filter((e) => e.toolKey !== "sdq-parent" && e.toolKey !== "ce-sdq-p-v1").concat(winner);
+}
+__name(normalizeSdqParentKeys, "normalizeSdqParentKeys");
 function engineFactsOf(events) {
-  const done = completed(events);
+  const done = normalizeSdqParentKeys(completed(events));
   const latest = latestPerTool(done);
   const perTool = latestTwoPerTool(done);
   const wEvent = latest.get(WECHSLER_W4_EVENT_KEY);
@@ -35067,11 +35270,14 @@ var SDQ_PROS_WEAK_MAX = 4;
 var TOOL_SOURCE = {
   "ce-snap-iv-p-v1": "parent",
   "sdq-parent": "parent",
+  "ce-sdq-p-v1": "parent",
   "ce-scared-p-v1": "parent",
   "ce-dcdq-v1": "parent",
   "achenbach-practical": "parent",
   "home_behavior": "parent",
+  "ce-home-monitor-v2": "parent",
   "ce-anamnesis-v2": "parent",
+  "ce-anamnesis-v3": "parent",
   "ce-snap-iv-t-v1": "teacher",
   "ce-sdq-t-v1": "teacher",
   "teacher-classroom": "teacher",
@@ -35085,6 +35291,7 @@ var TOOL_SOURCE = {
   "ce-rehab-cog-v1": "examiner",
   "ce-rehab-motor-v1": "examiner",
   "ce-rehab-adl-v1": "examiner",
+  "ce-rehab-fx-v1": "examiner",
   "ce-probe-read-v1": "performance",
   "ce-probe-write-v1": "performance",
   "ce-probe-calc-v1": "performance"
@@ -35094,12 +35301,12 @@ var OT_PROFILE_TOOL = "OtProfile";
 var CONSTRUCT_MIN_COVERAGE = {
   attention_exec: ["ce-snap-iv-p-v1", "ce-snap-iv-t-v1", WECHSLER_TOOL, "ce-rehab-cog-v1"],
   externalizing: ["ce-snap-iv-p-v1", "ce-snap-iv-t-v1", "ce-odd-criteria-v1"],
-  internalizing: ["ce-scared-p-v1", "sdq-parent", "ce-sdq-t-v1"],
+  internalizing: ["ce-scared-p-v1", "sdq-parent", "ce-sdq-p-v1", "ce-sdq-t-v1"],
   language_comm: ["ce-speech-criteria-v1", WECHSLER_TOOL, `${OT_PROFILE_TOOL}(auditory)`],
   academic_learning: ["ce-probe-read-v1", "ce-probe-write-v1", "ce-probe-calc-v1", "ce-sld-read-v1", "ce-sld-wri-v1", "ce-sld-calc-v1"],
   motor_coord: ["ce-dcdq-v1", `${OT_PROFILE_TOOL}(gross/fine)`],
   general_cog: [WECHSLER_TOOL],
-  social_adl: ["ce-asd-criteria-v1", "sdq-parent", "ce-sdq-t-v1", `${OT_PROFILE_TOOL}(social/adl)`]
+  social_adl: ["ce-asd-criteria-v1", "sdq-parent", "ce-sdq-p-v1", "ce-sdq-t-v1", `${OT_PROFILE_TOOL}(social/adl)`]
 };
 var GATE_DEPENDENT_CONSTRUCTS = {
   behavioral: ["attention_exec", "externalizing", "internalizing"],
@@ -35596,8 +35803,132 @@ function anamnesisTextFor(construct) {
 __name(anamnesisTextFor, "anamnesisTextFor");
 __name3(anamnesisTextFor, "anamnesisTextFor");
 __name23(anamnesisTextFor, "anamnesisTextFor");
+var ANAM3_CONCERN_FIELDS = [
+  { key: "attention_concern", construct: "attention_exec", fa: "\u062A\u0648\u062C\u0647 \u0648 \u062A\u0645\u0631\u06A9\u0632" },
+  { key: "hyper_concern", construct: "externalizing", fa: "\u0628\u06CC\u200C\u0642\u0631\u0627\u0631\u06CC \u0648 \u0634\u062A\u0627\u0628\u200C\u0632\u062F\u06AF\u06CC" },
+  { key: "sld_read_concern", construct: "academic_learning", fa: "\u062E\u0648\u0627\u0646\u062F\u0646", subtype: "read" },
+  { key: "sld_write_concern", construct: "academic_learning", fa: "\u0646\u0648\u0634\u062A\u0646", subtype: "write" },
+  { key: "sld_calc_concern", construct: "academic_learning", fa: "\u062D\u0633\u0627\u0628", subtype: "calc" },
+  { key: "exam_anxiety", construct: "internalizing", fa: "\u0627\u0636\u0637\u0631\u0627\u0628 \u0627\u0645\u062A\u062D\u0627\u0646" },
+  { key: "morning_somatic", construct: "internalizing", fa: "\u0646\u0627\u0631\u0627\u062D\u062A\u06CC \u062C\u0633\u0645\u06CC \u0635\u0628\u062D\u200C\u0647\u0627" },
+  { key: "sensory_concern", construct: "social_adl", fa: "\u062D\u0633\u0627\u0633\u06CC\u062A \u062D\u0633\u06CC" }
+];
+var HOME_MONITOR_FA = {
+  attention_exec: "\u062A\u0648\u062C\u0647 \u0648 \u06A9\u0627\u0631\u06A9\u0631\u062F \u0627\u062C\u0631\u0627\u06CC\u06CC",
+  externalizing: "\u0631\u0641\u062A\u0627\u0631\u0647\u0627\u06CC \u0628\u0631\u0648\u0646\u200C\u0631\u06CC\u0632\u06CC",
+  internalizing: "\u062D\u0627\u0644 \u0648 \u0647\u06CC\u062C\u0627\u0646",
+  language_comm: "\u0632\u0628\u0627\u0646 \u0648 \u0627\u0631\u062A\u0628\u0627\u0637",
+  academic_learning: "\u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u062F\u0631\u0633\u06CC",
+  motor_coord: "\u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u062D\u0631\u06A9\u062A\u06CC",
+  general_cog: "\u0634\u0646\u0627\u062E\u062A \u0639\u0645\u0648\u0645\u06CC",
+  social_adl: "\u0627\u062C\u062A\u0645\u0627\u0639\u06CC \u0648 \u062E\u0648\u062F\u06CC\u0627\u0631\u06CC"
+};
+var FX_DOMAIN_FA = {
+  att_sus: ["attention_exec", "\u062A\u0648\u062C\u0647 \u067E\u0627\u06CC\u062F\u0627\u0631"],
+  att_sel: ["attention_exec", "\u062A\u0648\u062C\u0647 \u0627\u0646\u062A\u062E\u0627\u0628\u06CC"],
+  wm: ["attention_exec", "\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC"],
+  inh: ["attention_exec", "\u0628\u0627\u0632\u062F\u0627\u0631\u06CC"],
+  flex: ["attention_exec", "\u0627\u0646\u0639\u0637\u0627\u0641 \u0630\u0647\u0646\u06CC"],
+  ps: ["general_cog", "\u062D\u0644 \u0645\u0633\u0626\u0644\u0647"]
+};
+function anamnesis3SeverityOf(value) {
+  if (!value) return null;
+  if (value.includes("\u0632\u06CC\u0627\u062F") || value.includes("\u0628\u06CC\u0634\u062A\u0631 \u0631\u0648\u0632\u0647\u0627")) return "high";
+  if (value.includes("\u0645\u062A\u0648\u0633\u0637")) return "mid";
+  return null;
+}
+__name(anamnesis3SeverityOf, "anamnesis3SeverityOf");
+function mapAnamnesisV3(rows, event, ctx) {
+  for (const f of ANAM3_CONCERN_FIELDS) {
+    const sev = anamnesis3SeverityOf(payloadField(event, f.key));
+    if (!sev) continue;
+    addRow(rows, {
+      construct: f.construct,
+      toolId: event.toolKey,
+      subtype: f.subtype,
+      signal: `anamnesis3_${f.key}_${sev}`,
+      weight: sev === "high" ? 2 : 1,
+      danger: sev === "high",
+      sourceType: TOOL_SOURCE[event.toolKey],
+      textFa: `\u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644\u060C \u0646\u06AF\u0631\u0627\u0646\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0627\u0632 ${f.fa} ${sev === "high" ? "\u0632\u06CC\u0627\u062F \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A." : "\u0645\u062A\u0648\u0633\u0637 \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A."}`
+    });
+  }
+  for (const [constructKey, keywords] of Object.entries(ANAMNESIS_KEYWORDS)) {
+    const fields = ANAM_FIELD_MAP[constructKey] ?? ["chief_complaint"];
+    const text = payloadText2(event, fields);
+    if (!text) continue;
+    if (keywords.some((k) => text.includes(k))) {
+      addRow(rows, { construct: constructKey, toolId: event.toolKey, signal: "anamnesis_kw", weight: 1, danger: false, sourceType: TOOL_SOURCE[event.toolKey], textFa: anamnesisTextFor(constructKey) });
+    }
+  }
+  const medical = payloadField(event, "medical");
+  const dev = payloadField(event, "development");
+  const cc = payloadField(event, "chief_complaint");
+  if (REDFLAG_KEYWORDS.tbi.some((k) => medical.includes(k))) ctx.tbi = true;
+  if (REDFLAG_KEYWORDS.selfharm.some((k) => medical.includes(k) || cc.includes(k))) ctx.selfHarm = true;
+  if (REDFLAG_KEYWORDS.regression.some((k) => dev.includes(k))) ctx.regression = true;
+  const familyStress = payloadField(event, "family_stress");
+  const crisis = payloadField(event, "crisis_event");
+  ctx.familyStress = ctx.familyStress || familyStress.trim() !== "" && familyStress !== "\u0646\u062F\u0627\u0631\u062F" || crisis.startsWith("\u0628\u0644\u0647");
+  ctx.schoolChanges = Boolean(payloadField(event, "school_change").trim().startsWith("\u06CC\u06A9") || payloadField(event, "school_change").includes("\u0628\u0627\u0631") || payloadField(event, "prev_intervention").trim() !== "" && payloadField(event, "prev_intervention") !== "\u0646\u062F\u0627\u0634\u062A\u0647" || payloadField(event, "school_changes").trim() || payloadField(event, "prior_intervention").trim());
+  const homeLang = payloadField(event, "home_language").trim();
+  if (homeLang && homeLang !== "\u0641\u0627\u0631\u0633\u06CC") {
+    ctx.homeLanguageNote = "\u0632\u0628\u0627\u0646 \u062E\u0627\u0646\u0647 \u0628\u0627 \u0632\u0628\u0627\u0646 \u0645\u062F\u0631\u0633\u0647 \u0645\u062A\u0641\u0627\u0648\u062A \u0627\u0633\u062A\u061B \u062F\u0631 \u062A\u0641\u0633\u06CC\u0631 \u0622\u0632\u0645\u0648\u0646\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u0645\u06CC \u0628\u0627\u06CC\u062F \u0627\u062D\u062A\u06CC\u0627\u0637 \u06A9\u0631\u062F.";
+  }
+}
+__name(mapAnamnesisV3, "mapAnamnesisV3");
+__name3(mapAnamnesisV3, "mapAnamnesisV3");
+__name23(mapAnamnesisV3, "mapAnamnesisV3");
+function mapRehabFx(rows, event) {
+  const source = TOOL_SOURCE[event.toolKey] ?? "examiner";
+  const flags = event.analysis?.flags ?? [];
+  let weak = 0;
+  for (const f of flags) {
+    const spec = FX_DOMAIN_FA[f.key];
+    if (!spec) continue;
+    const isWeak = String(f.label ?? "").includes("\u0636\u0639\u0641");
+    if (isWeak) weak += 1;
+    addRow(rows, {
+      construct: spec[0],
+      toolId: event.toolKey,
+      signal: `fx_${f.key}_${isWeak ? "weak" : "warn"}`,
+      weight: 1,
+      danger: isWeak,
+      sourceType: source,
+      textFa: `\u062F\u0631 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0639\u0645\u0644\u06A9\u0631\u062F\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u060C \u062D\u06CC\u0637\u0647\u0654 \xAB${spec[1]}\xBB ${isWeak ? "\u0636\u0639\u0641 \u0622\u0634\u06A9\u0627\u0631" : "\u0645\u0631\u0632\u06CC"} \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A.`
+    });
+  }
+  if (weak >= 3) {
+    addRow(rows, { construct: "attention_exec", toolId: event.toolKey, signal: "fx_multi_weak", weight: 2, danger: true, sourceType: source, textFa: `\u062F\u0631 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0639\u0645\u0644\u06A9\u0631\u062F\u06CC\u060C ${faNum52(weak)} \u062D\u06CC\u0637\u0647\u0654 \u0634\u0646\u0627\u062E\u062A\u06CC \u067E\u0627\u06CC\u0647 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0636\u0639\u06CC\u0641 \u0627\u0633\u062A \u2014 \u0627\u0644\u06AF\u0648\u06CC \u0646\u06CC\u0627\u0632 \u0628\u0647 \u0645\u062F\u0627\u062E\u0644\u0647\u0654 \u0647\u0645\u0647\u200C\u062C\u0627\u0646\u0628\u0647\u0654 \u0630\u0647\u0646\u06CC.` });
+  }
+}
+__name(mapRehabFx, "mapRehabFx");
+__name3(mapRehabFx, "mapRehabFx");
+__name23(mapRehabFx, "mapRehabFx");
+function mapHomeMonitor(rows, event) {
+  const source = TOOL_SOURCE[event.toolKey] ?? "parent";
+  for (const s of event.analysis?.subscaleScores ?? []) {
+    const fa2 = HOME_MONITOR_FA[s.id];
+    if (!fa2) continue;
+    const c = subscaleColor(event, s.id);
+    if (c === "danger") {
+      addRow(rows, { construct: s.id, toolId: event.toolKey, signal: `home_mon_${s.id}_danger`, weight: 1, danger: true, sourceType: source, textFa: `\u062F\u0631 \u067E\u0627\u06CC\u0634 \u062E\u0627\u0646\u0647\u060C \u06A9\u0627\u0646\u0648\u0646 \xAB${fa2}\xBB \u067E\u0631\u0631\u0646\u06AF \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A.` });
+    } else if (c === "warn") {
+      addRow(rows, { construct: s.id, toolId: event.toolKey, signal: `home_mon_${s.id}_warn`, weight: 1, danger: false, sourceType: source, textFa: `\u062F\u0631 \u067E\u0627\u06CC\u0634 \u062E\u0627\u0646\u0647\u060C \u06A9\u0627\u0646\u0648\u0646 \xAB${fa2}\xBB \u0646\u06CC\u0627\u0632\u0645\u0646\u062F \u062A\u0648\u062C\u0647 \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A.` });
+    }
+  }
+}
+__name(mapHomeMonitor, "mapHomeMonitor");
+__name3(mapHomeMonitor, "mapHomeMonitor");
+__name23(mapHomeMonitor, "mapHomeMonitor");
 function normalizeEvents(events, opts = {}) {
   const latest = latestPerTool2(events);
+  const sdqNew = latest.get("ce-sdq-p-v1");
+  const sdqOld = latest.get("sdq-parent");
+  if (sdqNew && sdqOld) {
+    const newerWins = String(sdqNew.occurredAt ?? "") >= String(sdqOld.occurredAt ?? "");
+    latest.delete(newerWins ? "sdq-parent" : "ce-sdq-p-v1");
+  }
   const rows = [];
   const ctx = {
     schPositive: false,
@@ -35631,6 +35962,9 @@ function normalizeEvents(events, opts = {}) {
         mapSnap(rows, "teacher", event);
         break;
       case "sdq-parent":
+        mapSdq(rows, "parent", event);
+        break;
+      case "ce-sdq-p-v1":
         mapSdq(rows, "parent", event);
         break;
       case "ce-sdq-t-v1":
@@ -35681,6 +36015,15 @@ function normalizeEvents(events, opts = {}) {
         break;
       case "ce-anamnesis-v2":
         mapAnamnesis(rows, event, ctx);
+        break;
+      case "ce-anamnesis-v3":
+        mapAnamnesisV3(rows, event, ctx);
+        break;
+      case "ce-rehab-fx-v1":
+        mapRehabFx(rows, event);
+        break;
+      case "ce-home-monitor-v2":
+        mapHomeMonitor(rows, event);
         break;
       default:
         break;
@@ -36043,8 +36386,8 @@ function detectDivergences(norm, wInj, otStatuses) {
     });
   }
   const snapAttentionDanger = norm.rows.some((r) => r.construct === "attention_exec" && r.toolId.startsWith("ce-snap") && r.danger);
-  const sdqPresent = norm.rows.some((r) => r.toolId.startsWith("sdq-") || r.toolId === "ce-sdq-t-v1");
-  const sdqAttentionDanger = norm.rows.some((r) => r.construct === "attention_exec" && (r.toolId === "sdq-parent" || r.toolId === "ce-sdq-t-v1") && r.danger);
+  const sdqPresent = norm.rows.some((r) => r.toolId.startsWith("sdq-") || r.toolId === "ce-sdq-p-v1" || r.toolId === "ce-sdq-t-v1");
+  const sdqAttentionDanger = norm.rows.some((r) => r.construct === "attention_exec" && (r.toolId === "sdq-parent" || r.toolId === "ce-sdq-p-v1" || r.toolId === "ce-sdq-t-v1") && r.danger);
   if (snapAttentionDanger && sdqPresent && !sdqAttentionDanger) {
     out.push({
       code: "D5",
@@ -36534,13 +36877,19 @@ function pickNextActions(input, norm, levels, redFlags, wInj, divergences) {
       add({ priority: 2, actionFa: `\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC ${t.fa} \u0628\u0631\u0627\u06CC \u0627\u062A\u0635\u0627\u0644 \u0628\u0647 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC \u0631\u0633\u0645\u06CC \u062B\u0628\u062A \u0634\u0648\u062F.`, toolId: t.sld, reasonFa: "\u067E\u0631\u0648\u0628 \u067E\u0631\u062E\u0637\u0631 \u2014 \u0645\u0644\u0627\u06A9\u200C\u0633\u0627\u0632\u06CC \u0644\u0627\u0632\u0645." });
     }
   }
-  if (norm.rows.some((r) => r.construct === "motor_coord" && (r.toolId === "ce-anamnesis-v2" || r.toolId === "ce-rehab-motor-v1")) && !present.has("ce-dcdq-v1")) {
+  if (norm.rows.some((r) => r.construct === "motor_coord" && (r.toolId === "ce-anamnesis-v2" || r.toolId === "ce-anamnesis-v3" || r.toolId === "ce-rehab-motor-v1")) && !present.has("ce-dcdq-v1")) {
     add({ priority: 2, actionFa: "\u067E\u0631\u0633\u0634\u0646\u0627\u0645\u0647\u0654 \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u062D\u0631\u06A9\u062A\u06CC DCDQ \u0628\u0631\u0627\u06CC \u063A\u0631\u0628\u0627\u0644\u06AF\u0631\u06CC \u0627\u0633\u062A\u0627\u0646\u062F\u0627\u0631\u062F \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F.", toolId: "ce-dcdq-v1", reasonFa: "\u0633\u06CC\u06AF\u0646\u0627\u0644 \u062D\u0631\u06A9\u062A\u06CC \u0628\u062F\u0648\u0646 DCDQ." });
   }
   if (input.gates && !input.gates.gates.find((g) => g.key === "skills")?.done) {
     add({ priority: 2, actionFa: "\u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u0645\u0647\u0627\u0631\u062A\u06CC \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC \u062A\u0627 \u062D\u062F\u0627\u0642\u0644 \u06F3 \u0645\u0647\u0627\u0631\u062A \u062F\u0631 \u0647\u0631 \u06F7 \u062D\u06CC\u0637\u0647 \u062A\u06A9\u0645\u06CC\u0644 \u0634\u0648\u062F.", toolId: OT_PROFILE_TOOL, reasonFa: "\u067E\u06CC\u0634\u200C\u0646\u06CC\u0627\u0632 \u0642\u0627\u0639\u062F\u0647\u0654 \u062D\u06CC\u0637\u0647\u0654 \u0639\u0642\u0628\u200C\u0645\u0627\u0646\u062F\u0647." });
   }
-  if (norm.rows.some((r) => r.construct === "internalizing" && (r.toolId === "sdq-parent" || r.toolId === "ce-sdq-t-v1")) && !present.has("ce-scared-p-v1")) {
+  if (atLeastLevel(levels, "attention_exec", "\u0645\u0631\u0632\u06CC") && !present.has("ce-home-monitor-v2")) {
+    add({ priority: 2, actionFa: "\u0641\u0631\u0645 \u067E\u0627\u06CC\u0634 \u062F\u0631 \u062E\u0627\u0646\u0647 (\u0646\u0633\u062E\u0647\u0654 \u06F2) \u0628\u0631\u0627\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F \u2014 \u06A9\u0627\u0646\u0648\u0646\u200C\u0647\u0627\u06CC \u062F\u0631\u06AF\u06CC\u0631 \u067E\u0631\u0648\u0646\u062F\u0647\u060C \u062F\u0631 \u0627\u0628\u062A\u062F\u0627\u06CC \u0641\u0631\u0645 \u0639\u0644\u0627\u0645\u062A \u0645\u06CC\u200C\u062E\u0648\u0631\u0646\u062F.", toolId: "ce-home-monitor-v2", reasonFa: "\u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u06A9\u0627\u0646\u0648\u0646 \u062F\u0631\u06AF\u06CC\u0631 \u062F\u0627\u0631\u062F\u061B \u067E\u0627\u06CC\u0634 \u062E\u0627\u0646\u0647\u0654 \u0647\u0645\u200C\u0633\u0627\u0632\u0647 \u0631\u0648\u0634\u0646\u0627\u06CC\u06CC \u0645\u06CC\u200C\u062F\u0647\u062F." });
+  }
+  if (atLeastLevel(levels, "attention_exec", "\u0645\u0631\u0632\u06CC") && !present.has("ce-rehab-fx-v1")) {
+    add({ priority: 2, actionFa: "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0639\u0645\u0644\u06A9\u0631\u062F\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 (FX) \u062F\u0631 \u062C\u0644\u0633\u0647\u0654 \u0628\u0639\u062F \u062B\u0628\u062A \u0634\u0648\u062F.", toolId: "ce-rehab-fx-v1", reasonFa: "\u0633\u0627\u0632\u0647\u0654 \u062A\u0648\u062C\u0647 \u062F\u0631 \u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u0641\u0639\u0627\u0644 \u0627\u0633\u062A\u061B \u0633\u0646\u062C\u0647\u0654 \u0639\u0645\u0644\u06A9\u0631\u062F\u06CC \u0645\u0633\u062A\u0642\u06CC\u0645 \u062A\u06A9\u0645\u06CC\u0644\u0634 \u0645\u06CC\u200C\u06A9\u0646\u062F." });
+  }
+  if (norm.rows.some((r) => r.construct === "internalizing" && (r.toolId === "sdq-parent" || r.toolId === "ce-sdq-p-v1" || r.toolId === "ce-sdq-t-v1")) && !present.has("ce-scared-p-v1")) {
     add({ priority: 2, actionFa: "\u067E\u0631\u0633\u0634\u0646\u0627\u0645\u0647\u0654 \u0627\u0636\u0637\u0631\u0627\u0628 \u06A9\u0648\u062F\u06A9 SCARED \u0628\u0631\u0627\u06CC \u0646\u0648\u0639\u200C\u0634\u0646\u0627\u0633\u06CC \u0646\u06AF\u0631\u0627\u0646\u06CC \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F.", toolId: "ce-scared-p-v1", reasonFa: "\u0633\u06CC\u06AF\u0646\u0627\u0644 \u062F\u0631\u0648\u0646\u06CC\u200C\u0633\u0627\u0632\u06CC \u0641\u0642\u0637 \u0627\u0632 SDQ \u0622\u0645\u062F\u0647 \u0627\u0633\u062A." });
   }
   if (atLeastLevel(levels, "social_adl", "\u0645\u0631\u0632\u06CC") && !present.has("ce-asd-criteria-v1")) {
@@ -37950,6 +38299,12 @@ function createClinicalEngineService(deps) {
     return result;
   }
   __name(getCaseFormulation, "getCaseFormulation");
+  async function homeMonitorFocusOf(studentId, actor) {
+    const result = await getCaseFormulation(studentId, actor);
+    const items = result.constructs.filter((c) => c.level === "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647" || c.level === "\u0647\u0645\u200C\u06AF\u0631\u0627-\u0628\u0627\u0644\u0627").sort((a, b) => b.score - a.score).slice(0, 4).map((c) => ({ key: c.key, titleFa: c.titleFa, level: c.level, score: c.score }));
+    return { generatedAt: result.generatedAt, coherence: result.coherence, items };
+  }
+  __name(homeMonitorFocusOf, "homeMonitorFocusOf");
   function sessionRowToRecord(r) {
     const status = PATHWAY_SESSION_STATUSES.includes(r.status) ? r.status : "planned";
     return {
@@ -38876,7 +39231,7 @@ function createClinicalEngineService(deps) {
     };
   }
   __name(caseAuditRowToRecord, "caseAuditRowToRecord");
-  return { getInsights, getCaseFormulation, getChecklistPlan, listPaths, createPath, decidePath, getPath: getPath2, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits };
+  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath: getPath2, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits };
 }
 __name(createClinicalEngineService, "createClinicalEngineService");
 
@@ -39264,7 +39619,7 @@ var OT_HOMEWORK_MAX = 300;
 var NEEDS_TEXT_MAX = 4e3;
 var NEEDS_PLAN_MAX = 300;
 var ANAMNESIS_KEYS = ["ce-anamnesis-v3", "ce-anamnesis-v2", "anamnesis"];
-var BEHAVIORAL_KEYS = ["sdq-parent", "ce-sdq-t-v1", "ce-snap-iv-p-v1", "ce-snap-iv-t-v1", "ce-scared-p-v1", "ce-dcdq-v1"];
+var BEHAVIORAL_KEYS = ["sdq-parent", "ce-sdq-p-v1", "ce-sdq-t-v1", "ce-snap-iv-p-v1", "ce-snap-iv-t-v1", "ce-scared-p-v1", "ce-dcdq-v1"];
 var WECHSLER_KEYS = ["ce-wechsler-w4-v1", "wechsler"];
 var NEEDS_EVENT_KEY = "ce-needs-v1";
 var OT_SESSION_EVENT_KEY = "ce-ot-session-v1";
@@ -39394,7 +39749,7 @@ function computeSuspicion(behavioralEvents, decisionEvent, isFreshIso) {
       }
       continue;
     }
-    if (toolKey === "sdq-parent" || toolKey === "ce-sdq-t-v1") {
+    if (toolKey === "sdq-parent" || toolKey === "ce-sdq-p-v1" || toolKey === "ce-sdq-t-v1") {
       const src = sourceFa(toolKey);
       if (subscaleColorOf(event, "hyper") === "danger") {
         hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u0634\u200C\u0641\u0639\u0627\u0644\u06CC \u062F\u0631 SDQ ${src} \u067E\u0631\u062E\u0637\u0631 \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u0627\u0633\u062A` });
@@ -43674,14 +44029,14 @@ function createCenterKpiService(deps) {
         `SELECT COUNT(*) AS total,
                 COALESCE(SUM(CASE WHEN ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS filled
          FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
-         WHERE cet.family_fillable = 1 AND ce.created_at >= ? AND ce.created_at <= ?`,
-        [fromIso, toIso]
+         WHERE cet.family_fillable = 1 AND cet.key != ? AND ce.created_at >= ? AND ce.created_at <= ?`,
+        [CENTER_SURVEY_EVENT_KEY, fromIso, toIso]
       ),
       db.query(
         `SELECT ce.analysis FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
-         WHERE cet.family_fillable = 1 AND ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL
+         WHERE cet.family_fillable = 1 AND cet.key != ? AND ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL
            AND ce.created_at >= ? AND ce.created_at <= ?`,
-        [fromIso, toIso]
+        [CENTER_SURVEY_EVENT_KEY, fromIso, toIso]
       )
     ]);
     let scoreSum = 0;
@@ -43708,12 +44063,55 @@ function createCenterKpiService(deps) {
       family_response_rate: rate(familyAgg?.filled ?? 0, familyTotal),
       family_avg_score: scoreCount > 0 ? round4(scoreSum / scoreCount) : null
     };
+    const surveyRows = await db.query(
+      `SELECT ce.status, ce.filled_by_chat_id, ce.analysis
+         FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
+        WHERE cet.key = ? AND ce.deleted_at IS NULL AND ce.created_at >= ? AND ce.created_at <= ?`,
+      [CENTER_SURVEY_EVENT_KEY, fromIso, toIso]
+    );
+    let surveysFilled = 0;
+    let centerSum = 0;
+    let centerCount = 0;
+    let therapistSum = 0;
+    let therapistCount = 0;
+    let npsSum = 0;
+    let npsCount = 0;
+    for (const row of surveyRows) {
+      if (row.status !== "completed" || !row.filled_by_chat_id) continue;
+      surveysFilled += 1;
+      const a = parseJson5(row.analysis);
+      for (const s of a?.subscaleScores ?? []) {
+        const score = Number(s.score);
+        const max = Number(s.max);
+        if (!Number.isFinite(score) || !Number.isFinite(max) || max <= 0) continue;
+        if (s.id === "center") {
+          centerSum += score / max * 100;
+          centerCount += 1;
+        } else if (s.id === "therapist") {
+          therapistSum += score / max * 100;
+          therapistCount += 1;
+        } else if (s.id === "nps") {
+          npsSum += score;
+          npsCount += 1;
+        }
+      }
+    }
+    const surveysSent = surveyRows.length;
+    const familySurvey = {
+      surveys_sent: surveysSent,
+      surveys_filled: surveysFilled,
+      response_rate: rate(surveysFilled, surveysSent),
+      center_avg: centerCount > 0 ? round4(centerSum / centerCount) : null,
+      therapist_avg: therapistCount > 0 ? round4(therapistSum / therapistCount) : null,
+      nps_avg: npsCount > 0 ? round4(npsSum / npsCount) : null
+    };
     return {
       window,
       generated_at: nowIso,
       appointments,
       intervention,
-      documentation
+      documentation,
+      family_survey: familySurvey
     };
   }
   __name(summary, "summary");
@@ -54327,6 +54725,7 @@ function createServices(deps) {
       otProfileOf: /* @__PURE__ */ __name((studentId, actor) => otEngine.getOtProfile(studentId, actor), "otProfileOf")
     }
   });
+  caseEvents.setMonitorFocusProvider((studentId, actor) => clinicalEngine.homeMonitorFocusOf(studentId, actor));
   const games = createGamesService({
     db,
     audit,
