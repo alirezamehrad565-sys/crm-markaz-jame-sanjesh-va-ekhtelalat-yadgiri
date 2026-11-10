@@ -22,7 +22,8 @@ function makeNationalId() {
 const KINDS = [
   { kind: 'scan', pkg: 'swarm1', goal: 'scan_attention', mission: 'scan_v1' },
   { kind: 'stroop', pkg: 'stroop1', goal: 'stroop_attention', mission: 'stroop_v1' },
-  { kind: 'flanker', pkg: 'flanker1', goal: 'flanker_attention', mission: 'flanker_v1' }
+  { kind: 'flanker', pkg: 'flanker1', goal: 'flanker_attention', mission: 'flanker_v1' },
+  { kind: 'trail', pkg: 'trail1', goal: 'trail_attention', mission: 'trail_v1' }
 ];
 const login = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username: 'manager', password: '1234' }) });
 const token = login.token;

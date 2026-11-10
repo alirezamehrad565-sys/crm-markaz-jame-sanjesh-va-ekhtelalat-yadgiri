@@ -1,4 +1,4 @@
-// golden tests ۱.۲۵.۳۲ — بازی‌های تازه (stroop/flanker؛ ردِ حذف‌شده پس از نقد سه‌گانهٔ ۱.۲۵.۵۱) + موتور شواهد + اهرم موج اسکن
+// golden tests ۱.۲۵.۳۲ — سه بازی تازه (stroop/flanker/trail) + موتور شواهد + اهرم موج اسکن
 // همهٔ فرمول‌ها خالص‌اند — این آزمون‌ها قرارداد §۸ را قفل می‌کنند: کلید پاسخ هرگز به کلاینت نمی‌رود؛
 // قاعدهٔ دامنهٔ صفر (مخرج صفر = null) و بی‌تفاوتی به ترتیب/تکرار مثل scan عیناً برقرار است.
 import { describe, expect, it } from 'vitest';
@@ -7,6 +7,7 @@ import {
   computeMetricValue,
   interferenceMsOf,
   scoreAttempt,
+  trailPrefixPctOf,
   type ScoredAttempt
 } from '../pure';
 import {
@@ -15,6 +16,7 @@ import {
   scanStageWaveMs,
   stageOutcomeFor,
   stroopItemInStage,
+  trailItemInStage,
   type GameKind
 } from '../stages';
 import { buildEvidenceDossier, EVIDENCE_RULES_VERSION } from '../evidence';
@@ -90,9 +92,50 @@ describe('نمره‌دهی فلانکر (۱.۲۵.۳۲)', () => {
   });
 });
 
-// ─── فرمول‌های تداخل ───
+// ─── رد پای دزد — ترتیب دقیق گره‌ها؛ پیش‌ماند صحیح ───
 
-describe('سنجه‌های تداخل استروپ/فلانکر (۱.۲۵.۳۲)', () => {
+const trailItem: MissionItem = {
+  id: 'tr1', phase: 'probe', type: 'trail',
+  prompt: 'رد را به ترتیب شماره کامل کن.',
+  correct: [2, 0, 3, 1],
+  stim: {
+    nodes: [{ x: 20, y: 30, n: 3 }, { x: 70, y: 60, n: 4 }, { x: 40, y: 70, n: 1 }, { x: 80, y: 20, n: 2 }],
+    window_ms: 18000, alt: false, seq: [1, 2, 3, 4]
+  }
+};
+
+describe('نمره‌دهی رد پای دزد (۱.۲۵.۳۲)', () => {
+  it('ترتیب کامل درست', () => {
+    const s = scoreAttempt(trailItem, MISSION, { order: [2, 0, 3, 1], node_rts_ms: [700, 1400, 2100, 2800] }, 700);
+    expect(s.correct).toBe(true);
+    expect(s.trailNodes).toBe(4);
+    expect(s.trailNodesTotal).toBe(4);
+  });
+
+  it('قطع رد در گرهٔ سوم — نادرست؛ پیش‌ماند صحیح = ۲', () => {
+    const s = scoreAttempt(trailItem, MISSION, { order: [2, 0, 1] }, 700);
+    expect(s.correct).toBe(false);
+    expect(s.trailNodes).toBe(2);
+    expect(s.trailNodesTotal).toBe(4);
+  });
+
+  it('تکرار گره — نخستین ورود حفظ می‌شود؛ ترتیب کج = پیش‌ماند صفر', () => {
+    const dup = scoreAttempt(trailItem, MISSION, { order: [2, 2, 0, 3, 1] }, 700);
+    expect(dup.correct).toBe(true); // تکرار بی‌اثر — مثل scan
+    const broken = scoreAttempt(trailItem, MISSION, { order: [0, 2, 3, 1] }, 700);
+    expect(broken.correct).toBe(false);
+    expect(broken.trailNodes).toBe(0);
+  });
+
+  it('پاسخ تهی/کج — ناسالم امن', () => {
+    expect(scoreAttempt(trailItem, MISSION, {}, 700).correct).toBe(false);
+    expect(scoreAttempt(trailItem, MISSION, { order: 'x' }, 700).trailNodesTotal).toBe(4);
+  });
+});
+
+// ─── فرمول‌های تداخل و پیش‌ماند ───
+
+describe('سنجه‌های تداخل استروپ/فلانکر و پیش‌ماند رد (۱.۲۵.۳۲)', () => {
   const mk = (id: string, congruent: boolean, rt: number | null, correct: boolean): ScoredAttempt => ({
     itemId: id, phase: 'probe', correct, rtMs: rt, rtValid: rt === null || rt >= 200, congruent
   });
@@ -120,6 +163,16 @@ describe('سنجه‌های تداخل استروپ/فلانکر (۱.۲۵.۳۲)'
     // میانهٔ هم‌خوان (۸۰۰،۱۰۰۰) = ۹۰۰ · میانهٔ ناهم‌خوان (۱۳۰۰،۱۵۰۰) = ۱۴۰۰ → ۵۰۰
     expect(computeMetricValue('interference_ms', scored)).toBe(500);
   });
+
+  it('trail_prefix = مجموع پیش‌ماند / مجموع طول رد', () => {
+    const rows: ScoredAttempt[] = [
+      { itemId: 't1', phase: 'probe', correct: true, rtMs: 700, rtValid: true, trailNodes: 4, trailNodesTotal: 4 },
+      { itemId: 't2', phase: 'probe', correct: false, rtMs: 600, rtValid: true, trailNodes: 2, trailNodesTotal: 6 }
+    ];
+    expect(trailPrefixPctOf(rows)).toBe(60); // (۴+۲)/(۴+۶)
+    expect(computeMetricValue('trail_prefix', rows)).toBe(60);
+    expect(computeMetricValue('trail_prefix', [])).toBeNull();
+  });
 });
 
 // ─── برچسب نمایشی پاسخ درست — فقط تمرین ───
@@ -132,24 +185,27 @@ describe('answerDisplayOf سه بازی تازه', () => {
     expect(answerDisplayOf(flankerItem)).toBe('راست');
     expect(answerDisplayOf({ ...flankerItem, correct: 0 })).toBe('چپ');
   });
+  it('رد: CSV اندیس‌های ترتیب درست — کلید برای نشان حقیقت تمرین', () => {
+    expect(answerDisplayOf(trailItem)).toBe('2,0,3,1');
+  });
 });
 
 // ─── نوع‌بازی و مراحل ───
 
 describe('نوع‌بازی و ملاک گذار سه بازی تازه', () => {
-  it('gameKindOf نوع‌های شناخته‌شده را می‌شناسد — trail حذف‌شده به گونوگو برمی‌گردد', () => {
+  it('gameKindOf سه نوع تازه را می‌شناسد', () => {
     expect(gameKindOf('stroop')).toBe('stroop');
     expect(gameKindOf('flanker')).toBe('flanker');
-    expect(gameKindOf('trail')).toBe('gonogo'); // حذف نقد سه‌گانهٔ ۱.۲۵.۵۱ — سازگاری بسته‌های قدیمی
+    expect(gameKindOf('trail')).toBe('trail');
     expect(gameKindOf('maghrur')).toBe('gonogo');
   });
 
-  it('ملاک گذار نوع‌ها بر دقت — ۶۵/۷۸/۸۸', () => {
+  it('ملاک گذار سه نوع تازه بر دقت — ۶۵/۷۸/۸۸', () => {
     const pct = (a: number | null) => ({ correct_go: null, correct_nogo: null, accuracy: a });
     expect(stageOutcomeFor('stroop', { pct: pct(64) }).passed).toBe(false);
     expect(stageOutcomeFor('flanker', { pct: pct(65) }).passed).toBe(true);
-    expect(stageOutcomeFor('nback', { pct: pct(78) }).stars).toBe(2);
-    expect(stageOutcomeFor('nback', { pct: pct(88) }).stars).toBe(3);
+    expect(stageOutcomeFor('trail', { pct: pct(78) }).stars).toBe(2);
+    expect(stageOutcomeFor('trail', { pct: pct(88) }).stars).toBe(3);
   });
 
   it('فیلتر بانک استروپ بر گروه stim.band', () => {
@@ -182,6 +238,21 @@ describe('نوع‌بازی و ملاک گذار سه بازی تازه', () => 
     expect(flankerItemInStage(bandP, 's1')).toBe(true);
     expect(flankerItemInStage(bandP, 's3')).toBe(true);
     expect(flankerItemInStage(bandP, 's5')).toBe(true);
+  });
+
+  it('فیلتر رد بر گروه stim.band + بازگشت ساختاری برای بانک بی‌گروه', () => {
+    expect(trailItemInStage({ stim: { nodes: [1, 2, 3, 4] } }, 's1')).toBe(true);
+    expect(trailItemInStage({ stim: { nodes: [1, 2, 3, 4, 5] } }, 's1')).toBe(false);
+    expect(trailItemInStage({ stim: { nodes: [1, 2, 3, 4, 5, 6, 7] } }, 's4')).toBe(true);
+    expect(trailItemInStage({ stim: { nodes: [] } }, 's1')).toBe(false);
+    // بانک گروه‌دار — پروب ۶ ردپایی خط‌کش ثابت سنجش؛ در همهٔ مراحل حاضر (رفع P0 ۱.۲۵.۴۷)
+    const bandP6 = { stim: { nodes: [1, 2, 3, 4, 5, 6], band: 'p' } };
+    expect(trailItemInStage(bandP6, 's1')).toBe(true);
+    expect(trailItemInStage(bandP6, 's3')).toBe(true);
+    expect(trailItemInStage(bandP6, 's5')).toBe(true);
+    const bandC6 = { stim: { nodes: [1, 2, 3, 4, 5, 6], band: 'c' } };
+    expect(trailItemInStage(bandC6, 's3')).toBe(true);
+    expect(trailItemInStage(bandC6, 's1')).toBe(false); // تمرین گروه c فقط از s3
   });
 });
 

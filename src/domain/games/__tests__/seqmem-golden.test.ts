@@ -190,6 +190,6 @@ describe('ملاک گذار و هویت نوع‌ها (G8)', () => {
   });
 
   it('نسخهٔ قواعد مرحله‌ها ۱.۵.۰ شد — افزودن دو قاعدهٔ تازه بامپ گرفت', () => {
-    expect(STAGE_RULES_VERSION).toBe('1.7.0');
+    expect(STAGE_RULES_VERSION).toBe('1.5.0');
   });
 });

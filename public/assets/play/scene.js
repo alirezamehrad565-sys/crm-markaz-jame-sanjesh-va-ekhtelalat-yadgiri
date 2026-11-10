@@ -146,10 +146,10 @@ const KIND_HEROES = {
   scan: () => fishPuppet('idle', '#F5F0E5'), // ماهی ماه‌نورد کرم — روی شب جاسوس‌ها مرئی (رفع P1: قبلاً #5E8FB8 در شب گم می‌شد)
   stroop: () => fishPuppet('happy', '#9B7EDE'),
   flanker: () => fishPuppet('swim', '#8FA6B8'),
+  trail: () => crabPuppet('idle', '#C4635F'),
   nback: () => crabPuppet('happy', '#438C89'),
   corsi: () => fishPuppet('happy', '#2F9E6E'), // ماهی زمردی خلیج مروارید — صدف‌های جادویی (G8/۱.۲۵.۴۸)
-  span: () => fishPuppet('idle', '#E86F9E'),   // ماهی فانوس‌دست شبِ فانوس — حباب‌های عدد (G8/۱.۲۵.۴۸)
-  simon: () => crabPuppet('idle', '#E08A4E')   // خرچنگ غروبِ ساحل هم‌نوا — هم‌صداها (۱.۲۵.۵۲)
+  span: () => fishPuppet('idle', '#E86F9E')    // ماهی فانوس‌دست شبِ فانوس — حباب‌های عدد (G8/۱.۲۵.۴۸)
 };
 
 /** قهرمان نوع‌بازی برای صحنهٔ آموزش — نوع ناشناخته = ماهی کهربایی */
