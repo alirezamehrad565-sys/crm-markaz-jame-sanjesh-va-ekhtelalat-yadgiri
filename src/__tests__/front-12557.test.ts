@@ -25,8 +25,8 @@ describe('گیت فرانت ۱.۲۵.۵۷ — هفت خواستهٔ کارفرم�
   const screening = read('views/screening.js');
 
   test('① سایدبار: عنکبوت + «گزارش به پشتیبانی»؛ نمای ساده با بلوک پاسخ پشتیبانی', () => {
-    expect(app).toMatch(/\{ hash: '#\/bug-report', label: 'گزارش به پشتیبانی', icon: 'spider', group: 'مرکز' \}/);
-    expect(ui).toMatch(/spider: '<circle cx="12" cy="11" r="3\.2"\/>/);
+    expect(app).toMatch(/\{ hash: '#\/bug-report', label: 'گزارش به پشتیبانی', icon: 'bug', group: 'مرکز' \}/);
+    expect(ui).toMatch(/bug: '<path d="m8 2 1\.88 1\.88"\/>/);
     expect(bug).toMatch(/'گزارش به پشتیبانی'/);
     /* ساده‌سازی: فیلد readonly صفحه و خط «گزارش‌دهنده» حذف شده‌اند؛ ارسال خودکار می‌ماند */
     expect(bug).not.toMatch(/readonly: true/);
