@@ -1,6 +1,6 @@
 import { createApp, createServices } from '@app/api-routing';
 import { createDb } from '@core/db';
-import { createAuditWriter } from '@core/audit';
+import { createAuditWriter, parseAuditRetentionDays } from '@core/audit';
 import { createLogger } from '@core/logger';
 import { BATCH_CRON, DIGEST_CRON, REMINDER_HORIZON_HOURS, CP_SYNC_CRON } from '@core/shared';
 import {
@@ -31,6 +31,11 @@ export interface Env {
   CP_SYNC_STAFF_ID?: string;
   /** Service Binding به ورکر کنترل‌پلین (هم‌حساب) — fetch عمومیِ هم‌زون ۱۰۴۲ می‌دهد */
   CP?: Fetcher;
+  /**
+   * ف۴ — سقف نگه‌داری audit_log بر حسب روز (اختیاری؛ پیش‌فرض ۱۸۰؛ صفر = پاکسازی خاموش).
+   * فقط مصرف کرون شبانهٔ digest است؛ مقادیر نامعتبر/منفی با پیش‌فرض جایگزین می‌شوند.
+   */
+  AUDIT_LOG_RETENTION_DAYS?: number;
 }
 
 /* ۱.۲۵.۵۷ — توکن بات دو منبع دارد: env اولویت، سپس settings.bale_bot_token (ثبت کاربر).
@@ -97,7 +102,8 @@ async function runNotificationCycle(env: Env): Promise<void> {
 
 async function runDigestCycle(env: Env): Promise<void> {
   const db = createDb(env.DB);
-  const audit = createAuditWriter(db);
+  // ف۴ — نویسندهٔ audit با سقف نگه‌داری env ساخته می‌شود تا پاکسازی شبانه همان سقف را اجرا کند
+  const audit = createAuditWriter(db, { retentionDays: parseAuditRetentionDays(env.AUDIT_LOG_RETENTION_DAYS) });
   const logger = createLogger('cron.digest');
   const services = createServices({
     db,
@@ -120,17 +126,25 @@ async function runDigestCycle(env: Env): Promise<void> {
   });
   // ۱.۲۵.۶۶ — نگه‌داری تله‌متری: خطاهای کلاینت (جدول 0106) و رویدادهای RUM بیشتر از ۹۰ روز حذف می‌شوند؛
   // هر دو جدول تا امروز بی‌پاکسازی بودند و بی‌کران رشد می‌کردند
+  // ف۴ — audit_log به همان بلوک پیوست شد (پیش‌فرض ۱۸۰ روز؛ env اختیاری؛ صفر = خاموش)
   const retention = await (async () => {
     try {
       const clientErrors = await services.clientErrors.pruneOld();
       const rumEvents = await services.rum.pruneOld();
-      return { client_errors: clientErrors, rum_events: rumEvents };
+      const auditLog = await audit.pruneOld();
+      return { client_errors: clientErrors, rum_events: rumEvents, audit_log: auditLog };
     } catch (err: unknown) {
       logger.error('retention.failed', { error: err instanceof Error ? err.message : String(err) });
       return null;
     }
   })();
-  logger.info('digest.cycle.done', { summary, dispatch, gamesMaintenance, retention });
+  // ف۴ — گزارش رشد جدول‌ها: شمارش ردیف‌ها فقط همین‌جا (کرون، هرگز مسیر درخواست نیست)؛
+  // مُهر ۲۴ساعتهٔ growth.last_snapshot_at دوباره‌کاری را می‌بندد
+  const growth = await services.growth.captureDaily().catch((err: unknown) => {
+    logger.error('growth.snapshot.failed', { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  });
+  logger.info('digest.cycle.done', { summary, dispatch, gamesMaintenance, retention, growth });
 }
 
 async function runBatchDispatchCycle(env: Env): Promise<void> {
