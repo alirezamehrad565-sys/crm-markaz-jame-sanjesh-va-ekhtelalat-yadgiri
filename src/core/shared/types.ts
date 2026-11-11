@@ -358,11 +358,15 @@ export interface AppBindings {
   ENV: string;
   CF_ACCESS_TEAM_DOMAIN: string;
   AUTH_SECRET?: string;
+  /** ف۵ (P2-15) — سقف نوشتنی per-IP در دقیقه روی /api/*؛ رشتهٔ «۰» = خاموش (پارس در @app/http/rate-limit) */
+  API_RATE_LIMIT_PER_MIN?: string;
 }
 
 export interface AppVariables {
   authContext: AuthContext;
   logger: Logger;
+  /** ف۵ (P2-13) — شناسهٔ همبستگی درخواست (`req-<uuid>`)؛ در هدر X-Request-Id و پاکت خطا هم می‌آید */
+  requestId: string;
 }
 
 export interface DashboardStaffCard {

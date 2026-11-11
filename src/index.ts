@@ -13,6 +13,7 @@ import { buildCpReportConfig, pushCpReport, cpReportOpportunistic } from '@app/c
 import { buildCpContentConfig, runCpContentCycle, cpContentOpportunistic } from '@app/cp-content/sync';
 import { buildBugReportConfig, runBugReportForward } from '@app/bug-report-forward'; // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP
 import { createContentScoreService } from '@domain/content-score'; // ۱.۲۵.۴۸ m6
+import { runAlertCycle } from '@app/health/alerts'; // ف۵ (P0-3) — هشدار خودکار روی چرخهٔ digest
 
 export interface Env {
   DB: D1Database;
@@ -36,6 +37,10 @@ export interface Env {
    * فقط مصرف کرون شبانهٔ digest است؛ مقادیر نامعتبر/منفی با پیش‌فرض جایگزین می‌شوند.
    */
   AUDIT_LOG_RETENTION_DAYS?: number;
+  /** ف۵ (P0-3) — آستانهٔ هشدار خطاهای مرورگر در ۲۴ ساعت (اختیاری؛ پیش‌فرض ۱۰۰؛ صفر = هر خطا هشدار) */
+  ALERT_CLIENT_ERRORS_MAX?: number;
+  /** ف۵ (P0-3) — kill-switch هشدار خودکار؛ رشتهٔ راستین («۱»/«true») ارزیابی را کامل خاموش می‌کند */
+  ALERTS_DISABLED?: string;
 }
 
 /* ۱.۲۵.۵۷ — توکن بات دو منبع دارد: env اولویت، سپس settings.bale_bot_token (ثبت کاربر).
@@ -105,14 +110,21 @@ async function runDigestCycle(env: Env): Promise<void> {
   // ف۴ — نویسندهٔ audit با سقف نگه‌داری env ساخته می‌شود تا پاکسازی شبانه همان سقف را اجرا کند
   const audit = createAuditWriter(db, { retentionDays: parseAuditRetentionDays(env.AUDIT_LOG_RETENTION_DAYS) });
   const logger = createLogger('cron.digest');
+  // ف۵ — همان سه‌متایی CP که fetch می‌سازد تا ارزیابی هشدار وضعیت واقعی لینک را ببیند
+  const cpContentCfg = buildCpContentConfig(env);
   const services = createServices({
     db,
     audit,
     logger,
     teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-    ...(await buildRuntimeEnv(env, db))
+    ...(await buildRuntimeEnv(env, db)),
+    // پنل سلامتِ همین چرخه برای ارزیابی هشدار باید وضعیت واقعی CP را ببیند، نه خاموش‌نما
+    // (قرارداد خاموشی سه‌متغیره دست‌نخورده می‌ماند)
+    cpSyncUrl: env.CP_SYNC_URL ?? null,
+    cpNodeCode: cpContentCfg.cpNodeCode,
+    cpNodeKey: cpContentCfg.cpNodeKey,
+    clientErrorsMax: env.ALERT_CLIENT_ERRORS_MAX ?? null
   });
-
   const summary = await services.notify.sendDailyDigest(new Date()).catch((err: unknown) => {
     logger.error('digest.failed', { error: err instanceof Error ? err.message : String(err) });
     return null;
@@ -144,7 +156,22 @@ async function runDigestCycle(env: Env): Promise<void> {
     logger.error('growth.snapshot.failed', { error: err instanceof Error ? err.message : String(err) });
     return null;
   });
-  logger.info('digest.cycle.done', { summary, dispatch, gamesMaintenance, retention, growth });
+  // ف۵ (P0-3 حداقلی) — ارزیابی هشدار خودکار بعد از شمارش رشد، در همان چرخهٔ شبانه:
+  // ① رانش مُهر تلاش/موفقیت درگاه‌های CP نسبت به آستانه‌های §۳-۱۱ ② جهش خطاهای مرورگر در ۲۴ ساعت
+  // (env اختیاری ALERT_CLIENT_ERRORS_MAX)؛ kill-switch: ALERTS_DISABLED. وقتی هشدار باشد:
+  // logger.error با کد alert.* + پیام فارسی در صف اعلان برای مدیر(ها) روی همان کانال دایجست.
+  const alerts = await runAlertCycle({
+    db,
+    health: services.health,
+    notify: services.notify,
+    logger,
+    clientErrorsMax: env.ALERT_CLIENT_ERRORS_MAX,
+    alertsDisabled: env.ALERTS_DISABLED
+  }).catch((err: unknown) => {
+    logger.error('alert.cycle.failed', { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  });
+  logger.info('digest.cycle.done', { summary, dispatch, gamesMaintenance, retention, growth, alerts });
 }
 
 async function runBatchDispatchCycle(env: Env): Promise<void> {
@@ -340,7 +367,8 @@ export default {
       cpSyncUrl: env.CP_SYNC_URL ?? null,
       cpNodeCode: cpContentCfg.cpNodeCode,
       cpNodeKey: cpContentCfg.cpNodeKey,
-      envName: env.ENV ?? null // ۱.۲۵.۶۷ — پنل سلامت
+      envName: env.ENV ?? null, // ۱.۲۵.۶۷ — پنل سلامت
+      clientErrorsMax: env.ALERT_CLIENT_ERRORS_MAX ?? null // ف۵ (P0-3) — آستانهٔ هشدار خطاهای مرورگر
     });
     return app.fetch(request, env, ctx);
   },

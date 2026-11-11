@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
-import type { AppHono, AuthContext } from '@core/shared';
+import type { AppHono, AppBindings, AppVariables } from '@core/shared';
 import { APP_VERSION } from '@core/version';
 import { authMiddleware, supervisorGate, getAuthContext } from '@core/auth';
 import { createDb } from '@core/db';
 import type { DbClient } from '@core/db';
-import { createAuditWriter } from '@core/audit';
+import { createAuditWriter, runWithRequestId } from '@core/audit';
 import type { AuditWriter } from '@core/audit';
 import { createLogger } from '@core/logger';
 import type { Logger } from '@core/logger';
@@ -107,7 +107,8 @@ import type { RumService } from '@app/rum';
 import { registerAuthRoutes, registerLogoutRoute } from '@app/auth';
 import { FEATURES } from '@core/shared';
 
-import { errorHandler } from '@app/http';
+import { errorHandler, parseApiRateLimitPerMin, makeKeyedRateLimiter, API_RATE_LIMIT_WINDOW_MS } from '@app/http';
+import { RateLimitError } from '@core/errors';
 
 export interface AppDeps {
   db: DbClient;
@@ -129,6 +130,8 @@ export interface AppDeps {
   cpNodeKey?: string | null;
   /** ۱.۲۵.۶۷ — نام محیط برای پنل سلامت (ENV رانتایم) */
   envName?: string | null;
+  /** ف۵ (P0-3) — آستانهٔ هشدار خطاهای مرورگر در ۲۴ ساعت (env اختیاری ALERT_CLIENT_ERRORS_MAX؛ پیش‌فرض ۱۰۰) */
+  clientErrorsMax?: number | string | null;
 }
 
 export interface Services {
@@ -475,11 +478,13 @@ export function createServices(deps: AppDeps): Services {
   // ۱.۲۵.۶۶ — لولهٔ خطای مرورگر: تا امروز کلاینت به /api/client-errors پست می‌کرد و ۴۰۱ می‌گرفت
   const clientErrors = createClientErrorsService({ db, logger });
 
-  // ۱.۲۵.۶۷ — پنل سلامت (ف۱ طرح ارتقا، CP-3): وضعیت سامانه + شش درگاه لینک CP از مُهرهای settings
+  // ۱.۲۵.۶۷ — پنل سلامت (ف۱ طرح ارتقا، CP-3): وضعیت سامانه + شش درگاه لینک CP از مُهرهای settings؛
+  // ف۵ (P0-3) — همان پنل حالا آرایهٔ هشدارها را هم مشتق می‌کند (آستانهٔ خطاهای مرورگر از deps)
   const health = createHealthService({
     db,
     cpConfigured: Boolean(deps.cpSyncUrl && deps.cpNodeCode && deps.cpNodeKey),
-    envName: deps.envName ?? null
+    envName: deps.envName ?? null,
+    clientErrorsMax: deps.clientErrorsMax ?? null
   });
 
   // ف۴ — گزارش رشد جدول‌ها: شمارش روزانه فقط در کرون digest رخ می‌دهد؛ این سرویس در مسیر درخواست فقط می‌خواند
@@ -515,13 +520,68 @@ export function createServices(deps: AppDeps): Services {
 export function createApp(deps: AppDeps): AppHono {
   const services = createServices(deps);
 
-  const app: AppHono = new Hono<{ Bindings: { DB: D1Database; ENV: string; CF_ACCESS_TEAM_DOMAIN: string }; Variables: { authContext: AuthContext; logger: Logger } }>();
+  const app: AppHono = new Hono<{ Bindings: AppBindings; Variables: AppVariables }>();
 
   // — هوک تستی: دسترسی به سرویس‌ها برای e2e (مثلاً setFillObserver در آزمون )
   (app as unknown as { __services?: Services }).__services = services;
 
   app.use('*', async (c, next) => {
     c.set('logger', services.logger);
+    return next();
+  });
+
+  /* ف۵ (P2-13) — request-id سراسری: هر درخواست /api/* شناسهٔ همبستگی `req-<uuid>` می‌گیرد که
+     در سه‌جا می‌نشیند: هدر پاسخ X-Request-Id، فیلد request_id پاکت خطا (errorHandler) و
+     ردیف‌های audit_log همان درخواست (زمینهٔ AsyncLocalStorage در @core/audit — همهٔ
+     audit.logهای از اعماق سرویس‌ها بدون تغییر امضا شامل می‌شوند). میدل‌ور اولِ /api/* است
+     تا هر چیزی که بعدش می‌آید — حتی خطا — شناسه را داشته باشد. */
+  app.use('/api/*', async (c, next) => {
+    const requestId = `req-${crypto.randomUUID()}`;
+    c.set('requestId', requestId);
+    try {
+      return await runWithRequestId(requestId, () => next());
+    } finally {
+      // با finally حتی روی مسیر خطا (۴xx/۵xx) هدر می‌نشیند
+      c.header('X-Request-Id', requestId);
+    }
+  });
+
+  /* ف۵ (P2-15) — محدودسازی نرخ نوشتنی /api/* per-IP (پنجرهٔ ثابت درون‌حافظهٔ per-isolate):
+     پیش‌فرض ۲۴۰ نوشتنی در دقیقه بر IP — سخاوتمندانه تا کاربرد عادی هرگز ۴۲۹ نبیند؛
+     env اختیاری API_RATE_LIMIT_PER_MIN («۰» = خاموش با یک لاگ). مستثنی‌ها:
+     ① /api/auth/login — throttle اختصاصی دوبل خودش را دارد (login_throttle: ۵/۱۵دقیقه بر
+       شناسه + ۲۰/۱۵دقیقه بر IP) و سقف سراسری روی مسیر ورود، قفل‌شدن دفتر پشت NAT واحد را
+       به‌همراه دارد؛ ② مسیرهای /public (تله‌متری rum/client-errors) در این میدل‌ور نیستند و
+       limiter خودشان را دارند. محدودیت صادقانه: شمارنده per-isolate است — جزئیات در
+       @app/http/rate-limit و سند طرح §۴ آیتم ۱۵. */
+  const apiRateLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
+  let rateLimitDisabledLogged = false;
+  app.use('/api/*', async (c, next) => {
+    if (c.req.method !== 'POST' && c.req.method !== 'PUT' && c.req.method !== 'PATCH' && c.req.method !== 'DELETE') {
+      return next(); // فقط متدهای نوشتنی — خواندنی‌ها بی‌سقف می‌مانند (کش no-store خودشان را دارند)
+    }
+    if (c.req.path === '/api/auth/login') return next(); // مستثنی مستند — throttle اختصاصی دارد
+
+    // env در هر درخواست از bindings خوانده می‌شود (wrangler var/secret رشته می‌دهد)؛
+    // کلید سطل، سقف را هم شامل است تا تغییر env سطل تازه بسازد نه بازنویسی سطل قدیم
+    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) {
+      if (!rateLimitDisabledLogged) {
+        rateLimitDisabledLogged = true;
+        services.logger.child('http').warn('api_rate_limit.disabled', {
+          reason: 'API_RATE_LIMIT_PER_MIN=0'
+        });
+      }
+      return next();
+    }
+    const ip = (c.req.header('cf-connecting-ip') ?? 'unknown').slice(0, 64);
+    if (!apiRateLimiter.allow(`${perMin}:${ip}`, perMin)) {
+      c.header('Retry-After', String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1000)));
+      throw new RateLimitError(
+        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1000),
+        'درخواست‌های نوشتنی بیش از حد مجاز است — کمی بعد دوباره تلاش کنید'
+      );
+    }
     return next();
   });
 

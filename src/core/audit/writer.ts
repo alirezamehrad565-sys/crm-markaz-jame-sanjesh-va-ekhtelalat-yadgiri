@@ -1,4 +1,5 @@
 import type { DbClient } from '@core/db';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 export interface AuditEntry {
   actorId: string;
@@ -6,6 +7,13 @@ export interface AuditEntry {
   resourceType: string;
   resourceId: string;
   changes?: Record<string, { from: unknown; to: unknown }>;
+  /**
+   * ف۵ (P2-13) — شناسهٔ همبستگی درخواست (فرمت `req-<uuid>`). اختیاری؛ اگر داده نشود از
+   * زمینهٔ درخواست جاری خوانده می‌شود (سیم‌کشی AsyncLocalStorage زیر — میدل‌ور request-id
+   * هر درخواست /api/* را در همین زمینه می‌پوشاند). صدا زدن بیرون زمینهٔ درخواست (کرون/
+   * فرصت‌طلب) بدون این فیلد = ستون null در جدول 0108 — عمداً، چون آن رویدادها درخواستی ندارند.
+   */
+  requestId?: string;
 }
 
 export interface AuditWriter {
@@ -37,17 +45,34 @@ export function parseAuditRetentionDays(raw: unknown): number {
   return Math.trunc(n);
 }
 
+/* ف۵ (P2-13) — زمینهٔ request-id ممیزی: میدل‌ور request-id در api-routing هر درخواست /api/* را
+   با runWithRequestId می‌پوشاند و هر audit.log/logInTransaction همان درخواست — حتی از اعماق
+   سرویس‌ها — بدون تغییر امضا، شناسهٔ را می‌گیرد. nodejs_compat ورکر AsyncLocalStorage را می‌دهد
+   و هارنس تست هم روی node است؛ چیزی global leak نمی‌شود چون عمر store فقط عمر همان درخواست است. */
+const requestIdALS = new AsyncLocalStorage<{ requestId: string }>();
+
+/** بلوک کد را در زمینهٔ یک درخواست اجرا می‌کند تا auditهای داخلش request-id داشته باشند */
+export function runWithRequestId<T>(requestId: string, fn: () => Promise<T>): Promise<T> {
+  return requestIdALS.run({ requestId }, fn);
+}
+
+function currentRequestId(): string | null {
+  return requestIdALS.getStore()?.requestId ?? null;
+}
+
 function buildInsert(entry: AuditEntry): { sql: string; params: unknown[] } {
   return {
-    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes)
-          VALUES (?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes, request_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
     params: [
       crypto.randomUUID(),
       entry.actorId,
       entry.action,
       entry.resourceType,
       entry.resourceId,
-      entry.changes ? JSON.stringify(entry.changes) : null
+      entry.changes ? JSON.stringify(entry.changes) : null,
+      // صراحتِ صدا زننده همیشه برندهٔ زمینهٔ درخواست است (مثلاً میدل‌ور ناظر که بعد از پاسخ می‌نویسد)
+      entry.requestId ?? currentRequestId()
     ]
   };
 }
