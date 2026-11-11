@@ -79,7 +79,10 @@ import {
 import { isValidIranianNationalId, normalizeNationalId } from './national-id';
 import { isOnGrid, tehranTodayYmd } from './time';
 
-export const UuidSchema = z.string().uuid('شناسه معتبر نیست');
+// zod4 — z.uuid() فقط UUID استاندارد RFC 9562 می‌پذیرد (نسخهٔ ۱..۸ + واریانت 89ab)؛
+// برای حفظ رفتار zod3 روی داده‌های موجود D1 و فیکسچرها (مثل seedهای «۱۱۱…») همان پذیرش باز با regex بازتولید شد
+const UUID_LOOSE_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+export const UuidSchema = z.string().regex(UUID_LOOSE_RE, 'شناسه معتبر نیست');
 
 export const IsoDateTimeSchema = z
   .string()
@@ -496,7 +499,7 @@ export const UpdateSettingsSchema = z.object({
           const hasFrom = typeof v.from === 'string' && v.from.length > 0;
           const hasTo = typeof v.to === 'string' && v.to.length > 0;
           if (hasFrom !== hasTo) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'هر دو تاریخ «از» و «تا» باید با هم وارد شوند' });
+            ctx.addIssue({ code: 'custom', message: 'هر دو تاریخ «از» و «تا» باید با هم وارد شوند' }); // zod4 — ZodIssueCode حذف شده
             return;
           }
           if (hasFrom && hasTo) {
@@ -518,7 +521,7 @@ export const UpdateSettingsSchema = z.object({
 });
 
 const ScoringWeightField = z
-  .number({ invalid_type_error: 'وزن باید عدد باشد' })
+  .number({ error: 'وزن باید عدد باشد' }) // zod4
   .int('وزن باید عدد صحیح باشد')
   .min(0, 'وزن نمی‌تواند منفی باشد')
   .max(10000, 'وزن حداکثر ۱۰۰۰۰ است');
@@ -536,7 +539,7 @@ export const ScoringWeightsSchema = z.object({
   formRefs: ScoringWeightField,
   base_action: ScoringWeightField,
   admin_cap: z
-    .number({ invalid_type_error: 'سقف باید عدد باشد' })
+    .number({ error: 'سقف باید عدد باشد' }) // zod4
     .int('سقف باید عدد صحیح باشد')
     .min(0, 'سقف نمی‌تواند منفی باشد')
     .max(100000, 'سقف حداکثر ۱۰۰۰۰۰ است')

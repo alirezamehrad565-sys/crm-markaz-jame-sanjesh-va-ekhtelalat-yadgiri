@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: گیت‌های انتشار — ف۲ (تایپ، آزمون، بودجه، همگامی اسناد)
+    name: گیت‌های انتشار — ف۳ (تایپ، آزمون، بودجه، همگامی اسناد، امنیت وابستگی‌ها)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,11 +22,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # ف۲ — ردیف CI طرح ارتقا §۷: npm audit گزارش می‌دهد؛ تا ف۳ (zod@4) «بلاک‌کننده» نیست
-      # چون HIGH شناخته‌شدهٔ zod<4.6.6 (GHSA-mrhx-c7xc-m3w5) تا ارتقای کنترل‌شده باز است.
-      - name: npm audit (deps production — گزارش؛ پس از ف۳ بلاک‌کننده می‌شود)
+      # ف۳ — از ۱.۲۵.۶۹ zod@4.6.7 (GHSA-mrhx-c7xc-m3w5 بسته شد) و npm audit بلاک‌کننده است:
+      # هر HIGH تازه در درخت تولید = قرمز CI. دامنهٔ گیت فقط درخت تولید است؛
+      # درخت dev (زنجیرهٔ wrangler→miniflare→@fastify/busboy) بدهی جداست و ارتقای کنترل‌شدهٔ wrangler جداگانه می‌رود.
+      - name: npm audit (deps production — بلاک‌کننده از ف۳)
         run: npm audit --omit=dev --audit-level=high
-        continue-on-error: true
 
       - name: Typecheck (tsc strict)
         run: npm run typecheck
