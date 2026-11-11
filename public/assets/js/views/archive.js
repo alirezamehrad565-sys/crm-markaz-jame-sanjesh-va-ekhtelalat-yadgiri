@@ -167,7 +167,7 @@ export async function renderArchive(container) {
         title: hasFilter ? 'نتیجه‌ای در آرشیو پیدا نشد' : 'آرشیو خالی است',
         hint: hasFilter
           ? 'جستجو یا فیلتر را تغییر دهید.'
-          : 'دیتابیس دانش‌آموزان نیاز ویژهٔ شهر — پرونده‌های خارج‌شده از چرخه این‌جا نگه داشته می‌شوند و می‌توانید مستقیم هم دانش‌آموز تعریف کنید.',
+          : 'پروندهٔ دانش‌آموزان نیاز ویژهٔ شهر — پرونده‌های خارج‌شده از چرخهٔ مرکز این‌جا نگه داشته می‌شوند و هر زمان خواستید همان‌جا به چرخه برگردانید.', /* H3 */
         actionLabel: hasFilter || isSupervisor ? undefined : 'دانش‌آموز جدید در آرشیو' /* ۱.۲۵.۰۱ — ناظر: بدون اکشن مرده */,
         onAction: hasFilter || isSupervisor ? undefined : openNewArchiveStudent /* ۱.۲۵.۰۱ — ناظر */
       })));
@@ -340,7 +340,7 @@ export async function renderArchive(container) {
       el('span', { class: 'badge badge--neutral' }, metaBar)
     ),
     el('div', { class: 'muted', style: { fontSize: 'var(--fs-xs)', margin: '0 2px var(--sp-3)' } }, /* 13px خام (S5-06) */
-      'دیتابیس دانش‌آموزان نیاز ویژهٔ شهر — پرونده‌های خارج‌شده از چرخهٔ مرکز این‌جا حفظ می‌شوند؛ می‌توانید مستقیم هم دانش‌آموز با برچسب تعریف کنید و هر زمان به چرخه برگردانید.'),
+      'پروندهٔ دانش‌آموزان نیاز ویژهٔ شهر — پرونده‌های خارج‌شده از چرخهٔ مرکز این‌جا نگه داشته می‌شوند؛ هر زمان خواستید، همان‌جا به چرخه برگردانید.'), /* H3 */
     toolbar,
     el('div', { class: 'card card__body--flush card--table cv-block' }, table, pagerZone) /* E2 */
   );

@@ -1,6 +1,6 @@
 import { api, qs } from '../api.js';
 import { fa, addDaysYmd, formatJalaliNumeric, iranianWeekdayOfYmd, tehranTodayYmd, toJalali, WEEKDAY_NAMES } from '../format.js';
-import { el, icon, skeletonState, errorState, dataTable, emptyState, toast, kpi, KPI_ALERT_RATE, statusBadge } from '../ui.js'; /* ۱.۲۵.۰۵ — kpi/آستانه تک‌منبع · ۱.۲۵.۵۶ — statusBadge برای نقش همکار */
+import { el, icon, skeletonState, errorState, dataTable, emptyState, toast, kpi, KPI_ALERT_RATE, statusBadge, markScrollable } from '../ui.js'; /* ۱.۲۵.۰۵ — kpi/آستانه تک‌منبع · ۱.۲۵.۵۶ — statusBadge برای نقش همکار · B7 — markScrollable */
 import { jalaliDateInput } from '../jalali-picker.js';
 import { barChart, donut, hbars, deferredChart } from '../charts.js'; // E3 · countUp به ui.js رفت (۱.۲۵.۰۵)
 
@@ -35,6 +35,7 @@ export async function renderReports(container) {
     el('button', { class: 'tab', type: 'button', role: 'tab', 'data-mode': 'advanced', onclick: () => switchMode('advanced') }, 'تحلیل پیشرفته'),
     el('button', { class: 'tab', type: 'button', role: 'tab', 'data-mode': 'attendance', onclick: () => switchMode('attendance') }, 'حضور و غیاب همکاران') /* ۱.۲۵.۵۶ — خواست کارفرما: تب CSV حضور همکاران */
   );
+  markScrollable(modeSeg); /* B7 — در موبایل تب سوم بریده می‌شد؛ نشانهٔ اسکرول هم‌الگوی ui.tabs() */
   function syncTabs() {
     modeSeg.querySelectorAll('.tab').forEach((t) => {
       const on = t.dataset.mode === local.mode;

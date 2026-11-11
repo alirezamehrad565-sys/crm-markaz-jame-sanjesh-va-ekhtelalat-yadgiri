@@ -646,7 +646,7 @@ function drawKeys(body, settings) {
   const connectionCard = el('div', { class: 'settings-section', style: { marginBottom: 'var(--sp-4)' } },
     el('h3', {}, 'اتصال‌های فعال'),
     el('p', { class: 'hint-text' },
-      'اتصال‌های زیر برای ارسال اعلان و استفاده برنامه‌ای از API سامانه استفاده می‌شوند. کلیدهای API جایگزین امنی برای اشتراک‌گذاری حساب کاربری با سرویس‌های خارجی هستند.'),
+      'اتصال‌های زیر برای ارسال اعلان و کاربرد برنامه‌ای از API سامانه هستند. کلیدهای API جایگزین امنی برای اشتراک‌گذاری حساب کاربری با سرویس‌های خارجی هستند.'), /* H7 — تکرار «استفاده…استفاده» نرم شد */
     el('div', { class: 'info-list' },
       row('بات بله (اعلان معلم و ولیّ)',
         el('span', { class: `badge ${settings.meta.baleConfigured ? 'badge--success' : 'badge--neutral'}` },

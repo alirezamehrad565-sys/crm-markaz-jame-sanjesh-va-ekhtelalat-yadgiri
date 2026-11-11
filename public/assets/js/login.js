@@ -81,6 +81,9 @@ export function renderLoginPage(onSuccess) {
       setToken(res.data.token);
       setDevStaffId(res.data.staff.id);
       sessionStorage.setItem(SESSION_KEY, '1');
+      /* B1 — ورود موفق نباید روی hash «#/login» بماند: روتر این مسیر را نمی‌شناسد و نمای ۴۰۴ می‌بیند.
+         دیپ‌لینک واقعی (مثل #/reports) دست‌نخورده می‌ماند و پس از reload همان جا رندر می‌شود. */
+      if (!location.hash || location.hash === '#/' || location.hash === '#/login') location.hash = '#/dashboard';
       onSuccess?.(res.data.staff);
       setTimeout(() => location.reload(), 250);
     } catch (err) {

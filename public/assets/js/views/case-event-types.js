@@ -91,7 +91,7 @@ export async function renderCaseEventTypes(container) {
     el('div', {},
       el('div', { class: 'page-head__title' }, 'فرم‌ها و پرسش‌نامه‌ها — رویدادساز'),
       el('div', { class: 'page-head__desc' },
-        'فرم‌ساز حرفه‌ای روان‌سنجی: گزینه‌های نمره‌دار، آیتم معکوس/بحرانی، زیرمقیاس و تفسیر خودکار؛ به‌علاوهٔ ارسال یک‌کلیکی چک‌لیست برای خانواده و معلم در بله.'
+        'فرم و پرسش‌نامهٔ استاندارد بسازید — با نمره‌گذاری، زیرمقیاس و تفسیر خودکار — و چک‌لیست را با یک کلیک برای خانواده و معلم در بله بفرستید.' /* H1 — بازنویسی انسانی: انباشت اصطلاح و «به‌علاوهٔ» حذف شد */
       )
     ),
     el('button', { class: 'btn btn--primary', onclick: () => openTypeForm({ tagName, onSaved: () => ctl.quietSync() }) }, /* ۱.۲۲.۰ — جای قالب تازه را ترتیب سرور تعیین می‌کند */
@@ -450,7 +450,7 @@ export async function renderCaseEventTypes(container) {
             ? el('button', {
                 class: 'btn btn--primary btn--sm',
                 onclick: () => openStudentPicker(t)
-              }, icon('zap', 14), 'ارسال برای دانش‌آموز')
+              }, icon('zap', 14), `ارسال برای ${fillTargetOf(t).label}`) /* B6 — گیرندهٔ واقعی فرم خانواده/معلم است؛ «دانش‌آموز» فقط معرفی‌کنندهٔ پرونده است */
             : null,
           rowMenu({
             label: `اقدامات بیشتر برای «${t.title}»`,
@@ -494,6 +494,9 @@ export async function renderCaseEventTypes(container) {
 
   function openStudentPicker(type) {
     const results = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', margin: '10px 0', maxHeight: '320px', overflowY: 'auto' } });
+    /* B5 — مودال بدون راهنما باز می‌شد: فقط یک input خالی؛ کاربر نمی‌دانست باید تایپ کند */
+    const hint = el('p', { class: 'cell-sub', style: { margin: '10px 0' } }, 'بخشی از نام یا کد ملی دانش‌آموز را بنویسید تا فهرست بگیرید.');
+    results.replaceChildren(hint);
     const input = el('input', {
       class: 'input',
       type: 'search',
@@ -504,7 +507,8 @@ export async function renderCaseEventTypes(container) {
     async function search(q) {
       results.replaceChildren(el('p', { class: 'cell-sub' }, 'در حال جستجو…'));
       try {
-        const res = await api.get(`/api/students?q=${encodeURIComponent(q)}&page=1&pageSize=8`);
+        /* B2 — سرور پارامتر «query» را می‌خواند نه «q»؛ با «q» فیلتر بی‌صدا بی‌اثر می‌شد (هم‌الگو: games-console.js) */
+        const res = await api.get(`/api/students?query=${encodeURIComponent(q)}&page=1&pageSize=8`);
         const items = res.data?.items ?? res.data ?? [];
         if (items.length === 0) {
           results.replaceChildren(el('p', { class: 'cell-sub' }, 'چیزی پیدا نشد — با کد ملی یا بخشی از نام جستجو کنید.'));
@@ -528,7 +532,7 @@ export async function renderCaseEventTypes(container) {
     input.addEventListener('input', () => {
       clearTimeout(timer);
       const q = input.value.trim();
-      if (q.length < 2) { results.replaceChildren(); return; }
+      if (q.length < 2) { results.replaceChildren(hint); return; } /* B5 — بر گشت به راهنما */
       timer = setTimeout(() => search(q), 350);
     });
 
