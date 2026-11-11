@@ -3,10 +3,12 @@ import { fa, formatJalaliNumeric } from '../format.js';
 import { el, icon, toast, toastError, emptyState } from '../ui.js';
 import { session } from '../state.js';
 
-// ─── گزارش به پشتیبانی (۱.۲۵.۵۷ — ساده‌سازی به خواست کارفرما) ───
+// ─── گزارش به پشتیبانی (۱.۲۵.۶۳ — بازطراحی UI/UX به خواست کارفرما) ───
 // همکار مشکل را تیک می‌زند و می‌فرستد؛ بقیه‌اش خودکار است: صفحهٔ موقع گزارش،
 // نام گزارش‌دهنده و نسخهٔ سامانه بی‌سروصدا ضبط می‌شوند. پاسخ پشتیبانی شبکه
 // (CP m8) در چرخهٔ دوطرفهٔ سرور pull و همین‌جا با نشان «پاسخ داده شد» می‌نشیند.
+// ۱.۲۵.۶۳: page-head استاندارد، قرص شدت استایل‌دار (CSS واقعی جای ظاهر خام مرورگر)،
+// ردیف گزارش کارت‌مانند، شمارندهٔ متن، نشان شمارش فهرست و آیکن bug در حالت خالی.
 // شناسهٔ بخش‌ها هم‌قرارداد نقشهٔ برچسب پنل شبکه است — ناشناخته‌ها برچسب خام می‌گیرند.
 
 const AREAS = [
@@ -66,6 +68,7 @@ function areaChip(area) {
   return btn;
 }
 
+/* ۱.۲۵.۶۳ — قرص شدت: input نامرئی + span استایل‌دار (.bug-sev در components.css) */
 function severityRadio(sev) {
   const id = `bug-sev-${sev.id}`;
   return el(
@@ -83,25 +86,15 @@ function severityRadio(sev) {
   );
 }
 
-/* ۱.۲۵.۵۷ — بلوک پاسخ پشتیبانی: فقط وقتی پاسخی رسیده باشد رندر می‌شود */
+/* ۱.۲۵.۶۳ — بلوک پاسخ پشتیبانی: استایل از CSS (.bug-reply) — ظاهر خام مرورگر یا استایل درون‌خطی نیست */
 function replyBlock(rec) {
   if (!rec.reply_text) return null;
   return el(
     'div',
-    {
-      class: 'bug-reply',
-      style: {
-        borderInlineStart: '3px solid var(--success)',
-        background: 'var(--success-soft)',
-        borderRadius: 'var(--radius-2, 8px)',
-        padding: 'var(--sp-2) var(--sp-3)',
-        display: 'grid',
-        gap: 'var(--sp-1)'
-      }
-    },
+    { class: 'bug-reply' },
     el(
       'div',
-      { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } },
+      { class: 'bug-row__head' },
       el('span', { class: 'badge badge--success' }, 'پاسخ پشتیبانی'),
       rec.replyAt
         ? el('span', { style: { fontSize: 'var(--fs-xs)', color: 'var(--text-3)' } }, formatJalaliNumeric(rec.replyAt.slice(0, 10)))
@@ -112,6 +105,7 @@ function replyBlock(rec) {
   );
 }
 
+/* ۱.۲۵.۶۳ — ردیف گزارش کارت‌مانند (.bug-row) با سرِ برچسب‌ها */
 function reportRow(rec) {
   const st = STATUS_META[rec.status] ?? STATUS_META.open;
   const areaLabels = (rec.areas ?? [])
@@ -120,10 +114,10 @@ function reportRow(rec) {
   const replied = Boolean(rec.reply_text);
   return el(
     'div',
-    { class: 'bug-row', style: { display: 'grid', gap: 'var(--sp-2)' } },
+    { class: 'bug-row' },
     el(
       'div',
-      { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center' } },
+      { class: 'bug-row__head' },
       el('span', { class: `badge ${SEVERITY_CLS[rec.severity] ?? 'badge--neutral'}` }, SEVERITIES.find((s) => s.id === rec.severity)?.label ?? fa(rec.severity)),
       replied
         ? el('span', { class: 'badge badge--success' }, 'پاسخ داده شد')
@@ -132,7 +126,7 @@ function reportRow(rec) {
         ? el('span', { style: { fontSize: 'var(--fs-xs)', color: 'var(--text-3)' } }, `تحویل: ${formatJalaliNumeric(rec.forwardedAt.slice(0, 10))}`)
         : null
     ),
-    areaLabels ? el('p', { style: { margin: 0 } }, areaLabels) : null,
+    areaLabels ? el('p', { style: { margin: 0, fontWeight: 600 } }, areaLabels) : null,
     rec.description ? el('p', { style: { margin: 0, whiteSpace: 'pre-wrap' } }, rec.description) : null,
     replyBlock(rec),
     el(
@@ -149,26 +143,29 @@ function reportRow(rec) {
 export async function renderBugReport(container) {
   container.replaceChildren(el('p', { style: { color: 'var(--text-3)' } }, 'در حال بارگذاری…'));
 
-  const chips = el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-2)' } }, ...AREAS.map(areaChip));
+  const chips = el('div', { class: 'chip-row' }, ...AREAS.map(areaChip));
   const sevWrap = el(
     'div',
-    { style: { display: 'flex', gap: 'var(--sp-4)', flexWrap: 'wrap' } },
+    { class: 'chip-row' },
     ...SEVERITIES.map(severityRadio)
   );
+
+  const counter = el('span', { style: { fontSize: 'var(--fs-xs)', color: 'var(--text-3)' } }, `${fa(0)} / ${fa(2000)}`);
   const desc = el('textarea', {
     class: 'input',
     rows: 4,
     maxlength: 2000,
     style: { width: '100%' },
     placeholder: 'توضیح مشکل (اختیاری اگر بخشی تیک خورده باشد)',
-    'aria-label': 'توضیح مشکل'
+    'aria-label': 'توضیح مشکل',
+    oninput: () => { counter.textContent = `${fa(desc.value.length)} / ${fa(2000)}`; }
   });
 
   const submitBtn = el(
     'button',
     { class: 'btn btn--primary', type: 'submit' },
     icon('send', 16),
-    'ارسال'
+    'ارسال گزارش'
   );
 
   const form = el(
@@ -195,6 +192,7 @@ export async function renderBugReport(container) {
           });
           toast('گزارش ثبت شد — خودکار به پشتیبانی می‌رود', 'success');
           desc.value = '';
+          counter.textContent = `${fa(0)} / ${fa(2000)}`;
           state.areas.clear();
           state.areas.add('other');
           chips.querySelectorAll('.chip').forEach((c) => {
@@ -211,18 +209,14 @@ export async function renderBugReport(container) {
         }
       }
     },
-    el('h2', { class: 'card__title' }, 'گزارش به پشتیبانی'),
-    el(
-      'p',
-      { style: { color: 'var(--text-3)', fontSize: 'var(--fs-sm)', margin: 0 } },
-      'مشکل را تیک بزنید و بفرستید — صفحه، نام شما و نسخهٔ سامانه خودکار ضبط می‌شود.'
-    ),
-    el('p', { style: { fontWeight: 600, margin: 0 } }, 'کدام بخش؟'),
+    el('h2', { class: 'card__title' }, icon('bug', 18), 'گزارش تازه'),
+    el('p', { style: { fontWeight: 600, margin: 0 } }, 'کدام بخش سامانه؟'),
     chips,
     el('p', { style: { fontWeight: 600, margin: 0 } }, 'شدت'),
     sevWrap,
+    el('p', { style: { margin: 0, fontSize: 'var(--fs-xs)', color: 'var(--text-3)' } }, 'بحرانی یعنی کار شما با سامانه متوقف شده است.'),
     desc,
-    submitBtn
+    el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' } }, counter, submitBtn)
   );
 
   const listBox = el('div', { class: 'card', style: { display: 'grid', gap: 'var(--sp-2)' } });
@@ -232,10 +226,13 @@ export async function renderBugReport(container) {
       const res = await api.get('/api/bug-reports');
       const items = res?.data ?? [];
       listBox.replaceChildren(
-        el('h2', { class: 'card__title' }, 'گزارش‌های پیشین'),
+        el('h2', { class: 'card__title' },
+          'گزارش‌های پیشین',
+          items.length > 0 ? el('span', { class: 'badge badge--neutral' }, fa(items.length)) : null
+        ),
         items.length === 0
-          ? emptyState({ iconName: 'check', title: 'هنوز گزارشی ثبت نشده', hint: 'اولین گزارش را همین بالا بفرستید.' })
-          : el('div', { style: { display: 'grid', gap: 'var(--sp-3)' } }, ...items.map(reportRow))
+          ? emptyState({ iconName: 'bug', title: 'هنوز گزارشی ثبت نشده', hint: 'اگر جایی از سامانه اذیت‌تان کرد، از همین فرم بفرستید — به پشتیبانی شبکه می‌رسد.' })
+          : el('div', { style: { display: 'grid', gap: 'var(--sp-2)' } }, ...items.map(reportRow))
       );
     } catch (err) {
       toastError(err);
@@ -245,6 +242,12 @@ export async function renderBugReport(container) {
 
   await loadList();
   container.replaceChildren(
+    el(
+      'div',
+      { class: 'page-head' },
+      el('h2', { class: 'page-head__title' }, 'گزارش به پشتیبانی'),
+      el('p', { class: 'page-head__desc' }, 'مشکل را تیک بزنید و بفرستید — گزارش خودکار با صفحه، نام شما و نسخهٔ سامانه به پشتیبانی شبکه می‌رسد و پاسخش همین‌جا می‌نشیند.')
+    ),
     el(
       'div',
       { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--sp-3)', alignItems: 'start' } },

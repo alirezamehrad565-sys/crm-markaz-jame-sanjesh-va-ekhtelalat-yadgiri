@@ -1759,3 +1759,15 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   min-width: 0;
 }
 .field__labelrow .field__label { margin: 0; }
+
+/* ── ۱.۲۵.۶۳ — گزارش به پشتیبانی: قرص شدت + ردیف کارت‌مانند + بلوک پاسخ (CSS وعدهٔ ۱.۲۵.۵۷ اکنون واقعاً این‌جاست؛ خواست کارفرما: UI/UX درست و حسابی) ── */
+.bug-sev { position: relative; display: inline-flex; cursor: pointer; }
+.bug-sev input { position: absolute; inset: 0; opacity: 0; cursor: pointer; margin: 0; }
+.bug-sev span { display: inline-block; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); border-radius: var(--radius-full); padding: 4px 14px; font-size: var(--fs-sm); font-weight: 600; transition: background var(--fast), border-color var(--fast), color var(--fast); }
+.bug-sev:hover > span { border-color: var(--primary); color: var(--primary); }
+.bug-sev input:checked + span { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+.bug-sev input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
+.bug-row { display: grid; gap: var(--sp-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-2); padding: var(--sp-3); transition: border-color var(--fast); }
+.bug-row:hover { border-color: color-mix(in srgb, var(--primary) 35%, var(--border)); }
+.bug-row__head { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
+.bug-reply { border-inline-start: 3px solid var(--success); background: var(--success-soft); border-radius: var(--radius-2); padding: var(--sp-2) var(--sp-3); display: grid; gap: var(--sp-1); }
