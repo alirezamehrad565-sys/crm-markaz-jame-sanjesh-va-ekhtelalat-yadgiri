@@ -395,6 +395,10 @@ const REASON_LABELS = {
 function openClassManager(school) {
   let classes = [];
   let classSearch = null; // — ورودی جستجو در body مودال ساخته می‌شود؛ در این اسکوپ نگه داشته می‌شود
+  /* ۱.۲۵.۶۵ — رفع TDZ (باگ واقعی «مودال کلاس‌ها لود نمی‌شود»): body مودال هم‌زمانِ ساختِ openModal
+     اجرا می‌شود و همان‌جا refresh() → ++refreshGen؛ تعریفِ این گارد بعد از openModal یعنی متغیر هنوز
+     در ناحیهٔ مرده است → ReferenceError → درخواست /api/classes هرگز شلیک نمی‌شد و اسپینر ابدی می‌ماند */
+  let refreshGen = 0;
   const listBox = el('div', { style: { minHeight: '120px' } }, loadingState('در حال بارگذاری کلاس‌ها…'));
   const countBadge = el('span', { class: 'badge badge--neutral' }, '—');
 
@@ -431,8 +435,7 @@ function openClassManager(school) {
     }
   });
 
-  /* ۱.۲۲.۲ (F6) — گارد نسل + isConnected: پاسخ کهنه در مودال بسته رندر نمی‌شود */
-  let refreshGen = 0;
+  /* گارد نسل + isConnected (از ۱.۲۲.۲): پاسخ کهنه در مودال بسته رندر نمی‌شود */
   async function refresh() {
     const myGen = ++refreshGen;
     try {
