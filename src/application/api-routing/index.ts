@@ -68,6 +68,8 @@ import { createBugReportService, registerBugReportRoutes } from '@domain/bug-rep
 import type { BugReportService } from '@domain/bug-reports';
 import { createClientErrorsService, registerClientErrorsRoutes } from '@app/client-errors'; // ۱.۲۵.۶۶ — لولهٔ خطای مرورگر
 import type { ClientErrorsService } from '@app/client-errors';
+import { createHealthService, registerHealthRoutes } from '@app/health'; // ۱.۲۵.۶۷ — پنل سلامت (CP-3 ف۱)
+import type { HealthService } from '@app/health';
 import { createContentScoreService, registerContentScoreRoutes } from '@domain/content-score'; // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
 import type { ContentScoreService } from '@domain/content-score';
 import { fetchCpContentFile } from '@app/cp-content/sync';
@@ -123,6 +125,8 @@ export interface AppDeps {
   cpSyncUrl?: string | null;
   cpNodeCode?: string | null;
   cpNodeKey?: string | null;
+  /** ۱.۲۵.۶۷ — نام محیط برای پنل سلامت (ENV رانتایم) */
+  envName?: string | null;
 }
 
 export interface Services {
@@ -167,6 +171,7 @@ export interface Services {
   networkContent: NetworkContentService; // ۱.۲۵.۴۶ — کتابخانهٔ شبکه
   bugReports: BugReportService; // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP
   clientErrors: ClientErrorsService; // ۱.۲۵.۶۶ — لولهٔ خطای مرورگر
+  health: HealthService; // ۱.۲۵.۶۷ — پنل سلامت (وضعیت سامانه + لینک CP — CP-3)
   contentScore: ContentScoreService; // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
 }
 
@@ -467,6 +472,13 @@ export function createServices(deps: AppDeps): Services {
   // ۱.۲۵.۶۶ — لولهٔ خطای مرورگر: تا امروز کلاینت به /api/client-errors پست می‌کرد و ۴۰۱ می‌گرفت
   const clientErrors = createClientErrorsService({ db, logger });
 
+  // ۱.۲۵.۶۷ — پنل سلامت (ف۱ طرح ارتقا، CP-3): وضعیت سامانه + شش درگاه لینک CP از مُهرهای settings
+  const health = createHealthService({
+    db,
+    cpConfigured: Boolean(deps.cpSyncUrl && deps.cpNodeCode && deps.cpNodeKey),
+    envName: deps.envName ?? null
+  });
+
   // ۱.۲۵.۴۶ — تابلوی شاخص‌های مرکز + کتابخانهٔ شبکه (محورهای کیفیِ غنی‌سازی CP)
   const centerKpi = createCenterKpiService({ db });
   const networkContent = createNetworkContentService({
@@ -491,7 +503,7 @@ export function createServices(deps: AppDeps): Services {
   // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP (صف محلی؛ ارسال در @app/bug-report-forward)
   const bugReports = createBugReportService(db, audit);
 
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, contentScore };
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, health, contentScore };
 }
 
 export function createApp(deps: AppDeps): AppHono {
@@ -666,6 +678,7 @@ export function createApp(deps: AppDeps): AppHono {
   registerBugReportRoutes(app, services.bugReports); // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP
 
   registerClientErrorsRoutes(app, services.clientErrors); // ۱.۲۵.۶۶ — لولهٔ خطای مرورگر (POST عمومی /public/client-errors، خواندن فقط‌مدیر)
+  registerHealthRoutes(app, services.health); // ۱.۲۵.۶۷ — پنل سلامت (GET /api/health/panel فقط‌مدیر)
 
   registerContentScoreRoutes(app, { contentScore: services.contentScore }); // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
 

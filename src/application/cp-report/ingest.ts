@@ -19,6 +19,9 @@
  */
 import { APP_VERSION } from '@core/version';
 import { tehranTodayYmd, tehranDayRange } from '@core/shared';
+// ۱.۲۵.۶۷ — CP-2: مُهرهای سینک از ماژول‌های مالکشان — snapshot سلامت از «دادهٔ واقعی موجود» پر می‌شود نه null
+import { CP_SYNC_SETTINGS_KEY } from '@app/cp-sync/announcements';
+import { CP_CONTENT_SYNC_KEY } from '@app/cp-content/sync';
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 
@@ -152,6 +155,63 @@ async function writeSettings(db: DbClient, key: string, jsonValue: string, nowIs
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-report', updated_at = excluded.updated_at`,
     [key, jsonValue, nowIso]
   );
+}
+
+/**
+ * ۱.۲۵.۶۷ — CP-2 (طرح ارتقا §۳-۶.۲): snapshot سلامتِ گزارش روزانه از مُهرها و صف‌های واقعی پر می‌شود —
+ * تا ۱.۲۵.۶۶ به‌جز reported_version همه‌اش null بود در حالی که همهٔ داده‌هایش همین حالا در
+ * settings/جدول‌ها هست (مُهرهای سینک، forward_error صف باگ از 0101). CP می‌تواند روی لینک هشدار بدهد.
+ * هم‌قرارداد CpReportHealthInput (snake_case) — هرگز throw نمی‌کند (حکم ماتریس خرابی §۳-۵).
+ */
+async function collectHealthSnapshot(db: DbClient, at: Date): Promise<CpReportHealthInput> {
+  // sync_lag_s: کهنگی «تازه‌ترین موفقیتِ pull» بین دو درگاه CP→نود (اعلان‌ها، برگزیده‌ها) —
+  // کوچک‌ترین فاصله از حال = تازه‌ترین؛ هیچ موفقیتی ثبت نشده = null (پیش از نخستین سینک)
+  let syncLagS: number | null = null;
+  for (const iso of [
+    await readSettingsIso(db, CP_SYNC_SETTINGS_KEY),
+    await readSettingsIso(db, CP_CONTENT_SYNC_KEY)
+  ]) {
+    if (!iso) continue;
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) continue;
+    const lag = Math.max(0, Math.round((at.getTime() - t) / 1000));
+    if (syncLagS === null || lag < syncLagS) syncLagS = lag;
+  }
+
+  // unsynced_ops: همرسانی‌های محلی هنوز نرفته به CP (status='queued') — عمق صف همرسانی
+  const queuedRow = await db
+    .queryOne<{ n: number }>("SELECT COUNT(*) AS n FROM network_content WHERE origin = 'local' AND status = 'queued'")
+    .catch(() => null); // جدول غایب (نصب بسیار قدیمی) = صفر — استقلال
+
+  // outbox_depth: گزارش‌های باگ باز/شکست‌خوردهٔ ارسال (صف forward از 0101)
+  const outboxRow = await db
+    .queryOne<{ n: number }>("SELECT COUNT(*) AS n FROM bug_reports WHERE status = 'open' OR forward_error IS NOT NULL")
+    .catch(() => null);
+
+  // error_rate_24h: نسبت گزارش‌های ۲۴ساعته‌ای که ارسالشان به CP شکسته —
+  // مخرج = گزارش‌های ساخته‌شدهٔ ۲۴ساعته (created_at هم‌فرمت datetime('now')؛ سرویس bug-reports)
+  const errRow = await db
+    .queryOne<{ total: number; failed: number }>(
+      `SELECT COUNT(*) AS total,
+              SUM(CASE WHEN forward_error IS NOT NULL THEN 1 ELSE 0 END) AS failed
+         FROM bug_reports
+        WHERE created_at >= datetime('now', '-24 hours')`
+    )
+    .catch(() => null);
+  const total24 = errRow?.total ?? 0;
+  const failed24 = errRow?.failed ?? 0;
+  const errorRate24h = total24 > 0 ? Math.round((failed24 / total24) * 1000) / 10 : null;
+
+  return {
+    captured_at: at.toISOString(),
+    reported_version: APP_VERSION,
+    outbox_depth: outboxRow?.n ?? null,
+    unsynced_ops: queuedRow?.n ?? null,
+    error_rate_1h: null, // نرخ یک‌ساعته مبنای دیتایی پایداری ندارد — سند CP-2 فقط ۲۴ساعته را ثبت کرد
+    error_rate_24h: errorRate24h,
+    sync_lag_s: syncLagS,
+    extras: null
+  };
 }
 
 export function shouldPushCpReport(
@@ -337,16 +397,7 @@ export async function pushCpReport(deps: {
           payload: kpi as unknown as Record<string, number | null>
         }
       ],
-      health: {
-        captured_at: atIso,
-        reported_version: APP_VERSION,
-        outbox_depth: null,
-        unsynced_ops: null,
-        error_rate_1h: null,
-        error_rate_24h: null,
-        sync_lag_s: null,
-        extras: null
-      }
+      health: await collectHealthSnapshot(db, at)
     };
 
     // ۵) push با کلید نود m1.2 — binding اگر هست، وگرنه HTTPS عمومی

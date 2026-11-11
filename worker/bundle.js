@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.66";
+var APP_VERSION = "1.25.67";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -45187,6 +45187,243 @@ function registerClientErrorsRoutes(app, service) {
 }
 __name(registerClientErrorsRoutes, "registerClientErrorsRoutes");
 
+// src/application/cp-sync/announcements.ts
+var CP_SYNC_SETTINGS_KEY = "cp_sync.last_sync_at";
+var CP_SYNC_ATTEMPT_KEY = "cp_sync.last_attempt_at";
+var CP_SYNC_MIN_INTERVAL_MS = 15 * 6e4;
+var CP_ID_PREFIX = "cp-";
+var CP_SYNC_LOOKBACK_MS = 6e4;
+var CP_SYNC_TIMEOUT_MS = 15e3;
+function clean(v) {
+  const s = v?.trim();
+  return s ? s : null;
+}
+__name(clean, "clean");
+function buildCpSyncConfig(env) {
+  return {
+    cpSyncUrl: clean(env.CP_SYNC_URL),
+    cpNodeCode: clean(env.CP_NODE_CODE),
+    cpNodeKey: clean(env.CP_NODE_KEY),
+    cpSyncStaffId: clean(env.CP_SYNC_STAFF_ID)
+  };
+}
+__name(buildCpSyncConfig, "buildCpSyncConfig");
+var CpSyncItemSchema = external_exports.object({
+  id: external_exports.string().min(4).max(120),
+  title: external_exports.string().min(1).max(120),
+  body: external_exports.string().min(1).max(2e3),
+  show_login: external_exports.boolean(),
+  show_panel: external_exports.boolean(),
+  active: external_exports.boolean(),
+  created_at: external_exports.string().min(10).max(40),
+  updated_at: external_exports.string().min(10).max(40)
+});
+var CpSyncResponseSchema = external_exports.object({
+  data: external_exports.object({
+    server_time: external_exports.string().min(10).max(40),
+    items: external_exports.array(CpSyncItemSchema).max(100)
+  })
+});
+function boolToInt(b) {
+  return b ? 1 : 0;
+}
+__name(boolToInt, "boolToInt");
+function buildRequestUrl(baseUrl, sinceIso) {
+  if (!sinceIso) return baseUrl;
+  const sep = baseUrl.includes("?") ? "&" : "?";
+  return `${baseUrl}${sep}since=${encodeURIComponent(sinceIso)}`;
+}
+__name(buildRequestUrl, "buildRequestUrl");
+async function readLastSyncAt(db) {
+  return readSettingsIso(db, CP_SYNC_SETTINGS_KEY);
+}
+__name(readLastSyncAt, "readLastSyncAt");
+async function writeLastSyncAt(db, iso) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, 'cp-sync', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-sync', updated_at = excluded.updated_at`,
+    [CP_SYNC_SETTINGS_KEY, JSON.stringify(iso), iso]
+  );
+}
+__name(writeLastSyncAt, "writeLastSyncAt");
+async function readSettingsIso(db, key) {
+  const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.value);
+    if (typeof parsed === "string" && parsed.length > 0) return parsed;
+  } catch {
+  }
+  return null;
+}
+__name(readSettingsIso, "readSettingsIso");
+async function stampCpSyncAttempt(db, at = /* @__PURE__ */ new Date()) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, 'cp-sync', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-sync', updated_at = excluded.updated_at`,
+    [CP_SYNC_ATTEMPT_KEY, JSON.stringify(at.toISOString()), at.toISOString()]
+  );
+}
+__name(stampCpSyncAttempt, "stampCpSyncAttempt");
+function shouldAttemptCpSync(lastAttemptIso, now, minIntervalMs = CP_SYNC_MIN_INTERVAL_MS) {
+  if (!lastAttemptIso) return true;
+  const t = Date.parse(lastAttemptIso);
+  if (Number.isNaN(t)) return true;
+  return now.getTime() - t >= minIntervalMs;
+}
+__name(shouldAttemptCpSync, "shouldAttemptCpSync");
+async function cpSyncOpportunistic(deps) {
+  const { db, logger, config } = deps;
+  if (!config.cpSyncUrl || !config.cpNodeCode || !config.cpNodeKey || !config.cpSyncStaffId) {
+    return { status: "skipped" };
+  }
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const last = await readSettingsIso(db, CP_SYNC_ATTEMPT_KEY);
+  if (!shouldAttemptCpSync(last, now(), deps.minIntervalMs ?? CP_SYNC_MIN_INTERVAL_MS)) {
+    return { status: "skipped" };
+  }
+  await stampCpSyncAttempt(db, now());
+  return syncCpAnnouncements({
+    db,
+    logger,
+    config,
+    binding: deps.binding,
+    fetchFn: deps.fetchFn,
+    now: deps.now
+  });
+}
+__name(cpSyncOpportunistic, "cpSyncOpportunistic");
+async function syncCpAnnouncements(deps) {
+  const { db, logger, config } = deps;
+  const log = logger.child("cp-sync");
+  if (!config.cpSyncUrl || !config.cpNodeCode || !config.cpNodeKey || !config.cpSyncStaffId) {
+    return { status: "disabled" };
+  }
+  try {
+    const lastIso = await readLastSyncAt(db);
+    let sinceIso = null;
+    if (lastIso) {
+      const t = Date.parse(lastIso);
+      if (!Number.isNaN(t)) sinceIso = new Date(t - CP_SYNC_LOOKBACK_MS).toISOString();
+    }
+    const url = buildRequestUrl(config.cpSyncUrl, sinceIso);
+    const init = {
+      method: "GET",
+      headers: {
+        "X-CP-Node-Code": config.cpNodeCode,
+        Authorization: `Bearer ${config.cpNodeKey}`,
+        "X-CP-Node-Version": APP_VERSION
+      },
+      signal: AbortSignal.timeout(CP_SYNC_TIMEOUT_MS)
+    };
+    const res = deps.binding ? await deps.binding.fetch(url, init) : await (deps.fetchFn ?? fetch)(url, init);
+    if (!res.ok) {
+      let bodyHead = "";
+      try {
+        bodyHead = (await res.text()).slice(0, 180);
+      } catch {
+        bodyHead = "";
+      }
+      log.warn("announcement.cp_sync_failed", {
+        http: res.status,
+        detail: "cp_http_error",
+        url: config.cpSyncUrl,
+        // کل URL درخواست‌شده — راز ندارد (کلید در هدر است)
+        body_head: bodyHead
+      });
+      return { status: "error", detail: `http_${res.status}` };
+    }
+    const payload = await res.json();
+    const parsed = CpSyncResponseSchema.safeParse(payload);
+    if (!parsed.success) {
+      log.warn("announcement.cp_sync_failed", { detail: "cp_payload_invalid" });
+      return { status: "error", detail: "payload_invalid" };
+    }
+    const items = parsed.data.data.items.filter((it) => it.id.startsWith(CP_ID_PREFIX)).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
+    if (items.length > 0) {
+      const staff = await db.queryOne(
+        "SELECT id FROM staff WHERE id = ? AND active = 1",
+        [config.cpSyncStaffId]
+      );
+      if (!staff) {
+        log.warn("announcement.cp_sync_failed", { detail: "cp_staff_missing" });
+        return { status: "error", detail: "staff_missing" };
+      }
+      const statements = items.map(
+        (it) => db.prepare(
+          `INSERT INTO announcements
+             (id, title, body, show_login, show_panel, bot_sent_staff, bot_sent_families,
+              active, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             title = excluded.title,
+             body = excluded.body,
+             show_login = excluded.show_login,
+             show_panel = excluded.show_panel,
+             active = excluded.active,
+             updated_at = excluded.updated_at
+           -- \u06AF\u0627\u0631\u062F \u0637\u0644\u0627\u06CC\u06CC: \u0647\u0631\u06AF\u0632 \u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627\u06CC \u0645\u062D\u0644\u06CC (\u0628\u062F\u0648\u0646 \u067E\u06CC\u0634\u0648\u0646\u062F cp-) \u0631\u0627 \u0628\u0627\u0632\u0646\u0648\u06CC\u0633\u06CC \u0646\u06A9\u0646 (\u0644\u0627\u06CC\u0647\u0654 \u062F\u0641\u0627\u0639 \u062F\u0648\u0645)
+           WHERE announcements.id LIKE 'cp-%'`,
+          [
+            it.id,
+            it.title,
+            it.body,
+            boolToInt(it.show_login),
+            boolToInt(it.show_panel),
+            boolToInt(it.active),
+            config.cpSyncStaffId,
+            it.created_at,
+            it.updated_at
+          ]
+        )
+      );
+      await db.batch(statements);
+    }
+    const serverTime = parsed.data.data.server_time;
+    await writeLastSyncAt(db, serverTime);
+    log.info("announcement.cp_sync", { n: items.length, received: parsed.data.data.items.length });
+    return { status: "ok", applied: items.length, received: parsed.data.data.items.length };
+  } catch (err) {
+    log.warn("announcement.cp_sync_failed", {
+      error: err instanceof Error ? err.message : String(err)
+    });
+    return { status: "error", detail: "network_or_unexpected" };
+  }
+}
+__name(syncCpAnnouncements, "syncCpAnnouncements");
+
+// src/core/audit/writer.ts
+function buildInsert(entry) {
+  return {
+    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    params: [
+      crypto.randomUUID(),
+      entry.actorId,
+      entry.action,
+      entry.resourceType,
+      entry.resourceId,
+      entry.changes ? JSON.stringify(entry.changes) : null
+    ]
+  };
+}
+__name(buildInsert, "buildInsert");
+function createAuditWriter(db) {
+  return {
+    async log(entry) {
+      const { sql, params } = buildInsert(entry);
+      await db.execute(sql, params);
+    },
+    async logInTransaction(tx, entry) {
+      const { sql, params } = buildInsert(entry);
+      await tx.execute(sql, params);
+    }
+  };
+}
+__name(createAuditWriter, "createAuditWriter");
+
 // src/domain/content-score/pure.ts
 var SCORE_FORMULA_VERSION = 1;
 var SCORE_SOURCES = ["exercises", "pathway_templates"];
@@ -45321,36 +45558,6 @@ function registerContentScoreRoutes(app, deps) {
 }
 __name(registerContentScoreRoutes, "registerContentScoreRoutes");
 
-// src/core/audit/writer.ts
-function buildInsert(entry) {
-  return {
-    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes)
-          VALUES (?, ?, ?, ?, ?, ?)`,
-    params: [
-      crypto.randomUUID(),
-      entry.actorId,
-      entry.action,
-      entry.resourceType,
-      entry.resourceId,
-      entry.changes ? JSON.stringify(entry.changes) : null
-    ]
-  };
-}
-__name(buildInsert, "buildInsert");
-function createAuditWriter(db) {
-  return {
-    async log(entry) {
-      const { sql, params } = buildInsert(entry);
-      await db.execute(sql, params);
-    },
-    async logInTransaction(tx, entry) {
-      const { sql, params } = buildInsert(entry);
-      await tx.execute(sql, params);
-    }
-  };
-}
-__name(createAuditWriter, "createAuditWriter");
-
 // src/application/cp-content/sync.ts
 var CP_CONTENT_ATTEMPT_KEY = "cp_content.last_attempt_at";
 var CP_CONTENT_SYNC_KEY = "cp_content.last_sync_at";
@@ -45360,13 +45567,14 @@ var CP_CONTENT_ID_PREFIX = "cp-content-";
 var CP_CONTENT_LOOKBACK_MS = 6e4;
 var CP_CONTENT_TIMEOUT_MS = 15e3;
 var CP_CONTENT_BATCH_MAX = 20;
-function clean(v) {
+var CP_CONTENT_PULL_MAX = 100;
+function clean2(v) {
   const s = v?.trim();
   return s ? s : null;
 }
-__name(clean, "clean");
+__name(clean2, "clean");
 function cpOriginFrom(baseUrl) {
-  const s = clean(baseUrl);
+  const s = clean2(baseUrl);
   if (!s) return null;
   try {
     return new URL(s).origin;
@@ -45378,9 +45586,9 @@ __name(cpOriginFrom, "cpOriginFrom");
 function buildCpContentConfig(env) {
   return {
     cpOrigin: cpOriginFrom(env.CP_SYNC_URL),
-    cpNodeCode: clean(env.CP_NODE_CODE),
-    cpNodeKey: clean(env.CP_NODE_KEY),
-    cpSyncStaffId: clean(env.CP_SYNC_STAFF_ID)
+    cpNodeCode: clean2(env.CP_NODE_CODE),
+    cpNodeKey: clean2(env.CP_NODE_KEY),
+    cpSyncStaffId: clean2(env.CP_SYNC_STAFF_ID)
   };
 }
 __name(buildCpContentConfig, "buildCpContentConfig");
@@ -45410,10 +45618,11 @@ var CpContentSyncItemSchema = external_exports.object({
 var CpContentSyncResponseSchema = external_exports.object({
   data: external_exports.object({
     server_time: external_exports.string().min(10).max(40),
-    items: external_exports.array(CpContentSyncItemSchema).max(CP_CONTENT_BATCH_MAX)
+    items: external_exports.array(CpContentSyncItemSchema).max(CP_CONTENT_PULL_MAX)
+    // CP-1 — قرارداد §۵: ≤۱۰۰ (نه ثابت دستهٔ push)
   })
 });
-async function readSettingsIso(db, key) {
+async function readSettingsIso2(db, key) {
   const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
   if (!row) return null;
   try {
@@ -45423,7 +45632,7 @@ async function readSettingsIso(db, key) {
   }
   return null;
 }
-__name(readSettingsIso, "readSettingsIso");
+__name(readSettingsIso2, "readSettingsIso");
 async function writeSettings(db, key, iso, updatedBy, nowIso) {
   await db.execute(
     `INSERT INTO settings (key, value, updated_by, updated_at)
@@ -45506,7 +45715,7 @@ async function pushQueuedSubmissions(deps) {
 __name(pushQueuedSubmissions, "pushQueuedSubmissions");
 async function pullCuratedItems(deps) {
   const { db, log, config, nowIso } = deps;
-  const lastIso = await readSettingsIso(db, CP_CONTENT_SYNC_KEY);
+  const lastIso = await readSettingsIso2(db, CP_CONTENT_SYNC_KEY);
   let sinceIso = null;
   if (lastIso) {
     const t = Date.parse(lastIso);
@@ -45604,7 +45813,7 @@ async function cpContentOpportunistic(deps) {
     return { status: "skipped" };
   }
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const last = await readSettingsIso(db, CP_CONTENT_ATTEMPT_KEY);
+  const last = await readSettingsIso2(db, CP_CONTENT_ATTEMPT_KEY);
   if (!shouldRunCpContent(last, now(), deps.minIntervalMs ?? CP_CONTENT_MIN_INTERVAL_MS)) {
     return { status: "skipped" };
   }
@@ -45645,7 +45854,7 @@ async function runCpContentCycle(deps) {
   let applied = 0;
   const errors = [];
   try {
-    const lastIso = await readSettingsIso(db, CP_CONTENT_ATTEMPT_KEY);
+    const lastIso = await readSettingsIso2(db, CP_CONTENT_ATTEMPT_KEY);
     if (!shouldRunCpContent(lastIso, now(), deps.minIntervalMs ?? CP_CONTENT_MIN_INTERVAL_MS)) {
       return { status: "skipped" };
     }
@@ -45685,6 +45894,542 @@ async function runCpContentCycle(deps) {
   }
 }
 __name(runCpContentCycle, "runCpContentCycle");
+
+// src/application/cp-report/ingest.ts
+var CP_REPORT_PUSH_KEY = "cp_report.last_push_at";
+var CP_REPORT_ATTEMPT_KEY = "cp_report.last_attempt_at";
+var CP_REPORT_SEQ_KEY = "cp_report.last_seq";
+var CP_REPORT_MIN_INTERVAL_MS = 24 * 60 * 6e4;
+var RUM_SAMPLE_CAP = 5e3;
+var CP_REPORT_TIMEOUT_MS = 15e3;
+function clean3(v) {
+  const s = v?.trim();
+  return s ? s : null;
+}
+__name(clean3, "clean");
+function ingestUrlFrom(baseUrl) {
+  const s = clean3(baseUrl);
+  if (!s) return null;
+  try {
+    return new URL(s).origin + "/api/node/ingest";
+  } catch {
+    return null;
+  }
+}
+__name(ingestUrlFrom, "ingestUrlFrom");
+function buildCpReportConfig(env) {
+  return {
+    ingestUrl: ingestUrlFrom(env.CP_SYNC_URL),
+    cpNodeCode: clean3(env.CP_NODE_CODE),
+    cpNodeKey: clean3(env.CP_NODE_KEY)
+  };
+}
+__name(buildCpReportConfig, "buildCpReportConfig");
+async function readSettingsRaw(db, key) {
+  const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
+  return row?.value ?? null;
+}
+__name(readSettingsRaw, "readSettingsRaw");
+async function readSettingsIso3(db, key) {
+  const raw2 = await readSettingsRaw(db, key);
+  if (!raw2) return null;
+  try {
+    const parsed = JSON.parse(raw2);
+    if (typeof parsed === "string" && parsed.length > 0) return parsed;
+  } catch {
+  }
+  return null;
+}
+__name(readSettingsIso3, "readSettingsIso");
+async function readSettingsInt(db, key) {
+  const raw2 = await readSettingsRaw(db, key);
+  if (!raw2) return null;
+  try {
+    const parsed = JSON.parse(raw2);
+    if (typeof parsed === "number" && Number.isFinite(parsed)) return parsed;
+  } catch {
+  }
+  return null;
+}
+__name(readSettingsInt, "readSettingsInt");
+async function writeSettings2(db, key, jsonValue, nowIso) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, 'cp-report', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-report', updated_at = excluded.updated_at`,
+    [key, jsonValue, nowIso]
+  );
+}
+__name(writeSettings2, "writeSettings");
+async function collectHealthSnapshot(db, at) {
+  let syncLagS = null;
+  for (const iso of [
+    await readSettingsIso3(db, CP_SYNC_SETTINGS_KEY),
+    await readSettingsIso3(db, CP_CONTENT_SYNC_KEY)
+  ]) {
+    if (!iso) continue;
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) continue;
+    const lag = Math.max(0, Math.round((at.getTime() - t) / 1e3));
+    if (syncLagS === null || lag < syncLagS) syncLagS = lag;
+  }
+  const queuedRow = await db.queryOne("SELECT COUNT(*) AS n FROM network_content WHERE origin = 'local' AND status = 'queued'").catch(() => null);
+  const outboxRow = await db.queryOne("SELECT COUNT(*) AS n FROM bug_reports WHERE status = 'open' OR forward_error IS NOT NULL").catch(() => null);
+  const errRow = await db.queryOne(
+    `SELECT COUNT(*) AS total,
+              SUM(CASE WHEN forward_error IS NOT NULL THEN 1 ELSE 0 END) AS failed
+         FROM bug_reports
+        WHERE created_at >= datetime('now', '-24 hours')`
+  ).catch(() => null);
+  const total24 = errRow?.total ?? 0;
+  const failed24 = errRow?.failed ?? 0;
+  const errorRate24h = total24 > 0 ? Math.round(failed24 / total24 * 1e3) / 10 : null;
+  return {
+    captured_at: at.toISOString(),
+    reported_version: APP_VERSION,
+    outbox_depth: outboxRow?.n ?? null,
+    unsynced_ops: queuedRow?.n ?? null,
+    error_rate_1h: null,
+    // نرخ یک‌ساعته مبنای دیتایی پایداری ندارد — سند CP-2 فقط ۲۴ساعته را ثبت کرد
+    error_rate_24h: errorRate24h,
+    sync_lag_s: syncLagS,
+    extras: null
+  };
+}
+__name(collectHealthSnapshot, "collectHealthSnapshot");
+function shouldPushCpReport(lastAttemptIso, now, minIntervalMs = CP_REPORT_MIN_INTERVAL_MS) {
+  if (!lastAttemptIso) return true;
+  const t = Date.parse(lastAttemptIso);
+  if (Number.isNaN(t)) return true;
+  return now.getTime() - t >= minIntervalMs;
+}
+__name(shouldPushCpReport, "shouldPushCpReport");
+async function stampCpReportAttempt(db, at = /* @__PURE__ */ new Date()) {
+  await writeSettings2(db, CP_REPORT_ATTEMPT_KEY, JSON.stringify(at.toISOString()), at.toISOString());
+}
+__name(stampCpReportAttempt, "stampCpReportAttempt");
+function percentile75(sorted) {
+  if (sorted.length === 0) return null;
+  const idx = Math.ceil(0.75 * sorted.length) - 1;
+  return sorted[Math.min(Math.max(idx, 0), sorted.length - 1)] ?? null;
+}
+__name(percentile75, "percentile75");
+var RUM_SAMPLE_SQL = `SELECT metric, value FROM rum_events
+  WHERE ts >= ? AND metric IN ('LCP','CLS','INP') ORDER BY metric, value LIMIT ${RUM_SAMPLE_CAP}`;
+async function collectKpiBucket(db, now = /* @__PURE__ */ new Date()) {
+  const nowIso = now.toISOString();
+  const day = tehranDayRange(tehranTodayYmd(now));
+  const [students, appts, overdue, errs, rum] = await Promise.all([
+    db.queryOne(
+      `SELECT COALESCE(SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END), 0) AS a,
+              COALESCE(SUM(CASE WHEN active = 0 THEN 1 ELSE 0 END), 0) AS ar
+       FROM students`
+    ),
+    db.queryOne(
+      `SELECT COALESCE(SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END), 0) AS t,
+              COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) AS c
+       FROM appointments WHERE start_at >= ? AND start_at <= ?`,
+      [day.start, day.end]
+    ),
+    db.queryOne(
+      `SELECT COUNT(*) AS c
+       FROM appointment_students aps JOIN appointments a ON a.id = aps.appointment_id
+       WHERE aps.attendance = 'pending' AND a.end_at < ?`,
+      [nowIso]
+    ),
+    db.queryOne(
+      `SELECT COALESCE(SUM(CASE WHEN occurred_at >= datetime('now', '-1 hour') THEN 1 ELSE 0 END), 0) AS h1,
+              COALESCE(SUM(CASE WHEN occurred_at >= datetime('now', '-24 hours') THEN 1 ELSE 0 END), 0) AS h24
+       FROM client_errors WHERE occurred_at >= datetime('now', '-24 hours')`
+    ),
+    (async () => {
+      const sinceIso = new Date(now.getTime() - 24 * 60 * 6e4).toISOString();
+      const [rows, count] = await Promise.all([
+        db.query(RUM_SAMPLE_SQL, [sinceIso]),
+        db.queryOne("SELECT COUNT(*) AS c FROM rum_events WHERE ts >= ?", [sinceIso])
+      ]);
+      const byMetric = /* @__PURE__ */ new Map();
+      for (const r of rows) {
+        const arr = byMetric.get(r.metric) ?? [];
+        arr.push(Number(r.value));
+        byMetric.set(r.metric, arr);
+      }
+      return { byMetric, count: count?.c ?? 0 };
+    })()
+  ]);
+  const p75Of = /* @__PURE__ */ __name((m) => {
+    const arr = rum.byMetric.get(m);
+    if (!arr || arr.length === 0) return null;
+    const v = percentile75(arr);
+    return v === null ? null : m === "CLS" ? Math.round(v * 1e3) / 1e3 : Math.round(v);
+  }, "p75Of");
+  return {
+    students_active: students?.a ?? 0,
+    students_archived: students?.ar ?? 0,
+    appointments_today: appts?.t ?? 0,
+    appointments_cancelled_today: appts?.c ?? 0,
+    attendance_pending_overdue: overdue?.c ?? 0,
+    client_errors_1h: errs?.h1 ?? 0,
+    client_errors_24h: errs?.h24 ?? 0,
+    rum_events_24h: rum.count,
+    rum_lcp_p75: p75Of("LCP"),
+    rum_cls_p75: p75Of("CLS"),
+    rum_inp_p75: p75Of("INP")
+  };
+}
+__name(collectKpiBucket, "collectKpiBucket");
+async function cpReportOpportunistic(deps) {
+  const { db, logger, config } = deps;
+  if (!config.ingestUrl || !config.cpNodeCode || !config.cpNodeKey) {
+    return { status: "skipped" };
+  }
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const last = await readSettingsIso3(db, CP_REPORT_ATTEMPT_KEY);
+  if (!shouldPushCpReport(last, now(), deps.minIntervalMs ?? CP_REPORT_MIN_INTERVAL_MS)) {
+    return { status: "skipped" };
+  }
+  return pushCpReport({ db, logger, config, binding: deps.binding, fetchFn: deps.fetchFn, now: deps.now });
+}
+__name(cpReportOpportunistic, "cpReportOpportunistic");
+async function pushCpReport(deps) {
+  const { db, logger, config } = deps;
+  const log = logger.child("cp-report");
+  if (!config.ingestUrl || !config.cpNodeCode || !config.cpNodeKey) {
+    return { status: "disabled" };
+  }
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  try {
+    const lastIso = await readSettingsIso3(db, CP_REPORT_ATTEMPT_KEY);
+    if (!shouldPushCpReport(lastIso, now(), deps.minIntervalMs ?? CP_REPORT_MIN_INTERVAL_MS)) {
+      return { status: "skipped" };
+    }
+    await stampCpReportAttempt(db, now());
+    const at = now();
+    const atIso = at.toISOString();
+    const kpi = await collectKpiBucket(db, at);
+    const lastSeq = await readSettingsInt(db, CP_REPORT_SEQ_KEY) ?? 0;
+    const seq = lastSeq + 1;
+    const body = {
+      events: [
+        {
+          seq,
+          ts: atIso,
+          level: "info",
+          category: "data",
+          event: "cp_report.kpi_daily",
+          payload: kpi
+        }
+      ],
+      health: await collectHealthSnapshot(db, at)
+    };
+    const init = {
+      method: "POST",
+      headers: {
+        "X-CP-Node-Code": config.cpNodeCode,
+        Authorization: `Bearer ${config.cpNodeKey}`,
+        "X-CP-Node-Version": APP_VERSION,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(CP_REPORT_TIMEOUT_MS)
+    };
+    const res = deps.binding ? await deps.binding.fetch(config.ingestUrl, init) : await (deps.fetchFn ?? fetch)(config.ingestUrl, init);
+    if (!res.ok) {
+      let bodyHead = "";
+      try {
+        bodyHead = (await res.text()).slice(0, 180);
+      } catch {
+        bodyHead = "";
+      }
+      log.warn("cp_report.push_failed", {
+        http: res.status,
+        detail: "cp_http_error",
+        url: config.ingestUrl,
+        body_head: bodyHead
+      });
+      return { status: "error", detail: `http_${res.status}` };
+    }
+    await writeSettings2(db, CP_REPORT_PUSH_KEY, JSON.stringify(atIso), atIso);
+    await writeSettings2(db, CP_REPORT_SEQ_KEY, JSON.stringify(seq), atIso);
+    log.info("cp_report.push", { seq, students_active: kpi.students_active });
+    return { status: "ok", applied: 1, seq };
+  } catch (err) {
+    log.warn("cp_report.push_failed", {
+      detail: "exception",
+      error: err instanceof Error ? err.message : String(err)
+    });
+    return { status: "error", detail: "exception" };
+  }
+}
+__name(pushCpReport, "pushCpReport");
+
+// src/application/bug-report-forward/index.ts
+var BUG_REPORT_ATTEMPT_KEY = "bug_report.forward_attempt_at";
+var BUG_REPORT_REPLY_SINCE_KEY = "bug_report.reply_since_at";
+var BUG_REPORT_MIN_INTERVAL_MS = 5 * 6e4;
+var BUG_REPORT_TIMEOUT_MS = 15e3;
+var BUG_REPORT_BATCH_MAX = 20;
+function clean4(v) {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s ? s : null;
+}
+__name(clean4, "clean");
+function cpOriginFrom2(v) {
+  const raw2 = clean4(v);
+  if (!raw2) return null;
+  try {
+    return new URL(raw2).origin;
+  } catch {
+    return null;
+  }
+}
+__name(cpOriginFrom2, "cpOriginFrom");
+function buildBugReportConfig(env) {
+  return {
+    cpOrigin: cpOriginFrom2(env.CP_SYNC_URL),
+    cpNodeCode: clean4(env.CP_NODE_CODE),
+    cpNodeKey: clean4(env.CP_NODE_KEY)
+  };
+}
+__name(buildBugReportConfig, "buildBugReportConfig");
+function nodeHeaders(config) {
+  return {
+    "X-CP-Node-Code": config.cpNodeCode,
+    Authorization: `Bearer ${config.cpNodeKey}`,
+    "X-CP-Node-Version": APP_VERSION,
+    "content-type": "application/json"
+  };
+}
+__name(nodeHeaders, "nodeHeaders");
+function cpFetchOf(deps) {
+  if (deps.binding) return (url, init) => deps.binding.fetch(url, init);
+  const doFetch = deps.fetchFn ?? fetch;
+  return (url, init) => doFetch(url, init);
+}
+__name(cpFetchOf, "cpFetchOf");
+function feedbackBodyOf(rec) {
+  return {
+    id: rec.id,
+    areas: rec.areas,
+    severity: rec.severity,
+    description: rec.description,
+    page: rec.page,
+    app_version: rec.appVersion,
+    reporter_name: rec.staffName,
+    created_at: rec.createdAt
+  };
+}
+__name(feedbackBodyOf, "feedbackBodyOf");
+async function readSettingsIso4(db, key) {
+  const row = await db.queryOne("SELECT value FROM settings WHERE key = ? LIMIT 1", [key]);
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.value);
+    if (typeof parsed === "string" && parsed.length > 0) return parsed;
+  } catch {
+  }
+  return null;
+}
+__name(readSettingsIso4, "readSettingsIso");
+async function writeSettingsIso(db, key, iso) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+    [key, JSON.stringify(iso), "bug-report-forward", (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").slice(0, 19)]
+  );
+}
+__name(writeSettingsIso, "writeSettingsIso");
+async function runBugReportForward(deps) {
+  const { db, logger, config } = deps;
+  if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) return { status: "skipped" };
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const doCpFetch = cpFetchOf(deps);
+  const service = createBugReportService(db, silentAudit());
+  const lastIso = await readSettingsIso4(db, BUG_REPORT_ATTEMPT_KEY);
+  const last = lastIso ? Date.parse(lastIso) : 0;
+  if (!deps.force && Number.isFinite(last) && now().getTime() - last < BUG_REPORT_MIN_INTERVAL_MS) {
+    return { status: "skipped" };
+  }
+  await writeSettingsIso(db, BUG_REPORT_ATTEMPT_KEY, now().toISOString());
+  let pulled = 0;
+  try {
+    const since = await readSettingsIso4(db, BUG_REPORT_REPLY_SINCE_KEY);
+    const repliesUrl = `${config.cpOrigin}/api/node/feedback/replies${since ? `?since=${encodeURIComponent(since)}` : ""}`;
+    const res = await doCpFetch(repliesUrl, {
+      method: "GET",
+      headers: nodeHeaders(config),
+      signal: AbortSignal.timeout(BUG_REPORT_TIMEOUT_MS)
+    });
+    if (res.ok) {
+      const body = await res.json().catch(() => null);
+      const items = Array.isArray(body?.data?.items) ? body?.data?.items : [];
+      if (items.length > 0) {
+        pulled = await service.applyReplies(items);
+        logger.info("bug_report.replies.applied", { pulled });
+      }
+      await writeSettingsIso(db, BUG_REPORT_REPLY_SINCE_KEY, body?.data?.server_time ?? now().toISOString());
+    } else {
+      logger.warn("bug_report.replies.pull_failed", { status: res.status });
+    }
+  } catch (err) {
+    logger.warn("bug_report.replies.pull_error", { error: err instanceof Error ? err.message : String(err) });
+  }
+  const open = await service.listOpen(BUG_REPORT_BATCH_MAX);
+  const url = `${config.cpOrigin}/api/node/feedback`;
+  let sent = 0;
+  let failed = 0;
+  for (const rec of open) {
+    try {
+      const res = await doCpFetch(url, {
+        method: "POST",
+        headers: nodeHeaders(config),
+        body: JSON.stringify(feedbackBodyOf(rec)),
+        signal: AbortSignal.timeout(BUG_REPORT_TIMEOUT_MS)
+      });
+      if (res.ok) {
+        await service.markSent(rec.id, now().toISOString().replace("T", " ").slice(0, 19));
+        sent += 1;
+      } else {
+        const text = (await res.text().catch(() => "")).slice(0, 200);
+        await service.markForwardError(rec.id, `HTTP ${res.status} ${text}`);
+        failed += 1;
+      }
+    } catch (err) {
+      await service.markForwardError(rec.id, err instanceof Error ? err.message : String(err));
+      failed += 1;
+    }
+  }
+  const remaining = (await service.listOpen(1)).length;
+  logger.info("bug_report.forward.done", { sent, failed, remaining, pulled });
+  return { status: "done", sent, failed, remaining, pulled };
+}
+__name(runBugReportForward, "runBugReportForward");
+function silentAudit() {
+  return {
+    log: /* @__PURE__ */ __name(async () => void 0, "log"),
+    logInTransaction: /* @__PURE__ */ __name(async () => void 0, "logInTransaction")
+  };
+}
+__name(silentAudit, "silentAudit");
+
+// src/application/health/service.ts
+var CHANNELS = [
+  { key: "announcements", label: "\u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627\u06CC \u0634\u0628\u06A9\u0647 (CP\u2192\u0646\u0648\u062F)", direction: "pull", attemptKey: CP_SYNC_ATTEMPT_KEY, successKey: CP_SYNC_SETTINGS_KEY, threshold_s: 6 * 3600 },
+  { key: "kpi_report", label: "\u06AF\u0632\u0627\u0631\u0634 KPI \u0631\u0648\u0632\u0627\u0646\u0647 (\u0646\u0648\u062F\u2192CP)", direction: "push", attemptKey: CP_REPORT_ATTEMPT_KEY, successKey: CP_REPORT_PUSH_KEY, threshold_s: 48 * 3600 },
+  { key: "content_push", label: "\u0647\u0645\u0631\u0633\u0627\u0646\u06CC \u0645\u062D\u062A\u0648\u0627 (\u0646\u0648\u062F\u2192CP)", direction: "push", attemptKey: CP_CONTENT_ATTEMPT_KEY, successKey: CP_CONTENT_PUSH_KEY, threshold_s: 72 * 3600 },
+  { key: "content_pull", label: "\u0628\u0631\u06AF\u0632\u06CC\u062F\u0647\u200C\u0647\u0627\u06CC \u0634\u0628\u06A9\u0647 (CP\u2192\u0646\u0648\u062F)", direction: "pull", attemptKey: CP_CONTENT_ATTEMPT_KEY, successKey: CP_CONTENT_SYNC_KEY, threshold_s: 6 * 3600 },
+  { key: "bug_forward", label: "\u06AF\u0632\u0627\u0631\u0634 \u0628\u0627\u06AF \u2192 CP", direction: "push", attemptKey: BUG_REPORT_ATTEMPT_KEY, successKey: null, successFromTable: true, threshold_s: 72 * 3600 },
+  { key: "bug_replies", label: "\u067E\u0627\u0633\u062E \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC (CP\u2192\u0646\u0648\u062F)", direction: "pull", attemptKey: BUG_REPORT_ATTEMPT_KEY, successKey: BUG_REPORT_REPLY_SINCE_KEY, threshold_s: 6 * 3600 }
+];
+async function readIsoStamp(db, key) {
+  try {
+    const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
+    if (!row) return null;
+    const parsed = JSON.parse(row.value);
+    return typeof parsed === "string" && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+__name(readIsoStamp, "readIsoStamp");
+async function countSafe(db, sql, params = []) {
+  try {
+    const row = await db.queryOne(sql, params);
+    return row?.n ?? null;
+  } catch {
+    return null;
+  }
+}
+__name(countSafe, "countSafe");
+function createHealthService(deps) {
+  const { db, cpConfigured, envName } = deps;
+  return {
+    async panel() {
+      const now = /* @__PURE__ */ new Date();
+      let dbOk = true;
+      let latencyMs = null;
+      const t0 = Date.now();
+      try {
+        await db.queryOne("SELECT 1 AS ok");
+        latencyMs = Date.now() - t0;
+      } catch {
+        dbOk = false;
+        latencyMs = null;
+      }
+      const migrationsApplied = await countSafe(db, "SELECT COUNT(*) AS n FROM d1_migrations");
+      const successStamps = /* @__PURE__ */ new Map();
+      for (const def of CHANNELS) {
+        if (def.successFromTable) {
+          try {
+            const maxRow = await db.queryOne("SELECT MAX(forwarded_at) AS m FROM bug_reports WHERE status = 'sent'");
+            const m = maxRow?.m ?? null;
+            successStamps.set(def.key, m ? m.replace(" ", "T") + "Z" : null);
+          } catch {
+            successStamps.set(def.key, null);
+          }
+        } else {
+          successStamps.set(def.key, await readIsoStamp(db, def.successKey ?? ""));
+        }
+      }
+      const channels = [];
+      for (const def of CHANNELS) {
+        const successAt = cpConfigured ? successStamps.get(def.key) ?? null : null;
+        const attemptAt = cpConfigured && def.attemptKey ? await readIsoStamp(db, def.attemptKey) : null;
+        let ageS = null;
+        let state = "never";
+        if (!cpConfigured || !successAt) {
+          state = "never";
+        } else {
+          const t = Date.parse(successAt);
+          if (!Number.isNaN(t)) {
+            ageS = Math.max(0, Math.round((now.getTime() - t) / 1e3));
+            state = ageS <= def.threshold_s ? "ok" : "stale";
+          }
+        }
+        channels.push({
+          key: def.key,
+          label: def.label,
+          direction: def.direction,
+          attempt_at: attemptAt,
+          success_at: successAt,
+          age_s: ageS,
+          state,
+          threshold_s: def.threshold_s
+        });
+      }
+      return {
+        version: APP_VERSION,
+        env: envName,
+        now: now.toISOString(),
+        db: { ok: dbOk, latency_ms: latencyMs },
+        migrations: { applied: migrationsApplied },
+        counts: {
+          // client_errors/bug_reports: فرمت datetime('now') = 'YYYY-MM-DD HH:MM:SS' — هم‌قرارداد COUNTهای cp-report
+          client_errors_24h: await countSafe(db, "SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at >= datetime('now', '-24 hours')"),
+          // rum_events: ستون ts با فرمت ISO UTC (0086) — پارامتری، نه datetime()
+          rum_events_24h: await countSafe(db, "SELECT COUNT(*) AS n FROM rum_events WHERE ts >= ?", [new Date(now.getTime() - 864e5).toISOString()]),
+          bug_reports_open: await countSafe(db, "SELECT COUNT(*) AS n FROM bug_reports WHERE status = 'open'")
+        },
+        cp_link: {
+          configured: cpConfigured,
+          channels
+        }
+      };
+    }
+  };
+}
+__name(createHealthService, "createHealthService");
+
+// src/application/health/routes.ts
+function registerHealthRoutes(app, service) {
+  app.get("/api/health/panel", requireRole("manager"), async (c) => {
+    const data = await service.panel();
+    c.header("Cache-Control", "no-store");
+    return c.json({ data }, 200);
+  });
+}
+__name(registerHealthRoutes, "registerHealthRoutes");
 
 // src/domain/finance/service.ts
 var LIST_LIMIT = 500;
@@ -55193,6 +55938,11 @@ function createServices(deps) {
   const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null });
   const rum = createRumService({ db, logger });
   const clientErrors = createClientErrorsService({ db, logger });
+  const health = createHealthService({
+    db,
+    cpConfigured: Boolean(deps.cpSyncUrl && deps.cpNodeCode && deps.cpNodeKey),
+    envName: deps.envName ?? null
+  });
   const centerKpi = createCenterKpiService({ db });
   const networkContent = createNetworkContentService({
     db,
@@ -55213,7 +55963,7 @@ function createServices(deps) {
   });
   const contentScore = createContentScoreService(db, audit);
   const bugReports = createBugReportService(db, audit);
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, contentScore };
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, health, contentScore };
 }
 __name(createServices, "createServices");
 function createApp(deps) {
@@ -55341,6 +56091,7 @@ function createApp(deps) {
   registerNetworkContentRoutes(app, services.networkContent);
   registerBugReportRoutes(app, services.bugReports);
   registerClientErrorsRoutes(app, services.clientErrors);
+  registerHealthRoutes(app, services.health);
   registerContentScoreRoutes(app, { contentScore: services.contentScore });
   if (FEATURES.apiKeys) registerKeysRoutes(app, services.keys);
   app.get("/api/conflicts", async (c) => {
@@ -55505,604 +56256,6 @@ function createLogger(scope) {
   };
 }
 __name(createLogger, "createLogger");
-
-// src/application/cp-sync/announcements.ts
-var CP_SYNC_SETTINGS_KEY = "cp_sync.last_sync_at";
-var CP_SYNC_ATTEMPT_KEY = "cp_sync.last_attempt_at";
-var CP_SYNC_MIN_INTERVAL_MS = 15 * 6e4;
-var CP_ID_PREFIX = "cp-";
-var CP_SYNC_LOOKBACK_MS = 6e4;
-var CP_SYNC_TIMEOUT_MS = 15e3;
-function clean2(v) {
-  const s = v?.trim();
-  return s ? s : null;
-}
-__name(clean2, "clean");
-function buildCpSyncConfig(env) {
-  return {
-    cpSyncUrl: clean2(env.CP_SYNC_URL),
-    cpNodeCode: clean2(env.CP_NODE_CODE),
-    cpNodeKey: clean2(env.CP_NODE_KEY),
-    cpSyncStaffId: clean2(env.CP_SYNC_STAFF_ID)
-  };
-}
-__name(buildCpSyncConfig, "buildCpSyncConfig");
-var CpSyncItemSchema = external_exports.object({
-  id: external_exports.string().min(4).max(120),
-  title: external_exports.string().min(1).max(120),
-  body: external_exports.string().min(1).max(2e3),
-  show_login: external_exports.boolean(),
-  show_panel: external_exports.boolean(),
-  active: external_exports.boolean(),
-  created_at: external_exports.string().min(10).max(40),
-  updated_at: external_exports.string().min(10).max(40)
-});
-var CpSyncResponseSchema = external_exports.object({
-  data: external_exports.object({
-    server_time: external_exports.string().min(10).max(40),
-    items: external_exports.array(CpSyncItemSchema).max(100)
-  })
-});
-function boolToInt(b) {
-  return b ? 1 : 0;
-}
-__name(boolToInt, "boolToInt");
-function buildRequestUrl(baseUrl, sinceIso) {
-  if (!sinceIso) return baseUrl;
-  const sep = baseUrl.includes("?") ? "&" : "?";
-  return `${baseUrl}${sep}since=${encodeURIComponent(sinceIso)}`;
-}
-__name(buildRequestUrl, "buildRequestUrl");
-async function readLastSyncAt(db) {
-  return readSettingsIso2(db, CP_SYNC_SETTINGS_KEY);
-}
-__name(readLastSyncAt, "readLastSyncAt");
-async function writeLastSyncAt(db, iso) {
-  await db.execute(
-    `INSERT INTO settings (key, value, updated_by, updated_at)
-     VALUES (?, ?, 'cp-sync', ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-sync', updated_at = excluded.updated_at`,
-    [CP_SYNC_SETTINGS_KEY, JSON.stringify(iso), iso]
-  );
-}
-__name(writeLastSyncAt, "writeLastSyncAt");
-async function readSettingsIso2(db, key) {
-  const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
-  if (!row) return null;
-  try {
-    const parsed = JSON.parse(row.value);
-    if (typeof parsed === "string" && parsed.length > 0) return parsed;
-  } catch {
-  }
-  return null;
-}
-__name(readSettingsIso2, "readSettingsIso");
-async function stampCpSyncAttempt(db, at = /* @__PURE__ */ new Date()) {
-  await db.execute(
-    `INSERT INTO settings (key, value, updated_by, updated_at)
-     VALUES (?, ?, 'cp-sync', ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-sync', updated_at = excluded.updated_at`,
-    [CP_SYNC_ATTEMPT_KEY, JSON.stringify(at.toISOString()), at.toISOString()]
-  );
-}
-__name(stampCpSyncAttempt, "stampCpSyncAttempt");
-function shouldAttemptCpSync(lastAttemptIso, now, minIntervalMs = CP_SYNC_MIN_INTERVAL_MS) {
-  if (!lastAttemptIso) return true;
-  const t = Date.parse(lastAttemptIso);
-  if (Number.isNaN(t)) return true;
-  return now.getTime() - t >= minIntervalMs;
-}
-__name(shouldAttemptCpSync, "shouldAttemptCpSync");
-async function cpSyncOpportunistic(deps) {
-  const { db, logger, config } = deps;
-  if (!config.cpSyncUrl || !config.cpNodeCode || !config.cpNodeKey || !config.cpSyncStaffId) {
-    return { status: "skipped" };
-  }
-  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const last = await readSettingsIso2(db, CP_SYNC_ATTEMPT_KEY);
-  if (!shouldAttemptCpSync(last, now(), deps.minIntervalMs ?? CP_SYNC_MIN_INTERVAL_MS)) {
-    return { status: "skipped" };
-  }
-  await stampCpSyncAttempt(db, now());
-  return syncCpAnnouncements({
-    db,
-    logger,
-    config,
-    binding: deps.binding,
-    fetchFn: deps.fetchFn,
-    now: deps.now
-  });
-}
-__name(cpSyncOpportunistic, "cpSyncOpportunistic");
-async function syncCpAnnouncements(deps) {
-  const { db, logger, config } = deps;
-  const log = logger.child("cp-sync");
-  if (!config.cpSyncUrl || !config.cpNodeCode || !config.cpNodeKey || !config.cpSyncStaffId) {
-    return { status: "disabled" };
-  }
-  try {
-    const lastIso = await readLastSyncAt(db);
-    let sinceIso = null;
-    if (lastIso) {
-      const t = Date.parse(lastIso);
-      if (!Number.isNaN(t)) sinceIso = new Date(t - CP_SYNC_LOOKBACK_MS).toISOString();
-    }
-    const url = buildRequestUrl(config.cpSyncUrl, sinceIso);
-    const init = {
-      method: "GET",
-      headers: {
-        "X-CP-Node-Code": config.cpNodeCode,
-        Authorization: `Bearer ${config.cpNodeKey}`,
-        "X-CP-Node-Version": APP_VERSION
-      },
-      signal: AbortSignal.timeout(CP_SYNC_TIMEOUT_MS)
-    };
-    const res = deps.binding ? await deps.binding.fetch(url, init) : await (deps.fetchFn ?? fetch)(url, init);
-    if (!res.ok) {
-      let bodyHead = "";
-      try {
-        bodyHead = (await res.text()).slice(0, 180);
-      } catch {
-        bodyHead = "";
-      }
-      log.warn("announcement.cp_sync_failed", {
-        http: res.status,
-        detail: "cp_http_error",
-        url: config.cpSyncUrl,
-        // کل URL درخواست‌شده — راز ندارد (کلید در هدر است)
-        body_head: bodyHead
-      });
-      return { status: "error", detail: `http_${res.status}` };
-    }
-    const payload = await res.json();
-    const parsed = CpSyncResponseSchema.safeParse(payload);
-    if (!parsed.success) {
-      log.warn("announcement.cp_sync_failed", { detail: "cp_payload_invalid" });
-      return { status: "error", detail: "payload_invalid" };
-    }
-    const items = parsed.data.data.items.filter((it) => it.id.startsWith(CP_ID_PREFIX)).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
-    if (items.length > 0) {
-      const staff = await db.queryOne(
-        "SELECT id FROM staff WHERE id = ? AND active = 1",
-        [config.cpSyncStaffId]
-      );
-      if (!staff) {
-        log.warn("announcement.cp_sync_failed", { detail: "cp_staff_missing" });
-        return { status: "error", detail: "staff_missing" };
-      }
-      const statements = items.map(
-        (it) => db.prepare(
-          `INSERT INTO announcements
-             (id, title, body, show_login, show_panel, bot_sent_staff, bot_sent_families,
-              active, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET
-             title = excluded.title,
-             body = excluded.body,
-             show_login = excluded.show_login,
-             show_panel = excluded.show_panel,
-             active = excluded.active,
-             updated_at = excluded.updated_at
-           -- \u06AF\u0627\u0631\u062F \u0637\u0644\u0627\u06CC\u06CC: \u0647\u0631\u06AF\u0632 \u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627\u06CC \u0645\u062D\u0644\u06CC (\u0628\u062F\u0648\u0646 \u067E\u06CC\u0634\u0648\u0646\u062F cp-) \u0631\u0627 \u0628\u0627\u0632\u0646\u0648\u06CC\u0633\u06CC \u0646\u06A9\u0646 (\u0644\u0627\u06CC\u0647\u0654 \u062F\u0641\u0627\u0639 \u062F\u0648\u0645)
-           WHERE announcements.id LIKE 'cp-%'`,
-          [
-            it.id,
-            it.title,
-            it.body,
-            boolToInt(it.show_login),
-            boolToInt(it.show_panel),
-            boolToInt(it.active),
-            config.cpSyncStaffId,
-            it.created_at,
-            it.updated_at
-          ]
-        )
-      );
-      await db.batch(statements);
-    }
-    const serverTime = parsed.data.data.server_time;
-    await writeLastSyncAt(db, serverTime);
-    log.info("announcement.cp_sync", { n: items.length, received: parsed.data.data.items.length });
-    return { status: "ok", applied: items.length, received: parsed.data.data.items.length };
-  } catch (err) {
-    log.warn("announcement.cp_sync_failed", {
-      error: err instanceof Error ? err.message : String(err)
-    });
-    return { status: "error", detail: "network_or_unexpected" };
-  }
-}
-__name(syncCpAnnouncements, "syncCpAnnouncements");
-
-// src/application/cp-report/ingest.ts
-var CP_REPORT_PUSH_KEY = "cp_report.last_push_at";
-var CP_REPORT_ATTEMPT_KEY = "cp_report.last_attempt_at";
-var CP_REPORT_SEQ_KEY = "cp_report.last_seq";
-var CP_REPORT_MIN_INTERVAL_MS = 24 * 60 * 6e4;
-var RUM_SAMPLE_CAP = 5e3;
-var CP_REPORT_TIMEOUT_MS = 15e3;
-function clean3(v) {
-  const s = v?.trim();
-  return s ? s : null;
-}
-__name(clean3, "clean");
-function ingestUrlFrom(baseUrl) {
-  const s = clean3(baseUrl);
-  if (!s) return null;
-  try {
-    return new URL(s).origin + "/api/node/ingest";
-  } catch {
-    return null;
-  }
-}
-__name(ingestUrlFrom, "ingestUrlFrom");
-function buildCpReportConfig(env) {
-  return {
-    ingestUrl: ingestUrlFrom(env.CP_SYNC_URL),
-    cpNodeCode: clean3(env.CP_NODE_CODE),
-    cpNodeKey: clean3(env.CP_NODE_KEY)
-  };
-}
-__name(buildCpReportConfig, "buildCpReportConfig");
-async function readSettingsRaw(db, key) {
-  const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
-  return row?.value ?? null;
-}
-__name(readSettingsRaw, "readSettingsRaw");
-async function readSettingsIso3(db, key) {
-  const raw2 = await readSettingsRaw(db, key);
-  if (!raw2) return null;
-  try {
-    const parsed = JSON.parse(raw2);
-    if (typeof parsed === "string" && parsed.length > 0) return parsed;
-  } catch {
-  }
-  return null;
-}
-__name(readSettingsIso3, "readSettingsIso");
-async function readSettingsInt(db, key) {
-  const raw2 = await readSettingsRaw(db, key);
-  if (!raw2) return null;
-  try {
-    const parsed = JSON.parse(raw2);
-    if (typeof parsed === "number" && Number.isFinite(parsed)) return parsed;
-  } catch {
-  }
-  return null;
-}
-__name(readSettingsInt, "readSettingsInt");
-async function writeSettings2(db, key, jsonValue, nowIso) {
-  await db.execute(
-    `INSERT INTO settings (key, value, updated_by, updated_at)
-     VALUES (?, ?, 'cp-report', ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-report', updated_at = excluded.updated_at`,
-    [key, jsonValue, nowIso]
-  );
-}
-__name(writeSettings2, "writeSettings");
-function shouldPushCpReport(lastAttemptIso, now, minIntervalMs = CP_REPORT_MIN_INTERVAL_MS) {
-  if (!lastAttemptIso) return true;
-  const t = Date.parse(lastAttemptIso);
-  if (Number.isNaN(t)) return true;
-  return now.getTime() - t >= minIntervalMs;
-}
-__name(shouldPushCpReport, "shouldPushCpReport");
-async function stampCpReportAttempt(db, at = /* @__PURE__ */ new Date()) {
-  await writeSettings2(db, CP_REPORT_ATTEMPT_KEY, JSON.stringify(at.toISOString()), at.toISOString());
-}
-__name(stampCpReportAttempt, "stampCpReportAttempt");
-function percentile75(sorted) {
-  if (sorted.length === 0) return null;
-  const idx = Math.ceil(0.75 * sorted.length) - 1;
-  return sorted[Math.min(Math.max(idx, 0), sorted.length - 1)] ?? null;
-}
-__name(percentile75, "percentile75");
-var RUM_SAMPLE_SQL = `SELECT metric, value FROM rum_events
-  WHERE ts >= ? AND metric IN ('LCP','CLS','INP') ORDER BY metric, value LIMIT ${RUM_SAMPLE_CAP}`;
-async function collectKpiBucket(db, now = /* @__PURE__ */ new Date()) {
-  const nowIso = now.toISOString();
-  const day = tehranDayRange(tehranTodayYmd(now));
-  const [students, appts, overdue, errs, rum] = await Promise.all([
-    db.queryOne(
-      `SELECT COALESCE(SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END), 0) AS a,
-              COALESCE(SUM(CASE WHEN active = 0 THEN 1 ELSE 0 END), 0) AS ar
-       FROM students`
-    ),
-    db.queryOne(
-      `SELECT COALESCE(SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END), 0) AS t,
-              COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) AS c
-       FROM appointments WHERE start_at >= ? AND start_at <= ?`,
-      [day.start, day.end]
-    ),
-    db.queryOne(
-      `SELECT COUNT(*) AS c
-       FROM appointment_students aps JOIN appointments a ON a.id = aps.appointment_id
-       WHERE aps.attendance = 'pending' AND a.end_at < ?`,
-      [nowIso]
-    ),
-    db.queryOne(
-      `SELECT COALESCE(SUM(CASE WHEN occurred_at >= datetime('now', '-1 hour') THEN 1 ELSE 0 END), 0) AS h1,
-              COALESCE(SUM(CASE WHEN occurred_at >= datetime('now', '-24 hours') THEN 1 ELSE 0 END), 0) AS h24
-       FROM client_errors WHERE occurred_at >= datetime('now', '-24 hours')`
-    ),
-    (async () => {
-      const sinceIso = new Date(now.getTime() - 24 * 60 * 6e4).toISOString();
-      const [rows, count] = await Promise.all([
-        db.query(RUM_SAMPLE_SQL, [sinceIso]),
-        db.queryOne("SELECT COUNT(*) AS c FROM rum_events WHERE ts >= ?", [sinceIso])
-      ]);
-      const byMetric = /* @__PURE__ */ new Map();
-      for (const r of rows) {
-        const arr = byMetric.get(r.metric) ?? [];
-        arr.push(Number(r.value));
-        byMetric.set(r.metric, arr);
-      }
-      return { byMetric, count: count?.c ?? 0 };
-    })()
-  ]);
-  const p75Of = /* @__PURE__ */ __name((m) => {
-    const arr = rum.byMetric.get(m);
-    if (!arr || arr.length === 0) return null;
-    const v = percentile75(arr);
-    return v === null ? null : m === "CLS" ? Math.round(v * 1e3) / 1e3 : Math.round(v);
-  }, "p75Of");
-  return {
-    students_active: students?.a ?? 0,
-    students_archived: students?.ar ?? 0,
-    appointments_today: appts?.t ?? 0,
-    appointments_cancelled_today: appts?.c ?? 0,
-    attendance_pending_overdue: overdue?.c ?? 0,
-    client_errors_1h: errs?.h1 ?? 0,
-    client_errors_24h: errs?.h24 ?? 0,
-    rum_events_24h: rum.count,
-    rum_lcp_p75: p75Of("LCP"),
-    rum_cls_p75: p75Of("CLS"),
-    rum_inp_p75: p75Of("INP")
-  };
-}
-__name(collectKpiBucket, "collectKpiBucket");
-async function cpReportOpportunistic(deps) {
-  const { db, logger, config } = deps;
-  if (!config.ingestUrl || !config.cpNodeCode || !config.cpNodeKey) {
-    return { status: "skipped" };
-  }
-  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const last = await readSettingsIso3(db, CP_REPORT_ATTEMPT_KEY);
-  if (!shouldPushCpReport(last, now(), deps.minIntervalMs ?? CP_REPORT_MIN_INTERVAL_MS)) {
-    return { status: "skipped" };
-  }
-  return pushCpReport({ db, logger, config, binding: deps.binding, fetchFn: deps.fetchFn, now: deps.now });
-}
-__name(cpReportOpportunistic, "cpReportOpportunistic");
-async function pushCpReport(deps) {
-  const { db, logger, config } = deps;
-  const log = logger.child("cp-report");
-  if (!config.ingestUrl || !config.cpNodeCode || !config.cpNodeKey) {
-    return { status: "disabled" };
-  }
-  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  try {
-    const lastIso = await readSettingsIso3(db, CP_REPORT_ATTEMPT_KEY);
-    if (!shouldPushCpReport(lastIso, now(), deps.minIntervalMs ?? CP_REPORT_MIN_INTERVAL_MS)) {
-      return { status: "skipped" };
-    }
-    await stampCpReportAttempt(db, now());
-    const at = now();
-    const atIso = at.toISOString();
-    const kpi = await collectKpiBucket(db, at);
-    const lastSeq = await readSettingsInt(db, CP_REPORT_SEQ_KEY) ?? 0;
-    const seq = lastSeq + 1;
-    const body = {
-      events: [
-        {
-          seq,
-          ts: atIso,
-          level: "info",
-          category: "data",
-          event: "cp_report.kpi_daily",
-          payload: kpi
-        }
-      ],
-      health: {
-        captured_at: atIso,
-        reported_version: APP_VERSION,
-        outbox_depth: null,
-        unsynced_ops: null,
-        error_rate_1h: null,
-        error_rate_24h: null,
-        sync_lag_s: null,
-        extras: null
-      }
-    };
-    const init = {
-      method: "POST",
-      headers: {
-        "X-CP-Node-Code": config.cpNodeCode,
-        Authorization: `Bearer ${config.cpNodeKey}`,
-        "X-CP-Node-Version": APP_VERSION,
-        "content-type": "application/json"
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(CP_REPORT_TIMEOUT_MS)
-    };
-    const res = deps.binding ? await deps.binding.fetch(config.ingestUrl, init) : await (deps.fetchFn ?? fetch)(config.ingestUrl, init);
-    if (!res.ok) {
-      let bodyHead = "";
-      try {
-        bodyHead = (await res.text()).slice(0, 180);
-      } catch {
-        bodyHead = "";
-      }
-      log.warn("cp_report.push_failed", {
-        http: res.status,
-        detail: "cp_http_error",
-        url: config.ingestUrl,
-        body_head: bodyHead
-      });
-      return { status: "error", detail: `http_${res.status}` };
-    }
-    await writeSettings2(db, CP_REPORT_PUSH_KEY, JSON.stringify(atIso), atIso);
-    await writeSettings2(db, CP_REPORT_SEQ_KEY, JSON.stringify(seq), atIso);
-    log.info("cp_report.push", { seq, students_active: kpi.students_active });
-    return { status: "ok", applied: 1, seq };
-  } catch (err) {
-    log.warn("cp_report.push_failed", {
-      detail: "exception",
-      error: err instanceof Error ? err.message : String(err)
-    });
-    return { status: "error", detail: "exception" };
-  }
-}
-__name(pushCpReport, "pushCpReport");
-
-// src/application/bug-report-forward/index.ts
-var BUG_REPORT_ATTEMPT_KEY = "bug_report.forward_attempt_at";
-var BUG_REPORT_REPLY_SINCE_KEY = "bug_report.reply_since_at";
-var BUG_REPORT_MIN_INTERVAL_MS = 5 * 6e4;
-var BUG_REPORT_TIMEOUT_MS = 15e3;
-var BUG_REPORT_BATCH_MAX = 20;
-function clean4(v) {
-  const s = typeof v === "string" ? v.trim() : "";
-  return s ? s : null;
-}
-__name(clean4, "clean");
-function cpOriginFrom2(v) {
-  const raw2 = clean4(v);
-  if (!raw2) return null;
-  try {
-    return new URL(raw2).origin;
-  } catch {
-    return null;
-  }
-}
-__name(cpOriginFrom2, "cpOriginFrom");
-function buildBugReportConfig(env) {
-  return {
-    cpOrigin: cpOriginFrom2(env.CP_SYNC_URL),
-    cpNodeCode: clean4(env.CP_NODE_CODE),
-    cpNodeKey: clean4(env.CP_NODE_KEY)
-  };
-}
-__name(buildBugReportConfig, "buildBugReportConfig");
-function nodeHeaders(config) {
-  return {
-    "X-CP-Node-Code": config.cpNodeCode,
-    Authorization: `Bearer ${config.cpNodeKey}`,
-    "X-CP-Node-Version": APP_VERSION,
-    "content-type": "application/json"
-  };
-}
-__name(nodeHeaders, "nodeHeaders");
-function cpFetchOf(deps) {
-  if (deps.binding) return (url, init) => deps.binding.fetch(url, init);
-  const doFetch = deps.fetchFn ?? fetch;
-  return (url, init) => doFetch(url, init);
-}
-__name(cpFetchOf, "cpFetchOf");
-function feedbackBodyOf(rec) {
-  return {
-    id: rec.id,
-    areas: rec.areas,
-    severity: rec.severity,
-    description: rec.description,
-    page: rec.page,
-    app_version: rec.appVersion,
-    reporter_name: rec.staffName,
-    created_at: rec.createdAt
-  };
-}
-__name(feedbackBodyOf, "feedbackBodyOf");
-async function readSettingsIso4(db, key) {
-  const row = await db.queryOne("SELECT value FROM settings WHERE key = ? LIMIT 1", [key]);
-  if (!row) return null;
-  try {
-    const parsed = JSON.parse(row.value);
-    if (typeof parsed === "string" && parsed.length > 0) return parsed;
-  } catch {
-  }
-  return null;
-}
-__name(readSettingsIso4, "readSettingsIso");
-async function writeSettingsIso(db, key, iso) {
-  await db.execute(
-    `INSERT INTO settings (key, value, updated_by, updated_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
-    [key, JSON.stringify(iso), "bug-report-forward", (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").slice(0, 19)]
-  );
-}
-__name(writeSettingsIso, "writeSettingsIso");
-async function runBugReportForward(deps) {
-  const { db, logger, config } = deps;
-  if (!config.cpOrigin || !config.cpNodeCode || !config.cpNodeKey) return { status: "skipped" };
-  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const doCpFetch = cpFetchOf(deps);
-  const service = createBugReportService(db, silentAudit());
-  const lastIso = await readSettingsIso4(db, BUG_REPORT_ATTEMPT_KEY);
-  const last = lastIso ? Date.parse(lastIso) : 0;
-  if (!deps.force && Number.isFinite(last) && now().getTime() - last < BUG_REPORT_MIN_INTERVAL_MS) {
-    return { status: "skipped" };
-  }
-  await writeSettingsIso(db, BUG_REPORT_ATTEMPT_KEY, now().toISOString());
-  let pulled = 0;
-  try {
-    const since = await readSettingsIso4(db, BUG_REPORT_REPLY_SINCE_KEY);
-    const repliesUrl = `${config.cpOrigin}/api/node/feedback/replies${since ? `?since=${encodeURIComponent(since)}` : ""}`;
-    const res = await doCpFetch(repliesUrl, {
-      method: "GET",
-      headers: nodeHeaders(config),
-      signal: AbortSignal.timeout(BUG_REPORT_TIMEOUT_MS)
-    });
-    if (res.ok) {
-      const body = await res.json().catch(() => null);
-      const items = Array.isArray(body?.data?.items) ? body?.data?.items : [];
-      if (items.length > 0) {
-        pulled = await service.applyReplies(items);
-        logger.info("bug_report.replies.applied", { pulled });
-      }
-      await writeSettingsIso(db, BUG_REPORT_REPLY_SINCE_KEY, body?.data?.server_time ?? now().toISOString());
-    } else {
-      logger.warn("bug_report.replies.pull_failed", { status: res.status });
-    }
-  } catch (err) {
-    logger.warn("bug_report.replies.pull_error", { error: err instanceof Error ? err.message : String(err) });
-  }
-  const open = await service.listOpen(BUG_REPORT_BATCH_MAX);
-  const url = `${config.cpOrigin}/api/node/feedback`;
-  let sent = 0;
-  let failed = 0;
-  for (const rec of open) {
-    try {
-      const res = await doCpFetch(url, {
-        method: "POST",
-        headers: nodeHeaders(config),
-        body: JSON.stringify(feedbackBodyOf(rec)),
-        signal: AbortSignal.timeout(BUG_REPORT_TIMEOUT_MS)
-      });
-      if (res.ok) {
-        await service.markSent(rec.id, now().toISOString().replace("T", " ").slice(0, 19));
-        sent += 1;
-      } else {
-        const text = (await res.text().catch(() => "")).slice(0, 200);
-        await service.markForwardError(rec.id, `HTTP ${res.status} ${text}`);
-        failed += 1;
-      }
-    } catch (err) {
-      await service.markForwardError(rec.id, err instanceof Error ? err.message : String(err));
-      failed += 1;
-    }
-  }
-  const remaining = (await service.listOpen(1)).length;
-  logger.info("bug_report.forward.done", { sent, failed, remaining, pulled });
-  return { status: "done", sent, failed, remaining, pulled };
-}
-__name(runBugReportForward, "runBugReportForward");
-function silentAudit() {
-  return {
-    log: /* @__PURE__ */ __name(async () => void 0, "log"),
-    logInTransaction: /* @__PURE__ */ __name(async () => void 0, "logInTransaction")
-  };
-}
-__name(silentAudit, "silentAudit");
 
 // src/index.ts
 var BALE_TOKEN_CACHE_TTL_MS = 6e4;
@@ -56363,7 +56516,9 @@ var src_default = {
       ...await buildRuntimeEnv(env, db),
       cpSyncUrl: env.CP_SYNC_URL ?? null,
       cpNodeCode: cpContentCfg.cpNodeCode,
-      cpNodeKey: cpContentCfg.cpNodeKey
+      cpNodeKey: cpContentCfg.cpNodeKey,
+      envName: env.ENV ?? null
+      // ۱.۲۵.۶۷ — پنل سلامت
     });
     return app.fetch(request, env, ctx);
   },

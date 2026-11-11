@@ -325,7 +325,8 @@ export default {
       ...(await buildRuntimeEnv(env, db)),
       cpSyncUrl: env.CP_SYNC_URL ?? null,
       cpNodeCode: cpContentCfg.cpNodeCode,
-      cpNodeKey: cpContentCfg.cpNodeKey
+      cpNodeKey: cpContentCfg.cpNodeKey,
+      envName: env.ENV ?? null // ۱.۲۵.۶۷ — پنل سلامت
     });
     return app.fetch(request, env, ctx);
   },

@@ -104,8 +104,8 @@ GET {origin}/api/node/content/sync?since=<ISO UTC>
   **یادداشت ۱۴۰۵/۰۸/۲۰ (بازبینی طرح ارتقا — CP-1):** کد نود از ۱.۲۵.۴۸ سقف پاسخ pull را با
   ثابت دستهٔ push (`CP_CONTENT_BATCH_MAX=20`) بسته — ناسازگار با همین بند و با رفتار CP
   (`cp-repo/src/domain/content/service.ts:924`)؛ شواهد کامل در
-  `docs/backend-upgrade-plan-2026-11-11.md` §۳-۶. رفع با ثابت جدا `CP_CONTENT_PULL_MAX=100`
-  در نخستین انتشار بعدی؛ درگاه push همان ≤۲۰ می‌ماند.
+  `docs/backend-upgrade-plan-2026-11-11.md` §۳-۶. رفع شد در انتشار **۱.۲۵.۶۷** با ثابت جدا
+  `CP_CONTENT_PULL_MAX=100` (+ سه آزمون سقف)؛ درگاه push همان ≤۲۰ می‌ماند.
 - **قانون طلایی (دو لایه دفاع):** فقط `id` با پیشوند `cp-content-` نوشته می‌شود —
   لایهٔ اول فیلتر JS بعد از Zod، لایهٔ دوم گارد SQL در UPSERT:
   `WHERE network_content.id LIKE 'cp-content-%'`.

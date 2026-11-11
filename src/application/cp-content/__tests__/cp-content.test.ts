@@ -16,7 +16,9 @@ import {
   shouldRunCpContent,
   CP_CONTENT_ATTEMPT_KEY,
   CP_CONTENT_SYNC_KEY,
-  CP_CONTENT_PUSH_KEY
+  CP_CONTENT_PUSH_KEY,
+  CP_CONTENT_PULL_MAX,
+  CP_CONTENT_BATCH_MAX
 } from '../sync';
 import type { DbClient } from '@core/db';
 
@@ -291,5 +293,42 @@ describe('قرارداد push همرسانی‌ها', () => {
     expect(res.detail).toContain('http_404');
     const rows = await db.query<{ id: string }>('SELECT id FROM network_content');
     expect(rows.length).toBe(0);
+  });
+});
+
+describe('رفع CP-1 — سقف صفحهٔ pull جدا از دستهٔ push (۱.۲۵.۶۷)', () => {
+  it('پاسخ ۱۰۰ آیتمی (سقف قرارداد §۵) کامل اعمال می‌شود — سقف قدیمیِ ۲۰ دیگر گلوگاه نیست', async () => {
+    const db = createTestApp().db;
+    const items = Array.from({ length: 100 }, (_, i) =>
+      cpItem({
+        id: `cp-content-dddd${String(i).padStart(4, '0')}-1111-4111-8111-111111111111`,
+        updated_at: '2026-11-01T10:00:00.000Z'
+      })
+    );
+    const { fn } = makeFetch(() => okJson({ data: { server_time: '2026-11-05T12:00:00.000Z', items } }));
+    const res = await runCpContentCycle({ db, logger: silentLogger('t'), config: configOf(), fetchFn: fn });
+    expect(res.status).toBe('ok');
+    expect(res.applied).toBe(100);
+  });
+
+  it('پاسخ ۱۰۱ آیتمی → payload_invalid و مُهر sync پیش نمی‌رود (دور بی‌نهایت گیت‌دار ماند)', async () => {
+    const db = createTestApp().db;
+    const items = Array.from({ length: 101 }, (_, i) =>
+      cpItem({
+        id: `cp-content-eeee${String(i).padStart(4, '0')}-1111-4111-8111-111111111111`,
+        updated_at: '2026-11-01T10:00:00.000Z'
+      })
+    );
+    const { fn } = makeFetch(() => okJson({ data: { server_time: '2026-11-05T12:00:00.000Z', items } }));
+    const res = await runCpContentCycle({ db, logger: silentLogger('t'), config: configOf(), fetchFn: fn });
+    expect(res.status).toBe('error');
+    expect(res.detail).toContain('payload_invalid');
+    const stamp = await db.queryOne<{ value: string }>('SELECT value FROM settings WHERE key = ?', [CP_CONTENT_SYNC_KEY]);
+    expect(stamp).toBeFalsy(); // مُهر فقط روی موفقیت پیش می‌رود
+  });
+
+  it('ثابت‌های جهت‌دار: PULL=۱۰۰ قراردادی، PUSH=۲۰ دستهٔ همرسانی', () => {
+    expect(CP_CONTENT_PULL_MAX).toBe(100);
+    expect(CP_CONTENT_BATCH_MAX).toBe(20);
   });
 });
