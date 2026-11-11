@@ -78,6 +78,9 @@ export interface TestApp {
     ENV: string;
     CF_ACCESS_TEAM_DOMAIN: string;
     AUTH_SECRET?: string;
+    /** ف۵ (P2-15) — هارنس پیش‌فرض محدودساز را خاموش می‌گذارد تا آزمون‌های موجود با رگبار درخواست ۴۲۹ نخورند؛
+     *  آزمون اختصاصی محدودساز خودش مقدار مشخص می‌دهد (هم‌الگوی صریح‌نگه‌داشتن رفتار در آزمون) */
+    API_RATE_LIMIT_PER_MIN?: string;
   };
 }
 
@@ -112,7 +115,8 @@ export function createTestApp(
   const env = {
     DB: d1 as unknown as D1Database,
     ENV: 'development',
-    CF_ACCESS_TEAM_DOMAIN: 'test.team.example.com'
+    CF_ACCESS_TEAM_DOMAIN: 'test.team.example.com',
+    API_RATE_LIMIT_PER_MIN: '0' // هارنس: محدودساز خاموش — آزمون اختصاصی P2-15 خودش سقف می‌دهد
   };
   return { sql: store, d1, db, app, env };
 }
@@ -124,6 +128,8 @@ export interface JsonOutcome<T = unknown> {
   ok: boolean;
   body: T;
   cacheControl: string | null;
+  /** ف۵ (P2-13) — هدر X-Request-Id پاسخ (هم‌بستگی لاگ/audit/پاکت خطا) */
+  requestId: string | null;
 }
 
 export class Api {
@@ -147,6 +153,7 @@ export class Api {
       FAKE_CTX
     );
     const cacheControl = res.headers.get('cache-control');
+    const requestId = res.headers.get('x-request-id');
     let parsed: unknown = null;
     const text = await res.text();
     if (text.length > 0) {
@@ -156,7 +163,7 @@ export class Api {
         parsed = text;
       }
     }
-    return { status: res.status, ok: res.ok, body: parsed, cacheControl };
+    return { status: res.status, ok: res.ok, body: parsed, cacheControl, requestId };
   }
 
   get(url: string) { return this.req('GET', url); }

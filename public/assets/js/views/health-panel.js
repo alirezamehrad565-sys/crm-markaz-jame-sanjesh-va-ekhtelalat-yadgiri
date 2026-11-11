@@ -1,6 +1,7 @@
 // نمای «پنل سلامت» (۱.۲۵.۶۷ — ف۱ طرح ارتقا، CP-2/CP-3): وضعیت سامانه + شش درگاه لینک CP
 // همهٔ داده از GET /api/health/panel (فقط‌مدیر) — مُهرهای settings و COUNTهای واقعی، بدون زیرساخت تازه
 // ف۴ — بخش «گزارش رشد جدول‌ها» افزوده شد: GET /api/growth/report فقط‌مدیر — شمارش شبانهٔ کرون + سیاست نگه‌داری
+// ف۵ — بخش «هشدارهای فعال» افزوده شد: رانش مُهر تلاش/موفقیت + جهش خطاهای مرورگر (P0-3 حداقلی)
 import { api } from '../api.js';
 import { el, icon, emptyState, skeletonState } from '../ui.js';
 import { fa, formatJalaliDateTime } from '../format.js';
@@ -109,6 +110,52 @@ function growthRow(t) {
     el('td', { style: { textAlign: 'center', whiteSpace: 'nowrap' } },
       el('span', { class: `badge ${badgeCls}` }, t.policy)
     )
+  );
+}
+
+/* ── ف۵ (P0-3 حداقلی) — هشدارهای فعال ─────────────────────────────────────────
+   همان دادهٔ پنل، با حکم: رانش مُهر تلاش/موفقیت درگاه‌های CP نسبت به آستانهٔ §۳-۱۱ و جهش
+   خطاهای مرورگر در ۲۴ ساعت. زنگ‌زنِ خودکار هر شب در کرون دایجست همین حکم را می‌گیرد و اگر
+   بات تنظیم باشد پیام فارسی برای مدیر(ها) می‌فرستد؛ مُهر آخرین ارزیابی از settings می‌آید. */
+
+const SEVERITY_META = {
+  error: { cls: 'badge--error', label: 'فوری' },
+  warning: { cls: 'badge--warning', label: 'هشدار' }
+};
+
+function alertsSection(alerts, lastEvaluatedAt) {
+  const count = (alerts ?? []).length;
+  const headBadge = count === 0
+    ? el('span', { class: 'badge badge--success' }, 'هیچ هشدار فعالی نیست')
+    : el('span', { class: 'badge badge--error' }, `${fa(count)} هشدار فعال`);
+  const stamp = lastEvaluatedAt
+    ? `آخرین ارزیابی خودکار: ${formatJalaliDateTime(lastEvaluatedAt)}`
+    : 'هنوز ارزیابی خودکار شبانه‌ای انجام نشده — با نخستین کرون دایجست مُهر می‌خورد';
+  return el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
+    el('div', { class: 'ob-section__head' },
+      el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+        el('h3', { style: { margin: 0 } }, 'هشدارهای فعال'),
+        headBadge
+      ),
+      el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
+        `${stamp} — ارزیابی هر شب در کرون دایجست انجام می‌شود و وقتی هشدار باشد، پیام فارسی برای مدیر روی همان کانال بات می‌آید؛ این بخش همان حکم را زنده نشان می‌دهد. دو قاعدهٔ هشدار: رانش مُهرِ تلاش/موفقیت درگاه‌های CP (داده ممکن است بی‌صدا گم شده باشد) و جهش خطاهای مرورگر در ۲۴ ساعت.`)
+    ),
+    count === 0
+      ? el('div', {}, el('div', { class: 'ob-row' },
+          el('div', { class: 'ob-row__main' },
+            el('div', { class: 'cell-main' }, 'همهٔ درگاه‌ها و شمارنده‌ها زیر آستانه‌اند'),
+            el('div', { class: 'cell-sub' }, 'اگر مشکلی پیش بیاید، همین‌جا و کانال بات خودش را نشان می‌دهد')))
+        )
+      : el('div', {}, (alerts ?? []).map((alert) => {
+          const meta = SEVERITY_META[alert.severity] ?? SEVERITY_META.warning;
+          return el('div', { class: 'ob-row' },
+            el('div', { class: 'ob-row__main' },
+              el('div', { class: 'cell-main' }, alert.message)),
+            el('div', { class: 'ob-row__side' },
+              el('span', { class: `badge ${meta.cls}` }, meta.label),
+              el('span', { class: 'badge badge--neutral' }, alert.code))
+          );
+        }))
   );
 }
 
@@ -221,6 +268,8 @@ export async function renderHealthPanel(outlet) {
         ),
         el('div', {}, cp.channels.map(channelRow))
       ),
+
+      alertsSection(data?.alerts, data?.alerts_last_evaluated_at), // ف۵ (P0-3) — هشدارهای فعال زنده
 
       growthSection(growth, growthError),
 

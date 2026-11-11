@@ -66,7 +66,9 @@ export class RateLimitError extends AppError {
     retryAfterSeconds: number,
     message = 'تلاش‌های ناموفق بیش از حد مجاز است — کمی بعد دوباره تلاش کنید'
   ) {
-    super('RATE_LIMITED', 429, message, { retryAfterSeconds });
+    // ف۵ (P2-15) — دلیل در details هم می‌آید تا پاکت ۴۲۹ یک‌دست باشد:
+    // { details: { reason: 'rate_limited', retryAfterSeconds } } + هدر Retry-After را صدا زننده ست می‌کند
+    super('RATE_LIMITED', 429, message, { reason: 'rate_limited', retryAfterSeconds });
     this.name = 'RateLimitError';
     this.retryAfterSeconds = retryAfterSeconds;
   }

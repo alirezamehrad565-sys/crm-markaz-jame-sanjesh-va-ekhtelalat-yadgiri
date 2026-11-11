@@ -6,6 +6,7 @@ import { CP_SYNC_SETTINGS_KEY, CP_SYNC_ATTEMPT_KEY } from '@app/cp-sync/announce
 import { CP_CONTENT_SYNC_KEY, CP_CONTENT_PUSH_KEY, CP_CONTENT_ATTEMPT_KEY } from '@app/cp-content/sync';
 import { CP_REPORT_PUSH_KEY, CP_REPORT_ATTEMPT_KEY } from '@app/cp-report/ingest';
 import { BUG_REPORT_ATTEMPT_KEY, BUG_REPORT_REPLY_SINCE_KEY } from '@app/bug-report-forward';
+import { deriveAlerts, readAlertsSeal, parseClientErrorsMax } from './alerts'; // ف۵ (P0-3) — مشتق هشدارها از همین دادهٔ پنل
 import type { DbClient } from '@core/db';
 
 export interface HealthChannelStatus {
@@ -38,6 +39,18 @@ export interface HealthPanelData {
     configured: boolean;
     channels: HealthChannelStatus[];
   };
+  /** ف۵ (P0-3) — هشدارهای فعالِ همین لحظه (رانش مُهر تلاش/موفقیت + جهش خطاهای مرورگر) — زنده مشتق می‌شود */
+  alerts: HealthAlert[];
+  /** ف۵ (P0-3) — مُهر آخرین ارزیابی خودکار کرون شبانه (settings: alerts.last_evaluated_at) */
+  alerts_last_evaluated_at: string | null;
+}
+
+/** یک هشدار فعال — فارسی، با کد پایدار برای لاگ/پنل و شدت دوحالته */
+export interface HealthAlert {
+  /** کد پایدار: `cp_seal_drift` (رانش مُهر تلاش/موفقیت) یا `client_errors_spike` (جهش خطاهای مرورگر) */
+  code: 'cp_seal_drift' | 'client_errors_spike';
+  message: string;
+  severity: 'error' | 'warning';
 }
 
 export interface HealthDeps {
@@ -45,6 +58,8 @@ export interface HealthDeps {
   /** CP سه‌متغیره کامل است؟ (kill switch معکوس) */
   cpConfigured: boolean;
   envName: string | null;
+  /** ف۵ (P0-3) — آستانهٔ هشدار خطاهای مرورگر (env خام ALERT_CLIENT_ERRORS_MAX؛ نبود = پیش‌فرض ۱۰۰) */
+  clientErrorsMax?: number | string | null;
 }
 
 interface ChannelDef {
@@ -98,6 +113,8 @@ export interface HealthService {
 
 export function createHealthService(deps: HealthDeps): HealthService {
   const { db, cpConfigured, envName } = deps;
+  // آستانهٔ خطاهای مرورگر یک‌بار در ساخت پارس می‌شود (env در طول عمر isolate تغییر نمی‌کند)
+  const clientErrorsMax = parseClientErrorsMax(deps.clientErrorsMax);
 
   return {
     async panel(): Promise<HealthPanelData> {
@@ -162,24 +179,31 @@ export function createHealthService(deps: HealthDeps): HealthService {
         });
       }
 
-      return {
+      const counts = {
+        // client_errors/bug_reports: فرمت datetime('now') = 'YYYY-MM-DD HH:MM:SS' — هم‌قرارداد COUNTهای cp-report
+        client_errors_24h: await countSafe(db, "SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at >= datetime('now', '-24 hours')"),
+        // rum_events: ستون ts با فرمت ISO UTC (0086) — پارامتری، نه datetime()
+        rum_events_24h: await countSafe(db, 'SELECT COUNT(*) AS n FROM rum_events WHERE ts >= ?', [new Date(now.getTime() - 86_400_000).toISOString()]),
+        bug_reports_open: await countSafe(db, "SELECT COUNT(*) AS n FROM bug_reports WHERE status = 'open'")
+      };
+
+      const panelData: HealthPanelData = {
         version: APP_VERSION,
         env: envName,
         now: now.toISOString(),
         db: { ok: dbOk, latency_ms: latencyMs },
         migrations: { applied: migrationsApplied },
-        counts: {
-          // client_errors/bug_reports: فرمت datetime('now') = 'YYYY-MM-DD HH:MM:SS' — هم‌قرارداد COUNTهای cp-report
-          client_errors_24h: await countSafe(db, "SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at >= datetime('now', '-24 hours')"),
-          // rum_events: ستون ts با فرمت ISO UTC (0086) — پارامتری، نه datetime()
-          rum_events_24h: await countSafe(db, 'SELECT COUNT(*) AS n FROM rum_events WHERE ts >= ?', [new Date(now.getTime() - 86_400_000).toISOString()]),
-          bug_reports_open: await countSafe(db, "SELECT COUNT(*) AS n FROM bug_reports WHERE status = 'open'")
-        },
+        counts,
         cp_link: {
           configured: cpConfigured,
           channels
-        }
+        },
+        alerts: [],
+        alerts_last_evaluated_at: await readAlertsSeal(db)
       };
+      // ف۵ (P0-3) — هشدارهای فعال از همان دادهٔ همین پنل مشتق می‌شوند (بدون رفت‌وبرگشت تازه)
+      panelData.alerts = deriveAlerts(panelData, clientErrorsMax);
+      return panelData;
     }
   };
 }
