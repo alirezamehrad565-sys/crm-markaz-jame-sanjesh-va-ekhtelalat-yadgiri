@@ -18,6 +18,8 @@ import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 import { createBugReportService } from '@domain/bug-reports';
 import type { BugReportRecord } from '@domain/bug-reports';
+// ۱.۲۵.۶۸ — CP-5: سقف بدنهٔ پاسخ پیش از parse (طرح ارتقا §۳-۵/§۴ آیتم ۲۴)
+import { readJsonCapped, readTextCapped } from '@app/cp-link/body';
 
 export const BUG_REPORT_ATTEMPT_KEY = 'bug_report.forward_attempt_at';
 export const BUG_REPORT_REPLY_SINCE_KEY = 'bug_report.reply_since_at'; // ۱.۲۵.۵۷ — مُهر since مکالمه
@@ -159,7 +161,8 @@ export async function runBugReportForward(deps: {
       signal: AbortSignal.timeout(BUG_REPORT_TIMEOUT_MS)
     });
     if (res.ok) {
-      const body = (await res.json().catch(() => null)) as { data?: { server_time?: string; items?: unknown[] } } | null;
+      // ۱.۲۵.۶۸ — CP-5: پاسخ pull هم سقف‌دار — پاسخ عظیم/خراب warn و دورهٔ بعد
+      const body = (await readJsonCapped(res).catch(() => null)) as { data?: { server_time?: string; items?: unknown[] } } | null;
       const items = Array.isArray(body?.data?.items) ? (body?.data?.items as never[]) : [];
       if (items.length > 0) {
         pulled = await service.applyReplies(items);
@@ -192,7 +195,8 @@ export async function runBugReportForward(deps: {
         await service.markSent(rec.id, now().toISOString().replace('T', ' ').slice(0, 19));
         sent += 1;
       } else {
-        const text = (await res.text().catch(() => '')).slice(0, 200);
+        // ۱.۲۵.۶۸ — CP-5: بدنهٔ خطا هم سقف‌دار
+        const text = (await readTextCapped(res).catch(() => '')).slice(0, 200);
         await service.markForwardError(rec.id, `HTTP ${res.status} ${text}`);
         failed += 1;
       }

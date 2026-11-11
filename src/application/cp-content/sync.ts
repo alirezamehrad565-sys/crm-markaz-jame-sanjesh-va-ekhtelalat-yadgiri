@@ -29,6 +29,8 @@ import { createAuditWriter } from '@core/audit';
 import { createContentScoreService } from '@domain/content-score';
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
+// ۱.۲۵.۶۸ — CP-5: سقف بدنهٔ پاسخ پیش از parse روی همهٔ خواندن‌های بدنه (§۳-۵/§۴ آیتم ۲۴)
+import { readJsonCapped, readTextCapped, readBytesCapped, CpBodyTooLargeError } from '@app/cp-link/body';
 
 /** مُهر «آخرین تلاش دورهٔ کامل» — رگولاتور مشترک cron و دروازهٔ فرصت‌طلب */
 export const CP_CONTENT_ATTEMPT_KEY = 'cp_content.last_attempt_at';
@@ -273,7 +275,8 @@ async function pushQueuedSubmissions(deps: {
   if (!res.ok) {
     let bodyHead = '';
     try {
-      bodyHead = (await res.text()).slice(0, 180);
+      // ۱.۲۵.۶۸ — CP-5: بدنهٔ خطا هم سقف‌دار
+      bodyHead = (await readTextCapped(res)).slice(0, 180);
     } catch {
       bodyHead = '';
     }
@@ -328,7 +331,8 @@ async function pullCuratedItems(deps: {
     // ۴۰۴ یعنی CP هنوز درگاه را ندارد — warn و تلاش دورهٔ بعد (استقلال کامل نود)
     let bodyHead = '';
     try {
-      bodyHead = (await res.text()).slice(0, 180);
+      // ۱.۲۵.۶۸ — CP-5: بدنهٔ خطا هم سقف‌دار
+      bodyHead = (await readTextCapped(res)).slice(0, 180);
     } catch {
       bodyHead = '';
     }
@@ -336,7 +340,21 @@ async function pullCuratedItems(deps: {
     throw new Error(`http_${res.status}`);
   }
 
-  const payload: unknown = await res.json();
+  // ۱.۲۵.۶۸ — CP-5: سقف بدنهٔ پاسخ پیش از parse — بودجهٔ §۳-۱۵: pull برگزیده‌ها ≤۱.۳MB
+  let payload: unknown;
+  try {
+    payload = await readJsonCapped(res);
+  } catch (err) {
+    if (err instanceof CpBodyTooLargeError) {
+      log.warn('cp_content.pull_failed', {
+        detail: 'cp_body_too_large',
+        limit: err.limitBytes,
+        received: err.receivedBytes
+      });
+      throw new Error('body_too_large');
+    }
+    throw err;
+  }
   const parsed = CpContentSyncResponseSchema.safeParse(payload);
   if (!parsed.success) {
     log.warn('cp_content.pull_failed', { detail: 'cp_payload_invalid' });
@@ -468,7 +486,9 @@ export async function fetchCpContentFile(deps: {
       ? await deps.binding.fetch(url, init)
       : await (deps.fetchFn ?? fetch)(url, init);
     if (!res.ok) return null;
-    return { bytes: await res.arrayBuffer(), mime: res.headers.get('content-type') ?? 'application/octet-stream' };
+    // ۱.۲۵.۶۸ — CP-5: سقف فایل لحظه‌نیاز = ۴۱MB (سقف بازسازی CP: ۴۰ تکه × ۱MB) — فایل خراب دور ریختنی است
+    const bytes = await readBytesCapped(res);
+    return { bytes, mime: res.headers.get('content-type') ?? 'application/octet-stream' };
   } catch {
     return null;
   }

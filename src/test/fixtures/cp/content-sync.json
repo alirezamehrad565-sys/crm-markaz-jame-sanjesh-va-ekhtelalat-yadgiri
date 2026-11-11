@@ -1,0 +1,47 @@
+{
+  "data": {
+    "server_time": "2026-11-11T08:30:00.000Z",
+    "items": [
+      {
+        "id": "cp-content-cc-fixture-001",
+        "kind": "exercise",
+        "title": "کارت برگزیدهٔ دقت دیداری — فیکسچر هم‌قراندی",
+        "summary": "خلاصهٔ کوتاه برای فهرست کتابخانهٔ شبکه",
+        "body": "متن کامل کارت برگزیده؛ سقف قرارداد ۱۲۰۰۰ نویسه.",
+        "tags": ["دقت دیداری", "کارت آماده"],
+        "subcategory": "در تمرین",
+        "author_name": "طراح نمونه",
+        "co_author_name": null,
+        "file_name": null,
+        "file_size": null,
+        "external_url": null,
+        "quality": { "refs": 12, "uses": 4 },
+        "status": "approved",
+        "source_center_code": "center-src",
+        "source_center_name": "مرکز مبدأ نمونه",
+        "created_at": "2026-11-01T10:00:00.000Z",
+        "updated_at": "2026-11-08T10:00:00.000Z"
+      },
+      {
+        "id": "cp-content-cc-fixture-002",
+        "kind": "clearbook",
+        "title": "کلر بوک مرکز مبدأ — بایگانی‌شده",
+        "summary": null,
+        "body": null,
+        "tags": [],
+        "subcategory": null,
+        "author_name": null,
+        "co_author_name": null,
+        "file_name": "کاربرگ-نمونه.pdf",
+        "file_size": 19687,
+        "external_url": null,
+        "quality": null,
+        "status": "retired",
+        "source_center_code": null,
+        "source_center_name": null,
+        "created_at": "2026-10-20T10:00:00.000Z",
+        "updated_at": "2026-11-05T07:15:00.000Z"
+      }
+    ]
+  }
+}

@@ -17,6 +17,8 @@ import { APP_VERSION } from '@core/version';
 import { CP_SYNC_CRON } from '@core/shared';
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
+// ۱.۲۵.۶۸ — CP-5: سقف بدنهٔ پاسخ پیش از parse (طرح ارتقا §۳-۵/§۴ آیتم ۲۴)
+import { readJsonCapped, readTextCapped, CpBodyTooLargeError } from '@app/cp-link/body';
 
 /** کلید settings برای «آخرین سینک موفق» (ISO UTC) */
 export const CP_SYNC_SETTINGS_KEY = 'cp_sync.last_sync_at';
@@ -245,9 +247,10 @@ export async function syncCpAnnouncements(deps: {
 
     if (!res.ok) {
       // تشخیص عملیاتی: URL و آغاز بدنهٔ پاسخ در لاگ می‌آید (بدنهٔ خطای CP راز ندارد)
+      // ۱.۲۵.۶۸ — CP-5: بدنهٔ خطا هم با سقف خوانده می‌شود؛ پاسخ عظیم isolate را نمی‌بلعد
       let bodyHead = '';
       try {
-        bodyHead = (await res.text()).slice(0, 180);
+        bodyHead = (await readTextCapped(res)).slice(0, 180);
       } catch {
         bodyHead = '';
       }
@@ -260,7 +263,21 @@ export async function syncCpAnnouncements(deps: {
       return { status: 'error', detail: `http_${res.status}` };
     }
 
-    const payload: unknown = await res.json();
+    // ۱.۲۵.۶۸ — CP-5: سقف بدنهٔ پاسخ پیش از parse — پاسخ عظیم = warn و دورهٔ بعد
+    let payload: unknown;
+    try {
+      payload = await readJsonCapped(res);
+    } catch (err) {
+      if (err instanceof CpBodyTooLargeError) {
+        log.warn('announcement.cp_sync_failed', {
+          detail: 'cp_body_too_large',
+          limit: err.limitBytes,
+          received: err.receivedBytes
+        });
+        return { status: 'error', detail: 'body_too_large' };
+      }
+      throw err;
+    }
     const parsed = CpSyncResponseSchema.safeParse(payload);
     if (!parsed.success) {
       log.warn('announcement.cp_sync_failed', { detail: 'cp_payload_invalid' });
