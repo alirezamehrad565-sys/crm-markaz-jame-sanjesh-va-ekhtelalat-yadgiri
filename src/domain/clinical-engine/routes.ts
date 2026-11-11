@@ -43,7 +43,7 @@ export const ClinicalPathCreateSchema = z
   .superRefine((v, ctx) => {
     if (!v.target_key && !v.template_key) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom', // zod4 — ZodIssueCode حذف شده
         message: 'هدف درمانی یا قالب مسیر لازم است',
         path: ['target_key']
       });
@@ -153,7 +153,7 @@ export const PathwayReportQuerySchema = z
   })
   .superRefine((v, ctx) => {
     if (v.from && v.to && v.from > v.to) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'تاریخ «از» بعد از «تا» است', path: ['from'] });
+      ctx.addIssue({ code: 'custom', message: 'تاریخ «از» بعد از «تا» است', path: ['from'] });
     }
   });
 
@@ -169,7 +169,7 @@ export const PathProbeAddSchema = z.object({
   value: z.number().finite().min(0).max(PATH_PROBE_VALUE_MAX),
   unit: z.string().trim().min(1).max(PATH_PROBE_UNIT_MAX).nullish(),
   session_id: z.string().min(1).nullish(),
-  taken_at: z.string().datetime({ offset: true }).nullish(),
+  taken_at: z.iso.datetime({ offset: true }).nullish(), // zod4 — z.iso.datetime جای z.string().datetime()
   note: z.string().trim().max(PATH_PROBE_NOTE_MAX).nullish()
 });
 
@@ -190,7 +190,7 @@ export const ClinicalPathDecisionSchema = z
   })
   .superRefine((v, ctx) => {
     if (v.action === 'edit' && !v.target_key) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'اصلاح فرضیه بدون هدف جدید مجاز نیست', path: ['target_key'] });
+      ctx.addIssue({ code: 'custom', message: 'اصلاح فرضیه بدون هدف جدید مجاز نیست', path: ['target_key'] });
     }
   });
 

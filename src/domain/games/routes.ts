@@ -40,7 +40,7 @@ const PackageSchema = z.object({
     max_missions_per_day: z.number().int().min(1).max(10),
     min_weeks: z.number().int().min(1).max(52)
   }),
-  body: z.record(z.unknown())
+  body: z.record(z.string(), z.unknown()) // zod4 — کلید صریح
 });
 
 const PrescriptionSchema = z.object({
@@ -49,7 +49,7 @@ const PrescriptionSchema = z.object({
   package_version: z.string().trim().regex(/^\d+\.\d+\.\d+$/),
   goal_id: z.string().trim().min(3).max(64),
   pathway_id: z.string().nullable().optional(),
-  dose_override: z.record(z.unknown()).nullable().optional(),
+  dose_override: z.record(z.string(), z.unknown()).nullable().optional(),
   suggested_by: z.enum(['recommender', 'therapist']).optional()
 });
 

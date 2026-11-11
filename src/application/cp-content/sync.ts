@@ -148,7 +148,7 @@ const CpContentSyncItemSchema = z.object({
   file_name: z.string().max(200).nullable().default(null),
   file_size: z.number().int().min(0).max(100_000_000).nullable().default(null),
   external_url: z.string().max(500).nullable().default(null),
-  quality: z.record(z.unknown()).nullable().default(null),
+  quality: z.record(z.string(), z.unknown()).nullable().default(null), // zod4 — کلید صریح
   status: z.enum(['collected', 'approved', 'rejected', 'retired', 'published']),
   source_center_code: z.string().max(60).nullable().default(null),
   source_center_name: z.string().max(120).nullable().default(null),

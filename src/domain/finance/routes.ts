@@ -47,7 +47,7 @@ function fileHeaders(filename: string, mimeType: string, inline: boolean): Recor
 const FinanceYmdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ باید به قالب YYYY-MM-DD باشد');
 
 const FinanceAmountSchema = z
-  .number({ invalid_type_error: 'مبلغ باید عدد باشد', required_error: 'مبلغ الزامی است' })
+  .number({ error: (iss) => (iss.input === undefined ? 'مبلغ الزامی است' : 'مبلغ باید عدد باشد') }) // zod4 — invalid_type_error/required_error حذف شده‌اند
   .int('مبلغ باید عدد صحیح باشد')
   .positive('مبلغ باید بزرگ‌تر از صفر باشد');
 

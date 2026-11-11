@@ -31,7 +31,7 @@ const BugReportCreateSchema = z
   })
   .superRefine((v, ctx) => {
     if (v.areas.length === 0 && !(v.description != null && v.description.length > 0)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['areas'], message: 'حداقل یک بخش یا توضیح لازم است' });
+      ctx.addIssue({ code: 'custom', path: ['areas'], message: 'حداقل یک بخش یا توضیح لازم است' }); // zod4
     }
   });
 

@@ -16,7 +16,7 @@ import { createImportService } from './service';
 
 const ImportRowsSchema = z.object({
   rows: z
-    .array(z.record(z.unknown()))
+    .array(z.record(z.string(), z.unknown())) // zod4 — کلید صریح
     .min(1, 'هیچ ردیفی برای درون‌ریزی ارسال نشده است')
     .max(IMPORT_ROWS_MAX, `حداکثر ${faDigits(IMPORT_ROWS_MAX)} ردیف در هر بار درون‌ریزی مجاز است`)
 });

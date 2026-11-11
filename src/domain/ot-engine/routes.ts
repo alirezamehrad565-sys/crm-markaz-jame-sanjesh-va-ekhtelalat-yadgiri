@@ -17,7 +17,7 @@ const OtSessionItemSchema = z
   })
   .superRefine((val, ctx) => {
     if (val.status === 'with_help' && !val.prompt_level) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['prompt_level'], message: 'برای «با کمک» انتخاب سطح راهنما الزامی است' });
+      ctx.addIssue({ code: 'custom', path: ['prompt_level'], message: 'برای «با کمک» انتخاب سطح راهنما الزامی است' }); // zod4
     }
   });
 
