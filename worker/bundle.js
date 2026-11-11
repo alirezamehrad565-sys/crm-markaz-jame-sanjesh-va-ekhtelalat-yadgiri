@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.65";
+var APP_VERSION = "1.25.66";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -45060,6 +45060,133 @@ function shape(rec) {
 }
 __name(shape, "shape");
 
+// src/application/rum/pure.ts
+function percentile(sorted, p) {
+  if (sorted.length === 0) return 0;
+  const clamped = Math.min(Math.max(p, 0), 1);
+  const idx = (sorted.length - 1) * clamped;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+__name(percentile, "percentile");
+function makeRateLimiter(max, windowMs) {
+  let windowStart = 0;
+  let count = 0;
+  return {
+    allow() {
+      const now = Date.now();
+      if (now - windowStart >= windowMs) {
+        windowStart = now;
+        count = 0;
+      }
+      if (count >= max) return false;
+      count += 1;
+      return true;
+    }
+  };
+}
+__name(makeRateLimiter, "makeRateLimiter");
+
+// src/application/client-errors/service.ts
+function clip(value, max) {
+  if (value === null || value === void 0) return null;
+  const s = String(value);
+  return s.length > max ? s.slice(0, max) : s;
+}
+__name(clip, "clip");
+var RETENTION_DAYS = 90;
+function createClientErrorsService(deps) {
+  const { db, logger } = deps;
+  const limiter = makeRateLimiter(deps.rateLimit?.max ?? 60, deps.rateLimit?.windowMs ?? 6e4);
+  return {
+    assertAllowed() {
+      if (!limiter.allow()) {
+        throw new RateLimitError(60, "\u062A\u0631\u0627\u0641\u06CC\u06A9 \u06AF\u0632\u0627\u0631\u0634 \u062E\u0637\u0627 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
+      }
+    },
+    async record(input) {
+      const id = crypto.randomUUID();
+      await db.execute(
+        `INSERT INTO client_errors (id, message, source, line_no, col_no, stack, url, app_version)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          clip(input.message, 500) ?? "",
+          clip(input.source, 300),
+          input.line ?? null,
+          input.col ?? null,
+          clip(input.stack, 2e3),
+          clip(input.url, 300),
+          clip(input.app_version, 20)
+        ]
+      );
+      logger.debug("client_error.recorded", { id });
+      return id;
+    },
+    async recent(days, limit) {
+      const windowDays = Number.isFinite(days) ? Math.min(Math.max(Math.trunc(days), 1), 90) : 7;
+      const rowLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 500) : 200;
+      const since = new Date(Date.now() - windowDays * 24 * 3600 * 1e3).toISOString().slice(0, 19).replace("T", " ");
+      const rows = await db.query(
+        `SELECT id, occurred_at, message, source, line_no AS line, col_no AS col, stack, url, app_version
+           FROM client_errors
+          WHERE occurred_at >= ?
+          ORDER BY occurred_at DESC, rowid DESC
+          LIMIT ?`,
+        [since, rowLimit]
+      );
+      const countRow = await db.queryOne(
+        `SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at >= ?`,
+        [since]
+      );
+      return { window_days: windowDays, total: countRow?.n ?? rows.length, errors: rows };
+    },
+    async pruneOld() {
+      const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 3600 * 1e3).toISOString().slice(0, 19).replace("T", " ");
+      const deleted = await db.query(
+        `DELETE FROM client_errors WHERE occurred_at < ? RETURNING id`,
+        [cutoff]
+      );
+      return deleted.length;
+    }
+  };
+}
+__name(createClientErrorsService, "createClientErrorsService");
+
+// src/application/client-errors/routes.ts
+var ClientErrorSchema = external_exports.object({
+  message: external_exports.string().min(1),
+  source: external_exports.string().max(500).nullish(),
+  line: external_exports.number().int().min(0).max(1e7).nullish(),
+  col: external_exports.number().int().min(0).max(1e7).nullish(),
+  stack: external_exports.string().max(16e3).nullish(),
+  url: external_exports.string().max(500).nullish(),
+  app_version: external_exports.string().max(50).nullish()
+});
+var MAX_BODY_BYTES = 16384;
+function registerClientErrorsRoutes(app, service) {
+  app.post("/public/client-errors", async (c) => {
+    const contentLength = Number.parseInt(c.req.header("content-length") ?? "0", 10) || 0;
+    if (contentLength > MAX_BODY_BYTES) {
+      throw new ValidationError("\u062D\u062C\u0645 \u06AF\u0632\u0627\u0631\u0634 \u062E\u0637\u0627 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
+    }
+    service.assertAllowed();
+    const body = ClientErrorSchema.parse(await c.req.json());
+    const id = await service.record(body);
+    c.header("Cache-Control", "no-store");
+    return c.json({ data: { received: 1, id } }, 200);
+  });
+  app.get("/api/client-errors", requireRole("manager"), async (c) => {
+    const days = Number.parseInt(c.req.query("days") ?? "", 10);
+    const limit = Number.parseInt(c.req.query("limit") ?? "", 10);
+    const data = await service.recent(days, limit);
+    return c.json({ data }, 200);
+  });
+}
+__name(registerClientErrorsRoutes, "registerClientErrorsRoutes");
+
 // src/domain/content-score/pure.ts
 var SCORE_FORMULA_VERSION = 1;
 var SCORE_SOURCES = ["exercises", "pathway_templates"];
@@ -54545,35 +54672,6 @@ function registerSessionNoteRoutes(app, service) {
 }
 __name(registerSessionNoteRoutes, "registerSessionNoteRoutes");
 
-// src/application/rum/pure.ts
-function percentile(sorted, p) {
-  if (sorted.length === 0) return 0;
-  const clamped = Math.min(Math.max(p, 0), 1);
-  const idx = (sorted.length - 1) * clamped;
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
-}
-__name(percentile, "percentile");
-function makeRateLimiter(max, windowMs) {
-  let windowStart = 0;
-  let count = 0;
-  return {
-    allow() {
-      const now = Date.now();
-      if (now - windowStart >= windowMs) {
-        windowStart = now;
-        count = 0;
-      }
-      if (count >= max) return false;
-      count += 1;
-      return true;
-    }
-  };
-}
-__name(makeRateLimiter, "makeRateLimiter");
-
 // src/application/rum/service.ts
 var MAX_SUMMARY_ROWS = 2e4;
 function createRumService(deps) {
@@ -54640,6 +54738,15 @@ function createRumService(deps) {
         poor_share: bucket.values.length ? Math.round(bucket.poor / bucket.values.length * 1e3) / 1e3 : 0
       }));
       return { window_days: windowDays, total: rows.length, metrics };
+    },
+    /* ۱.۲۵.۶۶ — rum_events تا امروز بی‌نگه‌دار بود و بی‌کران رشد می‌کرد؛ کرون شبانه سقف ۹۰ روز را اجرا می‌کند */
+    async pruneOld() {
+      const cutoff = new Date(Date.now() - 90 * 864e5).toISOString();
+      const deleted = await db.query(
+        `DELETE FROM rum_events WHERE ts < ? RETURNING id`,
+        [cutoff]
+      );
+      return deleted.length;
     }
   };
 }
@@ -54664,11 +54771,11 @@ var RumEventSchema = external_exports.object({
 var RumPayloadSchema = external_exports.object({
   events: external_exports.array(RumEventSchema).min(1).max(10)
 });
-var MAX_BODY_BYTES = 4096;
+var MAX_BODY_BYTES2 = 4096;
 function registerRumRoutes(app, service) {
   app.post("/public/rum", async (c) => {
     const contentLength = Number.parseInt(c.req.header("content-length") ?? "0", 10) || 0;
-    if (contentLength > MAX_BODY_BYTES) {
+    if (contentLength > MAX_BODY_BYTES2) {
       throw new ValidationError("\u062D\u062C\u0645 \u062F\u0631\u062E\u0648\u0627\u0633\u062A \u062A\u0644\u0647\u200C\u0645\u062A\u0631\u06CC \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
     }
     service.assertAllowed();
@@ -55085,6 +55192,7 @@ function createServices(deps) {
   });
   const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null });
   const rum = createRumService({ db, logger });
+  const clientErrors = createClientErrorsService({ db, logger });
   const centerKpi = createCenterKpiService({ db });
   const networkContent = createNetworkContentService({
     db,
@@ -55105,7 +55213,7 @@ function createServices(deps) {
   });
   const contentScore = createContentScoreService(db, audit);
   const bugReports = createBugReportService(db, audit);
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, contentScore };
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, contentScore };
 }
 __name(createServices, "createServices");
 function createApp(deps) {
@@ -55232,6 +55340,7 @@ function createApp(deps) {
   registerCenterKpiRoutes(app, services.centerKpi);
   registerNetworkContentRoutes(app, services.networkContent);
   registerBugReportRoutes(app, services.bugReports);
+  registerClientErrorsRoutes(app, services.clientErrors);
   registerContentScoreRoutes(app, { contentScore: services.contentScore });
   if (FEATURES.apiKeys) registerKeysRoutes(app, services.keys);
   app.get("/api/conflicts", async (c) => {
@@ -56071,7 +56180,17 @@ async function runDigestCycle(env) {
     logger.error("games.maintenance.failed", { error: err instanceof Error ? err.message : String(err) });
     return null;
   });
-  logger.info("digest.cycle.done", { summary, dispatch, gamesMaintenance });
+  const retention = await (async () => {
+    try {
+      const clientErrors = await services.clientErrors.pruneOld();
+      const rumEvents = await services.rum.pruneOld();
+      return { client_errors: clientErrors, rum_events: rumEvents };
+    } catch (err) {
+      logger.error("retention.failed", { error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  })();
+  logger.info("digest.cycle.done", { summary, dispatch, gamesMaintenance, retention });
 }
 __name(runDigestCycle, "runDigestCycle");
 async function runBatchDispatchCycle(env) {

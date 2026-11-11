@@ -118,6 +118,7 @@
 | 95 | `0095_games_preview_tokens_m267.sql` | توکن پیش‌نمایش فقط-پرسنلی ۳۰دقیقه‌ای (game_preview_tokens؛ فقط هش) |
 | 96 | `0096_games_session_stage_m268.sql` | مرحلهٔ منجمدشدهٔ جلسه (game_sessions.stage_id — نظام پنج‌مرحله‌ای تمرین) |
 | 97 | `0097_games_attempt_integrity_m269.sql` | اعتبار سطح DB جمع‌آوری داده: یگانگی (session_id,item_id) پس از پاک‌سازی تکرارهای تاریخی + ایندکس سوییپ جلسهٔ رهاشده |
+| 0106 | `0106_client_errors.sql` | تکمیل لولهٔ خطای مرورگر روی جدول موجود 0057: `ALTER ADD app_version` + اندیس `idx_client_errors_ver` — مصرف‌کنندهٔ تازه: POST /public/client-errors بی‌احراز (هم‌الگوی /public/rum) + GET /api/client-errors فقط‌مدیر؛ نگه‌داری ۹۰روزه با کرون شبانه؛ ستون user_agent طبق قانون PII هرگز پر نمی‌شود (ردیف‌های 0098–0105 در این جدول ثبت نشده‌اند — بدهی مستندسازی جداگانه) |
 
 ## شماره‌های تکراری
 

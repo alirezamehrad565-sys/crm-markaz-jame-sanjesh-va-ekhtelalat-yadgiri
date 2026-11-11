@@ -118,7 +118,19 @@ async function runDigestCycle(env: Env): Promise<void> {
     logger.error('games.maintenance.failed', { error: err instanceof Error ? err.message : String(err) });
     return null;
   });
-  logger.info('digest.cycle.done', { summary, dispatch, gamesMaintenance });
+  // ۱.۲۵.۶۶ — نگه‌داری تله‌متری: خطاهای کلاینت (جدول 0106) و رویدادهای RUM بیشتر از ۹۰ روز حذف می‌شوند؛
+  // هر دو جدول تا امروز بی‌پاکسازی بودند و بی‌کران رشد می‌کردند
+  const retention = await (async () => {
+    try {
+      const clientErrors = await services.clientErrors.pruneOld();
+      const rumEvents = await services.rum.pruneOld();
+      return { client_errors: clientErrors, rum_events: rumEvents };
+    } catch (err: unknown) {
+      logger.error('retention.failed', { error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  })();
+  logger.info('digest.cycle.done', { summary, dispatch, gamesMaintenance, retention });
 }
 
 async function runBatchDispatchCycle(env: Env): Promise<void> {
