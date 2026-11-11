@@ -28,7 +28,8 @@
     "update:dry": "node scripts/update-remote.mjs --dry-run",
     "backup:remote": "node scripts/update-remote.mjs --backup-only",
     "restore:drill": "node scripts/restore-drill.mjs",
-    "backup:local": "node scripts/ops/export-local-backup.mjs"
+    "backup:local": "node scripts/ops/export-local-backup.mjs",
+    "load:baseline": "node scripts/load/baseline.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",
