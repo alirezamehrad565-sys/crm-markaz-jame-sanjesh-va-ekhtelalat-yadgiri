@@ -6,6 +6,7 @@ import {
   faDigits
 } from '@core/shared';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import type { DocsDeps, DocCategory, DocFileBytesInput, DocFileMeta, DocListOpts, DocRecord, DocsService, NewDocInput, UpdateDocInput } from './types';
 import { DOC_CATEGORIES } from './types';
 
@@ -144,14 +145,17 @@ export function createDocsService(deps: DocsDeps): DocsService {
   async function filesOfDocs(docIds: string[]): Promise<Map<string, DocFileMeta[]>> {
     const map = new Map<string, DocFileMeta[]>();
     if (docIds.length === 0) return map;
-    const ph = docIds.map(() => '?').join(', ');
     // ۱.۱۲.۰ — جدیدترین فایل بالا + زمان بارگذاری در متادیتا؛ ترتیب قدیمی (صعودی) کاربر را
     // به ردیف کهنهٔ هم‌نام می‌رساند (گزارش «دانلود فایل دیگر» — ردیف‌های تکراری واقعی در تولید)
-    const rows = await db.query<FileRow>(
-      `SELECT id, doc_id, file_key, file_name, file_mime, file_size, created_at
-         FROM docs_files WHERE doc_id IN (${ph}) ORDER BY created_at DESC, rowid DESC`,
-      docIds
-    );
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی؛ هر برگه در یک تکه است پس ترتیب فایل‌های هر برگه حفظ می‌شود */
+    const rows: FileRow[] = [];
+    for (const chunk of inParamChunks(docIds)) {
+      rows.push(...await db.query<FileRow>(
+        `SELECT id, doc_id, file_key, file_name, file_mime, file_size, created_at
+         FROM docs_files WHERE doc_id IN (${inPlaceholders(chunk.length)}) ORDER BY created_at DESC, rowid DESC`,
+        chunk
+      ));
+    }
     for (const r of rows) {
       const list = map.get(r.doc_id) ?? [];
       list.push({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size, uploadedAt: r.created_at });

@@ -4,6 +4,7 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import { rowToAppointment, rowToStudent, selectAppointmentById, selectAppointments, selectStudentsOfAppointments, APPOINTMENT_STUDENT_QUERY_CHUNK } from './repository';
 import type { AppointmentRow, AppointmentStudentRow } from './repository';
 import type { Appointment, AppointmentDeps, AppointmentLifecycleObserver, AppointmentService, AppointmentUpdatePatch, CopyWeekInput, CopyWeekResult, ListFilters, MyStudent, NewAppointmentInput } from './types';
@@ -46,17 +47,20 @@ async function assertStudentsInScope(
   studentIds: string[]
 ): Promise<void> {
   if (actor.role !== 'therapist' || studentIds.length === 0) return;
-  const placeholders = studentIds.map(() => '?').join(', ');
-  const outside = await reader.query<{ id: string }>(
-    `SELECT s.id FROM students s
-      WHERE s.id IN (${placeholders})
+  /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی: studentIds از بدنهٔ درخواست است (ویرایش دسته‌جمعی می‌تواند >۱۰۰ باشد — سقف ۱۰۰ بایند D1)؛ بیرون‌مرزی = اجتماع بیرونِ هر تکه */
+  const outside: { id: string }[] = [];
+  for (const chunk of inParamChunks(studentIds)) {
+    outside.push(...await reader.query<{ id: string }>(
+      `SELECT s.id FROM students s
+      WHERE s.id IN (${inPlaceholders(chunk.length)})
         AND NOT EXISTS (
           SELECT 1 FROM appointments a
             JOIN appointment_students asn ON asn.appointment_id = a.id
            WHERE a.staff_id = ? AND asn.student_id = s.id
         )`,
-    [...studentIds, actor.staffId]
-  );
+      [...chunk, actor.staffId]
+    ));
+  }
   if (outside.length > 0) {
     throw new ForbiddenError('نوبت‌دهی درمانگر فقط برای دانش‌آموزانِ خودِ او مجاز است');
   }

@@ -7,6 +7,7 @@ import type { DbClient } from '@core/db';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { SettingsService } from '@app/settings';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import type {
   DocBotReply,
   DocRecipient,
@@ -172,13 +173,18 @@ export function createDocumentRequestService(deps: DocumentRequestDeps) {
   }
 
   async function newestOpenRequest(studentIds: string[], needRecipient: DocRecipient | null): Promise<{ id: string; student_id: string } | null> {
-    const placeholders = studentIds.map(() => '?').join(', ');
-    const rows = await db.query<{ id: string; student_id: string; templates: string }>(
-      `SELECT id, student_id, templates FROM document_requests
-        WHERE status != 'closed' AND student_id IN (${placeholders})
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی + مرتب‌سازی سراسری پس از ادغام (ORDER BY+LIMIT سراسری بین تکه‌ها معنا ندارد) */
+    const rows: { id: string; student_id: string; templates: string; sent_at: string }[] = [];
+    for (const chunk of inParamChunks(studentIds)) {
+      rows.push(...await db.query<{ id: string; student_id: string; templates: string; sent_at: string }>(
+        `SELECT id, student_id, templates, sent_at FROM document_requests
+        WHERE status != 'closed' AND student_id IN (${inPlaceholders(chunk.length)})
         ORDER BY sent_at DESC, id DESC LIMIT 25`,
-      studentIds
-    );
+        chunk
+      ));
+    }
+    /* مرتب‌سازی سراسری هم‌قرارداد ORDER BY sent_at DESC, id DESC سرور */
+    rows.sort((a, b) => (a.sent_at !== b.sent_at ? (a.sent_at < b.sent_at ? 1 : -1) : a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
     for (const row of rows) {
       if (!needRecipient) return row;
       if (parseStoredDocPayload(row.templates).recipients.includes(needRecipient)) return row;

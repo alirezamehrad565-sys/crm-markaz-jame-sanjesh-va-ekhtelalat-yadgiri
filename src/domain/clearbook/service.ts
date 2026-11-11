@@ -14,6 +14,7 @@ import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
 import type { ObjectStore } from '@core/storage';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import { sanitizeFilename } from '@domain/exercise-bank/pure';
 import {
   buildSeedPlans,
@@ -168,11 +169,14 @@ export function createClearbookService(deps: ClearbookDeps): ClearbookService {
   async function tagsOfEntries(entryIds: string[]): Promise<Map<string, string[]>> {
     const map = new Map<string, string[]>();
     if (entryIds.length === 0) return map;
-    const ph = entryIds.map(() => '?').join(', ');
-    const rows = await db.query<{ entry_id: string; tag: string }>(
-      `SELECT entry_id, tag FROM clearbook_entry_tags WHERE entry_id IN (${ph}) ORDER BY rowid`,
-      entryIds
-    );
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی (سقف ۱۰۰ بایند D1)؛ هر ورک همیشه در یک تکه است پس ترتیب تگ‌های هر ورک حفظ می‌شود */
+    const rows: { entry_id: string; tag: string }[] = [];
+    for (const chunk of inParamChunks(entryIds)) {
+      rows.push(...await db.query<{ entry_id: string; tag: string }>(
+        `SELECT entry_id, tag FROM clearbook_entry_tags WHERE entry_id IN (${inPlaceholders(chunk.length)}) ORDER BY rowid`,
+        chunk
+      ));
+    }
     for (const r of rows) {
       const list = map.get(r.entry_id) ?? [];
       list.push(r.tag);
@@ -184,12 +188,15 @@ export function createClearbookService(deps: ClearbookDeps): ClearbookService {
   async function attachmentsOfEntries(entryIds: string[]): Promise<Map<string, ClearbookAttachmentMeta[]>> {
     const map = new Map<string, ClearbookAttachmentMeta[]>();
     if (entryIds.length === 0) return map;
-    const ph = entryIds.map(() => '?').join(', ');
-    const rows = await db.query<AttachmentRow>(
-      `SELECT id, entry_id, file_key, file_name, file_mime, file_size, kind, caption, created_at
-         FROM clearbook_attachments WHERE entry_id IN (${ph}) ORDER BY created_at, rowid`,
-      entryIds
-    );
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی؛ هر ورک در یک تکه است پس ترتیب پیوست‌های هر ورک حفظ می‌شود */
+    const rows: AttachmentRow[] = [];
+    for (const chunk of inParamChunks(entryIds)) {
+      rows.push(...await db.query<AttachmentRow>(
+        `SELECT id, entry_id, file_key, file_name, file_mime, file_size, kind, caption, created_at
+           FROM clearbook_attachments WHERE entry_id IN (${inPlaceholders(chunk.length)}) ORDER BY created_at, rowid`,
+        chunk
+      ));
+    }
     for (const r of rows) {
       const list = map.get(r.entry_id) ?? [];
       list.push({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size, kind: r.kind, caption: r.caption });
@@ -733,11 +740,14 @@ export function createClearbookService(deps: ClearbookDeps): ClearbookService {
       if (targetExists) throw new ConflictError('سال مقصد از قبل تقویم دارد — ابتدا فازهای آن سال را حذف کنید');
       const shift = toYear - fromYear;
       const sourceIds = source.map((r) => r.id);
-      const ph = sourceIds.map(() => '?').join(', ');
-      const rows = await db.query<PlanRow>(
-        `SELECT ${PLAN_COLS} FROM clearbook_plans p JOIN staff s ON s.id = p.created_by WHERE p.id IN (${ph})`,
-        sourceIds
-      );
+      /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی: سال مبدأ می‌تواند صدها فاز داشته باشد (سقف ۱۰۰ بایند D1) */
+      const rows: PlanRow[] = [];
+      for (const chunk of inParamChunks(sourceIds)) {
+        rows.push(...await db.query<PlanRow>(
+          `SELECT ${PLAN_COLS} FROM clearbook_plans p JOIN staff s ON s.id = p.created_by WHERE p.id IN (${inPlaceholders(chunk.length)})`,
+          chunk
+        ));
+      }
       await db.transaction(async (tx) => {
         for (const row of rows) {
           const id = crypto.randomUUID();

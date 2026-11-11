@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.71";
+var APP_VERSION = "1.25.72";
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -26096,6 +26096,20 @@ function createConflictEngine(deps) {
 }
 __name(createConflictEngine, "createConflictEngine");
 
+// src/core/db/in-chunks.ts
+var IN_PARAM_CHUNK = 90;
+function inParamChunks(items, max = IN_PARAM_CHUNK) {
+  if (items.length === 0) return [];
+  const chunks = [];
+  for (let i = 0; i < items.length; i += max) chunks.push(items.slice(i, i + max));
+  return chunks;
+}
+__name(inParamChunks, "inParamChunks");
+function inPlaceholders(count) {
+  return new Array(count).fill("?").join(", ");
+}
+__name(inPlaceholders, "inPlaceholders");
+
 // src/domain/appointment-core/repository.ts
 function rowToAppointment(row, students) {
   return {
@@ -26217,11 +26231,13 @@ async function copyWeek(ctx) {
     return { batchId: null, copied: 0, conflicts: [], dryRun: input2.dryRun ?? false };
   }
   const ids = sourceRows.map((r) => r.id);
-  const placeholders = ids.map(() => "?").join(",");
-  const studentRows = await db.query(
-    `SELECT appointment_id, student_id, facet_id FROM appointment_students WHERE appointment_id IN (${placeholders})`,
-    ids
-  );
+  const studentRows = [];
+  for (const chunk of inParamChunks(ids)) {
+    studentRows.push(...await db.query(
+      `SELECT appointment_id, student_id, facet_id FROM appointment_students WHERE appointment_id IN (${inPlaceholders(chunk.length)})`,
+      chunk
+    ));
+  }
   const studentsByAppt = /* @__PURE__ */ new Map();
   for (const s of studentRows) {
     const list = studentsByAppt.get(s.appointment_id) ?? [];
@@ -26304,21 +26320,24 @@ async function undoCopyWeek(ctx) {
       throw new ForbiddenError("\u0628\u0631\u06AF\u0631\u062F\u0627\u0646\u06CC \u062F\u0633\u062A\u0647\u0654 \u06A9\u067E\u06CC \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u062E\u0648\u062F\u0650 \u0634\u0645\u0627 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
     }
   }
-  const placeholders = batchRows.map(() => "?").join(",");
-  const attended = await db.query(
-    `SELECT DISTINCT appointment_id FROM appointment_students
-      WHERE appointment_id IN (${placeholders}) AND attendance != 'pending'`,
-    batchRows.map((r) => r.id)
-  );
+  const attended = [];
+  for (const chunk of inParamChunks(batchRows.map((r) => r.id))) {
+    attended.push(...await db.query(
+      `SELECT DISTINCT appointment_id FROM appointment_students
+      WHERE appointment_id IN (${inPlaceholders(chunk.length)}) AND attendance != 'pending'`,
+      chunk
+    ));
+  }
   const blockedIds = new Set(attended.map((r) => r.appointment_id));
   const removable = batchRows.map((r) => r.id).filter((id) => !blockedIds.has(id));
   if (removable.length === 0) {
     return { removed: 0 };
   }
-  const removablePlaceholders = removable.map(() => "?").join(",");
   await db.transaction(async (tx) => {
-    await tx.execute(`DELETE FROM appointment_students WHERE appointment_id IN (${removablePlaceholders})`, removable);
-    await tx.execute(`DELETE FROM appointments WHERE id IN (${removablePlaceholders})`, removable);
+    for (const chunk of inParamChunks(removable)) {
+      await tx.execute(`DELETE FROM appointment_students WHERE appointment_id IN (${inPlaceholders(chunk.length)})`, chunk);
+      await tx.execute(`DELETE FROM appointments WHERE id IN (${inPlaceholders(chunk.length)})`, chunk);
+    }
     await audit.logInTransaction(tx, {
       actorId: actor.staffId,
       action: "appointment.copy_week.undo",
@@ -26346,17 +26365,19 @@ function assertAppointmentScope(actor, targetStaffId) {
 __name(assertAppointmentScope, "assertAppointmentScope");
 async function assertStudentsInScope(reader, actor, studentIds) {
   if (actor.role !== "therapist" || studentIds.length === 0) return;
-  const placeholders = studentIds.map(() => "?").join(", ");
-  const outside = await reader.query(
-    `SELECT s.id FROM students s
-      WHERE s.id IN (${placeholders})
+  const outside = [];
+  for (const chunk of inParamChunks(studentIds)) {
+    outside.push(...await reader.query(
+      `SELECT s.id FROM students s
+      WHERE s.id IN (${inPlaceholders(chunk.length)})
         AND NOT EXISTS (
           SELECT 1 FROM appointments a
             JOIN appointment_students asn ON asn.appointment_id = a.id
            WHERE a.staff_id = ? AND asn.student_id = s.id
         )`,
-    [...studentIds, actor.staffId]
-  );
+      [...chunk, actor.staffId]
+    ));
+  }
   if (outside.length > 0) {
     throw new ForbiddenError("\u0646\u0648\u0628\u062A\u200C\u062F\u0647\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646\u0650 \u062E\u0648\u062F\u0650 \u0627\u0648 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
   }
@@ -29501,18 +29522,31 @@ __name(parseCompositeRef, "parseCompositeRef");
 
 // src/application/student-timeline/service.ts
 function createStudentTimelineService(db) {
-  function inList(ids) {
-    return ids.map(() => "?").join(", ");
+  async function auditsIn(resourceType, resourceIds, extraWhere) {
+    const out = [];
+    for (const chunk of inParamChunks(resourceIds)) {
+      out.push(...await db.query(
+        `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
+           FROM audit_log
+          WHERE resource_type = '${resourceType}' AND resource_id IN (${inPlaceholders(chunk.length)})${extraWhere}
+          ORDER BY created_at ASC`,
+        chunk
+      ));
+    }
+    return out;
   }
-  __name(inList, "inList");
+  __name(auditsIn, "auditsIn");
   async function actorNames(actorIds) {
     const unique = [...new Set(actorIds)];
     const map2 = /* @__PURE__ */ new Map();
     if (unique.length === 0) return map2;
-    const rows = await db.query(
-      `SELECT id, full_name FROM staff WHERE id IN (${inList(unique)})`,
-      unique
-    );
+    const rows = [];
+    for (const chunk of inParamChunks(unique)) {
+      rows.push(...await db.query(
+        `SELECT id, full_name FROM staff WHERE id IN (${inPlaceholders(chunk.length)})`,
+        chunk
+      ));
+    }
     for (const r of rows) map2.set(r.id, r.full_name);
     return map2;
   }
@@ -29541,14 +29575,7 @@ function createStudentTimelineService(db) {
         [studentId]
       );
       const apptIds = appts.map((a) => a.id);
-      const moveAudits = apptIds.length ? await db.query(
-        `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
-               FROM audit_log
-              WHERE resource_type = 'appointment' AND action = 'appointment.move'
-                AND resource_id IN (${inList(apptIds)})
-              ORDER BY created_at ASC`,
-        apptIds
-      ) : [];
+      const moveAudits = apptIds.length ? await auditsIn("appointment", apptIds, ` AND action = 'appointment.move'`) : [];
       const noteAudits = await db.query(
         `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
            FROM audit_log
@@ -29563,26 +29590,13 @@ function createStudentTimelineService(db) {
         [studentId]
       );
       const fuIds = followups.map((f) => f.id);
-      const followupAudits = fuIds.length ? await db.query(
-        `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
-               FROM audit_log
-              WHERE resource_type = 'followup' AND resource_id IN (${inList(fuIds)})
-              ORDER BY created_at ASC`,
-        fuIds
-      ) : [];
+      const followupAudits = fuIds.length ? await auditsIn("followup", fuIds, "") : [];
       const waitlistRows = await db.query(
         `SELECT id, created_at FROM waitlist WHERE student_id = ?`,
         [studentId]
       );
       const wlIds = waitlistRows.map((w) => w.id);
-      const waitlistAudits = wlIds.length ? await db.query(
-        `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
-               FROM audit_log
-              WHERE resource_type = 'waitlist' AND resource_id IN (${inList(wlIds)})
-                AND action IN ('waitlist.waiting_set', 'waitlist.schedule', 'waitlist.admitted')
-              ORDER BY created_at ASC`,
-        wlIds
-      ) : [];
+      const waitlistAudits = wlIds.length ? await auditsIn("waitlist", wlIds, ` AND action IN ('waitlist.waiting_set', 'waitlist.schedule', 'waitlist.admitted')`) : [];
       const notifications = await db.query(
         `SELECT id, template, channel, sent_at
            FROM notifications
@@ -29598,14 +29612,7 @@ function createStudentTimelineService(db) {
         [studentId]
       );
       const ciIds = committeeItems.map((ci) => ci.id);
-      const committeeAudits = ciIds.length ? await db.query(
-        `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
-               FROM audit_log
-              WHERE resource_type = 'committee_item' AND resource_id IN (${inList(ciIds)})
-                AND action IN ('committee.item.created', 'committee.item.updated')
-              ORDER BY created_at ASC`,
-        ciIds
-      ) : [];
+      const committeeAudits = ciIds.length ? await auditsIn("committee_item", ciIds, ` AND action IN ('committee.item.created', 'committee.item.updated')`) : [];
       const assignments = await db.query(
         `SELECT a.id, e.title AS exercise_title
            FROM exercise_assignments a
@@ -29614,14 +29621,7 @@ function createStudentTimelineService(db) {
         [studentId]
       );
       const asgIds = assignments.map((a) => a.id);
-      const exerciseAudits = asgIds.length ? await db.query(
-        `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
-               FROM audit_log
-              WHERE resource_type = 'exercise_assignment' AND resource_id IN (${inList(asgIds)})
-                AND action IN ('exercise.assigned', 'exercise.submitted', 'exercise.corrected')
-              ORDER BY created_at ASC`,
-        asgIds
-      ) : [];
+      const exerciseAudits = asgIds.length ? await auditsIn("exercise_assignment", asgIds, ` AND action IN ('exercise.assigned', 'exercise.submitted', 'exercise.corrected')`) : [];
       const caseEvents = await db.query(
         `SELECT e.id, e.occurred_at, e.status, e.summary, e.analysis, s.full_name AS staff_name,
                 e.filled_by_chat_id, e.payload, t.title AS type_title, t.icon AS type_icon, t.category AS type_category
@@ -30073,13 +30073,16 @@ function createSpecialNeedsService(deps) {
   async function openFollowupsOf(studentIds) {
     const map2 = /* @__PURE__ */ new Map();
     if (studentIds.length === 0) return map2;
-    const ph = studentIds.map(() => "?").join(", ");
-    const rows = await db.query(
-      `SELECT id, student_id, due_at, created_at
+    const rows = [];
+    for (const chunk of inParamChunks(studentIds)) {
+      rows.push(...await db.query(
+        `SELECT id, student_id, due_at, created_at
          FROM followups
-        WHERE student_id IN (${ph}) AND status IN (${FOLLOWUP_OPEN_STATUSES.map(() => "?").join(", ")})`,
-      [...studentIds, ...FOLLOWUP_OPEN_STATUSES]
-    );
+        WHERE student_id IN (${inPlaceholders(chunk.length)}) AND status IN (${FOLLOWUP_OPEN_STATUSES.map(() => "?").join(", ")})`,
+        [...chunk, ...FOLLOWUP_OPEN_STATUSES]
+        // IN-bounded: FOLLOWUP_OPEN_STATUSES ثابت ماژول است (۱.۲۵.۷۲)
+      ));
+    }
     for (const r of rows) {
       const list = map2.get(r.student_id) ?? [];
       list.push({ id: r.id, dueAt: isoOf(r.due_at), createdAt: isoOf(r.created_at) ?? r.created_at });
@@ -30091,17 +30094,19 @@ function createSpecialNeedsService(deps) {
   async function sessionsOf(studentIds, nowIso) {
     const map2 = /* @__PURE__ */ new Map();
     if (studentIds.length === 0) return map2;
-    const ph = studentIds.map(() => "?").join(", ");
-    const rows = await db.query(
-      `SELECT a_s.student_id AS student_id,
+    const rows = [];
+    for (const chunk of inParamChunks(studentIds)) {
+      rows.push(...await db.query(
+        `SELECT a_s.student_id AS student_id,
               MAX(CASE WHEN a.start_at <= ? AND a.status != 'cancelled' THEN a.start_at END) AS last_past,
               MIN(CASE WHEN a.start_at > ? AND a.status = 'scheduled' THEN a.start_at END) AS next_upcoming
          FROM appointment_students a_s
          JOIN appointments a ON a.id = a_s.appointment_id
-        WHERE a_s.student_id IN (${ph})
+        WHERE a_s.student_id IN (${inPlaceholders(chunk.length)})
         GROUP BY a_s.student_id`,
-      [nowIso, nowIso, ...studentIds]
-    );
+        [nowIso, nowIso, ...chunk]
+      ));
+    }
     for (const r of rows) map2.set(r.student_id, r);
     return map2;
   }
@@ -34959,13 +34964,16 @@ function createDocumentRequestService(deps) {
   }
   __name(classStudentIds, "classStudentIds");
   async function newestOpenRequest(studentIds, needRecipient) {
-    const placeholders = studentIds.map(() => "?").join(", ");
-    const rows = await db.query(
-      `SELECT id, student_id, templates FROM document_requests
-        WHERE status != 'closed' AND student_id IN (${placeholders})
+    const rows = [];
+    for (const chunk of inParamChunks(studentIds)) {
+      rows.push(...await db.query(
+        `SELECT id, student_id, templates, sent_at FROM document_requests
+        WHERE status != 'closed' AND student_id IN (${inPlaceholders(chunk.length)})
         ORDER BY sent_at DESC, id DESC LIMIT 25`,
-      studentIds
-    );
+        chunk
+      ));
+    }
+    rows.sort((a, b) => a.sent_at !== b.sent_at ? a.sent_at < b.sent_at ? 1 : -1 : a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
     for (const row of rows) {
       if (!needRecipient) return row;
       if (parseStoredDocPayload(row.templates).recipients.includes(needRecipient)) return row;
@@ -38883,6 +38891,7 @@ function createCaseEventsService(deps) {
         `${EVENT_SELECT} AND e.appointment_id IN (${ids.map(() => "?").join(", ")})
           ORDER BY e.occurred_at DESC, e.created_at DESC`,
         ids
+        // IN-bounded: ids با .slice(0, 100) پیش از IN محدود شده‌اند (۱.۲۵.۷۲)
       );
       const map2 = /* @__PURE__ */ new Map();
       for (const r of rows) {
@@ -39381,6 +39390,7 @@ function createCaseEventsService(deps) {
             AND e.deleted_at IS NULL
           ORDER BY e.occurred_at DESC LIMIT 100`,
         [...FAMILY_SURVEY_EVENT_KEYS]
+        // IN-bounded: FAMILY_SURVEY_EVENT_KEYS ثابت ماژول است (۱.۲۵.۷۲)
       );
       const nowMs = now().getTime();
       return rows.map((r) => {
@@ -43112,6 +43122,7 @@ function createGamesService(deps) {
     const row = await db.queryOne(
       `SELECT COUNT(*) AS n FROM game_missions m JOIN game_prescriptions p ON p.id = m.prescription_id
        WHERE p.child_id = ? AND m.scheduled_for = ? AND m.status IN (${statuses.map(() => "?").join(",")})`,
+      // IN-bounded: statuses ثابت ماژول است
       [childId, scheduledFor, ...statuses]
     );
     return row?.n ?? 0;
@@ -43157,11 +43168,14 @@ function createGamesService(deps) {
     }
     const linkByMission = /* @__PURE__ */ new Map();
     if (rows.length > 0) {
-      const liveLinks = await db.query(
-        `SELECT mission_id, jti, expires_at FROM game_links
-         WHERE mission_id IN (${rows.map(() => "?").join(",")}) AND revoked_at IS NULL AND expires_at > ?`,
-        [...rows.map((r) => r.id), isoOf2(now())]
-      );
+      const liveLinks = [];
+      for (const chunk of inParamChunks(rows.map((r) => r.id))) {
+        liveLinks.push(...await db.query(
+          `SELECT mission_id, jti, expires_at FROM game_links
+         WHERE mission_id IN (${inPlaceholders(chunk.length)}) AND revoked_at IS NULL AND expires_at > ?`,
+          [...chunk, isoOf2(now())]
+        ));
+      }
       for (const l of liveLinks) linkByMission.set(l.mission_id, { jti: l.jti, expiresAt: l.expires_at });
     }
     return rows.map((row) => ({
@@ -43981,10 +43995,13 @@ function createGamesService(deps) {
   async function getSessionDetail(missionId) {
     const sessions = await db.query(`SELECT * FROM game_sessions WHERE mission_id = ? ORDER BY created_at DESC`, [missionId]);
     const sessionIds = sessions.map((s) => s.id);
-    const attempts = sessionIds.length ? await db.query(
-      `SELECT * FROM game_attempts WHERE session_id IN (${sessionIds.map(() => "?").join(",")}) ORDER BY created_at`,
-      sessionIds
-    ) : [];
+    const attempts = [];
+    for (const chunk of inParamChunks(sessionIds)) {
+      attempts.push(...await db.query(
+        `SELECT * FROM game_attempts WHERE session_id IN (${inPlaceholders(chunk.length)}) ORDER BY created_at`,
+        chunk
+      ));
+    }
     return {
       sessions: sessions.map((s) => ({
         id: s.id,
@@ -44039,10 +44056,13 @@ function createGamesService(deps) {
     );
     const missionRefOf = new Map(missionRows.map((m) => [m.id, m.mission_ref]));
     const sessionIds = sessions.map((s) => s.id);
-    const attempts = sessionIds.length ? await db.query(
-      `SELECT * FROM game_attempts WHERE session_id IN (${sessionIds.map(() => "?").join(",")}) ORDER BY created_at`,
-      sessionIds
-    ) : [];
+    const attempts = [];
+    for (const chunk of inParamChunks(sessionIds)) {
+      attempts.push(...await db.query(
+        `SELECT * FROM game_attempts WHERE session_id IN (${inPlaceholders(chunk.length)}) ORDER BY created_at`,
+        chunk
+      ));
+    }
     const reportSessions = [];
     const comparisonInput = [];
     for (const s of sessions) {
@@ -55040,12 +55060,15 @@ function createClinicalEngineService(deps) {
   async function loadSessionsOfPaths(pathIds) {
     const map2 = /* @__PURE__ */ new Map();
     if (pathIds.length === 0) return map2;
-    const rows = await db.query(
-      `SELECT * FROM pathway_sessions
-        WHERE pathway_id IN (${pathIds.map(() => "?").join(", ")})
+    const rows = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      rows.push(...await db.query(
+        `SELECT * FROM pathway_sessions
+        WHERE pathway_id IN (${inPlaceholders(chunk.length)})
         ORDER BY ord ASC, created_at ASC`,
-      pathIds
-    );
+        chunk
+      ));
+    }
     for (const r of rows) {
       const list = map2.get(r.pathway_id);
       const rec = sessionRowToRecord(r);
@@ -55097,13 +55120,18 @@ function createClinicalEngineService(deps) {
   async function loadProbeSummariesOfPaths(pathIds) {
     const map2 = /* @__PURE__ */ new Map();
     if (pathIds.length === 0) return map2;
-    const rows = await db.query(
-      `SELECT pathway_id, metric, value, taken_at FROM pathway_probes
-        WHERE pathway_id IN (${pathIds.map(() => "?").join(", ")})
+    const rows = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      rows.push(...await db.query(
+        `SELECT pathway_id, metric, value, taken_at FROM pathway_probes
+        WHERE pathway_id IN (${inPlaceholders(chunk.length)})
         ORDER BY taken_at DESC
         LIMIT 400`,
-      pathIds
-    );
+        chunk
+      ));
+    }
+    rows.sort((a, b) => a.taken_at < b.taken_at ? 1 : a.taken_at > b.taken_at ? -1 : 0);
+    rows.length = Math.min(rows.length, 400);
     const byPathMetric = /* @__PURE__ */ new Map();
     const counts = /* @__PURE__ */ new Map();
     for (const r of rows) {
@@ -56659,6 +56687,7 @@ function createOtEngineService(deps) {
           AND t.key IN (${keys.map(() => "?").join(", ")})
         ORDER BY e.occurred_at DESC, e.created_at DESC
         LIMIT 200`,
+      // IN-bounded: keys از ثابت‌های ماژول (BEHAVIORAL/WECHSLER/SUSPICION) است
       [studentId, ...keys]
     );
     return rows.map((r) => ({
@@ -57042,20 +57071,26 @@ function createOtEngineService(deps) {
     }
     const ids = [...bySkill.keys()];
     if (ids.length === 0) throw new ValidationError("\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0645\u0647\u0627\u0631\u062A \u0628\u0627 \u0648\u0636\u0639\u06CC\u062A \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
-    const validRows = await db.query(
-      `SELECT id FROM ot_skills WHERE id IN (${ids.map(() => "?").join(", ")})`,
-      ids
-    );
+    const validRows = [];
+    for (const chunk of inParamChunks(ids)) {
+      validRows.push(...await db.query(
+        `SELECT id FROM ot_skills WHERE id IN (${inPlaceholders(chunk.length)})`,
+        chunk
+      ));
+    }
     const valid = new Set(validRows.map((r) => r.id));
     const unknown2 = ids.filter((x) => !valid.has(x));
     if (unknown2.length > 0) throw new ValidationError(`\u0634\u0646\u0627\u0633\u0647\u0654 \u0645\u0647\u0627\u0631\u062A \u0646\u0627\u0645\u0639\u062A\u0628\u0631: ${unknown2[0]}`);
-    const prevRows = await db.query(
-      `SELECT skill_id, status
+    const prevRows = [];
+    for (const chunk of inParamChunks(ids)) {
+      prevRows.push(...await db.query(
+        `SELECT skill_id, status
          FROM ot_progress
-        WHERE student_id = ? AND skill_id IN (${ids.map(() => "?").join(", ")})
+        WHERE student_id = ? AND skill_id IN (${inPlaceholders(chunk.length)})
         ORDER BY occurred_at ASC, created_at ASC, rowid ASC`,
-      [studentId, ...ids]
-    );
+        [studentId, ...chunk]
+      ));
+    }
     const prevLatest = /* @__PURE__ */ new Map();
     for (const r of prevRows) prevLatest.set(r.skill_id, r.status);
     const masteryConfirmed = ids.filter((id) => {
@@ -57531,11 +57566,13 @@ function createTagService(deps) {
         if (!student) throw new NotFoundError("\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632");
         const unique = [...new Set(tagIds)];
         if (unique.length > 0) {
-          const placeholders = unique.map(() => "?").join(", ");
-          const found = await tx.query(
-            `SELECT id FROM tags WHERE active = 1 AND id IN (${placeholders})`,
-            unique
-          );
+          const found = [];
+          for (const chunk of inParamChunks(unique)) {
+            found.push(...await tx.query(
+              `SELECT id FROM tags WHERE active = 1 AND id IN (${inPlaceholders(chunk.length)})`,
+              chunk
+            ));
+          }
           if (found.length !== unique.length) throw new NotFoundError("\u0628\u0631\u0686\u0633\u0628");
         }
         const currentRows = await tx.query(
@@ -57544,11 +57581,16 @@ function createTagService(deps) {
             WHERE st.student_id = ? AND t.active = 1`,
           [studentId]
         );
-        const nextRows = unique.length > 0 ? await tx.query(
-          `SELECT t.id, t.name, t.category, t.color, t.active
-                   FROM tags t WHERE t.active = 1 AND t.id IN (${unique.map(() => "?").join(", ")})`,
-          unique
-        ) : [];
+        const nextRows = [];
+        if (unique.length > 0) {
+          for (const chunk of inParamChunks(unique)) {
+            nextRows.push(...await tx.query(
+              `SELECT t.id, t.name, t.category, t.color, t.active
+                   FROM tags t WHERE t.active = 1 AND t.id IN (${inPlaceholders(chunk.length)})`,
+              chunk
+            ));
+          }
+        }
         const current = currentRows.map(rowToRef);
         const next = nextRows.map(rowToRef);
         const diff = diffStudentTags(current, next);
@@ -58344,14 +58386,16 @@ function createKnowledgeService(deps) {
   async function attachmentsForItems(itemIds) {
     const map2 = /* @__PURE__ */ new Map();
     if (itemIds.length === 0) return map2;
-    const placeholders = itemIds.map(() => "?").join(", ");
-    const rows = await db.query(
-      `SELECT id, knowledge_id, file_key, file_name, file_mime, file_size, created_at
-         FROM knowledge_attachments
-        WHERE knowledge_id IN (${placeholders})
+    const rows = [];
+    for (const chunk of inParamChunks(itemIds)) {
+      rows.push(...await db.query(
+        `SELECT id, knowledge_id, file_key, file_name, file_mime, file_size, created_at
+           FROM knowledge_attachments
+        WHERE knowledge_id IN (${inPlaceholders(chunk.length)})
         ORDER BY created_at, rowid`,
-      itemIds
-    );
+        chunk
+      ));
+    }
     for (const r of rows) {
       const list = map2.get(r.knowledge_id) ?? [];
       list.push({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size });
@@ -59036,11 +59080,13 @@ function createClearbookService(deps) {
   async function tagsOfEntries(entryIds) {
     const map2 = /* @__PURE__ */ new Map();
     if (entryIds.length === 0) return map2;
-    const ph = entryIds.map(() => "?").join(", ");
-    const rows = await db.query(
-      `SELECT entry_id, tag FROM clearbook_entry_tags WHERE entry_id IN (${ph}) ORDER BY rowid`,
-      entryIds
-    );
+    const rows = [];
+    for (const chunk of inParamChunks(entryIds)) {
+      rows.push(...await db.query(
+        `SELECT entry_id, tag FROM clearbook_entry_tags WHERE entry_id IN (${inPlaceholders(chunk.length)}) ORDER BY rowid`,
+        chunk
+      ));
+    }
     for (const r of rows) {
       const list = map2.get(r.entry_id) ?? [];
       list.push(r.tag);
@@ -59052,12 +59098,14 @@ function createClearbookService(deps) {
   async function attachmentsOfEntries(entryIds) {
     const map2 = /* @__PURE__ */ new Map();
     if (entryIds.length === 0) return map2;
-    const ph = entryIds.map(() => "?").join(", ");
-    const rows = await db.query(
-      `SELECT id, entry_id, file_key, file_name, file_mime, file_size, kind, caption, created_at
-         FROM clearbook_attachments WHERE entry_id IN (${ph}) ORDER BY created_at, rowid`,
-      entryIds
-    );
+    const rows = [];
+    for (const chunk of inParamChunks(entryIds)) {
+      rows.push(...await db.query(
+        `SELECT id, entry_id, file_key, file_name, file_mime, file_size, kind, caption, created_at
+           FROM clearbook_attachments WHERE entry_id IN (${inPlaceholders(chunk.length)}) ORDER BY created_at, rowid`,
+        chunk
+      ));
+    }
     for (const r of rows) {
       const list = map2.get(r.entry_id) ?? [];
       list.push({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size, kind: r.kind, caption: r.caption });
@@ -59587,11 +59635,13 @@ function createClearbookService(deps) {
       if (targetExists) throw new ConflictError("\u0633\u0627\u0644 \u0645\u0642\u0635\u062F \u0627\u0632 \u0642\u0628\u0644 \u062A\u0642\u0648\u06CC\u0645 \u062F\u0627\u0631\u062F \u2014 \u0627\u0628\u062A\u062F\u0627 \u0641\u0627\u0632\u0647\u0627\u06CC \u0622\u0646 \u0633\u0627\u0644 \u0631\u0627 \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F");
       const shift = toYear - fromYear;
       const sourceIds = source.map((r) => r.id);
-      const ph = sourceIds.map(() => "?").join(", ");
-      const rows = await db.query(
-        `SELECT ${PLAN_COLS} FROM clearbook_plans p JOIN staff s ON s.id = p.created_by WHERE p.id IN (${ph})`,
-        sourceIds
-      );
+      const rows = [];
+      for (const chunk of inParamChunks(sourceIds)) {
+        rows.push(...await db.query(
+          `SELECT ${PLAN_COLS} FROM clearbook_plans p JOIN staff s ON s.id = p.created_by WHERE p.id IN (${inPlaceholders(chunk.length)})`,
+          chunk
+        ));
+      }
       await db.transaction(async (tx) => {
         for (const row of rows) {
           const id = crypto.randomUUID();
@@ -59986,12 +60036,14 @@ function createDocsService(deps) {
   async function filesOfDocs(docIds) {
     const map2 = /* @__PURE__ */ new Map();
     if (docIds.length === 0) return map2;
-    const ph = docIds.map(() => "?").join(", ");
-    const rows = await db.query(
-      `SELECT id, doc_id, file_key, file_name, file_mime, file_size, created_at
-         FROM docs_files WHERE doc_id IN (${ph}) ORDER BY created_at DESC, rowid DESC`,
-      docIds
-    );
+    const rows = [];
+    for (const chunk of inParamChunks(docIds)) {
+      rows.push(...await db.query(
+        `SELECT id, doc_id, file_key, file_name, file_mime, file_size, created_at
+         FROM docs_files WHERE doc_id IN (${inPlaceholders(chunk.length)}) ORDER BY created_at DESC, rowid DESC`,
+        chunk
+      ));
+    }
     for (const r of rows) {
       const list = map2.get(r.doc_id) ?? [];
       list.push({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size, uploadedAt: r.created_at });
@@ -60734,12 +60786,14 @@ function createCenterKpiService(deps) {
                 COALESCE(SUM(CASE WHEN ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS filled
          FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
          WHERE cet.family_fillable = 1 AND cet.key NOT IN (${FAMILY_SURVEY_EVENT_KEYS.map(() => "?").join(", ")}) AND ce.created_at >= ? AND ce.created_at <= ?`,
+        // IN-bounded: کلیدهای ثابت ماژول
         [...FAMILY_SURVEY_EVENT_KEYS, fromIso, toIso]
       ),
       db.query(
         `SELECT ce.analysis FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
          WHERE cet.family_fillable = 1 AND cet.key NOT IN (${FAMILY_SURVEY_EVENT_KEYS.map(() => "?").join(", ")}) AND ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL
            AND ce.created_at >= ? AND ce.created_at <= ?`,
+        // IN-bounded: کلیدهای ثابت ماژول
         [...FAMILY_SURVEY_EVENT_KEYS, fromIso, toIso]
       )
     ]);
@@ -63279,13 +63333,15 @@ function createFinanceService(deps) {
   async function attachmentsOfInvoices(invoiceIds) {
     const map2 = /* @__PURE__ */ new Map();
     if (invoiceIds.length === 0) return map2;
-    const ph = invoiceIds.map(() => "?").join(", ");
-    const rows = await db.query(
-      `SELECT id, invoice_id, file_key, file_name, file_mime, file_size, created_at
-         FROM finance_invoice_files WHERE invoice_id IN (${ph})
+    const rows = [];
+    for (const chunk of inParamChunks(invoiceIds)) {
+      rows.push(...await db.query(
+        `SELECT id, invoice_id, file_key, file_name, file_mime, file_size, created_at
+           FROM finance_invoice_files WHERE invoice_id IN (${inPlaceholders(chunk.length)})
         ORDER BY created_at DESC, rowid DESC`,
-      invoiceIds
-    );
+        chunk
+      ));
+    }
     for (const r of rows) {
       if (map2.has(r.invoice_id)) continue;
       map2.set(r.invoice_id, { id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size });
@@ -67204,28 +67260,37 @@ function createCaseEventsBot(deps) {
     if (studentIds.length === 0) {
       return { text: "\u0628\u0631\u0627\u06CC \u062F\u06CC\u062F\u0646 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u060C \u0627\u0628\u062A\u062F\u0627 \u0628\u0627 \u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u0627\u0632 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u0641\u0631\u0632\u0646\u062F \u062E\u0648\u062F \u0631\u0627 \u0628\u0647 \u0628\u0627\u062A \u0648\u0635\u0644 \u06A9\u0646\u06CC\u062F.", buttons: null };
     }
-    const placeholders = studentIds.map(() => "?").join(", ");
-    const rows2 = await db.query(
-      `SELECT e.id, e.student_id, t.title AS type_title, t.icon AS type_icon,
+    const rows2 = [];
+    for (const chunk of inParamChunks(studentIds)) {
+      rows2.push(...await db.query(
+        `SELECT e.id, e.student_id, t.title AS type_title, t.icon AS type_icon,
               s.first_name, s.last_name, e.created_at
          FROM case_events e
          JOIN case_event_types t ON t.id = e.event_type_id AND t.family_fillable = 1
          JOIN students s ON s.id = e.student_id
-        WHERE e.student_id IN (${placeholders}) AND e.status = 'pending_family'
+        WHERE e.student_id IN (${inPlaceholders(chunk.length)}) AND e.status = 'pending_family'
         ORDER BY e.created_at DESC
         LIMIT 8`,
-      studentIds
-    );
-    const doneRows = await db.query(
-      `SELECT t.title AS type_title, t.icon AS type_icon, s.first_name, s.last_name, e.analysis, e.occurred_at
+        chunk
+      ));
+    }
+    rows2.sort((a, b) => a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0);
+    rows2.length = Math.min(rows2.length, 8);
+    const doneRows = [];
+    for (const chunk of inParamChunks(studentIds)) {
+      doneRows.push(...await db.query(
+        `SELECT t.title AS type_title, t.icon AS type_icon, s.first_name, s.last_name, e.analysis, e.occurred_at
          FROM case_events e
          JOIN case_event_types t ON t.id = e.event_type_id AND t.family_fillable = 1
          JOIN students s ON s.id = e.student_id
-        WHERE e.student_id IN (${placeholders}) AND e.status = 'completed'
+        WHERE e.student_id IN (${inPlaceholders(chunk.length)}) AND e.status = 'completed'
         ORDER BY e.occurred_at DESC
         LIMIT 3`,
-      studentIds
-    );
+        chunk
+      ));
+    }
+    doneRows.sort((a, b) => a.occurred_at < b.occurred_at ? 1 : a.occurred_at > b.occurred_at ? -1 : 0);
+    doneRows.length = Math.min(doneRows.length, 3);
     const resultLines = [];
     for (const d of doneRows) {
       let scoreLine = "";
@@ -68609,13 +68674,15 @@ function createBotCommandsSection(ctx) {
         return renderTemplate("bot_identify_notfound");
       }
       const studentIds = studentRows.map((s) => s.id);
-      const placeholders = studentIds.map(() => "?").join(",");
-      const claimedRows = await db.query(
-        `SELECT student_id, chat_id FROM bot_links
+      const claimedRows = [];
+      for (const chunk of inParamChunks(studentIds)) {
+        claimedRows.push(...await db.query(
+          `SELECT student_id, chat_id FROM bot_links
           WHERE status = 'linked' AND chat_id IS NOT NULL AND chat_id != ?
-            AND student_id IN (${placeholders})`,
-        [chatId, ...studentIds]
-      );
+            AND student_id IN (${inPlaceholders(chunk.length)})`,
+          [chatId, ...chunk]
+        ));
+      }
       if (claimedRows.length > 0) {
         await audit.log({
           actorId: "bale-bot",

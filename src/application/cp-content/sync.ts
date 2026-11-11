@@ -290,7 +290,7 @@ async function pushQueuedSubmissions(deps: {
      WHERE origin = 'local' AND status = 'queued' AND id IN (${items.map(() => '?').join(', ')})`,
     [nowIso, ...items.map((i) => i.id)]
   );
-  log.info('cp_content.push', { n: items.length });
+  log.info('cp_content.push', { n: items.length }); // IN-bounded: items با LIMIT ثابت CP_CONTENT_BATCH_MAX در صدا زننده محدود است (۱.۲۵.۷۲)
   return items.length;
 }
 

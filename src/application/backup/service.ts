@@ -490,7 +490,7 @@ export function createBackupService(deps: {
     if (data.rows.length === 0) return { restoredRows: 0, skippedColumns: [...fileExtra] };
 
     const colList = cols.map((c) => `"${c}"`).join(', ');
-    const placeholders = cols.map(() => '?').join(', ');
+    const placeholders = cols.map(() => '?').join(', '); // IN-bounded: cols از pragma ستون‌های جدول است — محدود به اسکیما (۱.۲۵.۷۲)
     const insertSql = `INSERT INTO "${table}" (${colList}) VALUES (${placeholders})`;
     const selfRef = await hasSelfReference(table);
 
@@ -692,7 +692,7 @@ export function createBackupService(deps: {
           for (const t of level.tables) {
             const cols = await tableColumns(t);
             const colList = cols.map((c) => `"${c}"`).join(', ');
-            const placeholders = cols.map(() => '?').join(', ');
+            const placeholders = cols.map(() => '?').join(', '); // IN-bounded: cols از pragma ستون‌های جدول است — محدود به اسکیما (۱.۲۵.۷۲)
             for (const row of env.tables[t]?.rows ?? []) {
               batch.push(
                 db.prepare(

@@ -652,7 +652,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       const rows = await db.query<EventRow>(
         `${EVENT_SELECT} AND e.appointment_id IN (${ids.map(() => '?').join(', ')})
           ORDER BY e.occurred_at DESC, e.created_at DESC`,
-        ids
+        ids // IN-bounded: ids با .slice(0, 100) پیش از IN محدود شده‌اند (۱.۲۵.۷۲)
       );
       const map = new Map<string, CaseEventRecord[]>();
       for (const r of rows) {
@@ -1172,7 +1172,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
             AND t.key NOT IN (${FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', ')})
             AND e.deleted_at IS NULL
           ORDER BY e.occurred_at DESC LIMIT 100`,
-      [...FAMILY_SURVEY_EVENT_KEYS]
+      [...FAMILY_SURVEY_EVENT_KEYS] // IN-bounded: FAMILY_SURVEY_EVENT_KEYS ثابت ماژول است (۱.۲۵.۷۲)
       );
       const nowMs = now().getTime();
       return rows.map((r) => {
@@ -1508,7 +1508,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
     },
 
     async listSurveys() {
-      const placeholders = FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', ');
+      const placeholders = FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', '); // IN-bounded: FAMILY_SURVEY_EVENT_KEYS ثابت ماژول است (۱.۲۵.۷۲)
       const rows = await db.query<SurveyListRow>(
         `SELECT e.id, e.student_id, e.staff_id, st.first_name || ' ' || st.last_name AS student_name, s.full_name AS staff_name,
                 e.status, e.occurred_at, e.created_at, e.fill_expires_at, e.sent_at, e.fill_token, e.analysis, e.payload,
@@ -1534,7 +1534,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       const earliestYmd = addDaysYmd(firstYmd, -days); // پنجرهٔ قبلی هم لازم است
       const fromIso = tehranDayRange(earliestYmd).start;
       const toIso = tehranDayRange(todayYmd).end;
-      const placeholders = FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', ');
+      const placeholders = FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', '); // IN-bounded: FAMILY_SURVEY_EVENT_KEYS ثابت ماژول است (۱.۲۵.۷۲)
       const rows = await db.query<SurveyInsightDbRow>(
         `SELECT e.id, st.first_name || ' ' || st.last_name AS student_name, e.staff_id, s.full_name AS staff_name, e.status, e.filled_by_chat_id, e.fill_expires_at,
                 e.created_at, e.analysis, e.payload, t.key AS type_key

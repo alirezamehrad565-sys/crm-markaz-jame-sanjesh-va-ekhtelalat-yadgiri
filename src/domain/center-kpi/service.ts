@@ -256,13 +256,13 @@ export function createCenterKpiService(deps: { db: DbClient }): CenterKpiService
         `SELECT COUNT(*) AS total,
                 COALESCE(SUM(CASE WHEN ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS filled
          FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
-         WHERE cet.family_fillable = 1 AND cet.key NOT IN (${FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', ')}) AND ce.created_at >= ? AND ce.created_at <= ?`,
+         WHERE cet.family_fillable = 1 AND cet.key NOT IN (${FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', ')}) AND ce.created_at >= ? AND ce.created_at <= ?`, // IN-bounded: کلیدهای ثابت ماژول
         [...FAMILY_SURVEY_EVENT_KEYS, fromIso, toIso]
       ),
       db.query<FamilyScoreRow>(
         `SELECT ce.analysis FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id
          WHERE cet.family_fillable = 1 AND cet.key NOT IN (${FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', ')}) AND ce.status = 'completed' AND ce.filled_by_chat_id IS NOT NULL
-           AND ce.created_at >= ? AND ce.created_at <= ?`,
+           AND ce.created_at >= ? AND ce.created_at <= ?`, // IN-bounded: کلیدهای ثابت ماژول
         [...FAMILY_SURVEY_EVENT_KEYS, fromIso, toIso]
       )
     ]);
@@ -296,7 +296,7 @@ export function createCenterKpiService(deps: { db: DbClient }): CenterKpiService
 
     /* ─── ۱.۲۵.۵۹ — رضایت خانواده‌ها (نظرسنجی ce-center-survey-v1): فقط-عددی
          ۱.۲۵.۶۰ — کل خانوادهٔ نظرسنجی‌ها (تاریخی + پایان دوره + حین درمان) + میانگین پیشرفت + تفکیک نوع فرم ─── */
-    const surveyPlaceholders = FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', ');
+    const surveyPlaceholders = FAMILY_SURVEY_EVENT_KEYS.map(() => '?').join(', '); // IN-bounded: کلیدهای ثابت ماژول
     const surveyRows = await db.query<SurveyRow>(
       `SELECT ce.status, ce.filled_by_chat_id, ce.analysis, cet.key AS type_key
          FROM case_events ce JOIN case_event_types cet ON cet.id = ce.event_type_id

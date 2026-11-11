@@ -6,6 +6,7 @@ import { ConflictError, NotFoundError, ValidationError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import {
   computeMetricValue,
   decideValidity,
@@ -613,7 +614,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
   async function missionsOnDateForChild(childId: string, scheduledFor: string, statuses: string[]): Promise<number> {
     const row = await db.queryOne<{ n: number }>(
       `SELECT COUNT(*) AS n FROM game_missions m JOIN game_prescriptions p ON p.id = m.prescription_id
-       WHERE p.child_id = ? AND m.scheduled_for = ? AND m.status IN (${statuses.map(() => '?').join(',')})`,
+       WHERE p.child_id = ? AND m.scheduled_for = ? AND m.status IN (${statuses.map(() => '?').join(',')})`, // IN-bounded: statuses ثابت ماژول است
       [childId, scheduledFor, ...statuses]
     );
     return row?.n ?? 0;
@@ -659,11 +660,15 @@ export function createGamesService(deps: GamesDeps): GamesService {
     }
     const linkByMission = new Map<string, { jti: string; expiresAt: string }>();
     if (rows.length > 0) {
-      const liveLinks = await db.query<{ mission_id: string; jti: string; expires_at: string }>(
-        `SELECT mission_id, jti, expires_at FROM game_links
-         WHERE mission_id IN (${rows.map(() => '?').join(',')}) AND revoked_at IS NULL AND expires_at > ?`,
-        [...rows.map((r) => r.id), isoOf(now())]
-      );
+      /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی (سقف ۱۰۰ بایند D1)؛ هر مأموریت در یک تکه است */
+      const liveLinks: { mission_id: string; jti: string; expires_at: string }[] = [];
+      for (const chunk of inParamChunks(rows.map((r) => r.id))) {
+        liveLinks.push(...await db.query<{ mission_id: string; jti: string; expires_at: string }>(
+          `SELECT mission_id, jti, expires_at FROM game_links
+         WHERE mission_id IN (${inPlaceholders(chunk.length)}) AND revoked_at IS NULL AND expires_at > ?`,
+          [...chunk, isoOf(now())]
+        ));
+      }
       for (const l of liveLinks) linkByMission.set(l.mission_id, { jti: l.jti, expiresAt: l.expires_at });
     }
     return rows.map((row) => ({
@@ -1612,12 +1617,14 @@ export function createGamesService(deps: GamesDeps): GamesService {
   async function getSessionDetail(missionId: string): Promise<{ sessions: unknown[]; attempts: unknown[] }> {
     const sessions = await db.query<SessionRow>(`SELECT * FROM game_sessions WHERE mission_id = ? ORDER BY created_at DESC`, [missionId]);
     const sessionIds = sessions.map((s) => s.id);
-    const attempts = sessionIds.length
-      ? await db.query<AttemptRow>(
-          `SELECT * FROM game_attempts WHERE session_id IN (${sessionIds.map(() => '?').join(',')}) ORDER BY created_at`,
-          sessionIds
-        )
-      : [];
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی؛ هر جلسه در یک تکه است پس ترتیب تلاش‌های هر جلسه حفظ می‌شود */
+    const attempts: AttemptRow[] = [];
+    for (const chunk of inParamChunks(sessionIds)) {
+      attempts.push(...await db.query<AttemptRow>(
+        `SELECT * FROM game_attempts WHERE session_id IN (${inPlaceholders(chunk.length)}) ORDER BY created_at`,
+        chunk
+      ));
+    }
     return {
       sessions: sessions.map((s) => ({
         id: s.id, state: s.state, validity: s.validity, purpose: s.purpose ?? 'training',
@@ -1664,12 +1671,14 @@ export function createGamesService(deps: GamesDeps): GamesService {
     );
     const missionRefOf = new Map(missionRows.map((m) => [m.id, m.mission_ref]));
     const sessionIds = sessions.map((s) => s.id);
-    const attempts = sessionIds.length
-      ? await db.query<AttemptRow>(
-          `SELECT * FROM game_attempts WHERE session_id IN (${sessionIds.map(() => '?').join(',')}) ORDER BY created_at`,
-          sessionIds
-        )
-      : [];
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی؛ هر جلسه در یک تکه است پس ترتیب تلاش‌های هر جلسه حفظ می‌شود */
+    const attempts: AttemptRow[] = [];
+    for (const chunk of inParamChunks(sessionIds)) {
+      attempts.push(...await db.query<AttemptRow>(
+        `SELECT * FROM game_attempts WHERE session_id IN (${inPlaceholders(chunk.length)}) ORDER BY created_at`,
+        chunk
+      ));
+    }
 
     const reportSessions: ReportSession[] = [];
     const comparisonInput: Array<{ session_id: string; started_at: string | null; metrics: SessionMetricOutcome[] | null }> = [];

@@ -2,6 +2,7 @@ import { NotFoundError } from '@core/errors';
 import { FOLLOWUP_OPEN_STATUSES } from '@core/shared';
 import type { AuthContext } from '@core/shared';
 import type { DbClient } from '@core/db';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import type { TimelineEvent, TimelineFilters, TimelineResult, StudentTimelineService } from './types';
 import {
   appointmentEventState,
@@ -81,18 +82,33 @@ interface CaseEventRow {
 }
 
 export function createStudentTimelineService(db: DbClient): StudentTimelineService {
-  function inList(ids: string[]): string {
-    return ids.map(() => '?').join(', ');
+  /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی (سقف ۱۰۰ بایند D1): خط زمانیِ یک دانش‌آموز سال‌ها رویداد دارد؛
+     ادغام تکه‌ها بی‌اشکال است چون mergeTimelineEvents کل خط زمانی را دوباره مرتب می‌کند */
+  async function auditsIn(resourceType: string, resourceIds: string[], extraWhere: string): Promise<AuditRow[]> {
+    const out: AuditRow[] = [];
+    for (const chunk of inParamChunks(resourceIds)) {
+      out.push(...await db.query<AuditRow>(
+        `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
+           FROM audit_log
+          WHERE resource_type = '${resourceType}' AND resource_id IN (${inPlaceholders(chunk.length)})${extraWhere}
+          ORDER BY created_at ASC`,
+        chunk
+      ));
+    }
+    return out;
   }
 
   async function actorNames(actorIds: string[]): Promise<Map<string, string>> {
     const unique = [...new Set(actorIds)];
     const map = new Map<string, string>();
     if (unique.length === 0) return map;
-    const rows = await db.query<{ id: string; full_name: string }>(
-      `SELECT id, full_name FROM staff WHERE id IN (${inList(unique)})`,
-      unique
-    );
+    const rows: { id: string; full_name: string }[] = [];
+    for (const chunk of inParamChunks(unique)) {
+      rows.push(...await db.query<{ id: string; full_name: string }>(
+        `SELECT id, full_name FROM staff WHERE id IN (${inPlaceholders(chunk.length)})`,
+        chunk
+      ));
+    }
     for (const r of rows) map.set(r.id, r.full_name);
     return map;
   }
@@ -130,14 +146,7 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
       const apptIds = appts.map((a) => a.id);
 
       const moveAudits: AuditRow[] = apptIds.length
-        ? await db.query<AuditRow>(
-            `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
-               FROM audit_log
-              WHERE resource_type = 'appointment' AND action = 'appointment.move'
-                AND resource_id IN (${inList(apptIds)})
-              ORDER BY created_at ASC`,
-            apptIds
-          )
+        ? await auditsIn('appointment', apptIds, ` AND action = 'appointment.move'`)
         : [];
 
       const noteAudits = await db.query<AuditRow>(
@@ -156,13 +165,7 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
       );
       const fuIds = followups.map((f) => f.id);
       const followupAudits: AuditRow[] = fuIds.length
-        ? await db.query<AuditRow>(
-            `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
-               FROM audit_log
-              WHERE resource_type = 'followup' AND resource_id IN (${inList(fuIds)})
-              ORDER BY created_at ASC`,
-            fuIds
-          )
+        ? await auditsIn('followup', fuIds, '')
         : [];
 
       const waitlistRows = await db.query<WaitlistRow>(
@@ -171,14 +174,7 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
       );
       const wlIds = waitlistRows.map((w) => w.id);
       const waitlistAudits: AuditRow[] = wlIds.length
-        ? await db.query<AuditRow>(
-            `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
-               FROM audit_log
-              WHERE resource_type = 'waitlist' AND resource_id IN (${inList(wlIds)})
-                AND action IN ('waitlist.waiting_set', 'waitlist.schedule', 'waitlist.admitted')
-              ORDER BY created_at ASC`,
-            wlIds
-          )
+        ? await auditsIn('waitlist', wlIds, ` AND action IN ('waitlist.waiting_set', 'waitlist.schedule', 'waitlist.admitted')`)
         : [];
 
       const notifications = await db.query<NotificationRow>(
@@ -198,14 +194,7 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
       );
       const ciIds = committeeItems.map((ci) => ci.id);
       const committeeAudits: AuditRow[] = ciIds.length
-        ? await db.query<AuditRow>(
-            `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
-               FROM audit_log
-              WHERE resource_type = 'committee_item' AND resource_id IN (${inList(ciIds)})
-                AND action IN ('committee.item.created', 'committee.item.updated')
-              ORDER BY created_at ASC`,
-            ciIds
-          )
+        ? await auditsIn('committee_item', ciIds, ` AND action IN ('committee.item.created', 'committee.item.updated')`)
         : [];
 
       const assignments = await db.query<{ id: string; exercise_title: string }>(
@@ -217,14 +206,7 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
       );
       const asgIds = assignments.map((a) => a.id);
       const exerciseAudits: AuditRow[] = asgIds.length
-        ? await db.query<AuditRow>(
-            `SELECT id, actor_id, action, resource_type, resource_id, changes, strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
-               FROM audit_log
-              WHERE resource_type = 'exercise_assignment' AND resource_id IN (${inList(asgIds)})
-                AND action IN ('exercise.assigned', 'exercise.submitted', 'exercise.corrected')
-              ORDER BY created_at ASC`,
-            asgIds
-          )
+        ? await auditsIn('exercise_assignment', asgIds, ` AND action IN ('exercise.assigned', 'exercise.submitted', 'exercise.corrected')`)
         : [];
 
       const caseEvents = await db.query<CaseEventRow>(

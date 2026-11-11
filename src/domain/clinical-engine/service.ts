@@ -1,6 +1,7 @@
 import type { AuthContext } from '@core/shared';
 import { tehranDayRange } from '@core/shared'; // مرز روزِ بازهٔ گزارش با آفست تهران (قرارداد §۷)
 import type { DbClient } from '@core/db';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
@@ -592,12 +593,16 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
   async function loadSessionsOfPaths(pathIds: string[]): Promise<Map<string, PathSessionRecord[]>> {
     const map = new Map<string, PathSessionRecord[]>();
     if (pathIds.length === 0) return map;
-    const rows = await db.query<PathSessionRow>(
-      `SELECT * FROM pathway_sessions
-        WHERE pathway_id IN (${pathIds.map(() => '?').join(', ')})
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی؛ هر مسیر در یک تکه است پس ترتیب جلسه‌های هر مسیر حفظ می‌شود */
+    const rows: PathSessionRow[] = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      rows.push(...await db.query<PathSessionRow>(
+        `SELECT * FROM pathway_sessions
+        WHERE pathway_id IN (${inPlaceholders(chunk.length)})
         ORDER BY ord ASC, created_at ASC`,
-      pathIds
-    );
+        chunk
+      ));
+    }
     for (const r of rows) {
       const list = map.get(r.pathway_id);
       const rec = sessionRowToRecord(r);
@@ -649,13 +654,19 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
   async function loadProbeSummariesOfPaths(pathIds: string[]): Promise<Map<string, PathProbeSummaryBadge>> {
     const map = new Map<string, PathProbeSummaryBadge>();
     if (pathIds.length === 0) return map;
-    const rows = await db.query<{ pathway_id: string; metric: string; value: number; taken_at: string }>(
-      `SELECT pathway_id, metric, value, taken_at FROM pathway_probes
-        WHERE pathway_id IN (${pathIds.map(() => '?').join(', ')})
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی + مرتب‌سازی سراسری پس از ادغام (LIMIT 400 سراسری بین تکه‌ها معنا ندارد) */
+    const rows: { pathway_id: string; metric: string; value: number; taken_at: string }[] = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      rows.push(...await db.query<{ pathway_id: string; metric: string; value: number; taken_at: string }>(
+        `SELECT pathway_id, metric, value, taken_at FROM pathway_probes
+        WHERE pathway_id IN (${inPlaceholders(chunk.length)})
         ORDER BY taken_at DESC
         LIMIT 400`,
-      pathIds
-    );
+        chunk
+      ));
+    }
+    rows.sort((a, b) => (a.taken_at < b.taken_at ? 1 : a.taken_at > b.taken_at ? -1 : 0));
+    rows.length = Math.min(rows.length, 400); // هم‌قرارداد LIMIT 400 پیشین — سقف سراسری پس از ادغام تکه‌ها
     // سقف ۴۰۰ سطر: بج اطلاع‌رسانی است نه گزارش رسمی؛ ۴۰۰ پراپِ جدیدتر برای دنبالهٔ تسلط کافی است
     // (ترتیب DESC یعنی جدیدترین‌ها می‌مانند) و شمارش بیش از سقف، کمتر از واقعی دیده می‌شود.
     type MetricSeries = { points: { value: number; takenAt: string }[]; lastAt: string };
