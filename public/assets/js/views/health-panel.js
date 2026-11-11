@@ -1,5 +1,6 @@
 // نمای «پنل سلامت» (۱.۲۵.۶۷ — ف۱ طرح ارتقا، CP-2/CP-3): وضعیت سامانه + شش درگاه لینک CP
 // همهٔ داده از GET /api/health/panel (فقط‌مدیر) — مُهرهای settings و COUNTهای واقعی، بدون زیرساخت تازه
+// ف۴ — بخش «گزارش رشد جدول‌ها» افزوده شد: GET /api/growth/report فقط‌مدیر — شمارش شبانهٔ کرون + سیاست نگه‌داری
 import { api } from '../api.js';
 import { el, icon, emptyState, skeletonState } from '../ui.js';
 import { fa, formatJalaliDateTime } from '../format.js';
@@ -18,6 +19,24 @@ function thresholdHuman(sec) {
   if (sec < 3600) return `${fa(Math.round(sec / 60))} دقیقه`;
   if (sec < 86400) return `${fa(Math.round(sec / 3600))} ساعت`;
   return `${fa(Math.round(sec / 86400))} روز`;
+}
+
+/** عدد با علامت — مثبت «+۲۰»، منفی «−۵»، صفر «۰»، نبود «—» (جهت عددی ltr در سلول) */
+function signedNum(n) {
+  if (n == null) return '—';
+  if (n === 0) return fa(0);
+  return `${n > 0 ? '+' : '−'}${fa(Math.abs(n))}`;
+}
+
+/** میانگین روزانه با یک رقم اعشار فارسی */
+function avgNum(n) {
+  if (n == null) return '—';
+  return fa(String(n)).replace('.', '٫');
+}
+
+/** سلول عددی جدول رشد — جهت ltr تا علامت و رقم جابه‌جا نشوند */
+function numCell(value) {
+  return el('td', { style: { direction: 'ltr', textAlign: 'center', whiteSpace: 'nowrap' } }, value);
 }
 
 const STATE_META = {
@@ -57,6 +76,82 @@ function channelRow(ch) {
   );
 }
 
+/* ── ف۴ — گزارش رشد جدول‌ها ───────────────────────────────────────────────
+   شمارش ردیف‌ها هر شب در کرون دایجست انجام می‌شود (جدول table_growth_snapshots — مایگریشن 0107)؛
+   این بخش فقط خواندن snapshotهاست. جدول‌های «بی‌سیاست» بالای فهرست می‌آیند — کارکرد اصلی گزارش
+   لو دادن جدول‌های بدون خط‌مشی نگه‌داری است (طرح §۵-۳). */
+
+const POLICY_BADGE = {
+  'بی‌سیاست': 'badge--error',
+  'فقط-افزودنی': 'badge--success',
+  'پاکسازی دوره‌ای': 'badge--success',
+  '۱۸۰ روز': 'badge--neutral',
+  '۹۰ روز': 'badge--neutral',
+  'بازنویسی روزانه (خودپایش)': 'badge--neutral'
+};
+
+function growthRow(t) {
+  const countMain = t.latest_count != null ? fa(t.latest_count) : '—';
+  const countSub = [
+    t.latest_date ? `شمارش ${formatJalaliDateTime(t.latest_date)}` : null,
+    t.live_count != null && t.latest_count != null && t.live_count !== t.latest_count ? `زندهٔ همین لحظه: ${fa(t.live_count)}` : null
+  ].filter(Boolean).join(' · ');
+  const badgeCls = POLICY_BADGE[t.policy] ?? 'badge--neutral';
+  return el('tr', {},
+    el('td', { style: { fontWeight: 500 } }, t.table_name),
+    el('td', { style: { direction: 'ltr', textAlign: 'center', whiteSpace: 'nowrap' } },
+      el('div', {}, countMain),
+      countSub ? el('div', { class: 'hint-text', style: { fontSize: '0.72rem', whiteSpace: 'normal' } }, countSub) : null
+    ),
+    numCell(signedNum(t.delta_7d)),
+    numCell(signedNum(t.delta_30d)),
+    numCell(avgNum(t.avg_daily)),
+    el('td', { style: { textAlign: 'center', whiteSpace: 'nowrap' } },
+      el('span', { class: `badge ${badgeCls}` }, t.policy)
+    )
+  );
+}
+
+function growthSection(growth, growthError) {
+  const headBadge = growth
+    ? el('span', { class: 'badge badge--neutral' },
+        growth.snapshot_days > 0
+          ? `تاریخچهٔ ${fa(growth.snapshot_days)} روز شمارش`
+          : 'هنوز شمارشی ثبت نشده — با اولین کرون شبانه پُر می‌شود')
+    : null;
+  const stamp = growth?.last_snapshot_at
+    ? `آخرین شمارش شبانه: ${formatJalaliDateTime(growth.last_snapshot_at)}`
+    : 'هنوز هیچ شمارش شبانه‌ای انجام نشده است';
+  return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+    el('div', { class: 'card__head' },
+      el('h3', { style: { margin: 0 } }, 'گزارش رشد جدول‌ها'),
+      headBadge
+    ),
+    el('div', { class: 'card__body--flush' },
+      growthError
+        ? el('div', { class: 'card__body' },
+            el('p', { class: 'hint-text' }, `خواندن گزارش رشد ناموفق بود: ${growthError?.message ?? 'خطای نامشخص'} — بقیهٔ پنل سالم است.`))
+        : [
+            el('p', { class: 'hint-text', style: { padding: '0 var(--sp-4)', margin: 'var(--sp-3) 0 0' } },
+              `${stamp} — شمارش ردیف‌ها هر شب در کرون دایجست انجام می‌شود (هرگز در مسیر درخواست). ستون «سیاست» خط‌مشی نگه‌داری هر جدول است؛ «بی‌سیاست» یعنی هیچ سقف حذف/پاکسازی‌ای ندارد و بدون تصمیم، بی‌کران رشد می‌کند — این جدول‌ها عمداً بالای فهرست می‌آیند.`),
+            el('div', { class: 'table-wrap' },
+              el('table', { class: 'table' },
+                el('thead', {}, el('tr', {},
+                  el('th', { scope: 'col' }, 'نام جدول'),
+                  el('th', { scope: 'col', style: { textAlign: 'center' } }, 'ردیف‌ها'),
+                  el('th', { scope: 'col', style: { textAlign: 'center' } }, 'رشد ۷روز'),
+                  el('th', { scope: 'col', style: { textAlign: 'center' } }, 'رشد ۳۰روز'),
+                  el('th', { scope: 'col', style: { textAlign: 'center' } }, 'میانگین روزانه'),
+                  el('th', { scope: 'col', style: { textAlign: 'center' } }, 'سیاست')
+                )),
+                el('tbody', {}, (growth?.tables ?? []).map(growthRow))
+              )
+            )
+          ]
+    )
+  );
+}
+
 export async function renderHealthPanel(outlet) {
   const root = el('div', {});
   outlet.replaceChildren(root);
@@ -65,10 +160,13 @@ export async function renderHealthPanel(outlet) {
   const stopTimer = () => { if (timer) { clearInterval(timer); timer = null; } };
 
   async function reload() {
-    let data;
-    try {
-      data = (await api.get('/api/health/panel')).data;
-    } catch (err) {
+    // ف۴ — پنل سلامت و گزارش رشد هم‌زمان گرفته می‌شوند؛ خرابیِ رشد فقط بخش خودش را degraded می‌کند
+    const [healthOut, growthOut] = await Promise.allSettled([
+      api.get('/api/health/panel'),
+      api.get('/api/growth/report')
+    ]);
+    if (healthOut.status === 'rejected') {
+      const err = healthOut.reason;
       stopTimer();
       root.replaceChildren(emptyState({
         iconName: 'alert',
@@ -77,6 +175,9 @@ export async function renderHealthPanel(outlet) {
       }));
       return;
     }
+    const data = healthOut.value.data;
+    const growth = growthOut.status === 'fulfilled' ? growthOut.value.data : null;
+    const growthError = growthOut.status === 'rejected' ? growthOut.reason : null;
 
     const dbOk = data?.db?.ok;
     const counts = data?.counts ?? {};
@@ -121,8 +222,10 @@ export async function renderHealthPanel(outlet) {
         el('div', {}, cp.channels.map(channelRow))
       ),
 
+      growthSection(growth, growthError),
+
       el('p', { class: 'hint-text' },
-        `آخرین بازخوانی: ${formatJalaliDateTime(data?.now)} — مرجع طراحی: طرح ارتقای بک‌اند §۳-۹ (CP-2/CP-3).`)
+        `آخرین بازخوانی: ${formatJalaliDateTime(data?.now)} — مرجع طراحی: طرح ارتقای بک‌اند §۳-۹ (CP-2/CP-3) و §۵-۳ (ف۴ بهداشت داده).`)
     );
   }
 

@@ -225,6 +225,8 @@ export async function bugReportOpportunistic(deps: {
 function silentAudit() {
   return {
     log: async () => undefined,
-    logInTransaction: async () => undefined
+    logInTransaction: async () => undefined,
+    // ف۴ — امضای AuditWriter کامل شد؛ این مسیر فرصت‌طلب هرگز پاکسازی نمی‌کند (پاکسازی فقط کرون شبانه است)
+    pruneOld: async () => 0
   };
 }
