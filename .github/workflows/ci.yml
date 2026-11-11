@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: Typecheck + Tests
+    name: گیت‌های انتشار — ف۲ (تایپ، آزمون، بودجه، همگامی اسناد)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,14 +22,40 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # ف۲ — ردیف CI طرح ارتقا §۷: npm audit گزارش می‌دهد؛ تا ف۳ (zod@4) «بلاک‌کننده» نیست
+      # چون HIGH شناخته‌شدهٔ zod<4.6.6 (GHSA-mrhx-c7xc-m3w5) تا ارتقای کنترل‌شده باز است.
+      - name: npm audit (deps production — گزارش؛ پس از ف۳ بلاک‌کننده می‌شود)
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
+
       - name: Typecheck (tsc strict)
         run: npm run typecheck
 
       - name: Unit & e2e tests (vitest)
         run: npm test
 
+      - name: Build client bundle (boot + چانک‌های نما)
+        run: npm run build:client
+
+      - name: Build worker bundle از منبع (بازتولیدپذیری)
+        run: node scripts/build-worker-bundle.mjs
+
       - name: Bundle syntax check (node --check)
         run: node --check worker/bundle.js
+
+      - name: Performance budget (پیل بوت/CSS/فونت)
+        run: node scripts/perf-budget.mjs
+
+      # ف۲ — گیت همگامی MIGRATIONS.md: هر فایل مایگریشن باید سطر سند داشته باشد
+      - name: MIGRATIONS.md sync gate
+        run: node scripts/check-migrations-doc.mjs
+
+      # ف۲ — گیت دیسدیپلین هش CSP: بلاک inline ↔ هش‌های _headers
+      - name: CSP hash discipline gate
+        run: node scripts/check-csp-hash.mjs
+
+      # bundle-smoke عمداً این‌جا نیست: مقایسهٔ رفتاری «باندل زندهٔ تولید ↔ بازسازی» است
+      # و فقط در چرخهٔ انتشار محلی (کنار باندل کهنه) معنا دارد — آیتم ۶ §۳-۱۶ سند.
 
       # ⚠️ «Golden engine tests» حذف شد — موتور صورت‌بندی از (بازسازی esbuild باندل از src)
       # دیگر جزو باندل سرور نیست (مصرف‌کنندهٔ آن فقط فرانت‌اند است: public/assets/js/case-formulation.js)

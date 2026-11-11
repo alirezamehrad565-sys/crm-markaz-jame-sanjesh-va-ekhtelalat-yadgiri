@@ -22,6 +22,8 @@ import { tehranTodayYmd, tehranDayRange } from '@core/shared';
 // ۱.۲۵.۶۷ — CP-2: مُهرهای سینک از ماژول‌های مالکشان — snapshot سلامت از «دادهٔ واقعی موجود» پر می‌شود نه null
 import { CP_SYNC_SETTINGS_KEY } from '@app/cp-sync/announcements';
 import { CP_CONTENT_SYNC_KEY } from '@app/cp-content/sync';
+// ۱.۲۵.۶۸ — CP-5: سقف بدنهٔ پاسخ پیش از parse (طرح ارتقا §۳-۵/§۴ آیتم ۲۴)
+import { readTextCapped } from '@app/cp-link/body';
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 
@@ -419,7 +421,8 @@ export async function pushCpReport(deps: {
     if (!res.ok) {
       let bodyHead = '';
       try {
-        bodyHead = (await res.text()).slice(0, 180);
+        // ۱.۲۵.۶۸ — CP-5: بدنهٔ خطا هم سقف‌دار (پاسخ عظیم isolate را نمی‌بلعد)
+        bodyHead = (await readTextCapped(res)).slice(0, 180);
       } catch {
         bodyHead = '';
       }

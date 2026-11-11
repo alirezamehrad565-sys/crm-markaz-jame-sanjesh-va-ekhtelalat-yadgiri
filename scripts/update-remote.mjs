@@ -84,6 +84,26 @@ if (!DRY && !whoami.includes('You are logged')) {
 }
 console.log('   ورود Cloudflare: ✓');
 
+// گام صفر پضاف — نسخهٔ زندهٔ «پیش از انتشار» برای خط مبنای رولبک خودکار (ف۲):
+// اگر دروازهٔ سلامت ×۳ پس از انتشار قرمز شد، باندل همین نسخه از گیت بازگردانده می‌شود.
+const preflightBaseUrl = tomlText.match(/PUBLIC_BASE_URL\s*=\s*"([^"]+)"/)?.[1] ?? '';
+let liveVersionBefore = null;
+if (!DRY && preflightBaseUrl) {
+  try {
+    const res = await fetch(`${preflightBaseUrl.replace(/\/$/, '')}/health`, {
+      headers: { 'Cache-Control': 'no-cache' },
+      signal: AbortSignal.timeout(15_000)
+    });
+    const body = await res.text();
+    liveVersionBefore = body.match(/"version"\s*:\s*"([^"]+)"/)?.[1] ?? null;
+  } catch { /* زنده‌نشدن = مبنایی نیست؛ رولبک خودکار غیرفعال می‌ماند */ }
+}
+if (liveVersionBefore) {
+  console.log(`   نسخهٔ زندهٔ پیش از انتشار: ${liveVersionBefore} (خط مبنای رولبک خودکار)`);
+} else {
+  console.log('   نسخهٔ زندهٔ پیش از انتشار خوانده نشد — رولبک خودکار این دروازه در دسترس نیست.');
+}
+
 // ساخت باندل کلاینت (boot.[hash] + چانک‌های نما): باید پیش از گات بودجه و انتشار تازه باشد
 if (existsSync(join(root, 'scripts', 'build-client.mjs'))) {
   const build = run('node', [join(root, 'scripts', 'build-client.mjs')]);
@@ -200,45 +220,107 @@ if (DRY) {
   console.log('   deploy: ✓');
 }
 
-section('گام ۴ — تأیید استقرار (GET /health)');
-const publicBase = tomlText.match(/PUBLIC_BASE_URL\s*=\s*"([^"]+)"/)?.[1] ?? '';
+section('گام ۴ — دروازهٔ سلامت ×۳ و رولبک خودکار (ف۲)');
+const publicBase = preflightBaseUrl;
 const deployedUrl = deployOut.match(/https:\/\/[a-z0-9-]+\.workers\.dev/i)?.[0] ?? '';
 const baseUrl = publicBase || deployedUrl;
 if (!baseUrl) {
   console.log('   آدرس عمومی پیدا نشد — دستی چک کنید:');
   console.log(`   curl https://<دامنه-ورکر>/health   → باید version: "${appVersion}" بدهد`);
+} else if (DRY) {
+  console.log('   [dry-run] دروازهٔ سلامت ×۳ اجرا نمی‌شود.');
 } else {
   const url = `${baseUrl.replace(/\/$/, '')}/health`;
   console.log(`   پرس‌وجو: ${url}`);
-  if (DRY) {
-    console.log('   [dry-run] درخواست سلامت اجرا نمی‌شود.');
+  console.log('   سه راند با فاصلهٔ ۲۵ ثانیه — هر راند باید ۲۰۰ و راند آخر نسخهٔ تازه را بدهد:');
+  const rounds = [];
+  for (let round = 1; round <= 3; round++) {
+    await new Promise((r) => setTimeout(r, round === 1 ? 10_000 : 25_000));
+    let ok = false, version = '?';
+    try {
+      const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(15_000) });
+      const body = await res.text();
+      ok = res.ok;
+      version = body.match(/"version"\s*:\s*"([^"]+)"/)?.[1] ?? '?';
+    } catch { ok = false; }
+    rounds.push({ round, ok, version });
+    console.log(`   راند ${round}/۳: ${ok ? '✓ ۲۰۰' : '✗ ناموفق'} — version زنده: ${version}`);
+  }
+  const gateOk = rounds.every((r) => r.ok) && rounds[2].version === appVersion;
+
+  if (gateOk) {
+    console.log(`   ✅ دروازهٔ سلامت ×۳ سبز — نسخهٔ زنده: ${rounds[2].version} — انتشار نشست.`);
+  } else if (args.has('--no-rollback')) {
+    console.log('   ⚠ دروازهٔ قرمز شد ولی --no-rollback داده‌اید — برگشت خودکار رد شد؛ دستی چک کنید.');
+  } else if (!liveVersionBefore) {
+    console.log('   ⚠ دروازهٔ قرمز شد ولی خط مبنای رولبک (نسخهٔ زندهٔ پیش از انتشار) نداریم — برگشت خودکار ناممکن؛ دستی چک کنید.');
+  } else if (liveVersionBefore === appVersion) {
+    console.log('   ⚠ دروازهٔ قرمز شد ولی نسخهٔ زندهٔ پیش از انتشار با نسخهٔ تازه یکی است — رولبک معنا ندارد؛ دستی چک کنید.');
   } else {
-    let ok = false, body = '';
-    for (let attempt = 1; attempt <= 4 && !ok; attempt++) {
-      await new Promise((r) => setTimeout(r, attempt === 1 ? 2000 : 5000));
-      try {
-        const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } });
-        body = await res.text();
-        ok = res.ok;
-      } catch { ok = false; }
-    }
-    if (!ok) {
-      console.log('   ⚠ /health پاسخ نداد — اغلب تأخیر شبکه است؛ ۳۰ ثانیه بعد دستی چک کنید:');
-      console.log(`     curl ${url}`);
+    // ── رولبک خودکار: باندلِ نسخهٔ زندهٔ قبلی از گیت بازگردانده می‌شود ──
+    section('گام ۴ب — رولبک خودکار (health ×۳ قرمز ⇒ برگشت نسخهٔ قبلی)');
+    console.log(`   نسخهٔ مبنای برگشت: ${liveVersionBefore}`);
+    const baseCommit = runCapture('git', [
+      'log', '-S', `APP_VERSION = '${liveVersionBefore}'`, '--format=%h',
+      '--', 'src/core/version.ts'
+    ]).split('\n')[0]?.trim() ?? '';
+    if (!baseCommit) {
+      console.log('   ⚠ کامیت نسخهٔ مبنای در گیت پیدا نشد — رولبک خودکار ناممکن؛ دستی از backups/ یا reflog برگردانید.');
+      process.exitCode = 1;
     } else {
-      const live = body.match(/"version"\s*:\s*"([^"]+)"/)?.[1] ?? '?';
-      if (live === appVersion) {
-        console.log(`   ✅ نسخهٔ زنده: ${live} — به‌روزرسانی با موفقیت نشست.`);
+      console.log(`   کامیت مبنای: ${baseCommit} — بازسازی worker/ و public/ از گیت…`);
+      const { spawnSync: ss } = await import('node:child_process');
+      const archive = ss('git', ['archive', baseCommit, '--', 'worker', 'public'], {
+        encoding: 'buffer', maxBuffer: 512 * 1024 * 1024
+      });
+      if (archive.status !== 0 || !archive.stdout?.length) {
+        console.log('   ⚠ git archive ناموفق بود — رولبک خودکار ناممکن؛ دستی برگردانید.');
+        process.exitCode = 1;
       } else {
-        console.log(`   ⚠ نسخهٔ زنده (${live}) با باندل (${appVersion}) یکی نیست —`);
-        console.log('     اگر چند ثانیه قبل deploy شده، کش edge را صبر کنید؛ اگر ماند، deploy را دوباره اجرا کنید.');
+        const untar = ss('tar', ['-x', '-C', root], { input: archive.stdout });
+        if (untar.status !== 0) {
+          console.log('   ⚠ بازکردن آرشیو ناموفق بود — رولبک دستی لازم است.');
+          process.exitCode = 1;
+        } else {
+          console.log('   بازسازی شد — برگشت نسخهٔ قبلی…');
+          const back = spawnSync('npx', ['wrangler', 'deploy', '--var', 'ENV:production'], {
+            stdio: ['inherit', 'pipe', 'inherit'],
+            shell: process.platform === 'win32',
+            encoding: 'utf8'
+          });
+          if (back.status !== 0) {
+            console.log('   ⚠ دیپلوی رولبک ناموفق بود — وضعیت بحرانی: دستی از reflog/backups برگردانید.');
+            process.exitCode = 1;
+          } else {
+            let backOk = false, backVersion = '?';
+            for (let attempt = 1; attempt <= 3 && !backOk; attempt++) {
+              await new Promise((r) => setTimeout(r, attempt === 1 ? 5_000 : 15_000));
+              try {
+                const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(15_000) });
+                const body = await res.text();
+                backOk = res.ok;
+                backVersion = body.match(/"version"\s*:\s*"([^"]+)"/)?.[1] ?? '?';
+              } catch { backOk = false; }
+            }
+            if (backOk && backVersion === liveVersionBefore) {
+              console.log(`   ✅ رولبک خودکار کامل شد — نسخهٔ زنده: ${backVersion} — درخت کار به نسخهٔ جدید بازگردانده می‌شود.`);
+            } else {
+              console.log(`   ⚠ رولبک دیپلوی شد ولی نسخهٔ زنده (${backVersion}) با مبنای (${liveVersionBefore}) یکی نیست — کش لبه را صبر کنید و دستی چک کنید.`);
+              process.exitCode = 1;
+            }
+          }
+        }
       }
+      // بازگرداندن درخت کار به نسخهٔ جدید — هرگز حالت مخلوط نماند
+      spawnSync('git', ['checkout', 'HEAD', '--', 'worker', 'public'], { stdio: 'inherit', shell: process.platform === 'win32' });
+      console.log('   درخت کار: بازگردانده به نسخهٔ جدید (رولبک فقط روی تولید بود).');
     }
   }
 }
 
 section('جمع‌بندی');
 console.log(`   • نسخهٔ باندل: ${appVersion} — دامنه: ${baseUrl || '<دامنهٔ ورکر>'}`);
-console.log('   • بازگشت کد (rollback): باندل قبلی را باز کنید و فقط «npx wrangler deploy --var ENV:production» بزنید.');
+console.log('   • رولبک خودکار: دروازهٔ سلامت ×۳ قرمز ⇒ برگشت خودکار نسخهٔ قبلی از گیت (ف۲) — با --no-rollback خاموش می‌شود.');
+console.log('   • بازگشت دستی کد: کامیت نسخهٔ قبلی را بازسازی و فقط «npx wrangler deploy --var ENV:production» بزنید.');
 console.log(`   • بازگشت دیتابیس: فایل پشتیبان در ${BACKUP_DIR}/ — پیش از بازیابی برای من بنویسید تا راهنمایی کنم.`);
 console.log('   • چک‌لیست کامل: docs/UPDATE.md');

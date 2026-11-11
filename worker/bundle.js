@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.67";
+var APP_VERSION = "1.25.68";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -45187,6 +45187,84 @@ function registerClientErrorsRoutes(app, service) {
 }
 __name(registerClientErrorsRoutes, "registerClientErrorsRoutes");
 
+// src/application/cp-link/body.ts
+var CP_RESPONSE_BODY_MAX_BYTES = 2e6;
+var CP_FILE_MAX_BYTES = 41 * 1024 * 1024;
+var CpBodyTooLargeError = class extends Error {
+  static {
+    __name(this, "CpBodyTooLargeError");
+  }
+  limitBytes;
+  /** بایت خوانده‌شده تا لحظهٔ قطع — اگر Content-Length از قبل گویا بود null */
+  receivedBytes;
+  constructor(limitBytes, receivedBytes) {
+    super(`cp_body_too_large: limit=${limitBytes} received=${receivedBytes ?? "unknown"}`);
+    this.name = "CpBodyTooLargeError";
+    this.limitBytes = limitBytes;
+    this.receivedBytes = receivedBytes;
+  }
+};
+async function readBodyCapped(res, maxBytes) {
+  const declared = res.headers.get("content-length");
+  if (declared) {
+    const n = Number(declared);
+    if (Number.isFinite(n) && n > maxBytes) {
+      try {
+        await res.body?.cancel();
+      } catch {
+      }
+      throw new CpBodyTooLargeError(maxBytes, null);
+    }
+  }
+  const body = res.body;
+  if (!body) return new Uint8Array(0);
+  const reader = body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    for (; ; ) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        total += value.byteLength;
+        if (total > maxBytes) {
+          throw new CpBodyTooLargeError(maxBytes, total);
+        }
+        chunks.push(value);
+      }
+    }
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+    }
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.byteLength;
+  }
+  return out;
+}
+__name(readBodyCapped, "readBodyCapped");
+async function readJsonCapped(res, maxBytes = CP_RESPONSE_BODY_MAX_BYTES) {
+  const bytes = await readBodyCapped(res, maxBytes);
+  const text = new TextDecoder("utf-8").decode(bytes);
+  return JSON.parse(text);
+}
+__name(readJsonCapped, "readJsonCapped");
+async function readTextCapped(res, maxBytes = CP_RESPONSE_BODY_MAX_BYTES) {
+  const bytes = await readBodyCapped(res, maxBytes);
+  return new TextDecoder("utf-8").decode(bytes);
+}
+__name(readTextCapped, "readTextCapped");
+async function readBytesCapped(res, maxBytes = CP_FILE_MAX_BYTES) {
+  const bytes = await readBodyCapped(res, maxBytes);
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+}
+__name(readBytesCapped, "readBytesCapped");
+
 // src/application/cp-sync/announcements.ts
 var CP_SYNC_SETTINGS_KEY = "cp_sync.last_sync_at";
 var CP_SYNC_ATTEMPT_KEY = "cp_sync.last_attempt_at";
@@ -45322,7 +45400,7 @@ async function syncCpAnnouncements(deps) {
     if (!res.ok) {
       let bodyHead = "";
       try {
-        bodyHead = (await res.text()).slice(0, 180);
+        bodyHead = (await readTextCapped(res)).slice(0, 180);
       } catch {
         bodyHead = "";
       }
@@ -45335,7 +45413,20 @@ async function syncCpAnnouncements(deps) {
       });
       return { status: "error", detail: `http_${res.status}` };
     }
-    const payload = await res.json();
+    let payload;
+    try {
+      payload = await readJsonCapped(res);
+    } catch (err) {
+      if (err instanceof CpBodyTooLargeError) {
+        log.warn("announcement.cp_sync_failed", {
+          detail: "cp_body_too_large",
+          limit: err.limitBytes,
+          received: err.receivedBytes
+        });
+        return { status: "error", detail: "body_too_large" };
+      }
+      throw err;
+    }
     const parsed = CpSyncResponseSchema.safeParse(payload);
     if (!parsed.success) {
       log.warn("announcement.cp_sync_failed", { detail: "cp_payload_invalid" });
@@ -45697,7 +45788,7 @@ async function pushQueuedSubmissions(deps) {
   if (!res.ok) {
     let bodyHead = "";
     try {
-      bodyHead = (await res.text()).slice(0, 180);
+      bodyHead = (await readTextCapped(res)).slice(0, 180);
     } catch {
       bodyHead = "";
     }
@@ -45735,14 +45826,27 @@ async function pullCuratedItems(deps) {
   if (!res.ok) {
     let bodyHead = "";
     try {
-      bodyHead = (await res.text()).slice(0, 180);
+      bodyHead = (await readTextCapped(res)).slice(0, 180);
     } catch {
       bodyHead = "";
     }
     log.warn("cp_content.pull_failed", { http: res.status, detail: "cp_http_error", url, body_head: bodyHead });
     throw new Error(`http_${res.status}`);
   }
-  const payload = await res.json();
+  let payload;
+  try {
+    payload = await readJsonCapped(res);
+  } catch (err) {
+    if (err instanceof CpBodyTooLargeError) {
+      log.warn("cp_content.pull_failed", {
+        detail: "cp_body_too_large",
+        limit: err.limitBytes,
+        received: err.receivedBytes
+      });
+      throw new Error("body_too_large");
+    }
+    throw err;
+  }
   const parsed = CpContentSyncResponseSchema.safeParse(payload);
   if (!parsed.success) {
     log.warn("cp_content.pull_failed", { detail: "cp_payload_invalid" });
@@ -45836,7 +45940,8 @@ async function fetchCpContentFile(deps) {
     };
     const res = deps.binding ? await deps.binding.fetch(url, init) : await (deps.fetchFn ?? fetch)(url, init);
     if (!res.ok) return null;
-    return { bytes: await res.arrayBuffer(), mime: res.headers.get("content-type") ?? "application/octet-stream" };
+    const bytes = await readBytesCapped(res);
+    return { bytes, mime: res.headers.get("content-type") ?? "application/octet-stream" };
   } catch {
     return null;
   }
@@ -46137,7 +46242,7 @@ async function pushCpReport(deps) {
     if (!res.ok) {
       let bodyHead = "";
       try {
-        bodyHead = (await res.text()).slice(0, 180);
+        bodyHead = (await readTextCapped(res)).slice(0, 180);
       } catch {
         bodyHead = "";
       }
@@ -46262,7 +46367,7 @@ async function runBugReportForward(deps) {
       signal: AbortSignal.timeout(BUG_REPORT_TIMEOUT_MS)
     });
     if (res.ok) {
-      const body = await res.json().catch(() => null);
+      const body = await readJsonCapped(res).catch(() => null);
       const items = Array.isArray(body?.data?.items) ? body?.data?.items : [];
       if (items.length > 0) {
         pulled = await service.applyReplies(items);
@@ -46291,7 +46396,7 @@ async function runBugReportForward(deps) {
         await service.markSent(rec.id, now().toISOString().replace("T", " ").slice(0, 19));
         sent += 1;
       } else {
-        const text = (await res.text().catch(() => "")).slice(0, 200);
+        const text = (await readTextCapped(res).catch(() => "")).slice(0, 200);
         await service.markForwardError(rec.id, `HTTP ${res.status} ${text}`);
         failed += 1;
       }
