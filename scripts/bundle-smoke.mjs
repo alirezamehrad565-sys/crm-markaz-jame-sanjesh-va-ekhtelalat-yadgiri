@@ -104,6 +104,9 @@ async function probe(bundlePath) {
     norm = norm.replace(/"botAbout":"[^"]*",?/g, ''); // فیلد در باندل کهنه اصلاً نیست — حضور/غیاب مقایسه‌نشود
     // ۱.۲۵.۵۹ — iat/exp توکن لاگین بین دو پروب فرق می‌کنند (مرز ثانیه) — رفتار نیستند
     norm = norm.replace(/"iat":[0-9]+/g, '"iat":<IAT>').replace(/"exp":[0-9]+/g, '"exp":<EXP>');
+    // ۱.۲۵.۶۵ — خودِ رشتهٔ JWT مهرِ iat را درون payload کدگذاری‌شده دارد؛ مرز ثانیه کل رشتهٔ توکن
+    // را عوض می‌کرد و مقایسهٔ رفتاری را کاذب‌قرمز می‌کرد — فقط رشتهٔ مات می‌شود (حضور/غیاب می‌ماند)
+    norm = norm.replace(/"token":"[^"]*"/g, '"token":"<TOKEN>"');
     out.push(`${method} ${urlPath} → ${res.status} :: ${norm.slice(0, 4000)}`);
   }
   return out;
