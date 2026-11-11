@@ -2,6 +2,7 @@ import type { AuthContext } from '@core/shared';
 import { NEED_PROTOCOL_SUGGESTIONS, STUDENT_PROTOCOL_LABELS, type StudentProtocol } from '@core/shared';
 import { SNAP_IV_CUTOFFS, SCARED_CUTOFFS } from '@domain/clinical-engine/instruments'; /* ۱.۲۵.۰۶ — تک‌منبع برش‌ها (کپی محلی حذف) */
 import type { DbClient } from '@core/db';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import { ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
@@ -481,7 +482,7 @@ export function createOtEngineService(deps: OtEngineDeps) {
         WHERE e.student_id = ? AND e.status = 'completed' AND e.deleted_at IS NULL
           AND t.key IN (${keys.map(() => '?').join(', ')})
         ORDER BY e.occurred_at DESC, e.created_at DESC
-        LIMIT 200`,
+        LIMIT 200`, // IN-bounded: keys از ثابت‌های ماژول (BEHAVIORAL/WECHSLER/SUSPICION) است
       [studentId, ...keys]
     );
     return rows.map((r) => ({
@@ -948,21 +949,29 @@ export function createOtEngineService(deps: OtEngineDeps) {
     const ids = [...bySkill.keys()];
     if (ids.length === 0) throw new ValidationError('حداقل یک مهارت با وضعیت لازم است');
 
-    const validRows = await db.query<{ id: string }>(
-      `SELECT id FROM ot_skills WHERE id IN (${ids.map(() => '?').join(', ')})`,
-      ids
-    );
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی: ids از بدنهٔ درخواست است (به‌روزرسانی دسته‌جمعی مهارت‌ها — سقف ۱۰۰ بایند D1) */
+    const validRows: { id: string }[] = [];
+    for (const chunk of inParamChunks(ids)) {
+      validRows.push(...await db.query<{ id: string }>(
+        `SELECT id FROM ot_skills WHERE id IN (${inPlaceholders(chunk.length)})`,
+        chunk
+      ));
+    }
     const valid = new Set(validRows.map((r) => r.id));
     const unknown = ids.filter((x) => !valid.has(x));
     if (unknown.length > 0) throw new ValidationError(`شناسهٔ مهارت نامعتبر: ${unknown[0]}`);
 
-    const prevRows = await db.query<{ skill_id: string; status: string }>(
-      `SELECT skill_id, status
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی؛ هر مهارت در یک تکه است پس «آخرین وضعیت» هر مهارت حفظ می‌شود */
+    const prevRows: { skill_id: string; status: string }[] = [];
+    for (const chunk of inParamChunks(ids)) {
+      prevRows.push(...await db.query<{ skill_id: string; status: string }>(
+        `SELECT skill_id, status
          FROM ot_progress
-        WHERE student_id = ? AND skill_id IN (${ids.map(() => '?').join(', ')})
+        WHERE student_id = ? AND skill_id IN (${inPlaceholders(chunk.length)})
         ORDER BY occurred_at ASC, created_at ASC, rowid ASC`,
-      [studentId, ...ids]
-    );
+        [studentId, ...chunk]
+      ));
+    }
     const prevLatest = new Map<string, string>();
     for (const r of prevRows) prevLatest.set(r.skill_id, r.status); // آخرین ردیف هر مهارت
     const masteryConfirmed = ids.filter((id) => {

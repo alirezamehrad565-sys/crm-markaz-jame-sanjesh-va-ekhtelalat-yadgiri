@@ -280,7 +280,7 @@ export function createReportService(deps: ReportDeps): ReportService {
                 AND resource_id IN (${chunk.map(() => '?').join(',')})
               GROUP BY resource_id`,
             chunk.map((r) => r.id)
-          );
+          ); // IN-bounded: صدا زننده همان حلقهٔ تکهٔ ۹۰تایی ف۵ است (متغیر chunk)
           for (const r of auditRows) firstAdmitted.set(r.resource_id, r.admitted_at);
         }
       }

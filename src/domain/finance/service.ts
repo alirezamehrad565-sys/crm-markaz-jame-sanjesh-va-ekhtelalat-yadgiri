@@ -9,6 +9,7 @@ import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
 import type { ObjectStore } from '@core/storage';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import { sanitizeFilename } from '@domain/exercise-bank/pure';
 import type {
   BudgetRecord,
@@ -223,13 +224,16 @@ export function createFinanceService(deps: FinanceDeps): FinanceService {
   async function attachmentsOfInvoices(invoiceIds: string[]): Promise<Map<string, InvoiceAttachmentMeta>> {
     const map = new Map<string, InvoiceAttachmentMeta>();
     if (invoiceIds.length === 0) return map;
-    const ph = invoiceIds.map(() => '?').join(', ');
-    const rows = await db.query<InvoiceFileRow>(
-      `SELECT id, invoice_id, file_key, file_name, file_mime, file_size, created_at
-         FROM finance_invoice_files WHERE invoice_id IN (${ph})
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی؛ هر فاکتور در یک تکه است پس «آخرین پیوست» هر فاکتور سرِ جایش می‌ماند */
+    const rows: InvoiceFileRow[] = [];
+    for (const chunk of inParamChunks(invoiceIds)) {
+      rows.push(...await db.query<InvoiceFileRow>(
+        `SELECT id, invoice_id, file_key, file_name, file_mime, file_size, created_at
+           FROM finance_invoice_files WHERE invoice_id IN (${inPlaceholders(chunk.length)})
         ORDER BY created_at DESC, rowid DESC`,
-      invoiceIds
-    );
+        chunk
+      ));
+    }
     for (const r of rows) {
       // جایگزینی پیوست یعنی همیشه حداکثر یک ردیف — فقط اولین (آخرین) را نگه می‌داریم
       if (map.has(r.invoice_id)) continue;

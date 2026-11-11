@@ -211,8 +211,15 @@ export function summary30dScenario(data) {
     `${BASE}/api/dashboard/summary?from=${SUMMARY_30D_FROM}&to=${SUMMARY_30D_TO}`,
     authHeaders(data.token)
   );
-  // قناری: تا پیش از رفع، پاسخ ۵۰۰ «رفتار موردانتظار» است — اگر ۲۰۰ بیاید چک می‌شکند
-  check(res, { 'summary(30d) 500 — باگ سقف ۱۰۰پارامتر D1 (رفع شده؟)': (r) => r.status === 500 }, {
+  // قناری ۱.۲۵.۷۲ — باگ سقف ۱۰۰پارامتر D1 در ۱.۲۵.۷۰ با تکه‌بندی ۹۰تایی رفع شد (ف۵) و
+  // پویش کامل سازنده‌های IN در ۱.۲۵.۷۲ با دروازهٔ @core/db/in-chunks بسته شد؛
+  // انتظار قناری از «۵۰۰ (ثبت باگ)» به «۲۰۰ + بدنهٔ معتبر» چرخید — قرمزیِ این چک از این پس یعنی رگرسیون باگ.
+  check(res, {
+    'summary(30d) 200 — پس از رفع تکه‌بندی IN': (r) => r.status === 200,
+    'summary(30d) بدنهٔ JSON معتبر': (r) => {
+      try { JSON.parse(r.body); return true; } catch { return false; }
+    },
+  }, {
     scenario: 'dashboard_summary_30d',
   });
 }

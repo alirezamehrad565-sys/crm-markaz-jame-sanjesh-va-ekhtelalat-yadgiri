@@ -110,7 +110,7 @@ export function selectStudentsOfAppointments(ids: string[]): { sql: string; para
       params: []
     };
   }
-  const placeholders = ids.map(() => '?').join(',');
+  const placeholders = ids.map(() => '?').join(','); // IN-bounded: صدا زننده با APPOINTMENT_STUDENT_QUERY_CHUNK=90 تکه می‌کند (گیت e2e-in-list-chunk) (۱.۲۵.۷۲)
   return {
     sql: `SELECT appointment_id, student_id, facet_id, attendance, note, session_note, next_action
             FROM appointment_students

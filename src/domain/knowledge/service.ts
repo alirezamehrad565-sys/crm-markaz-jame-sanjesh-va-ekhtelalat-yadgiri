@@ -5,6 +5,7 @@ import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
 import type { ObjectStore } from '@core/storage';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import { sanitizeFilename, validateExerciseFileBytes } from '@domain/exercise-bank/pure';
 import type { KnowledgeService, NewKnowledgeInput, UpdateKnowledgeInput } from './types';
 
@@ -109,14 +110,17 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeService {
   async function attachmentsForItems(itemIds: string[]): Promise<Map<string, KnowledgeFileMeta[]>> {
     const map = new Map<string, KnowledgeFileMeta[]>();
     if (itemIds.length === 0) return map;
-    const placeholders = itemIds.map(() => '?').join(', ');
-    const rows = await db.query<AttachmentRow>(
-      `SELECT id, knowledge_id, file_key, file_name, file_mime, file_size, created_at
-         FROM knowledge_attachments
-        WHERE knowledge_id IN (${placeholders})
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی؛ هر آیتم در یک تکه است پس ترتیب پیوست‌های هر آیتم حفظ می‌شود */
+    const rows: AttachmentRow[] = [];
+    for (const chunk of inParamChunks(itemIds)) {
+      rows.push(...await db.query<AttachmentRow>(
+        `SELECT id, knowledge_id, file_key, file_name, file_mime, file_size, created_at
+           FROM knowledge_attachments
+        WHERE knowledge_id IN (${inPlaceholders(chunk.length)})
         ORDER BY created_at, rowid`,
-      itemIds
-    );
+        chunk
+      ));
+    }
     for (const r of rows) {
       const list = map.get(r.knowledge_id) ?? [];
       list.push({ id: r.id, filename: r.file_name, mime: r.file_mime, size: r.file_size });
