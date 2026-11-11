@@ -269,15 +269,20 @@ export function createReportService(deps: ReportDeps): ReportService {
       );
       const firstAdmitted = new Map<string, string>();
       if (wlIdRows.length > 0) {
-        const auditRows = await db.query<{ resource_id: string; admitted_at: string }>(
-          `SELECT resource_id, MIN(strftime('%Y-%m-%dT%H:%M:%SZ', created_at)) AS admitted_at
-             FROM audit_log
-            WHERE resource_type = 'waitlist' AND action = 'waitlist.admitted'
-              AND resource_id IN (${wlIdRows.map(() => '?').join(',')})
-            GROUP BY resource_id`,
-          wlIdRows.map((r) => r.id)
-        );
-        for (const r of auditRows) firstAdmitted.set(r.resource_id, r.admitted_at);
+        // ف۵ — سقف ۱۰۰ پارامتر bind در D1 (هم‌کلاس باگ کشف baseline بار روی summary):
+        // پرس‌وجوی audit_log تکه‌تکه ۹۰تایی روی admittedهای بی‌کران؛ MIN تکه‌ها همان MIN کل است
+        for (let i = 0; i < wlIdRows.length; i += 90) {
+          const chunk = wlIdRows.slice(i, i + 90);
+          const auditRows = await db.query<{ resource_id: string; admitted_at: string }>(
+            `SELECT resource_id, MIN(strftime('%Y-%m-%dT%H:%M:%SZ', created_at)) AS admitted_at
+               FROM audit_log
+              WHERE resource_type = 'waitlist' AND action = 'waitlist.admitted'
+                AND resource_id IN (${chunk.map(() => '?').join(',')})
+              GROUP BY resource_id`,
+            chunk.map((r) => r.id)
+          );
+          for (const r of auditRows) firstAdmitted.set(r.resource_id, r.admitted_at);
+        }
       }
       const waitPairs = wlIdRows
         .filter((r) => firstAdmitted.has(r.id))

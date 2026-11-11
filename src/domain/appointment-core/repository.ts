@@ -93,7 +93,23 @@ export function selectAppointments(filters: { staffId?: string; studentId?: stri
   };
 }
 
+/**
+ * سقف پارامترهای bind در D1 = ۱۰۰ پارامتر برای «هر کوئری» (خطای واقعی: «too many SQL variables»
+ * روی GET /api/dashboard/summary با پنجرهٔ >۱۰۰ نوبت — کشف baseline بار ف۵، scripts/load).
+ * تکه‌بندی باید در «حلقهٔ صدا زننده» باشد — UNION ALL با پارامترهای بیشتر هم همان سقف را می‌کارد.
+ * صدا زنندهٔ این سازنده باید ids را با همین ثابت slice کند (هم‌قرارداد).
+ */
+export const APPOINTMENT_STUDENT_QUERY_CHUNK = 90;
+
 export function selectStudentsOfAppointments(ids: string[]): { sql: string; params: unknown[] } {
+  // گارد دفاعی: IN خالی SQL نامعتبر است — کوئریِ هم‌شکل که هیچ ردیفی نمی‌دهد (هم‌قرارداد خروجی)
+  if (ids.length === 0) {
+    return {
+      sql: `SELECT appointment_id, student_id, facet_id, attendance, note, session_note, next_action
+              FROM appointment_students WHERE 0`,
+      params: []
+    };
+  }
   const placeholders = ids.map(() => '?').join(',');
   return {
     sql: `SELECT appointment_id, student_id, facet_id, attendance, note, session_note, next_action
