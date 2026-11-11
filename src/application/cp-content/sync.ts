@@ -44,8 +44,18 @@ export const CP_CONTENT_ID_PREFIX = 'cp-content-';
 export const CP_CONTENT_LOOKBACK_MS = 60_000;
 /** سقف زمان یک fetch */
 export const CP_CONTENT_TIMEOUT_MS = 15_000;
-/** حداکثر آیتم در هر دستهٔ push و هر پاسخ pull */
+/** حداکثر آیتم در هر دستهٔ push (فقط همرسانی) */
 export const CP_CONTENT_BATCH_MAX = 20;
+/**
+ * ۱.۲۵.۶۷ — رفع CP-1: سقف پاسخ pull جدا از ثابت دستهٔ push است.
+ * تا ۱.۲۵.۶۶ اسکیمای pull با همان CP_CONTENT_BATCH_MAX=۲۰ بسته بود در حالی که
+ * قرارداد (cp-node-content-hub.md §۵) و رفتار CP سمت خودش (LIMIT ۱۰۰ —
+ * cp-repo pure.ts:21 / service.ts:924) سقف ۱۰۰ می‌گویند؛ از آیتم ۲۱ به بعد
+ * هر pull برای همیشه payload_invalid می‌شد (دور بی‌نهایت — مُهر sync فقط روی
+ * موفقیت پیش می‌رود). درس ثبت‌شده در طرح ارتقا §۳-۶: ثابت‌های قراردادی با
+ * نامِ جهت (PULL/PUSH) تعریف شوند، نه ثابت مشترک.
+ */
+export const CP_CONTENT_PULL_MAX = 100;
 
 export interface CpContentConfig {
   /** origin CP (استخراج از CP_SYNC_URL) — بدون مسیر */
@@ -147,7 +157,7 @@ const CpContentSyncItemSchema = z.object({
 const CpContentSyncResponseSchema = z.object({
   data: z.object({
     server_time: z.string().min(10).max(40),
-    items: z.array(CpContentSyncItemSchema).max(CP_CONTENT_BATCH_MAX)
+    items: z.array(CpContentSyncItemSchema).max(CP_CONTENT_PULL_MAX) // CP-1 — قرارداد §۵: ≤۱۰۰ (نه ثابت دستهٔ push)
   })
 });
 

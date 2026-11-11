@@ -27,7 +27,19 @@ const FULL_ENV = { CP_SYNC_URL, CP_NODE_CODE: 'demo-a', CP_NODE_KEY: 'ck_live_te
 interface IngestCall {
   url: string;
   headers: Record<string, string>;
-  body: { events: Array<{ seq: number; ts: string; payload: Record<string, unknown> }>; health: { reported_version: string | null } | null };
+  body: {
+    events: Array<{ seq: number; ts: string; payload: Record<string, unknown> }>;
+    // ۱.۲۵.۶۷ — CP-2: snapshot سلامت با فیلدهای واقعی (قبلاً فقط reported_version تایپ می‌شد)
+    health: {
+      captured_at?: string;
+      reported_version: string | null;
+      outbox_depth?: number | null;
+      unsynced_ops?: number | null;
+      error_rate_1h?: number | null;
+      error_rate_24h?: number | null;
+      sync_lag_s?: number | null;
+    } | null;
+  };
 }
 
 function fetchCapturing(status = 200): typeof fetch & { calls: IngestCall[] } {
@@ -300,5 +312,61 @@ describe('cp-report: یک push کامل — فقط عدد، seq صعودی، م�
       expect(v === null || typeof v === 'number').toBe(true);
       expect(v).not.toBeNaN();
     }
+  });
+});
+
+describe('cp-report: CP-2 — snapshot سلامت از مُهرها و صف‌های واقعی (۱.۲۵.۶۷)', () => {
+  const isoToSqlite = (d: Date): string => d.toISOString().replace('T', ' ').slice(0, 19);
+
+  it('بدون هیچ مُهری: sync_lag_s و error_rate_24h پوچ — اما عمق صف‌ها صفر واقعی است (جدول هست، خالی است)', async () => {
+    const A = createTestApp();
+    const now = new Date();
+    const f = fetchCapturing();
+    await pushCpReport({ db: A.db, logger: silentLogger('it'), config: buildCpReportConfig(FULL_ENV), fetchFn: f, now: () => now });
+    const h = f.calls[0].body.health!;
+    expect(h.reported_version).toBeTruthy();
+    expect(h.sync_lag_s).toBeNull(); // هنوز هیچ سینک موفقی ثبت نشده
+    expect(h.error_rate_24h).toBeNull(); // بدون ترافیک ۲۴ساعته = ناشناخته نه صفر
+    expect(h.outbox_depth).toBe(0);
+    expect(h.unsynced_ops).toBe(0);
+  });
+
+  it('با مُهر سینک یک‌ساعته + دو گزارش باگ (یکی شکسته): sync_lag_s ≈ ۳۶۰۰، outbox=۱، error_rate=۵۰٪', async () => {
+    const A = createTestApp();
+    const t0 = new Date('2026-11-08T09:00:00.000Z');
+    const f = fetchCapturing();
+
+    const r1 = await pushCpReport({ db: A.db, logger: silentLogger('it'), config: buildCpReportConfig(FULL_ENV), fetchFn: f, now: () => t0 });
+    expect(r1.status).toBe('ok');
+
+    // مُهر سینک اعلان یک ساعت قبل از t0 + دو گزارش باگ ۲۴ساعته (یکی open سالم، یکی forward_error)
+    // توجه: created_at باید در پنجرهٔ واقعی datetime('now','-24 hours') باشد — ساعت هارنس با t0 موک‌شده فرق دارد
+    const hourAgo = new Date(t0.getTime() - 3600_000).toISOString();
+    const createdNow = isoToSqlite(new Date());
+    await A.db.execute(
+      `INSERT INTO settings (key, value, updated_by, updated_at) VALUES ('cp_sync.last_sync_at', ?, 'test', ?)`,
+      [JSON.stringify(hourAgo), hourAgo]
+    );
+    await A.db.execute(
+      `INSERT INTO bug_reports (id, areas, severity, status, forward_error, created_at)
+       VALUES ('bug-ok-1', '[]', 'minor', 'sent', NULL, ?)`,
+      [createdNow]
+    );
+    await A.db.execute(
+      `INSERT INTO bug_reports (id, areas, severity, status, forward_error, created_at)
+       VALUES ('bug-fail-1', '[]', 'major', 'open', 'http_500', ?)`,
+      [createdNow]
+    );
+
+    const r2 = await cpReportOpportunistic({
+      db: A.db, logger: silentLogger('it'), config: buildCpReportConfig(FULL_ENV), fetchFn: f,
+      now: () => new Date(t0.getTime() + CP_REPORT_MIN_INTERVAL_MS + 60_000)
+    });
+    expect(r2.status).toBe('ok');
+    const h = f.calls[1].body.health!;
+    expect(h.sync_lag_s).toBeGreaterThanOrEqual(3600);
+    expect(h.sync_lag_s).toBeLessThan(3600 + 25 * 3600); // فاصلهٔ کرون + یک ساعت، نه مقدار مسخره
+    expect(h.outbox_depth).toBe(1); // فقط شکست‌خورده در صف می‌ماند (sent دیگر در صف نیست)
+    expect(h.error_rate_24h).toBe(50); // ۱ شکسته از ۲ گزارش ۲۴ساعته
   });
 });
