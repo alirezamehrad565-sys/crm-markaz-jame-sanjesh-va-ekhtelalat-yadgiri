@@ -66,6 +66,8 @@ import type { CenterKpiService } from '@domain/center-kpi';
 import { createNetworkContentService, registerNetworkContentRoutes } from '@domain/network-content'; // ۱.۲۵.۴۶ — کتابخانهٔ شبکه
 import { createBugReportService, registerBugReportRoutes } from '@domain/bug-reports'; // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP
 import type { BugReportService } from '@domain/bug-reports';
+import { createClientErrorsService, registerClientErrorsRoutes } from '@app/client-errors'; // ۱.۲۵.۶۶ — لولهٔ خطای مرورگر
+import type { ClientErrorsService } from '@app/client-errors';
 import { createContentScoreService, registerContentScoreRoutes } from '@domain/content-score'; // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
 import type { ContentScoreService } from '@domain/content-score';
 import { fetchCpContentFile } from '@app/cp-content/sync';
@@ -164,6 +166,7 @@ export interface Services {
   centerKpi: CenterKpiService; // ۱.۲۵.۴۶ — تابلوی شاخص‌های مرکز
   networkContent: NetworkContentService; // ۱.۲۵.۴۶ — کتابخانهٔ شبکه
   bugReports: BugReportService; // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP
+  clientErrors: ClientErrorsService; // ۱.۲۵.۶۶ — لولهٔ خطای مرورگر
   contentScore: ContentScoreService; // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
 }
 
@@ -461,6 +464,9 @@ export function createServices(deps: AppDeps): Services {
   // تله‌متری کارایی: ثبت بی‌نام + جمع‌بندی صدک (نرخ درون‌حافظه، بدون IP/UA)
   const rum = createRumService({ db, logger });
 
+  // ۱.۲۵.۶۶ — لولهٔ خطای مرورگر: تا امروز کلاینت به /api/client-errors پست می‌کرد و ۴۰۱ می‌گرفت
+  const clientErrors = createClientErrorsService({ db, logger });
+
   // ۱.۲۵.۴۶ — تابلوی شاخص‌های مرکز + کتابخانهٔ شبکه (محورهای کیفیِ غنی‌سازی CP)
   const centerKpi = createCenterKpiService({ db });
   const networkContent = createNetworkContentService({
@@ -485,7 +491,7 @@ export function createServices(deps: AppDeps): Services {
   // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP (صف محلی؛ ارسال در @app/bug-report-forward)
   const bugReports = createBugReportService(db, audit);
 
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, contentScore };
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, contentScore };
 }
 
 export function createApp(deps: AppDeps): AppHono {
@@ -658,6 +664,8 @@ export function createApp(deps: AppDeps): AppHono {
   registerNetworkContentRoutes(app, services.networkContent); // ۱.۲۵.۴۶ — کتابخانهٔ شبکه
 
   registerBugReportRoutes(app, services.bugReports); // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP
+
+  registerClientErrorsRoutes(app, services.clientErrors); // ۱.۲۵.۶۶ — لولهٔ خطای مرورگر (POST عمومی /public/client-errors، خواندن فقط‌مدیر)
 
   registerContentScoreRoutes(app, { contentScore: services.contentScore }); // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
 

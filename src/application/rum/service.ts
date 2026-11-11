@@ -49,6 +49,8 @@ export interface RumService {
   record(events: RumEventInput[]): Promise<number>;
   /** جمع‌بندی صدک سنجه‌ها در پنجرهٔ چندروز اخیر (فقط مدیر) */
   summary(days: number): Promise<RumSummary>;
+  /** ۱.۲۵.۶۶ — حذف رویدادهای قدیم‌تر از ۹۰ روز (کرون شبانه) — تعداد حذف‌شده */
+  pruneOld(): Promise<number>;
 }
 
 export function createRumService(deps: RumDeps): RumService {
@@ -122,6 +124,16 @@ export function createRumService(deps: RumDeps): RumService {
       }));
 
       return { window_days: windowDays, total: rows.length, metrics };
+    },
+
+    /* ۱.۲۵.۶۶ — rum_events تا امروز بی‌نگه‌دار بود و بی‌کران رشد می‌کرد؛ کرون شبانه سقف ۹۰ روز را اجرا می‌کند */
+    async pruneOld(): Promise<number> {
+      const cutoff = new Date(Date.now() - 90 * 86_400_000).toISOString();
+      const deleted = await db.query<{ id: number }>(
+        `DELETE FROM rum_events WHERE ts < ? RETURNING id`,
+        [cutoff]
+      );
+      return deleted.length;
     }
   };
 }

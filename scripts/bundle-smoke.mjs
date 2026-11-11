@@ -107,6 +107,8 @@ async function probe(bundlePath) {
     // ۱.۲۵.۶۵ — خودِ رشتهٔ JWT مهرِ iat را درون payload کدگذاری‌شده دارد؛ مرز ثانیه کل رشتهٔ توکن
     // را عوض می‌کرد و مقایسهٔ رفتاری را کاذب‌قرمز می‌کرد — فقط رشتهٔ مات می‌شود (حضور/غیاب می‌ماند)
     norm = norm.replace(/"token":"[^"]*"/g, '"token":"<TOKEN>"');
+    // ۱.۲۵.۶۶ — expiresAt پاسخ لاگین هم مهر ثانیه‌ای now+۳۰روز است — رفتار نیست
+    norm = norm.replace(/"expiresAt":"[^"]*"/g, '"expiresAt":"<EXPIRES>"');
     out.push(`${method} ${urlPath} → ${res.status} :: ${norm.slice(0, 4000)}`);
   }
   return out;

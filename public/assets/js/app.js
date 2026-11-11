@@ -20,15 +20,28 @@ import { fa } from './format.js'; // badge لیست انتظار
 })();
 
 let __clientErrCount = 0;
+/* ۱.۲۵.۶۶ — لولهٔ خطا وصل شد: تا امروز به /api/client-errors (مسیرِ موجود نبود → میدل‌ور احراز ۴۰۱)
+   پست می‌شد و هیچ خطای مرورگری به سرور نمی‌رسید؛ اکنون هم‌الگوی /public/rum روی POST /public/client-errors
+   بی‌احراز می‌رود (خطاهای صفحهٔ ورود هم گزارش می‌شوند) با برش هم‌قرارداد با ستون‌های جدول 0106 */
 function reportClientError(message, source, line, col, stack) {
   if (__clientErrCount >= 10) return;
   __clientErrCount += 1;
   try {
-    fetch('/api/client-errors', {
+    const v = document.querySelector('link[rel="stylesheet"][href*="base.css"]')?.href ?? '';
+    const ver = v ? new URL(v).searchParams.get('v') : null;
+    fetch('/public/client-errors', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       keepalive: true,
-      body: JSON.stringify({ message, source, line, col, stack, url: location.href })
+      body: JSON.stringify({
+        message: String(message ?? '').slice(0, 500),
+        source: source ? String(source).slice(0, 300) : null,
+        line: Number.isFinite(line) ? Math.trunc(line) : null,
+        col: Number.isFinite(col) ? Math.trunc(col) : null,
+        stack: stack ? String(stack).slice(0, 6000) : null,
+        url: String(location.href).slice(0, 300),
+        app_version: ver ? String(ver).slice(0, 20) : null
+      })
     }).catch(() => {});
   } catch { /* گزارش خطا هرگز نباید خودش خطا تولید کند */ }
 }
