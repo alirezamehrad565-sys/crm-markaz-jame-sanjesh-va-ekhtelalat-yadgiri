@@ -4,7 +4,7 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
-import { rowToAppointment, rowToStudent, selectAppointmentById, selectAppointments, selectStudentsOfAppointments } from './repository';
+import { rowToAppointment, rowToStudent, selectAppointmentById, selectAppointments, selectStudentsOfAppointments, APPOINTMENT_STUDENT_QUERY_CHUNK } from './repository';
 import type { AppointmentRow, AppointmentStudentRow } from './repository';
 import type { Appointment, AppointmentDeps, AppointmentLifecycleObserver, AppointmentService, AppointmentUpdatePatch, CopyWeekInput, CopyWeekResult, ListFilters, MyStudent, NewAppointmentInput } from './types';
 import { copyWeek as copyWeekImpl, undoCopyWeek as undoCopyWeekImpl } from './week-copy';
@@ -125,13 +125,18 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       if (rows.length === 0) return [];
 
       const ids = rows.map((r) => r.id);
-      const { sql: ssql, params: sparams } = selectStudentsOfAppointments(ids);
-      const studentRows = await db.query<AppointmentStudentRow>(ssql, sparams);
+      // ف۵ — رفع باگ کشف baseline بار: سقف ۱۰۰ پارامتر bind در D1 («too many SQL variables» روی
+      // پنجرهٔ >۱۰۰ نوبت) — پرس‌وجوی دانش‌آموزان تکه‌تکه ۹۰تایی؛ گروه‌بندی در نقشه، ترتیب درون
+      // هر نوبت دست‌نخورده (هر نوبت همیشه در یک تکه است و هر تکه ORDER BY student_id دارد)
       const byAppointment = new Map<string, AppointmentStudentRow[]>();
-      for (const s of studentRows) {
-        const list = byAppointment.get(s.appointment_id) ?? [];
-        list.push(s);
-        byAppointment.set(s.appointment_id, list);
+      for (let i = 0; i < ids.length; i += APPOINTMENT_STUDENT_QUERY_CHUNK) {
+        const { sql: ssql, params: sparams } = selectStudentsOfAppointments(ids.slice(i, i + APPOINTMENT_STUDENT_QUERY_CHUNK));
+        const studentRows = await db.query<AppointmentStudentRow>(ssql, sparams);
+        for (const s of studentRows) {
+          const list = byAppointment.get(s.appointment_id) ?? [];
+          list.push(s);
+          byAppointment.set(s.appointment_id, list);
+        }
       }
       return rows.map((r) => rowToAppointment(r, (byAppointment.get(r.id) ?? []).map(rowToStudent)));
     },
