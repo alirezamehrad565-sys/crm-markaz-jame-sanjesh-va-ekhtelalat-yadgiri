@@ -1771,3 +1771,4 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .bug-row:hover { border-color: color-mix(in srgb, var(--primary) 35%, var(--border)); }
 .bug-row__head { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
 .bug-reply { border-inline-start: 3px solid var(--success); background: var(--success-soft); border-radius: var(--radius-2); padding: var(--sp-2) var(--sp-3); display: grid; gap: var(--sp-1); }
+@media (max-width: 480px) { .bug-actions .btn--primary { width: 100%; justify-content: center; } }

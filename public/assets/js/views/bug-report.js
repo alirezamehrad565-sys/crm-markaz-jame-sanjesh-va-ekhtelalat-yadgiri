@@ -3,12 +3,14 @@ import { fa, formatJalaliNumeric } from '../format.js';
 import { el, icon, toast, toastError, emptyState } from '../ui.js';
 import { session } from '../state.js';
 
-// ─── گزارش به پشتیبانی (۱.۲۵.۶۳ — بازطراحی UI/UX به خواست کارفرما) ───
+// ─── گزارش به پشتیبانی (۱.۲۵.۶۴ — نقد اسکرین‌شات و رفع ایرادهای UI/UX) ───
 // همکار مشکل را تیک می‌زند و می‌فرستد؛ بقیه‌اش خودکار است: صفحهٔ موقع گزارش،
 // نام گزارش‌دهنده و نسخهٔ سامانه بی‌سروصدا ضبط می‌شوند. پاسخ پشتیبانی شبکه
 // (CP m8) در چرخهٔ دوطرفهٔ سرور pull و همین‌جا با نشان «پاسخ داده شد» می‌نشیند.
-// ۱.۲۵.۶۳: page-head استاندارد، قرص شدت استایل‌دار (CSS واقعی جای ظاهر خام مرورگر)،
-// ردیف گزارش کارت‌مانند، شمارندهٔ متن، نشان شمارش فهرست و آیکن bug در حالت خالی.
+// ۱.۲۵.۶۴: قرارداد فیلد نما با سرور هم‌قرارداد شد (snake_case: created_at، staff_name،
+// forward_error، reply_at، reply_by — خطای «slice» و خالی‌شدن کل کارت ریشه‌کن شد)،
+// ساختار کارت استاندارد card__head/card__body، لیبل‌ها field__label، شمارنده در سطر
+// لیبل توضیح، دکمهٔ ارسال در ردیف actions، خطای بارگیری فهرست با «تلاش مجدد» درون‌کارت.
 // شناسهٔ بخش‌ها هم‌قرارداد نقشهٔ برچسب پنل شبکه است — ناشناخته‌ها برچسب خام می‌گیرند.
 
 const AREAS = [
@@ -68,7 +70,7 @@ function areaChip(area) {
   return btn;
 }
 
-/* ۱.۲۵.۶۳ — قرص شدت: input نامرئی + span استایل‌دار (.bug-sev در components.css) */
+/* قرص شدت: input نامرئی + span استایل‌دار (.bug-sev در components.css) */
 function severityRadio(sev) {
   const id = `bug-sev-${sev.id}`;
   return el(
@@ -86,7 +88,7 @@ function severityRadio(sev) {
   );
 }
 
-/* ۱.۲۵.۶۳ — بلوک پاسخ پشتیبانی: استایل از CSS (.bug-reply) — ظاهر خام مرورگر یا استایل درون‌خطی نیست */
+/* بلوک پاسخ پشتیبانی — فیلدهای snake_case هم‌قرارداد shape() سرور */
 function replyBlock(rec) {
   if (!rec.reply_text) return null;
   return el(
@@ -96,16 +98,16 @@ function replyBlock(rec) {
       'div',
       { class: 'bug-row__head' },
       el('span', { class: 'badge badge--success' }, 'پاسخ پشتیبانی'),
-      rec.replyAt
-        ? el('span', { style: { fontSize: 'var(--fs-xs)', color: 'var(--text-3)' } }, formatJalaliNumeric(rec.replyAt.slice(0, 10)))
+      rec.reply_at
+        ? el('span', { class: 'field__hint' }, formatJalaliNumeric(rec.reply_at.slice(0, 10)))
         : null
     ),
     el('p', { style: { margin: 0, whiteSpace: 'pre-wrap' } }, rec.reply_text),
-    rec.replyBy ? el('p', { style: { margin: 0, fontSize: 'var(--fs-xs)', color: 'var(--text-3)' } }, rec.replyBy) : null
+    rec.reply_by ? el('p', { class: 'field__hint', style: { margin: 0 } }, rec.reply_by) : null
   );
 }
 
-/* ۱.۲۵.۶۳ — ردیف گزارش کارت‌مانند (.bug-row) با سرِ برچسب‌ها */
+/* ردیف گزارش کارت‌مانند — فیلدهای snake_case هم‌قرارداد shape() سرور */
 function reportRow(rec) {
   const st = STATUS_META[rec.status] ?? STATUS_META.open;
   const areaLabels = (rec.areas ?? [])
@@ -122,8 +124,8 @@ function reportRow(rec) {
       replied
         ? el('span', { class: 'badge badge--success' }, 'پاسخ داده شد')
         : el('span', { class: `badge ${st.cls}` }, st.label),
-      rec.forwardedAt && !replied
-        ? el('span', { style: { fontSize: 'var(--fs-xs)', color: 'var(--text-3)' } }, `تحویل: ${formatJalaliNumeric(rec.forwardedAt.slice(0, 10))}`)
+      rec.forwarded_at && !replied
+        ? el('span', { class: 'field__hint' }, `تحویل: ${formatJalaliNumeric(rec.forwarded_at.slice(0, 10))}`)
         : null
     ),
     areaLabels ? el('p', { style: { margin: 0, fontWeight: 600 } }, areaLabels) : null,
@@ -131,11 +133,11 @@ function reportRow(rec) {
     replyBlock(rec),
     el(
       'p',
-      { style: { fontSize: 'var(--fs-xs)', color: 'var(--text-3)', margin: 0 } },
-      [rec.staffName, formatJalaliNumeric(rec.createdAt.slice(0, 10))].filter(Boolean).map((t, i) => (i ? ` · ${t}` : t))
+      { class: 'field__hint', style: { margin: 0 } },
+      [rec.staff_name, formatJalaliNumeric((rec.created_at ?? '').slice(0, 10))].filter(Boolean).map((t, i) => (i ? ` · ${t}` : t))
     ),
-    rec.status === 'open' && rec.forwardError && !replied
-      ? el('p', { style: { fontSize: 'var(--fs-xs)', color: 'var(--error)', margin: 0 } }, `خطای ارسال — تلاش دورهٔ بعد: ${rec.forwardError}`)
+    rec.status === 'open' && rec.forward_error && !replied
+      ? el('p', { class: 'field__hint', style: { margin: 0, color: 'var(--error)' } }, `خطای ارسال — تلاش دورهٔ بعد: ${rec.forward_error}`)
       : null
   );
 }
@@ -144,35 +146,24 @@ export async function renderBugReport(container) {
   container.replaceChildren(el('p', { style: { color: 'var(--text-3)' } }, 'در حال بارگذاری…'));
 
   const chips = el('div', { class: 'chip-row' }, ...AREAS.map(areaChip));
-  const sevWrap = el(
-    'div',
-    { class: 'chip-row' },
-    ...SEVERITIES.map(severityRadio)
-  );
+  const sevWrap = el('div', { class: 'chip-row' }, ...SEVERITIES.map(severityRadio));
 
-  const counter = el('span', { style: { fontSize: 'var(--fs-xs)', color: 'var(--text-3)' } }, `${fa(0)} / ${fa(2000)}`);
+  const counter = el('span', { class: 'field__hint' }, `${fa(0)} / ${fa(2000)}`);
   const desc = el('textarea', {
     class: 'input',
     rows: 4,
     maxlength: 2000,
-    style: { width: '100%' },
     placeholder: 'توضیح مشکل (اختیاری اگر بخشی تیک خورده باشد)',
     'aria-label': 'توضیح مشکل',
     oninput: () => { counter.textContent = `${fa(desc.value.length)} / ${fa(2000)}`; }
   });
 
-  const submitBtn = el(
-    'button',
-    { class: 'btn btn--primary', type: 'submit' },
-    icon('send', 16),
-    'ارسال گزارش'
-  );
+  const submitBtn = el('button', { class: 'btn btn--primary', type: 'submit' }, icon('send', 16), 'ارسال گزارش');
 
   const form = el(
     'form',
     {
-      class: 'card',
-      style: { display: 'grid', gap: 'var(--sp-2)' },
+      class: 'card bug-form',
       onsubmit: async (e) => {
         e.preventDefault();
         if (state.sending) return;
@@ -209,34 +200,58 @@ export async function renderBugReport(container) {
         }
       }
     },
-    el('h2', { class: 'card__title' }, icon('bug', 18), 'گزارش تازه'),
-    el('p', { style: { fontWeight: 600, margin: 0 } }, 'کدام بخش سامانه؟'),
-    chips,
-    el('p', { style: { fontWeight: 600, margin: 0 } }, 'شدت'),
-    sevWrap,
-    el('p', { style: { margin: 0, fontSize: 'var(--fs-xs)', color: 'var(--text-3)' } }, 'بحرانی یعنی کار شما با سامانه متوقف شده است.'),
-    desc,
-    el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' } }, counter, submitBtn)
+    el('div', { class: 'card__head' }, el('h2', { class: 'card__title' }, icon('bug', 18), 'گزارش تازه')),
+    el(
+      'div',
+      { class: 'card__body', style: { display: 'grid', gap: 'var(--sp-4)' } },
+      el('div', { class: 'field' },
+        el('span', { class: 'field__label' }, 'کدام بخش سامانه؟'),
+        chips
+      ),
+      el('div', { class: 'field' },
+        el('span', { class: 'field__label' }, 'شدت'),
+        sevWrap,
+        el('span', { class: 'field__hint' }, 'بحرانی یعنی کار شما با سامانه متوقف شده است.')
+      ),
+      el('div', { class: 'field' },
+        el('div', { class: 'field__labelrow' }, el('span', { class: 'field__label' }, 'توضیح مشکل'), counter),
+        desc
+      ),
+      el('div', { class: 'bug-actions', style: { display: 'flex', gap: 'var(--sp-2)' } }, submitBtn)
+    )
   );
 
-  const listBox = el('div', { class: 'card', style: { display: 'grid', gap: 'var(--sp-2)' } });
+  const listBox = el('div', { class: 'card' });
 
   async function loadList() {
+    listBox.replaceChildren(
+      el('div', { class: 'card__head' },
+        el('h2', { class: 'card__title' }, 'گزارش‌های پیشین'),
+        el('span', { class: 'card__meta' }, 'در حال بارگذاری…')
+      )
+    );
     try {
       const res = await api.get('/api/bug-reports');
       const items = res?.data ?? [];
       listBox.replaceChildren(
-        el('h2', { class: 'card__title' },
-          'گزارش‌های پیشین',
+        el('div', { class: 'card__head' },
+          el('h2', { class: 'card__title' }, 'گزارش‌های پیشین'),
           items.length > 0 ? el('span', { class: 'badge badge--neutral' }, fa(items.length)) : null
         ),
-        items.length === 0
-          ? emptyState({ iconName: 'bug', title: 'هنوز گزارشی ثبت نشده', hint: 'اگر جایی از سامانه اذیت‌تان کرد، از همین فرم بفرستید — به پشتیبانی شبکه می‌رسد.' })
-          : el('div', { style: { display: 'grid', gap: 'var(--sp-2)' } }, ...items.map(reportRow))
+        el('div', { class: 'card__body', style: { display: 'grid', gap: 'var(--sp-2)' } },
+          items.length === 0
+            ? emptyState({ iconName: 'bug', title: 'هنوز گزارشی ثبت نشده', hint: 'اگر جایی از سامانه اذیت‌تان کرد، از همین فرم بفرستید — به پشتیبانی شبکه می‌رسد.' })
+            : el('div', { style: { display: 'grid', gap: 'var(--sp-2)' } }, ...items.map(reportRow))
+        )
       );
     } catch (err) {
       toastError(err);
-      listBox.replaceChildren();
+      listBox.replaceChildren(
+        el('div', { class: 'card__head' }, el('h2', { class: 'card__title' }, 'گزارش‌های پیشین')),
+        el('div', { class: 'card__body' },
+          emptyState({ iconName: 'alert', title: 'فهرست گزارش‌ها باز نشد', hint: 'ارتباط با سرور برقرار نشد — گزارش‌های ثبت‌شده‌تان از بین نرفته‌اند.', actionLabel: 'تلاش مجدد', onAction: loadList })
+        )
+      );
     }
   }
 
@@ -250,7 +265,7 @@ export async function renderBugReport(container) {
     ),
     el(
       'div',
-      { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--sp-3)', alignItems: 'start' } },
+      { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--sp-4)', alignItems: 'start' } },
       form,
       listBox
     )
