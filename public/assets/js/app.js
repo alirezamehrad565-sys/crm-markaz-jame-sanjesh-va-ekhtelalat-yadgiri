@@ -132,8 +132,10 @@ const NAV = [
   { hash: '#/special-needs', label: 'نیازهای ویژه', icon: 'clip', group: 'مرکز', roles: ['manager', 'secretary'] },
   { hash: '#/settings', label: 'تنظیمات', icon: 'settings', group: 'مرکز', roles: ['manager', 'secretary'] },
   { hash: '#/backup', label: 'پشتیبان‌گیری', icon: 'save', group: 'مرکز', roles: ['manager'] },
-  { hash: '#/health', label: 'پنل سلامت', icon: 'activity', group: 'مرکز', roles: ['manager'] }, // ۱.۲۵.۶۷ — ف۱ طرح ارتقا (CP-3): وضعیت سامانه + لینک CP
-  { hash: '#/client-errors', label: 'خطاهای مرورگر', icon: 'bug', group: 'مرکز', roles: ['manager'] }, // ۱.۲۵.۶۷ — ف۱ طرح ارتقا (P1-8): نمای مدیریتی لولهٔ خطا
+  /* ۱.۲۵.۷۱ — «پنل سلامت» و «خطاهای مرورگر» از سایدبار و روتر قطع شدند (خواست کارفرما: کد حذف نشود، فقط از UI قطع شود).
+     دست‌نخورده‌ها: سورس نماها در views/health-panel.js و views/client-errors.js، ماژول سرور health/client-errors،
+     مسیرهای GET /api/health/panel و GET /api/client-errors، گزارشگر خطای مرورگر روی /public/client-errors،
+     و هشدارهای شبانه. بازگشت: دو خط NAV و دو register هم‌نام نما از کامیت ۱.۲۵.۷۰ (b17747a) برگردانده شود. */
   // ۱.۲۵.۵۳ — لینک بیرونی «کنترل‌پلین شبکه» از منو قطع شد (خواست کارفرما)؛ سمت CP بی‌تغییر می‌ماند
   // بازاعمال ۱.۲۵.۵۱ — جای کنترل‌پلین: گزارش باگ سامانه به پشتیبانی CP (همهٔ همکاران)
   { hash: '#/bug-report', label: 'گزارش به پشتیبانی', icon: 'bug', group: 'مرکز' } // ۱.۲۵.۶۳ — آیکن bug واقعی جای عنکبوت (خواست کارفرما)
@@ -446,8 +448,8 @@ const reportsView = lazyView(() => import('./views/reports.js'), 'renderReports'
 register('#/staff', { title: 'کارکنان', render: managerOnly(lazyView(() => import('./views/staff.js'), 'renderStaff', '#/staff')) });
 register('#/settings', { title: 'تنظیمات', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/settings.js'), 'renderSettings', '#/settings'), 'تنظیمات فقط برای دفتر مرکز (مدیر و منشی) فعال است.') });
 register('#/backup', { title: 'پشتیبان‌گیری و بازیابی', render: managerOnly(lazyView(() => import('./views/backup.js'), 'renderBackup', '#/backup')) }); // فقط مدیر
-register('#/health', { title: 'پنل سلامت', render: managerOnly(lazyView(() => import('./views/health-panel.js'), 'renderHealthPanel', '#/health')) }); // ۱.۲۵.۶۷ — ف۱ طرح ارتقا (CP-3)
-register('#/client-errors', { title: 'خطاهای مرورگر', render: managerOnly(lazyView(() => import('./views/client-errors.js'), 'renderClientErrors', '#/client-errors')) }); // ۱.۲۵.۶۷ — ف۱ طرح ارتقا (P1-8)
+/* ۱.۲۵.۷۱ — دو ثبت مسیر «پنل سلامت» و «خطاهای مرورگر» از روتر قطع شد (خواست کارفرما؛ سورس نماها و API زنده —
+   بازگشت = دو خط register از کامیت ۱.۲۵.۷۰ برگردانده شود؛ هش مستقیم اکنون ۴۰۴ می‌دهد) */
 register('#/working-hours', { title: 'تنظیمات', render: lazyView(() => import('./views/settings.js'), 'renderSettings', '#/working-hours') }); // — مسیر قدیمی → تنظیمات
 register('#/schools', { title: 'مدارس', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/schools.js'), 'renderSchools', '#/schools')) }); // — منشی مجاز
 register('#/students', { title: 'دانش‌آموزان', render: lazyView(() => import('./views/students.js'), 'renderStudents', '#/students') });
