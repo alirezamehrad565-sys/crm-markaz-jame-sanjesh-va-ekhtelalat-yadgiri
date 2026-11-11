@@ -109,6 +109,9 @@ async function probe(bundlePath) {
     norm = norm.replace(/"token":"[^"]*"/g, '"token":"<TOKEN>"');
     // ۱.۲۵.۶۶ — expiresAt پاسخ لاگین هم مهر ثانیه‌ای now+۳۰روز است — رفتار نیست
     norm = norm.replace(/"expiresAt":"[^"]*"/g, '"expiresAt":"<EXPIRES>"');
+    // ۱.۲۵.۷۰ — ف۵ request-id سراسری: پاکت خطای ۴xx/۵xx اکنون request_id تصادفی دارد —
+    // رفتارِ تازهٔ طراحی است؛ شناسه رندوم است و در باندل کهنه اصلاً نیست — حضور/غیاب مقایسه‌نشود (هم‌الگوی botAbout)
+    norm = norm.replace(/,?"request_id":"req-[^"]*"/g, '');
     out.push(`${method} ${urlPath} → ${res.status} :: ${norm.slice(0, 4000)}`);
   }
   return out;

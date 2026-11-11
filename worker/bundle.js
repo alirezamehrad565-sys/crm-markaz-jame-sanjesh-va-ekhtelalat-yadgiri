@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.69";
+var APP_VERSION = "1.25.70";
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -23497,7 +23497,7 @@ var RateLimitError = class extends AppError {
   }
   retryAfterSeconds;
   constructor(retryAfterSeconds, message = "\u062A\u0644\u0627\u0634\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F") {
-    super("RATE_LIMITED", 429, message, { retryAfterSeconds });
+    super("RATE_LIMITED", 429, message, { reason: "rate_limited", retryAfterSeconds });
     this.name = "RateLimitError";
     this.retryAfterSeconds = retryAfterSeconds;
   }
@@ -23964,6 +23964,75 @@ function findStaffByUsername(db, username) {
   ).bind(u, u.toLowerCase()).first();
 }
 __name(findStaffByUsername, "findStaffByUsername");
+
+// src/core/audit/writer.ts
+var AUDIT_RETENTION_DAYS_DEFAULT = 180;
+function parseAuditRetentionDays(raw2) {
+  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
+    return AUDIT_RETENTION_DAYS_DEFAULT;
+  }
+  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
+  if (!Number.isFinite(n) || n < 0) return AUDIT_RETENTION_DAYS_DEFAULT;
+  return Math.trunc(n);
+}
+__name(parseAuditRetentionDays, "parseAuditRetentionDays");
+function pickAsyncLocalStorage() {
+  try {
+    const probe = globalThis.process?.getBuiltinModule?.("node:async_hooks");
+    const ALS = probe?.AsyncLocalStorage;
+    return ALS ? new ALS() : null;
+  } catch {
+    return null;
+  }
+}
+__name(pickAsyncLocalStorage, "pickAsyncLocalStorage");
+var requestIdALS = pickAsyncLocalStorage();
+function runWithRequestId(requestId, fn) {
+  if (!requestIdALS) return fn();
+  return requestIdALS.run({ requestId }, fn);
+}
+__name(runWithRequestId, "runWithRequestId");
+function currentRequestId() {
+  return requestIdALS?.getStore()?.requestId ?? null;
+}
+__name(currentRequestId, "currentRequestId");
+function buildInsert(entry) {
+  return {
+    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes, request_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      crypto.randomUUID(),
+      entry.actorId,
+      entry.action,
+      entry.resourceType,
+      entry.resourceId,
+      entry.changes ? JSON.stringify(entry.changes) : null,
+      // صراحتِ صدا زننده همیشه برندهٔ زمینهٔ درخواست است (مثلاً میدل‌ور ناظر که بعد از پاسخ می‌نویسد)
+      entry.requestId ?? currentRequestId()
+    ]
+  };
+}
+__name(buildInsert, "buildInsert");
+function createAuditWriter(db, opts) {
+  const retentionDays = opts?.retentionDays !== void 0 ? parseAuditRetentionDays(opts.retentionDays) : AUDIT_RETENTION_DAYS_DEFAULT;
+  return {
+    async log(entry) {
+      const { sql, params } = buildInsert(entry);
+      await db.execute(sql, params);
+    },
+    async logInTransaction(tx, entry) {
+      const { sql, params } = buildInsert(entry);
+      await tx.execute(sql, params);
+    },
+    async pruneOld() {
+      if (retentionDays === 0) return 0;
+      const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1e3).toISOString().slice(0, 19).replace("T", " ");
+      const res = await db.execute(`DELETE FROM audit_log WHERE created_at < ?`, [cutoff]);
+      return typeof res?.meta?.changes === "number" ? res.meta.changes : 0;
+    }
+  };
+}
+__name(createAuditWriter, "createAuditWriter");
 
 // src/core/notify/templates.ts
 var UNKNOWN_TEMPLATE_FALLBACK = "\u0627\u0637\u0644\u0627\u0639\u200C\u0631\u0633\u0627\u0646\u06CC \u0633\u0627\u0645\u0627\u0646\u0647 \u0645\u0631\u06A9\u0632";
@@ -26092,7 +26161,15 @@ function selectAppointments(filters) {
   };
 }
 __name(selectAppointments, "selectAppointments");
+var APPOINTMENT_STUDENT_QUERY_CHUNK = 90;
 function selectStudentsOfAppointments(ids) {
+  if (ids.length === 0) {
+    return {
+      sql: `SELECT appointment_id, student_id, facet_id, attendance, note, session_note, next_action
+              FROM appointment_students WHERE 0`,
+      params: []
+    };
+  }
   const placeholders = ids.map(() => "?").join(",");
   return {
     sql: `SELECT appointment_id, student_id, facet_id, attendance, note, session_note, next_action
@@ -26338,13 +26415,15 @@ function createAppointmentService(deps) {
       const rows = await db.query(sql, params);
       if (rows.length === 0) return [];
       const ids = rows.map((r) => r.id);
-      const { sql: ssql, params: sparams } = selectStudentsOfAppointments(ids);
-      const studentRows = await db.query(ssql, sparams);
       const byAppointment = /* @__PURE__ */ new Map();
-      for (const s of studentRows) {
-        const list = byAppointment.get(s.appointment_id) ?? [];
-        list.push(s);
-        byAppointment.set(s.appointment_id, list);
+      for (let i = 0; i < ids.length; i += APPOINTMENT_STUDENT_QUERY_CHUNK) {
+        const { sql: ssql, params: sparams } = selectStudentsOfAppointments(ids.slice(i, i + APPOINTMENT_STUDENT_QUERY_CHUNK));
+        const studentRows = await db.query(ssql, sparams);
+        for (const s of studentRows) {
+          const list = byAppointment.get(s.appointment_id) ?? [];
+          list.push(s);
+          byAppointment.set(s.appointment_id, list);
+        }
       }
       return rows.map((r) => rowToAppointment(r, (byAppointment.get(r.id) ?? []).map(rowToStudent)));
     },
@@ -28843,40 +28922,130 @@ function pageParams(query) {
 __name(pageParams, "pageParams");
 
 // src/application/http/error-handler.ts
+function requestIdOf(c) {
+  return c.get("requestId");
+}
+__name(requestIdOf, "requestIdOf");
 function errorHandler2(err, c) {
+  const requestId = requestIdOf(c);
+  const withRequestId = /* @__PURE__ */ __name((body) => requestId ? { ...body, request_id: requestId } : body, "withRequestId");
   if (err instanceof ZodError) {
     return c.json(
-      {
+      withRequestId({
         error: "VALIDATION_ERROR",
         message: "\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A",
         details: err.issues.map((i) => ({ path: i.path.join("."), message: i.message }))
-      },
+      }),
       400
     );
   }
   if (err instanceof ConflictError) {
     return c.json(
-      {
+      withRequestId({
         error: "CONFLICT",
         message: err.message,
         ...err.currentVersion !== void 0 ? { current_version: err.currentVersion } : {}
-      },
+      }),
       409
     );
   }
   if (err instanceof AppError) {
-    return c.json({ error: err.code, message: err.message }, err.status);
+    return c.json(
+      withRequestId({
+        error: err.code,
+        message: err.message,
+        ...err.details ? { details: err.details } : {}
+      }),
+      err.status
+    );
   }
   if (err instanceof SyntaxError) {
-    return c.json({ error: "INVALID_JSON", message: "\u0628\u062F\u0646\u0647 \u062F\u0631\u062E\u0648\u0627\u0633\u062A JSON \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A" }, 400);
+    return c.json(withRequestId({ error: "INVALID_JSON", message: "\u0628\u062F\u0646\u0647 \u062F\u0631\u062E\u0648\u0627\u0633\u062A JSON \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A" }), 400);
   }
   c.get("logger")?.error("unhandled.error", {
     error: err instanceof Error ? err.message : "unknown",
-    path: c.req.path
+    path: c.req.path,
+    ...requestId ? { request_id: requestId } : {}
   });
-  return c.json({ error: "INTERNAL_ERROR", message: "\u062E\u0637\u0627\u06CC \u062F\u0627\u062E\u0644\u06CC \u0633\u0631\u0648\u0631" }, 500);
+  return c.json(withRequestId({ error: "INTERNAL_ERROR", message: "\u062E\u0637\u0627\u06CC \u062F\u0627\u062E\u0644\u06CC \u0633\u0631\u0648\u0631" }), 500);
 }
 __name(errorHandler2, "errorHandler");
+
+// src/application/rum/pure.ts
+function percentile(sorted, p) {
+  if (sorted.length === 0) return 0;
+  const clamped = Math.min(Math.max(p, 0), 1);
+  const idx = (sorted.length - 1) * clamped;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+__name(percentile, "percentile");
+function makeRateLimiter(max, windowMs) {
+  let windowStart = 0;
+  let count = 0;
+  return {
+    allow() {
+      const now = Date.now();
+      if (now - windowStart >= windowMs) {
+        windowStart = now;
+        count = 0;
+      }
+      if (count >= max) return false;
+      count += 1;
+      return true;
+    }
+  };
+}
+__name(makeRateLimiter, "makeRateLimiter");
+
+// src/application/http/rate-limit.ts
+var API_RATE_LIMIT_PER_MIN_DEFAULT = 240;
+var API_RATE_LIMIT_PER_MIN_MAX = 1e4;
+var API_RATE_LIMIT_WINDOW_MS = 6e4;
+function parseApiRateLimitPerMin(raw2) {
+  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
+    return API_RATE_LIMIT_PER_MIN_DEFAULT;
+  }
+  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
+  if (!Number.isFinite(n) || n < 0) return API_RATE_LIMIT_PER_MIN_DEFAULT;
+  if (n === 0) return 0;
+  return Math.min(Math.trunc(n), API_RATE_LIMIT_PER_MIN_MAX);
+}
+__name(parseApiRateLimitPerMin, "parseApiRateLimitPerMin");
+function makeKeyedRateLimiter(windowMs, maxKeys = 4096) {
+  const buckets = /* @__PURE__ */ new Map();
+  return {
+    allow(key, max) {
+      const now = Date.now();
+      if (!buckets.has(key) && buckets.size >= maxKeys) {
+        for (const [k, b] of buckets) {
+          if (now - b.lastSeen >= windowMs) buckets.delete(k);
+        }
+        if (buckets.size >= maxKeys) {
+          let oldestKey = null;
+          let oldestAt = Number.POSITIVE_INFINITY;
+          for (const [k, b] of buckets) {
+            if (b.lastSeen < oldestAt) {
+              oldestAt = b.lastSeen;
+              oldestKey = k;
+            }
+          }
+          if (oldestKey !== null) buckets.delete(oldestKey);
+        }
+      }
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = { limiter: makeRateLimiter(max, windowMs), lastSeen: now };
+        buckets.set(key, bucket);
+      }
+      bucket.lastSeen = now;
+      return bucket.limiter.allow();
+    }
+  };
+}
+__name(makeKeyedRateLimiter, "makeKeyedRateLimiter");
 
 // src/domain/student-profile/routes.ts
 var StudentTeacherSchema = external_exports.object({
@@ -61258,35 +61427,6 @@ function shape(rec) {
 }
 __name(shape, "shape");
 
-// src/application/rum/pure.ts
-function percentile(sorted, p) {
-  if (sorted.length === 0) return 0;
-  const clamped = Math.min(Math.max(p, 0), 1);
-  const idx = (sorted.length - 1) * clamped;
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
-}
-__name(percentile, "percentile");
-function makeRateLimiter(max, windowMs) {
-  let windowStart = 0;
-  let count = 0;
-  return {
-    allow() {
-      const now = Date.now();
-      if (now - windowStart >= windowMs) {
-        windowStart = now;
-        count = 0;
-      }
-      if (count >= max) return false;
-      count += 1;
-      return true;
-    }
-  };
-}
-__name(makeRateLimiter, "makeRateLimiter");
-
 // src/application/client-errors/service.ts
 function clip(value, max) {
   if (value === null || value === void 0) return null;
@@ -61682,36 +61822,6 @@ async function syncCpAnnouncements(deps) {
   }
 }
 __name(syncCpAnnouncements, "syncCpAnnouncements");
-
-// src/core/audit/writer.ts
-function buildInsert(entry) {
-  return {
-    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes)
-          VALUES (?, ?, ?, ?, ?, ?)`,
-    params: [
-      crypto.randomUUID(),
-      entry.actorId,
-      entry.action,
-      entry.resourceType,
-      entry.resourceId,
-      entry.changes ? JSON.stringify(entry.changes) : null
-    ]
-  };
-}
-__name(buildInsert, "buildInsert");
-function createAuditWriter(db) {
-  return {
-    async log(entry) {
-      const { sql, params } = buildInsert(entry);
-      await db.execute(sql, params);
-    },
-    async logInTransaction(tx, entry) {
-      const { sql, params } = buildInsert(entry);
-      await tx.execute(sql, params);
-    }
-  };
-}
-__name(createAuditWriter, "createAuditWriter");
 
 // src/domain/content-score/pure.ts
 var SCORE_FORMULA_VERSION = 1;
@@ -62612,20 +62722,57 @@ __name(runBugReportForward, "runBugReportForward");
 function silentAudit() {
   return {
     log: /* @__PURE__ */ __name(async () => void 0, "log"),
-    logInTransaction: /* @__PURE__ */ __name(async () => void 0, "logInTransaction")
+    logInTransaction: /* @__PURE__ */ __name(async () => void 0, "logInTransaction"),
+    // ف۴ — امضای AuditWriter کامل شد؛ این مسیر فرصت‌طلب هرگز پاکسازی نمی‌کند (پاکسازی فقط کرون شبانه است)
+    pruneOld: /* @__PURE__ */ __name(async () => 0, "pruneOld")
   };
 }
 __name(silentAudit, "silentAudit");
 
-// src/application/health/service.ts
-var CHANNELS = [
-  { key: "announcements", label: "\u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627\u06CC \u0634\u0628\u06A9\u0647 (CP\u2192\u0646\u0648\u062F)", direction: "pull", attemptKey: CP_SYNC_ATTEMPT_KEY, successKey: CP_SYNC_SETTINGS_KEY, threshold_s: 6 * 3600 },
-  { key: "kpi_report", label: "\u06AF\u0632\u0627\u0631\u0634 KPI \u0631\u0648\u0632\u0627\u0646\u0647 (\u0646\u0648\u062F\u2192CP)", direction: "push", attemptKey: CP_REPORT_ATTEMPT_KEY, successKey: CP_REPORT_PUSH_KEY, threshold_s: 48 * 3600 },
-  { key: "content_push", label: "\u0647\u0645\u0631\u0633\u0627\u0646\u06CC \u0645\u062D\u062A\u0648\u0627 (\u0646\u0648\u062F\u2192CP)", direction: "push", attemptKey: CP_CONTENT_ATTEMPT_KEY, successKey: CP_CONTENT_PUSH_KEY, threshold_s: 72 * 3600 },
-  { key: "content_pull", label: "\u0628\u0631\u06AF\u0632\u06CC\u062F\u0647\u200C\u0647\u0627\u06CC \u0634\u0628\u06A9\u0647 (CP\u2192\u0646\u0648\u062F)", direction: "pull", attemptKey: CP_CONTENT_ATTEMPT_KEY, successKey: CP_CONTENT_SYNC_KEY, threshold_s: 6 * 3600 },
-  { key: "bug_forward", label: "\u06AF\u0632\u0627\u0631\u0634 \u0628\u0627\u06AF \u2192 CP", direction: "push", attemptKey: BUG_REPORT_ATTEMPT_KEY, successKey: null, successFromTable: true, threshold_s: 72 * 3600 },
-  { key: "bug_replies", label: "\u067E\u0627\u0633\u062E \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC (CP\u2192\u0646\u0648\u062F)", direction: "pull", attemptKey: BUG_REPORT_ATTEMPT_KEY, successKey: BUG_REPORT_REPLY_SINCE_KEY, threshold_s: 6 * 3600 }
-];
+// src/application/health/alerts.ts
+var ALERTS_SEAL_KEY = "alerts.last_evaluated_at";
+var ALERT_CLIENT_ERRORS_MAX_DEFAULT = 100;
+function parseClientErrorsMax(raw2) {
+  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
+    return ALERT_CLIENT_ERRORS_MAX_DEFAULT;
+  }
+  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
+  if (!Number.isFinite(n) || n < 0) return ALERT_CLIENT_ERRORS_MAX_DEFAULT;
+  return Math.trunc(n);
+}
+__name(parseClientErrorsMax, "parseClientErrorsMax");
+function alertsDisabledFlag(raw2) {
+  if (raw2 === null || raw2 === void 0) return false;
+  const s = String(raw2).trim().toLowerCase();
+  return s === "1" || s === "true" || s === "yes" || s === "on";
+}
+__name(alertsDisabledFlag, "alertsDisabledFlag");
+function deriveAlerts(panel, clientErrorsMax) {
+  const alerts = [];
+  for (const ch of panel.cp_link.channels) {
+    if (!ch.attempt_at || !ch.success_at) continue;
+    const attemptMs = Date.parse(ch.attempt_at);
+    const successMs = Date.parse(ch.success_at);
+    if (Number.isNaN(attemptMs) || Number.isNaN(successMs)) continue;
+    const gapS = Math.round((attemptMs - successMs) / 1e3);
+    if (gapS <= ch.threshold_s) continue;
+    alerts.push({
+      code: "cp_seal_drift",
+      severity: "error",
+      message: `\u062F\u0631\u06AF\u0627\u0647 \xAB${ch.label}\xBB \u0631\u0627\u0646\u0634 \u0645\u064F\u0647\u0631 \u062F\u0627\u0631\u062F: \u0622\u062E\u0631\u06CC\u0646 \u062A\u0644\u0627\u0634 ${Math.round(gapS / 60)} \u062F\u0642\u06CC\u0642\u0647 \u062C\u0644\u0648\u062A\u0631 \u0627\u0632 \u0622\u062E\u0631\u06CC\u0646 \u0645\u0648\u0641\u0642\u06CC\u062A \u0627\u0633\u062A (\u0622\u0633\u062A\u0627\u0646\u0647\u0654 \u062F\u0631\u06AF\u0627\u0647 ${Math.round(ch.threshold_s / 60)} \u062F\u0642\u06CC\u0642\u0647) \u2014 \u0686\u0631\u062E\u0647\u200C\u0647\u0627 \u062A\u0644\u0627\u0634 \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F \u0648\u0644\u06CC \u0645\u0648\u0641\u0642 \u062B\u0628\u062A \u0646\u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u062F\u0627\u062F\u0647 \u0645\u0645\u06A9\u0646 \u0627\u0633\u062A \u0628\u06CC\u200C\u0635\u062F\u0627 \u06AF\u0645 \u0634\u062F\u0647 \u0628\u0627\u0634\u062F.`
+    });
+  }
+  const clientErrors24h = panel.counts.client_errors_24h;
+  if (clientErrors24h !== null && clientErrors24h > clientErrorsMax) {
+    alerts.push({
+      code: "client_errors_spike",
+      severity: "warning",
+      message: `\u062E\u0637\u0627\u0647\u0627\u06CC \u0645\u0631\u0648\u0631\u06AF\u0631 \u062F\u0631 \u06F2\u06F4 \u0633\u0627\u0639\u062A \u06AF\u0630\u0634\u062A\u0647 (${clientErrors24h} \u0645\u0648\u0631\u062F) \u0627\u0632 \u0622\u0633\u062A\u0627\u0646\u0647\u0654 ${clientErrorsMax} \u06AF\u0630\u0634\u062A\u0647 \u0627\u0633\u062A \u2014 \u0646\u0645\u0627\u06CC \xAB\u062E\u0637\u0627\u0647\u0627\u06CC \u0645\u0631\u0648\u0631\u06AF\u0631\xBB \u0631\u0627 \u0628\u0628\u06CC\u0646\u06CC\u062F.`
+    });
+  }
+  return alerts;
+}
+__name(deriveAlerts, "deriveAlerts");
 async function readIsoStamp(db, key) {
   try {
     const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
@@ -62637,6 +62784,78 @@ async function readIsoStamp(db, key) {
   }
 }
 __name(readIsoStamp, "readIsoStamp");
+async function readAlertsSeal(db) {
+  return readIsoStamp(db, ALERTS_SEAL_KEY);
+}
+__name(readAlertsSeal, "readAlertsSeal");
+async function writeAlertsSeal(db, iso) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, 'alerts-cron', datetime('now'))
+     ON CONFLICT(key) DO UPDATE SET
+       value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+    [ALERTS_SEAL_KEY, JSON.stringify(iso)]
+  );
+}
+__name(writeAlertsSeal, "writeAlertsSeal");
+async function runAlertCycle(deps) {
+  const { db, health, notify, logger } = deps;
+  if (alertsDisabledFlag(deps.alertsDisabled)) {
+    logger.info("alert.cycle.disabled", { reason: "ALERTS_DISABLED" });
+    return { disabled: true, evaluated_at: null, alerts: [], enqueued: 0 };
+  }
+  const evaluatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const clientErrorsMax = parseClientErrorsMax(deps.clientErrorsMax);
+  const panel = await health.panel();
+  const alerts = deriveAlerts(panel, clientErrorsMax);
+  let enqueued = 0;
+  if (alerts.length > 0) {
+    for (const alert of alerts) {
+      logger.error(`alert.${alert.code}`, {
+        severity: alert.severity,
+        message: alert.message,
+        now: evaluatedAt
+      });
+    }
+    const todayYmd = evaluatedAt.slice(0, 10);
+    const text = ["\u0647\u0634\u062F\u0627\u0631 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0633\u0627\u0645\u0627\u0646\u0647", "", ...alerts.map((a) => `\u2022 ${a.message}`)].join("\n");
+    try {
+      enqueued = await notify.enqueueOwnerAlert(text, `alert:${todayYmd}`);
+      if (enqueued > 0) await notify.dispatchPending(25);
+    } catch (err) {
+      logger.warn("alert.notify.failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  try {
+    await writeAlertsSeal(db, evaluatedAt);
+  } catch (err) {
+    logger.warn("alert.seal.failed", { error: err instanceof Error ? err.message : String(err) });
+  }
+  logger.info("alert.cycle.done", { evaluated_at: evaluatedAt, alerts: alerts.length, enqueued });
+  return { disabled: false, evaluated_at: evaluatedAt, alerts, enqueued };
+}
+__name(runAlertCycle, "runAlertCycle");
+
+// src/application/health/service.ts
+var CHANNELS = [
+  { key: "announcements", label: "\u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627\u06CC \u0634\u0628\u06A9\u0647 (CP\u2192\u0646\u0648\u062F)", direction: "pull", attemptKey: CP_SYNC_ATTEMPT_KEY, successKey: CP_SYNC_SETTINGS_KEY, threshold_s: 6 * 3600 },
+  { key: "kpi_report", label: "\u06AF\u0632\u0627\u0631\u0634 KPI \u0631\u0648\u0632\u0627\u0646\u0647 (\u0646\u0648\u062F\u2192CP)", direction: "push", attemptKey: CP_REPORT_ATTEMPT_KEY, successKey: CP_REPORT_PUSH_KEY, threshold_s: 48 * 3600 },
+  { key: "content_push", label: "\u0647\u0645\u0631\u0633\u0627\u0646\u06CC \u0645\u062D\u062A\u0648\u0627 (\u0646\u0648\u062F\u2192CP)", direction: "push", attemptKey: CP_CONTENT_ATTEMPT_KEY, successKey: CP_CONTENT_PUSH_KEY, threshold_s: 72 * 3600 },
+  { key: "content_pull", label: "\u0628\u0631\u06AF\u0632\u06CC\u062F\u0647\u200C\u0647\u0627\u06CC \u0634\u0628\u06A9\u0647 (CP\u2192\u0646\u0648\u062F)", direction: "pull", attemptKey: CP_CONTENT_ATTEMPT_KEY, successKey: CP_CONTENT_SYNC_KEY, threshold_s: 6 * 3600 },
+  { key: "bug_forward", label: "\u06AF\u0632\u0627\u0631\u0634 \u0628\u0627\u06AF \u2192 CP", direction: "push", attemptKey: BUG_REPORT_ATTEMPT_KEY, successKey: null, successFromTable: true, threshold_s: 72 * 3600 },
+  { key: "bug_replies", label: "\u067E\u0627\u0633\u062E \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC (CP\u2192\u0646\u0648\u062F)", direction: "pull", attemptKey: BUG_REPORT_ATTEMPT_KEY, successKey: BUG_REPORT_REPLY_SINCE_KEY, threshold_s: 6 * 3600 }
+];
+async function readIsoStamp2(db, key) {
+  try {
+    const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
+    if (!row) return null;
+    const parsed = JSON.parse(row.value);
+    return typeof parsed === "string" && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+__name(readIsoStamp2, "readIsoStamp");
 async function countSafe(db, sql, params = []) {
   try {
     const row = await db.queryOne(sql, params);
@@ -62648,6 +62867,7 @@ async function countSafe(db, sql, params = []) {
 __name(countSafe, "countSafe");
 function createHealthService(deps) {
   const { db, cpConfigured, envName } = deps;
+  const clientErrorsMax = parseClientErrorsMax(deps.clientErrorsMax);
   return {
     async panel() {
       const now = /* @__PURE__ */ new Date();
@@ -62673,13 +62893,13 @@ function createHealthService(deps) {
             successStamps.set(def.key, null);
           }
         } else {
-          successStamps.set(def.key, await readIsoStamp(db, def.successKey ?? ""));
+          successStamps.set(def.key, await readIsoStamp2(db, def.successKey ?? ""));
         }
       }
       const channels = [];
       for (const def of CHANNELS) {
         const successAt = cpConfigured ? successStamps.get(def.key) ?? null : null;
-        const attemptAt = cpConfigured && def.attemptKey ? await readIsoStamp(db, def.attemptKey) : null;
+        const attemptAt = cpConfigured && def.attemptKey ? await readIsoStamp2(db, def.attemptKey) : null;
         let ageS = null;
         let state = "never";
         if (!cpConfigured || !successAt) {
@@ -62702,24 +62922,29 @@ function createHealthService(deps) {
           threshold_s: def.threshold_s
         });
       }
-      return {
+      const counts = {
+        // client_errors/bug_reports: فرمت datetime('now') = 'YYYY-MM-DD HH:MM:SS' — هم‌قرارداد COUNTهای cp-report
+        client_errors_24h: await countSafe(db, "SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at >= datetime('now', '-24 hours')"),
+        // rum_events: ستون ts با فرمت ISO UTC (0086) — پارامتری، نه datetime()
+        rum_events_24h: await countSafe(db, "SELECT COUNT(*) AS n FROM rum_events WHERE ts >= ?", [new Date(now.getTime() - 864e5).toISOString()]),
+        bug_reports_open: await countSafe(db, "SELECT COUNT(*) AS n FROM bug_reports WHERE status = 'open'")
+      };
+      const panelData = {
         version: APP_VERSION,
         env: envName,
         now: now.toISOString(),
         db: { ok: dbOk, latency_ms: latencyMs },
         migrations: { applied: migrationsApplied },
-        counts: {
-          // client_errors/bug_reports: فرمت datetime('now') = 'YYYY-MM-DD HH:MM:SS' — هم‌قرارداد COUNTهای cp-report
-          client_errors_24h: await countSafe(db, "SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at >= datetime('now', '-24 hours')"),
-          // rum_events: ستون ts با فرمت ISO UTC (0086) — پارامتری، نه datetime()
-          rum_events_24h: await countSafe(db, "SELECT COUNT(*) AS n FROM rum_events WHERE ts >= ?", [new Date(now.getTime() - 864e5).toISOString()]),
-          bug_reports_open: await countSafe(db, "SELECT COUNT(*) AS n FROM bug_reports WHERE status = 'open'")
-        },
+        counts,
         cp_link: {
           configured: cpConfigured,
           channels
-        }
+        },
+        alerts: [],
+        alerts_last_evaluated_at: await readAlertsSeal(db)
       };
+      panelData.alerts = deriveAlerts(panelData, clientErrorsMax);
+      return panelData;
     }
   };
 }
@@ -62734,6 +62959,189 @@ function registerHealthRoutes(app, service) {
   });
 }
 __name(registerHealthRoutes, "registerHealthRoutes");
+
+// src/application/growth/service.ts
+var GROWTH_SNAPSHOT_SEAL_KEY = "growth.last_snapshot_at";
+var GROWTH_SEAL_HOURS = 24;
+var GROWTH_TABLE_SELF = "table_growth_snapshots";
+var TABLE_POLICIES = {
+  audit_log: "\u06F1\u06F8\u06F0 \u0631\u0648\u0632",
+  // ف۴ — pruneOld شبانه (P1-4)
+  rum_events: "\u06F9\u06F0 \u0631\u0648\u0632",
+  // نگه‌داری تله‌متری (۱.۲۵.۶۶)
+  client_errors: "\u06F9\u06F0 \u0631\u0648\u0632",
+  // نگه‌داری تله‌متری (۱.۲۵.۶۶)
+  network_content: "\u0641\u0642\u0637-\u0627\u0641\u0632\u0648\u062F\u0646\u06CC",
+  // حذف فیزیکی ممنوع — بایگانی active=0 (§۳-۱۵)
+  game_links: "\u067E\u0627\u06A9\u0633\u0627\u0632\u06CC \u062F\u0648\u0631\u0647\u200C\u0627\u06CC",
+  // games.maintenance — لینک منقضی هر شب
+  game_preview_tokens: "\u067E\u0627\u06A9\u0633\u0627\u0632\u06CC \u062F\u0648\u0631\u0647\u200C\u0627\u06CC",
+  // games.maintenance — توکن منقضی هر شب
+  login_throttle: "\u067E\u0627\u06A9\u0633\u0627\u0632\u06CC \u062F\u0648\u0631\u0647\u200C\u0627\u06CC",
+  // پاکسازی lazy روی هر تلاش ورود
+  [GROWTH_TABLE_SELF]: "\u0628\u0627\u0632\u0646\u0648\u06CC\u0633\u06CC \u0631\u0648\u0632\u0627\u0646\u0647 (\u062E\u0648\u062F\u067E\u0627\u06CC\u0634)"
+  // ف۴ — UPSERT هم‌روز؛ رشد ~۱×تعداد-جدول در روز
+};
+var POLICY_UNKNOWN = "\u0628\u06CC\u200C\u0633\u06CC\u0627\u0633\u062A";
+function policyOfTable(name) {
+  return TABLE_POLICIES[name] ?? POLICY_UNKNOWN;
+}
+__name(policyOfTable, "policyOfTable");
+async function listUserTables(db) {
+  const rows = await db.query(
+    `SELECT name FROM sqlite_master WHERE type = 'table'
+      AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'
+      ORDER BY name`
+  );
+  return rows.map((r) => r.name);
+}
+__name(listUserTables, "listUserTables");
+async function readIsoStamp3(db, key) {
+  try {
+    const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [key]);
+    if (!row) return null;
+    const parsed = JSON.parse(row.value);
+    return typeof parsed === "string" && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+__name(readIsoStamp3, "readIsoStamp");
+async function writeIsoStamp(db, key, iso) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_by, updated_at)
+     VALUES (?, ?, 'growth-cron', datetime('now'))
+     ON CONFLICT(key) DO UPDATE SET
+       value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+    [key, JSON.stringify(iso)]
+  );
+}
+__name(writeIsoStamp, "writeIsoStamp");
+async function liveCount(db, table) {
+  try {
+    const row = await db.queryOne(`SELECT COUNT(*) AS n FROM "${table}"`);
+    return row?.n ?? null;
+  } catch {
+    return null;
+  }
+}
+__name(liveCount, "liveCount");
+function daysBetween(fromYmd, toYmd) {
+  const from = Date.parse(`${fromYmd}T00:00:00Z`);
+  const to = Date.parse(`${toYmd}T00:00:00Z`);
+  if (Number.isNaN(from) || Number.isNaN(to)) return 1;
+  return Math.max(1, Math.round((to - from) / 864e5));
+}
+__name(daysBetween, "daysBetween");
+function createGrowthService(deps) {
+  const { db, logger } = deps;
+  return {
+    async captureDaily() {
+      const lastIso = await readIsoStamp3(db, GROWTH_SNAPSHOT_SEAL_KEY);
+      if (lastIso) {
+        const ageMs = Date.now() - Date.parse(lastIso);
+        if (!Number.isNaN(ageMs) && ageMs >= 0 && ageMs < GROWTH_SEAL_HOURS * 3600 * 1e3) {
+          return { skipped: true, reason: "sealed", last_snapshot_at: lastIso, tables: 0 };
+        }
+      }
+      const now = /* @__PURE__ */ new Date();
+      const snapshotDate = now.toISOString().slice(0, 10);
+      const capturedAt = now.toISOString();
+      const tables = (await listUserTables(db)).filter((t) => t !== GROWTH_TABLE_SELF);
+      const counts = [];
+      for (const t of tables) {
+        const n = await liveCount(db, t);
+        if (n === null) {
+          logger.warn("growth.snapshot.count_failed", { table: t });
+          continue;
+        }
+        counts.push({ table: t, rows: n });
+      }
+      const UPSERT = `INSERT INTO table_growth_snapshots (snapshot_date, table_name, row_count, captured_at)
+                      VALUES (?, ?, ?, ?)
+                      ON CONFLICT(snapshot_date, table_name) DO UPDATE SET
+                        row_count = excluded.row_count, captured_at = excluded.captured_at`;
+      const CHUNK = 50;
+      for (let i = 0; i < counts.length; i += CHUNK) {
+        const chunk = counts.slice(i, i + CHUNK);
+        await db.batch(chunk.map((c) => db.prepare(UPSERT, [snapshotDate, c.table, c.rows, capturedAt])));
+      }
+      await writeIsoStamp(db, GROWTH_SNAPSHOT_SEAL_KEY, capturedAt);
+      logger.info("growth.snapshot.done", { date: snapshotDate, tables: counts.length });
+      return { skipped: false, last_snapshot_at: capturedAt, tables: counts.length };
+    },
+    async report() {
+      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const today = nowIso.slice(0, 10);
+      const base7 = new Date(Date.parse(`${today}T00:00:00Z`) - 7 * 864e5).toISOString().slice(0, 10);
+      const base30 = new Date(Date.parse(`${today}T00:00:00Z`) - 30 * 864e5).toISOString().slice(0, 10);
+      const liveTables = await listUserTables(db);
+      const snapTables = await db.query(
+        "SELECT DISTINCT table_name AS table_name FROM table_growth_snapshots"
+      ).catch(() => []);
+      const names = [.../* @__PURE__ */ new Set([...liveTables, ...snapTables.map((s) => s.table_name)])].sort();
+      const daysRow = await db.queryOne(
+        "SELECT COUNT(DISTINCT snapshot_date) AS n FROM table_growth_snapshots"
+      ).catch(() => null);
+      const lastSnapshotIso = await readIsoStamp3(db, GROWTH_SNAPSHOT_SEAL_KEY);
+      const out = [];
+      for (const name of names) {
+        const latest = await db.queryOne(
+          "SELECT row_count, snapshot_date FROM table_growth_snapshots WHERE table_name = ? ORDER BY snapshot_date DESC LIMIT 1",
+          [name]
+        ).catch(() => null);
+        const ref7 = await db.queryOne(
+          "SELECT row_count, snapshot_date FROM table_growth_snapshots WHERE table_name = ? AND snapshot_date <= ? ORDER BY snapshot_date DESC LIMIT 1",
+          [name, base7]
+        ).catch(() => null);
+        const ref30 = await db.queryOne(
+          "SELECT row_count, snapshot_date FROM table_growth_snapshots WHERE table_name = ? AND snapshot_date <= ? ORDER BY snapshot_date DESC LIMIT 1",
+          [name, base30]
+        ).catch(() => null);
+        let delta7 = null;
+        if (latest && ref7) delta7 = Number(latest.row_count) - Number(ref7.row_count);
+        let delta30 = null;
+        if (latest && ref30) delta30 = Number(latest.row_count) - Number(ref30.row_count);
+        let avgDaily = null;
+        if (delta7 !== null) avgDaily = Math.round(delta7 / daysBetween(ref7.snapshot_date, latest.snapshot_date) * 10) / 10;
+        else if (delta30 !== null) avgDaily = Math.round(delta30 / daysBetween(ref30.snapshot_date, latest.snapshot_date) * 10) / 10;
+        out.push({
+          table_name: name,
+          policy: policyOfTable(name),
+          latest_count: latest ? Number(latest.row_count) : null,
+          latest_date: latest ? latest.snapshot_date : null,
+          delta_7d: delta7,
+          delta_30d: delta30,
+          avg_daily: avgDaily,
+          live_count: await liveCount(db, name)
+        });
+      }
+      out.sort((a, b) => {
+        const pa = a.policy === POLICY_UNKNOWN ? 0 : 1;
+        const pb = b.policy === POLICY_UNKNOWN ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+        return a.table_name.localeCompare(b.table_name);
+      });
+      return {
+        generated_at: nowIso,
+        last_snapshot_at: lastSnapshotIso,
+        snapshot_days: daysRow?.n ?? 0,
+        tables: out
+      };
+    }
+  };
+}
+__name(createGrowthService, "createGrowthService");
+
+// src/application/growth/routes.ts
+function registerGrowthRoutes(app, service) {
+  app.get("/api/growth/report", requireRole("manager"), async (c) => {
+    const data = await service.report();
+    c.header("Cache-Control", "no-store");
+    return c.json({ data }, 200);
+  });
+}
+__name(registerGrowthRoutes, "registerGrowthRoutes");
 
 // src/domain/finance/service.ts
 var LIST_LIMIT = 500;
@@ -69209,6 +69617,47 @@ function createNotificationSendersSection(ctx) {
 }
 __name(createNotificationSendersSection, "createNotificationSendersSection");
 
+// src/application/notify/alerts.ts
+function createAlertSection(ctx) {
+  const { deps, db, log, notify } = ctx;
+  return {
+    /**
+     * یک پیام هشدار را برای همهٔ مدیرانِ بات‌لینک‌دار صف می‌کند — تعداد صف‌شده برمی‌گردد.
+     * dedupKey روزانه از صدا زننده می‌آید (مثلاً `alert:2026-11-12`) تا اجرای تکراری کرون
+     * در همان روز دوباره‌کاری نکند؛ کلید نهایی per-گسترنده است.
+     */
+    async enqueueOwnerAlert(text, dedupKey) {
+      const channel = notify.getChannel("bale") ? "bale" : "internal";
+      const chatRows = await db.query(
+        `SELECT sbl.chat_id
+           FROM staff_bot_links sbl
+           JOIN staff st ON st.id = sbl.staff_id
+          WHERE sbl.status = 'linked' AND sbl.chat_id IS NOT NULL
+            AND st.role = 'manager' AND st.active = 1`
+      );
+      if (chatRows.length === 0) {
+        log.warn("alert.no_recipient", { channel, reason: "no linked manager chat" });
+        return 0;
+      }
+      const clinicName = await deps.settings.getClinicName();
+      let enqueued = 0;
+      for (const row of chatRows) {
+        const outcome = await notify.enqueue({
+          channel,
+          template: "generic",
+          recipient: row.chat_id,
+          payload: { extra: text, clinicName },
+          dedupKey: `${dedupKey}:${row.chat_id}`
+        });
+        if (!outcome.duplicate) enqueued += 1;
+      }
+      log.info("alert.enqueued", { channel, recipients: chatRows.length, enqueued });
+      return enqueued;
+    }
+  };
+}
+__name(createAlertSection, "createAlertSection");
+
 // src/application/notify/service.ts
 async function fetchBaleBotUsername(token, fetchImpl) {
   const doFetch = fetchImpl ?? fetch;
@@ -69326,6 +69775,8 @@ function createNotifyAppService(deps) {
     ...createBotCommandsSection(ctx),
     ...createDigestSection(ctx),
     ...createNotificationSendersSection(ctx),
+    ...createAlertSection(ctx),
+    // ف۵ (P0-3) — رساندن هشدار خودکار تا مدیر روی همان کانال دایجست
     async listNotifications(filters) {
       return notify.list(filters);
     },
@@ -71115,12 +71566,12 @@ function registerSearchRoutes(app, service) {
 __name(registerSearchRoutes, "registerSearchRoutes");
 
 // src/application/reports/pure.ts
-function daysBetween(from, to) {
+function daysBetween2(from, to) {
   return Math.max(1, Math.round((Date.parse(to) - Date.parse(from)) / (24 * 60 * 60 * 1e3)) + 1);
 }
-__name(daysBetween, "daysBetween");
+__name(daysBetween2, "daysBetween");
 function buildDaySeries(appointments, from, to) {
-  const n = daysBetween(from, to);
+  const n = daysBetween2(from, to);
   const map2 = /* @__PURE__ */ new Map();
   let cur = from;
   for (let i = 0; i < n; i++) {
@@ -71482,15 +71933,18 @@ function createReportService(deps) {
       );
       const firstAdmitted = /* @__PURE__ */ new Map();
       if (wlIdRows.length > 0) {
-        const auditRows = await db.query(
-          `SELECT resource_id, MIN(strftime('%Y-%m-%dT%H:%M:%SZ', created_at)) AS admitted_at
-             FROM audit_log
-            WHERE resource_type = 'waitlist' AND action = 'waitlist.admitted'
-              AND resource_id IN (${wlIdRows.map(() => "?").join(",")})
-            GROUP BY resource_id`,
-          wlIdRows.map((r) => r.id)
-        );
-        for (const r of auditRows) firstAdmitted.set(r.resource_id, r.admitted_at);
+        for (let i = 0; i < wlIdRows.length; i += 90) {
+          const chunk = wlIdRows.slice(i, i + 90);
+          const auditRows = await db.query(
+            `SELECT resource_id, MIN(strftime('%Y-%m-%dT%H:%M:%SZ', created_at)) AS admitted_at
+               FROM audit_log
+              WHERE resource_type = 'waitlist' AND action = 'waitlist.admitted'
+                AND resource_id IN (${chunk.map(() => "?").join(",")})
+              GROUP BY resource_id`,
+            chunk.map((r) => r.id)
+          );
+          for (const r of auditRows) firstAdmitted.set(r.resource_id, r.admitted_at);
+        }
       }
       const waitPairs = wlIdRows.filter((r) => firstAdmitted.has(r.id)).map((r) => ({ createdAt: r.created_at, admittedAt: firstAdmitted.get(r.id) }));
       const countBy = /* @__PURE__ */ __name((status) => wlRows.filter((w) => w.status === status).length, "countBy");
@@ -72245,8 +72699,10 @@ function createServices(deps) {
   const health = createHealthService({
     db,
     cpConfigured: Boolean(deps.cpSyncUrl && deps.cpNodeCode && deps.cpNodeKey),
-    envName: deps.envName ?? null
+    envName: deps.envName ?? null,
+    clientErrorsMax: deps.clientErrorsMax ?? null
   });
+  const growth = createGrowthService({ db, logger });
   const centerKpi = createCenterKpiService({ db });
   const networkContent = createNetworkContentService({
     db,
@@ -72267,7 +72723,7 @@ function createServices(deps) {
   });
   const contentScore = createContentScoreService(db, audit);
   const bugReports = createBugReportService(db, audit);
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, health, contentScore };
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, health, growth, contentScore };
 }
 __name(createServices, "createServices");
 function createApp(deps) {
@@ -72276,6 +72732,42 @@ function createApp(deps) {
   app.__services = services;
   app.use("*", async (c, next) => {
     c.set("logger", services.logger);
+    return next();
+  });
+  app.use("/api/*", async (c, next) => {
+    const requestId = `req-${crypto.randomUUID()}`;
+    c.set("requestId", requestId);
+    try {
+      return await runWithRequestId(requestId, () => next());
+    } finally {
+      c.header("X-Request-Id", requestId);
+    }
+  });
+  const apiRateLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
+  let rateLimitDisabledLogged = false;
+  app.use("/api/*", async (c, next) => {
+    if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH" && c.req.method !== "DELETE") {
+      return next();
+    }
+    if (c.req.path === "/api/auth/login") return next();
+    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) {
+      if (!rateLimitDisabledLogged) {
+        rateLimitDisabledLogged = true;
+        services.logger.child("http").warn("api_rate_limit.disabled", {
+          reason: "API_RATE_LIMIT_PER_MIN=0"
+        });
+      }
+      return next();
+    }
+    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
+    if (!apiRateLimiter.allow(`${perMin}:${ip}`, perMin)) {
+      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
+      throw new RateLimitError(
+        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3),
+        "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0646\u0648\u0634\u062A\u0646\u06CC \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
+      );
+    }
     return next();
   });
   app.use("*", async (c, next) => {
@@ -72396,6 +72888,7 @@ function createApp(deps) {
   registerBugReportRoutes(app, services.bugReports);
   registerClientErrorsRoutes(app, services.clientErrors);
   registerHealthRoutes(app, services.health);
+  registerGrowthRoutes(app, services.growth);
   registerContentScoreRoutes(app, { contentScore: services.contentScore });
   if (FEATURES.apiKeys) registerKeysRoutes(app, services.keys);
   app.get("/api/conflicts", async (c) => {
@@ -72619,14 +73112,21 @@ async function runNotificationCycle(env) {
 __name(runNotificationCycle, "runNotificationCycle");
 async function runDigestCycle(env) {
   const db = createDb(env.DB);
-  const audit = createAuditWriter(db);
+  const audit = createAuditWriter(db, { retentionDays: parseAuditRetentionDays(env.AUDIT_LOG_RETENTION_DAYS) });
   const logger = createLogger("cron.digest");
+  const cpContentCfg = buildCpContentConfig(env);
   const services = createServices({
     db,
     audit,
     logger,
     teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
-    ...await buildRuntimeEnv(env, db)
+    ...await buildRuntimeEnv(env, db),
+    // پنل سلامتِ همین چرخه برای ارزیابی هشدار باید وضعیت واقعی CP را ببیند، نه خاموش‌نما
+    // (قرارداد خاموشی سه‌متغیره دست‌نخورده می‌ماند)
+    cpSyncUrl: env.CP_SYNC_URL ?? null,
+    cpNodeCode: cpContentCfg.cpNodeCode,
+    cpNodeKey: cpContentCfg.cpNodeKey,
+    clientErrorsMax: env.ALERT_CLIENT_ERRORS_MAX ?? null
   });
   const summary = await services.notify.sendDailyDigest(/* @__PURE__ */ new Date()).catch((err) => {
     logger.error("digest.failed", { error: err instanceof Error ? err.message : String(err) });
@@ -72641,13 +73141,29 @@ async function runDigestCycle(env) {
     try {
       const clientErrors = await services.clientErrors.pruneOld();
       const rumEvents = await services.rum.pruneOld();
-      return { client_errors: clientErrors, rum_events: rumEvents };
+      const auditLog = await audit.pruneOld();
+      return { client_errors: clientErrors, rum_events: rumEvents, audit_log: auditLog };
     } catch (err) {
       logger.error("retention.failed", { error: err instanceof Error ? err.message : String(err) });
       return null;
     }
   })();
-  logger.info("digest.cycle.done", { summary, dispatch, gamesMaintenance, retention });
+  const growth = await services.growth.captureDaily().catch((err) => {
+    logger.error("growth.snapshot.failed", { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  });
+  const alerts = await runAlertCycle({
+    db,
+    health: services.health,
+    notify: services.notify,
+    logger,
+    clientErrorsMax: env.ALERT_CLIENT_ERRORS_MAX,
+    alertsDisabled: env.ALERTS_DISABLED
+  }).catch((err) => {
+    logger.error("alert.cycle.failed", { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  });
+  logger.info("digest.cycle.done", { summary, dispatch, gamesMaintenance, retention, growth, alerts });
 }
 __name(runDigestCycle, "runDigestCycle");
 async function runBatchDispatchCycle(env) {
@@ -72821,8 +73337,10 @@ var src_default = {
       cpSyncUrl: env.CP_SYNC_URL ?? null,
       cpNodeCode: cpContentCfg.cpNodeCode,
       cpNodeKey: cpContentCfg.cpNodeKey,
-      envName: env.ENV ?? null
+      envName: env.ENV ?? null,
       // ۱.۲۵.۶۷ — پنل سلامت
+      clientErrorsMax: env.ALERT_CLIENT_ERRORS_MAX ?? null
+      // ف۵ (P0-3) — آستانهٔ هشدار خطاهای مرورگر
     });
     return app.fetch(request, env, ctx);
   },

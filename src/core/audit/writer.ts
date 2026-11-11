@@ -1,5 +1,4 @@
 import type { DbClient } from '@core/db';
-import { AsyncLocalStorage } from 'node:async_hooks';
 
 export interface AuditEntry {
   actorId: string;
@@ -47,17 +46,39 @@ export function parseAuditRetentionDays(raw: unknown): number {
 
 /* ف۵ (P2-13) — زمینهٔ request-id ممیزی: میدل‌ور request-id در api-routing هر درخواست /api/* را
    با runWithRequestId می‌پوشاند و هر audit.log/logInTransaction همان درخواست — حتی از اعماق
-   سرویس‌ها — بدون تغییر امضا، شناسهٔ را می‌گیرد. nodejs_compat ورکر AsyncLocalStorage را می‌دهد
-   و هارنس تست هم روی node است؛ چیزی global leak نمی‌شود چون عمر store فقط عمر همان درخواست است. */
-const requestIdALS = new AsyncLocalStorage<{ requestId: string }>();
+   سرویس‌ها — بدون تغییر امضا، شناسهٔ را می‌گیرد. چیزی global leak نمی‌شود چون عمر store فقط عمر
+   همان درخواست است.
+   وابستگی پلتفرمی با پیش‌بینی زمان‌اجرا حل شده (هم‌الگوی خود hono در jsx/context): استاتیک‌import
+   «node:async_hooks» باندل ورکر را می‌شکند (esbuild platform=neutral آن را resolve نمی‌کند)؛
+   process.getBuiltinModule هم در Workers با nodejs_compat و هم روی Node ≥۲۲ در دسترس است؛
+   در محیط بی‌پشتیبانی زمینه ناکارآمد می‌شود و request_id ردیف‌های audit null می‌ماند (رفتار امن). */
+interface ALSLike {
+  getStore(): { requestId: string } | undefined;
+  run<T>(store: { requestId: string }, callback: () => T): T;
+}
+
+function pickAsyncLocalStorage(): ALSLike | null {
+  try {
+    const probe = (globalThis as unknown as {
+      process?: { getBuiltinModule?: (id: string) => { AsyncLocalStorage?: unknown } | undefined };
+    }).process?.getBuiltinModule?.('node:async_hooks');
+    const ALS = probe?.AsyncLocalStorage as (new () => ALSLike) | undefined;
+    return ALS ? new ALS() : null;
+  } catch {
+    return null;
+  }
+}
+
+const requestIdALS = pickAsyncLocalStorage();
 
 /** بلوک کد را در زمینهٔ یک درخواست اجرا می‌کند تا auditهای داخلش request-id داشته باشند */
 export function runWithRequestId<T>(requestId: string, fn: () => Promise<T>): Promise<T> {
+  if (!requestIdALS) return fn();
   return requestIdALS.run({ requestId }, fn);
 }
 
 function currentRequestId(): string | null {
-  return requestIdALS.getStore()?.requestId ?? null;
+  return requestIdALS?.getStore()?.requestId ?? null;
 }
 
 function buildInsert(entry: AuditEntry): { sql: string; params: unknown[] } {
