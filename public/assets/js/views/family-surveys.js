@@ -59,7 +59,7 @@ const npsTone = (v) => (v === null || v === undefined ? 'neutral' : v >= 50 ? 's
 function deltaLine(cur, prev, key, { suffix = '' } = {}) {
   const c = cur?.[key];
   const p = prev?.[key];
-  if (c === null || c === undefined || p === null || p === undefined) return 'دورهٔ قبلِ قابل‌مقایسه نداریم';
+  if (c === null || c === undefined || p === null || p === undefined) return 'دادهٔ دورهٔ قبل برای مقایسه نیست'; /* H6 — فعل بی‌فاعل نرم شد */
   const d = Math.round((c - p) * 10) / 10;
   if (Math.abs(d) < 0.5) return 'هم‌سطح دورهٔ قبل';
   return `${d > 0 ? '▲' : '▼'} ${fa(Math.abs(d))}${suffix} نسبت به دورهٔ قبل`;
@@ -719,7 +719,7 @@ export async function renderFamilySurveys(container) {
     el('div', {},
       el('div', { class: 'page-head__title' }, 'نظرسنجی خانواده‌ها — تابلوی بازخورد و شاخص‌های مرکز'),
       el('div', { class: 'page-head__desc' },
-        'دو فرم ساخت‌یافتهٔ سیستم («پایان دوره» و «حین درمان») از خانواده‌ها پر می‌شود و اینجا به شاخص تبدیل می‌شود: کارت‌های با هدف و مقایسه با دورهٔ قبل، روند زمانی، مقایسهٔ دو فرم، کارنامهٔ درمانگران و صدای خانواده. پاسخ‌ها بی‌نام تجمیع می‌شوند و فقط متن پیشنهاد با نام خانواده می‌آید.'
+        'دو فرم سیستم («پایان دوره» و «حین درمان») را خانواده‌ها پر می‌کنند؛ پاسخ‌ها این‌جا به شاخص تبدیل می‌شود: نمره با مقایسهٔ دورهٔ قبل، روند زمانی، مقایسهٔ دو فرم، کارنامهٔ درمانگران و صدای خانواده. پاسخ‌ها بی‌نام جمع می‌شوند و فقط متن پیشنهاد با نام خانواده می‌آید.' /* H2 — جملهٔ دیوار‌مانند به سه جملهٔ کوتاه شکسته شد؛ هیچ مفهومی حذف نشد */
       )
     ),
     el('button', { class: 'btn btn--primary', onclick: async () => { await mount('surveys', { openCreate: true }); } },

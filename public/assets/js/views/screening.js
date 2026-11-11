@@ -157,7 +157,7 @@ async function renderDailyTab(box, container, myGen) {
 
   const input = el('input', {
     class: 'input input--xl',
-    placeholder: state.editingId ? 'نام و فامیل…' : 'نام و فامیل دانش‌آموز… مثلاً: آوا محمدی #مهدکودک_ستاره',
+    placeholder: state.editingId ? 'نام و فامیل…' : 'نام و فامیل دانش‌آموز… مثلاً: آوا محمدی', /* H5 — مثال بلند در موبایل وسط هشتگ بریده می‌شد؛ راهنمای هشتگ در aria-label و خط زیر فیلد هست */
     value: state.editingId ? (entries.find((e) => e.id === state.editingId) ?? {}).name ?? '' : '',
     'aria-label': 'نام و فامیل دانش‌آموز و برچسب‌های هشتگ‌دار'
   });
@@ -317,7 +317,7 @@ async function renderDailyTab(box, container, myGen) {
     headTitle.textContent = editing ? `ویرایش: ${cur?.name ?? ''}` : 'ثبت سریع روز سنجش';
     submitBtn.replaceChildren(icon(editing ? 'check' : 'plus', 16), editing ? 'ذخیرهٔ تغییرات' : 'ثبت در روز سنجش');
     cancelBtn.style.display = editing ? '' : 'none';
-    input.placeholder = editing ? 'نام و فامیل…' : 'نام و فامیل دانش‌آموز… مثلاً: آوا محمدی #مهدکودک_ستاره';
+    input.placeholder = editing ? 'نام و فامیل…' : 'نام و فامیل دانش‌آموز… مثلاً: آوا محمدی'; /* H5 */
   };
   syncComposerMode();
 
