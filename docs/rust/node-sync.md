@@ -98,3 +98,13 @@
 **صندوق ورودی** (`node_sync_inbox` — مایگریشن 0110): payload سمت ابر projection کاهش‌یافته است نه ردیف کامل جدول؛ بنابراین استقرار مستقیم در جدول‌های اصلی ممنوع است — نگاشت بعدی به `announcements/...` تصمیم جدا دارد. idempotency با `(domain,id)`؛ فهرست سفید اکنون **سه‌لایه** است: ابر (pull) ← کلاینت (client.ts) ← سرور میز (internal-sync؛ کد `NODE_DOMAIN_FORBIDDEN`).
 
 **پوش سمت نود هنوز سیم نشده** (usage_summary/client_errors/health_ping) — مایلستون بعدی؛ کلاینت و قرارداد آن آماده و در drill اثبات شده است.
+
+## push نود (rust-f11) — سیم‌کشی سمت میز
+
+حلقهٔ push هم بسته شد (مایلستون ادامهٔ فاز ۶):
+
+1. **outbox موتور محلی**: `GET /api/internal/sync/outbox?since=<ISO>` (فقط-موتور با همان گیت `CENTER_DESKTOP_ENGINE` + سشن) — منابع: `client_errors` (جدول 0057/0106؛ نگاشت به `ClientErrorPayloadSchema`؛ ستون `user_agent` هرگز خوانده نمی‌شود — قانون PII) و `health_ping` (دقیقاً یک آیتم ساعت‌بکت با `APP_VERSION` و شمارش تجمیعی بی‌نام خطاهای ۲۴ ساعت). `usage_summary` فعلاً skip مستند — منبع محلی سیم نشده. سقف ۲۰۰ آیتم، مرتب ASC، ردیف ناسازگار با اسکیما فقط حذف می‌شود (حکم م۲۱۰).
+2. **pushNow زمان‌بند** (`src/node-sync-runner/runner.ts`): watermark `nodesync:push-watermark-v1` → outbox → `client.push({items})` (گات ۱۵دقیقه‌ای داخل کلاینت — skipped یعنی watermark دست‌نخورده، دورهٔ بعد). هر ۸ وضعیت client.push به نتیجهٔ نرم نگاشت می‌شود؛ هیچ مسیری throw نمی‌کند. فیلدهای `last_push_ok_at`/`last_push_error` به وضعیت اضافه شد (سازگار رو به جلو).
+3. **پنل**: دکمهٔ «همگام‌سازی اکنون» حالا pull + استقرار + پوش را در یک دوره انجام می‌دهد و خط وضعیت نتیجهٔ پوش را هم می‌گوید؛ ردیف «آخرین پوش به ابر» اضافه شد.
+
+idempotency نهایی سمت ابر با `(node_code, id)` برقرار است؛ فهرست سفید push (usage_summary/client_errors/health_ping) دست‌نخورده — دادهٔ بالینی هرگز.
