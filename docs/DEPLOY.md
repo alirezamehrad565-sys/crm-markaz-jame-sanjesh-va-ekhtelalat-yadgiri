@@ -35,7 +35,8 @@ export CLOUDFLARE_API_TOKEN=<token حساب-محدود>
 export CLOUDFLARE_ACCOUNT_ID=<ACCOUNT_ID>
 ```
 
-`account_id` ثابت تولید از قبل در `wrangler.toml` ثبت است.
+`account_id` هرگز در مخزن ثبت نمی‌شود (ممیزی نشت ۲۰۲۶-۱۱-۱۲) — فقط از env خوانده می‌شود؛
+wrangler مقدار `CLOUDFLARE_ACCOUNT_ID` را بر مقدار جای‌نگهدار `wrangler.toml` ترجیح می‌دهد.
 
 ## ۳) نصب از صفر (فقط بار اول)
 
