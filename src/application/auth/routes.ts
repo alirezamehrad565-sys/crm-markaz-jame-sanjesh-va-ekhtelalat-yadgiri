@@ -153,10 +153,19 @@ export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
       }
     }
 
-    const { token, expiresAt } = await signSessionJwt(
+    const { token, expiresAt, sid } = await signSessionJwt(
       { id: staff.id, fullName: staff.full_name, role: staff.role, email: staff.email },
       await resolveSessionSecret(c.env)
     );
+
+    // مایلستون ۱ (0111) — ثبت نشست برای ابطال سمت‌سرور + هرس فرصت‌طلب نشست‌های منقضی
+    const nowIso = new Date().toISOString();
+    await c.env.DB.prepare(
+      'INSERT INTO auth_sessions (sid, staff_id, issued_at, expires_at) VALUES (?, ?, ?, ?)'
+    )
+      .bind(sid, staff.id, nowIso, expiresAt)
+      .run();
+    await c.env.DB.prepare('DELETE FROM auth_sessions WHERE expires_at < ?').bind(nowIso).run();
 
     await deps.audit.log({
       actorId: staff.id,
@@ -190,10 +199,18 @@ export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
 // بستن حلقهٔ خروج: لاگین رویداد ممیزی داشت ولی خروج stub بی‌اثر بود. این روت بعد از
 // authMiddleware/supervisorGate در api-routing سوار می‌شود: کاربر احرازشده رویداد «auth.logout» می‌سازد،
 // ناشناس ۴۰۱ می‌گیرد (کلاینت محلی پاک می‌کند و نمی‌سوزد) و ناظر طبق از گیت رد می‌شود.
-// توکن JWT بی‌حالت است — ابطال سمت‌سرورِ توکن بیرون‌رفته مایگریشن ابطال می‌خواهد و مایلستون خودش را.
+// مایلستون ۱ (0111) — ابطال سمت‌سرور: JWT دیگر بی‌حالت نیست؛ خروج ردیف نشستِ توکن جاری
+// (ctx.sessionId) را ابطال می‌کند و همان توکن بلافاصله ۴۰۱ می‌گیرد.
 export function registerLogoutRoute(app: AppHono, deps: AuthRoutesDeps): void {
   app.post('/api/auth/logout', async (c) => {
     const ctx = getAuthContext(c);
+    if (ctx.sessionId) {
+      await c.env.DB.prepare(
+        'UPDATE auth_sessions SET revoked_at = ? WHERE sid = ? AND revoked_at IS NULL'
+      )
+        .bind(new Date().toISOString(), ctx.sessionId)
+        .run();
+    }
     await deps.audit.log({
       actorId: ctx.staffId,
       action: 'auth.logout',

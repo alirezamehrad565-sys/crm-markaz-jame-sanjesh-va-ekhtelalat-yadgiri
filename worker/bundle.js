@@ -23590,15 +23590,18 @@ async function hmacKey(secret) {
   );
 }
 __name(hmacKey, "hmacKey");
-async function signSessionJwt(staff, secret) {
+async function signSessionJwt(staff, secret, opts) {
   const now = Math.floor(Date.now() / 1e3);
+  const sid = opts?.sid ?? crypto.randomUUID();
+  const ttl = opts?.ttlSeconds ?? SESSION_TTL_SECONDS;
   const payload = {
     sub: staff.id,
     name: staff.fullName,
     role: staff.role,
     email: staff.email,
+    sid,
     iat: now,
-    exp: now + SESSION_TTL_SECONDS
+    exp: now + ttl
   };
   const header = { alg: "HS256", typ: "JWT" };
   const headerB64 = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)));
@@ -23607,7 +23610,7 @@ async function signSessionJwt(staff, secret) {
   const key = await hmacKey(secret);
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
   const token = `${data}.${base64UrlEncode(new Uint8Array(sig))}`;
-  return { token, expiresAt: new Date(payload.exp * 1e3).toISOString() };
+  return { token, expiresAt: new Date(payload.exp * 1e3).toISOString(), sid };
 }
 __name(signSessionJwt, "signSessionJwt");
 async function verifySessionJwt(token, secret) {
@@ -23805,6 +23808,14 @@ function authMiddleware() {
       const sessionToken = authHeader.slice(7).trim();
       const payload2 = await verifySessionJwt(sessionToken, await resolveSessionSecret(env));
       if (payload2) {
+        if (!payload2.sid) {
+          throw new AuthError("\u062A\u0648\u06A9\u0646 \u0641\u0627\u0642\u062F \u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0634\u0633\u062A \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+        }
+        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+        const session = await db.prepare("SELECT revoked_at, expires_at FROM auth_sessions WHERE sid = ?").bind(payload2.sid).first();
+        if (!session || session.revoked_at !== null || session.expires_at <= nowIso) {
+          throw new AuthError("\u0646\u0634\u0633\u062A \u0628\u0627\u0637\u0644 \u06CC\u0627 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+        }
         const staff2 = await getStaffById(db, payload2.sub);
         if (!staff2 || staff2.active !== 1) {
           throw new AuthError("\u06A9\u0627\u0631\u0628\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F \u06CC\u0627 \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0627\u0633\u062A");
@@ -23813,7 +23824,8 @@ function authMiddleware() {
           staffId: staff2.id,
           email: staff2.email,
           role: staff2.role,
-          displayName: staff2.full_name
+          displayName: staff2.full_name,
+          sessionId: payload2.sid
         });
         return next();
       }
@@ -72471,10 +72483,15 @@ function registerAuthRoutes(app, deps) {
         });
       }
     }
-    const { token, expiresAt } = await signSessionJwt(
+    const { token, expiresAt, sid } = await signSessionJwt(
       { id: staff.id, fullName: staff.full_name, role: staff.role, email: staff.email },
       await resolveSessionSecret(c.env)
     );
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    await c.env.DB.prepare(
+      "INSERT INTO auth_sessions (sid, staff_id, issued_at, expires_at) VALUES (?, ?, ?, ?)"
+    ).bind(sid, staff.id, nowIso, expiresAt).run();
+    await c.env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at < ?").bind(nowIso).run();
     await deps.audit.log({
       actorId: staff.id,
       action: "auth.login",
@@ -72504,6 +72521,11 @@ __name(registerAuthRoutes, "registerAuthRoutes");
 function registerLogoutRoute(app, deps) {
   app.post("/api/auth/logout", async (c) => {
     const ctx = getAuthContext(c);
+    if (ctx.sessionId) {
+      await c.env.DB.prepare(
+        "UPDATE auth_sessions SET revoked_at = ? WHERE sid = ? AND revoked_at IS NULL"
+      ).bind((/* @__PURE__ */ new Date()).toISOString(), ctx.sessionId).run();
+    }
     await deps.audit.log({
       actorId: ctx.staffId,
       action: "auth.logout",
