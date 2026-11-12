@@ -18,8 +18,9 @@ if (!version) fail('src/core/version.ts نسخه ندارد');
 else if (bundle.includes(version)) ok(`باندل ورکر نسخهٔ ${version} را دارد`);
 else fail(`باندل ورکر نسخهٔ ${version} را ندارد — باندل کهنه است؛ هرگز بازسازی نکن، sync-artifacts-from-prod بزن`);
 
-// ۲) نشانگرهای ویژگی‌های واقعی ۱.۲۵.۷۲ (که در سورسِ عقب موجود نیستند)
-for (const marker of ['cp_seal_drift', 'health/panel', 'client-errors', 'X-Request-Id']) {
+// ۲) نشانگرهای ویژگی‌های واقعی خط تولید (م۲۱۰: نشانگر cp_seal_drift حذف شد — آن قاعدهٔ هشدار
+//    به کنترل‌پلین منتقل شد و از سورس/باندل نود برداشته می‌شود؛ بقیهٔ نشانگرها سالم‌اند)
+for (const marker of ['health/panel', 'client-errors', 'X-Request-Id']) {
   if (bundle.includes(marker)) ok(`نشانگر ${marker} در باندل هست`);
   else fail(`نشانگر ${marker} در باندل نیست — باندل با سورسِ عقب بازسازی شده!`);
 }
