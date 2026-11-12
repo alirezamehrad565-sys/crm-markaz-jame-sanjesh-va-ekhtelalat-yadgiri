@@ -523,12 +523,22 @@ loadCurrentUser().then((ok) => {
   start(outlet);
   updateWaitlistBadge();
   updateTodosBadge();
-  /* __TUTORIAL_HOOK__ */
+  /* __CLOUD_SETUP_HOOK__ */
+  /* rust-f7 — ویزار راه‌اندازی نخست فقط در پوستهٔ دسکتاپ؛ در وب چانک هرگز fetch نمی‌شود.
+     توالی: ویزار اگر باز شد، توتوریال پس از «پایانِ» ویزار از داخل ماژول راه می‌افتد؛
+     اگر ویزار باز نشد (تمام/رد شده)، توتوریال مستقیم ادامه می‌یابد. */
   if (globalThis.__DESKTOP_SHELL__ === true && session.user) {
-    import('../../../src/tutorial/index.ts')
-      .then((m) => { void m.maybeStartTutorial(session.user); })
+    import('../../../src/cloud-setup/index.ts')
+      .then((s) => s.maybeRunSetup(session.user))
+      .catch(() => false)
+      .then((setupRan) =>
+        import('../../../src/tutorial/index.ts').then((m) => {
+          if (setupRan !== true) void m.maybeStartTutorial(session.user);
+        })
+      )
       .catch(() => {});
   }
+  /* __TUTORIAL_HOOK__ */
 });
 
 document.getElementById('user-chip').addEventListener('click', () => {

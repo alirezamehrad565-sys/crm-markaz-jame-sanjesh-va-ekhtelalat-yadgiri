@@ -21,9 +21,22 @@ export function desktopShellChannel(): boolean {
 }
 
 /**
- * گات نهایی: تور فقط وقتی مجاز است که هر دو کانال فعال باشند.
- * (فلگ استاتیک + کانال __DESKTOP_SHELL__) — آزمون منفی/مثبت در tutorial-gate.test.ts
+ * rust-f7 — کانال ویژگی‌های پوسته: پوستهٔ Rust پیش از ناوبری
+ * __DESKTOP_FEATURES__ = { tutorial: true, setup: true } را تزریق می‌کند.
+ * در وب هیچ‌کدام ست نمی‌شود، پس تور همان‌جا خاموش می‌ماند (حکم فاز ۳).
+ */
+export function shellFeatureEnabled(key: 'tutorial' | 'setup'): boolean {
+  if (!desktopShellChannel()) return false;
+  const features = (globalThis as Record<string, unknown>)['__DESKTOP_FEATURES__'] as
+    | { tutorial?: boolean; setup?: boolean }
+    | undefined;
+  return features?.[key] === true;
+}
+
+/**
+ * گات نهایی: تور با فلگ استاتیک (بیلد اختصاصی آینده) «یا» کانال ویژگی پوسته
+ * فعال می‌شود — در وب هر دو خاموش‌اند. آزمون منفی/مثبت در tutorial-gate.test.ts
  */
 export function tutorialFlagEnabled(): boolean {
-  return TUTORIAL_FEATURE.enabled === true && desktopShellChannel() === true;
+  return TUTORIAL_FEATURE.enabled === true || shellFeatureEnabled('tutorial');
 }

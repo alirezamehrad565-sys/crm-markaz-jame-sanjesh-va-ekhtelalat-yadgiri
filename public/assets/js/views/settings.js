@@ -114,6 +114,15 @@ export async function renderSettings(container, ctx = {}) {
       })
       .catch(() => {});
   }
+  /* rust-f7 — «اتصال ابر» فقط در پوستهٔ دسکتاپ: وضعیت/آزمون دوباره/ویرایش/پاک‌سازی */
+  if (globalThis.__DESKTOP_SHELL__ === true) {
+    import('../../../src/cloud-setup/index.ts')
+      .then((s) => {
+        const section = s.cloudSetupSection(session.user);
+        if (section) container.appendChild(section);
+      })
+      .catch(() => {});
+  }
 }
 
 function drawCenter(body, settings) {

@@ -8,6 +8,7 @@
 //! هم‌گامی فایل‌ها را می‌گیرد و کامپایل واقعی در خط CI با Rust stable انجام می‌شود.
 
 mod engine;
+mod secure_store;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -47,8 +48,12 @@ fn start_engine_in_background(app: tauri::AppHandle) {
                     }
                 }
                 // سوییچ پنجره به loopback — قرارداد هم‌ریشته بودن API با تولید (design.md §۲)
+                // rust-f7: کانال پوسته پیش از ناوبری ست می‌شود — فلگ‌های توتوریال/ویزار
+                // در وب خاموش می‌مانند و فقط پوستهٔ واقعی آن‌ها را روشن می‌کند.
                 if let Some(window) = app.get_webview_window("main") {
-                    let js = format!("location.replace('{base}/')");
+                    let js = format!(
+                        "globalThis.__DESKTOP_SHELL__ = true; globalThis.__DESKTOP_FEATURES__ = {{ tutorial: true, setup: true }}; location.replace('{base}/');"
+                    );
                     let _ = window.eval(&js);
                 }
                 eprintln!("[desktop] موتور محلی روی پورت {port} آماده است");
@@ -68,7 +73,7 @@ pub fn run() {
             start_engine_in_background(app.handle().clone());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![desktop_health])
+        .invoke_handler(tauri::generate_handler![desktop_health, secure_store::desktop_secure_store])
         .run(tauri::generate_context!())
         .expect("خطای راه‌اندازی پوستهٔ دسکتاپ");
 }

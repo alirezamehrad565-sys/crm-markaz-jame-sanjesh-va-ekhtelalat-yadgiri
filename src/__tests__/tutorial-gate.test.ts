@@ -34,6 +34,7 @@ beforeEach(() => {
 afterEach(() => {
   TUTORIAL_FEATURE.enabled = false;
   SHELL.__DESKTOP_SHELL__ = undefined;
+  delete (globalThis as Record<string, unknown>)['__DESKTOP_FEATURES__'];
   setTutorialStore(null);
   setTutorialDepsForTests(null);
 });
@@ -63,14 +64,16 @@ describe('tutorial-gate — دفاع دوکاناله', () => {
     expect(store.writes).toHaveLength(0);      // نه انبار
   });
 
-  it('مثبت: تنها با هر دو کانال (فلگ + __DESKTOP_SHELL__) گات باز می‌شود', () => {
+  it('مثبت (rust-f7): فلگ استاتیک «یا» کانال ویژگی پوسته گات را باز می‌کند', () => {
     TUTORIAL_FEATURE.enabled = true;
-    expect(tutorialFlagEnabled()).toBe(false); // فقط فلگ
+    expect(tutorialFlagEnabled()).toBe(true); // فلگ استاتیک — مسیر بیلد اختصاصی میز
     TUTORIAL_FEATURE.enabled = false;
     SHELL.__DESKTOP_SHELL__ = true;
-    expect(tutorialFlagEnabled()).toBe(false); // فقط کانال
+    expect(tutorialFlagEnabled()).toBe(false); // فقط کانال شل، بدون ویژگی صریح
+    (globalThis as Record<string, unknown>)['__DESKTOP_FEATURES__'] = { tutorial: true, setup: true };
+    expect(tutorialFlagEnabled()).toBe(true); // کانال ویژگی پوسته (تزریق lib.rs پیش از ناوبری)
     TUTORIAL_FEATURE.enabled = true;
-    expect(tutorialFlagEnabled()).toBe(true);  // هر دو
+    expect(tutorialFlagEnabled()).toBe(true); // هر دو
   });
 });
 

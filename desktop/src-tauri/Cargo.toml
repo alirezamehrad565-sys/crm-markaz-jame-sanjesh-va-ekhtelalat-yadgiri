@@ -16,6 +16,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 serde_json = "1"
+# rust-f7 — مخزن امن رازهای اتصال ابر (Credential Manager ویندوز؛ در CI لینوکس با secret-service)
+keyring = "3"
 
 [profile.release]
 codegen-units = 1
