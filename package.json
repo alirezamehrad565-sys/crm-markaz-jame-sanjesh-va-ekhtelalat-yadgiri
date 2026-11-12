@@ -1,6 +1,6 @@
 {
   "name": "center-system",
-  "version": "1.25.73",
+  "version": "1.25.74",
   "private": true,
   "type": "module",
   "author": {
@@ -20,6 +20,7 @@
     "migrate:local": "wrangler d1 migrations apply center-system-db --local",
     "migrate:remote": "wrangler d1 migrations apply center-system-db --remote",
     "seed:local": "wrangler d1 execute center-system-db --local --file=scripts/seed-dev.sql",
+    "seed:games": "node scripts/make-scan-seed-sql.mjs && node scripts/make-stroop-seed-sql.mjs && node scripts/make-flanker-seed-sql.mjs && wrangler d1 execute center-system-db --local --file=/tmp/seed-scan.sql && wrangler d1 execute center-system-db --local --file=/tmp/seed-stroop.sql && wrangler d1 execute center-system-db --local --file=/tmp/seed-flanker.sql",
     "bootstrap": "wrangler d1 execute center-system-db --local --file=scripts/bootstrap.sql",
     "bootstrap:remote": "wrangler d1 execute center-system-db --remote --file=scripts/bootstrap.sql",
     "build:selfhost": "node scripts/build-selfhost.mjs",

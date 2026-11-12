@@ -24,8 +24,20 @@ const KINDS = [
   { kind: 'stroop', pkg: 'stroop1', goal: 'stroop_attention', mission: 'stroop_v1' },
   { kind: 'flanker', pkg: 'flanker1', goal: 'flanker_attention', mission: 'flanker_v1' }
 ];
+// ۱.۲۵.۷۴ — تاریخ و نسخهٔ بسته دیگر هاردکد نیست: خطای کاذب «مأموریت منقضی شده» (تاریخ ۲۰۲۶-۱۱-۰۹ جامانده)
+// و «بسته یافت نشد» (stroop1 از م۵ سخت‌سازی ۱.۱.۰ شده) نمی‌آید — امروزِ تهران + آخرین نسخهٔ منتشرشده از API.
+function tehranToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tehran' }).format(new Date());
+}
+function latestVersion(packages, pkgId) {
+  // DTO فهرست، شناسه را در «id» می‌دهد نه package_id (خروجی واقعی /api/games/packages)
+  const vs = (packages || []).filter((p) => (p.id ?? p.package_id) === pkgId).map((p) => p.version);
+  if (!vs.length) throw new Error(`هیچ نسخه‌ای از بستهٔ ${pkgId} منتشر نشده — seed بازی‌ها اعمال نشده؟`);
+  return vs.sort((a, b) => a.localeCompare(b, 'en', { numeric: true })).at(-1);
+}
 const login = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username: 'manager', password: '1234' }) });
 const token = login.token;
+const published = await api('/api/games/packages?status=published', {}, token);
 for (const k of KINDS) {
   try {
     const student = await api('/api/students', {
@@ -33,10 +45,10 @@ for (const k of KINDS) {
       body: JSON.stringify({ first_name: 'چک', last_name: k.kind, national_id: makeNationalId(), birth_date: '2018-03-21', gender: 'male' })
     }, token);
     const rx = await api('/api/games/prescriptions', {
-      method: 'POST', body: JSON.stringify({ child_id: student.id, package_id: k.pkg, package_version: '1.0.0', goal_id: k.goal })
+      method: 'POST', body: JSON.stringify({ child_id: student.id, package_id: k.pkg, package_version: latestVersion(published, k.pkg), goal_id: k.goal })
     }, token);
     const mission = await api('/api/games/missions', {
-      method: 'POST', body: JSON.stringify({ prescription_id: rx.id, mission_ref: k.mission, scheduled_for: '2026-11-09' })
+      method: 'POST', body: JSON.stringify({ prescription_id: rx.id, mission_ref: k.mission, scheduled_for: tehranToday() })
     }, token);
     const link = await api(`/api/games/missions/${mission.id}/link`, { method: 'POST', body: '{}' }, token);
     const t = link.url.split('/m/')[1];
