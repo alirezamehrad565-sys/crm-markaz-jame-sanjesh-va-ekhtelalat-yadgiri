@@ -1,5 +1,7 @@
 // آزمون‌های هشدار خودکار (ف۵ طرح ارتقا — P0-3 حداقلی):
-// رانش مُهر تلاش/موفقیت → هشدار + مُهر ارزیابی · سالم → بی‌هشدار · جهش خطاهای مرورگر → هشدار · kill-switch → هیچ
+// رانش مُهر تلاش/موفقیت → دیگر هیچ هشداری سمت نود نمی‌سازد (م۲۱۰ — مالکیت هشدار CP-channel به
+// کنترل‌پلین منتقل شد: CP m9 node-health → channel_alerts) · مُهر ارزیابی باز هم نوشته می‌شود ·
+// سالم → بی‌هشدار · جهش خطاهای مرورگر (قاعدهٔ محلی-نودی) → هشدار · kill-switch → هیچ
 // ساعت «فریز» با مُهرهای دست‌کاری‌شدهٔ settings برقرار می‌شود (هم‌الگوی e2e-health-panel) نه با تایمر ساختگی.
 import { describe, it, expect } from 'vitest';
 import { createTestApp, asRole, silentLogger, MANAGER_ID } from '../../test/harness';
@@ -51,8 +53,8 @@ async function linkManagerChat(db: DbClient, chatId: string): Promise<void> {
   );
 }
 
-describe('هشدار خودکار — رانش مُهر تلاش/موفقیت (§۳-۱۱)', () => {
-  it('رانش ده‌روزه در درگاه announcements → هشدار error + logger.error + اعلان مدیر + مُهر ارزیابی', async () => {
+describe('هشدار خودکار — رانش مُهر تلاش/موفقیت (م۲۱۰: مالکیت CP، نود خاموش)', () => {
+  it('رانش ده‌روزه در درگاه announcements → دیگر هیچ هشدار، هیچ logger.error، هیچ اعلان مدیر؛ مُهر ارزیابی باز هم نوشته می‌شود', async () => {
     const A = createTestApp();
     const db = createDb(A.env.DB as never);
     await clearSeal(db);
@@ -68,29 +70,24 @@ describe('هشدار خودکار — رانش مُهر تلاش/موفقیت (�
     const outcome = await runAlertCycle({ db, health, notify: services.notify, logger: log, clientErrorsMax: null });
 
     expect(outcome.disabled).toBe(false);
-    expect(outcome.alerts).toHaveLength(1);
-    expect(outcome.alerts[0].code).toBe('cp_seal_drift');
-    expect(outcome.alerts[0].severity).toBe('error');
-    expect(outcome.alerts[0].message).toContain('اعلان‌های شبکه');
-    expect(outcome.alerts[0].message).toContain('بی‌صدا');
-    expect(log.errors.map((e) => e.code)).toContain('alert.cp_seal_drift');
-    expect(outcome.enqueued).toBe(1);
+    // حکم م۲۱۰: هشدار CP-channel در نود ساخته نمی‌شود — نه پنل، نه لاگ error، نه اعلان مدیر.
+    // مالکیت هشدار کنترل‌پلین است (CP m9 node-health → channel_alerts kind='seal_drift').
+    expect(outcome.alerts).toHaveLength(0);
+    expect(log.errors).toHaveLength(0);
+    expect(outcome.enqueued).toBe(0);
 
-    // اعلان روی همان کانال دایجست (اینجا: درگاه داخلی چون بات تنظیم نیست) صف و همان‌جا ارسال شده است
-    const notif = await db.queryOne<{ channel: string; template: string; recipient: string; status: string; payload: string }>(
-      `SELECT channel, template, recipient, status, payload FROM notifications WHERE recipient = 'mgr-chat-1' ORDER BY rowid DESC LIMIT 1`
+    // هیچ ردیف اعلانی برای مدیر صف نشده باشد
+    const notif = await db.queryOne<{ id: string }>(
+      `SELECT id FROM notifications WHERE recipient = 'mgr-chat-1' LIMIT 1`
     );
-    expect(notif?.channel).toBe('internal');
-    expect(notif?.template).toBe('generic');
-    expect(notif?.status).toBe('sent');
-    expect(notif?.payload).toContain('رانش مُهر');
+    expect(notif).toBeNull();
 
     // مُهر ارزیابی حتی در صورت صفر هشدار هم باید بنشیند — نشانِ «دیدیم و چیزی نبود»
     expect(await readAlertsSeal(db)).toBeTruthy();
     expect(outcome.evaluated_at).toBeTruthy();
   });
 
-  it('پنل زنده هم همان هشدار را دارد — حکم پنل و کرون از یک منطق مشتق می‌شود', async () => {
+  it('پنل زنده هم هیچ هشدار CP-channel ندارد — جدول درگاه‌ها دادهٔ واقعی ok/stale می‌ماند ولی بدون پیام هشدار', async () => {
     const A = createTestApp();
     const db = createDb(A.env.DB as never);
     const now = Date.now();
@@ -98,7 +95,11 @@ describe('هشدار خودکار — رانش مُهر تلاش/موفقیت (�
     await setStamp(db, 'cp_sync.last_sync_at', new Date(now - 9 * 86_400_000).toISOString());
     const health = createHealthService({ db, cpConfigured: true, envName: null });
     const panel = await health.panel();
-    expect(panel.alerts.map((a) => a.code)).toEqual(['cp_seal_drift']);
+    expect(panel.alerts).toHaveLength(0);
+    // درگاهِ رانش‌دار در جدول باقی می‌ماند (دادهٔ خام برای عیب‌یابی مدیر) — stale، بدون هیچ پیام هشدار
+    const ch = panel.cp_link.channels.find((c) => c.key === 'announcements');
+    expect(ch?.state).toBe('stale');
+    expect(ch?.success_at).toBeTruthy();
   });
 
   it('سالم: تلاش و موفقیت هم‌جوار → هیچ هشدار و هیچ logger.error؛ مُهر ارزیابی باز هم نوشته می‌شود', async () => {

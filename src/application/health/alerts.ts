@@ -1,13 +1,14 @@
 // هشدار خودکار (ف۵ طرح ارتقا — P0-3 حداقلی، آیتم صریح ف۵ در §۳-۱): «پنل هرگز خودش زنگ نمی‌زد»
-// زمینه: §۳-۱۱ + درس کشف ف۲ — «اگر مُهرِ تا-کجا-را-خواندم با تلاش ناموفق جلو برود و داده کامل
-// نرسد، داده بی‌صدا گم می‌شود». دو قاعدهٔ ارزیابی (هیچ عدد جادویی تازه‌ای — آستانه‌ها از همان
-// CHANNELS پنل سلامت و env می‌آیند):
-//   ① رانش مُهر تلاش/موفقیت: در هر درگاه، اگر مُهر «آخرین تلاش» از «آخرین موفقیت» بیش از
-//      آستانهٔ ok همان درگاه (§۳-۱۱) جلوتر باشد یعنی چرخه‌ها تلاش می‌کنند ولی موفق نمی‌شوند —
-//      دقیقاً امضای گم‌شدن خاموش داده.
+// م۲۱۰ (حکم کارفرما: «هشدارها نباید سمت نود بروند، باید سمت CP بیایند») — قاعدهٔ ① (رانش مُهر
+// تلاش/موفقیت درگاه‌های CP) از این نود حذف شد؛ مالکیت آن به کنترل‌پلین منتقل شد (CP m9/۱.۱۳.۰ —
+// ماژول node-health: جدول channel_alerts با seal_drift/auth_rejected/silent، ack/resolve فقط-owner،
+// رساندن اختیاری تلگرام). این نود دیگر هرگز برای درگاه‌های CP زنگ نمی‌زند — نه پنل، نه اعلان مدیر.
+// تنها قاعدهٔ باقی‌مانده — کاملاً محلی-نودی:
 //   ② جهش خطاهای مرورگر: COUNT(خطاهای ۲۴ ساعت) > ALERT_CLIENT_ERRORS_MAX (پیش‌فرض ۱۰۰).
 // اجرا فقط در چرخهٔ کرون شبانهٔ digest (کنار رشد جدول‌ها — بدون کرون تازه، سقف پلن Free ۵ کرون)؛
 // پنل سلامت همان منطق را زنده مشتق می‌کند تا نتیجه بدون رفت‌وبرگشت تازه دیده شود.
+// مُهرهای تلاش/موفقیت درگاه‌ها همچنان در جدول CHANNELS پنل به‌عنوان دادهٔ واقعی (ok/stale/never)
+// نمایش داده می‌شوند — بدون هیچ پیام هشدار؛ عیب‌یابی خاموش نود بدون دورزدن حکم «هشدار فقط-CP».
 // kill-switch: env ALERTS_DISABLED (رشتهٔ راستین) ارزیابی را کامل خاموش می‌کند.
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
@@ -43,26 +44,14 @@ export function alertsDisabledFlag(raw: unknown): boolean {
 /**
  * مشتقِ محض هشدارها از دادهٔ همان پنل سلامت — هم در panel() و هم در چرخهٔ کرون مصرف می‌شود
  * تا دو حکم هرگز از هم فاصله نگیرند. هیچ کوئری تازه‌ای ندارد؛ ورودی، خروجی کامل panel است.
+ * م۲۱۰ — فقط قاعدهٔ محلی-نودی (خطاهای مرورگر)؛ هشدار درگاه‌های CP مالکیتِ کنترل‌پلین است
+ * (CP m9 node-health → channel_alerts) و اینجا هرگز مشتق نمی‌شود — رانش مُهر حتی اگر
+ * باشد، در این خروجی نمی‌آید: نه پنل نود، نه اعلان مدیر نود.
  */
 export function deriveAlerts(panel: HealthPanelData, clientErrorsMax: number): HealthAlert[] {
   const alerts: HealthAlert[] = [];
 
-  // ① رانش مُهر تلاش/موفقیت — فقط وقتی هر دو مُهر موجودند و فاصله از آستانهٔ ok گذشته است
-  for (const ch of panel.cp_link.channels) {
-    if (!ch.attempt_at || !ch.success_at) continue;
-    const attemptMs = Date.parse(ch.attempt_at);
-    const successMs = Date.parse(ch.success_at);
-    if (Number.isNaN(attemptMs) || Number.isNaN(successMs)) continue;
-    const gapS = Math.round((attemptMs - successMs) / 1000);
-    if (gapS <= ch.threshold_s) continue;
-    alerts.push({
-      code: 'cp_seal_drift',
-      severity: 'error',
-      message: `درگاه «${ch.label}» رانش مُهر دارد: آخرین تلاش ${Math.round(gapS / 60)} دقیقه جلوتر از آخرین موفقیت است (آستانهٔ درگاه ${Math.round(ch.threshold_s / 60)} دقیقه) — چرخه‌ها تلاش می‌کنند ولی موفق ثبت نمی‌شود و داده ممکن است بی‌صدا گم شده باشد.`
-    });
-  }
-
-  // ② جهش خطاهای مرورگر — شمارش null (قطعی D1) هشدار نمی‌گیرد؛ «هرگز عدد از هوا نمی‌سازیم»
+  // جهش خطاهای مرورگر — شمارش null (قطعی D1) هشدار نمی‌گیرد؛ «هرگز عدد از هوا نمی‌سازیم»
   const clientErrors24h = panel.counts.client_errors_24h;
   if (clientErrors24h !== null && clientErrors24h > clientErrorsMax) {
     alerts.push({
