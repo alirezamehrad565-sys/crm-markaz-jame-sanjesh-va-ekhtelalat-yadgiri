@@ -8,7 +8,7 @@
 import { csEl, csButton } from '../cloud-setup/dom-build.js';
 import type { CsDocument, CsElement } from '../cloud-setup/dom-build.js';
 import { createNodeSyncRunner } from './runner.js';
-import type { RunnerFetch, SyncNowOutcome } from './runner.js';
+import type { PushNowOutcome, RunnerFetch, SyncNowOutcome } from './runner.js';
 import type { NodeSyncStore } from '../node-sync-client/client.js';
 
 export interface SyncSectionDeps {
@@ -39,6 +39,24 @@ function outcomeFa(out: SyncNowOutcome): string {
   }
 }
 
+/** rust-f11 — پسوند خط وضعیت برای نتیجهٔ push نود (نرم؛ هر وضعیتی جملهٔ خودش را دارد) */
+function pushSuffixFa(push: PushNowOutcome): string {
+  switch (push.status) {
+    case 'ok':
+      return push.sent > 0 ? ` — پوش: ${push.sent} آیتم به ابر` : ' — پوش: بدون آیتم جدید';
+    case 'skipped':
+      return ' — پوش: در گات ۱۵دقیقه‌ای (دورهٔ بعد)';
+    case 'unconfigured':
+      return '';
+    case 'push_failed':
+      return ` — پوش ناموفق${push.code ? ` (${push.code})` : ''}`;
+    case 'network_error':
+      return ' — پوش: قطعی شبکه';
+    case 'outbox_error':
+      return ` — پوش: outbox موتور پاسخ نداد (HTTP ${push.http})`;
+  }
+}
+
 function isoFa(iso: string | null): string {
   if (!iso) return 'هرگز';
   return iso.replace('T', ' ').slice(0, 16) + ' UTC';
@@ -56,6 +74,12 @@ export function buildSyncSection(doc: CsDocument, deps: SyncSectionDeps): CsElem
   const lastValue = csEl(doc, 'span', 'cloud-row-value', isoFa(st.last_ok_at));
   lastRow.appendChild(lastLabel);
   lastRow.appendChild(lastValue);
+  if (st.last_push_ok_at) {
+    const pushRow = csEl(doc, 'div', 'cloud-row');
+    pushRow.appendChild(csEl(doc, 'span', 'cloud-row-label', 'آخرین پوش به ابر'));
+    pushRow.appendChild(csEl(doc, 'span', 'cloud-row-value', isoFa(st.last_push_ok_at)));
+    box.appendChild(pushRow);
+  }
   if (st.last_error) {
     const errRow = csEl(doc, 'div', 'cloud-row');
     errRow.appendChild(csEl(doc, 'span', 'cloud-row-label', 'آخرین خطا'));
@@ -81,9 +105,11 @@ export function buildSyncSection(doc: CsDocument, deps: SyncSectionDeps): CsElem
         const creds = await deps.getCreds();
         const runner = createNodeSyncRunner({ ...creds, progressStorage: deps.progressStorage, tokenProvider: deps.tokenProvider, fetchFn: deps.fetchFn, now: deps.now });
         const out = await runner.syncNow();
+        // rust-f11 — پس از pull/استقرار، push نود هم در همان دوره انجام می‌شود (نرم؛ گات ۱۵دقیقه‌ای داخل کلاینت)
+        const push = await runner.pushNow();
         const fresh = runner.status();
         lastValue.textContent = isoFa(fresh.last_ok_at);
-        result.textContent = outcomeFa(out);
+        result.textContent = `${outcomeFa(out)}${pushSuffixFa(push)}`;
         result.style.display = 'block';
       })();
     })

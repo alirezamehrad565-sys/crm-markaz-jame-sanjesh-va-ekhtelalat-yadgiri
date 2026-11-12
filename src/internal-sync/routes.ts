@@ -8,6 +8,8 @@
  * (باندل یکسان، شاخهٔ زمان‌اجرای خاموش).
  *  • POST /api/internal/sync/ingest — آیتم‌های pullشدهٔ کلاینت → صندوق ورودی (0110)
  *  • GET  /api/internal/sync/status — شمارش صندوق بر حسب دامنه (نشانگر/drill)
+ *  • GET  /api/internal/sync/outbox — آیتم‌های قابل‌پوش نود→ابر (rust-f11؛ دو دامنهٔ
+ *    client_errors/health_ping با since اختیاری — قرارداد در outbox.ts)
  * هیچ دادهٔ بالینی در هیچ مسیری نیست — فهرست سفید سه‌لایه (ابر/کلاینت/سرور میز).
  */
 import type { Context } from 'hono';
@@ -18,6 +20,7 @@ import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 import { NotFoundError, ValidationError } from '@core/errors';
 import { IngestBodySchema, ingestInboxItem, inboxStatusCounts, splitByWhitelist } from './service';
+import { buildOutboxPage, parseOutboxSince } from './outbox';
 
 export interface InternalSyncRoutesDeps {
   db: DbClient;
@@ -64,5 +67,16 @@ export function registerInternalSyncRoutes(app: AppHono, deps: InternalSyncRoute
     getAuthContext(c); // همان گیت سشن — فراخوانی برای یکدستی ۴۰۱
     const status = await inboxStatusCounts(deps.db);
     return c.json({ data: status }, 200);
+  });
+
+  // rust-f11 — صندوق خروج push نود→ابر: آیتم‌های client_errors/health_ping برای client.push()
+  app.get('/api/internal/sync/outbox', async (c) => {
+    requireDesktopEngine(c);
+    const ctx = getAuthContext(c);
+    // since اختیاری ISO-UTC — نامعتبر با ValidationError به پاکت استاندارد ۴۰۰ می‌رود
+    const since = parseOutboxSince(c.req.query('since'));
+    const page = await buildOutboxPage(deps.db, since);
+    log.info('outbox.ok', { staffId: ctx.staffId, items: page.items.length });
+    return c.json({ data: page }, 200);
   });
 }

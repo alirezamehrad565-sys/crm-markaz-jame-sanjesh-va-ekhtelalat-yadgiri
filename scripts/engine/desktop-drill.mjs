@@ -289,6 +289,12 @@ try {
   const inbox = await getJson(`${base}/api/internal/sync/status`, { token: roles.manager });
   check('وضعیت صندوق: announcements=1 (نشانگر آخرین همگامی)', inbox.status === 200 && inbox.json?.data?.by_domain?.announcements === 1, JSON.stringify(inbox.json).slice(0, 140));
 
+  // rust-f11 — outbox موتور برای push نود: در DB تازه فقط health_ping ساعت‌بکت دارد
+  const outbox = await getJson(`${base}/api/internal/sync/outbox`, { token: roles.manager });
+  check('outbox موتور: دقیقاً یک health_ping با نسخهٔ اپ', outbox.status === 200 && outbox.json?.data?.items?.length === 1 && outbox.json?.data?.items[0]?.domain === 'health_ping' && Boolean(outbox.json?.data?.items[0]?.payload?.version), JSON.stringify(outbox.json).slice(0, 160));
+  const outboxSince = await getJson(`${base}/api/internal/sync/outbox?since=${encodeURIComponent(new Date().toISOString())}`, { token: roles.manager });
+  check('outbox با since=اکنون → خالی (پیشروی watermark کلاینت)', outboxSince.status === 200 && outboxSince.json?.data?.items?.length === 0, JSON.stringify(outboxSince.json).slice(0, 100));
+
   // ── سفر ج: مرگ موتور و بازگشت (drill خرابی ۱) ──
   console.log('\n[سفر ج] drill خرابی — SIGKILL گروه موتور، بوت دوباره روی همان D1');
   try {

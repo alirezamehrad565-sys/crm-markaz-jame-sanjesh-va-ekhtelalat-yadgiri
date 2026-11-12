@@ -73159,6 +73159,78 @@ async function inboxStatusCounts(db) {
 }
 __name(inboxStatusCounts, "inboxStatusCounts");
 
+// src/internal-sync/outbox.ts
+var OUTBOX_MAX_ITEMS = 200;
+var OutboxSinceSchema = external_exports.iso.datetime();
+function parseOutboxSince(raw2) {
+  const s = raw2?.trim();
+  if (!s) return null;
+  const parsed = OutboxSinceSchema.safeParse(s);
+  if (!parsed.success) throw new ValidationError("\u067E\u0627\u0631\u0627\u0645\u062A\u0631 since \u0628\u0627\u06CC\u062F ISO-UTC \u0645\u0639\u062A\u0628\u0631 \u0628\u0627\u0634\u062F (\u067E\u0633\u0648\u0646\u062F Z)");
+  return parsed.data;
+}
+__name(parseOutboxSince, "parseOutboxSince");
+var CLIENT_ERROR_COLUMNS = `id,
+  COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', occurred_at), occurred_at) AS at,
+  message, source, line_no AS line, col_no AS col, stack, url, app_version`;
+function sinceToSqlCutoff(sinceIso) {
+  return sinceIso.slice(0, 19).replace("T", " ");
+}
+__name(sinceToSqlCutoff, "sinceToSqlCutoff");
+async function clientErrorItems(db, since) {
+  const sql = `SELECT ${CLIENT_ERROR_COLUMNS}
+                 FROM client_errors
+                 ${since ? "WHERE occurred_at > ?" : ""}
+                ORDER BY occurred_at ASC, id ASC
+                LIMIT ?`;
+  const params = since ? [sinceToSqlCutoff(since), OUTBOX_MAX_ITEMS] : [OUTBOX_MAX_ITEMS];
+  const rows = await db.query(sql, params);
+  if (!NODE_PUSH_DOMAIN_SET.has("client_errors")) return [];
+  const items = [];
+  for (const r of rows) {
+    const parsed = ClientErrorPayloadSchema.safeParse({
+      message: r.message,
+      source: r.source,
+      line: r.line,
+      col: r.col,
+      stack: r.stack,
+      url: r.url,
+      app_version: r.app_version
+    });
+    if (!parsed.success) continue;
+    items.push({ id: String(r.id), domain: "client_errors", at: String(r.at), payload: parsed.data });
+  }
+  return items;
+}
+__name(clientErrorItems, "clientErrorItems");
+async function healthPingItem(db, now) {
+  const errs24h = await db.queryOne(
+    "SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at >= datetime('now', '-24 hours')"
+  );
+  const hour = now.toISOString().slice(0, 13);
+  const payload = HealthPingPayloadSchema.parse({
+    ok: true,
+    version: APP_VERSION,
+    // نسخهٔ اپ از @core/version — فیلد version اسکیما
+    counters: { client_errors_24h: Number(errs24h?.n ?? 0) }
+  });
+  return {
+    id: `ping-${hour}`,
+    domain: "health_ping",
+    at: `${hour}:00:00Z`,
+    payload
+  };
+}
+__name(healthPingItem, "healthPingItem");
+async function buildOutboxPage(db, since, now = /* @__PURE__ */ new Date()) {
+  const [errors, ping] = await Promise.all([clientErrorItems(db, since), healthPingItem(db, now)]);
+  const includePing = !since || Date.parse(ping.at) > Date.parse(since);
+  const items = includePing ? [...errors, ping] : errors;
+  items.sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  return { items: items.slice(0, OUTBOX_MAX_ITEMS), generated_at: now.toISOString() };
+}
+__name(buildOutboxPage, "buildOutboxPage");
+
 // src/internal-sync/routes.ts
 function requireDesktopEngine(c) {
   if (c.env?.CENTER_DESKTOP_ENGINE !== "1") {
@@ -73194,6 +73266,14 @@ function registerInternalSyncRoutes(app, deps) {
     getAuthContext(c);
     const status = await inboxStatusCounts(deps.db);
     return c.json({ data: status }, 200);
+  });
+  app.get("/api/internal/sync/outbox", async (c) => {
+    requireDesktopEngine(c);
+    const ctx = getAuthContext(c);
+    const since = parseOutboxSince(c.req.query("since"));
+    const page2 = await buildOutboxPage(deps.db, since);
+    log.info("outbox.ok", { staffId: ctx.staffId, items: page2.items.length });
+    return c.json({ data: page2 }, 200);
   });
 }
 __name(registerInternalSyncRoutes, "registerInternalSyncRoutes");
