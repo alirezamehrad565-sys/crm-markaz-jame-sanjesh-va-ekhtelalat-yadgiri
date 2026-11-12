@@ -106,6 +106,7 @@ import { createRumService, registerRumRoutes } from '@app/rum'; // پایش کا
 import type { RumService } from '@app/rum';
 import { registerAuthRoutes, registerLogoutRoute } from '@app/auth';
 import { FEATURES } from '@core/shared';
+import { createNodeSyncApp } from '../../node-sync/app'; // rust-f4 — زیراپ سینک نودهای دسکتاپ
 
 import { errorHandler, parseApiRateLimitPerMin, makeKeyedRateLimiter, API_RATE_LIMIT_WINDOW_MS } from '@app/http';
 import { RateLimitError } from '@core/errors';
@@ -667,6 +668,11 @@ export function createApp(deps: AppDeps): AppHono {
   registerGamesPublicRoutes(app, services.games);
 
   registerAuthRoutes(app, { audit: services.audit, logger: services.logger });
+
+  /* rust-f4 — زیراپ سینک نودهای دسکتاپ (/node/*): «پیش از» گیت authMiddleware ثبت می‌شود
+     (زنجیرهٔ عمومی §۵)؛ احراز مسیرهای نودی خودش node_code+node_key است و مسیرهای مدیریتی
+     درون زیراپ با همان گیت سشن بسته می‌شوند. سند: docs/rust/node-sync.md */
+  app.route('/node', createNodeSyncApp({ db: services.db, audit: services.audit, logger: services.logger }));
 
   app.use('/api/*', authMiddleware());
   app.use('/api/*', supervisorGate(services.audit));
