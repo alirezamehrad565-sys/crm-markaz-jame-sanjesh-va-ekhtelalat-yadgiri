@@ -515,7 +515,21 @@ document.getElementById('sidebar-close')?.addEventListener('click', closeSidebar
 
 const outlet = document.getElementById('outlet');
 initAnnouncementBanners(); // — بنر اعلان‌ها (صفحه ورود + پنل)
-loadCurrentUser().then((ok) => { if (ok) { start(outlet); updateWaitlistBadge(); updateTodosBadge(); } });
+/* rust-f3 — توتوریال اولیه: هوک شروع فقط در پوستهٔ دسکتاپ (فلگ استاتیک ماژول تور هم پیش‌فرض خاموش است).
+   در وب تولیدی گارد زیر هرگز true نمی‌شود → نه DOM، نه fetch، نه تغییر مسیر؛ حتی چانک تور fetch نمی‌شود.
+   login.js پس از ورود location.reload() می‌زند → این فراخوانی روی بوتِ پس از نشست معتبر = «ورود نخست». */
+loadCurrentUser().then((ok) => {
+  if (!ok) return;
+  start(outlet);
+  updateWaitlistBadge();
+  updateTodosBadge();
+  /* __TUTORIAL_HOOK__ */
+  if (globalThis.__DESKTOP_SHELL__ === true && session.user) {
+    import('../../../src/tutorial/index.ts')
+      .then((m) => { void m.maybeStartTutorial(session.user); })
+      .catch(() => {});
+  }
+});
 
 document.getElementById('user-chip').addEventListener('click', () => {
   if (session.user) logout();
