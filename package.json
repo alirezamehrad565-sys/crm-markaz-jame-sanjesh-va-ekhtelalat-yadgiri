@@ -30,6 +30,7 @@
     "desktop:icons": "python3 scripts/make-desktop-icons.py",
     "engine:start": "node scripts/engine/engine.mjs",
     "engine:smoke": "node scripts/engine/engine-smoke.mjs",
+    "drill:desktop": "node scripts/engine/desktop-drill.mjs",
     "seed:demo": "node scripts/engine/seed-demo.mjs",
     "usb:pack": "node scripts/build-usb-pack.mjs",
     "start:selfhost": "node dist/server.js",
