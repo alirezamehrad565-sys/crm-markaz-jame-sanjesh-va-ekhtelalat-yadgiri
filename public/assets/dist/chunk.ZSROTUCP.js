@@ -1,1 +1,0 @@
-import{h as s}from"./chunk.674CLB4P.js";async function r(){let e=[],t=1;for(;;){let a=await s.get(`/api/students?active=true&page_size=100&page=${t}`);e.push(...a.data);let o=a.meta?.totalPages??1;if(t>=o)break;t+=1}return e}export{r as a};
