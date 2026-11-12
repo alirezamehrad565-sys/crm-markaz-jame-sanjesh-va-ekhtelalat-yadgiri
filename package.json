@@ -1,6 +1,6 @@
 {
   "name": "center-system",
-  "version": "1.25.74",
+  "version": "1.25.75",
   "private": true,
   "type": "module",
   "author": {
@@ -24,6 +24,8 @@
     "bootstrap": "wrangler d1 execute center-system-db --local --file=scripts/bootstrap.sql",
     "bootstrap:remote": "wrangler d1 execute center-system-db --remote --file=scripts/bootstrap.sql",
     "build:selfhost": "node scripts/build-selfhost.mjs",
+    "build:games-worker": "node scripts/build-worker-games.mjs",
+    "smoke:games": "node scripts/games-bundle-smoke.mjs",
     "start:selfhost": "node dist/server.js",
     "update": "node scripts/update-remote.mjs",
     "update:dry": "node scripts/update-remote.mjs --dry-run",

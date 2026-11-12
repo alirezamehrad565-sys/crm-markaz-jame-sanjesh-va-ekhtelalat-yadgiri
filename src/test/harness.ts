@@ -15,6 +15,7 @@ import type { MediaFetcher } from '@core/notify';
 import type { BackupDocumentSender } from '@app/backup';
 import type { ExerciseFileSender } from '@domain/exercise-bank';
 import { createApp } from '@app/api-routing';
+import { createGamesApp } from '@app/games-standalone'; // ۱.۲۵.۷۵ — بستهٔ مستقل بازی‌ها
 
 export const MANAGER_ID = '00000000-0000-0000-0000-000000000001';
 export const ALI_ID = '00000000-0000-0000-0000-000000000002'; // نقش درمانگر
@@ -121,9 +122,31 @@ export function createTestApp(
   return { sql: store, d1, db, app, env };
 }
 
-const FAKE_CTX = { waitUntil: () => undefined, passThroughOnException: () => undefined } as unknown as ExecutionContext;
+/** اپ مستقل بازی‌ها روی همان MockD1 — e2e بستهٔ games-standalone (۱.۲۵.۷۵)؛ هم‌شکل TestApp اصلی */
+export function createTestGamesApp(
+  sql?: DatabaseSyncInstance,
+  opts?: { publicBaseUrl?: string | null }
+): TestApp {
+  const store = sql ?? createTestDb();
+  const d1 = new MockD1(store);
+  const db = createDb(d1 as unknown as D1Database);
+  const audit = createAuditWriter(db);
+  const app = createGamesApp({
+    db,
+    audit,
+    logger: silentLogger('games-it'),
+    publicBaseUrl: opts?.publicBaseUrl !== undefined ? opts.publicBaseUrl : 'https://center.test.example.com'
+  });
+  const env = {
+    DB: d1 as unknown as D1Database,
+    ENV: 'development',
+    CF_ACCESS_TEAM_DOMAIN: 'test.team.example.com',
+    API_RATE_LIMIT_PER_MIN: '0' // هارنس: محدودساز خاموش — هم‌الگوی اپ اصلی
+  };
+  return { sql: store, d1, db, app, env };
+}
 
-export interface JsonOutcome<T = unknown> {
+const FAKE_CTX = { waitUntil: () => undefined, passThroughOnException: () => undefined } as unknown as ExecutionContext;export interface JsonOutcome<T = unknown> {
   status: number;
   ok: boolean;
   body: T;

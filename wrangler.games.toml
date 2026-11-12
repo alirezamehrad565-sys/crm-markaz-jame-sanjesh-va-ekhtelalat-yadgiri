@@ -1,0 +1,32 @@
+name = "center-system-games"
+main = "worker/games-entry.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "center-system-db"
+database_id = "cf6bae8d-d574-4b8e-8a99-3b7462ef3f9e"
+migrations_dir = "migrations"
+
+# ورکر بازی کرون ندارد — چرخه‌های زمانی (یادآور/دیجست/سینک CP) فقط در اپ اصلی‌اند.
+# [triggers] عمداً حذف شده است.
+
+[vars]
+ENV = "production"
+CF_ACCESS_TEAM_DOMAIN = ""
+# ⚠ در استقرار مستقل، PUBLIC_BASE_URL باید ریشهٔ خودِ ورکر بازی باشد تا لینک‌های /m/:token درست ساخته شوند؛
+# مقدار فعلی همان اپ اصلی است و فقط تا پیش از تصمیم استقرار، معنای «هم‌ریشه با اپ اصلی» را نگه می‌دارد.
+PUBLIC_BASE_URL = "https://center-system.sanjeshm.workers.dev"
+
+[observability]
+enabled = true
+
+# تصمیم استقرار با کارفرماست — تا آن زمان این کانفیگ «آمادهٔ استقرار» است و دیپلوی نمی‌شود.
+# فعال‌سازی: مقدار زیر را از کامنت خارج کنید یا یک custom_domain بدهید؛
+# سپس AUTH_SECRET را با wrangler secret put AUTH_SECRET -c wrangler.games.toml ثبت کنید.
+# routes = [{ pattern = "games.example.workers.dev", custom_domain = true }]
