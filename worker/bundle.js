@@ -73084,6 +73084,98 @@ function createNodeSyncApp(deps) {
 }
 __name(createNodeSyncApp, "createNodeSyncApp");
 
+// src/internal-sync/service.ts
+var SYNC_INGEST_MAX_ITEMS = 100;
+var IngestItemSchema = external_exports.object({
+  id: external_exports.string().min(1).max(120),
+  domain: external_exports.string().min(1).max(40),
+  updated_at: external_exports.string().min(4).max(40),
+  payload: external_exports.record(external_exports.string(), external_exports.unknown())
+  // zod4 — کلید صریح
+});
+var IngestBodySchema = external_exports.object({
+  items: external_exports.array(IngestItemSchema).min(1).max(SYNC_INGEST_MAX_ITEMS)
+});
+async function ingestInboxItem(db, item) {
+  const payloadJson = JSON.stringify(item.payload);
+  const existing = await db.queryOne(
+    "SELECT updated_at, payload FROM node_sync_inbox WHERE domain = ? AND id = ?",
+    [item.domain, item.id]
+  );
+  if (!existing) {
+    await db.query(
+      "INSERT INTO node_sync_inbox (domain, id, updated_at, payload) VALUES (?, ?, ?, ?)",
+      [item.domain, item.id, item.updated_at, payloadJson]
+    );
+    return "inserted";
+  }
+  if (existing.updated_at === item.updated_at && existing.payload === payloadJson) return "duplicate";
+  await db.query(
+    "UPDATE node_sync_inbox SET updated_at = ?, payload = ?, received_at = datetime('now') WHERE domain = ? AND id = ?",
+    [item.updated_at, payloadJson, item.domain, item.id]
+  );
+  return "updated";
+}
+__name(ingestInboxItem, "ingestInboxItem");
+function splitByWhitelist(items) {
+  const allowed = items.filter((it) => NODE_PULL_DOMAIN_SET.has(it.domain));
+  const forbiddenDomains = [...new Set(items.filter((it) => !NODE_PULL_DOMAIN_SET.has(it.domain)).map((it) => it.domain))];
+  return { allowed, forbiddenDomains };
+}
+__name(splitByWhitelist, "splitByWhitelist");
+async function inboxStatusCounts(db) {
+  const rows = await db.query(
+    "SELECT domain, COUNT(*) AS n FROM node_sync_inbox GROUP BY domain ORDER BY domain"
+  );
+  const by_domain = {};
+  let total = 0;
+  for (const r of rows) {
+    by_domain[r.domain] = Number(r.n);
+    total += Number(r.n);
+  }
+  return { total, by_domain };
+}
+__name(inboxStatusCounts, "inboxStatusCounts");
+
+// src/internal-sync/routes.ts
+function requireDesktopEngine(c) {
+  if (c.env?.CENTER_DESKTOP_ENGINE !== "1") {
+    throw new NotFoundError("\u0645\u0633\u06CC\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
+  }
+}
+__name(requireDesktopEngine, "requireDesktopEngine");
+function registerInternalSyncRoutes(app, deps) {
+  const log = deps.logger.child("internal-sync");
+  app.post("/api/internal/sync/ingest", async (c) => {
+    requireDesktopEngine(c);
+    const ctx = getAuthContext(c);
+    const parsed = IngestBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError("\u0628\u062F\u0646\u0647\u0654 \u0627\u0633\u062A\u0642\u0631\u0627\u0631 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+    const { allowed, forbiddenDomains } = splitByWhitelist(parsed.data.items);
+    if (forbiddenDomains.length > 0) {
+      return c.json({ error: "NODE_DOMAIN_FORBIDDEN", message: "\u062F\u0627\u0645\u0646\u0647\u0654 \u0628\u06CC\u0631\u0648\u0646 \u0641\u0647\u0631\u0633\u062A \u0633\u0641\u06CC\u062F \u0633\u06CC\u0646\u06A9 \u0627\u0633\u062A" }, 403);
+    }
+    const counts = { inserted: 0, updated: 0, duplicates: 0 };
+    const by_domain = {};
+    for (const item of allowed) {
+      const r = await ingestInboxItem(deps.db, item);
+      if (r === "inserted") counts.inserted += 1;
+      else if (r === "updated") counts.updated += 1;
+      else counts.duplicates += 1;
+      by_domain[item.domain] = (by_domain[item.domain] ?? 0) + 1;
+    }
+    log.info("ingest.ok", { staffId: ctx.staffId, ...counts });
+    return c.json({ data: { ...counts, by_domain } }, 200);
+  });
+  app.get("/api/internal/sync/status", async (c) => {
+    requireDesktopEngine(c);
+    getAuthContext(c);
+    const status = await inboxStatusCounts(deps.db);
+    return c.json({ data: status }, 200);
+  });
+}
+__name(registerInternalSyncRoutes, "registerInternalSyncRoutes");
+
 // src/application/api-routing/index.ts
 function createServices(deps) {
   const { db, audit, logger } = deps;
@@ -73467,6 +73559,7 @@ function createApp(deps) {
   app.use("/api/*", authMiddleware());
   app.use("/api/*", supervisorGate(services.audit));
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
+  registerInternalSyncRoutes(app, { db: services.db, logger: services.logger });
   app.get("/api/me", (c) => c.json({ data: c.get("authContext") }, 200));
   registerRoutes(app, services.appointments);
   registerRoutes2(app, services.attendance);
