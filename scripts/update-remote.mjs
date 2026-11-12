@@ -105,10 +105,21 @@ if (liveVersionBefore) {
 }
 
 // ساخت باندل کلاینت (boot.[hash] + چانک‌های نما): باید پیش از گات بودجه و انتشار تازه باشد
-if (existsSync(join(root, 'scripts', 'build-client.mjs'))) {
+// بازیابی م۵: تا بازسازی کامل سورس، آرتیفکت مرجع است — FREEZE_ARTIFACTS=1 ساخت را قفل می‌کند
+if (process.env.FREEZE_ARTIFACTS === '1') {
+  console.log('   FREEZE_ARTIFACTS=1 — ساخت باندل کلاینت قفل شد (آرتیفکت کامیت‌شده مرجع است).');
+} else if (existsSync(join(root, 'scripts', 'build-client.mjs'))) {
   const build = run('node', [join(root, 'scripts', 'build-client.mjs')]);
   if (build.status !== 0) {
     fail('ساخت باندل کلاینت شکست خورد — خطای esbuild را ببینید (فرار اضطراری نیست؛ خطا را درست کنید).');
+  }
+}
+
+// گیت هم‌گامی آرتیفکت-منجمد — باندل ورکر/چانک‌ها باید همان اثرِ در مخزن باشند
+if (existsSync(join(root, 'scripts', 'gate-artifact-frozen.mjs'))) {
+  const gate = run('node', [join(root, 'scripts', 'gate-artifact-frozen.mjs')]);
+  if (gate.status !== 0) {
+    fail('گیت آرتیفکت-منجمد قرمز شد — باندل/چانک با مخزن هم‌خوان نیست (sync-artifacts-from-prod.mjs بزنید).');
   }
 }
 
