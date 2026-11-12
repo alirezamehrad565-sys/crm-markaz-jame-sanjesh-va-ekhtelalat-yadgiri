@@ -31615,15 +31615,15 @@ __name(m108NormalizeChecklistTexts, "m108NormalizeChecklistTexts");
 function m108NormalizeChecklistItems(items) {
   if (!items || items.length === 0) return null;
   const seen = /* @__PURE__ */ new Set();
-  const clean5 = [];
+  const clean6 = [];
   for (const it of items) {
     const text = it.text.trim();
     if (!text || seen.has(text)) continue;
     seen.add(text);
-    clean5.push({ text, done: Boolean(it.done) });
-    if (clean5.length >= TODO_CHECKLIST_MAX) break;
+    clean6.push({ text, done: Boolean(it.done) });
+    if (clean6.length >= TODO_CHECKLIST_MAX) break;
   }
-  return clean5.length > 0 ? JSON.stringify(clean5) : null;
+  return clean6.length > 0 ? JSON.stringify(clean6) : null;
 }
 __name(m108NormalizeChecklistItems, "m108NormalizeChecklistItems");
 function createTodosService(deps) {
@@ -31818,9 +31818,9 @@ function createTodosService(deps) {
       return rowToTodo(updated);
     },
     async addChecklistItem(id, text, actor) {
-      const clean5 = text.trim();
-      if (!clean5) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
-      if (clean5.length > 200) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+      const clean6 = text.trim();
+      if (!clean6) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
+      if (clean6.length > 200) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
       await db.transaction(async (tx) => {
         const row = await loadActiveRow(tx, id);
         if (row.assigner_id !== actor.staffId && row.assignee_id !== actor.staffId) {
@@ -31833,10 +31833,10 @@ function createTodosService(deps) {
         if (items.length >= TODO_CHECKLIST_MAX) {
           throw new ValidationError(`\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 ${TODO_CHECKLIST_MAX} \u0645\u0648\u0631\u062F \u0646\u062F\u0627\u0631\u062F`);
         }
-        if (items.some((it) => it.text === clean5)) {
+        if (items.some((it) => it.text === clean6)) {
           throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0648\u0631\u062F \u0627\u0632 \u0642\u0628\u0644 \u062F\u0631 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0647\u0633\u062A");
         }
-        items.push({ text: clean5, done: false });
+        items.push({ text: clean6, done: false });
         await tx.execute(`UPDATE todos SET checklist = ?, updated_at = datetime('now') WHERE id = ?`, [
           JSON.stringify(items),
           id
@@ -32769,11 +32769,11 @@ function createExerciseBankService(deps) {
     },
     // کدام شناسه‌ها واقعاً تمرینِ حذف‌نشدهٔ بانک‌اند (برای اعتبارسنجی لینک کارت طرح درمان)
     async idsExist(ids) {
-      const clean5 = [...new Set(ids.filter((x) => typeof x === "string" && x.length > 0))].slice(0, 50);
-      if (!clean5.length) return /* @__PURE__ */ new Set();
+      const clean6 = [...new Set(ids.filter((x) => typeof x === "string" && x.length > 0))].slice(0, 50);
+      if (!clean6.length) return /* @__PURE__ */ new Set();
       const rows = await db.query(
-        `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${clean5.map(() => "?").join(", ")})`,
-        clean5
+        `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${clean6.map(() => "?").join(", ")})`,
+        clean6
       );
       return new Set(rows.map((r) => r.id));
     },
@@ -51460,8 +51460,8 @@ function assertPlainTone(text) {
 }
 __name(assertPlainTone, "assertPlainTone");
 function shortLine(text, max = 120) {
-  const clean5 = text.replace(/\s+/g, " ").trim();
-  return Array.from(clean5).length <= max ? clean5 : `${Array.from(clean5).slice(0, max - 1).join("").trim()}\u2026`;
+  const clean6 = text.replace(/\s+/g, " ").trim();
+  return Array.from(clean6).length <= max ? clean6 : `${Array.from(clean6).slice(0, max - 1).join("").trim()}\u2026`;
 }
 __name(shortLine, "shortLine");
 function sawOf(h) {
@@ -69724,8 +69724,8 @@ async function fetchBaleBotUsername(token, fetchImpl) {
     const body = await res.json().catch(() => ({}));
     const username = body?.result?.username;
     if (typeof username !== "string") return null;
-    const clean5 = username.trim().replace(/^@/, "");
-    return /^[A-Za-z0-9_]{2,64}$/.test(clean5) ? clean5 : null;
+    const clean6 = username.trim().replace(/^@/, "");
+    return /^[A-Za-z0-9_]{2,64}$/.test(clean6) ? clean6 : null;
   } catch {
     return null;
   }
@@ -70395,20 +70395,20 @@ function createSettingsService(deps) {
       return typeof v === "string" ? v.trim().replace(/^@/, "") : "";
     },
     async setBotUsername(username, actor) {
-      const clean5 = username.trim().replace(/^@/, "");
-      if (clean5.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean5)) {
+      const clean6 = username.trim().replace(/^@/, "");
+      if (clean6.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean6)) {
         throw new ConflictError("\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u0628\u0627\u062A \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0644\u0627\u062A\u06CC\u0646\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637 \u0632\u06CC\u0631 \u0627\u0633\u062A (\u06F2 \u062A\u0627 \u06F6\u06F4 \u0646\u0648\u06CC\u0633\u0647)");
       }
       const before = await this.getBotUsername();
-      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean5, actor);
+      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean6, actor);
       await audit.log({
         actorId: actor.staffId,
         action: "settings.bot_username.update",
         resourceType: "settings",
         resourceId: "bot_username",
-        changes: { bot_username: { from: before || null, to: clean5 || null } }
+        changes: { bot_username: { from: before || null, to: clean6 || null } }
       });
-      return clean5;
+      return clean6;
     },
     /* ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات؛ خالی = پیش‌فرض سامانه */
     async getBotAbout() {
@@ -70505,10 +70505,10 @@ function createSettingsService(deps) {
     async updateScoringConfig(input2, actor) {
       const before = await this.getScoringConfig();
       const epoch = epochUtcOfTehranYmd(input2.epochYmd);
-      const clean5 = mergeScoringWeights(input2.weights);
-      await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean5 }, actor);
-      const changed = Object.keys(clean5).filter(
-        (k) => clean5[k] !== before.weights[k]
+      const clean6 = mergeScoringWeights(input2.weights);
+      await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean6 }, actor);
+      const changed = Object.keys(clean6).filter(
+        (k) => clean6[k] !== before.weights[k]
       ).length;
       await audit.log({
         actorId: actor.staffId,
@@ -71028,9 +71028,9 @@ function createBackupService(deps) {
             );
             if (rows.length === 0) break;
             for (const r of rows) {
-              const clean5 = {};
-              for (const [k, v] of Object.entries(r)) clean5[k] = encodeValue(v);
-              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean5)}`;
+              const clean6 = {};
+              for (const [k, v] of Object.entries(r)) clean6[k] = encodeValue(v);
+              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean6)}`;
               emitted += 1;
             }
             if (rows.length < page2) break;
@@ -72516,6 +72516,574 @@ function registerLogoutRoute(app, deps) {
 }
 __name(registerLogoutRoute, "registerLogoutRoute");
 
+// src/node-sync/service.ts
+var NODE_PULL_DOMAINS = ["announcements", "packages", "library"];
+var NODE_PUSH_DOMAINS = ["usage_summary", "client_errors", "health_ping"];
+var NODE_PULL_DOMAIN_SET = new Set(NODE_PULL_DOMAINS);
+var NODE_PUSH_DOMAIN_SET = new Set(NODE_PUSH_DOMAINS);
+var NODE_PUSH_MIN_INTERVAL_MS = 15 * 6e4;
+var NODE_PUSH_MAX_ITEMS = 100;
+var NODE_PUSH_BODY_MAX_BYTES = 256 * 1024;
+var NODE_PULL_DEFAULT_LIMIT = 50;
+var NODE_PULL_MAX_LIMIT = 100;
+var NODE_CODE_PATTERN = /^DESKTOP:[A-Za-z0-9][A-Za-z0-9._-]{2,63}$/;
+function clean5(v) {
+  const s = v?.trim();
+  return s ? s : null;
+}
+__name(clean5, "clean");
+function bearerToken(header) {
+  const s = clean5(header);
+  if (!s) return null;
+  return s.startsWith("Bearer ") ? clean5(s.slice(7)) : null;
+}
+__name(bearerToken, "bearerToken");
+var NODE_KEY_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+function randomKeySuffix(length = 40) {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  let out = "";
+  for (let i = 0; i < length; i += 1) out += NODE_KEY_ALPHABET[bytes[i] % NODE_KEY_ALPHABET.length];
+  return out;
+}
+__name(randomKeySuffix, "randomKeySuffix");
+async function generateNodeKey() {
+  const token = `nk_live_${randomKeySuffix()}`;
+  const keyHash = await hashApiKey(token);
+  return { token, keyHash, fingerprint: keyHash.slice(0, 12) };
+}
+__name(generateNodeKey, "generateNodeKey");
+function timingSafeHexEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+__name(timingSafeHexEqual, "timingSafeHexEqual");
+var NODE_ROW_COLUMNS = "node_code, label, key_hash, key_fingerprint, key_rotated_at, active, last_pull_at, last_push_attempt_at, last_push_ok_at, created_at";
+var NodeCodeInvalidError = class extends Error {
+  static {
+    __name(this, "NodeCodeInvalidError");
+  }
+  constructor() {
+    super("\u06A9\u062F \u0646\u0648\u062F \u0628\u0627\u06CC\u062F \u0634\u06A9\u0644 DESKTOP:<install-id> \u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F");
+    this.name = "NodeCodeInvalidError";
+  }
+};
+async function registerNode(db, audit, input2) {
+  const code = clean5(input2.nodeCode);
+  if (!code || !NODE_CODE_PATTERN.test(code)) throw new NodeCodeInvalidError();
+  const label = clean5(input2.label)?.slice(0, 120) ?? null;
+  const { token, keyHash, fingerprint } = await generateNodeKey();
+  const createdAt = (/* @__PURE__ */ new Date()).toISOString();
+  const registration = await db.transaction(async (tx) => {
+    const dup = await tx.queryOne(
+      "SELECT node_code FROM sync_nodes WHERE node_code = ?",
+      [code]
+    );
+    if (dup) {
+      throw new Error("NODE_CODE_TAKEN");
+    }
+    await tx.execute(
+      `INSERT INTO sync_nodes (node_code, label, key_hash, key_fingerprint, key_rotated_at, active, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+      [code, label, keyHash, fingerprint, createdAt, input2.actorStaffId, createdAt, createdAt]
+    );
+    await audit.logInTransaction(tx, {
+      actorId: input2.actorStaffId,
+      action: "node.register",
+      resourceType: "node",
+      resourceId: code,
+      changes: { label: { from: null, to: label }, key_fingerprint: { from: null, to: fingerprint } }
+    });
+    return { node_code: code, label, key_fingerprint: fingerprint, created_at: createdAt };
+  });
+  return { registration, nodeKey: token };
+}
+__name(registerNode, "registerNode");
+async function rotateNodeKey(db, audit, input2) {
+  const code = clean5(input2.nodeCode);
+  if (!code) throw new NodeCodeInvalidError();
+  const current = await db.queryOne(`SELECT ${NODE_ROW_COLUMNS} FROM sync_nodes WHERE node_code = ?`, [code]);
+  if (!current) throw new Error("NODE_MISSING");
+  const { token, keyHash, fingerprint } = await generateNodeKey();
+  const rotatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      `UPDATE sync_nodes SET key_hash = ?, key_fingerprint = ?, key_rotated_at = ?, updated_at = ? WHERE node_code = ?`,
+      [keyHash, fingerprint, rotatedAt, rotatedAt, code]
+    );
+    await audit.logInTransaction(tx, {
+      actorId: input2.actorStaffId,
+      action: "node.rotate_key",
+      resourceType: "node",
+      resourceId: code,
+      changes: { key_fingerprint: { from: current.key_fingerprint, to: fingerprint } }
+    });
+  });
+  return { rotation: { node_code: code, key_fingerprint: fingerprint, rotated_at: rotatedAt }, nodeKey: token };
+}
+__name(rotateNodeKey, "rotateNodeKey");
+async function revokeNode(db, audit, input2) {
+  const code = clean5(input2.nodeCode);
+  if (!code) throw new NodeCodeInvalidError();
+  const current = await db.queryOne(`SELECT ${NODE_ROW_COLUMNS} FROM sync_nodes WHERE node_code = ?`, [code]);
+  if (!current) throw new Error("NODE_MISSING");
+  await db.transaction(async (tx) => {
+    await tx.execute(`UPDATE sync_nodes SET active = 0, updated_at = ? WHERE node_code = ?`, [(/* @__PURE__ */ new Date()).toISOString(), code]);
+    await audit.logInTransaction(tx, {
+      actorId: input2.actorStaffId,
+      action: "node.revoke",
+      resourceType: "node",
+      resourceId: code,
+      changes: { active: { from: current.active === 1, to: false } }
+    });
+  });
+  return { node_code: code, active: 0 };
+}
+__name(revokeNode, "revokeNode");
+async function listNodes(db) {
+  const rows = await db.query(
+    `SELECT ${NODE_ROW_COLUMNS} FROM sync_nodes ORDER BY created_at DESC, node_code ASC`,
+    []
+  );
+  return rows.map((r) => ({
+    node_code: r.node_code,
+    label: r.label,
+    active: r.active === 1,
+    key_fingerprint: r.key_fingerprint,
+    key_rotated_at: r.key_rotated_at,
+    last_pull_at: r.last_pull_at,
+    last_push_ok_at: r.last_push_ok_at,
+    created_at: r.created_at
+  }));
+}
+__name(listNodes, "listNodes");
+async function verifyNodeCredentials(db, input2) {
+  const code = clean5(input2.nodeCode);
+  const key = clean5(input2.bearer);
+  const hash2 = await hashApiKey(key ?? "");
+  const fingerprint = hash2.slice(0, 12);
+  if (!code || !key) return { ok: false, fingerprint };
+  const node2 = await db.queryOne(
+    `SELECT ${NODE_ROW_COLUMNS} FROM sync_nodes WHERE node_code = ?`,
+    [code]
+  );
+  if (!node2 || node2.active !== 1) return { ok: false, fingerprint };
+  if (!timingSafeHexEqual(node2.key_hash, hash2)) return { ok: false, fingerprint };
+  return { ok: true, node: node2 };
+}
+__name(verifyNodeCredentials, "verifyNodeCredentials");
+function shouldAttemptNodePush(lastAttemptIso, now, minIntervalMs = NODE_PUSH_MIN_INTERVAL_MS) {
+  if (!lastAttemptIso) return true;
+  const t = Date.parse(lastAttemptIso);
+  if (Number.isNaN(t)) return true;
+  return now.getTime() - t >= minIntervalMs;
+}
+__name(shouldAttemptNodePush, "shouldAttemptNodePush");
+async function stampNodePushAttempt(db, nodeCode, at) {
+  await db.execute(
+    `UPDATE sync_nodes SET last_push_attempt_at = ?, updated_at = ? WHERE node_code = ?`,
+    [at.toISOString(), at.toISOString(), nodeCode]
+  );
+}
+__name(stampNodePushAttempt, "stampNodePushAttempt");
+async function stampNodePushOk(db, nodeCode, at) {
+  await db.execute(
+    `UPDATE sync_nodes SET last_push_ok_at = ?, last_push_attempt_at = ?, updated_at = ? WHERE node_code = ?`,
+    [at.toISOString(), at.toISOString(), at.toISOString(), nodeCode]
+  );
+}
+__name(stampNodePushOk, "stampNodePushOk");
+async function stampNodePull(db, nodeCode, at) {
+  await db.execute(
+    `UPDATE sync_nodes SET last_pull_at = ?, updated_at = ? WHERE node_code = ?`,
+    [at.toISOString(), at.toISOString(), nodeCode]
+  );
+}
+__name(stampNodePull, "stampNodePull");
+function toBase64Url(s) {
+  const bytes = new TextEncoder().encode(s);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+__name(toBase64Url, "toBase64Url");
+function fromBase64Url(s) {
+  try {
+    const norm = s.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = norm.length % 4 === 0 ? "" : "=".repeat(4 - norm.length % 4);
+    const bin = atob(norm + pad);
+    const bytes = Uint8Array.from(bin, (ch) => ch.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return null;
+  }
+}
+__name(fromBase64Url, "fromBase64Url");
+function encodeNodeCursor(c) {
+  return toBase64Url(JSON.stringify({ d: c.d.slice(0, 40), t: c.t.slice(0, 40), i: c.i.slice(0, 200) }));
+}
+__name(encodeNodeCursor, "encodeNodeCursor");
+function decodeNodeCursor(raw2) {
+  const s = clean5(raw2);
+  if (!s) return null;
+  if (s.length > 512) return null;
+  const json3 = fromBase64Url(s);
+  if (!json3) return null;
+  try {
+    const parsed = JSON.parse(json3);
+    if (typeof parsed.d !== "string" || typeof parsed.t !== "string" || typeof parsed.i !== "string") return null;
+    if (parsed.t.length === 0 || parsed.i.length === 0) return null;
+    return { d: parsed.d, t: parsed.t, i: parsed.i };
+  } catch {
+    return null;
+  }
+}
+__name(decodeNodeCursor, "decodeNodeCursor");
+function parseJsonSafe2(text) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+__name(parseJsonSafe2, "parseJsonSafe");
+var ISO_NORM = `strftime('%Y-%m-%dT%H:%M:%SZ', updated_at)`;
+var PULL_SOURCES = [
+  {
+    domain: "announcements",
+    from: "announcements",
+    columns: `json_object('title', title, 'body', body, 'show_login', show_login, 'show_panel', show_panel,
+                           'active', active, 'created_at', created_at)`,
+    fromWhere: "active = 1",
+    payload: /* @__PURE__ */ __name((d) => {
+      const o = d ?? {};
+      return {
+        title: o.title,
+        body: o.body,
+        show_login: o.show_login === 1,
+        show_panel: o.show_panel === 1,
+        active: o.active === 1,
+        created_at: o.created_at
+      };
+    }, "payload")
+  },
+  {
+    domain: "packages",
+    from: "game_packages",
+    idExpr: `id || '@' || version`,
+    columns: `json_object('version', version, 'title_fa', title_fa, 'evidence_level', evidence_level,
+                           'dose_json', dose_json, 'body_json', body_json, 'status', status)`,
+    fromWhere: `status = 'published'`,
+    payload: /* @__PURE__ */ __name((d) => {
+      const o = d ?? {};
+      return {
+        version: o.version,
+        title_fa: o.title_fa,
+        evidence_level: o.evidence_level,
+        dose: parseJsonSafe2(o.dose_json),
+        body: parseJsonSafe2(o.body_json),
+        status: o.status
+      };
+    }, "payload")
+  },
+  {
+    domain: "library",
+    from: "network_content",
+    columns: `json_object('kind', kind, 'title', title, 'summary', summary, 'body', body,
+                           'tags', tags, 'source_center', source_center)`,
+    fromWhere: `origin = 'cp' AND active = 1`,
+    payload: /* @__PURE__ */ __name((d) => {
+      const o = d ?? {};
+      return {
+        kind: o.kind,
+        title: o.title,
+        summary: o.summary,
+        body: parseJsonSafe2(o.body),
+        tags: parseJsonSafe2(o.tags) ?? [],
+        source_center: o.source_center
+      };
+    }, "payload")
+  }
+];
+async function pullNodePage(db, opts) {
+  const branches = [];
+  const params = [];
+  const sources = PULL_SOURCES.filter((s) => opts.domains.includes(s.domain));
+  for (const src of sources) {
+    let branch = `SELECT '${src.domain}' AS domain, ${src.idExpr ?? "id"} AS id, ${ISO_NORM} AS updated_at, ${src.columns} AS data
+                    FROM ${src.from} WHERE ${src.fromWhere}`;
+    if (opts.cursor) {
+      branch += ` AND (${ISO_NORM} > ? OR (${ISO_NORM} = ? AND (id > ? OR (id = ? AND '${src.domain}' > ?))))`;
+      params.push(opts.cursor.t, opts.cursor.t, opts.cursor.i, opts.cursor.i, opts.cursor.d);
+    }
+    branches.push(branch);
+  }
+  if (branches.length === 0) return { items: [], next_cursor: null };
+  const sql = `SELECT * FROM (${branches.join(" UNION ALL ")}) ORDER BY updated_at ASC, id ASC, domain ASC LIMIT ?`;
+  params.push(opts.limit + 1);
+  const rows = await db.query(sql, params);
+  const hasMore = rows.length > opts.limit;
+  const page2 = hasMore ? rows.slice(0, opts.limit) : rows;
+  const items = page2.map((r) => {
+    const src = sources.find((s) => s.domain === r.domain);
+    return {
+      id: String(r.id),
+      domain: r.domain,
+      updated_at: String(r.updated_at),
+      payload: src.payload(parseJsonSafe2(r.data))
+    };
+  });
+  const last = page2.length > 0 ? page2[page2.length - 1] : null;
+  return {
+    items,
+    next_cursor: hasMore && last ? encodeNodeCursor({ d: String(last.domain), t: String(last.updated_at), i: String(last.id) }) : null
+  };
+}
+__name(pullNodePage, "pullNodePage");
+var NodePushRawItemSchema = external_exports.object({
+  id: external_exports.string().min(4).max(120),
+  domain: external_exports.string().min(1).max(40),
+  at: external_exports.string().max(40).nullish(),
+  payload: external_exports.record(external_exports.string(), external_exports.unknown())
+  // zod4 — کلید صریح
+});
+var NodePushRawBodySchema = external_exports.object({
+  items: external_exports.array(NodePushRawItemSchema).min(1).max(NODE_PUSH_MAX_ITEMS)
+});
+var UsageSummaryPayloadSchema = external_exports.record(external_exports.string().min(1).max(64), external_exports.number());
+var ClientErrorPayloadSchema = external_exports.object({
+  message: external_exports.string().min(1).max(2e3),
+  source: external_exports.string().max(300).nullish(),
+  line: external_exports.number().int().min(0).max(1e7).nullish(),
+  col: external_exports.number().int().min(0).max(1e7).nullish(),
+  stack: external_exports.string().max(8e3).nullish(),
+  url: external_exports.string().max(300).nullish(),
+  app_version: external_exports.string().max(50).nullish()
+});
+var HealthPingPayloadSchema = external_exports.object({
+  ok: external_exports.boolean().nullish(),
+  version: external_exports.string().max(50).nullish(),
+  counters: external_exports.record(external_exports.string().min(1).max(64), external_exports.number()).nullish()
+});
+var PAYLOAD_SCHEMA_BY_DOMAIN = {
+  usage_summary: UsageSummaryPayloadSchema,
+  client_errors: ClientErrorPayloadSchema,
+  health_ping: HealthPingPayloadSchema
+};
+function validatePushItem(item) {
+  if (!NODE_PUSH_DOMAIN_SET.has(item.domain)) {
+    throw new Error("NODE_DOMAIN_FORBIDDEN");
+  }
+  const domain2 = item.domain;
+  const payload = PAYLOAD_SCHEMA_BY_DOMAIN[domain2].parse(item.payload);
+  const at = typeof item.at === "string" && item.at.trim().length > 0 ? item.at.trim() : null;
+  return { id: item.id, domain: domain2, at, payload };
+}
+__name(validatePushItem, "validatePushItem");
+async function pushNodeEvents(db, nodeCode, items) {
+  if (items.length === 0) return { accepted: 0, duplicates: 0 };
+  const statements = items.map(
+    (it) => db.prepare(
+      `INSERT INTO node_push_events (node_code, id, domain, payload, occurred_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(node_code, id) DO NOTHING`,
+      [nodeCode, it.id, it.domain, JSON.stringify(it.payload), it.at]
+    )
+  );
+  const results = await db.batch(statements);
+  let accepted = 0;
+  for (const r of results) {
+    const changes = r.meta?.changes;
+    if (typeof changes === "number") accepted += changes;
+  }
+  return { accepted, duplicates: items.length - accepted };
+}
+__name(pushNodeEvents, "pushNodeEvents");
+
+// src/node-sync/app.ts
+function fireAndForget(c, p) {
+  try {
+    c.executionCtx.waitUntil(p);
+  } catch {
+    p.catch(() => void 0);
+  }
+}
+__name(fireAndForget, "fireAndForget");
+var RegisterSchema = external_exports.object({
+  node_code: external_exports.string().max(120),
+  label: external_exports.string().max(120).nullish()
+});
+var NodeCodeSchema = external_exports.object({
+  node_code: external_exports.string().max(120)
+});
+function createNodeSyncApp(deps) {
+  const { db, audit, logger } = deps;
+  const log = logger.child("node-sync");
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const minIntervalMs = deps.pushMinIntervalMs ?? NODE_PUSH_MIN_INTERVAL_MS;
+  const app = new Hono3();
+  app.use("*", async (c, next) => {
+    const requestId = `req-${crypto.randomUUID()}`;
+    c.set("requestId", requestId);
+    try {
+      return await runWithRequestId(requestId, () => next());
+    } finally {
+      c.header("X-Request-Id", requestId);
+    }
+  });
+  const limiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
+  app.use("*", async (c, next) => {
+    if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH" && c.req.method !== "DELETE") {
+      return next();
+    }
+    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) return next();
+    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
+    if (!limiter.allow(`nodesync:${perMin}:${ip}`, perMin)) {
+      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
+      throw new RateLimitError(
+        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3),
+        "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0633\u06CC\u0646\u06A9 \u0646\u0648\u062F \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
+      );
+    }
+    return next();
+  });
+  app.use("*", async (c, next) => {
+    await next();
+    c.header("Cache-Control", "no-store");
+  });
+  async function authNode(c) {
+    const outcome = await verifyNodeCredentials(db, {
+      nodeCode: c.req.header("X-CP-Node-Code"),
+      bearer: bearerToken(c.req.header("Authorization"))
+    });
+    if (outcome.ok) return outcome.node;
+    log.warn("node_sync.auth_failed", { fingerprint: outcome.fingerprint });
+    return null;
+  }
+  __name(authNode, "authNode");
+  const authFailed = /* @__PURE__ */ __name((c) => c.json({ error: "NODE_AUTH_FAILED", message: "\u0627\u0639\u062A\u0628\u0627\u0631 \u0646\u0648\u062F \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F" }, 401), "authFailed");
+  app.get("/pull", async (c) => {
+    const node2 = await authNode(c);
+    if (!node2) return authFailed(c);
+    const rawDomains = (c.req.query("domains") ?? "").split(",").map((d) => d.trim().toLowerCase()).filter((d) => d.length > 0);
+    const unknownDomains = [...new Set(rawDomains.filter((d) => !NODE_PULL_DOMAIN_SET.has(d)))];
+    if (unknownDomains.length > 0) {
+      return c.json(
+        {
+          error: "NODE_DOMAIN_FORBIDDEN",
+          message: "\u062F\u0627\u0645\u0646\u0647\u0654 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u06CC \u0628\u06CC\u0631\u0648\u0646 \u0641\u0647\u0631\u0633\u062A \u0633\u0641\u06CC\u062F pull \u0627\u0633\u062A",
+          details: { domains: unknownDomains }
+        },
+        403
+      );
+    }
+    const domains = rawDomains.length > 0 ? rawDomains : [...NODE_PULL_DOMAINS];
+    const cursor = decodeNodeCursor(c.req.query("cursor"));
+    if (c.req.query("cursor") && !cursor) {
+      return c.json({ error: "NODE_CURSOR_INVALID", message: "cursor \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" }, 400);
+    }
+    const parsedLimit = Number.parseInt(c.req.query("limit") ?? "", 10);
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, NODE_PULL_MAX_LIMIT) : NODE_PULL_DEFAULT_LIMIT;
+    const page2 = await pullNodePage(db, { domains, cursor, limit });
+    fireAndForget(c, stampNodePull(db, node2.node_code, now()).catch(() => void 0));
+    return c.json(
+      { data: { items: page2.items, next_cursor: page2.next_cursor, server_time: now().toISOString() } },
+      200
+    );
+  });
+  app.post("/push", async (c) => {
+    const node2 = await authNode(c);
+    if (!node2) return authFailed(c);
+    const at = now();
+    if (!shouldAttemptNodePush(node2.last_push_attempt_at, at, minIntervalMs)) {
+      const lastT = Date.parse(node2.last_push_attempt_at ?? "");
+      const retryAfterS = Number.isNaN(lastT) ? null : Math.max(0, Math.ceil((lastT + minIntervalMs - at.getTime()) / 1e3));
+      return c.json({ data: { accepted: 0, duplicates: 0, throttled: true, retry_after_s: retryAfterS } }, 200);
+    }
+    const contentLength = Number.parseInt(c.req.header("content-length") ?? "0", 10) || 0;
+    if (contentLength > NODE_PUSH_BODY_MAX_BYTES) {
+      return c.json({ error: "NODE_BODY_TOO_LARGE", message: "\u062D\u062C\u0645 \u0628\u062F\u0646\u0647\u0654 push \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A" }, 400);
+    }
+    await stampNodePushAttempt(db, node2.node_code, at);
+    const raw2 = NodePushRawBodySchema.parse(await c.req.json());
+    const unknownDomains = [...new Set(raw2.items.map((it) => it.domain).filter((d) => !NODE_PUSH_DOMAIN_SET.has(d)))];
+    if (unknownDomains.length > 0) {
+      log.warn("node_sync.push_domain_forbidden", { domains: unknownDomains });
+      return c.json(
+        {
+          error: "NODE_DOMAIN_FORBIDDEN",
+          message: "\u062F\u0627\u0645\u0646\u0647\u0654 \u0627\u0631\u0633\u0627\u0644\u06CC \u0628\u06CC\u0631\u0648\u0646 \u0641\u0647\u0631\u0633\u062A \u0633\u0641\u06CC\u062F push \u0627\u0633\u062A \u2014 \u062F\u0627\u062F\u0647\u0654 \u0628\u0627\u0644\u06CC\u0646\u06CC \u0647\u0631\u06AF\u0632 \u0627\u0632 \u0645\u06CC\u0632 \u062E\u0627\u0631\u062C \u0646\u0645\u06CC\u200C\u0634\u0648\u062F",
+          details: { domains: unknownDomains }
+        },
+        403
+      );
+    }
+    const items = raw2.items.map((it) => validatePushItem(it));
+    const outcome = await pushNodeEvents(db, node2.node_code, items);
+    await stampNodePushOk(db, node2.node_code, at).catch(() => void 0);
+    log.info("node_sync.push", { node: node2.node_code, accepted: outcome.accepted, duplicates: outcome.duplicates });
+    return c.json({ data: { accepted: outcome.accepted, duplicates: outcome.duplicates, throttled: false } }, 200);
+  });
+  app.post("/register", authMiddleware(), requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = RegisterSchema.parse(await c.req.json());
+    try {
+      const { registration, nodeKey } = await registerNode(db, audit, {
+        nodeCode: body.node_code,
+        label: body.label ?? null,
+        actorStaffId: actor.staffId
+      });
+      log.info("node_sync.registered", { node: registration.node_code, fingerprint: registration.key_fingerprint });
+      return c.json({ data: { ...registration, node_key: nodeKey } }, 201);
+    } catch (err) {
+      if (err instanceof NodeCodeInvalidError) throw new ValidationError(err.message);
+      if (err instanceof Error && err.message === "NODE_CODE_TAKEN") {
+        throw new ConflictError("\u0627\u06CC\u0646 \u06A9\u062F \u0646\u0648\u062F \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u06A9\u0644\u06CC\u062F \u062A\u0627\u0632\u0647 \u0627\u0632 rotate-key \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F");
+      }
+      throw err;
+    }
+  });
+  app.post("/rotate-key", authMiddleware(), requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = NodeCodeSchema.parse(await c.req.json());
+    try {
+      const { rotation, nodeKey } = await rotateNodeKey(db, audit, {
+        nodeCode: body.node_code,
+        actorStaffId: actor.staffId
+      });
+      log.info("node_sync.key_rotated", { node: rotation.node_code, fingerprint: rotation.key_fingerprint });
+      return c.json({ data: { ...rotation, node_key: nodeKey } }, 200);
+    } catch (err) {
+      if (err instanceof NodeCodeInvalidError) throw new ValidationError(err.message);
+      if (err instanceof Error && err.message === "NODE_MISSING") throw new NotFoundError("\u0646\u0648\u062F");
+      throw err;
+    }
+  });
+  app.post("/revoke", authMiddleware(), requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = NodeCodeSchema.parse(await c.req.json());
+    try {
+      const result = await revokeNode(db, audit, { nodeCode: body.node_code, actorStaffId: actor.staffId });
+      log.info("node_sync.revoked", { node: result.node_code });
+      return c.json({ data: result }, 200);
+    } catch (err) {
+      if (err instanceof NodeCodeInvalidError) throw new ValidationError(err.message);
+      if (err instanceof Error && err.message === "NODE_MISSING") throw new NotFoundError("\u0646\u0648\u062F");
+      throw err;
+    }
+  });
+  app.get("/nodes", authMiddleware(), requireRole("manager"), async (c) => {
+    return c.json({ data: { nodes: await listNodes(db) } }, 200);
+  });
+  app.notFound((c) => c.json({ error: "NOT_FOUND" }, 404));
+  return app;
+}
+__name(createNodeSyncApp, "createNodeSyncApp");
+
 // src/application/api-routing/index.ts
 function createServices(deps) {
   const { db, audit, logger } = deps;
@@ -72895,6 +73463,7 @@ function createApp(deps) {
   });
   registerGamesPublicRoutes(app, services.games);
   registerAuthRoutes(app, { audit: services.audit, logger: services.logger });
+  app.route("/node", createNodeSyncApp({ db: services.db, audit: services.audit, logger: services.logger }));
   app.use("/api/*", authMiddleware());
   app.use("/api/*", supervisorGate(services.audit));
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
