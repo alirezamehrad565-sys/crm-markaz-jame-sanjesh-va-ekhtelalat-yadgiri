@@ -62,3 +62,7 @@ scaffold/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+
+# Desktop (rust) — بیلد Rust و ورودی‌های محلی
+desktop/src-tauri/target/
+desktop/src-tauri/gen/

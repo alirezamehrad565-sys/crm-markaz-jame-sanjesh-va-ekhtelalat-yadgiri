@@ -1,0 +1,25 @@
+[package]
+name = "center-desktop"
+version = "1.25.75"
+description = "مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام — نسخهٔ میز"
+edition = "2021"
+
+# نسخهٔ پوسته = نسخهٔ منبع (APP_VERSION در src/core/version.ts) — گیت desktop:check ناهم‌گامی را می‌گیرد
+
+[lib]
+name = "center_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde_json = "1"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

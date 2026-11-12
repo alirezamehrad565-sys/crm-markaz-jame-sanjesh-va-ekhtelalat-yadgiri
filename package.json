@@ -26,6 +26,8 @@
     "build:selfhost": "node scripts/build-selfhost.mjs",
     "build:games-worker": "node scripts/build-worker-games.mjs",
     "smoke:games": "node scripts/games-bundle-smoke.mjs",
+    "desktop:check": "node scripts/desktop-check.mjs",
+    "desktop:icons": "python3 scripts/make-desktop-icons.py",
     "start:selfhost": "node dist/server.js",
     "update": "node scripts/update-remote.mjs",
     "update:dry": "node scripts/update-remote.mjs --dry-run",
