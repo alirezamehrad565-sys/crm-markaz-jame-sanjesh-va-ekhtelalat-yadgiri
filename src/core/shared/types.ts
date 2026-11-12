@@ -36,6 +36,8 @@ export interface AuthContext {
   email: string;
   role: StaffRole;
   displayName: string;
+  /** شناسهٔ نشست فعال (0111) — فقط در مسیر توکن سشن؛ خروج با آن ردیف را ابطال می‌کند */
+  sessionId?: string;
 }
 
 export interface ConflictWarning {

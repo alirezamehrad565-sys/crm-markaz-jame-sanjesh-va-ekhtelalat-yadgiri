@@ -3,6 +3,8 @@ export interface SessionJwtPayload {
   name: string;             // نام نمایشی
   role: 'manager' | 'therapist' | 'secretary' | 'supervisor';
   email: string;            // legacy — ممکن است synthetic باشد
+  /** شناسهٔ یکتای نشست — صدور 0111 به بعد؛ توکن‌های قدیمی بدون آن ۴۰۱ می‌گیرند */
+  sid?: string;
   iat: number;
   exp: number;
 }
@@ -36,16 +38,21 @@ async function hmacKey(secret: string): Promise<CryptoKey> {
 
 export async function signSessionJwt(
   staff: { id: string; fullName: string; role: SessionJwtPayload['role']; email: string },
-  secret: string
-): Promise<{ token: string; expiresAt: string }> {
+  secret: string,
+  opts?: { sid?: string; ttlSeconds?: number }
+): Promise<{ token: string; expiresAt: string; sid: string }> {
   const now = Math.floor(Date.now() / 1000);
+  // مایلستون ۱ (0111) — هر نشست sid یکتا دارد تا ردیف auth_sessions آن قابل ابطال باشد
+  const sid = opts?.sid ?? crypto.randomUUID();
+  const ttl = opts?.ttlSeconds ?? SESSION_TTL_SECONDS;
   const payload: SessionJwtPayload = {
     sub: staff.id,
     name: staff.fullName,
     role: staff.role,
     email: staff.email,
+    sid,
     iat: now,
-    exp: now + SESSION_TTL_SECONDS
+    exp: now + ttl
   };
 
   const header = { alg: 'HS256', typ: 'JWT' };
@@ -57,7 +64,7 @@ export async function signSessionJwt(
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
   const token = `${data}.${base64UrlEncode(new Uint8Array(sig))}`;
 
-  return { token, expiresAt: new Date(payload.exp * 1000).toISOString() };
+  return { token, expiresAt: new Date(payload.exp * 1000).toISOString(), sid };
 }
 
 export async function verifySessionJwt(token: string, secret: string): Promise<SessionJwtPayload | null> {
