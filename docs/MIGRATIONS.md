@@ -160,6 +160,7 @@
 | 106 | `0106_client_errors.sql` | تکمیل لولهٔ خطای مرورگر روی جدول موجود 0057: `ALTER ADD app_version` + اندیس `idx_client_errors_ver` — مصرف‌کنندهٔ تازه: POST /public/client-errors بی‌احراز (هم‌الگوی /public/rum) + GET /api/client-errors فقط‌مدیر؛ نگه‌داری ۹۰روزه با کرون شبانه؛ ستون user_agent طبق قانون PII هرگز پر نمی‌شود (۱.۲۵.۶۶) |
 | 107 | `0107_table_growth.sql` | گزارش رشد جدول‌ها (ف۴ بهداشت داده) — جدول فقط-افزودنیِ `table_growth_snapshots` با کلید مرکب (snapshot_date، table_name) + اندیس `idx_growth_table_date`؛ شمارش روزانهٔ ردیف‌ها فقط در کرون digest با UPSERT idempotent هم‌روز و مُهر ۲۴ساعتهٔ `growth.last_snapshot_at`؛ خواندن فقط‌مدیر: GET /api/growth/report در پنل سلامت (در انتظار اعمال در چرخهٔ انتشار بعدی) |
 | 108 | `0108_audit_request_id.sql` | ستون nullable `request_id` روی `audit_log` + سیم‌کشی request-id سراسری ف۵ — روی پروداکشن اثرش از پیش بود (رکورد میراث ششم) و با مُهر دستی ثبت شد؛ روی نصب تازه واقعاً ستون می‌سازد (۱.۲۵.۷۰) |
+| 109 | `0109_node_sync.sql` | سینک ترکیبی نودهای دسکتاپ (rust-f4 — design.md §۵): رجیستری `sync_nodes` (کلید فقط هش SHA-256 + اثر انگشت — همان مکانیزم cp-link؛ ثبت فقط-مدیر با audit) + `node_push_events` برای push نود با idempotency جفت `(node_code, id)` — فقط دامنه‌های فهرست سفید (usage_summary/client_errors/health_ping)؛ دادهٔ بالینی ساختاراً جایی ندارد |
 
 ## شماره‌های تکراری
 
