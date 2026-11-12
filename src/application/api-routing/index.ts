@@ -107,6 +107,7 @@ import type { RumService } from '@app/rum';
 import { registerAuthRoutes, registerLogoutRoute } from '@app/auth';
 import { FEATURES } from '@core/shared';
 import { createNodeSyncApp } from '../../node-sync/app'; // rust-f4 — زیراپ سینک نودهای دسکتاپ
+import { registerInternalSyncRoutes } from '../../internal-sync'; // rust-f9 — استقرار سینک (فقط-موتور، گیت env)
 
 import { errorHandler, parseApiRateLimitPerMin, makeKeyedRateLimiter, API_RATE_LIMIT_WINDOW_MS } from '@app/http';
 import { RateLimitError } from '@core/errors';
@@ -680,6 +681,10 @@ export function createApp(deps: AppDeps): AppHono {
   // بستن حلقهٔ خروج: خروج احرازشده بعد از گیت ناظر سوار می‌شود؛ رویداد ممیزی actor درست دارد.
   // ناظر طبق از گیت رد می‌شود (۴۰۳) — رفتار فقط-خواندن دست‌نخورده می‌ماند.
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
+
+  // rust-f9 — استقرار سینک نود در میز: بعد از گیت‌ها تا سشن بگیرد؛ خودش گیت زمان‌اجرای
+  // CENTER_DESKTOP_ENGINE دارد (در تولید وب binding غایب است → ۴۰۴ کم‌دست، باندل یکسان).
+  registerInternalSyncRoutes(app, { db: services.db, logger: services.logger });
 
   app.get('/api/me', (c) => c.json({ data: c.get('authContext') }, 200));
 

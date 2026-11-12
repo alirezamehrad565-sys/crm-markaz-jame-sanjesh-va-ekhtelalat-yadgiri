@@ -280,6 +280,15 @@ try {
   client.resetCursor();
   check('resetCursor: cursor پاک شد (بازسازی کامل اختیاری)', (storage.getItem('nodesync:cursor:all') ?? '') === '');
 
+  // rust-f9 — استقرار واقعی در موتور: آیتم pullشده از کلود مک → صندوق ورودی موتور محلی
+  // (مسیر /api/internal/sync/* فقط در موتور زنده است — بایند CENTER_DESKTOP_ENGINE در capnp)
+  const ingest = await getJson(`${base}/api/internal/sync/ingest`, { method: 'POST', token: roles.manager, body: { items: p1.items } });
+  check('استقرار در موتور: آیتم pull → صندوق ورودی (inserted:1)', ingest.status === 200 && ingest.json?.data?.inserted === 1, JSON.stringify(ingest.json).slice(0, 140));
+  const ingest2 = await getJson(`${base}/api/internal/sync/ingest`, { method: 'POST', token: roles.manager, body: { items: p1.items } });
+  check('استقرار تکراری → duplicates:1 (idempotency موتور با domain,id)', ingest2.status === 200 && ingest2.json?.data?.duplicates === 1, JSON.stringify(ingest2.json).slice(0, 140));
+  const inbox = await getJson(`${base}/api/internal/sync/status`, { token: roles.manager });
+  check('وضعیت صندوق: announcements=1 (نشانگر آخرین همگامی)', inbox.status === 200 && inbox.json?.data?.by_domain?.announcements === 1, JSON.stringify(inbox.json).slice(0, 140));
+
   // ── سفر ج: مرگ موتور و بازگشت (drill خرابی ۱) ──
   console.log('\n[سفر ج] drill خرابی — SIGKILL گروه موتور، بوت دوباره روی همان D1');
   try {

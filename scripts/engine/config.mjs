@@ -163,6 +163,9 @@ export async function buildEngineConfig(opts) {
     textBinding('CLINIC_NAME', 'مرکز جامع'),
     textBinding('PUBLIC_BASE_URL', `http://127.0.0.1:${port}`),
     textBinding('AUTH_SECRET', authSecret),
+    // rust-f9 — گیت زمان‌اجرای میز: مسیرهای /api/internal/sync/* فقط در موتور محلی زنده‌اند؛
+    // در تولید وب این binding وجود ندارد → ۴۰۴ کم‌دست (باندل یکسان، رفتار تولید دست‌نخورده)
+    textBinding('CENTER_DESKTOP_ENGINE', '1'),
   ];
   const gamesVars = [
     textBinding('ENV', 'development'),
