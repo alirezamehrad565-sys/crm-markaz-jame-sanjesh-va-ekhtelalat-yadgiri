@@ -1,0 +1,7 @@
+{
+  "$schema": "gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "مجوزهای پیش‌فرض پنجرهٔ اصلی — فاز ۱ فقط هستهٔ Tauri",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
