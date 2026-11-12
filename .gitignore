@@ -2,9 +2,10 @@
 node_modules/
 
 # Build outputs
-dist/
-build/
+/build/
 *.tsbuildinfo
+# بازیابی م۵: public/assets/dist آرتیفکت مرجع است (باندل زندهٔ ۱.۲۵.۷۲) — کامیت می‌شود
+
 
 # Wrangler
 .wrangler/
@@ -56,7 +57,6 @@ scaffold/
 *.env.deploy
 
 # خروجی باندل کلاینت (ساخته‌شده در پیش‌پرواز دیپلوی با build-client.mjs؛ hash تکرارپذیر)
-public/assets/dist/
 
 # محلی — پایگاه‌دادهٔ selfhost (زمان اجرا؛ هرگز در مخزن)
 data/*.db
