@@ -66,3 +66,4 @@ data/*.db-wal
 # Desktop (rust) — بیلد Rust و ورودی‌های محلی
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
+dist/usb-pack/
