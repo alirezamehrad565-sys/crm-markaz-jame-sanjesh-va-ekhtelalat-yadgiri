@@ -31,6 +31,7 @@
     "engine:start": "node scripts/engine/engine.mjs",
     "engine:smoke": "node scripts/engine/engine-smoke.mjs",
     "seed:demo": "node scripts/engine/seed-demo.mjs",
+    "usb:pack": "node scripts/build-usb-pack.mjs",
     "start:selfhost": "node dist/server.js",
     "update": "node scripts/update-remote.mjs",
     "update:dry": "node scripts/update-remote.mjs --dry-run",
