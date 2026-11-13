@@ -42,6 +42,13 @@ export const NODE_PUSH_DOMAIN_SET: ReadonlySet<string> = new Set(NODE_PUSH_DOMAI
 
 /** حداقل فاصلهٔ دو push هر نود — ۱۵ دقیقه (هم‌ریتم گات سینک m1.5) */
 export const NODE_PUSH_MIN_INTERVAL_MS = 15 * 60_000;
+/**
+ * rust-f14 — هدر اعلام «همگام‌سازی جبرانی» (catch-up) روی /node/push: فقط گات ۱۵دقیقه‌ای را
+ * برای همین درخواست می‌گشاید — بوتِ پس از هفته‌ها آفلاین باید صندوق را در چند بستهٔ پشت‌سرهم
+ * تخلیه کند وگرنه گات پس از بستهٔ نخست می‌ایستد. مُهر تلاش، فهرست سفید و idempotency
+ * (node_code, id) عیناً برقرار می‌مانند؛ تیک دوره‌ای بدون این هدر زیر گات می‌ماند.
+ */
+export const NODE_PUSH_CATCHUP_HEADER = 'X-CP-Node-Catchup';
 /** حداکثر آیتم در یک push */
 export const NODE_PUSH_MAX_ITEMS = 100;
 /** حداکثر بدنهٔ push — ۲۵۶KB (پشتهٔ خطا و شمارنده‌ها جا می‌شود؛ بزرگ‌تر یعنی سوءاستفاده) */

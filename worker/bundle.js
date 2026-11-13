@@ -72709,6 +72709,7 @@ var NODE_PUSH_DOMAINS = ["usage_summary", "client_errors", "health_ping"];
 var NODE_PULL_DOMAIN_SET = new Set(NODE_PULL_DOMAINS);
 var NODE_PUSH_DOMAIN_SET = new Set(NODE_PUSH_DOMAINS);
 var NODE_PUSH_MIN_INTERVAL_MS = 15 * 6e4;
+var NODE_PUSH_CATCHUP_HEADER = "X-CP-Node-Catchup";
 var NODE_PUSH_MAX_ITEMS = 100;
 var NODE_PUSH_BODY_MAX_BYTES = 256 * 1024;
 var NODE_PULL_DEFAULT_LIMIT = 50;
@@ -73185,8 +73186,9 @@ function createNodeSyncApp(deps) {
   app.post("/push", async (c) => {
     const node2 = await authNode(c);
     if (!node2) return authFailed(c);
+    const catchUpDeclared = c.req.header(NODE_PUSH_CATCHUP_HEADER) === "1";
     const at = now();
-    if (!shouldAttemptNodePush(node2.last_push_attempt_at, at, minIntervalMs)) {
+    if (!catchUpDeclared && !shouldAttemptNodePush(node2.last_push_attempt_at, at, minIntervalMs)) {
       const lastT = Date.parse(node2.last_push_attempt_at ?? "");
       const retryAfterS = Number.isNaN(lastT) ? null : Math.max(0, Math.ceil((lastT + minIntervalMs - at.getTime()) / 1e3));
       return c.json({ data: { accepted: 0, duplicates: 0, throttled: true, retry_after_s: retryAfterS } }, 200);
@@ -73527,6 +73529,119 @@ function registerInternalSyncRoutes(app, deps) {
   });
 }
 __name(registerInternalSyncRoutes, "registerInternalSyncRoutes");
+
+// src/node-sync-runner/status.ts
+var NODE_SYNC_STATUS_MIRROR_KEY = "nodesync:status-mirror-v1";
+var SYNC_MODES = ["auto", "quarantined", "paused_version"];
+var SYNC_STATES = ["idle", "catching_up", "synced", "error", "offline"];
+var FAILURE_KINDS = ["none", "network", "server", "throttled", "auth", "version", "ingest", "unconfigured"];
+var NodeSyncStatusMirrorSchema = external_exports.object({
+  v: external_exports.literal(1),
+  mode: external_exports.enum(SYNC_MODES),
+  state: external_exports.enum(SYNC_STATES),
+  last_pull_cursor_at: external_exports.iso.datetime().nullable(),
+  last_push_ok_at: external_exports.iso.datetime().nullable(),
+  last_pull_ok_at: external_exports.iso.datetime().nullable(),
+  last_error_kind: external_exports.enum(FAILURE_KINDS).nullable(),
+  last_error_at: external_exports.iso.datetime().nullable(),
+  push_watermark: external_exports.iso.datetime().nullable(),
+  client_version: external_exports.string().max(50).nullable(),
+  updated_at: external_exports.iso.datetime()
+});
+function requireDesktopEngine2(c) {
+  if (c.env?.CENTER_DESKTOP_ENGINE !== "1") {
+    throw new NotFoundError("\u0645\u0633\u06CC\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
+  }
+}
+__name(requireDesktopEngine2, "requireDesktopEngine");
+async function readMirror(db) {
+  try {
+    const row = await db.queryOne(
+      "SELECT value FROM settings WHERE key = ?",
+      [NODE_SYNC_STATUS_MIRROR_KEY]
+    );
+    if (!row) return null;
+    const parsed = NodeSyncStatusMirrorSchema.safeParse(JSON.parse(row.value));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+__name(readMirror, "readMirror");
+async function writeMirror(db, mirror) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
+    [NODE_SYNC_STATUS_MIRROR_KEY, JSON.stringify(mirror)]
+  );
+}
+__name(writeMirror, "writeMirror");
+async function pendingPushCount(db, watermark) {
+  let count = 0;
+  try {
+    if (watermark) {
+      const cutoff = watermark.slice(0, 19).replace("T", " ");
+      const row = await db.queryOne(
+        "SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at > ?",
+        [cutoff]
+      );
+      count += Number(row?.n ?? 0);
+    } else {
+      const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors");
+      count += Number(row?.n ?? 0);
+    }
+  } catch {
+  }
+  try {
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const hourBucket = `${nowIso.slice(0, 13)}:00:00Z`;
+    const dayBucket = `${nowIso.slice(0, 10)}T00:00:00Z`;
+    const ahead = /* @__PURE__ */ __name((at) => !watermark || Date.parse(at) > Date.parse(watermark), "ahead");
+    if (ahead(hourBucket)) count += 1;
+    if (ahead(dayBucket)) count += 1;
+  } catch {
+  }
+  return count;
+}
+__name(pendingPushCount, "pendingPushCount");
+function cursorAgeDays(cursorAt, nowMs) {
+  const t = Date.parse(cursorAt);
+  if (Number.isNaN(t)) return null;
+  return Math.max(0, Math.round((nowMs - t) / 864e5 * 10) / 10);
+}
+__name(cursorAgeDays, "cursorAgeDays");
+function registerNodeSyncStatusRoute(app, deps) {
+  const log = deps.logger.child("node-sync-status");
+  app.post("/api/node-sync/status", async (c) => {
+    requireDesktopEngine2(c);
+    getAuthContext(c);
+    const parsed = NodeSyncStatusMirrorSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError("\u0627\u0633\u0646\u067E\u200C\u0634\u0627\u062A \u0648\u0636\u0639\u06CC\u062A \u0633\u06CC\u0646\u06A9 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+    await writeMirror(deps.db, parsed.data);
+    log.info("status_mirror.ok", { state: parsed.data.state, mode: parsed.data.mode });
+    return c.json({ data: { ok: true } }, 200);
+  });
+  app.get("/api/node-sync/status", async (c) => {
+    requireDesktopEngine2(c);
+    getAuthContext(c);
+    const mirror = await readMirror(deps.db);
+    const nowMs = Date.now();
+    const errorKind = mirror?.last_error_kind ?? null;
+    const payload = {
+      mode: mirror?.mode ?? "auto",
+      state: mirror?.state ?? "idle",
+      pending_push: await pendingPushCount(deps.db, mirror?.push_watermark ?? null),
+      last_pull_cursor_age_days: mirror?.last_pull_cursor_at ? cursorAgeDays(mirror.last_pull_cursor_at, nowMs) : null,
+      last_push_ok_at: mirror?.last_push_ok_at ?? null,
+      last_pull_ok_at: mirror?.last_pull_ok_at ?? null,
+      last_error: errorKind && errorKind !== "none" && mirror?.last_error_at ? { kind: errorKind, at: mirror.last_error_at } : null,
+      version: null
+      // قرارداد فعلی نسخهٔ مرکز را در پاسخ pull حمل نمی‌کند — بند ۴ بریف
+    };
+    return c.json(payload, 200);
+  });
+}
+__name(registerNodeSyncStatusRoute, "registerNodeSyncStatusRoute");
 
 // src/application/api-routing/index.ts
 function createServices(deps) {
@@ -73914,6 +74029,7 @@ function createApp(deps) {
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
   registerSetupCompleteRoutes(app, { db: services.db, audit: services.audit, logger: services.logger });
   registerInternalSyncRoutes(app, { db: services.db, logger: services.logger });
+  registerNodeSyncStatusRoute(app, { db: services.db, logger: services.logger });
   app.get("/api/me", (c) => c.json({ data: c.get("authContext") }, 200));
   registerRoutes(app, services.appointments);
   registerRoutes2(app, services.attendance);
