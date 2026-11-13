@@ -72362,183 +72362,6 @@ function registerRumRoutes(app, service) {
 }
 __name(registerRumRoutes, "registerRumRoutes");
 
-// src/application/auth/routes.ts
-var LOGIN_MAX_FAILURES = 5;
-var LOGIN_IP_MAX_FAILURES = 20;
-var LOGIN_WINDOW_MINUTES = 15;
-var LOGIN_WINDOW_MS = LOGIN_WINDOW_MINUTES * 60 * 1e3;
-var dummyHashPromise = null;
-function getDummyHash() {
-  dummyHashPromise ??= hashPassword(crypto.randomUUID() + crypto.randomUUID());
-  return dummyHashPromise;
-}
-__name(getDummyHash, "getDummyHash");
-function windowFloorIso() {
-  return new Date(Date.now() - LOGIN_WINDOW_MS).toISOString();
-}
-__name(windowFloorIso, "windowFloorIso");
-async function throttleRemainingSeconds(db, identity, maxFailures) {
-  const row = await db.prepare("SELECT fail_count, window_start FROM login_throttle WHERE identity = ? LIMIT 1").bind(identity).first();
-  if (!row) return 0;
-  const started = Date.parse(row.window_start);
-  if (!Number.isFinite(started)) return 0;
-  const elapsed = Date.now() - started;
-  if (elapsed >= LOGIN_WINDOW_MS) return 0;
-  if (row.fail_count < maxFailures) return 0;
-  return Math.max(1, Math.ceil((LOGIN_WINDOW_MS - elapsed) / 1e3));
-}
-__name(throttleRemainingSeconds, "throttleRemainingSeconds");
-async function recordLoginFailure(db, identity) {
-  await db.prepare(
-    `INSERT INTO login_throttle (identity, fail_count, window_start)
-       VALUES (?, 1, ?)
-       ON CONFLICT(identity) DO UPDATE SET
-         fail_count = CASE
-           WHEN login_throttle.window_start <= ? THEN 1
-           ELSE login_throttle.fail_count + 1
-         END,
-         window_start = CASE
-           WHEN login_throttle.window_start <= ? THEN excluded.window_start
-           ELSE login_throttle.window_start
-         END`
-  ).bind(identity, (/* @__PURE__ */ new Date()).toISOString(), windowFloorIso(), windowFloorIso()).run();
-}
-__name(recordLoginFailure, "recordLoginFailure");
-async function clearThrottle(db, identity) {
-  try {
-    await db.prepare("DELETE FROM login_throttle WHERE identity = ? OR window_start <= ?").bind(identity, windowFloorIso()).run();
-  } catch {
-  }
-}
-__name(clearThrottle, "clearThrottle");
-function registerAuthRoutes(app, deps) {
-  app.post("/api/auth/login", async (c) => {
-    const body = LoginSchema.parse(await c.req.json());
-    const identity = body.username.trim().toLowerCase();
-    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
-    const ipKey = `ip:${ip}`;
-    const blockedFor = await throttleRemainingSeconds(c.env.DB, identity, LOGIN_MAX_FAILURES);
-    if (blockedFor > 0) {
-      await deps.audit.log({
-        actorId: "anonymous",
-        action: "auth.login_throttled",
-        resourceType: "staff",
-        resourceId: identity,
-        changes: { retryAfterSeconds: { from: null, to: blockedFor }, scope: { from: null, to: "identity" } }
-      });
-      throw new RateLimitError(
-        blockedFor,
-        `\u062A\u0644\u0627\u0634\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 ${Math.ceil(blockedFor / 60)} \u062F\u0642\u06CC\u0642\u0647 \u062F\u06CC\u06AF\u0631 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F`
-      );
-    }
-    const ipBlockedFor = await throttleRemainingSeconds(c.env.DB, ipKey, LOGIN_IP_MAX_FAILURES);
-    if (ipBlockedFor > 0) {
-      await deps.audit.log({
-        actorId: "anonymous",
-        action: "auth.login_throttled",
-        resourceType: "staff",
-        resourceId: ipKey,
-        changes: { retryAfterSeconds: { from: null, to: ipBlockedFor }, scope: { from: null, to: "ip" } }
-      });
-      throw new RateLimitError(
-        ipBlockedFor,
-        `\u062A\u0644\u0627\u0634\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 ${Math.ceil(ipBlockedFor / 60)} \u062F\u0642\u06CC\u0642\u0647 \u062F\u06CC\u06AF\u0631 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F`
-      );
-    }
-    const staff = await findStaffByUsername(c.env.DB, body.username);
-    if (!staff || staff.active !== 1) {
-      await verifyPassword(body.password, await getDummyHash());
-      await recordLoginFailure(c.env.DB, identity);
-      await recordLoginFailure(c.env.DB, ipKey);
-      await deps.audit.log({
-        actorId: "anonymous",
-        action: "auth.login_failed",
-        resourceType: "staff",
-        resourceId: staff?.id ?? "unknown",
-        changes: { reason: { from: null, to: staff ? "inactive" : "not_found" } }
-      });
-      throw new AuthError("\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u06CC\u0627 \u0631\u0645\u0632 \u0639\u0628\u0648\u0631 \u0627\u0634\u062A\u0628\u0627\u0647 \u0627\u0633\u062A");
-    }
-    const ok2 = await verifyPassword(body.password, staff.password_hash ?? "");
-    if (!ok2) {
-      await recordLoginFailure(c.env.DB, identity);
-      await recordLoginFailure(c.env.DB, ipKey);
-      await deps.audit.log({
-        actorId: staff.id,
-        action: "auth.login_failed",
-        resourceType: "staff",
-        resourceId: staff.id,
-        changes: { reason: { from: null, to: "bad_password" } }
-      });
-      throw new AuthError("\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u06CC\u0627 \u0631\u0645\u0632 \u0639\u0628\u0648\u0631 \u0627\u0634\u062A\u0628\u0627\u0647 \u0627\u0633\u062A");
-    }
-    await clearThrottle(c.env.DB, identity);
-    if (staff.password_hash && isLegacyPasswordHash(staff.password_hash)) {
-      try {
-        const upgraded = await hashPassword(body.password);
-        await c.env.DB.prepare("UPDATE staff SET password_hash = ? WHERE id = ?").bind(upgraded, staff.id).run();
-        deps.logger.child("auth").info("login.password_upgraded", { staffId: staff.id });
-      } catch (err) {
-        deps.logger.child("auth").warn("login.password_upgrade_failed", {
-          error: err instanceof Error ? err.message : String(err)
-        });
-      }
-    }
-    const { token, expiresAt, sid } = await signSessionJwt(
-      { id: staff.id, fullName: staff.full_name, role: staff.role, email: staff.email },
-      await resolveSessionSecret(c.env)
-    );
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-    await c.env.DB.prepare(
-      "INSERT INTO auth_sessions (sid, staff_id, issued_at, expires_at) VALUES (?, ?, ?, ?)"
-    ).bind(sid, staff.id, nowIso, expiresAt).run();
-    await c.env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at < ?").bind(nowIso).run();
-    await deps.audit.log({
-      actorId: staff.id,
-      action: "auth.login",
-      resourceType: "staff",
-      resourceId: staff.id
-    });
-    deps.logger.child("auth").info("login.ok", { role: staff.role });
-    return c.json(
-      {
-        data: {
-          token,
-          expiresAt,
-          staff: {
-            id: staff.id,
-            fullName: staff.full_name,
-            role: staff.role,
-            username: staff.username,
-            email: staff.email
-          }
-        }
-      },
-      200
-    );
-  });
-}
-__name(registerAuthRoutes, "registerAuthRoutes");
-function registerLogoutRoute(app, deps) {
-  app.post("/api/auth/logout", async (c) => {
-    const ctx = getAuthContext(c);
-    if (ctx.sessionId) {
-      await c.env.DB.prepare(
-        "UPDATE auth_sessions SET revoked_at = ? WHERE sid = ? AND revoked_at IS NULL"
-      ).bind((/* @__PURE__ */ new Date()).toISOString(), ctx.sessionId).run();
-    }
-    await deps.audit.log({
-      actorId: ctx.staffId,
-      action: "auth.logout",
-      resourceType: "staff",
-      resourceId: ctx.staffId
-    });
-    deps.logger.child("auth").info("logout.ok", { role: ctx.role });
-    return c.json({ data: { ok: true } }, 200);
-  });
-}
-__name(registerLogoutRoute, "registerLogoutRoute");
-
 // src/core/db/client.ts
 function createDb(d1, logger) {
   const base = {
@@ -72595,114 +72418,6 @@ function createDb(d1, logger) {
   return base;
 }
 __name(createDb, "createDb");
-
-// src/application/setup/routes.ts
-var DEMO_STAFF_IDS = [
-  "30000000-0000-4000-8000-000000000301",
-  // manager
-  "30000000-0000-4000-8000-000000000302",
-  // secretary
-  "30000000-0000-4000-8000-000000000303"
-  // therapist
-];
-var SETUP_DONE_KEY = "setup_completed";
-async function readSetupFlag(db, key) {
-  const row = await db.queryOne(
-    `SELECT value FROM settings WHERE key = ? LIMIT 1`,
-    [key]
-  );
-  if (!row) return false;
-  return String(row.value).trim() === "1";
-}
-__name(readSetupFlag, "readSetupFlag");
-async function getSetupStatus(db) {
-  let completed2 = false;
-  try {
-    completed2 = await readSetupFlag(db, SETUP_DONE_KEY);
-  } catch {
-    completed2 = false;
-  }
-  if (completed2) return { initialized: true, demo_active: false };
-  let realStaffActive = 0;
-  try {
-    const placeholders = DEMO_STAFF_IDS.map(() => "?").join(",");
-    const row = await db.queryOne(
-      `SELECT COUNT(*) AS n FROM staff WHERE active = 1 AND id NOT IN (${placeholders})`,
-      [...DEMO_STAFF_IDS]
-    );
-    realStaffActive = row?.n ?? 0;
-  } catch {
-    realStaffActive = 0;
-  }
-  return { initialized: realStaffActive > 0, demo_active: realStaffActive === 0 };
-}
-__name(getSetupStatus, "getSetupStatus");
-async function completeSetup(deps, closeDemo) {
-  const { db, audit, logger } = deps;
-  if (await readSetupFlag(db, SETUP_DONE_KEY)) {
-    throw new ConflictError("\u0631\u0627\u0647\u200C\u0627\u0646\u062F\u0627\u0632\u06CC \u0646\u062E\u0633\u062A \u0642\u0628\u0644\u0627\u064B \u06A9\u0627\u0645\u0644 \u0634\u062F\u0647 \u0627\u0633\u062A");
-  }
-  let locked = 0;
-  if (closeDemo) {
-    const randomHash = await hashPassword(crypto.randomUUID() + ":" + crypto.randomUUID());
-    for (const id of DEMO_STAFF_IDS) {
-      const res = await db.query(
-        `UPDATE staff SET active = 0, password_hash = ?, updated_at = ? WHERE id = ? AND active = 1`,
-        [randomHash, (/* @__PURE__ */ new Date()).toISOString(), id]
-      );
-      const row = await db.queryOne(`SELECT id FROM staff WHERE id = ?`, [id]);
-      if (row) {
-        locked += 1;
-        await audit.log({
-          actorId: row.id,
-          action: "setup.demo_locked",
-          resourceType: "staff",
-          resourceId: id,
-          changes: { active: { from: 1, to: 0 } }
-        });
-      }
-      void res;
-    }
-  }
-  await db.query(
-    `INSERT INTO settings (key, value) VALUES (?, ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-    [SETUP_DONE_KEY, "1"]
-  );
-  await audit.log({
-    actorId: "setup",
-    action: "setup.completed",
-    resourceType: "settings",
-    resourceId: SETUP_DONE_KEY,
-    changes: { close_demo: { from: null, to: closeDemo } }
-  });
-  logger.info("setup.completed", { close_demo: closeDemo, demo_locked: locked });
-  return { demo_locked: locked };
-}
-__name(completeSetup, "completeSetup");
-function registerSetupStatusRoutes(app, deps) {
-  app.get("/api/setup/status", async (c) => {
-    try {
-      const st = await getSetupStatus(createDb(c.env.DB));
-      return c.json({ data: st }, 200);
-    } catch (err) {
-      deps.logger.child("setup").warn("setup.status_failed", {
-        error: err instanceof Error ? err.message : String(err)
-      });
-      return c.json({ data: { initialized: true, demo_active: false } }, 200);
-    }
-  });
-}
-__name(registerSetupStatusRoutes, "registerSetupStatusRoutes");
-var CompleteSchema = external_exports.object({ close_demo: external_exports.boolean().optional().default(true) });
-function registerSetupCompleteRoutes(app, deps) {
-  app.post("/api/setup/complete", async (c) => {
-    const body = CompleteSchema.parse(await c.req.json().catch(() => ({})));
-    const out = await completeSetup(deps, body.close_demo);
-    return c.json({ data: out }, 200);
-  });
-}
-__name(registerSetupCompleteRoutes, "registerSetupCompleteRoutes");
 
 // src/node-sync/service.ts
 var NODE_PULL_DOMAINS = ["announcements", "packages", "library"];
@@ -73032,6 +72747,99 @@ async function pullNodePage(db, opts) {
   };
 }
 __name(pullNodePage, "pullNodePage");
+var QUOTA_LIMITS = {
+  requests: 1e5,
+  rows_written: 1e5,
+  rows_read: 5e6
+};
+var NODE_PULL_ROWS_WRITTEN_EST = 1;
+var NODE_PULL_ROWS_READ_EST = 100;
+var NODE_PUSH_ROWS_WRITTEN_EST = 101;
+var NODE_PUSH_ROWS_READ_EST = 100;
+var LOGIN_ROWS_WRITTEN_EST = 4;
+var LOGIN_ROWS_READ_EST = 10;
+var QUOTA_ESTIMATES = {
+  pull: { rowsWritten: NODE_PULL_ROWS_WRITTEN_EST, rowsRead: NODE_PULL_ROWS_READ_EST },
+  push: { rowsWritten: NODE_PUSH_ROWS_WRITTEN_EST, rowsRead: NODE_PUSH_ROWS_READ_EST },
+  login: { rowsWritten: LOGIN_ROWS_WRITTEN_EST, rowsRead: LOGIN_ROWS_READ_EST }
+};
+function quotaDayUtc(d) {
+  return d.toISOString().slice(0, 10);
+}
+__name(quotaDayUtc, "quotaDayUtc");
+async function bumpQuotaUsage(db, kind, now = /* @__PURE__ */ new Date()) {
+  try {
+    const est = QUOTA_ESTIMATES[kind];
+    await db.execute(
+      `INSERT INTO quota_usage (day, requests, rows_written, rows_read_est)
+       VALUES (?, 1, ?, ?)
+       ON CONFLICT(day) DO UPDATE SET
+         requests = requests + 1,
+         rows_written = rows_written + excluded.rows_written,
+         rows_read_est = rows_read_est + excluded.rows_read_est`,
+      [quotaDayUtc(now), est.rowsWritten, est.rowsRead]
+    );
+  } catch {
+  }
+}
+__name(bumpQuotaUsage, "bumpQuotaUsage");
+function quotaLevelFor(percents) {
+  const values = [percents.requests, percents.rows_written, percents.rows_read];
+  if (values.some((v) => v >= 95)) return "danger";
+  if (values.some((v) => v >= 80)) return "warn";
+  return "ok";
+}
+__name(quotaLevelFor, "quotaLevelFor");
+function quotaPercent(value, limit) {
+  return Math.round(value / limit * 1e3) / 10;
+}
+__name(quotaPercent, "quotaPercent");
+async function centralQuotaSnapshot(db, now = /* @__PURE__ */ new Date()) {
+  const day = quotaDayUtc(now);
+  const row = await db.queryOne(
+    "SELECT requests, rows_written, rows_read_est FROM quota_usage WHERE day = ?",
+    [day]
+  );
+  const requests = row?.requests ?? 0;
+  const rowsWritten = row?.rows_written ?? 0;
+  const rowsRead = row?.rows_read_est ?? 0;
+  const cutoffSql = new Date(now.getTime() - 24 * 60 * 6e4).toISOString().slice(0, 19).replace("T", " ");
+  const failedRow = await db.queryOne(
+    `SELECT COUNT(*) AS n FROM audit_log WHERE action = 'auth.login_failed' AND created_at >= ?`,
+    [cutoffSql]
+  );
+  const percent = {
+    requests: quotaPercent(requests, QUOTA_LIMITS.requests),
+    rows_written: quotaPercent(rowsWritten, QUOTA_LIMITS.rows_written),
+    rows_read: quotaPercent(rowsRead, QUOTA_LIMITS.rows_read)
+  };
+  return {
+    day,
+    requests,
+    rows_written: rowsWritten,
+    rows_read_est: rowsRead,
+    limits: { ...QUOTA_LIMITS },
+    percent,
+    level: quotaLevelFor(percent),
+    estimated: true,
+    failed_logins_24h: failedRow?.n ?? 0
+  };
+}
+__name(centralQuotaSnapshot, "centralQuotaSnapshot");
+async function reconcileDomainCounts(db, domains) {
+  const out = [];
+  for (const domain2 of domains) {
+    const src = PULL_SOURCES.find((s) => s.domain === domain2);
+    if (!src) continue;
+    const row = await db.queryOne(
+      `SELECT COUNT(*) AS n, MAX(${ISO_NORM}) AS mx FROM ${src.from} WHERE ${src.fromWhere}`,
+      []
+    );
+    out.push({ domain: domain2, count: row?.n ?? 0, max_updated_at: row?.mx ?? null });
+  }
+  return out;
+}
+__name(reconcileDomainCounts, "reconcileDomainCounts");
 var NodePushRawItemSchema = external_exports.object({
   id: external_exports.string().min(4).max(120),
   domain: external_exports.string().min(1).max(40),
@@ -73091,6 +72899,292 @@ async function pushNodeEvents(db, nodeCode, items) {
   return { accepted, duplicates: items.length - accepted };
 }
 __name(pushNodeEvents, "pushNodeEvents");
+
+// src/application/auth/routes.ts
+var LOGIN_MAX_FAILURES = 5;
+var LOGIN_IP_MAX_FAILURES = 20;
+var LOGIN_WINDOW_MINUTES = 15;
+var LOGIN_WINDOW_MS = LOGIN_WINDOW_MINUTES * 60 * 1e3;
+var dummyHashPromise = null;
+function getDummyHash() {
+  dummyHashPromise ??= hashPassword(crypto.randomUUID() + crypto.randomUUID());
+  return dummyHashPromise;
+}
+__name(getDummyHash, "getDummyHash");
+function windowFloorIso() {
+  return new Date(Date.now() - LOGIN_WINDOW_MS).toISOString();
+}
+__name(windowFloorIso, "windowFloorIso");
+async function throttleRemainingSeconds(db, identity, maxFailures) {
+  const row = await db.prepare("SELECT fail_count, window_start FROM login_throttle WHERE identity = ? LIMIT 1").bind(identity).first();
+  if (!row) return 0;
+  const started = Date.parse(row.window_start);
+  if (!Number.isFinite(started)) return 0;
+  const elapsed = Date.now() - started;
+  if (elapsed >= LOGIN_WINDOW_MS) return 0;
+  if (row.fail_count < maxFailures) return 0;
+  return Math.max(1, Math.ceil((LOGIN_WINDOW_MS - elapsed) / 1e3));
+}
+__name(throttleRemainingSeconds, "throttleRemainingSeconds");
+async function recordLoginFailure(db, identity) {
+  await db.prepare(
+    `INSERT INTO login_throttle (identity, fail_count, window_start)
+       VALUES (?, 1, ?)
+       ON CONFLICT(identity) DO UPDATE SET
+         fail_count = CASE
+           WHEN login_throttle.window_start <= ? THEN 1
+           ELSE login_throttle.fail_count + 1
+         END,
+         window_start = CASE
+           WHEN login_throttle.window_start <= ? THEN excluded.window_start
+           ELSE login_throttle.window_start
+         END`
+  ).bind(identity, (/* @__PURE__ */ new Date()).toISOString(), windowFloorIso(), windowFloorIso()).run();
+}
+__name(recordLoginFailure, "recordLoginFailure");
+async function clearThrottle(db, identity) {
+  try {
+    await db.prepare("DELETE FROM login_throttle WHERE identity = ? OR window_start <= ?").bind(identity, windowFloorIso()).run();
+  } catch {
+  }
+}
+__name(clearThrottle, "clearThrottle");
+function registerAuthRoutes(app, deps) {
+  app.post("/api/auth/login", async (c) => {
+    const body = LoginSchema.parse(await c.req.json());
+    await bumpQuotaUsage(createDb(c.env.DB), "login");
+    const identity = body.username.trim().toLowerCase();
+    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
+    const ipKey = `ip:${ip}`;
+    const blockedFor = await throttleRemainingSeconds(c.env.DB, identity, LOGIN_MAX_FAILURES);
+    if (blockedFor > 0) {
+      await deps.audit.log({
+        actorId: "anonymous",
+        action: "auth.login_throttled",
+        resourceType: "staff",
+        resourceId: identity,
+        changes: { retryAfterSeconds: { from: null, to: blockedFor }, scope: { from: null, to: "identity" } }
+      });
+      throw new RateLimitError(
+        blockedFor,
+        `\u062A\u0644\u0627\u0634\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 ${Math.ceil(blockedFor / 60)} \u062F\u0642\u06CC\u0642\u0647 \u062F\u06CC\u06AF\u0631 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F`
+      );
+    }
+    const ipBlockedFor = await throttleRemainingSeconds(c.env.DB, ipKey, LOGIN_IP_MAX_FAILURES);
+    if (ipBlockedFor > 0) {
+      await deps.audit.log({
+        actorId: "anonymous",
+        action: "auth.login_throttled",
+        resourceType: "staff",
+        resourceId: ipKey,
+        changes: { retryAfterSeconds: { from: null, to: ipBlockedFor }, scope: { from: null, to: "ip" } }
+      });
+      throw new RateLimitError(
+        ipBlockedFor,
+        `\u062A\u0644\u0627\u0634\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 ${Math.ceil(ipBlockedFor / 60)} \u062F\u0642\u06CC\u0642\u0647 \u062F\u06CC\u06AF\u0631 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F`
+      );
+    }
+    const staff = await findStaffByUsername(c.env.DB, body.username);
+    if (!staff || staff.active !== 1) {
+      await verifyPassword(body.password, await getDummyHash());
+      await recordLoginFailure(c.env.DB, identity);
+      await recordLoginFailure(c.env.DB, ipKey);
+      await deps.audit.log({
+        actorId: "anonymous",
+        action: "auth.login_failed",
+        resourceType: "staff",
+        resourceId: staff?.id ?? "unknown",
+        changes: { reason: { from: null, to: staff ? "inactive" : "not_found" } }
+      });
+      throw new AuthError("\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u06CC\u0627 \u0631\u0645\u0632 \u0639\u0628\u0648\u0631 \u0627\u0634\u062A\u0628\u0627\u0647 \u0627\u0633\u062A");
+    }
+    const ok2 = await verifyPassword(body.password, staff.password_hash ?? "");
+    if (!ok2) {
+      await recordLoginFailure(c.env.DB, identity);
+      await recordLoginFailure(c.env.DB, ipKey);
+      await deps.audit.log({
+        actorId: staff.id,
+        action: "auth.login_failed",
+        resourceType: "staff",
+        resourceId: staff.id,
+        changes: { reason: { from: null, to: "bad_password" } }
+      });
+      throw new AuthError("\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u06CC\u0627 \u0631\u0645\u0632 \u0639\u0628\u0648\u0631 \u0627\u0634\u062A\u0628\u0627\u0647 \u0627\u0633\u062A");
+    }
+    await clearThrottle(c.env.DB, identity);
+    if (staff.password_hash && isLegacyPasswordHash(staff.password_hash)) {
+      try {
+        const upgraded = await hashPassword(body.password);
+        await c.env.DB.prepare("UPDATE staff SET password_hash = ? WHERE id = ?").bind(upgraded, staff.id).run();
+        deps.logger.child("auth").info("login.password_upgraded", { staffId: staff.id });
+      } catch (err) {
+        deps.logger.child("auth").warn("login.password_upgrade_failed", {
+          error: err instanceof Error ? err.message : String(err)
+        });
+      }
+    }
+    const { token, expiresAt, sid } = await signSessionJwt(
+      { id: staff.id, fullName: staff.full_name, role: staff.role, email: staff.email },
+      await resolveSessionSecret(c.env)
+    );
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    await c.env.DB.prepare(
+      "INSERT INTO auth_sessions (sid, staff_id, issued_at, expires_at) VALUES (?, ?, ?, ?)"
+    ).bind(sid, staff.id, nowIso, expiresAt).run();
+    await c.env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at < ?").bind(nowIso).run();
+    await deps.audit.log({
+      actorId: staff.id,
+      action: "auth.login",
+      resourceType: "staff",
+      resourceId: staff.id
+    });
+    deps.logger.child("auth").info("login.ok", { role: staff.role });
+    return c.json(
+      {
+        data: {
+          token,
+          expiresAt,
+          staff: {
+            id: staff.id,
+            fullName: staff.full_name,
+            role: staff.role,
+            username: staff.username,
+            email: staff.email
+          }
+        }
+      },
+      200
+    );
+  });
+}
+__name(registerAuthRoutes, "registerAuthRoutes");
+function registerLogoutRoute(app, deps) {
+  app.post("/api/auth/logout", async (c) => {
+    const ctx = getAuthContext(c);
+    if (ctx.sessionId) {
+      await c.env.DB.prepare(
+        "UPDATE auth_sessions SET revoked_at = ? WHERE sid = ? AND revoked_at IS NULL"
+      ).bind((/* @__PURE__ */ new Date()).toISOString(), ctx.sessionId).run();
+    }
+    await deps.audit.log({
+      actorId: ctx.staffId,
+      action: "auth.logout",
+      resourceType: "staff",
+      resourceId: ctx.staffId
+    });
+    deps.logger.child("auth").info("logout.ok", { role: ctx.role });
+    return c.json({ data: { ok: true } }, 200);
+  });
+}
+__name(registerLogoutRoute, "registerLogoutRoute");
+
+// src/application/setup/routes.ts
+var DEMO_STAFF_IDS = [
+  "30000000-0000-4000-8000-000000000301",
+  // manager
+  "30000000-0000-4000-8000-000000000302",
+  // secretary
+  "30000000-0000-4000-8000-000000000303"
+  // therapist
+];
+var SETUP_DONE_KEY = "setup_completed";
+async function readSetupFlag(db, key) {
+  const row = await db.queryOne(
+    `SELECT value FROM settings WHERE key = ? LIMIT 1`,
+    [key]
+  );
+  if (!row) return false;
+  return String(row.value).trim() === "1";
+}
+__name(readSetupFlag, "readSetupFlag");
+async function getSetupStatus(db) {
+  let completed2 = false;
+  try {
+    completed2 = await readSetupFlag(db, SETUP_DONE_KEY);
+  } catch {
+    completed2 = false;
+  }
+  if (completed2) return { initialized: true, demo_active: false };
+  let realStaffActive = 0;
+  try {
+    const placeholders = DEMO_STAFF_IDS.map(() => "?").join(",");
+    const row = await db.queryOne(
+      `SELECT COUNT(*) AS n FROM staff WHERE active = 1 AND id NOT IN (${placeholders})`,
+      [...DEMO_STAFF_IDS]
+    );
+    realStaffActive = row?.n ?? 0;
+  } catch {
+    realStaffActive = 0;
+  }
+  return { initialized: realStaffActive > 0, demo_active: realStaffActive === 0 };
+}
+__name(getSetupStatus, "getSetupStatus");
+async function completeSetup(deps, closeDemo) {
+  const { db, audit, logger } = deps;
+  if (await readSetupFlag(db, SETUP_DONE_KEY)) {
+    throw new ConflictError("\u0631\u0627\u0647\u200C\u0627\u0646\u062F\u0627\u0632\u06CC \u0646\u062E\u0633\u062A \u0642\u0628\u0644\u0627\u064B \u06A9\u0627\u0645\u0644 \u0634\u062F\u0647 \u0627\u0633\u062A");
+  }
+  let locked = 0;
+  if (closeDemo) {
+    const randomHash = await hashPassword(crypto.randomUUID() + ":" + crypto.randomUUID());
+    for (const id of DEMO_STAFF_IDS) {
+      const res = await db.query(
+        `UPDATE staff SET active = 0, password_hash = ?, updated_at = ? WHERE id = ? AND active = 1`,
+        [randomHash, (/* @__PURE__ */ new Date()).toISOString(), id]
+      );
+      const row = await db.queryOne(`SELECT id FROM staff WHERE id = ?`, [id]);
+      if (row) {
+        locked += 1;
+        await audit.log({
+          actorId: row.id,
+          action: "setup.demo_locked",
+          resourceType: "staff",
+          resourceId: id,
+          changes: { active: { from: 1, to: 0 } }
+        });
+      }
+      void res;
+    }
+  }
+  await db.query(
+    `INSERT INTO settings (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [SETUP_DONE_KEY, "1"]
+  );
+  await audit.log({
+    actorId: "setup",
+    action: "setup.completed",
+    resourceType: "settings",
+    resourceId: SETUP_DONE_KEY,
+    changes: { close_demo: { from: null, to: closeDemo } }
+  });
+  logger.info("setup.completed", { close_demo: closeDemo, demo_locked: locked });
+  return { demo_locked: locked };
+}
+__name(completeSetup, "completeSetup");
+function registerSetupStatusRoutes(app, deps) {
+  app.get("/api/setup/status", async (c) => {
+    try {
+      const st = await getSetupStatus(createDb(c.env.DB));
+      return c.json({ data: st }, 200);
+    } catch (err) {
+      deps.logger.child("setup").warn("setup.status_failed", {
+        error: err instanceof Error ? err.message : String(err)
+      });
+      return c.json({ data: { initialized: true, demo_active: false } }, 200);
+    }
+  });
+}
+__name(registerSetupStatusRoutes, "registerSetupStatusRoutes");
+var CompleteSchema = external_exports.object({ close_demo: external_exports.boolean().optional().default(true) });
+function registerSetupCompleteRoutes(app, deps) {
+  app.post("/api/setup/complete", async (c) => {
+    const body = CompleteSchema.parse(await c.req.json().catch(() => ({})));
+    const out = await completeSetup(deps, body.close_demo);
+    return c.json({ data: out }, 200);
+  });
+}
+__name(registerSetupCompleteRoutes, "registerSetupCompleteRoutes");
 
 // src/node-sync/app.ts
 function fireAndForget(c, p) {
@@ -73158,6 +73252,7 @@ function createNodeSyncApp(deps) {
   app.get("/pull", async (c) => {
     const node2 = await authNode(c);
     if (!node2) return authFailed(c);
+    await bumpQuotaUsage(db, "pull", now());
     const rawDomains = (c.req.query("domains") ?? "").split(",").map((d) => d.trim().toLowerCase()).filter((d) => d.length > 0);
     const unknownDomains = [...new Set(rawDomains.filter((d) => !NODE_PULL_DOMAIN_SET.has(d)))];
     if (unknownDomains.length > 0) {
@@ -73194,6 +73289,25 @@ function createNodeSyncApp(deps) {
       200
     );
   });
+  app.get("/reconcile", async (c) => {
+    const node2 = await authNode(c);
+    if (!node2) return authFailed(c);
+    const rawDomains = (c.req.query("domains") ?? "").split(",").map((d) => d.trim().toLowerCase()).filter((d) => d.length > 0);
+    const unknownDomains = [...new Set(rawDomains.filter((d) => !NODE_PULL_DOMAIN_SET.has(d)))];
+    if (unknownDomains.length > 0) {
+      return c.json(
+        {
+          error: "NODE_DOMAIN_FORBIDDEN",
+          message: "\u062F\u0627\u0645\u0646\u0647\u0654 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u06CC \u0628\u06CC\u0631\u0648\u0646 \u0641\u0647\u0631\u0633\u062A \u0633\u0641\u06CC\u062F reconcile \u0627\u0633\u062A",
+          details: { domains: unknownDomains }
+        },
+        400
+      );
+    }
+    const domains = rawDomains.length > 0 ? rawDomains : [...NODE_PULL_DOMAINS];
+    const statuses = await reconcileDomainCounts(db, domains);
+    return c.json({ server_ts: now().toISOString(), domains: statuses }, 200);
+  });
   app.post("/push", async (c) => {
     const node2 = await authNode(c);
     if (!node2) return authFailed(c);
@@ -73212,6 +73326,7 @@ function createNodeSyncApp(deps) {
         200
       );
     }
+    await bumpQuotaUsage(db, "push", now());
     const contentLength = Number.parseInt(c.req.header("content-length") ?? "0", 10) || 0;
     if (contentLength > NODE_PUSH_BODY_MAX_BYTES) {
       return c.json({ error: "NODE_BODY_TOO_LARGE", message: "\u062D\u062C\u0645 \u0628\u062F\u0646\u0647\u0654 push \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A" }, 400);
@@ -73294,6 +73409,14 @@ function createNodeSyncApp(deps) {
   return app;
 }
 __name(createNodeSyncApp, "createNodeSyncApp");
+function registerCentralQuotaRoutes(app, deps) {
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  app.get("/api/central/quota", authMiddleware(), requireRole("manager"), async (c) => {
+    const snapshot = await centralQuotaSnapshot(deps.db, now());
+    return c.json(snapshot, 200);
+  });
+}
+__name(registerCentralQuotaRoutes, "registerCentralQuotaRoutes");
 
 // src/internal-sync/service.ts
 var SYNC_INGEST_MAX_ITEMS = 100;
@@ -73581,6 +73704,20 @@ var NodeSyncStatusMirrorSchema = external_exports.object({
     pulled: external_exports.number().int().min(0),
     pushed: external_exports.number().int().min(0)
   }).nullable().optional(),
+  // ─── EXP-1 (نسخهٔ ۳) — نتیجهٔ آخرین آشتی‌ساز؛ آینهٔ قدیمیِ بدونِ آن هم پذیرفته می‌شود ───
+  reconciliation: external_exports.object({
+    at: external_exports.iso.datetime(),
+    ok: external_exports.boolean(),
+    differences: external_exports.number().int().min(0),
+    // سقف ۵ ردیف ناهم‌خوانی — آینهٔ RECONCILE_MAX_DETAIL سمت runner
+    detail: external_exports.array(
+      external_exports.object({
+        domain: external_exports.string().min(1).max(40),
+        center: external_exports.number().int().min(0),
+        local: external_exports.number().int().min(0)
+      })
+    ).max(5).nullable()
+  }).nullable().optional(),
   updated_at: external_exports.iso.datetime()
 });
 function requireDesktopEngine2(c) {
@@ -73674,7 +73811,9 @@ function registerNodeSyncStatusRoute(app, deps) {
       version: mirror?.version ?? null,
       clock_drift_minutes: mirror?.clock_drift_minutes ?? null,
       clock_warning: mirror?.clock_warning === true,
-      last_catchup: mirror?.last_catchup ?? null
+      last_catchup: mirror?.last_catchup ?? null,
+      // ─── EXP-1 (نسخهٔ ۳) — آشتی‌ساز؛ آینهٔ قدیمی بدونِ این فیلد = null نرم ───
+      reconciliation: mirror?.reconciliation ?? null
     };
     return c.json(payload, 200);
   });
@@ -74068,6 +74207,7 @@ function createApp(deps) {
   registerSetupCompleteRoutes(app, { db: services.db, audit: services.audit, logger: services.logger });
   registerInternalSyncRoutes(app, { db: services.db, logger: services.logger });
   registerNodeSyncStatusRoute(app, { db: services.db, logger: services.logger });
+  registerCentralQuotaRoutes(app, { db: services.db });
   app.get("/api/me", (c) => c.json({ data: c.get("authContext") }, 200));
   registerRoutes(app, services.appointments);
   registerRoutes2(app, services.attendance);

@@ -17,6 +17,15 @@
  *   • idempotency با جفت (node_code, id)
  *   • دامنهٔ بیرون فهرست سفید = 403 با کد آزمون‌پذیر NODE_DOMAIN_FORBIDDEN
  *   • هرگز مسیری نمی‌شکند: خطا = پاکت تمیز؛ حکم م۲۱۰ سمت نود فقط warn و دورهٔ بعد
+ *
+ * rust-f15 — سهمیه و هم‌راستاسازی:
+ *   • هر pull/pushِ احرازشده شمارندهٔ روزانهٔ quota_usage را با UPSERT تک‌دستوری جمع می‌زند
+ *     (برآورد ثابت هندلر در service.ts؛ خواندنی‌های مدیریتی شمرده نمی‌شوند)؛ پاسخ صامت زیر
+ *     گات push به قرارداد m1.5 «بدون نوشتن» می‌ماند و شمارش هم اضافه نمی‌کند.
+ *   • GET /node/reconcile — شمارش/تازه‌ترین مُهر دامنه‌های pull برای هم‌راستاسازی نود؛
+ *     دامنهٔ بیرون فهرست سفید = ۴۰۰ با همان پاکت NODE_DOMAIN_FORBIDDEN (قرارداد rust-f15).
+ *   • registerCentralQuotaRoutes — GET /api/central/quota فقط-مدیر (سشن + نقش مدیر)؛
+ *     در api-routing «بعد از» گیت‌های سراسری ثبت می‌شود.
  */
 import { Hono } from 'hono';
 import type { Context } from 'hono';
@@ -47,10 +56,13 @@ import {
   NodeCodeInvalidError,
   NodePushRawBodySchema,
   bearerToken,
+  bumpQuotaUsage,
+  centralQuotaSnapshot,
   decodeNodeCursor,
   listNodes,
   pullNodePage,
   pushNodeEvents,
+  reconcileDomainCounts,
   registerNode,
   revokeNode,
   rotateNodeKey,
@@ -156,6 +168,11 @@ export function createNodeSyncApp(deps: NodeSyncAppDeps): AppHono {
     const node = await authNode(c);
     if (!node) return authFailed(c);
 
+    // rust-f15 — شمارش سهمیه: هر pullِ احرازشده یک درخواست است (+۱ و برآورد ردیف هندلر).
+    // تلاشِ احراز-نشدن شمرده نمی‌شود تا مهاجمِ بی‌کلید نتواند سهمیهٔ روز را با نویز متورم کند؛
+    // خطای شمارش هم در bumpQuotaUsage بلعیده می‌شود (حکم م۲۱۰) و pull را نمی‌شکند.
+    await bumpQuotaUsage(db, 'pull', now());
+
     // فهرست سفید pull — هر دامنهٔ بیرون فهرست (مثل patients) رد صریح ۴۰۳ دارد
     const rawDomains = (c.req.query('domains') ?? '')
       .split(',')
@@ -206,6 +223,38 @@ export function createNodeSyncApp(deps: NodeSyncAppDeps): AppHono {
     );
   });
 
+  // ─── GET /node/reconcile?domains=... — هم‌راستاسازی شمارش (rust-f15) ───
+  // احراز دقیقاً هم‌الگوی pull (نودِ فعال با node_code+node_key)؛ دامنه‌ها همان فهرست سفید pull.
+  // پاسخ: server_ts لحظهٔ مرکز + count/max_updated_at بر حسب دامنه — بدون پاکت data (قرارداد).
+  // شمارش روی «همان ردیف‌هایی که pull تحویل می‌دهد» انجام می‌شود (شرط پایهٔ دامنه) تا نود بتواند
+  // با صندوق محلی‌اش مقایسه کند. این مسیر در سهمیه شمرده نمی‌شود (خواندنی نودی سبک).
+  app.get('/reconcile', async (c) => {
+    const node = await authNode(c);
+    if (!node) return authFailed(c);
+
+    const rawDomains = (c.req.query('domains') ?? '')
+      .split(',')
+      .map((d) => d.trim().toLowerCase())
+      .filter((d) => d.length > 0);
+    const unknownDomains = [...new Set(rawDomains.filter((d) => !NODE_PULL_DOMAIN_SET.has(d)))];
+    if (unknownDomains.length > 0) {
+      // قرارداد rust-f15: دامنهٔ بیرون فهرست سفید → ۴۰۰ با همان پاکت رد سفیدفهرست (کد آزمون‌پذیر)
+      return c.json(
+        {
+          error: 'NODE_DOMAIN_FORBIDDEN',
+          message: 'دامنهٔ درخواستی بیرون فهرست سفید reconcile است',
+          details: { domains: unknownDomains }
+        },
+        400
+      );
+    }
+    const domains: readonly NodePullDomain[] =
+      rawDomains.length > 0 ? (rawDomains as NodePullDomain[]) : [...NODE_PULL_DOMAINS];
+
+    const statuses = await reconcileDomainCounts(db, domains);
+    return c.json({ server_ts: now().toISOString(), domains: statuses }, 200);
+  });
+
   // ─── POST /node/push — سفیدفهرستی + مُهر تلاش + idempotency ───
   app.post('/push', async (c) => {
     const node = await authNode(c);
@@ -236,19 +285,24 @@ export function createNodeSyncApp(deps: NodeSyncAppDeps): AppHono {
       );
     }
 
-    // ۲) سقف سخت بدنه (اعتراف Content-Length — هم‌الگوی لولهٔ خطای مرورگر)
+    // ۲) rust-f15 — شمارش سهمیه فقط برای pushهایی که از گات گذشتند (+۱ و برآورد ردیف هندلر):
+    //    پاسخ صامت زیر گات به قرارداد m1.5 «بدون لاگ/نوشتن» می‌ماند و شمارش سهمیه هم اضافه
+    //    نمی‌کند؛ خطای شمارش در bumpQuotaUsage بلعیده می‌شود و push را نمی‌شکند (حکم م۲۱۰).
+    await bumpQuotaUsage(db, 'push', now());
+
+    // ۳) سقف سخت بدنه (اعتراف Content-Length — هم‌الگوی لولهٔ خطای مرورگر)
     const contentLength = Number.parseInt(c.req.header('content-length') ?? '0', 10) || 0;
     if (contentLength > NODE_PUSH_BODY_MAX_BYTES) {
       return c.json({ error: 'NODE_BODY_TOO_LARGE', message: 'حجم بدنهٔ push بیش از حد مجاز است' }, 400);
     }
 
-    // ۳) مُهر تلاش قبل از کار — همان الگوی m1.5 (خطای بعدی هم فاصله می‌گیرد)
+    // ۴) مُهر تلاش قبل از کار — همان الگوی m1.5 (خطای بعدی هم فاصله می‌گیرد)
     await stampNodePushAttempt(db, node.node_code, at);
 
-    // ۴) شکل کلی بدنه (SyntaxError → پاکت INVALID_JSON با errorHandler میزبان)
+    // ۵) شکل کلی بدنه (SyntaxError → پاکت INVALID_JSON با errorHandler میزبان)
     const raw = NodePushRawBodySchema.parse(await c.req.json<unknown>());
 
-    // ۵) فهرست سفید push — رد صریح کل درخواست؛ حتی یک بایت هم نوشته نمی‌شود (fail-closed)
+    // ۶) فهرست سفید push — رد صریح کل درخواست؛ حتی یک بایت هم نوشته نمی‌شود (fail-closed)
     const unknownDomains = [...new Set(raw.items.map((it) => it.domain).filter((d) => !NODE_PUSH_DOMAIN_SET.has(d)))];
     if (unknownDomains.length > 0) {
       log.warn('node_sync.push_domain_forbidden', { domains: unknownDomains });
@@ -262,10 +316,10 @@ export function createNodeSyncApp(deps: NodeSyncAppDeps): AppHono {
       );
     }
 
-    // ۶) اعتبارسنجی سفت بر حسب دامنه (ZodError → ۴۰۰ با details)
+    // ۷) اعتبارسنجی سفت بر حسب دامنه (ZodError → ۴۰۰ با details)
     const items = raw.items.map((it: NodePushRawItem) => validatePushItem(it));
 
-    // ۷) درج idempotent — جفت (node_code, id)؛ دوباره‌فرستادن همان id هیچ ردیفی اضافه نمی‌کند
+    // ۸) درج idempotent — جفت (node_code, id)؛ دوباره‌فرستادن همان id هیچ ردیفی اضافه نمی‌کند
     const outcome = await pushNodeEvents(db, node.node_code, items);
     await stampNodePushOk(db, node.node_code, at).catch(() => undefined);
     log.info('node_sync.push', { node: node.node_code, accepted: outcome.accepted, duplicates: outcome.duplicates });
@@ -341,4 +395,24 @@ export function createNodeSyncApp(deps: NodeSyncAppDeps): AppHono {
   // خطاها به errorHandler میزبان می‌روند (زیراپ همیشه در اپ اصلی سوار است)؛
   // errorHandler پاکت استاندارد + request_id همین زیراپ را می‌پیوندد.
   return app;
+}
+
+// ─── rust-f15 — GET /api/central/quota: دید مصرف روزانهٔ سهمیهٔ مرکز (فقط-مدیر) ───
+// احراز: همان الگوی مسیرهای مدیریتی دیگر ورکر — گیت سشن authMiddleware + requireRole('manager')
+// (عین مسیرهای register/rotate-key/revoke/nodes زیراپ). جای ثبت: api-routing «بعد از» گیت‌های
+// سراسری /api/* تا سشن بگیرد و no-store/request-id از زنجیرهٔ عمومی بیاید.
+// پاسخ: پاکت خام قرارداد rust-f15 (بدون لفاف data) — day/requests/rows_written/rows_read_est +
+// limits/percent/level + estimated:true + failed_logins_24h. منطق در centralQuotaSnapshot است.
+export interface CentralQuotaRoutesDeps {
+  db: DbClient;
+  /** تزریق زمان — فقط برای آزمون (پیش‌فرض: ساعت واقعی) */
+  now?: () => Date;
+}
+
+export function registerCentralQuotaRoutes(app: AppHono, deps: CentralQuotaRoutesDeps): void {
+  const now = deps.now ?? (() => new Date());
+  app.get('/api/central/quota', authMiddleware(), requireRole('manager'), async (c) => {
+    const snapshot = await centralQuotaSnapshot(deps.db, now());
+    return c.json(snapshot, 200);
+  });
 }

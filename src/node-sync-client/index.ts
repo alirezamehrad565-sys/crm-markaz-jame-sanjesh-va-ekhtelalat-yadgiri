@@ -18,5 +18,7 @@ export type {
   NodePushItemInput,
   NodePullItem,
   PullOutcome,
-  PushOutcome
+  PushOutcome,
+  NodeReconcileDomainRow,
+  ReconcileOutcome
 } from './client';

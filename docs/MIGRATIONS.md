@@ -164,6 +164,7 @@
 | 110 | `0110_node_sync_inbox.sql` | صندوق ورودی سینک میز (rust-f9): `node_sync_inbox` با idempotency جفت `(domain, id)` و شمارش درج/تکرار — transport log صفحه‌به‌صفحهٔ pull؛ نگاشت نمایشی اطلاعیه‌ها به جدول مستقل 0112 |
 | 111 | `0111_auth_sessions.sql` | ابطال سمت‌سرور نشست‌ها (rust-f10 — مایلستون ۱ بخش ۸): `auth_sessions` (sid/staff_id/issued_at/expires_at/revoked_at) + ایندکس staff/expiry — JWT دیگر بی‌حالت نیست: claim `sid` اجباری در صدور، چک ردیف در authMiddleware، هرس فرصت‌طلب منقضی‌ها در لاگین، ابطال در خروج |
 | 112 | `0112_synced_announcements.sql` | نگاشت نمایشی اطلاعیه‌های سینک‌شده (rust-f12): جدول مستقل `synced_announcements` (title/body/published_at/active/received_at) — درج مستقیم در `announcements` دروغ FK است (created_by NOT NULL REFERENCES staff)؛ UPSERT نرم در ingest پس از نوشتن صندوق + فیلد شمارش در status |
+| 113 | `0113_quota_usage.sql` | شمارش برآوردی مصرف روزانهٔ سهمیهٔ مرکز (rust-f15): جدول `quota_usage` با کلید `day` (UTC YYYY-MM-DD) و ستون‌های requests/rows_written/rows_read_est — UPSERT تک‌دستوری جمع‌کننده در سه مسیر شمرده‌شدهٔ pull نود، push نود و تلاش ورود (موفق/ناموفق)؛ خواندنی‌های مدیریتی شمرده نمی‌شوند؛ برآورد هندلرها ثابت‌های نام‌دار در `src/node-sync/service.ts` است و مصرف‌کننده: GET /api/central/quota (سطح ok/warn/danger بر آستانهٔ ۸۰/۹۵) |
 
 ## شماره‌های تکراری
 

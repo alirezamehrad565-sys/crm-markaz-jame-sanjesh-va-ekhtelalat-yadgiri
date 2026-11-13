@@ -41,7 +41,21 @@ export {
   NodePushRawItemSchema,
   UsageSummaryPayloadSchema,
   ClientErrorPayloadSchema,
-  HealthPingPayloadSchema
+  HealthPingPayloadSchema,
+  // rust-f15 — سهمیهٔ روزانهٔ مرکز و هم‌راستاسازی
+  QUOTA_LIMITS,
+  NODE_PULL_ROWS_WRITTEN_EST,
+  NODE_PULL_ROWS_READ_EST,
+  NODE_PUSH_ROWS_WRITTEN_EST,
+  NODE_PUSH_ROWS_READ_EST,
+  LOGIN_ROWS_WRITTEN_EST,
+  LOGIN_ROWS_READ_EST,
+  quotaDayUtc,
+  bumpQuotaUsage,
+  quotaLevelFor,
+  quotaPercent,
+  centralQuotaSnapshot,
+  reconcileDomainCounts
 } from './service';
 export type {
   NodePullDomain,
@@ -57,5 +71,9 @@ export type {
   NodePushRawItem,
   ValidatedPushItem,
   NodePushOutcome,
-  GeneratedNodeKey
+  GeneratedNodeKey,
+  QuotaKind,
+  QuotaLevel,
+  CentralQuotaSnapshot,
+  ReconcileDomainStatus
 } from './service';

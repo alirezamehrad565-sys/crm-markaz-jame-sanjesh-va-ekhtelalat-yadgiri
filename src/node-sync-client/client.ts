@@ -66,6 +66,25 @@ export type PullOutcome =
   | { status: 'network_error'; message: string }
   | { status: 'http_error'; http: number; code: string | null };
 
+/* ── EXP-1 — آشتی‌ساز (reconcile) — فقط-گزارش، بدون هیچ اصلاحی ──
+   GET /node/reconcile?domains=… با همان اعتبار نود pull؛ مرکز به‌ازای هر دامنه شمارش و
+   بزرگ‌ترین updated_at را برمی‌گرداند تا runner با صندوق محلی مقایسه کند. هیچ throwی —
+   قرارداد نرم همان بقیهٔ کلاینت (drill §۳-۱۱). */
+
+/** ردیف مقایسهٔ یک دامنه از پاسخ مرکز */
+export interface NodeReconcileDomainRow {
+  domain: string;
+  count: number;
+  max_updated_at: string | null;
+}
+
+export type ReconcileOutcome =
+  | { status: 'ok'; serverTs: string | null; domains: NodeReconcileDomainRow[] }
+  | { status: 'unconfigured' }
+  | { status: 'auth_error' }
+  | { status: 'network_error'; message: string }
+  | { status: 'http_error'; http: number; code: string | null };
+
 export type PushOutcome =
   | ({ status: 'ok'; accepted: number; duplicates: number; rejectedDomains: string[] } & CenterEnvelopeInfo)
   | ({ status: 'throttled'; retryAfterS: number | null; rejectedDomains: string[] } & CenterEnvelopeInfo)
@@ -101,6 +120,11 @@ const ATTEMPT_KEY = 'nodesync:last-push-attempt';
 export interface NodeSyncClient {
   /** pull فرصت‌طلب با cursor پایدار — cursor فقط بعد از پاسخ ok جلو می‌رود */
   pull(args?: { domains?: readonly string[]; limit?: number }): Promise<PullOutcome>;
+  /**
+   * EXP-1 — آشتی‌ساز: GET /node/reconcile?domains=… با همان اعتبار نود — فقط-گزارش؛
+   * دامنه‌های غایب = فهرست سفید pull کامل. هیچ throwی — خروجی نرم.
+   */
+  reconcile(args?: { domains?: readonly string[] }): Promise<ReconcileOutcome>;
   /** push با پیش‌فیلتر فهرست سفید — آیتم ممنوع هرگز ارسال نمی‌شود */
   push(args: { items: readonly NodePushItemInput[] }): Promise<PushOutcome>;
   /** وضعیت اعتبار ثبت‌شده محلی — بدون هیچ شبکه */
@@ -222,6 +246,51 @@ export function createNodeSyncClient(opts: NodeSyncClientOptions): NodeSyncClien
           nextCursor,
           serverTime: typeof data?.server_time === 'string' ? (data?.server_time as string) : null,
           ...envelopeInfoOf(r.body)
+        };
+      } catch (err) {
+        return { status: 'network_error', message: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    async reconcile(args) {
+      try {
+        const domains = domainKeyOf(args?.domains);
+        const { nodeCode, nodeKey } = readCreds();
+        if (!nodeCode || !nodeKey) return { status: 'unconfigured' };
+
+        const url = new URL(`${base}/node/reconcile`);
+        url.searchParams.set('domains', domains.join(','));
+        const r = await rawRequest('GET', url.toString(), {
+          'X-CP-Node-Code': nodeCode,
+          Authorization: `Bearer ${nodeKey}`,
+          ...(opts.clientVersion ? { 'X-CP-Node-Version': opts.clientVersion } : {})
+        });
+        if (r.networkError !== null) return { status: 'network_error', message: r.networkError };
+        if (r.http === 401) return { status: 'auth_error' };
+        if (r.http !== 200) {
+          return { status: 'http_error', http: r.http, code: errorEnvelopeOf(r.body) };
+        }
+        // پارس دفاعی — بدنهٔ خارج از قرارداد = خطای نرم، همان الگوی pull
+        // قرارداد آشتی‌ساز بدنهٔ «لخت» {server_ts, domains} می‌دهد (همان‌شکل /node/reconcile سمت
+        // مرکز)؛ پاکت {data:…} هم برای هم‌ریتم بقیهٔ مسیرها پذیرفته می‌شود.
+        const root = (r.body as { data?: Record<string, unknown> } | null)?.data ?? (r.body as Record<string, unknown> | null);
+        const data = root && typeof root === 'object' ? root : null;
+        const rawRows = Array.isArray(data?.domains) ? (data?.domains as unknown[]) : null;
+        if (!rawRows) return { status: 'http_error', http: r.http, code: 'NODE_RECONCILE_BODY_INVALID' };
+        const rows: NodeReconcileDomainRow[] = [];
+        for (const raw of rawRows) {
+          if (!raw || typeof raw !== 'object') continue;
+          const rec = raw as Record<string, unknown>;
+          if (typeof rec.domain !== 'string' || rec.domain.length === 0) continue;
+          const count = typeof rec.count === 'number' && Number.isFinite(rec.count) && rec.count >= 0 ? Math.floor(rec.count) : -1;
+          if (count < 0) continue;
+          const maxAt = typeof rec.max_updated_at === 'string' && rec.max_updated_at.length > 0 ? rec.max_updated_at : null;
+          rows.push({ domain: rec.domain, count, max_updated_at: maxAt });
+        }
+        return {
+          status: 'ok',
+          serverTs: typeof data?.server_ts === 'string' && data.server_ts.length > 0 ? data.server_ts : null,
+          domains: rows
         };
       } catch (err) {
         return { status: 'network_error', message: err instanceof Error ? err.message : String(err) };

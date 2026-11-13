@@ -8,6 +8,7 @@
     "devUrl": "http://127.0.0.1:8787"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام",

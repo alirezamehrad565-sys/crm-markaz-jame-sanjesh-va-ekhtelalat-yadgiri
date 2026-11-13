@@ -18,7 +18,10 @@ export {
   CATCHUP_PULL_LIMIT,
   CATCHUP_PUSH_CHUNK,
   CATCHUP_OUTBOX_PAGE_MAX,
-  CLIENT_CURSOR_KEY
+  CLIENT_CURSOR_KEY,
+  RECONCILE_KEY,
+  RECONCILE_MAX_DETAIL,
+  LOCAL_MAX_KEY
 } from './runner';
 export type {
   NodeSyncRunner,
@@ -30,7 +33,10 @@ export type {
   CatchUpStatus,
   CatchUpState,
   CatchUpStateV1,
-  NodeSyncStatusMirror
+  NodeSyncStatusMirror,
+  NodeReconciliationV1,
+  ReconcileDetailRow,
+  ReconcileOutcome
 } from './runner';
 export { buildSyncSection, notifySyncCredentialsChanged } from './panel';
 export type { SyncSectionDeps } from './panel';
@@ -48,5 +54,5 @@ export type { SyncCoordinator, CoordinatorOptions, CoordinatorState, SyncMode, S
 export { startNodeSyncBootCatchUp, resetNodeSyncBootCatchUpForTests } from './boot';
 export type { BootCatchUpDeps } from './boot';
 export { registerNodeSyncStatusRoute, NODE_SYNC_STATUS_MIRROR_KEY, NodeSyncStatusMirrorSchema } from './status';
-export type { NodeSyncStatusRouteDeps, NodeSyncStatusPayload } from './status';
+export type { NodeSyncStatusRouteDeps, NodeSyncStatusPayload, NodeSyncReconciliationInfo } from './status';
 

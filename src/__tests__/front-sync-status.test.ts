@@ -6,7 +6,7 @@
  * نگاشت‌ها تابع خالص‌اند (بدون DOM) — الگو: front-view-identifiers.test.ts و format-front.test.ts.
  */
 // @ts-ignore — فایل .js فرانت، خارج از include تایپ‌اسکریپت است (import تک‌خطی تا @ts-ignore نشتی را بپوشاند)
-import { syncErrorKindView, syncStateView, clockWarningView, catchupSummaryView, versionNumbersView, versionIncompatView } from '../../public/assets/js/views/health-panel.js';
+import { syncErrorKindView, syncStateView, clockWarningView, catchupSummaryView, versionNumbersView, versionIncompatView, reconciliationView, reconciliationDetailView, quotaLevelView, failedLoginsView, installEngineWatchdogBanner } from '../../public/assets/js/views/health-panel.js';
 
 describe('کارت وضعیت هم‌گامی پنل سلامت — نگاشت حالت به برچسب/رنگ', () => {
   it('پنج حالت شناخته‌شدهٔ قرارداد → برچسب فارسی و کلاس رنگ درست', () => {
@@ -112,5 +112,80 @@ describe('موج ۱ (۱-۴) — ردیف قرمز ناسازگاری نسخه (�
     expect(versionNumbersView({})).toBeNull();
     expect(versionNumbersView({ compatible: false })).toBeNull();
     expect(versionNumbersView(null)).toBeNull();
+  });
+});
+
+// ───────────────────────── EXP-1 — ردیف آشتی‌ساز (قرارداد v3) ─────────────────────────
+
+describe('EXP-1 — ردیف آشتی‌ساز از فیلد reconciliation وضعیت v3', () => {
+  const NOW = Date.parse('2026-11-13T10:00:00Z');
+
+  it('ok=true و differences=0 در پنجرهٔ ۱۰دقیقه‌ای → سبز «همهٔ دامنه‌ها هم‌شمار»', () => {
+    const fresh = { at: '2026-11-13T09:58:00Z', ok: true, differences: 0, detail: null };
+    expect(reconciliationView(fresh, NOW)).toEqual({ tone: 'ok', message: 'آشتی‌ساز: همهٔ دامنه‌ها هم‌شمار' });
+    // دقیقاً روی مرز ۱۰ دقیقه — هنوز داخل پنجره
+    const edge = { at: '2026-11-13T09:50:00Z', ok: true, differences: 0, detail: null };
+    expect(reconciliationView(edge, NOW)).toMatchObject({ tone: 'ok' });
+  });
+
+  it('ok=false → زرد «ناهم‌خوانی در K دامنه — بررسی لازم» با رقم فارسی', () => {
+    const fresh = { at: '2026-11-13T09:59:00Z', ok: false, differences: 2, detail: [{ domain: 'library', center: 40, local: 39 }] };
+    expect(reconciliationView(fresh, NOW)).toEqual({ tone: 'warn', message: 'آشتی‌ساز: ناهم‌خوانی در ۲ دامنه — بررسی لازم' });
+    expect(reconciliationDetailView(fresh.detail)).toBe('library — مرکز ۴۰ · این دستگاه ۳۹');
+    const five = { at: '2026-11-13T09:59:00Z', ok: false, differences: 5, detail: [] };
+    expect(reconciliationView(five, NOW)?.message).toBe('آشتی‌ساز: ناهم‌خوانی در ۵ دامنه — بررسی لازم');
+  });
+
+  it('خارج از پنجرهٔ ۱۰دقیقه‌ای / ورودی غایب یا خراب → null (ردیف رندر نمی‌شود)', () => {
+    const old = { at: '2026-11-13T09:00:00Z', ok: true, differences: 0, detail: null };
+    expect(reconciliationView(old, NOW)).toBeNull();
+    expect(reconciliationView(null, NOW)).toBeNull();
+    expect(reconciliationView(undefined, NOW)).toBeNull();
+    expect(reconciliationView('آشتی', NOW)).toBeNull();
+    expect(reconciliationView({ ok: true, differences: 0 }, NOW)).toBeNull(); // بی‌at
+    expect(reconciliationView({ at: 'خراب', ok: true, differences: 0 }, NOW)).toBeNull();
+    const future = { at: '2026-11-13T10:00:30Z', ok: true, differences: 0, detail: null }; // کج‌ساعت جزئی → داخل
+    expect(reconciliationView(future, NOW)).toMatchObject({ tone: 'ok' });
+  });
+
+  it('ok=true با differences ناهم‌خوان (پاکت عجیب) → null؛ differences غایب با ok=false → زرد بی‌عدد', () => {
+    expect(reconciliationView({ at: '2026-11-13T09:59:00Z', ok: true, differences: 3 }, NOW)).toBeNull();
+    expect(reconciliationView({ at: '2026-11-13T09:59:00Z', ok: false }, NOW)).toMatchObject({ tone: 'warn', message: 'آشتی‌ساز: ناهم‌خوانی در دامنه‌ها — بررسی لازم' });
+    expect(reconciliationDetailView(undefined)).toBeNull();
+    expect(reconciliationDetailView([{ domain: 'packages' }])).toBe('packages — مرکز — · این دستگاه —');
+  });
+});
+
+// ───────────────────────── EXP-2 — کارت مصرف مرکز (برآوردی) ─────────────────────────
+
+describe('EXP-2 — نگاشت‌های کارت مصرف مرکز', () => {
+  it('سطح مصرف → کلاس نشان: ok سبز / warn زرد / danger قرمز / ناشناخته خنثی', () => {
+    expect(quotaLevelView('ok')).toBe('badge--success');
+    expect(quotaLevelView('warn')).toBe('badge--warning');
+    expect(quotaLevelView('danger')).toBe('badge--error');
+    expect(quotaLevelView('other')).toBe('badge--neutral');
+    expect(quotaLevelView(undefined)).toBe('badge--neutral');
+  });
+
+  it('ورود ناموفق ۲۴ ساعت: پنج یا بیشتر → زرد؛ کمتر → خنثی؛ ورودی غایب/منفی → خنثی با «—»', () => {
+    expect(failedLoginsView(5)).toEqual({ cls: 'badge--warning', text: '۵' });
+    expect(failedLoginsView(12)).toEqual({ cls: 'badge--warning', text: '۱۲' });
+    expect(failedLoginsView(4)).toEqual({ cls: 'badge--neutral', text: '۴' });
+    expect(failedLoginsView(0)).toEqual({ cls: 'badge--neutral', text: '۰' });
+    expect(failedLoginsView(undefined)).toEqual({ cls: 'badge--neutral', text: '—' });
+    expect(failedLoginsView(-1)).toEqual({ cls: 'badge--neutral', text: '—' });
+  });
+});
+
+// ───────────────────────── EXP-4 — بنر نگهبان موتور (گارد کامل) ─────────────────────────
+
+describe('EXP-4 — بنر نگهبان موتور: بیرون پوستهٔ دسکتاپ no-op بی‌کرش', () => {
+  it('بدون کانال __TAURI__ (مرورگر/آزمون) → نصب نمی‌شود و هیچ throwی ندارد', () => {
+    expect((globalThis as Record<string, unknown>)['__TAURI__']).toBeUndefined(); // محیط آزمون — کانال نیست
+    const out = installEngineWatchdogBanner();
+    expect(out.installed).toBe(false);
+    expect(out.reason).toBe('no-tauri-channel');
+    // فراخوانی دوباره هم بی‌خطر است
+    expect(installEngineWatchdogBanner().installed).toBe(false);
   });
 });

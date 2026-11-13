@@ -1,9 +1,13 @@
 import type { AppHono } from '@core/shared';
 import { LoginSchema } from '@core/shared';
 import { findStaffByUsername, signSessionJwt, verifyPassword, hashPassword, isLegacyPasswordHash, resolveSessionSecret, getAuthContext } from '@core/auth';
+import { createDb } from '@core/db';
 import { AuthError, RateLimitError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
+// rust-f15 — شمارش برآوردی سهمیهٔ روزانه: هر تلاش ورود (موفق/ناموفق) شمارندهٔ quota_usage را
+// جمع می‌زند. import مستقیم از service (نه barrel) تا زیراپ app.ts و زنجیرهٔ آن کشیده نشود.
+import { bumpQuotaUsage } from '../../node-sync/service';
 
 const LOGIN_MAX_FAILURES = 5; // بر اساس نام کاربری — 
 const LOGIN_IP_MAX_FAILURES = 20; // بر اساس IP (سخت‌گیرتر از ۵ نیست — NAT دفتر قفل نشود) — 
@@ -71,6 +75,11 @@ export interface AuthRoutesDeps {
 export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
   app.post('/api/auth/login', async (c) => {
     const body = LoginSchema.parse(await c.req.json<unknown>());
+
+    // rust-f15 — شمارش سهمیه: هر تلاش ورود — موفق، ناموفق یا گات‌خورده — یک درخواست است و
+    // با برآورد ثابت هندلر ورود (service.ts سینک نود) در quota_usage جمع می‌شود. خطای شمارش
+    // در bumpQuotaUsage بلعیده می‌شود (حکم م۲۱۰) و مسیر ورود هرگز به‌خاطر آن سرخ نمی‌شود.
+    await bumpQuotaUsage(createDb(c.env.DB), 'login');
 
     const identity = body.username.trim().toLowerCase();
     const ip = (c.req.header('cf-connecting-ip') ?? 'unknown').slice(0, 64);
