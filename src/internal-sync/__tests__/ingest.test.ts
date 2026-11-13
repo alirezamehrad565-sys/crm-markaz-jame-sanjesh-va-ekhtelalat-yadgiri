@@ -2,6 +2,8 @@
  * rust-f9 — آزمون استقرار سینک در میز (مسیر واقعی api-routing روی MockD1)
  * گیت زمان‌اجرای CENTER_DESKTOP_ENGINE: خاموش → ۴۰۴ کم‌دست (رفتار تولید وب)؛
  * روشن → استقرار فهرست‌سفیدی/idempotent در صندوق ورودی 0110.
+ * rust-f12-A — نگاشت نمایشی: payload اطلاعیه پس از استقرار موفق در صندوق، با UPSERT
+ * به synced_announcements (0112) هم می‌نشیند؛ بدون title نرم رد می‌شود و صندوق می‌ماند.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, Api, loginToken, silentLogger } from '../../test/harness';
@@ -112,5 +114,127 @@ describe('/api/internal/sync — استقرار سینک میز (rust-f9)', () =
     it('سرویس با لاگ خاموش هم ساخته می‌شود (child internal-sync)', () => {
       expect(silentLogger('t').child('internal-sync')).toBeTruthy();
     });
+  });
+});
+
+describe('rust-f12-A — نگاشت نمایشی اطلاعیه‌ها به synced_announcements (0112)', () => {
+  let A: TestApp;
+  let managerToken: string;
+
+  beforeAll(async () => {
+    A = createTestApp(); // مایگریشن‌ها (از جمله 0112) در هارنس خودکار اعمال می‌شوند
+    A.env.CENTER_DESKTOP_ENGINE = '1';
+    managerToken = await loginToken(A, 'manager');
+  });
+
+  const syncedRow = (id: string): Record<string, unknown> | undefined =>
+    A.sql.prepare('SELECT * FROM synced_announcements WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  const syncedCount = (): number => Number(A.sql.prepare('SELECT COUNT(*) AS n FROM synced_announcements').get()?.n);
+
+  it('استقرار اطلاعیه → هم ردیف صندوق و هم ردیف synced_announcements با title/body درست', async () => {
+    const api = new Api(A).withToken(managerToken);
+    const r = await api.post('/api/internal/sync/ingest', {
+      items: [item('ann-f12-1', 'announcements', '2026-11-12T10:00:00Z', {
+        title: 'خبر مرکز', body: 'متن کامل خبر', created_at: '2026-11-12T08:00:00Z', active: true
+      })]
+    });
+    expect(r.status).toBe(200);
+    expect((r.body as { data: { inserted: number } }).data.inserted).toBe(1);
+    // ردیف صندوق (transport log) سر جایش است — منبع حقیقت
+    const inbox = A.sql.prepare('SELECT * FROM node_sync_inbox WHERE domain = ? AND id = ?')
+      .get('announcements', 'ann-f12-1') as Record<string, unknown> | undefined;
+    expect(inbox).toBeDefined();
+    expect(JSON.parse(inbox?.payload as string)).toMatchObject({ title: 'خبر مرکز' });
+    // ردیف نمایشی: title/body درست؛ published_at از created_at پروژektion؛ active=1
+    const row = syncedRow('ann-f12-1');
+    expect(row).toBeDefined();
+    expect(row?.title).toBe('خبر مرکز');
+    expect(row?.body).toBe('متن کامل خبر');
+    expect(row?.published_at).toBe('2026-11-12T08:00:00Z');
+    expect(row?.active).toBe(1);
+    expect(typeof row?.received_at).toBe('string');
+    expect((row?.received_at as string).length).toBeGreaterThan(0);
+  });
+
+  it('استقرار تکراری همان id → duplicates مسیر فعلی و هنوز دقیقاً یک ردیف synced (upsert نه دوبل)', async () => {
+    const api = new Api(A).withToken(managerToken);
+    const r = await api.post('/api/internal/sync/ingest', {
+      items: [item('ann-f12-1', 'announcements', '2026-11-12T10:00:00Z', {
+        title: 'خبر مرکز', body: 'متن کامل خبر', created_at: '2026-11-12T08:00:00Z', active: true
+      })]
+    });
+    expect(r.status).toBe(200);
+    expect((r.body as { data: { duplicates: number } }).data.duplicates).toBe(1);
+    expect(syncedCount()).toBe(1);
+    expect(syncedRow('ann-f12-1')?.title).toBe('خبر مرکز');
+  });
+
+  it('همان id با payload تازه‌تر → title در synced به‌روز و باز هم دقیقاً یک ردیف', async () => {
+    const api = new Api(A).withToken(managerToken);
+    const r = await api.post('/api/internal/sync/ingest', {
+      items: [item('ann-f12-1', 'announcements', '2026-11-12T09:00:00Z', {
+        title: 'خبر ویرایش‌شده', body: 'متن ویرایش‌شده', created_at: '2026-11-12T08:00:00Z', active: true
+      })]
+    });
+    expect(r.status).toBe(200);
+    expect((r.body as { data: { updated: number } }).data.updated).toBe(1);
+    expect(syncedCount()).toBe(1);
+    const row = syncedRow('ann-f12-1');
+    expect(row?.title).toBe('خبر ویرایش‌شده');
+    expect(row?.body).toBe('متن ویرایش‌شده');
+  });
+
+  it('received_at در هر نگاشت تازه می‌شود (عقب‌کشیده → استقرار دوباره → تازه)', async () => {
+    A.sql.prepare('UPDATE synced_announcements SET received_at = ? WHERE id = ?').run('2000-01-01 00:00:00', 'ann-f12-1');
+    const api = new Api(A).withToken(managerToken);
+    const r = await api.post('/api/internal/sync/ingest', {
+      items: [item('ann-f12-1', 'announcements', '2026-11-12T09:00:00Z', {
+        title: 'خبر ویرایش‌شده', body: 'متن ویرایش‌شده', created_at: '2026-11-12T08:00:00Z', active: true
+      })]
+    });
+    expect(r.status).toBe(200);
+    const row = syncedRow('ann-f12-1');
+    expect(row?.received_at).not.toBe('2000-01-01 00:00:00'); // تازه شد — هم‌مُهر اکنون SQLite
+    expect(row?.title).toBe('خبر ویرایش‌شده'); // title به‌روز ماند
+  });
+
+  it('payload بدون title → صندوق می‌نشیند ولی ردیف synced ساخته نمی‌شود', async () => {
+    const api = new Api(A).withToken(managerToken);
+    const r = await api.post('/api/internal/sync/ingest', {
+      items: [item('ann-f12-2', 'announcements', '2026-11-12T11:00:00Z', { body: 'بی‌عنوان' })]
+    });
+    expect(r.status).toBe(200);
+    expect((r.body as { data: { inserted: number } }).data.inserted).toBe(1); // صندوق دست‌نخورده
+    const inbox = A.sql.prepare('SELECT * FROM node_sync_inbox WHERE domain = ? AND id = ?')
+      .get('announcements', 'ann-f12-2') as Record<string, unknown> | undefined;
+    expect(inbox).toBeDefined();
+    expect(syncedRow('ann-f12-2')).toBeUndefined(); // نگاشت نرم رد شد
+    expect(syncedCount()).toBe(1); // فقط همان ردیف قبلی
+  });
+
+  it('status → فیلد جدید synced_announcements هم‌خوان با COUNT جدول و فیلدهای موجود هم‌قبل', async () => {
+    const api = new Api(A).withToken(managerToken);
+    const r = await api.get('/api/internal/sync/status');
+    expect(r.status).toBe(200);
+    const data = (r.body as { data: { total: number; by_domain: Record<string, number>; synced_announcements: number } }).data;
+    expect(data.synced_announcements).toBe(1);
+    expect(data.synced_announcements).toBe(syncedCount());
+    expect(data.by_domain.announcements).toBe(2); // دو آیتم صندوق (یکی بی‌title)
+    expect(data.total).toBe(2);
+  });
+
+  it('دامنهٔ غیر announcements (library) → رفتار قبلی: صندوق می‌نشیند و شمارش synced تغییری نمی‌کند', async () => {
+    const api = new Api(A).withToken(managerToken);
+    const r = await api.post('/api/internal/sync/ingest', {
+      items: [item('k-f12', 'library', '2026-11-12T12:00:00Z', { kind: 'article', title: 'راهنمای کتابخانه' })]
+    });
+    expect(r.status).toBe(200);
+    expect((r.body as { data: { inserted: number } }).data.inserted).toBe(1);
+    const inbox = A.sql.prepare('SELECT * FROM node_sync_inbox WHERE domain = ? AND id = ?')
+      .get('library', 'k-f12') as Record<string, unknown> | undefined;
+    expect(inbox).toBeDefined(); // مسیر قبلی دست‌نخورده
+    expect(syncedCount()).toBe(1); // به جدول نمایشی اطلاعیه‌ها چیزی اضافه نشد
+    const st = await api.get('/api/internal/sync/status');
+    expect((st.body as { data: { synced_announcements: number } }).data.synced_announcements).toBe(1);
   });
 });

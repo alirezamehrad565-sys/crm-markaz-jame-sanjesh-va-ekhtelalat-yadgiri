@@ -288,12 +288,17 @@ try {
   check('استقرار تکراری → duplicates:1 (idempotency موتور با domain,id)', ingest2.status === 200 && ingest2.json?.data?.duplicates === 1, JSON.stringify(ingest2.json).slice(0, 140));
   const inbox = await getJson(`${base}/api/internal/sync/status`, { token: roles.manager });
   check('وضعیت صندوق: announcements=1 (نشانگر آخرین همگامی)', inbox.status === 200 && inbox.json?.data?.by_domain?.announcements === 1, JSON.stringify(inbox.json).slice(0, 140));
+  // rust-f12 — نگاشت صندوق به جدول نمایشی synced_announcements (0112)
+  check('نگاشت صندوق: synced_announcements=1 (upsert نمایشی، بدون دروغ FK)', inbox.status === 200 && inbox.json?.data?.synced_announcements === 1, JSON.stringify(inbox.json).slice(0, 160));
 
-  // rust-f11 — outbox موتور برای push نود: در DB تازه فقط health_ping ساعت‌بکت دارد
+  // rust-f11+f12 — outbox موتور برای push نود: در DB تازه یک health_ping + یک usage_summary عددی
   const outbox = await getJson(`${base}/api/internal/sync/outbox`, { token: roles.manager });
-  check('outbox موتور: دقیقاً یک health_ping با نسخهٔ اپ', outbox.status === 200 && outbox.json?.data?.items?.length === 1 && outbox.json?.data?.items[0]?.domain === 'health_ping' && Boolean(outbox.json?.data?.items[0]?.payload?.version), JSON.stringify(outbox.json).slice(0, 160));
+  const outItems = Array.isArray(outbox.json?.data?.items) ? outbox.json.data.items : [];
+  const pingItem = outItems.find((i) => i.domain === 'health_ping');
+  const usageItem = outItems.find((i) => i.domain === 'usage_summary');
+  check('outbox موتور: health_ping با نسخهٔ اپ + usage_summary با شمارنده‌های عددی متناهی', outbox.status === 200 && Boolean(pingItem?.payload?.version) && Boolean(usageItem) && Object.values(usageItem?.payload ?? {}).every((v) => typeof v === 'number' && Number.isFinite(v)), JSON.stringify(outbox.json).slice(0, 220));
   const outboxSince = await getJson(`${base}/api/internal/sync/outbox?since=${encodeURIComponent(new Date().toISOString())}`, { token: roles.manager });
-  check('outbox با since=اکنون → خالی (پیشروی watermark کلاینت)', outboxSince.status === 200 && outboxSince.json?.data?.items?.length === 0, JSON.stringify(outboxSince.json).slice(0, 100));
+  check('outbox با since=اکنون → خالی (پیشروی watermark کلاینت؛ بکت‌های usage/ping همیشه ≤ اکنون)', outboxSince.status === 200 && outboxSince.json?.data?.items?.length === 0, JSON.stringify(outboxSince.json).slice(0, 100));
 
   // ── سفر ج: مرگ موتور و بازگشت (drill خرابی ۱) ──
   console.log('\n[سفر ج] drill خرابی — SIGKILL گروه موتور، بوت دوباره روی همان D1');

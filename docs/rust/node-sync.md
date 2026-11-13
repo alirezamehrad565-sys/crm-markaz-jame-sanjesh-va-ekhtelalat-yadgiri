@@ -108,3 +108,8 @@
 3. **پنل**: دکمهٔ «همگام‌سازی اکنون» حالا pull + استقرار + پوش را در یک دوره انجام می‌دهد و خط وضعیت نتیجهٔ پوش را هم می‌گوید؛ ردیف «آخرین پوش به ابر» اضافه شد.
 
 idempotency نهایی سمت ابر با `(node_code, id)` برقرار است؛ فهرست سفید push (usage_summary/client_errors/health_ping) دست‌نخورده — دادهٔ بالینی هرگز.
+
+## نگاشت صندوق و منبع usage_summary (rust-f12)
+
+- **نگاشت اطلاعیه‌ها به جدول نمایشی**: مایگریشن `0112_synced_announcements` — جدول نمایشی مستقل (id اطلاعیهٔ مرکز / title / body / published_at / active / received_at). درج مستقیم در جدول `announcements` (0008) راه نیست چون `created_by NOT NULL REFERENCES staff(id)` دارد و ردیف سینک‌شدهٔ مرکز چنین FKای ندارد — درج یعنی دروغ FK. ingest اکنون پس از هر نوشتن موفق صندوق برای دامنهٔ `announcements` یک UPSERT نرم در `synced_announcements` می‌زند (خطای نگاشت فقط log.warn؛ صندوق transport log و منبع حقیقت می‌ماند). `GET /api/internal/sync/status` فیلد `synced_announcements` (COUNT) دارد. نمایش در UI اطلاعیه‌ها = گام بعدی.
+- **usage_summary منبع واقعی گرفت**: outbox موتور اکنون هر سه دامنهٔ فهرست سفید push را سرو می‌کند. آیتم `usage_summary` بکت روزانه (id = `usage-<YYYY-MM-DD>`) با شمارنده‌های تجمیعی بی‌PII: `students_active`، `appointments_total`، `appointments_7d`، `day_notes_total`، `audit_events_24h`، `inbox_items_total`. هر شمارنده یک COUNT ساده؛ جدول غایب/خطا/مقدار غیرمتناهی → فقط آن شمارنده حذف؛ payload با `UsageSummaryPayloadSchema` safeParse و ناسازگار → آیتم حذف (حکم م۲۱۰). در نود تجمیع، در ابر فقط عدد.
