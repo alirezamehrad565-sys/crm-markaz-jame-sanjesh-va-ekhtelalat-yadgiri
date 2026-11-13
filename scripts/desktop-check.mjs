@@ -42,11 +42,15 @@ cargoVer === appVersion
   ? ok('نسخهٔ Cargo.toml هم‌گام است')
   : bad(`نسخهٔ Cargo.toml (${cargoVer}) با APP_VERSION (${appVersion}) هم‌گام نیست`);
 
-// ③ قراردادهای فاز ۲ — frontendDist و loopback
+// ③ قراردادهای فاز ۲ + v1.26.0 — صفحهٔ بوت و productName ASCII
 if (conf) {
-  conf.build?.frontendDist === '../../public'
-    ? ok('frontendDist = ../../public (خروجی build:client در ریشه)')
-    : bad('frontendDist باید ../../public باشد (خروجی build:client ریشه است، نه desktop/public)');
+  conf.build?.frontendDist === 'boot-dist'
+    ? ok('frontendDist = boot-dist (صفحهٔ بوت — v1.26.0)')
+    : bad('frontendDist باید boot-dist باشد (صفحهٔ بوت؛ سایت از resources سرو می‌شود)');
+  const prod = typeof conf.productName === 'string' ? conf.productName : '';
+  /^[\x20-\x7E]+$/.test(prod) && prod.length > 0
+    ? ok(`productName ASCII است (${prod}) — مسیر نصب یونیکد workerd را می‌کشد`)
+    : bad(`productName باید ASCII باشد — فعلی: «${prod}»`);
   conf.build?.devUrl === 'http://127.0.0.1:8787'
     ? ok('devUrl = loopback:8787')
     : bad('devUrl باید http://127.0.0.1:8787 باشد');
@@ -57,6 +61,16 @@ if (conf) {
 existsSync(path.join(ROOT, 'public', 'index.html'))
   ? ok('خروجی کلاینت (public/index.html) حاضر است')
   : bad('public/index.html نیست — build:client را اجرا کنید');
+mustExist(path.join(ROOT, 'desktop/src-tauri/boot-dist/index.html'), 'صفحهٔ بوت boot-dist/index.html');
+try {
+  const boot = readFileSync(path.join(ROOT, 'desktop', 'src-tauri', 'boot-dist', 'index.html'), 'utf8');
+  boot.includes('desktop_status') && boot.includes('engine_retry')
+    ? ok('صفحهٔ بوت: قرارداد desktop_status/engine_retry سیم است')
+    : bad('صفحهٔ بوت: فرمان‌های desktop_status/engine_retry در آن نیست');
+  boot.includes('پیام به سازنده')
+    ? ok('صفحهٔ بوت: کنش «پیام به سازنده» هست')
+    : bad('صفحهٔ بوت: کنش «پیام به سازنده» غایب است');
+} catch { bad('صفحهٔ بوت خوانده نشد'); }
 
 // ④ آیکن واقعی (سربرگ ICO: 00 00 01 00) و حجم معنادار
 try {
@@ -105,6 +119,16 @@ try {
   libSrc.includes('d1-seed') && libSrc.includes('auth-secret.txt')
     ? ok('بوت نخست: کپی d1-seed + راز per-install در lib.rs سیم است')
     : bad('بوت نخست (d1-seed/راز per-install) در lib.rs کامل نیست');
+  // v1.26.0 — وضعیت صریح بوت + فرمان‌های صفحهٔ بوت
+  for (const t of ['desktop_status', 'engine_retry', 'open_data_dir']) {
+    libSrc.includes(t) ? ok(`فرمان ${t} در lib.rs سیم است`) : bad(`فرمان ${t} در lib.rs نیست`);
+  }
+  libSrc.includes('EnginePhase::Failed')
+    ? ok('وضعیت صریح Failed{message, log_tail} در lib.rs هست')
+    : bad('وضعیت صریح بوت (EnginePhase::Failed) در lib.rs نیست');
+  existsSync(path.join(T, 'src', 'cf_deploy.rs'))
+    ? ok('cf_deploy.rs (ماژول کلادفلر) موجود است')
+    : bad('cf_deploy.rs نیست — ماژول کلادفلر v1.26.0 غایب است');
   const engineSrc = readFileSync(path.join(T, 'src', 'engine.rs'), 'utf8');
   engineSrc.includes('binaries') && engineSrc.includes('workerd.log')
     ? ok('engine.rs: کاندیداهای سایدکار + لاگ stderr سایدکار سیم است')

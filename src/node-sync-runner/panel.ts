@@ -9,7 +9,17 @@ import { csEl, csButton } from '../cloud-setup/dom-build.js';
 import type { CsDocument, CsElement } from '../cloud-setup/dom-build.js';
 import { createNodeSyncRunner } from './runner.js';
 import type { PushNowOutcome, RunnerFetch, SyncNowOutcome } from './runner.js';
+import { createSyncCoordinator, modeFa, readCoordinatorState, COORD_INTERVAL_MS_DEFAULT } from './coordinator.js';
+import type { SyncCoordinator } from './coordinator.js';
 import type { NodeSyncStore } from '../node-sync-client/client.js';
+
+/** v1.26.0 — هماهنگ‌سازهای زندهٔ همین صفحه — «ویرایش اتصال» با notifyCoordinatorsChanged خبرشان می‌کند */
+const activeCoordinators: SyncCoordinator[] = [];
+
+/** صدا زدن از run.ts پس از ذخیرهٔ اعتبار تازه — خروج از قرنطینه + تلاش فوری */
+export function notifySyncCredentialsChanged(): void {
+  for (const c of activeCoordinators) c.notifyCredentialsChanged();
+}
 
 export interface SyncSectionDeps {
   /** اعتبار از اتصال ابر — در لحظهٔ کلیک خوانده می‌شود (راز در انبار نمی‌نشیند) */
@@ -94,6 +104,25 @@ export function buildSyncSection(doc: CsDocument, deps: SyncSectionDeps): CsElem
   }
   box.appendChild(lastRow);
 
+  // v1.26.0 — وضعیت هماهنگ‌ساز: حالت، تلاش بعدی، خطاهای پیاپی (ماتریس §۴ سند طراحی)
+  const coordSt = readCoordinatorState(deps.progressStorage);
+  const modeRow = csEl(doc, 'div', 'cloud-row');
+  modeRow.appendChild(csEl(doc, 'span', 'cloud-row-label', 'حالت همگام‌سازی خودکار'));
+  modeRow.appendChild(csEl(doc, 'span', 'cloud-row-value', modeFa(coordSt.mode)));
+  box.appendChild(modeRow);
+  if (coordSt.next_attempt_at && coordSt.mode === 'auto') {
+    const nextRow = csEl(doc, 'div', 'cloud-row');
+    nextRow.appendChild(csEl(doc, 'span', 'cloud-row-label', 'تلاش بعدی'));
+    nextRow.appendChild(csEl(doc, 'span', 'cloud-row-value', isoFa(coordSt.next_attempt_at)));
+    box.appendChild(nextRow);
+  }
+  if (coordSt.consecutive_failures > 0) {
+    const failRow = csEl(doc, 'div', 'cloud-row');
+    failRow.appendChild(csEl(doc, 'span', 'cloud-row-label', 'خطاهای پیاپی'));
+    failRow.appendChild(csEl(doc, 'span', 'cloud-row-value', `${coordSt.consecutive_failures}`));
+    box.appendChild(failRow);
+  }
+
   const result = csEl(doc, 'div', 'cloud-setup-status');
   result.style.display = 'none';
 
@@ -111,10 +140,32 @@ export function buildSyncSection(doc: CsDocument, deps: SyncSectionDeps): CsElem
         lastValue.textContent = isoFa(fresh.last_ok_at);
         result.textContent = `${outcomeFa(out)}${pushSuffixFa(push)}`;
         result.style.display = 'block';
+        // وضعیت هماهنگ‌ساز هم با این تلاش دستی به‌روز می‌ماند — runner همان انبار را می‌نویسد
       })();
     })
   );
 
   box.appendChild(result);
+
+  // v1.26.0 — راه‌اندازی هماهنگ‌ساز خودکار (یک‌بار در هر رندر بخش، فقط با اعتبار کامل):
+  // تایمر در همین صفحهٔ میز زنده است؛ اعتبار از getCreds همان لحظه می‌آید و راز انبار نمی‌شود.
+  void (async () => {
+    try {
+      const creds = await deps.getCreds();
+      if (!creds.baseUrl || !creds.nodeCode || !creds.nodeKey) return;
+      const runner = createNodeSyncRunner({ ...creds, progressStorage: deps.progressStorage, tokenProvider: deps.tokenProvider, fetchFn: deps.fetchFn, now: deps.now });
+      const coord = createSyncCoordinator({
+        runner,
+        progressStorage: deps.progressStorage,
+        now: deps.now,
+        intervalMs: COORD_INTERVAL_MS_DEFAULT
+      });
+      coord.start();
+      activeCoordinators.push(coord);
+    } catch {
+      /* نرم — همگام‌سازی خودکار نباید رندر تنظیمات را بشکند */
+    }
+  })();
+
   return box;
 }

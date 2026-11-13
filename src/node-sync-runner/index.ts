@@ -7,5 +7,16 @@
  */
 export { createNodeSyncRunner, SYNC_STATUS_KEY, SYNC_MAX_PAGES_DEFAULT, PUSH_WATERMARK_KEY } from './runner';
 export type { NodeSyncRunner, NodeSyncRunnerOptions, SyncStatusV1, SyncNowOutcome, PushNowOutcome } from './runner';
-export { buildSyncSection } from './panel';
+export { buildSyncSection, notifySyncCredentialsChanged } from './panel';
 export type { SyncSectionDeps } from './panel';
+export {
+  createSyncCoordinator,
+  readCoordinatorState,
+  modeFa,
+  SYNC_COORD_KEY,
+  COORD_INTERVAL_MS_DEFAULT,
+  COORD_BASE_BACKOFF_MS,
+  COORD_MAX_BACKOFF_MS,
+  COORD_INGEST_BACKOFF_MS
+} from './coordinator';
+export type { SyncCoordinator, CoordinatorOptions, CoordinatorState, SyncMode, SyncFailureKind } from './coordinator';

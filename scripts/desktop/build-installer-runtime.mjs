@@ -104,6 +104,7 @@ async function main() {
   const checkOnly = argv.includes('--check');
   const targetIdx = argv.indexOf('--target');
   const target = targetIdx >= 0 ? argv[targetIdx + 1] : 'x86_64-pc-windows-msvc';
+  const centralDir = path.join(P.resourcesEngineDir, 'central'); // v1.26.0 — ورکر مرکزی + اسکیما
 
   if (checkOnly) {
     if (!existsSync(P.manifest)) throw new Error(`manifest نیست — ابتدا مونتاژ را اجرا کنید: ${P.manifest}`);
@@ -112,6 +113,8 @@ async function main() {
       [m.workerd.sidecar, m.workerd.sha256],
       [m.capnpTemplate.path, m.capnpTemplate.sha256],
       [m.d1Seed.sqlite, m.d1Seed.sha256],
+      [m.central.worker, m.central.workerSha256],
+      [m.central.schema, m.central.schemaSha256],
     ];
     for (const [rel, expected] of files) {
       const abs = path.join(ROOT, rel);
@@ -151,7 +154,28 @@ async function main() {
   const template = await buildInstallerCapnpTemplate({ publicDir: P.publicDir });
   writeFileSync(P.capnpTemplate, template);
 
-  // ⑤ ثبت هش‌ها
+  // ⑤ v1.26.0 — دارایی‌های «ساخت سرور مرکزی»: central-worker.js + schema.sql (docs/rust/first-run-and-cloud.md §۳)
+  //   ورکر مرکزی از منبع با esbuild ساخته و کنار اسکیما در resources/engine/central می‌نشیند؛
+  //   cf_deploy.rs هر دو را به حساب کلادفلر کاربر می‌فرستد.
+  rmSync(centralDir, { recursive: true, force: true });
+  mkdirSync(centralDir, { recursive: true });
+  execFileSync('node', [path.join(ROOT, 'scripts', 'build-central-bundle.mjs')], { stdio: 'inherit' });
+  const centralWorkerSrc = path.join(ROOT, 'worker', 'central-bundle.js');
+  const centralWorker = path.join(centralDir, 'central-worker.js');
+  cpSync(centralWorkerSrc, centralWorker);
+  const migDir = path.join(ROOT, 'migrations');
+  const migFiles = readdirSync(migDir).filter((f) => f.endsWith('.sql')).sort();
+  let schema = `-- schema.sql — تجمیع ${migFiles.length} مایگریشن رسمی (ساخته‌شده در build-installer-runtime)\n`;
+  schema += `-- مقصد: پایگاه markaz-central روی حساب کلادفلر کاربر — این فایل را دستی ویرایش نکنید.\n`;
+  for (const f of migFiles) {
+    schema += `\n-- ===== migration: ${f} =====\n` + readFileSync(path.join(migDir, f), 'utf8') + '\n';
+  }
+  const centralSchema = path.join(centralDir, 'schema.sql');
+  writeFileSync(centralSchema, schema, 'utf8');
+  const centralWorkerBytes = statSync(centralWorker).size;
+  const centralSchemaBytes = statSync(centralSchema).size;
+
+  // ⑥ ثبت هش‌ها
   const manifest = {
     generatedAt: new Date().toISOString(),
     target,
@@ -172,12 +196,23 @@ async function main() {
       seededUsers: seed.seededUsers,
     },
     public: { dir: path.relative(ROOT, P.publicDir), files: pub.files, bytes: pub.bytes },
+    central: {
+      dir: path.relative(ROOT, centralDir),
+      worker: path.relative(ROOT, centralWorker),
+      workerSha256: sha256(centralWorker),
+      workerBytes: centralWorkerBytes,
+      schema: path.relative(ROOT, centralSchema),
+      schemaSha256: sha256(centralSchema),
+      schemaBytes: centralSchemaBytes,
+      migrations: migFiles.length,
+    },
   };
   writeFileSync(P.manifest, JSON.stringify(manifest, null, 2) + '\n');
   console.log(`[runtime] سایدکار: ${manifest.workerd.sidecar} — sha256=${manifest.workerd.sha256.slice(0, 16)}… (${bytes}B)`);
   console.log(`[runtime] قالب capnp: ${manifest.capnpTemplate.path} (${manifest.capnpTemplate.bytes}B)`);
   console.log(`[runtime] d1-seed: ${seed.appliedCount}/${seed.total} مایگریشن + ${seed.seededUsers} کاربر نمایشی`);
   console.log(`[runtime] public: ${pub.files} فایل (${pub.bytes}B) — manifest: ${MANIFEST_NAME} ✓`);
+  console.log(`[runtime] central: worker (${centralWorkerBytes}B) + schema (${migFiles.length} مایگریشن، ${centralSchemaBytes}B) ✓`);
 }
 
 main().catch((err) => {

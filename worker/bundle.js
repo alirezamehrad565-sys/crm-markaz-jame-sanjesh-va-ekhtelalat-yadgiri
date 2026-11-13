@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.75";
+var APP_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -72538,6 +72538,171 @@ function registerLogoutRoute(app, deps) {
 }
 __name(registerLogoutRoute, "registerLogoutRoute");
 
+// src/core/db/client.ts
+function createDb(d1, logger) {
+  const base = {
+    async query(sql, params = []) {
+      const stmt = d1.prepare(sql).bind(...params);
+      const res = await stmt.all();
+      return res.results ?? [];
+    },
+    async queryOne(sql, params = []) {
+      const rows = await base.query(sql, params);
+      return rows.length > 0 ? rows[0] : null;
+    },
+    async execute(sql, params = []) {
+      return d1.prepare(sql).bind(...params).run();
+    },
+    prepare(sql, params = []) {
+      return d1.prepare(sql).bind(...params);
+    },
+    async batch(statements) {
+      if (statements.length === 0) return [];
+      return d1.batch(statements);
+    },
+    async transaction(fn) {
+      const statements = [];
+      const tx = {
+        query: /* @__PURE__ */ __name((sql, params = []) => base.query(sql, params), "query"),
+        queryOne: /* @__PURE__ */ __name((sql, params = []) => base.queryOne(sql, params), "queryOne"),
+        prepare: /* @__PURE__ */ __name((sql, params = []) => base.prepare(sql, params), "prepare"),
+        execute: /* @__PURE__ */ __name((sql, params = []) => {
+          statements.push(d1.prepare(sql).bind(...params));
+          return Promise.resolve({ success: true, meta: {} });
+        }, "execute"),
+        batch: /* @__PURE__ */ __name((stmts) => {
+          statements.push(...stmts);
+          return Promise.resolve([]);
+        }, "batch"),
+        transaction: /* @__PURE__ */ __name((fn2) => fn2(tx), "transaction")
+      };
+      const result = await fn(tx);
+      if (statements.length > 0) {
+        try {
+          await d1.batch(statements);
+        } catch (err) {
+          logger?.error("transaction.batch.failed", {
+            statementCount: statements.length,
+            error: err instanceof Error ? err.message : "unknown"
+          });
+          throw err;
+        }
+      }
+      return result;
+    }
+  };
+  return base;
+}
+__name(createDb, "createDb");
+
+// src/application/setup/routes.ts
+var DEMO_STAFF_IDS = [
+  "30000000-0000-4000-8000-000000000301",
+  // manager
+  "30000000-0000-4000-8000-000000000302",
+  // secretary
+  "30000000-0000-4000-8000-000000000303"
+  // therapist
+];
+var SETUP_DONE_KEY = "setup_completed";
+async function readSetupFlag(db, key) {
+  const row = await db.queryOne(
+    `SELECT value FROM settings WHERE key = ? LIMIT 1`,
+    [key]
+  );
+  if (!row) return false;
+  return String(row.value).trim() === "1";
+}
+__name(readSetupFlag, "readSetupFlag");
+async function getSetupStatus(db) {
+  let completed2 = false;
+  try {
+    completed2 = await readSetupFlag(db, SETUP_DONE_KEY);
+  } catch {
+    completed2 = false;
+  }
+  if (completed2) return { initialized: true, demo_active: false };
+  let realStaffActive = 0;
+  try {
+    const placeholders = DEMO_STAFF_IDS.map(() => "?").join(",");
+    const row = await db.queryOne(
+      `SELECT COUNT(*) AS n FROM staff WHERE active = 1 AND id NOT IN (${placeholders})`,
+      [...DEMO_STAFF_IDS]
+    );
+    realStaffActive = row?.n ?? 0;
+  } catch {
+    realStaffActive = 0;
+  }
+  return { initialized: realStaffActive > 0, demo_active: realStaffActive === 0 };
+}
+__name(getSetupStatus, "getSetupStatus");
+async function completeSetup(deps, closeDemo) {
+  const { db, audit, logger } = deps;
+  if (await readSetupFlag(db, SETUP_DONE_KEY)) {
+    throw new ConflictError("\u0631\u0627\u0647\u200C\u0627\u0646\u062F\u0627\u0632\u06CC \u0646\u062E\u0633\u062A \u0642\u0628\u0644\u0627\u064B \u06A9\u0627\u0645\u0644 \u0634\u062F\u0647 \u0627\u0633\u062A");
+  }
+  let locked = 0;
+  if (closeDemo) {
+    const randomHash = await hashPassword(crypto.randomUUID() + ":" + crypto.randomUUID());
+    for (const id of DEMO_STAFF_IDS) {
+      const res = await db.query(
+        `UPDATE staff SET active = 0, password_hash = ?, updated_at = ? WHERE id = ? AND active = 1`,
+        [randomHash, (/* @__PURE__ */ new Date()).toISOString(), id]
+      );
+      const row = await db.queryOne(`SELECT id FROM staff WHERE id = ?`, [id]);
+      if (row) {
+        locked += 1;
+        await audit.log({
+          actorId: row.id,
+          action: "setup.demo_locked",
+          resourceType: "staff",
+          resourceId: id,
+          changes: { active: { from: 1, to: 0 } }
+        });
+      }
+      void res;
+    }
+  }
+  await db.query(
+    `INSERT INTO settings (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [SETUP_DONE_KEY, "1"]
+  );
+  await audit.log({
+    actorId: "setup",
+    action: "setup.completed",
+    resourceType: "settings",
+    resourceId: SETUP_DONE_KEY,
+    changes: { close_demo: { from: null, to: closeDemo } }
+  });
+  logger.info("setup.completed", { close_demo: closeDemo, demo_locked: locked });
+  return { demo_locked: locked };
+}
+__name(completeSetup, "completeSetup");
+function registerSetupStatusRoutes(app, deps) {
+  app.get("/api/setup/status", async (c) => {
+    try {
+      const st = await getSetupStatus(createDb(c.env.DB));
+      return c.json({ data: st }, 200);
+    } catch (err) {
+      deps.logger.child("setup").warn("setup.status_failed", {
+        error: err instanceof Error ? err.message : String(err)
+      });
+      return c.json({ data: { initialized: true, demo_active: false } }, 200);
+    }
+  });
+}
+__name(registerSetupStatusRoutes, "registerSetupStatusRoutes");
+var CompleteSchema = external_exports.object({ close_demo: external_exports.boolean().optional().default(true) });
+function registerSetupCompleteRoutes(app, deps) {
+  app.post("/api/setup/complete", async (c) => {
+    const body = CompleteSchema.parse(await c.req.json().catch(() => ({})));
+    const out = await completeSetup(deps, body.close_demo);
+    return c.json({ data: out }, 200);
+  });
+}
+__name(registerSetupCompleteRoutes, "registerSetupCompleteRoutes");
+
 // src/node-sync/service.ts
 var NODE_PULL_DOMAINS = ["announcements", "packages", "library"];
 var NODE_PUSH_DOMAINS = ["usage_summary", "client_errors", "health_ping"];
@@ -73742,10 +73907,12 @@ function createApp(deps) {
   });
   registerGamesPublicRoutes(app, services.games);
   registerAuthRoutes(app, { audit: services.audit, logger: services.logger });
+  registerSetupStatusRoutes(app, { logger: services.logger });
   app.route("/node", createNodeSyncApp({ db: services.db, audit: services.audit, logger: services.logger }));
   app.use("/api/*", authMiddleware());
   app.use("/api/*", supervisorGate(services.audit));
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
+  registerSetupCompleteRoutes(app, { db: services.db, audit: services.audit, logger: services.logger });
   registerInternalSyncRoutes(app, { db: services.db, logger: services.logger });
   app.get("/api/me", (c) => c.json({ data: c.get("authContext") }, 200));
   registerRoutes(app, services.appointments);
@@ -73869,63 +74036,6 @@ function createApp(deps) {
   return app;
 }
 __name(createApp, "createApp");
-
-// src/core/db/client.ts
-function createDb(d1, logger) {
-  const base = {
-    async query(sql, params = []) {
-      const stmt = d1.prepare(sql).bind(...params);
-      const res = await stmt.all();
-      return res.results ?? [];
-    },
-    async queryOne(sql, params = []) {
-      const rows = await base.query(sql, params);
-      return rows.length > 0 ? rows[0] : null;
-    },
-    async execute(sql, params = []) {
-      return d1.prepare(sql).bind(...params).run();
-    },
-    prepare(sql, params = []) {
-      return d1.prepare(sql).bind(...params);
-    },
-    async batch(statements) {
-      if (statements.length === 0) return [];
-      return d1.batch(statements);
-    },
-    async transaction(fn) {
-      const statements = [];
-      const tx = {
-        query: /* @__PURE__ */ __name((sql, params = []) => base.query(sql, params), "query"),
-        queryOne: /* @__PURE__ */ __name((sql, params = []) => base.queryOne(sql, params), "queryOne"),
-        prepare: /* @__PURE__ */ __name((sql, params = []) => base.prepare(sql, params), "prepare"),
-        execute: /* @__PURE__ */ __name((sql, params = []) => {
-          statements.push(d1.prepare(sql).bind(...params));
-          return Promise.resolve({ success: true, meta: {} });
-        }, "execute"),
-        batch: /* @__PURE__ */ __name((stmts) => {
-          statements.push(...stmts);
-          return Promise.resolve([]);
-        }, "batch"),
-        transaction: /* @__PURE__ */ __name((fn2) => fn2(tx), "transaction")
-      };
-      const result = await fn(tx);
-      if (statements.length > 0) {
-        try {
-          await d1.batch(statements);
-        } catch (err) {
-          logger?.error("transaction.batch.failed", {
-            statementCount: statements.length,
-            error: err instanceof Error ? err.message : "unknown"
-          });
-          throw err;
-        }
-      }
-      return result;
-    }
-  };
-  return base;
-}
-__name(createDb, "createDb");
 
 // src/core/logger/logger.ts
 var LEVEL_WEIGHT = { debug: 10, info: 20, warn: 30, error: 40 };
