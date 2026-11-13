@@ -89,7 +89,8 @@ export function startNodeSyncBootCatchUp(deps: BootCatchUpDeps): { started: bool
             batches_last_run: 0,
             items_pushed_last_run: 0,
             last_error_kind: 'network',
-            last_error_at: nowFn().toISOString()
+            last_error_at: nowFn().toISOString(),
+            last_catchup: null
           } satisfies CatchUpStateV1)
         );
       } catch {

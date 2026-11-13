@@ -2,7 +2,9 @@
 //! طراحی: docs/rust/first-run-and-cloud.md §۳
 //!
 //! ورودی: توکن API کلادفلر (فقط به api.cloudflare.com می‌رود؛ هرگز لاگ/ذخیره نمی‌شود).
-//! گام‌ها: verify → حساب → D1 (ساخت/یافتن markaz-central) → اعمال schema.sql قطعه‌قطعه →
+//! گام‌ها: verify → حساب → D1 (ساخت/یافتن markaz-central) → جدول پیگیری __deploy_applied →
+//! اعمال schema.sql فایل‌به‌فایل با برنامهٔ deploy_plan (شکست میانه + تلاش دوباره، فایل‌های
+//! اعمال‌شده را Skip می‌کند — رفع CEN-3: خطای duplicate column name روی ALTERهای ساده) →
 //! آپلود ماژول central-worker.js با bindings (DB/AUTH_SECRET/NODE_SETUP_TOKEN) →
 //! فعال‌سازی workers.dev → انتظار /healthz.
 //! خروجی ساختاریافته: {ok, worker_url, admin_setup_token, auth_secret, steps[]} —
@@ -11,6 +13,10 @@
 //! دارایی‌ها از رانتایم نصاب خوانده می‌شوند: resources/engine/central/{central-worker.js, schema.sql}
 //! (در build-installer-runtime.mjs ساخته می‌شوند — §۶ سند طراحی).
 
+use crate::deploy_plan::{
+    plan_deploy, split_migration_files, unix_now, utc_iso_from_unix, AppliedRecord, DeployAction,
+    DEPLOY_APPLIED_DDL,
+};
 use serde_json::{json, Value};
 use tauri::Manager;
 
@@ -252,7 +258,7 @@ pub async fn cloudflare_deploy(
         }
     };
 
-    // — گام ۴: اسکیما —
+    // — گام ۴: اسکیما — فایل‌به‌فایل با پیگیری اعمال (رفع CEN-3) —
     let app_dir = app
         .path()
         .resource_dir()
@@ -266,23 +272,91 @@ pub async fn cloudflare_deploy(
         Ok(_) => return fail(&steps, format!("schema.sql خالی است: {}", schema_path.display())),
         Err(e) => return fail(&steps, format!("خواندن schema.sql ({}) ناموفق: {e}", schema_path.display())),
     };
-    let chunks = chunk_statements(split_statements(&schema_sql));
-    let total = chunks.len();
-    for (i, chunk) in chunks.iter().enumerate() {
-        let res = cf_call(
+
+    // جدول پیگیری — زیرساختِ ابزار deploy (نه migrations/)؛ از همان مسیر query همان پایگاه
+    let created = d1_query(&client, &token, &account_id, &db_id, json!({ "sql": DEPLOY_APPLIED_DDL })).await;
+    if let Err(e) = created {
+        steps.push(Step { name: "deploy_tracking", ok: false, detail: e.clone() });
+        return fail(&steps, format!("ساخت جدول پیگیری اعمال مایگریشن ناموفق: {e}"));
+    }
+    steps.push(Step { name: "deploy_tracking", ok: true, detail: "جدول پیگیری __deploy_applied حاضر است".into() });
+
+    // رکوردهای قبلاً اعمال‌شده → برنامهٔ قطعی اعمال (Skip / Fresh / Reapply / Reset)
+    let applied = load_applied_records(&client, &token, &account_id, &db_id).await;
+    let applied = match applied {
+        Ok(v) => v,
+        Err(e) => {
+            steps.push(Step { name: "deploy_tracking", ok: false, detail: e.clone() });
+            return fail(&steps, format!("خواندن رکوردهای اعمال‌شده ناموفق: {e}"));
+        }
+    };
+    let files = split_migration_files(&schema_sql);
+    if files.is_empty() {
+        return fail(&steps, format!("هیچ مایگریشنی در schema.sql یافت نشد: {}", schema_path.display()));
+    }
+    let plan = plan_deploy(&applied, &files);
+    let total_files = plan.len();
+    let skipped = plan.iter().filter(|(_, a)| *a == DeployAction::Skip).count();
+    let to_apply = total_files - skipped;
+    steps.push(Step {
+        name: "deploy_tracking",
+        ok: true,
+        detail: format!("{skipped} فایل قبلاً اعمال شده — {to_apply} فایل در نوبت اعمال"),
+    });
+    let mut applied_now = 0usize;
+    for (j, (name, action)) in plan.iter().enumerate() {
+        if *action == DeployAction::Skip {
+            continue;
+        }
+        // برنامه از همین فهرست ساخته شده — فایل همیشه پیدا می‌شود
+        let Some(file) = files.iter().find(|f| &f.name == name) else { continue };
+        applied_now += 1;
+        // هر فایل با همان جداکننده/قطعه‌بند قبلی اعمال می‌شود — «قطعهٔ i/n» حفظ شده است
+        let chunks = chunk_statements(split_statements(&file.sql));
+        let total = chunks.len();
+        for (i, chunk) in chunks.iter().enumerate() {
+            let res = d1_query(&client, &token, &account_id, &db_id, json!({ "sql": chunk })).await;
+            if let Err(e) = res {
+                steps.push(Step {
+                    name: "schema",
+                    ok: false,
+                    detail: format!("فایل {}/{} ({}) — قطعهٔ {}/{}: {e}", j + 1, total_files, name, i + 1, total),
+                });
+                return fail(&steps, format!("اعمال «{name}» در قطعهٔ {}/{} شکست خورد: {e}", i + 1, total));
+            }
+            steps.push(Step {
+                name: "schema",
+                ok: true,
+                detail: format!("فایل {}/{} ({}) — قطعهٔ {}/{} اعمال شد", j + 1, total_files, name, i + 1, total),
+            });
+        }
+        // ثبت رکورد فقط پس از موفقیت کامل فایل — تلاش دوبارهٔ بعدی همین فایل را Skip می‌کند
+        let record = AppliedRecord {
+            name: file.name.clone(),
+            checksum: Some(file.checksum.clone()),
+            applied_at: utc_iso_from_unix(unix_now()),
+        };
+        let recorded = d1_query(
             &client,
             &token,
-            reqwest::Method::POST,
-            &format!("{CF_API}/accounts/{account_id}/d1/database/{db_id}/query"),
-            Some(json!({ "sql": chunk })),
+            &account_id,
+            &db_id,
+            json!({
+                "sql": "INSERT INTO __deploy_applied (name, checksum, applied_at) VALUES (?1, ?2, ?3) ON CONFLICT(name) DO UPDATE SET checksum = excluded.checksum, applied_at = excluded.applied_at",
+                "params": [record.name, record.checksum.clone().unwrap_or_default(), record.applied_at]
+            }),
         )
         .await;
-        if let Err(e) = res {
-            steps.push(Step { name: "schema", ok: false, detail: format!("قطعه {}/{}: {e}", i + 1, total) });
-            return fail(&steps, format!("اعمال اسکیما در قطعهٔ {}/{} شکست خورد: {e}", i + 1, total));
+        if let Err(e) = recorded {
+            steps.push(Step { name: "deploy_tracking", ok: false, detail: e.clone() });
+            return fail(&steps, format!("ثبت رکورد اعمال «{}» ناموفق: {e}", file.name));
         }
-        steps.push(Step { name: "schema", ok: true, detail: format!("قطعه {}/{} اعمال شد", i + 1, total) });
     }
+    steps.push(Step {
+        name: "schema",
+        ok: true,
+        detail: format!("{applied_now} فایل این‌بار اعمال شد و {skipped} فایل از قبل بود"),
+    });
 
     // — گام ۵: آپلود ورکر —
     let worker_path = central_dir.join("central-worker.js");
@@ -393,6 +467,62 @@ pub async fn cloudflare_deploy(
         "auth_secret": auth_secret,
         "steps": steps_value(&steps)
     })
+}
+
+/// نقطهٔ پایانی query پایگاه D1 — همهٔ خواندن/نوشتنِ این ماژول از همین مسیر cf_call می‌رود
+async fn d1_query(
+    client: &reqwest::Client,
+    token: &str,
+    account_id: &str,
+    db_id: &str,
+    body: Value,
+) -> Result<Value, String> {
+    cf_call(
+        client,
+        token,
+        reqwest::Method::POST,
+        &format!("{CF_API}/accounts/{account_id}/d1/database/{db_id}/query"),
+        Some(body),
+    )
+    .await
+}
+
+/// خواندن رکوردهای __deploy_applied — پاسخ /query آرایه‌ای از مجموعه‌نتایج است؛
+/// checksum تهی = رکورد قدیمی/بدون اثر انگشت → در برنامه NeedsReset می‌شود
+async fn load_applied_records(
+    client: &reqwest::Client,
+    token: &str,
+    account_id: &str,
+    db_id: &str,
+) -> Result<Vec<AppliedRecord>, String> {
+    let res = d1_query(
+        client,
+        token,
+        account_id,
+        db_id,
+        json!({ "sql": "SELECT name, checksum, applied_at FROM __deploy_applied ORDER BY name" }),
+    )
+    .await?;
+    let rows = res
+        .as_array()
+        .and_then(|sets| sets.first())
+        .and_then(|set| set.get("results"))
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    Ok(rows
+        .iter()
+        .filter_map(|row| {
+            let name = row.get("name")?.as_str()?.to_string();
+            let checksum = row.get("checksum").and_then(|c| c.as_str()).unwrap_or("");
+            let applied_at = row.get("applied_at").and_then(|t| t.as_str()).unwrap_or("").to_string();
+            Some(AppliedRecord {
+                name,
+                checksum: if checksum.is_empty() { None } else { Some(checksum.to_string()) },
+                applied_at,
+            })
+        })
+        .collect())
 }
 
 /// انتخاب حساب: صریح ← تک‌حساب ← خطا با فهرست نام‌ها

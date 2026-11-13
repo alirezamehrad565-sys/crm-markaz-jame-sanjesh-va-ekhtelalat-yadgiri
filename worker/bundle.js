@@ -1824,6 +1824,7 @@ var Hono3 = class extends Hono {
 
 // src/core/version.ts
 var APP_VERSION = "1.26.0";
+var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -73176,10 +73177,20 @@ function createNodeSyncApp(deps) {
     }
     const parsedLimit = Number.parseInt(c.req.query("limit") ?? "", 10);
     const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, NODE_PULL_MAX_LIMIT) : NODE_PULL_DEFAULT_LIMIT;
+    const at = now().toISOString();
     const page2 = await pullNodePage(db, { domains, cursor, limit });
     fireAndForget(c, stampNodePull(db, node2.node_code, now()).catch(() => void 0));
     return c.json(
-      { data: { items: page2.items, next_cursor: page2.next_cursor, server_time: now().toISOString() } },
+      {
+        data: {
+          items: page2.items,
+          next_cursor: page2.next_cursor,
+          server_time: at,
+          server_ts: at,
+          center_version: APP_VERSION,
+          min_node_version: NODE_MIN_VERSION
+        }
+      },
       200
     );
   });
@@ -73188,10 +73199,18 @@ function createNodeSyncApp(deps) {
     if (!node2) return authFailed(c);
     const catchUpDeclared = c.req.header(NODE_PUSH_CATCHUP_HEADER) === "1";
     const at = now();
+    const handshake = {
+      server_ts: at.toISOString(),
+      center_version: APP_VERSION,
+      min_node_version: NODE_MIN_VERSION
+    };
     if (!catchUpDeclared && !shouldAttemptNodePush(node2.last_push_attempt_at, at, minIntervalMs)) {
       const lastT = Date.parse(node2.last_push_attempt_at ?? "");
       const retryAfterS = Number.isNaN(lastT) ? null : Math.max(0, Math.ceil((lastT + minIntervalMs - at.getTime()) / 1e3));
-      return c.json({ data: { accepted: 0, duplicates: 0, throttled: true, retry_after_s: retryAfterS } }, 200);
+      return c.json(
+        { data: { accepted: 0, duplicates: 0, throttled: true, retry_after_s: retryAfterS, ...handshake } },
+        200
+      );
     }
     const contentLength = Number.parseInt(c.req.header("content-length") ?? "0", 10) || 0;
     if (contentLength > NODE_PUSH_BODY_MAX_BYTES) {
@@ -73215,7 +73234,10 @@ function createNodeSyncApp(deps) {
     const outcome = await pushNodeEvents(db, node2.node_code, items);
     await stampNodePushOk(db, node2.node_code, at).catch(() => void 0);
     log.info("node_sync.push", { node: node2.node_code, accepted: outcome.accepted, duplicates: outcome.duplicates });
-    return c.json({ data: { accepted: outcome.accepted, duplicates: outcome.duplicates, throttled: false } }, 200);
+    return c.json(
+      { data: { accepted: outcome.accepted, duplicates: outcome.duplicates, throttled: false, ...handshake } },
+      200
+    );
   });
   app.post("/register", authMiddleware(), requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);
@@ -73546,6 +73568,19 @@ var NodeSyncStatusMirrorSchema = external_exports.object({
   last_error_at: external_exports.iso.datetime().nullable(),
   push_watermark: external_exports.iso.datetime().nullable(),
   client_version: external_exports.string().max(50).nullable(),
+  // ─── موج ۱ — هندشیک نسخه (۱-۴)، ساعت مرجع مرکز (۱-۳)، خلاصهٔ جبران کامل ───
+  version: external_exports.object({
+    client: external_exports.string().min(1).max(50),
+    center: external_exports.string().min(1).max(50),
+    compatible: external_exports.boolean()
+  }).nullable().optional(),
+  clock_drift_minutes: external_exports.number().int().min(0).max(525600).nullable().optional(),
+  clock_warning: external_exports.boolean().optional(),
+  last_catchup: external_exports.object({
+    at: external_exports.iso.datetime(),
+    pulled: external_exports.number().int().min(0),
+    pushed: external_exports.number().int().min(0)
+  }).nullable().optional(),
   updated_at: external_exports.iso.datetime()
 });
 function requireDesktopEngine2(c) {
@@ -73635,8 +73670,11 @@ function registerNodeSyncStatusRoute(app, deps) {
       last_push_ok_at: mirror?.last_push_ok_at ?? null,
       last_pull_ok_at: mirror?.last_pull_ok_at ?? null,
       last_error: errorKind && errorKind !== "none" && mirror?.last_error_at ? { kind: errorKind, at: mirror.last_error_at } : null,
-      version: null
-      // قرارداد فعلی نسخهٔ مرکز را در پاسخ pull حمل نمی‌کند — بند ۴ بریف
+      // ─── موج ۱ — آینهٔ غایب/قدیمی = پیش‌فرض نرم (اسنپ‌شات تازه از runner می‌آید) ───
+      version: mirror?.version ?? null,
+      clock_drift_minutes: mirror?.clock_drift_minutes ?? null,
+      clock_warning: mirror?.clock_warning === true,
+      last_catchup: mirror?.last_catchup ?? null
     };
     return c.json(payload, 200);
   });

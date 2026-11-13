@@ -10,13 +10,15 @@
 //! هم‌گامی فایل‌ها را می‌گیرد و کامپایل واقعی در خط CI با Rust stable انجام می‌شود.
 
 mod cf_deploy;
+mod deploy_plan;
 mod engine;
+mod engine_watchdog;
 mod secure_store;
 
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 /// وضعیت موتور محلی — نگه‌داری سایدکار تا خروج اپ (Drop = خاموشی تمیز)
 pub struct LocalEngineSlot(Mutex<Option<engine::LocalEngine>>);
@@ -110,11 +112,15 @@ fn read_log_tail(data_dir: &Path) -> String {
 /// سه توکن (data dir / public داخل نصاب / راز per-install)، کپی d1-seed در بوت نخست، و
 /// start سایدکار. Rust هیچ دانشی از ساختار capnp ندارد — فقط جایگزینی رشته و نوشتن فایل.
 fn boot_engine(app: &tauri::AppHandle) -> Result<engine::LocalEngine, String> {
+    // رویدادهای نگهبان موتور → رخداد تائوری برای پوسته (engine:restarting / engine:restored /
+    // engine:down) — نسل بوت برای نادیده گرفتن نوشتهٔ کهنه پس از engine_retry ضبط می‌شود
+    let gen = app.state::<AppState>().generation.load(Ordering::SeqCst);
+    let sink = engine_event_sink(app.clone(), gen);
     // توسعه: با CENTER_ENGINE_CONFIG کانفیگ از پیش تولیدشده (engine.mjs) مصرف می‌شود
     if let Ok(dev_config) = std::env::var("CENTER_ENGINE_CONFIG") {
         let p = std::path::PathBuf::from(dev_config);
         if p.is_file() {
-            return engine::LocalEngine::start(&p);
+            return engine::LocalEngine::start(&p, sink);
         }
     }
 
@@ -153,7 +159,49 @@ fn boot_engine(app: &tauri::AppHandle) -> Result<engine::LocalEngine, String> {
         .replace("__CENTER_AUTH_SECRET__", &secret);
     let capnp_path = data_dir.join("workerd.capnp");
     std::fs::write(&capnp_path, final_capnp).map_err(|e| format!("نوشتن capnp: {e}"))?;
-    engine::LocalEngine::start(&capnp_path)
+    engine::LocalEngine::start(&capnp_path, sink)
+}
+
+/// گیرندهٔ رویدادهای نگهبان موتور → رخداد تائوری برای پوسته + وضعیت صریح پس از تسلیم.
+/// نام رخدادها: engine:restarting {attempt, delay_ms} / engine:restored {port} /
+/// engine:down {attempts} — پس از engine:down فاز به Failed می‌رود (وضعیت صریح بوت) و
+/// «تلاش دوباره» همان engine_retry است. اگر نسل بوت عوض شده باشد، نوشتن فاز نادیده گرفته
+/// می‌شود تا نتیجهٔ کهنهٔ نگهبان، بوت تازه را خراب نکند.
+fn engine_event_sink(app: tauri::AppHandle, gen: u32) -> engine::EngineEventSink {
+    std::sync::Arc::new(move |ev| {
+        let stale = app.state::<AppState>().generation.load(Ordering::SeqCst) != gen;
+        match &ev {
+            engine_watchdog::WatchdogEvent::Restarting { attempt, delay_ms } => {
+                let _ = app.emit(
+                    "engine:restarting",
+                    serde_json::json!({ "attempt": attempt, "delay_ms": delay_ms }),
+                );
+            }
+            engine_watchdog::WatchdogEvent::Restored => {
+                let port = app.state::<AppState>().phase.lock().ok().and_then(|g| match &*g {
+                    EnginePhase::Ready { port, .. } => Some(*port),
+                    _ => None,
+                });
+                let _ = app.emit("engine:restored", serde_json::json!({ "port": port }));
+            }
+            engine_watchdog::WatchdogEvent::Down { attempts } => {
+                let _ = app.emit("engine:down", serde_json::json!({ "attempts": attempts }));
+                if !stale {
+                    let data_dir = app
+                        .path()
+                        .app_data_dir()
+                        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+                    let tail = read_log_tail(&data_dir);
+                    app.state::<AppState>().set_phase(EnginePhase::Failed {
+                        message: format!(
+                            "موتور محلی پس از {attempts} تلاش خودکار دوباره بسته شد — «تلاش دوباره» را بزنید."
+                        ),
+                        log_tail: tail,
+                    });
+                }
+            }
+        }
+    })
 }
 
 /// v1.26.0 — فرمان وضعیت برای صفحهٔ بوت (هم‌قرارداد boot-dist/index.html)

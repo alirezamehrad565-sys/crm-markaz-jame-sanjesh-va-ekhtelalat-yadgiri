@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { createTestApp, asRole, MANAGER_ID, type TestApp } from '../../test/harness';
 import { createAuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
+import { APP_VERSION, NODE_MIN_VERSION } from '@core/version'; // موج ۱ — هندشیک نسخه (۱-۴)
 import {
   createNodeSyncApp,
   NODE_PUSH_BODY_MAX_BYTES,
@@ -361,6 +362,57 @@ describe('node-sync: pull سفیدفهرستی و پاکت', () => {
     const d2 = (page2.body as { data: { items: Array<{ id: string }>; next_cursor: string | null } }).data;
     expect(d2.items.map((i) => i.id)).toEqual(['ns-stable-3', 'ns-stable-4', 'ns-stable-new']);
     expect(d2.next_cursor).toBeNull();
+  });
+});
+
+// ───────────────────────── موج ۱ — هندشیک نسخه و ساعت مرجع مرکز (۱-۳/۱-۴) ─────────────────────────
+
+describe('node-sync: هندشیک نسخه و ساعت مرجع مرکز در پاسخ‌های موفق (موج ۱)', () => {
+  it('pull موفق → center_version/min_node_version/server_ts کنار server_time قدیمی در پاکت است', async () => {
+    const A = createTestApp();
+    const reg = await registerNode(A);
+    const res = await nodeReq(A, 'GET', '/node/pull?domains=announcements', nodeHeaders(reg.code, reg.key));
+    expect(res.status).toBe(200);
+    const data = (res.body as { data: Record<string, unknown> }).data;
+    expect(data.center_version).toBe(APP_VERSION); // نسخهٔ خود مرکز (یک شماره، یک حقیقت: src/core/version.ts)
+    expect(data.min_node_version).toBe(NODE_MIN_VERSION); // حداقل نسخهٔ نود اعلامی مرکز — همان کد receiving-سر
+    expect(typeof data.server_ts).toBe('string');
+    expect(Number.isNaN(Date.parse(data.server_ts as string))).toBe(false); // ISO UTC
+    expect(data.server_time).toBe(data.server_ts); // قرارداد قبلی با همان مقدار — سازگاری عقب
+  });
+
+  it('push موفق → همان پاکت هندشیک در پاسخ ۲۰۰؛ پاسخ صامت زیر گات هم حامل آن است', async () => {
+    const A = createTestApp();
+    const reg = await registerNode(A);
+    await rewindPushSeal(A, reg.code); // عبور از گات ۱۵دقیقه‌ای برای push اول
+
+    const ok = await nodeReq(
+      A,
+      'POST',
+      '/node/push',
+      nodeHeaders(reg.code, reg.key),
+      { items: [{ id: 'hs-ping-1', domain: 'health_ping', payload: { ok: true } }] }
+    );
+    expect(ok.status).toBe(200);
+    const okData = (ok.body as { data: Record<string, unknown> }).data;
+    expect(okData.center_version).toBe(APP_VERSION);
+    expect(okData.min_node_version).toBe(NODE_MIN_VERSION);
+    expect(Number.isNaN(Date.parse(okData.server_ts as string))).toBe(false);
+
+    // push دوم فوری — زیر گات؛ پاسخ صامت هم باید هندشیک را حمل کند تا نودِ گات‌خورده هم نسخه را ببیند
+    const gated = await nodeReq(
+      A,
+      'POST',
+      '/node/push',
+      nodeHeaders(reg.code, reg.key),
+      { items: [{ id: 'hs-ping-2', domain: 'health_ping', payload: { ok: true } }] }
+    );
+    expect(gated.status).toBe(200);
+    const gatedData = (gated.body as { data: Record<string, unknown> }).data;
+    expect(gatedData.throttled).toBe(true);
+    expect(gatedData.center_version).toBe(APP_VERSION);
+    expect(gatedData.min_node_version).toBe(NODE_MIN_VERSION);
+    expect(Number.isNaN(Date.parse(gatedData.server_ts as string))).toBe(false);
   });
 });
 

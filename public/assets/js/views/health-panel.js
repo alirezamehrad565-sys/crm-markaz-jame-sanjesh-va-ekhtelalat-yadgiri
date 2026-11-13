@@ -5,6 +5,9 @@
 // ف۶ — بخش «وضعیت هم‌گامی» افزوده شد: GET /api/node-sync/status فقط‌مدیر — حالت جبرانی/خارج از خط/خطا/انتظار
 //       با نگاشت رنگ (syncStateView) + شمارِ رکوردهای محفوظ در انتظار ارسال + توقفِ نسخهٔ ناسازگار؛
 //       خرابیِ درگاه فقط همین کارت را degraded می‌کند («وضعیت هم‌گامی نامشخص») و با همان بازخوانی ۶۰ثانیه‌ای پنل تازه می‌شود
+// موج ۱ — قرارداد v2: هشدار زرد اختلاف ساعت با مرکز (clock_warning) · خط سبز «هم‌گام شد؛
+//       N رکورد رسید» در پنجرهٔ ۱۰دقیقه‌ای پس از جبران (last_catchup) · ردیف قرمز ناسازگاری
+//       نسخهٔ یکپارچه با شماره‌های هندشیک (version.compatible=false یا mode=paused_version)
 import { api } from '../api.js';
 import { el, icon, emptyState, skeletonState } from '../ui.js';
 import { fa, formatJalaliDateTime } from '../format.js';
@@ -72,6 +75,69 @@ export function syncErrorKindView(kind) {
   return SYNC_ERROR_KIND_VIEWS[kind] ?? 'خطای نامشخص';
 }
 
+/* ── موج ۱ — نگاشت‌های تازهٔ قرارداد v2 (همه تابع خالص، بی‌DOM — الگوی syncStateView) ──
+   قرارداد GET /api/node-sync/status نسخهٔ ۲: version/clock_drift_minutes/clock_warning/last_catchup */
+
+const CATCHUP_SUMMARY_WINDOW_MS = 10 * 60_000; // پیام «هم‌گام شد؛ N رکورد رسید» فقط ۱۰ دقیقه پس از جبران
+
+/**
+ * موج ۱ (۱-۳) — هشدار زرد اختلاف ساعت: فقط وقتی clock_warning صریحاً true است پیام می‌دهد؛
+ * X = clock_drift_minutes (قدر مطلق). ورودی غایب/ناشناخته = null (بی‌هشدار، بی‌کرش).
+ */
+export function clockWarningView(clockWarning, driftMinutes) {
+  if (clockWarning !== true) return null;
+  const m = driftMinutes == null ? Number.NaN : Number(driftMinutes);
+  const shown = Number.isFinite(m) ? Math.abs(Math.round(m)) : null;
+  return shown === null
+    ? 'ساعت این دستگاه تنظیم نیست — با ساعت مرکز اختلاف دارد'
+    : `ساعت این دستگاه تنظیم نیست — با ساعت مرکز ${fa(shown)} دقیقه اختلاف دارد`;
+}
+
+/**
+ * موج ۱ (بقیهٔ ۱-۱) — خط سبز پس از جبران کامل: state=synced و خلاصهٔ catch-up در
+ * پنجرهٔ ۱۰دقیقه‌ای باشد → «هم‌گام شد؛ N رکورد رسید»؛ اگر فقط یک جهت nonzero بوده
+ * فعل متناسب می‌آید (ارسال شد/دریافت شد). خارج از پنجره/بی‌خلاصه/دستاورد صفر = null
+ * (خط سبز عادی «هم‌گام شد» سر جایش می‌ماند).
+ */
+export function catchupSummaryView(state, lastCatchup, nowMs = Date.now()) {
+  if (state !== 'synced' || !lastCatchup || typeof lastCatchup !== 'object') return null;
+  const at = isoMsOf(lastCatchup.at);
+  if (at === null) return null;
+  const age = nowMs - at;
+  if (age > CATCHUP_SUMMARY_WINDOW_MS || age < -60_000) return null; // کج‌ساعت جزئی مُهر آینده پذیرفته است
+  const pulled = Number(lastCatchup.pulled) || 0;
+  const pushed = Number(lastCatchup.pushed) || 0;
+  const n = pulled + pushed;
+  if (n <= 0) return null;
+  if (pulled > 0 && pushed > 0) return `هم‌گام شد؛ ${fa(n)} رکورد رسید`;
+  if (pushed > 0) return `هم‌گام شد؛ ${fa(n)} رکورد ارسال شد`;
+  return `هم‌گام شد؛ ${fa(n)} رکورد دریافت شد`;
+}
+
+/**
+ * موج ۱ (۱-۴) — خط نسخه‌های دیده‌شده از هندشیک: «نسخهٔ نود X · حداقل نسخهٔ مرکز Y»؛
+ * هیچ عددی در پاکت نباشد = null.
+ */
+export function versionNumbersView(version) {
+  if (!version || typeof version !== 'object') return null;
+  const client = typeof version.client === 'string' && version.client ? version.client : null;
+  const center = typeof version.center === 'string' && version.center ? version.center : null;
+  if (client === null && center === null) return null;
+  return `نسخهٔ نود ${client ?? '—'} · حداقل نسخهٔ مرکز ${center ?? '—'}`;
+}
+
+/**
+ * موج ۱ (۱-۴) — ردیف قرمز ناسازگاری نسخه: فقط وقتی compatible صریحاً false است؛
+ * با ردیف paused_version یکپارچه می‌شود (همان پیام/همان رنگ، بدون دو ردیف دوباره).
+ */
+export function versionIncompatView(version) {
+  if (!version || typeof version !== 'object' || version.compatible !== false) return null;
+  return {
+    message: 'نسخه ناسازگار — اول مرکز را ارتقا دهید',
+    detail: versionNumbersView(version)
+  };
+}
+
 /** ISO معتبر → مُهر میلی‌ثانیه؛ ورودی خراب/حذف‌شده → null (تا NaN به تاریخ فارسی نشت نکند) */
 function isoMsOf(iso) {
   if (typeof iso !== 'string' || !iso) return null;
@@ -110,6 +176,12 @@ function syncSection(sync, syncError) {
       ? el('span', { class: 'badge badge--error' }, 'توقف نسخه')
       : el('span', { class: `badge ${view.badge}` }, view.short);
 
+  /* موج ۱ — خط سبز پس از جبران کامل: در پنجرهٔ ۱۰دقیقه‌ای «هم‌گام شد؛ N رکورد رسید» جای برچسب عادی می‌نشیند */
+  const summaryLine = catchupSummaryView(sync?.state, sync?.last_catchup);
+
+  /* موج ۱ — هشدار زرد اختلاف ساعت (۱-۳) — فقط-اطلاعاتی؛ رفتار سینک عوض نمی‌کند */
+  const clockMessage = clockWarningView(sync?.clock_warning === true, sync?.clock_drift_minutes);
+
   /* خط‌های جزئیات: آخرین هم‌گامی (وقتی هم‌گام است)، رکوردهای محفوظ در انتظار ارسال، گونهٔ خطا + زمان */
   const sub = [];
   if (sync?.state === 'synced') {
@@ -130,10 +202,11 @@ function syncSection(sync, syncError) {
   }
   if (sub.length === 0) sub.push('—');
 
+  /* موج ۱ (۱-۴) — ردیف نسخهٔ ناسازگار یکپارچه: paused_version یا compatible=false — هر دو یک ردیف قرمز */
   const version = sync?.version && typeof sync.version === 'object' ? sync.version : null;
-  const versionLine = version && (version.client != null || version.center != null)
-    ? `نسخهٔ نود ${version.client ?? '—'} · نسخهٔ مرکز ${version.center ?? '—'}`
-    : null;
+  const incompat = versionIncompatView(version);
+  const versionLine = versionNumbersView(version);
+  const showVersionRow = Boolean(paused || incompat);
 
   return el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
     el('div', { class: 'ob-section__head' },
@@ -158,14 +231,23 @@ function syncSection(sync, syncError) {
                 el('div', { class: 'ob-row__main' },
                   el('div', { class: 'cell-main' },
                     el('span', { class: `dot ${view.dot}`, style: { marginInlineEnd: 'var(--sp-2)' } }),
-                    view.label),
+                    summaryLine ?? view.label),
                   el('div', { class: 'cell-sub' }, sub.join(' · '))
                 )
               ),
-              paused
+              clockMessage
                 ? el('div', { class: 'ob-row' },
                     el('div', { class: 'ob-row__main' },
-                      el('div', { class: 'cell-main' }, 'نسخه ناسازگار — اول مرکز را ارتقا دهید'),
+                      el('div', { class: 'cell-main' }, clockMessage),
+                      el('div', { class: 'cell-sub' }, 'فقط هشدار نمایشی است — ثبت‌ها با مُهر خودشان مرتب می‌مانند')),
+                    el('div', { class: 'ob-row__side' },
+                      el('span', { class: 'badge badge--warning' }, 'اختلاف ساعت'))
+                  )
+                : null,
+              showVersionRow
+                ? el('div', { class: 'ob-row' },
+                    el('div', { class: 'ob-row__main' },
+                      el('div', { class: 'cell-main' }, incompat ? incompat.message : 'نسخه ناسازگار — اول مرکز را ارتقا دهید'),
                       versionLine ? el('div', { class: 'cell-sub' }, versionLine) : null
                     ),
                     el('div', { class: 'ob-row__side' },

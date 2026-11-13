@@ -48,17 +48,27 @@ export interface NodePullItem {
   payload: Record<string, unknown>;
 }
 
+/** پاکت هندشیک نسخه/ساعت مرکز (موج ۱، بند ۱-۳/۱-۴) — پاسخ بدون این فیلدها = همگی null */
+export interface CenterEnvelopeInfo {
+  /** نسخهٔ خود مرکز از پاسخ (center_version) */
+  centerVersion: string | null;
+  /** حداقل نسخهٔ نود اعلامی مرکز (min_node_version) */
+  minNodeVersion: string | null;
+  /** ساعت مرجع مرکز (server_ts) — مبنای سنجش اختلاف ساعت دستگاه */
+  serverTs: string | null;
+}
+
 /** همهٔ خروجی‌ها نرم‌اند — هیچ وضعیتی throw نمی‌شود (قرارداد خطای نرم drill §۳-۱۱) */
 export type PullOutcome =
-  | { status: 'ok'; items: NodePullItem[]; nextCursor: string | null; serverTime: string | null }
+  | ({ status: 'ok'; items: NodePullItem[]; nextCursor: string | null; serverTime: string | null } & CenterEnvelopeInfo)
   | { status: 'unconfigured' }
   | { status: 'auth_error' }
   | { status: 'network_error'; message: string }
   | { status: 'http_error'; http: number; code: string | null };
 
 export type PushOutcome =
-  | { status: 'ok'; accepted: number; duplicates: number; rejectedDomains: string[] }
-  | { status: 'throttled'; retryAfterS: number | null; rejectedDomains: string[] }
+  | ({ status: 'ok'; accepted: number; duplicates: number; rejectedDomains: string[] } & CenterEnvelopeInfo)
+  | ({ status: 'throttled'; retryAfterS: number | null; rejectedDomains: string[] } & CenterEnvelopeInfo)
   | { status: 'skipped'; reason: 'interval_gate'; rejectedDomains: string[] }
   | { status: 'rejected_domains'; domains: string[] }
   | { status: 'unconfigured'; rejectedDomains: string[] }
@@ -156,6 +166,17 @@ export function createNodeSyncClient(opts: NodeSyncClientOptions): NodeSyncClien
     return null;
   }
 
+  /** استخراج پاکت هندشیک نسخه/ساعت از data پاسخ مرکز — فیلد غایب/خراب = null (نرم) */
+  function envelopeInfoOf(body: unknown): CenterEnvelopeInfo {
+    const data = (body as { data?: Record<string, unknown> } | null)?.data;
+    const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+    return {
+      centerVersion: str(data?.center_version),
+      minNodeVersion: str(data?.min_node_version),
+      serverTs: str(data?.server_ts)
+    };
+  }
+
   return {
     credentials() {
       const { nodeCode, nodeKey } = readCreds();
@@ -199,7 +220,8 @@ export function createNodeSyncClient(opts: NodeSyncClientOptions): NodeSyncClien
           status: 'ok',
           items,
           nextCursor,
-          serverTime: typeof data?.server_time === 'string' ? (data?.server_time as string) : null
+          serverTime: typeof data?.server_time === 'string' ? (data?.server_time as string) : null,
+          ...envelopeInfoOf(r.body)
         };
       } catch (err) {
         return { status: 'network_error', message: err instanceof Error ? err.message : String(err) };
@@ -251,14 +273,16 @@ export function createNodeSyncClient(opts: NodeSyncClientOptions): NodeSyncClien
           return {
             status: 'throttled',
             retryAfterS: typeof data.retry_after_s === 'number' ? data.retry_after_s : null,
-            rejectedDomains
+            rejectedDomains,
+            ...envelopeInfoOf(r.body)
           };
         }
         return {
           status: 'ok',
           accepted: typeof data?.accepted === 'number' ? data.accepted : 0,
           duplicates: typeof data?.duplicates === 'number' ? data.duplicates : 0,
-          rejectedDomains
+          rejectedDomains,
+          ...envelopeInfoOf(r.body)
         };
       } catch (err) {
         return { status: 'network_error', message: err instanceof Error ? err.message : String(err), rejectedDomains: [] };

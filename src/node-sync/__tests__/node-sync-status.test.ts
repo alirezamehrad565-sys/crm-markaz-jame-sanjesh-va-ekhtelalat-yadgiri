@@ -2,8 +2,9 @@
  * rust-f14 — آزمون قرارداد GET/POST /api/node-sync/status + استثنای جبرانی گات push
  * اپ کامل روی MockD1 (هم‌الگوی node-sync.test.ts)؛ گیت زمان‌اجرای میز با env هارنس روشن می‌شود
  * (فقط در کانفیگ capnp موتور بایند است — در وب ۴۰۴ کم‌دست).
- * پوشش: شکل دقیق پاکت GET (نام فیلدها = قرارداد UI) · آینهٔ POST → بازتاب در GET ·
- * pending_push از DB با watermark · سن cursor · ۴۰۱ سشن · ۴۰۴ وب · ۴۰۰ بدنهٔ خراب ·
+ * پوشش: شکل دقیق پاکت GET (نام فیلدها = قرارداد UI نسخهٔ ۲ — دوازده فیلد) · آینهٔ POST → بازتاب در GET ·
+ * pending_push از DB با watermark · سن cursor · هندشیک نسخه/اختلاف ساعت/خلاصهٔ جبران (موج ۱) ·
+ * سازگاری عقب با آینهٔ قدیمیِ بدونِ فیلدهای تازه · ۴۰۱ سشن · ۴۰۴ وب · ۴۰۰ بدنهٔ خراب ·
  * هدر X-CP-Node-Catchup گات ۱۵دقیقه‌ای push را فقط برای دورهٔ جبرانی می‌گشاید.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -36,18 +37,33 @@ function sqlStamp(iso: string): string {
 
 // ───────────────────────── شکل پاکت GET — قرارداد ثابت UI ─────────────────────────
 
-describe('GET /api/node-sync/status — شکل دقیق قرارداد UI', () => {
-  it('پاکت پیش‌فرض: دقیقاً همین هشت فیلد با مقادیر خالی نرم', async () => {
+describe('GET /api/node-sync/status — شکل دقیق قرارداد UI نسخهٔ ۲', () => {
+  it('پاکت پیش‌فرض: دقیقاً همین دوازده فیلد با مقادیر خالی نرم', async () => {
     const api = await asRole(A, 'manager');
     const res = await api.get('/api/node-sync/status');
     expect(res.status).toBe(200);
     expect(Object.keys(res.body as Record<string, unknown>).sort()).toEqual(
-      ['last_error', 'last_pull_cursor_age_days', 'last_pull_ok_at', 'last_push_ok_at', 'mode', 'pending_push', 'state', 'version'].sort()
+      [
+        'clock_drift_minutes',
+        'clock_warning',
+        'last_catchup',
+        'last_error',
+        'last_pull_cursor_age_days',
+        'last_pull_ok_at',
+        'last_push_ok_at',
+        'mode',
+        'pending_push',
+        'state',
+        'version'
+      ].sort()
     );
     const body = res.body as Record<string, unknown>;
     expect(body.mode).toBe('auto');
     expect(body.state).toBe('idle');
-    expect(body.version).toBeNull(); // قرارداد فعلی نسخهٔ مرکز را حمل نمی‌کند — بند ۴ بریف
+    expect(body.version).toBeNull(); // هنوز هیچ هندشیک نسخه‌ای دیده نشده
+    expect(body.clock_drift_minutes).toBeNull(); // ساعت مرجع مرکز هنوز ندیده شده
+    expect(body.clock_warning).toBe(false);
+    expect(body.last_catchup).toBeNull(); // هنوز هیچ دورهٔ جبرانی کامل نبوده
     expect(body.last_error).toBeNull();
     expect(body.last_pull_cursor_age_days).toBeNull();
     expect(body.last_push_ok_at).toBeNull();
@@ -113,6 +129,54 @@ describe('POST /api/node-sync/status — آینهٔ اسنپ‌شات فرانت
     expect(body.last_push_ok_at).toBe(FOURTEEN_DAYS_AGO);
     expect(body.last_pull_ok_at).toBe(FOURTEEN_DAYS_AGO);
     expect(body.version).toBeNull();
+  });
+
+  it('موج ۱ — هندشیک نسخه/اختلاف ساعت/خلاصهٔ جبران در POST ذخیره و در GET دقیق بازتاب می‌یابد', async () => {
+    const api = await asRole(A, 'manager');
+    const post = await api.post('/api/node-sync/status', {
+      ...mirrorBody(),
+      version: { client: '1.26.0', center: '1.26.2', compatible: false },
+      clock_drift_minutes: 17,
+      clock_warning: true,
+      last_catchup: { at: nowIso(), pulled: 300, pushed: 500 }
+    });
+    expect(post.status).toBe(200);
+    const res = await api.get('/api/node-sync/status');
+    expect(res.status).toBe(200);
+    const body = res.body as Record<string, unknown>;
+    expect(body.version).toEqual({ client: '1.26.0', center: '1.26.2', compatible: false });
+    expect(body.clock_drift_minutes).toBe(17);
+    expect(body.clock_warning).toBe(true);
+    expect(body.last_catchup).toEqual({ at: expect.any(String), pulled: 300, pushed: 500 });
+  });
+
+  it('موج ۱ — آینهٔ قدیمیِ بدونِ فیلدهای تازه پذیرفته می‌شود؛ GET برای غایب‌ها پیش‌فرض نرم می‌گذارد (سازگاری عقب)', async () => {
+    const api = await asRole(A, 'manager');
+    const post = await api.post('/api/node-sync/status', mirrorBody()); // بدون version/clock_*/last_catchup
+    expect(post.status).toBe(200);
+    const res = await api.get('/api/node-sync/status');
+    const body = res.body as Record<string, unknown>;
+    expect(body.version).toBeNull();
+    expect(body.clock_drift_minutes).toBeNull();
+    expect(body.clock_warning).toBe(false);
+    expect(body.last_catchup).toBeNull();
+  });
+
+  it('موج ۱ — فیلد تازهٔ خراب (ناسازگار یا شمارندهٔ منفی) → ۴۰۰ و آینهٔ قبلی دست‌نخورده', async () => {
+    const api = await asRole(A, 'manager');
+    await api.post('/api/node-sync/status', mirrorBody());
+    const badCount = await api.post('/api/node-sync/status', {
+      ...mirrorBody(),
+      last_catchup: { at: nowIso(), pulled: -1, pushed: 0 }
+    });
+    expect(badCount.status).toBe(400);
+    const badVersion = await api.post('/api/node-sync/status', {
+      ...mirrorBody(),
+      version: { client: 'x', center: 'y', compatible: 'نه' }
+    });
+    expect(badVersion.status).toBe(400);
+    const res = await api.get('/api/node-sync/status');
+    expect((res.body as { version: unknown }).version).toBeNull(); // آینهٔ قبلیِ بدون version باقی است
   });
 
   it('pending_push از DB محلی با watermark حساب می‌شود — فقط client_errors بعد از watermark', async () => {

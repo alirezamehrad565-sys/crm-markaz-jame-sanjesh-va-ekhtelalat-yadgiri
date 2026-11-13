@@ -24,12 +24,18 @@
  *       • گات ۱۵دقیقه‌ای فقط تیک دوره‌ای را می‌بندد — catch-up با هدر NODE_PUSH_CATCHUP_HEADER
  *         سمت ابر و بدون کلاینت گات‌دار صریحاً می‌گذرد.
  *     خروجی CatchUpOutcome است و هیچ مسیری throw نمی‌کند (قرارداد drill §۳-۱۱).
+ *  ۶) موج ۱ — هندشیک نسخه (۱-۴) و ساعت مرجع مرکز (۱-۳): هر پاسخ موفق pull/push (دورهٔ عادی و
+ *     جبرانی) center_version/min_node_version/server_ts دارد؛ runner آن را در NODE_VERSION_KEY
+ *     ثبت می‌کند (compatible = APP_VERSION ≥ min با compareSemver؛ drift قدر مطلق به دقیقه،
+ *     هشدار > ۲ دقیقه — فقط-اطلاعاتی) و ناسازگاری را فقط در catch-up به version_error می‌برد
+ *     (هم‌رفتار ۴۲۶ receiving-سر). خلاصهٔ دورهٔ کامل جبرانی در last_catchup وضعیت می‌نشیند.
  * فهرست سفید سه‌لایه دست‌نخورده: ابر (pull) ← کلاینت (client.ts) ← سرور میز (internal-sync).
  * push مسیر معکوس است: موتور محلی (outbox) → client.push (پیش‌فیلتر فهرست سفید) → ابر (node/push).
  */
 import { createNodeSyncClient } from '../node-sync-client/client.js';
 import { NODE_PULL_DOMAINS } from '../node-sync-client/client.js';
 import type { NodePullItem, NodeSyncStore } from '../node-sync-client/client.js';
+import { APP_VERSION, compareSemver } from '../core/version.js';
 import { SYNC_COORD_KEY } from './coordinator.js';
 
 /** کلید وضعیت آخرین همگامی در انبار پیشرفت */
@@ -67,6 +73,38 @@ const STATUS_MIRROR_PATH = '/api/node-sync/status';
 const CATCHUP_HEADER = 'X-CP-Node-Catchup';
 /** کلید cursor استاندارد client برای مجموعهٔ کامل دامنه‌ها — دقیقاً هم‌فرمول cursorKeyFor در client.ts */
 export const CLIENT_CURSOR_KEY = `nodesync:cursor:${[...NODE_PULL_DOMAINS].sort().join('+')}`;
+
+// ─── موج ۱ — هندشیک نسخه (۱-۴) و ساعت مرجع مرکز (۱-۳) ───
+
+/**
+ * کلید هندشیک نسخه در انبار پیشرفت — آخرین {client, center, compatible, drift} دیده‌شده از
+ * پاسخ‌های موفق مرکز (pull/push، دورهٔ عادی و جبرانی). منبع فیلد version و clock_* در
+ * GET /api/node-sync/status.
+ */
+export const NODE_VERSION_KEY = 'nodesync:version-handshake-v1';
+/** آستانهٔ هشدار اختلاف ساعت به دقیقه — بیش از این = clock_warning (بند ۱-۳: بیش از ۲ دقیقه) */
+export const CLOCK_DRIFT_WARN_MINUTES = 2;
+
+/** آخرین هندشیک نسخه/ساعت ثبت‌شده از پاسخ‌های مرکز — در NODE_VERSION_KEY انبار می‌شود */
+export interface NodeVersionSeenV1 {
+  v: 1;
+  /** نسخهٔ خود نود (APP_VERSION هنگام ثبت) */
+  client: string;
+  /** نسخهٔ خود مرکز از پاسخ — پاسخ بدون فیلد = مقدار قبلی حفظ می‌شود */
+  center: string | null;
+  /** حداقل نسخهٔ نود اعلامی مرکز (min_node_version) */
+  min_node: string | null;
+  /** client ≥ min_node با compareSemver — min_node ناشناخته = سازگار فرض می‌شود */
+  compatible: boolean;
+  /** آخرین بار که پاسخی از مرکز ثبت شد (ISO دستگاه) */
+  at: string | null;
+  /** آخرین ساعت مرجع مرکز (server_ts) */
+  server_ts: string | null;
+  /** اختلاف ساعت دستگاه با مرکز — قدر مطلق به دقیقه (ناشناخته = null) */
+  clock_drift_minutes: number | null;
+  /** اختلاف بیش از CLOCK_DRIFT_WARN_MINUTES دقیقه */
+  clock_warning: boolean;
+}
 
 /** نتیجهٔ کل دورهٔ catch-up — هیچ مسیری throw نمی‌کند؛ همه‌چیز در وضعیت است */
 export type CatchUpStatus =
@@ -117,6 +155,12 @@ export interface CatchUpStateV1 {
   items_pushed_last_run: number;
   last_error_kind: string | null;
   last_error_at: string | null;
+  /**
+   * موج ۱ (بقیهٔ ۱-۱) — خلاصهٔ آخرین دورهٔ جبرانیِ کامل (state=synced با دستاورد واقعی):
+   * at = پایان دوره، pulled = آیتم‌های استقراریافته در صندوق، pushed = آیتم‌های محلی ackشدهٔ ابر.
+   * دورهٔ ۰/۰ خلاصهٔ معنادار قبلی را پاک نمی‌کند (UI تا ۱۰ دقیقه «هم‌گام شد؛ N رکورد رسید» می‌دهد).
+   */
+  last_catchup: { at: string; pulled: number; pushed: number } | null;
 }
 
 /**
@@ -135,6 +179,14 @@ export interface NodeSyncStatusMirror {
   last_error_at: string | null;
   push_watermark: string | null;
   client_version: string | null;
+  /** موج ۱ (۱-۴) — آخرین هندشیک نسخه از پاسخ‌های مرکز؛ هرگز هندشیک ندیده = null */
+  version: { client: string; center: string; compatible: boolean } | null;
+  /** موج ۱ (۱-۳) — قدر مطلق اختلاف ساعت دستگاه با مرکز به دقیقه؛ ناشناخته = null */
+  clock_drift_minutes: number | null;
+  /** موج ۱ (۱-۳) — اختلاف بیش از ۲ دقیقه */
+  clock_warning: boolean;
+  /** موج ۱ — خلاصهٔ آخرین دورهٔ جبرانی کامل {at, pulled, pushed}؛ هنوز هیچ دورهٔ کاملی نبوده = null */
+  last_catchup: { at: string; pulled: number; pushed: number } | null;
   updated_at: string;
 }
 
@@ -373,7 +425,8 @@ function emptyCatchUpState(): CatchUpStateV1 {
     batches_last_run: 0,
     items_pushed_last_run: 0,
     last_error_kind: null,
-    last_error_at: null
+    last_error_at: null,
+    last_catchup: null
   };
 }
 
@@ -522,6 +575,82 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
     }
   }
 
+  // ─── موج ۱ — هندشیک نسخه (۱-۴) و ساعت مرجع مرکز (۱-۳) ───
+
+  /** خواندن نرم هندشیک نسخه از انبار — غایب/خراب = خالی سازگار */
+  function readVersionSeen(): NodeVersionSeenV1 {
+    try {
+      const raw = progress.getItem(NODE_VERSION_KEY);
+      if (!raw) return emptyVersionSeen();
+      const p = JSON.parse(raw) as Partial<NodeVersionSeenV1>;
+      if (p?.v !== 1) return emptyVersionSeen();
+      return { ...emptyVersionSeen(), ...p, v: 1 };
+    } catch {
+      return emptyVersionSeen();
+    }
+  }
+
+  function emptyVersionSeen(): NodeVersionSeenV1 {
+    return {
+      v: 1,
+      client: APP_VERSION,
+      center: null,
+      min_node: null,
+      compatible: true,
+      at: null,
+      server_ts: null,
+      clock_drift_minutes: null,
+      clock_warning: false
+    };
+  }
+
+  /**
+   * ثبت پاکت هندشیک از هر پاسخ موفق مرکز — pull/push، دورهٔ عادی و جبرانی (بند ۱-۳/۱-۴):
+   *   • نسخه‌ها merge روی مقدار قبلی می‌شوند (پاسخِ بدون فیلد = قبلی می‌ماند)؛
+   *   • compatible = APP_VERSION ≥ min_node_version با compareSemver (min_node ناشناخته = سازگار)؛
+   *   • drift از server_ts نسبت به ساعت خود دستگاه — قدر مطلق به دقیقه؛ بیش از ۲ دقیقه = هشدار.
+   * فقط-اطلاعاتی: این تابع رفتار سینک را عوض نمی‌کند؛ ناسازگاری را گزارش می‌دهد تا فقط
+   * catchUp مسیر version_error بگیرد (تک‌مسیرِ گات نسخه، هم‌قرارداد ۴۲۶ receiving-سر).
+   */
+  function captureCenterEnvelope(data: unknown): { compatible: boolean; minNode: string | null } {
+    const prev = readVersionSeen();
+    let next = prev;
+    if (data && typeof data === 'object') {
+      const d = data as Record<string, unknown>;
+      const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+      const center = str(d.center_version) ?? prev.center;
+      const minNode = str(d.min_node_version) ?? prev.min_node;
+      const compatible = minNode ? compareSemver(APP_VERSION, minNode) >= 0 : prev.compatible;
+      let driftMinutes = prev.clock_drift_minutes;
+      let warning = prev.clock_warning;
+      const serverTs = str(d.server_ts);
+      if (serverTs !== null) {
+        const t = Date.parse(serverTs);
+        if (!Number.isNaN(t)) {
+          driftMinutes = Math.round(Math.abs(now().getTime() - t) / 60_000);
+          warning = driftMinutes > CLOCK_DRIFT_WARN_MINUTES;
+        }
+      }
+      next = {
+        v: 1,
+        client: APP_VERSION,
+        center,
+        min_node: minNode,
+        compatible,
+        at: now().toISOString(),
+        server_ts: serverTs ?? prev.server_ts,
+        clock_drift_minutes: driftMinutes,
+        clock_warning: warning
+      };
+      try {
+        progress.setItem(NODE_VERSION_KEY, JSON.stringify(next));
+      } catch {
+        // انبار ناموفق = نرم — هندشیک هرگز سینک را نمی‌کشد
+      }
+    }
+    return { compatible: next.compatible, minNode: next.min_node };
+  }
+
   /**
    * آینهٔ وضعیت به موتور محلی (POST /api/node-sync/status) — فقط-افزودنی: موتور به انبار
    * پیشرفت فرانت‌اند دسترسی ندارد و UI این قرارداد را از موتور می‌خواند؛ شکست آینه (وب/قطعی)
@@ -535,6 +664,7 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
         const st = readStatus(progress);
         const cu = readCatchUpState(progress);
         const co = readCoordStateSafe(progress);
+        const vs = readVersionSeen();
         const hasError = Boolean(co && co.last_error_kind && co.last_error_kind !== 'none');
         const body: NodeSyncStatusMirror = {
           v: 1,
@@ -546,7 +676,13 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
           last_error_kind: hasError ? (co?.last_error_kind ?? null) : null,
           last_error_at: hasError ? (co?.last_run_at ?? co?.updated_at ?? null) : null,
           push_watermark: readWatermark(),
-          client_version: null, // قرارداد فعلی نسخه‌ای بین نود و مرکز حمل نمی‌کند (سند node-sync §۲)
+          client_version: APP_VERSION, // موج ۱ — نسخهٔ خود نود (پیش‌تر قرارداد خالی بود؛ اکنون هندشیک داریم)
+          version: vs.center
+            ? { client: vs.client, center: vs.center, compatible: vs.compatible }
+            : null, // هنوز هیچ پاسخی از مرکز نسخه را حمل نکرده = null
+          clock_drift_minutes: vs.clock_drift_minutes,
+          clock_warning: vs.clock_warning,
+          last_catchup: cu.last_catchup ?? null,
           updated_at: now().toISOString()
         };
         await fetchFn(STATUS_MIRROR_PATH, {
@@ -596,6 +732,14 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
           if (pull.status === 'http_error') return { status: 'http_error', http: pull.http, code: pull.code };
           return { status: 'auth_error' }; // دست‌نیافتنی با اعتبار تنظیم‌شده — برای کامل بودن نوع
         }
+
+        // موج ۱ — هندشیک نسخه/ساعت از پاسخ pull دورهٔ عادی هم ثبت می‌شود (فقط-ثبت؛ گات نسخهٔ
+        // دورهٔ عادی با ۴۲۶/کد receiving-سر همان‌جا در classify هماهنگ‌ساز اعمال می‌شود)
+        captureCenterEnvelope({
+          center_version: pull.centerVersion,
+          min_node_version: pull.minNodeVersion,
+          server_ts: pull.serverTs
+        });
 
         if (pull.items.length > 0) {
           if (!token) {
@@ -691,6 +835,14 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
 
       // ۴) push از راه کلاینت — گات ۱۵دقیقه‌ای و فهرست سفید همان‌جا اعمال می‌شود
       const push = await client.push({ items: box.items });
+      if (push.status === 'ok' || push.status === 'throttled') {
+        // موج ۱ — هندشیک نسخه/ساعت از پاسخ push دورهٔ عادی هم ثبت می‌شود (فقط-ثبت، نرم)
+        captureCenterEnvelope({
+          center_version: push.centerVersion,
+          min_node_version: push.minNodeVersion,
+          server_ts: push.serverTs
+        });
+      }
       if (push.status === 'ok') {
         // watermark = بزرگ‌ترین at آیتم‌های فرستاده (نبود at معتبر → generated_at)
         const mark = maxAtOf(box.items) ?? box.generatedAt;
@@ -825,6 +977,23 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
         const pageData = parsePullPage(parsed);
         if (!pageData) {
           pullFailure = { status: 'http_error', http: res.status, code: 'NODE_PULL_BODY_INVALID', message: null };
+          break;
+        }
+
+        // موج ۱ (۱-۴) — هندشیک نسخه/ساعت از هر پاسخ موفق pull ثبت می‌شود؛ ناسازگاری محلی
+        // (APP_VERSION < min_node_version) = version_error بدون استقرار و بدون پوش —
+        // هم‌رفتارِ مسیر ۴۲۶ receiving-سر (کد NODE_MIN_VERSION از ۱.۲۶.۱ آماده بود).
+        const hand = captureCenterEnvelope((parsed as { data?: unknown } | null)?.data ?? null);
+        if (!hand.compatible) {
+          pullFailure = {
+            status: 'version_error',
+            http: null,
+            code: 'NODE_MIN_VERSION',
+            message:
+              hand.minNode !== null
+                ? `نسخهٔ نود ${APP_VERSION} کمتر از حداقل نسخهٔ مجاز مرکز (${hand.minNode}) است`
+                : null
+          };
           break;
         }
 
@@ -986,6 +1155,21 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
                 break;
               }
               const data = (pushBody as { data?: { accepted?: unknown; duplicates?: unknown; throttled?: unknown; retry_after_s?: unknown } } | null)?.data;
+              // موج ۱ (۱-۴) — هندشیک نسخه از پاسخ push هم ثبت می‌شود؛ ناسازگاری = توقف بسته‌ها
+              // (watermark دست‌نخورده — بسته‌های ackشده در دورهٔ بعد دوباره می‌روند، ابر با PK می‌شمارد)
+              const hand = captureCenterEnvelope(data ?? null);
+              if (!hand.compatible) {
+                chunkFailure = {
+                  status: 'version_error',
+                  http: null,
+                  code: 'NODE_MIN_VERSION',
+                  message:
+                    hand.minNode !== null
+                      ? `نسخهٔ نود ${APP_VERSION} کمتر از حداقل نسخهٔ مجاز مرکز (${hand.minNode}) است`
+                      : null
+                };
+                break;
+              }
               if (data?.throttled === true) {
                 // زیر گات افتاد (مرکز قدیمی بدون هدر جبرانی؟) — می‌ایستیم؛ watermark دست‌نخورده
                 chunkFailure = {
@@ -1034,14 +1218,14 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
         }
       }
 
-      // ─── وضعیت نهایی دوره + آینهٔ تازه به موتور محلی ───
+      // ─── وضعیت نهایی دوره + خلاصهٔ تکمیل + آینهٔ تازه به موتور محلی ───
       const failed = outcome.status !== 'ok';
       const finalState: CatchUpState = failed
         ? 'error'
         : outcome.pull_done && outcome.push_done
           ? 'synced'
           : 'catching_up'; // سقف خورده ولی خطا ندارد — progress محفوظ است و دورهٔ بعد ادامه می‌دهد
-      writeCatchUpState({
+      const statePatch: Partial<CatchUpStateV1> & { state: CatchUpState } = {
         state: finalState,
         last_run_at: now().toISOString(),
         pages_last_run: outcome.pages,
@@ -1050,7 +1234,18 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
         items_pushed_last_run: outcome.items_pushed,
         last_error_kind: failed ? outcome.status : null,
         last_error_at: failed ? now().toISOString() : null
-      });
+      };
+      // موج ۱ (بقیهٔ ۱-۱) — خلاصهٔ دورهٔ کامل: فقط دورهٔ synced با دستاورد واقعی ثبت می‌شود؛
+      // دورهٔ ۰/۰ خلاصهٔ معنادار قبلی را پاک نمی‌کند تا پیام «هم‌گام شد؛ N رکورد رسید»
+      // در پنجرهٔ ۱۰دقیقه‌ای UI با تیک‌های بی‌خبر پوچ نشود.
+      if (finalState === 'synced' && outcome.items_pulled + outcome.items_pushed > 0) {
+        statePatch.last_catchup = {
+          at: now().toISOString(),
+          pulled: outcome.items_pulled,
+          pushed: outcome.items_pushed
+        };
+      }
+      writeCatchUpState(statePatch);
       mirrorStatus();
       return outcome;
     }
