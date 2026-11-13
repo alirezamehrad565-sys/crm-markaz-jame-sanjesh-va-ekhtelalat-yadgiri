@@ -40,9 +40,9 @@ cargoVer === appVersion
 
 // ③ قراردادهای فاز ۲ — frontendDist و loopback
 if (conf) {
-  conf.build?.frontendDist === '../public'
-    ? ok('frontendDist = ../public')
-    : bad('frontendDist باید ../public باشد');
+  conf.build?.frontendDist === '../../public'
+    ? ok('frontendDist = ../../public (خروجی build:client در ریشه)')
+    : bad('frontendDist باید ../../public باشد (خروجی build:client ریشه است، نه desktop/public)');
   conf.build?.devUrl === 'http://127.0.0.1:8787'
     ? ok('devUrl = loopback:8787')
     : bad('devUrl باید http://127.0.0.1:8787 باشد');

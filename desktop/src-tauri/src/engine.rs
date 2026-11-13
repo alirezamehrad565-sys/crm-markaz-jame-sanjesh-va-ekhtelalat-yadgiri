@@ -63,7 +63,7 @@ fn health_once(port: u16) -> bool {
     let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) else {
         return false;
     };
-    stream.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
+    stream.set_read_timeout(Some(Duration::from_secs(2))).ok().unwrap_or(());
     let req = format!("GET /health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
     if stream.write_all(req.as_bytes()).is_err() {
         return false;
@@ -88,11 +88,12 @@ impl LocalEngine {
         }
         let port = free_port();
         // --experimental برای فلگ experimental سرویس D1 (همان آرگومان‌های scripts/engine/engine.mjs)
+        // خاموشی فقط با Drop ساختار LocalEngine (kill + wait) — std::process::Command
+        // متد kill_on_drop ندارد (API توکیو است) و نیازش هم نیست.
         let child = Command::new(&binary)
             .args(["serve", "--experimental", config.to_string_lossy().as_ref()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .kill_on_drop(true)
             .spawn()
             .map_err(|e| format!("spawn workerd ناموفق: {e}"))?;
         Ok(Self { child, port })
@@ -115,8 +116,8 @@ impl LocalEngine {
     }
 }
 
-/// خاموشی تمیز با Drop — خروج اپ یا drop شدن وضعیت، workerd را می‌بندد.
-/// kill_on_drop هم به‌عنوان شبکهٔ ایمن فعال است.
+/// خاموشی تمیز با Drop — خروج اپ یا drop شدن وضعیت، workerd را می‌بندد
+/// (kill + wait — معادل kill_on_drop توکیو، با std).
 impl Drop for LocalEngine {
     fn drop(&mut self) {
         let _ = self.child.kill();
