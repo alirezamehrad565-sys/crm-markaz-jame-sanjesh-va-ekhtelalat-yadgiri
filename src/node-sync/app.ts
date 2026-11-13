@@ -38,6 +38,7 @@ import {
   NODE_PULL_DOMAIN_SET,
   NODE_PULL_DEFAULT_LIMIT,
   NODE_PULL_MAX_LIMIT,
+  NODE_PUSH_CATCHUP_HEADER,
   NODE_PUSH_DOMAIN_SET,
   NODE_PUSH_BODY_MAX_BYTES,
   NODE_PUSH_MIN_INTERVAL_MS,
@@ -198,8 +199,13 @@ export function createNodeSyncApp(deps: NodeSyncAppDeps): AppHono {
 
     // ۱) گات ۱۵دقیقه‌ای — زیر گات پاسخ صامت: بدون خواندن بدنه، بدون لاگ، بدون نوشتن.
     //    (مُهر تلاش مشترک؛ نودِ خوش‌رفتار هرگز این پاسخ را نمی‌بیند — کلاینت خودش فاصله می‌گیرد.)
+    // rust-f14 — استثنای همگام‌سازی جبرانی: درخواستی که صراحتاً خودش را catch-up اعلام می‌کند
+    // (هدر NODE_PUSH_CATCHUP_HEADER — فقط بوت/تخلیهٔ صندوق) از گات می‌گذرد تا بوتِ پس از
+    // هفته‌ها آفلاین در چند بستهٔ پشت‌سرهم کامل تخلیه شود. مُهر تلاش و بقیهٔ قراردادها همین‌جا
+    // عیناً اجرا می‌شوند؛ تیک دوره‌ای بدون هدر زیر گات می‌ماند (هم‌ریتم m1.5).
+    const catchUpDeclared = c.req.header(NODE_PUSH_CATCHUP_HEADER) === '1';
     const at = now();
-    if (!shouldAttemptNodePush(node.last_push_attempt_at, at, minIntervalMs)) {
+    if (!catchUpDeclared && !shouldAttemptNodePush(node.last_push_attempt_at, at, minIntervalMs)) {
       const lastT = Date.parse(node.last_push_attempt_at ?? '');
       const retryAfterS = Number.isNaN(lastT)
         ? null

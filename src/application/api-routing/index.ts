@@ -109,6 +109,7 @@ import { registerSetupStatusRoutes, registerSetupCompleteRoutes } from '@app/set
 import { FEATURES } from '@core/shared';
 import { createNodeSyncApp } from '../../node-sync/app'; // rust-f4 — زیراپ سینک نودهای دسکتاپ
 import { registerInternalSyncRoutes } from '../../internal-sync'; // rust-f9 — استقرار سینک (فقط-موتور، گیت env)
+import { registerNodeSyncStatusRoute } from '../../node-sync-runner/status'; // rust-f14 — وضعیت سینک نود برای UI میز
 
 import { errorHandler, parseApiRateLimitPerMin, makeKeyedRateLimiter, API_RATE_LIMIT_WINDOW_MS } from '@app/http';
 import { RateLimitError } from '@core/errors';
@@ -694,6 +695,12 @@ export function createApp(deps: AppDeps): AppHono {
   // rust-f9 — استقرار سینک نود در میز: بعد از گیت‌ها تا سشن بگیرد؛ خودش گیت زمان‌اجرای
   // CENTER_DESKTOP_ENGINE دارد (در تولید وب binding غایب است → ۴۰۴ کم‌دست، باندل یکسان).
   registerInternalSyncRoutes(app, { db: services.db, logger: services.logger });
+
+  // rust-f14 — قرارداد وضعیت سینک نود برای UI میز: GET /api/node-sync/status (آینهٔ وضعیت
+  // هماهنگ‌ساز/catch-up + شمارش pending_push از DB) و POST همان مسیر برای آینهٔ اسنپ‌شات
+  // فرانت‌اند (runner.mirrorStatus). بعد از گیت‌ها تا سشن بگیرد؛ خودش گیت زمان‌اجرای
+  // CENTER_DESKTOP_ENGINE دارد (در تولید وب → ۴۰۴ کم‌دست، باندل یکسان).
+  registerNodeSyncStatusRoute(app, { db: services.db, logger: services.logger });
 
   app.get('/api/me', (c) => c.json({ data: c.get('authContext') }, 200));
 

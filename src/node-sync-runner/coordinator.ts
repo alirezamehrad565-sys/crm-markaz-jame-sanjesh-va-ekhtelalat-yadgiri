@@ -10,7 +10,7 @@
  *   ۵) وضعیت CoordinatorState در انبار پیشرفت — پنل همان را نمایش می‌دهد
  * همه‌چیز نرم: هیچ تابعی throw نمی‌کند و هیچ فراخوانی هم‌زمان دوباره وارد نمی‌شود.
  */
-import type { NodeSyncRunner, PushNowOutcome, SyncNowOutcome } from './runner.js';
+import type { CatchUpOutcome, NodeSyncRunner, PushNowOutcome, SyncNowOutcome } from './runner.js';
 import type { NodeSyncStore } from '../node-sync-client/client.js';
 
 export type SyncMode = 'auto' | 'quarantined' | 'paused_version';
@@ -64,6 +64,12 @@ export interface SyncCoordinator {
   stop(): void;
   /** تلاش دستی — همیشه مجاز، حتی در قرنطینه/گات نسخه */
   runNow(): Promise<{ pull: SyncNowOutcome; push: PushNowOutcome | null }>;
+  /**
+   * rust-f14 — دورهٔ جبرانی بوت: هر دو جهت تا تخلیهٔ کامل یا سقف (runner.catchUp) — همیشه
+   * مجاز حتی در قرنطینه/گات نسخه (هم‌قاعدهٔ runNow دستی)؛ همان ماتریس خرابی روی وضعیت
+   * می‌نشیند و تیک دوره‌ای عادی را برنامه‌ریزی می‌کند. هیچ مسیری throw نمی‌کند.
+   */
+  runCatchUp(): Promise<{ catchup: CatchUpOutcome }>;
   /** پس از ذخیرهٔ اعتبار تازه: خروج از قرنطینه + صفرکردن backoff + تلاش فوری */
   notifyCredentialsChanged(): void;
   state(): CoordinatorState;
@@ -177,27 +183,9 @@ export function createSyncCoordinator(opts: CoordinatorOptions): SyncCoordinator
     return 'none';
   }
 
-  async function runNow(): Promise<{ pull: SyncNowOutcome; push: PushNowOutcome | null }> {
-    if (running) {
-      const st = readState();
-      return { pull: { status: 'network_error', message: 'دورهٔ قبلی هنوز در جریان است' }, push: null };
-    }
-    running = true;
-    let pull: SyncNowOutcome;
-    let push: PushNowOutcome | null = null;
-    try {
-      pull = await opts.runner.syncNow();
-      if (pull.status === 'ok' || pull.status === 'unconfigured') {
-        push = await opts.runner.pushNow();
-      }
-    } finally {
-      running = false;
-    }
-
-    const st = readState();
-    const kind = classify(pull, push);
+  /** ماتریس مشترک خرابی → وضعیت بعدی (هم‌ریتم §۴ سند طراحی) — هم runNow هم runCatchUp همین را دارند */
+  function applyOutcome(st: CoordinatorState, kind: SyncFailureKind): CoordinatorState {
     const next: CoordinatorState = { ...st, last_run_at: now().toISOString(), last_error_kind: kind };
-
     if (kind === 'none' || kind === 'unconfigured') {
       next.mode = 'auto';
       next.consecutive_failures = 0;
@@ -216,9 +204,93 @@ export function createSyncCoordinator(opts: CoordinatorOptions): SyncCoordinator
       next.backoff_ms = delay;
       next.next_attempt_at = new Date(now().getTime() + delay).toISOString();
     }
+    return next;
+  }
+
+  async function runNow(): Promise<{ pull: SyncNowOutcome; push: PushNowOutcome | null }> {
+    if (running) {
+      const st = readState();
+      return { pull: { status: 'network_error', message: 'دورهٔ قبلی هنوز در جریان است' }, push: null };
+    }
+    running = true;
+    let pull: SyncNowOutcome;
+    let push: PushNowOutcome | null = null;
+    try {
+      pull = await opts.runner.syncNow();
+      if (pull.status === 'ok' || pull.status === 'unconfigured') {
+        push = await opts.runner.pushNow();
+      }
+    } finally {
+      running = false;
+    }
+
+    const next = applyOutcome(readState(), classify(pull, push));
     writeState(next);
     scheduleNext(next);
+    opts.runner.mirrorStatus?.(); // rust-f14 — آینهٔ تازه با مود نهایی (اختیاری؛ فیک‌های آزمون ندارند)
     return { pull, push };
+  }
+
+  /** نگاشت خروجی catch-up به نوع خرابی — همان داوری classify با شکل CatchUpOutcome */
+  function classifyCatchUp(o: CatchUpOutcome): SyncFailureKind {
+    if (o.status === 'ok') return 'none';
+    if (o.status === 'unconfigured') return 'unconfigured';
+    if (o.status === 'auth_error') return 'auth';
+    if (o.status === 'version_error') return 'version';
+    if (o.status === 'http_error') return o.http === 426 || o.code === 'NODE_MIN_VERSION' ? 'version' : 'server';
+    if (o.status === 'network_error') return 'network';
+    if (o.status === 'ingest_error') return 'ingest';
+    // push_failed — کد پاکت می‌گوید چه بود (هم‌قاعدهٔ شاخهٔ push در classify)
+    if (o.code === 'auth_error') return 'auth';
+    if (o.code === 'throttled') return 'throttled';
+    return 'server';
+  }
+
+  /** خروجی نرم برای مسیر هم‌زمان/runner بدون catchUp — هیچ throwی (قرارداد drill §۳-۱۱) */
+  function blockedCatchUpOutcome(message: string): CatchUpOutcome {
+    return {
+      status: 'network_error',
+      phase: 'pull',
+      http: null,
+      code: null,
+      message,
+      pages: 0,
+      items_pulled: 0,
+      by_domain: {},
+      batches: 0,
+      items_pushed: 0,
+      duplicates_pushed: 0,
+      pull_done: false,
+      push_done: false
+    };
+  }
+
+  /**
+   * rust-f14 — دورهٔ جبرانی (catch-up): هر دو جهت تا تخلیهٔ کامل یا سقف. همیشه مجاز حتی در
+   * قرنطینه/گات نسخه (هم‌قاعدهٔ runNow دستی)؛ وضعیت با همان ماتریس خرابی به‌روز می‌شود و
+   * تیک دوره‌ای عادی بعدش برنامه‌ریزی می‌شود. هیچ مسیری throw نمی‌کند.
+   */
+  async function runCatchUp(): Promise<{ catchup: CatchUpOutcome }> {
+    if (running || typeof (opts.runner as { catchUp?: unknown }).catchUp !== 'function') {
+      return {
+        catchup: blockedCatchUpOutcome(running ? 'دورهٔ قبلی هنوز در جریان است' : 'runner بدون دورهٔ جبرانی است')
+      };
+    }
+    running = true;
+    let outcome: CatchUpOutcome;
+    try {
+      outcome = await opts.runner.catchUp();
+    } catch {
+      // catchUp قرارداداً throw نمی‌کند؛ این فقط سپر دفاعی است — نرم
+      outcome = blockedCatchUpOutcome('خطای ناشناخته در دورهٔ جبرانی');
+    } finally {
+      running = false;
+    }
+    const next = applyOutcome(readState(), classifyCatchUp(outcome));
+    writeState(next);
+    scheduleNext(next);
+    opts.runner.mirrorStatus?.(); // آینهٔ تازه با مود نهایی — قرنطینه/گات نسخه از همین‌جا دیده می‌شود
+    return { catchup: outcome };
   }
 
   return {
@@ -233,6 +305,7 @@ export function createSyncCoordinator(opts: CoordinatorOptions): SyncCoordinator
       }
     },
     runNow,
+    runCatchUp,
     notifyCredentialsChanged() {
       const st = readState();
       if (st.mode === 'quarantined') {

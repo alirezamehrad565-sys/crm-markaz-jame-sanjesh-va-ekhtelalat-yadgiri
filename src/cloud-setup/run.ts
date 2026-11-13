@@ -81,6 +81,35 @@ export async function maybeRunSetup(user: SetupUser | null, deps?: Partial<RunDe
   const doc = merged.doc ?? defaultCloudDocument();
   if (!doc) return false;
   const store: CloudStore = merged.store ?? localStorageStore;
+  // rust-f14 — ماشهٔ بوت catch-up سینک نود: هر بوتِ میز (پس از ورود، ویزار تمام/رد) یک‌بار
+  // همگام‌سازی جبرانی دوطرفه می‌زند و بعدش تیک‌های عادی ۳۰دقیقه‌ای ادامه می‌یابد. fire-and-forget
+  // با مهار کامل خطا در boot.ts — هیچ awaitی ویزار را نگه نمی‌دارد و هیچ خطایی آن را نمی‌بندد.
+  // import پویا: فقط-میز؛ بودجهٔ eager_modules وب دست‌نخورده می‌ماند (هم‌الگوی import پنل).
+  void (async () => {
+    try {
+      const boot = await import('../node-sync-runner/boot.js');
+      boot.startNodeSyncBootCatchUp({
+        getCreds: async () => {
+          const secureRes = merged.secure ? { store: merged.secure } : await resolveSecureStore(store);
+          const key = await readSecret(secureRes.store, SECRET_NODE_KEY);
+          const fresh = loadCloudRecord(store);
+          return { baseUrl: fresh.worker_url, nodeCode: fresh.node_code, nodeKey: key };
+        },
+        progressStorage: store,
+        tokenProvider: () => {
+          try {
+            return (typeof localStorage !== 'undefined' ? localStorage.getItem('cs.token') : null) ?? null;
+          } catch {
+            return null;
+          }
+        },
+        // FetchLike ← قرارداد RunnerFetch زمان‌بند (runner فقط status مصرف می‌کند)
+        fetchFn: (input: string, init?: RequestInit) => (merged.fetchImpl ?? globalFetch)(input, init as never)
+      });
+    } catch {
+      /* نرم — بوت سینک هرگز ویزار/تنظیمات را نمی‌شکند */
+    }
+  })();
   const record = loadCloudRecord(store);
   if (record.setup_done && merged.force !== true) return false;
   const secureRes = merged.secure

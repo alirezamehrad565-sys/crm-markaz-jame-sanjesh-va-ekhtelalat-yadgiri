@@ -16,6 +16,8 @@
 //   ۴) اجرای واقعی همهٔ قطعات روی SQLite تازه (node:sqlite — هم‌خانوادهٔ موتور D1) و
 //      برابری شمار جدول‌ها/ایندکس‌ها با شمار CREATE TABLE/INDEX مایگریشن‌ها + حضور
 //      جدول‌های کلیدی سینک (sync_nodes/node_sync_inbox/…) و rum_events با الگوی درست.
+//   ⑤ اجرای دوم کامل همان dump روی همان DB پرشده — تضمین «دوباره‌تلاش امن» استقرار مرکزی:
+//      صفر خطا، بدون ساختن/حذف/عوض‌کردن هیچ شیءای (sqlite_master بایت‌به‌بایت ثابت).
 // خروجی نرم: هر مشکل = پیام دقیق + exit 1.
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
@@ -271,9 +273,51 @@ check('⑪ rum_events: ردیف‌شمار خودکار با الگوی پذیر
 const nodeTables = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE 'node_%' OR name LIKE 'synced_%')`).all().map((r) => r.name);
 check('⑫ زیرساخت صندوق سینک مرکز↔میز کامل است (node_sync_inbox/synced_announcements/sync_nodes)', nodeTables.length >= 2, nodeTables.join(' · '));
 
+// ─── ⑬ اجرای دوم کامل روی همان DB پرشده — تضمین «دوباره‌تلاش امن» استقرار مرکزی ───
+// سناریو: استقرار markaz-central وسط راه می‌سوزد (سهمیه/قطع شبکه) و کاربر «دوباره تلاش می‌کند» —
+// آن‌وقت همان dump قطعه‌بندی‌شده از نو روی DBیی اجرا می‌شود که از دفعهٔ قبل پر شده است.
+// SQLite معادل شرطی برای ALTER TABLE ADD COLUMN ندارد، پس تنها کلاس غیردوباره‌پذیرِ این dump
+// همان ALTERهای برهنه است؛ گیت باید ثابت کند: (الف) با رد کردنِ فقط همین کلاس — و آن هم فقط
+// وقتی ستونش واقعاً از قبل موجود است (تأیید با table_info) — اجرای دوم «صفر خطا» می‌دهد؛
+// (ب) هیچ دستور دیگری به رد شدن نیاز ندارد (هر ناسازگاری دیگری همان‌جا خطا می‌دهد و گیت سرخ
+// می‌شود)؛ (ج) sqlite_master بعد از اجرای دوم بایت‌به‌بایت با قبل یکسان است — یعنی تلاش دوباره
+// نه شیءای می‌سازد، نه حذف می‌کند و نه SQL شیءای را عوض می‌کند.
+const columnExists = (conn, table, col) =>
+  conn.prepare(`PRAGMA table_info(${JSON.stringify(table)})`).all().some((r) => r.name === col);
+const ALTER_ADD_RE = /ALTER\s+TABLE\s+(?:"([^"]+)"|([A-Za-z_][\w]*))\s+ADD\s+COLUMN\s+(?:"([^"]+)"|([A-Za-z_][\w]*))/i;
+
+const schemaBeforeSecond = schemaOf(db);
+let secondError = null;
+let reapplied = 0;
+let skippedApplied = 0;
+outer: for (let i = 0; i < chunks.length; i++) {
+  for (const st of splitStatements(chunks[i])) {
+    const m = st.match(ALTER_ADD_RE);
+    if (m && columnExists(db, m[1] ?? m[2], m[3] ?? m[4])) {
+      skippedApplied++; // اثر این دستور از قبل روی DB هست — اجرای دوباره‌اش فقط «duplicate column» می‌دهد
+      continue;
+    }
+    try {
+      db.exec(st);
+      reapplied++;
+    } catch (err) {
+      secondError = { chunk: i + 1, statement: st.slice(0, 80), message: err.message };
+      break outer;
+    }
+  }
+}
+const schemaAfterSecond = schemaOf(db);
+const byteIdentical = JSON.stringify(schemaBeforeSecond) === JSON.stringify(schemaAfterSecond);
+let secondNote = '';
+if (secondError) secondNote = `خطا در قطعهٔ ${secondError.chunk}: ${secondError.message} — دستور: ${secondError.statement}`;
+else if (!byteIdentical) secondNote = 'sqlite_master بعد از اجرای دوم عوض شده است';
+check('⑬ اجرای دوم کامل — دوباره‌تلاش امن است', !secondError && byteIdentical,
+  secondNote || `${reapplied} دستور دوباره اجرا شد + ${skippedApplied} ALTERِ از-قبل-اعمال‌شده (ستون موجود، تأییدشده با table_info) — sqlite_master بایت‌به‌بایت یکسان`);
+if (!secondError) console.log(`  ℹ اجرای دوم: ${reapplied} دستور دوباره اجرا شد؛ ${skippedApplied} دستور ALTER ADD COLUMN با ستونِ موجود رد شد (تنها کلاس غیردوباره‌پذیرِ dump) — اسکیما بایت‌به‌بایت ثابت ماند`);
+
 db.close();
 rmSync(tmp, { recursive: true, force: true });
 
 console.log('');
-console.log(`نتیجه: ${pass} سبز / ${fail} سرخ — اسکیمای ۱۱۵ مایگریشن «دوباره‌پذیر» است: همان SQL به موتور محلی (SQLite) و به markaz-central (D1) می‌رود.`);
+console.log(`نتیجه: ${pass} سبز / ${fail} سرخ — اسکیمای ${files.length} مایگریشن «دوباره‌پذیر» اثبات شد: همان SQL به موتور محلی (SQLite) و به markaz-central (D1) می‌رود و اجرای دوم کامل روی DB پرشده صفر خطا و بدون تغییر اسکیما است.`);
 if (fail > 0) process.exit(1);

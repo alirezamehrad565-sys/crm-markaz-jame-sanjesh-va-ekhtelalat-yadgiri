@@ -410,6 +410,7 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   flex-shrink: 0;
 }
 .dot--success { background: var(--success); }
+.dot--warning { background: var(--warning); } /* ف۶ — کارت «وضعیت هم‌گامی» پنل سلامت: جبرانی/خارج از خط */
 .dot--error   { background: var(--error); }
 .dot--neutral { background: var(--text-3); }
 

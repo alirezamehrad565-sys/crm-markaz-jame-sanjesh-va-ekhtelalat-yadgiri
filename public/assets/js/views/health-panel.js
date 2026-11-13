@@ -2,6 +2,9 @@
 // همهٔ داده از GET /api/health/panel (فقط‌مدیر) — مُهرهای settings و COUNTهای واقعی، بدون زیرساخت تازه
 // ف۴ — بخش «گزارش رشد جدول‌ها» افزوده شد: GET /api/growth/report فقط‌مدیر — شمارش شبانهٔ کرون + سیاست نگه‌داری
 // ف۵ — بخش «هشدارهای فعال» افزوده شد: رانش مُهر تلاش/موفقیت + جهش خطاهای مرورگر (P0-3 حداقلی)
+// ف۶ — بخش «وضعیت هم‌گامی» افزوده شد: GET /api/node-sync/status فقط‌مدیر — حالت جبرانی/خارج از خط/خطا/انتظار
+//       با نگاشت رنگ (syncStateView) + شمارِ رکوردهای محفوظ در انتظار ارسال + توقفِ نسخهٔ ناسازگار؛
+//       خرابیِ درگاه فقط همین کارت را degraded می‌کند («وضعیت هم‌گامی نامشخص») و با همان بازخوانی ۶۰ثانیه‌ای پنل تازه می‌شود
 import { api } from '../api.js';
 import { el, icon, emptyState, skeletonState } from '../ui.js';
 import { fa, formatJalaliDateTime } from '../format.js';
@@ -38,6 +41,140 @@ function avgNum(n) {
 /** سلول عددی جدول رشد — جهت ltr تا علامت و رقم جابه‌جا نشوند */
 function numCell(value) {
   return el('td', { style: { direction: 'ltr', textAlign: 'center', whiteSpace: 'nowrap' } }, value);
+}
+
+/* ── ف۶ — وضعیت هم‌گامی نود ───────────────────────────────────────────────
+   قرائت GET /api/node-sync/status (فقط‌مدیر): موتور هم‌گامیِ همین نود با مرکز.
+   نگاشت «حالت → برچسب/رنگ» تابع خالص است (syncStateView — بدون DOM) تا بی‌ماک
+   سنگین آزمون شود (src/__tests__/front-sync-status.test.ts). درگاه شاید هنوز مستقر
+   نباشد؛ پس همهٔ فیلدها اختیاری فرض می‌شوند و هر خرابی فقط همین کارت را degraded
+   می‌کند — «وضعیت هم‌گامی نامشخص» بی‌صدا، بقیهٔ پنل سالم می‌ماند (الگوی بخش رشد). */
+
+const SYNC_STATE_VIEWS = {
+  synced: { badge: 'badge--success', dot: 'dot--success', short: 'هم‌گام شد', label: 'هم‌گام شد' },
+  catching_up: { badge: 'badge--warning', dot: 'dot--warning', short: 'هم‌گام‌سازی جبرانی…', label: 'هم‌گام‌سازی جبرانی در جریان است…' },
+  offline: { badge: 'badge--warning', dot: 'dot--warning', short: 'خارج از خط', label: 'خارج از خط — ثبت‌ها محفوظ است' },
+  error: { badge: 'badge--error', dot: 'dot--error', short: 'خطای هم‌گامی', label: 'خطای هم‌گامی — تلاش دوباره خودکار می‌شود' },
+  idle: { badge: 'badge--neutral', dot: 'dot--neutral', short: 'در انتظار', label: 'در انتظار اولین هم‌گامی' }
+};
+
+const SYNC_STATE_UNKNOWN = { badge: 'badge--neutral', dot: 'dot--neutral', short: 'نامشخص', label: 'وضعیت هم‌گامی نامشخص' };
+
+/** حالت هم‌گامی → (برچسب فارسی، کلاس رنگ). حالت ناشناخته/حذف‌شده هم بی‌کرش به «نامشخص» می‌افتد */
+export function syncStateView(state) {
+  return SYNC_STATE_VIEWS[state] ?? SYNC_STATE_UNKNOWN;
+}
+
+const SYNC_ERROR_KIND_VIEWS = { network: 'مشکل شبکه', quota: 'سقف مصرف', version: 'ناسازگاری نسخه' };
+
+/** گونهٔ آخرین خطای هم‌گامی → فارسی؛ گونهٔ ناشناخته/حذف‌شده → «خطای نامشخص» */
+export function syncErrorKindView(kind) {
+  return SYNC_ERROR_KIND_VIEWS[kind] ?? 'خطای نامشخص';
+}
+
+/** ISO معتبر → مُهر میلی‌ثانیه؛ ورودی خراب/حذف‌شده → null (تا NaN به تاریخ فارسی نشت نکند) */
+function isoMsOf(iso) {
+  if (typeof iso !== 'string' || !iso) return null;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : null;
+}
+
+/** تازه‌ترین ISO معتبر میان چند مُهر — «آخرین هم‌گامی» از جفت push/pull */
+function newestIso(...isos) {
+  let best = null;
+  let bestMs = -1;
+  for (const iso of isos) {
+    const ms = isoMsOf(iso);
+    if (ms !== null && ms > bestMs) { bestMs = ms; best = iso; }
+  }
+  return best;
+}
+
+/** پوشش پاسخ درگاه وضعیت: پاکت {data:…} سرور باز می‌شود؛ پاسخِ بی‌هیچ فیلد شناخته → null */
+function unwrapNodeSyncStatus(payload) {
+  const raw = payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object'
+    ? payload.data
+    : payload;
+  if (!raw || typeof raw !== 'object') return null;
+  const known = ['mode', 'state', 'pending_push', 'last_push_ok_at', 'last_pull_ok_at', 'last_error', 'version']
+    .some((k) => k in raw);
+  return known ? raw : null;
+}
+
+function syncSection(sync, syncError) {
+  const view = syncStateView(sync?.state);
+  const paused = sync?.mode === 'paused_version';
+  const headBadge = !sync
+    ? el('span', { class: 'badge badge--neutral' }, 'نامشخص')
+    : paused
+      ? el('span', { class: 'badge badge--error' }, 'توقف نسخه')
+      : el('span', { class: `badge ${view.badge}` }, view.short);
+
+  /* خط‌های جزئیات: آخرین هم‌گامی (وقتی هم‌گام است)، رکوردهای محفوظ در انتظار ارسال، گونهٔ خطا + زمان */
+  const sub = [];
+  if (sync?.state === 'synced') {
+    const lastOk = newestIso(sync?.last_push_ok_at, sync?.last_pull_ok_at);
+    const ms = isoMsOf(lastOk);
+    if (ms !== null) {
+      sub.push(`آخرین هم‌گامی: ${ageHuman(Math.max(0, Math.round((Date.now() - ms) / 1000)))} (${formatJalaliDateTime(lastOk)})`);
+    }
+  }
+  const pending = Number(sync?.pending_push);
+  if (Number.isFinite(pending) && pending > 0) {
+    sub.push(`${fa(pending)} رکورد در انتظار ارسال — محفوظ است`);
+  }
+  if (sync?.state === 'error' && sync?.last_error && typeof sync.last_error === 'object') {
+    const kindText = syncErrorKindView(sync.last_error?.kind);
+    const atText = isoMsOf(sync.last_error?.at) !== null ? formatJalaliDateTime(sync.last_error.at) : null;
+    sub.push(atText ? `${kindText} — ${atText}` : kindText);
+  }
+  if (sub.length === 0) sub.push('—');
+
+  const version = sync?.version && typeof sync.version === 'object' ? sync.version : null;
+  const versionLine = version && (version.client != null || version.center != null)
+    ? `نسخهٔ نود ${version.client ?? '—'} · نسخهٔ مرکز ${version.center ?? '—'}`
+    : null;
+
+  return el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
+    el('div', { class: 'ob-section__head' },
+      el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+        el('h3', { style: { margin: 0 } }, 'وضعیت هم‌گامی'),
+        headBadge
+      ),
+      el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
+        'موتور هم‌گامیِ همین نود با مرکز — ثبت‌های «در انتظار ارسال» روی خود نود محفوظ‌اند و با بازگشت خط، ارسال خودکار از سر گرفته می‌شود؛ وضعیت با همان بازخوانی ۶۰ثانیه‌ای پنل تازه می‌شود.')
+    ),
+    el('div', {},
+      syncError
+        ? el('div', { class: 'card__body' },
+            el('p', { class: 'hint-text' },
+              `وضعیت هم‌گامی نامشخص — خواندن درگاه وضعیت ناموفق بود: ${syncError?.message ?? 'خطای نامشخص'}؛ بقیهٔ پنل سالم است.`))
+        : !sync
+          ? el('div', { class: 'card__body' },
+              el('p', { class: 'hint-text' },
+                'وضعیت هم‌گامی نامشخص — پاسخ درگاه وضعیت خوانا نبود؛ اگر سامانه تازه ارتقا یافته، شاید این درگاه هنوز در آن نسخه مستقر نشده باشد.'))
+          : [
+              el('div', { class: 'ob-row' },
+                el('div', { class: 'ob-row__main' },
+                  el('div', { class: 'cell-main' },
+                    el('span', { class: `dot ${view.dot}`, style: { marginInlineEnd: 'var(--sp-2)' } }),
+                    view.label),
+                  el('div', { class: 'cell-sub' }, sub.join(' · '))
+                )
+              ),
+              paused
+                ? el('div', { class: 'ob-row' },
+                    el('div', { class: 'ob-row__main' },
+                      el('div', { class: 'cell-main' }, 'نسخه ناسازگار — اول مرکز را ارتقا دهید'),
+                      versionLine ? el('div', { class: 'cell-sub' }, versionLine) : null
+                    ),
+                    el('div', { class: 'ob-row__side' },
+                      el('span', { class: 'badge badge--error' }, 'توقف نسخه'))
+                  )
+                : null
+            ]
+    )
+  );
 }
 
 const STATE_META = {
@@ -209,10 +346,11 @@ export async function renderHealthPanel(outlet) {
   const stopTimer = () => { if (timer) { clearInterval(timer); timer = null; } };
 
   async function reload() {
-    // ف۴ — پنل سلامت و گزارش رشد هم‌زمان گرفته می‌شوند؛ خرابیِ رشد فقط بخش خودش را degraded می‌کند
-    const [healthOut, growthOut] = await Promise.allSettled([
+    // ف۶ — پنل سلامت، گزارش رشد و وضعیت هم‌گامی هم‌زمان گرفته می‌شوند؛ خرابیِ هر بخش فقط کارت خودش را degraded می‌کند
+    const [healthOut, growthOut, syncOut] = await Promise.allSettled([
       api.get('/api/health/panel'),
-      api.get('/api/growth/report')
+      api.get('/api/growth/report'),
+      api.get('/api/node-sync/status')
     ]);
     if (healthOut.status === 'rejected') {
       const err = healthOut.reason;
@@ -227,6 +365,9 @@ export async function renderHealthPanel(outlet) {
     const data = healthOut.value.data;
     const growth = growthOut.status === 'fulfilled' ? growthOut.value.data : null;
     const growthError = growthOut.status === 'rejected' ? growthOut.reason : null;
+    // ف۶ — وضعیت هم‌گامی: پاکت {data:…} باز می‌شود؛ پاسخ ناآشنا (درگاه هنوز مستقر نبود؟) → null → کارت «نامشخص»
+    const sync = syncOut.status === 'fulfilled' ? unwrapNodeSyncStatus(syncOut.value) : null;
+    const syncError = syncOut.status === 'rejected' ? syncOut.reason : null;
 
     const dbOk = data?.db?.ok;
     const counts = data?.counts ?? {};
@@ -237,6 +378,21 @@ export async function renderHealthPanel(outlet) {
       : okCount === cp.channels.length
         ? el('span', { class: 'badge badge--success' }, `هر ${fa(cp.channels.length)} درگاه سالم`)
         : el('span', { class: 'badge badge--warning' }, `${fa(okCount)} از ${fa(cp.channels.length)} درگاه سالم`);
+
+    // ف۶ — کارت وضعیت هم‌گامی: هر خطای غیرمنتظرهٔ ساخت فقط به «نامشخص» بی‌صدا می‌افتد — پنل هرگز نمی‌شکند
+    let syncCard;
+    try {
+      syncCard = syncSection(sync, syncError);
+    } catch {
+      syncCard = el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+        el('div', { class: 'card__head' },
+          el('h3', { style: { margin: 0 } }, 'وضعیت هم‌گامی'),
+          el('span', { class: 'badge badge--neutral' }, 'نامشخص')
+        ),
+        el('div', { class: 'card__body' },
+          el('p', { class: 'hint-text' }, 'وضعیت هم‌گامی نامشخص — بقیهٔ پنل سالم است.'))
+      );
+    }
 
     root.replaceChildren(
       el('div', { class: 'page-head' },
@@ -258,6 +414,8 @@ export async function renderHealthPanel(outlet) {
           infoRow('گزارش باگ باز', counts.bug_reports_open != null ? fa(counts.bug_reports_open) : '—')
         )
       ),
+
+      syncCard, // ف۶ — وضعیت هم‌گامی نود (بین «سامانه» و درگاه‌های CP: جبرانی/خارج از خط/خطا با یک نگاه)
 
       el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
         el('div', { class: 'ob-section__head' },
