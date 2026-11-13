@@ -31,7 +31,8 @@ import {
 } from './dom-build.js';
 import { openSetupWizard } from './wizard.js';
 import { verifyCloudNode, type FetchLike } from './verify.js';
-import { buildSyncSection } from '../node-sync-runner/panel.js'; // rust-f9 — همگام‌سازی محتوا (فقط-میز)
+// rust-f9 — بخش همگام‌سازی محتوا با import پویا سیم می‌شود (پایین cloudSetupSection) —
+// نه import ایستا: فقط-میز است و بودجهٔ eager_modules وب (ci.yml) را نمی‌شکند.
 
 export interface SetupUser {
   role?: string | null;
@@ -177,25 +178,31 @@ export function cloudSetupSection(user: SetupUser | null, deps?: Partial<RunDeps
 
   // rust-f9 — بخش «همگام‌سازی محتوا از ابر» زیر اتصال ابر: اعتبار از همان record + مخزن
   // امن در لحظهٔ کلیک خوانده می‌شود؛ توکن سشن پوسته از کلید استاندارد cs.token می‌آید.
-  box.appendChild(
-    buildSyncSection(doc, {
-      getCreds: async () => {
-        const secureRes = await secureFor();
-        const key = await readSecret(secureRes.store, SECRET_NODE_KEY);
-        const fresh = loadCloudRecord(store);
-        return { baseUrl: fresh.worker_url, nodeCode: fresh.node_code, nodeKey: key };
-      },
-      progressStorage: store,
-      tokenProvider: () => {
-        try {
-          return (typeof localStorage !== 'undefined' ? localStorage.getItem('cs.token') : null) ?? null;
-        } catch {
-          return null;
-        }
-      },
-      // FetchLike ← قرارداد RunnerFetch زمان‌بند (runner فقط status مصرف می‌کند)
-      fetchFn: (input: string, init?: RequestInit) => (merged.fetchImpl ?? globalFetch)(input, init as never)
-    })
-  );
+  // rust-f13fix — import پویا: پنل سینک فقط-میز است و نباید در گراف بوت وب باشد
+  // (بودجهٔ eager_modules = ۵ در ci.yml)؛ در وب بخش‌های setup ساخته نمی‌شوند و
+  // چانک اصلاً واکشی نمی‌شود — روی میز با یک تیک رندر غیرهمگام اضافه می‌شود.
+  void (async () => {
+    const { buildSyncSection } = await import('../node-sync-runner/panel.js');
+    box.appendChild(
+      buildSyncSection(doc, {
+        getCreds: async () => {
+          const secureRes = await secureFor();
+          const key = await readSecret(secureRes.store, SECRET_NODE_KEY);
+          const fresh = loadCloudRecord(store);
+          return { baseUrl: fresh.worker_url, nodeCode: fresh.node_code, nodeKey: key };
+        },
+        progressStorage: store,
+        tokenProvider: () => {
+          try {
+            return (typeof localStorage !== 'undefined' ? localStorage.getItem('cs.token') : null) ?? null;
+          } catch {
+            return null;
+          }
+        },
+        // FetchLike ← قرارداد RunnerFetch زمان‌بند (runner فقط status مصرف می‌کند)
+        fetchFn: (input: string, init?: RequestInit) => (merged.fetchImpl ?? globalFetch)(input, init as never)
+      })
+    );
+  })();
   return box;
 }

@@ -24,6 +24,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: desktop/src-tauri
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: مونتاژ رانتایم نصاب لینوکس — سایدکار workerd (tauri-build در کامپایل هم externalBin را الزامی می‌داند)
+        run: |
+          npm ci
+          node scripts/desktop/build-installer-runtime.mjs --target x86_64-unknown-linux-gnu
       - name: cargo check پوستهٔ دسکتاپ (engine.rs / lib.rs / main.rs)
         working-directory: desktop/src-tauri
         run: cargo check --all-targets

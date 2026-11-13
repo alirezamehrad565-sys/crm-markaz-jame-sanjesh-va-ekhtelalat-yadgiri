@@ -1,6 +1,6 @@
 {
   "_comment": "مانیفست باندل کلاینت؛ گات بودجه (perf-budget.mjs) از این می‌خواند. فایل ساخته‌شده است — دستی ویرایش نشود.",
-  "boot": "boot.SK4EYUUH.js",
+  "boot": "boot.DXAP6R6X.js",
   "bootImports": [
     "chunk.TQV6FOIY.js",
     "chunk.3ELOCRLD.js",
@@ -28,9 +28,9 @@
       "role": "lazy"
     },
     {
-      "name": "boot.SK4EYUUH.js",
+      "name": "boot.DXAP6R6X.js",
       "raw": 74998,
-      "gz": 24582,
+      "gz": 24581,
       "role": "boot"
     },
     {
@@ -130,6 +130,12 @@
       "role": "lazy"
     },
     {
+      "name": "chunk.LSEU2KZC.js",
+      "raw": 3350,
+      "gz": 1469,
+      "role": "lazy"
+    },
+    {
       "name": "chunk.SD7CCJJT.js",
       "raw": 4622,
       "gz": 2108,
@@ -190,9 +196,9 @@
       "role": "lazy"
     },
     {
-      "name": "cloud-setup.WA5VJS7R.js",
-      "raw": 14245,
-      "gz": 5105,
+      "name": "cloud-setup.FPYG3QGM.js",
+      "raw": 11442,
+      "gz": 4346,
       "role": "lazy"
     },
     {
@@ -235,6 +241,12 @@
       "name": "outbox.SNBYEO2M.js",
       "raw": 5263,
       "gz": 2227,
+      "role": "lazy"
+    },
+    {
+      "name": "panel.MEAYIOH6.js",
+      "raw": 11832,
+      "gz": 4163,
       "role": "lazy"
     },
     {
@@ -317,8 +329,8 @@
     }
   ],
   "totals": {
-    "files": 51,
-    "raw": 1116759,
-    "gz": 365839
+    "files": 53,
+    "raw": 1129138,
+    "gz": 370711
   }
 }

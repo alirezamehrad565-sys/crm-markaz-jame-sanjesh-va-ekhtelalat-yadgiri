@@ -11,9 +11,10 @@
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import mime from 'mime';
 
-const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const MINIFLARE_WORKERS = path.join(REPO_ROOT, 'node_modules/miniflare/dist/src/workers');
 
 /** مجوزهای ورکر DO مینیفلر — هم‌مقادیر miniflare برای پایداری مسیر فایل‌های SQLite */
