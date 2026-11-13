@@ -4,8 +4,9 @@
 // `miniflare-D1DatabaseObject` و نام دیتابیس `main` → مسیر فایل SQLite قطعی است
 // (ما همان مسیر را با node:sqlite مستقیم مایگریت/سید می‌کنیم).
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-export const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
+export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const D1_OBJECT_CLASS = 'D1DatabaseObject';
 export const D1_UNIQUE_KEY = `miniflare-${D1_OBJECT_CLASS}`;
 
