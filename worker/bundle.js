@@ -73118,7 +73118,37 @@ var IngestItemSchema = external_exports.object({
 var IngestBodySchema = external_exports.object({
   items: external_exports.array(IngestItemSchema).min(1).max(SYNC_INGEST_MAX_ITEMS)
 });
-async function ingestInboxItem(db, item) {
+async function projectSyncedAnnouncement(db, id, payload, log) {
+  try {
+    const title = typeof payload.title === "string" ? payload.title : "";
+    if (title.trim().length === 0) return false;
+    const body = typeof payload.body === "string" ? payload.body : "";
+    const publishedAt = typeof payload.published_at === "string" && payload.published_at.length > 0 ? payload.published_at : typeof payload.created_at === "string" && payload.created_at.length > 0 ? payload.created_at : null;
+    const active = payload.active === false || payload.active === 0 ? 0 : 1;
+    await db.query(
+      `INSERT INTO synced_announcements (id, title, body, published_at, active, received_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))
+       ON CONFLICT(id) DO UPDATE SET
+         title = excluded.title,
+         body = excluded.body,
+         published_at = excluded.published_at,
+         active = excluded.active,
+         received_at = datetime('now')`,
+      [id, title, body, publishedAt, active]
+    );
+    return true;
+  } catch (err) {
+    log?.warn("internal_sync.announcement_projection_failed", { id, error: String(err) });
+    return false;
+  }
+}
+__name(projectSyncedAnnouncement, "projectSyncedAnnouncement");
+async function projectIfAnnouncement(db, item, log) {
+  if (item.domain !== "announcements") return;
+  await projectSyncedAnnouncement(db, item.id, item.payload, log);
+}
+__name(projectIfAnnouncement, "projectIfAnnouncement");
+async function ingestInboxItem(db, item, log) {
   const payloadJson = JSON.stringify(item.payload);
   const existing = await db.queryOne(
     "SELECT updated_at, payload FROM node_sync_inbox WHERE domain = ? AND id = ?",
@@ -73129,13 +73159,18 @@ async function ingestInboxItem(db, item) {
       "INSERT INTO node_sync_inbox (domain, id, updated_at, payload) VALUES (?, ?, ?, ?)",
       [item.domain, item.id, item.updated_at, payloadJson]
     );
+    await projectIfAnnouncement(db, item, log);
     return "inserted";
   }
-  if (existing.updated_at === item.updated_at && existing.payload === payloadJson) return "duplicate";
+  if (existing.updated_at === item.updated_at && existing.payload === payloadJson) {
+    await projectIfAnnouncement(db, item, log);
+    return "duplicate";
+  }
   await db.query(
     "UPDATE node_sync_inbox SET updated_at = ?, payload = ?, received_at = datetime('now') WHERE domain = ? AND id = ?",
     [item.updated_at, payloadJson, item.domain, item.id]
   );
+  await projectIfAnnouncement(db, item, log);
   return "updated";
 }
 __name(ingestInboxItem, "ingestInboxItem");
@@ -73158,6 +73193,11 @@ async function inboxStatusCounts(db) {
   return { total, by_domain };
 }
 __name(inboxStatusCounts, "inboxStatusCounts");
+async function syncedAnnouncementsCount(db) {
+  const row = await db.queryOne("SELECT COUNT(*) AS n FROM synced_announcements");
+  return Number(row?.n ?? 0);
+}
+__name(syncedAnnouncementsCount, "syncedAnnouncementsCount");
 
 // src/internal-sync/outbox.ts
 var OUTBOX_MAX_ITEMS = 200;
@@ -73222,10 +73262,54 @@ async function healthPingItem(db, now) {
   };
 }
 __name(healthPingItem, "healthPingItem");
+var USAGE_COUNTERS = [
+  { key: "students_active", sql: "SELECT COUNT(*) AS n FROM students WHERE active = 1" },
+  { key: "appointments_total", sql: "SELECT COUNT(*) AS n FROM appointments" },
+  {
+    key: "appointments_7d",
+    sql: "SELECT COUNT(*) AS n FROM appointments WHERE created_at >= datetime('now', '-7 days')"
+  },
+  { key: "day_notes_total", sql: "SELECT COUNT(*) AS n FROM day_notes" },
+  {
+    key: "audit_events_24h",
+    sql: "SELECT COUNT(*) AS n FROM audit_log WHERE created_at >= datetime('now', '-24 hours')"
+  },
+  { key: "inbox_items_total", sql: "SELECT COUNT(*) AS n FROM node_sync_inbox" }
+];
+async function usageSummaryItem(db, now) {
+  if (!NODE_PUSH_DOMAIN_SET.has("usage_summary")) return null;
+  const counters = {};
+  for (const c of USAGE_COUNTERS) {
+    try {
+      const row = await db.queryOne(c.sql);
+      const n = Number(row?.n ?? 0);
+      if (Number.isFinite(n)) counters[c.key] = n;
+    } catch {
+    }
+  }
+  const parsed = UsageSummaryPayloadSchema.safeParse(counters);
+  if (!parsed.success) return null;
+  const day = now.toISOString().slice(0, 10);
+  return {
+    id: `usage-${day}`,
+    domain: "usage_summary",
+    at: `${day}T00:00:00Z`,
+    // ابتدای همان بکت روز UTC — هم‌الگوی at بکت‌شدهٔ ping
+    payload: parsed.data
+  };
+}
+__name(usageSummaryItem, "usageSummaryItem");
 async function buildOutboxPage(db, since, now = /* @__PURE__ */ new Date()) {
-  const [errors, ping] = await Promise.all([clientErrorItems(db, since), healthPingItem(db, now)]);
+  const [errors, ping, usage] = await Promise.all([
+    clientErrorItems(db, since),
+    healthPingItem(db, now),
+    usageSummaryItem(db, now)
+  ]);
   const includePing = !since || Date.parse(ping.at) > Date.parse(since);
-  const items = includePing ? [...errors, ping] : errors;
+  const includeUsage = usage !== null && (!since || Date.parse(usage.at) > Date.parse(since));
+  const items = [...errors];
+  if (includeUsage && usage) items.push(usage);
+  if (includePing) items.push(ping);
   items.sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   return { items: items.slice(0, OUTBOX_MAX_ITEMS), generated_at: now.toISOString() };
 }
@@ -73252,7 +73336,7 @@ function registerInternalSyncRoutes(app, deps) {
     const counts = { inserted: 0, updated: 0, duplicates: 0 };
     const by_domain = {};
     for (const item of allowed) {
-      const r = await ingestInboxItem(deps.db, item);
+      const r = await ingestInboxItem(deps.db, item, log);
       if (r === "inserted") counts.inserted += 1;
       else if (r === "updated") counts.updated += 1;
       else counts.duplicates += 1;
@@ -73265,7 +73349,8 @@ function registerInternalSyncRoutes(app, deps) {
     requireDesktopEngine(c);
     getAuthContext(c);
     const status = await inboxStatusCounts(deps.db);
-    return c.json({ data: status }, 200);
+    const synced_announcements = await syncedAnnouncementsCount(deps.db);
+    return c.json({ data: { ...status, synced_announcements } }, 200);
   });
   app.get("/api/internal/sync/outbox", async (c) => {
     requireDesktopEngine(c);

@@ -7,7 +7,9 @@
  * در تولید وب این binding وجود ندارد → ۴۰۴ کم‌دست — رفتار تولید بایت‌به‌بایت دست‌نخورده
  * (باندل یکسان، شاخهٔ زمان‌اجرای خاموش).
  *  • POST /api/internal/sync/ingest — آیتم‌های pullشدهٔ کلاینت → صندوق ورودی (0110)
- *  • GET  /api/internal/sync/status — شمارش صندوق بر حسب دامنه (نشانگر/drill)
+ *    + نگاشت نمایشی اطلاعیه‌ها به synced_announcements (rust-f12-A — مایگریشن 0112)
+ *  • GET  /api/internal/sync/status — شمارش صندوق بر حسب دامنه + شمارش synced_announcements
+ *    (rust-f12-A) برای نشانگر/drill
  *  • GET  /api/internal/sync/outbox — آیتم‌های قابل‌پوش نود→ابر (rust-f11؛ دو دامنهٔ
  *    client_errors/health_ping با since اختیاری — قرارداد در outbox.ts)
  * هیچ دادهٔ بالینی در هیچ مسیری نیست — فهرست سفید سه‌لایه (ابر/کلاینت/سرور میز).
@@ -19,7 +21,7 @@ import { getAuthContext } from '@core/auth';
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 import { NotFoundError, ValidationError } from '@core/errors';
-import { IngestBodySchema, ingestInboxItem, inboxStatusCounts, splitByWhitelist } from './service';
+import { IngestBodySchema, ingestInboxItem, inboxStatusCounts, splitByWhitelist, syncedAnnouncementsCount } from './service';
 import { buildOutboxPage, parseOutboxSince } from './outbox';
 
 export interface InternalSyncRoutesDeps {
@@ -52,7 +54,7 @@ export function registerInternalSyncRoutes(app: AppHono, deps: InternalSyncRoute
     const counts = { inserted: 0, updated: 0, duplicates: 0 };
     const by_domain: Record<string, number> = {};
     for (const item of allowed) {
-      const r = await ingestInboxItem(deps.db, item);
+      const r = await ingestInboxItem(deps.db, item, log); // log — warn نگاشت نمایشی rust-f12-A
       if (r === 'inserted') counts.inserted += 1;
       else if (r === 'updated') counts.updated += 1;
       else counts.duplicates += 1;
@@ -66,7 +68,9 @@ export function registerInternalSyncRoutes(app: AppHono, deps: InternalSyncRoute
     requireDesktopEngine(c);
     getAuthContext(c); // همان گیت سشن — فراخوانی برای یکدستی ۴۰۱
     const status = await inboxStatusCounts(deps.db);
-    return c.json({ data: status }, 200);
+    // rust-f12-A — فیلد جدید نمایشی: شمارش synced_announcements (فیلدهای موجود دست‌نخورده)
+    const synced_announcements = await syncedAnnouncementsCount(deps.db);
+    return c.json({ data: { ...status, synced_announcements } }, 200);
   });
 
   // rust-f11 — صندوق خروج push نود→ابر: آیتم‌های client_errors/health_ping برای client.push()
