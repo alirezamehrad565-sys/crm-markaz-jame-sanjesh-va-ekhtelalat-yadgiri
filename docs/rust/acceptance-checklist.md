@@ -70,7 +70,7 @@
 | ۶ | شبیه‌سازی «دیسک پر» روی VM | پر کردن حجم دادهٔ میز تا سقف + مشاهدهٔ رفتار نرم | ردیف ۴ |
 | ۷ | گواهی امضای کد (پیشنهاد کارفرما) | placeholderهای `bundle.windows` در tauri.conf.json — بدون آن: هشدار SmartScreen مستند | خرید/تصمیم کارفرما |
 | ۸ | تصمیم WebView2 کاملاً آفلاین | `webview2InstallMode: "offlineInstaller"` (+~۱۲۰MB) یا پیش‌فرض | حکم کارفرما |
-| ۹ | سایدکار workerd در نصاب | دانلود pinned-version در CI + `externalBin` + ثبت هش | فاز ۲ |
+| ۹ | سایدکار workerd در نصاب | ✓ **انجام شد (rust-f13)** — دانلود pinned (`workerd@1.20250718.0` هم‌گام با مخزن) از npm رسمی در CI + `externalBin` (binaries/workerd) + ثبت هش sha256 در `engine-runtime-manifest.json` (با `--check`) + قالب capnp توکن‌دار + d1-seed مایگریت‌شده (۱۱۵/۱۱۵ + seed نمایشی) | ✓ انجام — امضای کارفرما |
 | ۱۰ | امضای این چک‌لیست | جدول امضای پایین | همهٔ ردیف‌ها |
 
 ## ۸) مایلستون‌های شناسایی‌شده در drill (rust-f8) — تصمیم کارفرما
