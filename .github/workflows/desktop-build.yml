@@ -45,7 +45,19 @@ jobs:
         run: |
           npm ci
           npm run build:client
-      - name: بیلد Tauri → نصاب NSIS فارسی (Setup.exe)
+      - name: بیلد Tauri — تلاش نخست (کش‌شدن NSIS بستهٔ تائوری؛ زبان فارسی در توزیع NSIS تائوری نیست → شکست انتظارشده)
+        run: npx @tauri-apps/cli@2 build
+        continue-on-error: true
+      - name: افزودن زبان فارسی به NSIS کش‌شده (Farsi→Persian از مخزن رسمی nsis-dev/nsis)
+        shell: pwsh
+        run: |
+          $lang = "$env:LOCALAPPDATA\tauri\NSIS\Contrib\Language files"
+          if (-not (Test-Path "$lang\..\..\Bin\makensis.exe")) { throw "NSIS کش نشد — تلاش نخست را بررسی کنید" }
+          $base = 'https://raw.githubusercontent.com/nsis-dev/nsis/master/Contrib/Language%20files'
+          Invoke-WebRequest "$base/Farsi.nlf" -OutFile "$lang\Persian.nlf"
+          Invoke-WebRequest "$base/Farsi.nsh" -OutFile "$lang\Persian.nsh"
+          Get-ChildItem "$lang\Persian.*" | Select-Object Name, Length
+      - name: بیلد Tauri → نصاب NSIS فارسی (Setup.exe) — تلاش دوم
         run: npx @tauri-apps/cli@2 build
       - name: مونتاژ پک USB — کپی خودکار Setup.exe از خروجی NSIS
         run: npm run usb:pack
