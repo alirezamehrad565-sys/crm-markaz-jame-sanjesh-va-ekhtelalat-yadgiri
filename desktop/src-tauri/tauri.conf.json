@@ -4,7 +4,7 @@
   "version": "1.25.75",
   "identifier": "ir.sdt144.center.desktop",
   "build": {
-    "frontendDist": "../public",
+    "frontendDist": "../../public",
     "devUrl": "http://127.0.0.1:8787"
   },
   "app": {
