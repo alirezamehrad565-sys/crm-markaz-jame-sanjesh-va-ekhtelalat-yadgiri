@@ -10,8 +10,10 @@
  * جای ثبت: در api-routing «بعد از» گیت authMiddleware/supervisorGate (احراز سشن کارمند) و با
  * گیت زمان‌اجرای میز CENTER_DESKTOP_ENGINE عین internal-sync — در تولید وب binding غایب است
  * → ۴۰۴ کم‌دست (باندل یکسان، شاخهٔ زمان‌اجرای خاموش).
- * نسخهٔ مرکز: قرارداد فعلی /node/pull هیچ فیلد نسخه‌ای حمل نمی‌کند (سند node-sync §۲) →
- * version همیشه null؛ هیچ endpoint تازه‌ای سمت مرکز ساخته نمی‌شود (بند ۴ بریف).
+ * نسخهٔ مرکز: از موج ۱ (۱-۳/۱-۴) هر پاسخ موفق pull/push سمت مرکز center_version/
+ * min_node_version/server_ts دارد؛ runner آن را در انبار پیشرفت ثبت و با آینهٔ POST می‌فرستد →
+ * version/clock_drift_minutes/clock_warning/last_catchup در همین پاکت GET می‌آیند؛ آینهٔ قدیمیِ
+ * بدونِ این فیلدها هم پذیرفته می‌شود (اختیاری در اسکیما) و در GET پیش‌فرض نرم می‌گیرد.
  *
  * pending_push: شمارش دقیق «آنچه پوش بعدی می‌فرستد» — client_errors با occurred_at بعد از
  * watermark آینه (تنها دامنهٔ pushable که در DB محلی ردیف دارد؛ سقف ۲۰۰ صفحهٔ outbox ندارد)
@@ -43,6 +45,8 @@ export type NodeSyncFailureKind = (typeof FAILURE_KINDS)[number];
 /**
  * آینهٔ وضعیت که فرانت‌اند با POST می‌فرستد — شکل سازنده‌اش NodeSyncStatusMirror در
  * runner.ts است (بدون zod، برای چانک فرانت‌اند)؛ اینجا سمت موتور سفت اعتبارسنجی می‌شود.
+ * موج ۱ (۱-۳/۱-۴): فیلدهای تازه «اختیاری» تعریف شده‌اند تا آینهٔ قدیمیِ بدونِ آن‌ها (آپدیت
+ * میانهٔ مسیر) همچنان پذیرفته شود — GET برای غایب‌ها پیش‌فرض نرم می‌گذارد.
  */
 export const NodeSyncStatusMirrorSchema = z.object({
   v: z.literal(1),
@@ -55,12 +59,48 @@ export const NodeSyncStatusMirrorSchema = z.object({
   last_error_at: z.iso.datetime().nullable(),
   push_watermark: z.iso.datetime().nullable(),
   client_version: z.string().max(50).nullable(),
+  // ─── موج ۱ — هندشیک نسخه (۱-۴)، ساعت مرجع مرکز (۱-۳)، خلاصهٔ جبران کامل ───
+  version: z
+    .object({
+      client: z.string().min(1).max(50),
+      center: z.string().min(1).max(50),
+      compatible: z.boolean()
+    })
+    .nullable()
+    .optional(),
+  clock_drift_minutes: z.number().int().min(0).max(525_600).nullable().optional(),
+  clock_warning: z.boolean().optional(),
+  last_catchup: z
+    .object({
+      at: z.iso.datetime(),
+      pulled: z.number().int().min(0),
+      pushed: z.number().int().min(0)
+    })
+    .nullable()
+    .optional(),
   updated_at: z.iso.datetime()
 });
 
 export type NodeSyncStatusMirror = z.infer<typeof NodeSyncStatusMirrorSchema>;
 
-/** پاکت GET — قرارداد ثابت UI؛ نام فیلدها نباید تغییر کند */
+/** شکل هندشیک نسخهٔ دیده‌شده — موج ۱ (۱-۴) */
+export interface NodeSyncVersionInfo {
+  /** نسخهٔ خود نود (APP_VERSION runner هنگام ثبت) */
+  client: string;
+  /** نسخهٔ خود مرکز از پاسخ pull/push */
+  center: string;
+  /** client ≥ min_node_version مرکز */
+  compatible: boolean;
+}
+
+/** خلاصهٔ دورهٔ جبرانی کامل — موج ۱ (بقیهٔ ۱-۱) */
+export interface NodeSyncCatchupSummary {
+  at: string;
+  pulled: number;
+  pushed: number;
+}
+
+/** پاکت GET — قرارداد ثابت UI نسخهٔ ۲ (موج ۱)؛ نام فیلدها نباید تغییر کند */
 export interface NodeSyncStatusPayload {
   mode: NodeSyncMode;
   state: NodeSyncUiState;
@@ -69,8 +109,14 @@ export interface NodeSyncStatusPayload {
   last_push_ok_at: string | null;
   last_pull_ok_at: string | null;
   last_error: { kind: Exclude<NodeSyncFailureKind, 'none'>; at: string } | null;
-  /** قرارداد فعلی نسخهٔ مرکز را حمل نمی‌کند → null تا وقتی پروتکل نسخه بگیرد */
-  version: null;
+  /** موج ۱ (۱-۴) — آخرین هندشیک نسخه از پاسخ‌های مرکز؛ هنوز هندشیک ندیده = null */
+  version: NodeSyncVersionInfo | null;
+  /** موج ۱ (۱-۳) — قدر مطلق اختلاف ساعت دستگاه با مرکز به دقیقه؛ ناشناخته = null */
+  clock_drift_minutes: number | null;
+  /** موج ۱ (۱-۳) — اختلاف بیش از ۲ دقیقه (اطلاعاتی؛ رفتار سینک عوض نمی‌کند) */
+  clock_warning: boolean;
+  /** موج ۱ — خلاصهٔ آخرین دورهٔ جبرانی کامل {at, pulled, pushed}؛ هیچ دورهٔ کاملی نبوده = null */
+  last_catchup: NodeSyncCatchupSummary | null;
 }
 
 export interface NodeSyncStatusRouteDeps {
@@ -187,7 +233,11 @@ export function registerNodeSyncStatusRoute(app: AppHono, deps: NodeSyncStatusRo
         errorKind && errorKind !== 'none' && mirror?.last_error_at
           ? { kind: errorKind as Exclude<NodeSyncFailureKind, 'none'>, at: mirror.last_error_at }
           : null,
-      version: null // قرارداد فعلی نسخهٔ مرکز را در پاسخ pull حمل نمی‌کند — بند ۴ بریف
+      // ─── موج ۱ — آینهٔ غایب/قدیمی = پیش‌فرض نرم (اسنپ‌شات تازه از runner می‌آید) ───
+      version: mirror?.version ?? null,
+      clock_drift_minutes: mirror?.clock_drift_minutes ?? null,
+      clock_warning: mirror?.clock_warning === true,
+      last_catchup: mirror?.last_catchup ?? null
     };
     return c.json(payload, 200);
   });

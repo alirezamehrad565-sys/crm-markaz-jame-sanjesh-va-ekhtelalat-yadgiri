@@ -28,6 +28,8 @@ import type { AuditWriter } from '@core/audit';
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 import { ConflictError, NotFoundError, RateLimitError, ValidationError } from '@core/errors';
+// موج ۱ (۱-۳/۱-۴) — نسخهٔ مرکز و حداقل نسخهٔ نود در پاسخ‌های موفق pull/push حمل می‌شوند
+import { APP_VERSION, NODE_MIN_VERSION } from '@core/version';
 import {
   parseApiRateLimitPerMin,
   makeKeyedRateLimiter,
@@ -183,11 +185,23 @@ export function createNodeSyncApp(deps: NodeSyncAppDeps): AppHono {
       ? Math.min(parsedLimit, NODE_PULL_MAX_LIMIT)
       : NODE_PULL_DEFAULT_LIMIT;
 
+    // موج ۱ (۱-۳/۱-۴) — ساعت مرجع مرکز + هندشیک نسخه در هر پاسخ موفق pull (فقط-افزودنی؛
+    // server_time قرارداد قبلی است و برای سازگاری عقب می‌ماند — همان مقدار server_ts).
+    const at = now().toISOString();
     const page = await pullNodePage(db, { domains, cursor, limit });
     fireAndForget(c, stampNodePull(db, node.node_code, now()).catch(() => undefined));
 
     return c.json(
-      { data: { items: page.items, next_cursor: page.next_cursor, server_time: now().toISOString() } },
+      {
+        data: {
+          items: page.items,
+          next_cursor: page.next_cursor,
+          server_time: at,
+          server_ts: at,
+          center_version: APP_VERSION,
+          min_node_version: NODE_MIN_VERSION
+        }
+      },
       200
     );
   });
@@ -205,12 +219,21 @@ export function createNodeSyncApp(deps: NodeSyncAppDeps): AppHono {
     // عیناً اجرا می‌شوند؛ تیک دوره‌ای بدون هدر زیر گات می‌ماند (هم‌ریتم m1.5).
     const catchUpDeclared = c.req.header(NODE_PUSH_CATCHUP_HEADER) === '1';
     const at = now();
+    // موج ۱ (۱-۳/۱-۴) — پاکت نسخه/ساعت مرکز؛ روی پاسخ موفق و پاسخ صامت زیر گات هر دو می‌نشیند
+    const handshake = {
+      server_ts: at.toISOString(),
+      center_version: APP_VERSION,
+      min_node_version: NODE_MIN_VERSION
+    };
     if (!catchUpDeclared && !shouldAttemptNodePush(node.last_push_attempt_at, at, minIntervalMs)) {
       const lastT = Date.parse(node.last_push_attempt_at ?? '');
       const retryAfterS = Number.isNaN(lastT)
         ? null
         : Math.max(0, Math.ceil((lastT + minIntervalMs - at.getTime()) / 1000));
-      return c.json({ data: { accepted: 0, duplicates: 0, throttled: true, retry_after_s: retryAfterS } }, 200);
+      return c.json(
+        { data: { accepted: 0, duplicates: 0, throttled: true, retry_after_s: retryAfterS, ...handshake } },
+        200
+      );
     }
 
     // ۲) سقف سخت بدنه (اعتراف Content-Length — هم‌الگوی لولهٔ خطای مرورگر)
@@ -247,7 +270,10 @@ export function createNodeSyncApp(deps: NodeSyncAppDeps): AppHono {
     await stampNodePushOk(db, node.node_code, at).catch(() => undefined);
     log.info('node_sync.push', { node: node.node_code, accepted: outcome.accepted, duplicates: outcome.duplicates });
 
-    return c.json({ data: { accepted: outcome.accepted, duplicates: outcome.duplicates, throttled: false } }, 200);
+    return c.json(
+      { data: { accepted: outcome.accepted, duplicates: outcome.duplicates, throttled: false, ...handshake } },
+      200
+    );
   });
 
   // ─── مسیرهای فقط-مدیر — همان گیت سشن کارمندان + audit_log ───

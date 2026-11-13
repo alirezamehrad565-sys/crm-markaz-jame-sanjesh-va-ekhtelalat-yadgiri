@@ -1,6 +1,6 @@
 {
   "_comment": "مانیفست باندل کلاینت؛ گات بودجه (perf-budget.mjs) از این می‌خواند. فایل ساخته‌شده است — دستی ویرایش نشود.",
-  "boot": "boot.BRCRDD5L.js",
+  "boot": "boot.XMTRB67Z.js",
   "bootImports": [
     "chunk.TQV6FOIY.js",
     "chunk.3ELOCRLD.js",
@@ -28,13 +28,13 @@
       "role": "lazy"
     },
     {
-      "name": "boot.7NOQGSPD.js",
-      "raw": 1116,
-      "gz": 681,
+      "name": "boot.QZ4Q5TZH.js",
+      "raw": 1162,
+      "gz": 700,
       "role": "lazy"
     },
     {
-      "name": "boot.BRCRDD5L.js",
+      "name": "boot.XMTRB67Z.js",
       "raw": 75687,
       "gz": 24724,
       "role": "boot"
@@ -64,6 +64,12 @@
       "role": "lazy"
     },
     {
+      "name": "chunk.2SUYXMMS.js",
+      "raw": 24031,
+      "gz": 7210,
+      "role": "lazy"
+    },
+    {
       "name": "chunk.2WZ6MPKR.js",
       "raw": 49564,
       "gz": 18542,
@@ -85,6 +91,12 @@
       "name": "chunk.6LUGIAJR.js",
       "raw": 400,
       "gz": 285,
+      "role": "lazy"
+    },
+    {
+      "name": "chunk.6M7KAHHU.js",
+      "raw": 343,
+      "gz": 254,
       "role": "lazy"
     },
     {
@@ -172,12 +184,6 @@
       "role": "lazy"
     },
     {
-      "name": "chunk.WVSHB6JC.js",
-      "raw": 21813,
-      "gz": 6531,
-      "role": "lazy"
-    },
-    {
       "name": "chunk.X44OS4NU.js",
       "raw": 13519,
       "gz": 4809,
@@ -208,9 +214,9 @@
       "role": "lazy"
     },
     {
-      "name": "cloud-setup.N5RQNODU.js",
-      "raw": 21415,
-      "gz": 7061,
+      "name": "cloud-setup.2DG6OACD.js",
+      "raw": 21440,
+      "gz": 7066,
       "role": "lazy"
     },
     {
@@ -256,9 +262,9 @@
       "role": "lazy"
     },
     {
-      "name": "panel.RGAHEGFF.js",
-      "raw": 4153,
-      "gz": 1538,
+      "name": "panel.7JNXRKGN.js",
+      "raw": 4181,
+      "gz": 1550,
       "role": "lazy"
     },
     {
@@ -341,8 +347,8 @@
     }
   ],
   "totals": {
-    "files": 55,
-    "raw": 1156186,
-    "gz": 378594
+    "files": 56,
+    "raw": 1158846,
+    "gz": 379563
   }
 }

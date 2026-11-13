@@ -1,6 +1,12 @@
-//! engine.rs — موتور محلی (سایدکار workerd) — فاز ۲ خط rust
+//! engine.rs — موتور محلی (سایدکار workerd) — فاز ۲ خط rust + نگهبان ری‌استارت (رفع ENG-1)
 //! طراحی: docs/rust/design.md §۲ و §۴ — بایند فقط loopback، پورت ۸۷۸۷ پیش‌فرض
 //! (اگر اشغال بود پورت آزاد بعدی)، سلامت /health، خاموشی با Drop.
+//!
+//! نگهبان (engine_watchdog.rs): اگر workerd در میانهٔ کار بمیرد، با انتظار ۲/۵/۱۰ ثانیه
+//! دوباره بالا می‌آید؛ سقف ۳ تلاش در پنجرهٔ ۱۰ دقیقه‌ای؛ پس از سقف رویداد engine:down و
+//! وضعیت صریح Failed در lib.rs — فقط «تلاش دوبارهٔ» دستی (engine_retry) اثر می‌کند.
+//! خاموشی عمدی (خروج اپ / Drop) با پرچم stop شناخته می‌شود و هرگز ری‌استارت نمی‌خواهد —
+//! کد خروج ملاک نیست، پرچم ملاک است.
 //!
 //! کامپایل در CI (cargo در محیط سندباکس جاری نیست) — گیت ساختاری desktop:check
 //! هم‌گامی فایل‌ها را می‌گیرد و کامپایل واقعی در خط CI با Rust stable انجام می‌شود.
@@ -9,14 +15,37 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+use crate::engine_watchdog::{next_action, now_ms, RestartRecord, WatchdogAction, WatchdogEvent};
 
 /// پورت پیش‌فرض موتور محلی — همان devUrl پوسته (tauri.conf.json)
 const DEFAULT_PORT: u16 = 8787;
 
+/// گام پولینگ نگهبان برای دیدن خروج فرزند — هم‌تراز با گام انتظار سلامت
+const SUPERVISE_POLL_MS: u64 = 500;
+
+/// مهلت سالم‌شدن پس از هر ری‌استارت — همان سقف بوت نخست (۳۰ ثانیه)
+const RESTART_HEALTH_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// گیرندهٔ رویدادهای نگهبان — lib.rs آن را به رخدادهای تائوری (engine:restarting و…) می‌بندد
+pub type EngineEventSink = Arc<dyn Fn(WatchdogEvent) + Send + Sync>;
+
+/// پارامترهای spawn — هم برای بوت نخست هم برای هر ری‌استارت نگهبان (همان باینری/کانفیگ/لاگ)
+struct SpawnPlan {
+    binary: PathBuf,
+    config: PathBuf,
+    log_dir: PathBuf,
+}
+
 pub struct LocalEngine {
-    child: Child,
     pub port: u16,
+    /// پرچم خاموشی عمدی — Drop و خروج اپ آن را می‌گذارند؛ روی true نگهبان هیچ ری‌استارتی نمی‌کند
+    stop: Arc<AtomicBool>,
+    /// کودک جاری — بین thread نگهبان و Drop مشترک؛ قفل فقط برای try_wait/kill کوتاه نگه داشته می‌شود
+    child_slot: Arc<Mutex<Option<Child>>>,
 }
 
 /// پیدا کردن باینری workerd: متغیر محیطی ← کنار برنامه (سایدکار نصاب: ریشه و binaries/) ←
@@ -87,12 +116,37 @@ fn health_once(port: u16) -> bool {
     head.starts_with("HTTP/1.1 200") || head.starts_with("HTTP/1.0 200")
 }
 
+/// spawn یک نمونهٔ workerd — آرگومان‌های همان scripts/engine/engine.mjs: serve --experimental
+/// (فلگ experimental برای سرویس D1)؛ stderr به data/workerd.log کنار کانفیگ می‌رود تا
+/// خرابی نصاب قابل تشخیص باشد؛ stdout بی‌صدا.
+fn spawn_workerd(plan: &SpawnPlan) -> Result<Child, String> {
+    let mut cmd = Command::new(&plan.binary);
+    cmd.args(["serve", "--experimental", plan.config.to_string_lossy().as_ref()])
+        .stdout(Stdio::null());
+    match std::fs::File::options()
+        .create(true)
+        .append(true)
+        .open(plan.log_dir.join("workerd.log"))
+    {
+        Ok(f) => {
+            cmd.stderr(Stdio::from(f));
+        }
+        Err(_) => {
+            cmd.stderr(Stdio::null());
+        }
+    }
+    cmd.spawn()
+        .map_err(|e| format!("spawn workerd ناموفق: {e}"))
+}
+
 impl LocalEngine {
     /// بالا آوردن workerd با کانفیگ capnp-text تولیدشده (scripts/engine/config.mjs)
     /// مسیر کانفیگ با CENTER_ENGINE_CONFIG بازنویسی می‌شود؛ پیش‌فرض: کنار برنامه.
-    pub fn start(config_path: &Path) -> Result<Self, String> {
-        let binary = find_workerd_binary()
-            .ok_or_else(|| "باینری workerd پیدا نشد (CENTER_WORKERD_BIN یا کنار برنامه)".to_string())?;
+    /// on_event: گیرندهٔ رویدادهای نگهبان — در lib.rs به emit تائوری بسته می‌شود.
+    pub fn start(config_path: &Path, on_event: EngineEventSink) -> Result<Self, String> {
+        let binary = find_workerd_binary().ok_or_else(|| {
+            "باینری workerd پیدا نشد (CENTER_WORKERD_BIN یا کنار برنامه)".to_string()
+        })?;
         let config = std::env::var("CENTER_ENGINE_CONFIG")
             .map(PathBuf::from)
             .unwrap_or_else(|_| config_path.to_path_buf());
@@ -100,30 +154,18 @@ impl LocalEngine {
             return Err(format!("کانفیگ موتور محلی یافت نشد: {}", config.display()));
         }
         let port = free_port();
-        // --experimental برای فلگ experimental سرویس D1 (همان آرگومان‌های scripts/engine/engine.mjs)
+        let plan = SpawnPlan {
+            binary,
+            config: config.clone(),
+            log_dir: config.parent().unwrap_or(Path::new(".")).to_path_buf(),
+        };
         // خاموشی فقط با Drop ساختار LocalEngine (kill + wait) — std::process::Command
         // متد kill_on_drop ندارد (API توکیو است) و نیازش هم نیست.
-        // rust-f13 — stderr سایدکار به data/workerd.log (کنار کانفیگ) می‌رود تا خرابی نصاب
-        // قابل تشخیص باشد؛ stdout بی‌صدا.
-        let mut cmd = Command::new(&binary);
-        cmd.args(["serve", "--experimental", config.to_string_lossy().as_ref()])
-            .stdout(Stdio::null());
-        match std::fs::File::options()
-            .create(true)
-            .append(true)
-            .open(config.parent().unwrap_or(Path::new(".")).join("workerd.log"))
-        {
-            Ok(f) => {
-                cmd.stderr(Stdio::from(f));
-            }
-            Err(_) => {
-                cmd.stderr(Stdio::null());
-            }
-        }
-        let child = cmd
-            .spawn()
-            .map_err(|e| format!("spawn workerd ناموفق: {e}"))?;
-        Ok(Self { child, port })
+        let child = spawn_workerd(&plan)?;
+        let stop = Arc::new(AtomicBool::new(false));
+        let child_slot = Arc::new(Mutex::new(Some(child)));
+        supervise(plan, port, Arc::clone(&stop), Arc::clone(&child_slot), on_event);
+        Ok(Self { port, stop, child_slot })
     }
 
     /// پولینگ /health تا سقف مهلت — از thread فراخوانی می‌شود
@@ -143,11 +185,149 @@ impl LocalEngine {
     }
 }
 
+/// به‌کارگیری thread نگهبان — detach می‌شود؛ فقط با پرچم stop تمام می‌شود (Drop یا خروج اپ)
+fn supervise(
+    plan: SpawnPlan,
+    port: u16,
+    stop: Arc<AtomicBool>,
+    child_slot: Arc<Mutex<Option<Child>>>,
+    on_event: EngineEventSink,
+) {
+    std::thread::spawn(move || {
+        let mut history: Vec<RestartRecord> = Vec::new();
+        loop {
+            if stop.load(Ordering::SeqCst) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(SUPERVISE_POLL_MS));
+            // خروج فرزند را با قفل کوتاه ببین — پولینگ try_wait مسدودکننده نیست
+            let exited = {
+                let mut guard = match child_slot.lock() {
+                    Ok(g) => g,
+                    Err(_) => return, // قفل مسموم — ادامهٔ نظارت بی‌معناست
+                };
+                match guard.as_mut() {
+                    Some(c) => c.try_wait().ok().flatten(),
+                    None => None,
+                }
+            };
+            let Some(_status) = exited else { continue };
+            // خروج عمدی (خاموشی اپ/Drop) — هرگز ری‌استارت نمی‌خواهد؛ کد خروج ملاک نیست
+            if stop.load(Ordering::SeqCst) {
+                return;
+            }
+            handle_unexpected_exit(&plan, port, &stop, &child_slot, &on_event, &mut history);
+        }
+    });
+}
+
+/// مرگ ناگهانی فرزند — تصمیم نگهبان و اجرای آن: انتظار backoff، spawn دوباره، ثبت بازرسی
+fn handle_unexpected_exit(
+    plan: &SpawnPlan,
+    port: u16,
+    stop: &AtomicBool,
+    child_slot: &Mutex<Option<Child>>,
+    on_event: &EngineEventSink,
+    history: &mut Vec<RestartRecord>,
+) {
+    let exit_at = now_ms();
+    let mut decision = next_action(history, now_ms(), exit_at);
+    if let WatchdogAction::ResetWindow = decision {
+        *history = Vec::new();
+        eprintln!("[desktop] پنجرهٔ ۱۰ دقیقه‌ای نگهبان موتور گذشت — شمارش تلاش‌ها از صفر");
+        decision = next_action(history, now_ms(), exit_at);
+    }
+    match decision {
+        // با تاریخچهٔ خالی این بازو رخ نمی‌دهد — فقط برای کامل بودن match
+        WatchdogAction::ResetWindow => {}
+        WatchdogAction::Restart(delay_ms) => {
+            let attempt = history.len() as u32 + 1;
+            eprintln!("[desktop] موتور ناگهانی بسته شد — راه‌اندازی دوباره تا {} ثانیه دیگر", delay_ms / 1000);
+            on_event(WatchdogEvent::Restarting { attempt, delay_ms });
+            if !sleep_interruptible(Duration::from_millis(delay_ms), stop) {
+                return; // خاموشی عمدی در میانهٔ انتظار — کودک مرده و کاری نمانده
+            }
+            match spawn_workerd(plan) {
+                Ok(new_child) => {
+                    if let Ok(mut guard) = child_slot.lock() {
+                        *guard = Some(new_child);
+                    }
+                    if wait_healthy_while(port, stop, RESTART_HEALTH_TIMEOUT) {
+                        // رشتهٔ خرابی بسته شد — شمارش تلاش‌ها برای حادثهٔ بعدی از صفر
+                        *history = Vec::new();
+                        eprintln!("[desktop] موتور پس از ری‌استارت دوباره روی پورت {port} آماده است");
+                        on_event(WatchdogEvent::Restored);
+                    } else if stop.load(Ordering::SeqCst) {
+                        return; // خاموشی در حین انتظار سلامت — Drop خودش کودک را می‌بندد
+                    } else {
+                        // بالا نیامد — ببند و به‌عنوان تلاش ناکام ثبت کن تا سقف پنجره پر شود
+                        kill_child(child_slot);
+                        history.push(RestartRecord { exit_at_ms: now_ms(), delay_ms });
+                        eprintln!("[desktop] موتور پس از ری‌استارت ظرف ۳۰ ثانیه سالم نشد — تلاش {attempt} ثبت شد");
+                    }
+                }
+                Err(e) => {
+                    history.push(RestartRecord { exit_at_ms: now_ms(), delay_ms });
+                    eprintln!("[desktop] spawn دوبارهٔ workerd ناموفق بود — تلاش {attempt} ثبت شد: {e}");
+                }
+            }
+        }
+        WatchdogAction::GiveUp => {
+            let attempts = history.len() as u32;
+            eprintln!("[desktop] نگهبان موتور تسلیم شد — {attempts} تلاش در پنجرهٔ ۱۰ دقیقه بی‌نتیجه بود؛ فقط «تلاش دوبارهٔ» دستی اثر می‌کند");
+            on_event(WatchdogEvent::Down { attempts });
+            // منتظر خاموشی عمدی بمان — engine_retry پوستهٔ slot را می‌بندد و Drop پرچم را می‌گذارد
+            while !stop.load(Ordering::SeqCst) {
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        }
+    }
+}
+
+/// انتظار قابل‌قطع با پرچم خاموشی — false یعنی خاموشی درخواست شده
+fn sleep_interruptible(total: Duration, stop: &AtomicBool) -> bool {
+    let deadline = Instant::now() + total;
+    while Instant::now() < deadline {
+        if stop.load(Ordering::SeqCst) {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    !stop.load(Ordering::SeqCst)
+}
+
+/// پولینگ /health تا سقف مهلت با پایش پرچم خاموشی — برای انتظار پس از هر ری‌استارت.
+/// false یعنی سالم نشد یا خاموشی درخواست شده (تماس‌گیرنده پرچم را دوباره می‌بیند).
+fn wait_healthy_while(port: u16, stop: &AtomicBool, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if stop.load(Ordering::SeqCst) {
+            return false;
+        }
+        if health_once(port) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    false
+}
+
+/// kill + wait کودک جاری — هم در Drop هم برای پاک‌سازی تلاش ناکام نگهبان
+fn kill_child(child_slot: &Mutex<Option<Child>>) {
+    if let Ok(mut guard) = child_slot.lock() {
+        if let Some(c) = guard.as_mut() {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
+    }
+}
+
 /// خاموشی تمیز با Drop — خروج اپ یا drop شدن وضعیت، workerd را می‌بندد
-/// (kill + wait — معادل kill_on_drop توکیو، با std).
+/// (kill + wait — معادل kill_on_drop توکیو، با std). پرچم stop هم thread نگهبان را
+/// در ≤ یک گام پولینگ تمام می‌کند؛ پس از خاموشی عمدی هیچ ری‌استارتی رخ نمی‌دهد.
 impl Drop for LocalEngine {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        self.stop.store(true, Ordering::SeqCst);
+        kill_child(&self.child_slot);
     }
 }

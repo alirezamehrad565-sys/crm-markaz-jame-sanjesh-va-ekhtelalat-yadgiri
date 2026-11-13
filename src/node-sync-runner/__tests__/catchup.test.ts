@@ -13,9 +13,10 @@
  * هیچ مسیری throw نمی‌کند.
  */
 import { describe, it, expect } from 'vitest';
-import { createNodeSyncRunner, CATCHUP_CURSOR_KEY, CATCHUP_STATE_KEY, PUSH_WATERMARK_KEY } from '../runner';
+import { createNodeSyncRunner, CATCHUP_CURSOR_KEY, CATCHUP_STATE_KEY, PUSH_WATERMARK_KEY, NODE_VERSION_KEY } from '../runner';
 import type { CatchUpOutcome, CatchUpStateV1, NodeSyncRunner } from '../runner';
 import { createSyncCoordinator } from '../coordinator';
+import { APP_VERSION } from '../../core/version';
 import type { NodeSyncStore, NodePullItem } from '../../node-sync-client/client';
 
 // ─── کمک‌سازهای cursor — همان فرمت سمت ورکر (base64url JSON {d,t,i}) ───
@@ -50,6 +51,9 @@ function memStore(): NodeSyncStore & { dump: () => Map<string, string> } {
 interface PullRecord { id: string; domain: string; updated_at: string; payload: Record<string, unknown> }
 interface OutboxRecord { id: string; domain: string; at: string; payload: Record<string, unknown> }
 
+/** موج ۱ — پاکت هندشیک مرکز (۱-۳/۱-۴): نسخه‌ها + انحراف ساعت مرکز از ساعت دستگاه آزمون */
+interface HandshakeOpt { centerVersion: string; minNodeVersion: string; serverTsOffsetMs?: number }
+
 function makeWorld(opts?: {
   /** پرتاب خطای شبکه در فراخوانی n-ام pull */
   throwOnPullPage?: number;
@@ -57,6 +61,10 @@ function makeWorld(opts?: {
   throwOnPushBatch?: number;
   /** پرتاب خطا در فراخوانی n-ام استقرار (موتور محلی) */
   throwOnIngest?: number;
+  /** موج ۱ — پاکت هندشیک روی هر پاسخ pull/push (غایب = مرکز قدیمی بدون فیلد نسخه) */
+  handshake?: HandshakeOpt;
+  /** موج ۱ — بازنویسی هندشیک فقط برای پاسخ push (آشکارسازی ناسازگاری در فاز push) */
+  pushHandshake?: HandshakeOpt;
 }) {
   const center = {
     pullItems: [] as PullRecord[],
@@ -83,6 +91,16 @@ function makeWorld(opts?: {
   const PAGE_SIZE = 50; // قرارداد بریف — سقف صفحهٔ pull در سناریو
   const OUTBOX_PAGE = 200; // آینهٔ OUTBOX_MAX_ITEMS سمت موتور محلی
 
+  /** موج ۱ — پاکت هندشیک در data پاسخ مرکز؛ غایب در opts = مرکز قدیمی بدون فیلد نسخه */
+  const handshakeData = (h?: HandshakeOpt): Record<string, unknown> =>
+    h
+      ? {
+          center_version: h.centerVersion,
+          min_node_version: h.minNodeVersion,
+          server_ts: new Date(Date.now() + (h.serverTsOffsetMs ?? 0)).toISOString()
+        }
+      : {};
+
   const fakeFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
     const method = (init?.method ?? 'GET').toUpperCase();
@@ -106,7 +124,8 @@ function makeWorld(opts?: {
         data: {
           items: page,
           next_cursor: hasMore && last ? encodeCursor(last.domain, last.updated_at, last.id) : null,
-          server_time: '2026-11-13T10:00:00Z'
+          server_time: '2026-11-13T10:00:00Z',
+          ...handshakeData(opts?.handshake)
         }
       };
       return new Response(JSON.stringify(body), { status: 200 });
@@ -135,7 +154,10 @@ function makeWorld(opts?: {
       }
       center.accepted += accepted;
       center.duplicates += duplicates;
-      return new Response(JSON.stringify({ data: { accepted, duplicates, throttled: false } }), { status: 200 });
+      return new Response(
+        JSON.stringify({ data: { accepted, duplicates, throttled: false, ...handshakeData(opts?.pushHandshake ?? opts?.handshake) } }),
+        { status: 200 }
+      );
     }
 
     if (url.includes('/api/internal/sync/ingest')) {
@@ -622,5 +644,195 @@ describe('هماهنگ‌ساز — runCatchUp: همان ماتریس خرابی
     const r = await coord.runCatchUp();
     expect(r.catchup.status).toBe('network_error');
     expect(r.catchup.message).toContain('دورهٔ جبرانی');
+  });
+});
+
+// ───────────────────────── موج ۱ — هندشیک نسخه (۱-۴)، ساعت مرجع مرکز (۱-۳)، خلاصهٔ تکمیل جبران ─────────────────────────
+
+describe('موج ۱ — هندشیک نسخه و ساعت مرکز در دورهٔ جبرانی', () => {
+  function versionSeenOf(store: ReturnType<typeof memStore>): Record<string, unknown> {
+    const raw = store.dump().get(NODE_VERSION_KEY);
+    expect(raw).toBeTruthy();
+    return JSON.parse(raw ?? '{}') as Record<string, unknown>;
+  }
+
+  it('پاسخ‌های سازگار pull/push → هندشیک در انبار می‌نشیند و آینهٔ status آن را می‌برد (compatible=true، بی‌هشدار ساعت)', async () => {
+    const world = makeWorld({ handshake: { centerVersion: '1.26.0', minNodeVersion: '1.26.0' } });
+    world.center.pullItems = seedPullItems(3);
+    world.engine.outbox = seedOutboxItems(2);
+    const store = memStore();
+    const runner = world.makeRunner(store);
+
+    const out = await runner.catchUp();
+    expect(out.status).toBe('ok');
+
+    const hs = versionSeenOf(store);
+    expect(hs.client).toBe(APP_VERSION);
+    expect(hs.center).toBe('1.26.0');
+    expect(hs.min_node).toBe('1.26.0');
+    expect(hs.compatible).toBe(true);
+    expect(typeof hs.server_ts).toBe('string'); // ساعت مرجع مرکز (۱-۳)
+    expect(hs.clock_drift_minutes).toBe(0); // ساعت فیک همان لحظه — اختلاف ~۰
+    expect(hs.clock_warning).toBe(false);
+
+    const mirror = world.engine.mirrors[world.engine.mirrors.length - 1] as Record<string, unknown>;
+    expect(mirror.version).toEqual({ client: APP_VERSION, center: '1.26.0', compatible: true });
+    expect(mirror.clock_drift_minutes).toBe(0);
+    expect(mirror.clock_warning).toBe(false);
+  });
+
+  it('ناسازگاری در پاسخ pull (APP_VERSION < min_node_version) → version_error قبل از استقرار، push نمی‌رود، هماهنگ‌ساز paused_version می‌شود', async () => {
+    const world = makeWorld({ handshake: { centerVersion: '9.0.0', minNodeVersion: '9.0.0' } });
+    world.center.pullItems = seedPullItems(10);
+    world.engine.outbox = seedOutboxItems(5);
+    const store = memStore();
+    const runner = world.makeRunner(store);
+    const coord = createSyncCoordinator({ runner, progressStorage: store, scheduleFn: () => () => undefined });
+
+    const r = await coord.runCatchUp();
+
+    expect(r.catchup.status).toBe('version_error');
+    expect(r.catchup.phase).toBe('pull');
+    expect(r.catchup.message).toContain('حداقل نسخهٔ مجاز مرکز'); // پیام فارسی با شماره‌ها
+    expect(world.engine.ingestCalls).toBe(0); // هیچ صفحه‌ای استقرار نیافت — گیت پیش از تعهد
+    expect(world.center.pushCalls).toBe(0); // فاز push هم skip شد (هم‌رفتار مسیر ۴۲۶)
+    expect(coord.state().mode).toBe('paused_version');
+    expect(coord.state().last_error_kind).toBe('version');
+
+    const hs = versionSeenOf(store);
+    expect(hs.compatible).toBe(false);
+    expect(hs.center).toBe('9.0.0');
+    expect(hs.min_node).toBe('9.0.0');
+    // آینهٔ آخر (بعد از داوری هماهنگ‌ساز) — نسخهٔ ناسازگار + مود paused_version برای ردیف قرمز UI
+    const mirror = world.engine.mirrors[world.engine.mirrors.length - 1] as Record<string, unknown>;
+    expect(mirror.mode).toBe('paused_version');
+    expect(mirror.version).toEqual({ client: APP_VERSION, center: '9.0.0', compatible: false });
+    // وضعیت catch-up هم error با kind نسخه است
+    expect(catchupStateOf(store).state).toBe('error');
+    expect(catchupStateOf(store).last_error_kind).toBe('version_error');
+  });
+
+  it('ناسازگاری که فقط در پاسخ push آشکار می‌شود → version_error در فاز push؛ watermark جلو نمی‌رود', async () => {
+    const world = makeWorld({
+      handshake: { centerVersion: '1.26.0', minNodeVersion: '1.26.0' }, // pull سازگار
+      pushHandshake: { centerVersion: '9.0.0', minNodeVersion: '9.0.0' } // push ناسازگار
+    });
+    world.center.pullItems = seedPullItems(2);
+    world.engine.outbox = seedOutboxItems(5); // یک بستهٔ ≤۱۰۰ — همان بسته ناسازگاری را می‌بیند
+    const store = memStore();
+    const runner = world.makeRunner(store);
+    const coord = createSyncCoordinator({ runner, progressStorage: store, scheduleFn: () => () => undefined });
+
+    const r = await coord.runCatchUp();
+
+    expect(r.catchup.status).toBe('version_error');
+    expect(r.catchup.phase).toBe('push');
+    expect(world.center.pushCalls).toBe(1); // یک بسته رفت و پاسخ ناسازگار آمد
+    // فیکِ مرکز بدنه را پذیرفته (۲۰۰ با پاکت ناسازگار) — از دید runner این «ack» رد شد:
+    // watermark جلو نرفته تا بسته در دورهٔ بعدِ سازگار دوباره برود و ابر با PK بشمارد
+    expect(world.center.pushEvents.size).toBe(5);
+    expect(store.dump().get(PUSH_WATERMARK_KEY) ?? null).toBeNull(); // watermark محفوظ — دورهٔ بعد دوباره
+    expect(coord.state().mode).toBe('paused_version');
+    expect(versionSeenOf(store).compatible).toBe(false);
+    expect((versionSeenOf(store).center as string)).toBe('9.0.0'); // نسخهٔ تازه‌ترین پاسخ برنده است
+  });
+
+  it('اختلاف ساعت مرکز > ۲ دقیقه → clock_warning=true و clock_drift_minutes عددی؛ اختلاف جزئی بی‌هشدار — و رفتار سینک عوض نمی‌شود', async () => {
+    // ۳۰ دقیقه جلوتر از دستگاه — هشدار زرد (۱-۳) ولی دورهٔ جبرانی همچنان ok کامل می‌شود
+    const world = makeWorld({ handshake: { centerVersion: '1.26.0', minNodeVersion: '1.26.0', serverTsOffsetMs: 30 * 60_000 } });
+    world.center.pullItems = seedPullItems(1);
+    const store = memStore();
+    const runner = world.makeRunner(store);
+    const out = await runner.catchUp();
+    expect(out.status).toBe('ok');
+    expect(out.pull_done).toBe(true);
+
+    const hs = versionSeenOf(store);
+    expect(hs.clock_drift_minutes).toBe(30);
+    expect(hs.clock_warning).toBe(true);
+    const mirror = world.engine.mirrors[world.engine.mirrors.length - 1] as Record<string, unknown>;
+    expect(mirror.clock_drift_minutes).toBe(30);
+    expect(mirror.clock_warning).toBe(true);
+
+    // ۱۰ ثانیه — گرد به صفر دقیقه، بی‌هشدار
+    const calm = makeWorld({ handshake: { centerVersion: '1.26.0', minNodeVersion: '1.26.0', serverTsOffsetMs: 10_000 } });
+    calm.center.pullItems = seedPullItems(1);
+    const store2 = memStore();
+    const runner2 = calm.makeRunner(store2);
+    expect((await runner2.catchUp()).status).toBe('ok');
+    const hs2 = versionSeenOf(store2);
+    expect(hs2.clock_drift_minutes).toBe(0);
+    expect(hs2.clock_warning).toBe(false);
+  });
+});
+
+describe('موج ۱ — خلاصهٔ تکمیل جبران (بقیهٔ ۱-۱)', () => {
+  it('دورهٔ کامل با دستاورد → last_catchup {at, pulled, pushed} در وضعیت catch-up و آینهٔ status می‌نشیند', async () => {
+    const world = makeWorld();
+    world.center.pullItems = seedPullItems(7);
+    world.engine.outbox = seedOutboxItems(3);
+    const store = memStore();
+    const runner = world.makeRunner(store);
+
+    await runner.catchUp();
+
+    const st = catchupStateOf(store);
+    expect(st.state).toBe('synced');
+    expect(st.last_catchup).not.toBeNull();
+    expect(st.last_catchup?.pulled).toBe(7); // آیتم‌های استقراریافته در صندوق
+    expect(st.last_catchup?.pushed).toBe(3); // آیتم‌های محلی ackشدهٔ ابر
+    expect(typeof st.last_catchup?.at).toBe('string');
+    expect(Number.isNaN(Date.parse(st.last_catchup?.at ?? ''))).toBe(false);
+
+    const mirror = world.engine.mirrors[world.engine.mirrors.length - 1] as Record<string, unknown>;
+    expect(mirror.last_catchup).toEqual({ at: st.last_catchup?.at, pulled: 7, pushed: 3 });
+  });
+
+  it('دورهٔ دوم بی‌خبر (۰/۰) — synced می‌ماند ولی خلاصهٔ معنادار قبلی پاک نمی‌شود', async () => {
+    const world = makeWorld();
+    world.center.pullItems = seedPullItems(4);
+    world.engine.outbox = seedOutboxItems(2);
+    const store = memStore();
+    const runner = world.makeRunner(store);
+
+    await runner.catchUp();
+    const first = catchupStateOf(store).last_catchup;
+    expect(first?.pulled).toBe(4);
+
+    const out2 = await runner.catchUp(); // هیچ تازه‌ای نیست — ۰/۰
+    expect(out2.status).toBe('ok');
+    expect(out2.items_pulled).toBe(0);
+    expect(out2.items_pushed).toBe(0);
+    const st2 = catchupStateOf(store);
+    expect(st2.state).toBe('synced');
+    expect(st2.last_catchup).toEqual(first); // خلاصهٔ دورهٔ پرکار حفظ شد
+  });
+
+  it('دورهٔ خطاخورده خلاصهٔ قبلی را بازنویسی نمی‌کند', async () => {
+    // نخستین دوره: قطعی در pull و push — هیچ دورهٔ کاملی نبوده، خلاصه‌ای هم نیست و watermark جلو نرفته
+    const world = makeWorld({ throwOnPullPage: 1, throwOnPushBatch: 1 });
+    world.center.pullItems = seedPullItems(10);
+    world.engine.outbox = seedOutboxItems(3);
+    const store = memStore();
+    const runner = world.makeRunner(store);
+    expect((await runner.catchUp()).status).toBe('network_error');
+    expect(catchupStateOf(store).last_catchup).toBeNull();
+
+    // دورهٔ سالم بعدی کامل همگرا می‌شود و خلاصه می‌سازد
+    const healed = makeWorld();
+    healed.center.pullItems = world.center.pullItems;
+    healed.engine.outbox = world.engine.outbox;
+    const runner2 = healed.makeRunner(store);
+    expect((await runner2.catchUp()).status).toBe('ok');
+    const good = catchupStateOf(store).last_catchup;
+    expect(good?.pulled).toBe(10);
+    expect(good?.pushed).toBe(3);
+
+    // قطعی تازه در pull — خلاصهٔ معنادار حفظ می‌ماند (بازنویسی با null نیست)
+    const broken = makeWorld({ throwOnPullPage: 1 });
+    broken.center.pullItems = [];
+    const runner3 = broken.makeRunner(store);
+    expect((await runner3.catchUp()).status).toBe('network_error');
+    expect(catchupStateOf(store).last_catchup).toEqual(good);
   });
 });
