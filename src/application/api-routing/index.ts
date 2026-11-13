@@ -105,6 +105,7 @@ import type { SessionNotesService } from '@app/session-notes';
 import { createRumService, registerRumRoutes } from '@app/rum'; // پایش کارایی (RUM)
 import type { RumService } from '@app/rum';
 import { registerAuthRoutes, registerLogoutRoute } from '@app/auth';
+import { registerSetupStatusRoutes, registerSetupCompleteRoutes } from '@app/setup/routes'; // v1.26.0 — راه‌اندازی نخست
 import { FEATURES } from '@core/shared';
 import { createNodeSyncApp } from '../../node-sync/app'; // rust-f4 — زیراپ سینک نودهای دسکتاپ
 import { registerInternalSyncRoutes } from '../../internal-sync'; // rust-f9 — استقرار سینک (فقط-موتور، گیت env)
@@ -670,6 +671,10 @@ export function createApp(deps: AppDeps): AppHono {
 
   registerAuthRoutes(app, { audit: services.audit, logger: services.logger });
 
+  // v1.26.0 — وضعیت راه‌اندازی نخست: عمومی و سبک (دو بولین) — راهنمای «manager / 1234»
+  // در صفحهٔ ورود فقط تا پایان راه‌اندازی نمایش داده می‌شود (هم در وب هم میز بی‌ضرر است).
+  registerSetupStatusRoutes(app, { logger: services.logger });
+
   /* rust-f4 — زیراپ سینک نودهای دسکتاپ (/node/*): «پیش از» گیت authMiddleware ثبت می‌شود
      (زنجیرهٔ عمومی §۵)؛ احراز مسیرهای نودی خودش node_code+node_key است و مسیرهای مدیریتی
      درون زیراپ با همان گیت سشن بسته می‌شوند. سند: docs/rust/node-sync.md */
@@ -681,6 +686,10 @@ export function createApp(deps: AppDeps): AppHono {
   // بستن حلقهٔ خروج: خروج احرازشده بعد از گیت ناظر سوار می‌شود؛ رویداد ممیزی actor درست دارد.
   // ناظر طبق از گیت رد می‌شود (۴۰۳) — رفتار فقط-خواندن دست‌نخورده می‌ماند.
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
+
+  // v1.26.0 — پایان راه‌اندازی نخست (بستن حساب‌های نمایشی) — فقط-مدیر؛
+  // مدیریت کارکنان از مسیرهای موجود @domain/staff (registerRoutes) استفاده می‌کند — همان‌جا سوار است.
+  registerSetupCompleteRoutes(app, { db: services.db, audit: services.audit, logger: services.logger });
 
   // rust-f9 — استقرار سینک نود در میز: بعد از گیت‌ها تا سشن بگیرد؛ خودش گیت زمان‌اجرای
   // CENTER_DESKTOP_ENGINE دارد (در تولید وب binding غایب است → ۴۰۴ کم‌دست، باندل یکسان).

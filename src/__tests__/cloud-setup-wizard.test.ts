@@ -138,7 +138,7 @@ describe('ویزار راه‌اندازی نخست', () => {
     expect(body.children).toHaveLength(0);
   });
 
-  it('ناوبری چهار گام + برچسب پایان در گام آخر', () => {
+  it('ناوبری شش گام + برچسب پایان در گام آخر', () => {
     const { doc } = fakeDoc();
     const handle = openSetupWizard({
       doc,
@@ -152,11 +152,48 @@ describe('ویزار راه‌اندازی نخست', () => {
     expect(handle.step()).toBe(1);
     handle.next();
     handle.next();
-    expect(handle.step()).toBe(3);
+    handle.next();
+    handle.next();
+    expect(handle.step()).toBe(5);
     expect(handle.refs.nextBtn.textContent).toBe(FINISH_LABEL);
     expect(handle.refs.skipBtn.style.display).toBe('none');
     handle.back();
-    expect(handle.step()).toBe(2);
+    expect(handle.step()).toBe(4);
+  });
+
+  it('لندینگ: سه مسیر با goTo — گام ساخت سرور و کارکنان قابل رسیدن‌اند', () => {
+    const { doc } = fakeDoc();
+    const handle = openSetupWizard({
+      doc,
+      store: fakeStore(),
+      secure: fakeSecure(),
+      insecure: false,
+      fetchImpl: okFetch,
+      onFinished: () => {}
+    });
+    handle.goTo(3); // مسیر «ساخت سرور مرکزی با کلادفلر»
+    expect(handle.step()).toBe(3);
+    handle.goTo(4); // مسیر «تعریف کارکنان»
+    expect(handle.step()).toBe(4);
+    handle.goTo(0);
+    expect(handle.refs.backBtn.style.display).toBe('none');
+  });
+
+  it('ساخت سرور مرکزی بیرون پوسته: نرم رد می‌شود (بدون throw)', async () => {
+    const { doc } = fakeDoc();
+    const handle = openSetupWizard({
+      doc,
+      store: fakeStore(),
+      secure: fakeSecure(),
+      insecure: false,
+      fetchImpl: okFetch,
+      onFinished: () => {}
+    });
+    const r = await handle.deployCentral('tok');
+    expect(r.ok).toBe(false);
+    expect(r.message).toContain('نسخهٔ میز');
+    const r2 = await handle.adminSetup('admin', 'secret1', 'مدیر');
+    expect(r2.ok).toBe(false);
   });
 
   it('آزمون اتصال موفق: پیام در ناحیهٔ وضعیت + بدون ذخیره', async () => {

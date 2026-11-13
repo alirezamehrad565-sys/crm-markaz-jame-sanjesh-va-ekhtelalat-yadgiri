@@ -1,6 +1,6 @@
 [package]
 name = "center-desktop"
-version = "1.25.75"
+version = "1.26.0"
 description = "مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام — نسخهٔ میز"
 edition = "2021"
 
@@ -18,6 +18,10 @@ tauri = { version = "2", features = [] }
 serde_json = "1"
 # rust-f7 — مخزن امن رازهای اتصال ابر (Credential Manager ویندوز؛ در CI لینوکس با secret-service)
 keyring = "3"
+# v1.26.0 — ماژول کلادفلر (cf_deploy.rs): HTTPS با rustls (بدون OpenSSL) + multipart آپلود ورکر
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "multipart"] }
+# runtime async تائوری روی tokio است — انتظار بین پروب‌های healthz
+tokio = { version = "1", features = ["time"] }
 
 [profile.release]
 codegen-units = 1

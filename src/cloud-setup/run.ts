@@ -96,6 +96,16 @@ export async function maybeRunSetup(user: SetupUser | null, deps?: Partial<RunDe
     onFinished: (skipped) => {
       merged.onFinished?.(skipped);
       if (!skipped) void startTutorialAfterSetup(user);
+      // v1.26.0 — اعتبار تازه ممکن است ذخیره شده باشد؛ هماهنگ‌ساز سینک از قرنطینه خارج می‌شود
+      // (import پویا — فقط-میز؛ در وب چانک اصلاً لود نمی‌شود)
+      void (async () => {
+        try {
+          const panel = await import('../node-sync-runner/panel.js');
+          panel.notifySyncCredentialsChanged();
+        } catch {
+          /* نرم — هماهنگ‌ساز اختیاری است */
+        }
+      })();
     }
   });
   return true;

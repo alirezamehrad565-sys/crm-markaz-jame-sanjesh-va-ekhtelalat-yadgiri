@@ -244,3 +244,17 @@ export async function readSecret(secure: SecureStore, key: string): Promise<stri
     return null;
   }
 }
+
+/**
+ * v1.26.0 — فراخوانی فرمان پوسته از داخل ویزار (مثلاً cloudflare_deploy).
+ * بیرون از پوستهٔ تائوری null می‌دهد — ویزار باید بدون فرض وجود آن کار کند.
+ */
+export function desktopInvoke(cmd: string, args?: Record<string, unknown>): Promise<unknown> | null {
+  const inv = tauriInvoke();
+  if (!inv) return null;
+  try {
+    return inv(cmd, args);
+  } catch {
+    return null;
+  }
+}

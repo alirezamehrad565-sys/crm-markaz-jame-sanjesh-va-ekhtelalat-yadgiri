@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+<meta charset="UTF-8">
+<title>مرکز جامع — در حال راه‌اندازی</title>
+<style>
+  :root { --p:#0D72A8; --pd:#0A5378; --soft:#E4F1FA; --bg:#F7FAFD; --text:#24313B; --muted:#5E6E7A; --border:#D7E3ED; --amber:#D89428; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; }
+  body { font-family: Tahoma, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         display:flex; align-items:center; justify-content:center; padding:32px; }
+  .wrap { width:560px; max-width:100%; }
+  .logo { font-size:22px; font-weight:700; color:var(--pd); margin-bottom:6px; }
+  .sub { font-size:13px; color:var(--muted); margin-bottom:26px; }
+  .bar { height:6px; border-radius:3px; background:var(--soft); overflow:hidden; margin-bottom:14px; }
+  .bar i { display:block; height:100%; width:36%; background:var(--p); border-radius:3px;
+           animation: slide 1.4s ease-in-out infinite; }
+  @keyframes slide { 0%{margin-right:-36%} 100%{margin-right:100%} }
+  .phase { font-size:15px; margin-bottom:8px; }
+  .hint { font-size:12.5px; color:var(--muted); line-height:1.9; }
+  .card { display:none; border:1px solid var(--border); border-radius:12px; background:#fff;
+          padding:20px 22px; margin-top:8px; }
+  .card.show { display:block; }
+  .card h2 { margin:0 0 10px; font-size:16.5px; color:var(--pd); }
+  .err { font-size:13.5px; line-height:2; word-break:break-word; }
+  .tail { font-size:11.5px; color:var(--muted); background:var(--bg); border:1px dashed var(--border);
+          border-radius:8px; padding:10px 12px; max-height:150px; overflow:auto; white-space:pre-wrap;
+          direction:ltr; text-align:left; margin:12px 0; }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+  button { font-family:inherit; font-size:13px; border:1px solid var(--border); background:#fff;
+           color:var(--pd); border-radius:8px; padding:8px 14px; cursor:pointer; }
+  button:hover { background:var(--soft); }
+  button.warn { color:#7A5312; border-color:#E6CFA0; }
+  .copied { font-size:12px; color:#177245; margin-top:8px; display:none; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">مرکز جامع سنجش و اختلالات یادگیری — نسخهٔ میز</div>
+    <div class="sub" id="ver"></div>
+
+    <div id="booting">
+      <div class="bar"><i></i></div>
+      <div class="phase" id="phase">در حال راه‌اندازی موتور محلی…</div>
+      <div class="hint">اجرای اول کمی بیشتر طول می‌کشد (ساخت پایگاه‌داده و کلید رمزنگاری مخصوص این نصب). اگر بیش از یک دقیقه طول کشید، این صفحه خودش وضعیت را عوض می‌کند.</div>
+    </div>
+
+    <div class="card" id="failed">
+      <h2>موتور محلی بالا نیامد</h2>
+      <div class="err" id="errmsg"></div>
+      <div class="tail" id="logtail"></div>
+      <div class="actions">
+        <button id="btnRetry">تلاش دوباره</button>
+        <button id="btnDir">باز کردن پوشهٔ داده</button>
+        <button id="btnCopy">کپی گزارش خرابی</button>
+        <button id="btnMail" class="warn">پیام به سازنده</button>
+      </div>
+      <div class="copied" id="copied">✓ گزارش خرابی کپی شد — در پیام خود بچسبانید.</div>
+    </div>
+  </div>
+
+<script>
+  // صفحهٔ بوت پوسته (v1.26.0) — هرگز صفحهٔ خالی نمی‌ماند: سه وضعیت صریح + کنش‌ها.
+  // قرارداد با lib.rs: desktop_status / engine_retry / open_data_dir — همه فقط loopback.
+  const invoke = () => (globalThis.__TAURI_INTERNALS__ ? globalThis.__TAURI_INTERNALS__.invoke : null);
+  let lastDiag = { message: '', log: '', ver: '' };
+
+  const el = (id) => document.getElementById(id);
+
+  function showFailed(st) {
+    el('booting').style.display = 'none';
+    el('failed').classList.add('show');
+    el('errmsg').textContent = st.message || 'دلیل نامشخص — دم لاگ را ببینید.';
+    el('logtail').textContent = st.log_tail ? ('--- آخر workerd.log ---\n' + st.log_tail) : '(لاگ خالی است — workerd احتمالاً اصلاً اجرا نشده)';
+  }
+
+  function showBooting(text) {
+    el('failed').classList.remove('show');
+    el('booting').style.display = 'block';
+    if (text) el('phase').textContent = text;
+  }
+
+  async function poll() {
+    const inv = invoke();
+    if (!inv) { setTimeout(poll, 700); return; }
+    let st;
+    try { st = await inv('desktop_status'); } catch { setTimeout(poll, 700); return; }
+    if (st.phase === 'ready') {
+      el('phase').textContent = 'موتور آماده است — باز کردن برنامه…';
+      globalThis.__DESKTOP_SHELL__ = true;
+      globalThis.__DESKTOP_FEATURES__ = { tutorial: true, setup: true };
+      location.replace(st.base_url + '/');
+      return;
+    }
+    if (st.phase === 'failed') { showFailed(st); lastDiag = st; return; }
+    setTimeout(poll, 700);
+  }
+
+  el('btnRetry').addEventListener('click', async () => {
+    const inv = invoke(); if (!inv) return;
+    showBooting('در حال تلاش دوباره…');
+    try { await inv('engine_retry'); } catch (e) { showFailed({ message: String(e), log_tail: lastDiag.log_tail || '' }); }
+    setTimeout(poll, 300);
+  });
+  el('btnDir').addEventListener('click', async () => {
+    const inv = invoke(); if (!inv) return;
+    try { await inv('open_data_dir'); } catch { /* نرم */ }
+  });
+  function diagText() {
+    return [
+      'گزارش خرابی راه‌اندازی — مرکز جامع نسخهٔ میز',
+      'نسخه: ' + (lastDiag.version || '?'),
+      'خطا: ' + (lastDiag.message || '(ثبت نشده)'),
+      '--- آخر لاگ workerd ---',
+      lastDiag.log_tail || '(خالی)'
+    ].join('\n');
+  }
+  el('btnCopy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(diagText());
+      el('copied').style.display = 'block';
+    } catch { /* کلیپ‌بورد رد کرد — متن انتخابی کاربر می‌ماند */ }
+  });
+  // «پیام به سازنده»: کپی گزارش + باز کردن صفحهٔ گزارش مخزن — هیچ ایمیل ساختگی نیست.
+  el('btnMail').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(diagText()); el('copied').style.display = 'block'; } catch { /* نرم */ }
+    setTimeout(() => {
+      try { globalThis.open('https://github.com/alirezamehrad565-sys/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri/issues/new'); } catch { /* نرم */ }
+    }, 250);
+  });
+
+  (async () => {
+    const inv = invoke();
+    if (inv) { try { const s = await inv('desktop_status'); el('ver').textContent = 'نسخهٔ ' + (s.version || ''); lastDiag.version = s.version; } catch { /* نرم */ } }
+    poll();
+  })();
+</script>
+</body>
+</html>

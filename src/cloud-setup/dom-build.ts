@@ -72,9 +72,11 @@ export function csRow(doc: CsDocument, label: string, value: string): CsElement 
 }
 
 export const WIZARD_STEP_TITLES = [
-  'خوش آمدید — نسخهٔ میز',
-  'اتصال به ابر (اختیاری)',
+  'شروع — راه‌اندازی مرکز',
+  'اتصال به سرور مرکزی موجود',
   'توکن Cloudflare (اختیاری)',
+  'ساخت سرور مرکزی با کلادفلر',
+  'تعریف کارکنان مرکز',
   'پایان راه‌اندازی'
 ] as const;
 
@@ -102,6 +104,8 @@ export interface WizardInputDom {
   node_code: CsElement;
   node_key: CsElement;
   cf_token: CsElement;
+  /** v1.26.0 — شناسهٔ حساب کلادفلر (وقتی توکن به چند حساب دسترسی دارد) */
+  cf_account: CsElement;
 }
 
 export interface WizardRefs {
@@ -132,7 +136,8 @@ export function buildWizardShell(doc: CsDocument, initial: CloudConnRecord): Wiz
     worker_url: csInput(doc, 'text', 'مثل https://center.example.workers.dev', 'cloud-input'),
     node_code: csInput(doc, 'text', 'DESKTOP:…', 'cloud-input'),
     node_key: csInput(doc, 'password', 'کلید نود — فقط یک‌بار نمایش داده می‌شود', 'cloud-input'),
-    cf_token: csInput(doc, 'password', 'توکن API کلادفلر — اختیاری', 'cloud-input')
+    cf_token: csInput(doc, 'password', 'توکن API کلادفلر — اختیاری', 'cloud-input'),
+    cf_account: csInput(doc, 'text', 'شناسهٔ حساب کلادفلر — فقط اگر چند حساب دارید', 'cloud-input')
   };
   if (initial.worker_url) inputs.worker_url.value = initial.worker_url;
   if (initial.node_code) inputs.node_code.value = initial.node_code;
@@ -167,8 +172,7 @@ export function renderWizardStep(refs: WizardRefs, stepIndex: number, slides: Cs
 }
 
 /** بخش تنظیمات «اتصال ابر» — وضعیت فعلی بدون کنش‌ها (کنش‌ها در run.ts سیم می‌شوند) */
-export function buildCloudSection(doc: CsDocument, record: CloudConnRecord, insecure: boolean): CsElement {
-  const box = csEl(doc, 'div', 'cloud-setup-section');
+export function buildCloudSection(doc: CsDocument, record: CloudConnRecord, insecure: boolean): CsElement {  const box = csEl(doc, 'div', 'cloud-setup-section');
   box.appendChild(csEl(doc, 'h3', 'cloud-section-title', 'اتصال ابر (نسخهٔ میز)'));
   box.appendChild(csRow(doc, 'آدرس ورکر', record.worker_url ?? '— تنظیم نشده'));
   box.appendChild(csRow(doc, 'کد نود', record.node_code ?? '—'));
@@ -187,5 +191,55 @@ export function buildCloudSection(doc: CsDocument, record: CloudConnRecord, inse
       )
     );
   }
+  return box;
+}
+
+/** آدرس صفحهٔ گزارش مخزن — «پیام به سازنده» هیچ ایمیل ساختگی ندارد؛ گزارش کپی + این صفحه */
+export const REPORT_ISSUES_URL =
+  'https://github.com/alirezamehrad565-sys/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri/issues/new';
+
+/**
+ * v1.26.0 — بلوک «پیام به سازنده»: گزارش نسخه/خطا کپی می‌شود و صفحهٔ گزارش مخزن باز می‌شود.
+ * دو کنش، هیچ throwی — کلیپ‌بورد/تب ناموفق = پیام نرم.
+ */
+export function buildReportBlock(doc: CsDocument, reportLines: readonly string[]): CsElement {
+  const box = csEl(doc, 'div', 'cloud-report');
+  box.appendChild(
+    csEl(doc, 'p', 'cloud-text', 'اگر در راه‌اندازی یا اتصال به مشکل برخوردید، گزارش زیر را برای سازنده بفرستید:')
+  );
+  const pre = csEl(doc, 'div', 'cloud-report-text', reportLines.join('\n'));
+  pre.style.whiteSpace = 'pre-wrap';
+  box.appendChild(pre);
+
+  const reportText = reportLines.join('\n');
+  const copiedNote = csEl(doc, 'div', 'cloud-report-copied', '✓ گزارش کپی شد');
+  copiedNote.style.display = 'none';
+
+  box.appendChild(
+    csButton(doc, 'کپی گزارش', 'cloud-btn cloud-btn-secondary', () => {
+      void (async () => {
+        try {
+          const g = globalThis as { navigator?: { clipboard?: { writeText(t: string): Promise<void> } } };
+          if (g.navigator?.clipboard) {
+            await g.navigator.clipboard.writeText(reportText);
+            copiedNote.style.display = 'block';
+          }
+        } catch {
+          /* نرم — متن در pre قابل انتخاب است */
+        }
+      })();
+    })
+  );
+  box.appendChild(
+    csButton(doc, 'صفحهٔ گزارش سازنده', 'cloud-btn cloud-btn-secondary', () => {
+      try {
+        const g = globalThis as { open?: (url: string) => unknown };
+        g.open?.(REPORT_ISSUES_URL);
+      } catch {
+        /* نرم */
+      }
+    })
+  );
+  box.appendChild(copiedNote);
   return box;
 }
