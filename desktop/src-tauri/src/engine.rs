@@ -19,7 +19,9 @@ pub struct LocalEngine {
     pub port: u16,
 }
 
-/// پیدا کردن باینری workerd: متغیر محیطی ← کنار برنامه (سایدکار نصاب) ← مسیرهای توسعهٔ node_modules
+/// پیدا کردن باینری workerd: متغیر محیطی ← کنار برنامه (سایدکار نصاب: ریشه و binaries/) ←
+/// مسیرهای توسعهٔ node_modules. rust-f13: در tauri dev فایل سایدکار پسوند هدف دارد
+/// (workerd-<target>) و در نصاب NSIS نام بدون پسوند هدف کنار exe (یا زیر binaries/) می‌نشیند.
 fn find_workerd_binary() -> Option<PathBuf> {
     if let Ok(from_env) = std::env::var("CENTER_WORKERD_BIN") {
         let p = PathBuf::from(from_env);
@@ -27,11 +29,22 @@ fn find_workerd_binary() -> Option<PathBuf> {
             return Some(p);
         }
     }
-    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
     let exe_name = if cfg!(windows) { "workerd.exe" } else { "workerd" };
-    let beside_exe = exe_dir.join(exe_name);
-    if beside_exe.is_file() {
-        return Some(beside_exe);
+    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    let mut candidates = vec![exe_dir.join(exe_name), exe_dir.join("binaries").join(exe_name)];
+    // سایدکار با نام هدف — شکل dev تائوری: binaries/workerd-<target>
+    if let Ok(entries) = std::fs::read_dir(exe_dir.join("binaries")) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            if name.to_string_lossy().starts_with("workerd") {
+                candidates.push(entry.path());
+            }
+        }
+    }
+    for c in &candidates {
+        if c.is_file() {
+            return Some(c.clone());
+        }
     }
     // مسیر توسعه — از ریشهٔ مخزن (دو سطح بالاتر از desktop/src-tauri)
     let dev_root = exe_dir
@@ -90,10 +103,24 @@ impl LocalEngine {
         // --experimental برای فلگ experimental سرویس D1 (همان آرگومان‌های scripts/engine/engine.mjs)
         // خاموشی فقط با Drop ساختار LocalEngine (kill + wait) — std::process::Command
         // متد kill_on_drop ندارد (API توکیو است) و نیازش هم نیست.
-        let child = Command::new(&binary)
-            .args(["serve", "--experimental", config.to_string_lossy().as_ref()])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+        // rust-f13 — stderr سایدکار به data/workerd.log (کنار کانفیگ) می‌رود تا خرابی نصاب
+        // قابل تشخیص باشد؛ stdout بی‌صدا.
+        let mut cmd = Command::new(&binary);
+        cmd.args(["serve", "--experimental", config.to_string_lossy().as_ref()])
+            .stdout(Stdio::null());
+        match std::fs::File::options()
+            .create(true)
+            .append(true)
+            .open(config.parent().unwrap_or(Path::new(".")).join("workerd.log"))
+        {
+            Ok(f) => {
+                cmd.stderr(Stdio::from(f));
+            }
+            Err(_) => {
+                cmd.stderr(Stdio::null());
+            }
+        }
+        let child = cmd
             .spawn()
             .map_err(|e| format!("spawn workerd ناموفق: {e}"))?;
         Ok(Self { child, port })

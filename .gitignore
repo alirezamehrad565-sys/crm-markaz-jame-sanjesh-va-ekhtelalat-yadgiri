@@ -67,3 +67,8 @@ data/*.db-wal
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
 dist/usb-pack/
+
+# rust-f13 — خروجی‌های مونتاژ رانتایم نصاب (در CI ساخته می‌شوند؛ git حمل نمی‌کند)
+desktop/src-tauri/binaries/
+desktop/src-tauri/resources/
+desktop/src-tauri/engine-runtime-manifest.json
