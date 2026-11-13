@@ -29,6 +29,11 @@
  *     ثبت می‌کند (compatible = APP_VERSION ≥ min با compareSemver؛ drift قدر مطلق به دقیقه،
  *     هشدار > ۲ دقیقه — فقط-اطلاعاتی) و ناسازگاری را فقط در catch-up به version_error می‌برد
  *     (هم‌رفتار ۴۲۶ receiving-سر). خلاصهٔ دورهٔ کامل جبرانی در last_catchup وضعیت می‌نشیند.
+ *  ۷) EXP-1 — آشتی‌ساز (reconcile): پس از هر دورهٔ جبرانی کامل (state=synced) یک‌بار
+ *     GET /node/reconcile با همان اعتبار نود زده می‌شود و شمارش + بیشینهٔ updated_at هر
+ *     دامنهٔ سفید pull با صندوق محلی مقایسه می‌شود (شمارش از GET /api/internal/sync/status
+ *     سمت موتور؛ بیشینهٔ محلی از مشاهدهٔ تجمعی استقرارها در LOCAL_MAX_KEY). فقط-گزارش:
+ *     نتیجه در RECONCILE_KEY می‌نشیند و هیچ اصلاحی هرگز انجام نمی‌شود.
  * فهرست سفید سه‌لایه دست‌نخورده: ابر (pull) ← کلاینت (client.ts) ← سرور میز (internal-sync).
  * push مسیر معکوس است: موتور محلی (outbox) → client.push (پیش‌فیلتر فهرست سفید) → ابر (node/push).
  */
@@ -84,6 +89,52 @@ export const CLIENT_CURSOR_KEY = `nodesync:cursor:${[...NODE_PULL_DOMAINS].sort(
 export const NODE_VERSION_KEY = 'nodesync:version-handshake-v1';
 /** آستانهٔ هشدار اختلاف ساعت به دقیقه — بیش از این = clock_warning (بند ۱-۳: بیش از ۲ دقیقه) */
 export const CLOCK_DRIFT_WARN_MINUTES = 2;
+
+// ─── EXP-1 — آشتی‌ساز (reconcile): مقایسهٔ فقط-گزارشی صندوق محلی با مرکز ───
+
+/**
+ * کلید نتیجهٔ آخرین مقایسهٔ آشتی‌ساز در انبار پیشرفت — منبع فیلد reconciliation در
+ * GET /api/node-sync/status (نسخهٔ ۳). هیچ اصلاحی هرگز از این مسیر نمی‌گذرد؛ فقط گزارش.
+ */
+export const RECONCILE_KEY = 'nodesync:reconciliation-v1';
+/** سقف ردیف‌های ناهم‌خوانی ذخیره‌شده — بریف EXP-1: حداکثر ۵ ورودی {domain, center, local} */
+export const RECONCILE_MAX_DETAIL = 5;
+/**
+ * کلید بزرگ‌ترین updated_at مشاهده‌شدهٔ هر دامنه در استقرار — آینهٔ محلیِ
+ * MAX(updated_at) FROM node_sync_inbox WHERE domain=? . موتور محلی per-domain max را در
+ * هیچ مسیری نمی‌دهد (فقط GET /api/internal/sync/status با by_domain شمارش‌ها)؛ runner
+ * تنها نویسندهٔ صندوق است، پس بیشینهٔ مشاهده‌شدهٔ همین ماژول = بیشینهٔ صندوق.
+ */
+export const LOCAL_MAX_KEY = 'nodesync:local-max-v1';
+/** مسیر شمارش صندوق محلی — همان مبدا و همان گات سشنِ مسیر استقرار (internal-sync/routes.ts) */
+const LOCAL_STATUS_PATH = '/api/internal/sync/status';
+
+/** یک ردیف ناهم‌خوانی — شمارش مرکز و شمارش صندوق محلی همان دامنه */
+export interface ReconcileDetailRow {
+  domain: string;
+  /** شمارش مرکز (count پاسخ /node/reconcile) */
+  center: number;
+  /** شمارش صندوق محلی (by_domain از GET /api/internal/sync/status) */
+  local: number;
+}
+
+/** نتیجهٔ آخرین مقایسهٔ آشتی‌ساز — در RECONCILE_KEY انبار و در وضعیت v3 آینه می‌شود */
+export interface NodeReconciliationV1 {
+  v: 1;
+  /** لحظهٔ مقایسه (ISO دستگاه) */
+  at: string;
+  /** true = همهٔ دامنه‌ها هم‌شمار؛ false = حداقل یک ناهم‌خوانی */
+  ok: boolean;
+  /** تعداد دامنه‌های ناهم‌خوان (صفر هنگام ok=true) */
+  differences: number;
+  /** حداکثر RECONCILE_MAX_DETAIL ردیف ناهم‌خوانی؛ هم‌خوانی کامل = null */
+  detail: ReconcileDetailRow[] | null;
+}
+
+/** خروجی نرم یک دورهٔ آشتی‌ساز — هیچ مسیری throw نمی‌کند */
+export type ReconcileOutcome =
+  | { status: 'ok'; ok: boolean; differences: number }
+  | { status: 'unavailable'; reason: string }
 
 /** آخرین هندشیک نسخه/ساعت ثبت‌شده از پاسخ‌های مرکز — در NODE_VERSION_KEY انبار می‌شود */
 export interface NodeVersionSeenV1 {
@@ -187,6 +238,11 @@ export interface NodeSyncStatusMirror {
   clock_warning: boolean;
   /** موج ۱ — خلاصهٔ آخرین دورهٔ جبرانی کامل {at, pulled, pushed}؛ هنوز هیچ دورهٔ کاملی نبوده = null */
   last_catchup: { at: string; pulled: number; pushed: number } | null;
+  /**
+   * EXP-1 (نسخهٔ ۳) — نتیجهٔ آخرین مقایسهٔ آشتی‌ساز؛ اختیاری تا آینهٔ قدیمی بدونِ آن هم
+   * پذیرفته شود (هم‌قرارداد فیلدهای موج ۱). هنوز هیچ مقایسه‌ای نبوده = غایب.
+   */
+  reconciliation?: NodeReconciliationV1 | null;
   updated_at: string;
 }
 
@@ -651,6 +707,150 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
     return { compatible: next.compatible, minNode: next.min_node };
   }
 
+  // ─── EXP-1 — آشتی‌ساز: مقایسهٔ فقط-گزارشی، بدون هیچ اصلاحی ───
+
+  /** خواندن نرم بیشینهٔ مشاهده‌شدهٔ هر دامنه — کلید غایب/خراب = جدول خالی */
+  function readLocalMax(): Record<string, string> {
+    try {
+      const raw = progress.getItem(LOCAL_MAX_KEY);
+      if (!raw) return {};
+      const p = JSON.parse(raw) as unknown;
+      if (!p || typeof p !== 'object' || Array.isArray(p)) return {};
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(p as Record<string, unknown>)) {
+        if (typeof k === 'string' && k.length > 0 && typeof v === 'string' && v.length > 0) out[k] = v;
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * ثبت بیشینهٔ updated_at مشاهده‌شدهٔ هر دامنه پس از استقرار موفق — با هر صفحهٔ تعهدشده
+   * جلو می‌رود (هرگز عقب نمی‌نشیند). این همان «MAX(updated_at) FROM node_sync_inbox» است
+   * از دید runner — تنها نویسندهٔ صندوق همین ماژول است، پس مشاهدهٔ تجمعی = واقعیت صندوق.
+   */
+  function recordLocalMax(items: readonly { domain: string; updated_at: string }[]): void {
+    if (items.length === 0) return;
+    try {
+      const cur = readLocalMax();
+      let changed = false;
+      for (const it of items) {
+        const prev = cur[it.domain];
+        if (prev === undefined || Date.parse(it.updated_at) > Date.parse(prev)) {
+          cur[it.domain] = it.updated_at;
+          changed = true;
+        }
+      }
+      if (changed) progress.setItem(LOCAL_MAX_KEY, JSON.stringify(cur));
+    } catch {
+      // انبار ناموفق = نرم — آشتی‌ساز بعدی بدون بیشینهٔ محلی فقط شمارش را می‌سنجد
+    }
+  }
+
+  /** خواندن نرم نتیجهٔ آخرین آشتی‌ساز — منبع فیلد reconciliation در آینهٔ وضعیت */
+  function readReconciliation(): NodeReconciliationV1 | null {
+    try {
+      const raw = progress.getItem(RECONCILE_KEY);
+      if (!raw) return null;
+      const p = JSON.parse(raw) as Partial<NodeReconciliationV1>;
+      if (p?.v !== 1 || typeof p.at !== 'string' || typeof p.ok !== 'boolean') return null;
+      const differences = typeof p.differences === 'number' && p.differences >= 0 ? p.differences : 0;
+      return { v: 1, at: p.at, ok: p.ok, differences, detail: Array.isArray(p.detail) ? p.detail.slice(0, RECONCILE_MAX_DETAIL) : null };
+    } catch {
+      return null;
+    }
+  }
+
+  /** نوشتن نرم نتیجهٔ آشتی‌ساز — انبار ناموفق هیچ چیز را نمی‌شکند */
+  function writeReconciliation(rec: NodeReconciliationV1): void {
+    try {
+      progress.setItem(RECONCILE_KEY, JSON.stringify(rec));
+    } catch {
+      // نرم
+    }
+  }
+
+  /**
+   * شمارش صندوق محلی بر حسب دامنه — همان گات و همان مبداِ مسیر استقرار (خواندن از
+   * GET /api/internal/sync/status سمت موتور؛ محرک واقعی: SELECT COUNT(*) GROUP BY domain
+   * روی node_sync_inbox در internal-sync/service.ts). هر خطا/بدنهٔ خارج از قرارداد = null.
+   */
+  async function localInboxCounts(): Promise<Record<string, number> | null> {
+    try {
+      const token = opts.tokenProvider?.() ?? null;
+      if (!token) return null;
+      const res = await fetchFn(LOCAL_STATUS_PATH, { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
+      if (res.status !== 200) return null;
+      let parsed: unknown = null;
+      try {
+        if ('json' in res && typeof res.json === 'function') parsed = await res.json();
+      } catch {
+        parsed = null;
+      }
+      const byDomain = (parsed as { data?: { by_domain?: unknown } } | null)?.data?.by_domain;
+      if (!byDomain || typeof byDomain !== 'object' || Array.isArray(byDomain)) return null;
+      const out: Record<string, number> = {};
+      for (const [d, n] of Object.entries(byDomain as Record<string, unknown>)) {
+        if (typeof n === 'number' && Number.isFinite(n) && n >= 0) out[d] = Math.floor(n);
+      }
+      return out;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * دورهٔ آشتی‌ساز — پس از هر دورهٔ جبرانیِ کامل (state=synced) یک‌بار: شمارش و بیشینهٔ
+   * updated_at هر دامنهٔ سفید pull بین مرکز و صندوق محلی مقایسه می‌شود و فقط «گزارش»
+   * می‌شود — هیچ اصلاح/حذف/بازنویسی‌ای انجام نمی‌شود (قرارداد بریف EXP-1).
+   * مقایسهٔ ناموفق (شبکه/اعتبار/درگاه محلی) نتیجهٔ قبلی را دست‌نخورده می‌گذارد.
+   */
+  async function reconcileNow(): Promise<ReconcileOutcome> {
+    const localCounts = await localInboxCounts();
+    if (localCounts === null) {
+      return { status: 'unavailable', reason: 'شمارش صندوق محلی در دسترس نیست' };
+    }
+    const rec = await client.reconcile({ domains: [...NODE_PULL_DOMAINS] });
+    if (rec.status !== 'ok') {
+      return { status: 'unavailable', reason: `پاسخ مرکز: ${rec.status}` };
+    }
+    const localMax = readLocalMax();
+    const detail: ReconcileDetailRow[] = [];
+    for (const row of rec.domains) {
+      // فقط دامنه‌های سفید pull سنجیده می‌شوند — بقیهٔ دامنه‌های پاسخ نادیده گرفته می‌شوند
+      if (!(NODE_PULL_DOMAINS as readonly string[]).includes(row.domain)) continue;
+      const localCount = localCounts[row.domain] ?? 0;
+      let same = row.count === localCount;
+      // مقایسهٔ بیشینه‌ها فقط وقتی هر دو سمت مُهر دارند — نبودِ مُهر با نبودِ ردیف هم‌معناست
+      const centerMaxT = row.max_updated_at !== null ? Date.parse(row.max_updated_at) : Number.NaN;
+      const localMaxIso = localMax[row.domain] ?? null;
+      const localMaxT = localMaxIso !== null ? Date.parse(localMaxIso) : Number.NaN;
+      if (!Number.isNaN(centerMaxT) && !Number.isNaN(localMaxT) && centerMaxT !== localMaxT) same = false;
+      if (!same) {
+        detail.push({ domain: row.domain, center: row.count, local: localCount });
+        console.warn(
+          `آشتی‌ساز: ناهم‌خوانی در دامنهٔ ${row.domain} — مرکز ${row.count}، این دستگاه ${localCount}`
+        );
+      }
+    }
+    const at = now().toISOString();
+    if (detail.length === 0) {
+      console.info('آشتی‌ساز: شمارش دامنه‌ها هم‌خوان است');
+      writeReconciliation({ v: 1, at, ok: true, differences: 0, detail: null });
+      return { status: 'ok', ok: true, differences: 0 };
+    }
+    writeReconciliation({
+      v: 1,
+      at,
+      ok: false,
+      differences: detail.length,
+      detail: detail.slice(0, RECONCILE_MAX_DETAIL)
+    });
+    return { status: 'ok', ok: false, differences: detail.length };
+  }
+
   /**
    * آینهٔ وضعیت به موتور محلی (POST /api/node-sync/status) — فقط-افزودنی: موتور به انبار
    * پیشرفت فرانت‌اند دسترسی ندارد و UI این قرارداد را از موتور می‌خواند؛ شکست آینه (وب/قطعی)
@@ -683,6 +883,8 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
           clock_drift_minutes: vs.clock_drift_minutes,
           clock_warning: vs.clock_warning,
           last_catchup: cu.last_catchup ?? null,
+          // EXP-1 — نتیجهٔ آخرین آشتی‌ساز (هیچ مقایسه‌ای نبوده = null نرم)
+          reconciliation: readReconciliation(),
           updated_at: now().toISOString()
         };
         await fetchFn(STATUS_MIRROR_PATH, {
@@ -767,6 +969,7 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
           }
           for (const it of pull.items) by_domain[it.domain] = (by_domain[it.domain] ?? 0) + 1;
           items += pull.items.length;
+          recordLocalMax(pull.items); // EXP-1 — بیشینهٔ مشاهده‌شدهٔ هر دامنه برای آشتی‌ساز
         }
 
         pages += 1;
@@ -1021,6 +1224,7 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
           }
           for (const it of pageData.items) outcome.by_domain[it.domain] = (outcome.by_domain[it.domain] ?? 0) + 1;
           outcome.items_pulled += pageData.items.length;
+          recordLocalMax(pageData.items); // EXP-1 — بیشینهٔ مشاهده‌شدهٔ هر دامنه برای آشتی‌ساز
         }
 
         outcome.pages += 1;
@@ -1246,6 +1450,15 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
         };
       }
       writeCatchUpState(statePatch);
+      // EXP-1 — آشتی‌ساز فقط پس از دورهٔ کامل هم‌گام (state=synced) و یک‌بار در همان دوره:
+      // مقایسهٔ فقط-گزارشی مرکز↔صندوق محلی؛ هر خطا نرم است و دورهٔ catch-up را عوض نمی‌کند.
+      if (finalState === 'synced') {
+        try {
+          await reconcileNow();
+        } catch {
+          // سپر دفاعی — آشتی‌ساز هرگز نمی‌شکند (قرارداد drill §۳-۱۱)
+        }
+      }
       mirrorStatus();
       return outcome;
     }

@@ -211,3 +211,94 @@ describe('node-sync-client: آینهٔ فهرست سفید', () => {
     expect([...NODE_PUSH_DOMAINS].sort()).toEqual(['client_errors', 'health_ping', 'usage_summary']);
   });
 });
+
+// ───────────────────────── EXP-1 — آشتی‌ساز (reconcile) ─────────────────────────
+
+describe('node-sync-client: reconcile — فقط-گزارش، قرارداد نرم', () => {
+  it('پاسخ قراردادی → ok با ردیف‌های دامنه + server_ts؛ درخواست با همان اعتبار نود pull', async () => {
+    // بدنهٔ «لخت» — عین قرارداد یخ‌زدهٔ /node/reconcile سمت مرکز (بدون پاکت {data:…})
+    const { fn, calls } = makeFetch(() =>
+      okJson({
+        server_ts: '2026-11-13T10:05:00.000Z',
+        domains: [
+          { domain: 'announcements', count: 123, max_updated_at: '2026-11-12T08:00:00.000Z' },
+          { domain: 'packages', count: 7, max_updated_at: null }
+        ]
+      })
+    );
+    const client = clientOf(configuredStore(), fn);
+    const out = await client.reconcile();
+    expect(out.status).toBe('ok');
+    if (out.status === 'ok') {
+      expect(out.serverTs).toBe('2026-11-13T10:05:00.000Z');
+      expect(out.domains).toEqual([
+        { domain: 'announcements', count: 123, max_updated_at: '2026-11-12T08:00:00.000Z' },
+        { domain: 'packages', count: 7, max_updated_at: null }
+      ]);
+    }
+    const url = new URL(calls[0]?.url ?? 'https://x.invalid');
+    expect(url.pathname).toBe('/node/reconcile');
+    expect(url.searchParams.get('domains')).toBe('announcements,packages,library'); // فهرست سفید کامل (ترتیب قرارداد کلاینت)
+    expect((calls[0]?.init.headers as Record<string, string>)['X-CP-Node-Code']).toBe(CODE);
+    expect((calls[0]?.init.headers as Record<string, string>).Authorization).toBe(`Bearer ${KEY}`);
+  });
+
+  it('پاکت {data:…} هم پذیرفته می‌شود (هم‌ریتم بقیهٔ مسیرهای نود) — بدنهٔ لخت و پاکتی هر دو قراردادند', async () => {
+    const { fn } = makeFetch(() =>
+      okJson({
+        data: {
+          server_ts: '2026-11-13T10:05:00.000Z',
+          domains: [{ domain: 'library', count: 3, max_updated_at: '2026-11-12T07:00:00.000Z' }]
+        }
+      })
+    );
+    const client = clientOf(configuredStore(), fn);
+    const out = await client.reconcile();
+    expect(out.status).toBe('ok');
+    if (out.status === 'ok') {
+      expect(out.serverTs).toBe('2026-11-13T10:05:00.000Z');
+      expect(out.domains).toEqual([{ domain: 'library', count: 3, max_updated_at: '2026-11-12T07:00:00.000Z' }]);
+    }
+  });
+
+  it('کلید غایب → unconfigured بدون هیچ fetch؛ ۴۰۱ → auth_error؛ شبکه قطع → network_error', async () => {
+    const empty = clientOf(memStore(), makeFetch(() => okJson({ data: { domains: [] } })).fn);
+    expect((await empty.reconcile()).status).toBe('unconfigured');
+
+    const authz = clientOf(configuredStore(), makeFetch(() => new Response('nope', { status: 401 })).fn);
+    expect((await authz.reconcile()).status).toBe('auth_error');
+
+    const dead = clientOf(configuredStore(), makeFetch(() => { throw new Error('socket down'); }).fn);
+    const deadOut = await dead.reconcile();
+    expect(deadOut.status).toBe('network_error');
+    if (deadOut.status === 'network_error') expect(deadOut.message).toBe('socket down');
+  });
+
+  it('بدنهٔ خارج از قرارداد → http_error با کد NODE_RECONCILE_BODY_INVALID؛ ردیف‌های مسموم حذف نرم می‌شوند', async () => {
+    const bad = clientOf(configuredStore(), makeFetch(() => okJson({ data: { nope: true } })).fn);
+    const badOut = await bad.reconcile();
+    expect(badOut.status).toBe('http_error');
+    if (badOut.status === 'http_error') expect(badOut.code).toBe('NODE_RECONCILE_BODY_INVALID');
+
+    const partial = clientOf(
+      configuredStore(),
+      makeFetch(() =>
+        okJson({
+          data: {
+            domains: [
+              { domain: 'announcements', count: 5, max_updated_at: '2026-11-12T08:00:00.000Z' },
+              { domain: 'خراب', count: -3, max_updated_at: null }, // شمارندهٔ منفی — حذف نرم
+              { domain: 'بدون-شمارش', max_updated_at: null }, // بدون count — حذف نرم
+              'رشتهٔ مسموم' // خارج از قرارداد — حذف نرم
+            ]
+          }
+        })
+      ).fn
+    );
+    const partialOut = await partial.reconcile();
+    expect(partialOut.status).toBe('ok');
+    if (partialOut.status === 'ok') {
+      expect(partialOut.domains).toEqual([{ domain: 'announcements', count: 5, max_updated_at: '2026-11-12T08:00:00.000Z' }]);
+    }
+  });
+});

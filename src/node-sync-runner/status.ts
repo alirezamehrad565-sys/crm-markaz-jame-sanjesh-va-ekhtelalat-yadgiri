@@ -14,6 +14,9 @@
  * min_node_version/server_ts دارد؛ runner آن را در انبار پیشرفت ثبت و با آینهٔ POST می‌فرستد →
  * version/clock_drift_minutes/clock_warning/last_catchup در همین پاکت GET می‌آیند؛ آینهٔ قدیمیِ
  * بدونِ این فیلدها هم پذیرفته می‌شود (اختیاری در اسکیما) و در GET پیش‌فرض نرم می‌گیرد.
+ * EXP-1 (نسخهٔ ۳): فیلد تازهٔ reconciliation — نتیجهٔ آخرین آشتی‌ساز (مقایسهٔ فقط-گزارشی
+ * شمارش/بیشینهٔ updated_at دامنه‌های سفید pull بین مرکز و صندوق محلی)؛ همان قرارداد
+ * اختیاری-در-POST / null-در-GET فیلدهای موج ۱ را دارد و نام هیچ فیلد قدیمی عوض نمی‌شود.
  *
  * pending_push: شمارش دقیق «آنچه پوش بعدی می‌فرستد» — client_errors با occurred_at بعد از
  * watermark آینه (تنها دامنهٔ pushable که در DB محلی ردیف دارد؛ سقف ۲۰۰ صفحهٔ outbox ندارد)
@@ -78,6 +81,26 @@ export const NodeSyncStatusMirrorSchema = z.object({
     })
     .nullable()
     .optional(),
+  // ─── EXP-1 (نسخهٔ ۳) — نتیجهٔ آخرین آشتی‌ساز؛ آینهٔ قدیمیِ بدونِ آن هم پذیرفته می‌شود ───
+  reconciliation: z
+    .object({
+      at: z.iso.datetime(),
+      ok: z.boolean(),
+      differences: z.number().int().min(0),
+      // سقف ۵ ردیف ناهم‌خوانی — آینهٔ RECONCILE_MAX_DETAIL سمت runner
+      detail: z
+        .array(
+          z.object({
+            domain: z.string().min(1).max(40),
+            center: z.number().int().min(0),
+            local: z.number().int().min(0)
+          })
+        )
+        .max(5)
+        .nullable()
+    })
+    .nullable()
+    .optional(),
   updated_at: z.iso.datetime()
 });
 
@@ -100,7 +123,19 @@ export interface NodeSyncCatchupSummary {
   pushed: number;
 }
 
-/** پاکت GET — قرارداد ثابت UI نسخهٔ ۲ (موج ۱)؛ نام فیلدها نباید تغییر کند */
+/** EXP-1 (نسخهٔ ۳) — نتیجهٔ آخرین آشتی‌ساز: فقط-گزارش، بدون هیچ اصلاحی سمت نود */
+export interface NodeSyncReconciliationInfo {
+  /** لحظهٔ مقایسه (ISO دستگاه نود) */
+  at: string;
+  /** true = همهٔ دامنه‌ها هم‌شمار */
+  ok: boolean;
+  /** تعداد دامنه‌های ناهم‌خوان */
+  differences: number;
+  /** حداکثر ۵ ردیف {domain, center, local}؛ هم‌خوانی کامل = null */
+  detail: Array<{ domain: string; center: number; local: number }> | null;
+}
+
+/** پاکت GET — قرارداد ثابت UI نسخهٔ ۳ (موج ۱ + EXP-1)؛ نام فیلدهای موجود نباید تغییر کند */
 export interface NodeSyncStatusPayload {
   mode: NodeSyncMode;
   state: NodeSyncUiState;
@@ -117,6 +152,8 @@ export interface NodeSyncStatusPayload {
   clock_warning: boolean;
   /** موج ۱ — خلاصهٔ آخرین دورهٔ جبرانی کامل {at, pulled, pushed}؛ هیچ دورهٔ کاملی نبوده = null */
   last_catchup: NodeSyncCatchupSummary | null;
+  /** EXP-1 — نتیجهٔ آخرین آشتی‌ساز؛ هنوز هیچ مقایسه‌ای نبوده یا آینهٔ قدیمی = null */
+  reconciliation: NodeSyncReconciliationInfo | null;
 }
 
 export interface NodeSyncStatusRouteDeps {
@@ -237,7 +274,9 @@ export function registerNodeSyncStatusRoute(app: AppHono, deps: NodeSyncStatusRo
       version: mirror?.version ?? null,
       clock_drift_minutes: mirror?.clock_drift_minutes ?? null,
       clock_warning: mirror?.clock_warning === true,
-      last_catchup: mirror?.last_catchup ?? null
+      last_catchup: mirror?.last_catchup ?? null,
+      // ─── EXP-1 (نسخهٔ ۳) — آشتی‌ساز؛ آینهٔ قدیمی بدونِ این فیلد = null نرم ───
+      reconciliation: mirror?.reconciliation ?? null
     };
     return c.json(payload, 200);
   });

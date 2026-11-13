@@ -107,7 +107,7 @@ import type { RumService } from '@app/rum';
 import { registerAuthRoutes, registerLogoutRoute } from '@app/auth';
 import { registerSetupStatusRoutes, registerSetupCompleteRoutes } from '@app/setup/routes'; // v1.26.0 — راه‌اندازی نخست
 import { FEATURES } from '@core/shared';
-import { createNodeSyncApp } from '../../node-sync/app'; // rust-f4 — زیراپ سینک نودهای دسکتاپ
+import { createNodeSyncApp, registerCentralQuotaRoutes } from '../../node-sync/app'; // rust-f4 — زیراپ سینک نودهای دسکتاپ؛ rust-f15 — دید سهمیهٔ روزانه فقط-مدیر
 import { registerInternalSyncRoutes } from '../../internal-sync'; // rust-f9 — استقرار سینک (فقط-موتور، گیت env)
 import { registerNodeSyncStatusRoute } from '../../node-sync-runner/status'; // rust-f14 — وضعیت سینک نود برای UI میز
 
@@ -701,6 +701,10 @@ export function createApp(deps: AppDeps): AppHono {
   // فرانت‌اند (runner.mirrorStatus). بعد از گیت‌ها تا سشن بگیرد؛ خودش گیت زمان‌اجرای
   // CENTER_DESKTOP_ENGINE دارد (در تولید وب → ۴۰۴ کم‌دست، باندل یکسان).
   registerNodeSyncStatusRoute(app, { db: services.db, logger: services.logger });
+
+  // rust-f15 — GET /api/central/quota: دید برآورد مصرف روزانهٔ سهمیه (فقط-مدیر؛ گیت سشن + نقش
+  // مدیر درون خود روت). بعد از گیت‌های سراسری تا no-store و ۴۰۱ کم‌دست زنجیرهٔ عمومی برقرار بماند.
+  registerCentralQuotaRoutes(app, { db: services.db });
 
   app.get('/api/me', (c) => c.json({ data: c.get('authContext') }, 200));
 

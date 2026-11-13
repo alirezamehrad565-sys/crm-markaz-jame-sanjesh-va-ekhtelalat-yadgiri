@@ -8,6 +8,12 @@
 // موج ۱ — قرارداد v2: هشدار زرد اختلاف ساعت با مرکز (clock_warning) · خط سبز «هم‌گام شد؛
 //       N رکورد رسید» در پنجرهٔ ۱۰دقیقه‌ای پس از جبران (last_catchup) · ردیف قرمز ناسازگاری
 //       نسخهٔ یکپارچه با شماره‌های هندشیک (version.compatible=false یا mode=paused_version)
+// EXP-1 — قرارداد v3: ردیف آشتی‌ساز از فیلد reconciliation — سبز «همهٔ دامنه‌ها هم‌شمار» در
+//       پنجرهٔ ۱۰دقیقه‌ای، زرد «ناهم‌خوانی در K دامنه» با جزئیات دامنه‌ها (فقط-گزارش)
+// EXP-2 — کارت «مصرف مرکز (برآوردی)»: GET /api/central/quota فقط-مدیر — سه شاخص رنگی
+//       (درخواست‌ها/نوشتن‌ها/خواندن‌ها) + ورود ناموفق ۲۴ ساعت؛ خرابی = خاکستری «دریافت نشد»
+// EXP-4 — بنر نگهبان موتور: رویدادهای Tauri (engine:restarting/restored/down) با گارد کامل —
+//       بیرون پوستهٔ دسکتاپ (مرورگر/آزمون) کل کانال no-op است و SPA هرگز نمی‌شکند
 import { api } from '../api.js';
 import { el, icon, emptyState, skeletonState } from '../ui.js';
 import { fa, formatJalaliDateTime } from '../format.js';
@@ -138,6 +144,82 @@ export function versionIncompatView(version) {
   };
 }
 
+/* ── EXP-1 — آشتی‌ساز (قرارداد v3) و EXP-2 — مصرف مرکز (برآوردی) ───────────────────
+   هر دو تابع خالص و بی‌DOM (الگوی clockWarningView) تا بی‌ماک سنگین آزمون شوند.
+   آشتی‌ساز فقط-گزارش است؛ مصرف مرکز شاید اصلاً در دسترس نباشد (پنل روی نود اجرا می‌شود
+   و مسیر فقط-مدیر مرکز را ندارد) — خرابی فقط همین کارت را degraded می‌کند. */
+
+const RECONCILE_WINDOW_MS = 10 * 60_000; // پیام آشتی‌ساز فقط ۱۰ دقیقه پس از مقایسه معتبر است
+
+/**
+ * EXP-1 — ردیف آشتی‌ساز از فیلد reconciliation وضعیت v3:
+ *  • ok=true و differences=0 (در پنجرهٔ ۱۰دقیقه‌ای) → سبز «آشتی‌ساز: همهٔ دامنه‌ها هم‌شمار»؛
+ *  • ok=false → زرد «آشتی‌ساز: ناهم‌خوانی در K دامنه — بررسی لازم»؛
+ *  • نتیجهٔ کهنه/غایب/خراب → null (ردیف اصلاً رندر نمی‌شود).
+ */
+export function reconciliationView(recon, nowMs = Date.now()) {
+  if (!recon || typeof recon !== 'object') return null;
+  const atMs = isoMsOf(recon.at);
+  if (atMs === null) return null;
+  const age = nowMs - atMs;
+  if (age > RECONCILE_WINDOW_MS || age < -60_000) return null; // کج‌ساعت جزئی مُهر آینده پذیرفته است
+  const diffs = Number(recon.differences);
+  if (recon.ok === true && diffs === 0) return { tone: 'ok', message: 'آشتی‌ساز: همهٔ دامنه‌ها هم‌شمار' };
+  if (recon.ok === false) {
+    const k = Number.isFinite(diffs) && diffs > 0 ? diffs : null;
+    return {
+      tone: 'warn',
+      message: k !== null ? `آشتی‌ساز: ناهم‌خوانی در ${fa(k)} دامنه — بررسی لازم` : 'آشتی‌ساز: ناهم‌خوانی در دامنه‌ها — بررسی لازم'
+    };
+  }
+  return null;
+}
+
+/** EXP-1 — خط جزئیات ردیف‌های ناهم‌خوانی: «library — مرکز ۴۰ · این دستگاه ۳۹» (حداکثر ۳) */
+export function reconciliationDetailView(detail) {
+  if (!Array.isArray(detail) || detail.length === 0) return null;
+  const parts = detail.slice(0, 3).map((d) => {
+    if (!d || typeof d !== 'object' || typeof d.domain !== 'string') return null;
+    const c = Number(d.center);
+    const l = Number(d.local);
+    const centerTxt = Number.isFinite(c) ? fa(c) : '—';
+    const localTxt = Number.isFinite(l) ? fa(l) : '—';
+    return `${d.domain} — مرکز ${centerTxt} · این دستگاه ${localTxt}`;
+  }).filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+/** EXP-2 — سطح مصرف → کلاس رنگ نشان: سبز/زرد/قرمز؛ سطح ناشناخته → خنثی */
+export function quotaLevelView(level) {
+  if (level === 'ok') return 'badge--success';
+  if (level === 'warn') return 'badge--warning';
+  if (level === 'danger') return 'badge--error';
+  return 'badge--neutral';
+}
+
+/** EXP-2 — درصد به رقم فارسی با ممیز فارسی؛ ورودی غایب/خراب → «—» */
+function pctNum(n) {
+  if (n == null) return '—';
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '—';
+  return fa(String(Math.round(v * 10) / 10)).replace('.', '٫');
+}
+
+/** EXP-2 — عدد شمارنده به رقم فارسی؛ ورودی غایب/خراب → «—» */
+function countNum(n) {
+  const v = Number(n);
+  return Number.isFinite(v) && v >= 0 ? fa(Math.round(v)) : '—';
+}
+
+/**
+ * EXP-2 — ردیف «ورود ناموفق ۲۴ ساعت»: زرد وقتی ≥ ۵؛ ورودی غایب → خنثی با «—».
+ */
+export function failedLoginsView(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v < 0) return { cls: 'badge--neutral', text: '—' };
+  return { cls: v >= 5 ? 'badge--warning' : 'badge--neutral', text: fa(Math.round(v)) };
+}
+
 /** ISO معتبر → مُهر میلی‌ثانیه؛ ورودی خراب/حذف‌شده → null (تا NaN به تاریخ فارسی نشت نکند) */
 function isoMsOf(iso) {
   if (typeof iso !== 'string' || !iso) return null;
@@ -208,6 +290,11 @@ function syncSection(sync, syncError) {
   const versionLine = versionNumbersView(version);
   const showVersionRow = Boolean(paused || incompat);
 
+  /* EXP-1 — ردیف آشتی‌ساز از فیلد reconciliation وضعیت v3 (کهنه/غایب = بدون ردیف) */
+  const reconcile = sync?.reconciliation && typeof sync.reconciliation === 'object' ? sync.reconciliation : null;
+  const reconcileView = reconciliationView(reconcile);
+  const reconcileDetail = reconcileView?.tone === 'warn' ? reconciliationDetailView(reconcile?.detail) : null;
+
   return el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
     el('div', { class: 'ob-section__head' },
       el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
@@ -242,6 +329,17 @@ function syncSection(sync, syncError) {
                       el('div', { class: 'cell-sub' }, 'فقط هشدار نمایشی است — ثبت‌ها با مُهر خودشان مرتب می‌مانند')),
                     el('div', { class: 'ob-row__side' },
                       el('span', { class: 'badge badge--warning' }, 'اختلاف ساعت'))
+                  )
+                : null,
+              reconcileView
+                ? el('div', { class: 'ob-row' },
+                    el('div', { class: 'ob-row__main' },
+                      el('div', { class: 'cell-main' }, reconcileView.message),
+                      reconcileDetail ? el('div', { class: 'cell-sub' }, reconcileDetail) : null
+                    ),
+                    el('div', { class: 'ob-row__side' },
+                      el('span', { class: `badge ${reconcileView.tone === 'ok' ? 'badge--success' : 'badge--warning'}` },
+                        reconcileView.tone === 'ok' ? 'هم‌شمار' : 'بررسی لازم'))
                   )
                 : null,
               showVersionRow
@@ -420,19 +518,218 @@ function growthSection(growth, growthError) {
   );
 }
 
+/* ── EXP-2 — کارت «مصرف مرکز (برآوردی)» ──────────────────────────────────────
+   قرائت GET /api/central/quota (فقط-مدیر مرکز) در همان بازخوانی ۶۰ثانیه‌ای. پنل شاید روی
+   نود اجرا شود و مسیر فقط-مدیر مرکز در دسترس نباشد — خرابی فقط همین کارت را degraded
+   می‌کند: خاکستری «دریافت نشد» و بقیهٔ پنل سالم می‌ماند (الگوی بخش رشد).
+   سه ردیف درصد با رنگ سطح (ok سبز / warn زرد / danger قرمز) + ردیف «ورود ناموفق ۲۴ ساعت». */
+
+const QUOTA_ROWS = [
+  { key: 'requests', label: 'درخواست‌ها' },
+  { key: 'rows_written', label: 'نوشتن‌ها' },
+  { key: 'rows_read', label: 'خواندن‌ها' }
+];
+
+/** پوشش پاسخ درگاه سهمیه: پاکت {data:…} باز می‌شود؛ پاسخ بی‌هیچ فیلد شناخته → null */
+function unwrapQuota(payload) {
+  const raw = payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object'
+    ? payload.data
+    : payload;
+  if (!raw || typeof raw !== 'object') return null;
+  const known = ['day', 'requests', 'rows_written', 'percent', 'level', 'failed_logins_24h'].some((k) => k in raw);
+  return known ? raw : null;
+}
+
+function quotaRowFa(label, percent, level, used, limit) {
+  const meta = quotaLevelView(level);
+  const pctText = `${pctNum(percent)}٪`;
+  const sub = used != null && limit != null ? `${countNum(used)} از ${countNum(limit)}` : null;
+  return el('div', { class: 'ob-row' },
+    el('div', { class: 'ob-row__main' },
+      el('div', { class: 'cell-main' }, label),
+      sub ? el('div', { class: 'cell-sub' }, sub) : null
+    ),
+    el('div', { class: 'ob-row__side' },
+      el('span', { class: `badge ${meta}` }, pctText)
+    )
+  );
+}
+
+function quotaSection(quota, quotaError) {
+  const q = quotaError ? null : quota;
+  const headBadge = q
+    ? el('span', { class: 'badge badge--neutral' }, q.day ? `روز ${q.day}` : 'برآوردی')
+    : el('span', { class: 'badge badge--neutral' }, 'دریافت نشد');
+  return el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
+    el('div', { class: 'ob-section__head' },
+      el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+        el('h3', { style: { margin: 0 } }, 'مصرف مرکز (برآوردی)'),
+        headBadge
+      ),
+      el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
+        'سهمیهٔ روزانهٔ مرکز (کارگر ابری) با برآوردِ خواندن — سه شاخص با سطح رنگی؛ ورود ناموفق ۲۴ ساعت همان آمار امنیتی مرکز است. این درگاه فقط-مدیر مرکز است؛ اگر پنل روی نود اجرا شود همین کارت «دریافت نشد» می‌گیرد و بقیهٔ پنل سالم می‌ماند.')
+    ),
+    !q
+      ? el('div', {},
+          el('div', { class: 'ob-row' },
+            el('div', { class: 'ob-row__main' },
+              el('div', { class: 'cell-main' }, 'دریافت نشد'),
+              el('div', { class: 'cell-sub' },
+                quotaError?.message
+                  ? `خواندن درگاه سهمیه ناموفق بود: ${quotaError.message}`
+                  : 'درگاه سهمیهٔ مرکز از این دستگاه در دسترس نیست — بقیهٔ پنل سالم است.'))
+          )
+        )
+      : [
+          ...QUOTA_ROWS.map((row) => {
+            const percent = q.percent && typeof q.percent === 'object' ? q.percent[row.key] : null;
+            const level = q.level && typeof q.level === 'object' ? q.level[row.key] : null;
+            const used = q[row.key];
+            const limit = q.limits && typeof q.limits === 'object' ? q.limits[row.key] : null;
+            return quotaRowFa(row.label, percent, level, used, limit);
+          }),
+          (() => {
+            const fl = failedLoginsView(q.failed_logins_24h);
+            return el('div', { class: 'ob-row' },
+              el('div', { class: 'ob-row__main' },
+                el('div', { class: 'cell-main' }, 'ورود ناموفق ۲۴ ساعت'),
+                el('div', { class: 'cell-sub' }, 'تلاش‌های ورود ردشدهٔ مرکز در یک روز گذشته — پنج یا بیشتر زرد می‌شود')),
+              el('div', { class: 'ob-row__side' },
+                el('span', { class: `badge ${fl.cls}` }, fl.text))
+            );
+          })()
+        ]
+  );
+}
+
+/* ── EXP-4 — بنر نگهبان موتور (فقط-دسکتاپ، گارد کامل) ─────────────────────────
+   Rust نگهبان موتور رویدادهای engine:restarting {attempt, delay_ms} / engine:restored {port}
+   / engine:down {attempts} را emit می‌کند (desktop/src-tauri/src/lib.rs). کانال دریافت:
+   window.__TAURI__.event.listen — با withGlobalTauri در tauri.conf.json فعال می‌شود.
+   همه‌چیز گاردشده است: بیرون پوستهٔ دسکتاپ (مرورگر/آزمون/IPC ردشده) کل تابع no-op می‌ماند
+   و SPA هرگز نمی‌شکند. بنر ثابت بالای صفحه: زرد راه‌اندازی دوباره، سبز «دوباره راه افتاد»
+   با پنهان‌شدن خودکار ۱۰ثانیه‌ای، قرمز ماندگار «پاسخ نمی‌دهد». */
+
+const ENGINE_BANNER_ID = 'engine-watchdog-banner';
+const ENGINE_BANNER_AUTOHIDE_MS = 10_000;
+let engineWatchdogInstalled = false;
+let engineBannerHideTimer = null;
+
+const ENGINE_BANNER_TONES = {
+  warn: { background: '#fef9c3', color: '#854d0e', border: '#fde047' },
+  ok: { background: '#dcfce7', color: '#166534', border: '#86efac' },
+  danger: { background: '#fee2e2', color: '#991b1b', border: '#fca5a5' }
+};
+
+/** گرهٔ بنر — تک‌نمونه روی body؛ در محیط بی‌DOM هرگز ساخته نمی‌شود */
+function engineBannerNode() {
+  if (typeof document === 'undefined') return null;
+  const existing = document.getElementById(ENGINE_BANNER_ID);
+  if (existing) return existing;
+  const banner = el('div', {
+    id: ENGINE_BANNER_ID,
+    role: 'status',
+    'aria-live': 'polite',
+    style: {
+      position: 'fixed',
+      top: '12px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: '9999',
+      padding: '8px 18px',
+      borderRadius: '10px',
+      fontSize: '0.85rem',
+      fontWeight: '600',
+      boxShadow: '0 4px 14px rgba(0,0,0,0.18)',
+      display: 'none',
+      maxWidth: 'min(92vw, 560px)',
+      textAlign: 'center'
+    }
+  });
+  document.body.appendChild(banner);
+  return banner;
+}
+
+function showEngineBanner(tone, text, autoHide) {
+  const banner = engineBannerNode();
+  if (!banner) return;
+  if (engineBannerHideTimer) { clearTimeout(engineBannerHideTimer); engineBannerHideTimer = null; }
+  const t = ENGINE_BANNER_TONES[tone] ?? ENGINE_BANNER_TONES.warn;
+  banner.style.background = t.background;
+  banner.style.color = t.color;
+  banner.style.border = `1px solid ${t.border}`;
+  banner.textContent = text;
+  banner.style.display = 'block';
+  if (autoHide) {
+    engineBannerHideTimer = setTimeout(() => {
+      banner.style.display = 'none';
+      engineBannerHideTimer = null;
+    }, ENGINE_BANNER_AUTOHIDE_MS);
+  }
+}
+
+/**
+ * EXP-4 — نصب یک‌بارهٔ گوش‌دادن‌های نگهبان موتور. خروجی فقط برای آزمون/تشخیص:
+ * { installed: false, reason } یعنی کانال Tauri در دسترس نیست (مرورگر/آزمون) و هیچ چیز
+ * نصب نشده — SPA در مرورگر و آزمون‌ها بی‌کرش ادامه می‌دهد.
+ */
+export function installEngineWatchdogBanner() {
+  if (engineWatchdogInstalled) return { installed: true };
+  try {
+    const tauri = globalThis.__TAURI__;
+    const listen = tauri && tauri.event && typeof tauri.event.listen === 'function' ? tauri.event.listen : null;
+    if (!listen) return { installed: false, reason: 'no-tauri-channel' };
+    if (typeof document === 'undefined') return { installed: false, reason: 'no-document' };
+    engineWatchdogInstalled = true;
+    void (async () => {
+      try {
+        await listen('engine:restarting', (ev) => {
+          const attempt = ev?.payload?.attempt;
+          const shown = Number.isFinite(Number(attempt)) && Number(attempt) > 0 ? fa(Math.round(Number(attempt))) : '—';
+          showEngineBanner('warn', `موتور در حال راه‌اندازی دوباره… (تلاش ${shown})`, false);
+        });
+        await listen('engine:restored', () => {
+          showEngineBanner('ok', 'موتور دوباره راه افتاد', true); // پنهان‌شدن خودکار ۱۰ثانیه‌ای
+        });
+        await listen('engine:down', (ev) => {
+          const attempts = ev?.payload?.attempts;
+          const n = Number.isFinite(Number(attempts)) && Number(attempts) > 0 ? fa(Math.round(Number(attempts))) : null;
+          showEngineBanner('danger', `موتور پاسخ نمی‌دهد${n ? ` — پس از ${n} تلاش` : ''} — صفحهٔ بوت را باز کنید`, false); // ماندگار
+        });
+      } catch {
+        // IPC گوش‌دادن ناموفق (مثلاً مجوز رد شد) — نرم؛ بنر هرگز SPA را نمی‌شکند
+      }
+    })();
+    return { installed: true };
+  } catch {
+    return { installed: false, reason: 'unexpected' };
+  }
+}
+
+/** بازنشانی گارد بنر — فقط آزمون */
+export function resetEngineWatchdogBannerForTests() {
+  engineWatchdogInstalled = false;
+  if (engineBannerHideTimer) { clearTimeout(engineBannerHideTimer); engineBannerHideTimer = null; }
+}
+
 export async function renderHealthPanel(outlet) {
   const root = el('div', {});
   outlet.replaceChildren(root);
+
+  // EXP-4 — گوش‌دادن‌های نگهبان موتور یک‌بار در هر نشست نصب می‌شوند؛ بیرون دسکتاپ no-op
+  installEngineWatchdogBanner();
 
   let timer = null;
   const stopTimer = () => { if (timer) { clearInterval(timer); timer = null; } };
 
   async function reload() {
-    // ف۶ — پنل سلامت، گزارش رشد و وضعیت هم‌گامی هم‌زمان گرفته می‌شوند؛ خرابیِ هر بخش فقط کارت خودش را degraded می‌کند
-    const [healthOut, growthOut, syncOut] = await Promise.allSettled([
+    // ف۶ + EXP-2 — پنل سلامت، گزارش رشد، وضعیت هم‌گامی و سهمیهٔ مرکز هم‌زمان گرفته می‌شوند؛
+    // خرابیِ هر بخش فقط کارت خودش را degraded می‌کند
+    const [healthOut, growthOut, syncOut, quotaOut] = await Promise.allSettled([
       api.get('/api/health/panel'),
       api.get('/api/growth/report'),
-      api.get('/api/node-sync/status')
+      api.get('/api/node-sync/status'),
+      api.get('/api/central/quota')
     ]);
     if (healthOut.status === 'rejected') {
       const err = healthOut.reason;
@@ -450,6 +747,9 @@ export async function renderHealthPanel(outlet) {
     // ف۶ — وضعیت هم‌گامی: پاکت {data:…} باز می‌شود؛ پاسخ ناآشنا (درگاه هنوز مستقر نبود؟) → null → کارت «نامشخص»
     const sync = syncOut.status === 'fulfilled' ? unwrapNodeSyncStatus(syncOut.value) : null;
     const syncError = syncOut.status === 'rejected' ? syncOut.reason : null;
+    // EXP-2 — سهمیهٔ مرکز: خرابی/پاکت ناآشنا → null → کارت «دریافت نشد»؛ بقیهٔ پنل سالم می‌ماند
+    const quota = quotaOut.status === 'fulfilled' ? unwrapQuota(quotaOut.value) : null;
+    const quotaError = quotaOut.status === 'rejected' ? quotaOut.reason : null;
 
     const dbOk = data?.db?.ok;
     const counts = data?.counts ?? {};
@@ -476,6 +776,21 @@ export async function renderHealthPanel(outlet) {
       );
     }
 
+    // EXP-2 — کارت مصرف مرکز: هر خطای غیرمنتظرهٔ ساخت فقط به «دریافت نشد» بی‌صدا می‌افتد — پنل هرگز نمی‌شکند
+    let quotaCard;
+    try {
+      quotaCard = quotaSection(quota, quotaError);
+    } catch {
+      quotaCard = el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+        el('div', { class: 'card__head' },
+          el('h3', { style: { margin: 0 } }, 'مصرف مرکز (برآوردی)'),
+          el('span', { class: 'badge badge--neutral' }, 'دریافت نشد')
+        ),
+        el('div', { class: 'card__body' },
+          el('p', { class: 'hint-text' }, 'سهمیهٔ مرکز دریافت نشد — بقیهٔ پنل سالم است.'))
+      );
+    }
+
     root.replaceChildren(
       el('div', { class: 'page-head' },
         el('h2', {}, 'پنل سلامت'),
@@ -498,6 +813,8 @@ export async function renderHealthPanel(outlet) {
       ),
 
       syncCard, // ف۶ — وضعیت هم‌گامی نود (بین «سامانه» و درگاه‌های CP: جبرانی/خارج از خط/خطا با یک نگاه)
+
+      quotaCard, // EXP-2 — مصرف مرکز (برآوردی): سه شاخص رنگی + ورود ناموفق ۲۴ ساعت؛ خرابی = «دریافت نشد»
 
       el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
         el('div', { class: 'ob-section__head' },

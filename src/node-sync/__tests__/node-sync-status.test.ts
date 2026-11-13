@@ -2,7 +2,7 @@
  * rust-f14 — آزمون قرارداد GET/POST /api/node-sync/status + استثنای جبرانی گات push
  * اپ کامل روی MockD1 (هم‌الگوی node-sync.test.ts)؛ گیت زمان‌اجرای میز با env هارنس روشن می‌شود
  * (فقط در کانفیگ capnp موتور بایند است — در وب ۴۰۴ کم‌دست).
- * پوشش: شکل دقیق پاکت GET (نام فیلدها = قرارداد UI نسخهٔ ۲ — دوازده فیلد) · آینهٔ POST → بازتاب در GET ·
+ * پوشش: شکل دقیق پاکت GET (نام فیلدها = قرارداد UI نسخهٔ ۳ — دوازده فیلد شامل reconciliation) · آینهٔ POST → بازتاب در GET ·
  * pending_push از DB با watermark · سن cursor · هندشیک نسخه/اختلاف ساعت/خلاصهٔ جبران (موج ۱) ·
  * سازگاری عقب با آینهٔ قدیمیِ بدونِ فیلدهای تازه · ۴۰۱ سشن · ۴۰۴ وب · ۴۰۰ بدنهٔ خراب ·
  * هدر X-CP-Node-Catchup گات ۱۵دقیقه‌ای push را فقط برای دورهٔ جبرانی می‌گشاید.
@@ -37,7 +37,7 @@ function sqlStamp(iso: string): string {
 
 // ───────────────────────── شکل پاکت GET — قرارداد ثابت UI ─────────────────────────
 
-describe('GET /api/node-sync/status — شکل دقیق قرارداد UI نسخهٔ ۲', () => {
+describe('GET /api/node-sync/status — شکل دقیق قرارداد UI نسخهٔ ۳ (موج ۱ + EXP-1)', () => {
   it('پاکت پیش‌فرض: دقیقاً همین دوازده فیلد با مقادیر خالی نرم', async () => {
     const api = await asRole(A, 'manager');
     const res = await api.get('/api/node-sync/status');
@@ -53,6 +53,7 @@ describe('GET /api/node-sync/status — شکل دقیق قرارداد UI نسخ
         'last_push_ok_at',
         'mode',
         'pending_push',
+        'reconciliation',
         'state',
         'version'
       ].sort()
@@ -64,6 +65,7 @@ describe('GET /api/node-sync/status — شکل دقیق قرارداد UI نسخ
     expect(body.clock_drift_minutes).toBeNull(); // ساعت مرجع مرکز هنوز ندیده شده
     expect(body.clock_warning).toBe(false);
     expect(body.last_catchup).toBeNull(); // هنوز هیچ دورهٔ جبرانی کامل نبوده
+    expect(body.reconciliation).toBeNull(); // EXP-1 — هنوز هیچ آشتی‌سازی نبوده
     expect(body.last_error).toBeNull();
     expect(body.last_pull_cursor_age_days).toBeNull();
     expect(body.last_push_ok_at).toBeNull();
@@ -160,6 +162,59 @@ describe('POST /api/node-sync/status — آینهٔ اسنپ‌شات فرانت
     expect(body.clock_drift_minutes).toBeNull();
     expect(body.clock_warning).toBe(false);
     expect(body.last_catchup).toBeNull();
+    expect(body.reconciliation).toBeNull(); // EXP-1 — آینهٔ بدون reconciliation = null نرم
+  });
+
+  it('EXP-1 — آشتی‌ساز در POST ذخیره و در GET دقیق بازتاب می‌یابد (هم‌خوان و ناهم‌خوان)', async () => {
+    const api = await asRole(A, 'manager');
+    const post = await api.post('/api/node-sync/status', {
+      ...mirrorBody(),
+      reconciliation: { at: nowIso(), ok: false, differences: 1, detail: [{ domain: 'library', center: 40, local: 39 }] }
+    });
+    expect(post.status).toBe(200);
+    const res = await api.get('/api/node-sync/status');
+    expect((res.body as { reconciliation: unknown }).reconciliation).toEqual({
+      at: expect.any(String),
+      ok: false,
+      differences: 1,
+      detail: [{ domain: 'library', center: 40, local: 39 }]
+    });
+
+    // هم‌خوانی کامل — detail=null در پاکت GET
+    const okPost = await api.post('/api/node-sync/status', {
+      ...mirrorBody(),
+      reconciliation: { at: nowIso(), ok: true, differences: 0, detail: null }
+    });
+    expect(okPost.status).toBe(200);
+    const res2 = await api.get('/api/node-sync/status');
+    expect((res2.body as { reconciliation: unknown }).reconciliation).toEqual({
+      at: expect.any(String),
+      ok: true,
+      differences: 0,
+      detail: null
+    });
+  });
+
+  it('EXP-1 — آشتی‌ساز خراب (ردیف بیش از سقف ۵ یا شمارندهٔ منفی) → ۴۰۰ و آینهٔ قبلی باقی', async () => {
+    const api = await asRole(A, 'manager');
+    await api.post('/api/node-sync/status', mirrorBody());
+    const tooMany = await api.post('/api/node-sync/status', {
+      ...mirrorBody(),
+      reconciliation: {
+        at: nowIso(),
+        ok: false,
+        differences: 6,
+        detail: [1, 2, 3, 4, 5, 6].map((i) => ({ domain: `d${i}`, center: i, local: 0 }))
+      }
+    });
+    expect(tooMany.status).toBe(400);
+    const negative = await api.post('/api/node-sync/status', {
+      ...mirrorBody(),
+      reconciliation: { at: nowIso(), ok: true, differences: -1, detail: null }
+    });
+    expect(negative.status).toBe(400);
+    const res = await api.get('/api/node-sync/status');
+    expect((res.body as { reconciliation: unknown }).reconciliation).toBeNull(); // آینهٔ قبلیِ بدون reconciliation باقی است
   });
 
   it('موج ۱ — فیلد تازهٔ خراب (ناسازگار یا شمارندهٔ منفی) → ۴۰۰ و آینهٔ قبلی دست‌نخورده', async () => {

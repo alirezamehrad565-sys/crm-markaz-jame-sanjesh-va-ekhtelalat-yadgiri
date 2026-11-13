@@ -11,239 +11,26 @@
  *    و سقف ۲۰۰ آیتم؛ مسیر آینهٔ وضعیت ضبط می‌شود.
  * ادعاها: صفر اتلاف + صفر ردیف دوباره + resume دقیق بعد از قطعی وسط راه + سقف‌های سالم +
  * هیچ مسیری throw نمی‌کند.
+ *
+ * فیکسچرها (شبکهٔ درون‌حافظه‌ای، cursor کلیدsetی، صندوق/outbox فیک) به catchup-harness.ts
+ * منتقل شده‌اند تا آزمون مبتنی بر خاصیت (EXP-3) و سنجهٔ کارایی دقیقاً همین قرارداد را
+ * مصرف کنند — رفتار آزمون‌های این فایل بایت‌به‌بایت همان است.
  */
 import { describe, it, expect } from 'vitest';
-import { createNodeSyncRunner, CATCHUP_CURSOR_KEY, CATCHUP_STATE_KEY, PUSH_WATERMARK_KEY, NODE_VERSION_KEY } from '../runner';
+import { createNodeSyncRunner, CATCHUP_CURSOR_KEY, CATCHUP_STATE_KEY, PUSH_WATERMARK_KEY, NODE_VERSION_KEY, RECONCILE_KEY, LOCAL_MAX_KEY } from '../runner';
 import type { CatchUpOutcome, CatchUpStateV1, NodeSyncRunner } from '../runner';
 import { createSyncCoordinator } from '../coordinator';
 import { APP_VERSION } from '../../core/version';
-import type { NodeSyncStore, NodePullItem } from '../../node-sync-client/client';
-
-// ─── کمک‌سازهای cursor — همان فرمت سمت ورکر (base64url JSON {d,t,i}) ───
-
-function encodeCursor(d: string, t: string, i: string): string {
-  const json = JSON.stringify({ d, t, i });
-  const bytes = new TextEncoder().encode(json);
-  let bin = '';
-  for (let k = 0; k < bytes.length; k += 1) bin += String.fromCharCode(bytes[k]);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function decodeCursor(raw: string): { d: string; t: string; i: string } | null {
-  try {
-    const norm = raw.replace(/-/g, '+').replace(/_/g, '/');
-    const pad = norm.length % 4 === 0 ? '' : '='.repeat(4 - (norm.length % 4));
-    const bin = atob(norm + pad);
-    const bytes = Uint8Array.from(bin, (ch) => ch.charCodeAt(0));
-    return JSON.parse(new TextDecoder().decode(bytes)) as { d: string; t: string; i: string };
-  } catch {
-    return null;
-  }
-}
-
-function memStore(): NodeSyncStore & { dump: () => Map<string, string> } {
-  const m = new Map<string, string>();
-  return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), dump: () => m };
-}
-
-// ─── فیک مرکز + موتور محلی — قرارداد واقعی، شبکهٔ درون‌حافظه‌ای ───
-
-interface PullRecord { id: string; domain: string; updated_at: string; payload: Record<string, unknown> }
-interface OutboxRecord { id: string; domain: string; at: string; payload: Record<string, unknown> }
-
-/** موج ۱ — پاکت هندشیک مرکز (۱-۳/۱-۴): نسخه‌ها + انحراف ساعت مرکز از ساعت دستگاه آزمون */
-interface HandshakeOpt { centerVersion: string; minNodeVersion: string; serverTsOffsetMs?: number }
-
-function makeWorld(opts?: {
-  /** پرتاب خطای شبکه در فراخوانی n-ام pull */
-  throwOnPullPage?: number;
-  /** پرتاب خطای شبکه در فراخوانی n-ام push */
-  throwOnPushBatch?: number;
-  /** پرتاب خطا در فراخوانی n-ام استقرار (موتور محلی) */
-  throwOnIngest?: number;
-  /** موج ۱ — پاکت هندشیک روی هر پاسخ pull/push (غایب = مرکز قدیمی بدون فیلد نسخه) */
-  handshake?: HandshakeOpt;
-  /** موج ۱ — بازنویسی هندشیک فقط برای پاسخ push (آشکارسازی ناسازگاری در فاز push) */
-  pushHandshake?: HandshakeOpt;
-}) {
-  const center = {
-    pullItems: [] as PullRecord[],
-    pullUrls: [] as string[],
-    pullCalls: 0,
-    pushCalls: 0,
-    pushIdsByCall: [] as string[][],
-    pushHadCatchupHeader: [] as boolean[],
-    pushEvents: new Map<string, true>(), // PK (node_code, id)
-    accepted: 0,
-    duplicates: 0,
-    lastPushAt: null as string | null
-  };
-  const engine = {
-    inbox: new Map<string, true>(), // PK (domain, id)
-    ingestCalls: 0,
-    ingestIdsByCall: [] as string[][],
-    ingestDuplicates: 0,
-    outbox: [] as OutboxRecord[],
-    outboxSince: [] as (string | null)[],
-    mirrors: [] as Record<string, unknown>[]
-  };
-
-  const PAGE_SIZE = 50; // قرارداد بریف — سقف صفحهٔ pull در سناریو
-  const OUTBOX_PAGE = 200; // آینهٔ OUTBOX_MAX_ITEMS سمت موتور محلی
-
-  /** موج ۱ — پاکت هندشیک در data پاسخ مرکز؛ غایب در opts = مرکز قدیمی بدون فیلد نسخه */
-  const handshakeData = (h?: HandshakeOpt): Record<string, unknown> =>
-    h
-      ? {
-          center_version: h.centerVersion,
-          min_node_version: h.minNodeVersion,
-          server_ts: new Date(Date.now() + (h.serverTsOffsetMs ?? 0)).toISOString()
-        }
-      : {};
-
-  const fakeFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input.toString();
-    const method = (init?.method ?? 'GET').toUpperCase();
-
-    if (url.includes('/node/pull')) {
-      center.pullCalls += 1;
-      center.pullUrls.push(url);
-      if (opts?.throwOnPullPage === center.pullCalls) throw new Error('network down (pull)');
-      const parsedUrl = new URL(url);
-      const cursorRaw = parsedUrl.searchParams.get('cursor');
-      // سقف صفحهٔ سناریو = ۵۰ — درخواست ۱۰۰تایی catch-up هم صفحات ۵۰تایی می‌گیرد (هم‌ریتم بریف)
-      const limit = Math.min(Number(parsedUrl.searchParams.get('limit') ?? '50') || 50, PAGE_SIZE);
-      // keyset واقعی: همهٔ مقایسه‌ها روی (updated_at, id) بعد از نقطهٔ cursor
-      const sorted = [...center.pullItems].sort((a, b) => (a.updated_at < b.updated_at ? -1 : a.updated_at > b.updated_at ? 1 : a.id < b.id ? -1 : 1));
-      const cur = cursorRaw ? decodeCursor(cursorRaw) : null;
-      const after = cur ? sorted.filter((it) => it.updated_at > cur.t || (it.updated_at === cur.t && it.id > cur.i)) : sorted;
-      const page = after.slice(0, limit);
-      const hasMore = after.length > page.length;
-      const last = page.length > 0 ? page[page.length - 1] : null;
-      const body = {
-        data: {
-          items: page,
-          next_cursor: hasMore && last ? encodeCursor(last.domain, last.updated_at, last.id) : null,
-          server_time: '2026-11-13T10:00:00Z',
-          ...handshakeData(opts?.handshake)
-        }
-      };
-      return new Response(JSON.stringify(body), { status: 200 });
-    }
-
-    if (url.includes('/node/push')) {
-      center.pushCalls += 1;
-      if (opts?.throwOnPushBatch === center.pushCalls) throw new Error('network down (push)');
-      const hadHeader = init?.headers != null && (init.headers as Record<string, string>)['X-CP-Node-Catchup'] === '1';
-      center.pushHadCatchupHeader.push(hadHeader);
-      const body = JSON.parse(String(init?.body ?? '{}')) as { items: Array<{ id: string; domain: string; at?: string | null; payload: Record<string, unknown> }> };
-      // گات ۱۵دقیقه‌ای سمت ابر — فقط برای درخواست «بدون» هدر جبرانی (قرارداد rust-f14)
-      if (!hadHeader && center.lastPushAt && Date.parse(center.lastPushAt) + 15 * 60_000 > Date.now()) {
-        return new Response(JSON.stringify({ data: { accepted: 0, duplicates: 0, throttled: true, retry_after_s: 900 } }), { status: 200 });
-      }
-      center.lastPushAt = new Date().toISOString();
-      center.pushIdsByCall.push(body.items.map((it) => it.id));
-      let accepted = 0;
-      let duplicates = 0;
-      for (const it of body.items) {
-        if (center.pushEvents.has(it.id)) duplicates += 1;
-        else {
-          center.pushEvents.set(it.id, true);
-          accepted += 1;
-        }
-      }
-      center.accepted += accepted;
-      center.duplicates += duplicates;
-      return new Response(
-        JSON.stringify({ data: { accepted, duplicates, throttled: false, ...handshakeData(opts?.pushHandshake ?? opts?.handshake) } }),
-        { status: 200 }
-      );
-    }
-
-    if (url.includes('/api/internal/sync/ingest')) {
-      engine.ingestCalls += 1;
-      if (opts?.throwOnIngest === engine.ingestCalls) throw new Error('engine down (ingest)');
-      const body = JSON.parse(String(init?.body ?? '{}')) as { items: NodePullItem[] };
-      engine.ingestIdsByCall.push(body.items.map((it) => it.id));
-      let inserted = 0;
-      let duplicates = 0;
-      for (const it of body.items) {
-        const key = `${it.domain}:${it.id}`;
-        if (engine.inbox.has(key)) duplicates += 1;
-        else {
-          engine.inbox.set(key, true);
-          inserted += 1;
-        }
-      }
-      engine.ingestDuplicates += duplicates;
-      return new Response(JSON.stringify({ data: { inserted, updated: 0, duplicates, by_domain: {} } }), { status: 200 });
-    }
-
-    if (url.includes('/api/internal/sync/outbox')) {
-      // مسیر outbox نسبی است (همان-مبدا) — since دستی از query خوانده می‌شود نه new URL
-      const since = url.includes('since=') ? decodeURIComponent(url.split('since=')[1] ?? '') : null;
-      engine.outboxSince.push(since);
-      const sorted = [...engine.outbox].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : 1));
-      const after = since ? sorted.filter((it) => Date.parse(it.at) > Date.parse(since)) : sorted;
-      const page = after.slice(0, OUTBOX_PAGE);
-      return new Response(JSON.stringify({ data: { items: page, generated_at: '2026-11-13T10:00:00Z' } }), { status: 200 });
-    }
-
-    if (url.includes('/api/node-sync/status')) {
-      engine.mirrors.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
-      return new Response(JSON.stringify({ data: { ok: true } }), { status: 200 });
-    }
-
-    return new Response('not found', { status: 404 });
-  }) as typeof fetch;
-
-  function makeRunner(store: ReturnType<typeof memStore>) {
-    return createNodeSyncRunner({
-      baseUrl: 'https://center.test',
-      nodeCode: 'DESKTOP:test-node',
-      nodeKey: 'nk_live_test',
-      progressStorage: store,
-      fetchFn: fakeFetch as never,
-      tokenProvider: () => 'sess-token'
-    });
-  }
-
-  return { center, engine, fetch: fakeFetch, makeRunner };
-}
-
-function seedPullItems(count: number): PullRecord[] {
-  const base = Date.parse('2026-10-27T00:00:00Z'); // دو هفته پیش — آیتم‌های انباشته در غیاب اپ
-  const items: PullRecord[] = [];
-  for (let i = 1; i <= count; i += 1) {
-    items.push({
-      id: `ann-${String(i).padStart(3, '0')}`,
-      domain: 'announcements',
-      updated_at: new Date(base + i * 1000).toISOString(),
-      payload: { title: `اعلان ${i}`, body: 'متن', show_login: true, show_panel: true, active: true, created_at: new Date(base + i * 1000).toISOString() }
-    });
-  }
-  return items;
-}
-
-function seedOutboxItems(count: number): OutboxRecord[] {
-  const base = Date.parse('2026-10-27T00:00:00Z');
-  const items: OutboxRecord[] = [];
-  for (let i = 1; i <= count; i += 1) {
-    items.push({
-      id: `err-${String(i).padStart(4, '0')}`,
-      domain: 'client_errors',
-      at: new Date(base + i * 1000).toISOString(),
-      payload: { message: `خطای صفحهٔ ${i}`, app_version: '1.26.0' }
-    });
-  }
-  return items;
-}
-
-function catchupStateOf(store: ReturnType<typeof memStore>): CatchUpStateV1 {
-  const raw = store.dump().get(CATCHUP_STATE_KEY);
-  expect(raw).toBeTruthy();
-  return JSON.parse(raw ?? '{}') as CatchUpStateV1;
-}
+import {
+  encodeCursor,
+  decodeCursor,
+  memStore,
+  makeWorld,
+  carryOverState,
+  seedPullItems,
+  seedOutboxItems,
+  catchupStateOf
+} from './catchup-harness';
 
 // ───────────────────────── سناریوی دو هفته آفلاین — همگرایی کامل ─────────────────────────
 
@@ -368,17 +155,9 @@ describe('catch-up: قطعی شبکه وسط راه — resume دقیق از ه�
     expect(catchupStateOf(store).last_error_kind).toBe('network_error');
 
     // ── دورهٔ بعد: شبکه سالم — از همان نقطه ادامه می‌دهد ──
+    // وضعیت جهان (صندوق/ابر/شمارنده‌ها) به جهانِ ترمیم‌شده منتقل می‌شود — شبکه تازه است، داده نه
     const healed = makeWorld();
-    healed.center.pullItems = world.center.pullItems;
-    healed.engine.outbox = world.engine.outbox;
-    healed.engine.inbox = world.engine.inbox; // صندوق همان صندوق است
-    healed.center.pushEvents = world.center.pushEvents; // ابر همان ابر است
-    healed.center.accepted = world.center.accepted;
-    healed.center.duplicates = world.center.duplicates;
-    healed.engine.ingestDuplicates = world.engine.ingestDuplicates;
-    healed.engine.ingestCalls = world.engine.ingestCalls;
-    healed.center.pushCalls = world.center.pushCalls;
-    healed.center.pullCalls = world.center.pullCalls;
+    carryOverState(world, healed);
     const runner2 = healed.makeRunner(store);
 
     const out2 = await runner2.catchUp();
@@ -834,5 +613,143 @@ describe('موج ۱ — خلاصهٔ تکمیل جبران (بقیهٔ ۱-۱)', 
     const runner3 = broken.makeRunner(store);
     expect((await runner3.catchUp()).status).toBe('network_error');
     expect(catchupStateOf(store).last_catchup).toEqual(good);
+  });
+});
+
+// ───────────────────────── EXP-1 — آشتی‌ساز (reconcile) ─────────────────────────
+
+describe('EXP-1 — آشتی‌ساز: مقایسهٔ فقط-گزارشی پس از دورهٔ کامل جبرانی', () => {
+  it('همگرایی کامل → هم‌خوانی: RECONCILE_KEY با ok=true می‌نشیند، بیشینهٔ محلی ثبت می‌شود و آینهٔ وضعیت reconciliation دارد', async () => {
+    const world = makeWorld();
+    world.center.pullItems = seedPullItems(120);
+    world.engine.outbox = seedOutboxItems(30);
+    const store = memStore();
+    const runner = world.makeRunner(store);
+
+    const out = await runner.catchUp();
+    expect(out.status).toBe('ok');
+
+    // نتیجهٔ آشتی‌ساز در انبار — هم‌خوانی کامل
+    const raw = store.dump().get(RECONCILE_KEY);
+    expect(raw).toBeTruthy();
+    const rec = JSON.parse(raw ?? '{}') as { v: number; ok: boolean; differences: number; detail: unknown; at: string };
+    expect(rec.v).toBe(1);
+    expect(rec.ok).toBe(true);
+    expect(rec.differences).toBe(0);
+    expect(rec.detail).toBeNull();
+    expect(Number.isNaN(Date.parse(rec.at))).toBe(false);
+
+    // بیشینهٔ محلی مشاهده‌شده = updated_at آخرین آیتم همان دامنه (آینهٔ MAX(updated_at) صندوق)
+    const localMax = JSON.parse(store.dump().get(LOCAL_MAX_KEY) ?? '{}') as Record<string, string>;
+    expect(localMax.announcements).toBe('2026-10-27T00:02:00.000Z'); // ann-120 — آخرین آیتم
+
+    // آینهٔ آخر به موتور محلی reconciliation هم می‌برد
+    const mirror = world.engine.mirrors[world.engine.mirrors.length - 1] as Record<string, unknown>;
+    expect(mirror.reconciliation).toEqual({ v: 1, at: rec.at, ok: true, differences: 0, detail: null });
+  });
+
+  it('حذف ردیف در مرکز (شبیه‌سازی شمارش ناهم‌خوان) → گزارش ناهم‌خوانی با {domain, center, local}، بدون هیچ اصلاح محلی', async () => {
+    const world = makeWorld();
+    world.center.pullItems = seedPullItems(300);
+    world.engine.outbox = [];
+    const store = memStore();
+    const runner = world.makeRunner(store);
+    expect((await runner.catchUp()).status).toBe('ok');
+    const before = store.dump().get(RECONCILE_KEY);
+    expect(before).toBeTruthy();
+
+    // مرکز ۵۰ ردیف کم می‌شود (حذف سمت مرکز) — صندوق محلی دست می‌خورد؟ نه: فقط گزارش
+    world.center.pullItems = world.center.pullItems.slice(0, 250);
+    const out2 = await runner.catchUp(); // هیچ تازه‌ای برای cursor — دورهٔ synced تازه
+    expect(out2.status).toBe('ok');
+    expect(out2.items_pulled).toBe(0);
+    expect(world.engine.inbox.size).toBe(300); // هیچ اصلاحی محلی رخ نداده — فقط گزارش
+
+    const rec = JSON.parse(store.dump().get(RECONCILE_KEY) ?? '{}') as { ok: boolean; differences: number; detail: Array<{ domain: string; center: number; local: number }> };
+    expect(rec.ok).toBe(false);
+    expect(rec.differences).toBe(1);
+    expect(rec.detail).toEqual([{ domain: 'announcements', center: 250, local: 300 }]);
+  });
+
+  it('لغزش مُهر (شمارش برابر، بیشینهٔ updated_at متفاوت) → همان دامنه ناهم‌خوان گزارش می‌شود', async () => {
+    const world = makeWorld();
+    world.center.pullItems = seedPullItems(150);
+    world.engine.outbox = [];
+    const store = memStore();
+    const runner = world.makeRunner(store);
+    expect((await runner.catchUp()).status).toBe('ok');
+
+    // مُهر آخرین ردیف مرکز به عقب کشیده می‌شود — قبل از cursor است و دوباره نمی‌آید؛
+    // شمارش برابر می‌ماند ولی بیشینهٔ مرکز از بیشینهٔ محلی عقب می‌افتد → ناهم‌خوانی
+    world.center.pullItems[149].updated_at = '2026-10-20T00:00:00.000Z';
+    expect((await runner.catchUp()).status).toBe('ok');
+
+    const rec = JSON.parse(store.dump().get(RECONCILE_KEY) ?? '{}') as { ok: boolean; differences: number; detail: Array<{ domain: string; center: number; local: number }> };
+    expect(rec.ok).toBe(false);
+    expect(rec.differences).toBe(1);
+    expect(rec.detail).toEqual([{ domain: 'announcements', center: 150, local: 150 }]);
+  });
+
+  it('درگاه شمارش محلی/مرکز در دسترس نیست → نتیجهٔ قبلی دست‌نخورده می‌ماند و دورهٔ جبرانی سالم می‌ماند', async () => {
+    const world = makeWorld();
+    world.center.pullItems = seedPullItems(60);
+    const store = memStore();
+    const runner = world.makeRunner(store);
+    expect((await runner.catchUp()).status).toBe('ok');
+    const firstRec = store.dump().get(RECONCILE_KEY);
+    expect(firstRec).toBeTruthy();
+
+    // شمارش صندوق محلی ۴۰۴ می‌دهد — آشتی‌ساز نرم عقب می‌نشیند، نتیجهٔ قبلی پاک نمی‌شود
+    const blindLocal = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/api/internal/sync/status')) return new Response('not found', { status: 404 });
+      return world.fetch(input as string, init);
+    }) as typeof fetch;
+    const blindRunner = createNodeSyncRunner({
+      baseUrl: 'https://center.test',
+      nodeCode: 'DESKTOP:test-node',
+      nodeKey: 'nk_live_test',
+      progressStorage: store,
+      fetchFn: blindLocal as never,
+      tokenProvider: () => 'sess-token'
+    });
+    const out = await blindRunner.catchUp();
+    expect(out.status).toBe('ok');
+    expect(out.pull_done).toBe(true);
+    expect(store.dump().get(RECONCILE_KEY)).toBe(firstRec); // نتیجهٔ قبلی محفوظ
+
+    // مرکز هم در دسترس نباشد — همان ماندگاری نرم
+    const deadCenter = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/node/reconcile')) throw new Error('socket down (reconcile)');
+      return world.fetch(input as string, init);
+    }) as typeof fetch;
+    const deadRunner = createNodeSyncRunner({
+      baseUrl: 'https://center.test',
+      nodeCode: 'DESKTOP:test-node',
+      nodeKey: 'nk_live_test',
+      progressStorage: store,
+      fetchFn: deadCenter as never,
+      tokenProvider: () => 'sess-token'
+    });
+    expect((await deadRunner.catchUp()).status).toBe('ok');
+    expect(store.dump().get(RECONCILE_KEY)).toBe(firstRec);
+  });
+
+  it('دورهٔ ناقص (سقف صفحات) آشتی‌ساز را نمی‌زند — فقط دورهٔ synced می‌زند', async () => {
+    const world = makeWorld();
+    world.center.pullItems = seedPullItems(300); // ۶ صفحهٔ ۵۰تایی
+    const store = memStore();
+    const runner = world.makeRunner(store);
+
+    const out1 = await runner.catchUp({ maxPages: 2 });
+    expect(out1.status).toBe('ok');
+    expect(catchupStateOf(store).state).toBe('catching_up');
+    expect(store.dump().get(RECONCILE_KEY) ?? null).toBeNull(); // هنوز هیچ آشتی‌سازی
+
+    expect((await runner.catchUp()).status).toBe('ok');
+    expect(catchupStateOf(store).state).toBe('synced');
+    const rec = JSON.parse(store.dump().get(RECONCILE_KEY) ?? '{}') as { ok: boolean };
+    expect(rec.ok).toBe(true);
   });
 });

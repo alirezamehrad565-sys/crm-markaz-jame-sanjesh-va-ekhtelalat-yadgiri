@@ -19,6 +19,8 @@
  *  • چرخش کلید: plaintext فقط یک‌بار در پاسخ، ابطال بی‌درنگ کلید کهنه (تک‌ستون هش) — سیاست CP-6.
  *  • حکم م۲۱۰: خطا هرگز مسیری را نمی‌شکند — خروجی همهٔ عملیات مقدار است نه throw، و
  *    سمت نود (کلاینت) در قطع شبکه فقط خطای نرم می‌گیرد و دورهٔ بعد تلاش می‌کند.
+ *  • rust-f15 — سهمیهٔ روزانهٔ مرکز: شمارش برآوردی مصرف (pull/push/login) در quota_usage با
+ *    UPSERT تک‌دستوری؛ تصویر مصرف GET /api/central/quota و هم‌راستاسازی GET /node/reconcile.
  */
 import { z } from 'zod';
 import { hashApiKey } from '@core/auth';
@@ -523,6 +525,179 @@ export async function pullNodePage(
     items,
     next_cursor: hasMore && last ? encodeNodeCursor({ d: String(last.domain), t: String(last.updated_at), i: String(last.id) }) : null
   };
+}
+
+// ─── سهمیهٔ روزانهٔ مرکز (rust-f15) — شمارش برآوردی مصرف Workers/D1 پلن رایگان ───
+
+/**
+ * سقف‌های پلن رایگان Cloudflare — «تقریبی» و وابسته به پلن رایگان (estimated): این اعداد
+ * سقف‌های روزانهٔ اعلامی Workers/D1 در زمان نوشتن است (درخواست ۱۰۰هزار، ردیف‌نویسی ۱۰۰هزار،
+ * ردیف‌خوانی ۵میلیون) و هرگز صورتحساب دقیق پلتفورم نیستند — فقط مبنای سطح‌بندی هشدار
+ * (ok/warn/danger) در GET /api/central/quota. تغییر پلن یا تغییر سیاست Cloudflare یعنی
+ * این ثابت‌ها باید بازبینی شوند؛ پاسخ همیشه estimated: true می‌فرستد تا مصرف‌کننده فریب نخورد.
+ */
+export const QUOTA_LIMITS = {
+  requests: 100_000,
+  rows_written: 100_000,
+  rows_read: 5_000_000
+} as const;
+
+/**
+ * برآورد ثابتِ ردیف‌نویسی/ردیف‌خوانی هر هندلر (برآوردی — «روی کاغذ»): شمارش دقیق ردیف‌های
+ * D1 خودش هزینه دارد و ممکن نیست؛ پس هر هندلر یک تخمین ثابت بیشینه می‌دهد تا جمع روزانه
+ * «حداکثر مصرف محتمل» را نشان دهد نه عدد دقیق. مبنای هر عدد:
+ *  • pull  — نوشتن: مُهر last_pull_at (۱)؛ خواندن: صفحهٔ کامل تا سقف ۱۰۰ + ردیف خود نود (~۱۰۰)
+ *  • push  — نوشتن: مُهر تلاش + مُهر ok + تا ۱۰۰ آیتم صندوق (~۱۰۱)؛ خواندن: ردیف نود + صندوق (~۱۰۰)
+ *  • login — نوشتن: login_throttle + auth_sessions + audit + هرس (~۴)؛ خواندن: staff + دو
+ *            throttle + نشست (~۱۰)
+ * این ثابت‌ها هزینهٔ ثابت هر درخواست را نزدیک‌به‌بدترین‌حالت می‌شمارند؛ حجم payload در آنها نیست.
+ */
+export const NODE_PULL_ROWS_WRITTEN_EST = 1;
+export const NODE_PULL_ROWS_READ_EST = 100;
+export const NODE_PUSH_ROWS_WRITTEN_EST = 101;
+export const NODE_PUSH_ROWS_READ_EST = 100;
+export const LOGIN_ROWS_WRITTEN_EST = 4;
+export const LOGIN_ROWS_READ_EST = 10;
+
+/** هندلرهای شمرده‌شده — عمداً فقط همین سه: خواندنی‌های مدیریتی شمرده نمی‌شوند (نویز = برآورد بی‌اعتبار) */
+export type QuotaKind = 'pull' | 'push' | 'login';
+
+const QUOTA_ESTIMATES: Record<QuotaKind, { rowsWritten: number; rowsRead: number }> = {
+  pull: { rowsWritten: NODE_PULL_ROWS_WRITTEN_EST, rowsRead: NODE_PULL_ROWS_READ_EST },
+  push: { rowsWritten: NODE_PUSH_ROWS_WRITTEN_EST, rowsRead: NODE_PUSH_ROWS_READ_EST },
+  login: { rowsWritten: LOGIN_ROWS_WRITTEN_EST, rowsRead: LOGIN_ROWS_READ_EST }
+};
+
+/** روز UTC به شکل YYYY-MM-DD — دانه‌بندی quota_usage همان روز UTC است نه محلی */
+export function quotaDayUtc(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * جمع‌زنِ شمارندهٔ روز (rust-f15) — تک‌دستوری و ارزان: INSERT ... ON CONFLICT(day) DO UPDATE
+ * همان UPSERT جمع‌کنندهٔ هم‌ریتم قرارداد (requests+1 و افزودن برآورد ردیف‌های همان هندلر).
+ * حکم م۲۱۰: شمارش سهمیه هرگز میزبان را نمی‌شکند — خطای اینجا بلعیده می‌شود (سهمیه تلمتری است
+ * نه دادهٔ عملیاتی؛ خرابی آن نباید pull/push/login را سرخ کند).
+ */
+export async function bumpQuotaUsage(db: DbClient, kind: QuotaKind, now: Date = new Date()): Promise<void> {
+  try {
+    const est = QUOTA_ESTIMATES[kind];
+    await db.execute(
+      `INSERT INTO quota_usage (day, requests, rows_written, rows_read_est)
+       VALUES (?, 1, ?, ?)
+       ON CONFLICT(day) DO UPDATE SET
+         requests = requests + 1,
+         rows_written = rows_written + excluded.rows_written,
+         rows_read_est = rows_read_est + excluded.rows_read_est`,
+      [quotaDayUtc(now), est.rowsWritten, est.rowsRead]
+    );
+  } catch {
+    // حکم م۲۱۰ — شمارش سهمیه هیچ مسیری را نمی‌شکند؛ بی‌صدا رد می‌شود
+  }
+}
+
+export type QuotaLevel = 'ok' | 'warn' | 'danger';
+
+/**
+ * سطح‌بندی مصرف از روی درصدها — قرارداد rust-f15: «danger» اگر هر درصدی ≥ ۹۵، وگرنه
+ * «warn» اگر هر درصدی ≥ ۸۰، وگرنه «ok». مرزها درصدهای رند‌شدهٔ یک‌اعشاری‌اند.
+ */
+export function quotaLevelFor(percents: { requests: number; rows_written: number; rows_read: number }): QuotaLevel {
+  const values = [percents.requests, percents.rows_written, percents.rows_read];
+  if (values.some((v) => v >= 95)) return 'danger';
+  if (values.some((v) => v >= 80)) return 'warn';
+  return 'ok';
+}
+
+/** درصد مصرف با گرد شدن به یک اعشار — قرارداد پاسخ quota */
+export function quotaPercent(value: number, limit: number): number {
+  return Math.round((value / limit) * 1000) / 10;
+}
+
+export interface CentralQuotaSnapshot {
+  day: string;
+  requests: number;
+  rows_written: number;
+  rows_read_est: number;
+  limits: { requests: number; rows_written: number; rows_read: number };
+  percent: { requests: number; rows_written: number; rows_read: number };
+  level: QuotaLevel;
+  estimated: true;
+  failed_logins_24h: number;
+}
+
+/**
+ * تصویر مصرف روز برای GET /api/central/quota — شمارندهٔ امروز (غایب = صفر نرم) + شمار تلاش‌های
+ * ورود ناموفق ۲۴ساعت اخیر. منبع failed_logins_24h: audit_log با action = 'auth.login_failed'
+ * (هر تلاش ناموفق یک ردیف ممیزی می‌سازد)؛ جدول login_throttle برای این کار مناسب نیست چون
+ * fail_count را بر شناسه با پنجرهٔ ۱۵دقیقه‌ای نگه می‌دارد — تاریخچهٔ ۲۴ساعته ندارد.
+ * created_at ممیزی با پیش‌فرض datetime('now') = «YYYY-MM-DD HH:MM:SS» است؛ برش ۲۴ساعت با همان
+ * قالب مقایسه می‌شود (ردیف‌های ISO احتمالی هم به‌درستی بالای برش می‌مانند — 'T' > ' ').
+ */
+export async function centralQuotaSnapshot(db: DbClient, now: Date = new Date()): Promise<CentralQuotaSnapshot> {
+  const day = quotaDayUtc(now);
+  const row = await db.queryOne<{ requests: number; rows_written: number; rows_read_est: number }>(
+    'SELECT requests, rows_written, rows_read_est FROM quota_usage WHERE day = ?',
+    [day]
+  );
+  const requests = row?.requests ?? 0;
+  const rowsWritten = row?.rows_written ?? 0;
+  const rowsRead = row?.rows_read_est ?? 0;
+
+  const cutoffSql = new Date(now.getTime() - 24 * 60 * 60_000).toISOString().slice(0, 19).replace('T', ' ');
+  const failedRow = await db.queryOne<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM audit_log WHERE action = 'auth.login_failed' AND created_at >= ?`,
+    [cutoffSql]
+  );
+
+  const percent = {
+    requests: quotaPercent(requests, QUOTA_LIMITS.requests),
+    rows_written: quotaPercent(rowsWritten, QUOTA_LIMITS.rows_written),
+    rows_read: quotaPercent(rowsRead, QUOTA_LIMITS.rows_read)
+  };
+  return {
+    day,
+    requests,
+    rows_written: rowsWritten,
+    rows_read_est: rowsRead,
+    limits: { ...QUOTA_LIMITS },
+    percent,
+    level: quotaLevelFor(percent),
+    estimated: true,
+    failed_logins_24h: failedRow?.n ?? 0
+  };
+}
+
+// ─── reconcile (rust-f15) — شمارش/تازه‌ترین مُهر هر دامنهٔ pull برای هم‌راستاسازی نود ───
+
+export interface ReconcileDomainStatus {
+  domain: NodePullDomain;
+  count: number;
+  /** MAX(updated_at) نرمال ISO ثانیه‌ای (هم‌قالب ISO_NORM pull)؛ جدول خالی = null */
+  max_updated_at: string | null;
+}
+
+/**
+ * شمارش و MAX(updated_at) بر حسب دامنهٔ pull — روی «همان ردیف‌هایی که pull تحویل می‌دهد»
+ * (شرط پایهٔ دامنه در PULL_SOURCES) تا مقایسهٔ شمارش نود با مرکز معنا داشته باشد؛ نه کل جدول.
+ * اسکن کامل جدول است (COUNT/MAX) — برآوردی و سبک برای حجم کلینیک؛ فقط سه دامنهٔ سفید دارد و
+ * مسیر نود است (احراز نود، نه سشن) — خواندنی مدیریتی نیست و در سهمیه شمرده نمی‌شود.
+ */
+export async function reconcileDomainCounts(
+  db: DbClient,
+  domains: readonly NodePullDomain[]
+): Promise<ReconcileDomainStatus[]> {
+  const out: ReconcileDomainStatus[] = [];
+  for (const domain of domains) {
+    const src = PULL_SOURCES.find((s) => s.domain === domain);
+    if (!src) continue; // گارد داخلی — روت پیش‌تر با فهرست سفید رد کرده است
+    const row = await db.queryOne<{ n: number; mx: string | null }>(
+      `SELECT COUNT(*) AS n, MAX(${ISO_NORM}) AS mx FROM ${src.from} WHERE ${src.fromWhere}`,
+      []
+    );
+    out.push({ domain, count: row?.n ?? 0, max_updated_at: row?.mx ?? null });
+  }
+  return out;
 }
 
 // ─── push — فهرست سفید سخت + اعتبارسنجی بر حسب دامنه + idempotency (node_code, id) ───
