@@ -45,6 +45,8 @@ jobs:
         run: |
           npm ci
           npm run build:client
+      - name: مونتاژ رانتایم نصاب — سایدکار workerd پین‌شده + قالب capnp + d1-seed + ثبت هش (rust-f13)
+        run: node scripts/desktop/build-installer-runtime.mjs --target x86_64-pc-windows-msvc
       - name: بیلد Tauri — تلاش نخست (کش‌شدن NSIS بستهٔ تائوری؛ زبان فارسی در توزیع NSIS تائوری نیست → شکست انتظارشده)
         run: npx @tauri-apps/cli@2 build
         continue-on-error: true

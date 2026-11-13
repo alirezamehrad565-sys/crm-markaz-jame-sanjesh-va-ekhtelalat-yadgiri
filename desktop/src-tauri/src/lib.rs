@@ -10,11 +10,105 @@
 mod engine;
 mod secure_store;
 
+use std::path::Path;
 use std::sync::Mutex;
 use tauri::Manager;
 
 /// وضعیت موتور محلی — نگه‌داری سایدکار تا خروج اپ (Drop = خاموشی تمیز)
 pub struct EngineState(Mutex<Option<engine::LocalEngine>>);
+
+/// کپی بازگشتی با std — بوت نخست: d1-seed مایگریت‌شدهٔ CI → data dir کاربر
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let to = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_recursive(&entry.path(), &to)?;
+        } else {
+            std::fs::copy(entry.path(), to)?;
+        }
+    }
+    Ok(())
+}
+
+/// راز per-install (۶۴ hex = ۳۲ بایت) بدون وابستهٔ جدید — هر فراخوانی RandomState کلید
+/// تصادفی OS می‌گیرد؛ چهار خروجی SipHash پشت‌سرهم. فقط loopback و هرگز خارج دستگاه نمی‌رود.
+fn random_hex_secret() -> String {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+    let mut out = String::with_capacity(64);
+    for i in 0..4u64 {
+        let mut h = RandomState::new().build_hasher();
+        h.write_u64(i);
+        out.push_str(&format!("{:016x}", h.finish()));
+    }
+    out
+}
+
+/// راز نشست در data dir (auth-secret.txt) — بوت نخست ساخته می‌شود و تا پاک‌سازی ثابت است
+fn read_or_create_auth_secret(data_dir: &Path) -> Result<String, String> {
+    let p = data_dir.join("auth-secret.txt");
+    if let Ok(existing) = std::fs::read_to_string(&p) {
+        let t = existing.trim().to_string();
+        if t.len() >= 32 {
+            return Ok(t);
+        }
+    }
+    let secret = random_hex_secret();
+    std::fs::write(&p, &secret).map_err(|e| format!("نوشتن راز ناموفق: {e}"))?;
+    Ok(secret)
+}
+
+/// rust-f13 — بوت موتور از رانتایم نصاب: قالب capnp توکن‌دار در resources/engine، جایگزینی
+/// سه توکن (data dir / public داخل نصاب / راز per-install)، کپی d1-seed در بوت نخست، و
+/// start سایدکار. Rust هیچ دانشی از ساختار capnp ندارد — فقط جایگزینی رشته و نوشتن فایل.
+fn boot_engine(app: &tauri::AppHandle) -> Result<engine::LocalEngine, String> {
+    // توسعه: با CENTER_ENGINE_CONFIG کانفیگ از پیش تولیدشده (engine.mjs) مصرف می‌شود
+    if let Ok(dev_config) = std::env::var("CENTER_ENGINE_CONFIG") {
+        let p = std::path::PathBuf::from(dev_config);
+        if p.is_file() {
+            return engine::LocalEngine::start(&p);
+        }
+    }
+
+    let engine_res = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("resource_dir: {e}"))?
+        .join("resources")
+        .join("engine");
+    let template = engine_res.join("workerd.capnp.template");
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?;
+    std::fs::create_dir_all(&data_dir).map_err(|e| format!("ساخت data dir: {e}"))?;
+
+    // بوت نخست: دیتابیس مایگریت‌شدهٔ زمان بسته‌بندی (d1-seed) → data dir — در نصب کاربر
+    // Node وجود ندارد؛ مایگریشن باید از قبل اعمال شده باشد. اگر کاربر قبلاً دیتا دارد، دست نمی‌خوریم.
+    if !data_dir.join("d1").exists() {
+        let seed = engine_res.join("d1-seed");
+        if seed.is_dir() {
+            copy_dir_recursive(&seed, &data_dir.join("d1"))
+                .map_err(|e| format!("کپی d1-seed: {e}"))?;
+        }
+    }
+
+    let secret = read_or_create_auth_secret(&data_dir)?;
+    let tmpl = std::fs::read_to_string(&template)
+        .map_err(|e| format!("خواندن قالب capnp ({template:?}): {e}"))?;
+    let final_capnp = tmpl
+        .replace("__CENTER_DATA_DIR__", &data_dir.to_string_lossy())
+        .replace(
+            "__CENTER_PUBLIC_DIR__",
+            &engine_res.join("public").to_string_lossy(),
+        )
+        .replace("__CENTER_AUTH_SECRET__", &secret);
+    let capnp_path = data_dir.join("workerd.capnp");
+    std::fs::write(&capnp_path, final_capnp).map_err(|e| format!("نوشتن capnp: {e}"))?;
+    engine::LocalEngine::start(&capnp_path)
+}
 
 /// فرمان سلامت پوسته — وضعیت موتور محلی را هم گزارش می‌کند
 #[tauri::command]
@@ -30,11 +124,7 @@ fn desktop_health(state: tauri::State<EngineState>) -> serde_json::Value {
 /// بالا آوردن موتور محلی در thread جدا و ناوبری پنجره به loopback پس از سلامت
 fn start_engine_in_background(app: tauri::AppHandle) {
     std::thread::spawn(move || {
-        // کانفیگ capnp-text تولیدشدهٔ موتور محلی (پیش‌فرض: کنار برنامه؛ در توسعه با CENTER_ENGINE_CONFIG)
-        let config = std::env::var("CENTER_ENGINE_CONFIG")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| std::env::temp_dir().join("workerd.capnp"));
-        match engine::LocalEngine::start(&config) {
+        match boot_engine(&app) {
             Ok(motor) => {
                 let port = motor.port;
                 let base = motor.base_url();
@@ -59,7 +149,7 @@ fn start_engine_in_background(app: tauri::AppHandle) {
                 eprintln!("[desktop] موتور محلی روی پورت {port} آماده است");
             }
             Err(msg) => {
-                // در توسعه بدون کانفیگ تولیدشده، پنجره روی پوستهٔ استاتیک می‌ماند — گیت فاز ۲ با engine:smoke است
+                // رانتایم نصاب ناقص یا سایدکار غایب — جزئیات در data dir/workerd.log (rust-f13)
                 eprintln!("[desktop] موتور محلی بالا نیامد: {msg}");
             }
         }

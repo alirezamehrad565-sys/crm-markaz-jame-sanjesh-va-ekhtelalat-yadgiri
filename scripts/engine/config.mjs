@@ -128,8 +128,41 @@ async function moduleEntry(name, contents) {
  */
 export async function buildEngineConfig(opts) {
   const { port, gamesPort = 8788, dataDir, authSecret } = opts;
+  return buildCapnpConfig({
+    port,
+    gamesPort,
+    dataDir,
+    publicDir: path.join(REPO_ROOT, 'public'),
+    authSecret,
+    env: 'development',
+  });
+}
+
+// rust-f13 — قالب capnp نصاب میز (گیت فاز ۲ ردیف ۹): همان شکل خروجی موتور محلی، ولی سه
+// مقدارِ وابسته به ماشینِ نصب با توکن جای‌گذاری می‌شوند و lib.rs پوسته در بوت آن‌ها را با
+// مقادیر واقعی (data dir کاربر / public داخل resources / راز per-install) جایگزین و capnp
+// نهایی را در data dir می‌نویسد — Rust هیچ دانشی از ساختار capnp ندارد، فقط جایگزینی رشته.
+// ENV = production: دور زدن توسعه (X-Dev-Staff-Id) در نصب واقعی خاموش است؛ راز از فایل داده.
+export const DATA_DIR_TOKEN = '__CENTER_DATA_DIR__';
+export const PUBLIC_DIR_TOKEN = '__CENTER_PUBLIC_DIR__';
+export const AUTH_SECRET_TOKEN = '__CENTER_AUTH_SECRET__';
+export const INSTALLER_MAIN_PORT = 8787;
+export const INSTALLER_GAMES_PORT = 8788;
+
+export async function buildInstallerCapnpTemplate({ publicDir }) {
+  return buildCapnpConfig({
+    port: INSTALLER_MAIN_PORT,
+    gamesPort: INSTALLER_GAMES_PORT,
+    dataDir: DATA_DIR_TOKEN,
+    publicDir,
+    authSecret: AUTH_SECRET_TOKEN,
+    env: 'production',
+  });
+}
+
+async function buildCapnpConfig(opts) {
+  const { port, gamesPort = 8788, dataDir, publicDir, authSecret, env } = opts;
   const d1DiskPath = path.join(dataDir, 'd1');
-  const publicDir = path.join(REPO_ROOT, 'public');
   const { encodedAssetManifest, assetsReverseMap } = await buildAssetManifest(publicDir);
 
   // ماژول‌های مینیفلر — database.worker (D1)، object-entry و سه ورکر assets از توزیع مینیفلر خوانده می‌شوند
@@ -158,7 +191,7 @@ export async function buildEngineConfig(opts) {
   // بایندهای مشترک دیتابیس و متغیرهای محیطی دو ورکر
   const d1Service = 'd1:db:main';
   const mainVars = [
-    textBinding('ENV', 'development'),
+    textBinding('ENV', env),
     textBinding('CF_ACCESS_TEAM_DOMAIN', ''),
     textBinding('CLINIC_NAME', 'مرکز جامع'),
     textBinding('PUBLIC_BASE_URL', `http://127.0.0.1:${port}`),
@@ -168,7 +201,7 @@ export async function buildEngineConfig(opts) {
     textBinding('CENTER_DESKTOP_ENGINE', '1'),
   ];
   const gamesVars = [
-    textBinding('ENV', 'development'),
+    textBinding('ENV', env),
     textBinding('CF_ACCESS_TEAM_DOMAIN', ''),
     textBinding('PUBLIC_BASE_URL', `http://127.0.0.1:${port}`),
     textBinding('AUTH_SECRET', authSecret),
