@@ -50,6 +50,11 @@ jobs:
       - name: MIGRATIONS.md sync gate
         run: node scripts/check-migrations-doc.mjs
 
+      # v1.26.0 — گیت سازگاری D1: پورت جداکنندهٔ cf_deploy.rs + اجرای کامل schema.sql روی SQLite
+      # و برابری sqlite_master با مسیر فایل‌به‌فایل — «همان SQL به موتور محلی و markaz-central می‌رود»
+      - name: D1 compatibility gate (schema.sql ↔ Cloudflare D1)
+        run: node scripts/check-d1-compat.mjs
+
       # ف۲ — گیت دیسدیپلین هش CSP: بلاک inline ↔ هش‌های _headers
       - name: CSP hash discipline gate
         run: node scripts/check-csp-hash.mjs
