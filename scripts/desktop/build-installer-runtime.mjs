@@ -155,12 +155,18 @@ async function main() {
   writeFileSync(P.capnpTemplate, template);
 
   // ⑤ v1.26.0 — دارایی‌های «ساخت سرور مرکزی»: central-worker.js + schema.sql (docs/rust/first-run-and-cloud.md §۳)
-  //   ورکر مرکزی از منبع با esbuild ساخته و کنار اسکیما در resources/engine/central می‌نشیند؛
-  //   cf_deploy.rs هر دو را به حساب کلادفلر کاربر می‌فرستد.
+  //   باندل مرکزی از منبع «commit» شده است (worker/central-bundle.js — بازسازی: scripts/build-central-bundle.mjs
+  //   در محیط توسعه/لینوکس)؛ اینجا فقط کپی + دود پروب تا روی ویندوز به .bin/esbuild نیاز نباشد.
   rmSync(centralDir, { recursive: true, force: true });
   mkdirSync(centralDir, { recursive: true });
-  execFileSync('node', [path.join(ROOT, 'scripts', 'build-central-bundle.mjs')], { stdio: 'inherit' });
   const centralWorkerSrc = path.join(ROOT, 'worker', 'central-bundle.js');
+  if (!existsSync(centralWorkerSrc)) {
+    throw new Error('worker/central-bundle.js نیست — scripts/build-central-bundle.mjs را در محیط لینوکس/توسعه اجرا و commit کنید');
+  }
+  const centralBody = readFileSync(centralWorkerSrc, 'utf8');
+  for (const probe of ['/healthz', '/admin/setup', '/admin/announcements', '"/pull"', '"/push"', '"/register"', 'NODE_SETUP_TOKEN']) {
+    if (!centralBody.includes(probe)) throw new Error(`باندل مرکزی ناقص — پروب غایب: ${probe}`);
+  }
   const centralWorker = path.join(centralDir, 'central-worker.js');
   cpSync(centralWorkerSrc, centralWorker);
   const migDir = path.join(ROOT, 'migrations');

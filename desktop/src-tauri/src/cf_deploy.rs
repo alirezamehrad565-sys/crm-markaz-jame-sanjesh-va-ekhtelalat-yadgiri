@@ -351,7 +351,7 @@ pub async fn cloudflare_deploy(
     };
     if sub.is_empty() {
         steps.push(Step { name: "subdomain", ok: false, detail: "subdomain حساب خالی است".into() });
-        return fail(&steps, "حساب کلادفلر subdomain workers.dev ندارد — در داشبورد کلادفلر فعالش کنید.");
+        return fail(&steps, "حساب کلادفلر subdomain workers.dev ندارد — در داشبورد کلادفلر فعالش کنید.".to_string());
     }
     let _ = cf_call(
         &client,

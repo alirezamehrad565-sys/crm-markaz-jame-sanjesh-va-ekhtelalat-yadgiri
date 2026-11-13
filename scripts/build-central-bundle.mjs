@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // ساخت باندل ورکر مرکزی مستقل (v1.26.0 — docs/rust/first-run-and-cloud.md §۳)
-// خروجی: worker/central-bundle.js — cf_deploy.rs همین فایل را به حساب کلادفلر کاربر آپلود می‌کند.
+// خروجی: worker/central-bundle.js — «commit می‌شود»؛ مونتاژ رانتایم نصاب فقط کپی + دود پروب
+// می‌کند (روی ویندوز .bin/esbuild نیست). بعد از هر تغییر در src/، این اسکریپت را اجرا و
+// خروجی را commit کنید. cf_deploy.rs همین فایل را به حساب کلادفلر کاربر آپلود می‌کند.
 // دود تست: باندل باید موجود، غیرتهی، ESM معتبر و حاوی مسیرهای کلیدی باشد.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';

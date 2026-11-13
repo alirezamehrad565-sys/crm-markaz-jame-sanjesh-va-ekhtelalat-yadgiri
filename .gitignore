@@ -73,5 +73,3 @@ desktop/src-tauri/binaries/
 desktop/src-tauri/resources/
 desktop/src-tauri/engine-runtime-manifest.json
 
-# v1.26.0 — باندل ورکر مرکزی (از منبع ساخته می‌شود)
-worker/central-bundle.js
