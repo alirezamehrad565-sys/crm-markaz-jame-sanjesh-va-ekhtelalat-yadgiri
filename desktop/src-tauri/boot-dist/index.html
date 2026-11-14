@@ -79,6 +79,15 @@
   .foot { margin-top:16px; font-size:11.5px; color:var(--muted); line-height:1.9; }
   .foot code { direction:ltr; unicode-bidi:embed; font-family:Consolas, monospace; font-size:11px;
                background:var(--soft); border-radius:4px; padding:1px 6px; }
+
+  /* فاز A — pill همیشه‌نمایان وضعیت سرور محلی (گوشهٔ صفحه؛ طرح server-cloud-update-design §۱-۲) */
+  .serverpill { position:fixed; bottom:14px; inset-inline-start:14px; z-index:60;
+                display:flex; align-items:center; gap:8px; max-width:88vw;
+                font-size:12px; color:var(--pd); background:var(--card);
+                border:1px solid var(--border); border-radius:999px; padding:5px 12px;
+                box-shadow:0 2px 8px rgba(36,49,59,.10); }
+  .serverpill[hidden] { display:none; }
+  .serverpill__dot { width:9px; height:9px; border-radius:50%; background:var(--muted); flex:none; }
 </style>
 </head>
 <body>
@@ -107,7 +116,7 @@
       <div class="err" id="errmsg"></div>
       <div class="tail" id="logtail"></div>
       <div class="actions">
-        <button id="btnRetry" class="primary">تلاش دوباره</button>
+        <button id="btnRetry" class="primary">راه‌اندازی دوباره</button>
         <button id="btnDir">باز کردن پوشهٔ داده</button>
         <button id="btnCopy">کپی گزارش خرابی</button>
         <button id="btnMail" class="warn">پیام به سازنده</button>
@@ -117,9 +126,17 @@
     </div>
   </div>
 
+  <!-- فاز A — pill وضعیت سرور محلی: حالت‌ها از رویداد engine:status + poll invoke engine_status هر ۳ثانیه تا Ready.
+       بیرون پوستهٔ تائوری (بدون کانال) مخفی می‌ماند و رفتار فعلی صفحه دست‌نخورده است. -->
+  <div class="serverpill" id="boot-server-pill" hidden>
+    <span class="serverpill__dot" id="boot-pill-dot" aria-hidden="true"></span>
+    <span id="boot-pill-label">سرور محلی…</span>
+  </div>
+
 <script>
   // صفحهٔ بوت پوسته (v1.27.01) — هرگز صفحهٔ خالی نمی‌ماند: دو وضعیت صریح + کنش‌ها.
-  // قرارداد با lib.rs: desktop_status / engine_retry / open_data_dir — همه فقط loopback.
+  // قرارداد با lib.rs: desktop_status / engine_restart (کهنه: engine_retry) / open_data_dir — همه فقط loopback.
+  // فاز A — لایهٔ pill وضعیت سرور محلی: engine_status + رویداد engine:status (پایین همین فایل).
   const invoke = () => (globalThis.__TAURI_INTERNALS__ ? globalThis.__TAURI_INTERNALS__.invoke : null);
   let lastDiag = { message: '', log: '', ver: '' };
   const bootStart = Date.now();
@@ -173,8 +190,13 @@
 
   el('btnRetry').addEventListener('click', async () => {
     const inv = invoke(); if (!inv) return;
-    showBooting('در حال تلاش دوباره…');
-    try { await inv('engine_retry'); } catch (e) { showFailed({ message: String(e), log_tail: lastDiag.log_tail || '' }); }
+    showBooting('در حال راه‌اندازی دوباره…');
+    // فاز A — فرمان تازهٔ پوستهٔ engine_restart؛ شکل قدیمی engine_retry fallback است (پوستهٔ کهنه)
+    try {
+      await inv('engine_restart');
+    } catch {
+      try { await inv('engine_retry'); } catch (e) { showFailed({ message: String(e), log_tail: lastDiag.log_tail || '' }); }
+    }
     setTimeout(poll, 300);
   });
   el('btnDir').addEventListener('click', async () => {
@@ -182,9 +204,19 @@
     try { await inv('open_data_dir'); } catch { /* نرم */ }
   });
   function diagText() {
+    // فاز A — گزارش با وضعیت FSM موتور غنی‌تر شد: وضعیت + دلیل ناتمامی + پورت‌ها + آخرین رویداد
+    // (از پاکت engine_status اگر رسیده باشد؛ وگرنه همان رفتار قبلی با desktop_status)
+    const st = engineStateLast || {};
+    const reason = st.state === 'Degraded'
+      ? (PILL_REASON_VIEWS[st.degradedReason] ?? (st.degradedReason || 'نامشخص'))
+      : (st.degradedReason || '—');
     return [
       'گزارش خرابی راه‌اندازی — مرکز جامع نسخهٔ میز',
-      'نسخه: ' + displayVersion(lastDiag.version),
+      'نسخه: ' + displayVersion(lastDiag.version || st.appVersion),
+      'وضعیت FSM: ' + (st.state || '(ثبت نشده)'),
+      'دلیل ناتمامی: ' + reason,
+      'پورت‌ها: اصلی ' + (st.port ?? '—') + ' · بازی‌ها ' + (st.gamesPort ?? '—'),
+      'آخرین رویداد: unix ' + (st.lastEventAtUnix ?? '—'),
       'خطا: ' + (lastDiag.message || '(ثبت نشده)'),
       '--- آخر لاگ موتور (engine.log) ---',
       lastDiag.log_tail || '(خالی)'
@@ -203,6 +235,89 @@
       try { globalThis.open('https://github.com/sdt144/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri/issues/new'); } catch { /* نرم */ }
     }, 250);
   });
+
+  // ── فاز A — pill وضعیت سرور محلی (id: boot-server-pill) ─────────────────────────
+  // قرارداد پوسته ↔ فرانت (طرح server-cloud-update-design §۱-۱): رویداد engine:status +
+  // invoke engine_status — پاکت {state, port, gamesPort, startedAtUnix, lastEventAtUnix,
+  // degradedReason, appVersion}؛ حالت‌ها = رشته‌های FSM موتور (lib.rs).
+  // نگاشت حالت→رنگ/برچسب هم‌قرارداد با serverStateView پنل سلامت (health-panel.js — لایهٔ دوم).
+  // poll هر ۳ثانیه تا Ready ادامه می‌یابد؛ بیرون پوسته pill مخفی می‌ماند و هیچ چیز عوض نمی‌شود.
+  const PILL_STATE_VIEWS = {
+    Ready: { color: 'var(--green)', text: 'سرور محلی روشن است' },
+    Degraded: { color: 'var(--amber)', text: 'سرور محلی ناتمام' },
+    Failed: { color: 'var(--red)', text: 'سرور بالا نیامد' },
+    Booting: { color: 'var(--amber)', text: 'در حال راه‌اندازی…' },
+    Validating: { color: 'var(--amber)', text: 'در حال راه‌اندازی…' },
+    Starting: { color: 'var(--amber)', text: 'در حال راه‌اندازی…' },
+    Recovering: { color: 'var(--red)', text: 'در حال بازیابی…' },
+    // Restarting = حالت واقعی سورسِ امروز (رویداد engine:restarting نگهبان در lib.rs) — زرد
+    Restarting: { color: 'var(--amber)', text: 'در حال بازیابی…' }
+  };
+  const PILL_STATE_UNKNOWN = { color: 'var(--muted)', text: 'وضعیت نامشخص' };
+  const PILL_REASON_VIEWS = { games_unhealthy: 'ورکر بازی‌ها ناسالم' };
+  let engineStateLast = null;
+  let pillPollTimer = null;
+
+  function pillPaint(st) {
+    const pill = el('boot-server-pill');
+    if (!pill) return;
+    const base = PILL_STATE_VIEWS[st?.state] ?? PILL_STATE_UNKNOWN;
+    let text = base.text;
+    if (st?.state === 'Ready') {
+      const p = Number(st.port);
+      text += Number.isFinite(p) && p > 0 ? ' — localhost:' + p : ' — localhost:8787';
+    }
+    if (st?.state === 'Degraded') text += ' — ' + (PILL_REASON_VIEWS[st.degradedReason] ?? 'دلیل نامشخص');
+    const dot = el('boot-pill-dot');
+    if (dot) dot.style.background = base.color;
+    const label = el('boot-pill-label');
+    if (label) label.textContent = text;
+    pill.hidden = false;
+  }
+
+  function pillHandle(st) {
+    if (!st || typeof st !== 'object' || !('state' in st)) return; // پاکت ناآشنا — نرم
+    engineStateLast = st;
+    pillPaint(st);
+    if (st.state === 'Ready') {
+      // بوت موفق — poll pill متوقف؛ جایگزینی صفحه با poll فعلی (desktop_status) انجام می‌شود
+      if (pillPollTimer) { clearInterval(pillPollTimer); pillPollTimer = null; }
+      return;
+    }
+    if (st.state === 'Failed') {
+      // پیام شکست بوت موجود ارتقا یافت: failcard از desktop_status با دم لاگ می‌آید؛
+      // اگر هنوز نیامده بود، همین‌جا پیام + سه دکمهٔ کنش نشان داده می‌شود
+      if (!el('failed').classList.contains('show')) {
+        showFailed({ message: 'سرور بالا نیامد — برای جزئیات، دم لاگ با باز شدن دوبارهٔ صفحه می‌آید.', log_tail: '' });
+      }
+      return;
+    }
+    // بازگشت به راه‌اندازی (پس از engine_restart) — کارت شکست بسته و حالت راه‌اندازی برمی‌گردد
+    if (['Booting', 'Validating', 'Starting', 'Recovering', 'Restarting'].includes(st.state) && el('failed').classList.contains('show')) {
+      showBooting(st.state === 'Recovering' || st.state === 'Restarting' ? 'در حال بازیابی…' : 'در حال راه‌اندازی…');
+    }
+  }
+
+  async function pillPoll() {
+    const inv = invoke();
+    if (!inv) return;
+    let st;
+    try { st = await inv('engine_status'); } catch { return; } // فرمان هنوز مستقر نیست — نرم
+    pillHandle(st);
+  }
+
+  (async () => {
+    const inv = invoke();
+    if (!inv) return; // بیرون پوستهٔ تائوری — pill مخفی، رفتار فعلی دست‌نخورده
+    void pillPoll();
+    pillPollTimer = setInterval(pillPoll, 3000);
+    try {
+      const ev = globalThis.__TAURI__?.event;
+      if (ev && typeof ev.listen === 'function') {
+        await ev.listen('engine:status', (e) => pillHandle(e?.payload));
+      }
+    } catch { /* گوش‌دادن ناموفق — poll تنها کافی است */ }
+  })();
 
   (async () => {
     const inv = invoke();

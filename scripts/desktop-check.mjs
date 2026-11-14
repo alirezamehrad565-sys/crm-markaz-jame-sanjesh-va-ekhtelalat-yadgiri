@@ -328,6 +328,34 @@ try {
   simC.status === 0
     ? ok('drill خرابی: شبیه‌ساز --corrupt سبز است — گیت هش دام را گرفت')
     : bad(`drill خرابی قرمز است (exit=${simC.status}) — گیت هش از خرابی گذشت یا drill شکست خورد`);
+  // فاز A — قرارداد وضعیت/ری‌استارت موتور در دسکتاپ (تغییرات هم‌زمان عامل R و عامل F):
+  // پین‌های زیر سخت‌اند (رشتهٔ دقیق) و تا merge دو عامل قرمزند — قرمزیِ آن‌ها در این مرحله انتظار است.
+  // تنها استثنا: پین capabilities «نرم هوشمند» است؛ چون نام دقیق مجوز فرمان‌های تازه در الگوی
+  // Tauri v2 هنوز قطعی نیست (allow-engine-status یا allow_engine_status — با خط‌تیره یا زیرخط)،
+  // حضور یکی از دو الگوی engine-status / engine_status پس از merge عامل R کافی است.
+  for (const t of ['engine_status', 'engine_restart', 'open_data_dir', 'engine:status']) {
+    libSrc11.includes(t)
+      ? ok(`lib.rs: ${t} سیم است (فاز A — فرمان/رویداد موتور)`)
+      : bad(`lib.rs: ${t} غایب است (فاز A — تا merge تغییر هم‌زمان عامل R در lib.rs)`);
+  }
+  const bootA = readFileSync(path.join(ROOT, 'desktop', 'src-tauri', 'boot-dist', 'index.html'), 'utf8');
+  for (const t of ['engine:status', 'boot-server-pill']) {
+    bootA.includes(t)
+      ? ok(`صفحهٔ بوت: ${t} سیم است (فاز A)`)
+      : bad(`صفحهٔ بوت: ${t} غایب است (فاز A — تا merge تغییر هم‌زمان عامل F در boot-dist)`);
+  }
+  const hpA = readFileSync(path.join(ROOT, 'public', 'assets', 'js', 'views', 'health-panel.js'), 'utf8');
+  hpA.includes('serverStateView')
+    ? ok('health-panel: serverStateView سیم است (فاز A)')
+    : bad('health-panel: serverStateView غایب است (فاز A — تا merge تغییر هم‌زمان عامل F)');
+  const testA = path.join(ROOT, 'src', '__tests__', 'front-server-status.test.ts');
+  existsSync(testA) && readFileSync(testA, 'utf8').includes('serverStateView')
+    ? ok('آزمون front-server-status.test.ts حاضر است و serverStateView را پوشش می‌دهد (فاز A)')
+    : bad('src/__tests__/front-server-status.test.ts موجود نیست یا serverStateView را ندارد (فاز A — تا merge عامل F)');
+  const capA = readFileSync(path.join(T, 'capabilities', 'default.json'), 'utf8');
+  capA.includes('engine_status') || capA.includes('engine-status')
+    ? ok('capabilities: مجوز فرمان‌های موتور (engine_status یا engine-status) ثبت شده است (فاز A)')
+    : bad('capabilities/default.json مجوز فرمان‌های موتور را ندارد — پس از merge عامل R باید الگوی allow-engine-status یا allow_engine_status در permissions باشد (پین نرم هوشمند فاز A: یکی از دو الگو کافی است)');
 } catch (e) {
   bad(`گیت پین‌های P2 خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }

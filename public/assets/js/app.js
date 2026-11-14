@@ -55,6 +55,9 @@ window.addEventListener('unhandledrejection', (e) => {
 
 import { session } from './state.js';
 import { initRum } from './rum.js'; // تله‌متری بی‌نام کارایی (بدون IP/UA — قانون PII design.md)
+// فاز A — نشانگر سربرگ «سرور محلی» از feed مشترک پوسته (engine:status + poll ۳۰ثانیه‌ای) تغذیه می‌شود؛
+// تابع نگاشت حالت→رنگ/برچسب همان خالصِ پنل سلامت است (serverStateView — یک منبع، دو لایه)
+import { serverStateView, installServerStatusFeed, subscribeServerStatus } from './views/health-panel.js';
 
 // ثبت ناظرهای CWV در نخستین فرصت؛ گزارشگرها buffered هستند و رویدادهای پیش از این هم می‌گیرند
 initRum();
@@ -301,6 +304,44 @@ function roleLabel(role) {
   return { manager: 'مدیر', therapist: 'درمانگر', secretary: 'منشی', supervisor: 'ناظر (فقط مشاهده)' }[role] ?? role;
 }
 
+/* ── فاز A — pill همیشه‌نمایان «سرور محلی» در سربرگ (طرح docs/rust/server-cloud-update-design.md §۱-۳) ──
+   نقطهٔ رنگ + برچسب کوتاه؛ تازه‌سازی با feed مشترک پوسته (رویداد engine:status + poll ۳۰ثانیه‌ای
+   engine_status — نصب یک‌بارِ installServerStatusFeed در health-panel.js). کلیک → پنل سلامت.
+   فقط در پوستهٔ میز (window.__TAURI__ — باGlobalTauri) نمایان است؛ حالت وب/آزمون هیچ عنصری
+   اضافه نمی‌کند و هر خطای غیرمنتظره هم فقط همین نشانگر را بی‌اثر می‌کند — بوت اپ هرگز نمی‌شکند. */
+function installServerStatusPill() {
+  try {
+    const tauri = globalThis.__TAURI__;
+    const topbar = document.querySelector('.topbar');
+    if (!tauri || !topbar || document.getElementById('server-status-pill')) return;
+    installServerStatusFeed();
+    const pill = el('button', {
+      id: 'server-status-pill',
+      class: 'badge badge--neutral',
+      type: 'button',
+      title: 'وضعیت سرور محلی — کلیک: پنل سلامت',
+      onclick: () => { location.hash = '#/health-panel'; },
+      style: { cursor: 'pointer', border: 'none', maxWidth: '260px', flex: 'none' }
+    },
+      el('span', { class: 'dot dot--neutral', 'aria-hidden': 'true' }),
+      el('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, '…')
+    );
+    const themeBtnEl = document.getElementById('theme-btn');
+    if (themeBtnEl) topbar.insertBefore(pill, themeBtnEl); else topbar.appendChild(pill);
+    const paint = (status) => {
+      const view = serverStateView(status?.state, status?.degradedReason);
+      pill.className = `badge ${view.badge}`;
+      const dotEl = pill.querySelector('.dot');
+      if (dotEl) dotEl.className = `dot ${view.dot}`;
+      const labelEl = pill.lastElementChild;
+      if (labelEl) labelEl.textContent = view.label;
+      pill.title = `${view.label} — کلیک: پنل سلامت`;
+    };
+    paint(null); // نخستین رنگ: خنثی «وضعیت نامشخص» تا نخستین پاکت پوسته برسد
+    subscribeServerStatus(paint);
+  } catch { /* نشانگر سربرگ هرگز بوت اپ را نمی‌شکند */ }
+}
+
 function rebuildNavForRole() {
   buildSidebar();
   syncNav(location.hash.replace(/^#\//, '') || 'dashboard');
@@ -450,6 +491,9 @@ register('#/settings', { title: 'تنظیمات', render: roleOnly(['manager', '
 register('#/backup', { title: 'پشتیبان‌گیری و بازیابی', render: managerOnly(lazyView(() => import('./views/backup.js'), 'renderBackup', '#/backup')) }); // فقط مدیر
 /* ۱.۲۵.۷۱ — دو ثبت مسیر «پنل سلامت» و «خطاهای مرورگر» از روتر قطع شد (خواست کارفرما؛ سورس نماها و API زنده —
    بازگشت = دو خط register از کامیت ۱.۲۵.۷۰ برگردانده شود؛ هش مستقیم اکنون ۴۰۴ می‌دهد) */
+/* فاز A — روت «پنل سلامت» دوباره وصل شد (فقط روت؛ آیتم سایدبار به حکم ۱.۲۵.۷۱ همچنان قطع است):
+   pill سربرگ «سرور محلی» کلیک → همین مسیر — الگوی register از هم‌نمایان کامیت ۱.۲۵.۷۰. */
+register('#/health-panel', { title: 'پنل سلامت', render: managerOnly(lazyView(() => import('./views/health-panel.js'), 'renderHealthPanel', '#/health-panel')) });
 register('#/working-hours', { title: 'تنظیمات', render: lazyView(() => import('./views/settings.js'), 'renderSettings', '#/working-hours') }); // — مسیر قدیمی → تنظیمات
 register('#/schools', { title: 'مدارس', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/schools.js'), 'renderSchools', '#/schools')) }); // — منشی مجاز
 register('#/students', { title: 'دانش‌آموزان', render: lazyView(() => import('./views/students.js'), 'renderStudents', '#/students') });
@@ -490,6 +534,8 @@ initTheme();
 buildSidebar();
 
 initGlobalSearch();
+
+installServerStatusPill(); // فاز A — نشانگر سربرگ «سرور محلی» (فقط پوستهٔ میز؛ حالت وب مخفی)
 
 document.getElementById('menu-btn').addEventListener('click', () => {
   const sidebar = document.getElementById('sidebar');

@@ -906,6 +906,224 @@ export function drillRecordView(record, nowMs = Date.now()) {
   return { tone: 'ok', label: dateFa, detail: `آخرین drill ${fa(days)} روز پیش` };
 }
 
+/* ── فاز A — لایه‌های دوگانهٔ نشانگر «سرور محلی» (طرح docs/rust/server-cloud-update-design.md §۱) ──
+   قرارداد پوسته ↔ فرانت: رویداد engine:status + فرمان‌های invoke: engine_status / engine_restart /
+   open_data_dir — پاکت JSON: {state, port, gamesPort, startedAtUnix, lastEventAtUnix, degradedReason,
+   appVersion}. حالت‌ها = واژگان واقعی lib.rs: Booting/Ready/Degraded/Failed/Restarting (+
+   Validating/Starting/Recovering از قرارداد §۱-۱ برای آینده). لایهٔ اول در boot-dist/index.html (pill بوت — id: boot-server-pill)؛ این فایل
+   لایهٔ دوم است: تابع نگاشت خالص serverStateView + کارت «سرور محلی» پنل سلامت + pill سربرگ (نصب از
+   app.js با همان feed مشترک). نگاشت دلیل‌های Degraded تابع خالص جدای خودش است (degradedReasonView).
+   همه‌چیز گاردشده است: بیرون پوستهٔ دسکتاپ (مرورگر/آزمون) feed و کارت به «حالت وب» می‌افتند و
+   SPA هرگز نمی‌شکند — الگوی installEngineWatchdogBanner بالای همین فایل. */
+
+const SERVER_STATE_VIEWS = {
+  Ready: { badge: 'badge--success', dot: 'dot--success', label: 'سرور محلی در حال اجرا' },
+  Degraded: { badge: 'badge--warning', dot: 'dot--warning', label: 'سرور محلی ناتمام' },
+  Failed: { badge: 'badge--error', dot: 'dot--error', label: 'سرور بالا نیامد' },
+  // «در حال راه‌اندازی…» — زردِ ملایم پالت (بج هشدار)؛ خاکستریِ خنثی فقط برای «وضعیت نامشخص» نگه داشته شده
+  Booting: { badge: 'badge--warning', dot: 'dot--warning', label: 'در حال راه‌اندازی…' },
+  Validating: { badge: 'badge--warning', dot: 'dot--warning', label: 'در حال راه‌اندازی…' },
+  Starting: { badge: 'badge--warning', dot: 'dot--warning', label: 'در حال راه‌اندازی…' },
+  // طرح §۱-۳: قرمز Failed/Recovering — موتور هنوز در دسترس نیست تا بازیابی تمام شود
+  Recovering: { badge: 'badge--error', dot: 'dot--error', label: 'در حال بازیابی…' },
+  // Restarting = حالت واقعی سورسِ امروز (رویداد engine:restarting نگهبان در lib.rs) — زرد
+  // «در حال بازیابی…»، هم‌لحن با بنر نگهبان (engine:restarting در EXP-4 بالای همین فایل)
+  Restarting: { badge: 'badge--warning', dot: 'dot--warning', label: 'در حال بازیابی…' }
+};
+
+const SERVER_STATE_UNKNOWN = { badge: 'badge--neutral', dot: 'dot--neutral', label: 'وضعیت نامشخص' };
+
+const DEGRADED_REASON_VIEWS = {
+  games_unhealthy: 'ورکر بازی‌ها ناسالم'
+};
+
+/** دلیل Degraded → فارسی؛ دلیل ناشناخته/غایب → «دلیل نامشخص» (تابع خالص جدای خودش) */
+export function degradedReasonView(reason) {
+  return DEGRADED_REASON_VIEWS[reason] ?? 'دلیل نامشخص';
+}
+
+/**
+ * فاز A — حالت FSM موتور → برچسب فارسی/کلاس رنگ (تابع خالص — بدون DOM؛ الگوی syncStateView).
+ * Ready سبز «سرور محلی در حال اجرا»؛ Degraded زرد با دلیل فارسی؛ Failed قرمز «سرور بالا نیامد»؛
+ * Booting/Validating/Starting «در حال راه‌اندازی…» زرد؛ Recovering قرمز و Restarting زرد
+ * «در حال بازیابی…»؛ حالت ناشناخته/غایب → خنثی «وضعیت نامشخص» بی‌کرش.
+ */
+export function serverStateView(state, degradedReason) {
+  const base = SERVER_STATE_VIEWS[state] ?? SERVER_STATE_UNKNOWN;
+  if (state === 'Degraded') {
+    return { ...base, label: `${base.label} — ${degradedReasonView(degradedReason)}` };
+  }
+  return base;
+}
+
+/** پاکت وضعیت → خط پورت‌ها با رقم فارسی؛ پورت غایب/خراب → «—» */
+export function serverPortsView(status) {
+  const port = Number(status?.port);
+  const games = Number(status?.gamesPort);
+  const p = Number.isFinite(port) && port > 0 ? fa(port) : '—';
+  const g = Number.isFinite(games) && games > 0 ? fa(games) : '—';
+  return `پورت اصلی ${p} · بازی‌ها ${g}`;
+}
+
+/** unix ثانیه → تاریخ جلالی فارسی؛ ورودی غایب/خراب → «—» (نگاشت مُهرهای پاکت) */
+export function unixJalaliView(sec) {
+  const n = Number(sec);
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  try { return formatJalaliDateTime(new Date(n * 1000).toISOString()); } catch { return '—'; }
+}
+
+/** unix ثانیه → «چند وقت پیش» خوانا؛ ورودی غایب/خراب/مُهر آیندهٔ عجیب → «—» */
+export function unixAgeView(sec, nowMs = Date.now()) {
+  const n = Number(sec);
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  const age = Math.round((nowMs - n * 1000) / 1000);
+  if (age < 0) return '—';
+  return ageHuman(age);
+}
+
+/**
+ * فاز A — رشتهٔ «کپی اطلاعات عیب‌یابی»: نسخهٔ اپ + وضعیت FSM + دلیل + پورت‌ها + آخرین رویداد
+ * (اعداد/نسخه لاتین می‌ماند — برای پیوست در گزارش پشتیبانی). تابع خالص: پاکت غایب هم رشتهٔ
+ * «نامشخص» می‌دهد تا دکمهٔ کپی هرگز بی‌اثر نماند.
+ */
+export function serverDiagnosticsText(status) {
+  const s = status && typeof status === 'object' ? status : null;
+  const view = serverStateView(s?.state, s?.degradedReason);
+  const port = Number(s?.port);
+  const games = Number(s?.gamesPort);
+  return [
+    'اطلاعات عیب‌یابی — سرور محلی مرکز جامع',
+    `نسخهٔ اپ: ${typeof s?.appVersion === 'string' && s.appVersion ? s.appVersion : '—'}`,
+    `وضعیت FSM: ${typeof s?.state === 'string' && s.state ? s.state : 'نامشخص'} — ${view.label}`,
+    `دلیل ناتمامی: ${s?.state === 'Degraded' ? degradedReasonView(s?.degradedReason) : '—'}`,
+    `پورت‌ها: اصلی ${Number.isFinite(port) && port > 0 ? port : '—'} · بازی‌ها ${Number.isFinite(games) && games > 0 ? games : '—'}`,
+    `زمان آخرین بوت: ${unixJalaliView(s?.startedAtUnix)}`,
+    `آخرین رویداد: unix ${s?.lastEventAtUnix ?? '—'} (${unixJalaliView(s?.lastEventAtUnix)})`
+  ].join('\n');
+}
+
+/** کپی متن در کلیپ‌بورد با fallback — true فقط اگر واقعاً کپی شد؛ بی‌DOM → false بی‌کرش */
+export async function copyTextToClipboard(text) {
+  try {
+    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch { /* fallback پایین */ }
+  try {
+    if (typeof document === 'undefined') return false;
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const okCopy = document.execCommand('copy');
+    ta.remove();
+    return okCopy;
+  } catch { return false; }
+}
+
+/** پاکت رویداد/فرمان وضعیت → پاک‌سازی‌شده؛ پاکت ناآشنا (هیچ فیلد شناخته) → null (الگوی unwrapQuota) */
+export function unwrapEngineStatus(payload) {
+  const raw = payload && typeof payload === 'object' ? payload : null;
+  if (!raw) return null;
+  const known = ['state', 'port', 'gamesPort', 'startedAtUnix', 'lastEventAtUnix', 'degradedReason', 'appVersion']
+    .some((k) => k in raw);
+  return known ? raw : null;
+}
+
+const SERVER_STATUS_POLL_MS = 30_000; // بازخوانی ۳۰ثانیه‌ای — هم‌ریتم دوپینگ نگه‌دارندهٔ پوسته (طرح §۱-۱)
+const SERVER_STATUS_EVENT = 'engine:status';
+const SERVER_STATUS_COMMAND = 'engine_status';
+
+let serverStatusFeedInstalled = false;
+let serverStatusFeedTimer = null;
+let lastServerStatusPayload = null;
+const serverStatusCallbacks = new Set();
+
+function notifyServerStatus(payload) {
+  const clean = unwrapEngineStatus(payload);
+  if (!clean) return; // پاکت ناآشنا — وضعیت قبلی دست‌نخورده می‌ماند
+  lastServerStatusPayload = clean;
+  for (const cb of [...serverStatusCallbacks]) {
+    try { cb(clean); } catch { /* شنوندهٔ خراب هرگز feed را نمی‌کشد */ }
+  }
+}
+
+async function pollEngineStatusOnce(invokeFn) {
+  try {
+    notifyServerStatus(await invokeFn(SERVER_STATUS_COMMAND));
+  } catch { /* فرمان هنوز مستقر نیست یا IPC رد شد — نرم؛ poll ادامه می‌یابد */ }
+}
+
+/**
+ * فاز A — نصب یک‌بارهٔ feed مشترک وضعیت سرور: شنیدن رویداد engine:status + poll هر ۳۰ثانیه با
+ * invoke engine_status. خروجی و گارد عین الگوی installEngineWatchdogBanner — بیرون پوستهٔ
+ * دسکتاپ (مرورگر/آزمون) نصب نمی‌شود و هیچ throwی ندارد. کارت پنل سلامت و pill سربرگ هر دو
+ * با subscribeServerStatus روی همین feed می‌نشینند (یک poll، چند شنونده).
+ */
+export function installServerStatusFeed() {
+  if (serverStatusFeedInstalled) return { installed: true };
+  try {
+    const tauri = globalThis.__TAURI__;
+    const listen = tauri && tauri.event && typeof tauri.event.listen === 'function' ? tauri.event.listen : null;
+    const invoke = tauri && typeof tauri.invoke === 'function' ? tauri.invoke : null;
+    if (!listen && !invoke) return { installed: false, reason: 'no-tauri-channel' };
+    serverStatusFeedInstalled = true;
+    if (listen) {
+      void (async () => {
+        try { await listen(SERVER_STATUS_EVENT, (ev) => notifyServerStatus(ev?.payload)); }
+        catch { /* IPC گوش‌دادن ناموفق — poll تنها کافی است */ }
+      })();
+    }
+    void pollEngineStatusOnce(invoke ?? (async () => null));
+    serverStatusFeedTimer = setInterval(() => void pollEngineStatusOnce(invoke ?? (async () => null)), SERVER_STATUS_POLL_MS);
+    return { installed: true };
+  } catch {
+    return { installed: false, reason: 'unexpected' };
+  }
+}
+
+/** اشتراک شنوندهٔ وضعیت — آخرین وضعیت شناخته‌شده بلافاصله می‌رسد؛ خروجی تابع لغو اشتراک */
+export function subscribeServerStatus(cb) {
+  if (typeof cb !== 'function') return () => {};
+  serverStatusCallbacks.add(cb);
+  if (lastServerStatusPayload) {
+    try { cb(lastServerStatusPayload); } catch { /* نرم */ }
+  }
+  return () => serverStatusCallbacks.delete(cb);
+}
+
+/** آخرین وضعیت پاک‌سازی‌شدهٔ پاکت engine_status — برای رندر نخست کارت (غایب → null) */
+export function lastServerStatus() {
+  return lastServerStatusPayload;
+}
+
+/**
+ * فاز A — فرمان پوستهٔ میز با گارد کامل (engine_restart / open_data_dir / …):
+ * بیرون دسکتاپ یا Err پوسته → {ok:false, reason} با پیام فارسی‌پذیر — SPA هرگز نمی‌شکند.
+ */
+export async function engineInvoke(command) {
+  try {
+    const tauri = globalThis.__TAURI__;
+    const invoke = tauri && typeof tauri.invoke === 'function' ? tauri.invoke : null;
+    if (!invoke) return { ok: false, reason: 'no-tauri-channel' };
+    return { ok: true, value: await invoke(command) };
+  } catch (err) {
+    return { ok: false, reason: err?.message != null ? String(err.message) : String(err ?? 'خطای نامشخص') };
+  }
+}
+
+/** بازنشانی feed — فقط آزمون */
+export function resetServerStatusFeedForTests() {
+  serverStatusFeedInstalled = false;
+  if (serverStatusFeedTimer) { clearInterval(serverStatusFeedTimer); serverStatusFeedTimer = null; }
+  serverStatusCallbacks.clear();
+  lastServerStatusPayload = null;
+}
+
 /* ── موج ۴ (۴-۵) — راهنمای درون‌برنامه‌ای ─────────────────────────────────────────
    چکیدهٔ دستی و فشردهٔ docs/ADMIN-GUIDE.fa.md (نسخهٔ ساده برای مدیر غیرفنی) — در همین فایل
    تعبیه شده است؛ در زمان اجرا هیچ فایل راهنما خوانده نمی‌شود و هیچ مسیر تازه‌ای به ناوبری
@@ -1084,8 +1302,8 @@ export async function renderHealthPanel(outlet) {
     await lockBtn(btn, async () => {
       try {
         const [stateM, verifyM] = await Promise.all([
-          import('../../../src/cloud-setup/state.ts'),
-          import('../../../src/cloud-setup/verify.ts')
+          import('../../../../src/cloud-setup/state.ts'),
+          import('../../../../src/cloud-setup/verify.ts')
         ]);
         const rec = stateM.loadCloudRecord();
         if (!rec.worker_url || !rec.node_code) {
@@ -1127,9 +1345,9 @@ export async function renderHealthPanel(outlet) {
     await lockBtn(btn, async () => {
       try {
         const [stateM, runnerM, coordM] = await Promise.all([
-          import('../../../src/cloud-setup/state.ts'),
-          import('../../../src/node-sync-runner/runner.ts'),
-          import('../../../src/node-sync-runner/coordinator.ts')
+          import('../../../../src/cloud-setup/state.ts'),
+          import('../../../../src/node-sync-runner/runner.ts'),
+          import('../../../../src/node-sync-runner/coordinator.ts')
         ]);
         const rec = stateM.loadCloudRecord();
         const secureRes = await stateM.resolveSecureStore();
@@ -1321,6 +1539,138 @@ export async function renderHealthPanel(outlet) {
     );
   }
 
+  /* ── فاز A — کارت «سرور محلی» (لایهٔ دوم نشانگر؛ طرح §۱-۳) ─────────────────────
+     وضعیت/پورت‌ها/نسخهٔ اپ/آخرین بوت از feed مشترک پوسته (رویداد engine:status + poll
+     ۳۰ثانیه‌ای engine_status) — رندر کارت درجا با شنونده تازه می‌شود، بدون rebuild کل نما.
+     سه کنش: راه‌اندازی دوباره (engine_restart با تأیید فارسی — الگوی restartAction)،
+     بازکردن پوشهٔ دیتا (open_data_dir)، کپی اطلاعات عیب‌یابی (کلیپ‌بورد با fallback).
+     بیرون پوستهٔ میز (window.__TAURI__ غایب) → کارت خاکستری «حالت وب — سرور خارجی». */
+  function serverSection() {
+    const tauri = globalThis.__TAURI__;
+    const hasChannel = Boolean(tauri && (typeof tauri.invoke === 'function' || (tauri.event && typeof tauri.event.listen === 'function')));
+    if (!hasChannel) {
+      return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+        el('div', { class: 'card__head' },
+          el('h3', { style: { margin: 0 } }, 'سرور محلی'),
+          el('span', { class: 'badge badge--neutral' }, 'حالت وب')
+        ),
+        el('div', { class: 'card__body' },
+          el('p', { class: 'hint-text', style: { whiteSpace: 'normal' } },
+            'حالت وب — سرور خارجی: این نسخه بدون پوستهٔ میز اجرا شده و فرمان‌های موتور محلی (engine_status / engine_restart) در دسترس نیستند؛ سلامت موتور همین‌جا از کارت «موتور محلی» بالای پنل خوانده می‌شود.')
+        )
+      );
+    }
+    installServerStatusFeed();
+    const resultLine = el('div', { class: 'hint-text', style: { marginTop: 'var(--sp-2)', whiteSpace: 'normal' } });
+    const body = el('div', { class: 'card__body--flush' });
+    const card = el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
+      el('div', { class: 'ob-section__head' },
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+          el('h3', { style: { margin: 0 } }, 'سرور محلی'),
+          el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
+            'وضعیت زندهٔ موتور محلی از رویداد engine:status و بازخوانی ۳۰ثانیه‌ای پوسته — نقطهٔ رنگی همان نگاشت pill سربرگ است.')
+        )
+      ),
+      body
+    );
+
+    // «راه‌اندازی دوباره» — invoke engine_restart؛ Err فارسی با الگوی پیام موجود (restartAction)
+    async function engineRestartAction(btn) {
+      await lockBtn(btn, async () => {
+        const okGo = await confirmModal({
+          title: 'راه‌اندازی دوبارهٔ موتور محلی',
+          message: 'موتور محلی چند ثانیه خاموش می‌شود و خودش بالا می‌آید؛ ثبت‌های باز شما محفوظ می‌ماند. راه‌اندازی دوباره انجام شود؟',
+          confirmLabel: 'راه‌اندازی دوباره',
+          danger: true
+        });
+        if (!okGo) return;
+        const out = await engineInvoke('engine_restart');
+        if (out.ok) {
+          const text = 'راه‌اندازی دوباره فرمان گرفت — موتور چند ثانیه بعد خودش بالا می‌آید';
+          toast(text, 'success');
+          setResult(resultLine, text, 'warn');
+        } else if (out.reason === 'no-tauri-channel') {
+          setResult(resultLine, 'پوستهٔ میز در دسترس نیست — فرمان راه‌اندازی دوباره اجرا نشد', 'error');
+        } else {
+          toastError(new Error(out.reason));
+          setResult(resultLine, `راه‌اندازی دوباره انجام نشد: ${out.reason ?? 'خطای نامشخص'}`, 'error');
+        }
+      });
+    }
+
+    // «بازکردن پوشهٔ دیتا» — invoke open_data_dir (همان فرمان صفحهٔ بوت)
+    async function openDataDirAction(btn) {
+      await lockBtn(btn, async () => {
+        const out = await engineInvoke('open_data_dir');
+        if (out.ok) {
+          setResult(resultLine, 'پوشهٔ داده در مدیریت فایل ویندوز باز شد', 'ok');
+        } else if (out.reason === 'no-tauri-channel') {
+          setResult(resultLine, 'پوستهٔ میز در دسترس نیست — بازکردن پوشهٔ دیتا اجرا نشد', 'error');
+        } else {
+          setResult(resultLine, `بازکردن پوشهٔ دیتا ناموفق بود: ${out.reason ?? 'خطای نامشخص'}`, 'error');
+        }
+      });
+    }
+
+    // «کپی اطلاعات عیب‌یابی» — نسخه + state + reason + پورت‌ها + آخرین رویداد، با fallback
+    async function copyDiagAction(btn) {
+      await lockBtn(btn, async () => {
+        const copied = await copyTextToClipboard(serverDiagnosticsText(lastServerStatus()));
+        if (copied) {
+          toast('اطلاعات عیب‌یابی کپی شد — در پیام پشتیبانی بچسبانید', 'success');
+          setResult(resultLine, 'اطلاعات عیب‌یابی کپی شد', 'ok');
+        } else {
+          setResult(resultLine, 'کپی در کلیپ‌بورد ممکن نشد — مرورگر اجازه نداد', 'error');
+        }
+      });
+    }
+
+    let unsubscribed = false;
+    let unsubscribe = null;
+    const paint = (status) => {
+      // نما رندر دوباره شده (بازخوانی ۶۰ثانیه‌ای کل پنل) — اشتراک کهنه بسته شود
+      if (!body.isConnected) {
+        if (unsubscribe && !unsubscribed) { unsubscribed = true; unsubscribe(); }
+        return;
+      }
+      const view = serverStateView(status?.state, status?.degradedReason);
+      body.replaceChildren(
+        el('div', { class: 'ob-row' },
+          el('div', { class: 'ob-row__main' },
+            el('div', { class: 'cell-main' },
+              el('span', { class: `dot ${view.dot}`, style: { marginInlineEnd: 'var(--sp-2)' } }),
+              view.label),
+            el('div', { class: 'cell-sub' },
+              status
+                ? `${serverPortsView(status)} · آخرین رویداد: ${unixAgeView(status?.lastEventAtUnix)}`
+                : 'پاکت وضعیت هنوز از پوسته نرسیده — با بازخوانی ۳۰ثانیه‌ای پُر می‌شود')
+          ),
+          el('div', { class: 'ob-row__side' },
+            el('span', { class: `badge ${view.badge}` }, typeof status?.state === 'string' && status.state ? status.state : '—')
+          )
+        ),
+        el('div', { class: 'ob-row' },
+          el('div', { class: 'ob-row__main' },
+            el('div', { class: 'cell-main' }, 'نسخهٔ اپ · آخرین بوت'),
+            el('div', { class: 'cell-sub' },
+              `${typeof status?.appVersion === 'string' && status.appVersion ? status.appVersion : '—'} · ${unixJalaliView(status?.startedAtUnix)}`)
+          )
+        ),
+        el('div', { class: 'ob-row' },
+          el('div', { class: 'ob-row__side' },
+            el('button', { class: 'btn btn--primary', type: 'button', onclick: (e) => void engineRestartAction(e.currentTarget) }, 'راه‌اندازی دوباره'),
+            el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void openDataDirAction(e.currentTarget) }, 'بازکردن پوشهٔ دیتا'),
+            el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void copyDiagAction(e.currentTarget) }, 'کپی اطلاعات عیب‌یابی')
+          )
+        ),
+        resultLine
+      );
+    };
+    paint(lastServerStatus());
+    unsubscribe = subscribeServerStatus(paint);
+    return card;
+  }
+
   async function reload() {
     // ف۶ + EXP-2 — پنل سلامت، گزارش رشد، وضعیت هم‌گامی و سهمیهٔ مرکز هم‌زمان گرفته می‌شوند؛
     // خرابیِ هر بخش فقط کارت خودش را degraded می‌کند
@@ -1403,6 +1753,8 @@ export async function renderHealthPanel(outlet) {
       rescueBarSection(), // ۴-۲ — نوار نجات سه‌دکمه‌ای (راه‌اندازی دوباره / پشتیبان فوری / zip)
 
       oneGlanceSection(data, sync, quota, lastBackupAt), // ۴-۱ — پنج سیگنال §۴ نقد با اقدام
+
+      serverSection(), // فاز A — کارت «سرور محلی»: وضعیت زندهٔ FSM موتور + سه کنش پوسته (حالت وب → خاکستری)
 
       el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
         el('div', { class: 'card__head' },
