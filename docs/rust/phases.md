@@ -1,0 +1,74 @@
+# فازبندی تولید اپ دسکتاپ (خط rust) — اقدامات، گیت‌ها، معیار پذیرش
+
+> مکمل `docs/rust/design.md`. ترتیب بر مبنای وابستگی واقعی: شل → موتور → آموزش → سینک → بسته‌بندی → ممیزی. هر فاز «تعریف تمام‌شده» و گیت خروجی مشخص دارد؛ هیچ فازی بدون سبز بودن گیت‌هایش بسته نمی‌شود. کل خط **بدون دیپلوی وب** پیش می‌رود (حکم کارفرما) — دیپلوی فقط تصادفی‌است که خود کارفرما برای اپ ابری بدهد و از این خط مستقل است.
+
+## نمای کلی
+
+| فاز | نام | تحویل اصلی | گیت خروجی |
+|---|---|---|---|
+| ۱ | اسکلت دسکتاپ | پوستهٔ Tauri کامل در `desktop/` + گیت ساختار | `desktop:check` ✓ (+ گیت‌های وب سبز) |
+| ۲ | موتور محلی | اجرای آفلاین کامل سامانه روی loopback | `engine-smoke` + e2e پارتی روی 127.0.0.1 |
+| ۳ | توتوریال اولیه | تور نقش‌محور + دیتای نمایشی | vitest tutorial + بررسی دستی سه نقش |
+| ۴ | سینک ترکیبی | پاکت نود↔ورکر (pull/push سفیدفهرستی) | آزمون سینک + drill قطع/وصل |
+| ۵ | اتوران نصب | setup.exe NSIS + پک USB پورتابل | نصب تمیز ویندوز + اجرای آفلاین |
+| ۶ | ممیزی و پذیرش | بستهٔ تحویل نهایی + سند عملیات | چک‌لیست پذیرش کارفرما |
+
+## فاز ۱ — اسکلت دسکتاپ (اکنون شروع شده)
+
+**هدف**: ستون فقرات پروژه در مخزن، بدون وابستگی به toolchain — هر کس repo را بکشد ساختار و قواعد را ببیند.
+
+اقدامات:
+- [x] `docs/rust/design.md` + `docs/rust/phases.md` (این سند)
+- [x] `desktop/src-tauri/` — Cargo.toml، build.rs، main.rs/lib.rs (فرمان سلامت `desktop_health`)، tauri.conf.json (پنجرهٔ فارسی، frontendDist=../public، devUrl=loopback، NSIS)، capabilities/default.json
+- [x] آیکن‌های برنامه (icon.ico چندسایز + png) — نشان موقت هندسی، تا طرح گرافیکی نهایی کارفرما
+- [x] `scripts/desktop-check.mjs` + npm `desktop:check` — گیت ساختار/نسخه/آیکن/کانفیگ
+- [x] .gitignore دسکتاپ (target/)
+
+**تعریف تمام‌شده**: `npm run desktop:check` سبز + tsc/vitest وب سبز (خط src دست‌نخورده) + کامیت روی rust.
+**پذیرش کارفرما**: گزارش ساختاری این فاز (همین تحویل).
+
+## فاز ۲ — موتور محلی (قلب سیستم ترکیبی)
+
+**وضعیت (۱۴۰۵/۰۸/۲۱): ✅ تحویل‌شده — rust-f2 (کامیت‌های ۱۱۰۲۹۱۸/ecf989f).** گیت `engine:smoke` ۱۹/۱۹ (سلامت/پوسته/۴۰۱/ورود سه نقش/me/kpis/بسته‌های بازی/۴۰۴ کم‌دست §۵/سرویس بازی‌ها ۸۷۸۸/توکن مشترک/خاموشی تمیز). اسکریپت‌های نهایی: `engine:start` / `engine:smoke` / `seed:demo` (به‌جای engine:dev). جزئیات فنی: `docs/rust/engine.md` — کانفیگ capnp-text ورکرَد، چیدمان miniflare برای D1 فایل‌محور، assets با مانیفست دودویی. لایهٔ Rust سایدکار (`engine.rs`) نوشته شده؛ کامپایل آن در CI (`desktop-build.yml`).
+
+اقدامات: تولید کانفیگ workerd از قالب (باندل اصلی + باندل بازی + assets + D1 فایل‌محور)؛ لایهٔ Rust spawn/سلامت/خاموشی تمیز؛ سوییچ پنجره به loopback؛ مایگریشن خودکار در اولین اجرا؛ `npm run engine:dev` برای توسعهٔ محلی بدون Tauri.
+**گیت خروجی**: `scripts/engine-smoke.mjs` — بوت موتور روی D1 موقت، /health، ورود، یک جریان بازی §۵؛ e2e پارتی: پاسخ‌های موتور محلی == پاسخ‌های ورکر (نمونهٔ ۱۰ endpoint).
+**پذیرش**: روی یک ویندوز واقعی، `npm run desktop:dev` سامانه را آفلاین باز کند.
+
+## فاز ۳ — توتوریال اولیه
+
+**وضعیت (۱۴۰۵/۰۸/۲۱): ✅ تحویل‌شده — rust-f3 (۱۰۰b86b/a481218).** ۳۸ آزمون (شروع/رد/تکرار/نقش‌ها/گیت دوکاناله) — vitest ۲۳۲۱/۲۳۲۱؛ چانک lazy تور در dist فقط با گارد `__DESKTOP_SHELL__` fetch می‌شود (رفتار وب ثابت). «بررسی دستی سه نقش روی موتور محلی» به میز ویندوزی موکول است (پوشش آزمونی کامل با فِیک DOM).
+
+اقدامات: ماژول `tutorial` کلاینت (JSON گام‌ها × ۳ نقش، overlay، state)؛ `seed-demo` میز؛ دکمهٔ تکرار/پاک‌سازی در تنظیمات؛ FEATURES gate تا در وب خاموش بماند.
+**گیت خروجی**: vitest اختصاصی (شروع/ردشدن/تکرار/نقش‌ها) + بررسی دستی سه نقش روی موتور محلی.
+**پذیرش**: اجرای نخست، تور فارسی روان؛ «رد کردن» هیچ مسیری را قفل نکند.
+
+## فاز ۴ — سینک ترکیبی با ورکر Cloudflare
+
+**وضعیت (۱۴۰۵/۰۸/۲۱): ✅ تحویل‌شده سمت قرارداد — rust-f4 (۱d259da).** ۳۷ آزمون (احراز/سفید-فهرستی با رد صریح `patients`/idempotency/مُهر ۱۵دقیقه/cursor/drill خطای نرم) — پاکت `/node/pull·push·register·rotate-key·revoke·nodes` + مایگریشن ۰۱۰۹ + ماژول کلاینت `node-sync-client`؛ endpointها اکنون در باندل محلی موتور هم هست (بازسازی rust-f6). باقی‌مانده‌ها (سند §۵ node-sync.md): UI پنل مدیریت نود و پاکسازی خودکار `node_push_events`.
+
+اقدامات: ماژول سینک سمت نود با همان پاکت CP (node_code/node_key، idempotent، مُهر تلاش، گیت ۱۵دقیقه/۲۴ساعت)؛ فهرست سفید دامنه‌ها در کد (pull: اعلان/کتابخانه/بسته‌ها؛ push: گزارش/خطاها/سلامت — بدون دادهٔ بالینی)؛ صفحهٔ تنظیم سینک (فعال/خاموش/وضعیت آخرین همگامی)؛ ثبت دستی نود در اپ ابری فقط-مدیر.
+**گیت خروجی**: آزمون پاکت (آزمون‌های cp-sync موجود به‌عنوان قرارداد) + drill قطع/وصل (هیچ مسیری ساکت نشکند — الگوی §۳-۱۱).
+**پذیرش**: اعلان/بستهٔ بازی منتشرشده در ابر، آفلاینِ بعدی روی میز ظاهر شود؛ گزارش نود در پنل ابر ثبت شود.
+
+## فاز ۵ — اتوران نصب و توزیع
+
+**وضعیت (۱۴۰۵/۰۸/۲۱): ✅ تحویل‌شده تا حد سندباکس — rust-f5 (f1043b0).** `usb:pack` سبز و idempotent (autorun.inf UTF-16LE، VERSION.txt شمسی، README-نصب ۹بخشی؛ Setup.exe پس از اولین بیلد CI خودکار کپی و اعتبارسنجی می‌شود) + `docs/rust/installer.md` (NSIS/WebView2/امضا/چرخهٔ نصب). نصب تمیز ویندوز و autorun واقعی: در CI/VM.
+
+اقدامات: فعال‌سازی Tauri bundler NSIS (فارسی، per-user، حذف تمیز با نگه‌داشتن data)؛ پک USB: autorun.inf + Setup.exe + README فارسی؛ evergreen WebView2 bootstrapper؛ placeholder امضای کد؛ سند عملیات نصب/بروزرسانی/پشتیبان.
+**گیت خروجی**: نصب تمیز روی ویندوز ۱۰/۱۱ (VM) + اجرای آفلاین کامل + حذف/نصب مجدد بدون از دست رفتن data.
+**پذیرش**: USB در سیستم بدون اینترنت → autorun → نصب → اجرا.
+
+## فاز ۶ — ممیزی نهایی و پذیرش
+
+**وضعیت (۱۴۰۵/۰۸/۲۲): 🔶 در جریان — rust-f6 … rust-f13.** انجام‌شده: ادغام خطی چهار فاز در rust؛ هم‌گامی آرتیفکت؛ گردش‌کار CI دسکتاپ `.github/workflows/desktop-build.yml`. **rust-f7**: محیط راه‌اندازی نخست — ویزار ۴گامی + بخش «اتصال ابر» + مخزن امن Credential Manager (`secure_store.rs`) + تزریق `__DESKTOP_FEATURES__` (رفع باگ تور مرده در میز) — ۳۸ آزمون تازه، سند `docs/rust/cloud-setup.md`. **rust-f8**: drill یکپارچهٔ دسکتاپ `npm run drill:desktop` با کد و شبکهٔ واقعی (موتور/سینک/خرابی سه‌گانه) — گزارش در `docs/reports/desktop-drill-*.md`؛ ارزیابی پورت Rust: «بدون پورت — گزینهٔ A» (`docs/rust/port-rust-games.md`). **rust-f9 (مایلستون ۲ بخش ۸)**: بستن حلقهٔ pull سینک — زمان‌بند فرانت‌اند `src/node-sync-runner` (پنل «همگام‌سازی محتوا از ابر» زیر اتصال ابر: آخرین همگامی/خطا/شمارش + دکمهٔ دستی) + مسیر استقرار `/api/internal/sync/ingest|status` با گیت زمان‌اجرای `CENTER_DESKTOP_ENGINE` (فقط کانفیگ capnp موتور — باندل دو سمت یکسان، تولید وب ۴۰۴ کم‌دست) + صندوق ورودی `node_sync_inbox` (0110) با idempotency `(domain,id)` — فهرست سفید اکنون سه‌لایه (ابر/کلاینت/سرور میز). drill به **۳۱/۳۱** ارتقا یافت (استقرار واقعی + idempotency + وضعیت صندوق). گیت‌ها: tsc صفر · vitest **۲۴۱۴/۲۴۱۴ (۲۱۳ فایل)** · desktop:check · engine:smoke ۱۹/۱۹. **rust-f10 (مایلستون ۱ بخش ۸)**: ابطال سمت‌سرور نشست‌ها — مایگریشن `0111_auth_sessions` (sid/staff_id/issued_at/expires_at/revoked_at) + claim `sid` در JWT + چک اجباری ردیف در authMiddleware (توکن بی‌sid از صدور قدیم عمداً ۴۰۱ — ورود دوباره یک‌باره) + ثبت و هرس فرصت‌طلب منقضی‌ها در لاگین + ابطال ردیف در خروج — ۶ آزمون e2e تازه؛ گیت‌ها: tsc صفر · vitest **۲۴۲۰/۲۴۲۰ (۲۱۳ فایل)** · drill ۳۱/۳۱ · smoke ۱۹/۱۹ · desktop ۲۱/۲۱؛ ادغام به خط main برای تولید (با `wrangler migrations apply`) = تصمیم کارفرما. **rust-f11**: push نود سیم شد — outbox موتور `GET /api/internal/sync/outbox?since=` (فقط-موتور: `client_errors` با نگاشت به اسکیما و بدون `user_agent`، `health_ping` ساعت‌بکت، `usage_summary` skip مستند) + `pushNow()` زمان‌بند (watermark، هر ۸ وضعیت client.push نرم، `last_push_ok_at/last_push_error` در وضعیت) + پنل: نتیجهٔ پوش در خط وضعیت و ردیف «آخرین پوش به ابر»؛ drill **۳۳/۳۳** (قرارداد outbox روی موتور واقعی)؛ گیت‌ها: tsc صفر · vitest **۲۴۳۷/۲۴۳۷ (۲۱۴ فایل؛ ۱۷ آزمون تازه)** · smoke ۱۹/۱۹ · desktop ۲۱/۲۱. **rust-f12**: نگاشت صندوق + منبع usage_summary — مایگریشن `0112_synced_announcements` (جدول نمایشی مستقل؛ درج در announcements با `created_by NOT NULL REFERENCES staff` دروغ FK است) + UPSERT نرم در ingest (صندوق transport log می‌ماند؛ خطای نگاشت هرگز ingest را نمی‌شکند؛ فیلد `synced_announcements` در status) + آیتم `usage_summary` بکت روزانه با ۶ شمارندهٔ تجمیعی بی‌PII (`students_active/appointments_total/appointments_7d/day_notes_total/audit_events_24h/inbox_items_total` — همهٔ دامنه‌های فهرست سفید push اکنون منبع دارند) — drill **۳۴/۳۴**؛ گیت‌ها: tsc صفر · vitest **۲۴۴۹/۲۴۴۹ (۲۱۴ فایل؛ ۱۲ آزمون تازه)** · smoke ۱۹/۱۹ · desktop ۲۱/۲۱. **فیکس CI (اولین اجرای واقعی گردش‌کار)**: سه شکست تکرارشوندهٔ همهٔ اجراهای قبلی رفع شد — E0277 «?» در تابع bool (engine.rs:66)، E0599 `kill_on_drop` متد توکیو روی std::Command (حذف؛ خاموشی با Drop ساختار LocalEngine)، `frontendDist` نادرست «../public»→«../../public» (خروجی build:client در ریشه است؛ desktop:check هم‌گام). **rust-f13 (گیت فاز ۲ ردیف ۹ — سایدکار در نصاب)**: `scripts/engine/config.mjs` قالب capnp توکن‌دار گرفت (`buildInstallerCapnpTemplate` با سه توکن `__CENTER_DATA_DIR__/__CENTER_PUBLIC_DIR__/__CENTER_AUTH_SECRET__` و ENV=production — دور زدن dev در نصب واقعی خاموش) + `scripts/desktop/config.mjs` منبع یکتای pin (`workerd@1.20250718.0` هم‌گام با مخزن، نگاشت هدف→بستهٔ رسمی npm، قرارداد نام سایدکار) + `build-installer-runtime.mjs`: دانلود سایدکار از رجیستری رسمی npm (۷۴MB، sha256 ثبت)، کپی public برای دیسک assets، **d1-seed مایگریت‌شده (۱۱۵/۱۱۵ + seed نمایشی — در نصب کاربر Node نیست؛ مایگریشن زمان بسته‌بندی)**، قالب capnp ۶.۵MB و manifest ثبت‌هش با `--check`؛ tauri.conf: `externalBin binaries/workerd` + `resources resources/engine/**/*`؛ engine.rs: کاندیداهای سایدکار (کنار exe / زیر binaries/ / شکل dev با پسوند هدف) + stderr سایدکار → `data/workerd.log`؛ lib.rs: `boot_engine` — کپی d1-seed فقط در بوت نخست، راز per-install در `auth-secret.txt` (بدون وابستهٔ جدید)، جایگزینی توکن‌ها → capnp نهایی در data dir (مسیر توسعه `CENTER_ENGINE_CONFIG` حفظ شد)؛ گام CI مونتاژ پیش از بیلد + desktop:check با ۱۳ بررسی تازه. اجرای محلی کامل ✓: `--check` سبز (sha256=9bab550c…)، smoke ۱۹/۱۹، drill ۳۴/۳۴، tsc صفر، vitest ۲۴۴۹/۲۴۴۹. **فیکس‌های CI (سه شکست در دو اجرا — همهٔ گردش‌کارها سبز شدند)**: ① ویندوز: ENOENT مسیر «D:\D:\…» — REPO_ROOT در engine-paths/engine-config با `fileURLToPath` ② cargo-check لینوکس: tauri-build در کامپایل هم `externalBin` را الزامی می‌داند → گام مونتاژ رانتایم لینوکس در job اضافه شد ③ گیت انتشار ف۳: پنل سینک rust-f9 با import پویا از گراف بوت وب خارج شد (run.ts: append غیرهمگام — چانک فقط-میز در وب واکشی نمی‌شود) و ratchet مستند `eager_modules` ۵→۶ (دو چانک شیم esbuild + سیم‌کشی setup/tutorial؛ نامزد مایلستون لاغرسازی بوت) + سطرهای 110/111/112 در MIGRATIONS.md و «شمارهٔ بعدی = 0113» — نتیجه: **desktop-build سبز (نصاب ۲۲.۲MB با سایدکار داخلش) + ci.yml سبز (تایپ/آزمون/بودجه/همگامی)**. **باقی‌مانده**: نمایش UI اطلاعیه‌های سینک‌شده از synced_announcements، نصب تمیز VM ویندوز + سناریوی USB + شبیه‌سازی دیسک-پر، ادغام rust به main (PR + `wrangler migrations apply` پیش از فعال‌سازی) — امضای چک‌لیست پذیرش.
+
+اقدامات باقی‌مانده فاز ۶: پایش CI دسکتاپ (cargo-check + NSIS) و دریافت آرتیفکت Setup.exe؛ نصب تمیز VM ویندوز + سناریوی USB + شبیه‌سازی دیسک-پر؛ نمایش UI اطلاعیه‌های سینک‌شده از synced_announcements؛ ادغام rust به main با ترتیب امن (اول `wrangler migrations apply` روی D1 تولید، بعد merge PR — پوش به main ایمیج ghcr را هم منتشر می‌کند)؛ بستهٔ تحویل نهایی + امضای چک‌لیست پذیرش کارفرما.
+**پذیرش**: امضای چک‌لیست پذیرش.
+
+## قواعد حاکم بر کل خط rust
+
+1. هر کامیت: گیت‌های وب مربوط به دست‌خوردگی + گیت فاز جاری؛ کامیت فارسی با شماره فاز (`rust-f1`, `rust-f2`, …).
+2. بدون دیپلوی، بدون دست‌زدن به خط main (تولید اپ ابری). فیکس‌های وب لازم → جدا در main، بعد merge به rust.
+3. دادهٔ بالینی هرگز از میز خارج نمی‌شود (فهرست سفید کد، بند ۵ design.md).
+4. نسخهٔ دسکتاپ = `APP_VERSION` منبع؛ گیت desktop-check ناهم‌گامی را می‌گیرد.

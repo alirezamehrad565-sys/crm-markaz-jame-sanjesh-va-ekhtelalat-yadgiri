@@ -32,6 +32,26 @@ async function drawPublicAnnouncements(box) {
   }
 }
 
+/* v1.26.0 — راهنمای نصب اولیه: فقط تا وقتی راه‌اندازی کامل نشده (docs/rust/first-run-and-cloud.md §۲).
+   هر خطا خاموش است — این کارت کمک است نه شرط ورود؛ پس از بستن حساب نمایشی دیگر ظاهر نمی‌شود. */
+async function drawFirstRunHint(box) {
+  try {
+    const res = await api.getDetached('/api/setup/status');
+    if (!res?.data || res.data.initialized !== false) return;
+    box.replaceChildren(
+      el('div', { class: 'alert alert--info', style: { textAlign: 'start' } },
+        icon('info', 16),
+        el('div', {},
+          el('b', { style: { display: 'block', fontSize: 'var(--fs-sm)' } }, 'راه‌اندازی اولیه'),
+          el('span', { style: { fontSize: 'var(--fs-xs)', color: 'var(--text-2)' } },
+            'با حساب شروع کار وارد شوید: نام کاربری manager و رمز 1234. بعد از ساخت حساب‌های مرکز در ویزار راه‌اندازی، این حساب بسته می‌شود.')
+        )
+      )
+    );
+  } catch {
+  }
+}
+
 export function renderLoginPage(onSuccess) {
   const shell = document.querySelector('.shell');
   if (shell) shell.style.display = 'none';
@@ -64,6 +84,7 @@ export function renderLoginPage(onSuccess) {
   });
   const errorBox = el('div', { class: 'login__error', style: { display: 'none' } });
   const annBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
+  const hintBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
 
   const submit = async () => {
     errorBox.style.display = 'none';
@@ -117,11 +138,13 @@ export function renderLoginPage(onSuccess) {
       el('div', { class: 'login__title' }, 'مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام'),
       el('div', { class: 'login__sub' }, 'سامانهٔ مدیریت نوبت‌دهی، سنجش و مراجعان'),
       form,
+      hintBox,
       annBox
     )
   );
 
   drawPublicAnnouncements(annBox);
+  drawFirstRunHint(hintBox);
   setTimeout(() => userInput.focus(), 50);
 
   return { submit };

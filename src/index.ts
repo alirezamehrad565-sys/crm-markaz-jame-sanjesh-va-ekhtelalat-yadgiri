@@ -41,6 +41,8 @@ export interface Env {
   ALERT_CLIENT_ERRORS_MAX?: number;
   /** ف۵ (P0-3) — kill-switch هشدار خودکار؛ رشتهٔ راستین («۱»/«true») ارزیابی را کامل خاموش می‌کند */
   ALERTS_DISABLED?: string;
+  /** ENG-4 (۱.۲۶.۴) — نشانی /health ورکر بازی‌ها؛ فقط در کانفیگ موتور محلی بسته می‌شود (config.mjs) */
+  GAMES_HEALTH_URL?: string;
 }
 
 /* ۱.۲۵.۵۷ — توکن بات دو منبع دارد: env اولویت، سپس settings.bale_bot_token (ثبت کاربر).
@@ -192,6 +194,8 @@ async function runBatchDispatchCycle(env: Env): Promise<void> {
 
 // پشتیبان خودکار شبانه: اگر مدیر فعالش کرده باشد، فایل پشتیبان به
 // مقصدهای بلهٔ انتخاب‌شده فرستاده می‌شود (همان cron دیجست، بعد از آن اجرا می‌شود)
+// ۱.۲۶.۴ — پیش از ارسال، «آخرین پشتیبان تأییدشده» در آرشیو محلی (settings) تازه می‌شود تا
+// دکمهٔ «دریافت پشتیبان فوری» (GET /api/backup/download) همیشه پشتیبانِ شب‌گذشته را داشته باشد.
 async function runBackupAutoSendCycle(env: Env): Promise<void> {
   const db = createDb(env.DB);
   const audit = createAuditWriter(db);
@@ -204,11 +208,15 @@ async function runBackupAutoSendCycle(env: Env): Promise<void> {
     ...(await buildRuntimeEnv(env, db))
   });
 
+  const archive = await services.backup.archiveLatest({ staffId: 'system' }).catch((err: unknown) => {
+    logger.error('backup.archive.failed', { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  });
   const outcome = await services.backup.runScheduledAutoSend().catch((err: unknown) => {
     logger.error('backup.auto.failed', { error: err instanceof Error ? err.message : String(err) });
     return null;
   });
-  logger.info('backup.auto.cycle.done', { outcome });
+  logger.info('backup.auto.cycle.done', { archive, outcome });
 }
 
 /** چرخهٔ سینک اعلان CP — کرون اختصاصی یا سلف‌هاست؛ مُهر تلاش مشترک با دروازهٔ فرصت‌طلب */
@@ -368,7 +376,8 @@ export default {
       cpNodeCode: cpContentCfg.cpNodeCode,
       cpNodeKey: cpContentCfg.cpNodeKey,
       envName: env.ENV ?? null, // ۱.۲۵.۶۷ — پنل سلامت
-      clientErrorsMax: env.ALERT_CLIENT_ERRORS_MAX ?? null // ف۵ (P0-3) — آستانهٔ هشدار خطاهای مرورگر
+      clientErrorsMax: env.ALERT_CLIENT_ERRORS_MAX ?? null, // ف۵ (P0-3) — آستانهٔ هشدار خطاهای مرورگر
+      gamesHealthUrl: env.GAMES_HEALTH_URL ?? null // ENG-4 (۱.۲۶.۴) — پایش ورکر بازی‌ها
     });
     return app.fetch(request, env, ctx);
   },

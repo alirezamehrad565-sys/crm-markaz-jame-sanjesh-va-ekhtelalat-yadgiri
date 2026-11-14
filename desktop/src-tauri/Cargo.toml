@@ -1,0 +1,36 @@
+[package]
+name = "center-desktop"
+version = "1.27.6"
+description = "مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام — نسخهٔ میز"
+edition = "2021"
+
+# نسخهٔ پوسته = نسخهٔ منبع (APP_VERSION در src/core/version.ts) — گیت desktop:check ناهم‌گامی را می‌گیرد
+
+[lib]
+name = "center_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde_json = "1"
+# rust-f7 — مخزن امن رازهای اتصال ابر (Credential Manager ویندوز؛ در CI لینوکس با secret-service)
+keyring = "3"
+# v1.26.0 — ماژول کلادفلر (cf_deploy.rs): HTTPS با rustls (بدون OpenSSL) + multipart آپلود ورکر
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "multipart"] }
+# runtime async تائوری روی tokio است — انتظار بین پروب‌های healthz
+tokio = { version = "1", features = ["time"] }
+# پیگیری مایگریشن‌ها (deploy_plan.rs) — checksum فایل‌ها؛ تنها وابستهٔ جدید مجاز (pure-Rust، بدون کتابخانهٔ سیستم)
+sha2 = "0.10"
+# F — تکی‌نمونه (بستن ریسک #۱۰): نمونهٔ دوم بلافاصله بسته می‌شود و کاربر به پنجرهٔ موجود
+# برمی‌گردد — جلوگیری از دو موتور/دو پنجره روی یک dataDir. باید اولین plugin زنجیرهٔ builder باشد.
+tauri-plugin-single-instance = "2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

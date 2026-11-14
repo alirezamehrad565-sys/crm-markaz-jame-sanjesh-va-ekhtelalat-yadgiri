@@ -1823,7 +1823,8 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.75";
+var APP_VERSION = "1.27.4";
+var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -23590,15 +23591,18 @@ async function hmacKey(secret) {
   );
 }
 __name(hmacKey, "hmacKey");
-async function signSessionJwt(staff, secret) {
+async function signSessionJwt(staff, secret, opts) {
   const now = Math.floor(Date.now() / 1e3);
+  const sid = opts?.sid ?? crypto.randomUUID();
+  const ttl = opts?.ttlSeconds ?? SESSION_TTL_SECONDS;
   const payload = {
     sub: staff.id,
     name: staff.fullName,
     role: staff.role,
     email: staff.email,
+    sid,
     iat: now,
-    exp: now + SESSION_TTL_SECONDS
+    exp: now + ttl
   };
   const header = { alg: "HS256", typ: "JWT" };
   const headerB64 = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)));
@@ -23607,7 +23611,7 @@ async function signSessionJwt(staff, secret) {
   const key = await hmacKey(secret);
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
   const token = `${data}.${base64UrlEncode(new Uint8Array(sig))}`;
-  return { token, expiresAt: new Date(payload.exp * 1e3).toISOString() };
+  return { token, expiresAt: new Date(payload.exp * 1e3).toISOString(), sid };
 }
 __name(signSessionJwt, "signSessionJwt");
 async function verifySessionJwt(token, secret) {
@@ -23805,6 +23809,14 @@ function authMiddleware() {
       const sessionToken = authHeader.slice(7).trim();
       const payload2 = await verifySessionJwt(sessionToken, await resolveSessionSecret(env));
       if (payload2) {
+        if (!payload2.sid) {
+          throw new AuthError("\u062A\u0648\u06A9\u0646 \u0641\u0627\u0642\u062F \u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0634\u0633\u062A \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+        }
+        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+        const session = await db.prepare("SELECT revoked_at, expires_at FROM auth_sessions WHERE sid = ?").bind(payload2.sid).first();
+        if (!session || session.revoked_at !== null || session.expires_at <= nowIso) {
+          throw new AuthError("\u0646\u0634\u0633\u062A \u0628\u0627\u0637\u0644 \u06CC\u0627 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+        }
         const staff2 = await getStaffById(db, payload2.sub);
         if (!staff2 || staff2.active !== 1) {
           throw new AuthError("\u06A9\u0627\u0631\u0628\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F \u06CC\u0627 \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0627\u0633\u062A");
@@ -23813,7 +23825,8 @@ function authMiddleware() {
           staffId: staff2.id,
           email: staff2.email,
           role: staff2.role,
-          displayName: staff2.full_name
+          displayName: staff2.full_name,
+          sessionId: payload2.sid
         });
         return next();
       }
@@ -31615,15 +31628,15 @@ __name(m108NormalizeChecklistTexts, "m108NormalizeChecklistTexts");
 function m108NormalizeChecklistItems(items) {
   if (!items || items.length === 0) return null;
   const seen = /* @__PURE__ */ new Set();
-  const clean5 = [];
+  const clean6 = [];
   for (const it of items) {
     const text = it.text.trim();
     if (!text || seen.has(text)) continue;
     seen.add(text);
-    clean5.push({ text, done: Boolean(it.done) });
-    if (clean5.length >= TODO_CHECKLIST_MAX) break;
+    clean6.push({ text, done: Boolean(it.done) });
+    if (clean6.length >= TODO_CHECKLIST_MAX) break;
   }
-  return clean5.length > 0 ? JSON.stringify(clean5) : null;
+  return clean6.length > 0 ? JSON.stringify(clean6) : null;
 }
 __name(m108NormalizeChecklistItems, "m108NormalizeChecklistItems");
 function createTodosService(deps) {
@@ -31818,9 +31831,9 @@ function createTodosService(deps) {
       return rowToTodo(updated);
     },
     async addChecklistItem(id, text, actor) {
-      const clean5 = text.trim();
-      if (!clean5) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
-      if (clean5.length > 200) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+      const clean6 = text.trim();
+      if (!clean6) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
+      if (clean6.length > 200) throw new ValidationError("\u0645\u0648\u0631\u062F \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
       await db.transaction(async (tx) => {
         const row = await loadActiveRow(tx, id);
         if (row.assigner_id !== actor.staffId && row.assignee_id !== actor.staffId) {
@@ -31833,10 +31846,10 @@ function createTodosService(deps) {
         if (items.length >= TODO_CHECKLIST_MAX) {
           throw new ValidationError(`\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0628\u06CC\u0634 \u0627\u0632 ${TODO_CHECKLIST_MAX} \u0645\u0648\u0631\u062F \u0646\u062F\u0627\u0631\u062F`);
         }
-        if (items.some((it) => it.text === clean5)) {
+        if (items.some((it) => it.text === clean6)) {
           throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0648\u0631\u062F \u0627\u0632 \u0642\u0628\u0644 \u062F\u0631 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0647\u0633\u062A");
         }
-        items.push({ text: clean5, done: false });
+        items.push({ text: clean6, done: false });
         await tx.execute(`UPDATE todos SET checklist = ?, updated_at = datetime('now') WHERE id = ?`, [
           JSON.stringify(items),
           id
@@ -32769,11 +32782,11 @@ function createExerciseBankService(deps) {
     },
     // کدام شناسه‌ها واقعاً تمرینِ حذف‌نشدهٔ بانک‌اند (برای اعتبارسنجی لینک کارت طرح درمان)
     async idsExist(ids) {
-      const clean5 = [...new Set(ids.filter((x) => typeof x === "string" && x.length > 0))].slice(0, 50);
-      if (!clean5.length) return /* @__PURE__ */ new Set();
+      const clean6 = [...new Set(ids.filter((x) => typeof x === "string" && x.length > 0))].slice(0, 50);
+      if (!clean6.length) return /* @__PURE__ */ new Set();
       const rows = await db.query(
-        `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${clean5.map(() => "?").join(", ")})`,
-        clean5
+        `SELECT id FROM exercises WHERE deleted_at IS NULL AND id IN (${clean6.map(() => "?").join(", ")})`,
+        clean6
       );
       return new Set(rows.map((r) => r.id));
     },
@@ -51460,8 +51473,8 @@ function assertPlainTone(text) {
 }
 __name(assertPlainTone, "assertPlainTone");
 function shortLine(text, max = 120) {
-  const clean5 = text.replace(/\s+/g, " ").trim();
-  return Array.from(clean5).length <= max ? clean5 : `${Array.from(clean5).slice(0, max - 1).join("").trim()}\u2026`;
+  const clean6 = text.replace(/\s+/g, " ").trim();
+  return Array.from(clean6).length <= max ? clean6 : `${Array.from(clean6).slice(0, max - 1).join("").trim()}\u2026`;
 }
 __name(shortLine, "shortLine");
 function sawOf(h) {
@@ -62906,6 +62919,32 @@ async function countSafe(db, sql, params = []) {
   }
 }
 __name(countSafe, "countSafe");
+async function probeGames(db, url2) {
+  if (!url2) return { ok: false, port: null, last_restart: null };
+  let port = null;
+  try {
+    port = new URL(url2).port ? Number(new URL(url2).port) : null;
+  } catch {
+    port = null;
+  }
+  try {
+    const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [
+      "sys_games_health"
+    ]);
+    if (!row?.value) return { ok: false, port, last_restart: null };
+    const snap = JSON.parse(row.value);
+    const checkedAt = typeof snap.checked_at === "string" ? Date.parse(snap.checked_at) : NaN;
+    const fresh = Number.isFinite(checkedAt) && Date.now() - checkedAt < 3e4;
+    return {
+      ok: snap.ok === true && fresh,
+      port,
+      last_restart: typeof snap.boot_ts === "string" ? snap.boot_ts : null
+    };
+  } catch {
+    return { ok: false, port, last_restart: null };
+  }
+}
+__name(probeGames, "probeGames");
 function createHealthService(deps) {
   const { db, cpConfigured, envName } = deps;
   const clientErrorsMax = parseClientErrorsMax(deps.clientErrorsMax);
@@ -62982,7 +63021,8 @@ function createHealthService(deps) {
           channels
         },
         alerts: [],
-        alerts_last_evaluated_at: await readAlertsSeal(db)
+        alerts_last_evaluated_at: await readAlertsSeal(db),
+        games: await probeGames(deps.db, deps.gamesHealthUrl ?? null)
       };
       panelData.alerts = deriveAlerts(panelData, clientErrorsMax);
       return panelData;
@@ -63000,6 +63040,513 @@ function registerHealthRoutes(app, service) {
   });
 }
 __name(registerHealthRoutes, "registerHealthRoutes");
+
+// src/core/human-events/index.ts
+var HUMAN_EVENTS_QUEUE_KEY = "sys_human_events";
+var HUMAN_EVENTS_MAX = 200;
+async function pushHumanEvent(db, msg, source) {
+  try {
+    let list = [];
+    const row = await db.queryOne(`SELECT value FROM settings WHERE key = ?`, [
+      HUMAN_EVENTS_QUEUE_KEY
+    ]);
+    if (row?.value) {
+      const parsed = JSON.parse(row.value);
+      if (Array.isArray(parsed)) list = parsed;
+    }
+    list.push({ ts: (/* @__PURE__ */ new Date()).toISOString(), source, msg });
+    while (list.length > HUMAN_EVENTS_MAX) list.shift();
+    await db.execute(
+      `INSERT INTO settings (key, value, updated_by) VALUES (?, ?, 'system')
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'system', updated_at = datetime('now')`,
+      [HUMAN_EVENTS_QUEUE_KEY, JSON.stringify(list)]
+    );
+  } catch {
+  }
+}
+__name(pushHumanEvent, "pushHumanEvent");
+async function readHumanEvents(db, limit = HUMAN_EVENTS_MAX) {
+  try {
+    const row = await db.queryOne(`SELECT value FROM settings WHERE key = ?`, [
+      HUMAN_EVENTS_QUEUE_KEY
+    ]);
+    if (!row?.value) return [];
+    const parsed = JSON.parse(row.value);
+    return Array.isArray(parsed) ? parsed.slice(-limit) : [];
+  } catch {
+    return [];
+  }
+}
+__name(readHumanEvents, "readHumanEvents");
+
+// src/node-sync-runner/status.ts
+var NODE_SYNC_STATUS_MIRROR_KEY = "nodesync:status-mirror-v1";
+var SYNC_MODES = ["auto", "quarantined", "paused_version"];
+var SYNC_STATES = ["idle", "catching_up", "synced", "error", "offline"];
+var FAILURE_KINDS = ["none", "network", "server", "throttled", "auth", "version", "ingest", "unconfigured"];
+var NodeSyncStatusMirrorSchema = external_exports.object({
+  v: external_exports.literal(1),
+  mode: external_exports.enum(SYNC_MODES),
+  state: external_exports.enum(SYNC_STATES),
+  last_pull_cursor_at: external_exports.iso.datetime().nullable(),
+  last_push_ok_at: external_exports.iso.datetime().nullable(),
+  last_pull_ok_at: external_exports.iso.datetime().nullable(),
+  last_error_kind: external_exports.enum(FAILURE_KINDS).nullable(),
+  last_error_at: external_exports.iso.datetime().nullable(),
+  push_watermark: external_exports.iso.datetime().nullable(),
+  client_version: external_exports.string().max(50).nullable(),
+  // ─── موج ۱ — هندشیک نسخه (۱-۴)، ساعت مرجع مرکز (۱-۳)، خلاصهٔ جبران کامل ───
+  version: external_exports.object({
+    client: external_exports.string().min(1).max(50),
+    center: external_exports.string().min(1).max(50),
+    compatible: external_exports.boolean()
+  }).nullable().optional(),
+  clock_drift_minutes: external_exports.number().int().min(0).max(525600).nullable().optional(),
+  clock_warning: external_exports.boolean().optional(),
+  last_catchup: external_exports.object({
+    at: external_exports.iso.datetime(),
+    pulled: external_exports.number().int().min(0),
+    pushed: external_exports.number().int().min(0)
+  }).nullable().optional(),
+  // ─── EXP-1 (نسخهٔ ۳) — نتیجهٔ آخرین آشتی‌ساز؛ آینهٔ قدیمیِ بدونِ آن هم پذیرفته می‌شود ───
+  reconciliation: external_exports.object({
+    at: external_exports.iso.datetime(),
+    ok: external_exports.boolean(),
+    differences: external_exports.number().int().min(0),
+    // سقف ۵ ردیف ناهم‌خوانی — آینهٔ RECONCILE_MAX_DETAIL سمت runner
+    detail: external_exports.array(
+      external_exports.object({
+        domain: external_exports.string().min(1).max(40),
+        center: external_exports.number().int().min(0),
+        local: external_exports.number().int().min(0)
+      })
+    ).max(5).nullable()
+  }).nullable().optional(),
+  updated_at: external_exports.iso.datetime()
+});
+function requireDesktopEngine(c) {
+  if (c.env?.CENTER_DESKTOP_ENGINE !== "1") {
+    throw new NotFoundError("\u0645\u0633\u06CC\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
+  }
+}
+__name(requireDesktopEngine, "requireDesktopEngine");
+async function readMirror(db) {
+  try {
+    const row = await db.queryOne(
+      "SELECT value FROM settings WHERE key = ?",
+      [NODE_SYNC_STATUS_MIRROR_KEY]
+    );
+    if (!row) return null;
+    const parsed = NodeSyncStatusMirrorSchema.safeParse(JSON.parse(row.value));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+__name(readMirror, "readMirror");
+async function writeMirror(db, mirror) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
+    [NODE_SYNC_STATUS_MIRROR_KEY, JSON.stringify(mirror)]
+  );
+}
+__name(writeMirror, "writeMirror");
+async function pendingPushCount(db, watermark) {
+  let count = 0;
+  try {
+    if (watermark) {
+      const cutoff = watermark.slice(0, 19).replace("T", " ");
+      const row = await db.queryOne(
+        "SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at > ?",
+        [cutoff]
+      );
+      count += Number(row?.n ?? 0);
+    } else {
+      const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors");
+      count += Number(row?.n ?? 0);
+    }
+  } catch {
+  }
+  try {
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const hourBucket = `${nowIso.slice(0, 13)}:00:00Z`;
+    const dayBucket = `${nowIso.slice(0, 10)}T00:00:00Z`;
+    const ahead = /* @__PURE__ */ __name((at) => !watermark || Date.parse(at) > Date.parse(watermark), "ahead");
+    if (ahead(hourBucket)) count += 1;
+    if (ahead(dayBucket)) count += 1;
+  } catch {
+  }
+  return count;
+}
+__name(pendingPushCount, "pendingPushCount");
+function cursorAgeDays(cursorAt, nowMs) {
+  const t = Date.parse(cursorAt);
+  if (Number.isNaN(t)) return null;
+  return Math.max(0, Math.round((nowMs - t) / 864e5 * 10) / 10);
+}
+__name(cursorAgeDays, "cursorAgeDays");
+function registerNodeSyncStatusRoute(app, deps) {
+  const log = deps.logger.child("node-sync-status");
+  app.post("/api/node-sync/status", async (c) => {
+    requireDesktopEngine(c);
+    getAuthContext(c);
+    const parsed = NodeSyncStatusMirrorSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError("\u0627\u0633\u0646\u067E\u200C\u0634\u0627\u062A \u0648\u0636\u0639\u06CC\u062A \u0633\u06CC\u0646\u06A9 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+    await writeMirror(deps.db, parsed.data);
+    log.info("status_mirror.ok", { state: parsed.data.state, mode: parsed.data.mode });
+    return c.json({ data: { ok: true } }, 200);
+  });
+  app.get("/api/node-sync/status", async (c) => {
+    requireDesktopEngine(c);
+    getAuthContext(c);
+    const mirror = await readMirror(deps.db);
+    const nowMs = Date.now();
+    const errorKind = mirror?.last_error_kind ?? null;
+    const payload = {
+      mode: mirror?.mode ?? "auto",
+      state: mirror?.state ?? "idle",
+      pending_push: await pendingPushCount(deps.db, mirror?.push_watermark ?? null),
+      last_pull_cursor_age_days: mirror?.last_pull_cursor_at ? cursorAgeDays(mirror.last_pull_cursor_at, nowMs) : null,
+      last_push_ok_at: mirror?.last_push_ok_at ?? null,
+      last_pull_ok_at: mirror?.last_pull_ok_at ?? null,
+      last_error: errorKind && errorKind !== "none" && mirror?.last_error_at ? { kind: errorKind, at: mirror.last_error_at } : null,
+      // ─── موج ۱ — آینهٔ غایب/قدیمی = پیش‌فرض نرم (اسنپ‌شات تازه از runner می‌آید) ───
+      version: mirror?.version ?? null,
+      clock_drift_minutes: mirror?.clock_drift_minutes ?? null,
+      clock_warning: mirror?.clock_warning === true,
+      last_catchup: mirror?.last_catchup ?? null,
+      // ─── EXP-1 (نسخهٔ ۳) — آشتی‌ساز؛ آینهٔ قدیمی بدونِ این فیلد = null نرم ───
+      reconciliation: mirror?.reconciliation ?? null
+    };
+    return c.json(payload, 200);
+  });
+}
+__name(registerNodeSyncStatusRoute, "registerNodeSyncStatusRoute");
+
+// src/application/system/zip.ts
+var CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) {
+      c = c & 1 ? 3988292384 ^ c >>> 1 : c >>> 1;
+    }
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+function crc32(bytes) {
+  let crc = 4294967295;
+  for (let i = 0; i < bytes.length; i += 1) {
+    crc = CRC_TABLE[(crc ^ bytes[i]) & 255] ^ crc >>> 8;
+  }
+  return (crc ^ 4294967295) >>> 0;
+}
+__name(crc32, "crc32");
+function dosDateTime(d) {
+  const date5 = (Math.max(0, d.getUTCFullYear() - 1980) & 127) << 9 | d.getUTCMonth() + 1 << 5 | d.getUTCDate();
+  const time3 = d.getUTCHours() << 11 | d.getUTCMinutes() << 5 | Math.floor(d.getUTCSeconds() / 2);
+  return { date: date5, time: time3 };
+}
+__name(dosDateTime, "dosDateTime");
+function zipText(text) {
+  return new TextEncoder().encode(text);
+}
+__name(zipText, "zipText");
+var U16 = /* @__PURE__ */ __name((v) => [v & 255, v >>> 8 & 255], "U16");
+var U32 = /* @__PURE__ */ __name((v) => [v & 255, v >>> 8 & 255, v >>> 16 & 255, v >>> 24 & 255], "U32");
+function buildStoreZip(entries, now = /* @__PURE__ */ new Date()) {
+  const { date: dosDate, time: dosTime } = dosDateTime(now);
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const nameBytes = zipText(entry.name);
+    const crc = crc32(entry.data);
+    const size = entry.data.length;
+    const lfh = [
+      80,
+      75,
+      3,
+      4,
+      // امضای PK\x03\x04
+      ...U16(20),
+      // نسخهٔ لازم برای استخراج
+      ...U16(2048),
+      // پرچم: نام UTF-8
+      ...U16(0),
+      // روش ذخیره = STORE
+      ...U16(dosTime),
+      ...U16(dosDate),
+      ...U32(crc),
+      ...U32(size),
+      // حجم فشرده‌شده (= خودش در STORE)
+      ...U32(size),
+      // حجم اصلی
+      ...U16(nameBytes.length),
+      ...U16(0)
+      // طول فیلد اضافی
+    ];
+    const lfhBytes = new Uint8Array(lfh);
+    chunks.push(lfhBytes, nameBytes, entry.data);
+    const cd = [
+      80,
+      75,
+      1,
+      2,
+      // امضای PK\x01\x02
+      ...U16(20),
+      ...U16(20),
+      // نسخهٔ ساخت / نسخهٔ لازم
+      ...U16(2048),
+      ...U16(0),
+      ...U16(dosTime),
+      ...U16(dosDate),
+      ...U32(crc),
+      ...U32(size),
+      ...U32(size),
+      ...U16(nameBytes.length),
+      ...U16(0),
+      ...U16(0),
+      // فیلد اضافی / توضیح
+      ...U16(0),
+      ...U16(0),
+      // شماره دیسک / ویژگی‌های درونی
+      ...U32(0),
+      // ویژگی‌های بیرونی
+      ...U32(offset)
+      // آفست local header
+    ];
+    central.push(new Uint8Array(cd), nameBytes);
+    offset += lfhBytes.length + nameBytes.length + size;
+  }
+  const centralStart = offset;
+  let centralSize = 0;
+  for (const c of central) centralSize += c.length;
+  const eocd = [
+    80,
+    75,
+    5,
+    6,
+    // امضای PK\x05\x06
+    ...U16(0),
+    ...U16(0),
+    // شماره دیسک
+    ...U16(entries.length),
+    ...U16(entries.length),
+    ...U32(centralSize),
+    ...U32(centralStart),
+    ...U16(0)
+    // طول توضیح
+  ];
+  const total = centralStart + centralSize + eocd.length;
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const c of [...chunks, ...central, new Uint8Array(eocd)]) {
+    out.set(c, pos);
+    pos += c.length;
+  }
+  return out;
+}
+__name(buildStoreZip, "buildStoreZip");
+
+// src/application/system/error-package.ts
+var AUDIT_TAIL = 100;
+var CLIENT_ERRORS_TAIL = 50;
+var HUMAN_EVENTS_TAIL = 200;
+async function readSyncMirrorSoft(db) {
+  try {
+    const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [
+      NODE_SYNC_STATUS_MIRROR_KEY
+    ]);
+    if (!row?.value) return null;
+    const parsed = JSON.parse(row.value);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+__name(readSyncMirrorSoft, "readSyncMirrorSoft");
+async function pendingPushSoft(db, watermark) {
+  try {
+    let count = 0;
+    if (watermark) {
+      const cutoff = watermark.slice(0, 19).replace("T", " ");
+      const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at > ?", [cutoff]);
+      count += Number(row?.n ?? 0);
+    } else {
+      const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors");
+      count += Number(row?.n ?? 0);
+    }
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const ahead = /* @__PURE__ */ __name((at) => !watermark || Date.parse(at) > Date.parse(watermark), "ahead");
+    if (ahead(`${nowIso.slice(0, 13)}:00:00Z`)) count += 1;
+    if (ahead(`${nowIso.slice(0, 10)}T00:00:00Z`)) count += 1;
+    return count;
+  } catch {
+    return null;
+  }
+}
+__name(pendingPushSoft, "pendingPushSoft");
+function readmeText(status) {
+  return [
+    "\u0628\u0633\u062A\u0647\u0654 \u06AF\u0632\u0627\u0631\u0634 \u062E\u0637\u0627 \u2014 \u0633\u0627\u0645\u0627\u0646\u0647\u0654 \u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639",
+    "===================================",
+    "",
+    "\u0627\u06CC\u0646 \u0628\u0633\u062A\u0647 \u0628\u0631\u0627\u06CC \u0627\u0631\u0633\u0627\u0644 \u0628\u0647 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0633\u0627\u062E\u062A\u0647 \u0634\u062F\u0647 \u0627\u0633\u062A \u0648 \u0634\u0627\u0645\u0644 \u0645\u0648\u0627\u0631\u062F \u0632\u06CC\u0631 \u0627\u0633\u062A:",
+    "  \u2022 status.json \u2014 \u0648\u0636\u0639\u06CC\u062A \u0641\u0646\u06CC \u0644\u062D\u0638\u0647\u0654 \u0633\u0627\u062E\u062A: \u0646\u0633\u062E\u0647\u0654 \u0628\u0631\u0646\u0627\u0645\u0647 \u0648 \u0645\u0648\u062A\u0648\u0631\u060C \u0646\u0633\u062E\u0647\u0654 \u0645\u0631\u06A9\u0632 (\u0627\u06AF\u0631 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0628\u0627\u0634\u062F)\u060C",
+    "    \u0634\u0645\u0627\u0631 \u0631\u06A9\u0648\u0631\u062F\u0647\u0627\u06CC \u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u0647\u0645\u200C\u06AF\u0627\u0645\u200C\u0633\u0627\u0632\u06CC\u060C \u0648 \u0645\u062D\u06CC\u0637 \u0627\u062C\u0631\u0627.",
+    "  \u2022 human-events.txt \u2014 \u06AF\u0632\u0627\u0631\u0634 \u0631\u0648\u06CC\u062F\u0627\u062F\u0647\u0627\u06CC \u0645\u0647\u0645 \u0633\u0627\u0645\u0627\u0646\u0647 \u0628\u0647 \u0641\u0627\u0631\u0633\u06CC \u0633\u0627\u062F\u0647 (\u0631\u06CC\u200C\u0627\u0633\u062A\u0627\u0631\u062A\u060C \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u060C \u0628\u0627\u0632\u0633\u0627\u0632\u06CC\u060C \u0633\u06CC\u0646\u06A9).",
+    "  \u2022 audit-tail.txt \u2014 \u0622\u062E\u0631\u06CC\u0646 \u0631\u0648\u06CC\u062F\u0627\u062F\u0647\u0627\u06CC \u0645\u0645\u06CC\u0632\u06CC \u0633\u0627\u0645\u0627\u0646\u0647 (\u06F1\u06F0\u06F0 \u0631\u0648\u06CC\u062F\u0627\u062F \u0622\u062E\u0631).",
+    "  \u2022 client-errors-tail.txt \u2014 \u0622\u062E\u0631\u06CC\u0646 \u062E\u0637\u0627\u0647\u0627\u06CC \u06AF\u0632\u0627\u0631\u0634\u200C\u0634\u062F\u0647 \u0627\u0632 \u0645\u0631\u0648\u0631\u06AF\u0631.",
+    "",
+    "\u0646\u06A9\u062A\u0647: \u0644\u0627\u06AF \u062E\u0627\u0645 \u0645\u0648\u062A\u0648\u0631 (workerd.log) \u0631\u0648\u06CC \u062F\u06CC\u0633\u06A9\u0650 \u062F\u0633\u062A\u06AF\u0627\u0647 \u0646\u0632\u062F \u0646\u0627\u0638\u0631 \u0628\u0631\u0646\u0627\u0645\u0647 \u0646\u06AF\u0647\u200C\u062F\u0627\u0631\u06CC \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0627\u0632",
+    "\u062F\u0627\u062E\u0644 \u0633\u0646\u062F\u0628\u0627\u06A9\u0633 \u0627\u0645\u0646 \u0628\u0631\u0646\u0627\u0645\u0647 \u062E\u0648\u0627\u0646\u062F\u0646\u06CC \u0646\u06CC\u0633\u062A\u061B \u062F\u0631 \u0635\u0648\u0631\u062A \u0646\u06CC\u0627\u0632\u060C \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0647\u0645\u0627\u0646 \u0641\u0627\u06CC\u0644 \u0631\u0627 \u0627\u0632 \u067E\u0648\u0634\u0647\u0654 \u062F\u0627\u062F\u0647",
+    "\u0645\u0637\u0627\u0644\u0628\u0647 \u0645\u06CC\u200C\u06A9\u0646\u062F. \u0647\u06CC\u0686\u200C\u06CC\u06A9 \u0627\u0632 \u0645\u062D\u062A\u0648\u0627\u06CC \u0627\u06CC\u0646 \u0628\u0633\u062A\u0647 \u0631\u0645\u0632 \u06CC\u0627 \u062A\u0648\u06A9\u0646 \u0646\u06CC\u0633\u062A \u0648 \u0627\u0631\u0633\u0627\u0644 \u0622\u0646 \u0628\u0647 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0628\u06CC\u200C\u062E\u0637\u0631 \u0627\u0633\u062A.",
+    "",
+    `\u0646\u0633\u062E\u0647\u0654 \u0628\u0631\u0646\u0627\u0645\u0647: ${status.app_version} \u2014 \u0644\u062D\u0638\u0647\u0654 \u0633\u0627\u062E\u062A: ${status.generated_at}`,
+    ""
+  ].join("\n");
+}
+__name(readmeText, "readmeText");
+async function auditTailText(db) {
+  try {
+    const rows = await db.query(
+      `SELECT id, created_at, actor_id, action, resource_type, resource_id FROM audit_log
+       ORDER BY created_at DESC, id DESC LIMIT ${AUDIT_TAIL}`
+    );
+    return rows.map((r) => `[${r.created_at}] ${r.actor_id} \u2014 ${r.action} (${r.resource_type}/${r.resource_id})`).join("\n") + "\n";
+  } catch {
+    return "audit_log \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F\n";
+  }
+}
+__name(auditTailText, "auditTailText");
+async function clientErrorsTailText(db) {
+  try {
+    const rows = await db.query(
+      `SELECT occurred_at, kind, message FROM client_errors
+       ORDER BY occurred_at DESC, id DESC LIMIT ${CLIENT_ERRORS_TAIL}`
+    );
+    return rows.map((r) => `[${r.occurred_at}] ${r.kind}: ${String(r.message ?? "").slice(0, 200)}`).join("\n") + "\n";
+  } catch {
+    return "client_errors \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F\n";
+  }
+}
+__name(clientErrorsTailText, "clientErrorsTailText");
+function errorPackageStamp(d = /* @__PURE__ */ new Date()) {
+  const p = /* @__PURE__ */ __name((n) => String(n).padStart(2, "0"), "p");
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+}
+__name(errorPackageStamp, "errorPackageStamp");
+async function buildErrorPackage(db, opts = {}) {
+  const mirror = await readSyncMirrorSoft(db);
+  const status = {
+    generated_at: (/* @__PURE__ */ new Date()).toISOString(),
+    app_version: APP_VERSION,
+    engine_version: APP_VERSION,
+    env: opts.envName ?? null,
+    center_version: typeof mirror?.version?.center === "string" ? mirror.version.center : null,
+    pending_push: await pendingPushSoft(db, mirror?.push_watermark ?? null),
+    // سینک pull بر پایهٔ cursor است و «شمار رکورد در انتظار دریافتی» سمت مرکز شمرده می‌شود؛
+    // از نود برآورد قابل‌اعتمادی ندارد — صادقانه null (طرح: «مشخص نبودن خودش خطاست» ولی
+    // عددِ دروغین بدتر است؛ ردیف سینک پنل همین را با state نشان می‌دهد)
+    pending_pull: null
+  };
+  const events = await readHumanEvents(db, HUMAN_EVENTS_TAIL);
+  const humanEventsText = events.map((e) => `[${e.ts}] ${e.msg} (\u0645\u0646\u0628\u0639: ${e.source})`).join("\n") + "\n";
+  const entries = [
+    { name: "status.json", data: zipText(JSON.stringify(status, null, 2)) },
+    { name: "human-events.txt", data: zipText(humanEventsText) },
+    { name: "audit-tail.txt", data: zipText(await auditTailText(db)) },
+    { name: "client-errors-tail.txt", data: zipText(await clientErrorsTailText(db)) },
+    { name: "readme.txt", data: zipText(readmeText(status)) }
+  ];
+  return {
+    bytes: buildStoreZip(entries),
+    filename: `error-package-${errorPackageStamp()}.zip`,
+    status
+  };
+}
+__name(buildErrorPackage, "buildErrorPackage");
+
+// src/application/system/routes.ts
+var RESTART_MARKER_KEY = "sys_restart_scheduled";
+var restartFlag = false;
+function isRestartScheduled() {
+  return restartFlag;
+}
+__name(isRestartScheduled, "isRestartScheduled");
+function registerSystemPublicRoutes(app, deps) {
+  app.get("/api/system/restart-status", async (c) => {
+    let scheduled = false;
+    try {
+      const row = await deps.db.queryOne("SELECT value FROM settings WHERE key = ?", [
+        RESTART_MARKER_KEY
+      ]);
+      scheduled = Boolean(row?.value);
+    } catch {
+      scheduled = isRestartScheduled();
+    }
+    return c.json({ ok: true, scheduled }, 200, { "Cache-Control": "no-store" });
+  });
+}
+__name(registerSystemPublicRoutes, "registerSystemPublicRoutes");
+function registerSystemRoutes(app, deps) {
+  app.post("/api/system/restart", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const already = restartFlag;
+    restartFlag = true;
+    try {
+      await deps.db.execute(
+        `INSERT INTO settings (key, value, updated_by, updated_at)
+         VALUES (?, ?, ?, datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = datetime('now')`,
+        [RESTART_MARKER_KEY, JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), actor_id: actor.staffId }), actor.staffId]
+      );
+    } catch (err) {
+      deps.logger.warn("system.restart.marker_failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+    try {
+      await deps.audit.log({
+        actorId: actor.staffId,
+        action: "system.restart_request",
+        resourceType: "system",
+        resourceId: "engine",
+        changes: { scheduled: { from: null, to: true }, already: { from: null, to: already } }
+      });
+    } catch (err) {
+      deps.logger.warn("system.restart.audit_failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+    await pushHumanEvent(deps.db, "\u0631\u0627\u0647\u200C\u0627\u0646\u062F\u0627\u0632\u06CC \u062F\u0648\u0628\u0627\u0631\u0647\u0654 \u0633\u0627\u0645\u0627\u0646\u0647 \u0627\u0632 \u067E\u0646\u0644", "panel");
+    return c.json(already ? { ok: true, scheduled: true, already: true } : { ok: true, scheduled: true }, 200, {
+      "Cache-Control": "no-store"
+    });
+  });
+  app.get("/api/support/error-package", requireRole("manager"), async (c) => {
+    const pkg = await buildErrorPackage(deps.db, { envName: deps.envName ?? null });
+    try {
+      await deps.audit.log({
+        actorId: getAuthContext(c).staffId,
+        action: "system.error_package",
+        resourceType: "support",
+        resourceId: pkg.filename
+      });
+    } catch (err) {
+      deps.logger.warn("system.error_package.audit_failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+    return new Response(pkg.bytes, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="${pkg.filename}"`,
+        "Cache-Control": "no-store"
+      }
+    });
+  });
+}
+__name(registerSystemRoutes, "registerSystemRoutes");
 
 // src/application/growth/service.ts
 var GROWTH_SNAPSHOT_SEAL_KEY = "growth.last_snapshot_at";
@@ -69724,8 +70271,8 @@ async function fetchBaleBotUsername(token, fetchImpl) {
     const body = await res.json().catch(() => ({}));
     const username = body?.result?.username;
     if (typeof username !== "string") return null;
-    const clean5 = username.trim().replace(/^@/, "");
-    return /^[A-Za-z0-9_]{2,64}$/.test(clean5) ? clean5 : null;
+    const clean6 = username.trim().replace(/^@/, "");
+    return /^[A-Za-z0-9_]{2,64}$/.test(clean6) ? clean6 : null;
   } catch {
     return null;
   }
@@ -70395,20 +70942,20 @@ function createSettingsService(deps) {
       return typeof v === "string" ? v.trim().replace(/^@/, "") : "";
     },
     async setBotUsername(username, actor) {
-      const clean5 = username.trim().replace(/^@/, "");
-      if (clean5.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean5)) {
+      const clean6 = username.trim().replace(/^@/, "");
+      if (clean6.length > 0 && !/^[A-Za-z0-9_]{2,64}$/.test(clean6)) {
         throw new ConflictError("\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u0628\u0627\u062A \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0644\u0627\u062A\u06CC\u0646\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637 \u0632\u06CC\u0631 \u0627\u0633\u062A (\u06F2 \u062A\u0627 \u06F6\u06F4 \u0646\u0648\u06CC\u0633\u0647)");
       }
       const before = await this.getBotUsername();
-      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean5, actor);
+      await upsertSetting(SETTING_KEYS.BOT_USERNAME, clean6, actor);
       await audit.log({
         actorId: actor.staffId,
         action: "settings.bot_username.update",
         resourceType: "settings",
         resourceId: "bot_username",
-        changes: { bot_username: { from: before || null, to: clean5 || null } }
+        changes: { bot_username: { from: before || null, to: clean6 || null } }
       });
-      return clean5;
+      return clean6;
     },
     /* ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات؛ خالی = پیش‌فرض سامانه */
     async getBotAbout() {
@@ -70505,10 +71052,10 @@ function createSettingsService(deps) {
     async updateScoringConfig(input2, actor) {
       const before = await this.getScoringConfig();
       const epoch = epochUtcOfTehranYmd(input2.epochYmd);
-      const clean5 = mergeScoringWeights(input2.weights);
-      await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean5 }, actor);
-      const changed = Object.keys(clean5).filter(
-        (k) => clean5[k] !== before.weights[k]
+      const clean6 = mergeScoringWeights(input2.weights);
+      await upsertSetting(SETTING_KEYS.SCORING_CONFIG, { epoch, weights: clean6 }, actor);
+      const changed = Object.keys(clean6).filter(
+        (k) => clean6[k] !== before.weights[k]
       ).length;
       await audit.log({
         actorId: actor.staffId,
@@ -70619,6 +71166,7 @@ __name(registerSettingsRoutes, "registerSettingsRoutes");
 // src/application/backup/service.ts
 var BACKUP_FORMAT = "gh-backup";
 var BACKUP_FORMAT_VERSION = 1;
+var BACKUP_ARCHIVE_KEY = "backup:archive-latest";
 var SKIP_RESTORE_TABLES = /* @__PURE__ */ new Set(["schema_migrations", "d1_migrations"]);
 var FILES_TABLE = "exercise_file_chunks";
 var IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -71028,9 +71576,9 @@ function createBackupService(deps) {
             );
             if (rows.length === 0) break;
             for (const r of rows) {
-              const clean5 = {};
-              for (const [k, v] of Object.entries(r)) clean5[k] = encodeValue(v);
-              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean5)}`;
+              const clean6 = {};
+              for (const [k, v] of Object.entries(r)) clean6[k] = encodeValue(v);
+              yield `${emitted > 0 ? "," : ""}${JSON.stringify(clean6)}`;
               emitted += 1;
             }
             if (rows.length < page2) break;
@@ -71253,6 +71801,75 @@ function createBackupService(deps) {
       }
       logger.info("backup.auto.done", { sent: report.sent, failed: report.failed });
       return { skipped: false, report };
+    },
+    // ─── آرشیو محلی آخرین پشتیبان تأییدشده (۴-۲) ───
+    async archiveLatest(actor) {
+      try {
+        const { bytes } = await collectExport(false);
+        if (bytes.byteLength > BACKUP_MAX_SEND_BYTES) {
+          logger.warn("backup.archive.too_large", { bytes: bytes.byteLength });
+          return { archived: false, bytes: bytes.byteLength, reason: "too_large" };
+        }
+        const envelope = JSON.parse(new TextDecoder().decode(bytes));
+        const summary = await service.inspect(envelope);
+        if (!summary.schemaCompatible) {
+          logger.warn("backup.archive.schema_incompatible", { problems: summary.problems });
+          return { archived: false, bytes: bytes.byteLength, reason: "schema_incompatible" };
+        }
+        await writeSetting(
+          BACKUP_ARCHIVE_KEY,
+          {
+            format: BACKUP_FORMAT,
+            format_version: BACKUP_FORMAT_VERSION,
+            app_version: APP_VERSION,
+            created_at: (/* @__PURE__ */ new Date()).toISOString(),
+            tables: summary.tableCount,
+            total_rows: summary.totalRows,
+            envelope
+          },
+          actor.staffId
+        );
+        try {
+          await audit.log({
+            actorId: actor.staffId,
+            action: "backup.archive",
+            resourceType: "backup",
+            resourceId: "archive-latest",
+            changes: {
+              tables: { from: null, to: summary.tableCount },
+              rows: { from: null, to: summary.totalRows }
+            }
+          });
+        } catch (err) {
+          logger.warn("backup.archive.audit_failed", { err: err instanceof Error ? err.message : String(err) });
+        }
+        logger.info("backup.archive.done", { tables: summary.tableCount, rows: summary.totalRows, bytes: bytes.byteLength });
+        return { archived: true, bytes: bytes.byteLength };
+      } catch (err) {
+        logger.warn("backup.archive.failed", { error: err instanceof Error ? err.message : String(err) });
+        return { archived: false, bytes: 0, reason: "error" };
+      }
+    },
+    async getArchivedBackup() {
+      try {
+        const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [
+          BACKUP_ARCHIVE_KEY
+        ]);
+        if (!row?.value) return null;
+        const parsed = JSON.parse(row.value);
+        if (!parsed || typeof parsed !== "object") return null;
+        const meta3 = parsed;
+        if (meta3.format !== BACKUP_FORMAT || !meta3.envelope) return null;
+        return {
+          bytes: new TextEncoder().encode(JSON.stringify(meta3.envelope)),
+          createdAt: meta3.created_at ?? null,
+          appVersion: meta3.app_version ?? null,
+          tables: typeof meta3.tables === "number" ? meta3.tables : null,
+          totalRows: typeof meta3.total_rows === "number" ? meta3.total_rows : null
+        };
+      } catch {
+        return null;
+      }
     }
   };
   return service;
@@ -71276,6 +71893,41 @@ function registerBackupRoutes(app, service) {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
         "Content-Disposition": `attachment; filename="backup-${stamp}.json"; filename*=UTF-8''${encodeURIComponent(`\u067E\u0634\u062A\u06CC\u0628\u0627\u0646-${stamp}.json`)}`,
+        "Cache-Control": "no-store"
+      }
+    });
+  });
+  app.get("/api/backup/download", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    let archived = await service.getArchivedBackup();
+    if (!archived) {
+      const outcome = await service.archiveLatest(actor);
+      archived = outcome.archived ? await service.getArchivedBackup() : null;
+    }
+    if (!archived) {
+      return c.json({ ok: false, error: "NO_BACKUP", message: "\u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0645\u0648\u062C\u0648\u062F \u0646\u06CC\u0633\u062A" }, 404);
+    }
+    const stamp = (archived.createdAt ?? (/* @__PURE__ */ new Date()).toISOString()).replace(/[-:]/g, "").replace("T", "").slice(0, 14);
+    try {
+      c.executionCtx.waitUntil(
+        (async () => {
+          try {
+            await service.logExport(actor, false);
+          } catch {
+          }
+        })()
+      );
+    } catch {
+      try {
+        await service.logExport(actor, false);
+      } catch {
+      }
+    }
+    return new Response(archived.bytes, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": `attachment; filename="backup-${stamp}.db"`,
         "Cache-Control": "no-store"
       }
     });
@@ -72349,6 +73001,655 @@ function registerRumRoutes(app, service) {
 }
 __name(registerRumRoutes, "registerRumRoutes");
 
+// src/core/db/client.ts
+function createDb(d1, logger) {
+  const base = {
+    async query(sql, params = []) {
+      const stmt = d1.prepare(sql).bind(...params);
+      const res = await stmt.all();
+      return res.results ?? [];
+    },
+    async queryOne(sql, params = []) {
+      const rows = await base.query(sql, params);
+      return rows.length > 0 ? rows[0] : null;
+    },
+    async execute(sql, params = []) {
+      return d1.prepare(sql).bind(...params).run();
+    },
+    prepare(sql, params = []) {
+      return d1.prepare(sql).bind(...params);
+    },
+    async batch(statements) {
+      if (statements.length === 0) return [];
+      return d1.batch(statements);
+    },
+    async transaction(fn) {
+      const statements = [];
+      const tx = {
+        query: /* @__PURE__ */ __name((sql, params = []) => base.query(sql, params), "query"),
+        queryOne: /* @__PURE__ */ __name((sql, params = []) => base.queryOne(sql, params), "queryOne"),
+        prepare: /* @__PURE__ */ __name((sql, params = []) => base.prepare(sql, params), "prepare"),
+        execute: /* @__PURE__ */ __name((sql, params = []) => {
+          statements.push(d1.prepare(sql).bind(...params));
+          return Promise.resolve({ success: true, meta: {} });
+        }, "execute"),
+        batch: /* @__PURE__ */ __name((stmts) => {
+          statements.push(...stmts);
+          return Promise.resolve([]);
+        }, "batch"),
+        transaction: /* @__PURE__ */ __name((fn2) => fn2(tx), "transaction")
+      };
+      const result = await fn(tx);
+      if (statements.length > 0) {
+        try {
+          await d1.batch(statements);
+        } catch (err) {
+          logger?.error("transaction.batch.failed", {
+            statementCount: statements.length,
+            error: err instanceof Error ? err.message : "unknown"
+          });
+          throw err;
+        }
+      }
+      return result;
+    }
+  };
+  return base;
+}
+__name(createDb, "createDb");
+
+// src/node-sync/service.ts
+var NODE_PULL_DOMAINS = ["announcements", "packages", "library"];
+var NODE_PUSH_DOMAINS = ["usage_summary", "client_errors", "health_ping"];
+var NODE_PULL_DOMAIN_SET = new Set(NODE_PULL_DOMAINS);
+var NODE_PUSH_DOMAIN_SET = new Set(NODE_PUSH_DOMAINS);
+var NODE_PUSH_MIN_INTERVAL_MS = 15 * 6e4;
+var NODE_PUSH_CATCHUP_HEADER = "X-CP-Node-Catchup";
+var NODE_PUSH_MAX_ITEMS = 100;
+var NODE_PUSH_BODY_MAX_BYTES = 256 * 1024;
+var NODE_PULL_DEFAULT_LIMIT = 50;
+var NODE_PULL_MAX_LIMIT = 100;
+var NODE_CODE_PATTERN = /^DESKTOP:[A-Za-z0-9][A-Za-z0-9._-]{2,63}$/;
+function clean5(v) {
+  const s = v?.trim();
+  return s ? s : null;
+}
+__name(clean5, "clean");
+function bearerToken(header) {
+  const s = clean5(header);
+  if (!s) return null;
+  return s.startsWith("Bearer ") ? clean5(s.slice(7)) : null;
+}
+__name(bearerToken, "bearerToken");
+var NODE_KEY_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+function randomKeySuffix(length = 40) {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  let out = "";
+  for (let i = 0; i < length; i += 1) out += NODE_KEY_ALPHABET[bytes[i] % NODE_KEY_ALPHABET.length];
+  return out;
+}
+__name(randomKeySuffix, "randomKeySuffix");
+async function generateNodeKey() {
+  const token = `nk_live_${randomKeySuffix()}`;
+  const keyHash = await hashApiKey(token);
+  return { token, keyHash, fingerprint: keyHash.slice(0, 12) };
+}
+__name(generateNodeKey, "generateNodeKey");
+function timingSafeHexEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+__name(timingSafeHexEqual, "timingSafeHexEqual");
+var NODE_ROW_COLUMNS = "node_code, label, key_hash, key_fingerprint, key_rotated_at, active, last_pull_at, last_push_attempt_at, last_push_ok_at, created_at";
+var NodeCodeInvalidError = class extends Error {
+  static {
+    __name(this, "NodeCodeInvalidError");
+  }
+  constructor() {
+    super("\u06A9\u062F \u0646\u0648\u062F \u0628\u0627\u06CC\u062F \u0634\u06A9\u0644 DESKTOP:<install-id> \u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F");
+    this.name = "NodeCodeInvalidError";
+  }
+};
+async function registerNode(db, audit, input2) {
+  const code = clean5(input2.nodeCode);
+  if (!code || !NODE_CODE_PATTERN.test(code)) throw new NodeCodeInvalidError();
+  const label = clean5(input2.label)?.slice(0, 120) ?? null;
+  const { token, keyHash, fingerprint } = await generateNodeKey();
+  const createdAt = (/* @__PURE__ */ new Date()).toISOString();
+  const registration = await db.transaction(async (tx) => {
+    const dup = await tx.queryOne(
+      "SELECT node_code FROM sync_nodes WHERE node_code = ?",
+      [code]
+    );
+    if (dup) {
+      throw new Error("NODE_CODE_TAKEN");
+    }
+    await tx.execute(
+      `INSERT INTO sync_nodes (node_code, label, key_hash, key_fingerprint, key_rotated_at, active, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+      [code, label, keyHash, fingerprint, createdAt, input2.actorStaffId, createdAt, createdAt]
+    );
+    await audit.logInTransaction(tx, {
+      actorId: input2.actorStaffId,
+      action: "node.register",
+      resourceType: "node",
+      resourceId: code,
+      changes: { label: { from: null, to: label }, key_fingerprint: { from: null, to: fingerprint } }
+    });
+    return { node_code: code, label, key_fingerprint: fingerprint, created_at: createdAt };
+  });
+  return { registration, nodeKey: token };
+}
+__name(registerNode, "registerNode");
+async function rotateNodeKey(db, audit, input2) {
+  const code = clean5(input2.nodeCode);
+  if (!code) throw new NodeCodeInvalidError();
+  const current = await db.queryOne(`SELECT ${NODE_ROW_COLUMNS} FROM sync_nodes WHERE node_code = ?`, [code]);
+  if (!current) throw new Error("NODE_MISSING");
+  const { token, keyHash, fingerprint } = await generateNodeKey();
+  const rotatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      `UPDATE sync_nodes SET key_hash = ?, key_fingerprint = ?, key_rotated_at = ?, updated_at = ? WHERE node_code = ?`,
+      [keyHash, fingerprint, rotatedAt, rotatedAt, code]
+    );
+    await audit.logInTransaction(tx, {
+      actorId: input2.actorStaffId,
+      action: "node.rotate_key",
+      resourceType: "node",
+      resourceId: code,
+      changes: { key_fingerprint: { from: current.key_fingerprint, to: fingerprint } }
+    });
+  });
+  return { rotation: { node_code: code, key_fingerprint: fingerprint, rotated_at: rotatedAt }, nodeKey: token };
+}
+__name(rotateNodeKey, "rotateNodeKey");
+async function revokeNode(db, audit, input2) {
+  const code = clean5(input2.nodeCode);
+  if (!code) throw new NodeCodeInvalidError();
+  const current = await db.queryOne(`SELECT ${NODE_ROW_COLUMNS} FROM sync_nodes WHERE node_code = ?`, [code]);
+  if (!current) throw new Error("NODE_MISSING");
+  await db.transaction(async (tx) => {
+    await tx.execute(`UPDATE sync_nodes SET active = 0, updated_at = ? WHERE node_code = ?`, [(/* @__PURE__ */ new Date()).toISOString(), code]);
+    await audit.logInTransaction(tx, {
+      actorId: input2.actorStaffId,
+      action: "node.revoke",
+      resourceType: "node",
+      resourceId: code,
+      changes: { active: { from: current.active === 1, to: false } }
+    });
+  });
+  return { node_code: code, active: 0 };
+}
+__name(revokeNode, "revokeNode");
+async function listNodes(db) {
+  const rows = await db.query(
+    `SELECT ${NODE_ROW_COLUMNS} FROM sync_nodes ORDER BY created_at DESC, node_code ASC`,
+    []
+  );
+  return rows.map((r) => ({
+    node_code: r.node_code,
+    label: r.label,
+    active: r.active === 1,
+    key_fingerprint: r.key_fingerprint,
+    key_rotated_at: r.key_rotated_at,
+    last_pull_at: r.last_pull_at,
+    last_push_ok_at: r.last_push_ok_at,
+    created_at: r.created_at
+  }));
+}
+__name(listNodes, "listNodes");
+async function verifyNodeCredentials(db, input2) {
+  const code = clean5(input2.nodeCode);
+  const key = clean5(input2.bearer);
+  const hash2 = await hashApiKey(key ?? "");
+  const fingerprint = hash2.slice(0, 12);
+  if (!code || !key) return { ok: false, fingerprint };
+  const node2 = await db.queryOne(
+    `SELECT ${NODE_ROW_COLUMNS} FROM sync_nodes WHERE node_code = ?`,
+    [code]
+  );
+  if (!node2 || node2.active !== 1) return { ok: false, fingerprint };
+  if (!timingSafeHexEqual(node2.key_hash, hash2)) return { ok: false, fingerprint };
+  return { ok: true, node: node2 };
+}
+__name(verifyNodeCredentials, "verifyNodeCredentials");
+function shouldAttemptNodePush(lastAttemptIso, now, minIntervalMs = NODE_PUSH_MIN_INTERVAL_MS) {
+  if (!lastAttemptIso) return true;
+  const t = Date.parse(lastAttemptIso);
+  if (Number.isNaN(t)) return true;
+  return now.getTime() - t >= minIntervalMs;
+}
+__name(shouldAttemptNodePush, "shouldAttemptNodePush");
+async function stampNodePushAttempt(db, nodeCode, at) {
+  await db.execute(
+    `UPDATE sync_nodes SET last_push_attempt_at = ?, updated_at = ? WHERE node_code = ?`,
+    [at.toISOString(), at.toISOString(), nodeCode]
+  );
+}
+__name(stampNodePushAttempt, "stampNodePushAttempt");
+async function stampNodePushOk(db, nodeCode, at) {
+  await db.execute(
+    `UPDATE sync_nodes SET last_push_ok_at = ?, last_push_attempt_at = ?, updated_at = ? WHERE node_code = ?`,
+    [at.toISOString(), at.toISOString(), at.toISOString(), nodeCode]
+  );
+}
+__name(stampNodePushOk, "stampNodePushOk");
+async function stampNodePull(db, nodeCode, at) {
+  await db.execute(
+    `UPDATE sync_nodes SET last_pull_at = ?, updated_at = ? WHERE node_code = ?`,
+    [at.toISOString(), at.toISOString(), nodeCode]
+  );
+}
+__name(stampNodePull, "stampNodePull");
+function toBase64Url(s) {
+  const bytes = new TextEncoder().encode(s);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+__name(toBase64Url, "toBase64Url");
+function fromBase64Url(s) {
+  try {
+    const norm = s.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = norm.length % 4 === 0 ? "" : "=".repeat(4 - norm.length % 4);
+    const bin = atob(norm + pad);
+    const bytes = Uint8Array.from(bin, (ch) => ch.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return null;
+  }
+}
+__name(fromBase64Url, "fromBase64Url");
+function encodeNodeCursor(c) {
+  return toBase64Url(JSON.stringify({ d: c.d.slice(0, 40), t: c.t.slice(0, 40), i: c.i.slice(0, 200) }));
+}
+__name(encodeNodeCursor, "encodeNodeCursor");
+function decodeNodeCursor(raw2) {
+  const s = clean5(raw2);
+  if (!s) return null;
+  if (s.length > 512) return null;
+  const json3 = fromBase64Url(s);
+  if (!json3) return null;
+  try {
+    const parsed = JSON.parse(json3);
+    if (typeof parsed.d !== "string" || typeof parsed.t !== "string" || typeof parsed.i !== "string") return null;
+    if (parsed.t.length === 0 || parsed.i.length === 0) return null;
+    return { d: parsed.d, t: parsed.t, i: parsed.i };
+  } catch {
+    return null;
+  }
+}
+__name(decodeNodeCursor, "decodeNodeCursor");
+function parseJsonSafe2(text) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+__name(parseJsonSafe2, "parseJsonSafe");
+var ISO_NORM = `strftime('%Y-%m-%dT%H:%M:%SZ', updated_at)`;
+var PULL_SOURCES = [
+  {
+    domain: "announcements",
+    from: "announcements",
+    columns: `json_object('title', title, 'body', body, 'show_login', show_login, 'show_panel', show_panel,
+                           'active', active, 'created_at', created_at)`,
+    fromWhere: "active = 1",
+    payload: /* @__PURE__ */ __name((d) => {
+      const o = d ?? {};
+      return {
+        title: o.title,
+        body: o.body,
+        show_login: o.show_login === 1,
+        show_panel: o.show_panel === 1,
+        active: o.active === 1,
+        created_at: o.created_at
+      };
+    }, "payload")
+  },
+  {
+    domain: "packages",
+    from: "game_packages",
+    idExpr: `id || '@' || version`,
+    columns: `json_object('version', version, 'title_fa', title_fa, 'evidence_level', evidence_level,
+                           'dose_json', dose_json, 'body_json', body_json, 'status', status)`,
+    fromWhere: `status = 'published'`,
+    payload: /* @__PURE__ */ __name((d) => {
+      const o = d ?? {};
+      return {
+        version: o.version,
+        title_fa: o.title_fa,
+        evidence_level: o.evidence_level,
+        dose: parseJsonSafe2(o.dose_json),
+        body: parseJsonSafe2(o.body_json),
+        status: o.status
+      };
+    }, "payload")
+  },
+  {
+    domain: "library",
+    from: "network_content",
+    columns: `json_object('kind', kind, 'title', title, 'summary', summary, 'body', body,
+                           'tags', tags, 'source_center', source_center)`,
+    fromWhere: `origin = 'cp' AND active = 1`,
+    payload: /* @__PURE__ */ __name((d) => {
+      const o = d ?? {};
+      return {
+        kind: o.kind,
+        title: o.title,
+        summary: o.summary,
+        body: parseJsonSafe2(o.body),
+        tags: parseJsonSafe2(o.tags) ?? [],
+        source_center: o.source_center
+      };
+    }, "payload")
+  }
+];
+async function pullNodePage(db, opts) {
+  const branches = [];
+  const params = [];
+  const sources = PULL_SOURCES.filter((s) => opts.domains.includes(s.domain));
+  for (const src of sources) {
+    let branch = `SELECT '${src.domain}' AS domain, ${src.idExpr ?? "id"} AS id, ${ISO_NORM} AS updated_at, ${src.columns} AS data
+                    FROM ${src.from} WHERE ${src.fromWhere}`;
+    if (opts.cursor) {
+      branch += ` AND (${ISO_NORM} > ? OR (${ISO_NORM} = ? AND (id > ? OR (id = ? AND '${src.domain}' > ?))))`;
+      params.push(opts.cursor.t, opts.cursor.t, opts.cursor.i, opts.cursor.i, opts.cursor.d);
+    }
+    branches.push(branch);
+  }
+  if (branches.length === 0) return { items: [], next_cursor: null };
+  const sql = `SELECT * FROM (${branches.join(" UNION ALL ")}) ORDER BY updated_at ASC, id ASC, domain ASC LIMIT ?`;
+  params.push(opts.limit + 1);
+  const rows = await db.query(sql, params);
+  const hasMore = rows.length > opts.limit;
+  const page2 = hasMore ? rows.slice(0, opts.limit) : rows;
+  const items = page2.map((r) => {
+    const src = sources.find((s) => s.domain === r.domain);
+    return {
+      id: String(r.id),
+      domain: r.domain,
+      updated_at: String(r.updated_at),
+      payload: src.payload(parseJsonSafe2(r.data))
+    };
+  });
+  const last = page2.length > 0 ? page2[page2.length - 1] : null;
+  return {
+    items,
+    next_cursor: hasMore && last ? encodeNodeCursor({ d: String(last.domain), t: String(last.updated_at), i: String(last.id) }) : null
+  };
+}
+__name(pullNodePage, "pullNodePage");
+var QUOTA_LIMITS = {
+  requests: 1e5,
+  rows_written: 1e5,
+  rows_read: 5e6
+};
+var NODE_PULL_ROWS_WRITTEN_EST = 1;
+var NODE_PULL_ROWS_READ_EST = 100;
+var NODE_PUSH_ROWS_WRITTEN_EST = 101;
+var NODE_PUSH_ROWS_READ_EST = 100;
+var LOGIN_ROWS_WRITTEN_EST = 4;
+var LOGIN_ROWS_READ_EST = 10;
+var QUOTA_ESTIMATES = {
+  pull: { rowsWritten: NODE_PULL_ROWS_WRITTEN_EST, rowsRead: NODE_PULL_ROWS_READ_EST },
+  push: { rowsWritten: NODE_PUSH_ROWS_WRITTEN_EST, rowsRead: NODE_PUSH_ROWS_READ_EST },
+  login: { rowsWritten: LOGIN_ROWS_WRITTEN_EST, rowsRead: LOGIN_ROWS_READ_EST }
+};
+function quotaDayUtc(d) {
+  return d.toISOString().slice(0, 10);
+}
+__name(quotaDayUtc, "quotaDayUtc");
+async function bumpQuotaUsage(db, kind, now = /* @__PURE__ */ new Date()) {
+  try {
+    const est = QUOTA_ESTIMATES[kind];
+    await db.execute(
+      `INSERT INTO quota_usage (day, requests, rows_written, rows_read_est)
+       VALUES (?, 1, ?, ?)
+       ON CONFLICT(day) DO UPDATE SET
+         requests = requests + 1,
+         rows_written = rows_written + excluded.rows_written,
+         rows_read_est = rows_read_est + excluded.rows_read_est`,
+      [quotaDayUtc(now), est.rowsWritten, est.rowsRead]
+    );
+  } catch {
+  }
+}
+__name(bumpQuotaUsage, "bumpQuotaUsage");
+function quotaLevelFor(percents) {
+  const values = [percents.requests, percents.rows_written, percents.rows_read];
+  if (values.some((v) => v >= 95)) return "danger";
+  if (values.some((v) => v >= 80)) return "warn";
+  return "ok";
+}
+__name(quotaLevelFor, "quotaLevelFor");
+function quotaPercent(value, limit) {
+  return Math.round(value / limit * 1e3) / 10;
+}
+__name(quotaPercent, "quotaPercent");
+async function centralQuotaSnapshot(db, now = /* @__PURE__ */ new Date()) {
+  const day = quotaDayUtc(now);
+  const row = await db.queryOne(
+    "SELECT requests, rows_written, rows_read_est FROM quota_usage WHERE day = ?",
+    [day]
+  );
+  const requests = row?.requests ?? 0;
+  const rowsWritten = row?.rows_written ?? 0;
+  const rowsRead = row?.rows_read_est ?? 0;
+  const cutoffSql = new Date(now.getTime() - 24 * 60 * 6e4).toISOString().slice(0, 19).replace("T", " ");
+  const failedRow = await db.queryOne(
+    `SELECT COUNT(*) AS n FROM audit_log WHERE action = 'auth.login_failed' AND created_at >= ?`,
+    [cutoffSql]
+  );
+  const percent = {
+    requests: quotaPercent(requests, QUOTA_LIMITS.requests),
+    rows_written: quotaPercent(rowsWritten, QUOTA_LIMITS.rows_written),
+    rows_read: quotaPercent(rowsRead, QUOTA_LIMITS.rows_read)
+  };
+  return {
+    day,
+    requests,
+    rows_written: rowsWritten,
+    rows_read_est: rowsRead,
+    limits: { ...QUOTA_LIMITS },
+    percent,
+    level: quotaLevelFor(percent),
+    estimated: true,
+    failed_logins_24h: failedRow?.n ?? 0
+  };
+}
+__name(centralQuotaSnapshot, "centralQuotaSnapshot");
+async function reconcileDomainCounts(db, domains) {
+  const out = [];
+  for (const domain2 of domains) {
+    const src = PULL_SOURCES.find((s) => s.domain === domain2);
+    if (!src) continue;
+    const row = await db.queryOne(
+      `SELECT COUNT(*) AS n, MAX(${ISO_NORM}) AS mx FROM ${src.from} WHERE ${src.fromWhere}`,
+      []
+    );
+    out.push({ domain: domain2, count: row?.n ?? 0, max_updated_at: row?.mx ?? null });
+  }
+  return out;
+}
+__name(reconcileDomainCounts, "reconcileDomainCounts");
+var NodePushRawItemSchema = external_exports.object({
+  id: external_exports.string().min(4).max(120),
+  domain: external_exports.string().min(1).max(40),
+  at: external_exports.string().max(40).nullish(),
+  payload: external_exports.record(external_exports.string(), external_exports.unknown())
+  // zod4 — کلید صریح
+});
+var NodePushRawBodySchema = external_exports.object({
+  items: external_exports.array(NodePushRawItemSchema).min(1).max(NODE_PUSH_MAX_ITEMS)
+});
+var UsageSummaryPayloadSchema = external_exports.record(external_exports.string().min(1).max(64), external_exports.number());
+var ClientErrorPayloadSchema = external_exports.object({
+  message: external_exports.string().min(1).max(2e3),
+  source: external_exports.string().max(300).nullish(),
+  line: external_exports.number().int().min(0).max(1e7).nullish(),
+  col: external_exports.number().int().min(0).max(1e7).nullish(),
+  stack: external_exports.string().max(8e3).nullish(),
+  url: external_exports.string().max(300).nullish(),
+  app_version: external_exports.string().max(50).nullish()
+});
+var HealthPingPayloadSchema = external_exports.object({
+  ok: external_exports.boolean().nullish(),
+  version: external_exports.string().max(50).nullish(),
+  counters: external_exports.record(external_exports.string().min(1).max(64), external_exports.number()).nullish()
+});
+var PAYLOAD_SCHEMA_BY_DOMAIN = {
+  usage_summary: UsageSummaryPayloadSchema,
+  client_errors: ClientErrorPayloadSchema,
+  health_ping: HealthPingPayloadSchema
+};
+function validatePushItem(item) {
+  if (!NODE_PUSH_DOMAIN_SET.has(item.domain)) {
+    throw new Error("NODE_DOMAIN_FORBIDDEN");
+  }
+  const domain2 = item.domain;
+  const payload = PAYLOAD_SCHEMA_BY_DOMAIN[domain2].parse(item.payload);
+  const at = typeof item.at === "string" && item.at.trim().length > 0 ? item.at.trim() : null;
+  return { id: item.id, domain: domain2, at, payload };
+}
+__name(validatePushItem, "validatePushItem");
+async function pushNodeEvents(db, nodeCode, items) {
+  if (items.length === 0) return { accepted: 0, duplicates: 0 };
+  const statements = items.map(
+    (it) => db.prepare(
+      `INSERT INTO node_push_events (node_code, id, domain, payload, occurred_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(node_code, id) DO NOTHING`,
+      [nodeCode, it.id, it.domain, JSON.stringify(it.payload), it.at]
+    )
+  );
+  const results = await db.batch(statements);
+  let accepted = 0;
+  for (const r of results) {
+    const changes = r.meta?.changes;
+    if (typeof changes === "number") accepted += changes;
+  }
+  return { accepted, duplicates: items.length - accepted };
+}
+__name(pushNodeEvents, "pushNodeEvents");
+var NODE_RATE_LIMIT_PER_MIN_DEFAULT = 120;
+var NODE_RATE_LIMIT_PER_MIN_MAX = 1e4;
+var NODE_RATE_LIMIT_WINDOW_MS = 6e4;
+function parseNodeRateLimitPerMin(raw2) {
+  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
+    return NODE_RATE_LIMIT_PER_MIN_DEFAULT;
+  }
+  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
+  if (!Number.isFinite(n) || n < 0) return NODE_RATE_LIMIT_PER_MIN_DEFAULT;
+  if (n === 0) return 0;
+  return Math.min(Math.trunc(n), NODE_RATE_LIMIT_PER_MIN_MAX);
+}
+__name(parseNodeRateLimitPerMin, "parseNodeRateLimitPerMin");
+function makeNodeSlidingWindowLimiter(windowMs, opts) {
+  const maxKeys = opts?.maxKeys ?? 2048;
+  const now = opts?.now ?? (() => Date.now());
+  const buckets = /* @__PURE__ */ new Map();
+  return {
+    allow(key, max) {
+      const at = now();
+      if (!buckets.has(key) && buckets.size >= maxKeys) {
+        for (const [k, ts] of buckets) {
+          const last = ts[ts.length - 1];
+          if (last === void 0 || at - last >= windowMs) buckets.delete(k);
+        }
+        if (buckets.size >= maxKeys) {
+          let oldestKey = null;
+          let oldestAt = Number.POSITIVE_INFINITY;
+          for (const [k, ts] of buckets) {
+            const last = ts[ts.length - 1] ?? Number.NEGATIVE_INFINITY;
+            if (last < oldestAt) {
+              oldestAt = last;
+              oldestKey = k;
+            }
+          }
+          if (oldestKey !== null) buckets.delete(oldestKey);
+        }
+      }
+      const window = buckets.get(key);
+      if (!window) {
+        buckets.set(key, [at]);
+        return true;
+      }
+      while (window.length > 0 && at - window[0] >= windowMs) window.shift();
+      if (window.length >= max) return false;
+      window.push(at);
+      return true;
+    }
+  };
+}
+__name(makeNodeSlidingWindowLimiter, "makeNodeSlidingWindowLimiter");
+var NODE_STALE_AFTER_MS = 24 * 60 * 6e4;
+function nodeLastSeenOf(lastPullAt, lastPushAttemptAt, lastPushOkAt) {
+  let best = null;
+  let bestMs = Number.NEGATIVE_INFINITY;
+  for (const iso of [lastPullAt, lastPushAttemptAt, lastPushOkAt]) {
+    if (!iso) continue;
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) continue;
+    if (t > bestMs) {
+      bestMs = t;
+      best = iso;
+    }
+  }
+  return best;
+}
+__name(nodeLastSeenOf, "nodeLastSeenOf");
+function nodeMapStateOf(active, lastSeen, now) {
+  if (!active) return "revoked";
+  if (!lastSeen) return "never_seen";
+  const t = Date.parse(lastSeen);
+  if (Number.isNaN(t)) return "never_seen";
+  return now.getTime() - t > NODE_STALE_AFTER_MS ? "stale" : "synced";
+}
+__name(nodeMapStateOf, "nodeMapStateOf");
+async function centralNodesMap(db, now = /* @__PURE__ */ new Date()) {
+  const rows = await db.query(
+    `SELECT ${NODE_ROW_COLUMNS} FROM sync_nodes ORDER BY created_at DESC, node_code ASC`,
+    []
+  );
+  const nodes = rows.map((r) => {
+    const lastSeen = nodeLastSeenOf(r.last_pull_at, r.last_push_attempt_at, r.last_push_ok_at);
+    return {
+      node_id: r.node_code,
+      name: r.label?.trim() ? r.label : r.node_code,
+      registered_at: r.created_at,
+      last_seen: lastSeen,
+      status: {
+        state: nodeMapStateOf(r.active === 1, lastSeen, now),
+        pending_push: null,
+        last_pull_ok_at: r.last_pull_at,
+        last_push_ok_at: r.last_push_ok_at,
+        reconciliation_ok: null
+      }
+    };
+  });
+  const snapshot = await centralQuotaSnapshot(db, now);
+  return {
+    server_ts: now.toISOString(),
+    nodes,
+    quota: {
+      day: snapshot.day,
+      percent_requests: snapshot.percent.requests,
+      percent_rows_written: snapshot.percent.rows_written,
+      percent_rows_read: snapshot.percent.rows_read,
+      level: snapshot.level
+    },
+    center_version: APP_VERSION
+  };
+}
+__name(centralNodesMap, "centralNodesMap");
+
 // src/application/auth/routes.ts
 var LOGIN_MAX_FAILURES = 5;
 var LOGIN_IP_MAX_FAILURES = 20;
@@ -72401,6 +73702,7 @@ __name(clearThrottle, "clearThrottle");
 function registerAuthRoutes(app, deps) {
   app.post("/api/auth/login", async (c) => {
     const body = LoginSchema.parse(await c.req.json());
+    await bumpQuotaUsage(createDb(c.env.DB), "login");
     const identity = body.username.trim().toLowerCase();
     const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
     const ipKey = `ip:${ip}`;
@@ -72471,10 +73773,15 @@ function registerAuthRoutes(app, deps) {
         });
       }
     }
-    const { token, expiresAt } = await signSessionJwt(
+    const { token, expiresAt, sid } = await signSessionJwt(
       { id: staff.id, fullName: staff.full_name, role: staff.role, email: staff.email },
       await resolveSessionSecret(c.env)
     );
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    await c.env.DB.prepare(
+      "INSERT INTO auth_sessions (sid, staff_id, issued_at, expires_at) VALUES (?, ?, ?, ?)"
+    ).bind(sid, staff.id, nowIso, expiresAt).run();
+    await c.env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at < ?").bind(nowIso).run();
     await deps.audit.log({
       actorId: staff.id,
       action: "auth.login",
@@ -72504,6 +73811,11 @@ __name(registerAuthRoutes, "registerAuthRoutes");
 function registerLogoutRoute(app, deps) {
   app.post("/api/auth/logout", async (c) => {
     const ctx = getAuthContext(c);
+    if (ctx.sessionId) {
+      await c.env.DB.prepare(
+        "UPDATE auth_sessions SET revoked_at = ? WHERE sid = ? AND revoked_at IS NULL"
+      ).bind((/* @__PURE__ */ new Date()).toISOString(), ctx.sessionId).run();
+    }
     await deps.audit.log({
       actorId: ctx.staffId,
       action: "auth.logout",
@@ -72515,6 +73827,773 @@ function registerLogoutRoute(app, deps) {
   });
 }
 __name(registerLogoutRoute, "registerLogoutRoute");
+
+// src/application/setup/routes.ts
+var DEMO_STAFF_IDS = [
+  "30000000-0000-4000-8000-000000000301",
+  // manager
+  "30000000-0000-4000-8000-000000000302",
+  // secretary
+  "30000000-0000-4000-8000-000000000303"
+  // therapist
+];
+var SETUP_DONE_KEY = "setup_completed";
+async function readSetupFlag(db, key) {
+  const row = await db.queryOne(
+    `SELECT value FROM settings WHERE key = ? LIMIT 1`,
+    [key]
+  );
+  if (!row) return false;
+  return String(row.value).trim() === "1";
+}
+__name(readSetupFlag, "readSetupFlag");
+async function getSetupStatus(db) {
+  let completed2 = false;
+  try {
+    completed2 = await readSetupFlag(db, SETUP_DONE_KEY);
+  } catch {
+    completed2 = false;
+  }
+  if (completed2) return { initialized: true, demo_active: false };
+  let realStaffActive = 0;
+  try {
+    const placeholders = DEMO_STAFF_IDS.map(() => "?").join(",");
+    const row = await db.queryOne(
+      `SELECT COUNT(*) AS n FROM staff WHERE active = 1 AND id NOT IN (${placeholders})`,
+      [...DEMO_STAFF_IDS]
+    );
+    realStaffActive = row?.n ?? 0;
+  } catch {
+    realStaffActive = 0;
+  }
+  return { initialized: realStaffActive > 0, demo_active: realStaffActive === 0 };
+}
+__name(getSetupStatus, "getSetupStatus");
+async function completeSetup(deps, closeDemo) {
+  const { db, audit, logger } = deps;
+  if (await readSetupFlag(db, SETUP_DONE_KEY)) {
+    throw new ConflictError("\u0631\u0627\u0647\u200C\u0627\u0646\u062F\u0627\u0632\u06CC \u0646\u062E\u0633\u062A \u0642\u0628\u0644\u0627\u064B \u06A9\u0627\u0645\u0644 \u0634\u062F\u0647 \u0627\u0633\u062A");
+  }
+  let locked = 0;
+  if (closeDemo) {
+    const randomHash = await hashPassword(crypto.randomUUID() + ":" + crypto.randomUUID());
+    for (const id of DEMO_STAFF_IDS) {
+      const res = await db.query(
+        `UPDATE staff SET active = 0, password_hash = ?, updated_at = ? WHERE id = ? AND active = 1`,
+        [randomHash, (/* @__PURE__ */ new Date()).toISOString(), id]
+      );
+      const row = await db.queryOne(`SELECT id FROM staff WHERE id = ?`, [id]);
+      if (row) {
+        locked += 1;
+        await audit.log({
+          actorId: row.id,
+          action: "setup.demo_locked",
+          resourceType: "staff",
+          resourceId: id,
+          changes: { active: { from: 1, to: 0 } }
+        });
+      }
+      void res;
+    }
+  }
+  await db.query(
+    `INSERT INTO settings (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [SETUP_DONE_KEY, "1"]
+  );
+  await audit.log({
+    actorId: "setup",
+    action: "setup.completed",
+    resourceType: "settings",
+    resourceId: SETUP_DONE_KEY,
+    changes: { close_demo: { from: null, to: closeDemo } }
+  });
+  logger.info("setup.completed", { close_demo: closeDemo, demo_locked: locked });
+  return { demo_locked: locked };
+}
+__name(completeSetup, "completeSetup");
+function registerSetupStatusRoutes(app, deps) {
+  app.get("/api/setup/status", async (c) => {
+    try {
+      const st = await getSetupStatus(createDb(c.env.DB));
+      return c.json({ data: st }, 200);
+    } catch (err) {
+      deps.logger.child("setup").warn("setup.status_failed", {
+        error: err instanceof Error ? err.message : String(err)
+      });
+      return c.json({ data: { initialized: true, demo_active: false } }, 200);
+    }
+  });
+}
+__name(registerSetupStatusRoutes, "registerSetupStatusRoutes");
+var CompleteSchema = external_exports.object({ close_demo: external_exports.boolean().optional().default(true) });
+function registerSetupCompleteRoutes(app, deps) {
+  app.post("/api/setup/complete", async (c) => {
+    const body = CompleteSchema.parse(await c.req.json().catch(() => ({})));
+    const out = await completeSetup(deps, body.close_demo);
+    return c.json({ data: out }, 200);
+  });
+}
+__name(registerSetupCompleteRoutes, "registerSetupCompleteRoutes");
+
+// src/node-sync/app.ts
+function fireAndForget(c, p) {
+  try {
+    c.executionCtx.waitUntil(p);
+  } catch {
+    p.catch(() => void 0);
+  }
+}
+__name(fireAndForget, "fireAndForget");
+var RegisterSchema = external_exports.object({
+  node_code: external_exports.string().max(120),
+  label: external_exports.string().max(120).nullish()
+});
+var NodeCodeSchema = external_exports.object({
+  node_code: external_exports.string().max(120)
+});
+function createNodeSyncApp(deps) {
+  const { db, audit, logger } = deps;
+  const log = logger.child("node-sync");
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const minIntervalMs = deps.pushMinIntervalMs ?? NODE_PUSH_MIN_INTERVAL_MS;
+  const app = new Hono3();
+  app.use("*", async (c, next) => {
+    const requestId = `req-${crypto.randomUUID()}`;
+    c.set("requestId", requestId);
+    try {
+      return await runWithRequestId(requestId, () => next());
+    } finally {
+      c.header("X-Request-Id", requestId);
+    }
+  });
+  const nodeLimitWindowMs = deps.rateLimitWindowMs ?? NODE_RATE_LIMIT_WINDOW_MS;
+  const nodeLimiter = makeNodeSlidingWindowLimiter(nodeLimitWindowMs);
+  const nodeRateLimitGuard = /* @__PURE__ */ __name(async (c, next) => {
+    const perMin = parseNodeRateLimitPerMin(c.env?.NODE_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) return next();
+    const nodeCode = (c.req.header("X-CP-Node-Code") ?? "").trim().slice(0, 120);
+    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
+    const key = nodeCode ? `node:${perMin}:${nodeCode}` : `anon:${perMin}:${ip}`;
+    if (!nodeLimiter.allow(key, perMin)) {
+      const retryAfterS = Math.ceil(nodeLimitWindowMs / 1e3);
+      c.header("Retry-After", String(retryAfterS));
+      try {
+        await audit.log({
+          actorId: nodeCode || "anonymous",
+          action: "node.rate_limited",
+          resourceType: "node",
+          resourceId: nodeCode || "unauthenticated",
+          changes: { path: { from: null, to: c.req.path } }
+        });
+      } catch {
+      }
+      throw new RateLimitError(
+        retryAfterS,
+        "\u062A\u0639\u062F\u0627\u062F \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0646\u0648\u062F \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u0628\u0639\u062F\u0627\u064B \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
+      );
+    }
+    return next();
+  }, "nodeRateLimitGuard");
+  app.use("/pull", nodeRateLimitGuard);
+  app.use("/push", nodeRateLimitGuard);
+  app.use("/reconcile", nodeRateLimitGuard);
+  const limiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
+  app.use("*", async (c, next) => {
+    if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH" && c.req.method !== "DELETE") {
+      return next();
+    }
+    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) return next();
+    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
+    if (!limiter.allow(`nodesync:${perMin}:${ip}`, perMin)) {
+      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
+      throw new RateLimitError(
+        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3),
+        "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0633\u06CC\u0646\u06A9 \u0646\u0648\u062F \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
+      );
+    }
+    return next();
+  });
+  app.use("*", async (c, next) => {
+    await next();
+    c.header("Cache-Control", "no-store");
+  });
+  async function authNode(c) {
+    const outcome = await verifyNodeCredentials(db, {
+      nodeCode: c.req.header("X-CP-Node-Code"),
+      bearer: bearerToken(c.req.header("Authorization"))
+    });
+    if (outcome.ok) return outcome.node;
+    log.warn("node_sync.auth_failed", { fingerprint: outcome.fingerprint });
+    return null;
+  }
+  __name(authNode, "authNode");
+  const authFailed = /* @__PURE__ */ __name((c) => c.json({ error: "NODE_AUTH_FAILED", message: "\u0627\u0639\u062A\u0628\u0627\u0631 \u0646\u0648\u062F \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F" }, 401), "authFailed");
+  app.get("/pull", async (c) => {
+    const node2 = await authNode(c);
+    if (!node2) return authFailed(c);
+    await bumpQuotaUsage(db, "pull", now());
+    const rawDomains = (c.req.query("domains") ?? "").split(",").map((d) => d.trim().toLowerCase()).filter((d) => d.length > 0);
+    const unknownDomains = [...new Set(rawDomains.filter((d) => !NODE_PULL_DOMAIN_SET.has(d)))];
+    if (unknownDomains.length > 0) {
+      return c.json(
+        {
+          error: "NODE_DOMAIN_FORBIDDEN",
+          message: "\u062F\u0627\u0645\u0646\u0647\u0654 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u06CC \u0628\u06CC\u0631\u0648\u0646 \u0641\u0647\u0631\u0633\u062A \u0633\u0641\u06CC\u062F pull \u0627\u0633\u062A",
+          details: { domains: unknownDomains }
+        },
+        403
+      );
+    }
+    const domains = rawDomains.length > 0 ? rawDomains : [...NODE_PULL_DOMAINS];
+    const cursor = decodeNodeCursor(c.req.query("cursor"));
+    if (c.req.query("cursor") && !cursor) {
+      return c.json({ error: "NODE_CURSOR_INVALID", message: "cursor \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" }, 400);
+    }
+    const parsedLimit = Number.parseInt(c.req.query("limit") ?? "", 10);
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, NODE_PULL_MAX_LIMIT) : NODE_PULL_DEFAULT_LIMIT;
+    const at = now().toISOString();
+    const page2 = await pullNodePage(db, { domains, cursor, limit });
+    fireAndForget(c, stampNodePull(db, node2.node_code, now()).catch(() => void 0));
+    return c.json(
+      {
+        data: {
+          items: page2.items,
+          next_cursor: page2.next_cursor,
+          server_time: at,
+          server_ts: at,
+          center_version: APP_VERSION,
+          min_node_version: NODE_MIN_VERSION
+        }
+      },
+      200
+    );
+  });
+  app.get("/reconcile", async (c) => {
+    const node2 = await authNode(c);
+    if (!node2) return authFailed(c);
+    const rawDomains = (c.req.query("domains") ?? "").split(",").map((d) => d.trim().toLowerCase()).filter((d) => d.length > 0);
+    const unknownDomains = [...new Set(rawDomains.filter((d) => !NODE_PULL_DOMAIN_SET.has(d)))];
+    if (unknownDomains.length > 0) {
+      return c.json(
+        {
+          error: "NODE_DOMAIN_FORBIDDEN",
+          message: "\u062F\u0627\u0645\u0646\u0647\u0654 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u06CC \u0628\u06CC\u0631\u0648\u0646 \u0641\u0647\u0631\u0633\u062A \u0633\u0641\u06CC\u062F reconcile \u0627\u0633\u062A",
+          details: { domains: unknownDomains }
+        },
+        400
+      );
+    }
+    const domains = rawDomains.length > 0 ? rawDomains : [...NODE_PULL_DOMAINS];
+    const statuses = await reconcileDomainCounts(db, domains);
+    return c.json({ server_ts: now().toISOString(), domains: statuses }, 200);
+  });
+  app.post("/push", async (c) => {
+    const node2 = await authNode(c);
+    if (!node2) return authFailed(c);
+    const catchUpDeclared = c.req.header(NODE_PUSH_CATCHUP_HEADER) === "1";
+    const at = now();
+    const handshake = {
+      server_ts: at.toISOString(),
+      center_version: APP_VERSION,
+      min_node_version: NODE_MIN_VERSION
+    };
+    if (!catchUpDeclared && !shouldAttemptNodePush(node2.last_push_attempt_at, at, minIntervalMs)) {
+      const lastT = Date.parse(node2.last_push_attempt_at ?? "");
+      const retryAfterS = Number.isNaN(lastT) ? null : Math.max(0, Math.ceil((lastT + minIntervalMs - at.getTime()) / 1e3));
+      return c.json(
+        { data: { accepted: 0, duplicates: 0, throttled: true, retry_after_s: retryAfterS, ...handshake } },
+        200
+      );
+    }
+    await bumpQuotaUsage(db, "push", now());
+    const contentLength = Number.parseInt(c.req.header("content-length") ?? "0", 10) || 0;
+    if (contentLength > NODE_PUSH_BODY_MAX_BYTES) {
+      return c.json({ error: "NODE_BODY_TOO_LARGE", message: "\u062D\u062C\u0645 \u0628\u062F\u0646\u0647\u0654 push \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A" }, 400);
+    }
+    await stampNodePushAttempt(db, node2.node_code, at);
+    const raw2 = NodePushRawBodySchema.parse(await c.req.json());
+    const unknownDomains = [...new Set(raw2.items.map((it) => it.domain).filter((d) => !NODE_PUSH_DOMAIN_SET.has(d)))];
+    if (unknownDomains.length > 0) {
+      log.warn("node_sync.push_domain_forbidden", { domains: unknownDomains });
+      return c.json(
+        {
+          error: "NODE_DOMAIN_FORBIDDEN",
+          message: "\u062F\u0627\u0645\u0646\u0647\u0654 \u0627\u0631\u0633\u0627\u0644\u06CC \u0628\u06CC\u0631\u0648\u0646 \u0641\u0647\u0631\u0633\u062A \u0633\u0641\u06CC\u062F push \u0627\u0633\u062A \u2014 \u062F\u0627\u062F\u0647\u0654 \u0628\u0627\u0644\u06CC\u0646\u06CC \u0647\u0631\u06AF\u0632 \u0627\u0632 \u0645\u06CC\u0632 \u062E\u0627\u0631\u062C \u0646\u0645\u06CC\u200C\u0634\u0648\u062F",
+          details: { domains: unknownDomains }
+        },
+        403
+      );
+    }
+    const items = raw2.items.map((it) => validatePushItem(it));
+    const outcome = await pushNodeEvents(db, node2.node_code, items);
+    await stampNodePushOk(db, node2.node_code, at).catch(() => void 0);
+    log.info("node_sync.push", { node: node2.node_code, accepted: outcome.accepted, duplicates: outcome.duplicates });
+    return c.json(
+      { data: { accepted: outcome.accepted, duplicates: outcome.duplicates, throttled: false, ...handshake } },
+      200
+    );
+  });
+  app.post("/register", authMiddleware(), requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = RegisterSchema.parse(await c.req.json());
+    try {
+      const { registration, nodeKey } = await registerNode(db, audit, {
+        nodeCode: body.node_code,
+        label: body.label ?? null,
+        actorStaffId: actor.staffId
+      });
+      log.info("node_sync.registered", { node: registration.node_code, fingerprint: registration.key_fingerprint });
+      return c.json({ data: { ...registration, node_key: nodeKey } }, 201);
+    } catch (err) {
+      if (err instanceof NodeCodeInvalidError) throw new ValidationError(err.message);
+      if (err instanceof Error && err.message === "NODE_CODE_TAKEN") {
+        throw new ConflictError("\u0627\u06CC\u0646 \u06A9\u062F \u0646\u0648\u062F \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u06A9\u0644\u06CC\u062F \u062A\u0627\u0632\u0647 \u0627\u0632 rotate-key \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F");
+      }
+      throw err;
+    }
+  });
+  app.post("/rotate-key", authMiddleware(), requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = NodeCodeSchema.parse(await c.req.json());
+    try {
+      const { rotation, nodeKey } = await rotateNodeKey(db, audit, {
+        nodeCode: body.node_code,
+        actorStaffId: actor.staffId
+      });
+      log.info("node_sync.key_rotated", { node: rotation.node_code, fingerprint: rotation.key_fingerprint });
+      return c.json({ data: { ...rotation, node_key: nodeKey } }, 200);
+    } catch (err) {
+      if (err instanceof NodeCodeInvalidError) throw new ValidationError(err.message);
+      if (err instanceof Error && err.message === "NODE_MISSING") throw new NotFoundError("\u0646\u0648\u062F");
+      throw err;
+    }
+  });
+  app.post("/revoke", authMiddleware(), requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = NodeCodeSchema.parse(await c.req.json());
+    try {
+      const result = await revokeNode(db, audit, { nodeCode: body.node_code, actorStaffId: actor.staffId });
+      log.info("node_sync.revoked", { node: result.node_code });
+      return c.json({ data: result }, 200);
+    } catch (err) {
+      if (err instanceof NodeCodeInvalidError) throw new ValidationError(err.message);
+      if (err instanceof Error && err.message === "NODE_MISSING") throw new NotFoundError("\u0646\u0648\u062F");
+      throw err;
+    }
+  });
+  app.get("/nodes", authMiddleware(), requireRole("manager"), async (c) => {
+    return c.json({ data: { nodes: await listNodes(db) } }, 200);
+  });
+  app.notFound((c) => c.json({ error: "NOT_FOUND" }, 404));
+  return app;
+}
+__name(createNodeSyncApp, "createNodeSyncApp");
+function registerCentralQuotaRoutes(app, deps) {
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  app.get("/api/central/quota", authMiddleware(), requireRole("manager"), async (c) => {
+    const snapshot = await centralQuotaSnapshot(deps.db, now());
+    return c.json(snapshot, 200);
+  });
+}
+__name(registerCentralQuotaRoutes, "registerCentralQuotaRoutes");
+function registerCentralNodesMapRoutes(app, deps) {
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  app.get("/api/central/nodes-map", authMiddleware(), requireRole("manager"), async (c) => {
+    const map2 = await centralNodesMap(deps.db, now());
+    if (c.req.query("format") === "html") {
+      return new Response(renderNodesMapHtml(map2), {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Robots-Tag": "noindex, nofollow",
+          "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        }
+      });
+    }
+    return c.json(map2, 200);
+  });
+}
+__name(registerCentralNodesMapRoutes, "registerCentralNodesMapRoutes");
+function escHtml(v) {
+  return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+__name(escHtml, "escHtml");
+function faCell(v) {
+  if (!v) return "\u2014";
+  return faDigits(v.slice(0, 19).replace("T", " "));
+}
+__name(faCell, "faCell");
+var STATE_CHIP = {
+  synced: { cls: "chip ok", label: "\u0647\u0645\u200C\u06AF\u0627\u0645" },
+  stale: { cls: "chip warn", label: "\u0628\u06CC\u200C\u062A\u0645\u0627\u0633" },
+  never_seen: { cls: "chip warn", label: "\u0647\u0631\u06AF\u0632 \u062A\u0645\u0627\u0633 \u0646\u06AF\u0631\u0641\u062A\u0647" },
+  revoked: { cls: "chip bad", label: "\u0628\u0627\u0637\u0644\u200C\u0634\u062F\u0647" }
+};
+var QUOTA_LEVEL_CHIP = {
+  ok: { cls: "chip ok", label: "\u0633\u0628\u0632 \u2014 \u0645\u0635\u0631\u0641 \u0639\u0627\u062F\u06CC" },
+  warn: { cls: "chip warn", label: "\u0632\u0631\u062F \u2014 \u0646\u0632\u062F\u06CC\u06A9 \u0633\u0642\u0641 (\u06F8\u06F0\u066A+)" },
+  danger: { cls: "chip bad", label: "\u0642\u0631\u0645\u0632 \u2014 \u0631\u0648\u06CC \u0645\u0631\u0632 \u0633\u0642\u0641 (\u06F9\u06F5\u066A+) \u2014 \u067E\u0644\u0646 Workers Paid \u0631\u0627 \u0641\u0639\u0627\u0644 \u06A9\u0646\u06CC\u062F" }
+};
+function renderNodesMapHtml(map2) {
+  const worstPercent = Math.max(
+    map2.quota.percent_requests,
+    map2.quota.percent_rows_written,
+    map2.quota.percent_rows_read
+  );
+  const levelChip = QUOTA_LEVEL_CHIP[map2.quota.level];
+  const nodeRows = map2.nodes.length ? map2.nodes.map((n) => {
+    const chip = STATE_CHIP[n.status.state];
+    const rowCls = n.status.state === "revoked" ? "node bad" : n.status.state === "synced" ? "node" : "node warn";
+    const pending = n.status.pending_push !== null ? faDigits(String(n.status.pending_push)) : "\u2014";
+    const recon = n.status.reconciliation_ok === null ? "\u2014" : n.status.reconciliation_ok ? "\u0647\u0645\u200C\u062E\u0648\u0627\u0646" : "\u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646";
+    return `      <div class="${rowCls}">
+        <div class="row1">
+          <span class="name">${escHtml(n.name)}</span>
+          <span class="code">${escHtml(n.node_id)}</span>
+          <span class="${chip.cls}">${chip.label}</span>
+        </div>
+        <div class="meta">
+          <span>\u062B\u0628\u062A: ${faCell(n.registered_at)}</span>
+          <span>\u0622\u062E\u0631\u06CC\u0646 \u062A\u0645\u0627\u0633: ${faCell(n.last_seen)}</span>
+          <span>\u0622\u062E\u0631\u06CC\u0646 pull \u0645\u0648\u0641\u0642: ${faCell(n.status.last_pull_ok_at)}</span>
+          <span>\u0622\u062E\u0631\u06CC\u0646 push \u0645\u0648\u0641\u0642: ${faCell(n.status.last_push_ok_at)}</span>
+          <span>\u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 push: ${pending}</span>
+          <span>\u0622\u0634\u062A\u06CC\u200C\u0633\u0627\u0632: ${recon}</span>
+        </div>
+      </div>`;
+  }).join("\n") : '      <div class="node empty">\u0647\u0646\u0648\u0632 \u0646\u0648\u062F\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0627\u0632 \u0645\u0633\u06CC\u0631 \u062B\u0628\u062A \u0646\u0648\u062F (\u0641\u0642\u0637-\u0645\u062F\u06CC\u0631) \u06CC\u06A9 \u0645\u06CC\u0632 \u0631\u0627 \u067E\u06CC\u0648\u0646\u062F \u0628\u0632\u0646\u06CC\u062F.</div>';
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>\u0646\u0642\u0634\u0647\u0654 \u0645\u0639\u0645\u0627\u0631\u06CC \u2014 \u0645\u0631\u06A9\u0632 \u0648 \u0646\u0648\u062F\u0647\u0627</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f4f6f8; color: #1f2937; font-family: Vazirmatn, Tahoma, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.9; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 40px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 28px 0 10px; }
+  .meta { color: #6b7280; font-size: 12.5px; }
+  .center { background: #fff; border: 2px solid #1d4ed8; border-radius: 12px; padding: 16px 20px; text-align: center; }
+  .center .tag { display: inline-block; background: #dbeafe; color: #1e3a8a; border-radius: 999px; padding: 2px 14px; font-size: 12.5px; }
+  .bar { background: #e5e7eb; border-radius: 999px; height: 14px; margin: 12px auto 6px; max-width: 520px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: ${map2.quota.level === "danger" ? "#dc2626" : map2.quota.level === "warn" ? "#d97706" : "#16a34a"}; border-radius: 999px; }
+  .connector { width: 2px; height: 26px; background: #94a3b8; margin: 0 auto; }
+  .node { background: #fff; border: 1px solid #e2e8f0; border-inline-start: 6px solid #16a34a; border-radius: 10px; padding: 10px 14px; margin: 10px 0; }
+  .node.warn { border-inline-start-color: #d97706; }
+  .node.bad { border-inline-start-color: #dc2626; }
+  .node.empty { color: #6b7280; border-inline-start-color: #cbd5e1; }
+  .row1 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .row1 .name { font-weight: 700; }
+  .row1 .code { color: #64748b; font-size: 12px; direction: ltr; }
+  .chip { border-radius: 999px; padding: 1px 12px; font-size: 12px; white-space: nowrap; }
+  .chip.ok { background: #dcfce7; color: #166534; }
+  .chip.warn { background: #fef9c3; color: #92400e; }
+  .chip.bad { background: #fee2e2; color: #991b1b; }
+  .node .meta { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 4px; font-size: 12.5px; color: #475569; }
+  .legend { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; font-size: 13px; }
+  .legend ul { margin: 6px 0 0; padding-inline-start: 20px; }
+  .note { color: #6b7280; font-size: 12.5px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>\u0646\u0642\u0634\u0647\u0654 \u0645\u0639\u0645\u0627\u0631\u06CC \u2014 \u0645\u0631\u06A9\u0632 \u2194 \u0646\u0648\u062F\u0647\u0627</h1>
+    <div class="meta">\u0646\u0633\u062E\u0647\u0654 \u0645\u0631\u06A9\u0632: ${faDigits(map2.center_version)} \xB7 \u0644\u062D\u0638\u0647\u0654 \u0645\u0631\u06A9\u0632: ${faCell(map2.server_ts)} \xB7 \u06AF\u0632\u0627\u0631\u0634\u0650 \u0641\u0642\u0637-\u062E\u0648\u0627\u0646\u062F\u0646\u06CC \u0627\u0633\u062A\u061B \u0627\u06CC\u0646 \u0635\u0641\u062D\u0647 \u0647\u06CC\u0686 \u062F\u0627\u062F\u0647\u0654 \u0628\u0627\u0644\u06CC\u0646\u06CC \u0646\u062F\u0627\u0631\u062F.</div>
+  </header>
+
+  <h2>\u0645\u0631\u06A9\u0632 (Cloudflare Worker + D1)</h2>
+  <section class="center">
+    <span class="tag">\u0645\u0631\u06A9\u0632</span>
+    <div>\u0646\u0633\u062E\u0647\u0654 ${faDigits(map2.center_version)}</div>
+    <div class="bar"><i style="width: ${faDigits(String(Math.min(100, Math.max(worstPercent, 1))))}%"></i></div>
+    <div class="meta">\u0633\u0647\u0645\u06CC\u0647\u0654 \u0631\u0648\u0632 (${faDigits(map2.quota.day)}): \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627 ${faDigits(String(map2.quota.percent_requests))}\u066A \xB7 \u0633\u0637\u0631\u0646\u0648\u06CC\u0633\u06CC ${faDigits(String(map2.quota.percent_rows_written))}\u066A \xB7 \u0633\u0637\u0631\u062E\u0648\u0627\u0646\u06CC ${faDigits(String(map2.quota.percent_rows_read))}\u066A \u2014 <span class="${levelChip.cls}">${levelChip.label}</span></div>
+  </section>
+  <div class="connector" aria-hidden="true"></div>
+
+  <h2>\u0646\u0648\u062F\u0647\u0627 (${faDigits(String(map2.nodes.length))})</h2>
+  <section>
+${nodeRows}
+  </section>
+
+  <h2>\u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u0631\u0646\u06AF\u200C\u0647\u0627</h2>
+  <section class="legend">
+    <ul>
+      <li><span class="chip ok">\u0647\u0645\u200C\u06AF\u0627\u0645</span> \u0633\u0628\u0632 \u2014 \u0622\u062E\u0631\u06CC\u0646 \u062A\u0645\u0627\u0633 \u0646\u0648\u062F \u0628\u0627 \u0645\u0631\u06A9\u0632 \u06A9\u0645\u062A\u0631 \u0627\u0632 \u06F2\u06F4 \u0633\u0627\u0639\u062A \u067E\u06CC\u0634 \u0627\u0633\u062A.</li>
+      <li><span class="chip warn">\u0628\u06CC\u200C\u062A\u0645\u0627\u0633 / \u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631</span> \u0632\u0631\u062F \u2014 \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F4 \u0633\u0627\u0639\u062A \u062A\u0645\u0627\u0633 \u0646\u0628\u0648\u062F\u0647\u060C \u0646\u0648\u062F \u0647\u0646\u0648\u0632 \u0647\u0631\u06AF\u0632 \u062A\u0645\u0627\u0633 \u0646\u06AF\u0631\u0641\u062A\u0647\u060C \u06CC\u0627 \u0631\u06A9\u0648\u0631\u062F\u06CC \u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 push \u0627\u0633\u062A.</li>
+      <li><span class="chip bad">\u0628\u0627\u0637\u0644 / \u062E\u0637\u0627</span> \u0642\u0631\u0645\u0632 \u2014 \u0646\u0648\u062F \u0627\u0632 \u067E\u0646\u0644 \u0645\u0631\u06A9\u0632 \u0628\u0627\u0637\u0644 \u0634\u062F\u0647 \u0627\u0633\u062A. (\u0648\u0636\u0639\u06CC\u062A \xAB\u062E\u0637\u0627\xBB\u06CC \u0633\u0645\u062A \u0646\u0648\u062F \u0647\u0646\u0648\u0632 \u0628\u0647 \u0645\u0631\u06A9\u0632 \u0622\u06CC\u0646\u0647 \u0646\u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0642\u0631\u0645\u0632\u0650 \u0627\u0645\u0631\u0648\u0632 \u0641\u0642\u0637 \xAB\u0628\u0627\u0637\u0644\u200C\u0634\u062F\u0647\xBB \u0631\u0627 \u0646\u0634\u0627\u0646 \u0645\u06CC\u200C\u062F\u0647\u062F.)</li>
+      <li>\u0646\u0648\u0627\u0631 \u0633\u0647\u0645\u06CC\u0647\u0654 \u0645\u0631\u06A9\u0632 \u0628\u0627 \u0631\u0646\u06AF \u0633\u0637\u062D \u0645\u0635\u0631\u0641 (\u0633\u0628\u0632 \u0639\u0627\u062F\u06CC / \u0632\u0631\u062F \u06F8\u06F0\u066A+ / \u0642\u0631\u0645\u0632 \u06F9\u06F5\u066A+) \u0631\u0646\u06AF \u0645\u06CC\u200C\u0634\u0648\u062F.</li>
+    </ul>
+    <div class="note">\u0633\u062A\u0648\u0646\u200C\u0647\u0627\u06CC \xAB\u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 push\xBB \u0648 \xAB\u0622\u0634\u062A\u06CC\u200C\u0633\u0627\u0632\xBB \u0641\u0639\u0644\u0627\u064B \xAB\u2014\xBB \u0645\u06CC\u200C\u0645\u0627\u0646\u0646\u062F: \u0622\u06CC\u0646\u0647\u0654 \u0648\u0636\u0639\u06CC\u062A \u0633\u06CC\u0646\u06A9 \u0641\u0642\u0637 \u0631\u0648\u06CC \u062F\u0633\u062A\u06AF\u0627\u0647\u0650 \u062E\u0648\u062F \u0634\u0639\u0628\u0647 \u0630\u062E\u06CC\u0631\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0628\u0647 \u0645\u0631\u06A9\u0632 \u0627\u0631\u0633\u0627\u0644 \u0646\u0645\u06CC\u200C\u0634\u0648\u062F (\u0642\u0631\u0627\u0631\u062F\u0627\u062F rust-f14) \u2014 \u0645\u0631\u06A9\u0632 \u0641\u0642\u0637 \u0645\u064F\u0647\u0631 \u062A\u0645\u0627\u0633\u200C\u0647\u0627\u06CC \u0648\u0627\u0642\u0639\u06CC (pull/push) \u0631\u0627 \u0627\u0632 \u0631\u062C\u06CC\u0633\u062A\u0631\u06CC \u0645\u06CC\u200C\u062F\u0627\u0646\u062F.</div>
+  </section>
+</main>
+</body>
+</html>`;
+}
+__name(renderNodesMapHtml, "renderNodesMapHtml");
+
+// src/internal-sync/service.ts
+var SYNC_INGEST_MAX_ITEMS = 100;
+var IngestItemSchema = external_exports.object({
+  id: external_exports.string().min(1).max(120),
+  domain: external_exports.string().min(1).max(40),
+  updated_at: external_exports.string().min(4).max(40),
+  payload: external_exports.record(external_exports.string(), external_exports.unknown())
+  // zod4 — کلید صریح
+});
+var IngestBodySchema = external_exports.object({
+  items: external_exports.array(IngestItemSchema).min(1).max(SYNC_INGEST_MAX_ITEMS)
+});
+async function projectSyncedAnnouncement(db, id, payload, log) {
+  try {
+    const title = typeof payload.title === "string" ? payload.title : "";
+    if (title.trim().length === 0) return false;
+    const body = typeof payload.body === "string" ? payload.body : "";
+    const publishedAt = typeof payload.published_at === "string" && payload.published_at.length > 0 ? payload.published_at : typeof payload.created_at === "string" && payload.created_at.length > 0 ? payload.created_at : null;
+    const active = payload.active === false || payload.active === 0 ? 0 : 1;
+    await db.query(
+      `INSERT INTO synced_announcements (id, title, body, published_at, active, received_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))
+       ON CONFLICT(id) DO UPDATE SET
+         title = excluded.title,
+         body = excluded.body,
+         published_at = excluded.published_at,
+         active = excluded.active,
+         received_at = datetime('now')`,
+      [id, title, body, publishedAt, active]
+    );
+    return true;
+  } catch (err) {
+    log?.warn("internal_sync.announcement_projection_failed", { id, error: String(err) });
+    return false;
+  }
+}
+__name(projectSyncedAnnouncement, "projectSyncedAnnouncement");
+async function projectIfAnnouncement(db, item, log) {
+  if (item.domain !== "announcements") return;
+  await projectSyncedAnnouncement(db, item.id, item.payload, log);
+}
+__name(projectIfAnnouncement, "projectIfAnnouncement");
+async function ingestInboxItem(db, item, log) {
+  const payloadJson = JSON.stringify(item.payload);
+  const existing = await db.queryOne(
+    "SELECT updated_at, payload FROM node_sync_inbox WHERE domain = ? AND id = ?",
+    [item.domain, item.id]
+  );
+  if (!existing) {
+    await db.query(
+      "INSERT INTO node_sync_inbox (domain, id, updated_at, payload) VALUES (?, ?, ?, ?)",
+      [item.domain, item.id, item.updated_at, payloadJson]
+    );
+    await projectIfAnnouncement(db, item, log);
+    return "inserted";
+  }
+  if (existing.updated_at === item.updated_at && existing.payload === payloadJson) {
+    await projectIfAnnouncement(db, item, log);
+    return "duplicate";
+  }
+  await db.query(
+    "UPDATE node_sync_inbox SET updated_at = ?, payload = ?, received_at = datetime('now') WHERE domain = ? AND id = ?",
+    [item.updated_at, payloadJson, item.domain, item.id]
+  );
+  await projectIfAnnouncement(db, item, log);
+  return "updated";
+}
+__name(ingestInboxItem, "ingestInboxItem");
+function splitByWhitelist(items) {
+  const allowed = items.filter((it) => NODE_PULL_DOMAIN_SET.has(it.domain));
+  const forbiddenDomains = [...new Set(items.filter((it) => !NODE_PULL_DOMAIN_SET.has(it.domain)).map((it) => it.domain))];
+  return { allowed, forbiddenDomains };
+}
+__name(splitByWhitelist, "splitByWhitelist");
+async function inboxStatusCounts(db) {
+  const rows = await db.query(
+    "SELECT domain, COUNT(*) AS n FROM node_sync_inbox GROUP BY domain ORDER BY domain"
+  );
+  const by_domain = {};
+  let total = 0;
+  for (const r of rows) {
+    by_domain[r.domain] = Number(r.n);
+    total += Number(r.n);
+  }
+  return { total, by_domain };
+}
+__name(inboxStatusCounts, "inboxStatusCounts");
+async function syncedAnnouncementsCount(db) {
+  const row = await db.queryOne("SELECT COUNT(*) AS n FROM synced_announcements");
+  return Number(row?.n ?? 0);
+}
+__name(syncedAnnouncementsCount, "syncedAnnouncementsCount");
+
+// src/internal-sync/outbox.ts
+var OUTBOX_MAX_ITEMS = 200;
+var OutboxSinceSchema = external_exports.iso.datetime();
+function parseOutboxSince(raw2) {
+  const s = raw2?.trim();
+  if (!s) return null;
+  const parsed = OutboxSinceSchema.safeParse(s);
+  if (!parsed.success) throw new ValidationError("\u067E\u0627\u0631\u0627\u0645\u062A\u0631 since \u0628\u0627\u06CC\u062F ISO-UTC \u0645\u0639\u062A\u0628\u0631 \u0628\u0627\u0634\u062F (\u067E\u0633\u0648\u0646\u062F Z)");
+  return parsed.data;
+}
+__name(parseOutboxSince, "parseOutboxSince");
+var CLIENT_ERROR_COLUMNS = `id,
+  COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', occurred_at), occurred_at) AS at,
+  message, source, line_no AS line, col_no AS col, stack, url, app_version`;
+function sinceToSqlCutoff(sinceIso) {
+  return sinceIso.slice(0, 19).replace("T", " ");
+}
+__name(sinceToSqlCutoff, "sinceToSqlCutoff");
+async function clientErrorItems(db, since) {
+  const sql = `SELECT ${CLIENT_ERROR_COLUMNS}
+                 FROM client_errors
+                 ${since ? "WHERE occurred_at > ?" : ""}
+                ORDER BY occurred_at ASC, id ASC
+                LIMIT ?`;
+  const params = since ? [sinceToSqlCutoff(since), OUTBOX_MAX_ITEMS] : [OUTBOX_MAX_ITEMS];
+  const rows = await db.query(sql, params);
+  if (!NODE_PUSH_DOMAIN_SET.has("client_errors")) return [];
+  const items = [];
+  for (const r of rows) {
+    const parsed = ClientErrorPayloadSchema.safeParse({
+      message: r.message,
+      source: r.source,
+      line: r.line,
+      col: r.col,
+      stack: r.stack,
+      url: r.url,
+      app_version: r.app_version
+    });
+    if (!parsed.success) continue;
+    items.push({ id: String(r.id), domain: "client_errors", at: String(r.at), payload: parsed.data });
+  }
+  return items;
+}
+__name(clientErrorItems, "clientErrorItems");
+async function healthPingItem(db, now) {
+  const errs24h = await db.queryOne(
+    "SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at >= datetime('now', '-24 hours')"
+  );
+  const hour = now.toISOString().slice(0, 13);
+  const payload = HealthPingPayloadSchema.parse({
+    ok: true,
+    version: APP_VERSION,
+    // نسخهٔ اپ از @core/version — فیلد version اسکیما
+    counters: { client_errors_24h: Number(errs24h?.n ?? 0) }
+  });
+  return {
+    id: `ping-${hour}`,
+    domain: "health_ping",
+    at: `${hour}:00:00Z`,
+    payload
+  };
+}
+__name(healthPingItem, "healthPingItem");
+var USAGE_COUNTERS = [
+  { key: "students_active", sql: "SELECT COUNT(*) AS n FROM students WHERE active = 1" },
+  { key: "appointments_total", sql: "SELECT COUNT(*) AS n FROM appointments" },
+  {
+    key: "appointments_7d",
+    sql: "SELECT COUNT(*) AS n FROM appointments WHERE created_at >= datetime('now', '-7 days')"
+  },
+  { key: "day_notes_total", sql: "SELECT COUNT(*) AS n FROM day_notes" },
+  {
+    key: "audit_events_24h",
+    sql: "SELECT COUNT(*) AS n FROM audit_log WHERE created_at >= datetime('now', '-24 hours')"
+  },
+  { key: "inbox_items_total", sql: "SELECT COUNT(*) AS n FROM node_sync_inbox" }
+];
+async function usageSummaryItem(db, now) {
+  if (!NODE_PUSH_DOMAIN_SET.has("usage_summary")) return null;
+  const counters = {};
+  for (const c of USAGE_COUNTERS) {
+    try {
+      const row = await db.queryOne(c.sql);
+      const n = Number(row?.n ?? 0);
+      if (Number.isFinite(n)) counters[c.key] = n;
+    } catch {
+    }
+  }
+  const parsed = UsageSummaryPayloadSchema.safeParse(counters);
+  if (!parsed.success) return null;
+  const day = now.toISOString().slice(0, 10);
+  return {
+    id: `usage-${day}`,
+    domain: "usage_summary",
+    at: `${day}T00:00:00Z`,
+    // ابتدای همان بکت روز UTC — هم‌الگوی at بکت‌شدهٔ ping
+    payload: parsed.data
+  };
+}
+__name(usageSummaryItem, "usageSummaryItem");
+async function buildOutboxPage(db, since, now = /* @__PURE__ */ new Date()) {
+  const [errors, ping, usage] = await Promise.all([
+    clientErrorItems(db, since),
+    healthPingItem(db, now),
+    usageSummaryItem(db, now)
+  ]);
+  const includePing = !since || Date.parse(ping.at) > Date.parse(since);
+  const includeUsage = usage !== null && (!since || Date.parse(usage.at) > Date.parse(since));
+  const items = [...errors];
+  if (includeUsage && usage) items.push(usage);
+  if (includePing) items.push(ping);
+  items.sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  return { items: items.slice(0, OUTBOX_MAX_ITEMS), generated_at: now.toISOString() };
+}
+__name(buildOutboxPage, "buildOutboxPage");
+
+// src/internal-sync/routes.ts
+function requireDesktopEngine2(c) {
+  if (c.env?.CENTER_DESKTOP_ENGINE !== "1") {
+    throw new NotFoundError("\u0645\u0633\u06CC\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
+  }
+}
+__name(requireDesktopEngine2, "requireDesktopEngine");
+function registerInternalSyncRoutes(app, deps) {
+  const log = deps.logger.child("internal-sync");
+  app.post("/api/internal/sync/ingest", async (c) => {
+    requireDesktopEngine2(c);
+    const ctx = getAuthContext(c);
+    const parsed = IngestBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError("\u0628\u062F\u0646\u0647\u0654 \u0627\u0633\u062A\u0642\u0631\u0627\u0631 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+    const { allowed, forbiddenDomains } = splitByWhitelist(parsed.data.items);
+    if (forbiddenDomains.length > 0) {
+      return c.json({ error: "NODE_DOMAIN_FORBIDDEN", message: "\u062F\u0627\u0645\u0646\u0647\u0654 \u0628\u06CC\u0631\u0648\u0646 \u0641\u0647\u0631\u0633\u062A \u0633\u0641\u06CC\u062F \u0633\u06CC\u0646\u06A9 \u0627\u0633\u062A" }, 403);
+    }
+    const counts = { inserted: 0, updated: 0, duplicates: 0 };
+    const by_domain = {};
+    for (const item of allowed) {
+      const r = await ingestInboxItem(deps.db, item, log);
+      if (r === "inserted") counts.inserted += 1;
+      else if (r === "updated") counts.updated += 1;
+      else counts.duplicates += 1;
+      by_domain[item.domain] = (by_domain[item.domain] ?? 0) + 1;
+    }
+    log.info("ingest.ok", { staffId: ctx.staffId, ...counts });
+    return c.json({ data: { ...counts, by_domain } }, 200);
+  });
+  app.get("/api/internal/sync/status", async (c) => {
+    requireDesktopEngine2(c);
+    getAuthContext(c);
+    const status = await inboxStatusCounts(deps.db);
+    const synced_announcements = await syncedAnnouncementsCount(deps.db);
+    return c.json({ data: { ...status, synced_announcements } }, 200);
+  });
+  app.get("/api/internal/sync/outbox", async (c) => {
+    requireDesktopEngine2(c);
+    const ctx = getAuthContext(c);
+    const since = parseOutboxSince(c.req.query("since"));
+    const page2 = await buildOutboxPage(deps.db, since);
+    log.info("outbox.ok", { staffId: ctx.staffId, items: page2.items.length });
+    return c.json({ data: page2 }, 200);
+  });
+}
+__name(registerInternalSyncRoutes, "registerInternalSyncRoutes");
 
 // src/application/api-routing/index.ts
 function createServices(deps) {
@@ -72754,7 +74833,8 @@ function createServices(deps) {
     db,
     cpConfigured: Boolean(deps.cpSyncUrl && deps.cpNodeCode && deps.cpNodeKey),
     envName: deps.envName ?? null,
-    clientErrorsMax: deps.clientErrorsMax ?? null
+    clientErrorsMax: deps.clientErrorsMax ?? null,
+    gamesHealthUrl: deps.gamesHealthUrl ?? null
   });
   const growth = createGrowthService({ db, logger });
   const centerKpi = createCenterKpiService({ db });
@@ -72865,9 +74945,8 @@ function createApp(deps) {
     return c.json(
       {
         ok: dbOk,
-        db: dbOk ? "up" : "down",
         version: APP_VERSION,
-        ts: (/* @__PURE__ */ new Date()).toISOString()
+        server_ts: (/* @__PURE__ */ new Date()).toISOString()
       },
       dbOk ? 200 : 503,
       { "Cache-Control": "no-store" }
@@ -72895,9 +74974,17 @@ function createApp(deps) {
   });
   registerGamesPublicRoutes(app, services.games);
   registerAuthRoutes(app, { audit: services.audit, logger: services.logger });
+  registerSetupStatusRoutes(app, { logger: services.logger });
+  registerSystemPublicRoutes(app, { db: services.db });
+  app.route("/node", createNodeSyncApp({ db: services.db, audit: services.audit, logger: services.logger }));
   app.use("/api/*", authMiddleware());
   app.use("/api/*", supervisorGate(services.audit));
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
+  registerSetupCompleteRoutes(app, { db: services.db, audit: services.audit, logger: services.logger });
+  registerInternalSyncRoutes(app, { db: services.db, logger: services.logger });
+  registerNodeSyncStatusRoute(app, { db: services.db, logger: services.logger });
+  registerCentralQuotaRoutes(app, { db: services.db });
+  registerCentralNodesMapRoutes(app, { db: services.db });
   app.get("/api/me", (c) => c.json({ data: c.get("authContext") }, 200));
   registerRoutes(app, services.appointments);
   registerRoutes2(app, services.attendance);
@@ -72942,6 +75029,12 @@ function createApp(deps) {
   registerBugReportRoutes(app, services.bugReports);
   registerClientErrorsRoutes(app, services.clientErrors);
   registerHealthRoutes(app, services.health);
+  registerSystemRoutes(app, {
+    db: services.db,
+    audit: services.audit,
+    logger: services.logger,
+    envName: deps.envName ?? null
+  });
   registerGrowthRoutes(app, services.growth);
   registerContentScoreRoutes(app, { contentScore: services.contentScore });
   if (FEATURES.apiKeys) registerKeysRoutes(app, services.keys);
@@ -73020,63 +75113,6 @@ function createApp(deps) {
   return app;
 }
 __name(createApp, "createApp");
-
-// src/core/db/client.ts
-function createDb(d1, logger) {
-  const base = {
-    async query(sql, params = []) {
-      const stmt = d1.prepare(sql).bind(...params);
-      const res = await stmt.all();
-      return res.results ?? [];
-    },
-    async queryOne(sql, params = []) {
-      const rows = await base.query(sql, params);
-      return rows.length > 0 ? rows[0] : null;
-    },
-    async execute(sql, params = []) {
-      return d1.prepare(sql).bind(...params).run();
-    },
-    prepare(sql, params = []) {
-      return d1.prepare(sql).bind(...params);
-    },
-    async batch(statements) {
-      if (statements.length === 0) return [];
-      return d1.batch(statements);
-    },
-    async transaction(fn) {
-      const statements = [];
-      const tx = {
-        query: /* @__PURE__ */ __name((sql, params = []) => base.query(sql, params), "query"),
-        queryOne: /* @__PURE__ */ __name((sql, params = []) => base.queryOne(sql, params), "queryOne"),
-        prepare: /* @__PURE__ */ __name((sql, params = []) => base.prepare(sql, params), "prepare"),
-        execute: /* @__PURE__ */ __name((sql, params = []) => {
-          statements.push(d1.prepare(sql).bind(...params));
-          return Promise.resolve({ success: true, meta: {} });
-        }, "execute"),
-        batch: /* @__PURE__ */ __name((stmts) => {
-          statements.push(...stmts);
-          return Promise.resolve([]);
-        }, "batch"),
-        transaction: /* @__PURE__ */ __name((fn2) => fn2(tx), "transaction")
-      };
-      const result = await fn(tx);
-      if (statements.length > 0) {
-        try {
-          await d1.batch(statements);
-        } catch (err) {
-          logger?.error("transaction.batch.failed", {
-            statementCount: statements.length,
-            error: err instanceof Error ? err.message : "unknown"
-          });
-          throw err;
-        }
-      }
-      return result;
-    }
-  };
-  return base;
-}
-__name(createDb, "createDb");
 
 // src/core/logger/logger.ts
 var LEVEL_WEIGHT = { debug: 10, info: 20, warn: 30, error: 40 };
@@ -73246,11 +75282,15 @@ async function runBackupAutoSendCycle(env) {
     teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
     ...await buildRuntimeEnv(env, db)
   });
+  const archive = await services.backup.archiveLatest({ staffId: "system" }).catch((err) => {
+    logger.error("backup.archive.failed", { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  });
   const outcome = await services.backup.runScheduledAutoSend().catch((err) => {
     logger.error("backup.auto.failed", { error: err instanceof Error ? err.message : String(err) });
     return null;
   });
-  logger.info("backup.auto.cycle.done", { outcome });
+  logger.info("backup.auto.cycle.done", { archive, outcome });
 }
 __name(runBackupAutoSendCycle, "runBackupAutoSendCycle");
 async function runCpSyncCycle(env) {
@@ -73393,8 +75433,10 @@ var src_default = {
       cpNodeKey: cpContentCfg.cpNodeKey,
       envName: env.ENV ?? null,
       // ۱.۲۵.۶۷ — پنل سلامت
-      clientErrorsMax: env.ALERT_CLIENT_ERRORS_MAX ?? null
+      clientErrorsMax: env.ALERT_CLIENT_ERRORS_MAX ?? null,
       // ف۵ (P0-3) — آستانهٔ هشدار خطاهای مرورگر
+      gamesHealthUrl: env.GAMES_HEALTH_URL ?? null
+      // ENG-4 (۱.۲۶.۴) — پایش ورکر بازی‌ها
     });
     return app.fetch(request, env, ctx);
   },

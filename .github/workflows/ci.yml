@@ -43,12 +43,27 @@ jobs:
       - name: Bundle syntax check (node --check)
         run: node --check worker/bundle.js
 
+      - name: Build games worker bundle
+        run: node scripts/build-worker-games.mjs
+
+      # v1.27.۰۳ — گیت فاز ۲ دوهاته: موتور توسعهٔ workerd و موتور دسکتاپ adapter (نصاب)
+      - name: Engine smoke — workerd (حالت توسعه)
+        run: node scripts/engine/engine-smoke.mjs
+
+      - name: Engine smoke — adapter (موتور درون‌پروسه‌ای نصاب — بدون workerd)
+        run: SMOKE_ENGINE=adapter node scripts/engine/engine-smoke.mjs
+
       - name: Performance budget (پیل بوت/CSS/فونت)
         run: node scripts/perf-budget.mjs
 
       # ف۲ — گیت همگامی MIGRATIONS.md: هر فایل مایگریشن باید سطر سند داشته باشد
       - name: MIGRATIONS.md sync gate
         run: node scripts/check-migrations-doc.mjs
+
+      # v1.26.0 — گیت سازگاری D1: پورت جداکنندهٔ cf_deploy.rs + اجرای کامل schema.sql روی SQLite
+      # و برابری sqlite_master با مسیر فایل‌به‌فایل — «همان SQL به موتور محلی و markaz-central می‌رود»
+      - name: D1 compatibility gate (schema.sql ↔ Cloudflare D1)
+        run: node scripts/check-d1-compat.mjs
 
       # ف۲ — گیت دیسدیپلین هش CSP: بلاک inline ↔ هش‌های _headers
       - name: CSP hash discipline gate

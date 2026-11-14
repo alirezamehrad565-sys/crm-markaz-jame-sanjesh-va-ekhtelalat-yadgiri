@@ -36,6 +36,8 @@ export interface AuthContext {
   email: string;
   role: StaffRole;
   displayName: string;
+  /** شناسهٔ نشست فعال (0111) — فقط در مسیر توکن سشن؛ خروج با آن ردیف را ابطال می‌کند */
+  sessionId?: string;
 }
 
 export interface ConflictWarning {
@@ -360,6 +362,10 @@ export interface AppBindings {
   AUTH_SECRET?: string;
   /** ف۵ (P2-15) — سقف نوشتنی per-IP در دقیقه روی /api/*؛ رشتهٔ «۰» = خاموش (پارس در @app/http/rate-limit) */
   API_RATE_LIMIT_PER_MIN?: string;
+  /** EXP-7 — سقف درخواست نودی per-node در دقیقه روی /node/pull|push|reconcile؛ رشتهٔ «۰» = خاموش (پارس در node-sync/service) */
+  NODE_RATE_LIMIT_PER_MIN?: string;
+  /** ENG-4 (۱.۲۶.۴) — نشانی /health ورکر بازی‌ها؛ فقط در موتور محلی بسته می‌شود (config.mjs) — تولید وب غایب */
+  GAMES_HEALTH_URL?: string;
 }
 
 export interface AppVariables {

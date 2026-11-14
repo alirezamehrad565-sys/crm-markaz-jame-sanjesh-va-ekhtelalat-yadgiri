@@ -1979,7 +1979,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.75";
+var APP_VERSION = "1.27.4";
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -23517,15 +23517,18 @@ async function hmacKey(secret) {
   );
 }
 __name(hmacKey, "hmacKey");
-async function signSessionJwt(staff, secret) {
+async function signSessionJwt(staff, secret, opts) {
   const now = Math.floor(Date.now() / 1e3);
+  const sid = opts?.sid ?? crypto.randomUUID();
+  const ttl = opts?.ttlSeconds ?? SESSION_TTL_SECONDS;
   const payload = {
     sub: staff.id,
     name: staff.fullName,
     role: staff.role,
     email: staff.email,
+    sid,
     iat: now,
-    exp: now + SESSION_TTL_SECONDS
+    exp: now + ttl
   };
   const header = { alg: "HS256", typ: "JWT" };
   const headerB64 = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)));
@@ -23534,7 +23537,7 @@ async function signSessionJwt(staff, secret) {
   const key = await hmacKey(secret);
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
   const token = `${data}.${base64UrlEncode(new Uint8Array(sig))}`;
-  return { token, expiresAt: new Date(payload.exp * 1e3).toISOString() };
+  return { token, expiresAt: new Date(payload.exp * 1e3).toISOString(), sid };
 }
 __name(signSessionJwt, "signSessionJwt");
 async function verifySessionJwt(token, secret) {
@@ -23710,6 +23713,14 @@ function authMiddleware() {
       const sessionToken = authHeader.slice(7).trim();
       const payload2 = await verifySessionJwt(sessionToken, await resolveSessionSecret(env));
       if (payload2) {
+        if (!payload2.sid) {
+          throw new AuthError("\u062A\u0648\u06A9\u0646 \u0641\u0627\u0642\u062F \u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0634\u0633\u062A \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+        }
+        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+        const session = await db.prepare("SELECT revoked_at, expires_at FROM auth_sessions WHERE sid = ?").bind(payload2.sid).first();
+        if (!session || session.revoked_at !== null || session.expires_at <= nowIso) {
+          throw new AuthError("\u0646\u0634\u0633\u062A \u0628\u0627\u0637\u0644 \u06CC\u0627 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+        }
         const staff2 = await getStaffById(db, payload2.sub);
         if (!staff2 || staff2.active !== 1) {
           throw new AuthError("\u06A9\u0627\u0631\u0628\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F \u06CC\u0627 \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0627\u0633\u062A");
@@ -23718,7 +23729,8 @@ function authMiddleware() {
           staffId: staff2.id,
           email: staff2.email,
           role: staff2.role,
-          displayName: staff2.full_name
+          displayName: staff2.full_name,
+          sessionId: payload2.sid
         });
         return next();
       }
@@ -28401,6 +28413,72 @@ function publicError(c, err) {
 }
 __name(publicError, "publicError");
 
+// src/node-sync/service.ts
+var NODE_PULL_DOMAINS = ["announcements", "packages", "library"];
+var NODE_PUSH_DOMAINS = ["usage_summary", "client_errors", "health_ping"];
+var NODE_PULL_DOMAIN_SET = new Set(NODE_PULL_DOMAINS);
+var NODE_PUSH_DOMAIN_SET = new Set(NODE_PUSH_DOMAINS);
+var NODE_PUSH_MIN_INTERVAL_MS = 15 * 6e4;
+var NODE_PUSH_MAX_ITEMS = 100;
+var NODE_PUSH_BODY_MAX_BYTES = 256 * 1024;
+var NODE_PULL_ROWS_WRITTEN_EST = 1;
+var NODE_PULL_ROWS_READ_EST = 100;
+var NODE_PUSH_ROWS_WRITTEN_EST = 101;
+var NODE_PUSH_ROWS_READ_EST = 100;
+var LOGIN_ROWS_WRITTEN_EST = 4;
+var LOGIN_ROWS_READ_EST = 10;
+var QUOTA_ESTIMATES = {
+  pull: { rowsWritten: NODE_PULL_ROWS_WRITTEN_EST, rowsRead: NODE_PULL_ROWS_READ_EST },
+  push: { rowsWritten: NODE_PUSH_ROWS_WRITTEN_EST, rowsRead: NODE_PUSH_ROWS_READ_EST },
+  login: { rowsWritten: LOGIN_ROWS_WRITTEN_EST, rowsRead: LOGIN_ROWS_READ_EST }
+};
+function quotaDayUtc(d) {
+  return d.toISOString().slice(0, 10);
+}
+__name(quotaDayUtc, "quotaDayUtc");
+async function bumpQuotaUsage(db, kind, now = /* @__PURE__ */ new Date()) {
+  try {
+    const est = QUOTA_ESTIMATES[kind];
+    await db.execute(
+      `INSERT INTO quota_usage (day, requests, rows_written, rows_read_est)
+       VALUES (?, 1, ?, ?)
+       ON CONFLICT(day) DO UPDATE SET
+         requests = requests + 1,
+         rows_written = rows_written + excluded.rows_written,
+         rows_read_est = rows_read_est + excluded.rows_read_est`,
+      [quotaDayUtc(now), est.rowsWritten, est.rowsRead]
+    );
+  } catch {
+  }
+}
+__name(bumpQuotaUsage, "bumpQuotaUsage");
+var NodePushRawItemSchema = external_exports.object({
+  id: external_exports.string().min(4).max(120),
+  domain: external_exports.string().min(1).max(40),
+  at: external_exports.string().max(40).nullish(),
+  payload: external_exports.record(external_exports.string(), external_exports.unknown())
+  // zod4 — کلید صریح
+});
+var NodePushRawBodySchema = external_exports.object({
+  items: external_exports.array(NodePushRawItemSchema).min(1).max(NODE_PUSH_MAX_ITEMS)
+});
+var UsageSummaryPayloadSchema = external_exports.record(external_exports.string().min(1).max(64), external_exports.number());
+var ClientErrorPayloadSchema = external_exports.object({
+  message: external_exports.string().min(1).max(2e3),
+  source: external_exports.string().max(300).nullish(),
+  line: external_exports.number().int().min(0).max(1e7).nullish(),
+  col: external_exports.number().int().min(0).max(1e7).nullish(),
+  stack: external_exports.string().max(8e3).nullish(),
+  url: external_exports.string().max(300).nullish(),
+  app_version: external_exports.string().max(50).nullish()
+});
+var HealthPingPayloadSchema = external_exports.object({
+  ok: external_exports.boolean().nullish(),
+  version: external_exports.string().max(50).nullish(),
+  counters: external_exports.record(external_exports.string().min(1).max(64), external_exports.number()).nullish()
+});
+var NODE_STALE_AFTER_MS = 24 * 60 * 6e4;
+
 // src/application/auth/routes.ts
 var LOGIN_MAX_FAILURES = 5;
 var LOGIN_IP_MAX_FAILURES = 20;
@@ -28453,6 +28531,7 @@ __name(clearThrottle, "clearThrottle");
 function registerAuthRoutes(app, deps) {
   app.post("/api/auth/login", async (c) => {
     const body = LoginSchema.parse(await c.req.json());
+    await bumpQuotaUsage(createDb(c.env.DB), "login");
     const identity = body.username.trim().toLowerCase();
     const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
     const ipKey = `ip:${ip}`;
@@ -28523,10 +28602,15 @@ function registerAuthRoutes(app, deps) {
         });
       }
     }
-    const { token, expiresAt } = await signSessionJwt(
+    const { token, expiresAt, sid } = await signSessionJwt(
       { id: staff.id, fullName: staff.full_name, role: staff.role, email: staff.email },
       await resolveSessionSecret(c.env)
     );
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    await c.env.DB.prepare(
+      "INSERT INTO auth_sessions (sid, staff_id, issued_at, expires_at) VALUES (?, ?, ?, ?)"
+    ).bind(sid, staff.id, nowIso, expiresAt).run();
+    await c.env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at < ?").bind(nowIso).run();
     await deps.audit.log({
       actorId: staff.id,
       action: "auth.login",
@@ -28556,6 +28640,11 @@ __name(registerAuthRoutes, "registerAuthRoutes");
 function registerLogoutRoute(app, deps) {
   app.post("/api/auth/logout", async (c) => {
     const ctx = getAuthContext(c);
+    if (ctx.sessionId) {
+      await c.env.DB.prepare(
+        "UPDATE auth_sessions SET revoked_at = ? WHERE sid = ? AND revoked_at IS NULL"
+      ).bind((/* @__PURE__ */ new Date()).toISOString(), ctx.sessionId).run();
+    }
     await deps.audit.log({
       actorId: ctx.staffId,
       action: "auth.logout",
@@ -28750,6 +28839,7 @@ function createGamesApp(deps) {
       ms: Date.now() - start
     });
   });
+  const BOOT_TS = (/* @__PURE__ */ new Date()).toISOString();
   app.get("/health", async (c) => {
     let dbOk = true;
     try {
@@ -28757,8 +28847,18 @@ function createGamesApp(deps) {
     } catch {
       dbOk = false;
     }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
     return c.json(
-      { ok: dbOk, db: dbOk ? "up" : "down", module: "games", version: APP_VERSION, ts: (/* @__PURE__ */ new Date()).toISOString() },
+      {
+        ok: dbOk,
+        db: dbOk ? "up" : "down",
+        module: "games",
+        version: APP_VERSION,
+        ts: now,
+        worker: "games",
+        server_ts: now,
+        boot_ts: BOOT_TS
+      },
       dbOk ? 200 : 503,
       { "Cache-Control": "no-store" }
     );

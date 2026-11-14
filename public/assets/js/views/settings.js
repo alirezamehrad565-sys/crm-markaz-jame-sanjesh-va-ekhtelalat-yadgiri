@@ -103,6 +103,26 @@ export async function renderSettings(container, ctx = {}) {
     tabBar.root,
     body
   );
+
+  /* rust-f3 — «اجرای دوبارهٔ راهنمای شروع» فقط در پوستهٔ دسکتاپ؛ در وب ماژول تور کاملاً بی‌اثر است
+     و چانکش fetch نمی‌شود. بخش ساخته‌شده از ماژول تور، زیر بدنهٔ تنظیمات می‌نشیند. */
+  if (globalThis.__DESKTOP_SHELL__ === true) {
+    import('../../../src/tutorial/index.ts')
+      .then((m) => {
+        const section = m.tutorialRerunSection(session.user?.role);
+        if (section) container.appendChild(section);
+      })
+      .catch(() => {});
+  }
+  /* rust-f7 — «اتصال ابر» فقط در پوستهٔ دسکتاپ: وضعیت/آزمون دوباره/ویرایش/پاک‌سازی */
+  if (globalThis.__DESKTOP_SHELL__ === true) {
+    import('../../../src/cloud-setup/index.ts')
+      .then((s) => {
+        const section = s.cloudSetupSection(session.user);
+        if (section) container.appendChild(section);
+      })
+      .catch(() => {});
+  }
 }
 
 function drawCenter(body, settings) {

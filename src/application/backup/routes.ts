@@ -27,6 +27,49 @@ export function registerBackupRoutes(app: AppHono, service: BackupService): void
     });
   });
 
+  // دریافت پشتیبان فوری (۴-۲ — دکمهٔ نجات پنل): تازه‌ترین پشتیبانِ تأییدشدهٔ آرشیو محلی؛
+  // اگر آرشیو هنوز نداریم، همین لحظه می‌سازیم و آرشیو می‌کنیم (دکمه هرگز خالی نمی‌ماند).
+  // هیچ پشتیبانی ممکن نشد (پایگاه ناسالم) → ۴۰۴ با پاکت قراردادی UI.
+  app.get('/api/backup/download', requireRole('manager'), async (c) => {
+    const actor = getAuthContext(c);
+    let archived = await service.getArchivedBackup();
+    if (!archived) {
+      const outcome = await service.archiveLatest(actor);
+      archived = outcome.archived ? await service.getArchivedBackup() : null;
+    }
+    if (!archived) {
+      return c.json({ ok: false, error: 'NO_BACKUP', message: 'پشتیبانی موجود نیست' }, 404);
+    }
+    // نام قراردادی: backup-<UTCts>.db — مُهر از created_at پشتیبان (UTC، بدون جداکننده)
+    const stamp = (archived.createdAt ?? new Date().toISOString()).replace(/[-:]/g, '').replace('T', '').slice(0, 14);
+    // ثبت ممیزی دانلود بهترین‌تلاش است — در workerd با waitUntil؛ در آزمون/بدون ctx هم‌زمان
+    try {
+      c.executionCtx.waitUntil(
+        (async () => {
+          try {
+            await service.logExport(actor, false);
+          } catch {
+            // بی‌اثر
+          }
+        })()
+      );
+    } catch {
+      try {
+        await service.logExport(actor, false);
+      } catch {
+        // بی‌اثر
+      }
+    }
+    return new Response(archived.bytes as unknown as BodyInit, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="backup-${stamp}.db"`,
+        'Cache-Control': 'no-store'
+      }
+    });
+  });
+
   // بررسی فایل پشتیبان بدون هیچ نوشتنی — برای پیش‌نمایش پیش از بازیابی
   app.post('/api/backup/inspect', requireRole('manager'), async (c) => {
     const len = Number(c.req.header('content-length') ?? '0');

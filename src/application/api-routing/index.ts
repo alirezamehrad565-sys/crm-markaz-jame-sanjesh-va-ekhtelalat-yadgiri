@@ -70,6 +70,7 @@ import { createClientErrorsService, registerClientErrorsRoutes } from '@app/clie
 import type { ClientErrorsService } from '@app/client-errors';
 import { createHealthService, registerHealthRoutes } from '@app/health'; // ۱.۲۵.۶۷ — پنل سلامت (CP-3 ف۱)
 import type { HealthService } from '@app/health';
+import { registerSystemRoutes, registerSystemPublicRoutes, isRestartScheduled } from '@app/system'; // ۱.۲۶.۴ — دکمه‌های نجات (۴-۲) + بستهٔ خطا
 import { createGrowthService, registerGrowthRoutes } from '@app/growth'; // ف۴ — گزارش رشد جدول‌ها (بهداشت داده)
 import type { GrowthService } from '@app/growth';
 import { createContentScoreService, registerContentScoreRoutes } from '@domain/content-score'; // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
@@ -105,7 +106,11 @@ import type { SessionNotesService } from '@app/session-notes';
 import { createRumService, registerRumRoutes } from '@app/rum'; // پایش کارایی (RUM)
 import type { RumService } from '@app/rum';
 import { registerAuthRoutes, registerLogoutRoute } from '@app/auth';
+import { registerSetupStatusRoutes, registerSetupCompleteRoutes } from '@app/setup/routes'; // v1.26.0 — راه‌اندازی نخست
 import { FEATURES } from '@core/shared';
+import { createNodeSyncApp, registerCentralQuotaRoutes, registerCentralNodesMapRoutes } from '../../node-sync/app'; // rust-f4 — زیراپ سینک نودهای دسکتاپ؛ rust-f15 — دید سهمیهٔ روزانه فقط-مدیر؛ EXP-8 — نقشهٔ معماری فقط-مدیر
+import { registerInternalSyncRoutes } from '../../internal-sync'; // rust-f9 — استقرار سینک (فقط-موتور، گیت env)
+import { registerNodeSyncStatusRoute } from '../../node-sync-runner/status'; // rust-f14 — وضعیت سینک نود برای UI میز
 
 import { errorHandler, parseApiRateLimitPerMin, makeKeyedRateLimiter, API_RATE_LIMIT_WINDOW_MS } from '@app/http';
 import { RateLimitError } from '@core/errors';
@@ -132,6 +137,8 @@ export interface AppDeps {
   envName?: string | null;
   /** ف۵ (P0-3) — آستانهٔ هشدار خطاهای مرورگر در ۲۴ ساعت (env اختیاری ALERT_CLIENT_ERRORS_MAX؛ پیش‌فرض ۱۰۰) */
   clientErrorsMax?: number | string | null;
+  /** ENG-4 (۱.۲۶.۴) — نشانی /health ورکر بازی‌ها (binding GAMES_HEALTH_URL؛ فقط در موتور محلی) */
+  gamesHealthUrl?: string | null;
 }
 
 export interface Services {
@@ -480,11 +487,13 @@ export function createServices(deps: AppDeps): Services {
 
   // ۱.۲۵.۶۷ — پنل سلامت (ف۱ طرح ارتقا، CP-3): وضعیت سامانه + شش درگاه لینک CP از مُهرهای settings؛
   // ف۵ (P0-3) — همان پنل حالا آرایهٔ هشدارها را هم مشتق می‌کند (آستانهٔ خطاهای مرورگر از deps)
+  // ENG-4 (۱.۲۶.۴) — ردیف تازهٔ بازی‌ها از پروب /health پورت دوم (binding GAMES_HEALTH_URL)
   const health = createHealthService({
     db,
     cpConfigured: Boolean(deps.cpSyncUrl && deps.cpNodeCode && deps.cpNodeKey),
     envName: deps.envName ?? null,
-    clientErrorsMax: deps.clientErrorsMax ?? null
+    clientErrorsMax: deps.clientErrorsMax ?? null,
+    gamesHealthUrl: deps.gamesHealthUrl ?? null
   });
 
   // ف۴ — گزارش رشد جدول‌ها: شمارش روزانه فقط در کرون digest رخ می‌دهد؛ این سرویس در مسیر درخواست فقط می‌خواند
@@ -620,7 +629,13 @@ export function createApp(deps: AppDeps): AppHono {
     });
   });
 
-  // — : سلامت واقعی = دسترسی D1 هم آزموده می‌شود؛ خرابی → 503 تا مانیتور بیرونی متوجه شود
+  // — : سلامت واقعی = دسترسی D1 هم آزموده می‌شود؛ خرابی → 503 تا مانیتور بیرونی متوجه شود.
+  // EXP-4 (رصد بیرونی مرکز): این مسیر «عمومی و بی‌احراز» است و شکل پاسخ حداقلی و قراردادی
+  // {ok, version, server_ts} — نه فیلد بیشتر (بدون هیچ نشت داده؛ جزئیات db/ping بیرون نمی‌رود).
+  // مصرف‌کنندگان: Cloudflare Health Check / uptime-check بیرونی (سند راهنمای ادمین §EXP-4)،
+  // دروازهٔ سلامت ×۳ scripts/update-remote.mjs (فقط res.ok و "version" می‌خواند) و انتظار
+  // سبزشدن موتور محلی در scripts/engine/engine.mjs (فقط res.ok). server_ts هم‌قرارداد
+  // پاسخ‌های سینک است تا ساعت مرجع مرکز از همین مسیر هم خواندنی باشد.
   app.get('/health', async (c) => {
     let dbOk = true;
     try {
@@ -631,9 +646,8 @@ export function createApp(deps: AppDeps): AppHono {
     return c.json(
       {
         ok: dbOk,
-        db: dbOk ? 'up' : 'down',
         version: APP_VERSION,
-        ts: new Date().toISOString()
+        server_ts: new Date().toISOString()
       },
       dbOk ? 200 : 503,
       { 'Cache-Control': 'no-store' }
@@ -668,12 +682,46 @@ export function createApp(deps: AppDeps): AppHono {
 
   registerAuthRoutes(app, { audit: services.audit, logger: services.logger });
 
+  // v1.26.0 — وضعیت راه‌اندازی نخست: عمومی و سبک (دو بولین) — راهنمای «manager / 1234»
+  // در صفحهٔ ورود فقط تا پایان راه‌اندازی نمایش داده می‌شود (هم در وب هم میز بی‌ضرر است).
+  registerSetupStatusRoutes(app, { logger: services.logger });
+
+  // ۱.۲۶.۴ — وضعیت مُهر ری‌استارت برای ناظر بیرونی (قبل از گیت auth؛ ناظر سشن اپ ندارد)
+  registerSystemPublicRoutes(app, { db: services.db });
+
+  /* rust-f4 — زیراپ سینک نودهای دسکتاپ (/node/*): «پیش از» گیت authMiddleware ثبت می‌شود
+     (زنجیرهٔ عمومی §۵)؛ احراز مسیرهای نودی خودش node_code+node_key است و مسیرهای مدیریتی
+     درون زیراپ با همان گیت سشن بسته می‌شوند. سند: docs/rust/node-sync.md */
+  app.route('/node', createNodeSyncApp({ db: services.db, audit: services.audit, logger: services.logger }));
+
   app.use('/api/*', authMiddleware());
   app.use('/api/*', supervisorGate(services.audit));
 
   // بستن حلقهٔ خروج: خروج احرازشده بعد از گیت ناظر سوار می‌شود؛ رویداد ممیزی actor درست دارد.
   // ناظر طبق از گیت رد می‌شود (۴۰۳) — رفتار فقط-خواندن دست‌نخورده می‌ماند.
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
+
+  // v1.26.0 — پایان راه‌اندازی نخست (بستن حساب‌های نمایشی) — فقط-مدیر؛
+  // مدیریت کارکنان از مسیرهای موجود @domain/staff (registerRoutes) استفاده می‌کند — همان‌جا سوار است.
+  registerSetupCompleteRoutes(app, { db: services.db, audit: services.audit, logger: services.logger });
+
+  // rust-f9 — استقرار سینک نود در میز: بعد از گیت‌ها تا سشن بگیرد؛ خودش گیت زمان‌اجرای
+  // CENTER_DESKTOP_ENGINE دارد (در تولید وب binding غایب است → ۴۰۴ کم‌دست، باندل یکسان).
+  registerInternalSyncRoutes(app, { db: services.db, logger: services.logger });
+
+  // rust-f14 — قرارداد وضعیت سینک نود برای UI میز: GET /api/node-sync/status (آینهٔ وضعیت
+  // هماهنگ‌ساز/catch-up + شمارش pending_push از DB) و POST همان مسیر برای آینهٔ اسنپ‌شات
+  // فرانت‌اند (runner.mirrorStatus). بعد از گیت‌ها تا سشن بگیرد؛ خودش گیت زمان‌اجرای
+  // CENTER_DESKTOP_ENGINE دارد (در تولید وب → ۴۰۴ کم‌دست، باندل یکسان).
+  registerNodeSyncStatusRoute(app, { db: services.db, logger: services.logger });
+
+  // rust-f15 — GET /api/central/quota: دید برآورد مصرف روزانهٔ سهمیه (فقط-مدیر؛ گیت سشن + نقش
+  // مدیر درون خود روت). بعد از گیت‌های سراسری تا no-store و ۴۰۱ کم‌دست زنجیرهٔ عمومی برقرار بماند.
+  registerCentralQuotaRoutes(app, { db: services.db });
+
+  // EXP-8 — GET /api/central/nodes-map: نقشهٔ معماری مرکز↔نودها (فقط-مدیر؛ همان گیت quota؛
+  // ?format=html صفحهٔ مدیریتی رندر-سروری بدون JavaScript). ثبت دو-خطی هم‌الگوی quota.
+  registerCentralNodesMapRoutes(app, { db: services.db });
 
   app.get('/api/me', (c) => c.json({ data: c.get('authContext') }, 200));
 
@@ -745,6 +793,12 @@ export function createApp(deps: AppDeps): AppHono {
 
   registerClientErrorsRoutes(app, services.clientErrors); // ۱.۲۵.۶۶ — لولهٔ خطای مرورگر (POST عمومی /public/client-errors، خواندن فقط‌مدیر)
   registerHealthRoutes(app, services.health); // ۱.۲۵.۶۷ — پنل سلامت (GET /api/health/panel فقط‌مدیر)
+  registerSystemRoutes(app, {
+    db: services.db,
+    audit: services.audit,
+    logger: services.logger,
+    envName: deps.envName ?? null
+  }); // ۱.۲۶.۴ — POST /api/system/restart + GET /api/support/error-package (فقط‌مدیر، ۴-۲)
   registerGrowthRoutes(app, services.growth); // ف۴ — گزارش رشد جدول‌ها (GET /api/growth/report فقط‌مدیر)
 
   registerContentScoreRoutes(app, { contentScore: services.contentScore }); // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه

@@ -62,3 +62,15 @@ scaffold/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+
+# Desktop (rust) — بیلد Rust و ورودی‌های محلی
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+dist/usb-pack/
+
+# rust-f13 + v1.27.۰۳ — خروجی‌های مونتاژ رانتایم نصاب (در CI ساخته می‌شوند؛ git حمل نمی‌کند)
+# سایدکار node و کل resources/engine (public/d1-seed/bundles/engine-server) خروجی بیلدند
+desktop/src-tauri/binaries/
+desktop/src-tauri/resources/
+desktop/src-tauri/engine-runtime-manifest.json
+

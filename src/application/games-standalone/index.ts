@@ -109,6 +109,10 @@ export function createGamesApp(deps: GamesAppDeps): AppHono {
   });
 
   // سلامت ماژول — سبک‌تر از اپ اصلی: D1 + نسخه + نشانِ ماژول
+  // ENG-4 (۱.۲۶.۴) — قرارداد پایش ورکر دوم: فیلدهای worker/server_ts/boot_ts فقط-افزودنی
+  // هستند (ok/db/module/version/ts دست‌نخورده می‌مانند). boot_ts = زمان بالاآمدن همین نمونهٔ
+  // ماژول؛ پس از هر ری‌استارت نگهبان تازه می‌شود و پنل سلامت آن را last_restart می‌خواند.
+  const BOOT_TS = new Date().toISOString();
   app.get('/health', async (c) => {
     let dbOk = true;
     try {
@@ -116,8 +120,18 @@ export function createGamesApp(deps: GamesAppDeps): AppHono {
     } catch {
       dbOk = false;
     }
+    const now = new Date().toISOString();
     return c.json(
-      { ok: dbOk, db: dbOk ? 'up' : 'down', module: 'games', version: APP_VERSION, ts: new Date().toISOString() },
+      {
+        ok: dbOk,
+        db: dbOk ? 'up' : 'down',
+        module: 'games',
+        version: APP_VERSION,
+        ts: now,
+        worker: 'games',
+        server_ts: now,
+        boot_ts: BOOT_TS
+      },
       dbOk ? 200 : 503,
       { 'Cache-Control': 'no-store' }
     );

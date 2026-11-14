@@ -1,0 +1,10 @@
+; اتوران نصب «مرکز جامع — نسخهٔ میز» (خط rust — فاز ۵)
+; منبع این قالب desktop/installer/autorun.inf است؛ هنگام مونتاژ پک USB،
+; اسکریپت scripts/build-usb-pack.mjs همین محتوا را با CRLF و کدگذاری
+; UTF-16 LE (با BOM) در ریشهٔ فلش می‌نویسد — قالبی که ویندوز ۱۰/۱۱
+; برای برچسب و متن اجرای خودکارِ فارسی می‌خواند.
+[autorun]
+open=Setup.exe
+icon=Setup.exe,0
+label=مرکز جامع — نسخهٔ میز
+action=نصب نسخهٔ میز

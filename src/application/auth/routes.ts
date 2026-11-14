@@ -1,9 +1,13 @@
 import type { AppHono } from '@core/shared';
 import { LoginSchema } from '@core/shared';
 import { findStaffByUsername, signSessionJwt, verifyPassword, hashPassword, isLegacyPasswordHash, resolveSessionSecret, getAuthContext } from '@core/auth';
+import { createDb } from '@core/db';
 import { AuthError, RateLimitError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
+// rust-f15 — شمارش برآوردی سهمیهٔ روزانه: هر تلاش ورود (موفق/ناموفق) شمارندهٔ quota_usage را
+// جمع می‌زند. import مستقیم از service (نه barrel) تا زیراپ app.ts و زنجیرهٔ آن کشیده نشود.
+import { bumpQuotaUsage } from '../../node-sync/service';
 
 const LOGIN_MAX_FAILURES = 5; // بر اساس نام کاربری — 
 const LOGIN_IP_MAX_FAILURES = 20; // بر اساس IP (سخت‌گیرتر از ۵ نیست — NAT دفتر قفل نشود) — 
@@ -71,6 +75,11 @@ export interface AuthRoutesDeps {
 export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
   app.post('/api/auth/login', async (c) => {
     const body = LoginSchema.parse(await c.req.json<unknown>());
+
+    // rust-f15 — شمارش سهمیه: هر تلاش ورود — موفق، ناموفق یا گات‌خورده — یک درخواست است و
+    // با برآورد ثابت هندلر ورود (service.ts سینک نود) در quota_usage جمع می‌شود. خطای شمارش
+    // در bumpQuotaUsage بلعیده می‌شود (حکم م۲۱۰) و مسیر ورود هرگز به‌خاطر آن سرخ نمی‌شود.
+    await bumpQuotaUsage(createDb(c.env.DB), 'login');
 
     const identity = body.username.trim().toLowerCase();
     const ip = (c.req.header('cf-connecting-ip') ?? 'unknown').slice(0, 64);
@@ -153,10 +162,19 @@ export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
       }
     }
 
-    const { token, expiresAt } = await signSessionJwt(
+    const { token, expiresAt, sid } = await signSessionJwt(
       { id: staff.id, fullName: staff.full_name, role: staff.role, email: staff.email },
       await resolveSessionSecret(c.env)
     );
+
+    // مایلستون ۱ (0111) — ثبت نشست برای ابطال سمت‌سرور + هرس فرصت‌طلب نشست‌های منقضی
+    const nowIso = new Date().toISOString();
+    await c.env.DB.prepare(
+      'INSERT INTO auth_sessions (sid, staff_id, issued_at, expires_at) VALUES (?, ?, ?, ?)'
+    )
+      .bind(sid, staff.id, nowIso, expiresAt)
+      .run();
+    await c.env.DB.prepare('DELETE FROM auth_sessions WHERE expires_at < ?').bind(nowIso).run();
 
     await deps.audit.log({
       actorId: staff.id,
@@ -190,10 +208,18 @@ export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
 // بستن حلقهٔ خروج: لاگین رویداد ممیزی داشت ولی خروج stub بی‌اثر بود. این روت بعد از
 // authMiddleware/supervisorGate در api-routing سوار می‌شود: کاربر احرازشده رویداد «auth.logout» می‌سازد،
 // ناشناس ۴۰۱ می‌گیرد (کلاینت محلی پاک می‌کند و نمی‌سوزد) و ناظر طبق از گیت رد می‌شود.
-// توکن JWT بی‌حالت است — ابطال سمت‌سرورِ توکن بیرون‌رفته مایگریشن ابطال می‌خواهد و مایلستون خودش را.
+// مایلستون ۱ (0111) — ابطال سمت‌سرور: JWT دیگر بی‌حالت نیست؛ خروج ردیف نشستِ توکن جاری
+// (ctx.sessionId) را ابطال می‌کند و همان توکن بلافاصله ۴۰۱ می‌گیرد.
 export function registerLogoutRoute(app: AppHono, deps: AuthRoutesDeps): void {
   app.post('/api/auth/logout', async (c) => {
     const ctx = getAuthContext(c);
+    if (ctx.sessionId) {
+      await c.env.DB.prepare(
+        'UPDATE auth_sessions SET revoked_at = ? WHERE sid = ? AND revoked_at IS NULL'
+      )
+        .bind(new Date().toISOString(), ctx.sessionId)
+        .run();
+    }
     await deps.audit.log({
       actorId: ctx.staffId,
       action: 'auth.logout',
