@@ -188,6 +188,32 @@ try {
   bad(`گیت capnp-ویندوزی خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }
 
+// ⑨ v1.27.02 — خودترمیمی نصاب ویندوز: VC++ Redistributable داخل بسته + تشخیص هدفمند کرش بومی
+// (issueهای upstream cloudflare/workerd#4668/#7581 — access violation 0xc0000005 هنگام init)
+try {
+  mustExist(path.join(T, 'installer-hooks.nsh'), 'هوک‌های نصاب installer-hooks.nsh');
+  const hooks = readFileSync(path.join(T, 'installer-hooks.nsh'), 'utf8');
+  hooks.includes('NSIS_HOOK_POSTINSTALL') && hooks.includes('vc_redist.x64.exe') && hooks.includes('runas')
+    ? ok('هوک POSTINSTALL: نصب VC++ Redistributable با ارتقای مجوز سیم است')
+    : bad('هوک نصاب VC++ Redistributable کامل نیست (POSTINSTALL/vc_redist/runas)');
+  conf?.bundle?.resources?.includes('resources/redist/*')
+    ? ok('resources/redist/* در tauri.conf ثبت است')
+    : bad('resources/redist/* در tauri.conf نیست');
+  conf?.bundle?.windows?.nsis?.installerHooks === 'installer-hooks.nsh'
+    ? ok('installerHooks در nsis سیم است')
+    : bad('installerHooks در tauri.conf/nsis نیست');
+  const bir = readFileSync(path.join(ROOT, 'scripts', 'desktop', 'build-installer-runtime.mjs'), 'utf8');
+  bir.includes('aka.ms/vs/17/release/vc_redist.x64.exe') && bir.includes('redist,')
+    ? ok('دانلود و ثبت redist در مونتاژ رانتایم (هدف ویندوز) سیم است')
+    : bad('دانلود/ثبت VC++ Redistributable در build-installer-runtime نیست');
+  const libSrc3 = readFileSync(path.join(T, 'src', 'lib.rs'), 'utf8');
+  libSrc3.includes('boot_failure_message') && libSrc3.includes('structured exception')
+    ? ok('تشخیص هدفمند کرش بومی (boot_failure_message) در lib.rs سیم است')
+    : bad('تشخیص هدفمند کرش بومی در lib.rs نیست');
+} catch (e) {
+  bad(`گیت خودترمیمی نصاب خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+}
+
 lines.push(failed ? '❌ گیت ساختار دسکتاپ قرمز است' : '✅ گیت ساختار دسکتاپ سبز است');
 writeFileSync('/tmp/desktop-check-report.txt', lines.join('\n') + '\n');
 console.log(lines.join('\n'));

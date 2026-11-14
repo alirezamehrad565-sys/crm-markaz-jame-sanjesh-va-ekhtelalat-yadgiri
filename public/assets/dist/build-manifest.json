@@ -1,6 +1,6 @@
 {
   "_comment": "مانیفست باندل کلاینت؛ گات بودجه (perf-budget.mjs) از این می‌خواند. فایل ساخته‌شده است — دستی ویرایش نشود.",
-  "boot": "boot.COA2FEPF.js",
+  "boot": "boot.5BGYRWDM.js",
   "bootImports": [
     "chunk.TQV6FOIY.js",
     "chunk.3ELOCRLD.js",
@@ -28,16 +28,16 @@
       "role": "lazy"
     },
     {
-      "name": "boot.COA2FEPF.js",
-      "raw": 75687,
-      "gz": 24723,
-      "role": "boot"
-    },
-    {
-      "name": "boot.YAXBO4JX.js",
+      "name": "boot.26S2DYMM.js",
       "raw": 1162,
       "gz": 700,
       "role": "lazy"
+    },
+    {
+      "name": "boot.5BGYRWDM.js",
+      "raw": 75687,
+      "gz": 24725,
+      "role": "boot"
     },
     {
       "name": "bug-report.6VPQRJFC.js",
@@ -76,6 +76,12 @@
       "role": "boot-dep"
     },
     {
+      "name": "chunk.3HWCHGCS.js",
+      "raw": 343,
+      "gz": 254,
+      "role": "lazy"
+    },
+    {
       "name": "chunk.43HDOTRP.js",
       "raw": 457,
       "gz": 323,
@@ -85,12 +91,6 @@
       "name": "chunk.6LUGIAJR.js",
       "raw": 400,
       "gz": 285,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.6U44PHTZ.js",
-      "raw": 343,
-      "gz": 254,
       "role": "lazy"
     },
     {
@@ -112,12 +112,6 @@
       "role": "lazy"
     },
     {
-      "name": "chunk.C2RGLKHF.js",
-      "raw": 27928,
-      "gz": 8302,
-      "role": "lazy"
-    },
-    {
       "name": "chunk.C3VPDRD5.js",
       "raw": 4486,
       "gz": 1907,
@@ -133,6 +127,12 @@
       "name": "chunk.EPCVQX4N.js",
       "raw": 9035,
       "gz": 3424,
+      "role": "lazy"
+    },
+    {
+      "name": "chunk.FKYKTXB2.js",
+      "raw": 27928,
+      "gz": 8302,
       "role": "lazy"
     },
     {
@@ -214,9 +214,9 @@
       "role": "lazy"
     },
     {
-      "name": "cloud-setup.43VVPYIM.js",
+      "name": "cloud-setup.NKLGPQPT.js",
       "raw": 23962,
-      "gz": 7993,
+      "gz": 7990,
       "role": "lazy"
     },
     {
@@ -262,9 +262,9 @@
       "role": "lazy"
     },
     {
-      "name": "panel.CTL2F4Q5.js",
+      "name": "panel.3KYVCK6E.js",
       "raw": 4181,
-      "gz": 1547,
+      "gz": 1549,
       "role": "lazy"
     },
     {
@@ -349,6 +349,6 @@
   "totals": {
     "files": 56,
     "raw": 1165265,
-    "gz": 381578
+    "gz": 381579
   }
 }

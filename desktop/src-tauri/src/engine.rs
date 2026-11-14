@@ -163,6 +163,12 @@ fn spawn_workerd(plan: &SpawnPlan) -> Result<Child, String> {
     let mut cmd = Command::new(&plan.binary);
     cmd.args(["serve", "--experimental", plan.config.to_string_lossy().as_ref()])
         .stdout(Stdio::null());
+    // ۱.۲۷.۰۲ — بدون پنجرهٔ کنسول کنار برنامه در ویندوز
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
     match std::fs::File::options()
         .create(true)
         .append(true)
