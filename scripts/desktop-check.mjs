@@ -293,6 +293,45 @@ try {
   bad(`گیت قرارداد رانتایم خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }
 
+// ⑪ پین‌های P2 — چرخش لاگ (ریسک ۹) + تکی‌نمونه/ثبت نصب (ریسک ۱۰ و ردیف ۱۱) + cargo test در CI
+// + drill خرابی هش: شبیه‌ساز دوم با --corrupt (دو فراخوانی پشت‌سرهم — عادی در ⑩، drill این‌جا).
+// پین‌ها سخت و کامل‌اند: تا merge سه تغییر هم‌زمان (engine.rs / lib.rs / Cargo.toml) قرمزند و
+// بعد از merge هر سه باید همه سبز شوند — گارد موقت/هشدارِ نرم عمداً ندارد.
+try {
+  const engineSrc11 = readFileSync(path.join(T, 'src', 'engine.rs'), 'utf8');
+  engineSrc11.includes('rotate_engine_log')
+    ? ok('engine.rs: rotate_engine_log سیم است (چرخش لاگ — ریسک ۹)')
+    : bad('engine.rs: rotate_engine_log غایب است (چرخش لاگ — ریسک ۹؛ تا merge تغییر هم‌زمان engine.rs)');
+  const libSrc11 = readFileSync(path.join(T, 'src', 'lib.rs'), 'utf8');
+  for (const t of ['tauri_plugin_single_instance::init', 'install-manifest.json', 'write_install_manifest']) {
+    libSrc11.includes(t)
+      ? ok(`lib.rs: ${t} سیم است (تکی‌نمونه + ثبت نصب — ریسک ۱۰ و ردیف ۱۱)`)
+      : bad(`lib.rs: ${t} غایب است (تکی‌نمونه/ثبت نصب — ریسک ۱۰/۱۱؛ تا merge تغییر هم‌زمان lib.rs)`);
+  }
+  const cargo11 = readFileSync(path.join(T, 'Cargo.toml'), 'utf8');
+  cargo11.includes('tauri-plugin-single-instance')
+    ? ok('Cargo.toml: وابستگی tauri-plugin-single-instance ثبت شده است')
+    : bad('Cargo.toml: tauri-plugin-single-instance غایب است (تا merge تغییر هم‌زمان Cargo.toml)');
+  const wf11 = readFileSync(path.join(ROOT, '.github', 'workflows', 'desktop-build.yml'), 'utf8');
+  wf11.includes('cargo test --all-targets')
+    ? ok('CI دسکتاپ: گام cargo test --all-targets سیم است')
+    : bad('CI دسکتاپ: cargo test --all-targets در گردش‌کار نیست');
+  // drill خرابی — شبیه‌ساز با --corrupt: گیت هش باید دام را بگیرد (exit≠0 → قرمز)
+  const simC = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'desktop', 'installer-sim.mjs'), '--corrupt'], {
+    cwd: ROOT, encoding: 'utf8', timeout: 120_000,
+  });
+  const simCOut = `${simC.stdout || ''}${simC.stderr || ''}`;
+  for (const l of simCOut.split('\n')) {
+    if (l.startsWith('✗ ')) { failed = true; lines.push(l); }
+    else if (l.includes('drill') || l.startsWith('  ✓') || l.startsWith('  ↯')) lines.push(l);
+  }
+  simC.status === 0
+    ? ok('drill خرابی: شبیه‌ساز --corrupt سبز است — گیت هش دام را گرفت')
+    : bad(`drill خرابی قرمز است (exit=${simC.status}) — گیت هش از خرابی گذشت یا drill شکست خورد`);
+} catch (e) {
+  bad(`گیت پین‌های P2 خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+}
+
 lines.push(failed ? '❌ گیت ساختار دسکتاپ قرمز است' : '✅ گیت ساختار دسکتاپ سبز است');
 writeFileSync('/tmp/desktop-check-report.txt', lines.join('\n') + '\n');
 console.log(lines.join('\n'));

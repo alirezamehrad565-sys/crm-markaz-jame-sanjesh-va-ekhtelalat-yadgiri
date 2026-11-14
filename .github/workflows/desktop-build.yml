@@ -35,6 +35,9 @@ jobs:
       - name: cargo check پوستهٔ دسکتاپ (engine.rs / lib.rs / main.rs)
         working-directory: desktop/src-tauri
         run: cargo check --all-targets
+      - name: cargo test پوستهٔ دسکتاپ (تست‌های واحد verify_runtime_integrity / چرخش لاگ / install-manifest)
+        working-directory: desktop/src-tauri
+        run: cargo test --all-targets
 
   windows-build:
     name: بیلد ویندوز — نصاب NSIS + پک USB
