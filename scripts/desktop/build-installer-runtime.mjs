@@ -116,6 +116,7 @@ async function main() {
       [m.central.worker, m.central.workerSha256],
       [m.central.schema, m.central.schemaSha256],
     ];
+    if (m.redist) files.push([m.redist.path, m.redist.sha256]);
     for (const [rel, expected] of files) {
       const abs = path.join(ROOT, rel);
       if (!existsSync(abs)) throw new Error(`خروجی گم‌شده: ${rel}`);
@@ -181,7 +182,29 @@ async function main() {
   const centralWorkerBytes = statSync(centralWorker).size;
   const centralSchemaBytes = statSync(centralSchema).size;
 
-  // ⑥ ثبت هش‌ها
+  // ⑥ v1.27.02 — Microsoft Visual C++ Redistributable x64 — رفع کرش راه‌اندازی workerd روی
+  // ویندوز (access violation 0xc0000005 — issueهای cloudflare/workerd#4668 و #7581؛ جامعهٔ
+  // workerd: «معمولاً با آخرین redist حل می‌شود»). فقط هدف ویندوز؛ هوک POSTINSTALL نصاب NSIS
+  // آن را با ارتقای مجوز اجرا می‌کند (installer-hooks.nsh).
+  let redist = null;
+  if (target === 'x86_64-pc-windows-msvc') {
+    const redistUrl = 'https://aka.ms/vs/17/release/vc_redist.x64.exe';
+    const redistFile = path.join(P.tauriDir, 'resources', 'redist', 'vc_redist.x64.exe');
+    mkdirSync(path.dirname(redistFile), { recursive: true });
+    console.log('[runtime] دانلود VC++ Redistributable x64 (رفع کرش ویندوز workerd)…');
+    const res = await fetch(redistUrl, { redirect: 'follow' });
+    if (!res.ok) throw new Error(`دانلود VC++ Redistributable ناموفق: HTTP ${res.status} — ${redistUrl}`);
+    writeFileSync(redistFile, Buffer.from(await res.arrayBuffer()));
+    const redistBytes = statSync(redistFile).size;
+    if (redistBytes < 1_000_000) throw new Error(`فایل redist مشکوک است (${redistBytes}B) — دانلود ناقص`);
+    if (!readFileSync(redistFile).subarray(0, 2).equals(Buffer.from([0x4d, 0x5a]))) {
+      throw new Error('فایل redist امضای PE ندارد — دانلود نامعتبر (مثلاً صفحهٔ خطا)');
+    }
+    redist = { path: path.relative(ROOT, redistFile), sha256: sha256(redistFile), bytes: redistBytes, source: redistUrl };
+    console.log(`[runtime] VC++ Redistributable: ${redist.path} (${redistBytes}B)`);
+  }
+
+  // ⑦ ثبت هش‌ها
   const manifest = {
     generatedAt: new Date().toISOString(),
     target,
@@ -212,6 +235,7 @@ async function main() {
       schemaBytes: centralSchemaBytes,
       migrations: migFiles.length,
     },
+    redist,
   };
   writeFileSync(P.manifest, JSON.stringify(manifest, null, 2) + '\n');
   console.log(`[runtime] سایدکار: ${manifest.workerd.sidecar} — sha256=${manifest.workerd.sha256.slice(0, 16)}… (${bytes}B)`);

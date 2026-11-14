@@ -173,6 +173,19 @@ fn escape_capnp_path(p: &str) -> String {
     p.replace('\\', "\\\\")
 }
 
+/// پیام شکست بوت — اگر لاگ سایدکار کرش بومی را نشان دهد، تشخیص هدفمند ویندوز می‌آید:
+/// ناسازگاری شناخته‌شدهٔ upstream workerd (issue #4668/#7581 — access violation 0xc0000005)
+/// که طبق تجربهٔ جامعهٔ workerd معمولاً با آخرین Microsoft Visual C++ Redistributable حل می‌شود.
+/// نصاب NSIS همین redist را داخل بسته دارد و پس از نصب اجرا می‌کند (installer-hooks.nsh).
+fn boot_failure_message(log_tail: &str) -> String {
+    let t = log_tail.to_lowercase();
+    if t.contains("structured exception") || t.contains("access violation") || t.contains("0xc0000005") {
+        "موتور محلی با خطای بومی ویندوز (access violation) اجرا را قطع کرده است — ناسازگاری شناخته‌شدهٔ موتور workerd با برخی ویندوزها. راه‌حل معمول: آخرین «Microsoft Visual C++ Redistributable x64» را نصب کنید — فایل نصاب آن داخل پوشهٔ برنامه در resources\\redist\\vc_redist.x64.exe هست (نصاب جدید آن را خودکار اجرا می‌کند)؛ بعد ویندوز را یک‌بار راه‌اندازی مجدد کنید و «تلاش دوباره» را بزنید. دیتای شما دست‌نخورده است.".to_string()
+    } else {
+        "موتور محلی ظرف ۳۰ ثانیه سالم نشد — احتمالاً workerd بلافاصله اجرا را قطع کرده است.".to_string()
+    }
+}
+
 /// گیرندهٔ رویدادهای نگهبان موتور → رخداد تائوری برای پوسته + وضعیت صریح پس از تسلیم.
 /// نام رخدادها: engine:restarting {attempt, delay_ms} / engine:restored {port} /
 /// engine:down {attempts} — پس از engine:down فاز به Failed می‌رود (وضعیت صریح بوت) و
@@ -309,7 +322,7 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
                         .unwrap_or_else(|_| std::path::PathBuf::from("."));
                     let tail = read_log_tail(&data_dir);
                     state.set_phase(EnginePhase::Failed {
-                        message: "موتور محلی ظرف ۳۰ ثانیه سالم نشد — احتمالاً workerd بلافاصله اجرا را قطع کرده است.".to_string(),
+                        message: boot_failure_message(&tail),
                         log_tail: tail,
                     });
                     return; // drop وضعیت محلی → خاموشی سایدکار
@@ -384,5 +397,15 @@ mod tests {
         assert_eq!(escape_capnp_path("/home/z/data"), "/home/z/data");
         // دبل‌بک‌اسلشِ موجود نباید چهار تایی شود
         assert_eq!(escape_capnp_path(r"C:\a\\b"), r"C:\\a\\\\b");
+    }
+
+    /// ۱.۲۷.۰۲ — تشخیص هدفمند کرش بومی workerd در لاگ (گزارش نصاب واقعی)
+    #[test]
+    fn boot_failure_message_targets_native_crash() {
+        let crash = "*** Received structured exception #0xc0000005: access violation; stack: 7fff";
+        assert!(boot_failure_message(crash).contains("Visual C++ Redistributable"));
+        assert!(boot_failure_message("ACCESS VIOLATION somewhere").contains("access violation"));
+        assert!(boot_failure_message("").contains("۳۰ ثانیه"));
+        assert!(boot_failure_message("port already in use").contains("۳۰ ثانیه"));
     }
 }
