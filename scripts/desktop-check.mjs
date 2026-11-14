@@ -122,6 +122,20 @@ try {
   conf?.bundle?.resources?.includes('resources/engine/**/*')
     ? ok('resources = resources/engine/**/* در tauri.conf')
     : bad('resources = resources/engine/**/* در tauri.conf نیست');
+  // v1.27.۰۵ — manifest رانتایم باید داخل resources/engine نوشته شود (با glob resources شحنه
+  // می‌شود) و مونتاژ باید فیلدهای engineServer و nodeVersion را بنویسد — PRECHECK پوستهٔ Rust
+  // (engine.rs) در بوت هش سه فایل رانتایم و نسخهٔ سایدکار node را با این فیلدها تطبیق می‌دهد.
+  const cfgSrc = readFileSync(path.join(ROOT, 'scripts', 'desktop', 'config.mjs'), 'utf8');
+  cfgSrc.includes("manifest: path.join(tauri, RESOURCES_ENGINE_DIR, MANIFEST_NAME)")
+    ? ok('config.mjs: manifest داخل resources/engine نوشته می‌شود — نصاب آن را شحنه می‌کند')
+    : bad('config.mjs: manifest بیرون resources/engine است — نصب‌شده نمی‌تواند هش رانتایم را تطبیق دهد');
+  const birSrc = readFileSync(path.join(ROOT, 'scripts', 'desktop', 'build-installer-runtime.mjs'), 'utf8');
+  birSrc.includes('engineServer') && birSrc.includes('sha256(engineServerDst)')
+    ? ok('مونتاژ رانتایم: هش engineServer در manifest ثبت می‌شود')
+    : bad('مونتاژ رانتایم: فیلد engineServer.sha256 در manifest نوشته نمی‌شود');
+  birSrc.includes('nodeVersion: PINNED_NODE_VERSION')
+    ? ok('مونتاژ رانتایم: nodeVersion در manifest ثبت می‌شود (تطبیق نسخهٔ سایدکار در PRECHECK)')
+    : bad('مونتاژ رانتایم: فیلد nodeVersion در manifest نوشته نمی‌شود');
   mustExist(path.join(ROOT, 'scripts', 'desktop', 'build-installer-runtime.mjs'), 'build-installer-runtime.mjs');
   const libSrc = readFileSync(path.join(T, 'src', 'lib.rs'), 'utf8');
   for (const t of ['EngineLaunch', 'd1-seed', 'CENTER_ENGINE_REPO', 'engine-server.js']) {

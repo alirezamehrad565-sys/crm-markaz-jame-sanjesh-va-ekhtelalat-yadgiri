@@ -13,7 +13,9 @@
 //     کپی می‌کند؛ shim D1 (node:sqlite) همین فایل را باز می‌کند — دادهٔ کارفرما سازگار می‌ماند
 //   ④ کپی engine-server.js + باندل‌های ورکر (worker/games-bundle.js) → resources/engine
 //   ⑤ دارایی‌های «ساخت سرور مرکزی» (central-worker.js + schema.sql) — بدون تغییر v1.26.0
-//   ⑥ ثبت هش‌ها در engine-runtime-manifest.json (معیار «ثبت هش» گیت ردیف ۹)
+//   ⑥ ثبت هش‌ها در engine-runtime-manifest.json (معیار «ثبت هش» گیت ردیف ۹) — v1.27.۰۵: این
+//     فایل داخل resources/engine می‌نشیند تا glob resources نصاب آن را شحنه کند و پوستهٔ Rust
+//     (engine.rs — PRECHECK) در بوت، هش سه فایل رانتایم و نسخهٔ سایدکار node را تطبیق دهد
 // با --check: همهٔ خروجی‌ها و هش‌های manifest دوباره وارسی می‌شوند (بدون دانلود).
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -133,6 +135,10 @@ async function main() {
   if (checkOnly) {
     if (!existsSync(P.manifest)) throw new Error(`manifest نیست — ابتدا مونتاژ را اجرا کنید: ${P.manifest}`);
     const m = JSON.parse(readFileSync(P.manifest, 'utf8'));
+    // v1.27.۰۵ — pin نسخهٔ سایدکار هم باید در manifest ثبت و هم‌گام باشد (PRECHECK پوسته)
+    if (m.nodeVersion !== PINNED_NODE_VERSION) {
+      throw new Error(`nodeVersion manifest (${m.nodeVersion}) با pin (${PINNED_NODE_VERSION}) هم‌گام نیست`);
+    }
     const files = [
       [m.node.sidecar, m.node.sha256],
       [m.d1Seed.sqlite, m.d1Seed.sha256],
@@ -222,6 +228,9 @@ async function main() {
   const manifest = {
     generatedAt: new Date().toISOString(),
     target,
+    // v1.27.۰۵ — نسخهٔ pinned سایدکار در سطح بالا؛ PRECHECK پوسته (engine.rs) خروجی
+    // «node --version» سایدکار نصب‌شده را با همین فیلد تطبیق می‌دهد (هم‌مقدار node.version)
+    nodeVersion: PINNED_NODE_VERSION,
     node: {
       version: PINNED_NODE_VERSION,
       sidecar: path.relative(ROOT, sidecar),
