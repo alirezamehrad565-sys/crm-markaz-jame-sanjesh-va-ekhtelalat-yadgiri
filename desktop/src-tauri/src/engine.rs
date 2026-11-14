@@ -86,7 +86,7 @@ pub fn find_node_binary() -> PathBuf {
         }
     }
     let exe_name = if cfg!(windows) { "node.exe" } else { "node" };
-    if let Ok(exe_dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.to_path_buf())) {
+    if let Some(exe_dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.to_path_buf())) {
         let mut candidates = vec![exe_dir.join(exe_name), exe_dir.join("binaries").join(exe_name)];
         if let Ok(entries) = std::fs::read_dir(exe_dir.join("binaries")) {
             for entry in entries.flatten() {
@@ -299,7 +299,7 @@ fn supervise(
                                 *guard = Some(new_child);
                             }
                             // پس از ری‌استارت پنل هم پورت نهایی ممکن است عوض شود — دوباره کانفیگ
-                            let Some((new_port, new_games)) =
+                            let Some((new_port, _)) =
                                 wait_engine_config(&plan.data_dir, RESTART_HEALTH_TIMEOUT)
                             else {
                                 kill_child(&child_slot);
