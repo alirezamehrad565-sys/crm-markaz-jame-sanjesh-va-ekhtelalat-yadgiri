@@ -1,6 +1,6 @@
 {
   "_comment": "مانیفست باندل کلاینت؛ گات بودجه (perf-budget.mjs) از این می‌خواند. فایل ساخته‌شده است — دستی ویرایش نشود.",
-  "boot": "boot.FZDPC7QB.js",
+  "boot": "boot.4TPKZGQB.js",
   "bootImports": [
     "chunk.TQV6FOIY.js",
     "chunk.3ELOCRLD.js",
@@ -28,16 +28,16 @@
       "role": "lazy"
     },
     {
-      "name": "boot.4KERYFAG.js",
-      "raw": 1162,
-      "gz": 701,
-      "role": "lazy"
-    },
-    {
-      "name": "boot.FZDPC7QB.js",
+      "name": "boot.4TPKZGQB.js",
       "raw": 75687,
       "gz": 24724,
       "role": "boot"
+    },
+    {
+      "name": "boot.RYFZGF4V.js",
+      "raw": 1162,
+      "gz": 699,
+      "role": "lazy"
     },
     {
       "name": "bug-report.6VPQRJFC.js",
@@ -88,12 +88,6 @@
       "role": "lazy"
     },
     {
-      "name": "chunk.6M7KAHHU.js",
-      "raw": 343,
-      "gz": 254,
-      "role": "lazy"
-    },
-    {
       "name": "chunk.6YSEPOY5.js",
       "raw": 20406,
       "gz": 6721,
@@ -118,6 +112,12 @@
       "role": "lazy"
     },
     {
+      "name": "chunk.CE2ROUUC.js",
+      "raw": 27928,
+      "gz": 8302,
+      "role": "lazy"
+    },
+    {
       "name": "chunk.EDER3AUA.js",
       "raw": 40226,
       "gz": 11471,
@@ -139,6 +139,12 @@
       "name": "chunk.I26KF3HD.js",
       "raw": 7298,
       "gz": 2905,
+      "role": "lazy"
+    },
+    {
+      "name": "chunk.L2Y6HBUB.js",
+      "raw": 343,
+      "gz": 254,
       "role": "lazy"
     },
     {
@@ -184,12 +190,6 @@
       "role": "lazy"
     },
     {
-      "name": "chunk.XHY2QKGK.js",
-      "raw": 27928,
-      "gz": 8302,
-      "role": "lazy"
-    },
-    {
       "name": "chunk.XNCKIJGB.js",
       "raw": 49108,
       "gz": 17430,
@@ -214,9 +214,9 @@
       "role": "lazy"
     },
     {
-      "name": "cloud-setup.AA7APZBR.js",
+      "name": "cloud-setup.TZF5SPEB.js",
       "raw": 23962,
-      "gz": 7990,
+      "gz": 7993,
       "role": "lazy"
     },
     {
@@ -262,9 +262,9 @@
       "role": "lazy"
     },
     {
-      "name": "panel.CWEVWMRZ.js",
+      "name": "panel.7O7AUQ3L.js",
       "raw": 4181,
-      "gz": 1550,
+      "gz": 1549,
       "role": "lazy"
     },
     {
