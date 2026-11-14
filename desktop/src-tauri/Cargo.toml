@@ -24,6 +24,9 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 tokio = { version = "1", features = ["time"] }
 # پیگیری مایگریشن‌ها (deploy_plan.rs) — checksum فایل‌ها؛ تنها وابستهٔ جدید مجاز (pure-Rust، بدون کتابخانهٔ سیستم)
 sha2 = "0.10"
+# F — تکی‌نمونه (بستن ریسک #۱۰): نمونهٔ دوم بلافاصله بسته می‌شود و کاربر به پنجرهٔ موجود
+# برمی‌گردد — جلوگیری از دو موتور/دو پنجره روی یک dataDir. باید اولین plugin زنجیرهٔ builder باشد.
+tauri-plugin-single-instance = "2"
 
 [profile.release]
 codegen-units = 1
