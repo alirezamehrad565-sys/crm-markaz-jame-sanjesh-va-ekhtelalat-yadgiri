@@ -23,6 +23,11 @@
 //! موجود (رویداد engine:restarting موجود) و صفرشدن شمارش‌ها. خروج خود کودک → همان مسیر
 //! نگهبان اصلی؛ سلامت اصلی ناموفق → همان مسیر موجود (هیچ تغییر رفتاری).
 //!
+//! چرخش engine.log — ریسک #۹ سند ریسک: پیش از هر spawn حجم data/engine.log با آستانهٔ
+//! ENGINE_LOG_ROTATE_BYTES (۱۰MB) سنجیده می‌شود؛ گذر از آستانه → بایگانی به engine.log.1
+//! (rename اتمی، فقط یک نسل بایگانی). آزمون‌های واحد چرخش و verify_runtime_integrity هم
+//! انتهای همین فایل است.
+//!
 //! کامپایل در CI (cargo در محیط سندباکس جاری نیست) — گیت ساختاری desktop:check
 //! هم‌گامی فایل‌ها را می‌گیرد و کامپایل واقعی در خط CI با Rust stable انجام می‌شود.
 
@@ -59,6 +64,13 @@ const GAMES_RESTART_ROUNDS: u32 = 6;
 
 /// فاصلهٔ پایش زمان اجرا (مُهر ری‌استارت/سلامت بازی‌ها) — ۱۰ گام پولینگ = ۵ ثانیه
 const RUNTIME_POLL_EVERY: u32 = 10;
+
+/// آستانهٔ چرخش engine.log — ۱۰ مگابایت. دلیل: ریسک #۹ سند ریسک — لاگ stdout/stderr موتور
+/// روی ماشین کارفرما پیوست نوشته می‌شود و بدون چرخش بی‌کران رشد می‌کند تا دیسک پر شود.
+/// پیش از هر spawn سنجیده می‌شود؛ لاگ گذرانده از آستانه با rename به engine.log.1 می‌رود
+/// (یک نسل بایگانی + یک نسل جاری ≈ حداکثر ۲ برابر آستانه) تا هم بازرسی گزارش‌ها ممکن
+/// بماند هم رشد مهار شود.
+const ENGINE_LOG_ROTATE_BYTES: u64 = 10 * 1024 * 1024;
 
 /// گیرندهٔ رویدادهای نگهبان — lib.rs آن را به رخدادهای تائوری (engine:restarting و…) می‌بندد
 pub type EngineEventSink = Arc<dyn Fn(WatchdogEvent) + Send + Sync>;
@@ -191,6 +203,39 @@ fn wait_engine_config(data_dir: &Path, timeout: Duration) -> Option<(u16, u16)> 
     None
 }
 
+/// چرخش لاگ موتور (ریسک #۹ سند ریسک) — اگر data_dir/engine.log موجود بود و حجمش از
+/// max_bytes گذشته بود: نخست engine.log.1 قدیمی (اگر هست) حذف و سپس engine.log با
+/// std::fs::rename به engine.log.1 منتقل می‌شود (rename روی همان فایل‌سیستم اتمی است و
+/// محتوای لاگ دست‌نخورده به بایگانی می‌رود). امضا عام است (max_bytes پارامتر) تا
+/// آزمون‌های واحد با آستانهٔ کوچک صدا بزنند؛ در spawn_engine با ENGINE_LOG_ROTATE_BYTES.
+/// اگر پوشهٔ data یا خود لاگ هنوز نیست، بی‌خطا رد می‌شود — نخستین بوت است و
+/// LocalEngine::start خودش data dir را می‌سازد. هر خطای I/O با پیام فارسی صریح
+/// برمی‌گردد (درس ۱.۲۷.۰۴: شکست صریح نام‌وبنام بهتر از اجرای کور است).
+fn rotate_engine_log(data_dir: &Path, max_bytes: u64) -> Result<(), String> {
+    if !data_dir.is_dir() {
+        return Ok(()); // پوشهٔ data هنوز ساخته نشده — بوت خودش می‌سازد
+    }
+    let log_path = data_dir.join("engine.log");
+    if !log_path.exists() {
+        return Ok(()); // لاگی برای چرخش نیست — نخستین بوت
+    }
+    let size = std::fs::metadata(&log_path)
+        .map_err(|e| format!("خواندن حجم engine.log برای چرخش ناموفق بود: {e}"))?
+        .len();
+    if size <= max_bytes {
+        return Ok(()); // زیر آستانه — لاگ دست‌نخورده می‌ماند
+    }
+    let rotated_path = data_dir.join("engine.log.1");
+    if rotated_path.exists() {
+        std::fs::remove_file(&rotated_path)
+            .map_err(|e| format!("حذف بایگانی قدیمی engine.log.1 برای چرخش ناموفق بود: {e}"))?;
+    }
+    std::fs::rename(&log_path, &rotated_path).map_err(|e| {
+        format!("چرخش engine.log به engine.log.1 ناموفق بود (شاید فایل باز است یا دسترسی نیست): {e}")
+    })?;
+    Ok(())
+}
+
 /// spawn یک نمونهٔ موتور adapter — node + engine-server.js با پرچم‌های مسیرها.
 /// v1.27.۰۴ — ریشه‌یابی گزارش واقعی EISDIR (lstat 'C:'): نود ورودی main را که بعد از
 /// path.resolve به «ریشهٔ درایو» برسد، در realpathSync می‌میرد (lstat ریشهٔ درایو بدون
@@ -202,6 +247,10 @@ fn wait_engine_config(data_dir: &Path, timeout: Duration) -> Option<(u16, u16)> 
 /// stderr/stdout به data/engine.log می‌رود؛ پیش از spawn هم خط فرمان کامل در لاگ می‌نشیند
 /// تا هر گزارش بعدی خودش را توضیح دهد.
 fn spawn_engine(plan: &EngineLaunch) -> Result<Child, String> {
+    // ریسک #۹ — چرخش لاگ پیش از باز شدن فایل لاگ: اگر engine.log از آستانه گذشته باشد به
+    // engine.log.1 می‌رود تا رشد بی‌کران لاگ روی ماشین کارفرما مهار شود. شکست چرخش با پیام
+    // فارسی صریح spawn را رد می‌کند — عین فلسفهٔ ۱.۲۷.۰۴: شکست نام‌وبنام بهتر از اجرای کور.
+    rotate_engine_log(&plan.data_dir, ENGINE_LOG_ROTATE_BYTES)?;
     let engine_dir = plan
         .server_js
         .parent()
@@ -664,5 +713,190 @@ impl Drop for LocalEngine {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
         kill_child(&self.child_slot);
+    }
+}
+
+/// آزمون‌های واحد engine.rs — فقط با std و ابزارهای همین فایل (بدون وابستگی جدید؛
+/// sha256_hex از crate::deploy_plan). کامپایل/اجرا در CI انجام می‌شود. هر آزمون پوشهٔ
+/// موقت یکتای خودش را می‌سازد و در پایان بهترین‌تلاش پاک‌سازی می‌کند تا آزمون‌ها
+/// مستقل و تکرارپذیر باشند.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::AtomicU32;
+
+    /// شمارندهٔ ایستا برای نام یکتای پوشهٔ موقت هر آزمون — بدون وابستگی جدید
+    static TEST_DIR_SEQ: AtomicU32 = AtomicU32::new(0);
+
+    /// پوشهٔ موقت یکتا برای هر آزمون — engine-rust-test-{pid}-{شمارنده} در temp سیستم
+    /// (pid در نام هست تا دو اجرای هم‌زمان آزمون هم تداخل نکنند)
+    fn temp_test_dir() -> PathBuf {
+        let seq = TEST_DIR_SEQ.fetch_add(1, Ordering::SeqCst);
+        let dir =
+            std::env::temp_dir().join(format!("engine-rust-test-{}-{}", std::process::id(), seq));
+        let _ = std::fs::remove_dir_all(&dir); // بازماندهٔ اجرای قبلی اگر مانده باشد
+        std::fs::create_dir_all(&dir).expect("ساخت پوشهٔ موقت آزمون ناموفق بود");
+        dir
+    }
+
+    /// پاک‌سازی بهترین‌تلاش در پایان هر آزمون — شکستش آزمون را قرمز نمی‌کند
+    fn cleanup_test_dir(dir: &Path) {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// رانتایم ساختگی برای آزمون‌های verify_runtime_integrity — سه فایل باندل واقعی روی
+    /// دیسک می‌نویسد تا هش‌شان با sha256_hex در manifest آزمون ثبت شود. فیلد nodeVersion
+    /// عمداً در manifest آزمون‌ها نوشته نمی‌شود تا وارسی نسخهٔ سایدکار node — که وابستگی
+    /// محیطی است — رد شود و فقط هش سه فایل سنجیده شود.
+    fn launch_with_dummy_runtime(dir: &Path) -> EngineLaunch {
+        let server_js = dir.join("engine-server.js");
+        let main_bundle = dir.join("worker.js");
+        let games_bundle = dir.join("games.js");
+        std::fs::write(&server_js, "// باندل موتور ساختگی برای آزمون\n").unwrap();
+        std::fs::write(&main_bundle, "// باندل ورکر اصلی ساختگی\n").unwrap();
+        std::fs::write(&games_bundle, "// باندل ورکر بازی‌ها ساختگی\n").unwrap();
+        EngineLaunch {
+            node: dir.join("node"),
+            server_js,
+            data_dir: dir.join("data"),
+            main_bundle,
+            games_bundle,
+            public_dir: dir.join("public"),
+        }
+    }
+
+    /// آزمون چرخش: لاگ بزرگ‌تر از آستانهٔ آزمون (۱۰۲۴ بایت) → پس از چرخش engine.log نیست
+    /// و engine.log.1 دقیقاً همان بایت‌ها را دارد
+    #[test]
+    fn test_rotates_large_log() {
+        let dir = temp_test_dir();
+        let log_path = dir.join("engine.log");
+        let body = "x".repeat(2048);
+        std::fs::write(&log_path, &body).expect("نوشتن لاگ آزمون ناموفق بود");
+        rotate_engine_log(&dir, 1024).expect("چرخش لاگ باید موفق باشد");
+        assert!(!log_path.exists(), "engine.log پس از چرخش نباید سر جایش باشد");
+        let rotated_path = dir.join("engine.log.1");
+        let moved = std::fs::read(&rotated_path).expect("engine.log.1 پس از چرخش باید باشد");
+        assert_eq!(
+            moved.as_slice(),
+            body.as_bytes(),
+            "بایت‌های لاگ باید دست‌نخورده به بایگانی بروند"
+        );
+        cleanup_test_dir(&dir);
+    }
+
+    /// آزمون دوم چرخش: لاگ کوچک‌تر از آستانه دست‌نخورده می‌ماند — نه جابه‌جایی نه بایگانی
+    #[test]
+    fn test_small_log_untouched() {
+        let dir = temp_test_dir();
+        let log_path = dir.join("engine.log");
+        std::fs::write(&log_path, "short").expect("نوشتن لاگ آزمون ناموفق بود");
+        rotate_engine_log(&dir, 1024).expect("چرخش نباید برای لاگ کوچک خطا بدهد");
+        assert!(log_path.exists(), "لاگ کوچک باید سر جایش بماند");
+        assert!(!dir.join("engine.log.1").exists(), "برای لاگ کوچک بایگانی نباید ساخته شود");
+        let kept = std::fs::read(&log_path).expect("لاگ کوچک باید خوانا باشد");
+        assert_eq!(kept.as_slice(), "short".as_bytes(), "محتوای لاگ کوچک نباید عوض شود");
+        cleanup_test_dir(&dir);
+    }
+
+    /// آزمون سوم چرخش: چرخش دوباره با لاگ بزرگ تازه → بایگانی engine.log.1 قبلی حذف و
+    /// با محتوای تازه جایگزین می‌شود (فقط یک نسل بایگانی نگه داشته می‌شود)
+    #[test]
+    fn test_second_rotation_replaces_previous_archive() {
+        let dir = temp_test_dir();
+        let log_path = dir.join("engine.log");
+        let first_body = "old-first".repeat(200); // ۱۸۰۰ بایت > آستانهٔ آزمون
+        std::fs::write(&log_path, &first_body).expect("نوشتن لاگ نخست ناموفق بود");
+        rotate_engine_log(&dir, 1024).expect("چرخش نخست باید موفق باشد");
+        let rotated_path = dir.join("engine.log.1");
+        let first_archive = std::fs::read(&rotated_path).expect("بایگانی نخست باید باشد");
+        assert_eq!(first_archive.as_slice(), first_body.as_bytes());
+        // لاگ تازهٔ بزرگ → چرخش دوم باید بایگانی قبلی را جایگزین کند
+        let second_body = "second-log".repeat(300); // ۳۰۰۰ بایت > آستانهٔ آزمون
+        std::fs::write(&log_path, &second_body).expect("نوشتن لاگ دوم ناموفق بود");
+        rotate_engine_log(&dir, 1024).expect("چرخش دوم باید موفق باشد");
+        assert!(!log_path.exists(), "لاگ تازه پس از چرخش دوم نباید سر جایش باشد");
+        let second_archive = std::fs::read(&rotated_path).expect("بایگانی دوم باید باشد");
+        assert_ne!(
+            second_archive.as_slice(),
+            first_archive.as_slice(),
+            "بایگانی قبلی باید جایگزین شده باشد"
+        );
+        assert_eq!(second_archive.as_slice(), second_body.as_bytes());
+        cleanup_test_dir(&dir);
+    }
+
+    /// آزمون ④ — manifest سالم با هش درست هر سه فایل (با sha256_hex روی همان فایل‌ها) → Ok
+    #[test]
+    fn test_verify_integrity_ok_with_matching_manifest() {
+        let dir = temp_test_dir();
+        let launch = launch_with_dummy_runtime(&dir);
+        let manifest = serde_json::json!({
+            "engineServer": { "sha256": sha256_hex(&std::fs::read(&launch.server_js).unwrap()) },
+            "bundles": {
+                "mainSha256": sha256_hex(&std::fs::read(&launch.main_bundle).unwrap()),
+                "gamesSha256": sha256_hex(&std::fs::read(&launch.games_bundle).unwrap()),
+            }
+        })
+        .to_string();
+        std::fs::write(dir.join("engine-runtime-manifest.json"), manifest)
+            .expect("نوشتن manifest آزمون ناموفق بود");
+        let res = verify_runtime_integrity(&launch);
+        assert!(res.is_ok(), "manifest سالم باید تأیید شود: {res:?}");
+        cleanup_test_dir(&dir);
+    }
+
+    /// آزمون ⑤ — هش ناسازگار در manifest → Err که به Repair (اجرای دوبارهٔ نصاب) هدایت می‌کند
+    #[test]
+    fn test_verify_integrity_hash_mismatch_mentions_repair() {
+        let dir = temp_test_dir();
+        let launch = launch_with_dummy_runtime(&dir);
+        // هش engineServer عمداً ناسازگار — دو فیلد دیگر درست‌اند تا خطا دقیقاً از وارسی هش بگذرد
+        let manifest = serde_json::json!({
+            "engineServer": { "sha256": sha256_hex(b"not-the-real-server-bundle-bytes") },
+            "bundles": {
+                "mainSha256": sha256_hex(&std::fs::read(&launch.main_bundle).unwrap()),
+                "gamesSha256": sha256_hex(&std::fs::read(&launch.games_bundle).unwrap()),
+            }
+        })
+        .to_string();
+        std::fs::write(dir.join("engine-runtime-manifest.json"), manifest)
+            .expect("نوشتن manifest آزمون ناموفق بود");
+        let err = verify_runtime_integrity(&launch).expect_err("هش ناسازگار باید خطا بدهد");
+        assert!(err.contains("Repair"), "پیام خطا باید به Repair هدایت کند: {err}");
+        cleanup_test_dir(&dir);
+    }
+
+    /// آزمون ⑥ — بدون فایل manifest → Ok (حالت توسعه — باندل مخزن manifest ندارد)
+    #[test]
+    fn test_verify_integrity_without_manifest_is_ok() {
+        let dir = temp_test_dir();
+        let launch = launch_with_dummy_runtime(&dir);
+        let res = verify_runtime_integrity(&launch);
+        assert!(res.is_ok(), "بدون manifest (حالت توسعه) باید بی‌خطا رد شود: {res:?}");
+        cleanup_test_dir(&dir);
+    }
+
+    /// آزمون ⑦ — فیلد غایب در manifest → Err با نام دقیق بخش/فیلد (bundles.gamesSha256)
+    #[test]
+    fn test_verify_integrity_missing_field_names_section_and_field() {
+        let dir = temp_test_dir();
+        let launch = launch_with_dummy_runtime(&dir);
+        // bundles.gamesSha256 عمداً غایب — دو فیلد دیگر سالم‌اند تا خطا دقیقاً همین فیلد باشد
+        let manifest = serde_json::json!({
+            "engineServer": { "sha256": sha256_hex(&std::fs::read(&launch.server_js).unwrap()) },
+            "bundles": {
+                "mainSha256": sha256_hex(&std::fs::read(&launch.main_bundle).unwrap()),
+            }
+        })
+        .to_string();
+        std::fs::write(dir.join("engine-runtime-manifest.json"), manifest)
+            .expect("نوشتن manifest آزمون ناموفق بود");
+        let err = verify_runtime_integrity(&launch).expect_err("فیلد غایب باید خطا بدهد");
+        assert!(
+            err.contains("bundles.gamesSha256"),
+            "خطا باید نام بخش/فیلد غایب را داشته باشد: {err}"
+        );
+        cleanup_test_dir(&dir);
     }
 }
