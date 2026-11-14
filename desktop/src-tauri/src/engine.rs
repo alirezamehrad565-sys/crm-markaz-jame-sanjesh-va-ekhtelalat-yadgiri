@@ -26,6 +26,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::deploy_plan::sha256_hex;
 use crate::engine_watchdog::{next_action, now_ms, RestartRecord, WatchdogAction, WatchdogEvent};
 
 /// پورت پیش‌فرض موتور محلی — همان devUrl پوسته (tauri.conf.json)
@@ -260,12 +261,87 @@ fn spawn_engine(plan: &EngineLaunch) -> Result<Child, String> {
         .map_err(|e| format!("spawn موتور محلی ناموفق: {e}"))
 }
 
+/// v1.27.۰۵ — اعتبارسنجی هش/نسخهٔ رانتایم در برابر manifest نصاب (PRECHECK پوسته):
+/// مونتاژ نصاب، هش‌های sha256 و نسخهٔ سایدکار node را در engine-runtime-manifest.json کنار
+/// engine-server.js ثبت می‌کند (داخل resources/engine — scripts/desktop/config.mjs — تا glob
+/// resources نصاب آن را شحنه کند). اگر manifest نبود، حالت توسعه است (باندل مخزن manifest
+/// ندارد) و بی‌خطا رد می‌شود؛ اگر بود، هر ناهم‌گامی یعنی نصب ناقص/خراب — پیش از هر spawn با
+/// پیام فارسی نام‌وبنام رد می‌شود تا کاربر به Repair (اجرای دوبارهٔ نصاب) هدایت شود.
+fn verify_runtime_integrity(launch: &EngineLaunch) -> Result<(), String> {
+    let engine_dir = launch
+        .server_js
+        .parent()
+        .ok_or_else(|| "مسیر باندل موتور فاقد پوشهٔ والد است".to_string())?;
+    let manifest_path = engine_dir.join("engine-runtime-manifest.json");
+    if !manifest_path.is_file() {
+        return Ok(()); // حالت توسعه — باندل مخزن manifest ندارد
+    }
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&manifest_path)
+            .map_err(|e| format!("خواندن manifest نصاب ناموفق بود: {e}"))?,
+    )
+    .map_err(|e| format!("manifest نصاب پارس نشد — نصاب را دوباره اجرا کنید (Repair): {e}"))?;
+    let expected = |section: &str, field: &str| -> Result<String, String> {
+        manifest
+            .get(section)
+            .and_then(|s| s.get(field))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| {
+                format!("فیلد «{section}.{field}» در manifest نصاب نیست — نصاب را دوباره اجرا کنید (Repair).")
+            })
+    };
+    for (file, label, section, field) in [
+        (&launch.server_js, "باندل موتور (engine-server.js)", "engineServer", "sha256"),
+        (&launch.main_bundle, "باندل ورکر اصلی (bundles/worker.js)", "bundles", "mainSha256"),
+        (&launch.games_bundle, "باندل ورکر بازی‌ها (bundles/games.js)", "bundles", "gamesSha256"),
+    ] {
+        let want = expected(section, field)?;
+        let bytes = std::fs::read(file).map_err(|e| format!("خواندن «{label}» ناموفق بود: {e}"))?;
+        if sha256_hex(&bytes) != want {
+            return Err(format!(
+                "هش «{label}» با manifest نصاب هم‌خوان نیست — نصب رانتایم ناقص یا خراب است؛ نصاب را دوباره اجرا کنید (Repair)."
+            ));
+        }
+    }
+    // نسخهٔ سایدکار node — فقط اگر manifest ثبتش دارد (manifestهای کهنه این گام را رد می‌کنند)
+    if let Some(want_ver) = manifest.get("nodeVersion").and_then(|v| v.as_str()) {
+        let mut cmd = Command::new(&launch.node);
+        cmd.arg("--version");
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
+        let out = cmd
+            .output()
+            .map_err(|e| format!("اجرای سایدکار node برای وارسی نسخه ناموفق بود — نصاب را دوباره اجرا کنید (Repair): {e}"))?;
+        if !out.status.success() {
+            return Err(
+                "سایدکار node پاسخ «--version» نداد — نصب رانتایم ناقص است؛ نصاب را دوباره اجرا کنید (Repair)."
+                    .to_string(),
+            );
+        }
+        let got = String::from_utf8_lossy(&out.stdout);
+        let got = got.trim();
+        let got = got.strip_prefix('v').unwrap_or(got); // node نسخه را با پیشوند v می‌دهد
+        if got != want_ver {
+            return Err(format!(
+                "نسخهٔ سایدکار node ({got}) با نسخهٔ ثبت‌شده در manifest نصاب ({want_ver}) هم‌خوان نیست — نصاب را دوباره اجرا کنید (Repair)."
+            ));
+        }
+    }
+    Ok(())
+}
+
 impl LocalEngine {
     /// بالا آوردن موتور adapter با مشخصات کامل اجرا (EngineLaunch).
     /// on_event: گیرندهٔ رویدادهای نگهبان — در lib.rs به emit تائوری بسته می‌شود.
     /// v1.27.۰۳: پس از spawn منتظر engine-config.json می‌ماند تا پورت نهایی معلوم شود.
     /// v1.27.۰۴: پیش‌بازرسی رانتایم — هر فایل غایب با نام دقیق و پیام فارسی، پیش از هر spawn
     /// (تفکیک «نصب ناقص» از «نود نتوانست main را resolve کند» — درس گزارش EISDIR).
+    /// v1.27.۰۵: پس از پیش‌بازرسی، اعتبارسنجی هش سه فایل رانتایم و نسخهٔ سایدکار در برابر
+    /// manifest نصاب (verify_runtime_integrity) — نبود manifest (حالت توسعه) بی‌خطا رد می‌شود.
     pub fn start(launch: EngineLaunch, on_event: EngineEventSink) -> Result<Self, String> {
         let mut errs: Vec<String> = Vec::new();
         if !launch.server_js.is_file() {
@@ -286,6 +362,7 @@ impl LocalEngine {
                 errs.join(" | ")
             ));
         }
+        verify_runtime_integrity(&launch)?;
         std::fs::create_dir_all(&launch.data_dir).map_err(|e| format!("ساخت data dir: {e}"))?;
         let plan = launch;
         let child = spawn_engine(&plan)?;

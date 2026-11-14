@@ -33,7 +33,7 @@ export const RESOURCES_ENGINE_DIR = 'resources/engine'; // resources: "resources
 export const CAPNP_TEMPLATE_NAME = 'workerd.capnp.template';
 export const D1_SEED_DIR = 'd1-seed'; // دیتابیس مایگریت‌شده + seed نمایشی — بوت نخست کپی می‌کند
 export const PUBLIC_DIR_NAME = 'public'; // دیسک assets worker داخل نصاب
-export const MANIFEST_NAME = 'engine-runtime-manifest.json'; // ثبت هش‌ها (گیت ردیف ۹)
+export const MANIFEST_NAME = 'engine-runtime-manifest.json'; // ثبت هش‌ها (گیت ردیف ۹) — داخل resources/engine می‌نشیند تا glob resources آن را شحنه کند
 
 /** مسیرهای مطلق چیدمان نصاب برای یک ریشهٔ مخزن */
 export function installerPaths(repoRoot) {
@@ -45,6 +45,9 @@ export function installerPaths(repoRoot) {
     capnpTemplate: path.join(tauri, RESOURCES_ENGINE_DIR, CAPNP_TEMPLATE_NAME),
     d1SeedDir: path.join(tauri, RESOURCES_ENGINE_DIR, D1_SEED_DIR),
     publicDir: path.join(tauri, RESOURCES_ENGINE_DIR, PUBLIC_DIR_NAME),
-    manifest: path.join(tauri, MANIFEST_NAME),
+    // v1.27.۰۵ — manifest داخل resources/engine (قبلاً ریشهٔ src-tauri بود و چون glob
+    // resources فقط «resources/engine/**/*» است، شحنه نمی‌شد و نصب‌شده نمی‌توانست در بوت
+    // هش/نسخهٔ رانتایم را تطبیق دهد — PRECHECK پوسته: desktop/src-tauri/src/engine.rs)
+    manifest: path.join(tauri, RESOURCES_ENGINE_DIR, MANIFEST_NAME),
   };
 }
