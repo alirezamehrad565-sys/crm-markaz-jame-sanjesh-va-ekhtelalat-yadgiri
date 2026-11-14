@@ -382,7 +382,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::escape_capnp_path;
+    use super::{boot_failure_message, escape_capnp_path};
 
     /// ۱.۲۷.۰۱ — رگرسیون نصاب واقعی: مسیر خام ویندوزی در capnp «Parse error» می‌داد.
     #[test]
