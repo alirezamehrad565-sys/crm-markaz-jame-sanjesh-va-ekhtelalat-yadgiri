@@ -150,7 +150,8 @@ fn boot_engine(app: &tauri::AppHandle) -> Result<engine::LocalEngine, String> {
         }
     }
 
-    let launch = engine::EngineLaunch { node: engine::find_node_binary(), server_js, main_bundle, games_bundle, public_dir, data_dir };
+    let node = engine::find_node_binary()?;
+    let launch = engine::EngineLaunch { node, server_js, main_bundle, games_bundle, public_dir, data_dir };
     engine::LocalEngine::start(launch, sink)
 }
 

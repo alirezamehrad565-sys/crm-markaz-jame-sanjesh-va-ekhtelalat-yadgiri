@@ -1,6 +1,6 @@
 {
   "_comment": "مانیفست باندل کلاینت؛ گات بودجه (perf-budget.mjs) از این می‌خواند. فایل ساخته‌شده است — دستی ویرایش نشود.",
-  "boot": "boot.EASPNSAT.js",
+  "boot": "boot.EWS5VKVG.js",
   "bootImports": [
     "chunk.TQV6FOIY.js",
     "chunk.3ELOCRLD.js",
@@ -28,15 +28,15 @@
       "role": "lazy"
     },
     {
-      "name": "boot.EASPNSAT.js",
+      "name": "boot.EWS5VKVG.js",
       "raw": 75687,
-      "gz": 24724,
+      "gz": 24725,
       "role": "boot"
     },
     {
-      "name": "boot.GBA3LXZK.js",
+      "name": "boot.JI7LDXIT.js",
       "raw": 1162,
-      "gz": 701,
+      "gz": 698,
       "role": "lazy"
     },
     {
@@ -68,18 +68,6 @@
       "raw": 49564,
       "gz": 18542,
       "role": "boot-dep"
-    },
-    {
-      "name": "chunk.2YA34SRB.js",
-      "raw": 343,
-      "gz": 254,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.37DVCZGY.js",
-      "raw": 27928,
-      "gz": 8301,
-      "role": "lazy"
     },
     {
       "name": "chunk.3ELOCRLD.js",
@@ -154,6 +142,12 @@
       "role": "lazy"
     },
     {
+      "name": "chunk.MPKUIHY7.js",
+      "raw": 27928,
+      "gz": 8300,
+      "role": "lazy"
+    },
+    {
       "name": "chunk.SD7CCJJT.js",
       "raw": 4622,
       "gz": 2108,
@@ -176,6 +170,12 @@
       "raw": 180,
       "gz": 159,
       "role": "boot-dep"
+    },
+    {
+      "name": "chunk.UUOCENIB.js",
+      "raw": 343,
+      "gz": 255,
+      "role": "lazy"
     },
     {
       "name": "chunk.WVRFM3BF.js",
@@ -214,9 +214,9 @@
       "role": "lazy"
     },
     {
-      "name": "cloud-setup.SS7NOTCN.js",
+      "name": "cloud-setup.GCJZP5CH.js",
       "raw": 23962,
-      "gz": 7994,
+      "gz": 7987,
       "role": "lazy"
     },
     {
@@ -262,9 +262,9 @@
       "role": "lazy"
     },
     {
-      "name": "panel.MS3HC55X.js",
+      "name": "panel.BWITOF4V.js",
       "raw": 4181,
-      "gz": 1550,
+      "gz": 1549,
       "role": "lazy"
     },
     {
@@ -349,6 +349,6 @@
   "totals": {
     "files": 56,
     "raw": 1165265,
-    "gz": 381583
+    "gz": 381573
   }
 }
