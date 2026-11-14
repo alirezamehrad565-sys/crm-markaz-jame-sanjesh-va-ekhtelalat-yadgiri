@@ -1,6 +1,6 @@
 {
   "_comment": "مانیفست باندل کلاینت؛ گات بودجه (perf-budget.mjs) از این می‌خواند. فایل ساخته‌شده است — دستی ویرایش نشود.",
-  "boot": "boot.4TPKZGQB.js",
+  "boot": "boot.COA2FEPF.js",
   "bootImports": [
     "chunk.TQV6FOIY.js",
     "chunk.3ELOCRLD.js",
@@ -28,15 +28,15 @@
       "role": "lazy"
     },
     {
-      "name": "boot.4TPKZGQB.js",
+      "name": "boot.COA2FEPF.js",
       "raw": 75687,
-      "gz": 24724,
+      "gz": 24723,
       "role": "boot"
     },
     {
-      "name": "boot.RYFZGF4V.js",
+      "name": "boot.YAXBO4JX.js",
       "raw": 1162,
-      "gz": 699,
+      "gz": 700,
       "role": "lazy"
     },
     {
@@ -88,6 +88,12 @@
       "role": "lazy"
     },
     {
+      "name": "chunk.6U44PHTZ.js",
+      "raw": 343,
+      "gz": 254,
+      "role": "lazy"
+    },
+    {
       "name": "chunk.6YSEPOY5.js",
       "raw": 20406,
       "gz": 6721,
@@ -106,15 +112,15 @@
       "role": "lazy"
     },
     {
-      "name": "chunk.C3VPDRD5.js",
-      "raw": 4486,
-      "gz": 1907,
+      "name": "chunk.C2RGLKHF.js",
+      "raw": 27928,
+      "gz": 8302,
       "role": "lazy"
     },
     {
-      "name": "chunk.CE2ROUUC.js",
-      "raw": 27928,
-      "gz": 8302,
+      "name": "chunk.C3VPDRD5.js",
+      "raw": 4486,
+      "gz": 1907,
       "role": "lazy"
     },
     {
@@ -139,12 +145,6 @@
       "name": "chunk.I26KF3HD.js",
       "raw": 7298,
       "gz": 2905,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.L2Y6HBUB.js",
-      "raw": 343,
-      "gz": 254,
       "role": "lazy"
     },
     {
@@ -214,7 +214,7 @@
       "role": "lazy"
     },
     {
-      "name": "cloud-setup.TZF5SPEB.js",
+      "name": "cloud-setup.43VVPYIM.js",
       "raw": 23962,
       "gz": 7993,
       "role": "lazy"
@@ -262,9 +262,9 @@
       "role": "lazy"
     },
     {
-      "name": "panel.7O7AUQ3L.js",
+      "name": "panel.CTL2F4Q5.js",
       "raw": 4181,
-      "gz": 1549,
+      "gz": 1547,
       "role": "lazy"
     },
     {
@@ -349,6 +349,6 @@
   "totals": {
     "files": 56,
     "raw": 1165265,
-    "gz": 381580
+    "gz": 381578
   }
 }

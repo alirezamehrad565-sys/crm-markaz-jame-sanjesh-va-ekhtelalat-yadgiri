@@ -70,6 +70,15 @@ try {
   boot.includes('پیام به سازنده')
     ? ok('صفحهٔ بوت: کنش «پیام به سازنده» هست')
     : bad('صفحهٔ بوت: کنش «پیام به سازنده» غایب است');
+  // v1.27.01 — فونت وزیر باید در خود صفحهٔ بوت باندل باشد (نه Tahoma خام و نه CDN آنلاین)
+  boot.includes('@font-face') && boot.includes('Vazirmatn') && boot.includes('fonts/vazirmatn-fa-regular.woff2')
+    ? ok("صفحهٔ بوت: فونت وزیر متن (@font-face محلی) سیم است")
+    : bad('صفحهٔ بوت: فونت وزیر در صفحهٔ بوت نیست — فونت خام Tahoma ممنوع');
+  for (const f of ['vazirmatn-fa-regular.woff2', 'vazirmatn-fa-bold.woff2']) {
+    existsSync(path.join(ROOT, 'desktop', 'src-tauri', 'boot-dist', 'fonts', f))
+      ? ok(`صفحهٔ بوت: فونت ${f} باندل شده`)
+      : bad(`صفحهٔ بوت: فونت ${f} در boot-dist/fonts نیست`);
+  }
 } catch { bad('صفحهٔ بوت خوانده نشد'); }
 
 // ④ آیکن واقعی (سربرگ ICO: 00 00 01 00) و حجم معنادار
@@ -148,6 +157,35 @@ try {
     : bad('.gitignore خروجی‌های رانتایم نصاب را پوشش نمی‌دهد');
 } catch (e) {
   bad(`بخش rust-f13 خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+}
+
+// ⑧ v1.27.01 — escape مسیر ویندوزی در capnp — رگرسیون نصاب واقعی (Parse error 6:46):
+// مسیرهای %APPDATA% بک‌اسلش دارند و داخل رشتهٔ capnp باید دبل شوند وگرنه workerd پارس نمی‌کند.
+try {
+  const libSrc2 = readFileSync(path.join(T, 'src', 'lib.rs'), 'utf8');
+  for (const t of [DATA_DIR_TOKEN, PUBLIC_DIR_TOKEN]) {
+    libSrc2.includes(`"${t}", &escape_capnp_path(`) || libSrc2.includes(`"${t}",\n            &escape_capnp_path(`)
+      ? ok(`جایگزینی ${t} از escape_capnp_path می‌گذرد`)
+      : bad(`${t} بدون escape_capnp_path جایگزین می‌شود — Parse error ویندوز برمی‌گردد`);
+  }
+  const { buildInstallerCapnpTemplate } = await import('./engine/config.mjs');
+  const winDir = 'C:\\Users\\alire\\AppData\\Roaming\\ir.sdt144.center.desktop';
+  const esc = (p) => p.replace(/\\/g, '\\\\');
+  const cfg = (await buildInstallerCapnpTemplate({ publicDir: './public' }))
+    .replaceAll(DATA_DIR_TOKEN, esc(winDir))
+    .replaceAll(PUBLIC_DIR_TOKEN, esc(winDir + '/public'))
+    .replaceAll(AUTH_SECRET_TOKEN, 'a'.repeat(64));
+  // escapeهای مجاز capnp: \\ \" \' \n \r \t \b \f \0 \xHH \uHHHH — اول جفت‌های سالم `\\` مصرف
+  // می‌شوند (وگرنه بک‌اسلش دوم جفت با نویسهٔ بعدش تطبیق می‌خورد)؛ هر `\` باقی‌مانده که بعدش
+  // نویسهٔ مجاز نباشد (مثل \U از مسیر ویندوزی C:\Users) = Parse error — خطای نصاب واقعی ۱.۲۷.۰.
+  const noPairs = cfg.replaceAll('\\\\', '');
+  const stray = noPairs.match(/\\(?![\\"'nrtbf0ux])/);
+  const d1line = cfg.split('\n').find((l) => l.includes('d1:storage'));
+  !stray && d1line && d1line.includes('C:\\\\Users')
+    ? ok('شبیه‌سازی جایگذاری ویندوزی capnp: همهٔ بک‌اسلش‌ها دبل‌اند — d1:storage سالم')
+    : bad('شبیه‌سازی capnp ویندوزی ناموفق — بک‌اسلش خام در خروجی یا خط d1 نایست');
+} catch (e) {
+  bad(`گیت capnp-ویندوزی خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }
 
 lines.push(failed ? '❌ گیت ساختار دسکتاپ قرمز است' : '✅ گیت ساختار دسکتاپ سبز است');

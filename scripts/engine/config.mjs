@@ -151,20 +151,24 @@ export const INSTALLER_MAIN_PORT = 8787;
 export const INSTALLER_GAMES_PORT = 8788;
 
 export async function buildInstallerCapnpTemplate({ publicDir }) {
+  // ۱.۲۷.۰۱ — مانیفست دارایی‌ها از public واقعیِ زمانِ بیلد خوانده می‌شود، ولی مسیر disk در
+  // قالب همیشه «توکن» است؛ مسیر مطلق ماشینِ بیلد هرگز نباید داخل نصاب بماند — lib.rs در بوت
+  // توکن را با مسیر واقعی کاربر جایگزین می‌کند (با escape بک‌اسلش ویندوزی — رگرسیون ۱.۲۷.۰۱).
   return buildCapnpConfig({
     port: INSTALLER_MAIN_PORT,
     gamesPort: INSTALLER_GAMES_PORT,
     dataDir: DATA_DIR_TOKEN,
-    publicDir,
+    publicDir: PUBLIC_DIR_TOKEN,
+    manifestPublicDir: publicDir,
     authSecret: AUTH_SECRET_TOKEN,
     env: 'production',
   });
 }
 
 async function buildCapnpConfig(opts) {
-  const { port, gamesPort = 8788, dataDir, publicDir, authSecret, env } = opts;
+  const { port, gamesPort = 8788, dataDir, publicDir, manifestPublicDir = publicDir, authSecret, env } = opts;
   const d1DiskPath = path.join(dataDir, 'd1');
-  const { encodedAssetManifest, assetsReverseMap } = await buildAssetManifest(publicDir);
+  const { encodedAssetManifest, assetsReverseMap } = await buildAssetManifest(manifestPublicDir);
 
   // ماژول‌های مینیفلر — database.worker (D1)، object-entry و سه ورکر assets از توزیع مینیفلر خوانده می‌شوند
   const [databaseWorker, objectEntryWorker, assetsKvWorker, assetWorker, routerWorker, sharedModule, zodModule] = await Promise.all([

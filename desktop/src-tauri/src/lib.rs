@@ -150,16 +150,27 @@ fn boot_engine(app: &tauri::AppHandle) -> Result<engine::LocalEngine, String> {
     let secret = read_or_create_auth_secret(&data_dir)?;
     let tmpl = std::fs::read_to_string(&template)
         .map_err(|e| format!("خواندن قالب capnp ({template:?}): {e}"))?;
+    // ۱.۲۷.۰۱ — مسیرهای ویندوزی بک‌اسلش دارند و capnp داخل رشته فقط `\\` را escape می‌شناسد؛
+    // جایگذاری خام «C:\Users\...» خطای Parse error:6:46 در workerd می‌داد (گزارش نصاب واقعی).
     let final_capnp = tmpl
-        .replace("__CENTER_DATA_DIR__", &data_dir.to_string_lossy())
+        .replace(
+            "__CENTER_DATA_DIR__",
+            &escape_capnp_path(&data_dir.to_string_lossy()),
+        )
         .replace(
             "__CENTER_PUBLIC_DIR__",
-            &engine_res.join("public").to_string_lossy(),
+            &escape_capnp_path(&engine_res.join("public").to_string_lossy()),
         )
         .replace("__CENTER_AUTH_SECRET__", &secret);
     let capnp_path = data_dir.join("workerd.capnp");
     std::fs::write(&capnp_path, final_capnp).map_err(|e| format!("نوشتن capnp: {e}"))?;
     engine::LocalEngine::start(&capnp_path, sink)
+}
+
+/// escape یک مسیر برای درج امن در رشته‌های capnp — هر `\` به `\\` تبدیل می‌شود تا
+/// پارسر capnp آن را به بک‌اسلش واقعی برگرداند (دبل‌کوتیشن و بقیهٔ نویسه‌ها دست‌نخورده).
+fn escape_capnp_path(p: &str) -> String {
+    p.replace('\\', "\\\\")
 }
 
 /// گیرندهٔ رویدادهای نگهبان موتور → رخداد تائوری برای پوسته + وضعیت صریح پس از تسلیم.
@@ -354,4 +365,24 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("خطای راه‌اندازی پوستهٔ دسکتاپ");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_capnp_path;
+
+    /// ۱.۲۷.۰۱ — رگرسیون نصاب واقعی: مسیر خام ویندوزی در capnp «Parse error» می‌داد.
+    #[test]
+    fn escape_capnp_path_windows_backslashes() {
+        let raw = r"C:\Users\alire\AppData\Roaming\ir.sdt144.center.desktop";
+        let escaped = escape_capnp_path(raw);
+        assert_eq!(
+            escaped,
+            r"C:\\Users\\alire\\AppData\\Roaming\\ir.sdt144.center.desktop"
+        );
+        // مسیر لینوکسی بدون بک‌اسلش دست‌نخورده می‌ماند
+        assert_eq!(escape_capnp_path("/home/z/data"), "/home/z/data");
+        // دبل‌بک‌اسلشِ موجود نباید چهار تایی شود
+        assert_eq!(escape_capnp_path(r"C:\a\\b"), r"C:\\a\\\\b");
+    }
 }
