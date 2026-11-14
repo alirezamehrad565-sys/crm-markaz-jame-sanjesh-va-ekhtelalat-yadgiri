@@ -2,6 +2,21 @@
 
 قالب بر اساس [Keep a Changelog](https://keepachangelog.com/) و نسخه‌گذاری معنایی (SemVer).
 
+## [۱.۲۷.۰۶] — بهداشت و Repair: تکی‌نمونه + ثبت نتیجهٔ نصب (install-manifest.json) + چرخش engine.log + تست‌های واحد Rust در CI
+
+### Added
+- **تکی‌نمونه** (بستن ریسک #۱۰ سند ریسک): پلاگین رسمی `tauri-plugin-single-instance` — نمونهٔ دوم بلافاصله بسته می‌شود و کالبک در نمونهٔ اول پنجرهٔ main را فوکوس می‌گیرد؛ دیگر دو موتور/دو پنجره روی یک dataDir ممکن نیست.
+- **ثبت نتیجهٔ نصب** (بستن ردیف ۱۱ جدول اختلاف ممیزی): پس از هر بوت موفق، `dataDir/install-manifest.json` با بهترین‌تلاش نوشته می‌شود — appVersion، installedAtUnix (حفظ مقدار نخستین نصب) + lastBootAtUnix، نسخهٔ node (`node --version`)، پورت‌های نهایی، هش engine-runtime-manifest.json و هش/حجم چهار فایل رانتایم + آرایهٔ missing. نوشتن اتمیک (tmp + rename). پشتیبانی/Repair بدون اجرای اپ می‌تواند ببیند چه نسخه/فایلی نصب است.
+- **چرخش engine.log سمت Rust** (بستن ریسک #۹): پیش از هر spawn — گذر لاگ از ۱۰MB → بایگانی `engine.log.1` با rename اتمی (یک نسل؛ حداکثر ≈ ۲ برابر آستانه). رشد بی‌کران لاگ روی ماشین کارفرما مهار شد.
+- **تست‌های واحد Rust** (بلوک `#[cfg(test)]`، بدون وابستگی جدید): چرخش لاگ ×۳ + `verify_runtime_integrity` ×۴ (سازگار/ناسازگار/بدون manifest/فیلد غایب) + `write_install_manifest` ×۲ (حفظ installedAt، node ناموجود → null بی‌کرش) — با گام تازهٔ **`cargo test --all-targets`** در CI روی هر push اجرا می‌شوند.
+- **drill خرابی گیت قرارداد** (`installer-sim --corrupt`، بخش ⑪ desktop-check): کپی موقت باندل‌ها با ۱۶ بایت خراب → اثبات اینکه گیت هش دام را می‌گیرد (گیت دیگر نمی‌تواند تهی سبز شود) + پین‌های سخت تابع/وابستگی‌های P2.
+
+### Changed
+- بامپ یک‌جای نسخه به ۱.۲۷.۰۶ در هشت نقطه (APP_VERSION، package.json + lock، tauri.conf، Cargo.toml، sw.js، مُهر ?v= دارایی‌ها، پین نسخهٔ سه تست).
+
+### گیت‌ها (همه سبز)
+`desktop-check` کامل (شامل drill خرابی و پین‌های ⑪) · `vitest` ۲۶۴۰/۲۶۴۰ · `tsc` تمیز · کامپایل/تست Rust با cargo check + cargo test در CI.
+
 ## [۱.۲۷.۰۵] — ریشهٔ خطای نصب ۱.۲۷.۰۴: ناسازگاری مسیر باندل‌ها (bundles/↔central/) + گیت قرارداد رانتایم + اعتبارسنجی هش و سلامت مستقل ورکرها
 
 ### زمینه — گزارش واقعی کارفرما (v1.27.04) و ممیزی مصوب
