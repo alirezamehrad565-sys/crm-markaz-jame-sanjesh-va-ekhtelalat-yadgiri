@@ -43,6 +43,12 @@ export interface HealthPanelData {
   alerts: HealthAlert[];
   /** ف۵ (P0-3) — مُهر آخرین ارزیابی خودکار کرون شبانه (settings: alerts.last_evaluated_at) */
   alerts_last_evaluated_at: string | null;
+  /**
+   * ENG-4 (۱.۲۶.۴) — پایش ورکر بازی‌ها؛ فقط-افزودنی (هیچ کلید قدیمی پنل عوض نمی‌شود).
+   * در موتور محلی، probing نشانی واقعی پورت دوم است؛ در تولید وب (بدون binding) port=null.
+   * last_restart = boot_ts پاسخ سلامت بازی‌ها — پس از هر ری‌استارت نگهبان تازه می‌شود.
+   */
+  games: { ok: boolean; port: number | null; last_restart: string | null };
 }
 
 /**
@@ -63,6 +69,8 @@ export interface HealthDeps {
   envName: string | null;
   /** ف۵ (P0-3) — آستانهٔ هشدار خطاهای مرورگر (env خام ALERT_CLIENT_ERRORS_MAX؛ نبود = پیش‌فرض ۱۰۰) */
   clientErrorsMax?: number | string | null;
+  /** ENG-4 (۱.۲۶.۴) — نشانی /health ورکر بازی‌ها (binding GAMES_HEALTH_URL؛ در تولید وب غایب) */
+  gamesHealthUrl?: string | null;
 }
 
 interface ChannelDef {
@@ -106,6 +114,39 @@ async function countSafe(db: DbClient, sql: string, params: unknown[] = []): Pro
     return row?.n ?? null;
   } catch {
     return null; // جدول غایب/قطعی D1 — پنل باید بی‌صدا degraded بماند نه ۵۰۰ بدهد
+  }
+}
+
+/**
+ * ENG-4 — پروب سلامت ورکر بازی‌ها برای ردیف تازهٔ پنل. حکم پنل: «سلامت نباید خودش بیمار
+ * باشد» — هر شکستی = ناسالم/نامعلوم گزارش می‌شود، نه ۵۰۰. نشانی از binding می‌آید (موتور
+ * محلی)؛ بدون binding = سرویس بازی‌ها در این نصب وجود ندارد (port=null، فقط صادقانه).
+ */
+async function probeGames(db: DbClient, url: string | null): Promise<HealthPanelData['games']> {
+  if (!url) return { ok: false, port: null, last_restart: null };
+  let port: number | null = null;
+  try {
+    port = new URL(url).port ? Number(new URL(url).port) : null;
+  } catch {
+    port = null;
+  }
+  // خواندن از آینهٔ ناظر (settings: sys_games_health) — workerd به loopback خودش دسترسی
+  // ندارد؛ ناظر Node هر پایش (۵ ثانیه) سلامت بازی‌ها را می‌پرسد و می‌نویسد (ENG-4).
+  try {
+    const row = await db.queryOne<{ value: string }>('SELECT value FROM settings WHERE key = ?', [
+      'sys_games_health'
+    ]);
+    if (!row?.value) return { ok: false, port, last_restart: null };
+    const snap = JSON.parse(row.value) as { ok?: unknown; boot_ts?: unknown; checked_at?: unknown };
+    const checkedAt = typeof snap.checked_at === 'string' ? Date.parse(snap.checked_at) : NaN;
+    const fresh = Number.isFinite(checkedAt) && Date.now() - checkedAt < 30_000;
+    return {
+      ok: snap.ok === true && fresh,
+      port,
+      last_restart: typeof snap.boot_ts === 'string' ? snap.boot_ts : null
+    };
+  } catch {
+    return { ok: false, port, last_restart: null };
   }
 }
 
@@ -202,7 +243,8 @@ export function createHealthService(deps: HealthDeps): HealthService {
           channels
         },
         alerts: [],
-        alerts_last_evaluated_at: await readAlertsSeal(db)
+        alerts_last_evaluated_at: await readAlertsSeal(db),
+        games: await probeGames(deps.db, deps.gamesHealthUrl ?? null)
       };
       // ف۵ (P0-3) — هشدارهای فعال از همان دادهٔ همین پنل مشتق می‌شوند (بدون رفت‌وبرگشت تازه)
       panelData.alerts = deriveAlerts(panelData, clientErrorsMax);

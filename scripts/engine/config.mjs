@@ -200,6 +200,9 @@ async function buildCapnpConfig(opts) {
     // rust-f9 — گیت زمان‌اجرای میز: مسیرهای /api/internal/sync/* فقط در موتور محلی زنده‌اند؛
     // در تولید وب این binding وجود ندارد → ۴۰۴ کم‌دست (باندل یکسان، رفتار تولید دست‌نخورده)
     textBinding('CENTER_DESKTOP_ENGINE', '1'),
+    // ENG-4 (۱.۲۶.۴) — نشانی سلامت ورکر بازی‌ها برای ردیف تازهٔ پنل سلامت؛ فقط-افزودنی:
+    // در تولید وب binding وجود ندارد → پنل سمت اپ games را «نامعلوم/خاموش» گزارش می‌کند
+    textBinding('GAMES_HEALTH_URL', `http://127.0.0.1:${gamesPort}/health`),
   ];
   const gamesVars = [
     textBinding('ENV', env),

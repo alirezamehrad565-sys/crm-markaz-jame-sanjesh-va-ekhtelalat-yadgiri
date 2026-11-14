@@ -19,6 +19,7 @@ import {
   type WizardRefs
 } from '../cloud-setup/dom-build.js';
 import { openSetupWizard } from '../cloud-setup/wizard.js';
+import { CF_TOKEN_GUIDE_URL, mapCloudflareTokenError } from '../cloud-setup/token-errors.js';
 
 /* ─── فِیک DOM سازگار با قرارداد CsElement ─── */
 
@@ -306,5 +307,179 @@ describe('ویزار راه‌اندازی نخست', () => {
     });
     expect(handle.refs.inputs.worker_url.value).toBe('https://old.example');
     expect(handle.refs.inputs.node_code.value).toBe('DESKTOP:old');
+  });
+});
+
+/* ─── موج ۲ — ۲-۳ تلاش دوبارهٔ استقرار و ۲-۴ نگاشت خطای توکن ─────────────────────────
+   پشتوانهٔ «اجرای دوباره بی‌خطر است»: استقرار per-file idempotent از ۱.۲۶.۲ (جدول پیگیری
+   __deploy_applied سمت پوسته). فرمان پوسته با پل __TAURI_INTERNALS__.invoke شبیه‌سازی می‌شود. */
+
+/** جست‌وجوی عمقی متن در فِیک DOM — برای یافتن بلوک تلاش دوباره در اسلاید استقرار */
+function findText(node: { textContent: string; children: readonly { textContent: string; children: readonly unknown[] }[] }, needle: string): boolean {
+  if (node.textContent.includes(needle)) return true;
+  return node.children.some((c) => findText(c as never, needle));
+}
+
+/** پل Tauri شبیه‌سازی‌شده — نتیجهٔ n-ام فراخوانی cloudflare_deploy را برمی‌گرداند */
+function stubTauriDeploy(results: Array<Record<string, unknown>>): { calls: () => number; restore: () => void } {
+  const g = globalThis as { __TAURI_INTERNALS__?: { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } };
+  const previous = g.__TAURI_INTERNALS__;
+  let calls = 0;
+  g.__TAURI_INTERNALS__ = {
+    invoke: async () => {
+      const next = results[Math.min(calls, results.length - 1)];
+      calls += 1;
+      return next;
+    }
+  };
+  return { calls: () => calls, restore: () => { if (previous) g.__TAURI_INTERNALS__ = previous; else delete g.__TAURI_INTERNALS__; } };
+}
+
+describe('موج ۲ (۲-۳) — دکمهٔ «تلاش دوباره» استقرار مرکز', () => {
+  it('شکست قطعهٔ i/n: بلوک تلاش دوباره با متن «اجرای دوباره بی‌خطر است» نمایان می‌شود', async () => {
+    const { doc } = fakeDoc();
+    const stub = stubTauriDeploy([
+      { ok: false, message: 'اعمال «0030_quota.sql» در قطعهٔ ۵/۱۲ شکست خورد: قطع شبکه' }
+    ]);
+    try {
+      const handle = openSetupWizard({
+        doc,
+        store: fakeStore(),
+        secure: fakeSecure(),
+        insecure: false,
+        fetchImpl: okFetch,
+        onFinished: () => {}
+      });
+      expect(handle.deployRetryVisible()).toBe(false);
+      const r = await handle.retryDeploy('tok');
+      expect(r.ok).toBe(false);
+      expect(r.message).toContain('قطعهٔ ۵/۱۲');
+      expect(handle.deployRetryVisible()).toBe(true);
+      // اسلاید استقرار حاوی دکمهٔ تلاش دوباره + متن اطمینان + دکمهٔ لینک توکن کلادفلر است
+      handle.goTo(3);
+      expect(findText(handle.refs.stepBody as never, 'تلاش دوباره')).toBe(true);
+      expect(findText(handle.refs.stepBody as never, 'اجرای دوباره بی‌خطر است')).toBe(true);
+      expect(findText(handle.refs.stepBody as never, 'صفحهٔ توکن‌های کلادفلر')).toBe(true);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it('تلاش دوباره با موفقیت: بلوک پنهان، پیام ✓، آدرس ورکر پر می‌شود', async () => {
+    const { doc } = fakeDoc();
+    const stub = stubTauriDeploy([
+      { ok: false, message: 'اعمال «0030_quota.sql» در قطعهٔ ۵/۱۲ شکست خورد: قطع شبکه' },
+      { ok: true, worker_url: 'https://center.example.workers.dev', admin_setup_token: 'setup-tok' }
+    ]);
+    try {
+      const handle = openSetupWizard({
+        doc,
+        store: fakeStore(),
+        secure: fakeSecure(),
+        insecure: false,
+        fetchImpl: okFetch,
+        onFinished: () => {}
+      });
+      const first = await handle.retryDeploy('tok');
+      expect(first.ok).toBe(false);
+      expect(handle.deployRetryVisible()).toBe(true);
+      const second = await handle.retryDeploy('tok');
+      expect(second.ok).toBe(true);
+      expect(handle.deployRetryVisible()).toBe(false);
+      expect(handle.refs.statusArea.textContent.startsWith('✓')).toBe(true);
+      expect(handle.refs.inputs.worker_url.value).toBe('https://center.example.workers.dev');
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it('بیرون پوسته: شکست نرم، بلوک تلاش دوباره نمایان (دکمه دوباره نرم رد می‌دهد)', async () => {
+    const { doc } = fakeDoc();
+    const handle = openSetupWizard({
+      doc,
+      store: fakeStore(),
+      secure: fakeSecure(),
+      insecure: false,
+      fetchImpl: okFetch,
+      onFinished: () => {}
+    });
+    const r = await handle.retryDeploy('tok');
+    expect(r.ok).toBe(false);
+    expect(r.message).toContain('نسخهٔ میز');
+    expect(handle.deployRetryVisible()).toBe(true);
+  });
+});
+
+describe('موج ۲ (۲-۴) — نگاشت خطای توکن کلادفلر', () => {
+  it('جدول نگاشت: ۴۰۱ → توکن نشناخته، ۴۰۳ → محدودهٔ ناقص، توکن نامعتبر، غیرخطای توکن → null', () => {
+    expect(mapCloudflareTokenError({ status: 401, message: '' })?.kind).toBe('unauthorized');
+    expect(mapCloudflareTokenError({ message: 'فهرست حساب‌ها نگرفته شد: HTTP 401' })?.kind).toBe('unauthorized');
+    expect(mapCloudflareTokenError({ status: 403, message: '' })?.kind).toBe('insufficient_scope');
+    expect(mapCloudflareTokenError({ message: 'آپلود ورکر رد شد (HTTP 403): forbidden' })?.kind).toBe('insufficient_scope');
+    expect(mapCloudflareTokenError({ outcome: 'invalid_token', message: 'توکن معتبر نیست: Invalid or expired token' })?.kind).toBe('invalid_token');
+    // عدد 4010 نه 401 است — الگوی کد HTTP وسط عدد بزرگ‌تر نگاشت نمی‌گیرد
+    expect(mapCloudflareTokenError({ message: 'خطای 4010 نامشخص' })).toBeNull();
+    // قطعی شبکه — توکن نیست، نگاشت توکن گمراه‌کننده است
+    expect(mapCloudflareTokenError({ message: 'دسترسی به api.cloudflare.com برقرار نشد — اینترنت را بررسی کنید.' })).toBeNull();
+    expect(mapCloudflareTokenError({})).toBeNull();
+  });
+
+  it('راهنمای نگاشت: لینک مستقیم صفحهٔ توکن‌ها + نام صریح محدوده‌های لازم', () => {
+    const g = mapCloudflareTokenError({ status: 403, message: '' });
+    expect(g).not.toBeNull();
+    expect(g?.url).toBe(CF_TOKEN_GUIDE_URL);
+    expect(g?.text).toContain(CF_TOKEN_GUIDE_URL);
+    for (const scope of ['Workers Scripts:Edit', 'D1:Edit', 'Account Settings:Read']) {
+      expect(g?.scopes).toContain(scope);
+      expect(g?.text).toContain(scope);
+    }
+    expect(g?.text).toContain('توکن تازه');
+  });
+
+  it('ویزار: آزمون توکن ۴۰۱ → پیام حاوی لینک و محدوده‌ها', async () => {
+    const { doc } = fakeDoc();
+    const fail401 = async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({ success: false, errors: [{ message: 'Invalid or expired token' }] })
+    });
+    const handle = openSetupWizard({
+      doc,
+      store: fakeStore(),
+      secure: fakeSecure(),
+      insecure: false,
+      fetchImpl: fail401 as never,
+      onFinished: () => {}
+    });
+    const r = await handle.testToken('tok');
+    expect(r.ok).toBe(false);
+    expect(handle.refs.statusArea.textContent).toContain('dash.cloudflare.com/profile/api-tokens');
+    expect(handle.refs.statusArea.textContent).toContain('Workers Scripts:Edit');
+    expect(handle.refs.statusArea.textContent).toContain('D1:Edit');
+  });
+
+  it('ویزار: شکست استقرار با ۴۰۳ → نگاشت در پیام + بلوک تلاش دوباره نمایان', async () => {
+    const { doc } = fakeDoc();
+    const stub = stubTauriDeploy([
+      { ok: false, message: 'فهرست حساب‌ها نگرفته شد: HTTP 403' }
+    ]);
+    try {
+      const handle = openSetupWizard({
+        doc,
+        store: fakeStore(),
+        secure: fakeSecure(),
+        insecure: false,
+        fetchImpl: okFetch,
+        onFinished: () => {}
+      });
+      const r = await handle.retryDeploy('tok');
+      expect(r.ok).toBe(false);
+      expect(handle.deployRetryVisible()).toBe(true);
+      expect(handle.refs.statusArea.textContent).toContain('۴۰۳');
+      expect(handle.refs.statusArea.textContent).toContain('dash.cloudflare.com/profile/api-tokens');
+      expect(handle.refs.statusArea.textContent).toContain('Account Settings:Read');
+    } finally {
+      stub.restore();
+    }
   });
 });

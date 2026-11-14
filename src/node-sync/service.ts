@@ -26,6 +26,8 @@ import { z } from 'zod';
 import { hashApiKey } from '@core/auth';
 import type { DbClient } from '@core/db';
 import type { AuditWriter } from '@core/audit';
+// EXP-8 — نسخهٔ مرکز در پاکت نقشهٔ معماری (هم‌منبع پاسخ‌های pull/push)
+import { APP_VERSION } from '@core/version';
 
 // ─── فهرست سفید دامنه‌ها — مرزِ قرارداد؛ رشد فقط با ویرایش آگاهانهٔ هر دو سمت ───
 
@@ -791,4 +793,225 @@ export async function pushNodeEvents(
     if (typeof changes === 'number') accepted += changes;
   }
   return { accepted, duplicates: items.length - accepted };
+}
+
+// ─── EXP-7 — محدودساز نرخ per-node روی pull/push/reconcile (پنجرهٔ لغزان درون‌حافظه) ───
+//
+// هدف: رگبار ماشینی روی مسیرهای نودی (نظرسنجی بی‌پایان، کلید سرقتی، ابطال‌نشده) پیش از رسیدن
+// به احراز/دیتابیس با ۴۲۹ بسته شود — عین توصیهٔ EXP-7 طرح ارتقا.
+//
+// محدودیت صادقانه (عین صراحت محدودساز per-IP در @app/http): شمارنده per-isolate و درون‌حافظهٔ
+// همان isolate است — با چند isolate هم‌زمان هر کدام سهمیهٔ خودش را می‌شمارند (بودجهٔ مؤثر =
+// سقف × تعداد isolate) و ری‌استارت isolate پنجره را صفر می‌کند. برای مقیاس کلینیک (چند شعبه،
+// تیک سینک ۳۰دقیقه‌ای) این تقریب کاملاً کافی است؛ محدودسازی سختِ حساب‌شده، کار rate-limiting
+// لبه‌ای کلادفلر روی دامنهٔ اختصاصی است (workers.dev zone ندارد و WAF روی آن سوار نمی‌شود).
+//
+// پنجرهٔ لغزانِ «لاگ زمانی»: برای هر کلید فهرست مُهرهای درخواست‌های «پذیرفته‌شده» نگه داشته
+// می‌شود و مُهرهای کهنه‌تر از پنجره بُرش می‌خورند. فقط پذیرفته‌شده‌ها شمرده می‌شوند تا رگبار ۴۲۹
+// خودش پنجره را جوان نکند و نود خوش‌رفتار با گذر پنجره آزاد شود. حافظهٔ کلیدها سقف‌دار است
+// (maxKeys): با سرریز، کلیدهای ساکت‌شدهٔ کهنه بُرش می‌خورند — رشد بی‌کران ندارد. کلید (node_code
+// یا IP جایگزین) فقط در حافظهٔ همین isolate می‌ماند و هرگز لاگ/ذخیره نمی‌شود (قانون PII §۶).
+
+/** پیش‌فرض سقف درخواست نودی در دقیقه بر کلید (node_code) — سخاوتمندانه؛ تیک عادی سینک ۳۰دقیقه‌ای است */
+export const NODE_RATE_LIMIT_PER_MIN_DEFAULT = 120;
+/** سقف منطقی پیکربندی — مقادیر غیرمنطقی بالای این با همین سقف گیره می‌شوند */
+export const NODE_RATE_LIMIT_PER_MIN_MAX = 10_000;
+/** پنجرهٔ شمارش بر حسب میلی‌ثانیه (قرارداد «در دقیقه») */
+export const NODE_RATE_LIMIT_WINDOW_MS = 60_000;
+
+/**
+ * تفسیر env اختیاری `NODE_RATE_LIMIT_PER_MIN` — همان قرارداد parseApiRateLimitPerMin:
+ *   نبود/رشتهٔ خالی → پیش‌فرض ۱۲۰ · صفر → خاموش · غیرعددی/منفی → پیش‌فرض · عدد مثبت → گیرهٔ ۱..۱۰۰۰۰.
+ */
+export function parseNodeRateLimitPerMin(raw: unknown): number {
+  if (raw === null || raw === undefined || (typeof raw === 'string' && raw.trim() === '')) {
+    return NODE_RATE_LIMIT_PER_MIN_DEFAULT;
+  }
+  const n = typeof raw === 'string' ? Number(raw.trim()) : Number(raw);
+  if (!Number.isFinite(n) || n < 0) return NODE_RATE_LIMIT_PER_MIN_DEFAULT;
+  if (n === 0) return 0;
+  return Math.min(Math.trunc(n), NODE_RATE_LIMIT_PER_MIN_MAX);
+}
+
+export interface NodeSlidingWindowLimiter {
+  /** true = اجازهٔ عبور برای این کلید؛ false = سقف پنجرهٔ لغزان این کلید پر است */
+  allow(key: string, max: number): boolean;
+}
+
+/**
+ * پنجرهٔ لغزان زمانی بر کلید — سقف (max) در لحظهٔ هر فراخوانی داده می‌شود (env رشته می‌آید و
+ * میتواند تغییر کند)؛ کلیدِ فراخوانی باید سقف را هم شامل باشد تا تغییر سقف سطل تازه بسازد.
+ * `now` فقط برای آزمون تزریق می‌شود (پیش‌فرض ساعت واقعی).
+ */
+export function makeNodeSlidingWindowLimiter(
+  windowMs: number,
+  opts?: { maxKeys?: number; now?: () => number }
+): NodeSlidingWindowLimiter {
+  const maxKeys = opts?.maxKeys ?? 2048;
+  const now = opts?.now ?? (() => Date.now());
+  const buckets = new Map<string, number[]>();
+  return {
+    allow(key: string, max: number): boolean {
+      const at = now();
+      if (!buckets.has(key) && buckets.size >= maxKeys) {
+        // پنجره‌های ساکت‌شدهٔ کهنه بُرش می‌خورند؛ اگر هنوز پر بود، کهنه‌ترین آخرین-تماس بیرون می‌رود
+        for (const [k, ts] of buckets) {
+          const last = ts[ts.length - 1];
+          if (last === undefined || at - last >= windowMs) buckets.delete(k);
+        }
+        if (buckets.size >= maxKeys) {
+          let oldestKey: string | null = null;
+          let oldestAt = Number.POSITIVE_INFINITY;
+          for (const [k, ts] of buckets) {
+            const last = ts[ts.length - 1] ?? Number.NEGATIVE_INFINITY;
+            if (last < oldestAt) {
+              oldestAt = last;
+              oldestKey = k;
+            }
+          }
+          if (oldestKey !== null) buckets.delete(oldestKey);
+        }
+      }
+      const window = buckets.get(key);
+      if (!window) {
+        buckets.set(key, [at]);
+        return true;
+      }
+      // مُهرهای کهنه‌تر از پنجره بُرش می‌خورند (پنجرهٔ لغزان = فقط مُهرهای داخل آخر windowMs می‌شمارند)
+      while (window.length > 0 && at - window[0] >= windowMs) window.shift();
+      if (window.length >= max) return false;
+      window.push(at);
+      return true;
+    }
+  };
+}
+
+// ─── EXP-8 — نقشهٔ معماری مرکز↔نودها (GET /api/central/nodes-map — فقط سمت مرکز) ───
+//
+// منبع داده‌ها (همان چیزی که /node/register و /api/central/nodes می‌خوانند):
+//   • رجیستری: جدول sync_nodes (مایگریشن 0109) — node_code/label/active/created_at و مُهرهای
+//     last_pull_at / last_push_attempt_at / last_push_ok_at که stampNode* هنگام هر تماس نود می‌نویسد.
+//   • سهمیه: همان centralQuotaSnapshot (rust-f15) — فقط زیرمجموعهٔ درصد/سطح در پاکت می‌آید.
+// وضعیت هر نود («آینهٔ آخرین وضعیت») صادقانه: انبار آینهٔ وضعیت سمت مرکز وجود ندارد — آینهٔ
+// runner فقط در جدول settings «موتور میزِ خود نود» می‌نشیند (nodesync:status-mirror-v1 در
+// node-sync-runner/status.ts) و هرگز به مرکز پست نمی‌شود. پس فیلدهایی که منبع مرکزی ندارند
+// (pending_push، reconciliation_ok) همیشه null می‌آیند و در سند/مستندات ثبت است؛ به‌جای
+// «حدس»، state از مُهرهای واقعی رجیستری مشتق می‌شود.
+
+/** آستانهٔ «بی‌تماس = کهنه» — تیک عادی سینک ۳۰دقیقه‌ای است (COORD_INTERVAL_MS_DEFAULT در node-sync-runner)؛ بی‌تماسی بیش از یک شبانه‌روز یعنی شعبه خاموش/قطع است */
+export const NODE_STALE_AFTER_MS = 24 * 60 * 60_000;
+
+export type CentralNodeMapState = 'synced' | 'stale' | 'revoked' | 'never_seen';
+
+export interface CentralNodeMapStatus {
+  /** مشتق از رجیستری: synced | stale | revoked | never_seen — نه وضعیت اعلامی خود نود */
+  state: CentralNodeMapState;
+  /** انبار آینهٔ مرکز وجود ندارد (قرارداد rust-f14 فقط سمت میز است) → همیشه null و مستند */
+  pending_push: null;
+  /** = last_pull_at رجیستری (مُهر پس از pull موفق) */
+  last_pull_ok_at: string | null;
+  /** = last_push_ok_at رجیستری (مُهر پس از push موفق) */
+  last_push_ok_at: string | null;
+  /** نتیجهٔ آشتی‌ساز فقط در آینهٔ خود نود (میز) می‌نشیند و به مرکز پست نمی‌شود → همیشه null */
+  reconciliation_ok: null;
+}
+
+export interface CentralNodeMapEntry {
+  /** شناسهٔ نود = node_code رجیستری (کلید اصلی جدول sync_nodes؛ ستون جداگانهٔ node_id وجود ندارد) */
+  node_id: string;
+  /** برچسب فارسی ثبت‌شده؛ نبودِ برچسب = خود node_code */
+  name: string;
+  /** = created_at رجیستری */
+  registered_at: string;
+  /** تازه‌ترین مُهر تماس نود (pull/push) — هرگز تماس نبوده = null */
+  last_seen: string | null;
+  status: CentralNodeMapStatus;
+}
+
+export interface CentralNodesMapQuota {
+  day: string;
+  percent_requests: number;
+  percent_rows_written: number;
+  percent_rows_read: number;
+  level: QuotaLevel;
+}
+
+export interface CentralNodesMapPayload {
+  server_ts: string;
+  nodes: CentralNodeMapEntry[];
+  quota: CentralNodesMapQuota;
+  center_version: string;
+}
+
+/** تازه‌ترین مُهر تماس از میان سه مُهر رجیستری — مُهرهای خراب نادیده گرفته می‌شوند */
+export function nodeLastSeenOf(
+  lastPullAt: string | null,
+  lastPushAttemptAt: string | null,
+  lastPushOkAt: string | null
+): string | null {
+  let best: string | null = null;
+  let bestMs = Number.NEGATIVE_INFINITY;
+  for (const iso of [lastPullAt, lastPushAttemptAt, lastPushOkAt]) {
+    if (!iso) continue;
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) continue;
+    if (t > bestMs) {
+      bestMs = t;
+      best = iso;
+    }
+  }
+  return best;
+}
+
+/**
+ * مشتق state از رجیستری (فقط-گزارشی؛ هرگز اصلاح نمی‌کند):
+ *   باطل‌شده → revoked · هرگز تماس نبوده → never_seen · بی‌تماسی > NODE_STALE_AFTER_MS → stale · وگرنه synced
+ */
+export function nodeMapStateOf(active: boolean, lastSeen: string | null, now: Date): CentralNodeMapState {
+  if (!active) return 'revoked';
+  if (!lastSeen) return 'never_seen';
+  const t = Date.parse(lastSeen);
+  if (Number.isNaN(t)) return 'never_seen';
+  return now.getTime() - t > NODE_STALE_AFTER_MS ? 'stale' : 'synced';
+}
+
+/**
+ * تصویر نقشهٔ معماری برای GET /api/central/nodes-map (EXP-8 — فقط سمت مرکز ساخته می‌شود؛
+ * در میز شعبه هرگز). همهٔ نودها (فعال و باطل‌شده) با ترتیب listNodes؛ سهمیه از centralQuotaSnapshot.
+ */
+export async function centralNodesMap(db: DbClient, now: Date = new Date()): Promise<CentralNodesMapPayload> {
+  const rows = await db.query<SyncNodeRow>(
+    `SELECT ${NODE_ROW_COLUMNS} FROM sync_nodes ORDER BY created_at DESC, node_code ASC`,
+    []
+  );
+  const nodes: CentralNodeMapEntry[] = rows.map((r) => {
+    const lastSeen = nodeLastSeenOf(r.last_pull_at, r.last_push_attempt_at, r.last_push_ok_at);
+    return {
+      node_id: r.node_code,
+      name: r.label?.trim() ? r.label : r.node_code,
+      registered_at: r.created_at,
+      last_seen: lastSeen,
+      status: {
+        state: nodeMapStateOf(r.active === 1, lastSeen, now),
+        pending_push: null,
+        last_pull_ok_at: r.last_pull_at,
+        last_push_ok_at: r.last_push_ok_at,
+        reconciliation_ok: null
+      }
+    };
+  });
+
+  const snapshot = await centralQuotaSnapshot(db, now);
+  return {
+    server_ts: now.toISOString(),
+    nodes,
+    quota: {
+      day: snapshot.day,
+      percent_requests: snapshot.percent.requests,
+      percent_rows_written: snapshot.percent.rows_written,
+      percent_rows_read: snapshot.percent.rows_read,
+      level: snapshot.level
+    },
+    center_version: APP_VERSION
+  };
 }

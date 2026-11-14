@@ -6,7 +6,7 @@
  * نگاشت‌ها تابع خالص‌اند (بدون DOM) — الگو: front-view-identifiers.test.ts و format-front.test.ts.
  */
 // @ts-ignore — فایل .js فرانت، خارج از include تایپ‌اسکریپت است (import تک‌خطی تا @ts-ignore نشتی را بپوشاند)
-import { syncErrorKindView, syncStateView, clockWarningView, catchupSummaryView, versionNumbersView, versionIncompatView, reconciliationView, reconciliationDetailView, quotaLevelView, failedLoginsView, installEngineWatchdogBanner } from '../../public/assets/js/views/health-panel.js';
+import { syncErrorKindView, syncStateView, clockWarningView, catchupSummaryView, versionNumbersView, versionIncompatView, reconciliationView, reconciliationDetailView, quotaLevelView, failedLoginsView, installEngineWatchdogBanner, engineSignalView, centerSignalView, syncLagSignalView, quotaSignalView, backupSignalView, drillRecordView, readOpsDrillRecord, OPS_DRILL_KEY, healthToneView } from '../../public/assets/js/views/health-panel.js';
 
 describe('کارت وضعیت هم‌گامی پنل سلامت — نگاشت حالت به برچسب/رنگ', () => {
   it('پنج حالت شناخته‌شدهٔ قرارداد → برچسب فارسی و کلاس رنگ درست', () => {
@@ -187,5 +187,106 @@ describe('EXP-4 — بنر نگهبان موتور: بیرون پوستهٔ دس
     expect(out.reason).toBe('no-tauri-channel');
     // فراخوانی دوباره هم بی‌خطر است
     expect(installEngineWatchdogBanner().installed).toBe(false);
+  });
+});
+
+// ───────────────── موج ۴ (۴-۱) — پنج سیگنال §۴ نقد، هرکدام سه رنگ ─────────────────
+// نگاشت‌ها تابع خالص بی‌DOM‌اند (الگوی بالای همین فایل) — پنج سیگنال: موتور محلی، مرکز،
+// عقب‌ماندگی سینک، مصرف سهمیه، پشتیبان + EXP-6 drill عملیاتی.
+
+describe('موج ۴ (۴-۱) — سیگنال موتور محلی', () => {
+  it('db سالم و بدون فیلد بازی‌ها (نسخهٔ قدیمی‌تر) → سبز؛ فیلد games افزوده با گارد کامل', () => {
+    expect(engineSignalView({ version: '1.26.3', db: { ok: true, latency_ms: 3 } })).toMatchObject({ tone: 'ok', label: 'سالم' });
+    expect(engineSignalView({ version: '1.26.3', db: { ok: true }, games: { ok: true, port: 8787 } })).toMatchObject({ tone: 'ok' });
+    // games حاضر ولی ok=false → زرد
+    expect(engineSignalView({ db: { ok: true }, games: { ok: false, port: 8787 } })).toMatchObject({ tone: 'warn', label: 'ناتمام — بازی‌ها' });
+    // games شکل خراب → بی‌اثر (سبز عادی)
+    expect(engineSignalView({ db: { ok: true }, games: 'junk' })).toMatchObject({ tone: 'ok' });
+    expect(engineSignalView({ db: { ok: false } })).toMatchObject({ tone: 'error', label: 'پاسخ نمی‌دهد' });
+    expect(engineSignalView(null)).toMatchObject({ tone: 'error' });
+    expect(engineSignalView('junk')).toMatchObject({ tone: 'error' });
+  });
+});
+
+describe('موج ۴ (۴-۱) — سیگنال مرکز و عقب‌ماندگی سینک', () => {
+  const NOW = Date.parse('2026-11-14T10:00:00Z');
+
+  it('مرکز: هم‌گام با نسخه → سبز؛ خارج از خط → زرد «داده محفوظ است»؛ خطا → قرمز؛ ناسازگاری → قرمز', () => {
+    const synced = { state: 'synced', version: { client: '1.26.3', center: '1.26.3', compatible: true }, last_pull_ok_at: '2026-11-14T09:58:00Z' };
+    expect(centerSignalView(synced, NOW)).toMatchObject({ tone: 'ok', label: 'در دسترس' });
+    expect(centerSignalView(synced, NOW).detail).toContain('نسخهٔ مرکز 1.26.3');
+    expect(centerSignalView({ state: 'offline' }, NOW)).toMatchObject({ tone: 'warn', label: 'قطع — داده محفوظ است' });
+    expect(centerSignalView({ state: 'error', last_error: { kind: 'server', at: '2026-11-14T09:00:00Z' } }, NOW)).toMatchObject({ tone: 'error', label: 'پاسخ نمی‌دهد' });
+    expect(centerSignalView({ state: 'synced', version: { client: '1.26.3', center: '1.26.0', compatible: false } }, NOW)).toMatchObject({ tone: 'error', label: 'ناسازگار نسخه' });
+    expect(centerSignalView(null, NOW)).toMatchObject({ tone: 'unknown' });
+    expect(centerSignalView(undefined, NOW)).toMatchObject({ tone: 'unknown' });
+  });
+
+  it('سینک: صفر و هم‌گام → سبز؛ N رکورد در انتظار → زرد با رقم فارسی؛ خطا/توقف نسخه → قرمز', () => {
+    expect(syncLagSignalView({ state: 'synced', pending_push: 0 })).toMatchObject({ tone: 'ok', label: 'بی‌عقب‌ماندگی' });
+    expect(syncLagSignalView({ state: 'synced', pending_push: 12 })).toMatchObject({ tone: 'warn', label: '۱۲ رکورد در انتظار' });
+    expect(syncLagSignalView({ state: 'offline', pending_push: 0 })).toMatchObject({ tone: 'warn', label: 'خارج از خط' });
+    expect(syncLagSignalView({ state: 'error', pending_push: 0 })).toMatchObject({ tone: 'error', label: 'خطای هم‌گامی' });
+    expect(syncLagSignalView({ state: 'synced', pending_push: 5, version: { client: 'a', center: 'b', compatible: false } })).toMatchObject({ tone: 'error', label: 'متوقف — نسخه' });
+    expect(syncLagSignalView(null)).toMatchObject({ tone: 'unknown' });
+  });
+});
+
+describe('موج ۴ (۴-۱) — سیگنال مصرف سهمیه و پشتیبان', () => {
+  it('سهمیه: بدترین سطح حاکم است — danger قرمز با توصیهٔ Workers Paid، warn زرد، سبز، خاکستری', () => {
+    expect(quotaSignalView({ level: { requests: 'ok', rows_written: 'ok', rows_read: 'ok' } })).toMatchObject({ tone: 'ok', label: 'زیر سقف' });
+    expect(quotaSignalView({ level: { requests: 'warn', rows_written: 'ok', rows_read: 'ok' } })).toMatchObject({ tone: 'warn', label: 'نزدیک سقف' });
+    const danger = quotaSignalView({ level: { requests: 'ok', rows_written: 'danger', rows_read: 'ok' } });
+    expect(danger).toMatchObject({ tone: 'error', label: 'سقف رد شده' });
+    expect(danger.detail).toContain('Workers Paid');
+    expect(quotaSignalView(null)).toMatchObject({ tone: 'unknown', label: 'دریافت نشد' });
+  });
+
+  const NOW = Date.parse('2026-11-14T10:00:00Z');
+
+  it('پشتیبان: مُهر غایب → قرمز؛ تا ۷ روز سبز؛ ۸–۳۰ زرد؛ بیش از ۳۰ قرمز — با رقم فارسی', () => {
+    expect(backupSignalView(null, NOW)).toMatchObject({ tone: 'error', label: 'بی‌پشتیبان' });
+    expect(backupSignalView('not-an-iso', NOW)).toMatchObject({ tone: 'error' });
+    expect(backupSignalView('2026-11-11T00:00:00Z', NOW)).toMatchObject({ tone: 'ok', label: 'تازه' });
+    expect(backupSignalView('2026-11-01T00:00:00Z', NOW)).toMatchObject({ tone: 'warn', label: 'کهنه شده' });
+    expect(backupSignalView('2026-11-01T00:00:00Z', NOW).detail).toContain('۱۳ روز پیش');
+    expect(backupSignalView('2026-09-01T00:00:00Z', NOW)).toMatchObject({ tone: 'error', label: 'بیش از یک ماه' });
+  });
+});
+
+describe('EXP-6 — رکورد drill عملیاتی در پنل', () => {
+  const NOW = Date.parse('2026-11-14T10:00:00Z');
+
+  it('بدون رکورد → خاکستری «—»؛ تا ۳۱ روز سبز با تاریخ فارسی؛ بیش از ۳۱ روز زرد', () => {
+    expect(drillRecordView(null, NOW)).toMatchObject({ tone: 'unknown', label: '—' });
+    expect(drillRecordView({ at: 'broken' }, NOW)).toMatchObject({ tone: 'unknown' });
+    expect(drillRecordView({ at: '2026-11-12T00:00:00Z', result: 'done' }, NOW).tone).toBe('ok');
+    expect(drillRecordView({ at: '2026-11-12T00:00:00Z', result: 'done' }, NOW).label).toContain('۲۱'); // تاریخ شمسی با رقم فارسی
+    const stale = drillRecordView({ at: '2026-08-01T00:00:00Z', result: 'done' }, NOW);
+    expect(stale.tone).toBe('warn');
+    expect(stale.detail).toContain('وقت drill بعدی است');
+  });
+
+  it('خواندن نرم از انبار: JSON خراب/کلید غایب = null؛ کلید قرارداد nodesync:ops-drill-v1', () => {
+    const mem = new Map<string, string>();
+    const storage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
+    expect(readOpsDrillRecord(storage)).toBeNull();
+    storage.setItem(OPS_DRILL_KEY, 'not json');
+    expect(readOpsDrillRecord(storage)).toBeNull();
+    storage.setItem(OPS_DRILL_KEY, JSON.stringify({ at: '2026-11-12T00:00:00Z', result: 'done' }));
+    expect(readOpsDrillRecord(storage)).toMatchObject({ result: 'done' });
+    storage.setItem(OPS_DRILL_KEY, JSON.stringify({ result: 'done' })); // بی‌at → نامعتبر
+    expect(readOpsDrillRecord(storage)).toBeNull();
+  });
+});
+
+describe('موج ۴ — نگاشت سه‌رنگ مشترک سیگنال‌ها', () => {
+  it('healthToneView: چهار tone قراردادی؛ ناشناخته → خنثی', () => {
+    expect(healthToneView('ok')).toEqual({ badge: 'badge--success', dot: 'dot--success' });
+    expect(healthToneView('warn')).toEqual({ badge: 'badge--warning', dot: 'dot--warning' });
+    expect(healthToneView('error')).toEqual({ badge: 'badge--error', dot: 'dot--error' });
+    expect(healthToneView('unknown')).toEqual({ badge: 'badge--neutral', dot: 'dot--neutral' });
+    expect(healthToneView('nonsense')).toEqual({ badge: 'badge--neutral', dot: 'dot--neutral' });
+    expect(healthToneView(undefined)).toEqual({ badge: 'badge--neutral', dot: 'dot--neutral' });
   });
 });

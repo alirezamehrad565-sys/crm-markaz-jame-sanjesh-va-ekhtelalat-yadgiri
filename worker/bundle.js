@@ -62919,6 +62919,32 @@ async function countSafe(db, sql, params = []) {
   }
 }
 __name(countSafe, "countSafe");
+async function probeGames(db, url2) {
+  if (!url2) return { ok: false, port: null, last_restart: null };
+  let port = null;
+  try {
+    port = new URL(url2).port ? Number(new URL(url2).port) : null;
+  } catch {
+    port = null;
+  }
+  try {
+    const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [
+      "sys_games_health"
+    ]);
+    if (!row?.value) return { ok: false, port, last_restart: null };
+    const snap = JSON.parse(row.value);
+    const checkedAt = typeof snap.checked_at === "string" ? Date.parse(snap.checked_at) : NaN;
+    const fresh = Number.isFinite(checkedAt) && Date.now() - checkedAt < 3e4;
+    return {
+      ok: snap.ok === true && fresh,
+      port,
+      last_restart: typeof snap.boot_ts === "string" ? snap.boot_ts : null
+    };
+  } catch {
+    return { ok: false, port, last_restart: null };
+  }
+}
+__name(probeGames, "probeGames");
 function createHealthService(deps) {
   const { db, cpConfigured, envName } = deps;
   const clientErrorsMax = parseClientErrorsMax(deps.clientErrorsMax);
@@ -62995,7 +63021,8 @@ function createHealthService(deps) {
           channels
         },
         alerts: [],
-        alerts_last_evaluated_at: await readAlertsSeal(db)
+        alerts_last_evaluated_at: await readAlertsSeal(db),
+        games: await probeGames(deps.db, deps.gamesHealthUrl ?? null)
       };
       panelData.alerts = deriveAlerts(panelData, clientErrorsMax);
       return panelData;
@@ -63013,6 +63040,513 @@ function registerHealthRoutes(app, service) {
   });
 }
 __name(registerHealthRoutes, "registerHealthRoutes");
+
+// src/core/human-events/index.ts
+var HUMAN_EVENTS_QUEUE_KEY = "sys_human_events";
+var HUMAN_EVENTS_MAX = 200;
+async function pushHumanEvent(db, msg, source) {
+  try {
+    let list = [];
+    const row = await db.queryOne(`SELECT value FROM settings WHERE key = ?`, [
+      HUMAN_EVENTS_QUEUE_KEY
+    ]);
+    if (row?.value) {
+      const parsed = JSON.parse(row.value);
+      if (Array.isArray(parsed)) list = parsed;
+    }
+    list.push({ ts: (/* @__PURE__ */ new Date()).toISOString(), source, msg });
+    while (list.length > HUMAN_EVENTS_MAX) list.shift();
+    await db.execute(
+      `INSERT INTO settings (key, value, updated_by) VALUES (?, ?, 'system')
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'system', updated_at = datetime('now')`,
+      [HUMAN_EVENTS_QUEUE_KEY, JSON.stringify(list)]
+    );
+  } catch {
+  }
+}
+__name(pushHumanEvent, "pushHumanEvent");
+async function readHumanEvents(db, limit = HUMAN_EVENTS_MAX) {
+  try {
+    const row = await db.queryOne(`SELECT value FROM settings WHERE key = ?`, [
+      HUMAN_EVENTS_QUEUE_KEY
+    ]);
+    if (!row?.value) return [];
+    const parsed = JSON.parse(row.value);
+    return Array.isArray(parsed) ? parsed.slice(-limit) : [];
+  } catch {
+    return [];
+  }
+}
+__name(readHumanEvents, "readHumanEvents");
+
+// src/node-sync-runner/status.ts
+var NODE_SYNC_STATUS_MIRROR_KEY = "nodesync:status-mirror-v1";
+var SYNC_MODES = ["auto", "quarantined", "paused_version"];
+var SYNC_STATES = ["idle", "catching_up", "synced", "error", "offline"];
+var FAILURE_KINDS = ["none", "network", "server", "throttled", "auth", "version", "ingest", "unconfigured"];
+var NodeSyncStatusMirrorSchema = external_exports.object({
+  v: external_exports.literal(1),
+  mode: external_exports.enum(SYNC_MODES),
+  state: external_exports.enum(SYNC_STATES),
+  last_pull_cursor_at: external_exports.iso.datetime().nullable(),
+  last_push_ok_at: external_exports.iso.datetime().nullable(),
+  last_pull_ok_at: external_exports.iso.datetime().nullable(),
+  last_error_kind: external_exports.enum(FAILURE_KINDS).nullable(),
+  last_error_at: external_exports.iso.datetime().nullable(),
+  push_watermark: external_exports.iso.datetime().nullable(),
+  client_version: external_exports.string().max(50).nullable(),
+  // ─── موج ۱ — هندشیک نسخه (۱-۴)، ساعت مرجع مرکز (۱-۳)، خلاصهٔ جبران کامل ───
+  version: external_exports.object({
+    client: external_exports.string().min(1).max(50),
+    center: external_exports.string().min(1).max(50),
+    compatible: external_exports.boolean()
+  }).nullable().optional(),
+  clock_drift_minutes: external_exports.number().int().min(0).max(525600).nullable().optional(),
+  clock_warning: external_exports.boolean().optional(),
+  last_catchup: external_exports.object({
+    at: external_exports.iso.datetime(),
+    pulled: external_exports.number().int().min(0),
+    pushed: external_exports.number().int().min(0)
+  }).nullable().optional(),
+  // ─── EXP-1 (نسخهٔ ۳) — نتیجهٔ آخرین آشتی‌ساز؛ آینهٔ قدیمیِ بدونِ آن هم پذیرفته می‌شود ───
+  reconciliation: external_exports.object({
+    at: external_exports.iso.datetime(),
+    ok: external_exports.boolean(),
+    differences: external_exports.number().int().min(0),
+    // سقف ۵ ردیف ناهم‌خوانی — آینهٔ RECONCILE_MAX_DETAIL سمت runner
+    detail: external_exports.array(
+      external_exports.object({
+        domain: external_exports.string().min(1).max(40),
+        center: external_exports.number().int().min(0),
+        local: external_exports.number().int().min(0)
+      })
+    ).max(5).nullable()
+  }).nullable().optional(),
+  updated_at: external_exports.iso.datetime()
+});
+function requireDesktopEngine(c) {
+  if (c.env?.CENTER_DESKTOP_ENGINE !== "1") {
+    throw new NotFoundError("\u0645\u0633\u06CC\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
+  }
+}
+__name(requireDesktopEngine, "requireDesktopEngine");
+async function readMirror(db) {
+  try {
+    const row = await db.queryOne(
+      "SELECT value FROM settings WHERE key = ?",
+      [NODE_SYNC_STATUS_MIRROR_KEY]
+    );
+    if (!row) return null;
+    const parsed = NodeSyncStatusMirrorSchema.safeParse(JSON.parse(row.value));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+__name(readMirror, "readMirror");
+async function writeMirror(db, mirror) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
+    [NODE_SYNC_STATUS_MIRROR_KEY, JSON.stringify(mirror)]
+  );
+}
+__name(writeMirror, "writeMirror");
+async function pendingPushCount(db, watermark) {
+  let count = 0;
+  try {
+    if (watermark) {
+      const cutoff = watermark.slice(0, 19).replace("T", " ");
+      const row = await db.queryOne(
+        "SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at > ?",
+        [cutoff]
+      );
+      count += Number(row?.n ?? 0);
+    } else {
+      const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors");
+      count += Number(row?.n ?? 0);
+    }
+  } catch {
+  }
+  try {
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const hourBucket = `${nowIso.slice(0, 13)}:00:00Z`;
+    const dayBucket = `${nowIso.slice(0, 10)}T00:00:00Z`;
+    const ahead = /* @__PURE__ */ __name((at) => !watermark || Date.parse(at) > Date.parse(watermark), "ahead");
+    if (ahead(hourBucket)) count += 1;
+    if (ahead(dayBucket)) count += 1;
+  } catch {
+  }
+  return count;
+}
+__name(pendingPushCount, "pendingPushCount");
+function cursorAgeDays(cursorAt, nowMs) {
+  const t = Date.parse(cursorAt);
+  if (Number.isNaN(t)) return null;
+  return Math.max(0, Math.round((nowMs - t) / 864e5 * 10) / 10);
+}
+__name(cursorAgeDays, "cursorAgeDays");
+function registerNodeSyncStatusRoute(app, deps) {
+  const log = deps.logger.child("node-sync-status");
+  app.post("/api/node-sync/status", async (c) => {
+    requireDesktopEngine(c);
+    getAuthContext(c);
+    const parsed = NodeSyncStatusMirrorSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError("\u0627\u0633\u0646\u067E\u200C\u0634\u0627\u062A \u0648\u0636\u0639\u06CC\u062A \u0633\u06CC\u0646\u06A9 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+    await writeMirror(deps.db, parsed.data);
+    log.info("status_mirror.ok", { state: parsed.data.state, mode: parsed.data.mode });
+    return c.json({ data: { ok: true } }, 200);
+  });
+  app.get("/api/node-sync/status", async (c) => {
+    requireDesktopEngine(c);
+    getAuthContext(c);
+    const mirror = await readMirror(deps.db);
+    const nowMs = Date.now();
+    const errorKind = mirror?.last_error_kind ?? null;
+    const payload = {
+      mode: mirror?.mode ?? "auto",
+      state: mirror?.state ?? "idle",
+      pending_push: await pendingPushCount(deps.db, mirror?.push_watermark ?? null),
+      last_pull_cursor_age_days: mirror?.last_pull_cursor_at ? cursorAgeDays(mirror.last_pull_cursor_at, nowMs) : null,
+      last_push_ok_at: mirror?.last_push_ok_at ?? null,
+      last_pull_ok_at: mirror?.last_pull_ok_at ?? null,
+      last_error: errorKind && errorKind !== "none" && mirror?.last_error_at ? { kind: errorKind, at: mirror.last_error_at } : null,
+      // ─── موج ۱ — آینهٔ غایب/قدیمی = پیش‌فرض نرم (اسنپ‌شات تازه از runner می‌آید) ───
+      version: mirror?.version ?? null,
+      clock_drift_minutes: mirror?.clock_drift_minutes ?? null,
+      clock_warning: mirror?.clock_warning === true,
+      last_catchup: mirror?.last_catchup ?? null,
+      // ─── EXP-1 (نسخهٔ ۳) — آشتی‌ساز؛ آینهٔ قدیمی بدونِ این فیلد = null نرم ───
+      reconciliation: mirror?.reconciliation ?? null
+    };
+    return c.json(payload, 200);
+  });
+}
+__name(registerNodeSyncStatusRoute, "registerNodeSyncStatusRoute");
+
+// src/application/system/zip.ts
+var CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) {
+      c = c & 1 ? 3988292384 ^ c >>> 1 : c >>> 1;
+    }
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+function crc32(bytes) {
+  let crc = 4294967295;
+  for (let i = 0; i < bytes.length; i += 1) {
+    crc = CRC_TABLE[(crc ^ bytes[i]) & 255] ^ crc >>> 8;
+  }
+  return (crc ^ 4294967295) >>> 0;
+}
+__name(crc32, "crc32");
+function dosDateTime(d) {
+  const date5 = (Math.max(0, d.getUTCFullYear() - 1980) & 127) << 9 | d.getUTCMonth() + 1 << 5 | d.getUTCDate();
+  const time3 = d.getUTCHours() << 11 | d.getUTCMinutes() << 5 | Math.floor(d.getUTCSeconds() / 2);
+  return { date: date5, time: time3 };
+}
+__name(dosDateTime, "dosDateTime");
+function zipText(text) {
+  return new TextEncoder().encode(text);
+}
+__name(zipText, "zipText");
+var U16 = /* @__PURE__ */ __name((v) => [v & 255, v >>> 8 & 255], "U16");
+var U32 = /* @__PURE__ */ __name((v) => [v & 255, v >>> 8 & 255, v >>> 16 & 255, v >>> 24 & 255], "U32");
+function buildStoreZip(entries, now = /* @__PURE__ */ new Date()) {
+  const { date: dosDate, time: dosTime } = dosDateTime(now);
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const nameBytes = zipText(entry.name);
+    const crc = crc32(entry.data);
+    const size = entry.data.length;
+    const lfh = [
+      80,
+      75,
+      3,
+      4,
+      // امضای PK\x03\x04
+      ...U16(20),
+      // نسخهٔ لازم برای استخراج
+      ...U16(2048),
+      // پرچم: نام UTF-8
+      ...U16(0),
+      // روش ذخیره = STORE
+      ...U16(dosTime),
+      ...U16(dosDate),
+      ...U32(crc),
+      ...U32(size),
+      // حجم فشرده‌شده (= خودش در STORE)
+      ...U32(size),
+      // حجم اصلی
+      ...U16(nameBytes.length),
+      ...U16(0)
+      // طول فیلد اضافی
+    ];
+    const lfhBytes = new Uint8Array(lfh);
+    chunks.push(lfhBytes, nameBytes, entry.data);
+    const cd = [
+      80,
+      75,
+      1,
+      2,
+      // امضای PK\x01\x02
+      ...U16(20),
+      ...U16(20),
+      // نسخهٔ ساخت / نسخهٔ لازم
+      ...U16(2048),
+      ...U16(0),
+      ...U16(dosTime),
+      ...U16(dosDate),
+      ...U32(crc),
+      ...U32(size),
+      ...U32(size),
+      ...U16(nameBytes.length),
+      ...U16(0),
+      ...U16(0),
+      // فیلد اضافی / توضیح
+      ...U16(0),
+      ...U16(0),
+      // شماره دیسک / ویژگی‌های درونی
+      ...U32(0),
+      // ویژگی‌های بیرونی
+      ...U32(offset)
+      // آفست local header
+    ];
+    central.push(new Uint8Array(cd), nameBytes);
+    offset += lfhBytes.length + nameBytes.length + size;
+  }
+  const centralStart = offset;
+  let centralSize = 0;
+  for (const c of central) centralSize += c.length;
+  const eocd = [
+    80,
+    75,
+    5,
+    6,
+    // امضای PK\x05\x06
+    ...U16(0),
+    ...U16(0),
+    // شماره دیسک
+    ...U16(entries.length),
+    ...U16(entries.length),
+    ...U32(centralSize),
+    ...U32(centralStart),
+    ...U16(0)
+    // طول توضیح
+  ];
+  const total = centralStart + centralSize + eocd.length;
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const c of [...chunks, ...central, new Uint8Array(eocd)]) {
+    out.set(c, pos);
+    pos += c.length;
+  }
+  return out;
+}
+__name(buildStoreZip, "buildStoreZip");
+
+// src/application/system/error-package.ts
+var AUDIT_TAIL = 100;
+var CLIENT_ERRORS_TAIL = 50;
+var HUMAN_EVENTS_TAIL = 200;
+async function readSyncMirrorSoft(db) {
+  try {
+    const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [
+      NODE_SYNC_STATUS_MIRROR_KEY
+    ]);
+    if (!row?.value) return null;
+    const parsed = JSON.parse(row.value);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+__name(readSyncMirrorSoft, "readSyncMirrorSoft");
+async function pendingPushSoft(db, watermark) {
+  try {
+    let count = 0;
+    if (watermark) {
+      const cutoff = watermark.slice(0, 19).replace("T", " ");
+      const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at > ?", [cutoff]);
+      count += Number(row?.n ?? 0);
+    } else {
+      const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors");
+      count += Number(row?.n ?? 0);
+    }
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const ahead = /* @__PURE__ */ __name((at) => !watermark || Date.parse(at) > Date.parse(watermark), "ahead");
+    if (ahead(`${nowIso.slice(0, 13)}:00:00Z`)) count += 1;
+    if (ahead(`${nowIso.slice(0, 10)}T00:00:00Z`)) count += 1;
+    return count;
+  } catch {
+    return null;
+  }
+}
+__name(pendingPushSoft, "pendingPushSoft");
+function readmeText(status) {
+  return [
+    "\u0628\u0633\u062A\u0647\u0654 \u06AF\u0632\u0627\u0631\u0634 \u062E\u0637\u0627 \u2014 \u0633\u0627\u0645\u0627\u0646\u0647\u0654 \u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639",
+    "===================================",
+    "",
+    "\u0627\u06CC\u0646 \u0628\u0633\u062A\u0647 \u0628\u0631\u0627\u06CC \u0627\u0631\u0633\u0627\u0644 \u0628\u0647 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0633\u0627\u062E\u062A\u0647 \u0634\u062F\u0647 \u0627\u0633\u062A \u0648 \u0634\u0627\u0645\u0644 \u0645\u0648\u0627\u0631\u062F \u0632\u06CC\u0631 \u0627\u0633\u062A:",
+    "  \u2022 status.json \u2014 \u0648\u0636\u0639\u06CC\u062A \u0641\u0646\u06CC \u0644\u062D\u0638\u0647\u0654 \u0633\u0627\u062E\u062A: \u0646\u0633\u062E\u0647\u0654 \u0628\u0631\u0646\u0627\u0645\u0647 \u0648 \u0645\u0648\u062A\u0648\u0631\u060C \u0646\u0633\u062E\u0647\u0654 \u0645\u0631\u06A9\u0632 (\u0627\u06AF\u0631 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0628\u0627\u0634\u062F)\u060C",
+    "    \u0634\u0645\u0627\u0631 \u0631\u06A9\u0648\u0631\u062F\u0647\u0627\u06CC \u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u0647\u0645\u200C\u06AF\u0627\u0645\u200C\u0633\u0627\u0632\u06CC\u060C \u0648 \u0645\u062D\u06CC\u0637 \u0627\u062C\u0631\u0627.",
+    "  \u2022 human-events.txt \u2014 \u06AF\u0632\u0627\u0631\u0634 \u0631\u0648\u06CC\u062F\u0627\u062F\u0647\u0627\u06CC \u0645\u0647\u0645 \u0633\u0627\u0645\u0627\u0646\u0647 \u0628\u0647 \u0641\u0627\u0631\u0633\u06CC \u0633\u0627\u062F\u0647 (\u0631\u06CC\u200C\u0627\u0633\u062A\u0627\u0631\u062A\u060C \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u060C \u0628\u0627\u0632\u0633\u0627\u0632\u06CC\u060C \u0633\u06CC\u0646\u06A9).",
+    "  \u2022 audit-tail.txt \u2014 \u0622\u062E\u0631\u06CC\u0646 \u0631\u0648\u06CC\u062F\u0627\u062F\u0647\u0627\u06CC \u0645\u0645\u06CC\u0632\u06CC \u0633\u0627\u0645\u0627\u0646\u0647 (\u06F1\u06F0\u06F0 \u0631\u0648\u06CC\u062F\u0627\u062F \u0622\u062E\u0631).",
+    "  \u2022 client-errors-tail.txt \u2014 \u0622\u062E\u0631\u06CC\u0646 \u062E\u0637\u0627\u0647\u0627\u06CC \u06AF\u0632\u0627\u0631\u0634\u200C\u0634\u062F\u0647 \u0627\u0632 \u0645\u0631\u0648\u0631\u06AF\u0631.",
+    "",
+    "\u0646\u06A9\u062A\u0647: \u0644\u0627\u06AF \u062E\u0627\u0645 \u0645\u0648\u062A\u0648\u0631 (workerd.log) \u0631\u0648\u06CC \u062F\u06CC\u0633\u06A9\u0650 \u062F\u0633\u062A\u06AF\u0627\u0647 \u0646\u0632\u062F \u0646\u0627\u0638\u0631 \u0628\u0631\u0646\u0627\u0645\u0647 \u0646\u06AF\u0647\u200C\u062F\u0627\u0631\u06CC \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0627\u0632",
+    "\u062F\u0627\u062E\u0644 \u0633\u0646\u062F\u0628\u0627\u06A9\u0633 \u0627\u0645\u0646 \u0628\u0631\u0646\u0627\u0645\u0647 \u062E\u0648\u0627\u0646\u062F\u0646\u06CC \u0646\u06CC\u0633\u062A\u061B \u062F\u0631 \u0635\u0648\u0631\u062A \u0646\u06CC\u0627\u0632\u060C \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0647\u0645\u0627\u0646 \u0641\u0627\u06CC\u0644 \u0631\u0627 \u0627\u0632 \u067E\u0648\u0634\u0647\u0654 \u062F\u0627\u062F\u0647",
+    "\u0645\u0637\u0627\u0644\u0628\u0647 \u0645\u06CC\u200C\u06A9\u0646\u062F. \u0647\u06CC\u0686\u200C\u06CC\u06A9 \u0627\u0632 \u0645\u062D\u062A\u0648\u0627\u06CC \u0627\u06CC\u0646 \u0628\u0633\u062A\u0647 \u0631\u0645\u0632 \u06CC\u0627 \u062A\u0648\u06A9\u0646 \u0646\u06CC\u0633\u062A \u0648 \u0627\u0631\u0633\u0627\u0644 \u0622\u0646 \u0628\u0647 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0628\u06CC\u200C\u062E\u0637\u0631 \u0627\u0633\u062A.",
+    "",
+    `\u0646\u0633\u062E\u0647\u0654 \u0628\u0631\u0646\u0627\u0645\u0647: ${status.app_version} \u2014 \u0644\u062D\u0638\u0647\u0654 \u0633\u0627\u062E\u062A: ${status.generated_at}`,
+    ""
+  ].join("\n");
+}
+__name(readmeText, "readmeText");
+async function auditTailText(db) {
+  try {
+    const rows = await db.query(
+      `SELECT id, created_at, actor_id, action, resource_type, resource_id FROM audit_log
+       ORDER BY created_at DESC, id DESC LIMIT ${AUDIT_TAIL}`
+    );
+    return rows.map((r) => `[${r.created_at}] ${r.actor_id} \u2014 ${r.action} (${r.resource_type}/${r.resource_id})`).join("\n") + "\n";
+  } catch {
+    return "audit_log \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F\n";
+  }
+}
+__name(auditTailText, "auditTailText");
+async function clientErrorsTailText(db) {
+  try {
+    const rows = await db.query(
+      `SELECT occurred_at, kind, message FROM client_errors
+       ORDER BY occurred_at DESC, id DESC LIMIT ${CLIENT_ERRORS_TAIL}`
+    );
+    return rows.map((r) => `[${r.occurred_at}] ${r.kind}: ${String(r.message ?? "").slice(0, 200)}`).join("\n") + "\n";
+  } catch {
+    return "client_errors \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F\n";
+  }
+}
+__name(clientErrorsTailText, "clientErrorsTailText");
+function errorPackageStamp(d = /* @__PURE__ */ new Date()) {
+  const p = /* @__PURE__ */ __name((n) => String(n).padStart(2, "0"), "p");
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+}
+__name(errorPackageStamp, "errorPackageStamp");
+async function buildErrorPackage(db, opts = {}) {
+  const mirror = await readSyncMirrorSoft(db);
+  const status = {
+    generated_at: (/* @__PURE__ */ new Date()).toISOString(),
+    app_version: APP_VERSION,
+    engine_version: APP_VERSION,
+    env: opts.envName ?? null,
+    center_version: typeof mirror?.version?.center === "string" ? mirror.version.center : null,
+    pending_push: await pendingPushSoft(db, mirror?.push_watermark ?? null),
+    // سینک pull بر پایهٔ cursor است و «شمار رکورد در انتظار دریافتی» سمت مرکز شمرده می‌شود؛
+    // از نود برآورد قابل‌اعتمادی ندارد — صادقانه null (طرح: «مشخص نبودن خودش خطاست» ولی
+    // عددِ دروغین بدتر است؛ ردیف سینک پنل همین را با state نشان می‌دهد)
+    pending_pull: null
+  };
+  const events = await readHumanEvents(db, HUMAN_EVENTS_TAIL);
+  const humanEventsText = events.map((e) => `[${e.ts}] ${e.msg} (\u0645\u0646\u0628\u0639: ${e.source})`).join("\n") + "\n";
+  const entries = [
+    { name: "status.json", data: zipText(JSON.stringify(status, null, 2)) },
+    { name: "human-events.txt", data: zipText(humanEventsText) },
+    { name: "audit-tail.txt", data: zipText(await auditTailText(db)) },
+    { name: "client-errors-tail.txt", data: zipText(await clientErrorsTailText(db)) },
+    { name: "readme.txt", data: zipText(readmeText(status)) }
+  ];
+  return {
+    bytes: buildStoreZip(entries),
+    filename: `error-package-${errorPackageStamp()}.zip`,
+    status
+  };
+}
+__name(buildErrorPackage, "buildErrorPackage");
+
+// src/application/system/routes.ts
+var RESTART_MARKER_KEY = "sys_restart_scheduled";
+var restartFlag = false;
+function isRestartScheduled() {
+  return restartFlag;
+}
+__name(isRestartScheduled, "isRestartScheduled");
+function registerSystemPublicRoutes(app, deps) {
+  app.get("/api/system/restart-status", async (c) => {
+    let scheduled = false;
+    try {
+      const row = await deps.db.queryOne("SELECT value FROM settings WHERE key = ?", [
+        RESTART_MARKER_KEY
+      ]);
+      scheduled = Boolean(row?.value);
+    } catch {
+      scheduled = isRestartScheduled();
+    }
+    return c.json({ ok: true, scheduled }, 200, { "Cache-Control": "no-store" });
+  });
+}
+__name(registerSystemPublicRoutes, "registerSystemPublicRoutes");
+function registerSystemRoutes(app, deps) {
+  app.post("/api/system/restart", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const already = restartFlag;
+    restartFlag = true;
+    try {
+      await deps.db.execute(
+        `INSERT INTO settings (key, value, updated_by, updated_at)
+         VALUES (?, ?, ?, datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = datetime('now')`,
+        [RESTART_MARKER_KEY, JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), actor_id: actor.staffId }), actor.staffId]
+      );
+    } catch (err) {
+      deps.logger.warn("system.restart.marker_failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+    try {
+      await deps.audit.log({
+        actorId: actor.staffId,
+        action: "system.restart_request",
+        resourceType: "system",
+        resourceId: "engine",
+        changes: { scheduled: { from: null, to: true }, already: { from: null, to: already } }
+      });
+    } catch (err) {
+      deps.logger.warn("system.restart.audit_failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+    await pushHumanEvent(deps.db, "\u0631\u0627\u0647\u200C\u0627\u0646\u062F\u0627\u0632\u06CC \u062F\u0648\u0628\u0627\u0631\u0647\u0654 \u0633\u0627\u0645\u0627\u0646\u0647 \u0627\u0632 \u067E\u0646\u0644", "panel");
+    return c.json(already ? { ok: true, scheduled: true, already: true } : { ok: true, scheduled: true }, 200, {
+      "Cache-Control": "no-store"
+    });
+  });
+  app.get("/api/support/error-package", requireRole("manager"), async (c) => {
+    const pkg = await buildErrorPackage(deps.db, { envName: deps.envName ?? null });
+    try {
+      await deps.audit.log({
+        actorId: getAuthContext(c).staffId,
+        action: "system.error_package",
+        resourceType: "support",
+        resourceId: pkg.filename
+      });
+    } catch (err) {
+      deps.logger.warn("system.error_package.audit_failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+    return new Response(pkg.bytes, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="${pkg.filename}"`,
+        "Cache-Control": "no-store"
+      }
+    });
+  });
+}
+__name(registerSystemRoutes, "registerSystemRoutes");
 
 // src/application/growth/service.ts
 var GROWTH_SNAPSHOT_SEAL_KEY = "growth.last_snapshot_at";
@@ -70632,6 +71166,7 @@ __name(registerSettingsRoutes, "registerSettingsRoutes");
 // src/application/backup/service.ts
 var BACKUP_FORMAT = "gh-backup";
 var BACKUP_FORMAT_VERSION = 1;
+var BACKUP_ARCHIVE_KEY = "backup:archive-latest";
 var SKIP_RESTORE_TABLES = /* @__PURE__ */ new Set(["schema_migrations", "d1_migrations"]);
 var FILES_TABLE = "exercise_file_chunks";
 var IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -71266,6 +71801,75 @@ function createBackupService(deps) {
       }
       logger.info("backup.auto.done", { sent: report.sent, failed: report.failed });
       return { skipped: false, report };
+    },
+    // ─── آرشیو محلی آخرین پشتیبان تأییدشده (۴-۲) ───
+    async archiveLatest(actor) {
+      try {
+        const { bytes } = await collectExport(false);
+        if (bytes.byteLength > BACKUP_MAX_SEND_BYTES) {
+          logger.warn("backup.archive.too_large", { bytes: bytes.byteLength });
+          return { archived: false, bytes: bytes.byteLength, reason: "too_large" };
+        }
+        const envelope = JSON.parse(new TextDecoder().decode(bytes));
+        const summary = await service.inspect(envelope);
+        if (!summary.schemaCompatible) {
+          logger.warn("backup.archive.schema_incompatible", { problems: summary.problems });
+          return { archived: false, bytes: bytes.byteLength, reason: "schema_incompatible" };
+        }
+        await writeSetting(
+          BACKUP_ARCHIVE_KEY,
+          {
+            format: BACKUP_FORMAT,
+            format_version: BACKUP_FORMAT_VERSION,
+            app_version: APP_VERSION,
+            created_at: (/* @__PURE__ */ new Date()).toISOString(),
+            tables: summary.tableCount,
+            total_rows: summary.totalRows,
+            envelope
+          },
+          actor.staffId
+        );
+        try {
+          await audit.log({
+            actorId: actor.staffId,
+            action: "backup.archive",
+            resourceType: "backup",
+            resourceId: "archive-latest",
+            changes: {
+              tables: { from: null, to: summary.tableCount },
+              rows: { from: null, to: summary.totalRows }
+            }
+          });
+        } catch (err) {
+          logger.warn("backup.archive.audit_failed", { err: err instanceof Error ? err.message : String(err) });
+        }
+        logger.info("backup.archive.done", { tables: summary.tableCount, rows: summary.totalRows, bytes: bytes.byteLength });
+        return { archived: true, bytes: bytes.byteLength };
+      } catch (err) {
+        logger.warn("backup.archive.failed", { error: err instanceof Error ? err.message : String(err) });
+        return { archived: false, bytes: 0, reason: "error" };
+      }
+    },
+    async getArchivedBackup() {
+      try {
+        const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [
+          BACKUP_ARCHIVE_KEY
+        ]);
+        if (!row?.value) return null;
+        const parsed = JSON.parse(row.value);
+        if (!parsed || typeof parsed !== "object") return null;
+        const meta3 = parsed;
+        if (meta3.format !== BACKUP_FORMAT || !meta3.envelope) return null;
+        return {
+          bytes: new TextEncoder().encode(JSON.stringify(meta3.envelope)),
+          createdAt: meta3.created_at ?? null,
+          appVersion: meta3.app_version ?? null,
+          tables: typeof meta3.tables === "number" ? meta3.tables : null,
+          totalRows: typeof meta3.total_rows === "number" ? meta3.total_rows : null
+        };
+      } catch {
+        return null;
+      }
     }
   };
   return service;
@@ -71289,6 +71893,41 @@ function registerBackupRoutes(app, service) {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
         "Content-Disposition": `attachment; filename="backup-${stamp}.json"; filename*=UTF-8''${encodeURIComponent(`\u067E\u0634\u062A\u06CC\u0628\u0627\u0646-${stamp}.json`)}`,
+        "Cache-Control": "no-store"
+      }
+    });
+  });
+  app.get("/api/backup/download", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    let archived = await service.getArchivedBackup();
+    if (!archived) {
+      const outcome = await service.archiveLatest(actor);
+      archived = outcome.archived ? await service.getArchivedBackup() : null;
+    }
+    if (!archived) {
+      return c.json({ ok: false, error: "NO_BACKUP", message: "\u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0645\u0648\u062C\u0648\u062F \u0646\u06CC\u0633\u062A" }, 404);
+    }
+    const stamp = (archived.createdAt ?? (/* @__PURE__ */ new Date()).toISOString()).replace(/[-:]/g, "").replace("T", "").slice(0, 14);
+    try {
+      c.executionCtx.waitUntil(
+        (async () => {
+          try {
+            await service.logExport(actor, false);
+          } catch {
+          }
+        })()
+      );
+    } catch {
+      try {
+        await service.logExport(actor, false);
+      } catch {
+      }
+    }
+    return new Response(archived.bytes, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": `attachment; filename="backup-${stamp}.db"`,
         "Cache-Control": "no-store"
       }
     });
@@ -72899,6 +73538,117 @@ async function pushNodeEvents(db, nodeCode, items) {
   return { accepted, duplicates: items.length - accepted };
 }
 __name(pushNodeEvents, "pushNodeEvents");
+var NODE_RATE_LIMIT_PER_MIN_DEFAULT = 120;
+var NODE_RATE_LIMIT_PER_MIN_MAX = 1e4;
+var NODE_RATE_LIMIT_WINDOW_MS = 6e4;
+function parseNodeRateLimitPerMin(raw2) {
+  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
+    return NODE_RATE_LIMIT_PER_MIN_DEFAULT;
+  }
+  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
+  if (!Number.isFinite(n) || n < 0) return NODE_RATE_LIMIT_PER_MIN_DEFAULT;
+  if (n === 0) return 0;
+  return Math.min(Math.trunc(n), NODE_RATE_LIMIT_PER_MIN_MAX);
+}
+__name(parseNodeRateLimitPerMin, "parseNodeRateLimitPerMin");
+function makeNodeSlidingWindowLimiter(windowMs, opts) {
+  const maxKeys = opts?.maxKeys ?? 2048;
+  const now = opts?.now ?? (() => Date.now());
+  const buckets = /* @__PURE__ */ new Map();
+  return {
+    allow(key, max) {
+      const at = now();
+      if (!buckets.has(key) && buckets.size >= maxKeys) {
+        for (const [k, ts] of buckets) {
+          const last = ts[ts.length - 1];
+          if (last === void 0 || at - last >= windowMs) buckets.delete(k);
+        }
+        if (buckets.size >= maxKeys) {
+          let oldestKey = null;
+          let oldestAt = Number.POSITIVE_INFINITY;
+          for (const [k, ts] of buckets) {
+            const last = ts[ts.length - 1] ?? Number.NEGATIVE_INFINITY;
+            if (last < oldestAt) {
+              oldestAt = last;
+              oldestKey = k;
+            }
+          }
+          if (oldestKey !== null) buckets.delete(oldestKey);
+        }
+      }
+      const window = buckets.get(key);
+      if (!window) {
+        buckets.set(key, [at]);
+        return true;
+      }
+      while (window.length > 0 && at - window[0] >= windowMs) window.shift();
+      if (window.length >= max) return false;
+      window.push(at);
+      return true;
+    }
+  };
+}
+__name(makeNodeSlidingWindowLimiter, "makeNodeSlidingWindowLimiter");
+var NODE_STALE_AFTER_MS = 24 * 60 * 6e4;
+function nodeLastSeenOf(lastPullAt, lastPushAttemptAt, lastPushOkAt) {
+  let best = null;
+  let bestMs = Number.NEGATIVE_INFINITY;
+  for (const iso of [lastPullAt, lastPushAttemptAt, lastPushOkAt]) {
+    if (!iso) continue;
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) continue;
+    if (t > bestMs) {
+      bestMs = t;
+      best = iso;
+    }
+  }
+  return best;
+}
+__name(nodeLastSeenOf, "nodeLastSeenOf");
+function nodeMapStateOf(active, lastSeen, now) {
+  if (!active) return "revoked";
+  if (!lastSeen) return "never_seen";
+  const t = Date.parse(lastSeen);
+  if (Number.isNaN(t)) return "never_seen";
+  return now.getTime() - t > NODE_STALE_AFTER_MS ? "stale" : "synced";
+}
+__name(nodeMapStateOf, "nodeMapStateOf");
+async function centralNodesMap(db, now = /* @__PURE__ */ new Date()) {
+  const rows = await db.query(
+    `SELECT ${NODE_ROW_COLUMNS} FROM sync_nodes ORDER BY created_at DESC, node_code ASC`,
+    []
+  );
+  const nodes = rows.map((r) => {
+    const lastSeen = nodeLastSeenOf(r.last_pull_at, r.last_push_attempt_at, r.last_push_ok_at);
+    return {
+      node_id: r.node_code,
+      name: r.label?.trim() ? r.label : r.node_code,
+      registered_at: r.created_at,
+      last_seen: lastSeen,
+      status: {
+        state: nodeMapStateOf(r.active === 1, lastSeen, now),
+        pending_push: null,
+        last_pull_ok_at: r.last_pull_at,
+        last_push_ok_at: r.last_push_ok_at,
+        reconciliation_ok: null
+      }
+    };
+  });
+  const snapshot = await centralQuotaSnapshot(db, now);
+  return {
+    server_ts: now.toISOString(),
+    nodes,
+    quota: {
+      day: snapshot.day,
+      percent_requests: snapshot.percent.requests,
+      percent_rows_written: snapshot.percent.rows_written,
+      percent_rows_read: snapshot.percent.rows_read,
+      level: snapshot.level
+    },
+    center_version: APP_VERSION
+  };
+}
+__name(centralNodesMap, "centralNodesMap");
 
 // src/application/auth/routes.ts
 var LOGIN_MAX_FAILURES = 5;
@@ -73217,6 +73967,37 @@ function createNodeSyncApp(deps) {
       c.header("X-Request-Id", requestId);
     }
   });
+  const nodeLimitWindowMs = deps.rateLimitWindowMs ?? NODE_RATE_LIMIT_WINDOW_MS;
+  const nodeLimiter = makeNodeSlidingWindowLimiter(nodeLimitWindowMs);
+  const nodeRateLimitGuard = /* @__PURE__ */ __name(async (c, next) => {
+    const perMin = parseNodeRateLimitPerMin(c.env?.NODE_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) return next();
+    const nodeCode = (c.req.header("X-CP-Node-Code") ?? "").trim().slice(0, 120);
+    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
+    const key = nodeCode ? `node:${perMin}:${nodeCode}` : `anon:${perMin}:${ip}`;
+    if (!nodeLimiter.allow(key, perMin)) {
+      const retryAfterS = Math.ceil(nodeLimitWindowMs / 1e3);
+      c.header("Retry-After", String(retryAfterS));
+      try {
+        await audit.log({
+          actorId: nodeCode || "anonymous",
+          action: "node.rate_limited",
+          resourceType: "node",
+          resourceId: nodeCode || "unauthenticated",
+          changes: { path: { from: null, to: c.req.path } }
+        });
+      } catch {
+      }
+      throw new RateLimitError(
+        retryAfterS,
+        "\u062A\u0639\u062F\u0627\u062F \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0646\u0648\u062F \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u0628\u0639\u062F\u0627\u064B \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
+      );
+    }
+    return next();
+  }, "nodeRateLimitGuard");
+  app.use("/pull", nodeRateLimitGuard);
+  app.use("/push", nodeRateLimitGuard);
+  app.use("/reconcile", nodeRateLimitGuard);
   const limiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
   app.use("*", async (c, next) => {
     if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH" && c.req.method !== "DELETE") {
@@ -73417,6 +74198,145 @@ function registerCentralQuotaRoutes(app, deps) {
   });
 }
 __name(registerCentralQuotaRoutes, "registerCentralQuotaRoutes");
+function registerCentralNodesMapRoutes(app, deps) {
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  app.get("/api/central/nodes-map", authMiddleware(), requireRole("manager"), async (c) => {
+    const map2 = await centralNodesMap(deps.db, now());
+    if (c.req.query("format") === "html") {
+      return new Response(renderNodesMapHtml(map2), {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Robots-Tag": "noindex, nofollow",
+          "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        }
+      });
+    }
+    return c.json(map2, 200);
+  });
+}
+__name(registerCentralNodesMapRoutes, "registerCentralNodesMapRoutes");
+function escHtml(v) {
+  return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+__name(escHtml, "escHtml");
+function faCell(v) {
+  if (!v) return "\u2014";
+  return faDigits(v.slice(0, 19).replace("T", " "));
+}
+__name(faCell, "faCell");
+var STATE_CHIP = {
+  synced: { cls: "chip ok", label: "\u0647\u0645\u200C\u06AF\u0627\u0645" },
+  stale: { cls: "chip warn", label: "\u0628\u06CC\u200C\u062A\u0645\u0627\u0633" },
+  never_seen: { cls: "chip warn", label: "\u0647\u0631\u06AF\u0632 \u062A\u0645\u0627\u0633 \u0646\u06AF\u0631\u0641\u062A\u0647" },
+  revoked: { cls: "chip bad", label: "\u0628\u0627\u0637\u0644\u200C\u0634\u062F\u0647" }
+};
+var QUOTA_LEVEL_CHIP = {
+  ok: { cls: "chip ok", label: "\u0633\u0628\u0632 \u2014 \u0645\u0635\u0631\u0641 \u0639\u0627\u062F\u06CC" },
+  warn: { cls: "chip warn", label: "\u0632\u0631\u062F \u2014 \u0646\u0632\u062F\u06CC\u06A9 \u0633\u0642\u0641 (\u06F8\u06F0\u066A+)" },
+  danger: { cls: "chip bad", label: "\u0642\u0631\u0645\u0632 \u2014 \u0631\u0648\u06CC \u0645\u0631\u0632 \u0633\u0642\u0641 (\u06F9\u06F5\u066A+) \u2014 \u067E\u0644\u0646 Workers Paid \u0631\u0627 \u0641\u0639\u0627\u0644 \u06A9\u0646\u06CC\u062F" }
+};
+function renderNodesMapHtml(map2) {
+  const worstPercent = Math.max(
+    map2.quota.percent_requests,
+    map2.quota.percent_rows_written,
+    map2.quota.percent_rows_read
+  );
+  const levelChip = QUOTA_LEVEL_CHIP[map2.quota.level];
+  const nodeRows = map2.nodes.length ? map2.nodes.map((n) => {
+    const chip = STATE_CHIP[n.status.state];
+    const rowCls = n.status.state === "revoked" ? "node bad" : n.status.state === "synced" ? "node" : "node warn";
+    const pending = n.status.pending_push !== null ? faDigits(String(n.status.pending_push)) : "\u2014";
+    const recon = n.status.reconciliation_ok === null ? "\u2014" : n.status.reconciliation_ok ? "\u0647\u0645\u200C\u062E\u0648\u0627\u0646" : "\u0646\u0627\u0647\u0645\u200C\u062E\u0648\u0627\u0646";
+    return `      <div class="${rowCls}">
+        <div class="row1">
+          <span class="name">${escHtml(n.name)}</span>
+          <span class="code">${escHtml(n.node_id)}</span>
+          <span class="${chip.cls}">${chip.label}</span>
+        </div>
+        <div class="meta">
+          <span>\u062B\u0628\u062A: ${faCell(n.registered_at)}</span>
+          <span>\u0622\u062E\u0631\u06CC\u0646 \u062A\u0645\u0627\u0633: ${faCell(n.last_seen)}</span>
+          <span>\u0622\u062E\u0631\u06CC\u0646 pull \u0645\u0648\u0641\u0642: ${faCell(n.status.last_pull_ok_at)}</span>
+          <span>\u0622\u062E\u0631\u06CC\u0646 push \u0645\u0648\u0641\u0642: ${faCell(n.status.last_push_ok_at)}</span>
+          <span>\u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 push: ${pending}</span>
+          <span>\u0622\u0634\u062A\u06CC\u200C\u0633\u0627\u0632: ${recon}</span>
+        </div>
+      </div>`;
+  }).join("\n") : '      <div class="node empty">\u0647\u0646\u0648\u0632 \u0646\u0648\u062F\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0627\u0632 \u0645\u0633\u06CC\u0631 \u062B\u0628\u062A \u0646\u0648\u062F (\u0641\u0642\u0637-\u0645\u062F\u06CC\u0631) \u06CC\u06A9 \u0645\u06CC\u0632 \u0631\u0627 \u067E\u06CC\u0648\u0646\u062F \u0628\u0632\u0646\u06CC\u062F.</div>';
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>\u0646\u0642\u0634\u0647\u0654 \u0645\u0639\u0645\u0627\u0631\u06CC \u2014 \u0645\u0631\u06A9\u0632 \u0648 \u0646\u0648\u062F\u0647\u0627</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f4f6f8; color: #1f2937; font-family: Vazirmatn, Tahoma, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.9; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 40px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 28px 0 10px; }
+  .meta { color: #6b7280; font-size: 12.5px; }
+  .center { background: #fff; border: 2px solid #1d4ed8; border-radius: 12px; padding: 16px 20px; text-align: center; }
+  .center .tag { display: inline-block; background: #dbeafe; color: #1e3a8a; border-radius: 999px; padding: 2px 14px; font-size: 12.5px; }
+  .bar { background: #e5e7eb; border-radius: 999px; height: 14px; margin: 12px auto 6px; max-width: 520px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: ${map2.quota.level === "danger" ? "#dc2626" : map2.quota.level === "warn" ? "#d97706" : "#16a34a"}; border-radius: 999px; }
+  .connector { width: 2px; height: 26px; background: #94a3b8; margin: 0 auto; }
+  .node { background: #fff; border: 1px solid #e2e8f0; border-inline-start: 6px solid #16a34a; border-radius: 10px; padding: 10px 14px; margin: 10px 0; }
+  .node.warn { border-inline-start-color: #d97706; }
+  .node.bad { border-inline-start-color: #dc2626; }
+  .node.empty { color: #6b7280; border-inline-start-color: #cbd5e1; }
+  .row1 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .row1 .name { font-weight: 700; }
+  .row1 .code { color: #64748b; font-size: 12px; direction: ltr; }
+  .chip { border-radius: 999px; padding: 1px 12px; font-size: 12px; white-space: nowrap; }
+  .chip.ok { background: #dcfce7; color: #166534; }
+  .chip.warn { background: #fef9c3; color: #92400e; }
+  .chip.bad { background: #fee2e2; color: #991b1b; }
+  .node .meta { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 4px; font-size: 12.5px; color: #475569; }
+  .legend { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; font-size: 13px; }
+  .legend ul { margin: 6px 0 0; padding-inline-start: 20px; }
+  .note { color: #6b7280; font-size: 12.5px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>\u0646\u0642\u0634\u0647\u0654 \u0645\u0639\u0645\u0627\u0631\u06CC \u2014 \u0645\u0631\u06A9\u0632 \u2194 \u0646\u0648\u062F\u0647\u0627</h1>
+    <div class="meta">\u0646\u0633\u062E\u0647\u0654 \u0645\u0631\u06A9\u0632: ${faDigits(map2.center_version)} \xB7 \u0644\u062D\u0638\u0647\u0654 \u0645\u0631\u06A9\u0632: ${faCell(map2.server_ts)} \xB7 \u06AF\u0632\u0627\u0631\u0634\u0650 \u0641\u0642\u0637-\u062E\u0648\u0627\u0646\u062F\u0646\u06CC \u0627\u0633\u062A\u061B \u0627\u06CC\u0646 \u0635\u0641\u062D\u0647 \u0647\u06CC\u0686 \u062F\u0627\u062F\u0647\u0654 \u0628\u0627\u0644\u06CC\u0646\u06CC \u0646\u062F\u0627\u0631\u062F.</div>
+  </header>
+
+  <h2>\u0645\u0631\u06A9\u0632 (Cloudflare Worker + D1)</h2>
+  <section class="center">
+    <span class="tag">\u0645\u0631\u06A9\u0632</span>
+    <div>\u0646\u0633\u062E\u0647\u0654 ${faDigits(map2.center_version)}</div>
+    <div class="bar"><i style="width: ${faDigits(String(Math.min(100, Math.max(worstPercent, 1))))}%"></i></div>
+    <div class="meta">\u0633\u0647\u0645\u06CC\u0647\u0654 \u0631\u0648\u0632 (${faDigits(map2.quota.day)}): \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627 ${faDigits(String(map2.quota.percent_requests))}\u066A \xB7 \u0633\u0637\u0631\u0646\u0648\u06CC\u0633\u06CC ${faDigits(String(map2.quota.percent_rows_written))}\u066A \xB7 \u0633\u0637\u0631\u062E\u0648\u0627\u0646\u06CC ${faDigits(String(map2.quota.percent_rows_read))}\u066A \u2014 <span class="${levelChip.cls}">${levelChip.label}</span></div>
+  </section>
+  <div class="connector" aria-hidden="true"></div>
+
+  <h2>\u0646\u0648\u062F\u0647\u0627 (${faDigits(String(map2.nodes.length))})</h2>
+  <section>
+${nodeRows}
+  </section>
+
+  <h2>\u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u0631\u0646\u06AF\u200C\u0647\u0627</h2>
+  <section class="legend">
+    <ul>
+      <li><span class="chip ok">\u0647\u0645\u200C\u06AF\u0627\u0645</span> \u0633\u0628\u0632 \u2014 \u0622\u062E\u0631\u06CC\u0646 \u062A\u0645\u0627\u0633 \u0646\u0648\u062F \u0628\u0627 \u0645\u0631\u06A9\u0632 \u06A9\u0645\u062A\u0631 \u0627\u0632 \u06F2\u06F4 \u0633\u0627\u0639\u062A \u067E\u06CC\u0634 \u0627\u0633\u062A.</li>
+      <li><span class="chip warn">\u0628\u06CC\u200C\u062A\u0645\u0627\u0633 / \u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631</span> \u0632\u0631\u062F \u2014 \u0628\u06CC\u0634 \u0627\u0632 \u06F2\u06F4 \u0633\u0627\u0639\u062A \u062A\u0645\u0627\u0633 \u0646\u0628\u0648\u062F\u0647\u060C \u0646\u0648\u062F \u0647\u0646\u0648\u0632 \u0647\u0631\u06AF\u0632 \u062A\u0645\u0627\u0633 \u0646\u06AF\u0631\u0641\u062A\u0647\u060C \u06CC\u0627 \u0631\u06A9\u0648\u0631\u062F\u06CC \u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 push \u0627\u0633\u062A.</li>
+      <li><span class="chip bad">\u0628\u0627\u0637\u0644 / \u062E\u0637\u0627</span> \u0642\u0631\u0645\u0632 \u2014 \u0646\u0648\u062F \u0627\u0632 \u067E\u0646\u0644 \u0645\u0631\u06A9\u0632 \u0628\u0627\u0637\u0644 \u0634\u062F\u0647 \u0627\u0633\u062A. (\u0648\u0636\u0639\u06CC\u062A \xAB\u062E\u0637\u0627\xBB\u06CC \u0633\u0645\u062A \u0646\u0648\u062F \u0647\u0646\u0648\u0632 \u0628\u0647 \u0645\u0631\u06A9\u0632 \u0622\u06CC\u0646\u0647 \u0646\u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0642\u0631\u0645\u0632\u0650 \u0627\u0645\u0631\u0648\u0632 \u0641\u0642\u0637 \xAB\u0628\u0627\u0637\u0644\u200C\u0634\u062F\u0647\xBB \u0631\u0627 \u0646\u0634\u0627\u0646 \u0645\u06CC\u200C\u062F\u0647\u062F.)</li>
+      <li>\u0646\u0648\u0627\u0631 \u0633\u0647\u0645\u06CC\u0647\u0654 \u0645\u0631\u06A9\u0632 \u0628\u0627 \u0631\u0646\u06AF \u0633\u0637\u062D \u0645\u0635\u0631\u0641 (\u0633\u0628\u0632 \u0639\u0627\u062F\u06CC / \u0632\u0631\u062F \u06F8\u06F0\u066A+ / \u0642\u0631\u0645\u0632 \u06F9\u06F5\u066A+) \u0631\u0646\u06AF \u0645\u06CC\u200C\u0634\u0648\u062F.</li>
+    </ul>
+    <div class="note">\u0633\u062A\u0648\u0646\u200C\u0647\u0627\u06CC \xAB\u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 push\xBB \u0648 \xAB\u0622\u0634\u062A\u06CC\u200C\u0633\u0627\u0632\xBB \u0641\u0639\u0644\u0627\u064B \xAB\u2014\xBB \u0645\u06CC\u200C\u0645\u0627\u0646\u0646\u062F: \u0622\u06CC\u0646\u0647\u0654 \u0648\u0636\u0639\u06CC\u062A \u0633\u06CC\u0646\u06A9 \u0641\u0642\u0637 \u0631\u0648\u06CC \u062F\u0633\u062A\u06AF\u0627\u0647\u0650 \u062E\u0648\u062F \u0634\u0639\u0628\u0647 \u0630\u062E\u06CC\u0631\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0628\u0647 \u0645\u0631\u06A9\u0632 \u0627\u0631\u0633\u0627\u0644 \u0646\u0645\u06CC\u200C\u0634\u0648\u062F (\u0642\u0631\u0627\u0631\u062F\u0627\u062F rust-f14) \u2014 \u0645\u0631\u06A9\u0632 \u0641\u0642\u0637 \u0645\u064F\u0647\u0631 \u062A\u0645\u0627\u0633\u200C\u0647\u0627\u06CC \u0648\u0627\u0642\u0639\u06CC (pull/push) \u0631\u0627 \u0627\u0632 \u0631\u062C\u06CC\u0633\u062A\u0631\u06CC \u0645\u06CC\u200C\u062F\u0627\u0646\u062F.</div>
+  </section>
+</main>
+</body>
+</html>`;
+}
+__name(renderNodesMapHtml, "renderNodesMapHtml");
 
 // src/internal-sync/service.ts
 var SYNC_INGEST_MAX_ITEMS = 100;
@@ -73628,16 +74548,16 @@ async function buildOutboxPage(db, since, now = /* @__PURE__ */ new Date()) {
 __name(buildOutboxPage, "buildOutboxPage");
 
 // src/internal-sync/routes.ts
-function requireDesktopEngine(c) {
+function requireDesktopEngine2(c) {
   if (c.env?.CENTER_DESKTOP_ENGINE !== "1") {
     throw new NotFoundError("\u0645\u0633\u06CC\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
   }
 }
-__name(requireDesktopEngine, "requireDesktopEngine");
+__name(requireDesktopEngine2, "requireDesktopEngine");
 function registerInternalSyncRoutes(app, deps) {
   const log = deps.logger.child("internal-sync");
   app.post("/api/internal/sync/ingest", async (c) => {
-    requireDesktopEngine(c);
+    requireDesktopEngine2(c);
     const ctx = getAuthContext(c);
     const parsed = IngestBodySchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) throw new ValidationError("\u0628\u062F\u0646\u0647\u0654 \u0627\u0633\u062A\u0642\u0631\u0627\u0631 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
@@ -73658,14 +74578,14 @@ function registerInternalSyncRoutes(app, deps) {
     return c.json({ data: { ...counts, by_domain } }, 200);
   });
   app.get("/api/internal/sync/status", async (c) => {
-    requireDesktopEngine(c);
+    requireDesktopEngine2(c);
     getAuthContext(c);
     const status = await inboxStatusCounts(deps.db);
     const synced_announcements = await syncedAnnouncementsCount(deps.db);
     return c.json({ data: { ...status, synced_announcements } }, 200);
   });
   app.get("/api/internal/sync/outbox", async (c) => {
-    requireDesktopEngine(c);
+    requireDesktopEngine2(c);
     const ctx = getAuthContext(c);
     const since = parseOutboxSince(c.req.query("since"));
     const page2 = await buildOutboxPage(deps.db, since);
@@ -73674,151 +74594,6 @@ function registerInternalSyncRoutes(app, deps) {
   });
 }
 __name(registerInternalSyncRoutes, "registerInternalSyncRoutes");
-
-// src/node-sync-runner/status.ts
-var NODE_SYNC_STATUS_MIRROR_KEY = "nodesync:status-mirror-v1";
-var SYNC_MODES = ["auto", "quarantined", "paused_version"];
-var SYNC_STATES = ["idle", "catching_up", "synced", "error", "offline"];
-var FAILURE_KINDS = ["none", "network", "server", "throttled", "auth", "version", "ingest", "unconfigured"];
-var NodeSyncStatusMirrorSchema = external_exports.object({
-  v: external_exports.literal(1),
-  mode: external_exports.enum(SYNC_MODES),
-  state: external_exports.enum(SYNC_STATES),
-  last_pull_cursor_at: external_exports.iso.datetime().nullable(),
-  last_push_ok_at: external_exports.iso.datetime().nullable(),
-  last_pull_ok_at: external_exports.iso.datetime().nullable(),
-  last_error_kind: external_exports.enum(FAILURE_KINDS).nullable(),
-  last_error_at: external_exports.iso.datetime().nullable(),
-  push_watermark: external_exports.iso.datetime().nullable(),
-  client_version: external_exports.string().max(50).nullable(),
-  // ─── موج ۱ — هندشیک نسخه (۱-۴)، ساعت مرجع مرکز (۱-۳)، خلاصهٔ جبران کامل ───
-  version: external_exports.object({
-    client: external_exports.string().min(1).max(50),
-    center: external_exports.string().min(1).max(50),
-    compatible: external_exports.boolean()
-  }).nullable().optional(),
-  clock_drift_minutes: external_exports.number().int().min(0).max(525600).nullable().optional(),
-  clock_warning: external_exports.boolean().optional(),
-  last_catchup: external_exports.object({
-    at: external_exports.iso.datetime(),
-    pulled: external_exports.number().int().min(0),
-    pushed: external_exports.number().int().min(0)
-  }).nullable().optional(),
-  // ─── EXP-1 (نسخهٔ ۳) — نتیجهٔ آخرین آشتی‌ساز؛ آینهٔ قدیمیِ بدونِ آن هم پذیرفته می‌شود ───
-  reconciliation: external_exports.object({
-    at: external_exports.iso.datetime(),
-    ok: external_exports.boolean(),
-    differences: external_exports.number().int().min(0),
-    // سقف ۵ ردیف ناهم‌خوانی — آینهٔ RECONCILE_MAX_DETAIL سمت runner
-    detail: external_exports.array(
-      external_exports.object({
-        domain: external_exports.string().min(1).max(40),
-        center: external_exports.number().int().min(0),
-        local: external_exports.number().int().min(0)
-      })
-    ).max(5).nullable()
-  }).nullable().optional(),
-  updated_at: external_exports.iso.datetime()
-});
-function requireDesktopEngine2(c) {
-  if (c.env?.CENTER_DESKTOP_ENGINE !== "1") {
-    throw new NotFoundError("\u0645\u0633\u06CC\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
-  }
-}
-__name(requireDesktopEngine2, "requireDesktopEngine");
-async function readMirror(db) {
-  try {
-    const row = await db.queryOne(
-      "SELECT value FROM settings WHERE key = ?",
-      [NODE_SYNC_STATUS_MIRROR_KEY]
-    );
-    if (!row) return null;
-    const parsed = NodeSyncStatusMirrorSchema.safeParse(JSON.parse(row.value));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
-}
-__name(readMirror, "readMirror");
-async function writeMirror(db, mirror) {
-  await db.execute(
-    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
-    [NODE_SYNC_STATUS_MIRROR_KEY, JSON.stringify(mirror)]
-  );
-}
-__name(writeMirror, "writeMirror");
-async function pendingPushCount(db, watermark) {
-  let count = 0;
-  try {
-    if (watermark) {
-      const cutoff = watermark.slice(0, 19).replace("T", " ");
-      const row = await db.queryOne(
-        "SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at > ?",
-        [cutoff]
-      );
-      count += Number(row?.n ?? 0);
-    } else {
-      const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors");
-      count += Number(row?.n ?? 0);
-    }
-  } catch {
-  }
-  try {
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-    const hourBucket = `${nowIso.slice(0, 13)}:00:00Z`;
-    const dayBucket = `${nowIso.slice(0, 10)}T00:00:00Z`;
-    const ahead = /* @__PURE__ */ __name((at) => !watermark || Date.parse(at) > Date.parse(watermark), "ahead");
-    if (ahead(hourBucket)) count += 1;
-    if (ahead(dayBucket)) count += 1;
-  } catch {
-  }
-  return count;
-}
-__name(pendingPushCount, "pendingPushCount");
-function cursorAgeDays(cursorAt, nowMs) {
-  const t = Date.parse(cursorAt);
-  if (Number.isNaN(t)) return null;
-  return Math.max(0, Math.round((nowMs - t) / 864e5 * 10) / 10);
-}
-__name(cursorAgeDays, "cursorAgeDays");
-function registerNodeSyncStatusRoute(app, deps) {
-  const log = deps.logger.child("node-sync-status");
-  app.post("/api/node-sync/status", async (c) => {
-    requireDesktopEngine2(c);
-    getAuthContext(c);
-    const parsed = NodeSyncStatusMirrorSchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) throw new ValidationError("\u0627\u0633\u0646\u067E\u200C\u0634\u0627\u062A \u0648\u0636\u0639\u06CC\u062A \u0633\u06CC\u0646\u06A9 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
-    await writeMirror(deps.db, parsed.data);
-    log.info("status_mirror.ok", { state: parsed.data.state, mode: parsed.data.mode });
-    return c.json({ data: { ok: true } }, 200);
-  });
-  app.get("/api/node-sync/status", async (c) => {
-    requireDesktopEngine2(c);
-    getAuthContext(c);
-    const mirror = await readMirror(deps.db);
-    const nowMs = Date.now();
-    const errorKind = mirror?.last_error_kind ?? null;
-    const payload = {
-      mode: mirror?.mode ?? "auto",
-      state: mirror?.state ?? "idle",
-      pending_push: await pendingPushCount(deps.db, mirror?.push_watermark ?? null),
-      last_pull_cursor_age_days: mirror?.last_pull_cursor_at ? cursorAgeDays(mirror.last_pull_cursor_at, nowMs) : null,
-      last_push_ok_at: mirror?.last_push_ok_at ?? null,
-      last_pull_ok_at: mirror?.last_pull_ok_at ?? null,
-      last_error: errorKind && errorKind !== "none" && mirror?.last_error_at ? { kind: errorKind, at: mirror.last_error_at } : null,
-      // ─── موج ۱ — آینهٔ غایب/قدیمی = پیش‌فرض نرم (اسنپ‌شات تازه از runner می‌آید) ───
-      version: mirror?.version ?? null,
-      clock_drift_minutes: mirror?.clock_drift_minutes ?? null,
-      clock_warning: mirror?.clock_warning === true,
-      last_catchup: mirror?.last_catchup ?? null,
-      // ─── EXP-1 (نسخهٔ ۳) — آشتی‌ساز؛ آینهٔ قدیمی بدونِ این فیلد = null نرم ───
-      reconciliation: mirror?.reconciliation ?? null
-    };
-    return c.json(payload, 200);
-  });
-}
-__name(registerNodeSyncStatusRoute, "registerNodeSyncStatusRoute");
 
 // src/application/api-routing/index.ts
 function createServices(deps) {
@@ -74058,7 +74833,8 @@ function createServices(deps) {
     db,
     cpConfigured: Boolean(deps.cpSyncUrl && deps.cpNodeCode && deps.cpNodeKey),
     envName: deps.envName ?? null,
-    clientErrorsMax: deps.clientErrorsMax ?? null
+    clientErrorsMax: deps.clientErrorsMax ?? null,
+    gamesHealthUrl: deps.gamesHealthUrl ?? null
   });
   const growth = createGrowthService({ db, logger });
   const centerKpi = createCenterKpiService({ db });
@@ -74169,9 +74945,8 @@ function createApp(deps) {
     return c.json(
       {
         ok: dbOk,
-        db: dbOk ? "up" : "down",
         version: APP_VERSION,
-        ts: (/* @__PURE__ */ new Date()).toISOString()
+        server_ts: (/* @__PURE__ */ new Date()).toISOString()
       },
       dbOk ? 200 : 503,
       { "Cache-Control": "no-store" }
@@ -74200,6 +74975,7 @@ function createApp(deps) {
   registerGamesPublicRoutes(app, services.games);
   registerAuthRoutes(app, { audit: services.audit, logger: services.logger });
   registerSetupStatusRoutes(app, { logger: services.logger });
+  registerSystemPublicRoutes(app, { db: services.db });
   app.route("/node", createNodeSyncApp({ db: services.db, audit: services.audit, logger: services.logger }));
   app.use("/api/*", authMiddleware());
   app.use("/api/*", supervisorGate(services.audit));
@@ -74208,6 +74984,7 @@ function createApp(deps) {
   registerInternalSyncRoutes(app, { db: services.db, logger: services.logger });
   registerNodeSyncStatusRoute(app, { db: services.db, logger: services.logger });
   registerCentralQuotaRoutes(app, { db: services.db });
+  registerCentralNodesMapRoutes(app, { db: services.db });
   app.get("/api/me", (c) => c.json({ data: c.get("authContext") }, 200));
   registerRoutes(app, services.appointments);
   registerRoutes2(app, services.attendance);
@@ -74252,6 +75029,12 @@ function createApp(deps) {
   registerBugReportRoutes(app, services.bugReports);
   registerClientErrorsRoutes(app, services.clientErrors);
   registerHealthRoutes(app, services.health);
+  registerSystemRoutes(app, {
+    db: services.db,
+    audit: services.audit,
+    logger: services.logger,
+    envName: deps.envName ?? null
+  });
   registerGrowthRoutes(app, services.growth);
   registerContentScoreRoutes(app, { contentScore: services.contentScore });
   if (FEATURES.apiKeys) registerKeysRoutes(app, services.keys);
@@ -74499,11 +75282,15 @@ async function runBackupAutoSendCycle(env) {
     teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
     ...await buildRuntimeEnv(env, db)
   });
+  const archive = await services.backup.archiveLatest({ staffId: "system" }).catch((err) => {
+    logger.error("backup.archive.failed", { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  });
   const outcome = await services.backup.runScheduledAutoSend().catch((err) => {
     logger.error("backup.auto.failed", { error: err instanceof Error ? err.message : String(err) });
     return null;
   });
-  logger.info("backup.auto.cycle.done", { outcome });
+  logger.info("backup.auto.cycle.done", { archive, outcome });
 }
 __name(runBackupAutoSendCycle, "runBackupAutoSendCycle");
 async function runCpSyncCycle(env) {
@@ -74646,8 +75433,10 @@ var src_default = {
       cpNodeKey: cpContentCfg.cpNodeKey,
       envName: env.ENV ?? null,
       // ۱.۲۵.۶۷ — پنل سلامت
-      clientErrorsMax: env.ALERT_CLIENT_ERRORS_MAX ?? null
+      clientErrorsMax: env.ALERT_CLIENT_ERRORS_MAX ?? null,
       // ف۵ (P0-3) — آستانهٔ هشدار خطاهای مرورگر
+      gamesHealthUrl: env.GAMES_HEALTH_URL ?? null
+      // ENG-4 (۱.۲۶.۴) — پایش ورکر بازی‌ها
     });
     return app.fetch(request, env, ctx);
   },

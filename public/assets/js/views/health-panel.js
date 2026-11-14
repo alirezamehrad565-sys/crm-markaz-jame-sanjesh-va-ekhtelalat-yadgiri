@@ -14,8 +14,12 @@
 //       (درخواست‌ها/نوشتن‌ها/خواندن‌ها) + ورود ناموفق ۲۴ ساعت؛ خرابی = خاکستری «دریافت نشد»
 // EXP-4 — بنر نگهبان موتور: رویدادهای Tauri (engine:restarting/restored/down) با گارد کامل —
 //       بیرون پوستهٔ دسکتاپ (مرورگر/آزمون) کل کانال no-op است و SPA هرگز نمی‌شکند
+// موج ۴ — افزوده‌های تجربهٔ ادمین (همه در همین نمای جدا از مسیر؛ بدون هیچ تغییر ناوبری):
+//       ۴-۲ نوار نجات سه‌دکمه‌ای (restart/پشتیبان/zip) · ۴-۱ پنج سیگنال §۴ نقد با سه رنگ و
+//       دکمهٔ اقدام · EXP-6 ثبت drill عملیاتی (nodesync:ops-drill-v1) · ۴-۵ راهنمای درون‌برنامه‌ای
+//       (چکیدهٔ دستی ADMIN-GUIDE — بدون خواندن فایل در زمان اجرا)
 import { api } from '../api.js';
-import { el, icon, emptyState, skeletonState } from '../ui.js';
+import { el, icon, emptyState, skeletonState, confirmModal, toast, toastError, lockBtn } from '../ui.js';
 import { fa, formatJalaliDateTime } from '../format.js';
 
 /** فاصلهٔ خوانا به فارسی — از ثانیه */
@@ -712,6 +716,253 @@ export function resetEngineWatchdogBannerForTests() {
   if (engineBannerHideTimer) { clearTimeout(engineBannerHideTimer); engineBannerHideTimer = null; }
 }
 
+/* ── موج ۴ (۴-۱) — پنج سیگنال §۴ نقد، هرکدام سه رنگ + دکمهٔ اقدام ────────────────
+   منبع: docs/FAILURE-CRITIQUE.fa.md §۴ — «این پنج سیگنال، ۹۰٪ سناریوها را پیش از فاجعه
+   معلوم می‌کنند». همهٔ نگاشت‌ها تابع خالص بی‌DOM (الگوی syncStateView) تا بی‌ماک سنگین
+   آزمون شوند. tone: ok سبز / warn زرد / error قرمز / unknown خاکستری (درگاه ناآشنا). */
+
+const SIGNAL_TONES = {
+  ok: { badge: 'badge--success', dot: 'dot--success' },
+  warn: { badge: 'badge--warning', dot: 'dot--warning' },
+  error: { badge: 'badge--error', dot: 'dot--error' },
+  unknown: { badge: 'badge--neutral', dot: 'dot--neutral' }
+};
+
+/** tone → کلاس نشان/نقطهٔ رنگی؛ ناشناخته → خنثی */
+export function healthToneView(tone) {
+  return SIGNAL_TONES[tone] ?? SIGNAL_TONES.unknown;
+}
+
+/**
+ * ۴-۱ سیگنال ۱ — موتور محلی. ورودی: پاکت GET /api/health/panel (همان `data` reload).
+ * db.ok = پایگاه محلی سالم؛ فیلد بازی‌ها افزوده‌ای است و شاید در نسخه‌های قدیمی‌تر غایب باشد —
+ * غایب = بی‌اثر؛ حاضر و ok=false = زرد. پاسخ ناآشنا = قرمز «پاسخ نمی‌دهد».
+ */
+export function engineSignalView(data) {
+  if (!data || typeof data !== 'object') {
+    return { tone: 'error', label: 'پاسخ نمی‌دهد', detail: 'درگاه سلامت موتور خوانا نبود' };
+  }
+  const dbOk = data?.db?.ok === true;
+  const version = typeof data?.version === 'string' && data.version ? data.version : null;
+  // فیلد افزودهٔ games {ok, port} — با گارد کامل؛ نسخهٔ قدیمی‌تر بدون آن سبز عادی می‌ماند
+  const games = data?.games && typeof data.games === 'object' ? data.games : null;
+  const parts = [];
+  if (version) parts.push(`نسخهٔ ${version}`);
+  if (games && games.ok === false) parts.push('بخش بازی‌ها در دسترس نیست');
+  if (!dbOk) parts.unshift('پایگاه محلی پاسخ نمی‌دهد');
+  let tone = dbOk ? 'ok' : 'error';
+  let label = dbOk ? 'سالم' : 'پاسخ نمی‌دهد';
+  if (dbOk && games && games.ok === false) { tone = 'warn'; label = 'ناتمام — بازی‌ها'; }
+  return { tone, label, detail: parts.length > 0 ? parts.join(' · ') : '—' };
+}
+
+/**
+ * ۴-۱ سیگنال ۲ — مرکز. ورودی: پاکت GET /api/node-sync/status (+nowMs برای آزمون).
+ * هندشیک نسخه قرمز می‌دهد؛ خطای هم‌گامی قرمز؛ خارج از خط/در انتظار زرد («داده محفوظ است»)؛
+ * هم‌گام با نسخهٔ مرکز سبز. وضعیت آینه غایب/ناآشنا = خاکستری.
+ */
+export function centerSignalView(sync, nowMs = Date.now()) {
+  if (!sync || typeof sync !== 'object') {
+    return { tone: 'unknown', label: 'نامشخص', detail: 'وضعیت هم‌گامی برای سنجش مرکز در دسترس نیست' };
+  }
+  const version = sync.version && typeof sync.version === 'object' ? sync.version : null;
+  if (version && version.compatible === false) {
+    return { tone: 'error', label: 'ناسازگار نسخه', detail: 'اول مرکز را ارتقا دهید' };
+  }
+  const centerV = typeof version?.center === 'string' && version.center ? version.center : null;
+  if (sync.state === 'synced') {
+    const lastOk = newestIso(sync.last_push_ok_at, sync.last_pull_ok_at);
+    const ms = isoMsOf(lastOk);
+    const age = ms !== null ? ` · آخرین هم‌گامی ${ageHuman(Math.max(0, Math.round((nowMs - ms) / 1000)))}` : '';
+    return { tone: 'ok', label: 'در دسترس', detail: `${centerV ? `نسخهٔ مرکز ${centerV}` : 'نسخهٔ مرکز هنوز دیده نشده'}${age}` };
+  }
+  if (sync.state === 'error') {
+    const kindText = syncErrorKindView(sync.last_error?.kind);
+    return { tone: 'error', label: 'پاسخ نمی‌دهد', detail: kindText };
+  }
+  // offline / idle / catching_up — مرکز دیده نشده ولی داده محفوظ است
+  return { tone: 'warn', label: 'قطع — داده محفوظ است', detail: 'با بازگشت خط، هم‌گام‌سازی خودش ادامه می‌یابد' };
+}
+
+/**
+ * ۴-۱ سیگنال ۳ — عقب‌ماندگی سینک. صفر و هم‌گام = سبز؛ رکورد در انتظار/خارج از خط = زرد؛
+ * توقف نسخه یا خطای هم‌گامی = قرمز. منبع همان /api/node-sync/status است.
+ */
+export function syncLagSignalView(sync) {
+  if (!sync || typeof sync !== 'object') {
+    return { tone: 'unknown', label: 'نامشخص', detail: 'وضعیت هم‌گامی در دسترس نیست' };
+  }
+  const version = sync.version && typeof sync.version === 'object' ? sync.version : null;
+  if (version && version.compatible === false) {
+    return { tone: 'error', label: 'متوقف — نسخه', detail: 'اول مرکز را ارتقا دهید' };
+  }
+  const pending = Number(sync.pending_push);
+  const pendingSafe = Number.isFinite(pending) && pending > 0 ? pending : 0;
+  if (sync.state === 'error') {
+    return { tone: 'error', label: 'خطای هم‌گامی', detail: 'تلاش دوباره خودکار می‌شود — رکوردها محفوظ‌اند' };
+  }
+  if (pendingSafe > 0) {
+    return { tone: 'warn', label: `${fa(pendingSafe)} رکورد در انتظار`, detail: 'محفوظ است — با وصل شدن خط ارسال می‌شود' };
+  }
+  if (sync.state === 'synced') {
+    return { tone: 'ok', label: 'بی‌عقب‌ماندگی', detail: 'همهٔ ثبت‌ها به مرکز رسیده‌اند' };
+  }
+  return { tone: 'warn', label: 'خارج از خط', detail: 'ثبت‌های محلی صف شده‌اند — هیچ چیز گم نمی‌شود' };
+}
+
+/**
+ * ۴-۱ سیگنال ۴ — مصرف سهمیهٔ مرکز. بدترین سطح میان سه شاخص (درخواست‌ها/نوشتن/خواندن):
+ * danger قرمز، warn زرد، همه ok سبز؛ درگاه ناآشنا (پنل روی نود) = خاکستری.
+ */
+export function quotaSignalView(quota) {
+  if (!quota || typeof quota !== 'object') {
+    return { tone: 'unknown', label: 'دریافت نشد', detail: 'درگاه سهمیهٔ مرکز از این دستگاه در دسترس نیست' };
+  }
+  const levels = ['requests', 'rows_written', 'rows_read']
+    .map((k) => (quota.level && typeof quota.level === 'object' ? quota.level[k] : null))
+    .filter(Boolean);
+  const pct = quota.percent && typeof quota.percent === 'object' ? quota.percent.requests : null;
+  const pctText = pct != null ? ` · درخواست‌ها ${pctNum(pct)}٪` : '';
+  if (levels.includes('danger')) return { tone: 'error', label: 'سقف رد شده', detail: 'پلن Workers Paid سقف روزانه را عملاً برمی‌دارد' + pctText };
+  if (levels.includes('warn')) return { tone: 'warn', label: 'نزدیک سقف', detail: 'مصرف روزانهٔ رایگان کلادفلر نزدیک اتمام است' + pctText };
+  return { tone: 'ok', label: 'زیر سقف', detail: 'مصرف روزانه در محدودهٔ امن است' + pctText };
+}
+
+/** آستانه‌های رنگ کارت پشتیبان — هفتگی سبز، تا یک ماه زرد، بیشتر قرمز (راهنمای ادمین §۲) */
+const BACKUP_OK_DAYS = 7;
+const BACKUP_WARN_DAYS = 30;
+
+/**
+ * ۴-۱ سیگنال ۵ — پشتیبان. منبع مُهر: کلید موجود cs.lastBackupAt (همان کلید نمای
+ * پشتیبان‌گیری می‌نویسد — منبع جدیدی ساخته نمی‌شود). مُهر غایب = قرمز «بی‌پشتیبان».
+ */
+export function backupSignalView(lastBackupIso, nowMs = Date.now()) {
+  const ms = isoMsOf(lastBackupIso);
+  if (ms === null) {
+    return { tone: 'error', label: 'بی‌پشتیبان', detail: 'در این مرورگر پشتیبانی گرفته نشده — «دریافت پشتیبان فوری» را بزنید' };
+  }
+  const days = Math.max(0, Math.floor((nowMs - ms) / 86_400_000));
+  if (days <= BACKUP_OK_DAYS) {
+    return { tone: 'ok', label: 'تازه', detail: `آخرین پشتیبان: ${ageHuman(Math.max(0, Math.round((nowMs - ms) / 1000)))}` };
+  }
+  if (days <= BACKUP_WARN_DAYS) {
+    return { tone: 'warn', label: 'کهنه شده', detail: `آخرین پشتیبان ${fa(days)} روز پیش — همین امروز یکی بگیرید` };
+  }
+  return { tone: 'error', label: 'بیش از یک ماه', detail: `آخرین پشتیبان ${fa(days)} روز پیش — فوری پشتیبان بگیرید` };
+}
+
+/* ── EXP-6 — ثبت drill عملیاتی ماهانه در پنل ─────────────────────────────────────
+   چک‌لیست چاپی در ADMIN-GUIDE است (عامل دیگر)؛ اینجا فقط «ثبت نتیجه در پنل» (پیوند ۳-۲):
+   localStorage['nodesync:ops-drill-v1'] = {at, result} پس از تأیید فارسی؛ تاریخ با رقم
+   فارسی؛ بیش از ۳۱ روز = زرد («وقت drill بعدی است»). */
+
+export const OPS_DRILL_KEY = 'nodesync:ops-drill-v1';
+const DRILL_STALE_DAYS = 31;
+
+/** خواندن نرم رکورد drill — JSON خراب/غایب = null */
+export function readOpsDrillRecord(storage) {
+  try {
+    const ls = storage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
+    const raw = ls ? ls.getItem(OPS_DRILL_KEY) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || isoMsOf(parsed.at) === null) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * EXP-6 — نمای رکورد drill: بدون رکورد = {tone:'unknown', label:'—'}؛ تا ۳۱ روز سبز با
+ * تاریخ فارسی؛ بیشتر = زرد «وقت drill بعدی است».
+ */
+export function drillRecordView(record, nowMs = Date.now()) {
+  const ms = isoMsOf(record?.at);
+  if (ms === null) {
+    return { tone: 'unknown', label: '—', detail: 'هنوز هیچ drill عملیاتی ثبت نشده است' };
+  }
+  const days = Math.max(0, Math.floor((nowMs - ms) / 86_400_000));
+  const dateFa = formatJalaliDateTime(record.at);
+  if (days > DRILL_STALE_DAYS) {
+    return { tone: 'warn', label: dateFa, detail: `${fa(days)} روز از آخرین drill گذشته — وقت drill بعدی است` };
+  }
+  return { tone: 'ok', label: dateFa, detail: `آخرین drill ${fa(days)} روز پیش` };
+}
+
+/* ── موج ۴ (۴-۵) — راهنمای درون‌برنامه‌ای ─────────────────────────────────────────
+   چکیدهٔ دستی و فشردهٔ docs/ADMIN-GUIDE.fa.md (نسخهٔ ساده برای مدیر غیرفنی) — در همین فایل
+   تعبیه شده است؛ در زمان اجرا هیچ فایل راهنما خوانده نمی‌شود و هیچ مسیر تازه‌ای به ناوبری
+   اضافه نمی‌شود (حکم کارفرما: نمای پنل جدا از ناوبری می‌ماند). هفت بخش = هفت عنوان راهنما. */
+
+const GUIDE_SECTIONS = [
+  {
+    title: 'روز اول — سه قدم',
+    lines: [
+      '۱) نصب روی هر رایانهٔ شعبه: فایل نصب را اجرا کنید و «نصب» را بزنید — بقیه‌اش خودکار است.',
+      'اگر پیام «آنتی‌ویروس مانع شد» دیدید: «مشاهدهٔ راهنما» را بزنید و همان ۴ قدم تصویری را انجام دهید؛ به آنتی‌ویروس بگویید پوشهٔ نصب «مطمئن» است.',
+      '۲) ساختن مرکز مشترک (فقط یک‌بار، روی رایانهٔ ستاد): بخش «مرکز» ← نصب‌و‌راه‌اندازی مرکز؛ حساب رایگان کلادفلر و توکن لازم است. اگر وسطش اینترنت قطع شد، «تلاش دوباره» بی‌خطر است.',
+      '۳) دیدن وضعیت: «پنل سلامت» را باز کنید — هدف این است که پنج چراغ سبز باشد: موتور محلی، مرکز، سینک، سهمیه، پشتیبان.'
+    ]
+  },
+  {
+    title: 'کارهای روزانه — کمتر از یک دقیقه',
+    lines: [
+      'صبح یک نگاه به پنل سلامت: همه سبز؟ تمام.',
+      'هفته‌ای یک‌بار پشتیبان بگیرید و فایل را روی فلش یا حافظهٔ جدا نگه دارید — نه روی همان رایانه، نه در ایمیل/پیام‌رسان عمومی (داخلش اطلاعات مراجعین است).',
+      'ماهی یک‌بار: سطر drill عملیاتی و آزمون بازیابی باید سبز باشد؛ اگر سرخ شد، به پشتیبانی بگویید.',
+      'چیزی نصب یا پاک نکنید؛ به‌روزرسانی را فقط از پیام خودِ برنامه انجام دهید — اول ستاد، بعد شعبه‌ها.'
+    ]
+  },
+  {
+    title: 'اگر مشکلی پیش آمد — جدول یاری',
+    lines: [
+      'چراغ «موتور محلی» قرمز ماند؟ چند لحظه صبر کنید؛ بعد از دو دقیقه دکمهٔ «راه‌اندازی دوبارهٔ سامانه» را بزنید.',
+      'چراغ «مرکز» قرمز؟ اینترنت را چک کنید؛ اگر اینترنت سالم است مشکل از کلادفلر است — داده‌ها امن‌اند، چند ساعت بعد چک کنید.',
+      'بنر «N رکورد در انتظار — محفوظ است»؟ هیچ کاری نکنید؛ با وصل شدن اینترنت خودش می‌فرستد.',
+      '«ساعت این دستگاه تنظیم نیست»؟ ساعت ویندوز را روی «تنظیم خودکار زمان» بگذارید.',
+      'چراغ «مصرف سهمیه» زرد/قرمز؟ به پشتیبانی بگویید «سهمیه زرد/قرمز شده» — احتمالاً باید پلن ۵ دلاری فعال شود.',
+      'پیام «اول مرکز را ارتقا دهید»؟ روی رایانهٔ ستاد اول برنامه را به‌روز کنید، بعد برگردید.',
+      'هیچ‌کدام؟ «دریافت گزارش خطا (zip)» را بزنید و فایل را برای پشتیبانی بفرستید.'
+    ]
+  },
+  {
+    title: 'کی زنگ بزنید و چه بگویید',
+    lines: [
+      'زنگ بزنید اگر: چراغی بیش از یک ساعت قرمز ماند · بازیابی سرخ شد · چیزی از دست رفت · پیامی دیدید که در جدول یاری نیست.',
+      'چهار چیز را آماده کنید: نسخهٔ برنامه (پایین همین پنل) · عکس از پنل سلامت · فایل گزارش خطا · یک جمله از «چه کاری می‌کردید و چه دیدید».'
+    ]
+  },
+  {
+    title: 'این کارها را نکنید',
+    lines: [
+      'پوشهٔ نصب یا فایل‌های سامانه را جابه‌جا، پاک یا تغییر نام ندهید.',
+      'فایل پشتیبان را در ایمیل/پیام‌رسان عمومی نفرستید و روی همان رایانه نگه ندارید.',
+      'چند نسخهٔ موازی نصب نکنید؛ آنتی‌ویروس را کامل خاموش نکنید — فقط استثنای پوشهٔ نصب را اضافه کنید.',
+      'اطلاعات ورود مدیر را در گروه‌ها نفرستید؛ اگر مشکوک شدید رمز را عوض کنید.'
+    ]
+  },
+  {
+    title: 'چند جملهٔ امنیت خاطر',
+    lines: [
+      'برق رفت؟ ثبت‌های شما با سیستم امن‌نگه‌داری محفوظ‌اند و برنامه در اجرای بعدی خودش را ترمیم می‌کند.',
+      'اینترنت یک هفته نیامد؟ شعبه‌ها محلی کامل کار می‌کنند؛ همه‌چیز صف می‌شود و بعد از وصل شدن یک‌جا می‌رود — چیزی گم نمی‌شود و چیزی دوبله ثبت نمی‌شود.',
+      'رایانهٔ ستاد سوخت؟ مرکز روی کلادفلر است و تاریخچهٔ خودش را نگه می‌دارد؛ ستاد فقط «کلید کنترل» است و با نصب دوباره برمی‌گردد.'
+    ]
+  },
+  {
+    title: 'واژه‌نامهٔ کوتاه',
+    lines: [
+      'موتور محلی: سرویس پشت‌صحنهٔ همین رایانه · مرکز: دستگاه اشتراک دادهٔ بین شعبه‌ها روی کلادفلر.',
+      'سینک: رفت‌وآمد خودکار داده بین شعبه‌ها و مرکز · پشتیبان: عکس لحظه‌ای از همهٔ داده‌ها برای روز نیاز.',
+      'سهمیه: سقف رایگان کلادفلر برای مصرف روزانه · توکن: کلید مجوزی که کلادفلر برای نصب مرکز می‌خواهد.',
+      'واچ‌داگ: نگهبان خودکار؛ اگر سرویس داخلی بمیرد، دوباره راهش می‌اندازد.'
+    ]
+  }
+];
+
+
+
 export async function renderHealthPanel(outlet) {
   const root = el('div', {});
   outlet.replaceChildren(root);
@@ -721,6 +972,338 @@ export async function renderHealthPanel(outlet) {
 
   let timer = null;
   const stopTimer = () => { if (timer) { clearInterval(timer); timer = null; } };
+
+  /* ── موج ۴ — کنش‌ها و بخش‌های افزوده (۴-۱/۴-۲/۴-۵/EXP-6) ──────────────────────
+     همه در همین نمای جدا از مسیر؛ هیچ تغییر ناوبری، هیچ لمسی به app.js. بازخوانی ۶۰ثانیه‌ای
+     کل نما را از نو می‌سازد — بخش‌های تازه هم با همان ریتم تازه می‌شوند. */
+
+  // خط نتیجهٔ هر کارت: متن + نقطهٔ رنگی (بازخورد کنش‌ها بدون rebuild کل نما)
+  function setResult(line, text, tone) {
+    if (!line) return;
+    const t = healthToneView(tone);
+    line.textContent = '';
+    line.appendChild(el('span', { class: `dot ${t.dot}`, style: { marginInlineEnd: 'var(--sp-1)' } }));
+    line.appendChild(document.createTextNode(text));
+  }
+
+  // ذخیرهٔ blob دانلودشده — الگوی نمای پشتیبان‌گیری (downloadBlob + لینک موقت)
+  function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = el('a', { href: url, download: filename });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  function fallbackBackupName() {
+    try {
+      return `backup-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.db`;
+    } catch {
+      return 'backup.db';
+    }
+  }
+
+  // ۴-۲ — «راه‌اندازی دوبارهٔ سامانه» — POST /api/system/restart با تأیید فارسی
+  // قرارداد موتور (موج ۴): {ok:true, scheduled:true} یا {already:true} روی دوباره‌زنی.
+  async function restartAction(btn, { title, message, resultLine } = {}) {
+    await lockBtn(btn, async () => {
+      const okGo = await confirmModal({
+        title: title ?? 'راه‌اندازی دوبارهٔ سامانه',
+        message: message ?? 'سامانه چند ثانیه در دسترس نیست و بعد خودش بالا می‌آید؛ ثبت‌های باز شما محفوظ می‌ماند. راه‌اندازی دوباره انجام شود؟',
+        confirmLabel: 'راه‌اندازی دوباره',
+        danger: true
+      });
+      if (!okGo) return;
+      try {
+        const res = await api.post('/api/system/restart');
+        const already = res?.already === true || res?.data?.already === true;
+        const text = already
+          ? 'راه‌اندازی دوباره از قبل برنامه‌ریزی شده بود — چند ثانیه صبر کنید'
+          : 'راه‌اندازی دوباره برنامه‌ریزی شد — سامانه چند ثانیه بعد خودش بالا می‌آید';
+        toast(text, 'success');
+        setResult(resultLine, text, 'ok');
+      } catch (err) {
+        toastError(err);
+        setResult(resultLine, `راه‌اندازی دوباره انجام نشد: ${err?.message ?? 'خطای نامشخص'}`, 'error');
+      }
+    });
+  }
+
+  // ۴-۲/۴-۱ — «دریافت پشتیبان فوری» — GET /api/backup/download (پیوست باینری backup-*.db)
+  // مُهر cs.lastBackupAt همان کلید نمای پشتیبان‌گیری است — منبع تازه می‌شود.
+  async function backupDownloadAction(btn, resultLine) {
+    await lockBtn(btn, async () => {
+      try {
+        const { blob, filename } = await api.downloadBlob('/api/backup/download');
+        saveBlob(blob, filename || fallbackBackupName());
+        try { localStorage.setItem('cs.lastBackupAt', new Date().toISOString()); } catch { /* نرم */ }
+        toast('پشتیبان فوری دریافت شد — فایل را روی حافظهٔ جدا (نه همین رایانه) نگه دارید', 'success');
+        setResult(resultLine, 'پشتیبان فوری دریافت شد — روی حافظهٔ جدا نگه دارید', 'ok');
+      } catch (err) {
+        toastError(err);
+        setResult(resultLine, `دریافت پشتیبان ناموفق بود: ${err?.message ?? 'خطای نامشخص'}`, 'error');
+      }
+    });
+  }
+
+  // ۴-۲ — «دریافت گزارش خطا (zip)» — GET /api/support/error-package
+  async function errorPackageAction(btn, resultLine) {
+    await lockBtn(btn, async () => {
+      try {
+        const { blob, filename } = await api.downloadBlob('/api/support/error-package');
+        saveBlob(blob, filename || `error-package-${Date.now()}.zip`);
+        toast('گزارش خطا دریافت شد — فایل zip را برای پشتیبانی بفرستید', 'success');
+        setResult(resultLine, 'گزارش خطا دریافت شد — برای پشتیبانی بفرستید', 'ok');
+      } catch (err) {
+        toastError(err);
+        setResult(resultLine, `دریافت گزارش خطا ناموفق بود: ${err?.message ?? 'خطای نامشخص'}`, 'error');
+      }
+    });
+  }
+
+  // ۴-۱ — «آزمایش اتصال» مرکز — پینگ واقعی همین حالا: verifyCloudNode (همان مسیر pull
+  // یک‌آیتمی با اعتبار نود) روی worker_url ثبت‌شده در «اتصال ابر». اعتبار ناقص = پیام نرم.
+  async function centerPingAction(btn, resultLine) {
+    await lockBtn(btn, async () => {
+      try {
+        const [stateM, verifyM] = await Promise.all([
+          import('../../../src/cloud-setup/state.ts'),
+          import('../../../src/cloud-setup/verify.ts')
+        ]);
+        const rec = stateM.loadCloudRecord();
+        if (!rec.worker_url || !rec.node_code) {
+          setResult(resultLine, 'اتصال ابر روی این دستگاه تنظیم نشده است', 'warn');
+          return;
+        }
+        const secureRes = await stateM.resolveSecureStore();
+        const key = await stateM.readSecret(secureRes.store, stateM.SECRET_NODE_KEY);
+        if (!key) {
+          setResult(resultLine, 'کلید نود در دسترس نیست — در تنظیمات «ویرایش اتصال» را کامل کنید', 'warn');
+          return;
+        }
+        const r = await verifyM.verifyCloudNode((input, init) => fetch(input, init), {
+          workerUrl: rec.worker_url,
+          nodeCode: rec.node_code,
+          nodeKey: key
+        });
+        setResult(resultLine, r.message, r.ok ? 'ok' : 'error');
+      } catch (err) {
+        setResult(resultLine, `آزمایش اتصال ممکن نشد: ${err?.message ?? 'خطای نامشخص'}`, 'error');
+      }
+    });
+  }
+
+  // ۴-۱ — «جبران دوباره» — نقطهٔ ورود جبرانِ موجود runner: coordinator.runCatchUp()
+  // (همان مسیر catch-up بوت rust-f14؛ همیشه مجاز حتی در قرنطینه/گات نسخه). اعتبار نود از
+  // «اتصال ابر» + مخزن امن در لحظهٔ کلیک خوانده می‌شود — راز انبار نمی‌شود (قرارداد panel.ts).
+  const CATCHUP_STATUS_FA = {
+    ok: 'کامل شد',
+    unconfigured: 'اتصال ابر کامل نیست',
+    auth_error: 'اعتبار نود رد شد',
+    version_error: 'نسخه ناسازگار — اول برنامه را به‌روز کنید',
+    http_error: 'خطای مرکز',
+    network_error: 'قطع شبکه',
+    ingest_error: 'خطای استقرار در موتور محلی',
+    push_failed: 'ارسال ناموفق — ادامهٔ خودکار'
+  };
+  async function syncCatchupAction(btn, resultLine) {
+    await lockBtn(btn, async () => {
+      try {
+        const [stateM, runnerM, coordM] = await Promise.all([
+          import('../../../src/cloud-setup/state.ts'),
+          import('../../../src/node-sync-runner/runner.ts'),
+          import('../../../src/node-sync-runner/coordinator.ts')
+        ]);
+        const rec = stateM.loadCloudRecord();
+        const secureRes = await stateM.resolveSecureStore();
+        const key = await stateM.readSecret(secureRes.store, stateM.SECRET_NODE_KEY);
+        const storage = typeof localStorage !== 'undefined' ? localStorage : undefined;
+        const runner = runnerM.createNodeSyncRunner({
+          baseUrl: rec.worker_url,
+          nodeCode: rec.node_code,
+          nodeKey: key,
+          progressStorage: storage,
+          tokenProvider: () => {
+            try { return (typeof localStorage !== 'undefined' ? localStorage.getItem('cs.token') : null) ?? null; }
+            catch { return null; }
+          }
+        });
+        const coord = coordM.createSyncCoordinator({ runner, progressStorage: storage });
+        setResult(resultLine, 'جبران در جریان است…', 'warn');
+        const { catchup } = await coord.runCatchUp();
+        const head = CATCHUP_STATUS_FA[catchup?.status] ?? 'ناتمام';
+        if (catchup?.status === 'ok') {
+          const done = catchup.pull_done && catchup.push_done;
+          const text = done
+            ? `جبران کامل شد — ${fa(Number(catchup.items_pulled) || 0)} دریافت · ${fa(Number(catchup.items_pushed) || 0)} ارسال`
+            : `جبران بخشی رفت — ${fa(Number(catchup.items_pulled) || 0)} دریافت · ${fa(Number(catchup.items_pushed) || 0)} ارسال؛ ادامهٔ خودکار از همان نقطه`;
+          setResult(resultLine, text, done ? 'ok' : 'warn');
+        } else {
+          setResult(resultLine, `جبران ناتمام: ${head} — رکوردها محفوظ‌اند و دورهٔ بعد ادامه می‌دهد`, 'warn');
+        }
+      } catch (err) {
+        setResult(resultLine, `جبران دوباره ممکن نشد: ${err?.message ?? 'خطای نامشخص'}`, 'error');
+      }
+    });
+  }
+
+  // ۴-۱ — «بازخوانی سهمیه» — GET /api/central/quota همان درگاه کارت تفصیلی
+  async function quotaRefetchAction(btn, resultLine) {
+    await lockBtn(btn, async () => {
+      try {
+        const fresh = unwrapQuota(await api.get('/api/central/quota'));
+        if (!fresh) {
+          setResult(resultLine, 'پاکت سهمیه خوانا نبود — بعداً دوباره بزنید', 'warn');
+          return;
+        }
+        const pct = fresh.percent && typeof fresh.percent === 'object' ? fresh.percent.requests : null;
+        setResult(resultLine, `سهمیه تازه شد — درخواست‌ها ${pctNum(pct)}٪`, 'ok');
+      } catch (err) {
+        setResult(resultLine, `بازخوانی سهمیه ناموفق بود: ${err?.message ?? 'خطای نامشخص'}`, 'error');
+      }
+    });
+  }
+
+  // کارت سیگنال — سه رنگ + دکمهٔ اقدام + خط نتیجه (۴-۱)
+  function signalCardEl({ title, view, actionLabel, onAction }) {
+    const tone = healthToneView(view.tone);
+    const resultLine = el('div', { class: 'hint-text', style: { marginTop: 'var(--sp-2)', whiteSpace: 'normal' } });
+    return el('div', { class: 'card', style: { flex: '1 1 190px', minWidth: '170px', margin: 0 } },
+      el('div', { class: 'card__body', style: { padding: 'var(--sp-3)' } },
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', justifyContent: 'space-between', flexWrap: 'wrap' } },
+          el('strong', {}, title),
+          el('span', { class: `badge ${tone.badge}` }, view.label)
+        ),
+        el('div', { class: 'hint-text', style: { marginTop: 'var(--sp-1)', whiteSpace: 'normal' } },
+          el('span', { class: `dot ${tone.dot}`, style: { marginInlineEnd: 'var(--sp-1)' } }),
+          view.detail || '—'),
+        el('button', {
+          class: 'btn btn--ghost',
+          type: 'button',
+          style: { marginTop: 'var(--sp-2)', width: '100%' },
+          onclick: (e) => onAction(e.currentTarget, resultLine)
+        }, actionLabel),
+        resultLine
+      )
+    );
+  }
+
+  // ۴-۲ — نوار نجات همیشه‌در‌دسترس: سه دکمه، بالای پنل
+  function rescueBarSection() {
+    return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+      el('div', { class: 'card__body', style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flexWrap: 'wrap', padding: 'var(--sp-3) var(--sp-4)' } },
+        el('span', { class: 'badge badge--neutral', style: { flexShrink: '0' } }, 'نوار نجات'),
+        el('button', { class: 'btn btn--primary', type: 'button', onclick: (e) => void restartAction(e.currentTarget) }, 'راه‌اندازی دوبارهٔ سامانه'),
+        el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void backupDownloadAction(e.currentTarget, null) }, 'دریافت پشتیبان فوری'),
+        el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void errorPackageAction(e.currentTarget, null) }, 'دریافت گزارش خطا (zip)'),
+        el('span', { class: 'hint-text', style: { marginInlineStart: 'auto', whiteSpace: 'normal' } }, 'برای روزهای سخت — با تأیید فارسی و حالت مشغول')
+      )
+    );
+  }
+
+  // ۴-۱ — بخش «سلامت یک‌نگاهی»: پنج سیگنال §۴ نقد، هرکدام کارت با سه رنگ + اقدام
+  function oneGlanceSection(data, sync, quota, lastBackupAt) {
+    const cards = [
+      { title: 'موتور محلی', view: engineSignalView(data), actionLabel: 'راه‌اندازی دوبارهٔ موتور', onAction: (btn, line) => restartAction(btn, {
+          title: 'راه‌اندازی دوبارهٔ موتور',
+          message: 'موتور محلی چند ثانیه خاموش می‌شود و خودش بالا می‌آید؛ ثبت‌های باز محفوظ می‌ماند. راه‌اندازی دوباره انجام شود؟',
+          resultLine: line
+        }) },
+      { title: 'مرکز', view: centerSignalView(sync), actionLabel: 'آزمایش اتصال', onAction: centerPingAction },
+      { title: 'سینک', view: syncLagSignalView(sync), actionLabel: 'جبران دوباره', onAction: syncCatchupAction },
+      { title: 'مصرف سهمیه', view: quotaSignalView(quota), actionLabel: 'بازخوانی سهمیه', onAction: quotaRefetchAction },
+      { title: 'پشتیبان', view: backupSignalView(lastBackupAt), actionLabel: 'دریافت پشتیبان', onAction: backupDownloadAction }
+    ];
+    return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+      el('div', { class: 'card__head' },
+        el('h3', { style: { margin: 0 } }, 'سلامت یک‌نگاهی — پنج سیگنال'),
+        el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
+          'پنج سیگنال §۴ نقد (موتور محلی، مرکز، عقب‌ماندگی سینک، مصرف سهمیه، پشتیبان) با سه رنگ سبز/زرد/قرمز — هر کارت دکمهٔ اقدام خودش را دارد؛ نتیجهٔ هر اقدام زیر همان کارت می‌آید.')
+      ),
+      el('div', { class: 'card__body', style: { display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' } },
+        cards.map((c) => signalCardEl(c))
+      )
+    );
+  }
+
+  // EXP-6 — ردیف drill عملیاتی: ثبت نتیجه با تأیید فارسی؛ بیش از ۳۱ روز زرد می‌شود
+  function drillSection() {
+    const valueBadge = el('span', { class: 'badge badge--neutral' }, '—');
+    const sub = el('div', { class: 'cell-sub' }, 'هنوز هیچ drill عملیاتی ثبت نشده است');
+    const render = () => {
+      const v = drillRecordView(readOpsDrillRecord(), Date.now());
+      const t = healthToneView(v.tone);
+      valueBadge.className = `badge ${t.badge}`;
+      valueBadge.textContent = v.label;
+      sub.textContent = v.detail;
+    };
+    render();
+    return el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
+      el('div', { class: 'ob-row' },
+        el('div', { class: 'ob-row__main' },
+          el('div', { class: 'cell-main', style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+            'آخرین drill ثبت‌شده:',
+            valueBadge
+          ),
+          sub
+        ),
+        el('div', { class: 'ob-row__side' },
+          el('button', {
+            class: 'btn btn--ghost',
+            type: 'button',
+            onclick: (e) => void lockBtn(e.currentTarget, async () => {
+              const okGo = await confirmModal({
+                title: 'ثبت drill امروز',
+                message: 'آخرین drill عملیاتی — بازیابی پشتیبان روی رایانهٔ تمیز + قطع اینترنت واقعی + بستن برنامه از Task Manager — امروز با موفقیت انجام شده است؟ فقط نتیجهٔ واقعی را ثبت کنید.',
+                confirmLabel: 'ثبت می‌کنم'
+              });
+              if (!okGo) return;
+              try {
+                localStorage.setItem(OPS_DRILL_KEY, JSON.stringify({ at: new Date().toISOString(), result: 'done' }));
+                render();
+                toast('نتیجهٔ drill امروز ثبت شد — ماه بعد دوباره', 'success');
+              } catch {
+                toast('ثبت drill ممکن نشد — حافظهٔ مرورگر در دسترس نیست', 'error');
+              }
+            })
+          }, 'ثبت drill امروز')
+        )
+      )
+    );
+  }
+
+  // ۴-۵ — راهنمای درون‌برنامه‌ای: بخش تاشو؛ متن تعبیه‌شدهٔ همین فایل (بدون خواندن فایل بیرونی)
+  function guideSection() {
+    const body = el('div', { style: { display: 'none' } },
+      GUIDE_SECTIONS.map((s) => el('div', { style: { marginBottom: 'var(--sp-3)' } },
+        el('h4', { style: { margin: '0 0 var(--sp-1)' } }, s.title),
+        el('ul', { style: { margin: 0, paddingInlineStart: 'var(--sp-4)' } },
+          s.lines.map((ln) => el('li', { style: { margin: '2px 0', whiteSpace: 'normal' } }, ln))
+        )
+      ))
+    );
+    const toggleBtn = el('button', {
+      class: 'btn btn--ghost',
+      type: 'button',
+      onclick: () => {
+        const open = body.style.display !== 'none';
+        body.style.display = open ? 'none' : 'block';
+        toggleBtn.textContent = open ? 'باز کردن راهنما' : 'بستن راهنما';
+      }
+    }, 'باز کردن راهنما');
+    return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+      el('div', { class: 'card__head', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-2)' } },
+        el('h3', { style: { margin: 0 } }, 'راهنما — چکیدهٔ راهنمای ادمین'),
+        toggleBtn
+      ),
+      el('div', { class: 'card__body' },
+        el('p', { class: 'hint-text', style: { margin: '0 0 var(--sp-2)', whiteSpace: 'normal' } },
+          'همان راهنمای سادهٔ ادمین، داخل خود برنامه — برای روزی که فایل راهنما دسترس نیست. سامانهٔ دسکتاپ بدون اینترنت هم کامل کار می‌کند؛ فقط تبادل بین شعبه‌ها تا وصل شدن صبر می‌کند.'),
+        body
+      )
+    );
+  }
 
   async function reload() {
     // ف۶ + EXP-2 — پنل سلامت، گزارش رشد، وضعیت هم‌گامی و سهمیهٔ مرکز هم‌زمان گرفته می‌شوند؛
@@ -750,6 +1333,10 @@ export async function renderHealthPanel(outlet) {
     // EXP-2 — سهمیهٔ مرکز: خرابی/پاکت ناآشنا → null → کارت «دریافت نشد»؛ بقیهٔ پنل سالم می‌ماند
     const quota = quotaOut.status === 'fulfilled' ? unwrapQuota(quotaOut.value) : null;
     const quotaError = quotaOut.status === 'rejected' ? quotaOut.reason : null;
+
+    // موج ۴ (۴-۱) — مُهر پشتیبان از کلید موجود نمای پشتیبان‌گیری (cs.lastBackupAt)
+    let lastBackupAt = null;
+    try { lastBackupAt = localStorage.getItem('cs.lastBackupAt'); } catch { /* نرم */ }
 
     const dbOk = data?.db?.ok;
     const counts = data?.counts ?? {};
@@ -797,6 +1384,10 @@ export async function renderHealthPanel(outlet) {
         el('p', { class: 'hint-text' }, 'وضعیت زندهٔ سامانه و لینک کنترل‌پلین — از زمانِ واقعی آخرین همگام‌سازی و شمارنده‌های جدول‌ها؛ هر ۶۰ ثانیه خودکار بازخوانی می‌شود.')
       ),
 
+      rescueBarSection(), // ۴-۲ — نوار نجات سه‌دکمه‌ای (راه‌اندازی دوباره / پشتیبان فوری / zip)
+
+      oneGlanceSection(data, sync, quota, lastBackupAt), // ۴-۱ — پنج سیگنال §۴ نقد با اقدام
+
       el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
         el('div', { class: 'card__head' },
           el('h3', { style: { margin: 0 } }, 'سامانه'),
@@ -831,6 +1422,10 @@ export async function renderHealthPanel(outlet) {
       alertsSection(data?.alerts, data?.alerts_last_evaluated_at), // ف۵ (P0-3) — هشدارهای فعال زنده
 
       growthSection(growth, growthError),
+
+      drillSection(), // EXP-6 — ثبت drill عملیاتی ماهانه (پیوند ۳-۲ و چک‌لیست چاپی ADMIN-GUIDE)
+
+      guideSection(), // ۴-۵ — راهنمای درون‌برنامه‌ای (چکیدهٔ ADMIN-GUIDE — بدون خواندن فایل)
 
       el('p', { class: 'hint-text' },
         `آخرین بازخوانی: ${formatJalaliDateTime(data?.now)} — مرجع طراحی: طرح ارتقای بک‌اند §۳-۹ (CP-2/CP-3) و §۵-۳ (ف۴ بهداشت داده).`)

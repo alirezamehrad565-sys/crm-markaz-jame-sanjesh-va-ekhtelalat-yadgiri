@@ -30,6 +30,12 @@ const SUPERVISE_POLL_MS: u64 = 500;
 /// مهلت سالم‌شدن پس از هر ری‌استارت — همان سقف بوت نخست (۳۰ ثانیه)
 const RESTART_HEALTH_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// ENG-4 — چند شکست پیاپیِ پایش بازی‌ها «مرگ» شمرده می‌شود (پایش هر ۵ ثانیه)
+const GAMES_FAIL_THRESHOLD: u32 = 2;
+
+/// فاصلهٔ پایش زمان اجرا (مُهر ری‌استارت/سلامت بازی‌ها) — ۱۰ گام پولینگ = ۵ ثانیه
+const RUNTIME_POLL_EVERY: u32 = 10;
+
 /// گیرندهٔ رویدادهای نگهبان — lib.rs آن را به رخدادهای تائوری (engine:restarting و…) می‌بندد
 pub type EngineEventSink = Arc<dyn Fn(WatchdogEvent) + Send + Sync>;
 
@@ -100,7 +106,7 @@ pub fn free_port() -> u16 {
         .unwrap_or(DEFAULT_PORT)
 }
 
-/// یک پروب HTTP ساده با std — بدون وابستگی جدید؛ فقط سطر وضعیت پاسخ خوانده می‌شود
+/// پروب HTTP ساده با std — فقط سطر وضعیت پاسخ خوانده می‌شود (بدون وابستگی جدید)
 fn health_once(port: u16) -> bool {
     let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) else {
         return false;
@@ -114,6 +120,40 @@ fn health_once(port: u16) -> bool {
     let n = stream.read(&mut head).unwrap_or(0);
     let head = String::from_utf8_lossy(&head[..n]);
     head.starts_with("HTTP/1.1 200") || head.starts_with("HTTP/1.0 200")
+}
+
+/// ۴-۲ — آیا ری‌استارت از پنل در نوبت است؟ مُهر را endpoint عمومی سبک
+/// /api/system/restart-status می‌گوید (ناظر سشن اپ ندارد؛ یک بولین بی‌حساسیت).
+fn restart_scheduled_once(port: u16) -> bool {
+    let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) else {
+        return false;
+    };
+    stream.set_read_timeout(Some(Duration::from_secs(2))).ok().unwrap_or(());
+    let req = format!("GET /api/system/restart-status HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
+    if stream.write_all(req.as_bytes()).is_err() {
+        return false;
+    }
+    // سربرگ + اندکی از بدنه — بدنهٔ کوچک JSON در همان ۱ کیلوبایت اول می‌آید
+    let mut buf = [0u8; 1024];
+    let n = stream.read(&mut buf).unwrap_or(0);
+    let text = String::from_utf8_lossy(&buf[..n]);
+    text.contains("\"scheduled\":true")
+}
+
+/// ENG-4 — کشف پورت دوم (بازی‌ها) از کانفیگ capnp-text: دومین `address = "127.0.0.1:NNNN"`
+/// (نخستین مال اپ اصلی است). Rust هیچ دانشی از ساختار capnp ندارد — فقط جست‌وجوی رشته.
+fn games_port_from_config(config: &Path) -> Option<u16> {
+    let text = std::fs::read_to_string(config).ok()?;
+    let mut found = 0usize;
+    for segment in text.split("address = \"127.0.0.1:") {
+        if found == 0 {
+            found = 1;
+            continue; // تکهٔ پیش از نخستین address
+        }
+        let digits: String = segment.chars().take_while(|c| c.is_ascii_digit()).collect();
+        return digits.parse::<u16>().ok();
+    }
+    None
 }
 
 /// spawn یک نمونهٔ workerd — آرگومان‌های همان scripts/engine/engine.mjs: serve --experimental
@@ -164,7 +204,8 @@ impl LocalEngine {
         let child = spawn_workerd(&plan)?;
         let stop = Arc::new(AtomicBool::new(false));
         let child_slot = Arc::new(Mutex::new(Some(child)));
-        supervise(plan, port, Arc::clone(&stop), Arc::clone(&child_slot), on_event);
+        let games_port = games_port_from_config(&config);
+        supervise(plan, port, games_port, Arc::clone(&stop), Arc::clone(&child_slot), on_event);
         Ok(Self { port, stop, child_slot })
     }
 
@@ -186,20 +227,109 @@ impl LocalEngine {
 }
 
 /// به‌کارگیری thread نگهبان — detach می‌شود؛ فقط با پرچم stop تمام می‌شود (Drop یا خروج اپ)
+/// ENG-4: همان thread پایش مُهر ری‌استارت پنل و سلامت ورکر بازی‌ها را هم انجام می‌دهد
+/// (هر دو سرویس در یک پروسهٔ workerd هستند؛ ری‌استارتِ هر دو = spawn دوبارهٔ همان child).
 fn supervise(
     plan: SpawnPlan,
     port: u16,
+    games_port: Option<u16>,
     stop: Arc<AtomicBool>,
     child_slot: Arc<Mutex<Option<Child>>>,
     on_event: EngineEventSink,
 ) {
     std::thread::spawn(move || {
         let mut history: Vec<RestartRecord> = Vec::new();
+        // وضعیت پایش بازی‌ها — آینهٔ engine_watchdog.rs (بک‌آف ۲/۵/۱۰، کاپ ۳، پنجرهٔ ۱۰د)
+        let mut games_history: Vec<RestartRecord> = Vec::new();
+        let mut games_fails: u32 = 0;
+        let mut tick: u32 = 0;
         loop {
             if stop.load(Ordering::SeqCst) {
                 return;
             }
             std::thread::sleep(Duration::from_millis(SUPERVISE_POLL_MS));
+            tick += 1;
+            // پایش زمان اجرا هر ۵ ثانیه — ① مُهر ری‌استارت پنل (خروج عمدی، حساب کرش ندارد)
+            // ② سلامت ورکر بازی‌ها با اپ سالم (ENG-4)
+            if tick % RUNTIME_POLL_EVERY == 0 && !stop.load(Ordering::SeqCst) {
+                if restart_scheduled_once(port) {
+                    eprintln!("[desktop] ری‌استارت سامانه از پنل درخواست شد — خاموشی تمیز و بالا آوردن دوباره");
+                    on_event(WatchdogEvent::Restarting { attempt: 0, delay_ms: 0 });
+                    kill_child(&child_slot);
+                    history.clear();
+                    games_history.clear();
+                    games_fails = 0;
+                    match spawn_workerd(&plan) {
+                        Ok(new_child) => {
+                            if let Ok(mut guard) = child_slot.lock() {
+                                *guard = Some(new_child);
+                            }
+                            if wait_healthy_while(port, &stop, RESTART_HEALTH_TIMEOUT) {
+                                on_event(WatchdogEvent::Restored);
+                                eprintln!("[desktop] ری‌استارت پنل کامل شد — موتور دوباره روی پورت {port} آماده است");
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[desktop] spawn دوبارهٔ workerd پس از ری‌استارت پنل ناموفق بود: {e}");
+                        }
+                    }
+                    continue;
+                }
+                let main_ok = health_once(port);
+                let games_ok = games_port.map(health_once).unwrap_or(false);
+                if games_ok {
+                    if games_fails > 0 || !games_history.is_empty() {
+                        eprintln!("[desktop] ورکر بازی‌ها دوباره سالم است — شمارش نگهبان از صفر");
+                    }
+                    games_fails = 0;
+                    games_history.clear();
+                } else if main_ok {
+                    games_fails += 1;
+                    if games_fails >= GAMES_FAIL_THRESHOLD {
+                        games_fails = 0;
+                        let now = now_ms();
+                        let mut decision = next_action(&games_history, now, now);
+                        if let WatchdogAction::ResetWindow = decision {
+                            games_history.clear();
+                            decision = next_action(&games_history, now, now);
+                        }
+                        match decision {
+                            WatchdogAction::GiveUp => {
+                                eprintln!("[desktop] نگهبان بازی‌ها تسلیم شد — ۳ تلاش در پنجرهٔ ۱۰ دقیقه بی‌نتیجه؛ بخش اداری سالم مانده و فقط «تلاش دوبارهٔ» دستی اثر می‌کند");
+                                on_event(WatchdogEvent::Down { attempts: games_history.len() as u32 });
+                            }
+                            WatchdogAction::ResetWindow => {}
+                            WatchdogAction::Restart(delay_ms) => {
+                                let attempt = games_history.len() as u32 + 1;
+                                eprintln!("[desktop] ورکر بازی‌ها ناسالم است — ری‌استارت تا {} ثانیه دیگر (تلاش {})", delay_ms / 1000, attempt);
+                                on_event(WatchdogEvent::Restarting { attempt, delay_ms });
+                                games_history.push(RestartRecord { exit_at_ms: now, delay_ms });
+                                if sleep_interruptible(Duration::from_millis(delay_ms), &stop) {
+                                    kill_child(&child_slot);
+                                    match spawn_workerd(&plan) {
+                                        Ok(new_child) => {
+                                            if let Ok(mut guard) = child_slot.lock() {
+                                                *guard = Some(new_child);
+                                            }
+                                            if wait_healthy_while(port, &stop, RESTART_HEALTH_TIMEOUT) {
+                                                games_history.clear();
+                                                on_event(WatchdogEvent::Restored);
+                                                eprintln!("[desktop] ورکر بازی‌ها پس از ری‌استارت دوباره آماده است");
+                                            } else if !stop.load(Ordering::SeqCst) {
+                                                kill_child(&child_slot);
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!("[desktop] spawn دوبارهٔ workerd برای بازی‌ها ناموفق بود: {e}");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // اگر اپ اصلی هم ناسالم بود: مرگ کل پروسه است — شاخهٔ try_wait زیر همان را می‌گیرد
+            }
             // خروج فرزند را با قفل کوتاه ببین — پولینگ try_wait مسدودکننده نیست
             let exited = {
                 let mut guard = match child_slot.lock() {

@@ -23,6 +23,16 @@ import type { SendResult } from '@core/notify/types';
 export const BACKUP_FORMAT = 'gh-backup';
 export const BACKUP_FORMAT_VERSION = 1;
 
+/**
+ * آرشیو محلی «آخرین پشتیبان تأییدشده» — ۴-۲ (دریافت پشتیبان فوری) و مکمل لایهٔ ۱ بکاپ:
+ * همان پاکت gh-backup که نویسندهٔ موجود (buildExportStream) می‌سازد، پس از گذر از inspect
+ * (اعتبارسنجی قالب + هم‌خوانی اسکیما) در جدول settings نگه‌داری می‌شود تا:
+ *   ① دکمهٔ «دریافت پشتیبان فوری» بدون رفت‌وبرگشت بیرونی همیشه یک پشتیبان تأییدشده بدهد،
+ *   ② سقف چرخش = ۱ (آخرین) — کلید ثابت، جای‌گزینی هر شب.
+ * workerd به فایل‌سیستم دسترسی ندارد؛ تنها انبار درون‌دسترسِ اپ همین جدول settings است.
+ */
+export const BACKUP_ARCHIVE_KEY = 'backup:archive-latest';
+
 // جدول‌های سیستمی که هرگز در بازیابی دست نمی‌خورند
 // (d1_migrations = تاریخچهٔ مهاجرت‌های خود D1 — بازگرداندن نسخهٔ کهنه‌اش
 // باعث می‌شود «d1 migrations apply» بعدی سعی کند مهاجرت‌های اعمال‌شده را دوباره بزند)
@@ -135,6 +145,22 @@ export interface ScheduledAutoSendOutcome {
   report?: SendReport;
 }
 
+/** نتیجهٔ آرشیو محلی آخرین پشتیبان — ۴-۲ */
+export interface ArchiveOutcome {
+  archived: boolean;
+  bytes: number;
+  reason?: 'too_large' | 'schema_incompatible' | 'error';
+}
+
+/** پشتیبان آرشیوشدهٔ محلی — برای دانلود (۴-۲) */
+export interface ArchivedBackup {
+  bytes: Uint8Array;
+  createdAt: string | null;
+  appVersion: string | null;
+  tables: number | null;
+  totalRows: number | null;
+}
+
 function assertIdent(name: string): string {
   if (!IDENT_RE.test(name)) throw new ValidationError(`نام جدول غیرمجاز است: ${name.slice(0, 40)}`);
   return name;
@@ -183,6 +209,10 @@ export interface BackupService {
   saveDelivery(actor: { staffId: string }, input: unknown): Promise<DeliveryConfig>;
   sendBackup(actor: { staffId: string }, input: unknown): Promise<SendReport>;
   runScheduledAutoSend(): Promise<ScheduledAutoSendOutcome>;
+  /** آرشیو محلی آخرین پشتیبان تأییدشده در settings (۴-۲) — best-effort */
+  archiveLatest(actor: { staffId: string }): Promise<ArchiveOutcome>;
+  /** خواندن آرشیو محلی — هیچ پشتیبانی تأییدشده‌ای نیست = null */
+  getArchivedBackup(): Promise<ArchivedBackup | null>;
 }
 
 export function createBackupService(deps: {
@@ -843,6 +873,87 @@ export function createBackupService(deps: {
       }
       logger.info('backup.auto.done', { sent: report.sent, failed: report.failed });
       return { skipped: false, report };
+    },
+
+    // ─── آرشیو محلی آخرین پشتیبان تأییدشده (۴-۲) ───
+
+    async archiveLatest(actor): Promise<ArchiveOutcome> {
+      try {
+        // نویسندهٔ همان پاکت gh-backup (buildExportStream) — بدون فایل‌های پیوستی تا سبک بماند
+        const { bytes } = await collectExport(false);
+        if (bytes.byteLength > BACKUP_MAX_SEND_BYTES) {
+          logger.warn('backup.archive.too_large', { bytes: bytes.byteLength });
+          return { archived: false, bytes: bytes.byteLength, reason: 'too_large' };
+        }
+        // «تأییدشده» = همان inspect پنل بازیابی (قالب + هم‌خوانی اسکیما) روی خودِ پاکت بگذرد
+        const envelope: unknown = JSON.parse(new TextDecoder().decode(bytes));
+        const summary = await service.inspect(envelope);
+        if (!summary.schemaCompatible) {
+          logger.warn('backup.archive.schema_incompatible', { problems: summary.problems });
+          return { archived: false, bytes: bytes.byteLength, reason: 'schema_incompatible' };
+        }
+        await writeSetting(
+          BACKUP_ARCHIVE_KEY,
+          {
+            format: BACKUP_FORMAT,
+            format_version: BACKUP_FORMAT_VERSION,
+            app_version: APP_VERSION,
+            created_at: new Date().toISOString(),
+            tables: summary.tableCount,
+            total_rows: summary.totalRows,
+            envelope
+          },
+          actor.staffId
+        );
+        try {
+          await audit.log({
+            actorId: actor.staffId,
+            action: 'backup.archive',
+            resourceType: 'backup',
+            resourceId: 'archive-latest',
+            changes: {
+              tables: { from: null, to: summary.tableCount },
+              rows: { from: null, to: summary.totalRows }
+            }
+          });
+        } catch (err) {
+          logger.warn('backup.archive.audit_failed', { err: err instanceof Error ? err.message : String(err) });
+        }
+        logger.info('backup.archive.done', { tables: summary.tableCount, rows: summary.totalRows, bytes: bytes.byteLength });
+        return { archived: true, bytes: bytes.byteLength };
+      } catch (err) {
+        logger.warn('backup.archive.failed', { error: err instanceof Error ? err.message : String(err) });
+        return { archived: false, bytes: 0, reason: 'error' };
+      }
+    },
+
+    async getArchivedBackup(): Promise<ArchivedBackup | null> {
+      try {
+        const row = await db.queryOne<{ value: string }>('SELECT value FROM settings WHERE key = ?', [
+          BACKUP_ARCHIVE_KEY
+        ]);
+        if (!row?.value) return null;
+        const parsed: unknown = JSON.parse(row.value);
+        if (!parsed || typeof parsed !== 'object') return null;
+        const meta = parsed as {
+          format?: string;
+          app_version?: string;
+          created_at?: string;
+          tables?: number;
+          total_rows?: number;
+          envelope?: unknown;
+        };
+        if (meta.format !== BACKUP_FORMAT || !meta.envelope) return null;
+        return {
+          bytes: new TextEncoder().encode(JSON.stringify(meta.envelope)),
+          createdAt: meta.created_at ?? null,
+          appVersion: meta.app_version ?? null,
+          tables: typeof meta.tables === 'number' ? meta.tables : null,
+          totalRows: typeof meta.total_rows === 'number' ? meta.total_rows : null
+        };
+      } catch {
+        return null;
+      }
     }
   };
 

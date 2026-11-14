@@ -41,6 +41,7 @@ import {
 import { APP_VERSION } from '../core/version.js';
 import type { WizardInput } from './types.js';
 import { verifyCloudNode, verifyCloudToken, type FetchLike, type VerifyResult } from './verify.js';
+import { CF_TOKEN_GUIDE_URL, mapCloudflareTokenError } from './token-errors.js';
 
 export interface SetupWizardDeps {
   doc: CsDocument;
@@ -71,6 +72,16 @@ export interface SetupWizardHandle {
   adminSetup(username: string, password: string, fullName: string): Promise<{ ok: boolean; message: string }>;
   /** v1.26.0 — افزودن کارمند واقعی از اسلاید کارکنان (همان POST /api/staff) */
   addStaff(fullName: string, username: string, role: string, password: string): Promise<{ ok: boolean; message: string }>;
+  /**
+   * موج ۲ (۲-۳) — دکمهٔ «تلاش دوباره» استقرار مرکز: همان گام ۱ با همان ورودی‌ها دوباره اجرا
+   * می‌شود. پشتوانه: استقرار از ۱.۲۶.۲ per-file idempotent است (جدول پیگیری __deploy_applied
+   * سمت پوسته؛ مایگریشن‌های اعمال‌شده دوباره اعمال نمی‌شوند) — اجرای دوباره بی‌خطر است.
+   * آرگومان اختیاری فقط برای آزمون/تماس برنامه‌ای است — توکن را در ورودی همان گام می‌نشیند
+   * (عین تایپ کاربر)؛ کلیک دکمه بدون آرگومان از خود ورودی می‌خواند.
+   */
+  retryDeploy(tokenArg?: string): Promise<{ ok: boolean; message: string }>;
+  /** موج ۲ (۲-۳) — نمای «تلاش دوباره» پس از شکست استقرار (برای آزمون) */
+  deployRetryVisible(): boolean;
   refs: WizardRefs;
   step(): number;
 }
@@ -155,6 +166,25 @@ export function openSetupWizard(deps: SetupWizardDeps): SetupWizardHandle {
     refs.statusArea.style.display = 'none';
   }
 
+  /**
+   * موج ۲ (۲-۳) — اجرای گام «ساخت سرور مرکزی» — هم دکمهٔ اصلی و هم «تلاش دوباره» همین را
+   * می‌زنند: شکست → پیام (با نگاشت ۲-۴ اگر خطای توکن کلادفلر باشد) + نمایان‌شدن تلاش دوباره؛
+   * موفقیت → پنهان‌شدن تلاش دوباره + پیام ادامه. هیچ مسیری throw نمی‌کند.
+   */
+  async function runDeployStep(): Promise<{ ok: boolean; message: string }> {
+    hideStatus();
+    const r = await handle.deployCentral(deployTokenInput.value, refs.inputs.cf_account.value);
+    if (r.ok) {
+      hideDeployRetry();
+      showStatus('✓ ' + r.message + ' — حالا مدیر مرکز را بسازید (گام ۲).');
+    } else {
+      const guide = mapCloudflareTokenError({ message: r.message });
+      showStatus('✕ ' + (guide ? guide.text : r.message));
+      showDeployRetry();
+    }
+    return r;
+  }
+
   async function testNode(url: string, code: string, key: string): Promise<{ ok: boolean; message: string }> {
     const r = await verifyCloudNode(deps.fetchImpl, { workerUrl: url, nodeCode: code, nodeKey: key });
     nodeResult = r;
@@ -165,7 +195,14 @@ export function openSetupWizard(deps: SetupWizardDeps): SetupWizardHandle {
   async function testToken(token: string): Promise<{ ok: boolean; message: string }> {
     const r = await verifyCloudToken(deps.fetchImpl, { token });
     tokenResult = r;
-    showStatus((r.ok ? '✓ ' : '✕ ') + r.message);
+    if (r.ok) {
+      showStatus('✓ ' + r.message);
+    } else {
+      // موج ۲ (۲-۴) — نگاشت خطای توکن به راهنمای عملی: چه اتفاقی افتاد + لینک مستقیم صفحهٔ
+      // توکن‌های کلادفلر + محدوده‌های لازم. خطای ناآشنا (شبکه و…) نگاشت نمی‌گیرد — پیام اصلی.
+      const guide = mapCloudflareTokenError({ message: r.message, outcome: r.outcome });
+      showStatus('✕ ' + (guide ? `${r.message} — ${guide.text}` : r.message));
+    }
     return { ok: r.ok, message: r.message };
   }
 
@@ -318,6 +355,26 @@ export function openSetupWizard(deps: SetupWizardDeps): SetupWizardHandle {
   const deployPassInput = csInput(deps.doc, 'password', 'رمز مدیر مرکز — حداقل ۶ نویسه', 'cloud-input');
   const deployNameInput = csInput(deps.doc, 'text', 'نام کامل مدیر مرکز', 'cloud-input');
 
+  // موج ۲ (۲-۳) — بلوک «تلاش دوباره» استقرار: پس از شکست قطعهٔ i/n نمایان می‌شود؛
+  // پشتوانهٔ بی‌خطر بودن: استقرار per-file idempotent از ۱.۲۶.۲ (جدول پیگیری __deploy_applied
+  // سمت پوسته — مایگریشن‌های اعمال‌شده در اجرای دوباره شناسایی و رد می‌شوند؛ از همان قطعه ادامه).
+  const deployRetryBox = csEl(deps.doc, 'div', 'cloud-retry-block');
+  deployRetryBox.appendChild(
+    csEl(
+      deps.doc,
+      'p',
+      'cloud-text cloud-retry-hint',
+      'اجرای دوباره بی‌خطر است — گام‌های انجام‌شدهٔ استقرار (از جمله مایگریشن‌های اعمال‌شده) شناسایی و رد می‌شوند و از همان قطعهٔ ناتمام ادامه می‌یابد.'
+    )
+  );
+  deployRetryBox.style.display = 'none';
+  const showDeployRetry = (): void => {
+    deployRetryBox.style.display = 'block';
+  };
+  const hideDeployRetry = (): void => {
+    deployRetryBox.style.display = 'none';
+  };
+
   const deploy = csEl(deps.doc, 'div', 'cloud-slide');
   deploy.appendChild(
     csEl(
@@ -332,18 +389,29 @@ export function openSetupWizard(deps: SetupWizardDeps): SetupWizardHandle {
   deploy.appendChild(csEl(deps.doc, 'label', 'cloud-label', 'شناسهٔ حساب (اگر چند حساب دارید)'));
   deploy.appendChild(refs.inputs.cf_account);
   deploy.appendChild(
-    csButton(deps.doc, '۱) ساخت سرور مرکزی', 'cloud-btn cloud-btn-primary', () => {
-      void (async () => {
-        hideStatus();
-        const r = await handle.deployCentral(deployTokenInput.value, refs.inputs.cf_account.value);
-        if (r.ok) {
-          showStatus('✓ ' + r.message + ' — حالا مدیر مرکز را بسازید (گام ۲).');
-        } else {
-          showStatus('✕ ' + r.message);
-        }
-      })();
+    // موج ۲ (۲-۴) — لینک مستقیم صفحهٔ توکن‌های کلادفلر (همیشه در دسترس، نه فقط در خطا)
+    csButton(deps.doc, 'صفحهٔ توکن‌های کلادفلر', 'cloud-btn cloud-btn-secondary', () => {
+      try {
+        const g = globalThis as { open?: (url: string) => unknown };
+        g.open?.(CF_TOKEN_GUIDE_URL);
+      } catch {
+        /* نرم — لینک در متن راهنما هم هست */
+      }
     })
   );
+  deploy.appendChild(
+    csButton(deps.doc, '۱) ساخت سرور مرکزی', 'cloud-btn cloud-btn-primary', () => {
+      void runDeployStep();
+    })
+  );
+
+  // موج ۲ (۲-۳) — دکمهٔ «تلاش دوباره» + متن اطمینان؛ فقط پس از شکست نمایان است
+  deployRetryBox.appendChild(
+    csButton(deps.doc, 'تلاش دوباره', 'cloud-btn cloud-btn-primary cloud-retry-btn', () => {
+      void runDeployStep();
+    })
+  );
+  deploy.appendChild(deployRetryBox);
 
   deploy.appendChild(csEl(deps.doc, 'label', 'cloud-label', 'نام کاربری مدیر مرکز'));
   deploy.appendChild(deployUserInput);
@@ -584,6 +652,14 @@ export function openSetupWizard(deps: SetupWizardDeps): SetupWizardHandle {
       }
       const msg = (res.body?.message as string) ?? `HTTP ${res.status}`;
       return { ok: false, message: `ساخت کارمند رد شد: ${msg}` };
+    },
+    async retryDeploy(tokenArg?: string) {
+      // موج ۲ (۲-۳) — همان مسیر دکمهٔ «تلاش دوباره» (عین کلیک — آزمون‌پذیر)
+      if (tokenArg !== undefined) deployTokenInput.value = tokenArg;
+      return runDeployStep();
+    },
+    deployRetryVisible() {
+      return deployRetryBox.style.display !== 'none';
     },
     refs,
     step: () => step
