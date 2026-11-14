@@ -18,20 +18,27 @@ import { createServer } from 'node:net';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { buildEngineConfig } from './config.mjs';
+import { startAdapterEngine } from './adapter/server.mjs';
 import { REPO_ROOT, d1SqlitePath } from './engine-paths.mjs';
 import { applyMigrations } from './apply-migrations.mjs';
 import { ensureDbIntegrityOrRestore, takeSnapshot, writeAuditRow } from './db-snapshot.mjs';
 import { pushHumanEventDb, drainQueueToLog, rotateFileIfNeeded } from './human-log.mjs';
 import { nextAction as gamesNextAction, GAMES_FAIL_THRESHOLD, restartMessage } from './games-watchdog.mjs';
 
-function parseArgs(argv) {
-  const out = { port: 8787, gamesPort: 8788, dataDir: path.join(REPO_ROOT, 'engine-data'), seed: false };
+export function parseArgs(argv) {
+  // v1.27.۰۳ — --engine adapter: اجرای ورکرها در همین فرایند Node (بدون workerd — رفع کرش
+  // init ویندوزی workerd#4668/#7581). پیش‌فرض workerd (حالت توسعه، رفتار قبلی دست‌نخورده).
+  const out = { port: 8787, gamesPort: 8788, dataDir: path.join(REPO_ROOT, 'engine-data'), seed: false, engine: 'workerd' };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--port') out.port = Number(argv[++i]);
     else if (a === '--games-port') out.gamesPort = Number(argv[++i]);
     else if (a === '--data-dir') out.dataDir = path.resolve(argv[++i]);
     else if (a === '--seed') out.seed = true;
+    else if (a === '--engine') out.engine = argv[++i];
+    else if (a === '--main-bundle') out.mainBundle = path.resolve(argv[++i]);
+    else if (a === '--games-bundle') out.gamesBundle = path.resolve(argv[++i]);
+    else if (a === '--public-dir') out.publicDir = path.resolve(argv[++i]);
     else if (a === '--help') out.help = true;
   }
   return out;
@@ -183,7 +190,7 @@ function findWorkerdBinary() {
 async function waitHealth(url, child, timeoutMs = 30_000) {
   const started = Date.now();
   for (;;) {
-    if (child.exitCode !== null || child.signalCode !== null) {
+    if (child && (child.exitCode !== null || child.signalCode !== null)) {
       throw new Error(`workerd پیش از آماده شدن خارج شد (کد ${child.exitCode}) — لاگ: dataDir/workerd.log`);
     }
     try {
@@ -253,29 +260,49 @@ export async function runEngine(opts) {
   }
   drainQueueToLog(walDb, eventsLogPath);
 
-  // ۳) secret مشترک + کانفیگ capnp-text — پورت‌ها همین‌جا قطعی می‌شوند: اگر پورت خواسته‌شده
-  // اشغال بود، خودکار پورت آزاد می‌گیریم و فقط در لاگ خبر می‌دهیم (پیش‌فرض‌های CLI ثابت می‌مانند)
+  // ۳) secret مشترک + کانفیگ — پورت‌ها همین‌جا قطعی می‌شوند: اگر پورت خواسته‌شده
+  // اشغال بود، خودکار پورت آزاد می‌گیریم و فقط در لاگ خبر می‌دهیم (پیش‌فرض‌های CLI ثابت می‌مانند).
+  // حالت adapter: به‌جای capnp، قرارداد JSON با پوستهٔ Rust نوشته می‌شود (engine-config.json
+  // با پورت‌های نهایی — Rust منتظر همین فایل است و از آن پورت واقعی را می‌خواند).
   const port = await resolvePort(opts.port);
   const gamesPort = await resolvePort(opts.gamesPort, 'بازی‌ها');
   const authSecret = resolveAuthSecret(dbPath);
-  const configText = await buildEngineConfig({ port, gamesPort, dataDir: opts.dataDir, authSecret });
-  const configPath = path.join(opts.dataDir, 'workerd.capnp');
-  writeFileSync(configPath, configText);
+  const isAdapter = opts.engine === 'adapter';
+  if (isAdapter) {
+    const configOut = path.join(opts.dataDir, 'engine-config.json');
+    writeFileSync(configOut, JSON.stringify({
+      engine: 'adapter',
+      port,
+      gamesPort,
+      dbPath,
+      mainBundle: opts.mainBundle ?? path.join(REPO_ROOT, 'worker/bundle.js'),
+      gamesBundle: opts.gamesBundle ?? path.join(REPO_ROOT, 'worker/games-bundle.js'),
+      publicDir: opts.publicDir ?? path.join(REPO_ROOT, 'public'),
+      authSecret,
+      pid: process.pid,
+      written_at: new Date().toISOString(),
+    }, null, 2) + '\n');
+  } else {
+    const configText = await buildEngineConfig({ port, gamesPort, dataDir: opts.dataDir, authSecret });
+    writeFileSync(path.join(opts.dataDir, 'workerd.capnp'), configText);
+  }
 
-  // ۴) spawn workerd — لاگ در dataDir/workerd.log (چرخش ۵MB×۷ پیش از باز شدن پیوست انجام شد)
-  const bin = findWorkerdBinary();
-  const logFd = openSync(workerdLogPath, 'a');
+  // ۴) موتور — حالت workerd: سایدکار کرانفایل؛ حالت adapter: سرورهای HTTP در همین فرایند
+  // (بدون هیچ باینری بومی خارجی — ریشهٔ کرش ویندوزی حذف شد)
   const base = `http://127.0.0.1:${port}`;
   const gamesBase = `http://127.0.0.1:${gamesPort}`;
 
   // کودک جاری بین بوت/ری‌استارت‌های ناظر جابه‌جا می‌شود؛ هندل‌های خروج هر بار دوباره بسته می‌شوند
   let child = null;
+  let handle = null;
   let shuttingDown = false;
   let restartingNow = false;
-
+  // حالت workerd — باینری/فایل لاگ یک‌بار در شاخهٔ workerd باز می‌شوند؛ spawnChild در سطح
+  // runEngine تعریف می‌شود چون respawnWorkerd (ناظر ری‌استارت) هم به آن ارجاع دارد
+  let bin = null;
+  let logFd = null;
   const spawnChild = () =>
-    spawn(bin, ['serve', '--experimental', `--import-path=${path.join(REPO_ROOT, 'node_modules/workerd')}`, configPath], { stdio: ['ignore', logFd, logFd] });
-
+    spawn(bin, ['serve', '--experimental', `--import-path=${path.join(REPO_ROOT, 'node_modules/workerd')}`, path.join(opts.dataDir, 'workerd.capnp')], { stdio: ['ignore', logFd, logFd] });
   const attachChildHandlers = () => {
     child.once('exit', (code, signal) => {
       // حین ری‌استارت درخواستی/ناظرِ بازی‌ها، خروج کودکِ کهنه طبیعی است — فرایند موتور نمی‌میرد
@@ -284,9 +311,36 @@ export async function runEngine(opts) {
       process.exit(1);
     });
   };
-  child = spawnChild();
-  attachChildHandlers();
-  console.log(`[engine] workerd بالا آمد — اپ: ${base} | بازی‌ها: ${gamesBase} | داده: ${opts.dataDir}`);
+
+  const startAdapter = async () => {
+    handle = await startAdapterEngine({
+      port,
+      gamesPort,
+      dbPath,
+      mainBundle: opts.mainBundle ?? path.join(REPO_ROOT, 'worker/bundle.js'),
+      gamesBundle: opts.gamesBundle ?? path.join(REPO_ROOT, 'worker/games-bundle.js'),
+      publicDir: opts.publicDir ?? path.join(REPO_ROOT, 'public'),
+      bindings: { authSecret, publicBaseUrl: base, gamesHealthUrl: `${gamesBase}/health` },
+      log: (m) => console.log(`[engine] ${m}`),
+    });
+  };
+  const stopAdapter = async () => {
+    if (!handle) return;
+    const h = handle;
+    handle = null;
+    await h.close();
+  };
+
+  if (isAdapter) {
+    await startAdapter();
+    console.log(`[engine] موتور درون‌پروسه‌ای بالا آمد — اپ: ${base} | بازی‌ها: ${gamesBase} | داده: ${opts.dataDir}`);
+  } else {
+    bin = findWorkerdBinary();
+    logFd = openSync(workerdLogPath, 'a');
+    child = spawnChild();
+    attachChildHandlers();
+    console.log(`[engine] workerd بالا آمد — اپ: ${base} | بازی‌ها: ${gamesBase} | داده: ${opts.dataDir}`);
+  }
 
   // ۵) خاموشی تمیز — هندل‌های SIGTERM/SIGINT و خروج ناگهانی همین‌جا و «قبل از انتظار سلامت»
   // ثبت می‌شوند تا سیگنال حین بوت هم به «خاموشی تمیز + چک‌پوینت WAL» برسد، نه خروج خام node
@@ -296,6 +350,14 @@ export async function runEngine(opts) {
     shuttingDown = true;
     console.log(`[engine] خاموشی تمیز (${signal})...`);
     if (nightlyCheckpoint) clearInterval(nightlyCheckpoint);
+    if (isAdapter) {
+      void (async () => {
+        await stopAdapter();
+        checkpointWal(walDb, 'خاموشی تمیز');
+        process.exit(0);
+      })();
+      return;
+    }
     child.kill('SIGTERM');
     const forceTimer = setTimeout(() => child.kill('SIGKILL'), 5000);
     child.once('exit', () => {
@@ -310,7 +372,8 @@ export async function runEngine(opts) {
 
   // ۶) انتظار سلامت — اگر بوت شکست خورد و هندل DB موجود است، اول چک‌پوینت WAL بی‌خطر
   try {
-    await waitHealth(`${base}/health`, child);
+    if (isAdapter) await waitHealth(`${base}/health`, null);
+    else await waitHealth(`${base}/health`, child);
   } catch (err) {
     checkpointWal(walDb, 'پس از شکست بوت');
     throw err;
@@ -375,6 +438,43 @@ export async function runEngine(opts) {
   let gamesGiveUp = false;
   let lastSyncKey = null;
 
+  /**
+   * v1.27.۰۳ — ری‌استارت تمیز موتور درون‌پروسه‌ای (حالت adapter): بستن سرورها + چک‌پوینت WAL
+   * + راه‌اندازی دوباره روی همان پورت‌ها. معادل همان قرارداد respawnWorkerd — مُهر تا موفقیت می‌ماند.
+   */
+  const respawnAdapter = async (reason) => {
+    if (restartingNow || shuttingDown) return;
+    restartingNow = true;
+    try {
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          console.log(`[engine] ری‌استارت تمیز موتور درون‌پروسه‌ای (${reason}) — تلاش ${attempt}/3...`);
+          await stopAdapter();
+          checkpointWal(walDb, `پیش از ری‌استارت (${reason})`);
+          await startAdapter();
+          await waitHealth(`${base}/health`, null);
+          try {
+            walDb.prepare('DELETE FROM settings WHERE key = ?').run(RESTART_MARKER_KEY);
+          } catch { /* بهترین‌تلاش */ }
+          pushHumanEventDb(walDb, 'راه‌اندازی دوبارهٔ سامانه از پنل', 'engine');
+          drainQueueToLog(walDb, eventsLogPath);
+          console.log('[engine] ری‌استارت کامل شد — /health سبز است');
+          return;
+        } catch (err) {
+          console.error(`[engine] تلاش ${attempt}/3 ری‌استارت ناکام ماند: ${err?.message ?? err}`);
+          if (attempt < 3) await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+      console.error('[engine] هر ۳ تلاش ری‌استارت ناکام بود — برای مداخلهٔ نگهبان بیرونی (Rust) خارج می‌شود');
+      try { writeAuditRow(walDb, 'system.respawn_failed', 'system', 'engine', { reason }); } catch { /* بهترین‌تلاش */ }
+      process.exit(1);
+    } finally {
+      restartingNow = false;
+    }
+  };
+  /** مسیر ری‌استارت برحسب حالت موتور */
+  const respawnEngine = isAdapter ? respawnAdapter : respawnWorkerd;
+
   /** رویداد انسانی تغییر وضعیت سینک — فقط روی گذار، نه هر پایش (۴-۳) */
   const syncEventMaybe = () => {
     try {
@@ -406,7 +506,7 @@ export async function runEngine(opts) {
         try {
           writeAuditRow(walDb, 'system.restart', 'system', 'engine', { via: 'panel' });
         } catch { /* بهترین‌تلاش */ }
-        await respawnWorkerd('درخواست پنل');
+        await respawnEngine('درخواست پنل');
         return;
       }
     } catch { /* خواندن مُهر ناموفق — پایش بازی‌ها ادامه می‌یابد */ }
@@ -473,7 +573,7 @@ export async function runEngine(opts) {
           } catch { /* بهترین‌تلاش */ }
           await new Promise((r) => setTimeout(r, decision.delay_ms));
           if (shuttingDown || restartingNow) return;
-          await respawnWorkerd(`نگهبان بازی‌ها — تلاش ${attempt}`);
+          await respawnEngine(`نگهبان بازی‌ها — تلاش ${attempt}`);
           return;
         }
       }
@@ -502,7 +602,8 @@ export async function runEngine(opts) {
     drainQueueToLog(walDb, eventsLogPath);
   }, NIGHTLY_CHECKPOINT_MS);
   nightlyCheckpoint.unref();
-  return child;
+  // حالت adapter: هندل بستن سرورها برمی‌گردد؛ حالت workerd: کودک سایدکار (رفتار قبلی)
+  return isAdapter ? { close: stopAdapter } : child;
 }
 
 // اجرای مستقیم

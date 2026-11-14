@@ -1,12 +1,19 @@
-//! engine.rs — موتور محلی (سایدکار workerd) — فاز ۲ خط rust + نگهبان ری‌استارت (رفع ENG-1)
-//! طراحی: docs/rust/design.md §۲ و §۴ — بایند فقط loopback، پورت ۸۷۸۷ پیش‌فرض
-//! (اگر اشغال بود پورت آزاد بعدی)، سلامت /health، خاموشی با Drop.
+//! engine.rs — موتور محلی دسکتاپ (سایدکار node + engine-server) — فاز ۲ خط rust + نگهبان
+//! ری‌استارت (رفع ENG-1). طراحی: docs/rust/design.md §۲ و §۴ — بایند فقط loopback، پورت
+//! ۸۷۸۷ پیش‌فرض (اگر اشغال بود موتور خودش پورت آزاد می‌گیرد و در engine-config.json می‌نویسد).
 //!
-//! نگهبان (engine_watchdog.rs): اگر workerd در میانهٔ کار بمیرد، با انتظار ۲/۵/۱۰ ثانیه
-//! دوباره بالا می‌آید؛ سقف ۳ تلاش در پنجرهٔ ۱۰ دقیقه‌ای؛ پس از سقف رویداد engine:down و
-//! وضعیت صریح Failed در lib.rs — فقط «تلاش دوبارهٔ» دستی (engine_retry) اثر می‌کند.
-//! خاموشی عمدی (خروج اپ / Drop) با پرچم stop شناخته می‌شود و هرگز ری‌استارت نمی‌خواهد —
-//! کد خروج ملاک نیست، پرچم ملاک است.
+//! v1.27.۰۳ — تعویض موتور: workerd (باینری بومی خارجی) از مسیر دسکتاپ حذف شد. دو گزارش
+//! نصاب واقعی + issueهای باز upstream (workerd#4668/#7581 — access violation 0xc0000005 هنگام
+//! init روی برخی ویندوزها، حتی با redist تازه) نشان داد این وابستگی بومی قابل‌اعتماد نیست.
+//! حالا پوسته، `engine-server.js` (باندل engine.mjs با موتور درون‌پروسه‌ای — scripts/engine/)
+//! را با سایدکار node اجرا می‌کند: همان باندل‌های ورکر (Hono + D1) روی shim کامل D1 از
+//! node:sqlite روی همان فایل SQLite — دادهٔ کاربر بدون تبدیل حفظ می‌شود. خواندن پورت‌های
+//! واقعی از dataDir/engine-config.json (قرارداد با engine.mjs — پورت‌های resolve‌شده نهایی).
+//!
+//! نگهبان (engine_watchdog.rs): اگر موتور در میانهٔ کار بمیرد، با انتظار ۲/۵/۱۰ ثانیه دوباره
+//! بالا می‌آید؛ سقف ۳ تلاش در پنجرهٔ ۱۰ دقیقه‌ای؛ پس از سقف رویداد engine:down و وضعیت صریح
+//! Failed در lib.rs. خاموشی عمدی (خروج اپ / Drop) با پرچم stop شناخته می‌شود و هرگز
+//! ری‌استارت نمی‌خواهد — کد خروج ملاک نیست، پرچم ملاک است.
 //!
 //! کامپایل در CI (cargo در محیط سندباکس جاری نیست) — گیت ساختاری desktop:check
 //! هم‌گامی فایل‌ها را می‌گیرد و کامپایل واقعی در خط CI با Rust stable انجام می‌شود.
@@ -24,6 +31,10 @@ use crate::engine_watchdog::{next_action, now_ms, RestartRecord, WatchdogAction,
 /// پورت پیش‌فرض موتور محلی — همان devUrl پوسته (tauri.conf.json)
 const DEFAULT_PORT: u16 = 8787;
 
+/// پورت پیش‌فرض سرویس بازی‌ها — به موتور «درخواست» می‌شود؛ اگر اشغال بود موتور پورت دیگری
+/// می‌گیرد و نهایی را در engine-config.json می‌نویسد (Rust همان را می‌خواند).
+const DEFAULT_GAMES_PORT: u16 = 8788;
+
 /// گام پولینگ نگهبان برای دیدن خروج فرزند — هم‌تراز با گام انتظار سلامت
 const SUPERVISE_POLL_MS: u64 = 500;
 
@@ -39,11 +50,21 @@ const RUNTIME_POLL_EVERY: u32 = 10;
 /// گیرندهٔ رویدادهای نگهبان — lib.rs آن را به رخدادهای تائوری (engine:restarting و…) می‌بندد
 pub type EngineEventSink = Arc<dyn Fn(WatchdogEvent) + Send + Sync>;
 
-/// پارامترهای spawn — هم برای بوت نخست هم برای هر ری‌استارت نگهبان (همان باینری/کانفیگ/لاگ)
-struct SpawnPlan {
-    binary: PathBuf,
-    config: PathBuf,
-    log_dir: PathBuf,
+/// v1.27.۰۳ — همهٔ مسیرهای لازم برای spawn موتور adapter (بوت نخست و هر ری‌استارت نگهبان)
+#[derive(Clone)]
+pub struct EngineLaunch {
+    /// سایدکار node (نصاب) یا node سیستم (توسعه)
+    pub node: PathBuf,
+    /// باندل موتور: engine-server.js در resources/engine
+    pub server_js: PathBuf,
+    /// data dir کاربر (کانفیگ/لاگ/دیتابیس این‌جاست)
+    pub data_dir: PathBuf,
+    /// باندل ورکر اصلی (Hono) — در نصاب: resources/engine/central/worker.js
+    pub main_bundle: PathBuf,
+    /// باندل ورکر بازی‌ها — در نصاب: resources/engine/central/games.js
+    pub games_bundle: PathBuf,
+    /// پوشهٔ public برای سرویس استاتیک
+    pub public_dir: PathBuf,
 }
 
 pub struct LocalEngine {
@@ -54,48 +75,39 @@ pub struct LocalEngine {
     child_slot: Arc<Mutex<Option<Child>>>,
 }
 
-/// پیدا کردن باینری workerd: متغیر محیطی ← کنار برنامه (سایدکار نصاب: ریشه و binaries/) ←
-/// مسیرهای توسعهٔ node_modules. rust-f13: در tauri dev فایل سایدکار پسوند هدف دارد
-/// (workerd-<target>) و در نصاب NSIS نام بدون پسوند هدف کنار exe (یا زیر binaries/) می‌نشیند.
-fn find_workerd_binary() -> Option<PathBuf> {
-    if let Ok(from_env) = std::env::var("CENTER_WORKERD_BIN") {
+/// پیدا کردن باینری node: متغیر محیطی ← کنار برنامه (سایدکار نصاب: ریشه و binaries/) ←
+/// مسیر توسعه «node» روی PATH. rust-f13 الگوی workerd: سایدکار در dev پسوند هدف دارد
+/// (node-<target>) و در نصاب NSIS نام بدون پسوند هدف کنار exe می‌نشیند.
+pub fn find_node_binary() -> PathBuf {
+    if let Ok(from_env) = std::env::var("CENTER_NODE_BIN") {
         let p = PathBuf::from(from_env);
         if p.is_file() {
-            return Some(p);
+            return p;
         }
     }
-    let exe_name = if cfg!(windows) { "workerd.exe" } else { "workerd" };
-    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
-    let mut candidates = vec![exe_dir.join(exe_name), exe_dir.join("binaries").join(exe_name)];
-    // سایدکار با نام هدف — شکل dev تائوری: binaries/workerd-<target>
-    if let Ok(entries) = std::fs::read_dir(exe_dir.join("binaries")) {
-        for entry in entries.flatten() {
-            let name = entry.file_name();
-            if name.to_string_lossy().starts_with("workerd") {
-                candidates.push(entry.path());
+    let exe_name = if cfg!(windows) { "node.exe" } else { "node" };
+    if let Ok(exe_dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.to_path_buf())) {
+        let mut candidates = vec![exe_dir.join(exe_name), exe_dir.join("binaries").join(exe_name)];
+        if let Ok(entries) = std::fs::read_dir(exe_dir.join("binaries")) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                if name.to_string_lossy().starts_with("node") {
+                    candidates.push(entry.path());
+                }
+            }
+        }
+        for c in &candidates {
+            if c.is_file() {
+                return c.clone();
             }
         }
     }
-    for c in &candidates {
-        if c.is_file() {
-            return Some(c.clone());
-        }
-    }
-    // مسیر توسعه — از ریشهٔ مخزن (دو سطح بالاتر از desktop/src-tauri)
-    let dev_root = exe_dir
-        .ancestors()
-        .find(|a| a.join("node_modules/workerd/bin").is_dir())
-        .map(|a| a.to_path_buf());
-    if let Some(root) = dev_root {
-        let dev = root.join("node_modules/workerd/bin/workerd");
-        if dev.is_file() {
-            return Some(dev);
-        }
-    }
-    None
+    // توسعه — node روی PATH (همان nodeی که npm/cargo-check با آن کار می‌کند)
+    PathBuf::from(exe_name)
 }
 
-/// پورت آزاد روی loopback: ۸۷۸۷ پیش‌فرض، وگرنه پورت گذرا از هستهٔ سیستم
+/// پورت آزاد روی loopback: ۸۷۸۷ پیش‌فرض، وگرنه پورت گذرا از هستهٔ سیستم.
+/// (فقط برای «درخواست» اولیه به موتور — پورت نهایی از engine-config.json خوانده می‌شود.)
 pub fn free_port() -> u16 {
     if TcpListener::bind(("127.0.0.1", DEFAULT_PORT)).is_ok() {
         return DEFAULT_PORT;
@@ -140,28 +152,48 @@ fn restart_scheduled_once(port: u16) -> bool {
     text.contains("\"scheduled\":true")
 }
 
-/// ENG-4 — کشف پورت دوم (بازی‌ها) از کانفیگ capnp-text: دومین `address = "127.0.0.1:NNNN"`
-/// (نخستین مال اپ اصلی است). Rust هیچ دانشی از ساختار capnp ندارد — فقط جست‌وجوی رشته.
-fn games_port_from_config(config: &Path) -> Option<u16> {
-    let text = std::fs::read_to_string(config).ok()?;
-    let mut found = 0usize;
-    for segment in text.split("address = \"127.0.0.1:") {
-        if found == 0 {
-            found = 1;
-            continue; // تکهٔ پیش از نخستین address
+/// v1.27.۰۳ — انتظار engine-config.json (قرارداد engine.mjs): موتور بعد از قطعی پورت‌ها
+/// (resolve اشغال ۸۷۸۷/۸۷۸۸) و پیش از سبزشدن /health این فایل را می‌نویسد. Rust پورت‌های
+/// نهایی را از همین‌جا می‌خواند — ریسک «پورت اشغال» از ریشه بسته شد (دیگر پورت پیش‌فرضِ
+/// فرضی پایش نمی‌شود). بازگشت: (port, games_port). ناموفق = None (تماس‌گیرنده پیام فارسی می‌سازد).
+fn wait_engine_config(data_dir: &Path, timeout: Duration) -> Option<(u16, u16)> {
+    let path = data_dir.join("engine-config.json");
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                let port = v.get("port").and_then(|p| p.as_u64()).map(|p| p as u16);
+                let games = v.get("gamesPort").and_then(|p| p.as_u64()).map(|p| p as u16);
+                if let (Some(port), Some(games)) = (port, games) {
+                    return Some((port, games));
+                }
+            }
         }
-        let digits: String = segment.chars().take_while(|c| c.is_ascii_digit()).collect();
-        return digits.parse::<u16>().ok();
+        std::thread::sleep(Duration::from_millis(SUPERVISE_POLL_MS));
     }
     None
 }
 
-/// spawn یک نمونهٔ workerd — آرگومان‌های همان scripts/engine/engine.mjs: serve --experimental
-/// (فلگ experimental برای سرویس D1)؛ stderr به data/workerd.log کنار کانفیگ می‌رود تا
-/// خرابی نصاب قابل تشخیص باشد؛ stdout بی‌صدا.
-fn spawn_workerd(plan: &SpawnPlan) -> Result<Child, String> {
-    let mut cmd = Command::new(&plan.binary);
-    cmd.args(["serve", "--experimental", plan.config.to_string_lossy().as_ref()])
+/// spawn یک نمونهٔ موتور adapter — node + engine-server.js با پرچم‌های مسیرها.
+/// stderr/stdout به data/engine.log می‌رود تا خرابی نصاب قابل تشخیص باشد؛ stdout خروجی عملیاتی
+/// engine.mjs هم در همان لاگ بنشیند (Rust از stdout چیزی نمی‌خواند).
+fn spawn_engine(plan: &EngineLaunch) -> Result<Child, String> {
+    let mut cmd = Command::new(&plan.node);
+    cmd.arg(&plan.server_js)
+        .arg("--engine")
+        .arg("adapter")
+        .arg("--data-dir")
+        .arg(&plan.data_dir)
+        .arg("--port")
+        .arg(DEFAULT_PORT.to_string())
+        .arg("--games-port")
+        .arg(DEFAULT_GAMES_PORT.to_string())
+        .arg("--main-bundle")
+        .arg(&plan.main_bundle)
+        .arg("--games-bundle")
+        .arg(&plan.games_bundle)
+        .arg("--public-dir")
+        .arg(&plan.public_dir)
         .stdout(Stdio::null());
     // ۱.۲۷.۰۲ — بدون پنجرهٔ کنسول کنار برنامه در ویندوز
     #[cfg(target_os = "windows")]
@@ -172,7 +204,7 @@ fn spawn_workerd(plan: &SpawnPlan) -> Result<Child, String> {
     match std::fs::File::options()
         .create(true)
         .append(true)
-        .open(plan.log_dir.join("workerd.log"))
+        .open(plan.data_dir.join("engine.log"))
     {
         Ok(f) => {
             cmd.stderr(Stdio::from(f));
@@ -182,35 +214,31 @@ fn spawn_workerd(plan: &SpawnPlan) -> Result<Child, String> {
         }
     }
     cmd.spawn()
-        .map_err(|e| format!("spawn workerd ناموفق: {e}"))
+        .map_err(|e| format!("spawn موتور محلی ناموفق: {e}"))
 }
 
 impl LocalEngine {
-    /// بالا آوردن workerd با کانفیگ capnp-text تولیدشده (scripts/engine/config.mjs)
-    /// مسیر کانفیگ با CENTER_ENGINE_CONFIG بازنویسی می‌شود؛ پیش‌فرض: کنار برنامه.
+    /// بالا آوردن موتور adapter با مشخصات کامل اجرا (EngineLaunch).
     /// on_event: گیرندهٔ رویدادهای نگهبان — در lib.rs به emit تائوری بسته می‌شود.
-    pub fn start(config_path: &Path, on_event: EngineEventSink) -> Result<Self, String> {
-        let binary = find_workerd_binary().ok_or_else(|| {
-            "باینری workerd پیدا نشد (CENTER_WORKERD_BIN یا کنار برنامه)".to_string()
-        })?;
-        let config = std::env::var("CENTER_ENGINE_CONFIG")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| config_path.to_path_buf());
-        if !config.is_file() {
-            return Err(format!("کانفیگ موتور محلی یافت نشد: {}", config.display()));
+    /// v1.27.۰۳: پس از spawn منتظر engine-config.json می‌ماند تا پورت نهایی معلوم شود.
+    pub fn start(launch: EngineLaunch, on_event: EngineEventSink) -> Result<Self, String> {
+        if !launch.server_js.is_file() {
+            return Err(format!("باندل موتور یافت نشد: {}", launch.server_js.display()));
         }
-        let port = free_port();
-        let plan = SpawnPlan {
-            binary,
-            config: config.clone(),
-            log_dir: config.parent().unwrap_or(Path::new(".")).to_path_buf(),
-        };
-        // خاموشی فقط با Drop ساختار LocalEngine (kill + wait) — std::process::Command
-        // متد kill_on_drop ندارد (API توکیو است) و نیازش هم نیست.
-        let child = spawn_workerd(&plan)?;
+        std::fs::create_dir_all(&launch.data_dir).map_err(|e| format!("ساخت data dir: {e}"))?;
+        let plan = launch;
+        let child = spawn_engine(&plan)?;
         let stop = Arc::new(AtomicBool::new(false));
         let child_slot = Arc::new(Mutex::new(Some(child)));
-        let games_port = games_port_from_config(&config);
+        // خاموشی فقط با Drop ساختار LocalEngine (kill + wait) — std::process::Command
+        // متد kill_on_drop ندارد (API توکیو است) و نیازش هم نیست.
+        let Some((port, games_port)) = wait_engine_config(&plan.data_dir, RESTART_HEALTH_TIMEOUT) else {
+            kill_child(&child_slot);
+            return Err(format!(
+                "موتور محلی ظرف {} ثانیه کانفیگ (engine-config.json) نداد — لاگ: dataDir/engine.log",
+                RESTART_HEALTH_TIMEOUT.as_secs()
+            ));
+        };
         supervise(plan, port, games_port, Arc::clone(&stop), Arc::clone(&child_slot), on_event);
         Ok(Self { port, stop, child_slot })
     }
@@ -233,12 +261,12 @@ impl LocalEngine {
 }
 
 /// به‌کارگیری thread نگهبان — detach می‌شود؛ فقط با پرچم stop تمام می‌شود (Drop یا خروج اپ)
-/// ENG-4: همان thread پایش مُهر ری‌استارت پنل و سلامت ورکر بازی‌ها را هم انجام می‌دهد
-/// (هر دو سرویس در یک پروسهٔ workerd هستند؛ ری‌استارتِ هر دو = spawn دوبارهٔ همان child).
+/// ENG-4: همان thread پایش مُهر ری‌استارت پنل و سلامت سرویس بازی‌ها را هم انجام می‌دهد
+/// (هر دو سرویس در یک پروسهٔ موتور هستند؛ ری‌استارتِ هر دو = spawn دوبارهٔ همان child).
 fn supervise(
-    plan: SpawnPlan,
+    plan: EngineLaunch,
     port: u16,
-    games_port: Option<u16>,
+    games_port: u16,
     stop: Arc<AtomicBool>,
     child_slot: Arc<Mutex<Option<Child>>>,
     on_event: EngineEventSink,
@@ -256,7 +284,7 @@ fn supervise(
             std::thread::sleep(Duration::from_millis(SUPERVISE_POLL_MS));
             tick += 1;
             // پایش زمان اجرا هر ۵ ثانیه — ① مُهر ری‌استارت پنل (خروج عمدی، حساب کرش ندارد)
-            // ② سلامت ورکر بازی‌ها با اپ سالم (ENG-4)
+            // ② سلامت سرویس بازی‌ها با اپ سالم (ENG-4)
             if tick % RUNTIME_POLL_EVERY == 0 && !stop.load(Ordering::SeqCst) {
                 if restart_scheduled_once(port) {
                     eprintln!("[desktop] ری‌استارت سامانه از پنل درخواست شد — خاموشی تمیز و بالا آوردن دوباره");
@@ -265,27 +293,35 @@ fn supervise(
                     history.clear();
                     games_history.clear();
                     games_fails = 0;
-                    match spawn_workerd(&plan) {
+                    match spawn_engine(&plan) {
                         Ok(new_child) => {
                             if let Ok(mut guard) = child_slot.lock() {
                                 *guard = Some(new_child);
                             }
-                            if wait_healthy_while(port, &stop, RESTART_HEALTH_TIMEOUT) {
+                            // پس از ری‌استارت پنل هم پورت نهایی ممکن است عوض شود — دوباره کانفیگ
+                            let Some((new_port, new_games)) =
+                                wait_engine_config(&plan.data_dir, RESTART_HEALTH_TIMEOUT)
+                            else {
+                                kill_child(&child_slot);
+                                eprintln!("[desktop] پس از ری‌استارت پنل کانفیگ نیامد — تلاش دوبارهٔ نگهبان");
+                                continue;
+                            };
+                            if wait_healthy_while(new_port, &stop, RESTART_HEALTH_TIMEOUT) {
                                 on_event(WatchdogEvent::Restored);
-                                eprintln!("[desktop] ری‌استارت پنل کامل شد — موتور دوباره روی پورت {port} آماده است");
+                                eprintln!("[desktop] ری‌استارت پنل کامل شد — موتور دوباره روی پورت {new_port} آماده است");
                             }
                         }
                         Err(e) => {
-                            eprintln!("[desktop] spawn دوبارهٔ workerd پس از ری‌استارت پنل ناموفق بود: {e}");
+                            eprintln!("[desktop] spawn دوبارهٔ موتور پس از ری‌استارت پنل ناموفق بود: {e}");
                         }
                     }
                     continue;
                 }
                 let main_ok = health_once(port);
-                let games_ok = games_port.map(health_once).unwrap_or(false);
+                let games_ok = health_once(games_port);
                 if games_ok {
                     if games_fails > 0 || !games_history.is_empty() {
-                        eprintln!("[desktop] ورکر بازی‌ها دوباره سالم است — شمارش نگهبان از صفر");
+                        eprintln!("[desktop] سرویس بازی‌ها دوباره سالم است — شمارش نگهبان از صفر");
                     }
                     games_fails = 0;
                     games_history.clear();
@@ -307,26 +343,32 @@ fn supervise(
                             WatchdogAction::ResetWindow => {}
                             WatchdogAction::Restart(delay_ms) => {
                                 let attempt = games_history.len() as u32 + 1;
-                                eprintln!("[desktop] ورکر بازی‌ها ناسالم است — ری‌استارت تا {} ثانیه دیگر (تلاش {})", delay_ms / 1000, attempt);
+                                eprintln!("[desktop] سرویس بازی‌ها ناسالم است — ری‌استارت تا {} ثانیه دیگر (تلاش {})", delay_ms / 1000, attempt);
                                 on_event(WatchdogEvent::Restarting { attempt, delay_ms });
                                 games_history.push(RestartRecord { exit_at_ms: now, delay_ms });
                                 if sleep_interruptible(Duration::from_millis(delay_ms), &stop) {
                                     kill_child(&child_slot);
-                                    match spawn_workerd(&plan) {
+                                    match spawn_engine(&plan) {
                                         Ok(new_child) => {
                                             if let Ok(mut guard) = child_slot.lock() {
                                                 *guard = Some(new_child);
                                             }
-                                            if wait_healthy_while(port, &stop, RESTART_HEALTH_TIMEOUT) {
+                                            let Some((new_port, _)) =
+                                                wait_engine_config(&plan.data_dir, RESTART_HEALTH_TIMEOUT)
+                                            else {
+                                                kill_child(&child_slot);
+                                                continue;
+                                            };
+                                            if wait_healthy_while(new_port, &stop, RESTART_HEALTH_TIMEOUT) {
                                                 games_history.clear();
                                                 on_event(WatchdogEvent::Restored);
-                                                eprintln!("[desktop] ورکر بازی‌ها پس از ری‌استارت دوباره آماده است");
+                                                eprintln!("[desktop] سرویس بازی‌ها پس از ری‌استارت دوباره آماده است");
                                             } else if !stop.load(Ordering::SeqCst) {
                                                 kill_child(&child_slot);
                                             }
                                         }
                                         Err(e) => {
-                                            eprintln!("[desktop] spawn دوبارهٔ workerd برای بازی‌ها ناموفق بود: {e}");
+                                            eprintln!("[desktop] spawn دوبارهٔ موتور برای بازی‌ها ناموفق بود: {e}");
                                         }
                                     }
                                 }
@@ -359,7 +401,7 @@ fn supervise(
 
 /// مرگ ناگهانی فرزند — تصمیم نگهبان و اجرای آن: انتظار backoff، spawn دوباره، ثبت بازرسی
 fn handle_unexpected_exit(
-    plan: &SpawnPlan,
+    plan: &EngineLaunch,
     port: u16,
     stop: &AtomicBool,
     child_slot: &Mutex<Option<Child>>,
@@ -383,15 +425,19 @@ fn handle_unexpected_exit(
             if !sleep_interruptible(Duration::from_millis(delay_ms), stop) {
                 return; // خاموشی عمدی در میانهٔ انتظار — کودک مرده و کاری نمانده
             }
-            match spawn_workerd(plan) {
+            match spawn_engine(plan) {
                 Ok(new_child) => {
                     if let Ok(mut guard) = child_slot.lock() {
                         *guard = Some(new_child);
                     }
-                    if wait_healthy_while(port, stop, RESTART_HEALTH_TIMEOUT) {
+                    // پورت نهایی ممکن است پس از spawn دوباره عوض شود — از کانفیگ می‌خوانیم
+                    let new_port = wait_engine_config(&plan.data_dir, RESTART_HEALTH_TIMEOUT)
+                        .map(|(p, _)| p)
+                        .unwrap_or(port);
+                    if wait_healthy_while(new_port, stop, RESTART_HEALTH_TIMEOUT) {
                         // رشتهٔ خرابی بسته شد — شمارش تلاش‌ها برای حادثهٔ بعدی از صفر
                         *history = Vec::new();
-                        eprintln!("[desktop] موتور پس از ری‌استارت دوباره روی پورت {port} آماده است");
+                        eprintln!("[desktop] موتور پس از ری‌استارت دوباره روی پورت {new_port} آماده است");
                         on_event(WatchdogEvent::Restored);
                     } else if stop.load(Ordering::SeqCst) {
                         return; // خاموشی در حین انتظار سلامت — Drop خودش کودک را می‌بندد
@@ -404,7 +450,7 @@ fn handle_unexpected_exit(
                 }
                 Err(e) => {
                     history.push(RestartRecord { exit_at_ms: now_ms(), delay_ms });
-                    eprintln!("[desktop] spawn دوبارهٔ workerd ناموفق بود — تلاش {attempt} ثبت شد: {e}");
+                    eprintln!("[desktop] spawn دوبارهٔ موتور ناموفق بود — تلاش {attempt} ثبت شد: {e}");
                 }
             }
         }
@@ -458,7 +504,7 @@ fn kill_child(child_slot: &Mutex<Option<Child>>) {
     }
 }
 
-/// خاموشی تمیز با Drop — خروج اپ یا drop شدن وضعیت، workerd را می‌بندد
+/// خاموشی تمیز با Drop — خروج اپ یا drop شدن وضعیت، موتور را می‌بندد
 /// (kill + wait — معادل kill_on_drop توکیو، با std). پرچم stop هم thread نگهبان را
 /// در ≤ یک گام پولینگ تمام می‌کند؛ پس از خاموشی عمدی هیچ ری‌استارتی رخ نمی‌دهد.
 impl Drop for LocalEngine {

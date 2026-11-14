@@ -5,10 +5,7 @@
 // آیکن واقعی (سربرگ ICO)، capabilities، اسکریپت‌های npm، gitignore بیلد.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import {
-  PINNED_WORKERD_VERSION, TARGET_NPM_PACKAGE, sidecarFileName,
-} from './desktop/config.mjs';
-import { DATA_DIR_TOKEN, PUBLIC_DIR_TOKEN, AUTH_SECRET_TOKEN } from './engine/config.mjs';
+import { PINNED_WORKERD_VERSION } from './desktop/config.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const T = path.join(ROOT, 'desktop', 'src-tauri');
@@ -108,27 +105,28 @@ gitignore.includes('desktop/src-tauri/target/')
   ? ok('gitignore بیلد Rust را پوشش می‌دهد')
   : bad('.gitignore شامل desktop/src-tauri/target/ نیست');
 
-// ⑦ rust-f13 — رانتایم نصاب: سایدکار workerd پین‌شده + قالب capnp توکن‌دار + بوت lib.rs
+// ⑦ rust-f13 + v1.27.۰۳ — رانتایم نصاب: سایدکار node پین‌شده + باندل engine-server + بوت lib.rs
+// (workerd فقط موتور «توسعه» است — در نصاب دیگر هیچ نقشی ندارد)
 try {
   const installedW = JSON.parse(readFileSync(path.join(ROOT, 'node_modules', 'workerd', 'package.json'), 'utf8')).version;
   installedW === PINNED_WORKERD_VERSION
-    ? ok(`pin سایدکار هم‌گام با workerd مخزن (${PINNED_WORKERD_VERSION})`)
-    : bad(`pin سایدکار (${PINNED_WORKERD_VERSION}) با workerd مخزن (${installedW}) ناهم‌گام است`);
-  sidecarFileName('x86_64-pc-windows-msvc') === 'workerd-x86_64-pc-windows-msvc.exe'
-    ? ok('قرارداد نام سایدکار externalBin درست است')
-    : bad('قرارداد نام سایدکار نادرست است');
-  TARGET_NPM_PACKAGE['x86_64-pc-windows-msvc']
-    ? ok('نگاشت هدف ویندوز به بستهٔ npm رسمی workerd ثبت است')
-    : bad('نگاشت هدف ویندوز به بستهٔ npm نیست');
+    ? ok(`pin موتور توسعهٔ workerd هم‌گام است (${PINNED_WORKERD_VERSION})`)
+    : bad(`pin workerd (${PINNED_WORKERD_VERSION}) با مخزن (${installedW}) ناهم‌گام است — npm i`);
+  conf?.bundle?.externalBin?.includes('binaries/node')
+    ? ok('externalBin = binaries/node در tauri.conf (موتور دسکتاپ = سایدکار node)')
+    : bad('externalBin باید binaries/node باشد');
+  conf?.bundle?.externalBin?.includes('binaries/workerd')
+    ? bad('externalBin هنوز workerd دارد — موتور دسکتاپ باید node باشد')
+    : ok('externalBin فاقد workerd است — باینری بومی کرش‌ساز از نصاب حذف شد');
+  conf?.bundle?.resources?.includes('resources/engine/**/*')
+    ? ok('resources = resources/engine/**/* در tauri.conf')
+    : bad('resources = resources/engine/**/* در tauri.conf نیست');
   mustExist(path.join(ROOT, 'scripts', 'desktop', 'build-installer-runtime.mjs'), 'build-installer-runtime.mjs');
   const libSrc = readFileSync(path.join(T, 'src', 'lib.rs'), 'utf8');
-  for (const t of [DATA_DIR_TOKEN, PUBLIC_DIR_TOKEN, AUTH_SECRET_TOKEN]) {
-    libSrc.includes(t) ? ok(`توکن ${t} در lib.rs جایگزین می‌شود`) : bad(`توکن ${t} در lib.rs نیست`);
+  for (const t of ['EngineLaunch', 'd1-seed', 'CENTER_ENGINE_REPO', 'engine-server.js']) {
+    libSrc.includes(t) ? ok(`lib.rs: ${t} سیم است`) : bad(`lib.rs: ${t} غایب است`);
   }
-  libSrc.includes('d1-seed') && libSrc.includes('auth-secret.txt')
-    ? ok('بوت نخست: کپی d1-seed + راز per-install در lib.rs سیم است')
-    : bad('بوت نخست (d1-seed/راز per-install) در lib.rs کامل نیست');
-  // v1.26.0 — وضعیت صریح بوت + فرمان‌های صفحهٔ بوت
+  libSrc.includes('engine.log') ? ok('lib.rs: دم لاگ engine.log سیم است') : bad('lib.rs: نام لاگ engine.log نیست');
   for (const t of ['desktop_status', 'engine_retry', 'open_data_dir']) {
     libSrc.includes(t) ? ok(`فرمان ${t} در lib.rs سیم است`) : bad(`فرمان ${t} در lib.rs نیست`);
   }
@@ -139,15 +137,9 @@ try {
     ? ok('cf_deploy.rs (ماژول کلادفلر) موجود است')
     : bad('cf_deploy.rs نیست — ماژول کلادفلر v1.26.0 غایب است');
   const engineSrc = readFileSync(path.join(T, 'src', 'engine.rs'), 'utf8');
-  engineSrc.includes('binaries') && engineSrc.includes('workerd.log')
-    ? ok('engine.rs: کاندیداهای سایدکار + لاگ stderr سایدکار سیم است')
-    : bad('engine.rs: کاندیداهای سایدکار یا لاگ سایدکار کامل نیست');
-  conf?.bundle?.externalBin?.includes('binaries/workerd')
-    ? ok('externalBin = binaries/workerd در tauri.conf')
-    : bad('externalBin = binaries/workerd در tauri.conf نیست');
-  conf?.bundle?.resources?.includes('resources/engine/**/*')
-    ? ok('resources = resources/engine/**/* در tauri.conf')
-    : bad('resources = resources/engine/**/* در tauri.conf نیست');
+  for (const t of ['find_node_binary', 'engine-config.json', 'engine.log', '--engine', 'adapter', 'CREATE_NO_WINDOW']) {
+    engineSrc.includes(t) ? ok(`engine.rs: ${t} سیم است`) : bad(`engine.rs: ${t} غایب است`);
+  }
   const wf = readFileSync(path.join(ROOT, '.github', 'workflows', 'desktop-build.yml'), 'utf8');
   wf.includes('build-installer-runtime.mjs')
     ? ok('گردش‌کار CI گام مونتاژ رانتایم نصاب را دارد')
@@ -159,59 +151,69 @@ try {
   bad(`بخش rust-f13 خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }
 
-// ⑧ v1.27.01 — escape مسیر ویندوزی در capnp — رگرسیون نصاب واقعی (Parse error 6:46):
-// مسیرهای %APPDATA% بک‌اسلش دارند و داخل رشتهٔ capnp باید دبل شوند وگرنه workerd پارس نمی‌کند.
+// ⑧ v1.27.۰۳ — موتور درون‌پروسه‌ای (adapter): shim D1 روی node:sqlite + سرورهای HTTP در همین
+// فرایند + قرارداد engine-config.json — ریشهٔ کرش ویندوزی (باینری بومی workerd) از مسیر حذف شد.
 try {
-  const libSrc2 = readFileSync(path.join(T, 'src', 'lib.rs'), 'utf8');
-  for (const t of [DATA_DIR_TOKEN, PUBLIC_DIR_TOKEN]) {
-    libSrc2.includes(`"${t}", &escape_capnp_path(`) || libSrc2.includes(`"${t}",\n            &escape_capnp_path(`)
-      ? ok(`جایگزینی ${t} از escape_capnp_path می‌گذرد`)
-      : bad(`${t} بدون escape_capnp_path جایگزین می‌شود — Parse error ویندوز برمی‌گردد`);
+  mustExist(path.join(ROOT, 'scripts/engine/adapter/server.mjs'), 'adapter/server.mjs');
+  mustExist(path.join(ROOT, 'scripts/engine/adapter/d1.mjs'), 'adapter/d1.mjs');
+  const d1 = readFileSync(path.join(ROOT, 'scripts', 'engine', 'adapter', 'd1.mjs'), 'utf8');
+  for (const t of ["from 'node:sqlite'", 'DatabaseSync', 'prepare(', 'batch(', 'exec(', 'last_row_id']) {
+    d1.includes(t) ? ok(`d1.mjs: ${t.replace("'node:sqlite'", 'node:sqlite')} سیم است`) : bad(`d1.mjs: ${t} غایب است`);
   }
-  const { buildInstallerCapnpTemplate } = await import('./engine/config.mjs');
-  const winDir = 'C:\\Users\\alire\\AppData\\Roaming\\ir.sdt144.center.desktop';
-  const esc = (p) => p.replace(/\\/g, '\\\\');
-  const cfg = (await buildInstallerCapnpTemplate({ publicDir: './public' }))
-    .replaceAll(DATA_DIR_TOKEN, esc(winDir))
-    .replaceAll(PUBLIC_DIR_TOKEN, esc(winDir + '/public'))
-    .replaceAll(AUTH_SECRET_TOKEN, 'a'.repeat(64));
-  // escapeهای مجاز capnp: \\ \" \' \n \r \t \b \f \0 \xHH \uHHHH — اول جفت‌های سالم `\\` مصرف
-  // می‌شوند (وگرنه بک‌اسلش دوم جفت با نویسهٔ بعدش تطبیق می‌خورد)؛ هر `\` باقی‌مانده که بعدش
-  // نویسهٔ مجاز نباشد (مثل \U از مسیر ویندوزی C:\Users) = Parse error — خطای نصاب واقعی ۱.۲۷.۰.
-  const noPairs = cfg.replaceAll('\\\\', '');
-  const stray = noPairs.match(/\\(?![\\"'nrtbf0ux])/);
-  const d1line = cfg.split('\n').find((l) => l.includes('d1:storage'));
-  !stray && d1line && d1line.includes('C:\\\\Users')
-    ? ok('شبیه‌سازی جایگذاری ویندوزی capnp: همهٔ بک‌اسلش‌ها دبل‌اند — d1:storage سالم')
-    : bad('شبیه‌سازی capnp ویندوزی ناموفق — بک‌اسلش خام در خروجی یا خط d1 نایست');
+  const srv = readFileSync(path.join(ROOT, 'scripts', 'engine', 'adapter', 'server.mjs'), 'utf8');
+  for (const t of ['startAdapterEngine', 'serveStatic', 'createServer', "listen(p, '127.0.0.1'", 'CLINIC_NAME', 'AUTH_SECRET']) {
+    srv.includes(t) ? ok(`server.mjs: ${t} سیم است`) : bad(`server.mjs: ${t} غایب است`);
+  }
+  const em = readFileSync(path.join(ROOT, 'scripts', 'engine', 'engine.mjs'), 'utf8');
+  for (const t of ["--engine adapter", 'engine-config.json', 'respawnAdapter', 'startAdapterEngine']) {
+    em.includes(t) ? ok(`engine.mjs: ${t} سیم است`) : bad(`engine.mjs: ${t} غایب است`);
+  }
+  const am = readFileSync(path.join(ROOT, 'scripts', 'engine', 'apply-migrations.mjs'), 'utf8');
+  am.includes('existsSync(dir)')
+    ? ok('apply-migrations: نبود پوشهٔ migrations در نصاب تحمل می‌شود (d1-seed از پیش مایگریت است)')
+    : bad('apply-migrations بدون پوشهٔ migrations می‌میرد — نصاب بوت نمی‌شود');
+  mustExist(path.join(ROOT, 'scripts/engine/engine-server.js'), 'باندل engine-server.js');
+  const es = readFileSync(path.join(ROOT, 'scripts', 'engine', 'engine-server.js'), 'utf8');
+  es.includes('startAdapterEngine') && es.includes('engine-config.json')
+    ? ok('باندل engine-server موتور adapter را در خود دارد')
+    : bad('باندل engine-server کهنه است — build:engine-server را دوباره بزنید');
+  const smoke = readFileSync(path.join(ROOT, 'scripts', 'engine', 'engine-smoke.mjs'), 'utf8');
+  smoke.includes('SMOKE_ENGINE') && smoke.includes('--engine')
+    ? ok('engine-smoke: گیت دوهاته workerd/adapter سیم است')
+    : bad('engine-smoke: حالت adapter سیم نیست');
 } catch (e) {
-  bad(`گیت capnp-ویندوزی خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+  bad(`گیت adapter خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }
 
-// ⑨ v1.27.02 — خودترمیمی نصاب ویندوز: VC++ Redistributable داخل بسته + تشخیص هدفمند کرش بومی
-// (issueهای upstream cloudflare/workerd#4668/#7581 — access violation 0xc0000005 هنگام init)
+// ⑨ v1.27.۰۳ — نصاب: سایدکار node از nodejs.org رسمی + حذف قطعی redist و هوک VC++
+// (گزارش کارفرما: redist سیستمش 14.52 تازه‌تر از نسخهٔ بسته بود — دانگرید رد شد؛ کرش هم
+// باقی بود → راه‌حل درست حذف وابستگی بومی بود نه تعویض redist)
 try {
-  mustExist(path.join(T, 'installer-hooks.nsh'), 'هوک‌های نصاب installer-hooks.nsh');
-  const hooks = readFileSync(path.join(T, 'installer-hooks.nsh'), 'utf8');
-  hooks.includes('NSIS_HOOK_POSTINSTALL') && hooks.includes('vc_redist.x64.exe') && hooks.includes('runas')
-    ? ok('هوک POSTINSTALL: نصب VC++ Redistributable با ارتقای مجوز سیم است')
-    : bad('هوک نصاب VC++ Redistributable کامل نیست (POSTINSTALL/vc_redist/runas)');
-  conf?.bundle?.resources?.includes('resources/redist/*')
-    ? ok('resources/redist/* در tauri.conf ثبت است')
-    : bad('resources/redist/* در tauri.conf نیست');
-  conf?.bundle?.windows?.nsis?.installerHooks === 'installer-hooks.nsh'
-    ? ok('installerHooks در nsis سیم است')
-    : bad('installerHooks در tauri.conf/nsis نیست');
   const bir = readFileSync(path.join(ROOT, 'scripts', 'desktop', 'build-installer-runtime.mjs'), 'utf8');
-  bir.includes('aka.ms/vs/17/release/vc_redist.x64.exe') && bir.includes('redist,')
-    ? ok('دانلود و ثبت redist در مونتاژ رانتایم (هدف ویندوز) سیم است')
-    : bad('دانلود/ثبت VC++ Redistributable در build-installer-runtime نیست');
+  bir.includes('nodejs.org/dist/') && bir.includes('PINNED_NODE_VERSION') && bir.includes('nodeSidecarFileName')
+    ? ok('دانلود سایدکار node از dist رسمی در مونتاژ رانتایم سیم است')
+    : bad('دانلود سایدکار node در build-installer-runtime نیست');
+  bir.includes('engine-server.js') && bir.includes("bundlesDir")
+    ? ok('کپی engine-server + باندل‌های ورکر در مونتاژ رانتایم سیم است')
+    : bad('کپی engine-server/باندل‌ها در مونتاژ رانتایم نیست');
+  bir.includes('vc_redist') || bir.includes('aka.ms')
+    ? bad('مونتاژ رانتایم هنوز redist دارد — باید حذف شده باشد')
+    : ok('redist از مونتاژ رانتایم حذف شده است');
+  existsSync(path.join(T, 'installer-hooks.nsh'))
+    ? bad('installer-hooks.nsh باید حذف شده باشد (نصب VC++ دیگر معنا ندارد)')
+    : ok('هوک VC++ حذف شده است');
+  conf?.bundle?.windows?.nsis?.installerHooks
+    ? bad('tauri.conf هنوز installerHooks دارد')
+    : ok('tauri.conf فاقد installerHooks است');
+  conf?.bundle?.resources?.some((r) => r.includes('redist'))
+    ? bad('tauri.conf هنوز resources/redist دارد')
+    : ok('resources/redist از tauri.conf حذف شده است');
   const libSrc3 = readFileSync(path.join(T, 'src', 'lib.rs'), 'utf8');
-  libSrc3.includes('boot_failure_message') && libSrc3.includes('structured exception')
-    ? ok('تشخیص هدفمند کرش بومی (boot_failure_message) در lib.rs سیم است')
-    : bad('تشخیص هدفمند کرش بومی در lib.rs نیست');
+  libSrc3.includes('boot_failure_message') && libSrc3.includes('engine.log')
+    ? ok('پیام شکست بوت راهنمای engine.log می‌دهد')
+    : bad('پیام شکست بوت به engine.log ارجاع ندارد');
 } catch (e) {
-  bad(`گیت خودترمیمی نصاب خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+  bad(`گیت سایدکار node خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }
 
 lines.push(failed ? '❌ گیت ساختار دسکتاپ قرمز است' : '✅ گیت ساختار دسکتاپ سبز است');

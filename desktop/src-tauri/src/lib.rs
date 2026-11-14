@@ -63,37 +63,13 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// راز per-install (۶۴ hex = ۳۲ بایت) بدون وابستهٔ جدید — هر فراخوانی RandomState کلید
-/// تصادفی OS می‌گیرد؛ چهار خروجی SipHash پشت‌سرهم. فقط loopback و هرگز خارج دستگاه نمی‌رود.
-fn random_hex_secret() -> String {
-    use std::collections::hash_map::RandomState;
-    use std::hash::{BuildHasher, Hasher};
-    let mut out = String::with_capacity(64);
-    for i in 0..4u64 {
-        let mut h = RandomState::new().build_hasher();
-        h.write_u64(i);
-        out.push_str(&format!("{:016x}", h.finish()));
-    }
-    out
-}
+/// راز per-install — v1.27.۰۳ حذف شد: موتور adapter راز نشست را مثل حالت توسعه در جدول
+/// settings (کلید sys_auth_secret) می‌سازد و نگه می‌دارد — یک منبع حقیقت برای هر دو مسیر.
 
-/// راز نشست در data dir (auth-secret.txt) — بوت نخست ساخته می‌شود و تا پاک‌سازی ثابت است
-fn read_or_create_auth_secret(data_dir: &Path) -> Result<String, String> {
-    let p = data_dir.join("auth-secret.txt");
-    if let Ok(existing) = std::fs::read_to_string(&p) {
-        let t = existing.trim().to_string();
-        if t.len() >= 32 {
-            return Ok(t);
-        }
-    }
-    let secret = random_hex_secret();
-    std::fs::write(&p, &secret).map_err(|e| format!("نوشتن راز ناموفق: {e}"))?;
-    Ok(secret)
-}
-
-/// v1.26.0 — دم لاگ workerd برای گزارش خرابی (حداکثر ۴KB انتهای فایل)
+/// v1.26.0 — دم لاگ موتور برای گزارش خرابی (حداکثر ۴KB انتهای فایل)
+/// v1.27.۰۳ — نام فایل engine.log (سایدکار node؛ کارفرما قبلاً workerd.log داشت)
 fn read_log_tail(data_dir: &Path) -> String {
-    let p = data_dir.join("workerd.log");
+    let p = data_dir.join("engine.log");
     let Ok(meta) = std::fs::metadata(&p) else { return String::new() };
     let take = meta.len().min(4096) as u64;
     let Ok(mut f) = std::fs::File::open(&p) else { return String::new() };
@@ -108,82 +84,80 @@ fn read_log_tail(data_dir: &Path) -> String {
     String::from_utf8_lossy(&buf).trim().to_string()
 }
 
-/// rust-f13 — بوت موتور از رانتایم نصاب: قالب capnp توکن‌دار در resources/engine، جایگزینی
-/// سه توکن (data dir / public داخل نصاب / راز per-install)، کپی d1-seed در بوت نخست، و
-/// start سایدکار. Rust هیچ دانشی از ساختار capnp ندارد — فقط جایگزینی رشته و نوشتن فایل.
+/// rust-f13 + v1.27.۰۳ — بوت موتور دسکتاپ: مسیرهای سایدکار node و باندل engine-server از
+/// resources/engine، کپی d1-seed در بوت نخست، و اجرای EngineLaunch. هیچ capnp و هیچ قالب
+/// متنی دیگر در کار نیست — قرارداد موتور: CLI + dataDir/engine-config.json (پورت‌های نهایی).
+/// توسعه: با CENTER_ENGINE_REPO مسیرهای مخزن مصرف می‌شود (باندل‌ها از worker/ و public از ریشه).
 fn boot_engine(app: &tauri::AppHandle) -> Result<engine::LocalEngine, String> {
     // رویدادهای نگهبان موتور → رخداد تائوری برای پوسته (engine:restarting / engine:restored /
     // engine:down) — نسل بوت برای نادیده گرفتن نوشتهٔ کهنه پس از engine_retry ضبط می‌شود
     let gen = app.state::<AppState>().generation.load(Ordering::SeqCst);
     let sink = engine_event_sink(app.clone(), gen);
-    // توسعه: با CENTER_ENGINE_CONFIG کانفیگ از پیش تولیدشده (engine.mjs) مصرف می‌شود
-    if let Ok(dev_config) = std::env::var("CENTER_ENGINE_CONFIG") {
-        let p = std::path::PathBuf::from(dev_config);
-        if p.is_file() {
-            return engine::LocalEngine::start(&p, sink);
-        }
-    }
 
-    let engine_res = app
-        .path()
-        .resource_dir()
-        .map_err(|e| format!("resource_dir: {e}"))?
-        .join("resources")
-        .join("engine");
-    let template = engine_res.join("workerd.capnp.template");
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("app_data_dir: {e}"))?;
+    let (server_js, main_bundle, games_bundle, public_dir, data_dir) =
+        if let Ok(repo) = std::env::var("CENTER_ENGINE_REPO") {
+            // توسعه: همه‌چیز از مخزن — همان چیزی که engine-smoke در حالت adapter می‌سنجد
+            let repo = std::path::PathBuf::from(repo);
+            (
+                repo.join("scripts/engine/engine-server.js"),
+                repo.join("worker/bundle.js"),
+                repo.join("worker/games-bundle.js"),
+                repo.join("public"),
+                repo.join("engine-data"),
+            )
+        } else {
+            let engine_res = app
+                .path()
+                .resource_dir()
+                .map_err(|e| format!("resource_dir: {e}"))?
+                .join("resources")
+                .join("engine");
+            let data_dir = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("app_data_dir: {e}"))?;
+            (
+                engine_res.join("engine-server.js"),
+                engine_res.join("central/worker.js"),
+                engine_res.join("central/games.js"),
+                engine_res.join("public"),
+                data_dir,
+            )
+        };
     std::fs::create_dir_all(&data_dir).map_err(|e| format!("ساخت data dir: {e}"))?;
 
     // بوت نخست: دیتابیس مایگریت‌شدهٔ زمان بسته‌بندی (d1-seed) → data dir — در نصب کاربر
-    // Node وجود ندارد؛ مایگریشن باید از قبل اعمال شده باشد. اگر کاربر قبلاً دیتا دارد، دست نمی‌خوریم.
+    // مایگریشن از قبل اعمال شده (engine-server پوشهٔ migrations مخزن را ندارد و رد می‌کند).
+    // اگر کاربر قبلاً دیتا دارد، دست نمی‌خوریم. v1.27.۰۳: همین فایل را shim D1 (node:sqlite)
+    // باز می‌کند — مسیر قطعی d1/miniflare-D1DatabaseObject/<hash>.sqlite عین پشتهٔ workerd.
     if !data_dir.join("d1").exists() {
-        let seed = engine_res.join("d1-seed");
+        let seed = if std::env::var("CENTER_ENGINE_REPO").is_ok() {
+            std::env::var("CENTER_ENGINE_REPO")
+                .map(|r| std::path::PathBuf::from(r).join("desktop/src-tauri/resources/engine/d1-seed"))
+                .unwrap_or_default()
+        } else {
+            let engine_res = app
+                .path()
+                .resource_dir()
+                .map_err(|e| format!("resource_dir: {e}"))?
+                .join("resources")
+                .join("engine");
+            engine_res.join("d1-seed")
+        };
         if seed.is_dir() {
             copy_dir_recursive(&seed, &data_dir.join("d1"))
                 .map_err(|e| format!("کپی d1-seed: {e}"))?;
         }
     }
 
-    let secret = read_or_create_auth_secret(&data_dir)?;
-    let tmpl = std::fs::read_to_string(&template)
-        .map_err(|e| format!("خواندن قالب capnp ({template:?}): {e}"))?;
-    // ۱.۲۷.۰۱ — مسیرهای ویندوزی بک‌اسلش دارند و capnp داخل رشته فقط `\\` را escape می‌شناسد؛
-    // جایگذاری خام «C:\Users\...» خطای Parse error:6:46 در workerd می‌داد (گزارش نصاب واقعی).
-    let final_capnp = tmpl
-        .replace(
-            "__CENTER_DATA_DIR__",
-            &escape_capnp_path(&data_dir.to_string_lossy()),
-        )
-        .replace(
-            "__CENTER_PUBLIC_DIR__",
-            &escape_capnp_path(&engine_res.join("public").to_string_lossy()),
-        )
-        .replace("__CENTER_AUTH_SECRET__", &secret);
-    let capnp_path = data_dir.join("workerd.capnp");
-    std::fs::write(&capnp_path, final_capnp).map_err(|e| format!("نوشتن capnp: {e}"))?;
-    engine::LocalEngine::start(&capnp_path, sink)
+    let launch = engine::EngineLaunch { node: engine::find_node_binary(), server_js, main_bundle, games_bundle, public_dir, data_dir };
+    engine::LocalEngine::start(launch, sink)
 }
 
-/// escape یک مسیر برای درج امن در رشته‌های capnp — هر `\` به `\\` تبدیل می‌شود تا
-/// پارسر capnp آن را به بک‌اسلش واقعی برگرداند (دبل‌کوتیشن و بقیهٔ نویسه‌ها دست‌نخورده).
-fn escape_capnp_path(p: &str) -> String {
-    p.replace('\\', "\\\\")
-}
-
-/// پیام شکست بوت — اگر لاگ سایدکار کرش بومی را نشان دهد، تشخیص هدفمند ویندوز می‌آید:
-/// ناسازگاری شناخته‌شدهٔ upstream workerd (issue #4668/#7581 — access violation 0xc0000005)
-/// که طبق تجربهٔ جامعهٔ workerd معمولاً با آخرین Microsoft Visual C++ Redistributable حل می‌شود.
-/// نصاب NSIS همین redist را داخل بسته دارد و پس از نصب اجرا می‌کند (installer-hooks.nsh).
-fn boot_failure_message(log_tail: &str) -> String {
-    let t = log_tail.to_lowercase();
-    if t.contains("structured exception") || t.contains("access violation") || t.contains("0xc0000005") {
-        "موتور محلی با خطای بومی ویندوز (access violation) اجرا را قطع کرده است — ناسازگاری شناخته‌شدهٔ موتور workerd با برخی ویندوزها. راه‌حل معمول: آخرین «Microsoft Visual C++ Redistributable x64» را نصب کنید — فایل نصاب آن داخل پوشهٔ برنامه در resources\\redist\\vc_redist.x64.exe هست (نصاب جدید آن را خودکار اجرا می‌کند)؛ بعد ویندوز را یک‌بار راه‌اندازی مجدد کنید و «تلاش دوباره» را بزنید. دیتای شما دست‌نخورده است.".to_string()
-    } else {
-        "موتور محلی ظرف ۳۰ ثانیه سالم نشد — احتمالاً workerd بلافاصله اجرا را قطع کرده است.".to_string()
-    }
+/// پیام شکست بوت — v1.27.۰۳: موتور adapter است؛ کرش بومی workerd از مسیر دسکتاپ حذف شده و
+/// شکست بوت معمولاً یعنی کانفیگ ندادن در مهلت (ببین dataDir/engine.log) یا نبود فایل‌های رانتایم.
+fn boot_failure_message(_log_tail: &str) -> String {
+    "موتور محلی ظرف ۳۰ ثانیه آماده نشد — جزئیات در dataDir/engine.log است؛ «تلاش دوباره» را بزنید و اگر تکرار شد، گزارش خرابی را با دکمهٔ «پیام به سازنده» بفرستید. دیتای شما دست‌نخورده است.".to_string()
 }
 
 /// گیرندهٔ رویدادهای نگهبان موتور → رخداد تائوری برای پوسته + وضعیت صریح پس از تسلیم.
@@ -382,30 +356,16 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{boot_failure_message, escape_capnp_path};
-
-    /// ۱.۲۷.۰۱ — رگرسیون نصاب واقعی: مسیر خام ویندوزی در capnp «Parse error» می‌داد.
-    #[test]
-    fn escape_capnp_path_windows_backslashes() {
-        let raw = r"C:\Users\alire\AppData\Roaming\ir.sdt144.center.desktop";
-        let escaped = escape_capnp_path(raw);
-        assert_eq!(
-            escaped,
-            r"C:\\Users\\alire\\AppData\\Roaming\\ir.sdt144.center.desktop"
-        );
-        // مسیر لینوکسی بدون بک‌اسلش دست‌نخورده می‌ماند
-        assert_eq!(escape_capnp_path("/home/z/data"), "/home/z/data");
-        // دبل‌بک‌اسلشِ موجود نباید چهار تایی شود
-        assert_eq!(escape_capnp_path(r"C:\a\\b"), r"C:\\a\\\\b");
-    }
+    use super::boot_failure_message;
 
     /// ۱.۲۷.۰۲ — تشخیص هدفمند کرش بومی workerd در لاگ (گزارش نصاب واقعی)
+    /// ۱.۲۷.۰۳ — با حذف workerd از مسیر دسکتاپ، پیام شکست بوت عمومی و راهنماست
     #[test]
-    fn boot_failure_message_targets_native_crash() {
-        let crash = "*** Received structured exception #0xc0000005: access violation; stack: 7fff";
-        assert!(boot_failure_message(crash).contains("Visual C++ Redistributable"));
-        assert!(boot_failure_message("ACCESS VIOLATION somewhere").contains("access violation"));
-        assert!(boot_failure_message("").contains("۳۰ ثانیه"));
-        assert!(boot_failure_message("port already in use").contains("۳۰ ثانیه"));
+    fn boot_failure_message_is_actionable() {
+        let m = boot_failure_message("");
+        assert!(m.contains("۳۰ ثانیه"));
+        assert!(m.contains("تلاش دوباره"));
+        assert!(m.contains("engine.log"));
+        assert!(m.contains("دست‌نخورده"));
     }
 }

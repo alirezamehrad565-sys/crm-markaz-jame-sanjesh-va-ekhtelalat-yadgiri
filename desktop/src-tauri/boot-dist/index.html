@@ -113,7 +113,7 @@
         <button id="btnMail" class="warn">پیام به سازنده</button>
       </div>
       <div class="copied" id="copied">✓ گزارش خرابی کپی شد — در پیام خود بچسبانید.</div>
-      <div class="foot">اگر مشکل تکرار شد، خروجی <code>workerd.capnp</code> و <code>workerd.log</code> در پوشهٔ داده هم به گزارش اضافه کنید. جزئیات راهنما: <code>docs/ADMIN-GUIDE.fa.md</code></div>
+      <div class="foot">اگر مشکل تکرار شد، فایل <code>engine.log</code> و <code>engine-config.json</code> در پوشهٔ داده هم به گزارش اضافه کنید. جزئیات راهنما: <code>docs/ADMIN-GUIDE.fa.md</code></div>
     </div>
   </div>
 
@@ -136,7 +136,7 @@
     el('booting').style.display = 'none';
     el('failed').classList.add('show');
     el('errmsg').textContent = st.message || 'دلیل نامشخص — دم لاگ را ببینید.';
-    el('logtail').textContent = st.log_tail ? ('--- آخر workerd.log ---\n' + st.log_tail) : '(لاگ خالی است — workerd احتمالاً اصلاً اجرا نشده)';
+    el('logtail').textContent = st.log_tail ? ('--- آخر engine.log ---\n' + st.log_tail) : '(لاگ خالی است — موتور احتمالاً اصلاً اجرا نشده)';
   }
 
   function showBooting(text) {
@@ -186,7 +186,7 @@
       'گزارش خرابی راه‌اندازی — مرکز جامع نسخهٔ میز',
       'نسخه: ' + displayVersion(lastDiag.version),
       'خطا: ' + (lastDiag.message || '(ثبت نشده)'),
-      '--- آخر لاگ workerd ---',
+      '--- آخر لاگ موتور (engine.log) ---',
       lastDiag.log_tail || '(خالی)'
     ].join('\n');
   }

@@ -3,7 +3,7 @@
 // طراحی: docs/rust/design.md §۴ — مایگریشن خودکار در اولین اجرا با همان `migrations/` رسمی
 // (ترتیب عددی، ۱۱۱ فایل). idempotent: جدول `_migrations(version, applied_at)` ثبت می‌کند.
 // دیتابیس همان فایل SQLite پشتهٔ D1 موتور محلی است (چیدمان عین miniflare).
-import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -18,8 +18,12 @@ export function applyMigrations(dbPath) {
     applied_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
   const applied = new Set(db.prepare('SELECT version FROM _migrations').all().map((r) => r.version));
+  // v1.27.۰۳ — در نصاب دسکتاپ (باندل engine-server) پوشهٔ migrations مخزن وجود ندارد؛
+  // دیتابیس از d1-seed از پیش مایگریت‌شده می‌آید → بدون پوشه، مایگریشن صفر و ادامهٔ بوت
   const dir = path.join(REPO_ROOT, 'migrations');
-  const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
+  const files = existsSync(dir)
+    ? readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()
+    : [];
   let appliedCount = 0;
   for (const file of files) {
     if (applied.has(file)) continue;

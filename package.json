@@ -1,6 +1,6 @@
 {
   "name": "center-system",
-  "version": "1.27.2",
+  "version": "1.27.3",
   "private": true,
   "type": "module",
   "author": {
@@ -40,7 +40,10 @@
     "restore:drill": "node scripts/restore-drill.mjs",
     "backup:local": "node scripts/ops/export-local-backup.mjs",
     "load:baseline": "node scripts/load/baseline.mjs",
-    "check:d1": "node scripts/check-d1-compat.mjs"
+    "check:d1": "node scripts/check-d1-compat.mjs",
+    "build:engine-server": "node scripts/build-engine-server.mjs",
+    "smoke:engine": "node scripts/engine/engine-smoke.mjs",
+    "smoke:engine:adapter": "SMOKE_ENGINE=adapter node scripts/engine/engine-smoke.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",

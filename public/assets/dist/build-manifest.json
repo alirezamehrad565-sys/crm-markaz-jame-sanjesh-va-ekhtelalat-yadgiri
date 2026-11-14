@@ -1,6 +1,6 @@
 {
   "_comment": "مانیفست باندل کلاینت؛ گات بودجه (perf-budget.mjs) از این می‌خواند. فایل ساخته‌شده است — دستی ویرایش نشود.",
-  "boot": "boot.5BGYRWDM.js",
+  "boot": "boot.EASPNSAT.js",
   "bootImports": [
     "chunk.TQV6FOIY.js",
     "chunk.3ELOCRLD.js",
@@ -28,16 +28,16 @@
       "role": "lazy"
     },
     {
-      "name": "boot.26S2DYMM.js",
-      "raw": 1162,
-      "gz": 700,
-      "role": "lazy"
+      "name": "boot.EASPNSAT.js",
+      "raw": 75687,
+      "gz": 24724,
+      "role": "boot"
     },
     {
-      "name": "boot.5BGYRWDM.js",
-      "raw": 75687,
-      "gz": 24725,
-      "role": "boot"
+      "name": "boot.GBA3LXZK.js",
+      "raw": 1162,
+      "gz": 701,
+      "role": "lazy"
     },
     {
       "name": "bug-report.6VPQRJFC.js",
@@ -70,16 +70,22 @@
       "role": "boot-dep"
     },
     {
+      "name": "chunk.2YA34SRB.js",
+      "raw": 343,
+      "gz": 254,
+      "role": "lazy"
+    },
+    {
+      "name": "chunk.37DVCZGY.js",
+      "raw": 27928,
+      "gz": 8301,
+      "role": "lazy"
+    },
+    {
       "name": "chunk.3ELOCRLD.js",
       "raw": 3567,
       "gz": 937,
       "role": "boot-dep"
-    },
-    {
-      "name": "chunk.3HWCHGCS.js",
-      "raw": 343,
-      "gz": 254,
-      "role": "lazy"
     },
     {
       "name": "chunk.43HDOTRP.js",
@@ -127,12 +133,6 @@
       "name": "chunk.EPCVQX4N.js",
       "raw": 9035,
       "gz": 3424,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.FKYKTXB2.js",
-      "raw": 27928,
-      "gz": 8302,
       "role": "lazy"
     },
     {
@@ -214,9 +214,9 @@
       "role": "lazy"
     },
     {
-      "name": "cloud-setup.NKLGPQPT.js",
+      "name": "cloud-setup.SS7NOTCN.js",
       "raw": 23962,
-      "gz": 7990,
+      "gz": 7994,
       "role": "lazy"
     },
     {
@@ -262,9 +262,9 @@
       "role": "lazy"
     },
     {
-      "name": "panel.3KYVCK6E.js",
+      "name": "panel.MS3HC55X.js",
       "raw": 4181,
-      "gz": 1549,
+      "gz": 1550,
       "role": "lazy"
     },
     {
@@ -349,6 +349,6 @@
   "totals": {
     "files": 56,
     "raw": 1165265,
-    "gz": 381579
+    "gz": 381583
   }
 }

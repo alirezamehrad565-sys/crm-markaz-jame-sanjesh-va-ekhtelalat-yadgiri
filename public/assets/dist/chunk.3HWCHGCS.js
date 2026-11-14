@@ -1,1 +1,0 @@
-var u="1.27.2";function o(e){let n=String(e??"").trim().replace(/^v/i,"").split("."),r=[0,0,0];for(let t=0;t<3;t+=1){let s=Number.parseInt(n[t]??"",10);Number.isFinite(s)&&s>=0&&(r[t]=s)}return r}function c(e,i){let n=o(e),r=o(i);return n[0]!==r[0]?n[0]<r[0]?-1:1:n[1]!==r[1]?n[1]<r[1]?-1:1:n[2]!==r[2]?n[2]<r[2]?-1:1:0}export{u as a,c as b};
