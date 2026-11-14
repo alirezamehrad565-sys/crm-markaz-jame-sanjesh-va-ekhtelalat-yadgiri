@@ -6,7 +6,7 @@
  * نگاشت‌ها تابع خالص‌اند (بدون DOM) — الگو: front-view-identifiers.test.ts و format-front.test.ts.
  */
 // @ts-ignore — فایل .js فرانت، خارج از include تایپ‌اسکریپت است (import تک‌خطی تا @ts-ignore نشتی را بپوشاند)
-import { syncErrorKindView, syncStateView, clockWarningView, catchupSummaryView, versionNumbersView, versionIncompatView, reconciliationView, reconciliationDetailView, quotaLevelView, failedLoginsView, installEngineWatchdogBanner, engineSignalView, centerSignalView, syncLagSignalView, quotaSignalView, backupSignalView, drillRecordView, readOpsDrillRecord, OPS_DRILL_KEY, healthToneView } from '../../public/assets/js/views/health-panel.js';
+import { syncErrorKindView, syncStateView, clockWarningView, catchupSummaryView, versionNumbersView, versionIncompatView, reconciliationView, reconciliationDetailView, quotaLevelView, failedLoginsView, installEngineWatchdogBanner, resetEngineWatchdogBannerForTests, engineSignalView, centerSignalView, syncLagSignalView, quotaSignalView, backupSignalView, drillRecordView, readOpsDrillRecord, OPS_DRILL_KEY, healthToneView } from '../../public/assets/js/views/health-panel.js';
 
 describe('کارت وضعیت هم‌گامی پنل سلامت — نگاشت حالت به برچسب/رنگ', () => {
   it('پنج حالت شناخته‌شدهٔ قرارداد → برچسب فارسی و کلاس رنگ درست', () => {
@@ -187,6 +187,43 @@ describe('EXP-4 — بنر نگهبان موتور: بیرون پوستهٔ دس
     expect(out.reason).toBe('no-tauri-channel');
     // فراخوانی دوباره هم بی‌خطر است
     expect(installEngineWatchdogBanner().installed).toBe(false);
+  });
+});
+
+// ───────────────── M4 — بنر Degraded ورکر بازی‌ها (گوش‌دادن + پیام از payload) ─────────────────
+
+describe('M4 — بنر Degraded: engine:degraded و engine:degraded_recovered روی کانال Tauri', () => {
+  it('کانال مصنوعی → هر پنج رویداد گوش داده می‌شوند؛ پیام فارسی از payload به بنر می‌رود؛ payload خراب → پیام پیش‌فرض بی‌کرش', async () => {
+    const banner: { style: Record<string, string>; textContent: string } = { style: {}, textContent: '' };
+    const handlers: Record<string, (ev?: unknown) => void> = {};
+    const registered: string[] = [];
+    const g = globalThis as unknown as Record<string, unknown>;
+    g['__TAURI__'] = { event: { listen: async (name: string, cb: (ev?: unknown) => void) => { registered.push(name); handlers[name] = cb; } } };
+    g['document'] = { getElementById: () => banner }; // بنر موجود — بدون DOM واقعی هم showEngineBanner کار می‌کند
+    resetEngineWatchdogBannerForTests();
+    try {
+      expect(installEngineWatchdogBanner().installed).toBe(true);
+      await new Promise((r) => setTimeout(r, 0)); // IIFE گوش‌دادن‌ها async است
+      expect(registered).toEqual(expect.arrayContaining([
+        'engine:restarting', 'engine:restored', 'engine:down', 'engine:degraded', 'engine:degraded_recovered',
+      ]));
+      // رخداد Degraded → پیام فارسی payload روی بنر (زرد ماندگار)
+      handlers['engine:degraded']({ payload: { kind: 'games_worker', message: 'ورکر بازی‌ها پاسخ نمی‌دهد — سرویس اصلی سالم است' } });
+      expect(banner.textContent).toBe('ورکر بازی‌ها پاسخ نمی‌دهد — سرویس اصلی سالم است');
+      expect(banner.style['display']).toBe('block');
+      // رخداد بازگشت → پیام سبز بازگشت از payload
+      handlers['engine:degraded_recovered']({ payload: { kind: 'games_worker', message: 'ورکر بازی‌ها دوباره پاسخ می‌دهد — همه‌چیز سالم است' } });
+      expect(banner.textContent).toBe('ورکر بازی‌ها دوباره پاسخ می‌دهد — همه‌چیز سالم است');
+      // payload غایب/خراب → پیام پیش‌فرض و هیچ throwی نیست
+      handlers['engine:degraded']({ payload: { message: 42 } });
+      expect(banner.textContent).toBe('ورکر بازی‌ها پاسخ نمی‌دهد — سرویس اصلی سالم است');
+      handlers['engine:degraded_recovered'](undefined);
+      expect(banner.textContent).toBe('ورکر بازی‌ها دوباره پاسخ می‌دهد');
+    } finally {
+      resetEngineWatchdogBannerForTests(); // تایمر پنهان‌شدن خودکار پاک شود
+      delete g['__TAURI__'];
+      delete g['document'];
+    }
   });
 });
 

@@ -47,7 +47,8 @@ pub enum WatchdogAction {
 }
 
 /// رویداد نگهبان برای UI/لاگ — engine.rs این‌ها را به رخدادهای تائوری
-/// («engine:restarting» / «engine:restored» / «engine:down») می‌برد
+/// («engine:restarting» / «engine:restored» / «engine:down» /
+/// «engine:degraded» / «engine:degraded_recovered») می‌برد
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WatchdogEvent {
     /// ری‌استارت در نوبت است — attempt شمارهٔ تلاش در رشتهٔ فعلی است
@@ -56,6 +57,11 @@ pub enum WatchdogEvent {
     Restored,
     /// سقف تلاش‌ها پر شد — وضعیت صریح پایین‌بودن موتور
     Down { attempts: u32 },
+    /// M4 — ورکر بازی‌ها چند دَور پیاپی پاسخ نداد اما سرویس اصلی سالم است —
+    /// وضعیت Degraded (بدون ری‌استارت؛ اپ کار می‌کند، فقط بخش بازی‌ها پایین است)
+    Degraded { fails: u32 },
+    /// M4 — ورکر بازی‌ها بدون ری‌استارت خودش دوباره سالم شد — بازگشت به Ready
+    DegradedRecovered,
 }
 
 /// تصمیم بعدی پس از مرگ فرزند — pure؛ ترتیب بررسی: بازنشانی پنجره ← سقف تلاش ← انتظار بعدی.
