@@ -1572,7 +1572,7 @@ async function runEngine(opts2) {
   nightlyCheckpoint.unref();
   return isAdapter ? { close: stopAdapter } : child;
 }
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (false) {
   const opts2 = parseArgs(process.argv.slice(2));
   if (opts2.help) {
     console.log("استفاده: node scripts/engine/engine.mjs --port 8787 --data-dir <مسیر> [--games-port 8788] [--seed]");
