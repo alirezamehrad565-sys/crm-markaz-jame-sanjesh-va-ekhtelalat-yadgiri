@@ -6,6 +6,11 @@
 //! productName حالا ASCII است (Markaz-Jame-Desktop) — مسیر فارسی نصب، workerd را روی ویندوز
 //! در خواندن کانفیگ می‌کشت (docs/rust/first-run-and-cloud.md §۰).
 //!
+//! فاز A (docs/rust/server-cloud-update-design.md §۱) — قرارداد وضعیت سرور محلی: آینهٔ
+//! EngineStatusMirror از همان نگهبان موجود تغذیه می‌شود (FSM دوم نیست) و با فرمان
+//! engine_status و رویداد engine:status به فرانت می‌رسد؛ engine_restart مسیر صادقانهٔ
+//! بوت موجود را می‌رود و open_data_dir در ویندوز با CREATE_NO_WINDOW باز می‌کند.
+//!
 //! کامپایل در CI (cargo در محیط سندباکس جاری نیست) — گیت ساختاری desktop:check
 //! هم‌گامی فایل‌ها را می‌گیرد و کامپایل واقعی در خط CI با Rust stable انجام می‌شود.
 
@@ -51,6 +56,112 @@ impl AppState {
     }
 }
 
+/// فاز A — رشته‌های وضعیت قرارداد engine_status: دقیقاً واژگان واقعی سورس — واریانت‌های
+/// EnginePhase همین فایل (Booting/Ready/Degraded/Failed) + Restarting از رویداد
+/// engine:restarting نگهبان. FSM ده‌وضعیتی §۷ سند install-runtime-audit هنوز کامل پیاده
+/// نشده (PRECHECK/VALIDATING/… داخل همین چرخهٔ بوت جاری رخ می‌دهند) — آینه فقط وضعیت‌های
+/// واقعاً موجود را گزارش می‌کند تا هرگز وضعیتی که سورس نمی‌سازد جعل نشود.
+const STATE_BOOTING: &str = "Booting";
+const STATE_READY: &str = "Ready";
+const STATE_DEGRADED: &str = "Degraded";
+const STATE_FAILED: &str = "Failed";
+const STATE_RESTARTING: &str = "Restarting";
+
+/// دلیل Degraded قرارداد §۱-۱ سند طراحی — فقط ورکر بازی‌ها پایین است (سرویس اصلی سالم)
+const DEGRADED_REASON_GAMES: &str = "games_unhealthy";
+
+/// فاز A — snapshot آینهٔ وضعیت سرور محلی (محتوای قرارداد engine_status / engine:status).
+/// پورت‌ها مُهر بوت‌اند: ری‌استارت نگهبان در EnginePhase هم پورت قبلی را نگه می‌دارد و
+/// آینه همان رفتار را منعکس می‌کند (به‌روزرسانی پورت فقط در بوت موفق بعدی).
+#[derive(Clone)]
+pub struct EngineStatusSnapshot {
+    state: String,
+    port: Option<u16>,
+    games_port: Option<u16>,
+    started_at_unix: u64,
+    last_event_at_unix: u64,
+    degraded_reason: Option<String>,
+    app_version: String,
+}
+
+impl EngineStatusSnapshot {
+    /// وضعیت اولیه — اگر موتور هرگز بوت نشده باشد: Booting با پیام‌های خالی (port/reason =
+    /// null و مُهرها صفر — هیچ رویدادی هنوز نیامده است)
+    fn booting() -> Self {
+        Self {
+            state: STATE_BOOTING.to_string(),
+            port: None,
+            games_port: None,
+            started_at_unix: 0,
+            last_event_at_unix: 0,
+            degraded_reason: None,
+            app_version: env!("CARGO_PKG_VERSION").to_string(),
+        }
+    }
+}
+
+/// فاز A — آینهٔ مدیریت‌شدهٔ وضعیت سرور محلی: منبع حقیقت همان نگهبان engine.rs است
+/// (رویدادهای EngineEventSink + نتیجهٔ بوت در lib.rs)؛ اینجا فقط بازتاب آن نگه داشته
+/// می‌شود تا فرمان engine_status بدون وضعیت جهانی تازه، آخرین وضعیت را بدهد.
+pub struct EngineStatusMirror(pub Mutex<EngineStatusSnapshot>);
+
+impl EngineStatusMirror {
+    fn new() -> Self {
+        Self(Mutex::new(EngineStatusSnapshot::booting()))
+    }
+}
+
+/// فاز A — نگاشت خالص رویداد نگهبان → (state، degraded_reason) — تابع بدون I/O و بدون ساعت
+/// برای آزمون واحد. بازوی پایانی «ناشناخته» است: Down (تسلیم نگهبان) و هر رویداد آیندهٔ
+/// نگهبان به امن‌ترین حالت صریح Failed می‌روند — هرگز وقتی از سلامت مطمئن نیستیم Ready
+/// نشان نمی‌دهیم. degradedReason طبق قرارداد فقط برای Degraded «games_unhealthy» است.
+fn watchdog_event_status(ev: &engine_watchdog::WatchdogEvent) -> (String, Option<String>) {
+    match ev {
+        engine_watchdog::WatchdogEvent::Restarting { .. } => {
+            (STATE_RESTARTING.to_string(), None)
+        }
+        // بازگشت سلامت (پس از ری‌استارت نگهبان یا خودبه‌خود) → Ready؛ دلیل Degraded پاک می‌شود
+        engine_watchdog::WatchdogEvent::Restored
+        | engine_watchdog::WatchdogEvent::DegradedRecovered => (STATE_READY.to_string(), None),
+        engine_watchdog::WatchdogEvent::Degraded { .. } => {
+            (STATE_DEGRADED.to_string(), Some(DEGRADED_REASON_GAMES.to_string()))
+        }
+        // ناشناخته/تسلیم نگهبان — Failed بدون دلیل (پیام صریح از مسیر engine:down می‌آید)
+        _ => (STATE_FAILED.to_string(), None),
+    }
+}
+
+/// فاز A — JSON کامل قرارداد §۱-۱ سند طراحی: همان شکل مثال سند (state/port/gamesPort/
+/// startedAtUnix/lastEventAtUnix/degradedReason/appVersion). فیلدهای غیر-Copy با clone صریح
+/// می‌آیند تا snapshot وام گرفته‌شده (داخل قفل آینه) دست‌نخورده بماند.
+fn engine_status_json(s: &EngineStatusSnapshot) -> serde_json::Value {
+    serde_json::json!({
+        "state": s.state.clone(),
+        "port": s.port,
+        "gamesPort": s.games_port,
+        "startedAtUnix": s.started_at_unix,
+        "lastEventAtUnix": s.last_event_at_unix,
+        "degradedReason": s.degraded_reason.clone(),
+        "appVersion": s.app_version.clone(),
+    })
+}
+
+/// فاز A — نقطهٔ واحد به‌روزرسانی آینه + emit رویداد تائوری «engine:status» با payload JSON
+/// کامل؛ هر تغییر وضعیت آینه بلافاصله از همین تابع به تائوری می‌رسد (emit بیرون از قفل).
+fn set_engine_status(app: &tauri::AppHandle, f: impl FnOnce(&mut EngineStatusSnapshot)) {
+    let payload = {
+        let mirror = app.state::<EngineStatusMirror>();
+        let mut guard = match mirror.0.lock() {
+            Ok(g) => g,
+            Err(_) => return, // قفل مسموم — آینه تا بوت/رویداد بعدی دست‌نخورده می‌ماند
+        };
+        f(&mut guard);
+        guard.last_event_at_unix = unix_now();
+        engine_status_json(&guard)
+    };
+    let _ = app.emit("engine:status", payload);
+}
+
 /// کپی بازگشتی با std — بوت نخست: d1-seed مایگریت‌شدهٔ CI → data dir کاربر
 fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dst)?;
@@ -91,7 +202,9 @@ fn read_log_tail(data_dir: &Path) -> String {
 /// resources/engine، کپی d1-seed در بوت نخست، و اجرای EngineLaunch. هیچ capnp و هیچ قالب
 /// متنی دیگر در کار نیست — قرارداد موتور: CLI + dataDir/engine-config.json (پورت‌های نهایی).
 /// توسعه: با CENTER_ENGINE_REPO مسیرهای مخزن مصرف می‌شود (باندل‌ها از worker/ و public از ریشه).
-fn boot_engine(app: &tauri::AppHandle) -> Result<engine::LocalEngine, String> {
+/// فاز A — بازگشت: (موتور، پورت‌های نهایی از read_engine_ports) — پورت‌ها برای آینهٔ وضعیت
+/// (Ready در spawn_engine_boot) برمی‌گردند؛ None یعنی کانفیگ خوانده نشد (پورت اصلی motor.port می‌ماند).
+fn boot_engine(app: &tauri::AppHandle) -> Result<(engine::LocalEngine, Option<(u16, u16)>), String> {
     // رویدادهای نگهبان موتور → رخداد تائوری برای پوسته (engine:restarting / engine:restored /
     // engine:down) — نسل بوت برای نادیده گرفتن نوشتهٔ کهنه پس از engine_retry ضبط می‌شود
     let gen = app.state::<AppState>().generation.load(Ordering::SeqCst);
@@ -207,10 +320,12 @@ fn boot_engine(app: &tauri::AppHandle) -> Result<engine::LocalEngine, String> {
     // F — ثبت نتیجهٔ نصب در dataDir/install-manifest.json — بهترین تلاش: شکست ثبت نباید بوت را
     // بشکند؛ نتیجه برای پشتیبانی/Repair است. اینجا انتظار کانفیگ (wait_engine_config در
     // LocalEngine::start) موفق شده و پورت‌های نهایی دوباره از همان engine-config.json خوانده می‌شود.
-    if let Some((port, games_port)) = read_engine_ports(&launch.data_dir) {
+    // فاز A — همان پورت‌ها برای آینهٔ وضعیت برگردانده می‌شوند (یک خواندن، دو مصرف).
+    let ports = read_engine_ports(&launch.data_dir);
+    if let Some((port, games_port)) = ports {
         let _ = write_install_manifest(&launch.data_dir, &launch, port, games_port);
     }
-    Ok(motor)
+    Ok((motor, ports))
 }
 
 /// F — خواندن پورت‌های نهایی از dataDir/engine-config.json (قرارداد engine.mjs) — همان فایلی
@@ -423,6 +538,16 @@ fn engine_event_sink(app: tauri::AppHandle, gen: u32) -> engine::EngineEventSink
                 }
             }
         }
+        // فاز A — آینهٔ وضعیت: هر رویداد نگهبان → وضعیت متناظر + emit «engine:status» با
+        // payload JSON کامل (نقطهٔ واحد = set_engine_status). رویدادهای نگهبانِ نسل کهنه
+        // (پس از engine_retry) آینه را خراب نمی‌کنند — همان گارد نسلِ فازهای بالا.
+        if !stale {
+            let (ev_state, ev_reason) = watchdog_event_status(&ev);
+            set_engine_status(&app, |st| {
+                st.state = ev_state;
+                st.degraded_reason = ev_reason;
+            });
+        }
     })
 }
 
@@ -447,6 +572,20 @@ fn desktop_status(app: tauri::AppHandle) -> serde_json::Value {
     }
 }
 
+/// فاز A — قرارداد وضعیت سرور محلی (docs/rust/server-cloud-update-design.md §۱-۱): همان JSON
+/// آینهٔ EngineStatusMirror — بدون وضعیت جهانی تازه، منبعش همان نگهبان است. اگر موتور هرگز
+/// بوت نشده باشد آینه در وضعیت اولیهٔ Booting است (پیام‌های خالی: پورت/دلیل null، مُهرها صفر).
+#[tauri::command]
+fn engine_status(app: tauri::AppHandle) -> serde_json::Value {
+    let snapshot = app
+        .state::<EngineStatusMirror>()
+        .0
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_else(|_| EngineStatusSnapshot::booting());
+    engine_status_json(&snapshot)
+}
+
 /// v1.26.0 — تلاش دوبارهٔ بوت از صفحهٔ بوت؛ نتیجهٔ نسل‌های کهنه نادیده گرفته می‌شود
 #[tauri::command]
 fn engine_retry(app: tauri::AppHandle) {
@@ -468,7 +607,37 @@ fn engine_retry(app: tauri::AppHandle) {
     spawn_engine_boot(app.clone());
 }
 
-/// v1.26.0 — باز کردن پوشهٔ داده در File Explorer (برای دیدن workerd.log)
+/// فاز A — فرمان راه‌اندازی دوباره از UI (design §۱-۱: «همان مسیر نگهبان موجود، بدون مسیر
+/// تازهٔ کد اجرا»). LocalEngine توقف/ری‌استارت عمومی ندارد (خاموشی فقط با Dropِ slot است) —
+/// پس دکمهٔ کاذب نمی‌سازیم: موتور در حال اجرا (Ready/Degraded — M4: Degraded هم اجراست) با
+/// پیام صادقانهٔ فارسی رد می‌شود؛ Failed یا هرگز-بوت‌نشده به همان مسیر بوت موجود (engine_retry)
+/// می‌رود. حالت Booting هم رد می‌شود — بوت دوم روی همان dataDir یعنی ریسک شناخته‌شدهٔ دو موتور.
+#[tauri::command]
+fn engine_restart(app: tauri::AppHandle) -> Result<(), String> {
+    let phase = app
+        .state::<AppState>()
+        .phase
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or(EnginePhase::Booting);
+    match phase {
+        EnginePhase::Booting => Err(
+            "راه‌اندازی موتور محلی همین حالا در جریان است — چند لحظه صبر کنید.".to_string(),
+        ),
+        EnginePhase::Ready { .. } | EnginePhase::Degraded { .. } => Err(
+            "سرور در حال اجراست؛ برای راه‌اندازی دوباره برنامه را ببندید و باز کنید".to_string(),
+        ),
+        // Failed/هرگز — دقیقاً همان مسیر بوت موجود: slot بسته می‌شود، نسل تازه، spawn_engine_boot
+        EnginePhase::Failed { .. } => {
+            engine_retry(app);
+            Ok(())
+        }
+    }
+}
+
+/// v1.26.0 — باز کردن پوشهٔ داده در File Explorer (برای دیدن engine.log)
+/// فاز A — ویندوز: explorer.exe با الگوی CREATE_NO_WINDOW (عین node_version) تا باز کردن
+/// پوشه هرگز پنجرهٔ کنسول گذرا نسازد؛ لینوکس xdg-open، مک open. خطا → Err فارسی.
 #[tauri::command]
 fn open_data_dir(app: tauri::AppHandle) -> Result<(), String> {
     let dir = app
@@ -477,7 +646,14 @@ fn open_data_dir(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| format!("app_data_dir: {e}"))?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("ساخت data dir: {e}"))?;
     let opened = if cfg!(target_os = "windows") {
-        std::process::Command::new("explorer").arg(&dir).spawn().is_ok()
+        let mut cmd = std::process::Command::new("explorer.exe");
+        cmd.arg(&dir);
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
+        cmd.spawn().is_ok()
     } else if cfg!(target_os = "macos") {
         std::process::Command::new("open").arg(&dir).spawn().is_ok()
     } else {
@@ -505,8 +681,14 @@ fn desktop_health(app: tauri::AppHandle) -> serde_json::Value {
     serde_json::json!({ "ok": true, "module": "desktop-shell", "phase": 2, "engine": engine })
 }
 
-/// بالا آوردن موتور محلی در thread جدا؛ هر سه خروجی (ready/timeout/fail) وضعیت صریح می‌سازند
+/// بالا آوردن موتور محلی در thread جدا؛ هر سه خروجی (ready/timeout/fail) وضعیت صریح می‌سازند.
+/// فاز A — آینهٔ وضعیت هم در هر سه خروجی به‌روز می‌شود: هر بوت تازه از Booting شروع می‌شود
+/// (engine_status هرگز وضعیت کهنهٔ بوت قبلی را نمی‌دهد)، بوت موفق Ready + پورت‌های
+/// read_engine_ports و شکست بوت Failed با همان پیام موجود در degradedReason.
 fn spawn_engine_boot(app: tauri::AppHandle) {
+    set_engine_status(&app, |st| {
+        *st = EngineStatusSnapshot::booting();
+    });
     let gen = app.state::<AppState>().generation.load(Ordering::SeqCst);
     std::thread::spawn(move || {
         let state = app.state::<AppState>();
@@ -514,9 +696,10 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
             state.generation.load(Ordering::SeqCst) != gen
         };
         match boot_engine(&app) {
-            Ok(motor) => {
+            Ok((motor, ports)) => {
                 let port = motor.port;
                 let base = motor.base_url();
+                let games_port = ports.map(|(_, g)| g);
                 if !motor.wait_healthy(std::time::Duration::from_secs(30)) {
                     if finish_stale(&state) {
                         return;
@@ -526,9 +709,15 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
                         .app_data_dir()
                         .unwrap_or_else(|_| std::path::PathBuf::from("."));
                     let tail = read_log_tail(&data_dir);
+                    let msg = boot_failure_message(&tail);
                     state.set_phase(EnginePhase::Failed {
-                        message: boot_failure_message(&tail),
+                        message: msg.clone(),
                         log_tail: tail,
+                    });
+                    // فاز A — شکست بوت: پیام موجود → Failed با همان دلیل در آینه
+                    set_engine_status(&app, |st| {
+                        st.state = STATE_FAILED.to_string();
+                        st.degraded_reason = Some(msg);
                     });
                     return; // drop وضعیت محلی → خاموشی سایدکار
                 }
@@ -539,6 +728,15 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
                     return;
                 }
                 state.set_phase(EnginePhase::Ready { port, base_url: base.clone() });
+                // فاز A — بوت موفق: Ready + پورت‌های نهایی از read_engine_ports (پورت اصلی
+                // motor.port همان مقدار کانفیگ است؛ نبود کانفیگ = فقط پورت اصلی ثبت می‌شود)
+                set_engine_status(&app, |st| {
+                    st.state = STATE_READY.to_string();
+                    st.port = ports.map(|(p, _)| p).or(Some(port));
+                    st.games_port = games_port;
+                    st.started_at_unix = unix_now();
+                    st.degraded_reason = None;
+                });
                 // ناوبری صفحهٔ بوت به loopback — خودِ boot page با desktop_status این را می‌فهمد و
                 // location.replace می‌زند؛ اینجا هم برای سازگاری eval همان ناوبری را تزریق می‌کنیم.
                 if let Some(window) = app.get_webview_window("main") {
@@ -558,7 +756,12 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
                     .app_data_dir()
                     .unwrap_or_else(|_| std::path::PathBuf::from("."));
                 let tail = read_log_tail(&data_dir);
-                state.set_phase(EnginePhase::Failed { message: msg, log_tail: tail });
+                state.set_phase(EnginePhase::Failed { message: msg.clone(), log_tail: tail });
+                // فاز A — شکست بوت: پیام موجود → Failed با همان دلیل در آینه
+                set_engine_status(&app, |st| {
+                    st.state = STATE_FAILED.to_string();
+                    st.degraded_reason = Some(msg);
+                });
                 eprintln!("[desktop] موتور محلی بالا نیامد — وضعیت Failed در صفحهٔ بوت نمایش داده می‌شود");
             }
         }
@@ -577,6 +780,8 @@ pub fn run() {
         }))
         .manage(LocalEngineSlot(Mutex::new(None)))
         .manage(AppState::new())
+        // فاز A — آینهٔ وضعیت سرور محلی (قرارداد engine_status / engine:status)
+        .manage(EngineStatusMirror::new())
         .setup(|app| {
             spawn_engine_boot(app.handle().clone());
             Ok(())
@@ -584,7 +789,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             desktop_health,
             desktop_status,
+            engine_status,
             engine_retry,
+            engine_restart,
             open_data_dir,
             cf_deploy::cloudflare_deploy,
             secure_store::desktop_secure_store
@@ -595,8 +802,9 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{boot_failure_message, write_install_manifest};
+    use super::{boot_failure_message, engine_status_json, watchdog_event_status, EngineStatusSnapshot, write_install_manifest};
     use crate::deploy_plan::sha256_hex;
+    use crate::engine_watchdog::WatchdogEvent;
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -731,5 +939,76 @@ mod tests {
             "فایل‌های رانتایم مستقل از node ثبت می‌شوند"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ---------- فاز A — قرارداد وضعیت سرور محلی (engine_status / engine:status) ----------
+
+    /// فاز A — Degraded: وضعیت Degraded با دلیل قراردادی games_unhealthy (ورکر بازی‌ها)
+    #[test]
+    fn watchdog_degraded_event_maps_with_games_reason() {
+        let (state, reason) = watchdog_event_status(&WatchdogEvent::Degraded { fails: 3 });
+        assert_eq!(state, "Degraded", "رشتهٔ قرارداد دقیقاً Degraded است");
+        assert_eq!(reason.as_deref(), Some("games_unhealthy"), "دلیل قرارداد §۱-۱ سند طراحی");
+    }
+
+    /// فاز A — Restarting: ری‌استارت نگهبان (هم چرخهٔ خرابی هم ری‌استارت پنل) → Restarting
+    /// بدون دلیل؛ فرانت حالت زرد «در حال بازگشت» می‌سازد
+    #[test]
+    fn watchdog_restarting_event_maps_to_restarting() {
+        let (state, reason) =
+            watchdog_event_status(&WatchdogEvent::Restarting { attempt: 2, delay_ms: 5_000 });
+        assert_eq!(state, "Restarting", "رشتهٔ قرارداد دقیقاً Restarting است");
+        assert!(reason.is_none(), "Restarting دلیل Degraded ندارد");
+    }
+
+    /// فاز A — Ready: بازگشت سلامت (پس از ری‌استارت نگهبان یا خودبه‌خودی ورکر بازی‌ها) →
+    /// Ready و پاک شدن دلیل Degraded
+    #[test]
+    fn watchdog_restored_and_recovered_events_map_to_ready() {
+        for ev in [WatchdogEvent::Restored, WatchdogEvent::DegradedRecovered] {
+            let (state, reason) = watchdog_event_status(&ev);
+            assert_eq!(state, "Ready", "بازگشت سلامت باید دقیقاً Ready بدهد");
+            assert!(reason.is_none(), "بازگشت سلامت باید دلیل Degraded را پاک کند");
+        }
+    }
+
+    /// فاز A — ناشناخته: Down (تسلیم نگهبان) از بازوی نگاشت «ناشناخته» می‌گذرد — هر رویداد
+    /// ناشناخته/آیندهٔ نگهبان به امن‌ترین حالت صریح Failed می‌رود (هرگز Ready جعل نمی‌شود)
+    /// بدون دلیل؛ پیام صریح از مسیر engine:down موجود می‌آید
+    #[test]
+    fn watchdog_down_and_unknown_events_map_to_failed_without_reason() {
+        let (state, reason) = watchdog_event_status(&WatchdogEvent::Down { attempts: 3 });
+        assert_eq!(state, "Failed", "تسلیم نگهبان باید دقیقاً Failed بدهد");
+        assert!(reason.is_none(), "پیام شکست از رویداد engine:down می‌آید نه آینه");
+    }
+
+    /// فاز A — اگر موتور هرگز بوت نشده باشد: JSON قرارداد با state=Booting و پیام‌های خالی
+    /// (پورت/دلیل null، مُهرها صفر) و appVersion درست
+    #[test]
+    fn engine_status_json_never_booted_is_booting_with_empty_messages() {
+        let v = engine_status_json(&EngineStatusSnapshot::booting());
+        assert_eq!(v["state"].as_str(), Some("Booting"));
+        assert!(v["port"].is_null(), "پورت هرگز-بوت‌نشده باید null باشد");
+        assert!(v["gamesPort"].is_null(), "gamesPort هرگز-بوت‌نشده باید null باشد");
+        assert_eq!(v["startedAtUnix"].as_u64(), Some(0), "بوت رخ نداده — مُهر صفر است");
+        assert_eq!(v["lastEventAtUnix"].as_u64(), Some(0));
+        assert!(v["degradedReason"].is_null(), "پیام‌های خالی یعنی دلیل null");
+        assert_eq!(v["appVersion"].as_str(), Some(env!("CARGO_PKG_VERSION")));
+    }
+
+    /// فاز A — شکل کامل JSON قرارداد §۱-۱: همهٔ کلیدهای قرارداد حاضرند و پورت‌ها درست می‌نشینند
+    #[test]
+    fn engine_status_json_has_full_contract_shape() {
+        let mut s = EngineStatusSnapshot::booting();
+        s.port = Some(8787);
+        s.games_port = Some(8788);
+        s.degraded_reason = Some("games_unhealthy".to_string());
+        let v = engine_status_json(&s);
+        for key in ["state", "port", "gamesPort", "startedAtUnix", "lastEventAtUnix", "degradedReason", "appVersion"] {
+            assert!(v.get(key).is_some(), "کلید قرارداد «{key}» در JSON نیست");
+        }
+        assert_eq!(v["port"].as_u64(), Some(8787));
+        assert_eq!(v["gamesPort"].as_u64(), Some(8788));
+        assert_eq!(v["degradedReason"].as_str(), Some("games_unhealthy"));
     }
 }
