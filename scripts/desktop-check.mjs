@@ -4,6 +4,7 @@
 // بررسی‌ها: فایل‌های الزامی، پارس JSON/Cargo، هم‌گامی نسخه با APP_VERSION،
 // آیکن واقعی (سربرگ ICO)، capabilities، اسکریپت‌های npm، gitignore بیلد.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { PINNED_WORKERD_VERSION } from './desktop/config.mjs';
 
@@ -182,6 +183,13 @@ try {
   es.includes('startAdapterEngine') && es.includes('engine-config.json')
     ? ok('باندل engine-server موتور adapter را در خود دارد')
     : bad('باندل engine-server کهنه است — build:engine-server را دوباره بزنید');
+  // v1.27.۰۵ — تک‌بوت: گارد «اجرای مستقیم» engine.mjs در باندل باید خاموش باشد؛ وگرنه در posix
+  // file://argv[1] با import.meta.url باندل تصادفی برابر می‌شود و runEngine دو بار می‌گشت
+  // (دو موتور در یک پروسه — یافتهٔ installer-sim؛ روی ویندوز ورود بی‌شرط تنها بوت‌کننده است).
+  const bes = readFileSync(path.join(ROOT, 'scripts', 'build-engine-server.mjs'), 'utf8');
+  em.includes("typeof IS_ENGINE_BUNDLE === 'undefined'") && bes.includes("IS_ENGINE_BUNDLE: 'true'")
+    ? ok('تک‌بوت: گارد اجرای مستقیم در باندل با IS_ENGINE_BUNDLE خاموش می‌شود')
+    : bad('تک‌بوت: قرارداد IS_ENGINE_BUNDLE سیم نیست — باندل posix دو موتور می‌سازد');
   const smoke = readFileSync(path.join(ROOT, 'scripts', 'engine', 'engine-smoke.mjs'), 'utf8');
   smoke.includes('SMOKE_ENGINE') && smoke.includes('--engine')
     ? ok('engine-smoke: گیت دوهاته workerd/adapter سیم است')
@@ -219,6 +227,40 @@ try {
     : bad('پیام شکست بوت به engine.log ارجاع ندارد');
 } catch (e) {
   bad(`گیت سایدکار node خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+}
+
+// ⑩ v1.27.۰۵ — گیت قرارداد مسیر رانتایم: تیپل نصاب lib.rs ↔ مونتاژ (کلاس خطای نسخهٔ بستهٔ ۱.۲۷.۰۴).
+// ریشهٔ آن خطا: شاخهٔ نصاب lib.rs دنبال central/worker.js و central/games.js بود در حالی که
+// مونتاژ باندل‌های موتور را در bundles/ می‌گذارد — و هیچ آزمونی این قرارداد را نمی‌پوشاند.
+// از این پس: پین رشته‌ای دو سمت + شبیه‌ساز بوت که مسیرها را از خود lib.rs استخراج می‌کند
+// (installer-sim.mjs) — هر ناهم‌گامی آینده همین‌جا قرمز می‌شود، نه روی ماشین کارفرما.
+try {
+  const libSrc5 = readFileSync(path.join(T, 'src', 'lib.rs'), 'utf8');
+  // کامنت‌های تاریخی (مثل شرح خطای ۱.۲۷.۰۴) مسیرهای کهنه را یاد می‌کنند — فقط کد باید سنجیده شود
+  const libCode5 = libSrc5.replace(/\/\/[^\n]*/g, '');
+  libCode5.includes('engine_res.join("bundles/worker.js")') && libCode5.includes('engine_res.join("bundles/games.js")')
+    ? ok('lib.rs: تیپل نصاب به bundles/ اشاره می‌کند (هم‌گام با مونتاژ)')
+    : bad('lib.rs: تیپل نصاب bundles/ را ندارد — رگرسیون ۱.۲۷.۰۴');
+  libCode5.includes('central/worker.js') || libCode5.includes('central/games.js')
+    ? bad('lib.rs: هنوز مسیر central/ برای باندل‌های موتور دارد — عین خطای ۱.۲۷.۰۴')
+    : ok('lib.rs: هیچ مسیر central/ برای باندل‌های موتور باقی نیست');
+  const bir5 = readFileSync(path.join(ROOT, 'scripts', 'desktop', 'build-installer-runtime.mjs'), 'utf8');
+  bir5.includes("path.join(bundlesDir, 'worker.js')") && bir5.includes("path.join(bundlesDir, 'games.js')")
+    ? ok('مونتاژ رانتایم مقصد bundles/ را دارد (هم‌گام با تیپل lib.rs)')
+    : bad('مونتاژ رانتایم مقصد bundles/ ندارد — با تیپل lib.rs ناهم‌گام است');
+  const sim = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'desktop', 'installer-sim.mjs')], {
+    cwd: ROOT, encoding: 'utf8', timeout: 120_000,
+  });
+  const simOut = `${sim.stdout || ''}${sim.stderr || ''}`;
+  for (const l of simOut.split('\n')) {
+    if (l.startsWith('✗ ')) { failed = true; lines.push(l); }
+    else if (l.startsWith('✓ ') || l.startsWith('… ')) lines.push(l);
+  }
+  sim.status === 0
+    ? ok('شبیه‌ساز نصاب: بوت با تیپل واقعی lib.rs موفق بود')
+    : bad(`شبیه‌ساز نصاب قرمز است (exit=${sim.status}) — قرارداد مسیر lib.rs ↔ مونتاژ شکسته است`);
+} catch (e) {
+  bad(`گیت قرارداد رانتایم خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }
 
 lines.push(failed ? '❌ گیت ساختار دسکتاپ قرمز است' : '✅ گیت ساختار دسکتاپ سبز است');

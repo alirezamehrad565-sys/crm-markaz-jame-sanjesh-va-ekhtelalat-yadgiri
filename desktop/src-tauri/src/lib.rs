@@ -118,8 +118,13 @@ fn boot_engine(app: &tauri::AppHandle) -> Result<engine::LocalEngine, String> {
                 .map_err(|e| format!("app_data_dir: {e}"))?;
             (
                 engine_res.join("engine-server.js"),
-                engine_res.join("central/worker.js"),
-                engine_res.join("central/games.js"),
+                // v1.27.۰۵ — ریشهٔ خطای نسخهٔ بستهٔ ۱.۲۷.۰۴: تیپل قبلی دنبال central/worker.js و
+                // central/games.js بود در حالی که مونتاژ (build-installer-runtime.mjs) باندل‌های
+                // موتور را در bundles/ می‌گذارد — پوشهٔ central/ فقط دارایی «ساخت سرور مرکزی» است
+                // (central-worker.js + schema.sql — میراث v1.26.0، ربطی به موتور محلی ندارد).
+                // گیت قرارداد (desktop-check ⑩ + installer-sim) از این پس هم‌گامی دو سمت را می‌سنجد.
+                engine_res.join("bundles/worker.js"),
+                engine_res.join("bundles/games.js"),
                 engine_res.join("public"),
                 data_dir,
             )
