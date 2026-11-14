@@ -203,7 +203,133 @@ fn boot_engine(app: &tauri::AppHandle) -> Result<engine::LocalEngine, String> {
 
     let node = engine::find_node_binary()?;
     let launch = engine::EngineLaunch { node, server_js, main_bundle, games_bundle, public_dir, data_dir };
-    engine::LocalEngine::start(launch, sink)
+    let motor = engine::LocalEngine::start(launch.clone(), sink)?;
+    // F — ثبت نتیجهٔ نصب در dataDir/install-manifest.json — بهترین تلاش: شکست ثبت نباید بوت را
+    // بشکند؛ نتیجه برای پشتیبانی/Repair است. اینجا انتظار کانفیگ (wait_engine_config در
+    // LocalEngine::start) موفق شده و پورت‌های نهایی دوباره از همان engine-config.json خوانده می‌شود.
+    if let Some((port, games_port)) = read_engine_ports(&launch.data_dir) {
+        let _ = write_install_manifest(&launch.data_dir, &launch, port, games_port);
+    }
+    Ok(motor)
+}
+
+/// F — خواندن پورت‌های نهایی از dataDir/engine-config.json (قرارداد engine.mjs) — همان فایلی
+/// که wait_engine_config در engine.rs منتظرش می‌ماند؛ پس از بوت موفق یک‌بار خوانده می‌شود.
+/// ناموفق = None (ثبت manifest بهترین تلاش است و نباید بوت را درگیر کند).
+fn read_engine_ports(data_dir: &Path) -> Option<(u16, u16)> {
+    let text = std::fs::read_to_string(data_dir.join("engine-config.json")).ok()?;
+    let v = serde_json::from_str::<serde_json::Value>(&text).ok()?;
+    let port = v.get("port").and_then(|p| p.as_u64()).map(|p| p as u16);
+    let games = v.get("gamesPort").and_then(|p| p.as_u64()).map(|p| p as u16);
+    Some((port?, games?))
+}
+
+/// F — الان به ثانیهٔ یونیکس (SystemTime — بدون وابستگی جدید)
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// F — نسخهٔ سایدکار node با اجرای «node --version» — عین الگوی CREATE_NO_WINDOW در
+/// verify_runtime_integrity (engine.rs)؛ بدون پیشوند v (هم‌قرارداد nodeVersion در manifest
+/// نصاب). هر شکست → None (در JSON می‌شود null — نبود نسخه نباید ثبت manifest را بشکند).
+fn node_version(node: &Path) -> Option<String> {
+    let mut cmd = std::process::Command::new(node);
+    cmd.arg("--version");
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let out = cmd.output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let got = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if got.is_empty() {
+        return None;
+    }
+    Some(got.strip_prefix('v').unwrap_or(&got).to_string())
+}
+
+/// F — ثبت نتیجهٔ نصب در dataDir/install-manifest.json (بستن ردیف ۱۱ جدول اختلاف ممیزی):
+/// پشتیبانی/Repair می‌تواند نسخهٔ اپ، زمان نصب/آخرین بوت، نسخهٔ node، پورت‌های نهایی، هش
+/// manifest نصاب و هش/حجم فایل‌های رانتایم را بدون اجرای اپ بخواند. نوشتن اتمیک: ابتدا
+/// install-manifest.json.tmp سپس rename — عین الگوی staging d1 در boot_engine (tmp و مقصد
+/// هر دو زیر data_dir و روی یک volume اند). installedAtUnix از فایل قبلی حفظ می‌شود (نصب
+/// همان است) و lastBootAtUnix هر بوت تازه می‌شود. فایل‌های رانتایم: بوت موفق یعنی همه
+/// هست‌اند — هر غایب بدون ردیف در files می‌آید و نامش فقط در آرایهٔ missing ثبت می‌شود.
+fn write_install_manifest(
+    data_dir: &Path,
+    launch: &engine::EngineLaunch,
+    port: u16,
+    games_port: u16,
+) -> Result<(), String> {
+    let manifest_path = data_dir.join("install-manifest.json");
+    // installedAtUnix قبلی — اگر فایل موجود و پارس‌شدنی بود همان مقدار می‌ماند، وگرنه الان
+    let installed_at = std::fs::read_to_string(&manifest_path)
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        .and_then(|v| v.get("installedAtUnix").and_then(|x| x.as_u64()))
+        .unwrap_or_else(unix_now);
+
+    // هش manifest نصاب (engine-runtime-manifest.json کنار engine-server.js) — حالت توسعه ندارد
+    let engine_dir = launch
+        .server_js
+        .parent()
+        .ok_or_else(|| "مسیر باندل موتور فاقد پوشهٔ والد است".to_string())?;
+    let runtime_manifest_sha =
+        std::fs::read(engine_dir.join("engine-runtime-manifest.json"))
+            .ok()
+            .map(|bytes| crate::deploy_plan::sha256_hex(&bytes));
+
+    // فایل‌های رانتایم — {name, sha256, bytes}؛ غایب → بدون ردیف (نامش در missing می‌آید)
+    let index_html = launch.public_dir.join("index.html");
+    let mut files: Vec<serde_json::Value> = Vec::new();
+    let mut missing: Vec<String> = Vec::new();
+    for path in [&launch.server_js, &launch.main_bundle, &launch.games_bundle, &index_html] {
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.display().to_string());
+        if let Ok(bytes) = std::fs::read(path) {
+            files.push(serde_json::json!({
+                "name": name,
+                "sha256": crate::deploy_plan::sha256_hex(&bytes),
+                "bytes": bytes.len(),
+            }));
+        } else {
+            missing.push(name);
+        }
+    }
+
+    let mut manifest = serde_json::json!({
+        "appVersion": env!("CARGO_PKG_VERSION"),
+        "installedAtUnix": installed_at,
+        "lastBootAtUnix": unix_now(),
+        "node": { "version": node_version(&launch.node) },
+        "ports": { "port": port, "gamesPort": games_port },
+        "runtimeManifestSha256": runtime_manifest_sha,
+        "files": files,
+    });
+    if !missing.is_empty() {
+        manifest["missing"] = serde_json::json!(missing);
+    }
+
+    let pretty = serde_json::to_string_pretty(&manifest)
+        .map_err(|e| format!("ساخت JSON برای install-manifest.json ناموفق بود: {e}"))?;
+    let tmp = data_dir.join("install-manifest.json.tmp");
+    std::fs::write(&tmp, pretty.as_bytes())
+        .map_err(|e| format!("نوشتن install-manifest.json.tmp ناموفق بود: {e}"))?;
+    // انتقال اتمیک — rename مقصد موجود را هم جایگزین می‌کند (MoveFileEx با REPLACE_EXISTING
+    // در ویندوز؛ rename(2) در یونیکس) — یا manifest کامل تازه است یا قبلی دست‌نخورده مانده
+    std::fs::rename(&tmp, &manifest_path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp); // ماندهٔ tmp باقی نماند — اجرای بعدی تمیز بنویسد
+        format!("انتقال install-manifest.json.tmp به install-manifest.json ناموفق بود: {e}")
+    })?;
+    Ok(())
 }
 
 /// پیام شکست بوت — v1.27.۰۳: موتور adapter است؛ کرش بومی workerd از مسیر دسکتاپ حذف شده و
@@ -441,6 +567,14 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
 
 pub fn run() {
     tauri::Builder::default()
+        // F — تکی‌نمونه (بستن ریسک #۱۰) — باید اولین plugin زنجیره باشد (پلاگین‌ها به ترتیب
+        // ثبت اجرا می‌شوند). نمونهٔ دوم بلافاصله بسته می‌شود و این کالبک در نمونهٔ اول اجرا
+        // می‌شود: کاربر به پنجرهٔ موجود برمی‌گردد — جلوگیری از دو موتور/دو پنجره روی یک dataDir.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            }
+        }))
         .manage(LocalEngineSlot(Mutex::new(None)))
         .manage(AppState::new())
         .setup(|app| {
@@ -461,7 +595,36 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::boot_failure_message;
+    use super::{boot_failure_message, write_install_manifest};
+    use crate::deploy_plan::sha256_hex;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// F — دایرکتوری موقت بدون وابستگی: temp_dir + pid + شمارندهٔ AtomicU32 — تست‌های موازی
+    /// هر کدام دایرکتوری جدا می‌گیرند و ماندهٔ اجرای قبلی هر چه هست پاک می‌شود.
+    fn temp_dir(tag: &str) -> PathBuf {
+        static COUNTER: AtomicU32 = AtomicU32::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!(
+            "center-desktop-{}-{}-{}",
+            tag,
+            std::process::id(),
+            n
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("ساخت دایرکتوری موقت تست");
+        dir
+    }
+
+    /// فایل‌های ساختگی موتور در دایرکتوری موقت — عین چهار فایل رانتایم بوت واقعی
+    fn fake_engine_files(dir: &Path) {
+        let public = dir.join("public");
+        std::fs::create_dir_all(&public).expect("ساخت public");
+        std::fs::write(dir.join("engine-server.js"), b"server-bundle").expect("نوشتن engine-server.js");
+        std::fs::write(dir.join("worker.js"), b"main-bundle").expect("نوشتن باندل اصلی");
+        std::fs::write(dir.join("games.js"), b"games-bundle").expect("نوشتن باندل بازی‌ها");
+        std::fs::write(public.join("index.html"), b"<html></html>").expect("نوشتن index.html");
+    }
 
     /// ۱.۲۷.۰۲ — تشخیص هدفمند کرش بومی workerd در لاگ (گزارش نصاب واقعی)
     /// ۱.۲۷.۰۳ — با حذف workerd از مسیر دسکتاپ، پیام شکست بوت عمومی و راهنماست
@@ -472,5 +635,101 @@ mod tests {
         assert!(m.contains("تلاش دوباره"));
         assert!(m.contains("engine.log"));
         assert!(m.contains("دست‌نخورده"));
+    }
+
+    /// F — ثبت manifest: فایل ساخته می‌شود، JSON پارس می‌شود، appVersion درست، files کامل
+    /// (۴ فایل با هش/حجم)، هش manifest نصاب ثبت می‌شود، فراخوانی دوم installedAtUnix را حفظ
+    /// می‌کند و lastBootAtUnix جلو می‌رود، و tmp باقی نمی‌ماند.
+    #[test]
+    fn write_install_manifest_creates_and_preserves_installed_at() {
+        let dir = temp_dir("manifest");
+        fake_engine_files(&dir);
+        // manifest نصاب ساختگی — runtimeManifestSha256 باید هش همین فایل شود
+        std::fs::write(dir.join("engine-runtime-manifest.json"), b"{}").expect("نوشتن manifest نصاب");
+        let launch = crate::engine::EngineLaunch {
+            node: dir.join("no-such-node"), // مسیر ناموجود — پوشش مسیر شکست بدون panic
+            server_js: dir.join("engine-server.js"),
+            main_bundle: dir.join("worker.js"),
+            games_bundle: dir.join("games.js"),
+            public_dir: dir.join("public"),
+            data_dir: dir.clone(),
+        };
+
+        let path = dir.join("install-manifest.json");
+        write_install_manifest(&dir, &launch, 8787, 8788).expect("نوشتن manifest بار اول");
+        assert!(path.is_file(), "install-manifest.json ساخته نشد");
+        let first: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(&path).expect("خواندن manifest بار اول"),
+        )
+        .expect("پارس JSON بار اول");
+        assert_eq!(first["appVersion"].as_str(), Some(env!("CARGO_PKG_VERSION")));
+        assert_eq!(first["ports"]["port"].as_u64(), Some(8787));
+        assert_eq!(first["ports"]["gamesPort"].as_u64(), Some(8788));
+        assert!(first["node"].is_object(), "node باید آبجکت باشد");
+        let files = first["files"].as_array().expect("files باید آرایه باشد");
+        assert_eq!(files.len(), 4, "هر چهار فایل رانتایم باید ردیف داشته باشند");
+        assert_eq!(files[0]["name"].as_str(), Some("engine-server.js"));
+        assert_eq!(
+            files[0]["sha256"].as_str(),
+            Some(sha256_hex(b"server-bundle").as_str())
+        );
+        assert_eq!(files[0]["bytes"].as_u64(), Some(b"server-bundle".len() as u64));
+        let want_manifest_sha = sha256_hex(b"{}");
+        assert_eq!(
+            first["runtimeManifestSha256"].as_str(),
+            Some(want_manifest_sha.as_str())
+        );
+        assert!(first.get("missing").is_none(), "همهٔ فایل‌ها هست‌اند — missing نباید باشد");
+
+        // مُهرها ثانیه‌ای‌اند — یک ثانیه منتظر می‌مانیم تا lastBootAtUnix قطعاً جلو برود
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        write_install_manifest(&dir, &launch, 8787, 8788).expect("نوشتن manifest بار دوم");
+        let second: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(&path).expect("خواندن manifest بار دوم"),
+        )
+        .expect("پارس JSON بار دوم");
+        assert_eq!(
+            second["installedAtUnix"].as_u64(),
+            first["installedAtUnix"].as_u64(),
+            "installedAtUnix باید از فایل قبلی حفظ شود"
+        );
+        assert!(
+            second["lastBootAtUnix"].as_u64() > first["lastBootAtUnix"].as_u64(),
+            "lastBootAtUnix باید جلو برود"
+        );
+        assert!(
+            !dir.join("install-manifest.json.tmp").exists(),
+            "tmp باید با rename مصرف شود و باقی نماند"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// F — node ناموجود: بدون panic، فایل باز هم ساخته می‌شود و node.version=null است؛
+    /// بدون manifest نصاب هم runtimeManifestSha256=null می‌ماند (حالت توسعه).
+    #[test]
+    fn write_install_manifest_missing_node_yields_null_version() {
+        let dir = temp_dir("manifest-no-node");
+        fake_engine_files(&dir);
+        let launch = crate::engine::EngineLaunch {
+            node: dir.join("no-such-node.exe"),
+            server_js: dir.join("engine-server.js"),
+            main_bundle: dir.join("worker.js"),
+            games_bundle: dir.join("games.js"),
+            public_dir: dir.join("public"),
+            data_dir: dir.clone(),
+        };
+        write_install_manifest(&dir, &launch, 1234, 5678).expect("ثبت بدون node نباید شکست بخورد");
+        let v: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.join("install-manifest.json")).expect("خواندن manifest"),
+        )
+        .expect("پارس JSON");
+        assert!(v["node"]["version"].is_null(), "node ناموجود باید version=null بدهد");
+        assert!(v["runtimeManifestSha256"].is_null(), "بدون manifest نصاب باید null بماند");
+        assert_eq!(
+            v["files"].as_array().map(|f| f.len()),
+            Some(4),
+            "فایل‌های رانتایم مستقل از node ثبت می‌شوند"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
