@@ -137,9 +137,14 @@ try {
     ? ok('cf_deploy.rs (ماژول کلادفلر) موجود است')
     : bad('cf_deploy.rs نیست — ماژول کلادفلر v1.26.0 غایب است');
   const engineSrc = readFileSync(path.join(T, 'src', 'engine.rs'), 'utf8');
-  for (const t of ['find_node_binary', 'engine-config.json', 'engine.log', '--engine', 'adapter', 'CREATE_NO_WINDOW']) {
-    engineSrc.includes(t) ? ok(`engine.rs: ${t} سیم است`) : bad(`engine.rs: ${t} غایب است`);
+  // v1.27.۰۴ — قرارداد spawn ضد-EISDIR: main نسبی + cwd صریح + پیش‌بازرسی + لاگ خط فرمان
+  for (const t of ['find_node_binary', 'engine-config.json', 'engine.log', '--engine', 'adapter', 'CREATE_NO_WINDOW', 'current_dir', 'Result<PathBuf, String>', 'نصب رانتایم ناقص']) {
+    engineSrc.includes(t) ? ok(`engine.rs: ${t.replace('Result<PathBuf, String>', 'find_node_binary → Result')} سیم است`) : bad(`engine.rs: ${t} غایب است`);
   }
+  const libSrcAll = libSrc;
+  libSrcAll.includes('find_node_binary()?')
+    ? ok('lib.rs: خطای find_node_binary صریح به کاربر می‌رسد (?)')
+    : bad('lib.rs: خروجی Result از find_node_binary مصرف نشده');
   const wf = readFileSync(path.join(ROOT, '.github', 'workflows', 'desktop-build.yml'), 'utf8');
   wf.includes('build-installer-runtime.mjs')
     ? ok('گردش‌کار CI گام مونتاژ رانتایم نصاب را دارد')

@@ -75,14 +75,15 @@ pub struct LocalEngine {
     child_slot: Arc<Mutex<Option<Child>>>,
 }
 
-/// پیدا کردن باینری node: متغیر محیطی ← کنار برنامه (سایدکار نصاب: ریشه و binaries/) ←
-/// مسیر توسعه «node» روی PATH. rust-f13 الگوی workerd: سایدکار در dev پسوند هدف دارد
-/// (node-<target>) و در نصاب NSIS نام بدون پسوند هدف کنار exe می‌نشیند.
-pub fn find_node_binary() -> PathBuf {
+/// پیدا کردن باینری node: متغیر محیطی ← کنار برنامه (سایدکار نصاب: ریشه و binaries/).
+/// v1.27.۰۴ — خروجی Result و بدون حدس PATH در نصاب: گزارش واقعی EISDIR (lstat 'C:') نشان داد
+/// نودی که از PATH/شیم میانی بالا می‌آید ممکن است argv دست‌خورده بگیرد؛ شکست صریح با پیام فارسی
+/// بهتر از اجرای کور است. PATH فقط در حالت توسعه (CENTER_ENGINE_REPO) مجاز است.
+pub fn find_node_binary() -> Result<PathBuf, String> {
     if let Ok(from_env) = std::env::var("CENTER_NODE_BIN") {
         let p = PathBuf::from(from_env);
         if p.is_file() {
-            return p;
+            return Ok(p);
         }
     }
     let exe_name = if cfg!(windows) { "node.exe" } else { "node" };
@@ -98,12 +99,15 @@ pub fn find_node_binary() -> PathBuf {
         }
         for c in &candidates {
             if c.is_file() {
-                return c.clone();
+                return Ok(c.clone());
             }
         }
     }
     // توسعه — node روی PATH (همان nodeی که npm/cargo-check با آن کار می‌کند)
-    PathBuf::from(exe_name)
+    if std::env::var("CENTER_ENGINE_REPO").is_ok() {
+        return Ok(PathBuf::from(exe_name));
+    }
+    Err("سایدکار node.exe کنار برنامه یافت نشد — نصب رانتایم ناقص است؛ نصاب را دوباره اجرا کنید و اگر تکرار شد «پیام به سازنده» را بزنید.".to_string())
 }
 
 /// پورت آزاد روی loopback: ۸۷۸۷ پیش‌فرض، وگرنه پورت گذرا از هستهٔ سیستم.
@@ -175,11 +179,29 @@ fn wait_engine_config(data_dir: &Path, timeout: Duration) -> Option<(u16, u16)> 
 }
 
 /// spawn یک نمونهٔ موتور adapter — node + engine-server.js با پرچم‌های مسیرها.
-/// stderr/stdout به data/engine.log می‌رود تا خرابی نصاب قابل تشخیص باشد؛ stdout خروجی عملیاتی
-/// engine.mjs هم در همان لاگ بنشیند (Rust از stdout چیزی نمی‌خواند).
+/// v1.27.۰۴ — ریشه‌یابی گزارش واقعی EISDIR (lstat 'C:'): نود ورودی main را که بعد از
+/// path.resolve به «ریشهٔ درایو» برسد، در realpathSync می‌میرد (lstat ریشهٔ درایو بدون
+/// بک‌اسلش = EISDIR). خط فرمان ما طبق چیدمان tauri-bundler درست بود، ولی argv در لایهٔ
+/// میانی ویندوز (AV/EDR — ریسک #۴ سند ریسک) دست‌خورده بود. رفع ساختاری: **main نسبی** +
+/// **cwd صریح روی پوشهٔ باندل** — هیچ مسیر مطلقی به‌عنوان ورودی نود پارس نمی‌شود و کلاس
+/// خطا از ریشه می‌میرد؛ بقیهٔ مسیرها (دیتابیس/باندل‌ها) آرگومان‌های برنامهٔ خود ما هستند
+/// و مستقیماً با fs خوانده می‌شوند، نه با resolver نود.
+/// stderr/stdout به data/engine.log می‌رود؛ پیش از spawn هم خط فرمان کامل در لاگ می‌نشیند
+/// تا هر گزارش بعدی خودش را توضیح دهد.
 fn spawn_engine(plan: &EngineLaunch) -> Result<Child, String> {
+    let engine_dir = plan
+        .server_js
+        .parent()
+        .map(|p| p.to_path_buf())
+        .ok_or_else(|| "مسیر باندل موتور فاقد پوشهٔ والد است".to_string())?;
+    let main_arg = plan
+        .server_js
+        .file_name()
+        .map(|f| f.to_os_string())
+        .ok_or_else(|| "نام فایل باندل موتور نامعتبر است".to_string())?;
+
     let mut cmd = Command::new(&plan.node);
-    cmd.arg(&plan.server_js)
+    cmd.arg(&main_arg)
         .arg("--engine")
         .arg("adapter")
         .arg("--data-dir")
@@ -194,7 +216,8 @@ fn spawn_engine(plan: &EngineLaunch) -> Result<Child, String> {
         .arg(&plan.games_bundle)
         .arg("--public-dir")
         .arg(&plan.public_dir)
-        .stdout(Stdio::null());
+        .stdout(Stdio::null())
+        .current_dir(&engine_dir);
     // ۱.۲۷.۰۲ — بدون پنجرهٔ کنسول کنار برنامه در ویندوز
     #[cfg(target_os = "windows")]
     {
@@ -213,6 +236,26 @@ fn spawn_engine(plan: &EngineLaunch) -> Result<Child, String> {
             cmd.stderr(Stdio::null());
         }
     }
+    // تشخیص‌پذیری — خط فرمان کامل پیش از spawn در لاگ می‌نشیند؛ گزارش‌های بعدی خودتوضیح‌اند
+    if let Ok(mut f) = std::fs::File::options()
+        .create(true)
+        .append(true)
+        .open(plan.data_dir.join("engine.log"))
+    {
+        let _ = writeln!(
+            f,
+            "[desktop] spawn cwd={} cmd={} {} --engine adapter --data-dir {} --port {} --games-port {} --main-bundle {} --games-bundle {} --public-dir {}",
+            engine_dir.display(),
+            plan.node.display(),
+            main_arg.to_string_lossy(),
+            plan.data_dir.display(),
+            DEFAULT_PORT,
+            DEFAULT_GAMES_PORT,
+            plan.main_bundle.display(),
+            plan.games_bundle.display(),
+            plan.public_dir.display(),
+        );
+    }
     cmd.spawn()
         .map_err(|e| format!("spawn موتور محلی ناموفق: {e}"))
 }
@@ -221,9 +264,27 @@ impl LocalEngine {
     /// بالا آوردن موتور adapter با مشخصات کامل اجرا (EngineLaunch).
     /// on_event: گیرندهٔ رویدادهای نگهبان — در lib.rs به emit تائوری بسته می‌شود.
     /// v1.27.۰۳: پس از spawn منتظر engine-config.json می‌ماند تا پورت نهایی معلوم شود.
+    /// v1.27.۰۴: پیش‌بازرسی رانتایم — هر فایل غایب با نام دقیق و پیام فارسی، پیش از هر spawn
+    /// (تفکیک «نصب ناقص» از «نود نتوانست main را resolve کند» — درس گزارش EISDIR).
     pub fn start(launch: EngineLaunch, on_event: EngineEventSink) -> Result<Self, String> {
+        let mut errs: Vec<String> = Vec::new();
         if !launch.server_js.is_file() {
-            return Err(format!("باندل موتور یافت نشد: {}", launch.server_js.display()));
+            errs.push(format!("باندل موتور (engine-server.js) یافت نشد: {}", launch.server_js.display()));
+        }
+        if !launch.main_bundle.is_file() {
+            errs.push(format!("باندل ورکر اصلی یافت نشد: {}", launch.main_bundle.display()));
+        }
+        if !launch.games_bundle.is_file() {
+            errs.push(format!("باندل ورکر بازی‌ها یافت نشد: {}", launch.games_bundle.display()));
+        }
+        if !launch.public_dir.join("index.html").is_file() {
+            errs.push(format!("پوستهٔ کلاینت (public/index.html) یافت نشد: {}", launch.public_dir.display()));
+        }
+        if !errs.is_empty() {
+            return Err(format!(
+                "نصب رانتایم ناقص است — «تلاش دوباره» را بزنید و اگر تکرار شد، نصاب را دوباره اجرا کنید؛ جزئیات: {}",
+                errs.join(" | ")
+            ));
         }
         std::fs::create_dir_all(&launch.data_dir).map_err(|e| format!("ساخت data dir: {e}"))?;
         let plan = launch;
