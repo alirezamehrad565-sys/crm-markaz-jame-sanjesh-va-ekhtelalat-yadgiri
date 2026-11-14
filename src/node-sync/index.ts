@@ -55,7 +55,18 @@ export {
   quotaLevelFor,
   quotaPercent,
   centralQuotaSnapshot,
-  reconcileDomainCounts
+  reconcileDomainCounts,
+  // EXP-7 — محدودساز نرخ per-node (پنجرهٔ لغزان درون‌حافظه)
+  NODE_RATE_LIMIT_PER_MIN_DEFAULT,
+  NODE_RATE_LIMIT_PER_MIN_MAX,
+  NODE_RATE_LIMIT_WINDOW_MS,
+  parseNodeRateLimitPerMin,
+  makeNodeSlidingWindowLimiter,
+  // EXP-8 — نقشهٔ معماری مرکز↔نودها (فقط سمت مرکز)
+  NODE_STALE_AFTER_MS,
+  centralNodesMap,
+  nodeLastSeenOf,
+  nodeMapStateOf
 } from './service';
 export type {
   NodePullDomain,
@@ -75,5 +86,12 @@ export type {
   QuotaKind,
   QuotaLevel,
   CentralQuotaSnapshot,
-  ReconcileDomainStatus
+  ReconcileDomainStatus,
+  // EXP-7 / EXP-8
+  NodeSlidingWindowLimiter,
+  CentralNodeMapState,
+  CentralNodeMapStatus,
+  CentralNodeMapEntry,
+  CentralNodesMapQuota,
+  CentralNodesMapPayload
 } from './service';

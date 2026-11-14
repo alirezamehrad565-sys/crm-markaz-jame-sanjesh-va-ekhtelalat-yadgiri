@@ -26,11 +26,22 @@
  *     دامنهٔ بیرون فهرست سفید = ۴۰۰ با همان پاکت NODE_DOMAIN_FORBIDDEN (قرارداد rust-f15).
  *   • registerCentralQuotaRoutes — GET /api/central/quota فقط-مدیر (سشن + نقش مدیر)؛
  *     در api-routing «بعد از» گیت‌های سراسری ثبت می‌شود.
+ *
+ * EXP-7 — محدودساز نرخ per-node: روی /node/pull، /node/push و /node/reconcile پنجرهٔ لغزان
+ *   درون‌حافظهٔ per-node (پیش‌فرض ۱۲۰ درخواست در دقیقه بر node_code؛ env «۰» = خاموش)؛
+ *   ردِ ۴۲۹ با پاکت استاندارد RateLimitError + یک ردیف audit به‌ازای هر ۴۲۹ (تلاش
+ *   محدودشده مشکوک است). قرارداد پاسخ pull/push/reconcile دست‌نخورده می‌ماند — این لایه
+ *   فقط «مسیر ۴۲۹ تازه» اضافه می‌کند و تحت سقف هیچ رفتاری عوض نمی‌شود.
+ *
+ * EXP-8 — نقشهٔ معماری فقط-سمت-مرکز: registerCentralNodesMapRoutes مسیر GET
+ *   /api/central/nodes-map را با همان گیت quota (سشن + نقش مدیر) ثبت می‌کند؛ خروجی JSON
+ *   پاکت قراردادی و با ?format=html صفحهٔ مدیریتی رندر-سروری فارسی RTL بدون هیچ JavaScript.
  */
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import type { AppHono, AppBindings, AppVariables } from '@core/shared';
+import { faDigits } from '@core/shared';
 import { authMiddleware, requireRole, getAuthContext } from '@core/auth';
 import { runWithRequestId } from '@core/audit';
 import type { AuditWriter } from '@core/audit';
@@ -53,13 +64,17 @@ import {
   NODE_PUSH_DOMAIN_SET,
   NODE_PUSH_BODY_MAX_BYTES,
   NODE_PUSH_MIN_INTERVAL_MS,
+  NODE_RATE_LIMIT_WINDOW_MS,
   NodeCodeInvalidError,
   NodePushRawBodySchema,
   bearerToken,
   bumpQuotaUsage,
+  centralNodesMap,
   centralQuotaSnapshot,
   decodeNodeCursor,
   listNodes,
+  makeNodeSlidingWindowLimiter,
+  parseNodeRateLimitPerMin,
   pullNodePage,
   pushNodeEvents,
   reconcileDomainCounts,
@@ -73,7 +88,7 @@ import {
   validatePushItem,
   verifyNodeCredentials
 } from './service';
-import type { NodePullDomain, NodePushRawItem, SyncNodeRow } from './service';
+import type { CentralNodesMapPayload, NodePullDomain, NodePushRawItem, SyncNodeRow } from './service';
 
 export interface NodeSyncAppDeps {
   db: DbClient;
@@ -83,6 +98,8 @@ export interface NodeSyncAppDeps {
   now?: () => Date;
   /** بازنویسی گات ۱۵دقیقه‌ای push — فقط برای آزمون */
   pushMinIntervalMs?: number;
+  /** بازنویسی پنجرهٔ محدودساز per-node (EXP-7) — فقط برای آزمون؛ پیش‌فرض NODE_RATE_LIMIT_WINDOW_MS */
+  rateLimitWindowMs?: number;
 }
 
 type Env = { Bindings: AppBindings; Variables: AppVariables };
@@ -123,6 +140,46 @@ export function createNodeSyncApp(deps: NodeSyncAppDeps): AppHono {
       c.header('X-Request-Id', requestId);
     }
   });
+
+  // ─── EXP-7 — محدودساز نرخ per-node روی pull/push/reconcile (پنجرهٔ لغزان per-isolate) ───
+  // کلید = node_code هدر (هویت نود؛ مقدار غیرمحرمانه)؛ هدر غایب = کلید per-IP در حافظهٔ همین
+  // isolate (IP هرگز لاگ/ذخیره نمی‌شود — قانون PII §۶). سقف از env NODE_RATE_LIMIT_PER_MIN
+  // («۰» = خاموش، پیش‌فرض ۱۲۰) و در کلید سطل هم می‌نشیند تا تغییر سقف سطل تازه بسازد.
+  // ردِ ۴۲۹: پاکت استاندارد RateLimitError (errorHandler میزبان) + Retry-After + یک ردیف
+  // audit به‌ازای هر ۴۲۹ — تلاش محدودشده مشکوک است (نظرسنجی ماشینی یا کلید سرقتی).
+  // ثبت پیش از احراز نود: رگبار بی‌کلید هم پیش از پرس‌وجوی رجیستری بسته شود.
+  const nodeLimitWindowMs = deps.rateLimitWindowMs ?? NODE_RATE_LIMIT_WINDOW_MS;
+  const nodeLimiter = makeNodeSlidingWindowLimiter(nodeLimitWindowMs);
+  const nodeRateLimitGuard = async (c: Context<Env>, next: () => Promise<void>): Promise<void> => {
+    const perMin = parseNodeRateLimitPerMin(c.env?.NODE_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) return next();
+    const nodeCode = (c.req.header('X-CP-Node-Code') ?? '').trim().slice(0, 120);
+    const ip = (c.req.header('cf-connecting-ip') ?? 'unknown').slice(0, 64);
+    const key = nodeCode ? `node:${perMin}:${nodeCode}` : `anon:${perMin}:${ip}`;
+    if (!nodeLimiter.allow(key, perMin)) {
+      const retryAfterS = Math.ceil(nodeLimitWindowMs / 1000);
+      c.header('Retry-After', String(retryAfterS));
+      try {
+        await audit.log({
+          actorId: nodeCode || 'anonymous',
+          action: 'node.rate_limited',
+          resourceType: 'node',
+          resourceId: nodeCode || 'unauthenticated',
+          changes: { path: { from: null, to: c.req.path } }
+        });
+      } catch {
+        // حکم م۲۱۰ — ممیزی هرگز مسیر را نمی‌شکند
+      }
+      throw new RateLimitError(
+        retryAfterS,
+        'تعداد درخواست‌های نود بیش از حد مجاز است — بعداً تلاش کنید'
+      );
+    }
+    return next();
+  };
+  app.use('/pull', nodeRateLimitGuard);
+  app.use('/push', nodeRateLimitGuard);
+  app.use('/reconcile', nodeRateLimitGuard);
 
   // — محدودساز نوشتنی per-IP (همان سقف و همان مستثنی‌های اپ اصلی؛ env «۰» = خاموش) —
   const limiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
@@ -415,4 +472,177 @@ export function registerCentralQuotaRoutes(app: AppHono, deps: CentralQuotaRoute
     const snapshot = await centralQuotaSnapshot(deps.db, now());
     return c.json(snapshot, 200);
   });
+}
+
+// ─── EXP-8 — GET /api/central/nodes-map: نقشهٔ معماری مرکز↔نودها (فقط-مدیر) ───
+// احراز: عین مسیر quota — گیت سشن authMiddleware + requireRole('manager'). جای ثبت:
+// api-routing «بعد از» گیت‌های سراسری /api/* (هم‌الگوی quota) تا سشن بگیرد و no-store و
+// request-id از زنجیرهٔ عمومی بیاید. JSON = پاکت قراردادی EXP-8؛ ?format=html = صفحهٔ
+// مدیریتی رندر-سروری (پیشینهٔ text/html در ورکر: گزارش بازی‌ها routes.ts `?format=html` و
+// صفحهٔ /m/:token — هدرهای همان خانواده: no-store + noindex + CSP سخت بدون اسکریپت).
+export interface CentralNodesMapRoutesDeps {
+  db: DbClient;
+  /** تزریق زمان — فقط برای آزمون (پیش‌فرض: ساعت واقعی) */
+  now?: () => Date;
+}
+
+export function registerCentralNodesMapRoutes(app: AppHono, deps: CentralNodesMapRoutesDeps): void {
+  const now = deps.now ?? (() => new Date());
+  app.get('/api/central/nodes-map', authMiddleware(), requireRole('manager'), async (c) => {
+    const map = await centralNodesMap(deps.db, now());
+    if (c.req.query('format') === 'html') {
+      return new Response(renderNodesMapHtml(map), {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Robots-Tag': 'noindex, nofollow',
+          'Content-Security-Policy':
+            "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        }
+      });
+    }
+    return c.json(map, 200);
+  });
+}
+
+// ─── EXP-8 — رندر سروری صفحهٔ نقشهٔ معماری ───
+// خودکفا: CSS درون‌خطی، بدون هیچ JavaScript، فارسی RTL. خروجی «فقط-گزارش» است — هیچ دکمهٔ
+// اقدامی ندارد (قرارداد آشتی‌ساز/داشبورد: گزارش می‌دهد، اصلاح نمی‌کند).
+
+/** گریز HTML برای مقادیرِ از رجیستری (label ورودی مدیر است — همیشه گریز می‌شود) */
+function escHtml(v: string): string {
+  return v
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** نمایش مقدار تاریخ/رشته؛ null/خالی = «—» (فیلد بدون منبع مرکزی، صادقانه خالی می‌ماند) */
+function faCell(v: string | null | undefined): string {
+  if (!v) return '—';
+  return faDigits(v.slice(0, 19).replace('T', ' '));
+}
+
+const STATE_CHIP: Record<CentralNodesMapPayload['nodes'][number]['status']['state'], { cls: string; label: string }> = {
+  synced: { cls: 'chip ok', label: 'هم‌گام' },
+  stale: { cls: 'chip warn', label: 'بی‌تماس' },
+  never_seen: { cls: 'chip warn', label: 'هرگز تماس نگرفته' },
+  revoked: { cls: 'chip bad', label: 'باطل‌شده' }
+};
+
+const QUOTA_LEVEL_CHIP: Record<CentralNodesMapPayload['quota']['level'], { cls: string; label: string }> = {
+  ok: { cls: 'chip ok', label: 'سبز — مصرف عادی' },
+  warn: { cls: 'chip warn', label: 'زرد — نزدیک سقف (۸۰٪+)' },
+  danger: { cls: 'chip bad', label: 'قرمز — روی مرز سقف (۹۵٪+) — پلن Workers Paid را فعال کنید' }
+};
+
+export function renderNodesMapHtml(map: CentralNodesMapPayload): string {
+  const worstPercent = Math.max(
+    map.quota.percent_requests,
+    map.quota.percent_rows_written,
+    map.quota.percent_rows_read
+  );
+  const levelChip = QUOTA_LEVEL_CHIP[map.quota.level];
+  const nodeRows = map.nodes.length
+    ? map.nodes
+        .map((n) => {
+          const chip = STATE_CHIP[n.status.state];
+          const rowCls = n.status.state === 'revoked' ? 'node bad' : n.status.state === 'synced' ? 'node' : 'node warn';
+          const pending =
+            n.status.pending_push !== null
+              ? faDigits(String(n.status.pending_push))
+              : '—';
+          const recon = n.status.reconciliation_ok === null ? '—' : n.status.reconciliation_ok ? 'هم‌خوان' : 'ناهم‌خوان';
+          return `      <div class="${rowCls}">
+        <div class="row1">
+          <span class="name">${escHtml(n.name)}</span>
+          <span class="code">${escHtml(n.node_id)}</span>
+          <span class="${chip.cls}">${chip.label}</span>
+        </div>
+        <div class="meta">
+          <span>ثبت: ${faCell(n.registered_at)}</span>
+          <span>آخرین تماس: ${faCell(n.last_seen)}</span>
+          <span>آخرین pull موفق: ${faCell(n.status.last_pull_ok_at)}</span>
+          <span>آخرین push موفق: ${faCell(n.status.last_push_ok_at)}</span>
+          <span>در انتظار push: ${pending}</span>
+          <span>آشتی‌ساز: ${recon}</span>
+        </div>
+      </div>`;
+        })
+        .join('\n')
+    : '      <div class="node empty">هنوز نودی ثبت نشده است — از مسیر ثبت نود (فقط-مدیر) یک میز را پیوند بزنید.</div>';
+
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>نقشهٔ معماری — مرکز و نودها</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f4f6f8; color: #1f2937; font-family: Vazirmatn, Tahoma, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.9; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 40px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 28px 0 10px; }
+  .meta { color: #6b7280; font-size: 12.5px; }
+  .center { background: #fff; border: 2px solid #1d4ed8; border-radius: 12px; padding: 16px 20px; text-align: center; }
+  .center .tag { display: inline-block; background: #dbeafe; color: #1e3a8a; border-radius: 999px; padding: 2px 14px; font-size: 12.5px; }
+  .bar { background: #e5e7eb; border-radius: 999px; height: 14px; margin: 12px auto 6px; max-width: 520px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: ${map.quota.level === 'danger' ? '#dc2626' : map.quota.level === 'warn' ? '#d97706' : '#16a34a'}; border-radius: 999px; }
+  .connector { width: 2px; height: 26px; background: #94a3b8; margin: 0 auto; }
+  .node { background: #fff; border: 1px solid #e2e8f0; border-inline-start: 6px solid #16a34a; border-radius: 10px; padding: 10px 14px; margin: 10px 0; }
+  .node.warn { border-inline-start-color: #d97706; }
+  .node.bad { border-inline-start-color: #dc2626; }
+  .node.empty { color: #6b7280; border-inline-start-color: #cbd5e1; }
+  .row1 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .row1 .name { font-weight: 700; }
+  .row1 .code { color: #64748b; font-size: 12px; direction: ltr; }
+  .chip { border-radius: 999px; padding: 1px 12px; font-size: 12px; white-space: nowrap; }
+  .chip.ok { background: #dcfce7; color: #166534; }
+  .chip.warn { background: #fef9c3; color: #92400e; }
+  .chip.bad { background: #fee2e2; color: #991b1b; }
+  .node .meta { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 4px; font-size: 12.5px; color: #475569; }
+  .legend { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; font-size: 13px; }
+  .legend ul { margin: 6px 0 0; padding-inline-start: 20px; }
+  .note { color: #6b7280; font-size: 12.5px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>نقشهٔ معماری — مرکز ↔ نودها</h1>
+    <div class="meta">نسخهٔ مرکز: ${faDigits(map.center_version)} · لحظهٔ مرکز: ${faCell(map.server_ts)} · گزارشِ فقط-خواندنی است؛ این صفحه هیچ دادهٔ بالینی ندارد.</div>
+  </header>
+
+  <h2>مرکز (Cloudflare Worker + D1)</h2>
+  <section class="center">
+    <span class="tag">مرکز</span>
+    <div>نسخهٔ ${faDigits(map.center_version)}</div>
+    <div class="bar"><i style="width: ${faDigits(String(Math.min(100, Math.max(worstPercent, 1))))}%"></i></div>
+    <div class="meta">سهمیهٔ روز (${faDigits(map.quota.day)}): درخواست‌ها ${faDigits(String(map.quota.percent_requests))}٪ · سطرنویسی ${faDigits(String(map.quota.percent_rows_written))}٪ · سطرخوانی ${faDigits(String(map.quota.percent_rows_read))}٪ — <span class="${levelChip.cls}">${levelChip.label}</span></div>
+  </section>
+  <div class="connector" aria-hidden="true"></div>
+
+  <h2>نودها (${faDigits(String(map.nodes.length))})</h2>
+  <section>
+${nodeRows}
+  </section>
+
+  <h2>راهنمای رنگ‌ها</h2>
+  <section class="legend">
+    <ul>
+      <li><span class="chip ok">هم‌گام</span> سبز — آخرین تماس نود با مرکز کمتر از ۲۴ ساعت پیش است.</li>
+      <li><span class="chip warn">بی‌تماس / در انتظار</span> زرد — بیش از ۲۴ ساعت تماس نبوده، نود هنوز هرگز تماس نگرفته، یا رکوردی در انتظار push است.</li>
+      <li><span class="chip bad">باطل / خطا</span> قرمز — نود از پنل مرکز باطل شده است. (وضعیت «خطا»ی سمت نود هنوز به مرکز آینه نمی‌شود؛ قرمزِ امروز فقط «باطل‌شده» را نشان می‌دهد.)</li>
+      <li>نوار سهمیهٔ مرکز با رنگ سطح مصرف (سبز عادی / زرد ۸۰٪+ / قرمز ۹۵٪+) رنگ می‌شود.</li>
+    </ul>
+    <div class="note">ستون‌های «در انتظار push» و «آشتی‌ساز» فعلاً «—» می‌مانند: آینهٔ وضعیت سینک فقط روی دستگاهِ خود شعبه ذخیره می‌شود و به مرکز ارسال نمی‌شود (قرارداد rust-f14) — مرکز فقط مُهر تماس‌های واقعی (pull/push) را از رجیستری می‌داند.</div>
+  </section>
+</main>
+</body>
+</html>`;
 }

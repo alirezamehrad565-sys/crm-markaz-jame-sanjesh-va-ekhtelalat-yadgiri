@@ -8,18 +8,22 @@ const EXPECTED_KINDS: readonly HumanErrorKind[] = [
   'engine_port_busy',
   'disk_low',
   'db_integrity_failed',
+  'db_restored_from_backup',
   'sync_network',
   'sync_version_mismatch',
   'central_token_invalid',
   'central_quota',
   'central_deploy_chunk_failed',
+  'system_restart_scheduled',
+  'games_worker_restarted',
+  'update_rolled_back',
 ];
 const FIELDS = ['title', 'hint', 'action'] as const;
 const PERSIAN_RE = /[\u0600-\u06FF]/;
 const KNOWN_VARS = new Set(['port', 'free_mb', 'chunk', 'total']);
 
 describe('پیام‌های انسانی — پوشش کامل انواع خطا', () => {
-  it('اتحاد: هر ۹ نوعِ قراردادی تعریف شده‌اند و چیزی کم/زیاد نیست', () => {
+  it('اتحاد: هر ۱۳ نوعِ قراردادی تعریف شده‌اند و چیزی کم/زیاد نیست', () => {
     expect([...KINDS].sort()).toEqual([...EXPECTED_KINDS].sort());
   });
 

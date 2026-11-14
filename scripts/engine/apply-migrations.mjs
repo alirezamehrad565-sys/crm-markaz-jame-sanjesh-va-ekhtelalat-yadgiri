@@ -5,7 +5,8 @@
 // دیتابیس همان فایل SQLite پشتهٔ D1 موتور محلی است (چیدمان عین miniflare).
 import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 import { REPO_ROOT, d1SqlitePath } from './engine-paths.mjs';
 
 export function applyMigrations(dbPath) {
