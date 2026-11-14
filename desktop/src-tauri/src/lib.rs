@@ -135,7 +135,27 @@ fn boot_engine(app: &tauri::AppHandle) -> Result<engine::LocalEngine, String> {
     // مایگریشن از قبل اعمال شده (engine-server پوشهٔ migrations مخزن را ندارد و رد می‌کند).
     // اگر کاربر قبلاً دیتا دارد، دست نمی‌خوریم. v1.27.۰۳: همین فایل را shim D1 (node:sqlite)
     // باز می‌کند — مسیر قطعی d1/miniflare-D1DatabaseObject/<hash>.sqlite عین پشتهٔ workerd.
+    //
+    // کپی اتمیک — دو ریسکی که این بلوک می‌بندد: ① کپیِ ناقصِ قطع‌شده: اگر اپ وسط کپی مستقیم
+    // به d1 بسته/قطع شود، پوشهٔ d1 ناقص روی دیسک می‌ماند و بوت بعدی به‌خاطر «وجود» همان پوشهٔ
+    // ناقص دیگر کپی نمی‌کند → دیتابیس خراب برای همیشه؛ پس کپی به staging (d1.staging) می‌رود
+    // و پیش از جابه‌جایی، سلامتش وارسی می‌شود (زیرپوشهٔ miniflare-D1DatabaseObject با حداقل
+    // یک فایل .sqlite — عین چیزی که shim D1 با node:sqlite باز می‌کند؛ d1SqlitePath در
+    // engine-paths.mjs). ② rename اتمیک همان volume: انتقال staging → d1 با std::fs::rename
+    // است و هر دو زیر data_dir (یک volume) اند؛ پس d1 یا کامل است یا هنوز نیست — هیچ حالت
+    // میانی روی دیسک دیده نمی‌شود و بوت بعدی اگر d1 نیست، از stagingِ تمیز از سر می‌گیرد.
+    // هر شکست (کپی/وارسی/rename) staging را پاک می‌کند تا اجرای بعدی حتماً تمیز شروع کند.
     if !data_dir.join("d1").exists() {
+        let staging = data_dir.join("d1.staging");
+        // ماندهٔ staging اجرای قبلی هر چه هست کامل حذف می‌شود (قطعی: دیر یا زود پاک می‌شود)
+        if staging.exists() {
+            let removed = if staging.is_dir() {
+                std::fs::remove_dir_all(&staging)
+            } else {
+                std::fs::remove_file(&staging)
+            };
+            removed.map_err(|e| format!("حذف staging ماندهٔ d1-seed: {e}"))?;
+        }
         let seed = if std::env::var("CENTER_ENGINE_REPO").is_ok() {
             std::env::var("CENTER_ENGINE_REPO")
                 .map(|r| std::path::PathBuf::from(r).join("desktop/src-tauri/resources/engine/d1-seed"))
@@ -150,8 +170,31 @@ fn boot_engine(app: &tauri::AppHandle) -> Result<engine::LocalEngine, String> {
             engine_res.join("d1-seed")
         };
         if seed.is_dir() {
-            copy_dir_recursive(&seed, &data_dir.join("d1"))
-                .map_err(|e| format!("کپی d1-seed: {e}"))?;
+            copy_dir_recursive(&seed, &staging).map_err(|e| {
+                let _ = std::fs::remove_dir_all(&staging); // اجرای بعدی تمیز شروع کند
+                format!("کپی d1-seed: {e}")
+            })?;
+            // وارسی حداقلی سلامت staging — زیرپوشهٔ miniflare-D1DatabaseObject با حداقل یک
+            // فایل .sqlite؛ بدون آن، rename یعنی گذاشتن دیتابیسِ بی‌بنیاد در بوت‌های بعدی
+            let do_dir = staging.join("miniflare-D1DatabaseObject");
+            let has_sqlite = std::fs::read_dir(&do_dir)
+                .map(|entries| {
+                    entries.filter_map(|e| e.ok()).any(|e| {
+                        let p = e.path();
+                        p.is_file() && p.extension().map(|x| x == "sqlite").unwrap_or(false)
+                    })
+                })
+                .unwrap_or(false);
+            if !has_sqlite {
+                let _ = std::fs::remove_dir_all(&staging); // اجرای بعدی تمیز شروع کند
+                return Err("کپی d1-seed: staging ناقص است — زیرپوشهٔ miniflare-D1DatabaseObject با فایل .sqlite در آن نیست".to_string());
+            }
+            // انتقال اتمیک: staging و d1 هر دو زیر data_dir و روی همان volume اند — rename
+            // دایرکتوریِ مقصدِ ناموجود، جابه‌جایی اتمیک است (d1 هنوز وجود ندارد؛ جایگزینی نیست)
+            std::fs::rename(&staging, &data_dir.join("d1")).map_err(|e| {
+                let _ = std::fs::remove_dir_all(&staging); // اجرای بعدی تمیز شروع کند
+                format!("انتقال d1.staging به d1: {e}")
+            })?;
         }
     }
 
