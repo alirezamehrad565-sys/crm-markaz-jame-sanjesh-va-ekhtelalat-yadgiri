@@ -24,6 +24,10 @@ await build({
   charset: 'utf8',
   legalComments: 'none',
   logLevel: 'info',
+  // v1.27.۰۵ — تک‌بوت: گارد «اجرای مستقیم» engine.mjs در باندل باید خاموش باشد (ورود بی‌شرط
+  // engine-server-entry.mjs تنها بوت‌کننده است). در posix file://argv[1] با import.meta.url
+  // باندل تصادفی برابر می‌شد → دو runEngine در یک پروسه (یافتهٔ installer-sim).
+  define: { IS_ENGINE_BUNDLE: 'true' },
 });
 
 const bytes = statSync(out).size;

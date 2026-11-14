@@ -606,8 +606,12 @@ export async function runEngine(opts) {
   return isAdapter ? { close: stopAdapter } : child;
 }
 
-// اجرای مستقیم
-if (import.meta.url === `file://${process.argv[1]}`) {
+// اجرای مستقیم — v1.27.۰۵: در باندل engine-server هرگز اجرا نمی‌شود؛ build-engine-server
+// ثابت IS_ENGINE_BUNDLE را define می‌کند. بدون این، در posix مسیر باندل با file://argv[1]
+// تصادفی برابر می‌شد و runEngine دو بار می‌گشت (دو موتور در یک پروسه — یافتهٔ installer-sim).
+// روی ویندوز گارد اصلی بی‌اعتنا به باندل نمی‌پاسد؛ بوت بی‌شرط ورود (engine-server-entry.mjs)
+// همان مسیر رسمی باندل است.
+if (typeof IS_ENGINE_BUNDLE === 'undefined' && import.meta.url === `file://${process.argv[1]}`) {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.help) {
     console.log('استفاده: node scripts/engine/engine.mjs --port 8787 --data-dir <مسیر> [--games-port 8788] [--seed]');
