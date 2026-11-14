@@ -71,12 +71,25 @@ const dbPath = d1SqlitePath(dataDir);
 const base = `http://127.0.0.1:${enginePort}`;
 const gamesBase = `http://127.0.0.1:${gamesPort}`;
 
+// v1.27.۰۳ — دو حالت گیت: workerd (پیش‌فرض توسعه) و adapter (موتور درون‌پروسه‌ای دسکتاپ —
+// همان چیزی که نصاب اجرا می‌کند). هر دو باید ۲۷/۲۷ سبز شوند.
+const adapterMode = process.env.SMOKE_ENGINE === 'adapter';
+console.log(`[smoke] حالت موتور: ${adapterMode ? 'adapter (درون‌پروسه‌ای — بدون workerd)' : 'workerd (توسعه)'}`);
 console.log(`[smoke] پورت‌ها: اپ=${enginePort} بازی‌ها=${gamesPort} | دادهٔ موقت: ${dataDir}`);
 
 // — بخش ۱: آماده‌سازی —
 check('دایرکتوری موقت داده ساخته شد', dataDir.startsWith(os.tmpdir()));
 
-const engine = spawn(process.execPath, [path.join(REPO_ROOT, 'scripts/engine/engine.mjs'), '--port', String(enginePort), '--games-port', String(gamesPort), '--data-dir', dataDir, '--seed'], {
+const engineArgs = [path.join(REPO_ROOT, 'scripts/engine/engine.mjs'), '--port', String(enginePort), '--games-port', String(gamesPort), '--data-dir', dataDir, '--seed'];
+if (adapterMode) {
+  engineArgs.push(
+    '--engine', 'adapter',
+    '--main-bundle', path.join(REPO_ROOT, 'worker/bundle.js'),
+    '--games-bundle', path.join(REPO_ROOT, 'worker/games-bundle.js'),
+    '--public-dir', path.join(REPO_ROOT, 'public'),
+  );
+}
+const engine = spawn(process.execPath, engineArgs, {
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let engineLog = '';
@@ -204,5 +217,5 @@ function mkDirExists(p) {
   }
 }
 
-console.log(`\n[smoke] نتیجه: ${pass} سبز، ${fail} سرخ ${fail === 0 ? '— گیت فاز ۲ سبز است' : '— ناکام'}`);
+console.log(`\n[smoke] نتیجه (${adapterMode ? 'adapter' : 'workerd'}): ${pass} سبز، ${fail} سرخ ${fail === 0 ? '— گیت فاز ۲ سبز است' : '— ناکام'}`);
 process.exit(fail === 0 ? 0 : 1);

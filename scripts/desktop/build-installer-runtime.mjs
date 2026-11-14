@@ -2,13 +2,18 @@
 //
 //   node scripts/desktop/build-installer-runtime.mjs --target x86_64-pc-windows-msvc [--check]
 //
-// کارها (بدون هیچ عملیات Cloudflare؛ دانلود فقط از رجیستری رسمی npm):
-//   ① دانلود سایدکار workerd نسخهٔ pinned از بستهٔ رسمی npm هدف + sha256
-//   ② کپی public/ (خروجی build:client) → resources/engine/public — دیسک assets worker
-//   ③ d1-seed: دیتابیس مایگریت‌شده (+ seed نمایشی) در چیدمان قطعی miniflare — بوت نخست lib.rs کپی می‌کند
-//     (در نصب کاربر Node وجود ندارد؛ مایگریشن باید زمان بسته‌بندی اعمال شده باشد)
-//   ④ قالب capnp توکن‌دار (buildInstallerCapnpTemplate) — lib.rs در بوت توکن‌ها را جایگزین می‌کند
-//   ⑤ ثبت هش‌ها در engine-runtime-manifest.json (معیار «ثبت هش» گیت ردیف ۹)
+// v1.27.۰۳ — تعویض موتور دسکتاپ: workerd از مسیر نصاب حذف شد (issueهای باز upstream
+// workerd#4668/#7581 — کرش init ویندوزی؛ گزارش نصاب واقعی کارفرما: حتی با redist تازه‌تر
+// از نسخهٔ بسته، همین کرش تکرار شد). موتور تازه: سایدکار node + engine-server.js
+// (باندل engine.mjs با حالت adapter درون‌پروسه‌ای) + باندل‌های همان ورکرها به‌صورت فایل.
+// کارها (بدون هیچ عملیات Cloudflare؛ دانلود فقط از nodejs.org رسمی):
+//   ① دانلود سایدکار node نسخهٔ pinned (zip ویندوز / tar لینوکس) → binaries/node-<target>
+//   ② کپی public/ (خروجی build:client) → resources/engine/public — سرویس استاتیک adapter
+//   ③ d1-seed: دیتابیس مایگریت‌شده (+ seed نمایشی) در چیدمان قطعی miniflare — بوت نخست lib.rs
+//     کپی می‌کند؛ shim D1 (node:sqlite) همین فایل را باز می‌کند — دادهٔ کارفرما سازگار می‌ماند
+//   ④ کپی engine-server.js + باندل‌های ورکر (worker/games-bundle.js) → resources/engine
+//   ⑤ دارایی‌های «ساخت سرور مرکزی» (central-worker.js + schema.sql) — بدون تغییر v1.26.0
+//   ⑥ ثبت هش‌ها در engine-runtime-manifest.json (معیار «ثبت هش» گیت ردیف ۹)
 // با --check: همهٔ خروجی‌ها و هش‌های manifest دوباره وارسی می‌شوند (بدون دانلود).
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -18,17 +23,16 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import {
-  PINNED_WORKERD_VERSION, TARGET_NPM_PACKAGE, sidecarFileName,
-  installerPaths, CAPNP_TEMPLATE_NAME, MANIFEST_NAME,
-} from './config.mjs';
-import { buildInstallerCapnpTemplate } from '../engine/config.mjs';
+import { installerPaths, MANIFEST_NAME } from './config.mjs';
 import { applyMigrations } from '../engine/apply-migrations.mjs';
 import { seedDemo } from '../engine/seed-demo.mjs';
 import { d1SqlitePath } from '../engine/engine-paths.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const P = installerPaths(ROOT);
+
+/** v1.27.۰۳ — نسخهٔ pinned سایدکار node (LTS Jod — node:sqlite از 22.5 در این خط است) */
+export const PINNED_NODE_VERSION = '22.23.5';
 
 function sha256(file) {
   return createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -51,27 +55,45 @@ function dirStats(dir) {
   return { files, bytes };
 }
 
-async function downloadSidecar(target) {
-  const pkg = TARGET_NPM_PACKAGE[target];
-  if (!pkg) throw new Error(`هدف ناشناخته: ${target} — مقصدهای پشتیبانی‌شده: ${Object.keys(TARGET_NPM_PACKAGE).join(', ')}`);
-  const meta = await (await fetch(`https://registry.npmjs.org/${pkg}/${PINNED_WORKERD_VERSION}`)).json();
-  if (!meta?.dist?.tarball) throw new Error(`بستهٔ ${pkg}@${PINNED_WORKERD_VERSION} در رجیستری یافت نشد`);
-  console.log(`[runtime] دانلود سایدکار: ${pkg}@${PINNED_WORKERD_VERSION}`);
-  const tgz = path.join(os.tmpdir(), `workerd-${target}-${PINNED_WORKERD_VERSION}.tgz`);
-  const res = await fetch(meta.dist.tarball);
-  if (!res.ok) throw new Error(`دانلود تاربال ناموفق: HTTP ${res.status}`);
-  writeFileSync(tgz, Buffer.from(await res.arrayBuffer()));
+/** نام سایدکار node با پسوند هدف — هم‌قرارداد با find_node_binary در engine.rs */
+function nodeSidecarFileName(target) {
+  const ext = target.includes('windows') ? '.exe' : '';
+  return `node-${target}${ext}`;
+}
 
-  const extractDir = mkdtempSync(path.join(os.tmpdir(), 'workerd-extract-'));
-  execFileSync('tar', ['-xzf', tgz, '-C', extractDir]);
-  const binName = target.includes('windows') ? 'workerd.exe' : 'workerd';
-  const binPath = path.join(extractDir, 'package', 'bin', binName);
-  if (!existsSync(binPath)) throw new Error(`باینری داخل تاربال یافت نشد: ${binPath}`);
+/**
+ * ① دانلود سایدکار node از dist رسمی nodejs.org — zip ویندوز (node.exe داخل ریشهٔ بسته)،
+ * tar.gz لینوکس (bin/node داخل بسته). امضای PE/ELF و حداقل حجم وارسی می‌شود.
+ */
+async function downloadNodeSidecar(target) {
+  const isWin = target.includes('windows');
+  const version = PINNED_NODE_VERSION;
+  const distUrl = isWin
+    ? `https://nodejs.org/dist/v${version}/node-v${version}-win-x64.zip`
+    : `https://nodejs.org/dist/v${version}/node-v${version}-linux-x64.tar.gz`;
+  console.log(`[runtime] دانلود سایدکار node v${version} (${isWin ? 'win-x64' : 'linux-x64'})…`);
+  const res = await fetch(distUrl, { redirect: 'follow' });
+  if (!res.ok) throw new Error(`دانلود node ناموفق: HTTP ${res.status} — ${distUrl}`);
+  const archive = path.join(os.tmpdir(), `node-v${version}-${target}${isWin ? '.zip' : '.tar.gz'}`);
+  writeFileSync(archive, Buffer.from(await res.arrayBuffer()));
+
+  const extractDir = mkdtempSync(path.join(os.tmpdir(), 'node-extract-'));
+  execFileSync('tar', ['-xf', archive, '-C', extractDir]);
+  const binPath = isWin
+    ? path.join(extractDir, `node-v${version}-win-x64`, 'node.exe')
+    : path.join(extractDir, `node-v${version}-linux-x64`, 'bin', 'node');
+  if (!existsSync(binPath)) throw new Error(`باینری node داخل بسته یافت نشد: ${binPath}`);
+  if (readFileSync(binPath).subarray(0, 4).toString('hex') !== (isWin ? '4d5a9000' : '7f454c46')) {
+    throw new Error('فایل node امضای PE/ELF ندارد — دانلود نامعتبر');
+  }
 
   mkdirSync(P.sidecarDir, { recursive: true });
-  const sidecar = path.join(P.sidecarDir, sidecarFileName(target));
+  const sidecar = path.join(P.sidecarDir, nodeSidecarFileName(target));
   rmSync(sidecar, { force: true });
   cpSync(binPath, sidecar);
+  if (!isWin) execFileSync('chmod', ['0755', sidecar]);
+  rmSync(extractDir, { recursive: true, force: true });
+  rmSync(archive, { force: true });
   return { sidecar, bytes: statSync(sidecar).size };
 }
 
@@ -105,18 +127,21 @@ async function main() {
   const targetIdx = argv.indexOf('--target');
   const target = targetIdx >= 0 ? argv[targetIdx + 1] : 'x86_64-pc-windows-msvc';
   const centralDir = path.join(P.resourcesEngineDir, 'central'); // v1.26.0 — ورکر مرکزی + اسکیما
+  const bundlesDir = path.join(P.resourcesEngineDir, 'bundles'); // v1.27.۰۳ — باندل‌های ورکر (فایل)
+  const engineServer = path.join(P.resourcesEngineDir, 'engine-server.js');
 
   if (checkOnly) {
     if (!existsSync(P.manifest)) throw new Error(`manifest نیست — ابتدا مونتاژ را اجرا کنید: ${P.manifest}`);
     const m = JSON.parse(readFileSync(P.manifest, 'utf8'));
     const files = [
-      [m.workerd.sidecar, m.workerd.sha256],
-      [m.capnpTemplate.path, m.capnpTemplate.sha256],
+      [m.node.sidecar, m.node.sha256],
       [m.d1Seed.sqlite, m.d1Seed.sha256],
+      [m.bundles.main, m.bundles.mainSha256],
+      [m.bundles.games, m.bundles.gamesSha256],
+      [m.engineServer.path, m.engineServer.sha256],
       [m.central.worker, m.central.workerSha256],
       [m.central.schema, m.central.schemaSha256],
     ];
-    if (m.redist) files.push([m.redist.path, m.redist.sha256]);
     for (const [rel, expected] of files) {
       const abs = path.join(ROOT, rel);
       if (!existsSync(abs)) throw new Error(`خروجی گم‌شده: ${rel}`);
@@ -127,22 +152,22 @@ async function main() {
     return;
   }
 
-  // پیش‌نیازها
-  const repoWorkerd = path.join(ROOT, 'node_modules', 'workerd', 'package.json');
-  if (existsSync(repoWorkerd)) {
-    const installed = JSON.parse(readFileSync(repoWorkerd, 'utf8')).version;
-    if (installed !== PINNED_WORKERD_VERSION) {
-      throw new Error(`ناهم‌گامی pin: node_modules/workerd=${installed} ولی pinned=${PINNED_WORKERD_VERSION} — config.mjs را هم‌گام کنید`);
-    }
+  // پیش‌نیازها — باندل موتور و باندل‌های ورکر باید از پیش ساخته و کامیت شده باشند
+  for (const [file, hint] of [
+    ['scripts/engine/engine-server.js', 'npm run build:engine-server'],
+    ['worker/bundle.js', 'npm run build:worker (scripts/build-worker-bundle.mjs)'],
+    ['worker/games-bundle.js', 'npm run build:games-worker'],
+  ]) {
+    if (!existsSync(path.join(ROOT, file))) throw new Error(`${file} نیست — ابتدا «${hint}» را اجرا و commit کنید`);
   }
   if (!existsSync(path.join(ROOT, 'public', 'index.html'))) {
     throw new Error('public/index.html نیست — ابتدا «npm run build:client» را اجرا کنید');
   }
 
-  // ① سایدکار pinned
-  const { sidecar, bytes } = await downloadSidecar(target);
+  // ① سایدکار node pinned
+  const { sidecar, bytes } = await downloadNodeSidecar(target);
 
-  // ② کپی public برای دیسک assets
+  // ② کپی public برای سرویس استاتیک adapter
   rmSync(P.resourcesEngineDir, { recursive: true, force: true });
   mkdirSync(P.publicDir, { recursive: true });
   cpSync(path.join(ROOT, 'public'), P.publicDir, { recursive: true });
@@ -151,9 +176,20 @@ async function main() {
   // ③ d1-seed مایگریت‌شده + seed
   const seed = buildD1Seed();
 
-  // ④ قالب capnp توکن‌دار — مانیفست دارایی‌ها از همان کپی داخل resources ساخته می‌شود
-  const template = await buildInstallerCapnpTemplate({ publicDir: P.publicDir });
-  writeFileSync(P.capnpTemplate, template);
+  // ④ v1.27.۰۳ — باندل موتور + باندل‌های ورکر به‌صورت فایل (adapter داینامیک import می‌کند)
+  const engineServerDst = path.join(P.resourcesEngineDir, 'engine-server.js');
+  cpSync(path.join(ROOT, 'scripts/engine/engine-server.js'), engineServerDst);
+  const engineServerBytes = statSync(engineServerDst).size;
+  mkdirSync(bundlesDir, { recursive: true });
+  const mainBundle = path.join(bundlesDir, 'worker.js');
+  const gamesBundle = path.join(bundlesDir, 'games.js');
+  cpSync(path.join(ROOT, 'worker', 'bundle.js'), mainBundle);
+  cpSync(path.join(ROOT, 'worker', 'games-bundle.js'), gamesBundle);
+  for (const [f, probe] of [[mainBundle, 'fetch'], [gamesBundle, 'fetch']]) {
+    if (!readFileSync(f, 'utf8').includes(probe)) throw new Error(`باندل ورکر ناقص — پروب غایب: ${f}`);
+  }
+  const mainBundleBytes = statSync(mainBundle).size;
+  const gamesBundleBytes = statSync(gamesBundle).size;
 
   // ⑤ v1.26.0 — دارایی‌های «ساخت سرور مرکزی»: central-worker.js + schema.sql (docs/rust/first-run-and-cloud.md §۳)
   //   باندل مرکزی از منبع «commit» شده است (worker/central-bundle.js — بازسازی: scripts/build-central-bundle.mjs
@@ -182,40 +218,27 @@ async function main() {
   const centralWorkerBytes = statSync(centralWorker).size;
   const centralSchemaBytes = statSync(centralSchema).size;
 
-  // ⑥ v1.27.02 — Microsoft Visual C++ Redistributable x64 — رفع کرش راه‌اندازی workerd روی
-  // ویندوز (access violation 0xc0000005 — issueهای cloudflare/workerd#4668 و #7581؛ جامعهٔ
-  // workerd: «معمولاً با آخرین redist حل می‌شود»). فقط هدف ویندوز؛ هوک POSTINSTALL نصاب NSIS
-  // آن را با ارتقای مجوز اجرا می‌کند (installer-hooks.nsh).
-  let redist = null;
-  if (target === 'x86_64-pc-windows-msvc') {
-    const redistUrl = 'https://aka.ms/vs/17/release/vc_redist.x64.exe';
-    const redistFile = path.join(P.tauriDir, 'resources', 'redist', 'vc_redist.x64.exe');
-    mkdirSync(path.dirname(redistFile), { recursive: true });
-    console.log('[runtime] دانلود VC++ Redistributable x64 (رفع کرش ویندوز workerd)…');
-    const res = await fetch(redistUrl, { redirect: 'follow' });
-    if (!res.ok) throw new Error(`دانلود VC++ Redistributable ناموفق: HTTP ${res.status} — ${redistUrl}`);
-    writeFileSync(redistFile, Buffer.from(await res.arrayBuffer()));
-    const redistBytes = statSync(redistFile).size;
-    if (redistBytes < 1_000_000) throw new Error(`فایل redist مشکوک است (${redistBytes}B) — دانلود ناقص`);
-    if (!readFileSync(redistFile).subarray(0, 2).equals(Buffer.from([0x4d, 0x5a]))) {
-      throw new Error('فایل redist امضای PE ندارد — دانلود نامعتبر (مثلاً صفحهٔ خطا)');
-    }
-    redist = { path: path.relative(ROOT, redistFile), sha256: sha256(redistFile), bytes: redistBytes, source: redistUrl };
-    console.log(`[runtime] VC++ Redistributable: ${redist.path} (${redistBytes}B)`);
-  }
-
-  // ⑦ ثبت هش‌ها
+  // ⑥ ثبت هش‌ها
   const manifest = {
     generatedAt: new Date().toISOString(),
     target,
-    workerd: {
-      version: PINNED_WORKERD_VERSION,
-      npmPackage: TARGET_NPM_PACKAGE[target],
+    node: {
+      version: PINNED_NODE_VERSION,
       sidecar: path.relative(ROOT, sidecar),
       sha256: sha256(sidecar),
       bytes,
+      source: 'https://nodejs.org/dist/',
     },
-    capnpTemplate: { path: path.relative(ROOT, P.capnpTemplate), name: CAPNP_TEMPLATE_NAME, sha256: sha256(P.capnpTemplate), bytes: statSync(P.capnpTemplate).size },
+    engineServer: { path: path.relative(ROOT, engineServerDst), sha256: sha256(engineServerDst), bytes: engineServerBytes },
+    bundles: {
+      dir: path.relative(ROOT, bundlesDir),
+      main: path.relative(ROOT, mainBundle),
+      mainSha256: sha256(mainBundle),
+      mainBytes: mainBundleBytes,
+      games: path.relative(ROOT, gamesBundle),
+      gamesSha256: sha256(gamesBundle),
+      gamesBytes: gamesBundleBytes,
+    },
     d1Seed: {
       dir: path.relative(ROOT, P.d1SeedDir),
       sqlite: path.relative(ROOT, seed.seedSqlite),
@@ -235,11 +258,11 @@ async function main() {
       schemaBytes: centralSchemaBytes,
       migrations: migFiles.length,
     },
-    redist,
   };
   writeFileSync(P.manifest, JSON.stringify(manifest, null, 2) + '\n');
-  console.log(`[runtime] سایدکار: ${manifest.workerd.sidecar} — sha256=${manifest.workerd.sha256.slice(0, 16)}… (${bytes}B)`);
-  console.log(`[runtime] قالب capnp: ${manifest.capnpTemplate.path} (${manifest.capnpTemplate.bytes}B)`);
+  console.log(`[runtime] سایدکار node: ${manifest.node.sidecar} — sha256=${manifest.node.sha256.slice(0, 16)}… (${bytes}B)`);
+  console.log(`[runtime] engine-server: ${manifest.engineServer.path} (${engineServerBytes}B)`);
+  console.log(`[runtime] باندل‌ها: main (${mainBundleBytes}B) + games (${gamesBundleBytes}B)`);
   console.log(`[runtime] d1-seed: ${seed.appliedCount}/${seed.total} مایگریشن + ${seed.seededUsers} کاربر نمایشی`);
   console.log(`[runtime] public: ${pub.files} فایل (${pub.bytes}B) — manifest: ${MANIFEST_NAME} ✓`);
   console.log(`[runtime] central: worker (${centralWorkerBytes}B) + schema (${migFiles.length} مایگریشن، ${centralSchemaBytes}B) ✓`);

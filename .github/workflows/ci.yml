@@ -43,6 +43,16 @@ jobs:
       - name: Bundle syntax check (node --check)
         run: node --check worker/bundle.js
 
+      - name: Build games worker bundle
+        run: node scripts/build-worker-games.mjs
+
+      # v1.27.۰۳ — گیت فاز ۲ دوهاته: موتور توسعهٔ workerd و موتور دسکتاپ adapter (نصاب)
+      - name: Engine smoke — workerd (حالت توسعه)
+        run: node scripts/engine/engine-smoke.mjs
+
+      - name: Engine smoke — adapter (موتور درون‌پروسه‌ای نصاب — بدون workerd)
+        run: SMOKE_ENGINE=adapter node scripts/engine/engine-smoke.mjs
+
       - name: Performance budget (پیل بوت/CSS/فونت)
         run: node scripts/perf-budget.mjs
 

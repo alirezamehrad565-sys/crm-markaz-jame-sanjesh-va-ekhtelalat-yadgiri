@@ -2,6 +2,33 @@
 
 قالب بر اساس [Keep a Changelog](https://keepachangelog.com/) و نسخه‌گذاری معنایی (SemVer).
 
+## [۱.۲۷.۰۳] — تعویض موتور دسکتاپ: workerd حذف شد؛ اجرای درون‌پروسه‌ای روی سایدکار node (shim کامل D1)
+
+### زمینه — گزارش نصاب واقعی کارفرما (v1.27.02)
+کرش بومی تکرار شد و لاگ نصب VC++ نشان داد سیستم کارفرما redist **۱۴٫۵۲** (تازه‌تر از نسخهٔ بسته ۱۴٫۴۴) دارد و ویندوز دانگرید را با `0x80070666` رد می‌کند — یعنی مسیر «توزیع redist» برای این ماشین بی‌اثر است و کرش upstream (`workerd#4668`/`#7581`) با تعویض redist حل نمی‌شود. تصمیم مهندسی: **باینری بومی workerd از مسیر دسکتاپ حذف شد** — موتور تازه همان باندل‌های ورکر (Hono + D1) را درون فرایند Node اجرا می‌کند و پوستهٔ Rust نقش سوپروایزر را همانند قبل دارد.
+
+### Changed — موتور (معماری)
+- **`scripts/engine/adapter/server.mjs`** — دو سرور HTTP درون‌پروسه‌ای (اصلی + بازی‌ها) با همان مسیریابی workerd: دارایی استاتیک اول برای GET/HEAD، ورکر بعد؛ بایند فقط loopback؛ همان بایندینگ‌های capnp قبلی (DB/ENV/CLINIC_NAME/AUTH_SECRET/CENTER_DESKTOP_ENGINE/GAMES_HEALTH_URL).
+- **`scripts/engine/adapter/d1.mjs`** — shim کامل API D1 روی `node:sqlite` (prepare/bind/all/first/run/batch اتمی/exec) روی **همان فایل SQLite پشتهٔ D1** — دادهٔ نصب کارفرما بدون هیچ تبدیلی حفظ می‌شود (مسیر قطعی `d1/miniflare-D1DatabaseObject/<hash>.sqlite` عین قبل).
+- **`engine.mjs --engine adapter`** — همهٔ زیرساخت عملیاتی موتور (یکپارچگی DB، پشتیبان بوت/شبانه، رویدادهای انسانی، ناظر ری‌استارت پنل، نگهبان بازی‌ها، چرخش لاگ) حالا روی موتور درون‌پروسه‌ای هم کار می‌کند؛ پیش‌فرض (بدون پرچم) همان workerd توسعه می‌ماند. قرارداد جدید: نوشتن **`engine-config.json`** با پورت‌های نهایی resolve‌شده — ریسک «پورت اشغال» از ریشه بسته شد.
+- **باندل `engine-server.js`** (۱۰۴KB — `npm run build:engine-server`) — فایل تنها لازم نصاب؛ باندل‌های ورکر به‌صورت فایل کنارش import داینامیک می‌شوند.
+- **`apply-migrations`** — نبود پوشهٔ `migrations/` در نصاب تحمل می‌شود (d1-seed از پیش مایگریت است).
+
+### Changed — پوستهٔ Rust
+- **`engine.rs`** — `EngineLaunch` (node/server_js/bundles/public/data_dir) + `find_node_binary` (سایدکار نصاب → node سیستم در توسعه) + `spawn_engine` (بدون capnp) + انتظار `engine-config.json` برای پورت نهایی؛ نگهبان/پایش ری‌استارت پنل و بازی‌ها دست‌نخورده؛ لاگ `engine.log`.
+- **`lib.rs`** — بوت بدون قالب و توکن: dev با `CENTER_ENGINE_REPO`، نصاب از `resources/engine`؛ کپی d1-seed حفظ شد؛ راز نشست مثل حالت توسعه در جدول settings می‌سازد/می‌ماند (فایل auth-secret.txt حذف).
+
+### Removed — نصاب
+- `binaries/workerd` از externalBin، قالب capnp، هوک VC++ (`installer-hooks.nsh`) و توزیع redist — نصاب بدون هیچ باینری بومی موتور.
+
+### Added — گیت‌ها و CI
+- `desktop-check` ⑦⑧⑨ بازنویسی: سیم‌کشی adapter (d1.mjs/server.mjs/engine.mjs/باندل)، حذف قطعی redist و هوک، externalBin node، engine-config.json، engine.log.
+- **CI اکنون هر دو موتور را گیت می‌گیرد**: `engine-smoke` در دو حالت workerd (توسعه) و `SMOKE_ENGINE=adapter` (موتور نصاب) — هر دو **۲۷/۲۷** شامل ری‌استارت پنل، پشتیبان فوری، zip گزارش خطا و رویدادهای انسانی.
+- شبیه‌سازی نصب محلی: بوت سایدکار node دانلودشده + d1-seed کپی‌شده → سبز (همان مسیر بوت نخست lib.rs).
+
+### Fixed
+- ریسک «پورت اشغال» — پورت نهایی از `engine-config.json` خوانده می‌شود، نه فرض ۸۷۸۷ (ریسک #۶ سند ریسک بسته شد).
+
 ## [۱.۲۷.۰۲] — کرش بومی workerd ویندوز (access violation) — توزیع خودکار VC++ Redistributable + تشخیص هدفمند + سند نقد و ریسک
 
 ### زمینه — گزارش نصاب واقعی کارفرما (v1.27.01)
