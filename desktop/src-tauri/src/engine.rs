@@ -59,9 +59,9 @@ pub struct EngineLaunch {
     pub server_js: PathBuf,
     /// data dir کاربر (کانفیگ/لاگ/دیتابیس این‌جاست)
     pub data_dir: PathBuf,
-    /// باندل ورکر اصلی (Hono) — در نصاب: resources/engine/central/worker.js
+    /// باندل ورکر اصلی (Hono) — در نصاب: resources/engine/bundles/worker.js (v1.27.۰۵ — قبلاً central/ بود؛ گیت ⑩)
     pub main_bundle: PathBuf,
-    /// باندل ورکر بازی‌ها — در نصاب: resources/engine/central/games.js
+    /// باندل ورکر بازی‌ها — در نصاب: resources/engine/bundles/games.js (v1.27.۰۵ — قبلاً central/ بود؛ گیت ⑩)
     pub games_bundle: PathBuf,
     /// پوشهٔ public برای سرویس استاتیک
     pub public_dir: PathBuf,
