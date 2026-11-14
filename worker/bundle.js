@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.0";
+var APP_VERSION = "1.27.1";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js

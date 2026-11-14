@@ -1,6 +1,6 @@
 [package]
 name = "center-desktop"
-version = "1.27.0"
+version = "1.27.1"
 description = "مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام — نسخهٔ میز"
 edition = "2021"
 
