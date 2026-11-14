@@ -70,6 +70,10 @@ dist/usb-pack/
 
 # rust-f13 — خروجی‌های مونتاژ رانتایم نصاب (در CI ساخته می‌شوند؛ git حمل نمی‌کند)
 desktop/src-tauri/binaries/
-desktop/src-tauri/resources/
+# v1.27.02 — فقط خروجی‌ها نادیده؛ redist/README.md کامیت می‌شود تا glob resources/redist/*
+# در tauri-build (cargo check لینوکس) همیشه فایل داشته باشد
+desktop/src-tauri/resources/**
+!desktop/src-tauri/resources/redist/
+!desktop/src-tauri/resources/redist/README.md
 desktop/src-tauri/engine-runtime-manifest.json
 
