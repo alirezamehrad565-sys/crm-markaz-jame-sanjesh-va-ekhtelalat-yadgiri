@@ -109,6 +109,22 @@ for (let i = 0; i < 120 && !booted; i++) {
 check('مایگریشن‌ها + seed در بوت موتور اعمال شد', booted && engineLog.includes('مایگریشن') && engineLog.includes('seed نمایشی'), engineLog.slice(-300));
 check('بوت موتور روی D1 موقت — /health پاسخ داد', booted);
 
+// M4 — پروب مستقل Games Worker در حالت adapter: سلامت gamesPort جدا از اپ اصلی با fetch
+// (همان چیزی که پوستهٔ Rust با پروب مستقل engine.rs می‌سنجد) — بعد از سبزشدن /health اصلی
+if (booted && adapterMode) {
+  let gamesProbed = false;
+  for (let i = 0; i < 60 && !gamesProbed; i++) {
+    try {
+      const res = await fetch(`${gamesBase}/health`, { signal: AbortSignal.timeout(1500) });
+      if (res.ok) gamesProbed = true;
+      else await delay(500);
+    } catch {
+      await delay(500);
+    }
+  }
+  check('سلامت مستقل gamesPort: /health سرویس بازی‌ها جدا از اپ اصلی → ۲۰۰ (پروب مستقل M4)', gamesProbed);
+}
+
 try {
   if (booted) {
     // — بخش ۲: سلامت و پوسته —

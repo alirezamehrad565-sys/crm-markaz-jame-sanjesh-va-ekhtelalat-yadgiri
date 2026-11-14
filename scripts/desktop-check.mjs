@@ -156,6 +156,14 @@ try {
   for (const t of ['find_node_binary', 'engine-config.json', 'engine.log', '--engine', 'adapter', 'CREATE_NO_WINDOW', 'current_dir', 'Result<PathBuf, String>', 'نصب رانتایم ناقص']) {
     engineSrc.includes(t) ? ok(`engine.rs: ${t.replace('Result<PathBuf, String>', 'find_node_binary → Result')} سیم است`) : bad(`engine.rs: ${t} غایب است`);
   }
+  // M4 — سلامت مستقل Games Worker: پروب جداگانهٔ gamesPort در حلقهٔ نگهبان + سیاست Degraded
+  // (۳ دَور پیاپی با اپ سالم → Degraded؛ ~۶ دَور → ری‌استارت یک‌باره) + رویداد/فاز تازه در lib.rs
+  engineSrc.includes('GAMES_DEGRADED_ROUNDS') && engineSrc.includes('GAMES_RESTART_ROUNDS') && engineSrc.includes('health_once(games_port)')
+    ? ok('engine.rs: پروب مستقل بازی‌ها + سیاست DEGRADED (M4) سیم است')
+    : bad('engine.rs: پروب مستقل بازی‌ها/سیاست DEGRADED (M4) غایب است');
+  libSrc.includes('engine:degraded') && libSrc.includes('EnginePhase::Degraded') && libSrc.includes('DegradedRecovered')
+    ? ok('lib.rs: رویداد engine:degraded + فاز Degraded (M4) سیم است')
+    : bad('lib.rs: رویداد/فاز Degraded (M4) غایب است');
   const libSrcAll = libSrc;
   libSrcAll.includes('find_node_binary()?')
     ? ok('lib.rs: خطای find_node_binary صریح به کاربر می‌رسد (?)')
@@ -208,6 +216,14 @@ try {
   smoke.includes('SMOKE_ENGINE') && smoke.includes('--engine')
     ? ok('engine-smoke: گیت دوهاته workerd/adapter سیم است')
     : bad('engine-smoke: حالت adapter سیم نیست');
+  // M4 — پروب مستقل gamesPort در smoke حالت adapter + گوش‌دادن بنر Degraded در پنل سلامت
+  smoke.includes('سلامت مستقل gamesPort')
+    ? ok('engine-smoke: پروب مستقل gamesPort در حالت adapter سیم است (M4)')
+    : bad('engine-smoke: پروب مستقل gamesPort (M4) غایب است');
+  const hpSrc = readFileSync(path.join(ROOT, 'public', 'assets', 'js', 'views', 'health-panel.js'), 'utf8');
+  hpSrc.includes("listen('engine:degraded'") && hpSrc.includes("listen('engine:degraded_recovered'")
+    ? ok('health-panel: بنر Degraded/بازگشت (engine:degraded) سیم است')
+    : bad('health-panel: گوش‌دادن engine:degraded غایب است');
 } catch (e) {
   bad(`گیت adapter خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }

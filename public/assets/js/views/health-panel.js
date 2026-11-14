@@ -608,11 +608,13 @@ function quotaSection(quota, quotaError) {
 
 /* ── EXP-4 — بنر نگهبان موتور (فقط-دسکتاپ، گارد کامل) ─────────────────────────
    Rust نگهبان موتور رویدادهای engine:restarting {attempt, delay_ms} / engine:restored {port}
-   / engine:down {attempts} را emit می‌کند (desktop/src-tauri/src/lib.rs). کانال دریافت:
+   / engine:down {attempts} + M4: engine:degraded {kind, message} / engine:degraded_recovered
+   {kind, message} را emit می‌کند (desktop/src-tauri/src/lib.rs). کانال دریافت:
    window.__TAURI__.event.listen — با withGlobalTauri در tauri.conf.json فعال می‌شود.
    همه‌چیز گاردشده است: بیرون پوستهٔ دسکتاپ (مرورگر/آزمون/IPC ردشده) کل تابع no-op می‌ماند
    و SPA هرگز نمی‌شکند. بنر ثابت بالای صفحه: زرد راه‌اندازی دوباره، سبز «دوباره راه افتاد»
-   با پنهان‌شدن خودکار ۱۰ثانیه‌ای، قرمز ماندگار «پاسخ نمی‌دهد». */
+   با پنهان‌شدن خودکار ۱۰ثانیه‌ای، قرمز ماندگار «پاسخ نمی‌دهد»؛ M4: زرد ماندگار Degraded
+   (فقط ورکر بازی‌ها پایین است — سرویس اصلی سالم و اپ کار می‌کند) و سبز بازگشت آن. */
 
 const ENGINE_BANNER_ID = 'engine-watchdog-banner';
 const ENGINE_BANNER_AUTOHIDE_MS = 10_000;
@@ -699,6 +701,20 @@ export function installEngineWatchdogBanner() {
           const attempts = ev?.payload?.attempts;
           const n = Number.isFinite(Number(attempts)) && Number(attempts) > 0 ? fa(Math.round(Number(attempts))) : null;
           showEngineBanner('danger', `موتور پاسخ نمی‌دهد${n ? ` — پس از ${n} تلاش` : ''} — صفحهٔ بوت را باز کنید`, false); // ماندگار
+        });
+        // M4 — ناسالمی مستقل ورکر بازی‌ها با سرویس اصلی سالم: زرد ماندگار تا بازگشت سلامت؛
+        // پیام فارسی از payload رخداد (lib.rs) می‌آید — پیام غایب/خراب → پیام پیش‌فرض بی‌کرش
+        await listen('engine:degraded', (ev) => {
+          const msg = typeof ev?.payload?.message === 'string' && ev.payload.message
+            ? ev.payload.message
+            : 'ورکر بازی‌ها پاسخ نمی‌دهد — سرویس اصلی سالم است';
+          showEngineBanner('warn', msg, false); // ماندگار تا engine:degraded_recovered
+        });
+        await listen('engine:degraded_recovered', (ev) => {
+          const msg = typeof ev?.payload?.message === 'string' && ev.payload.message
+            ? ev.payload.message
+            : 'ورکر بازی‌ها دوباره پاسخ می‌دهد';
+          showEngineBanner('ok', msg, true); // پنهان‌شدن خودکار ۱۰ثانیه‌ای
         });
       } catch {
         // IPC گوش‌دادن ناموفق (مثلاً مجوز رد شد) — نرم؛ بنر هرگز SPA را نمی‌شکند

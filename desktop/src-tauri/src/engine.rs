@@ -15,6 +15,14 @@
 //! Failed در lib.rs. خاموشی عمدی (خروج اپ / Drop) با پرچم stop شناخته می‌شود و هرگز
 //! ری‌استارت نمی‌خواهد — کد خروج ملاک نیست، پرچم ملاک است.
 //!
+//! M4 — سلامت مستقل Games Worker: نگهبان هر دَور پایش (۵ ثانیه) سلامت اصلی و بازی‌ها را
+//! جداگانه می‌سنجد (هر دو /health روی loopback). سیاست محافظه‌کار Degraded: فقط بازی‌ها
+//! ۳ دَور پیاپی ناسالم با اپ سالم → وضعیت Degraded + رویداد engine:degraded (بدون
+//! ری‌استارت — اپ کار می‌کند)؛ برگشت سلامت → engine:degraded_recovered و بازگشت به Ready؛
+//! اگر ۳ دَور دیگر (مجموعاً ~۶ دَور) هم ناسالم ماند → یک‌بار ری‌استارت کودک با همان مسیر
+//! موجود (رویداد engine:restarting موجود) و صفرشدن شمارش‌ها. خروج خود کودک → همان مسیر
+//! نگهبان اصلی؛ سلامت اصلی ناموفق → همان مسیر موجود (هیچ تغییر رفتاری).
+//!
 //! کامپایل در CI (cargo در محیط سندباکس جاری نیست) — گیت ساختاری desktop:check
 //! هم‌گامی فایل‌ها را می‌گیرد و کامپایل واقعی در خط CI با Rust stable انجام می‌شود.
 
@@ -42,8 +50,12 @@ const SUPERVISE_POLL_MS: u64 = 500;
 /// مهلت سالم‌شدن پس از هر ری‌استارت — همان سقف بوت نخست (۳۰ ثانیه)
 const RESTART_HEALTH_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// ENG-4 — چند شکست پیاپیِ پایش بازی‌ها «مرگ» شمرده می‌شود (پایش هر ۵ ثانیه)
-const GAMES_FAIL_THRESHOLD: u32 = 2;
+/// M4 — چند دَور پیاپی ناسالمیِ ورکر بازی‌ها (با اپ اصلی سالم) وضعیت Degraded می‌گیرد
+/// (هر دَور = RUNTIME_POLL_EVERY گام SUPERVISE_POLL_MS = ۵ ثانیه؛ ۳ دَور ≈ ۱۵ ثانیه)
+const GAMES_DEGRADED_ROUNDS: u32 = 3;
+
+/// M4 — پس از ۳ دَور دیگر (مجموعاً ~۶ دَور ≈ ۳۰ ثانیه) یک‌بار ری‌استارت کودک با همان مسیر موجود
+const GAMES_RESTART_ROUNDS: u32 = 6;
 
 /// فاصلهٔ پایش زمان اجرا (مُهر ری‌استارت/سلامت بازی‌ها) — ۱۰ گام پولینگ = ۵ ثانیه
 const RUNTIME_POLL_EVERY: u32 = 10;
@@ -399,21 +411,23 @@ impl LocalEngine {
 }
 
 /// به‌کارگیری thread نگهبان — detach می‌شود؛ فقط با پرچم stop تمام می‌شود (Drop یا خروج اپ)
-/// ENG-4: همان thread پایش مُهر ری‌استارت پنل و سلامت سرویس بازی‌ها را هم انجام می‌دهد
+/// ENG-4/M4: همان thread پایش مُهر ری‌استارت پنل و سلامت جداگانهٔ دو سرویس را هم انجام می‌دهد
 /// (هر دو سرویس در یک پروسهٔ موتور هستند؛ ری‌استارتِ هر دو = spawn دوبارهٔ همان child).
+/// پورت‌ها mut اند: پس از هر spawn دوباره از engine-config.json خوانده می‌شوند تا پروب مستقل
+/// بازی‌ها همیشه gamesPort نهایی را ببیند (M4).
 fn supervise(
     plan: EngineLaunch,
-    port: u16,
-    games_port: u16,
+    mut port: u16,
+    mut games_port: u16,
     stop: Arc<AtomicBool>,
     child_slot: Arc<Mutex<Option<Child>>>,
     on_event: EngineEventSink,
 ) {
     std::thread::spawn(move || {
         let mut history: Vec<RestartRecord> = Vec::new();
-        // وضعیت پایش بازی‌ها — آینهٔ engine_watchdog.rs (بک‌آف ۲/۵/۱۰، کاپ ۳، پنجرهٔ ۱۰د)
-        let mut games_history: Vec<RestartRecord> = Vec::new();
+        // وضعیت پایش بازی‌ها (M4) — شمارش دَورهای ناسالم متوالی + آیا Degraded اعلام شده است
         let mut games_fails: u32 = 0;
+        let mut games_degraded = false;
         let mut tick: u32 = 0;
         loop {
             if stop.load(Ordering::SeqCst) {
@@ -422,31 +436,34 @@ fn supervise(
             std::thread::sleep(Duration::from_millis(SUPERVISE_POLL_MS));
             tick += 1;
             // پایش زمان اجرا هر ۵ ثانیه — ① مُهر ری‌استارت پنل (خروج عمدی، حساب کرش ندارد)
-            // ② سلامت سرویس بازی‌ها با اپ سالم (ENG-4)
+            // ② سلامت جداگانهٔ اصلی و بازی‌ها (پروب مستقل gamesPort — M4)
             if tick % RUNTIME_POLL_EVERY == 0 && !stop.load(Ordering::SeqCst) {
                 if restart_scheduled_once(port) {
                     eprintln!("[desktop] ری‌استارت سامانه از پنل درخواست شد — خاموشی تمیز و بالا آوردن دوباره");
                     on_event(WatchdogEvent::Restarting { attempt: 0, delay_ms: 0 });
                     kill_child(&child_slot);
                     history.clear();
-                    games_history.clear();
                     games_fails = 0;
+                    games_degraded = false;
                     match spawn_engine(&plan) {
                         Ok(new_child) => {
                             if let Ok(mut guard) = child_slot.lock() {
                                 *guard = Some(new_child);
                             }
-                            // پس از ری‌استارت پنل هم پورت نهایی ممکن است عوض شود — دوباره کانفیگ
-                            let Some((new_port, _)) =
+                            // پس از ری‌استارت پنل هم پورت‌های نهایی ممکن است عوض شوند — هر دو از
+                            // کانفیگ خوانده می‌شوند (پروب بازی‌ها باید gamesPort تازه را ببیند — M4)
+                            let Some((new_port, new_games_port)) =
                                 wait_engine_config(&plan.data_dir, RESTART_HEALTH_TIMEOUT)
                             else {
                                 kill_child(&child_slot);
                                 eprintln!("[desktop] پس از ری‌استارت پنل کانفیگ نیامد — تلاش دوبارهٔ نگهبان");
                                 continue;
                             };
-                            if wait_healthy_while(new_port, &stop, RESTART_HEALTH_TIMEOUT) {
+                            port = new_port;
+                            games_port = new_games_port;
+                            if wait_healthy_while(port, &stop, RESTART_HEALTH_TIMEOUT) {
                                 on_event(WatchdogEvent::Restored);
-                                eprintln!("[desktop] ری‌استارت پنل کامل شد — موتور دوباره روی پورت {new_port} آماده است");
+                                eprintln!("[desktop] ری‌استارت پنل کامل شد — موتور دوباره روی پورت {port} آماده است");
                             }
                         }
                         Err(e) => {
@@ -458,60 +475,58 @@ fn supervise(
                 let main_ok = health_once(port);
                 let games_ok = health_once(games_port);
                 if games_ok {
-                    if games_fails > 0 || !games_history.is_empty() {
+                    // M4 — برگشت سلامت بازی‌ها: اگر Degraded اعلام شده بود رویداد بازگشت می‌رود و
+                    // lib.rs فاز را به Ready برمی‌گرداند؛ در هر حال شمارش‌ها صفر می‌شود
+                    if games_degraded {
+                        eprintln!("[desktop] ورکر بازی‌ها بدون ری‌استارت دوباره سالم است — بازگشت به Ready");
+                        on_event(WatchdogEvent::DegradedRecovered);
+                    } else if games_fails > 0 {
                         eprintln!("[desktop] سرویس بازی‌ها دوباره سالم است — شمارش نگهبان از صفر");
                     }
                     games_fails = 0;
-                    games_history.clear();
+                    games_degraded = false;
                 } else if main_ok {
+                    // M4 — فقط بازی‌ها ناسالم (اپ اصلی سالم): سیاست محافظه‌کار — ۳ دَور پیاپی
+                    // → وضعیت Degraded بدون ری‌استارت؛ ۳ دَور دیگر (مجموعاً ~۶) → یک‌بار ری‌استارت.
+                    // اپ اصلی در هیچ‌یک از این دو مسیر قطع نمی‌شود.
                     games_fails += 1;
-                    if games_fails >= GAMES_FAIL_THRESHOLD {
-                        games_fails = 0;
-                        let now = now_ms();
-                        let mut decision = next_action(&games_history, now, now);
-                        if let WatchdogAction::ResetWindow = decision {
-                            games_history.clear();
-                            decision = next_action(&games_history, now, now);
-                        }
-                        match decision {
-                            WatchdogAction::GiveUp => {
-                                eprintln!("[desktop] نگهبان بازی‌ها تسلیم شد — ۳ تلاش در پنجرهٔ ۱۰ دقیقه بی‌نتیجه؛ بخش اداری سالم مانده و فقط «تلاش دوبارهٔ» دستی اثر می‌کند");
-                                on_event(WatchdogEvent::Down { attempts: games_history.len() as u32 });
-                            }
-                            WatchdogAction::ResetWindow => {}
-                            WatchdogAction::Restart(delay_ms) => {
-                                let attempt = games_history.len() as u32 + 1;
-                                eprintln!("[desktop] سرویس بازی‌ها ناسالم است — ری‌استارت تا {} ثانیه دیگر (تلاش {})", delay_ms / 1000, attempt);
-                                on_event(WatchdogEvent::Restarting { attempt, delay_ms });
-                                games_history.push(RestartRecord { exit_at_ms: now, delay_ms });
-                                if sleep_interruptible(Duration::from_millis(delay_ms), &stop) {
+                    if games_fails == GAMES_DEGRADED_ROUNDS {
+                        games_degraded = true;
+                        eprintln!("[desktop] ورکر بازی‌ها {GAMES_DEGRADED_ROUNDS} دَور پیاپی پاسخ نداد — وضعیت Degraded (سرویس اصلی سالم است)");
+                        on_event(WatchdogEvent::Degraded { fails: games_fails });
+                    } else if games_fails >= GAMES_RESTART_ROUNDS {
+                        eprintln!("[desktop] ورکر بازی‌ها پس از Degraded هم پاسخ نمی‌دهد — ری‌استارت یک‌بارهٔ کودک با همان مسیر موجود");
+                        on_event(WatchdogEvent::Restarting { attempt: 1, delay_ms: 0 });
+                        kill_child(&child_slot);
+                        match spawn_engine(&plan) {
+                            Ok(new_child) => {
+                                if let Ok(mut guard) = child_slot.lock() {
+                                    *guard = Some(new_child);
+                                }
+                                // پورت‌های نهایی ممکن است پس از spawn دوباره عوض شوند — هر دو از کانفیگ
+                                let Some((new_port, new_games_port)) =
+                                    wait_engine_config(&plan.data_dir, RESTART_HEALTH_TIMEOUT)
+                                else {
                                     kill_child(&child_slot);
-                                    match spawn_engine(&plan) {
-                                        Ok(new_child) => {
-                                            if let Ok(mut guard) = child_slot.lock() {
-                                                *guard = Some(new_child);
-                                            }
-                                            let Some((new_port, _)) =
-                                                wait_engine_config(&plan.data_dir, RESTART_HEALTH_TIMEOUT)
-                                            else {
-                                                kill_child(&child_slot);
-                                                continue;
-                                            };
-                                            if wait_healthy_while(new_port, &stop, RESTART_HEALTH_TIMEOUT) {
-                                                games_history.clear();
-                                                on_event(WatchdogEvent::Restored);
-                                                eprintln!("[desktop] سرویس بازی‌ها پس از ری‌استارت دوباره آماده است");
-                                            } else if !stop.load(Ordering::SeqCst) {
-                                                kill_child(&child_slot);
-                                            }
-                                        }
-                                        Err(e) => {
-                                            eprintln!("[desktop] spawn دوبارهٔ موتور برای بازی‌ها ناموفق بود: {e}");
-                                        }
-                                    }
+                                    eprintln!("[desktop] پس از ری‌استارت بازی‌ها کانفیگ نیامد — تلاش دوبارهٔ نگهبان");
+                                    continue;
+                                };
+                                port = new_port;
+                                games_port = new_games_port;
+                                if wait_healthy_while(port, &stop, RESTART_HEALTH_TIMEOUT) {
+                                    on_event(WatchdogEvent::Restored);
+                                    eprintln!("[desktop] ری‌استارت بازی‌ها کامل شد — موتور دوباره روی پورت {port} آماده است");
                                 }
                             }
+                            Err(e) => {
+                                eprintln!("[desktop] spawn دوبارهٔ موتور برای بازی‌ها ناموفق بود: {e}");
+                            }
                         }
+                        // پس از ری‌استارت شمارش‌ها صفر — اگر بازی‌ها باز ناسالم ماند، چرخهٔ Degraded
+                        // تازه از صفر شروع می‌شود (باز هم بدون قطع اپ اصلی؛ مرگ خود کودک → مسیر موجود)
+                        games_fails = 0;
+                        games_degraded = false;
+                        continue; // کودک تازه است — این دَور try_wait لازم نیست (عین مسیر ری‌استارت پنل)
                     }
                 }
                 // اگر اپ اصلی هم ناسالم بود: مرگ کل پروسه است — شاخهٔ try_wait زیر همان را می‌گیرد

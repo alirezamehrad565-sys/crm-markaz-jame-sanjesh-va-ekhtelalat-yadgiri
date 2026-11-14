@@ -24,10 +24,13 @@ use tauri::{Emitter, Manager};
 pub struct LocalEngineSlot(Mutex<Option<engine::LocalEngine>>);
 
 /// v1.26.0 — وضعیت صریح بوت برای صفحهٔ بوت (سه حالت، هیچ حالت خاموشی نیست)
+/// M4 — واریانت چهارم Degraded: اپ اصلی سالم و کار می‌کند اما ورکر بازی‌ها پایین است
+/// (پروب مستقل gamesPort — نگهبان خودش بازگشت/ری‌استارت را مدیریت می‌کند)
 #[derive(Clone)]
 pub enum EnginePhase {
     Booting,
     Ready { port: u16, base_url: String },
+    Degraded { port: u16, base_url: String },
     Failed { message: String, log_tail: String },
 }
 
@@ -212,8 +215,10 @@ fn boot_failure_message(_log_tail: &str) -> String {
 /// گیرندهٔ رویدادهای نگهبان موتور → رخداد تائوری برای پوسته + وضعیت صریح پس از تسلیم.
 /// نام رخدادها: engine:restarting {attempt, delay_ms} / engine:restored {port} /
 /// engine:down {attempts} — پس از engine:down فاز به Failed می‌رود (وضعیت صریح بوت) و
-/// «تلاش دوباره» همان engine_retry است. اگر نسل بوت عوض شده باشد، نوشتن فاز نادیده گرفته
-/// می‌شود تا نتیجهٔ کهنهٔ نگهبان، بوت تازه را خراب نکند.
+/// «تلاش دوباره» همان engine_retry است. M4: engine:degraded / engine:degraded_recovered
+/// برای ناسالمی مستقل ورکر بازی‌ها با سرویس اصلی سالم — فاز بین Ready و Degraded جابه‌جا
+/// می‌شود (پورت/base_url همان می‌مانَد؛ اپ اصلی کار می‌کند). اگر نسل بوت عوض شده باشد،
+/// نوشتن فاز نادیده گرفته می‌شود تا نتیجهٔ کهنهٔ نگهبان، بوت تازه را خراب نکند.
 fn engine_event_sink(app: tauri::AppHandle, gen: u32) -> engine::EngineEventSink {
     std::sync::Arc::new(move |ev| {
         let stale = app.state::<AppState>().generation.load(Ordering::SeqCst) != gen;
@@ -225,11 +230,19 @@ fn engine_event_sink(app: tauri::AppHandle, gen: u32) -> engine::EngineEventSink
                 );
             }
             engine_watchdog::WatchdogEvent::Restored => {
-                let port = app.state::<AppState>().phase.lock().ok().and_then(|g| match &*g {
-                    EnginePhase::Ready { port, .. } => Some(*port),
+                // M4 — پورت از Ready یا Degraded خوانده می‌شود؛ پس از ری‌استارت سالم، فاز
+                // Degraded (در صورت بودن) به Ready برمی‌گردد
+                let cur = app.state::<AppState>().phase.lock().ok().map(|g| g.clone());
+                let port = cur.as_ref().and_then(|p| match p {
+                    EnginePhase::Ready { port, .. } | EnginePhase::Degraded { port, .. } => Some(*port),
                     _ => None,
                 });
                 let _ = app.emit("engine:restored", serde_json::json!({ "port": port }));
+                if !stale {
+                    if let Some(EnginePhase::Degraded { port, base_url }) = cur {
+                        app.state::<AppState>().set_phase(EnginePhase::Ready { port, base_url });
+                    }
+                }
             }
             engine_watchdog::WatchdogEvent::Down { attempts } => {
                 let _ = app.emit("engine:down", serde_json::json!({ "attempts": attempts }));
@@ -247,6 +260,42 @@ fn engine_event_sink(app: tauri::AppHandle, gen: u32) -> engine::EngineEventSink
                     });
                 }
             }
+            engine_watchdog::WatchdogEvent::Degraded { .. } => {
+                // M4 — فقط ورکر بازی‌ها پایین است (سرویس اصلی سالم) — بدون ری‌استارت؛
+                // پیام فارسی کوتاه برای بنر پنل سلامت
+                let _ = app.emit(
+                    "engine:degraded",
+                    serde_json::json!({
+                        "kind": "games_worker",
+                        "message": "ورکر بازی‌ها پاسخ نمی‌دهد — سرویس اصلی سالم است",
+                    }),
+                );
+                if !stale {
+                    // Ready → Degraded با حفظ پورت/base_url؛ اگر فاز Failed است دست نمی‌خوریم
+                    if let Ok(mut guard) = app.state::<AppState>().phase.lock() {
+                        if let EnginePhase::Ready { port, base_url } = guard.clone() {
+                            *guard = EnginePhase::Degraded { port, base_url };
+                        }
+                    }
+                }
+            }
+            engine_watchdog::WatchdogEvent::DegradedRecovered => {
+                // M4 — ورکر بازی‌ها بدون ری‌استارت دوباره سالم شد — بازگشت به Ready
+                let _ = app.emit(
+                    "engine:degraded_recovered",
+                    serde_json::json!({
+                        "kind": "games_worker",
+                        "message": "ورکر بازی‌ها دوباره پاسخ می‌دهد — همه‌چیز سالم است",
+                    }),
+                );
+                if !stale {
+                    if let Ok(mut guard) = app.state::<AppState>().phase.lock() {
+                        if let EnginePhase::Degraded { port, base_url } = guard.clone() {
+                            *guard = EnginePhase::Ready { port, base_url };
+                        }
+                    }
+                }
+            }
         }
     })
 }
@@ -262,6 +311,10 @@ fn desktop_status(app: tauri::AppHandle) -> serde_json::Value {
         EnginePhase::Ready { port, base_url } => {
             serde_json::json!({ "phase": "ready", "version": version, "port": port, "base_url": base_url })
         }
+        // M4 — Degraded همان شکل ready را دارد (اپ اصلی کار می‌کند)؛ فقط phase عوض است
+        EnginePhase::Degraded { port, base_url } => {
+            serde_json::json!({ "phase": "degraded", "version": version, "port": port, "base_url": base_url })
+        }
         EnginePhase::Failed { message, log_tail } => {
             serde_json::json!({ "phase": "failed", "version": version, "message": message, "log_tail": log_tail })
         }
@@ -274,8 +327,10 @@ fn engine_retry(app: tauri::AppHandle) {
     let state = app.state::<AppState>();
     {
         let phase = state.phase.lock().map(|g| g.clone()).unwrap_or(EnginePhase::Booting);
-        if matches!(phase, EnginePhase::Booting | EnginePhase::Ready { .. }) {
-            return; // بوت در جریان است یا موتور آماده — کاری نکن
+        // بوت در جریان است یا موتور آماده (حتی Degraded — M4: اپ اصلی کار می‌کند و
+        // بازگشت/ری‌استارت بازی‌ها را نگهبان خودش مدیریت می‌کند) — کاری نکن
+        if matches!(phase, EnginePhase::Booting | EnginePhase::Ready { .. } | EnginePhase::Degraded { .. }) {
+            return;
         }
         // موتور قبلی (اگر زنده مانده باشد) با ست‌شدن None می‌میرد
         if let Ok(mut slot) = app.state::<LocalEngineSlot>().0.lock() {
@@ -315,7 +370,8 @@ fn desktop_health(app: tauri::AppHandle) -> serde_json::Value {
     let state = app.state::<AppState>();
     let phase = state.phase.lock().map(|g| g.clone()).unwrap_or(EnginePhase::Booting);
     let engine = match phase {
-        EnginePhase::Ready { port, ref base_url } => {
+        // M4 — Degraded هم مثل Ready گزارش می‌شود: اپ اصلی روی همان base_url کار می‌کند
+        EnginePhase::Ready { port, ref base_url } | EnginePhase::Degraded { port, ref base_url } => {
             Some(serde_json::json!({ "port": port, "baseUrl": base_url }))
         }
         _ => None,
