@@ -307,7 +307,7 @@ function upsertRowWrite(table: string, columns: ColumnMeta[], pk: string[], row:
     .filter((c) => !pkSet.has(c.name))
     .map((c) => `${assertSafeIdent(c.name)} = excluded.${assertSafeIdent(c.name)}`)
     .join(', ');
-  const placeholders = cols.map(() => '?').join(', ');
+  const placeholders = cols.map(() => '?').join(', '); // IN-bounded: به تعداد ستون‌های schema جدول (PRAGMA) — فهرست متغیر کاربر نیست
   return {
     sql: `INSERT INTO ${assertSafeIdent(table)} (${cols.join(', ')}) VALUES (${placeholders})
           ON CONFLICT(${conflictTarget}) DO UPDATE SET ${updateSet}`,
@@ -320,7 +320,7 @@ function upsertRowWrite(table: string, columns: ColumnMeta[], pk: string[], row:
  *  نه trigger حذف را می‌راند (دود بند ⑦ smoke-instance-sync). */
 function replaceRowWrite(table: string, columns: ColumnMeta[], row: Row): PushWrite {
   const cols = columns.map((c) => assertSafeIdent(c.name));
-  const placeholders = cols.map(() => '?').join(', ');
+  const placeholders = cols.map(() => '?').join(', '); // IN-bounded: به تعداد ستون‌های schema جدول (PRAGMA) — فهرست متغیر کاربر نیست
   return {
     sql: `INSERT OR REPLACE INTO ${assertSafeIdent(table)} (${cols.join(', ')}) VALUES (${placeholders})`,
     params: cols.map((c) => bindValue(row[c]))

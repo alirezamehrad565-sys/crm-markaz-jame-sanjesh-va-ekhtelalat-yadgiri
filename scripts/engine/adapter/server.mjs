@@ -110,7 +110,7 @@ const reqHead = (m) => String(m ?? '').toUpperCase() === 'HEAD';
 /**
  * فاز B — CloudFsIO: پل فایل‌سیستم dataDir برای اپ (docs/rust/server-cloud-update-design.md §۲-۴).
  * باندل ورکر هرگز node:fs import نمی‌کند (باید در workerd هم باندل‌پذیر بماند) — پس فایل‌های
- * ابری (cloud-config.json + sync-state.json + پشتیبان‌های cloud-sync-pre-*/cloud-sync-clone-*)
+ * ابری (cloud-config.json + sync-state.json + پشتیبان‌های cloud-sync-pre-* و cloud-sync-clone-*)
  * فقط از طریق همین آبجکت تزریقی در binding CLOUD_FS خوانده/نوشته می‌شوند؛ در حالت workerd
  * (توسعه) غایب است → اپ «configured=false» می‌دهد و هم‌گامی ابری خاموش می‌ماند.
  * سد نام فایل: فقط همین الگوها مجازند — هیچ مسیر دیگری از اپ به dataDir باز نمی‌شود.

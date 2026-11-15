@@ -237,7 +237,7 @@ export async function applyEcho(
     if (typeof winner !== 'object' || Array.isArray(winner)) continue;
     const row = winner as Record<string, unknown>;
     const colList = cols.map((c) => `"${c}"`).join(', ');
-    const placeholders = cols.map(() => '?').join(', ');
+    const placeholders = cols.map(() => '?').join(', '); // IN-bounded: به تعداد ستون‌های schema جدول echo (ستون‌های واقعی ردیف برنده) — متغیر کاربر نیست
     statements.push(
       db.prepare(`INSERT OR REPLACE INTO "${table}" (${colList}) VALUES (${placeholders})`, cols.map((c) => (row[c] === undefined ? null : row[c])))
     );

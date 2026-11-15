@@ -102,6 +102,6 @@ describe('گیت پویش IN-list — هر سازندهٔ IN یا تکه‌بن�
     /* ۱۵ نقطهٔ ثابتِ مستند: statuses بازی‌ها، keys باتری بالینی، کلیدهای نظرسنجی خانواده (center-kpi ×۳ و case-events ×۳)،
        slice صریح case-events، دو pragma بکاپ، statuses دنبال‌وی special-needs، reports تکه‌شدهٔ ف۵،
        repo نوبت‌ها تکه‌شدهٔ ف۵، بستهٔ push با LIMIT ثابت، وضعیت setup نمایشی سه‌شناسه (v1.26.0) */
-    expect(markedSites.length).toBe(16);
+    expect(markedSites.length).toBe(19); // فاز B — ۳ سایت ستونی schema-مقید instance-sync (service×۲ + runner×۱) به نشان‌های ۱۶گانهٔ قبلی افزوده شد
   });
 });

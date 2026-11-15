@@ -182,6 +182,8 @@ describe('مسیر بوت واقعی engine.mjs با پایگاه خراب — �
       }
     }
 
+    // عیب‌یابی‌پذیری دائمی: اگر بوت نشد، آخرِ لاگ موتور چاپ می‌شود تا علت ریشه‌ای دیده شود
+    if (!booted) console.error('=== ENGINE LOG (خرابی بوت) ===\n' + log.slice(-4000));
     expect(booted).toBe(true);
     expect(log).toContain('پایگاه داده آسیب دیده بود');
     expect(log).toContain('بازسازی شد');
