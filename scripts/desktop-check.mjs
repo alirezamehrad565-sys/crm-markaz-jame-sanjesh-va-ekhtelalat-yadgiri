@@ -400,6 +400,14 @@ try {
   pinB(path.join(ROOT, 'src', '__tests__', 'front-cloud-sync.test.ts'), ['cloudSyncStateView'], 'آزمون front-cloud-sync.test.ts');
   pinB(path.join(IS_DIR, '__tests__', 'two-instance-sync.test.ts'), ['rowWinner'], 'آزمون two-instance-sync.test.ts');
   pinB(path.join(ROOT, 'worker', 'central-bundle.js'), ['instance-sync'], 'worker/central-bundle.js');
+
+  // فاز C — ویزارد «پیکربندی اولیه اتصال ابری» (سند §۲-۵/§۶ فاز C؛ عامل فرانت): پین‌های سخت
+  // رشته‌ای — هم‌الگوی pinB فاز B. view تازهٔ ویزارد + روت/بنر/هدایت اولین اجرا در app.js +
+  // لینک پانویس boot-dist در حالت «موتور آماده» + آزمون خالص. عمداً فقط همین پین‌ها — هیچ چیز دیگر.
+  pinB(path.join(ROOT, 'public', 'assets', 'js', 'views', 'cloud-setup.js'), ['cloudSetupView', 'provision'], 'cloud-setup (ویزارد فاز C)');
+  pinB(path.join(ROOT, 'public', 'assets', 'js', 'app.js'), ['/#/cloud-setup'], 'app.js (روت/بنر فاز C)');
+  pinB(path.join(ROOT, 'desktop', 'src-tauri', 'boot-dist', 'index.html'), ['پیکربندی اتصال ابری'], 'boot-dist (لینک فاز C)');
+  pinB(path.join(ROOT, 'src', '__tests__', 'front-cloud-setup.test.ts'), ['cloudSetupView'], 'آزمون front-cloud-setup.test.ts');
 } catch (e) {
   bad(`گیت پین‌های P2 خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }

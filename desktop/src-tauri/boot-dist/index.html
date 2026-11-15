@@ -79,6 +79,8 @@
   .foot { margin-top:16px; font-size:11.5px; color:var(--muted); line-height:1.9; }
   .foot code { direction:ltr; unicode-bidi:embed; font-family:Consolas, monospace; font-size:11px;
                background:var(--soft); border-radius:4px; padding:1px 6px; }
+  /* فاز C — لینک کم‌رنگ «پیکربندی اتصال ابری» در پانویس حالت «موتور آماده» */
+  .foot a { color:var(--pd); }
 
   /* فاز A — pill همیشه‌نمایان وضعیت سرور محلی (گوشهٔ صفحه؛ طرح server-cloud-update-design §۱-۲) */
   .serverpill { position:fixed; bottom:14px; inset-inline-start:14px; z-index:60;
@@ -124,6 +126,13 @@
       <div class="copied" id="copied">✓ گزارش خرابی کپی شد — در پیام خود بچسبانید.</div>
       <div class="foot">اگر مشکل تکرار شد، فایل <code>engine.log</code> و <code>engine-config.json</code> در پوشهٔ داده هم به گزارش اضافه کنید. جزئیات راهنما: <code>docs/ADMIN-GUIDE.fa.md</code></div>
     </div>
+  </div>
+
+  <!-- فاز C — لینک کم‌رنگ «پیکربندی اتصال ابری» در پانویس صفحهٔ بوت: فقط در حالت «موتور آماده»
+       نمایان می‌شود (پیش از آن hidden است — الگوی pill فاز A). پس از باز شدن SPA به مسیر
+       #/cloud-setup می‌رود؛ نصب تازه هنوز ابر ندارد. چند خط — هیچ CSS/JS سنگینی. -->
+  <div class="foot" id="boot-cloud-foot" hidden>
+    <a id="boot-cloud-link" href="#">پیکربندی اتصال ابری</a> — پس از باز شدن برنامه، برای وصل‌کردن این دستگاه به ابر یا ساخت ورکر.
   </div>
 
   <!-- فاز A — pill وضعیت سرور محلی: حالت‌ها از رویداد engine:status + poll invoke engine_status هر ۳ثانیه تا Ready.
@@ -181,7 +190,17 @@
       el('phase').textContent = 'موتور آماده است — باز کردن برنامه…';
       globalThis.__DESKTOP_SHELL__ = true;
       globalThis.__DESKTOP_FEATURES__ = { tutorial: true, setup: true };
-      location.replace(st.base_url + '/');
+      // فاز C — لینک کم‌رنگ «پیکربندی اتصال ابری» در حالت «موتور آماده» (نصب تازه هنوز ابر ندارد):
+      // چند صدم ثانیه پیش از جایگزینی صفحه دیده می‌شود؛ بیرون پوسته یا بدون base_url رها می‌شود.
+      try {
+        const cloudFoot = el('boot-cloud-foot');
+        const cloudLink = el('boot-cloud-link');
+        if (cloudFoot && cloudLink && typeof st.base_url === 'string' && st.base_url) {
+          cloudLink.href = st.base_url + '/#/cloud-setup';
+          cloudFoot.hidden = false;
+        }
+      } catch { /* نرم — بوت هرگز از این لینک نمی‌شکند */ }
+      setTimeout(() => location.replace(st.base_url + '/'), 1200);
       return;
     }
     if (st.phase === 'failed') { showFailed(st); lastDiag = st; return; }

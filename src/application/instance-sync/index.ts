@@ -26,3 +26,26 @@ export type {
 } from './service';
 export { SYNC_TABLES, isSyncTable, syncTableMeta, syncPkValueOfRow, syncPkValueSplit } from './tables';
 export { canonicalJson, syncHash, rowWinner, stampHashWinner, tombstoneCanonical, parseCursorPair } from './winner';
+// فاز C (A1) — کلاینت ساخت خودکار ورکر ابری + پل دارایی‌های binding CLOUD_PROVISION
+export {
+  provisionCloudWorker,
+  verifyCloudToken,
+  normalizeWorkerName,
+  chunkSchemaSql,
+  schemaMigrationCount,
+  SCHEMA_CHUNK_BYTES,
+  WORKER_NAME_PATTERN,
+  WORKER_NAME_PREFIX
+} from './provision';
+export type {
+  CloudProvisionIO,
+  ProvisionDeps,
+  ProvisionResult,
+  ProvisionStep,
+  ProvisionSuccess,
+  ProvisionFailure,
+  CloudAccount,
+  VerifyCloudDeps,
+  VerifyCloudResult,
+  WorkerNameOutcome
+} from './provision';

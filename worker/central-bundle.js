@@ -25201,6 +25201,9 @@ function createInstanceSyncApp(deps) {
 }
 __name(createInstanceSyncApp, "createInstanceSyncApp");
 
+// src/application/instance-sync/provision.ts
+var SCHEMA_CHUNK_BYTES = 64 * 1024;
+
 // src/application/auth/routes.ts
 var LOGIN_MAX_FAILURES = 5;
 var LOGIN_IP_MAX_FAILURES = 20;

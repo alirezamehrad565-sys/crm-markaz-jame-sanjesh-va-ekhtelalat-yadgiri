@@ -393,6 +393,75 @@ function managerOnly(render) {
   return roleOnly(['manager'], render, 'این بخش فقط برای مدیر مرکز فعال است.'); /* S11-19 */
 }
 
+/* ── فاز C — ورودی‌های سبک «پیکربندی اولیه اتصال ابری» (سند §۲-۵) ─────────────────
+   دو فلگ سشن‌محلی/نصب‌محلی و دو ورودی بنر/هدایت اولین اجرا — هر دو post-login و بی‌await
+   سنگین: بوت و نخستین رندر هرگز منتظر fetch وضعیت نمی‌مانند؛ خطای درگاه = بی‌بنر/بی‌هدایت
+   (الگوی نرم feedهای status). کلیدها: cloudSetupSeen (localStorage — فقط یک‌بار در طول عمر
+   نصب) و cs.cloudSetupSkipped/cs.cloudSetupBannerDismissed (sessionStorage — ردکردن سشن‌محلی؛
+   کلیدها با views/cloud-setup.js مشترک‌اند — این فایل lazy است و از app.js import نمی‌شود). */
+const CLOUD_SETUP_SEEN_KEY = 'cloudSetupSeen';
+const CLOUD_SETUP_BANNER_KEY = 'cs.cloudSetupBannerDismissed';
+const CLOUD_SETUP_SKIP_KEY = 'cs.cloudSetupSkipped';
+
+function cloudSetupRouteActive() {
+  return ['', 'dashboard'].includes(location.hash.replace(/^#\//, '').split('?')[0]);
+}
+
+/* بنر یک‌خطی بالای داشبورد — فقط مدیر + status.configured=false + ردنشده در این سشن.
+   الگوی بنرهای alert داشبورد (alert alert--info + alert__body/alert__actions) — بدون CSS تازه. */
+function withCloudSetupBanner(dashboardRender) {
+  return async (container, ctx) => {
+    await dashboardRender(container, ctx);
+    try {
+      if (session.user?.role !== 'manager') return;
+      try {
+        if (sessionStorage.getItem(CLOUD_SETUP_BANNER_KEY) === '1' || sessionStorage.getItem(CLOUD_SETUP_SKIP_KEY) === '1') return;
+      } catch { /* حالت خصوصی — بنر می‌آید */ }
+      if (!cloudSetupRouteActive()) return;
+      const res = await api.getDetached('/api/instance-sync/status'); // نرم — خطا = بی‌بنر
+      const st = res?.data && typeof res.data === 'object' ? res.data : null;
+      if (!st || st.configured !== false) return;
+      if (!cloudSetupRouteActive()) return; // کاربر در فاصلهٔ fetch جابه‌جا شد — مزاحم نشویم
+      const banner = el('div', { class: 'alert alert--info', style: { marginBottom: 'var(--sp-4)' } },
+        icon('link', 18),
+        el('div', { class: 'alert__body' },
+          el('span', {}, 'این نصب هنوز به ابر وصل نیست — هم‌گامی دوسویه و پشتیبان ابری فعال نیست. پیکربندی یک‌بار با ویزارد انجام می‌شود.'),
+          el('div', { class: 'alert__actions' },
+            el('button', { class: 'btn btn--soft btn--sm', onclick: () => { location.hash = '#/cloud-setup'; } }, icon('settings', 14), 'شروع پیکربندی ابری'),
+            el('button', {
+              class: 'btn btn--ghost btn--sm',
+              onclick: (e) => {
+                try { sessionStorage.setItem(CLOUD_SETUP_BANNER_KEY, '1'); } catch { /* نرم */ }
+                e.currentTarget.closest('.alert')?.remove();
+              }
+            }, 'بعداً')
+          )
+        )
+      );
+      container.prepend(banner);
+    } catch { /* خطای وضعیت = بی‌بنر — داشبورد هرگز نمی‌شکند */ }
+  };
+}
+
+/* تشخیص اولین اجرا — مدیرِ نصبِ تازهٔ بی‌اتصال یک‌بار خودکار به ویزارد می‌رود.
+   فلگ cloudSetupSeen فقط پس از تأیید configured=false نوشته می‌شود تا fetch ناموفق
+   (موتور هنوز نیامده) «فرصت یک‌بار» را نسوزاند؛ خودِ هدایت fire-and-forget است. */
+function armFirstRunCloudSetup() {
+  try {
+    if (session.user?.role !== 'manager') return;
+    if (localStorage.getItem(CLOUD_SETUP_SEEN_KEY) === '1') return;
+    if (!cloudSetupRouteActive()) return; // دیپ‌لینک کاربر را نمی‌رباییم
+    api.getDetached('/api/instance-sync/status')
+      .then((res) => {
+        const st = res?.data && typeof res.data === 'object' ? res.data : null;
+        if (!st || st.configured !== false) return;
+        try { localStorage.setItem(CLOUD_SETUP_SEEN_KEY, '1'); } catch { /* حالت خصوصی — نرم */ }
+        if (cloudSetupRouteActive()) location.hash = '#/cloud-setup';
+      })
+      .catch(() => { /* موتور/شبکه حاضر نیست — فلگ مصرف نمی‌شود؛ بوت بعدی دوباره می‌کشد */ });
+  } catch { /* حالت خصوصی مرورگر — بوت هرگز نمی‌شکند */ }
+}
+
 /* /بارگذار تنبل نماها.
    • chunk فقط با ورود به مسیر fetch می‌شود (import داینامیک literal در thunk — esbuild چانک جدا می‌سازد)
    • گیت نقش بیرونِ lazyView می‌ماند (roleOnly) تا کاربر بی‌مجاز هرگز chunk را fetch نکند
@@ -456,7 +525,9 @@ function roleOnly(roles, render, hint = 'این بخش فقط برای منشی 
   };
 }
 
-register('#/dashboard', { title: 'داشبورد', render: renderDashboard });
+/* فاز C — داشبورد با پوششِ بنر «پیکربندی ابری»: پس از رندر کامل داشبورد، اگر مدیر + بی‌اتصال +
+   ردنشده در این سشن، بنر یک‌خطی بالای نما می‌نشیند (وضعیت نرم گرفته می‌شود — خطا = بی‌بنر) */
+register('#/dashboard', { title: 'داشبورد', render: withCloudSetupBanner(renderDashboard) });
 register('#/appointments', {
   title: 'تقویم نوبت‌ها',
   render: roleOnly(
@@ -496,6 +567,12 @@ register('#/backup', { title: 'پشتیبان‌گیری و بازیابی', ren
 /* فاز A — روت «پنل سلامت» دوباره وصل شد (فقط روت؛ آیتم سایدبار به حکم ۱.۲۵.۷۱ همچنان قطع است):
    pill سربرگ «سرور محلی» کلیک → همین مسیر — الگوی register از هم‌نمایان کامیت ۱.۲۵.۷۰. */
 register('#/health-panel', { title: 'پنل سلامت', render: managerOnly(lazyView(() => import('./views/health-panel.js'), 'renderHealthPanel', '#/health-panel')) });
+/* فاز C — ویزارد «پیکربندی اولیه اتصال ابری» (سند server-cloud-update-design §۲-۵/§۶ فاز C):
+   جریان پیکربندی نخست پس از نصب تازه — فقط مدیر؛ کل ویزارد (مدل خالص + جریان‌های B1/A1 +
+   گام secret یک‌بارمصرف) در views/cloud-setup.js است و chunk فقط با ورود به مسیر می‌آید
+   (import داینامیک literal در thunk — گیت بودجهٔ کارایی: boot_js_gz/eager_modules دست نمی‌خورد).
+   آدرس کامل مسیر در نصب میز: http://127.0.0.1:8787/#/cloud-setup — از لینک پانویس boot-dist هم. */
+register('#/cloud-setup', { title: 'پیکربندی اتصال ابری', render: managerOnly(lazyView(() => import('./views/cloud-setup.js'), 'renderCloudSetup', '#/cloud-setup')) });
 register('#/working-hours', { title: 'تنظیمات', render: lazyView(() => import('./views/settings.js'), 'renderSettings', '#/working-hours') }); // — مسیر قدیمی → تنظیمات
 register('#/schools', { title: 'مدارس', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/schools.js'), 'renderSchools', '#/schools')) }); // — منشی مجاز
 register('#/students', { title: 'دانش‌آموزان', render: lazyView(() => import('./views/students.js'), 'renderStudents', '#/students') });
@@ -571,6 +648,7 @@ loadCurrentUser().then((ok) => {
   start(outlet);
   updateWaitlistBadge();
   updateTodosBadge();
+  armFirstRunCloudSetup(); // فاز C — هدایت یک‌بارهٔ اولین اجرا به ویزارد ابری (نرم و post-login؛ بوت را مسدود نمی‌کند)
   /* __CLOUD_SETUP_HOOK__ */
   /* rust-f7 — ویزار راه‌اندازی نخست فقط در پوستهٔ دسکتاپ؛ در وب چانک هرگز fetch نمی‌شود.
      توالی: ویزار اگر باز شد، توتوریال پس از «پایانِ» ویزار از داخل ماژول راه می‌افتد؛

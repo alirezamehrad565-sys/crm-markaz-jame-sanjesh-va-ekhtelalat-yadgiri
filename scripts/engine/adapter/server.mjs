@@ -158,6 +158,32 @@ function makeCloudFsIO(dataDir) {
 }
 
 /**
+ * فاز C (A1) — CloudProvision: پل دارایی‌های «ساخت خودکار ورکر ابری» برای اپ
+ * (docs/rust/first-run-and-cloud.md §۳ — جدول گام‌های CF API).
+ * فقط دو فایل ثابتِ «ساخت سرور مرکزی» خوانده می‌شود: central-worker.js و schema.sql —
+ * ساختهٔ build-installer-runtime در نصب (resources/engine/central) و در توسعه schema.sql
+ * موقتِ تجمیع migrations/ که engine.mjs می‌سازد. سد امنیتی عین CLOUD_FILE_RE اما ساده‌تر:
+ * اپ هیچ مسیری نمی‌فرستد و همین‌جا هیچ مسیر دلخواهی باز نمی‌شود — دو خوانندهٔ بی‌آرگومان
+ * روی دو مسیری که فقط سمت موتور (engine.mjs) حل شده‌اند. هر دو فایل حاضر نبودند → null
+ * → اپ روی مسیر provision «۵۰۱ — فقط در نسخهٔ دسکتاپ» می‌دهد (حالت workerd همیشه null).
+ */
+function makeCloudProvision(centralWorkerPath, schemaSqlPath) {
+  if (!centralWorkerPath || !schemaSqlPath) return null;
+  const fileOk = (p) => {
+    try { return statSync(p).isFile(); } catch { return false; }
+  };
+  if (!fileOk(centralWorkerPath) || !fileOk(schemaSqlPath)) return null;
+  return {
+    readCentralWorker: async () => {
+      try { return readFileSync(centralWorkerPath, 'utf8'); } catch { return null; }
+    },
+    readSchemaSql: async () => {
+      try { return readFileSync(schemaSqlPath, 'utf8'); } catch { return null; }
+    },
+  };
+}
+
+/**
  * بالا آوردن هر دو سرویس در همین فرایند. برمی‌گرداند { close } — engine.mjs در
  * ری‌استارت پنل/نگهبان بازی‌ها close و دوباره startAdapterEngine می‌زند.
  */
@@ -184,6 +210,8 @@ export async function startAdapterEngine(opts) {
     CENTER_DESKTOP_ENGINE: '1',
     GAMES_HEALTH_URL: bindings.gamesHealthUrl ?? `http://127.0.0.1:${gamesPort}/health`,
     CLOUD_FS: cloudFs,
+    // فاز C — دارایی‌های «ساخت ورکر ابری» (central-worker.js + schema.sql)؛ در workerd غایب است → اپ ۵۰۱ می‌دهد
+    CLOUD_PROVISION: makeCloudProvision(bindings.centralWorkerPath, bindings.centralSchemaPath),
     ENGINE_CLOUD_SECRET: typeof bindings.engineCloudSecret === 'string' ? bindings.engineCloudSecret : '',
   };
   const gamesEnv = {

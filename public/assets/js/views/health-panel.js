@@ -1981,7 +1981,10 @@ export async function renderHealthPanel(outlet) {
         rows.push(el('div', { class: 'ob-row' },
           el('div', { class: 'ob-row__main' },
             el('div', { class: 'cell-main' }, 'اتصال ابری تنظیم نشده'),
-            el('div', { class: 'cell-sub' }, 'با «پیکربندی اتصال» آدرس ورکر و secret را ثبت کنید — یا در نصب تازه «کلون از ابر» را انتخاب کنید.'))
+            el('div', { class: 'cell-sub' }, 'با «پیکربندی اتصال» آدرس ورکر و secret را ثبت کنید — یا در نصب تازه «کلون از ابر» را انتخاب کنید.')),
+          // فاز C — ورودی ویزارد «پیکربندی اولیه اتصال ابری» (سه‌گامی: existing/create/فقط محلی)
+          el('div', { class: 'ob-row__side' },
+            el('button', { class: 'btn btn--ghost', type: 'button', onclick: () => { location.hash = '#/cloud-setup'; } }, 'پیکربندی اولیه…'))
         ));
       } else {
         rows.push(

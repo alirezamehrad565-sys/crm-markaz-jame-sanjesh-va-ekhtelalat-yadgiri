@@ -37,7 +37,9 @@ describe('گیت ۱.۲۵.۰۱ — مسیرهای منوی ناظر', () => {
     // منوی ناظر همچنان ۷ صفحهٔ فقط-مشاهده است
     expect(app).toMatch(/readHashes = \['#\/dashboard', '#\/appointments', '#\/students', '#\/waitlist', '#\/archive', '#\/reports', '#\/exercises'\]/);
     // مسیرهای بدون roleOnly از این فهرست (داشبورد/دانش‌آموزان/گزارش‌ها/کارت‌های آماده) بی‌گیت ثبت شده‌اند
-    expect(app).toMatch(/register\('#\/dashboard', \{ title: 'داشبورد', render: renderDashboard \}\)/);
+    // فاز C — دور رندر داشبورد بنر «پیکربندی اتصال ابری» پیچیده شد (withCloudSetupBanner — فقط مدیر،
+    // فقط وقتی ابر تنظیم نشده باشد)؛ منوی ناظر و readHashes دست‌نخورده ماندند
+    expect(app).toMatch(/register\('#\/dashboard', \{ title: 'داشبورد', render: withCloudSetupBanner\(renderDashboard\) \}\)/);
     expect(app).toMatch(/register\('#\/students', \{ title: 'دانش‌آموزان', render: lazyView/);
     expect(app).toMatch(/register\('#\/exercises', \{ title: 'کارت‌های آماده', render: lazyView/);
   });

@@ -13,7 +13,8 @@
 // هر دو بایند فقط روی 127.0.0.1 هستند (design.md §۸).
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, openSync, promises as fsPromises, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, promises as fsPromises, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -49,6 +50,44 @@ function applyLocalTriggersBestEffort(dbPath) {
     console.error(`[engine] هشدار: اعمال triggerهای فقط-میز ناموفق بود — بوت بدون trigger ادامه می‌یابد (هم‌گامی سالم می‌ماند؛ فقط مُهر خودکار ندارد): ${err?.message ?? err}`);
   } finally {
     try { db?.close(); } catch { /* بسته است */ }
+  }
+}
+
+/**
+ * فاز C (A1) — حل مسیر دارایی‌های «ساخت خودکار ورکر ابری» (binding CLOUD_PROVISION در adapter).
+ * نصب: resources/engine/central/ (ساختهٔ build-installer-runtime ⑤) — لنگر مسیر، خودِ
+ * --main-bundle است که پوستهٔ Rust همیشه می‌دهد (bundles/worker.js → یک پوشه بالاتر central/).
+ * توسعه: worker/central-bundle.js (کامیت‌شده) + فایل موقت schema.sql در os.tmpdir با تجمیع
+ * migrations/ — عین الگوی تجمیع ⑤ همان اسکریپت (فقط توسعه؛ dataDir دیتای کاربر است و هرگز).
+ * شکست حل مسیر → هر دو null → binding غایب → اپ روی مسیر provision «۵۰۱» می‌دهد؛ بوت هرگز
+ * نمی‌کشد. مسیر فقط node-side است: باندل ورکر این فایل‌ها را نمی‌بیند — دو خوانندهٔ بی‌آرگومان.
+ */
+function resolveCentralPaths(opts) {
+  const bundleDir = path.dirname(opts.mainBundle ?? path.join(REPO_ROOT, 'worker/bundle.js'));
+  const centralDir = path.join(bundleDir, '..', 'central');
+  const installWorker = path.join(centralDir, 'central-worker.js');
+  const installSchema = path.join(centralDir, 'schema.sql');
+  if (existsSync(installWorker) && existsSync(installSchema)) {
+    return { centralWorkerPath: installWorker, centralSchemaPath: installSchema };
+  }
+  // توسعه — باندل مرکزی کامیت‌شده + اسکیمای موقت از تجمیع migrations/
+  const devWorker = path.join(REPO_ROOT, 'worker', 'central-bundle.js');
+  if (!existsSync(devWorker)) return { centralWorkerPath: null, centralSchemaPath: null };
+  try {
+    const migDir = path.join(REPO_ROOT, 'migrations');
+    const migFiles = readdirSync(migDir).filter((f) => f.endsWith('.sql')).sort();
+    if (migFiles.length === 0) return { centralWorkerPath: null, centralSchemaPath: null };
+    let schema = `-- schema.sql — تجمیع ${migFiles.length} مایگریشن رسمی (ساخته‌شده در موتور محلی — فقط توسعه)\n`;
+    schema += `-- مقصد: پایگاه markaz-central روی حساب کلادفلر کاربر — این فایل را دستی ویرایش نکنید.\n`;
+    for (const f of migFiles) {
+      schema += `\n-- ===== migration: ${f} =====\n` + readFileSync(path.join(migDir, f), 'utf8') + '\n';
+    }
+    const tmpSchema = path.join(tmpdir(), `markaz-central-schema-${process.pid}.sql`);
+    writeFileSync(tmpSchema, schema, 'utf8');
+    return { centralWorkerPath: devWorker, centralSchemaPath: tmpSchema };
+  } catch (err) {
+    console.error(`[engine] هشدار: دارایی‌های ساخت ورکر ابری حل نشد — CLOUD_PROVISION خاموش می‌ماند (بوت سالم ادامه می‌یابد): ${err?.message ?? err}`);
+    return { centralWorkerPath: null, centralSchemaPath: null };
   }
 }
 
@@ -343,7 +382,11 @@ export async function runEngine(opts) {
     });
   };
 
+  // فاز C — دارایی‌های «ساخت ورکر ابری» یک‌بار در نخستین بوت adapter حل می‌شوند (نصب/توسعه)؛
+  // شکست حل → null/null → binding CLOUD_PROVISION غایب → اپ ۵۰۱ می‌دهد (بوت هرگز نمی‌کشد)
+  let centralPaths = null;
   const startAdapter = async () => {
+    if (centralPaths === null) centralPaths = resolveCentralPaths(opts);
     handle = await startAdapterEngine({
       port,
       gamesPort,
@@ -355,12 +398,15 @@ export async function runEngine(opts) {
       // پیش از بوت تزریق می‌کند) + مسیر dataDir برای پل فایل‌های ابری CloudFsIO
       // (cloud-config.json / sync-state.json / پشتیبان‌های cloud-sync-*) — server.mjs همین‌ها
       // را در bindingهای CLOUD_FS و ENGINE_CLOUD_SECRET اپ می‌بندد؛ حالت workerd غایب = خاموش.
+      // فاز C — دو مسیر ثابت دارایی‌های ساخت ورکر ابری → binding CLOUD_PROVISION (adapter فقط).
       bindings: {
         authSecret,
         publicBaseUrl: base,
         gamesHealthUrl: `${gamesBase}/health`,
         engineCloudSecret: process.env.ENGINE_CLOUD_SECRET ?? '',
         dataDir: opts.dataDir,
+        centralWorkerPath: centralPaths.centralWorkerPath,
+        centralSchemaPath: centralPaths.centralSchemaPath,
       },
       log: (m) => console.log(`[engine] ${m}`),
     });

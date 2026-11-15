@@ -14,6 +14,8 @@
  *   • POST /api/instance-sync/config  — فقط-مدیر (وارسی https؛ secret این‌جا نیست)
  *   • DELETE /api/instance-sync/config — فقط-مدیر (cursorها باقی؛ audit cloud.unlink)
  *   • POST /api/instance-sync/clone   — فقط-مدیر (بدون confirm روی DB غیر-خالی → ۴۰۹)
+ *   • POST /api/instance-sync/provision/verify — فقط-مدیر (وارسی توکن CF + فهرست حساب‌ها؛ فاز C)
+ *   • POST /api/instance-sync/provision — فقط-مدیر (ساخت خودکار ورکر ابری؛ binding غایب → ۵۰۱)
  *
  * هیچ secretی در هیچ پاسخی نمی‌آید — status فقط secret_present بولین می‌دهد.
  * زمان‌بند دوره‌ای: یک‌بار در ثبت این مسیرها بر فرایند بیدار می‌شود (پرچم ماژول + گارد
@@ -44,6 +46,9 @@ import {
   unlinkCloudConfig
 } from './runner';
 import type { CloudFsIO, CloudSyncDeps } from './runner';
+// فاز C (A1) — کلاینت ساخت خودکار ورکر ابری (گام‌های CF API — سند first-run-and-cloud §۳)
+import { provisionCloudWorker, verifyCloudToken } from './provision';
+import type { CloudProvisionIO, ProvisionResult, VerifyCloudResult } from './provision';
 
 type Env = { Bindings: AppBindings; Variables: AppVariables };
 
@@ -70,6 +75,20 @@ function envOf(c: Context<Env>): Record<string, unknown> {
 function cloudFsOf(env: Record<string, unknown>): CloudFsIO | null {
   const fs = env.CLOUD_FS;
   return fs && typeof fs === 'object' ? (fs as CloudFsIO) : null;
+}
+
+/** پل دارایی‌های ساخت ورکر ابری از binding — غایب در workerd/تولید وب → مسیر provision «۵۰۱» می‌دهد */
+function cloudProvisionOf(env: Record<string, unknown>): CloudProvisionIO | null {
+  const p = env.CLOUD_PROVISION;
+  if (!p || typeof p !== 'object') return null;
+  const io = p as Partial<CloudProvisionIO>;
+  return typeof io.readCentralWorker === 'function' && typeof io.readSchemaSql === 'function' ? (p as CloudProvisionIO) : null;
+}
+
+/** تزریق آزمون fetch (ابر فیک) — در تولید غایب است و fetch سراسری مصرف می‌شود */
+function fetchImplOf(env: Record<string, unknown>): ((input: string, init?: RequestInit) => Promise<Response>) | undefined {
+  const f = env.CLOUD_FETCH;
+  return typeof f === 'function' ? (f as (input: string, init?: RequestInit) => Promise<Response>) : undefined;
 }
 
 /** deps کامل برای مسیرهای درخواست — env همین درخواست + سرویس‌های ثبت‌شده */
@@ -105,6 +124,17 @@ const CloudConfigSchema = z.object({
 
 const CloneSchema = z.object({
   confirm: z.boolean().optional()
+});
+
+// فاز C (A1) — بدنهٔ ساخت ورکر ابری؛ توکن فقط به api.cloudflare.com می‌رود و هرگز ذخیره/لاگ نمی‌شود
+const ProvisionVerifySchema = z.object({
+  token: z.string().min(1, 'توکن کلادفلر لازم است')
+});
+
+const ProvisionSchema = z.object({
+  token: z.string().min(1, 'توکن کلادفلر لازم است'),
+  accountId: z.string().min(1).optional(),
+  name: z.string().min(1, 'نام ورکر لازم است')
 });
 
 /** پاسخ قراردادی خطای ابر — ۵۰۲ برای offline/auth (ابر دور است، خطای درخواست نیست) */
@@ -209,5 +239,67 @@ export function registerDesktopRoutes(app: AppHono, deps: DesktopRoutesDeps): vo
     getAuthContext(c);
     const listing = await listCloudBackups(requestDeps(c, deps));
     return c.json({ data: listing }, 200);
+  });
+
+  // ─── فاز C (A1) — ساخت خودکار ورکر ابری (سند first-run-and-cloud §۳) ───
+  // هر دو فقط-مدیر. هیچ نوشتن وضعیت محلی این‌جا نیست — ذخیرهٔ config همچنان مسیر POST /config
+  // است؛ این دو فقط می‌سازند و برمی‌گردانند. binding CLOUD_PROVISION در workerd/تولید وب غایب
+  // است → «۵۰۱ — فقط در نسخهٔ دسکتاپ» (بدون گیت ۴۰۴؛ قرارداد صریح مأموریت فاز C).
+
+  // POST وارسی توکن + فهرست حساب‌ها [{id,name}] — بدون هیچ پرویژن؛ مبنای انتخاب accountId
+  app.post('/api/instance-sync/provision/verify', requireRole('manager'), async (c) => {
+    getAuthContext(c);
+    const parsed = ProvisionVerifySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'VALIDATION_ERROR', message: 'بدنهٔ وارسی نامعتبر است — token لازم است' }, 400);
+    }
+    const result: VerifyCloudResult = await verifyCloudToken({
+      fetchImpl: fetchImplOf(envOf(c)),
+      token: parsed.data.token
+    });
+    if (!result.ok) {
+      return c.json(
+        { error: 'CLOUD_PROVISION_FAILED', message: result.message, data: { step: result.step, errors: result.errors ?? [] } },
+        400
+      );
+    }
+    return c.json({ data: { accounts: result.accounts } }, 200);
+  });
+
+  // POST ساخت کامل ورکر ابری (D1 + اسکیما + دیپلوی + secret + دامنه + سلامت) — فقط-مدیر
+  app.post('/api/instance-sync/provision', requireRole('manager'), async (c) => {
+    const actor = getAuthContext(c);
+    const parsed = ProvisionSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'VALIDATION_ERROR', message: 'بدنهٔ ساخت ورکر نامعتبر است — token و name لازم است' }, 400);
+    }
+    const provision = cloudProvisionOf(envOf(c));
+    if (!provision) {
+      return c.json({ error: 'CLOUD_PROVISION_UNAVAILABLE', message: 'ساخت ورکر فقط در نسخهٔ دسکتاپ ممکن است' }, 501);
+    }
+    const [centralWorker, schemaSql] = await Promise.all([provision.readCentralWorker(), provision.readSchemaSql()]);
+    if (!centralWorker || !schemaSql) {
+      return c.json(
+        { error: 'CLOUD_PROVISION_UNAVAILABLE', message: 'باندل مرکزی یا اسکیمای نصب در دسترس نیست — ساخت ورکر ممکن نشد' },
+        501
+      );
+    }
+    // لاگ فقط رویدادهای بی‌راز (redaction در خود provision.ts تضمین شده — پیام‌ها هرگز secret ندارند)
+    const result: ProvisionResult = await provisionCloudWorker({
+      fetchImpl: fetchImplOf(envOf(c)),
+      centralWorker,
+      schemaSql,
+      name: parsed.data.name,
+      token: parsed.data.token,
+      accountId: parsed.data.accountId,
+      log: (message) => deps.logger.info('cloud.provision.step', { staffId: actor.staffId, detail: message })
+    });
+    if (!result.ok) {
+      return c.json(
+        { error: 'CLOUD_PROVISION_FAILED', message: result.message, data: { step: result.step, steps: result.steps } },
+        400
+      );
+    }
+    return c.json({ data: result }, 200);
   });
 }
