@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Markaz-Jame-Desktop",
-  "version": "1.27.11",
+  "version": "1.27.12",
   "identifier": "ir.sdt144.center.desktop",
   "build": {
     "frontendDist": "boot-dist",
@@ -43,7 +43,8 @@
         "languages": [
           "Persian",
           "English"
-        ]
+        ],
+        "installerHooks": "./installer-hooks.nsh"
       }
     }
   }

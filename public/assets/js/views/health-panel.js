@@ -35,6 +35,14 @@
 //       خیلی طولانیه — ساده شود»: بالای صفحه فقط سه چیز (سلامت یک‌نگاهی + سرور محلی + اتصال ابری)؛
 //       بقیهٔ بخش‌ها زیر آکاردئون واحد «جزئیات پیشرفته» با پیش‌فرض بسته — باز/بسته سشن‌محلی با کلید
 //       hp.advancedOpen (الگوی cs.cloudSetupSkipped ویزارد)؛ عنوان‌های h3 و محتوای بخش‌ها عین قبل.
+// ۱.۲۷.۱۲ — دو اشکال کارفرما از v1.27.11 + خودتوضیحی موتور کهنه: (۱) کارت‌های «سرور محلی»/
+//       «اتصال ابری» هنگام ساخت خالی می‌ماندند — paint دو پارامتری شد (status, isInitial)؛ پرِ
+//       اولیه با بدنهٔ جدا از DOM هم می‌نشیند و گارد «اشتراک کهنه» فقط برای emitهای feed می‌ماند.
+//       (۲) کارت سرور ردیف «آدرس محلی» گرفت (serverAddressView — پورت واقعی یا پیش‌فرض ۸۷۸۷؛
+//       حالت وب origin) با دکمهٔ «کپی آدرس». (۳) هشدار زرد ناهم‌نسخه‌ای موتور/برنامه
+//       (engineAppVersionGapView — مقایسهٔ عددی نقطه‌ای با نرمال‌سازی رقم فارسی) بالای کارت سرور
+//       + متن کوتاهش در ردیف بی‌اتصال کارت ابری و توضیح «وضعیت اتصال ابری از سرور نگرفته شد»
+//       به‌جای «—» تا موتور کهنهٔ بدون /api/instance-sync/* خودتوضیح باشد (دکمه‌ها/CTA دست‌نخورده).
 import { api } from '../api.js';
 import { el, icon, emptyState, skeletonState, confirmModal, formModal, toast, toastError, lockBtn } from '../ui.js';
 import { fa, formatJalaliDateTime } from '../format.js';
@@ -1011,6 +1019,269 @@ export async function copyTextToClipboard(text) {
   } catch { return false; }
 }
 
+/* ── ۱.۲۷.۱۲ — آدرس محلی، هشدار ناهم‌نسخه‌ای موتور/برنامه و کارخانه‌های paint دو کارت ─────
+   همهٔ نگاشت‌ها تابع خالص بی‌DOM‌اند (الگوی serverPortsView/cloudCardView) تا بی‌ماک سنگین
+   آزمون شوند؛ کارخانه‌های paint (الگوی آزمون mountCloudSetup — DOM مصنوعی کمینه) همان بدنهٔ
+   پویای قبلی دو کارت را می‌سازند، فقط با گارد دومایه‌ای پرِ اولیه. */
+
+/** fa وارون — رقم فارسی/عربی → لاتین (تابع کمکی محلی؛ نسخه‌ها شاید «۱.۲۷.۴» بیایند) */
+function unfaDigits(v) {
+  const faD = '۰۱۲۳۴۵۶۷۸۹';
+  const arD = '٠١٢٣٤٥٦٧٨٩';
+  return String(v).replace(/[۰-۹٠-٩]/g, (ch) => {
+    const i = faD.indexOf(ch);
+    return String(i >= 0 ? i : arD.indexOf(ch));
+  });
+}
+
+/** نسخهٔ متنی → آرایهٔ عددی segmentها (برای مقایسهٔ نقطه‌ای — نه رشته‌ای)؛ نامعتبر/تهی → null (نامعلوم) */
+function versionSegmentsOf(v) {
+  if (typeof v !== 'string' && typeof v !== 'number') return null;
+  const s = unfaDigits(v).trim().replace(/^v/i, '');
+  if (!/^\d+(?:\.\d+)*$/.test(s)) return null;
+  return s.split('.').map((p) => Number.parseInt(p, 10));
+}
+
+/** مقایسهٔ segment به segment با پُرکردن صفر (1.27 == 1.27.0)؛ -1 یعنی a قدیمی‌تر */
+function cmpVersionSegments(a, b) {
+  const n = Math.max(a.length, b.length);
+  for (let i = 0; i < n; i += 1) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    if (x !== y) return x < y ? -1 : 1;
+  }
+  return 0;
+}
+
+/**
+ * ۱.۲۷.۱۲ — نمای هشدار ناهم‌نسخه‌ای موتور محلی/برنامهٔ نمایش (تابع خالص): فقط وقتی هر دو
+ * نسخه معلوم‌اند و موتور واقعاً قدیمی‌تر است چیزی می‌دهد؛ برابر/موتور تازه‌تر/نامعلوم → null
+ * (بی‌هشدار، بی‌کرش). متن دو جمله‌ای ساده برای مدیر غیرفنی: اجرای نصاب + راهِ فایل اشغال.
+ */
+export function engineAppVersionGapView(engineVersion, appVersion) {
+  const eng = versionSegmentsOf(engineVersion);
+  const app = versionSegmentsOf(appVersion);
+  if (!eng || !app) return null;
+  if (cmpVersionSegments(eng, app) !== -1) return null; // برابر یا موتور تازه‌تر — بی‌هشدار
+  const ev = unfaDigits(engineVersion).trim().replace(/^v/i, '');
+  const av = unfaDigits(appVersion).trim().replace(/^v/i, '');
+  return {
+    engineVersion: ev,
+    appVersion: av,
+    text: `موتور محلی (${ev}) قدیمی‌تر از برنامهٔ نمایش (${av}) است — آخرین نصاب را اجرا کنید تا موتور هم به‌روز شود؛ اگر نصب گفت فایل اشغال است، برنامه را کامل ببندید و نصب را دوباره اجرا کنید.`
+  };
+}
+
+/** متن کوتاه‌شدهٔ هشدار ناهم‌نسخه‌ای (تا پیش از «؛») برای cell-sub ردیف بی‌اتصال کارت ابری؛ gap غایب → null */
+export function engineGapShortView(gap) {
+  if (!gap || typeof gap.text !== 'string') return null;
+  const head = gap.text.split('؛')[0].trim();
+  return head || null;
+}
+
+/**
+ * ۱.۲۷.۱۲ — آدرس سرور محلی برای نمایش در کارت (تابع خالص — خواست کارفرما: «آدرس ۱۲۷.۰.۰.۱
+ * نشون نمی‌دهد»): status.port عددی معتبر → http://127.0.0.1:<port> با isDefault=false (پورت با
+ * رقم فارسی — هم‌الگوی serverPortsView)؛ وگرنه origin (حالت وب — کانال تائوری نیست) خودش آدرس
+ * است با isDefault=false؛ در غیر این دو حالت پورت پیش‌فرض با isDefault=true تا رندر، توضیح
+ * «آدرس پس از رسیدن وضعیت پوسته دقیق می‌شود» را نشان دهد.
+ */
+export function serverAddressView(status, origin) {
+  const port = Number(status?.port);
+  if (Number.isFinite(port) && port > 0) {
+    // copyText با رقم لاتین — آدرسِ چسبانده‌شده باید مستقیم در مرورگر کار کند؛ متن نمایشی رقم فارسی می‌ماند
+    return { address: `http://127.0.0.1:${fa(port)}`, copyText: `http://127.0.0.1:${port}`, isDefault: false };
+  }
+  const org = typeof origin === 'string' && origin.trim() && origin.trim() !== 'null' ? origin.trim() : null;
+  if (org) return { address: org, copyText: org, isDefault: false };
+  return { address: `http://127.0.0.1:${fa(8787)}`, copyText: 'http://127.0.0.1:8787', isDefault: true };
+}
+
+/** ردیف «آدرس محلی» کارت سرور — main برچسب + متن LTR آدرس + دکمهٔ ghost «کپی آدرس» (توست «آدرس کپی شد») */
+function serverAddressRow(addr) {
+  const copyBtn = el('button', {
+    class: 'btn btn--ghost',
+    type: 'button',
+    onclick: (e) => void lockBtn(e.currentTarget, async () => {
+      const copied = await copyTextToClipboard(addr.copyText ?? addr.address);
+      toast(copied ? 'آدرس کپی شد' : 'کپی در کلیپ‌بورد ممکن نشد — مرورگر اجازه نداد', copied ? 'success' : 'error');
+    })
+  }, 'کپی آدرس');
+  return el('div', { class: 'ob-row' },
+    el('div', { class: 'ob-row__main' },
+      el('div', { class: 'cell-main', style: { whiteSpace: 'normal' } },
+        'آدرس محلی ',
+        el('span', { style: { direction: 'ltr', unicodeBidi: 'plaintext', whiteSpace: 'nowrap' } }, addr.address)),
+      addr.isDefault ? el('div', { class: 'cell-sub' }, 'پورت پیش‌فرض — پس از رسیدن وضعیت پوسته، آدرس دقیق می‌شود') : null
+    ),
+    el('div', { class: 'ob-row__side' }, copyBtn)
+  );
+}
+
+/**
+ * ۱.۲۷.۱۲ — کارخانهٔ paint کارت «سرور محلی» (بدنهٔ پویای قبلی همان کارت؛ بیرون‌کشی شد تا با
+ * DOM مصنوعی کمینه — الگوی آزمون mountCloudSetup — بی‌ماک سنگین آزمون شود). خروجی paint(status, isInitial):
+ * پرِ اولیه (isInitial=true) همیشه بدنه را پُر می‌کند حتی وقتی بدنه هنوز به DOM وصل نیست — کارت
+ * داخل آرایهٔ el در reload ساخته می‌شود و تا root.replaceChildren بعدی وصل نیست؛ با گارد قدیمی
+ * پرِ اولیه بی‌صدا رد می‌شد و کارت تا اولین emit feed خالی می‌ماند (اشکال گزارش‌شدهٔ کارفرما).
+ * گارد «بستن اشتراک کهنه» فقط برای emitهای feed است — پیام/رفتارش عین قبل.
+ * ctx: { resultLine, engineRestartAction, openDataDirAction, copyDiagAction, onStaleSubscription }
+ */
+export function makeServerCardPaint(body, ctx = {}) {
+  return (status, isInitial) => {
+    if (!isInitial && !body.isConnected) {
+      // نما رندر دوباره شده (بازخوانی ۶۰ثانیه‌ای کل پنل) — اشتراک کهنه بسته شود
+      if (typeof ctx.onStaleSubscription === 'function') ctx.onStaleSubscription();
+      return;
+    }
+    const view = serverStateView(status?.state, status?.degradedReason);
+    // فاز D1 — توضیح انسانی پورت‌ها (خواست کارفرما: «سرور محلی روشن است روی پورت …»)
+    const portLine = status?.state === 'Ready' ? `سرور محلی روشن است — ${serverPortsView(status)}` : serverPortsView(status);
+    body.replaceChildren(
+      el('div', { class: 'ob-row' },
+        el('div', { class: 'ob-row__main' },
+          el('div', { class: 'cell-main' },
+            el('span', { class: `dot ${view.dot}`, style: { marginInlineEnd: 'var(--sp-2)' } }),
+            view.label),
+          el('div', { class: 'cell-sub' },
+            status
+              ? `${portLine} · آخرین رویداد: ${unixAgeView(status?.lastEventAtUnix)}`
+              : 'وضعیت هنوز از پوستهٔ برنامه نرسیده — با بازخوانی ۳۰ثانیه‌ای خودکار پُر می‌شود')
+        ),
+        el('div', { class: 'ob-row__side' },
+          el('span', { class: `badge ${view.badge}` }, typeof status?.state === 'string' && status.state ? status.state : '—')
+        )
+      ),
+      // ۱.۲۷.۱۲ — ردیف آدرس محلی، بلافاصله بعد از ردیف وضعیت (خواست کارفرما)
+      serverAddressRow(serverAddressView(status, null)),
+      el('div', { class: 'ob-row' },
+        el('div', { class: 'ob-row__main' },
+          el('div', { class: 'cell-main' }, 'نسخهٔ اپ · آخرین بوت'),
+          el('div', { class: 'cell-sub' },
+            `${typeof status?.appVersion === 'string' && status.appVersion ? status.appVersion : '—'} · ${unixJalaliView(status?.startedAtUnix)}`)
+        )
+      ),
+      el('div', { class: 'ob-row' },
+        el('div', { class: 'ob-row__side' },
+          el('button', { class: 'btn btn--primary', type: 'button', onclick: (e) => void ctx.engineRestartAction(e.currentTarget) }, 'راه‌اندازی دوباره'),
+          el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void ctx.openDataDirAction(e.currentTarget) }, 'بازکردن پوشهٔ داده'),
+          el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void ctx.copyDiagAction(e.currentTarget) }, 'کپی اطلاعات عیب‌یابی')
+        )
+      ),
+      ctx.resultLine ?? null
+    );
+  };
+}
+
+/** ۱.۲۷.۱۲ — توضیح cell-sub ردیف وضعیت کارت ابری وقتی status=null (موتور کهنهٔ بدون
+   /api/instance-sync/* هم همین‌جا می‌افتد — poll ابر شکست می‌خورد و feed هرگز notify نمی‌شود) */
+const CLOUD_STATUS_PENDING_TEXT = 'وضعیت اتصال ابری از سرور نگرفته شد — اگر موتور محلی قدیمی است، با به‌روزرسانی نصب درست می‌شود.';
+
+/**
+ * ۱.۲۷.۱۲ — کارخانهٔ paint کارت «اتصال ابری» (بدنهٔ پویای قبلی همان کارت؛ بیرون‌کشی برای آزمون
+ * با DOM مصنوعی کمینه). paint(status, isInitial) — پرِ اولیه همیشه می‌نشیند حتی با بدنهٔ جدا از
+ * DOM؛ اگر feed هرگز emit نکند (موتور کهنه — poll ابر همیشه شکست می‌خورد) کارت تا ابد خالی
+ * می‌ماند؛ همان اشکال کارفرما. گارد «بستن اشتراک کهنه» فقط برای emitهای feed. دو تفاوت متن
+ * با قبل (خواست کارفرما): status=null → توضیح «وضعیت اتصال ابری از سرور نگرفته شد» به‌جای «—»؛
+ * ردیف بی‌اتصال وقتی status=null و موتور کهنه است، متن کوتاه‌شدهٔ هشدار ناهم‌نسخه‌ای را هم می‌آورد.
+ * ctx: { setupToggleBtn, advancedToggleBtn, advancedBody, resultLine, runNowAction,
+ *        configureAction, deleteConnectionAction, gapShort, onStaleSubscription }
+ */
+export function makeCloudCardPaint(body, ctx = {}) {
+  const { setupToggleBtn, advancedToggleBtn, advancedBody, resultLine } = ctx;
+  return (status, isInitial) => {
+    if (!isInitial && !body.isConnected) {
+      // نما رندر دوباره شده (بازخوانی ۶۰ثانیه‌ای کل پنل) — اشتراک کهنه بسته شود
+      if (typeof ctx.onStaleSubscription === 'function') ctx.onStaleSubscription();
+      return;
+    }
+    const vm = cloudCardView(status);
+    const view = cloudSyncStateView(status);
+    const human = cloudHumanStatusView(status);
+    const humanTone = healthToneView(human.tone);
+    const counts = cloudCountsView(status?.last_sync?.pulled, status?.last_sync?.pushed);
+    const subParts = [];
+    if (view.detail) subParts.push(view.detail);
+    if (counts.detail) subParts.push(counts.detail);
+    // ۱.۲۷.۱۲ — به‌جای «—» توضیح انسانی «وضعیت نگرفته شد» (دکمه‌ها و CTA دست‌نخورده)
+    const statusSub = status == null
+      ? CLOUD_STATUS_PENDING_TEXT
+      : (subParts.length > 0 ? subParts.join(' · ') : '—');
+    /* لایهٔ عادی — خط وضعیت انسانی + همگام‌سازی خودکار + دو دکمهٔ برجستهٔ همان قرارداد run-now */
+    const rows = [
+      el('div', { class: 'ob-row' },
+        el('div', { class: 'ob-row__main' },
+          el('div', { class: 'cell-main' },
+            el('span', { class: `dot ${humanTone.dot}`, style: { marginInlineEnd: 'var(--sp-2)' } }),
+            human.text),
+          el('div', { class: 'cell-sub' }, statusSub)
+        ),
+        el('div', { class: 'ob-row__side' },
+          vm.configured ? el('span', { class: `badge ${view.badge}` }, counts.head) : null
+        )
+      ),
+      vm.configured
+        ? el('div', { class: 'ob-row' },
+            el('div', { class: 'ob-row__main' },
+              el('div', { class: 'cell-main' }, `همگام‌سازی خودکار: ${vm.intervalText ?? 'تنظیم نشده'}`),
+              el('div', { class: 'cell-sub' }, 'در این فاصله اطلاعات خودکار رد و بدل می‌شود — بدون نیاز به کار شما')
+            ),
+            el('div', { class: 'ob-row__side' },
+              el('button', { class: 'btn btn--ghost', type: 'button', onclick: () => ctx.configureAction() }, 'تغییر')
+            )
+          )
+        : null,
+      el('div', { class: 'ob-row' },
+        el('div', { class: 'ob-row__side' },
+          el('button', { class: 'btn btn--primary', type: 'button', disabled: vm.runNowDisabled, onclick: (e) => void ctx.runNowAction(e.currentTarget) }, 'دریافت اطلاعات'),
+          el('button', { class: 'btn btn--primary', type: 'button', disabled: vm.runNowDisabled, onclick: (e) => void ctx.runNowAction(e.currentTarget) }, 'ارسال اطلاعات')
+        )
+      )
+    ];
+    if (!vm.configured) {
+      // بی‌اتصال — مسیر ساخت اتصال در لایهٔ عادی می‌ماند (مدیر تازه‌کار نباید دنبالش بگردد)؛
+      // فاز D2 — دکمه ناوبری نمی‌کند: ناحیهٔ داخلی ویزارد را بازو/بسته می‌کند (جریان کامل داخل کارت).
+      // ۱.۲۷.۱۲ — وقتی وضعیت از سرور نگرفته شده و موتور کهنه است، متن کوتاه هشدار ناهم‌نسخه‌ای
+      // هم می‌آید تا «شروع پیکربندی ابری» بدون توضیح نماند.
+      const ctaText = 'با «پیکربندی اولیه» این دستگاه به مرکز ابری وصل می‌شود — چند دقیقه بیشتر طول نمی‌کشد.';
+      rows.push(el('div', { class: 'ob-row' },
+        el('div', { class: 'ob-row__main' },
+          el('div', { class: 'cell-sub' }, status == null && ctx.gapShort ? `${ctx.gapShort} · ${ctaText}` : ctaText)),
+        // فاز C — ورودی ویزارد «پیکربندی اولیه اتصال ابری» (سه‌گامی: existing/create/فقط محلی)
+        el('div', { class: 'ob-row__side' },
+          setupToggleBtn)
+      ));
+    }
+    /* لایهٔ پیشرفته — جزئیات نشست‌محلی؛ فقط با اتصال رندر می‌شود (الگوی guideSection) */
+    const adv = cloudAdvancedView(status);
+    advancedBody.replaceChildren(
+      ...(vm.configured ? [
+        infoRow('نسخهٔ ساختار اطلاعات', adv.schemaText ?? '—'),
+        infoRow('تعارض اطلاعات', adv.conflictsText ?? '—'),
+        infoRow('تاریخچهٔ خطاها', adv.errorText ?? 'خطایی ثبت نشده است'),
+        infoRow('آدرس مرکز ابری · دستگاه', el('span', { style: { direction: 'ltr', unicodeBidi: 'plaintext' } }, `${vm.urlText ?? '—'} · ${vm.deviceIdText ?? '—'}`)),
+        infoRow('کلید اتصال', vm.secretPresent ? 'تنظیم شده' : '—')
+      ] : []),
+      el('div', { class: 'ob-row' },
+        el('div', { class: 'ob-row__side' },
+          vm.configured ? el('button', { class: 'btn btn--ghost', type: 'button', onclick: () => { location.hash = '#/cloud-setup'; } }, 'پیکربندی اولیه…') : null,
+          vm.showDelete ? el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void ctx.deleteConnectionAction(e.currentTarget) }, 'حذف اتصال') : null
+        )
+      )
+    );
+    if (vm.configured) {
+      rows.push(
+        el('div', { class: 'ob-row' },
+          el('div', { class: 'ob-row__side' }, advancedToggleBtn)
+        ),
+        advancedBody
+      );
+    }
+    rows.push(resultLine);
+    body.replaceChildren(...rows);
+  };
+}
+
 /* (۱.۲۷.۰۸) پاکت‌سنج unwrapEngineStatus و feed مشترک وضعیت سرور به views/server-pill.js
    رفت‌اند (خروج از گراف بوت) — همین‌جا از همان ماژول صادر و مصرف می‌شوند. */
 
@@ -1857,6 +2128,8 @@ export async function renderHealthPanel(outlet) {
     const tauri = globalThis.__TAURI__;
     const hasChannel = Boolean(tauri && (typeof tauri.invoke === 'function' || (tauri.event && typeof tauri.event.listen === 'function')));
     if (!hasChannel) {
+      // ۱.۲۷.۱۲ — حالت وب هم آدرس را نشان می‌دهد (خواست کارفرما) — کانال تائوری نیست: origin خودش آدرس است
+      const webAddr = serverAddressView(null, typeof window !== 'undefined' && window?.location?.origin ? window.location.origin : null);
       return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
         el('div', { class: 'card__head' },
           el('h3', { style: { margin: 0 } }, 'سرور محلی'),
@@ -1864,7 +2137,8 @@ export async function renderHealthPanel(outlet) {
         ),
         el('div', { class: 'card__body' },
           el('p', { class: 'hint-text', style: { whiteSpace: 'normal' } },
-            'حالت وب — سرور خارجی: این نسخه بدون پوستهٔ میز اجرا شده و فرمان‌های موتور محلی (engine_status / engine_restart) در دسترس نیستند؛ سلامت موتور همین‌جا از کارت «موتور محلی» بالای پنل خوانده می‌شود.')
+            'حالت وب — سرور خارجی: این نسخه بدون پوستهٔ میز اجرا شده و فرمان‌های موتور محلی (engine_status / engine_restart) در دسترس نیستند؛ سلامت موتور همین‌جا از کارت «موتور محلی» بالای پنل خوانده می‌شود.'),
+          serverAddressRow(webAddr)
         )
       );
     }
@@ -1935,48 +2209,19 @@ export async function renderHealthPanel(outlet) {
 
     let unsubscribed = false;
     let unsubscribe = null;
-    const paint = (status) => {
-      // نما رندر دوباره شده (بازخوانی ۶۰ثانیه‌ای کل پنل) — اشتراک کهنه بسته شود
-      if (!body.isConnected) {
+    // ۱.۲۷.۱۲ — paint دومایه‌ای شد (status, isInitial): پرِ اولیه با بدنهٔ جدا از DOM هم می‌نشیند
+    // (کارت داخل آرایهٔ el ساخته می‌شود و هنوز به DOM وصل نیست) — گارد «اشتراک کهنه» فقط برای emitهای feed
+    const paint = makeServerCardPaint(body, {
+      resultLine,
+      engineRestartAction,
+      openDataDirAction,
+      copyDiagAction,
+      onStaleSubscription: () => {
+        // نما رندر دوباره شده (بازخوانی ۶۰ثانیه‌ای کل پنل) — اشتراک کهنه بسته شود
         if (unsubscribe && !unsubscribed) { unsubscribed = true; unsubscribe(); }
-        return;
       }
-      const view = serverStateView(status?.state, status?.degradedReason);
-      // فاز D1 — توضیح انسانی پورت‌ها (خواست کارفرما: «سرور محلی روشن است روی پورت …»)
-      const portLine = status?.state === 'Ready' ? `سرور محلی روشن است — ${serverPortsView(status)}` : serverPortsView(status);
-      body.replaceChildren(
-        el('div', { class: 'ob-row' },
-          el('div', { class: 'ob-row__main' },
-            el('div', { class: 'cell-main' },
-              el('span', { class: `dot ${view.dot}`, style: { marginInlineEnd: 'var(--sp-2)' } }),
-              view.label),
-            el('div', { class: 'cell-sub' },
-              status
-                ? `${portLine} · آخرین رویداد: ${unixAgeView(status?.lastEventAtUnix)}`
-                : 'وضعیت هنوز از پوستهٔ برنامه نرسیده — با بازخوانی ۳۰ثانیه‌ای خودکار پُر می‌شود')
-          ),
-          el('div', { class: 'ob-row__side' },
-            el('span', { class: `badge ${view.badge}` }, typeof status?.state === 'string' && status.state ? status.state : '—')
-          )
-        ),
-        el('div', { class: 'ob-row' },
-          el('div', { class: 'ob-row__main' },
-            el('div', { class: 'cell-main' }, 'نسخهٔ اپ · آخرین بوت'),
-            el('div', { class: 'cell-sub' },
-              `${typeof status?.appVersion === 'string' && status.appVersion ? status.appVersion : '—'} · ${unixJalaliView(status?.startedAtUnix)}`)
-          )
-        ),
-        el('div', { class: 'ob-row' },
-          el('div', { class: 'ob-row__side' },
-            el('button', { class: 'btn btn--primary', type: 'button', onclick: (e) => void engineRestartAction(e.currentTarget) }, 'راه‌اندازی دوباره'),
-            el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void openDataDirAction(e.currentTarget) }, 'بازکردن پوشهٔ داده'),
-            el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void copyDiagAction(e.currentTarget) }, 'کپی اطلاعات عیب‌یابی')
-          )
-        ),
-        resultLine
-      );
-    };
-    paint(lastServerStatus());
+    });
+    paint(lastServerStatus(), true);
     unsubscribe = subscribeServerStatus(paint);
     return card;
   }
@@ -1994,8 +2239,10 @@ export async function renderHealthPanel(outlet) {
      «کلون از ابر…» در فرم (تأیید دوبله + هشدار جایگزینی اطلاعات → POST clone {confirm:true} →
      نتیجه + مسیر پشتیبان). بیرون پوستهٔ میز فیلد کلید غیرفعال است — بقیهٔ کارت سالم می‌ماند.
      ⚠ هیچ تغییر قرارداد API و هیچ تغییر نام تابع — فقط متن‌ها، ترتیب نمایش و بازو/بستن. */
-  function cloudSyncSection() {
+  function cloudSyncSection(engineGap) {
     const desktopSecret = cloudSecretChannelAvailable();
+    // ۱.۲۷.۱۲ — متن کوتاه هشدار ناهم‌نسخه‌ای برای ردیف بی‌اتصال وقتی status=null (خودتوضیحی موتور کهنه)
+    const gapShort = engineGapShortView(engineGap);
     const resultLine = el('div', { class: 'hint-text', style: { marginTop: 'var(--sp-2)', whiteSpace: 'normal' } });
     const body = el('div', { class: 'card__body--flush' });
     // فاز D2 — ناحیهٔ سوارشدن ویزارد داخل کارت: عمداً بیرون از body تا بازخوانی‌های ۳۰ثانیه‌ای feed
@@ -2214,91 +2461,23 @@ export async function renderHealthPanel(outlet) {
       }
     }
 
-    const paint = (status) => {
-      // نما رندر دوباره شده (بازخوانی ۶۰ثانیه‌ای کل پنل) — اشتراک کهنه بسته شود
-      if (!body.isConnected) {
+    // ۱.۲۷.۱۲ — paint دومایه‌ای شد (status, isInitial): پرِ اولیه با بدنهٔ جدا از DOM هم می‌نشیند —
+    // اگر feed هرگز emit نکند (موتور کهنهٔ بدون /api/instance-sync/*) کارت تا ابد خالی نمی‌ماند
+    const paint = makeCloudCardPaint(body, {
+      setupToggleBtn,
+      advancedToggleBtn,
+      advancedBody,
+      resultLine,
+      runNowAction,
+      configureAction,
+      deleteConnectionAction,
+      gapShort,
+      onStaleSubscription: () => {
+        // نما رندر دوباره شده (بازخوانی ۶۰ثانیه‌ای کل پنل) — اشتراک کهنه بسته شود
         if (unsubscribe && !unsubscribed) { unsubscribed = true; unsubscribe(); }
-        return;
       }
-      const vm = cloudCardView(status);
-      const view = cloudSyncStateView(status);
-      const human = cloudHumanStatusView(status);
-      const humanTone = healthToneView(human.tone);
-      const counts = cloudCountsView(status?.last_sync?.pulled, status?.last_sync?.pushed);
-      const subParts = [];
-      if (view.detail) subParts.push(view.detail);
-      if (counts.detail) subParts.push(counts.detail);
-      /* لایهٔ عادی — خط وضعیت انسانی + همگام‌سازی خودکار + دو دکمهٔ برجستهٔ همان قرارداد run-now */
-      const rows = [
-        el('div', { class: 'ob-row' },
-          el('div', { class: 'ob-row__main' },
-            el('div', { class: 'cell-main' },
-              el('span', { class: `dot ${humanTone.dot}`, style: { marginInlineEnd: 'var(--sp-2)' } }),
-              human.text),
-            el('div', { class: 'cell-sub' }, subParts.length > 0 ? subParts.join(' · ') : '—')
-          ),
-          el('div', { class: 'ob-row__side' },
-            vm.configured ? el('span', { class: `badge ${view.badge}` }, counts.head) : null
-          )
-        ),
-        vm.configured
-          ? el('div', { class: 'ob-row' },
-              el('div', { class: 'ob-row__main' },
-                el('div', { class: 'cell-main' }, `همگام‌سازی خودکار: ${vm.intervalText ?? 'تنظیم نشده'}`),
-                el('div', { class: 'cell-sub' }, 'در این فاصله اطلاعات خودکار رد و بدل می‌شود — بدون نیاز به کار شما')
-              ),
-              el('div', { class: 'ob-row__side' },
-                el('button', { class: 'btn btn--ghost', type: 'button', onclick: () => configureAction() }, 'تغییر')
-              )
-            )
-          : null,
-        el('div', { class: 'ob-row' },
-          el('div', { class: 'ob-row__side' },
-            el('button', { class: 'btn btn--primary', type: 'button', disabled: vm.runNowDisabled, onclick: (e) => void runNowAction(e.currentTarget) }, 'دریافت اطلاعات'),
-            el('button', { class: 'btn btn--primary', type: 'button', disabled: vm.runNowDisabled, onclick: (e) => void runNowAction(e.currentTarget) }, 'ارسال اطلاعات')
-          )
-        )
-      ];
-      if (!vm.configured) {
-        // بی‌اتصال — مسیر ساخت اتصال در لایهٔ عادی می‌ماند (مدیر تازه‌کار نباید دنبالش بگردد)؛
-        // فاز D2 — دکمه ناوبری نمی‌کند: ناحیهٔ داخلی ویزارد را بازو/بسته می‌کند (جریان کامل داخل کارت)
-        rows.push(el('div', { class: 'ob-row' },
-          el('div', { class: 'ob-row__main' },
-            el('div', { class: 'cell-sub' }, 'با «پیکربندی اولیه» این دستگاه به مرکز ابری وصل می‌شود — چند دقیقه بیشتر طول نمی‌کشد.')),
-          // فاز C — ورودی ویزارد «پیکربندی اولیه اتصال ابری» (سه‌گامی: existing/create/فقط محلی)
-          el('div', { class: 'ob-row__side' },
-            setupToggleBtn)
-        ));
-      }
-      /* لایهٔ پیشرفته — جزئیات نشست‌محلی؛ فقط با اتصال رندر می‌شود (الگوی guideSection) */
-      const adv = cloudAdvancedView(status);
-      advancedBody.replaceChildren(
-        ...(vm.configured ? [
-          infoRow('نسخهٔ ساختار اطلاعات', adv.schemaText ?? '—'),
-          infoRow('تعارض اطلاعات', adv.conflictsText ?? '—'),
-          infoRow('تاریخچهٔ خطاها', adv.errorText ?? 'خطایی ثبت نشده است'),
-          infoRow('آدرس مرکز ابری · دستگاه', el('span', { style: { direction: 'ltr', unicodeBidi: 'plaintext' } }, `${vm.urlText ?? '—'} · ${vm.deviceIdText ?? '—'}`)),
-          infoRow('کلید اتصال', vm.secretPresent ? 'تنظیم شده' : '—')
-        ] : []),
-        el('div', { class: 'ob-row' },
-          el('div', { class: 'ob-row__side' },
-            vm.configured ? el('button', { class: 'btn btn--ghost', type: 'button', onclick: () => { location.hash = '#/cloud-setup'; } }, 'پیکربندی اولیه…') : null,
-            vm.showDelete ? el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void deleteConnectionAction(e.currentTarget) }, 'حذف اتصال') : null
-          )
-        )
-      );
-      if (vm.configured) {
-        rows.push(
-          el('div', { class: 'ob-row' },
-            el('div', { class: 'ob-row__side' }, advancedToggleBtn)
-          ),
-          advancedBody
-        );
-      }
-      rows.push(resultLine);
-      body.replaceChildren(...rows);
-    };
-    paint(lastCloudSyncStatus());
+    });
+    paint(lastCloudSyncStatus(), true);
     unsubscribe = subscribeCloudSyncStatus(paint);
     startCloudSyncFeed();
     return card;
@@ -2336,6 +2515,18 @@ export async function renderHealthPanel(outlet) {
     // موج ۴ (۴-۱) — مُهر پشتیبان از کلید موجود نمای پشتیبان‌گیری (cs.lastBackupAt)
     let lastBackupAt = null;
     try { lastBackupAt = localStorage.getItem('cs.lastBackupAt'); } catch { /* نرم */ }
+
+    // ۱.۲۷.۱۲ — هشدار ناهم‌نسخه‌ای موتور/برنامه: نسخهٔ موتور با اولویت از /api/health/panel
+    // (data.version — همان فیلد سیگنال «موتور محلی» پنج‌سیگنال؛ همیشه در دسترس حتی بدون تائوری)؛
+    // فقط اگر آن غایب بود appVersion پاکت engine_status (نسخهٔ اپ کارت سرور). APP_VERSION از
+    // «منبع یکتای نسخه» (src/core/version.ts) با import پویا — الگوی importهای نما به src.
+    let appVersion = null;
+    try { appVersion = (await import('../../../../src/core/version.ts')).APP_VERSION ?? null; } catch { /* نرم — بی‌هشدار نسخه */ }
+    const feedAppVersion = lastServerStatus()?.appVersion;
+    const engineVersionText = typeof data?.version === 'string' && data.version
+      ? data.version
+      : (typeof feedAppVersion === 'string' && feedAppVersion ? feedAppVersion : null);
+    const engineGap = engineAppVersionGapView(engineVersionText, appVersion);
 
     const dbOk = data?.db?.ok;
     const counts = data?.counts ?? {};
@@ -2453,9 +2644,22 @@ export async function renderHealthPanel(outlet) {
       oneGlanceSection(data, sync, quota, lastBackupAt), // ۴-۱ — پنج سیگنال §۴ نقد با اقدام
 
       // فاز B — دو کارت جدا کنار هم (دو قرارداد جدا — سند §۲-۵): «سرور محلی» (فاز A) + «اتصال ابری» (فاز B)؛
-      // روی نمایشگر باریک خودش می‌شکند (auto-fit) — هیچ تغییری در ساخت کارت سرور فاز A ندادیم
+      // روی نمایشگر باریک خودش می‌شکند (auto-fit) — هیچ تغییری در ساخت کارت سرور فاز A نداریم
+      // ۱.۲۷.۱۲ — ردیف هشدار ناهم‌نسخه‌ای (badge زرد موجود — بدون CSS تازه) بالای کارت سرور
+      // محلی داخل همان grid (span همهٔ ستون‌ها)؛ gapShort به کارت ابری می‌رود (ردیف بی‌اتصال)
       el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--sp-3)', alignItems: 'start' } },
-        serverSection(), cloudSyncSection()),
+        engineGap
+          ? el('div', { class: 'card card__body--flush', style: { gridColumn: '1 / -1' } },
+              el('div', { class: 'ob-row' },
+                el('div', { class: 'ob-row__main' },
+                  el('div', { class: 'cell-main', style: { whiteSpace: 'normal' } }, engineGap.text)
+                ),
+                el('div', { class: 'ob-row__side' },
+                  el('span', { class: 'badge badge--warning' }, 'ناهم‌نسخه‌ای')
+                )
+              ))
+          : null,
+        serverSection(), cloudSyncSection(engineGap)),
 
       // فاز D2 — آکاردئون واحد «جزئیات پیشرفته»: بقیهٔ بخش‌ها با همان ترتیب/محتوای قبل، پیش‌فرض بسته
       el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },

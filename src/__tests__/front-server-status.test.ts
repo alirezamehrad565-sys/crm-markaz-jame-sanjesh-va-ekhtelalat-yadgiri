@@ -8,7 +8,7 @@
  * نگاشت‌ها تابع خالص‌اند (بدون DOM) — الگو: front-sync-status.test.ts.
  */
 // @ts-ignore — فایل .js فرانت، خارج از include تایپ‌اسکریپت است (import تک‌خطی تا @ts-ignore نشتی را بپوشاند)
-import { serverStateView, degradedReasonView, serverPortsView, unixJalaliView, unixAgeView, serverDiagnosticsText, copyTextToClipboard, unwrapEngineStatus, installServerStatusFeed, subscribeServerStatus, lastServerStatus, engineInvoke, resetServerStatusFeedForTests } from '../../public/assets/js/views/health-panel.js';
+import { serverStateView, degradedReasonView, serverPortsView, unixJalaliView, unixAgeView, serverDiagnosticsText, copyTextToClipboard, unwrapEngineStatus, installServerStatusFeed, subscribeServerStatus, lastServerStatus, engineInvoke, resetServerStatusFeedForTests, serverAddressView, engineAppVersionGapView, engineGapShortView, makeServerCardPaint } from '../../public/assets/js/views/health-panel.js';
 
 describe('serverStateView — نگاشت حالت FSM موتور به برچسب/رنگ', () => {
   it('هفت حالت شناخته‌شدهٔ قرارداد → برچسب فارسی و کلاس رنگ درست', () => {
@@ -222,5 +222,215 @@ describe('installServerStatusFeed — روی کانال مصنوعی: گوش‌�
       resetServerStatusFeedForTests();
       delete g['__TAURI__'];
     }
+  });
+});
+
+/* ── ۱.۲۷.۱۲ — آدرس سرور محلی در کارت + هشدار ناهم‌نسخه‌ای موتور/برنامه + پرِ اولیهٔ کارت ── */
+
+describe('serverAddressView — آدرس سرور محلی برای کارت (خواست کارفرما: «۱۲۷.۰.۰.۱ نشون نمی‌دهد»)', () => {
+  it('پورت عددی معتبر → http://127.0.0.1:<پورت> با رقم فارسی و isDefault=false', () => {
+    expect(serverAddressView({ port: 8787, gamesPort: 8788 }, null)).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', isDefault: false });
+    expect(serverAddressView({ port: 8901 }, null).address).toBe('http://127.0.0.1:۸۹۰۱'); // متن فارسی پورت با fa
+    expect(serverAddressView({ port: '8787' }, null).isDefault).toBe(false); // پورت رشته‌ای عددی هم معتبر
+  });
+
+  it('پورت غایب/خراب → پیش‌فرض ۸۷۸۷ با isDefault=true (رندر، sub «پورت پیش‌فرض» را می‌گذارد)', () => {
+    expect(serverAddressView({}, null)).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', isDefault: true });
+    expect(serverAddressView({ port: 0 }, null).isDefault).toBe(true);
+    expect(serverAddressView({ port: -1 }, null).isDefault).toBe(true);
+    expect(serverAddressView({ port: 'junk' }, null).isDefault).toBe(true);
+    expect(serverAddressView(null, null)).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', isDefault: true });
+    expect(serverAddressView(undefined, undefined).isDefault).toBe(true);
+  });
+
+  it('حالت وب — کانال تائوری نیست: origin خودش آدرس است (isDefault=false، همان تابع)', () => {
+    expect(serverAddressView(null, 'http://192.168.1.10:8787')).toEqual({ address: 'http://192.168.1.10:8787', isDefault: false });
+    expect(serverAddressView({}, 'https://markaz.example.com')).toEqual({ address: 'https://markaz.example.com', isDefault: false });
+    // پورت معتبر بر origin مقدم است
+    expect(serverAddressView({ port: 8901 }, 'https://markaz.example.com').address).toBe('http://127.0.0.1:۸۹۰۱');
+    // origin بی‌ارزش ('null' بی‌کانال واقعی/تهی) → پیش‌فرض
+    expect(serverAddressView(null, 'null')).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', isDefault: true });
+    expect(serverAddressView(null, '')).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', isDefault: true });
+    expect(serverAddressView(null, 42 as unknown as string)).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', isDefault: true });
+  });
+});
+
+describe('engineAppVersionGapView — هشدار ناهم‌نسخه‌ای موتور محلی/برنامهٔ نمایش (خودتوضیحی موتور کهنه)', () => {
+  it('موتور قدیمی‌تر از برنامه → gap با متن دو جمله‌ای و هر دو نسخه (مقایسهٔ عددی نقطه‌ای — نه رشته‌ای)', () => {
+    const gap = engineAppVersionGapView('1.27.4', '1.27.11');
+    expect(gap).not.toBeNull();
+    expect(gap).toMatchObject({ engineVersion: '1.27.4', appVersion: '1.27.11' });
+    expect(gap.text).toContain('موتور محلی (1.27.4) قدیمی‌تر از برنامهٔ نمایش (1.27.11) است');
+    expect(gap.text).toContain('آخرین نصاب را اجرا کنید تا موتور هم به‌روز شود');
+    expect(gap.text).toContain('فایل اشغال است'); // جملهٔ دوم — راهِ نصبِ نافرجام
+    // مقایسهٔ عددی segment به segment: 4 < 11 — مقایسهٔ رشته‌ای می‌گفت '4' > '1'
+    expect(engineAppVersionGapView('1.26.9', '1.27.11')).toMatchObject({ engineVersion: '1.26.9' });
+    expect(engineAppVersionGapView('1.27.10', '1.27.11')).toMatchObject({ engineVersion: '1.27.10' });
+  });
+
+  it('برابر / موتور تازه‌تر → null بی‌هشدار', () => {
+    expect(engineAppVersionGapView('1.27.11', '1.27.11')).toBeNull();
+    expect(engineAppVersionGapView('1.27.12', '1.27.11')).toBeNull(); // موتور تازه‌تر از برنامه
+    expect(engineAppVersionGapView('2.0.0', '1.27.11')).toBeNull();
+    expect(engineAppVersionGapView('1.27.4', '1.27.4')).toBeNull();
+    expect(engineAppVersionGapView('1.27', '1.27.0')).toBeNull(); // پُرکردن صفر — برابر
+  });
+
+  it('رقم فارسی/عربی نرمال می‌شود («۱.۲۷.۴» → 1.27.4) و gap درست می‌دهد', () => {
+    const gap = engineAppVersionGapView('۱.۲۷.۴', '1.27.11');
+    expect(gap).toMatchObject({ engineVersion: '1.27.4', appVersion: '1.27.11' });
+    expect(gap.text).toContain('موتور محلی (1.27.4)'); // متن هم با نسخهٔ نرمال‌شده
+    // ارقام عربی (٠-٩) هم نرمال می‌شوند
+    expect(engineAppVersionGapView('١.٢٧.٤', '1.27.11')).toMatchObject({ engineVersion: '1.27.4' });
+  });
+
+  it('هر نسخهٔ نامعلوم/خراب → null بی‌کرش؛ engineGapShortView متن کوتاه تا پیش از «؛» می‌دهد', () => {
+    expect(engineAppVersionGapView(null, '1.27.11')).toBeNull();
+    expect(engineAppVersionGapView('1.27.4', null)).toBeNull();
+    expect(engineAppVersionGapView(undefined, undefined)).toBeNull();
+    expect(engineAppVersionGapView('', '')).toBeNull();
+    expect(engineAppVersionGapView('نامشخص', '1.27.11')).toBeNull();
+    expect(engineAppVersionGapView('1.27.4', {} as unknown as string)).toBeNull();
+    const gap = engineAppVersionGapView('1.27.4', '1.27.11');
+    const short = engineGapShortView(gap);
+    expect(short).toBe('موتور محلی (1.27.4) قدیمی‌تر از برنامهٔ نمایش (1.27.11) است — آخرین نصاب را اجرا کنید تا موتور هم به‌روز شود');
+    expect(short).not.toContain('؛'); // کوتاه‌شده — جملهٔ دوم نصب حذف است
+    expect(engineGapShortView(null)).toBeNull();
+    expect(engineGapShortView({ text: '' })).toBeNull();
+    expect(engineGapShortView({} as unknown as { text: string })).toBeNull();
+  });
+});
+
+/* ── DOM مصنوعی کمینه — الگوی آزمون mountCloudSetup در front-cloud-setup.test.ts ── */
+
+class FakeNode {
+  tagName: string;
+  children: FakeNode[] = [];
+  parentNode: FakeNode | null = null;
+  attributes = new Map<string, string>();
+  listeners = new Map<string, Array<(ev?: unknown) => void>>();
+  dataset: Record<string, string> = {};
+  style: Record<string, string> = {};
+  className = '';
+  value = '';
+  disabled = false;
+  isRoot = false;
+
+  constructor(tag: string) { this.tagName = String(tag).toUpperCase(); }
+
+  get isConnected(): boolean {
+    let p: FakeNode | null = this;
+    while (p.parentNode !== null) p = p.parentNode;
+    return p.isRoot;
+  }
+  appendChild(child: FakeNode): FakeNode { child.parentNode = this; this.children.push(child); return child; }
+  replaceChildren(...kids: unknown[]): void {
+    for (const c of this.children) c.parentNode = null;
+    this.children = [];
+    for (const k of kids) {
+      if (k === null || k === undefined || k === false) continue;
+      this.appendChild(k instanceof FakeNode ? k : new FakeText(String(k)));
+    }
+  }
+  setAttribute(key: string, v: string): void { this.attributes.set(key, String(v)); }
+  getAttribute(key: string): string | null { return this.attributes.get(key) ?? null; }
+  addEventListener(type: string, fn: (ev?: unknown) => void): void {
+    const arr = this.listeners.get(type) ?? [];
+    arr.push(fn);
+    this.listeners.set(type, arr);
+  }
+}
+
+class FakeText extends FakeNode {
+  text: string;
+  constructor(text: string) { super('#text'); this.text = text; }
+}
+
+/** نصب DOM مصنوعی روی globalThis (ui.js append به instanceof Node گارد می‌زند) — خروجی = بازگردانی */
+function installFakeDom(): () => void {
+  const g = globalThis as unknown as Record<string, unknown>;
+  const prevDocument = g['document'];
+  const prevNode = g['Node'];
+  g['document'] = {
+    createElement: (tag: string) => new FakeNode(tag),
+    createElementNS: (ns: string, tag: string) => new FakeNode(tag),
+    createTextNode: (text: string) => new FakeText(text),
+    body: new FakeNode('body')
+  };
+  g['Node'] = FakeNode;
+  return () => {
+    if (prevDocument === undefined) delete g['document']; else g['document'] = prevDocument;
+    if (prevNode === undefined) delete g['Node']; else g['Node'] = prevNode;
+  };
+}
+
+/** همهٔ گره‌های زیرین + متن یک گره (فقط گره‌های متنی) — الگوی آزمون mountCloudSetup */
+function allNodes(root: FakeNode): FakeNode[] {
+  const out: FakeNode[] = [];
+  const walk = (n: FakeNode) => { out.push(n); for (const c of n.children) walk(c); };
+  walk(root);
+  return out;
+}
+function textOf(node: FakeNode): string {
+  const out: string[] = [];
+  for (const n of allNodes(node)) if (n instanceof FakeText) out.push(n.text);
+  return out.join('').trim();
+}
+function findButton(root: FakeNode, label: string): FakeNode | null {
+  return allNodes(root).find((n) => n.tagName === 'BUTTON' && textOf(n).includes(label)) ?? null;
+}
+
+describe('makeServerCardPaint — پرِ اولیهٔ کارت «سرور محلی» با بدنهٔ جدا از DOM (اشکال گزارش‌شدهٔ کارفرما)', () => {
+  const makeCtx = () => ({
+    engineRestartAction: async () => {},
+    openDataDirAction: async () => {},
+    copyDiagAction: async () => {},
+    onStaleSubscription: vi.fn()
+  });
+
+  it('پرِ اولیه (isInitial=true) حتی با status=null پُر می‌شود: خط وضعیت خاکستری + آدرس محلی + سه دکمه', () => {
+    const restore = installFakeDom();
+    try {
+      const body = new FakeNode('div'); // جدا از DOM — همان لحظهٔ ساخت کارت داخل آرایهٔ el در reload
+      const ctx = makeCtx();
+      const paint = makeServerCardPaint(body, ctx);
+      paint(null, true); // پرِ اولیه — با گارد قدیمی بی‌صدا رد می‌شد و کارت خالی می‌ماند
+      expect(body.children.length).toBeGreaterThan(0);
+      const t = textOf(body);
+      expect(t).toContain('وضعیت هنوز از پوستهٔ برنامه نرسیده'); // ردیف وضعیت خاکستری «وضعیت نامشخص»
+      expect(t).toContain('وضعیت نامشخص');
+      expect(t).toContain('آدرس محلی'); // ردیف تازهٔ آدرس بعد از ردیف وضعیت — خواست کارفرما
+      expect(t).toContain('http://127.0.0.1:۸۷۸۷'); // بی‌پورت → پیش‌فرض
+      expect(t).toContain('پورت پیش‌فرض — پس از رسیدن وضعیت پوسته، آدرس دقیق می‌شود');
+      for (const label of ['راه‌اندازی دوباره', 'بازکردن پوشهٔ داده', 'کپی اطلاعات عیب‌یابی']) {
+        expect(findButton(body, label)).not.toBeNull(); // سه دکمهٔ کارت
+      }
+      expect(findButton(body, 'کپی آدرس')).not.toBeNull();
+      expect(ctx.onStaleSubscription).not.toHaveBeenCalled(); // پرِ اولیه اشتراک کهنه را نمی‌بندد
+    } finally { restore(); }
+  });
+
+  it('گارد فقط برای emitهای feed است: emit با بدنهٔ جدا → اشتراک کهنه بسته و بدنه دست‌نخورده؛ با بدنهٔ وصل → پُر می‌شود', () => {
+    const restore = installFakeDom();
+    try {
+      const body = new FakeNode('div');
+      const ctx = makeCtx();
+      const paint = makeServerCardPaint(body, ctx);
+      paint(null, true); // پرِ اولیه — جدا از DOM
+      const before = body.children.length;
+      paint({ state: 'Ready', port: 8901 }, false); // emit feed — بدنه هنوز جدا
+      expect(ctx.onStaleSubscription).toHaveBeenCalledTimes(1); // بستن اشتراک کهنه (پیام عین قبل)
+      expect(body.children.length).toBe(before); // گارد — بدون رندر
+      const root = new FakeNode('div');
+      root.isRoot = true;
+      root.appendChild(body); // کارت وصل شد
+      paint({ state: 'Ready', port: 8901 }, false);
+      expect(ctx.onStaleSubscription).toHaveBeenCalledTimes(1); // بستن اضافی نه
+      const t = textOf(body);
+      expect(t).toContain('سرور محلی روشن است'); // Ready — خط پورت انسانی
+      expect(t).toContain('http://127.0.0.1:۸۹۰۱'); // آدرس واقعی از پورت وضعیت — خواست کارفرما
+      expect(t).not.toContain('وضعیت هنوز از پوستهٔ برنامه نرسیده');
+      expect(t).not.toContain('پورت پیش‌فرض'); // پورت واقعی آمد — توضیح پیش‌فرض حذف
+    } finally { restore(); }
   });
 });

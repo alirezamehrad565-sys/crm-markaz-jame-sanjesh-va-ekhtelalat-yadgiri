@@ -8,7 +8,7 @@
  * feed وضعیت HTTP است: poll ۳۰ثانیه‌ای + poll فوری پس از هر کنش؛ پاکت ناآشنا نادیده می‌ماند.
  */
 // @ts-ignore — فایل .js فرانت، خارج از include تایپ‌اسکریپت است (import تک‌خطی تا @ts-ignore نشتی را بپوشاند)
-import { cloudSyncStateView, cloudCountsView, cloudSecretMaskView, cloudCardView, cloudSyncErrorKindOf, cloudSyncErrorKindView, cloudSyncStatusMessageView, cloudHumanStatusView, cloudAdvancedView, cloudAdvancedToggleView, unwrapInstanceSyncStatus, cloudSecretInvoke, startCloudSyncFeed, pollCloudSyncNow, subscribeCloudSyncStatus, lastCloudSyncStatus, resetCloudSyncFeedForTests, cloudSetupEntryToggleView, healthPanelLayoutView, markAdvancedSectionsOpen, advancedSectionsOpenInSession, HEALTH_PANEL_ADVANCED_KEY } from '../../public/assets/js/views/health-panel.js';
+import { cloudSyncStateView, cloudCountsView, cloudSecretMaskView, cloudCardView, cloudSyncErrorKindOf, cloudSyncErrorKindView, cloudSyncStatusMessageView, cloudHumanStatusView, cloudAdvancedView, cloudAdvancedToggleView, unwrapInstanceSyncStatus, cloudSecretInvoke, startCloudSyncFeed, pollCloudSyncNow, subscribeCloudSyncStatus, lastCloudSyncStatus, resetCloudSyncFeedForTests, cloudSetupEntryToggleView, healthPanelLayoutView, markAdvancedSectionsOpen, advancedSectionsOpenInSession, HEALTH_PANEL_ADVANCED_KEY, makeCloudCardPaint, engineGapShortView, engineAppVersionGapView } from '../../public/assets/js/views/health-panel.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -497,5 +497,190 @@ describe('healthPanelLayoutView — کوتاه‌سازی پنل: بالای ص�
     // بی‌storage (node/حالت خصوصی) → false بی‌کرش — پیش‌فرض بسته می‌ماند
     expect(advancedSectionsOpenInSession()).toBe(false);
     expect(() => markAdvancedSectionsOpen(true)).not.toThrow();
+  });
+});
+
+/* ── ۱.۲۷.۱۲ — پرِ اولیهٔ کارت «اتصال ابری» با بدنهٔ جدا از DOM (اشکال گزارش‌شدهٔ کارفرما:
+   باگ paint اولیه + موتور کهنهٔ بدون /api/instance-sync/* — feed هرگز emit نمی‌کند) ──
+   DOM مصنوعی کمینه — الگوی آزمون mountCloudSetup در front-cloud-setup.test.ts. ── */
+
+class FakeNode {
+  tagName: string;
+  children: FakeNode[] = [];
+  parentNode: FakeNode | null = null;
+  attributes = new Map<string, string>();
+  listeners = new Map<string, Array<(ev?: unknown) => void>>();
+  dataset: Record<string, string> = {};
+  style: Record<string, string> = {};
+  className = '';
+  value = '';
+  disabled = false;
+  isRoot = false;
+
+  constructor(tag: string) { this.tagName = String(tag).toUpperCase(); }
+
+  get isConnected(): boolean {
+    let p: FakeNode | null = this;
+    while (p.parentNode !== null) p = p.parentNode;
+    return p.isRoot;
+  }
+  appendChild(child: FakeNode): FakeNode { child.parentNode = this; this.children.push(child); return child; }
+  replaceChildren(...kids: unknown[]): void {
+    for (const c of this.children) c.parentNode = null;
+    this.children = [];
+    for (const k of kids) {
+      if (k === null || k === undefined || k === false) continue;
+      this.appendChild(k instanceof FakeNode ? k : new FakeText(String(k)));
+    }
+  }
+  setAttribute(key: string, v: string): void { this.attributes.set(key, String(v)); }
+  getAttribute(key: string): string | null { return this.attributes.get(key) ?? null; }
+  addEventListener(type: string, fn: (ev?: unknown) => void): void {
+    const arr = this.listeners.get(type) ?? [];
+    arr.push(fn);
+    this.listeners.set(type, arr);
+  }
+}
+
+class FakeText extends FakeNode {
+  text: string;
+  constructor(text: string) { super('#text'); this.text = text; }
+}
+
+/** نصب DOM مصنوعی روی globalThis (ui.js append به instanceof Node گارد می‌زند) — خروجی = بازگردانی */
+function installFakeDom(): () => void {
+  const g = globalThis as unknown as Record<string, unknown>;
+  const prevDocument = g['document'];
+  const prevNode = g['Node'];
+  g['document'] = {
+    createElement: (tag: string) => new FakeNode(tag),
+    createElementNS: (ns: string, tag: string) => new FakeNode(tag),
+    createTextNode: (text: string) => new FakeText(text),
+    body: new FakeNode('body')
+  };
+  g['Node'] = FakeNode;
+  return () => {
+    if (prevDocument === undefined) delete g['document']; else g['document'] = prevDocument;
+    if (prevNode === undefined) delete g['Node']; else g['Node'] = prevNode;
+  };
+}
+
+/** همهٔ گره‌های زیرین + متن یک گره (فقط گره‌های متنی) — الگوی آزمون mountCloudSetup */
+function allNodes(root: FakeNode): FakeNode[] {
+  const out: FakeNode[] = [];
+  const walk = (n: FakeNode) => { out.push(n); for (const c of n.children) walk(c); };
+  walk(root);
+  return out;
+}
+function textOf(node: FakeNode): string {
+  const out: string[] = [];
+  for (const n of allNodes(node)) if (n instanceof FakeText) out.push(n.text);
+  return out.join('').trim();
+}
+function findButton(root: FakeNode, label: string): FakeNode | null {
+  return allNodes(root).find((n) => n.tagName === 'BUTTON' && textOf(n).includes(label)) ?? null;
+}
+
+describe('makeCloudCardPaint — پرِ اولیهٔ کارت «اتصال ابری» با بدنهٔ جدا از DOM (۱.۲۷.۱۲)', () => {
+  // متن کوتاه هشدار ناهم‌نسخه‌ای — از همان تابع خالص، تا سوپِ رندر با مدل هم‌خوان بماند
+  const GAP_SHORT = engineGapShortView(engineAppVersionGapView('1.27.4', '1.27.11')) as string;
+
+  const makeCtx = (over: Record<string, unknown> = {}) => {
+    const setupToggleBtn = new FakeNode('button');
+    setupToggleBtn.appendChild(new FakeText('شروع پیکربندی ابری')); // برچسب paintSetupToggle در section
+    const advancedToggleBtn = new FakeNode('button');
+    advancedToggleBtn.appendChild(new FakeText('جزئیات پیشرفته')); // برچسب paintAdvanced در section
+    return {
+      setupToggleBtn,
+      advancedToggleBtn,
+      advancedBody: new FakeNode('div'),
+      resultLine: new FakeNode('div'),
+      runNowAction: async () => {},
+      configureAction: () => {},
+      deleteConnectionAction: async () => {},
+      gapShort: null,
+      onStaleSubscription: vi.fn(),
+      ...over
+    };
+  };
+
+  it('پرِ اولیه (isInitial=true) حتی با status=null و بدنهٔ جدا از DOM پُر می‌شود: توضیح + دو دکمهٔ غیرفعال + CTA', () => {
+    const restore = installFakeDom();
+    try {
+      const body = new FakeNode('div'); // جدا از DOM — همان لحظهٔ ساخت کارت داخل آرایهٔ el در reload
+      const ctx = makeCtx();
+      const paint = makeCloudCardPaint(body, ctx);
+      paint(null, true); // با گارد قدیمی بی‌صدا رد می‌شد و کارت تا ابد خالی می‌ماند
+      expect(body.children.length).toBeGreaterThan(0);
+      const t = textOf(body);
+      // سوپ — خواست کارفرما: خروجی کارت بی‌اتصال شامل متن توضیحِ «وضعیت نگرفته شده» است
+      expect(t).toContain('وضعیت اتصال ابری از سرور نگرفته شد — اگر موتور محلی قدیمی است، با به‌روزرسانی نصب درست می‌شود.');
+      for (const label of ['دریافت اطلاعات', 'ارسال اطلاعات']) {
+        const b = findButton(body, label);
+        expect(b).not.toBeNull();
+        expect(b?.disabled).toBe(true); // بی‌اتصال → غیرفعال (دکمه‌ها و CTA دست‌نخورده)
+      }
+      expect(findButton(body, 'شروع پیکربندی ابری')).not.toBeNull(); // CTA در خروجی است
+      expect(t).toContain('با «پیکربندی اولیه» این دستگاه به مرکز ابری وصل می‌شود');
+      expect(ctx.onStaleSubscription).not.toHaveBeenCalled(); // پرِ اولیه اشتراک کهنه را نمی‌بندد
+    } finally { restore(); }
+  });
+
+  it('موتور کهنه (status=null + gapShort) → متن کوتاه هشدار ناهم‌نسخه‌ای در cell-sub ردیف بی‌اتصال می‌آید تا CTA بی‌توضیح نماند', () => {
+    const restore = installFakeDom();
+    try {
+      const body = new FakeNode('div');
+      const ctx = makeCtx({ gapShort: GAP_SHORT });
+      const paint = makeCloudCardPaint(body, ctx);
+      paint(null, true);
+      const t = textOf(body);
+      expect(t).toContain(GAP_SHORT); // متن کوتاه هشدار کنار CTA
+      expect(t).toContain('با «پیکربندی اولیه»'); // متن اصلی CTA هم هست
+      // شرط status=null است: با وضعیت رسیده (بدنهٔ وصل) متن gap در ردیف بی‌اتصال نمی‌آید
+      const body2 = new FakeNode('div');
+      const root = new FakeNode('div');
+      root.isRoot = true;
+      root.appendChild(body2);
+      const paint2 = makeCloudCardPaint(body2, makeCtx({ gapShort: GAP_SHORT }));
+      paint2({ configured: false }, false);
+      const t2 = textOf(body2);
+      expect(t2).toContain('با «پیکربندی اولیه»');
+      expect(t2).not.toContain(GAP_SHORT);
+      expect(t2).not.toContain('وضعیت اتصال ابری از سرور نگرفته شد'); // status واقعی → توضیح «نگرفته شد» حذف
+    } finally { restore(); }
+  });
+
+  it('گارد فقط برای emitهای feed است: emit با بدنهٔ جدا → اشتراک کهنه بسته می‌شود و بدنه دست‌نخورده می‌ماند', () => {
+    const restore = installFakeDom();
+    try {
+      const body = new FakeNode('div');
+      const ctx = makeCtx();
+      const paint = makeCloudCardPaint(body, ctx);
+      paint(null, true); // پرِ اولیه — جدا از DOM
+      const before = body.children.length;
+      paint({ configured: true, running: true }, false); // emit feed — بدنه هنوز جدا
+      expect(ctx.onStaleSubscription).toHaveBeenCalledTimes(1); // بستن اشتراک کهنه (پیام عین قبل)
+      expect(body.children.length).toBe(before); // گارد — بدون رندر
+    } finally { restore(); }
+  });
+
+  it('پاکت اتصال‌دار (status واقعی) → همان چیدمان قبل با شمارنده‌ها و لایهٔ پیشرفته — هیچ تغییر رفتار', () => {
+    const restore = installFakeDom();
+    try {
+      const body = new FakeNode('div');
+      const ctx = makeCtx();
+      const paint = makeCloudCardPaint(body, ctx);
+      paint(FULL_SYNCED, true); // پرِ اولیه با پاکت کامل
+      const t = textOf(body);
+      expect(t).toContain('متصل به مرکز ابری');
+      expect(t).toContain('همگام‌سازی خودکار: هر ۱۰ دقیقه');
+      expect(t).toContain('↑۰ ↓۰');
+      expect(t).toContain('نسخهٔ ساختار اطلاعات'); // لایهٔ پیشرفته با اتصال رندر می‌شود
+      expect(t).toContain('کلید اتصال');
+      expect(t).toContain('تنظیم شده');
+      expect(findButton(body, 'دریافت اطلاعات')?.disabled).toBe(false); // با اتصال → فعال
+      expect(findButton(body, 'شروع پیکربندی ابری')).toBeNull(); // ردیف بی‌اتصال نیست
+      expect(t).not.toContain('وضعیت اتصال ابری از سرور نگرفته شد'); // فقط وقتی status=null
+    } finally { restore(); }
   });
 });
