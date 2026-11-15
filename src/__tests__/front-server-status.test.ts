@@ -228,24 +228,25 @@ describe('installServerStatusFeed — روی کانال مصنوعی: گوش‌�
 /* ── ۱.۲۷.۱۲ — آدرس سرور محلی در کارت + هشدار ناهم‌نسخه‌ای موتور/برنامه + پرِ اولیهٔ کارت ── */
 
 describe('serverAddressView — آدرس سرور محلی برای کارت (خواست کارفرما: «۱۲۷.۰.۰.۱ نشون نمی‌دهد»)', () => {
-  it('پورت عددی معتبر → http://127.0.0.1:<پورت> با رقم فارسی و isDefault=false', () => {
-    expect(serverAddressView({ port: 8787, gamesPort: 8788 }, null)).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', isDefault: false });
+  it('پورت عددی معتبر → http://127.0.0.1:<پورت> با رقم فارسی + copyText لاتین و isDefault=false', () => {
+    expect(serverAddressView({ port: 8787, gamesPort: 8788 }, null)).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', copyText: 'http://127.0.0.1:8787', isDefault: false });
     expect(serverAddressView({ port: 8901 }, null).address).toBe('http://127.0.0.1:۸۹۰۱'); // متن فارسی پورت با fa
+    expect(serverAddressView({ port: 8901 }, null).copyText).toBe('http://127.0.0.1:8901'); // کپی همیشه رقم لاتین — آدرس چسبانده‌شده مستقیم کار کند
     expect(serverAddressView({ port: '8787' }, null).isDefault).toBe(false); // پورت رشته‌ای عددی هم معتبر
   });
 
   it('پورت غایب/خراب → پیش‌فرض ۸۷۸۷ با isDefault=true (رندر، sub «پورت پیش‌فرض» را می‌گذارد)', () => {
-    expect(serverAddressView({}, null)).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', isDefault: true });
+    expect(serverAddressView({}, null)).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', copyText: 'http://127.0.0.1:8787', isDefault: true });
     expect(serverAddressView({ port: 0 }, null).isDefault).toBe(true);
     expect(serverAddressView({ port: -1 }, null).isDefault).toBe(true);
     expect(serverAddressView({ port: 'junk' }, null).isDefault).toBe(true);
-    expect(serverAddressView(null, null)).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', isDefault: true });
+    expect(serverAddressView(null, null)).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', copyText: 'http://127.0.0.1:8787', isDefault: true });
     expect(serverAddressView(undefined, undefined).isDefault).toBe(true);
   });
 
   it('حالت وب — کانال تائوری نیست: origin خودش آدرس است (isDefault=false، همان تابع)', () => {
-    expect(serverAddressView(null, 'http://192.168.1.10:8787')).toEqual({ address: 'http://192.168.1.10:8787', isDefault: false });
-    expect(serverAddressView({}, 'https://markaz.example.com')).toEqual({ address: 'https://markaz.example.com', isDefault: false });
+    expect(serverAddressView(null, 'http://192.168.1.10:8787')).toEqual({ address: 'http://192.168.1.10:8787', copyText: 'http://192.168.1.10:8787', isDefault: false });
+    expect(serverAddressView({}, 'https://markaz.example.com')).toEqual({ address: 'https://markaz.example.com', copyText: 'https://markaz.example.com', isDefault: false });
     // پورت معتبر بر origin مقدم است
     expect(serverAddressView({ port: 8901 }, 'https://markaz.example.com').address).toBe('http://127.0.0.1:۸۹۰۱');
     // origin بی‌ارزش ('null' بی‌کانال واقعی/تهی) → پیش‌فرض

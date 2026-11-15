@@ -242,12 +242,21 @@ try {
   bir.includes('vc_redist') || bir.includes('aka.ms')
     ? bad('مونتاژ رانتایم هنوز redist دارد — باید حذف شده باشد')
     : ok('redist از مونتاژ رانتایم حذف شده است');
-  existsSync(path.join(T, 'installer-hooks.nsh'))
-    ? bad('installer-hooks.nsh باید حذف شده باشد (نصب VC++ دیگر معنا ندارد)')
-    : ok('هوک VC++ حذف شده است');
+  // ⑨-الف v1.27.۱۲ — قلاب نصاب فقط «بستن موتور جامانده» است؛ نصب VC++/redist در هوک همچنان ممنوع
+  // (نیت پین قدیمی حفظ شده: redist سیستم کارفرما تازه‌تر از بسته بود — هیچ نصب VC++ی نباید برگردد)
+  const hookPath = path.join(T, 'installer-hooks.nsh');
+  const hasHook = existsSync(hookPath);
+  const hookText = hasHook ? readFileSync(hookPath, 'utf8') : '';
+  hookText.includes('vc_redist') || hookText.includes('aka.ms') || hookText.includes('vcredist')
+    ? bad('installer-hooks.nsh هنوز نصب VC++/redist دارد — ممنوع (نیت پین v1.27.03)')
+    : ok('هوک نصاب بدون redist است');
   conf?.bundle?.windows?.nsis?.installerHooks
-    ? bad('tauri.conf هنوز installerHooks دارد')
-    : ok('tauri.conf فاقد installerHooks است');
+    ? hasHook && hookText.includes('NSIS_HOOK_PREINSTALL')
+      ? ok('قلاب نصاب وصل است — بستن موتور جامانده پیش از کپی (v1.27.12)')
+      : bad('installerHooks در conf هست ولی installer-hooks.nsh با NSIS_HOOK_PREINSTALL نیست')
+    : hasHook
+      ? bad('installer-hooks.nsh هست ولی conf به آن وصل نیست')
+      : ok('tauri.conf فاقد installerHooks است و هوکی وجود ندارد');
   conf?.bundle?.resources?.some((r) => r.includes('redist'))
     ? bad('tauri.conf هنوز resources/redist دارد')
     : ok('resources/redist از tauri.conf حذف شده است');
